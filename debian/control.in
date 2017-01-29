@@ -31,6 +31,7 @@ Build-Depends:
  bison,
  quilt,
  gettext,
+ oss4-dev [kfreebsd-any],
  sharutils,
  pkg-config,
  dctrl-tools,

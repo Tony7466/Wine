@@ -1,6 +1,7 @@
 #!/usr/bin/make -f
 
 DEB_HOST_ARCH=$(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_ARCH_OS=$(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
 DEB_BUILD_ARCH_OS=$(shell dpkg-architecture -qDEB_BUILD_ARCH_OS)
 DEB_BUILD_ARCH_BITS=$(shell dpkg-architecture -qDEB_BUILD_ARCH_BITS)
 
@@ -48,6 +49,11 @@ CONFLAGS=--with-gnutls \
 # flags specific to kfreebsd
 ifeq ($(DEB_BUILD_ARCH_OS), kfreebsd)
 export DEB_LDFLAGS_MAINT_APPEND+=-lfreebsd-glue
+endif
+
+# enable oss only on kfreebsd
+ifneq ($(DEB_HOST_ARCH_OS), kfreebsd)
+CONFLAGS+=--without-oss
 endif
 
 # enable wine64 on 64-bit architectures
