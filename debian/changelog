@@ -1,3 +1,9 @@
+wine (1.8.6-5) UNRELEASED; urgency=medium
+
+  * Enable oss on kfreebsd, explicitly disable it on other archs.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Thu, 02 Feb 2017 13:25:43 +0100
+
 wine (1.8.6-4) unstable; urgency=medium
 
   * Remove outdated oss4 build dependency (closes: #852988).
