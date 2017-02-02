@@ -30,6 +30,6 @@ fi
 tmpdir=$(mktemp -d -t sonames2elf.XXXXXX)
 cd "$tmpdir"
 printf 'INPUT(%s)\n' "$@" > libeverything.so
-gcc -shared -nostdlib -Wl,--no-as-needed -L. -leverything -o elf
+gcc -shared -Wl,--no-as-needed -L. -leverything -o elf
 cat elf
 rm -rf "$tmpdir"
