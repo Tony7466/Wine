@@ -1,8 +1,9 @@
-wine-development (2.0-3) UNRELEASED; urgency=medium
+wine-development (2.0-3) unstable; urgency=medium
 
   * Enable oss on kfreebsd, explicitly disable it on other archs.
+  * Create the sonames2elf binary without -nostdlib (cf. #853793).
 
- -- Jens Reyer <jre.winesim@gmail.com>  Thu, 02 Feb 2017 18:13:12 +0100
+ -- Jens Reyer <jre.winesim@gmail.com>  Thu, 02 Feb 2017 18:14:48 +0100
 
 wine-development (2.0-2) unstable; urgency=medium
 
