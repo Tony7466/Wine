@@ -1967,6 +1967,8 @@ static void test_surface_qi(void)
     surface_desc.ddsCaps.dwCaps = DDSCAPS_TEXTURE;
     surface_desc.dwWidth = 512;
     surface_desc.dwHeight = 512;
+    hr = IDirectDraw_CreateSurface(ddraw, &surface_desc, (IDirectDrawSurface **)0xdeadbeef, NULL);
+    ok(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
     hr = IDirectDraw_CreateSurface(ddraw, &surface_desc, &surface, NULL);
     ok(SUCCEEDED(hr), "Failed to create surface, hr %#x.\n", hr);
 
@@ -2722,7 +2724,7 @@ static void test_coop_level_mode_set(void)
     screen_size.cy = 0;
 
     hr = IDirectDrawSurface_Restore(primary);
-    todo_wine ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
     hr = set_display_mode(ddraw, param.ddraw_width, param.ddraw_height);
     if (hr == DDERR_NOEXCLUSIVEMODE /* NT4 testbot */)
     {
@@ -2733,9 +2735,9 @@ static void test_coop_level_mode_set(void)
     }
     ok(SUCCEEDED(hr), "Failed to set display mode, hr %#x.\n", hr);
     hr = IDirectDrawSurface_Restore(primary);
-    todo_wine ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
     hr = IDirectDrawSurface_IsLost(primary);
-    todo_wine ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
 
     ok(!expect_messages->message, "Expected message %#x, but didn't receive it.\n", expect_messages->message);
     expect_messages = NULL;
@@ -2781,7 +2783,7 @@ static void test_coop_level_mode_set(void)
     hr = IDirectDraw_RestoreDisplayMode(ddraw);
     ok(SUCCEEDED(hr), "RestoreDisplayMode failed, hr %#x.\n", hr);
     hr = IDirectDrawSurface_IsLost(primary);
-    todo_wine ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
 
     ok(!expect_messages->message, "Expected message %#x, but didn't receive it.\n", expect_messages->message);
     expect_messages = NULL;
@@ -2892,13 +2894,13 @@ static void test_coop_level_mode_set(void)
     screen_size.cy = 0;
 
     hr = IDirectDrawSurface_Restore(primary);
-    todo_wine ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
     hr = set_display_mode(ddraw, param.ddraw_width, param.ddraw_height);
     ok(SUCCEEDED(hr), "Failed to set display mode, hr %#x.\n", hr);
     hr = IDirectDrawSurface_Restore(primary);
-    todo_wine ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
     hr = IDirectDrawSurface_IsLost(primary);
-    todo_wine ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
 
     ok(!expect_messages->message, "Expected message %#x, but didn't receive it.\n", expect_messages->message);
     expect_messages = NULL;
@@ -2944,7 +2946,7 @@ static void test_coop_level_mode_set(void)
     hr = IDirectDraw_RestoreDisplayMode(ddraw);
     ok(SUCCEEDED(hr), "RestoreDisplayMode failed, hr %#x.\n", hr);
     hr = IDirectDrawSurface_IsLost(primary);
-    todo_wine ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
 
     ok(!expect_messages->message, "Expected message %#x, but didn't receive it.\n", expect_messages->message);
     expect_messages = NULL;
@@ -4623,6 +4625,48 @@ static void test_primary_palette(void)
      * the palette here will cause an access violation. */
     hr = IDirectDrawSurface_GetPalette(primary, &tmp);
     ok(hr == DDERR_NOPALETTEATTACHED, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDirectDrawSurface_IsLost(primary);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+
+    memset(&surface_desc, 0, sizeof(surface_desc));
+    surface_desc.dwSize = sizeof(surface_desc);
+    hr = IDirectDrawSurface_GetSurfaceDesc(primary, &surface_desc);
+    ok(SUCCEEDED(hr), "Failed to get surface desc, hr %#x.\n", hr);
+    ok(surface_desc.dwWidth == 640, "Got unexpected surface width %u.\n", surface_desc.dwWidth);
+    ok(surface_desc.dwHeight == 480, "Got unexpected surface height %u.\n", surface_desc.dwHeight);
+    ok(U1(surface_desc.ddpfPixelFormat).dwRGBBitCount == 8, "Got unexpected bit count %u.\n",
+            U1(surface_desc.ddpfPixelFormat).dwRGBBitCount);
+
+    hr = set_display_mode(ddraw, 640, 480);
+    ok(SUCCEEDED(hr), "Failed to set display mode, hr %#x.\n", hr);
+
+    memset(&surface_desc, 0, sizeof(surface_desc));
+    surface_desc.dwSize = sizeof(surface_desc);
+    hr = IDirectDrawSurface_GetSurfaceDesc(primary, &surface_desc);
+    ok(SUCCEEDED(hr), "Failed to get surface desc, hr %#x.\n", hr);
+    ok(surface_desc.dwWidth == 640, "Got unexpected surface width %u.\n", surface_desc.dwWidth);
+    ok(surface_desc.dwHeight == 480, "Got unexpected surface height %u.\n", surface_desc.dwHeight);
+    ok(U1(surface_desc.ddpfPixelFormat).dwRGBBitCount == 32
+            || U1(surface_desc.ddpfPixelFormat).dwRGBBitCount == 24,
+            "Got unexpected bit count %u.\n", U1(surface_desc.ddpfPixelFormat).dwRGBBitCount);
+
+    hr = IDirectDrawSurface_IsLost(primary);
+    ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+    hr = IDirectDrawSurface_Restore(primary);
+    ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
+    hr = IDirectDrawSurface_IsLost(primary);
+    ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+
+    memset(&surface_desc, 0, sizeof(surface_desc));
+    surface_desc.dwSize = sizeof(surface_desc);
+    hr = IDirectDrawSurface_GetSurfaceDesc(primary, &surface_desc);
+    ok(SUCCEEDED(hr), "Failed to get surface desc, hr %#x.\n", hr);
+    ok(surface_desc.dwWidth == 640, "Got unexpected surface width %u.\n", surface_desc.dwWidth);
+    ok(surface_desc.dwHeight == 480, "Got unexpected surface height %u.\n", surface_desc.dwHeight);
+    ok(U1(surface_desc.ddpfPixelFormat).dwRGBBitCount == 32
+            || U1(surface_desc.ddpfPixelFormat).dwRGBBitCount == 24,
+            "Got unexpected bit count %u.\n", U1(surface_desc.ddpfPixelFormat).dwRGBBitCount);
 
 done:
     refcount = IDirectDrawSurface_Release(backbuffer);

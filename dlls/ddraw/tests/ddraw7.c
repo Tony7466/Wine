@@ -1994,6 +1994,8 @@ static void test_surface_qi(void)
     surface_desc.ddsCaps.dwCaps = DDSCAPS_TEXTURE;
     surface_desc.dwWidth = 512;
     surface_desc.dwHeight = 512;
+    hr = IDirectDraw7_CreateSurface(ddraw, &surface_desc, (IDirectDrawSurface7 **)0xdeadbeef, NULL);
+    ok(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
     hr = IDirectDraw7_CreateSurface(ddraw, &surface_desc, &surface, NULL);
     ok(SUCCEEDED(hr), "Failed to create surface, hr %#x.\n", hr);
 
@@ -2758,13 +2760,13 @@ static void test_coop_level_mode_set(void)
     screen_size.cy = 0;
 
     hr = IDirectDrawSurface7_Restore(primary);
-    todo_wine ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
     hr = set_display_mode(ddraw, param.ddraw_width, param.ddraw_height);
     ok(SUCCEEDED(hr), "Failed to set display mode, hr %#x.\n", hr);
     hr = IDirectDrawSurface7_Restore(primary);
-    todo_wine ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
     hr = IDirectDrawSurface7_IsLost(primary);
-    todo_wine ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
 
     ok(!expect_messages->message, "Expected message %#x, but didn't receive it.\n", expect_messages->message);
     expect_messages = NULL;
@@ -2810,7 +2812,7 @@ static void test_coop_level_mode_set(void)
     hr = IDirectDraw7_RestoreDisplayMode(ddraw);
     ok(SUCCEEDED(hr), "RestoreDisplayMode failed, hr %#x.\n", hr);
     hr = IDirectDrawSurface7_IsLost(primary);
-    todo_wine ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
 
     ok(!expect_messages->message, "Expected message %#x, but didn't receive it.\n", expect_messages->message);
     expect_messages = NULL;
@@ -2921,13 +2923,13 @@ static void test_coop_level_mode_set(void)
     screen_size.cy = 0;
 
     hr = IDirectDrawSurface7_Restore(primary);
-    todo_wine ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
     hr = set_display_mode(ddraw, param.ddraw_width, param.ddraw_height);
     ok(SUCCEEDED(hr), "Failed to set display mode, hr %#x.\n", hr);
     hr = IDirectDrawSurface7_Restore(primary);
-    todo_wine ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
     hr = IDirectDrawSurface7_IsLost(primary);
-    todo_wine ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
 
     ok(!expect_messages->message, "Expected message %#x, but didn't receive it.\n", expect_messages->message);
     expect_messages = NULL;
@@ -2973,7 +2975,7 @@ static void test_coop_level_mode_set(void)
     hr = IDirectDraw7_RestoreDisplayMode(ddraw);
     ok(SUCCEEDED(hr), "RestoreDisplayMode failed, hr %#x.\n", hr);
     hr = IDirectDrawSurface7_IsLost(primary);
-    todo_wine ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
 
     ok(!expect_messages->message, "Expected message %#x, but didn't receive it.\n", expect_messages->message);
     expect_messages = NULL;
@@ -5891,7 +5893,6 @@ static void test_surface_lock(void)
         expected_hr = tests[i].caps & DDSCAPS_TEXTURE && !(tests[i].caps & DDSCAPS_VIDEOMEMORY)
                 ? DD_OK : DDERR_INVALIDPARAMS;
         hr = IDirectDrawSurface7_Lock(surface, NULL, &ddsd, DDLOCK_WAIT, NULL);
-        todo_wine_if(expected_hr == D3D_OK)
         ok(hr == expected_hr, "Got hr %#x, expected %#x, type %s.\n", hr, expected_hr, tests[i].name);
         if (SUCCEEDED(hr))
         {
@@ -6865,6 +6866,48 @@ static void test_primary_palette(void)
      * the palette here will cause an access violation. */
     hr = IDirectDrawSurface7_GetPalette(primary, &tmp);
     ok(hr == DDERR_NOPALETTEATTACHED, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDirectDrawSurface7_IsLost(primary);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+
+    memset(&surface_desc, 0, sizeof(surface_desc));
+    surface_desc.dwSize = sizeof(surface_desc);
+    hr = IDirectDrawSurface7_GetSurfaceDesc(primary, &surface_desc);
+    ok(SUCCEEDED(hr), "Failed to get surface desc, hr %#x.\n", hr);
+    ok(surface_desc.dwWidth == 640, "Got unexpected surface width %u.\n", surface_desc.dwWidth);
+    ok(surface_desc.dwHeight == 480, "Got unexpected surface height %u.\n", surface_desc.dwHeight);
+    ok(U1(U4(surface_desc).ddpfPixelFormat).dwRGBBitCount == 8, "Got unexpected bit count %u.\n",
+            U1(U4(surface_desc).ddpfPixelFormat).dwRGBBitCount);
+
+    hr = set_display_mode(ddraw, 640, 480);
+    ok(SUCCEEDED(hr), "Failed to set display mode, hr %#x.\n", hr);
+
+    memset(&surface_desc, 0, sizeof(surface_desc));
+    surface_desc.dwSize = sizeof(surface_desc);
+    hr = IDirectDrawSurface7_GetSurfaceDesc(primary, &surface_desc);
+    ok(SUCCEEDED(hr), "Failed to get surface desc, hr %#x.\n", hr);
+    ok(surface_desc.dwWidth == 640, "Got unexpected surface width %u.\n", surface_desc.dwWidth);
+    ok(surface_desc.dwHeight == 480, "Got unexpected surface height %u.\n", surface_desc.dwHeight);
+    ok(U1(U4(surface_desc).ddpfPixelFormat).dwRGBBitCount == 32
+            || U1(U4(surface_desc).ddpfPixelFormat).dwRGBBitCount == 24,
+            "Got unexpected bit count %u.\n", U1(U4(surface_desc).ddpfPixelFormat).dwRGBBitCount);
+
+    hr = IDirectDrawSurface7_IsLost(primary);
+    ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+    hr = IDirectDrawSurface7_Restore(primary);
+    ok(hr == DDERR_WRONGMODE, "Got unexpected hr %#x.\n", hr);
+    hr = IDirectDrawSurface7_IsLost(primary);
+    ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+
+    memset(&surface_desc, 0, sizeof(surface_desc));
+    surface_desc.dwSize = sizeof(surface_desc);
+    hr = IDirectDrawSurface7_GetSurfaceDesc(primary, &surface_desc);
+    ok(SUCCEEDED(hr), "Failed to get surface desc, hr %#x.\n", hr);
+    ok(surface_desc.dwWidth == 640, "Got unexpected surface width %u.\n", surface_desc.dwWidth);
+    ok(surface_desc.dwHeight == 480, "Got unexpected surface height %u.\n", surface_desc.dwHeight);
+    ok(U1(U4(surface_desc).ddpfPixelFormat).dwRGBBitCount == 32
+            || U1(U4(surface_desc).ddpfPixelFormat).dwRGBBitCount == 24,
+            "Got unexpected bit count %u.\n", U1(U4(surface_desc).ddpfPixelFormat).dwRGBBitCount);
 
 done:
     refcount = IDirectDrawSurface7_Release(backbuffer);
@@ -12321,7 +12364,6 @@ static void test_surface_desc_size(void)
             desc.blob[sizeof(DDSURFACEDESC2)] = 0xef;
             hr = IDirectDrawSurface_Lock(surface, NULL, &desc.desc1, 0, 0);
             expected_hr = ignore_size || valid_size ? DD_OK : DDERR_INVALIDPARAMS;
-            todo_wine_if(ignore_size && !valid_size)
             ok(hr == expected_hr, "Got hr %#x, expected %#x, dwSize %u, type %s.\n",
                     hr, expected_hr, desc_sizes[j], surface_caps[i].name);
             ok(desc.dwSize == desc_sizes[j], "dwSize was changed from %u to %u, type %s.\n",
@@ -12348,7 +12390,6 @@ static void test_surface_desc_size(void)
             desc.blob[sizeof(DDSURFACEDESC2)] = 0xef;
             hr = IDirectDrawSurface3_Lock(surface3, NULL, &desc.desc1, 0, 0);
             expected_hr = ignore_size || valid_size ? DD_OK : DDERR_INVALIDPARAMS;
-            todo_wine_if(ignore_size && !valid_size)
             ok(hr == expected_hr, "Got hr %#x, expected %#x, dwSize %u, type %s.\n",
                     hr, expected_hr, desc_sizes[j], surface_caps[i].name);
             ok(desc.dwSize == desc_sizes[j], "dwSize was changed from %u to %u, type %s.\n",
@@ -12375,7 +12416,6 @@ static void test_surface_desc_size(void)
             desc.blob[sizeof(DDSURFACEDESC2)] = 0xef;
             hr = IDirectDrawSurface7_Lock(surface7, NULL, &desc.desc2, 0, 0);
             expected_hr = ignore_size || valid_size ? DD_OK : DDERR_INVALIDPARAMS;
-            todo_wine_if(ignore_size && !valid_size)
             ok(hr == expected_hr, "Got hr %#x, expected %#x, dwSize %u, type %s.\n",
                     hr, expected_hr, desc_sizes[j], surface_caps[i].name);
             ok(desc.dwSize == desc_sizes[j], "dwSize was changed from %u to %u, type %s.\n",

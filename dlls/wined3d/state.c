@@ -3723,9 +3723,10 @@ void apply_pixelshader(struct wined3d_context *context, const struct wined3d_sta
     context->shader_update_mask |= 1u << WINED3D_SHADER_TYPE_PIXEL;
 }
 
-static void state_geometry_shader(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
+static void state_shader(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
 {
-    context->shader_update_mask |= 1u << WINED3D_SHADER_TYPE_GEOMETRY;
+    enum wined3d_shader_type shader_type = state_id - STATE_SHADER(0);
+    context->shader_update_mask |= 1u << shader_type;
 }
 
 static void shader_bumpenv(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
@@ -4984,6 +4985,8 @@ const struct StateEntryTemplate misc_state_template[] =
     { STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_GEOMETRY),{ STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_GEOMETRY),state_cb_warn,      }, WINED3D_GL_EXT_NONE             },
     { STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_PIXEL),   { STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_PIXEL),   state_cb,           }, ARB_UNIFORM_BUFFER_OBJECT       },
     { STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_PIXEL),   { STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_PIXEL),   state_cb_warn,      }, WINED3D_GL_EXT_NONE             },
+    { STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_COMPUTE), { STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_COMPUTE), state_cb,           }, ARB_UNIFORM_BUFFER_OBJECT       },
+    { STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_COMPUTE), { STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_COMPUTE), state_cb_warn,      }, WINED3D_GL_EXT_NONE             },
     { STATE_SHADER_RESOURCE_BINDING,                      { STATE_SHADER_RESOURCE_BINDING,                      state_shader_resource_binding}, WINED3D_GL_EXT_NONE    },
     { STATE_UNORDERED_ACCESS_VIEW_BINDING,                { STATE_UNORDERED_ACCESS_VIEW_BINDING,                state_uav_binding   }, ARB_SHADER_IMAGE_LOAD_STORE     },
     { STATE_UNORDERED_ACCESS_VIEW_BINDING,                { STATE_UNORDERED_ACCESS_VIEW_BINDING,                state_uav_warn      }, WINED3D_GL_EXT_NONE             },
@@ -5176,7 +5179,8 @@ const struct StateEntryTemplate misc_state_template[] =
     { STATE_BASEVERTEXINDEX,                              { STATE_STREAMSRC,                                    NULL,               }, WINED3D_GL_EXT_NONE             },
     { STATE_FRAMEBUFFER,                                  { STATE_FRAMEBUFFER,                                  context_state_fb    }, WINED3D_GL_EXT_NONE             },
     { STATE_SHADER(WINED3D_SHADER_TYPE_PIXEL),            { STATE_SHADER(WINED3D_SHADER_TYPE_PIXEL),            context_state_drawbuf},WINED3D_GL_EXT_NONE             },
-    { STATE_SHADER(WINED3D_SHADER_TYPE_GEOMETRY),         { STATE_SHADER(WINED3D_SHADER_TYPE_GEOMETRY),         state_geometry_shader}, WINED3D_GL_EXT_NONE             },
+    { STATE_SHADER(WINED3D_SHADER_TYPE_GEOMETRY),         { STATE_SHADER(WINED3D_SHADER_TYPE_GEOMETRY),         state_shader        }, WINED3D_GL_EXT_NONE             },
+    { STATE_SHADER(WINED3D_SHADER_TYPE_COMPUTE),          { STATE_SHADER(WINED3D_SHADER_TYPE_COMPUTE),          state_shader        }, WINED3D_GL_EXT_NONE             },
     {0 /* Terminate */,                                   { 0,                                                  0                   }, WINED3D_GL_EXT_NONE             },
 };
 
@@ -5958,9 +5962,11 @@ static void validate_state_table(struct StateEntry *state_table)
         STATE_SHADER(WINED3D_SHADER_TYPE_VERTEX),
         STATE_SHADER(WINED3D_SHADER_TYPE_GEOMETRY),
         STATE_SHADER(WINED3D_SHADER_TYPE_PIXEL),
+        STATE_SHADER(WINED3D_SHADER_TYPE_COMPUTE),
         STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_VERTEX),
         STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_GEOMETRY),
         STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_PIXEL),
+        STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_COMPUTE),
         STATE_SHADER_RESOURCE_BINDING,
         STATE_VIEWPORT,
         STATE_LIGHT_TYPE,
