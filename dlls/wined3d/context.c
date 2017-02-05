@@ -1545,6 +1545,9 @@ void context_bind_dummy_textures(const struct wined3d_device *device, const stru
         if (gl_info->supported[EXT_TEXTURE_ARRAY])
             gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_2D_ARRAY, device->dummy_textures.tex_2d_array);
 
+        if (gl_info->supported[ARB_TEXTURE_BUFFER_OBJECT])
+            gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_BUFFER, device->dummy_textures.tex_buffer);
+
         checkGLcall("Bind dummy textures");
     }
 }
@@ -1752,7 +1755,7 @@ struct wined3d_context *context_create(struct wined3d_swapchain *swapchain,
     if (color_format->id == WINED3DFMT_P8_UINT)
         color_format = wined3d_get_format(gl_info, WINED3DFMT_B8G8R8A8_UNORM, target_usage);
 
-    /* When "always_offscreen" is enabled, we only use the drawable for
+    /* When using FBOs for off-screen rendering, we only use the drawable for
      * presentation blits, and don't do any rendering to it. That means we
      * don't need depth or stencil buffers, and can mostly ignore the render
      * target format. This wouldn't necessarily be quite correct for 10bpc
@@ -1760,8 +1763,7 @@ struct wined3d_context *context_create(struct wined3d_swapchain *swapchain,
      * Using the same format regardless of the color/depth/stencil targets
      * makes it much less likely that different wined3d instances will set
      * conflicting pixel formats. */
-    if (wined3d_settings.offscreen_rendering_mode != ORM_BACKBUFFER
-            && wined3d_settings.always_offscreen)
+    if (wined3d_settings.offscreen_rendering_mode != ORM_BACKBUFFER)
     {
         color_format = wined3d_get_format(gl_info, WINED3DFMT_B8G8R8A8_UNORM, target_usage);
         ds_format = wined3d_get_format(gl_info, WINED3DFMT_UNKNOWN, WINED3DUSAGE_DEPTHSTENCIL);
@@ -2444,6 +2446,10 @@ void context_bind_texture(struct wined3d_context *context, GLenum target, GLuint
                 gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_3D, device->dummy_textures.tex_3d);
                 checkGLcall("glBindTexture");
                 break;
+            case GL_TEXTURE_BUFFER:
+                gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_BUFFER, device->dummy_textures.tex_buffer);
+                checkGLcall("glBindTexture");
+                break;
             default:
                 ERR("Unexpected texture target %#x.\n", old_texture_type);
         }
@@ -2689,8 +2695,7 @@ BOOL context_apply_clear_state(struct wined3d_context *context, const struct win
         context_check_fbo_status(context, GL_FRAMEBUFFER);
     }
 
-    if (context->last_was_blit)
-        context->last_was_blit = FALSE;
+    context->last_was_blit = FALSE;
 
     /* Blending and clearing should be orthogonal, but tests on the nvidia
      * driver show that disabling blending when clearing improves the clearing
@@ -3499,8 +3504,12 @@ BOOL context_apply_draw_state(struct wined3d_context *context,
         for (i = 0, map = context->stream_info.use_map; map; map >>= 1, ++i)
         {
             if (map & 1)
-                buffer_mark_used(state->streams[context->stream_info.elements[i].stream_idx].buffer);
+                wined3d_buffer_load(state->streams[context->stream_info.elements[i].stream_idx].buffer,
+                        context, state);
         }
+        /* Loading the buffers above may have invalidated the stream info. */
+        if (isStateDirty(context, STATE_STREAMSRC))
+            context_update_stream_info(context, state);
     }
     if (state->index_buffer)
     {
@@ -3552,6 +3561,12 @@ BOOL context_apply_draw_state(struct wined3d_context *context,
     context->last_was_blit = FALSE;
 
     return TRUE;
+}
+
+void context_apply_compute_state(struct wined3d_context *context,
+        const struct wined3d_device *device, const struct wined3d_state *state)
+{
+    FIXME("Implement applying compute state.\n");
 }
 
 static void context_setup_target(struct wined3d_context *context,

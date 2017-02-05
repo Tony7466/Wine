@@ -266,6 +266,7 @@ static const struct wined3d_typed_format_info typed_formats[] =
     {WINED3DFMT_BC3_UNORM,                WINED3DFMT_BC3_TYPELESS,          ""},
     {WINED3DFMT_BC4_UNORM,                WINED3DFMT_BC4_TYPELESS,          ""},
     {WINED3DFMT_BC5_UNORM,                WINED3DFMT_BC5_TYPELESS,          ""},
+    {WINED3DFMT_BC5_SNORM,                WINED3DFMT_BC5_TYPELESS,          ""},
     {WINED3DFMT_BC6H_UF16,                WINED3DFMT_BC6H_TYPELESS,         ""},
     {WINED3DFMT_BC6H_SF16,                WINED3DFMT_BC6H_TYPELESS,         ""},
     {WINED3DFMT_BC7_UNORM_SRGB,           WINED3DFMT_BC7_TYPELESS,          ""},
@@ -353,6 +354,7 @@ static const struct wined3d_format_block_info format_block_info[] =
     {WINED3DFMT_BC3_UNORM, 4,  4,  16, TRUE},
     {WINED3DFMT_BC4_UNORM, 4,  4,  8,  TRUE},
     {WINED3DFMT_BC5_UNORM, 4,  4,  16, TRUE},
+    {WINED3DFMT_BC5_SNORM, 4,  4,  16, TRUE},
     {WINED3DFMT_BC6H_UF16, 4,  4,  16, TRUE},
     {WINED3DFMT_BC6H_SF16, 4,  4,  16, TRUE},
     {WINED3DFMT_BC7_UNORM, 4,  4,  16, TRUE},
@@ -1153,6 +1155,11 @@ static const struct wined3d_format_texture_info format_texture_info[] =
             WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_POSTPIXELSHADER_BLENDING | WINED3DFMT_FLAG_FILTERING
             | WINED3DFMT_FLAG_COMPRESSED,
             ARB_TEXTURE_COMPRESSION_RGTC, NULL},
+    {WINED3DFMT_BC5_SNORM,              GL_COMPRESSED_SIGNED_RG_RGTC2,    GL_COMPRESSED_SIGNED_RG_RGTC2,          0,
+            GL_RG,                      GL_UNSIGNED_BYTE,                 0,
+            WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_POSTPIXELSHADER_BLENDING | WINED3DFMT_FLAG_FILTERING
+            | WINED3DFMT_FLAG_COMPRESSED,
+            ARB_TEXTURE_COMPRESSION_RGTC, NULL},
     {WINED3DFMT_BC6H_UF16,              GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT_ARB, GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT_ARB, 0,
             GL_RGB,                     GL_UNSIGNED_BYTE,                 0,
             WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_POSTPIXELSHADER_BLENDING | WINED3DFMT_FLAG_FILTERING
@@ -1220,7 +1227,7 @@ static const struct wined3d_format_texture_info format_texture_info[] =
             WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_POSTPIXELSHADER_BLENDING | WINED3DFMT_FLAG_RENDERTARGET,
             EXT_PACKED_FLOAT},
     /* Palettized formats */
-    {WINED3DFMT_P8_UINT,                GL_R8,                            GL_R8,                              0,
+    {WINED3DFMT_P8_UINT,                GL_R8,                            GL_R8,                                  0,
             GL_RED,                     GL_UNSIGNED_BYTE,                 0,
             0,
             ARB_TEXTURE_RG,             NULL},
@@ -2382,11 +2389,14 @@ static void check_fbo_compat(struct wined3d_caps_gl_ctx *ctx, struct wined3d_for
                 TRACE("Format %s's sRGB format is FBO attachable, type %u.\n",
                         debug_d3dformat(format->id), type);
                 format->flags[type] |= WINED3DFMT_FLAG_FBO_ATTACHABLE_SRGB;
+                if (gl_info->supported[EXT_TEXTURE_SRGB_DECODE])
+                    format->glInternal = format->glGammaInternal;
             }
             else
             {
                 WARN("Format %s's sRGB format is not FBO attachable, type %u.\n",
                         debug_d3dformat(format->id), type);
+                format_clear_flag(format, WINED3DFMT_FLAG_SRGB_WRITE);
             }
         }
         else if (status == GL_FRAMEBUFFER_COMPLETE)
@@ -2523,11 +2533,14 @@ static void init_format_fbo_compat_info(struct wined3d_caps_gl_ctx *ctx)
                         TRACE("Format %s's sRGB format is FBO attachable, resource type %u.\n",
                                 debug_d3dformat(format->id), type);
                         format->flags[type] |= WINED3DFMT_FLAG_FBO_ATTACHABLE_SRGB;
+                        if (gl_info->supported[EXT_TEXTURE_SRGB_DECODE])
+                            format->glInternal = format->glGammaInternal;
                     }
                     else
                     {
                         WARN("Format %s's sRGB format is not FBO attachable, resource type %u.\n",
                                 debug_d3dformat(format->id), type);
+                        format_clear_flag(format, WINED3DFMT_FLAG_SRGB_WRITE);
                     }
                 }
                 else if (format->flags[type] & WINED3DFMT_FLAG_FBO_ATTACHABLE)
@@ -2739,7 +2752,8 @@ static void query_internal_format(struct wined3d_adapter *adapter,
 
             if (!(format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & (WINED3DFMT_FLAG_SRGB_READ | WINED3DFMT_FLAG_SRGB_WRITE)))
                 format->glGammaInternal = format->glInternal;
-            else if (gl_info->supported[EXT_TEXTURE_SRGB_DECODE])
+            else if (wined3d_settings.offscreen_rendering_mode != ORM_FBO
+                    && gl_info->supported[EXT_TEXTURE_SRGB_DECODE])
                 format->glInternal = format->glGammaInternal;
         }
     }
@@ -2761,7 +2775,8 @@ static void query_internal_format(struct wined3d_adapter *adapter,
                 format->glGammaInternal = format->glInternal;
                 format_clear_flag(format, WINED3DFMT_FLAG_SRGB_READ | WINED3DFMT_FLAG_SRGB_WRITE);
             }
-            else if (gl_info->supported[EXT_TEXTURE_SRGB_DECODE])
+            else if (wined3d_settings.offscreen_rendering_mode != ORM_FBO
+                    && gl_info->supported[EXT_TEXTURE_SRGB_DECODE])
             {
                 format->glInternal = format->glGammaInternal;
             }
@@ -3347,6 +3362,8 @@ static void apply_format_fixups(struct wined3d_adapter *adapter, struct wined3d_
     idx = get_format_idx(WINED3DFMT_BC4_UNORM);
     gl_info->formats[idx].flags[WINED3D_GL_RES_TYPE_TEX_3D] &= ~WINED3DFMT_FLAG_TEXTURE;
     idx = get_format_idx(WINED3DFMT_BC5_UNORM);
+    gl_info->formats[idx].flags[WINED3D_GL_RES_TYPE_TEX_3D] &= ~WINED3DFMT_FLAG_TEXTURE;
+    idx = get_format_idx(WINED3DFMT_BC5_SNORM);
     gl_info->formats[idx].flags[WINED3D_GL_RES_TYPE_TEX_3D] &= ~WINED3DFMT_FLAG_TEXTURE;
 }
 
@@ -5717,9 +5734,27 @@ void wined3d_ffp_get_vs_settings(const struct wined3d_context *context,
 
     for (i = 0; i < MAX_ACTIVE_LIGHTS; ++i)
     {
-        if (state->lights[i])
-            settings->light_type |= (state->lights[i]->OriginalParms.type
-                    & WINED3D_FFP_LIGHT_TYPE_MASK) << WINED3D_FFP_LIGHT_TYPE_SHIFT(i);
+        if (!state->lights[i])
+            continue;
+
+        switch (state->lights[i]->OriginalParms.type)
+        {
+            case WINED3D_LIGHT_POINT:
+                ++settings->point_light_count;
+                break;
+            case WINED3D_LIGHT_SPOT:
+                ++settings->spot_light_count;
+                break;
+            case WINED3D_LIGHT_DIRECTIONAL:
+                ++settings->directional_light_count;
+                break;
+            case WINED3D_LIGHT_PARALLELPOINT:
+                ++settings->parallel_point_light_count;
+                break;
+            default:
+                FIXME("Unhandled light type %#x.\n", state->lights[i]->OriginalParms.type);
+                break;
+        }
     }
 
     if (!state->render_states[WINED3D_RS_FOGENABLE])
@@ -5878,26 +5913,17 @@ BOOL wined3d_clip_blit(const RECT *clip_rect, RECT *clipped, RECT *other)
 void wined3d_gl_limits_get_uniform_block_range(const struct wined3d_gl_limits *gl_limits,
         enum wined3d_shader_type shader_type, unsigned int *base, unsigned int *count)
 {
+    unsigned int i;
+
     *base = 0;
-    *count = gl_limits->vertex_uniform_blocks;
+    for (i = 0; i < WINED3D_SHADER_TYPE_COUNT; ++i)
+    {
+        *count = gl_limits->uniform_blocks[i];
+        if (i == shader_type)
+            return;
+        *base += *count;
+    }
 
-    if (shader_type == WINED3D_SHADER_TYPE_VERTEX)
-        return;
-
-    *base += *count;
-    *count = gl_limits->geometry_uniform_blocks;
-
-    if (shader_type == WINED3D_SHADER_TYPE_GEOMETRY)
-        return;
-
-    *base += *count;
-    *count = gl_limits->fragment_uniform_blocks;
-
-    if (shader_type == WINED3D_SHADER_TYPE_PIXEL)
-        return;
-
-    *base += *count;
+    ERR("Unrecognized shader type %#x.\n", shader_type);
     *count = 0;
-
-    ERR("Unhandled shader type %#x.\n", shader_type);
 }

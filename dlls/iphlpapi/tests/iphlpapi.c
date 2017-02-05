@@ -1409,6 +1409,9 @@ static void test_GetAdaptersAddresses(void)
         ua = aa->FirstUnicastAddress;
         while (ua)
         {
+            ok(S(U(*ua)).Length == sizeof(IP_ADAPTER_UNICAST_ADDRESS_LH) ||
+               S(U(*ua)).Length == sizeof(IP_ADAPTER_UNICAST_ADDRESS_XP),
+               "Unknown structure size of %u bytes\n", S(U(*ua)).Length);
             ok(ua->PrefixOrigin != IpPrefixOriginOther,
                "bad address config value %d\n", ua->PrefixOrigin);
             ok(ua->SuffixOrigin != IpSuffixOriginOther,
@@ -1435,6 +1438,13 @@ static void test_GetAdaptersAddresses(void)
             trace("\tValidLifetime:           %u seconds\n", ua->ValidLifetime);
             trace("\tPreferredLifetime:       %u seconds\n", ua->PreferredLifetime);
             trace("\tLeaseLifetime:           %u seconds\n", ua->LeaseLifetime);
+            if (S(U(*ua)).Length < sizeof(IP_ADAPTER_UNICAST_ADDRESS_LH))
+            {
+                trace("\n");
+                ua = ua->Next;
+                continue;
+            }
+            trace("\tOnLinkPrefixLength:      %u\n", ua->OnLinkPrefixLength);
             trace("\n");
             ua = ua->Next;
         }
@@ -1582,7 +1592,7 @@ static void test_AllocateAndGetTcpExTableFromStack(void)
         ok( ret == ERROR_INVALID_PARAMETER, "got %u\n", ret );
         ret = pAllocateAndGetTcpExTableFromStack( (void **)&table_ex, FALSE, INVALID_HANDLE_VALUE, 0, AF_INET );
         ok( ret == ERROR_INVALID_PARAMETER, "got %u\n", ret );
-        ret = pAllocateAndGetTcpExTableFromStack( (void **)NULL, FALSE, GetProcessHeap(), 0, AF_INET );
+        ret = pAllocateAndGetTcpExTableFromStack( NULL, FALSE, GetProcessHeap(), 0, AF_INET );
         ok( ret == ERROR_INVALID_PARAMETER, "got %u\n", ret );
     }
 
@@ -1598,9 +1608,12 @@ static void test_AllocateAndGetTcpExTableFromStack(void)
         trace( "AllocateAndGetTcpExTableFromStack table: %u entries\n", table_ex->dwNumEntries );
         for (i = 0; i < table_ex->dwNumEntries; i++)
         {
+          char remote_ip[16];
+
+          strcpy(remote_ip, ntoa(table_ex->table[i].dwRemoteAddr));
           trace( "%u: local %s:%u remote %s:%u state %u pid %u\n", i,
                  ntoa(table_ex->table[i].dwLocalAddr), ntohs(table_ex->table[i].dwLocalPort),
-                 ntoa( table_ex->table[i].dwRemoteAddr ), ntohs(table_ex->table[i].dwRemotePort),
+                 remote_ip, ntohs(table_ex->table[i].dwRemotePort),
                  U(table_ex->table[i]).dwState, table_ex->table[i].dwOwningPid );
         }
     }
