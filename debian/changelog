@@ -1,3 +1,16 @@
+wine (1.8.6-5) unstable; urgency=medium
+
+  * Enable oss on kfreebsd, explicitly disable it on other archs.
+  * Create the sonames2elf binary without -nostdlib (cf. #853793)
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Thu, 02 Feb 2017 15:04:27 +0100
+
+wine (1.8.6-4) unstable; urgency=medium
+
+  * Remove outdated oss4 build dependency (closes: #852988).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Tue, 31 Jan 2017 06:05:01 +0000
+
 wine (1.8.6-3~bpo8+1) jessie-backports; urgency=medium
 
   * Rebuild for jessie-backports.

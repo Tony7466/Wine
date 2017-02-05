@@ -30,7 +30,7 @@ Build-Depends:
  bison,
  quilt,
  gettext,
- oss4-dev,
+ oss4-dev [kfreebsd-any],
  sharutils,
  dctrl-tools,
  khronos-api,
