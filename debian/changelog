@@ -1,3 +1,10 @@
+wine (1.8.6-5~bpo8+1) jessie-backports; urgency=medium
+
+  * Rebuild for jessie-backports.
+  * No changes.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Sun, 05 Feb 2017 21:14:47 +0100
+
 wine (1.8.6-5) unstable; urgency=medium
 
   * Enable oss on kfreebsd, explicitly disable it on other archs.
