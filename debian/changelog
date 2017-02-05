@@ -1,3 +1,20 @@
+wine-development (2.1-1) experimental; urgency=medium
+
+  * New upstream release 2.1, released Feb 3, 2017.
+    - Many fixes that were deferred during code freeze.
+    - More Shader Model 5 instructions.
+    - A number of improvements to MIME message handling.
+    - Line breaking improvements in DirectWrite.
+    - HID bus service now running by default.
+    - Direct2D rendering improvements.
+    - Various bug fixes.
+    - New versioning convention.
+    - Source release tarballs now use xz compression.
+  * Update watch file to find the new upstream tarballs.
+  * Update to debhelper 10.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 05 Feb 2017 17:39:44 +0000
+
 wine-development (2.0-3) unstable; urgency=medium
 
   * Enable oss on kfreebsd, explicitly disable it on other archs.
