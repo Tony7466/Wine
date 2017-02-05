@@ -103,7 +103,7 @@ debian/bug-control: debian/bug-control.in
 	sed s/VERSION/$(VERSION)/g < $< > $@
 
 %:
-	dh $@ --parallel --with autoreconf
+	dh $@
 
 override_dh_auto_configure:
 	./debian/scripts/generate libs/port/cptable.generated cpmap
