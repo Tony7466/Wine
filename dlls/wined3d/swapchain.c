@@ -365,7 +365,7 @@ static void swapchain_blit(const struct wined3d_swapchain *swapchain,
         float tex_right = src_rect->right;
         float tex_bottom = src_rect->bottom;
 
-        context2 = context_acquire(device, back_buffer);
+        context2 = context_acquire(device, texture, 0);
         context_apply_blit_state(context2, device);
 
         if (texture->flags & WINED3D_TEXTURE_NORMALIZED_COORDS)
@@ -387,6 +387,9 @@ static void swapchain_blit(const struct wined3d_swapchain *swapchain,
         device->blitter->set_shader(device->blit_priv, context2, back_buffer, NULL);
         gl_info->gl_ops.gl.p_glTexParameteri(back_buffer->texture_target, GL_TEXTURE_MIN_FILTER, gl_filter);
         gl_info->gl_ops.gl.p_glTexParameteri(back_buffer->texture_target, GL_TEXTURE_MAG_FILTER, gl_filter);
+        if (gl_info->supported[EXT_TEXTURE_SRGB_DECODE])
+            gl_info->gl_ops.gl.p_glTexParameteri(back_buffer->texture_target,
+                    GL_TEXTURE_SRGB_DECODE_EXT, GL_SKIP_DECODE_EXT);
 
         context_set_draw_buffer(context, GL_BACK);
 
@@ -490,7 +493,7 @@ static void swapchain_gl_present(struct wined3d_swapchain *swapchain,
     struct wined3d_context *context;
     BOOL render_to_fbo;
 
-    context = context_acquire(swapchain->device, back_buffer->sub_resources[0].u.surface);
+    context = context_acquire(swapchain->device, back_buffer, 0);
     if (!context->valid)
     {
         context_release(context);
@@ -633,7 +636,7 @@ static void swapchain_gl_frontbuffer_updated(struct wined3d_swapchain *swapchain
     struct wined3d_texture *front_buffer = swapchain->front_buffer;
     struct wined3d_context *context;
 
-    context = context_acquire(swapchain->device, front_buffer->sub_resources[0].u.surface);
+    context = context_acquire(swapchain->device, front_buffer, 0);
     wined3d_texture_load_location(front_buffer, 0, context, front_buffer->resource.draw_binding);
     context_release(context);
     SetRectEmpty(&swapchain->front_buffer_update);
@@ -784,6 +787,7 @@ static HRESULT swapchain_init(struct wined3d_swapchain *swapchain, struct wined3
     const struct wined3d_adapter *adapter = device->adapter;
     struct wined3d_resource_desc texture_desc;
     BOOL displaymode_set = FALSE;
+    DWORD texture_flags = 0;
     RECT client_rect;
     HWND window;
     HRESULT hr;
@@ -856,8 +860,11 @@ static HRESULT swapchain_init(struct wined3d_swapchain *swapchain, struct wined3
     texture_desc.depth = 1;
     texture_desc.size = 0;
 
+    if (swapchain->desc.flags & WINED3D_SWAPCHAIN_GDI_COMPATIBLE)
+        texture_flags |= WINED3D_TEXTURE_CREATE_GET_DC;
+
     if (FAILED(hr = device->device_parent->ops->create_swapchain_texture(device->device_parent,
-            parent, &texture_desc, &swapchain->front_buffer)))
+            parent, &texture_desc, texture_flags, &swapchain->front_buffer)))
     {
         WARN("Failed to create front buffer, hr %#x.\n", hr);
         goto err;
@@ -972,7 +979,7 @@ static HRESULT swapchain_init(struct wined3d_swapchain *swapchain, struct wined3
         {
             TRACE("Creating back buffer %u.\n", i);
             if (FAILED(hr = device->device_parent->ops->create_swapchain_texture(device->device_parent,
-                    parent, &texture_desc, &swapchain->back_buffers[i])))
+                    parent, &texture_desc, texture_flags, &swapchain->back_buffers[i])))
             {
                 WARN("Failed to create back buffer %u, hr %#x.\n", i, hr);
                 swapchain->desc.backbuffer_count = i;
@@ -995,7 +1002,7 @@ static HRESULT swapchain_init(struct wined3d_swapchain *swapchain, struct wined3
             texture_desc.usage = WINED3DUSAGE_DEPTHSTENCIL;
 
             if (FAILED(hr = device->device_parent->ops->create_swapchain_texture(device->device_parent,
-                    device->device_parent, &texture_desc, &ds)))
+                    device->device_parent, &texture_desc, texture_flags, &ds)))
             {
                 WARN("Failed to create the auto depth/stencil surface, hr %#x.\n", hr);
                 goto err;
@@ -1129,7 +1136,9 @@ void swapchain_destroy_contexts(struct wined3d_swapchain *swapchain)
     {
         context_destroy(swapchain->device, swapchain->context[i]);
     }
+    HeapFree(GetProcessHeap(), 0, swapchain->context);
     swapchain->num_contexts = 0;
+    swapchain->context = NULL;
 }
 
 struct wined3d_context *swapchain_get_context(struct wined3d_swapchain *swapchain)
@@ -1190,7 +1199,7 @@ void swapchain_update_swap_interval(struct wined3d_swapchain *swapchain)
     struct wined3d_context *context;
     int swap_interval;
 
-    context = context_acquire(swapchain->device, swapchain->front_buffer->sub_resources[0].u.surface);
+    context = context_acquire(swapchain->device, swapchain->front_buffer, 0);
     gl_info = context->gl_info;
 
     switch (swapchain->desc.swap_interval)

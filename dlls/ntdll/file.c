@@ -579,7 +579,6 @@ static NTSTATUS server_read_file( HANDLE handle, HANDLE event, PIO_APC_ROUTINE a
         status = wine_server_call( req );
         wait_handle = wine_server_ptr_handle( reply->wait );
         options     = reply->options;
-        if (status != STATUS_PENDING) io->Information = wine_server_reply_size( reply );
     }
     SERVER_END_REQ;
 
@@ -627,7 +626,6 @@ static NTSTATUS server_write_file( HANDLE handle, HANDLE event, PIO_APC_ROUTINE 
         status = wine_server_call( req );
         wait_handle = wine_server_ptr_handle( reply->wait );
         options     = reply->options;
-        if (status != STATUS_PENDING) io->Information = reply->size;
     }
     SERVER_END_REQ;
 
@@ -2374,7 +2372,14 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE hFile, PIO_STATUS_BLOCK io,
         0,                                             /* FileNumaNodeInformation */
         0,                                             /* FileStandardLinkInformation */
         0,                                             /* FileRemoteProtocolInformation */
+        0,                                             /* FileRenameInformationBypassAccessCheck */
+        0,                                             /* FileLinkInformationBypassAccessCheck */
+        0,                                             /* FileVolumeNameInformation */
+        sizeof(FILE_ID_INFORMATION),                   /* FileIdInformation */
+        0,                                             /* FileIdExtdDirectoryInformation */
         0,                                             /* FileReplaceCompletionInformation */
+        0,                                             /* FileHardLinkFullIdInformation */
+        0,                                             /* FileIdExtdBothDirectoryInformation */
     };
 
     struct stat st;
@@ -2610,6 +2615,16 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE hFile, PIO_STATUS_BLOCK io,
                 }
                 RtlFreeAnsiString( &unix_name );
             }
+        }
+        break;
+    case FileIdInformation:
+        if (fd_get_file_info( fd, &st, &attr ) == -1) io->u.Status = FILE_GetNtStatus();
+        else
+        {
+            FILE_ID_INFORMATION *info = ptr;
+            info->VolumeSerialNumber = 0;  /* FIXME */
+            memset( &info->FileId, 0, sizeof(info->FileId) );
+            *(ULONGLONG *)&info->FileId = st.st_ino;
         }
         break;
     default:

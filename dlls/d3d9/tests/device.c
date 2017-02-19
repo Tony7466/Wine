@@ -1437,15 +1437,15 @@ static void test_refcount(void)
     CHECK_CALL(hr, "GetSwapChain", device, ++refcount);
     if (pSwapChain)
     {
-        CHECK_REFCOUNT( pSwapChain, 1);
+        CHECK_REFCOUNT(pSwapChain, 1);
 
         hr = IDirect3DDevice9_GetRenderTarget(device, 0, &pRenderTarget);
         CHECK_CALL(hr, "GetRenderTarget", device, ++refcount);
-        CHECK_REFCOUNT( pSwapChain, 1);
-        if(pRenderTarget)
+        CHECK_REFCOUNT(pSwapChain, 1);
+        if (pRenderTarget)
         {
-            CHECK_SURFACE_CONTAINER( pRenderTarget, IID_IDirect3DSwapChain9, pSwapChain);
-            CHECK_REFCOUNT( pRenderTarget, 1);
+            CHECK_SURFACE_CONTAINER(pRenderTarget, IID_IDirect3DSwapChain9, pSwapChain);
+            CHECK_REFCOUNT(pRenderTarget, 1);
 
             CHECK_ADDREF_REFCOUNT(pRenderTarget, 2);
             CHECK_REFCOUNT(device, refcount);
@@ -1454,9 +1454,9 @@ static void test_refcount(void)
 
             hr = IDirect3DDevice9_GetRenderTarget(device, 0, &pRenderTarget);
             CHECK_CALL(hr, "GetRenderTarget", device, refcount);
-            CHECK_REFCOUNT( pRenderTarget, 2);
-            CHECK_RELEASE_REFCOUNT( pRenderTarget, 1);
-            CHECK_RELEASE_REFCOUNT( pRenderTarget, 0);
+            CHECK_REFCOUNT(pRenderTarget, 2);
+            CHECK_RELEASE_REFCOUNT(pRenderTarget, 1);
+            CHECK_RELEASE_REFCOUNT(pRenderTarget, 0);
             CHECK_REFCOUNT(device, --refcount);
 
             /* The render target is released with the device, so AddRef with refcount=0 is fine here. */
@@ -1464,24 +1464,28 @@ static void test_refcount(void)
             CHECK_REFCOUNT(device, ++refcount);
             CHECK_RELEASE_REFCOUNT(pRenderTarget, 0);
             CHECK_REFCOUNT(device, --refcount);
+            CHECK_RELEASE_REFCOUNT(pRenderTarget, 0);
+            CHECK_RELEASE_REFCOUNT(pRenderTarget, 0);
         }
 
         /* Render target and back buffer are identical. */
         hr = IDirect3DDevice9_GetBackBuffer(device, 0, 0, 0, &pBackBuffer);
         CHECK_CALL(hr, "GetBackBuffer", device, ++refcount);
-        if(pBackBuffer)
+        if (pBackBuffer)
         {
             CHECK_RELEASE_REFCOUNT(pBackBuffer, 0);
             ok(pRenderTarget == pBackBuffer, "RenderTarget=%p and BackBuffer=%p should be the same.\n",
-            pRenderTarget, pBackBuffer);
+                    pRenderTarget, pBackBuffer);
+            CHECK_RELEASE_REFCOUNT(pBackBuffer, 0);
+            CHECK_RELEASE_REFCOUNT(pBackBuffer, 0);
             pBackBuffer = NULL;
         }
         CHECK_REFCOUNT(device, --refcount);
 
         hr = IDirect3DDevice9_GetDepthStencilSurface(device, &pStencilSurface);
         CHECK_CALL(hr, "GetDepthStencilSurface", device, ++refcount);
-        CHECK_REFCOUNT( pSwapChain, 1);
-        if(pStencilSurface)
+        CHECK_REFCOUNT(pSwapChain, 1);
+        if (pStencilSurface)
         {
             CHECK_SURFACE_CONTAINER(pStencilSurface, IID_IDirect3DDevice9, device);
             CHECK_REFCOUNT( pStencilSurface, 1);
@@ -1491,7 +1495,7 @@ static void test_refcount(void)
             CHECK_RELEASE_REFCOUNT(pStencilSurface, 1);
             CHECK_REFCOUNT(device, refcount);
 
-            CHECK_RELEASE_REFCOUNT( pStencilSurface, 0);
+            CHECK_RELEASE_REFCOUNT(pStencilSurface, 0);
             CHECK_REFCOUNT(device, --refcount);
 
             /* The stencil surface is released with the device, so AddRef with refcount=0 is fine here. */
@@ -1499,17 +1503,23 @@ static void test_refcount(void)
             CHECK_REFCOUNT(device, ++refcount);
             CHECK_RELEASE_REFCOUNT(pStencilSurface, 0);
             CHECK_REFCOUNT(device, --refcount);
+            CHECK_RELEASE_REFCOUNT(pStencilSurface, 0);
+            CHECK_RELEASE_REFCOUNT(pStencilSurface, 0);
             pStencilSurface = NULL;
         }
 
-        CHECK_RELEASE_REFCOUNT( pSwapChain, 0);
+        CHECK_RELEASE_REFCOUNT(pSwapChain, 0);
         CHECK_REFCOUNT(device, --refcount);
+        CHECK_RELEASE_REFCOUNT(pSwapChain, 0);
+        CHECK_RELEASE_REFCOUNT(pSwapChain, 0);
 
         /* The implicit swapchwin is released with the device, so AddRef with refcount=0 is fine here. */
         CHECK_ADDREF_REFCOUNT(pSwapChain, 1);
         CHECK_REFCOUNT(device, ++refcount);
         CHECK_RELEASE_REFCOUNT(pSwapChain, 0);
         CHECK_REFCOUNT(device, --refcount);
+        CHECK_RELEASE_REFCOUNT(pSwapChain, 0);
+        CHECK_RELEASE_REFCOUNT(pSwapChain, 0);
         pSwapChain = NULL;
     }
 
@@ -1518,7 +1528,7 @@ static void test_refcount(void)
     CHECK_CALL(hr, "CreateIndexBuffer", device, ++refcount );
     if(pIndexBuffer)
     {
-        tmp = get_refcount( (IUnknown *)pIndexBuffer );
+        tmp = get_refcount((IUnknown *)pIndexBuffer);
 
         hr = IDirect3DDevice9_SetIndices(device, pIndexBuffer);
         CHECK_CALL( hr, "SetIndices", pIndexBuffer, tmp);
@@ -1635,17 +1645,17 @@ static void test_refcount(void)
     d3dpp.AutoDepthStencilFormat = D3DFMT_D24S8;
     hr = IDirect3DDevice9_CreateAdditionalSwapChain(device, &d3dpp, &pSwapChain);
     CHECK_CALL(hr, "CreateAdditionalSwapChain", device, ++refcount);
-    if(pSwapChain)
+    if (pSwapChain)
     {
         /* check implicit back buffer */
         hr = IDirect3DSwapChain9_GetBackBuffer(pSwapChain, 0, 0, &pBackBuffer);
         CHECK_CALL(hr, "GetBackBuffer", device, ++refcount);
-        CHECK_REFCOUNT( pSwapChain, 1);
-        if(pBackBuffer)
+        CHECK_REFCOUNT(pSwapChain, 1);
+        if (pBackBuffer)
         {
-            CHECK_SURFACE_CONTAINER( pBackBuffer, IID_IDirect3DSwapChain9, pSwapChain);
-            CHECK_REFCOUNT( pBackBuffer, 1);
-            CHECK_RELEASE_REFCOUNT( pBackBuffer, 0);
+            CHECK_SURFACE_CONTAINER(pBackBuffer, IID_IDirect3DSwapChain9, pSwapChain);
+            CHECK_REFCOUNT(pBackBuffer, 1);
+            CHECK_RELEASE_REFCOUNT(pBackBuffer, 0);
             CHECK_REFCOUNT(device, --refcount);
 
             /* The back buffer is released with the swapchain, so AddRef with refcount=0 is fine here. */
@@ -1653,9 +1663,11 @@ static void test_refcount(void)
             CHECK_REFCOUNT(device, ++refcount);
             CHECK_RELEASE_REFCOUNT(pBackBuffer, 0);
             CHECK_REFCOUNT(device, --refcount);
+            CHECK_RELEASE_REFCOUNT(pBackBuffer, 0);
+            CHECK_RELEASE_REFCOUNT(pBackBuffer, 0);
             pBackBuffer = NULL;
         }
-        CHECK_REFCOUNT( pSwapChain, 1);
+        CHECK_REFCOUNT(pSwapChain, 1);
     }
     hr = IDirect3DDevice9_CreateQuery(device, D3DQUERYTYPE_EVENT, &pQuery);
     CHECK_CALL(hr, "CreateQuery", device, ++refcount);
@@ -1669,12 +1681,14 @@ static void test_refcount(void)
      * Otherwise GetRenderTarget would re-allocate it and the pointer would change.*/
     hr = IDirect3DDevice9_GetRenderTarget(device, 0, &pRenderTarget2);
     CHECK_CALL(hr, "GetRenderTarget", device, ++refcount);
-    if(pRenderTarget2)
+    if (pRenderTarget2)
     {
         CHECK_RELEASE_REFCOUNT(pRenderTarget2, 0);
         ok(pRenderTarget == pRenderTarget2, "RenderTarget=%p and RenderTarget2=%p should be the same.\n",
-           pRenderTarget, pRenderTarget2);
+                pRenderTarget, pRenderTarget2);
         CHECK_REFCOUNT(device, --refcount);
+        CHECK_RELEASE_REFCOUNT(pRenderTarget2, 0);
+        CHECK_RELEASE_REFCOUNT(pRenderTarget2, 0);
         pRenderTarget2 = NULL;
     }
     pRenderTarget = NULL;
@@ -11443,6 +11457,69 @@ static void test_render_target_device_mismatch(void)
     DestroyWindow(window);
 }
 
+static void test_format_unknown(void)
+{
+    IDirect3DDevice9 *device;
+    IDirect3D9 *d3d;
+    UINT refcount;
+    HWND window;
+    void *iface;
+    HRESULT hr;
+
+    window = CreateWindowA("static", "d3d9_test", WS_OVERLAPPEDWINDOW,
+            0, 0, 640, 480, NULL, NULL, NULL, NULL);
+    d3d = Direct3DCreate9(D3D_SDK_VERSION);
+    ok(!!d3d, "Failed to create a D3D object.\n");
+    if (!(device = create_device(d3d, window, NULL)))
+    {
+        skip("Failed to create a D3D device.\n");
+        IDirect3D9_Release(d3d);
+        DestroyWindow(window);
+        return;
+    }
+
+    iface = (void *)0xdeadbeef;
+    hr = IDirect3DDevice9_CreateRenderTarget(device, 64, 64,
+            D3DFMT_UNKNOWN, D3DMULTISAMPLE_NONE, 0, FALSE, (IDirect3DSurface9 **)&iface, NULL);
+    ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x.\n", hr);
+    ok(!iface, "Got unexpected iface %p.\n", iface);
+
+    iface = (void *)0xdeadbeef;
+    hr = IDirect3DDevice9_CreateDepthStencilSurface(device, 64, 64,
+            D3DFMT_UNKNOWN, D3DMULTISAMPLE_NONE, 0, TRUE, (IDirect3DSurface9 **)&iface, NULL);
+    ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x.\n", hr);
+    ok(!iface, "Got unexpected iface %p.\n", iface);
+
+    iface = (void *)0xdeadbeef;
+    hr = IDirect3DDevice9_CreateOffscreenPlainSurface(device, 64, 64,
+            D3DFMT_UNKNOWN, D3DPOOL_DEFAULT, (IDirect3DSurface9 **)&iface, NULL);
+    ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x.\n", hr);
+    ok(!iface, "Got unexpected iface %p.\n", iface);
+
+    iface = (void *)0xdeadbeef;
+    hr = IDirect3DDevice9_CreateTexture(device, 64, 64, 1, 0,
+            D3DFMT_UNKNOWN, D3DPOOL_DEFAULT, (IDirect3DTexture9 **)&iface, NULL);
+    ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x.\n", hr);
+    ok(!iface, "Got unexpected iface %p.\n", iface);
+
+    iface = (void *)0xdeadbeef;
+    hr = IDirect3DDevice9_CreateCubeTexture(device, 64, 1, 0,
+            D3DFMT_UNKNOWN, D3DPOOL_DEFAULT, (IDirect3DCubeTexture9 **)&iface, NULL);
+    ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x.\n", hr);
+    ok(!iface, "Got unexpected iface %p.\n", iface);
+
+    iface = (void *)0xdeadbeef;
+    hr = IDirect3DDevice9_CreateVolumeTexture(device, 64, 64, 1, 1, 0,
+            D3DFMT_UNKNOWN, D3DPOOL_DEFAULT, (IDirect3DVolumeTexture9 **)&iface, NULL);
+    ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x.\n", hr);
+    ok(!iface, "Got unexpected iface %p.\n", iface);
+
+    refcount = IDirect3DDevice9_Release(device);
+    ok(!refcount, "Device has %u references left.\n", refcount);
+    IDirect3D9_Release(d3d);
+    DestroyWindow(window);
+}
+
 START_TEST(device)
 {
     WNDCLASSA wc = {0};
@@ -11560,6 +11637,7 @@ START_TEST(device)
     test_miptree_layout();
     test_get_render_target_data();
     test_render_target_device_mismatch();
+    test_format_unknown();
 
     UnregisterClassA("d3d9_test_wc", GetModuleHandleA(NULL));
 }

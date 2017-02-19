@@ -44,6 +44,8 @@
 extern HMODULE	huser32 DECLSPEC_HIDDEN;
 extern HINSTANCE shell32_hInstance DECLSPEC_HIDDEN;
 
+extern CLSID CLSID_ShellImageDataFactory;
+
 /* Iconcache */
 #define INVALID_INDEX -1
 void SIC_Destroy(void) DECLSPEC_HIDDEN;
@@ -222,5 +224,15 @@ enum tid_t {
 HRESULT get_typeinfo(enum tid_t, ITypeInfo**) DECLSPEC_HIDDEN;
 void release_typelib(void) DECLSPEC_HIDDEN;
 void release_desktop_folder(void) DECLSPEC_HIDDEN;
+
+static inline WCHAR *strdupW(const WCHAR *src)
+{
+    WCHAR *dest;
+    if (!src) return NULL;
+    dest = HeapAlloc(GetProcessHeap(), 0, (lstrlenW(src) + 1) * sizeof(*dest));
+    if (dest)
+        lstrcpyW(dest, src);
+    return dest;
+}
 
 #endif

@@ -24,20 +24,23 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(d3d);
 
+#define WINED3D_VIEW_CUBE_ARRAY (WINED3D_VIEW_TEXTURE_CUBE | WINED3D_VIEW_TEXTURE_ARRAY)
+
 static BOOL is_stencil_view_format(const struct wined3d_format *format)
 {
     return format->id == WINED3DFMT_X24_TYPELESS_G8_UINT
             || format->id == WINED3DFMT_X32_TYPELESS_G8X24_UINT;
 }
 
-static GLenum get_texture_view_target(const struct wined3d_view_desc *desc,
-        const struct wined3d_texture *texture)
+static GLenum get_texture_view_target(const struct wined3d_gl_info *gl_info,
+        const struct wined3d_view_desc *desc, const struct wined3d_texture *texture)
 {
     static const struct
     {
         GLenum texture_target;
         unsigned int view_flags;
         GLenum view_target;
+        enum wined3d_gl_extension extension;
     }
     view_types[] =
     {
@@ -46,14 +49,19 @@ static GLenum get_texture_view_target(const struct wined3d_view_desc *desc,
         {GL_TEXTURE_2D_ARRAY, 0,                          GL_TEXTURE_2D},
         {GL_TEXTURE_2D_ARRAY, WINED3D_VIEW_TEXTURE_ARRAY, GL_TEXTURE_2D_ARRAY},
         {GL_TEXTURE_2D_ARRAY, WINED3D_VIEW_TEXTURE_CUBE,  GL_TEXTURE_CUBE_MAP},
+        {GL_TEXTURE_2D_ARRAY, WINED3D_VIEW_CUBE_ARRAY,    GL_TEXTURE_CUBE_MAP_ARRAY, ARB_TEXTURE_CUBE_MAP_ARRAY},
         {GL_TEXTURE_3D,       0,                          GL_TEXTURE_3D},
     };
     unsigned int i;
 
     for (i = 0; i < ARRAY_SIZE(view_types); ++i)
     {
-        if (view_types[i].texture_target == texture->target && view_types[i].view_flags == desc->flags)
+        if (view_types[i].texture_target != texture->target || view_types[i].view_flags != desc->flags)
+            continue;
+        if (gl_info->supported[view_types[i].extension])
             return view_types[i].view_target;
+
+        FIXME("Extension %#x not supported.\n", view_types[i].extension);
     }
 
     FIXME("Unhandled view flags %#x for texture target %#x.\n", desc->flags, texture->target);
@@ -71,7 +79,7 @@ static void create_texture_view(struct wined3d_gl_view *view, GLenum view_target
 
     view->target = view_target;
 
-    context = context_acquire(texture->resource.device, NULL);
+    context = context_acquire(texture->resource.device, NULL, 0);
     gl_info = context->gl_info;
 
     if (!gl_info->supported[ARB_TEXTURE_VIEW])
@@ -122,16 +130,25 @@ static void create_texture_view(struct wined3d_gl_view *view, GLenum view_target
 }
 
 static void create_buffer_texture(struct wined3d_gl_view *view,
-        struct wined3d_buffer *buffer, const struct wined3d_format *view_format)
+        struct wined3d_buffer *buffer, const struct wined3d_format *view_format,
+        unsigned int offset, unsigned int size)
 {
     const struct wined3d_gl_info *gl_info;
     struct wined3d_context *context;
 
-    context = context_acquire(buffer->resource.device, NULL);
+    context = context_acquire(buffer->resource.device, NULL, 0);
     gl_info = context->gl_info;
     if (!gl_info->supported[ARB_TEXTURE_BUFFER_OBJECT])
     {
         FIXME("OpenGL implementation does not support buffer textures.\n");
+        context_release(context);
+        return;
+    }
+
+    if ((offset & (gl_info->limits.texture_buffer_offset_alignment - 1)))
+    {
+        FIXME("Buffer offset %u is not %u byte aligned.\n",
+                offset, gl_info->limits.texture_buffer_offset_alignment);
         context_release(context);
         return;
     }
@@ -142,12 +159,40 @@ static void create_buffer_texture(struct wined3d_gl_view *view,
     gl_info->gl_ops.gl.p_glGenTextures(1, &view->name);
 
     context_bind_texture(context, GL_TEXTURE_BUFFER, view->name);
-    GL_EXTCALL(glTexBuffer(GL_TEXTURE_BUFFER, view_format->glInternal, buffer->buffer_object));
+    if (gl_info->supported[ARB_TEXTURE_BUFFER_RANGE])
+    {
+        GL_EXTCALL(glTexBufferRange(GL_TEXTURE_BUFFER, view_format->glInternal,
+                buffer->buffer_object, offset, size));
+    }
+    else
+    {
+        if (offset || size != buffer->resource.size)
+            FIXME("OpenGL implementation does not support ARB_texture_buffer_range.\n");
+        GL_EXTCALL(glTexBuffer(GL_TEXTURE_BUFFER, view_format->glInternal, buffer->buffer_object));
+    }
     checkGLcall("Create buffer texture");
 
     context_invalidate_state(context, STATE_SHADER_RESOURCE_BINDING);
 
     context_release(context);
+}
+
+static void create_buffer_view(struct wined3d_gl_view *view,
+        const struct wined3d_view_desc *desc, struct wined3d_buffer *buffer,
+        const struct wined3d_format *view_format)
+{
+    unsigned int offset, size;
+
+    if (desc->format_id == WINED3DFMT_UNKNOWN)
+    {
+        FIXME("Structured buffer views not supported.\n");
+        return;
+    }
+
+    offset = desc->u.buffer.start_idx * view_format->byte_count;
+    size = desc->u.buffer.count * view_format->byte_count;
+
+    create_buffer_texture(view, buffer, view_format, offset, size);
 }
 
 ULONG CDECL wined3d_rendertarget_view_incref(struct wined3d_rendertarget_view *view)
@@ -178,7 +223,7 @@ ULONG CDECL wined3d_rendertarget_view_decref(struct wined3d_rendertarget_view *v
         /* Call wined3d_object_destroyed() before releasing the resource,
          * since releasing the resource may end up destroying the parent. */
         view->parent_ops->wined3d_object_destroyed(view->parent);
-        wined3d_cs_emit_destroy_object(device->cs, wined3d_rendertarget_view_destroy_object, view);
+        wined3d_cs_destroy_object(device->cs, wined3d_rendertarget_view_destroy_object, view);
         wined3d_resource_decref(resource);
     }
 
@@ -384,7 +429,7 @@ static void wined3d_shader_resource_view_destroy_object(void *object)
         const struct wined3d_gl_info *gl_info;
         struct wined3d_context *context;
 
-        context = context_acquire(view->resource->device, NULL);
+        context = context_acquire(view->resource->device, NULL, 0);
         gl_info = context->gl_info;
         gl_info->gl_ops.gl.p_glDeleteTextures(1, &view->gl_view.name);
         checkGLcall("glDeleteTextures");
@@ -408,7 +453,7 @@ ULONG CDECL wined3d_shader_resource_view_decref(struct wined3d_shader_resource_v
         /* Call wined3d_object_destroyed() before releasing the resource,
          * since releasing the resource may end up destroying the parent. */
         view->parent_ops->wined3d_object_destroyed(view->parent);
-        wined3d_cs_emit_destroy_object(device->cs, wined3d_shader_resource_view_destroy_object, view);
+        wined3d_cs_destroy_object(device->cs, wined3d_shader_resource_view_destroy_object, view);
         wined3d_resource_decref(resource);
     }
 
@@ -422,63 +467,30 @@ void * CDECL wined3d_shader_resource_view_get_parent(const struct wined3d_shader
     return view->parent;
 }
 
-static HRESULT wined3d_shader_resource_view_init(struct wined3d_shader_resource_view *view,
-        const struct wined3d_view_desc *desc, struct wined3d_resource *resource,
-        void *parent, const struct wined3d_parent_ops *parent_ops)
+static void wined3d_shader_resource_view_cs_init(void *object)
 {
-    const struct wined3d_gl_info *gl_info = &resource->device->adapter->gl_info;
+    struct wined3d_shader_resource_view *view = object;
+    struct wined3d_resource *resource = view->resource;
     const struct wined3d_format *view_format;
+    const struct wined3d_gl_info *gl_info;
+    const struct wined3d_view_desc *desc;
     GLenum view_target;
 
-    view_format = wined3d_get_format(gl_info, desc->format_id, resource->usage);
-    if (wined3d_format_is_typeless(view_format)
-            && !(view_format->id == WINED3DFMT_R32_TYPELESS && (desc->flags & WINED3D_VIEW_BUFFER_RAW)))
-    {
-        WARN("Trying to create view for typeless format %s.\n", debug_d3dformat(view_format->id));
-        return E_INVALIDARG;
-    }
-
-    view->refcount = 1;
-    view->parent = parent;
-    view->parent_ops = parent_ops;
+    view_format = view->format;
+    gl_info = &resource->device->adapter->gl_info;
+    desc = &view->desc;
 
     if (resource->type == WINED3D_RTYPE_BUFFER)
     {
         struct wined3d_buffer *buffer = buffer_from_resource(resource);
 
-        if (desc->format_id == WINED3DFMT_UNKNOWN)
-        {
-            FIXME("Structured buffer views not supported.\n");
-        }
-        else if (desc->flags & WINED3D_VIEW_BUFFER_RAW)
-        {
-            FIXME("Raw buffer views not supported.\n");
-        }
-        else
-        {
-            /* FIXME: Support for buffer offsets can be implemented using ARB_texture_buffer_range. */
-            if (desc->u.buffer.start_idx
-                    || desc->u.buffer.count * view_format->byte_count != buffer->resource.size)
-            {
-                FIXME("Ignoring buffer range %u-%u.\n", desc->u.buffer.start_idx, desc->u.buffer.count);
-            }
-
-            create_buffer_texture(&view->gl_view, buffer, view_format);
-        }
+        create_buffer_view(&view->gl_view, desc, buffer, view_format);
     }
     else
     {
         struct wined3d_texture *texture = texture_from_resource(resource);
 
-        if (!desc->u.texture.level_count
-                || desc->u.texture.level_idx >= texture->level_count
-                || desc->u.texture.level_count > texture->level_count - desc->u.texture.level_idx
-                || !desc->u.texture.layer_count
-                || desc->u.texture.layer_idx >= texture->layer_count
-                || desc->u.texture.layer_count > texture->layer_count - desc->u.texture.layer_idx)
-            return E_INVALIDARG;
-
-        view_target = get_texture_view_target(desc, texture);
+        view_target = get_texture_view_target(gl_info, desc, texture);
 
         if (resource->format->id == view_format->id && texture->target == view_target
                 && !desc->u.texture.level_idx && desc->u.texture.level_count == texture->level_count
@@ -502,7 +514,66 @@ static HRESULT wined3d_shader_resource_view_init(struct wined3d_shader_resource_
                     debug_d3dformat(resource->format->id), debug_d3dformat(view_format->id));
         }
     }
+}
+
+static HRESULT wined3d_shader_resource_view_init(struct wined3d_shader_resource_view *view,
+        const struct wined3d_view_desc *desc, struct wined3d_resource *resource,
+        void *parent, const struct wined3d_parent_ops *parent_ops)
+{
+    const struct wined3d_gl_info *gl_info = &resource->device->adapter->gl_info;
+    const struct wined3d_format *view_format;
+
+    view_format = wined3d_get_format(gl_info, desc->format_id, resource->usage);
+    if (resource->type == WINED3D_RTYPE_BUFFER && desc->flags & WINED3D_VIEW_BUFFER_RAW)
+    {
+        if (view_format->id != WINED3DFMT_R32_TYPELESS)
+        {
+            WARN("Invalid format %s for raw buffer view.\n", debug_d3dformat(view_format->id));
+            return E_INVALIDARG;
+        }
+
+        view_format = wined3d_get_format(gl_info, WINED3DFMT_R32_UINT, resource->usage);
+    }
+
+    if (wined3d_format_is_typeless(view_format))
+    {
+        WARN("Trying to create view for typeless format %s.\n", debug_d3dformat(view_format->id));
+        return E_INVALIDARG;
+    }
+
+    if (resource->type == WINED3D_RTYPE_BUFFER)
+    {
+        struct wined3d_buffer *buffer = buffer_from_resource(resource);
+
+        if (view_format->byte_count)
+        {
+            unsigned int buffer_size = buffer->resource.size / view_format->byte_count;
+            if (desc->u.buffer.start_idx >= buffer_size
+                    || desc->u.buffer.count > buffer_size - desc->u.buffer.start_idx)
+                return E_INVALIDARG;
+        }
+    }
+    else
+    {
+        struct wined3d_texture *texture = texture_from_resource(resource);
+
+        if (!desc->u.texture.level_count
+                || desc->u.texture.level_idx >= texture->level_count
+                || desc->u.texture.level_count > texture->level_count - desc->u.texture.level_idx
+                || !desc->u.texture.layer_count
+                || desc->u.texture.layer_idx >= texture->layer_count
+                || desc->u.texture.layer_count > texture->layer_count - desc->u.texture.layer_idx)
+            return E_INVALIDARG;
+    }
+
+    view->refcount = 1;
     wined3d_resource_incref(view->resource = resource);
+    view->parent = parent;
+    view->parent_ops = parent_ops;
+    view->format = view_format;
+    view->desc = *desc;
+
+    wined3d_cs_init_object(resource->device->cs, wined3d_shader_resource_view_cs_init, view);
 
     return WINED3D_OK;
 }
@@ -582,7 +653,7 @@ ULONG CDECL wined3d_unordered_access_view_decref(struct wined3d_unordered_access
         /* Call wined3d_object_destroyed() before releasing the resource,
          * since releasing the resource may end up destroying the parent. */
         view->parent_ops->wined3d_object_destroyed(view->parent);
-        wined3d_cs_emit_destroy_object(device->cs, wined3d_unordered_access_view_destroy_object, view);
+        wined3d_cs_destroy_object(device->cs, wined3d_unordered_access_view_destroy_object, view);
         wined3d_resource_decref(resource);
     }
 
@@ -605,16 +676,49 @@ void wined3d_unordered_access_view_invalidate_location(struct wined3d_unordered_
 
     if (resource->type == WINED3D_RTYPE_BUFFER)
     {
-        FIXME("Not implemented for %s resources.\n", debug_d3dresourcetype(resource->type));
+        wined3d_buffer_invalidate_location(buffer_from_resource(resource), location);
         return;
     }
 
     texture = texture_from_resource(resource);
 
-    sub_resource_idx = view->layer_idx * texture->level_count + view->level_idx;
-    layer_count = (resource->type != WINED3D_RTYPE_TEXTURE_3D) ? view->layer_count : 1;
+    sub_resource_idx = view->desc.u.texture.layer_idx * texture->level_count + view->desc.u.texture.level_idx;
+    layer_count = (resource->type != WINED3D_RTYPE_TEXTURE_3D) ? view->desc.u.texture.layer_count : 1;
     for (i = 0; i < layer_count; ++i, sub_resource_idx += texture->level_count)
         wined3d_texture_invalidate_location(texture, sub_resource_idx, location);
+}
+
+static void wined3d_unordered_access_view_cs_init(void *object)
+{
+    struct wined3d_unordered_access_view *view = object;
+    struct wined3d_resource *resource = view->resource;
+    struct wined3d_view_desc *desc = &view->desc;
+    const struct wined3d_gl_info *gl_info;
+
+    gl_info = &resource->device->adapter->gl_info;
+
+    if (resource->type == WINED3D_RTYPE_BUFFER)
+    {
+        struct wined3d_buffer *buffer = buffer_from_resource(resource);
+
+        create_buffer_view(&view->gl_view, desc, buffer, view->format);
+    }
+    else
+    {
+        struct wined3d_texture *texture = texture_from_resource(resource);
+        unsigned int depth_or_layer_count;
+
+        if (resource->type == WINED3D_RTYPE_TEXTURE_3D)
+            depth_or_layer_count = wined3d_texture_get_level_depth(texture, desc->u.texture.level_idx);
+        else
+            depth_or_layer_count = texture->layer_count;
+
+        if (desc->u.texture.layer_idx || desc->u.texture.layer_count != depth_or_layer_count)
+        {
+            create_texture_view(&view->gl_view, get_texture_view_target(gl_info, desc, texture),
+                    desc, texture, view->format);
+        }
+    }
 }
 
 static HRESULT wined3d_unordered_access_view_init(struct wined3d_unordered_access_view *view,
@@ -628,9 +732,20 @@ static HRESULT wined3d_unordered_access_view_init(struct wined3d_unordered_acces
     view->parent_ops = parent_ops;
 
     view->format = wined3d_get_format(gl_info, desc->format_id, resource->usage);
+    view->desc = *desc;
 
-    if (wined3d_format_is_typeless(view->format)
-            && !(view->format->id == WINED3DFMT_R32_TYPELESS && (desc->flags & WINED3D_VIEW_BUFFER_RAW)))
+    if (resource->type == WINED3D_RTYPE_BUFFER && desc->flags & WINED3D_VIEW_BUFFER_RAW)
+    {
+        if (view->format->id != WINED3DFMT_R32_TYPELESS)
+        {
+            WARN("Invalid format %s for raw buffer view.\n", debug_d3dformat(view->format->id));
+            return E_INVALIDARG;
+        }
+
+        view->format = wined3d_get_format(gl_info, WINED3DFMT_R32_UINT, resource->usage);
+    }
+
+    if (wined3d_format_is_typeless(view->format))
     {
         WARN("Trying to create view for typeless format %s.\n", debug_d3dformat(view->format->id));
         return E_INVALIDARG;
@@ -638,7 +753,15 @@ static HRESULT wined3d_unordered_access_view_init(struct wined3d_unordered_acces
 
     if (resource->type == WINED3D_RTYPE_BUFFER)
     {
-        FIXME("Buffer unordered access views not supported.\n");
+        struct wined3d_buffer *buffer = buffer_from_resource(resource);
+
+        if (view->format->byte_count)
+        {
+            unsigned int buffer_size = buffer->resource.size / view->format->byte_count;
+            if (desc->u.buffer.start_idx >= buffer_size
+                    || desc->u.buffer.count > buffer_size - desc->u.buffer.start_idx)
+                return E_INVALIDARG;
+        }
     }
     else
     {
@@ -656,18 +779,10 @@ static HRESULT wined3d_unordered_access_view_init(struct wined3d_unordered_acces
                 || !desc->u.texture.layer_count
                 || desc->u.texture.layer_count > depth_or_layer_count - desc->u.texture.layer_idx)
             return E_INVALIDARG;
-
-        if (desc->u.texture.layer_idx || desc->u.texture.layer_count != depth_or_layer_count)
-        {
-            create_texture_view(&view->gl_view, get_texture_view_target(desc, texture),
-                    desc, texture, view->format);
-        }
-
-        view->layer_idx = desc->u.texture.layer_idx;
-        view->layer_count = desc->u.texture.layer_count;
-        view->level_idx = desc->u.texture.level_idx;
     }
     wined3d_resource_incref(view->resource = resource);
+
+    wined3d_cs_init_object(resource->device->cs, wined3d_unordered_access_view_cs_init, view);
 
     return WINED3D_OK;
 }

@@ -745,6 +745,10 @@ static void update_library_argv0( const WCHAR *argv0 )
  *   resulting in an odd number of '\' followed by a '"'
  *   '\"'    -> '\\\"'
  *   '\\"'   -> '\\\\\"'
+ * - '\'s are followed by the closing '"' must be doubled,
+ *   resulting in an even number of '\' followed by a '"'
+ *   ' \'    -> '" \\"'
+ *   ' \\'    -> '" \\\\"'
  * - '\'s that are not followed by a '"' can be left as is
  *   'a\b'   == 'a\b'
  *   'a\\b'  == 'a\\b'
@@ -787,7 +791,7 @@ static BOOL build_command_line( WCHAR **argv )
         }
         len+=(a-*arg)+1 /* for the separating space */;
         if (has_space)
-            len+=2; /* for the quotes */
+            len+=2+bcount; /* for the quotes and doubling of '\' preceding the closing quote */
     }
 
     if (!(rupp->CommandLine.Buffer = RtlAllocateHeap( GetProcessHeap(), 0, len * sizeof(WCHAR))))
@@ -800,6 +804,7 @@ static BOOL build_command_line( WCHAR **argv )
     {
         BOOL has_space,has_quote;
         WCHAR* a;
+        int bcount;
 
         /* Check for quotes and spaces in this argument */
         has_space=has_quote=FALSE;
@@ -821,9 +826,7 @@ static BOOL build_command_line( WCHAR **argv )
         /* Now transfer it to the command line */
         if (has_space)
             *p++='"';
-        if (has_quote) {
-            int bcount;
-
+        if (has_quote || has_space) {
             bcount=0;
             a=*arg;
             while (*a!='\0') {
@@ -849,8 +852,14 @@ static BOOL build_command_line( WCHAR **argv )
             WCHAR* x = *arg;
             while ((*p=*x++)) p++;
         }
-        if (has_space)
+        if (has_space) {
+            int i;
+
+            /* Double all the '\' preceding the closing quote */
+            for (i=0;i<bcount;i++)
+                *p++='\\';
             *p++='"';
+        }
         *p++=' ';
     }
     if (p > rupp->CommandLine.Buffer)
@@ -1083,16 +1092,12 @@ static inline DWORD call_process_entry( PEB *peb, LPTHREAD_START_ROUTINE entry )
  *
  * Startup routine of a new process. Runs on the new process stack.
  */
-static DWORD WINAPI start_process( PEB *peb )
+static DWORD WINAPI start_process( LPTHREAD_START_ROUTINE entry )
 {
-    IMAGE_NT_HEADERS *nt;
-    LPTHREAD_START_ROUTINE entry;
+    BOOL being_debugged;
+    PEB *peb = NtCurrentTeb()->Peb;
 
-    nt = RtlImageNtHeader( peb->ImageBaseAddress );
-    entry = (LPTHREAD_START_ROUTINE)((char *)peb->ImageBaseAddress +
-                                     nt->OptionalHeader.AddressOfEntryPoint);
-
-    if (!nt->OptionalHeader.AddressOfEntryPoint)
+    if (!entry)
     {
         ERR( "%s doesn't have an entry point, it cannot be executed\n",
              debugstr_w(peb->ProcessParameters->ImagePathName.Buffer) );
@@ -1103,8 +1108,11 @@ static DWORD WINAPI start_process( PEB *peb )
         DPRINTF( "%04x:Starting process %s (entryproc=%p)\n", GetCurrentThreadId(),
                  debugstr_w(peb->ProcessParameters->ImagePathName.Buffer), entry );
 
+    if (!CheckRemoteDebuggerPresent( GetCurrentProcess(), &being_debugged ))
+        being_debugged = FALSE;
+
     SetLastError( 0 );  /* clear error code */
-    if (peb->BeingDebugged) DbgBreakPoint();
+    if (being_debugged) DbgBreakPoint();
     return call_process_entry( peb, entry );
 }
 

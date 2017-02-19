@@ -72,7 +72,7 @@
 typedef struct HTMLDOMNode HTMLDOMNode;
 typedef struct ConnectionPoint ConnectionPoint;
 typedef struct BSCallback BSCallback;
-typedef struct event_target_t event_target_t;
+typedef struct EventTarget EventTarget;
 
 #define TID_LIST \
     XIID(NULL) \
@@ -258,7 +258,7 @@ typedef struct {
     HRESULT (*invoke)(DispatchEx*,DISPID,LCID,WORD,DISPPARAMS*,VARIANT*,EXCEPINFO*,IServiceProvider*);
     HRESULT (*populate_props)(DispatchEx*);
     /* We abuse this vtbl for EventTarget functions to avoid separated vtbl. */
-    event_target_t **(*get_event_target_ptr)(DispatchEx*);
+    EventTarget *(*get_event_target)(DispatchEx*);
     void (*bind_event)(DispatchEx*,int);
 } dispex_static_data_vtbl_t;
 
@@ -363,10 +363,10 @@ typedef struct {
     DISPID id;
 } global_prop_t;
 
-typedef struct {
+struct EventTarget {
     DispatchEx dispex;
-    event_target_t *ptr;
-} EventTarget;
+    struct wine_rb_tree handler_map;
+};
 
 typedef struct {
     DispatchEx dispex;
@@ -640,6 +640,7 @@ struct HTMLDocumentObj {
     HWND hwnd;
     HWND tooltips_hwnd;
 
+    BOOL is_mhtml;
     BOOL request_uiactivate;
     BOOL in_place_active;
     BOOL ui_active;
@@ -694,7 +695,7 @@ typedef struct {
     HRESULT (*clone)(HTMLDOMNode*,nsIDOMNode*,HTMLDOMNode**);
     HRESULT (*handle_event)(HTMLDOMNode*,DWORD,nsIDOMEvent*,BOOL*);
     HRESULT (*get_attr_col)(HTMLDOMNode*,HTMLAttributeCollection**);
-    event_target_t **(*get_event_target_ptr)(HTMLDOMNode*);
+    EventTarget *(*get_event_target)(HTMLDOMNode*);
     HRESULT (*fire_event)(HTMLDOMNode*,DWORD,BOOL*);
     HRESULT (*put_disabled)(HTMLDOMNode*,VARIANT_BOOL);
     HRESULT (*get_disabled)(HTMLDOMNode*,VARIANT_BOOL*);
@@ -800,7 +801,6 @@ struct HTMLDocumentNode {
 
     nsIDOMHTMLDocument *nsdoc;
     BOOL content_ready;
-    event_target_t *body_event_target;
 
     IHTMLDOMImplementation *dom_implementation;
 

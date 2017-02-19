@@ -3482,28 +3482,17 @@ static BOOL init_typeless_formats(struct wined3d_gl_info *gl_info)
     return TRUE;
 }
 
-BOOL initPixelFormatsNoGL(struct wined3d_gl_info *gl_info)
-{
-    if (!init_format_base_info(gl_info)) return FALSE;
-
-    if (!init_format_block_info(gl_info))
-    {
-        HeapFree(GetProcessHeap(), 0, gl_info->formats);
-        gl_info->formats = NULL;
-        return FALSE;
-    }
-
-    return TRUE;
-}
-
 /* Context activation is done by the caller. */
 BOOL wined3d_adapter_init_format_info(struct wined3d_adapter *adapter, struct wined3d_caps_gl_ctx *ctx)
 {
     struct wined3d_gl_info *gl_info = &adapter->gl_info;
 
     if (!init_format_base_info(gl_info)) return FALSE;
-
     if (!init_format_block_info(gl_info)) goto fail;
+
+    if (!ctx) /* WINED3D_NO3D */
+        return TRUE;
+
     if (!init_format_texture_info(adapter, gl_info)) goto fail;
     if (!init_format_vertex_info(gl_info)) goto fail;
 
@@ -4377,14 +4366,20 @@ const char *debug_d3dstate(DWORD state)
     }
     if (STATE_IS_SAMPLER(state))
         return wine_dbg_sprintf("STATE_SAMPLER(%#x)", state - STATE_SAMPLER(0));
-    if (STATE_IS_SHADER(state))
+    if (STATE_IS_COMPUTE_SHADER(state))
+        return wine_dbg_sprintf("STATE_SHADER(%s)", debug_shader_type(WINED3D_SHADER_TYPE_COMPUTE));
+    if (STATE_IS_GRAPHICS_SHADER(state))
         return wine_dbg_sprintf("STATE_SHADER(%s)", debug_shader_type(state - STATE_SHADER(0)));
-    if (STATE_IS_CONSTANT_BUFFER(state))
+    if (STATE_IS_COMPUTE_CONSTANT_BUFFER(state))
+        return wine_dbg_sprintf("STATE_CONSTANT_BUFFER(%s)", debug_shader_type(WINED3D_SHADER_TYPE_COMPUTE));
+    if (STATE_IS_GRAPHICS_CONSTANT_BUFFER(state))
         return wine_dbg_sprintf("STATE_CONSTANT_BUFFER(%s)", debug_shader_type(state - STATE_CONSTANT_BUFFER(0)));
     if (STATE_IS_SHADER_RESOURCE_BINDING(state))
         return "STATE_SHADER_RESOURCE_BINDING";
-    if (STATE_IS_UNORDERED_ACCESS_VIEW_BINDING(state))
-        return "STATE_UNORDERED_ACCESS_VIEW_BINDING";
+    if (STATE_IS_COMPUTE_UNORDERED_ACCESS_VIEW_BINDING(state))
+        return "STATE_COMPUTE_UNORDERED_ACCESS_VIEW_BINDING";
+    if (STATE_IS_GRAPHICS_UNORDERED_ACCESS_VIEW_BINDING(state))
+        return "STATE_GRAPHICS_UNORDERED_ACCESS_VIEW_BINDING";
     if (STATE_IS_TRANSFORM(state))
         return wine_dbg_sprintf("STATE_TRANSFORM(%s)", debug_d3dtstype(state - STATE_TRANSFORM(0)));
     if (STATE_IS_STREAMSRC(state))
@@ -5805,6 +5800,12 @@ const struct blit_shader *wined3d_select_blitter(const struct wined3d_gl_info *g
         &cpu_blit,
     };
     unsigned int i;
+
+    TRACE("gl_info %p, d3d_info %p, blit_op %#x, src_rect %s, src_usage %s, src_pool %s, src_format %s, "
+            "dst_rect %s, dst_usage %s, dst_pool %s, dst_format %s.\n", gl_info, d3d_info, blit_op,
+            wine_dbgstr_rect(src_rect), debug_d3dusage(src_usage), debug_d3dpool(src_pool),
+            src_format ? debug_d3dformat(src_format->id) : "(null)", wine_dbgstr_rect(dst_rect),
+            debug_d3dusage(dst_usage), debug_d3dpool(dst_pool), debug_d3dformat(dst_format->id));
 
     for (i = 0; i < sizeof(blitters) / sizeof(*blitters); ++i)
     {

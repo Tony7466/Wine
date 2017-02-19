@@ -744,7 +744,7 @@ static void buffer_unload(struct wined3d_resource *resource)
     {
         struct wined3d_context *context;
 
-        context = context_acquire(resource->device, NULL);
+        context = context_acquire(resource->device, NULL, 0);
 
         wined3d_buffer_load_location(buffer, context, WINED3D_LOCATION_SYSMEM);
         wined3d_buffer_invalidate_location(buffer, WINED3D_LOCATION_BUFFER);
@@ -776,7 +776,7 @@ static void wined3d_buffer_destroy_object(void *object)
 
     if (buffer->buffer_object)
     {
-        context = context_acquire(buffer->resource.device, NULL);
+        context = context_acquire(buffer->resource.device, NULL, 0);
         buffer_destroy_buffer_object(buffer, context);
         context_release(context);
 
@@ -797,7 +797,7 @@ ULONG CDECL wined3d_buffer_decref(struct wined3d_buffer *buffer)
     {
         buffer->resource.parent_ops->wined3d_object_destroyed(buffer->resource.parent);
         resource_cleanup(&buffer->resource);
-        wined3d_cs_emit_destroy_object(buffer->resource.device->cs, wined3d_buffer_destroy_object, buffer);
+        wined3d_cs_destroy_object(buffer->resource.device->cs, wined3d_buffer_destroy_object, buffer);
     }
 
     return refcount;
@@ -1039,7 +1039,7 @@ static HRESULT wined3d_buffer_map(struct wined3d_buffer *buffer, UINT offset, UI
         {
             if (!(buffer->locations & WINED3D_LOCATION_SYSMEM))
             {
-                context = context_acquire(device, NULL);
+                context = context_acquire(device, NULL, 0);
                 wined3d_buffer_load_location(buffer, context, WINED3D_LOCATION_SYSMEM);
                 context_release(context);
             }
@@ -1051,7 +1051,7 @@ static HRESULT wined3d_buffer_map(struct wined3d_buffer *buffer, UINT offset, UI
         {
             const struct wined3d_gl_info *gl_info;
 
-            context = context_acquire(device, NULL);
+            context = context_acquire(device, NULL, 0);
             gl_info = context->gl_info;
 
             if (!(flags & WINED3D_MAP_DISCARD))
@@ -1107,7 +1107,6 @@ static HRESULT wined3d_buffer_map(struct wined3d_buffer *buffer, UINT offset, UI
                         buffer->flags |= WINED3D_BUFFER_PIN_SYSMEM;
                     }
                     TRACE("New pointer is %p.\n", buffer->resource.heap_memory);
-                    buffer->map_ptr = NULL;
                 }
             }
 
@@ -1156,7 +1155,7 @@ static void wined3d_buffer_unmap(struct wined3d_buffer *buffer)
         const struct wined3d_gl_info *gl_info;
         struct wined3d_context *context;
 
-        context = context_acquire(device, NULL);
+        context = context_acquire(device, NULL, 0);
         gl_info = context->gl_info;
 
         buffer_bind(buffer, context);
@@ -1206,7 +1205,7 @@ HRESULT wined3d_buffer_copy(struct wined3d_buffer *dst_buffer, unsigned int dst_
 
     device = dst_buffer->resource.device;
 
-    context = context_acquire(device, NULL);
+    context = context_acquire(device, NULL, 0);
     gl_info = context->gl_info;
 
     dst_location = wined3d_buffer_get_memory(dst_buffer, &dst, dst_buffer->locations);
@@ -1300,7 +1299,7 @@ static void buffer_resource_preload(struct wined3d_resource *resource)
 {
     struct wined3d_context *context;
 
-    context = context_acquire(resource->device, NULL);
+    context = context_acquire(resource->device, NULL, 0);
     wined3d_buffer_load(buffer_from_resource(resource), context, NULL);
     context_release(context);
 }
@@ -1353,10 +1352,15 @@ static const struct wined3d_resource_ops buffer_resource_ops =
     buffer_resource_sub_resource_unmap,
 };
 
-static GLenum buffer_type_hint_from_bind_flags(unsigned int bind_flags)
+static GLenum buffer_type_hint_from_bind_flags(const struct wined3d_gl_info *gl_info,
+        unsigned int bind_flags)
 {
     if (bind_flags == WINED3D_BIND_INDEX_BUFFER)
         return GL_ELEMENT_ARRAY_BUFFER;
+
+    if (bind_flags & (WINED3D_BIND_SHADER_RESOURCE | WINED3D_BIND_UNORDERED_ACCESS)
+            && gl_info->supported[ARB_TEXTURE_BUFFER_OBJECT])
+        return GL_TEXTURE_BUFFER;
 
     if (bind_flags & WINED3D_BIND_CONSTANT_BUFFER)
         return GL_UNIFORM_BUFFER;
@@ -1395,7 +1399,7 @@ static HRESULT buffer_init(struct wined3d_buffer *buffer, struct wined3d_device 
         WARN("Failed to initialize resource, hr %#x.\n", hr);
         return hr;
     }
-    buffer->buffer_type_hint = buffer_type_hint_from_bind_flags(bind_flags);
+    buffer->buffer_type_hint = buffer_type_hint_from_bind_flags(gl_info, bind_flags);
     buffer->bind_flags = bind_flags;
     buffer->locations = WINED3D_LOCATION_SYSMEM;
 

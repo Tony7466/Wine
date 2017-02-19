@@ -280,7 +280,7 @@ void wined3d_surface_destroy_dc(struct wined3d_surface *surface)
 
     if (device->d3d_initialized)
     {
-        context = context_acquire(device, NULL);
+        context = context_acquire(device, NULL, 0);
         gl_info = context->gl_info;
     }
 
@@ -316,7 +316,7 @@ HRESULT wined3d_surface_create_dc(struct wined3d_surface *surface)
 
     if (device->d3d_initialized)
     {
-        context = context_acquire(device, NULL);
+        context = context_acquire(device, NULL, 0);
         gl_info = context->gl_info;
     }
 
@@ -406,7 +406,7 @@ static void surface_depth_blt_fbo(const struct wined3d_device *device,
     if (src_mask & WINED3DFMT_FLAG_STENCIL)
         gl_mask |= GL_STENCIL_BUFFER_BIT;
 
-    context = context_acquire(device, NULL);
+    context = context_acquire(device, NULL, 0);
     if (!context->valid)
     {
         context_release(context);
@@ -526,7 +526,8 @@ static void surface_blt_fbo(const struct wined3d_device *device,
 
     restore_rt = context_get_rt_surface(old_ctx);
     if (restore_rt != required_rt)
-        context = context_acquire(device, required_rt);
+        context = context_acquire(device, required_rt ? required_rt->container : NULL,
+                required_rt ? surface_get_sub_resource_idx(required_rt) : 0);
     else
         restore_rt = NULL;
 
@@ -1152,7 +1153,7 @@ HRESULT surface_upload_from_surface(struct wined3d_surface *dst_surface, const P
     if (dst_format->convert || wined3d_format_get_color_key_conversion(dst_texture, FALSE))
         return wined3d_surface_blt(dst_surface, &dst_rect, src_surface, src_rect, 0, NULL, WINED3D_TEXF_POINT);
 
-    context = context_acquire(dst_texture->resource.device, NULL);
+    context = context_acquire(dst_texture->resource.device, NULL, 0);
     gl_info = context->gl_info;
 
     /* Only load the surface for partial updates. For newly allocated texture
@@ -1521,7 +1522,8 @@ static struct wined3d_texture *surface_convert_format(struct wined3d_texture *sr
 
     if (!(conv = find_converter(src_format->id, dst_format->id)) && (!device->d3d_initialized
             || !is_identity_fixup(src_format->color_fixup) || src_format->convert
-            || !is_identity_fixup(dst_format->color_fixup) || dst_format->convert))
+            || !is_identity_fixup(dst_format->color_fixup) || dst_format->convert
+            || (src_format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_COMPRESSED)))
     {
         FIXME("Cannot find a conversion function from format %s to %s.\n",
                 debug_d3dformat(src_format->id), debug_d3dformat(dst_format->id));
@@ -1581,7 +1583,7 @@ static struct wined3d_texture *surface_convert_format(struct wined3d_texture *sr
         POINT dst_point = {0, 0};
 
         TRACE("Using upload conversion.\n");
-        context = context_acquire(device, NULL);
+        context = context_acquire(device, NULL, 0);
         gl_info = context->gl_info;
 
         wined3d_texture_prepare_texture(dst_texture, context, FALSE);
@@ -1678,7 +1680,7 @@ static void read_from_framebuffer(struct wined3d_surface *surface,
 
     restore_rt = context_get_rt_surface(old_ctx);
     if (restore_rt != surface)
-        context = context_acquire(device, surface);
+        context = context_acquire(device, texture, sub_resource_idx);
     else
         restore_rt = NULL;
 
@@ -1789,7 +1791,7 @@ void surface_load_fb_texture(struct wined3d_surface *surface, BOOL srgb, struct 
 
     restore_rt = context_get_rt_surface(old_ctx);
     if (restore_rt != surface)
-        context = context_acquire(device, surface);
+        context = context_acquire(device, texture, surface_get_sub_resource_idx(surface));
     else
         restore_rt = NULL;
 
@@ -1821,6 +1823,7 @@ void surface_load_fb_texture(struct wined3d_surface *surface, BOOL srgb, struct 
 static void fb_copy_to_texture_direct(struct wined3d_surface *dst_surface, struct wined3d_surface *src_surface,
         const RECT *src_rect, const RECT *dst_rect_in, enum wined3d_texture_filter_type filter)
 {
+    unsigned int src_sub_resource_idx = surface_get_sub_resource_idx(src_surface);
     unsigned int dst_sub_resource_idx = surface_get_sub_resource_idx(dst_surface);
     struct wined3d_texture *src_texture = src_surface->container;
     struct wined3d_texture *dst_texture = dst_surface->container;
@@ -1842,7 +1845,7 @@ static void fb_copy_to_texture_direct(struct wined3d_surface *dst_surface, struc
         upsidedown = TRUE;
     }
 
-    context = context_acquire(device, src_surface);
+    context = context_acquire(device, src_texture, src_sub_resource_idx);
     gl_info = context->gl_info;
     context_apply_blit_state(context, device);
     wined3d_texture_load(dst_texture, context, FALSE);
@@ -1935,6 +1938,7 @@ static void fb_copy_to_texture_direct(struct wined3d_surface *dst_surface, struc
 static void fb_copy_to_texture_hwstretch(struct wined3d_surface *dst_surface, struct wined3d_surface *src_surface,
         const RECT *src_rect, const RECT *dst_rect_in, enum wined3d_texture_filter_type filter)
 {
+    unsigned int src_sub_resource_idx = surface_get_sub_resource_idx(src_surface);
     unsigned int dst_sub_resource_idx = surface_get_sub_resource_idx(dst_surface);
     unsigned int src_width, src_height, src_pow2_width, src_pow2_height;
     struct wined3d_texture *src_texture = src_surface->container;
@@ -1954,7 +1958,7 @@ static void fb_copy_to_texture_hwstretch(struct wined3d_surface *dst_surface, st
 
     TRACE("Using hwstretch blit\n");
     /* Activate the Proper context for reading from the source surface, set it up for blitting */
-    context = context_acquire(device, src_surface);
+    context = context_acquire(device, src_texture, src_sub_resource_idx);
     gl_info = context->gl_info;
     context_apply_blit_state(context, device);
     wined3d_texture_load(dst_texture, context, FALSE);
@@ -2248,6 +2252,7 @@ static void surface_blt_to_drawable(const struct wined3d_device *device,
         struct wined3d_surface *src_surface, const RECT *src_rect_in,
         struct wined3d_surface *dst_surface, const RECT *dst_rect_in)
 {
+    unsigned int dst_sub_resource_idx = surface_get_sub_resource_idx(dst_surface);
     struct wined3d_texture *src_texture = src_surface->container;
     struct wined3d_texture *dst_texture = dst_surface->container;
     const struct wined3d_gl_info *gl_info;
@@ -2260,7 +2265,7 @@ static void surface_blt_to_drawable(const struct wined3d_device *device,
 
     restore_rt = context_get_rt_surface(old_ctx);
     if (restore_rt != dst_surface)
-        context = context_acquire(device, dst_surface);
+        context = context_acquire(device, dst_texture, dst_sub_resource_idx);
     else
         restore_rt = NULL;
 
@@ -2491,67 +2496,6 @@ static HRESULT surface_blt_special(struct wined3d_surface *dst_surface, const RE
     return WINED3DERR_INVALIDCALL;
 }
 
-static DWORD resource_access_from_location(DWORD location)
-{
-    switch (location)
-    {
-        case WINED3D_LOCATION_SYSMEM:
-        case WINED3D_LOCATION_USER_MEMORY:
-        case WINED3D_LOCATION_BUFFER:
-            return WINED3D_RESOURCE_ACCESS_CPU;
-
-        case WINED3D_LOCATION_DRAWABLE:
-        case WINED3D_LOCATION_TEXTURE_SRGB:
-        case WINED3D_LOCATION_TEXTURE_RGB:
-        case WINED3D_LOCATION_RB_MULTISAMPLE:
-        case WINED3D_LOCATION_RB_RESOLVED:
-            return WINED3D_RESOURCE_ACCESS_GPU;
-
-        default:
-            FIXME("Unhandled location %#x.\n", location);
-            return 0;
-    }
-}
-
-static void surface_copy_simple_location(struct wined3d_surface *surface, DWORD location)
-{
-    unsigned int sub_resource_idx = surface_get_sub_resource_idx(surface);
-    struct wined3d_texture *texture = surface->container;
-    struct wined3d_device *device = texture->resource.device;
-    struct wined3d_texture_sub_resource *sub_resource;
-    struct wined3d_context *context;
-    const struct wined3d_gl_info *gl_info;
-    struct wined3d_bo_address dst, src;
-
-    sub_resource = &texture->sub_resources[sub_resource_idx];
-    wined3d_texture_get_memory(texture, sub_resource_idx, &dst, location);
-    wined3d_texture_get_memory(texture, sub_resource_idx, &src, sub_resource->locations);
-
-    if (dst.buffer_object)
-    {
-        context = context_acquire(device, NULL);
-        gl_info = context->gl_info;
-        GL_EXTCALL(glBindBuffer(GL_PIXEL_UNPACK_BUFFER, dst.buffer_object));
-        GL_EXTCALL(glBufferSubData(GL_PIXEL_UNPACK_BUFFER, 0, sub_resource->size, src.addr));
-        GL_EXTCALL(glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0));
-        checkGLcall("Upload PBO");
-        context_release(context);
-        return;
-    }
-    if (src.buffer_object)
-    {
-        context = context_acquire(device, NULL);
-        gl_info = context->gl_info;
-        GL_EXTCALL(glBindBuffer(GL_PIXEL_PACK_BUFFER, src.buffer_object));
-        GL_EXTCALL(glGetBufferSubData(GL_PIXEL_PACK_BUFFER, 0, sub_resource->size, dst.addr));
-        GL_EXTCALL(glBindBuffer(GL_PIXEL_PACK_BUFFER, 0));
-        checkGLcall("Download PBO");
-        context_release(context);
-        return;
-    }
-    memcpy(dst.addr, src.addr, sub_resource->size);
-}
-
 /* Context activation is done by the caller. */
 static void surface_load_sysmem(struct wined3d_surface *surface,
         struct wined3d_context *context, DWORD dst_location)
@@ -2564,12 +2508,6 @@ static void surface_load_sysmem(struct wined3d_surface *surface,
     wined3d_texture_prepare_location(texture, sub_resource_idx, context, dst_location);
 
     sub_resource = &texture->sub_resources[sub_resource_idx];
-    if (sub_resource->locations & surface_simple_locations)
-    {
-        surface_copy_simple_location(surface, dst_location);
-        return;
-    }
-
     if (sub_resource->locations & (WINED3D_LOCATION_RB_MULTISAMPLE | WINED3D_LOCATION_RB_RESOLVED))
         wined3d_texture_load_location(texture, sub_resource_idx, context, WINED3D_LOCATION_TEXTURE_RGB);
 
@@ -2813,46 +2751,15 @@ HRESULT surface_load_location(struct wined3d_surface *surface, struct wined3d_co
 {
     unsigned int sub_resource_idx = surface_get_sub_resource_idx(surface);
     struct wined3d_texture *texture = surface->container;
-    struct wined3d_texture_sub_resource *sub_resource;
     HRESULT hr;
 
     TRACE("surface %p, location %s.\n", surface, wined3d_debug_location(location));
 
-    sub_resource = &texture->sub_resources[sub_resource_idx];
-    if (sub_resource->locations & location)
-    {
-        TRACE("Location (%#x) is already up to date.\n", location);
-        return WINED3D_OK;
-    }
-
-    if (WARN_ON(d3d))
-    {
-        DWORD required_access = resource_access_from_location(location);
-        if ((texture->resource.access_flags & required_access) != required_access)
-            WARN("Operation requires %#x access, but surface only has %#x.\n",
-                    required_access, texture->resource.access_flags);
-    }
-
-    if (sub_resource->locations & WINED3D_LOCATION_DISCARDED)
-    {
-        TRACE("Surface previously discarded, nothing to do.\n");
-        wined3d_texture_prepare_location(texture, sub_resource_idx, context, location);
-        wined3d_texture_validate_location(texture, sub_resource_idx, location);
-        wined3d_texture_invalidate_location(texture, sub_resource_idx, WINED3D_LOCATION_DISCARDED);
-        goto done;
-    }
-
-    if (!sub_resource->locations)
-    {
-        ERR("Surface %p does not have any up to date location.\n", surface);
-        wined3d_texture_validate_location(texture, sub_resource_idx, WINED3D_LOCATION_DISCARDED);
-        return surface_load_location(surface, context, location);
-    }
-
     if (texture->resource.usage & WINED3DUSAGE_DEPTHSTENCIL)
     {
+        DWORD current = texture->sub_resources[sub_resource_idx].locations;
         FIXME("Unimplemented copy from %s to %s for depth/stencil buffers.\n",
-                wined3d_debug_location(sub_resource->locations), wined3d_debug_location(location));
+                wined3d_debug_location(current), wined3d_debug_location(location));
         return WINED3DERR_INVALIDCALL;
     }
 
@@ -2885,9 +2792,6 @@ HRESULT surface_load_location(struct wined3d_surface *surface, struct wined3d_co
             ERR("Don't know how to handle location %#x.\n", location);
             break;
     }
-
-done:
-    wined3d_texture_validate_location(texture, sub_resource_idx, location);
 
     return WINED3D_OK;
 }
@@ -2930,7 +2834,11 @@ static BOOL ffp_blit_supported(const struct wined3d_gl_info *gl_info,
         const RECT *src_rect, DWORD src_usage, enum wined3d_pool src_pool, const struct wined3d_format *src_format,
         const RECT *dst_rect, DWORD dst_usage, enum wined3d_pool dst_pool, const struct wined3d_format *dst_format)
 {
-    if (src_pool == WINED3D_POOL_SYSTEM_MEM || dst_pool == WINED3D_POOL_SYSTEM_MEM)
+    BOOL decompress;
+
+    decompress = src_format && (src_format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_COMPRESSED)
+            && !(dst_format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_COMPRESSED);
+    if (!decompress && (src_pool == WINED3D_POOL_SYSTEM_MEM || dst_pool == WINED3D_POOL_SYSTEM_MEM))
     {
         TRACE("Source or destination is in system memory.\n");
         return FALSE;
@@ -3036,7 +2944,7 @@ static void ffp_blit_blit_surface(struct wined3d_device *device, enum wined3d_bl
 
     wined3d_texture_set_color_key(src_texture, WINED3D_CKEY_SRC_BLT, color_key);
 
-    context = context_acquire(device, dst_surface);
+    context = context_acquire(device, dst_texture, dst_sub_resource_idx);
     gl_info = context->gl_info;
 
     if (op == WINED3D_BLIT_OP_COLOR_BLIT_ALPHATEST)
@@ -3988,7 +3896,8 @@ HRESULT wined3d_surface_blt(struct wined3d_surface *dst_surface, const RECT *dst
                     {
                         if (!wined3d_resource_is_offscreen(&dst_texture->resource))
                         {
-                            struct wined3d_context *context = context_acquire(device, dst_surface);
+                            struct wined3d_context *context = context_acquire(device,
+                                    dst_texture, dst_sub_resource_idx);
                             wined3d_texture_load_location(dst_texture, dst_sub_resource_idx,
                                     context, dst_texture->resource.draw_binding);
                             context_release(context);
@@ -4027,7 +3936,7 @@ HRESULT wined3d_surface_blt(struct wined3d_surface *dst_surface, const RECT *dst
                 struct wined3d_context *context;
                 TRACE("Using FBO blit.\n");
 
-                context = context_acquire(device, NULL);
+                context = context_acquire(device, NULL, 0);
                 surface_blt_fbo(device, context, filter,
                         src_surface, src_texture->resource.draw_binding, src_rect,
                         dst_surface, dst_texture->resource.draw_binding, dst_rect);

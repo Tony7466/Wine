@@ -3517,8 +3517,10 @@ static void test_coop_level_surf_create(void)
     ddsd.dwSize = sizeof(ddsd);
     ddsd.dwFlags = DDSD_CAPS;
     ddsd.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
+    surface = (void *)0xdeadbeef;
     hr = IDirectDraw2_CreateSurface(ddraw, &ddsd, &surface, NULL);
     ok(hr == DDERR_NOCOOPERATIVELEVELSET, "Surface creation returned hr %#x.\n", hr);
+    ok(surface == (void *)0xdeadbeef, "Got unexpected surface %p.\n", surface);
 
     IDirectDraw2_Release(ddraw);
 }
@@ -10954,7 +10956,7 @@ static void test_transform_vertices(void)
      * y as ((y + 0) * 2 + 1) * 5. The 5 comes from dvScaleX/Y, 2 from
      * the view matrix and the +1's from the world and projection matrix. */
     vp_data.dwX = 0;
-    vp_data.dwX = 0;
+    vp_data.dwY = 0;
     vp_data.dwWidth = 256;
     vp_data.dwHeight = 256;
     vp_data.dvScaleX = 5.0f;

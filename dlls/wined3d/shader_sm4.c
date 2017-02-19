@@ -277,11 +277,14 @@ enum wined3d_sm4_opcode
     WINED3D_SM5_OP_ATOMIC_UMIN                      = 0xb1,
     WINED3D_SM5_OP_IMM_ATOMIC_ALLOC                 = 0xb2,
     WINED3D_SM5_OP_IMM_ATOMIC_CONSUME               = 0xb3,
+    WINED3D_SM5_OP_IMM_ATOMIC_IADD                  = 0xb4,
     WINED3D_SM5_OP_IMM_ATOMIC_AND                   = 0xb5,
     WINED3D_SM5_OP_IMM_ATOMIC_OR                    = 0xb6,
     WINED3D_SM5_OP_IMM_ATOMIC_XOR                   = 0xb7,
     WINED3D_SM5_OP_IMM_ATOMIC_EXCH                  = 0xb8,
     WINED3D_SM5_OP_IMM_ATOMIC_CMP_EXCH              = 0xb9,
+    WINED3D_SM5_OP_IMM_ATOMIC_IMAX                  = 0xba,
+    WINED3D_SM5_OP_IMM_ATOMIC_IMIN                  = 0xbb,
     WINED3D_SM5_OP_IMM_ATOMIC_UMAX                  = 0xbc,
     WINED3D_SM5_OP_IMM_ATOMIC_UMIN                  = 0xbd,
     WINED3D_SM5_OP_SYNC                             = 0xbe,
@@ -360,6 +363,7 @@ enum wined3d_sm4_resource_type
     WINED3D_SM4_RESOURCE_TEXTURE_1DARRAY    = 0x7,
     WINED3D_SM4_RESOURCE_TEXTURE_2DARRAY    = 0x8,
     WINED3D_SM4_RESOURCE_TEXTURE_2DMSARRAY  = 0x9,
+    WINED3D_SM4_RESOURCE_TEXTURE_CUBEARRAY  = 0xa,
 };
 
 enum wined3d_sm4_data_type
@@ -448,6 +452,7 @@ static const enum wined3d_shader_resource_type resource_type_table[] =
     /* WINED3D_SM4_RESOURCE_TEXTURE_1DARRAY */      WINED3D_SHADER_RESOURCE_TEXTURE_1DARRAY,
     /* WINED3D_SM4_RESOURCE_TEXTURE_2DARRAY */      WINED3D_SHADER_RESOURCE_TEXTURE_2DARRAY,
     /* WINED3D_SM4_RESOURCE_TEXTURE_2DMSARRAY */    WINED3D_SHADER_RESOURCE_TEXTURE_2DMSARRAY,
+    /* WINED3D_SM4_RESOURCE_TEXTURE_CUBEARRAY */    WINED3D_SHADER_RESOURCE_TEXTURE_CUBEARRAY,
 };
 
 static const enum wined3d_data_type data_type_table[] =
@@ -1000,11 +1005,14 @@ static const struct wined3d_sm4_opcode_info opcode_table[] =
     {WINED3D_SM5_OP_ATOMIC_UMIN,                      WINED3DSIH_ATOMIC_UMIN,                      "U",    "iu"},
     {WINED3D_SM5_OP_IMM_ATOMIC_ALLOC,                 WINED3DSIH_IMM_ATOMIC_ALLOC,                 "u",    "U"},
     {WINED3D_SM5_OP_IMM_ATOMIC_CONSUME,               WINED3DSIH_IMM_ATOMIC_CONSUME,               "u",    "U"},
+    {WINED3D_SM5_OP_IMM_ATOMIC_IADD,                  WINED3DSIH_IMM_ATOMIC_IADD,                  "uU",   "ii"},
     {WINED3D_SM5_OP_IMM_ATOMIC_AND,                   WINED3DSIH_IMM_ATOMIC_AND,                   "uU",   "iu"},
     {WINED3D_SM5_OP_IMM_ATOMIC_OR,                    WINED3DSIH_IMM_ATOMIC_OR,                    "uU",   "iu"},
     {WINED3D_SM5_OP_IMM_ATOMIC_XOR,                   WINED3DSIH_IMM_ATOMIC_XOR,                   "uU",   "iu"},
     {WINED3D_SM5_OP_IMM_ATOMIC_EXCH,                  WINED3DSIH_IMM_ATOMIC_EXCH,                  "uU",   "iu"},
     {WINED3D_SM5_OP_IMM_ATOMIC_CMP_EXCH,              WINED3DSIH_IMM_ATOMIC_CMP_EXCH,              "uU",   "iuu"},
+    {WINED3D_SM5_OP_IMM_ATOMIC_IMAX,                  WINED3DSIH_IMM_ATOMIC_IMAX,                  "iU",   "ii"},
+    {WINED3D_SM5_OP_IMM_ATOMIC_IMIN,                  WINED3DSIH_IMM_ATOMIC_IMIN,                  "iU",   "ii"},
     {WINED3D_SM5_OP_IMM_ATOMIC_UMAX,                  WINED3DSIH_IMM_ATOMIC_UMAX,                  "uU",   "iu"},
     {WINED3D_SM5_OP_IMM_ATOMIC_UMIN,                  WINED3DSIH_IMM_ATOMIC_UMIN,                  "uU",   "iu"},
     {WINED3D_SM5_OP_SYNC,                             WINED3DSIH_SYNC,                             "",     "",

@@ -400,6 +400,10 @@ enum wined3d_blend
     WINED3D_BLEND_BOTHINVSRCALPHA           = 13,
     WINED3D_BLEND_BLENDFACTOR               = 14,
     WINED3D_BLEND_INVBLENDFACTOR            = 15,
+    WINED3D_BLEND_SRC1COLOR                 = 16,
+    WINED3D_BLEND_INVSRC1COLOR              = 17,
+    WINED3D_BLEND_SRC1ALPHA                 = 18,
+    WINED3D_BLEND_INVSRC1ALPHA              = 19,
 };
 
 enum wined3d_blend_op
@@ -830,6 +834,7 @@ enum wined3d_display_rotation
 #define WINED3D_SWAPCHAIN_ALLOW_MODE_SWITCH                     0x00001000u
 #define WINED3D_SWAPCHAIN_USE_CLOSEST_MATCHING_MODE             0x00002000u
 #define WINED3D_SWAPCHAIN_RESTORE_WINDOW_RECT                   0x00004000u
+#define WINED3D_SWAPCHAIN_GDI_COMPATIBLE                        0x00008000u
 
 #define WINED3DDP_MAXTEXCOORD                                   8
 
@@ -2026,7 +2031,7 @@ struct wined3d_device_parent_ops
             struct wined3d_texture *wined3d_texture, unsigned int sub_resource_idx,
             void **parent, const struct wined3d_parent_ops **parent_ops);
     HRESULT (__cdecl *create_swapchain_texture)(struct wined3d_device_parent *device_parent, void *parent,
-            const struct wined3d_resource_desc *desc, struct wined3d_texture **texture);
+            const struct wined3d_resource_desc *desc, DWORD texture_flags, struct wined3d_texture **texture);
     HRESULT (__cdecl *create_swapchain)(struct wined3d_device_parent *device_parent,
             struct wined3d_swapchain_desc *desc, struct wined3d_swapchain **swapchain);
 };
@@ -2239,6 +2244,8 @@ HRESULT __cdecl wined3d_device_set_clip_status(struct wined3d_device *device,
         const struct wined3d_clip_status *clip_status);
 void __cdecl wined3d_device_set_compute_shader(struct wined3d_device *device, struct wined3d_shader *shader);
 void __cdecl wined3d_device_set_cs_cb(struct wined3d_device *device, unsigned int idx, struct wined3d_buffer *buffer);
+void __cdecl wined3d_device_set_cs_uav(struct wined3d_device *device, unsigned int idx,
+        struct wined3d_unordered_access_view *uav);
 void __cdecl wined3d_device_set_cursor_position(struct wined3d_device *device,
         int x_screen_space, int y_screen_space, DWORD flags);
 HRESULT __cdecl wined3d_device_set_cursor_properties(struct wined3d_device *device,

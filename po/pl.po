@@ -68,10 +68,10 @@ msgstr "Informacje o wsparciu"
 #: mshtml.rc:57 msvfw32.rc:36 oledlg.rc:62 oledlg.rc:94 serialui.rc:41
 #: setupapi.rc:59 shell32.rc:276 shell32.rc:300 shell32.rc:322 shell32.rc:341
 #: shlwapi.rc:44 user32.rc:83 user32.rc:98 wininet.rc:51 wininet.rc:71
-#: winspool.rc:42 net.rc:47 notepad.rc:117 oleview.rc:162 oleview.rc:175
+#: winspool.rc:42 net.rc:47 notepad.rc:117 oleview.rc:161 oleview.rc:174
 #: progman.rc:106 progman.rc:124 progman.rc:142 progman.rc:158 progman.rc:180
-#: progman.rc:199 progman.rc:216 regedit.rc:259 regedit.rc:270 regedit.rc:283
-#: regedit.rc:299 regedit.rc:312 regedit.rc:325 taskmgr.rc:442 taskmgr.rc:517
+#: progman.rc:199 progman.rc:216 regedit.rc:263 regedit.rc:274 regedit.rc:287
+#: regedit.rc:303 regedit.rc:316 regedit.rc:329 taskmgr.rc:442 taskmgr.rc:517
 #: winecfg.rc:214 winecfg.rc:224 wineconsole.rc:135 winefile.rc:128
 #: winefile.rc:151 winefile.rc:181 winemine.rc:71 winemine.rc:81 winemine.rc:95
 #: wordpad.rc:215 wordpad.rc:226 wordpad.rc:244 wordpad.rc:257
@@ -151,10 +151,10 @@ msgstr "Za&instaluj"
 #: msvfw32.rc:37 oledlg.rc:63 oledlg.rc:95 serialui.rc:42 setupapi.rc:42
 #: setupapi.rc:60 shell32.rc:277 shell32.rc:301 shell32.rc:312 shell32.rc:342
 #: shlwapi.rc:45 user32.rc:84 user32.rc:99 wininet.rc:52 wininet.rc:72
-#: winspool.rc:43 notepad.rc:118 oleview.rc:163 oleview.rc:176 progman.rc:107
+#: winspool.rc:43 notepad.rc:118 oleview.rc:162 oleview.rc:175 progman.rc:107
 #: progman.rc:125 progman.rc:143 progman.rc:159 progman.rc:181 progman.rc:200
-#: progman.rc:217 regedit.rc:260 regedit.rc:271 regedit.rc:284 regedit.rc:300
-#: regedit.rc:313 regedit.rc:326 taskmgr.rc:443 taskmgr.rc:518 wineboot.rc:34
+#: progman.rc:217 regedit.rc:264 regedit.rc:275 regedit.rc:288 regedit.rc:304
+#: regedit.rc:317 regedit.rc:330 taskmgr.rc:443 taskmgr.rc:518 wineboot.rc:34
 #: winecfg.rc:215 winecfg.rc:225 wineconsole.rc:136 winefile.rc:129
 #: winefile.rc:152 winefile.rc:182 winemine.rc:96 wordpad.rc:216 wordpad.rc:227
 #: wordpad.rc:245 wordpad.rc:258
@@ -230,7 +230,7 @@ msgid "Programs (*.exe)"
 msgstr "Programy (*.exe)"
 
 #: appwiz.rc:43 avifil32.rc:33 cryptui.rc:83 shell32.rc:199 notepad.rc:76
-#: oleview.rc:104 progman.rc:82 regedit.rc:198 winedbg.rc:42 winhlp32.rc:90
+#: oleview.rc:103 progman.rc:82 regedit.rc:200 winedbg.rc:42 winhlp32.rc:90
 msgid "All files (*.*)"
 msgstr "Wszystkie pliki (*.*)"
 
@@ -342,8 +342,8 @@ msgstr "Zakończ"
 msgid "Customize Toolbar"
 msgstr "Dostosowywanie paska narzędzi"
 
-#: comctl32.rc:84 cryptui.rc:351 ieframe.rc:43 oleview.rc:83 oleview.rc:188
-#: oleview.rc:201 oleview.rc:213 taskmgr.rc:139
+#: comctl32.rc:84 cryptui.rc:351 ieframe.rc:43 oleview.rc:83 oleview.rc:187
+#: oleview.rc:200 oleview.rc:212 taskmgr.rc:139
 msgid "&Close"
 msgstr "&Zamknij"
 
@@ -394,7 +394,7 @@ msgctxt "hotkey"
 msgid "None"
 msgstr "Brak"
 
-#: comctl32.rc:31 cryptui.rc:230 regedit.rc:249 taskmgr.rc:434 winedbg.rc:60
+#: comctl32.rc:31 cryptui.rc:230 regedit.rc:253 taskmgr.rc:434 winedbg.rc:60
 #: winedbg.rc:75 wordpad.rc:180
 msgid "Close"
 msgstr "Zamknij"
@@ -408,7 +408,7 @@ msgid "Go to today"
 msgstr "Idź do dziś"
 
 #: comdlg32.rc:157 comdlg32.rc:170 comdlg32.rc:459 comdlg32.rc:485
-#: shell32.rc:167 oleview.rc:102
+#: shell32.rc:167 oleview.rc:101
 msgid "Open"
 msgstr "Otwórz"
 
@@ -453,7 +453,7 @@ msgstr "Drukarka:"
 msgid "Print range"
 msgstr "Zakres wydruku"
 
-#: comdlg32.rc:207 comdlg32.rc:384 regedit.rc:231
+#: comdlg32.rc:207 comdlg32.rc:384 regedit.rc:235
 msgid "&All"
 msgstr "&Cały rejestr"
 
@@ -623,7 +623,7 @@ msgstr "Dod&aj do własnych kolorów"
 msgid "&Define Custom Colors >>"
 msgstr "Z&definiuj własne kolory >>"
 
-#: comdlg32.rc:316 regedit.rc:238 regedit.rc:248
+#: comdlg32.rc:316 regedit.rc:242 regedit.rc:252
 msgid "Find"
 msgstr "Znajdź"
 
@@ -3071,7 +3071,7 @@ msgstr "Symbol"
 msgid "OEM/DOS"
 msgstr "OEM/DOS"
 
-#: gdi32.rc:45 wldap32.rc:110
+#: gdi32.rc:45 wldap32.rc:112
 msgid "Other"
 msgstr "Inne"
 
@@ -7355,11 +7355,11 @@ msgctxt "object state"
 msgid "has popup"
 msgstr "ma-okno-wysuwne"
 
-#: oleaut32.rc:30 oleview.rc:147
+#: oleaut32.rc:30 oleview.rc:146
 msgid "True"
 msgstr "Prawda"
 
-#: oleaut32.rc:31 oleview.rc:148
+#: oleaut32.rc:31 oleview.rc:147
 msgid "False"
 msgstr "Fałsz"
 
@@ -8123,7 +8123,7 @@ msgctxt "display name"
 msgid "Desktop"
 msgstr "Pulpit"
 
-#: shell32.rc:157 regedit.rc:203
+#: shell32.rc:157 regedit.rc:205
 msgid "My Computer"
 msgstr "Mój komputer"
 
@@ -9344,239 +9344,245 @@ msgstr "Plik wyjściowy już istnieje. Wybierz, OK aby zastąpić plik."
 msgid "Unable to create the output file."
 msgstr "Nie mogę utworzyć pliku wyjściowego."
 
-#: wldap32.rc:30
+#: wldap32.rc:32
 msgid "Success"
 msgstr "Powodzenie"
 
-#: wldap32.rc:31
+#: wldap32.rc:33
 msgid "Operations Error"
 msgstr "Błąd operacji"
 
-#: wldap32.rc:32
+#: wldap32.rc:34
 msgid "Protocol Error"
 msgstr "Błąd protokołu"
 
-#: wldap32.rc:33
+#: wldap32.rc:35
 msgid "Time Limit Exceeded"
 msgstr "Przekroczono limit czasu"
 
-#: wldap32.rc:34
+#: wldap32.rc:36
 msgid "Size Limit Exceeded"
 msgstr "Przekroczono limit rozmiaru"
 
-#: wldap32.rc:35
+#: wldap32.rc:37
 msgid "Compare False"
 msgstr "Porównanie dało wynik negatywny"
 
-#: wldap32.rc:36
+#: wldap32.rc:38
 msgid "Compare True"
 msgstr "Porównanie dało wynik pozytywny"
 
-#: wldap32.rc:37
+#: wldap32.rc:39
 msgid "Authentication Method Not Supported"
 msgstr "Metoda uwierzytelniania nie jest obsługiwana"
 
-#: wldap32.rc:38
+#: wldap32.rc:40
 msgid "Strong Authentication Required"
 msgstr "Wymagana mocna metoda uwierzytelniania"
 
-#: wldap32.rc:39
+#: wldap32.rc:41
 msgid "Referral (v2)"
 msgstr "Odwołanie (v2)"
 
-#: wldap32.rc:40
+#: wldap32.rc:42
 msgid "Referral"
 msgstr "Odwołanie"
 
-#: wldap32.rc:41
+#: wldap32.rc:43
 msgid "Administration Limit Exceeded"
 msgstr "Przekroczono limit administracyjny na serwerze"
 
-#: wldap32.rc:42
+#: wldap32.rc:44
 msgid "Unavailable Critical Extension"
 msgstr "Bezwzględnie wymagane rozszerzenie nie jest dostępne"
 
-#: wldap32.rc:43
+#: wldap32.rc:45
 msgid "Confidentiality Required"
 msgstr "Wymagana poufność"
 
 #: wldap32.rc:46
+#, fuzzy
+#| msgid "Shutdown in progress.\n"
+msgid "SASL Bind in Progress"
+msgstr "Zamykanie w toku.\n"
+
+#: wldap32.rc:48
 msgid "No Such Attribute"
 msgstr "Nie ma takiego atrybutu"
 
-#: wldap32.rc:47
+#: wldap32.rc:49
 msgid "Undefined Type"
 msgstr "Niezdefiniowany typ"
 
-#: wldap32.rc:48
+#: wldap32.rc:50
 msgid "Inappropriate Matching"
 msgstr "Nieodpowiednie dopasowanie"
 
-#: wldap32.rc:49
+#: wldap32.rc:51
 msgid "Constraint Violation"
 msgstr "Naruszenie więzów"
 
-#: wldap32.rc:50
+#: wldap32.rc:52
 msgid "Attribute Or Value Exists"
 msgstr "Atrybut lub wartość istnieje"
 
-#: wldap32.rc:51
+#: wldap32.rc:53
 msgid "Invalid Syntax"
 msgstr "Błąd składni"
 
-#: wldap32.rc:62
+#: wldap32.rc:64
 msgid "No Such Object"
 msgstr "Nie ma takiego obiektu"
 
-#: wldap32.rc:63
+#: wldap32.rc:65
 msgid "Alias Problem"
 msgstr "Problem aliasu"
 
-#: wldap32.rc:64
+#: wldap32.rc:66
 msgid "Invalid DN Syntax"
 msgstr "Niepoprawna składnia DN"
 
-#: wldap32.rc:65
+#: wldap32.rc:67
 msgid "Is Leaf"
 msgstr "Jest liściem"
 
-#: wldap32.rc:66
+#: wldap32.rc:68
 msgid "Alias Dereference Problem"
 msgstr "Problem z odwołaniem do aliasu"
 
-#: wldap32.rc:78
+#: wldap32.rc:80
 msgid "Inappropriate Authentication"
 msgstr "Nieodpowiednie uwierzytelnienie"
 
-#: wldap32.rc:79
+#: wldap32.rc:81
 msgid "Invalid Credentials"
 msgstr "Nieprawidłowe poświadczenia"
 
-#: wldap32.rc:80
+#: wldap32.rc:82
 msgid "Insufficient Rights"
 msgstr "Niewystarczające prawa dostępu"
 
-#: wldap32.rc:81
+#: wldap32.rc:83
 msgid "Busy"
 msgstr "Zajęty"
 
-#: wldap32.rc:82
+#: wldap32.rc:84
 msgid "Unavailable"
 msgstr "Niedostępny"
 
-#: wldap32.rc:83
+#: wldap32.rc:85
 msgid "Unwilling To Perform"
 msgstr "Brak chęci wykonania"
 
-#: wldap32.rc:84
+#: wldap32.rc:86
 msgid "Loop Detected"
 msgstr "Wykryto pętlę"
 
-#: wldap32.rc:90
+#: wldap32.rc:92
 msgid "Sort Control Missing"
 msgstr "Brak formantu sortowania"
 
-#: wldap32.rc:91
+#: wldap32.rc:93
 msgid "Index range error"
 msgstr "Błąd zakresu indeksu"
 
-#: wldap32.rc:94
+#: wldap32.rc:96
 msgid "Naming Violation"
 msgstr "Naruszenie zasad nazewnictwa"
 
-#: wldap32.rc:95
+#: wldap32.rc:97
 msgid "Object Class Violation"
 msgstr "Naruszenie klasy obiektu"
 
-#: wldap32.rc:96
+#: wldap32.rc:98
 msgid "Not allowed on Non-leaf"
 msgstr "Operacja niedozwolona na nie-liściu"
 
-#: wldap32.rc:97
+#: wldap32.rc:99
 msgid "Not allowed on RDN"
 msgstr "Operacja niedozwolona na RDN"
 
-#: wldap32.rc:98
+#: wldap32.rc:100
 msgid "Already Exists"
 msgstr "Już istnieje"
 
-#: wldap32.rc:99
+#: wldap32.rc:101
 msgid "No Object Class Mods"
 msgstr "Brak modułów klas obiektów"
 
-#: wldap32.rc:100
+#: wldap32.rc:102
 msgid "Results Too Large"
 msgstr "Wynik zbyt duży"
 
-#: wldap32.rc:101
+#: wldap32.rc:103
 msgid "Affects Multiple DSAs"
 msgstr "Ma wpływ na wiele agentów DSA"
 
-#: wldap32.rc:111
+#: wldap32.rc:113
 msgid "Server Down"
 msgstr "Serwer wyłączony"
 
-#: wldap32.rc:112
+#: wldap32.rc:114
 msgid "Local Error"
 msgstr "Błąd lokalny"
 
-#: wldap32.rc:113
+#: wldap32.rc:115
 msgid "Encoding Error"
 msgstr "Błąd podczas kodowania"
 
-#: wldap32.rc:114
+#: wldap32.rc:116
 msgid "Decoding Error"
 msgstr "Błąd podczas dekodowania"
 
-#: wldap32.rc:115
+#: wldap32.rc:117
 msgid "Timeout"
 msgstr "Limit czasu"
 
-#: wldap32.rc:116
+#: wldap32.rc:118
 msgid "Auth Unknown"
 msgstr "Nieznane uwierzytelnianie"
 
-#: wldap32.rc:117
+#: wldap32.rc:119
 msgid "Filter Error"
 msgstr "Błąd filtru"
 
-#: wldap32.rc:118
+#: wldap32.rc:120
 msgid "User Canceled"
 msgstr "Akcja anulowana przez użytkownika"
 
-#: wldap32.rc:119
+#: wldap32.rc:121
 msgid "Parameter Error"
 msgstr "Błąd parametru"
 
-#: wldap32.rc:120
+#: wldap32.rc:122
 msgid "No Memory"
 msgstr "Brak pamięci"
 
-#: wldap32.rc:121
+#: wldap32.rc:123
 msgid "Can't connect to the LDAP server"
 msgstr "Nie można się połączyć z serwerem LDAP"
 
-#: wldap32.rc:122
+#: wldap32.rc:124
 msgid "Operation not supported by this version of the LDAP protocol"
 msgstr "Operacja nie jest obsługiwana przez tę wersję protokołu LDAP"
 
-#: wldap32.rc:123
+#: wldap32.rc:125
 msgid "Specified control was not found in message"
 msgstr "Brak określonego formantu w wiadomości"
 
-#: wldap32.rc:124
+#: wldap32.rc:126
 msgid "No result present in message"
 msgstr "Brak wyników w wiadomości"
 
-#: wldap32.rc:125
+#: wldap32.rc:127
 msgid "More results returned"
 msgstr "Zwrócono więcej wyników"
 
-#: wldap32.rc:126
+#: wldap32.rc:128
 msgid "Loop while handling referrals"
 msgstr "Pętla przed obsługą odwołań"
 
-#: wldap32.rc:127
+#: wldap32.rc:129
 msgid "Referral hop limit exceeded"
 msgstr "Przekroczono limit skoków odwołań"
 
@@ -10942,7 +10948,7 @@ msgctxt "accelerator Copy"
 msgid "C"
 msgstr "C"
 
-#: notepad.rc:134 regedit.rc:335 wordpad.rc:287
+#: notepad.rc:134 regedit.rc:339 wordpad.rc:287
 msgctxt "accelerator Find"
 msgid "F"
 msgstr "F"
@@ -10962,7 +10968,7 @@ msgctxt "accelerator Open"
 msgid "O"
 msgstr "O"
 
-#: notepad.rc:138 regedit.rc:336 wordpad.rc:300
+#: notepad.rc:138 regedit.rc:340 wordpad.rc:300
 msgctxt "accelerator Print"
 msgid "P"
 msgstr "P"
@@ -11151,31 +11157,31 @@ msgstr "Z&apisz jako..."
 msgid "&Group by type kind"
 msgstr "&Grupuj według rodzaju"
 
-#: oleview.rc:157
+#: oleview.rc:156
 msgid "Connect to another machine"
 msgstr "Połącz z innym komputerem"
 
-#: oleview.rc:160
+#: oleview.rc:159
 msgid "&Machine name:"
 msgstr "&Nazwa komputera:"
 
-#: oleview.rc:168
+#: oleview.rc:167
 msgid "System Configuration"
 msgstr "Ustawienia systemu"
 
-#: oleview.rc:171
+#: oleview.rc:170
 msgid "System Settings"
 msgstr "Ustawienia systemu"
 
-#: oleview.rc:172
+#: oleview.rc:171
 msgid "&Enable Distributed COM"
 msgstr "Włącz &Distributed COM"
 
-#: oleview.rc:173
+#: oleview.rc:172
 msgid "Enable &Remote Connections (Win95 only)"
 msgstr "Włącz &zdalne połączenia (tylko Win95)"
 
-#: oleview.rc:174
+#: oleview.rc:173
 msgid ""
 "These settings change only registry values.\n"
 "They have no effect on Wine performance."
@@ -11183,35 +11189,35 @@ msgstr ""
 "Te ustawienia zmieniają tylko wartości w rejestrze.\n"
 "Nie mają wpływu na zachowanie Wine."
 
-#: oleview.rc:181
+#: oleview.rc:180
 msgid "Default Interface Viewer"
 msgstr "Standardowa przeglądarka interfejsu"
 
-#: oleview.rc:184
+#: oleview.rc:183
 msgid "Interface"
 msgstr "Interfejs"
 
-#: oleview.rc:186
+#: oleview.rc:185
 msgid "IID:"
 msgstr "IID:"
 
-#: oleview.rc:189
+#: oleview.rc:188
 msgid "&View Type Info"
 msgstr "&Wyświetl TypeInfo"
 
-#: oleview.rc:194
+#: oleview.rc:193
 msgid "IPersist Interface Viewer"
 msgstr "Przeglądarka interfejsu IPersist"
 
-#: oleview.rc:197 oleview.rc:209
+#: oleview.rc:196 oleview.rc:208
 msgid "Class Name:"
 msgstr "Nazwa klasy:"
 
-#: oleview.rc:199 oleview.rc:211
+#: oleview.rc:198 oleview.rc:210
 msgid "CLSID:"
 msgstr "CLSID:"
 
-#: oleview.rc:206
+#: oleview.rc:205
 msgid "IPersistStream Interface Viewer"
 msgstr "Przeglądarka interfejsu IPersistStream"
 
@@ -11219,7 +11225,7 @@ msgstr "Przeglądarka interfejsu IPersistStream"
 msgid "OleView"
 msgstr "OleView"
 
-#: oleview.rc:101
+#: oleview.rc:100
 msgid "ITypeLib viewer"
 msgstr "Przeglądarka ITypeLib"
 
@@ -11227,173 +11233,169 @@ msgstr "Przeglądarka ITypeLib"
 msgid "OleView - OLE/COM Object Viewer"
 msgstr "OleView - przeglądarka obiektów OLE/COM"
 
-#: oleview.rc:100
-msgid "version 1.0"
-msgstr "wersja 1.0"
-
-#: oleview.rc:103
+#: oleview.rc:102
 msgid "TypeLib files (*.tlb; *.olb; *.dll; *.ocx; *.exe)"
 msgstr "Pliki TypeLib (*.tlb; *.olb; *.dll; *.ocx; *.exe)"
 
-#: oleview.rc:106
+#: oleview.rc:105
 msgid "Bind to file via a File Moniker"
 msgstr "Dowiąż do pliku za pomocą obiektu File Moniker"
 
-#: oleview.rc:107
+#: oleview.rc:106
 msgid "Open a TypeLib file and view the contents"
 msgstr "Otwórz plik z biblioteki typów (TypeLib) i wyświetl jego zawartość"
 
-#: oleview.rc:108
+#: oleview.rc:107
 msgid "Change machine wide Distributed COM settings"
 msgstr "Zmień ustawienia Distributed COM tego komputera"
 
-#: oleview.rc:109
+#: oleview.rc:108
 msgid "Run the Wine registry editor"
 msgstr "Uruchom Edytor Rejestrów Wine"
 
-#: oleview.rc:110
+#: oleview.rc:109
 msgid "Quit the application. Prompts to save changes"
 msgstr "Zakończ aplikację. Możesz zostać zapytany, czy zapisać zmiany"
 
-#: oleview.rc:111
+#: oleview.rc:110
 msgid "Create an instance of the selected object"
 msgstr "Stwórz instancję wybranego obiektu"
 
-#: oleview.rc:112
+#: oleview.rc:111
 msgid "Create an instance of the selected object on a specific machine"
 msgstr "Stwórz instancję wybranego obiektu na określonym komputerze"
 
-#: oleview.rc:113
+#: oleview.rc:112
 msgid "Release the currently selected object instance"
 msgstr "Zwolnij aktualnie wybraną instancję obiektu"
 
-#: oleview.rc:114
+#: oleview.rc:113
 msgid "Copy the GUID of the currently selected item to the clipboard"
 msgstr "Skopiuj GUID aktualnie wybranego obiektu do schowka"
 
-#: oleview.rc:115
+#: oleview.rc:114
 msgid "Display the viewer for the selected item"
 msgstr "Wyświetl przeglądarkę aktualnie wybranego elementu"
 
-#: oleview.rc:120
+#: oleview.rc:119
 msgid "Toggle between expert and novice display mode"
 msgstr "Przełącz pomiędzy trybem eksperta i początkującego"
 
-#: oleview.rc:121
+#: oleview.rc:120
 msgid ""
 "Toggle the display of component categories that are not meant to be visible"
 msgstr "Przełącz wyświetlanie kategorii, które nie muszą być widoczne"
 
-#: oleview.rc:122
+#: oleview.rc:121
 msgid "Show or hide the toolbar"
 msgstr "Pokaż lub ukryj pasek narzędzi"
 
-#: oleview.rc:123
+#: oleview.rc:122
 msgid "Show or hide the status bar"
 msgstr "Pokaż lub ukryj pasek stanu"
 
-#: oleview.rc:124
+#: oleview.rc:123
 msgid "Refresh all lists"
 msgstr "Odśwież wszystkie listy"
 
-#: oleview.rc:125
+#: oleview.rc:124
 msgid "Display program information, version number and copyright"
 msgstr ""
 "Wyświetl informacje o programie, numerze jego wersji i prawach autorskich"
 
-#: oleview.rc:116
+#: oleview.rc:115
 msgid "Ask for an in-process server when calling CoGetClassObject"
 msgstr "Zapytaj o serwer w procesie przy wywoływaniu CoGetClassObject"
 
-#: oleview.rc:117
+#: oleview.rc:116
 msgid "Ask for an in-process handler when calling CoGetClassObject"
 msgstr "Zapytaj o uchwyt w procesie przy wywoływaniu CoGetClassObject"
 
-#: oleview.rc:118
+#: oleview.rc:117
 msgid "Ask for a local server when calling CoGetClassObject"
 msgstr "Zapytaj o lokalny serwer przy wywoływaniu CoGetClassObject"
 
-#: oleview.rc:119
+#: oleview.rc:118
 msgid "Ask for a remote server when calling CoGetClassObject"
 msgstr "Zapytaj o zdalny serwer przy wywoływaniu CoGetClassObject"
 
-#: oleview.rc:131
+#: oleview.rc:130
 msgid "ObjectClasses"
 msgstr "Klasy obiektów"
 
-#: oleview.rc:132
+#: oleview.rc:131
 msgid "Grouped by Component Category"
 msgstr "Zgrupowane według kategorii komponentów"
 
-#: oleview.rc:133
+#: oleview.rc:132
 msgid "OLE 1.0 Objects"
 msgstr "Obiekty OLE 1.0"
 
-#: oleview.rc:134
+#: oleview.rc:133
 msgid "COM Library Objects"
 msgstr "Obiekty standardowe COM"
 
-#: oleview.rc:135
+#: oleview.rc:134
 msgid "All Objects"
 msgstr "Wszystkie obiekty"
 
-#: oleview.rc:136
+#: oleview.rc:135
 msgid "Application IDs"
 msgstr "Identyfikatory aplikacji (AppID)"
 
-#: oleview.rc:137
+#: oleview.rc:136
 msgid "Type Libraries"
 msgstr "Biblioteki typów (TypeLib)"
 
-#: oleview.rc:138
+#: oleview.rc:137
 msgid "ver."
 msgstr "wer."
 
-#: oleview.rc:139
+#: oleview.rc:138
 msgid "Interfaces"
 msgstr "Interfejsy"
 
-#: oleview.rc:141
+#: oleview.rc:140
 msgid "Registry"
 msgstr "Rejestr"
 
-#: oleview.rc:142
+#: oleview.rc:141
 msgid "Implementation"
 msgstr "Implementacja"
 
-#: oleview.rc:143
+#: oleview.rc:142
 msgid "Activation"
 msgstr "Aktywacja"
 
-#: oleview.rc:145
+#: oleview.rc:144
 msgid "CoGetClassObject failed."
 msgstr "CoGetClassObject nie powiodło się."
 
-#: oleview.rc:146
+#: oleview.rc:145
 msgid "Unknown error"
 msgstr "Nieznany błąd"
 
-#: oleview.rc:149
+#: oleview.rc:148
 msgid "bytes"
 msgstr "bajty(ów)"
 
-#: oleview.rc:151
+#: oleview.rc:150
 msgid "LoadTypeLib( %1 ) failed ($%2!x!)"
 msgstr "LoadTypeLib( %1 ) nie powiodło się ($%2!x!)"
 
-#: oleview.rc:152
+#: oleview.rc:151
 msgid "Inherited Interfaces"
 msgstr "Odziedziczone interfejsy"
 
-#: oleview.rc:127
+#: oleview.rc:126
 msgid "Save as an .IDL or .H file"
 msgstr "Zapisz jako plik .IDL lub .H"
 
-#: oleview.rc:128
+#: oleview.rc:127
 msgid "Close window"
 msgstr "Zamknij okno"
 
-#: oleview.rc:129
+#: oleview.rc:128
 msgid "Group typeinfos by kind"
 msgstr "Grupuj informacje o typach według rodzajów"
 
@@ -11704,7 +11706,7 @@ msgstr "Określony plik już istnieje. Czy chcesz go zastąpić?"
 msgid "The registry operation was cancelled\n"
 msgstr ""
 
-#: reg.rc:53 regedit.rc:204
+#: reg.rc:53 regedit.rc:206
 msgid "(Default)"
 msgstr "(Domyślna)"
 
@@ -11770,7 +11772,7 @@ msgstr ""
 msgid "Type \"REG %1 /?\" for help.\n"
 msgstr ""
 
-#: reg.rc:65 regedit.rc:205
+#: reg.rc:65 regedit.rc:207
 msgid "(value not set)"
 msgstr "(wartość nie ustalona)"
 
@@ -11846,83 +11848,83 @@ msgstr "Edytor rejestru - i&nformacje"
 msgid "Modify Binary Data..."
 msgstr "Zmień dane binarne..."
 
-#: regedit.rc:230
+#: regedit.rc:234
 msgid "Export registry"
 msgstr "&Eksportuj rejestr"
 
-#: regedit.rc:232
+#: regedit.rc:236
 msgid "S&elected branch:"
 msgstr "&Wybraną gałąź:"
 
-#: regedit.rc:241
+#: regedit.rc:245
 msgid "Find:"
 msgstr "Znajdź:"
 
-#: regedit.rc:243
+#: regedit.rc:247
 msgid "Find in:"
 msgstr "Szukaj w:"
 
-#: regedit.rc:244
+#: regedit.rc:248
 msgid "Keys"
 msgstr "Kluczach"
 
-#: regedit.rc:245
+#: regedit.rc:249
 msgid "Value names"
 msgstr "Nazwach wartości"
 
-#: regedit.rc:246
+#: regedit.rc:250
 msgid "Value content"
 msgstr "Treści wartości"
 
-#: regedit.rc:247
+#: regedit.rc:251
 msgid "Whole string only"
 msgstr "Tylko pełne dopasowanie"
 
-#: regedit.rc:254
+#: regedit.rc:258
 msgid "Add Favorite"
 msgstr "Dodaj do ulubionych"
 
-#: regedit.rc:257 regedit.rc:268
+#: regedit.rc:261 regedit.rc:272
 msgid "Name:"
 msgstr "Nazwa:"
 
-#: regedit.rc:265
+#: regedit.rc:269
 msgid "Remove Favorite"
 msgstr "Usuń ulubiony"
 
-#: regedit.rc:276
+#: regedit.rc:280
 msgid "Edit String"
 msgstr "Edycja danej tekstowej"
 
-#: regedit.rc:279 regedit.rc:292 regedit.rc:308 regedit.rc:321
+#: regedit.rc:283 regedit.rc:296 regedit.rc:312 regedit.rc:325
 msgid "Value name:"
 msgstr "Nazwa:"
 
-#: regedit.rc:281 regedit.rc:294 regedit.rc:310 regedit.rc:323
+#: regedit.rc:285 regedit.rc:298 regedit.rc:314 regedit.rc:327
 msgid "Value data:"
 msgstr "Wartość:"
 
-#: regedit.rc:289
+#: regedit.rc:293
 msgid "Edit DWORD"
 msgstr "Edycja danej liczbowej (DWORD)"
 
-#: regedit.rc:296
+#: regedit.rc:300
 msgid "Base"
 msgstr "System"
 
-#: regedit.rc:297
+#: regedit.rc:301
 msgid "Hexadecimal"
 msgstr "Szesnastkowy"
 
-#: regedit.rc:298
+#: regedit.rc:302
 msgid "Decimal"
 msgstr "Dziesiętny"
 
-#: regedit.rc:305
+#: regedit.rc:309
 msgid "Edit Binary"
 msgstr "Edycja danej binarnej"
 
-#: regedit.rc:318
+#: regedit.rc:322
 msgid "Edit Multi-String"
 msgstr "Edycja danej wielotekstowej"
 
@@ -11959,79 +11961,91 @@ msgstr "Wartość"
 msgid "Registry Editor"
 msgstr "Edytor rejestru"
 
-#: regedit.rc:194
+#: regedit.rc:196
 msgid "Import Registry File"
 msgstr "Importuje plik do rejestru"
 
-#: regedit.rc:195
+#: regedit.rc:197
 msgid "Export Registry File"
 msgstr "Eksportuje całość lub część rejestru do pliku"
 
-#: regedit.rc:196
+#: regedit.rc:198
 msgid "Registry files (*.reg)"
 msgstr "Pliki rejestru (*.reg)"
 
-#: regedit.rc:197
+#: regedit.rc:199
 msgid "Win9x/NT4 Registry files (REGEDIT4)"
 msgstr "Pliki rejestru Win9x/NT4 (REGEDIT4)"
 
-#: regedit.rc:206
+#: regedit.rc:208
 msgid "(cannot display value)"
 msgstr "(nie mogę wyświetlić wartości)"
 
-#: regedit.rc:207
+#: regedit.rc:209
 msgid "(unknown %d)"
 msgstr "(nieznany: %d)"
 
-#: regedit.rc:212
+#: regedit.rc:214
 #, fuzzy
 #| msgid "Error: Unable to access remote machine\n"
 msgid "Unable to modify the selected registry value."
 msgstr "Błąd: Błąd dostępu do zdalnej maszyny\n"
 
-#: regedit.rc:213
+#: regedit.rc:215
 #, fuzzy
 #| msgid "Error: Unable to access remote machine\n"
 msgid "Unable to create a new registry key."
 msgstr "Błąd: Błąd dostępu do zdalnej maszyny\n"
 
-#: regedit.rc:214
+#: regedit.rc:216
 #, fuzzy
 #| msgid "Error: Unable to access remote machine\n"
 msgid "Unable to create a new registry value."
 msgstr "Błąd: Błąd dostępu do zdalnej maszyny\n"
 
-#: regedit.rc:215
+#: regedit.rc:217
 msgid ""
 "Unable to rename the key '%1'.\n"
 "The specified key name already exists."
 msgstr ""
 
-#: regedit.rc:216
+#: regedit.rc:218
 msgid ""
 "Unable to rename the value '%1'.\n"
 "The specified value name already exists."
 msgstr ""
 
-#: regedit.rc:217
+#: regedit.rc:219
 #, fuzzy
 #| msgid "Error: Unable to access remote machine\n"
 msgid "Unable to delete the selected registry key."
 msgstr "Błąd: Błąd dostępu do zdalnej maszyny\n"
 
-#: regedit.rc:218
+#: regedit.rc:220
 #, fuzzy
 #| msgid "Error: Unable to access remote machine\n"
 msgid "Unable to rename the selected registry key."
 msgstr "Błąd: Błąd dostępu do zdalnej maszyny\n"
 
-#: regedit.rc:219
+#: regedit.rc:221
 #, fuzzy
 #| msgid "Error: Unable to access remote machine\n"
 msgid "Unable to rename the selected registry value."
 msgstr "Błąd: Błąd dostępu do zdalnej maszyny\n"
 
-#: regedit.rc:371
+#: regedit.rc:222
+msgid ""
+"The keys and values contained in %1 were successfully added to the registry."
+msgstr ""
+
+#: regedit.rc:223
+#, fuzzy
+#| msgid ""
+#| "Error: The system was unable to find the specified registry key or value\n"
+msgid "Unable to import %1. The specified file is not a valid registry file."
+msgstr "Błąd: System nie mógł znaleźć podanej wartości lub klucza rejestru\n"
+
+#: regedit.rc:375
 msgid ""
 "Usage:\n"
 "  regedit [options] [filename] [reg_key]\n"
@@ -12062,7 +12076,7 @@ msgid ""
 "  regedit /D \"HKEY_LOCAL_MACHINE\\Error\\Path\"\n"
 msgstr ""
 
-#: regedit.rc:372
+#: regedit.rc:376
 #, fuzzy
 #| msgid ""
 #| "regsvr32: Invalid or unrecognized switch [%1]\n"
@@ -12072,55 +12086,55 @@ msgstr ""
 "regsvr32: Nieprawidłowy lub nierozpoznany przełącznik [%1]\n"
 "\n"
 
-#: regedit.rc:373
+#: regedit.rc:377
 msgid "Type \"regedit /?\" for help.\n"
 msgstr ""
 
-#: regedit.rc:374
+#: regedit.rc:378
 #, fuzzy
 #| msgid "No command was specified."
 msgid "regedit: No filename was specified.\n"
 msgstr "Nie określono polecenia."
 
-#: regedit.rc:375
+#: regedit.rc:379
 msgid "regedit: No registry key was specified for removal.\n"
 msgstr ""
 
-#: regedit.rc:376
+#: regedit.rc:380
 #, fuzzy
 #| msgid "uninstaller: The application with GUID '%1' was not found\n"
 msgid "regedit: The file '%1' was not found.\n"
 msgstr "usuwanie programów: Nie znaleziono aplikacji o GUID '%1'\n"
 
-#: regedit.rc:377
+#: regedit.rc:381
 #, fuzzy
 #| msgid "Error: Unable to access remote machine\n"
 msgid "regedit: Unable to open the file '%1'.\n"
 msgstr "Błąd: Błąd dostępu do zdalnej maszyny\n"
 
-#: regedit.rc:378
+#: regedit.rc:382
 #, fuzzy
 #| msgid "Invalid handle operation.\n"
 msgid "regedit: Unhandled action.\n"
 msgstr "Niepoprawna operacja na uchwycie.\n"
 
-#: regedit.rc:379
+#: regedit.rc:383
 msgid "regedit: Out of memory! (%1!S!, line %2!u!)\n"
 msgstr ""
 
-#: regedit.rc:380
+#: regedit.rc:384
 #, fuzzy
 #| msgid "Error: Invalid key name\n"
 msgid "regedit: Invalid hexadecimal value.\n"
 msgstr "Błąd: Niewłaściwa nazwa klucza\n"
 
-#: regedit.rc:381
+#: regedit.rc:385
 msgid ""
 "regedit: Unable to convert hexadecimal data. An invalid value was "
 "encountered at '%1'.\n"
 msgstr ""
 
-#: regedit.rc:382
+#: regedit.rc:386
 #, fuzzy
 #| msgid ""
 #| "regsvr32: Invalid or unrecognized switch [%1]\n"
@@ -12130,51 +12144,51 @@ msgstr ""
 "regsvr32: Nieprawidłowy lub nierozpoznany przełącznik [%1]\n"
 "\n"
 
-#: regedit.rc:383
+#: regedit.rc:387
 #, fuzzy
 #| msgid "Error: Unsupported type\n"
 msgid "regedit: Unsupported registry data type [%1]\n"
 msgstr "Błąd: Niewspierany typ\n"
 
-#: regedit.rc:384
+#: regedit.rc:388
 #, fuzzy
 #| msgid "Error: Unable to access remote machine\n"
 msgid "regedit: Unexpected end of line in '%1'.\n"
 msgstr "Błąd: Błąd dostępu do zdalnej maszyny\n"
 
-#: regedit.rc:385
+#: regedit.rc:389
 #, fuzzy
 #| msgid "uninstaller: The application with GUID '%1' was not found\n"
 msgid "regedit: The line '%1' was not recognized.\n"
 msgstr "usuwanie programów: Nie znaleziono aplikacji o GUID '%1'\n"
 
-#: regedit.rc:386
+#: regedit.rc:390
 #, fuzzy
 #| msgid "Error: Unable to access remote machine\n"
 msgid "regedit: Unable to add the registry value '%1' to '%2'.\n"
 msgstr "Błąd: Błąd dostępu do zdalnej maszyny\n"
 
-#: regedit.rc:387
+#: regedit.rc:391
 #, fuzzy
 #| msgid "Error: Unable to access remote machine\n"
 msgid "regedit: Unable to open the registry key '%1'.\n"
 msgstr "Błąd: Błąd dostępu do zdalnej maszyny\n"
 
-#: regedit.rc:388
+#: regedit.rc:392
 #, fuzzy
 #| msgid "Error: Unsupported type\n"
 msgid "regedit: Unsupported registry data type [%1] encountered in '%2'.\n"
 msgstr "Błąd: Niewspierany typ\n"
 
-#: regedit.rc:389
+#: regedit.rc:393
 msgid "regedit: The registry value '%1' will be exported as binary data.\n"
 msgstr ""
 
-#: regedit.rc:390
+#: regedit.rc:394
 msgid "regedit: Incorrect registry class specification in '%1'.\n"
 msgstr ""
 
-#: regedit.rc:391
+#: regedit.rc:395
 #, fuzzy
 #| msgid ""
 #| "Error: The system was unable to find the specified registry key or value\n"
@@ -12182,7 +12196,7 @@ msgid ""
 "regedit: Unable to export '%1'. The specified registry key was not found.\n"
 msgstr "Błąd: System nie mógł znaleźć podanej wartości lub klucza rejestru\n"
 
-#: regedit.rc:392
+#: regedit.rc:396
 #, fuzzy
 #| msgid "Error: Unable to access remote machine\n"
 msgid "regedit: Unable to delete the registry class '%1'.\n"
@@ -12291,7 +12305,7 @@ msgstr "Wartość jest zbyt duża (%u)"
 msgid "Confirm Value Delete"
 msgstr "Potwierdzenie kasowania"
 
-#: regedit.rc:189
+#: regedit.rc:191
 #, fuzzy
 #| msgid "Search string '%s' not found"
 msgid "Search complete. The string '%1' was not found."
@@ -12301,11 +12315,11 @@ msgstr "Nie udało się wyszukać ciągu '%s'"
 msgid "Are you sure you want to delete these values?"
 msgstr "Czy jesteś pewien, że chcesz usunąć te wartości?"
 
-#: regedit.rc:187
+#: regedit.rc:189
 msgid "New Key #%d"
 msgstr "Nowy klucz #%d"
 
-#: regedit.rc:188
+#: regedit.rc:190
 msgid "New Value #%d"
 msgstr "Nowa wartość #%d"
 
@@ -12322,6 +12336,19 @@ msgstr "Dodaje nową wartość ciągu rozwijalnego"
 #: regedit.rc:174
 msgid "Exports selected branch of the registry to a text file"
 msgstr "Eksportuje zaznaczoną gałąź rejestru do pliku tekstowego"
+
+#: regedit.rc:187
+#, fuzzy
+#| msgid "Confirm Value Delete"
+msgid "Confirm Key Delete"
+msgstr "Potwierdzenie kasowania"
+
+#: regedit.rc:188
+#, fuzzy
+#| msgid "Are you sure you want to delete '%1'?"
+msgid ""
+"Are you sure you want to delete the registry key '%1' and all of its subkeys?"
+msgstr "Czy jesteś pewien, że chcesz usunąć '%1'?"
 
 #: regsvr32.rc:32
 msgid ""
