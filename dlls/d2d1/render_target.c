@@ -207,6 +207,8 @@ static inline struct d2d_d3d_render_target *impl_from_ID2D1RenderTarget(ID2D1Ren
 
 static HRESULT STDMETHODCALLTYPE d2d_d3d_render_target_QueryInterface(ID2D1RenderTarget *iface, REFIID iid, void **out)
 {
+    struct d2d_d3d_render_target *render_target = impl_from_ID2D1RenderTarget(iface);
+
     TRACE("iface %p, iid %s, out %p.\n", iface, debugstr_guid(iid), out);
 
     if (IsEqualGUID(iid, &IID_ID2D1RenderTarget)
@@ -215,6 +217,12 @@ static HRESULT STDMETHODCALLTYPE d2d_d3d_render_target_QueryInterface(ID2D1Rende
     {
         ID2D1RenderTarget_AddRef(iface);
         *out = iface;
+        return S_OK;
+    }
+    else if (IsEqualGUID(iid, &IID_ID2D1GdiInteropRenderTarget))
+    {
+        ID2D1GdiInteropRenderTarget_AddRef(&render_target->ID2D1GdiInteropRenderTarget_iface);
+        *out = &render_target->ID2D1GdiInteropRenderTarget_iface;
         return S_OK;
     }
 
@@ -1866,8 +1874,107 @@ static const struct IDWriteTextRendererVtbl d2d_text_renderer_vtbl =
     d2d_text_renderer_DrawInlineObject,
 };
 
-HRESULT d2d_d3d_render_target_init(struct d2d_d3d_render_target *render_target, ID2D1Factory *factory,
-        IDXGISurface *surface, const D2D1_RENDER_TARGET_PROPERTIES *desc)
+static inline struct d2d_d3d_render_target *impl_from_ID2D1GdiInteropRenderTarget(ID2D1GdiInteropRenderTarget *iface)
+{
+    return CONTAINING_RECORD(iface, struct d2d_d3d_render_target, ID2D1GdiInteropRenderTarget_iface);
+}
+
+static HRESULT STDMETHODCALLTYPE d2d_gdi_interop_render_target_QueryInterface(ID2D1GdiInteropRenderTarget *iface,
+        REFIID iid, void **out)
+{
+    struct d2d_d3d_render_target *render_target = impl_from_ID2D1GdiInteropRenderTarget(iface);
+
+    TRACE("iface %p, iid %s, out %p.\n", iface, debugstr_guid(iid), out);
+
+    return IUnknown_QueryInterface(render_target->outer_unknown, iid, out);
+}
+
+static ULONG STDMETHODCALLTYPE d2d_gdi_interop_render_target_AddRef(ID2D1GdiInteropRenderTarget *iface)
+{
+    struct d2d_d3d_render_target *render_target = impl_from_ID2D1GdiInteropRenderTarget(iface);
+
+    TRACE("iface %p.\n", iface);
+
+    return IUnknown_AddRef(render_target->outer_unknown);
+}
+
+static ULONG STDMETHODCALLTYPE d2d_gdi_interop_render_target_Release(ID2D1GdiInteropRenderTarget *iface)
+{
+    struct d2d_d3d_render_target *render_target = impl_from_ID2D1GdiInteropRenderTarget(iface);
+
+    TRACE("iface %p.\n", iface);
+
+    return IUnknown_Release(render_target->outer_unknown);
+}
+
+static HRESULT d2d_d3d_render_target_get_surface(struct d2d_d3d_render_target *render_target, IDXGISurface1 **surface)
+{
+    ID3D10Resource *resource;
+    HRESULT hr;
+
+    ID3D10RenderTargetView_GetResource(render_target->view, &resource);
+    hr = ID3D10Resource_QueryInterface(resource, &IID_IDXGISurface1, (void **)surface);
+    ID3D10Resource_Release(resource);
+    if (FAILED(hr))
+    {
+        *surface = NULL;
+        WARN("Failed to get DXGI surface, %#x.\n", hr);
+        return hr;
+    }
+
+    return hr;
+}
+
+static HRESULT STDMETHODCALLTYPE d2d_gdi_interop_render_target_GetDC(ID2D1GdiInteropRenderTarget *iface,
+        D2D1_DC_INITIALIZE_MODE mode, HDC *dc)
+{
+    struct d2d_d3d_render_target *render_target = impl_from_ID2D1GdiInteropRenderTarget(iface);
+    IDXGISurface1 *surface;
+    HRESULT hr;
+
+    TRACE("iface %p, mode %d, dc %p.\n", iface, mode, dc);
+
+    if (FAILED(hr = d2d_d3d_render_target_get_surface(render_target, &surface)))
+        return hr;
+
+    hr = IDXGISurface1_GetDC(surface, mode != D2D1_DC_INITIALIZE_MODE_COPY, dc);
+    IDXGISurface1_Release(surface);
+
+    return hr;
+}
+
+static HRESULT STDMETHODCALLTYPE d2d_gdi_interop_render_target_ReleaseDC(ID2D1GdiInteropRenderTarget *iface,
+        const RECT *update)
+{
+    struct d2d_d3d_render_target *render_target = impl_from_ID2D1GdiInteropRenderTarget(iface);
+    IDXGISurface1 *surface;
+    RECT update_rect;
+    HRESULT hr;
+
+    TRACE("iface %p, update rect %s.\n", iface, wine_dbgstr_rect(update));
+
+    if (FAILED(hr = d2d_d3d_render_target_get_surface(render_target, &surface)))
+        return hr;
+
+    if (update)
+        update_rect = *update;
+    hr = IDXGISurface1_ReleaseDC(surface, update ? &update_rect : NULL);
+    IDXGISurface1_Release(surface);
+
+    return hr;
+}
+
+static const struct ID2D1GdiInteropRenderTargetVtbl d2d_gdi_interop_render_target_vtbl =
+{
+    d2d_gdi_interop_render_target_QueryInterface,
+    d2d_gdi_interop_render_target_AddRef,
+    d2d_gdi_interop_render_target_Release,
+    d2d_gdi_interop_render_target_GetDC,
+    d2d_gdi_interop_render_target_ReleaseDC,
+};
+
+static HRESULT d2d_d3d_render_target_init(struct d2d_d3d_render_target *render_target, ID2D1Factory *factory,
+        IDXGISurface *surface, IUnknown *outer_unknown, const D2D1_RENDER_TARGET_PROPERTIES *desc)
 {
     D3D10_SUBRESOURCE_DATA buffer_data;
     D3D10_STATE_BLOCK_MASK state_mask;
@@ -1917,12 +2024,10 @@ HRESULT d2d_d3d_render_target_init(struct d2d_d3d_render_target *render_target, 
             float2 q_prev, q_next, v_p, q_i;
             float l;
 
-            q_prev.x = dot(prev, transform_geometry._11_21);
-            q_prev.y = dot(prev, transform_geometry._12_22);
+            q_prev = float2(dot(prev, transform_geometry._11_21), dot(prev, transform_geometry._12_22));
             q_prev = normalize(q_prev);
 
-            q_next.x = dot(next, transform_geometry._11_21);
-            q_next.y = dot(next, transform_geometry._12_22);
+            q_next = float2(dot(next, transform_geometry._11_21), dot(next, transform_geometry._12_22));
             q_next = normalize(q_next);
 
             /* tan(½θ) = sin(θ) / (1 + cos(θ))
@@ -1930,21 +2035,19 @@ HRESULT d2d_d3d_render_target_init(struct d2d_d3d_render_target *render_target, 
             v_p = float2(-q_prev.y, q_prev.x);
             l = -dot(v_p, q_next) / (1.0f + dot(q_prev, q_next));
             q_i = l * q_prev + v_p;
-            if (l < 0.0f)
-                q_i *= -1.0f;
             position = mul(float3(position, 1.0f), transform_geometry) + stroke_width * 0.5f * q_i;
 
             return float4(mul(float2x3(transform_rtx.xyz * transform_rtx.w, transform_rty.xyz * transform_rty.w),
                     float3(position.xy, 1.0f)) + float2(-1.0f, 1.0f), 0.0f, 1.0f);
         }
 #endif
-        0x43425844, 0xb58748c9, 0x99343e01, 0x92198e38, 0x667ab784, 0x00000001, 0x000004c0, 0x00000003,
+        0x43425844, 0xe88f7af5, 0x480b101b, 0xfd80f66b, 0xd878e0b8, 0x00000001, 0x0000047c, 0x00000003,
         0x0000002c, 0x00000098, 0x000000cc, 0x4e475349, 0x00000064, 0x00000003, 0x00000008, 0x00000050,
         0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x00000303, 0x00000059, 0x00000000, 0x00000000,
         0x00000003, 0x00000001, 0x00000303, 0x0000005e, 0x00000000, 0x00000000, 0x00000003, 0x00000002,
         0x00000303, 0x49534f50, 0x4e4f4954, 0x45525000, 0x454e0056, 0xab005458, 0x4e47534f, 0x0000002c,
         0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x0000000f,
-        0x505f5653, 0x5449534f, 0x004e4f49, 0x52444853, 0x000003ec, 0x00010040, 0x000000fb, 0x04000059,
+        0x505f5653, 0x5449534f, 0x004e4f49, 0x52444853, 0x000003a8, 0x00010040, 0x000000ea, 0x04000059,
         0x00208e46, 0x00000000, 0x00000004, 0x0300005f, 0x00101032, 0x00000000, 0x0300005f, 0x00101032,
         0x00000001, 0x0300005f, 0x00101032, 0x00000002, 0x04000067, 0x001020f2, 0x00000000, 0x00000001,
         0x02000068, 0x00000003, 0x0800000f, 0x00100012, 0x00000000, 0x00101046, 0x00000002, 0x00208046,
@@ -1960,22 +2063,20 @@ HRESULT d2d_d3d_render_target_init(struct d2d_d3d_render_target *render_target, 
         0x00000000, 0x00100a26, 0x00000001, 0x00100046, 0x00000000, 0x0700000f, 0x00100012, 0x00000000,
         0x00100046, 0x00000001, 0x00100046, 0x00000000, 0x07000000, 0x00100012, 0x00000000, 0x0010000a,
         0x00000000, 0x00004001, 0x3f800000, 0x0800000e, 0x00100012, 0x00000000, 0x8010002a, 0x00000041,
-        0x00000000, 0x0010000a, 0x00000000, 0x09000032, 0x00100062, 0x00000000, 0x00100006, 0x00000000,
-        0x00100106, 0x00000001, 0x00100cf6, 0x00000001, 0x07000031, 0x00100012, 0x00000000, 0x0010000a,
-        0x00000000, 0x00004001, 0x00000000, 0x0a000037, 0x00100032, 0x00000000, 0x00100006, 0x00000000,
-        0x80100596, 0x00000041, 0x00000000, 0x00100596, 0x00000000, 0x08000038, 0x00100042, 0x00000000,
-        0x0020803a, 0x00000000, 0x00000001, 0x00004001, 0x3f000000, 0x05000036, 0x00100032, 0x00000001,
-        0x00101046, 0x00000000, 0x05000036, 0x00100042, 0x00000001, 0x00004001, 0x3f800000, 0x08000010,
-        0x00100012, 0x00000002, 0x00100246, 0x00000001, 0x00208246, 0x00000000, 0x00000000, 0x08000010,
-        0x00100022, 0x00000002, 0x00100246, 0x00000001, 0x00208246, 0x00000000, 0x00000001, 0x09000032,
-        0x00100032, 0x00000000, 0x00100aa6, 0x00000000, 0x00100046, 0x00000000, 0x00100046, 0x00000002,
-        0x09000038, 0x00100072, 0x00000001, 0x00208ff6, 0x00000000, 0x00000002, 0x00208246, 0x00000000,
-        0x00000002, 0x05000036, 0x00100042, 0x00000000, 0x00004001, 0x3f800000, 0x07000010, 0x00100012,
-        0x00000001, 0x00100246, 0x00000001, 0x00100246, 0x00000000, 0x09000038, 0x00100072, 0x00000002,
-        0x00208ff6, 0x00000000, 0x00000003, 0x00208246, 0x00000000, 0x00000003, 0x07000010, 0x00100022,
-        0x00000001, 0x00100246, 0x00000002, 0x00100246, 0x00000000, 0x0a000000, 0x00102032, 0x00000000,
-        0x00100046, 0x00000001, 0x00004002, 0xbf800000, 0x3f800000, 0x00000000, 0x00000000, 0x08000036,
-        0x001020c2, 0x00000000, 0x00004002, 0x00000000, 0x00000000, 0x00000000, 0x3f800000, 0x0100003e,
+        0x00000000, 0x0010000a, 0x00000000, 0x09000032, 0x00100032, 0x00000000, 0x00100006, 0x00000000,
+        0x00100046, 0x00000001, 0x00100f36, 0x00000001, 0x08000038, 0x00100042, 0x00000000, 0x0020803a,
+        0x00000000, 0x00000001, 0x00004001, 0x3f000000, 0x05000036, 0x00100032, 0x00000001, 0x00101046,
+        0x00000000, 0x05000036, 0x00100042, 0x00000001, 0x00004001, 0x3f800000, 0x08000010, 0x00100012,
+        0x00000002, 0x00100246, 0x00000001, 0x00208246, 0x00000000, 0x00000000, 0x08000010, 0x00100022,
+        0x00000002, 0x00100246, 0x00000001, 0x00208246, 0x00000000, 0x00000001, 0x09000032, 0x00100032,
+        0x00000000, 0x00100aa6, 0x00000000, 0x00100046, 0x00000000, 0x00100046, 0x00000002, 0x09000038,
+        0x00100072, 0x00000001, 0x00208ff6, 0x00000000, 0x00000002, 0x00208246, 0x00000000, 0x00000002,
+        0x05000036, 0x00100042, 0x00000000, 0x00004001, 0x3f800000, 0x07000010, 0x00100012, 0x00000001,
+        0x00100246, 0x00000001, 0x00100246, 0x00000000, 0x09000038, 0x00100072, 0x00000002, 0x00208ff6,
+        0x00000000, 0x00000003, 0x00208246, 0x00000000, 0x00000003, 0x07000010, 0x00100022, 0x00000001,
+        0x00100246, 0x00000002, 0x00100246, 0x00000000, 0x0a000000, 0x00102032, 0x00000000, 0x00100046,
+        0x00000001, 0x00004002, 0xbf800000, 0x3f800000, 0x00000000, 0x00000000, 0x08000036, 0x001020c2,
+        0x00000000, 0x00004002, 0x00000000, 0x00000000, 0x00000000, 0x3f800000, 0x0100003e,
     };
     static const DWORD vs_code_triangle[] =
     {
@@ -2314,10 +2415,14 @@ HRESULT d2d_d3d_render_target_init(struct d2d_d3d_render_target *render_target, 
         WARN("Ignoring feature level %#x.\n", desc->minLevel);
 
     render_target->ID2D1RenderTarget_iface.lpVtbl = &d2d_d3d_render_target_vtbl;
+    render_target->ID2D1GdiInteropRenderTarget_iface.lpVtbl = &d2d_gdi_interop_render_target_vtbl;
     render_target->IDWriteTextRenderer_iface.lpVtbl = &d2d_text_renderer_vtbl;
     render_target->refcount = 1;
     render_target->factory = factory;
     ID2D1Factory_AddRef(render_target->factory);
+
+    render_target->outer_unknown = outer_unknown ? outer_unknown :
+            (IUnknown *)&render_target->ID2D1RenderTarget_iface;
 
     if (FAILED(hr = IDXGISurface_GetDevice(surface, &IID_ID3D10Device, (void **)&render_target->device)))
     {
@@ -2561,6 +2666,28 @@ err:
         ID3D10Device_Release(render_target->device);
     ID2D1Factory_Release(render_target->factory);
     return hr;
+}
+
+HRESULT d2d_d3d_create_render_target(ID2D1Factory *factory, IDXGISurface *surface, IUnknown *outer_unknown,
+        const D2D1_RENDER_TARGET_PROPERTIES *desc, ID2D1RenderTarget **render_target)
+{
+    struct d2d_d3d_render_target *object;
+    HRESULT hr;
+
+    if (!(object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object))))
+        return E_OUTOFMEMORY;
+
+    if (FAILED(hr = d2d_d3d_render_target_init(object, factory, surface, outer_unknown, desc)))
+    {
+        WARN("Failed to initialize render target, hr %#x.\n", hr);
+        HeapFree(GetProcessHeap(), 0, object);
+        return hr;
+    }
+
+    TRACE("Created render target %p.\n", object);
+    *render_target = &object->ID2D1RenderTarget_iface;
+
+    return S_OK;
 }
 
 HRESULT d2d_d3d_render_target_create_rtv(ID2D1RenderTarget *iface, IDXGISurface1 *surface)

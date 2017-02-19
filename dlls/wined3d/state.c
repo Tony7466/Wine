@@ -60,7 +60,7 @@ ULONG CDECL wined3d_rasterizer_state_decref(struct wined3d_rasterizer_state *sta
     TRACE("%p decreasing refcount to %u.\n", state, refcount);
 
     if (!refcount)
-        wined3d_cs_emit_destroy_object(device->cs, wined3d_rasterizer_state_destroy_object, state);
+        wined3d_cs_destroy_object(device->cs, wined3d_rasterizer_state_destroy_object, state);
 
     return refcount;
 }
@@ -406,6 +406,14 @@ static GLenum gl_blend_factor(enum wined3d_blend factor, const struct wined3d_fo
             return GL_CONSTANT_COLOR_EXT;
         case WINED3D_BLEND_INVBLENDFACTOR:
             return GL_ONE_MINUS_CONSTANT_COLOR_EXT;
+        case WINED3D_BLEND_SRC1COLOR:
+            return GL_SRC1_COLOR;
+        case WINED3D_BLEND_INVSRC1COLOR:
+            return GL_ONE_MINUS_SRC1_COLOR;
+        case WINED3D_BLEND_SRC1ALPHA:
+            return GL_SRC1_ALPHA;
+        case WINED3D_BLEND_INVSRC1ALPHA:
+            return GL_ONE_MINUS_SRC1_ALPHA;
         default:
             FIXME("Unhandled blend factor %#x.\n", factor);
             return GL_NONE;
@@ -3723,6 +3731,11 @@ void apply_pixelshader(struct wined3d_context *context, const struct wined3d_sta
     context->shader_update_mask |= 1u << WINED3D_SHADER_TYPE_PIXEL;
 }
 
+static void state_compute_shader(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
+{
+    context->shader_update_mask |= 1u << WINED3D_SHADER_TYPE_COMPUTE;
+}
+
 static void state_shader(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
 {
     enum wined3d_shader_type shader_type = state_id - STATE_SHADER(0);
@@ -4934,12 +4947,17 @@ void state_srgbwrite(struct wined3d_context *context, const struct wined3d_state
 
 static void state_cb(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
 {
-    enum wined3d_shader_type shader_type = state_id - STATE_CONSTANT_BUFFER(0);
     const struct wined3d_gl_info *gl_info = context->gl_info;
+    enum wined3d_shader_type shader_type;
     struct wined3d_buffer *buffer;
     unsigned int i, base, count;
 
     TRACE("context %p, state %p, state_id %#x.\n", context, state, state_id);
+
+    if (STATE_IS_GRAPHICS_CONSTANT_BUFFER(state_id))
+        shader_type = state_id - STATE_GRAPHICS_CONSTANT_BUFFER(0);
+    else
+        shader_type = WINED3D_SHADER_TYPE_COMPUTE;
 
     wined3d_gl_limits_get_uniform_block_range(&gl_info->limits, shader_type, &base, &count);
     for (i = 0; i < count; ++i)
@@ -4972,6 +4990,13 @@ static void state_uav_binding(struct wined3d_context *context,
     context->update_unordered_access_view_bindings = 1;
 }
 
+static void state_cs_uav_binding(struct wined3d_context *context,
+        const struct wined3d_state *state, DWORD state_id)
+{
+    TRACE("context %p, state %p, state_id %#x.\n", context, state, state_id);
+    context->update_compute_unordered_access_view_bindings = 1;
+}
+
 static void state_uav_warn(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
 {
     WARN("ARB_image_load_store is not supported by OpenGL implementation.\n");
@@ -4988,8 +5013,10 @@ const struct StateEntryTemplate misc_state_template[] =
     { STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_COMPUTE), { STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_COMPUTE), state_cb,           }, ARB_UNIFORM_BUFFER_OBJECT       },
     { STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_COMPUTE), { STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_COMPUTE), state_cb_warn,      }, WINED3D_GL_EXT_NONE             },
     { STATE_SHADER_RESOURCE_BINDING,                      { STATE_SHADER_RESOURCE_BINDING,                      state_shader_resource_binding}, WINED3D_GL_EXT_NONE    },
-    { STATE_UNORDERED_ACCESS_VIEW_BINDING,                { STATE_UNORDERED_ACCESS_VIEW_BINDING,                state_uav_binding   }, ARB_SHADER_IMAGE_LOAD_STORE     },
-    { STATE_UNORDERED_ACCESS_VIEW_BINDING,                { STATE_UNORDERED_ACCESS_VIEW_BINDING,                state_uav_warn      }, WINED3D_GL_EXT_NONE             },
+    { STATE_GRAPHICS_UNORDERED_ACCESS_VIEW_BINDING,       { STATE_GRAPHICS_UNORDERED_ACCESS_VIEW_BINDING,       state_uav_binding   }, ARB_SHADER_IMAGE_LOAD_STORE     },
+    { STATE_GRAPHICS_UNORDERED_ACCESS_VIEW_BINDING,       { STATE_GRAPHICS_UNORDERED_ACCESS_VIEW_BINDING,       state_uav_warn      }, WINED3D_GL_EXT_NONE             },
+    { STATE_COMPUTE_UNORDERED_ACCESS_VIEW_BINDING,        { STATE_COMPUTE_UNORDERED_ACCESS_VIEW_BINDING,        state_cs_uav_binding}, ARB_SHADER_IMAGE_LOAD_STORE     },
+    { STATE_COMPUTE_UNORDERED_ACCESS_VIEW_BINDING,        { STATE_COMPUTE_UNORDERED_ACCESS_VIEW_BINDING,        state_uav_warn      }, WINED3D_GL_EXT_NONE             },
     { STATE_RENDER(WINED3D_RS_SRCBLEND),                  { STATE_RENDER(WINED3D_RS_ALPHABLENDENABLE),          NULL                }, WINED3D_GL_EXT_NONE             },
     { STATE_RENDER(WINED3D_RS_DESTBLEND),                 { STATE_RENDER(WINED3D_RS_ALPHABLENDENABLE),          NULL                }, WINED3D_GL_EXT_NONE             },
     { STATE_RENDER(WINED3D_RS_ALPHABLENDENABLE),          { STATE_RENDER(WINED3D_RS_ALPHABLENDENABLE),          state_blend         }, WINED3D_GL_EXT_NONE             },
@@ -5180,7 +5207,7 @@ const struct StateEntryTemplate misc_state_template[] =
     { STATE_FRAMEBUFFER,                                  { STATE_FRAMEBUFFER,                                  context_state_fb    }, WINED3D_GL_EXT_NONE             },
     { STATE_SHADER(WINED3D_SHADER_TYPE_PIXEL),            { STATE_SHADER(WINED3D_SHADER_TYPE_PIXEL),            context_state_drawbuf},WINED3D_GL_EXT_NONE             },
     { STATE_SHADER(WINED3D_SHADER_TYPE_GEOMETRY),         { STATE_SHADER(WINED3D_SHADER_TYPE_GEOMETRY),         state_shader        }, WINED3D_GL_EXT_NONE             },
-    { STATE_SHADER(WINED3D_SHADER_TYPE_COMPUTE),          { STATE_SHADER(WINED3D_SHADER_TYPE_COMPUTE),          state_shader        }, WINED3D_GL_EXT_NONE             },
+    { STATE_SHADER(WINED3D_SHADER_TYPE_COMPUTE),          { STATE_SHADER(WINED3D_SHADER_TYPE_COMPUTE),          state_compute_shader}, WINED3D_GL_EXT_NONE             },
     {0 /* Terminate */,                                   { 0,                                                  0                   }, WINED3D_GL_EXT_NONE             },
 };
 

@@ -530,7 +530,9 @@ static void test_buffered_paint(void)
     HDC target, src, hdc;
     HPAINTBUFFER buffer;
     RECT rect, rect2;
+    RGBQUAD *bits;
     HRESULT hr;
+    int row;
 
     if (!pBeginBufferedPaint)
     {
@@ -552,31 +554,55 @@ static void test_buffered_paint(void)
             &params, NULL);
     ok(buffer == NULL, "Unexpected buffer %p\n", buffer);
 
+    src = (void *)0xdeadbeef;
     buffer = pBeginBufferedPaint(target, NULL, BPBF_COMPATIBLEBITMAP,
             &params, &src);
     ok(buffer == NULL, "Unexpected buffer %p\n", buffer);
+    ok(src == NULL, "Unexpected buffered dc %p\n", src);
 
     /* target rect is mandatory */
-    rect.left = rect.top = 0;
-    rect.right = rect.bottom = 0;
+    SetRectEmpty(&rect);
+    src = (void *)0xdeadbeef;
     buffer = pBeginBufferedPaint(target, &rect, BPBF_COMPATIBLEBITMAP,
             &params, &src);
     ok(buffer == NULL, "Unexpected buffer %p\n", buffer);
+    ok(src == NULL, "Unexpected buffered dc %p\n", src);
 
-    rect.left = rect.top = 0;
-    rect.right = rect.bottom = 5;
+    /* inverted rectangle */
+    SetRect(&rect, 10, 0, 5, 5);
+    src = (void *)0xdeadbeef;
     buffer = pBeginBufferedPaint(target, &rect, BPBF_COMPATIBLEBITMAP,
             &params, &src);
-todo_wine
+    ok(buffer == NULL, "Unexpected buffer %p\n", buffer);
+    ok(src == NULL, "Unexpected buffered dc %p\n", src);
+
+    SetRect(&rect, 0, 10, 5, 0);
+    src = (void *)0xdeadbeef;
+    buffer = pBeginBufferedPaint(target, &rect, BPBF_COMPATIBLEBITMAP,
+            &params, &src);
+    ok(buffer == NULL, "Unexpected buffer %p\n", buffer);
+    ok(src == NULL, "Unexpected buffered dc %p\n", src);
+
+    /* valid rectangle, no target dc */
+    SetRect(&rect, 0, 0, 5, 5);
+    src = (void *)0xdeadbeef;
+    buffer = pBeginBufferedPaint(NULL, &rect, BPBF_COMPATIBLEBITMAP,
+            &params, &src);
+    ok(buffer == NULL, "Unexpected buffer %p\n", buffer);
+    ok(src == NULL, "Unexpected buffered dc %p\n", src);
+
+    SetRect(&rect, 0, 0, 5, 5);
+    src = NULL;
+    buffer = pBeginBufferedPaint(target, &rect, BPBF_COMPATIBLEBITMAP,
+            &params, &src);
     ok(buffer != NULL, "Unexpected buffer %p\n", buffer);
+    ok(src != NULL, "Expected buffered dc\n");
     hr = pEndBufferedPaint(buffer, FALSE);
     ok(hr == S_OK, "Unexpected return code %#x\n", hr);
 
-    rect.left = rect.top = 0;
-    rect.right = rect.bottom = 5;
+    SetRect(&rect, 0, 0, 5, 5);
     buffer = pBeginBufferedPaint(target, &rect, BPBF_COMPATIBLEBITMAP,
             &params, &src);
-todo_wine
     ok(buffer != NULL, "Unexpected buffer %p\n", buffer);
 
     /* clearing */
@@ -590,48 +616,78 @@ todo_wine
 
     /* access buffer attributes */
     hdc = pGetBufferedPaintDC(buffer);
-todo_wine
     ok(hdc == src, "Unexpected hdc, %p, buffered dc %p\n", hdc, src);
 
     hdc = pGetBufferedPaintTargetDC(buffer);
-todo_wine
     ok(hdc == target, "Unexpected target hdc %p, original %p\n", hdc, target);
 
-    hr = pGetBufferedPaintTargetRect(buffer, NULL);
-todo_wine
+    hr = pGetBufferedPaintTargetRect(NULL, NULL);
     ok(hr == E_POINTER, "Unexpected return code %#x\n", hr);
+
+    hr = pGetBufferedPaintTargetRect(buffer, NULL);
+    ok(hr == E_POINTER, "Unexpected return code %#x\n", hr);
+
+    hr = pGetBufferedPaintTargetRect(NULL, &rect2);
+    ok(hr == E_FAIL, "Unexpected return code %#x\n", hr);
 
     SetRectEmpty(&rect2);
     hr = pGetBufferedPaintTargetRect(buffer, &rect2);
-todo_wine {
     ok(hr == S_OK, "Unexpected return code %#x\n", hr);
     ok(EqualRect(&rect, &rect2), "Wrong target rect\n");
-}
+
     hr = pEndBufferedPaint(buffer, FALSE);
     ok(hr == S_OK, "Unexpected return code %#x\n", hr);
+
+    /* invalid buffer handle */
+    hr = pEndBufferedPaint(NULL, FALSE);
+    ok(hr == E_INVALIDARG, "Unexpected return code %#x\n", hr);
+
+    hdc = pGetBufferedPaintDC(NULL);
+    ok(hdc == NULL, "Unexpected hdc %p\n", hdc);
+
+    hdc = pGetBufferedPaintTargetDC(NULL);
+    ok(hdc == NULL, "Unexpected target hdc %p\n", hdc);
+
+    hr = pGetBufferedPaintTargetRect(NULL, &rect2);
+    ok(hr == E_FAIL, "Unexpected return code %#x\n", hr);
+
+    hr = pGetBufferedPaintTargetRect(NULL, NULL);
+    ok(hr == E_POINTER, "Unexpected return code %#x\n", hr);
+
+    bits = (void *)0xdeadbeef;
+    row = 10;
+    hr = pGetBufferedPaintBits(NULL, &bits, &row);
+    ok(hr == E_FAIL, "Unexpected return code %#x\n", hr);
+    ok(row == 10, "Unexpected row count %d\n", row);
+    ok(bits == (void *)0xdeadbeef, "Unepexpected data pointer %p\n", bits);
+
+    hr = pGetBufferedPaintBits(NULL, NULL, NULL);
+    ok(hr == E_POINTER, "Unexpected return code %#x\n", hr);
+
+    hr = pGetBufferedPaintBits(NULL, &bits, NULL);
+    ok(hr == E_POINTER, "Unexpected return code %#x\n", hr);
+
+    hr = pGetBufferedPaintBits(NULL, NULL, &row);
+    ok(hr == E_POINTER, "Unexpected return code %#x\n", hr);
 
     /* access buffer bits */
     for (format = BPBF_COMPATIBLEBITMAP; format <= BPBF_TOPDOWNMONODIB; format++)
     {
-        RGBQUAD *bits;
-        int row;
-
         buffer = pBeginBufferedPaint(target, &rect, format, &params, &src);
 
         /* only works for DIB buffers */
         bits = NULL;
         row = 0;
         hr = pGetBufferedPaintBits(buffer, &bits, &row);
-todo_wine {
         if (format == BPBF_COMPATIBLEBITMAP)
             ok(hr == E_FAIL, "Unexpected return code %#x\n", hr);
         else
         {
             ok(hr == S_OK, "Unexpected return code %#x\n", hr);
             ok(bits != NULL, "Bitmap bits %p\n", bits);
-            ok(row > 0, "Bitmap width %d\n", row);
+            ok(row >= (rect.right - rect.left), "format %d: bitmap width %d\n", format, row);
         }
-}
+
         hr = pEndBufferedPaint(buffer, FALSE);
         ok(hr == S_OK, "Unexpected return code %#x\n", hr);
     }

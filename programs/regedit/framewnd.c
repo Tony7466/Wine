@@ -354,18 +354,30 @@ static BOOL ImportRegistryFile(HWND hWnd)
 {
     OPENFILENAMEW ofn;
     WCHAR title[128];
+    HKEY root_key = NULL;
+    WCHAR *key_path;
 
     InitOpenFileName(hWnd, &ofn);
     ofn.Flags |= OFN_ENABLESIZING;
     LoadStringW(hInst, IDS_FILEDIALOG_IMPORT_TITLE, title, COUNT_OF(title));
     ofn.lpstrTitle = title;
     if (GetOpenFileNameW(&ofn)) {
-        if (!import_registry_filename(ofn.lpstrFile))
+        if (!import_registry_filename(ofn.lpstrFile)) {
+            messagebox(hWnd, MB_OK|MB_ICONERROR, IDS_APP_TITLE, IDS_IMPORT_FAILED, ofn.lpstrFile);
             return FALSE;
+        } else {
+            messagebox(hWnd, MB_OK|MB_ICONINFORMATION, IDS_APP_TITLE,
+                       IDS_IMPORT_SUCCESSFUL, ofn.lpstrFile);
+        }
     } else {
         CheckCommDlgError(hWnd);
     }
     RefreshTreeView(g_pChildWnd->hTreeWnd);
+
+    key_path = GetItemPath(g_pChildWnd->hTreeWnd, 0, &root_key);
+    RefreshListView(g_pChildWnd->hListWnd, root_key, key_path, NULL);
+    HeapFree(GetProcessHeap(), 0, key_path);
+
     return TRUE;
 }
 
@@ -707,8 +719,8 @@ static BOOL _CmdWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
             curIndex = SendMessageW(g_pChildWnd->hListWnd, LVM_GETNEXTITEM, curIndex, MAKELPARAM(LVNI_SELECTED, 0));
             if(curIndex != -1 && firstItem) {
-                if (MessageBoxW(hWnd, MAKEINTRESOURCEW(IDS_DELETE_BOX_TEXT_MULTIPLE),
-                                MAKEINTRESOURCEW(IDS_DELETE_BOX_TITLE),
+                if (MessageBoxW(hWnd, MAKEINTRESOURCEW(IDS_DELETE_VALUE_TEXT_MULTIPLE),
+                                MAKEINTRESOURCEW(IDS_DELETE_VALUE_TITLE),
                                 MB_YESNO | MB_ICONEXCLAMATION) != IDYES)
                     break;
             }

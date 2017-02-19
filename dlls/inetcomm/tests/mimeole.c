@@ -1368,6 +1368,8 @@ static HRESULT WINAPI ProtocolSink_ReportData(IInternetProtocolSink *iface, DWOR
     buf[read] = 0;
     ok(!strcmp(buf, current_binding_test->data), "unexpected data: %s\n", buf);
 
+    hres = IInternetProtocol_Read(current_binding_protocol, buf, sizeof(buf), &read);
+    ok(hres == S_FALSE, "Read failed: %08x\n", hres);
     return S_OK;
 }
 
@@ -1577,7 +1579,7 @@ static void test_mhtml_protocol(void)
     hres = IClassFactory_CreateInstance(class_factory, &outer, &IID_IUnknown, (void**)&unk);
     ok(hres == S_OK, "CreateInstance returned: %08x\n", hres);
     hres = IUnknown_QueryInterface(unk, &IID_IInternetProtocol, (void**)&unk2);
-    ok(hres == S_OK, "Coult not get IInternetProtocol iface: %08x\n", hres);
+    ok(hres == S_OK, "Could not get IInternetProtocol iface: %08x\n", hres);
     IUnknown_Release(unk2);
     IUnknown_Release(unk);
 

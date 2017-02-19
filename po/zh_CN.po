@@ -60,10 +60,10 @@ msgstr "技术支持信息"
 #: mshtml.rc:57 msvfw32.rc:36 oledlg.rc:62 oledlg.rc:94 serialui.rc:41
 #: setupapi.rc:59 shell32.rc:276 shell32.rc:300 shell32.rc:322 shell32.rc:341
 #: shlwapi.rc:44 user32.rc:83 user32.rc:98 wininet.rc:51 wininet.rc:71
-#: winspool.rc:42 net.rc:47 notepad.rc:117 oleview.rc:162 oleview.rc:175
+#: winspool.rc:42 net.rc:47 notepad.rc:117 oleview.rc:161 oleview.rc:174
 #: progman.rc:106 progman.rc:124 progman.rc:142 progman.rc:158 progman.rc:180
-#: progman.rc:199 progman.rc:216 regedit.rc:259 regedit.rc:270 regedit.rc:283
-#: regedit.rc:299 regedit.rc:312 regedit.rc:325 taskmgr.rc:442 taskmgr.rc:517
+#: progman.rc:199 progman.rc:216 regedit.rc:263 regedit.rc:274 regedit.rc:287
+#: regedit.rc:303 regedit.rc:316 regedit.rc:329 taskmgr.rc:442 taskmgr.rc:517
 #: winecfg.rc:214 winecfg.rc:224 wineconsole.rc:135 winefile.rc:128
 #: winefile.rc:151 winefile.rc:181 winemine.rc:71 winemine.rc:81 winemine.rc:95
 #: wordpad.rc:215 wordpad.rc:226 wordpad.rc:244 wordpad.rc:257
@@ -139,10 +139,10 @@ msgstr "安装(&I)"
 #: msvfw32.rc:37 oledlg.rc:63 oledlg.rc:95 serialui.rc:42 setupapi.rc:42
 #: setupapi.rc:60 shell32.rc:277 shell32.rc:301 shell32.rc:312 shell32.rc:342
 #: shlwapi.rc:45 user32.rc:84 user32.rc:99 wininet.rc:52 wininet.rc:72
-#: winspool.rc:43 notepad.rc:118 oleview.rc:163 oleview.rc:176 progman.rc:107
+#: winspool.rc:43 notepad.rc:118 oleview.rc:162 oleview.rc:175 progman.rc:107
 #: progman.rc:125 progman.rc:143 progman.rc:159 progman.rc:181 progman.rc:200
-#: progman.rc:217 regedit.rc:260 regedit.rc:271 regedit.rc:284 regedit.rc:300
-#: regedit.rc:313 regedit.rc:326 taskmgr.rc:443 taskmgr.rc:518 wineboot.rc:34
+#: progman.rc:217 regedit.rc:264 regedit.rc:275 regedit.rc:288 regedit.rc:304
+#: regedit.rc:317 regedit.rc:330 taskmgr.rc:443 taskmgr.rc:518 wineboot.rc:34
 #: winecfg.rc:215 winecfg.rc:225 wineconsole.rc:136 winefile.rc:129
 #: winefile.rc:152 winefile.rc:182 winemine.rc:96 wordpad.rc:216 wordpad.rc:227
 #: wordpad.rc:245 wordpad.rc:258
@@ -212,7 +212,7 @@ msgid "Programs (*.exe)"
 msgstr "程序 (*.exe)"
 
 #: appwiz.rc:43 avifil32.rc:33 cryptui.rc:83 shell32.rc:199 notepad.rc:76
-#: oleview.rc:104 progman.rc:82 regedit.rc:198 winedbg.rc:42 winhlp32.rc:90
+#: oleview.rc:103 progman.rc:82 regedit.rc:200 winedbg.rc:42 winhlp32.rc:90
 msgid "All files (*.*)"
 msgstr "所有文件 (*.*)"
 
@@ -322,8 +322,8 @@ msgstr "结束"
 msgid "Customize Toolbar"
 msgstr "自定义工具栏"
 
-#: comctl32.rc:84 cryptui.rc:351 ieframe.rc:43 oleview.rc:83 oleview.rc:188
-#: oleview.rc:201 oleview.rc:213 taskmgr.rc:139
+#: comctl32.rc:84 cryptui.rc:351 ieframe.rc:43 oleview.rc:83 oleview.rc:187
+#: oleview.rc:200 oleview.rc:212 taskmgr.rc:139
 msgid "&Close"
 msgstr "关闭(&C)"
 
@@ -374,7 +374,7 @@ msgctxt "hotkey"
 msgid "None"
 msgstr "无"
 
-#: comctl32.rc:31 cryptui.rc:230 regedit.rc:249 taskmgr.rc:434 winedbg.rc:60
+#: comctl32.rc:31 cryptui.rc:230 regedit.rc:253 taskmgr.rc:434 winedbg.rc:60
 #: winedbg.rc:75 wordpad.rc:180
 msgid "Close"
 msgstr "关闭"
@@ -388,7 +388,7 @@ msgid "Go to today"
 msgstr "转到今天"
 
 #: comdlg32.rc:157 comdlg32.rc:170 comdlg32.rc:459 comdlg32.rc:485
-#: shell32.rc:167 oleview.rc:102
+#: shell32.rc:167 oleview.rc:101
 msgid "Open"
 msgstr "打开"
 
@@ -433,7 +433,7 @@ msgstr "打印机："
 msgid "Print range"
 msgstr "打印范围"
 
-#: comdlg32.rc:207 comdlg32.rc:384 regedit.rc:231
+#: comdlg32.rc:207 comdlg32.rc:384 regedit.rc:235
 msgid "&All"
 msgstr "全部(&A)"
 
@@ -603,7 +603,7 @@ msgstr "添加到自定义颜色(&A)"
 msgid "&Define Custom Colors >>"
 msgstr "定义自定义颜色(&D) >>"
 
-#: comdlg32.rc:316 regedit.rc:238 regedit.rc:248
+#: comdlg32.rc:316 regedit.rc:242 regedit.rc:252
 msgid "Find"
 msgstr "查找"
 
@@ -3005,7 +3005,7 @@ msgstr "符号"
 msgid "OEM/DOS"
 msgstr "OEM/DOS"
 
-#: gdi32.rc:45 wldap32.rc:110
+#: gdi32.rc:45 wldap32.rc:112
 msgid "Other"
 msgstr "其它"
 
@@ -7279,11 +7279,11 @@ msgctxt "object state"
 msgid "has popup"
 msgstr "有弹出项"
 
-#: oleaut32.rc:30 oleview.rc:147
+#: oleaut32.rc:30 oleview.rc:146
 msgid "True"
 msgstr "真"
 
-#: oleaut32.rc:31 oleview.rc:148
+#: oleaut32.rc:31 oleview.rc:147
 msgid "False"
 msgstr "假"
 
@@ -8033,7 +8033,7 @@ msgctxt "display name"
 msgid "Desktop"
 msgstr "桌面"
 
-#: shell32.rc:157 regedit.rc:203
+#: shell32.rc:157 regedit.rc:205
 msgid "My Computer"
 msgstr "我的电脑"
 
@@ -9125,239 +9125,245 @@ msgstr "输出文件已存在。按“确定”覆盖。"
 msgid "Unable to create the output file."
 msgstr "不能创建输出文件。"
 
-#: wldap32.rc:30
+#: wldap32.rc:32
 msgid "Success"
 msgstr "成功"
 
-#: wldap32.rc:31
+#: wldap32.rc:33
 msgid "Operations Error"
 msgstr "操作错误"
 
-#: wldap32.rc:32
+#: wldap32.rc:34
 msgid "Protocol Error"
 msgstr "协议错误"
 
-#: wldap32.rc:33
+#: wldap32.rc:35
 msgid "Time Limit Exceeded"
 msgstr "超出时间限制"
 
-#: wldap32.rc:34
+#: wldap32.rc:36
 msgid "Size Limit Exceeded"
 msgstr "超出大小限制"
 
-#: wldap32.rc:35
+#: wldap32.rc:37
 msgid "Compare False"
 msgstr "比较假值"
 
-#: wldap32.rc:36
+#: wldap32.rc:38
 msgid "Compare True"
 msgstr "比较真值"
 
-#: wldap32.rc:37
+#: wldap32.rc:39
 msgid "Authentication Method Not Supported"
 msgstr "不支持的认证方式"
 
-#: wldap32.rc:38
+#: wldap32.rc:40
 msgid "Strong Authentication Required"
 msgstr "需要强认证"
 
-#: wldap32.rc:39
+#: wldap32.rc:41
 msgid "Referral (v2)"
 msgstr "推举 (v2)"
 
-#: wldap32.rc:40
+#: wldap32.rc:42
 msgid "Referral"
 msgstr "推举"
 
-#: wldap32.rc:41
+#: wldap32.rc:43
 msgid "Administration Limit Exceeded"
 msgstr "超出管理限制。"
 
-#: wldap32.rc:42
+#: wldap32.rc:44
 msgid "Unavailable Critical Extension"
 msgstr "不可用的关键扩展"
 
-#: wldap32.rc:43
+#: wldap32.rc:45
 msgid "Confidentiality Required"
 msgstr "需要保密性"
 
 #: wldap32.rc:46
+#, fuzzy
+#| msgid "Shutdown in progress.\n"
+msgid "SASL Bind in Progress"
+msgstr "正在关机。\n"
+
+#: wldap32.rc:48
 msgid "No Such Attribute"
 msgstr "无此属性"
 
-#: wldap32.rc:47
+#: wldap32.rc:49
 msgid "Undefined Type"
 msgstr "未定义类型"
 
-#: wldap32.rc:48
+#: wldap32.rc:50
 msgid "Inappropriate Matching"
 msgstr "不当匹配"
 
-#: wldap32.rc:49
+#: wldap32.rc:51
 msgid "Constraint Violation"
 msgstr "约束冲突"
 
-#: wldap32.rc:50
+#: wldap32.rc:52
 msgid "Attribute Or Value Exists"
 msgstr "属性或值已存在"
 
-#: wldap32.rc:51
+#: wldap32.rc:53
 msgid "Invalid Syntax"
 msgstr "无效语法"
 
-#: wldap32.rc:62
+#: wldap32.rc:64
 msgid "No Such Object"
 msgstr "无此对象"
 
-#: wldap32.rc:63
+#: wldap32.rc:65
 msgid "Alias Problem"
 msgstr "别名问题"
 
-#: wldap32.rc:64
+#: wldap32.rc:66
 msgid "Invalid DN Syntax"
 msgstr "DN 语法无效"
 
-#: wldap32.rc:65
+#: wldap32.rc:67
 msgid "Is Leaf"
 msgstr "为叶节点"
 
-#: wldap32.rc:66
+#: wldap32.rc:68
 msgid "Alias Dereference Problem"
 msgstr "别名差别问题"
 
-#: wldap32.rc:78
+#: wldap32.rc:80
 msgid "Inappropriate Authentication"
 msgstr "不当认证"
 
-#: wldap32.rc:79
+#: wldap32.rc:81
 msgid "Invalid Credentials"
 msgstr "无效凭据"
 
-#: wldap32.rc:80
+#: wldap32.rc:82
 msgid "Insufficient Rights"
 msgstr "权限不足"
 
-#: wldap32.rc:81
+#: wldap32.rc:83
 msgid "Busy"
 msgstr "正忙"
 
-#: wldap32.rc:82
+#: wldap32.rc:84
 msgid "Unavailable"
 msgstr "不可用"
 
-#: wldap32.rc:83
+#: wldap32.rc:85
 msgid "Unwilling To Perform"
 msgstr "拒绝执行"
 
-#: wldap32.rc:84
+#: wldap32.rc:86
 msgid "Loop Detected"
 msgstr "检测到循环"
 
-#: wldap32.rc:90
+#: wldap32.rc:92
 msgid "Sort Control Missing"
 msgstr "缺少排序控制"
 
-#: wldap32.rc:91
+#: wldap32.rc:93
 msgid "Index range error"
 msgstr "索引范围错误"
 
-#: wldap32.rc:94
+#: wldap32.rc:96
 msgid "Naming Violation"
 msgstr "命名冲突"
 
-#: wldap32.rc:95
+#: wldap32.rc:97
 msgid "Object Class Violation"
 msgstr "对象类冲突"
 
-#: wldap32.rc:96
+#: wldap32.rc:98
 msgid "Not allowed on Non-leaf"
 msgstr "不允许用于非叶节点"
 
-#: wldap32.rc:97
+#: wldap32.rc:99
 msgid "Not allowed on RDN"
 msgstr "不允许用于 RDN"
 
-#: wldap32.rc:98
+#: wldap32.rc:100
 msgid "Already Exists"
 msgstr "已经存在"
 
-#: wldap32.rc:99
+#: wldap32.rc:101
 msgid "No Object Class Mods"
 msgstr "无对象类模块"
 
-#: wldap32.rc:100
+#: wldap32.rc:102
 msgid "Results Too Large"
 msgstr "结果太大"
 
-#: wldap32.rc:101
+#: wldap32.rc:103
 msgid "Affects Multiple DSAs"
 msgstr "影响多个 DSA"
 
-#: wldap32.rc:111
+#: wldap32.rc:113
 msgid "Server Down"
 msgstr "服务器不可用"
 
-#: wldap32.rc:112
+#: wldap32.rc:114
 msgid "Local Error"
 msgstr "本地错误"
 
-#: wldap32.rc:113
+#: wldap32.rc:115
 msgid "Encoding Error"
 msgstr "编码错误"
 
-#: wldap32.rc:114
+#: wldap32.rc:116
 msgid "Decoding Error"
 msgstr "解码错误"
 
-#: wldap32.rc:115
+#: wldap32.rc:117
 msgid "Timeout"
 msgstr "超时"
 
-#: wldap32.rc:116
+#: wldap32.rc:118
 msgid "Auth Unknown"
 msgstr "未知认证"
 
-#: wldap32.rc:117
+#: wldap32.rc:119
 msgid "Filter Error"
 msgstr "筛选器错误"
 
-#: wldap32.rc:118
+#: wldap32.rc:120
 msgid "User Canceled"
 msgstr "用户已取消"
 
-#: wldap32.rc:119
+#: wldap32.rc:121
 msgid "Parameter Error"
 msgstr "参数错误"
 
-#: wldap32.rc:120
+#: wldap32.rc:122
 msgid "No Memory"
 msgstr "内存不足"
 
-#: wldap32.rc:121
+#: wldap32.rc:123
 msgid "Can't connect to the LDAP server"
 msgstr "无法连接到 LDAP 服务器"
 
-#: wldap32.rc:122
+#: wldap32.rc:124
 msgid "Operation not supported by this version of the LDAP protocol"
 msgstr "该版本的 LDAP 协议不支持该操作"
 
-#: wldap32.rc:123
+#: wldap32.rc:125
 msgid "Specified control was not found in message"
 msgstr "消息中找不到指定的控制"
 
-#: wldap32.rc:124
+#: wldap32.rc:126
 msgid "No result present in message"
 msgstr "消息中无结果"
 
-#: wldap32.rc:125
+#: wldap32.rc:127
 msgid "More results returned"
 msgstr "返回了更多结果"
 
-#: wldap32.rc:126
+#: wldap32.rc:128
 msgid "Loop while handling referrals"
 msgstr "处理推举时发现循环"
 
-#: wldap32.rc:127
+#: wldap32.rc:129
 msgid "Referral hop limit exceeded"
 msgstr "超出推举跳跃限制"
 
@@ -10679,7 +10685,7 @@ msgctxt "accelerator Copy"
 msgid "C"
 msgstr "C"
 
-#: notepad.rc:134 regedit.rc:335 wordpad.rc:287
+#: notepad.rc:134 regedit.rc:339 wordpad.rc:287
 msgctxt "accelerator Find"
 msgid "F"
 msgstr "F"
@@ -10699,7 +10705,7 @@ msgctxt "accelerator Open"
 msgid "O"
 msgstr "O"
 
-#: notepad.rc:138 regedit.rc:336 wordpad.rc:300
+#: notepad.rc:138 regedit.rc:340 wordpad.rc:300
 msgctxt "accelerator Print"
 msgid "P"
 msgstr "P"
@@ -10886,31 +10892,31 @@ msgstr "另存为(&S)…"
 msgid "&Group by type kind"
 msgstr "按类型分组(&G)"
 
-#: oleview.rc:157
+#: oleview.rc:156
 msgid "Connect to another machine"
 msgstr "连接到另外一台计算机"
 
-#: oleview.rc:160
+#: oleview.rc:159
 msgid "&Machine name:"
 msgstr "计算机名称(&M)："
 
-#: oleview.rc:168
+#: oleview.rc:167
 msgid "System Configuration"
 msgstr "系统配置"
 
-#: oleview.rc:171
+#: oleview.rc:170
 msgid "System Settings"
 msgstr "系统设置"
 
-#: oleview.rc:172
+#: oleview.rc:171
 msgid "&Enable Distributed COM"
 msgstr "启用分布式CO&M"
 
-#: oleview.rc:173
+#: oleview.rc:172
 msgid "Enable &Remote Connections (Win95 only)"
 msgstr "启用远程连接(限&Win95)"
 
-#: oleview.rc:174
+#: oleview.rc:173
 msgid ""
 "These settings change only registry values.\n"
 "They have no effect on Wine performance."
@@ -10918,35 +10924,35 @@ msgstr ""
 "这些设置只改变注册表的值。\n"
 "它对Wine的性能没有影响。"
 
-#: oleview.rc:181
+#: oleview.rc:180
 msgid "Default Interface Viewer"
 msgstr "默认接口查看器"
 
-#: oleview.rc:184
+#: oleview.rc:183
 msgid "Interface"
 msgstr "接口"
 
-#: oleview.rc:186
+#: oleview.rc:185
 msgid "IID:"
 msgstr "IID:"
 
-#: oleview.rc:189
+#: oleview.rc:188
 msgid "&View Type Info"
 msgstr "查看类型信息(&V)"
 
-#: oleview.rc:194
+#: oleview.rc:193
 msgid "IPersist Interface Viewer"
 msgstr "IPersist 接口查看器"
 
-#: oleview.rc:197 oleview.rc:209
+#: oleview.rc:196 oleview.rc:208
 msgid "Class Name:"
 msgstr "类名："
 
-#: oleview.rc:199 oleview.rc:211
+#: oleview.rc:198 oleview.rc:210
 msgid "CLSID:"
 msgstr "CLSID:"
 
-#: oleview.rc:206
+#: oleview.rc:205
 msgid "IPersistStream Interface Viewer"
 msgstr "IPersistStream 接口查看器"
 
@@ -10954,7 +10960,7 @@ msgstr "IPersistStream 接口查看器"
 msgid "OleView"
 msgstr "OleView"
 
-#: oleview.rc:101
+#: oleview.rc:100
 msgid "ITypeLib viewer"
 msgstr "ITypeLib 查看器"
 
@@ -10962,172 +10968,168 @@ msgstr "ITypeLib 查看器"
 msgid "OleView - OLE/COM Object Viewer"
 msgstr "OleView - OLE/COM 对象查看器"
 
-#: oleview.rc:100
-msgid "version 1.0"
-msgstr "版本 1.0"
-
-#: oleview.rc:103
+#: oleview.rc:102
 msgid "TypeLib files (*.tlb; *.olb; *.dll; *.ocx; *.exe)"
 msgstr "TypeLib 文件 (*.tlb; *.olb; *.dll; *.ocx; *.exe)"
 
-#: oleview.rc:106
+#: oleview.rc:105
 msgid "Bind to file via a File Moniker"
 msgstr "通过文件标记绑定到文件"
 
-#: oleview.rc:107
+#: oleview.rc:106
 msgid "Open a TypeLib file and view the contents"
 msgstr "打开 TypeLib 文件并查看内容"
 
-#: oleview.rc:108
+#: oleview.rc:107
 msgid "Change machine wide Distributed COM settings"
 msgstr "修改本机分布式 COM 设置"
 
-#: oleview.rc:109
+#: oleview.rc:108
 msgid "Run the Wine registry editor"
 msgstr "运行 Wine 注册表编辑器"
 
-#: oleview.rc:110
+#: oleview.rc:109
 msgid "Quit the application. Prompts to save changes"
 msgstr "退出程序。提示保存"
 
-#: oleview.rc:111
+#: oleview.rc:110
 msgid "Create an instance of the selected object"
 msgstr "创建当前选定对象实例"
 
-#: oleview.rc:112
+#: oleview.rc:111
 msgid "Create an instance of the selected object on a specific machine"
 msgstr "在指定机器上创建当前选定对象的实例"
 
-#: oleview.rc:113
+#: oleview.rc:112
 msgid "Release the currently selected object instance"
 msgstr "释放当前选定对象实例"
 
-#: oleview.rc:114
+#: oleview.rc:113
 msgid "Copy the GUID of the currently selected item to the clipboard"
 msgstr "把当前选定项目的 GUID 复制到剪贴板"
 
-#: oleview.rc:115
+#: oleview.rc:114
 msgid "Display the viewer for the selected item"
 msgstr "显示选定项目的查看器"
 
-#: oleview.rc:120
+#: oleview.rc:119
 msgid "Toggle between expert and novice display mode"
 msgstr "切换专家和新手显示模式"
 
-#: oleview.rc:121
+#: oleview.rc:120
 msgid ""
 "Toggle the display of component categories that are not meant to be visible"
 msgstr "切换隐藏组件类显示"
 
-#: oleview.rc:122
+#: oleview.rc:121
 msgid "Show or hide the toolbar"
 msgstr "显示或隐藏工具栏"
 
-#: oleview.rc:123
+#: oleview.rc:122
 msgid "Show or hide the status bar"
 msgstr "显示或隐藏状态栏"
 
-#: oleview.rc:124
+#: oleview.rc:123
 msgid "Refresh all lists"
 msgstr "刷新所有名单"
 
-#: oleview.rc:125
+#: oleview.rc:124
 msgid "Display program information, version number and copyright"
 msgstr "显示程序信息、版本号及版权"
 
-#: oleview.rc:116
+#: oleview.rc:115
 msgid "Ask for an in-process server when calling CoGetClassObject"
 msgstr "调用 CoGetClassObject 时请求进程内服务器"
 
-#: oleview.rc:117
+#: oleview.rc:116
 msgid "Ask for an in-process handler when calling CoGetClassObject"
 msgstr "调用 CoGetClassObject 时请求进程内处理函数"
 
-#: oleview.rc:118
+#: oleview.rc:117
 msgid "Ask for a local server when calling CoGetClassObject"
 msgstr "调用 CoGetClassObject 时请求本地服务器"
 
-#: oleview.rc:119
+#: oleview.rc:118
 msgid "Ask for a remote server when calling CoGetClassObject"
 msgstr "调用 CoGetClassObject 时请求远程服务器"
 
-#: oleview.rc:131
+#: oleview.rc:130
 msgid "ObjectClasses"
 msgstr "对象类型"
 
-#: oleview.rc:132
+#: oleview.rc:131
 msgid "Grouped by Component Category"
 msgstr "按部件类型分组"
 
-#: oleview.rc:133
+#: oleview.rc:132
 msgid "OLE 1.0 Objects"
 msgstr "OLE 1.0 对象"
 
-#: oleview.rc:134
+#: oleview.rc:133
 msgid "COM Library Objects"
 msgstr "COM 函数库对象"
 
-#: oleview.rc:135
+#: oleview.rc:134
 msgid "All Objects"
 msgstr "所有对象"
 
-#: oleview.rc:136
+#: oleview.rc:135
 msgid "Application IDs"
 msgstr "应用程序 IDs"
 
-#: oleview.rc:137
+#: oleview.rc:136
 msgid "Type Libraries"
 msgstr "类型函数库"
 
-#: oleview.rc:138
+#: oleview.rc:137
 msgid "ver."
 msgstr "版本"
 
-#: oleview.rc:139
+#: oleview.rc:138
 msgid "Interfaces"
 msgstr "界面"
 
-#: oleview.rc:141
+#: oleview.rc:140
 msgid "Registry"
 msgstr "注册表"
 
-#: oleview.rc:142
+#: oleview.rc:141
 msgid "Implementation"
 msgstr "实现"
 
-#: oleview.rc:143
+#: oleview.rc:142
 msgid "Activation"
 msgstr "激活"
 
-#: oleview.rc:145
+#: oleview.rc:144
 msgid "CoGetClassObject failed."
 msgstr "CoGetClassObject 失败。"
 
-#: oleview.rc:146
+#: oleview.rc:145
 msgid "Unknown error"
 msgstr "未知错误"
 
-#: oleview.rc:149
+#: oleview.rc:148
 msgid "bytes"
 msgstr "字节"
 
-#: oleview.rc:151
+#: oleview.rc:150
 msgid "LoadTypeLib( %1 ) failed ($%2!x!)"
 msgstr "LoadTypeLib( %1 ) 失败 ($%2!x!)"
 
-#: oleview.rc:152
+#: oleview.rc:151
 msgid "Inherited Interfaces"
 msgstr "继承的接口"
 
-#: oleview.rc:127
+#: oleview.rc:126
 msgid "Save as an .IDL or .H file"
 msgstr "存为 .IDL 或 .H 文件"
 
-#: oleview.rc:128
+#: oleview.rc:127
 msgid "Close window"
 msgstr "关闭窗口"
 
-#: oleview.rc:129
+#: oleview.rc:128
 msgid "Group typeinfos by kind"
 msgstr "按类别分组"
 
@@ -11424,7 +11426,7 @@ msgstr "注册表值 '%1' 已经存在。您想要覆盖它吗?"
 msgid "The registry operation was cancelled\n"
 msgstr "注册表操作已经取消\n"
 
-#: reg.rc:53 regedit.rc:204
+#: reg.rc:53 regedit.rc:206
 msgid "(Default)"
 msgstr "(默认)"
 
@@ -11476,7 +11478,7 @@ msgstr "输入“REG /?”以获取帮助。\n"
 msgid "Type \"REG %1 /?\" for help.\n"
 msgstr "输入“REG %1 /?”以获取帮助。\n"
 
-#: reg.rc:65 regedit.rc:205
+#: reg.rc:65 regedit.rc:207
 msgid "(value not set)"
 msgstr "(没有设值)"
 
@@ -11552,83 +11554,83 @@ msgstr "关于注册表编辑器(&A)"
 msgid "Modify Binary Data..."
 msgstr "修改二进制数据…"
 
-#: regedit.rc:230
+#: regedit.rc:234
 msgid "Export registry"
 msgstr "导出注册表"
 
-#: regedit.rc:232
+#: regedit.rc:236
 msgid "S&elected branch:"
 msgstr "指定分支(&E)："
 
-#: regedit.rc:241
+#: regedit.rc:245
 msgid "Find:"
 msgstr "查找："
 
-#: regedit.rc:243
+#: regedit.rc:247
 msgid "Find in:"
 msgstr "查找范围："
 
-#: regedit.rc:244
+#: regedit.rc:248
 msgid "Keys"
 msgstr "键"
 
-#: regedit.rc:245
+#: regedit.rc:249
 msgid "Value names"
 msgstr "值名称"
 
-#: regedit.rc:246
+#: regedit.rc:250
 msgid "Value content"
 msgstr "值内容"
 
-#: regedit.rc:247
+#: regedit.rc:251
 msgid "Whole string only"
 msgstr "整词匹配"
 
-#: regedit.rc:254
+#: regedit.rc:258
 msgid "Add Favorite"
 msgstr "添加收藏"
 
-#: regedit.rc:257 regedit.rc:268
+#: regedit.rc:261 regedit.rc:272
 msgid "Name:"
 msgstr "名称："
 
-#: regedit.rc:265
+#: regedit.rc:269
 msgid "Remove Favorite"
 msgstr "删除收藏"
 
-#: regedit.rc:276
+#: regedit.rc:280
 msgid "Edit String"
 msgstr "编辑字符串"
 
-#: regedit.rc:279 regedit.rc:292 regedit.rc:308 regedit.rc:321
+#: regedit.rc:283 regedit.rc:296 regedit.rc:312 regedit.rc:325
 msgid "Value name:"
 msgstr "值名称："
 
-#: regedit.rc:281 regedit.rc:294 regedit.rc:310 regedit.rc:323
+#: regedit.rc:285 regedit.rc:298 regedit.rc:314 regedit.rc:327
 msgid "Value data:"
 msgstr "值数据："
 
-#: regedit.rc:289
+#: regedit.rc:293
 msgid "Edit DWORD"
 msgstr "编辑整数"
 
-#: regedit.rc:296
+#: regedit.rc:300
 msgid "Base"
 msgstr "进制"
 
-#: regedit.rc:297
+#: regedit.rc:301
 msgid "Hexadecimal"
 msgstr "十六进制"
 
-#: regedit.rc:298
+#: regedit.rc:302
 msgid "Decimal"
 msgstr "十进制"
 
-#: regedit.rc:305
+#: regedit.rc:309
 msgid "Edit Binary"
 msgstr "编辑二进制"
 
-#: regedit.rc:318
+#: regedit.rc:322
 msgid "Edit Multi-String"
 msgstr "编辑多个字符串"
 
@@ -11665,79 +11667,92 @@ msgstr "数据"
 msgid "Registry Editor"
 msgstr "注册表编辑器"
 
-#: regedit.rc:194
+#: regedit.rc:196
 msgid "Import Registry File"
 msgstr "导入注册表文件"
 
-#: regedit.rc:195
+#: regedit.rc:197
 msgid "Export Registry File"
 msgstr "导出注册表文件"
 
-#: regedit.rc:196
+#: regedit.rc:198
 msgid "Registry files (*.reg)"
 msgstr "注册表文件 (*.reg)"
 
-#: regedit.rc:197
+#: regedit.rc:199
 msgid "Win9x/NT4 Registry files (REGEDIT4)"
 msgstr "Win9x/NT4 注册表文件 (REGEDIT4)"
 
-#: regedit.rc:206
+#: regedit.rc:208
 msgid "(cannot display value)"
 msgstr "(不能显示值)"
 
-#: regedit.rc:207
+#: regedit.rc:209
 msgid "(unknown %d)"
 msgstr "(未知 %d)"
 
-#: regedit.rc:212
+#: regedit.rc:214
 #, fuzzy
 #| msgid "regedit: Unable to open the registry key '%1'.\n"
 msgid "Unable to modify the selected registry value."
 msgstr "regedit: 无法打开注册表键 '%1'。\n"
 
-#: regedit.rc:213
+#: regedit.rc:215
 #, fuzzy
 #| msgid "regedit: Unable to open the registry key '%1'.\n"
 msgid "Unable to create a new registry key."
 msgstr "regedit: 无法打开注册表键 '%1'。\n"
 
-#: regedit.rc:214
+#: regedit.rc:216
 #, fuzzy
 #| msgid "regedit: Unable to open the registry key '%1'.\n"
 msgid "Unable to create a new registry value."
 msgstr "regedit: 无法打开注册表键 '%1'。\n"
 
-#: regedit.rc:215
+#: regedit.rc:217
 msgid ""
 "Unable to rename the key '%1'.\n"
 "The specified key name already exists."
 msgstr ""
 
-#: regedit.rc:216
+#: regedit.rc:218
 msgid ""
 "Unable to rename the value '%1'.\n"
 "The specified value name already exists."
 msgstr ""
 
-#: regedit.rc:217
+#: regedit.rc:219
 #, fuzzy
 #| msgid "regedit: Unable to open the registry key '%1'.\n"
 msgid "Unable to delete the selected registry key."
 msgstr "regedit: 无法打开注册表键 '%1'。\n"
 
-#: regedit.rc:218
+#: regedit.rc:220
 #, fuzzy
 #| msgid "regedit: Unable to open the registry key '%1'.\n"
 msgid "Unable to rename the selected registry key."
 msgstr "regedit: 无法打开注册表键 '%1'。\n"
 
-#: regedit.rc:219
+#: regedit.rc:221
 #, fuzzy
 #| msgid "regedit: Unable to open the registry key '%1'.\n"
 msgid "Unable to rename the selected registry value."
 msgstr "regedit: 无法打开注册表键 '%1'。\n"
 
-#: regedit.rc:371
+#: regedit.rc:222
+msgid ""
+"The keys and values contained in %1 were successfully added to the registry."
+msgstr ""
+
+#: regedit.rc:223
+#, fuzzy
+#| msgid ""
+#| "regedit: Unable to export '%1'. The specified registry key was not "
+#| "found.\n"
+msgid "Unable to import %1. The specified file is not a valid registry file."
+msgstr "regedit: 无法导出 '%1'。未找到指定的注册表键。\n"
+
+#: regedit.rc:375
 msgid ""
 "Usage:\n"
 "  regedit [options] [filename] [reg_key]\n"
@@ -11792,90 +11807,90 @@ msgstr ""
 "  regedit /E \"export.reg\" \"HKEY_CURRENT_USER\\Console\"\n"
 "  regedit /D \"HKEY_LOCAL_MACHINE\\Error\\Path\"\n"
 
-#: regedit.rc:372
+#: regedit.rc:376
 msgid "regedit: Invalid or unrecognized switch [%1]\n"
 msgstr "regedit：无效或无法识别的开关 [%1]\n"
 
-#: regedit.rc:373
+#: regedit.rc:377
 msgid "Type \"regedit /?\" for help.\n"
 msgstr "输入 \"regedit /?\" 来获得帮助\n"
 
-#: regedit.rc:374
+#: regedit.rc:378
 msgid "regedit: No filename was specified.\n"
 msgstr "regedit: 没有指定文件名。\n"
 
-#: regedit.rc:375
+#: regedit.rc:379
 msgid "regedit: No registry key was specified for removal.\n"
 msgstr "regedit：未指定任何要移除的注册表键。\n"
 
-#: regedit.rc:376
+#: regedit.rc:380
 msgid "regedit: The file '%1' was not found.\n"
 msgstr "regedit: 找不到文件 '%1'。\n"
 
-#: regedit.rc:377
+#: regedit.rc:381
 msgid "regedit: Unable to open the file '%1'.\n"
 msgstr "regedit: 无法打开文件 '%1'。\n"
 
-#: regedit.rc:378
+#: regedit.rc:382
 msgid "regedit: Unhandled action.\n"
 msgstr "regedit: 无法处理的操作。\n"
 
-#: regedit.rc:379
+#: regedit.rc:383
 msgid "regedit: Out of memory! (%1!S!, line %2!u!)\n"
 msgstr "regedit: 内存不足! (%1!S!, 行 %2!u!)\n"
 
-#: regedit.rc:380
+#: regedit.rc:384
 msgid "regedit: Invalid hexadecimal value.\n"
 msgstr "regedit: 无效的十六进制值。\n"
 
-#: regedit.rc:381
+#: regedit.rc:385
 msgid ""
 "regedit: Unable to convert hexadecimal data. An invalid value was "
 "encountered at '%1'.\n"
 msgstr "regedit: 无法转换十六进制数据。在 \"%1\" 处发现无效值。\n"
 
-#: regedit.rc:382
+#: regedit.rc:386
 msgid "regedit: Unrecognized escape sequence [\\%1!c!]\n"
 msgstr "regedit: 无法识别的转义序列 [\\%1!c!]\n"
 
-#: regedit.rc:383
+#: regedit.rc:387
 msgid "regedit: Unsupported registry data type [%1]\n"
 msgstr "regedit: 不受支持的注册表数据类型 [%1]\n"
 
-#: regedit.rc:384
+#: regedit.rc:388
 msgid "regedit: Unexpected end of line in '%1'.\n"
 msgstr "regedit: '%1' 中存在未预期的行尾。\n"
 
-#: regedit.rc:385
+#: regedit.rc:389
 msgid "regedit: The line '%1' was not recognized.\n"
 msgstr "regedit: 行 '%1' 无法被识别。\n"
 
-#: regedit.rc:386
+#: regedit.rc:390
 msgid "regedit: Unable to add the registry value '%1' to '%2'.\n"
 msgstr "regedit: 无法向 '%2' 添加注册表值 '%1'。\n"
 
-#: regedit.rc:387
+#: regedit.rc:391
 msgid "regedit: Unable to open the registry key '%1'.\n"
 msgstr "regedit: 无法打开注册表键 '%1'。\n"
 
-#: regedit.rc:388
+#: regedit.rc:392
 msgid "regedit: Unsupported registry data type [%1] encountered in '%2'.\n"
 msgstr "regedit: 在 '%2' 遇到不受支持的注册表数据类型 [%1]。\n"
 
-#: regedit.rc:389
+#: regedit.rc:393
 msgid "regedit: The registry value '%1' will be exported as binary data.\n"
 msgstr "regedit: 注册表值 \"%1\" 将会被导出为二进制数据。\n"
 
-#: regedit.rc:390
+#: regedit.rc:394
 msgid "regedit: Incorrect registry class specification in '%1'.\n"
 msgstr "regedit：“%1”中包含无效的注册表类规范。\n"
 
-#: regedit.rc:391
+#: regedit.rc:395
 msgid ""
 "regedit: Unable to export '%1'. The specified registry key was not found.\n"
 msgstr "regedit: 无法导出 '%1'。未找到指定的注册表键。\n"
 
-#: regedit.rc:392
+#: regedit.rc:396
 msgid "regedit: Unable to delete the registry class '%1'.\n"
 msgstr "regedit：无法删除注册表类“%1”。\n"
 
@@ -11981,7 +11996,7 @@ msgstr "值太大 (%u)"
 msgid "Confirm Value Delete"
 msgstr "确认删除值"
 
-#: regedit.rc:189
+#: regedit.rc:191
 #, fuzzy
 #| msgid "Search string '%s' not found"
 msgid "Search complete. The string '%1' was not found."
@@ -11991,11 +12006,11 @@ msgstr "未找到字符串 '%s'"
 msgid "Are you sure you want to delete these values?"
 msgstr "您确认要删除这些值吗?"
 
-#: regedit.rc:187
+#: regedit.rc:189
 msgid "New Key #%d"
 msgstr "新键 #%d"
 
-#: regedit.rc:188
+#: regedit.rc:190
 msgid "New Value #%d"
 msgstr "新值 #%d"
 
@@ -12012,6 +12027,19 @@ msgstr "添加新多字符串值"
 #: regedit.rc:174
 msgid "Exports selected branch of the registry to a text file"
 msgstr "把选定的注册表分支导出为文本文件"
+
+#: regedit.rc:187
+#, fuzzy
+#| msgid "Confirm Value Delete"
+msgid "Confirm Key Delete"
+msgstr "确认删除值"
+
+#: regedit.rc:188
+#, fuzzy
+#| msgid "Are you sure you want to delete the registry key '%1'?"
+msgid ""
+"Are you sure you want to delete the registry key '%1' and all of its subkeys?"
+msgstr "您真的要删除注册表键 '%1' 吗?"
 
 #: regsvr32.rc:32
 msgid ""

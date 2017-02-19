@@ -162,6 +162,9 @@ static const char * const shader_opcode_names[] =
     /* WINED3DSIH_IMM_ATOMIC_CMP_EXCH              */ "imm_atomic_cmp_exch",
     /* WINED3DSIH_IMM_ATOMIC_CONSUME               */ "imm_atomic_consume",
     /* WINED3DSIH_IMM_ATOMIC_EXCH                  */ "imm_atomic_exch",
+    /* WINED3DSIH_IMM_ATOMIC_IADD                  */ "imm_atomic_iadd",
+    /* WINED3DSIH_IMM_ATOMIC_IMAX                  */ "imm_atomic_imax",
+    /* WINED3DSIH_IMM_ATOMIC_IMIN                  */ "imm_atomic_imin",
     /* WINED3DSIH_IMM_ATOMIC_OR                    */ "imm_atomic_or",
     /* WINED3DSIH_IMM_ATOMIC_UMAX                  */ "imm_atomic_umax",
     /* WINED3DSIH_IMM_ATOMIC_UMIN                  */ "imm_atomic_umin",
@@ -1023,6 +1026,18 @@ static HRESULT shader_get_registers_used(struct wined3d_shader *shader, const st
                 FIXME("Invalid instruction %#x for shader type %#x.\n",
                         ins.handler_idx, shader_version.type);
         }
+        else if (ins.handler_idx == WINED3DSIH_DCL_RESOURCE_RAW)
+        {
+            unsigned int reg_idx = ins.declaration.dst.reg.idx[0].offset;
+            if (reg_idx >= ARRAY_SIZE(reg_maps->resource_info))
+            {
+                ERR("Invalid resource index %u.\n", reg_idx);
+                break;
+            }
+            reg_maps->resource_info[reg_idx].type = WINED3D_SHADER_RESOURCE_BUFFER;
+            reg_maps->resource_info[reg_idx].data_type = WINED3D_DATA_UINT;
+            reg_maps->resource_info[reg_idx].flags = WINED3D_VIEW_BUFFER_RAW;
+        }
         else if (ins.handler_idx == WINED3DSIH_DCL_SAMPLER)
         {
             if (ins.flags & WINED3DSI_SAMPLER_COMPARISON_MODE)
@@ -1031,6 +1046,30 @@ static HRESULT shader_get_registers_used(struct wined3d_shader *shader, const st
         else if (ins.handler_idx == WINED3DSIH_DCL_TEMPS)
         {
             reg_maps->temporary_count = ins.declaration.count;
+        }
+        else if (ins.handler_idx == WINED3DSIH_DCL_THREAD_GROUP)
+        {
+            if (shader_version.type == WINED3D_SHADER_TYPE_COMPUTE)
+            {
+                shader->u.cs.thread_group_size = ins.declaration.thread_group_size;
+            }
+            else
+            {
+                FIXME("Invalid instruction %#x for shader type %#x.\n",
+                        ins.handler_idx, shader_version.type);
+            }
+        }
+        else if (ins.handler_idx == WINED3DSIH_DCL_UAV_RAW)
+        {
+            unsigned int reg_idx = ins.declaration.dst.reg.idx[0].offset;
+            if (reg_idx >= ARRAY_SIZE(reg_maps->uav_resource_info))
+            {
+                ERR("Invalid UAV resource index %u.\n", reg_idx);
+                break;
+            }
+            reg_maps->uav_resource_info[reg_idx].type = WINED3D_SHADER_RESOURCE_BUFFER;
+            reg_maps->uav_resource_info[reg_idx].data_type = WINED3D_DATA_UINT;
+            reg_maps->uav_resource_info[reg_idx].flags = WINED3D_VIEW_BUFFER_RAW;
         }
         else if (ins.handler_idx == WINED3DSIH_DCL_VERTICES_OUT)
         {
@@ -1257,14 +1296,19 @@ static HRESULT shader_get_registers_used(struct wined3d_shader *shader, const st
                 }
             }
 
-            if (ins.handler_idx == WINED3DSIH_ATOMIC_IADD
+            if ((WINED3DSIH_ATOMIC_AND <= ins.handler_idx && ins.handler_idx <= WINED3DSIH_ATOMIC_XOR)
+                    || (WINED3DSIH_IMM_ATOMIC_AND <= ins.handler_idx
+                    && ins.handler_idx <= WINED3DSIH_IMM_ATOMIC_XOR
+                    && ins.handler_idx != WINED3DSIH_IMM_ATOMIC_CONSUME)
                     || ins.handler_idx == WINED3DSIH_LD_UAV_TYPED)
             {
                 unsigned int reg_idx;
-                if (ins.handler_idx == WINED3DSIH_ATOMIC_IADD)
+                if (ins.handler_idx == WINED3DSIH_LD_UAV_TYPED)
+                    reg_idx = ins.src[1].reg.idx[0].offset;
+                else if (WINED3DSIH_ATOMIC_AND <= ins.handler_idx && ins.handler_idx <= WINED3DSIH_ATOMIC_XOR)
                     reg_idx = ins.dst[0].reg.idx[0].offset;
                 else
-                    reg_idx = ins.src[1].reg.idx[0].offset;
+                    reg_idx = ins.dst[1].reg.idx[0].offset;
                 if (reg_idx >= MAX_UNORDERED_ACCESS_VIEWS)
                 {
                     ERR("Invalid UAV index %u.\n", reg_idx);
@@ -1317,6 +1361,7 @@ static HRESULT shader_get_registers_used(struct wined3d_shader *shader, const st
                         ins.src[2].reg.idx[0].offset, reg_maps->sampler_map.count);
             }
             else if (ins.handler_idx == WINED3DSIH_LD
+                    || (ins.handler_idx == WINED3DSIH_LD_RAW && ins.src[1].reg.type == WINED3DSPR_RESOURCE)
                     || (ins.handler_idx == WINED3DSIH_RESINFO && ins.src[1].reg.type == WINED3DSPR_RESOURCE))
             {
                 shader_record_sample(reg_maps, ins.src[1].reg.idx[0].offset,
@@ -1653,6 +1698,10 @@ static void shader_dump_decl_usage(struct wined3d_string_buffer *buffer,
 
             case WINED3D_SHADER_RESOURCE_TEXTURE_2DMSARRAY:
                 shader_addline(buffer, "texture2dmsarray");
+                break;
+
+            case WINED3D_SHADER_RESOURCE_TEXTURE_CUBEARRAY:
+                shader_addline(buffer, "texturecubearray");
                 break;
 
             default:
@@ -2917,7 +2966,7 @@ ULONG CDECL wined3d_shader_decref(struct wined3d_shader *shader)
     if (!refcount)
     {
         shader->parent_ops->wined3d_object_destroyed(shader->parent);
-        wined3d_cs_emit_destroy_object(shader->device->cs, wined3d_shader_destroy_object, shader);
+        wined3d_cs_destroy_object(shader->device->cs, wined3d_shader_destroy_object, shader);
     }
 
     return refcount;

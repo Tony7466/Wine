@@ -514,11 +514,8 @@ static void remove_dir (const char *dir)
 
 static const char* get_test_source_file(const char* test, const char* subtest)
 {
-    static const char* special_dirs[][2] = {
-	{ 0, 0 }
-    };
     static char buffer[MAX_PATH];
-    int i, len = strlen(test);
+    int len = strlen(test);
 
     if (len > 4 && !strcmp( test + len - 4, ".exe" ))
     {
@@ -526,14 +523,6 @@ static const char* get_test_source_file(const char* test, const char* subtest)
         buffer[len] = 0;
     }
     else len = sprintf(buffer, "dlls/%s", test);
-
-    for (i = 0; special_dirs[i][0]; i++) {
-	if (strcmp(test, special_dirs[i][0]) == 0) {
-            strcpy( buffer, special_dirs[i][1] );
-            len = strlen(buffer);
-	    break;
-	}
-    }
 
     sprintf(buffer + len, "/tests/%s.c", subtest);
     return buffer;
@@ -625,6 +614,10 @@ run_ex (char *cmd, HANDLE out_file, const char *tempdir, DWORD ms)
     STARTUPINFOA si;
     PROCESS_INFORMATION pi;
     DWORD wait, status;
+
+    /* Flush to disk so we know which test caused Windows to crash if it does */
+    if (out_file)
+        FlushFileBuffers(out_file);
 
     GetStartupInfoA (&si);
     si.dwFlags    = STARTF_USESTDHANDLES;
@@ -780,6 +773,7 @@ get_subtests (const char *tempdir, struct wine_test *test, LPSTR res_name)
 static void
 run_test (struct wine_test* test, const char* subtest, HANDLE out_file, const char *tempdir)
 {
+    /* Build the source filename so analysis tools can link to it */
     const char* file = get_test_source_file(test->name, subtest);
 
     if (test_filtered_out( test->name, subtest ))
@@ -1233,6 +1227,7 @@ usage (void)
 " -q        quiet mode, no output at all\n"
 " -o FILE   put report into FILE, do not submit\n"
 " -s FILE   submit FILE, do not run tests\n"
+" -S URL    URL to submit the results to\n"
 " -t TAG    include TAG of characters [-.0-9a-zA-Z] in the report\n"
 " -u URL    include TestBot URL in the report\n"
 " -x DIR    Extract tests to DIR (default: .\\wct) and exit\n");
@@ -1243,7 +1238,7 @@ int main( int argc, char *argv[] )
     BOOL (WINAPI *pIsWow64Process)(HANDLE hProcess, PBOOL Wow64Process);
     char *logname = NULL, *outdir = NULL;
     const char *extract = NULL;
-    const char *cp, *submit = NULL;
+    const char *cp, *submit = NULL, *submiturl = NULL;
     int reset_env = 1;
     int poweroff = 0;
     int interactive = 1;
@@ -1314,9 +1309,13 @@ int main( int argc, char *argv[] )
                 usage();
                 exit( 2 );
             }
-            if (tag)
-                report (R_WARNING, "ignoring tag for submission");
-            send_file (submit);
+            break;
+        case 'S':
+            if (!(submiturl = argv[++i]))
+            {
+                usage();
+                exit( 2 );
+            }
             break;
         case 'o':
             if (!(logname = argv[++i]))
@@ -1364,7 +1363,12 @@ int main( int argc, char *argv[] )
             exit (2);
         }
     }
-    if (!submit && !extract) {
+    if (submit) {
+        if (tag)
+            report (R_WARNING, "ignoring tag for submission");
+        send_file (submiturl, submit);
+
+    } else if (!extract) {
         int is_win9x = (GetVersion() & 0x80000000) != 0;
 
         report (R_STATUS, "Starting up");
@@ -1430,7 +1434,7 @@ int main( int argc, char *argv[] )
             if (build_id[0] && nr_of_skips <= SKIP_LIMIT && failures <= FAILURES_LIMIT &&
                 !nr_native_dlls && !is_win9x &&
                 report (R_ASK, MB_YESNO, "Do you want to submit the test results?") == IDYES)
-                if (!send_file (logname) && !DeleteFileA(logname))
+                if (!send_file (submiturl, logname) && !DeleteFileA(logname))
                     report (R_WARNING, "Can't remove logfile: %u", GetLastError());
         } else run_tests (logname, outdir);
         report (R_STATUS, "Finished - %u failures", failures);

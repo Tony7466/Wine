@@ -65,10 +65,10 @@ msgstr "Destek Bilgisi"
 #: mshtml.rc:57 msvfw32.rc:36 oledlg.rc:62 oledlg.rc:94 serialui.rc:41
 #: setupapi.rc:59 shell32.rc:276 shell32.rc:300 shell32.rc:322 shell32.rc:341
 #: shlwapi.rc:44 user32.rc:83 user32.rc:98 wininet.rc:51 wininet.rc:71
-#: winspool.rc:42 net.rc:47 notepad.rc:117 oleview.rc:162 oleview.rc:175
+#: winspool.rc:42 net.rc:47 notepad.rc:117 oleview.rc:161 oleview.rc:174
 #: progman.rc:106 progman.rc:124 progman.rc:142 progman.rc:158 progman.rc:180
-#: progman.rc:199 progman.rc:216 regedit.rc:259 regedit.rc:270 regedit.rc:283
-#: regedit.rc:299 regedit.rc:312 regedit.rc:325 taskmgr.rc:442 taskmgr.rc:517
+#: progman.rc:199 progman.rc:216 regedit.rc:263 regedit.rc:274 regedit.rc:287
+#: regedit.rc:303 regedit.rc:316 regedit.rc:329 taskmgr.rc:442 taskmgr.rc:517
 #: winecfg.rc:214 winecfg.rc:224 wineconsole.rc:135 winefile.rc:128
 #: winefile.rc:151 winefile.rc:181 winemine.rc:71 winemine.rc:81 winemine.rc:95
 #: wordpad.rc:215 wordpad.rc:226 wordpad.rc:244 wordpad.rc:257
@@ -147,10 +147,10 @@ msgstr "&Yükle"
 #: msvfw32.rc:37 oledlg.rc:63 oledlg.rc:95 serialui.rc:42 setupapi.rc:42
 #: setupapi.rc:60 shell32.rc:277 shell32.rc:301 shell32.rc:312 shell32.rc:342
 #: shlwapi.rc:45 user32.rc:84 user32.rc:99 wininet.rc:52 wininet.rc:72
-#: winspool.rc:43 notepad.rc:118 oleview.rc:163 oleview.rc:176 progman.rc:107
+#: winspool.rc:43 notepad.rc:118 oleview.rc:162 oleview.rc:175 progman.rc:107
 #: progman.rc:125 progman.rc:143 progman.rc:159 progman.rc:181 progman.rc:200
-#: progman.rc:217 regedit.rc:260 regedit.rc:271 regedit.rc:284 regedit.rc:300
-#: regedit.rc:313 regedit.rc:326 taskmgr.rc:443 taskmgr.rc:518 wineboot.rc:34
+#: progman.rc:217 regedit.rc:264 regedit.rc:275 regedit.rc:288 regedit.rc:304
+#: regedit.rc:317 regedit.rc:330 taskmgr.rc:443 taskmgr.rc:518 wineboot.rc:34
 #: winecfg.rc:215 winecfg.rc:225 wineconsole.rc:136 winefile.rc:129
 #: winefile.rc:152 winefile.rc:182 winemine.rc:96 wordpad.rc:216 wordpad.rc:227
 #: wordpad.rc:245 wordpad.rc:258
@@ -226,7 +226,7 @@ msgid "Programs (*.exe)"
 msgstr "Programlar (*.exe)"
 
 #: appwiz.rc:43 avifil32.rc:33 cryptui.rc:83 shell32.rc:199 notepad.rc:76
-#: oleview.rc:104 progman.rc:82 regedit.rc:198 winedbg.rc:42 winhlp32.rc:90
+#: oleview.rc:103 progman.rc:82 regedit.rc:200 winedbg.rc:42 winhlp32.rc:90
 msgid "All files (*.*)"
 msgstr "Tüm dosyalar (*.*)"
 
@@ -338,8 +338,8 @@ msgstr "Son"
 msgid "Customize Toolbar"
 msgstr "Araç Çubuğunu Özelleştir"
 
-#: comctl32.rc:84 cryptui.rc:351 ieframe.rc:43 oleview.rc:83 oleview.rc:188
-#: oleview.rc:201 oleview.rc:213 taskmgr.rc:139
+#: comctl32.rc:84 cryptui.rc:351 ieframe.rc:43 oleview.rc:83 oleview.rc:187
+#: oleview.rc:200 oleview.rc:212 taskmgr.rc:139
 msgid "&Close"
 msgstr "&Kapat"
 
@@ -390,7 +390,7 @@ msgctxt "hotkey"
 msgid "None"
 msgstr "Hiçbiri"
 
-#: comctl32.rc:31 cryptui.rc:230 regedit.rc:249 taskmgr.rc:434 winedbg.rc:60
+#: comctl32.rc:31 cryptui.rc:230 regedit.rc:253 taskmgr.rc:434 winedbg.rc:60
 #: winedbg.rc:75 wordpad.rc:180
 msgid "Close"
 msgstr "Kapat"
@@ -404,7 +404,7 @@ msgid "Go to today"
 msgstr "Bugüne git"
 
 #: comdlg32.rc:157 comdlg32.rc:170 comdlg32.rc:459 comdlg32.rc:485
-#: shell32.rc:167 oleview.rc:102
+#: shell32.rc:167 oleview.rc:101
 msgid "Open"
 msgstr "Aç"
 
@@ -449,7 +449,7 @@ msgstr "Yazıcı:"
 msgid "Print range"
 msgstr "Yazdırma aralığı"
 
-#: comdlg32.rc:207 comdlg32.rc:384 regedit.rc:231
+#: comdlg32.rc:207 comdlg32.rc:384 regedit.rc:235
 msgid "&All"
 msgstr "&Tümü"
 
@@ -619,7 +619,7 @@ msgstr "&Özel Renklere Ekle"
 msgid "&Define Custom Colors >>"
 msgstr "&Özel Renkleri Tanımla >>"
 
-#: comdlg32.rc:316 regedit.rc:238 regedit.rc:248
+#: comdlg32.rc:316 regedit.rc:242 regedit.rc:252
 msgid "Find"
 msgstr "Bul"
 
@@ -3056,7 +3056,7 @@ msgstr "Simge"
 msgid "OEM/DOS"
 msgstr "OEM/DOS"
 
-#: gdi32.rc:45 wldap32.rc:110
+#: gdi32.rc:45 wldap32.rc:112
 msgid "Other"
 msgstr "Diğer"
 
@@ -7338,11 +7338,11 @@ msgctxt "object state"
 msgid "has popup"
 msgstr "açılır penceresi var"
 
-#: oleaut32.rc:30 oleview.rc:147
+#: oleaut32.rc:30 oleview.rc:146
 msgid "True"
 msgstr "Doğru"
 
-#: oleaut32.rc:31 oleview.rc:148
+#: oleaut32.rc:31 oleview.rc:147
 msgid "False"
 msgstr "Yanlış"
 
@@ -8101,7 +8101,7 @@ msgctxt "display name"
 msgid "Desktop"
 msgstr "Masaüstü"
 
-#: shell32.rc:157 regedit.rc:203
+#: shell32.rc:157 regedit.rc:205
 msgid "My Computer"
 msgstr "Bilgisayarım"
 
@@ -8358,10 +8358,8 @@ msgid "Wine Control Panel"
 msgstr "Wine Denetim Masası"
 
 #: shell32.rc:195
-#, fuzzy
-#| msgid "Unable to display Run File dialog box (internal error)"
 msgid "Unable to display Run dialog box (internal error)"
-msgstr "Dosya Çalıştır iletişim kutusu görüntülenemedi (dahili hata)"
+msgstr "Çalıştır iletişim kutusu görüntülenemedi (dahili hata)"
 
 #: shell32.rc:196
 msgid "Unable to display Browse dialog box (internal error)"
@@ -9132,7 +9130,7 @@ msgid ""
 "until the device is free, and then try again."
 msgstr ""
 "Geçerli dalga aygıtı kullanımda olduğundan yürütme için açılamıyor. Aygıt "
-"boşalana kadar bekleyin ve yeniden deneyin."
+"lana kadar bekleyin ve yeniden deneyin."
 
 #: winmm.rc:114
 msgid ""
@@ -9290,239 +9288,245 @@ msgstr "Çıktı dosyası zaten var. Üzerine yazmak için Tamam tıklayın."
 msgid "Unable to create the output file."
 msgstr "Çıktı dosyası oluşturulamıyor."
 
-#: wldap32.rc:30
+#: wldap32.rc:32
 msgid "Success"
 msgstr "Başarılı"
 
-#: wldap32.rc:31
+#: wldap32.rc:33
 msgid "Operations Error"
 msgstr "İşlem Hatası"
 
-#: wldap32.rc:32
+#: wldap32.rc:34
 msgid "Protocol Error"
 msgstr "Protokol Hatası"
 
-#: wldap32.rc:33
+#: wldap32.rc:35
 msgid "Time Limit Exceeded"
 msgstr "Zaman Sınırı Aşıldı"
 
-#: wldap32.rc:34
+#: wldap32.rc:36
 msgid "Size Limit Exceeded"
 msgstr "Boyut Sınırı Aşıldı"
 
-#: wldap32.rc:35
+#: wldap32.rc:37
 msgid "Compare False"
 msgstr "Karşılaştırma Yanlış"
 
-#: wldap32.rc:36
+#: wldap32.rc:38
 msgid "Compare True"
 msgstr "Karşılaştırma Doğru"
 
-#: wldap32.rc:37
+#: wldap32.rc:39
 msgid "Authentication Method Not Supported"
 msgstr "Yetkilendirme Yöntemi Desteklenmiyor"
 
-#: wldap32.rc:38
+#: wldap32.rc:40
 msgid "Strong Authentication Required"
 msgstr "Güçlü Yetkilendirme Gerekli"
 
-#: wldap32.rc:39
+#: wldap32.rc:41
 msgid "Referral (v2)"
 msgstr "Başvuru (v2)"
 
-#: wldap32.rc:40
+#: wldap32.rc:42
 msgid "Referral"
 msgstr "Başvuru"
 
-#: wldap32.rc:41
+#: wldap32.rc:43
 msgid "Administration Limit Exceeded"
 msgstr "Yönetim Sınırı Aşıldı"
 
-#: wldap32.rc:42
+#: wldap32.rc:44
 msgid "Unavailable Critical Extension"
 msgstr "Kullanılamayan Kritik Uzantı"
 
-#: wldap32.rc:43
+#: wldap32.rc:45
 msgid "Confidentiality Required"
 msgstr "Gizlilik Gerekli"
 
 #: wldap32.rc:46
+#, fuzzy
+#| msgid "Shutdown in progress.\n"
+msgid "SASL Bind in Progress"
+msgstr "Kapatılıyor.\n"
+
+#: wldap32.rc:48
 msgid "No Such Attribute"
 msgstr "Böyle Bir Öznitelik Yok"
 
-#: wldap32.rc:47
+#: wldap32.rc:49
 msgid "Undefined Type"
 msgstr "Tanımlanmamış Tür"
 
-#: wldap32.rc:48
+#: wldap32.rc:50
 msgid "Inappropriate Matching"
 msgstr "Uygunsuz Eşleşme"
 
-#: wldap32.rc:49
+#: wldap32.rc:51
 msgid "Constraint Violation"
 msgstr "Kısıtlama İhlali"
 
-#: wldap32.rc:50
+#: wldap32.rc:52
 msgid "Attribute Or Value Exists"
 msgstr "Varolan Öznitelik Veya Değer"
 
-#: wldap32.rc:51
+#: wldap32.rc:53
 msgid "Invalid Syntax"
 msgstr "Geçersiz Sözdizimi"
 
-#: wldap32.rc:62
+#: wldap32.rc:64
 msgid "No Such Object"
 msgstr "Böyle Bir Nesne Yok"
 
-#: wldap32.rc:63
+#: wldap32.rc:65
 msgid "Alias Problem"
 msgstr "Takma Ad Sorunu"
 
-#: wldap32.rc:64
+#: wldap32.rc:66
 msgid "Invalid DN Syntax"
 msgstr "Geçersiz DN Sözdizimi"
 
-#: wldap32.rc:65
+#: wldap32.rc:67
 msgid "Is Leaf"
 msgstr "Yaprak Konumunda"
 
-#: wldap32.rc:66
+#: wldap32.rc:68
 msgid "Alias Dereference Problem"
 msgstr "Takma Ad Başvuru Sorunu"
 
-#: wldap32.rc:78
+#: wldap32.rc:80
 msgid "Inappropriate Authentication"
 msgstr "Uygunsuz Yetkilendirme"
 
-#: wldap32.rc:79
+#: wldap32.rc:81
 msgid "Invalid Credentials"
 msgstr "Geçersiz Belgeler"
 
-#: wldap32.rc:80
+#: wldap32.rc:82
 msgid "Insufficient Rights"
 msgstr "Geçersiz Yetkiler"
 
-#: wldap32.rc:81
+#: wldap32.rc:83
 msgid "Busy"
 msgstr "Meşgul"
 
-#: wldap32.rc:82
+#: wldap32.rc:84
 msgid "Unavailable"
 msgstr "Kullanılabilir Değil"
 
-#: wldap32.rc:83
+#: wldap32.rc:85
 msgid "Unwilling To Perform"
 msgstr "Yürütmeye İsteksiz"
 
-#: wldap32.rc:84
+#: wldap32.rc:86
 msgid "Loop Detected"
 msgstr "Döngü Algılandı"
 
-#: wldap32.rc:90
+#: wldap32.rc:92
 msgid "Sort Control Missing"
 msgstr "Sıralama Denetimi Eksik"
 
-#: wldap32.rc:91
+#: wldap32.rc:93
 msgid "Index range error"
 msgstr "Eksik Dizin Aralığı Hatası"
 
-#: wldap32.rc:94
+#: wldap32.rc:96
 msgid "Naming Violation"
 msgstr "Adlandırma İhlali"
 
-#: wldap32.rc:95
+#: wldap32.rc:97
 msgid "Object Class Violation"
 msgstr "Nesne Sınıfı İhlali"
 
-#: wldap32.rc:96
+#: wldap32.rc:98
 msgid "Not allowed on Non-leaf"
 msgstr "Yaprak olmayan konumda izinli değil"
 
-#: wldap32.rc:97
+#: wldap32.rc:99
 msgid "Not allowed on RDN"
 msgstr "RDN üzerinde izin verilmiyor"
 
-#: wldap32.rc:98
+#: wldap32.rc:100
 msgid "Already Exists"
 msgstr "Zaten Var"
 
-#: wldap32.rc:99
+#: wldap32.rc:101
 msgid "No Object Class Mods"
 msgstr "Nesne Sınıfı Modülleri Yok"
 
-#: wldap32.rc:100
+#: wldap32.rc:102
 msgid "Results Too Large"
 msgstr "Sonuçlar Çok Büyük"
 
-#: wldap32.rc:101
+#: wldap32.rc:103
 msgid "Affects Multiple DSAs"
 msgstr "Birden Fazla DSA Etkilenir"
 
-#: wldap32.rc:111
+#: wldap32.rc:113
 msgid "Server Down"
 msgstr "Sunucu Kapalı"
 
-#: wldap32.rc:112
+#: wldap32.rc:114
 msgid "Local Error"
 msgstr "Yerel Hata"
 
-#: wldap32.rc:113
+#: wldap32.rc:115
 msgid "Encoding Error"
 msgstr "Kodlama Hatası"
 
-#: wldap32.rc:114
+#: wldap32.rc:116
 msgid "Decoding Error"
 msgstr "Kod Çözme Hatası"
 
-#: wldap32.rc:115
+#: wldap32.rc:117
 msgid "Timeout"
 msgstr "Zaman Aşımı"
 
-#: wldap32.rc:116
+#: wldap32.rc:118
 msgid "Auth Unknown"
 msgstr "Yazar Bilinmiyor"
 
-#: wldap32.rc:117
+#: wldap32.rc:119
 msgid "Filter Error"
 msgstr "Süzme Hatası"
 
-#: wldap32.rc:118
+#: wldap32.rc:120
 msgid "User Canceled"
 msgstr "Kullanıcı İptal Etti"
 
-#: wldap32.rc:119
+#: wldap32.rc:121
 msgid "Parameter Error"
 msgstr "Parametre Hatası"
 
-#: wldap32.rc:120
+#: wldap32.rc:122
 msgid "No Memory"
 msgstr "Bellek Yok"
 
-#: wldap32.rc:121
+#: wldap32.rc:123
 msgid "Can't connect to the LDAP server"
 msgstr "LDAP sunucusuna bağlanamıyor"
 
-#: wldap32.rc:122
+#: wldap32.rc:124
 msgid "Operation not supported by this version of the LDAP protocol"
 msgstr "İşlem LDAP iletişim kuralının bu sürümünce desteklenmiyor"
 
-#: wldap32.rc:123
+#: wldap32.rc:125
 msgid "Specified control was not found in message"
 msgstr "İletide belirtilen denetim bulunamadı"
 
-#: wldap32.rc:124
+#: wldap32.rc:126
 msgid "No result present in message"
 msgstr "İletide sonuç yok"
 
-#: wldap32.rc:125
+#: wldap32.rc:127
 msgid "More results returned"
 msgstr "Dönen diğer sonuçlar"
 
-#: wldap32.rc:126
+#: wldap32.rc:128
 msgid "Loop while handling referrals"
 msgstr "Başvuruları işlerken dön"
 
-#: wldap32.rc:127
+#: wldap32.rc:129
 msgid "Referral hop limit exceeded"
 msgstr "Paketin gönderildiği yönlendirici sınırı aşıldı"
 
@@ -10891,7 +10895,7 @@ msgctxt "accelerator Copy"
 msgid "C"
 msgstr "C"
 
-#: notepad.rc:134 regedit.rc:335 wordpad.rc:287
+#: notepad.rc:134 regedit.rc:339 wordpad.rc:287
 msgctxt "accelerator Find"
 msgid "F"
 msgstr "F"
@@ -10911,7 +10915,7 @@ msgctxt "accelerator Open"
 msgid "O"
 msgstr "O"
 
-#: notepad.rc:138 regedit.rc:336 wordpad.rc:300
+#: notepad.rc:138 regedit.rc:340 wordpad.rc:300
 msgctxt "accelerator Print"
 msgid "P"
 msgstr "P"
@@ -11100,31 +11104,31 @@ msgstr "&Farklı Kaydet..."
 msgid "&Group by type kind"
 msgstr "Tür çeşidine göre g&rupla"
 
-#: oleview.rc:157
+#: oleview.rc:156
 msgid "Connect to another machine"
 msgstr "Başka bir makineye bağlan"
 
-#: oleview.rc:160
+#: oleview.rc:159
 msgid "&Machine name:"
 msgstr "&Makine adı:"
 
-#: oleview.rc:168
+#: oleview.rc:167
 msgid "System Configuration"
 msgstr "Sistem Yapılandırma"
 
-#: oleview.rc:171
+#: oleview.rc:170
 msgid "System Settings"
 msgstr "Sistem Ayarları"
 
-#: oleview.rc:172
+#: oleview.rc:171
 msgid "&Enable Distributed COM"
 msgstr "&Dağıtılmış COM'u Etkinleştir"
 
-#: oleview.rc:173
+#: oleview.rc:172
 msgid "Enable &Remote Connections (Win95 only)"
 msgstr "&Uzaktan Bağlantılar'ı Etkinleştir (sadece Win95)"
 
-#: oleview.rc:174
+#: oleview.rc:173
 msgid ""
 "These settings change only registry values.\n"
 "They have no effect on Wine performance."
@@ -11132,35 +11136,35 @@ msgstr ""
 "Bu ayarlar sadece kayıt değerlerini değiştirir.\n"
 "Wine performansı üzerine bir etkileri yoktur."
 
-#: oleview.rc:181
+#: oleview.rc:180
 msgid "Default Interface Viewer"
 msgstr "Öntanımlı Arayüz Gösterici"
 
-#: oleview.rc:184
+#: oleview.rc:183
 msgid "Interface"
 msgstr "Arayüz"
 
-#: oleview.rc:186
+#: oleview.rc:185
 msgid "IID:"
 msgstr "IID:"
 
-#: oleview.rc:189
+#: oleview.rc:188
 msgid "&View Type Info"
 msgstr "&Tür Bilgisini Göster"
 
-#: oleview.rc:194
+#: oleview.rc:193
 msgid "IPersist Interface Viewer"
 msgstr "IPersist Arayüz Gösterici"
 
-#: oleview.rc:197 oleview.rc:209
+#: oleview.rc:196 oleview.rc:208
 msgid "Class Name:"
 msgstr "Sınıf Adı:"
 
-#: oleview.rc:199 oleview.rc:211
+#: oleview.rc:198 oleview.rc:210
 msgid "CLSID:"
 msgstr "CLSID:"
 
-#: oleview.rc:206
+#: oleview.rc:205
 msgid "IPersistStream Interface Viewer"
 msgstr "IPersistStream Arayüz Gösterici"
 
@@ -11168,7 +11172,7 @@ msgstr "IPersistStream Arayüz Gösterici"
 msgid "OleView"
 msgstr "OleView"
 
-#: oleview.rc:101
+#: oleview.rc:100
 msgid "ITypeLib viewer"
 msgstr "ITypeLib Görüntüleyicisi"
 
@@ -11176,172 +11180,168 @@ msgstr "ITypeLib Görüntüleyicisi"
 msgid "OleView - OLE/COM Object Viewer"
 msgstr "OleView - OLE/COM Nesne Görüntüleyicisi"
 
-#: oleview.rc:100
-msgid "version 1.0"
-msgstr "sürüm 1.0"
-
-#: oleview.rc:103
+#: oleview.rc:102
 msgid "TypeLib files (*.tlb; *.olb; *.dll; *.ocx; *.exe)"
 msgstr "TypeLib dosyaları (*.tlb; *.olb; *.dll; *.ocx; *.exe)"
 
-#: oleview.rc:106
+#: oleview.rc:105
 msgid "Bind to file via a File Moniker"
 msgstr "Dosyaya File Moniker ile ilişkilendir"
 
-#: oleview.rc:107
+#: oleview.rc:106
 msgid "Open a TypeLib file and view the contents"
 msgstr "Bir TypeLib dosyası aç ve içindekileri görüntüle"
 
-#: oleview.rc:108
+#: oleview.rc:107
 msgid "Change machine wide Distributed COM settings"
 msgstr "Genel Dağıtılan COM ayarlarını değiştir"
 
-#: oleview.rc:109
+#: oleview.rc:108
 msgid "Run the Wine registry editor"
 msgstr "Wine kayıt defteri düzenleyicisini çalıştır"
 
-#: oleview.rc:110
+#: oleview.rc:109
 msgid "Quit the application. Prompts to save changes"
 msgstr "Uygulamadan çık. Değişiklikleri kaydetmenizi ister"
 
-#: oleview.rc:111
+#: oleview.rc:110
 msgid "Create an instance of the selected object"
 msgstr "Seçilen nesnenin örneğini oluştur"
 
-#: oleview.rc:112
+#: oleview.rc:111
 msgid "Create an instance of the selected object on a specific machine"
 msgstr "Seçilen nesnenin örneğini özel bir makinede oluştur"
 
-#: oleview.rc:113
+#: oleview.rc:112
 msgid "Release the currently selected object instance"
 msgstr "Seçili nesne örneğini bırak"
 
-#: oleview.rc:114
+#: oleview.rc:113
 msgid "Copy the GUID of the currently selected item to the clipboard"
 msgstr "Seçilen nesnenin GUID'ini panoya kopyala"
 
-#: oleview.rc:115
+#: oleview.rc:114
 msgid "Display the viewer for the selected item"
 msgstr "Seçilen nesne için görüntüleyiciyi göster"
 
-#: oleview.rc:120
+#: oleview.rc:119
 msgid "Toggle between expert and novice display mode"
 msgstr "Uzman ve acemi görüntüleme kipleri arasında geçiş yap"
 
-#: oleview.rc:121
+#: oleview.rc:120
 msgid ""
 "Toggle the display of component categories that are not meant to be visible"
 msgstr "Görüntülenmesi istemeyen bileşen kategorilerinin görünümünü kapat"
 
-#: oleview.rc:122
+#: oleview.rc:121
 msgid "Show or hide the toolbar"
 msgstr "Araç çubuğunu göster veya gizle"
 
-#: oleview.rc:123
+#: oleview.rc:122
 msgid "Show or hide the status bar"
 msgstr "Durum çubuğunu göster veya gizle"
 
-#: oleview.rc:124
+#: oleview.rc:123
 msgid "Refresh all lists"
 msgstr "Tüm listeyi yenile"
 
-#: oleview.rc:125
+#: oleview.rc:124
 msgid "Display program information, version number and copyright"
 msgstr "Program bilgisi, sürüm numarası ve telif hakkını gösterir"
 
-#: oleview.rc:116
+#: oleview.rc:115
 msgid "Ask for an in-process server when calling CoGetClassObject"
 msgstr "CoGetClassObject'i çağırırken işlem içi sunucu iste"
 
-#: oleview.rc:117
+#: oleview.rc:116
 msgid "Ask for an in-process handler when calling CoGetClassObject"
 msgstr "CoGetClassObject'i çağırırken işlem içi işleyici iste"
 
-#: oleview.rc:118
+#: oleview.rc:117
 msgid "Ask for a local server when calling CoGetClassObject"
 msgstr "CoGetClassObject'i çağırırken yerel sunucu iste"
 
-#: oleview.rc:119
+#: oleview.rc:118
 msgid "Ask for a remote server when calling CoGetClassObject"
 msgstr "CoGetClassObject'i çağırırken uzak sunucu iste"
 
-#: oleview.rc:131
+#: oleview.rc:130
 msgid "ObjectClasses"
 msgstr "NesneSınıfları"
 
-#: oleview.rc:132
+#: oleview.rc:131
 msgid "Grouped by Component Category"
 msgstr "Bileşen Kategorisine Göre Sınıflandırıldı"
 
-#: oleview.rc:133
+#: oleview.rc:132
 msgid "OLE 1.0 Objects"
 msgstr "OLE 1.0 Nesneleri"
 
-#: oleview.rc:134
+#: oleview.rc:133
 msgid "COM Library Objects"
 msgstr "COM Kütüphane Nesneleri"
 
-#: oleview.rc:135
+#: oleview.rc:134
 msgid "All Objects"
 msgstr "Bütün Nesneler"
 
-#: oleview.rc:136
+#: oleview.rc:135
 msgid "Application IDs"
 msgstr "Uygulama Kimlikleri"
 
-#: oleview.rc:137
+#: oleview.rc:136
 msgid "Type Libraries"
 msgstr "Tür Kitaplıkları"
 
-#: oleview.rc:138
+#: oleview.rc:137
 msgid "ver."
 msgstr "Sürüm"
 
-#: oleview.rc:139
+#: oleview.rc:138
 msgid "Interfaces"
 msgstr "Arayüzler"
 
-#: oleview.rc:141
+#: oleview.rc:140
 msgid "Registry"
 msgstr "Kayıt"
 
-#: oleview.rc:142
+#: oleview.rc:141
 msgid "Implementation"
 msgstr "Gerçekleme"
 
-#: oleview.rc:143
+#: oleview.rc:142
 msgid "Activation"
 msgstr "Etkinleştirme"
 
-#: oleview.rc:145
+#: oleview.rc:144
 msgid "CoGetClassObject failed."
 msgstr "CoGetClassObject başarısız."
 
-#: oleview.rc:146
+#: oleview.rc:145
 msgid "Unknown error"
 msgstr "Bilinmeyen hata"
 
-#: oleview.rc:149
+#: oleview.rc:148
 msgid "bytes"
 msgstr "bayt"
 
-#: oleview.rc:151
+#: oleview.rc:150
 msgid "LoadTypeLib( %1 ) failed ($%2!x!)"
 msgstr "LoadTypeLib ( %1 ) başarısız ($%2!x!)"
 
-#: oleview.rc:152
+#: oleview.rc:151
 msgid "Inherited Interfaces"
 msgstr "Alınan Arayüzler"
 
-#: oleview.rc:127
+#: oleview.rc:126
 msgid "Save as an .IDL or .H file"
 msgstr ".IDL veya .H dosyası olarak kaydet"
 
-#: oleview.rc:128
+#: oleview.rc:127
 msgid "Close window"
 msgstr "Pencereyi kapat"
 
-#: oleview.rc:129
+#: oleview.rc:128
 msgid "Group typeinfos by kind"
 msgstr "Tür bilgilerini türe göre grupla"
 
@@ -11642,7 +11642,7 @@ msgstr "Belirtilen '%1' kayıt defteri değeri zaten var. Üzerine yazılsın m�
 msgid "The registry operation was cancelled\n"
 msgstr "Kayıt defteri işlemi iptal edildi\n"
 
-#: reg.rc:53 regedit.rc:204
+#: reg.rc:53 regedit.rc:206
 msgid "(Default)"
 msgstr "(Standart)"
 
@@ -11698,7 +11698,7 @@ msgstr "Yardım için \"REG /?\" yazın.\n"
 msgid "Type \"REG %1 /?\" for help.\n"
 msgstr "Yardım için \"REG %1 /?\" yazın.\n"
 
-#: reg.rc:65 regedit.rc:205
+#: reg.rc:65 regedit.rc:207
 msgid "(value not set)"
 msgstr "(değer belirlenmemiş)"
 
@@ -11774,83 +11774,83 @@ msgstr "Kayıt Defteri Düzenleyicisi &Hakkında"
 msgid "Modify Binary Data..."
 msgstr "İkili Değeri Değiştir..."
 
-#: regedit.rc:230
+#: regedit.rc:234
 msgid "Export registry"
 msgstr "Kayıt Defterini Ver"
 
-#: regedit.rc:232
+#: regedit.rc:236
 msgid "S&elected branch:"
 msgstr "S&eçilen kısım:"
 
-#: regedit.rc:241
+#: regedit.rc:245
 msgid "Find:"
 msgstr "Bul:"
 
-#: regedit.rc:243
+#: regedit.rc:247
 msgid "Find in:"
 msgstr "Konum:"
 
-#: regedit.rc:244
+#: regedit.rc:248
 msgid "Keys"
 msgstr "Anahtarlar"
 
-#: regedit.rc:245
+#: regedit.rc:249
 msgid "Value names"
 msgstr "Değer adları"
 
-#: regedit.rc:246
+#: regedit.rc:250
 msgid "Value content"
 msgstr "Değer içeriği"
 
-#: regedit.rc:247
+#: regedit.rc:251
 msgid "Whole string only"
 msgstr "Yalnızca tüm sözcükler"
 
-#: regedit.rc:254
+#: regedit.rc:258
 msgid "Add Favorite"
 msgstr "Sık Kullanılanlara Ekle"
 
-#: regedit.rc:257 regedit.rc:268
+#: regedit.rc:261 regedit.rc:272
 msgid "Name:"
 msgstr "Ad:"
 
-#: regedit.rc:265
+#: regedit.rc:269
 msgid "Remove Favorite"
 msgstr "Sık Kullanılanlardan Sil"
 
-#: regedit.rc:276
+#: regedit.rc:280
 msgid "Edit String"
 msgstr "Dizeyi Düzenle"
 
-#: regedit.rc:279 regedit.rc:292 regedit.rc:308 regedit.rc:321
+#: regedit.rc:283 regedit.rc:296 regedit.rc:312 regedit.rc:325
 msgid "Value name:"
 msgstr "Değer adı:"
 
-#: regedit.rc:281 regedit.rc:294 regedit.rc:310 regedit.rc:323
+#: regedit.rc:285 regedit.rc:298 regedit.rc:314 regedit.rc:327
 msgid "Value data:"
 msgstr "Değer verisi:"
 
-#: regedit.rc:289
+#: regedit.rc:293
 msgid "Edit DWORD"
 msgstr "DWORD Düzenle"
 
-#: regedit.rc:296
+#: regedit.rc:300
 msgid "Base"
 msgstr "Taban"
 
-#: regedit.rc:297
+#: regedit.rc:301
 msgid "Hexadecimal"
 msgstr "Onaltılı"
 
-#: regedit.rc:298
+#: regedit.rc:302
 msgid "Decimal"
 msgstr "Onlu"
 
-#: regedit.rc:305
+#: regedit.rc:309
 msgid "Edit Binary"
 msgstr "İkiliyi Düzenle"
 
-#: regedit.rc:318
+#: regedit.rc:322
 msgid "Edit Multi-String"
 msgstr "Çoklu Dizeyi Düzenle"
 
@@ -11886,81 +11886,88 @@ msgstr "Veri"
 
 #: regedit.rc:132
 msgid "Registry Editor"
-msgstr "Kayıt DÜzenleyici"
+msgstr "Kayıt Düzenleyici"
 
-#: regedit.rc:194
+#: regedit.rc:196
 msgid "Import Registry File"
 msgstr "Kayıt Dosyasından Al"
 
-#: regedit.rc:195
+#: regedit.rc:197
 msgid "Export Registry File"
 msgstr "Kayıt Dosyasına Ver"
 
-#: regedit.rc:196
+#: regedit.rc:198
 msgid "Registry files (*.reg)"
 msgstr "Kayıt dosyaları (*.reg)"
 
-#: regedit.rc:197
+#: regedit.rc:199
 msgid "Win9x/NT4 Registry files (REGEDIT4)"
 msgstr "Win9X/NT4 Kayıt Dosyaları (REGEDIT4)"
 
-#: regedit.rc:206
+#: regedit.rc:208
 msgid "(cannot display value)"
 msgstr "(değer görüntülenemiyor)"
 
-#: regedit.rc:207
+#: regedit.rc:209
 msgid "(unknown %d)"
-msgstr "(%d bilinmiyor)"
-
-#: regedit.rc:212
-#, fuzzy
-#| msgid "regedit: Unable to open the registry key '%1'.\n"
-msgid "Unable to modify the selected registry value."
-msgstr "regedit: '%1' kayıt anahtarı açılamıyor.\n"
-
-#: regedit.rc:213
-#, fuzzy
-#| msgid "regedit: Unable to open the registry key '%1'.\n"
-msgid "Unable to create a new registry key."
-msgstr "regedit: '%1' kayıt anahtarı açılamıyor.\n"
+msgstr "(bilinmeyen %d)"
 
 #: regedit.rc:214
-#, fuzzy
-#| msgid "regedit: Unable to open the registry key '%1'.\n"
-msgid "Unable to create a new registry value."
-msgstr "regedit: '%1' kayıt anahtarı açılamıyor.\n"
+msgid "Unable to modify the selected registry value."
+msgstr "Seçilen kayıt değeri değiştirilemiyor."
 
 #: regedit.rc:215
+msgid "Unable to create a new registry key."
+msgstr "Yeni bir kayıt anahtarı oluşturulamıyor."
+
+#: regedit.rc:216
+msgid "Unable to create a new registry value."
+msgstr "Yeni bir kayıt değeri oluşturulamıyor."
+
+#: regedit.rc:217
 msgid ""
 "Unable to rename the key '%1'.\n"
 "The specified key name already exists."
 msgstr ""
+"'%1' anahtarı yeniden adlandırılamıyor.\n"
+"Belirtilen anahtar adı zaten var."
 
-#: regedit.rc:216
+#: regedit.rc:218
 msgid ""
 "Unable to rename the value '%1'.\n"
 "The specified value name already exists."
 msgstr ""
-
-#: regedit.rc:217
-#, fuzzy
-#| msgid "regedit: Unable to open the registry key '%1'.\n"
-msgid "Unable to delete the selected registry key."
-msgstr "regedit: '%1' kayıt anahtarı açılamıyor.\n"
-
-#: regedit.rc:218
-#, fuzzy
-#| msgid "regedit: Unable to open the registry key '%1'.\n"
-msgid "Unable to rename the selected registry key."
-msgstr "regedit: '%1' kayıt anahtarı açılamıyor.\n"
+"'%1' değeri yeniden adlandırılamıyor.\n"
+"Belirtilen değer adı zaten var."
 
 #: regedit.rc:219
-#, fuzzy
-#| msgid "regedit: Unable to open the registry key '%1'.\n"
-msgid "Unable to rename the selected registry value."
-msgstr "regedit: '%1' kayıt anahtarı açılamıyor.\n"
+msgid "Unable to delete the selected registry key."
+msgstr "Seçilen kayıt anahtarı silinemiyor."
 
-#: regedit.rc:371
+#: regedit.rc:220
+msgid "Unable to rename the selected registry key."
+msgstr "Seçilen kayıt anahtarı yeniden adlandırılamıyor."
+
+#: regedit.rc:221
+msgid "Unable to rename the selected registry value."
+msgstr "Seçilen kayıt değeri yeniden adlandırılamıyor."
+
+#: regedit.rc:222
+msgid ""
+"The keys and values contained in %1 were successfully added to the registry."
+msgstr ""
+
+#: regedit.rc:223
+#, fuzzy
+#| msgid ""
+#| "Unable to rename the key '%1'.\n"
+#| "The specified key name already exists."
+msgid "Unable to import %1. The specified file is not a valid registry file."
+msgstr ""
+"'%1' anahtarı yeniden adlandırılamıyor.\n"
+"Belirtilen anahtar adı zaten var."
+
+#: regedit.rc:375
 msgid ""
 "Usage:\n"
 "  regedit [options] [filename] [reg_key]\n"
@@ -12020,45 +12027,45 @@ msgstr ""
 "  regedit /E \"export.reg\" \"HKEY_CURRENT_USER\\Console\"\n"
 "  regedit /D \"HKEY_LOCAL_MACHINE\\Error\\Path\"\n"
 
-#: regedit.rc:372
+#: regedit.rc:376
 msgid "regedit: Invalid or unrecognized switch [%1]\n"
 msgstr ""
 "regedit: Geçersiz veya bilinmeyen değişken [%1]\n"
 "\n"
 
-#: regedit.rc:373
+#: regedit.rc:377
 msgid "Type \"regedit /?\" for help.\n"
 msgstr "Yardım için \"regedit /?\" yazın.\n"
 
-#: regedit.rc:374
+#: regedit.rc:378
 msgid "regedit: No filename was specified.\n"
 msgstr "regedit: Dosya adı belirtilmemiş.\n"
 
-#: regedit.rc:375
+#: regedit.rc:379
 msgid "regedit: No registry key was specified for removal.\n"
 msgstr "regedit: Kaldırmak için kayıt anahtarı belirtilmemiş.\n"
 
-#: regedit.rc:376
+#: regedit.rc:380
 msgid "regedit: The file '%1' was not found.\n"
 msgstr "regedit: '%1' dosyası bulunamadı.\n"
 
-#: regedit.rc:377
+#: regedit.rc:381
 msgid "regedit: Unable to open the file '%1'.\n"
 msgstr "regedit: '%1' dosyası açılamıyor.\n"
 
-#: regedit.rc:378
+#: regedit.rc:382
 msgid "regedit: Unhandled action.\n"
 msgstr "regedit: İşlenmeyen eylem.\n"
 
-#: regedit.rc:379
+#: regedit.rc:383
 msgid "regedit: Out of memory! (%1!S!, line %2!u!)\n"
 msgstr "regedit: Yetersiz bellek! (%1!S!, satır %2!u!)\n"
 
-#: regedit.rc:380
+#: regedit.rc:384
 msgid "regedit: Invalid hexadecimal value.\n"
 msgstr "regedit: Geçersiz onaltılık değer.\n"
 
-#: regedit.rc:381
+#: regedit.rc:385
 msgid ""
 "regedit: Unable to convert hexadecimal data. An invalid value was "
 "encountered at '%1'.\n"
@@ -12066,51 +12073,51 @@ msgstr ""
 "regedit: Onaltılık değeri çevirme başarısız. '%1''de geçersiz bir değerle "
 "karşılaşıldı.\n"
 
-#: regedit.rc:382
+#: regedit.rc:386
 msgid "regedit: Unrecognized escape sequence [\\%1!c!]\n"
 msgstr ""
 "regedit: Bilinmeyen kaçış sırası [\\%1!c!]\n"
 "\n"
 
-#: regedit.rc:383
+#: regedit.rc:387
 msgid "regedit: Unsupported registry data type [%1]\n"
 msgstr "regedit: Desteklenmeyen kayıt defteri veri türü [%1]\n"
 
-#: regedit.rc:384
+#: regedit.rc:388
 msgid "regedit: Unexpected end of line in '%1'.\n"
 msgstr "regedit: '%1''de beklenmeyen satır sonu.\n"
 
-#: regedit.rc:385
+#: regedit.rc:389
 msgid "regedit: The line '%1' was not recognized.\n"
 msgstr "regedit: '%1' satırı bilinmiyor.\n"
 
-#: regedit.rc:386
+#: regedit.rc:390
 msgid "regedit: Unable to add the registry value '%1' to '%2'.\n"
 msgstr "regedit: '%1' kayıt değeri, '%2''ye eklenemiyor.\n"
 
-#: regedit.rc:387
+#: regedit.rc:391
 msgid "regedit: Unable to open the registry key '%1'.\n"
 msgstr "regedit: '%1' kayıt anahtarı açılamıyor.\n"
 
-#: regedit.rc:388
+#: regedit.rc:392
 msgid "regedit: Unsupported registry data type [%1] encountered in '%2'.\n"
 msgstr ""
 "regedit: Desteklenmeyen [%1] kayıt veri türüyle '%2''de karşılaşıldı.\n"
 
-#: regedit.rc:389
+#: regedit.rc:393
 msgid "regedit: The registry value '%1' will be exported as binary data.\n"
 msgstr "regedit: '%1' kayıt değeri ikili veri olarak dışa verilecek.\n"
 
-#: regedit.rc:390
+#: regedit.rc:394
 msgid "regedit: Incorrect registry class specification in '%1'.\n"
 msgstr "'%1''de yanlış kayıt sınıfı özelliği.\n"
 
-#: regedit.rc:391
+#: regedit.rc:395
 msgid ""
 "regedit: Unable to export '%1'. The specified registry key was not found.\n"
 msgstr "regedit: '%1' verilemiyor. Belirtilen kayıt anahtarı bulunamadı.\n"
 
-#: regedit.rc:392
+#: regedit.rc:396
 msgid "regedit: Unable to delete the registry class '%1'.\n"
 msgstr "regedit: '%1' kayıt sınıfı silinemiyor.\n"
 
@@ -12195,50 +12202,40 @@ msgid "Displays program information, version number and copyright"
 msgstr "Program bilgisini, sürüm numarasını ve telif hakkını gösterir"
 
 #: regedit.rc:181
-#, fuzzy
-#| msgid "regedit: Unable to open the registry key '%1'.\n"
 msgid "Unable to query the registry value '%1'."
-msgstr "regedit: '%1' kayıt anahtarı açılamıyor.\n"
+msgstr "'%1' kayıt değeri sorgulanamıyor."
 
 #: regedit.rc:182
-#, fuzzy
-#| msgid "Can't edit keys of this type (%u)"
 msgid "Unable to edit registry keys of this type (%1!u!)."
-msgstr "Bu tür (%u) anahtarlar değiştirilemez"
+msgstr "Bu tür (%1!u!) kayıt anahtarları değiştirilemez."
 
 #: regedit.rc:183
-#, fuzzy
-#| msgid "Value is too big (%u)"
 msgid "The value is too big (%1!u!)."
-msgstr "Değer çok büyük (%u)"
+msgstr "Değer çok büyük (%1!u!)."
 
 #: regedit.rc:184
 msgid "Confirm Value Delete"
-msgstr "Değer silmeyi onayla"
+msgstr "Değer Silmeyi Onayla"
 
-#: regedit.rc:189
-#, fuzzy
-#| msgid "Search string '%s' not found"
+#: regedit.rc:191
 msgid "Search complete. The string '%1' was not found."
-msgstr "Arama dizesi '%s' bulunamadı"
+msgstr "Arama tamamlandı. '%1' dizesi bulunamadı."
 
 #: regedit.rc:186
 msgid "Are you sure you want to delete these values?"
 msgstr "Bu değerleri silmek istediğinizden emin misiniz?"
 
-#: regedit.rc:187
+#: regedit.rc:189
 msgid "New Key #%d"
 msgstr "Yeni Anahtar #%d"
 
-#: regedit.rc:188
+#: regedit.rc:190
 msgid "New Value #%d"
 msgstr "Yeni Değer #%d"
 
 #: regedit.rc:180
-#, fuzzy
-#| msgid "regedit: Unable to open the registry key '%1'.\n"
 msgid "Unable to query the registry key '%1'."
-msgstr "regedit: '%1' kayıt anahtarı açılamıyor.\n"
+msgstr "'%1' kayıt anahtarı sorgulanamıyor."
 
 #: regedit.rc:152
 msgid "Adds a new multi-string value"
@@ -12247,6 +12244,19 @@ msgstr "Yeni bir çoklu dize değeri ekler"
 #: regedit.rc:174
 msgid "Exports selected branch of the registry to a text file"
 msgstr "Sistem kaydının seçilen kısmını metin dosyasına aktarır"
+
+#: regedit.rc:187
+#, fuzzy
+#| msgid "Confirm Value Delete"
+msgid "Confirm Key Delete"
+msgstr "Değer Silmeyi Onayla"
+
+#: regedit.rc:188
+#, fuzzy
+#| msgid "Are you sure you want to delete the registry key '%1'?"
+msgid ""
+"Are you sure you want to delete the registry key '%1' and all of its subkeys?"
+msgstr "'%1' kayıt defteri anahtarını silmek istediğinizden emin misiniz?"
 
 #: regsvr32.rc:32
 msgid ""
@@ -13184,7 +13194,7 @@ msgstr "İşlem İlişkisine Erişme veya Ayarlama Başarısız"
 
 #: taskmgr.rc:322
 msgid "System Idle Process"
-msgstr "Sistem Boşta İşlemi"
+msgstr "Boş Sistem İşlemi"
 
 #: taskmgr.rc:323
 msgid "Not Responding"

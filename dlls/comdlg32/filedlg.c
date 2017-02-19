@@ -2951,7 +2951,8 @@ static void FILEDLG95_SHELL_Clean(HWND hwnd)
       IShellView_DestroyViewWindow(fodInfos->Shell.FOIShellView);
       IShellView_Release(fodInfos->Shell.FOIShellView);
     }
-    IShellFolder_Release(fodInfos->Shell.FOIShellFolder);
+    if (fodInfos->Shell.FOIShellFolder)
+      IShellFolder_Release(fodInfos->Shell.FOIShellFolder);
     IShellBrowser_Release(fodInfos->Shell.FOIShellBrowser);
     if (fodInfos->Shell.FOIDataObject)
       IDataObject_Release(fodInfos->Shell.FOIDataObject);
@@ -4027,9 +4028,9 @@ static BOOL BrowseSelectedFolder(HWND hwnd)
           if ( FAILED( IShellBrowser_BrowseObject( fodInfos->Shell.FOIShellBrowser,
                          pidlSelection, SBSP_RELATIVE ) ) )
           {
-               static const WCHAR notexist[] = {'P','a','t','h',' ','d','o','e','s',
-                                   ' ','n','o','t',' ','e','x','i','s','t',0};
-               MessageBoxW( hwnd, notexist, fodInfos->title, MB_OK | MB_ICONEXCLAMATION );
+               WCHAR buf[64];
+               LoadStringW( COMDLG32_hInstance, IDS_PATHNOTEXISTING, buf, sizeof(buf)/sizeof(WCHAR) );
+               MessageBoxW( hwnd, buf, fodInfos->title, MB_OK | MB_ICONEXCLAMATION );
           }
           bBrowseSelFolder = TRUE;
           if(fodInfos->ofnInfos->Flags & OFN_EXPLORER)

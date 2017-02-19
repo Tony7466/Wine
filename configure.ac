@@ -2347,7 +2347,13 @@ AC_CHECK_MEMBERS([struct sockaddr_in6.sin6_scope_id],,,
 
 dnl Check for struct __res_state
 AC_CHECK_TYPES([struct __res_state],,,
-[#ifdef HAVE_RESOLV_H
+[#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>
+#endif
+#ifdef HAVE_RESOLV_H
 #include <resolv.h>
 #endif])
 
@@ -2373,6 +2379,9 @@ dnl Check for struct icmpstat
 AC_CHECK_MEMBERS([struct icmpstat.icps_inhist],,,
 [#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
+#endif
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>
 #endif
 #ifdef HAVE_NETINET_IP_H
 #include <netinet/ip.h>
@@ -2856,7 +2865,7 @@ WINE_CONFIG_DLL(comm.drv16,enable_win16)
 WINE_CONFIG_DLL(commdlg.dll16,enable_win16)
 WINE_CONFIG_DLL(compobj.dll16,enable_win16)
 WINE_CONFIG_DLL(compstui,,[implib])
-WINE_CONFIG_DLL(comsvcs,,[implib])
+WINE_CONFIG_DLL(comsvcs,,[clean,implib])
 WINE_CONFIG_DLL(concrt140)
 WINE_CONFIG_DLL(connect)
 WINE_CONFIG_DLL(credui,,[clean,implib])
@@ -3297,6 +3306,7 @@ WINE_CONFIG_TEST(dlls/propsys/tests)
 WINE_CONFIG_DLL(psapi,,[implib])
 WINE_CONFIG_TEST(dlls/psapi/tests)
 WINE_CONFIG_DLL(pstorec,,[clean])
+WINE_CONFIG_TEST(dlls/pstorec/tests)
 WINE_CONFIG_DLL(qcap)
 WINE_CONFIG_TEST(dlls/qcap/tests)
 WINE_CONFIG_DLL(qedit,,[clean])
@@ -3423,6 +3433,7 @@ WINE_CONFIG_DLL(vdmdbg,,[implib])
 WINE_CONFIG_DLL(ver.dll16,enable_win16)
 WINE_CONFIG_DLL(version,,[implib])
 WINE_CONFIG_TEST(dlls/version/tests)
+WINE_CONFIG_DLL(virtdisk)
 WINE_CONFIG_DLL(vmm.vxd,enable_win16)
 WINE_CONFIG_DLL(vnbt.vxd,enable_win16)
 WINE_CONFIG_DLL(vnetbios.vxd,enable_win16)

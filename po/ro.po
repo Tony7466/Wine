@@ -63,10 +63,10 @@ msgstr "Informații de asistență"
 #: mshtml.rc:57 msvfw32.rc:36 oledlg.rc:62 oledlg.rc:94 serialui.rc:41
 #: setupapi.rc:59 shell32.rc:276 shell32.rc:300 shell32.rc:322 shell32.rc:341
 #: shlwapi.rc:44 user32.rc:83 user32.rc:98 wininet.rc:51 wininet.rc:71
-#: winspool.rc:42 net.rc:47 notepad.rc:117 oleview.rc:162 oleview.rc:175
+#: winspool.rc:42 net.rc:47 notepad.rc:117 oleview.rc:161 oleview.rc:174
 #: progman.rc:106 progman.rc:124 progman.rc:142 progman.rc:158 progman.rc:180
-#: progman.rc:199 progman.rc:216 regedit.rc:259 regedit.rc:270 regedit.rc:283
-#: regedit.rc:299 regedit.rc:312 regedit.rc:325 taskmgr.rc:442 taskmgr.rc:517
+#: progman.rc:199 progman.rc:216 regedit.rc:263 regedit.rc:274 regedit.rc:287
+#: regedit.rc:303 regedit.rc:316 regedit.rc:329 taskmgr.rc:442 taskmgr.rc:517
 #: winecfg.rc:214 winecfg.rc:224 wineconsole.rc:135 winefile.rc:128
 #: winefile.rc:151 winefile.rc:181 winemine.rc:71 winemine.rc:81 winemine.rc:95
 #: wordpad.rc:215 wordpad.rc:226 wordpad.rc:244 wordpad.rc:257
@@ -140,10 +140,10 @@ msgstr "&Instalează"
 #: msvfw32.rc:37 oledlg.rc:63 oledlg.rc:95 serialui.rc:42 setupapi.rc:42
 #: setupapi.rc:60 shell32.rc:277 shell32.rc:301 shell32.rc:312 shell32.rc:342
 #: shlwapi.rc:45 user32.rc:84 user32.rc:99 wininet.rc:52 wininet.rc:72
-#: winspool.rc:43 notepad.rc:118 oleview.rc:163 oleview.rc:176 progman.rc:107
+#: winspool.rc:43 notepad.rc:118 oleview.rc:162 oleview.rc:175 progman.rc:107
 #: progman.rc:125 progman.rc:143 progman.rc:159 progman.rc:181 progman.rc:200
-#: progman.rc:217 regedit.rc:260 regedit.rc:271 regedit.rc:284 regedit.rc:300
-#: regedit.rc:313 regedit.rc:326 taskmgr.rc:443 taskmgr.rc:518 wineboot.rc:34
+#: progman.rc:217 regedit.rc:264 regedit.rc:275 regedit.rc:288 regedit.rc:304
+#: regedit.rc:317 regedit.rc:330 taskmgr.rc:443 taskmgr.rc:518 wineboot.rc:34
 #: winecfg.rc:215 winecfg.rc:225 wineconsole.rc:136 winefile.rc:129
 #: winefile.rc:152 winefile.rc:182 winemine.rc:96 wordpad.rc:216 wordpad.rc:227
 #: wordpad.rc:245 wordpad.rc:258
@@ -212,7 +212,7 @@ msgid "Programs (*.exe)"
 msgstr "Programe (*.exe)"
 
 #: appwiz.rc:43 avifil32.rc:33 cryptui.rc:83 shell32.rc:199 notepad.rc:76
-#: oleview.rc:104 progman.rc:82 regedit.rc:198 winedbg.rc:42 winhlp32.rc:90
+#: oleview.rc:103 progman.rc:82 regedit.rc:200 winedbg.rc:42 winhlp32.rc:90
 msgid "All files (*.*)"
 msgstr "Toate fișierele (*.*)"
 
@@ -324,8 +324,8 @@ msgstr "&Termină"
 msgid "Customize Toolbar"
 msgstr "Personalizare bara de unelte"
 
-#: comctl32.rc:84 cryptui.rc:351 ieframe.rc:43 oleview.rc:83 oleview.rc:188
-#: oleview.rc:201 oleview.rc:213 taskmgr.rc:139
+#: comctl32.rc:84 cryptui.rc:351 ieframe.rc:43 oleview.rc:83 oleview.rc:187
+#: oleview.rc:200 oleview.rc:212 taskmgr.rc:139
 msgid "&Close"
 msgstr "În&chide"
 
@@ -376,7 +376,7 @@ msgctxt "hotkey"
 msgid "None"
 msgstr "Nespecificat"
 
-#: comctl32.rc:31 cryptui.rc:230 regedit.rc:249 taskmgr.rc:434 winedbg.rc:60
+#: comctl32.rc:31 cryptui.rc:230 regedit.rc:253 taskmgr.rc:434 winedbg.rc:60
 #: winedbg.rc:75 wordpad.rc:180
 msgid "Close"
 msgstr "Închide"
@@ -390,7 +390,7 @@ msgid "Go to today"
 msgstr "Mergi la Azi"
 
 #: comdlg32.rc:157 comdlg32.rc:170 comdlg32.rc:459 comdlg32.rc:485
-#: shell32.rc:167 oleview.rc:102
+#: shell32.rc:167 oleview.rc:101
 msgid "Open"
 msgstr "Deschide"
 
@@ -435,7 +435,7 @@ msgstr "Imprimantă:"
 msgid "Print range"
 msgstr "Interval tipărire"
 
-#: comdlg32.rc:207 comdlg32.rc:384 regedit.rc:231
+#: comdlg32.rc:207 comdlg32.rc:384 regedit.rc:235
 msgid "&All"
 msgstr "To&ate"
 
@@ -605,7 +605,7 @@ msgstr "&Adaugă culori personalizate"
 msgid "&Define Custom Colors >>"
 msgstr "&Definește culori personalizate >>"
 
-#: comdlg32.rc:316 regedit.rc:238 regedit.rc:248
+#: comdlg32.rc:316 regedit.rc:242 regedit.rc:252
 msgid "Find"
 msgstr "Căutare"
 
@@ -3046,7 +3046,7 @@ msgstr "Simbol"
 msgid "OEM/DOS"
 msgstr "OEM/DOS"
 
-#: gdi32.rc:45 wldap32.rc:110
+#: gdi32.rc:45 wldap32.rc:112
 msgid "Other"
 msgstr "Altul"
 
@@ -7377,11 +7377,11 @@ msgctxt "object state"
 msgid "has popup"
 msgstr "are popup"
 
-#: oleaut32.rc:30 oleview.rc:147
+#: oleaut32.rc:30 oleview.rc:146
 msgid "True"
 msgstr "Adevărat"
 
-#: oleaut32.rc:31 oleview.rc:148
+#: oleaut32.rc:31 oleview.rc:147
 msgid "False"
 msgstr "Fals"
 
@@ -8144,7 +8144,7 @@ msgctxt "display name"
 msgid "Desktop"
 msgstr "Birou"
 
-#: shell32.rc:157 regedit.rc:203
+#: shell32.rc:157 regedit.rc:205
 #, fuzzy
 msgid "My Computer"
 msgstr ""
@@ -9374,239 +9374,243 @@ msgstr "Fișierul de ieșire există deja. Dați clic pe OK pentru al suprascrie
 msgid "Unable to create the output file."
 msgstr "Nu am putut crea fișierul de ieșire."
 
-#: wldap32.rc:30
+#: wldap32.rc:32
 msgid "Success"
 msgstr "Succes"
 
-#: wldap32.rc:31
+#: wldap32.rc:33
 msgid "Operations Error"
 msgstr "Eroare de operațiuni"
 
-#: wldap32.rc:32
+#: wldap32.rc:34
 msgid "Protocol Error"
 msgstr "Eroare de protocol"
 
-#: wldap32.rc:33
+#: wldap32.rc:35
 msgid "Time Limit Exceeded"
 msgstr "Limită de timp depășită"
 
-#: wldap32.rc:34
+#: wldap32.rc:36
 msgid "Size Limit Exceeded"
 msgstr "Limită de mărime depășită"
 
-#: wldap32.rc:35
+#: wldap32.rc:37
 msgid "Compare False"
 msgstr "Comparație falsă"
 
-#: wldap32.rc:36
+#: wldap32.rc:38
 msgid "Compare True"
 msgstr "Comparație adevărată"
 
-#: wldap32.rc:37
+#: wldap32.rc:39
 msgid "Authentication Method Not Supported"
 msgstr "Metodă de autentificare nesuportată"
 
-#: wldap32.rc:38
+#: wldap32.rc:40
 msgid "Strong Authentication Required"
 msgstr "Autentificare puternică necesară"
 
-#: wldap32.rc:39
+#: wldap32.rc:41
 msgid "Referral (v2)"
 msgstr "Referent (v2)"
 
-#: wldap32.rc:40
+#: wldap32.rc:42
 msgid "Referral"
 msgstr "Referent"
 
-#: wldap32.rc:41
+#: wldap32.rc:43
 msgid "Administration Limit Exceeded"
 msgstr "Limită administrativă depășită"
 
-#: wldap32.rc:42
+#: wldap32.rc:44
 msgid "Unavailable Critical Extension"
 msgstr "Extensie critică indisponibilă"
 
-#: wldap32.rc:43
+#: wldap32.rc:45
 msgid "Confidentiality Required"
 msgstr "Confidențialitate necesară"
 
 #: wldap32.rc:46
+msgid "SASL Bind in Progress"
+msgstr ""
+
+#: wldap32.rc:48
 msgid "No Such Attribute"
 msgstr "Atribut necunoscut"
 
-#: wldap32.rc:47
+#: wldap32.rc:49
 msgid "Undefined Type"
 msgstr "Tip nedefinit"
 
-#: wldap32.rc:48
+#: wldap32.rc:50
 msgid "Inappropriate Matching"
 msgstr "Potrivire necorespunzătoare"
 
-#: wldap32.rc:49
+#: wldap32.rc:51
 msgid "Constraint Violation"
 msgstr "Violare de restricție"
 
-#: wldap32.rc:50
+#: wldap32.rc:52
 msgid "Attribute Or Value Exists"
 msgstr "Atributul sau valoarea există deja"
 
-#: wldap32.rc:51
+#: wldap32.rc:53
 msgid "Invalid Syntax"
 msgstr "Sintaxă nevalidă"
 
-#: wldap32.rc:62
+#: wldap32.rc:64
 msgid "No Such Object"
 msgstr "Obiect necunoscut"
 
-#: wldap32.rc:63
+#: wldap32.rc:65
 msgid "Alias Problem"
 msgstr "Problemă la alias"
 
-#: wldap32.rc:64
+#: wldap32.rc:66
 msgid "Invalid DN Syntax"
 msgstr "Sintaxă DN nevalidă"
 
-#: wldap32.rc:65
+#: wldap32.rc:67
 msgid "Is Leaf"
 msgstr "Este o frunză"
 
-#: wldap32.rc:66
+#: wldap32.rc:68
 msgid "Alias Dereference Problem"
 msgstr "Problemă de dereferențiere la alias"
 
-#: wldap32.rc:78
+#: wldap32.rc:80
 msgid "Inappropriate Authentication"
 msgstr "Autentificare necorespunzătoare"
 
-#: wldap32.rc:79
+#: wldap32.rc:81
 msgid "Invalid Credentials"
 msgstr "Autorizații nevalide"
 
-#: wldap32.rc:80
+#: wldap32.rc:82
 msgid "Insufficient Rights"
 msgstr "Drepturi insuficiente"
 
-#: wldap32.rc:81
+#: wldap32.rc:83
 msgid "Busy"
 msgstr "Ocupat"
 
-#: wldap32.rc:82
+#: wldap32.rc:84
 msgid "Unavailable"
 msgstr "Indisponibil"
 
-#: wldap32.rc:83
+#: wldap32.rc:85
 msgid "Unwilling To Perform"
 msgstr "Refuză să funcționeze"
 
-#: wldap32.rc:84
+#: wldap32.rc:86
 msgid "Loop Detected"
 msgstr "Buclă detectată"
 
-#: wldap32.rc:90
+#: wldap32.rc:92
 msgid "Sort Control Missing"
 msgstr "Control de triere lipsă"
 
-#: wldap32.rc:91
+#: wldap32.rc:93
 msgid "Index range error"
 msgstr "Eroare de interval la index"
 
-#: wldap32.rc:94
+#: wldap32.rc:96
 msgid "Naming Violation"
 msgstr "Violare de denumire"
 
-#: wldap32.rc:95
+#: wldap32.rc:97
 msgid "Object Class Violation"
 msgstr "Violare de clasă de obiect"
 
-#: wldap32.rc:96
+#: wldap32.rc:98
 msgid "Not allowed on Non-leaf"
 msgstr "Nepermis pe non-frunze"
 
-#: wldap32.rc:97
+#: wldap32.rc:99
 msgid "Not allowed on RDN"
 msgstr "Nepermis pe RDN"
 
-#: wldap32.rc:98
+#: wldap32.rc:100
 msgid "Already Exists"
 msgstr "Există deja"
 
-#: wldap32.rc:99
+#: wldap32.rc:101
 msgid "No Object Class Mods"
 msgstr "Nici o modificare de clasă de obiecte"
 
-#: wldap32.rc:100
+#: wldap32.rc:102
 msgid "Results Too Large"
 msgstr "Rezultate prea mari"
 
-#: wldap32.rc:101
+#: wldap32.rc:103
 msgid "Affects Multiple DSAs"
 msgstr "Afectează mai multe DSA"
 
-#: wldap32.rc:111
+#: wldap32.rc:113
 msgid "Server Down"
 msgstr "Server indisponibil"
 
-#: wldap32.rc:112
+#: wldap32.rc:114
 msgid "Local Error"
 msgstr "Eroare locală"
 
-#: wldap32.rc:113
+#: wldap32.rc:115
 msgid "Encoding Error"
 msgstr "Eroare de codificare"
 
-#: wldap32.rc:114
+#: wldap32.rc:116
 msgid "Decoding Error"
 msgstr "Eroare de decodificare"
 
-#: wldap32.rc:115
+#: wldap32.rc:117
 msgid "Timeout"
 msgstr "Timp alocat expirat"
 
-#: wldap32.rc:116
+#: wldap32.rc:118
 msgid "Auth Unknown"
 msgstr "Autentificare necunoscută"
 
-#: wldap32.rc:117
+#: wldap32.rc:119
 msgid "Filter Error"
 msgstr "Eroare de filtrare"
 
-#: wldap32.rc:118
+#: wldap32.rc:120
 msgid "User Canceled"
 msgstr "Anulat de utilizator"
 
-#: wldap32.rc:119
+#: wldap32.rc:121
 msgid "Parameter Error"
 msgstr "Eroare de parametri"
 
-#: wldap32.rc:120
+#: wldap32.rc:122
 msgid "No Memory"
 msgstr "Memorie insuficientă"
 
-#: wldap32.rc:121
+#: wldap32.rc:123
 msgid "Can't connect to the LDAP server"
 msgstr "Nu se poate conecta la serverul LDAP"
 
-#: wldap32.rc:122
+#: wldap32.rc:124
 msgid "Operation not supported by this version of the LDAP protocol"
 msgstr "Operațiune nesuportată de această versiune a protocolului LDAP"
 
-#: wldap32.rc:123
+#: wldap32.rc:125
 msgid "Specified control was not found in message"
 msgstr "Controlul specificat nu a fost găsit în mesaj"
 
-#: wldap32.rc:124
+#: wldap32.rc:126
 msgid "No result present in message"
 msgstr "Nici un rezultat în mesaj"
 
-#: wldap32.rc:125
+#: wldap32.rc:127
 msgid "More results returned"
 msgstr "Mai multe rezultate returnate"
 
-#: wldap32.rc:126
+#: wldap32.rc:128
 msgid "Loop while handling referrals"
 msgstr "Buclă la gestionarea referenților"
 
-#: wldap32.rc:127
+#: wldap32.rc:129
 msgid "Referral hop limit exceeded"
 msgstr "Limită număr referenți depășită"
 
@@ -10897,7 +10901,7 @@ msgctxt "accelerator Copy"
 msgid "C"
 msgstr "C"
 
-#: notepad.rc:134 regedit.rc:335 wordpad.rc:287
+#: notepad.rc:134 regedit.rc:339 wordpad.rc:287
 msgctxt "accelerator Find"
 msgid "F"
 msgstr "F"
@@ -10917,7 +10921,7 @@ msgctxt "accelerator Open"
 msgid "O"
 msgstr "O"
 
-#: notepad.rc:138 regedit.rc:336 wordpad.rc:300
+#: notepad.rc:138 regedit.rc:340 wordpad.rc:300
 msgctxt "accelerator Print"
 msgid "P"
 msgstr "P"
@@ -11106,31 +11110,31 @@ msgstr "&Salvare ca..."
 msgid "&Group by type kind"
 msgstr "&Grupează după tip"
 
-#: oleview.rc:157
+#: oleview.rc:156
 msgid "Connect to another machine"
 msgstr "Conectează la alt calculator"
 
-#: oleview.rc:160
+#: oleview.rc:159
 msgid "&Machine name:"
 msgstr "Nu&me calculator:"
 
-#: oleview.rc:168
+#: oleview.rc:167
 msgid "System Configuration"
 msgstr "Configurare sistem"
 
-#: oleview.rc:171
+#: oleview.rc:170
 msgid "System Settings"
 msgstr "Configurație sistem"
 
-#: oleview.rc:172
+#: oleview.rc:171
 msgid "&Enable Distributed COM"
 msgstr "Activ&ează COM distribuit"
 
-#: oleview.rc:173
+#: oleview.rc:172
 msgid "Enable &Remote Connections (Win95 only)"
 msgstr "Activea&ză conexiunile la distanță (doar Win95)"
 
-#: oleview.rc:174
+#: oleview.rc:173
 msgid ""
 "These settings change only registry values.\n"
 "They have no effect on Wine performance."
@@ -11138,35 +11142,35 @@ msgstr ""
 "Aceste setări schimbă doar valori în registru.\n"
 "Nu au nici un efect asupra performanței în Wine."
 
-#: oleview.rc:181
+#: oleview.rc:180
 msgid "Default Interface Viewer"
 msgstr "Vizualizator interfață implicit"
 
-#: oleview.rc:184
+#: oleview.rc:183
 msgid "Interface"
 msgstr "Interfață"
 
-#: oleview.rc:186
+#: oleview.rc:185
 msgid "IID:"
 msgstr "IID:"
 
-#: oleview.rc:189
+#: oleview.rc:188
 msgid "&View Type Info"
 msgstr "&Afișează informațiile de tip"
 
-#: oleview.rc:194
+#: oleview.rc:193
 msgid "IPersist Interface Viewer"
 msgstr "Vizualizator interfață IPersist"
 
-#: oleview.rc:197 oleview.rc:209
+#: oleview.rc:196 oleview.rc:208
 msgid "Class Name:"
 msgstr "Nume clasă:"
 
-#: oleview.rc:199 oleview.rc:211
+#: oleview.rc:198 oleview.rc:210
 msgid "CLSID:"
 msgstr "CLSID:"
 
-#: oleview.rc:206
+#: oleview.rc:205
 msgid "IPersistStream Interface Viewer"
 msgstr "Vizualizator interfață IPersistStream"
 
@@ -11174,7 +11178,7 @@ msgstr "Vizualizator interfață IPersistStream"
 msgid "OleView"
 msgstr "OleView"
 
-#: oleview.rc:101
+#: oleview.rc:100
 msgid "ITypeLib viewer"
 msgstr "Vizualizator ITypeLib"
 
@@ -11182,175 +11186,171 @@ msgstr "Vizualizator ITypeLib"
 msgid "OleView - OLE/COM Object Viewer"
 msgstr "OleView - Vizualizator de obiecte OLE/COM"
 
-#: oleview.rc:100
-msgid "version 1.0"
-msgstr "versiunea 1.0"
-
-#: oleview.rc:103
+#: oleview.rc:102
 msgid "TypeLib files (*.tlb; *.olb; *.dll; *.ocx; *.exe)"
 msgstr "Fișiere TypeLib (*.tlb; *.olb; *.dll; *.ocx; *.exe)"
 
-#: oleview.rc:106
+#: oleview.rc:105
 msgid "Bind to file via a File Moniker"
 msgstr "Leagă la fișier printr-un File Moniker"
 
-#: oleview.rc:107
+#: oleview.rc:106
 msgid "Open a TypeLib file and view the contents"
 msgstr "Deschide un fișier TypeLib și afișează conținutul"
 
-#: oleview.rc:108
+#: oleview.rc:107
 msgid "Change machine wide Distributed COM settings"
 msgstr "Modifică parametrii COM distribuiți în întregul calculator"
 
-#: oleview.rc:109
+#: oleview.rc:108
 msgid "Run the Wine registry editor"
 msgstr "Execută editorul de registru Wine"
 
-#: oleview.rc:110
+#: oleview.rc:109
 msgid "Quit the application. Prompts to save changes"
 msgstr "Închide aplicația. Solicită salvarea modificărilor"
 
-#: oleview.rc:111
+#: oleview.rc:110
 msgid "Create an instance of the selected object"
 msgstr "Creează o instanță a obiectului selectat"
 
-#: oleview.rc:112
+#: oleview.rc:111
 msgid "Create an instance of the selected object on a specific machine"
 msgstr "Creează o instanță a obiectului selectat pe un calculator specificat"
 
-#: oleview.rc:113
+#: oleview.rc:112
 msgid "Release the currently selected object instance"
 msgstr "Eliberează instanța obiectului selectat"
 
-#: oleview.rc:114
+#: oleview.rc:113
 msgid "Copy the GUID of the currently selected item to the clipboard"
 msgstr "Copiază GUID al obiectului selectat în clipboard"
 
-#: oleview.rc:115
+#: oleview.rc:114
 msgid "Display the viewer for the selected item"
 msgstr "Afișează vizualizatorul pentru obiectul selectat"
 
-#: oleview.rc:120
+#: oleview.rc:119
 msgid "Toggle between expert and novice display mode"
 msgstr "Comută între modul de afișare pentru experți și cel pentru începători"
 
-#: oleview.rc:121
+#: oleview.rc:120
 msgid ""
 "Toggle the display of component categories that are not meant to be visible"
 msgstr ""
 "Activează/dezactivează afișarea categoriilor de componente care nu sunt "
 "prevăzute a fi vizibile"
 
-#: oleview.rc:122
+#: oleview.rc:121
 msgid "Show or hide the toolbar"
 msgstr "Afișează sau ascunde bara de instrumente"
 
-#: oleview.rc:123
+#: oleview.rc:122
 msgid "Show or hide the status bar"
 msgstr "Afișează sau ascunde bara de stare"
 
-#: oleview.rc:124
+#: oleview.rc:123
 msgid "Refresh all lists"
 msgstr "Actualizează toate listele"
 
-#: oleview.rc:125
+#: oleview.rc:124
 msgid "Display program information, version number and copyright"
 msgstr ""
 "Afișează numărul versiunii, drepturile de autor și informații despre program"
 
-#: oleview.rc:116
+#: oleview.rc:115
 msgid "Ask for an in-process server when calling CoGetClassObject"
 msgstr ""
 
-#: oleview.rc:117
+#: oleview.rc:116
 msgid "Ask for an in-process handler when calling CoGetClassObject"
 msgstr ""
 
-#: oleview.rc:118
+#: oleview.rc:117
 msgid "Ask for a local server when calling CoGetClassObject"
 msgstr "Cere un server local când se apelează CoGetClassObject"
 
-#: oleview.rc:119
+#: oleview.rc:118
 msgid "Ask for a remote server when calling CoGetClassObject"
 msgstr "Cere un server la distanță când se apelează CoGetClassObject"
 
-#: oleview.rc:131
+#: oleview.rc:130
 msgid "ObjectClasses"
 msgstr "ObjectClasses"
 
-#: oleview.rc:132
+#: oleview.rc:131
 msgid "Grouped by Component Category"
 msgstr "Grupate pe categorii de componente"
 
-#: oleview.rc:133
+#: oleview.rc:132
 msgid "OLE 1.0 Objects"
 msgstr "Obiecte OLE 1.0"
 
-#: oleview.rc:134
+#: oleview.rc:133
 msgid "COM Library Objects"
 msgstr "Obiecte de bibliotecă COM"
 
-#: oleview.rc:135
+#: oleview.rc:134
 msgid "All Objects"
 msgstr "Toate obiectele"
 
-#: oleview.rc:136
+#: oleview.rc:135
 msgid "Application IDs"
 msgstr "Identificatoare de aplicații"
 
-#: oleview.rc:137
+#: oleview.rc:136
 msgid "Type Libraries"
 msgstr "Biblioteci de tipuri"
 
-#: oleview.rc:138
+#: oleview.rc:137
 msgid "ver."
 msgstr "ver."
 
-#: oleview.rc:139
+#: oleview.rc:138
 msgid "Interfaces"
 msgstr "Interfețe"
 
-#: oleview.rc:141
+#: oleview.rc:140
 msgid "Registry"
 msgstr "Registru"
 
-#: oleview.rc:142
+#: oleview.rc:141
 msgid "Implementation"
 msgstr "Implementare"
 
-#: oleview.rc:143
+#: oleview.rc:142
 msgid "Activation"
 msgstr "Activare"
 
-#: oleview.rc:145
+#: oleview.rc:144
 msgid "CoGetClassObject failed."
 msgstr "CoGetClassObject a eșuat."
 
-#: oleview.rc:146
+#: oleview.rc:145
 msgid "Unknown error"
 msgstr "Eroare necunoscută"
 
-#: oleview.rc:149
+#: oleview.rc:148
 msgid "bytes"
 msgstr "octeți"
 
-#: oleview.rc:151
+#: oleview.rc:150
 msgid "LoadTypeLib( %1 ) failed ($%2!x!)"
 msgstr "LoadTypeLib( %1 ) a eșuat ($%2!x!)"
 
-#: oleview.rc:152
+#: oleview.rc:151
 msgid "Inherited Interfaces"
 msgstr "Interfețe moștenite"
 
-#: oleview.rc:127
+#: oleview.rc:126
 msgid "Save as an .IDL or .H file"
 msgstr "Salvează ca fișier .IDL sau .H"
 
-#: oleview.rc:128
+#: oleview.rc:127
 msgid "Close window"
 msgstr "Închide fereastra"
 
-#: oleview.rc:129
+#: oleview.rc:128
 msgid "Group typeinfos by kind"
 msgstr "Grupează typeinfo-urile pe categorii"
 
@@ -11646,7 +11646,7 @@ msgstr "Valoare de registru „%1” există deja. Doriți să o înlocuiți?"
 msgid "The registry operation was cancelled\n"
 msgstr "Operația pe registru a fost anulată\n"
 
-#: reg.rc:53 regedit.rc:204
+#: reg.rc:53 regedit.rc:206
 msgid "(Default)"
 msgstr "(Implicit)"
 
@@ -11698,7 +11698,7 @@ msgstr "Tastați \"REG /?\" pentru ajutor.\n"
 msgid "Type \"REG %1 /?\" for help.\n"
 msgstr "Tastați \"REG %1 /?\" pentru ajutor.\n"
 
-#: reg.rc:65 regedit.rc:205
+#: reg.rc:65 regedit.rc:207
 msgid "(value not set)"
 msgstr "(valoare nestabilită)"
 
@@ -11774,83 +11774,83 @@ msgstr "Des&pre editorul de registru"
 msgid "Modify Binary Data..."
 msgstr "Modifică date binare..."
 
-#: regedit.rc:230
+#: regedit.rc:234
 msgid "Export registry"
 msgstr "Exportă registrul"
 
-#: regedit.rc:232
+#: regedit.rc:236
 msgid "S&elected branch:"
 msgstr "Ramura s&electată:"
 
-#: regedit.rc:241
+#: regedit.rc:245
 msgid "Find:"
 msgstr "Caută:"
 
-#: regedit.rc:243
+#: regedit.rc:247
 msgid "Find in:"
 msgstr "Caută în:"
 
-#: regedit.rc:244
+#: regedit.rc:248
 msgid "Keys"
 msgstr "Chei"
 
-#: regedit.rc:245
+#: regedit.rc:249
 msgid "Value names"
 msgstr "Nume valori"
 
-#: regedit.rc:246
+#: regedit.rc:250
 msgid "Value content"
 msgstr "Conținut valori"
 
-#: regedit.rc:247
+#: regedit.rc:251
 msgid "Whole string only"
 msgstr "Doar șirul întreg"
 
-#: regedit.rc:254
+#: regedit.rc:258
 msgid "Add Favorite"
 msgstr "Adăugare favorită"
 
-#: regedit.rc:257 regedit.rc:268
+#: regedit.rc:261 regedit.rc:272
 msgid "Name:"
 msgstr "Nume:"
 
-#: regedit.rc:265
+#: regedit.rc:269
 msgid "Remove Favorite"
 msgstr "Eliminare favorită"
 
-#: regedit.rc:276
+#: regedit.rc:280
 msgid "Edit String"
 msgstr "Editare șir"
 
-#: regedit.rc:279 regedit.rc:292 regedit.rc:308 regedit.rc:321
+#: regedit.rc:283 regedit.rc:296 regedit.rc:312 regedit.rc:325
 msgid "Value name:"
 msgstr "Nume valoare:"
 
-#: regedit.rc:281 regedit.rc:294 regedit.rc:310 regedit.rc:323
+#: regedit.rc:285 regedit.rc:298 regedit.rc:314 regedit.rc:327
 msgid "Value data:"
 msgstr "Date valoare:"
 
-#: regedit.rc:289
+#: regedit.rc:293
 msgid "Edit DWORD"
 msgstr "Editare DWORD"
 
-#: regedit.rc:296
+#: regedit.rc:300
 msgid "Base"
 msgstr "Bază"
 
-#: regedit.rc:297
+#: regedit.rc:301
 msgid "Hexadecimal"
 msgstr "Hexazecimal"
 
-#: regedit.rc:298
+#: regedit.rc:302
 msgid "Decimal"
 msgstr "Zecimal"
 
-#: regedit.rc:305
+#: regedit.rc:309
 msgid "Edit Binary"
 msgstr "Editare binar"
 
-#: regedit.rc:318
+#: regedit.rc:322
 msgid "Edit Multi-String"
 msgstr "Editare șir multiplu"
 
@@ -11889,79 +11889,94 @@ msgstr "Date"
 msgid "Registry Editor"
 msgstr "Editor registru"
 
-#: regedit.rc:194
+#: regedit.rc:196
 msgid "Import Registry File"
 msgstr "Importă fișierul registru"
 
-#: regedit.rc:195
+#: regedit.rc:197
 msgid "Export Registry File"
 msgstr "Exportă fișierul registru"
 
-#: regedit.rc:196
+#: regedit.rc:198
 msgid "Registry files (*.reg)"
 msgstr "Fișiere de registru (*.reg)"
 
-#: regedit.rc:197
+#: regedit.rc:199
 msgid "Win9x/NT4 Registry files (REGEDIT4)"
 msgstr "Fișiere de registru Win9x/NT4 (REGEDIT4)"
 
-#: regedit.rc:206
+#: regedit.rc:208
 msgid "(cannot display value)"
 msgstr "(valoarea nu poate fi afișată)"
 
-#: regedit.rc:207
+#: regedit.rc:209
 msgid "(unknown %d)"
 msgstr "(%d necunoscut)"
 
-#: regedit.rc:212
+#: regedit.rc:214
 #, fuzzy
 #| msgid "regedit: Unable to open the registry key '%1'.\n"
 msgid "Unable to modify the selected registry value."
 msgstr "regedit: Nu s-a putut deschide cheia de registru „%1”.\n"
 
-#: regedit.rc:213
+#: regedit.rc:215
 #, fuzzy
 #| msgid "regedit: Unable to open the registry key '%1'.\n"
 msgid "Unable to create a new registry key."
 msgstr "regedit: Nu s-a putut deschide cheia de registru „%1”.\n"
 
-#: regedit.rc:214
+#: regedit.rc:216
 #, fuzzy
 #| msgid "regedit: Unable to open the registry key '%1'.\n"
 msgid "Unable to create a new registry value."
 msgstr "regedit: Nu s-a putut deschide cheia de registru „%1”.\n"
 
-#: regedit.rc:215
+#: regedit.rc:217
 msgid ""
 "Unable to rename the key '%1'.\n"
 "The specified key name already exists."
 msgstr ""
 
-#: regedit.rc:216
+#: regedit.rc:218
 msgid ""
 "Unable to rename the value '%1'.\n"
 "The specified value name already exists."
 msgstr ""
 
-#: regedit.rc:217
+#: regedit.rc:219
 #, fuzzy
 #| msgid "regedit: Unable to open the registry key '%1'.\n"
 msgid "Unable to delete the selected registry key."
 msgstr "regedit: Nu s-a putut deschide cheia de registru „%1”.\n"
 
-#: regedit.rc:218
+#: regedit.rc:220
 #, fuzzy
 #| msgid "regedit: Unable to open the registry key '%1'.\n"
 msgid "Unable to rename the selected registry key."
 msgstr "regedit: Nu s-a putut deschide cheia de registru „%1”.\n"
 
-#: regedit.rc:219
+#: regedit.rc:221
 #, fuzzy
 #| msgid "regedit: Unable to open the registry key '%1'.\n"
 msgid "Unable to rename the selected registry value."
 msgstr "regedit: Nu s-a putut deschide cheia de registru „%1”.\n"
 
-#: regedit.rc:371
+#: regedit.rc:222
+msgid ""
+"The keys and values contained in %1 were successfully added to the registry."
+msgstr ""
+
+#: regedit.rc:223
+#, fuzzy
+#| msgid ""
+#| "regedit: Unable to export '%1'. The specified registry key was not "
+#| "found.\n"
+msgid "Unable to import %1. The specified file is not a valid registry file."
+msgstr ""
+"regedit: Nu sa putut exporta „%1”. Cheia de registru specificată nu a fost "
+"găsită.\n"
+
+#: regedit.rc:375
 msgid ""
 "Usage:\n"
 "  regedit [options] [filename] [reg_key]\n"
@@ -11992,96 +12007,96 @@ msgid ""
 "  regedit /D \"HKEY_LOCAL_MACHINE\\Error\\Path\"\n"
 msgstr ""
 
-#: regedit.rc:372
+#: regedit.rc:376
 msgid "regedit: Invalid or unrecognized switch [%1]\n"
 msgstr ""
 
-#: regedit.rc:373
+#: regedit.rc:377
 msgid "Type \"regedit /?\" for help.\n"
 msgstr "Tastați \"regedit /?\" pentru ajutor.\n"
 
-#: regedit.rc:374
+#: regedit.rc:378
 msgid "regedit: No filename was specified.\n"
 msgstr "regedit Nu a fost specificată nici un fișier.\n"
 
-#: regedit.rc:375
+#: regedit.rc:379
 msgid "regedit: No registry key was specified for removal.\n"
 msgstr ""
 
-#: regedit.rc:376
+#: regedit.rc:380
 msgid "regedit: The file '%1' was not found.\n"
 msgstr "regedit: Fișierul „%1” nu a fost găsit.\n"
 
-#: regedit.rc:377
+#: regedit.rc:381
 msgid "regedit: Unable to open the file '%1'.\n"
 msgstr "regedit: Nu s-a putut deschide fișierul „%1”.\n"
 
-#: regedit.rc:378
+#: regedit.rc:382
 msgid "regedit: Unhandled action.\n"
 msgstr "regedit: Acțiune negestionată.\n"
 
-#: regedit.rc:379
+#: regedit.rc:383
 msgid "regedit: Out of memory! (%1!S!, line %2!u!)\n"
 msgstr "regedit: Memorie insuficientă! (%1!S!, linia %2!u!)\n"
 
-#: regedit.rc:380
+#: regedit.rc:384
 msgid "regedit: Invalid hexadecimal value.\n"
 msgstr "regedit: Valoare hexazecimală nevalidă.\n"
 
-#: regedit.rc:381
+#: regedit.rc:385
 msgid ""
 "regedit: Unable to convert hexadecimal data. An invalid value was "
 "encountered at '%1'.\n"
 msgstr ""
 
-#: regedit.rc:382
+#: regedit.rc:386
 msgid "regedit: Unrecognized escape sequence [\\%1!c!]\n"
 msgstr ""
 
-#: regedit.rc:383
+#: regedit.rc:387
 #, fuzzy
 #| msgid "Error: Command line not supported\n"
 msgid "regedit: Unsupported registry data type [%1]\n"
 msgstr "Eroare: Linie de comandă nesuportată\n"
 
-#: regedit.rc:384
+#: regedit.rc:388
 msgid "regedit: Unexpected end of line in '%1'.\n"
 msgstr "regedit: Sfârșit de linie neașteptat în „%1”.\n"
 
-#: regedit.rc:385
+#: regedit.rc:389
 msgid "regedit: The line '%1' was not recognized.\n"
 msgstr "regedit: Linia „%1” nu a fost recunoscută.\n"
 
-#: regedit.rc:386
+#: regedit.rc:390
 msgid "regedit: Unable to add the registry value '%1' to '%2'.\n"
 msgstr "regedit: Nu s-a putut adăuga valoarea de registru „%1” la „%2”.\n"
 
-#: regedit.rc:387
+#: regedit.rc:391
 msgid "regedit: Unable to open the registry key '%1'.\n"
 msgstr "regedit: Nu s-a putut deschide cheia de registru „%1”.\n"
 
-#: regedit.rc:388
+#: regedit.rc:392
 #, fuzzy
 #| msgid "Error: Command line not supported\n"
 msgid "regedit: Unsupported registry data type [%1] encountered in '%2'.\n"
 msgstr "Eroare: Linie de comandă nesuportată\n"
 
-#: regedit.rc:389
+#: regedit.rc:393
 msgid "regedit: The registry value '%1' will be exported as binary data.\n"
 msgstr ""
 
-#: regedit.rc:390
+#: regedit.rc:394
 msgid "regedit: Incorrect registry class specification in '%1'.\n"
 msgstr ""
 
-#: regedit.rc:391
+#: regedit.rc:395
 msgid ""
 "regedit: Unable to export '%1'. The specified registry key was not found.\n"
 msgstr ""
 "regedit: Nu sa putut exporta „%1”. Cheia de registru specificată nu a fost "
 "găsită.\n"
 
-#: regedit.rc:392
+#: regedit.rc:396
 msgid "regedit: Unable to delete the registry class '%1'.\n"
 msgstr "regedit: Nu s-a putut șterge clasa de registru „%1”.\n"
 
@@ -12187,7 +12202,7 @@ msgstr "Valoarea este prea mare (%u)"
 msgid "Confirm Value Delete"
 msgstr "Confirmă ștergerea valorii"
 
-#: regedit.rc:189
+#: regedit.rc:191
 #, fuzzy
 #| msgid "Search string '%s' not found"
 msgid "Search complete. The string '%1' was not found."
@@ -12197,11 +12212,11 @@ msgstr "Șirul de căutare „%s” nu a fost găsit"
 msgid "Are you sure you want to delete these values?"
 msgstr "Sigur doriți să ștergeți aceste valori?"
 
-#: regedit.rc:187
+#: regedit.rc:189
 msgid "New Key #%d"
 msgstr "Cheie nouă #%d"
 
-#: regedit.rc:188
+#: regedit.rc:190
 msgid "New Value #%d"
 msgstr "Valoare nouă #%d"
 
@@ -12218,6 +12233,19 @@ msgstr "Adaugă o nouă valoare de șir multiplu"
 #: regedit.rc:174
 msgid "Exports selected branch of the registry to a text file"
 msgstr "Exportă ramura de registru selectată ca fișier text"
+
+#: regedit.rc:187
+#, fuzzy
+#| msgid "Confirm Value Delete"
+msgid "Confirm Key Delete"
+msgstr "Confirmă ștergerea valorii"
+
+#: regedit.rc:188
+#, fuzzy
+#| msgid "Are you sure you want to delete the registry key '%1'?"
+msgid ""
+"Are you sure you want to delete the registry key '%1' and all of its subkeys?"
+msgstr "Sigur doriți să ștergeți cheia de registru „%1”?"
 
 #: regsvr32.rc:32
 msgid ""

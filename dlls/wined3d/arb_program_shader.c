@@ -4755,7 +4755,7 @@ static void shader_arb_destroy(struct wined3d_shader *shader)
 
         if (shader_data->num_gl_shaders)
         {
-            struct wined3d_context *context = context_acquire(device, NULL);
+            struct wined3d_context *context = context_acquire(device, NULL, 0);
 
             for (i = 0; i < shader_data->num_gl_shaders; ++i)
             {
@@ -4779,7 +4779,7 @@ static void shader_arb_destroy(struct wined3d_shader *shader)
 
         if (shader_data->num_gl_shaders)
         {
-            struct wined3d_context *context = context_acquire(device, NULL);
+            struct wined3d_context *context = context_acquire(device, NULL, 0);
 
             for (i = 0; i < shader_data->num_gl_shaders; ++i)
             {
@@ -5142,6 +5142,9 @@ static const SHADER_HANDLER shader_arb_instruction_handler_table[WINED3DSIH_TABL
     /* WINED3DSIH_IMM_ATOMIC_CMP_EXCH              */ NULL,
     /* WINED3DSIH_IMM_ATOMIC_CONSUME               */ NULL,
     /* WINED3DSIH_IMM_ATOMIC_EXCH                  */ NULL,
+    /* WINED3DSIH_IMM_ATOMIC_IADD                  */ NULL,
+    /* WINED3DSIH_IMM_ATOMIC_IMAX                  */ NULL,
+    /* WINED3DSIH_IMM_ATOMIC_IMIN                  */ NULL,
     /* WINED3DSIH_IMM_ATOMIC_OR                    */ NULL,
     /* WINED3DSIH_IMM_ATOMIC_UMAX                  */ NULL,
     /* WINED3DSIH_IMM_ATOMIC_UMIN                  */ NULL,
@@ -7712,6 +7715,7 @@ static BOOL arbfp_blit_supported(const struct wined3d_gl_info *gl_info,
         const RECT *dst_rect, DWORD dst_usage, enum wined3d_pool dst_pool, const struct wined3d_format *dst_format)
 {
     enum complex_fixup src_fixup;
+    BOOL decompress;
 
     if (!gl_info->supported[ARB_FRAGMENT_PROGRAM])
         return FALSE;
@@ -7734,7 +7738,9 @@ static BOOL arbfp_blit_supported(const struct wined3d_gl_info *gl_info,
             return FALSE;
     }
 
-    if (src_pool == WINED3D_POOL_SYSTEM_MEM || dst_pool == WINED3D_POOL_SYSTEM_MEM)
+    decompress = src_format && (src_format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_COMPRESSED)
+            && !(dst_format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_COMPRESSED);
+    if (!decompress && (dst_pool == WINED3D_POOL_SYSTEM_MEM || src_pool == WINED3D_POOL_SYSTEM_MEM))
         return FALSE;
 
     src_fixup = get_complex_fixup(src_format->color_fixup);
@@ -7794,7 +7800,7 @@ static void arbfp_blit_surface(struct wined3d_device *device, enum wined3d_blit_
     struct wined3d_color_key alpha_test_key;
 
     /* Activate the destination context, set it up for blitting */
-    context = context_acquire(device, dst_surface);
+    context = context_acquire(device, dst_texture, dst_sub_resource_idx);
 
     /* Now load the surface */
     if (wined3d_settings.offscreen_rendering_mode != ORM_FBO

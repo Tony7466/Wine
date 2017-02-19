@@ -1060,7 +1060,7 @@
 @ extern _environ msvcr120._environ
 @ cdecl _eof(long) msvcr120._eof
 @ cdecl _errno() msvcr120._errno
-@ stub _except1
+@ cdecl _except1(long long double double long ptr) msvcr120._except1
 @ cdecl -arch=i386 _except_handler2(ptr ptr ptr ptr) msvcr120._except_handler2
 @ cdecl -arch=i386 _except_handler3(ptr ptr ptr ptr) msvcr120._except_handler3
 @ cdecl -arch=i386 _except_handler4_common(ptr ptr ptr ptr ptr ptr) msvcr120._except_handler4_common
@@ -1817,7 +1817,7 @@
 @ cdecl feof(ptr) msvcr120.feof
 @ stub feraiseexcept
 @ cdecl ferror(ptr) msvcr120.ferror
-@ stub fesetenv
+@ cdecl fesetenv(ptr) msvcr120.fesetenv
 @ stub fesetexceptflag
 @ stub fesetround
 @ stub fetestexcept
