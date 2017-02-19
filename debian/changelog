@@ -1,3 +1,15 @@
+wine-development (2.2-1) experimental; urgency=medium
+
+  * New upstream release 2.2, released Feb 17, 2017.
+    - Windows version set to Windows 7 for new prefixes.
+    - More steps towards the Direct3D command stream.
+    - Still more Shader Model 5 instructions.
+    - Initial support for double-buffered theme painting.
+    - Various bug fixes.
+  * Use date of the latest changelog update as the build date.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 19 Feb 2017 04:28:45 +0000
+
 wine-development (2.1-1) experimental; urgency=medium
 
   * New upstream release 2.1, released Feb 3, 2017.
