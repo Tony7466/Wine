@@ -70,6 +70,9 @@ endif
 # override maintainer mode config
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-error
 
+# use date of the latest changelog update as the build date
+export WIDL_TIME_OVERRIDE=$(shell date --date="$(dpkg-parsechangelog -S Date)" +%s)
+
 # additional files to generate
 INSTALLS=$(shell ls debian/*VERSION* | sed s/VERSION/$(VERSION)/) \
          debian/bug-control \
