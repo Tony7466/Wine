@@ -35,8 +35,6 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
 {
     switch(reason)
     {
-    case DLL_WINE_PREATTACH:
-        return FALSE; /* prefer native version */
     case DLL_PROCESS_ATTACH:
         DisableThreadLibraryCalls(inst);
         break;
@@ -44,7 +42,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     return TRUE;
 }
 
-void WINAPI XInputEnable(BOOL enable)
+void WINAPI DECLSPEC_HOTPATCH XInputEnable(BOOL enable)
 {
     /* Setting to false will stop messages from XInputSetState being sent
     to the controllers. Setting to true will send the last vibration

@@ -315,7 +315,7 @@
 @ stdcall IoAllocateMdl(ptr long long long ptr)
 @ stdcall IoAllocateWorkItem(ptr)
 @ stub IoAssignResources
-@ stub IoAttachDevice
+@ stdcall IoAttachDevice(ptr ptr ptr)
 @ stub IoAttachDeviceByPointer
 @ stdcall IoAttachDeviceToDeviceStack(ptr ptr)
 @ stub IoAttachDeviceToDeviceStackSafe
@@ -618,7 +618,7 @@
 @ stub KeSetTargetProcessorDpc
 @ stub KeSetTimeIncrement
 @ stub KeSetTimer
-@ stub KeSetTimerEx
+@ stdcall KeSetTimerEx(ptr int64 long ptr)
 @ stub KeStackAttachProcess
 @ stub KeSynchronizeExecution
 @ stub KeTerminateThread
@@ -963,6 +963,7 @@
 @ stdcall RtlConvertSidToUnicodeString(ptr ptr long) ntdll.RtlConvertSidToUnicodeString
 @ stdcall -arch=win32 -ret64 RtlConvertUlongToLargeInteger(long) ntdll.RtlConvertUlongToLargeInteger
 @ stdcall RtlCopyLuid(ptr ptr) ntdll.RtlCopyLuid
+@ stdcall -arch=x86_64 RtlCopyMemory(ptr ptr long) ntdll.RtlCopyMemory
 @ stub RtlCopyRangeList
 @ stdcall RtlCopySid(long ptr ptr) ntdll.RtlCopySid
 @ stdcall RtlCopyString(ptr ptr) ntdll.RtlCopyString
@@ -1181,6 +1182,7 @@
 @ stdcall RtlUnicodeToOemN(ptr long ptr ptr long) ntdll.RtlUnicodeToOemN
 @ stub RtlUnlockBootStatusData
 @ stdcall -register RtlUnwind(ptr ptr ptr ptr) ntdll.RtlUnwind
+@ stdcall -arch=x86_64 RtlUnwindEx(ptr ptr ptr ptr ptr ptr) ntdll.RtlUnwindEx
 @ stdcall RtlUpcaseUnicodeChar(long) ntdll.RtlUpcaseUnicodeChar
 @ stdcall RtlUpcaseUnicodeString(ptr ptr long) ntdll.RtlUpcaseUnicodeString
 @ stdcall RtlUpcaseUnicodeStringToAnsiString(ptr ptr long) ntdll.RtlUpcaseUnicodeStringToAnsiString
