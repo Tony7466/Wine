@@ -1,11 +1,12 @@
-wine (1.8.7-1) UNRELEASED; urgency=medium
+wine (1.8.7-1) experimental; urgency=medium
 
   * New upstream release 1.8.7, released Feb 28, 2017.
     - Various bug fixes.
     - A few more cards added to the GPU description table.
     - Turkish translation updates.
+  * Refresh patches.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Wed, 08 Mar 2017 15:41:28 +0100
+ -- Jens Reyer <jre.winesim@gmail.com>  Wed, 08 Mar 2017 18:55:35 +0100
 
 wine (1.8.6-5) unstable; urgency=medium
 
