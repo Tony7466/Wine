@@ -1535,7 +1535,9 @@ enum wined3d_pci_device
     CARD_AMD_RADEON_HD8770          = 0x665c,
     CARD_AMD_RADEON_R3              = 0x9830,
     CARD_AMD_RADEON_R7              = 0x130f,
-    CARD_AMD_RADEON_R9              = 0x67b1,
+    CARD_AMD_RADEON_R9_285          = 0x6939,
+    CARD_AMD_RADEON_R9_290          = 0x67b1,
+    CARD_AMD_RADEON_R9_FURY         = 0x7300,
     CARD_AMD_RADEON_RX_460          = 0x67ef,
     CARD_AMD_RADEON_RX_480          = 0x67df,
 
@@ -1654,6 +1656,7 @@ enum wined3d_pci_device
     CARD_NVIDIA_GEFORCE_GTX970M     = 0x13d8,
     CARD_NVIDIA_GEFORCE_GTX980      = 0x13c0,
     CARD_NVIDIA_GEFORCE_GTX980TI    = 0x17c8,
+    CARD_NVIDIA_GEFORCE_GTX1050     = 0x1c81,
     CARD_NVIDIA_GEFORCE_GTX1060     = 0x1c03,
     CARD_NVIDIA_GEFORCE_GTX1070     = 0x1b81,
     CARD_NVIDIA_GEFORCE_GTX1080     = 0x1b80,
@@ -1696,6 +1699,15 @@ enum wined3d_pci_device
     CARD_INTEL_IVBS                 = 0x015a,
     CARD_INTEL_HWD                  = 0x0412,
     CARD_INTEL_HWM                  = 0x0416,
+    CARD_INTEL_I5100_1              = 0x0a22,
+    CARD_INTEL_I5100_2              = 0x0a2a,
+    CARD_INTEL_I5100_3              = 0x0a2b,
+    CARD_INTEL_I5100_4              = 0x0a2e,
+    CARD_INTEL_IP5200_1             = 0x0d22,
+    CARD_INTEL_IP5200_2             = 0x0d26,
+    CARD_INTEL_IP5200_3             = 0x0d2a,
+    CARD_INTEL_IP5200_4             = 0x0d2b,
+    CARD_INTEL_IP5200_5             = 0x0d2e,
     CARD_INTEL_HD5300               = 0x161e,
     CARD_INTEL_HD5500               = 0x1616,
     CARD_INTEL_HD5600               = 0x1612,
@@ -2010,6 +2022,8 @@ struct wined3d_ffp_vs_settings
     DWORD padding         : 10;
 
     DWORD texgen[MAX_TEXTURES];
+
+    WORD swizzle_map; /* MAX_ATTRIBS, 16 */
 };
 
 struct wined3d_ffp_vs_desc
