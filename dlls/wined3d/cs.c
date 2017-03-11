@@ -54,6 +54,8 @@ enum wined3d_cs_op
     WINED3D_CS_OP_SET_CLIP_PLANE,
     WINED3D_CS_OP_SET_COLOR_KEY,
     WINED3D_CS_OP_SET_MATERIAL,
+    WINED3D_CS_OP_SET_LIGHT,
+    WINED3D_CS_OP_SET_LIGHT_ENABLE,
     WINED3D_CS_OP_RESET_STATE,
     WINED3D_CS_OP_CALLBACK,
     WINED3D_CS_OP_QUERY_ISSUE,
@@ -95,6 +97,7 @@ struct wined3d_cs_dispatch
 struct wined3d_cs_draw
 {
     enum wined3d_cs_op opcode;
+    GLenum primitive_type;
     int base_vertex_idx;
     unsigned int start_idx;
     unsigned int index_count;
@@ -278,6 +281,19 @@ struct wined3d_cs_set_material
     struct wined3d_material material;
 };
 
+struct wined3d_cs_set_light
+{
+    enum wined3d_cs_op opcode;
+    struct wined3d_light_info light;
+};
+
+struct wined3d_cs_set_light_enable
+{
+    enum wined3d_cs_op opcode;
+    unsigned int idx;
+    BOOL enable;
+};
+
 struct wined3d_cs_reset_state
 {
     enum wined3d_cs_op opcode;
@@ -371,17 +387,16 @@ void wined3d_cs_emit_present(struct wined3d_cs *cs, struct wined3d_swapchain *sw
 
 static void wined3d_cs_exec_clear(struct wined3d_cs *cs, const void *data)
 {
+    const struct wined3d_state *state = &cs->state;
     const struct wined3d_cs_clear *op = data;
-    const struct wined3d_state *state;
     struct wined3d_device *device;
     unsigned int i;
     RECT draw_rect;
 
     device = cs->device;
-    state = &device->state;
     wined3d_get_draw_rect(state, &draw_rect);
     device_clear_render_targets(device, device->adapter->gl_info.limits.buffers,
-            &device->fb, op->rect_count, op->rects, &draw_rect, op->flags,
+            state->fb, op->rect_count, op->rects, &draw_rect, op->flags,
             &op->color, op->depth, op->stencil);
 
     if (op->flags & WINED3DCLEAR_TARGET)
@@ -534,8 +549,8 @@ static void release_unordered_access_resources(const struct wined3d_shader *shad
 
 static void wined3d_cs_exec_dispatch(struct wined3d_cs *cs, const void *data)
 {
-    struct wined3d_state *state = &cs->device->state;
     const struct wined3d_cs_dispatch *op = data;
+    struct wined3d_state *state = &cs->state;
 
     dispatch_compute(cs->device, state,
             op->group_count_x, op->group_count_y, op->group_count_z);
@@ -566,7 +581,7 @@ void wined3d_cs_emit_dispatch(struct wined3d_cs *cs,
 
 static void wined3d_cs_exec_draw(struct wined3d_cs *cs, const void *data)
 {
-    struct wined3d_state *state = &cs->device->state;
+    struct wined3d_state *state = &cs->state;
     const struct wined3d_cs_draw *op = data;
     unsigned int i;
 
@@ -575,6 +590,13 @@ static void wined3d_cs_exec_draw(struct wined3d_cs *cs, const void *data)
     {
         state->load_base_vertex_index = op->base_vertex_idx;
         device_invalidate_state(cs->device, STATE_BASEVERTEXINDEX);
+    }
+
+    if (state->gl_primitive_type != op->primitive_type)
+    {
+        if (state->gl_primitive_type == GL_POINTS || op->primitive_type == GL_POINTS)
+            device_invalidate_state(cs->device, STATE_POINT_ENABLE);
+        state->gl_primitive_type = op->primitive_type;
     }
 
     draw_primitive(cs->device, state, op->base_vertex_idx, op->start_idx,
@@ -604,7 +626,7 @@ static void wined3d_cs_exec_draw(struct wined3d_cs *cs, const void *data)
             state->unordered_access_view[WINED3D_PIPELINE_GRAPHICS]);
 }
 
-void wined3d_cs_emit_draw(struct wined3d_cs *cs, int base_vertex_idx, unsigned int start_idx,
+void wined3d_cs_emit_draw(struct wined3d_cs *cs, GLenum primitive_type, int base_vertex_idx, unsigned int start_idx,
         unsigned int index_count, unsigned int start_instance, unsigned int instance_count, BOOL indexed)
 {
     const struct wined3d_state *state = &cs->device->state;
@@ -613,6 +635,7 @@ void wined3d_cs_emit_draw(struct wined3d_cs *cs, int base_vertex_idx, unsigned i
 
     op = cs->ops->require_space(cs, sizeof(*op));
     op->opcode = WINED3D_CS_OP_DRAW;
+    op->primitive_type = primitive_type;
     op->base_vertex_idx = base_vertex_idx;
     op->start_idx = start_idx;
     op->index_count = index_count;
@@ -1050,7 +1073,9 @@ static void wined3d_cs_exec_set_shader_resource_view(struct wined3d_cs *cs, cons
         InterlockedDecrement(&prev->resource->bind_count);
 
     if (op->type != WINED3D_SHADER_TYPE_COMPUTE)
-        device_invalidate_state(cs->device, STATE_SHADER_RESOURCE_BINDING);
+        device_invalidate_state(cs->device, STATE_GRAPHICS_SHADER_RESOURCE_BINDING);
+    else
+        device_invalidate_state(cs->device, STATE_COMPUTE_SHADER_RESOURCE_BINDING);
 }
 
 void wined3d_cs_emit_set_shader_resource_view(struct wined3d_cs *cs, enum wined3d_shader_type type,
@@ -1102,7 +1127,10 @@ static void wined3d_cs_exec_set_sampler(struct wined3d_cs *cs, const void *data)
     const struct wined3d_cs_set_sampler *op = data;
 
     cs->state.sampler[op->type][op->sampler_idx] = op->sampler;
-    device_invalidate_state(cs->device, STATE_SHADER_RESOURCE_BINDING);
+    if (op->type != WINED3D_SHADER_TYPE_COMPUTE)
+        device_invalidate_state(cs->device, STATE_GRAPHICS_SHADER_RESOURCE_BINDING);
+    else
+        device_invalidate_state(cs->device, STATE_COMPUTE_SHADER_RESOURCE_BINDING);
 }
 
 void wined3d_cs_emit_set_sampler(struct wined3d_cs *cs, enum wined3d_shader_type type,
@@ -1126,7 +1154,9 @@ static void wined3d_cs_exec_set_shader(struct wined3d_cs *cs, const void *data)
     cs->state.shader[op->type] = op->shader;
     device_invalidate_state(cs->device, STATE_SHADER(op->type));
     if (op->type != WINED3D_SHADER_TYPE_COMPUTE)
-        device_invalidate_state(cs->device, STATE_SHADER_RESOURCE_BINDING);
+        device_invalidate_state(cs->device, STATE_GRAPHICS_SHADER_RESOURCE_BINDING);
+    else
+        device_invalidate_state(cs->device, STATE_COMPUTE_SHADER_RESOURCE_BINDING);
 }
 
 void wined3d_cs_emit_set_shader(struct wined3d_cs *cs, enum wined3d_shader_type type, struct wined3d_shader *shader)
@@ -1369,6 +1399,88 @@ void wined3d_cs_emit_set_material(struct wined3d_cs *cs, const struct wined3d_ma
     cs->ops->submit(cs);
 }
 
+static void wined3d_cs_exec_set_light(struct wined3d_cs *cs, const void *data)
+{
+    const struct wined3d_cs_set_light *op = data;
+    struct wined3d_light_info *light_info;
+    unsigned int light_idx, hash_idx;
+
+    light_idx = op->light.OriginalIndex;
+
+    if (!(light_info = wined3d_state_get_light(&cs->state, light_idx)))
+    {
+        TRACE("Adding new light.\n");
+        if (!(light_info = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*light_info))))
+        {
+            ERR("Failed to allocate light info.\n");
+            return;
+        }
+
+        hash_idx = LIGHTMAP_HASHFUNC(light_idx);
+        list_add_head(&cs->state.light_map[hash_idx], &light_info->entry);
+        light_info->glIndex = -1;
+        light_info->OriginalIndex = light_idx;
+    }
+
+    if (light_info->glIndex != -1)
+    {
+        if (light_info->OriginalParms.type != op->light.OriginalParms.type)
+            device_invalidate_state(cs->device, STATE_LIGHT_TYPE);
+        device_invalidate_state(cs->device, STATE_ACTIVELIGHT(light_info->glIndex));
+    }
+
+    light_info->OriginalParms = op->light.OriginalParms;
+    light_info->position = op->light.position;
+    light_info->direction = op->light.direction;
+    light_info->exponent = op->light.exponent;
+    light_info->cutoff = op->light.cutoff;
+}
+
+void wined3d_cs_emit_set_light(struct wined3d_cs *cs, const struct wined3d_light_info *light)
+{
+    struct wined3d_cs_set_light *op;
+
+    op = cs->ops->require_space(cs, sizeof(*op));
+    op->opcode = WINED3D_CS_OP_SET_LIGHT;
+    op->light = *light;
+
+    cs->ops->submit(cs);
+}
+
+static void wined3d_cs_exec_set_light_enable(struct wined3d_cs *cs, const void *data)
+{
+    const struct wined3d_cs_set_light_enable *op = data;
+    struct wined3d_device *device = cs->device;
+    struct wined3d_light_info *light_info;
+    int prev_idx;
+
+    if (!(light_info = wined3d_state_get_light(&cs->state, op->idx)))
+    {
+        ERR("Light doesn't exist.\n");
+        return;
+    }
+
+    prev_idx = light_info->glIndex;
+    wined3d_state_enable_light(&cs->state, &device->adapter->d3d_info, light_info, op->enable);
+    if (light_info->glIndex != prev_idx)
+    {
+        device_invalidate_state(device, STATE_LIGHT_TYPE);
+        device_invalidate_state(device, STATE_ACTIVELIGHT(op->enable ? light_info->glIndex : prev_idx));
+    }
+}
+
+void wined3d_cs_emit_set_light_enable(struct wined3d_cs *cs, unsigned int idx, BOOL enable)
+{
+    struct wined3d_cs_set_light_enable *op;
+
+    op = cs->ops->require_space(cs, sizeof(*op));
+    op->opcode = WINED3D_CS_OP_SET_LIGHT_ENABLE;
+    op->idx = idx;
+    op->enable = enable;
+
+    cs->ops->submit(cs);
+}
+
 static void wined3d_cs_exec_reset_state(struct wined3d_cs *cs, const void *data)
 {
     struct wined3d_adapter *adapter = cs->device->adapter;
@@ -1565,6 +1677,8 @@ static void (* const wined3d_cs_op_handlers[])(struct wined3d_cs *cs, const void
     /* WINED3D_CS_OP_SET_CLIP_PLANE             */ wined3d_cs_exec_set_clip_plane,
     /* WINED3D_CS_OP_SET_COLOR_KEY              */ wined3d_cs_exec_set_color_key,
     /* WINED3D_CS_OP_SET_MATERIAL               */ wined3d_cs_exec_set_material,
+    /* WINED3D_CS_OP_SET_LIGHT                  */ wined3d_cs_exec_set_light,
+    /* WINED3D_CS_OP_SET_LIGHT_ENABLE           */ wined3d_cs_exec_set_light_enable,
     /* WINED3D_CS_OP_RESET_STATE                */ wined3d_cs_exec_reset_state,
     /* WINED3D_CS_OP_CALLBACK                   */ wined3d_cs_exec_callback,
     /* WINED3D_CS_OP_QUERY_ISSUE                */ wined3d_cs_exec_query_issue,

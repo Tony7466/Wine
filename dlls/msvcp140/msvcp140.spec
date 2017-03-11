@@ -358,9 +358,9 @@
 @ cdecl -arch=arm ??0ios_base@std@@IAA@XZ(ptr) ios_base_ctor
 @ thiscall -arch=i386 ??0ios_base@std@@IAE@XZ(ptr) ios_base_ctor
 @ cdecl -arch=win64 ??0ios_base@std@@IEAA@XZ(ptr) ios_base_ctor
-@ stub -arch=arm ??0task_continuation_context@Concurrency@@AAA@XZ
-@ stub -arch=i386 ??0task_continuation_context@Concurrency@@AAE@XZ
-@ stub -arch=win64 ??0task_continuation_context@Concurrency@@AEAA@XZ
+@ cdecl -arch=arm ??0task_continuation_context@Concurrency@@AAA@XZ(ptr) task_continuation_context_ctor
+@ thiscall -arch=i386 ??0task_continuation_context@Concurrency@@AAE@XZ(ptr) task_continuation_context_ctor
+@ cdecl -arch=win64 ??0task_continuation_context@Concurrency@@AEAA@XZ(ptr) task_continuation_context_ctor
 @ stub -arch=arm ??0time_base@std@@QAA@I@Z
 @ stub -arch=i386 ??0time_base@std@@QAE@I@Z
 @ stub -arch=win64 ??0time_base@std@@QEAA@_K@Z
@@ -1695,8 +1695,8 @@
 @ stub -arch=win64 ?__ExceptionPtrCompare@@YA_NPEBX0@Z
 @ cdecl -arch=win32 ?__ExceptionPtrCopy@@YAXPAXPBX@Z(ptr ptr) msvcr120.?__ExceptionPtrCopy@@YAXPAXPBX@Z
 @ cdecl -arch=win64 ?__ExceptionPtrCopy@@YAXPEAXPEBX@Z(ptr ptr) msvcr120.?__ExceptionPtrCopy@@YAXPEAXPEBX@Z
-@ stub -arch=win32 ?__ExceptionPtrCopyException@@YAXPAXPBX1@Z
-@ stub -arch=win64 ?__ExceptionPtrCopyException@@YAXPEAXPEBX1@Z
+@ cdecl -arch=win32 ?__ExceptionPtrCopyException@@YAXPAXPBX1@Z(ptr ptr ptr) msvcr120.?__ExceptionPtrCopyException@@YAXPAXPBX1@Z
+@ cdecl -arch=win64 ?__ExceptionPtrCopyException@@YAXPEAXPEBX1@Z(ptr ptr ptr) msvcr120.?__ExceptionPtrCopyException@@YAXPEAXPEBX1@Z
 @ cdecl -arch=win32 ?__ExceptionPtrCreate@@YAXPAX@Z(ptr) msvcr120.?__ExceptionPtrCreate@@YAXPAX@Z
 @ cdecl -arch=win64 ?__ExceptionPtrCreate@@YAXPEAX@Z(ptr) msvcr120.?__ExceptionPtrCreate@@YAXPEAX@Z
 @ cdecl -arch=win32 ?__ExceptionPtrCurrentException@@YAXPAX@Z(ptr) msvcr120.?__ExceptionPtrCurrentException@@YAXPAX@Z
@@ -3668,7 +3668,7 @@
 @ extern _LSnan _LSnan
 @ stub _Last_write_time
 @ stub _Link
-@ stub _Lock_shared_ptr_spin_lock
+@ cdecl _Lock_shared_ptr_spin_lock()
 @ stub _Lstat
 @ stub _Make_dir
 @ cdecl _Mbrtowc(ptr ptr long ptr ptr) _Mbrtowc
@@ -3738,7 +3738,7 @@
 @ cdecl _Towlower(long ptr) _Towlower
 @ cdecl _Towupper(long ptr) _Towupper
 @ stub _Unlink
-@ stub _Unlock_shared_ptr_spin_lock
+@ cdecl _Unlock_shared_ptr_spin_lock()
 @ stub _WStod
 @ stub _WStodx
 @ stub _WStof

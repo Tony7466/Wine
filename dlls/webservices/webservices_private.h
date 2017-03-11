@@ -27,8 +27,8 @@ struct xmlbuf
 };
 
 void *ws_alloc( WS_HEAP *, SIZE_T ) DECLSPEC_HIDDEN;
-void *ws_realloc( WS_HEAP *, void *, SIZE_T ) DECLSPEC_HIDDEN;
-void ws_free( WS_HEAP *, void * ) DECLSPEC_HIDDEN;
+void *ws_realloc( WS_HEAP *, void *, SIZE_T, SIZE_T ) DECLSPEC_HIDDEN;
+void ws_free( WS_HEAP *, void *, SIZE_T ) DECLSPEC_HIDDEN;
 const char *debugstr_xmlstr( const WS_XML_STRING * ) DECLSPEC_HIDDEN;
 WS_XML_STRING *alloc_xml_string( const unsigned char *, ULONG ) DECLSPEC_HIDDEN;
 WS_XML_UTF8_TEXT *alloc_utf8_text( const unsigned char *, ULONG ) DECLSPEC_HIDDEN;
@@ -147,27 +147,27 @@ static inline BOOL is_valid_parent( const struct node *node )
     return (node_type( node ) == WS_XML_NODE_TYPE_ELEMENT || node_type( node ) == WS_XML_NODE_TYPE_BOF);
 }
 
-static inline void *heap_alloc( SIZE_T size )
+static inline void* __WINE_ALLOC_SIZE(1) heap_alloc(size_t size)
 {
-    return HeapAlloc( GetProcessHeap(), 0, size );
+    return HeapAlloc(GetProcessHeap(), 0, size);
 }
 
-static inline void *heap_alloc_zero( SIZE_T size )
+static inline void* __WINE_ALLOC_SIZE(1) heap_alloc_zero(size_t size)
 {
-    return HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, size );
+    return HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, size);
 }
 
-static inline void *heap_realloc( void *mem, SIZE_T size )
+static inline void* __WINE_ALLOC_SIZE(2) heap_realloc(void *mem, size_t size)
 {
-    return HeapReAlloc( GetProcessHeap(), 0, mem, size );
+    return HeapReAlloc(GetProcessHeap(), 0, mem, size);
 }
 
-static inline void *heap_realloc_zero( void *mem, SIZE_T size )
+static inline void* __WINE_ALLOC_SIZE(2) heap_realloc_zero(void *mem, size_t size)
 {
-    return HeapReAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, mem, size );
+    return HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, mem, size);
 }
 
-static inline BOOL heap_free( void *mem )
+static inline BOOL heap_free(void *mem)
 {
-    return HeapFree( GetProcessHeap(), 0, mem );
+    return HeapFree(GetProcessHeap(), 0, mem);
 }

@@ -1580,7 +1580,7 @@ char * CDECL MSVCRT__fcvt( double number, int ndigits, int *decpt, int *sign )
 	number = -number;
     } else *sign = 0;
 
-    snprintf(buf, 80, "%.*f", ndigits < 0 ? 0 : ndigits, number);
+    stop = snprintf(buf, 80, "%.*f", ndigits < 0 ? 0 : ndigits, number);
     ptr1 = buf;
     ptr2 = data->efcvt_buffer;
     first = NULL;
@@ -1597,9 +1597,7 @@ char * CDECL MSVCRT__fcvt( double number, int ndigits, int *decpt, int *sign )
     /* If requested digits is zero or less, we will need to truncate
      * the returned string */
     if (ndigits < 1) {
-	stop = strlen(buf) + ndigits;
-    } else {
-	stop = strlen(buf);
+	stop += ndigits;
     }
 
     while (*ptr1 == '0') ptr1++; /* Skip leading zeroes */
@@ -1665,7 +1663,7 @@ int CDECL MSVCRT__fcvt_s(char* outbuffer, MSVCRT_size_t size, double number, int
 	number = -number;
     } else *sign = 0;
 
-    snprintf(buf, 80, "%.*f", ndigits < 0 ? 0 : ndigits, number);
+    stop = snprintf(buf, 80, "%.*f", ndigits < 0 ? 0 : ndigits, number);
     ptr1 = buf;
     ptr2 = outbuffer;
     first = NULL;
@@ -1682,9 +1680,7 @@ int CDECL MSVCRT__fcvt_s(char* outbuffer, MSVCRT_size_t size, double number, int
     /* If requested digits is zero or less, we will need to truncate
      * the returned string */
     if (ndigits < 1) {
-	stop = strlen(buf) + ndigits;
-    } else {
-	stop = strlen(buf);
+	stop += ndigits;
     }
 
     while (*ptr1 == '0') ptr1++; /* Skip leading zeroes */
@@ -1843,6 +1839,19 @@ MSVCRT_ldiv_t CDECL MSVCRT_ldiv(MSVCRT_long num, MSVCRT_long denom)
   return ret;
 }
 #endif /* ifdef __i386__ */
+
+/*********************************************************************
+ *		lldiv (MSVCRT.@)
+ */
+MSVCRT_lldiv_t CDECL MSVCRT_lldiv(MSVCRT_longlong num, MSVCRT_longlong denom)
+{
+  MSVCRT_lldiv_t ret;
+
+  ret.quot = num / denom;
+  ret.rem = num % denom;
+
+  return ret;
+}
 
 #ifdef __i386__
 

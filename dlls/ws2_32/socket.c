@@ -624,6 +624,7 @@ static const int ws_flags_map[][2] =
     MAP_OPTION( MSG_PEEK ),
     MAP_OPTION( MSG_DONTROUTE ),
     MAP_OPTION( MSG_WAITALL ),
+    { WS_MSG_PARTIAL, 0 },
 };
 
 static const int ws_sock_map[][2] =
@@ -1731,13 +1732,16 @@ static inline BOOL supported_protocol(int protocol)
 
 /**********************************************************************/
 
-/* Returns the length of the converted address if successful, 0 if it was too small to
- * start with.
+/* Returns the length of the converted address if successful, 0 if it was too
+ * small to start with or unknown family or invalid address buffer.
  */
 static unsigned int ws_sockaddr_ws2u(const struct WS_sockaddr* wsaddr, int wsaddrlen,
                                      union generic_unix_sockaddr *uaddr)
 {
     unsigned int uaddrlen = 0;
+
+    if (!wsaddr)
+        return 0;
 
     switch (wsaddr->sa_family)
     {
@@ -2737,10 +2741,7 @@ SOCKET WINAPI WS_accept(SOCKET s, struct WS_sockaddr *addr, int *addrlen32)
     TRACE("socket %04lx\n", s );
     status = _is_blocking(s, &is_blocking);
     if (status)
-    {
-        set_error(status);
-        return INVALID_SOCKET;
-    }
+        goto error;
 
     do {
         /* try accepting first (if there is a deferred connection) */
@@ -2773,7 +2774,9 @@ SOCKET WINAPI WS_accept(SOCKET s, struct WS_sockaddr *addr, int *addrlen32)
         }
     } while (is_blocking && status == STATUS_CANT_WAIT);
 
+error:
     set_error(status);
+    WARN(" -> ERROR %d\n", GetLastError());
     return INVALID_SOCKET;
 }
 
@@ -4905,68 +4908,54 @@ INT WINAPI WSAIoctl(SOCKET s, DWORD code, LPVOID in_buff, DWORD in_size, LPVOID 
         break;
    }
 
-   case WS_SIO_FLUSH:
-	FIXME("SIO_FLUSH: stub.\n");
-	break;
+    case WS_SIO_FLUSH:
+        FIXME("SIO_FLUSH: stub.\n");
+        break;
 
-   case WS_SIO_GET_EXTENSION_FUNCTION_POINTER:
-   {
-        static const GUID connectex_guid = WSAID_CONNECTEX;
-        static const GUID disconnectex_guid = WSAID_DISCONNECTEX;
-        static const GUID acceptex_guid = WSAID_ACCEPTEX;
-        static const GUID getaccepexsockaddrs_guid = WSAID_GETACCEPTEXSOCKADDRS;
-        static const GUID transmitfile_guid = WSAID_TRANSMITFILE;
-        static const GUID transmitpackets_guid = WSAID_TRANSMITPACKETS;
-        static const GUID wsarecvmsg_guid = WSAID_WSARECVMSG;
-        static const GUID wsasendmsg_guid = WSAID_WSASENDMSG;
+    case WS_SIO_GET_EXTENSION_FUNCTION_POINTER:
+    {
+#define EXTENSION_FUNCTION(x, y) { x, y, #y },
+        static const struct
+        {
+            GUID guid;
+            void *func_ptr;
+            const char *name;
+        } guid_funcs[] = {
+            EXTENSION_FUNCTION(WSAID_CONNECTEX, WS2_ConnectEx)
+            EXTENSION_FUNCTION(WSAID_DISCONNECTEX, WS2_DisconnectEx)
+            EXTENSION_FUNCTION(WSAID_ACCEPTEX, WS2_AcceptEx)
+            EXTENSION_FUNCTION(WSAID_GETACCEPTEXSOCKADDRS, WS2_GetAcceptExSockaddrs)
+            EXTENSION_FUNCTION(WSAID_TRANSMITFILE, WS2_TransmitFile)
+            /* EXTENSION_FUNCTION(WSAID_TRANSMITPACKETS, WS2_TransmitPackets) */
+            EXTENSION_FUNCTION(WSAID_WSARECVMSG, WS2_WSARecvMsg)
+            EXTENSION_FUNCTION(WSAID_WSASENDMSG, WSASendMsg)
+        };
+#undef EXTENSION_FUNCTION
+        BOOL found = FALSE;
+        unsigned int i;
 
-        if ( IsEqualGUID(&connectex_guid, in_buff) )
+        for (i = 0; i < sizeof(guid_funcs) / sizeof(guid_funcs[0]); i++)
         {
-            *(LPFN_CONNECTEX *)out_buff = WS2_ConnectEx;
-            break;
+            if (IsEqualGUID(&guid_funcs[i].guid, in_buff))
+            {
+                found = TRUE;
+                break;
+            }
         }
-        else if ( IsEqualGUID(&disconnectex_guid, in_buff) )
-        {
-            *(LPFN_DISCONNECTEX *)out_buff = WS2_DisconnectEx;
-            break;
-        }
-        else if ( IsEqualGUID(&acceptex_guid, in_buff) )
-        {
-            *(LPFN_ACCEPTEX *)out_buff = WS2_AcceptEx;
-            break;
-        }
-        else if ( IsEqualGUID(&getaccepexsockaddrs_guid, in_buff) )
-        {
-            *(LPFN_GETACCEPTEXSOCKADDRS *)out_buff = WS2_GetAcceptExSockaddrs;
-            break;
-        }
-        else if ( IsEqualGUID(&transmitfile_guid, in_buff) )
-        {
-            *(LPFN_TRANSMITFILE *)out_buff = WS2_TransmitFile;
-            break;
-        }
-        else if ( IsEqualGUID(&transmitpackets_guid, in_buff) )
-        {
-            FIXME("SIO_GET_EXTENSION_FUNCTION_POINTER: unimplemented TransmitPackets\n");
-        }
-        else if ( IsEqualGUID(&wsarecvmsg_guid, in_buff) )
-        {
-            *(LPFN_WSARECVMSG *)out_buff = WS2_WSARecvMsg;
-            break;
-        }
-        else if ( IsEqualGUID(&wsasendmsg_guid, in_buff) )
-        {
-            *(LPFN_WSASENDMSG *)out_buff = WSASendMsg;
-            break;
-        }
-        else
-            FIXME("SIO_GET_EXTENSION_FUNCTION_POINTER %s: stub\n", debugstr_guid(in_buff));
 
+        if (found)
+        {
+            TRACE("-> got %s\n", guid_funcs[i].name);
+            *(void **)out_buff = guid_funcs[i].func_ptr;
+            break;
+        }
+
+        FIXME("SIO_GET_EXTENSION_FUNCTION_POINTER %s: stub\n", debugstr_guid(in_buff));
         status = WSAEOPNOTSUPP;
         break;
-   }
-   case WS_SIO_KEEPALIVE_VALS:
-   {
+    }
+    case WS_SIO_KEEPALIVE_VALS:
+    {
         struct tcp_keepalive *k;
         int keepalive, keepidle, keepintvl;
 
@@ -6537,7 +6526,7 @@ static int convert_aiflag_w2u(int winflags) {
             winflags &= ~ws_aiflag_map[i][0];
         }
     if (winflags)
-        FIXME("Unhandled windows AI_xxx flags %x\n", winflags);
+        FIXME("Unhandled windows AI_xxx flags 0x%x\n", winflags);
     return unixflags;
 }
 
@@ -6551,7 +6540,7 @@ static int convert_niflag_w2u(int winflags) {
             winflags &= ~ws_niflag_map[i][0];
         }
     if (winflags)
-        FIXME("Unhandled windows NI_xxx flags %x\n", winflags);
+        FIXME("Unhandled windows NI_xxx flags 0x%x\n", winflags);
     return unixflags;
 }
 
@@ -6564,8 +6553,8 @@ static int convert_aiflag_u2w(int unixflags) {
             winflags |= ws_aiflag_map[i][0];
             unixflags &= ~ws_aiflag_map[i][1];
         }
-    if (unixflags) /* will warn usually */
-        WARN("Unhandled UNIX AI_xxx flags %x\n", unixflags);
+    if (unixflags)
+        WARN("Unhandled UNIX AI_xxx flags 0x%x\n", unixflags);
     return winflags;
 }
 
@@ -8266,10 +8255,6 @@ INT WINAPI WSAStringToAddressA(LPSTR AddressString,
             ((LPSOCKADDR_IN)lpAddress)->sin_port = htons(atoi(ptrPort+1));
             *ptrPort = '\0';
         }
-        else
-        {
-            ((LPSOCKADDR_IN)lpAddress)->sin_port = 0;
-        }
 
         if(inet_aton(workBuffer, &inetaddr) > 0)
         {
@@ -8280,11 +8265,12 @@ INT WINAPI WSAStringToAddressA(LPSTR AddressString,
             res = WSAEINVAL;
 
         break;
-
     }
     case WS_AF_INET6:
     {
         struct in6_addr inetaddr;
+        char *ptrAddr = workBuffer;
+
         /* If lpAddressLength is too small, tell caller the size we need */
         if (*lpAddressLength < sizeof(SOCKADDR_IN6))
         {
@@ -8298,24 +8284,27 @@ INT WINAPI WSAStringToAddressA(LPSTR AddressString,
 
         ((LPSOCKADDR_IN6)lpAddress)->sin6_family = WS_AF_INET6;
 
-        /* This one is a bit tricky. An IPv6 address contains colons, so the
-         * check from IPv4 doesn't work like that. However, IPv6 addresses that
-         * contain a port are written with braces like [fd12:3456:7890::1]:12345
-         * so what we will do is to look for ']', check if the next char is a
-         * colon, and if it is, parse the port as in IPv4. */
+        /* Valid IPv6 addresses can also be surrounded by [ ], and in this case
+         * a port number may follow after like in [fd12:3456:7890::1]:12345
+         * We need to cut the brackets and find the port if any. */
 
-        ptrPort = strchr(workBuffer, ']');
-        if(ptrPort && *(++ptrPort) == ':')
+        if(*workBuffer == '[')
         {
-            ((LPSOCKADDR_IN6)lpAddress)->sin6_port = htons(atoi(ptrPort+1));
+            ptrPort = strchr(workBuffer, ']');
+            if (!ptrPort)
+            {
+                SetLastError(WSAEINVAL);
+                return SOCKET_ERROR;
+            }
+
+            if (ptrPort[1] == ':')
+                ((LPSOCKADDR_IN6)lpAddress)->sin6_port = htons(atoi(ptrPort + 2));
+
             *ptrPort = '\0';
-        }
-        else
-        {
-            ((LPSOCKADDR_IN6)lpAddress)->sin6_port = 0;
+            ptrAddr = workBuffer + 1;
         }
 
-        if(inet_pton(AF_INET6, workBuffer, &inetaddr) > 0)
+        if(inet_pton(AF_INET6, ptrAddr, &inetaddr) > 0)
         {
             memcpy(&((LPSOCKADDR_IN6)lpAddress)->sin6_addr, &inetaddr,
                     sizeof(struct in6_addr));

@@ -129,8 +129,8 @@ static void sock_destroy_ifchange_q( struct sock *sock );
 static int sock_get_poll_events( struct fd *fd );
 static void sock_poll_event( struct fd *fd, int event );
 static enum server_fd_type sock_get_fd_type( struct fd *fd );
-static obj_handle_t sock_ioctl( struct fd *fd, ioctl_code_t code, const async_data_t *async, int blocking );
-static void sock_queue_async( struct fd *fd, const async_data_t *data, int type, int count );
+static obj_handle_t sock_ioctl( struct fd *fd, ioctl_code_t code, struct async *async, int blocking );
+static void sock_queue_async( struct fd *fd, struct async *async, int type, int count );
 static void sock_reselect_async( struct fd *fd, struct async_queue *queue );
 
 static int sock_get_ntstatus( int err );
@@ -534,12 +534,11 @@ static enum server_fd_type sock_get_fd_type( struct fd *fd )
     return FD_TYPE_SOCKET;
 }
 
-obj_handle_t sock_ioctl( struct fd *fd, ioctl_code_t code, const async_data_t *async_data, int blocking )
+obj_handle_t sock_ioctl( struct fd *fd, ioctl_code_t code, struct async *async, int blocking )
 {
     struct sock *sock = get_fd_user( fd );
     obj_handle_t wait_handle = 0;
     struct async_queue *ifchange_q;
-    struct async *async;
 
     assert( sock->obj.ops == &sock_ops );
 
@@ -552,9 +551,8 @@ obj_handle_t sock_ioctl( struct fd *fd, ioctl_code_t code, const async_data_t *a
             return 0;
         }
         if (!(ifchange_q = sock_get_ifchange_q( sock ))) return 0;
-        if (!(async = create_async( current, ifchange_q, async_data, NULL ))) return 0;
+        queue_async( ifchange_q, async );
         if (blocking) wait_handle = alloc_handle( current->process, async, SYNCHRONIZE, 0 );
-        release_object( async );
         set_error( STATUS_PENDING );
         return wait_handle;
     default:
@@ -563,10 +561,9 @@ obj_handle_t sock_ioctl( struct fd *fd, ioctl_code_t code, const async_data_t *a
     }
 }
 
-static void sock_queue_async( struct fd *fd, const async_data_t *data, int type, int count )
+static void sock_queue_async( struct fd *fd, struct async *async, int type, int count )
 {
     struct sock *sock = get_fd_user( fd );
-    struct async *async;
     struct async_queue *queue;
 
     assert( sock->obj.ops == &sock_ops );
@@ -593,9 +590,7 @@ static void sock_queue_async( struct fd *fd, const async_data_t *data, int type,
         return;
     }
 
-    if (!(async = create_async( current, queue, data, NULL ))) return;
-    release_object( async );
-
+    queue_async( queue, async );
     sock_reselect( sock );
 
     set_error( STATUS_PENDING );

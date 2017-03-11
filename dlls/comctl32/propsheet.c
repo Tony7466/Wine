@@ -2957,11 +2957,25 @@ static LPWSTR load_string( HINSTANCE instance, LPCWSTR str )
 HPROPSHEETPAGE WINAPI CreatePropertySheetPageA(
                           LPCPROPSHEETPAGEA lpPropSheetPage)
 {
-  PROPSHEETPAGEW* ppsp = Alloc(sizeof(PROPSHEETPAGEW));
+    PROPSHEETPAGEW *ppsp;
 
-  memcpy(ppsp,lpPropSheetPage,min(lpPropSheetPage->dwSize,sizeof(PROPSHEETPAGEA)));
+    if (lpPropSheetPage->dwSize < PROPSHEETPAGEA_V1_SIZE)
+        return NULL;
 
-  ppsp->dwFlags &= ~ PSP_INTERNAL_UNICODE;
+    /* original data is used for callback notifications */
+    if ((lpPropSheetPage->dwFlags & PSP_USECALLBACK) && lpPropSheetPage->pfnCallback)
+    {
+        ppsp = Alloc(2 * sizeof(*ppsp));
+        memcpy(ppsp, lpPropSheetPage, min(lpPropSheetPage->dwSize, sizeof(PROPSHEETPAGEA)));
+        memcpy(ppsp + 1, lpPropSheetPage, min(lpPropSheetPage->dwSize, sizeof(PROPSHEETPAGEA)));
+    }
+    else
+    {
+        ppsp = Alloc(sizeof(*ppsp));
+        memcpy(ppsp, lpPropSheetPage, min(lpPropSheetPage->dwSize, sizeof(PROPSHEETPAGEA)));
+    }
+
+    ppsp->dwFlags &= ~PSP_INTERNAL_UNICODE;
 
     if ( !(ppsp->dwFlags & PSP_DLGINDIRECT) )
     {
@@ -3013,6 +3027,9 @@ HPROPSHEETPAGE WINAPI CreatePropertySheetPageA(
     else
         ppsp->pszHeaderSubTitle = NULL;
 
+    if ((ppsp->dwFlags & PSP_USECALLBACK) && ppsp->dwSize > PROPSHEETPAGEA_V1_SIZE && ppsp->pfnCallback)
+        ppsp->pfnCallback(0, PSPCB_ADDREF, ppsp + 1);
+
     return (HPROPSHEETPAGE)ppsp;
 }
 
@@ -3023,11 +3040,25 @@ HPROPSHEETPAGE WINAPI CreatePropertySheetPageA(
  */
 HPROPSHEETPAGE WINAPI CreatePropertySheetPageW(LPCPROPSHEETPAGEW lpPropSheetPage)
 {
-  PROPSHEETPAGEW* ppsp = Alloc(sizeof(PROPSHEETPAGEW));
+    PROPSHEETPAGEW *ppsp;
 
-  memcpy(ppsp,lpPropSheetPage,min(lpPropSheetPage->dwSize,sizeof(PROPSHEETPAGEW)));
+    if (lpPropSheetPage->dwSize < PROPSHEETPAGEW_V1_SIZE)
+        return NULL;
 
-  ppsp->dwFlags |= PSP_INTERNAL_UNICODE;
+    /* original data is used for callback notifications */
+    if ((lpPropSheetPage->dwFlags & PSP_USECALLBACK) && lpPropSheetPage->pfnCallback)
+    {
+        ppsp = Alloc(2 * sizeof(*ppsp));
+        memcpy(ppsp, lpPropSheetPage, min(lpPropSheetPage->dwSize, sizeof(PROPSHEETPAGEW)));
+        memcpy(ppsp + 1, lpPropSheetPage, min(lpPropSheetPage->dwSize, sizeof(PROPSHEETPAGEW)));
+    }
+    else
+    {
+        ppsp = Alloc(sizeof(*ppsp));
+        memcpy(ppsp, lpPropSheetPage, min(lpPropSheetPage->dwSize, sizeof(PROPSHEETPAGEW)));
+    }
+
+    ppsp->dwFlags |= PSP_INTERNAL_UNICODE;
 
     if ( !(ppsp->dwFlags & PSP_DLGINDIRECT) )
     {
@@ -3059,6 +3090,9 @@ HPROPSHEETPAGE WINAPI CreatePropertySheetPageW(LPCPROPSHEETPAGEW lpPropSheetPage
     else
         ppsp->pszHeaderSubTitle = NULL;
 
+    if ((ppsp->dwFlags & PSP_USECALLBACK) && ppsp->dwSize > PROPSHEETPAGEW_V1_SIZE && ppsp->pfnCallback)
+        ppsp->pfnCallback(0, PSPCB_ADDREF, ppsp + 1);
+
     return (HPROPSHEETPAGE)ppsp;
 }
 
@@ -3079,6 +3113,9 @@ BOOL WINAPI DestroyPropertySheetPage(HPROPSHEETPAGE hPropPage)
 
   if (!psp)
      return FALSE;
+
+  if ((psp->dwFlags & PSP_USECALLBACK) && psp->pfnCallback)
+     psp->pfnCallback(0, PSPCB_RELEASE, psp + 1);
 
   if (!(psp->dwFlags & PSP_DLGINDIRECT) && !IS_INTRESOURCE( psp->u.pszTemplate ))
      Free ((LPVOID)psp->u.pszTemplate);

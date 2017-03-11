@@ -211,10 +211,10 @@
 @ stdcall CryptSetProviderExA(str long ptr long)
 @ stdcall CryptSetProviderExW(wstr long ptr long)
 @ stdcall CryptSetProviderW(wstr long)
-@ stdcall CryptSignHashA(long long ptr long ptr ptr)
-@ stdcall CryptSignHashW(long long ptr long ptr ptr)
-@ stdcall CryptVerifySignatureA(long ptr long long ptr long)
-@ stdcall CryptVerifySignatureW(long ptr long long ptr long)
+@ stdcall CryptSignHashA(long long str long ptr ptr)
+@ stdcall CryptSignHashW(long long wstr long ptr ptr)
+@ stdcall CryptVerifySignatureA(long ptr long long str long)
+@ stdcall CryptVerifySignatureW(long ptr long long wstr long)
 @ stdcall DecryptFileA(str long)
 @ stdcall DecryptFileW(wstr long)
 @ stdcall DeleteAce(ptr long)
@@ -415,8 +415,8 @@
 @ stdcall LookupPrivilegeNameW(wstr ptr ptr ptr)
 @ stdcall LookupPrivilegeValueA(ptr ptr ptr)
 @ stdcall LookupPrivilegeValueW(ptr ptr ptr)
-# @ stub LookupSecurityDescriptorPartsA
-# @ stub LookupSecurityDescriptorPartsW
+@ stdcall LookupSecurityDescriptorPartsA(ptr ptr ptr ptr ptr ptr ptr)
+@ stdcall LookupSecurityDescriptorPartsW(ptr ptr ptr ptr ptr ptr ptr)
 @ stdcall LsaAddAccountRights(ptr ptr ptr long)
 @ stub LsaAddPrivilegesToAccount
 # @ stub LsaClearAuditLog
@@ -654,8 +654,8 @@
 @ stdcall RegSetValueW(long wstr long ptr long)
 @ stdcall RegUnLoadKeyA(long str)
 @ stdcall RegUnLoadKeyW(long wstr)
-@ stdcall RegisterEventSourceA(ptr ptr)
-@ stdcall RegisterEventSourceW(ptr ptr)
+@ stdcall RegisterEventSourceA(str str)
+@ stdcall RegisterEventSourceW(wstr wstr)
 # @ stub RegisterIdleTask
 @ stdcall RegisterServiceCtrlHandlerA(str ptr)
 @ stdcall RegisterServiceCtrlHandlerExA(str ptr ptr)

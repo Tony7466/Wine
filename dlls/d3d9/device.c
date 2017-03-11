@@ -251,6 +251,168 @@ static BOOL wined3d_swapchain_desc_from_present_parameters(struct wined3d_swapch
     return TRUE;
 }
 
+void d3dcaps_from_wined3dcaps(D3DCAPS9 *caps, const WINED3DCAPS *wined3d_caps)
+{
+    static const DWORD ps_minor_version[] = {0, 4, 0, 0};
+    static const DWORD vs_minor_version[] = {0, 1, 0, 0};
+    static const DWORD texture_filter_caps =
+        D3DPTFILTERCAPS_MINFPOINT      | D3DPTFILTERCAPS_MINFLINEAR    | D3DPTFILTERCAPS_MINFANISOTROPIC |
+        D3DPTFILTERCAPS_MINFPYRAMIDALQUAD                              | D3DPTFILTERCAPS_MINFGAUSSIANQUAD|
+        D3DPTFILTERCAPS_MIPFPOINT      | D3DPTFILTERCAPS_MIPFLINEAR    | D3DPTFILTERCAPS_MAGFPOINT       |
+        D3DPTFILTERCAPS_MAGFLINEAR     |D3DPTFILTERCAPS_MAGFANISOTROPIC|D3DPTFILTERCAPS_MAGFPYRAMIDALQUAD|
+        D3DPTFILTERCAPS_MAGFGAUSSIANQUAD;
+
+    caps->DeviceType                        = (D3DDEVTYPE)wined3d_caps->DeviceType;
+    caps->AdapterOrdinal                    = wined3d_caps->AdapterOrdinal;
+    caps->Caps                              = wined3d_caps->Caps;
+    caps->Caps2                             = wined3d_caps->Caps2;
+    caps->Caps3                             = wined3d_caps->Caps3;
+    caps->PresentationIntervals             = wined3d_caps->PresentationIntervals;
+    caps->CursorCaps                        = wined3d_caps->CursorCaps;
+    caps->DevCaps                           = wined3d_caps->DevCaps;
+    caps->PrimitiveMiscCaps                 = wined3d_caps->PrimitiveMiscCaps;
+    caps->RasterCaps                        = wined3d_caps->RasterCaps;
+    caps->ZCmpCaps                          = wined3d_caps->ZCmpCaps;
+    caps->SrcBlendCaps                      = wined3d_caps->SrcBlendCaps;
+    caps->DestBlendCaps                     = wined3d_caps->DestBlendCaps;
+    caps->AlphaCmpCaps                      = wined3d_caps->AlphaCmpCaps;
+    caps->ShadeCaps                         = wined3d_caps->ShadeCaps;
+    caps->TextureCaps                       = wined3d_caps->TextureCaps;
+    caps->TextureFilterCaps                 = wined3d_caps->TextureFilterCaps;
+    caps->CubeTextureFilterCaps             = wined3d_caps->CubeTextureFilterCaps;
+    caps->VolumeTextureFilterCaps           = wined3d_caps->VolumeTextureFilterCaps;
+    caps->TextureAddressCaps                = wined3d_caps->TextureAddressCaps;
+    caps->VolumeTextureAddressCaps          = wined3d_caps->VolumeTextureAddressCaps;
+    caps->LineCaps                          = wined3d_caps->LineCaps;
+    caps->MaxTextureWidth                   = wined3d_caps->MaxTextureWidth;
+    caps->MaxTextureHeight                  = wined3d_caps->MaxTextureHeight;
+    caps->MaxVolumeExtent                   = wined3d_caps->MaxVolumeExtent;
+    caps->MaxTextureRepeat                  = wined3d_caps->MaxTextureRepeat;
+    caps->MaxTextureAspectRatio             = wined3d_caps->MaxTextureAspectRatio;
+    caps->MaxAnisotropy                     = wined3d_caps->MaxAnisotropy;
+    caps->MaxVertexW                        = wined3d_caps->MaxVertexW;
+    caps->GuardBandLeft                     = wined3d_caps->GuardBandLeft;
+    caps->GuardBandTop                      = wined3d_caps->GuardBandTop;
+    caps->GuardBandRight                    = wined3d_caps->GuardBandRight;
+    caps->GuardBandBottom                   = wined3d_caps->GuardBandBottom;
+    caps->ExtentsAdjust                     = wined3d_caps->ExtentsAdjust;
+    caps->StencilCaps                       = wined3d_caps->StencilCaps;
+    caps->FVFCaps                           = wined3d_caps->FVFCaps;
+    caps->TextureOpCaps                     = wined3d_caps->TextureOpCaps;
+    caps->MaxTextureBlendStages             = wined3d_caps->MaxTextureBlendStages;
+    caps->MaxSimultaneousTextures           = wined3d_caps->MaxSimultaneousTextures;
+    caps->VertexProcessingCaps              = wined3d_caps->VertexProcessingCaps;
+    caps->MaxActiveLights                   = wined3d_caps->MaxActiveLights;
+    caps->MaxUserClipPlanes                 = wined3d_caps->MaxUserClipPlanes;
+    caps->MaxVertexBlendMatrices            = wined3d_caps->MaxVertexBlendMatrices;
+    caps->MaxVertexBlendMatrixIndex         = wined3d_caps->MaxVertexBlendMatrixIndex;
+    caps->MaxPointSize                      = wined3d_caps->MaxPointSize;
+    caps->MaxPrimitiveCount                 = wined3d_caps->MaxPrimitiveCount;
+    caps->MaxVertexIndex                    = wined3d_caps->MaxVertexIndex;
+    caps->MaxStreams                        = wined3d_caps->MaxStreams;
+    caps->MaxStreamStride                   = wined3d_caps->MaxStreamStride;
+    caps->VertexShaderVersion               = wined3d_caps->VertexShaderVersion;
+    caps->MaxVertexShaderConst              = wined3d_caps->MaxVertexShaderConst;
+    caps->PixelShaderVersion                = wined3d_caps->PixelShaderVersion;
+    caps->PixelShader1xMaxValue             = wined3d_caps->PixelShader1xMaxValue;
+    caps->DevCaps2                          = wined3d_caps->DevCaps2;
+    caps->MaxNpatchTessellationLevel        = wined3d_caps->MaxNpatchTessellationLevel;
+    caps->MasterAdapterOrdinal              = wined3d_caps->MasterAdapterOrdinal;
+    caps->AdapterOrdinalInGroup             = wined3d_caps->AdapterOrdinalInGroup;
+    caps->NumberOfAdaptersInGroup           = wined3d_caps->NumberOfAdaptersInGroup;
+    caps->DeclTypes                         = wined3d_caps->DeclTypes;
+    caps->NumSimultaneousRTs                = wined3d_caps->NumSimultaneousRTs;
+    caps->StretchRectFilterCaps             = wined3d_caps->StretchRectFilterCaps;
+    caps->VS20Caps.Caps                     = wined3d_caps->VS20Caps.caps;
+    caps->VS20Caps.DynamicFlowControlDepth  = wined3d_caps->VS20Caps.dynamic_flow_control_depth;
+    caps->VS20Caps.NumTemps                 = wined3d_caps->VS20Caps.temp_count;
+    caps->VS20Caps.StaticFlowControlDepth   = wined3d_caps->VS20Caps.static_flow_control_depth;
+    caps->PS20Caps.Caps                     = wined3d_caps->PS20Caps.caps;
+    caps->PS20Caps.DynamicFlowControlDepth  = wined3d_caps->PS20Caps.dynamic_flow_control_depth;
+    caps->PS20Caps.NumTemps                 = wined3d_caps->PS20Caps.temp_count;
+    caps->PS20Caps.StaticFlowControlDepth   = wined3d_caps->PS20Caps.static_flow_control_depth;
+    caps->PS20Caps.NumInstructionSlots      = wined3d_caps->PS20Caps.instruction_slot_count;
+    caps->VertexTextureFilterCaps           = wined3d_caps->VertexTextureFilterCaps;
+    caps->MaxVShaderInstructionsExecuted    = wined3d_caps->MaxVShaderInstructionsExecuted;
+    caps->MaxPShaderInstructionsExecuted    = wined3d_caps->MaxPShaderInstructionsExecuted;
+    caps->MaxVertexShader30InstructionSlots = wined3d_caps->MaxVertexShader30InstructionSlots;
+    caps->MaxPixelShader30InstructionSlots  = wined3d_caps->MaxPixelShader30InstructionSlots;
+
+    /* Some functionality is implemented in d3d9.dll, not wined3d.dll. Add the needed caps. */
+    caps->DevCaps2 |= D3DDEVCAPS2_CAN_STRETCHRECT_FROM_TEXTURES;
+
+    /* Filter wined3d caps. */
+    caps->TextureFilterCaps &= texture_filter_caps;
+    caps->CubeTextureFilterCaps &= texture_filter_caps;
+    caps->VolumeTextureFilterCaps &= texture_filter_caps;
+
+    caps->DevCaps &=
+        D3DDEVCAPS_EXECUTESYSTEMMEMORY | D3DDEVCAPS_EXECUTEVIDEOMEMORY | D3DDEVCAPS_TLVERTEXSYSTEMMEMORY |
+        D3DDEVCAPS_TLVERTEXVIDEOMEMORY | D3DDEVCAPS_TEXTURESYSTEMMEMORY| D3DDEVCAPS_TEXTUREVIDEOMEMORY   |
+        D3DDEVCAPS_DRAWPRIMTLVERTEX    | D3DDEVCAPS_CANRENDERAFTERFLIP | D3DDEVCAPS_TEXTURENONLOCALVIDMEM|
+        D3DDEVCAPS_DRAWPRIMITIVES2     | D3DDEVCAPS_SEPARATETEXTUREMEMORIES                              |
+        D3DDEVCAPS_DRAWPRIMITIVES2EX   | D3DDEVCAPS_HWTRANSFORMANDLIGHT| D3DDEVCAPS_CANBLTSYSTONONLOCAL  |
+        D3DDEVCAPS_HWRASTERIZATION     | D3DDEVCAPS_PUREDEVICE         | D3DDEVCAPS_QUINTICRTPATCHES     |
+        D3DDEVCAPS_RTPATCHES           | D3DDEVCAPS_RTPATCHHANDLEZERO  | D3DDEVCAPS_NPATCHES;
+
+    caps->ShadeCaps &=
+        D3DPSHADECAPS_COLORGOURAUDRGB  | D3DPSHADECAPS_SPECULARGOURAUDRGB |
+        D3DPSHADECAPS_ALPHAGOURAUDBLEND | D3DPSHADECAPS_FOGGOURAUD;
+
+    caps->RasterCaps &=
+        D3DPRASTERCAPS_DITHER          | D3DPRASTERCAPS_ZTEST          | D3DPRASTERCAPS_FOGVERTEX        |
+        D3DPRASTERCAPS_FOGTABLE        | D3DPRASTERCAPS_MIPMAPLODBIAS  | D3DPRASTERCAPS_ZBUFFERLESSHSR   |
+        D3DPRASTERCAPS_FOGRANGE        | D3DPRASTERCAPS_ANISOTROPY     | D3DPRASTERCAPS_WBUFFER          |
+        D3DPRASTERCAPS_WFOG            | D3DPRASTERCAPS_ZFOG           | D3DPRASTERCAPS_COLORPERSPECTIVE |
+        D3DPRASTERCAPS_SCISSORTEST     | D3DPRASTERCAPS_SLOPESCALEDEPTHBIAS                              |
+        D3DPRASTERCAPS_DEPTHBIAS       | D3DPRASTERCAPS_MULTISAMPLE_TOGGLE;
+
+    caps->DevCaps2 &=
+        D3DDEVCAPS2_STREAMOFFSET       | D3DDEVCAPS2_DMAPNPATCH        | D3DDEVCAPS2_ADAPTIVETESSRTPATCH |
+        D3DDEVCAPS2_ADAPTIVETESSNPATCH | D3DDEVCAPS2_CAN_STRETCHRECT_FROM_TEXTURES                       |
+        D3DDEVCAPS2_PRESAMPLEDDMAPNPATCH| D3DDEVCAPS2_VERTEXELEMENTSCANSHARESTREAMOFFSET;
+
+    caps->Caps2 &=
+        D3DCAPS2_FULLSCREENGAMMA       | D3DCAPS2_CANCALIBRATEGAMMA    | D3DCAPS2_RESERVED               |
+        D3DCAPS2_CANMANAGERESOURCE     | D3DCAPS2_DYNAMICTEXTURES      | D3DCAPS2_CANAUTOGENMIPMAP;
+
+    caps->VertexProcessingCaps &=
+        D3DVTXPCAPS_TEXGEN             | D3DVTXPCAPS_MATERIALSOURCE7   | D3DVTXPCAPS_DIRECTIONALLIGHTS   |
+        D3DVTXPCAPS_POSITIONALLIGHTS   | D3DVTXPCAPS_LOCALVIEWER       | D3DVTXPCAPS_TWEENING            |
+        D3DVTXPCAPS_TEXGEN_SPHEREMAP   | D3DVTXPCAPS_NO_TEXGEN_NONLOCALVIEWER;
+
+    caps->TextureCaps &=
+        D3DPTEXTURECAPS_PERSPECTIVE    | D3DPTEXTURECAPS_POW2          | D3DPTEXTURECAPS_ALPHA           |
+        D3DPTEXTURECAPS_SQUAREONLY     | D3DPTEXTURECAPS_TEXREPEATNOTSCALEDBYSIZE                        |
+        D3DPTEXTURECAPS_ALPHAPALETTE   | D3DPTEXTURECAPS_NONPOW2CONDITIONAL                              |
+        D3DPTEXTURECAPS_PROJECTED      | D3DPTEXTURECAPS_CUBEMAP       | D3DPTEXTURECAPS_VOLUMEMAP       |
+        D3DPTEXTURECAPS_MIPMAP         | D3DPTEXTURECAPS_MIPVOLUMEMAP  | D3DPTEXTURECAPS_MIPCUBEMAP      |
+        D3DPTEXTURECAPS_CUBEMAP_POW2   | D3DPTEXTURECAPS_VOLUMEMAP_POW2| D3DPTEXTURECAPS_NOPROJECTEDBUMPENV;
+
+    caps->MaxVertexShaderConst = min(D3D9_MAX_VERTEX_SHADER_CONSTANTF, caps->MaxVertexShaderConst);
+    caps->NumSimultaneousRTs = min(D3D9_MAX_SIMULTANEOUS_RENDERTARGETS, caps->NumSimultaneousRTs);
+
+    if (caps->PixelShaderVersion > 3)
+    {
+        caps->PixelShaderVersion = D3DPS_VERSION(3, 0);
+    }
+    else
+    {
+        DWORD major = caps->PixelShaderVersion;
+        caps->PixelShaderVersion = D3DPS_VERSION(major, ps_minor_version[major]);
+    }
+
+    if (caps->VertexShaderVersion > 3)
+    {
+        caps->VertexShaderVersion = D3DVS_VERSION(3, 0);
+    }
+    else
+    {
+        DWORD major = caps->VertexShaderVersion;
+        caps->VertexShaderVersion = D3DVS_VERSION(major, vs_minor_version[major]);
+    }
+}
+
 static HRESULT WINAPI d3d9_device_QueryInterface(IDirect3DDevice9Ex *iface, REFIID riid, void **out)
 {
     TRACE("iface %p, riid %s, out %p.\n", iface, debugstr_guid(riid), out);
@@ -406,7 +568,7 @@ static HRESULT WINAPI d3d9_device_GetDirect3D(IDirect3DDevice9Ex *iface, IDirect
 static HRESULT WINAPI d3d9_device_GetDeviceCaps(IDirect3DDevice9Ex *iface, D3DCAPS9 *caps)
 {
     struct d3d9_device *device = impl_from_IDirect3DDevice9Ex(iface);
-    WINED3DCAPS *wined3d_caps;
+    WINED3DCAPS wined3d_caps;
     HRESULT hr;
 
     TRACE("iface %p, caps %p.\n", iface, caps);
@@ -414,22 +576,13 @@ static HRESULT WINAPI d3d9_device_GetDeviceCaps(IDirect3DDevice9Ex *iface, D3DCA
     if (!caps)
         return D3DERR_INVALIDCALL;
 
-    if (!(wined3d_caps = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*wined3d_caps))))
-        return D3DERR_INVALIDCALL; /* well this is what MSDN says to return */
-
     memset(caps, 0, sizeof(*caps));
 
     wined3d_mutex_lock();
-    hr = wined3d_device_get_device_caps(device->wined3d_device, wined3d_caps);
+    hr = wined3d_device_get_device_caps(device->wined3d_device, &wined3d_caps);
     wined3d_mutex_unlock();
 
-    WINECAPSTOD3D9CAPS(caps, wined3d_caps)
-    HeapFree(GetProcessHeap(), 0, wined3d_caps);
-
-    /* Some functionality is implemented in d3d9.dll, not wined3d.dll. Add the needed caps */
-    caps->DevCaps2 |= D3DDEVCAPS2_CAN_STRETCHRECT_FROM_TEXTURES;
-
-    filter_caps(caps);
+    d3dcaps_from_wined3dcaps(caps, &wined3d_caps);
 
     return hr;
 }
