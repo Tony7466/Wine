@@ -1516,6 +1516,9 @@ static void test_converttostr(void)
     DBSTATUS dst_status;
     DBLENGTH dst_len;
     static const WCHAR ten[] = {'1','0',0};
+    static const WCHAR idW[] = {'0','C','7','3','3','A','8','D','-','2','A','1','C',0 };
+    static const char idA[] = "0C733A8D";
+    static const char withnull[] = "test\0ed";
     static const char ten_a[] = "10";
     static const char fourthreetwoone[] = "4321";
     static const char guid_str[] = "{0C733A8D-2A1C-11CE-ADE5-00AA0044773D}";
@@ -1877,6 +1880,47 @@ static void test_converttostr(void)
     ok(!lstrcmpA(ten_a, dst), "got %s\n", dst);
     SysFreeString(b);
 
+    b = SysAllocString(idW);
+    *(BSTR *)src = b;
+    memset(dst, 0xcc, sizeof(dst));
+    dst_len = 0x1234;
+    hr = IDataConvert_DataConvert(convert, DBTYPE_BSTR, DBTYPE_STR, 0, &dst_len, src, dst, 9, 0, &dst_status, 0, 0, 0);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(dst_status == DBSTATUS_S_TRUNCATED, "got %08x\n", dst_status);
+    ok(dst_len == 13, "got %ld\n", dst_len);
+    ok(!lstrcmpA(idA, dst), "got %s\n", dst);
+    SysFreeString(b);
+
+    memcpy(src, withnull, sizeof(withnull));
+    memset(dst, 0xcc, sizeof(dst));
+    dst_len = 0x1234;
+    hr = IDataConvert_DataConvert(convert, DBTYPE_STR, DBTYPE_STR, sizeof(withnull), &dst_len, src, dst, sizeof(dst), 0, &dst_status, 0, 0, 0);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(dst_status == DBSTATUS_S_OK, "got %08x\n", dst_status);
+    ok(dst_len == 8, "got %ld\n", dst_len);
+    ok(!memcmp(withnull, dst, 8), "got %s\n", dst);
+    ok(dst[8] == 0, "got %02x\n", dst[8]);
+
+    memcpy(src, withnull, sizeof(withnull));
+    memset(dst, 0xcc, sizeof(dst));
+    dst_len = 0x1234;
+    hr = IDataConvert_DataConvert(convert, DBTYPE_STR, DBTYPE_STR, 7, &dst_len, src, dst, sizeof(dst), 0, &dst_status, 0, 0, 0);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(dst_status == DBSTATUS_S_OK, "got %08x\n", dst_status);
+    ok(dst_len == 7, "got %ld\n", dst_len);
+    ok(!memcmp(withnull, dst, 7), "got %s\n", dst);
+    ok(dst[7] == 0, "got %02x\n", dst[7]);
+
+    memcpy(src, withnull, sizeof(withnull));
+    memset(dst, 0xcc, sizeof(dst));
+    dst_len = 0x1234;
+    hr = IDataConvert_DataConvert(convert, DBTYPE_STR, DBTYPE_STR, 6, &dst_len, src, dst, sizeof(dst), 0, &dst_status, 0, 0, 0);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(dst_status == DBSTATUS_S_OK, "got %08x\n", dst_status);
+    ok(dst_len == 6, "got %ld\n", dst_len);
+    ok(!memcmp(withnull, dst, 6), "got %s\n", dst);
+    ok(dst[6] == 0, "got %02x\n", dst[6]);
+
     memcpy(src, ten, sizeof(ten));
     memset(dst, 0xcc, sizeof(dst));
     dst_len = 0x1234;
@@ -2097,7 +2141,132 @@ static void test_converttobyrefwstr(void)
 
     dst_len = 44;
     V_VT(&v) = VT_NULL;
-    hr = IDataConvert_DataConvert(convert, DBTYPE_VARIANT, DBTYPE_BYREF | DBTYPE_WSTR, 0, &dst_len, &v, dst, sizeof(dst), 0, &dst_status, 0, 0, 0);
+    hr = IDataConvert_DataConvert(convert, DBTYPE_VARIANT, DBTYPE_BYREF | DBTYPE_WSTR, 0, &dst_len, &v, &dst, sizeof(dst), 0, &dst_status, 0, 0, 0);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(dst_status == DBSTATUS_S_ISNULL, "got %08x\n", dst_status);
+    ok(dst_len == 44, "got %ld\n", dst_len);
+}
+
+static void test_converttobyrefstr(void)
+{
+    HRESULT hr;
+    char *dst;
+    BYTE src[20];
+    DBSTATUS dst_status;
+    DBLENGTH dst_len;
+    static const WCHAR ten[] = {'1','0',0};
+    static const char withnull[] = "test\0ed";
+    BSTR b;
+    VARIANT v;
+
+    VariantInit(&v);
+
+    hr = IDataConvert_DataConvert(convert, DBTYPE_EMPTY, DBTYPE_STR | DBTYPE_BYREF, 0, &dst_len, src, &dst, sizeof(dst), 0, &dst_status, 0, 0, 0);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(dst_status == DBSTATUS_S_OK, "got %08x\n", dst_status);
+    ok(dst_len == 0, "got %ld\n", dst_len);
+    ok(dst[0] == 0, "got %04x\n", dst[0]);
+    CoTaskMemFree(dst);
+
+    dst = (void*)0x12345678;
+    dst_len = 0x1234;
+    hr = IDataConvert_DataConvert(convert, DBTYPE_NULL, DBTYPE_STR | DBTYPE_BYREF, 0, &dst_len, src, &dst, sizeof(dst), 0, &dst_status, 0, 0, 0);
+    ok(hr == DB_E_UNSUPPORTEDCONVERSION, "got %08x\n", hr);
+    ok(dst_status == DBSTATUS_E_BADACCESSOR, "got %08x\n", dst_status);
+    ok(dst_len == 0x1234, "got %ld\n", dst_len);
+    ok(dst == (void*)0x12345678, "got %p\n", dst);
+
+    *(short *)src = 4321;
+    dst_len = 0x1234;
+    hr = IDataConvert_DataConvert(convert, DBTYPE_I2, DBTYPE_STR | DBTYPE_BYREF, 0, &dst_len, src, &dst, sizeof(dst), 0, &dst_status, 0, 0, 0);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(dst_status == DBSTATUS_S_OK, "got %08x\n", dst_status);
+    ok(dst_len == 4, "got %ld\n", dst_len);
+    ok(!lstrcmpA(dst, "4321"), "got %s\n", dst);
+    CoTaskMemFree(dst);
+
+    *(short *)src = 4321;
+    dst_len = 0x1234;
+    hr = IDataConvert_DataConvert(convert, DBTYPE_I2, DBTYPE_STR | DBTYPE_BYREF, 0, &dst_len, src, &dst, 0, 0, &dst_status, 0, 0, 0);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(dst_status == DBSTATUS_S_OK, "got %08x\n", dst_status);
+    ok(dst_len == 4, "got %ld\n", dst_len);
+    ok(!lstrcmpA(dst, "4321"), "got %s\n", dst);
+    CoTaskMemFree(dst);
+
+    b = SysAllocString(ten);
+    *(BSTR *)src = b;
+    dst_len = 0x1234;
+    hr = IDataConvert_DataConvert(convert, DBTYPE_BSTR, DBTYPE_STR | DBTYPE_BYREF, 0, &dst_len, src, &dst, sizeof(dst), 0, &dst_status, 0, 0, 0);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(dst_status == DBSTATUS_S_OK, "got %08x\n", dst_status);
+    ok(dst_len == 2, "got %ld\n", dst_len);
+    ok(!lstrcmpA("10", dst), "got %s\n", dst);
+    CoTaskMemFree(dst);
+    SysFreeString(b);
+
+    memcpy(src, ten, sizeof(ten));
+    dst_len = 0x1234;
+    hr = IDataConvert_DataConvert(convert, DBTYPE_WSTR, DBTYPE_STR | DBTYPE_BYREF, 2, &dst_len, src, &dst, sizeof(dst), 0, &dst_status, 0, 0, 0);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(dst_status == DBSTATUS_S_OK, "got %08x\n", dst_status);
+    ok(dst_len == 1, "got %ld\n", dst_len);
+    ok(dst[0] == '1', "got %02x\n", dst[0]);
+    ok(dst[1] == 0, "got %02x\n", dst[1]);
+    CoTaskMemFree(dst);
+
+    memcpy(src, ten, sizeof(ten));
+    dst_len = 0x1234;
+    hr = IDataConvert_DataConvert(convert, DBTYPE_WSTR, DBTYPE_STR | DBTYPE_BYREF, 4, &dst_len, src, &dst, sizeof(dst), 0, &dst_status, 0, 0, 0);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(dst_status == DBSTATUS_S_OK, "got %08x\n", dst_status);
+    ok(dst_len == 2, "got %ld\n", dst_len);
+    ok(!lstrcmpA("10", dst), "got %s\n", dst);
+    CoTaskMemFree(dst);
+
+    memcpy(src, ten, sizeof(ten));
+    dst_len = 0x1234;
+    hr = IDataConvert_DataConvert(convert, DBTYPE_WSTR, DBTYPE_STR | DBTYPE_BYREF, 0, &dst_len, src, &dst, sizeof(dst), 0, &dst_status, 0, 0, DBDATACONVERT_LENGTHFROMNTS);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(dst_status == DBSTATUS_S_OK, "got %08x\n", dst_status);
+    ok(dst_len == 2, "got %ld\n", dst_len);
+    ok(!lstrcmpA("10", dst), "got %s\n", dst);
+    CoTaskMemFree(dst);
+
+    memcpy(src, withnull, sizeof(withnull));
+    dst_len = 0x1234;
+    hr = IDataConvert_DataConvert(convert, DBTYPE_STR, DBTYPE_STR | DBTYPE_BYREF, sizeof(withnull), &dst_len, src, &dst, sizeof(dst), 0, &dst_status, 0, 0, 0);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(dst_status == DBSTATUS_S_OK, "got %08x\n", dst_status);
+    ok(dst_len == 8, "got %ld\n", dst_len);
+    ok(!memcmp(withnull, dst, 8), "got %s\n", dst);
+    ok(dst[8] == 0, "got %02x\n", dst[8]);
+    CoTaskMemFree(dst);
+
+    memcpy(src, withnull, sizeof(withnull));
+    dst_len = 0x1234;
+    hr = IDataConvert_DataConvert(convert, DBTYPE_STR, DBTYPE_STR | DBTYPE_BYREF, 7, &dst_len, src, &dst, sizeof(dst), 0, &dst_status, 0, 0, 0);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(dst_status == DBSTATUS_S_OK, "got %08x\n", dst_status);
+    ok(dst_len == 7, "got %ld\n", dst_len);
+    ok(!memcmp(withnull, dst, 7), "got %s\n", dst);
+    ok(dst[7] == 0, "got %02x\n", dst[7]);
+    CoTaskMemFree(dst);
+
+    memcpy(src, withnull, sizeof(withnull));
+    dst_len = 0x1234;
+    hr = IDataConvert_DataConvert(convert, DBTYPE_STR, DBTYPE_STR | DBTYPE_BYREF, 6, &dst_len, src, &dst, sizeof(dst), 0, &dst_status, 0, 0, 0);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(dst_status == DBSTATUS_S_OK, "got %08x\n", dst_status);
+    ok(dst_len == 6, "got %ld\n", dst_len);
+    ok(!memcmp(withnull, dst, 6), "got %s\n", dst);
+    ok(dst[6] == 0, "got %02x\n", dst[6]);
+    CoTaskMemFree(dst);
+
+
+    dst_len = 44;
+    V_VT(&v) = VT_NULL;
+    hr = IDataConvert_DataConvert(convert, DBTYPE_VARIANT, DBTYPE_STR | DBTYPE_BYREF, 0, &dst_len, &v, dst, sizeof(dst), 0, &dst_status, 0, 0, 0);
     ok(hr == S_OK, "got %08x\n", hr);
     ok(dst_status == DBSTATUS_S_ISNULL, "got %08x\n", dst_status);
     ok(dst_len == 44, "got %ld\n", dst_len);
@@ -3116,6 +3285,7 @@ START_TEST(convert)
     test_converttobstr();
     test_converttowstr();
     test_converttobyrefwstr();
+    test_converttobyrefstr();
     test_converttoguid();
     test_converttoui1();
     test_converttoui4();

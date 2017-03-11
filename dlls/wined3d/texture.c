@@ -806,8 +806,6 @@ void wined3d_texture_bind(struct wined3d_texture *texture,
 void wined3d_texture_bind_and_dirtify(struct wined3d_texture *texture,
         struct wined3d_context *context, BOOL srgb)
 {
-    DWORD active_sampler;
-
     /* We don't need a specific texture unit, but after binding the texture
      * the current unit is dirty. Read the unit back instead of switching to
      * 0, this avoids messing around with the state manager's GL states. The
@@ -817,12 +815,16 @@ void wined3d_texture_bind_and_dirtify(struct wined3d_texture *texture,
      * called from sampler() in state.c. This means we can't touch anything
      * other than whatever happens to be the currently active texture, or we
      * would risk marking already applied sampler states dirty again. */
-    active_sampler = context->rev_tex_unit_map[context->active_texture];
-    if (active_sampler != WINED3D_UNMAPPED_STAGE)
-        context_invalidate_state(context, STATE_SAMPLER(active_sampler));
+    if (context->active_texture < MAX_COMBINED_SAMPLERS)
+    {
+        DWORD active_sampler = context->rev_tex_unit_map[context->active_texture];
+        if (active_sampler != WINED3D_UNMAPPED_STAGE)
+            context_invalidate_state(context, STATE_SAMPLER(active_sampler));
+    }
     /* FIXME: Ideally we'd only do this when touching a binding that's used by
      * a shader. */
-    context_invalidate_state(context, STATE_SHADER_RESOURCE_BINDING);
+    context_invalidate_compute_state(context, STATE_COMPUTE_SHADER_RESOURCE_BINDING);
+    context_invalidate_state(context, STATE_GRAPHICS_SHADER_RESOURCE_BINDING);
 
     wined3d_texture_bind(texture, context, srgb);
 }
@@ -1574,7 +1576,7 @@ static void texture2d_upload_data(struct wined3d_texture *texture, unsigned int 
 static BOOL texture2d_load_location(struct wined3d_texture *texture, unsigned int sub_resource_idx,
         struct wined3d_context *context, DWORD location)
 {
-    return SUCCEEDED(surface_load_location(texture->sub_resources[sub_resource_idx].u.surface, context, location));
+    return surface_load_location(texture->sub_resources[sub_resource_idx].u.surface, context, location);
 }
 
 /* Context activation is done by the caller. */
@@ -1830,16 +1832,15 @@ static HRESULT texture_resource_sub_resource_map(struct wined3d_resource *resour
     if (flags & WINED3D_MAP_DISCARD)
     {
         TRACE("WINED3D_MAP_DISCARD flag passed, marking %s as up to date.\n",
-                wined3d_debug_location(texture->resource.map_binding));
-        if ((ret = wined3d_texture_prepare_location(texture, sub_resource_idx,
-                context, texture->resource.map_binding)))
-            wined3d_texture_validate_location(texture, sub_resource_idx, texture->resource.map_binding);
+                wined3d_debug_location(resource->map_binding));
+        if ((ret = wined3d_texture_prepare_location(texture, sub_resource_idx, context, resource->map_binding)))
+            wined3d_texture_validate_location(texture, sub_resource_idx, resource->map_binding);
     }
     else
     {
         if (resource->usage & WINED3DUSAGE_DYNAMIC)
             WARN_(d3d_perf)("Mapping a dynamic texture without WINED3D_MAP_DISCARD.\n");
-        ret = wined3d_texture_load_location(texture, sub_resource_idx, context, texture->resource.map_binding);
+        ret = wined3d_texture_load_location(texture, sub_resource_idx, context, resource->map_binding);
     }
 
     if (!ret)
@@ -1850,10 +1851,10 @@ static HRESULT texture_resource_sub_resource_map(struct wined3d_resource *resour
     }
 
     if (!(flags & WINED3D_MAP_READONLY)
-        && (!(flags & WINED3D_MAP_NO_DIRTY_UPDATE) || (resource->usage & WINED3DUSAGE_DYNAMIC)))
-        wined3d_texture_invalidate_location(texture, sub_resource_idx, ~texture->resource.map_binding);
+            && (!(flags & WINED3D_MAP_NO_DIRTY_UPDATE) || (resource->usage & WINED3DUSAGE_DYNAMIC)))
+        wined3d_texture_invalidate_location(texture, sub_resource_idx, ~resource->map_binding);
 
-    wined3d_texture_get_memory(texture, sub_resource_idx, &data, texture->resource.map_binding);
+    wined3d_texture_get_memory(texture, sub_resource_idx, &data, resource->map_binding);
     base_memory = wined3d_texture_map_bo_address(&data, sub_resource->size,
             gl_info, GL_PIXEL_UNPACK_BUFFER, flags);
     TRACE("Base memory pointer %p.\n", base_memory);
@@ -1954,10 +1955,6 @@ static HRESULT texture_resource_sub_resource_unmap(struct wined3d_resource *reso
     {
         if (!(sub_resource->locations & (WINED3D_LOCATION_DRAWABLE | WINED3D_LOCATION_TEXTURE_RGB)))
             texture->swapchain->swapchain_ops->swapchain_frontbuffer_updated(texture->swapchain);
-    }
-    else if (resource->format_flags & (WINED3DFMT_FLAG_DEPTH | WINED3DFMT_FLAG_STENCIL))
-    {
-        FIXME("Depth / stencil buffer locking is not implemented.\n");
     }
 
     --sub_resource->map_count;

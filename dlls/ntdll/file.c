@@ -3418,12 +3418,14 @@ NTSTATUS WINAPI NtFlushBuffersFile( HANDLE hFile, IO_STATUS_BLOCK* IoStatusBlock
     int fd, needs_close;
 
     ret = server_get_unix_fd( hFile, FILE_WRITE_DATA, &fd, &needs_close, &type, NULL );
+    if (ret == STATUS_ACCESS_DENIED)
+        ret = server_get_unix_fd( hFile, FILE_APPEND_DATA, &fd, &needs_close, &type, NULL );
 
     if (!ret && type == FD_TYPE_SERIAL)
     {
         ret = COMM_FlushBuffersFile( fd );
     }
-    else
+    else if (ret != STATUS_ACCESS_DENIED)
     {
         SERVER_START_REQ( flush )
         {

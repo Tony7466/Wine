@@ -800,6 +800,12 @@ enum wined3d_display_rotation
     WINED3D_DISPLAY_ROTATION_270            = 4,
 };
 
+enum wined3d_shader_byte_code_format
+{
+    WINED3D_SHADER_BYTE_CODE_FORMAT_SM1     = 0,
+    WINED3D_SHADER_BYTE_CODE_FORMAT_SM4     = 1,
+};
+
 #define WINED3DCOLORWRITEENABLE_RED                             (1u << 0)
 #define WINED3DCOLORWRITEENABLE_GREEN                           (1u << 1)
 #define WINED3DCOLORWRITEENABLE_BLUE                            (1u << 2)
@@ -1888,6 +1894,8 @@ typedef struct _WINED3DCAPS
     DWORD Reserved3;
 
     struct wined3d_ddraw_caps ddraw_caps;
+
+    BOOL shader_double_precision;
 } WINED3DCAPS;
 
 struct wined3d_color_key
@@ -1908,11 +1916,12 @@ struct wined3d_blt_fx
 
 struct wined3d_buffer_desc
 {
-    UINT byte_width;
+    unsigned int byte_width;
     DWORD usage;
-    UINT bind_flags;
-    UINT cpu_access_flags;
-    UINT misc_flags;
+    unsigned int bind_flags;
+    unsigned int cpu_access_flags;
+    unsigned int misc_flags;
+    unsigned int structure_byte_stride;
 };
 
 struct wined3d_rasterizer_state_desc
@@ -1957,6 +1966,8 @@ struct wined3d_shader_signature
 struct wined3d_shader_desc
 {
     const DWORD *byte_code;
+    size_t byte_code_size;
+    enum wined3d_shader_byte_code_format format;
     struct wined3d_shader_signature input_signature;
     struct wined3d_shader_signature output_signature;
     unsigned int max_version;
@@ -2244,6 +2255,10 @@ HRESULT __cdecl wined3d_device_set_clip_status(struct wined3d_device *device,
         const struct wined3d_clip_status *clip_status);
 void __cdecl wined3d_device_set_compute_shader(struct wined3d_device *device, struct wined3d_shader *shader);
 void __cdecl wined3d_device_set_cs_cb(struct wined3d_device *device, unsigned int idx, struct wined3d_buffer *buffer);
+void __cdecl wined3d_device_set_cs_resource_view(struct wined3d_device *device,
+        unsigned int idx, struct wined3d_shader_resource_view *view);
+void __cdecl wined3d_device_set_cs_sampler(struct wined3d_device *device,
+        unsigned int idx, struct wined3d_sampler *sampler);
 void __cdecl wined3d_device_set_cs_uav(struct wined3d_device *device, unsigned int idx,
         struct wined3d_unordered_access_view *uav);
 void __cdecl wined3d_device_set_cursor_position(struct wined3d_device *device,

@@ -125,7 +125,7 @@ typedef void (*second_reorder_function)(LPWSTR pwChar, IndicSyllable *syllable,W
 typedef int (*combining_lexical_function)(WCHAR c);
 
 /* the orders of joined_forms and contextual_features need to line up */
-static const char* contextual_features[] =
+static const char *const contextual_features[] =
 {
     "isol",
     "fina",
@@ -168,7 +168,7 @@ static OPENTYPE_FEATURE_RECORD arabic_features[] =
     { MS_MAKE_TAG('m','s','e','t'), 1},
 };
 
-static const char* required_arabic_features[] =
+static const char *const required_arabic_features[] =
 {
     "fina",
     "init",
@@ -205,7 +205,7 @@ static OPENTYPE_FEATURE_RECORD syriac_features[] =
     { MS_MAKE_TAG('d','l','i','g'), 1},
 };
 
-static const char* required_syriac_features[] =
+static const char *const required_syriac_features[] =
 {
     "fina",
     "fin2",
@@ -263,13 +263,13 @@ static OPENTYPE_FEATURE_RECORD thai_gpos_features[] =
     { MS_MAKE_TAG('m','k','m','k'), 1},
 };
 
-static const char* required_lao_features[] =
+static const char *const required_lao_features[] =
 {
     "ccmp",
     NULL
 };
 
-static const char* required_devanagari_features[] =
+static const char *const required_devanagari_features[] =
 {
     "nukt",
     "akhn",
@@ -309,7 +309,7 @@ static OPENTYPE_FEATURE_RECORD myanmar_features[] =
     { MS_MAKE_TAG('c','l','i','g'), 1},
 };
 
-static const char* required_bengali_features[] =
+static const char *const required_bengali_features[] =
 {
     "nukt",
     "akhn",
@@ -326,7 +326,7 @@ static const char* required_bengali_features[] =
     NULL
 };
 
-static const char* required_gurmukhi_features[] =
+static const char *const required_gurmukhi_features[] =
 {
     "nukt",
     "akhn",
@@ -345,7 +345,7 @@ static const char* required_gurmukhi_features[] =
     NULL
 };
 
-static const char* required_oriya_features[] =
+static const char *const required_oriya_features[] =
 {
     "nukt",
     "akhn",
@@ -362,7 +362,7 @@ static const char* required_oriya_features[] =
     NULL
 };
 
-static const char* required_tamil_features[] =
+static const char *const required_tamil_features[] =
 {
     "nukt",
     "akhn",
@@ -378,7 +378,7 @@ static const char* required_tamil_features[] =
     NULL
 };
 
-static const char* required_telugu_features[] =
+static const char *const required_telugu_features[] =
 {
     "nukt",
     "akhn",
@@ -405,7 +405,7 @@ static OPENTYPE_FEATURE_RECORD khmer_features[] =
     { MS_MAKE_TAG('c','l','i','g'), 1},
 };
 
-static const char* required_khmer_features[] =
+static const char *const required_khmer_features[] =
 {
     "pref",
     "blwf",
@@ -446,7 +446,7 @@ static OPENTYPE_FEATURE_RECORD mongolian_features[] =
 typedef struct ScriptShapeDataTag {
     TEXTRANGE_PROPERTIES   defaultTextRange;
     TEXTRANGE_PROPERTIES   defaultGPOSTextRange;
-    const char**           requiredFeatures;
+    const char *const *requiredFeatures;
     OPENTYPE_TAG           newOtTag;
     ContextualShapingProc  contextProc;
     ShapeCharGlyphPropProc charGlyphPropProc;
@@ -753,11 +753,9 @@ static void UpdateClusters(int nextIndex, int changeCount, int write_dir, int ch
     {
         int i;
         int target_glyph = nextIndex - write_dir;
-        int seeking_glyph;
         int target_index = -1;
         int replacing_glyph = -1;
         int changed = 0;
-        int top_logclust = 0;
 
         if (changeCount > 0)
         {
@@ -767,35 +765,7 @@ static void UpdateClusters(int nextIndex, int changeCount, int write_dir, int ch
                 target_glyph = nextIndex + (changeCount + 1);
         }
 
-        seeking_glyph = target_glyph;
-        for (i = 0; i < chars; i++)
-            if (pwLogClust[i] > top_logclust)
-                top_logclust = pwLogClust[i];
-
-        do {
-            if (write_dir > 0)
-                for (i = 0; i < chars; i++)
-                {
-                    if (pwLogClust[i] == seeking_glyph)
-                    {
-                        target_index = i;
-                        break;
-                    }
-                }
-            else
-                for (i = chars - 1; i >= 0; i--)
-                {
-                    if (pwLogClust[i] == seeking_glyph)
-                    {
-                        target_index = i;
-                        break;
-                    }
-                }
-            if (target_index == -1)
-                seeking_glyph ++;
-        }
-        while (target_index == -1 && seeking_glyph <= top_logclust);
-
+        target_index = USP10_FindGlyphInLogClust(pwLogClust, chars, target_glyph);
         if (target_index == -1)
         {
             ERR("Unable to find target glyph\n");
@@ -882,14 +852,17 @@ static int apply_GSUB_feature(HDC hdc, SCRIPT_ANALYSIS *psa, ScriptCache* psc, W
 
 static VOID GPOS_apply_feature(ScriptCache *psc, LPOUTLINETEXTMETRICW lpotm, LPLOGFONTW lplogfont, const SCRIPT_ANALYSIS *analysis, INT* piAdvance, LoadedFeature *feature, const WORD *glyphs, INT glyph_count, GOFFSET *pGoffset)
 {
-    int i;
+    int dir = analysis->fLogicalOrder && analysis->fRTL ? -1 : 1;
+    unsigned int start_idx, i, j;
 
     TRACE("%i lookups\n", feature->lookup_count);
+
+    start_idx = dir < 0 ? glyph_count - 1 : 0;
     for (i = 0; i < feature->lookup_count; i++)
     {
-        int j;
         for (j = 0; j < glyph_count; )
-            j = OpenType_apply_GPOS_lookup(psc, lpotm, lplogfont, analysis, piAdvance, feature->lookups[i], glyphs, j, glyph_count, pGoffset);
+            j += OpenType_apply_GPOS_lookup(psc, lpotm, lplogfont, analysis, piAdvance,
+                    feature->lookups[i], glyphs, start_idx + dir * j, glyph_count, pGoffset);
     }
 }
 

@@ -1339,3 +1339,41 @@ void __cdecl threads__Mtx_unlock(void *mtx)
 {
     LeaveCriticalSection(mtx);
 }
+
+#if _MSVCP_VER >= 110
+static LONG shared_ptr_lock;
+
+void __cdecl _Lock_shared_ptr_spin_lock(void)
+{
+    LONG l = 0;
+
+    while(InterlockedCompareExchange(&shared_ptr_lock, 1, 0) != 0) {
+        if(l++ == 1000) {
+            Sleep(0);
+            l = 0;
+        }
+    }
+}
+
+void __cdecl _Unlock_shared_ptr_spin_lock(void)
+{
+    shared_ptr_lock = 0;
+}
+#endif
+
+#if _MSVCP_VER >= 140
+typedef struct {
+    void *unk0;
+    BYTE unk1;
+} task_continuation_context;
+
+/* ??0task_continuation_context@Concurrency@@AAE@XZ */
+/* ??0task_continuation_context@Concurrency@@AEAA@XZ */
+DEFINE_THISCALL_WRAPPER(task_continuation_context_ctor, 4)
+task_continuation_context* __thiscall task_continuation_context_ctor(task_continuation_context *this)
+{
+    TRACE("(%p)\n", this);
+    memset(this, 0, sizeof(*this));
+    return this;
+}
+#endif

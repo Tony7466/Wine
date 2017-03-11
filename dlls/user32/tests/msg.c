@@ -985,7 +985,7 @@ static const struct message WmShowPopupExtremeLocationSeq[] = {
     { WM_NCPAINT, sent|wparam, 1 },
     { WM_ERASEBKGND, sent },
     { WM_WINDOWPOSCHANGED, sent },
-    /* ocasionally received on test machines */
+    /* occasionally received on test machines */
     { WM_NCPAINT, sent|optional },
     { WM_ERASEBKGND, sent|optional },
     { 0 }
@@ -1018,7 +1018,7 @@ static const struct message WmShowPopupFirstDrawSeq_1[] = {
     { WM_ERASEBKGND, sent },
     { WM_WINDOWPOSCHANGED, sent },
     { WM_PAINT, sent },
-    /* ocasionally received on test machines */
+    /* occasionally received on test machines */
     { WM_NCPAINT, sent|beginpaint|optional },
     { WM_ERASEBKGND, sent|beginpaint|optional },
     { 0 }
@@ -1058,7 +1058,7 @@ static const struct message WmShowPopupFirstDrawSeq_2[] = {
     { WM_MOVE, sent|defwinproc },
     { WM_SIZE, sent|defwinproc, 0 },
     { WM_PAINT, sent},
-    /* ocasionally received on test machines */
+    /* occasionally received on test machines */
     { WM_NCPAINT, sent|beginpaint|optional },
     { WM_ERASEBKGND, sent|beginpaint|optional },
     { 0 }
@@ -1189,7 +1189,7 @@ static const struct message WmFirstDrawChildSeq1[] = {
 static const struct message WmFirstDrawChildSeq2[] = {
     { WM_NCPAINT, sent|wparam, 1 },
     { WM_ERASEBKGND, sent },
-    /* ocasionally received on test machines */
+    /* occasionally received on test machines */
     { WM_NCPAINT, sent|optional },
     { WM_ERASEBKGND, sent|optional },
     { 0 }
@@ -4651,7 +4651,7 @@ static void test_showwindow(void)
     flush_sequence();
     ShowWindow(hwnd, SW_SHOWMAXIMIZED);
     ok_sequence(WmShowMaxPopupResizedSeq_todo,
-            "ShowWindow(SW_SHOWMAXIMIZED):invisible maximized and resized popup TODO", FALSE);
+            "ShowWindow(SW_SHOWMAXIMIZED):invisible maximized and resized popup TODO", TRUE);
     DestroyWindow(hwnd);
     flush_sequence();
 
@@ -5135,7 +5135,7 @@ static void test_messages(void)
                              10, 10, 100, 100, NULL, 0, 0, NULL );
     ok (hwnd != 0, "Failed to create popup window\n");
     RedrawWindow(hwnd, NULL, NULL, RDW_UPDATENOW);
-    ok_sequence(WmShowPopupFirstDrawSeq_1, "RedrawWindow:show_popup_first_draw_visible", TRUE);
+    ok_sequence(WmShowPopupFirstDrawSeq_1, "RedrawWindow:show_popup_first_draw_visible", FALSE);
     DestroyWindow(hwnd);
 
     /* Invisible, show, message */
@@ -5146,7 +5146,7 @@ static void test_messages(void)
     ok (hwnd != 0, "Failed to create popup window\n");
     ShowWindow(hwnd, SW_SHOW);
     SendMessageW(hwnd, WM_PAINT, 0, 0);
-    ok_sequence(WmShowPopupFirstDrawSeq_1, "RedrawWindow:show_popup_first_draw_show", TRUE);
+    ok_sequence(WmShowPopupFirstDrawSeq_1, "RedrawWindow:show_popup_first_draw_show", FALSE);
     DestroyWindow(hwnd);
 
     /* Invisible, show maximized, redraw */
@@ -5157,38 +5157,38 @@ static void test_messages(void)
     ok (hwnd != 0, "Failed to create popup window\n");
     ShowWindow(hwnd, SW_SHOWMAXIMIZED);
     RedrawWindow(hwnd, NULL, NULL, RDW_UPDATENOW);
-    ok_sequence(WmShowPopupFirstDrawSeq_2, "RedrawWindow:show_popup_first_draw_show_maximized", TRUE);
+    ok_sequence(WmShowPopupFirstDrawSeq_2, "RedrawWindow:show_popup_first_draw_show_maximized", FALSE);
     DestroyWindow(hwnd);
 
     /* Test SetWindowPos */
-    test_msg_setpos(WmFirstDrawSetWindowPosSeq1, SWP_SHOWWINDOW, TRUE);
+    test_msg_setpos(WmFirstDrawSetWindowPosSeq1, SWP_SHOWWINDOW, FALSE);
     test_msg_setpos(WmFirstDrawSetWindowPosSeq2, 0, FALSE);
     test_msg_setpos(WmFirstDrawSetWindowPosSeq3,
-            SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE | SWP_NOCLIENTSIZE | SWP_NOCLIENTMOVE | SWP_NOZORDER, TRUE);
+            SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE | SWP_NOCLIENTSIZE | SWP_NOCLIENTMOVE | SWP_NOZORDER, FALSE);
 
-    test_msg_setpos(WmFirstDrawSetWindowPosSeq1, SWP_SHOWWINDOW | SWP_NOSIZE, TRUE);
-    test_msg_setpos(WmFirstDrawSetWindowPosSeq4, SWP_SHOWWINDOW | SWP_NOMOVE, TRUE);
-    test_msg_setpos(WmFirstDrawSetWindowPosSeq3, SWP_SHOWWINDOW | SWP_NOCLIENTSIZE, TRUE);
-    test_msg_setpos(WmFirstDrawSetWindowPosSeq3, SWP_SHOWWINDOW | SWP_NOCLIENTMOVE, TRUE);
-    test_msg_setpos(WmFirstDrawSetWindowPosSeq1, SWP_SHOWWINDOW | SWP_NOZORDER, TRUE);
+    test_msg_setpos(WmFirstDrawSetWindowPosSeq1, SWP_SHOWWINDOW | SWP_NOSIZE, FALSE);
+    test_msg_setpos(WmFirstDrawSetWindowPosSeq4, SWP_SHOWWINDOW | SWP_NOMOVE, FALSE);
+    test_msg_setpos(WmFirstDrawSetWindowPosSeq3, SWP_SHOWWINDOW | SWP_NOCLIENTSIZE, FALSE);
+    test_msg_setpos(WmFirstDrawSetWindowPosSeq3, SWP_SHOWWINDOW | SWP_NOCLIENTMOVE, FALSE);
+    test_msg_setpos(WmFirstDrawSetWindowPosSeq1, SWP_SHOWWINDOW | SWP_NOZORDER, FALSE);
 
     test_msg_setpos(WmFirstDrawSetWindowPosSeq2, SWP_SHOWWINDOW | SWP_DEFERERASE, FALSE);
-    test_msg_setpos(WmFirstDrawSetWindowPosSeq3, SWP_SHOWWINDOW | SWP_DEFERERASE | SWP_NOCLIENTMOVE, TRUE);
-    test_msg_setpos(WmFirstDrawSetWindowPosSeq3, SWP_SHOWWINDOW | SWP_DEFERERASE | SWP_NOCLIENTSIZE, TRUE);
+    test_msg_setpos(WmFirstDrawSetWindowPosSeq3, SWP_SHOWWINDOW | SWP_DEFERERASE | SWP_NOCLIENTMOVE, FALSE);
+    test_msg_setpos(WmFirstDrawSetWindowPosSeq3, SWP_SHOWWINDOW | SWP_DEFERERASE | SWP_NOCLIENTSIZE, FALSE);
     test_msg_setpos(WmFirstDrawSetWindowPosSeq5, SWP_SHOWWINDOW | SWP_DEFERERASE | SWP_NOMOVE, FALSE);
     test_msg_setpos(WmFirstDrawSetWindowPosSeq2, SWP_SHOWWINDOW | SWP_DEFERERASE | SWP_NOSIZE, FALSE);
     test_msg_setpos(WmFirstDrawSetWindowPosSeq2, SWP_SHOWWINDOW | SWP_DEFERERASE | SWP_NOZORDER, FALSE);
 
-    test_msg_setpos(WmFirstDrawSetWindowPosSeq1, SWP_SHOWWINDOW | SWP_NOCOPYBITS, TRUE);
-    test_msg_setpos(WmFirstDrawSetWindowPosSeq3, SWP_SHOWWINDOW | SWP_NOCOPYBITS | SWP_NOCLIENTMOVE, TRUE);
-    test_msg_setpos(WmFirstDrawSetWindowPosSeq3, SWP_SHOWWINDOW | SWP_NOCOPYBITS | SWP_NOCLIENTSIZE, TRUE);
-    test_msg_setpos(WmFirstDrawSetWindowPosSeq4, SWP_SHOWWINDOW | SWP_NOCOPYBITS | SWP_NOMOVE, TRUE);
-    test_msg_setpos(WmFirstDrawSetWindowPosSeq1, SWP_SHOWWINDOW | SWP_NOCOPYBITS | SWP_NOSIZE, TRUE);
-    test_msg_setpos(WmFirstDrawSetWindowPosSeq1, SWP_SHOWWINDOW | SWP_NOCOPYBITS | SWP_NOZORDER, TRUE);
+    test_msg_setpos(WmFirstDrawSetWindowPosSeq1, SWP_SHOWWINDOW | SWP_NOCOPYBITS, FALSE);
+    test_msg_setpos(WmFirstDrawSetWindowPosSeq3, SWP_SHOWWINDOW | SWP_NOCOPYBITS | SWP_NOCLIENTMOVE, FALSE);
+    test_msg_setpos(WmFirstDrawSetWindowPosSeq3, SWP_SHOWWINDOW | SWP_NOCOPYBITS | SWP_NOCLIENTSIZE, FALSE);
+    test_msg_setpos(WmFirstDrawSetWindowPosSeq4, SWP_SHOWWINDOW | SWP_NOCOPYBITS | SWP_NOMOVE, FALSE);
+    test_msg_setpos(WmFirstDrawSetWindowPosSeq1, SWP_SHOWWINDOW | SWP_NOCOPYBITS | SWP_NOSIZE, FALSE);
+    test_msg_setpos(WmFirstDrawSetWindowPosSeq1, SWP_SHOWWINDOW | SWP_NOCOPYBITS | SWP_NOZORDER, FALSE);
 
     test_msg_setpos(WmFirstDrawSetWindowPosSeq2, SWP_SHOWWINDOW | SWP_NOREDRAW, FALSE);
-    test_msg_setpos(WmFirstDrawSetWindowPosSeq3, SWP_SHOWWINDOW | SWP_NOREDRAW | SWP_NOCLIENTMOVE, TRUE);
-    test_msg_setpos(WmFirstDrawSetWindowPosSeq3, SWP_SHOWWINDOW | SWP_NOREDRAW | SWP_NOCLIENTSIZE, TRUE);
+    test_msg_setpos(WmFirstDrawSetWindowPosSeq3, SWP_SHOWWINDOW | SWP_NOREDRAW | SWP_NOCLIENTMOVE, FALSE);
+    test_msg_setpos(WmFirstDrawSetWindowPosSeq3, SWP_SHOWWINDOW | SWP_NOREDRAW | SWP_NOCLIENTSIZE, FALSE);
     test_msg_setpos(WmFirstDrawSetWindowPosSeq5, SWP_SHOWWINDOW | SWP_NOREDRAW | SWP_NOMOVE, FALSE);
     test_msg_setpos(WmFirstDrawSetWindowPosSeq2, SWP_SHOWWINDOW | SWP_NOREDRAW | SWP_NOSIZE, FALSE);
     test_msg_setpos(WmFirstDrawSetWindowPosSeq2, SWP_SHOWWINDOW | SWP_NOREDRAW | SWP_NOZORDER, FALSE);
@@ -5220,7 +5220,7 @@ static void test_messages(void)
     flush_sequence();
     SetWindowPos(hparent, NULL, 0, 0, 100, 100, SWP_SHOWWINDOW);
     ok_sequence(WmFirstDrawChildSeq2, /* Expect child to be redrawn */
-                "SetWindowPos:show_popup_first_show_window_child2", TRUE);
+                "SetWindowPos:show_popup_first_show_window_child2", FALSE);
     DestroyWindow(hchild);
     DestroyWindow(hparent);
 
@@ -14378,6 +14378,18 @@ static const struct message NCRBUTTONDOWNSeq[] =
     { 0 }
 };
 
+static const struct message NCXBUTTONUPSeq1[] =
+{
+    { WM_APPCOMMAND, sent|lparam, /*hwnd*/0, MAKELPARAM(0, FAPPCOMMAND_MOUSE | APPCOMMAND_BROWSER_BACKWARD) },
+    { 0 }
+};
+
+static const struct message NCXBUTTONUPSeq2[] =
+{
+    { WM_APPCOMMAND, sent|lparam, /*hwnd*/0, MAKELPARAM(0, FAPPCOMMAND_MOUSE | APPCOMMAND_BROWSER_FORWARD) },
+    { 0 }
+};
+
 struct rbuttonup_thread_data
 {
     HWND hwnd;
@@ -14436,6 +14448,22 @@ static void test_defwinproc(void)
 
     DefWindowProcA( hwnd, WM_NCRBUTTONDOWN, HTCAPTION, MAKELPARAM(x, y));
     ok_sequence(NCRBUTTONDOWNSeq, "WM_NCRBUTTONDOWN on caption", FALSE);
+
+    res = DefWindowProcA(hwnd, WM_NCXBUTTONUP, 0, MAKELPARAM(x, y));
+    ok(!res, "WM_NCXBUTTONUP returned %ld\n", res);
+    ok_sequence(WmEmptySeq, "WM_NCXBUTTONUP without button", FALSE);
+
+    res = DefWindowProcA(hwnd, WM_NCXBUTTONUP, MAKEWPARAM(0, XBUTTON1), MAKELPARAM(x, y));
+    ok(!res, "WM_NCXBUTTONUP returned %ld\n", res);
+    ok_sequence(NCXBUTTONUPSeq1, "WM_NCXBUTTONUP with XBUTTON1", FALSE);
+
+    res = DefWindowProcA(hwnd, WM_NCXBUTTONUP, MAKEWPARAM(0, XBUTTON2), MAKELPARAM(x, y));
+    ok(!res, "WM_NCXBUTTONUP returned %ld\n", res);
+    ok_sequence(NCXBUTTONUPSeq2, "WM_NCXBUTTONUP with XBUTTON2", FALSE);
+
+    res = DefWindowProcA(hwnd, WM_NCXBUTTONUP, MAKEWPARAM(0, 3), MAKELPARAM(x, y));
+    ok(!res, "WM_NCXBUTTONUP returned %ld\n", res);
+    ok_sequence(WmEmptySeq, "WM_NCXBUTTONUP with invalid button", FALSE);
 
     SetEvent( data.wndproc_finished );
     WaitForSingleObject( thread, 1000 );

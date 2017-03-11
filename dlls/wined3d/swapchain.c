@@ -27,6 +27,11 @@
 WINE_DEFAULT_DEBUG_CHANNEL(d3d);
 WINE_DECLARE_DEBUG_CHANNEL(fps);
 
+static void wined3d_swapchain_destroy_object(void *object)
+{
+    swapchain_destroy_contexts(object);
+}
+
 static void swapchain_cleanup(struct wined3d_swapchain *swapchain)
 {
     HRESULT hr;
@@ -60,11 +65,7 @@ static void swapchain_cleanup(struct wined3d_swapchain *swapchain)
         swapchain->back_buffers = NULL;
     }
 
-    for (i = 0; i < swapchain->num_contexts; ++i)
-    {
-        context_destroy(swapchain->device, swapchain->context[i]);
-    }
-    HeapFree(GetProcessHeap(), 0, swapchain->context);
+    wined3d_cs_destroy_object(swapchain->device->cs, wined3d_swapchain_destroy_object, swapchain);
 
     /* Restore the screen resolution if we rendered in fullscreen.
      * This will restore the screen resolution to what it was before creating
@@ -487,7 +488,7 @@ static void swapchain_gl_present(struct wined3d_swapchain *swapchain,
         const RECT *src_rect, const RECT *dst_rect, DWORD flags)
 {
     struct wined3d_texture *back_buffer = swapchain->back_buffers[0];
-    const struct wined3d_fb_state *fb = &swapchain->device->fb;
+    const struct wined3d_fb_state *fb = &swapchain->device->cs->fb;
     const struct wined3d_gl_info *gl_info;
     struct wined3d_texture *logo_texture;
     struct wined3d_context *context;
@@ -781,6 +782,50 @@ static void wined3d_swapchain_apply_sample_count_override(const struct wined3d_s
     *quality = 0;
 }
 
+static void wined3d_swapchain_cs_init(void *object)
+{
+    struct wined3d_swapchain *swapchain = object;
+    const struct wined3d_gl_info *gl_info;
+    unsigned int i;
+
+    static const enum wined3d_format_id formats[] =
+    {
+        WINED3DFMT_D24_UNORM_S8_UINT,
+        WINED3DFMT_D32_UNORM,
+        WINED3DFMT_R24_UNORM_X8_TYPELESS,
+        WINED3DFMT_D16_UNORM,
+        WINED3DFMT_S1_UINT_D15_UNORM,
+    };
+
+    gl_info = &swapchain->device->adapter->gl_info;
+
+    /* Without ORM_FBO, switching the depth/stencil format is hard. Always
+     * request a depth/stencil buffer in the likely case it's needed later. */
+    for (i = 0; i < ARRAY_SIZE(formats); ++i)
+    {
+        swapchain->ds_format = wined3d_get_format(gl_info, formats[i], WINED3DUSAGE_DEPTHSTENCIL);
+        if ((swapchain->context[0] = context_create(swapchain, swapchain->front_buffer, swapchain->ds_format)))
+            break;
+        TRACE("Depth stencil format %s is not supported, trying next format.\n", debug_d3dformat(formats[i]));
+    }
+
+    if (!swapchain->context[0])
+    {
+        WARN("Failed to create context.\n");
+        return;
+    }
+    swapchain->num_contexts = 1;
+
+    if (wined3d_settings.offscreen_rendering_mode != ORM_FBO
+            && (!swapchain->desc.enable_auto_depth_stencil
+            || swapchain->desc.auto_depth_stencil_format != swapchain->ds_format->id))
+        FIXME("Add OpenGL context recreation support.\n");
+
+    context_release(swapchain->context[0]);
+
+    swapchain_update_swap_interval(swapchain);
+}
+
 static HRESULT swapchain_init(struct wined3d_swapchain *swapchain, struct wined3d_device *device,
         struct wined3d_swapchain_desc *desc, void *parent, const struct wined3d_parent_ops *parent_ops)
 {
@@ -907,17 +952,6 @@ static HRESULT swapchain_init(struct wined3d_swapchain *swapchain, struct wined3
 
     if (!(device->wined3d->flags & WINED3D_NO3D))
     {
-        static const enum wined3d_format_id formats[] =
-        {
-            WINED3DFMT_D24_UNORM_S8_UINT,
-            WINED3DFMT_D32_UNORM,
-            WINED3DFMT_R24_UNORM_X8_TYPELESS,
-            WINED3DFMT_D16_UNORM,
-            WINED3DFMT_S1_UINT_D15_UNORM
-        };
-
-        const struct wined3d_gl_info *gl_info = &adapter->gl_info;
-
         swapchain->context = HeapAlloc(GetProcessHeap(), 0, sizeof(*swapchain->context));
         if (!swapchain->context)
         {
@@ -925,43 +959,14 @@ static HRESULT swapchain_init(struct wined3d_swapchain *swapchain, struct wined3
             hr = E_OUTOFMEMORY;
             goto err;
         }
-        swapchain->num_contexts = 1;
 
-        /* In WGL both color, depth and stencil are features of a pixel format. In case of D3D they are separate.
-         * You are able to add a depth + stencil surface at a later stage when you need it.
-         * In order to support this properly in WineD3D we need the ability to recreate the opengl context and
-         * drawable when this is required. This is very tricky as we need to reapply ALL opengl states for the new
-         * context, need torecreate shaders, textures and other resources.
-         *
-         * The context manager already takes care of the state problem and for the other tasks code from Reset
-         * can be used. These changes are way to risky during the 1.0 code freeze which is taking place right now.
-         * Likely a lot of other new bugs will be exposed. For that reason request a depth stencil surface all the
-         * time. It can cause a slight performance hit but fixes a lot of regressions. A fixme reminds of that this
-         * issue needs to be fixed. */
-        for (i = 0; i < (sizeof(formats) / sizeof(*formats)); i++)
-        {
-            swapchain->ds_format = wined3d_get_format(gl_info, formats[i], WINED3DUSAGE_DEPTHSTENCIL);
-            swapchain->context[0] = context_create(swapchain, swapchain->front_buffer, swapchain->ds_format);
-            if (swapchain->context[0]) break;
-            TRACE("Depth stencil format %s is not supported, trying next format\n",
-                  debug_d3dformat(formats[i]));
-        }
+        wined3d_cs_init_object(device->cs, wined3d_swapchain_cs_init, swapchain);
 
         if (!swapchain->context[0])
         {
-            WARN("Failed to create context.\n");
             hr = WINED3DERR_NOTAVAILABLE;
             goto err;
         }
-
-        if (wined3d_settings.offscreen_rendering_mode != ORM_FBO
-                && (!desc->enable_auto_depth_stencil
-                || swapchain->desc.auto_depth_stencil_format != swapchain->ds_format->id))
-        {
-            FIXME("Add OpenGL context recreation support to context_validate_onscreen_formats\n");
-        }
-        context_release(swapchain->context[0]);
-        swapchain_update_swap_interval(swapchain);
     }
 
     if (swapchain->desc.backbuffer_count > 0)
@@ -1051,16 +1056,7 @@ err:
         HeapFree(GetProcessHeap(), 0, swapchain->back_buffers);
     }
 
-    if (swapchain->context)
-    {
-        if (swapchain->context[0])
-        {
-            context_release(swapchain->context[0]);
-            context_destroy(device, swapchain->context[0]);
-            swapchain->num_contexts = 0;
-        }
-        HeapFree(GetProcessHeap(), 0, swapchain->context);
-    }
+    wined3d_cs_destroy_object(swapchain->device->cs, wined3d_swapchain_destroy_object, swapchain);
 
     if (swapchain->front_buffer)
     {

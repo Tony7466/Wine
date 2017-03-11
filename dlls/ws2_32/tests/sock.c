@@ -1565,6 +1565,8 @@ todo_wine
     /* test SO_PROTOCOL_INFO structure returned for different protocols */
     for (i = 0; i < sizeof(prottest) / sizeof(prottest[0]); i++)
     {
+        int k;
+
         s = socket(prottest[i].family, prottest[i].type, prottest[i].proto);
         if (s == INVALID_SOCKET && prottest[i].family == AF_INET6) continue;
 
@@ -1608,6 +1610,76 @@ todo_wine
            prottest[i].type, infoA.iSocketType);
         ok(infoA.iProtocol == prottest[i].proto, "socket protocol invalid, expected %d received %d\n",
            prottest[i].proto, infoA.iProtocol);
+
+        /* IP_HDRINCL is supported only on SOCK_RAW but passed to SOCK_DGRAM by Impossible Creatures */
+        size = sizeof(i);
+        k = 1;
+        SetLastError(0xdeadbeef);
+        err = setsockopt(s, IPPROTO_IP, IP_HDRINCL, (char *) &k, size);
+        if (err == -1) /* >= Vista */
+        {
+            todo_wine {
+            ok(GetLastError() == WSAEINVAL, "Expected 10022, got %d\n", GetLastError());
+            k = 99;
+            SetLastError(0xdeadbeef);
+            err = getsockopt(s, IPPROTO_IP, IP_HDRINCL, (char *) &k, &size);
+            ok(err == -1, "Expected -1, got %d\n", err);
+            ok(GetLastError() == WSAEINVAL, "Expected 10022, got %d\n", GetLastError());
+            ok(k == 99, "Expected 99, got %d\n", k);
+
+            size = sizeof(k);
+            k = 0;
+            SetLastError(0xdeadbeef);
+            err = setsockopt(s, IPPROTO_IP, IP_HDRINCL, (char *) &k, size);
+            }
+            ok(err == -1, "Expected -1, got %d\n", err);
+            todo_wine {
+            ok(GetLastError() == WSAEINVAL, "Expected 10022, got %d\n", GetLastError());
+            k = 99;
+            SetLastError(0xdeadbeef);
+            err = getsockopt(s, IPPROTO_IP, IP_HDRINCL, (char *) &k, &size);
+            ok(err == -1, "Expected -1, got %d\n", err);
+            ok(GetLastError() == WSAEINVAL, "Expected 10022, got %d\n", GetLastError());
+            ok(k == 99, "Expected 99, got %d\n", k);
+            }
+        }
+        else /* <= 2003 the tests differ between TCP and UDP, UDP silenty accepts */
+        {
+            SetLastError(0xdeadbeef);
+            k = 99;
+            err = getsockopt(s, IPPROTO_IP, IP_HDRINCL, (char *) &k, &size);
+            if (prottest[i].type == SOCK_DGRAM)
+            {
+                ok(err == 0, "Expected 0, got %d\n", err);
+                ok(k == 1, "Expected 1, got %d\n", k);
+            }
+            else
+            {
+                /* contratry to what we could expect the function returns error but k is changed */
+                ok(err == -1, "Expected -1, got %d\n", err);
+                ok(GetLastError() == WSAENOPROTOOPT, "Expected 10042, got %d\n", GetLastError());
+                ok(k == 0, "Expected 0, got %d\n", k);
+            }
+
+            k = 0;
+            err = setsockopt(s, IPPROTO_IP, IP_HDRINCL, (char *) &k, size);
+            ok(err == 0, "Expected 0, got %d\n", err);
+
+            k = 99;
+            err = getsockopt(s, IPPROTO_IP, IP_HDRINCL, (char *) &k, &size);
+            if (prottest[i].type == SOCK_DGRAM)
+            {
+                ok(err == 0, "Expected 0, got %d\n", err);
+                ok(k == 0, "Expected 0, got %d\n", k);
+            }
+            else
+            {
+                /* contratry to what we could expect the function returns error but k is changed */
+                ok(err == -1, "Expected -1, got %d\n", err);
+                ok(GetLastError() == WSAENOPROTOOPT, "Expected 10042, got %d\n", GetLastError());
+                ok(k == 0, "Expected 0, got %d\n", k);
+            }
+        }
 
         closesocket(s);
     }
@@ -3325,15 +3397,27 @@ static void test_WSAStringToAddressA(void)
         (ret == SOCKET_ERROR && (GLE == ERROR_INVALID_PARAMETER || GLE == WSAEINVAL)),
         "WSAStringToAddressA() failed unexpectedly: %d\n", GLE );
 
+    len = sizeof(sockaddr);
+
+    ret = WSAStringToAddressA( address9, AF_INET, NULL, (SOCKADDR*)&sockaddr, &len );
+    GLE = WSAGetLastError();
+    ok( (ret == SOCKET_ERROR && GLE == WSAEINVAL),
+        "WSAStringToAddressA() should have failed with %d\n", GLE );
+
     len = sizeof(sockaddr6);
     memset(&sockaddr6, 0, len);
     sockaddr6.sin6_family = AF_INET6;
 
     ret = WSAStringToAddressA( address6, AF_INET6, NULL, (SOCKADDR*)&sockaddr6,
             &len );
+    if (ret == SOCKET_ERROR)
+    {
+        win_skip("IPv6 not supported\n");
+        return;
+    }
+
     GLE = WSAGetLastError();
-    ok( ret == 0 || (ret == SOCKET_ERROR && GLE == WSAEINVAL),
-        "WSAStringToAddressA() failed for IPv6 address: %d\n", GLE);
+    ok( ret == 0, "WSAStringToAddressA() failed for IPv6 address: %d\n", GLE);
 
     len = sizeof(sockaddr6);
     memset(&sockaddr6, 0, len);
@@ -3342,8 +3426,7 @@ static void test_WSAStringToAddressA(void)
     ret = WSAStringToAddressA( address7, AF_INET6, NULL, (SOCKADDR*)&sockaddr6,
             &len );
     GLE = WSAGetLastError();
-    ok( ret == 0 || (ret == SOCKET_ERROR && GLE == WSAEINVAL),
-        "WSAStringToAddressA() failed for IPv6 address: %d\n", GLE);
+    ok( ret == 0, "WSAStringToAddressA() failed for IPv6 address: %d\n", GLE);
 
     len = sizeof(sockaddr6);
     memset(&sockaddr6, 0, len);
@@ -3352,16 +3435,22 @@ static void test_WSAStringToAddressA(void)
     ret = WSAStringToAddressA( address8, AF_INET6, NULL, (SOCKADDR*)&sockaddr6,
             &len );
     GLE = WSAGetLastError();
-    ok( (ret == 0 && sockaddr6.sin6_port == 0xffff) ||
-        (ret == SOCKET_ERROR && GLE == WSAEINVAL),
+    ok( ret == 0 && sockaddr6.sin6_port == 0xffff,
         "WSAStringToAddressA() failed for IPv6 address: %d\n", GLE);
 
-    len = sizeof(sockaddr);
+    len = sizeof(sockaddr6);
 
-    ret = WSAStringToAddressA( address9, AF_INET, NULL, (SOCKADDR*)&sockaddr, &len );
+    ret = WSAStringToAddressA( address7 + 1, AF_INET6, NULL, (SOCKADDR*)&sockaddr, &len );
     GLE = WSAGetLastError();
     ok( (ret == SOCKET_ERROR && GLE == WSAEINVAL),
-        "WSAStringToAddressA() should have failed with %d\n", GLE );
+        "WSAStringToAddressW() should have failed with %d\n", GLE );
+
+    len = sizeof(sockaddr6);
+
+    ret = WSAStringToAddressA( address8 + 1, AF_INET6, NULL, (SOCKADDR*)&sockaddr, &len );
+    GLE = WSAGetLastError();
+    ok( (ret == SOCKET_ERROR && GLE == WSAEINVAL),
+        "WSAStringToAddressW() should have failed with %d\n", GLE );
 }
 
 static void test_WSAStringToAddressW(void)
@@ -3448,15 +3537,27 @@ static void test_WSAStringToAddressW(void)
         broken(len == sizeof(SOCKADDR_STORAGE)) /* NT4/2k */,
         "unexpected length %d\n", len );
 
+    len = sizeof(sockaddr);
+
+    ret = WSAStringToAddressW( address9, AF_INET, NULL, (SOCKADDR*)&sockaddr, &len );
+    GLE = WSAGetLastError();
+    ok( (ret == SOCKET_ERROR && GLE == WSAEINVAL),
+        "WSAStringToAddressW() should have failed with %d\n", GLE );
+
     len = sizeof(sockaddr6);
     memset(&sockaddr6, 0, len);
     sockaddr6.sin6_family = AF_INET6;
 
     ret = WSAStringToAddressW( address6, AF_INET6, NULL, (SOCKADDR*)&sockaddr6,
             &len );
+    if (ret == SOCKET_ERROR)
+    {
+        win_skip("IPv6 not supported\n");
+        return;
+    }
+
     GLE = WSAGetLastError();
-    ok( ret == 0 || (ret == SOCKET_ERROR && GLE == WSAEINVAL),
-        "WSAStringToAddressW() failed for IPv6 address: %d\n", GLE);
+    ok( ret == 0, "WSAStringToAddressW() failed for IPv6 address: %d\n", GLE);
 
     len = sizeof(sockaddr6);
     memset(&sockaddr6, 0, len);
@@ -3465,8 +3566,7 @@ static void test_WSAStringToAddressW(void)
     ret = WSAStringToAddressW( address7, AF_INET6, NULL, (SOCKADDR*)&sockaddr6,
             &len );
     GLE = WSAGetLastError();
-    ok( ret == 0 || (ret == SOCKET_ERROR && GLE == WSAEINVAL),
-        "WSAStringToAddressW() failed for IPv6 address: %d\n", GLE);
+    ok( ret == 0, "WSAStringToAddressW() failed for IPv6 address: %d\n", GLE);
 
     len = sizeof(sockaddr6);
     memset(&sockaddr6, 0, len);
@@ -3475,13 +3575,19 @@ static void test_WSAStringToAddressW(void)
     ret = WSAStringToAddressW( address8, AF_INET6, NULL, (SOCKADDR*)&sockaddr6,
             &len );
     GLE = WSAGetLastError();
-    ok( (ret == 0 && sockaddr6.sin6_port == 0xffff) ||
-        (ret == SOCKET_ERROR && GLE == WSAEINVAL),
+    ok( ret == 0 && sockaddr6.sin6_port == 0xffff,
         "WSAStringToAddressW() failed for IPv6 address: %d\n", GLE);
 
-    len = sizeof(sockaddr);
+    len = sizeof(sockaddr6);
 
-    ret = WSAStringToAddressW( address9, AF_INET, NULL, (SOCKADDR*)&sockaddr, &len );
+    ret = WSAStringToAddressW( address7 + 1, AF_INET6, NULL, (SOCKADDR*)&sockaddr, &len );
+    GLE = WSAGetLastError();
+    ok( (ret == SOCKET_ERROR && GLE == WSAEINVAL),
+        "WSAStringToAddressW() should have failed with %d\n", GLE );
+
+    len = sizeof(sockaddr6);
+
+    ret = WSAStringToAddressW( address8 + 1, AF_INET6, NULL, (SOCKADDR*)&sockaddr, &len );
     GLE = WSAGetLastError();
     ok( (ret == SOCKET_ERROR && GLE == WSAEINVAL),
         "WSAStringToAddressW() should have failed with %d\n", GLE );
@@ -5769,6 +5875,11 @@ static void test_events(int useMessages)
         goto end;
     }
 
+    SetLastError(0xdeadbeef);
+    ret = connect(src, NULL, 0);
+    ok(ret == SOCKET_ERROR, "expected -1, got %d\n", ret);
+    ok(GetLastError() == WSAEFAULT, "expected 10014, got %d\n", GetLastError());
+
     ret = connect(src, (struct sockaddr*)&addr, sizeof(addr));
     if (ret == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)
     {
@@ -6549,7 +6660,7 @@ static void test_WSARecv(void)
 {
     SOCKET src, dest, server = INVALID_SOCKET;
     char buf[20];
-    WSABUF bufs;
+    WSABUF bufs[2];
     WSAOVERLAPPED ov;
     DWORD bytesReturned, flags, id;
     struct linger ling;
@@ -6568,8 +6679,8 @@ static void test_WSARecv(void)
 
     memset(&ov, 0, sizeof(ov));
     flags = 0;
-    bufs.len = 2;
-    bufs.buf = buf;
+    bufs[0].len = 2;
+    bufs[0].buf = buf;
 
     /* Send 4 bytes and receive in two calls of 2 */
     SetLastError(0xdeadbeef);
@@ -6578,31 +6689,49 @@ static void test_WSARecv(void)
     ok(GetLastError() == ERROR_SUCCESS, "Expected 0, got %d\n", GetLastError());
     SetLastError(0xdeadbeef);
     bytesReturned = 0xdeadbeef;
-    iret = WSARecv(dest, &bufs, 1, &bytesReturned, &flags, NULL, NULL);
+    iret = WSARecv(dest, bufs, 1, &bytesReturned, &flags, NULL, NULL);
     ok(!iret, "Expected 0, got %d\n", iret);
-    ok(bytesReturned, "Expected 2, got %d\n", bytesReturned);
+    ok(bytesReturned == 2, "Expected 2, got %d\n", bytesReturned);
     ok(GetLastError() == ERROR_SUCCESS, "Expected 0, got %d\n", GetLastError());
     SetLastError(0xdeadbeef);
     bytesReturned = 0xdeadbeef;
-    iret = WSARecv(dest, &bufs, 1, &bytesReturned, &flags, NULL, NULL);
+    iret = WSARecv(dest, bufs, 1, &bytesReturned, &flags, NULL, NULL);
     ok(!iret, "Expected 0, got %d\n", iret);
-    ok(bytesReturned, "Expected 2, got %d\n", bytesReturned);
+    ok(bytesReturned == 2, "Expected 2, got %d\n", bytesReturned);
     ok(GetLastError() == ERROR_SUCCESS, "Expected 0, got %d\n", GetLastError());
 
-    bufs.len = 4;
+    bufs[0].len = 4;
     SetLastError(0xdeadbeef);
     iret = send(src, "test", 4, 0);
     ok(iret == 4, "Expected 4, got %d\n", iret);
     ok(GetLastError() == ERROR_SUCCESS, "Expected 0, got %d\n", GetLastError());
     SetLastError(0xdeadbeef);
     bytesReturned = 0xdeadbeef;
-    iret = WSARecv(dest, &bufs, 1, &bytesReturned, &flags, NULL, NULL);
+    iret = WSARecv(dest, bufs, 1, &bytesReturned, &flags, NULL, NULL);
     ok(!iret, "Expected 0, got %d\n", iret);
-    ok(bytesReturned, "Expected 4, got %d\n", bytesReturned);
+    ok(bytesReturned == 4, "Expected 4, got %d\n", bytesReturned);
     ok(GetLastError() == ERROR_SUCCESS, "Expected 0, got %d\n", GetLastError());
 
-    bufs.len = sizeof(buf);
+    /* Test 2 buffers */
+    bufs[0].len = 4;
+    bufs[1].len = 5;
+    bufs[1].buf = buf + 10;
+    SetLastError(0xdeadbeef);
+    iret = send(src, "deadbeefs", 9, 0);
+    ok(iret == 9, "Expected 9, got %d\n", iret);
+    ok(GetLastError() == ERROR_SUCCESS, "Expected 0, got %d\n", GetLastError());
+    SetLastError(0xdeadbeef);
+    bytesReturned = 0xdeadbeef;
+    iret = WSARecv(dest, bufs, 2, &bytesReturned, &flags, NULL, NULL);
+    ok(!iret, "Expected 0, got %d\n", iret);
+    ok(bytesReturned == 9, "Expected 9, got %d\n", bytesReturned);
+    bufs[0].buf[4] = '\0';
+    bufs[1].buf[5] = '\0';
+    ok(!strcmp(bufs[0].buf, "dead"), "buf[0] doesn't match: %s != dead\n", bufs[0].buf);
+    ok(!strcmp(bufs[1].buf, "beefs"), "buf[1] doesn't match: %s != beefs\n", bufs[1].buf);
+    ok(GetLastError() == ERROR_SUCCESS, "Expected 0, got %d\n", GetLastError());
 
+    bufs[0].len = sizeof(buf);
     ov.hEvent = CreateEventA(NULL, FALSE, FALSE, NULL);
     ok(ov.hEvent != NULL, "could not create event object, errno = %d\n", GetLastError());
     if (!ov.hEvent)
@@ -6613,10 +6742,10 @@ static void test_WSARecv(void)
     iret = setsockopt (src, SOL_SOCKET, SO_LINGER, (char *) &ling, sizeof(ling));
     ok(!iret, "Failed to set linger %d\n", GetLastError());
 
-    iret = WSARecv(dest, &bufs, 1, NULL, &flags, &ov, NULL);
+    iret = WSARecv(dest, bufs, 1, NULL, &flags, &ov, NULL);
     ok(iret == SOCKET_ERROR && GetLastError() == ERROR_IO_PENDING, "WSARecv failed - %d error %d\n", iret, GetLastError());
 
-    iret = WSARecv(dest, &bufs, 1, &bytesReturned, &flags, &ov, NULL);
+    iret = WSARecv(dest, bufs, 1, &bytesReturned, &flags, &ov, NULL);
     ok(iret == SOCKET_ERROR && GetLastError() == ERROR_IO_PENDING, "WSARecv failed - %d error %d\n", iret, GetLastError());
 
     closesocket(src);

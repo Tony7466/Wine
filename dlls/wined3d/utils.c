@@ -3509,6 +3509,53 @@ fail:
     return FALSE;
 }
 
+BOOL wined3d_caps_gl_ctx_test_viewport_subpixel_bits(struct wined3d_caps_gl_ctx *ctx)
+{
+    static const struct wined3d_color red = {1.0f, 0.0f, 0.0f, 1.0f};
+    const struct wined3d_gl_info *gl_info = ctx->gl_info;
+    static const float offset = -63.0f / 128.0f;
+    GLuint texture, fbo;
+    DWORD readback[4];
+    unsigned int i;
+
+    gl_info->gl_ops.gl.p_glGenTextures(1, &texture);
+    gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_2D, texture);
+    gl_info->gl_ops.gl.p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+    gl_info->gl_ops.gl.p_glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, ARRAY_SIZE(readback), 1, 0,
+            GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, NULL);
+    gl_info->fbo_ops.glGenFramebuffers(1, &fbo);
+    gl_info->fbo_ops.glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    gl_info->fbo_ops.glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+            GL_TEXTURE_2D, texture, 0);
+    checkGLcall("create resources");
+
+    gl_info->gl_ops.gl.p_glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    gl_info->gl_ops.gl.p_glClear(GL_COLOR_BUFFER_BIT);
+    GL_EXTCALL(glViewportIndexedf(0, offset, offset, 4.0f, 1.0f));
+    draw_test_quad(ctx, NULL, &red);
+    checkGLcall("draw");
+
+    gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_2D, texture);
+    gl_info->gl_ops.gl.p_glGetTexImage(GL_TEXTURE_2D, 0,
+            GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, readback);
+    checkGLcall("readback");
+
+    TRACE("Readback colors are 0x%08x, 0x%08x, 0x%08x, 0x%08x.\n",
+            readback[0], readback[1], readback[2], readback[3]);
+
+    gl_info->gl_ops.gl.p_glDeleteTextures(1, &texture);
+    gl_info->fbo_ops.glDeleteFramebuffers(1, &fbo);
+    gl_info->fbo_ops.glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    checkGLcall("delete resources");
+
+    for (i = 0; i < ARRAY_SIZE(readback); ++i)
+    {
+        if (readback[i] != 0xffff0000)
+            return FALSE;
+    }
+    return TRUE;
+}
+
 float wined3d_adapter_find_polyoffset_scale(struct wined3d_caps_gl_ctx *ctx, GLenum format)
 {
     const struct wined3d_gl_info *gl_info = ctx->gl_info;
@@ -4374,8 +4421,10 @@ const char *debug_d3dstate(DWORD state)
         return wine_dbg_sprintf("STATE_CONSTANT_BUFFER(%s)", debug_shader_type(WINED3D_SHADER_TYPE_COMPUTE));
     if (STATE_IS_GRAPHICS_CONSTANT_BUFFER(state))
         return wine_dbg_sprintf("STATE_CONSTANT_BUFFER(%s)", debug_shader_type(state - STATE_CONSTANT_BUFFER(0)));
-    if (STATE_IS_SHADER_RESOURCE_BINDING(state))
-        return "STATE_SHADER_RESOURCE_BINDING";
+    if (STATE_IS_COMPUTE_SHADER_RESOURCE_BINDING(state))
+        return "STATE_COMPUTE_SHADER_RESOURCE_BINDING";
+    if (STATE_IS_GRAPHICS_SHADER_RESOURCE_BINDING(state))
+        return "STATE_GRAPHICS_SHADER_RESOURCE_BINDING";
     if (STATE_IS_COMPUTE_UNORDERED_ACCESS_VIEW_BINDING(state))
         return "STATE_COMPUTE_UNORDERED_ACCESS_VIEW_BINDING";
     if (STATE_IS_GRAPHICS_UNORDERED_ACCESS_VIEW_BINDING(state))
@@ -4930,22 +4979,27 @@ DWORD wined3d_format_convert_from_float(const struct wined3d_format *format, con
     }
     conv[] =
     {
-        {WINED3DFMT_B8G8R8A8_UNORM,     255.0f,  255.0f,  255.0f,  255.0f, 16,  8,  0, 24},
-        {WINED3DFMT_B8G8R8X8_UNORM,     255.0f,  255.0f,  255.0f,  255.0f, 16,  8,  0, 24},
-        {WINED3DFMT_B8G8R8_UNORM,       255.0f,  255.0f,  255.0f,  255.0f, 16,  8,  0, 24},
-        {WINED3DFMT_B5G6R5_UNORM,        31.0f,   63.0f,   31.0f,    0.0f, 11,  5,  0,  0},
-        {WINED3DFMT_B5G5R5A1_UNORM,      31.0f,   31.0f,   31.0f,    1.0f, 10,  5,  0, 15},
-        {WINED3DFMT_B5G5R5X1_UNORM,      31.0f,   31.0f,   31.0f,    1.0f, 10,  5,  0, 15},
-        {WINED3DFMT_R8_UNORM,           255.0f,    0.0f,    0.0f,    0.0f,  0,  0,  0,  0},
-        {WINED3DFMT_A8_UNORM,             0.0f,    0.0f,    0.0f,  255.0f,  0,  0,  0,  0},
-        {WINED3DFMT_B4G4R4A4_UNORM,      15.0f,   15.0f,   15.0f,   15.0f,  8,  4,  0, 12},
-        {WINED3DFMT_B4G4R4X4_UNORM,      15.0f,   15.0f,   15.0f,   15.0f,  8,  4,  0, 12},
-        {WINED3DFMT_B2G3R3_UNORM,         7.0f,    7.0f,    3.0f,    0.0f,  5,  2,  0,  0},
-        {WINED3DFMT_R8G8B8A8_UNORM,     255.0f,  255.0f,  255.0f,  255.0f,  0,  8, 16, 24},
-        {WINED3DFMT_R8G8B8X8_UNORM,     255.0f,  255.0f,  255.0f,  255.0f,  0,  8, 16, 24},
-        {WINED3DFMT_B10G10R10A2_UNORM, 1023.0f, 1023.0f, 1023.0f,    3.0f, 20, 10,  0, 30},
-        {WINED3DFMT_R10G10B10A2_UNORM, 1023.0f, 1023.0f, 1023.0f,    3.0f,  0, 10, 20, 30},
-        {WINED3DFMT_P8_UINT,              0.0f,    0.0f,    0.0f,  255.0f,  0,  0,  0,  0},
+        {WINED3DFMT_B8G8R8A8_UNORM,           255.0f,  255.0f,  255.0f,  255.0f, 16,  8,  0, 24},
+        {WINED3DFMT_B8G8R8X8_UNORM,           255.0f,  255.0f,  255.0f,  255.0f, 16,  8,  0, 24},
+        {WINED3DFMT_B8G8R8_UNORM,             255.0f,  255.0f,  255.0f,  255.0f, 16,  8,  0, 24},
+        {WINED3DFMT_B5G6R5_UNORM,              31.0f,   63.0f,   31.0f,    0.0f, 11,  5,  0,  0},
+        {WINED3DFMT_B5G5R5A1_UNORM,            31.0f,   31.0f,   31.0f,    1.0f, 10,  5,  0, 15},
+        {WINED3DFMT_B5G5R5X1_UNORM,            31.0f,   31.0f,   31.0f,    1.0f, 10,  5,  0, 15},
+        {WINED3DFMT_R8_UNORM,                 255.0f,    0.0f,    0.0f,    0.0f,  0,  0,  0,  0},
+        {WINED3DFMT_A8_UNORM,                   0.0f,    0.0f,    0.0f,  255.0f,  0,  0,  0,  0},
+        {WINED3DFMT_B4G4R4A4_UNORM,            15.0f,   15.0f,   15.0f,   15.0f,  8,  4,  0, 12},
+        {WINED3DFMT_B4G4R4X4_UNORM,            15.0f,   15.0f,   15.0f,   15.0f,  8,  4,  0, 12},
+        {WINED3DFMT_B2G3R3_UNORM,               7.0f,    7.0f,    3.0f,    0.0f,  5,  2,  0,  0},
+        {WINED3DFMT_R8G8B8A8_UNORM,           255.0f,  255.0f,  255.0f,  255.0f,  0,  8, 16, 24},
+        {WINED3DFMT_R8G8B8X8_UNORM,           255.0f,  255.0f,  255.0f,  255.0f,  0,  8, 16, 24},
+        {WINED3DFMT_B10G10R10A2_UNORM,       1023.0f, 1023.0f, 1023.0f,    3.0f, 20, 10,  0, 30},
+        {WINED3DFMT_R10G10B10A2_UNORM,       1023.0f, 1023.0f, 1023.0f,    3.0f,  0, 10, 20, 30},
+        {WINED3DFMT_P8_UINT,                    0.0f,    0.0f,    0.0f,  255.0f,  0,  0,  0,  0},
+        {WINED3DFMT_S1_UINT_D15_UNORM,      32767.0f,    0.0f,    0.0f,    0.0f,  0,  0,  0,  0},
+        {WINED3DFMT_D16_UNORM,              65535.0f,    0.0f,    0.0f,    0.0f,  0,  0,  0,  0},
+        {WINED3DFMT_D24_UNORM_S8_UINT,   16777215.0f,    0.0f,    0.0f,    0.0f,  0,  0,  0,  0},
+        {WINED3DFMT_X8D24_UNORM,         16777215.0f,    0.0f,    0.0f,    0.0f,  0,  0,  0,  0},
+        {WINED3DFMT_D32_UNORM,         4294967295.0f,    0.0f,    0.0f,    0.0f,  0,  0,  0,  0},
     };
     unsigned int i;
 
@@ -4974,7 +5028,7 @@ DWORD wined3d_format_convert_from_float(const struct wined3d_format *format, con
 
 static float color_to_float(DWORD color, DWORD size, DWORD offset)
 {
-    DWORD mask = (1u << size) - 1;
+    DWORD mask = size < 32 ? (1u << size) - 1 : ~0u;
 
     if (!size)
         return 1.0f;
@@ -5028,6 +5082,14 @@ BOOL wined3d_format_convert_color_to_float(const struct wined3d_format *format,
                 float_color->b = 0.0f;
             }
             float_color->a = color / 255.0f;
+            return TRUE;
+
+        case WINED3DFMT_S1_UINT_D15_UNORM:
+        case WINED3DFMT_D16_UNORM:
+        case WINED3DFMT_D24_UNORM_S8_UINT:
+        case WINED3DFMT_X8D24_UNORM:
+        case WINED3DFMT_D32_UNORM:
+            float_color->r = color_to_float(color, format->depth_size, 0);
             return TRUE;
 
         default:
@@ -5927,4 +5989,51 @@ void wined3d_gl_limits_get_uniform_block_range(const struct wined3d_gl_limits *g
 
     ERR("Unrecognized shader type %#x.\n", shader_type);
     *count = 0;
+}
+
+void wined3d_gl_limits_get_texture_unit_range(const struct wined3d_gl_limits *gl_limits,
+        enum wined3d_shader_type shader_type, unsigned int *base, unsigned int *count)
+{
+    if (shader_type != WINED3D_SHADER_TYPE_COMPUTE)
+    {
+        *base = *count = 0;
+        ERR("Unhandled shader type %#x.\n", shader_type);
+        return;
+    }
+
+    if (gl_limits->combined_samplers == gl_limits->graphics_samplers)
+        *base = 0;
+    else
+        *base = gl_limits->graphics_samplers - 1;
+    *count = gl_limits->compute_samplers;
+}
+
+BOOL wined3d_array_reserve(void **elements, SIZE_T *capacity, SIZE_T count, SIZE_T size)
+{
+    SIZE_T max_capacity, new_capacity;
+    void *new_elements;
+
+    if (count <= *capacity)
+        return TRUE;
+
+    max_capacity = ~(SIZE_T)0 / size;
+    if (count > max_capacity)
+        return FALSE;
+
+    new_capacity = max(1, *capacity);
+    while (new_capacity < count && new_capacity <= max_capacity / 2)
+        new_capacity *= 2;
+    if (new_capacity < count)
+        new_capacity = count;
+
+    if (!*elements)
+        new_elements = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, new_capacity * size);
+    else
+        new_elements = HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, *elements, new_capacity * size);
+    if (!new_elements)
+        return FALSE;
+
+    *elements = new_elements;
+    *capacity = new_capacity;
+    return TRUE;
 }

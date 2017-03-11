@@ -719,20 +719,12 @@ void context_free_occlusion_query(struct wined3d_occlusion_query *query)
     list_remove(&query->entry);
     query->context = NULL;
 
-    if (context->free_occlusion_query_count >= context->free_occlusion_query_size - 1)
+    if (!wined3d_array_reserve((void **)&context->free_occlusion_queries,
+            &context->free_occlusion_query_size, context->free_occlusion_query_count + 1,
+            sizeof(*context->free_occlusion_queries)))
     {
-        UINT new_size = context->free_occlusion_query_size << 1;
-        GLuint *new_data = HeapReAlloc(GetProcessHeap(), 0, context->free_occlusion_queries,
-                new_size * sizeof(*context->free_occlusion_queries));
-
-        if (!new_data)
-        {
-            ERR("Failed to grow free list, leaking query %u in context %p.\n", query->id, context);
-            return;
-        }
-
-        context->free_occlusion_query_size = new_size;
-        context->free_occlusion_queries = new_data;
+        ERR("Failed to grow free list, leaking query %u in context %p.\n", query->id, context);
+        return;
     }
 
     context->free_occlusion_queries[context->free_occlusion_query_count++] = query->id;
@@ -787,20 +779,12 @@ void context_free_event_query(struct wined3d_event_query *query)
     list_remove(&query->entry);
     query->context = NULL;
 
-    if (context->free_event_query_count >= context->free_event_query_size - 1)
+    if (!wined3d_array_reserve((void **)&context->free_event_queries,
+            &context->free_event_query_size, context->free_event_query_count + 1,
+            sizeof(*context->free_event_queries)))
     {
-        UINT new_size = context->free_event_query_size << 1;
-        union wined3d_gl_query_object *new_data = HeapReAlloc(GetProcessHeap(), 0, context->free_event_queries,
-                new_size * sizeof(*context->free_event_queries));
-
-        if (!new_data)
-        {
-            ERR("Failed to grow free list, leaking query %u in context %p.\n", query->object.id, context);
-            return;
-        }
-
-        context->free_event_query_size = new_size;
-        context->free_event_queries = new_data;
+        ERR("Failed to grow free list, leaking query %u in context %p.\n", query->object.id, context);
+        return;
     }
 
     context->free_event_queries[context->free_event_query_count++] = query->object;
@@ -834,20 +818,12 @@ void context_free_timestamp_query(struct wined3d_timestamp_query *query)
     list_remove(&query->entry);
     query->context = NULL;
 
-    if (context->free_timestamp_query_count >= context->free_timestamp_query_size - 1)
+    if (!wined3d_array_reserve((void **)&context->free_timestamp_queries,
+            &context->free_timestamp_query_size, context->free_timestamp_query_count + 1,
+            sizeof(*context->free_timestamp_queries)))
     {
-        UINT new_size = context->free_timestamp_query_size << 1;
-        GLuint *new_data = HeapReAlloc(GetProcessHeap(), 0, context->free_timestamp_queries,
-                new_size * sizeof(*context->free_timestamp_queries));
-
-        if (!new_data)
-        {
-            ERR("Failed to grow free list, leaking query %u in context %p.\n", query->id, context);
-            return;
-        }
-
-        context->free_timestamp_query_size = new_size;
-        context->free_timestamp_queries = new_data;
+        ERR("Failed to grow free list, leaking query %u in context %p.\n", query->id, context);
+        return;
     }
 
     context->free_timestamp_queries[context->free_timestamp_query_count++] = query->id;
@@ -1713,7 +1689,7 @@ struct wined3d_context *context_create(struct wined3d_swapchain *swapchain,
     /* Initialize the texture unit mapping to a 1:1 mapping */
     for (s = 0; s < MAX_COMBINED_SAMPLERS; ++s)
     {
-        if (s < gl_info->limits.combined_samplers)
+        if (s < gl_info->limits.graphics_samplers)
         {
             ret->tex_unit_map[s] = s;
             ret->rev_tex_unit_map[s] = s;
@@ -1724,6 +1700,9 @@ struct wined3d_context *context_create(struct wined3d_swapchain *swapchain,
             ret->rev_tex_unit_map[s] = WINED3D_UNMAPPED_STAGE;
         }
     }
+    if (!(ret->texture_type = wined3d_calloc(gl_info->limits.combined_samplers,
+            sizeof(*ret->texture_type))))
+        goto out;
 
     if (!(hdc = GetDCEx(swapchain->win_handle, 0, DCX_USESTYLE | DCX_CACHE)))
     {
@@ -1828,11 +1807,11 @@ struct wined3d_context *context_create(struct wined3d_swapchain *swapchain,
     ret->d3d_info = d3d_info;
     ret->state_table = device->StateTable;
 
-    /* Mark all states dirty to force a proper initialization of the states
-     * on the first use of the context. */
+    /* Mark all states dirty to force a proper initialization of the states on
+     * the first use of the context. Compute states do not need initialization. */
     for (state = 0; state <= STATE_HIGHEST; ++state)
     {
-        if (ret->state_table[state].representative)
+        if (ret->state_table[state].representative && !STATE_IS_COMPUTE(state))
             context_invalidate_state(ret, state);
     }
 
@@ -2018,6 +1997,7 @@ out:
     if (hdc) wined3d_release_dc(swapchain->win_handle, hdc);
     device->shader_backend->shader_free_context_data(ret);
     device->adapter->fragment_pipe->free_context_data(ret);
+    HeapFree(GetProcessHeap(), 0, ret->texture_type);
     HeapFree(GetProcessHeap(), 0, ret->free_event_queries);
     HeapFree(GetProcessHeap(), 0, ret->free_occlusion_queries);
     HeapFree(GetProcessHeap(), 0, ret->free_timestamp_queries);
@@ -2064,6 +2044,7 @@ void context_destroy(struct wined3d_device *device, struct wined3d_context *cont
 
     device->shader_backend->shader_free_context_data(context);
     device->adapter->fragment_pipe->free_context_data(context);
+    HeapFree(GetProcessHeap(), 0, context->texture_type);
     HeapFree(GetProcessHeap(), 0, context->fbo_key);
     HeapFree(GetProcessHeap(), 0, context->draw_buffers);
     HeapFree(GetProcessHeap(), 0, context->blit_targets);
@@ -2865,14 +2846,8 @@ static void context_map_fixed_function_samplers(struct wined3d_context *context,
         const struct wined3d_state *state)
 {
     const struct wined3d_d3d_info *d3d_info = context->d3d_info;
-    const struct wined3d_gl_info *gl_info = context->gl_info;
     unsigned int i, tex;
     WORD ffu_map;
-
-    context_update_fixed_function_usage_map(context, state);
-
-    if (gl_info->limits.combined_samplers >= MAX_COMBINED_SAMPLERS)
-        return;
 
     ffu_map = context->fixed_function_usage_map;
 
@@ -2915,13 +2890,9 @@ static void context_map_fixed_function_samplers(struct wined3d_context *context,
 static void context_map_psamplers(struct wined3d_context *context, const struct wined3d_state *state)
 {
     const struct wined3d_d3d_info *d3d_info = context->d3d_info;
-    const struct wined3d_gl_info *gl_info = context->gl_info;
     const struct wined3d_shader_resource_info *resource_info =
             state->shader[WINED3D_SHADER_TYPE_PIXEL]->reg_maps.resource_info;
     unsigned int i;
-
-    if (gl_info->limits.combined_samplers >= MAX_COMBINED_SAMPLERS)
-        return;
 
     for (i = 0; i < MAX_FRAGMENT_SAMPLERS; ++i)
     {
@@ -2967,11 +2938,8 @@ static void context_map_vsamplers(struct wined3d_context *context, BOOL ps, cons
             state->shader[WINED3D_SHADER_TYPE_VERTEX]->reg_maps.resource_info;
     const struct wined3d_shader_resource_info *ps_resource_info = NULL;
     const struct wined3d_gl_info *gl_info = context->gl_info;
-    int start = min(MAX_COMBINED_SAMPLERS, gl_info->limits.combined_samplers) - 1;
+    int start = min(MAX_COMBINED_SAMPLERS, gl_info->limits.graphics_samplers) - 1;
     int i;
-
-    if (gl_info->limits.combined_samplers >= MAX_COMBINED_SAMPLERS)
-        return;
 
     /* Note that we only care if a resource is used or not, not the
      * resource's specific type. Otherwise we'd need to call
@@ -3008,13 +2976,20 @@ static void context_map_vsamplers(struct wined3d_context *context, BOOL ps, cons
 
 static void context_update_tex_unit_map(struct wined3d_context *context, const struct wined3d_state *state)
 {
+    const struct wined3d_gl_info *gl_info = context->gl_info;
     BOOL vs = use_vs(state);
     BOOL ps = use_ps(state);
+
+    if (!ps)
+        context_update_fixed_function_usage_map(context, state);
 
     /* Try to go for a 1:1 mapping of the samplers when possible. Pixel shaders
      * need a 1:1 map at the moment.
      * When the mapping of a stage is changed, sampler and ALL texture stage
      * states have to be reset. */
+
+    if (gl_info->limits.graphics_samplers >= MAX_COMBINED_SAMPLERS)
+        return;
 
     if (ps)
         context_map_psamplers(context, state);
@@ -3351,16 +3326,56 @@ static void context_load_shader_resources(struct wined3d_context *context, const
     }
 }
 
-static void context_bind_shader_resources(struct wined3d_context *context, const struct wined3d_state *state)
+static void context_bind_shader_resources(struct wined3d_context *context,
+        const struct wined3d_state *state, enum wined3d_shader_type shader_type,
+        unsigned int base_idx, unsigned int count)
 {
     const struct wined3d_gl_info *gl_info = context->gl_info;
     const struct wined3d_device *device = context->device;
     struct wined3d_shader_sampler_map_entry *entry;
     struct wined3d_shader_resource_view *view;
+    unsigned int shader_sampler_count, i;
+    const struct wined3d_shader *shader;
     struct wined3d_sampler *sampler;
-    struct wined3d_shader *shader;
-    unsigned int i, j, count;
     GLuint sampler_name;
+
+    if (!(shader = state->shader[shader_type]))
+        return;
+
+    shader_sampler_count = shader->reg_maps.sampler_map.count;
+    if (shader_sampler_count > count)
+        FIXME("Shader %p needs %u samplers, but only %u are supported.\n",
+                shader, shader_sampler_count, count);
+    count = min(shader_sampler_count, count);
+
+    for (i = 0; i < count; ++i)
+    {
+        entry = &shader->reg_maps.sampler_map.entries[i];
+
+        if (!(view = state->shader_resource_view[shader_type][entry->resource_idx]))
+        {
+            WARN("No resource view bound at index %u, %u.\n", shader_type, entry->resource_idx);
+            continue;
+        }
+
+        if (entry->sampler_idx == WINED3D_SAMPLER_DEFAULT)
+            sampler_name = device->default_sampler;
+        else if ((sampler = state->sampler[shader_type][entry->sampler_idx]))
+            sampler_name = sampler->name;
+        else
+            sampler_name = device->null_sampler;
+
+        context_active_texture(context, gl_info, base_idx + entry->bind_idx);
+        GL_EXTCALL(glBindSampler(base_idx + entry->bind_idx, sampler_name));
+        checkGLcall("glBindSampler");
+        wined3d_shader_resource_view_bind(view, context);
+    }
+}
+
+static void context_bind_graphics_shader_resources(struct wined3d_context *context,
+        const struct wined3d_state *state)
+{
+    unsigned int i;
 
     static const struct
     {
@@ -3375,40 +3390,45 @@ static void context_bind_shader_resources(struct wined3d_context *context, const
     };
 
     for (i = 0; i < ARRAY_SIZE(shader_types); ++i)
+        context_bind_shader_resources(context, state, shader_types[i].type,
+                shader_types[i].base_idx, shader_types[i].count);
+}
+
+static void context_load_unordered_access_resources(struct wined3d_context *context,
+        const struct wined3d_shader *shader, struct wined3d_unordered_access_view * const *views)
+{
+    struct wined3d_unordered_access_view *view;
+    struct wined3d_texture *texture;
+    struct wined3d_buffer *buffer;
+    unsigned int i;
+
+    context->uses_uavs = 0;
+
+    if (!shader)
+        return;
+
+    for (i = 0; i < MAX_UNORDERED_ACCESS_VIEWS; ++i)
     {
-        if (!(shader = state->shader[shader_types[i].type]))
+        if (!shader->reg_maps.uav_resource_info[i].type)
             continue;
 
-        count = shader->reg_maps.sampler_map.count;
-        if (count > shader_types[i].count)
+        if (!(view = views[i]))
+            continue;
+
+        if (view->resource->type == WINED3D_RTYPE_BUFFER)
         {
-            FIXME("Shader %p needs %u samplers, but only %u are supported.\n",
-                    shader, count, shader_types[i].count);
-            count = shader_types[i].count;
+            buffer = buffer_from_resource(view->resource);
+            wined3d_buffer_load_location(buffer, context, WINED3D_LOCATION_BUFFER);
+            wined3d_unordered_access_view_invalidate_location(view, ~WINED3D_LOCATION_BUFFER);
+        }
+        else
+        {
+            texture = texture_from_resource(view->resource);
+            wined3d_texture_load(texture, context, FALSE);
+            wined3d_unordered_access_view_invalidate_location(view, ~WINED3D_LOCATION_TEXTURE_RGB);
         }
 
-        for (j = 0; j < count; ++j)
-        {
-            entry = &shader->reg_maps.sampler_map.entries[j];
-
-            if (!(view = state->shader_resource_view[shader_types[i].type][entry->resource_idx]))
-            {
-                WARN("No resource view bound at index %u, %u.\n", shader_types[i].type, entry->resource_idx);
-                continue;
-            }
-
-            if (entry->sampler_idx == WINED3D_SAMPLER_DEFAULT)
-                sampler_name = device->default_sampler;
-            else if ((sampler = state->sampler[shader_types[i].type][entry->sampler_idx]))
-                sampler_name = sampler->name;
-            else
-                sampler_name = device->null_sampler;
-
-            context_active_texture(context, gl_info, shader_types[i].base_idx + entry->bind_idx);
-            GL_EXTCALL(glBindSampler(shader_types[i].base_idx + entry->bind_idx, sampler_name));
-            checkGLcall("glBindSampler");
-            wined3d_shader_resource_view_bind(view, context);
-        }
+        context->uses_uavs = 1;
     }
 }
 
@@ -3417,13 +3437,9 @@ static void context_bind_unordered_access_views(struct wined3d_context *context,
 {
     const struct wined3d_gl_info *gl_info = context->gl_info;
     struct wined3d_unordered_access_view *view;
-    struct wined3d_texture *texture = NULL;
-    struct wined3d_buffer *buffer;
     GLuint texture_name;
     unsigned int i;
     GLint level;
-
-    context->uses_uavs = 0;
 
     if (!shader)
         return;
@@ -3440,28 +3456,14 @@ static void context_bind_unordered_access_views(struct wined3d_context *context,
             continue;
         }
 
-        if (view->resource->type == WINED3D_RTYPE_BUFFER)
-        {
-            buffer = buffer_from_resource(view->resource);
-            wined3d_buffer_load_location(buffer, context, WINED3D_LOCATION_BUFFER);
-            wined3d_unordered_access_view_invalidate_location(view, ~WINED3D_LOCATION_BUFFER);
-        }
-        else
-        {
-            texture = texture_from_resource(view->resource);
-            wined3d_texture_load(texture, context, FALSE);
-            wined3d_unordered_access_view_invalidate_location(view, ~WINED3D_LOCATION_TEXTURE_RGB);
-        }
-
-        context->uses_uavs = 1;
-
         if (view->gl_view.name)
         {
             texture_name = view->gl_view.name;
             level = 0;
         }
-        else if (texture)
+        else if (view->resource->type != WINED3D_RTYPE_BUFFER)
         {
+            struct wined3d_texture *texture = texture_from_resource(view->resource);
             texture_name = wined3d_texture_get_gl_texture(texture, FALSE)->name;
             level = view->desc.u.texture.level_idx;
         }
@@ -3474,6 +3476,9 @@ static void context_bind_unordered_access_views(struct wined3d_context *context,
 
         GL_EXTCALL(glBindImageTexture(i, texture_name, level, GL_TRUE, 0, GL_READ_WRITE,
                 view->format->glInternal));
+
+        if (view->counter_bo)
+            GL_EXTCALL(glBindBufferBase(GL_ATOMIC_COUNTER_BUFFER, i, view->counter_bo));
     }
     checkGLcall("Bind unordered access views");
 }
@@ -3483,12 +3488,12 @@ BOOL context_apply_draw_state(struct wined3d_context *context,
         const struct wined3d_device *device, const struct wined3d_state *state)
 {
     const struct StateEntry *state_table = context->state_table;
+    const struct wined3d_gl_info *gl_info = context->gl_info;
     const struct wined3d_fb_state *fb = state->fb;
     unsigned int i;
     WORD map;
 
-    if (!context_validate_rt_config(context->gl_info->limits.buffers,
-            fb->render_targets, fb->depth_stencil))
+    if (!context_validate_rt_config(gl_info->limits.buffers, fb->render_targets, fb->depth_stencil))
         return FALSE;
 
     if (wined3d_settings.offscreen_rendering_mode == ORM_FBO && isStateDirty(context, STATE_FRAMEBUFFER))
@@ -3502,6 +3507,8 @@ BOOL context_apply_draw_state(struct wined3d_context *context,
     context_update_tex_unit_map(context, state);
     context_preload_textures(context, state);
     context_load_shader_resources(context, state, ~(1u << WINED3D_SHADER_TYPE_COMPUTE));
+    context_load_unordered_access_resources(context, state->shader[WINED3D_SHADER_TYPE_PIXEL],
+            state->unordered_access_view[WINED3D_PIPELINE_GRAPHICS]);
     /* TODO: Right now the dependency on the vertex shader is necessary
      * since context_stream_info_from_declaration depends on the reg_maps of
      * the current VS but maybe it's possible to relax the coupling in some
@@ -3554,8 +3561,10 @@ BOOL context_apply_draw_state(struct wined3d_context *context,
 
     if (context->update_shader_resource_bindings)
     {
-        context_bind_shader_resources(context, state);
+        context_bind_graphics_shader_resources(context, state);
         context->update_shader_resource_bindings = 0;
+        if (gl_info->limits.combined_samplers == gl_info->limits.graphics_samplers)
+            context->update_compute_shader_resource_bindings = 1;
     }
 
     if (context->update_unordered_access_view_bindings)
@@ -3582,9 +3591,12 @@ void context_apply_compute_state(struct wined3d_context *context,
         const struct wined3d_device *device, const struct wined3d_state *state)
 {
     const struct StateEntry *state_table = context->state_table;
+    const struct wined3d_gl_info *gl_info = context->gl_info;
     unsigned int state_id, i, j;
 
     context_load_shader_resources(context, state, 1u << WINED3D_SHADER_TYPE_COMPUTE);
+    context_load_unordered_access_resources(context, state->shader[WINED3D_SHADER_TYPE_COMPUTE],
+            state->unordered_access_view[WINED3D_PIPELINE_COMPUTE]);
 
     for (i = 0, state_id = STATE_COMPUTE_OFFSET; i < ARRAY_SIZE(context->dirty_compute_states); ++i)
     {
@@ -3600,6 +3612,17 @@ void context_apply_compute_state(struct wined3d_context *context,
     {
         device->shader_backend->shader_select_compute(device->shader_priv, context, state);
         context->shader_update_mask &= ~(1u << WINED3D_SHADER_TYPE_COMPUTE);
+    }
+
+    if (context->update_compute_shader_resource_bindings)
+    {
+        unsigned int base_idx, count;
+        wined3d_gl_limits_get_texture_unit_range(&gl_info->limits,
+                WINED3D_SHADER_TYPE_COMPUTE, &base_idx, &count);
+        context_bind_shader_resources(context, state, WINED3D_SHADER_TYPE_COMPUTE, base_idx, count);
+        context->update_compute_shader_resource_bindings = 0;
+        if (gl_info->limits.combined_samplers == gl_info->limits.graphics_samplers)
+            context->update_shader_resource_bindings = 1;
     }
 
     if (context->update_compute_unordered_access_view_bindings)

@@ -6740,7 +6740,7 @@ static void test_updatetexture(void)
                 ok(SUCCEEDED(hr), "Failed to end scene, hr %#x.\n", hr);
 
                 color = getPixelColor(device, 320, 240);
-                ok (color_match(color, 0x007f7f00, 2) || broken(tests[i].broken)
+                ok (color_match(color, 0x007f7f00, 3) || broken(tests[i].broken)
                         || broken(color == 0x00adbeef), /* WARP device often just breaks down. */
                         "Got unexpected color 0x%08x, case %u, %u.\n", color, t, i);
             }
@@ -6936,6 +6936,17 @@ static void test_pointsize(void)
         IDirect3DDevice8_Release(device);
         goto done;
     }
+
+    /* The r500 Windows driver needs a draw with regular texture coordinates at least once during the
+     * device's lifetime, otherwise texture coordinate generation only works for texture 0. */
+    hr = IDirect3DDevice8_SetVertexShader(device, D3DFVF_XYZ | D3DFVF_TEX1);
+    ok(SUCCEEDED(hr), "Failed to set FVF, hr=%#x.\n", hr);
+    hr = IDirect3DDevice8_BeginScene(device);
+    ok(SUCCEEDED(hr), "Failed to begin scene, hr %#x.\n", hr);
+    hr = IDirect3DDevice8_DrawPrimitiveUP(device, D3DPT_POINTLIST, 1, vertices, sizeof(float) * 5);
+    ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
+    hr = IDirect3DDevice8_EndScene(device);
+    ok(SUCCEEDED(hr), "Failed to end scene, hr %#x.\n", hr);
 
     hr = IDirect3DDevice8_Clear(device, 0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, 0xff0000ff, 1.0f, 0);
     ok(SUCCEEDED(hr), "Failed to clear, hr %#x.\n", hr);

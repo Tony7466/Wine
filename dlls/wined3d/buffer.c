@@ -64,18 +64,11 @@ static void buffer_invalidate_bo_range(struct wined3d_buffer *buffer, unsigned i
         goto invalidate_all;
     }
 
-    if (buffer->modified_areas >= buffer->maps_size)
+    if (!wined3d_array_reserve((void **)&buffer->maps, &buffer->maps_size,
+            buffer->modified_areas + 1, sizeof(*buffer->maps)))
     {
-        struct wined3d_map_range *new;
-
-        if (!(new = HeapReAlloc(GetProcessHeap(), 0, buffer->maps, 2 * buffer->maps_size * sizeof(*buffer->maps))))
-        {
-            ERR("Failed to allocate maps array, invalidating entire buffer.\n");
-            goto invalidate_all;
-        }
-
-        buffer->maps = new;
-        buffer->maps_size *= 2;
+        ERR("Failed to allocate maps array, invalidating entire buffer.\n");
+        goto invalidate_all;
     }
 
     buffer->maps[buffer->modified_areas].offset = offset;
@@ -1054,7 +1047,9 @@ static HRESULT wined3d_buffer_map(struct wined3d_buffer *buffer, UINT offset, UI
             context = context_acquire(device, NULL, 0);
             gl_info = context->gl_info;
 
-            if (!(flags & WINED3D_MAP_DISCARD))
+            if (flags & WINED3D_MAP_DISCARD)
+                wined3d_buffer_validate_location(buffer, WINED3D_LOCATION_BUFFER);
+            else
                 wined3d_buffer_load_location(buffer, context, WINED3D_LOCATION_BUFFER);
 
             if (!(flags & WINED3D_MAP_READONLY))
@@ -1465,15 +1460,13 @@ HRESULT CDECL wined3d_buffer_create(struct wined3d_device *device, const struct 
     TRACE("device %p, desc %p, data %p, parent %p, parent_ops %p, buffer %p.\n",
             device, desc, data, parent, parent_ops, buffer);
 
-    object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object));
-    if (!object)
+    if (!(object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object))))
         return E_OUTOFMEMORY;
 
     FIXME("Ignoring access flags (pool).\n");
 
-    hr = buffer_init(object, device, desc->byte_width, desc->usage, WINED3DFMT_UNKNOWN,
-            WINED3D_POOL_MANAGED, desc->bind_flags, data, parent, parent_ops);
-    if (FAILED(hr))
+    if (FAILED(hr = buffer_init(object, device, desc->byte_width, desc->usage, WINED3DFMT_UNKNOWN,
+            WINED3D_POOL_MANAGED, desc->bind_flags, data, parent, parent_ops)))
     {
         WARN("Failed to initialize buffer, hr %#x.\n", hr);
         HeapFree(GetProcessHeap(), 0, object);
