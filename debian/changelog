@@ -1,3 +1,15 @@
+wine-development (2.3-1) experimental; urgency=medium
+
+  * New upstream release 2.3, released Mar 3, 2017.
+    - Obsolete wineinstall script removed.
+    - More Direct3D command stream work.
+    - A few more Shader Model 5 instructions.
+    - Better underline rendering in DirectWrite.
+    - Improved ODBC support on 64-bit.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 11 Mar 2017 05:24:44 +0000
+
 wine-development (2.2-1) experimental; urgency=medium
 
   * New upstream release 2.2, released Feb 17, 2017.
