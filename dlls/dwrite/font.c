@@ -212,7 +212,7 @@ struct dwrite_colorglyphenum {
 enum fontface_flags {
     FONTFACE_IS_SYMBOL             = 1 << 0,
     FONTFACE_IS_MONOSPACED         = 1 << 1,
-    FONTFACE_HAS_KERN_PAIRS        = 1 << 2,
+    FONTFACE_HAS_KERNING_PAIRS     = 1 << 2,
     FONTFACE_HAS_VERTICAL_VARIANTS = 1 << 3
 };
 
@@ -739,11 +739,20 @@ static inline int round_metric(FLOAT metric)
     return (int)floorf(metric + 0.5f);
 }
 
+static UINT32 fontface_get_horz_metric_adjustment(const struct dwrite_fontface *fontface)
+{
+    if (!(fontface->simulations & DWRITE_FONT_SIMULATIONS_BOLD))
+        return 0;
+
+    return (fontface->metrics.designUnitsPerEm + 49) / 50;
+}
+
 static HRESULT WINAPI dwritefontface_GetGdiCompatibleGlyphMetrics(IDWriteFontFace4 *iface, FLOAT emSize, FLOAT ppdip,
     DWRITE_MATRIX const *m, BOOL use_gdi_natural, UINT16 const *glyphs, UINT32 glyph_count,
     DWRITE_GLYPH_METRICS *metrics, BOOL is_sideways)
 {
     struct dwrite_fontface *This = impl_from_IDWriteFontFace4(iface);
+    UINT32 adjustment = fontface_get_horz_metric_adjustment(This);
     DWRITE_MEASURING_MODE mode;
     FLOAT scale, size;
     HRESULT hr;
@@ -762,13 +771,17 @@ static HRESULT WINAPI dwritefontface_GetGdiCompatibleGlyphMetrics(IDWriteFontFac
     for (i = 0; i < glyph_count; i++) {
         DWRITE_GLYPH_METRICS *ret = metrics + i;
         DWRITE_GLYPH_METRICS design;
+        BOOL has_contours;
 
         hr = IDWriteFontFace4_GetDesignGlyphMetrics(iface, glyphs + i, 1, &design, is_sideways);
         if (FAILED(hr))
             return hr;
 
-        ret->advanceWidth = freetype_get_glyph_advance(iface, size, glyphs[i], mode);
-        ret->advanceWidth = round_metric(ret->advanceWidth * This->metrics.designUnitsPerEm / size);
+        ret->advanceWidth = freetype_get_glyph_advance(iface, size, glyphs[i], mode, &has_contours);
+        if (has_contours)
+            ret->advanceWidth = round_metric(ret->advanceWidth * This->metrics.designUnitsPerEm / size + adjustment);
+        else
+            ret->advanceWidth = round_metric(ret->advanceWidth * This->metrics.designUnitsPerEm / size);
 
 #define SCALE_METRIC(x) ret->x = round_metric(round_metric((design.x) * scale) / scale)
         SCALE_METRIC(leftSideBearing);
@@ -878,6 +891,7 @@ static HRESULT WINAPI dwritefontface1_GetDesignGlyphAdvances(IDWriteFontFace4 *i
     UINT32 glyph_count, UINT16 const *glyphs, INT32 *advances, BOOL is_sideways)
 {
     struct dwrite_fontface *This = impl_from_IDWriteFontFace4(iface);
+    UINT32 adjustment = fontface_get_horz_metric_adjustment(This);
     UINT32 i;
 
     TRACE("(%p)->(%u %p %p %d)\n", This, glyph_count, glyphs, advances, is_sideways);
@@ -885,8 +899,14 @@ static HRESULT WINAPI dwritefontface1_GetDesignGlyphAdvances(IDWriteFontFace4 *i
     if (is_sideways)
         FIXME("sideways mode not supported\n");
 
-    for (i = 0; i < glyph_count; i++)
-        advances[i] = freetype_get_glyph_advance(iface, This->metrics.designUnitsPerEm, glyphs[i], DWRITE_MEASURING_MODE_NATURAL);
+    for (i = 0; i < glyph_count; i++) {
+        BOOL has_contours;
+
+        advances[i] = freetype_get_glyph_advance(iface, This->metrics.designUnitsPerEm, glyphs[i],
+                DWRITE_MEASURING_MODE_NATURAL, &has_contours);
+        if (has_contours)
+            advances[i] += adjustment;
+    }
 
     return S_OK;
 }
@@ -896,6 +916,7 @@ static HRESULT WINAPI dwritefontface1_GetGdiCompatibleGlyphAdvances(IDWriteFontF
     BOOL is_sideways, UINT32 glyph_count, UINT16 const *glyphs, INT32 *advances)
 {
     struct dwrite_fontface *This = impl_from_IDWriteFontFace4(iface);
+    UINT32 adjustment = fontface_get_horz_metric_adjustment(This);
     DWRITE_MEASURING_MODE mode;
     UINT32 i;
 
@@ -918,8 +939,13 @@ static HRESULT WINAPI dwritefontface1_GetGdiCompatibleGlyphAdvances(IDWriteFontF
 
     mode = use_gdi_natural ? DWRITE_MEASURING_MODE_GDI_NATURAL : DWRITE_MEASURING_MODE_GDI_CLASSIC;
     for (i = 0; i < glyph_count; i++) {
-        advances[i] = freetype_get_glyph_advance(iface, em_size, glyphs[i], mode);
-        advances[i] = round_metric(advances[i] * This->metrics.designUnitsPerEm / em_size);
+        BOOL has_contours;
+
+        advances[i] = freetype_get_glyph_advance(iface, em_size, glyphs[i], mode, &has_contours);
+        if (has_contours)
+            advances[i] = round_metric(advances[i] * This->metrics.designUnitsPerEm / em_size + adjustment);
+        else
+            advances[i] = round_metric(advances[i] * This->metrics.designUnitsPerEm / em_size);
     }
 
     return S_OK;
@@ -941,7 +967,7 @@ static HRESULT WINAPI dwritefontface1_GetKerningPairAdjustments(IDWriteFontFace4
         return E_INVALIDARG;
     }
 
-    if (This->flags & FONTFACE_HAS_KERN_PAIRS) {
+    if (!(This->flags & FONTFACE_HAS_KERNING_PAIRS)) {
         memset(adjustments, 0, count*sizeof(INT32));
         return S_OK;
     }
@@ -957,7 +983,7 @@ static BOOL WINAPI dwritefontface1_HasKerningPairs(IDWriteFontFace4 *iface)
 {
     struct dwrite_fontface *This = impl_from_IDWriteFontFace4(iface);
     TRACE("(%p)\n", This);
-    return !!(This->flags & FONTFACE_HAS_KERN_PAIRS);
+    return !!(This->flags & FONTFACE_HAS_KERNING_PAIRS);
 }
 
 static HRESULT WINAPI dwritefontface1_GetRecommendedRenderingMode(IDWriteFontFace4 *iface,
@@ -4284,7 +4310,7 @@ HRESULT create_fontface(const struct fontface_desc *desc, IDWriteFontFace4 **ret
     if (is_symbol)
         fontface->flags |= FONTFACE_IS_SYMBOL;
     if (freetype_has_kerning_pairs(&fontface->IDWriteFontFace4_iface))
-        fontface->flags |= FONTFACE_HAS_KERN_PAIRS;
+        fontface->flags |= FONTFACE_HAS_KERNING_PAIRS;
     if (freetype_is_monospaced(&fontface->IDWriteFontFace4_iface))
         fontface->flags |= FONTFACE_IS_MONOSPACED;
     if (opentype_has_vertical_variants(&fontface->IDWriteFontFace4_iface))
@@ -4877,14 +4903,14 @@ static void glyphrunanalysis_render(struct dwrite_glyphrunanalysis *analysis, DW
 {
     static const BYTE masks[8] = {0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01};
     struct dwrite_glyphbitmap glyph_bitmap;
-    IDWriteFontFace4 *fontface2;
+    IDWriteFontFace4 *fontface;
     D2D_POINT_2F origin;
     UINT32 i, size;
     BOOL is_rtl;
     HRESULT hr;
     RECT *bbox;
 
-    hr = IDWriteFontFace_QueryInterface(analysis->run.fontFace, &IID_IDWriteFontFace4, (void**)&fontface2);
+    hr = IDWriteFontFace_QueryInterface(analysis->run.fontFace, &IID_IDWriteFontFace4, (void **)&fontface);
     if (FAILED(hr)) {
         WARN("failed to get IDWriteFontFace4, 0x%08x\n", hr);
         return;
@@ -4899,7 +4925,7 @@ static void glyphrunanalysis_render(struct dwrite_glyphrunanalysis *analysis, DW
     is_rtl = analysis->run.bidiLevel & 1;
 
     memset(&glyph_bitmap, 0, sizeof(glyph_bitmap));
-    glyph_bitmap.fontface = fontface2;
+    glyph_bitmap.fontface = fontface;
     glyph_bitmap.emsize = analysis->run.fontEmSize * analysis->ppdip;
     glyph_bitmap.nohint = is_natural_rendering_mode(analysis->rendering_mode);
     glyph_bitmap.type = type;
@@ -4987,7 +5013,7 @@ static void glyphrunanalysis_render(struct dwrite_glyphrunanalysis *analysis, DW
         origin.y += advance->y;
     }
 
-    IDWriteFontFace4_Release(fontface2);
+    IDWriteFontFace4_Release(fontface);
 
     analysis->flags |= RUNANALYSIS_BITMAP_READY;
 

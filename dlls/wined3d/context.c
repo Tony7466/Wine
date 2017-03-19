@@ -1525,6 +1525,9 @@ void context_bind_dummy_textures(const struct wined3d_device *device, const stru
         if (gl_info->supported[ARB_TEXTURE_CUBE_MAP])
             gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_CUBE_MAP, device->dummy_textures.tex_cube);
 
+        if (gl_info->supported[ARB_TEXTURE_CUBE_MAP_ARRAY])
+            gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, device->dummy_textures.tex_cube_array);
+
         if (gl_info->supported[EXT_TEXTURE_ARRAY])
             gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_2D_ARRAY, device->dummy_textures.tex_2d_array);
 
@@ -1632,7 +1635,7 @@ struct wined3d_context *context_create(struct wined3d_swapchain *swapchain,
     HGLRC ctx, share_ctx;
     DWORD target_usage;
     int pixel_format;
-    unsigned int s;
+    unsigned int i;
     DWORD state;
     HDC hdc = 0;
 
@@ -1686,20 +1689,40 @@ struct wined3d_context *context_create(struct wined3d_swapchain *swapchain,
         goto out;
     }
 
-    /* Initialize the texture unit mapping to a 1:1 mapping */
-    for (s = 0; s < MAX_COMBINED_SAMPLERS; ++s)
+    for (i = 0; i < ARRAY_SIZE(ret->tex_unit_map); ++i)
+        ret->tex_unit_map[i] = WINED3D_UNMAPPED_STAGE;
+    for (i = 0; i < ARRAY_SIZE(ret->rev_tex_unit_map); ++i)
+        ret->rev_tex_unit_map[i] = WINED3D_UNMAPPED_STAGE;
+    if (gl_info->limits.graphics_samplers >= MAX_COMBINED_SAMPLERS)
     {
-        if (s < gl_info->limits.graphics_samplers)
+        /* Initialize the texture unit mapping to a 1:1 mapping. */
+        unsigned int base, count;
+
+        wined3d_gl_limits_get_texture_unit_range(&gl_info->limits, WINED3D_SHADER_TYPE_PIXEL, &base, &count);
+        if (base + MAX_FRAGMENT_SAMPLERS > ARRAY_SIZE(ret->rev_tex_unit_map))
         {
-            ret->tex_unit_map[s] = s;
-            ret->rev_tex_unit_map[s] = s;
+            ERR("Unexpected texture unit base index %u.\n", base);
+            goto out;
         }
-        else
+        for (i = 0; i < min(count, MAX_FRAGMENT_SAMPLERS); ++i)
         {
-            ret->tex_unit_map[s] = WINED3D_UNMAPPED_STAGE;
-            ret->rev_tex_unit_map[s] = WINED3D_UNMAPPED_STAGE;
+            ret->tex_unit_map[i] = base + i;
+            ret->rev_tex_unit_map[base + i] = i;
+        }
+
+        wined3d_gl_limits_get_texture_unit_range(&gl_info->limits, WINED3D_SHADER_TYPE_VERTEX, &base, &count);
+        if (base + MAX_VERTEX_SAMPLERS > ARRAY_SIZE(ret->rev_tex_unit_map))
+        {
+            ERR("Unexpected texture unit base index %u.\n", base);
+            goto out;
+        }
+        for (i = 0; i < min(count, MAX_VERTEX_SAMPLERS); ++i)
+        {
+            ret->tex_unit_map[MAX_FRAGMENT_SAMPLERS + i] = base + i;
+            ret->rev_tex_unit_map[base + i] = MAX_FRAGMENT_SAMPLERS + i;
         }
     }
+
     if (!(ret->texture_type = wined3d_calloc(gl_info->limits.combined_samplers,
             sizeof(*ret->texture_type))))
         goto out;
@@ -1915,11 +1938,11 @@ struct wined3d_context *context_create(struct wined3d_swapchain *swapchain,
         /* Set up the previous texture input for all shader units. This applies to bump mapping, and in d3d
          * the previous texture where to source the offset from is always unit - 1.
          */
-        for (s = 1; s < gl_info->limits.textures; ++s)
+        for (i = 1; i < gl_info->limits.textures; ++i)
         {
-            context_active_texture(ret, gl_info, s);
+            context_active_texture(ret, gl_info, i);
             gl_info->gl_ops.gl.p_glTexEnvi(GL_TEXTURE_SHADER_NV,
-                    GL_PREVIOUS_TEXTURE_INPUT_NV, GL_TEXTURE0_ARB + s - 1);
+                    GL_PREVIOUS_TEXTURE_INPUT_NV, GL_TEXTURE0_ARB + i - 1);
             checkGLcall("glTexEnvi(GL_TEXTURE_SHADER_NV, GL_PREVIOUS_TEXTURE_INPUT_NV, ...");
         }
     }
@@ -1945,9 +1968,9 @@ struct wined3d_context *context_create(struct wined3d_swapchain *swapchain,
 
     if (gl_info->supported[ARB_POINT_SPRITE])
     {
-        for (s = 0; s < gl_info->limits.textures; ++s)
+        for (i = 0; i < gl_info->limits.textures; ++i)
         {
-            context_active_texture(ret, gl_info, s);
+            context_active_texture(ret, gl_info, i);
             gl_info->gl_ops.gl.p_glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE);
             checkGLcall("glTexEnvi(GL_POINT_SPRITE_ARB, GL_COORD_REPLACE_ARB, GL_TRUE)");
         }
@@ -1966,12 +1989,18 @@ struct wined3d_context *context_create(struct wined3d_swapchain *swapchain,
         if (gl_info->supported[ARB_ES3_COMPATIBILITY])
         {
             gl_info->gl_ops.gl.p_glEnable(GL_PRIMITIVE_RESTART_FIXED_INDEX);
-            checkGLcall("Enable GL_PRIMITIVE_RESTART_FIXED_INDEX");
+            checkGLcall("enable GL_PRIMITIVE_RESTART_FIXED_INDEX");
         }
         else
         {
             FIXME("OpenGL implementation does not support GL_PRIMITIVE_RESTART_FIXED_INDEX.\n");
         }
+    }
+    if (!(d3d_info->wined3d_creation_flags & WINED3D_LEGACY_CUBEMAP_FILTERING)
+            && gl_info->supported[ARB_SEAMLESS_CUBE_MAP])
+    {
+        gl_info->gl_ops.gl.p_glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+        checkGLcall("enable seamless cube map filtering");
     }
     if (gl_info->supported[ARB_CLIP_CONTROL])
         GL_EXTCALL(glPointParameteri(GL_POINT_SPRITE_COORD_ORIGIN, GL_LOWER_LEFT));
@@ -2050,6 +2079,43 @@ void context_destroy(struct wined3d_device *device, struct wined3d_context *cont
     HeapFree(GetProcessHeap(), 0, context->blit_targets);
     device_context_remove(device, context);
     if (destroy) HeapFree(GetProcessHeap(), 0, context);
+}
+
+const DWORD *context_get_tex_unit_mapping(const struct wined3d_context *context,
+        const struct wined3d_shader_version *shader_version, unsigned int *base, unsigned int *count)
+{
+    const struct wined3d_gl_info *gl_info = context->gl_info;
+
+    if (!shader_version)
+    {
+        *base = 0;
+        *count = MAX_TEXTURES;
+        return context->tex_unit_map;
+    }
+
+    if (shader_version->major >= 4)
+    {
+        wined3d_gl_limits_get_texture_unit_range(&gl_info->limits, shader_version->type, base, count);
+        return NULL;
+    }
+
+    switch (shader_version->type)
+    {
+        case WINED3D_SHADER_TYPE_PIXEL:
+            *base = 0;
+            *count = MAX_FRAGMENT_SAMPLERS;
+            break;
+        case WINED3D_SHADER_TYPE_VERTEX:
+            *base = MAX_FRAGMENT_SAMPLERS;
+            *count = MAX_VERTEX_SAMPLERS;
+            break;
+        default:
+            ERR("Unhandled shader type %#x.\n", shader_version->type);
+            *base = 0;
+            *count = 0;
+    }
+
+    return context->tex_unit_map;
 }
 
 /* Context activation is done by the caller. */
@@ -2419,7 +2485,7 @@ void context_bind_texture(struct wined3d_context *context, GLenum target, GLuint
                 checkGLcall("glBindTexture");
                 break;
             case GL_TEXTURE_CUBE_MAP_ARRAY:
-                gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, 0);
+                gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, device->dummy_textures.tex_cube_array);
                 checkGLcall("glBindTexture");
                 break;
             case GL_TEXTURE_3D:
@@ -3045,12 +3111,13 @@ static BOOL fixed_get_input(BYTE usage, BYTE usage_idx, unsigned int *regnum)
 }
 
 /* Context activation is done by the caller. */
-void context_stream_info_from_declaration(struct wined3d_context *context,
-        const struct wined3d_state *state, struct wined3d_stream_info *stream_info)
+void wined3d_stream_info_from_declaration(struct wined3d_stream_info *stream_info,
+        const struct wined3d_state *state, const struct wined3d_gl_info *gl_info,
+        const struct wined3d_d3d_info *d3d_info)
 {
     /* We need to deal with frequency data! */
     struct wined3d_vertex_declaration *declaration = state->vertex_declaration;
-    BOOL generic_attributes = context->d3d_info->ffp_generic_attributes;
+    BOOL generic_attributes = d3d_info->ffp_generic_attributes;
     BOOL use_vshader = use_vs(state);
     unsigned int i;
 
@@ -3142,7 +3209,7 @@ void context_stream_info_from_declaration(struct wined3d_context *context,
                 stream_info->elements[idx].divisor = 0;
             }
 
-            if (!context->gl_info->supported[ARB_VERTEX_ARRAY_BGRA]
+            if (!gl_info->supported[ARB_VERTEX_ARRAY_BGRA]
                     && element->format->id == WINED3DFMT_B8G8R8A8_UNORM)
             {
                 stream_info->swizzle_map |= 1u << idx;
@@ -3162,7 +3229,7 @@ static void context_update_stream_info(struct wined3d_context *context, const st
     unsigned int i;
     WORD map;
 
-    context_stream_info_from_declaration(context, state, stream_info);
+    wined3d_stream_info_from_declaration(stream_info, state, gl_info, d3d_info);
 
     stream_info->all_vbo = 1;
     context->num_buffer_queries = 0;
@@ -3313,10 +3380,7 @@ static void context_load_shader_resources(struct wined3d_context *context, const
             entry = &shader->reg_maps.sampler_map.entries[j];
 
             if (!(view = state->shader_resource_view[i][entry->resource_idx]))
-            {
-                WARN("No resource view bound at index %u, %u.\n", i, entry->resource_idx);
                 continue;
-            }
 
             if (view->resource->type == WINED3D_RTYPE_BUFFER)
                 wined3d_buffer_load(buffer_from_resource(view->resource), context, state);
@@ -3327,20 +3391,23 @@ static void context_load_shader_resources(struct wined3d_context *context, const
 }
 
 static void context_bind_shader_resources(struct wined3d_context *context,
-        const struct wined3d_state *state, enum wined3d_shader_type shader_type,
-        unsigned int base_idx, unsigned int count)
+        const struct wined3d_state *state, enum wined3d_shader_type shader_type)
 {
+    unsigned int bind_idx, shader_sampler_count, base, count, i;
     const struct wined3d_gl_info *gl_info = context->gl_info;
     const struct wined3d_device *device = context->device;
     struct wined3d_shader_sampler_map_entry *entry;
     struct wined3d_shader_resource_view *view;
-    unsigned int shader_sampler_count, i;
     const struct wined3d_shader *shader;
     struct wined3d_sampler *sampler;
+    const DWORD *tex_unit_map;
     GLuint sampler_name;
 
     if (!(shader = state->shader[shader_type]))
         return;
+
+    tex_unit_map = context_get_tex_unit_mapping(context,
+            &shader->reg_maps.shader_version, &base, &count);
 
     shader_sampler_count = shader->reg_maps.sampler_map.count;
     if (shader_sampler_count > count)
@@ -3351,6 +3418,9 @@ static void context_bind_shader_resources(struct wined3d_context *context,
     for (i = 0; i < count; ++i)
     {
         entry = &shader->reg_maps.sampler_map.entries[i];
+        bind_idx = base + entry->bind_idx;
+        if (tex_unit_map)
+            bind_idx = tex_unit_map[bind_idx];
 
         if (!(view = state->shader_resource_view[shader_type][entry->resource_idx]))
         {
@@ -3365,33 +3435,11 @@ static void context_bind_shader_resources(struct wined3d_context *context,
         else
             sampler_name = device->null_sampler;
 
-        context_active_texture(context, gl_info, base_idx + entry->bind_idx);
-        GL_EXTCALL(glBindSampler(base_idx + entry->bind_idx, sampler_name));
+        context_active_texture(context, gl_info, bind_idx);
+        GL_EXTCALL(glBindSampler(bind_idx, sampler_name));
         checkGLcall("glBindSampler");
         wined3d_shader_resource_view_bind(view, context);
     }
-}
-
-static void context_bind_graphics_shader_resources(struct wined3d_context *context,
-        const struct wined3d_state *state)
-{
-    unsigned int i;
-
-    static const struct
-    {
-        enum wined3d_shader_type type;
-        unsigned int base_idx;
-        unsigned int count;
-    }
-    shader_types[] =
-    {
-        {WINED3D_SHADER_TYPE_PIXEL,     0,                      MAX_FRAGMENT_SAMPLERS},
-        {WINED3D_SHADER_TYPE_VERTEX,    MAX_FRAGMENT_SAMPLERS,  MAX_VERTEX_SAMPLERS},
-    };
-
-    for (i = 0; i < ARRAY_SIZE(shader_types); ++i)
-        context_bind_shader_resources(context, state, shader_types[i].type,
-                shader_types[i].base_idx, shader_types[i].count);
 }
 
 static void context_load_unordered_access_resources(struct wined3d_context *context,
@@ -3409,9 +3457,6 @@ static void context_load_unordered_access_resources(struct wined3d_context *cont
 
     for (i = 0; i < MAX_UNORDERED_ACCESS_VIEWS; ++i)
     {
-        if (!shader->reg_maps.uav_resource_info[i].type)
-            continue;
-
         if (!(view = views[i]))
             continue;
 
@@ -3446,12 +3491,10 @@ static void context_bind_unordered_access_views(struct wined3d_context *context,
 
     for (i = 0; i < MAX_UNORDERED_ACCESS_VIEWS; ++i)
     {
-        if (!shader->reg_maps.uav_resource_info[i].type)
-            continue;
-
         if (!(view = views[i]))
         {
-            WARN("No unordered access view bound at index %u.\n", i);
+            if (shader->reg_maps.uav_resource_info[i].type)
+                WARN("No unordered access view bound at index %u.\n", i);
             GL_EXTCALL(glBindImageTexture(i, 0, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R8));
             continue;
         }
@@ -3510,7 +3553,7 @@ BOOL context_apply_draw_state(struct wined3d_context *context,
     context_load_unordered_access_resources(context, state->shader[WINED3D_SHADER_TYPE_PIXEL],
             state->unordered_access_view[WINED3D_PIPELINE_GRAPHICS]);
     /* TODO: Right now the dependency on the vertex shader is necessary
-     * since context_stream_info_from_declaration depends on the reg_maps of
+     * since wined3d_stream_info_from_declaration() depends on the reg_maps of
      * the current VS but maybe it's possible to relax the coupling in some
      * situations at least. */
     if (isStateDirty(context, STATE_VDECL) || isStateDirty(context, STATE_STREAMSRC)
@@ -3561,7 +3604,8 @@ BOOL context_apply_draw_state(struct wined3d_context *context,
 
     if (context->update_shader_resource_bindings)
     {
-        context_bind_graphics_shader_resources(context, state);
+        for (i = 0; i < WINED3D_SHADER_TYPE_GRAPHICS_COUNT; ++i)
+            context_bind_shader_resources(context, state, i);
         context->update_shader_resource_bindings = 0;
         if (gl_info->limits.combined_samplers == gl_info->limits.graphics_samplers)
             context->update_compute_shader_resource_bindings = 1;
@@ -3616,10 +3660,7 @@ void context_apply_compute_state(struct wined3d_context *context,
 
     if (context->update_compute_shader_resource_bindings)
     {
-        unsigned int base_idx, count;
-        wined3d_gl_limits_get_texture_unit_range(&gl_info->limits,
-                WINED3D_SHADER_TYPE_COMPUTE, &base_idx, &count);
-        context_bind_shader_resources(context, state, WINED3D_SHADER_TYPE_COMPUTE, base_idx, count);
+        context_bind_shader_resources(context, state, WINED3D_SHADER_TYPE_COMPUTE);
         context->update_compute_shader_resource_bindings = 0;
         if (gl_info->limits.combined_samplers == gl_info->limits.graphics_samplers)
             context->update_shader_resource_bindings = 1;

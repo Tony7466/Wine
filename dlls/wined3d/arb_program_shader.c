@@ -3809,7 +3809,8 @@ static GLuint shader_arb_generate_pshader(const struct wined3d_shader *shader,
     }
 
     /* Base Shader Body */
-    shader_generate_main(shader, buffer, reg_maps, &priv_ctx);
+    if (FAILED(shader_generate_main(shader, buffer, reg_maps, &priv_ctx)))
+        return 0;
 
     if(args->super.srgb_correction) {
         arbfp_add_sRGB_correction(buffer, fragcolor, srgbtmp[0], srgbtmp[1], srgbtmp[2], srgbtmp[3],
@@ -4222,7 +4223,8 @@ static GLuint shader_arb_generate_vshader(const struct wined3d_shader *shader,
     /* The shader starts with the main function */
     priv_ctx.in_main_func = TRUE;
     /* Base Shader Body */
-    shader_generate_main(shader, buffer, reg_maps, &priv_ctx);
+    if (FAILED(shader_generate_main(shader, buffer, reg_maps, &priv_ctx)))
+        return -1;
 
     if (!priv_ctx.footer_written) vshader_add_footer(&priv_ctx,
             shader_data, args, reg_maps, gl_info, buffer);
@@ -5056,6 +5058,7 @@ static const SHADER_HANDLER shader_arb_instruction_handler_table[WINED3DSIH_TABL
     /* WINED3DSIH_DCL_HS_JOIN_PHASE_INSTANCE_COUNT */ NULL,
     /* WINED3DSIH_DCL_HS_MAX_TESSFACTOR            */ NULL,
     /* WINED3DSIH_DCL_IMMEDIATE_CONSTANT_BUFFER    */ NULL,
+    /* WINED3DSIH_DCL_INDEX_RANGE                  */ NULL,
     /* WINED3DSIH_DCL_INDEXABLE_TEMP               */ NULL,
     /* WINED3DSIH_DCL_INPUT                        */ NULL,
     /* WINED3DSIH_DCL_INPUT_CONTROL_POINT_COUNT    */ NULL,
@@ -5244,6 +5247,7 @@ static const SHADER_HANDLER shader_arb_instruction_handler_table[WINED3DSIH_TABL
     /* WINED3DSIH_ULT                              */ NULL,
     /* WINED3DSIH_UMAX                             */ NULL,
     /* WINED3DSIH_UMIN                             */ NULL,
+    /* WINED3DSIH_UMUL                             */ NULL,
     /* WINED3DSIH_USHR                             */ NULL,
     /* WINED3DSIH_UTOF                             */ NULL,
     /* WINED3DSIH_XOR                              */ NULL,
@@ -5791,7 +5795,7 @@ static void arbfp_get_caps(const struct wined3d_gl_info *gl_info, struct fragmen
     /* TODO: Implement WINED3DTEXOPCAPS_PREMODULATE */
 
     caps->MaxTextureBlendStages   = MAX_TEXTURES;
-    caps->MaxSimultaneousTextures = min(gl_info->limits.fragment_samplers, MAX_TEXTURES);
+    caps->MaxSimultaneousTextures = min(gl_info->limits.samplers[WINED3D_SHADER_TYPE_PIXEL], MAX_TEXTURES);
 }
 
 static DWORD arbfp_get_emul_mask(const struct wined3d_gl_info *gl_info)
@@ -7785,21 +7789,15 @@ static BOOL arbfp_blit_supported(const struct wined3d_gl_info *gl_info,
     }
 }
 
-static void arbfp_blit_surface(struct wined3d_device *device, enum wined3d_blit_op op, DWORD filter,
-        struct wined3d_surface *src_surface, const RECT *src_rect_in,
-        struct wined3d_surface *dst_surface, const RECT *dst_rect_in,
-        const struct wined3d_color_key *color_key)
+static void arbfp_blit_surface(struct wined3d_device *device, enum wined3d_blit_op op, struct wined3d_context *context,
+        struct wined3d_surface *src_surface, const RECT *src_rect,
+        struct wined3d_surface *dst_surface, const RECT *dst_rect,
+        const struct wined3d_color_key *color_key, enum wined3d_texture_filter_type filter)
 {
-    unsigned int dst_sub_resource_idx = surface_get_sub_resource_idx(dst_surface);
     struct wined3d_texture *src_texture = src_surface->container;
     struct wined3d_texture *dst_texture = dst_surface->container;
-    struct wined3d_context *context;
-    RECT src_rect = *src_rect_in;
-    RECT dst_rect = *dst_rect_in;
     struct wined3d_color_key alpha_test_key;
-
-    /* Activate the destination context, set it up for blitting */
-    context = context_acquire(device, dst_texture, dst_sub_resource_idx);
+    RECT s, d;
 
     /* Now load the surface */
     if (wined3d_settings.offscreen_rendering_mode != ORM_FBO
@@ -7815,8 +7813,10 @@ static void arbfp_blit_surface(struct wined3d_device *device, enum wined3d_blit_
          * rectangle instead. */
         surface_load_fb_texture(src_surface, FALSE, context);
 
-        src_rect.top = wined3d_texture_get_level_height(src_texture, src_surface->texture_level) - src_rect.top;
-        src_rect.bottom = wined3d_texture_get_level_height(src_texture, src_surface->texture_level) - src_rect.bottom;
+        s = *src_rect;
+        s.top = wined3d_texture_get_level_height(src_texture, src_surface->texture_level) - s.top;
+        s.bottom = wined3d_texture_get_level_height(src_texture, src_surface->texture_level) - s.bottom;
+        src_rect = &s;
     }
     else
         wined3d_texture_load(src_texture, context, FALSE);
@@ -7824,7 +7824,11 @@ static void arbfp_blit_surface(struct wined3d_device *device, enum wined3d_blit_
     context_apply_blit_state(context, device);
 
     if (!wined3d_resource_is_offscreen(&dst_texture->resource))
-        surface_translate_drawable_coords(dst_surface, context->win_handle, &dst_rect);
+    {
+        d = *dst_rect;
+        surface_translate_drawable_coords(dst_surface, context->win_handle, &d);
+        dst_rect = &d;
+    }
 
     if (op == WINED3D_BLIT_OP_COLOR_BLIT_ALPHATEST)
     {
@@ -7837,7 +7841,7 @@ static void arbfp_blit_surface(struct wined3d_device *device, enum wined3d_blit_
     arbfp_blit_set(device->blit_priv, context, src_surface, color_key);
 
     /* Draw a textured quad */
-    draw_textured_quad(src_surface, context, &src_rect, &dst_rect, filter);
+    draw_textured_quad(src_surface, context, src_rect, dst_rect, filter);
 
     /* Leave the opengl state valid for blitting */
     arbfp_blit_unset(context->gl_info);
@@ -7845,11 +7849,6 @@ static void arbfp_blit_surface(struct wined3d_device *device, enum wined3d_blit_
     if (wined3d_settings.strict_draw_ordering
             || (dst_texture->swapchain && (dst_texture->swapchain->front_buffer == dst_texture)))
         context->gl_info->gl_ops.gl.p_glFlush(); /* Flush to ensure ordering across contexts. */
-
-    context_release(context);
-
-    wined3d_texture_validate_location(dst_texture, dst_sub_resource_idx, dst_texture->resource.draw_binding);
-    wined3d_texture_invalidate_location(dst_texture, dst_sub_resource_idx, ~dst_texture->resource.draw_binding);
 }
 
 static HRESULT arbfp_blit_color_fill(struct wined3d_device *device, struct wined3d_rendertarget_view *view,

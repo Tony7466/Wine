@@ -2759,7 +2759,7 @@ static void query_internal_format(struct wined3d_adapter *adapter,
     }
     else
     {
-        if (!gl_info->limits.vertex_samplers)
+        if (!gl_info->limits.samplers[WINED3D_SHADER_TYPE_VERTEX])
             format_clear_flag(format, WINED3DFMT_FLAG_VTF);
 
         if (!(gl_info->quirks & WINED3D_QUIRK_LIMITED_TEX_FILTERING))
@@ -2803,6 +2803,7 @@ static void query_internal_format(struct wined3d_adapter *adapter,
     {
         if (gl_info->supported[ARB_INTERNALFORMAT_QUERY])
         {
+            count = 0;
             GL_EXTCALL(glGetInternalformativ(GL_RENDERBUFFER, format->glInternal,
                     GL_NUM_SAMPLE_COUNTS, 1, &count));
             checkGLcall("glGetInternalformativ(GL_NUM_SAMPLE_COUNTS)");
@@ -5994,18 +5995,29 @@ void wined3d_gl_limits_get_uniform_block_range(const struct wined3d_gl_limits *g
 void wined3d_gl_limits_get_texture_unit_range(const struct wined3d_gl_limits *gl_limits,
         enum wined3d_shader_type shader_type, unsigned int *base, unsigned int *count)
 {
-    if (shader_type != WINED3D_SHADER_TYPE_COMPUTE)
+    unsigned int i;
+
+    if (shader_type == WINED3D_SHADER_TYPE_COMPUTE)
     {
-        *base = *count = 0;
-        ERR("Unhandled shader type %#x.\n", shader_type);
+        if (gl_limits->combined_samplers == gl_limits->graphics_samplers)
+            *base = 0;
+        else
+            *base = gl_limits->graphics_samplers;
+        *count = gl_limits->samplers[WINED3D_SHADER_TYPE_COMPUTE];
         return;
     }
 
-    if (gl_limits->combined_samplers == gl_limits->graphics_samplers)
-        *base = 0;
-    else
-        *base = gl_limits->graphics_samplers - 1;
-    *count = gl_limits->compute_samplers;
+    *base = 0;
+    for (i = 0; i < WINED3D_SHADER_TYPE_GRAPHICS_COUNT; ++i)
+    {
+        *count = gl_limits->samplers[i];
+        if (i == shader_type)
+            return;
+        *base += *count;
+    }
+
+    ERR("Unrecognized shader type %#x.\n", shader_type);
+    *count = 0;
 }
 
 BOOL wined3d_array_reserve(void **elements, SIZE_T *capacity, SIZE_T count, SIZE_T size)

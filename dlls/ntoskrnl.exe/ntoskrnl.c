@@ -1999,6 +1999,19 @@ NTSTATUS WINAPI KeWaitForSingleObject(PVOID Object,
 }
 
 /***********************************************************************
+ *           KeWaitForMultipleObjects   (NTOSKRNL.EXE.@)
+ */
+NTSTATUS WINAPI KeWaitForMultipleObjects(ULONG Count, PVOID Object[], WAIT_TYPE WaitType,
+                                         KWAIT_REASON WaitReason, KPROCESSOR_MODE WaitMode,
+                                         BOOLEAN Alertable, PLARGE_INTEGER Timeout,
+                                         PKWAIT_BLOCK WaitBlockArray)
+{
+    FIXME( "stub: %u, %p, %d, %d, %d, %d, %p, %p\n", Count, Object, WaitType, WaitReason, WaitMode,
+           Alertable, Timeout, WaitBlockArray );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+/***********************************************************************
  *           IoRegisterFileSystem   (NTOSKRNL.EXE.@)
  */
 VOID WINAPI IoRegisterFileSystem(PDEVICE_OBJECT DeviceObject)
@@ -3187,4 +3200,30 @@ NTSTATUS WINAPI IoCreateFile(HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBUT
 VOID WINAPI KeClearEvent(PRKEVENT event)
 {
     FIXME("stub: %p\n", event);
+}
+
+/***********************************************************************
+ *           KeAcquireInStackQueuedSpinLock (NTOSKRNL.EXE.@)
+ */
+#ifdef DEFINE_FASTCALL2_ENTRYPOINT
+DEFINE_FASTCALL2_ENTRYPOINT( KeAcquireInStackQueuedSpinLock )
+void WINAPI __regs_KeAcquireInStackQueuedSpinLock( KSPIN_LOCK *spinlock, KLOCK_QUEUE_HANDLE *handle )
+#else
+void WINAPI KeAcquireInStackQueuedSpinLock( KSPIN_LOCK *spinlock, KLOCK_QUEUE_HANDLE *handle )
+#endif
+{
+    FIXME( "stub: %p %p\n", spinlock, handle );
+}
+
+/***********************************************************************
+ *           KeReleaseInStackQueuedSpinLock (NTOSKRNL.EXE.@)
+ */
+#ifdef DEFINE_FASTCALL1_ENTRYPOINT
+DEFINE_FASTCALL1_ENTRYPOINT( KeReleaseInStackQueuedSpinLock )
+void WINAPI __regs_KeReleaseInStackQueuedSpinLock( KLOCK_QUEUE_HANDLE *handle )
+#else
+void WINAPI KeReleaseInStackQueuedSpinLock( KLOCK_QUEUE_HANDLE *handle )
+#endif
+{
+    FIXME( "stub: %p\n", handle);
 }

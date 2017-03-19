@@ -78,6 +78,7 @@ static const char * const shader_opcode_names[] =
     /* WINED3DSIH_DCL_HS_JOIN_PHASE_INSTANCE_COUNT */ "dcl_hs_join_phase_instance_count",
     /* WINED3DSIH_DCL_HS_MAX_TESSFACTOR            */ "dcl_hs_max_tessfactor",
     /* WINED3DSIH_DCL_IMMEDIATE_CONSTANT_BUFFER    */ "dcl_immediateConstantBuffer",
+    /* WINED3DSIH_DCL_INDEX_RANGE                  */ "dcl_index_range",
     /* WINED3DSIH_DCL_INDEXABLE_TEMP               */ "dcl_indexableTemp",
     /* WINED3DSIH_DCL_INPUT                        */ "dcl_input",
     /* WINED3DSIH_DCL_INPUT_CONTROL_POINT_COUNT    */ "dcl_input_control_point_count",
@@ -266,6 +267,7 @@ static const char * const shader_opcode_names[] =
     /* WINED3DSIH_ULT                              */ "ult",
     /* WINED3DSIH_UMAX                             */ "umax",
     /* WINED3DSIH_UMIN                             */ "umin",
+    /* WINED3DSIH_UMUL                             */ "umul",
     /* WINED3DSIH_USHR                             */ "ushr",
     /* WINED3DSIH_UTOF                             */ "utof",
     /* WINED3DSIH_XOR                              */ "xor",
@@ -884,7 +886,7 @@ static HRESULT shader_reg_maps_add_tgsm(struct wined3d_shader_reg_maps *reg_maps
             register_idx + 1, sizeof(*reg_maps->tgsm)))
         return E_OUTOFMEMORY;
 
-    reg_maps->tgsm_count = register_idx + 1;
+    reg_maps->tgsm_count = max(register_idx + 1, reg_maps->tgsm_count);
     tgsm = &reg_maps->tgsm[register_idx];
     tgsm->size = size;
     tgsm->stride = stride;
@@ -933,8 +935,8 @@ static HRESULT shader_get_registers_used(struct wined3d_shader *shader, const st
         /* Unhandled opcode, and its parameters. */
         if (ins.handler_idx == WINED3DSIH_TABLE_SIZE)
         {
-            TRACE("Skipping unrecognized instruction.\n");
-            continue;
+            WARN("Encountered unrecognised or invalid instruction.\n");
+            return WINED3DERR_INVALIDCALL;
         }
 
         /* Handle declarations. */
@@ -995,6 +997,8 @@ static HRESULT shader_get_registers_used(struct wined3d_shader *shader, const st
                     }
                     reg_maps->uav_resource_info[reg_idx].type = semantic->resource_type;
                     reg_maps->uav_resource_info[reg_idx].data_type = semantic->resource_data_type;
+                    if (ins.flags)
+                        FIXME("Ignoring typed UAV flags %#x.\n", ins.flags);
                     break;
 
                 default:
@@ -1110,6 +1114,8 @@ static HRESULT shader_get_registers_used(struct wined3d_shader *shader, const st
                 ERR("Invalid UAV resource index %u.\n", reg_idx);
                 break;
             }
+            if (ins.flags)
+                FIXME("Ignoring raw UAV flags %#x.\n", ins.flags);
             reg_maps->uav_resource_info[reg_idx].type = WINED3D_SHADER_RESOURCE_BUFFER;
             reg_maps->uav_resource_info[reg_idx].data_type = WINED3D_DATA_UINT;
             reg_maps->uav_resource_info[reg_idx].flags = WINED3D_VIEW_BUFFER_RAW;
@@ -1382,6 +1388,7 @@ static HRESULT shader_get_registers_used(struct wined3d_shader *shader, const st
             }
             else if ((WINED3DSIH_ATOMIC_AND <= ins.handler_idx && ins.handler_idx <= WINED3DSIH_ATOMIC_XOR)
                     || (WINED3DSIH_IMM_ATOMIC_AND <= ins.handler_idx && ins.handler_idx <= WINED3DSIH_IMM_ATOMIC_XOR)
+                    || (ins.handler_idx == WINED3DSIH_BUFINFO && ins.src[0].reg.type == WINED3DSPR_UAV)
                     || ins.handler_idx == WINED3DSIH_LD_UAV_TYPED
                     || (ins.handler_idx == WINED3DSIH_LD_RAW && ins.src[1].reg.type == WINED3DSPR_UAV)
                     || (ins.handler_idx == WINED3DSIH_LD_STRUCTURED && ins.src[2].reg.type == WINED3DSPR_UAV))
@@ -1393,6 +1400,8 @@ static HRESULT shader_get_registers_used(struct wined3d_shader *shader, const st
                     reg_idx = ins.src[2].reg.idx[0].offset;
                 else if (WINED3DSIH_ATOMIC_AND <= ins.handler_idx && ins.handler_idx <= WINED3DSIH_ATOMIC_XOR)
                     reg_idx = ins.dst[0].reg.idx[0].offset;
+                else if (ins.handler_idx == WINED3DSIH_BUFINFO)
+                    reg_idx = ins.src[0].reg.idx[0].offset;
                 else
                     reg_idx = ins.dst[1].reg.idx[0].offset;
                 if (reg_idx >= MAX_UNORDERED_ACCESS_VIEWS)
@@ -1445,6 +1454,11 @@ static HRESULT shader_get_registers_used(struct wined3d_shader *shader, const st
             {
                 shader_record_sample(reg_maps, ins.src[1].reg.idx[0].offset,
                         ins.src[2].reg.idx[0].offset, reg_maps->sampler_map.count);
+            }
+            else if (ins.handler_idx == WINED3DSIH_BUFINFO && ins.src[0].reg.type == WINED3DSPR_RESOURCE)
+            {
+                shader_record_sample(reg_maps, ins.src[0].reg.idx[0].offset,
+                        WINED3D_SAMPLER_DEFAULT, reg_maps->sampler_map.count);
             }
             else if (ins.handler_idx == WINED3DSIH_LD
                     || (ins.handler_idx == WINED3DSIH_LD_RAW && ins.src[1].reg.type == WINED3DSPR_RESOURCE)
@@ -1723,7 +1737,8 @@ static void shader_dump_sysval_semantic(struct wined3d_string_buffer *buffer, en
 }
 
 static void shader_dump_decl_usage(struct wined3d_string_buffer *buffer,
-        const struct wined3d_shader_semantic *semantic, const struct wined3d_shader_version *shader_version)
+        const struct wined3d_shader_semantic *semantic, unsigned int flags,
+        const struct wined3d_shader_version *shader_version)
 {
     shader_addline(buffer, "dcl");
 
@@ -1800,6 +1815,8 @@ static void shader_dump_decl_usage(struct wined3d_string_buffer *buffer,
                 shader_addline(buffer, "unknown");
                 break;
         }
+        if (semantic->reg.reg.type == WINED3DSPR_UAV)
+            shader_dump_uav_flags(buffer, flags);
         switch (semantic->resource_data_type)
         {
             case WINED3D_DATA_FLOAT:
@@ -2274,7 +2291,7 @@ static void shader_dump_src_param(struct wined3d_string_buffer *buffer,
 
 /* Shared code in order to generate the bulk of the shader string.
  * NOTE: A description of how to parse tokens can be found on MSDN. */
-void shader_generate_main(const struct wined3d_shader *shader, struct wined3d_string_buffer *buffer,
+HRESULT shader_generate_main(const struct wined3d_shader *shader, struct wined3d_string_buffer *buffer,
         const struct wined3d_shader_reg_maps *reg_maps, void *backend_ctx)
 {
     struct wined3d_device *device = shader->device;
@@ -2312,8 +2329,8 @@ void shader_generate_main(const struct wined3d_shader *shader, struct wined3d_st
         /* Unknown opcode and its parameters. */
         if (ins.handler_idx == WINED3DSIH_TABLE_SIZE)
         {
-            TRACE("Skipping unrecognized instruction.\n");
-            continue;
+            WARN("Encountered unrecognised or invalid instruction.\n");
+            return WINED3DERR_INVALIDCALL;
         }
 
         if (ins.predicate)
@@ -2322,6 +2339,8 @@ void shader_generate_main(const struct wined3d_shader *shader, struct wined3d_st
         /* Call appropriate function for output target */
         device->shader_backend->shader_handle_instruction(&ins);
     }
+
+    return WINED3D_OK;
 }
 
 static void shader_dump_ins_modifiers(struct wined3d_string_buffer *buffer,
@@ -2492,7 +2511,7 @@ static void shader_trace_init(const struct wined3d_shader_frontend *fe, void *fe
 
         if (ins.handler_idx == WINED3DSIH_DCL || ins.handler_idx == WINED3DSIH_DCL_UAV_TYPED)
         {
-            shader_dump_decl_usage(&buffer, &ins.declaration.semantic, &shader_version);
+            shader_dump_decl_usage(&buffer, &ins.declaration.semantic, ins.flags, &shader_version);
             shader_dump_ins_modifiers(&buffer, &ins.declaration.semantic.reg);
             shader_addline(&buffer, " ");
             shader_dump_dst_param(&buffer, &ins.declaration.semantic.reg, &shader_version);
@@ -2536,6 +2555,12 @@ static void shader_trace_init(const struct wined3d_shader_frontend *fe, void *fe
                         ins.declaration.icb->data[4 * i + 3]);
             }
             shader_addline(&buffer, "}");
+        }
+        else if (ins.handler_idx == WINED3DSIH_DCL_INDEX_RANGE)
+        {
+            shader_addline(&buffer, "%s ", shader_opcode_names[ins.handler_idx]);
+            shader_dump_dst_param(&buffer, &ins.declaration.index_range.first_register, &shader_version);
+            shader_addline(&buffer, " %u", ins.declaration.index_range.last_register);
         }
         else if (ins.handler_idx == WINED3DSIH_DCL_INDEXABLE_TEMP)
         {

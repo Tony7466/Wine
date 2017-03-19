@@ -67,8 +67,8 @@ WINE_DECLARE_DEBUG_CHANNEL(d3d_bytecode);
 #define WINED3D_SM5_FP_ARRAY_SIZE_SHIFT         16
 #define WINED3D_SM5_FP_TABLE_COUNT_MASK         0xffffu
 
-#define WINED3D_SM5_UAV_FLAGS_SHIFT             11
-#define WINED3D_SM5_UAV_FLAGS_MASK              (0x8fffu << WINED3D_SM5_UAV_FLAGS_SHIFT)
+#define WINED3D_SM5_UAV_FLAGS_SHIFT             15
+#define WINED3D_SM5_UAV_FLAGS_MASK              (0x1ffu << WINED3D_SM5_UAV_FLAGS_SHIFT)
 
 #define WINED3D_SM5_SYNC_FLAGS_SHIFT            11
 #define WINED3D_SM5_SYNC_FLAGS_MASK             (0xffu << WINED3D_SM5_SYNC_FLAGS_SHIFT)
@@ -191,6 +191,7 @@ enum wined3d_sm4_opcode
     WINED3D_SM4_OP_UDIV                             = 0x4e,
     WINED3D_SM4_OP_ULT                              = 0x4f,
     WINED3D_SM4_OP_UGE                              = 0x50,
+    WINED3D_SM4_OP_UMUL                             = 0x51,
     WINED3D_SM4_OP_UMAX                             = 0x53,
     WINED3D_SM4_OP_UMIN                             = 0x54,
     WINED3D_SM4_OP_USHR                             = 0x55,
@@ -199,6 +200,7 @@ enum wined3d_sm4_opcode
     WINED3D_SM4_OP_DCL_RESOURCE                     = 0x58,
     WINED3D_SM4_OP_DCL_CONSTANT_BUFFER              = 0x59,
     WINED3D_SM4_OP_DCL_SAMPLER                      = 0x5a,
+    WINED3D_SM4_OP_DCL_INDEX_RANGE                  = 0x5b,
     WINED3D_SM4_OP_DCL_OUTPUT_TOPOLOGY              = 0x5c,
     WINED3D_SM4_OP_DCL_INPUT_PRIMITIVE              = 0x5d,
     WINED3D_SM4_OP_DCL_VERTICES_OUT                 = 0x5e,
@@ -546,6 +548,9 @@ static void shader_sm4_read_dcl_resource(struct wined3d_shader_instruction *ins,
     {
         ins->declaration.semantic.resource_data_type = data_type_table[data_type];
     }
+
+    if (reg_data_type == WINED3D_DATA_UAV)
+        ins->flags = (opcode_token & WINED3D_SM5_UAV_FLAGS_MASK) >> WINED3D_SM5_UAV_FLAGS_SHIFT;
 }
 
 static void shader_sm4_read_dcl_constant_buffer(struct wined3d_shader_instruction *ins,
@@ -565,6 +570,14 @@ static void shader_sm4_read_dcl_sampler(struct wined3d_shader_instruction *ins,
     if (ins->flags & ~WINED3D_SM4_SAMPLER_COMPARISON)
         FIXME("Unhandled sampler mode %#x.\n", ins->flags);
     shader_sm4_read_dst_param(priv, &tokens, WINED3D_DATA_SAMPLER, &ins->declaration.dst);
+}
+
+static void shader_sm4_read_dcl_index_range(struct wined3d_shader_instruction *ins,
+        DWORD opcode, DWORD opcode_token, const DWORD *tokens, unsigned int token_count,
+        struct wined3d_sm4_data *priv)
+{
+    shader_sm4_read_dst_param(priv, &tokens, WINED3D_DATA_OPAQUE, &ins->declaration.index_range.first_register);
+    ins->declaration.index_range.last_register = *tokens;
 }
 
 static void shader_sm4_read_dcl_output_topology(struct wined3d_shader_instruction *ins,
@@ -893,6 +906,7 @@ static const struct wined3d_sm4_opcode_info opcode_table[] =
     {WINED3D_SM4_OP_UDIV,                             WINED3DSIH_UDIV,                             "uu",   "uu"},
     {WINED3D_SM4_OP_ULT,                              WINED3DSIH_ULT,                              "u",    "uu"},
     {WINED3D_SM4_OP_UGE,                              WINED3DSIH_UGE,                              "u",    "uu"},
+    {WINED3D_SM4_OP_UMUL,                             WINED3DSIH_UMUL,                             "uu",   "uu"},
     {WINED3D_SM4_OP_UMAX,                             WINED3DSIH_UMAX,                             "u",    "uu"},
     {WINED3D_SM4_OP_UMIN,                             WINED3DSIH_UMIN,                             "u",    "uu"},
     {WINED3D_SM4_OP_USHR,                             WINED3DSIH_USHR,                             "u",    "uu"},
@@ -904,6 +918,8 @@ static const struct wined3d_sm4_opcode_info opcode_table[] =
             shader_sm4_read_dcl_constant_buffer},
     {WINED3D_SM4_OP_DCL_SAMPLER,                      WINED3DSIH_DCL_SAMPLER,                      "",     "",
             shader_sm4_read_dcl_sampler},
+    {WINED3D_SM4_OP_DCL_INDEX_RANGE,                  WINED3DSIH_DCL_INDEX_RANGE,                  "",     "",
+            shader_sm4_read_dcl_index_range},
     {WINED3D_SM4_OP_DCL_OUTPUT_TOPOLOGY,              WINED3DSIH_DCL_OUTPUT_TOPOLOGY,              "",     "",
             shader_sm4_read_dcl_output_topology},
     {WINED3D_SM4_OP_DCL_INPUT_PRIMITIVE,              WINED3DSIH_DCL_INPUT_PRIMITIVE,              "",     "",
@@ -1504,16 +1520,36 @@ static void shader_sm4_read_instruction(void *data, const DWORD **ptr, struct wi
     DWORD opcode_token, opcode, previous_token;
     struct wined3d_sm4_data *priv = data;
     unsigned int i, len;
+    SIZE_T remaining;
     const DWORD *p;
 
     list_move_head(&priv->src_free, &priv->src);
+
+    if (*ptr >= priv->end)
+    {
+        WARN("End of byte-code, failed to read opcode.\n");
+        goto fail;
+    }
+    remaining = priv->end - *ptr;
 
     opcode_token = *(*ptr)++;
     opcode = opcode_token & WINED3D_SM4_OPCODE_MASK;
 
     len = ((opcode_token & WINED3D_SM4_INSTRUCTION_LENGTH_MASK) >> WINED3D_SM4_INSTRUCTION_LENGTH_SHIFT);
     if (!len)
+    {
+        if (remaining < 2)
+        {
+            WARN("End of byte-code, failed to read length token.\n");
+            goto fail;
+        }
         len = **ptr;
+    }
+    if (!len || remaining < len)
+    {
+        WARN("Read invalid length %u (remaining %lu).\n", len, remaining);
+        goto fail;
+    }
     --len;
 
     if (TRACE_ON(d3d_bytecode))
@@ -1547,10 +1583,6 @@ static void shader_sm4_read_instruction(void *data, const DWORD **ptr, struct wi
     p = *ptr;
     *ptr += len;
 
-    previous_token = opcode_token;
-    while (previous_token & WINED3D_SM4_INSTRUCTION_MODIFIER)
-        shader_sm4_read_instruction_modifier(previous_token = *p++, ins);
-
     if (opcode_info->read_opcode_func)
     {
         opcode_info->read_opcode_func(ins, opcode, opcode_token, p, len, priv);
@@ -1558,6 +1590,10 @@ static void shader_sm4_read_instruction(void *data, const DWORD **ptr, struct wi
     else
     {
         enum wined3d_shader_dst_modifier instruction_dst_modifier = WINED3DSPDM_NONE;
+
+        previous_token = opcode_token;
+        while (previous_token & WINED3D_SM4_INSTRUCTION_MODIFIER && p != *ptr)
+            shader_sm4_read_instruction_modifier(previous_token = *p++, ins);
 
         ins->flags = (opcode_token & WINED3D_SM4_INSTRUCTION_FLAGS_MASK) >> WINED3D_SM4_INSTRUCTION_FLAGS_SHIFT;
 
@@ -1586,6 +1622,13 @@ static void shader_sm4_read_instruction(void *data, const DWORD **ptr, struct wi
             }
         }
     }
+
+    return;
+
+fail:
+    *ptr = priv->end;
+    ins->handler_idx = WINED3DSIH_TABLE_SIZE;
+    return;
 }
 
 static BOOL shader_sm4_is_end(void *data, const DWORD **ptr)

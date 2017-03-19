@@ -1067,7 +1067,7 @@ static ULONG adapterAddressesFromIndex(ULONG family, ULONG flags, IF_INDEX index
         {
             IP_ADAPTER_UNICAST_ADDRESS *ua;
             struct WS_sockaddr_in *sa;
-            aa->Flags |= IP_ADAPTER_IPV4_ENABLED;
+            aa->u1.s1.Ipv4Enabled = TRUE;
             ua = aa->FirstUnicastAddress = (IP_ADAPTER_UNICAST_ADDRESS *)ptr;
             for (i = 0; i < num_v4addrs; i++)
             {
@@ -1101,7 +1101,7 @@ static ULONG adapterAddressesFromIndex(ULONG family, ULONG flags, IF_INDEX index
             IP_ADAPTER_UNICAST_ADDRESS *ua;
             struct WS_sockaddr_in6 *sa;
 
-            aa->Flags |= IP_ADAPTER_IPV6_ENABLED;
+            aa->u1.s1.Ipv6Enabled = TRUE;
             if (aa->FirstUnicastAddress)
             {
                 for (ua = aa->FirstUnicastAddress; ua->Next; ua = ua->Next)
@@ -2640,8 +2640,8 @@ DWORD WINAPI NotifyAddrChange(PHANDLE Handle, LPOVERLAPPED overlapped)
 /******************************************************************
  *    NotifyIpInterfaceChange (IPHLPAPI.@)
  */
-DWORD WINAPI NotifyIpInterfaceChange(ULONG family, PVOID callback, PVOID context,
-                                     BOOLEAN init_notify, PHANDLE handle)
+DWORD WINAPI NotifyIpInterfaceChange(ADDRESS_FAMILY family, PIPINTERFACE_CHANGE_CALLBACK callback,
+                                     PVOID context, BOOLEAN init_notify, PHANDLE handle)
 {
     FIXME("(family %d, callback %p, context %p, init_notify %d, handle %p): stub\n",
           family, callback, context, init_notify, handle);
@@ -2672,6 +2672,18 @@ DWORD WINAPI NotifyRouteChange(PHANDLE Handle, LPOVERLAPPED overlapped)
   return ERROR_NOT_SUPPORTED;
 }
 
+
+/******************************************************************
+ *    NotifyUnicastIpAddressChange (IPHLPAPI.@)
+ */
+DWORD WINAPI NotifyUnicastIpAddressChange(ADDRESS_FAMILY family, PUNICAST_IPADDRESS_CHANGE_CALLBACK callback,
+                                          PVOID context, BOOLEAN init_notify, PHANDLE handle)
+{
+    FIXME("(family %d, callback %p, context %p, init_notify %d, handle %p): stub\n",
+          family, callback, context, init_notify, handle);
+    if (handle) *handle = NULL;
+    return ERROR_NOT_SUPPORTED;
+}
 
 /******************************************************************
  *    SendARP (IPHLPAPI.@)
