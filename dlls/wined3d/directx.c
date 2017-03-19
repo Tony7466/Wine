@@ -147,6 +147,7 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_ARB_point_sprite",                 ARB_POINT_SPRITE              },
     {"GL_ARB_provoking_vertex",             ARB_PROVOKING_VERTEX          },
     {"GL_ARB_sampler_objects",              ARB_SAMPLER_OBJECTS           },
+    {"GL_ARB_seamless_cube_map",            ARB_SEAMLESS_CUBE_MAP         },
     {"GL_ARB_shader_atomic_counters",       ARB_SHADER_ATOMIC_COUNTERS    },
     {"GL_ARB_shader_bit_encoding",          ARB_SHADER_BIT_ENCODING       },
     {"GL_ARB_shader_image_load_store",      ARB_SHADER_IMAGE_LOAD_STORE   },
@@ -1371,6 +1372,7 @@ static const struct gpu_description gpu_description_table[] =
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX860M,    "NVIDIA GeForce GTX 860M",          DRIVER_NVIDIA_GEFORCE8,  2048},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX870M,    "NVIDIA GeForce GTX 870M",          DRIVER_NVIDIA_GEFORCE8,  3072},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX880M,    "NVIDIA GeForce GTX 880M",          DRIVER_NVIDIA_GEFORCE8,  4096},
+    {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_940M,       "NVIDIA GeForce 940M",              DRIVER_NVIDIA_GEFORCE8,  4096},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX950,     "NVIDIA GeForce GTX 950",           DRIVER_NVIDIA_GEFORCE8,  2048},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX950M,    "NVIDIA GeForce GTX 950M",          DRIVER_NVIDIA_GEFORCE8,  4096},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX960,     "NVIDIA GeForce GTX 960",           DRIVER_NVIDIA_GEFORCE8,  4096},
@@ -1880,6 +1882,7 @@ cards_nvidia_binary[] =
     {"GTX 960",                     CARD_NVIDIA_GEFORCE_GTX960},    /* GeForce 900 - midend high */
     {"GTX 950M",                    CARD_NVIDIA_GEFORCE_GTX950M},   /* GeForce 900 - midend mobile */
     {"GTX 950",                     CARD_NVIDIA_GEFORCE_GTX950},    /* GeForce 900 - midend */
+    {"GeForce 940M",                CARD_NVIDIA_GEFORCE_940M},      /* GeForce 900 - midend mobile */
     {"GTX 880M",                    CARD_NVIDIA_GEFORCE_GTX880M},   /* GeForce 800 - mobile */
     {"GTX 870M",                    CARD_NVIDIA_GEFORCE_GTX870M},   /* GeForce 800 - mobile */
     {"GTX 860M",                    CARD_NVIDIA_GEFORCE_GTX860M},   /* GeForce 800 - mobile */
@@ -3392,8 +3395,8 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
 
 static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
 {
+    unsigned int i, sampler_count;
     GLfloat gl_floatv[2];
-    unsigned int i;
     GLint gl_max;
 
     gl_info->limits.blends = 1;
@@ -3401,11 +3404,12 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
     gl_info->limits.textures = 0;
     gl_info->limits.texture_coords = 0;
     for (i = 0; i < WINED3D_SHADER_TYPE_COUNT; ++i)
+    {
         gl_info->limits.uniform_blocks[i] = 0;
-    gl_info->limits.fragment_samplers = 1;
-    gl_info->limits.vertex_samplers = 0;
-    gl_info->limits.compute_samplers = 0;
-    gl_info->limits.combined_samplers = gl_info->limits.fragment_samplers + gl_info->limits.vertex_samplers;
+        gl_info->limits.samplers[i] = 0;
+    }
+    gl_info->limits.samplers[WINED3D_SHADER_TYPE_PIXEL] = 1;
+    gl_info->limits.combined_samplers = gl_info->limits.samplers[WINED3D_SHADER_TYPE_PIXEL];
     gl_info->limits.graphics_samplers = gl_info->limits.combined_samplers;
     gl_info->limits.vertex_attribs = 16;
     gl_info->limits.texture_buffer_offset_alignment = 1;
@@ -3485,18 +3489,20 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
         if (gl_info->supported[ARB_FRAGMENT_PROGRAM] || gl_info->supported[ARB_FRAGMENT_SHADER])
         {
             gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &gl_max);
-            gl_info->limits.fragment_samplers = gl_max;
+            gl_info->limits.samplers[WINED3D_SHADER_TYPE_PIXEL] = gl_max;
         }
         else
         {
-            gl_info->limits.fragment_samplers = gl_info->limits.textures;
+            gl_info->limits.samplers[WINED3D_SHADER_TYPE_PIXEL] = gl_info->limits.textures;
         }
-        TRACE("Max fragment samplers: %d.\n", gl_info->limits.fragment_samplers);
+        TRACE("Max fragment samplers: %d.\n", gl_info->limits.samplers[WINED3D_SHADER_TYPE_PIXEL]);
 
         if (gl_info->supported[ARB_VERTEX_SHADER])
         {
+            unsigned int vertex_sampler_count;
+
             gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS_ARB, &gl_max);
-            gl_info->limits.vertex_samplers = gl_max;
+            vertex_sampler_count = gl_info->limits.samplers[WINED3D_SHADER_TYPE_VERTEX] = gl_max;
             gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS_ARB, &gl_max);
             gl_info->limits.combined_samplers = gl_max;
             gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_VERTEX_ATTRIBS_ARB, &gl_max);
@@ -3516,26 +3522,26 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
              *
              * So this is just a check to check that our assumption holds true. If not, write a warning
              * and reduce the number of vertex samplers or probably disable vertex texture fetch. */
-            if (gl_info->limits.vertex_samplers && gl_info->limits.combined_samplers < 12
-                    && MAX_TEXTURES + gl_info->limits.vertex_samplers > gl_info->limits.combined_samplers)
+            if (vertex_sampler_count && gl_info->limits.combined_samplers < 12
+                    && MAX_TEXTURES + vertex_sampler_count > gl_info->limits.combined_samplers)
             {
                 FIXME("OpenGL implementation supports %u vertex samplers and %u total samplers.\n",
-                        gl_info->limits.vertex_samplers, gl_info->limits.combined_samplers);
+                        vertex_sampler_count, gl_info->limits.combined_samplers);
                 FIXME("Expected vertex samplers + MAX_TEXTURES(=8) > combined_samplers.\n");
                 if (gl_info->limits.combined_samplers > MAX_TEXTURES)
-                    gl_info->limits.vertex_samplers = gl_info->limits.combined_samplers - MAX_TEXTURES;
+                    vertex_sampler_count = gl_info->limits.combined_samplers - MAX_TEXTURES;
                 else
-                    gl_info->limits.vertex_samplers = 0;
+                    vertex_sampler_count = 0;
+                gl_info->limits.samplers[WINED3D_SHADER_TYPE_VERTEX] = vertex_sampler_count;
             }
         }
         else
         {
-            gl_info->limits.combined_samplers = gl_info->limits.fragment_samplers;
+            gl_info->limits.combined_samplers = gl_info->limits.samplers[WINED3D_SHADER_TYPE_PIXEL];
         }
-        TRACE("Max vertex samplers: %u.\n", gl_info->limits.vertex_samplers);
+        TRACE("Max vertex samplers: %u.\n", gl_info->limits.samplers[WINED3D_SHADER_TYPE_VERTEX]);
         TRACE("Max combined samplers: %u.\n", gl_info->limits.combined_samplers);
         TRACE("Max vertex attributes: %u.\n", gl_info->limits.vertex_attribs);
-        gl_info->limits.graphics_samplers = gl_info->limits.combined_samplers;
     }
     else
     {
@@ -3617,6 +3623,9 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
         gl_info->limits.uniform_blocks[WINED3D_SHADER_TYPE_GEOMETRY] = min(gl_max, WINED3D_MAX_CBS);
         TRACE("Max geometry uniform blocks: %u (%d).\n",
                 gl_info->limits.uniform_blocks[WINED3D_SHADER_TYPE_GEOMETRY], gl_max);
+        gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_GEOMETRY_TEXTURE_IMAGE_UNITS, &gl_max);
+        gl_info->limits.samplers[WINED3D_SHADER_TYPE_GEOMETRY] = gl_max;
+        TRACE("Max geometry samplers: %u.\n", gl_info->limits.samplers[WINED3D_SHADER_TYPE_GEOMETRY]);
     }
     if (gl_info->supported[ARB_FRAGMENT_SHADER])
     {
@@ -3642,12 +3651,8 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
         TRACE("Max compute uniform blocks: %u (%d).\n",
                 gl_info->limits.uniform_blocks[WINED3D_SHADER_TYPE_COMPUTE], gl_max);
         gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_COMPUTE_TEXTURE_IMAGE_UNITS, &gl_max);
-        gl_info->limits.compute_samplers = gl_max;
-        TRACE("Max compute samplers: %u.\n", gl_info->limits.compute_samplers);
-        /* A majority of OpenGL implementations allow to statically partition
-         * the set of texture bindings into six separate sets. */
-        if (gl_info->limits.combined_samplers >= MAX_COMBINED_SAMPLERS + gl_info->limits.compute_samplers)
-            gl_info->limits.graphics_samplers -= gl_info->limits.compute_samplers;
+        gl_info->limits.samplers[WINED3D_SHADER_TYPE_COMPUTE] = gl_max;
+        TRACE("Max compute samplers: %u.\n", gl_info->limits.samplers[WINED3D_SHADER_TYPE_COMPUTE]);
     }
     if (gl_info->supported[ARB_UNIFORM_BUFFER_OBJECT])
     {
@@ -3691,6 +3696,31 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
         gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_SAMPLES, &gl_max);
         gl_info->limits.samples = gl_max;
     }
+
+    gl_info->limits.samplers[WINED3D_SHADER_TYPE_PIXEL] =
+            min(gl_info->limits.samplers[WINED3D_SHADER_TYPE_PIXEL], MAX_GL_FRAGMENT_SAMPLERS);
+    sampler_count = 0;
+    for (i = 0; i < WINED3D_SHADER_TYPE_GRAPHICS_COUNT; ++i)
+        sampler_count += gl_info->limits.samplers[i];
+    if (gl_info->supported[WINED3D_GL_VERSION_3_2] && gl_info->limits.combined_samplers < sampler_count)
+    {
+        /* The minimum value for GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS in OpenGL
+         * 3.2 is 48 (16 per stage). When tessellation shaders are supported
+         * the minimum value is increased to 80. */
+        WARN("Graphics pipeline sampler count %u is greater than combined sampler count %u.\n",
+                sampler_count, gl_info->limits.combined_samplers);
+        for (i = 0; i < WINED3D_SHADER_TYPE_GRAPHICS_COUNT; ++i)
+            gl_info->limits.samplers[i] = min(gl_info->limits.samplers[i], 16);
+    }
+
+    /* A majority of OpenGL implementations allow us to statically partition
+     * the set of texture bindings into six separate sets. */
+    gl_info->limits.graphics_samplers = gl_info->limits.combined_samplers;
+    sampler_count = 0;
+    for (i = 0; i < WINED3D_SHADER_TYPE_COUNT; ++i)
+        sampler_count += gl_info->limits.samplers[i];
+    if (gl_info->limits.combined_samplers >= sampler_count)
+        gl_info->limits.graphics_samplers -= gl_info->limits.samplers[WINED3D_SHADER_TYPE_COMPUTE];
 }
 
 /* Context activation is done by the caller. */
@@ -3765,6 +3795,7 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
          * extension for core-only support. */
         {ARB_FRAGMENT_COORD_CONVENTIONS,   MAKEDWORD_VERSION(3, 2)},
         {ARB_PROVOKING_VERTEX,             MAKEDWORD_VERSION(3, 2)},
+        {ARB_SEAMLESS_CUBE_MAP,            MAKEDWORD_VERSION(3, 2)},
         {ARB_SYNC,                         MAKEDWORD_VERSION(3, 2)},
         {ARB_VERTEX_ARRAY_BGRA,            MAKEDWORD_VERSION(3, 2)},
 

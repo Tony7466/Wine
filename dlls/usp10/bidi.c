@@ -695,8 +695,8 @@ static BracketPair *computeBracketPairs(IsolatedRun *iso_run)
     int pair_count = 0;
     int i;
 
-    open_stack = HeapAlloc(GetProcessHeap(), 0, sizeof(WCHAR) * iso_run->length);
-    stack_index = HeapAlloc(GetProcessHeap(), 0, sizeof(int) * iso_run->length);
+    open_stack = heap_alloc(iso_run->length * sizeof(*open_stack));
+    stack_index = heap_alloc(iso_run->length * sizeof(*stack_index));
 
     for (i = 0; i < iso_run->length; i++)
     {
@@ -705,7 +705,7 @@ static BracketPair *computeBracketPairs(IsolatedRun *iso_run)
         {
             if (!out)
             {
-                out = HeapAlloc(GetProcessHeap(),0,sizeof(BracketPair));
+                out = heap_alloc(sizeof(*out));
                 out[0].start = -1;
             }
 
@@ -742,14 +742,14 @@ static BracketPair *computeBracketPairs(IsolatedRun *iso_run)
     }
     if (pair_count == 0)
     {
-        HeapFree(GetProcessHeap(),0,out);
+        heap_free(out);
         out = NULL;
     }
     else if (pair_count > 1)
         qsort(out, pair_count, sizeof(BracketPair), compr);
 
-    HeapFree(GetProcessHeap(), 0, open_stack);
-    HeapFree(GetProcessHeap(), 0, stack_index);
+    heap_free(open_stack);
+    heap_free(stack_index);
     return out;
 }
 
@@ -848,7 +848,7 @@ static void resolveNeutrals(IsolatedRun *iso_run)
             i++;
             p = &pairs[i];
         }
-        HeapFree(GetProcessHeap(),0,pairs);
+        heap_free(pairs);
     }
 
     /* N1 */
@@ -995,8 +995,8 @@ static void computeIsolatingRunsSet(unsigned baselevel, WORD *pcls, WORD *pLevel
     Run *runs;
     IsolatedRun *current_isolated;
 
-    runs = HeapAlloc(GetProcessHeap(), 0, uCount * sizeof(Run));
-    if (!runs) return;
+    if (!(runs = heap_alloc(uCount * sizeof(*runs))))
+        return;
 
     list_init(set);
 
@@ -1023,8 +1023,9 @@ static void computeIsolatingRunsSet(unsigned baselevel, WORD *pcls, WORD *pLevel
         {
             int type_fence, real_end;
             int j;
-            current_isolated = HeapAlloc(GetProcessHeap(), 0, sizeof(IsolatedRun) + sizeof(RunChar)*uCount);
-            if (!current_isolated) break;
+
+            if (!(current_isolated = heap_alloc(FIELD_OFFSET(IsolatedRun, item[uCount]))))
+                break;
 
             run_start = runs[k].start;
             current_isolated->e = runs[k].e;
@@ -1119,7 +1120,7 @@ search:
         i++;
     }
 
-    HeapFree(GetProcessHeap(), 0, runs);
+    heap_free(runs);
 }
 
 /*************************************************************
@@ -1141,8 +1142,7 @@ BOOL BIDI_DetermineLevels(
 
     TRACE("%s, %d\n", debugstr_wn(lpString, uCount), uCount);
 
-    chartype = HeapAlloc(GetProcessHeap(), 0, uCount * sizeof(WORD));
-    if (!chartype)
+    if (!(chartype = heap_alloc(uCount * sizeof(*chartype))))
     {
         WARN("Out of memory\n");
         return FALSE;
@@ -1175,7 +1175,7 @@ BOOL BIDI_DetermineLevels(
         if (TRACE_ON(bidi)) iso_dump_types("After Neutrals", iso_run);
 
         list_remove(&iso_run->entry);
-        HeapFree(GetProcessHeap(),0,iso_run);
+        heap_free(iso_run);
     }
 
     if (TRACE_ON(bidi)) dump_types("Before Implicit", chartype, 0, uCount);
@@ -1186,7 +1186,7 @@ BOOL BIDI_DetermineLevels(
     classify(lpString, chartype, uCount, c);
     resolveResolved(baselevel, chartype, lpOutLevels, 0, uCount-1);
 
-    HeapFree(GetProcessHeap(), 0, chartype);
+    heap_free(chartype);
     return TRUE;
 }
 

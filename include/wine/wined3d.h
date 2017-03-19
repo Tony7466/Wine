@@ -1279,6 +1279,7 @@ enum wined3d_shader_byte_code_format
 #define WINED3D_SRGB_READ_WRITE_CONTROL                         0x00000200
 #define WINED3D_LEGACY_UNBOUND_RESOURCE_COLOR                   0x00000400
 #define WINED3D_NO_PRIMITIVE_RESTART                            0x00000800
+#define WINED3D_LEGACY_CUBEMAP_FILTERING                        0x00001000
 
 #define WINED3D_RESZ_CODE                                       0x7fa05000
 
@@ -2162,8 +2163,13 @@ HRESULT __cdecl wined3d_device_get_clip_plane(const struct wined3d_device *devic
         UINT plane_idx, struct wined3d_vec4 *plane);
 HRESULT __cdecl wined3d_device_get_clip_status(const struct wined3d_device *device,
         struct wined3d_clip_status *clip_status);
+struct wined3d_shader * __cdecl wined3d_device_get_compute_shader(const struct wined3d_device *device);
 void __cdecl wined3d_device_get_creation_parameters(const struct wined3d_device *device,
         struct wined3d_device_creation_parameters *creation_parameters);
+struct wined3d_buffer * __cdecl wined3d_device_get_cs_cb(const struct wined3d_device *device, unsigned int idx);
+struct wined3d_shader_resource_view * __cdecl wined3d_device_get_cs_resource_view(const struct wined3d_device *device,
+        unsigned int idx);
+struct wined3d_sampler * __cdecl wined3d_device_get_cs_sampler(const struct wined3d_device *device, unsigned int idx);
 struct wined3d_rendertarget_view * __cdecl wined3d_device_get_depth_stencil_view(const struct wined3d_device *device);
 HRESULT __cdecl wined3d_device_get_device_caps(const struct wined3d_device *device, WINED3DCAPS *caps);
 HRESULT __cdecl wined3d_device_get_display_mode(const struct wined3d_device *device, UINT swapchain_idx,

@@ -30,10 +30,12 @@
 
 #include "wine/test.h"
 
-/* Do not allow more than 1 deviation here */
-#define match_off_by_1(a, b, exact) (abs((a) - (b)) <= ((exact) ? 0 : 1))
-
-#define near_match(a, b) (abs((a) - (b)) <= 6)
+static inline BOOL match_off_by_n(int a, int b, unsigned int n)
+{
+    return abs(a - b) <= n;
+}
+#define match_off_by_1(a, b, exact) match_off_by_n((a), (b), (exact) ? 0 : 1)
+#define near_match(a, b) match_off_by_n((a), (b), 6)
 #define expect(expected, got) ok(got == expected, "Expected %.8x, got %.8x\n", expected, got)
 
 static LONG  (WINAPI *pGdiGetCharDimensions)(HDC hdc, LPTEXTMETRICW lptm, LONG *height);
@@ -5646,6 +5648,45 @@ todo_wine
     ReleaseDC(NULL, hdc);
 }
 
+static void test_fstype_fixup(void)
+{
+    HDC hdc;
+    LOGFONTA lf;
+    HFONT hfont, hfont_prev;
+    DWORD ret;
+    OUTLINETEXTMETRICA *otm;
+    DWORD otm_size;
+
+    memset(&lf, 0, sizeof(lf));
+    lf.lfHeight = 72;
+    lstrcpyA(lf.lfFaceName, "wine_test");
+
+    SetLastError(0xdeadbeef);
+    hfont = CreateFontIndirectA(&lf);
+    ok(hfont != 0, "CreateFontIndirectA error %u\n", GetLastError());
+
+    hdc = GetDC(NULL);
+
+    hfont_prev = SelectObject(hdc, hfont);
+    ok(hfont_prev != NULL, "SelectObject failed\n");
+
+    otm_size = GetOutlineTextMetricsA(hdc, 0, NULL);
+    otm = HeapAlloc(GetProcessHeap(), 0, otm_size);
+    otm->otmSize = sizeof(*otm);
+    ret = GetOutlineTextMetricsA(hdc, otm->otmSize, otm);
+    ok(ret == otm->otmSize, "expected %u, got %u, error %d\n", otm->otmSize, ret, GetLastError());
+
+    /* Test font has fsType set to 0x7fff, test that reserved bits are filtered out,
+       valid bits are 1, 2, 3, 8, 9. */
+    ok((otm->otmfsType & ~0x30e) == 0, "fsType %#x\n", otm->otmfsType);
+
+    HeapFree(GetProcessHeap(), 0, otm);
+
+    SelectObject(hdc, hfont_prev);
+    DeleteObject(hfont);
+    ReleaseDC(NULL, hdc);
+}
+
 static void test_CreateScalableFontResource(void)
 {
     char ttf_name[MAX_PATH];
@@ -5729,6 +5770,7 @@ static void test_CreateScalableFontResource(void)
 
     test_GetGlyphOutline_empty_contour();
     test_GetGlyphOutline_metric_clipping();
+    test_fstype_fixup();
 
     ret = pRemoveFontResourceExA(fot_name, FR_PRIVATE, 0);
     ok(!ret, "RemoveFontResourceEx() with not matching flags should fail\n");

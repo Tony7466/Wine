@@ -33,6 +33,7 @@ static NTSTATUS (WINAPI *pBCryptCreateHash)(BCRYPT_ALG_HANDLE, BCRYPT_HASH_HANDL
                                             ULONG, ULONG);
 static NTSTATUS (WINAPI *pBCryptHash)(BCRYPT_ALG_HANDLE, UCHAR *, ULONG, UCHAR *, ULONG, UCHAR *, ULONG);
 static NTSTATUS (WINAPI *pBCryptHashData)(BCRYPT_HASH_HANDLE, PUCHAR, ULONG, ULONG);
+static NTSTATUS (WINAPI *pBCryptDuplicateHash)(BCRYPT_HASH_HANDLE, BCRYPT_HASH_HANDLE *, UCHAR *, ULONG, ULONG);
 static NTSTATUS (WINAPI *pBCryptFinishHash)(BCRYPT_HASH_HANDLE, PUCHAR, ULONG, ULONG);
 static NTSTATUS (WINAPI *pBCryptDestroyHash)(BCRYPT_HASH_HANDLE);
 static NTSTATUS (WINAPI *pBCryptGenRandom)(BCRYPT_ALG_HANDLE, PUCHAR, ULONG, ULONG);
@@ -142,6 +143,42 @@ static int strcmp_wa(const WCHAR *strw, const char *stra)
     return lstrcmpW(strw, buf);
 }
 
+#define test_object_length(a) _test_object_length(__LINE__,a)
+static void _test_object_length(unsigned line, void *handle)
+{
+    NTSTATUS status;
+    ULONG len, size;
+
+    len = size = 0xdeadbeef;
+    status = pBCryptGetProperty(NULL, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, sizeof(len), &size, 0);
+    ok_(__FILE__,line)(status == STATUS_INVALID_HANDLE, "BCryptGetProperty failed: %08x\n", status);
+
+    len = size = 0xdeadbeef;
+    status = pBCryptGetProperty(handle, NULL, (UCHAR *)&len, sizeof(len), &size, 0);
+    ok_(__FILE__,line)(status == STATUS_INVALID_PARAMETER, "BCryptGetProperty failed: %08x\n", status);
+
+    len = size = 0xdeadbeef;
+    status = pBCryptGetProperty(handle, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, sizeof(len), NULL, 0);
+    ok_(__FILE__,line)(status == STATUS_INVALID_PARAMETER, "BCryptGetProperty failed: %08x\n", status);
+
+    len = size = 0xdeadbeef;
+    status = pBCryptGetProperty(handle, BCRYPT_OBJECT_LENGTH, NULL, sizeof(len), &size, 0);
+    ok_(__FILE__,line)(status == STATUS_SUCCESS, "BCryptGetProperty failed: %08x\n", status);
+    ok_(__FILE__,line)(size == sizeof(len), "got %u\n", size);
+
+    len = size = 0xdeadbeef;
+    status = pBCryptGetProperty(handle, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, 0, &size, 0);
+    ok_(__FILE__,line)(status == STATUS_BUFFER_TOO_SMALL, "BCryptGetProperty failed: %08x\n", status);
+    ok_(__FILE__,line)(len == 0xdeadbeef, "got %u\n", len);
+    ok_(__FILE__,line)(size == sizeof(len), "got %u\n", size);
+
+    len = size = 0xdeadbeef;
+    status = pBCryptGetProperty(handle, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, sizeof(len), &size, 0);
+    ok_(__FILE__,line)(status == STATUS_SUCCESS, "BCryptGetProperty failed: %08x\n", status);
+    ok_(__FILE__,line)(len != 0xdeadbeef, "len not set\n");
+    ok_(__FILE__,line)(size == sizeof(len), "got %u\n", size);
+}
+
 #define test_hash_length(a,b) _test_hash_length(__LINE__,a,b)
 static void _test_hash_length(unsigned line, void *handle, ULONG exlen)
 {
@@ -172,47 +209,19 @@ static void test_sha1(void)
 {
     static const char expected[] = "961fa64958818f767707072755d7018dcd278e94";
     static const char expected_hmac[] = "2472cf65d0e090618d769d3e46f0d9446cf212da";
+    UCHAR buf[512], buf_hmac[1024], buf_hmac2[1024], sha1[20], sha1_hmac[20];
+    BCRYPT_HASH_HANDLE hash, hash2;
     BCRYPT_ALG_HANDLE alg;
-    BCRYPT_HASH_HANDLE hash;
-    UCHAR buf[512], buf_hmac[1024], sha1[20], sha1_hmac[20];
-    ULONG size, len;
     char str[41];
     NTSTATUS ret;
+    ULONG len;
 
     alg = NULL;
     ret = pBCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA1_ALGORITHM, MS_PRIMITIVE_PROVIDER, 0);
     ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
     ok(alg != NULL, "alg not set\n");
 
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(NULL, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, sizeof(len), &size, 0);
-    ok(ret == STATUS_INVALID_HANDLE, "got %08x\n", ret);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, NULL, (UCHAR *)&len, sizeof(len), &size, 0);
-    ok(ret == STATUS_INVALID_PARAMETER, "got %08x\n", ret);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, sizeof(len), NULL, 0);
-    ok(ret == STATUS_INVALID_PARAMETER, "got %08x\n", ret);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, NULL, sizeof(len), &size, 0);
-    ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
-    ok(size == sizeof(len), "got %u\n", size);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, 0, &size, 0);
-    ok(ret == STATUS_BUFFER_TOO_SMALL, "got %08x\n", ret);
-    ok(len == 0xdeadbeef, "got %u\n", len);
-    ok(size == sizeof(len), "got %u\n", size);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len , sizeof(len), &size, 0);
-    ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
-    ok(len != 0xdeadbeef, "len not set\n");
-    ok(size == sizeof(len), "got %u\n", size);
-
+    test_object_length(alg);
     test_hash_length(alg, 20);
     test_alg_name(alg, "SHA1");
 
@@ -260,6 +269,29 @@ static void test_sha1(void)
     test_hash_length(hash, 20);
     test_alg_name(hash, "SHA1");
 
+    len = sizeof(buf_hmac2);
+    ret = pBCryptDuplicateHash(NULL, &hash2, buf_hmac2, len, 0);
+    ok(ret == STATUS_INVALID_HANDLE, "got %08x\n", ret);
+
+    len = sizeof(buf_hmac2);
+    ret = pBCryptDuplicateHash(hash, NULL, buf_hmac2, len, 0);
+    ok(ret == STATUS_INVALID_PARAMETER, "got %08x\n", ret);
+
+    hash2 = NULL;
+    len = sizeof(buf_hmac2);
+    ret = pBCryptDuplicateHash(hash, &hash2, buf_hmac2, len, 0);
+    ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
+    ok(hash2 != NULL, "hash not set\n");
+
+    memset(sha1_hmac, 0, sizeof(sha1_hmac));
+    ret = pBCryptFinishHash(hash2, sha1_hmac, sizeof(sha1_hmac), 0);
+    ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
+    format_hash( sha1_hmac, sizeof(sha1_hmac), str );
+    ok(!strcmp(str, expected_hmac), "got %s\n", str);
+
+    ret = pBCryptDestroyHash(hash2);
+    ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
+
     memset(sha1_hmac, 0, sizeof(sha1_hmac));
     ret = pBCryptFinishHash(hash, sha1_hmac, sizeof(sha1_hmac), 0);
     ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
@@ -282,44 +314,16 @@ static void test_sha256(void)
     BCRYPT_ALG_HANDLE alg;
     BCRYPT_HASH_HANDLE hash;
     UCHAR buf[512], buf_hmac[1024], sha256[32], sha256_hmac[32];
-    ULONG size, len;
     char str[65];
     NTSTATUS ret;
+    ULONG len;
 
     alg = NULL;
     ret = pBCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, MS_PRIMITIVE_PROVIDER, 0);
     ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
     ok(alg != NULL, "alg not set\n");
 
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(NULL, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, sizeof(len), &size, 0);
-    ok(ret == STATUS_INVALID_HANDLE, "got %08x\n", ret);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, NULL, (UCHAR *)&len, sizeof(len), &size, 0);
-    ok(ret == STATUS_INVALID_PARAMETER, "got %08x\n", ret);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, sizeof(len), NULL, 0);
-    ok(ret == STATUS_INVALID_PARAMETER, "got %08x\n", ret);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, NULL, sizeof(len), &size, 0);
-    ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
-    ok(size == sizeof(len), "got %u\n", size);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, 0, &size, 0);
-    ok(ret == STATUS_BUFFER_TOO_SMALL, "got %08x\n", ret);
-    ok(len == 0xdeadbeef, "got %u\n", len);
-    ok(size == sizeof(len), "got %u\n", size);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len , sizeof(len), &size, 0);
-    ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
-    ok(len != 0xdeadbeef, "len not set\n");
-    ok(size == sizeof(len), "got %u\n", size);
-
+    test_object_length(alg);
     test_hash_length(alg, 32);
     test_alg_name(alg, "SHA256");
 
@@ -389,44 +393,16 @@ static void test_sha384(void)
     BCRYPT_ALG_HANDLE alg;
     BCRYPT_HASH_HANDLE hash;
     UCHAR buf[512], buf_hmac[1024], sha384[48], sha384_hmac[48];
-    ULONG size, len;
     char str[97];
     NTSTATUS ret;
+    ULONG len;
 
     alg = NULL;
     ret = pBCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA384_ALGORITHM, MS_PRIMITIVE_PROVIDER, 0);
     ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
     ok(alg != NULL, "alg not set\n");
 
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(NULL, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, sizeof(len), &size, 0);
-    ok(ret == STATUS_INVALID_HANDLE, "got %08x\n", ret);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, NULL, (UCHAR *)&len, sizeof(len), &size, 0);
-    ok(ret == STATUS_INVALID_PARAMETER, "got %08x\n", ret);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, sizeof(len), NULL, 0);
-    ok(ret == STATUS_INVALID_PARAMETER, "got %08x\n", ret);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, NULL, sizeof(len), &size, 0);
-    ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
-    ok(size == sizeof(len), "got %u\n", size);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, 0, &size, 0);
-    ok(ret == STATUS_BUFFER_TOO_SMALL, "got %08x\n", ret);
-    ok(len == 0xdeadbeef, "got %u\n", len);
-    ok(size == sizeof(len), "got %u\n", size);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len , sizeof(len), &size, 0);
-    ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
-    ok(len != 0xdeadbeef, "len not set\n");
-    ok(size == sizeof(len), "got %u\n", size);
-
+    test_object_length(alg);
     test_hash_length(alg, 48);
     test_alg_name(alg, "SHA384");
 
@@ -498,44 +474,16 @@ static void test_sha512(void)
     BCRYPT_ALG_HANDLE alg;
     BCRYPT_HASH_HANDLE hash;
     UCHAR buf[512], buf_hmac[1024], sha512[64], sha512_hmac[64];
-    ULONG size, len;
     char str[129];
     NTSTATUS ret;
+    ULONG len;
 
     alg = NULL;
     ret = pBCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA512_ALGORITHM, MS_PRIMITIVE_PROVIDER, 0);
     ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
     ok(alg != NULL, "alg not set\n");
 
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(NULL, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, sizeof(len), &size, 0);
-    ok(ret == STATUS_INVALID_HANDLE, "got %08x\n", ret);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, NULL, (UCHAR *)&len, sizeof(len), &size, 0);
-    ok(ret == STATUS_INVALID_PARAMETER, "got %08x\n", ret);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, sizeof(len), NULL, 0);
-    ok(ret == STATUS_INVALID_PARAMETER, "got %08x\n", ret);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, NULL, sizeof(len), &size, 0);
-    ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
-    ok(size == sizeof(len), "got %u\n", size);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, 0, &size, 0);
-    ok(ret == STATUS_BUFFER_TOO_SMALL, "got %08x\n", ret);
-    ok(len == 0xdeadbeef, "got %u\n", len);
-    ok(size == sizeof(len), "got %u\n", size);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len , sizeof(len), &size, 0);
-    ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
-    ok(len != 0xdeadbeef, "len not set\n");
-    ok(size == sizeof(len), "got %u\n", size);
-
+    test_object_length(alg);
     test_hash_length(alg, 64);
     test_alg_name(alg, "SHA512");
 
@@ -606,44 +554,16 @@ static void test_md5(void)
     BCRYPT_ALG_HANDLE alg;
     BCRYPT_HASH_HANDLE hash;
     UCHAR buf[512], buf_hmac[1024], md5[16], md5_hmac[16];
-    ULONG size, len;
     char str[65];
     NTSTATUS ret;
+    ULONG len;
 
     alg = NULL;
     ret = pBCryptOpenAlgorithmProvider(&alg, BCRYPT_MD5_ALGORITHM, MS_PRIMITIVE_PROVIDER, 0);
     ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
     ok(alg != NULL, "alg not set\n");
 
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(NULL, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, sizeof(len), &size, 0);
-    ok(ret == STATUS_INVALID_HANDLE, "got %08x\n", ret);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, NULL, (UCHAR *)&len, sizeof(len), &size, 0);
-    ok(ret == STATUS_INVALID_PARAMETER, "got %08x\n", ret);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, sizeof(len), NULL, 0);
-    ok(ret == STATUS_INVALID_PARAMETER, "got %08x\n", ret);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, NULL, sizeof(len), &size, 0);
-    ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
-    ok(size == sizeof(len), "got %u\n", size);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, 0, &size, 0);
-    ok(ret == STATUS_BUFFER_TOO_SMALL, "got %08x\n", ret);
-    ok(len == 0xdeadbeef, "got %u\n", len);
-    ok(size == sizeof(len), "got %u\n", size);
-
-    len = size = 0xdeadbeef;
-    ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len , sizeof(len), &size, 0);
-    ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
-    ok(len != 0xdeadbeef, "len not set\n");
-    ok(size == sizeof(len), "got %u\n", size);
-
+    test_object_length(alg);
     test_hash_length(alg, 16);
     test_alg_name(alg, "MD5");
 
@@ -761,6 +681,10 @@ static void test_rng(void)
 
     len = size = 0xdeadbeef;
     ret = pBCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, sizeof(len), &size, 0);
+    ok(ret == STATUS_NOT_SUPPORTED, "got %08x\n", ret);
+
+    len = size = 0xdeadbeef;
+    ret = pBCryptGetProperty(alg, BCRYPT_HASH_LENGTH, (UCHAR *)&len, sizeof(len), &size, 0);
     ok(ret == STATUS_NOT_SUPPORTED, "got %08x\n", ret);
 
     test_alg_name(alg, "RNG");
@@ -1090,6 +1014,7 @@ START_TEST(bcrypt)
     pBCryptCreateHash = (void *)GetProcAddress(module, "BCryptCreateHash");
     pBCryptHash = (void *)GetProcAddress(module, "BCryptHash");
     pBCryptHashData = (void *)GetProcAddress(module, "BCryptHashData");
+    pBCryptDuplicateHash = (void *)GetProcAddress(module, "BCryptDuplicateHash");
     pBCryptFinishHash = (void *)GetProcAddress(module, "BCryptFinishHash");
     pBCryptDestroyHash = (void *)GetProcAddress(module, "BCryptDestroyHash");
     pBCryptGenRandom = (void *)GetProcAddress(module, "BCryptGenRandom");

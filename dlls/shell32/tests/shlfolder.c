@@ -454,7 +454,7 @@ static void test_EnumObjects(IShellFolder *iFolder)
         flags = ~0u;
         hr = IShellFolder_GetAttributesOf(iFolder, 1, (LPCITEMIDLIST*)(idlArr + i), &flags);
         ok(hr == S_OK, "GetAttributesOf returns %08x\n", hr);
-        ok((flags & ~SFGAO_HASSUBFOLDER) == full_attrs[i], "%d: got %08x expected %08x\n", i, flags, full_attrs[i]);
+        ok((flags & ~(SFGAO_HASSUBFOLDER|SFGAO_COMPRESSED)) == full_attrs[i], "%d: got %08x expected %08x\n", i, flags, full_attrs[i]);
     }
 
     for (i=0;i<5;i++)
@@ -3800,10 +3800,10 @@ static void test_ShellItemArrayEnumItems(void)
         hr = IShellFolder_BindToObject(pdesktopsf, pidl_testdir, NULL, (REFIID)&IID_IShellFolder,
                                        (void**)&psf);
         ok(hr == S_OK, "Got 0x%08x\n", hr);
-        if(SUCCEEDED(hr))
-            pILFree(pidl_testdir);
+        pILFree(pidl_testdir);
     }
     IShellFolder_Release(pdesktopsf);
+    if (FAILED(hr)) return;
 
     hr = IShellFolder_EnumObjects(psf, NULL, SHCONTF_FOLDERS | SHCONTF_NONFOLDERS, &peidl);
     ok(hr == S_OK, "Got %08x\n", hr);

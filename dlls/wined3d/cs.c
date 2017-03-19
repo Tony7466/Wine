@@ -63,6 +63,8 @@ enum wined3d_cs_op
     WINED3D_CS_OP_UNLOAD_RESOURCE,
     WINED3D_CS_OP_MAP,
     WINED3D_CS_OP_UNMAP,
+    WINED3D_CS_OP_BLT_SUB_RESOURCE,
+    WINED3D_CS_OP_UPDATE_SUB_RESOURCE,
 };
 
 struct wined3d_cs_present
@@ -342,6 +344,29 @@ struct wined3d_cs_unmap
     struct wined3d_resource *resource;
     unsigned int sub_resource_idx;
     HRESULT *hr;
+};
+
+struct wined3d_cs_blt_sub_resource
+{
+    enum wined3d_cs_op opcode;
+    struct wined3d_resource *dst_resource;
+    unsigned int dst_sub_resource_idx;
+    struct wined3d_box dst_box;
+    struct wined3d_resource *src_resource;
+    unsigned int src_sub_resource_idx;
+    struct wined3d_box src_box;
+    DWORD flags;
+    struct wined3d_blt_fx fx;
+    enum wined3d_texture_filter_type filter;
+};
+
+struct wined3d_cs_update_sub_resource
+{
+    enum wined3d_cs_op opcode;
+    struct wined3d_resource *resource;
+    unsigned int sub_resource_idx;
+    struct wined3d_box box;
+    struct wined3d_sub_resource_data data;
 };
 
 static void wined3d_cs_exec_present(struct wined3d_cs *cs, const void *data)
@@ -1647,6 +1672,153 @@ HRESULT wined3d_cs_unmap(struct wined3d_cs *cs, struct wined3d_resource *resourc
     return hr;
 }
 
+static void wined3d_cs_exec_blt_sub_resource(struct wined3d_cs *cs, const void *data)
+{
+    const struct wined3d_cs_blt_sub_resource *op = data;
+
+    if (op->dst_resource->type == WINED3D_RTYPE_BUFFER)
+    {
+        if (FAILED(wined3d_buffer_copy(buffer_from_resource(op->dst_resource), op->dst_box.left,
+                buffer_from_resource(op->src_resource), op->src_box.left,
+                op->src_box.right - op->src_box.left)))
+            ERR("Failed to copy buffer.\n");
+    }
+    else if (op->dst_resource->type == WINED3D_RTYPE_TEXTURE_2D)
+    {
+        struct wined3d_surface *dst_surface, *src_surface = NULL;
+        struct wined3d_texture *dst_texture, *src_texture;
+        RECT dst_rect, src_rect;
+
+        dst_texture = texture_from_resource(op->dst_resource);
+        dst_surface = dst_texture->sub_resources[op->dst_sub_resource_idx].u.surface;
+        if (op->src_resource)
+        {
+            src_texture = texture_from_resource(op->src_resource);
+            src_surface = src_texture->sub_resources[op->src_sub_resource_idx].u.surface;
+        }
+        SetRect(&dst_rect, op->dst_box.left, op->dst_box.top, op->dst_box.right, op->dst_box.bottom);
+        SetRect(&src_rect, op->src_box.left, op->src_box.top, op->src_box.right, op->src_box.bottom);
+
+        if (FAILED(wined3d_surface_blt(dst_surface, &dst_rect, src_surface,
+                &src_rect, op->flags, &op->fx, op->filter)))
+            FIXME("Blit failed.\n");
+    }
+    else
+    {
+        FIXME("Not implemented for %s resources.\n", debug_d3dresourcetype(op->dst_resource->type));
+    }
+
+    if (op->src_resource)
+        wined3d_resource_release(op->src_resource);
+    wined3d_resource_release(op->dst_resource);
+}
+
+void wined3d_cs_emit_blt_sub_resource(struct wined3d_cs *cs, struct wined3d_resource *dst_resource,
+        unsigned int dst_sub_resource_idx, const struct wined3d_box *dst_box, struct wined3d_resource *src_resource,
+        unsigned int src_sub_resource_idx, const struct wined3d_box *src_box, DWORD flags,
+        const struct wined3d_blt_fx *fx, enum wined3d_texture_filter_type filter)
+{
+    struct wined3d_cs_blt_sub_resource *op;
+
+    op = cs->ops->require_space(cs, sizeof(*op));
+    op->opcode = WINED3D_CS_OP_BLT_SUB_RESOURCE;
+    op->dst_resource = dst_resource;
+    op->dst_sub_resource_idx = dst_sub_resource_idx;
+    op->dst_box = *dst_box;
+    op->src_resource = src_resource;
+    op->src_sub_resource_idx = src_sub_resource_idx;
+    op->src_box = *src_box;
+    op->flags = flags;
+    if (fx)
+        op->fx = *fx;
+    op->filter = filter;
+
+    wined3d_resource_acquire(dst_resource);
+    if (src_resource)
+        wined3d_resource_acquire(src_resource);
+
+    cs->ops->submit(cs);
+}
+
+static void wined3d_cs_exec_update_sub_resource(struct wined3d_cs *cs, const void *data)
+{
+    const struct wined3d_cs_update_sub_resource *op = data;
+    const struct wined3d_box *box = &op->box;
+    unsigned int width, height, depth, level;
+    struct wined3d_const_bo_address addr;
+    struct wined3d_context *context;
+    struct wined3d_texture *texture;
+
+    if (op->resource->type == WINED3D_RTYPE_BUFFER)
+    {
+        struct wined3d_buffer *buffer = buffer_from_resource(op->resource);
+
+        context = context_acquire(op->resource->device, NULL, 0);
+        if (!wined3d_buffer_load_location(buffer, context, WINED3D_LOCATION_BUFFER))
+        {
+            ERR("Failed to load buffer location.\n");
+            context_release(context);
+            goto done;
+        }
+
+        wined3d_buffer_upload_data(buffer, context, box, op->data.data);
+        wined3d_buffer_invalidate_location(buffer, ~WINED3D_LOCATION_BUFFER);
+        context_release(context);
+        goto done;
+    }
+
+    texture = wined3d_texture_from_resource(op->resource);
+
+    level = op->sub_resource_idx % texture->level_count;
+    width = wined3d_texture_get_level_width(texture, level);
+    height = wined3d_texture_get_level_height(texture, level);
+    depth = wined3d_texture_get_level_depth(texture, level);
+
+    addr.buffer_object = 0;
+    addr.addr = op->data.data;
+
+    context = context_acquire(op->resource->device, NULL, 0);
+
+    /* Only load the sub-resource for partial updates. */
+    if (!box->left && !box->top && !box->front
+            && box->right == width && box->bottom == height && box->back == depth)
+        wined3d_texture_prepare_texture(texture, context, FALSE);
+    else
+        wined3d_texture_load_location(texture, op->sub_resource_idx, context, WINED3D_LOCATION_TEXTURE_RGB);
+    wined3d_texture_bind_and_dirtify(texture, context, FALSE);
+
+    wined3d_texture_upload_data(texture, op->sub_resource_idx, context,
+            box, &addr, op->data.row_pitch, op->data.slice_pitch);
+
+    context_release(context);
+
+    wined3d_texture_validate_location(texture, op->sub_resource_idx, WINED3D_LOCATION_TEXTURE_RGB);
+    wined3d_texture_invalidate_location(texture, op->sub_resource_idx, ~WINED3D_LOCATION_TEXTURE_RGB);
+
+done:
+    wined3d_resource_release(op->resource);
+}
+
+void wined3d_cs_emit_update_sub_resource(struct wined3d_cs *cs, struct wined3d_resource *resource,
+        unsigned int sub_resource_idx, const struct wined3d_box *box, const void *data, unsigned int row_pitch,
+        unsigned int slice_pitch)
+{
+    struct wined3d_cs_update_sub_resource *op;
+
+    op = cs->ops->require_space(cs, sizeof(*op));
+    op->opcode = WINED3D_CS_OP_UPDATE_SUB_RESOURCE;
+    op->resource = resource;
+    op->sub_resource_idx = sub_resource_idx;
+    op->box = *box;
+    op->data.row_pitch = row_pitch;
+    op->data.slice_pitch = slice_pitch;
+    op->data.data = data;
+
+    wined3d_resource_acquire(resource);
+
+    cs->ops->submit(cs);
+}
+
 static void (* const wined3d_cs_op_handlers[])(struct wined3d_cs *cs, const void *data) =
 {
     /* WINED3D_CS_OP_PRESENT                    */ wined3d_cs_exec_present,
@@ -1686,6 +1858,8 @@ static void (* const wined3d_cs_op_handlers[])(struct wined3d_cs *cs, const void
     /* WINED3D_CS_OP_UNLOAD_RESOURCE            */ wined3d_cs_exec_unload_resource,
     /* WINED3D_CS_OP_MAP                        */ wined3d_cs_exec_map,
     /* WINED3D_CS_OP_UNMAP                      */ wined3d_cs_exec_unmap,
+    /* WINED3D_CS_OP_BLT_SUB_RESOURCE           */ wined3d_cs_exec_blt_sub_resource,
+    /* WINED3D_CS_OP_UPDATE_SUB_RESOURCE        */ wined3d_cs_exec_update_sub_resource,
 };
 
 static void *wined3d_cs_st_require_space(struct wined3d_cs *cs, size_t size)

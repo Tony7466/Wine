@@ -7828,6 +7828,12 @@ static void test_vshader_input(void)
         IDirect3DDevice9_Release(device);
         goto done;
     }
+    if (caps.PixelShaderVersion < D3DPS_VERSION(3, 0))
+    {
+        skip("No ps_3_0 support, skipping tests.\n");
+        IDirect3DDevice9_Release(device);
+        goto done;
+    }
 
     hr = IDirect3D9_GetAdapterIdentifier(d3d, D3DADAPTER_DEFAULT, 0, &identifier);
     ok(SUCCEEDED(hr), "Failed to get adapter identifier, hr %#x.\n", hr);
@@ -8087,11 +8093,8 @@ static void test_vshader_input(void)
         hr = IDirect3DDevice9_EndScene(device);
         ok(SUCCEEDED(hr), "Failed to end scene, hr %#x.\n", hr);
 
-        /* WARP ends up using the color attribute from the previous draw. Let's mark
-         * that behavior as broken. */
         color = getPixelColor(device, 160, 360);
-        ok(color_match(color, 0x00000000, 1)
-                || broken(color_match(color, 0x00ffff00, 1)),
+        ok(color_match(color, 0x00000000, 1) || broken(warp),
                 "Got unexpected color 0x%08x for no color attribute test.\n", color);
 
         IDirect3DDevice9_SetVertexShader(device, NULL);
@@ -10582,7 +10585,7 @@ static void test_pointsize(void)
     ps2 = {D3DPS_VERSION(2, 0), pshader2_code},
     ps2_zw = {D3DPS_VERSION(2, 0), pshader2_zw_code},
     ps3 = {D3DPS_VERSION(3, 0), pshader3_code},
-    ps3_zw = {D3DVS_VERSION(3, 0), pshader3_zw_code};
+    ps3_zw = {D3DPS_VERSION(3, 0), pshader3_zw_code};
     static const struct
     {
         const struct test_shader *vs;
@@ -19628,18 +19631,18 @@ done:
 
 static void test_updatetexture(void)
 {
-    IDirect3DDevice9 *device;
-    IDirect3D9 *d3d9;
-    HWND window;
-    HRESULT hr;
+    BOOL r32f_supported, ati2n_supported, do_visual_test;
     IDirect3DBaseTexture9 *src, *dst;
     unsigned int t, i, f, l, x, y, z;
     D3DLOCKED_RECT locked_rect;
     D3DLOCKED_BOX locked_box;
+    IDirect3DDevice9 *device;
+    IDirect3D9 *d3d9;
     ULONG refcount;
-    D3DCAPS9 caps;
     D3DCOLOR color;
-    BOOL ati2n_supported, do_visual_test;
+    D3DCAPS9 caps;
+    HWND window;
+    HRESULT hr;
     static const struct
     {
         struct vec3 pos;
@@ -19766,16 +19769,26 @@ static void test_updatetexture(void)
             skip("%s textures not supported, skipping some tests.\n", texture_types[t].name);
             continue;
         }
-
         if (FAILED(IDirect3D9_CheckDeviceFormat(d3d9, D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL,
-                D3DFMT_X8R8G8B8, 0, texture_types[t].type, MAKEFOURCC('A','T','I','2'))))
+                D3DFMT_X8R8G8B8, D3DUSAGE_QUERY_FILTER, texture_types[t].type, D3DFMT_A8R8G8B8)))
+        {
+            skip("%s D3DFMT_A8R8G8B8 texture filtering is not supported, skipping some tests.\n",
+                    texture_types[t].name);
+            continue;
+        }
+        r32f_supported = TRUE;
+        if (FAILED(IDirect3D9_CheckDeviceFormat(d3d9, D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL,
+                D3DFMT_X8R8G8B8, D3DUSAGE_QUERY_FILTER, texture_types[t].type, D3DFMT_R32F)))
+        {
+            skip("%s R32F textures are not supported, skipping some tests.\n", texture_types[t].name);
+            r32f_supported = FALSE;
+        }
+        ati2n_supported = TRUE;
+        if (FAILED(IDirect3D9_CheckDeviceFormat(d3d9, D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL,
+                D3DFMT_X8R8G8B8, D3DUSAGE_QUERY_FILTER, texture_types[t].type, MAKEFOURCC('A','T','I','2'))))
         {
             skip("%s ATI2N textures are not supported, skipping some tests.\n", texture_types[t].name);
             ati2n_supported = FALSE;
-        }
-        else
-        {
-            ati2n_supported = TRUE;
         }
 
         hr = IDirect3DDevice9_SetFVF(device, texture_types[t].fvf);
@@ -19783,7 +19796,9 @@ static void test_updatetexture(void)
 
         for (i = 0; i < sizeof(tests) / sizeof(*tests); ++i)
         {
-            if (tests[i].src_format == MAKEFOURCC('A','T','I','2') && !ati2n_supported)
+            if (tests[i].dst_format == D3DFMT_R32F && !r32f_supported)
+                continue;
+            if (tests[i].dst_format == MAKEFOURCC('A','T','I','2') && !ati2n_supported)
                 continue;
 
             switch (texture_types[t].type)
@@ -22393,6 +22408,134 @@ static void test_drawindexedprimitiveup(void)
     DestroyWindow(window);
 }
 
+static void test_vertex_texture(void)
+{
+    static const D3DVERTEXELEMENT9 decl_elements[] =
+    {
+        {0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},
+        D3DDECL_END()
+    };
+    static const struct vec3 quad[] =
+    {
+        {-1.0f, -1.0f, 0.0f},
+        {-1.0f,  1.0f, 0.0f},
+        { 1.0f, -1.0f, 0.0f},
+        { 1.0f,  1.0f, 0.0f},
+    };
+    static const DWORD vs_code[] =
+    {
+        0xfffe0300,                                                             /* vs_3_0              */
+        0x05000051, 0xa00f0000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, /* def c0, 0, 0, 0, 0  */
+        0x0200001f, 0x80000000, 0x900f0000,                                     /* dcl_position v0     */
+        0x0200001f, 0x90000000, 0xa00f0800,                                     /* dcl_2d s0           */
+        0x0200001f, 0x80000000, 0xe00f0000,                                     /* dcl_position o0     */
+        0x0200001f, 0x8000000a, 0xe00f0001,                                     /* dcl_color o1        */
+        0x0300005f, 0xe00f0001, 0xa0000000, 0xa0e40800,                         /* texldl o1, c0.x, s0 */
+        0x02000001, 0xe00f0000, 0x90e40000,                                     /* mov o0, v0          */
+        0x0000ffff,                                                             /* end */
+    };
+    static const DWORD ps_code[] =
+    {
+        0xffff0300,                         /* ps_3_0       */
+        0x0200001f, 0x8000000a, 0x900f0000, /* dcl_color v0 */
+        0x02000001, 0x800f0800, 0x90e40000, /* mov oC0, v0  */
+        0x0000ffff,                         /* end          */
+    };
+    static const DWORD texture_data[4] = {0x00ffff00, 0x00ffff00, 0x00ffff00, 0x00ffff00};
+    IDirect3DVertexDeclaration9 *declaration;
+    IDirect3DTexture9 *texture;
+    IDirect3DVertexShader9 *vs;
+    IDirect3DPixelShader9 *ps;
+    IDirect3DDevice9 *device;
+    D3DLOCKED_RECT lr;
+    IDirect3D9 *d3d;
+    D3DCOLOR color;
+    ULONG refcount;
+    D3DCAPS9 caps;
+    HWND window;
+    HRESULT hr;
+
+    window = create_window();
+    d3d = Direct3DCreate9(D3D_SDK_VERSION);
+    ok(!!d3d, "Failed to create D3D object.\n");
+
+    if (!(device = create_device(d3d, window, window, TRUE)))
+    {
+        skip("Failed to create D3D device.\n");
+        IDirect3D9_Release(d3d);
+        DestroyWindow(window);
+        return;
+    }
+
+    hr = IDirect3DDevice9_GetDeviceCaps(device, &caps);
+    ok(SUCCEEDED(hr), "Failed to get device caps, hr %#x.\n", hr);
+    if (caps.VertexShaderVersion < D3DVS_VERSION(3, 0) || caps.PixelShaderVersion < D3DPS_VERSION(3, 0))
+    {
+        skip("SM3 is not supported.\n");
+        goto done;
+    }
+    if (!(caps.VertexTextureFilterCaps & D3DPTFILTERCAPS_MAGFPOINT)
+            || !(caps.VertexTextureFilterCaps & D3DPTFILTERCAPS_MINFPOINT))
+    {
+        skip("Vertex texture point filtering is not supported, caps %#x.\n", caps.VertexTextureFilterCaps);
+        goto done;
+    }
+    hr = IDirect3D9_CheckDeviceFormat(d3d, 0, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8,
+            D3DUSAGE_QUERY_VERTEXTEXTURE, D3DRTYPE_TEXTURE, D3DFMT_A8R8G8B8);
+    if (hr != D3D_OK)
+    {
+        skip("No vertex texture fetch support for D3DFMT_A8R8G8B8, hr %#x.\n", hr);
+        goto done;
+    }
+
+    hr = IDirect3DDevice9_CreateTexture(device, 2, 2, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &texture, NULL);
+    ok(hr == D3D_OK, "Failed to create texture, hr %#x.\n", hr);
+    memset(&lr, 0, sizeof(lr));
+    hr = IDirect3DTexture9_LockRect(texture, 0, &lr, NULL, 0);
+    ok(hr == D3D_OK, "Failed to lock texture, hr %#x.\n", hr);
+    memcpy(lr.pBits, texture_data, sizeof(texture_data));
+    hr = IDirect3DTexture9_UnlockRect(texture, 0);
+    ok(hr == D3D_OK, "Failed to unlock texture, hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_SetTexture(device, D3DVERTEXTEXTURESAMPLER0, (IDirect3DBaseTexture9 *)texture);
+    ok(hr == D3D_OK, "Failed to set texture, hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_CreateVertexDeclaration(device, decl_elements, &declaration);
+    ok(SUCCEEDED(hr), "Failed to create vertex declaration, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_CreateVertexShader(device, vs_code, &vs);
+    ok(SUCCEEDED(hr), "Failed to create vertex shader, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_CreatePixelShader(device, ps_code, &ps);
+    ok(SUCCEEDED(hr), "Failed to create pixel shader, hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_SetVertexDeclaration(device, declaration);
+    ok(SUCCEEDED(hr), "Failed to set vertex declaration, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_SetVertexShader(device, vs);
+    ok(SUCCEEDED(hr), "Failed to set vertex shader, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_SetPixelShader(device, ps);
+    ok(SUCCEEDED(hr), "Failed to set pixel shader, hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_Clear(device, 0, NULL, D3DCLEAR_TARGET, 0xffffffff, 0.0f, 0);
+    ok(SUCCEEDED(hr), "Failed to clear, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_BeginScene(device);
+    ok(SUCCEEDED(hr), "Failed to begin scene, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_DrawPrimitiveUP(device, D3DPT_TRIANGLESTRIP, 2, quad, sizeof(*quad));
+    ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_EndScene(device);
+    ok(SUCCEEDED(hr), "Failed to end scene, hr %#x.\n", hr);
+    color = getPixelColor(device, 160, 360);
+    ok(color == texture_data[0], "Got unexpected color 0x%08x.\n", color);
+
+    IDirect3DPixelShader9_Release(ps);
+    IDirect3DVertexShader9_Release(vs);
+    IDirect3DTexture9_Release(texture);
+    IDirect3DVertexDeclaration9_Release(declaration);
+done:
+    refcount = IDirect3DDevice9_Release(device);
+    ok(!refcount, "Device has %u references left.\n", refcount);
+    IDirect3D9_Release(d3d);
+    DestroyWindow(window);
+}
+
 START_TEST(visual)
 {
     D3DADAPTER_IDENTIFIER9 identifier;
@@ -22522,4 +22665,5 @@ START_TEST(visual)
     test_max_index16();
     test_backbuffer_resize();
     test_drawindexedprimitiveup();
+    test_vertex_texture();
 }
