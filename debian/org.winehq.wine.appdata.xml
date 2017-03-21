@@ -35,11 +35,11 @@
   </categories>
 
   <releases>
-    <release version="1.8.6" date="2016-12-19">
+    <release version="1.8.7" date="2017-02-28">
       <description>
         <p>Various bug fixes.</p>
-        <p>Fix a regression introduced in 1.8.5 (winehq: #41627)</p>
         <p>A few more cards added to the GPU description table.</p>
+        <p>Turkish translation updates.</p>
       </description>
     </release>
   </releases>
