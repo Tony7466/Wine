@@ -71,8 +71,8 @@ Build-Depends:
  fontforge-nox | fontforge,
 Standards-Version: 3.9.8
 Homepage: http://www.winehq.org/
-Vcs-Browser: https://anonscm.debian.org/git/pkg-wine/wine.git
-Vcs-Git: https://anonscm.debian.org/git/pkg-wine/wine.git
+Vcs-Browser: https://anonscm.debian.org/git/pkg-wine/wine.git/?h=buster-2.0
+Vcs-Git: https://anonscm.debian.org/git/pkg-wine/wine.git -b buster-2.0
 
 Package: wineVERSION
 Architecture: all
@@ -89,14 +89,11 @@ Suggests:
  wine-binfmt,
  dosbox (>= 0.74-4.2~),
 Breaks:
- wine (<< 1.8.3-3~),
  wine1.6 (<< 1:1.8.4ubuntu1~),
  wine1.6-i386 (<< 1:1.8.4ubuntu1~),
 Replaces:
  wine1.6 (<< 1:1.8.4ubuntu1~),
  wine1.6-i386 (<< 1:1.8.4ubuntu1~),
-Provides:
- wine,
 Description: Windows API implementation - standard suite
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
@@ -142,7 +139,6 @@ Suggests:
  libwine-gecko-2.47 [!armel !armhf !arm64],
  wine64VERSION-preloader (= ${binary:Version}),
 Breaks:
- wine64 (<< 1.8.3-3~),
  wineVERSION (<< 1.7.50-3~),
  wine64VERSION-preloader (<< 1.7.51-2~),
  wine1.6-amd64 (<< 1:1.8.4ubuntu1~),
@@ -195,8 +191,6 @@ Recommends:
  wineVERSION (= ${source:Version}),
  g++ | g++-multilib:amd64 [i386],
 Breaks:
- wine32-tools (<< 1.8.3-3~),
- wine64-tools (<< 1.8.3-3~),
  wine1.6 (<< 1:1.8.4ubuntu1~),
 Conflicts:
  wine64VERSION-tools,
@@ -227,8 +221,6 @@ Recommends:
  wineVERSION (= ${source:Version}),
  g++,
 Breaks:
- wine32-tools (<< 1.8.3-3~),
- wine64-tools (<< 1.8.3-3~),
  wine1.6 (<< 1:1.8.4ubuntu1~),
 Conflicts:
  wine32VERSION-tools,
@@ -264,6 +256,11 @@ Pre-Depends:
 Breaks:
  wine32VERSION (<< 1.7.51-2~),
  wine64VERSION (<< 1.7.51-2~),
+ wine1.6-amd64 (<< 1:1.8.4ubuntu1~),
+ wine1.6-i386 (<< 1:1.8.4ubuntu1~),
+Replaces:
+ wine1.6-amd64 (<< 1:1.8.4ubuntu1~),
+ wine1.6-i386 (<< 1:1.8.4ubuntu1~),
 Description: Windows API implementation - library
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
@@ -293,38 +290,38 @@ Description: Windows API implementation - development files
  .
  This package provides Wine's C header files and development libraries.
 
-# Package: wine-binfmt
-# Architecture: all
-# Multi-Arch: foreign
-# Depends:
-#  ${misc:Depends},
-#  wine,
-#  binfmt-support,
-# Breaks:
-#  wine1.6 (<< 1:1.8.4ubuntu1~),
-# Replaces:
-#  wine1.6 (<< 1:1.8.4ubuntu1~),
-# Description: Windows API implementation - binfmt support
-#  Wine is a free MS-Windows API implementation.
-#  This is still a work in progress and many applications may still not work.
-#  .
-#  This package provides support for launching Windows executables directly.
-#
-# Package: fonts-wine
-# Section: fonts
-# Architecture: all
-# Multi-Arch: foreign
-# Built-Using: ${built:Using}
-# Depends:
-#  ${misc:Depends},
-# Breaks:
-#  libwineVERSION (<< 1.7.41-2~),
-#  wine1.6 (<< 1:1.8.4ubuntu1~),
-# Replaces:
-#  libwineVERSION (<< 1.7.41-2~),
-#  wine1.6 (<< 1:1.8.4ubuntu1~),
-# Description: Windows API implementation - fonts
-#  Wine is a free MS-Windows API implementation.
-#  This is still a work in progress and many applications may still not work.
-#  .
-#  This package provides the fonts used by Wine.
+Package: wine-binfmt
+Architecture: all
+Multi-Arch: foreign
+Depends:
+ ${misc:Depends},
+ wine,
+ binfmt-support,
+Breaks:
+ wine1.6 (<< 1:1.8.4ubuntu1~),
+Replaces:
+ wine1.6 (<< 1:1.8.4ubuntu1~),
+Description: Windows API implementation - binfmt support
+ Wine is a free MS-Windows API implementation.
+ This is still a work in progress and many applications may still not work.
+ .
+ This package provides support for launching Windows executables directly.
+
+Package: fonts-wine
+Section: fonts
+Architecture: all
+Multi-Arch: foreign
+Built-Using: ${built:Using}
+Depends:
+ ${misc:Depends},
+Breaks:
+ libwineVERSION (<< 1.7.41-2~),
+ wine1.6 (<< 1:1.8.4ubuntu1~),
+Replaces:
+ libwineVERSION (<< 1.7.41-2~),
+ wine1.6 (<< 1:1.8.4ubuntu1~),
+Description: Windows API implementation - fonts
+ Wine is a free MS-Windows API implementation.
+ This is still a work in progress and many applications may still not work.
+ .
+ This package provides the fonts used by Wine.
