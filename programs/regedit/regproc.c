@@ -52,7 +52,6 @@ static HKEY reg_class_keys[] = {
 
 /* return values */
 #define NOT_ENOUGH_MEMORY     1
-#define IO_ERROR              2
 
 /* processing macros */
 
@@ -193,6 +192,8 @@ static BYTE* convertHexCSVToHex(WCHAR *str, DWORD *size)
     return data;
 }
 
+#define REG_UNKNOWN_TYPE 99
+
 /******************************************************************************
  * This function returns the HKEY associated with the data type encoded in the
  * value.  It modifies the input parameter (key value) in order to skip this
@@ -205,21 +206,18 @@ static DWORD getDataType(LPWSTR *lpValue, DWORD* parse_type)
     struct data_type { const WCHAR *tag; int len; int type; int parse_type; };
 
     static const WCHAR quote[] = {'"'};
-    static const WCHAR str[] = {'s','t','r',':','"'};
-    static const WCHAR str2[] = {'s','t','r','(','2',')',':','"'};
     static const WCHAR hex[] = {'h','e','x',':'};
     static const WCHAR dword[] = {'d','w','o','r','d',':'};
     static const WCHAR hexp[] = {'h','e','x','('};
 
-    static const struct data_type data_types[] = {                   /* actual type */  /* type to assume for parsing */
-                { quote,       1,   REG_SZ,              REG_SZ },
-                { str,         5,   REG_SZ,              REG_SZ },
-                { str2,        8,   REG_EXPAND_SZ,       REG_SZ },
-                { hex,         4,   REG_BINARY,          REG_BINARY },
-                { dword,       6,   REG_DWORD,           REG_DWORD },
-                { hexp,        4,   -1,                  REG_BINARY },
-                { NULL,        0,    0,                  0 }
-            };
+    static const struct data_type data_types[] = {
+    /*    tag    len  type         parse type    */
+        { quote,  1,  REG_SZ,      REG_SZ },
+        { hex,    4,  REG_BINARY,  REG_BINARY },
+        { dword,  6,  REG_DWORD,   REG_DWORD },
+        { hexp,   4,  -1,          REG_BINARY }, /* REG_NONE, REG_EXPAND_SZ, REG_MULTI_SZ */
+        { NULL,   0,  0,           0 }
+    };
 
     const struct data_type *ptr;
     int type;
@@ -245,8 +243,8 @@ static DWORD getDataType(LPWSTR *lpValue, DWORD* parse_type)
         }
         return type;
     }
-    *parse_type=REG_NONE;
-    return REG_NONE;
+    *parse_type = REG_UNKNOWN_TYPE;
+    return REG_UNKNOWN_TYPE;
 }
 
 /******************************************************************************
@@ -436,7 +434,15 @@ static LONG setValue(WCHAR* val_name, WCHAR* val_data, BOOL is_unicode)
     }
     else                                /* unknown format */
     {
-        output_message(STRING_UNKNOWN_DATA_FORMAT, reg_type_to_wchar(dwDataType));
+        if (dwDataType == REG_UNKNOWN_TYPE)
+        {
+            WCHAR buf[32];
+            LoadStringW(GetModuleHandleW(NULL), STRING_UNKNOWN_TYPE, buf, ARRAY_SIZE(buf));
+            output_message(STRING_UNKNOWN_DATA_FORMAT, buf);
+        }
+        else
+            output_message(STRING_UNKNOWN_DATA_FORMAT, reg_type_to_wchar(dwDataType));
+
         return ERROR_INVALID_DATA;
     }
 
@@ -646,267 +652,243 @@ static void processRegEntry31(WCHAR *line)
     closeKey();
 }
 
-/* version constants */
+enum reg_versions {
+    REG_VERSION_31,
+    REG_VERSION_40,
+    REG_VERSION_50,
+    REG_VERSION_FUZZY,
+    REG_VERSION_INVALID
+};
 
-#define REG_VERSION_31  3
-#define REG_VERSION_40  4
-#define REG_VERSION_50  5
-
-/******************************************************************************
- * Processes a registry file.
- * Correctly processes comments (in # and ; form), line continuation.
- *
- * Parameters:
- *   in - input stream to read from
- *   first_chars - beginning of stream, read due to Unicode check
- */
-static void processRegLinesA(FILE *in, char* first_chars)
+static enum reg_versions parse_file_header(WCHAR *s)
 {
-    char *buf = NULL;  /* the line read from the input stream */
-    unsigned long line_size = REG_VAL_BUF_SIZE;
-    size_t chars_in_buf = -1;
-    char *s; /* A pointer to buf for fread */
-    char *line; /* The start of the current line */
-    WCHAR *lineW;
-    unsigned long version = 0;
+    static const WCHAR header_31[] = {'R','E','G','E','D','I','T',0};
+    static const WCHAR header_40[] = {'R','E','G','E','D','I','T','4',0};
+    static const WCHAR header_50[] = {'W','i','n','d','o','w','s',' ',
+                                      'R','e','g','i','s','t','r','y',' ','E','d','i','t','o','r',' ',
+                                      'V','e','r','s','i','o','n',' ','5','.','0','0',0};
 
-    static const char header_31[] = "REGEDIT";
-    static const char header_40[] = "REGEDIT4";
-    static const char header_50[] = "Windows Registry Editor Version 5.00";
+    while (*s && (*s == ' ' || *s == '\t')) s++;
 
-    buf = HeapAlloc(GetProcessHeap(), 0, line_size);
-    CHECK_ENOUGH_MEMORY(buf);
-    s = buf;
-    line = buf;
+    if (!strcmpW(s, header_31))
+        return REG_VERSION_31;
 
-    memcpy(line, first_chars, 2);
+    if (!strcmpW(s, header_40))
+        return REG_VERSION_40;
 
-    if (first_chars)
-        s += 2;
+    if (!strcmpW(s, header_50))
+        return REG_VERSION_50;
 
-    while (!feof(in)) {
-        size_t size_remaining;
-        int size_to_get;
-        char *s_eol = NULL; /* various local uses */
+    /* The Windows version accepts registry file headers beginning with "REGEDIT" and ending
+     * with other characters, as long as "REGEDIT" appears at the start of the line. For example,
+     * "REGEDIT 4", "REGEDIT9" and "REGEDIT4FOO" are all treated as valid file headers.
+     * In all such cases, however, the contents of the registry file are not imported.
+     */
+    if (!strncmpW(s, header_31, 7)) /* "REGEDIT" without NUL */
+        return REG_VERSION_FUZZY;
 
-        /* Do we need to expand the buffer? */
-        assert(s >= buf && s <= buf + line_size);
-        size_remaining = line_size - (s - buf);
-        if (size_remaining < 3) /* we need at least 3 bytes of room for \r\n\0 */
-        {
-            char *new_buffer;
-            size_t new_size = line_size + REG_VAL_BUF_SIZE;
-            if (new_size > line_size) /* no arithmetic overflow */
-                new_buffer = HeapReAlloc(GetProcessHeap(), 0, buf, new_size);
-            else
-                new_buffer = NULL;
-            CHECK_ENOUGH_MEMORY(new_buffer);
-            buf = new_buffer;
-            line = buf;
-            s = buf + line_size - size_remaining;
-            line_size = new_size;
-            size_remaining = line_size - (s - buf);
-        }
-
-        /* Get as much as possible into the buffer, terminating on EOF,
-         * error or once we have read the maximum amount. Abort on error.
-         */
-        size_to_get = (size_remaining > INT_MAX ? INT_MAX : size_remaining);
-
-        chars_in_buf = fread(s, 1, size_to_get - 1, in);
-        s[chars_in_buf] = 0;
-
-        if (chars_in_buf == 0) {
-            if (ferror(in)) {
-                perror("While reading input");
-                exit(IO_ERROR);
-            } else {
-                assert(feof(in));
-                *s = '\0';
-            }
-        }
-
-        /* If we didn't read the end-of-line sequence or EOF, go around again */
-        while (1)
-        {
-            s_eol = strpbrk(line, "\r\n");
-            if (!s_eol) {
-                /* Move the stub of the line to the start of the buffer so
-                 * we get the maximum space to read into, and so we don't
-                 * have to recalculate 'line' if the buffer expands */
-                MoveMemory(buf, line, strlen(line) + 1);
-                line = buf;
-                s = strchr(line, '\0');
-                break;
-            }
-
-            /* If we find a comment line, discard it and go around again */
-            if (line [0] == '#' || line [0] == ';') {
-                if (*s_eol == '\r' && *(s_eol + 1) == '\n')
-                    line = s_eol + 2;
-                else
-                    line = s_eol + 1;
-                continue;
-            }
-
-            /* If there is a concatenating '\\', go around again */
-            if (*(s_eol - 1) == '\\') {
-                char *next_line = s_eol + 1;
-
-                if (*s_eol == '\r' && *(s_eol + 1) == '\n')
-                    next_line++;
-
-                while (*(next_line + 1) == ' ' || *(next_line + 1) == '\t')
-                    next_line++;
-
-                MoveMemory(s_eol - 1, next_line, chars_in_buf - (next_line - s) + 1);
-                chars_in_buf -= next_line - s_eol + 1;
-                continue;
-            }
-
-            /* Remove any line feed. Leave s_eol on the last \0 */
-            if (*s_eol == '\r' && *(s_eol + 1) == '\n')
-                *s_eol++ = '\0';
-            *s_eol = '\0';
-
-	    /* Check if the line is a header string */
-	    if (!strcmp(line, header_31)) {
-		version = REG_VERSION_31;
-	    } else if (!strcmp(line, header_40)) {
-		version = REG_VERSION_40;
-	    } else if (!strcmp(line, header_50)) {
-		version = REG_VERSION_50;
-	    } else {
-		lineW = GetWideString(line);
-		if (version == REG_VERSION_31) {
-		    processRegEntry31(lineW);
-		} else if(version == REG_VERSION_40 || version == REG_VERSION_50) {
-		    processRegEntry(lineW, FALSE);
-		}
-		HeapFree(GetProcessHeap(), 0, lineW);
-	    }
-            line = s_eol + 1;
-        }
-    }
-    closeKey();
-
-    HeapFree(GetProcessHeap(), 0, buf);
+    return REG_VERSION_INVALID;
 }
 
-static void processRegLinesW(FILE *in)
+static char *get_lineA(FILE *fp)
 {
-    WCHAR* buf           = NULL;  /* line read from input stream */
-    ULONG lineSize       = REG_VAL_BUF_SIZE;
-    size_t CharsInBuf = -1;
+    static size_t size;
+    static char *buf, *next;
+    char *line;
 
-    WCHAR* s; /* The pointer into buf for where the current fgets should read */
-    WCHAR* line; /* The start of the current line */
+    if (!fp)
+    {
+        if (size) HeapFree(GetProcessHeap(), 0, buf);
+        size = 0;
+        return NULL;
+    }
 
-    buf = HeapAlloc(GetProcessHeap(), 0, lineSize * sizeof(WCHAR));
-    CHECK_ENOUGH_MEMORY(buf);
+    if (!size)
+    {
+        size = REG_VAL_BUF_SIZE;
+        buf = HeapAlloc(GetProcessHeap(), 0, size);
+        CHECK_ENOUGH_MEMORY(buf);
+        *buf = 0;
+        next = buf;
+    }
+    line = next;
 
-    s = buf;
-    line = buf;
-
-    while(!feof(in)) {
-        size_t size_remaining;
-        int size_to_get;
-        WCHAR *s_eol = NULL; /* various local uses */
-
-        /* Do we need to expand the buffer ? */
-        assert (s >= buf && s <= buf + lineSize);
-        size_remaining = lineSize - (s-buf);
-        if (size_remaining < 2) /* room for 1 character and the \0 */
+    while (next)
+    {
+        char *p = strpbrk(line, "\r\n");
+        if (!p)
         {
-            WCHAR *new_buffer;
-            size_t new_size = lineSize + (REG_VAL_BUF_SIZE / sizeof(WCHAR));
-            if (new_size > lineSize) /* no arithmetic overflow */
-                new_buffer = HeapReAlloc (GetProcessHeap(), 0, buf, new_size * sizeof(WCHAR));
-            else
-                new_buffer = NULL;
-            CHECK_ENOUGH_MEMORY(new_buffer);
-            buf = new_buffer;
+            size_t len, count;
+            len = strlen(next);
+            memmove(buf, next, len + 1);
+            if (size - len < 3)
+            {
+                char *new_buf = HeapReAlloc(GetProcessHeap(), 0, buf, size * 2);
+                CHECK_ENOUGH_MEMORY(new_buf);
+                buf = new_buf;
+                size *= 2;
+            }
+            if (!(count = fread(buf + len, 1, size - len - 1, fp)))
+            {
+                next = NULL;
+                return buf;
+            }
+            buf[len + count] = 0;
+            next = buf;
             line = buf;
-            s = buf + lineSize - size_remaining;
-            lineSize = new_size;
-            size_remaining = lineSize - (s-buf);
+            continue;
         }
-
-        /* Get as much as possible into the buffer, terminated either by
-        * eof, error or getting the maximum amount.  Abort on error.
-        */
-        size_to_get = (size_remaining > INT_MAX ? INT_MAX : size_remaining);
-
-        CharsInBuf = fread(s, sizeof(WCHAR), size_to_get - 1, in);
-        s[CharsInBuf] = 0;
-
-        if (CharsInBuf == 0) {
-            if (ferror(in)) {
-                perror ("While reading input");
-                exit (IO_ERROR);
-            } else {
-                assert (feof(in));
-                *s = '\0';
-                /* It is not clear to me from the definition that the
-                * contents of the buffer are well defined on detecting
-                * an eof without managing to read anything.
-                */
-            }
-        }
-
-        /* If we didn't read the eol nor the eof go around for the rest */
-        while(1)
+        next = p + 1;
+        if (*p == '\r' && *(p + 1) == '\n') next++;
+        *p = 0;
+        if (p > buf && *(p - 1) == '\\')
         {
-            const WCHAR line_endings[] = {'\r','\n',0};
-            s_eol = strpbrkW(line, line_endings);
-
-            if(!s_eol) {
-                /* Move the stub of the line to the start of the buffer so
-                 * we get the maximum space to read into, and so we don't
-                 * have to recalculate 'line' if the buffer expands */
-                MoveMemory(buf, line, (strlenW(line)+1) * sizeof(WCHAR));
-                line = buf;
-                s = strchrW(line, '\0');
-                break;
-            }
-
-            /* If it is a comment line then discard it and go around again */
-            if (*line == '#' || *line == ';') {
-                if (*s_eol == '\r' && *(s_eol+1) == '\n')
-                    line = s_eol + 2;
-                else
-                    line = s_eol + 1;
-                continue;
-            }
-
-            /* If there is a concatenating \\ then go around again */
-            if (*(s_eol-1) == '\\') {
-                WCHAR* NextLine = s_eol + 1;
-
-                if(*s_eol == '\r' && *(s_eol+1) == '\n')
-                    NextLine++;
-
-                while(*(NextLine+1) == ' ' || *(NextLine+1) == '\t')
-                    NextLine++;
-
-                MoveMemory(s_eol - 1, NextLine, (CharsInBuf - (NextLine - s) + 1)*sizeof(WCHAR));
-                CharsInBuf -= NextLine - s_eol + 1;
-                continue;
-            }
-
-            /* Remove any line feed.  Leave s_eol on the last \0 */
-            if (*s_eol == '\r' && *(s_eol + 1) == '\n')
-                *s_eol++ = '\0';
-            *s_eol = '\0';
-
-            processRegEntry(line, TRUE);
-            line = s_eol + 1;
+            while (*next == ' ' || *next == '\t') next++;
+            memmove(p - 1, next, strlen(next) + 1);
+            next = line;
+            continue;
         }
+        if (*line == ';' || *line == '#')
+        {
+            line = next;
+            continue;
+        }
+        return line;
+    }
+    HeapFree(GetProcessHeap(), 0, buf);
+    size = 0;
+    return NULL;
+}
+
+static BOOL processRegLinesA(FILE *fp, char *two_chars)
+{
+    char *line, *header;
+    WCHAR *lineW;
+    int reg_version;
+
+    line = get_lineA(fp);
+
+    header = HeapAlloc(GetProcessHeap(), 0, strlen(line) + 3);
+    CHECK_ENOUGH_MEMORY(header);
+    strcpy(header, two_chars);
+    strcpy(header + 2, line);
+
+    lineW = GetWideString(header);
+    HeapFree(GetProcessHeap(), 0, header);
+
+    reg_version = parse_file_header(lineW);
+    HeapFree(GetProcessHeap(), 0, lineW);
+    if (reg_version == REG_VERSION_FUZZY || reg_version == REG_VERSION_INVALID)
+    {
+        get_lineA(NULL); /* Reset static variables */
+        return reg_version == REG_VERSION_FUZZY;
+    }
+
+    while ((line = get_lineA(fp)))
+    {
+        lineW = GetWideString(line);
+
+        if (reg_version == REG_VERSION_31)
+            processRegEntry31(lineW);
+        else
+            processRegEntry(lineW, FALSE);
+
+        HeapFree(GetProcessHeap(), 0, lineW);
     }
 
     closeKey();
+    return TRUE;
+}
 
-    HeapFree(GetProcessHeap(), 0, buf);
+static WCHAR *get_lineW(FILE *fp)
+{
+    static size_t size;
+    static WCHAR *buf, *next;
+    WCHAR *line;
+
+    if (!fp)
+    {
+        if (size) HeapFree(GetProcessHeap(), 0, buf);
+        size = 0;
+        return NULL;
+    }
+
+    if (!size)
+    {
+        size = REG_VAL_BUF_SIZE;
+        buf = HeapAlloc(GetProcessHeap(), 0, size * sizeof(WCHAR));
+        CHECK_ENOUGH_MEMORY(buf);
+        *buf = 0;
+        next = buf;
+    }
+    line = next;
+
+    while (next)
+    {
+        static const WCHAR line_endings[] = {'\r','\n',0};
+        WCHAR *p = strpbrkW(line, line_endings);
+        if (!p)
+        {
+            size_t len, count;
+            len = strlenW(next);
+            memmove(buf, next, (len + 1) * sizeof(WCHAR));
+            if (size - len < 3)
+            {
+                WCHAR *new_buf = HeapReAlloc(GetProcessHeap(), 0, buf, (size * 2) * sizeof(WCHAR));
+                CHECK_ENOUGH_MEMORY(new_buf);
+                buf = new_buf;
+                size *= 2;
+            }
+            if (!(count = fread(buf + len, sizeof(WCHAR), size - len - 1, fp)))
+            {
+                next = NULL;
+                return buf;
+            }
+            buf[len + count] = 0;
+            next = buf;
+            line = buf;
+            continue;
+        }
+        next = p + 1;
+        if (*p == '\r' && *(p + 1) == '\n') next++;
+        *p = 0;
+        if (p > buf && *(p - 1) == '\\')
+        {
+            while (*next == ' ' || *next == '\t') next++;
+            memmove(p - 1, next, (strlenW(next) + 1) * sizeof(WCHAR));
+            next = line;
+            continue;
+        }
+        if (*line == ';' || *line == '#')
+        {
+            line = next;
+            continue;
+        }
+        return line;
+    }
+    HeapFree( GetProcessHeap(), 0, buf );
+    size = 0;
+    return NULL;
+}
+
+static BOOL processRegLinesW(FILE *fp)
+{
+    WCHAR *line;
+    int reg_version;
+
+    line = get_lineW(fp);
+    reg_version = parse_file_header(line);
+    if (reg_version == REG_VERSION_FUZZY || reg_version == REG_VERSION_INVALID)
+    {
+        get_lineW(NULL); /* Reset static variables */
+        return reg_version == REG_VERSION_FUZZY;
+    }
+
+    while ((line = get_lineW(fp)))
+        processRegEntry(line, TRUE);
+
+    closeKey();
+    return TRUE;
 }
 
 /******************************************************************************
@@ -1382,22 +1364,15 @@ BOOL export_registry_key(WCHAR *file_name, WCHAR *reg_key_name, DWORD format)
  */
 BOOL import_registry_file(FILE* reg_file)
 {
-    if (reg_file)
-    {
-        BYTE s[2];
-        if (fread( s, 2, 1, reg_file) == 1)
-        {
-            if (s[0] == 0xff && s[1] == 0xfe)
-            {
-                processRegLinesW(reg_file);
-            } else
-            {
-                processRegLinesA(reg_file, (char*)s);
-            }
-        }
-        return TRUE;
-    }
-    return FALSE;
+    BYTE s[2];
+
+    if (!reg_file || (fread(s, 2, 1, reg_file) != 1))
+        return FALSE;
+
+    if (s[0] == 0xff && s[1] == 0xfe)
+        return processRegLinesW(reg_file);
+    else
+        return processRegLinesA(reg_file, (char *)s);
 }
 
 /******************************************************************************

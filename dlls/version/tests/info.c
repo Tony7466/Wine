@@ -25,6 +25,7 @@
 #include "winbase.h"
 #include "winerror.h"
 #include "winnls.h"
+#include "winuser.h"
 #include "winver.h"
 #include "verrsrc.h"
 #include "wine/test.h"
@@ -646,6 +647,17 @@ static void test_GetFileVersionInfoEx(void)
     };
     char desc[MAX_PATH];
 
+    mod = GetModuleHandleA("kernel32.dll");
+    assert(mod);
+
+    if (!FindResourceExA(mod, (LPCSTR)RT_VERSION, (LPCSTR)VS_VERSION_INFO, lang) &&
+        !FindResourceExA(mod, (LPCSTR)RT_VERSION, (LPCSTR)VS_VERSION_INFO,
+                         MAKELANGID(PRIMARYLANGID(lang),SUBLANG_NEUTRAL)))
+    {
+        skip("Translation is not available\n");
+        return;
+    }
+
     size = GetFileVersionInfoSizeW(kernel32W, NULL);
     ok(size, "GetFileVersionInfoSize(kernel32) error %u\n", GetLastError());
 
@@ -661,7 +673,6 @@ static void test_GetFileVersionInfoEx(void)
     ok(size == 4, "VerQueryValue returned %u, expected 4\n", size);
 
     /* test default version resource */
-    todo_wine_if(lang != english)
     ok(LOWORD(translation) == lang, "got %u, expected lang is %u\n",
        LOWORD(translation), lang);
     ok(HIWORD(translation) == unicode, "got %u, expected codepage is %u\n",
@@ -698,7 +709,6 @@ static void test_GetFileVersionInfoEx(void)
         translation = *(UINT *)p;
 
         /* test MUI version resource */
-        todo_wine_if((test_flags[i] & FILE_VER_GET_LOCALISED) && lang != english)
         if (test_flags[i] & FILE_VER_GET_LOCALISED)
             ok(LOWORD(translation) == lang, "[%u] got %u, expected lang is %u\n",
                i, LOWORD(translation), lang);

@@ -27,6 +27,7 @@
 #include "winbase.h"
 #include "winternl.h"
 #include "winreg.h"
+#include "winperf.h"
 #include "winsvc.h"
 #include "winerror.h"
 #include "aclapi.h"
@@ -771,11 +772,10 @@ cleanup:
 
 static void test_query_value_ex(void)
 {
-    DWORD ret;
-    DWORD size;
-    DWORD type;
+    DWORD ret, size, type;
     BYTE buffer[10];
-    
+
+    size = sizeof(buffer);
     ret = RegQueryValueExA(hkey_main, "TP1_SZ", NULL, &type, NULL, &size);
     ok(ret == ERROR_SUCCESS, "expected ERROR_SUCCESS, got %d\n", ret);
     ok(size == strlen(sTestpath1) + 1, "(%d,%d)\n", (DWORD)strlen(sTestpath1) + 1, size);
@@ -1832,7 +1832,7 @@ static void test_reg_query_info(void)
     ok(classbufferW[0] == 0x5555, "classbufferW[0] = 0x%x\n", classbufferW[0]);
 
     /* empty key */
-    sdlen = 0;
+    sdlen = classlen =0;
     ret = RegQueryInfoKeyA(subkey, NULL, &classlen, NULL, &subkeys, &maxsubkeylen, &maxclasslen, &values, &maxvaluenamelen, &maxvaluelen, &sdlen, &lastwrite);
     ok(ret == ERROR_SUCCESS, "ret = %d\n", ret);
     ok(classlen == strlen(subkey_class), "classlen = %u\n", classlen);
@@ -1846,7 +1846,7 @@ static void test_reg_query_info(void)
     ok(lastwrite.dwLowDateTime != 0, "lastwrite.dwLowDateTime = %u\n", lastwrite.dwLowDateTime);
     ok(lastwrite.dwHighDateTime != 0, "lastwrite.dwHighDateTime = %u\n", lastwrite.dwHighDateTime);
 
-    sdlen = 0;
+    sdlen = classlen = 0;
     ret = RegQueryInfoKeyW(subkey, NULL, &classlen, NULL, &subkeys, &maxsubkeylen, &maxclasslen, &values, &maxvaluenamelen, &maxvaluelen, &sdlen, &lastwrite);
     ok(ret == ERROR_SUCCESS, "ret = %d\n", ret);
     ok(classlen == strlen(subkey_class), "classlen = %u\n", classlen);
@@ -1867,7 +1867,7 @@ static void test_reg_query_info(void)
     ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
 
     /* with subkey & default value */
-    sdlen = 0;
+    sdlen = classlen = 0;
     ret = RegQueryInfoKeyA(subkey, NULL, &classlen, NULL, &subkeys, &maxsubkeylen, &maxclasslen, &values, &maxvaluenamelen, &maxvaluelen, &sdlen, &lastwrite);
     ok(ret == ERROR_SUCCESS, "ret = %d\n", ret);
     ok(classlen == strlen(subkey_class), "classlen = %u\n", classlen);
@@ -1881,7 +1881,7 @@ static void test_reg_query_info(void)
     ok(lastwrite.dwLowDateTime != 0, "lastwrite.dwLowDateTime = %u\n", lastwrite.dwLowDateTime);
     ok(lastwrite.dwHighDateTime != 0, "lastwrite.dwHighDateTime = %u\n", lastwrite.dwHighDateTime);
 
-    sdlen = 0;
+    sdlen = classlen = 0;
     ret = RegQueryInfoKeyW(subkey, NULL, &classlen, NULL, &subkeys, &maxsubkeylen, &maxclasslen, &values, &maxvaluenamelen, &maxvaluelen, &sdlen, &lastwrite);
     ok(ret == ERROR_SUCCESS, "ret = %d\n", ret);
     ok(classlen == strlen(subkey_class), "classlen = %u\n", classlen);
@@ -1902,12 +1902,14 @@ static void test_reg_query_info(void)
     ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
 
     /* with named value */
+    classlen = 0;
     ret = RegQueryInfoKeyA(subkey, NULL, &classlen, NULL, &subkeys, &maxsubkeylen, &maxclasslen, &values, &maxvaluenamelen, &maxvaluelen, &sdlen, &lastwrite);
     ok(ret == ERROR_SUCCESS, "ret = %d\n", ret);
     ok(values == 3, "values = %u\n", values);
     ok(maxvaluenamelen == strlen("value one"), "maxvaluenamelen = %u\n", maxvaluenamelen);
     ok(maxvaluelen == sizeof("second value data") * sizeof(WCHAR), "maxvaluelen = %u\n", maxvaluelen);
 
+    classlen = 0;
     ret = RegQueryInfoKeyW(subkey, NULL, &classlen, NULL, &subkeys, &maxsubkeylen, &maxclasslen, &values, &maxvaluenamelen, &maxvaluelen, &sdlen, &lastwrite);
     ok(ret == ERROR_SUCCESS, "ret = %d\n", ret);
     ok(values == 3, "values = %u\n", values);
@@ -3479,6 +3481,54 @@ static void test_RegNotifyChangeKeyValue(void)
     CloseHandle(event);
 }
 
+static void test_RegQueryValueExPerformanceData(void)
+{
+    DWORD cbData, len;
+    BYTE *value;
+    DWORD dwret;
+    LONG limit = 6;
+    PERF_DATA_BLOCK *pdb;
+
+    /* Test with data == NULL */
+    dwret = RegQueryValueExA( HKEY_PERFORMANCE_DATA, "Global", NULL, NULL, NULL, &cbData );
+    todo_wine ok( dwret == ERROR_MORE_DATA, "expected ERROR_MORE_DATA, got %d\n", dwret );
+
+    /* Test ERROR_MORE_DATA, start with small buffer */
+    len = 10;
+    value = HeapAlloc(GetProcessHeap(), 0, len);
+    cbData = len;
+    dwret = RegQueryValueExA( HKEY_PERFORMANCE_DATA, "Global", NULL, NULL, value, &cbData );
+    todo_wine ok( dwret == ERROR_MORE_DATA, "expected ERROR_MORE_DATA, got %d\n", dwret );
+    while( dwret == ERROR_MORE_DATA && limit)
+    {
+        len = len * 10;
+        value = HeapReAlloc( GetProcessHeap(), 0, value, len );
+        cbData = len;
+        dwret = RegQueryValueExA( HKEY_PERFORMANCE_DATA, "Global", NULL, NULL, value, &cbData );
+        limit--;
+    }
+    ok(limit > 0, "too many times ERROR_MORE_DATA returned\n");
+
+    todo_wine ok(dwret == ERROR_SUCCESS, "expected ERROR_SUCCESS, got %d\n", dwret);
+
+    /* Check returned data */
+    if (dwret == ERROR_SUCCESS)
+    {
+        todo_wine ok(len >= sizeof(PERF_DATA_BLOCK), "got size %d\n", len);
+        if (len >= sizeof(PERF_DATA_BLOCK)) {
+            pdb = (PERF_DATA_BLOCK*) value;
+            ok(pdb->Signature[0] == 'P', "expected Signature[0] = 'P', got 0x%x\n", pdb->Signature[0]);
+            ok(pdb->Signature[1] == 'E', "expected Signature[1] = 'E', got 0x%x\n", pdb->Signature[1]);
+            ok(pdb->Signature[2] == 'R', "expected Signature[2] = 'R', got 0x%x\n", pdb->Signature[2]);
+            ok(pdb->Signature[3] == 'F', "expected Signature[3] = 'F', got 0x%x\n", pdb->Signature[3]);
+            /* TODO: check other field */
+        }
+    }
+
+    HeapFree(GetProcessHeap(), 0, value);
+}
+
+
 START_TEST(registry)
 {
     /* Load pointers for functions that are not available in all Windows versions */
@@ -3514,6 +3564,7 @@ START_TEST(registry)
     test_delete_key_value();
     test_RegOpenCurrentUser();
     test_RegNotifyChangeKeyValue();
+    test_RegQueryValueExPerformanceData();
 
     /* cleanup */
     delete_key( hkey_main );

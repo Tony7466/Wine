@@ -7308,8 +7308,7 @@ static BOOL gen_nv12_read(struct wined3d_string_buffer *buffer, const struct arb
 }
 
 /* Context activation is done by the caller. */
-static GLuint gen_p8_shader(struct arbfp_blit_priv *priv,
-        const struct wined3d_gl_info *gl_info, const struct arbfp_blit_type *type)
+static GLuint gen_p8_shader(const struct wined3d_gl_info *gl_info, const struct arbfp_blit_type *type)
 {
     GLuint shader;
     struct wined3d_string_buffer buffer;
@@ -7397,8 +7396,7 @@ static void upload_palette(const struct wined3d_texture *texture, struct wined3d
 }
 
 /* Context activation is done by the caller. */
-static GLuint gen_yuv_shader(struct arbfp_blit_priv *priv, const struct wined3d_gl_info *gl_info,
-        const struct arbfp_blit_type *type)
+static GLuint gen_yuv_shader(const struct wined3d_gl_info *gl_info, const struct arbfp_blit_type *type)
 {
     GLuint shader;
     struct wined3d_string_buffer buffer;
@@ -7522,8 +7520,7 @@ static GLuint gen_yuv_shader(struct arbfp_blit_priv *priv, const struct wined3d_
 }
 
 /* Context activation is done by the caller. */
-static GLuint arbfp_gen_plain_shader(struct arbfp_blit_priv *priv,
-        const struct wined3d_gl_info *gl_info, const struct arbfp_blit_type *type)
+static GLuint arbfp_gen_plain_shader(const struct wined3d_gl_info *gl_info, const struct arbfp_blit_type *type)
 {
     GLuint shader;
     struct wined3d_string_buffer buffer;
@@ -7643,18 +7640,18 @@ static HRESULT arbfp_blit_set(void *blit_priv, struct wined3d_context *context, 
             case COMPLEX_FIXUP_NONE:
                 if (!is_identity_fixup(texture->resource.format->color_fixup))
                     FIXME("Implement support for sign or swizzle fixups.\n");
-                shader = arbfp_gen_plain_shader(priv, gl_info, &type);
+                shader = arbfp_gen_plain_shader(gl_info, &type);
                 break;
 
             case COMPLEX_FIXUP_P8:
-                shader = gen_p8_shader(priv, gl_info, &type);
+                shader = gen_p8_shader(gl_info, &type);
                 break;
 
             case COMPLEX_FIXUP_YUY2:
             case COMPLEX_FIXUP_UYVY:
             case COMPLEX_FIXUP_YV12:
             case COMPLEX_FIXUP_NV12:
-                shader = gen_yuv_shader(priv, gl_info, &type);
+                shader = gen_yuv_shader(gl_info, &type);
                 break;
         }
 
@@ -7790,8 +7787,8 @@ static BOOL arbfp_blit_supported(const struct wined3d_gl_info *gl_info,
 }
 
 static void arbfp_blit_surface(struct wined3d_device *device, enum wined3d_blit_op op, struct wined3d_context *context,
-        struct wined3d_surface *src_surface, const RECT *src_rect,
-        struct wined3d_surface *dst_surface, const RECT *dst_rect,
+        struct wined3d_surface *src_surface, DWORD src_location, const RECT *src_rect,
+        struct wined3d_surface *dst_surface, DWORD dst_location, const RECT *dst_rect,
         const struct wined3d_color_key *color_key, enum wined3d_texture_filter_type filter)
 {
     struct wined3d_texture *src_texture = src_surface->container;
@@ -7823,11 +7820,31 @@ static void arbfp_blit_surface(struct wined3d_device *device, enum wined3d_blit_
 
     context_apply_blit_state(context, device);
 
-    if (!wined3d_resource_is_offscreen(&dst_texture->resource))
+    if (dst_location == WINED3D_LOCATION_DRAWABLE)
     {
         d = *dst_rect;
         surface_translate_drawable_coords(dst_surface, context->win_handle, &d);
         dst_rect = &d;
+    }
+
+    if (wined3d_settings.offscreen_rendering_mode == ORM_FBO)
+    {
+        GLenum buffer;
+
+        if (dst_location == WINED3D_LOCATION_DRAWABLE)
+        {
+            TRACE("Destination surface %p is onscreen.\n", dst_surface);
+            buffer = wined3d_texture_get_gl_buffer(dst_texture);
+        }
+        else
+        {
+            TRACE("Destination surface %p is offscreen.\n", dst_surface);
+            buffer = GL_COLOR_ATTACHMENT0;
+        }
+        context_apply_fbo_state_blit(context, GL_DRAW_FRAMEBUFFER, dst_surface, NULL, dst_location);
+        context_set_draw_buffer(context, buffer);
+        context_check_fbo_status(context, GL_DRAW_FRAMEBUFFER);
+        context_invalidate_state(context, STATE_FRAMEBUFFER);
     }
 
     if (op == WINED3D_BLIT_OP_COLOR_BLIT_ALPHATEST)
@@ -7865,11 +7882,10 @@ static HRESULT arbfp_blit_depth_fill(struct wined3d_device *device, struct wined
     return WINED3DERR_INVALIDCALL;
 }
 
-const struct blit_shader arbfp_blit = {
+const struct wined3d_blitter_ops arbfp_blit =
+{
     arbfp_blit_alloc,
     arbfp_blit_free,
-    arbfp_blit_set,
-    arbfp_blit_unset,
     arbfp_blit_supported,
     arbfp_blit_color_fill,
     arbfp_blit_depth_fill,

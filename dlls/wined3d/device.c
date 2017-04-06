@@ -35,6 +35,7 @@
 #include "wined3d_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(d3d);
+WINE_DECLARE_DEBUG_CHANNEL(winediag);
 
 /* Define the default light parameters as specified by MSDN. */
 const struct wined3d_light WINED3D_default_light =
@@ -56,7 +57,7 @@ const struct wined3d_light WINED3D_default_light =
  * actually have the same values in GL and D3D. */
 GLenum gl_primitive_type_from_d3d(enum wined3d_primitive_type primitive_type)
 {
-    switch(primitive_type)
+    switch (primitive_type)
     {
         case WINED3D_PT_POINTLIST:
             return GL_POINTS;
@@ -89,7 +90,7 @@ GLenum gl_primitive_type_from_d3d(enum wined3d_primitive_type primitive_type)
             return GL_TRIANGLE_STRIP_ADJACENCY_ARB;
 
         default:
-            FIXME("Unhandled primitive type %s\n", debug_d3dprimitivetype(primitive_type));
+            FIXME("Unhandled primitive type %s.\n", debug_d3dprimitivetype(primitive_type));
         case WINED3D_PT_UNDEFINED:
             return ~0u;
     }
@@ -97,7 +98,7 @@ GLenum gl_primitive_type_from_d3d(enum wined3d_primitive_type primitive_type)
 
 static enum wined3d_primitive_type d3d_primitive_type_from_gl(GLenum primitive_type)
 {
-    switch(primitive_type)
+    switch (primitive_type)
     {
         case GL_POINTS:
             return WINED3D_PT_POINTLIST;
@@ -130,7 +131,7 @@ static enum wined3d_primitive_type d3d_primitive_type_from_gl(GLenum primitive_t
             return WINED3D_PT_TRIANGLESTRIP_ADJ;
 
         default:
-            FIXME("Unhandled primitive type %s\n", debug_d3dprimitivetype(primitive_type));
+            FIXME("Unhandled primitive type %s.\n", debug_d3dprimitivetype(primitive_type));
         case ~0u:
             return WINED3D_PT_UNDEFINED;
     }
@@ -547,23 +548,16 @@ static void device_load_logo(struct wined3d_device *device, const char *filename
     HRESULT hr;
     HDC dcb = NULL, dcs = NULL;
 
-    hbm = LoadImageA(NULL, filename, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE | LR_CREATEDIBSECTION);
-    if(hbm)
+    if (!(hbm = LoadImageA(NULL, filename, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE | LR_CREATEDIBSECTION)))
     {
-        GetObjectA(hbm, sizeof(BITMAP), &bm);
-        dcb = CreateCompatibleDC(NULL);
-        if(!dcb) goto out;
-        SelectObject(dcb, hbm);
+        ERR_(winediag)("Failed to load logo %s.\n", wine_dbgstr_a(filename));
+        return;
     }
-    else
-    {
-        /* Create a 32x32 white surface to indicate that wined3d is used, but the specified image
-         * couldn't be loaded
-         */
-        memset(&bm, 0, sizeof(bm));
-        bm.bmWidth = 32;
-        bm.bmHeight = 32;
-    }
+    GetObjectA(hbm, sizeof(BITMAP), &bm);
+
+    if (!(dcb = CreateCompatibleDC(NULL)))
+        goto out;
+    SelectObject(dcb, hbm);
 
     desc.resource_type = WINED3D_RTYPE_TEXTURE_2D;
     desc.format = WINED3DFMT_B5G6R5_UNORM;
@@ -575,34 +569,26 @@ static void device_load_logo(struct wined3d_device *device, const char *filename
     desc.height = bm.bmHeight;
     desc.depth = 1;
     desc.size = 0;
-    if (FAILED(hr = wined3d_texture_create(device, &desc, 1, 1, WINED3D_TEXTURE_CREATE_MAPPABLE,
+    if (FAILED(hr = wined3d_texture_create(device, &desc, 1, 1,
+            WINED3D_TEXTURE_CREATE_MAPPABLE | WINED3D_TEXTURE_CREATE_GET_DC,
             NULL, NULL, &wined3d_null_parent_ops, &device->logo_texture)))
     {
         ERR("Wine logo requested, but failed to create texture, hr %#x.\n", hr);
         goto out;
     }
 
-    if (dcb)
+    if (FAILED(hr = wined3d_texture_get_dc(device->logo_texture, 0, &dcs)))
     {
-        if (FAILED(hr = wined3d_texture_get_dc(device->logo_texture, 0, &dcs)))
-            goto out;
-        BitBlt(dcs, 0, 0, bm.bmWidth, bm.bmHeight, dcb, 0, 0, SRCCOPY);
-        wined3d_texture_release_dc(device->logo_texture, 0, dcs);
-
-        color_key.color_space_low_value = 0;
-        color_key.color_space_high_value = 0;
-        wined3d_texture_set_color_key(device->logo_texture, WINED3D_CKEY_SRC_BLT, &color_key);
+        wined3d_texture_decref(device->logo_texture);
+        device->logo_texture = NULL;
+        goto out;
     }
-    else
-    {
-        const struct wined3d_color c = {1.0f, 1.0f, 1.0f, 1.0f};
-        const RECT rect = {0, 0, desc.width, desc.height};
-        struct wined3d_surface *surface;
+    BitBlt(dcs, 0, 0, bm.bmWidth, bm.bmHeight, dcb, 0, 0, SRCCOPY);
+    wined3d_texture_release_dc(device->logo_texture, 0, dcs);
 
-        /* Fill the surface with a white color to show that wined3d is there */
-        surface = device->logo_texture->sub_resources[0].u.surface;
-        surface_color_fill(surface, &rect, &c);
-    }
+    color_key.color_space_low_value = 0;
+    color_key.color_space_high_value = 0;
+    wined3d_texture_set_color_key(device->logo_texture, WINED3D_CKEY_SRC_BLT, &color_key);
 
 out:
     if (dcb) DeleteDC(dcb);
@@ -775,50 +761,58 @@ static void destroy_dummy_textures(struct wined3d_device *device, struct wined3d
 /* Context activation is done by the caller. */
 static void create_default_samplers(struct wined3d_device *device, struct wined3d_context *context)
 {
-    const struct wined3d_gl_info *gl_info = context->gl_info;
+    struct wined3d_sampler_desc desc;
+    HRESULT hr;
 
-    if (gl_info->supported[ARB_SAMPLER_OBJECTS])
+    desc.address_u = WINED3D_TADDRESS_WRAP;
+    desc.address_v = WINED3D_TADDRESS_WRAP;
+    desc.address_w = WINED3D_TADDRESS_WRAP;
+    memset(desc.border_color, 0, sizeof(desc.border_color));
+    desc.mag_filter = WINED3D_TEXF_POINT;
+    desc.min_filter = WINED3D_TEXF_POINT;
+    desc.mip_filter = WINED3D_TEXF_NONE;
+    desc.lod_bias = 0.0f;
+    desc.min_lod = -1000.0f;
+    desc.max_lod =  1000.0f;
+    desc.mip_base_level = 0;
+    desc.max_anisotropy = 1;
+    desc.compare = FALSE;
+    desc.comparison_func = WINED3D_CMP_NEVER;
+    desc.srgb_decode = TRUE;
+
+    /* In SM4+ shaders there is a separation between resources and samplers. Some shader
+     * instructions allow access to resources without using samplers.
+     * In GLSL, resources are always accessed through sampler or image variables. The default
+     * sampler object is used to emulate the direct resource access when there is no sampler state
+     * to use.
+     */
+    if (FAILED(hr = wined3d_sampler_create(device, &desc, NULL, &device->default_sampler)))
     {
-        /* In SM4+ shaders there is a separation between resources and samplers. Some shader
-         * instructions allow access to resources without using samplers.
-         * In GLSL, resources are always accessed through sampler or image variables. The default
-         * sampler object is used to emulate the direct resource access when there is no sampler state
-         * to use.
-         */
-        GL_EXTCALL(glGenSamplers(1, &device->default_sampler));
-        GL_EXTCALL(glSamplerParameteri(device->default_sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
-        GL_EXTCALL(glSamplerParameteri(device->default_sampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
-        checkGLcall("Create default sampler");
-
-        /* In D3D10+, a NULL sampler maps to the default sampler state. */
-        GL_EXTCALL(glGenSamplers(1, &device->null_sampler));
-        GL_EXTCALL(glSamplerParameteri(device->null_sampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR));
-        GL_EXTCALL(glSamplerParameteri(device->null_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE));
-        GL_EXTCALL(glSamplerParameteri(device->null_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE));
-        GL_EXTCALL(glSamplerParameteri(device->null_sampler, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE));
-        checkGLcall("Create null sampler");
+        ERR("Failed to create default sampler, hr %#x.\n", hr);
+        device->default_sampler = NULL;
     }
-    else
+
+    /* In D3D10+, a NULL sampler maps to the default sampler state. */
+    desc.address_u = WINED3D_TADDRESS_CLAMP;
+    desc.address_v = WINED3D_TADDRESS_CLAMP;
+    desc.address_w = WINED3D_TADDRESS_CLAMP;
+    desc.mag_filter = WINED3D_TEXF_LINEAR;
+    desc.min_filter = WINED3D_TEXF_LINEAR;
+    desc.mip_filter = WINED3D_TEXF_LINEAR;
+    if (FAILED(hr = wined3d_sampler_create(device, &desc, NULL, &device->null_sampler)))
     {
-        device->default_sampler = 0;
-        device->null_sampler = 0;
+        ERR("Failed to create null sampler, hr %#x.\n", hr);
+        device->null_sampler = NULL;
     }
 }
 
 /* Context activation is done by the caller. */
 static void destroy_default_samplers(struct wined3d_device *device, struct wined3d_context *context)
 {
-    const struct wined3d_gl_info *gl_info = context->gl_info;
-
-    if (gl_info->supported[ARB_SAMPLER_OBJECTS])
-    {
-        GL_EXTCALL(glDeleteSamplers(1, &device->default_sampler));
-        GL_EXTCALL(glDeleteSamplers(1, &device->null_sampler));
-        checkGLcall("glDeleteSamplers");
-    }
-
-    device->default_sampler = 0;
-    device->null_sampler = 0;
+    wined3d_sampler_decref(device->default_sampler);
+    device->default_sampler = NULL;
+    wined3d_sampler_decref(device->null_sampler);
+    device->null_sampler = NULL;
 }
 
 static LONG fullscreen_style(LONG style)
@@ -1292,7 +1286,7 @@ void CDECL wined3d_device_set_stream_output(struct wined3d_device *device, UINT 
 
     TRACE("device %p, idx %u, buffer %p, offset %u.\n", device, idx, buffer, offset);
 
-    if (idx >= MAX_STREAM_OUT)
+    if (idx >= WINED3D_MAX_STREAM_OUTPUT_BUFFERS)
     {
         WARN("Invalid stream output %u.\n", idx);
         return;
@@ -1316,7 +1310,7 @@ struct wined3d_buffer * CDECL wined3d_device_get_stream_output(struct wined3d_de
 {
     TRACE("device %p, idx %u, offset %p.\n", device, idx, offset);
 
-    if (idx >= MAX_STREAM_OUT)
+    if (idx >= WINED3D_MAX_STREAM_OUTPUT_BUFFERS)
     {
         WARN("Invalid stream output %u.\n", idx);
         return NULL;
@@ -4150,7 +4144,7 @@ HRESULT CDECL wined3d_device_clear_rendertarget_view(struct wined3d_device *devi
         struct wined3d_rendertarget_view *view, const RECT *rect, DWORD flags,
         const struct wined3d_color *color, float depth, DWORD stencil)
 {
-    const struct blit_shader *blitter;
+    const struct wined3d_blitter_ops *blitter;
     struct wined3d_resource *resource;
     enum wined3d_blit_op blit_op;
     RECT r;
@@ -4178,6 +4172,16 @@ HRESULT CDECL wined3d_device_clear_rendertarget_view(struct wined3d_device *devi
     {
         SetRect(&r, 0, 0, view->width, view->height);
         rect = &r;
+    }
+    else
+    {
+        struct wined3d_box b = {rect->left, rect->top, rect->right, rect->bottom, 0, 1};
+        struct wined3d_texture *texture = texture_from_resource(view->resource);
+        HRESULT hr;
+
+        if (FAILED(hr = wined3d_texture_check_box_dimensions(texture,
+                view->sub_resource_idx % texture->level_count, &b)))
+            return hr;
     }
 
     if (flags & WINED3DCLEAR_TARGET)
@@ -4742,6 +4746,8 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
         device->update_state = &device->state;
 
         device_init_swapchain_state(device, swapchain);
+        if (wined3d_settings.logo)
+            device_load_logo(device, wined3d_settings.logo);
     }
     else if (device->back_buffer_view)
     {

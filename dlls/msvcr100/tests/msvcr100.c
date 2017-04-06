@@ -82,6 +82,7 @@ struct thiscall_thunk
 
 static ULONG_PTR (WINAPI *call_thiscall_func1)( void *func, void *this );
 static ULONG_PTR (WINAPI *call_thiscall_func2)( void *func, void *this, const void *a );
+static ULONG_PTR (WINAPI *call_thiscall_func3)( void *func, void *this, const void *a, const void *b );
 
 static void init_thiscall_thunk(void)
 {
@@ -94,16 +95,19 @@ static void init_thiscall_thunk(void)
     thunk->jmp_edx  = 0xe2ff; /* jmp  *%edx */
     call_thiscall_func1 = (void *)thunk;
     call_thiscall_func2 = (void *)thunk;
+    call_thiscall_func3 = (void *)thunk;
 }
 
 #define call_func1(func,_this) call_thiscall_func1(func,_this)
 #define call_func2(func,_this,a) call_thiscall_func2(func,_this,(const void*)(a))
+#define call_func3(func,_this,a,b) call_thiscall_func3(func,_this,(const void*)(a),(const void*)(b))
 
 #else
 
 #define init_thiscall_thunk()
 #define call_func1(func,_this) func(_this)
 #define call_func2(func,_this,a) func(_this,a)
+#define call_func3(func,_this,a,b) func(_this,a,b)
 
 #endif /* __i386__ */
 
@@ -137,6 +141,36 @@ typedef struct
 typedef struct {
     CRITICAL_SECTION cs;
 } _ReentrantBlockingLock;
+
+typedef struct {
+    char pad[64];
+} event;
+
+typedef struct {
+    void *vtable;
+} Context;
+
+typedef struct {
+    void *policy_container;
+} SchedulerPolicy;
+
+struct SchedulerVtbl;
+typedef struct {
+    struct SchedulerVtbl *vtable;
+} Scheduler;
+
+struct SchedulerVtbl {
+    Scheduler* (__thiscall *vector_dor)(Scheduler*);
+    unsigned int (__thiscall *Id)(Scheduler*);
+    unsigned int (__thiscall *GetNumberOfVirtualProcessors)(Scheduler*);
+    SchedulerPolicy* (__thiscall *GetPolicy)(Scheduler*);
+    unsigned int (__thiscall *Reference)(Scheduler*);
+    unsigned int (__thiscall *Release)(Scheduler*);
+    void (__thiscall *RegisterShutdownEvent)(Scheduler*,HANDLE);
+    void (__thiscall *Attach)(Scheduler*);
+    /* CreateScheduleGroup */
+    /* ScheduleTask */
+};
 
 static int* (__cdecl *p_errno)(void);
 static int (__cdecl *p_wmemcpy_s)(wchar_t *dest, size_t numberOfElements, const wchar_t *src, size_t count);
@@ -178,6 +212,23 @@ static void (__thiscall *p_NonReentrantBlockingLock__Acquire)(_ReentrantBlocking
 static void (__thiscall *p_NonReentrantBlockingLock__Release)(_ReentrantBlockingLock*);
 static MSVCRT_bool (__thiscall *p_NonReentrantBlockingLock__TryAcquire)(_ReentrantBlockingLock*);
 
+static event* (__thiscall *p_event_ctor)(event*);
+static void (__thiscall *p_event_dtor)(event*);
+static void (__thiscall *p_event_reset)(event*);
+static void (__thiscall *p_event_set)(event*);
+static size_t (__thiscall *p_event_wait)(event*, unsigned int);
+static int (__cdecl *p_event_wait_for_multiple)(event**, size_t, MSVCRT_bool, unsigned int);
+
+static Context* (__cdecl *p_Context_CurrentContext)(void);
+static unsigned int (__cdecl *p_Context_Id)(void);
+static SchedulerPolicy* (__thiscall *p_SchedulerPolicy_ctor)(SchedulerPolicy*);
+static void (__thiscall *p_SchedulerPolicy_SetConcurrencyLimits)(SchedulerPolicy*, unsigned int, unsigned int);
+static void (__thiscall *p_SchedulerPolicy_dtor)(SchedulerPolicy*);
+static Scheduler* (__cdecl *p_Scheduler_Create)(SchedulerPolicy*);
+static Scheduler* (__cdecl *p_CurrentScheduler_Get)(void);
+static void (__cdecl *p_CurrentScheduler_Detach)(void);
+static unsigned int (__cdecl *p_CurrentScheduler_Id)(void);
+
 /* make sure we use the correct errno */
 #undef errno
 #define errno (*p_errno())
@@ -210,6 +261,10 @@ static BOOL init(void)
     SET(p__aligned_msize, "_aligned_msize");
     SET(p_atoi, "atoi");
 
+    SET(p_Context_Id, "?Id@Context@Concurrency@@SAIXZ");
+    SET(p_CurrentScheduler_Detach, "?Detach@CurrentScheduler@Concurrency@@SAXXZ");
+    SET(p_CurrentScheduler_Id, "?Id@CurrentScheduler@Concurrency@@SAIXZ");
+
     if(sizeof(void*) == 8) { /* 64-bit initialization */
         SET(pSpinWait_ctor_yield, "??0?$_SpinWait@$00@details@Concurrency@@QEAA@P6AXXZ@Z");
         SET(pSpinWait_dtor, "??_F?$_SpinWait@$00@details@Concurrency@@QEAAXXZ");
@@ -237,6 +292,20 @@ static BOOL init(void)
         SET(p_NonReentrantBlockingLock__Acquire, "?_Acquire@_NonReentrantBlockingLock@details@Concurrency@@QEAAXXZ");
         SET(p_NonReentrantBlockingLock__Release, "?_Release@_NonReentrantBlockingLock@details@Concurrency@@QEAAXXZ");
         SET(p_NonReentrantBlockingLock__TryAcquire, "?_TryAcquire@_NonReentrantBlockingLock@details@Concurrency@@QEAA_NXZ");
+
+        SET(p_event_ctor, "??0event@Concurrency@@QEAA@XZ");
+        SET(p_event_dtor, "??1event@Concurrency@@QEAA@XZ");
+        SET(p_event_reset, "?reset@event@Concurrency@@QEAAXXZ");
+        SET(p_event_set, "?set@event@Concurrency@@QEAAXXZ");
+        SET(p_event_wait, "?wait@event@Concurrency@@QEAA_KI@Z");
+        SET(p_event_wait_for_multiple, "?wait_for_multiple@event@Concurrency@@SA_KPEAPEAV12@_K_NI@Z");
+
+        SET(p_Context_CurrentContext, "?CurrentContext@Context@Concurrency@@SAPEAV12@XZ");
+        SET(p_SchedulerPolicy_ctor, "??0SchedulerPolicy@Concurrency@@QEAA@XZ");
+        SET(p_SchedulerPolicy_SetConcurrencyLimits, "?SetConcurrencyLimits@SchedulerPolicy@Concurrency@@QEAAXII@Z");
+        SET(p_SchedulerPolicy_dtor, "??1SchedulerPolicy@Concurrency@@QEAA@XZ");
+        SET(p_Scheduler_Create, "?Create@Scheduler@Concurrency@@SAPEAV12@AEBVSchedulerPolicy@2@@Z");
+        SET(p_CurrentScheduler_Get, "?Get@CurrentScheduler@Concurrency@@SAPEAVScheduler@2@XZ");
     } else {
         SET(pSpinWait_ctor_yield, "??0?$_SpinWait@$00@details@Concurrency@@QAE@P6AXXZ@Z");
         SET(pSpinWait_dtor, "??_F?$_SpinWait@$00@details@Concurrency@@QAEXXZ");
@@ -264,6 +333,20 @@ static BOOL init(void)
         SET(p_NonReentrantBlockingLock__Acquire, "?_Acquire@_NonReentrantBlockingLock@details@Concurrency@@QAEXXZ");
         SET(p_NonReentrantBlockingLock__Release, "?_Release@_NonReentrantBlockingLock@details@Concurrency@@QAEXXZ");
         SET(p_NonReentrantBlockingLock__TryAcquire, "?_TryAcquire@_NonReentrantBlockingLock@details@Concurrency@@QAE_NXZ");
+
+        SET(p_event_ctor, "??0event@Concurrency@@QAE@XZ");
+        SET(p_event_dtor, "??1event@Concurrency@@QAE@XZ");
+        SET(p_event_reset, "?reset@event@Concurrency@@QAEXXZ");
+        SET(p_event_set, "?set@event@Concurrency@@QAEXXZ");
+        SET(p_event_wait, "?wait@event@Concurrency@@QAEII@Z");
+        SET(p_event_wait_for_multiple, "?wait_for_multiple@event@Concurrency@@SAIPAPAV12@I_NI@Z");
+
+        SET(p_Context_CurrentContext, "?CurrentContext@Context@Concurrency@@SAPAV12@XZ");
+        SET(p_SchedulerPolicy_ctor, "??0SchedulerPolicy@Concurrency@@QAE@XZ");
+        SET(p_SchedulerPolicy_SetConcurrencyLimits, "?SetConcurrencyLimits@SchedulerPolicy@Concurrency@@QAEXII@Z");
+        SET(p_SchedulerPolicy_dtor, "??1SchedulerPolicy@Concurrency@@QAE@XZ");
+        SET(p_Scheduler_Create, "?Create@Scheduler@Concurrency@@SAPAV12@ABVSchedulerPolicy@2@@Z");
+        SET(p_CurrentScheduler_Get, "?Get@CurrentScheduler@Concurrency@@SAPAVScheduler@2@XZ");
     }
 
     init_thiscall_thunk();
@@ -705,11 +788,191 @@ static void test__ReentrantBlockingLock(void)
     call_func1(p_NonReentrantBlockingLock_dtor, &rbl);
 }
 
+static DWORD WINAPI test_event_thread(void *arg)
+{
+    event *evt = arg;
+    call_func1(p_event_set, evt);
+    return 0;
+}
+
+static DWORD WINAPI multiple_events_thread(void *arg)
+{
+     event **events = arg;
+
+     Sleep(50);
+     call_func1(p_event_set, events[0]);
+     call_func1(p_event_reset, events[0]);
+     call_func1(p_event_set, events[1]);
+     call_func1(p_event_reset, events[1]);
+     return 0;
+}
+
+static void test_event(void)
+{
+    int i;
+    int ret;
+    event evt;
+    event *evts[70];
+    HANDLE thread;
+    HANDLE threads[NUMELMS(evts)];
+
+    call_func1(p_event_ctor, &evt);
+
+    ret = call_func2(p_event_wait, &evt, 100);
+    ok(ret == -1, "expected -1, got %d\n", ret);
+
+    call_func1(p_event_set, &evt);
+    ret = call_func2(p_event_wait, &evt, 100);
+    ok(!ret, "expected 0, got %d\n", ret);
+
+    ret = call_func2(p_event_wait, &evt, 100);
+    ok(!ret, "expected 0, got %d\n", ret);
+
+    call_func1(p_event_reset, &evt);
+    ret = call_func2(p_event_wait, &evt, 100);
+    ok(ret == -1, "expected -1, got %d\n", ret);
+
+    thread = CreateThread(NULL, 0, test_event_thread, (void*)&evt, 0, NULL);
+    ret = call_func2(p_event_wait, &evt, 5000);
+    ok(!ret, "expected 0, got %d\n", ret);
+    WaitForSingleObject(thread, INFINITE);
+    CloseHandle(thread);
+
+    if (0) /* crashes on Windows */
+        p_event_wait_for_multiple(NULL, 10, TRUE, 0);
+
+    for (i = 0; i < NUMELMS(evts); i++) {
+        evts[i] = malloc(sizeof(evt));
+        call_func1(p_event_ctor, evts[i]);
+    }
+
+    ret = p_event_wait_for_multiple(evts, 0, TRUE, 100);
+    ok(!ret, "expected 0, got %d\n", ret);
+
+    ret = p_event_wait_for_multiple(evts, NUMELMS(evts), TRUE, 100);
+    ok(ret == -1, "expected -1, got %d\n", ret);
+
+    /* reset and test wait for multiple with all */
+    for (i = 0; i < NUMELMS(evts); i++)
+        threads[i] = CreateThread(NULL, 0, test_event_thread, (void*)evts[i], 0, NULL);
+
+    ret = p_event_wait_for_multiple(evts, NUMELMS(evts), TRUE, 5000);
+    ok(ret != -1, "didn't expect -1\n");
+
+    for (i = 0; i < NUMELMS(evts); i++) {
+        WaitForSingleObject(threads[i], INFINITE);
+        CloseHandle(threads[i]);
+    }
+
+    /* reset and test wait for multiple with any */
+    call_func1(p_event_reset, evts[0]);
+
+    thread = CreateThread(NULL, 0, test_event_thread, (void*)evts[0], 0, NULL);
+    ret = p_event_wait_for_multiple(evts, 1, FALSE, 5000);
+    ok(!ret, "expected 0, got %d\n", ret);
+    WaitForSingleObject(thread, INFINITE);
+    CloseHandle(thread);
+
+    call_func1(p_event_reset, evts[0]);
+    call_func1(p_event_reset, evts[1]);
+    thread = CreateThread(NULL, 0, multiple_events_thread, (void*)evts, 0, NULL);
+    ret = p_event_wait_for_multiple(evts, 2, TRUE, 500);
+    ok(ret == -1, "expected -1, got %d\n", ret);
+    WaitForSingleObject(thread, INFINITE);
+    CloseHandle(thread);
+
+    call_func1(p_event_reset, evts[0]);
+    call_func1(p_event_set, evts[1]);
+    ret = p_event_wait_for_multiple(evts, 2, FALSE, 0);
+    ok(ret == 1, "expected 1, got %d\n", ret);
+
+    for (i = 0; i < NUMELMS(evts); i++) {
+        call_func1(p_event_dtor, evts[i]);
+        free(evts[i]);
+    }
+
+    call_func1(p_event_dtor, &evt);
+}
+
+static DWORD WINAPI external_context_thread(void *arg)
+{
+    unsigned int id;
+    Context *ctx;
+
+    id = p_Context_Id();
+    ok(id == -1, "Context::Id() = %u\n", id);
+
+    ctx = p_Context_CurrentContext();
+    ok(ctx != NULL, "Context::CurrentContext() = NULL\n");
+    id = p_Context_Id();
+    ok(id == 1, "Context::Id() = %u\n", id);
+    return 0;
+}
+
+static void test_ExternalContextBase(void)
+{
+    unsigned int id;
+    Context *ctx;
+    HANDLE thread;
+
+    id = p_Context_Id();
+    ok(id == -1, "Context::Id() = %u\n", id);
+
+    ctx = p_Context_CurrentContext();
+    ok(ctx != NULL, "Context::CurrentContext() = NULL\n");
+    id = p_Context_Id();
+    ok(id == 0, "Context::Id() = %u\n", id);
+
+    ctx = p_Context_CurrentContext();
+    ok(ctx != NULL, "Context::CurrentContext() = NULL\n");
+    id = p_Context_Id();
+    ok(id == 0, "Context::Id() = %u\n", id);
+
+    thread = CreateThread(NULL, 0, external_context_thread, NULL, 0, NULL);
+    ok(thread != NULL, "CreateThread failed: %d\n", GetLastError());
+    WaitForSingleObject(thread, INFINITE);
+}
+
+static void test_Scheduler(void)
+{
+    Scheduler *scheduler, *current_scheduler;
+    SchedulerPolicy policy;
+    unsigned int i;
+
+    call_func1(p_SchedulerPolicy_ctor, &policy);
+    scheduler = p_Scheduler_Create(&policy);
+    ok(scheduler != NULL, "Scheduler::Create() = NULL\n");
+
+    call_func1(scheduler->vtable->Attach, scheduler);
+    current_scheduler = p_CurrentScheduler_Get();
+    ok(current_scheduler == scheduler, "CurrentScheduler::Get() = %p, expected %p\n",
+            current_scheduler, scheduler);
+    p_CurrentScheduler_Detach();
+
+    current_scheduler = p_CurrentScheduler_Get();
+    ok(current_scheduler != scheduler, "scheduler has not changed after detach\n");
+    call_func1(scheduler->vtable->Release, scheduler);
+
+    i = p_CurrentScheduler_Id();
+    ok(!i, "CurrentScheduler::Id() = %u\n", i);
+
+    call_func3(p_SchedulerPolicy_SetConcurrencyLimits, &policy, 1, 1);
+    scheduler = p_Scheduler_Create(&policy);
+    ok(scheduler != NULL, "Scheduler::Create() = NULL\n");
+
+    i = call_func1(scheduler->vtable->GetNumberOfVirtualProcessors, scheduler);
+    ok(i == 1, "Scheduler::GetNumberOfVirtualProcessors() = %u\n", i);
+    call_func1(scheduler->vtable->Release, scheduler);
+    call_func1(p_SchedulerPolicy_dtor, &policy);
+}
+
 START_TEST(msvcr100)
 {
     if (!init())
         return;
 
+    test_ExternalContextBase();
+    test_Scheduler();
     test_wmemcpy_s();
     test_wmemmove_s();
     test_fread_s();
@@ -718,4 +981,5 @@ START_TEST(msvcr100)
     test__SpinWait();
     test_reader_writer_lock();
     test__ReentrantBlockingLock();
+    test_event();
 }

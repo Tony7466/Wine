@@ -215,7 +215,6 @@ struct wined3d_rendertarget_view *ddraw_surface_get_rendertarget_view(struct ddr
 void ddraw_surface_init(struct ddraw_surface *surface, struct ddraw *ddraw,
         struct wined3d_texture *wined3d_texture, unsigned int sub_resource_idx,
         const struct wined3d_parent_ops **parent_ops) DECLSPEC_HIDDEN;
-ULONG ddraw_surface_release_iface(struct ddraw_surface *This) DECLSPEC_HIDDEN;
 HRESULT ddraw_surface_update_frontbuffer(struct ddraw_surface *surface,
         const RECT *rect, BOOL read) DECLSPEC_HIDDEN;
 
@@ -580,6 +579,8 @@ struct d3d_vertex_buffer *unsafe_impl_from_IDirect3DVertexBuffer7(IDirect3DVerte
 
 void ddrawformat_from_wined3dformat(DDPIXELFORMAT *ddraw_format,
         enum wined3d_format_id wined3d_format) DECLSPEC_HIDDEN;
+BOOL wined3d_colour_from_ddraw_colour(const DDPIXELFORMAT *pf, const struct ddraw_palette *palette,
+        DWORD colour, struct wined3d_color *wined3d_colour) DECLSPEC_HIDDEN;
 enum wined3d_format_id wined3dformat_from_ddrawformat(const DDPIXELFORMAT *format) DECLSPEC_HIDDEN;
 void DDRAW_dump_surface_desc(const DDSURFACEDESC2 *lpddsd) DECLSPEC_HIDDEN;
 void dump_D3DMATRIX(const D3DMATRIX *mat) DECLSPEC_HIDDEN;

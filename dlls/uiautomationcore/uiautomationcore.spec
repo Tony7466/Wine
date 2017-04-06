@@ -59,8 +59,8 @@
 @ stub UiaGetErrorDescription
 @ stub UiaGetPatternProvider
 @ stub UiaGetPropertyValue
-@ stub UiaGetReservedMixedAttributeValue
-@ stub UiaGetReservedNotSupportedValue
+@ stdcall UiaGetReservedMixedAttributeValue(ptr)
+@ stdcall UiaGetReservedNotSupportedValue(ptr)
 @ stub UiaGetRootNode
 @ stub UiaGetRuntimeId
 @ stub UiaGetUpdatedCache
@@ -69,7 +69,7 @@
 @ stub UiaHUiaNodeFromVariant
 @ stub UiaHasServerSideProvider
 @ stub UiaHostProviderFromHwnd
-@ stub UiaLookupId
+@ stdcall UiaLookupId(long ptr)
 @ stub UiaNavigate
 @ stub UiaNodeFromFocus
 @ stub UiaNodeFromHandle

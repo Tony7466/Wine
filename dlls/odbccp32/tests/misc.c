@@ -420,7 +420,7 @@ void test_SQLInstallDriverEx(void)
     BOOL ret, sql_ret;
     DWORD cnt, error_code = 0;
     HKEY hkey;
-    DWORD reg_ret;
+    LONG res;
 
     GetSystemDirectoryA(syspath, MAX_PATH);
 
@@ -441,18 +441,21 @@ void test_SQLInstallDriverEx(void)
 
     if (ret)
     {
-        reg_ret = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "Software\\ODBC\\ODBCINST.INI\\WINE ODBC Driver", 0, KEY_READ, &hkey);
-        ok(reg_ret == ERROR_SUCCESS, "RegOpenKeyExW failed\n");
-        if (reg_ret == ERROR_SUCCESS)
+        res = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "Software\\ODBC\\ODBCINST.INI\\WINE ODBC Driver", 0, KEY_READ, &hkey);
+        ok(res == ERROR_SUCCESS, "RegOpenKeyExW failed\n");
+        if (res == ERROR_SUCCESS)
         {
-            DWORD type, size = MAX_PATH;
+            DWORD type = 0xdeadbeef, size = MAX_PATH;
             char driverpath[MAX_PATH];
 
             strcpy(driverpath, syspath);
             strcat(driverpath, "\\sample.dll");
 
-            reg_ret = RegGetValueA(hkey, NULL, "Driver", RRF_RT_REG_SZ, &type, &path, &size);
-            ok(reg_ret == ERROR_SUCCESS, "RegGetValueA failed\n");
+            memset(path, 0, sizeof(path));
+            res = RegQueryValueExA(hkey, "Driver", NULL, &type, (BYTE *)path, &size);
+            ok(res == ERROR_SUCCESS, "got %d\n", res);
+            ok(type == REG_SZ, "got %u\n", type);
+            ok(size == strlen(driverpath) + 1, "got %u\n", size);
             ok(!strcmp(path, driverpath), "invalid path %s\n", path);
 
             RegCloseKey(hkey);
@@ -462,12 +465,12 @@ void test_SQLInstallDriverEx(void)
     cnt = 100;
     ret = SQLRemoveDriver("WINE ODBC Driver", FALSE, &cnt);
     ok(ret, "SQLRemoveDriver failed\n");
-    todo_wine ok(cnt == 0, "SQLRemoveDriver failed %d\n", cnt);
+    ok(cnt == 0, "SQLRemoveDriver failed %d\n", cnt);
 
     cnt = 100;
     ret = SQLRemoveDriver("WINE ODBC Driver Path", FALSE, &cnt);
     ok(ret, "SQLRemoveDriver failed\n");
-    todo_wine ok(cnt == 0, "SQLRemoveDriver failed %d\n", cnt);
+    ok(cnt == 0, "SQLRemoveDriver failed %d\n", cnt);
 }
 
 START_TEST(misc)

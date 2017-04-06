@@ -305,136 +305,38 @@ static void swapchain_blit(const struct wined3d_swapchain *swapchain,
 {
     struct wined3d_texture *texture = swapchain->back_buffers[0];
     struct wined3d_surface *back_buffer = texture->sub_resources[0].u.surface;
-    struct wined3d_surface *front_buffer = swapchain->front_buffer->sub_resources[0].u.surface;
-    UINT src_w = src_rect->right - src_rect->left;
-    UINT src_h = src_rect->bottom - src_rect->top;
-    GLenum gl_filter;
-    const struct wined3d_gl_info *gl_info = context->gl_info;
-    RECT win_rect;
-    UINT win_h;
+    struct wined3d_device *device = swapchain->device;
+    const struct wined3d_blitter_ops *blitter;
+    enum wined3d_texture_filter_type filter;
+    DWORD location;
 
     TRACE("swapchain %p, context %p, src_rect %s, dst_rect %s.\n",
             swapchain, context, wine_dbgstr_rect(src_rect), wine_dbgstr_rect(dst_rect));
 
-    if (src_w == dst_rect->right - dst_rect->left && src_h == dst_rect->bottom - dst_rect->top)
-        gl_filter = GL_NEAREST;
-    else
-        gl_filter = GL_LINEAR;
-
-    GetClientRect(swapchain->win_handle, &win_rect);
-    win_h = win_rect.bottom - win_rect.top;
-
-    if (gl_info->fbo_ops.glBlitFramebuffer && is_identity_fixup(texture->resource.format->color_fixup))
+    if (!(blitter = wined3d_select_blitter(&device->adapter->gl_info,
+            &device->adapter->d3d_info, WINED3D_BLIT_OP_COLOR_BLIT,
+            src_rect, texture->resource.usage, texture->resource.pool, texture->resource.format,
+            dst_rect, texture->resource.usage, texture->resource.pool, texture->resource.format)))
     {
-        DWORD location = WINED3D_LOCATION_TEXTURE_RGB;
-
-        if (texture->resource.multisample_type)
-        {
-            location = WINED3D_LOCATION_RB_RESOLVED;
-            wined3d_texture_load_location(texture, 0, context, location);
-        }
-
-        context_apply_fbo_state_blit(context, GL_READ_FRAMEBUFFER, back_buffer, NULL, location);
-        gl_info->gl_ops.gl.p_glReadBuffer(GL_COLOR_ATTACHMENT0);
-        context_check_fbo_status(context, GL_READ_FRAMEBUFFER);
-
-        context_apply_fbo_state_blit(context, GL_DRAW_FRAMEBUFFER, front_buffer, NULL, WINED3D_LOCATION_DRAWABLE);
-        context_set_draw_buffer(context, GL_BACK);
-        context_invalidate_state(context, STATE_FRAMEBUFFER);
-
-        gl_info->gl_ops.gl.p_glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-        context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE));
-        context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE1));
-        context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE2));
-        context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE3));
-
-        gl_info->gl_ops.gl.p_glDisable(GL_SCISSOR_TEST);
-        context_invalidate_state(context, STATE_RENDER(WINED3D_RS_SCISSORTESTENABLE));
-
-        /* Note that the texture is upside down */
-        gl_info->fbo_ops.glBlitFramebuffer(src_rect->left, src_rect->top, src_rect->right, src_rect->bottom,
-                dst_rect->left, win_h - dst_rect->top, dst_rect->right, win_h - dst_rect->bottom,
-                GL_COLOR_BUFFER_BIT, gl_filter);
-        checkGLcall("Swapchain present blit(EXT_framebuffer_blit)\n");
+        FIXME("No blitter supports the requested blit.\n");
+        return;
     }
+
+    if ((src_rect->right - src_rect->left == dst_rect->right - dst_rect->left
+            && src_rect->bottom - src_rect->top == dst_rect->bottom - dst_rect->top)
+            || is_complex_fixup(texture->resource.format->color_fixup))
+        filter = WINED3D_TEXF_NONE;
     else
-    {
-        struct wined3d_device *device = swapchain->device;
-        struct wined3d_context *context2;
-        float tex_left = src_rect->left;
-        float tex_top = src_rect->top;
-        float tex_right = src_rect->right;
-        float tex_bottom = src_rect->bottom;
+        filter = WINED3D_TEXF_LINEAR;
 
-        context2 = context_acquire(device, texture, 0);
-        context_apply_blit_state(context2, device);
+    location = WINED3D_LOCATION_TEXTURE_RGB;
+    if (texture->resource.multisample_type)
+        location = WINED3D_LOCATION_RB_RESOLVED;
 
-        if (texture->flags & WINED3D_TEXTURE_NORMALIZED_COORDS)
-        {
-            tex_left /= texture->pow2_width;
-            tex_right /= texture->pow2_width;
-            tex_top /= texture->pow2_height;
-            tex_bottom /= texture->pow2_height;
-        }
-
-        if (is_complex_fixup(texture->resource.format->color_fixup))
-            gl_filter = GL_NEAREST;
-
-        context_apply_fbo_state_blit(context2, GL_FRAMEBUFFER, front_buffer, NULL, WINED3D_LOCATION_DRAWABLE);
-        context_bind_texture(context2, back_buffer->texture_target, texture->texture_rgb.name);
-
-        /* Set up the texture. The surface is not in a wined3d_texture
-         * container, so there are no D3D texture settings to dirtify. */
-        device->blitter->set_shader(device->blit_priv, context2, back_buffer, NULL);
-        gl_info->gl_ops.gl.p_glTexParameteri(back_buffer->texture_target, GL_TEXTURE_MIN_FILTER, gl_filter);
-        gl_info->gl_ops.gl.p_glTexParameteri(back_buffer->texture_target, GL_TEXTURE_MAG_FILTER, gl_filter);
-        if (gl_info->supported[EXT_TEXTURE_SRGB_DECODE])
-            gl_info->gl_ops.gl.p_glTexParameteri(back_buffer->texture_target,
-                    GL_TEXTURE_SRGB_DECODE_EXT, GL_SKIP_DECODE_EXT);
-
-        context_set_draw_buffer(context, GL_BACK);
-
-        /* Set the viewport to the destination rectandle, disable any projection
-         * transformation set up by context_apply_blit_state(), and draw a
-         * (-1,-1)-(1,1) quad.
-         *
-         * Back up viewport and matrix to avoid breaking last_was_blit
-         *
-         * Note that context_apply_blit_state() set up viewport and ortho to
-         * match the surface size - we want the GL drawable(=window) size. */
-        gl_info->gl_ops.gl.p_glPushAttrib(GL_VIEWPORT_BIT);
-        gl_info->gl_ops.gl.p_glViewport(dst_rect->left, win_h - dst_rect->bottom,
-                dst_rect->right, win_h - dst_rect->top);
-        gl_info->gl_ops.gl.p_glMatrixMode(GL_PROJECTION);
-        gl_info->gl_ops.gl.p_glPushMatrix();
-        gl_info->gl_ops.gl.p_glLoadIdentity();
-
-        gl_info->gl_ops.gl.p_glBegin(GL_QUADS);
-            /* bottom left */
-            gl_info->gl_ops.gl.p_glTexCoord2f(tex_left, tex_bottom);
-            gl_info->gl_ops.gl.p_glVertex2i(-1, -1);
-
-            /* top left */
-            gl_info->gl_ops.gl.p_glTexCoord2f(tex_left, tex_top);
-            gl_info->gl_ops.gl.p_glVertex2i(-1, 1);
-
-            /* top right */
-            gl_info->gl_ops.gl.p_glTexCoord2f(tex_right, tex_top);
-            gl_info->gl_ops.gl.p_glVertex2i(1, 1);
-
-            /* bottom right */
-            gl_info->gl_ops.gl.p_glTexCoord2f(tex_right, tex_bottom);
-            gl_info->gl_ops.gl.p_glVertex2i(1, -1);
-        gl_info->gl_ops.gl.p_glEnd();
-
-        gl_info->gl_ops.gl.p_glPopMatrix();
-        gl_info->gl_ops.gl.p_glPopAttrib();
-
-        device->blitter->unset_shader(context->gl_info);
-        checkGLcall("Swapchain present blit(manual)\n");
-
-        context_release(context2);
-    }
+    wined3d_texture_validate_location(texture, 0, WINED3D_LOCATION_DRAWABLE);
+    blitter->blit_surface(device, WINED3D_BLIT_OP_COLOR_BLIT, context, back_buffer, location,
+            src_rect, back_buffer, WINED3D_LOCATION_DRAWABLE, dst_rect, NULL, filter);
+    wined3d_texture_invalidate_location(texture, 0, WINED3D_LOCATION_DRAWABLE);
 }
 
 /* Context activation is done by the caller. */
@@ -510,7 +412,7 @@ static void swapchain_gl_present(struct wined3d_swapchain *swapchain,
 
         /* Blit the logo into the upper left corner of the drawable. */
         wined3d_texture_blt(back_buffer, 0, &rect, logo_texture, 0, &rect,
-                WINED3D_BLT_ALPHA_TEST, NULL, WINED3D_TEXF_POINT);
+                WINED3D_BLT_SRC_CKEY, NULL, WINED3D_TEXF_POINT);
     }
 
     if (swapchain->device->bCursorVisible && swapchain->device->cursor_texture

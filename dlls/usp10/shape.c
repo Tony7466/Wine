@@ -120,7 +120,8 @@ typedef struct tagConsonantComponents
     WCHAR output;
 } ConsonantComponents;
 
-typedef void (*second_reorder_function)(LPWSTR pwChar, IndicSyllable *syllable,WORD* pwGlyphs, IndicSyllable* glyph_index, lexical_function lex);
+typedef void (*second_reorder_function)(const WCHAR *chars, const IndicSyllable *syllable,
+        WORD *glyphs, const IndicSyllable *glyph_index, lexical_function lex);
 
 typedef int (*combining_lexical_function)(WCHAR c);
 
@@ -541,7 +542,8 @@ static const ScriptShapeData ShapingData[] =
 
 extern scriptData scriptInformation[];
 
-static INT GSUB_apply_feature_all_lookups(LPCVOID header, LoadedFeature *feature, WORD *glyphs, INT glyph_index, INT write_dir, INT *glyph_count)
+static int GSUB_apply_feature_all_lookups(const void *header, LoadedFeature *feature,
+        WORD *glyphs, unsigned int glyph_index, int write_dir, int *glyph_count)
 {
     int i;
     int out_index = GSUB_E_NOGLYPH;
@@ -565,19 +567,21 @@ static INT GSUB_apply_feature_all_lookups(LPCVOID header, LoadedFeature *feature
     return out_index;
 }
 
-static OPENTYPE_TAG get_opentype_script(HDC hdc, SCRIPT_ANALYSIS *psa, ScriptCache *psc, BOOL tryNew)
+static OPENTYPE_TAG get_opentype_script(HDC hdc, const SCRIPT_ANALYSIS *psa,
+        const ScriptCache *script_cache, BOOL try_new)
 {
     UINT charset;
 
-    if (psc->userScript != 0)
+    if (script_cache->userScript)
     {
-        if (tryNew && ShapingData[psa->eScript].newOtTag != 0 && psc->userScript == scriptInformation[psa->eScript].scriptTag)
+        if (try_new && ShapingData[psa->eScript].newOtTag
+                && script_cache->userScript == scriptInformation[psa->eScript].scriptTag)
             return ShapingData[psa->eScript].newOtTag;
-        else
-            return psc->userScript;
+
+        return script_cache->userScript;
     }
 
-    if (tryNew && ShapingData[psa->eScript].newOtTag != 0)
+    if (try_new && ShapingData[psa->eScript].newOtTag)
         return ShapingData[psa->eScript].newOtTag;
 
     if (scriptInformation[psa->eScript].scriptTag)
@@ -851,7 +855,9 @@ static int apply_GSUB_feature(HDC hdc, SCRIPT_ANALYSIS *psa, ScriptCache* psc, W
     return GSUB_E_NOFEATURE;
 }
 
-static VOID GPOS_apply_feature(ScriptCache *psc, LPOUTLINETEXTMETRICW lpotm, LPLOGFONTW lplogfont, const SCRIPT_ANALYSIS *analysis, INT* piAdvance, LoadedFeature *feature, const WORD *glyphs, INT glyph_count, GOFFSET *pGoffset)
+static void GPOS_apply_feature(const ScriptCache *psc, const OUTLINETEXTMETRICW *otm,
+        const LOGFONTW *logfont, const SCRIPT_ANALYSIS *analysis, int *advance,
+        const LoadedFeature *feature, const WORD *glyphs, int glyph_count, GOFFSET *goffset)
 {
     int dir = analysis->fLogicalOrder && analysis->fRTL ? -1 : 1;
     unsigned int start_idx, i, j;
@@ -862,8 +868,8 @@ static VOID GPOS_apply_feature(ScriptCache *psc, LPOUTLINETEXTMETRICW lpotm, LPL
     for (i = 0; i < feature->lookup_count; i++)
     {
         for (j = 0; j < glyph_count; )
-            j += OpenType_apply_GPOS_lookup(psc, lpotm, lplogfont, analysis, piAdvance,
-                    feature->lookups[i], glyphs, start_idx + dir * j, glyph_count, pGoffset);
+            j += OpenType_apply_GPOS_lookup(psc, otm, logfont, analysis, advance,
+                    feature->lookups[i], glyphs, start_idx + dir * j, glyph_count, goffset);
     }
 }
 
@@ -1713,7 +1719,7 @@ static void ComposeConsonants(HDC hdc, WCHAR *pwOutChars, INT *pcChars, const Co
     }
 }
 
-static void Reorder_Ra_follows_base(LPWSTR pwChar, IndicSyllable *s, lexical_function lexical)
+static void Reorder_Ra_follows_base(WCHAR *pwChar, IndicSyllable *s, lexical_function lexical)
 {
     if (s->ralf >= 0)
     {
@@ -1732,7 +1738,7 @@ static void Reorder_Ra_follows_base(LPWSTR pwChar, IndicSyllable *s, lexical_fun
     }
 }
 
-static void Reorder_Ra_follows_matra(LPWSTR pwChar, IndicSyllable *s, lexical_function lexical)
+static void Reorder_Ra_follows_matra(WCHAR *pwChar, IndicSyllable *s, lexical_function lexical)
 {
     if (s->ralf >= 0)
     {
@@ -1757,7 +1763,7 @@ static void Reorder_Ra_follows_matra(LPWSTR pwChar, IndicSyllable *s, lexical_fu
     }
 }
 
-static void Reorder_Ra_follows_syllable(LPWSTR pwChar, IndicSyllable *s, lexical_function lexical)
+static void Reorder_Ra_follows_syllable(WCHAR *pwChar, IndicSyllable *s, lexical_function lexical)
 {
     if (s->ralf >= 0)
     {
@@ -1778,7 +1784,7 @@ static void Reorder_Ra_follows_syllable(LPWSTR pwChar, IndicSyllable *s, lexical
     }
 }
 
-static void Reorder_Matra_precede_base(LPWSTR pwChar, IndicSyllable *s, lexical_function lexical)
+static void Reorder_Matra_precede_base(WCHAR *pwChar, IndicSyllable *s, lexical_function lexical)
 {
     int i;
 
@@ -1805,7 +1811,7 @@ static void Reorder_Matra_precede_base(LPWSTR pwChar, IndicSyllable *s, lexical_
     }
 }
 
-static void Reorder_Matra_precede_syllable(LPWSTR pwChar, IndicSyllable *s, lexical_function lexical)
+static void Reorder_Matra_precede_syllable(WCHAR *pwChar, IndicSyllable *s, lexical_function lexical)
 {
     int i;
 
@@ -1832,14 +1838,16 @@ static void Reorder_Matra_precede_syllable(LPWSTR pwChar, IndicSyllable *s, lexi
     }
 }
 
-static void SecondReorder_Blwf_follows_matra(LPWSTR pwChar, IndicSyllable *s, WORD *glyphs, IndicSyllable *g, lexical_function lexical)
+static void SecondReorder_Blwf_follows_matra(const WCHAR *chars, const IndicSyllable *s,
+        WORD *glyphs, const IndicSyllable *g, lexical_function lexical)
 {
     if (s->blwf >= 0 && g->blwf > g->base)
     {
         int j,loc;
         int g_offset;
         for (loc = s->end; loc > s->blwf; loc--)
-            if (lexical(pwChar[loc]) == lex_Matra_below || lexical(pwChar[loc]) == lex_Matra_above || lexical(pwChar[loc]) == lex_Matra_post)
+            if (lexical(chars[loc]) == lex_Matra_below || lexical(chars[loc]) == lex_Matra_above
+                    || lexical(chars[loc]) == lex_Matra_post)
                 break;
 
         g_offset = (loc - s->blwf) - 1;
@@ -1856,14 +1864,15 @@ static void SecondReorder_Blwf_follows_matra(LPWSTR pwChar, IndicSyllable *s, WO
     }
 }
 
-static void SecondReorder_Matra_precede_base(LPWSTR pwChar, IndicSyllable *s, WORD *glyphs, IndicSyllable *g, lexical_function lexical)
+static void SecondReorder_Matra_precede_base(const WCHAR *chars, const IndicSyllable *s,
+        WORD *glyphs, const IndicSyllable *g, lexical_function lexical)
 {
     int i;
 
     /* reorder previously moved Matras to correct position*/
     for (i = s->start; i < s->base; i++)
     {
-        if (lexical(pwChar[i]) == lex_Matra_pre)
+        if (lexical(chars[i]) == lex_Matra_pre)
         {
             int j;
             int g_start = g->start + i - s->start;
@@ -1879,7 +1888,8 @@ static void SecondReorder_Matra_precede_base(LPWSTR pwChar, IndicSyllable *s, WO
     }
 }
 
-static void SecondReorder_Pref_precede_base(LPWSTR pwChar, IndicSyllable *s, WORD *glyphs, IndicSyllable *g, lexical_function lexical)
+static void SecondReorder_Pref_precede_base(const IndicSyllable *s,
+        WORD *glyphs, const IndicSyllable *g, lexical_function lexical)
 {
     if (s->pref >= 0 && g->pref > g->base)
     {
@@ -1892,7 +1902,7 @@ static void SecondReorder_Pref_precede_base(LPWSTR pwChar, IndicSyllable *s, WOR
     }
 }
 
-static void Reorder_Like_Sinhala(LPWSTR pwChar, IndicSyllable *s, lexical_function lexical)
+static void Reorder_Like_Sinhala(WCHAR *pwChar, IndicSyllable *s, lexical_function lexical)
 {
     TRACE("Syllable (%i..%i..%i)\n",s->start,s->base,s->end);
     if (s->start == s->base && s->base == s->end)  return;
@@ -1902,7 +1912,7 @@ static void Reorder_Like_Sinhala(LPWSTR pwChar, IndicSyllable *s, lexical_functi
     Reorder_Matra_precede_base(pwChar, s, lexical);
 }
 
-static void Reorder_Like_Devanagari(LPWSTR pwChar, IndicSyllable *s, lexical_function lexical)
+static void Reorder_Like_Devanagari(WCHAR *pwChar, IndicSyllable *s, lexical_function lexical)
 {
     TRACE("Syllable (%i..%i..%i)\n",s->start,s->base,s->end);
     if (s->start == s->base && s->base == s->end)  return;
@@ -1912,7 +1922,7 @@ static void Reorder_Like_Devanagari(LPWSTR pwChar, IndicSyllable *s, lexical_fun
     Reorder_Matra_precede_syllable(pwChar, s, lexical);
 }
 
-static void Reorder_Like_Bengali(LPWSTR pwChar, IndicSyllable *s, lexical_function lexical)
+static void Reorder_Like_Bengali(WCHAR *pwChar, IndicSyllable *s, lexical_function lexical)
 {
     TRACE("Syllable (%i..%i..%i)\n",s->start,s->base,s->end);
     if (s->start == s->base && s->base == s->end)  return;
@@ -1922,7 +1932,7 @@ static void Reorder_Like_Bengali(LPWSTR pwChar, IndicSyllable *s, lexical_functi
     Reorder_Matra_precede_syllable(pwChar, s, lexical);
 }
 
-static void Reorder_Like_Kannada(LPWSTR pwChar, IndicSyllable *s, lexical_function lexical)
+static void Reorder_Like_Kannada(WCHAR *pwChar, IndicSyllable *s, lexical_function lexical)
 {
     TRACE("Syllable (%i..%i..%i)\n",s->start,s->base,s->end);
     if (s->start == s->base && s->base == s->end)  return;
@@ -1932,25 +1942,27 @@ static void Reorder_Like_Kannada(LPWSTR pwChar, IndicSyllable *s, lexical_functi
     Reorder_Matra_precede_syllable(pwChar, s, lexical);
 }
 
-static void SecondReorder_Like_Telugu(LPWSTR pwChar, IndicSyllable *s, WORD* pwGlyphs, IndicSyllable *g, lexical_function lexical)
+static void SecondReorder_Like_Telugu(const WCHAR *chars, const IndicSyllable *s,
+        WORD *glyphs, const IndicSyllable *g, lexical_function lexical)
 {
     TRACE("Syllable (%i..%i..%i)\n",s->start,s->base,s->end);
     TRACE("Glyphs (%i..%i..%i)\n",g->start,g->base,g->end);
     if (s->start == s->base && s->base == s->end)  return;
-    if (lexical(pwChar[s->base]) == lex_Vowel) return;
+    if (lexical(chars[s->base]) == lex_Vowel) return;
 
-    SecondReorder_Blwf_follows_matra(pwChar, s, pwGlyphs, g, lexical);
+    SecondReorder_Blwf_follows_matra(chars, s, glyphs, g, lexical);
 }
 
-static void SecondReorder_Like_Tamil(LPWSTR pwChar, IndicSyllable *s, WORD* pwGlyphs, IndicSyllable *g, lexical_function lexical)
+static void SecondReorder_Like_Tamil(const WCHAR *chars, const IndicSyllable *s,
+        WORD *glyphs, const IndicSyllable *g, lexical_function lexical)
 {
     TRACE("Syllable (%i..%i..%i)\n",s->start,s->base,s->end);
     TRACE("Glyphs (%i..%i..%i)\n",g->start,g->base,g->end);
     if (s->start == s->base && s->base == s->end)  return;
-    if (lexical(pwChar[s->base]) == lex_Vowel) return;
+    if (lexical(chars[s->base]) == lex_Vowel) return;
 
-    SecondReorder_Matra_precede_base(pwChar, s, pwGlyphs, g, lexical);
-    SecondReorder_Pref_precede_base(pwChar, s, pwGlyphs, g, lexical);
+    SecondReorder_Matra_precede_base(chars, s, glyphs, g, lexical);
+    SecondReorder_Pref_precede_base(s, glyphs, g, lexical);
 }
 
 

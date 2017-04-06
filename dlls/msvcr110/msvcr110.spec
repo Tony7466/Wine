@@ -6,14 +6,14 @@
 @ cdecl -arch=arm ??0?$_SpinWait@$0A@@details@Concurrency@@QAA@P6AXXZ@Z(ptr ptr) SpinWait_ctor
 @ thiscall -arch=i386 ??0?$_SpinWait@$0A@@details@Concurrency@@QAE@P6AXXZ@Z(ptr ptr) SpinWait_ctor
 @ cdecl -arch=win64 ??0?$_SpinWait@$0A@@details@Concurrency@@QEAA@P6AXXZ@Z(ptr ptr) SpinWait_ctor
-@ stub -arch=win32 ??0SchedulerPolicy@Concurrency@@QAA@IZZ
-@ stub -arch=win64 ??0SchedulerPolicy@Concurrency@@QEAA@_KZZ
-@ stub -arch=arm ??0SchedulerPolicy@Concurrency@@QAA@ABV01@@Z
-@ stub -arch=i386 ??0SchedulerPolicy@Concurrency@@QAE@ABV01@@Z
-@ stub -arch=win64 ??0SchedulerPolicy@Concurrency@@QEAA@AEBV01@@Z
-@ stub -arch=arm ??0SchedulerPolicy@Concurrency@@QAA@XZ
-@ stub -arch=i386 ??0SchedulerPolicy@Concurrency@@QAE@XZ
-@ stub -arch=win64 ??0SchedulerPolicy@Concurrency@@QEAA@XZ
+@ varargs -arch=win32 ??0SchedulerPolicy@Concurrency@@QAA@IZZ(ptr long) SchedulerPolicy_ctor_policies
+@ varargs -arch=win64 ??0SchedulerPolicy@Concurrency@@QEAA@_KZZ(ptr long) SchedulerPolicy_ctor_policies
+@ cdecl -arch=arm ??0SchedulerPolicy@Concurrency@@QAA@ABV01@@Z(ptr ptr) SchedulerPolicy_copy_ctor
+@ thiscall -arch=i386 ??0SchedulerPolicy@Concurrency@@QAE@ABV01@@Z(ptr ptr) SchedulerPolicy_copy_ctor
+@ cdecl -arch=win64 ??0SchedulerPolicy@Concurrency@@QEAA@AEBV01@@Z(ptr ptr) SchedulerPolicy_copy_ctor
+@ cdecl -arch=arm ??0SchedulerPolicy@Concurrency@@QAA@XZ(ptr) SchedulerPolicy_ctor
+@ thiscall -arch=i386 ??0SchedulerPolicy@Concurrency@@QAE@XZ(ptr) SchedulerPolicy_ctor
+@ cdecl -arch=win64 ??0SchedulerPolicy@Concurrency@@QEAA@XZ(ptr) SchedulerPolicy_ctor
 @ stub -arch=arm ??0_CancellationTokenState@details@Concurrency@@AAA@XZ
 @ stub -arch=i386 ??0_CancellationTokenState@details@Concurrency@@AAE@XZ
 @ stub -arch=win64 ??0_CancellationTokenState@details@Concurrency@@AEAA@XZ
@@ -137,24 +137,24 @@
 @ cdecl -arch=arm ??0exception@std@@QAA@XZ(ptr) MSVCRT_exception_default_ctor
 @ thiscall -arch=i386 ??0exception@std@@QAE@XZ(ptr) MSVCRT_exception_default_ctor
 @ cdecl -arch=win64 ??0exception@std@@QEAA@XZ(ptr) MSVCRT_exception_default_ctor
-@ stub -arch=arm ??0improper_lock@Concurrency@@QAA@PBD@Z
-@ stub -arch=i386 ??0improper_lock@Concurrency@@QAE@PBD@Z
-@ stub -arch=win64 ??0improper_lock@Concurrency@@QEAA@PEBD@Z
-@ stub -arch=arm ??0improper_lock@Concurrency@@QAA@XZ
-@ stub -arch=i386 ??0improper_lock@Concurrency@@QAE@XZ
-@ stub -arch=win64 ??0improper_lock@Concurrency@@QEAA@XZ
-@ stub -arch=arm ??0improper_scheduler_attach@Concurrency@@QAA@PBD@Z
-@ stub -arch=i386 ??0improper_scheduler_attach@Concurrency@@QAE@PBD@Z
-@ stub -arch=win64 ??0improper_scheduler_attach@Concurrency@@QEAA@PEBD@Z
-@ stub -arch=arm ??0improper_scheduler_attach@Concurrency@@QAA@XZ
-@ stub -arch=i386 ??0improper_scheduler_attach@Concurrency@@QAE@XZ
-@ stub -arch=win64 ??0improper_scheduler_attach@Concurrency@@QEAA@XZ
-@ stub -arch=arm ??0improper_scheduler_detach@Concurrency@@QAA@PBD@Z
-@ stub -arch=i386 ??0improper_scheduler_detach@Concurrency@@QAE@PBD@Z
-@ stub -arch=win64 ??0improper_scheduler_detach@Concurrency@@QEAA@PEBD@Z
-@ stub -arch=arm ??0improper_scheduler_detach@Concurrency@@QAA@XZ
-@ stub -arch=i386 ??0improper_scheduler_detach@Concurrency@@QAE@XZ
-@ stub -arch=win64 ??0improper_scheduler_detach@Concurrency@@QEAA@XZ
+@ cdecl -arch=arm ??0improper_lock@Concurrency@@QAA@PBD@Z(ptr str) improper_lock_ctor_str
+@ thiscall -arch=i386 ??0improper_lock@Concurrency@@QAE@PBD@Z(ptr str) improper_lock_ctor_str
+@ cdecl -arch=win64 ??0improper_lock@Concurrency@@QEAA@PEBD@Z(ptr str) improper_lock_ctor_str
+@ cdecl -arch=arm ??0improper_lock@Concurrency@@QAA@XZ(ptr) improper_lock_ctor
+@ thiscall -arch=i386 ??0improper_lock@Concurrency@@QAE@XZ(ptr) improper_lock_ctor
+@ cdecl -arch=win64 ??0improper_lock@Concurrency@@QEAA@XZ(ptr) improper_lock_ctor
+@ cdecl -arch=arm ??0improper_scheduler_attach@Concurrency@@QAA@PBD@Z(ptr str) improper_scheduler_attach_ctor_str
+@ thiscall -arch=i386 ??0improper_scheduler_attach@Concurrency@@QAE@PBD@Z(ptr str) improper_scheduler_attach_ctor_str
+@ cdecl -arch=win64 ??0improper_scheduler_attach@Concurrency@@QEAA@PEBD@Z(ptr str) improper_scheduler_attach_ctor_str
+@ cdecl -arch=arm ??0improper_scheduler_attach@Concurrency@@QAA@XZ(ptr) improper_scheduler_attach_ctor
+@ thiscall -arch=i386 ??0improper_scheduler_attach@Concurrency@@QAE@XZ(ptr) improper_scheduler_attach_ctor
+@ cdecl -arch=win64 ??0improper_scheduler_attach@Concurrency@@QEAA@XZ(ptr) improper_scheduler_attach_ctor
+@ cdecl -arch=arm ??0improper_scheduler_detach@Concurrency@@QAA@PBD@Z(ptr str) improper_scheduler_detach_ctor_str
+@ thiscall -arch=i386 ??0improper_scheduler_detach@Concurrency@@QAE@PBD@Z(ptr str) improper_scheduler_detach_ctor_str
+@ cdecl -arch=win64 ??0improper_scheduler_detach@Concurrency@@QEAA@PEBD@Z(ptr str) improper_scheduler_detach_ctor_str
+@ cdecl -arch=arm ??0improper_scheduler_detach@Concurrency@@QAA@XZ(ptr) improper_scheduler_detach_ctor
+@ thiscall -arch=i386 ??0improper_scheduler_detach@Concurrency@@QAE@XZ(ptr) improper_scheduler_detach_ctor
+@ cdecl -arch=win64 ??0improper_scheduler_detach@Concurrency@@QEAA@XZ(ptr) improper_scheduler_detach_ctor
 @ stub -arch=arm ??0improper_scheduler_reference@Concurrency@@QAA@PBD@Z
 @ stub -arch=i386 ??0improper_scheduler_reference@Concurrency@@QAE@PBD@Z
 @ stub -arch=win64 ??0improper_scheduler_reference@Concurrency@@QEAA@PEBD@Z
@@ -185,24 +185,24 @@
 @ stub -arch=arm ??0invalid_oversubscribe_operation@Concurrency@@QAA@XZ
 @ stub -arch=i386 ??0invalid_oversubscribe_operation@Concurrency@@QAE@XZ
 @ stub -arch=win64 ??0invalid_oversubscribe_operation@Concurrency@@QEAA@XZ
-@ stub -arch=arm ??0invalid_scheduler_policy_key@Concurrency@@QAA@PBD@Z
-@ stub -arch=i386 ??0invalid_scheduler_policy_key@Concurrency@@QAE@PBD@Z
-@ stub -arch=win64 ??0invalid_scheduler_policy_key@Concurrency@@QEAA@PEBD@Z
-@ stub -arch=arm ??0invalid_scheduler_policy_key@Concurrency@@QAA@XZ
-@ stub -arch=i386 ??0invalid_scheduler_policy_key@Concurrency@@QAE@XZ
-@ stub -arch=win64 ??0invalid_scheduler_policy_key@Concurrency@@QEAA@XZ
-@ stub -arch=arm ??0invalid_scheduler_policy_thread_specification@Concurrency@@QAA@PBD@Z
-@ stub -arch=i386 ??0invalid_scheduler_policy_thread_specification@Concurrency@@QAE@PBD@Z
-@ stub -arch=win64 ??0invalid_scheduler_policy_thread_specification@Concurrency@@QEAA@PEBD@Z
-@ stub -arch=arm ??0invalid_scheduler_policy_thread_specification@Concurrency@@QAA@XZ
-@ stub -arch=i386 ??0invalid_scheduler_policy_thread_specification@Concurrency@@QAE@XZ
-@ stub -arch=win64 ??0invalid_scheduler_policy_thread_specification@Concurrency@@QEAA@XZ
-@ stub -arch=arm ??0invalid_scheduler_policy_value@Concurrency@@QAA@PBD@Z
-@ stub -arch=i386 ??0invalid_scheduler_policy_value@Concurrency@@QAE@PBD@Z
-@ stub -arch=win64 ??0invalid_scheduler_policy_value@Concurrency@@QEAA@PEBD@Z
-@ stub -arch=arm ??0invalid_scheduler_policy_value@Concurrency@@QAA@XZ
-@ stub -arch=i386 ??0invalid_scheduler_policy_value@Concurrency@@QAE@XZ
-@ stub -arch=win64 ??0invalid_scheduler_policy_value@Concurrency@@QEAA@XZ
+@ cdecl -arch=arm ??0invalid_scheduler_policy_key@Concurrency@@QAA@PBD@Z(ptr str) invalid_scheduler_policy_key_ctor_str
+@ thiscall -arch=i386 ??0invalid_scheduler_policy_key@Concurrency@@QAE@PBD@Z(ptr str) invalid_scheduler_policy_key_ctor_str
+@ cdecl -arch=win64 ??0invalid_scheduler_policy_key@Concurrency@@QEAA@PEBD@Z(ptr str) invalid_scheduler_policy_key_ctor_str
+@ cdecl -arch=arm ??0invalid_scheduler_policy_key@Concurrency@@QAA@XZ(ptr) invalid_scheduler_policy_key_ctor
+@ thiscall -arch=i386 ??0invalid_scheduler_policy_key@Concurrency@@QAE@XZ(ptr) invalid_scheduler_policy_key_ctor
+@ cdecl -arch=win64 ??0invalid_scheduler_policy_key@Concurrency@@QEAA@XZ(ptr) invalid_scheduler_policy_key_ctor
+@ cdecl -arch=arm ??0invalid_scheduler_policy_thread_specification@Concurrency@@QAA@PBD@Z(ptr str) invalid_scheduler_policy_thread_specification_ctor_str
+@ thiscall -arch=i386 ??0invalid_scheduler_policy_thread_specification@Concurrency@@QAE@PBD@Z(ptr str) invalid_scheduler_policy_thread_specification_ctor_str
+@ cdecl -arch=win64 ??0invalid_scheduler_policy_thread_specification@Concurrency@@QEAA@PEBD@Z(ptr str) invalid_scheduler_policy_thread_specification_ctor_str
+@ cdecl -arch=arm ??0invalid_scheduler_policy_thread_specification@Concurrency@@QAA@XZ(ptr) invalid_scheduler_policy_thread_specification_ctor
+@ thiscall -arch=i386 ??0invalid_scheduler_policy_thread_specification@Concurrency@@QAE@XZ(ptr) invalid_scheduler_policy_thread_specification_ctor
+@ cdecl -arch=win64 ??0invalid_scheduler_policy_thread_specification@Concurrency@@QEAA@XZ(ptr) invalid_scheduler_policy_thread_specification_ctor
+@ cdecl -arch=arm ??0invalid_scheduler_policy_value@Concurrency@@QAA@PBD@Z(ptr str) invalid_scheduler_policy_value_ctor_str
+@ thiscall -arch=i386 ??0invalid_scheduler_policy_value@Concurrency@@QAE@PBD@Z(ptr str) invalid_scheduler_policy_value_ctor_str
+@ cdecl -arch=win64 ??0invalid_scheduler_policy_value@Concurrency@@QEAA@PEBD@Z(ptr str) invalid_scheduler_policy_value_ctor_str
+@ cdecl -arch=arm ??0invalid_scheduler_policy_value@Concurrency@@QAA@XZ(ptr) invalid_scheduler_policy_value_ctor
+@ thiscall -arch=i386 ??0invalid_scheduler_policy_value@Concurrency@@QAE@XZ(ptr) invalid_scheduler_policy_value_ctor
+@ cdecl -arch=win64 ??0invalid_scheduler_policy_value@Concurrency@@QEAA@XZ(ptr) invalid_scheduler_policy_value_ctor
 @ stub -arch=arm ??0message_not_found@Concurrency@@QAA@PBD@Z
 @ stub -arch=i386 ??0message_not_found@Concurrency@@QAE@PBD@Z
 @ stub -arch=win64 ??0message_not_found@Concurrency@@QEAA@PEBD@Z
@@ -236,12 +236,12 @@
 @ stub -arch=arm ??0scheduler_not_attached@Concurrency@@QAA@XZ
 @ stub -arch=i386 ??0scheduler_not_attached@Concurrency@@QAE@XZ
 @ stub -arch=win64 ??0scheduler_not_attached@Concurrency@@QEAA@XZ
-@ stub -arch=arm ??0scheduler_resource_allocation_error@Concurrency@@QAA@J@Z
-@ stub -arch=i386 ??0scheduler_resource_allocation_error@Concurrency@@QAE@J@Z
-@ stub -arch=win64 ??0scheduler_resource_allocation_error@Concurrency@@QEAA@J@Z
-@ stub -arch=arm ??0scheduler_resource_allocation_error@Concurrency@@QAA@PBDJ@Z
-@ stub -arch=i386 ??0scheduler_resource_allocation_error@Concurrency@@QAE@PBDJ@Z
-@ stub -arch=win64 ??0scheduler_resource_allocation_error@Concurrency@@QEAA@PEBDJ@Z
+@ cdecl -arch=arm ??0scheduler_resource_allocation_error@Concurrency@@QAA@J@Z(ptr long) scheduler_resource_allocation_error_ctor
+@ thiscall -arch=i386 ??0scheduler_resource_allocation_error@Concurrency@@QAE@J@Z(ptr long) scheduler_resource_allocation_error_ctor
+@ cdecl -arch=win64 ??0scheduler_resource_allocation_error@Concurrency@@QEAA@J@Z(ptr long) scheduler_resource_allocation_error_ctor
+@ cdecl -arch=arm ??0scheduler_resource_allocation_error@Concurrency@@QAA@PBDJ@Z(ptr str long) scheduler_resource_allocation_error_ctor_name
+@ thiscall -arch=i386 ??0scheduler_resource_allocation_error@Concurrency@@QAE@PBDJ@Z(ptr str long) scheduler_resource_allocation_error_ctor_name
+@ cdecl -arch=win64 ??0scheduler_resource_allocation_error@Concurrency@@QEAA@PEBDJ@Z(ptr str long) scheduler_resource_allocation_error_ctor_name
 @ stub -arch=arm ??0scheduler_worker_creation_error@Concurrency@@QAA@J@Z
 @ stub -arch=i386 ??0scheduler_worker_creation_error@Concurrency@@QAE@J@Z
 @ stub -arch=win64 ??0scheduler_worker_creation_error@Concurrency@@QEAA@J@Z
@@ -269,9 +269,9 @@
 @ stub -arch=arm ??0unsupported_os@Concurrency@@QAA@XZ
 @ stub -arch=i386 ??0unsupported_os@Concurrency@@QAE@XZ
 @ stub -arch=win64 ??0unsupported_os@Concurrency@@QEAA@XZ
-@ stub -arch=arm ??1SchedulerPolicy@Concurrency@@QAA@XZ
-@ stub -arch=i386 ??1SchedulerPolicy@Concurrency@@QAE@XZ
-@ stub -arch=win64 ??1SchedulerPolicy@Concurrency@@QEAA@XZ
+@ cdecl -arch=arm ??1SchedulerPolicy@Concurrency@@QAA@XZ(ptr) SchedulerPolicy_dtor
+@ thiscall -arch=i386 ??1SchedulerPolicy@Concurrency@@QAE@XZ(ptr) SchedulerPolicy_dtor
+@ cdecl -arch=win64 ??1SchedulerPolicy@Concurrency@@QEAA@XZ(ptr) SchedulerPolicy_dtor
 @ stub -arch=arm ??1_CancellationTokenState@details@Concurrency@@UAA@XZ
 @ stub -arch=i386 ??1_CancellationTokenState@details@Concurrency@@UAE@XZ
 @ stub -arch=win64 ??1_CancellationTokenState@details@Concurrency@@UEAA@XZ
@@ -349,9 +349,9 @@
 @ stub -arch=arm ??4?$_SpinWait@$0A@@details@Concurrency@@QAAAAV012@ABV012@@Z
 @ stub -arch=i386 ??4?$_SpinWait@$0A@@details@Concurrency@@QAEAAV012@ABV012@@Z
 @ stub -arch=win64 ??4?$_SpinWait@$0A@@details@Concurrency@@QEAAAEAV012@AEBV012@@Z
-@ stub -arch=arm ??4SchedulerPolicy@Concurrency@@QAAAAV01@ABV01@@Z
-@ stub -arch=i386 ??4SchedulerPolicy@Concurrency@@QAEAAV01@ABV01@@Z
-@ stub -arch=win64 ??4SchedulerPolicy@Concurrency@@QEAAAEAV01@AEBV01@@Z
+@ cdecl -arch=arm ??4SchedulerPolicy@Concurrency@@QAAAAV01@ABV01@@Z(ptr ptr) SchedulerPolicy_op_assign
+@ thiscall -arch=i386 ??4SchedulerPolicy@Concurrency@@QAEAAV01@ABV01@@Z(ptr ptr) SchedulerPolicy_op_assign
+@ cdecl -arch=win64 ??4SchedulerPolicy@Concurrency@@QEAAAEAV01@AEBV01@@Z(ptr ptr) SchedulerPolicy_op_assign
 @ cdecl -arch=arm ??4__non_rtti_object@std@@QAAAAV01@ABV01@@Z(ptr ptr) MSVCRT___non_rtti_object_opequals
 @ thiscall -arch=i386 ??4__non_rtti_object@std@@QAEAAV01@ABV01@@Z(ptr ptr) MSVCRT___non_rtti_object_opequals
 @ cdecl -arch=win64 ??4__non_rtti_object@std@@QEAAAEAV01@AEBV01@@Z(ptr ptr) MSVCRT___non_rtti_object_opequals
@@ -400,66 +400,66 @@
 @ cdecl -arch=win64 ??_V@YAXPEAX@Z(ptr) MSVCRT_operator_delete
 @ stub -arch=win32 ??_V@YAXPAXHPBDH@Z
 @ stub -arch=win64 ??_V@YAXPEAXHPEBDH@Z
-@ stub -arch=win32 ?Alloc@Concurrency@@YAPAXI@Z
-@ stub -arch=win64 ?Alloc@Concurrency@@YAPEAX_K@Z
-@ stub ?Block@Context@Concurrency@@SAXXZ
-@ stub -arch=win32 ?Create@CurrentScheduler@Concurrency@@SAXABVSchedulerPolicy@2@@Z
-@ stub -arch=win64 ?Create@CurrentScheduler@Concurrency@@SAXAEBVSchedulerPolicy@2@@Z
-@ stub -arch=win32 ?Create@Scheduler@Concurrency@@SAPAV12@ABVSchedulerPolicy@2@@Z
-@ stub -arch=win64 ?Create@Scheduler@Concurrency@@SAPEAV12@AEBVSchedulerPolicy@2@@Z
+@ cdecl -arch=win32 ?Alloc@Concurrency@@YAPAXI@Z(long) Concurrency_Alloc
+@ cdecl -arch=win64 ?Alloc@Concurrency@@YAPEAX_K@Z(long) Concurrency_Alloc
+@ cdecl ?Block@Context@Concurrency@@SAXXZ() Context_Block
+@ cdecl -arch=win32 ?Create@CurrentScheduler@Concurrency@@SAXABVSchedulerPolicy@2@@Z(ptr) CurrentScheduler_Create
+@ cdecl -arch=win64 ?Create@CurrentScheduler@Concurrency@@SAXAEBVSchedulerPolicy@2@@Z(ptr) CurrentScheduler_Create
+@ cdecl -arch=win32 ?Create@Scheduler@Concurrency@@SAPAV12@ABVSchedulerPolicy@2@@Z(ptr) Scheduler_Create
+@ cdecl -arch=win64 ?Create@Scheduler@Concurrency@@SAPEAV12@AEBVSchedulerPolicy@2@@Z(ptr) Scheduler_Create
 @ stub -arch=win32 ?CreateResourceManager@Concurrency@@YAPAUIResourceManager@1@XZ
 @ stub -arch=win64 ?CreateResourceManager@Concurrency@@YAPEAUIResourceManager@1@XZ
-@ stub -arch=win32 ?CreateScheduleGroup@CurrentScheduler@Concurrency@@SAPAVScheduleGroup@2@AAVlocation@2@@Z
-@ stub -arch=win64 ?CreateScheduleGroup@CurrentScheduler@Concurrency@@SAPEAVScheduleGroup@2@AEAVlocation@2@@Z
-@ stub -arch=win32 ?CreateScheduleGroup@CurrentScheduler@Concurrency@@SAPAVScheduleGroup@2@XZ
-@ stub -arch=win64 ?CreateScheduleGroup@CurrentScheduler@Concurrency@@SAPEAVScheduleGroup@2@XZ
-@ stub -arch=win32 ?CurrentContext@Context@Concurrency@@SAPAV12@XZ
-@ stub -arch=win64 ?CurrentContext@Context@Concurrency@@SAPEAV12@XZ
-@ stub ?Detach@CurrentScheduler@Concurrency@@SAXXZ
+@ cdecl -arch=win32 ?CreateScheduleGroup@CurrentScheduler@Concurrency@@SAPAVScheduleGroup@2@AAVlocation@2@@Z(ptr) CurrentScheduler_CreateScheduleGroup_loc
+@ cdecl -arch=win64 ?CreateScheduleGroup@CurrentScheduler@Concurrency@@SAPEAVScheduleGroup@2@AEAVlocation@2@@Z(ptr) CurrentScheduler_CreateScheduleGroup_loc
+@ cdecl -arch=win32 ?CreateScheduleGroup@CurrentScheduler@Concurrency@@SAPAVScheduleGroup@2@XZ() CurrentScheduler_CreateScheduleGroup
+@ cdecl -arch=win64 ?CreateScheduleGroup@CurrentScheduler@Concurrency@@SAPEAVScheduleGroup@2@XZ() CurrentScheduler_CreateScheduleGroup
+@ cdecl -arch=win32 ?CurrentContext@Context@Concurrency@@SAPAV12@XZ() Context_CurrentContext
+@ cdecl -arch=win64 ?CurrentContext@Context@Concurrency@@SAPEAV12@XZ() Context_CurrentContext
+@ cdecl ?Detach@CurrentScheduler@Concurrency@@SAXXZ() CurrentScheduler_Detach
 @ stub ?DisableTracing@Concurrency@@YAJXZ
 @ stub ?EnableTracing@Concurrency@@YAJXZ
-@ stub -arch=win32 ?Free@Concurrency@@YAXPAX@Z
-@ stub -arch=win64 ?Free@Concurrency@@YAXPEAX@Z
-@ stub -arch=win32 ?Get@CurrentScheduler@Concurrency@@SAPAVScheduler@2@XZ
-@ stub -arch=win64 ?Get@CurrentScheduler@Concurrency@@SAPEAVScheduler@2@XZ
+@ cdecl -arch=win32 ?Free@Concurrency@@YAXPAX@Z(ptr) Concurrency_Free
+@ cdecl -arch=win64 ?Free@Concurrency@@YAXPEAX@Z(ptr) Concurrency_Free
+@ cdecl -arch=win32 ?Get@CurrentScheduler@Concurrency@@SAPAVScheduler@2@XZ() CurrentScheduler_Get
+@ cdecl -arch=win64 ?Get@CurrentScheduler@Concurrency@@SAPEAVScheduler@2@XZ() CurrentScheduler_Get
 @ stub ?GetExecutionContextId@Concurrency@@YAIXZ
-@ stub ?GetNumberOfVirtualProcessors@CurrentScheduler@Concurrency@@SAIXZ
+@ cdecl ?GetNumberOfVirtualProcessors@CurrentScheduler@Concurrency@@SAIXZ() CurrentScheduler_GetNumberOfVirtualProcessors
 @ stub ?GetOSVersion@Concurrency@@YA?AW4OSVersion@IResourceManager@1@XZ
-@ stub ?GetPolicy@CurrentScheduler@Concurrency@@SA?AVSchedulerPolicy@2@XZ
-@ stub -arch=arm ?GetPolicyValue@SchedulerPolicy@Concurrency@@QBAIW4PolicyElementKey@2@@Z
-@ stub -arch=i386 ?GetPolicyValue@SchedulerPolicy@Concurrency@@QBEIW4PolicyElementKey@2@@Z
-@ stub -arch=win64 ?GetPolicyValue@SchedulerPolicy@Concurrency@@QEBAIW4PolicyElementKey@2@@Z
+@ cdecl ?GetPolicy@CurrentScheduler@Concurrency@@SA?AVSchedulerPolicy@2@XZ(ptr) CurrentScheduler_GetPolicy
+@ cdecl -arch=arm ?GetPolicyValue@SchedulerPolicy@Concurrency@@QBAIW4PolicyElementKey@2@@Z(ptr long) SchedulerPolicy_GetPolicyValue
+@ thiscall -arch=i386 ?GetPolicyValue@SchedulerPolicy@Concurrency@@QBEIW4PolicyElementKey@2@@Z(ptr long) SchedulerPolicy_GetPolicyValue
+@ cdecl -arch=win64 ?GetPolicyValue@SchedulerPolicy@Concurrency@@QEBAIW4PolicyElementKey@2@@Z(ptr long) SchedulerPolicy_GetPolicyValue
 @ stub ?GetProcessorCount@Concurrency@@YAIXZ
 @ stub ?GetProcessorNodeCount@Concurrency@@YAIXZ
 @ stub ?GetSchedulerId@Concurrency@@YAIXZ
 @ stub -arch=win32 ?GetSharedTimerQueue@details@Concurrency@@YAPAXXZ
 @ stub -arch=win64 ?GetSharedTimerQueue@details@Concurrency@@YAPEAXXZ
-@ stub ?Id@Context@Concurrency@@SAIXZ
-@ stub ?Id@CurrentScheduler@Concurrency@@SAIXZ
-@ stub -arch=win32 ?IsAvailableLocation@CurrentScheduler@Concurrency@@SA_NABVlocation@2@@Z
-@ stub -arch=win64 ?IsAvailableLocation@CurrentScheduler@Concurrency@@SA_NAEBVlocation@2@@Z
-@ stub ?IsCurrentTaskCollectionCanceling@Context@Concurrency@@SA_NXZ
+@ cdecl ?Id@Context@Concurrency@@SAIXZ() Context_Id
+@ cdecl ?Id@CurrentScheduler@Concurrency@@SAIXZ() CurrentScheduler_Id
+@ cdecl -arch=win32 ?IsAvailableLocation@CurrentScheduler@Concurrency@@SA_NABVlocation@2@@Z(ptr) CurrentScheduler_IsAvailableLocation
+@ cdecl -arch=win64 ?IsAvailableLocation@CurrentScheduler@Concurrency@@SA_NAEBVlocation@2@@Z(ptr) CurrentScheduler_IsAvailableLocation
+@ cdecl ?IsCurrentTaskCollectionCanceling@Context@Concurrency@@SA_NXZ() Context_IsCurrentTaskCollectionCanceling
 @ stub -arch=win32 ?Log2@details@Concurrency@@YAKI@Z
 @ stub -arch=win64 ?Log2@details@Concurrency@@YAK_K@Z
-@ stub ?Oversubscribe@Context@Concurrency@@SAX_N@Z
-@ stub -arch=win32 ?RegisterShutdownEvent@CurrentScheduler@Concurrency@@SAXPAX@Z
-@ stub -arch=win64 ?RegisterShutdownEvent@CurrentScheduler@Concurrency@@SAXPEAX@Z
-@ stub ?ResetDefaultSchedulerPolicy@Scheduler@Concurrency@@SAXXZ
-@ stub ?ScheduleGroupId@Context@Concurrency@@SAIXZ
-@ stub -arch=win32 ?ScheduleTask@CurrentScheduler@Concurrency@@SAXP6AXPAX@Z0@Z
-@ stub -arch=win64 ?ScheduleTask@CurrentScheduler@Concurrency@@SAXP6AXPEAX@Z0@Z
-@ stub -arch=win32 ?ScheduleTask@CurrentScheduler@Concurrency@@SAXP6AXPAX@Z0AAVlocation@2@@Z
-@ stub -arch=win64 ?ScheduleTask@CurrentScheduler@Concurrency@@SAXP6AXPEAX@Z0AEAVlocation@2@@Z
-@ stub -arch=arm ?SetConcurrencyLimits@SchedulerPolicy@Concurrency@@QAAXII@Z
-@ stub -arch=i386 ?SetConcurrencyLimits@SchedulerPolicy@Concurrency@@QAEXII@Z
-@ stub -arch=win64 ?SetConcurrencyLimits@SchedulerPolicy@Concurrency@@QEAAXII@Z
-@ stub -arch=win32 ?SetDefaultSchedulerPolicy@Scheduler@Concurrency@@SAXABVSchedulerPolicy@2@@Z
-@ stub -arch=win64 ?SetDefaultSchedulerPolicy@Scheduler@Concurrency@@SAXAEBVSchedulerPolicy@2@@Z
-@ stub -arch=arm ?SetPolicyValue@SchedulerPolicy@Concurrency@@QAAIW4PolicyElementKey@2@I@Z
-@ stub -arch=i386 ?SetPolicyValue@SchedulerPolicy@Concurrency@@QAEIW4PolicyElementKey@2@I@Z
-@ stub -arch=win64 ?SetPolicyValue@SchedulerPolicy@Concurrency@@QEAAIW4PolicyElementKey@2@I@Z
-@ stub ?VirtualProcessorId@Context@Concurrency@@SAIXZ
-@ stub ?Yield@Context@Concurrency@@SAXXZ
+@ cdecl ?Oversubscribe@Context@Concurrency@@SAX_N@Z(long) Context_Oversubscribe
+@ cdecl -arch=win32 ?RegisterShutdownEvent@CurrentScheduler@Concurrency@@SAXPAX@Z(long) CurrentScheduler_RegisterShutdownEvent
+@ cdecl -arch=win64 ?RegisterShutdownEvent@CurrentScheduler@Concurrency@@SAXPEAX@Z(long) CurrentScheduler_RegisterShutdownEvent
+@ cdecl ?ResetDefaultSchedulerPolicy@Scheduler@Concurrency@@SAXXZ() Scheduler_ResetDefaultSchedulerPolicy
+@ cdecl ?ScheduleGroupId@Context@Concurrency@@SAIXZ() Context_ScheduleGroupId
+@ cdecl -arch=win32 ?ScheduleTask@CurrentScheduler@Concurrency@@SAXP6AXPAX@Z0@Z(ptr ptr) CurrentScheduler_ScheduleTask
+@ cdecl -arch=win64 ?ScheduleTask@CurrentScheduler@Concurrency@@SAXP6AXPEAX@Z0@Z(ptr ptr) CurrentScheduler_ScheduleTask
+@ cdecl -arch=win32 ?ScheduleTask@CurrentScheduler@Concurrency@@SAXP6AXPAX@Z0AAVlocation@2@@Z(ptr ptr ptr) CurrentScheduler_ScheduleTask_loc
+@ cdecl -arch=win64 ?ScheduleTask@CurrentScheduler@Concurrency@@SAXP6AXPEAX@Z0AEAVlocation@2@@Z(ptr ptr ptr) CurrentScheduler_ScheduleTask_loc
+@ cdecl -arch=arm ?SetConcurrencyLimits@SchedulerPolicy@Concurrency@@QAAXII@Z(ptr long long) SchedulerPolicy_SetConcurrencyLimits
+@ thiscall -arch=i386 ?SetConcurrencyLimits@SchedulerPolicy@Concurrency@@QAEXII@Z(ptr long long) SchedulerPolicy_SetConcurrencyLimits
+@ cdecl -arch=win64 ?SetConcurrencyLimits@SchedulerPolicy@Concurrency@@QEAAXII@Z(ptr long long) SchedulerPolicy_SetConcurrencyLimits
+@ cdecl -arch=win32 ?SetDefaultSchedulerPolicy@Scheduler@Concurrency@@SAXABVSchedulerPolicy@2@@Z(ptr) Scheduler_SetDefaultSchedulerPolicy
+@ cdecl -arch=win64 ?SetDefaultSchedulerPolicy@Scheduler@Concurrency@@SAXAEBVSchedulerPolicy@2@@Z(ptr) Scheduler_SetDefaultSchedulerPolicy
+@ cdecl -arch=arm ?SetPolicyValue@SchedulerPolicy@Concurrency@@QAAIW4PolicyElementKey@2@I@Z(ptr long long) SchedulerPolicy_SetPolicyValue
+@ thiscall -arch=i386 ?SetPolicyValue@SchedulerPolicy@Concurrency@@QAEIW4PolicyElementKey@2@I@Z(ptr long long) SchedulerPolicy_SetPolicyValue
+@ cdecl -arch=win64 ?SetPolicyValue@SchedulerPolicy@Concurrency@@QEAAIW4PolicyElementKey@2@I@Z(ptr long long) SchedulerPolicy_SetPolicyValue
+@ cdecl ?VirtualProcessorId@Context@Concurrency@@SAIXZ() Context_VirtualProcessorId
+@ cdecl ?Yield@Context@Concurrency@@SAXXZ() Context_Yield
 @ stub -arch=arm ?_Abort@_StructuredTaskCollection@details@Concurrency@@AAAXXZ
 @ stub -arch=i386 ?_Abort@_StructuredTaskCollection@details@Concurrency@@AAEXXZ
 @ stub -arch=win64 ?_Abort@_StructuredTaskCollection@details@Concurrency@@AEAAXXZ
@@ -647,7 +647,7 @@
 @ cdecl -arch=arm ?_SpinOnce@?$_SpinWait@$0A@@details@Concurrency@@QAA_NXZ(ptr) SpinWait__SpinOnce
 @ thiscall -arch=i386 ?_SpinOnce@?$_SpinWait@$0A@@details@Concurrency@@QAE_NXZ(ptr) SpinWait__SpinOnce
 @ cdecl -arch=win64 ?_SpinOnce@?$_SpinWait@$0A@@details@Concurrency@@QEAA_NXZ(ptr) SpinWait__SpinOnce
-@ stub ?_SpinYield@Context@Concurrency@@SAXXZ
+@ cdecl ?_SpinYield@Context@Concurrency@@SAXXZ() Context__SpinYield
 @ stub -arch=arm ?_Start@_Timer@details@Concurrency@@IAAXXZ
 @ stub -arch=i386 ?_Start@_Timer@details@Concurrency@@IAEXXZ
 @ stub -arch=win64 ?_Start@_Timer@details@Concurrency@@IEAAXXZ
@@ -658,8 +658,8 @@
 @ stub -arch=i386 ?_Tidy@exception@std@@AAEXXZ
 @ stub -arch=win64 ?_Tidy@exception@std@@AEAAXXZ
 @ stub ?_Trace_agents@Concurrency@@YAXW4Agents_EventType@1@_JZZ
-@ stub -arch=win32 ?_Trace_ppl_function@Concurrency@@YAXABU_GUID@@EW4ConcRT_EventType@1@@Z
-@ stub -arch=win64 ?_Trace_ppl_function@Concurrency@@YAXAEBU_GUID@@EW4ConcRT_EventType@1@@Z
+@ cdecl -arch=win32 ?_Trace_ppl_function@Concurrency@@YAXABU_GUID@@EW4ConcRT_EventType@1@@Z(ptr long long) Concurrency__Trace_ppl_function
+@ cdecl -arch=win64 ?_Trace_ppl_function@Concurrency@@YAXAEBU_GUID@@EW4ConcRT_EventType@1@@Z(ptr long long) Concurrency__Trace_ppl_function
 @ cdecl -arch=arm ?_TryAcquire@_NonReentrantBlockingLock@details@Concurrency@@QAA_NXZ(ptr) _ReentrantBlockingLock__TryAcquire
 @ thiscall -arch=i386 ?_TryAcquire@_NonReentrantBlockingLock@details@Concurrency@@QAE_NXZ(ptr) _ReentrantBlockingLock__TryAcquire
 @ cdecl -arch=win64 ?_TryAcquire@_NonReentrantBlockingLock@details@Concurrency@@QEAA_NXZ(ptr) _ReentrantBlockingLock__TryAcquire
@@ -688,8 +688,8 @@
 @ stub ?_Yield@_Context@details@Concurrency@@SAXXZ
 @ stub -arch=win32 ?__ExceptionPtrAssign@@YAXPAXPBX@Z
 @ stub -arch=win64 ?__ExceptionPtrAssign@@YAXPEAXPEBX@Z
-@ stub -arch=win32 ?__ExceptionPtrCompare@@YA_NPBX0@Z
-@ stub -arch=win64 ?__ExceptionPtrCompare@@YA_NPEBX0@Z
+@ cdecl -arch=win32 ?__ExceptionPtrCompare@@YA_NPBX0@Z(ptr ptr) __ExceptionPtrCompare
+@ cdecl -arch=win64 ?__ExceptionPtrCompare@@YA_NPEBX0@Z(ptr ptr) __ExceptionPtrCompare
 @ cdecl -arch=win32 ?__ExceptionPtrCopy@@YAXPAXPBX@Z(ptr ptr) __ExceptionPtrCopy
 @ cdecl -arch=win64 ?__ExceptionPtrCopy@@YAXPEAXPEBX@Z(ptr ptr) __ExceptionPtrCopy
 @ cdecl -arch=win32 ?__ExceptionPtrCopyException@@YAXPAXPBX1@Z(ptr ptr ptr) __ExceptionPtrCopyException
@@ -743,9 +743,9 @@
 @ cdecl -arch=win64 ?before@type_info@@QEBA_NAEBV1@@Z(ptr ptr) MSVCRT_type_info_before
 @ stub ?current@location@Concurrency@@SA?AV12@XZ
 @ stub ?from_numa_node@location@Concurrency@@SA?AV12@G@Z
-@ stub -arch=arm ?get_error_code@scheduler_resource_allocation_error@Concurrency@@QBAJXZ
-@ stub -arch=i386 ?get_error_code@scheduler_resource_allocation_error@Concurrency@@QBEJXZ
-@ stub -arch=win64 ?get_error_code@scheduler_resource_allocation_error@Concurrency@@QEBAJXZ
+@ cdecl -arch=arm ?get_error_code@scheduler_resource_allocation_error@Concurrency@@QBAJXZ(ptr) scheduler_resource_allocation_error_get_error_code
+@ thiscall -arch=i386 ?get_error_code@scheduler_resource_allocation_error@Concurrency@@QBEJXZ(ptr) scheduler_resource_allocation_error_get_error_code
+@ cdecl -arch=win64 ?get_error_code@scheduler_resource_allocation_error@Concurrency@@QEBAJXZ(ptr) scheduler_resource_allocation_error_get_error_code
 @ cdecl -arch=arm ?lock@critical_section@Concurrency@@QAAXXZ(ptr) critical_section_lock
 @ thiscall -arch=i386 ?lock@critical_section@Concurrency@@QAEXXZ(ptr) critical_section_lock
 @ cdecl -arch=win64 ?lock@critical_section@Concurrency@@QEAAXXZ(ptr) critical_section_lock

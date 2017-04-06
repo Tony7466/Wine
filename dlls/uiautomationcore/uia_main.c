@@ -16,7 +16,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "uiautomationcore.h"
+#include "uiautomation.h"
 
 #include "wine/debug.h"
 
@@ -44,4 +44,33 @@ BOOL WINAPI UiaClientsAreListening(void)
 {
     FIXME("()\n");
     return FALSE;
+}
+
+/***********************************************************************
+ *          UiaGetReservedMixedAttributeValue (uiautomationcore.@)
+ */
+HRESULT WINAPI UiaGetReservedMixedAttributeValue(IUnknown **value)
+{
+    FIXME("(%p) stub!\n", value);
+    *value = NULL;
+    return S_OK;
+}
+
+/***********************************************************************
+ *          UiaGetReservedNotSupportedValue (uiautomationcore.@)
+ */
+HRESULT WINAPI UiaGetReservedNotSupportedValue(IUnknown **value)
+{
+    FIXME("(%p) stub!\n", value);
+    *value = NULL;
+    return S_OK;
+}
+
+/***********************************************************************
+ *          UiaLookupId (uiautomationcore.@)
+ */
+int WINAPI UiaLookupId(enum AutomationIdentifierType type, const GUID *guid)
+{
+    FIXME("(%d, %s) stub!\n", type, debugstr_guid(guid));
+    return 1;
 }
