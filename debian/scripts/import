@@ -1,6 +1,6 @@
 #!/bin/sh -e
 # Copyright: 2013-2015 Michael Gilbert <mgilbert@debian.org>
-# License: LGPL-2.1
+# License: LGPL-2.1+
 
 # check for version argument
 if [ "$#" -lt "1" ]; then

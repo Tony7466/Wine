@@ -12,6 +12,7 @@ wine-development (2.5+dfsg-1) UNRELEASED; urgency=medium
   * Add +dfsg suffix to the upstream version.
   * Document purpose of the sonames2elf script.
   * Support stable release 2.0 in import script.
+  * Fix typo to clarify license LGPL-2.1 *or later* in import scripts.
 
  -- Jens Reyer <jre.winesim@gmail.com>  Thu, 06 Apr 2017 12:40:41 +0200
 
