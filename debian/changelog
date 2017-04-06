@@ -1,3 +1,17 @@
+wine-development (2.5-1) UNRELEASED; urgency=medium
+
+  * New upstream release 2.5, released Mar 31, 2017.
+    - Support for message-mode named pipes.
+    - Translation of version resources through po files.
+    - Transform feedback support in Direct3D.
+    - Scheduler classes in C++ runtime.
+    - Better scrolling in popup menus.
+    - More improvements to the XML reader.
+    - Various bug fixes.
+  * Refresh patches.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Thu, 06 Apr 2017 12:40:41 +0200
+
 wine-development (2.4-1) experimental; urgency=medium
 
   * New upstream release 2.4, released Mar 17, 2017.
