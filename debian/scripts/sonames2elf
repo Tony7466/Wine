@@ -1,5 +1,10 @@
 #!/bin/sh
-# encoding=UTF-8
+# Build an ELF depending on specified sonames.
+
+# dpkg-shlibdeps can compute dependencies on dlopen'ed libraries with this ELF.
+# Needed as workaround until this can be done directly with dpkg.  See
+# https://bugs.debian.org/596715 (dpkg-shlibdeps: Please allow to manually add
+# library dependencies via shlibdeps)
 
 # Copyright © 2016 Jakub Wilk <jwilk@jwilk.net>
 #
