@@ -708,6 +708,36 @@ typedef struct {
     WORD target;
 } FindGlyph_struct;
 
+BOOL usp10_array_reserve(void **elements, SIZE_T *capacity, SIZE_T count, SIZE_T size)
+{
+    SIZE_T max_capacity, new_capacity;
+    void *new_elements;
+
+    if (count <= *capacity)
+        return TRUE;
+
+    max_capacity = ~(SIZE_T)0 / size;
+    if (count > max_capacity)
+        return FALSE;
+
+    new_capacity = max(1, *capacity);
+    while (new_capacity < count && new_capacity <= max_capacity / 2)
+        new_capacity *= 2;
+    if (new_capacity < count)
+        new_capacity = count;
+
+    if (!*elements)
+        new_elements = heap_alloc_zero(new_capacity * size);
+    else
+        new_elements = HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, *elements, new_capacity * size);
+    if (!new_elements)
+        return FALSE;
+
+    *elements = new_elements;
+    *capacity = new_capacity;
+    return TRUE;
+}
+
 /* TODO Fix font properties on Arabic locale */
 static inline BOOL set_cache_font_properties(const HDC hdc, ScriptCache *sc)
 {
@@ -860,7 +890,7 @@ static WCHAR mirror_char( WCHAR ch )
     return ch + wine_mirror_map[wine_mirror_map[ch >> 8] + (ch & 0xff)];
 }
 
-static inline DWORD decode_surrogate_pair(LPCWSTR str, INT index, INT end)
+static DWORD decode_surrogate_pair(const WCHAR *str, unsigned int index, unsigned int end)
 {
     if (index < end-1 && IS_SURROGATE_PAIR(str[index],str[index+1]))
     {
@@ -1138,7 +1168,8 @@ HRESULT WINAPI ScriptRecordDigitSubstitution(LCID locale, SCRIPT_DIGITSUBSTITUTE
         sds->NationalDigitLanguage = LANG_ENGLISH;
 
     if (!GetLocaleInfoW(locale, LOCALE_IDIGITSUBSTITUTION | LOCALE_RETURN_NUMBER,
-                        (LPWSTR)&sub, sizeof(sub)/sizeof(WCHAR))) return E_INVALIDARG;
+            (WCHAR *)&sub, sizeof(sub) / sizeof(WCHAR)))
+        return E_INVALIDARG;
 
     switch (sub)
     {
@@ -1875,7 +1906,7 @@ static void find_fallback_font(enum usp10_script scriptid, WCHAR *FaceName)
         DWORD type;
 
         sprintfW(value, szFmt, scriptInformation[scriptid].scriptTag);
-        if (RegQueryValueExW(hkey, value, 0, &type, (LPBYTE)FaceName, &count))
+        if (RegQueryValueExW(hkey, value, 0, &type, (BYTE *)FaceName, &count))
             lstrcpyW(FaceName,scriptInformation[scriptid].fallbackFont);
         RegCloseKey(hkey);
     }
@@ -1963,7 +1994,9 @@ HRESULT WINAPI ScriptStringAnalyse(HDC hdc, const void *pString, int cString,
         if ((analysis->logattrs = heap_alloc(sizeof(SCRIPT_LOGATTR) * cString)))
         {
             for (i = 0; i < analysis->numItems; i++)
-                ScriptBreak(&((LPWSTR)pString)[analysis->pItem[i].iCharPos], analysis->pItem[i+1].iCharPos - analysis->pItem[i].iCharPos, &analysis->pItem[i].a, &analysis->logattrs[analysis->pItem[i].iCharPos]);
+                ScriptBreak(&((WCHAR *)pString)[analysis->pItem[i].iCharPos],
+                        analysis->pItem[i + 1].iCharPos - analysis->pItem[i].iCharPos,
+                        &analysis->pItem[i].a, &analysis->logattrs[analysis->pItem[i].iCharPos]);
         }
         else
             goto error;

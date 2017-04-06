@@ -2813,6 +2813,9 @@ static void shader_trace_init(const struct wined3d_shader_frontend *fe, void *fe
 
 static void shader_cleanup(struct wined3d_shader *shader)
 {
+    if (shader->reg_maps.shader_version.type == WINED3D_SHADER_TYPE_GEOMETRY)
+        HeapFree(GetProcessHeap(), 0, shader->u.gs.so_desc.elements);
+
     HeapFree(GetProcessHeap(), 0, shader->output_signature.elements);
     HeapFree(GetProcessHeap(), 0, shader->input_signature.elements);
     HeapFree(GetProcessHeap(), 0, shader->signature_strings);
@@ -3399,25 +3402,43 @@ static HRESULT hull_shader_init(struct wined3d_shader *shader, struct wined3d_de
 }
 
 static HRESULT geometry_shader_init(struct wined3d_shader *shader, struct wined3d_device *device,
-        const struct wined3d_shader_desc *desc, void *parent, const struct wined3d_parent_ops *parent_ops)
+        const struct wined3d_shader_desc *desc, const struct wined3d_stream_output_desc *so_desc,
+        void *parent, const struct wined3d_parent_ops *parent_ops)
 {
-    return shader_init(shader, device, desc, 0, WINED3D_SHADER_TYPE_GEOMETRY, parent, parent_ops);
+    HRESULT hr;
+
+    if (FAILED(hr = shader_init(shader, device, desc, 0, WINED3D_SHADER_TYPE_GEOMETRY, parent, parent_ops)))
+        return hr;
+
+    if (so_desc)
+    {
+        struct wined3d_stream_output_desc *d = &shader->u.gs.so_desc;
+        *d = *so_desc;
+        if (!(d->elements = wined3d_calloc(so_desc->element_count, sizeof(*d->elements))))
+        {
+            shader_cleanup(shader);
+            return E_OUTOFMEMORY;
+        }
+        memcpy(d->elements, so_desc->elements, so_desc->element_count * sizeof(*d->elements));
+    }
+
+    return WINED3D_OK;
 }
 
 void find_gs_compile_args(const struct wined3d_state *state, const struct wined3d_shader *shader,
         struct gs_compile_args *args)
 {
-    args->ps_input_count = state->shader[WINED3D_SHADER_TYPE_PIXEL]
-            ? state->shader[WINED3D_SHADER_TYPE_PIXEL]->limits->packed_input : 0;
+    args->output_count = state->shader[WINED3D_SHADER_TYPE_PIXEL]
+            ? state->shader[WINED3D_SHADER_TYPE_PIXEL]->limits->packed_input : shader->limits->packed_output;
 }
 
 void find_ps_compile_args(const struct wined3d_state *state, const struct wined3d_shader *shader,
         BOOL position_transformed, struct ps_compile_args *args, const struct wined3d_context *context)
 {
-    const struct wined3d_gl_info *gl_info = context->gl_info;
     const struct wined3d_d3d_info *d3d_info = context->d3d_info;
+    const struct wined3d_gl_info *gl_info = context->gl_info;
     const struct wined3d_texture *texture;
-    UINT i;
+    unsigned int i;
 
     memset(args, 0, sizeof(*args)); /* FIXME: Make sure all bits are set. */
     if (!gl_info->supported[ARB_FRAMEBUFFER_SRGB] && needs_srgb_write(context, state, state->fb))
@@ -3520,33 +3541,40 @@ void find_ps_compile_args(const struct wined3d_state *state, const struct wined3
         }
     }
 
-    for (i = 0; i < MAX_FRAGMENT_SAMPLERS; ++i)
-    {
-        if (!shader->reg_maps.resource_info[i].type)
-            continue;
-
-        texture = state->textures[i];
-        if (!texture)
-        {
-            args->color_fixup[i] = COLOR_FIXUP_IDENTITY;
-            continue;
-        }
-        if (can_use_texture_swizzle(gl_info, texture->resource.format))
-            args->color_fixup[i] = COLOR_FIXUP_IDENTITY;
-        else
-            args->color_fixup[i] = texture->resource.format->color_fixup;
-
-        if (texture->resource.format_flags & WINED3DFMT_FLAG_SHADOW)
-            args->shadow |= 1u << i;
-
-        /* Flag samplers that need NP2 texcoord fixup. */
-        if (!(texture->flags & WINED3D_TEXTURE_POW2_MAT_IDENT))
-            args->np2_fixup |= (1u << i);
-    }
-
-    /* In SM4+ we use dcl_sampler in order to determine if we should use shadow sampler. */
     if (shader->reg_maps.shader_version.major >= 4)
+    {
+        /* In SM4+ we use dcl_sampler in order to determine if we should use shadow sampler. */
         args->shadow = 0;
+        for (i = 0 ; i < MAX_FRAGMENT_SAMPLERS; ++i)
+            args->color_fixup[i] = COLOR_FIXUP_IDENTITY;
+        args->np2_fixup = 0;
+    }
+    else
+    {
+        for (i = 0; i < MAX_FRAGMENT_SAMPLERS; ++i)
+        {
+            if (!shader->reg_maps.resource_info[i].type)
+                continue;
+
+            texture = state->textures[i];
+            if (!texture)
+            {
+                args->color_fixup[i] = COLOR_FIXUP_IDENTITY;
+                continue;
+            }
+            if (can_use_texture_swizzle(gl_info, texture->resource.format))
+                args->color_fixup[i] = COLOR_FIXUP_IDENTITY;
+            else
+                args->color_fixup[i] = texture->resource.format->color_fixup;
+
+            if (texture->resource.format_flags & WINED3DFMT_FLAG_SHADOW)
+                args->shadow |= 1u << i;
+
+            /* Flag samplers that need NP2 texcoord fixup. */
+            if (!(texture->flags & WINED3D_TEXTURE_POW2_MAT_IDENT))
+                args->np2_fixup |= (1u << i);
+        }
+    }
 
     if (shader->reg_maps.shader_version.major >= 3)
     {
@@ -3781,19 +3809,19 @@ HRESULT CDECL wined3d_shader_create_ds(struct wined3d_device *device, const stru
 }
 
 HRESULT CDECL wined3d_shader_create_gs(struct wined3d_device *device, const struct wined3d_shader_desc *desc,
-        void *parent, const struct wined3d_parent_ops *parent_ops, struct wined3d_shader **shader)
+        const struct wined3d_stream_output_desc *so_desc, void *parent,
+        const struct wined3d_parent_ops *parent_ops, struct wined3d_shader **shader)
 {
     struct wined3d_shader *object;
     HRESULT hr;
 
-    TRACE("device %p, desc %p, parent %p, parent_ops %p, shader %p.\n",
-            device, desc, parent, parent_ops, shader);
+    TRACE("device %p, desc %p, so_desc %p, parent %p, parent_ops %p, shader %p.\n",
+            device, desc, so_desc, parent, parent_ops, shader);
 
-    object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object));
-    if (!object)
+    if (!(object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object))))
         return E_OUTOFMEMORY;
 
-    if (FAILED(hr = geometry_shader_init(object, device, desc, parent, parent_ops)))
+    if (FAILED(hr = geometry_shader_init(object, device, desc, so_desc, parent, parent_ops)))
     {
         WARN("Failed to initialize geometry shader, hr %#x.\n", hr);
         HeapFree(GetProcessHeap(), 0, object);

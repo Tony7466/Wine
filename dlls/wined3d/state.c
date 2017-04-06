@@ -3494,10 +3494,7 @@ static void sampler_texmatrix(struct wined3d_context *context, const struct wine
 
     /* The fixed function np2 texture emulation uses the texture matrix to fix up the coordinates
      * wined3d_texture_apply_state_changes() multiplies the set matrix with a fixup matrix. Before the
-     * scaling is reapplied or removed, the texture matrix has to be reapplied
-     *
-     * The mapped stage is already active because the sampler() function below, which is part of the
-     * misc pipeline
+     * scaling is reapplied or removed, the texture matrix has to be reapplied.
      */
     if (sampler < MAX_TEXTURES)
     {
@@ -3562,6 +3559,7 @@ static void wined3d_sampler_desc_from_sampler_states(struct wined3d_sampler_desc
     desc->lod_bias = lod_bias.f;
     desc->min_lod = -1000.0f;
     desc->max_lod = 1000.0f;
+    desc->mip_base_level = sampler_states[WINED3D_SAMP_MAX_MIP_LEVEL];
     desc->max_anisotropy = sampler_states[WINED3D_SAMP_MAX_ANISOTROPY];
     if ((sampler_states[WINED3D_SAMP_MAG_FILTER] != WINED3D_TEXF_ANISOTROPIC
                 && sampler_states[WINED3D_SAMP_MIN_FILTER] != WINED3D_TEXF_ANISOTROPIC
@@ -3598,7 +3596,6 @@ static void sampler(struct wined3d_context *context, const struct wined3d_state 
 
     TRACE("Sampler %u.\n", sampler_idx);
 
-
     if (mapped_stage == WINED3D_UNMAPPED_STAGE)
     {
         TRACE("No sampler mapped to stage %u. Returning.\n", sampler_idx);
@@ -3611,69 +3608,38 @@ static void sampler(struct wined3d_context *context, const struct wined3d_state 
 
     if (state->textures[sampler_idx])
     {
-        struct wined3d_texture *texture = state->textures[sampler_idx];
         BOOL srgb = state->sampler_states[sampler_idx][WINED3D_SAMP_SRGB_TEXTURE];
         const DWORD *sampler_states = state->sampler_states[sampler_idx];
+        struct wined3d_texture *texture = state->textures[sampler_idx];
+        struct wined3d_device *device = context->device;
         struct wined3d_sampler_desc desc;
-        struct gl_texture *gl_tex;
-        unsigned int base_level;
+        struct wined3d_sampler *sampler;
+        struct wine_rb_entry *entry;
 
         wined3d_sampler_desc_from_sampler_states(&desc, context, sampler_states, texture);
 
         wined3d_texture_bind(texture, context, srgb);
-        if (!gl_info->supported[ARB_SAMPLER_OBJECTS])
+
+        if ((entry = wine_rb_get(&device->samplers, &desc)))
         {
-            wined3d_texture_apply_sampler_desc(texture, &desc, context);
+            sampler = WINE_RB_ENTRY_VALUE(entry, struct wined3d_sampler, entry);
         }
         else
         {
-            struct wined3d_device *device = context->device;
-            struct wined3d_sampler *sampler;
-            struct wine_rb_entry *entry;
-
-            if ((entry = wine_rb_get(&device->samplers, &desc)))
+            if (FAILED(wined3d_sampler_create(device, &desc, NULL, &sampler)))
             {
-                sampler = WINE_RB_ENTRY_VALUE(entry, struct wined3d_sampler, entry);
+                ERR("Failed to create sampler.\n");
+                return;
             }
-            else
+            if (wine_rb_put(&device->samplers, &desc, &sampler->entry) == -1)
             {
-                if (FAILED(wined3d_sampler_create(device, &desc, NULL, &sampler)))
-                {
-                    ERR("Failed to create sampler.\n");
-                    sampler = NULL;
-                }
-                else
-                {
-                    if (wine_rb_put(&device->samplers, &desc, &sampler->entry) == -1)
-                        ERR("Failed to insert sampler.\n");
-                }
-            }
-
-            if (sampler)
-            {
-                GL_EXTCALL(glBindSampler(mapped_stage, sampler->name));
-                checkGLcall("glBindSampler");
+                ERR("Failed to insert sampler.\n");
+                wined3d_sampler_decref(sampler);
+                return;
             }
         }
 
-        if (texture->flags & WINED3D_TEXTURE_COND_NP2)
-            base_level = 0;
-        else if (desc.mip_filter == WINED3D_TEXF_NONE)
-            base_level = texture->lod;
-        else
-            base_level = min(max(sampler_states[WINED3D_SAMP_MAX_MIP_LEVEL],
-                    texture->lod), texture->level_count - 1);
-
-        gl_tex = wined3d_texture_get_gl_texture(texture, texture->flags & WINED3D_TEXTURE_IS_SRGB);
-        if (base_level != gl_tex->base_level)
-        {
-            /* Note that WINED3D_SAMP_MAX_MIP_LEVEL specifies the largest mipmap
-             * (default 0), while GL_TEXTURE_MAX_LEVEL specifies the smallest
-             * mipmap used (default 1000). So WINED3D_SAMP_MAX_MIP_LEVEL
-             * corresponds to GL_TEXTURE_BASE_LEVEL. */
-            gl_info->gl_ops.gl.p_glTexParameteri(texture->target, GL_TEXTURE_BASE_LEVEL, base_level);
-            gl_tex->base_level = base_level;
-        }
+        wined3d_sampler_bind(sampler, mapped_stage, texture, context);
 
         /* Trigger shader constant reloading (for NP2 texcoord fixup) */
         if (!(texture->flags & WINED3D_TEXTURE_POW2_MAT_IDENT))
@@ -4964,7 +4930,7 @@ static void state_cb(struct wined3d_context *context, const struct wined3d_state
         buffer = state->cb[shader_type][i];
         GL_EXTCALL(glBindBufferBase(GL_UNIFORM_BUFFER, base + i, buffer ? buffer->buffer_object : 0));
     }
-    checkGLcall("glBindBufferBase");
+    checkGLcall("bind constant buffers");
 }
 
 static void state_cb_warn(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
@@ -5008,6 +4974,42 @@ static void state_uav_warn(struct wined3d_context *context, const struct wined3d
     WARN("ARB_image_load_store is not supported by OpenGL implementation.\n");
 }
 
+static void state_so(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
+{
+    const struct wined3d_gl_info *gl_info = context->gl_info;
+    struct wined3d_buffer *buffer;
+    unsigned int offset, size, i;
+
+    TRACE("context %p, state %p, state_id %#x.\n", context, state, state_id);
+
+    context_end_transform_feedback(context);
+
+    for (i = 0; i < ARRAY_SIZE(state->stream_output); ++i)
+    {
+        if (!(buffer = state->stream_output[i].buffer))
+        {
+            GL_EXTCALL(glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, i, 0));
+            continue;
+        }
+
+        offset = state->stream_output[i].offset;
+        if (offset == ~0u)
+        {
+            FIXME("Appending to stream output buffers not implemented.\n");
+            offset = 0;
+        }
+        size = buffer->resource.size - offset;
+        GL_EXTCALL(glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, i,
+                buffer->buffer_object, offset, size));
+    }
+    checkGLcall("bind transform feedback buffers");
+}
+
+static void state_so_warn(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
+{
+    WARN("Transform feedback not supported.\n");
+}
+
 const struct StateEntryTemplate misc_state_template[] =
 {
     { STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_VERTEX),  { STATE_CONSTANT_BUFFER(WINED3D_SHADER_TYPE_VERTEX),  state_cb,           }, ARB_UNIFORM_BUFFER_OBJECT       },
@@ -5024,6 +5026,8 @@ const struct StateEntryTemplate misc_state_template[] =
     { STATE_COMPUTE_SHADER_RESOURCE_BINDING,              { STATE_COMPUTE_SHADER_RESOURCE_BINDING,              state_cs_resource_binding}, WINED3D_GL_EXT_NONE        },
     { STATE_COMPUTE_UNORDERED_ACCESS_VIEW_BINDING,        { STATE_COMPUTE_UNORDERED_ACCESS_VIEW_BINDING,        state_cs_uav_binding}, ARB_SHADER_IMAGE_LOAD_STORE     },
     { STATE_COMPUTE_UNORDERED_ACCESS_VIEW_BINDING,        { STATE_COMPUTE_UNORDERED_ACCESS_VIEW_BINDING,        state_uav_warn      }, WINED3D_GL_EXT_NONE             },
+    { STATE_STREAM_OUTPUT,                                { STATE_STREAM_OUTPUT,                                state_so,           }, WINED3D_GL_VERSION_3_2          },
+    { STATE_STREAM_OUTPUT,                                { STATE_STREAM_OUTPUT,                                state_so_warn,      }, WINED3D_GL_EXT_NONE             },
     { STATE_RENDER(WINED3D_RS_SRCBLEND),                  { STATE_RENDER(WINED3D_RS_ALPHABLENDENABLE),          NULL                }, WINED3D_GL_EXT_NONE             },
     { STATE_RENDER(WINED3D_RS_DESTBLEND),                 { STATE_RENDER(WINED3D_RS_ALPHABLENDENABLE),          NULL                }, WINED3D_GL_EXT_NONE             },
     { STATE_RENDER(WINED3D_RS_ALPHABLENDENABLE),          { STATE_RENDER(WINED3D_RS_ALPHABLENDENABLE),          state_blend         }, WINED3D_GL_EXT_NONE             },

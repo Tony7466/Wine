@@ -183,7 +183,7 @@ HRESULT shader_parse_signature(const char *data, DWORD data_size, struct wined3d
     read_dword(&ptr, &count);
     TRACE("%u elements\n", count);
 
-    skip_dword_unknown(&ptr, 1);
+    skip_dword_unknown(&ptr, 1); /* It seems to always be 0x00000008. */
 
     if (!require_space(ptr - data, count, 6 * sizeof(DWORD), data_size))
     {
@@ -224,6 +224,21 @@ HRESULT shader_parse_signature(const char *data, DWORD data_size, struct wined3d
     s->element_count = count;
 
     return S_OK;
+}
+
+struct wined3d_shader_signature_element *shader_find_signature_element(const struct wined3d_shader_signature *s,
+        const char *semantic_name, unsigned int semantic_idx)
+{
+    struct wined3d_shader_signature_element *e = s->elements;
+    unsigned int i;
+
+    for (i = 0; i < s->element_count; ++i)
+    {
+        if (!strcasecmp(e[i].semantic_name, semantic_name) && e[i].semantic_idx == semantic_idx)
+            return &e[i];
+    }
+
+    return NULL;
 }
 
 void shader_free_signature(struct wined3d_shader_signature *s)
@@ -1173,11 +1188,253 @@ static const struct wined3d_parent_ops d3d_geometry_shader_wined3d_parent_ops =
     d3d_geometry_shader_wined3d_object_destroyed,
 };
 
-static HRESULT d3d_geometry_shader_init(struct d3d_geometry_shader *shader, struct d3d_device *device,
-        const void *byte_code, SIZE_T byte_code_length)
+static HRESULT wined3d_so_elements_from_d3d11_so_entries(struct wined3d_stream_output_element *elements,
+        const D3D11_SO_DECLARATION_ENTRY *entries, unsigned int entry_count,
+        const unsigned int *buffer_strides, unsigned int buffer_stride_count,
+        const struct wined3d_shader_signature *os, D3D_FEATURE_LEVEL feature_level)
 {
+    unsigned int i, j, mask;
+
+    for (i = 0; i < entry_count; ++i)
+    {
+        struct wined3d_stream_output_element *e = &elements[i];
+        const D3D11_SO_DECLARATION_ENTRY *f = &entries[i];
+        struct wined3d_shader_signature_element *output;
+
+        TRACE("Stream: %u, semantic: %s, semantic idx: %u, start component: %u, "
+                "component count %u, output slot %u.\n",
+                f->Stream, debugstr_a(f->SemanticName), f->SemanticIndex,
+                f->StartComponent, f->ComponentCount, f->OutputSlot);
+
+        if (f->Stream >= D3D11_SO_STREAM_COUNT)
+        {
+            WARN("Invalid stream %u.\n", f->Stream);
+            return E_INVALIDARG;
+        }
+        if (f->Stream && feature_level < D3D_FEATURE_LEVEL_11_0)
+        {
+            WARN("Invalid stream %u for feature level %#x.\n", f->Stream, feature_level);
+            return E_INVALIDARG;
+        }
+        if (f->Stream)
+        {
+            FIXME("Streams not implemented yet.\n");
+            return E_INVALIDARG;
+        }
+        if (f->OutputSlot >= D3D11_SO_BUFFER_SLOT_COUNT)
+        {
+            WARN("Invalid output slot %u.\n", f->OutputSlot);
+            return E_INVALIDARG;
+        }
+
+        e->stream_idx = f->Stream;
+        e->component_idx = f->StartComponent;
+        e->component_count = f->ComponentCount;
+        e->output_slot = f->OutputSlot;
+
+        if (!f->SemanticName)
+        {
+            if (f->SemanticIndex)
+            {
+                WARN("Invalid semantic idx %u for stream output gap.\n", f->SemanticIndex);
+                return E_INVALIDARG;
+            }
+            if (e->component_idx || !e->component_count)
+            {
+                WARN("Invalid stream output gap %u-%u.\n", e->component_idx, e->component_count);
+                return E_INVALIDARG;
+            }
+
+            e->register_idx = WINED3D_STREAM_OUTPUT_GAP;
+        }
+        else if ((output = shader_find_signature_element(os, f->SemanticName, f->SemanticIndex)))
+        {
+            if (e->component_idx > 3 || e->component_count > 4 || !e->component_count
+                    || e->component_idx + e->component_count > 4)
+            {
+                WARN("Invalid component range %u-%u.\n", e->component_idx, e->component_count);
+                return E_INVALIDARG;
+            }
+
+            for (j = 0; j < 4; ++j)
+            {
+                if ((1u << j) & output->mask)
+                    break;
+            }
+            e->component_idx += j;
+            mask = ((1u << e->component_count) - 1) << e->component_idx;
+            if ((output->mask & 0xff & mask) != mask)
+            {
+                WARN("Invalid component range %u-%u (mask %#x), output mask %#x.\n",
+                        e->component_idx, e->component_count, mask, output->mask & 0xff);
+                return E_INVALIDARG;
+            }
+
+            e->register_idx = output->register_idx;
+            TRACE("Register idx: %u, register component idx %u, register mask %#x.\n",
+                    e->register_idx, e->component_idx, mask);
+        }
+        else
+        {
+            WARN("Failed to find output signature element for stream output entry.\n");
+            return E_INVALIDARG;
+        }
+    }
+
+    for (i = 0; i < entry_count; ++i)
+    {
+        const struct wined3d_stream_output_element *e1 = &elements[i];
+        if (e1->register_idx == WINED3D_STREAM_OUTPUT_GAP)
+            continue;
+
+        for (j = i + 1; j < entry_count; ++j)
+        {
+            const struct wined3d_stream_output_element *e2 = &elements[j];
+
+            if (e1->register_idx == e2->register_idx
+                    && e1->component_idx < e2->component_idx + e2->component_count
+                    && e1->component_idx + e1->component_count > e2->component_idx)
+            {
+                WARN("Stream output elements %u and %u overlap.\n", i, j);
+                return E_INVALIDARG;
+            }
+        }
+    }
+
+    for (i = 0; i < D3D11_SO_STREAM_COUNT; ++i)
+    {
+        unsigned int current_stride[D3D11_SO_BUFFER_SLOT_COUNT] = {0};
+        unsigned int element_count[D3D11_SO_BUFFER_SLOT_COUNT] = {0};
+        unsigned int gap_count[D3D11_SO_BUFFER_SLOT_COUNT] = {0};
+
+        for (j = 0; j < entry_count; ++j)
+        {
+            const struct wined3d_stream_output_element *e = &elements[j];
+
+            if (e->stream_idx != i)
+                continue;
+            current_stride[e->output_slot] += 4 * e->component_count;
+            ++element_count[e->output_slot];
+            if (e->register_idx == WINED3D_STREAM_OUTPUT_GAP)
+                ++gap_count[e->output_slot];
+        }
+
+        for (j = 0; j < D3D11_SO_BUFFER_SLOT_COUNT; ++j)
+        {
+            if (!element_count[j])
+                continue;
+            if (element_count[j] == gap_count[j])
+            {
+                WARN("Stream %u, output slot %u contains only gaps.\n", i, j);
+                return E_INVALIDARG;
+            }
+            if (buffer_stride_count)
+            {
+                if (buffer_stride_count <= j)
+                {
+                    WARN("Buffer strides are required for all buffer slots.\n");
+                    return E_INVALIDARG;
+                }
+                if (buffer_strides[j] < current_stride[j] || buffer_strides[j] % 4)
+                {
+                    WARN("Invalid stride %u for buffer slot %u.\n", buffer_strides[j], j);
+                    return E_INVALIDARG;
+                }
+            }
+        }
+
+        if (!i && feature_level < D3D_FEATURE_LEVEL_11_0 && element_count[0] != entry_count)
+        {
+            for (j = 0; j < ARRAY_SIZE(element_count); ++j)
+            {
+                if (element_count[j] > 1)
+                {
+                    WARN("Only one element per output slot is allowed.\n");
+                    return E_INVALIDARG;
+                }
+            }
+        }
+    }
+
+    return S_OK;
+}
+
+static HRESULT d3d_geometry_shader_init(struct d3d_geometry_shader *shader,
+        struct d3d_device *device, const void *byte_code, SIZE_T byte_code_length,
+        const D3D11_SO_DECLARATION_ENTRY *so_entries, unsigned int so_entry_count,
+        const unsigned int *buffer_strides, unsigned int buffer_stride_count,
+        unsigned int rasterizer_stream)
+{
+    struct wined3d_stream_output_desc so_desc;
     struct wined3d_shader_desc desc;
+    unsigned int i;
     HRESULT hr;
+
+    if (so_entry_count > D3D11_SO_STREAM_COUNT * D3D11_SO_OUTPUT_COMPONENT_COUNT)
+    {
+        WARN("Entry count %u is greater than %u.\n",
+                so_entry_count, D3D11_SO_STREAM_COUNT * D3D11_SO_OUTPUT_COMPONENT_COUNT);
+        return E_INVALIDARG;
+    }
+    if (so_entries && !so_entry_count)
+    {
+        WARN("Invalid SO entry count %u.\n", so_entry_count);
+        return E_INVALIDARG;
+    }
+    if (rasterizer_stream != D3D11_SO_NO_RASTERIZED_STREAM && rasterizer_stream >= D3D11_SO_STREAM_COUNT)
+    {
+        WARN("Invalid rasterizer stream %u.\n", rasterizer_stream);
+        return E_INVALIDARG;
+    }
+    if (device->feature_level < D3D_FEATURE_LEVEL_11_0)
+    {
+        if (rasterizer_stream)
+        {
+            WARN("Invalid rasterizer stream %u for feature level %#x.\n",
+                    rasterizer_stream, device->feature_level);
+            return E_INVALIDARG;
+        }
+        if (buffer_stride_count && buffer_stride_count != 1)
+        {
+            WARN("Invalid buffer stride count %u for feature level %#x.\n",
+                    buffer_stride_count, device->feature_level);
+            return E_INVALIDARG;
+        }
+    }
+
+    if (FAILED(hr = shader_extract_from_dxbc(byte_code, byte_code_length, &desc, device->feature_level)))
+    {
+        WARN("Failed to extract shader, hr %#x.\n", hr);
+        return hr;
+    }
+    desc.max_version = d3d_sm_from_feature_level(device->feature_level);
+
+    memset(&so_desc, 0, sizeof(so_desc));
+    if (so_entries)
+    {
+        so_desc.element_count = so_entry_count;
+        for (i = 0; i < min(buffer_stride_count, ARRAY_SIZE(so_desc.buffer_strides)); ++i)
+            so_desc.buffer_strides[i] = buffer_strides[i];
+        so_desc.buffer_stride_count = buffer_stride_count;
+        so_desc.rasterizer_stream_idx = rasterizer_stream;
+
+        if (!(so_desc.elements = d3d11_calloc(so_entry_count, sizeof(*so_desc.elements))))
+        {
+            ERR("Failed to allocate wined3d stream output element array memory.\n");
+            shader_free_signature(&desc.input_signature);
+            shader_free_signature(&desc.output_signature);
+            return E_OUTOFMEMORY;
+        }
+        if (FAILED(hr = wined3d_so_elements_from_d3d11_so_entries(so_desc.elements,
+                so_entries, so_entry_count, buffer_strides, buffer_stride_count,
+                &desc.output_signature, device->feature_level)))
+        {
+            HeapFree(GetProcessHeap(), 0, so_desc.elements);
+            shader_free_signature(&desc.input_signature);
+            shader_free_signature(&desc.output_signature);
+            return hr;
+        }
+    }
 
     shader->ID3D11GeometryShader_iface.lpVtbl = &d3d11_geometry_shader_vtbl;
     shader->ID3D10GeometryShader_iface.lpVtbl = &d3d10_geometry_shader_vtbl;
@@ -1185,17 +1442,9 @@ static HRESULT d3d_geometry_shader_init(struct d3d_geometry_shader *shader, stru
     wined3d_mutex_lock();
     wined3d_private_store_init(&shader->private_store);
 
-    if (FAILED(hr = shader_extract_from_dxbc(byte_code, byte_code_length, &desc, device->feature_level)))
-    {
-        WARN("Failed to extract shader, hr %#x.\n", hr);
-        wined3d_private_store_cleanup(&shader->private_store);
-        wined3d_mutex_unlock();
-        return hr;
-    }
-    desc.max_version = d3d_sm_from_feature_level(device->feature_level);
-
-    hr = wined3d_shader_create_gs(device->wined3d_device, &desc, shader,
-            &d3d_geometry_shader_wined3d_parent_ops, &shader->wined3d_shader);
+    hr = wined3d_shader_create_gs(device->wined3d_device, &desc, so_entries ? &so_desc : NULL,
+            shader, &d3d_geometry_shader_wined3d_parent_ops, &shader->wined3d_shader);
+    HeapFree(GetProcessHeap(), 0, so_desc.elements);
     shader_free_signature(&desc.input_signature);
     shader_free_signature(&desc.output_signature);
     if (FAILED(hr))
@@ -1214,6 +1463,8 @@ static HRESULT d3d_geometry_shader_init(struct d3d_geometry_shader *shader, stru
 }
 
 HRESULT d3d_geometry_shader_create(struct d3d_device *device, const void *byte_code, SIZE_T byte_code_length,
+        const D3D11_SO_DECLARATION_ENTRY *so_entries, unsigned int so_entry_count,
+        const unsigned int *buffer_strides, unsigned int buffer_stride_count, unsigned int rasterizer_stream,
         struct d3d_geometry_shader **shader)
 {
     struct d3d_geometry_shader *object;
@@ -1222,7 +1473,8 @@ HRESULT d3d_geometry_shader_create(struct d3d_device *device, const void *byte_c
     if (!(object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object))))
         return E_OUTOFMEMORY;
 
-    if (FAILED(hr = d3d_geometry_shader_init(object, device, byte_code, byte_code_length)))
+    if (FAILED(hr = d3d_geometry_shader_init(object, device, byte_code, byte_code_length,
+            so_entries, so_entry_count, buffer_strides, buffer_stride_count, rasterizer_stream)))
     {
         WARN("Failed to initialize geometry shader, hr %#x.\n", hr);
         HeapFree(GetProcessHeap(), 0, object);

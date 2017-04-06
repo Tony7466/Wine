@@ -39,10 +39,13 @@ static void wined3d_sampler_destroy_object(void *object)
     const struct wined3d_gl_info *gl_info;
     struct wined3d_context *context;
 
-    context = context_acquire(sampler->device, NULL, 0);
-    gl_info = context->gl_info;
-    GL_EXTCALL(glDeleteSamplers(1, &sampler->name));
-    context_release(context);
+    if (sampler->name)
+    {
+        context = context_acquire(sampler->device, NULL, 0);
+        gl_info = context->gl_info;
+        GL_EXTCALL(glDeleteSamplers(1, &sampler->name));
+        context_release(context);
+    }
 
     HeapFree(GetProcessHeap(), 0, sampler);
 }
@@ -115,7 +118,9 @@ static void wined3d_sampler_init(struct wined3d_sampler *sampler, struct wined3d
     sampler->device = device;
     sampler->parent = parent;
     sampler->desc = *desc;
-    wined3d_cs_init_object(device->cs, wined3d_sampler_cs_init, sampler);
+
+    if (device->adapter->gl_info.supported[ARB_SAMPLER_OBJECTS])
+        wined3d_cs_init_object(device->cs, wined3d_sampler_cs_init, sampler);
 }
 
 HRESULT CDECL wined3d_sampler_create(struct wined3d_device *device, const struct wined3d_sampler_desc *desc,
@@ -124,9 +129,6 @@ HRESULT CDECL wined3d_sampler_create(struct wined3d_device *device, const struct
     struct wined3d_sampler *object;
 
     TRACE("device %p, desc %p, parent %p, sampler %p.\n", device, desc, parent, sampler);
-
-    if (!device->adapter->gl_info.supported[ARB_SAMPLER_OBJECTS])
-        return WINED3DERR_INVALIDCALL;
 
     if (desc->address_u < WINED3D_TADDRESS_WRAP || desc->address_u > WINED3D_TADDRESS_MIRROR_ONCE
             || desc->address_v < WINED3D_TADDRESS_WRAP || desc->address_v > WINED3D_TADDRESS_MIRROR_ONCE
@@ -147,4 +149,53 @@ HRESULT CDECL wined3d_sampler_create(struct wined3d_device *device, const struct
     *sampler = object;
 
     return WINED3D_OK;
+}
+
+static void texture_apply_base_level(struct wined3d_texture *texture,
+        const struct wined3d_sampler_desc *desc, const struct wined3d_gl_info *gl_info)
+{
+    struct gl_texture *gl_tex;
+    unsigned int base_level;
+
+    if (texture->flags & WINED3D_TEXTURE_COND_NP2)
+        base_level = 0;
+    else if (desc->mip_filter == WINED3D_TEXF_NONE)
+        base_level = texture->lod;
+    else
+        base_level = min(max(desc->mip_base_level, texture->lod), texture->level_count - 1);
+
+    gl_tex = wined3d_texture_get_gl_texture(texture, texture->flags & WINED3D_TEXTURE_IS_SRGB);
+    if (base_level != gl_tex->base_level)
+    {
+        /* Note that WINED3D_SAMP_MAX_MIP_LEVEL specifies the largest mipmap
+         * (default 0), while GL_TEXTURE_MAX_LEVEL specifies the smallest
+         * mipmap used (default 1000). So WINED3D_SAMP_MAX_MIP_LEVEL
+         * corresponds to GL_TEXTURE_BASE_LEVEL. */
+        gl_info->gl_ops.gl.p_glTexParameteri(texture->target, GL_TEXTURE_BASE_LEVEL, base_level);
+        gl_tex->base_level = base_level;
+    }
+}
+
+/* This function relies on the correct texture being bound and loaded. */
+void wined3d_sampler_bind(struct wined3d_sampler *sampler, unsigned int unit,
+        struct wined3d_texture *texture, const struct wined3d_context *context)
+{
+    const struct wined3d_gl_info *gl_info = context->gl_info;
+
+    if (gl_info->supported[ARB_SAMPLER_OBJECTS])
+    {
+        GL_EXTCALL(glBindSampler(unit, sampler->name));
+        checkGLcall("bind sampler");
+    }
+    else if (texture)
+    {
+        wined3d_texture_apply_sampler_desc(texture, &sampler->desc, context);
+    }
+    else
+    {
+        ERR("Could not apply sampler state.\n");
+    }
+
+    if (texture)
+        texture_apply_base_level(texture, &sampler->desc, gl_info);
 }

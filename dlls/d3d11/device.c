@@ -696,9 +696,6 @@ static void STDMETHODCALLTYPE d3d11_immediate_context_OMSetBlendState(ID3D11Devi
     if (!blend_factor)
         blend_factor = default_blend_factor;
 
-    if (blend_factor[0] != 1.0f || blend_factor[1] != 1.0f || blend_factor[2] != 1.0f || blend_factor[3] != 1.0f)
-        FIXME("Ignoring blend factor %s.\n", debug_float4(blend_factor));
-
     wined3d_mutex_lock();
     memcpy(device->blend_factor, blend_factor, 4 * sizeof(*blend_factor));
     wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_MULTISAMPLEMASK, sample_mask);
@@ -718,30 +715,27 @@ static void STDMETHODCALLTYPE d3d11_immediate_context_OMSetBlendState(ID3D11Devi
     }
 
     desc = &device->blend_state->desc;
-    /* glSampleCoverage() */
-    if (desc->AlphaToCoverageEnable)
-        FIXME("Ignoring AlphaToCoverageEnable %#x.\n", desc->AlphaToCoverageEnable);
-    /* glEnableIndexedEXT(GL_BLEND, ...) */
-    FIXME("Per-rendertarget blend not implemented.\n");
     wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_ALPHABLENDENABLE,
             desc->RenderTarget[0].BlendEnable);
     if (desc->RenderTarget[0].BlendEnable)
     {
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_SRCBLEND,
-                desc->RenderTarget[0].SrcBlend);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_DESTBLEND,
-                desc->RenderTarget[0].DestBlend);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_BLENDOP,
-                desc->RenderTarget[0].BlendOp);
+        const D3D11_RENDER_TARGET_BLEND_DESC *d = &desc->RenderTarget[0];
+
+        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_SRCBLEND, d->SrcBlend);
+        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_DESTBLEND, d->DestBlend);
+        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_BLENDOP, d->BlendOp);
         wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_SEPARATEALPHABLENDENABLE, TRUE);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_SRCBLENDALPHA,
-                desc->RenderTarget[0].SrcBlendAlpha);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_DESTBLENDALPHA,
-                desc->RenderTarget[0].DestBlendAlpha);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_BLENDOPALPHA,
-                desc->RenderTarget[0].BlendOpAlpha);
+        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_SRCBLENDALPHA, d->SrcBlendAlpha);
+        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_DESTBLENDALPHA, d->DestBlendAlpha);
+        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_BLENDOPALPHA, d->BlendOpAlpha);
+
+        if (memcmp(blend_factor, default_blend_factor, sizeof(default_blend_factor))
+                && (d->SrcBlend == D3D11_BLEND_BLEND_FACTOR || d->SrcBlend == D3D11_BLEND_INV_BLEND_FACTOR
+                || d->DestBlend == D3D11_BLEND_BLEND_FACTOR || d->DestBlend == D3D11_BLEND_INV_BLEND_FACTOR
+                || d->SrcBlendAlpha == D3D11_BLEND_BLEND_FACTOR || d->SrcBlendAlpha == D3D11_BLEND_INV_BLEND_FACTOR
+                || d->DestBlendAlpha == D3D11_BLEND_BLEND_FACTOR || d->DestBlendAlpha == D3D11_BLEND_INV_BLEND_FACTOR))
+            FIXME("Ignoring blend factor %s.\n", debug_float4(blend_factor));
     }
-    FIXME("Color mask > 3 not implemented.\n");
     wined3d_device_set_render_state(device->wined3d_device,
             WINED3D_RS_COLORWRITEENABLE, desc->RenderTarget[0].RenderTargetWriteMask);
     wined3d_device_set_render_state(device->wined3d_device,
@@ -2476,7 +2470,8 @@ static HRESULT STDMETHODCALLTYPE d3d11_device_CreateGeometryShader(ID3D11Device 
     if (class_linkage)
         FIXME("Class linkage is not implemented yet.\n");
 
-    if (FAILED(hr = d3d_geometry_shader_create(device, byte_code, byte_code_length, &object)))
+    if (FAILED(hr = d3d_geometry_shader_create(device, byte_code, byte_code_length,
+            NULL, 0, NULL, 0, 0, &object)))
         return hr;
 
     *shader = &object->ID3D11GeometryShader_iface;
@@ -2486,15 +2481,31 @@ static HRESULT STDMETHODCALLTYPE d3d11_device_CreateGeometryShader(ID3D11Device 
 
 static HRESULT STDMETHODCALLTYPE d3d11_device_CreateGeometryShaderWithStreamOutput(ID3D11Device *iface,
         const void *byte_code, SIZE_T byte_code_length, const D3D11_SO_DECLARATION_ENTRY *so_entries,
-        UINT entry_count, const UINT *buffer_strides, UINT strides_count, UINT rasterized_stream,
+        UINT entry_count, const UINT *buffer_strides, UINT strides_count, UINT rasterizer_stream,
         ID3D11ClassLinkage *class_linkage, ID3D11GeometryShader **shader)
 {
-    FIXME("iface %p, byte_code %p, byte_code_length %lu, so_entries %p, entry_count %u, "
-            "buffer_strides %p, strides_count %u, rasterized_stream %u, class_linkage %p, shader %p stub!\n",
-            iface, byte_code, byte_code_length, so_entries, entry_count, buffer_strides, strides_count,
-            rasterized_stream, class_linkage, shader);
+    struct d3d_device *device = impl_from_ID3D11Device(iface);
+    struct d3d_geometry_shader *object;
+    HRESULT hr;
 
-    return E_NOTIMPL;
+    TRACE("iface %p, byte_code %p, byte_code_length %lu, so_entries %p, entry_count %u, "
+            "buffer_strides %p, strides_count %u, rasterizer_stream %u, class_linkage %p, shader %p.\n",
+            iface, byte_code, byte_code_length, so_entries, entry_count, buffer_strides, strides_count,
+            rasterizer_stream, class_linkage, shader);
+
+    if (class_linkage)
+        FIXME("Class linkage is not implemented yet.\n");
+
+    if (FAILED(hr = d3d_geometry_shader_create(device, byte_code, byte_code_length,
+            so_entries, entry_count, buffer_strides, strides_count, rasterizer_stream, &object)))
+    {
+        *shader = NULL;
+        return hr;
+    }
+
+    *shader = &object->ID3D11GeometryShader_iface;
+
+    return hr;
 }
 
 static HRESULT STDMETHODCALLTYPE d3d11_device_CreatePixelShader(ID3D11Device *iface, const void *byte_code,
@@ -2629,7 +2640,18 @@ static HRESULT STDMETHODCALLTYPE d3d11_device_CreateBlendState(ID3D11Device *ifa
         tmp_desc.RenderTarget[i].DestBlendAlpha = desc->RenderTarget[j].DestBlendAlpha;
         tmp_desc.RenderTarget[i].BlendOpAlpha = desc->RenderTarget[j].BlendOpAlpha;
         tmp_desc.RenderTarget[i].RenderTargetWriteMask = desc->RenderTarget[j].RenderTargetWriteMask;
+
+        if (i > 3 && tmp_desc.RenderTarget[i].RenderTargetWriteMask != D3D11_COLOR_WRITE_ENABLE_ALL)
+            FIXME("Color mask %#x not supported for render target %u.\n",
+                    tmp_desc.RenderTarget[i].RenderTargetWriteMask, i);
     }
+
+    /* glSampleCoverage() */
+    if (tmp_desc.AlphaToCoverageEnable)
+        FIXME("Ignoring AlphaToCoverageEnable %#x.\n", tmp_desc.AlphaToCoverageEnable);
+    /* glEnableIndexedEXT(GL_BLEND, ...) */
+    if (tmp_desc.IndependentBlendEnable)
+        FIXME("Per-rendertarget blend not implemented.\n");
 
     wined3d_mutex_lock();
     if ((entry = wine_rb_get(&device->blend_states, &tmp_desc)))
@@ -3706,7 +3728,7 @@ static void STDMETHODCALLTYPE d3d10_device_SOSetTargets(ID3D10Device1 *iface,
 
     TRACE("iface %p, target_count %u, targets %p, offsets %p.\n", iface, target_count, targets, offsets);
 
-    count = min(target_count, 4);
+    count = min(target_count, D3D10_SO_BUFFER_SLOT_COUNT);
     wined3d_mutex_lock();
     for (i = 0; i < count; ++i)
     {
@@ -3716,7 +3738,7 @@ static void STDMETHODCALLTYPE d3d10_device_SOSetTargets(ID3D10Device1 *iface,
                 buffer ? buffer->wined3d_buffer : NULL, offsets[i]);
     }
 
-    for (i = count; i < 4; ++i)
+    for (i = count; i < D3D10_SO_BUFFER_SLOT_COUNT; ++i)
     {
         wined3d_device_set_stream_output(device->wined3d_device, i, NULL, 0);
     }
@@ -4892,7 +4914,8 @@ static HRESULT STDMETHODCALLTYPE d3d10_device_CreateGeometryShader(ID3D10Device1
     TRACE("iface %p, byte_code %p, byte_code_length %lu, shader %p.\n",
             iface, byte_code, byte_code_length, shader);
 
-    if (FAILED(hr = d3d_geometry_shader_create(device, byte_code, byte_code_length, &object)))
+    if (FAILED(hr = d3d_geometry_shader_create(device, byte_code, byte_code_length,
+            NULL, 0, NULL, 0, 0, &object)))
         return hr;
 
     *shader = &object->ID3D10GeometryShader_iface;
@@ -4904,12 +4927,45 @@ static HRESULT STDMETHODCALLTYPE d3d10_device_CreateGeometryShaderWithStreamOutp
         const void *byte_code, SIZE_T byte_code_length, const D3D10_SO_DECLARATION_ENTRY *output_stream_decls,
         UINT output_stream_decl_count, UINT output_stream_stride, ID3D10GeometryShader **shader)
 {
-    FIXME("iface %p, byte_code %p, byte_code_length %lu, output_stream_decls %p, "
-            "output_stream_decl_count %u, output_stream_stride %u, shader %p stub!\n",
+    struct d3d_device *device = impl_from_ID3D10Device(iface);
+    D3D11_SO_DECLARATION_ENTRY *so_entries;
+    struct d3d_geometry_shader *object;
+    unsigned int i, stride_count = 1;
+    HRESULT hr;
+
+    TRACE("iface %p, byte_code %p, byte_code_length %lu, output_stream_decls %p, "
+            "output_stream_decl_count %u, output_stream_stride %u, shader %p.\n",
             iface, byte_code, byte_code_length, output_stream_decls,
             output_stream_decl_count, output_stream_stride, shader);
 
-    return E_NOTIMPL;
+    if (!(so_entries = d3d11_calloc(output_stream_decl_count, sizeof(*so_entries))))
+    {
+        ERR("Failed to allocate D3D11 SO declaration array memory.\n");
+        return E_OUTOFMEMORY;
+    }
+
+    for (i = 0; i < output_stream_decl_count; ++i)
+    {
+        so_entries[i].Stream = 0;
+        so_entries[i].SemanticName = output_stream_decls[i].SemanticName;
+        so_entries[i].SemanticIndex = output_stream_decls[i].SemanticIndex;
+        so_entries[i].StartComponent = output_stream_decls[i].StartComponent;
+        so_entries[i].ComponentCount = output_stream_decls[i].ComponentCount;
+        so_entries[i].OutputSlot = output_stream_decls[i].OutputSlot;
+
+        if (output_stream_decls[i].OutputSlot)
+           stride_count = 0;
+    }
+
+    hr = d3d_geometry_shader_create(device, byte_code, byte_code_length,
+            so_entries, output_stream_decl_count, &output_stream_stride, stride_count, 0, &object);
+    HeapFree(GetProcessHeap(), 0, so_entries);
+    if (FAILED(hr))
+        return hr;
+
+    *shader = &object->ID3D10GeometryShader_iface;
+
+    return hr;
 }
 
 static HRESULT STDMETHODCALLTYPE d3d10_device_CreatePixelShader(ID3D10Device1 *iface,

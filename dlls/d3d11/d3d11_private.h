@@ -37,6 +37,10 @@
 #include "wine/winedxgi.h"
 #include "wine/rbtree.h"
 
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
+#endif
+
 #define MAKE_TAG(ch0, ch1, ch2, ch3) \
     ((DWORD)(ch0) | ((DWORD)(ch1) << 8) | \
     ((DWORD)(ch2) << 16) | ((DWORD)(ch3) << 24 ))
@@ -316,6 +320,8 @@ struct d3d_geometry_shader
 };
 
 HRESULT d3d_geometry_shader_create(struct d3d_device *device, const void *byte_code, SIZE_T byte_code_length,
+        const D3D11_SO_DECLARATION_ENTRY *so_entries, unsigned int so_entry_count,
+        const unsigned int *buffer_strides, unsigned int buffer_stride_count, unsigned int rasterizer_stream,
         struct d3d_geometry_shader **shader) DECLSPEC_HIDDEN;
 struct d3d_geometry_shader *unsafe_impl_from_ID3D11GeometryShader(ID3D11GeometryShader *iface) DECLSPEC_HIDDEN;
 struct d3d_geometry_shader *unsafe_impl_from_ID3D10GeometryShader(ID3D10GeometryShader *iface) DECLSPEC_HIDDEN;
@@ -353,6 +359,8 @@ HRESULT d3d11_compute_shader_create(struct d3d_device *device, const void *byte_
 struct d3d11_compute_shader *unsafe_impl_from_ID3D11ComputeShader(ID3D11ComputeShader *iface) DECLSPEC_HIDDEN;
 
 HRESULT shader_parse_signature(const char *data, DWORD data_size, struct wined3d_shader_signature *s) DECLSPEC_HIDDEN;
+struct wined3d_shader_signature_element *shader_find_signature_element(const struct wined3d_shader_signature *s,
+        const char *semantic_name, unsigned int semantic_idx) DECLSPEC_HIDDEN;
 void shader_free_signature(struct wined3d_shader_signature *s) DECLSPEC_HIDDEN;
 
 /* ID3D11ClassLinkage */

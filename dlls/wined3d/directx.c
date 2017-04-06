@@ -182,6 +182,8 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_ARB_texture_swizzle",              ARB_TEXTURE_SWIZZLE           },
     {"GL_ARB_texture_view",                 ARB_TEXTURE_VIEW              },
     {"GL_ARB_timer_query",                  ARB_TIMER_QUERY               },
+    {"GL_ARB_transform_feedback2",          ARB_TRANSFORM_FEEDBACK2       },
+    {"GL_ARB_transform_feedback3",          ARB_TRANSFORM_FEEDBACK3       },
     {"GL_ARB_uniform_buffer_object",        ARB_UNIFORM_BUFFER_OBJECT     },
     {"GL_ARB_vertex_array_bgra",            ARB_VERTEX_ARRAY_BGRA         },
     {"GL_ARB_vertex_blend",                 ARB_VERTEX_BLEND              },
@@ -2597,7 +2599,7 @@ static const struct wined3d_shader_backend_ops *select_shader_backend(const stru
     return &none_shader_backend;
 }
 
-static const struct blit_shader *select_blit_implementation(const struct wined3d_gl_info *gl_info,
+static const struct wined3d_blitter_ops *select_blit_implementation(const struct wined3d_gl_info *gl_info,
         const struct wined3d_shader_backend_ops *shader_backend_ops)
 {
     if ((shader_backend_ops == &glsl_shader_backend
@@ -2868,6 +2870,19 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     /* GL_ARB_timer_query */
     USE_GL_FUNC(glQueryCounter)
     USE_GL_FUNC(glGetQueryObjectui64v)
+    /* GL_ARB_transform_feedback2 */
+    USE_GL_FUNC(glBindTransformFeedback);
+    USE_GL_FUNC(glDeleteTransformFeedbacks);
+    USE_GL_FUNC(glDrawTransformFeedback);
+    USE_GL_FUNC(glGenTransformFeedbacks);
+    USE_GL_FUNC(glIsTransformFeedback);
+    USE_GL_FUNC(glPauseTransformFeedback);
+    USE_GL_FUNC(glResumeTransformFeedback);
+    /* GL_ARB_transform_feedback3 */
+    USE_GL_FUNC(glBeginQueryIndexed);
+    USE_GL_FUNC(glDrawTransformFeedbackStream);
+    USE_GL_FUNC(glEndQueryIndexed);
+    USE_GL_FUNC(glGetQueryIndexediv);
     /* GL_ARB_uniform_buffer_object */
     USE_GL_FUNC(glBindBufferBase)
     USE_GL_FUNC(glBindBufferRange)
@@ -3161,6 +3176,7 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     USE_GL_FUNC(glActiveTexture)            /* OpenGL 1.3 */
     USE_GL_FUNC(glAttachShader)             /* OpenGL 2.0 */
     USE_GL_FUNC(glBeginQuery)               /* OpenGL 1.5 */
+    USE_GL_FUNC(glBeginTransformFeedback)   /* OpenGL 3.0 */
     USE_GL_FUNC(glBindAttribLocation)       /* OpenGL 2.0 */
     USE_GL_FUNC(glBindBuffer)               /* OpenGL 1.5 */
     USE_GL_FUNC(glBindVertexArray)          /* OpenGL 3.0 */
@@ -3195,6 +3211,7 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     USE_GL_FUNC(glEnablei)                  /* OpenGL 3.0 */
     USE_GL_FUNC(glEnableVertexAttribArray)  /* OpenGL 2.0 */
     USE_GL_FUNC(glEndQuery)                 /* OpenGL 1.5 */
+    USE_GL_FUNC(glEndTransformFeedback)     /* OpenGL 3.0 */
     USE_GL_FUNC(glGenBuffers)               /* OpenGL 1.5 */
     USE_GL_FUNC(glGenQueries)               /* OpenGL 1.5 */
     USE_GL_FUNC(glGenVertexArrays)          /* OpenGL 3.0 */
@@ -3228,6 +3245,7 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     USE_GL_FUNC(glTexBuffer)                /* OpenGL 3.1 */
     USE_GL_FUNC(glTexImage3D)               /* OpenGL 1.2 */
     USE_GL_FUNC(glTexSubImage3D)            /* OpenGL 1.2 */
+    USE_GL_FUNC(glTransformFeedbackVaryings)/* OpenGL 3.0 */
     USE_GL_FUNC(glUniform1f)                /* OpenGL 2.0 */
     USE_GL_FUNC(glUniform1fv)               /* OpenGL 2.0 */
     USE_GL_FUNC(glUniform1i)                /* OpenGL 2.0 */
@@ -3684,6 +3702,11 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
             gl_info->supported[ARB_SHADER_ATOMIC_COUNTERS] = FALSE;
         }
     }
+    if (gl_info->supported[ARB_TRANSFORM_FEEDBACK3])
+    {
+        gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_VERTEX_STREAMS, &gl_max);
+        TRACE("Max vertex streams: %d.\n", gl_max);
+    }
 
     if (gl_info->supported[NV_LIGHT_MAX_EXPONENT])
         gl_info->gl_ops.gl.p_glGetFloatv(GL_MAX_SHININESS_NV, &gl_info->limits.shininess);
@@ -3811,6 +3834,8 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
 
         {ARB_GPU_SHADER5,                  MAKEDWORD_VERSION(4, 0)},
         {ARB_TEXTURE_CUBE_MAP_ARRAY,       MAKEDWORD_VERSION(4, 0)},
+        {ARB_TRANSFORM_FEEDBACK2,          MAKEDWORD_VERSION(4, 0)},
+        {ARB_TRANSFORM_FEEDBACK3,          MAKEDWORD_VERSION(4, 0)},
 
         {ARB_ES2_COMPATIBILITY,            MAKEDWORD_VERSION(4, 1)},
         {ARB_VIEWPORT_ARRAY,               MAKEDWORD_VERSION(4, 1)},
