@@ -8,32 +8,9 @@ if [ "$#" -lt "1" ]; then
   exit 1
 fi
 
-# set variables
-version="$1"
-debian="https://anonscm.debian.org/git/pkg-wine/wine.git"
-winehq="git://source.winehq.org/git/wine.git"
-tag="wine-$version"
-case $version in
-  2.0.*)
-    upstream_branch="upstream-2.0"
-    packaging_branch="buster-2.0"
-    ;;
-  *)
-    upstream_branch="upstream"
-    packaging_branch="master"
-    ;;
-esac
-
-# terminate if we're not building from a git tree,
-# or required branches don't exist
+# terminate if we're not building from a git tree
 if [ ! -d ".git" ]; then
   echo "error: importing only supported for git checkouts"
-  exit 1
-elif [ ! -f ".git/refs/heads/${packaging_branch}" ]; then
-  echo "error: required branch ${packaging_branch} does not exist"
-  exit 1
-elif [ ! -f ".git/refs/heads/${upstream_branch}" ]; then
-  echo "error: required branch ${upstream_branch} does not exist"
   exit 1
 fi
 
@@ -41,13 +18,18 @@ fi
 git update-index --assume-unchanged configure include/config.h.in
 
 # pull specified tag from upstream repository
+version="$1"
+debian="https://anonscm.debian.org/git/pkg-wine/wine.git"
+upstream_branch="upstream"
+winehq="git://source.winehq.org/git/wine.git"
+tag="wine-$version"
 git checkout ${upstream_branch}
 git pull $debian ${upstream_branch}
 git pull --no-edit $winehq tag "$tag" || echo "unable to fetch tag $tag"
 
-# merge upstream_branch into packaging_branch (favoring "their" changes)
-git checkout ${packaging_branch}
-git merge --strategy-option=theirs ${upstream_branch}
+# merge upstream into master (favoring "their" changes)
+git checkout master
+git merge --strategy-option=theirs upstream
 
 # format the "New upstream release" message
 tag_time=`git cat-file tag "$tag" | sed -n 's/tagger .*<.*> \([0-9]*\) .*/\1/p'`
