@@ -1,4 +1,4 @@
-wine-development (2.5-1) UNRELEASED; urgency=medium
+wine-development (2.5-1) experimental; urgency=medium
 
   * New upstream release 2.5, released Mar 31, 2017.
     - Support for message-mode named pipes.
@@ -13,7 +13,7 @@ wine-development (2.5-1) UNRELEASED; urgency=medium
   * Support stable release 2.0 in import script.
   * Fix typo to clarify license LGPL-2.1 *or later* in import scripts.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Thu, 06 Apr 2017 12:40:41 +0200
+ -- Jens Reyer <jre.winesim@gmail.com>  Fri, 07 Apr 2017 12:45:15 +0200
 
 wine-development (2.4-1) experimental; urgency=medium
 
