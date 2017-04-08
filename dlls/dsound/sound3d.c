@@ -170,11 +170,6 @@ void DSOUND_Calc3DBuffer(IDirectSoundBufferImpl *dsb)
 	
 	switch (dsb->ds3db_ds3db.dwMode)
 	{
-		case DS3DMODE_DISABLE:
-			TRACE("3D processing disabled\n");
-			/* this one is here only to eliminate annoying warning message */
-			DSOUND_RecalcVolPan (&dsb->volpan);
-			return;
 		case DS3DMODE_NORMAL:
 			TRACE("Normal 3D processing mode\n");
 			/* we need to calculate distance between buffer and listener*/
@@ -187,6 +182,12 @@ void DSOUND_Calc3DBuffer(IDirectSoundBufferImpl *dsb)
 			vDistance = dsb->ds3db_ds3db.vPosition;
 			flDistance = VectorMagnitude (&vDistance);
 			break;
+		default:
+			TRACE("3D processing disabled\n");
+			/* this one is here only to eliminate annoying warning message */
+			dsb->volpan.lVolume = dsb->ds3db_lVolume;
+			DSOUND_RecalcVolPan (&dsb->volpan);
+			return;
 	}
 	
 	if (flDistance > dsb->ds3db_ds3db.flMaxDistance)
@@ -205,9 +206,11 @@ void DSOUND_Calc3DBuffer(IDirectSoundBufferImpl *dsb)
 
 	if (flDistance < dsb->ds3db_ds3db.flMinDistance)
 		flDistance = dsb->ds3db_ds3db.flMinDistance;
+
+	flDistance = dsb->ds3db_ds3db.flMinDistance + (flDistance - dsb->ds3db_ds3db.flMinDistance) * dsb->device->ds3dl.flRolloffFactor;
 	
 	/* attenuation proportional to the distance squared, converted to millibels as in lVolume*/
-	lVolume -= log10(flDistance/dsb->ds3db_ds3db.flMinDistance * flDistance/dsb->ds3db_ds3db.flMinDistance)*1000 * dsb->device->ds3dl.flRolloffFactor;
+	lVolume -= log10(flDistance/dsb->ds3db_ds3db.flMinDistance * flDistance/dsb->ds3db_ds3db.flMinDistance)*1000;
 	TRACE("dist. att: Distance = %f, MinDistance = %f => adjusting volume %d to %f\n", flDistance, dsb->ds3db_ds3db.flMinDistance, dsb->ds3db_lVolume, lVolume);
 
 	/* conning */
