@@ -36,6 +36,7 @@
 #include "objsafe.h"
 #include "htiface.h"
 #include "tlogstg.h"
+#include "mscoree.h"
 
 static INT (WINAPI *pLCIDToLocaleName)(LCID,LPWSTR,INT,DWORD);
 static LANGID (WINAPI *pGetUserDefaultUILanguage)(void);
@@ -686,32 +687,40 @@ static void _test_disp_value(unsigned line, IUnknown *unk, const char *val)
     VariantClear(&var);
 }
 
-#define test_disp(u,id,v) _test_disp(__LINE__,u,id,v)
-static void _test_disp(unsigned line, IUnknown *unk, const IID *diid, const char *val)
-{
-    IID iid;
-
-    if(_test_get_dispid(line, unk, &iid))
-        ok_(__FILE__,line) (IsEqualGUID(&iid, diid), "unexpected guid %s\n", wine_dbgstr_guid(&iid));
-
-    if(val)
-        _test_disp_value(line, unk, val);
-}
-
 #define test_disp2(u,id,id2,v) _test_disp2(__LINE__,u,id,id2,v)
 static void _test_disp2(unsigned line, IUnknown *unk, const IID *diid, const IID *diid2, const char *val)
 {
+    IUnknown *u;
     IID iid;
+    HRESULT hres;
 
     if(_test_get_dispid(line, unk, &iid))
-        ok_(__FILE__,line) (IsEqualGUID(&iid, diid) || broken(IsEqualGUID(&iid, diid2)),
+        ok_(__FILE__,line) (IsEqualGUID(&iid, diid) || broken(diid2 && IsEqualGUID(&iid, diid2)),
                 "unexpected guid %s\n", wine_dbgstr_guid(&iid));
+
+    if(!IsEqualGUID(diid, &DIID_DispHTMLWindow2) && !IsEqualGUID(diid, &DIID_DispHTMLLocation)) {
+        u = (void*)0xdeadbeef;
+        hres = IUnknown_QueryInterface(unk, &IID_IMarshal, (void**)&u);
+        ok_(__FILE__,line)(hres == E_NOINTERFACE, "Got IMarshal iface\n");
+        ok_(__FILE__,line)(!u, "u = %p\n", u);
+    }
+
+    u = (void*)0xdeadbeef;
+    hres = IUnknown_QueryInterface(unk, &IID_IManagedObject, (void**)&u);
+    ok_(__FILE__,line)(hres == E_NOINTERFACE, "Got IManagedObject iface\n");
+    ok_(__FILE__,line)(!u, "u = %p\n", u);
 
     if(val)
         _test_disp_value(line, unk, val);
 }
 
-#define test_class_info(u) _test_class_info(__LINE__,u)
+#define test_disp(u,id,v) _test_disp(__LINE__,u,id,v)
+static void _test_disp(unsigned line, IUnknown *unk, const IID *diid, const char *val)
+{
+    return _test_disp2(line, unk, diid, NULL, val);
+}
+
+#define test_class_info(id) _test_class_info(__LINE__,id)
 static void _test_class_info(unsigned line, IUnknown *unk)
 {
     IProvideClassInfo *classinfo;
@@ -7234,23 +7243,31 @@ static void test_tr_elem(IHTMLElement *elem)
     IHTMLTableRow_Release(row);
 }
 
-static void test_td_elem(IHTMLElement *elem)
+static void test_td_elem(IHTMLDocument2 *doc, IHTMLElement *div)
 {
     IHTMLTableCell *cell;
+    IHTMLElement *elem;
     HRESULT hres;
     LONG lval;
     BSTR str;
     VARIANT vbg, vDefaultbg;
 
+    test_elem_set_innerhtml((IUnknown*)div,
+                            "<table id=\"tbl\"><tbody>"
+                            "  <tr></tr>"
+                            "  <tr id=\"row2\"><td id=\"td1\">td1 text</td><td id=\"td2\">td2 text</td><td></td></tr>"
+                            "  <tr></tr>"
+                            "</tbody></table>");
+
+    elem = get_doc_elem_by_id(doc, "td1");
     hres = IHTMLElement_QueryInterface(elem, &IID_IHTMLTableCell, (void**)&cell);
     ok(hres == S_OK, "Could not get IHTMLTableRow iface: %08x\n", hres);
-    if(FAILED(hres))
-        return;
+    IHTMLElement_Release(elem);
 
     lval = 0xdeadbeef;
     hres = IHTMLTableCell_get_cellIndex(cell, &lval);
     ok(hres == S_OK, "get cellIndex failed: %08x\n", hres);
-    ok(lval == 1, "Expected 1, got %d\n", lval);
+    ok(!lval, "Expected 0, got %d\n", lval);
 
     str = a2bstr("left");
     hres = IHTMLTableCell_put_align(cell, str);
@@ -7299,6 +7316,40 @@ static void test_td_elem(IHTMLElement *elem)
     hres = IHTMLTableCell_put_bgColor(cell, vDefaultbg);
     ok(hres == S_OK, "put_bgColor failed: %08x\n", hres);
     VariantClear(&vDefaultbg);
+
+    hres = IHTMLTableCell_get_rowSpan(cell, &lval);
+    ok(hres == S_OK, "get_rowSpan failed: %08x\n", hres);
+    ok(lval == 1, "rowSpan = %d\n", lval);
+
+    hres = IHTMLTableCell_put_rowSpan(cell, -1);
+    ok(hres == E_INVALIDARG, "put_rowSpan failed: %08x\n", hres);
+
+    hres = IHTMLTableCell_put_rowSpan(cell, 0);
+    ok(hres == E_INVALIDARG, "put_rowSpan failed: %08x\n", hres);
+
+    hres = IHTMLTableCell_put_rowSpan(cell, 2);
+    ok(hres == S_OK, "put_rowSpan failed: %08x\n", hres);
+
+    hres = IHTMLTableCell_get_rowSpan(cell, &lval);
+    ok(hres == S_OK, "get_rowSpan failed: %08x\n", hres);
+    ok(lval == 2, "rowSpan = %d\n", lval);
+
+    hres = IHTMLTableCell_get_colSpan(cell, &lval);
+    ok(hres == S_OK, "get_rowSpan failed: %08x\n", hres);
+    ok(lval == 1, "rowSpan = %d\n", lval);
+
+    hres = IHTMLTableCell_put_colSpan(cell, -1);
+    ok(hres == E_INVALIDARG, "put_rowSpan failed: %08x\n", hres);
+
+    hres = IHTMLTableCell_put_colSpan(cell, 0);
+    ok(hres == E_INVALIDARG, "put_rowSpan failed: %08x\n", hres);
+
+    hres = IHTMLTableCell_put_colSpan(cell, 2);
+    ok(hres == S_OK, "put_rowSpan failed: %08x\n", hres);
+
+    hres = IHTMLTableCell_get_colSpan(cell, &lval);
+    ok(hres == S_OK, "get_rowSpan failed: %08x\n", hres);
+    ok(lval == 2, "rowSpan = %d\n", lval);
 
     IHTMLTableCell_Release(cell);
 }
@@ -8543,13 +8594,6 @@ static void test_elems(IHTMLDocument2 *doc)
         IHTMLElement_Release(elem);
     }
 
-    elem = get_doc_elem_by_id(doc, "td2");
-    ok(elem != NULL, "elem == NULL\n");
-    if(elem) {
-        test_td_elem(elem);
-        IHTMLElement_Release(elem);
-    }
-
     elem = get_doc_elem_by_id(doc, "row2");
     ok(elem != NULL, "elem == NULL\n");
     if(elem) {
@@ -9246,6 +9290,7 @@ static void test_elems2(IHTMLDocument2 *doc)
         IHTMLElement_Release(elem);
     }
 
+    test_td_elem(doc, div);
     test_attr(doc, div);
     test_blocked(doc, div);
     test_elem_names(doc);

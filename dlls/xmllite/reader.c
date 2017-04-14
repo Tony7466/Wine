@@ -84,6 +84,7 @@ typedef enum
     StringValue_Last
 } XmlReaderStringValue;
 
+static const WCHAR usasciiW[] = {'U','S','-','A','S','C','I','I',0};
 static const WCHAR utf16W[] = {'U','T','F','-','1','6',0};
 static const WCHAR utf8W[] = {'U','T','F','-','8',0};
 
@@ -154,8 +155,9 @@ struct xml_encoding_data
 };
 
 static const struct xml_encoding_data xml_encoding_map[] = {
+    { usasciiW, XmlEncoding_USASCII, 20127 },
     { utf16W, XmlEncoding_UTF16, ~0 },
-    { utf8W,  XmlEncoding_UTF8,  CP_UTF8 }
+    { utf8W,  XmlEncoding_UTF8,  CP_UTF8 },
 };
 
 const WCHAR *get_encoding_name(xml_encoding encoding)
@@ -734,7 +736,7 @@ xml_encoding parse_encoding_name(const WCHAR *name, int len)
     if (!name) return XmlEncoding_Unknown;
 
     min = 0;
-    max = sizeof(xml_encoding_map)/sizeof(struct xml_encoding_data) - 1;
+    max = sizeof(xml_encoding_map)/sizeof(xml_encoding_map[0]) - 1;
 
     while (min <= max)
     {
@@ -3601,15 +3603,10 @@ static const struct IUnknownVtbl xmlreaderinputvtbl =
 HRESULT WINAPI CreateXmlReader(REFIID riid, void **obj, IMalloc *imalloc)
 {
     xmlreader *reader;
+    HRESULT hr;
     int i;
 
     TRACE("(%s, %p, %p)\n", wine_dbgstr_guid(riid), obj, imalloc);
-
-    if (!IsEqualGUID(riid, &IID_IXmlReader))
-    {
-        ERR("Unexpected IID requested -> (%s)\n", wine_dbgstr_guid(riid));
-        return E_FAIL;
-    }
 
     if (imalloc)
         reader = IMalloc_Alloc(imalloc, sizeof(*reader));
@@ -3638,11 +3635,12 @@ HRESULT WINAPI CreateXmlReader(REFIID riid, void **obj, IMalloc *imalloc)
     for (i = 0; i < StringValue_Last; i++)
         reader->strvalues[i] = strval_empty;
 
-    *obj = &reader->IXmlReader_iface;
+    hr = IXmlReader_QueryInterface(&reader->IXmlReader_iface, riid, obj);
+    IXmlReader_Release(&reader->IXmlReader_iface);
 
-    TRACE("returning iface %p\n", *obj);
+    TRACE("returning iface %p, hr %#x\n", *obj, hr);
 
-    return S_OK;
+    return hr;
 }
 
 HRESULT WINAPI CreateXmlReaderInputWithEncodingName(IUnknown *stream,

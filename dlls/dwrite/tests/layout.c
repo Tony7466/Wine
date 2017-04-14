@@ -602,6 +602,7 @@ static HRESULT WINAPI testrenderer_DrawGlyphRun(IDWriteTextRenderer *iface,
     entry.kind = DRAW_GLYPHRUN;
     if (effect)
         entry.kind |= DRAW_EFFECT;
+    ok(lstrlenW(descr->localeName) < LOCALE_NAME_MAX_LENGTH, "unexpectedly long locale name\n");
     lstrcpyW(entry.locale, descr->localeName);
     entry.glyphcount = run->glyphCount;
     add_call(sequences, RENDERER_ID, &entry);
@@ -1636,6 +1637,10 @@ static void test_Draw(void)
     hr = IDWriteTextLayout_Draw(layout, &ctxt, &testrenderer, 0.0, 0.0);
     ok(hr == S_OK, "got 0x%08x\n", hr);
     ok_sequence(sequences, RENDERER_ID, draw_seq2, "draw test 2", TRUE);
+    hr = IDWriteTextLayout_GetMetrics(layout, &tm);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+todo_wine
+    ok(tm.lineCount == 6, "got %u\n", tm.lineCount);
     IDWriteTextLayout_Release(layout);
 
     /* string with control characters */
@@ -1644,7 +1649,7 @@ static void test_Draw(void)
     flush_sequence(sequences, RENDERER_ID);
     hr = IDWriteTextLayout_Draw(layout, &ctxt, &testrenderer, 0.0, 0.0);
     ok(hr == S_OK, "got 0x%08x\n", hr);
-    ok_sequence(sequences, RENDERER_ID, draw_seq3, "draw test 3", TRUE);
+    ok_sequence(sequences, RENDERER_ID, draw_seq3, "draw test 3", FALSE);
     IDWriteTextLayout_Release(layout);
 
     /* strikethrough splits ranges from renderer point of view, but doesn't break

@@ -6912,6 +6912,19 @@ interface IHTMLDatabinding : IDispatch
     [propget, id(DISPID_IHTMLDATABINDING_DATAFORMATAS)] \
     BSTR dataFormatAs()
 
+#define WINE_HTMLELEMENT_INTERFACES             \
+    interface IHTMLElement;                     \
+    interface IHTMLElement2;                    \
+    interface IHTMLElement3;                    \
+    interface IHTMLElement4;                    \
+    interface IHTMLUniqueName;                  \
+    interface IHTMLDOMNode;                     \
+    interface IHTMLDOMNode2;                    \
+ /* interface IHTMLElement5; */                 \
+    interface IHTMLElement6;                    \
+    interface IHTMLDOMConstructor               \
+ /* interface IHTMLElement7 */
+
 #define WINE_HTMLELEMENT_DISPINTERFACE_DECL     \
     WINE_IHTMLELEMENT_DISPINTERFACE_DECL;       \
     WINE_IHTMLELEMENT2_DISPINTERFACE_DECL;      \
@@ -6922,6 +6935,21 @@ interface IHTMLDatabinding : IDispatch
     WINE_IHTMLELEMENT5_DISPINTERFACE_DECL;      \
     WINE_IHTMLELEMENT6_DISPINTERFACE_DECL;      \
     WINE_IHTMLDOMCONSTRUCTOR_DISPINTERFACE_DECL
+
+#define WINE_HTMLDATAELEMENT_INTERFACES         \
+    interface IHTMLElement;                     \
+    interface IHTMLElement2;                    \
+    interface IHTMLElement3;                    \
+    interface IHTMLElement4;                    \
+    interface IHTMLUniqueName;                  \
+    interface IHTMLDOMNode;                     \
+    interface IHTMLDOMNode2;                    \
+    interface IHTMLDatabinding;                 \
+ /* interface IHTMLElement5; */                 \
+    interface IHTMLElement6;                    \
+    interface IElementSelector;                 \
+    interface IHTMLDOMConstructor               \
+ /* interface IHTMLElement7 */
 
 #define WINE_HTMLDATAELEMENT_DISPINTERFACE_DECL \
     WINE_IHTMLELEMENT_DISPINTERFACE_DECL;       \
@@ -6977,6 +7005,22 @@ methods:
     IDispatch *namedRecordset(
             [in] BSTR dataMember,
             [in, optional] VARIANT *hierarchy);
+}
+
+/*****************************************************************************
+ *    HTMLGenericElement coclass
+ */
+[
+    noncreatable,
+    uuid(3050f4b8-98b5-11cf-bb82-00aa00bdce0b)
+]
+coclass HTMLGenericElement
+{
+    [default]         dispinterface DispHTMLGenericElement;
+    [source, default] dispinterface HTMLElementEvents;
+    [source]          dispinterface HTMLElementEvents2;
+    WINE_HTMLELEMENT_INTERFACES;
+    interface IHTMLGenericElement;
 }
 
 /*****************************************************************************
@@ -7633,6 +7677,26 @@ methods:
 
     [propget, id(DISPID_IHTMLLINKELEMENT4_IE8_HREF)]
     BSTR ie8_href();
+}
+
+/*****************************************************************************
+ *    HTMLLinkElement coclass
+ */
+[
+    noncreatable,
+    uuid(3050f277-98b5-11cf-bb82-00aa00bdce0b)
+]
+coclass HTMLLinkElement
+{
+    [default]         dispinterface DispHTMLLinkElement;
+ /* [source, default] dispinterface HTMLLinkElementEvents; */
+ /* [source]          dispinterface HTMLLinkElementEvents2; */
+    WINE_HTMLELEMENT_INTERFACES;
+    interface IHTMLLinkElement;
+    interface IHTMLLinkElement2;
+    interface IHTMLLinkElement3;
+    interface IHTMLLinkElement4;
+ /* interface IHTMLLinkElement5; */
 }
 
 /*****************************************************************************
@@ -8474,15 +8538,12 @@ coclass HTMLFormElement
     [default]           dispinterface DispHTMLFormElement;
     [source, default]   dispinterface HTMLFormElementEvents;
     [source]            dispinterface HTMLFormElementEvents2;
-                        interface IHTMLElement;
-                        interface IHTMLElement2;
-                        interface IHTMLElement3;
-                        interface IHTMLElement4;
-                        interface IHTMLUniqueName;
-                        interface IHTMLDOMNode;
-                        interface IHTMLDOMNode2;
-                        interface IHTMLDOMConstructor;
-                        interface IHTMLFormElement;
+    WINE_HTMLELEMENT_INTERFACES;
+    interface IHTMLFormElement;
+ /* interface IHTMLFormElement2; */
+ /* interface IHTMLFormElement3; */
+ /* interface IHTMLSubmitData; */
+ /* interface IHTMLFormElement4; */
 }
 
 /*****************************************************************************
@@ -8860,6 +8921,27 @@ methods:
 }
 
 /*****************************************************************************
+ *    HTMLImg coclass
+ */
+[
+    noncreatable,
+    uuid(3050f241-98b5-11cf-bb82-00aa00bdce0b)
+]
+coclass HTMLImg
+{
+    [default]         dispinterface DispHTMLImg;
+ /* [source, default] dispinterface HTMLImgEvents; */
+ /* [source]          dispinterface HTMLImgEvents2; */
+    WINE_HTMLDATAELEMENT_INTERFACES;
+    interface IHTMLControlElement;
+    interface IHTMLImgElement;
+ /* interface IHTMLImgElement2; */
+ /* interface IHTMLImgElement3; */
+ /* interface IHTMLImgElement4; */
+ /* interface IHTMLMSImgElement; */
+}
+
+/*****************************************************************************
  *    IHTMLXMLHttpRequest interface
  */
 [
@@ -9049,6 +9131,23 @@ methods:
 
     [id(DISPID_IEVENTTARGET_DISPATCHEVENT)]
     VARIANT_BOOL dispatchEvent([in] IDOMEvent *evt);
+}
+
+/*****************************************************************************
+ *    HTMLXMLHttpRequest
+ */
+[
+    noncreatable,
+    uuid(3051040b-98b5-11cf-bb82-00aa00bdce0b)
+]
+coclass HTMLXMLHttpRequest
+{
+    [default]         dispinterface DispHTMLXMLHttpRequest;
+ /* [source, default] dispinterface HTMLXMLHttpRequestEvents; */
+    interface IHTMLXMLHttpRequest;
+    interface IHTMLXMLHttpRequest2;
+    interface IHTMLDOMConstructor;
+    interface IEventTarget;
 }
 
 /*****************************************************************************
@@ -9394,17 +9493,14 @@ coclass HTMLBody
     [default]           dispinterface DispHTMLBody;
     [source, default]   dispinterface HTMLTextContainerEvents;
     [source]            dispinterface HTMLTextContainerEvents2;
-                        interface IHTMLElement;
-                        interface IHTMLElement2;
-                        interface IHTMLElement3;
-                        interface IHTMLElement4;
-                        interface IHTMLUniqueName;
-                        interface IHTMLDOMNode;
-                        interface IHTMLDOMNode2;
-                        interface IHTMLControlElement;
-                        interface IHTMLTextContainer;
-                        interface IHTMLBodyElement;
-                        interface IHTMLBodyElement2;
+    WINE_HTMLELEMENT_INTERFACES;
+    interface IHTMLControlElement;
+    interface IHTMLTextContainer;
+    interface IHTMLBodyElement;
+    interface IHTMLBodyElement2;
+ /* interface IHTMLBodyElement3; */
+ /* interface IHTMLBodyElement4; */
+ /* interface IHTMLBodyElement5; */
 }
 
 /*****************************************************************************
@@ -9695,6 +9791,24 @@ methods:
 
     [propget, id(DISPID_IHTMLANCHORELEMENT3_IE8_HREF)]
     BSTR ie8_href();
+}
+
+/*****************************************************************************
+ *    HTMLAnchorElement coclass
+ */
+[
+    noncreatable,
+    uuid(3050f248-98b5-11cf-bb82-00aa00bdce0b)
+]
+coclass HTMLAnchorElement
+{
+    [default]         dispinterface DispHTMLAnchorElement;
+ /* [source, default] dispinterface HTMLAnchorEvents; */
+ /* [source]          dispinterface HTMLAnchorEvents2; */
+    WINE_HTMLDATAELEMENT_INTERFACES;
+    interface IHTMLAnchorElement;
+ /* interface IHTMLAnchorElement2; */
+ /* interface IHTMLAnchorElement3; */
 }
 
 /*****************************************************************************
@@ -10489,16 +10603,10 @@ coclass HTMLOptionElement
     [default]           dispinterface DispHTMLOptionElement;
     [source, default]   dispinterface HTMLElementEvents;
     [source]            dispinterface HTMLElementEvents2;
-                        interface IHTMLElement;
-                        interface IHTMLElement2;
-                        interface IHTMLElement3;
-                        interface IHTMLElement4;
-                        interface IHTMLUniqueName;
-                        interface IHTMLDOMNode;
-                        interface IHTMLDOMNode2;
-                        interface IHTMLDatabinding;
-                        interface IHTMLOptionElement;
-                        interface IHTMLOptionElement3;
+    WINE_HTMLDATAELEMENT_INTERFACES;
+    interface IHTMLOptionElement;
+    interface IHTMLOptionElement3;
+ /* interface IHTMLOptionElement4; */
 }
 
 /*****************************************************************************
@@ -16884,15 +16992,10 @@ coclass HTMLCommentElement
     [default]           dispinterface DispHTMLCommentElement;
     [source, default]   dispinterface HTMLElementEvents;
     [source]            dispinterface HTMLElementEvents2;
-                        interface IHTMLElement;
-                        interface IHTMLElement2;
-                        interface IHTMLElement3;
-                        interface IHTMLElement4;
-                        interface IHTMLUniqueName;
-                        interface IHTMLDOMNode;
-                        interface IHTMLDOMNode2;
-                        interface IHTMLCommentElement;
-                        interface IHTMLCommentElement2;
+    WINE_HTMLELEMENT_INTERFACES;
+    interface IHTMLCommentElement;
+    interface IHTMLCommentElement2;
+ /* interface IHTMLCommentElement3; */
 }
 
 /*****************************************************************************
@@ -17525,18 +17628,12 @@ coclass HTMLTable
     [default]           dispinterface DispHTMLTable;
     [source, default]   dispinterface HTMLTableEvents;
     [source]            dispinterface HTMLTableEvents2;
-                        interface IHTMLElement;
-                        interface IHTMLElement2;
-                        interface IHTMLElement3;
-                        interface IHTMLElement4;
-                        interface IHTMLUniqueName;
-                        interface IHTMLDOMNode;
-                        interface IHTMLDOMNode2;
-                        interface IHTMLDatabinding;
-                        interface IHTMLControlElement;
-                        interface IHTMLTable;
-                        interface IHTMLTable2;
-                        interface IHTMLTable3;
+    WINE_HTMLDATAELEMENT_INTERFACES;
+    interface IHTMLControlElement;
+    interface IHTMLTable;
+    interface IHTMLTable2;
+    interface IHTMLTable3;
+ /* interface IHTMLTable4; */
 }
 
 [
