@@ -45,9 +45,9 @@
 @ stub -arch=arm ??0_ReentrantPPLLock@details@Concurrency@@QAA@XZ
 @ stub -arch=i386 ??0_ReentrantPPLLock@details@Concurrency@@QAE@XZ
 @ stub -arch=win64 ??0_ReentrantPPLLock@details@Concurrency@@QEAA@XZ
-@ stub -arch=arm ??0_Scheduler@details@Concurrency@@QAA@PAVScheduler@2@@Z
-@ stub -arch=i386 ??0_Scheduler@details@Concurrency@@QAE@PAVScheduler@2@@Z
-@ stub -arch=win64 ??0_Scheduler@details@Concurrency@@QEAA@PEAVScheduler@2@@Z
+@ cdecl -arch=arm ??0_Scheduler@details@Concurrency@@QAA@PAVScheduler@2@@Z(ptr ptr) msvcr120.??0_Scheduler@details@Concurrency@@QAA@PAVScheduler@2@@Z
+@ thiscall -arch=i386 ??0_Scheduler@details@Concurrency@@QAE@PAVScheduler@2@@Z(ptr ptr) msvcr120.??0_Scheduler@details@Concurrency@@QAE@PAVScheduler@2@@Z
+@ cdecl -arch=win64 ??0_Scheduler@details@Concurrency@@QEAA@PEAVScheduler@2@@Z(ptr ptr) msvcr120.??0_Scheduler@details@Concurrency@@QEAA@PEAVScheduler@2@@Z
 @ stub -arch=arm ??0_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QAA@AAV123@@Z
 @ stub -arch=i386 ??0_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QAE@AAV123@@Z
 @ stub -arch=win64 ??0_Scoped_lock@_NonReentrantPPLLock@details@Concurrency@@QEAA@AEAV123@@Z
@@ -376,9 +376,9 @@
 @ stub -arch=arm ??_F_Context@details@Concurrency@@QAAXXZ
 @ stub -arch=i386 ??_F_Context@details@Concurrency@@QAEXXZ
 @ stub -arch=win64 ??_F_Context@details@Concurrency@@QEAAXXZ
-@ stub -arch=arm ??_F_Scheduler@details@Concurrency@@QAAXXZ
-@ stub -arch=i386 ??_F_Scheduler@details@Concurrency@@QAEXXZ
-@ stub -arch=win64 ??_F_Scheduler@details@Concurrency@@QEAAXXZ
+@ cdecl -arch=arm ??_F_Scheduler@details@Concurrency@@QAAXXZ(ptr) msvcr120.??_F_Scheduler@details@Concurrency@@QAAXXZ
+@ thiscall -arch=i386 ??_F_Scheduler@details@Concurrency@@QAEXXZ(ptr) msvcr120.??_F_Scheduler@details@Concurrency@@QAEXXZ
+@ cdecl -arch=win64 ??_F_Scheduler@details@Concurrency@@QEAAXXZ(ptr) msvcr120.??_F_Scheduler@details@Concurrency@@QEAAXXZ
 @ cdecl -arch=arm ??_Fbad_cast@std@@QAAXXZ(ptr) msvcr120.??_Fbad_cast@std@@QAAXXZ
 @ thiscall -arch=i386 ??_Fbad_cast@std@@QAEXXZ(ptr) msvcr120.??_Fbad_cast@std@@QAEXXZ
 @ cdecl -arch=win64 ??_Fbad_cast@std@@QEAAXXZ(ptr) msvcr120.??_Fbad_cast@std@@QEAAXXZ
@@ -519,17 +519,17 @@
 @ cdecl -arch=arm ?_DoYield@?$_SpinWait@$0A@@details@Concurrency@@IAAXXZ(ptr) msvcr120.?_DoYield@?$_SpinWait@$0A@@details@Concurrency@@IAAXXZ
 @ thiscall -arch=i386 ?_DoYield@?$_SpinWait@$0A@@details@Concurrency@@IAEXXZ(ptr) msvcr120.?_DoYield@?$_SpinWait@$0A@@details@Concurrency@@IAEXXZ
 @ cdecl -arch=win64 ?_DoYield@?$_SpinWait@$0A@@details@Concurrency@@IEAAXXZ(ptr) msvcr120.?_DoYield@?$_SpinWait@$0A@@details@Concurrency@@IEAAXXZ
-@ stub ?_Get@_CurrentScheduler@details@Concurrency@@SA?AV_Scheduler@23@XZ
+@ cdecl ?_Get@_CurrentScheduler@details@Concurrency@@SA?AV_Scheduler@23@XZ(ptr) msvcr120.?_Get@_CurrentScheduler@details@Concurrency@@SA?AV_Scheduler@23@XZ
 @ stub -arch=win32 ?_GetConcRTTraceInfo@Concurrency@@YAPBU_CONCRT_TRACE_INFO@details@1@XZ
 @ stub -arch=win64 ?_GetConcRTTraceInfo@Concurrency@@YAPEBU_CONCRT_TRACE_INFO@details@1@XZ
 @ cdecl ?_GetConcurrency@details@Concurrency@@YAIXZ() msvcr120.?_GetConcurrency@details@Concurrency@@YAIXZ
 @ stub -arch=win32 ?_GetCurrentInlineDepth@_StackGuard@details@Concurrency@@CAAAIXZ
 @ stub -arch=win64 ?_GetCurrentInlineDepth@_StackGuard@details@Concurrency@@CAAEA_KXZ
-@ stub ?_GetNumberOfVirtualProcessors@_CurrentScheduler@details@Concurrency@@SAIXZ
-@ stub -arch=arm ?_GetScheduler@_Scheduler@details@Concurrency@@QAAPAVScheduler@3@XZ
-@ stub -arch=i386 ?_GetScheduler@_Scheduler@details@Concurrency@@QAEPAVScheduler@3@XZ
-@ stub -arch=win64 ?_GetScheduler@_Scheduler@details@Concurrency@@QEAAPEAVScheduler@3@XZ
-@ stub ?_Id@_CurrentScheduler@details@Concurrency@@SAIXZ
+@ cdecl ?_GetNumberOfVirtualProcessors@_CurrentScheduler@details@Concurrency@@SAIXZ() msvcr120.?_GetNumberOfVirtualProcessors@_CurrentScheduler@details@Concurrency@@SAIXZ
+@ cdecl -arch=arm ?_GetScheduler@_Scheduler@details@Concurrency@@QAAPAVScheduler@3@XZ(ptr) msvcr120.?_GetScheduler@_Scheduler@details@Concurrency@@QAAPAVScheduler@3@XZ
+@ thiscall -arch=i386 ?_GetScheduler@_Scheduler@details@Concurrency@@QAEPAVScheduler@3@XZ(ptr) msvcr120.?_GetScheduler@_Scheduler@details@Concurrency@@QAEPAVScheduler@3@XZ
+@ cdecl -arch=win64 ?_GetScheduler@_Scheduler@details@Concurrency@@QEAAPEAVScheduler@3@XZ(ptr) msvcr120.?_GetScheduler@_Scheduler@details@Concurrency@@QEAAPEAVScheduler@3@XZ
+@ cdecl ?_Id@_CurrentScheduler@details@Concurrency@@SAIXZ() msvcr120.?_Id@_CurrentScheduler@details@Concurrency@@SAIXZ
 @ stub -arch=arm ?_IsCanceling@_StructuredTaskCollection@details@Concurrency@@QAA_NXZ
 @ stub -arch=i386 ?_IsCanceling@_StructuredTaskCollection@details@Concurrency@@QAE_NXZ
 @ stub -arch=win64 ?_IsCanceling@_StructuredTaskCollection@details@Concurrency@@QEAA_NXZ
@@ -552,9 +552,9 @@
 @ thiscall -arch=i386 ?_NumberOfSpins@?$_SpinWait@$0A@@details@Concurrency@@IAEKXZ(ptr) msvcr120.?_NumberOfSpins@?$_SpinWait@$0A@@details@Concurrency@@IAEKXZ
 @ cdecl -arch=win64 ?_NumberOfSpins@?$_SpinWait@$0A@@details@Concurrency@@IEAAKXZ(ptr) msvcr120.?_NumberOfSpins@?$_SpinWait@$0A@@details@Concurrency@@IEAAKXZ
 @ stub ?_Oversubscribe@_Context@details@Concurrency@@SAX_N@Z
-@ stub -arch=arm ?_Reference@_Scheduler@details@Concurrency@@QAAIXZ
-@ stub -arch=i386 ?_Reference@_Scheduler@details@Concurrency@@QAEIXZ
-@ stub -arch=win64 ?_Reference@_Scheduler@details@Concurrency@@QEAAIXZ
+@ cdecl -arch=arm ?_Reference@_Scheduler@details@Concurrency@@QAAIXZ(ptr) msvcr120.?_Reference@_Scheduler@details@Concurrency@@QAAIXZ
+@ thiscall -arch=i386 ?_Reference@_Scheduler@details@Concurrency@@QAEIXZ(ptr) msvcr120.?_Reference@_Scheduler@details@Concurrency@@QAEIXZ
+@ cdecl -arch=win64 ?_Reference@_Scheduler@details@Concurrency@@QEAAIXZ(ptr) msvcr120.?_Reference@_Scheduler@details@Concurrency@@QEAAIXZ
 @ cdecl -arch=arm ?_Release@_NonReentrantBlockingLock@details@Concurrency@@QAAXXZ(ptr) msvcr120.?_Release@_NonReentrantBlockingLock@details@Concurrency@@QAAXXZ
 @ thiscall -arch=i386 ?_Release@_NonReentrantBlockingLock@details@Concurrency@@QAEXXZ(ptr) msvcr120.?_Release@_NonReentrantBlockingLock@details@Concurrency@@QAEXXZ
 @ cdecl -arch=win64 ?_Release@_NonReentrantBlockingLock@details@Concurrency@@QEAAXXZ(ptr) msvcr120.?_Release@_NonReentrantBlockingLock@details@Concurrency@@QEAAXXZ
@@ -570,9 +570,9 @@
 @ stub -arch=arm ?_Release@_ReentrantPPLLock@details@Concurrency@@QAAXXZ
 @ stub -arch=i386 ?_Release@_ReentrantPPLLock@details@Concurrency@@QAEXXZ
 @ stub -arch=win64 ?_Release@_ReentrantPPLLock@details@Concurrency@@QEAAXXZ
-@ stub -arch=arm ?_Release@_Scheduler@details@Concurrency@@QAAIXZ
-@ stub -arch=i386 ?_Release@_Scheduler@details@Concurrency@@QAEIXZ
-@ stub -arch=win64 ?_Release@_Scheduler@details@Concurrency@@QEAAIXZ
+@ cdecl -arch=arm ?_Release@_Scheduler@details@Concurrency@@QAAIXZ(ptr) msvcr120.?_Release@_Scheduler@details@Concurrency@@QAAIXZ
+@ thiscall -arch=i386 ?_Release@_Scheduler@details@Concurrency@@QAEIXZ(ptr) msvcr120.?_Release@_Scheduler@details@Concurrency@@QAEIXZ
+@ cdecl -arch=win64 ?_Release@_Scheduler@details@Concurrency@@QEAAIXZ(ptr) msvcr120.?_Release@_Scheduler@details@Concurrency@@QEAAIXZ
 @ stub -arch=arm ?_ReleaseRead@_ReaderWriterLock@details@Concurrency@@QAAXXZ
 @ stub -arch=i386 ?_ReleaseRead@_ReaderWriterLock@details@Concurrency@@QAEXXZ
 @ stub -arch=win64 ?_ReleaseRead@_ReaderWriterLock@details@Concurrency@@QEAAXXZ
@@ -604,8 +604,8 @@
 @ stub -arch=arm ?_Schedule@_TaskCollection@details@Concurrency@@QAAXPAV_UnrealizedChore@23@PAVlocation@3@@Z
 @ stub -arch=i386 ?_Schedule@_TaskCollection@details@Concurrency@@QAEXPAV_UnrealizedChore@23@PAVlocation@3@@Z
 @ stub -arch=win64 ?_Schedule@_TaskCollection@details@Concurrency@@QEAAXPEAV_UnrealizedChore@23@PEAVlocation@3@@Z
-@ stub -arch=win32 ?_ScheduleTask@_CurrentScheduler@details@Concurrency@@SAXP6AXPAX@Z0@Z
-@ stub -arch=win64 ?_ScheduleTask@_CurrentScheduler@details@Concurrency@@SAXP6AXPEAX@Z0@Z
+@ cdecl -arch=win32 ?_ScheduleTask@_CurrentScheduler@details@Concurrency@@SAXP6AXPAX@Z0@Z(ptr ptr) msvcr120.?_ScheduleTask@_CurrentScheduler@details@Concurrency@@SAXP6AXPAX@Z0@Z
+@ cdecl -arch=win64 ?_ScheduleTask@_CurrentScheduler@details@Concurrency@@SAXP6AXPEAX@Z0@Z(ptr ptr) msvcr120.?_ScheduleTask@_CurrentScheduler@details@Concurrency@@SAXP6AXPEAX@Z0@Z
 @ cdecl -arch=arm ?_SetSpinCount@?$_SpinWait@$00@details@Concurrency@@QAAXI@Z(ptr long) msvcr120.?_SetSpinCount@?$_SpinWait@$00@details@Concurrency@@QAAXI@Z
 @ thiscall -arch=i386 ?_SetSpinCount@?$_SpinWait@$00@details@Concurrency@@QAEXI@Z(ptr long) msvcr120.?_SetSpinCount@?$_SpinWait@$00@details@Concurrency@@QAEXI@Z
 @ cdecl -arch=win64 ?_SetSpinCount@?$_SpinWait@$00@details@Concurrency@@QEAAXI@Z(ptr long) msvcr120.?_SetSpinCount@?$_SpinWait@$00@details@Concurrency@@QEAAXI@Z
@@ -895,7 +895,7 @@
 @ stub __crtIsPackagedApp
 @ cdecl __crtLCMapStringA(long long str long ptr long long long) msvcr120.__crtLCMapStringA
 @ cdecl __crtLCMapStringW(long long wstr long ptr long long long) msvcr120.__crtLCMapStringW
-@ stub __crtSleep
+@ cdecl __crtSleep(long) msvcr120.__crtSleep
 @ stub __crtWaitForWinRTThreadExit
 @ cdecl __daylight() msvcr120.__daylight
 @ cdecl __dllonexit(ptr ptr ptr) msvcr120.__dllonexit
@@ -1194,7 +1194,7 @@
 @ cdecl _isalnum_l(long ptr) msvcr120._isalnum_l
 @ cdecl _isalpha_l(long ptr) msvcr120._isalpha_l
 @ cdecl _isatty(long) msvcr120._isatty
-@ stub _isblank_l
+@ cdecl _isblank_l(long ptr) msvcr120._isblank_l
 @ cdecl _iscntrl_l(long ptr) msvcr120._iscntrl_l
 @ cdecl _isctype(long long) msvcr120._isctype
 @ cdecl _isctype_l(long long ptr) msvcr120._isctype_l
@@ -1234,11 +1234,11 @@
 @ cdecl _isupper_l(long ptr) msvcr120._isupper_l
 @ stub _iswalnum_l
 @ cdecl _iswalpha_l(long ptr) msvcr120._iswalpha_l
-@ stub _iswblank_l
+@ cdecl _iswblank_l(long ptr) msvcr120._iswblank_l
 @ stub _iswcntrl_l
 @ stub _iswcsym_l
 @ stub _iswcsymf_l
-@ stub _iswctype_l
+@ cdecl _iswctype_l(long long ptr) msvcr120._iswctype_l
 @ cdecl _iswdigit_l(long ptr) msvcr120._iswdigit_l
 @ stub _iswgraph_l
 @ stub _iswlower_l
@@ -1878,7 +1878,7 @@
 @ stub imaxdiv
 @ cdecl isalnum(long) msvcr120.isalnum
 @ cdecl isalpha(long) msvcr120.isalpha
-@ stub isblank
+@ cdecl isblank(long) msvcr120.isblank
 @ cdecl iscntrl(long) msvcr120.iscntrl
 @ cdecl isdigit(long) msvcr120.isdigit
 @ cdecl isgraph(long) msvcr120.isgraph
@@ -1891,7 +1891,7 @@
 @ cdecl iswalnum(long) msvcr120.iswalnum
 @ cdecl iswalpha(long) msvcr120.iswalpha
 @ cdecl iswascii(long) msvcr120.iswascii
-@ stub iswblank
+@ cdecl iswblank(long) msvcr120.iswblank
 @ cdecl iswcntrl(long) msvcr120.iswcntrl
 @ cdecl iswctype(long long) msvcr120.iswctype
 @ cdecl iswdigit(long) msvcr120.iswdigit

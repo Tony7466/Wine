@@ -181,6 +181,9 @@ IDL_SRCS = \
 	wmsbuffer.idl \
 	wmsdkidl.idl \
 	wpcapi.idl \
+	wsdbase.idl \
+	wsddisco.idl \
+	wsdxml.idl \
 	wtypes.idl \
 	wuapi.idl \
 	xapo.idl \
@@ -510,6 +513,7 @@ HEADER_SRCS = \
 	msxml2did.h \
 	msxml6did.h \
 	msxmldid.h \
+	mtxdm.h \
 	nb30.h \
 	ncrypt.h \
 	ndrtypes.h \
@@ -686,6 +690,9 @@ HEADER_SRCS = \
 	ws2ipdef.h \
 	ws2spi.h \
 	ws2tcpip.h \
+	wsdapi.h \
+	wsdtypes.h \
+	wsdxmldom.h \
 	wshisotp.h \
 	wsipx.h \
 	wsnwlink.h \

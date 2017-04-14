@@ -976,14 +976,8 @@ static void STDMETHODCALLTYPE d3d11_immediate_context_CopySubresourceRegion(ID3D
             src_resource, src_subresource_idx, src_box);
 
     if (src_box)
-    {
-        wined3d_src_box.left = src_box->left;
-        wined3d_src_box.top = src_box->top;
-        wined3d_src_box.front = src_box->front;
-        wined3d_src_box.right = src_box->right;
-        wined3d_src_box.bottom = src_box->bottom;
-        wined3d_src_box.back = src_box->back;
-    }
+        wined3d_box_set(&wined3d_src_box, src_box->left, src_box->top,
+                src_box->right, src_box->bottom, src_box->front, src_box->back);
 
     wined3d_dst_resource = wined3d_resource_from_d3d11_resource(dst_resource);
     wined3d_src_resource = wined3d_resource_from_d3d11_resource(src_resource);
@@ -1020,14 +1014,7 @@ static void STDMETHODCALLTYPE d3d11_immediate_context_UpdateSubresource(ID3D11De
             iface, resource, subresource_idx, box, data, row_pitch, depth_pitch);
 
     if (box)
-    {
-        wined3d_box.left = box->left;
-        wined3d_box.top = box->top;
-        wined3d_box.front = box->front;
-        wined3d_box.right = box->right;
-        wined3d_box.bottom = box->bottom;
-        wined3d_box.back = box->back;
-    }
+        wined3d_box_set(&wined3d_box, box->left, box->top, box->right, box->bottom, box->front, box->back);
 
     wined3d_resource = wined3d_resource_from_d3d11_resource(resource);
     wined3d_mutex_lock();
@@ -3820,14 +3807,8 @@ static void STDMETHODCALLTYPE d3d10_device_CopySubresourceRegion(ID3D10Device1 *
             src_resource, src_subresource_idx, src_box);
 
     if (src_box)
-    {
-        wined3d_src_box.left = src_box->left;
-        wined3d_src_box.top = src_box->top;
-        wined3d_src_box.front = src_box->front;
-        wined3d_src_box.right = src_box->right;
-        wined3d_src_box.bottom = src_box->bottom;
-        wined3d_src_box.back = src_box->back;
-    }
+        wined3d_box_set(&wined3d_src_box, src_box->left, src_box->top,
+                src_box->right, src_box->bottom, src_box->front, src_box->back);
 
     wined3d_dst_resource = wined3d_resource_from_d3d10_resource(dst_resource);
     wined3d_src_resource = wined3d_resource_from_d3d10_resource(src_resource);
@@ -4928,7 +4909,7 @@ static HRESULT STDMETHODCALLTYPE d3d10_device_CreateGeometryShaderWithStreamOutp
         UINT output_stream_decl_count, UINT output_stream_stride, ID3D10GeometryShader **shader)
 {
     struct d3d_device *device = impl_from_ID3D10Device(iface);
-    D3D11_SO_DECLARATION_ENTRY *so_entries;
+    D3D11_SO_DECLARATION_ENTRY *so_entries = NULL;
     struct d3d_geometry_shader *object;
     unsigned int i, stride_count = 1;
     HRESULT hr;
@@ -4938,9 +4919,18 @@ static HRESULT STDMETHODCALLTYPE d3d10_device_CreateGeometryShaderWithStreamOutp
             iface, byte_code, byte_code_length, output_stream_decls,
             output_stream_decl_count, output_stream_stride, shader);
 
-    if (!(so_entries = d3d11_calloc(output_stream_decl_count, sizeof(*so_entries))))
+    if (!output_stream_decl_count && output_stream_stride)
+    {
+        WARN("Stride must be 0 when declaration entry count is 0.\n");
+        *shader = NULL;
+        return E_INVALIDARG;
+    }
+
+    if (output_stream_decl_count
+            && !(so_entries = d3d11_calloc(output_stream_decl_count, sizeof(*so_entries))))
     {
         ERR("Failed to allocate D3D11 SO declaration array memory.\n");
+        *shader = NULL;
         return E_OUTOFMEMORY;
     }
 
@@ -4954,14 +4944,26 @@ static HRESULT STDMETHODCALLTYPE d3d10_device_CreateGeometryShaderWithStreamOutp
         so_entries[i].OutputSlot = output_stream_decls[i].OutputSlot;
 
         if (output_stream_decls[i].OutputSlot)
-           stride_count = 0;
+        {
+            stride_count = 0;
+            if (output_stream_stride)
+            {
+                WARN("Stride must be 0 when multiple output slots are used.\n");
+                HeapFree(GetProcessHeap(), 0, so_entries);
+                *shader = NULL;
+                return E_INVALIDARG;
+            }
+        }
     }
 
     hr = d3d_geometry_shader_create(device, byte_code, byte_code_length,
             so_entries, output_stream_decl_count, &output_stream_stride, stride_count, 0, &object);
     HeapFree(GetProcessHeap(), 0, so_entries);
     if (FAILED(hr))
+    {
+        *shader = NULL;
         return hr;
+    }
 
     *shader = &object->ID3D10GeometryShader_iface;
 
