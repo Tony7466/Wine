@@ -1,0 +1,19 @@
+--- a/configure.ac
++++ b/configure.ac
+@@ -1461,7 +1461,7 @@ WINE_NOTICE_WITH(pulse, [test -z "$PULSE
+ dnl **** Check for gstreamer ****
+ if test "x$with_gstreamer" != "xno"
+ then
+-    WINE_PACKAGE_FLAGS(GSTREAMER,[gstreamer-1.0 gstreamer-video-1.0 gstreamer-audio-1.0],,,,
++    WINE_PACKAGE_FLAGS(GSTREAMER,[gstreamer-1.0],,,,
+         [ac_gst_incl=""
+         for i in $GSTREAMER_CFLAGS
+         do
+@@ -1469,6 +1469,7 @@ then
+                 -I*) ac_gst_incl="$ac_gst_incl $i";;
+             esac
+         done
++        GSTREAMER_LIBS="$GSTREAMER_LIBS -lgstvideo-1.0 -lgstaudio-1.0"
+         GSTREAMER_CFLAGS=$ac_gst_incl
+         CPPFLAGS="$ac_save_CPPFLAGS $GSTREAMER_CFLAGS"
+         AC_CHECK_HEADER([gst/gst.h],

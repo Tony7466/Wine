@@ -1,3 +1,16 @@
+wine-development (2.6-1) experimental; urgency=medium
+
+  * New upstream release 2.6, released Apr 13, 2017.
+    - Multi-threaded command stream in Direct3D.
+    - More Shader Model 5 instructions.
+    - More support for 3D textures.
+    - Better font transformations in DirectWrite.
+    - Various bug fixes.
+  * Avoid unnecessary linking to gstbase.
+  * Drop glu32.patch since upstream no longer links to it unnecessarily.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Fri, 14 Apr 2017 18:21:47 +0000
+
 wine-development (2.5-1) experimental; urgency=medium
 
   * New upstream release 2.5, released Mar 31, 2017.

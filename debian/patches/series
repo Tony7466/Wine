@@ -19,6 +19,6 @@ debsuffix/winemenubuilder.patch
 binary-indep/manpages.patch
 binary-indep/sfnt2fon.patch
 
-glu32.patch
+gstbase.patch
 font-divbyzero.patch
 printer-resolution.patch
