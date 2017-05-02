@@ -24,6 +24,8 @@
 #include <math.h>
 #include "d3d.h"
 
+HRESULT WINAPI GetSurfaceFromDC(HDC dc, struct IDirectDrawSurface **surface, HDC *device_dc);
+
 static HRESULT (WINAPI *pDirectDrawCreateEx)(GUID *guid, void **ddraw, REFIID iid, IUnknown *outer_unknown);
 static BOOL is_ddraw64 = sizeof(DWORD) != sizeof(DWORD *);
 static DEVMODEW registry_mode;
@@ -5891,7 +5893,6 @@ static void test_surface_lock(void)
         expected_hr = tests[i].caps & DDSCAPS_TEXTURE && !(tests[i].caps & DDSCAPS_VIDEOMEMORY)
                 ? DD_OK : DDERR_INVALIDPARAMS;
         hr = IDirectDrawSurface7_Lock(surface, NULL, &ddsd, DDLOCK_WAIT, NULL);
-        todo_wine_if(expected_hr == D3D_OK)
         ok(hr == expected_hr, "Got hr %#x, expected %#x, type %s.\n", hr, expected_hr, tests[i].name);
         if (SUCCEEDED(hr))
         {
@@ -12321,7 +12322,6 @@ static void test_surface_desc_size(void)
             desc.blob[sizeof(DDSURFACEDESC2)] = 0xef;
             hr = IDirectDrawSurface_Lock(surface, NULL, &desc.desc1, 0, 0);
             expected_hr = ignore_size || valid_size ? DD_OK : DDERR_INVALIDPARAMS;
-            todo_wine_if(ignore_size && !valid_size)
             ok(hr == expected_hr, "Got hr %#x, expected %#x, dwSize %u, type %s.\n",
                     hr, expected_hr, desc_sizes[j], surface_caps[i].name);
             ok(desc.dwSize == desc_sizes[j], "dwSize was changed from %u to %u, type %s.\n",
@@ -12348,7 +12348,6 @@ static void test_surface_desc_size(void)
             desc.blob[sizeof(DDSURFACEDESC2)] = 0xef;
             hr = IDirectDrawSurface3_Lock(surface3, NULL, &desc.desc1, 0, 0);
             expected_hr = ignore_size || valid_size ? DD_OK : DDERR_INVALIDPARAMS;
-            todo_wine_if(ignore_size && !valid_size)
             ok(hr == expected_hr, "Got hr %#x, expected %#x, dwSize %u, type %s.\n",
                     hr, expected_hr, desc_sizes[j], surface_caps[i].name);
             ok(desc.dwSize == desc_sizes[j], "dwSize was changed from %u to %u, type %s.\n",
@@ -12375,7 +12374,6 @@ static void test_surface_desc_size(void)
             desc.blob[sizeof(DDSURFACEDESC2)] = 0xef;
             hr = IDirectDrawSurface7_Lock(surface7, NULL, &desc.desc2, 0, 0);
             expected_hr = ignore_size || valid_size ? DD_OK : DDERR_INVALIDPARAMS;
-            todo_wine_if(ignore_size && !valid_size)
             ok(hr == expected_hr, "Got hr %#x, expected %#x, dwSize %u, type %s.\n",
                     hr, expected_hr, desc_sizes[j], surface_caps[i].name);
             ok(desc.dwSize == desc_sizes[j], "dwSize was changed from %u to %u, type %s.\n",
@@ -12403,6 +12401,117 @@ static void test_surface_desc_size(void)
 
     refcount = IDirectDraw7_Release(ddraw);
     ok(!refcount, "DirectDraw has %u references left.\n", refcount);
+}
+
+static void test_get_surface_from_dc(void)
+{
+    IDirectDrawSurface *surface1, *tmp1;
+    IDirectDrawSurface7 *surface, *tmp;
+    DDSURFACEDESC2 surface_desc;
+    IDirectDraw7 *ddraw;
+    HDC dc, device_dc;
+    ULONG refcount;
+    HWND window;
+    HRESULT hr;
+    DWORD ret;
+
+    window = CreateWindowA("static", "ddraw_test", WS_OVERLAPPEDWINDOW,
+            0, 0, 640, 480, 0, 0, 0, 0);
+    ddraw = create_ddraw();
+    ok(!!ddraw, "Failed to create a ddraw object.\n");
+    hr = IDirectDraw7_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
+    ok(SUCCEEDED(hr), "Failed to set cooperative level, hr %#x.\n", hr);
+
+    memset(&surface_desc, 0, sizeof(surface_desc));
+    surface_desc.dwSize = sizeof(surface_desc);
+    surface_desc.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
+    surface_desc.dwWidth = 64;
+    surface_desc.dwHeight = 64;
+    surface_desc.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
+
+    hr = IDirectDraw7_CreateSurface(ddraw, &surface_desc, &surface, NULL);
+    ok(SUCCEEDED(hr), "Failed to create surface, hr %#x.\n", hr);
+    hr = IDirectDrawSurface7_QueryInterface(surface, &IID_IDirectDrawSurface, (void **)&surface1);
+    ok(SUCCEEDED(hr), "Failed to query IDirectDrawSurface interface, hr %#x.\n", hr);
+
+    refcount = get_refcount((IUnknown *)surface1);
+    ok(refcount == 1, "Got unexpected refcount %u.\n", refcount);
+    refcount = get_refcount((IUnknown *)surface);
+    ok(refcount == 1, "Got unexpected refcount %u.\n", refcount);
+
+    hr = IDirectDrawSurface7_GetDC(surface, &dc);
+    ok(SUCCEEDED(hr), "Failed to get DC, hr %#x.\n", hr);
+
+    tmp1 = (void *)0xdeadbeef;
+    device_dc = (void *)0xdeadbeef;
+    hr = GetSurfaceFromDC(NULL, &tmp1, &device_dc);
+    ok(hr == DDERR_NOTFOUND, "Got unexpected hr %#x.\n", hr);
+    ok(!tmp1, "Got unexpected surface %p.\n", tmp1);
+    ok(!device_dc, "Got unexpected device_dc %p.\n", device_dc);
+
+    device_dc = (void *)0xdeadbeef;
+    hr = GetSurfaceFromDC(dc, NULL, &device_dc);
+    ok(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
+    ok(device_dc == (void *)0xdeadbeef, "Got unexpected device_dc %p.\n", device_dc);
+
+    tmp1 = (void *)0xdeadbeef;
+    hr = GetSurfaceFromDC(dc, &tmp1, NULL);
+    ok(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
+    ok(!tmp1, "Got unexpected surface %p.\n", tmp1);
+
+    hr = GetSurfaceFromDC(dc, &tmp1, &device_dc);
+    ok(SUCCEEDED(hr), "GetSurfaceFromDC failed, hr %#x.\n", hr);
+    ok(tmp1 == surface1, "Got unexpected surface %p, expected %p.\n", tmp1, surface1);
+    IDirectDrawSurface_Release(tmp1);
+
+    ret = GetObjectType(device_dc);
+    todo_wine ok(ret == OBJ_DC, "Got unexpected object type %#x.\n", ret);
+    ret = GetDeviceCaps(device_dc, TECHNOLOGY);
+    todo_wine ok(ret == DT_RASDISPLAY, "Got unexpected technology %#x.\n", ret);
+
+    hr = IDirectDraw7_GetSurfaceFromDC(ddraw, dc, NULL);
+    ok(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDirectDraw7_GetSurfaceFromDC(ddraw, dc, &tmp);
+    ok(SUCCEEDED(hr), "GetSurfaceFromDC failed, hr %#x.\n", hr);
+    ok(tmp == surface, "Got unexpected surface %p, expected %p.\n", tmp, surface);
+
+    refcount = get_refcount((IUnknown *)surface1);
+    ok(refcount == 1, "Got unexpected refcount %u.\n", refcount);
+    refcount = get_refcount((IUnknown *)surface);
+    ok(refcount == 2, "Got unexpected refcount %u.\n", refcount);
+
+    hr = IDirectDrawSurface7_ReleaseDC(surface, dc);
+    ok(SUCCEEDED(hr), "ReleaseDC failed, hr %#x.\n", hr);
+
+    IDirectDrawSurface_Release(tmp);
+
+    dc = CreateCompatibleDC(NULL);
+    ok(!!dc, "CreateCompatibleDC failed.\n");
+
+    tmp1 = (void *)0xdeadbeef;
+    device_dc = (void *)0xdeadbeef;
+    hr = GetSurfaceFromDC(dc, &tmp1, &device_dc);
+    ok(hr == DDERR_NOTFOUND, "Got unexpected hr %#x.\n", hr);
+    ok(!tmp1, "Got unexpected surface %p.\n", tmp1);
+    ok(!device_dc, "Got unexpected device_dc %p.\n", device_dc);
+
+    tmp = (void *)0xdeadbeef;
+    hr = IDirectDraw7_GetSurfaceFromDC(ddraw, dc, &tmp);
+    ok(hr == DDERR_NOTFOUND, "Got unexpected hr %#x.\n", hr);
+    ok(!tmp, "Got unexpected surface %p.\n", tmp);
+
+    ok(DeleteDC(dc), "DeleteDC failed.\n");
+
+    tmp = (void *)0xdeadbeef;
+    hr = IDirectDraw7_GetSurfaceFromDC(ddraw, NULL, &tmp);
+    ok(hr == DDERR_NOTFOUND, "Got unexpected hr %#x.\n", hr);
+    ok(!tmp, "Got unexpected surface %p.\n", tmp);
+
+    IDirectDrawSurface7_Release(surface);
+    IDirectDrawSurface_Release(surface1);
+    IDirectDraw7_Release(ddraw);
+    DestroyWindow(window);
 }
 
 START_TEST(ddraw7)
@@ -12517,4 +12626,5 @@ START_TEST(ddraw7)
     test_edge_antialiasing_blending();
     test_display_mode_surface_pixel_format();
     test_surface_desc_size();
+    test_get_surface_from_dc();
 }
