@@ -1124,7 +1124,7 @@
 @ extern _environ MSVCRT__environ
 @ cdecl _eof(long) MSVCRT__eof
 @ cdecl _errno() MSVCRT__errno
-@ stub _except1
+@ cdecl _except1(long long double double long ptr)
 @ cdecl -arch=i386 _except_handler2(ptr ptr ptr ptr)
 @ cdecl -arch=i386 _except_handler3(ptr ptr ptr ptr)
 @ cdecl -arch=i386 _except_handler4_common(ptr ptr ptr ptr ptr ptr)
@@ -2151,7 +2151,7 @@
 @ cdecl feof(ptr) MSVCRT_feof
 @ stub feraiseexcept
 @ cdecl ferror(ptr) MSVCRT_ferror
-@ stub fesetenv
+@ cdecl fesetenv(ptr) MSVCRT_fesetenv
 @ stub fesetexceptflag
 @ stub fesetround
 @ stub fetestexcept
@@ -2293,9 +2293,9 @@
 @ cdecl memset(ptr long long) MSVCRT_memset
 @ cdecl modf(double ptr) MSVCRT_modf
 @ cdecl -arch=arm,x86_64 modff(float ptr) MSVCRT_modff
-@ stub nan
-@ stub nanf
-@ stub nanl
+@ cdecl nan(str) MSVCR120_nan
+@ cdecl nanf(str) MSVCR120_nanf
+@ cdecl nanl(str) MSVCR120_nan
 @ cdecl nearbyint(double) MSVCRT_nearbyint
 @ cdecl nearbyintf(float) MSVCRT_nearbyintf
 @ cdecl nearbyintl(double) MSVCRT_nearbyint
