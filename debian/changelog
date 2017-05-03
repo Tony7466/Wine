@@ -1,3 +1,18 @@
+wine (2.0.1-1) experimental; urgency=medium
+
+  [ Michael Gilbert ]
+  * Update to debhelper 10.
+  * Use date of the latest changelog update as the build date.
+
+  [ Jens Reyer ]
+  * New upstream release 2.0.1, released Apr 20, 2017.
+    - Various bug fixes
+    - Deprecated tools/wineinstall
+  * Describe purpose of the sonames2elf script.
+  * Clarify license LGPL-2.1 *or later* in import scripts.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Wed, 03 May 2017 17:22:11 +0200
+
 wine (2.0-4) experimental; urgency=medium
 
   * Switch to the stable branch.
