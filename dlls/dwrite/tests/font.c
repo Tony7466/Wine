@@ -1,7 +1,7 @@
 /*
  *    Font related tests
  *
- * Copyright 2012, 2014-2016 Nikolay Sivov for CodeWeavers
+ * Copyright 2012, 2014-2017 Nikolay Sivov for CodeWeavers
  * Copyright 2014 Aric Stewart for CodeWeavers
  *
  * This library is free software; you can redistribute it and/or
@@ -42,6 +42,17 @@
 #define MS_POST_TAG DWRITE_MAKE_OPENTYPE_TAG('p','o','s','t')
 #define MS_GSUB_TAG DWRITE_MAKE_OPENTYPE_TAG('G','S','U','B')
 #define MS_KERN_TAG DWRITE_MAKE_OPENTYPE_TAG('k','e','r','n')
+#define MS_GLYF_TAG DWRITE_MAKE_OPENTYPE_TAG('g','l','y','f')
+#define MS_CFF__TAG DWRITE_MAKE_OPENTYPE_TAG('C','F','F',' ')
+#define MS_COLR_TAG DWRITE_MAKE_OPENTYPE_TAG('C','O','L','R')
+#define MS_SVG__TAG DWRITE_MAKE_OPENTYPE_TAG('S','V','G',' ')
+#define MS_SBIX_TAG DWRITE_MAKE_OPENTYPE_TAG('s','b','i','x')
+#define MS_MAXP_TAG DWRITE_MAKE_OPENTYPE_TAG('m','a','x','p')
+
+/* 'sbix' formats */
+#define MS_PNG__TAG DWRITE_MAKE_OPENTYPE_TAG('p','n','g',' ')
+#define MS_JPG__TAG DWRITE_MAKE_OPENTYPE_TAG('j','p','g',' ')
+#define MS_TIFF_TAG DWRITE_MAKE_OPENTYPE_TAG('t','i','f','f')
 
 #ifdef WORDS_BIGENDIAN
 #define GET_BE_WORD(x) (x)
@@ -297,6 +308,31 @@ typedef struct {
     WORD ExtensionLookupType;
     DWORD ExtensionOffset;
 } GSUB_ExtensionPosFormat1;
+
+typedef struct {
+    WORD version;
+    WORD flags;
+    DWORD numStrikes;
+    DWORD strikeOffset[1];
+} sbix_header;
+
+typedef struct {
+    WORD ppem;
+    WORD ppi;
+    DWORD glyphDataOffsets[1];
+} sbix_strike;
+
+typedef struct {
+    WORD originOffsetX;
+    WORD originOffsetY;
+    DWORD graphicType;
+    BYTE data[1];
+} sbix_glyph_data;
+
+typedef struct {
+    DWORD version;
+    WORD numGlyphs;
+} maxp;
 
 #include "poppack.h"
 
@@ -3455,6 +3491,7 @@ static void test_CreateFontFaceFromHdc(void)
     IDWriteFactory *factory;
     HFONT hfont, oldhfont;
     LOGFONTW logfont;
+    LOGFONTA lf;
     HRESULT hr;
     ULONG ref;
     HDC hdc;
@@ -3465,9 +3502,15 @@ static void test_CreateFontFaceFromHdc(void)
     hr = IDWriteFactory_GetGdiInterop(factory, &interop);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
+    /* Invalid HDC. */
     fontface = (void*)0xdeadbeef;
     hr = IDWriteGdiInterop_CreateFontFaceFromHdc(interop, NULL, &fontface);
     ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
+    ok(fontface == NULL, "got %p\n", fontface);
+
+    fontface = (void *)0xdeadbeef;
+    hr = IDWriteGdiInterop_CreateFontFaceFromHdc(interop, (HDC)0xdeadbeef, &fontface);
+    ok(hr == E_FAIL, "got 0x%08x\n", hr);
     ok(fontface == NULL, "got %p\n", fontface);
 
     memset(&logfont, 0, sizeof(logfont));
@@ -3485,6 +3528,21 @@ static void test_CreateFontFaceFromHdc(void)
     hr = IDWriteGdiInterop_CreateFontFaceFromHdc(interop, hdc, &fontface);
     ok(hr == S_OK, "got 0x%08x\n", hr);
     IDWriteFontFace_Release(fontface);
+    DeleteObject(SelectObject(hdc, oldhfont));
+
+    /* Select bitmap font MS Sans Serif, format that's not supported by DirectWrite. */
+    memset(&lf, 0, sizeof(lf));
+    lf.lfHeight = -12;
+    strcpy(lf.lfFaceName, "MS Sans Serif");
+
+    hfont = CreateFontIndirectA(&lf);
+    oldhfont = SelectObject(hdc, hfont);
+
+    fontface = (void *)0xdeadbeef;
+    hr = IDWriteGdiInterop_CreateFontFaceFromHdc(interop, hdc, &fontface);
+    ok(hr == DWRITE_E_FILEFORMAT || broken(hr == E_FAIL) /* Vista */, "got 0x%08x\n", hr);
+    ok(fontface == NULL, "got %p\n", fontface);
+
     DeleteObject(SelectObject(hdc, oldhfont));
     DeleteDC(hdc);
 
@@ -4308,10 +4366,13 @@ static void test_GetEudcFontCollection(void)
         return;
     }
 
+    EXPECT_REF(factory1, 1);
     hr = IDWriteFactory1_GetEudcFontCollection(factory1, &coll, FALSE);
     ok(hr == S_OK, "got 0x%08x\n", hr);
+    EXPECT_REF(factory1, 2);
     hr = IDWriteFactory1_GetEudcFontCollection(factory1, &coll2, FALSE);
     ok(hr == S_OK, "got 0x%08x\n", hr);
+    EXPECT_REF(factory1, 2);
     ok(coll == coll2, "got %p, %p\n", coll, coll2);
     IDWriteFontCollection_Release(coll);
     IDWriteFontCollection_Release(coll2);
@@ -7263,6 +7324,308 @@ static void test_object_lifetime(void)
     ok(ref == 0, "factory not released, %u\n", ref);
 }
 
+static void test_inmemory_file_loader(void)
+{
+    IDWriteFontFileLoader *loader, *loader2;
+    IDWriteInMemoryFontFileLoader *inmemory;
+    IDWriteFontFile *file, *file2;
+    IDWriteFontFileStream *stream;
+    IDWriteFontFace *fontface;
+    IDWriteFactory5 *factory5;
+    IDWriteFactory *factory;
+    const void *key, *data;
+    UINT32 count, key_size;
+    UINT64 file_size;
+    void *context;
+    HRESULT hr;
+    ULONG ref;
+
+    factory = create_factory();
+
+    hr = IDWriteFactory_QueryInterface(factory, &IID_IDWriteFactory5, (void **)&factory5);
+    IDWriteFactory_Release(factory);
+    if (FAILED(hr)) {
+        skip("CreateInMemoryFontFileLoader is not supported\n");
+        return;
+    }
+
+    fontface = create_fontface((IDWriteFactory *)factory5);
+    hr = IDWriteFactory5_CreateInMemoryFontFileLoader(factory5, &loader);
+    ok(hr == S_OK, "got %#x\n", hr);
+
+    hr = IDWriteFactory5_CreateInMemoryFontFileLoader(factory5, &loader2);
+    ok(hr == S_OK, "got %#x\n", hr);
+    ok(loader != loader2, "unexpected pointer\n");
+    IDWriteFontFileLoader_Release(loader2);
+
+    hr = IDWriteFontFileLoader_QueryInterface(loader, &IID_IDWriteInMemoryFontFileLoader, (void **)&inmemory);
+    ok(hr == S_OK, "got %#x\n", hr);
+    IDWriteFontFileLoader_Release(loader);
+
+    /* Use whole font blob to construct in-memory file. */
+    count = 1;
+    hr = IDWriteFontFace_GetFiles(fontface, &count, &file);
+    ok(hr == S_OK, "got %#x\n", hr);
+
+    hr = IDWriteFontFile_GetLoader(file, &loader);
+    ok(hr == S_OK, "got %#x\n", hr);
+
+    hr = IDWriteFontFile_GetReferenceKey(file, &key, &key_size);
+    ok(hr == S_OK, "got %#x\n", hr);
+
+    hr = IDWriteFontFileLoader_CreateStreamFromKey(loader, key, key_size, &stream);
+    ok(hr == S_OK, "got %#x\n", hr);
+    IDWriteFontFileLoader_Release(loader);
+    IDWriteFontFile_Release(file);
+
+    hr = IDWriteFontFileStream_GetFileSize(stream, &file_size);
+    ok(hr == S_OK, "got %#x\n", hr);
+
+    hr = IDWriteFontFileStream_ReadFileFragment(stream, &data, 0, file_size, &context);
+    ok(hr == S_OK, "got %#x\n", hr);
+
+    hr = IDWriteInMemoryFontFileLoader_CreateInMemoryFontFileReference(inmemory, (IDWriteFactory *)factory5, data,
+        file_size, NULL, &file);
+    ok(hr == E_INVALIDARG, "got %#x\n", hr);
+
+    hr = IDWriteFactory5_RegisterFontFileLoader(factory5, (IDWriteFontFileLoader *)inmemory);
+    ok(hr == S_OK, "got %#x\n", hr);
+
+    hr = IDWriteInMemoryFontFileLoader_CreateInMemoryFontFileReference(inmemory, (IDWriteFactory *)factory5, data,
+        file_size, NULL, &file);
+    ok(hr == S_OK, "got %#x\n", hr);
+
+    hr = IDWriteInMemoryFontFileLoader_CreateInMemoryFontFileReference(inmemory, (IDWriteFactory *)factory5, data,
+        file_size, NULL, &file2);
+    ok(hr == S_OK, "got %#x\n", hr);
+    ok(file2 != file, "got unexpected file\n");
+
+    /* Check in-memory reference key format. */
+    hr = IDWriteFontFile_GetReferenceKey(file, &key, &key_size);
+    ok(hr == S_OK, "got %#x\n", hr);
+
+    ok(key && *(DWORD*)key == 1, "got wrong ref key\n");
+    ok(key_size == 4, "ref key size %u\n", key_size);
+
+    hr = IDWriteFontFile_GetReferenceKey(file2, &key, &key_size);
+    ok(hr == S_OK, "got %#x\n", hr);
+
+    ok(key && *(DWORD*)key == 2, "got wrong ref key\n");
+    ok(key_size == 4, "ref key size %u\n", key_size);
+
+    /* Release file and index 1, create new one to see if index is reused. */
+    IDWriteFontFile_Release(file);
+
+    hr = IDWriteInMemoryFontFileLoader_CreateInMemoryFontFileReference(inmemory, (IDWriteFactory *)factory5, data,
+        file_size, NULL, &file);
+    ok(hr == S_OK, "got %#x\n", hr);
+    ok(file2 != file, "got unexpected file\n");
+
+    hr = IDWriteFontFile_GetReferenceKey(file, &key, &key_size);
+    ok(hr == S_OK, "got %#x\n", hr);
+
+    ok(key && *(DWORD*)key == 3, "got wrong ref key\n");
+    ok(key_size == 4, "ref key size %u\n", key_size);
+
+    IDWriteFontFile_Release(file);
+    IDWriteFontFile_Release(file2);
+
+    hr = IDWriteFactory5_UnregisterFontFileLoader(factory5, (IDWriteFontFileLoader *)inmemory);
+    ok(hr == S_OK, "got %#x\n", hr);
+
+    IDWriteFontFileStream_ReleaseFileFragment(stream, context);
+    IDWriteFontFileStream_Release(stream);
+
+    IDWriteInMemoryFontFileLoader_Release(inmemory);
+
+    IDWriteFontFace_Release(fontface);
+    ref = IDWriteFactory5_Release(factory5);
+    ok(ref == 0, "factory not released, %u\n", ref);
+}
+
+static BOOL face_has_table(IDWriteFontFace4 *fontface, UINT32 tag)
+{
+    BOOL exists = FALSE;
+    const void *data;
+    void *context;
+    UINT32 size;
+    HRESULT hr;
+
+    hr = IDWriteFontFace4_TryGetFontTable(fontface, tag, &data, &size, &context, &exists);
+    ok(hr == S_OK, "TryGetFontTable() failed, %#x\n", hr);
+    if (exists)
+        IDWriteFontFace4_ReleaseFontTable(fontface, context);
+
+    return exists;
+}
+
+static DWORD get_sbix_formats(IDWriteFontFace4 *fontface)
+{
+    UINT32 size, s, num_strikes;
+    const sbix_header *header;
+    UINT16 g, num_glyphs;
+    BOOL exists = FALSE;
+    const maxp *maxp;
+    const void *data;
+    DWORD ret = 0;
+    void *context;
+    HRESULT hr;
+
+    hr = IDWriteFontFace4_TryGetFontTable(fontface, MS_MAXP_TAG, &data, &size, &context, &exists);
+    ok(hr == S_OK, "TryGetFontTable() failed, %#x\n", hr);
+    ok(exists, "Expected maxp table\n");
+
+    if (!exists)
+        return 0;
+
+    maxp = data;
+    num_glyphs = GET_BE_WORD(maxp->numGlyphs);
+
+    hr = IDWriteFontFace4_TryGetFontTable(fontface, MS_SBIX_TAG, &data, &size, &context, &exists);
+    ok(hr == S_OK, "TryGetFontTable() failed, %#x\n", hr);
+    ok(exists, "Expected sbix table\n");
+
+    header = data;
+    num_strikes = GET_BE_DWORD(header->numStrikes);
+
+    for (s = 0; s < num_strikes; s++) {
+        sbix_strike *strike = (sbix_strike *)((BYTE *)header + GET_BE_DWORD(header->strikeOffset[s]));
+
+        for (g = 0; g < num_glyphs; g++) {
+            DWORD offset = GET_BE_DWORD(strike->glyphDataOffsets[g]);
+            DWORD offset_next = GET_BE_DWORD(strike->glyphDataOffsets[g + 1]);
+            sbix_glyph_data *glyph_data;
+            DWORD format;
+
+            if (offset == offset_next)
+                continue;
+
+            glyph_data = (sbix_glyph_data *)((BYTE *)strike + offset);
+            switch (format = glyph_data->graphicType)
+            {
+            case MS_PNG__TAG:
+                ret |= DWRITE_GLYPH_IMAGE_FORMATS_PNG;
+                break;
+            case MS_JPG__TAG:
+                ret |= DWRITE_GLYPH_IMAGE_FORMATS_JPEG;
+                break;
+            case MS_TIFF_TAG:
+                ret |= DWRITE_GLYPH_IMAGE_FORMATS_TIFF;
+                break;
+            default:
+                ok(0, "unexpected format, %#x\n", GET_BE_DWORD(format));
+            }
+        }
+    }
+
+    IDWriteFontFace4_ReleaseFontTable(fontface, context);
+
+    return ret;
+}
+
+static DWORD get_face_glyph_image_formats(IDWriteFontFace4 *fontface)
+{
+    DWORD ret = DWRITE_GLYPH_IMAGE_FORMATS_NONE;
+
+    if (face_has_table(fontface, MS_GLYF_TAG))
+        ret |= DWRITE_GLYPH_IMAGE_FORMATS_TRUETYPE;
+
+    if (face_has_table(fontface, MS_CFF__TAG))
+        ret |= DWRITE_GLYPH_IMAGE_FORMATS_CFF;
+
+    if (face_has_table(fontface, MS_COLR_TAG))
+        ret |= DWRITE_GLYPH_IMAGE_FORMATS_COLR;
+
+    if (face_has_table(fontface, MS_SVG__TAG))
+        ret |= DWRITE_GLYPH_IMAGE_FORMATS_SVG;
+
+    if (face_has_table(fontface, MS_SBIX_TAG))
+        ret |= get_sbix_formats(fontface);
+
+    /* TODO: handle embedded bitmaps tables */
+    return ret;
+}
+
+static void test_GetGlyphImageFormats(void)
+{
+    IDWriteFontCollection *syscollection;
+    IDWriteFactory *factory;
+    UINT32 i, count;
+    HRESULT hr;
+    ULONG ref;
+    IDWriteFontFace *fontface;
+    IDWriteFontFace4 *fontface4;
+
+    factory = create_factory();
+
+    fontface = create_fontface(factory);
+    hr = IDWriteFontFace_QueryInterface(fontface, &IID_IDWriteFontFace4, (void **)&fontface4);
+    IDWriteFontFace_Release(fontface);
+    if (FAILED(hr)) {
+        win_skip("GetGlyphImageFormats() is not supported\n");
+        IDWriteFactory_Release(factory);
+        return;
+    }
+    IDWriteFontFace4_Release(fontface4);
+
+    hr = IDWriteFactory_GetSystemFontCollection(factory, &syscollection, FALSE);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    count = IDWriteFontCollection_GetFontFamilyCount(syscollection);
+
+    for (i = 0; i < count; i++) {
+        WCHAR familynameW[256], facenameW[128];
+        IDWriteLocalizedStrings *names;
+        IDWriteFontFamily *family;
+        UINT32 j, fontcount;
+        IDWriteFont *font;
+
+        hr = IDWriteFontCollection_GetFontFamily(syscollection, i, &family);
+        ok(hr == S_OK, "got 0x%08x\n", hr);
+
+        hr = IDWriteFontFamily_GetFamilyNames(family, &names);
+        ok(hr == S_OK, "got 0x%08x\n", hr);
+
+        get_enus_string(names, familynameW, sizeof(familynameW)/sizeof(*familynameW));
+        IDWriteLocalizedStrings_Release(names);
+
+        fontcount = IDWriteFontFamily_GetFontCount(family);
+        for (j = 0; j < fontcount; j++) {
+            DWORD formats, expected_formats;
+
+            hr = IDWriteFontFamily_GetFont(family, j, &font);
+            ok(hr == S_OK, "got 0x%08x\n", hr);
+
+            hr = IDWriteFont_CreateFontFace(font, &fontface);
+            ok(hr == S_OK, "got 0x%08x\n", hr);
+
+            hr = IDWriteFont_GetFaceNames(font, &names);
+            ok(hr == S_OK, "got 0x%08x\n", hr);
+
+            get_enus_string(names, facenameW, sizeof(facenameW)/sizeof(*facenameW));
+
+            IDWriteLocalizedStrings_Release(names);
+
+            IDWriteFontFace_QueryInterface(fontface, &IID_IDWriteFontFace4, (void **)&fontface4);
+
+            /* Mask describes font as a whole. */
+            formats = IDWriteFontFace4_GetGlyphImageFormats(fontface4);
+            expected_formats = get_face_glyph_image_formats(fontface4);
+            ok(formats == expected_formats, "%s - %s, expected formats %#x, got formats %#x.\n",
+                wine_dbgstr_w(familynameW), wine_dbgstr_w(facenameW), expected_formats, formats);
+
+            IDWriteFontFace4_Release(fontface4);
+            IDWriteFontFace_Release(fontface);
+            IDWriteFont_Release(font);
+        }
+
+        IDWriteFontFamily_Release(family);
+    }
+
+    IDWriteFontCollection_Release(syscollection);
+    ref = IDWriteFactory_Release(factory);
+    ok(ref == 0, "factory not released, %u\n", ref);
+}
+
 START_TEST(font)
 {
     IDWriteFactory *factory;
@@ -7324,6 +7687,8 @@ START_TEST(font)
     test_HasVerticalGlyphVariants();
     test_HasKerningPairs();
     test_ComputeGlyphOrigins();
+    test_inmemory_file_loader();
+    test_GetGlyphImageFormats();
 
     IDWriteFactory_Release(factory);
 }

@@ -1098,6 +1098,7 @@ static INT GSUB_apply_ContextSubst(const OT_LookupList* lookup, const OT_LookupT
                 {
                     const GSUB_SubRule_1 *sr;
                     const GSUB_SubRule_2 *sr_2;
+                    unsigned int g;
                     int g_count, l;
                     int newIndex = glyph_index;
 
@@ -1105,6 +1106,11 @@ static INT GSUB_apply_ContextSubst(const OT_LookupList* lookup, const OT_LookupT
                     sr = (const GSUB_SubRule_1*)((const BYTE*)srs+offset);
                     g_count = GET_BE_WORD(sr->GlyphCount);
                     TRACE("   SubRule has %i glyphs\n",g_count);
+
+                    g = glyph_index + write_dir * (g_count - 1);
+                    if (g >= *glyph_count)
+                        continue;
+
                     for (l = 0; l < g_count-1; l++)
                         if (glyphs[glyph_index + (write_dir * (l+1))] != GET_BE_WORD(sr->Input[l])) break;
 
@@ -1115,16 +1121,23 @@ static INT GSUB_apply_ContextSubst(const OT_LookupList* lookup, const OT_LookupT
                     }
 
                     TRACE("   Rule matches\n");
-                    sr_2 = (const GSUB_SubRule_2*)((const BYTE*)sr+
-                        FIELD_OFFSET(GSUB_SubRule_1, Input[g_count-1]));
+                    sr_2 = (const GSUB_SubRule_2 *)&sr->Input[g_count - 1];
 
                     for (l = 0; l < GET_BE_WORD(sr->SubstCount); l++)
                     {
-                        int lookupIndex = GET_BE_WORD(sr_2->SubstLookupRecord[l].LookupListIndex);
-                        int SequenceIndex = GET_BE_WORD(sr_2->SubstLookupRecord[l].SequenceIndex) * write_dir;
+                        unsigned int lookup_index = GET_BE_WORD(sr_2->SubstLookupRecord[l].LookupListIndex);
+                        unsigned int sequence_index = GET_BE_WORD(sr_2->SubstLookupRecord[l].SequenceIndex);
 
-                        TRACE("   SUBST: %i -> %i %i\n",l, SequenceIndex, lookupIndex);
-                        newIndex = GSUB_apply_lookup(lookup, lookupIndex, glyphs, glyph_index + SequenceIndex, write_dir, glyph_count);
+                        g = glyph_index + write_dir * sequence_index;
+                        if (g >= *glyph_count)
+                        {
+                            WARN("Invalid sequence index %u (glyph index %u, write dir %d).\n",
+                                    sequence_index, glyph_index, write_dir);
+                            continue;
+                        }
+
+                        TRACE("   SUBST: %u -> %u %u.\n", l, sequence_index, lookup_index);
+                        newIndex = GSUB_apply_lookup(lookup, lookup_index, glyphs, g, write_dir, glyph_count);
                         if (newIndex == GSUB_E_NOGLYPH)
                         {
                             ERR("   Chain failed to generate a glyph\n");
@@ -1169,6 +1182,7 @@ static INT GSUB_apply_ContextSubst(const OT_LookupList* lookup, const OT_LookupT
                 {
                     const GSUB_SubClassRule_1 *sr;
                     const GSUB_SubClassRule_2 *sr_2;
+                    unsigned int g;
                     int g_count, l;
                     int newIndex = glyph_index;
 
@@ -1176,6 +1190,11 @@ static INT GSUB_apply_ContextSubst(const OT_LookupList* lookup, const OT_LookupT
                     sr = (const GSUB_SubClassRule_1*)((const BYTE*)scs+offset);
                     g_count = GET_BE_WORD(sr->GlyphCount);
                     TRACE("   SubClassRule has %i glyphs classes\n",g_count);
+
+                    g = glyph_index + write_dir * (g_count - 1);
+                    if (g >= *glyph_count)
+                        continue;
+
                     for (l = 0; l < g_count-1; l++)
                     {
                         int g_class = OT_get_glyph_class(glyph_class_table, glyphs[glyph_index + (write_dir * (l+1))]);
@@ -1189,16 +1208,23 @@ static INT GSUB_apply_ContextSubst(const OT_LookupList* lookup, const OT_LookupT
                     }
 
                     TRACE("   Rule matches\n");
-                    sr_2 = (const GSUB_SubClassRule_2*)((const BYTE*)sr+
-                        FIELD_OFFSET(GSUB_SubClassRule_1, Class[g_count-1]));
+                    sr_2 = (const GSUB_SubClassRule_2 *)&sr->Class[g_count - 1];
 
                     for (l = 0; l < GET_BE_WORD(sr->SubstCount); l++)
                     {
-                        int lookupIndex = GET_BE_WORD(sr_2->SubstLookupRecord[l].LookupListIndex);
-                        int SequenceIndex = GET_BE_WORD(sr_2->SubstLookupRecord[l].SequenceIndex) * write_dir;
+                        unsigned int lookup_index = GET_BE_WORD(sr_2->SubstLookupRecord[l].LookupListIndex);
+                        unsigned int sequence_index = GET_BE_WORD(sr_2->SubstLookupRecord[l].SequenceIndex);
 
-                        TRACE("   SUBST: %i -> %i %i\n",l, SequenceIndex, lookupIndex);
-                        newIndex = GSUB_apply_lookup(lookup, lookupIndex, glyphs, glyph_index + SequenceIndex, write_dir, glyph_count);
+                        g = glyph_index + write_dir * sequence_index;
+                        if (g >= *glyph_count)
+                        {
+                            WARN("Invalid sequence index %u (glyph index %u, write dir %d).\n",
+                                    sequence_index, glyph_index, write_dir);
+                            continue;
+                        }
+
+                        TRACE("   SUBST: %u -> %u %u.\n", l, sequence_index, lookup_index);
+                        newIndex = GSUB_apply_lookup(lookup, lookup_index, glyphs, g, write_dir, glyph_count);
                         if (newIndex == GSUB_E_NOGLYPH)
                         {
                             ERR("   Chain failed to generate a glyph\n");
@@ -1346,12 +1372,19 @@ static INT GSUB_apply_ChainContextSubst(const OT_LookupList* lookup, const OT_Lo
                 substitute_count = GET_BE_WORD(substitute->SubstCount);
                 for (k = 0; k < substitute_count; ++k)
                 {
-                    WORD lookup_index = GET_BE_WORD(substitute->SubstLookupRecord[k].LookupListIndex);
-                    WORD sequence_index = GET_BE_WORD(substitute->SubstLookupRecord[k].SequenceIndex) * write_dir;
+                    unsigned int lookup_index = GET_BE_WORD(substitute->SubstLookupRecord[k].LookupListIndex);
+                    unsigned int sequence_index = GET_BE_WORD(substitute->SubstLookupRecord[k].SequenceIndex);
+                    unsigned int g = glyph_index + write_dir * sequence_index;
+
+                    if (g >= *glyph_count)
+                    {
+                        WARN("Skipping invalid sequence index %u (glyph index %u, write dir %d).\n",
+                                sequence_index, glyph_index, write_dir);
+                        continue;
+                    }
 
                     TRACE("SUBST: %u -> %u %u.\n", k, sequence_index, lookup_index);
-                    new_index = GSUB_apply_lookup(lookup, lookup_index, glyphs,
-                            glyph_index + sequence_index, write_dir, glyph_count);
+                    new_index = GSUB_apply_lookup(lookup, lookup_index, glyphs, g, write_dir, glyph_count);
                     if (new_index == GSUB_E_NOGLYPH)
                         ERR("Chain failed to generate a glyph.\n");
                 }
@@ -1426,12 +1459,19 @@ static INT GSUB_apply_ChainContextSubst(const OT_LookupList* lookup, const OT_Lo
             substitution_count = GET_BE_WORD(substitute->SubstCount);
             for (k = 0; k < substitution_count; ++k)
             {
-                WORD lookup_index = GET_BE_WORD(substitute->SubstLookupRecord[k].LookupListIndex);
-                WORD sequence_index = GET_BE_WORD(substitute->SubstLookupRecord[k].SequenceIndex) * write_dir;
+                unsigned int lookup_index = GET_BE_WORD(substitute->SubstLookupRecord[k].LookupListIndex);
+                unsigned int sequence_index = GET_BE_WORD(substitute->SubstLookupRecord[k].SequenceIndex);
+                unsigned int g = glyph_index + write_dir * sequence_index;
+
+                if (g >= *glyph_count)
+                {
+                    WARN("Skipping invalid sequence index %u (glyph index %u, write dir %d).\n",
+                            sequence_index, glyph_index, write_dir);
+                    continue;
+                }
 
                 TRACE("SUBST: %u -> %u %u.\n", k, sequence_index, lookup_index);
-                new_index = GSUB_apply_lookup(lookup, lookup_index, glyphs,
-                        glyph_index + sequence_index, write_dir, glyph_count);
+                new_index = GSUB_apply_lookup(lookup, lookup_index, glyphs, g, write_dir, glyph_count);
                 if (new_index == GSUB_E_NOGLYPH)
                     ERR("Chain failed to generate a glyph.\n");
             }
@@ -2152,12 +2192,18 @@ static unsigned int GPOS_apply_ContextPos(const ScriptCache *script_cache, const
                 {
                     const GPOS_PosClassRule_1 *pr;
                     const GPOS_PosClassRule_2 *pr_2;
+                    unsigned int g;
                     int g_count, l;
 
                     offset = GET_BE_WORD(pcs->PosClassRule[k]);
                     pr = (const GPOS_PosClassRule_1*)((const BYTE*)pcs+offset);
                     g_count = GET_BE_WORD(pr->GlyphCount);
                     TRACE("PosClassRule has %i glyphs classes\n",g_count);
+
+                    g = glyph_index + write_dir * (g_count - 1);
+                    if (g >= glyph_count)
+                        continue;
+
                     for (l = 0; l < g_count-1; l++)
                     {
                         int g_class = OT_get_glyph_class(glyph_class_table, glyphs[glyph_index + (write_dir * (l+1))]);
@@ -2171,17 +2217,25 @@ static unsigned int GPOS_apply_ContextPos(const ScriptCache *script_cache, const
                     }
 
                     TRACE("Rule matches\n");
-                    pr_2 = (const GPOS_PosClassRule_2*)((const BYTE*)pr+
-                        FIELD_OFFSET(GPOS_PosClassRule_1, Class[g_count-1]));
+                    pr_2 = (const GPOS_PosClassRule_2 *)&pr->Class[g_count - 1];
 
                     for (l = 0; l < GET_BE_WORD(pr->PosCount); l++)
                     {
-                        int lookupIndex = GET_BE_WORD(pr_2->PosLookupRecord[l].LookupListIndex);
-                        int SequenceIndex = GET_BE_WORD(pr_2->PosLookupRecord[l].SequenceIndex) * write_dir;
+                        unsigned int lookup_index = GET_BE_WORD(pr_2->PosLookupRecord[l].LookupListIndex);
+                        unsigned int sequence_index = GET_BE_WORD(pr_2->PosLookupRecord[l].SequenceIndex);
 
-                        TRACE("Position: %i -> %i %i\n",l, SequenceIndex, lookupIndex);
-                        GPOS_apply_lookup(script_cache, otm, logfont, analysis, advance, lookup, lookupIndex,
-                                glyphs, glyph_index + SequenceIndex, glyph_count, goffset);
+                        g = glyph_index + write_dir * sequence_index;
+                        if (g >= glyph_count)
+                        {
+                            WARN("Invalid sequence index %u (glyph index %u, write dir %d).\n",
+                                    sequence_index, glyph_index, write_dir);
+                            continue;
+                        }
+
+                        TRACE("Position: %u -> %u %u.\n", l, sequence_index, lookup_index);
+
+                        GPOS_apply_lookup(script_cache, otm, logfont, analysis, advance,
+                                lookup, lookup_index, glyphs, g, glyph_count, goffset);
                     }
                     return 1;
                 }
@@ -2301,12 +2355,20 @@ static unsigned int GPOS_apply_ChainContextPos(const ScriptCache *script_cache, 
 
             for (k = 0; k < positioning_count; ++k)
             {
-                WORD lookup_index = GET_BE_WORD(positioning->PosLookupRecord[k].LookupListIndex);
-                WORD sequence_index = GET_BE_WORD(positioning->PosLookupRecord[k].SequenceIndex) * write_dir;
+                unsigned int lookup_index = GET_BE_WORD(positioning->PosLookupRecord[k].LookupListIndex);
+                unsigned int sequence_index = GET_BE_WORD(positioning->PosLookupRecord[k].SequenceIndex);
+                unsigned int g = glyph_index + write_dir * sequence_index;
+
+                if (g >= glyph_count)
+                {
+                    WARN("Skipping invalid sequence index %u (glyph index %u, write dir %d).\n",
+                            sequence_index, glyph_index, write_dir);
+                    continue;
+                }
 
                 TRACE("Position: %u -> %u %u.\n", k, sequence_index, lookup_index);
                 GPOS_apply_lookup(script_cache, otm, logfont, analysis, advance, lookup, lookup_index,
-                        glyphs, glyph_index + sequence_index, glyph_count, goffset);
+                        glyphs, g, glyph_count, goffset);
             }
             return input_count + lookahead_count;
         }
