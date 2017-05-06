@@ -32,13 +32,13 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(mshtml);
 
-typedef struct {
+struct HTMLTableCell {
     HTMLElement element;
 
     IHTMLTableCell IHTMLTableCell_iface;
 
     nsIDOMHTMLTableCellElement *nscell;
-} HTMLTableCell;
+};
 
 static inline HTMLTableCell *impl_from_IHTMLTableCell(IHTMLTableCell *iface)
 {
@@ -461,6 +461,7 @@ static void HTMLTableCell_unlink(HTMLDOMNode *iface)
 }
 
 static const NodeImplVtbl HTMLTableCellImplVtbl = {
+    &CLSID_HTMLTableCell,
     HTMLTableCell_QI,
     HTMLTableCell_destructor,
     HTMLElement_cpc,

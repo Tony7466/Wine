@@ -54,8 +54,6 @@
 
 struct d3d_device;
 
-extern const struct wined3d_parent_ops d3d_null_wined3d_parent_ops DECLSPEC_HIDDEN;
-
 /* TRACE helper functions */
 const char *debug_d3d10_primitive_topology(D3D10_PRIMITIVE_TOPOLOGY topology) DECLSPEC_HIDDEN;
 const char *debug_dxgi_format(DXGI_FORMAT format) DECLSPEC_HIDDEN;
@@ -254,6 +252,7 @@ struct d3d_input_layout
 
     struct wined3d_private_store private_store;
     struct wined3d_vertex_declaration *wined3d_decl;
+    ID3D11Device *device;
 };
 
 HRESULT d3d_input_layout_create(struct d3d_device *device,
@@ -293,6 +292,7 @@ struct d3d11_hull_shader
 
 HRESULT d3d11_hull_shader_create(struct d3d_device *device, const void *byte_code, SIZE_T byte_code_length,
         struct d3d11_hull_shader **shader) DECLSPEC_HIDDEN;
+struct d3d11_hull_shader *unsafe_impl_from_ID3D11HullShader(ID3D11HullShader *iface) DECLSPEC_HIDDEN;
 
 /* ID3D11DomainShader */
 struct d3d11_domain_shader
@@ -307,6 +307,7 @@ struct d3d11_domain_shader
 
 HRESULT d3d11_domain_shader_create(struct d3d_device *device, const void *byte_code, SIZE_T byte_code_length,
         struct d3d11_domain_shader **shader) DECLSPEC_HIDDEN;
+struct d3d11_domain_shader *unsafe_impl_from_ID3D11DomainShader(ID3D11DomainShader *iface) DECLSPEC_HIDDEN;
 
 /* ID3D11GeometryShader, ID3D10GeometryShader */
 struct d3d_geometry_shader
@@ -518,7 +519,6 @@ struct d3d_device
     float blend_factor[4];
     struct d3d_depthstencil_state *depth_stencil_state;
     UINT stencil_ref;
-    struct d3d_rasterizer_state *rasterizer_state;
 };
 
 static inline struct d3d_device *impl_from_ID3D11Device(ID3D11Device *iface)

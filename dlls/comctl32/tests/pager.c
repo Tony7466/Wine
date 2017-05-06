@@ -207,8 +207,8 @@ static HWND create_pager_control( DWORD style )
 
 static LRESULT WINAPI child_proc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    struct message msg;
     static LONG defwndproc_counter;
+    struct message msg = { 0 };
     LRESULT ret;
 
     msg.message = message;
@@ -272,14 +272,14 @@ static void test_pager(void)
 
     flush_sequences( sequences, NUM_MSG_SEQUENCES );
     SendMessageA( pager, PGM_SETCHILD, 0, (LPARAM)child1_wnd );
-    ok_sequence(sequences, PAGER_SEQ_INDEX, set_child_seq, "set child", TRUE);
+    ok_sequence(sequences, PAGER_SEQ_INDEX, set_child_seq, "set child", FALSE);
     GetWindowRect( pager, &rect );
     ok( rect.right - rect.left == 100 && rect.bottom - rect.top == 100,
         "pager resized %dx%d\n", rect.right - rect.left, rect.bottom - rect.top );
 
     flush_sequences(sequences, NUM_MSG_SEQUENCES);
     SendMessageA(pager, PGM_SETCHILD, 0, (LPARAM)child2_wnd);
-    ok_sequence(sequences, PAGER_SEQ_INDEX, switch_child_seq, "switch to invisible child", TRUE);
+    ok_sequence(sequences, PAGER_SEQ_INDEX, switch_child_seq, "switch to invisible child", FALSE);
     GetWindowRect(pager, &rect);
     ok(rect.right - rect.left == 100 && rect.bottom - rect.top == 100,
         "pager resized %dx%d\n", rect.right - rect.left, rect.bottom - rect.top);
@@ -287,7 +287,7 @@ static void test_pager(void)
 
     flush_sequences(sequences, NUM_MSG_SEQUENCES);
     SendMessageA(pager, PGM_SETCHILD, 0, (LPARAM)child1_wnd);
-    ok_sequence(sequences, PAGER_SEQ_INDEX, set_child_seq, "switch to visible child", TRUE);
+    ok_sequence(sequences, PAGER_SEQ_INDEX, set_child_seq, "switch to visible child", FALSE);
     GetWindowRect(pager, &rect);
     ok(rect.right - rect.left == 100 && rect.bottom - rect.top == 100,
         "pager resized %dx%d\n", rect.right - rect.left, rect.bottom - rect.top);
