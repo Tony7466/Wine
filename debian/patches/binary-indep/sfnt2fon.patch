@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3573,7 +3573,6 @@ WINE_CONFIG_TEST(dlls/xmllite/tests)
+@@ -3572,7 +3572,6 @@ WINE_CONFIG_TEST(dlls/xmllite/tests)
  WINE_CONFIG_DLL(xolehlp)
  WINE_CONFIG_DLL(xpsprint)
  WINE_CONFIG_DLL(xpssvcs)
@@ -11,7 +11,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  WINE_CONFIG_MAKEFILE([include],,[clean,install-dev])
  WINE_CONFIG_MAKEFILE([libs/port])
  WINE_CONFIG_MAKEFILE([libs/wine],,[clean,implib,install-dev,install-lib])
-@@ -3679,7 +3678,6 @@ WINE_CONFIG_PROGRAM(xcopy,,[clean,instal
+@@ -3678,7 +3677,6 @@ WINE_CONFIG_PROGRAM(xcopy,,[clean,instal
  WINE_CONFIG_TEST(programs/xcopy/tests)
  WINE_CONFIG_MAKEFILE([server],,[clean,install-lib])
  WINE_CONFIG_TOOL(tools,[clean])
@@ -21,7 +21,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  WINE_CONFIG_TOOL(tools/winedump,[clean,install-dev])
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -135,10 +135,9 @@ __builddeps__: __tooldeps__ libs/wine in
+@@ -136,10 +136,9 @@ __builddeps__: __tooldeps__ libs/wine in
  dummy:
  loader: libs/port libs/wine tools
  server: libs/port libs/wine tools include

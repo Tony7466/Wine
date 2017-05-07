@@ -1,3 +1,15 @@
+wine-development (2.7-1) experimental; urgency=medium
+
+  * New upstream release 2.7, released Apr 28, 2017.
+    - TCP and UDP connection support in WebServices.
+    - Various shader improvements for Direct3D 11.
+    - Improved support for high DPI settings.
+    - Partial reimplementation of the GLU library.
+    - Support for recent versions of OSMesa.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 06 May 2017 23:14:30 +0000
+
 wine-development (2.6-1) experimental; urgency=medium
 
   * New upstream release 2.6, released Apr 13, 2017.
