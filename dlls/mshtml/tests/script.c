@@ -3118,7 +3118,6 @@ static HRESULT WINAPI ProtocolEx_StartEx(IInternetProtocolEx *iface, IUri *uri, 
     }else {
         src = FindResourceW(NULL, *path == '/' ? path+1 : path, (const WCHAR*)RT_HTML);
         ok(src != NULL, "Could not find resource for path %s\n", wine_dbgstr_w(path));
-        SysFreeString(path);
         if(src) {
             This->size = SizeofResource(NULL, src);
             This->data = LoadResource(NULL, src);
@@ -3463,7 +3462,7 @@ static void run_js_tests(void)
     run_script_as_http_with_mode("navigation.js", NULL, NULL);
     run_script_as_http_with_mode("navigation.js", NULL, "11");
 
-    run_script_as_http_with_mode("documentmode.js", "?5", NULL);
+    run_script_as_http_with_mode("documentmode.js", "?0", NULL);
     run_script_as_http_with_mode("documentmode.js", "?5", "5");
     run_script_as_http_with_mode("documentmode.js", "?5", "6");
     run_script_as_http_with_mode("documentmode.js", "?7", "7");

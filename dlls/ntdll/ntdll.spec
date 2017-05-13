@@ -41,9 +41,11 @@
 # @ stub DbgUiStopDebugging
 @ stub DbgUiWaitStateChange
 @ stdcall DbgUserBreakPoint()
+@ stdcall EtwEventEnabled(int64 ptr)
 @ stdcall EtwEventRegister(ptr ptr ptr ptr)
 @ stdcall EtwEventSetInformation(int64 long ptr long)
 @ stdcall EtwEventUnregister(int64)
+@ stdcall EtwEventWrite(int64 ptr long ptr)
 @ stdcall EtwRegisterTraceGuidsA(ptr ptr ptr long ptr str str ptr)
 @ stdcall EtwRegisterTraceGuidsW(ptr ptr ptr long ptr wstr wstr ptr)
 @ stdcall EtwUnregisterTraceGuids(int64)
@@ -62,7 +64,7 @@
 # @ stub LdrDestroyOutOfProcessImage
 @ stdcall LdrDisableThreadCalloutsForDll(long)
 @ stub LdrEnumResources
-# @ stub LdrEnumerateLoadedModules
+@ stdcall LdrEnumerateLoadedModules(ptr ptr ptr)
 # @ stub LdrFindCreateProcessManifest
 @ stdcall LdrFindEntryForAddress(ptr ptr)
 @ stdcall LdrFindResourceDirectory_U(long ptr long ptr)

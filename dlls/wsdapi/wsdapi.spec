@@ -4,8 +4,8 @@
 @ stub WSDNotifyNetworkChange
 @ stub WSDRemoveFirewallCheck
 @ stub WSDXMLCompareNames
-@ stub WSDAllocateLinkedMemory
-@ stub WSDAttachLinkedMemory
+@ stdcall WSDAllocateLinkedMemory(ptr long)
+@ stdcall WSDAttachLinkedMemory(ptr ptr)
 @ stub WSDCompareEndpoints
 @ stub WSDCopyEndpoint
 @ stub WSDCreateDeviceHost2
@@ -26,8 +26,8 @@
 @ stub WSDCreateUdpAddress
 @ stub WSDCreateUdpMessageParameters
 @ stub WSDCreateUdpTransport
-@ stub WSDDetachLinkedMemory
-@ stub WSDFreeLinkedMemory
+@ stdcall WSDDetachLinkedMemory(ptr)
+@ stdcall WSDFreeLinkedMemory(ptr)
 @ stub WSDGenerateFault
 @ stub WSDGenerateFaultEx
 @ stub WSDGenerateRandomDelay
@@ -36,10 +36,10 @@
 @ stub WSDSetConfigurationOption
 @ stub WSDUriDecode
 @ stub WSDUriEncode
-@ stub WSDXMLAddChild
-@ stub WSDXMLAddSibling
-@ stub WSDXMLBuildAnyForSingleElement
-@ stub WSDXMLCleanupElement
+@ stdcall WSDXMLAddChild(ptr ptr)
+@ stdcall WSDXMLAddSibling(ptr ptr)
+@ stdcall WSDXMLBuildAnyForSingleElement(ptr ptr ptr)
+@ stdcall WSDXMLCleanupElement(ptr)
 @ stub WSDXMLCreateContext
 @ stub WSDXMLGetNameFromBuiltinNamespace
 @ stub WSDXMLGetValueFromAny

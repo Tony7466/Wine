@@ -111,6 +111,8 @@ static const struct wined3d_extension_map gl_extension_map[] =
 
     /* ARB */
     {"GL_ARB_blend_func_extended",          ARB_BLEND_FUNC_EXTENDED       },
+    {"GL_ARB_clear_buffer_object",          ARB_CLEAR_BUFFER_OBJECT       },
+    {"GL_ARB_clear_texture",                ARB_CLEAR_TEXTURE             },
     {"GL_ARB_clip_control",                 ARB_CLIP_CONTROL              },
     {"GL_ARB_color_buffer_float",           ARB_COLOR_BUFFER_FLOAT        },
     {"GL_ARB_compute_shader",               ARB_COMPUTE_SHADER            },
@@ -1063,8 +1065,6 @@ static void quirk_broken_arb_fog(struct wined3d_gl_info *gl_info)
 
 static void quirk_broken_viewport_subpixel_bits(struct wined3d_gl_info *gl_info)
 {
-    TRACE("Disabling ARB_viewport_array.\n");
-    gl_info->supported[ARB_VIEWPORT_ARRAY] = FALSE;
     if (gl_info->supported[ARB_CLIP_CONTROL])
     {
         TRACE("Disabling ARB_clip_control.\n");
@@ -1390,6 +1390,7 @@ static const struct gpu_description gpu_description_table[] =
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX1060,    "NVIDIA GeForce GTX 1060",          DRIVER_NVIDIA_GEFORCE8,  6144},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX1070,    "NVIDIA GeForce GTX 1070",          DRIVER_NVIDIA_GEFORCE8,  8192},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX1080,    "NVIDIA GeForce GTX 1080",          DRIVER_NVIDIA_GEFORCE8,  8192},
+    {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX1080TI,  "NVIDIA GeForce GTX 1080 Ti",       DRIVER_NVIDIA_GEFORCE8,  11264},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_TITANX_PASCAL,      "NVIDIA TITAN X (Pascal)",          DRIVER_NVIDIA_GEFORCE8,  12288},
 
     /* AMD cards */
@@ -1876,6 +1877,7 @@ cards_nvidia_binary[] =
 {
     /* Direct 3D 11 */
     {"TITAN X (Pascal)",            CARD_NVIDIA_TITANX_PASCAL},     /* GeForce 1000 - highend */
+    {"GTX 1080 Ti",                 CARD_NVIDIA_GEFORCE_GTX1080TI}, /* GeForce 1000 - highend */
     {"GTX 1080",                    CARD_NVIDIA_GEFORCE_GTX1080},   /* GeForce 1000 - highend */
     {"GTX 1070",                    CARD_NVIDIA_GEFORCE_GTX1070},   /* GeForce 1000 - highend */
     {"GTX 1060",                    CARD_NVIDIA_GEFORCE_GTX1060},   /* GeForce 1000 - midend high */
@@ -2680,6 +2682,12 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     /* GL_ARB_blend_func_extended */
     USE_GL_FUNC(glBindFragDataLocationIndexed)
     USE_GL_FUNC(glGetFragDataIndex)
+    /* GL_ARB_clear_buffer_object */
+    USE_GL_FUNC(glClearBufferData)
+    USE_GL_FUNC(glClearBufferSubData)
+    /* GL_ARB_clear_texture */
+    USE_GL_FUNC(glClearTexImage)
+    USE_GL_FUNC(glClearTexSubImage)
     /* GL_ARB_clip_control */
     USE_GL_FUNC(glClipControl)
     /* GL_ARB_color_buffer_float */
@@ -3870,6 +3878,7 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
         {ARB_TEXTURE_COMPRESSION_BPTC,     MAKEDWORD_VERSION(4, 2)},
         {ARB_TEXTURE_STORAGE,              MAKEDWORD_VERSION(4, 2)},
 
+        {ARB_CLEAR_BUFFER_OBJECT,          MAKEDWORD_VERSION(4, 3)},
         {ARB_COMPUTE_SHADER,               MAKEDWORD_VERSION(4, 3)},
         {ARB_DEBUG_OUTPUT,                 MAKEDWORD_VERSION(4, 3)},
         {ARB_ES3_COMPATIBILITY,            MAKEDWORD_VERSION(4, 3)},
@@ -3881,6 +3890,8 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
         {ARB_TEXTURE_BUFFER_RANGE,         MAKEDWORD_VERSION(4, 3)},
         {ARB_TEXTURE_QUERY_LEVELS,         MAKEDWORD_VERSION(4, 3)},
         {ARB_TEXTURE_VIEW,                 MAKEDWORD_VERSION(4, 3)},
+
+        {ARB_CLEAR_TEXTURE,                MAKEDWORD_VERSION(4, 4)},
 
         {ARB_CLIP_CONTROL,                 MAKEDWORD_VERSION(4, 5)},
         {ARB_DERIVATIVE_CONTROL,           MAKEDWORD_VERSION(4, 5)},
@@ -4135,8 +4146,11 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
 
         gl_info->gl_ops.gl.p_glGetIntegerv(GL_VIEWPORT_SUBPIXEL_BITS, &subpixel_bits);
         TRACE("Viewport supports %d subpixel bits.\n", subpixel_bits);
-        if (subpixel_bits < 8)
-            gl_info->supported[ARB_VIEWPORT_ARRAY] = FALSE;
+        if (subpixel_bits < 8 && gl_info->supported[ARB_CLIP_CONTROL])
+        {
+            TRACE("Disabling ARB_clip_control because viewport subpixel bits < 8.\n");
+            gl_info->supported[ARB_CLIP_CONTROL] = FALSE;
+        }
     }
     if (gl_info->supported[ARB_CLIP_CONTROL] && !gl_info->supported[ARB_VIEWPORT_ARRAY])
     {
