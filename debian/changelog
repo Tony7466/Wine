@@ -1,3 +1,14 @@
+wine-development (2.8-1) experimental; urgency=medium
+
+  * New upstream release 2.8, released May 12, 2017.
+    - Direct3D command stream runs asynchronously.
+    - Better serial and parallel ports autodetection.
+    - Still more fixes for high DPI settings.
+    - System tray notifications on macOS.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 13 May 2017 15:52:08 +0000
+
 wine-development (2.7-1) experimental; urgency=medium
 
   * New upstream release 2.7, released Apr 28, 2017.

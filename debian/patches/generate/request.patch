@@ -14,7 +14,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 -        if (/^\#define SERVER_PROTOCOL_VERSION (\d+)/) { $protocol = $1; last; }
 -    }
 -    close SERVER_PROT;
-+    my $protocol = 526;
++    my $protocol = 530;
      return $protocol;
  }
  
@@ -64,7 +64,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #endif  /* __WINE_SERVER_REQUEST_H */
 --- a/server/trace.c
 +++ b/server/trace.c
-@@ -1202,8 +1202,9 @@ static void dump_varargs_handle_infos( c
+@@ -1208,8 +1208,9 @@ static void dump_varargs_handle_infos( c
  
  typedef void (*dump_func)( const void *req );
  
@@ -76,7 +76,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  static void dump_new_process_request( const struct new_process_request *req )
  {
-@@ -5431,8 +5432,7 @@ static const struct
+@@ -5444,8 +5445,7 @@ static const struct
      { NULL, 0 }
  };
  
