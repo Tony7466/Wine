@@ -2402,12 +2402,18 @@ static void test_effect_parameter_value(IDirect3DDevice9 *device)
 
 static void test_effect_setvalue_object(IDirect3DDevice9 *device)
 {
-    ID3DXEffect *effect;
-    D3DXHANDLE parameter;
-    IDirect3DTexture9 *texture;
+    static const char expected_string[] = "test_string_1";
+    static const char expected_string2[] = "test_longer_string_2";
+    static const char *expected_string_array[] = {expected_string, expected_string2};
+    const char *string_array[ARRAY_SIZE(expected_string_array)];
+    const char *string, *string2;
     IDirect3DTexture9 *texture_set;
-    HRESULT hr;
+    IDirect3DTexture9 *texture;
+    D3DXHANDLE parameter;
+    ID3DXEffect *effect;
+    unsigned int i;
     ULONG count;
+    HRESULT hr;
 
     hr = D3DXCreateEffect(device, test_effect_parameter_value_blob_object,
             sizeof(test_effect_parameter_value_blob_object), NULL, NULL, 0, NULL, &effect, NULL);
@@ -2434,6 +2440,43 @@ static void test_effect_setvalue_object(IDirect3DDevice9 *device)
     count = IDirect3DTexture9_Release(texture);
     ok(!count, "Got reference count %u, expected 0.\n", count);
 
+    hr = effect->lpVtbl->SetString(effect, "s", expected_string);
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+    string = NULL;
+    hr = effect->lpVtbl->GetString(effect, "s", &string);
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+    hr = effect->lpVtbl->GetString(effect, "s", &string2);
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+
+    ok(string != expected_string, "String pointers are the same.\n");
+    ok(string == string2, "String pointers differ.\n");
+    ok(!strcmp(string, expected_string), "Unexpected string '%s'.\n", string);
+
+    string = expected_string2;
+    hr = effect->lpVtbl->SetValue(effect, "s", &string, sizeof(string) - 1);
+    ok(hr == D3DERR_INVALIDCALL, "Got result %#x.\n", hr);
+    hr = effect->lpVtbl->SetValue(effect, "s", &string, sizeof(string));
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+    hr = effect->lpVtbl->SetValue(effect, "s", &string, sizeof(string) * 2);
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+    string = NULL;
+    hr = effect->lpVtbl->GetValue(effect, "s", &string, sizeof(string));
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+
+    ok(string != expected_string2, "String pointers are the same.\n");
+    ok(!strcmp(string, expected_string2), "Unexpected string '%s'.\n", string);
+
+    hr = effect->lpVtbl->SetValue(effect, "s_2", expected_string_array,
+            sizeof(expected_string_array));
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+    hr = effect->lpVtbl->GetValue(effect, "s_2", string_array,
+            sizeof(string_array));
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+    for (i = 0; i < ARRAY_SIZE(expected_string_array); ++i)
+    {
+        ok(!strcmp(string_array[i], expected_string_array[i]), "Unexpected string '%s', i %u.\n",
+                string_array[i], i);
+    }
     effect->lpVtbl->Release(effect);
 }
 
@@ -3987,6 +4030,33 @@ static const DWORD test_effect_preshader_effect_blob[] =
 #define TEST_EFFECT_PRESHADER_VSHADER_POS 2710
 #define TEST_EFFECT_PRESHADER_VSHADER_LEN 13
 
+#define test_effect_preshader_compare_shader_bytecode(a, b, c, d) \
+        test_effect_preshader_compare_shader_bytecode_(__LINE__, a, b, c, d)
+static void test_effect_preshader_compare_shader_bytecode_(unsigned int line,
+        const DWORD *bytecode, unsigned int bytecode_size, int expected_shader_index, BOOL todo)
+{
+    unsigned int i = 0;
+
+    todo_wine_if(todo)
+    ok_(__FILE__, line)(!!bytecode, "NULL shader bytecode.\n");
+
+    if (!bytecode)
+        return;
+
+    while (bytecode[i++] != 0x0000ffff)
+        ;
+
+    if (!bytecode_size)
+        bytecode_size = i * sizeof(*bytecode);
+    else
+        ok(i * sizeof(*bytecode) == bytecode_size, "Unexpected byte code size %u.\n", bytecode_size);
+
+    todo_wine_if(todo)
+    ok_(__FILE__, line)(!memcmp(bytecode, &test_effect_preshader_effect_blob[TEST_EFFECT_PRESHADER_VSHADER_POS
+            + expected_shader_index * TEST_EFFECT_PRESHADER_VSHADER_LEN], bytecode_size),
+            "Incorrect shader selected.\n");
+}
+
 #define test_effect_preshader_compare_shader(a, b, c) \
         test_effect_preshader_compare_shader_(__LINE__, a, b, c)
 static void test_effect_preshader_compare_shader_(unsigned int line, IDirect3DDevice9 *device,
@@ -4013,10 +4083,9 @@ static void test_effect_preshader_compare_shader_(unsigned int line, IDirect3DDe
     hr = IDirect3DVertexShader9_GetFunction(vshader, byte_code, &byte_code_size);
     ok_(__FILE__, line)(hr == D3D_OK, "Got result %#x.\n", hr);
 
-    todo_wine_if(todo)
-    ok_(__FILE__, line)(!memcmp(byte_code, &test_effect_preshader_effect_blob[TEST_EFFECT_PRESHADER_VSHADER_POS
-            + expected_shader_index * TEST_EFFECT_PRESHADER_VSHADER_LEN], byte_code_size),
-            "Incorrect shader selected.\n");
+    test_effect_preshader_compare_shader_bytecode_(line, byte_code,
+            byte_code_size, expected_shader_index, todo);
+
     HeapFree(GetProcessHeap(), 0, byte_code);
     IDirect3DVertexShader9_Release(vshader);
  }
@@ -4485,6 +4554,8 @@ static void test_effect_preshader_ops(IDirect3DDevice9 *device)
     {
         {"exp", 0x10500001, 1, {0x3f800000, 0x3f800000, 0x3e5edc66, 0x7f800000},
                 {0.0f, -0.0f, -2.2f, 3.402823466e+38f}, {1.0f, 2.0f, -3.0f, 4.0f}},
+        {"log", 0x10600001, 1, {0, 0x40000000, 0x3f9199b7, 0x43000000},
+                {0.0f, 4.0f, -2.2f, 3.402823466e+38f}, {1.0f, 2.0f, -3.0f, 4.0f}},
         {"0 * INF", 0x20500004, 2, {0xffc00000, 0xffc00000, 0xc0d33334, 0x7f800000},
                 {0.0f, -0.0f, -2.2f, 3.402823466e+38f}, {INFINITY, INFINITY, 3.0f, 4.0f}},
     };
@@ -5993,6 +6064,7 @@ static void test_effect_shared_parameters(IDirect3DDevice9 *device)
             "Unexpected vector %g, %g, %g, %g.\n", fvect.x, fvect.y, fvect.z, fvect.w);
 
     hr = effect3->lpVtbl->EndPass(effect3);
+    todo_wine
     ok(hr == D3D_OK, "Got result %#x.\n", hr);
 
     hr = effect3->lpVtbl->End(effect3);
@@ -6150,6 +6222,120 @@ static void test_effect_shared_parameters(IDirect3DDevice9 *device)
     ok(!refcount, "Effect pool was not properly freed, refcount %u.\n", refcount);
 }
 
+static void test_effect_large_address_aware_flag(IDirect3DDevice9 *device)
+{
+    ID3DXEffect *effect;
+    D3DXHANDLE param;
+    static int expected_ivect[4] = {28, 29, 30, 31};
+    int ivect[4];
+    HRESULT hr;
+
+    hr = D3DXCreateEffect(device, test_effect_preshader_effect_blob, sizeof(test_effect_preshader_effect_blob),
+            NULL, NULL, D3DXFX_LARGEADDRESSAWARE, NULL, &effect, NULL);
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+
+    param = effect->lpVtbl->GetParameterByName(effect, NULL, "g_iVect");
+    ok(!!param, "GetParameterByName failed.\n");
+
+    hr = effect->lpVtbl->SetValue(effect, param, expected_ivect, sizeof(expected_ivect));
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+
+    hr = effect->lpVtbl->GetValue(effect, param, ivect, sizeof(ivect));
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+
+    ok(!memcmp(ivect, expected_ivect, sizeof(expected_ivect)), "Vector value mismatch.\n");
+
+    if (0)
+    {
+        /* Native d3dx crashes in GetValue(). */
+        hr = effect->lpVtbl->GetValue(effect, "g_iVect", ivect, sizeof(ivect));
+        ok(hr == D3DERR_INVALIDCALL, "Got result %#x.\n", hr);
+    }
+
+    effect->lpVtbl->Release(effect);
+}
+
+static void test_effect_get_pass_desc(IDirect3DDevice9 *device)
+{
+    unsigned int passes_count;
+    ID3DXEffect *effect;
+    D3DXPASS_DESC desc;
+    D3DXVECTOR4 fvect;
+    D3DXHANDLE pass;
+    HRESULT hr;
+
+    hr = D3DXCreateEffect(device, test_effect_preshader_effect_blob, sizeof(test_effect_preshader_effect_blob),
+            NULL, NULL, 0, NULL, &effect, NULL);
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+
+    pass = effect->lpVtbl->GetPass(effect, "tech0", 1);
+    ok(!!pass, "GetPass() failed.\n");
+
+    hr = effect->lpVtbl->GetPassDesc(effect, pass, &desc);
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+    test_effect_preshader_compare_shader_bytecode(desc.pVertexShaderFunction, 0, 2, FALSE);
+
+    fvect.x = fvect.y = fvect.w = 0.0f;
+    fvect.z = 0.0f;
+    hr = effect->lpVtbl->SetVector(effect, "g_iVect", &fvect);
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+
+    hr = effect->lpVtbl->GetPassDesc(effect, pass, &desc);
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+    ok(!desc.pPixelShaderFunction, "Unexpected non null desc.pPixelShaderFunction.\n");
+
+    test_effect_preshader_compare_shader_bytecode(desc.pVertexShaderFunction, 0, 0, FALSE);
+
+    fvect.z = 3.0f;
+    hr = effect->lpVtbl->SetVector(effect, "g_iVect", &fvect);
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+
+    hr = effect->lpVtbl->GetPassDesc(effect, pass, &desc);
+    ok(hr == E_FAIL, "Got result %#x.\n", hr);
+    ok(!desc.pVertexShaderFunction, "Unexpected non null desc.pVertexShaderFunction.\n");
+
+    /* Repeating call to confirm GetPassDesc() returns same error on the second call,
+     * as it is not the case sometimes for BeginPass() with out of bound access. */
+    hr = effect->lpVtbl->GetPassDesc(effect, pass, &desc);
+    ok(hr == E_FAIL, "Got result %#x.\n", hr);
+    ok(!desc.pVertexShaderFunction, "Unexpected non null desc.pVertexShaderFunction.\n");
+
+    hr = effect->lpVtbl->Begin(effect, &passes_count, 0);
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+
+    hr = effect->lpVtbl->BeginPass(effect, 1);
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+
+    hr = effect->lpVtbl->GetPassDesc(effect, pass, &desc);
+    todo_wine
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+
+    test_effect_preshader_compare_shader_bytecode(desc.pVertexShaderFunction, 0, 0, TRUE);
+
+    fvect.z = 2.0f;
+    hr = effect->lpVtbl->SetVector(effect, "g_iVect", &fvect);
+    hr = effect->lpVtbl->GetPassDesc(effect, pass, &desc);
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+    test_effect_preshader_compare_shader_bytecode(desc.pVertexShaderFunction, 0, 2, FALSE);
+
+    effect->lpVtbl->Release(effect);
+
+    hr = D3DXCreateEffect(device, test_effect_preshader_effect_blob, sizeof(test_effect_preshader_effect_blob),
+            NULL, NULL, D3DXFX_NOT_CLONEABLE, NULL, &effect, NULL);
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+
+    pass = effect->lpVtbl->GetPass(effect, "tech0", 1);
+    ok(!!pass, "GetPass() failed.\n");
+
+    hr = effect->lpVtbl->GetPassDesc(effect, pass, &desc);
+    ok(hr == D3D_OK, "Got result %#x.\n", hr);
+
+    ok(!desc.pVertexShaderFunction, "Unexpected non null desc.pVertexShaderFunction.\n");
+    ok(!desc.pPixelShaderFunction, "Unexpected non null desc.pPixelShaderFunction.\n");
+
+    effect->lpVtbl->Release(effect);
+}
+
 START_TEST(effect)
 {
     HWND wnd;
@@ -6199,6 +6385,8 @@ START_TEST(effect)
     test_effect_state_manager(device);
     test_cross_effect_handle(device);
     test_effect_shared_parameters(device);
+    test_effect_large_address_aware_flag(device);
+    test_effect_get_pass_desc(device);
 
     count = IDirect3DDevice9_Release(device);
     ok(count == 0, "The device was not properly freed: refcount %u\n", count);

@@ -249,7 +249,6 @@ typedef struct tagLISTVIEW_INFO
   RANGES selectionRanges;
   INT nSelectionMark;           /* item to start next multiselection from */
   INT nHotItem;
-  BOOL bAutoarrange;		/* Autoarrange flag when NOT in LVS_AUTOARRANGE */
 
   /* columns */
   HDPA hdpaColumns;		/* array of COLUMN_INFO pointers */
@@ -1584,8 +1583,8 @@ static inline LRESULT CallWindowProcT(WNDPROC proc, HWND hwnd, UINT uMsg,
 
 static inline BOOL is_autoarrange(const LISTVIEW_INFO *infoPtr)
 {
-    return ((infoPtr->dwStyle & LVS_AUTOARRANGE) || infoPtr->bAutoarrange) &&
-	   (infoPtr->uView == LV_VIEW_ICON || infoPtr->uView == LV_VIEW_SMALLICON);
+    return (infoPtr->dwStyle & LVS_AUTOARRANGE) &&
+        (infoPtr->uView == LV_VIEW_ICON || infoPtr->uView == LV_VIEW_SMALLICON);
 }
 
 static void toggle_checkbox_state(LISTVIEW_INFO *infoPtr, INT nItem)
@@ -2782,7 +2781,6 @@ static BOOL LISTVIEW_Arrange(LISTVIEW_INFO *infoPtr, INT nAlignCode)
     default: return FALSE;
     }
     
-    infoPtr->bAutoarrange = TRUE;
     infoPtr->currIconPos.x = infoPtr->currIconPos.y = 0;
     for (i = 0; i < infoPtr->nItemCount; i++)
     {
@@ -7826,18 +7824,24 @@ static INT LISTVIEW_InsertItemT(LISTVIEW_INFO *infoPtr, const LVITEMW *lpLVItem,
         HDPA hItem;
         ITEM_INFO *item_s;
         INT i = 0, cmpv;
+        WCHAR *textW;
+
+        textW = textdupTtoW(lpLVItem->pszText, isW);
 
         while (i < infoPtr->nItemCount)
         {
             hItem  = DPA_GetPtr( infoPtr->hdpaItems, i);
             item_s = DPA_GetPtr(hItem, 0);
 
-            cmpv = textcmpWT(item_s->hdr.pszText, lpLVItem->pszText, isW);
+            cmpv = textcmpWT(item_s->hdr.pszText, textW, TRUE);
             if (infoPtr->dwStyle & LVS_SORTDESCENDING) cmpv *= -1;
 
             if (cmpv >= 0) break;
             i++;
         }
+
+        textfreeT(textW, isW);
+
         nItem = i;
     }
     else
@@ -8935,8 +8939,6 @@ static BOOL LISTVIEW_SetItemPosition(LISTVIEW_INFO *infoPtr, INT nItem, const PO
     }
     Pt.x -= Origin.x;
     Pt.y -= Origin.y;
-
-    infoPtr->bAutoarrange = FALSE;
 
     return LISTVIEW_MoveIconTo(infoPtr, nItem, &Pt, FALSE);
 }

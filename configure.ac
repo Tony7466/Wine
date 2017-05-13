@@ -2015,7 +2015,6 @@ AC_CHECK_FUNCS(\
 	getpwuid \
 	gettimeofday \
 	getuid \
-	if_nameindex \
 	isnanf \
 	kqueue \
 	lstat \
@@ -2202,6 +2201,19 @@ AC_CHECK_MEMBERS([struct ff_effect.direction],,,
 [#ifdef HAVE_LINUX_INPUT_H
 #include <linux/input.h>
 #endif])
+
+AC_CACHE_CHECK([for if_nameindex],wine_cv_have_if_nameindex,
+               AC_LINK_IFELSE([AC_LANG_PROGRAM([[#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
+#ifdef HAVE_NET_IF_H
+# include <net/if.h>
+#endif]],
+                              [[struct if_nameindex *p = if_nameindex(); return p->if_index;]])],[wine_cv_have_if_nameindex=yes],[wine_cv_have_if_nameindex=no]))
+if test "$wine_cv_have_if_nameindex" = "yes"
+then
+  AC_DEFINE(HAVE_IF_NAMEINDEX, 1, [Define to 1 if you have the `if_nameindex' function.])
+fi
 
 AC_CACHE_CHECK([for sigaddset],wine_cv_have_sigaddset,
                AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <signal.h>]], [[sigset_t set; sigaddset(&set,SIGTERM);]])],[wine_cv_have_sigaddset=yes],[wine_cv_have_sigaddset=no]))
@@ -3031,6 +3043,7 @@ WINE_CONFIG_DLL(esent)
 WINE_CONFIG_DLL(evr)
 WINE_CONFIG_DLL(explorerframe,,[clean])
 WINE_CONFIG_TEST(dlls/explorerframe/tests)
+WINE_CONFIG_DLL(ext-ms-win-authz-context-l1-1-0)
 WINE_CONFIG_DLL(ext-ms-win-domainjoin-netjoin-l1-1-0)
 WINE_CONFIG_DLL(ext-ms-win-gdi-dc-create-l1-1-1)
 WINE_CONFIG_DLL(ext-ms-win-gdi-dc-l1-2-0)
@@ -3135,7 +3148,8 @@ WINE_CONFIG_DLL(mciseq)
 WINE_CONFIG_DLL(mciwave)
 WINE_CONFIG_DLL(mf)
 WINE_CONFIG_DLL(mf3216)
-WINE_CONFIG_DLL(mfplat)
+WINE_CONFIG_DLL(mfplat,,[implib])
+WINE_CONFIG_TEST(dlls/mfplat/tests)
 WINE_CONFIG_DLL(mfreadwrite)
 WINE_CONFIG_DLL(mgmtapi)
 WINE_CONFIG_DLL(midimap)

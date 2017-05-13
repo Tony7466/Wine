@@ -5227,11 +5227,13 @@ static void test_private_data(void)
 static void test_state_refcounting(const D3D_FEATURE_LEVEL feature_level)
 {
     ID3D11RasterizerState *rasterizer_state, *tmp_rasterizer_state;
+    ID3D11Predicate *predicate, *tmp_predicate;
     ID3D11SamplerState *sampler, *tmp_sampler;
     ID3D11ShaderResourceView *srv, *tmp_srv;
     ID3D11RenderTargetView *rtv, *tmp_rtv;
     D3D11_RASTERIZER_DESC rasterizer_desc;
     D3D11_TEXTURE2D_DESC texture_desc;
+    D3D11_QUERY_DESC predicate_desc;
     D3D11_SAMPLER_DESC sampler_desc;
     struct device_desc device_desc;
     ID3D11DeviceContext *context;
@@ -5339,6 +5341,23 @@ static void test_state_refcounting(const D3D_FEATURE_LEVEL feature_level)
     ok(tmp_rtv == rtv, "Got RTV %p, expected %p.\n", tmp_rtv, rtv);
     refcount = ID3D11RenderTargetView_Release(tmp_rtv);
     ok(!refcount, "Got refcount %u, expected 0.\n", refcount);
+
+    /* ID3D11Predicate */
+    if (feature_level >= D3D_FEATURE_LEVEL_10_0)
+    {
+        predicate_desc.Query = D3D11_QUERY_OCCLUSION_PREDICATE;
+        predicate_desc.MiscFlags = 0;
+        hr = ID3D11Device_CreatePredicate(device, &predicate_desc, &predicate);
+        ok(SUCCEEDED(hr), "Failed to create predicate, hr %#x.\n", hr);
+
+        ID3D11DeviceContext_SetPredication(context, predicate, TRUE);
+        refcount = ID3D11Predicate_Release(predicate);
+        ok(!refcount, "Got refcount %u, expected 0.\n", refcount);
+        ID3D11DeviceContext_GetPredication(context, &tmp_predicate, NULL);
+        ok(tmp_predicate == predicate, "Got predicate %p, expected %p.\n", tmp_predicate, predicate);
+        refcount = ID3D11Predicate_Release(tmp_predicate);
+        ok(!refcount, "Got refcount %u, expected 0.\n", refcount);
+    }
 
     ID3D11DeviceContext_Release(context);
     refcount = ID3D11Device_Release(device);
@@ -9486,6 +9505,354 @@ static void test_clear_depth_stencil_view(void)
 
     ID3D11DeviceContext_Release(context);
 
+    refcount = ID3D11Device_Release(device);
+    ok(!refcount, "Device has %u references left.\n", refcount);
+}
+
+static unsigned int to_sint8(unsigned int x)
+{
+    union
+    {
+        signed int s;
+        unsigned int u;
+    } bits;
+    bits.u = x;
+    return min(max(bits.s, -128), 127) & 0xff;
+}
+
+#define check_rgba_sint8(data, uvec) check_rgba_sint8_(__LINE__, data, uvec)
+static void check_rgba_sint8_(unsigned int line, DWORD data, const struct uvec4 *v)
+{
+    unsigned int x = to_sint8(v->x);
+    unsigned int y = to_sint8(v->y);
+    unsigned int z = to_sint8(v->z);
+    unsigned int w = to_sint8(v->w);
+    DWORD expected[] =
+    {
+        /* Windows 7 - Nvidia, WARP */
+        (v->x & 0xff) | (v->y & 0xff) << 8 | (v->z & 0xff) << 16 | (v->w & 0xff) << 24,
+        /* Windows 10 - AMD */
+        x | y << 8 | z << 16 | w << 24,
+        /* Windows 10 - Intel */
+        x | x << 8 | x << 16 | x << 24,
+    };
+
+    ok_(__FILE__, line)(data == expected[0] || data == expected[1] || broken(data == expected[2]),
+            "Got %#x, expected %#x or %#x at %u, uvec4 %#x, %#x, %#x, %#x.\n",
+            data, expected[0], expected[1], x, v->x, v->y, v->z, v->w);
+}
+
+static void test_clear_buffer_unordered_access_view(void)
+{
+    D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc;
+    ID3D11UnorderedAccessView *uav, *uav2;
+    struct device_desc device_desc;
+    D3D11_BUFFER_DESC buffer_desc;
+    ID3D11DeviceContext *context;
+    struct resource_readback rb;
+    ID3D11Buffer *buffer;
+    ID3D11Device *device;
+    struct uvec4 uvec4;
+    unsigned int i, x;
+    ULONG refcount;
+    HRESULT hr;
+
+    static const D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_11_0;
+    static const struct uvec4 fe_uvec4 = {0xfefefefe, 0xfefefefe, 0xfefefefe, 0xfefefefe};
+    static const struct uvec4 uvec4_data[] =
+    {
+        {0x00000000, 0x00000000, 0x00000000, 0x00000000},
+
+        {0x00000000, 0xffffffff, 0xffffffff, 0xffffffff},
+        {0xffffffff, 0x00000000, 0x00000000, 0x00000000},
+        {0x00000000, 0xffffffff, 0x00000000, 0x00000000},
+        {0x00000000, 0x00000000, 0xffffffff, 0x00000000},
+        {0x00000000, 0x00000000, 0x00000000, 0xffffffff},
+
+        {0x7fffffff, 0x7fffffff, 0x7fffffff, 0x7fffffff},
+        {0x80000000, 0x80000000, 0x80000000, 0x80000000},
+        {0x000000ff, 0x00000080, 0x80000080, 0x00000080},
+        {0x000000ff, 0x0000007f, 0x000000ef, 0x000000fe},
+        {0x800000ff, 0x8000007f, 0x800000ef, 0x800000fe},
+        {0xfefefefe, 0xf0f0f0f0, 0xefefefef, 0x0f0f0f0f},
+        {0xaaaaaaaa, 0xdeadbeef, 0xdeadbabe, 0xdeadf00d},
+
+        {0x00000001, 0x00000002, 0x00000003, 0x00000004},
+        {0x000000ff, 0x000000fe, 0x000000fd, 0x000000fc},
+        {0x000000f2, 0x000000f1, 0x000000f0, 0x000000ef},
+        {0x0000000a, 0x0000000d, 0x0000000e, 0x0000000f},
+        {0x0000001a, 0x0000002d, 0x0000003e, 0x0000004f},
+        {0x00000050, 0x00000060, 0x00000070, 0x00000080},
+        {0x00000090, 0x000000a0, 0x000000b0, 0x000000c0},
+        {0x000000d0, 0x000000e0, 0x000000f0, 0x000000ff},
+        {0x00000073, 0x00000077, 0x0000007a, 0x0000007b},
+        {0x0000007c, 0x0000007d, 0x0000007e, 0x0000007f},
+
+        {0x80000001, 0x80000002, 0x80000003, 0x80000004},
+        {0x800000ff, 0x800000fe, 0x800000fd, 0x800000fc},
+        {0x800000f2, 0x800000f1, 0x800000f0, 0x800000ef},
+        {0x8000000a, 0x0000000d, 0x8000000e, 0x8000000f},
+        {0x8000001a, 0x8000002d, 0x8000003e, 0x8000004f},
+        {0x80000050, 0x80000060, 0x80000070, 0x00000080},
+        {0x80000090, 0x800000a0, 0x800000b0, 0x800000c0},
+        {0x800000d0, 0x800000e0, 0x800000f0, 0x800000ff},
+        {0x80000073, 0x80000077, 0x8000007a, 0x8000007b},
+        {0x8000007c, 0x8000007d, 0x8000007e, 0x8000007f},
+
+        {0x7fffff01, 0x7fffff02, 0x7fffff03, 0x7fffff04},
+        {0x7fffffff, 0x7ffffffe, 0x7ffffffd, 0x7ffffffc},
+        {0x7ffffff2, 0x7ffffff1, 0x7ffffff0, 0x7fffffef},
+        {0x7fffff0a, 0x7fffff0d, 0x7fffff0e, 0x7fffff0f},
+        {0x7fffff1a, 0x7fffff2d, 0x7fffff3e, 0x7fffff4f},
+        {0x7fffff50, 0x7fffff60, 0x7fffff70, 0x7fffff80},
+        {0x8fffff90, 0x7fffffa0, 0x7fffffb0, 0x7fffffc0},
+        {0x7fffffd0, 0x7fffffe0, 0x7ffffff0, 0x7fffffff},
+        {0x7fffff73, 0x7fffff77, 0x7fffff7a, 0x7fffff7b},
+        {0x7fffff7c, 0x7fffff7d, 0x7fffff7e, 0x7fffff7f},
+
+        {0xffffff01, 0xffffff02, 0xffffff03, 0xffffff04},
+        {0xffffffff, 0xfffffffe, 0xfffffffd, 0xfffffffc},
+        {0xfffffff2, 0xfffffff1, 0xfffffff0, 0xffffffef},
+        {0xffffff0a, 0xffffff0d, 0xffffff0e, 0xffffff0f},
+        {0xffffff1a, 0xffffff2d, 0xffffff3e, 0xffffff4f},
+        {0xffffff50, 0xffffff60, 0xffffff70, 0xffffff80},
+        {0xffffff90, 0xffffffa0, 0xffffffb0, 0xffffffc0},
+        {0xffffffd0, 0xffffffe0, 0xfffffff0, 0xffffffff},
+        {0xffffff73, 0xffffff77, 0xffffff7a, 0xffffff7b},
+        {0xffffff7c, 0xffffff7d, 0xffffff7e, 0xffffff7f},
+    };
+
+    device_desc.feature_level = &feature_level;
+    device_desc.flags = 0;
+    if (!(device = create_device(&device_desc)))
+    {
+        skip("Failed to create device for feature level %#x.\n", feature_level);
+        return;
+    }
+
+    ID3D11Device_GetImmediateContext(device, &context);
+
+    /* Structured buffer views */
+    buffer_desc.ByteWidth = 64;
+    buffer_desc.Usage = D3D11_USAGE_DEFAULT;
+    buffer_desc.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+    buffer_desc.CPUAccessFlags = 0;
+    buffer_desc.MiscFlags = 0;
+    buffer_desc.StructureByteStride = 0;
+    buffer_desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+    buffer_desc.StructureByteStride = 4;
+    hr = ID3D11Device_CreateBuffer(device, &buffer_desc, NULL, &buffer);
+    ok(SUCCEEDED(hr), "Failed to create a buffer, hr %#x.\n", hr);
+
+    hr = ID3D11Device_CreateUnorderedAccessView(device, (ID3D11Resource *)buffer, NULL, &uav);
+    ok(SUCCEEDED(hr), "Failed to create unordered access view, hr %#x.\n", hr);
+
+    uav_desc.Format = DXGI_FORMAT_UNKNOWN;
+    uav_desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+    U(uav_desc).Buffer.FirstElement = 0;
+    U(uav_desc).Buffer.NumElements = 4;
+    U(uav_desc).Buffer.Flags = 0;
+    hr = ID3D11Device_CreateUnorderedAccessView(device, (ID3D11Resource *)buffer, &uav_desc, &uav2);
+    ok(SUCCEEDED(hr), "Failed to create unordered access view, hr %#x.\n", hr);
+
+    for (i = 0; i < ARRAY_SIZE(uvec4_data); ++i)
+    {
+        uvec4 = uvec4_data[i];
+        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav, &uvec4.x);
+        get_buffer_readback(buffer, &rb);
+        for (x = 0; x < buffer_desc.ByteWidth / sizeof(uvec4.x); ++x)
+        {
+            DWORD data = get_readback_color(&rb, x, 0);
+            ok(data == uvec4.x, "Got unexpected value %#x at %u.\n", data, x);
+        }
+        release_resource_readback(&rb);
+
+        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav2, &fe_uvec4.x);
+        get_buffer_readback(buffer, &rb);
+        for (x = 0; x < buffer_desc.ByteWidth / sizeof(uvec4.x); ++x)
+        {
+            DWORD data = get_readback_color(&rb, x, 0);
+            uvec4 = x < U(uav_desc).Buffer.NumElements ? fe_uvec4 : uvec4_data[i];
+            ok(data == uvec4.x, "Got unexpected value %#x at %u.\n", data, x);
+        }
+        release_resource_readback(&rb);
+    }
+
+    ID3D11Buffer_Release(buffer);
+    ID3D11UnorderedAccessView_Release(uav);
+    ID3D11UnorderedAccessView_Release(uav2);
+
+    /* Raw buffer views */
+    buffer_desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+    hr = ID3D11Device_CreateBuffer(device, &buffer_desc, NULL, &buffer);
+    ok(SUCCEEDED(hr), "Failed to create a buffer, hr %#x.\n", hr);
+
+    uav_desc.Format = DXGI_FORMAT_R32_TYPELESS;
+    uav_desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+    U(uav_desc).Buffer.FirstElement = 0;
+    U(uav_desc).Buffer.NumElements = 16;
+    U(uav_desc).Buffer.Flags = D3D11_BUFFER_UAV_FLAG_RAW;
+    hr = ID3D11Device_CreateUnorderedAccessView(device, (ID3D11Resource *)buffer, &uav_desc, &uav);
+    ok(SUCCEEDED(hr), "Failed to create unordered access view, hr %#x.\n", hr);
+    U(uav_desc).Buffer.FirstElement = 8;
+    U(uav_desc).Buffer.NumElements = 8;
+    hr = ID3D11Device_CreateUnorderedAccessView(device, (ID3D11Resource *)buffer, &uav_desc, &uav2);
+    ok(SUCCEEDED(hr), "Failed to create unordered access view, hr %#x.\n", hr);
+
+    for (i = 0; i < ARRAY_SIZE(uvec4_data); ++i)
+    {
+        uvec4 = uvec4_data[i];
+        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav, &uvec4.x);
+        get_buffer_readback(buffer, &rb);
+        for (x = 0; x < buffer_desc.ByteWidth / sizeof(uvec4.x); ++x)
+        {
+            DWORD data = get_readback_color(&rb, x, 0);
+            ok(data == uvec4.x, "Got unexpected value %#x at %u.\n", data, x);
+        }
+        release_resource_readback(&rb);
+
+        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav2, &fe_uvec4.x);
+        get_buffer_readback(buffer, &rb);
+        for (x = 0; x < buffer_desc.ByteWidth / sizeof(uvec4.x); ++x)
+        {
+            DWORD data = get_readback_color(&rb, x, 0);
+            uvec4 = U(uav_desc).Buffer.FirstElement <= x ? fe_uvec4 : uvec4_data[i];
+            ok(data == uvec4.x, "Got unexpected value %#x at %u.\n", data, x);
+        }
+        release_resource_readback(&rb);
+    }
+
+    ID3D11Buffer_Release(buffer);
+    ID3D11UnorderedAccessView_Release(uav);
+    ID3D11UnorderedAccessView_Release(uav2);
+
+    /* Typed buffer views */
+    buffer_desc.MiscFlags = 0;
+    hr = ID3D11Device_CreateBuffer(device, &buffer_desc, NULL, &buffer);
+    ok(SUCCEEDED(hr), "Failed to create a buffer, hr %#x.\n", hr);
+
+    uav_desc.Format = DXGI_FORMAT_R32_SINT;
+    uav_desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+    U(uav_desc).Buffer.FirstElement = 0;
+    U(uav_desc).Buffer.NumElements = 16;
+    U(uav_desc).Buffer.Flags = 0;
+    hr = ID3D11Device_CreateUnorderedAccessView(device, (ID3D11Resource *)buffer, &uav_desc, &uav);
+    ok(SUCCEEDED(hr), "Failed to create unordered access view, hr %#x.\n", hr);
+    U(uav_desc).Buffer.FirstElement = 9;
+    U(uav_desc).Buffer.NumElements = 7;
+    hr = ID3D11Device_CreateUnorderedAccessView(device, (ID3D11Resource *)buffer, &uav_desc, &uav2);
+    ok(SUCCEEDED(hr), "Failed to create unordered access view, hr %#x.\n", hr);
+
+    for (i = 0; i < ARRAY_SIZE(uvec4_data); ++i)
+    {
+        uvec4 = uvec4_data[i];
+        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav, &uvec4.x);
+        get_buffer_readback(buffer, &rb);
+        for (x = 0; x < buffer_desc.ByteWidth / sizeof(uvec4.x); ++x)
+        {
+            DWORD data = get_readback_color(&rb, x, 0);
+            ok(data == uvec4.x, "Got unexpected value %#x at %u.\n", data, x);
+        }
+        release_resource_readback(&rb);
+
+        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav2, &fe_uvec4.x);
+        get_buffer_readback(buffer, &rb);
+        for (x = 0; x < buffer_desc.ByteWidth / sizeof(uvec4.x); ++x)
+        {
+            DWORD data = get_readback_color(&rb, x, 0);
+            uvec4 = U(uav_desc).Buffer.FirstElement <= x ? fe_uvec4 : uvec4_data[i];
+            ok(data == uvec4.x, "Got unexpected value %#x at %u.\n", data, x);
+        }
+        release_resource_readback(&rb);
+    }
+
+    ID3D11UnorderedAccessView_Release(uav);
+    ID3D11UnorderedAccessView_Release(uav2);
+
+    uav_desc.Format = DXGI_FORMAT_R32G32B32A32_SINT;
+    uav_desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+    U(uav_desc).Buffer.FirstElement = 0;
+    U(uav_desc).Buffer.NumElements = 4;
+    U(uav_desc).Buffer.Flags = 0;
+    hr = ID3D11Device_CreateUnorderedAccessView(device, (ID3D11Resource *)buffer, &uav_desc, &uav);
+    ok(SUCCEEDED(hr), "Failed to create unordered access view, hr %#x.\n", hr);
+    U(uav_desc).Buffer.FirstElement = 2;
+    U(uav_desc).Buffer.NumElements = 2;
+    hr = ID3D11Device_CreateUnorderedAccessView(device, (ID3D11Resource *)buffer, &uav_desc, &uav2);
+    ok(SUCCEEDED(hr), "Failed to create unordered access view, hr %#x.\n", hr);
+
+    for (i = 0; i < ARRAY_SIZE(uvec4_data); ++i)
+    {
+        uvec4 = uvec4_data[i];
+        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav, &uvec4.x);
+        get_buffer_readback(buffer, &rb);
+        for (x = 0; x < buffer_desc.ByteWidth / sizeof(uvec4); ++x)
+        {
+            const struct uvec4 *data = get_readback_uvec4(&rb, x, 0);
+            const struct uvec4 broken_result = {uvec4.x, uvec4.x, uvec4.x, uvec4.x}; /* Intel */
+            ok(compare_uvec4(data, &uvec4) || broken(compare_uvec4(data, &broken_result)),
+                    "Got {%#x, %#x, %#x, %#x}, expected {%#x, %#x, %#x, %#x} at %u.\n",
+                    data->x, data->y, data->z, data->w, uvec4.x, uvec4.y, uvec4.z, uvec4.w, i);
+        }
+        release_resource_readback(&rb);
+
+        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav2, &fe_uvec4.x);
+        get_buffer_readback(buffer, &rb);
+        for (x = 0; x < buffer_desc.ByteWidth / sizeof(uvec4); ++x)
+        {
+            const struct uvec4 *data = get_readback_uvec4(&rb, x, 0);
+            struct uvec4 broken_result;
+            uvec4 = U(uav_desc).Buffer.FirstElement <= x ? fe_uvec4 : uvec4_data[i];
+            broken_result.x = broken_result.y = broken_result.z = broken_result.w = uvec4.x;
+            ok(compare_uvec4(data, &uvec4) || broken(compare_uvec4(data, &broken_result)),
+                    "Got {%#x, %#x, %#x, %#x}, expected {%#x, %#x, %#x, %#x} at %u.\n",
+                    data->x, data->y, data->z, data->w, uvec4.x, uvec4.y, uvec4.z, uvec4.w, i);
+        }
+        release_resource_readback(&rb);
+    }
+
+    uvec4.x = uvec4.y = uvec4.z = uvec4.w = 0xdeadbeef;
+    ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav, &uvec4.x);
+    ID3D11UnorderedAccessView_Release(uav);
+    ID3D11UnorderedAccessView_Release(uav2);
+
+    uav_desc.Format = DXGI_FORMAT_R8G8B8A8_SINT;
+    uav_desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+    U(uav_desc).Buffer.FirstElement = 0;
+    U(uav_desc).Buffer.NumElements = 16;
+    U(uav_desc).Buffer.Flags = 0;
+    hr = ID3D11Device_CreateUnorderedAccessView(device, (ID3D11Resource *)buffer, &uav_desc, &uav);
+    ok(SUCCEEDED(hr), "Failed to create unordered access view, hr %#x.\n", hr);
+    U(uav_desc).Buffer.FirstElement = 8;
+    U(uav_desc).Buffer.NumElements = 8;
+    hr = ID3D11Device_CreateUnorderedAccessView(device, (ID3D11Resource *)buffer, &uav_desc, &uav2);
+    ok(SUCCEEDED(hr), "Failed to create unordered access view, hr %#x.\n", hr);
+
+    for (i = 0; i < ARRAY_SIZE(uvec4_data); ++i)
+    {
+        uvec4 = uvec4_data[i];
+        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav, &uvec4.x);
+        get_buffer_readback(buffer, &rb);
+        for (x = 0; x < buffer_desc.ByteWidth / sizeof(uvec4.x); ++x)
+            todo_wine check_rgba_sint8(get_readback_color(&rb, x, 0), &uvec4);
+        release_resource_readback(&rb);
+
+        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav2, &fe_uvec4.x);
+        get_buffer_readback(buffer, &rb);
+        for (x = 0; x < buffer_desc.ByteWidth / sizeof(uvec4.x); ++x)
+        {
+            uvec4 = U(uav_desc).Buffer.FirstElement <= x ? fe_uvec4 : uvec4_data[i];
+            todo_wine check_rgba_sint8(get_readback_color(&rb, x, 0), &uvec4);
+        }
+        release_resource_readback(&rb);
+    }
+
+    ID3D11UnorderedAccessView_Release(uav);
+    ID3D11UnorderedAccessView_Release(uav2);
+
+    ID3D11Buffer_Release(buffer);
+
+    ID3D11DeviceContext_Release(context);
     refcount = ID3D11Device_Release(device);
     ok(!refcount, "Device has %u references left.\n", refcount);
 }
@@ -17729,6 +18096,174 @@ done:
     release_test_context(&test_context);
 }
 
+static void test_fractional_viewports(void)
+{
+    struct d3d11_test_context test_context;
+    D3D11_TEXTURE2D_DESC texture_desc;
+    ID3D11InputLayout *input_layout;
+    ID3D11DeviceContext *context;
+    struct resource_readback rb;
+    ID3D11RenderTargetView *rtv;
+    ID3D11VertexShader *vs;
+    ID3D11PixelShader *ps;
+    unsigned int i, x, y;
+    ID3D11Device *device;
+    ID3D11Texture2D *rt;
+    UINT offset, stride;
+    D3D11_VIEWPORT vp;
+    ID3D11Buffer *vb;
+    HRESULT hr;
+
+    static const D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_11_0;
+    static const DWORD vs_code[] =
+    {
+#if 0
+        void main(in float4 in_position : POSITION,
+                in float2 in_texcoord : TEXCOORD,
+                out float4 position : SV_Position,
+                out float2 texcoord : TEXCOORD)
+        {
+            position = in_position;
+            texcoord = in_texcoord;
+        }
+#endif
+        0x43425844, 0x4df282ca, 0x85c8bbfc, 0xd44ad19f, 0x1158be97, 0x00000001, 0x00000148, 0x00000003,
+        0x0000002c, 0x00000080, 0x000000d8, 0x4e475349, 0x0000004c, 0x00000002, 0x00000008, 0x00000038,
+        0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x00000f0f, 0x00000041, 0x00000000, 0x00000000,
+        0x00000003, 0x00000001, 0x00000303, 0x49534f50, 0x4e4f4954, 0x58455400, 0x524f4f43, 0xabab0044,
+        0x4e47534f, 0x00000050, 0x00000002, 0x00000008, 0x00000038, 0x00000000, 0x00000001, 0x00000003,
+        0x00000000, 0x0000000f, 0x00000044, 0x00000000, 0x00000000, 0x00000003, 0x00000001, 0x00000c03,
+        0x505f5653, 0x7469736f, 0x006e6f69, 0x43584554, 0x44524f4f, 0xababab00, 0x52444853, 0x00000068,
+        0x00010040, 0x0000001a, 0x0300005f, 0x001010f2, 0x00000000, 0x0300005f, 0x00101032, 0x00000001,
+        0x04000067, 0x001020f2, 0x00000000, 0x00000001, 0x03000065, 0x00102032, 0x00000001, 0x05000036,
+        0x001020f2, 0x00000000, 0x00101e46, 0x00000000, 0x05000036, 0x00102032, 0x00000001, 0x00101046,
+        0x00000001, 0x0100003e,
+    };
+    static const DWORD ps_code[] =
+    {
+#if 0
+        float4 main(float4 position : SV_Position,
+                float2 texcoord : TEXCOORD) : SV_Target
+        {
+            return float4(position.xy, texcoord);
+        }
+#endif
+        0x43425844, 0xa15616bc, 0x6862ab1c, 0x28b915c0, 0xdb0df67c, 0x00000001, 0x0000011c, 0x00000003,
+        0x0000002c, 0x00000084, 0x000000b8, 0x4e475349, 0x00000050, 0x00000002, 0x00000008, 0x00000038,
+        0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x0000030f, 0x00000044, 0x00000000, 0x00000000,
+        0x00000003, 0x00000001, 0x00000303, 0x505f5653, 0x7469736f, 0x006e6f69, 0x43584554, 0x44524f4f,
+        0xababab00, 0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000,
+        0x00000003, 0x00000000, 0x0000000f, 0x545f5653, 0x65677261, 0xabab0074, 0x52444853, 0x0000005c,
+        0x00000040, 0x00000017, 0x04002064, 0x00101032, 0x00000000, 0x00000001, 0x03001062, 0x00101032,
+        0x00000001, 0x03000065, 0x001020f2, 0x00000000, 0x05000036, 0x00102032, 0x00000000, 0x00101046,
+        0x00000000, 0x05000036, 0x001020c2, 0x00000000, 0x00101406, 0x00000001, 0x0100003e,
+    };
+    static const D3D11_INPUT_ELEMENT_DESC layout_desc[] =
+    {
+        {"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 8, D3D11_INPUT_PER_VERTEX_DATA, 0},
+    };
+    static const struct
+    {
+        struct vec2 position;
+        struct vec2 texcoord;
+    }
+    quad[] =
+    {
+        {{-1.0f, -1.0f}, {0.0f, 0.0f}},
+        {{-1.0f,  1.0f}, {0.0f, 1.0f}},
+        {{ 1.0f, -1.0f}, {1.0f, 0.0f}},
+        {{ 1.0f,  1.0f}, {1.0f, 1.0f}},
+    };
+    static const float white[] = {1.0f, 1.0f, 1.0f, 1.0f};
+    static const float viewport_offsets[] =
+    {
+        0.0f, 0.5f, 0.25f, 0.125f, 0.0625f, 0.03125f, 0.015625f, 0.0078125f, 0.00390625f,
+        1.0f / 128.0f, 63.0f / 128.0f,
+    };
+
+    if (!init_test_context(&test_context, &feature_level))
+        return;
+    device = test_context.device;
+    context = test_context.immediate_context;
+
+    texture_desc.Width = 4;
+    texture_desc.Height = 4;
+    texture_desc.MipLevels = 1;
+    texture_desc.ArraySize = 1;
+    texture_desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    texture_desc.SampleDesc.Count = 1;
+    texture_desc.SampleDesc.Quality = 0;
+    texture_desc.Usage = D3D11_USAGE_DEFAULT;
+    texture_desc.BindFlags = D3D11_BIND_RENDER_TARGET;
+    texture_desc.CPUAccessFlags = 0;
+    texture_desc.MiscFlags = 0;
+    hr = ID3D11Device_CreateTexture2D(device, &texture_desc, NULL, &rt);
+    ok(SUCCEEDED(hr), "Failed to create texture, hr %#x.\n", hr);
+    hr = ID3D11Device_CreateRenderTargetView(device, (ID3D11Resource *)rt, NULL, &rtv);
+    ok(SUCCEEDED(hr), "Failed to create render target view, hr %#x.\n", hr);
+    ID3D11DeviceContext_OMSetRenderTargets(context, 1, &rtv, NULL);
+
+    hr = ID3D11Device_CreateInputLayout(device, layout_desc, ARRAY_SIZE(layout_desc),
+            vs_code, sizeof(vs_code), &input_layout);
+    ok(SUCCEEDED(hr), "Failed to create input layout, hr %#x.\n", hr);
+    vb = create_buffer(device, D3D11_BIND_VERTEX_BUFFER, sizeof(quad), quad);
+
+    ID3D11DeviceContext_IASetInputLayout(context, input_layout);
+    ID3D11DeviceContext_IASetPrimitiveTopology(context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    stride = sizeof(*quad);
+    offset = 0;
+    ID3D11DeviceContext_IASetVertexBuffers(context, 0, 1, &vb, &stride, &offset);
+
+    hr = ID3D11Device_CreateVertexShader(device, vs_code, sizeof(vs_code), NULL, &vs);
+    ok(SUCCEEDED(hr), "Failed to create vertex shader, hr %#x.\n", hr);
+    ID3D11DeviceContext_VSSetShader(context, vs, NULL, 0);
+
+    hr = ID3D11Device_CreatePixelShader(device, ps_code, sizeof(ps_code), NULL, &ps);
+    ok(SUCCEEDED(hr), "Failed to create pixel shader, hr %#x.\n", hr);
+    ID3D11DeviceContext_PSSetShader(context, ps, NULL, 0);
+
+    for (i = 0; i < ARRAY_SIZE(viewport_offsets); ++i)
+    {
+        vp.TopLeftX = viewport_offsets[i];
+        vp.TopLeftY = viewport_offsets[i];
+        vp.Width = texture_desc.Width;
+        vp.Height = texture_desc.Height;
+        vp.MinDepth = 0.0f;
+        vp.MaxDepth = 1.0f;
+        ID3D11DeviceContext_RSSetViewports(context, 1, &vp);
+        ID3D11DeviceContext_ClearRenderTargetView(context, rtv, white);
+        ID3D11DeviceContext_Draw(context, 4, 0);
+        get_texture_readback(rt, 0, &rb);
+        for (y = 0; y < texture_desc.Height; ++y)
+        {
+            for (x = 0; x < texture_desc.Width; ++x)
+            {
+                const struct vec4 *v = get_readback_vec4(&rb, x, y);
+                struct vec4 expected = {x + 0.5f, y + 0.5f,
+                        (x + 0.5f - viewport_offsets[i]) / texture_desc.Width,
+                        1.0f - (y + 0.5f - viewport_offsets[i]) / texture_desc.Height};
+                ok(compare_float(v->x, expected.x, 0) && compare_float(v->y, expected.y, 0),
+                        "Got fragcoord {%.8e, %.8e}, expected {%.8e, %.8e} at (%u, %u), offset %.8e.\n",
+                        v->x, v->y, expected.x, expected.y, x, y, viewport_offsets[i]);
+                todo_wine
+                ok(compare_float(v->z, expected.z, 2) && compare_float(v->w, expected.w, 2),
+                        "Got texcoord {%.8e, %.8e}, expected {%.8e, %.8e} at (%u, %u), offset %.8e.\n",
+                        v->z, v->w, expected.z, expected.w, x, y, viewport_offsets[i]);
+            }
+        }
+        release_resource_readback(&rb);
+    }
+
+    ID3D11InputLayout_Release(input_layout);
+    ID3D11Buffer_Release(vb);
+    ID3D11VertexShader_Release(vs);
+    ID3D11PixelShader_Release(ps);
+    ID3D11RenderTargetView_Release(rtv);
+    ID3D11Texture2D_Release(rt);
+    release_test_context(&test_context);
+}
+
 START_TEST(d3d11)
 {
     test_create_device();
@@ -17774,6 +18309,7 @@ START_TEST(d3d11)
     test_swapchain_flip();
     test_clear_render_target_view();
     test_clear_depth_stencil_view();
+    test_clear_buffer_unordered_access_view();
     test_draw_depth_only();
     test_draw_uav_only();
     test_cb_relative_addressing();
@@ -17818,4 +18354,5 @@ START_TEST(d3d11)
     test_fl10_stream_output_desc();
     test_stream_output_resume();
     test_gather();
+    test_fractional_viewports();
 }

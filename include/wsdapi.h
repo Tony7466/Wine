@@ -24,5 +24,6 @@
 #include <wsdxmldom.h>
 #include <wsdtypes.h>
 #include <wsddisco.h>
+#include <wsdutil.h>
 
 #endif

@@ -671,18 +671,16 @@ static enum reg_versions parse_file_header(WCHAR *s)
     return REG_VERSION_INVALID;
 }
 
-static char *get_lineA(FILE *fp)
+static WCHAR *get_lineA(FILE *fp)
 {
+    static WCHAR *lineW;
     static size_t size;
     static char *buf, *next;
     char *line;
 
-    if (!fp)
-    {
-        if (size) HeapFree(GetProcessHeap(), 0, buf);
-        size = 0;
-        return NULL;
-    }
+    HeapFree(GetProcessHeap(), 0, lineW);
+
+    if (!fp) goto cleanup;
 
     if (!size)
     {
@@ -712,7 +710,8 @@ static char *get_lineA(FILE *fp)
             if (!(count = fread(buf + len, 1, size - len - 1, fp)))
             {
                 next = NULL;
-                return buf;
+                lineW = GetWideString(buf);
+                return lineW;
             }
             buf[len + count] = 0;
             next = buf;
@@ -735,51 +734,15 @@ static char *get_lineA(FILE *fp)
             line = next;
             continue;
         }
-        return line;
+        lineW = GetWideString(line);
+        return lineW;
     }
-    HeapFree(GetProcessHeap(), 0, buf);
+
+cleanup:
+    lineW = NULL;
+    if (size) HeapFree(GetProcessHeap(), 0, buf);
     size = 0;
     return NULL;
-}
-
-static BOOL processRegLinesA(FILE *fp, char *two_chars)
-{
-    char *line, *header;
-    WCHAR *lineW;
-    int reg_version;
-
-    line = get_lineA(fp);
-
-    header = HeapAlloc(GetProcessHeap(), 0, strlen(line) + 3);
-    CHECK_ENOUGH_MEMORY(header);
-    strcpy(header, two_chars);
-    strcpy(header + 2, line);
-
-    lineW = GetWideString(header);
-    HeapFree(GetProcessHeap(), 0, header);
-
-    reg_version = parse_file_header(lineW);
-    HeapFree(GetProcessHeap(), 0, lineW);
-    if (reg_version == REG_VERSION_FUZZY || reg_version == REG_VERSION_INVALID)
-    {
-        get_lineA(NULL); /* Reset static variables */
-        return reg_version == REG_VERSION_FUZZY;
-    }
-
-    while ((line = get_lineA(fp)))
-    {
-        lineW = GetWideString(line);
-
-        if (reg_version == REG_VERSION_31)
-            processRegEntry31(lineW);
-        else
-            processRegEntry(lineW, FALSE);
-
-        HeapFree(GetProcessHeap(), 0, lineW);
-    }
-
-    closeKey();
-    return TRUE;
 }
 
 static WCHAR *get_lineW(FILE *fp)
@@ -788,12 +751,7 @@ static WCHAR *get_lineW(FILE *fp)
     static WCHAR *buf, *next;
     WCHAR *line;
 
-    if (!fp)
-    {
-        if (size) HeapFree(GetProcessHeap(), 0, buf);
-        size = 0;
-        return NULL;
-    }
+    if (!fp) goto cleanup;
 
     if (!size)
     {
@@ -849,29 +807,11 @@ static WCHAR *get_lineW(FILE *fp)
         }
         return line;
     }
-    HeapFree( GetProcessHeap(), 0, buf );
+
+cleanup:
+    if (size) HeapFree(GetProcessHeap(), 0, buf);
     size = 0;
     return NULL;
-}
-
-static BOOL processRegLinesW(FILE *fp)
-{
-    WCHAR *line;
-    int reg_version;
-
-    line = get_lineW(fp);
-    reg_version = parse_file_header(line);
-    if (reg_version == REG_VERSION_FUZZY || reg_version == REG_VERSION_INVALID)
-    {
-        get_lineW(NULL); /* Reset static variables */
-        return reg_version == REG_VERSION_FUZZY;
-    }
-
-    while ((line = get_lineW(fp)))
-        processRegEntry(line, TRUE);
-
-    closeKey();
-    return TRUE;
 }
 
 /******************************************************************************
@@ -1348,14 +1288,47 @@ BOOL export_registry_key(WCHAR *file_name, WCHAR *reg_key_name, DWORD format)
 BOOL import_registry_file(FILE* reg_file)
 {
     BYTE s[2];
+    BOOL is_unicode;
+    WCHAR *(*get_line)(FILE *);
+    WCHAR *line, *header;
+    int reg_version;
 
     if (!reg_file || (fread(s, 2, 1, reg_file) != 1))
         return FALSE;
 
-    if (s[0] == 0xff && s[1] == 0xfe)
-        return processRegLinesW(reg_file);
-    else
-        return processRegLinesA(reg_file, (char *)s);
+    is_unicode = (s[0] == 0xff && s[1] == 0xfe);
+    get_line = is_unicode ? get_lineW : get_lineA;
+
+    line = get_line(reg_file);
+
+    if (!is_unicode)
+    {
+        header = HeapAlloc(GetProcessHeap(), 0, (lstrlenW(line) + 3) * sizeof(WCHAR));
+        CHECK_ENOUGH_MEMORY(header);
+        header[0] = s[0];
+        header[1] = s[1];
+        lstrcpyW(header + 2, line);
+        reg_version = parse_file_header(header);
+        HeapFree(GetProcessHeap(), 0, header);
+    }
+    else reg_version = parse_file_header(line);
+
+    if (reg_version == REG_VERSION_FUZZY || reg_version == REG_VERSION_INVALID)
+    {
+        get_line(NULL); /* Reset static variables */
+        return reg_version == REG_VERSION_FUZZY;
+    }
+
+    while ((line = get_line(reg_file)))
+    {
+        if (reg_version == REG_VERSION_31)
+            processRegEntry31(line);
+        else
+            processRegEntry(line, is_unicode);
+    }
+
+    closeKey();
+    return TRUE;
 }
 
 /******************************************************************************
