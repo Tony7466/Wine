@@ -155,6 +155,7 @@ void wined3d_texture_invalidate_location(struct wined3d_texture *texture,
         unsigned int sub_resource_idx, DWORD location)
 {
     struct wined3d_texture_sub_resource *sub_resource;
+    DWORD previous_locations;
 
     TRACE("texture %p, sub_resource_idx %u, location %s.\n",
             texture, sub_resource_idx, wined3d_debug_location(location));
@@ -163,8 +164,9 @@ void wined3d_texture_invalidate_location(struct wined3d_texture *texture,
         wined3d_texture_set_dirty(texture);
 
     sub_resource = &texture->sub_resources[sub_resource_idx];
+    previous_locations = sub_resource->locations;
     sub_resource->locations &= ~location;
-    if (sub_resource->locations == WINED3D_LOCATION_SYSMEM)
+    if (previous_locations != WINED3D_LOCATION_SYSMEM && sub_resource->locations == WINED3D_LOCATION_SYSMEM)
         ++texture->sysmem_count;
 
     TRACE("New locations flags are %s.\n", wined3d_debug_location(sub_resource->locations));
@@ -1327,7 +1329,7 @@ HRESULT CDECL wined3d_texture_update_desc(struct wined3d_texture *texture, UINT 
     if (surface->dc)
     {
         wined3d_cs_destroy_object(device->cs, texture2d_destroy_dc, surface);
-        device->cs->ops->finish(device->cs);
+        device->cs->ops->finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
         create_dib = TRUE;
     }
 
@@ -1390,7 +1392,7 @@ HRESULT CDECL wined3d_texture_update_desc(struct wined3d_texture *texture, UINT 
     if (create_dib)
     {
         wined3d_cs_init_object(device->cs, texture2d_create_dc, surface);
-        device->cs->ops->finish(device->cs);
+        device->cs->ops->finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
     }
 
     return WINED3D_OK;
@@ -2247,7 +2249,7 @@ static HRESULT texture_init(struct wined3d_texture *texture, const struct wined3
             if ((desc->usage & WINED3DUSAGE_OWNDC) || (device->wined3d->flags & WINED3D_NO3D))
             {
                 wined3d_cs_init_object(device->cs, texture2d_create_dc, surface);
-                device->cs->ops->finish(device->cs);
+                device->cs->ops->finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
                 if (!surface->dc)
                 {
                     wined3d_texture_cleanup_sync(texture);
@@ -3044,7 +3046,7 @@ HRESULT CDECL wined3d_texture_get_dc(struct wined3d_texture *texture, unsigned i
     if (!surface->dc)
     {
         wined3d_cs_init_object(device->cs, texture2d_create_dc, surface);
-        device->cs->ops->finish(device->cs);
+        device->cs->ops->finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
     }
     if (!surface->dc)
         return WINED3DERR_INVALIDCALL;
@@ -3091,7 +3093,7 @@ HRESULT CDECL wined3d_texture_release_dc(struct wined3d_texture *texture, unsign
     if (!(texture->resource.usage & WINED3DUSAGE_OWNDC) && !(device->wined3d->flags & WINED3D_NO3D))
     {
         wined3d_cs_destroy_object(device->cs, texture2d_destroy_dc, surface);
-        device->cs->ops->finish(device->cs);
+        device->cs->ops->finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
     }
 
     --sub_resource->map_count;

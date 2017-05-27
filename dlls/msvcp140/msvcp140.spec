@@ -3620,7 +3620,7 @@
 @ thiscall -ret64 -arch=i386 ?xsputn@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MAE_JPB_W_J@Z(ptr wstr int64) basic_streambuf_wchar_xsputn
 @ cdecl -arch=win64 ?xsputn@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MEAA_JPEB_W_J@Z(ptr ptr long) basic_streambuf_wchar_xsputn
 @ stub _Chmod
-@ stub _Close_dir
+@ cdecl _Close_dir(ptr) tr2_sys__Close_dir
 @ cdecl _Cnd_broadcast(ptr)
 @ cdecl _Cnd_destroy(ptr)
 @ cdecl _Cnd_destroy_in_situ(ptr)
@@ -3670,7 +3670,7 @@
 @ stub _Link
 @ cdecl _Lock_shared_ptr_spin_lock()
 @ stub _Lstat
-@ stub _Make_dir
+@ cdecl _Make_dir(wstr) tr2_sys__Make_dir_wchar
 @ cdecl _Mbrtowc(ptr ptr long ptr ptr) _Mbrtowc
 @ stub _Mtx_clear_owner
 @ cdecl _Mtx_current_owns(ptr) _Mtx_current_owns
@@ -3689,10 +3689,10 @@
 @ stub _Mtxlock
 @ stub _Mtxunlock
 @ extern _Nan _Nan
-@ stub _Open_dir
+@ cdecl _Open_dir(ptr wstr long long) tr2_sys__Open_dir_wchar
 @ cdecl -ret64 _Query_perf_counter()
 @ cdecl -ret64 _Query_perf_frequency()
-@ stub _Read_dir
+@ cdecl _Read_dir(ptr ptr ptr) tr2_sys__Read_dir_wchar
 @ stub _Remove_dir
 @ stub _Rename
 @ stub _Resize

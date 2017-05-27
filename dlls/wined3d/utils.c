@@ -149,6 +149,8 @@ static const struct wined3d_format_channels formats[] =
     /* Unsure about them, could not find a Windows driver that supports them */
     {WINED3DFMT_R16,                       16,  0,  0,  0,   0,  0,  0,  0,    2,   0,     0},
     {WINED3DFMT_AL16,                       0,  0,  0, 16,   0,  0,  0, 16,    4,   0,     0},
+    /* DirectX 10 HDR formats */
+    {WINED3DFMT_R9G9B9E5_SHAREDEXP,         0,  0,  0,  0,   0,  0,  0,  0,    4,   0,     0},
     /* Typeless */
     {WINED3DFMT_R32G32B32A32_TYPELESS,     32, 32, 32, 32,   0, 32, 64, 96,   16,   0,     0},
     {WINED3DFMT_R32G32B32_TYPELESS,        32, 32, 32,  0,   0, 32, 64,  0,   12,   0,     0},
@@ -823,6 +825,26 @@ static void convert_s8_uint_d24_float(const BYTE *src, BYTE *dst, UINT src_row_p
             {
                 dest_f[x * 2] = float_24_to_32((source[x] & 0xffffff00u) >> 8);
                 dest_s[x * 2 + 1] = source[x] & 0xff;
+            }
+        }
+    }
+}
+
+static void convert_x8_d24_unorm(const BYTE *src, BYTE *dst, UINT src_row_pitch, UINT src_slice_pitch,
+        UINT dst_row_pitch, UINT dst_slice_pitch, UINT width, UINT height, UINT depth)
+{
+    unsigned int x, y, z;
+
+    for (z = 0; z < depth; ++z)
+    {
+        for (y = 0; y < height; ++y)
+        {
+            const DWORD *source = (const DWORD *)(src + z * src_slice_pitch + y * src_row_pitch);
+            DWORD *dest = (DWORD *)(dst + z * dst_slice_pitch + y * dst_row_pitch);
+
+            for (x = 0; x < width; ++x)
+            {
+                dest[x] = source[x] << 8 | source[x] >> 16;
             }
         }
     }
@@ -1571,14 +1593,14 @@ static const struct wined3d_format_texture_info format_texture_info[] =
             | WINED3DFMT_FLAG_DEPTH | WINED3DFMT_FLAG_STENCIL | WINED3DFMT_FLAG_SHADOW,
             ARB_FRAMEBUFFER_OBJECT,     NULL},
     {WINED3DFMT_X8D24_UNORM,            GL_DEPTH_COMPONENT,               GL_DEPTH_COMPONENT,                     0,
-            GL_DEPTH_COMPONENT,         GL_UNSIGNED_INT,                  0,
+            GL_DEPTH_COMPONENT,         GL_UNSIGNED_INT,                  4,
             WINED3DFMT_FLAG_DEPTH,
-            WINED3D_GL_EXT_NONE,        NULL},
+            WINED3D_GL_EXT_NONE,        convert_x8_d24_unorm},
     {WINED3DFMT_X8D24_UNORM,            GL_DEPTH_COMPONENT24_ARB,         GL_DEPTH_COMPONENT24_ARB,               0,
-            GL_DEPTH_COMPONENT,         GL_UNSIGNED_INT,                  0,
+            GL_DEPTH_COMPONENT,         GL_UNSIGNED_INT,                  4,
             WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_POSTPIXELSHADER_BLENDING | WINED3DFMT_FLAG_FILTERING
             | WINED3DFMT_FLAG_DEPTH | WINED3DFMT_FLAG_SHADOW,
-            ARB_DEPTH_TEXTURE,          NULL},
+            ARB_DEPTH_TEXTURE,          convert_x8_d24_unorm},
     {WINED3DFMT_S4X4_UINT_D24_UNORM,    GL_DEPTH_COMPONENT24_ARB,         GL_DEPTH_COMPONENT24_ARB,               0,
             GL_DEPTH_COMPONENT,         GL_UNSIGNED_INT,                  0,
             WINED3DFMT_FLAG_DEPTH | WINED3DFMT_FLAG_SHADOW,
@@ -1655,6 +1677,11 @@ static const struct wined3d_format_texture_info format_texture_info[] =
             GL_RGBA,                    GL_UNSIGNED_INT_8_8_8_8_REV,      0,
             WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_RENDERTARGET | WINED3DFMT_FLAG_FBO_ATTACHABLE,
             ARB_FRAMEBUFFER_OBJECT,     NULL},
+    /* DirectX 10 HDR formats */
+    {WINED3DFMT_R9G9B9E5_SHAREDEXP,     GL_RGB9_E5_EXT,                   GL_RGB9_E5_EXT,                            0,
+            GL_RGB,                     GL_UNSIGNED_INT_5_9_9_9_REV_EXT,  0,
+            WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_POSTPIXELSHADER_BLENDING | WINED3DFMT_FLAG_FILTERING,
+            EXT_TEXTURE_SHARED_EXPONENT, NULL},
 };
 
 struct wined3d_format_srgb_info
@@ -4102,9 +4129,10 @@ const char *debug_d3dprimitivetype(enum wined3d_primitive_type primitive_type)
         PRIM_TO_STR(WINED3D_PT_LINESTRIP_ADJ);
         PRIM_TO_STR(WINED3D_PT_TRIANGLELIST_ADJ);
         PRIM_TO_STR(WINED3D_PT_TRIANGLESTRIP_ADJ);
+        PRIM_TO_STR(WINED3D_PT_PATCH);
 #undef  PRIM_TO_STR
         default:
-            FIXME("Unrecognized %u primitive type!\n", primitive_type);
+            FIXME("Unrecognized primitive type %#x.\n", primitive_type);
             return "unrecognized";
     }
 }

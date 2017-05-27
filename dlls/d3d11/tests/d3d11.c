@@ -1293,6 +1293,12 @@ static void draw_quad_(unsigned int line, struct d3d11_test_context *context)
     ID3D11DeviceContext_Draw(context->immediate_context, 4, 0);
 }
 
+static void set_quad_color(struct d3d11_test_context *context, const struct vec4 *color)
+{
+    ID3D11DeviceContext_UpdateSubresource(context->immediate_context,
+            (ID3D11Resource *)context->ps_cb, 0, NULL, color, 0, 0);
+}
+
 #define draw_color_quad(c, color) draw_color_quad_(__LINE__, c, color)
 static void draw_color_quad_(unsigned int line, struct d3d11_test_context *context, const struct vec4 *color)
 {
@@ -1334,8 +1340,7 @@ static void draw_color_quad_(unsigned int line, struct d3d11_test_context *conte
     ID3D11DeviceContext_PSSetShader(context->immediate_context, context->ps, NULL, 0);
     ID3D11DeviceContext_PSSetConstantBuffers(context->immediate_context, 0, 1, &context->ps_cb);
 
-    ID3D11DeviceContext_UpdateSubresource(context->immediate_context, (ID3D11Resource *)context->ps_cb, 0,
-            NULL, color, 0, 0);
+    set_quad_color(context, color);
 
     draw_quad_(line, context);
 }
@@ -1764,6 +1769,9 @@ static void test_create_texture2d(void)
                 FALSE, TRUE},
         {DXGI_FORMAT_D32_FLOAT,               1, D3D11_BIND_RENDER_TARGET,    0, FALSE, FALSE},
         {DXGI_FORMAT_D32_FLOAT,               1, D3D11_BIND_DEPTH_STENCIL,    0, TRUE,  FALSE},
+        {DXGI_FORMAT_R9G9B9E5_SHAREDEXP,      1, D3D11_BIND_SHADER_RESOURCE,  0, TRUE,  FALSE},
+        {DXGI_FORMAT_R9G9B9E5_SHAREDEXP,      1, D3D11_BIND_RENDER_TARGET,    0, FALSE, FALSE},
+        {DXGI_FORMAT_R9G9B9E5_SHAREDEXP,      1, D3D11_BIND_DEPTH_STENCIL,    0, FALSE, FALSE},
     };
 
     if (!(device = create_device(NULL)))
@@ -2080,6 +2088,9 @@ static void test_create_texture3d(void)
         {DXGI_FORMAT_R8G8B8A8_UNORM,        D3D11_BIND_DEPTH_STENCIL,   FALSE, FALSE},
         {DXGI_FORMAT_D24_UNORM_S8_UINT,     D3D11_BIND_RENDER_TARGET,   FALSE, FALSE},
         {DXGI_FORMAT_D32_FLOAT,             D3D11_BIND_RENDER_TARGET,   FALSE, FALSE},
+        {DXGI_FORMAT_R9G9B9E5_SHAREDEXP,    D3D11_BIND_SHADER_RESOURCE, TRUE,  FALSE},
+        {DXGI_FORMAT_R9G9B9E5_SHAREDEXP,    D3D11_BIND_RENDER_TARGET,   FALSE, FALSE},
+        {DXGI_FORMAT_R9G9B9E5_SHAREDEXP,    D3D11_BIND_DEPTH_STENCIL,   FALSE, FALSE},
     };
 
     if (!(device = create_device(NULL)))
@@ -2311,12 +2322,12 @@ static void test_texture3d_interfaces(void)
 static void test_create_buffer(void)
 {
     ID3D10Buffer *d3d10_buffer;
+    HRESULT expected_hr, hr;
     D3D11_BUFFER_DESC desc;
     ID3D11Buffer *buffer;
     ID3D11Device *device;
     unsigned int i;
     ULONG refcount;
-    HRESULT hr;
 
     static const struct test
     {
@@ -2507,7 +2518,6 @@ static void test_create_buffer(void)
     buffer = create_buffer(device, D3D11_BIND_VERTEX_BUFFER, 1024, NULL);
     hr = check_interface(buffer, &IID_ID3D10Buffer, TRUE, TRUE); /* Not available on all Windows versions. */
     ID3D11Buffer_Release(buffer);
-
     if (FAILED(hr))
     {
         win_skip("Buffers do not implement ID3D10Buffer.\n");
@@ -2521,7 +2531,6 @@ static void test_create_buffer(void)
         D3D11_BUFFER_DESC obtained_desc;
         D3D10_BUFFER_DESC d3d10_desc;
         ID3D10Device *d3d10_device;
-        HRESULT expected_hr;
 
         desc.ByteWidth = 1024;
         desc.Usage = D3D11_USAGE_DEFAULT;
@@ -2593,6 +2602,18 @@ static void test_create_buffer(void)
         if (d3d10_device) ID3D10Device_Release(d3d10_device);
 
         ID3D10Buffer_Release(d3d10_buffer);
+    }
+
+    memset(&desc, 0, sizeof(desc));
+    desc.BindFlags = D3D10_BIND_CONSTANT_BUFFER;
+    for (i = 0; i <= 32; ++i)
+    {
+        desc.ByteWidth = i;
+        expected_hr = !i || i % 16 ? E_INVALIDARG : S_OK;
+        hr = ID3D11Device_CreateBuffer(device, &desc, NULL, &buffer);
+        ok(hr == expected_hr, "Got unexpected hr %#x for constant buffer size %u.\n", hr, i);
+        if (SUCCEEDED(hr))
+            ID3D11Buffer_Release(buffer);
     }
 
     refcount = ID3D11Device_Release(device);
@@ -3668,22 +3689,13 @@ static void test_create_shader(const D3D_FEATURE_LEVEL feature_level)
     };
     static const DWORD ps_4_0[] =
     {
-        0x43425844, 0x4da9446f, 0xfbe1f259, 0x3fdb3009, 0x517521fa, 0x00000001, 0x000001ac,
-        0x00000005, 0x00000034, 0x0000008c, 0x000000bc, 0x000000f0, 0x00000130, 0x46454452,
-        0x00000050, 0x00000000, 0x00000000, 0x00000000, 0x0000001c, 0xffff0400, 0x00000100,
-        0x0000001c, 0x7263694d, 0x666f736f, 0x52282074, 0x4c482029, 0x53204c53, 0x65646168,
-        0x6f432072, 0x6c69706d, 0x39207265, 0x2e39322e, 0x2e323539, 0x31313133, 0xababab00,
-        0x4e475349, 0x00000028, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000,
-        0x00000003, 0x00000000, 0x00000f0f, 0x4f4c4f43, 0xabab0052, 0x4e47534f, 0x0000002c,
-        0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003, 0x00000000,
-        0x0000000f, 0x545f5653, 0x45475241, 0xabab0054, 0x52444853, 0x00000038, 0x00000040,
-        0x0000000e, 0x03001062, 0x001010f2, 0x00000000, 0x03000065, 0x001020f2, 0x00000000,
-        0x05000036, 0x001020f2, 0x00000000, 0x00101e46, 0x00000000, 0x0100003e, 0x54415453,
-        0x00000074, 0x00000002, 0x00000000, 0x00000000, 0x00000002, 0x00000000, 0x00000000,
-        0x00000000, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
-        0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000001,
-        0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
-        0x00000000, 0x00000000,
+        0x43425844, 0x08c2b568, 0x17d33120, 0xb7d82948, 0x13a570fb, 0x00000001, 0x000000d0, 0x00000003,
+        0x0000002c, 0x0000005c, 0x00000090, 0x4e475349, 0x00000028, 0x00000001, 0x00000008, 0x00000020,
+        0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x00000f0f, 0x4f4c4f43, 0xabab0052, 0x4e47534f,
+        0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003, 0x00000000,
+        0x0000000f, 0x545f5653, 0x45475241, 0xabab0054, 0x52444853, 0x00000038, 0x00000040, 0x0000000e,
+        0x03001062, 0x001010f2, 0x00000000, 0x03000065, 0x001020f2, 0x00000000, 0x05000036, 0x001020f2,
+        0x00000000, 0x00101e46, 0x00000000, 0x0100003e,
     };
     static const DWORD ps_4_0_level_9_0[] =
     {
@@ -4323,8 +4335,8 @@ static void test_create_blend_state(void)
     }
 
     /* Not available on all Windows versions. */
-    hr = check_interface(blend_state1, &IID_ID3D10BlendState, TRUE, TRUE);
-    hr = check_interface(blend_state1, &IID_ID3D10BlendState1, TRUE, TRUE);
+    check_interface(blend_state1, &IID_ID3D10BlendState, TRUE, TRUE);
+    check_interface(blend_state1, &IID_ID3D10BlendState1, TRUE, TRUE);
 
     refcount = ID3D11BlendState_Release(blend_state1);
     ok(refcount == 1, "Got unexpected refcount %u.\n", refcount);
@@ -4434,7 +4446,7 @@ static void test_create_depthstencil_state(void)
     ID3D11Device_Release(tmp);
 
     /* Not available on all Windows versions. */
-    hr = check_interface(ds_state1, &IID_ID3D10DepthStencilState, TRUE, TRUE);
+    check_interface(ds_state1, &IID_ID3D10DepthStencilState, TRUE, TRUE);
 
     refcount = ID3D11DepthStencilState_Release(ds_state2);
     ok(refcount == 1, "Got unexpected refcount %u.\n", refcount);
@@ -4590,13 +4602,13 @@ static void test_create_query(void)
         {D3D11_QUERY_OCCLUSION_PREDICATE,           D3D_FEATURE_LEVEL_10_0, TRUE,  TRUE,  FALSE},
         {D3D11_QUERY_SO_STATISTICS,                 D3D_FEATURE_LEVEL_10_0, FALSE, FALSE, TRUE},
         {D3D11_QUERY_SO_OVERFLOW_PREDICATE,         D3D_FEATURE_LEVEL_10_0, TRUE,  TRUE,  TRUE},
-        {D3D11_QUERY_SO_STATISTICS_STREAM0,         D3D_FEATURE_LEVEL_11_0, FALSE, FALSE, TRUE},
+        {D3D11_QUERY_SO_STATISTICS_STREAM0,         D3D_FEATURE_LEVEL_11_0, FALSE, FALSE, FALSE},
         {D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM0, D3D_FEATURE_LEVEL_11_0, TRUE,  FALSE, TRUE},
-        {D3D11_QUERY_SO_STATISTICS_STREAM1,         D3D_FEATURE_LEVEL_11_0, FALSE, FALSE, TRUE},
+        {D3D11_QUERY_SO_STATISTICS_STREAM1,         D3D_FEATURE_LEVEL_11_0, FALSE, FALSE, FALSE},
         {D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM1, D3D_FEATURE_LEVEL_11_0, TRUE,  FALSE, TRUE},
-        {D3D11_QUERY_SO_STATISTICS_STREAM2,         D3D_FEATURE_LEVEL_11_0, FALSE, FALSE, TRUE},
+        {D3D11_QUERY_SO_STATISTICS_STREAM2,         D3D_FEATURE_LEVEL_11_0, FALSE, FALSE, FALSE},
         {D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM2, D3D_FEATURE_LEVEL_11_0, TRUE,  FALSE, TRUE},
-        {D3D11_QUERY_SO_STATISTICS_STREAM3,         D3D_FEATURE_LEVEL_11_0, FALSE, FALSE, TRUE},
+        {D3D11_QUERY_SO_STATISTICS_STREAM3,         D3D_FEATURE_LEVEL_11_0, FALSE, FALSE, FALSE},
         {D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM3, D3D_FEATURE_LEVEL_11_0, TRUE,  FALSE, TRUE},
     };
 
@@ -4840,6 +4852,48 @@ static void test_occlusion_query(void)
     ok((data.dword[0] == 0x90000000 && data.dword[1] == 0x1)
             || (data.dword[0] == 0xffffffff && !data.dword[1])
             || broken(!data.uint),
+            "Got unexpected query result 0x%08x%08x.\n", data.dword[1], data.dword[0]);
+
+    ID3D11Asynchronous_Release(query);
+
+    /* The following test exercises a code path in wined3d. A wined3d context
+     * associated with the query is destroyed when the swapchain is released. */
+    hr = ID3D11Device_CreateQuery(device, &query_desc, (ID3D11Query **)&query);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+
+    vp.Width = 64.0f;
+    vp.Height = 64.0f;
+    ID3D11DeviceContext_RSSetViewports(context, 1, &vp);
+    ID3D11DeviceContext_ClearRenderTargetView(context, test_context.backbuffer_rtv, white);
+    ID3D11DeviceContext_Begin(context, query);
+    draw_color_quad(&test_context, &red);
+    ID3D11DeviceContext_End(context, query);
+
+    ID3D11RenderTargetView_Release(test_context.backbuffer_rtv);
+    ID3D11Texture2D_Release(test_context.backbuffer);
+    IDXGISwapChain_Release(test_context.swapchain);
+    test_context.swapchain = create_swapchain(device, test_context.window, NULL);
+    hr = IDXGISwapChain_GetBuffer(test_context.swapchain, 0, &IID_ID3D11Texture2D,
+            (void **)&test_context.backbuffer);
+    ok(SUCCEEDED(hr), "Failed to get backbuffer, hr %#x.\n", hr);
+    hr = ID3D11Device_CreateRenderTargetView(device, (ID3D11Resource *)test_context.backbuffer,
+            NULL, &test_context.backbuffer_rtv);
+    ok(SUCCEEDED(hr), "Failed to create rendertarget view, hr %#x.\n", hr);
+    ID3D11DeviceContext_OMSetRenderTargets(context, 1, &test_context.backbuffer_rtv, NULL);
+    ID3D11DeviceContext_ClearRenderTargetView(context, test_context.backbuffer_rtv, white);
+
+    for (i = 0; i < 500; ++i)
+    {
+        if ((hr = ID3D11DeviceContext_GetData(context, query, NULL, 0, 0)) != S_FALSE)
+            break;
+        Sleep(10);
+    }
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    hr = ID3D11DeviceContext_GetData(context, query, &data, sizeof(data), 0);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    /* This test occasionally succeeds with CSMT enabled because of a race condition. */
+if (0)
+    todo_wine ok(data.dword[0] == 0x1000 && !data.dword[1],
             "Got unexpected query result 0x%08x%08x.\n", data.dword[1], data.dword[0]);
 
     ID3D11Asynchronous_Release(query);
@@ -6064,6 +6118,13 @@ static void test_texture(void)
          40,  30,  20,  10,
         250, 210, 155, 190,
     };
+    static const DWORD r9g9b9e5_data[] =
+    {
+        0x80000100, 0x80020000, 0x84000000, 0x84000100,
+        0x78000100, 0x78020000, 0x7c000000, 0x78020100,
+        0x70000133, 0x70026600, 0x74cc0000, 0x74cc0133,
+        0x6800019a, 0x68033400, 0x6e680000, 0x6e6b359a,
+    };
     static const struct texture rgba_texture =
     {
         4, 4, 3, 1, DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -6111,6 +6172,8 @@ static void test_texture(void)
         {{r32_float, 4 * sizeof(*r32_float)}}};
     static const struct texture r32u_typeless = {4, 4, 1, 1, DXGI_FORMAT_R32_TYPELESS,
         {{r32_uint, 4 * sizeof(*r32_uint)}}};
+    static const struct texture r9g9b9e5_texture = {4, 4, 1, 1, DXGI_FORMAT_R9G9B9E5_SHAREDEXP,
+        {{r9g9b9e5_data, 4 * sizeof(*r9g9b9e5_data)}}};
     static const DWORD red_colors[] =
     {
         0xff0000ff, 0xff0000ff, 0xff0000ff, 0xff0000ff,
@@ -6209,6 +6272,13 @@ static void test_texture(void)
         0x01000028, 0x0100001e, 0x01000014, 0x0100000a,
         0x010000fa, 0x010000d2, 0x0100009b, 0x010000be,
     };
+    static const DWORD r9g9b9e5_colors[16] =
+    {
+        0xff0000ff, 0xff00ff00, 0xffff0000, 0xffff00ff,
+        0xff00007f, 0xff007f00, 0xff7f0000, 0xff007f7f,
+        0xff00004c, 0xff004c00, 0xff4c0000, 0xff4c004c,
+        0xff000033, 0xff003300, 0xff330000, 0xff333333,
+    };
     static const DWORD zero_colors[4 * 4] = {0};
     static const float red[] = {1.0f, 0.0f, 0.0f, 0.5f};
 
@@ -6248,6 +6318,7 @@ static void test_texture(void)
         {&ps_ld,              &bc6h_s_texture,   POINT,        0.0f, 0.0f,    0.0f,  0.0f, bc_colors},
         {&ps_ld,              &bc7_texture,      POINT,        0.0f, 0.0f,    0.0f,  0.0f, bc7_colors},
         {&ps_ld,              &bc7_texture_srgb, POINT,        0.0f, 0.0f,    0.0f,  0.0f, bc7_colors},
+        {&ps_ld,              &r9g9b9e5_texture, POINT,        0.0f, 0.0f,    0.0f,  0.0f, r9g9b9e5_colors},
         {&ps_ld,              NULL,              POINT,        0.0f, 0.0f,    0.0f,  0.0f, zero_colors},
         {&ps_ld,              NULL,              POINT,        0.0f, 0.0f, MIP_MAX,  0.0f, zero_colors},
         {&ps_ld_sint8,        &sint8_texture,    POINT,        0.0f, 0.0f,    0.0f,  0.0f, sint8_colors},
@@ -6267,6 +6338,7 @@ static void test_texture(void)
         {&ps_sample,          &rgba_texture,     POINT,        8.0f, 0.0f, MIP_MAX,  0.0f, level_1_colors},
         {&ps_sample,          &srgb_texture,     POINT,        0.0f, 0.0f,    0.0f,  0.0f, srgb_colors},
         {&ps_sample,          &a8_texture,       POINT,        0.0f, 0.0f,    0.0f,  0.0f, a8_colors},
+        {&ps_sample,          &r9g9b9e5_texture, POINT,        0.0f, 0.0f,    0.0f,  0.0f, r9g9b9e5_colors},
         {&ps_sample,          NULL,              POINT,        0.0f, 0.0f,    0.0f,  0.0f, zero_colors},
         {&ps_sample,          NULL,              POINT,        0.0f, 0.0f, MIP_MAX,  0.0f, zero_colors},
         {&ps_sample_b,        &rgba_texture,     POINT,        0.0f, 0.0f, MIP_MAX,  0.0f, rgba_level_0},
@@ -7951,6 +8023,1259 @@ static void test_scissor(void)
     release_test_context(&test_context);
 }
 
+static void test_clear_state(void)
+{
+    static const D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_11_0;
+    static const D3D11_INPUT_ELEMENT_DESC layout_desc[] =
+    {
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+    };
+#if 0
+    float4 main(float4 pos : POSITION) : POSITION
+    {
+        return pos;
+    }
+#endif
+    static const DWORD simple_vs[] =
+    {
+        0x43425844, 0x66689e7c, 0x643f0971, 0xb7f67ff4, 0xabc48688, 0x00000001, 0x000000d4, 0x00000003,
+        0x0000002c, 0x00000060, 0x00000094, 0x4e475349, 0x0000002c, 0x00000001, 0x00000008, 0x00000020,
+        0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x00000f0f, 0x49534f50, 0x4e4f4954, 0xababab00,
+        0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003,
+        0x00000000, 0x0000000f, 0x49534f50, 0x4e4f4954, 0xababab00, 0x52444853, 0x00000038, 0x00010040,
+        0x0000000e, 0x0300005f, 0x001010f2, 0x00000000, 0x03000065, 0x001020f2, 0x00000000, 0x05000036,
+        0x001020f2, 0x00000000, 0x00101e46, 0x00000000, 0x0100003e,
+    };
+#if 0
+    struct data
+    {
+        float4 position : SV_Position;
+    };
+
+    struct patch_constant_data
+    {
+        float edges[3] : SV_TessFactor;
+        float inside : SV_InsideTessFactor;
+    };
+
+    void patch_constant(InputPatch<data, 3> input, out patch_constant_data output)
+    {
+        output.edges[0] = output.edges[1] = output.edges[2] = 1.0f;
+        output.inside = 1.0f;
+    }
+
+    [domain("tri")]
+    [outputcontrolpoints(3)]
+    [partitioning("integer")]
+    [outputtopology("triangle_ccw")]
+    [patchconstantfunc("patch_constant")]
+    data hs_main(InputPatch<data, 3> input, uint i : SV_OutputControlPointID)
+    {
+        return input[i];
+    }
+
+    [domain("tri")]
+    void ds_main(patch_constant_data input,
+            float3 tess_coord : SV_DomainLocation,
+            const OutputPatch<data, 3> patch,
+            out data output)
+    {
+        output.position = tess_coord.x * patch[0].position
+                + tess_coord.y * patch[1].position
+                + tess_coord.z * patch[2].position;
+    }
+#endif
+    static const DWORD simple_hs[] =
+    {
+        0x43425844, 0x42b5df25, 0xfd8aa2b1, 0xbe5490cb, 0xb595f8b1, 0x00000001, 0x0000020c, 0x00000004,
+        0x00000030, 0x00000064, 0x00000098, 0x0000012c, 0x4e475349, 0x0000002c, 0x00000001, 0x00000008,
+        0x00000020, 0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x00000f0f, 0x505f5653, 0x7469736f,
+        0x006e6f69, 0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000,
+        0x00000003, 0x00000000, 0x0000000f, 0x505f5653, 0x7469736f, 0x006e6f69, 0x47534350, 0x0000008c,
+        0x00000004, 0x00000008, 0x00000068, 0x00000000, 0x0000000d, 0x00000003, 0x00000000, 0x00000e01,
+        0x00000068, 0x00000001, 0x0000000d, 0x00000003, 0x00000001, 0x00000e01, 0x00000068, 0x00000002,
+        0x0000000d, 0x00000003, 0x00000002, 0x00000e01, 0x00000076, 0x00000000, 0x0000000e, 0x00000003,
+        0x00000003, 0x00000e01, 0x545f5653, 0x46737365, 0x6f746361, 0x56530072, 0x736e495f, 0x54656469,
+        0x46737365, 0x6f746361, 0xabab0072, 0x58454853, 0x000000d8, 0x00030050, 0x00000036, 0x01000071,
+        0x01001893, 0x01001894, 0x01001095, 0x01000896, 0x01002097, 0x0100086a, 0x01000073, 0x02000099,
+        0x00000003, 0x0200005f, 0x00017000, 0x04000067, 0x00102012, 0x00000000, 0x00000011, 0x04000067,
+        0x00102012, 0x00000001, 0x00000012, 0x04000067, 0x00102012, 0x00000002, 0x00000013, 0x02000068,
+        0x00000001, 0x0400005b, 0x00102012, 0x00000000, 0x00000003, 0x04000036, 0x00100012, 0x00000000,
+        0x0001700a, 0x06000036, 0x00902012, 0x0010000a, 0x00000000, 0x00004001, 0x3f800000, 0x0100003e,
+        0x01000073, 0x04000067, 0x00102012, 0x00000003, 0x00000014, 0x05000036, 0x00102012, 0x00000003,
+        0x00004001, 0x3f800000, 0x0100003e,
+    };
+    static const DWORD simple_ds[] =
+    {
+        0x43425844, 0xb7e35b82, 0x1b930ff2, 0x48d3a0f2, 0x375219ed, 0x00000001, 0x000001e0, 0x00000004,
+        0x00000030, 0x00000064, 0x000000f8, 0x0000012c, 0x4e475349, 0x0000002c, 0x00000001, 0x00000008,
+        0x00000020, 0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x00000f0f, 0x505f5653, 0x7469736f,
+        0x006e6f69, 0x47534350, 0x0000008c, 0x00000004, 0x00000008, 0x00000068, 0x00000000, 0x0000000d,
+        0x00000003, 0x00000000, 0x00000001, 0x00000068, 0x00000001, 0x0000000d, 0x00000003, 0x00000001,
+        0x00000001, 0x00000068, 0x00000002, 0x0000000d, 0x00000003, 0x00000002, 0x00000001, 0x00000076,
+        0x00000000, 0x0000000e, 0x00000003, 0x00000003, 0x00000001, 0x545f5653, 0x46737365, 0x6f746361,
+        0x56530072, 0x736e495f, 0x54656469, 0x46737365, 0x6f746361, 0xabab0072, 0x4e47534f, 0x0000002c,
+        0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x0000000f,
+        0x505f5653, 0x7469736f, 0x006e6f69, 0x58454853, 0x000000ac, 0x00040050, 0x0000002b, 0x01001893,
+        0x01001095, 0x0100086a, 0x0200005f, 0x0001c072, 0x0400005f, 0x002190f2, 0x00000003, 0x00000000,
+        0x04000067, 0x001020f2, 0x00000000, 0x00000001, 0x02000068, 0x00000001, 0x07000038, 0x001000f2,
+        0x00000000, 0x0001c556, 0x00219e46, 0x00000001, 0x00000000, 0x09000032, 0x001000f2, 0x00000000,
+        0x0001c006, 0x00219e46, 0x00000000, 0x00000000, 0x00100e46, 0x00000000, 0x09000032, 0x001020f2,
+        0x00000000, 0x0001caa6, 0x00219e46, 0x00000002, 0x00000000, 0x00100e46, 0x00000000, 0x0100003e,
+    };
+#if 0
+    struct gs_out
+    {
+        float4 pos : SV_POSITION;
+    };
+
+    [maxvertexcount(4)]
+    void main(point float4 vin[1] : POSITION, inout TriangleStream<gs_out> vout)
+    {
+        float offset = 0.1 * vin[0].w;
+        gs_out v;
+
+        v.pos = float4(vin[0].x - offset, vin[0].y - offset, vin[0].z, vin[0].w);
+        vout.Append(v);
+        v.pos = float4(vin[0].x - offset, vin[0].y + offset, vin[0].z, vin[0].w);
+        vout.Append(v);
+        v.pos = float4(vin[0].x + offset, vin[0].y - offset, vin[0].z, vin[0].w);
+        vout.Append(v);
+        v.pos = float4(vin[0].x + offset, vin[0].y + offset, vin[0].z, vin[0].w);
+        vout.Append(v);
+    }
+#endif
+    static const DWORD simple_gs[] =
+    {
+        0x43425844, 0x000ee786, 0xc624c269, 0x885a5cbe, 0x444b3b1f, 0x00000001, 0x0000023c, 0x00000003,
+        0x0000002c, 0x00000060, 0x00000094, 0x4e475349, 0x0000002c, 0x00000001, 0x00000008, 0x00000020,
+        0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x00000f0f, 0x49534f50, 0x4e4f4954, 0xababab00,
+        0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000001, 0x00000003,
+        0x00000000, 0x0000000f, 0x505f5653, 0x5449534f, 0x004e4f49, 0x52444853, 0x000001a0, 0x00020040,
+        0x00000068, 0x0400005f, 0x002010f2, 0x00000001, 0x00000000, 0x02000068, 0x00000001, 0x0100085d,
+        0x0100285c, 0x04000067, 0x001020f2, 0x00000000, 0x00000001, 0x0200005e, 0x00000004, 0x0f000032,
+        0x00100032, 0x00000000, 0x80201ff6, 0x00000041, 0x00000000, 0x00000000, 0x00004002, 0x3dcccccd,
+        0x3dcccccd, 0x00000000, 0x00000000, 0x00201046, 0x00000000, 0x00000000, 0x05000036, 0x00102032,
+        0x00000000, 0x00100046, 0x00000000, 0x06000036, 0x001020c2, 0x00000000, 0x00201ea6, 0x00000000,
+        0x00000000, 0x01000013, 0x05000036, 0x00102012, 0x00000000, 0x0010000a, 0x00000000, 0x0e000032,
+        0x00100052, 0x00000000, 0x00201ff6, 0x00000000, 0x00000000, 0x00004002, 0x3dcccccd, 0x00000000,
+        0x3dcccccd, 0x00000000, 0x00201106, 0x00000000, 0x00000000, 0x05000036, 0x00102022, 0x00000000,
+        0x0010002a, 0x00000000, 0x06000036, 0x001020c2, 0x00000000, 0x00201ea6, 0x00000000, 0x00000000,
+        0x01000013, 0x05000036, 0x00102012, 0x00000000, 0x0010000a, 0x00000000, 0x05000036, 0x00102022,
+        0x00000000, 0x0010001a, 0x00000000, 0x06000036, 0x001020c2, 0x00000000, 0x00201ea6, 0x00000000,
+        0x00000000, 0x01000013, 0x05000036, 0x00102032, 0x00000000, 0x00100086, 0x00000000, 0x06000036,
+        0x001020c2, 0x00000000, 0x00201ea6, 0x00000000, 0x00000000, 0x01000013, 0x0100003e,
+    };
+#if 0
+    float4 main(float4 color : COLOR) : SV_TARGET
+    {
+        return color;
+    }
+#endif
+    static const DWORD simple_ps[] =
+    {
+        0x43425844, 0x08c2b568, 0x17d33120, 0xb7d82948, 0x13a570fb, 0x00000001, 0x000000d0, 0x00000003,
+        0x0000002c, 0x0000005c, 0x00000090, 0x4e475349, 0x00000028, 0x00000001, 0x00000008, 0x00000020,
+        0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x00000f0f, 0x4f4c4f43, 0xabab0052, 0x4e47534f,
+        0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003, 0x00000000,
+        0x0000000f, 0x545f5653, 0x45475241, 0xabab0054, 0x52444853, 0x00000038, 0x00000040, 0x0000000e,
+        0x03001062, 0x001010f2, 0x00000000, 0x03000065, 0x001020f2, 0x00000000, 0x05000036, 0x001020f2,
+        0x00000000, 0x00101e46, 0x00000000, 0x0100003e,
+    };
+#if 0
+    [numthreads(1, 1, 1)]
+    void main() { }
+#endif
+    static const DWORD simple_cs[] =
+    {
+        0x43425844, 0x1acc3ad0, 0x71c7b057, 0xc72c4306, 0xf432cb57, 0x00000001, 0x00000074, 0x00000003,
+        0x0000002c, 0x0000003c, 0x0000004c, 0x4e475349, 0x00000008, 0x00000000, 0x00000008, 0x4e47534f,
+        0x00000008, 0x00000000, 0x00000008, 0x58454853, 0x00000020, 0x00050050, 0x00000008, 0x0100086a,
+        0x0400009b, 0x00000001, 0x00000001, 0x00000001, 0x0100003e,
+    };
+
+    D3D11_VIEWPORT tmp_viewport[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
+    ID3D11ShaderResourceView *tmp_srv[D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT];
+    ID3D11ShaderResourceView *srv[D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT];
+    ID3D11RenderTargetView *tmp_rtv[D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT];
+    RECT tmp_rect[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
+    ID3D11SamplerState *tmp_sampler[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT];
+    ID3D11RenderTargetView *rtv[D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT];
+    ID3D11Texture2D *rt_texture[D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT];
+    ID3D11Buffer *cb[D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT];
+    ID3D11Buffer *tmp_buffer[D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT];
+    ID3D11SamplerState *sampler[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT];
+    ID3D11UnorderedAccessView *tmp_uav[D3D11_PS_CS_UAV_REGISTER_COUNT];
+    ID3D11UnorderedAccessView *cs_uav[D3D11_PS_CS_UAV_REGISTER_COUNT];
+    ID3D11Buffer *buffer[D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT];
+    ID3D11Buffer *cs_uav_buffer[D3D11_PS_CS_UAV_REGISTER_COUNT];
+    UINT offset[D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT];
+    UINT stride[D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT];
+    ID3D11Buffer *so_buffer[D3D11_SO_BUFFER_SLOT_COUNT];
+    ID3D11InputLayout *tmp_input_layout, *input_layout;
+    ID3D11DepthStencilState *tmp_ds_state, *ds_state;
+    ID3D11BlendState *tmp_blend_state, *blend_state;
+    ID3D11RasterizerState *tmp_rs_state, *rs_state;
+    ID3D11Predicate *tmp_predicate, *predicate;
+    D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc;
+    D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc;
+    ID3D11DepthStencilView *tmp_dsv, *dsv;
+    ID3D11UnorderedAccessView *ps_uav;
+    D3D11_PRIMITIVE_TOPOLOGY topology;
+    D3D11_TEXTURE2D_DESC texture_desc;
+    ID3D11GeometryShader *tmp_gs, *gs;
+    ID3D11ComputeShader *tmp_cs, *cs;
+    D3D11_DEPTH_STENCIL_DESC ds_desc;
+    ID3D11VertexShader *tmp_vs, *vs;
+    ID3D11DomainShader *tmp_ds, *ds;
+    D3D11_SAMPLER_DESC sampler_desc;
+    D3D11_QUERY_DESC predicate_desc;
+    struct device_desc device_desc;
+    ID3D11PixelShader *tmp_ps, *ps;
+    ID3D11HullShader *tmp_hs, *hs;
+    D3D11_RASTERIZER_DESC rs_desc;
+    ID3D11DeviceContext *context;
+    D3D11_BLEND_DESC blend_desc;
+    ID3D11Texture2D *ds_texture;
+    ID3D11Buffer *ps_uav_buffer;
+    float blend_factor[4];
+    ID3D11Device *device;
+    BOOL predicate_value;
+    DXGI_FORMAT format;
+    UINT sample_mask;
+    UINT stencil_ref;
+    ULONG refcount;
+    UINT count, i;
+    HRESULT hr;
+
+    device_desc.feature_level = &feature_level;
+    device_desc.flags = 0;
+    if (!(device = create_device(&device_desc)))
+    {
+        skip("Failed to create device.\n");
+        return;
+    }
+
+    ID3D11Device_GetImmediateContext(device, &context);
+
+    /* Verify the initial state after device creation. */
+
+    ID3D11DeviceContext_VSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_buffer[i], "Got unexpected constant buffer %p in slot %u.\n", tmp_buffer[i], i);
+    }
+    ID3D11DeviceContext_VSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_srv[i], "Got unexpected shader resource view %p in slot %u.\n", tmp_srv[i], i);
+    }
+    ID3D11DeviceContext_VSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_sampler[i], "Got unexpected sampler %p in slot %u.\n", tmp_sampler[i], i);
+    }
+    ID3D11DeviceContext_VSGetShader(context, &tmp_vs, NULL, 0);
+    ok(!tmp_vs, "Got unexpected vertex shader %p.\n", tmp_vs);
+
+    ID3D11DeviceContext_HSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_buffer[i], "Got unexpected constant buffer %p in slot %u.\n", tmp_buffer[i], i);
+    }
+    ID3D11DeviceContext_HSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_srv[i], "Got unexpected shader resource view %p in slot %u.\n", tmp_srv[i], i);
+    }
+    ID3D11DeviceContext_HSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_sampler[i], "Got unexpected sampler %p in slot %u.\n", tmp_sampler[i], i);
+    }
+    ID3D11DeviceContext_HSGetShader(context, &tmp_hs, NULL, 0);
+    ok(!tmp_hs, "Got unexpected hull shader %p.\n", tmp_hs);
+
+    ID3D11DeviceContext_DSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_buffer[i], "Got unexpected constant buffer %p in slot %u.\n", tmp_buffer[i], i);
+    }
+    ID3D11DeviceContext_DSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_srv[i], "Got unexpected shader resource view %p in slot %u.\n", tmp_srv[i], i);
+    }
+    ID3D11DeviceContext_DSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_sampler[i], "Got unexpected sampler %p in slot %u.\n", tmp_sampler[i], i);
+    }
+    ID3D11DeviceContext_DSGetShader(context, &tmp_ds, NULL, 0);
+    ok(!tmp_ds, "Got unexpected domain shader %p.\n", tmp_ds);
+
+    ID3D11DeviceContext_GSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_buffer[i], "Got unexpected constant buffer %p in slot %u.\n", tmp_buffer[i], i);
+    }
+    ID3D11DeviceContext_GSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_srv[i], "Got unexpected shader resource view %p in slot %u.\n", tmp_srv[i], i);
+    }
+    ID3D11DeviceContext_GSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_sampler[i], "Got unexpected sampler %p in slot %u.\n", tmp_sampler[i], i);
+    }
+    ID3D11DeviceContext_GSGetShader(context, &tmp_gs, NULL, 0);
+    ok(!tmp_gs, "Got unexpected geometry shader %p.\n", tmp_gs);
+
+    ID3D11DeviceContext_PSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_buffer[i], "Got unexpected constant buffer %p in slot %u.\n", tmp_buffer[i], i);
+    }
+    ID3D11DeviceContext_PSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT,
+            tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_srv[i], "Got unexpected shader resource view %p in slot %u.\n", tmp_srv[i], i);
+    }
+    ID3D11DeviceContext_PSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_sampler[i], "Got unexpected sampler %p in slot %u.\n", tmp_sampler[i], i);
+    }
+    ID3D11DeviceContext_PSGetShader(context, &tmp_ps, NULL, 0);
+    ok(!tmp_ps, "Got unexpected pixel shader %p.\n", tmp_ps);
+
+    ID3D11DeviceContext_CSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_buffer[i], "Got unexpected constant buffer %p in slot %u.\n", tmp_buffer[i], i);
+    }
+    ID3D11DeviceContext_CSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT,
+            tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_srv[i], "Got unexpected shader resource view %p in slot %u.\n", tmp_srv[i], i);
+    }
+    ID3D11DeviceContext_CSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_sampler[i], "Got unexpected sampler %p in slot %u.\n", tmp_sampler[i], i);
+    }
+    ID3D11DeviceContext_CSGetShader(context, &tmp_cs, NULL, 0);
+    ok(!tmp_cs, "Got unexpected compute shader %p.\n", tmp_cs);
+    ID3D11DeviceContext_CSGetUnorderedAccessViews(context, 0, D3D11_PS_CS_UAV_REGISTER_COUNT, tmp_uav);
+    for (i = 0; i < D3D11_PS_CS_UAV_REGISTER_COUNT; ++i)
+    {
+        ok(!tmp_uav[i], "Got unexpected unordered access view %p in slot %u.\n", tmp_uav[i], i);
+    }
+
+    ID3D11DeviceContext_IAGetVertexBuffers(context, 0, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
+            tmp_buffer, stride, offset);
+    for (i = 0; i < D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_buffer[i], "Got unexpected vertex buffer %p in slot %u.\n", tmp_buffer[i], i);
+        ok(!stride[i], "Got unexpected stride %u in slot %u.\n", stride[i], i);
+        ok(!offset[i], "Got unexpected offset %u in slot %u.\n", offset[i], i);
+    }
+    ID3D11DeviceContext_IAGetIndexBuffer(context, tmp_buffer, &format, offset);
+    ok(!tmp_buffer[0], "Got unexpected index buffer %p.\n", tmp_buffer[0]);
+    ok(format == DXGI_FORMAT_UNKNOWN, "Got unexpected index buffer format %#x.\n", format);
+    ok(!offset[0], "Got unexpected index buffer offset %u.\n", offset[0]);
+    ID3D11DeviceContext_IAGetInputLayout(context, &tmp_input_layout);
+    ok(!tmp_input_layout, "Got unexpected input layout %p.\n", tmp_input_layout);
+    ID3D11DeviceContext_IAGetPrimitiveTopology(context, &topology);
+    ok(topology == D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED, "Got unexpected primitive topology %#x.\n", topology);
+
+    ID3D11DeviceContext_OMGetBlendState(context, &tmp_blend_state, blend_factor, &sample_mask);
+    ok(!tmp_blend_state, "Got unexpected blend state %p.\n", tmp_blend_state);
+    ok(blend_factor[0] == 1.0f && blend_factor[1] == 1.0f
+            && blend_factor[2] == 1.0f && blend_factor[3] == 1.0f,
+            "Got unexpected blend factor {%.8e, %.8e, %.8e, %.8e}.\n",
+            blend_factor[0], blend_factor[1], blend_factor[2], blend_factor[3]);
+    ok(sample_mask == D3D11_DEFAULT_SAMPLE_MASK, "Got unexpected sample mask %#x.\n", sample_mask);
+    ID3D11DeviceContext_OMGetDepthStencilState(context, &tmp_ds_state, &stencil_ref);
+    ok(!tmp_ds_state, "Got unexpected depth stencil state %p.\n", tmp_ds_state);
+    ok(!stencil_ref, "Got unexpected stencil ref %u.\n", stencil_ref);
+    ID3D11DeviceContext_OMGetRenderTargets(context, D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, tmp_rtv, &tmp_dsv);
+    for (i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+    {
+        ok(!tmp_rtv[i], "Got unexpected render target view %p in slot %u.\n", tmp_rtv[i], i);
+    }
+    ok(!tmp_dsv, "Got unexpected depth stencil view %p.\n", tmp_dsv);
+    ID3D11DeviceContext_OMGetRenderTargetsAndUnorderedAccessViews(context,
+            D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, tmp_rtv, &tmp_dsv,
+            0, D3D11_PS_CS_UAV_REGISTER_COUNT, tmp_uav);
+    for (i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+    {
+        ok(!tmp_rtv[i], "Got unexpected render target view %p in slot %u.\n", tmp_rtv[i], i);
+    }
+    ok(!tmp_dsv, "Got unexpected depth stencil view %p.\n", tmp_dsv);
+    for (i = 0; i < D3D11_PS_CS_UAV_REGISTER_COUNT; ++i)
+    {
+        ok(!tmp_uav[i], "Got unexpected unordered access view %p in slot %u.\n", tmp_uav[i], i);
+    }
+
+    ID3D11DeviceContext_RSGetScissorRects(context, &count, NULL);
+    todo_wine ok(!count, "Got unexpected scissor rect count %u.\n", count);
+    memset(tmp_rect, 0x55, sizeof(tmp_rect));
+    count = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+    ID3D11DeviceContext_RSGetScissorRects(context, &count, tmp_rect);
+    for (i = 0; i < D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE; ++i)
+    {
+        ok(!tmp_rect[i].left && !tmp_rect[i].top && !tmp_rect[i].right && !tmp_rect[i].bottom,
+                "Got unexpected scissor rect %s in slot %u.\n", wine_dbgstr_rect(&tmp_rect[i]), i);
+    }
+    ID3D11DeviceContext_RSGetViewports(context, &count, NULL);
+    todo_wine ok(!count, "Got unexpected viewport count %u.\n", count);
+    memset(tmp_viewport, 0x55, sizeof(tmp_viewport));
+    count = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+    ID3D11DeviceContext_RSGetViewports(context, &count, tmp_viewport);
+    for (i = 0; i < D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE; ++i)
+    {
+        ok(!tmp_viewport[i].TopLeftX && !tmp_viewport[i].TopLeftY && !tmp_viewport[i].Width
+                && !tmp_viewport[i].Height && !tmp_viewport[i].MinDepth && !tmp_viewport[i].MaxDepth,
+                "Got unexpected viewport {%.8e, %.8e, %.8e, %.8e, %.8e, %.8e} in slot %u.\n",
+                tmp_viewport[i].TopLeftX, tmp_viewport[i].TopLeftY, tmp_viewport[i].Width,
+                tmp_viewport[i].Height, tmp_viewport[i].MinDepth, tmp_viewport[i].MaxDepth, i);
+    }
+    ID3D11DeviceContext_RSGetState(context, &tmp_rs_state);
+    ok(!tmp_rs_state, "Got unexpected rasterizer state %p.\n", tmp_rs_state);
+
+    ID3D11DeviceContext_SOGetTargets(context, D3D11_SO_BUFFER_SLOT_COUNT, tmp_buffer);
+    for (i = 0; i < D3D11_SO_BUFFER_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_buffer[i], "Got unexpected stream output %p in slot %u.\n", tmp_buffer[i], i);
+    }
+
+    ID3D11DeviceContext_GetPredication(context, &tmp_predicate, &predicate_value);
+    ok(!tmp_predicate, "Got unexpected predicate %p.\n", tmp_predicate);
+    ok(!predicate_value, "Got unexpected predicate value %#x.\n", predicate_value);
+
+    /* Create resources. */
+
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+        cb[i] = create_buffer(device, D3D11_BIND_CONSTANT_BUFFER, 1024, NULL);
+
+    for (i = 0; i < D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        buffer[i] = create_buffer(device,
+                D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER | D3D11_BIND_SHADER_RESOURCE,
+                1024, NULL);
+
+        stride[i] = (i + 1) * 4;
+        offset[i] = (i + 1) * 16;
+    }
+
+    for (i = 0; i < D3D11_SO_BUFFER_SLOT_COUNT; ++i)
+        so_buffer[i] = create_buffer(device, D3D11_BIND_STREAM_OUTPUT, 1024, NULL);
+
+    srv_desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    srv_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+    U(srv_desc).Buffer.ElementOffset = 0;
+    U(srv_desc).Buffer.ElementWidth = 64;
+
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        hr = ID3D11Device_CreateShaderResourceView(device,
+                (ID3D11Resource *)buffer[i % D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT], &srv_desc, &srv[i]);
+        ok(SUCCEEDED(hr), "Failed to create shader resource view, hr %#x.\n", hr);
+    }
+
+    uav_desc.Format = DXGI_FORMAT_R32_UINT;
+    uav_desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+    U(uav_desc).Buffer.FirstElement = 0;
+    U(uav_desc).Buffer.NumElements = 8;
+    U(uav_desc).Buffer.Flags = 0;
+
+    for (i = 0; i < D3D11_PS_CS_UAV_REGISTER_COUNT; ++i)
+    {
+        cs_uav_buffer[i] = create_buffer(device, D3D11_BIND_UNORDERED_ACCESS, 32, NULL);
+        hr = ID3D11Device_CreateUnorderedAccessView(device, (ID3D11Resource *)cs_uav_buffer[i],
+                &uav_desc, &cs_uav[i]);
+        ok(SUCCEEDED(hr), "Failed to create unordered access view, hr %#x.\n", hr);
+    }
+
+    ps_uav_buffer = create_buffer(device, D3D11_BIND_UNORDERED_ACCESS, 32, NULL);
+    hr = ID3D11Device_CreateUnorderedAccessView(device, (ID3D11Resource *)ps_uav_buffer,
+            &uav_desc, &ps_uav);
+    ok(SUCCEEDED(hr), "Failed to create unordered access view, hr %#x.\n", hr);
+
+    sampler_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sampler_desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sampler_desc.MipLODBias = 0.0f;
+    sampler_desc.MaxAnisotropy = 16;
+    sampler_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    sampler_desc.BorderColor[0] = 0.0f;
+    sampler_desc.BorderColor[1] = 0.0f;
+    sampler_desc.BorderColor[2] = 0.0f;
+    sampler_desc.BorderColor[3] = 0.0f;
+    sampler_desc.MinLOD = 0.0f;
+    sampler_desc.MaxLOD = 16.0f;
+
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        sampler_desc.MinLOD = (float)i;
+
+        hr = ID3D11Device_CreateSamplerState(device, &sampler_desc, &sampler[i]);
+        ok(SUCCEEDED(hr), "Failed to create sampler state, hr %#x.\n", hr);
+    }
+
+    hr = ID3D11Device_CreateVertexShader(device, simple_vs, sizeof(simple_vs), NULL, &vs);
+    ok(SUCCEEDED(hr), "Failed to create vertex shader, hr %#x.\n", hr);
+
+    hr = ID3D11Device_CreateHullShader(device, simple_hs, sizeof(simple_hs), NULL, &hs);
+    ok(SUCCEEDED(hr), "Failed to create hull shader, hr %#x.\n", hr);
+
+    hr = ID3D11Device_CreateDomainShader(device, simple_ds, sizeof(simple_ds), NULL, &ds);
+    ok(SUCCEEDED(hr), "Failed to create domain shader, hr %#x.\n", hr);
+
+    hr = ID3D11Device_CreateGeometryShader(device, simple_gs, sizeof(simple_gs), NULL, &gs);
+    ok(SUCCEEDED(hr), "Failed to create geometry shader, hr %#x.\n", hr);
+
+    hr = ID3D11Device_CreatePixelShader(device, simple_ps, sizeof(simple_ps), NULL, &ps);
+    ok(SUCCEEDED(hr), "Failed to create pixel shader, hr %#x.\n", hr);
+
+    hr = ID3D11Device_CreateComputeShader(device, simple_cs, sizeof(simple_cs), NULL, &cs);
+    ok(SUCCEEDED(hr), "Failed to create compute shader, hr %#x.\n", hr);
+
+    hr = ID3D11Device_CreateInputLayout(device, layout_desc, ARRAY_SIZE(layout_desc),
+            simple_vs, sizeof(simple_vs), &input_layout);
+    ok(SUCCEEDED(hr), "Failed to create input layout, hr %#x.\n", hr);
+
+    memset(&blend_desc, 0, sizeof(blend_desc));
+    blend_desc.AlphaToCoverageEnable = FALSE;
+    blend_desc.IndependentBlendEnable = FALSE;
+    blend_desc.RenderTarget[0].BlendEnable = TRUE;
+    blend_desc.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
+    blend_desc.RenderTarget[0].DestBlend = D3D11_BLEND_ZERO;
+    blend_desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+    blend_desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+    blend_desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+    blend_desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+    blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+    hr = ID3D11Device_CreateBlendState(device, &blend_desc, &blend_state);
+    ok(SUCCEEDED(hr), "Failed to create blend state, hr %#x.\n", hr);
+
+    ds_desc.DepthEnable = TRUE;
+    ds_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+    ds_desc.DepthFunc = D3D11_COMPARISON_LESS;
+    ds_desc.StencilEnable = FALSE;
+    ds_desc.StencilReadMask = D3D11_DEFAULT_STENCIL_READ_MASK;
+    ds_desc.StencilWriteMask = D3D11_DEFAULT_STENCIL_WRITE_MASK;
+    ds_desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+    ds_desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+    ds_desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+    ds_desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+    ds_desc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+    ds_desc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+    ds_desc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+    ds_desc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+    hr = ID3D11Device_CreateDepthStencilState(device, &ds_desc, &ds_state);
+    ok(SUCCEEDED(hr), "Failed to create depthstencil state, hr %#x.\n", hr);
+
+    texture_desc.Width = 512;
+    texture_desc.Height = 512;
+    texture_desc.MipLevels = 1;
+    texture_desc.ArraySize = 1;
+    texture_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    texture_desc.SampleDesc.Count = 1;
+    texture_desc.SampleDesc.Quality = 0;
+    texture_desc.Usage = D3D11_USAGE_DEFAULT;
+    texture_desc.BindFlags = D3D11_BIND_RENDER_TARGET;
+    texture_desc.CPUAccessFlags = 0;
+    texture_desc.MiscFlags = 0;
+
+    for (i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+    {
+        hr = ID3D11Device_CreateTexture2D(device, &texture_desc, NULL, &rt_texture[i]);
+        ok(SUCCEEDED(hr), "Failed to create texture, hr %#x.\n", hr);
+    }
+
+    texture_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    texture_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+
+    hr = ID3D11Device_CreateTexture2D(device, &texture_desc, NULL, &ds_texture);
+    ok(SUCCEEDED(hr), "Failed to create texture, hr %#x.\n", hr);
+
+    for (i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+    {
+        hr = ID3D11Device_CreateRenderTargetView(device, (ID3D11Resource *)rt_texture[i], NULL, &rtv[i]);
+        ok(SUCCEEDED(hr), "Failed to create rendertarget view, hr %#x.\n", hr);
+    }
+
+    hr = ID3D11Device_CreateDepthStencilView(device, (ID3D11Resource *)ds_texture, NULL, &dsv);
+    ok(SUCCEEDED(hr), "Failed to create depthstencil view, hr %#x.\n", hr);
+
+    for (i = 0; i < D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE; ++i)
+    {
+        SetRect(&tmp_rect[i], i, i * 2, i + 1, (i + 1) * 2);
+
+        tmp_viewport[i].TopLeftX = i * 3;
+        tmp_viewport[i].TopLeftY = i * 4;
+        tmp_viewport[i].Width = 3;
+        tmp_viewport[i].Height = 4;
+        tmp_viewport[i].MinDepth = i * 0.01f;
+        tmp_viewport[i].MaxDepth = (i + 1) * 0.01f;
+    }
+
+    rs_desc.FillMode = D3D11_FILL_SOLID;
+    rs_desc.CullMode = D3D11_CULL_BACK;
+    rs_desc.FrontCounterClockwise = FALSE;
+    rs_desc.DepthBias = 0;
+    rs_desc.DepthBiasClamp = 0.0f;
+    rs_desc.SlopeScaledDepthBias = 0.0f;
+    rs_desc.DepthClipEnable = TRUE;
+    rs_desc.ScissorEnable = FALSE;
+    rs_desc.MultisampleEnable = FALSE;
+    rs_desc.AntialiasedLineEnable = FALSE;
+
+    hr = ID3D11Device_CreateRasterizerState(device, &rs_desc, &rs_state);
+    ok(SUCCEEDED(hr), "Failed to create rasterizer state, hr %#x.\n", hr);
+
+    predicate_desc.Query = D3D11_QUERY_OCCLUSION_PREDICATE;
+    predicate_desc.MiscFlags = 0;
+
+    hr = ID3D11Device_CreatePredicate(device, &predicate_desc, &predicate);
+    ok(SUCCEEDED(hr), "Failed to create predicate, hr %#x.\n", hr);
+
+    /* Setup state. */
+
+    /* Some versions of Windows AMD drivers hang while the device is being
+     * released, if the total number of used resource slots exceeds some limit.
+     * Do not use all constant buffers slots in order to not trigger this
+     * driver bug. */
+    ID3D11DeviceContext_VSSetConstantBuffers(context, 0, 1, &cb[0]);
+    ID3D11DeviceContext_VSSetConstantBuffers(context, 7, 1, &cb[7]);
+    ID3D11DeviceContext_VSSetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, srv);
+    ID3D11DeviceContext_VSSetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, sampler);
+    ID3D11DeviceContext_VSSetShader(context, vs, NULL, 0);
+
+    ID3D11DeviceContext_HSSetConstantBuffers(context, 0, 1, &cb[0]);
+    ID3D11DeviceContext_HSSetConstantBuffers(context, 7, 1, &cb[7]);
+    ID3D11DeviceContext_HSSetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, srv);
+    ID3D11DeviceContext_HSSetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, sampler);
+    ID3D11DeviceContext_HSSetShader(context, hs, NULL, 0);
+
+    ID3D11DeviceContext_DSSetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT, cb);
+    ID3D11DeviceContext_DSSetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, srv);
+    ID3D11DeviceContext_DSSetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, sampler);
+    ID3D11DeviceContext_DSSetShader(context, ds, NULL, 0);
+
+    ID3D11DeviceContext_GSSetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT, cb);
+    ID3D11DeviceContext_GSSetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, srv);
+    ID3D11DeviceContext_GSSetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, sampler);
+    ID3D11DeviceContext_GSSetShader(context, gs, NULL, 0);
+
+    ID3D11DeviceContext_PSSetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT, cb);
+    ID3D11DeviceContext_PSSetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, srv);
+    ID3D11DeviceContext_PSSetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, sampler);
+    ID3D11DeviceContext_PSSetShader(context, ps, NULL, 0);
+
+    ID3D11DeviceContext_CSSetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT, cb);
+    ID3D11DeviceContext_CSSetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, srv);
+    ID3D11DeviceContext_CSSetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, sampler);
+    ID3D11DeviceContext_CSSetShader(context, cs, NULL, 0);
+    ID3D11DeviceContext_CSSetUnorderedAccessViews(context, 0, D3D11_PS_CS_UAV_REGISTER_COUNT, cs_uav, NULL);
+
+    ID3D11DeviceContext_IASetVertexBuffers(context, 0, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
+            buffer, stride, offset);
+    ID3D11DeviceContext_IASetIndexBuffer(context, buffer[0], DXGI_FORMAT_R32_UINT, offset[0]);
+    ID3D11DeviceContext_IASetInputLayout(context, input_layout);
+    ID3D11DeviceContext_IASetPrimitiveTopology(context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+
+    blend_factor[0] = 0.1f;
+    blend_factor[1] = 0.2f;
+    blend_factor[2] = 0.3f;
+    blend_factor[3] = 0.4f;
+    ID3D11DeviceContext_OMSetBlendState(context, blend_state, blend_factor, 0xff00ff00);
+    ID3D11DeviceContext_OMSetDepthStencilState(context, ds_state, 3);
+    ID3D11DeviceContext_OMSetRenderTargetsAndUnorderedAccessViews(context,
+            D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT - 1, rtv, dsv,
+            D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT - 1, 1, &ps_uav, NULL);
+
+    ID3D11DeviceContext_RSSetScissorRects(context, D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE,
+            tmp_rect);
+    ID3D11DeviceContext_RSSetViewports(context, D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE,
+            tmp_viewport);
+    ID3D11DeviceContext_RSSetState(context, rs_state);
+
+    ID3D11DeviceContext_SOSetTargets(context, D3D11_SO_BUFFER_SLOT_COUNT, so_buffer, offset);
+
+    ID3D11DeviceContext_SetPredication(context, predicate, TRUE);
+
+    /* Verify the set state. */
+
+    ID3D11DeviceContext_VSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ID3D11Buffer *expected_cb = i % 7 ? NULL : cb[i];
+        ok(tmp_buffer[i] == expected_cb, "Got unexpected constant buffer %p in slot %u, expected %p.\n",
+                tmp_buffer[i], i, expected_cb);
+        if (tmp_buffer[i])
+            ID3D11Buffer_Release(tmp_buffer[i]);
+    }
+    ID3D11DeviceContext_VSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(tmp_srv[i] == srv[i], "Got unexpected shader resource view %p in slot %u, expected %p.\n",
+                tmp_srv[i], i, srv[i]);
+        ID3D11ShaderResourceView_Release(tmp_srv[i]);
+    }
+    ID3D11DeviceContext_VSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(tmp_sampler[i] == sampler[i], "Got unexpected sampler %p in slot %u, expected %p.\n",
+                tmp_sampler[i], i, sampler[i]);
+        ID3D11SamplerState_Release(tmp_sampler[i]);
+    }
+    ID3D11DeviceContext_VSGetShader(context, &tmp_vs, NULL, 0);
+    ok(tmp_vs == vs, "Got unexpected vertex shader %p, expected %p.\n", tmp_vs, vs);
+    ID3D11VertexShader_Release(tmp_vs);
+
+    ID3D11DeviceContext_HSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ID3D11Buffer *expected_cb = i % 7 ? NULL : cb[i];
+        ok(tmp_buffer[i] == expected_cb, "Got unexpected constant buffer %p in slot %u, expected %p.\n",
+                tmp_buffer[i], i, expected_cb);
+        if (tmp_buffer[i])
+            ID3D11Buffer_Release(tmp_buffer[i]);
+    }
+    ID3D11DeviceContext_HSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(tmp_srv[i] == srv[i], "Got unexpected shader resource view %p in slot %u, expected %p.\n",
+                tmp_srv[i], i, srv[i]);
+        ID3D11ShaderResourceView_Release(tmp_srv[i]);
+    }
+    ID3D11DeviceContext_HSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(tmp_sampler[i] == sampler[i], "Got unexpected sampler %p in slot %u, expected %p.\n",
+                tmp_sampler[i], i, sampler[i]);
+        ID3D11SamplerState_Release(tmp_sampler[i]);
+    }
+    ID3D11DeviceContext_HSGetShader(context, &tmp_hs, NULL, 0);
+    ok(tmp_hs == hs, "Got unexpected hull shader %p, expected %p.\n", tmp_hs, hs);
+    ID3D11HullShader_Release(tmp_hs);
+
+    ID3D11DeviceContext_DSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ok(tmp_buffer[i] == cb[i], "Got unexpected constant buffer %p in slot %u, expected %p.\n",
+                tmp_buffer[i], i, cb[i]);
+        ID3D11Buffer_Release(tmp_buffer[i]);
+    }
+    ID3D11DeviceContext_DSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(tmp_srv[i] == srv[i], "Got unexpected shader resource view %p in slot %u, expected %p.\n",
+                tmp_srv[i], i, srv[i]);
+        ID3D11ShaderResourceView_Release(tmp_srv[i]);
+    }
+    ID3D11DeviceContext_DSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(tmp_sampler[i] == sampler[i], "Got unexpected sampler %p in slot %u, expected %p.\n",
+                tmp_sampler[i], i, sampler[i]);
+        ID3D11SamplerState_Release(tmp_sampler[i]);
+    }
+    ID3D11DeviceContext_DSGetShader(context, &tmp_ds, NULL, 0);
+    ok(tmp_ds == ds, "Got unexpected domain shader %p, expected %p.\n", tmp_ds, ds);
+    ID3D11DomainShader_Release(tmp_ds);
+
+    ID3D11DeviceContext_GSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ok(tmp_buffer[i] == cb[i], "Got unexpected constant buffer %p in slot %u, expected %p.\n",
+                tmp_buffer[i], i, cb[i]);
+        ID3D11Buffer_Release(tmp_buffer[i]);
+    }
+    ID3D11DeviceContext_GSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(tmp_srv[i] == srv[i], "Got unexpected shader resource view %p in slot %u, expected %p.\n",
+                tmp_srv[i], i, srv[i]);
+        ID3D11ShaderResourceView_Release(tmp_srv[i]);
+    }
+    ID3D11DeviceContext_GSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(tmp_sampler[i] == sampler[i], "Got unexpected sampler %p in slot %u, expected %p.\n",
+                tmp_sampler[i], i, sampler[i]);
+        ID3D11SamplerState_Release(tmp_sampler[i]);
+    }
+    ID3D11DeviceContext_GSGetShader(context, &tmp_gs, NULL, 0);
+    ok(tmp_gs == gs, "Got unexpected geometry shader %p, expected %p.\n", tmp_gs, gs);
+    ID3D11GeometryShader_Release(tmp_gs);
+
+    ID3D11DeviceContext_PSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ok(tmp_buffer[i] == cb[i], "Got unexpected constant buffer %p in slot %u, expected %p.\n",
+                tmp_buffer[i], i, cb[i]);
+        ID3D11Buffer_Release(tmp_buffer[i]);
+    }
+    ID3D11DeviceContext_PSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(tmp_srv[i] == srv[i], "Got unexpected shader resource view %p in slot %u, expected %p.\n",
+                tmp_srv[i], i, srv[i]);
+        ID3D11ShaderResourceView_Release(tmp_srv[i]);
+    }
+    ID3D11DeviceContext_PSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(tmp_sampler[i] == sampler[i], "Got unexpected sampler %p in slot %u, expected %p.\n",
+                tmp_sampler[i], i, sampler[i]);
+        ID3D11SamplerState_Release(tmp_sampler[i]);
+    }
+    ID3D11DeviceContext_PSGetShader(context, &tmp_ps, NULL, 0);
+    ok(tmp_ps == ps, "Got unexpected pixel shader %p, expected %p.\n", tmp_ps, ps);
+    ID3D11PixelShader_Release(tmp_ps);
+
+    ID3D11DeviceContext_CSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ok(tmp_buffer[i] == cb[i], "Got unexpected constant buffer %p in slot %u, expected %p.\n",
+                tmp_buffer[i], i, cb[i]);
+        ID3D11Buffer_Release(tmp_buffer[i]);
+    }
+    ID3D11DeviceContext_CSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(tmp_srv[i] == srv[i], "Got unexpected shader resource view %p in slot %u, expected %p.\n",
+                tmp_srv[i], i, srv[i]);
+        ID3D11ShaderResourceView_Release(tmp_srv[i]);
+    }
+    ID3D11DeviceContext_CSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(tmp_sampler[i] == sampler[i], "Got unexpected sampler %p in slot %u, expected %p.\n",
+                tmp_sampler[i], i, sampler[i]);
+        ID3D11SamplerState_Release(tmp_sampler[i]);
+    }
+    ID3D11DeviceContext_CSGetShader(context, &tmp_cs, NULL, 0);
+    ok(tmp_cs == cs, "Got unexpected compute shader %p, expected %p.\n", tmp_cs, cs);
+    ID3D11ComputeShader_Release(tmp_cs);
+    ID3D11DeviceContext_CSGetUnorderedAccessViews(context, 0, D3D11_PS_CS_UAV_REGISTER_COUNT, tmp_uav);
+    for (i = 0; i < D3D11_PS_CS_UAV_REGISTER_COUNT; ++i)
+    {
+        ok(tmp_uav[i] == cs_uav[i], "Got unexpected unordered access view %p in slot %u, expected %p.\n",
+                tmp_uav[i], i, cs_uav[i]);
+        ID3D11UnorderedAccessView_Release(tmp_uav[i]);
+    }
+
+    ID3D11DeviceContext_IAGetVertexBuffers(context, 0, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
+            tmp_buffer, stride, offset);
+    for (i = 0; i < D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        todo_wine_if(i >= D3D10_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT)
+        {
+        ok(tmp_buffer[i] == buffer[i], "Got unexpected vertex buffer %p in slot %u, expected %p.\n",
+                tmp_buffer[i], i, buffer[i]);
+        ok(stride[i] == (i + 1) * 4, "Got unexpected stride %u in slot %u.\n", stride[i], i);
+        ok(offset[i] == (i + 1) * 16, "Got unexpected offset %u in slot %u.\n", offset[i], i);
+        }
+        if (tmp_buffer[i])
+            ID3D11Buffer_Release(tmp_buffer[i]);
+    }
+    ID3D11DeviceContext_IAGetIndexBuffer(context, tmp_buffer, &format, offset);
+    ok(tmp_buffer[0] == buffer[0], "Got unexpected index buffer %p, expected %p.\n", tmp_buffer[0], buffer[0]);
+    ID3D11Buffer_Release(tmp_buffer[0]);
+    ok(format == DXGI_FORMAT_R32_UINT, "Got unexpected index buffer format %#x.\n", format);
+    ok(offset[0] == 16, "Got unexpected index buffer offset %u.\n", offset[0]);
+    ID3D11DeviceContext_IAGetInputLayout(context, &tmp_input_layout);
+    ok(tmp_input_layout == input_layout, "Got unexpected input layout %p, expected %p.\n",
+            tmp_input_layout, input_layout);
+    ID3D11InputLayout_Release(tmp_input_layout);
+    ID3D11DeviceContext_IAGetPrimitiveTopology(context, &topology);
+    ok(topology == D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP, "Got unexpected primitive topology %#x.\n", topology);
+
+    ID3D11DeviceContext_OMGetBlendState(context, &tmp_blend_state, blend_factor, &sample_mask);
+    ok(tmp_blend_state == blend_state, "Got unexpected blend state %p, expected %p.\n", tmp_blend_state, blend_state);
+    ID3D11BlendState_Release(tmp_blend_state);
+    ok(blend_factor[0] == 0.1f && blend_factor[1] == 0.2f
+            && blend_factor[2] == 0.3f && blend_factor[3] == 0.4f,
+            "Got unexpected blend factor {%.8e, %.8e, %.8e, %.8e}.\n",
+            blend_factor[0], blend_factor[1], blend_factor[2], blend_factor[3]);
+    ok(sample_mask == 0xff00ff00, "Got unexpected sample mask %#x.\n", sample_mask);
+    ID3D11DeviceContext_OMGetDepthStencilState(context, &tmp_ds_state, &stencil_ref);
+    ok(tmp_ds_state == ds_state, "Got unexpected depth stencil state %p, expected %p.\n", tmp_ds_state, ds_state);
+    ID3D11DepthStencilState_Release(tmp_ds_state);
+    ok(stencil_ref == 3, "Got unexpected stencil ref %u.\n", stencil_ref);
+    ID3D11DeviceContext_OMGetRenderTargets(context, D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, tmp_rtv, &tmp_dsv);
+    for (i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT - 1; ++i)
+    {
+        ok(tmp_rtv[i] == rtv[i], "Got unexpected render target view %p in slot %u, expected %p.\n",
+                tmp_rtv[i], i, rtv[i]);
+        ID3D11RenderTargetView_Release(tmp_rtv[i]);
+    }
+    ok(!tmp_rtv[i], "Got unexpected render target view %p in slot %u.\n", tmp_rtv[i], i);
+    ok(tmp_dsv == dsv, "Got unexpected depth stencil view %p, expected %p.\n", tmp_dsv, dsv);
+    ID3D11DepthStencilView_Release(tmp_dsv);
+    ID3D11DeviceContext_OMGetRenderTargetsAndUnorderedAccessViews(context,
+            D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, tmp_rtv, &tmp_dsv,
+            0, D3D11_PS_CS_UAV_REGISTER_COUNT, tmp_uav);
+    for (i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT - 1; ++i)
+    {
+        ok(tmp_rtv[i] == rtv[i], "Got unexpected render target view %p in slot %u, expected %p.\n",
+                tmp_rtv[i], i, rtv[i]);
+        ID3D11RenderTargetView_Release(tmp_rtv[i]);
+    }
+    ok(!tmp_rtv[i], "Got unexpected render target view %p in slot %u.\n", tmp_rtv[i], i);
+    ok(tmp_dsv == dsv, "Got unexpected depth stencil view %p, expected %p.\n", tmp_dsv, dsv);
+    ID3D11DepthStencilView_Release(tmp_dsv);
+    for (i = 0; i < D3D11_PS_CS_UAV_REGISTER_COUNT - 1; ++i)
+    {
+        ok(!tmp_uav[i], "Got unexpected unordered access view %p in slot %u.\n", tmp_uav[i], i);
+    }
+    ok(tmp_uav[i] == ps_uav, "Got unexpected unordered access view %p in slot %u, expected %p.\n",
+            tmp_uav[i], i, ps_uav);
+    ID3D11UnorderedAccessView_Release(tmp_uav[i]);
+
+    ID3D11DeviceContext_RSGetScissorRects(context, &count, NULL);
+    todo_wine ok(count == D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE,
+            "Got unexpected scissor rect count %u.\n", count);
+    memset(tmp_rect, 0x55, sizeof(tmp_rect));
+    ID3D11DeviceContext_RSGetScissorRects(context, &count, tmp_rect);
+    for (i = 0; i < count; ++i)
+    {
+        ok(tmp_rect[i].left == i
+                && tmp_rect[i].top == i * 2
+                && tmp_rect[i].right == i + 1
+                && tmp_rect[i].bottom == (i + 1) * 2,
+                "Got unexpected scissor rect %s in slot %u.\n", wine_dbgstr_rect(&tmp_rect[i]), i);
+    }
+    ID3D11DeviceContext_RSGetViewports(context, &count, NULL);
+    todo_wine ok(count == D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE,
+            "Got unexpected viewport count %u.\n", count);
+    memset(tmp_viewport, 0x55, sizeof(tmp_viewport));
+    ID3D11DeviceContext_RSGetViewports(context, &count, tmp_viewport);
+    for (i = 0; i < count; ++i)
+    {
+        ok(tmp_viewport[i].TopLeftX == i * 3
+                && tmp_viewport[i].TopLeftY == i * 4
+                && tmp_viewport[i].Width == 3
+                && tmp_viewport[i].Height == 4
+                && compare_float(tmp_viewport[i].MinDepth, i * 0.01f, 16)
+                && compare_float(tmp_viewport[i].MaxDepth, (i + 1) * 0.01f, 16),
+                "Got unexpected viewport {%.8e, %.8e, %.8e, %.8e, %.8e, %.8e} in slot %u.\n",
+                tmp_viewport[i].TopLeftX, tmp_viewport[i].TopLeftY, tmp_viewport[i].Width,
+                tmp_viewport[i].Height, tmp_viewport[i].MinDepth, tmp_viewport[i].MaxDepth, i);
+    }
+    ID3D11DeviceContext_RSGetState(context, &tmp_rs_state);
+    ok(tmp_rs_state == rs_state, "Got unexpected rasterizer state %p, expected %p.\n", tmp_rs_state, rs_state);
+    ID3D11RasterizerState_Release(tmp_rs_state);
+
+    ID3D11DeviceContext_SOGetTargets(context, D3D11_SO_BUFFER_SLOT_COUNT, tmp_buffer);
+    for (i = 0; i < D3D11_SO_BUFFER_SLOT_COUNT; ++i)
+    {
+        ok(tmp_buffer[i] == so_buffer[i], "Got unexpected stream output %p in slot %u, expected %p.\n",
+                tmp_buffer[i], i, so_buffer[i]);
+        ID3D11Buffer_Release(tmp_buffer[i]);
+    }
+
+    ID3D11DeviceContext_GetPredication(context, &tmp_predicate, &predicate_value);
+    ok(tmp_predicate == predicate, "Got unexpected predicate %p, expected %p.\n", tmp_predicate, predicate);
+    ID3D11Predicate_Release(tmp_predicate);
+    ok(predicate_value, "Got unexpected predicate value %#x.\n", predicate_value);
+
+    /* Verify ClearState(). */
+
+    ID3D11DeviceContext_ClearState(context);
+
+    ID3D11DeviceContext_VSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_buffer[i], "Got unexpected constant buffer %p in slot %u.\n", tmp_buffer[i], i);
+    }
+    ID3D11DeviceContext_VSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_srv[i], "Got unexpected shader resource view %p in slot %u.\n", tmp_srv[i], i);
+    }
+    ID3D11DeviceContext_VSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_sampler[i], "Got unexpected sampler %p in slot %u.\n", tmp_sampler[i], i);
+    }
+    ID3D11DeviceContext_VSGetShader(context, &tmp_vs, NULL, 0);
+    ok(!tmp_vs, "Got unexpected vertex shader %p.\n", tmp_vs);
+
+    ID3D11DeviceContext_HSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_buffer[i], "Got unexpected constant buffer %p in slot %u.\n", tmp_buffer[i], i);
+    }
+    ID3D11DeviceContext_HSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_srv[i], "Got unexpected shader resource view %p in slot %u.\n", tmp_srv[i], i);
+    }
+    ID3D11DeviceContext_HSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_sampler[i], "Got unexpected sampler %p in slot %u.\n", tmp_sampler[i], i);
+    }
+    ID3D11DeviceContext_HSGetShader(context, &tmp_hs, NULL, 0);
+    ok(!tmp_hs, "Got unexpected hull shader %p.\n", tmp_hs);
+
+    ID3D11DeviceContext_DSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_buffer[i], "Got unexpected constant buffer %p in slot %u.\n", tmp_buffer[i], i);
+    }
+    ID3D11DeviceContext_DSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_srv[i], "Got unexpected shader resource view %p in slot %u.\n", tmp_srv[i], i);
+    }
+    ID3D11DeviceContext_DSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_sampler[i], "Got unexpected sampler %p in slot %u.\n", tmp_sampler[i], i);
+    }
+    ID3D11DeviceContext_DSGetShader(context, &tmp_ds, NULL, 0);
+    ok(!tmp_ds, "Got unexpected domain shader %p.\n", tmp_ds);
+
+    ID3D11DeviceContext_GSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_buffer[i], "Got unexpected constant buffer %p in slot %u.\n", tmp_buffer[i], i);
+    }
+    ID3D11DeviceContext_GSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_srv[i], "Got unexpected shader resource view %p in slot %u.\n", tmp_srv[i], i);
+    }
+    ID3D11DeviceContext_GSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_sampler[i], "Got unexpected sampler %p in slot %u.\n", tmp_sampler[i], i);
+    }
+    ID3D11DeviceContext_GSGetShader(context, &tmp_gs, NULL, 0);
+    ok(!tmp_gs, "Got unexpected geometry shader %p.\n", tmp_gs);
+
+    ID3D11DeviceContext_PSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_buffer[i], "Got unexpected constant buffer %p in slot %u.\n", tmp_buffer[i], i);
+    }
+    ID3D11DeviceContext_PSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT, tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_srv[i], "Got unexpected shader resource view %p in slot %u.\n", tmp_srv[i], i);
+    }
+    ID3D11DeviceContext_PSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_sampler[i], "Got unexpected sampler %p in slot %u.\n", tmp_sampler[i], i);
+    }
+    ID3D11DeviceContext_PSGetShader(context, &tmp_ps, NULL, 0);
+    ok(!tmp_ps, "Got unexpected pixel shader %p.\n", tmp_ps);
+
+    ID3D11DeviceContext_CSGetConstantBuffers(context, 0, D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+            tmp_buffer);
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_buffer[i], "Got unexpected constant buffer %p in slot %u.\n", tmp_buffer[i], i);
+    }
+    ID3D11DeviceContext_CSGetShaderResources(context, 0, D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT,
+            tmp_srv);
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_srv[i], "Got unexpected shader resource view %p in slot %u.\n", tmp_srv[i], i);
+    }
+    ID3D11DeviceContext_CSGetSamplers(context, 0, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, tmp_sampler);
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_sampler[i], "Got unexpected sampler %p in slot %u.\n", tmp_sampler[i], i);
+    }
+    ID3D11DeviceContext_CSGetShader(context, &tmp_cs, NULL, 0);
+    ok(!tmp_cs, "Got unexpected compute shader %p.\n", tmp_cs);
+    ID3D11DeviceContext_CSGetUnorderedAccessViews(context, 0, D3D11_PS_CS_UAV_REGISTER_COUNT, tmp_uav);
+    for (i = 0; i < D3D11_PS_CS_UAV_REGISTER_COUNT; ++i)
+    {
+        ok(!tmp_uav[i], "Got unexpected unordered access view %p in slot %u.\n", tmp_uav[i], i);
+    }
+
+    ID3D11DeviceContext_IAGetVertexBuffers(context, 0, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
+            tmp_buffer, stride, offset);
+    for (i = 0; i < D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_buffer[i], "Got unexpected vertex buffer %p in slot %u.\n", tmp_buffer[i], i);
+        todo_wine_if(i < D3D10_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT)
+        {
+        ok(!stride[i], "Got unexpected stride %u in slot %u.\n", stride[i], i);
+        ok(!offset[i], "Got unexpected offset %u in slot %u.\n", offset[i], i);
+        }
+    }
+    ID3D11DeviceContext_IAGetIndexBuffer(context, tmp_buffer, &format, offset);
+    ok(!tmp_buffer[0], "Got unexpected index buffer %p.\n", tmp_buffer[0]);
+    ok(format == DXGI_FORMAT_UNKNOWN, "Got unexpected index buffer format %#x.\n", format);
+    ok(!offset[0], "Got unexpected index buffer offset %u.\n", offset[0]);
+    ID3D11DeviceContext_IAGetInputLayout(context, &tmp_input_layout);
+    ok(!tmp_input_layout, "Got unexpected input layout %p.\n", tmp_input_layout);
+    ID3D11DeviceContext_IAGetPrimitiveTopology(context, &topology);
+    ok(topology == D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED, "Got unexpected primitive topology %#x.\n", topology);
+
+    ID3D11DeviceContext_OMGetBlendState(context, &tmp_blend_state, blend_factor, &sample_mask);
+    ok(!tmp_blend_state, "Got unexpected blend state %p.\n", tmp_blend_state);
+    ok(blend_factor[0] == 1.0f && blend_factor[1] == 1.0f
+            && blend_factor[2] == 1.0f && blend_factor[3] == 1.0f,
+            "Got unexpected blend factor {%.8e, %.8e, %.8e, %.8e}.\n",
+            blend_factor[0], blend_factor[1], blend_factor[2], blend_factor[3]);
+    ok(sample_mask == D3D11_DEFAULT_SAMPLE_MASK, "Got unexpected sample mask %#x.\n", sample_mask);
+    ID3D11DeviceContext_OMGetDepthStencilState(context, &tmp_ds_state, &stencil_ref);
+    ok(!tmp_ds_state, "Got unexpected depth stencil state %p.\n", tmp_ds_state);
+    ok(!stencil_ref, "Got unexpected stencil ref %u.\n", stencil_ref);
+    ID3D11DeviceContext_OMGetRenderTargets(context, D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, tmp_rtv, &tmp_dsv);
+    for (i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+    {
+        ok(!tmp_rtv[i], "Got unexpected render target view %p in slot %u.\n", tmp_rtv[i], i);
+    }
+    ok(!tmp_dsv, "Got unexpected depth stencil view %p.\n", tmp_dsv);
+    ID3D11DeviceContext_OMGetRenderTargetsAndUnorderedAccessViews(context,
+            D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, tmp_rtv, &tmp_dsv,
+            0, D3D11_PS_CS_UAV_REGISTER_COUNT, tmp_uav);
+    for (i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+    {
+        ok(!tmp_rtv[i], "Got unexpected render target view %p in slot %u.\n", tmp_rtv[i], i);
+    }
+    ok(!tmp_dsv, "Got unexpected depth stencil view %p.\n", tmp_dsv);
+    for (i = 0; i < D3D11_PS_CS_UAV_REGISTER_COUNT; ++i)
+    {
+        ok(!tmp_uav[i], "Got unexpected unordered access view %p in slot %u.\n", tmp_uav[i], i);
+    }
+
+    ID3D11DeviceContext_RSGetScissorRects(context, &count, NULL);
+    todo_wine ok(!count, "Got unexpected scissor rect count %u.\n", count);
+    memset(tmp_rect, 0x55, sizeof(tmp_rect));
+    count = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+    ID3D11DeviceContext_RSGetScissorRects(context, &count, tmp_rect);
+    for (i = 0; i < D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE; ++i)
+    {
+        todo_wine_if(!i)
+        ok(!tmp_rect[i].left && !tmp_rect[i].top && !tmp_rect[i].right && !tmp_rect[i].bottom,
+                "Got unexpected scissor rect %s in slot %u.\n",
+                wine_dbgstr_rect(&tmp_rect[i]), i);
+    }
+    ID3D11DeviceContext_RSGetViewports(context, &count, NULL);
+    todo_wine ok(!count, "Got unexpected viewport count %u.\n", count);
+    memset(tmp_viewport, 0x55, sizeof(tmp_viewport));
+    count = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+    ID3D11DeviceContext_RSGetViewports(context, &count, tmp_viewport);
+    for (i = 0; i < D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE; ++i)
+    {
+        todo_wine_if(!i)
+        ok(!tmp_viewport[i].TopLeftX && !tmp_viewport[i].TopLeftY && !tmp_viewport[i].Width
+                && !tmp_viewport[i].Height && !tmp_viewport[i].MinDepth && !tmp_viewport[i].MaxDepth,
+                "Got unexpected viewport {%.8e, %.8e, %.8e, %.8e, %.8e, %.8e} in slot %u.\n",
+                tmp_viewport[i].TopLeftX, tmp_viewport[i].TopLeftY, tmp_viewport[i].Width,
+                tmp_viewport[i].Height, tmp_viewport[i].MinDepth, tmp_viewport[i].MaxDepth, i);
+    }
+    ID3D11DeviceContext_RSGetState(context, &tmp_rs_state);
+    ok(!tmp_rs_state, "Got unexpected rasterizer state %p.\n", tmp_rs_state);
+
+    ID3D11DeviceContext_SOGetTargets(context, D3D11_SO_BUFFER_SLOT_COUNT, tmp_buffer);
+    for (i = 0; i < D3D11_SO_BUFFER_SLOT_COUNT; ++i)
+    {
+        ok(!tmp_buffer[i], "Got unexpected stream output %p in slot %u.\n", tmp_buffer[i], i);
+    }
+
+    ID3D11DeviceContext_GetPredication(context, &tmp_predicate, &predicate_value);
+    ok(!tmp_predicate, "Got unexpected predicate %p.\n", tmp_predicate);
+    ok(!predicate_value, "Got unexpected predicate value %#x.\n", predicate_value);
+
+    /* Cleanup. */
+
+    ID3D11Predicate_Release(predicate);
+    ID3D11RasterizerState_Release(rs_state);
+    ID3D11DepthStencilView_Release(dsv);
+    ID3D11Texture2D_Release(ds_texture);
+
+    for (i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+    {
+        ID3D11RenderTargetView_Release(rtv[i]);
+        ID3D11Texture2D_Release(rt_texture[i]);
+    }
+
+    ID3D11DepthStencilState_Release(ds_state);
+    ID3D11BlendState_Release(blend_state);
+    ID3D11InputLayout_Release(input_layout);
+    ID3D11VertexShader_Release(vs);
+    ID3D11HullShader_Release(hs);
+    ID3D11DomainShader_Release(ds);
+    ID3D11GeometryShader_Release(gs);
+    ID3D11PixelShader_Release(ps);
+    ID3D11ComputeShader_Release(cs);
+
+    for (i = 0; i < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT; ++i)
+    {
+        ID3D11SamplerState_Release(sampler[i]);
+    }
+
+    for (i = 0; i < D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ID3D11ShaderResourceView_Release(srv[i]);
+    }
+
+    for (i = 0; i < D3D11_PS_CS_UAV_REGISTER_COUNT; ++i)
+    {
+        ID3D11UnorderedAccessView_Release(cs_uav[i]);
+        ID3D11Buffer_Release(cs_uav_buffer[i]);
+    }
+    ID3D11UnorderedAccessView_Release(ps_uav);
+    ID3D11Buffer_Release(ps_uav_buffer);
+
+    for (i = 0; i < D3D11_SO_BUFFER_SLOT_COUNT; ++i)
+    {
+        ID3D11Buffer_Release(so_buffer[i]);
+    }
+
+    for (i = 0; i < D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT; ++i)
+    {
+        ID3D11Buffer_Release(buffer[i]);
+    }
+
+    for (i = 0; i < D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT; ++i)
+    {
+        ID3D11Buffer_Release(cb[i]);
+    }
+
+    ID3D11DeviceContext_Release(context);
+    refcount = ID3D11Device_Release(device);
+    ok(!refcount, "Device has %u references left.\n", refcount);
+}
+
 static void test_il_append_aligned(void)
 {
     struct d3d11_test_context test_context;
@@ -9129,29 +10454,19 @@ static void test_swapchain_flip(void)
             return t1.Sample(s, p);
         }
 #endif
-        0x43425844, 0x1733542c, 0xf74c6b6a, 0x0fb11eac, 0x76f6a999, 0x00000001, 0x000002cc, 0x00000005,
-        0x00000034, 0x000000f4, 0x00000128, 0x0000015c, 0x00000250, 0x46454452, 0x000000b8, 0x00000000,
-        0x00000000, 0x00000003, 0x0000001c, 0xffff0400, 0x00000100, 0x00000084, 0x0000007c, 0x00000003,
-        0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000001, 0x00000000, 0x0000007e, 0x00000002,
-        0x00000005, 0x00000004, 0xffffffff, 0x00000000, 0x00000001, 0x0000000c, 0x00000081, 0x00000002,
-        0x00000005, 0x00000004, 0xffffffff, 0x00000001, 0x00000001, 0x0000000c, 0x30740073, 0x00317400,
-        0x7263694d, 0x666f736f, 0x52282074, 0x4c482029, 0x53204c53, 0x65646168, 0x6f432072, 0x6c69706d,
-        0x39207265, 0x2e39322e, 0x2e323539, 0x31313133, 0xababab00, 0x4e475349, 0x0000002c, 0x00000001,
-        0x00000008, 0x00000020, 0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x0000010f, 0x505f5653,
-        0x5449534f, 0x004e4f49, 0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000,
-        0x00000000, 0x00000003, 0x00000000, 0x0000000f, 0x545f5653, 0x65677261, 0xabab0074, 0x52444853,
-        0x000000ec, 0x00000040, 0x0000003b, 0x0300005a, 0x00106000, 0x00000000, 0x04001858, 0x00107000,
-        0x00000000, 0x00005555, 0x04001858, 0x00107000, 0x00000001, 0x00005555, 0x04002064, 0x00101012,
-        0x00000000, 0x00000001, 0x03000065, 0x001020f2, 0x00000000, 0x02000068, 0x00000001, 0x07000031,
-        0x00100012, 0x00000000, 0x0010100a, 0x00000000, 0x00004001, 0x43a00000, 0x0304001f, 0x0010000a,
-        0x00000000, 0x0c000045, 0x001020f2, 0x00000000, 0x00004002, 0x3f000000, 0x3f000000, 0x00000000,
-        0x00000000, 0x00107e46, 0x00000000, 0x00106000, 0x00000000, 0x0100003e, 0x01000015, 0x0c000045,
+        0x43425844, 0xc00961ea, 0x48558efd, 0x5eec7aed, 0xb597e6d1, 0x00000001, 0x00000188, 0x00000003,
+        0x0000002c, 0x00000060, 0x00000094, 0x4e475349, 0x0000002c, 0x00000001, 0x00000008, 0x00000020,
+        0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x0000010f, 0x505f5653, 0x5449534f, 0x004e4f49,
+        0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003,
+        0x00000000, 0x0000000f, 0x545f5653, 0x65677261, 0xabab0074, 0x52444853, 0x000000ec, 0x00000040,
+        0x0000003b, 0x0300005a, 0x00106000, 0x00000000, 0x04001858, 0x00107000, 0x00000000, 0x00005555,
+        0x04001858, 0x00107000, 0x00000001, 0x00005555, 0x04002064, 0x00101012, 0x00000000, 0x00000001,
+        0x03000065, 0x001020f2, 0x00000000, 0x02000068, 0x00000001, 0x07000031, 0x00100012, 0x00000000,
+        0x0010100a, 0x00000000, 0x00004001, 0x43a00000, 0x0304001f, 0x0010000a, 0x00000000, 0x0c000045,
         0x001020f2, 0x00000000, 0x00004002, 0x3f000000, 0x3f000000, 0x00000000, 0x00000000, 0x00107e46,
-        0x00000001, 0x00106000, 0x00000000, 0x0100003e, 0x54415453, 0x00000074, 0x00000007, 0x00000001,
-        0x00000000, 0x00000002, 0x00000001, 0x00000000, 0x00000000, 0x00000002, 0x00000001, 0x00000000,
-        0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000002, 0x00000000, 0x00000000, 0x00000000,
-        0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
-        0x00000000, 0x00000000, 0x00000000
+        0x00000000, 0x00106000, 0x00000000, 0x0100003e, 0x01000015, 0x0c000045, 0x001020f2, 0x00000000,
+        0x00004002, 0x3f000000, 0x3f000000, 0x00000000, 0x00000000, 0x00107e46, 0x00000001, 0x00106000,
+        0x00000000, 0x0100003e,
     };
     static const struct vec2 quad[] =
     {
@@ -10782,6 +12097,122 @@ static void test_sm4_breakc_instruction(void)
 
     hr = ID3D11Device_CreatePixelShader(device, ps_breakc_z_code, sizeof(ps_breakc_z_code), NULL, &ps);
     ok(SUCCEEDED(hr), "Failed to create breakc_z pixel shader, hr %#x.\n", hr);
+    ID3D11DeviceContext_PSSetShader(context, ps, NULL, 0);
+    draw_quad(&test_context);
+    check_texture_color(test_context.backbuffer, 0xff00ff00, 0);
+    ID3D11PixelShader_Release(ps);
+
+    release_test_context(&test_context);
+}
+
+static void test_sm4_continuec_instruction(void)
+{
+    struct d3d11_test_context test_context;
+    ID3D11DeviceContext *context;
+    ID3D11PixelShader *ps;
+    ID3D11Device *device;
+    HRESULT hr;
+
+    /* To get fxc to output continuec_z/continuec_nz instead of an if-block
+     * with a normal continue inside, the shaders have been compiled with
+     * the /Gfa flag. */
+    static const DWORD ps_continuec_nz_code[] =
+    {
+#if 0
+        float4 main() : SV_TARGET
+        {
+            uint counter = 0;
+            int i = -1;
+
+            while (i < 255) {
+                ++i;
+
+                if (i != 0)
+                    continue;
+
+                ++counter;
+            }
+
+            if (counter == 1)
+                return float4(0.0f, 1.0f, 0.0f, 1.0f);
+            else
+                return float4(1.0f, 0.0f, 0.0f, 1.0f);
+        }
+#endif
+        0x43425844, 0xaadaac96, 0xbe00fdfb, 0x29356be0, 0x47e79bd6, 0x00000001, 0x00000208, 0x00000003,
+        0x0000002c, 0x0000003c, 0x00000070, 0x4e475349, 0x00000008, 0x00000000, 0x00000008, 0x4e47534f,
+        0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003, 0x00000000,
+        0x0000000f, 0x545f5653, 0x45475241, 0xabab0054, 0x52444853, 0x00000190, 0x00000040, 0x00000064,
+        0x03000065, 0x001020f2, 0x00000000, 0x02000068, 0x00000003, 0x08000036, 0x00100032, 0x00000000,
+        0x00004002, 0x00000000, 0xffffffff, 0x00000000, 0x00000000, 0x01000030, 0x07000021, 0x00100042,
+        0x00000000, 0x0010001a, 0x00000000, 0x00004001, 0x000000ff, 0x03040003, 0x0010002a, 0x00000000,
+        0x0700001e, 0x00100022, 0x00000001, 0x0010001a, 0x00000000, 0x00004001, 0x00000001, 0x09000037,
+        0x00100022, 0x00000002, 0x0010001a, 0x00000001, 0x0010001a, 0x00000001, 0x00004001, 0x00000000,
+        0x05000036, 0x00100012, 0x00000002, 0x0010000a, 0x00000000, 0x05000036, 0x00100032, 0x00000000,
+        0x00100046, 0x00000002, 0x05000036, 0x00100042, 0x00000000, 0x0010001a, 0x00000001, 0x03040008,
+        0x0010002a, 0x00000000, 0x0700001e, 0x00100012, 0x00000001, 0x0010000a, 0x00000000, 0x00004001,
+        0x00000001, 0x05000036, 0x00100032, 0x00000000, 0x00100046, 0x00000001, 0x01000016, 0x07000020,
+        0x00100012, 0x00000000, 0x0010000a, 0x00000000, 0x00004001, 0x00000001, 0x08000036, 0x001020f2,
+        0x00000000, 0x00004002, 0x00000000, 0x3f800000, 0x00000000, 0x3f800000, 0x0304003f, 0x0010000a,
+        0x00000000, 0x08000036, 0x001020f2, 0x00000000, 0x00004002, 0x3f800000, 0x00000000, 0x00000000,
+        0x3f800000, 0x0100003e,
+
+    };
+    static const DWORD ps_continuec_z_code[] =
+    {
+#if 0
+        float4 main() : SV_TARGET
+        {
+            uint counter = 0;
+            int i = -1;
+
+            while (i < 255) {
+                ++i;
+
+                if (i == 0)
+                    continue;
+
+                ++counter;
+            }
+
+            if (counter == 255)
+                return float4(0.0f, 1.0f, 0.0f, 1.0f);
+            else
+                return float4(1.0f, 0.0f, 0.0f, 1.0f);
+        }
+#endif
+        0x43425844, 0x0322b23d, 0x52b25dc8, 0xa625f5f1, 0x271e3f46, 0x00000001, 0x000001d0, 0x00000003,
+        0x0000002c, 0x0000003c, 0x00000070, 0x4e475349, 0x00000008, 0x00000000, 0x00000008, 0x4e47534f,
+        0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003, 0x00000000,
+        0x0000000f, 0x545f5653, 0x45475241, 0xabab0054, 0x52444853, 0x00000158, 0x00000040, 0x00000056,
+        0x03000065, 0x001020f2, 0x00000000, 0x02000068, 0x00000002, 0x08000036, 0x00100032, 0x00000000,
+        0x00004002, 0x00000000, 0xffffffff, 0x00000000, 0x00000000, 0x01000030, 0x07000021, 0x00100042,
+        0x00000000, 0x0010001a, 0x00000000, 0x00004001, 0x000000ff, 0x03040003, 0x0010002a, 0x00000000,
+        0x0700001e, 0x00100022, 0x00000001, 0x0010001a, 0x00000000, 0x00004001, 0x00000001, 0x05000036,
+        0x00100042, 0x00000001, 0x0010000a, 0x00000000, 0x05000036, 0x00100072, 0x00000000, 0x00100966,
+        0x00000001, 0x03000008, 0x0010002a, 0x00000000, 0x0700001e, 0x00100012, 0x00000001, 0x0010000a,
+        0x00000000, 0x00004001, 0x00000001, 0x05000036, 0x00100032, 0x00000000, 0x00100046, 0x00000001,
+        0x01000016, 0x07000020, 0x00100012, 0x00000000, 0x0010000a, 0x00000000, 0x00004001, 0x000000ff,
+        0x08000036, 0x001020f2, 0x00000000, 0x00004002, 0x00000000, 0x3f800000, 0x00000000, 0x3f800000,
+        0x0304003f, 0x0010000a, 0x00000000, 0x08000036, 0x001020f2, 0x00000000, 0x00004002, 0x3f800000,
+        0x00000000, 0x00000000, 0x3f800000, 0x0100003e,
+    };
+
+    if (!init_test_context(&test_context, NULL))
+        return;
+
+    device = test_context.device;
+    context = test_context.immediate_context;
+
+    hr = ID3D11Device_CreatePixelShader(device, ps_continuec_nz_code, sizeof(ps_continuec_nz_code), NULL, &ps);
+    ok(SUCCEEDED(hr), "Failed to create continuec_nz pixel shader, hr %#x.\n", hr);
+    ID3D11DeviceContext_PSSetShader(context, ps, NULL, 0);
+    draw_quad(&test_context);
+    check_texture_color(test_context.backbuffer, 0xff00ff00, 0);
+    ID3D11PixelShader_Release(ps);
+
+    hr = ID3D11Device_CreatePixelShader(device, ps_continuec_z_code, sizeof(ps_continuec_z_code), NULL, &ps);
+    ok(SUCCEEDED(hr), "Failed to create continuec_z pixel shader, hr %#x.\n", hr);
     ID3D11DeviceContext_PSSetShader(context, ps, NULL, 0);
     draw_quad(&test_context);
     check_texture_color(test_context.backbuffer, 0xff00ff00, 0);
@@ -16900,6 +18331,402 @@ float4 main(struct ps_data ps_input) : SV_Target
     release_test_context(&test_context);
 }
 
+struct triangle
+{
+    struct vec4 v[3];
+};
+
+#define check_triangles(buffer, triangles, count) check_triangles_(__LINE__, buffer, triangles, count)
+static void check_triangles_(unsigned int line, ID3D11Buffer *buffer,
+        const struct triangle *triangles, unsigned int triangle_count)
+{
+    const struct triangle *current, *expected;
+    struct resource_readback rb;
+    unsigned int i, j, offset;
+    BOOL all_match = TRUE;
+
+    get_buffer_readback(buffer, &rb);
+
+    for (i = 0; i < triangle_count; ++i)
+    {
+        current = get_readback_data(&rb, i, 0, sizeof(*current));
+        expected = &triangles[i];
+
+        offset = ~0u;
+        for (j = 0; j < ARRAY_SIZE(expected->v); ++j)
+        {
+            if (compare_vec4(&current->v[0], &expected->v[j], 0))
+            {
+                offset = j;
+                break;
+            }
+        }
+
+        if (offset == ~0u)
+        {
+            all_match = FALSE;
+            break;
+        }
+
+        for (j = 0; j < ARRAY_SIZE(expected->v); ++j)
+        {
+            if (!compare_vec4(&current->v[j], &expected->v[(j + offset) % 3], 0))
+            {
+                all_match = FALSE;
+                break;
+            }
+        }
+        if (!all_match)
+            break;
+    }
+
+    ok_(__FILE__, line)(all_match, "Triangle %u vertices {%.8e, %.8e, %.8e, %.8e}, "
+            "{%.8e, %.8e, %.8e, %.8e}, {%.8e, %.8e, %.8e, %.8e} "
+            "do not match {%.8e, %.8e, %.8e, %.8e}, {%.8e, %.8e, %.8e, %.8e}, "
+            "{%.8e, %.8e, %.8e, %.8e}.\n", i,
+            current->v[0].x, current->v[0].y, current->v[0].z, current->v[0].w,
+            current->v[1].x, current->v[1].y, current->v[1].z, current->v[1].w,
+            current->v[2].x, current->v[2].y, current->v[2].z, current->v[2].w,
+            expected->v[0].x, expected->v[0].y, expected->v[0].z, expected->v[0].w,
+            expected->v[1].x, expected->v[1].y, expected->v[1].z, expected->v[1].w,
+            expected->v[2].x, expected->v[2].y, expected->v[2].z, expected->v[2].w);
+
+    release_resource_readback(&rb);
+}
+
+static void test_quad_tessellation(void)
+{
+#if 0
+    struct point_data
+    {
+        float4 position : SV_POSITION;
+    };
+
+    struct patch_constant_data
+    {
+        float edges[4] : SV_TessFactor;
+        float inside[2] : SV_InsideTessFactor;
+    };
+
+    float4 tess_factors;
+    float2 inside_tess_factors;
+
+    patch_constant_data patch_constant(InputPatch<point_data, 4> input)
+    {
+        patch_constant_data output;
+
+        output.edges[0] = tess_factors.x;
+        output.edges[1] = tess_factors.y;
+        output.edges[2] = tess_factors.z;
+        output.edges[3] = tess_factors.w;
+        output.inside[0] = inside_tess_factors.x;
+        output.inside[1] = inside_tess_factors.y;
+
+        return output;
+    }
+
+    [domain("quad")]
+    [outputcontrolpoints(4)]
+    [outputtopology("triangle_ccw")]
+    [partitioning("integer")]
+    [patchconstantfunc("patch_constant")]
+    point_data hs_main(InputPatch<point_data, 4> input,
+            uint i : SV_OutputControlPointID)
+    {
+        return input[i];
+    }
+
+    [domain("quad")]
+    point_data ds_main(patch_constant_data input,
+            float2 tess_coord : SV_DomainLocation,
+            const OutputPatch<point_data, 4> patch)
+    {
+        point_data output;
+
+        float4 a = lerp(patch[0].position, patch[1].position, tess_coord.x);
+        float4 b = lerp(patch[2].position, patch[3].position, tess_coord.x);
+        output.position = lerp(a, b, tess_coord.y);
+
+        return output;
+    }
+#endif
+    static const DWORD hs_quad_ccw_code[] =
+    {
+        0x43425844, 0xdf8df700, 0x58b08fb1, 0xbd23d2c3, 0xcf884094, 0x00000001, 0x000002b8, 0x00000004,
+        0x00000030, 0x00000064, 0x00000098, 0x0000015c, 0x4e475349, 0x0000002c, 0x00000001, 0x00000008,
+        0x00000020, 0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x00000f0f, 0x505f5653, 0x5449534f,
+        0x004e4f49, 0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000,
+        0x00000003, 0x00000000, 0x0000000f, 0x505f5653, 0x5449534f, 0x004e4f49, 0x47534350, 0x000000bc,
+        0x00000006, 0x00000008, 0x00000098, 0x00000000, 0x0000000b, 0x00000003, 0x00000000, 0x00000e01,
+        0x00000098, 0x00000001, 0x0000000b, 0x00000003, 0x00000001, 0x00000e01, 0x00000098, 0x00000002,
+        0x0000000b, 0x00000003, 0x00000002, 0x00000e01, 0x00000098, 0x00000003, 0x0000000b, 0x00000003,
+        0x00000003, 0x00000e01, 0x000000a6, 0x00000000, 0x0000000c, 0x00000003, 0x00000004, 0x00000e01,
+        0x000000a6, 0x00000001, 0x0000000c, 0x00000003, 0x00000005, 0x00000e01, 0x545f5653, 0x46737365,
+        0x6f746361, 0x56530072, 0x736e495f, 0x54656469, 0x46737365, 0x6f746361, 0xabab0072, 0x58454853,
+        0x00000154, 0x00030050, 0x00000055, 0x01000071, 0x01002093, 0x01002094, 0x01001895, 0x01000896,
+        0x01002097, 0x0100086a, 0x04000059, 0x00208e46, 0x00000000, 0x00000002, 0x01000073, 0x04000067,
+        0x00102012, 0x00000000, 0x0000000b, 0x06000036, 0x00102012, 0x00000000, 0x0020800a, 0x00000000,
+        0x00000000, 0x0100003e, 0x01000073, 0x04000067, 0x00102012, 0x00000001, 0x0000000c, 0x06000036,
+        0x00102012, 0x00000001, 0x0020801a, 0x00000000, 0x00000000, 0x0100003e, 0x01000073, 0x04000067,
+        0x00102012, 0x00000002, 0x0000000d, 0x06000036, 0x00102012, 0x00000002, 0x0020802a, 0x00000000,
+        0x00000000, 0x0100003e, 0x01000073, 0x04000067, 0x00102012, 0x00000003, 0x0000000e, 0x06000036,
+        0x00102012, 0x00000003, 0x0020803a, 0x00000000, 0x00000000, 0x0100003e, 0x01000073, 0x04000067,
+        0x00102012, 0x00000004, 0x0000000f, 0x06000036, 0x00102012, 0x00000004, 0x0020800a, 0x00000000,
+        0x00000001, 0x0100003e, 0x01000073, 0x04000067, 0x00102012, 0x00000005, 0x00000010, 0x06000036,
+        0x00102012, 0x00000005, 0x0020801a, 0x00000000, 0x00000001, 0x0100003e,
+    };
+    static const DWORD ds_quad_code[] =
+    {
+        0x43425844, 0xeb6b7631, 0x07f5469e, 0xed0cbf4a, 0x7158b3a6, 0x00000001, 0x00000284, 0x00000004,
+        0x00000030, 0x00000064, 0x00000128, 0x0000015c, 0x4e475349, 0x0000002c, 0x00000001, 0x00000008,
+        0x00000020, 0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x00000f0f, 0x505f5653, 0x5449534f,
+        0x004e4f49, 0x47534350, 0x000000bc, 0x00000006, 0x00000008, 0x00000098, 0x00000000, 0x0000000b,
+        0x00000003, 0x00000000, 0x00000001, 0x00000098, 0x00000001, 0x0000000b, 0x00000003, 0x00000001,
+        0x00000001, 0x00000098, 0x00000002, 0x0000000b, 0x00000003, 0x00000002, 0x00000001, 0x00000098,
+        0x00000003, 0x0000000b, 0x00000003, 0x00000003, 0x00000001, 0x000000a6, 0x00000000, 0x0000000c,
+        0x00000003, 0x00000004, 0x00000001, 0x000000a6, 0x00000001, 0x0000000c, 0x00000003, 0x00000005,
+        0x00000001, 0x545f5653, 0x46737365, 0x6f746361, 0x56530072, 0x736e495f, 0x54656469, 0x46737365,
+        0x6f746361, 0xabab0072, 0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000,
+        0x00000001, 0x00000003, 0x00000000, 0x0000000f, 0x505f5653, 0x5449534f, 0x004e4f49, 0x58454853,
+        0x00000120, 0x00040050, 0x00000048, 0x01002093, 0x01001895, 0x0100086a, 0x0200005f, 0x0001c032,
+        0x0400005f, 0x002190f2, 0x00000004, 0x00000000, 0x04000067, 0x001020f2, 0x00000000, 0x00000001,
+        0x02000068, 0x00000002, 0x0a000000, 0x001000f2, 0x00000000, 0x80219e46, 0x00000041, 0x00000002,
+        0x00000000, 0x00219e46, 0x00000003, 0x00000000, 0x09000032, 0x001000f2, 0x00000000, 0x0001c006,
+        0x00100e46, 0x00000000, 0x00219e46, 0x00000002, 0x00000000, 0x0a000000, 0x001000f2, 0x00000001,
+        0x80219e46, 0x00000041, 0x00000000, 0x00000000, 0x00219e46, 0x00000001, 0x00000000, 0x09000032,
+        0x001000f2, 0x00000001, 0x0001c006, 0x00100e46, 0x00000001, 0x00219e46, 0x00000000, 0x00000000,
+        0x08000000, 0x001000f2, 0x00000000, 0x00100e46, 0x00000000, 0x80100e46, 0x00000041, 0x00000001,
+        0x08000032, 0x001020f2, 0x00000000, 0x0001c556, 0x00100e46, 0x00000000, 0x00100e46, 0x00000001,
+        0x0100003e,
+    };
+#if 0
+    ...
+    [outputtopology("triangle_cw")]
+    ...
+#endif
+    static const DWORD hs_quad_cw_code[] =
+    {
+        0x43425844, 0x1ab30cc8, 0x94174771, 0x61f4cdd0, 0xa287f62c, 0x00000001, 0x000002b8, 0x00000004,
+        0x00000030, 0x00000064, 0x00000098, 0x0000015c, 0x4e475349, 0x0000002c, 0x00000001, 0x00000008,
+        0x00000020, 0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x00000f0f, 0x505f5653, 0x5449534f,
+        0x004e4f49, 0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000,
+        0x00000003, 0x00000000, 0x0000000f, 0x505f5653, 0x5449534f, 0x004e4f49, 0x47534350, 0x000000bc,
+        0x00000006, 0x00000008, 0x00000098, 0x00000000, 0x0000000b, 0x00000003, 0x00000000, 0x00000e01,
+        0x00000098, 0x00000001, 0x0000000b, 0x00000003, 0x00000001, 0x00000e01, 0x00000098, 0x00000002,
+        0x0000000b, 0x00000003, 0x00000002, 0x00000e01, 0x00000098, 0x00000003, 0x0000000b, 0x00000003,
+        0x00000003, 0x00000e01, 0x000000a6, 0x00000000, 0x0000000c, 0x00000003, 0x00000004, 0x00000e01,
+        0x000000a6, 0x00000001, 0x0000000c, 0x00000003, 0x00000005, 0x00000e01, 0x545f5653, 0x46737365,
+        0x6f746361, 0x56530072, 0x736e495f, 0x54656469, 0x46737365, 0x6f746361, 0xabab0072, 0x58454853,
+        0x00000154, 0x00030050, 0x00000055, 0x01000071, 0x01002093, 0x01002094, 0x01001895, 0x01000896,
+        0x01001897, 0x0100086a, 0x04000059, 0x00208e46, 0x00000000, 0x00000002, 0x01000073, 0x04000067,
+        0x00102012, 0x00000000, 0x0000000b, 0x06000036, 0x00102012, 0x00000000, 0x0020800a, 0x00000000,
+        0x00000000, 0x0100003e, 0x01000073, 0x04000067, 0x00102012, 0x00000001, 0x0000000c, 0x06000036,
+        0x00102012, 0x00000001, 0x0020801a, 0x00000000, 0x00000000, 0x0100003e, 0x01000073, 0x04000067,
+        0x00102012, 0x00000002, 0x0000000d, 0x06000036, 0x00102012, 0x00000002, 0x0020802a, 0x00000000,
+        0x00000000, 0x0100003e, 0x01000073, 0x04000067, 0x00102012, 0x00000003, 0x0000000e, 0x06000036,
+        0x00102012, 0x00000003, 0x0020803a, 0x00000000, 0x00000000, 0x0100003e, 0x01000073, 0x04000067,
+        0x00102012, 0x00000004, 0x0000000f, 0x06000036, 0x00102012, 0x00000004, 0x0020800a, 0x00000000,
+        0x00000001, 0x0100003e, 0x01000073, 0x04000067, 0x00102012, 0x00000005, 0x00000010, 0x06000036,
+        0x00102012, 0x00000005, 0x0020801a, 0x00000000, 0x00000001, 0x0100003e,
+    };
+#if 0
+    struct point_data
+    {
+        float4 pos : SV_POSITION;
+    };
+
+    [maxvertexcount(3)]
+    void main(triangle point_data vin[3], inout TriangleStream<point_data> vout)
+    {
+        for (uint i = 0; i < 3; ++i)
+            vout.Append(vin[i]);
+    }
+#endif
+    static const DWORD gs_code[] =
+    {
+        0x43425844, 0x8e49d18d, 0x6d08d6e5, 0xb7015628, 0xf9351fdd, 0x00000001, 0x00000164, 0x00000003,
+        0x0000002c, 0x00000060, 0x00000094, 0x4e475349, 0x0000002c, 0x00000001, 0x00000008, 0x00000020,
+        0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x00000f0f, 0x505f5653, 0x5449534f, 0x004e4f49,
+        0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000001, 0x00000003,
+        0x00000000, 0x0000000f, 0x505f5653, 0x5449534f, 0x004e4f49, 0x52444853, 0x000000c8, 0x00020040,
+        0x00000032, 0x05000061, 0x002010f2, 0x00000003, 0x00000000, 0x00000001, 0x02000068, 0x00000001,
+        0x0100185d, 0x0100285c, 0x04000067, 0x001020f2, 0x00000000, 0x00000001, 0x0200005e, 0x00000003,
+        0x05000036, 0x00100012, 0x00000000, 0x00004001, 0x00000000, 0x01000030, 0x07000050, 0x00100022,
+        0x00000000, 0x0010000a, 0x00000000, 0x00004001, 0x00000003, 0x03040003, 0x0010001a, 0x00000000,
+        0x07000036, 0x001020f2, 0x00000000, 0x00a01e46, 0x0010000a, 0x00000000, 0x00000000, 0x01000013,
+        0x0700001e, 0x00100012, 0x00000000, 0x0010000a, 0x00000000, 0x00004001, 0x00000001, 0x01000016,
+        0x0100003e,
+    };
+    static const D3D11_SO_DECLARATION_ENTRY so_declaration[] =
+    {
+        {0, "SV_POSITION", 0, 0, 4, 0},
+    };
+    static const D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_11_0;
+    static const struct vec4 green = {0.0f, 1.0f, 0.0f, 1.0f};
+    static const struct vec4 white = {1.0f, 1.0f, 1.0f, 1.0f};
+    static const BYTE zero_data[1024];
+    static const struct triangle expected_quad_ccw[] =
+    {
+        {{{-1.0f, -1.0f, 0.0f, 1.0f},
+          { 1.0f, -1.0f, 0.0f, 1.0f},
+          {-1.0f,  1.0f, 0.0f, 1.0f}}},
+        {{{-1.0f,  1.0f, 0.0f, 1.0f},
+          { 1.0f, -1.0f, 0.0f, 1.0f},
+          { 1.0f,  1.0f, 0.0f, 1.0f}}},
+        {{{ 0.0f,  0.0f, 0.0f, 0.0f},
+          { 0.0f,  0.0f, 0.0f, 0.0f},
+          { 0.0f,  0.0f, 0.0f, 0.0f}}},
+    };
+    static const struct triangle expected_quad_cw[] =
+    {
+        {{{-1.0f, -1.0f, 0.0f, 1.0f},
+          {-1.0f,  1.0f, 0.0f, 1.0f},
+          { 1.0f, -1.0f, 0.0f, 1.0f}}},
+        {{{-1.0f,  1.0f, 0.0f, 1.0f},
+          { 1.0f,  1.0f, 0.0f, 1.0f},
+          { 1.0f, -1.0f, 0.0f, 1.0f}}},
+        {{{ 0.0f,  0.0f, 0.0f, 0.0f},
+          { 0.0f,  0.0f, 0.0f, 0.0f},
+          { 0.0f,  0.0f, 0.0f, 0.0f}}},
+    };
+    struct
+    {
+        float tess_factors[4];
+        float inside_tess_factors[2];
+        DWORD padding[2];
+    } constant;
+
+    D3D11_QUERY_DATA_SO_STATISTICS so_statistics;
+    struct d3d11_test_context test_context;
+    ID3D11DeviceContext *context;
+    ID3D11Buffer *cb, *so_buffer;
+    D3D11_QUERY_DESC query_desc;
+    ID3D11Asynchronous *query;
+    ID3D11GeometryShader *gs;
+    ID3D11DomainShader *ds;
+    const UINT offset = 0;
+    ID3D11HullShader *hs;
+    ID3D11Device *device;
+    unsigned int i;
+    HRESULT hr;
+
+    if (!init_test_context(&test_context, &feature_level))
+        return;
+
+    device = test_context.device;
+    context = test_context.immediate_context;
+
+    draw_color_quad(&test_context, &white);
+    check_texture_color(test_context.backbuffer, 0xffffffff, 0);
+
+    set_quad_color(&test_context, &green);
+    ID3D11DeviceContext_IASetPrimitiveTopology(context, D3D11_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST);
+
+    so_buffer = create_buffer(device, D3D11_BIND_STREAM_OUTPUT, sizeof(zero_data), zero_data);
+    hr = ID3D11Device_CreateGeometryShaderWithStreamOutput(device, gs_code, sizeof(gs_code),
+            so_declaration, ARRAY_SIZE(so_declaration), NULL, 0, 0, NULL, &gs);
+    ok(SUCCEEDED(hr), "Failed to create geometry shader with stream output, hr %#x.\n", hr);
+    ID3D11DeviceContext_GSSetShader(context, gs, NULL, 0);
+
+    for (i = 0; i < ARRAY_SIZE(constant.tess_factors); ++i)
+        constant.tess_factors[i] = 1.0f;
+    for (i = 0; i < ARRAY_SIZE(constant.inside_tess_factors); ++i)
+        constant.inside_tess_factors[i] = 1.0f;
+    cb = create_buffer(device, D3D11_BIND_CONSTANT_BUFFER, sizeof(constant), &constant);
+    ID3D11DeviceContext_HSSetConstantBuffers(context, 0, 1, &cb);
+    hr = ID3D11Device_CreateHullShader(device, hs_quad_ccw_code, sizeof(hs_quad_ccw_code), NULL, &hs);
+    ok(SUCCEEDED(hr), "Failed to create hull shader, hr %#x.\n", hr);
+    ID3D11DeviceContext_HSSetShader(context, hs, NULL, 0);
+    hr = ID3D11Device_CreateDomainShader(device, ds_quad_code, sizeof(ds_quad_code), NULL, &ds);
+    ok(SUCCEEDED(hr), "Failed to create domain shader, hr %#x.\n", hr);
+    ID3D11DeviceContext_DSSetShader(context, ds, NULL, 0);
+
+    ID3D11DeviceContext_SOSetTargets(context, 1, &so_buffer, &offset);
+    ID3D11DeviceContext_Draw(context, 4, 0);
+    check_texture_color(test_context.backbuffer, 0xffffffff, 0);
+    ID3D11DeviceContext_SOSetTargets(context, 0, NULL, NULL);
+    check_triangles(so_buffer, expected_quad_ccw, ARRAY_SIZE(expected_quad_ccw));
+
+    ID3D11DeviceContext_UpdateSubresource(context, (ID3D11Resource *)so_buffer, 0, NULL, zero_data, 0, 0);
+
+    ID3D11HullShader_Release(hs);
+    hr = ID3D11Device_CreateHullShader(device, hs_quad_cw_code, sizeof(hs_quad_cw_code), NULL, &hs);
+    ok(SUCCEEDED(hr), "Failed to create hull shader, hr %#x.\n", hr);
+    ID3D11DeviceContext_HSSetShader(context, hs, NULL, 0);
+
+    ID3D11DeviceContext_SOSetTargets(context, 1, &so_buffer, &offset);
+    ID3D11DeviceContext_Draw(context, 4, 0);
+    check_texture_color(test_context.backbuffer, 0xff00ff00, 0);
+    ID3D11DeviceContext_SOSetTargets(context, 0, NULL, NULL);
+    check_triangles(so_buffer, expected_quad_cw, ARRAY_SIZE(expected_quad_cw));
+
+    ID3D11DeviceContext_UpdateSubresource(context, (ID3D11Resource *)so_buffer, 0, NULL, zero_data, 0, 0);
+
+    ID3D11DeviceContext_SOSetTargets(context, 1, &so_buffer, &offset);
+    query_desc.Query = D3D11_QUERY_SO_STATISTICS_STREAM0;
+    query_desc.MiscFlags = 0;
+    hr = ID3D11Device_CreateQuery(device, &query_desc, (ID3D11Query **)&query);
+    ok(hr == S_OK, "Failed to create query, hr %#x.\n", hr);
+    ID3D11DeviceContext_Begin(context, query);
+
+    set_quad_color(&test_context, &white);
+    for (i = 0; i < ARRAY_SIZE(constant.tess_factors); ++i)
+        constant.tess_factors[i] = 2.0f;
+    ID3D11DeviceContext_UpdateSubresource(context, (ID3D11Resource *)cb, 0, NULL, &constant, 0, 0);
+    ID3D11DeviceContext_Draw(context, 4, 0);
+    check_texture_color(test_context.backbuffer, 0xffffffff, 0);
+
+    set_quad_color(&test_context, &green);
+    constant.tess_factors[0] = 0.0f; /* A patch is discarded. */
+    ID3D11DeviceContext_UpdateSubresource(context, (ID3D11Resource *)cb, 0, NULL, &constant, 0, 0);
+    ID3D11DeviceContext_Draw(context, 4, 0);
+    check_texture_color(test_context.backbuffer, 0xffffffff, 0);
+
+    ID3D11DeviceContext_End(context, query);
+    for (i = 0; i < 500; ++i)
+    {
+        if ((hr = ID3D11DeviceContext_GetData(context, query, NULL, 0, 0)) != S_FALSE)
+            break;
+        Sleep(10);
+    }
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    hr = ID3D11DeviceContext_GetData(context, query, &so_statistics, sizeof(so_statistics), 0);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    ok(so_statistics.NumPrimitivesWritten == 8, "Got unexpected primitives written %u.\n",
+            (unsigned int)so_statistics.NumPrimitivesWritten);
+    ok(so_statistics.PrimitivesStorageNeeded == 8, "Got unexpected primitives storage needed %u.\n",
+            (unsigned int)so_statistics.PrimitivesStorageNeeded);
+    ID3D11DeviceContext_Begin(context, query);
+
+    constant.tess_factors[0] = 5.0f;
+    ID3D11DeviceContext_UpdateSubresource(context, (ID3D11Resource *)cb, 0, NULL, &constant, 0, 0);
+    ID3D11DeviceContext_Draw(context, 4, 0);
+    check_texture_color(test_context.backbuffer, 0xff00ff00, 0);
+
+    ID3D11DeviceContext_End(context, query);
+    for (i = 0; i < 500; ++i)
+    {
+        if ((hr = ID3D11DeviceContext_GetData(context, query, NULL, 0, 0)) != S_FALSE)
+            break;
+        Sleep(10);
+    }
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    hr = ID3D11DeviceContext_GetData(context, query, &so_statistics, sizeof(so_statistics), 0);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    ok(so_statistics.NumPrimitivesWritten == 11, "Got unexpected primitives written %u.\n",
+            (unsigned int)so_statistics.NumPrimitivesWritten);
+    ok(so_statistics.PrimitivesStorageNeeded == 11, "Got unexpected primitives storage needed %u.\n",
+            (unsigned int)so_statistics.PrimitivesStorageNeeded);
+    ID3D11Asynchronous_Release(query);
+
+    ID3D11Buffer_Release(so_buffer);
+    ID3D11GeometryShader_Release(gs);
+    ID3D11DomainShader_Release(ds);
+    ID3D11HullShader_Release(hs);
+    ID3D11Buffer_Release(cb);
+    release_test_context(&test_context);
+}
+
 #define check_so_desc(a, b, c, d, e, f, g, h) check_so_desc_(__LINE__, a, b, c, d, e, f, g, h)
 static void check_so_desc_(unsigned int line, ID3D11Device *device,
         const DWORD *code, size_t code_size, const D3D11_SO_DECLARATION_ENTRY *entry,
@@ -18096,6 +19923,226 @@ done:
     release_test_context(&test_context);
 }
 
+static void test_gather_c(void)
+{
+    struct
+    {
+        int width, height;
+        int offset_x, offset_y;
+        float compare_value;
+        int padding[3];
+    } constant;
+    struct d3d11_test_context test_context;
+    D3D11_TEXTURE2D_DESC texture_desc;
+    D3D11_SAMPLER_DESC sampler_desc;
+    D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc;
+    ID3D11ShaderResourceView *srv;
+    ID3D11Texture2D *texture, *rt;
+    ID3D11DeviceContext *context;
+    ID3D11SamplerState *sampler;
+    ID3D11RenderTargetView *rtv;
+    struct resource_readback rb;
+    ID3D11PixelShader *ps;
+    ID3D11Device *device;
+    unsigned int x, y;
+    ID3D11Buffer *cb;
+    HRESULT hr;
+
+    static const D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_11_0;
+    static const DWORD gather4_c_code[] =
+    {
+#if 0
+        SamplerComparisonState s;
+        Texture2D<float4> t;
+
+        int2 size;
+        int2 offset;
+        float compare;
+
+        float4 main(float4 position : SV_Position) : SV_Target
+        {
+            return t.GatherCmp(s, position.xy / size, compare);
+        }
+#endif
+        0x43425844, 0xd3d04479, 0x901e9208, 0x7074fd0c, 0xbcadb2da, 0x00000001, 0x00000168, 0x00000003,
+        0x0000002c, 0x00000060, 0x00000094, 0x4e475349, 0x0000002c, 0x00000001, 0x00000008, 0x00000020,
+        0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x0000030f, 0x505f5653, 0x7469736f, 0x006e6f69,
+        0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003,
+        0x00000000, 0x0000000f, 0x545f5653, 0x65677261, 0xabab0074, 0x58454853, 0x000000cc, 0x00000050,
+        0x00000033, 0x0100086a, 0x04000059, 0x00208e46, 0x00000000, 0x00000002, 0x0300085a, 0x00106000,
+        0x00000000, 0x04001858, 0x00107000, 0x00000000, 0x00005555, 0x04002064, 0x00101032, 0x00000000,
+        0x00000001, 0x03000065, 0x001020f2, 0x00000000, 0x02000068, 0x00000001, 0x0600002b, 0x00100032,
+        0x00000000, 0x00208046, 0x00000000, 0x00000000, 0x0700000e, 0x00100032, 0x00000000, 0x00101046,
+        0x00000000, 0x00100046, 0x00000000, 0x8e00007e, 0x800000c2, 0x00155543, 0x001020f2, 0x00000000,
+        0x00100046, 0x00000000, 0x00107e46, 0x00000000, 0x0010600a, 0x00000000, 0x0020800a, 0x00000000,
+        0x00000001, 0x0100003e,
+    };
+    static const DWORD gather4_po_c_code[] =
+    {
+#if 0
+        SamplerComparisonState s;
+        Texture2D<float4> t;
+
+        int2 size;
+        int2 offset;
+        float compare;
+
+        float4 main(float4 position : SV_Position) : SV_Target
+        {
+            return t.GatherCmp(s, position.xy / size, compare, offset);
+        }
+#endif
+        0x43425844, 0x501de13e, 0x472d2d20, 0x6df0fee4, 0xef27d9e6, 0x00000001, 0x00000174, 0x00000003,
+        0x0000002c, 0x00000060, 0x00000094, 0x4e475349, 0x0000002c, 0x00000001, 0x00000008, 0x00000020,
+        0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x0000030f, 0x505f5653, 0x7469736f, 0x006e6f69,
+        0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003,
+        0x00000000, 0x0000000f, 0x545f5653, 0x65677261, 0xabab0074, 0x58454853, 0x000000d8, 0x00000050,
+        0x00000036, 0x0100086a, 0x04000059, 0x00208e46, 0x00000000, 0x00000002, 0x0300085a, 0x00106000,
+        0x00000000, 0x04001858, 0x00107000, 0x00000000, 0x00005555, 0x04002064, 0x00101032, 0x00000000,
+        0x00000001, 0x03000065, 0x001020f2, 0x00000000, 0x02000068, 0x00000001, 0x0600002b, 0x00100032,
+        0x00000000, 0x00208046, 0x00000000, 0x00000000, 0x0700000e, 0x00100032, 0x00000000, 0x00101046,
+        0x00000000, 0x00100046, 0x00000000, 0x91000080, 0x800000c2, 0x00155543, 0x001020f2, 0x00000000,
+        0x00100046, 0x00000000, 0x00208ae6, 0x00000000, 0x00000000, 0x00107e46, 0x00000000, 0x0010600a,
+        0x00000000, 0x0020800a, 0x00000000, 0x00000001, 0x0100003e,
+    };
+    static const float texture_data[] =
+    {
+        0.00f, 0.10f, 0.20f, 0.30f,
+        0.40f, 0.50f, 0.60f, 0.70f,
+        0.80f, 0.90f, 0.05f, 0.15f,
+        0.25f, 0.35f, 0.45f, 0.55f,
+    };
+    static const struct vec4 expected_gather4_c[] =
+    {
+        {0.0f, 1.00, 0.00, 0.0f}, {1.0f, 1.00, 0.00, 0.0f}, {1.0f, 1.00, 0.00, 0.0f}, {1.0f, 1.00, 0.00, 0.0f},
+        {1.0f, 1.00, 1.00, 0.0f}, {1.0f, 0.00, 1.00, 1.0f}, {0.0f, 0.00, 1.00, 1.0f}, {0.0f, 0.00, 1.00, 1.0f},
+        {0.0f, 0.00, 1.00, 1.0f}, {0.0f, 0.00, 0.00, 1.0f}, {0.0f, 1.00, 0.00, 0.0f}, {1.0f, 1.00, 0.00, 0.0f},
+        {0.0f, 0.00, 0.00, 0.0f}, {0.0f, 0.00, 0.00, 0.0f}, {0.0f, 1.00, 1.00, 0.0f}, {1.0f, 1.00, 1.00, 1.0f},
+    };
+    static const struct vec4 expected_gather4_po_c[] =
+    {
+        {1.0f, 0.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f},
+        {0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 0.0f, 0.0f},
+        {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 1.0f},
+        {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 1.0f},
+    };
+    static const struct vec4 white = {1.0f, 1.0f, 1.0f, 1.0f};
+    static const D3D11_SUBRESOURCE_DATA resource_data = {&texture_data, sizeof(texture_data) / 4};
+
+    if (!init_test_context(&test_context, &feature_level))
+        return;
+
+    device = test_context.device;
+    context = test_context.immediate_context;
+
+    sampler_desc.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
+    sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sampler_desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sampler_desc.MipLODBias = 0.0f;
+    sampler_desc.MaxAnisotropy = 0;
+    sampler_desc.ComparisonFunc = D3D11_COMPARISON_LESS_EQUAL;
+    sampler_desc.BorderColor[0] = 0.0f;
+    sampler_desc.BorderColor[1] = 0.0f;
+    sampler_desc.BorderColor[2] = 0.0f;
+    sampler_desc.BorderColor[3] = 0.0f;
+    sampler_desc.MinLOD = 0.0f;
+    sampler_desc.MaxLOD = D3D11_FLOAT32_MAX;
+
+    hr = ID3D11Device_CreateSamplerState(device, &sampler_desc, &sampler);
+    ok(SUCCEEDED(hr), "Failed to create sampler state, hr %#x.\n", hr);
+    ID3D11DeviceContext_PSSetSamplers(context, 0, 1, &sampler);
+
+    texture_desc.Width = 4;
+    texture_desc.Height = 4;
+    texture_desc.MipLevels = 1;
+    texture_desc.ArraySize = 1;
+    texture_desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    texture_desc.SampleDesc.Count = 1;
+    texture_desc.SampleDesc.Quality = 0;
+    texture_desc.Usage = D3D11_USAGE_DEFAULT;
+    texture_desc.BindFlags = D3D11_BIND_RENDER_TARGET;
+    texture_desc.CPUAccessFlags = 0;
+    texture_desc.MiscFlags = 0;
+    hr = ID3D11Device_CreateTexture2D(device, &texture_desc, NULL, &rt);
+    ok(SUCCEEDED(hr), "Failed to create texture, hr %#x.\n", hr);
+    hr = ID3D11Device_CreateRenderTargetView(device, (ID3D11Resource *)rt, NULL, &rtv);
+    ok(SUCCEEDED(hr), "Failed to create render target view, hr %#x.\n", hr);
+    ID3D11DeviceContext_OMSetRenderTargets(context, 1, &rtv, NULL);
+
+    constant.width = texture_desc.Width;
+    constant.height = texture_desc.Height;
+    constant.offset_x = 1;
+    constant.offset_y = 1;
+    constant.compare_value = 0.5f;
+    cb = create_buffer(device, D3D11_BIND_CONSTANT_BUFFER, sizeof(constant), &constant);
+    ID3D11DeviceContext_PSSetConstantBuffers(context, 0, 1, &cb);
+
+    texture_desc.Format = DXGI_FORMAT_R32_TYPELESS;
+    texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_DEPTH_STENCIL;
+    hr = ID3D11Device_CreateTexture2D(device, &texture_desc, &resource_data, &texture);
+    ok(SUCCEEDED(hr), "Failed to create texture, hr %#x.\n", hr);
+
+    srv_desc.Format = DXGI_FORMAT_R32_FLOAT;
+    srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    U(srv_desc).Texture2D.MostDetailedMip = 0;
+    U(srv_desc).Texture2D.MipLevels = 1;
+    hr = ID3D11Device_CreateShaderResourceView(device, (ID3D11Resource *)texture, &srv_desc, &srv);
+    ok(SUCCEEDED(hr), "Failed to create shader resource view, hr %#x.\n", hr);
+    ID3D11DeviceContext_PSSetShaderResources(context, 0, 1, &srv);
+
+    hr = ID3D11Device_CreatePixelShader(device, gather4_c_code, sizeof(gather4_c_code), NULL, &ps);
+    ok(SUCCEEDED(hr), "Failed to create pixel shader, hr %#x.\n", hr);
+    ID3D11DeviceContext_PSSetShader(context, ps, NULL, 0);
+
+    ID3D11DeviceContext_ClearRenderTargetView(context, rtv, &white.x);
+    draw_quad(&test_context);
+    get_texture_readback(rt, 0, &rb);
+    for (y = 0; y < texture_desc.Height; ++y)
+    {
+        for (x = 0; x < texture_desc.Width; ++x)
+        {
+            const struct vec4 *expected = &expected_gather4_c[y * texture_desc.Width + x];
+            const struct vec4 *got = get_readback_vec4(&rb, x, y);
+            ok(compare_vec4(got, expected, 0),
+                    "Got {%.8e, %.8e, %.8e, %.8e}, expected {%.8e, %.8e, %.8e, %.8e}.\n",
+                    got->x, got->y, got->z, got->w, expected->x, expected->y, expected->z, expected->w);
+        }
+    }
+    release_resource_readback(&rb);
+    ID3D11PixelShader_Release(ps);
+
+    hr = ID3D11Device_CreatePixelShader(device, gather4_po_c_code, sizeof(gather4_po_c_code), NULL, &ps);
+    ok(SUCCEEDED(hr), "Failed to create pixel shader, hr %#x.\n", hr);
+    ID3D11DeviceContext_PSSetShader(context, ps, NULL, 0);
+
+    ID3D11DeviceContext_ClearRenderTargetView(context, rtv, &white.x);
+    draw_quad(&test_context);
+    get_texture_readback(rt, 0, &rb);
+    for (y = 0; y < texture_desc.Height; ++y)
+    {
+        for (x = 0; x < texture_desc.Width; ++x)
+        {
+            const struct vec4 *expected = &expected_gather4_po_c[y * texture_desc.Width + x];
+            const struct vec4 *got = get_readback_vec4(&rb, x, y);
+            ok(compare_vec4(got, expected, 0),
+                    "Got {%.8e, %.8e, %.8e, %.8e}, expected {%.8e, %.8e, %.8e, %.8e}.\n",
+                    got->x, got->y, got->z, got->w, expected->x, expected->y, expected->z, expected->w);
+        }
+    }
+    release_resource_readback(&rb);
+    ID3D11PixelShader_Release(ps);
+
+    ID3D11ShaderResourceView_Release(srv);
+    ID3D11Texture2D_Release(texture);
+
+    ID3D11Buffer_Release(cb);
+    ID3D11Texture2D_Release(rt);
+    ID3D11RenderTargetView_Release(rtv);
+    ID3D11SamplerState_Release(sampler);
+    release_test_context(&test_context);
+}
+
 static void test_fractional_viewports(void)
 {
     struct d3d11_test_context test_context;
@@ -18298,6 +20345,7 @@ START_TEST(d3d11)
     test_render_target_views();
     test_layered_rendering();
     test_scissor();
+    test_clear_state();
     test_il_append_aligned();
     test_fragment_coords();
     test_update_subresource();
@@ -18317,6 +20365,7 @@ START_TEST(d3d11)
     test_shader_stage_input_output_matching();
     test_sm4_if_instruction();
     test_sm4_breakc_instruction();
+    test_sm4_continuec_instruction();
     test_create_input_layout();
     test_input_assembler();
     test_null_sampler();
@@ -18350,9 +20399,11 @@ START_TEST(d3d11)
     test_compute_shader_registers();
     test_tgsm();
     test_geometry_shader();
+    test_quad_tessellation();
     test_stream_output();
     test_fl10_stream_output_desc();
     test_stream_output_resume();
     test_gather();
+    test_gather_c();
     test_fractional_viewports();
 }

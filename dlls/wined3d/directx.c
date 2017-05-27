@@ -33,7 +33,6 @@ WINE_DEFAULT_DEBUG_CHANNEL(d3d);
 WINE_DECLARE_DEBUG_CHANNEL(d3d_perf);
 WINE_DECLARE_DEBUG_CHANNEL(winediag);
 
-#define WINE_DEFAULT_VIDMEM (64 * 1024 * 1024)
 #define DEFAULT_REFRESH_RATE 0
 
 /* The driver names reflect the lowest GPU supported
@@ -236,6 +235,7 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_EXT_texture_integer",              EXT_TEXTURE_INTEGER           },
     {"GL_EXT_texture_lod_bias",             EXT_TEXTURE_LOD_BIAS          },
     {"GL_EXT_texture_mirror_clamp",         EXT_TEXTURE_MIRROR_CLAMP      },
+    {"GL_EXT_texture_shared_exponent",      EXT_TEXTURE_SHARED_EXPONENT   },
     {"GL_EXT_texture_snorm",                EXT_TEXTURE_SNORM             },
     {"GL_EXT_texture_sRGB",                 EXT_TEXTURE_SRGB              },
     {"GL_EXT_texture_sRGB_decode",          EXT_TEXTURE_SRGB_DECODE       },
@@ -3824,6 +3824,7 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
         {EXT_PACKED_FLOAT,                 MAKEDWORD_VERSION(3, 0)},
         {EXT_TEXTURE_ARRAY,                MAKEDWORD_VERSION(3, 0)},
         {EXT_TEXTURE_INTEGER,              MAKEDWORD_VERSION(3, 0)},
+        {EXT_TEXTURE_SHARED_EXPONENT,      MAKEDWORD_VERSION(3, 0)},
         /* We don't want to enable EXT_GPU_SHADER4: even though similar
          * functionality is available in core GL 3.0 / GLSL 1.30, it's different
          * enough that reusing the same flag for the new features hurts more
@@ -4140,6 +4141,22 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
         if (!counter_bits)
             gl_info->supported[ARB_TIMER_QUERY] = FALSE;
     }
+    if (gl_version >= MAKEDWORD_VERSION(3, 0))
+    {
+        GLint counter_bits;
+
+        gl_info->supported[WINED3D_GL_PRIMITIVE_QUERY] = TRUE;
+
+        GL_EXTCALL(glGetQueryiv(GL_PRIMITIVES_GENERATED, GL_QUERY_COUNTER_BITS, &counter_bits));
+        TRACE("Primitives query counter has %d bits.\n", counter_bits);
+        if (!counter_bits)
+            gl_info->supported[WINED3D_GL_PRIMITIVE_QUERY] = FALSE;
+
+        GL_EXTCALL(glGetQueryiv(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, GL_QUERY_COUNTER_BITS, &counter_bits));
+        TRACE("Transform feedback primitives query counter has %d bits.\n", counter_bits);
+        if (!counter_bits)
+            gl_info->supported[WINED3D_GL_PRIMITIVE_QUERY] = FALSE;
+    }
     if (gl_info->supported[ARB_VIEWPORT_ARRAY])
     {
         GLint subpixel_bits;
@@ -4339,8 +4356,6 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
 
     if (!(gpu_description = query_gpu_description(gl_info, &vram_bytes)))
     {
-        static const struct gpu_description default_gpu_description =
-                {HW_VENDOR_NVIDIA, CARD_NVIDIA_RIVA_128, "Direct3D HAL", DRIVER_UNKNOWN, WINE_DEFAULT_VIDMEM};
         enum wined3d_pci_vendor vendor;
         enum wined3d_pci_device device;
 
@@ -4354,7 +4369,7 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
         if (!(gpu_description = get_gpu_description(vendor, device)))
         {
             ERR("Card %04x:%04x not found in driver DB.\n", vendor, device);
-            gpu_description = &default_gpu_description;
+            return FALSE;
         }
     }
     fixup_extensions(gl_info, caps_gl_ctx, gl_renderer_str, gl_vendor,
@@ -6546,6 +6561,10 @@ static BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, UINT ordinal, 
         wined3d_caps_gl_ctx_destroy(&caps_gl_ctx);
         return FALSE;
     }
+
+    if (wined3d_settings.offscreen_rendering_mode == ORM_BACKBUFFER)
+        ERR_(winediag)("You are using the backbuffer for offscreen rendering. "
+                "This is unsupported, and will be removed in a future version.\n");
 
     wined3d_adapter_init_fb_cfgs(adapter, caps_gl_ctx.dc);
     /* We haven't found any suitable formats. This should only happen in

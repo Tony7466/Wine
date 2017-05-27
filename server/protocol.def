@@ -853,8 +853,8 @@ struct rawinput_device
     mem_size_t virtual_size;                    /* virtual memory in bytes */
     mem_size_t peak_working_set_size;           /* peak real memory in bytes */
     mem_size_t working_set_size;                /* real memory in bytes */
-    mem_size_t pagefile_usage;                  /* swapped-out memory in bytes */
-    mem_size_t peak_pagefile_usage;             /* peak swapped-out memory in bytes */
+    mem_size_t pagefile_usage;                  /* commit charge in bytes */
+    mem_size_t peak_pagefile_usage;             /* peak commit charge in bytes */
 @END
 
 
@@ -3184,6 +3184,7 @@ enum caret_state
 /* Fetch a data format from the clipboard */
 @REQ(get_clipboard_data)
     unsigned int   format;         /* clipboard format of the data */
+    int            render;         /* will we try to render it if missing? */
     int            cached;         /* do we already have it in the client-side cache? */
     unsigned int   seqno;          /* sequence number for the data in the cache */
 @REPLY

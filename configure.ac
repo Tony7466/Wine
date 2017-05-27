@@ -81,6 +81,8 @@ AC_ARG_WITH(xcomposite,AS_HELP_STRING([--without-xcomposite],[do not use the Xco
             [if test "x$withval" = "xno"; then ac_cv_header_X11_extensions_Xcomposite_h=no; fi])
 AC_ARG_WITH(xcursor,   AS_HELP_STRING([--without-xcursor],[do not use the Xcursor extension]),
             [if test "x$withval" = "xno"; then ac_cv_header_X11_Xcursor_Xcursor_h=no; fi])
+AC_ARG_WITH(xfixes,  AS_HELP_STRING([--without-xfixes],[do not use Xfixes for clipboard change notifications]),
+            [if test "x$withval" = "xno"; then ac_cv_header_X11_extensions_Xfixes_h=no; fi])
 AC_ARG_WITH(xinerama,  AS_HELP_STRING([--without-xinerama],[do not use Xinerama (multi-monitor support)]),
             [if test "x$withval" = "xno"; then ac_cv_header_X11_extensions_Xinerama_h=no; fi])
 AC_ARG_WITH(xinput,    AS_HELP_STRING([--without-xinput],[do not use the Xinput extension]),
@@ -999,6 +1001,7 @@ then
                       X11/extensions/XInput2.h \
                       X11/extensions/XShm.h \
                       X11/extensions/Xcomposite.h \
+                      X11/extensions/Xfixes.h \
                       X11/extensions/Xinerama.h \
                       X11/extensions/Xrandr.h \
                       X11/extensions/Xrender.h \
@@ -1096,6 +1099,16 @@ then
         WINE_NOTICE_WITH(xrandr,[test "x$ac_cv_lib_soname_Xrandr" = "x"],
                          [libxrandr ${notice_platform}development files not found, XRandr won't be supported.])
 
+        dnl *** Check for Xfixes extension
+        if test "$ac_cv_header_X11_extensions_Xfixes_h" = "yes"
+        then
+                AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <X11/Xlib.h>
+#include <X11/extensions/Xfixes.h>]], [[static typeof(XFixesQueryVersion) * func; if (func) return 0;]])],
+                  [WINE_CHECK_SONAME(Xfixes,XFixesQueryVersion,,,[$X_LIBS $X_EXTRA_LIBS])])
+        fi
+        WINE_NOTICE_WITH(xfixes,[test "x$ac_cv_lib_soname_Xfixes" = "x"],
+                         [libxfixes ${notice_platform}development files not found, Xfixes won't be supported.])
+
         dnl *** Check for Xinerama extension
         if test "$ac_cv_header_X11_extensions_Xinerama_h" = "yes"
         then
@@ -1161,10 +1174,19 @@ else
     X_CFLAGS=""
     X_LIBS=""
 fi
-WINE_ERROR_WITH(x,[test "x$X_LIBS" = "x"],[X ${notice_platform}development files not found. Wine will be built
+
+if test "$enable_winemac_drv" = "no"
+then
+    WINE_ERROR_WITH(x,[test "x$X_LIBS" = "x"],
+[X ${notice_platform}development files not found. Wine will be built
 without X support, which probably isn't what you want. You will need
-to install ${notice_platform}development packages of Xlib/Xfree86 at the very least.],
-[enable_winex11_drv])
+to install ${notice_platform}development packages of Xlib at the very least.],
+                    [enable_winex11_drv])
+else
+    WINE_NOTICE_WITH(x,[test "x$X_LIBS" = "x"],
+                     [X ${notice_platform}development files not found, the X11 driver won't be supported.],
+                     [enable_winex11_drv])
+fi
 
 dnl **** Check for OpenCL ****
 if test "$ac_cv_header_CL_cl_h" = "yes"
@@ -1266,7 +1288,7 @@ then
 #include <gnutls/crypto.h>]], [[static typeof(gnutls_mac_get_key_size) *func; if (func) return 0;]])],
                 [WINE_CHECK_SONAME(gnutls,gnutls_global_init,,[GNUTLS_CFLAGS=""],[$GNUTLS_LIBS],[[libgnutls\\(-deb0\\)\\{0,1\\}]])
                  WINE_CHECK_LIB_FUNCS(gnutls_hash,[$GNUTLS_LIBS],,
-                                      [WINE_NOTICE([libgnutls ${notice_platform}development files too old, no bcrypt hash support.])])])],
+                                      [WINE_NOTICE([libgnutls ${notice_platform}development files too old, bcrypt hashes won't be supported.])])])],
             [GNUTLS_CFLAGS=""])])
 fi
 WINE_WARNING_WITH(gnutls,[test "x$ac_cv_lib_soname_gnutls" = "x"],
@@ -1481,7 +1503,7 @@ then
                  WINE_NOTICE([glib-2.0 pkgconfig configuration is for the wrong architecture, winegstreamer won't be built.])])])])
 fi
 WINE_NOTICE_WITH(gstreamer,[test "x$ac_glib2_broken" != xyes -a "x$ac_cv_lib_gstreamer_1_0_gst_pad_new" != xyes -a "x$ac_cv_header_QuickTime_ImageCompression_h" != xyes ],
-                 [gstreamer-1.0 base plugins ${notice_platform}development files not found, gstreamer support disabled])
+                 [gstreamer-1.0 base plugins ${notice_platform}development files not found, GStreamer won't be supported.])
 test "x$ac_cv_lib_gstreamer_1_0_gst_pad_new" = xyes || enable_winegstreamer=${enable_winegstreamer:-no}
 
 dnl **** Check for ALSA 1.x ****
@@ -1657,7 +1679,7 @@ then
                       AC_DEFINE_UNQUOTED(HAVE_OPENAL,1,[Define to 1 if OpenAL is available])],,)
 fi
 WINE_NOTICE_WITH(openal,[test "x$ac_cv_lib_openal" != xyes],
-                 [libopenal ${notice_platform}development files not found (or too old), OpenAL won't be supported],
+                 [libopenal ${notice_platform}development files not found (or too old), OpenAL won't be supported.],
                  [enable_openal32])
 
 dnl **** Check for openal-soft ****
@@ -1672,7 +1694,7 @@ LPALCRENDERSAMPLESSOFT x;]])],[ac_cv_have_openalsoft=yes],[ac_cv_have_openalsoft
 fi
 if test "x$ac_cv_have_openalsoft" != xyes
 then
-    WINE_NOTICE([openal-soft ${notice_platform}development files not found (or too old), XAudio2 won't be supported])
+    WINE_NOTICE([openal-soft ${notice_platform}development files not found (or too old), XAudio2 won't be supported.])
     enable_x3daudio1_0=${enable_x3daudio1_0:-no}
     enable_x3daudio1_1=${enable_x3daudio1_1:-no}
     enable_x3daudio1_2=${enable_x3daudio1_2:-no}
