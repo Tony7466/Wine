@@ -330,14 +330,8 @@ static HRESULT WINAPI OLEClipbrd_IEnumFORMATETC_Next
 
     for(i = 0; i < cfetch; i++)
     {
-      rgelt[i] = This->data->entries[This->pos++].fmtetc;
-      if(rgelt[i].ptd)
-      {
-        DVTARGETDEVICE *target = rgelt[i].ptd;
-        rgelt[i].ptd = CoTaskMemAlloc(target->tdSize);
-        if(!rgelt[i].ptd) return E_OUTOFMEMORY;
-        memcpy(rgelt[i].ptd, target, target->tdSize);
-      }
+      hres = copy_formatetc(rgelt + i, &This->data->entries[This->pos++].fmtetc);
+      if(FAILED(hres)) return hres;
     }
   }
   else
@@ -1792,35 +1786,6 @@ void OLEClipbrd_Initialize(void)
     }
 }
 
-/***********************************************************************
- * OLEClipbrd_UnInitialize()
- * Un-Initializes the OLE clipboard
- */
-void OLEClipbrd_UnInitialize(void)
-{
-    ole_clipbrd *clipbrd = theOleClipboard;
-
-    TRACE("()\n");
-
-    if ( clipbrd )
-    {
-        static const WCHAR ole32W[] = {'o','l','e','3','2',0};
-        HINSTANCE hinst = GetModuleHandleW(ole32W);
-
-        if ( clipbrd->window )
-        {
-            DestroyWindow(clipbrd->window);
-            UnregisterClassW( clipbrd_wndclass, hinst );
-        }
-
-        IStream_Release(clipbrd->marshal_data);
-        if (clipbrd->src_data) IDataObject_Release(clipbrd->src_data);
-        HeapFree(GetProcessHeap(), 0, clipbrd->cached_enum);
-        HeapFree(GetProcessHeap(), 0, clipbrd);
-        theOleClipboard = NULL;
-    }
-}
-
 /*********************************************************************
  *          set_clipboard_formats
  *
@@ -2018,6 +1983,41 @@ static HRESULT set_src_dataobject(ole_clipbrd *clipbrd, IDataObject *data)
         hr = set_clipboard_formats(clipbrd, data);
     }
     return hr;
+}
+
+/***********************************************************************
+ * OLEClipbrd_UnInitialize()
+ * Un-Initializes the OLE clipboard
+ */
+void OLEClipbrd_UnInitialize(void)
+{
+    ole_clipbrd *clipbrd = theOleClipboard;
+
+    TRACE("()\n");
+
+    if ( clipbrd )
+    {
+        static const WCHAR ole32W[] = {'o','l','e','3','2',0};
+        HINSTANCE hinst = GetModuleHandleW(ole32W);
+
+        /* OleUninitialize() does not release the reference to the dataobject, so
+           take an additional reference here.  This reference is then leaked. */
+        if (clipbrd->src_data)
+        {
+            IDataObject_AddRef(clipbrd->src_data);
+            set_src_dataobject(clipbrd, NULL);
+        }
+
+        if ( clipbrd->window )
+        {
+            DestroyWindow(clipbrd->window);
+            UnregisterClassW( clipbrd_wndclass, hinst );
+        }
+
+        IStream_Release(clipbrd->marshal_data);
+        HeapFree(GetProcessHeap(), 0, clipbrd);
+        theOleClipboard = NULL;
+    }
 }
 
 /***********************************************************************

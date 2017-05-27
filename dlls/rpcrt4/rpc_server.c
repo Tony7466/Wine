@@ -669,9 +669,12 @@ static DWORD CALLBACK RPCRT4_server_thread(LPVOID the_arg)
     {
       /* cleanup */
       cps->ops->free_wait_array(cps, objs);
+
       EnterCriticalSection(&cps->cs);
-      for (conn = cps->conn; conn; conn = conn->Next)
+      LIST_FOR_EACH_ENTRY(conn, &cps->listeners, RpcConnection, protseq_entry)
         RPCRT4_CloseConnection(conn);
+      LIST_FOR_EACH_ENTRY(conn, &cps->connections, RpcConnection, protseq_entry)
+        rpcrt4_conn_close_read(conn);
       LeaveCriticalSection(&cps->cs);
 
       if (res == 0 && !std_listen)
@@ -802,14 +805,16 @@ static RPC_STATUS RPCRT4_stop_listen(BOOL auto_listen)
 static BOOL RPCRT4_protseq_is_endpoint_registered(RpcServerProtseq *protseq, const char *endpoint)
 {
   RpcConnection *conn;
+  BOOL registered = FALSE;
   EnterCriticalSection(&protseq->cs);
-  for (conn = protseq->conn; conn; conn = conn->Next)
-  {
-    if (!endpoint || !strcmp(endpoint, conn->Endpoint))
+  LIST_FOR_EACH_ENTRY(conn, &protseq->listeners, RpcConnection, protseq_entry) {
+    if (!endpoint || !strcmp(endpoint, conn->Endpoint)) {
+      registered = TRUE;
       break;
+    }
   }
   LeaveCriticalSection(&protseq->cs);
-  return (conn != NULL);
+  return registered;
 }
 
 static RPC_STATUS RPCRT4_use_protseq(RpcServerProtseq* ps, const char *endpoint)
@@ -858,7 +863,7 @@ RPC_STATUS WINAPI RpcServerInqBindings( RPC_BINDING_VECTOR** BindingVector )
   count = 0;
   LIST_FOR_EACH_ENTRY(ps, &protseqs, RpcServerProtseq, entry) {
     EnterCriticalSection(&ps->cs);
-    for (conn = ps->conn; conn; conn = conn->Next)
+    LIST_FOR_EACH_ENTRY(conn, &ps->listeners, RpcConnection, protseq_entry)
       count++;
     LeaveCriticalSection(&ps->cs);
   }
@@ -871,7 +876,7 @@ RPC_STATUS WINAPI RpcServerInqBindings( RPC_BINDING_VECTOR** BindingVector )
     count = 0;
     LIST_FOR_EACH_ENTRY(ps, &protseqs, RpcServerProtseq, entry) {
       EnterCriticalSection(&ps->cs);
-      for (conn = ps->conn; conn; conn = conn->Next) {
+      LIST_FOR_EACH_ENTRY(conn, &ps->listeners, RpcConnection, protseq_entry) {
        RPCRT4_MakeBinding((RpcBinding**)&(*BindingVector)->BindingH[count],
                           conn);
        count++;
@@ -942,13 +947,10 @@ static RPC_STATUS alloc_serverprotoseq(UINT MaxCalls, const char *Protseq, RpcSe
   (*ps)->MaxCalls = MaxCalls;
   (*ps)->Protseq = RPCRT4_strdupA(Protseq);
   (*ps)->ops = ops;
-  (*ps)->MaxCalls = 0;
-  (*ps)->conn = NULL;
+  list_init(&(*ps)->listeners);
+  list_init(&(*ps)->connections);
   InitializeCriticalSection(&(*ps)->cs);
   (*ps)->cs.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": RpcServerProtseq.cs");
-  (*ps)->is_listening = FALSE;
-  (*ps)->mgr_mutex = NULL;
-  (*ps)->server_ready_event = NULL;
 
   list_add_head(&protseqs, &(*ps)->entry);
 

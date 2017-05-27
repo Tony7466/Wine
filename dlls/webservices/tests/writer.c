@@ -395,7 +395,7 @@ static void test_WsWriteStartElement(void)
     HRESULT hr;
     WS_XML_WRITER *writer;
     WS_XML_STRING prefix = {1, (BYTE *)"p"}, ns = {2, (BYTE *)"ns"}, ns2 = {3, (BYTE *)"ns2"};
-    WS_XML_STRING localname = {1, (BYTE *)"a"}, localname2 =  {1, (BYTE *)"b"};
+    WS_XML_STRING localname = {1, (BYTE *)"a"}, localname2 =  {1, (BYTE *)"b"}, empty = {0, NULL};
 
     hr = WsCreateWriter( NULL, 0, &writer, NULL );
     ok( hr == S_OK, "got %08x\n", hr );
@@ -469,6 +469,17 @@ static void test_WsWriteStartElement(void)
     ok( hr == S_OK, "got %08x\n", hr );
     check_output( writer, "<p:a xmlns:p=\"ns\"><b xmlns=\"ns2\"/></p:a>", __LINE__ );
 
+    hr = set_output( writer );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsWriteStartElement( writer, &empty, &localname, &empty, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    hr = WsWriteEndStartElement( writer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    hr = WsWriteEndElement( writer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    check_output( writer, "<a></a>", __LINE__ );
+
     WsFreeWriter( writer );
 }
 
@@ -476,7 +487,8 @@ static void test_WsWriteStartAttribute(void)
 {
     HRESULT hr;
     WS_XML_WRITER *writer;
-    WS_XML_STRING prefix = {1, (BYTE *)"p"}, localname = {3, (BYTE *)"str"}, ns = {2, (BYTE *)"ns"};
+    WS_XML_STRING prefix = {1, (BYTE *)"p"}, localname = {3, (BYTE *)"str"};
+    WS_XML_STRING localname2 = {3, (BYTE *)"len"}, ns = {2, (BYTE *)"ns"}, empty = {0, NULL};
     WS_XML_UTF8_TEXT text = {{WS_XML_TEXT_TYPE_UTF8}};
 
     hr = WsCreateWriter( NULL, 0, &writer, NULL );
@@ -492,9 +504,7 @@ static void test_WsWriteStartAttribute(void)
     ok( hr == E_INVALIDARG, "got %08x\n", hr );
 
     /* WsWriteStartAttribute doesn't output anything */
-    localname.length = 3;
-    localname.bytes  = (BYTE *)"len";
-    hr = WsWriteStartAttribute( writer, &prefix, &localname, &ns, FALSE, NULL );
+    hr = WsWriteStartAttribute( writer, &prefix, &localname2, &ns, FALSE, NULL );
     ok( hr == S_OK, "got %08x\n", hr );
     check_output( writer, "", __LINE__ );
 
@@ -512,6 +522,43 @@ static void test_WsWriteStartAttribute(void)
     hr = WsWriteEndElement( writer, NULL );
     ok( hr == S_OK, "got %08x\n", hr );
     check_output( writer, "<p:str p:len=\"0\" xmlns:p=\"ns\"/>", __LINE__ );
+
+    hr = set_output( writer );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsWriteStartElement( writer, &prefix, &localname, &ns, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsWriteStartAttribute( writer, &empty, &localname2, &empty, FALSE, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    hr = WsWriteEndAttribute( writer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsWriteEndElement( writer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    check_output( writer, "<p:str len=\"\" xmlns:p=\"ns\"/>", __LINE__ );
+
+    hr = set_output( writer );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsWriteStartElement( writer, &prefix, &localname, &ns, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsWriteStartAttribute( writer, NULL, &localname2, &empty, FALSE, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsWriteEndAttribute( writer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsWriteStartAttribute( writer, NULL, &localname, &ns, FALSE, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsWriteEndAttribute( writer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsWriteEndElement( writer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    check_output( writer, "<p:str len=\"\" p:str=\"\" xmlns:p=\"ns\"/>", __LINE__ );
 
     WsFreeWriter( writer );
 }
@@ -1940,9 +1987,11 @@ static void test_WsCopyNode(void)
 {
     WS_XML_STRING localname = {1, (BYTE *)"t"}, localname2 = {1, (BYTE *)"u"}, ns = {0, NULL};
     WS_XML_NODE_POSITION pos, pos2;
+    const WS_XML_NODE *node;
     WS_XML_WRITER *writer;
     WS_XML_READER *reader;
     WS_XML_BUFFER *buffer;
+    WS_BUFFERS bufs;
     WS_HEAP *heap;
     HRESULT hr;
 
@@ -1997,6 +2046,48 @@ static void test_WsCopyNode(void)
     ok( hr == S_OK, "got %08x\n", hr );
     ok( pos2.buffer == pos.buffer, "wrong buffer\n" );
     ok( pos2.node == pos.node, "wrong node\n" );
+
+    hr = WsGetReaderNode( reader, &node, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    ok( node->nodeType == WS_XML_NODE_TYPE_EOF, "got %u\n", node->nodeType );
+
+    /* reader positioned at EOF */
+    hr = WsCreateXmlBuffer( heap, NULL, 0, &buffer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsSetOutputToBuffer( writer, buffer, NULL, 0, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsCopyNode( writer, reader, NULL );
+    ok( hr == WS_E_INVALID_OPERATION, "got %08x\n", hr );
+
+    /* reader positioned at BOF */
+    hr = set_input( reader, "<v/>", sizeof("<v/>") - 1 );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsFillReader( reader, sizeof("<v/>") - 1, NULL, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsGetReaderNode( reader, &node, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    ok( node->nodeType == WS_XML_NODE_TYPE_BOF, "got %u\n", node->nodeType );
+
+    hr = set_output( writer );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsCopyNode( writer, reader, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    check_output( writer, "<v/>", __LINE__ );
+
+    hr = WsGetReaderNode( reader, &node, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    ok( node->nodeType == WS_XML_NODE_TYPE_EOF, "got %u\n", node->nodeType );
+
+    memset( &bufs, 0, sizeof(bufs) );
+    hr = WsGetWriterProperty( writer, WS_XML_WRITER_PROPERTY_BUFFERS, &bufs, sizeof(bufs), NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    ok( bufs.bufferCount == 1, "got %u\n", bufs.bufferCount );
+    ok( bufs.buffers != NULL, "buffers not set\n" );
 
     WsFreeReader( reader );
     WsFreeWriter( writer );
@@ -3039,8 +3130,10 @@ static void test_repeating_element(void)
 static const WS_XML_STRING *init_xmlstring( const char *src, WS_XML_STRING *str )
 {
     if (!src) return NULL;
-    str->length = strlen( src );
-    str->bytes  = (BYTE *)src;
+    str->length     = strlen( src );
+    str->bytes      = (BYTE *)src;
+    str->dictionary = NULL;
+    str->id         = 0;
     return str;
 }
 
@@ -3329,6 +3422,176 @@ static void test_WsWriteCharsUtf8(void)
     WsFreeWriter( writer );
 }
 
+static void check_output_bin( WS_XML_WRITER *writer, const char *expected, int len, unsigned int line )
+{
+    WS_BYTES bytes;
+    ULONG size = sizeof(bytes);
+    HRESULT hr;
+
+    memset( &bytes, 0, sizeof(bytes) );
+    hr = WsGetWriterProperty( writer, WS_XML_WRITER_PROPERTY_BYTES, &bytes, size, NULL );
+    ok( hr == S_OK, "%u: got %08x\n", line, hr );
+    ok( bytes.length == len, "%u: got %u expected %u\n", line, bytes.length, len );
+    if (bytes.length != len) return;
+    ok( !memcmp( bytes.bytes, expected, bytes.length ), "%u: got %s expected %s\n", line,
+        debugstr_bytes(bytes.bytes, bytes.length), debugstr_bytes((const BYTE *)expected, len) );
+}
+
+static void test_binary_encoding(void)
+{
+    static const char res[] =
+        {0x40,0x01,'t',0x01};
+    static const char res2[] =
+        {0x6d,0x01,'t',0x09,0x01,'p',0x02,'n','s',0x01};
+    static const char res3[] =
+        {0x41,0x02,'p','2',0x01,'t',0x09,0x02,'p','2',0x02,'n','s',0x01};
+    static const char res4[] =
+        {0x41,0x02,'p','2',0x01,'t',0x09,0x02,'p','2',0x02,'n','s',0x99,0x04,'t','e','s','t'};
+    static const char res100[] =
+        {0x40,0x01,'t',0x04,0x01,'t',0x98,0x00,0x01};
+    static const char res101[] =
+        {0x40,0x01,'t',0x35,0x01,'t',0x98,0x00,0x09,0x01,'p',0x02,'n','s',0x01};
+    static const char res102[] =
+        {0x40,0x01,'t',0x05,0x02,'p','2',0x01,'t',0x98,0x00,0x09,0x02,'p','2',0x02,'n','s',0x01};
+    static const char res103[] =
+        {0x40,0x01,'t',0x05,0x02,'p','2',0x01,'t',0x98,0x04,'t','e','s','t',0x09,0x02,'p','2',0x02,'n','s',0x01};
+    static const char res200[] =
+        {0x02,0x07,'c','o','m','m','e','n','t'};
+    WS_XML_WRITER_BINARY_ENCODING bin = {{WS_XML_WRITER_ENCODING_TYPE_BINARY}};
+    WS_XML_WRITER_BUFFER_OUTPUT buf = {{WS_XML_WRITER_OUTPUT_TYPE_BUFFER}};
+    static const char prefix[] = "p", prefix2[] = "p2";
+    static const char localname[] = "t", ns[] = "ns";
+    const WS_XML_STRING *prefix_ptr, *localname_ptr, *ns_ptr;
+    WS_XML_STRING str, str2, str3, localname2 = {1, (BYTE *)"t"}, empty = {0, NULL};
+    WS_XML_UTF8_TEXT utf8 = {{WS_XML_TEXT_TYPE_UTF8}};
+    WS_XML_COMMENT_NODE comment = {{WS_XML_NODE_TYPE_COMMENT}};
+    WS_XML_WRITER *writer;
+    HRESULT hr;
+    ULONG i;
+    static const struct
+    {
+        const char *prefix;
+        const char *localname;
+        const char *ns;
+        const char *text;
+        const char *result;
+        int         len_result;
+    }
+    elem_tests[] =
+    {
+        { NULL, localname, "", NULL, res, sizeof(res) },            /* short element */
+        { prefix, localname, ns, NULL, res2, sizeof(res2) },        /* one character prefix element */
+        { prefix2, localname, ns, NULL, res3, sizeof(res3) },       /* element */
+        { prefix2, localname, ns, "test", res4, sizeof(res4) },     /* element with text */
+    };
+    static const struct
+    {
+        const char *prefix;
+        const char *localname;
+        const char *ns;
+        const char *value;
+        const char *result;
+        int         len_result;
+    }
+    attr_tests[] =
+    {
+        { NULL, localname, "", NULL, res100, sizeof(res100) },          /* short attribute */
+        { prefix, localname, ns, NULL, res101, sizeof(res101) },        /* one character prefix attribute */
+        { prefix2, localname, ns, NULL, res102, sizeof(res102) },       /* attribute */
+        { prefix2, localname, ns, "test", res103, sizeof(res103) },     /* attribute with value */
+    };
+
+    hr = WsCreateWriter( NULL, 0, &writer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    for (i = 0; i < sizeof(elem_tests)/sizeof(elem_tests[0]); i++)
+    {
+        hr = WsSetOutput( writer, &bin.encoding, &buf.output, NULL, 0, NULL );
+        ok( hr == S_OK, "%u: got %08x\n", i, hr );
+
+        prefix_ptr = init_xmlstring( elem_tests[i].prefix, &str );
+        localname_ptr = init_xmlstring( elem_tests[i].localname, &str2 );
+        ns_ptr = init_xmlstring( elem_tests[i].ns, &str3 );
+
+        hr = WsWriteStartElement( writer, prefix_ptr, localname_ptr, ns_ptr, NULL );
+        ok( hr == S_OK, "%u: got %08x\n", i, hr );
+        if (elem_tests[i].text)
+        {
+            utf8.value.length = strlen( elem_tests[i].text );
+            utf8.value.bytes  = (BYTE *)elem_tests[i].text;
+            hr = WsWriteText( writer, &utf8.text, NULL );
+            ok( hr == S_OK, "%u: got %08x\n", i, hr );
+        }
+        hr = WsWriteEndElement( writer, NULL );
+        ok( hr == S_OK, "%u: got %08x\n", i, hr );
+        if (hr == S_OK) check_output_bin( writer, elem_tests[i].result, elem_tests[i].len_result, __LINE__ );
+    }
+
+    for (i = 0; i < sizeof(attr_tests)/sizeof(attr_tests[0]); i++)
+    {
+        hr = WsSetOutput( writer, &bin.encoding, &buf.output, NULL, 0, NULL );
+        ok( hr == S_OK, "%u: got %08x\n", i, hr );
+
+        prefix_ptr = init_xmlstring( attr_tests[i].prefix, &str );
+        localname_ptr = init_xmlstring( attr_tests[i].localname, &str2 );
+        ns_ptr = init_xmlstring( elem_tests[i].ns, &str3 );
+
+        hr = WsWriteStartElement( writer, NULL, &localname2, &empty, NULL );
+        ok( hr == S_OK, "%u: got %08x\n", i, hr );
+        hr = WsWriteStartAttribute( writer, prefix_ptr, localname_ptr, ns_ptr, FALSE, NULL );
+        ok( hr == S_OK, "%u: got %08x\n", i, hr );
+        if (attr_tests[i].value)
+        {
+            utf8.value.length = strlen( attr_tests[i].value );
+            utf8.value.bytes  = (BYTE *)attr_tests[i].value;
+            hr = WsWriteText( writer, &utf8.text, NULL );
+            ok( hr == S_OK, "%u: got %08x\n", i, hr );
+        }
+        hr = WsWriteEndAttribute( writer, NULL );
+        ok( hr == S_OK, "got %08x\n", hr );
+        hr = WsWriteEndElement( writer, NULL );
+        ok( hr == S_OK, "%u: got %08x\n", i, hr );
+        if (hr == S_OK) check_output_bin( writer, attr_tests[i].result, attr_tests[i].len_result, __LINE__ );
+    }
+
+    hr = WsSetOutput( writer, &bin.encoding, &buf.output, NULL, 0, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    comment.value.bytes   = (BYTE *)"comment";
+    comment.value.length  = sizeof("comment") - 1;
+    hr = WsWriteNode( writer, &comment.node, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    if (hr == S_OK) check_output_bin( writer, res200, sizeof(res200), __LINE__ );
+
+    WsFreeWriter( writer );
+}
+
+static void test_namespaces(void)
+{
+    WS_XML_STRING prefix = {1, (BYTE *)"p"}, prefix2 = {1, (BYTE *)"q"};
+    WS_XML_STRING localname = {1, (BYTE *)"t"}, localname2 = {1, (BYTE *)"a"};
+    WS_XML_STRING ns = {1, (BYTE *)"n"}, ns2 = {1, (BYTE *)"o"};
+    WS_XML_WRITER *writer;
+    HRESULT hr;
+
+    hr = WsCreateWriter( NULL, 0, &writer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = set_output( writer );
+    ok( hr == S_OK, "got %08x\n", hr );
+    hr = WsWriteStartElement( writer, &prefix, &localname, &ns, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    hr = WsWriteStartAttribute( writer, &prefix2, &localname2, &ns2, FALSE, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    hr = WsWriteEndAttribute( writer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    hr = WsWriteEndElement( writer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    check_output( writer, "<p:t q:a=\"\" xmlns:p=\"n\" xmlns:q=\"o\"/>", __LINE__ );
+
+    WsFreeWriter( writer );
+}
+
 START_TEST(writer)
 {
     test_WsCreateWriter();
@@ -3366,4 +3629,6 @@ START_TEST(writer)
     test_WsWriteBytes();
     test_WsWriteChars();
     test_WsWriteCharsUtf8();
+    test_binary_encoding();
+    test_namespaces();
 }

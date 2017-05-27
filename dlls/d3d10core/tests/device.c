@@ -88,6 +88,31 @@ static ULONG get_refcount(void *iface)
     return IUnknown_Release(unknown);
 }
 
+#define check_interface(a, b, c, d) check_interface_(__LINE__, a, b, c, d)
+static HRESULT check_interface_(unsigned int line, void *iface, REFIID riid, BOOL supported, BOOL is_broken)
+{
+    HRESULT hr, expected_hr, broken_hr;
+    IUnknown *unknown = iface, *out;
+
+    if (supported)
+    {
+        expected_hr = S_OK;
+        broken_hr = E_NOINTERFACE;
+    }
+    else
+    {
+        expected_hr = E_NOINTERFACE;
+        broken_hr = S_OK;
+    }
+
+    hr = IUnknown_QueryInterface(unknown, riid, (void **)&out);
+    ok_(__FILE__, line)(hr == expected_hr || broken(is_broken && hr == broken_hr),
+            "Got hr %#x, expected %#x.\n", hr, expected_hr);
+    if (SUCCEEDED(hr))
+        IUnknown_Release(out);
+    return hr;
+}
+
 static BOOL compare_float(float f, float g, unsigned int ulps)
 {
     int x = *(int *)&f;
@@ -1142,32 +1167,32 @@ static void draw_color_quad_(unsigned int line, struct d3d10core_test_context *c
 static void test_feature_level(void)
 {
     D3D_FEATURE_LEVEL feature_level;
-    ID3D11Device *device11;
-    ID3D10Device *device10;
+    ID3D10Device *d3d10_device;
+    ID3D11Device *d3d11_device;
     HRESULT hr;
 
-    if (!(device10 = create_device()))
+    if (!(d3d10_device = create_device()))
     {
         skip("Failed to create device, skipping tests.\n");
         return;
     }
 
-    hr = ID3D10Device_QueryInterface(device10, &IID_ID3D11Device, (void **)&device11);
+    hr = ID3D10Device_QueryInterface(d3d10_device, &IID_ID3D11Device, (void **)&d3d11_device);
     ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
             "Failed to query ID3D11Device interface, hr %#x.\n", hr);
     if (FAILED(hr))
     {
         win_skip("D3D11 is not available.\n");
-        ID3D10Device_Release(device10);
+        ID3D10Device_Release(d3d10_device);
         return;
     }
 
     /* Device was created by D3D10CreateDevice. */
-    feature_level = ID3D11Device_GetFeatureLevel(device11);
+    feature_level = ID3D11Device_GetFeatureLevel(d3d11_device);
     ok(feature_level == D3D_FEATURE_LEVEL_10_0, "Got unexpected feature level %#x.\n", feature_level);
 
-    ID3D11Device_Release(device11);
-    ID3D10Device_Release(device10);
+    ID3D11Device_Release(d3d11_device);
+    ID3D10Device_Release(d3d10_device);
 }
 
 static void test_device_interfaces(void)
@@ -1185,13 +1210,12 @@ static void test_device_interfaces(void)
         return;
     }
 
-    hr = ID3D10Device_QueryInterface(device, &IID_IUnknown, (void **)&iface);
-    ok(SUCCEEDED(hr), "Device should implement IUnknown interface, hr %#x.\n", hr);
-    IUnknown_Release(iface);
-
-    hr = ID3D10Device_QueryInterface(device, &IID_IDXGIObject, (void **)&iface);
-    ok(SUCCEEDED(hr), "Device should implement IDXGIObject interface, hr %#x.\n", hr);
-    IUnknown_Release(iface);
+    check_interface(device, &IID_IUnknown, TRUE, FALSE);
+    check_interface(device, &IID_IDXGIObject, TRUE, FALSE);
+    check_interface(device, &IID_IDXGIDevice1, TRUE, TRUE); /* Not available on all Windows versions. */
+    check_interface(device, &IID_ID3D10Multithread, TRUE, FALSE);
+    check_interface(device, &IID_ID3D10Device1, TRUE, TRUE); /* Not available on all Windows versions. */
+    check_interface(device, &IID_ID3D11Device, TRUE, TRUE); /* Not available on all Windows versions. */
 
     hr = ID3D10Device_QueryInterface(device, &IID_IDXGIDevice, (void **)&dxgi_device);
     ok(SUCCEEDED(hr), "Device should implement IDXGIDevice.\n");
@@ -1208,25 +1232,6 @@ static void test_device_interfaces(void)
     IUnknown_Release(dxgi_adapter);
     IUnknown_Release(dxgi_device);
 
-    hr = ID3D10Device_QueryInterface(device, &IID_IDXGIDevice1, (void **)&iface);
-    ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
-            "Device should implement IDXGIDevice1.\n");
-    if (SUCCEEDED(hr)) IUnknown_Release(iface);
-
-    hr = ID3D10Device_QueryInterface(device, &IID_ID3D10Multithread, (void **)&iface);
-    ok(SUCCEEDED(hr), "Device should implement ID3D10Multithread interface, hr %#x.\n", hr);
-    IUnknown_Release(iface);
-
-    hr = ID3D10Device_QueryInterface(device, &IID_ID3D10Device1, (void **)&iface);
-    ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
-            "Device should implement ID3D10Device1 interface, hr %#x.\n", hr);
-    if (SUCCEEDED(hr)) IUnknown_Release(iface);
-
-    hr = ID3D10Device_QueryInterface(device, &IID_ID3D11Device, (void **)&iface);
-    ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
-            "Device should implement ID3D11Device interface, hr %#x.\n", hr);
-    if (SUCCEEDED(hr)) IUnknown_Release(iface);
-
     refcount = ID3D10Device_Release(device);
     ok(!refcount, "Device has %u references left.\n", refcount);
 }
@@ -1239,7 +1244,6 @@ static void test_create_texture2d(void)
     D3D10_TEXTURE2D_DESC desc;
     ID3D10Texture2D *texture;
     UINT quality_level_count;
-    IDXGISurface *surface;
     unsigned int i;
     HRESULT hr;
 
@@ -1330,6 +1334,9 @@ static void test_create_texture2d(void)
                 FALSE, TRUE},
         {DXGI_FORMAT_D32_FLOAT,              1, D3D10_BIND_RENDER_TARGET,   0, FALSE, FALSE},
         {DXGI_FORMAT_D32_FLOAT,              1, D3D10_BIND_DEPTH_STENCIL,   0, TRUE,  FALSE},
+        {DXGI_FORMAT_R9G9B9E5_SHAREDEXP,     1, D3D10_BIND_SHADER_RESOURCE, 0, TRUE,  FALSE},
+        {DXGI_FORMAT_R9G9B9E5_SHAREDEXP,     1, D3D10_BIND_RENDER_TARGET,   0, FALSE, FALSE},
+        {DXGI_FORMAT_R9G9B9E5_SHAREDEXP,     1, D3D10_BIND_DEPTH_STENCIL,   0, FALSE, FALSE},
     };
 
     if (!(device = create_device()))
@@ -1366,9 +1373,7 @@ static void test_create_texture2d(void)
     ok(refcount == expected_refcount, "Got unexpected refcount %u, expected %u.\n", refcount, expected_refcount);
     ID3D10Device_Release(tmp);
 
-    hr = ID3D10Texture2D_QueryInterface(texture, &IID_IDXGISurface, (void **)&surface);
-    ok(SUCCEEDED(hr), "Texture should implement IDXGISurface\n");
-    if (SUCCEEDED(hr)) IDXGISurface_Release(surface);
+    check_interface(texture, &IID_IDXGISurface, TRUE, FALSE);
     ID3D10Texture2D_Release(texture);
 
     desc.MipLevels = 0;
@@ -1398,19 +1403,14 @@ static void test_create_texture2d(void)
     ok(desc.CPUAccessFlags == 0, "Got unexpected CPUAccessFlags %u.\n", desc.CPUAccessFlags);
     ok(desc.MiscFlags == 0, "Got unexpected MiscFlags %u.\n", desc.MiscFlags);
 
-    hr = ID3D10Texture2D_QueryInterface(texture, &IID_IDXGISurface, (void **)&surface);
-    ok(FAILED(hr), "Texture should not implement IDXGISurface\n");
-    if (SUCCEEDED(hr)) IDXGISurface_Release(surface);
+    check_interface(texture, &IID_IDXGISurface, FALSE, FALSE);
     ID3D10Texture2D_Release(texture);
 
     desc.MipLevels = 1;
     desc.ArraySize = 2;
     hr = ID3D10Device_CreateTexture2D(device, &desc, NULL, &texture);
     ok(SUCCEEDED(hr), "Failed to create a 2d texture, hr %#x\n", hr);
-
-    hr = ID3D10Texture2D_QueryInterface(texture, &IID_IDXGISurface, (void **)&surface);
-    ok(FAILED(hr), "Texture should not implement IDXGISurface\n");
-    if (SUCCEEDED(hr)) IDXGISurface_Release(surface);
+    check_interface(texture, &IID_IDXGISurface, FALSE, FALSE);
     ID3D10Texture2D_Release(texture);
 
     ID3D10Device_CheckMultisampleQualityLevels(device, DXGI_FORMAT_R8G8B8A8_UNORM, 2, &quality_level_count);
@@ -1458,7 +1458,6 @@ static void test_texture2d_interfaces(void)
     ID3D11Texture2D *d3d11_texture;
     D3D10_TEXTURE2D_DESC desc;
     ID3D10Texture2D *texture;
-    IDXGISurface *surface;
     ID3D10Device *device;
     unsigned int i;
     ULONG refcount;
@@ -1503,16 +1502,9 @@ static void test_texture2d_interfaces(void)
 
     hr = ID3D10Device_CreateTexture2D(device, &desc, NULL, &texture);
     ok(SUCCEEDED(hr), "Failed to create a 2d texture, hr %#x.\n", hr);
-
-    hr = ID3D10Texture2D_QueryInterface(texture, &IID_IDXGISurface, (void **)&surface);
-    ok(hr == E_NOINTERFACE, "Texture should not implement IDXGISurface.\n");
-
-    hr = ID3D10Texture2D_QueryInterface(texture, &IID_ID3D11Texture2D, (void **)&d3d11_texture);
-    ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
-            "Texture should implement ID3D11Texture2D.\n");
-    if (SUCCEEDED(hr)) ID3D11Texture2D_Release(d3d11_texture);
+    check_interface(texture, &IID_IDXGISurface, FALSE, FALSE);
+    hr = check_interface(texture, &IID_ID3D11Texture2D, TRUE, TRUE); /* Not available on all Windows versions. */
     ID3D10Texture2D_Release(texture);
-
     if (FAILED(hr))
     {
         win_skip("D3D11 is not available, skipping tests.\n");
@@ -1548,10 +1540,7 @@ static void test_texture2d_interfaces(void)
             continue;
         }
 
-        hr = ID3D10Texture2D_QueryInterface(texture, &IID_IDXGISurface, (void **)&surface);
-        ok(SUCCEEDED(hr), "Test %u: Texture should implement IDXGISurface.\n", i);
-        IDXGISurface_Release(surface);
-
+        check_interface(texture, &IID_IDXGISurface, TRUE, FALSE);
         hr = ID3D10Texture2D_QueryInterface(texture, &IID_ID3D11Texture2D, (void **)&d3d11_texture);
         ok(SUCCEEDED(hr), "Test %u: Texture should implement ID3D11Texture2D.\n", i);
         ID3D10Texture2D_Release(texture);
@@ -1600,7 +1589,6 @@ static void test_create_texture3d(void)
     ID3D10Device *device, *tmp;
     D3D10_TEXTURE3D_DESC desc;
     ID3D10Texture3D *texture;
-    IDXGISurface *surface;
     unsigned int i;
     HRESULT hr;
 
@@ -1622,6 +1610,9 @@ static void test_create_texture3d(void)
         {DXGI_FORMAT_R8G8B8A8_UNORM,        D3D10_BIND_DEPTH_STENCIL,   FALSE, FALSE},
         {DXGI_FORMAT_D24_UNORM_S8_UINT,     D3D10_BIND_RENDER_TARGET,   FALSE, FALSE},
         {DXGI_FORMAT_D32_FLOAT,             D3D10_BIND_RENDER_TARGET,   FALSE, FALSE},
+        {DXGI_FORMAT_R9G9B9E5_SHAREDEXP,    D3D10_BIND_SHADER_RESOURCE, TRUE,  FALSE},
+        {DXGI_FORMAT_R9G9B9E5_SHAREDEXP,    D3D10_BIND_RENDER_TARGET,   FALSE, FALSE},
+        {DXGI_FORMAT_R9G9B9E5_SHAREDEXP,    D3D10_BIND_DEPTH_STENCIL,   FALSE, FALSE},
     };
 
     if (!(device = create_device()))
@@ -1656,9 +1647,7 @@ static void test_create_texture3d(void)
     ok(refcount == expected_refcount, "Got unexpected refcount %u, expected %u.\n", refcount, expected_refcount);
     ID3D10Device_Release(tmp);
 
-    hr = ID3D10Texture3D_QueryInterface(texture, &IID_IDXGISurface, (void **)&surface);
-    ok(FAILED(hr), "Texture should not implement IDXGISurface.\n");
-    if (SUCCEEDED(hr)) IDXGISurface_Release(surface);
+    check_interface(texture, &IID_IDXGISurface, FALSE, FALSE);
     ID3D10Texture3D_Release(texture);
 
     desc.MipLevels = 0;
@@ -1686,9 +1675,7 @@ static void test_create_texture3d(void)
     ok(desc.CPUAccessFlags == 0, "Got unexpected CPUAccessFlags %u.\n", desc.CPUAccessFlags);
     ok(desc.MiscFlags == 0, "Got unexpected MiscFlags %u.\n", desc.MiscFlags);
 
-    hr = ID3D10Texture3D_QueryInterface(texture, &IID_IDXGISurface, (void **)&surface);
-    ok(FAILED(hr), "Texture should not implement IDXGISurface.\n");
-    if (SUCCEEDED(hr)) IDXGISurface_Release(surface);
+    check_interface(texture, &IID_IDXGISurface, FALSE, FALSE);
     ID3D10Texture3D_Release(texture);
 
     desc.MipLevels = 1;
@@ -1712,12 +1699,12 @@ static void test_create_texture3d(void)
 static void test_create_buffer(void)
 {
     ID3D11Buffer *d3d11_buffer;
+    HRESULT expected_hr, hr;
     D3D10_BUFFER_DESC desc;
     ID3D10Buffer *buffer;
     ID3D10Device *device;
     unsigned int i;
     ULONG refcount;
-    HRESULT hr;
 
     static const struct test
     {
@@ -1765,12 +1752,8 @@ static void test_create_buffer(void)
     }
 
     buffer = create_buffer(device, D3D10_BIND_VERTEX_BUFFER, 1024, NULL);
-    hr = ID3D10Buffer_QueryInterface(buffer, &IID_ID3D11Buffer, (void **)&d3d11_buffer);
-    ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
-            "Buffer should implement ID3D11Buffer.\n");
-    if (SUCCEEDED(hr)) ID3D11Buffer_Release(d3d11_buffer);
+    hr = check_interface(buffer, &IID_ID3D11Buffer, TRUE, TRUE); /* Not available on all Windows versions. */
     ID3D10Buffer_Release(buffer);
-
     if (FAILED(hr))
     {
         win_skip("D3D11 is not available.\n");
@@ -1837,6 +1820,18 @@ static void test_create_buffer(void)
     if (SUCCEEDED(hr))
         ID3D10Buffer_Release(buffer);
 
+    memset(&desc, 0, sizeof(desc));
+    desc.BindFlags = D3D10_BIND_CONSTANT_BUFFER;
+    for (i = 0; i <= 32; ++i)
+    {
+        desc.ByteWidth = i;
+        expected_hr = !i || i % 16 ? E_INVALIDARG : S_OK;
+        hr = ID3D10Device_CreateBuffer(device, &desc, NULL, &buffer);
+        ok(hr == expected_hr, "Got unexpected hr %#x for constant buffer size %u.\n", hr, i);
+        if (SUCCEEDED(hr))
+            ID3D10Buffer_Release(buffer);
+    }
+
     refcount = ID3D10Device_Release(device);
     ok(!refcount, "Device has %u references left.\n", refcount);
 }
@@ -1849,7 +1844,6 @@ static void test_create_depthstencil_view(void)
     ID3D10DepthStencilView *dsview;
     ID3D10Device *device, *tmp;
     ID3D10Texture2D *texture;
-    IUnknown *iface;
     unsigned int i;
     HRESULT hr;
 
@@ -2012,10 +2006,8 @@ static void test_create_depthstencil_view(void)
         refcount = get_refcount(texture);
         ok(refcount == expected_refcount, "Got refcount %u, expected %u.\n", refcount, expected_refcount);
 
-        hr = ID3D10DepthStencilView_QueryInterface(dsview, &IID_ID3D11DepthStencilView, (void **)&iface);
-        ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
-                "Test %u: Depth stencil view should implement ID3D11DepthStencilView.\n", i);
-        if (SUCCEEDED(hr)) IUnknown_Release(iface);
+        /* Not available on all Windows versions. */
+        check_interface(dsview, &IID_ID3D11DepthStencilView, TRUE, TRUE);
 
         memset(&dsv_desc, 0, sizeof(dsv_desc));
         ID3D10DepthStencilView_GetDesc(dsview, &dsv_desc);
@@ -2120,14 +2112,13 @@ static void test_create_rendertarget_view(void)
     D3D10_TEXTURE2D_DESC texture2d_desc;
     D3D10_SUBRESOURCE_DATA data = {0};
     ULONG refcount, expected_refcount;
-    D3D10_BUFFER_DESC buffer_desc;
     ID3D10RenderTargetView *rtview;
+    D3D10_BUFFER_DESC buffer_desc;
     ID3D10Device *device, *tmp;
     ID3D10Texture3D *texture3d;
     ID3D10Texture2D *texture2d;
     ID3D10Resource *texture;
     ID3D10Buffer *buffer;
-    IUnknown *iface;
     unsigned int i;
     HRESULT hr;
 
@@ -2310,10 +2301,8 @@ static void test_create_rendertarget_view(void)
     ok(refcount == expected_refcount, "Got unexpected refcount %u, expected %u.\n", refcount, expected_refcount);
     ID3D10Device_Release(tmp);
 
-    hr = ID3D10RenderTargetView_QueryInterface(rtview, &IID_ID3D11RenderTargetView, (void **)&iface);
-    ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
-            "Render target view should implement ID3D11RenderTargetView.\n");
-    if (SUCCEEDED(hr)) IUnknown_Release(iface);
+    /* Not available on all Windows versions. */
+    check_interface(rtview, &IID_ID3D11RenderTargetView, TRUE, TRUE);
 
     ID3D10RenderTargetView_Release(rtview);
     ID3D10Buffer_Release(buffer);
@@ -2375,10 +2364,8 @@ static void test_create_rendertarget_view(void)
         refcount = get_refcount(texture);
         ok(refcount == expected_refcount, "Got refcount %u, expected %u.\n", refcount, expected_refcount);
 
-        hr = ID3D10RenderTargetView_QueryInterface(rtview, &IID_ID3D11RenderTargetView, (void **)&iface);
-        ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
-                "Test %u: Render target view should implement ID3D11RenderTargetView.\n", i);
-        if (SUCCEEDED(hr)) IUnknown_Release(iface);
+        /* Not available on all Windows versions. */
+        check_interface(rtview, &IID_ID3D11RenderTargetView, TRUE, TRUE);
 
         memset(&rtv_desc, 0, sizeof(rtv_desc));
         ID3D10RenderTargetView_GetDesc(rtview, &rtv_desc);
@@ -2772,7 +2759,6 @@ static void test_create_shader_resource_view(void)
     ID3D10Texture2D *texture2d;
     ID3D10Resource *texture;
     ID3D10Buffer *buffer;
-    IUnknown *iface;
     unsigned int i;
     HRESULT hr;
 
@@ -2931,14 +2917,9 @@ static void test_create_shader_resource_view(void)
     ok(refcount == expected_refcount, "Got unexpected refcount %u, expected %u.\n", refcount, expected_refcount);
     ID3D10Device_Release(tmp);
 
-    hr = ID3D10ShaderResourceView_QueryInterface(srview, &IID_ID3D10ShaderResourceView1, (void **)&iface);
-    ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
-            "Shader resource view should implement ID3D10ShaderResourceView1.\n");
-    if (SUCCEEDED(hr)) IUnknown_Release(iface);
-    hr = ID3D10ShaderResourceView_QueryInterface(srview, &IID_ID3D11ShaderResourceView, (void **)&iface);
-    ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
-            "Shader resource view should implement ID3D11ShaderResourceView.\n");
-    if (SUCCEEDED(hr)) IUnknown_Release(iface);
+    /* Not available on all Windows versions. */
+    check_interface(srview, &IID_ID3D10ShaderResourceView1, TRUE, TRUE);
+    check_interface(srview, &IID_ID3D11ShaderResourceView, TRUE, TRUE);
 
     ID3D10ShaderResourceView_Release(srview);
     ID3D10Buffer_Release(buffer);
@@ -3003,14 +2984,9 @@ static void test_create_shader_resource_view(void)
         refcount = get_refcount(texture);
         ok(refcount == expected_refcount, "Got refcount %u, expected %u.\n", refcount, expected_refcount);
 
-        hr = ID3D10ShaderResourceView_QueryInterface(srview, &IID_ID3D10ShaderResourceView1, (void **)&iface);
-        ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
-                "Test %u: Shader resource view should implement ID3D10ShaderResourceView1.\n", i);
-        if (SUCCEEDED(hr)) IUnknown_Release(iface);
-        hr = ID3D10ShaderResourceView_QueryInterface(srview, &IID_ID3D11ShaderResourceView, (void **)&iface);
-        ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
-                "Test %u: Shader resource view should implement ID3D11ShaderResourceView.\n", i);
-        if (SUCCEEDED(hr)) IUnknown_Release(iface);
+        /* Not available on all Windows versions. */
+        check_interface(srview, &IID_ID3D10ShaderResourceView1, TRUE, TRUE);
+        check_interface(srview, &IID_ID3D11ShaderResourceView, TRUE, TRUE);
 
         memset(&srv_desc, 0, sizeof(srv_desc));
         ID3D10ShaderResourceView_GetDesc(srview, &srv_desc);
@@ -3152,22 +3128,13 @@ float4 main(const float4 color : COLOR) : SV_TARGET
 #endif
     static const DWORD ps_4_0[] =
     {
-        0x43425844, 0x4da9446f, 0xfbe1f259, 0x3fdb3009, 0x517521fa, 0x00000001, 0x000001ac,
-        0x00000005, 0x00000034, 0x0000008c, 0x000000bc, 0x000000f0, 0x00000130, 0x46454452,
-        0x00000050, 0x00000000, 0x00000000, 0x00000000, 0x0000001c, 0xffff0400, 0x00000100,
-        0x0000001c, 0x7263694d, 0x666f736f, 0x52282074, 0x4c482029, 0x53204c53, 0x65646168,
-        0x6f432072, 0x6c69706d, 0x39207265, 0x2e39322e, 0x2e323539, 0x31313133, 0xababab00,
-        0x4e475349, 0x00000028, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000,
-        0x00000003, 0x00000000, 0x00000f0f, 0x4f4c4f43, 0xabab0052, 0x4e47534f, 0x0000002c,
-        0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003, 0x00000000,
-        0x0000000f, 0x545f5653, 0x45475241, 0xabab0054, 0x52444853, 0x00000038, 0x00000040,
-        0x0000000e, 0x03001062, 0x001010f2, 0x00000000, 0x03000065, 0x001020f2, 0x00000000,
-        0x05000036, 0x001020f2, 0x00000000, 0x00101e46, 0x00000000, 0x0100003e, 0x54415453,
-        0x00000074, 0x00000002, 0x00000000, 0x00000000, 0x00000002, 0x00000000, 0x00000000,
-        0x00000000, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
-        0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000001,
-        0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
-        0x00000000, 0x00000000,
+        0x43425844, 0x08c2b568, 0x17d33120, 0xb7d82948, 0x13a570fb, 0x00000001, 0x000000d0, 0x00000003,
+        0x0000002c, 0x0000005c, 0x00000090, 0x4e475349, 0x00000028, 0x00000001, 0x00000008, 0x00000020,
+        0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x00000f0f, 0x4f4c4f43, 0xabab0052, 0x4e47534f,
+        0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003, 0x00000000,
+        0x0000000f, 0x545f5653, 0x45475241, 0xabab0054, 0x52444853, 0x00000038, 0x00000040, 0x0000000e,
+        0x03001062, 0x001010f2, 0x00000000, 0x03000065, 0x001020f2, 0x00000000, 0x05000036, 0x001020f2,
+        0x00000000, 0x00101e46, 0x00000000, 0x0100003e,
     };
 
 #if 0
@@ -3219,7 +3186,6 @@ void main(point float4 vin[1] : POSITION, inout TriangleStream<gs_out> vout)
     ID3D10GeometryShader *gs;
     ID3D10VertexShader *vs;
     ID3D10PixelShader *ps;
-    IUnknown *iface;
     HRESULT hr;
 
     if (!(device = create_device()))
@@ -3243,10 +3209,8 @@ void main(point float4 vin[1] : POSITION, inout TriangleStream<gs_out> vout)
     ok(refcount == expected_refcount, "Got unexpected refcount %u, expected %u.\n", refcount, expected_refcount);
     ID3D10Device_Release(tmp);
 
-    hr = ID3D10VertexShader_QueryInterface(vs, &IID_ID3D11VertexShader, (void **)&iface);
-    ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
-            "Vertex shader should implement ID3D11VertexShader.\n");
-    if (SUCCEEDED(hr)) IUnknown_Release(iface);
+    /* Not available on all Windows versions. */
+    check_interface(vs, &IID_ID3D11VertexShader, TRUE, TRUE);
 
     refcount = ID3D10VertexShader_Release(vs);
     ok(!refcount, "Vertex shader has %u references left.\n", refcount);
@@ -3275,10 +3239,8 @@ void main(point float4 vin[1] : POSITION, inout TriangleStream<gs_out> vout)
     ok(refcount == expected_refcount, "Got unexpected refcount %u, expected %u.\n", refcount, expected_refcount);
     ID3D10Device_Release(tmp);
 
-    hr = ID3D10PixelShader_QueryInterface(ps, &IID_ID3D11PixelShader, (void **)&iface);
-    ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
-            "Pixel shader should implement ID3D11PixelShader.\n");
-    if (SUCCEEDED(hr)) IUnknown_Release(iface);
+    /* Not available on all Windows versions. */
+    check_interface(ps, &IID_ID3D11PixelShader, TRUE, TRUE);
 
     refcount = ID3D10PixelShader_Release(ps);
     ok(!refcount, "Pixel shader has %u references left.\n", refcount);
@@ -3298,10 +3260,8 @@ void main(point float4 vin[1] : POSITION, inout TriangleStream<gs_out> vout)
     ok(refcount == expected_refcount, "Got unexpected refcount %u, expected %u.\n", refcount, expected_refcount);
     ID3D10Device_Release(tmp);
 
-    hr = ID3D10GeometryShader_QueryInterface(gs, &IID_ID3D11GeometryShader, (void **)&iface);
-    ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
-            "Geometry shader should implement ID3D11GeometryShader.\n");
-    if (SUCCEEDED(hr)) IUnknown_Release(iface);
+    /* Not available on all Windows versions. */
+    check_interface(gs, &IID_ID3D11GeometryShader, TRUE, TRUE);
 
     refcount = ID3D10GeometryShader_Release(gs);
     ok(!refcount, "Geometry shader has %u references left.\n", refcount);
@@ -3516,7 +3476,6 @@ static void test_create_blend_state(void)
     D3D10_BLEND_DESC blend_desc;
     ID3D11Device *d3d11_device;
     ID3D10Device *device, *tmp;
-    IUnknown *iface;
     unsigned int i;
     HRESULT hr;
 
@@ -3558,10 +3517,8 @@ static void test_create_blend_state(void)
     ok(refcount == expected_refcount, "Got unexpected refcount %u, expected %u.\n", refcount, expected_refcount);
     ID3D10Device_Release(tmp);
 
-    hr = ID3D10BlendState_QueryInterface(blend_state1, &IID_ID3D10BlendState1, (void **)&iface);
-    ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
-            "Blend state should implement ID3D10BlendState1.\n");
-    if (SUCCEEDED(hr)) IUnknown_Release(iface);
+    /* Not available on all Windows versions. */
+    check_interface(blend_state1, &IID_ID3D10BlendState1, TRUE, TRUE);
 
     hr = ID3D10Device_QueryInterface(device, &IID_ID3D11Device, (void **)&d3d11_device);
     ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
@@ -3879,7 +3836,6 @@ static void test_create_query(void)
     ID3D10Device *device, *tmp;
     HRESULT hr, expected_hr;
     ID3D10Query *query;
-    IUnknown *iface;
     unsigned int i;
 
     if (!(device = create_device()))
@@ -3909,12 +3865,8 @@ static void test_create_query(void)
         if (FAILED(hr))
             continue;
 
-        expected_hr = tests[i].is_predicate ? S_OK : E_NOINTERFACE;
-        hr = ID3D10Query_QueryInterface(query, &IID_ID3D10Predicate, (void **)&predicate);
+        check_interface(query, &IID_ID3D10Predicate, tests[i].is_predicate, FALSE);
         ID3D10Query_Release(query);
-        ok(hr == expected_hr, "Got unexpected hr %#x for query type %u.\n", hr, query_desc.Query);
-        if (SUCCEEDED(hr))
-            ID3D10Predicate_Release(predicate);
 
         expected_hr = tests[i].is_predicate ? S_FALSE : E_INVALIDARG;
         hr = ID3D10Device_CreatePredicate(device, &query_desc, NULL);
@@ -3940,10 +3892,8 @@ static void test_create_query(void)
     refcount = get_refcount(device);
     ok(refcount == expected_refcount, "Got unexpected refcount %u, expected %u.\n", refcount, expected_refcount);
     ID3D10Device_Release(tmp);
-    hr = ID3D10Predicate_QueryInterface(predicate, &IID_ID3D11Predicate, (void **)&iface);
-    ok(SUCCEEDED(hr) || broken(hr == E_NOINTERFACE) /* Not available on all Windows versions. */,
-            "Predicate should implement ID3D11Predicate.\n");
-    if (SUCCEEDED(hr)) IUnknown_Release(iface);
+    /* Not available on all Windows versions. */
+    check_interface(predicate, &IID_ID3D11Predicate, TRUE, TRUE);
     ID3D10Predicate_Release(predicate);
 
     refcount = ID3D10Device_Release(device);
@@ -5799,6 +5749,13 @@ static void test_texture(void)
          40,  30,  20,  10,
         250, 210, 155, 190,
     };
+    static const DWORD r9g9b9e5_data[] =
+    {
+        0x80000100, 0x80020000, 0x84000000, 0x84000100,
+        0x78000100, 0x78020000, 0x7c000000, 0x78020100,
+        0x70000133, 0x70026600, 0x74cc0000, 0x74cc0133,
+        0x6800019a, 0x68033400, 0x6e680000, 0x6e6b359a,
+    };
     static const struct texture rgba_texture =
     {
         4, 4, 3, 1, DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -5842,6 +5799,8 @@ static void test_texture(void)
             {{r32_float, 4 * sizeof(*r32_float)}}};
     static const struct texture r32u_typeless = {4, 4, 1, 1, DXGI_FORMAT_R32_TYPELESS,
             {{r32_uint, 4 * sizeof(*r32_uint)}}};
+    static const struct texture r9g9b9e5_texture = {4, 4, 1, 1, DXGI_FORMAT_R9G9B9E5_SHAREDEXP,
+            {{r9g9b9e5_data, 4 * sizeof(*r9g9b9e5_data)}}};
     static const DWORD red_colors[] =
     {
         0xff0000ff, 0xff0000ff, 0xff0000ff, 0xff0000ff,
@@ -5933,6 +5892,13 @@ static void test_texture(void)
         0x01000028, 0x0100001e, 0x01000014, 0x0100000a,
         0x010000fa, 0x010000d2, 0x0100009b, 0x010000be,
     };
+    static const DWORD r9g9b9e5_colors[16] =
+    {
+        0xff0000ff, 0xff00ff00, 0xffff0000, 0xffff00ff,
+        0xff00007f, 0xff007f00, 0xff7f0000, 0xff007f7f,
+        0xff00004c, 0xff004c00, 0xff4c0000, 0xff4c004c,
+        0xff000033, 0xff003300, 0xff330000, 0xff333333,
+    };
     static const DWORD zero_colors[4 * 4] = {0};
     static const float red[] = {1.0f, 0.0f, 0.0f, 0.5f};
 
@@ -5968,6 +5934,7 @@ static void test_texture(void)
         {&ps_ld,              &bc1_texture_srgb, POINT,        0.0f, 0.0f,    0.0f,  0.0f, bc_colors},
         {&ps_ld,              &bc2_texture_srgb, POINT,        0.0f, 0.0f,    0.0f,  0.0f, bc_colors},
         {&ps_ld,              &bc3_texture_srgb, POINT,        0.0f, 0.0f,    0.0f,  0.0f, bc_colors},
+        {&ps_ld,              &r9g9b9e5_texture, POINT,        0.0f, 0.0f,    0.0f,  0.0f, r9g9b9e5_colors},
         {&ps_ld,              NULL,              POINT,        0.0f, 0.0f,    0.0f,  0.0f, zero_colors},
         {&ps_ld,              NULL,              POINT,        0.0f, 0.0f, MIP_MAX,  0.0f, zero_colors},
         {&ps_ld_sint8,        &sint8_texture,    POINT,        0.0f, 0.0f,    0.0f,  0.0f, sint8_colors},
@@ -5983,6 +5950,7 @@ static void test_texture(void)
         {&ps_sample,          &rgba_texture,     POINT,        8.0f, 0.0f, MIP_MAX,  0.0f, level_1_colors},
         {&ps_sample,          &srgb_texture,     POINT,        0.0f, 0.0f,    0.0f,  0.0f, srgb_colors},
         {&ps_sample,          &a8_texture,       POINT,        0.0f, 0.0f,    0.0f,  0.0f, a8_colors},
+        {&ps_sample,          &r9g9b9e5_texture, POINT,        0.0f, 0.0f,    0.0f,  0.0f, r9g9b9e5_colors},
         {&ps_sample,          NULL,              POINT,        0.0f, 0.0f,    0.0f,  0.0f, zero_colors},
         {&ps_sample,          NULL,              POINT,        0.0f, 0.0f, MIP_MAX,  0.0f, zero_colors},
         {&ps_sample_b,        &rgba_texture,     POINT,        0.0f, 0.0f, MIP_MAX,  0.0f, rgba_level_0},
@@ -8417,29 +8385,19 @@ static void test_swapchain_flip(void)
             return t1.Sample(s, p);
         }
 #endif
-        0x43425844, 0x1733542c, 0xf74c6b6a, 0x0fb11eac, 0x76f6a999, 0x00000001, 0x000002cc, 0x00000005,
-        0x00000034, 0x000000f4, 0x00000128, 0x0000015c, 0x00000250, 0x46454452, 0x000000b8, 0x00000000,
-        0x00000000, 0x00000003, 0x0000001c, 0xffff0400, 0x00000100, 0x00000084, 0x0000007c, 0x00000003,
-        0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000001, 0x00000000, 0x0000007e, 0x00000002,
-        0x00000005, 0x00000004, 0xffffffff, 0x00000000, 0x00000001, 0x0000000c, 0x00000081, 0x00000002,
-        0x00000005, 0x00000004, 0xffffffff, 0x00000001, 0x00000001, 0x0000000c, 0x30740073, 0x00317400,
-        0x7263694d, 0x666f736f, 0x52282074, 0x4c482029, 0x53204c53, 0x65646168, 0x6f432072, 0x6c69706d,
-        0x39207265, 0x2e39322e, 0x2e323539, 0x31313133, 0xababab00, 0x4e475349, 0x0000002c, 0x00000001,
-        0x00000008, 0x00000020, 0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x0000010f, 0x505f5653,
-        0x5449534f, 0x004e4f49, 0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000,
-        0x00000000, 0x00000003, 0x00000000, 0x0000000f, 0x545f5653, 0x65677261, 0xabab0074, 0x52444853,
-        0x000000ec, 0x00000040, 0x0000003b, 0x0300005a, 0x00106000, 0x00000000, 0x04001858, 0x00107000,
-        0x00000000, 0x00005555, 0x04001858, 0x00107000, 0x00000001, 0x00005555, 0x04002064, 0x00101012,
-        0x00000000, 0x00000001, 0x03000065, 0x001020f2, 0x00000000, 0x02000068, 0x00000001, 0x07000031,
-        0x00100012, 0x00000000, 0x0010100a, 0x00000000, 0x00004001, 0x43a00000, 0x0304001f, 0x0010000a,
-        0x00000000, 0x0c000045, 0x001020f2, 0x00000000, 0x00004002, 0x3f000000, 0x3f000000, 0x00000000,
-        0x00000000, 0x00107e46, 0x00000000, 0x00106000, 0x00000000, 0x0100003e, 0x01000015, 0x0c000045,
+        0x43425844, 0xc00961ea, 0x48558efd, 0x5eec7aed, 0xb597e6d1, 0x00000001, 0x00000188, 0x00000003,
+        0x0000002c, 0x00000060, 0x00000094, 0x4e475349, 0x0000002c, 0x00000001, 0x00000008, 0x00000020,
+        0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x0000010f, 0x505f5653, 0x5449534f, 0x004e4f49,
+        0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003,
+        0x00000000, 0x0000000f, 0x545f5653, 0x65677261, 0xabab0074, 0x52444853, 0x000000ec, 0x00000040,
+        0x0000003b, 0x0300005a, 0x00106000, 0x00000000, 0x04001858, 0x00107000, 0x00000000, 0x00005555,
+        0x04001858, 0x00107000, 0x00000001, 0x00005555, 0x04002064, 0x00101012, 0x00000000, 0x00000001,
+        0x03000065, 0x001020f2, 0x00000000, 0x02000068, 0x00000001, 0x07000031, 0x00100012, 0x00000000,
+        0x0010100a, 0x00000000, 0x00004001, 0x43a00000, 0x0304001f, 0x0010000a, 0x00000000, 0x0c000045,
         0x001020f2, 0x00000000, 0x00004002, 0x3f000000, 0x3f000000, 0x00000000, 0x00000000, 0x00107e46,
-        0x00000001, 0x00106000, 0x00000000, 0x0100003e, 0x54415453, 0x00000074, 0x00000007, 0x00000001,
-        0x00000000, 0x00000002, 0x00000001, 0x00000000, 0x00000000, 0x00000002, 0x00000001, 0x00000000,
-        0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000002, 0x00000000, 0x00000000, 0x00000000,
-        0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
-        0x00000000, 0x00000000, 0x00000000
+        0x00000000, 0x00106000, 0x00000000, 0x0100003e, 0x01000015, 0x0c000045, 0x001020f2, 0x00000000,
+        0x00004002, 0x3f000000, 0x3f000000, 0x00000000, 0x00000000, 0x00107e46, 0x00000001, 0x00106000,
+        0x00000000, 0x0100003e,
     };
     static const struct vec2 quad[] =
     {
@@ -9257,6 +9215,120 @@ static void test_sm4_breakc_instruction(void)
 
     hr = ID3D10Device_CreatePixelShader(device, ps_breakc_z_code, sizeof(ps_breakc_z_code), &ps);
     ok(SUCCEEDED(hr), "Failed to create breakc_z pixel shader, hr %#x.\n", hr);
+    ID3D10Device_PSSetShader(device, ps);
+    draw_quad(&test_context);
+    check_texture_color(test_context.backbuffer, 0xff00ff00, 0);
+    ID3D10PixelShader_Release(ps);
+
+    release_test_context(&test_context);
+}
+
+static void test_sm4_continuec_instruction(void)
+{
+    struct d3d10core_test_context test_context;
+    ID3D10PixelShader *ps;
+    ID3D10Device *device;
+    HRESULT hr;
+
+    /* To get fxc to output continuec_z/continuec_nz instead of an if-block
+     * with a normal continue inside, the shaders have been compiled with
+     * the /Gfa flag. */
+    static const DWORD ps_continuec_nz_code[] =
+    {
+#if 0
+        float4 main() : SV_TARGET
+        {
+            uint counter = 0;
+            int i = -1;
+
+            while (i < 255) {
+                ++i;
+
+                if (i != 0)
+                    continue;
+
+                ++counter;
+            }
+
+            if (counter == 1)
+                return float4(0.0f, 1.0f, 0.0f, 1.0f);
+            else
+                return float4(1.0f, 0.0f, 0.0f, 1.0f);
+        }
+#endif
+        0x43425844, 0xaadaac96, 0xbe00fdfb, 0x29356be0, 0x47e79bd6, 0x00000001, 0x00000208, 0x00000003,
+        0x0000002c, 0x0000003c, 0x00000070, 0x4e475349, 0x00000008, 0x00000000, 0x00000008, 0x4e47534f,
+        0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003, 0x00000000,
+        0x0000000f, 0x545f5653, 0x45475241, 0xabab0054, 0x52444853, 0x00000190, 0x00000040, 0x00000064,
+        0x03000065, 0x001020f2, 0x00000000, 0x02000068, 0x00000003, 0x08000036, 0x00100032, 0x00000000,
+        0x00004002, 0x00000000, 0xffffffff, 0x00000000, 0x00000000, 0x01000030, 0x07000021, 0x00100042,
+        0x00000000, 0x0010001a, 0x00000000, 0x00004001, 0x000000ff, 0x03040003, 0x0010002a, 0x00000000,
+        0x0700001e, 0x00100022, 0x00000001, 0x0010001a, 0x00000000, 0x00004001, 0x00000001, 0x09000037,
+        0x00100022, 0x00000002, 0x0010001a, 0x00000001, 0x0010001a, 0x00000001, 0x00004001, 0x00000000,
+        0x05000036, 0x00100012, 0x00000002, 0x0010000a, 0x00000000, 0x05000036, 0x00100032, 0x00000000,
+        0x00100046, 0x00000002, 0x05000036, 0x00100042, 0x00000000, 0x0010001a, 0x00000001, 0x03040008,
+        0x0010002a, 0x00000000, 0x0700001e, 0x00100012, 0x00000001, 0x0010000a, 0x00000000, 0x00004001,
+        0x00000001, 0x05000036, 0x00100032, 0x00000000, 0x00100046, 0x00000001, 0x01000016, 0x07000020,
+        0x00100012, 0x00000000, 0x0010000a, 0x00000000, 0x00004001, 0x00000001, 0x08000036, 0x001020f2,
+        0x00000000, 0x00004002, 0x00000000, 0x3f800000, 0x00000000, 0x3f800000, 0x0304003f, 0x0010000a,
+        0x00000000, 0x08000036, 0x001020f2, 0x00000000, 0x00004002, 0x3f800000, 0x00000000, 0x00000000,
+        0x3f800000, 0x0100003e,
+
+    };
+    static const DWORD ps_continuec_z_code[] =
+    {
+#if 0
+        float4 main() : SV_TARGET
+        {
+            uint counter = 0;
+            int i = -1;
+
+            while (i < 255) {
+                ++i;
+
+                if (i == 0)
+                    continue;
+
+                ++counter;
+            }
+
+            if (counter == 255)
+                return float4(0.0f, 1.0f, 0.0f, 1.0f);
+            else
+                return float4(1.0f, 0.0f, 0.0f, 1.0f);
+        }
+#endif
+        0x43425844, 0x0322b23d, 0x52b25dc8, 0xa625f5f1, 0x271e3f46, 0x00000001, 0x000001d0, 0x00000003,
+        0x0000002c, 0x0000003c, 0x00000070, 0x4e475349, 0x00000008, 0x00000000, 0x00000008, 0x4e47534f,
+        0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003, 0x00000000,
+        0x0000000f, 0x545f5653, 0x45475241, 0xabab0054, 0x52444853, 0x00000158, 0x00000040, 0x00000056,
+        0x03000065, 0x001020f2, 0x00000000, 0x02000068, 0x00000002, 0x08000036, 0x00100032, 0x00000000,
+        0x00004002, 0x00000000, 0xffffffff, 0x00000000, 0x00000000, 0x01000030, 0x07000021, 0x00100042,
+        0x00000000, 0x0010001a, 0x00000000, 0x00004001, 0x000000ff, 0x03040003, 0x0010002a, 0x00000000,
+        0x0700001e, 0x00100022, 0x00000001, 0x0010001a, 0x00000000, 0x00004001, 0x00000001, 0x05000036,
+        0x00100042, 0x00000001, 0x0010000a, 0x00000000, 0x05000036, 0x00100072, 0x00000000, 0x00100966,
+        0x00000001, 0x03000008, 0x0010002a, 0x00000000, 0x0700001e, 0x00100012, 0x00000001, 0x0010000a,
+        0x00000000, 0x00004001, 0x00000001, 0x05000036, 0x00100032, 0x00000000, 0x00100046, 0x00000001,
+        0x01000016, 0x07000020, 0x00100012, 0x00000000, 0x0010000a, 0x00000000, 0x00004001, 0x000000ff,
+        0x08000036, 0x001020f2, 0x00000000, 0x00004002, 0x00000000, 0x3f800000, 0x00000000, 0x3f800000,
+        0x0304003f, 0x0010000a, 0x00000000, 0x08000036, 0x001020f2, 0x00000000, 0x00004002, 0x3f800000,
+        0x00000000, 0x00000000, 0x3f800000, 0x0100003e,
+    };
+
+    if (!init_test_context(&test_context))
+        return;
+
+    device = test_context.device;
+
+    hr = ID3D10Device_CreatePixelShader(device, ps_continuec_nz_code, sizeof(ps_continuec_nz_code), &ps);
+    ok(SUCCEEDED(hr), "Failed to create continuec_nz pixel shader, hr %#x.\n", hr);
+    ID3D10Device_PSSetShader(device, ps);
+    draw_quad(&test_context);
+    check_texture_color(test_context.backbuffer, 0xff00ff00, 0);
+    ID3D10PixelShader_Release(ps);
+
+    hr = ID3D10Device_CreatePixelShader(device, ps_continuec_z_code, sizeof(ps_continuec_z_code), &ps);
+    ok(SUCCEEDED(hr), "Failed to create continuec_z pixel shader, hr %#x.\n", hr);
     ID3D10Device_PSSetShader(device, ps);
     draw_quad(&test_context);
     check_texture_color(test_context.backbuffer, 0xff00ff00, 0);
@@ -12525,6 +12597,7 @@ START_TEST(device)
     test_shader_stage_input_output_matching();
     test_sm4_if_instruction();
     test_sm4_breakc_instruction();
+    test_sm4_continuec_instruction();
     test_create_input_layout();
     test_input_assembler();
     test_null_sampler();
