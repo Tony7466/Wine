@@ -1,3 +1,14 @@
+wine-development (2.9-1) experimental; urgency=medium
+
+  * New upstream release 2.9, released May 26, 2017.
+    - Support for tesselation shaders in Direct3D.
+    - Binary mode support in WebServices.
+    - Clipboard changes detected through Xfixes.
+    - User interface improvements in RegEdit.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 27 May 2017 03:39:17 +0000
+
 wine-development (2.8-1) experimental; urgency=medium
 
   * New upstream release 2.8, released May 12, 2017.
