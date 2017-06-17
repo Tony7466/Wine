@@ -301,7 +301,10 @@ GLenum wined3d_gl_compare_func(enum wined3d_cmp_func f)
         case WINED3D_CMP_ALWAYS:
             return GL_ALWAYS;
         default:
-            FIXME("Unrecognized compare function %#x.\n", f);
+            if (!f)
+                WARN("Unrecognized compare function %#x.\n", f);
+            else
+                FIXME("Unrecognized compare function %#x.\n", f);
             return GL_NONE;
     }
 }
@@ -5845,21 +5848,8 @@ static DWORD ffp_fragment_get_emul_mask(const struct wined3d_gl_info *gl_info)
 
 static BOOL ffp_color_fixup_supported(struct color_fixup_desc fixup)
 {
-    if (TRACE_ON(d3d))
-    {
-        TRACE("Checking support for fixup:\n");
-        dump_color_fixup_desc(fixup);
-    }
-
     /* We only support identity conversions. */
-    if (is_identity_fixup(fixup))
-    {
-        TRACE("[OK]\n");
-        return TRUE;
-    }
-
-    TRACE("[FAILED]\n");
-    return FALSE;
+    return is_identity_fixup(fixup);
 }
 
 static BOOL ffp_none_context_alloc(struct wined3d_context *context)

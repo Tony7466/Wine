@@ -151,6 +151,8 @@ case $host in
       host_cpu="i386"
       notice_platform="32-bit "
       AC_SUBST(TARGETFLAGS,"-m32")
+      PKG_CONFIG_PATH=${PKG_CONFIG_PATH:-/usr/lib/i386-linux-gnu/pkgconfig:/usr/lib/pkgconfig}
+      export PKG_CONFIG_PATH
       enable_win16=${enable_win16:-yes}
     else
       if test "x${GCC}" = "xyes"
@@ -851,6 +853,7 @@ case $host_os in
   linux-android*)
     DLLFLAGS="$DLLFLAGS -fPIC"
     LDEXECFLAGS="-Wl,-pie"
+    enable_wineandroid_drv=${enable_wineandroid_drv:-yes}
     WINE_TRY_CFLAGS([-fPIC -Wl,--export-dynamic],
                     [WINELOADER_LDFLAGS="-Wl,--export-dynamic"])
     WINE_TRY_CFLAGS([-fPIC -Wl,--rpath,\$ORIGIN/../lib],
@@ -865,6 +868,16 @@ case $host_os in
     AC_SUBST(LIBWINE_SHAREDLIB,"libwine.so")
     AC_SUBST(LIBWINE_INSTALL_LIB,"libwine.so")
     AC_SUBST(LIBWINE_LDFLAGS,["-shared -Wl,-soname,libwine.so"])
+
+    if test "x$exec_prefix" = xNONE
+    then
+      case $host_cpu in
+        *i[[3456]]86*) exec_prefix='${prefix}/x86' ;;
+        *x86_64*)      exec_prefix='${prefix}/x86_64' ;;
+        *arm*)         exec_prefix='${prefix}/armeabi-v7a' ;;
+        *aarch64*)     exec_prefix='${prefix}/arm64-v8a' ;;
+      esac
+    fi
     ;;
 
   *)
@@ -938,6 +951,7 @@ esac
 
 enable_winecoreaudio_drv=${enable_winecoreaudio_drv:-no}
 enable_wineqtdecoder=${enable_wineqtdecoder:-no}
+enable_wineandroid_drv=${enable_wineandroid_drv:-no}
 enable_winemac_drv=${enable_winemac_drv:-no}
 test "$ac_cv_header_linux_joystick_h" = "yes" -o "$ac_cv_header_IOKit_hid_IOHIDLib_h" = "yes" || enable_winejoystick_drv=${enable_winejoystick_drv:-no}
 
@@ -1175,7 +1189,7 @@ else
     X_LIBS=""
 fi
 
-if test "$enable_winemac_drv" = "no"
+if test "$enable_wineandroid_drv$enable_winemac_drv" = "nono"
 then
     WINE_ERROR_WITH(x,[test "x$X_LIBS" = "x"],
 [X ${notice_platform}development files not found. Wine will be built
@@ -2687,6 +2701,7 @@ WINE_CONFIG_DLL(aclui,,[implib])
 WINE_CONFIG_DLL(activeds,,[implib])
 WINE_CONFIG_DLL(actxprxy,,[clean])
 WINE_CONFIG_LIB(adsiid)
+WINE_CONFIG_DLL(adsldpc)
 WINE_CONFIG_DLL(advapi32,,[clean,implib])
 WINE_CONFIG_TEST(dlls/advapi32/tests)
 WINE_CONFIG_DLL(advpack,,[implib])
@@ -2843,6 +2858,7 @@ WINE_CONFIG_DLL(api-ms-win-ntuser-dc-access-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-power-base-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-power-setting-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-rtcore-ntuser-private-l1-1-0)
+WINE_CONFIG_DLL(api-ms-win-security-activedirectoryclient-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-security-audit-l1-1-1)
 WINE_CONFIG_DLL(api-ms-win-security-base-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-security-base-l1-2-0)
@@ -3168,7 +3184,8 @@ WINE_CONFIG_DLL(mcicda)
 WINE_CONFIG_DLL(mciqtz32)
 WINE_CONFIG_DLL(mciseq)
 WINE_CONFIG_DLL(mciwave)
-WINE_CONFIG_DLL(mf)
+WINE_CONFIG_DLL(mf,,[implib])
+WINE_CONFIG_TEST(dlls/mf/tests)
 WINE_CONFIG_DLL(mf3216)
 WINE_CONFIG_DLL(mfplat,,[implib])
 WINE_CONFIG_TEST(dlls/mfplat/tests)
@@ -3435,6 +3452,7 @@ WINE_CONFIG_TEST(dlls/t2embed/tests)
 WINE_CONFIG_DLL(tapi32,,[implib])
 WINE_CONFIG_DLL(taskschd,,[clean])
 WINE_CONFIG_TEST(dlls/taskschd/tests)
+WINE_CONFIG_DLL(tdh)
 WINE_CONFIG_DLL(tdi.sys)
 WINE_CONFIG_DLL(toolhelp.dll16,enable_win16)
 WINE_CONFIG_DLL(traffic)
@@ -3506,6 +3524,7 @@ WINE_CONFIG_TEST(dlls/windowscodecs/tests)
 WINE_CONFIG_DLL(windowscodecsext,,[implib])
 WINE_CONFIG_TEST(dlls/windowscodecsext/tests)
 WINE_CONFIG_DLL(winealsa.drv)
+WINE_CONFIG_DLL(wineandroid.drv,,[clean])
 WINE_CONFIG_DLL(winebus.sys)
 WINE_CONFIG_DLL(winecoreaudio.drv)
 WINE_CONFIG_LIB(winecrt0)
