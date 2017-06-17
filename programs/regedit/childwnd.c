@@ -180,6 +180,7 @@ static void OnTreeSelectionChanged(HWND hwndTV, HWND hwndLV, HTREEITEM hItem, BO
         if (rootitem == hItem)
         {
             SendMessageW(hwndLV, LVM_DELETEALLITEMS, 0, 0);
+            UpdateStatusBar();
             return;
         }
 
@@ -471,14 +472,9 @@ LRESULT CALLBACK ChildWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
             default:
                 return 0; /* goto def; */
             }
-        } else
-            if (((int)wParam == LIST_WINDOW) && (g_pChildWnd != NULL)) {
-		if (((LPNMHDR)lParam)->code == NM_SETFOCUS) {
-		    g_pChildWnd->nFocusPanel = 1;
-		} else if (!SendMessageW(g_pChildWnd->hListWnd, WM_NOTIFY_REFLECT, wParam, lParam)) {
-                    goto def;
-                }
-            }
+        } else if ((int)wParam == LIST_WINDOW && g_pChildWnd != NULL) {
+            return SendMessageW(g_pChildWnd->hListWnd, WM_NOTIFY_REFLECT, wParam, lParam);
+        }
         break;
 
     case WM_SIZE:

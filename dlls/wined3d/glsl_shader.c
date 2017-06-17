@@ -2709,6 +2709,17 @@ static void shader_glsl_gen_modifier(enum wined3d_shader_src_modifier src_modifi
     }
 }
 
+static void shader_glsl_fixup_scalar_register_variable(char *register_name,
+        const char *glsl_variable, const struct wined3d_gl_info *gl_info)
+{
+    /* The ARB_shading_language_420pack extension allows swizzle operations on
+     * scalars. */
+    if (gl_info->supported[ARB_SHADING_LANGUAGE_420PACK])
+        sprintf(register_name, "%s", glsl_variable);
+    else
+        sprintf(register_name, "ivec2(%s, 0)", glsl_variable);
+}
+
 /** Writes the GLSL variable name that corresponds to the register that the
  * DX opcode parameter is trying to access */
 static void shader_glsl_get_register_name(const struct wined3d_shader_register *reg,
@@ -3031,18 +3042,14 @@ static void shader_glsl_get_register_name(const struct wined3d_shader_register *
             break;
 
         case WINED3DSPR_LOCALTHREADINDEX:
-            if (gl_info->supported[ARB_SHADING_LANGUAGE_420PACK])
-                sprintf(register_name, "int(gl_LocalInvocationIndex)");
-            else
-                sprintf(register_name, "ivec2(gl_LocalInvocationIndex, 0)");
+            shader_glsl_fixup_scalar_register_variable(register_name,
+                    "int(gl_LocalInvocationIndex)", gl_info);
             break;
 
         case WINED3DSPR_GSINSTID:
         case WINED3DSPR_OUTPOINTID:
-            if (gl_info->supported[ARB_SHADING_LANGUAGE_420PACK])
-                sprintf(register_name, "gl_InvocationID");
-            else
-                sprintf(register_name, "ivec2(gl_InvocationID, 0)");
+            shader_glsl_fixup_scalar_register_variable(register_name,
+                    "gl_InvocationID", gl_info);
             break;
 
         case WINED3DSPR_THREADID:
@@ -3059,7 +3066,8 @@ static void shader_glsl_get_register_name(const struct wined3d_shader_register *
 
         case WINED3DSPR_FORKINSTID:
         case WINED3DSPR_JOININSTID:
-            sprintf(register_name, "phase_instance_id");
+            shader_glsl_fixup_scalar_register_variable(register_name,
+                    "phase_instance_id", gl_info);
             break;
 
         case WINED3DSPR_TESSCOORD:
@@ -8265,7 +8273,7 @@ static void shader_glsl_ffp_vertex_lighting(struct wined3d_string_buffer *buffer
             continue;
         }
         shader_addline(buffer, "dir = normalize(dir);\n");
-        shader_glsl_ffp_vertex_lighting_footer(buffer, settings, i);
+        shader_glsl_ffp_vertex_lighting_footer(buffer, settings, idx);
         shader_addline(buffer, "}\n");
     }
 
@@ -8306,7 +8314,7 @@ static void shader_glsl_ffp_vertex_lighting(struct wined3d_string_buffer *buffer
             shader_addline(buffer, "}\n");
             continue;
         }
-        shader_glsl_ffp_vertex_lighting_footer(buffer, settings, i);
+        shader_glsl_ffp_vertex_lighting_footer(buffer, settings, idx);
         shader_addline(buffer, "}\n");
     }
 
@@ -8317,7 +8325,7 @@ static void shader_glsl_ffp_vertex_lighting(struct wined3d_string_buffer *buffer
             continue;
         shader_addline(buffer, "att = 1.0;\n");
         shader_addline(buffer, "dir = normalize(ffp_light[%u].direction.xyz);\n", idx);
-        shader_glsl_ffp_vertex_lighting_footer(buffer, settings, i);
+        shader_glsl_ffp_vertex_lighting_footer(buffer, settings, idx);
     }
 
     for (i = 0; i < settings->parallel_point_light_count; ++i, ++idx)
@@ -8327,7 +8335,7 @@ static void shader_glsl_ffp_vertex_lighting(struct wined3d_string_buffer *buffer
             continue;
         shader_addline(buffer, "att = 1.0;\n");
         shader_addline(buffer, "dir = normalize(ffp_light[%u].position.xyz);\n", idx);
-        shader_glsl_ffp_vertex_lighting_footer(buffer, settings, i);
+        shader_glsl_ffp_vertex_lighting_footer(buffer, settings, idx);
     }
 
     shader_addline(buffer, "ffp_varying_diffuse.xyz = %s.xyz * ambient + %s.xyz * diffuse + %s.xyz;\n",
@@ -10511,15 +10519,15 @@ static void shader_glsl_init_context_state(struct wined3d_context *context)
     checkGLcall("GL_PROGRAM_POINT_SIZE");
 }
 
-static void shader_glsl_get_caps(const struct wined3d_gl_info *gl_info, struct shader_caps *caps)
+static unsigned int shader_glsl_get_shader_model(const struct wined3d_gl_info *gl_info)
 {
-    unsigned int shader_model;
+    BOOL shader_model_4 = gl_info->glsl_version >= MAKEDWORD_VERSION(1, 50)
+            && gl_info->supported[WINED3D_GL_VERSION_3_2]
+            && gl_info->supported[ARB_SAMPLER_OBJECTS]
+            && gl_info->supported[ARB_SHADER_BIT_ENCODING]
+            && gl_info->supported[ARB_TEXTURE_SWIZZLE];
 
-    /* FIXME: Check for the specific extensions required for SM5 support
-     * (ARB_compute_shader, ARB_tessellation_shader, ARB_gpu_shader5, ...) as
-     * soon as we introduce them, adjusting the GL / GLSL version checks
-     * accordingly. */
-    if (gl_info->glsl_version >= MAKEDWORD_VERSION(4, 30) && gl_info->supported[WINED3D_GL_VERSION_4_3]
+    if (shader_model_4
             && gl_info->supported[ARB_COMPUTE_SHADER]
             && gl_info->supported[ARB_DERIVATIVE_CONTROL]
             && gl_info->supported[ARB_GPU_SHADER5]
@@ -10530,17 +10538,23 @@ static void shader_glsl_get_caps(const struct wined3d_gl_info *gl_info, struct s
             && gl_info->supported[ARB_TESSELLATION_SHADER]
             && gl_info->supported[ARB_TEXTURE_GATHER]
             && gl_info->supported[ARB_TRANSFORM_FEEDBACK3])
-        shader_model = 5;
-    else if (gl_info->glsl_version >= MAKEDWORD_VERSION(1, 50) && gl_info->supported[WINED3D_GL_VERSION_3_2]
-            && gl_info->supported[ARB_SHADER_BIT_ENCODING] && gl_info->supported[ARB_SAMPLER_OBJECTS]
-            && gl_info->supported[ARB_TEXTURE_SWIZZLE])
-        shader_model = 4;
+        return 5;
+
+    if (shader_model_4)
+        return 4;
+
     /* Support for texldd and texldl instructions in pixel shaders is required
      * for SM3. */
-    else if (shader_glsl_has_core_grad(gl_info) || gl_info->supported[ARB_SHADER_TEXTURE_LOD])
-        shader_model = 3;
-    else
-        shader_model = 2;
+    if (shader_glsl_has_core_grad(gl_info) || gl_info->supported[ARB_SHADER_TEXTURE_LOD])
+        return 3;
+
+    return 2;
+}
+
+static void shader_glsl_get_caps(const struct wined3d_gl_info *gl_info, struct shader_caps *caps)
+{
+    unsigned int shader_model = shader_glsl_get_shader_model(gl_info);
+
     TRACE("Shader model %u.\n", shader_model);
 
     caps->vs_version = min(wined3d_settings.max_sm_vs, shader_model);
@@ -10583,21 +10597,8 @@ static void shader_glsl_get_caps(const struct wined3d_gl_info *gl_info, struct s
 
 static BOOL shader_glsl_color_fixup_supported(struct color_fixup_desc fixup)
 {
-    if (TRACE_ON(d3d_shader) && TRACE_ON(d3d))
-    {
-        TRACE("Checking support for fixup:\n");
-        dump_color_fixup_desc(fixup);
-    }
-
     /* We support everything except YUV conversions. */
-    if (!is_complex_fixup(fixup))
-    {
-        TRACE("[OK]\n");
-        return TRUE;
-    }
-
-    TRACE("[FAILED]\n");
-    return FALSE;
+    return !is_complex_fixup(fixup);
 }
 
 static const SHADER_HANDLER shader_glsl_instruction_handler_table[WINED3DSIH_TABLE_SIZE] =
