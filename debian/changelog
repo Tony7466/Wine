@@ -1,3 +1,15 @@
+wine-development (2.10-1) unstable; urgency=medium
+
+  * New upstream release 2.10, released Jun 9, 2017.
+    - Dictionary support in WebServices.
+    - A number of Direct2D fixes.
+    - User interface improvements in RegEdit.
+    - OLE clipboard cache fixes.
+    - Various bug fixes.
+  * Upload to unstable now that stretch has been released.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 17 Jun 2017 20:13:51 +0000
+
 wine-development (2.9-1) experimental; urgency=medium
 
   * New upstream release 2.9, released May 26, 2017.
