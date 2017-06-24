@@ -4,7 +4,7 @@ author: Jens Reyer <jre.winesim@gmail.com>
 
 --- a/dlls/appwiz.cpl/addons.c
 +++ b/dlls/appwiz.cpl/addons.c
-@@ -795,9 +795,8 @@ BOOL install_addon(addon_t addon_type)
+@@ -790,9 +790,8 @@ BOOL install_addon(addon_t addon_type)
       */
      if (install_from_registered_dir() == INSTALL_NEXT
          && install_from_default_dir() == INSTALL_NEXT

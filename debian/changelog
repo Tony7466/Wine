@@ -1,3 +1,14 @@
+wine-development (2.11-1) unstable; urgency=medium
+
+  * New upstream release 2.11, released Jun 23, 2017.
+    - Support for security labels.
+    - Relay debugging on ARM64.
+    - More dictionary support in WebServices.
+    - New registry file parser in RegEdit.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 24 Jun 2017 13:24:46 +0000
+
 wine-development (2.10-1) unstable; urgency=medium
 
   * New upstream release 2.10, released Jun 9, 2017.

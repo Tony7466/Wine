@@ -36,6 +36,7 @@ Build-Depends:
  dctrl-tools,
  khronos-api,
  unicode-data (>= 9.0),
+ unicode-data (<< 10.0),
  libpng-dev,
  libssl-dev,
  libxml2-dev,
