@@ -1302,13 +1302,20 @@ done:
 /* read any content returned by the server so that the connection can be reused */
 static void drain_content( request_t *request )
 {
-    DWORD bytes_read;
+    DWORD size, bytes_read, bytes_total = 0, bytes_left = request->content_length - request->content_read;
     char buffer[2048];
 
     refill_buffer( request, FALSE );
     for (;;)
     {
-        if (!read_data( request, buffer, sizeof(buffer), &bytes_read, FALSE ) || !bytes_read) return;
+        if (request->read_chunked) size = sizeof(buffer);
+        else
+        {
+            if (bytes_total >= bytes_left) return;
+            size = min( sizeof(buffer), bytes_left - bytes_total );
+        }
+        if (!read_data( request, buffer, size, &bytes_read, FALSE ) || !bytes_read) return;
+        bytes_total += bytes_read;
     }
 }
 
@@ -2348,9 +2355,9 @@ static BOOL handle_redirect( request_t *request, DWORD status )
 
             netconn_close( &request->netconn );
             if (!(ret = netconn_init( &request->netconn ))) goto end;
+            request->content_length = request->content_read = 0;
             request->read_pos = request->read_size = 0;
-            request->read_chunked = FALSE;
-            request->read_chunked_eof = FALSE;
+            request->read_chunked = request->read_chunked_eof = FALSE;
         }
         else heap_free( hostname );
 

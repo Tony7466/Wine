@@ -42,6 +42,7 @@ struct d3drm_object
     DWORD appdata;
     struct list destroy_callbacks;
     const char *classname;
+    char *name;
 };
 
 struct d3drm_texture
@@ -127,7 +128,6 @@ struct d3drm_mesh_builder
     IDirect3DRMMeshBuilder3 IDirect3DRMMeshBuilder3_iface;
     LONG ref;
     IDirect3DRM *d3drm;
-    char* name;
     SIZE_T nb_vertices;
     SIZE_T vertices_size;
     D3DVECTOR *vertices;
@@ -147,6 +147,75 @@ struct d3drm_mesh_builder
     DWORD *material_indices;
 };
 
+struct mesh_group
+{
+    unsigned nb_vertices;
+    D3DRMVERTEX* vertices;
+    unsigned nb_faces;
+    unsigned vertex_per_face;
+    DWORD face_data_size;
+    unsigned* face_data;
+    D3DCOLOR color;
+    IDirect3DRMMaterial2* material;
+    IDirect3DRMTexture3* texture;
+};
+
+struct d3drm_mesh
+{
+    struct d3drm_object obj;
+    IDirect3DRMMesh IDirect3DRMMesh_iface;
+    LONG ref;
+    IDirect3DRM *d3drm;
+    DWORD groups_capacity;
+    DWORD nb_groups;
+    struct mesh_group *groups;
+};
+
+struct d3drm_light
+{
+    struct d3drm_object obj;
+    IDirect3DRMLight IDirect3DRMLight_iface;
+    LONG ref;
+    IDirect3DRM *d3drm;
+    D3DRMLIGHTTYPE type;
+    D3DCOLOR color;
+    D3DVALUE range;
+    D3DVALUE cattenuation;
+    D3DVALUE lattenuation;
+    D3DVALUE qattenuation;
+    D3DVALUE umbra;
+    D3DVALUE penumbra;
+};
+
+struct color_rgb
+{
+    D3DVALUE r;
+    D3DVALUE g;
+    D3DVALUE b;
+};
+
+struct d3drm_material
+{
+    struct d3drm_object obj;
+    IDirect3DRMMaterial2 IDirect3DRMMaterial2_iface;
+    LONG ref;
+    IDirect3DRM *d3drm;
+    struct color_rgb emissive;
+    struct color_rgb specular;
+    D3DVALUE power;
+    struct color_rgb ambient;
+};
+
+struct d3drm_animation
+{
+    struct d3drm_object obj;
+    IDirect3DRMAnimation2 IDirect3DRMAnimation2_iface;
+    IDirect3DRMAnimation IDirect3DRMAnimation_iface;
+    LONG ref;
+    IDirect3DRM *d3drm;
+};
+
+
 HRESULT d3drm_device_create(struct d3drm_device **device, IDirect3DRM *d3drm) DECLSPEC_HIDDEN;
 HRESULT d3drm_device_create_surfaces_from_clipper(struct d3drm_device *object, IDirectDraw *ddraw,
         IDirectDrawClipper *clipper, int width, int height, IDirectDrawSurface **surface) DECLSPEC_HIDDEN;
@@ -158,6 +227,8 @@ void d3drm_object_init(struct d3drm_object *object, const char *classname) DECLS
 HRESULT d3drm_object_add_destroy_callback(struct d3drm_object *object, D3DRMOBJECTCALLBACK cb, void *ctx) DECLSPEC_HIDDEN;
 HRESULT d3drm_object_delete_destroy_callback(struct d3drm_object *object, D3DRMOBJECTCALLBACK cb, void *ctx) DECLSPEC_HIDDEN;
 HRESULT d3drm_object_get_class_name(struct d3drm_object *object, DWORD *size, char *name) DECLSPEC_HIDDEN;
+HRESULT d3drm_object_get_name(struct d3drm_object *object, DWORD *size, char *name) DECLSPEC_HIDDEN;
+HRESULT d3drm_object_set_name(struct d3drm_object *object, const char *name) DECLSPEC_HIDDEN;
 void d3drm_object_cleanup(IDirect3DRMObject *iface, struct d3drm_object *object) DECLSPEC_HIDDEN;
 
 struct d3drm_frame *unsafe_impl_from_IDirect3DRMFrame(IDirect3DRMFrame *iface) DECLSPEC_HIDDEN;
@@ -168,9 +239,10 @@ HRESULT d3drm_frame_create(struct d3drm_frame **frame, IUnknown *parent_frame, I
 HRESULT d3drm_face_create(struct d3drm_face **face) DECLSPEC_HIDDEN;
 HRESULT d3drm_viewport_create(struct d3drm_viewport **viewport, IDirect3DRM *d3drm) DECLSPEC_HIDDEN;
 HRESULT d3drm_mesh_builder_create(struct d3drm_mesh_builder **mesh_builder, IDirect3DRM *d3drm) DECLSPEC_HIDDEN;
-HRESULT Direct3DRMLight_create(IUnknown** ppObj) DECLSPEC_HIDDEN;
-HRESULT Direct3DRMMesh_create(IDirect3DRMMesh** obj) DECLSPEC_HIDDEN;
-HRESULT Direct3DRMMaterial_create(IDirect3DRMMaterial2** ret_iface) DECLSPEC_HIDDEN;
+HRESULT d3drm_light_create(struct d3drm_light **light, IDirect3DRM *d3drm) DECLSPEC_HIDDEN;
+HRESULT d3drm_material_create(struct d3drm_material **material, IDirect3DRM *d3drm) DECLSPEC_HIDDEN;
+HRESULT d3drm_mesh_create(struct d3drm_mesh **mesh, IDirect3DRM *d3drm) DECLSPEC_HIDDEN;
+HRESULT d3drm_animation_create(struct d3drm_animation **animation, IDirect3DRM *d3drm) DECLSPEC_HIDDEN;
 
 HRESULT load_mesh_data(IDirect3DRMMeshBuilder3 *iface, IDirectXFileData *data,
                        D3DRMLOADTEXTURECALLBACK load_texture_proc, void *arg) DECLSPEC_HIDDEN;

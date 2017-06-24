@@ -1709,8 +1709,8 @@ INT MSI_ProcessMessage( MSIPACKAGE *package, INSTALLMESSAGE eMessageType, MSIREC
     static const WCHAR szSetProgress[] = {'S','e','t','P','r','o','g','r','e','s','s',0};
     static const WCHAR szActionText[] = {'A','c','t','i','o','n','T','e','x','t',0};
     MSIRECORD *uirow;
-    LPWSTR deformated, message;
-    DWORD i, len, total_len, log_type = 0;
+    LPWSTR deformated, message = {0};
+    DWORD len, log_type = 0;
     INT rc = 0;
     char *msg;
 
@@ -1776,63 +1776,39 @@ INT MSI_ProcessMessage( MSIPACKAGE *package, INSTALLMESSAGE eMessageType, MSIREC
     }
     else
     {
-        static const WCHAR format[] = {'%','u',':',' ',0};
-        UINT count = MSI_RecordGetFieldCount( record );
-        WCHAR *p;
-
-        total_len = 1;
-        for (i = 1; i <= count; i++)
-        {
-            len = 0;
-            MSI_RecordGetStringW( record, i, NULL, &len );
-            total_len += len + 13;
-        }
-        p = message = msi_alloc( total_len * sizeof(WCHAR) );
-        if (!p) return ERROR_OUTOFMEMORY;
-
-        for (i = 1; i <= count; i++)
-        {
-            if (count > 1)
-            {
-                len = sprintfW( p, format, i );
-                total_len -= len;
-                p += len;
-            }
-            len = total_len;
-            MSI_RecordGetStringW( record, i, p, &len );
-            total_len -= len;
-            p += len;
-            if (count > 1 && total_len)
-            {
-                *p++ = ' ';
-                total_len--;
-            }
-        }
-        p[0] = 0;
+        UINT res = MSI_FormatRecordW(package, record, message, &len);
+        if (res != ERROR_SUCCESS && res != ERROR_MORE_DATA)
+            return res;
+        len++;
+        message = msi_alloc(len * sizeof(WCHAR));
+        if (!message) return ERROR_OUTOFMEMORY;
+        MSI_FormatRecordW(package, record, message, &len);
     }
-
-    TRACE("%p %p %p %x %x %s\n", gUIHandlerA, gUIHandlerW, gUIHandlerRecord,
-          gUIFilter, log_type, debugstr_w(message));
 
     /* convert it to ASCII */
     len = WideCharToMultiByte( CP_ACP, 0, message, -1, NULL, 0, NULL, NULL );
     msg = msi_alloc( len );
     WideCharToMultiByte( CP_ACP, 0, message, -1, msg, len, NULL, NULL );
 
-    if (gUIHandlerW && (gUIFilter & log_type))
+    if (gUIHandlerRecord && (gUIFilterRecord & log_type))
     {
+        MSIHANDLE rec = alloc_msihandle(&record->hdr);
+        TRACE("Calling UI handler %p(pvContext=%p, iMessageType=%08x, hRecord=%u)\n",
+              gUIHandlerRecord, gUIContextRecord, eMessageType, rec);
+        rc = gUIHandlerRecord( gUIContextRecord, eMessageType, rec );
+        MsiCloseHandle( rec );
+    }
+    if (!rc && gUIHandlerW && (gUIFilter & log_type))
+    {
+        TRACE("Calling UI handler %p(pvContext=%p, iMessageType=%08x, szMessage=%s)\n",
+              gUIHandlerW, gUIContext, eMessageType, debugstr_w(message));
         rc = gUIHandlerW( gUIContext, eMessageType, message );
     }
-    else if (gUIHandlerA && (gUIFilter & log_type))
+    else if (!rc && gUIHandlerA && (gUIFilter & log_type))
     {
+        TRACE("Calling UI handler %p(pvContext=%p, iMessageType=%08x, szMessage=%s)\n",
+              gUIHandlerA, gUIContext, eMessageType, debugstr_a(msg));
         rc = gUIHandlerA( gUIContext, eMessageType, msg );
-    }
-    else if (gUIHandlerRecord && (gUIFilter & log_type))
-    {
-        MSIHANDLE rec = MsiCreateRecord( 1 );
-        MsiRecordSetStringW( rec, 0, message );
-        rc = gUIHandlerRecord( gUIContext, eMessageType, rec );
-        MsiCloseHandle( rec );
     }
 
     if (!rc && package->log_file != INVALID_HANDLE_VALUE &&
@@ -1882,7 +1858,7 @@ INT MSI_ProcessMessage( MSIPACKAGE *package, INSTALLMESSAGE eMessageType, MSIREC
         break;
     }
 
-    return ERROR_SUCCESS;
+    return rc;
 }
 
 INT WINAPI MsiProcessMessage( MSIHANDLE hInstall, INSTALLMESSAGE eMessageType,

@@ -1081,7 +1081,10 @@ static HRESULT WINAPI convert_DataConvert(IDataConvert* iface,
         }
         break;
     }
-    break;
+
+    case DBTYPE_NUMERIC:
+        FIXME("Unimplemented conversion %04x -> DBTYPE_NUMERIC\n", src_type);
+        return E_NOTIMPL;
 
     default:
         FIXME("Unimplemented conversion %04x -> %04x\n", src_type, dst_type);
@@ -1371,6 +1374,8 @@ static HRESULT WINAPI convert_GetConversionSize(IDataConvert* iface,
     if ((*dst_len = get_length(dst_type)))
         return S_OK;
 
+    *dst_len = 110;
+
     if(src_type == DBTYPE_VARIANT && V_VT((VARIANT*)src) == VT_NULL)
         return S_OK;
 
@@ -1393,6 +1398,18 @@ static HRESULT WINAPI convert_GetConversionSize(IDataConvert* iface,
                 return hr;
         }
         break;
+        case DBTYPE_DATE:
+        case DBTYPE_DECIMAL:
+        case DBTYPE_EMPTY:
+        case DBTYPE_I1:
+        case DBTYPE_I2:
+        case DBTYPE_UI2:
+        case DBTYPE_I4:
+        case DBTYPE_UI4:
+        case DBTYPE_I8:
+        case DBTYPE_UI8:
+        case DBTYPE_R4:
+            break;
         default:
             FIXME("unimplemented for %04x -> DBTYPE_STR\n", src_type);
             return E_NOTIMPL;
@@ -1424,6 +1441,18 @@ static HRESULT WINAPI convert_GetConversionSize(IDataConvert* iface,
                 *dst_len = (*src_len) + sizeof(WCHAR);
             else
                 *dst_len = (lstrlenW(src) + 1) * sizeof(WCHAR);
+            break;
+        case DBTYPE_DATE:
+        case DBTYPE_DECIMAL:
+        case DBTYPE_EMPTY:
+        case DBTYPE_I1:
+        case DBTYPE_I2:
+        case DBTYPE_UI2:
+        case DBTYPE_I4:
+        case DBTYPE_UI4:
+        case DBTYPE_I8:
+        case DBTYPE_UI8:
+        case DBTYPE_R4:
             break;
         default:
             FIXME("unimplemented for %04x -> DBTYPE_WSTR\n", src_type);

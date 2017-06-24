@@ -510,6 +510,7 @@
 @ stdcall Ke386SetIoAccessMap(long ptr)
 @ stub KeAcquireInterruptSpinLock
 @ stub KeAcquireSpinLockAtDpcLevel
+@ stdcall -arch=x86_64 KeAcquireSpinLockRaiseToDpc(ptr)
 @ stub KeAddSystemServiceTable
 @ stub KeAreApcsDisabled
 @ stub KeAttachProcess
@@ -591,6 +592,7 @@
 @ stub KeReleaseMutant
 @ stdcall KeReleaseMutex(ptr long)
 @ stdcall KeReleaseSemaphore(ptr long long long)
+@ stdcall KeReleaseSpinLock(ptr long)
 @ stub KeReleaseSpinLockFromDpcLevel
 @ stub KeRemoveByKeyDeviceQueue
 @ stub KeRemoveByKeyDeviceQueueIfBusy

@@ -113,7 +113,7 @@ static struct android_win_data *alloc_win_data( HWND hwnd )
     if ((data = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*data))))
     {
         data->hwnd = hwnd;
-        data->window = create_ioctl_window( hwnd );
+        data->window = create_ioctl_window( hwnd, FALSE );
         EnterCriticalSection( &win_data_section );
         win_data_context[context_idx(hwnd)] = data;
     }
@@ -224,16 +224,34 @@ void desktop_changed( JNIEnv *env, jobject obj, jint width, jint height )
 
 
 /***********************************************************************
+ *           config_changed
+ *
+ * JNI callback, runs in the context of the Java thread.
+ */
+void config_changed( JNIEnv *env, jobject obj, jint dpi )
+{
+    union event_data data;
+
+    memset( &data, 0, sizeof(data) );
+    data.type = CONFIG_CHANGED;
+    data.cfg.dpi = dpi;
+    p__android_log_print( ANDROID_LOG_INFO, "wine", "config_changed: %u dpi", dpi );
+    send_event( &data );
+}
+
+
+/***********************************************************************
  *           surface_changed
  *
  * JNI callback, runs in the context of the Java thread.
  */
-void surface_changed( JNIEnv *env, jobject obj, jint win, jobject surface )
+void surface_changed( JNIEnv *env, jobject obj, jint win, jobject surface, jboolean client )
 {
     union event_data data;
 
     memset( &data, 0, sizeof(data) );
     data.surface.hwnd = LongToHandle( win );
+    data.surface.client = client;
     if (surface)
     {
         int width, height;
@@ -244,8 +262,8 @@ void surface_changed( JNIEnv *env, jobject obj, jint win, jobject surface )
         data.surface.window = win;
         data.surface.width = width;
         data.surface.height = height;
-        p__android_log_print( ANDROID_LOG_INFO, "wine", "surface_changed: %p %ux%u",
-                              data.surface.hwnd, width, height );
+        p__android_log_print( ANDROID_LOG_INFO, "wine", "surface_changed: %p %s %ux%u",
+                              data.surface.hwnd, client ? "client" : "whole", width, height );
     }
     data.type = SURFACE_CHANGED;
     send_event( &data );
@@ -428,11 +446,17 @@ static int process_events( DWORD mask )
                           SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOREDRAW );
             break;
 
-        case SURFACE_CHANGED:
-            TRACE("SURFACE_CHANGED %p %p size %ux%u\n", event->data.surface.hwnd,
-                  event->data.surface.window, event->data.surface.width, event->data.surface.height );
+        case CONFIG_CHANGED:
+            TRACE( "CONFIG_CHANGED dpi %u\n", event->data.cfg.dpi );
+            set_screen_dpi( event->data.cfg.dpi );
+            break;
 
-            register_native_window( event->data.surface.hwnd, event->data.surface.window );
+        case SURFACE_CHANGED:
+            TRACE("SURFACE_CHANGED %p %p %s size %ux%u\n", event->data.surface.hwnd,
+                  event->data.surface.window, event->data.surface.client ? "client" : "whole",
+                  event->data.surface.width, event->data.surface.height );
+
+            register_native_window( event->data.surface.hwnd, event->data.surface.window, event->data.surface.client );
             break;
 
         case MOTION_EVENT:
@@ -923,7 +947,7 @@ static LRESULT CALLBACK desktop_wndproc_wrapper( HWND hwnd, UINT msg, WPARAM wp,
     switch (msg)
     {
     case WM_PARENTNOTIFY:
-        if (LOWORD(wp) == WM_DESTROY) destroy_ioctl_window( (HWND)lp );
+        if (LOWORD(wp) == WM_DESTROY) destroy_ioctl_window( (HWND)lp, FALSE );
         break;
     }
     return desktop_orig_wndproc( hwnd, msg, wp, lp );
@@ -977,6 +1001,7 @@ void CDECL ANDROID_DestroyWindow( HWND hwnd )
 
     if (data->surface) window_surface_release( data->surface );
     data->surface = NULL;
+    destroy_gl_drawable( hwnd );
     free_win_data( data );
 }
 
@@ -994,34 +1019,11 @@ static struct android_win_data *create_win_data( HWND hwnd, const RECT *window_r
 
     if (!(parent = GetAncestor( hwnd, GA_PARENT ))) return NULL;  /* desktop or HWND_MESSAGE */
 
-    if (parent != GetDesktopWindow())
-    {
-        if (!(data = get_win_data( parent )) &&
-            !(data = create_win_data( parent, NULL, NULL )))
-            return NULL;
-        release_win_data( data );
-    }
-
     if (!(data = alloc_win_data( hwnd ))) return NULL;
 
     data->parent = (parent == GetDesktopWindow()) ? 0 : parent;
-
-    if (window_rect)
-    {
-        data->whole_rect = data->window_rect = *window_rect;
-        data->client_rect = *client_rect;
-    }
-    else
-    {
-        GetWindowRect( hwnd, &data->window_rect );
-        MapWindowPoints( 0, parent, (POINT *)&data->window_rect, 2 );
-        data->whole_rect = data->window_rect;
-        GetClientRect( hwnd, &data->client_rect );
-        MapWindowPoints( hwnd, parent, (POINT *)&data->client_rect, 2 );
-        ioctl_window_pos_changed( hwnd, &data->window_rect, &data->client_rect, &data->whole_rect,
-                                  GetWindowLongW( hwnd, GWL_STYLE ), SWP_NOACTIVATE,
-                                  GetWindow( hwnd, GW_HWNDPREV ), GetWindow( hwnd, GW_OWNER ));
-    }
+    data->whole_rect = data->window_rect = *window_rect;
+    data->client_rect = *client_rect;
     return data;
 }
 
@@ -1328,7 +1330,11 @@ LRESULT CDECL ANDROID_WindowMessage( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp )
     switch (msg)
     {
     case WM_ANDROID_REFRESH:
-        if ((data = get_win_data( hwnd )))
+        if (wp)  /* opengl client window */
+        {
+            update_gl_drawable( hwnd );
+        }
+        else if ((data = get_win_data( hwnd )))
         {
             struct window_surface *surface = data->surface;
             if (surface)

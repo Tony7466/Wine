@@ -394,6 +394,7 @@ AC_CHECK_HEADERS(\
 	CoreAudio/CoreAudio.h \
 	CoreServices/CoreServices.h \
 	DiskArbitration/DiskArbitration.h \
+	EGL/egl.h \
 	IOKit/IOKitLib.h \
 	IOKit/hid/IOHIDLib.h \
 	OpenAL/al.h \
@@ -868,6 +869,9 @@ case $host_os in
     AC_SUBST(LIBWINE_SHAREDLIB,"libwine.so")
     AC_SUBST(LIBWINE_INSTALL_LIB,"libwine.so")
     AC_SUBST(LIBWINE_LDFLAGS,["-shared -Wl,-soname,libwine.so"])
+
+    WINE_CHECK_SONAME(EGL,eglGetProcAddress)
+    WINE_CHECK_SONAME(GLESv2,glFlush)
 
     if test "x$exec_prefix" = xNONE
     then
@@ -2047,6 +2051,7 @@ AC_CHECK_FUNCS(\
 	futimesat \
 	getattrlist \
 	getauxval \
+	getifaddrs \
 	getopt_long_only \
 	getpwuid \
 	gettimeofday \
@@ -2720,6 +2725,8 @@ WINE_CONFIG_DLL(api-ms-win-core-com-l1-1-1)
 WINE_CONFIG_DLL(api-ms-win-core-com-private-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-core-console-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-core-console-l2-1-0)
+WINE_CONFIG_DLL(api-ms-win-core-crt-l1-1-0)
+WINE_CONFIG_DLL(api-ms-win-core-crt-l2-1-0)
 WINE_CONFIG_DLL(api-ms-win-core-datetime-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-core-datetime-l1-1-1)
 WINE_CONFIG_DLL(api-ms-win-core-debug-l1-1-0)
@@ -2863,6 +2870,7 @@ WINE_CONFIG_DLL(api-ms-win-security-audit-l1-1-1)
 WINE_CONFIG_DLL(api-ms-win-security-base-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-security-base-l1-2-0)
 WINE_CONFIG_DLL(api-ms-win-security-base-private-l1-1-1)
+WINE_CONFIG_DLL(api-ms-win-security-credentials-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-security-grouppolicy-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-security-lsalookup-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-security-lsalookup-l1-1-1)
