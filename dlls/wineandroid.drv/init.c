@@ -28,6 +28,7 @@
 
 #include "windef.h"
 #include "winbase.h"
+#include "winreg.h"
 #include "android.h"
 #include "wine/server.h"
 #include "wine/library.h"
@@ -81,6 +82,22 @@ void init_monitors( int width, int height )
            wine_dbgstr_rect( &rect ), wine_dbgstr_rect( &default_monitor.rcWork ));
 }
 
+
+/******************************************************************************
+ *           set_screen_dpi
+ */
+void set_screen_dpi( DWORD dpi )
+{
+    static const WCHAR dpi_key_name[] = {'S','o','f','t','w','a','r','e','\\','F','o','n','t','s',0};
+    static const WCHAR dpi_value_name[] = {'L','o','g','P','i','x','e','l','s',0};
+    HKEY hkey;
+
+    if (!RegCreateKeyW( HKEY_CURRENT_CONFIG, dpi_key_name, &hkey ))
+    {
+        RegSetValueExW( hkey, dpi_value_name, 0, REG_DWORD, (void *)&dpi, sizeof(DWORD) );
+        RegCloseKey( hkey );
+    }
+}
 
 /**********************************************************************
  *	     fetch_display_metrics
@@ -190,6 +207,17 @@ static INT ANDROID_GetDeviceCaps( PHYSDEV dev, INT cap )
 
 
 /***********************************************************************
+ *           ANDROID_ChangeDisplaySettingsEx
+ */
+LONG CDECL ANDROID_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
+                                            HWND hwnd, DWORD flags, LPVOID lpvoid )
+{
+    FIXME( "(%s,%p,%p,0x%08x,%p)\n", debugstr_w( devname ), devmode, hwnd, flags, lpvoid );
+    return DISP_CHANGE_SUCCESSFUL;
+}
+
+
+/***********************************************************************
  *           ANDROID_GetMonitorInfo
  */
 BOOL CDECL ANDROID_GetMonitorInfo( HMONITOR handle, LPMONITORINFO info )
@@ -237,6 +265,61 @@ BOOL CDECL ANDROID_EnumDisplayMonitors( HDC hdc, LPRECT rect, MONITORENUMPROC pr
                 return FALSE;
     }
     return TRUE;
+}
+
+
+/***********************************************************************
+ *           ANDROID_EnumDisplaySettingsEx
+ */
+BOOL CDECL ANDROID_EnumDisplaySettingsEx( LPCWSTR name, DWORD n, LPDEVMODEW devmode, DWORD flags)
+{
+    static const WCHAR dev_name[CCHDEVICENAME] =
+        { 'W','i','n','e',' ','A','n','d','r','o','i','d',' ','d','r','i','v','e','r',0 };
+
+    devmode->dmSize = offsetof( DEVMODEW, dmICMMethod );
+    devmode->dmSpecVersion = DM_SPECVERSION;
+    devmode->dmDriverVersion = DM_SPECVERSION;
+    memcpy( devmode->dmDeviceName, dev_name, sizeof(dev_name) );
+    devmode->dmDriverExtra = 0;
+    devmode->u2.dmDisplayFlags = 0;
+    devmode->dmDisplayFrequency = 0;
+    devmode->u1.s2.dmPosition.x = 0;
+    devmode->u1.s2.dmPosition.y = 0;
+    devmode->u1.s2.dmDisplayOrientation = 0;
+    devmode->u1.s2.dmDisplayFixedOutput = 0;
+
+    if (n == ENUM_CURRENT_SETTINGS || n == ENUM_REGISTRY_SETTINGS) n = 0;
+    if (n == 0)
+    {
+        devmode->dmPelsWidth = screen_width;
+        devmode->dmPelsHeight = screen_height;
+        devmode->dmBitsPerPel = screen_bpp;
+        devmode->dmDisplayFrequency = 60;
+        devmode->dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFLAGS | DM_DISPLAYFREQUENCY;
+        TRACE( "mode %d -- %dx%d %d bpp @%d Hz\n", n,
+               devmode->dmPelsWidth, devmode->dmPelsHeight,
+               devmode->dmBitsPerPel, devmode->dmDisplayFrequency );
+        return TRUE;
+    }
+    TRACE( "mode %d -- not present\n", n );
+    SetLastError( ERROR_NO_MORE_FILES );
+    return FALSE;
+}
+
+
+/**********************************************************************
+ *           ANDROID_wine_get_wgl_driver
+ */
+static struct opengl_funcs * ANDROID_wine_get_wgl_driver( PHYSDEV dev, UINT version )
+{
+    struct opengl_funcs *ret;
+
+    if (!(ret = get_wgl_driver( version )))
+    {
+        dev = GET_NEXT_PHYSDEV( dev, wine_get_wgl_driver );
+        ret = dev->funcs->wine_get_wgl_driver( dev, version );
+    }
+    return ret;
 }
 
 
@@ -368,7 +451,7 @@ static const struct gdi_dc_funcs android_drv_funcs =
     NULL,                               /* pStrokePath */
     NULL,                               /* pUnrealizePalette */
     NULL,                               /* pWidenPath */
-    NULL,                               /* wine_get_wgl_driver */
+    ANDROID_wine_get_wgl_driver,        /* wine_get_wgl_driver */
     GDI_PRIORITY_GRAPHICS_DRV           /* priority */
 };
 
@@ -390,7 +473,8 @@ const struct gdi_dc_funcs * CDECL ANDROID_get_gdi_driver( unsigned int version )
 static const JNINativeMethod methods[] =
 {
     { "wine_desktop_changed", "(II)V", desktop_changed },
-    { "wine_surface_changed", "(ILandroid/view/Surface;)V", surface_changed },
+    { "wine_config_changed", "(I)V", config_changed },
+    { "wine_surface_changed", "(ILandroid/view/Surface;Z)V", surface_changed },
     { "wine_motion_event", "(IIIIII)Z", motion_event },
     { "wine_keyboard_event", "(IIII)Z", keyboard_event },
 };

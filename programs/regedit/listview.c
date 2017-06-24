@@ -129,8 +129,13 @@ void format_value_data(HWND hwndLV, int index, DWORD type, void *data, DWORD siz
             ListView_SetItemTextW(hwndLV, index, 2, buf);
             break;
         }
+        case REG_MULTI_SZ:
+            MakeMULTISZDisplayable(data);
+            ListView_SetItemTextW(hwndLV, index, 2, data);
+            break;
         case REG_BINARY:
         case REG_NONE:
+        default:
         {
             unsigned int i;
             BYTE *pData = data;
@@ -143,21 +148,10 @@ void format_value_data(HWND hwndLV, int index, DWORD type, void *data, DWORD siz
             HeapFree(GetProcessHeap(), 0, strBinary);
             break;
         }
-        case REG_MULTI_SZ:
-            MakeMULTISZDisplayable(data);
-            ListView_SetItemTextW(hwndLV, index, 2, data);
-            break;
-        default:
-        {
-            WCHAR szText[128];
-            LoadStringW(hInst, IDS_REGISTRY_VALUE_CANT_DISPLAY, szText, COUNT_OF(szText));
-            ListView_SetItemTextW(hwndLV, index, 2, szText);
-            break;
-        }
     }
 }
 
-int AddEntryToList(HWND hwndLV, WCHAR *Name, DWORD dwValType, void *ValBuf, DWORD dwCount)
+int AddEntryToList(HWND hwndLV, WCHAR *Name, DWORD dwValType, void *ValBuf, DWORD dwCount, int pos)
 {
     LINE_INFO* linfo;
     LVITEMW item;
@@ -178,7 +172,7 @@ int AddEntryToList(HWND hwndLV, WCHAR *Name, DWORD dwValType, void *ValBuf, DWOR
     }
 
     item.mask = LVIF_TEXT | LVIF_PARAM | LVIF_STATE | LVIF_IMAGE;
-    item.iItem = SendMessageW(hwndLV, LVM_GETITEMCOUNT, 0, 0);
+    item.iItem = (pos == -1) ? SendMessageW(hwndLV, LVM_GETITEMCOUNT, 0, 0) : pos;
     item.iSubItem = 0;
     item.state = 0;
     item.stateMask = LVIS_FOCUSED | LVIS_SELECTED;
@@ -281,7 +275,10 @@ static void OnGetDispInfo(NMLVDISPINFOW* plvdi)
         plvdi->item.pszText = g_pszDefaultValueName;
         break;
     case 1:
-        switch (((LINE_INFO*)plvdi->item.lParam)->dwValType) {
+    {
+        DWORD data_type = ((LINE_INFO *)plvdi->item.lParam)->dwValType;
+
+        switch (data_type) {
         case REG_SZ:
             plvdi->item.pszText = reg_szT;
             break;
@@ -311,14 +308,14 @@ static void OnGetDispInfo(NMLVDISPINFOW* plvdi)
             break;
         default:
           {
-            WCHAR szUnknownFmt[64];
-            LoadStringW(hInst, IDS_REGISTRY_UNKNOWN_TYPE, szUnknownFmt, COUNT_OF(szUnknownFmt));
-            wsprintfW(buffer, szUnknownFmt, plvdi->item.lParam);
+            WCHAR fmt[] = {'0','x','%','x',0};
+            wsprintfW(buffer, fmt, data_type);
             plvdi->item.pszText = buffer;
             break;
           }
         }
         break;
+    }
     case 2:
         plvdi->item.pszText = g_szValueNotSet;
         break;
@@ -557,7 +554,7 @@ BOOL RefreshListView(HWND hwndLV, HKEY hKeyRoot, LPCWSTR keyPath, LPCWSTR highli
 
     valSize = max_val_size;
     if (RegQueryValueExW(hKey, NULL, NULL, &valType, valBuf, &valSize) == ERROR_FILE_NOT_FOUND) {
-        AddEntryToList(hwndLV, NULL, REG_SZ, NULL, 0);
+        AddEntryToList(hwndLV, NULL, REG_SZ, NULL, 0, -1);
     }
     for(index = 0; index < val_count; index++) {
         valNameLen = max_val_name_len;
@@ -566,7 +563,7 @@ BOOL RefreshListView(HWND hwndLV, HKEY hKeyRoot, LPCWSTR keyPath, LPCWSTR highli
         errCode = RegEnumValueW(hKey, index, valName, &valNameLen, NULL, &valType, valBuf, &valSize);
 	if (errCode != ERROR_SUCCESS) goto done;
         valBuf[valSize] = 0;
-        AddEntryToList(hwndLV, valName[0] ? valName : NULL, valType, valBuf, valSize);
+        AddEntryToList(hwndLV, valName[0] ? valName : NULL, valType, valBuf, valSize, -1);
     }
 
     memset(&item, 0, sizeof(item));

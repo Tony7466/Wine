@@ -136,7 +136,7 @@ static void test_WsCreateWriter(void)
 
     bytes.length = 0xdeadbeef;
     bytes.bytes = (BYTE *)0xdeadbeef;
-    size = sizeof(buffers);
+    size = sizeof(bytes);
     hr = WsGetWriterProperty( writer, WS_XML_WRITER_PROPERTY_BYTES, &bytes, size, NULL );
     ok( hr == S_OK, "got %08x\n", hr );
     ok( !bytes.length, "got %u\n", bytes.length );
@@ -679,6 +679,7 @@ static void test_basic_type(void)
     WCHAR *str;
     WS_STRING string;
     WS_BYTES bytes;
+    WS_UNIQUE_ID id;
     ULONG i;
     static const struct
     {
@@ -829,6 +830,25 @@ static void test_basic_type(void)
     ok( hr == S_OK, "got %08x\n", hr );
     check_output( writer, "<t a:nil=\"true\" xmlns:a=\"http://www.w3.org/2001/XMLSchema-instance\"/>",
                   __LINE__ );
+
+    prepare_basic_type_test( writer );
+    memset( &id, 0, sizeof(id) );
+    hr = WsWriteType( writer, WS_ELEMENT_TYPE_MAPPING, WS_UNIQUE_ID_TYPE, NULL, WS_WRITE_REQUIRED_VALUE,
+                      &id, sizeof(id), NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    hr = WsWriteEndElement( writer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    check_output( writer, "<t>urn:uuid:00000000-0000-0000-0000-000000000000</t>", __LINE__ );
+
+    prepare_basic_type_test( writer );
+    id.uri.length = 4;
+    id.uri.chars  = testW;
+    hr = WsWriteType( writer, WS_ELEMENT_TYPE_MAPPING, WS_UNIQUE_ID_TYPE, NULL, WS_WRITE_REQUIRED_VALUE,
+                      &id, sizeof(id), NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    hr = WsWriteEndElement( writer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    check_output( writer, "<t>test</t>", __LINE__ );
 
     WsFreeWriter( writer );
 }
@@ -1971,17 +1991,9 @@ static void test_WsWriteNode(void)
 
 static HRESULT set_input( WS_XML_READER *reader, const char *data, ULONG size )
 {
-    WS_XML_READER_TEXT_ENCODING enc;
-    WS_XML_READER_BUFFER_INPUT input;
-
-    enc.encoding.encodingType = WS_XML_READER_ENCODING_TYPE_TEXT;
-    enc.charSet               = WS_CHARSET_AUTO;
-
-    input.input.inputType = WS_XML_READER_INPUT_TYPE_BUFFER;
-    input.encodedData     = (void *)data;
-    input.encodedDataSize = size;
-
-    return WsSetInput( reader, &enc.encoding, &input.input, NULL, 0, NULL );
+    WS_XML_READER_TEXT_ENCODING text = {{WS_XML_READER_ENCODING_TYPE_TEXT}, WS_CHARSET_AUTO};
+    WS_XML_READER_BUFFER_INPUT buf = {{WS_XML_READER_INPUT_TYPE_BUFFER}, (void *)data, size};
+    return WsSetInput( reader, &text.encoding, &buf.input, NULL, 0, NULL );
 }
 
 static void test_WsCopyNode(void)
@@ -2090,6 +2102,20 @@ static void test_WsCopyNode(void)
     ok( bufs.bufferCount == 1, "got %u\n", bufs.bufferCount );
     ok( bufs.buffers != NULL, "buffers not set\n" );
 
+    /* reader positioned at BOF, single text node */
+    hr = set_input( reader, "text", sizeof("text") - 1 );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsGetReaderNode( reader, &node, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    ok( node->nodeType == WS_XML_NODE_TYPE_BOF, "got %u\n", node->nodeType );
+
+    hr = set_output( writer );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsCopyNode( writer, reader, NULL );
+    ok( hr == WS_E_INVALID_FORMAT, "got %08x\n", hr );
+
     WsFreeReader( reader );
     WsFreeWriter( writer );
     WsFreeHeap( heap );
@@ -2098,10 +2124,12 @@ static void test_WsCopyNode(void)
 static void test_text_types(void)
 {
     static const WCHAR utf16W[] = {'u','t','f','1','6'};
-    WS_XML_STRING localname = {1, (BYTE *)"t"}, ns = {0, NULL};
+    WS_XML_STRING prefix = {1, (BYTE *)"p"}, localname = {1, (BYTE *)"t"}, localname2 = {1, (BYTE *)"u"};
+    WS_XML_STRING ns = {0, NULL}, ns2 = {2, (BYTE *)"ns"};
     WS_XML_WRITER *writer;
     static const WS_XML_UTF8_TEXT val_utf8 = { {WS_XML_TEXT_TYPE_UTF8}, {4, (BYTE *)"utf8"} };
     static WS_XML_UTF16_TEXT val_utf16 = { {WS_XML_TEXT_TYPE_UTF16} };
+    static WS_XML_QNAME_TEXT val_qname = { {WS_XML_TEXT_TYPE_QNAME} };
     static const WS_XML_GUID_TEXT val_guid = { {WS_XML_TEXT_TYPE_GUID} };
     static const WS_XML_UNIQUE_ID_TEXT val_urn = { {WS_XML_TEXT_TYPE_UNIQUE_ID} };
     static const WS_XML_BOOL_TEXT val_bool = { {WS_XML_TEXT_TYPE_BOOL}, TRUE };
@@ -2129,12 +2157,15 @@ static void test_text_types(void)
         { &val_datetime.text, "<t>0001-01-01T00:00:00Z</t>" },
         { &val_double.text, "<t>1.1</t>" },
         { &val_base64.text, "<t>dGVzdA==</t>" },
+        { &val_qname.text,  "<t>u</t>" },
     };
     HRESULT hr;
     ULONG i;
 
     val_utf16.bytes     = (BYTE *)utf16W;
     val_utf16.byteCount = sizeof(utf16W);
+    val_qname.localName = &localname2;
+    val_qname.ns        = &ns;
 
     hr = WsCreateWriter( NULL, 0, &writer, NULL );
     ok( hr == S_OK, "got %08x\n", hr );
@@ -2153,6 +2184,21 @@ static void test_text_types(void)
         ok( hr == S_OK, "%u: got %08x\n", i, hr );
         check_output( writer, tests[i].result, __LINE__ );
     }
+
+    hr = set_output( writer );
+    ok( hr == S_OK, "got %08x\n", hr );
+    hr = WsWriteStartElement( writer, &prefix, &localname, &ns2, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    val_qname.prefix    = &prefix;
+    val_qname.localName = &localname2;
+    val_qname.ns        = &ns2;
+    hr = WsWriteText( writer, &val_qname.text, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = WsWriteEndElement( writer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    check_output( writer, "<p:t xmlns:p=\"ns\">p:u</p:t>", __LINE__ );
 
     WsFreeWriter( writer );
 }
@@ -3603,6 +3649,34 @@ static const WS_XML_STRING *init_xmlstring_dict( WS_XML_DICTIONARY *dict, ULONG 
     return str;
 }
 
+static HRESULT CALLBACK dict_cb( void *state, const WS_XML_STRING *str, BOOL *found, ULONG *id, WS_ERROR *error )
+{
+    ULONG *call_count = state;
+
+    (*call_count)++;
+    switch (str->bytes[0])
+    {
+    case 't':
+        *id = 1;
+        *found = TRUE;
+        break;
+
+    case 'n':
+        *id = 2;
+        *found = TRUE;
+        break;
+
+    case 'v':
+        *found = FALSE;
+        return WS_E_OTHER;
+
+    default:
+        *found = FALSE;
+        break;
+    }
+    return S_OK;
+}
+
 static void test_dictionary(void)
 {
     static const char res[] =
@@ -3613,6 +3687,12 @@ static void test_dictionary(void)
         {0x53,0x06,0x0b,0x01,'p',0x0a,0x01};
     static const char res4[] =
         {0x43,0x02,'p','2',0x06,0x0b,0x02,'p','2',0x0a,0x01};
+    static const char res5[] =
+        {0x42,0x03,0x0a,0x05,0x01};
+    static const char res6[] =
+        {0x40,0x01,0x75,0x0a,0x05,0x01};
+    static const char res7[] =
+        {0x40,0x01,0x76,0x0a,0x05,0x01};
     static const char res100[] =
         {0x42,0x06,0x06,0x06,0x98,0x00,0x01};
     static const char res101[] =
@@ -3626,7 +3706,7 @@ static void test_dictionary(void)
     WS_XML_DICTIONARY dict;
     WS_XML_WRITER *writer;
     HRESULT hr;
-    ULONG i;
+    ULONG i, call_count;
     static const struct
     {
         ULONG       prefix;
@@ -3722,11 +3802,54 @@ static void test_dictionary(void)
         hr = WsWriteStartAttribute( writer, prefix_ptr, localname_ptr, ns_ptr, FALSE, NULL );
         ok( hr == S_OK, "%u: got %08x\n", i, hr );
         hr = WsWriteEndAttribute( writer, NULL );
-        ok( hr == S_OK, "got %08x\n", hr );
+        ok( hr == S_OK, "%u: got %08x\n", i, hr );
         hr = WsWriteEndElement( writer, NULL );
         ok( hr == S_OK, "%u: got %08x\n", i, hr );
         if (hr == S_OK) check_output_bin( writer, attr_tests[i].result, attr_tests[i].len_result, __LINE__ );
     }
+
+    /* callback */
+    bin.staticDictionary = NULL;
+    bin.dynamicStringCallback = dict_cb;
+    bin.dynamicStringCallbackState = &call_count;
+
+    hr = WsSetOutput( writer, &bin.encoding, &buf.output, NULL, 0, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    init_xmlstring( "t", &localname );
+    init_xmlstring( "ns", &ns );
+    call_count = 0;
+    hr = WsWriteStartElement( writer, NULL, &localname, &ns, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    hr = WsWriteEndElement( writer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    ok( call_count == 2, "got %u\n", call_count );
+    check_output_bin( writer, res5, sizeof(res5), __LINE__ );
+
+    /* unknown string */
+    hr = WsSetOutput( writer, &bin.encoding, &buf.output, NULL, 0, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    init_xmlstring( "u", &localname );
+    init_xmlstring( "ns", &ns );
+    call_count = 0;
+    hr = WsWriteStartElement( writer, NULL, &localname, &ns, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    hr = WsWriteEndElement( writer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    ok( call_count == 2, "got %u\n", call_count );
+    check_output_bin( writer, res6, sizeof(res6), __LINE__ );
+
+    /* unknown string, error return from callback */
+    hr = WsSetOutput( writer, &bin.encoding, &buf.output, NULL, 0, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    init_xmlstring( "v", &localname );
+    init_xmlstring( "ns", &ns );
+    call_count = 0;
+    hr = WsWriteStartElement( writer, NULL, &localname, &ns, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    hr = WsWriteEndElement( writer, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    ok( call_count == 2, "got %u\n", call_count );
+    check_output_bin( writer, res7, sizeof(res7), __LINE__ );
 
     WsFreeWriter( writer );
 }

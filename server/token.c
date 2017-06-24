@@ -70,6 +70,7 @@ static const SID interactive_sid = { SID_REVISION, 1, { SECURITY_NT_AUTHORITY },
 static const SID anonymous_logon_sid = { SID_REVISION, 1, { SECURITY_NT_AUTHORITY }, { SECURITY_ANONYMOUS_LOGON_RID } };
 static const SID authenticated_user_sid = { SID_REVISION, 1, { SECURITY_NT_AUTHORITY }, { SECURITY_AUTHENTICATED_USER_RID } };
 static const SID local_system_sid = { SID_REVISION, 1, { SECURITY_NT_AUTHORITY }, { SECURITY_LOCAL_SYSTEM_RID } };
+static const SID high_label_sid = { SID_REVISION, 1, { SECURITY_MANDATORY_LABEL_AUTHORITY }, { SECURITY_MANDATORY_HIGH_RID } };
 static const struct /* same fields as struct SID */
 {
     BYTE Revision;
@@ -100,6 +101,7 @@ const PSID security_local_system_sid = (PSID)&local_system_sid;
 const PSID security_local_user_sid = (PSID)&local_user_sid;
 const PSID security_builtin_admins_sid = (PSID)&builtin_admins_sid;
 const PSID security_builtin_users_sid = (PSID)&builtin_users_sid;
+const PSID security_high_label_sid = (PSID)&high_label_sid;
 
 static luid_t prev_luid_value = { 1000, 0 };
 
@@ -336,6 +338,116 @@ int sd_is_valid( const struct security_descriptor *sd, data_size_t size )
     return TRUE;
 }
 
+/* extract security labels from SACL */
+ACL *extract_security_labels( const ACL *sacl )
+{
+    size_t size = sizeof(ACL);
+    const ACE_HEADER *ace;
+    ACE_HEADER *label_ace;
+    unsigned int i, count = 0;
+    ACL *label_acl;
+
+    ace = (const ACE_HEADER *)(sacl + 1);
+    for (i = 0; i < sacl->AceCount; i++, ace = ace_next( ace ))
+    {
+        if (ace->AceType == SYSTEM_MANDATORY_LABEL_ACE_TYPE)
+        {
+            size += ace->AceSize;
+            count++;
+        }
+    }
+
+    label_acl = mem_alloc( size );
+    if (!label_acl) return NULL;
+
+    label_acl->AclRevision = sacl->AclRevision;
+    label_acl->Sbz1 = 0;
+    label_acl->AclSize = size;
+    label_acl->AceCount = count;
+    label_acl->Sbz2 = 0;
+    label_ace = (ACE_HEADER *)(label_acl + 1);
+
+    ace = (const ACE_HEADER *)(sacl + 1);
+    for (i = 0; i < sacl->AceCount; i++, ace = ace_next( ace ))
+    {
+        if (ace->AceType == SYSTEM_MANDATORY_LABEL_ACE_TYPE)
+        {
+            memcpy( label_ace, ace, ace->AceSize );
+            label_ace = (ACE_HEADER *)ace_next( label_ace );
+        }
+    }
+    return label_acl;
+}
+
+/* replace security labels in an existing SACL */
+ACL *replace_security_labels( const ACL *old_sacl, const ACL *new_sacl )
+{
+    const ACE_HEADER *ace;
+    ACE_HEADER *replaced_ace;
+    size_t size = sizeof(ACL);
+    unsigned int i, count = 0;
+    BYTE revision = ACL_REVISION;
+    ACL *replaced_acl;
+
+    if (old_sacl)
+    {
+        revision = max( revision, old_sacl->AclRevision );
+        ace = (const ACE_HEADER *)(old_sacl + 1);
+        for (i = 0; i < old_sacl->AceCount; i++, ace = ace_next( ace ))
+        {
+            if (ace->AceType == SYSTEM_MANDATORY_LABEL_ACE_TYPE) continue;
+            size += ace->AceSize;
+            count++;
+        }
+    }
+
+    if (new_sacl)
+    {
+        revision = max( revision, new_sacl->AclRevision );
+        ace = (const ACE_HEADER *)(new_sacl + 1);
+        for (i = 0; i < new_sacl->AceCount; i++, ace = ace_next( ace ))
+        {
+            if (ace->AceType != SYSTEM_MANDATORY_LABEL_ACE_TYPE) continue;
+            size += ace->AceSize;
+            count++;
+        }
+    }
+
+    replaced_acl = mem_alloc( size );
+    if (!replaced_acl) return NULL;
+
+    replaced_acl->AclRevision = revision;
+    replaced_acl->Sbz1 = 0;
+    replaced_acl->AclSize = size;
+    replaced_acl->AceCount = count;
+    replaced_acl->Sbz2 = 0;
+    replaced_ace = (ACE_HEADER *)(replaced_acl + 1);
+
+    if (old_sacl)
+    {
+        ace = (const ACE_HEADER *)(old_sacl + 1);
+        for (i = 0; i < old_sacl->AceCount; i++, ace = ace_next( ace ))
+        {
+            if (ace->AceType == SYSTEM_MANDATORY_LABEL_ACE_TYPE) continue;
+            memcpy( replaced_ace, ace, ace->AceSize );
+            replaced_ace = (ACE_HEADER *)ace_next( replaced_ace );
+        }
+    }
+
+    if (new_sacl)
+    {
+        ace = (const ACE_HEADER *)(new_sacl + 1);
+        for (i = 0; i < new_sacl->AceCount; i++, ace = ace_next( ace ))
+        {
+            if (ace->AceType != SYSTEM_MANDATORY_LABEL_ACE_TYPE) continue;
+            memcpy( replaced_ace, ace, ace->AceSize );
+            replaced_ace = (ACE_HEADER *)ace_next( replaced_ace );
+        }
+    }
+
+    return replaced_acl;
+}
+
 /* maps from generic rights to specific rights as given by a mapping */
 static inline void map_generic_mask(unsigned int *mask, const GENERIC_MAPPING *mapping)
 {
@@ -512,7 +624,7 @@ static struct token *create_token( unsigned primary, const SID *user,
 }
 
 struct token *token_duplicate( struct token *src_token, unsigned primary,
-                               int impersonation_level )
+                               int impersonation_level, const struct security_descriptor *sd )
 {
     const luid_t *modified_id =
         primary || (impersonation_level == src_token->impersonation_level) ?
@@ -561,6 +673,9 @@ struct token *token_duplicate( struct token *src_token, unsigned primary,
             release_object( token );
             return NULL;
         }
+
+    if (sd) default_set_sd( &token->obj, sd, OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION |
+                            DACL_SECURITY_INFORMATION | SACL_SECURITY_INFORMATION );
 
     return token;
 }
@@ -612,6 +727,56 @@ struct sid_data
     int count;
     unsigned int subauth[MAX_SUBAUTH_COUNT];
 };
+
+static struct security_descriptor *create_security_label_sd( struct token *token, PSID label_sid )
+{
+    size_t sid_len = security_sid_len( label_sid ), sacl_size, sd_size;
+    SYSTEM_MANDATORY_LABEL_ACE *smla;
+    struct security_descriptor *sd;
+    ACL *sacl;
+
+    sacl_size = sizeof(ACL) + FIELD_OFFSET(SYSTEM_MANDATORY_LABEL_ACE, SidStart) + sid_len;
+    sd_size = sizeof(struct security_descriptor) + sacl_size;
+    if (!(sd = mem_alloc( sd_size )))
+        return NULL;
+
+    sd->control   = SE_SACL_PRESENT;
+    sd->owner_len = 0;
+    sd->group_len = 0;
+    sd->sacl_len  = sacl_size;
+    sd->dacl_len  = 0;
+
+    sacl = (ACL *)(sd + 1);
+    sacl->AclRevision = ACL_REVISION;
+    sacl->Sbz1 = 0;
+    sacl->AclSize = sacl_size;
+    sacl->AceCount = 1;
+    sacl->Sbz2 = 0;
+
+    smla = (SYSTEM_MANDATORY_LABEL_ACE *)(sacl + 1);
+    smla->Header.AceType = SYSTEM_MANDATORY_LABEL_ACE_TYPE;
+    smla->Header.AceFlags = 0;
+    smla->Header.AceSize = FIELD_OFFSET(SYSTEM_MANDATORY_LABEL_ACE, SidStart) + sid_len;
+    smla->Mask = SYSTEM_MANDATORY_LABEL_NO_WRITE_UP;
+    memcpy( &smla->SidStart, label_sid, sid_len );
+
+    assert( sd_is_valid( sd, sd_size ) );
+    return sd;
+}
+
+int token_assign_label( struct token *token, PSID label )
+{
+    struct security_descriptor *sd;
+    int ret = 0;
+
+    if ((sd = create_security_label_sd( token, label )))
+    {
+        ret = set_sd_defaults_from_token( &token->obj, sd, LABEL_SECURITY_INFORMATION, token );
+        free( sd );
+    }
+
+    return ret;
+}
 
 struct token *token_create_admin( void )
 {
@@ -1130,15 +1295,20 @@ DECL_HANDLER(get_token_privileges)
 DECL_HANDLER(duplicate_token)
 {
     struct token *src_token;
+    struct unicode_str name;
+    const struct security_descriptor *sd;
+    const struct object_attributes *objattr = get_req_object_attributes( &sd, &name, NULL );
+
+    if (!objattr) return;
 
     if ((src_token = (struct token *)get_handle_obj( current->process, req->handle,
                                                      TOKEN_DUPLICATE,
                                                      &token_ops )))
     {
-        struct token *token = token_duplicate( src_token, req->primary, req->impersonation_level );
+        struct token *token = token_duplicate( src_token, req->primary, req->impersonation_level, sd );
         if (token)
         {
-            reply->new_handle = alloc_handle( current->process, token, req->access, req->attributes);
+            reply->new_handle = alloc_handle_no_access_check( current->process, token, req->access, objattr->attributes );
             release_object( token );
         }
         release_object( src_token );

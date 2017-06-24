@@ -19,6 +19,8 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include <limits.h>
+
 #define COBJMACROS
 #include <d3d.h>
 #include <initguid.h>
@@ -40,9 +42,37 @@ static ULONG get_refcount(IUnknown *object)
     return IUnknown_Release( object );
 }
 
-static BOOL match_float(float a, float b)
+static BOOL compare_float(float f, float g, unsigned int ulps)
 {
-    return (a - b) < 0.000001f;
+    int x = *(int *)&f;
+    int y = *(int *)&g;
+
+    if (x < 0)
+        x = INT_MIN - x;
+    if (y < 0)
+        y = INT_MIN - y;
+
+    if (abs(x - y) > ulps)
+        return FALSE;
+
+    return TRUE;
+}
+
+#define check_vector(a, b, c, d, e) check_vector_(__LINE__, a, b, c, d, e)
+static void check_vector_(unsigned int line, const D3DVECTOR *v, float x, float y, float z, unsigned int ulps)
+{
+    BOOL ret = compare_float(U1(v)->x, x, ulps)
+            && compare_float(U2(v)->y, y, ulps)
+            && compare_float(U3(v)->z, z, ulps);
+
+    ok_(__FILE__, line)(ret, "Got unexpected vector {%.8e, %.8e, %.8e}, expected {%.8e, %.8e, %.8e}.\n",
+            U1(v)->x, U2(v)->y, U3(v)->z, x, y, z);
+}
+
+#define vector_eq(a, b) vector_eq_(__LINE__, a, b)
+static void vector_eq_(unsigned int line, const D3DVECTOR *left, const D3DVECTOR *right)
+{
+    check_vector_(line, left, U1(right)->x, U2(right)->y, U3(right)->z, 0);
 }
 
 static D3DRMMATRIX4D identity = {
@@ -102,6 +132,81 @@ static void test_class_name_(unsigned int line, IDirect3DRMObject *object, const
     ok_(__FILE__, line)(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
     ok_(__FILE__, line)(size == strlen(name), "Wrong classname size: %u.\n", size);
     ok_(__FILE__, line)(!strcmp(cname, "XXX"), "Expected unchanged buffer, but got \"%s\".\n", cname);
+}
+
+#define test_object_name(a) test_object_name_(__LINE__, a)
+static void test_object_name_(unsigned int line, IDirect3DRMObject *object)
+{
+    char name[64] = {0};
+    HRESULT hr;
+    DWORD size;
+
+    hr = IDirect3DRMObject_GetName(object, NULL, NULL);
+    ok_(__FILE__, line)(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
+
+    name[0] = 0x1f;
+    hr = IDirect3DRMObject_GetName(object, NULL, name);
+    ok_(__FILE__, line)(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
+    ok_(__FILE__, line)(name[0] == 0x1f, "Unexpected buffer contents, %#x.\n", name[0]);
+
+    /* Name is not set yet. */
+    size = 100;
+    hr = IDirect3DRMObject_GetName(object, &size, NULL);
+    ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to get name size, hr %#x.\n", hr);
+    ok_(__FILE__, line)(size == 0, "Unexpected size %u.\n", size);
+
+    size = sizeof(name);
+    name[0] = 0x1f;
+    hr = IDirect3DRMObject_GetName(object, &size, name);
+    ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to get name size, hr %#x.\n", hr);
+    ok_(__FILE__, line)(size == 0, "Unexpected size %u.\n", size);
+    ok_(__FILE__, line)(name[0] == 0, "Unexpected name \"%s\".\n", name);
+
+    size = 0;
+    name[0] = 0x1f;
+    hr = IDirect3DRMObject_GetName(object, &size, name);
+    ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to get name size, hr %#x.\n", hr);
+    ok_(__FILE__, line)(size == 0, "Unexpected size %u.\n", size);
+    ok_(__FILE__, line)(name[0] == 0x1f, "Unexpected name \"%s\".\n", name);
+
+    hr = IDirect3DRMObject_SetName(object, NULL);
+    ok_(__FILE__, line)(SUCCEEDED(hr), "Got unexpected hr %#x.\n", hr);
+
+    hr = IDirect3DRMObject_SetName(object, "name");
+    ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to set a name, hr %#x.\n", hr);
+
+    size = 0;
+    hr = IDirect3DRMObject_GetName(object, &size, NULL);
+    ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to get name size, hr %#x.\n", hr);
+    ok_(__FILE__, line)(size == strlen("name") + 1, "Unexpected size %u.\n", size);
+
+    size = strlen("name") + 1;
+    hr = IDirect3DRMObject_GetName(object, &size, name);
+    ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to get name size, hr %#x.\n", hr);
+    ok_(__FILE__, line)(size == strlen("name") + 1, "Unexpected size %u.\n", size);
+    ok_(__FILE__, line)(!strcmp(name, "name"), "Unexpected name \"%s\".\n", name);
+
+    size = 2;
+    name[0] = 0x1f;
+    hr = IDirect3DRMObject_GetName(object, &size, name);
+    ok_(__FILE__, line)(hr == E_INVALIDARG, "Failed to get object name, hr %#x.\n", hr);
+    ok_(__FILE__, line)(size == 2, "Unexpected size %u.\n", size);
+    ok_(__FILE__, line)(name[0] == 0x1f, "Got unexpected name \"%s\".\n", name);
+
+    hr = IDirect3DRMObject_SetName(object, NULL);
+    ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to set object name, hr %#x.\n", hr);
+
+    size = 1;
+    hr = IDirect3DRMObject_GetName(object, &size, NULL);
+    ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to get name size, hr %#x.\n", hr);
+    ok_(__FILE__, line)(size == 0, "Unexpected size %u.\n", size);
+
+    size = 1;
+    name[0] = 0x1f;
+    hr = IDirect3DRMObject_GetName(object, &size, name);
+    ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to get name size, hr %#x.\n", hr);
+    ok_(__FILE__, line)(size == 0, "Unexpected size %u.\n", size);
+    ok_(__FILE__, line)(name[0] == 0, "Got unexpected name \"%s\".\n", name);
 }
 
 static char data_bad_version[] =
@@ -301,6 +406,7 @@ static void test_MeshBuilder(void)
     IDirect3DRMMeshBuilder3_Release(meshbuilder3);
 
     test_class_name((IDirect3DRMObject *)pMeshBuilder, "Builder");
+    test_object_name((IDirect3DRMObject *)pMeshBuilder);
 
     info.lpMemory = data_bad_version;
     info.dSize = strlen(data_bad_version);
@@ -352,18 +458,10 @@ static void test_MeshBuilder(void)
     /* Check that Load method generated default normals */
     hr = IDirect3DRMMeshBuilder_GetVertices(pMeshBuilder, NULL, NULL, &val2, n, NULL, NULL);
     ok(hr == D3DRM_OK, "Cannot get vertices information (hr = %x)\n", hr);
-    ok(match_float(U1(n[0]).x, 0.577350f),  "Wrong component n[0].x = %f (expected %f)\n", U1(n[0]).x, 0.577350f);
-    ok(match_float(U2(n[0]).y, 0.577350f),  "Wrong component n[0].y = %f (expected %f)\n", U2(n[0]).y, 0.577350f);
-    ok(match_float(U3(n[0]).z, 0.577350f),  "Wrong component n[0].z = %f (expected %f)\n", U3(n[0]).z, 0.577350f);
-    ok(match_float(U1(n[1]).x, -0.229416f), "Wrong component n[1].x = %f (expected %f)\n", U1(n[1]).x, -0.229416f);
-    ok(match_float(U2(n[1]).y, 0.688247f),  "Wrong component n[1].y = %f (expected %f)\n", U2(n[1]).y, 0.688247f);
-    ok(match_float(U3(n[1]).z, 0.688247f),  "Wrong component n[1].z = %f (expected %f)\n", U3(n[1]).z, 0.688247f);
-    ok(match_float(U1(n[2]).x, -0.229416f), "Wrong component n[2].x = %f (expected %f)\n", U1(n[2]).x, -0.229416f);
-    ok(match_float(U2(n[2]).y, 0.688247f),  "Wrong component n[2].y = %f (expected %f)\n", U2(n[2]).y, 0.688247f);
-    ok(match_float(U3(n[2]).z, 0.688247f),  "Wrong component n[2].z = %f (expected %f)\n", U3(n[2]).z, 0.688247f);
-    ok(match_float(U1(n[3]).x, -0.577350f), "Wrong component n[3].x = %f (expected %f)\n", U1(n[3]).x, -0.577350f);
-    ok(match_float(U2(n[3]).y, 0.577350f),  "Wrong component n[3].y = %f (expected %f)\n", U2(n[3]).y, 0.577350f);
-    ok(match_float(U3(n[3]).z, 0.577350f),  "Wrong component n[3].z = %f (expected %f)\n", U3(n[3]).z, 0.577350f);
+    check_vector(&n[0],  0.577350f, 0.577350f, 0.577350f, 32);
+    check_vector(&n[1], -0.229416f, 0.688247f, 0.688247f, 32);
+    check_vector(&n[2], -0.229416f, 0.688247f, 0.688247f, 32);
+    check_vector(&n[3], -0.577350f, 0.577350f, 0.577350f, 32);
 
     /* Check that Load method generated default texture coordinates (0.0f, 0.0f) for each vertex */
     valu = 1.23f;
@@ -459,24 +557,12 @@ static void test_MeshBuilder(void)
     ok(val1 == 3, "Wrong number of vertices %d (must be 3)\n", val1);
     ok(val2 == 3, "Wrong number of normals %d (must be 3)\n", val2);
     ok(val3 == 8, "Wrong number of face data bytes %d (must be 8)\n", val3);
-    ok(U1(v[0]).x == 0.1f, "Wrong component v[0].x = %f (expected 0.1)\n", U1(v[0]).x);
-    ok(U2(v[0]).y == 0.2f, "Wrong component v[0].y = %f (expected 0.2)\n", U2(v[0]).y);
-    ok(U3(v[0]).z == 0.3f, "Wrong component v[0].z = %f (expected 0.3)\n", U3(v[0]).z);
-    ok(U1(v[1]).x == 0.4f, "Wrong component v[1].x = %f (expected 0.4)\n", U1(v[1]).x);
-    ok(U2(v[1]).y == 0.5f, "Wrong component v[1].y = %f (expected 0.5)\n", U2(v[1]).y);
-    ok(U3(v[1]).z == 0.6f, "Wrong component v[1].z = %f (expected 0.6)\n", U3(v[1]).z);
-    ok(U1(v[2]).x == 0.7f, "Wrong component v[2].x = %f (expected 0.7)\n", U1(v[2]).x);
-    ok(U2(v[2]).y == 0.8f, "Wrong component v[2].y = %f (expected 0.8)\n", U2(v[2]).y);
-    ok(U3(v[2]).z == 0.9f, "Wrong component v[2].z = %f (expected 0.9)\n", U3(v[2]).z);
-    ok(U1(n[0]).x == 1.1f, "Wrong component n[0].x = %f (expected 1.1)\n", U1(n[0]).x);
-    ok(U2(n[0]).y == 1.2f, "Wrong component n[0].y = %f (expected 1.2)\n", U2(n[0]).y);
-    ok(U3(n[0]).z == 1.3f, "Wrong component n[0].z = %f (expected 1.3)\n", U3(n[0]).z);
-    ok(U1(n[1]).x == 1.4f, "Wrong component n[1].x = %f (expected 1.4)\n", U1(n[1]).x);
-    ok(U2(n[1]).y == 1.5f, "Wrong component n[1].y = %f (expected 1.5)\n", U2(n[1]).y);
-    ok(U3(n[1]).z == 1.6f, "Wrong component n[1].z = %f (expected 1.6)\n", U3(n[1]).z);
-    ok(U1(n[2]).x == 1.7f, "Wrong component n[2].x = %f (expected 1.7)\n", U1(n[2]).x);
-    ok(U2(n[2]).y == 1.8f, "Wrong component n[2].y = %f (expected 1.8)\n", U2(n[2]).y);
-    ok(U3(n[2]).z == 1.9f, "Wrong component n[2].z = %f (expected 1.9)\n", U3(n[2]).z);
+    check_vector(&v[0], 0.1f, 0.2f, 0.3f, 32);
+    check_vector(&v[1], 0.4f, 0.5f, 0.6f, 32);
+    check_vector(&v[2], 0.7f, 0.8f, 0.9f, 32);
+    check_vector(&n[0], 1.1f, 1.2f, 1.3f, 32);
+    check_vector(&n[1], 1.4f, 1.5f, 1.6f, 32);
+    check_vector(&n[2], 1.7f, 1.8f, 1.9f, 32);
     ok(f[0] == 3 , "Wrong component f[0] = %d (expected 3)\n", f[0]);
     ok(f[1] == 0 , "Wrong component f[1] = %d (expected 0)\n", f[1]);
     ok(f[2] == 0 , "Wrong component f[2] = %d (expected 0)\n", f[2]);
@@ -539,25 +625,14 @@ static void test_MeshBuilder(void)
     ok(hr == D3DRM_OK, "Cannot get vertices information (hr = %x)\n", hr);
     ok(val2 == 3, "Wrong number of normals %d (must be 3)\n", val2);
     ok(val1 == 3, "Wrong number of vertices %d (must be 3)\n", val1);
-    ok(U1(v[0]).x == 0.1f*2, "Wrong component v[0].x = %f (expected %f)\n", U1(v[0]).x, 0.1f*2);
-    ok(U2(v[0]).y == 0.2f*3, "Wrong component v[0].y = %f (expected %f)\n", U2(v[0]).y, 0.2f*3);
-    ok(U3(v[0]).z == 0.3f*4, "Wrong component v[0].z = %f (expected %f)\n", U3(v[0]).z, 0.3f*4);
-    ok(U1(v[1]).x == 0.4f*2, "Wrong component v[1].x = %f (expected %f)\n", U1(v[1]).x, 0.4f*2);
-    ok(U2(v[1]).y == 0.5f*3, "Wrong component v[1].y = %f (expected %f)\n", U2(v[1]).y, 0.5f*3);
-    ok(U3(v[1]).z == 0.6f*4, "Wrong component v[1].z = %f (expected %f)\n", U3(v[1]).z, 0.6f*4);
-    ok(U1(v[2]).x == 0.7f*2, "Wrong component v[2].x = %f (expected %f)\n", U1(v[2]).x, 0.7f*2);
-    ok(U2(v[2]).y == 0.8f*3, "Wrong component v[2].y = %f (expected %f)\n", U2(v[2]).y, 0.8f*3);
-    ok(U3(v[2]).z == 0.9f*4, "Wrong component v[2].z = %f (expected %f)\n", U3(v[2]).z, 0.9f*4);
+
+    check_vector(&v[0], 0.1f * 2, 0.2f * 3, 0.3f * 4, 32);
+    check_vector(&v[1], 0.4f * 2, 0.5f * 3, 0.6f * 4, 32);
+    check_vector(&v[2], 0.7f * 2, 0.8f * 3, 0.9f * 4, 32);
     /* Normals are not affected by Scale */
-    ok(U1(n[0]).x == 1.1f, "Wrong component n[0].x = %f (expected %f)\n", U1(n[0]).x, 1.1f);
-    ok(U2(n[0]).y == 1.2f, "Wrong component n[0].y = %f (expected %f)\n", U2(n[0]).y, 1.2f);
-    ok(U3(n[0]).z == 1.3f, "Wrong component n[0].z = %f (expected %f)\n", U3(n[0]).z, 1.3f);
-    ok(U1(n[1]).x == 1.4f, "Wrong component n[1].x = %f (expected %f)\n", U1(n[1]).x, 1.4f);
-    ok(U2(n[1]).y == 1.5f, "Wrong component n[1].y = %f (expected %f)\n", U2(n[1]).y, 1.5f);
-    ok(U3(n[1]).z == 1.6f, "Wrong component n[1].z = %f (expected %f)\n", U3(n[1]).z, 1.6f);
-    ok(U1(n[2]).x == 1.7f, "Wrong component n[2].x = %f (expected %f)\n", U1(n[2]).x, 1.7f);
-    ok(U2(n[2]).y == 1.8f, "Wrong component n[2].y = %f (expected %f)\n", U2(n[2]).y, 1.8f);
-    ok(U3(n[2]).z == 1.9f, "Wrong component n[2].z = %f (expected %f)\n", U3(n[2]).z, 1.9f);
+    check_vector(&n[0], 1.1f, 1.2f, 1.3f, 32);
+    check_vector(&n[1], 1.4f, 1.5f, 1.6f, 32);
+    check_vector(&n[2], 1.7f, 1.8f, 1.9f, 32);
 
     IDirect3DRMMeshBuilder_Release(pMeshBuilder);
 
@@ -589,6 +664,7 @@ static void test_MeshBuilder3(void)
     ok(hr == D3DRM_OK, "Cannot get IDirect3DRMMeshBuilder3 interface (hr = %x)\n", hr);
 
     test_class_name((IDirect3DRMObject *)pMeshBuilder3, "Builder");
+    test_object_name((IDirect3DRMObject *)pMeshBuilder3);
 
     info.lpMemory = data_bad_version;
     info.dSize = strlen(data_bad_version);
@@ -676,6 +752,7 @@ static void test_Mesh(void)
     ok(hr == D3DRM_OK, "Cannot get IDirect3DRMMesh interface (hr = %x)\n", hr);
 
     test_class_name((IDirect3DRMObject *)mesh, "Mesh");
+    test_object_name((IDirect3DRMObject *)mesh);
 
     hr = IDirect3DRMMesh_QueryInterface(mesh, &IID_IDirect3DRMObject, (void **)&unk);
     ok(SUCCEEDED(hr), "Failed to get IDirect3DRMObject, %#x.\n", hr);
@@ -725,6 +802,7 @@ static void test_Face(void)
     IDirect3DRMObject_Release(obj);
 
     test_class_name((IDirect3DRMObject *)face1, "Face");
+    test_object_name((IDirect3DRMObject *)face1);
 
     icount = IDirect3DRMFace_GetVertexCount(face1);
     ok(!icount, "wrong VertexCount: %i\n", icount);
@@ -806,6 +884,7 @@ static void test_Face(void)
     IDirect3DRMObject_Release(obj);
 
     test_class_name((IDirect3DRMObject *)face2, "Face");
+    test_object_name((IDirect3DRMObject *)face2);
 
     icount = IDirect3DRMMeshBuilder3_GetFaceCount(MeshBuilder3);
     todo_wine
@@ -871,43 +950,14 @@ static void test_Face(void)
         hr = IDirect3DRMFace_GetVertices(face, &count, v2, n2);
         ok(hr == D3DRM_OK, "Cannot get vertices information (hr = %x)\n", hr);
         ok(count == 3, "Wrong number of vertices %d (must be 3)\n", count);
-        ok(U1(v2[0]).x == U1(v1[0]).x, "Wrong component v2[0].x = %f (expected %f)\n",
-           U1(v2[0]).x, U1(v1[0]).x);
-        ok(U2(v2[0]).y == U2(v1[0]).y, "Wrong component v2[0].y = %f (expected %f)\n",
-           U2(v2[0]).y, U2(v1[0]).y);
-        ok(U3(v2[0]).z == U3(v1[0]).z, "Wrong component v2[0].z = %f (expected %f)\n",
-           U3(v2[0]).z, U3(v1[0]).z);
-        ok(U1(v2[1]).x == U1(v1[1]).x, "Wrong component v2[1].x = %f (expected %f)\n",
-           U1(v2[1]).x, U1(v1[1]).x);
-        ok(U2(v2[1]).y == U2(v1[1]).y, "Wrong component v2[1].y = %f (expected %f)\n",
-           U2(v2[1]).y, U2(v1[1]).y);
-        ok(U3(v2[1]).z == U3(v1[1]).z, "Wrong component v2[1].z = %f (expected %f)\n",
-           U3(v2[1]).z, U3(v1[1]).z);
-        ok(U1(v2[2]).x == U1(v1[2]).x, "Wrong component v2[2].x = %f (expected %f)\n",
-           U1(v2[2]).x, U1(v1[2]).x);
-        ok(U2(v2[2]).y == U2(v1[2]).y, "Wrong component v2[2].y = %f (expected %f)\n",
-           U2(v2[2]).y, U2(v1[2]).y);
-        ok(U3(v2[2]).z == U3(v1[2]).z, "Wrong component v2[2].z = %f (expected %f)\n",
-           U3(v2[2]).z, U3(v1[2]).z);
 
-        ok(U1(n2[0]).x == U1(n1[0]).x, "Wrong component n2[0].x = %f (expected %f)\n",
-           U1(n2[0]).x, U1(n1[0]).x);
-        ok(U2(n2[0]).y == U2(n1[0]).y, "Wrong component n2[0].y = %f (expected %f)\n",
-           U2(n2[0]).y, U2(n1[0]).y);
-        ok(U3(n2[0]).z == U3(n1[0]).z, "Wrong component n2[0].z = %f (expected %f)\n",
-           U3(n2[0]).z, U3(n1[0]).z);
-        ok(U1(n2[1]).x == U1(n1[1]).x, "Wrong component n2[1].x = %f (expected %f)\n",
-           U1(n2[1]).x, U1(n1[1]).x);
-        ok(U2(n2[1]).y == U2(n1[1]).y, "Wrong component n2[1].y = %f (expected %f)\n",
-           U2(n2[1]).y, U2(n1[1]).y);
-        ok(U3(n2[1]).z == U3(n1[1]).z, "Wrong component n2[1].z = %f (expected %f)\n",
-           U3(n2[1]).z, U3(n1[1]).z);
-        ok(U1(n2[2]).x == U1(n1[2]).x, "Wrong component n2[2].x = %f (expected %f)\n",
-           U1(n2[2]).x, U1(n1[2]).x);
-        ok(U2(n2[2]).y == U2(n1[2]).y, "Wrong component n2[2].y = %f (expected %f)\n",
-           U2(n2[2]).y, U2(n1[2]).y);
-        ok(U3(n2[2]).z == U3(n1[2]).z, "Wrong component n2[2].z = %f (expected %f)\n",
-           U3(n2[2]).z, U3(n1[2]).z);
+        vector_eq(&v1[0], &v2[0]);
+        vector_eq(&v1[1], &v2[1]);
+        vector_eq(&v1[2], &v2[2]);
+
+        vector_eq(&n1[0], &n2[0]);
+        vector_eq(&n1[1], &n2[1]);
+        vector_eq(&n1[2], &n2[2]);
 
         IDirect3DRMFace_Release(face);
         IDirect3DRMFaceArray_Release(array1);
@@ -937,17 +987,22 @@ static void test_Frame(void)
     IDirect3DRMLight *light1;
     IDirect3DRMLight *light_tmp;
     IDirect3DRMLightArray *light_array;
+    ULONG ref, ref2;
     D3DCOLOR color;
     DWORD count;
 
     hr = Direct3DRMCreate(&d3drm);
     ok(hr == D3DRM_OK, "Cannot get IDirect3DRM interface (hr = %x)\n", hr);
 
+    ref = get_refcount((IUnknown *)d3drm);
     hr = IDirect3DRM_CreateFrame(d3drm, NULL, &pFrameC);
     ok(hr == D3DRM_OK, "Cannot get IDirect3DRMFrame interface (hr = %x)\n", hr);
     CHECK_REFCOUNT(pFrameC, 1);
+    ref2 = get_refcount((IUnknown *)d3drm);
+    ok(ref2 > ref, "Expected d3drm object to be referenced.\n");
 
     test_class_name((IDirect3DRMObject *)pFrameC, "Frame");
+    test_object_name((IDirect3DRMObject *)pFrameC);
 
     hr = IDirect3DRMFrame_GetParent(pFrameC, NULL);
     ok(hr == D3DRMERR_BADVALUE, "Should fail and return D3DRM_BADVALUE (hr = %x)\n", hr);
@@ -1408,24 +1463,33 @@ static void test_object(void)
     {
         REFCLSID clsid;
         REFIID iid;
-        BOOL todo;
+        BOOL takes_d3drm_ref;
     }
     tests[] =
     {
-        { &CLSID_CDirect3DRMDevice,        &IID_IDirect3DRMDevice,       FALSE },
-        { &CLSID_CDirect3DRMDevice,        &IID_IDirect3DRMDevice2,      FALSE },
-        { &CLSID_CDirect3DRMDevice,        &IID_IDirect3DRMDevice3,      FALSE },
-        { &CLSID_CDirect3DRMDevice,        &IID_IDirect3DRMWinDevice,    FALSE },
-        { &CLSID_CDirect3DRMTexture,       &IID_IDirect3DRMTexture,      FALSE },
-        { &CLSID_CDirect3DRMTexture,       &IID_IDirect3DRMTexture2,     FALSE },
-        { &CLSID_CDirect3DRMTexture,       &IID_IDirect3DRMTexture3,     FALSE },
-        { &CLSID_CDirect3DRMViewport,      &IID_IDirect3DRMViewport,     FALSE },
-        { &CLSID_CDirect3DRMViewport,      &IID_IDirect3DRMViewport2,    FALSE },
-        { &CLSID_CDirect3DRMFace,          &IID_IDirect3DRMFace },
-        { &CLSID_CDirect3DRMFace,          &IID_IDirect3DRMFace2 },
-        { &CLSID_CDirect3DRMMeshBuilder,   &IID_IDirect3DRMMeshBuilder },
-        { &CLSID_CDirect3DRMMeshBuilder,   &IID_IDirect3DRMMeshBuilder2 },
-        { &CLSID_CDirect3DRMMeshBuilder,   &IID_IDirect3DRMMeshBuilder3 },
+        { &CLSID_CDirect3DRMDevice,      &IID_IDirect3DRMDevice },
+        { &CLSID_CDirect3DRMDevice,      &IID_IDirect3DRMDevice2 },
+        { &CLSID_CDirect3DRMDevice,      &IID_IDirect3DRMDevice3 },
+        { &CLSID_CDirect3DRMDevice,      &IID_IDirect3DRMWinDevice },
+        { &CLSID_CDirect3DRMTexture,     &IID_IDirect3DRMTexture },
+        { &CLSID_CDirect3DRMTexture,     &IID_IDirect3DRMTexture2 },
+        { &CLSID_CDirect3DRMTexture,     &IID_IDirect3DRMTexture3 },
+        { &CLSID_CDirect3DRMViewport,    &IID_IDirect3DRMViewport },
+        { &CLSID_CDirect3DRMViewport,    &IID_IDirect3DRMViewport2 },
+        { &CLSID_CDirect3DRMFace,        &IID_IDirect3DRMFace },
+        { &CLSID_CDirect3DRMFace,        &IID_IDirect3DRMFace2 },
+        { &CLSID_CDirect3DRMMeshBuilder, &IID_IDirect3DRMMeshBuilder,  TRUE },
+        { &CLSID_CDirect3DRMMeshBuilder, &IID_IDirect3DRMMeshBuilder2, TRUE },
+        { &CLSID_CDirect3DRMMeshBuilder, &IID_IDirect3DRMMeshBuilder3, TRUE },
+        { &CLSID_CDirect3DRMFrame,       &IID_IDirect3DRMFrame,        TRUE },
+        { &CLSID_CDirect3DRMFrame,       &IID_IDirect3DRMFrame2,       TRUE },
+        { &CLSID_CDirect3DRMFrame,       &IID_IDirect3DRMFrame3,       TRUE },
+        { &CLSID_CDirect3DRMLight,       &IID_IDirect3DRMLight,        TRUE },
+        { &CLSID_CDirect3DRMMaterial,    &IID_IDirect3DRMMaterial,     TRUE },
+        { &CLSID_CDirect3DRMMaterial,    &IID_IDirect3DRMMaterial2,    TRUE },
+        { &CLSID_CDirect3DRMMesh,        &IID_IDirect3DRMMesh,         TRUE },
+        { &CLSID_CDirect3DRMAnimation,   &IID_IDirect3DRMAnimation,    TRUE },
+        { &CLSID_CDirect3DRMAnimation,   &IID_IDirect3DRMAnimation2,   TRUE },
     };
     IDirect3DRM *d3drm1;
     IDirect3DRM2 *d3drm2;
@@ -1449,8 +1513,6 @@ static void test_object(void)
 
     for (i = 0; i < sizeof(tests) / sizeof(*tests); ++i)
     {
-        BOOL takes_ref = IsEqualGUID(tests[i].clsid, &CLSID_CDirect3DRMMeshBuilder);
-
         unknown = (IUnknown *)0xdeadbeef;
         hr = IDirect3DRM_CreateObject(d3drm1, NULL, NULL, tests[i].iid, (void **)&unknown);
         ok(hr == D3DRMERR_BADVALUE, "Test %u: expected hr == D3DRMERR_BADVALUE, got %#x.\n", i, hr);
@@ -1463,13 +1525,12 @@ static void test_object(void)
         ok(hr == D3DRMERR_BADVALUE, "Test %u: expected hr == D3DRMERR_BADVALUE, got %#x.\n", i, hr);
 
         hr = IDirect3DRM_CreateObject(d3drm1, tests[i].clsid, NULL, tests[i].iid, (void **)&unknown);
-        todo_wine_if(tests[i].todo)
         ok(SUCCEEDED(hr), "Test %u: expected hr == D3DRM_OK, got %#x.\n", i, hr);
         if (SUCCEEDED(hr))
         {
             ref2 = get_refcount((IUnknown *)d3drm1);
-            if (takes_ref)
-                ok(ref2 == ref1 + 1, "Test %u: expected ref2 == ref1 + 1, got ref1 = %u, ref2 = %u.\n", i, ref1, ref2);
+            if (tests[i].takes_d3drm_ref)
+                ok(ref2 > ref1, "Test %u: expected ref2 > ref1, got ref1 = %u, ref2 = %u.\n", i, ref1, ref2);
             else
                 ok(ref2 == ref1, "Test %u: expected ref2 == ref1, got ref1 = %u, ref2 = %u.\n", i, ref1, ref2);
 
@@ -1491,8 +1552,8 @@ static void test_object(void)
             hr = IDirect3DRM2_CreateObject(d3drm2, tests[i].clsid, NULL, tests[i].iid, (void **)&unknown);
             ok(SUCCEEDED(hr), "Test %u: expected hr == D3DRM_OK, got %#x.\n", i, hr);
             ref2 = get_refcount((IUnknown *)d3drm1);
-            if (takes_ref)
-                ok(ref2 == ref1 + 1, "Test %u: expected ref2 == ref1 + 1, got ref1 = %u, ref2 = %u.\n", i, ref1, ref2);
+            if (tests[i].takes_d3drm_ref)
+                ok(ref2 > ref1, "Test %u: expected ref2 > ref1, got ref1 = %u, ref2 = %u.\n", i, ref1, ref2);
             else
                 ok(ref2 == ref1, "Test %u: expected ref2 == ref1, got ref1 = %u, ref2 = %u.\n", i, ref1, ref2);
             ref3 = get_refcount((IUnknown *)d3drm2);
@@ -1510,8 +1571,8 @@ static void test_object(void)
             hr = IDirect3DRM3_CreateObject(d3drm3, tests[i].clsid, NULL, tests[i].iid, (void **)&unknown);
             ok(SUCCEEDED(hr), "Test %u: expected hr == D3DRM_OK, got %#x.\n", i, hr);
             ref2 = get_refcount((IUnknown *)d3drm1);
-            if (takes_ref)
-                ok(ref2 == ref1 + 1, "Test %u: expected ref2 == ref1 + 1, got ref1 = %u, ref2 = %u.\n", i, ref1, ref2);
+            if (tests[i].takes_d3drm_ref)
+                ok(ref2 > ref1, "Test %u: expected ref2 > ref1, got ref1 = %u, ref2 = %u.\n", i, ref1, ref2);
             else
                 ok(ref2 == ref1, "Test %u: expected ref2 == ref1, got ref1 = %u, ref2 = %u.\n", i, ref1, ref2);
             ref3 = get_refcount((IUnknown *)d3drm2);
@@ -1840,6 +1901,7 @@ static void test_Viewport(void)
     IDirect3DRMObject_Release(obj2);
 
     test_class_name((IDirect3DRMObject *)viewport, "Viewport");
+    test_object_name((IDirect3DRMObject *)viewport);
 
     /* AppData */
     hr = IDirect3DRMViewport_SetAppData(viewport, 0);
@@ -2049,8 +2111,7 @@ static void test_Viewport(void)
     IDirect3DRMDevice3_Release(device3);
     IDirect3DRMDevice_Release(device1);
     ref4 = get_refcount((IUnknown *)d3drm1);
-    todo_wine ok(ref4 > initial_ref1, "Expected ref4 > initial_ref1, got initial_ref1 = %u, ref4 = %u.\n", initial_ref1,
-            ref4);
+    ok(ref4 > initial_ref1, "Expected ref4 > initial_ref1, got initial_ref1 = %u, ref4 = %u.\n", initial_ref1, ref4);
     ref4 = get_refcount((IUnknown *)d3drm2);
     ok(ref4 == initial_ref2, "Expected ref4 == initial_ref2, got initial_ref2 = %u, ref4 = %u.\n", initial_ref2, ref4);
     ref4 = get_refcount((IUnknown *)d3drm3);
@@ -2062,8 +2123,7 @@ static void test_Viewport(void)
 
     IDirect3DRMFrame3_Release(frame3);
     ref4 = get_refcount((IUnknown *)d3drm1);
-    todo_wine ok(ref4 > initial_ref1, "Expected ref4 > initial_ref1, got initial_ref1 = %u, ref4 = %u.\n", initial_ref1,
-            ref4);
+    ok(ref4 > initial_ref1, "Expected ref4 > initial_ref1, got initial_ref1 = %u, ref4 = %u.\n", initial_ref1, ref4);
     ref4 = get_refcount((IUnknown *)d3drm2);
     ok(ref4 == initial_ref2, "Expected ref4 == initial_ref2, got initial_ref2 = %u, ref4 = %u.\n", initial_ref2, ref4);
     ref4 = get_refcount((IUnknown *)d3drm3);
@@ -2086,6 +2146,7 @@ static void test_Viewport(void)
 
 static void test_Light(void)
 {
+    IDirect3DRMObject *object;
     HRESULT hr;
     IDirect3DRM *d3drm;
     IDirect3DRMLight *light;
@@ -2098,7 +2159,12 @@ static void test_Light(void)
     hr = IDirect3DRM_CreateLightRGB(d3drm, D3DRMLIGHT_SPOT, 0.5, 0.5, 0.5, &light);
     ok(hr == D3DRM_OK, "Cannot get IDirect3DRMLight interface (hr = %x)\n", hr);
 
+    hr = IDirect3DRMLight_QueryInterface(light, &IID_IDirect3DRMObject, (void **)&object);
+    ok(SUCCEEDED(hr), "Failed to get IDirect3DRMObject, hr %#x.\n", hr);
+    IDirect3DRMObject_Release(object);
+
     test_class_name((IDirect3DRMObject *)light, "Light");
+    test_object_name((IDirect3DRMObject *)light);
 
     type = IDirect3DRMLight_GetType(light);
     ok(type == D3DRMLIGHT_SPOT, "wrong type (%u)\n", type);
@@ -2148,6 +2214,7 @@ static void test_Material2(void)
     ok(hr == D3DRM_OK, "Cannot get IDirect3DRMMaterial2 interface (hr = %x)\n", hr);
 
     test_class_name((IDirect3DRMObject *)material2, "Material");
+    test_object_name((IDirect3DRMObject *)material2);
 
     r = IDirect3DRMMaterial2_GetPower(material2);
     ok(r == 18.5f, "wrong power (%f)\n", r);
@@ -2360,6 +2427,9 @@ static void test_Texture(void)
     test_class_name((IDirect3DRMObject *)texture1, "Texture");
     test_class_name((IDirect3DRMObject *)texture2, "Texture");
     test_class_name((IDirect3DRMObject *)texture3, "Texture");
+    test_object_name((IDirect3DRMObject *)texture1);
+    test_object_name((IDirect3DRMObject *)texture2);
+    test_object_name((IDirect3DRMObject *)texture3);
 
     d3drm_img = IDirect3DRMTexture_GetImage(texture1);
     ok(!!d3drm_img, "Failed to get image.\n");
@@ -2566,6 +2636,7 @@ static void test_Device(void)
     ok(hr == D3DRM_OK, "Cannot get IDirect3DRMDevice interface (hr = %x)\n", hr);
 
     test_class_name((IDirect3DRMObject *)device, "Device");
+    test_object_name((IDirect3DRMObject *)device);
 
     /* WinDevice */
     if (FAILED(hr = IDirect3DRMDevice_QueryInterface(device, &IID_IDirect3DRMWinDevice, (void **)&win_device)))
@@ -2575,6 +2646,7 @@ static void test_Device(void)
     }
 
     test_class_name((IDirect3DRMObject *)win_device, "Device");
+    test_object_name((IDirect3DRMObject *)win_device);
     IDirect3DRMWinDevice_Release(win_device);
 
 cleanup:
@@ -6629,6 +6701,48 @@ static void test_create_texture_from_surface(void)
     IDirectDraw_Release(ddraw);
 }
 
+static void test_animation(void)
+{
+    IDirect3DRMAnimation2 *animation2;
+    IDirect3DRMAnimation *animation;
+    IDirect3DRMObject *obj, *obj2;
+    IDirect3DRM *d3drm1;
+    HRESULT hr;
+
+    hr = Direct3DRMCreate(&d3drm1);
+    ok(SUCCEEDED(hr), "Failed to create IDirect3DRM instance, hr 0x%08x.\n", hr);
+
+    hr = IDirect3DRM_CreateAnimation(d3drm1, NULL);
+    ok(hr == D3DRMERR_BADVALUE, "Unexpected hr 0x%08x.\n", hr);
+
+    CHECK_REFCOUNT(d3drm1, 1);
+    hr = IDirect3DRM_CreateAnimation(d3drm1, &animation);
+    ok(SUCCEEDED(hr), "Failed to create animation hr 0x%08x.\n", hr);
+    CHECK_REFCOUNT(d3drm1, 2);
+
+    test_class_name((IDirect3DRMObject *)animation, "Animation");
+
+    hr = IDirect3DRMAnimation_QueryInterface(animation, &IID_IDirect3DRMAnimation2, (void **)&animation2);
+    ok(SUCCEEDED(hr), "Failed to get IDirect3DRMAnimation2, hr 0x%08x.\n", hr);
+    ok(animation != (void *)animation2, "Expected different interface pointer.\n");
+
+    hr = IDirect3DRMAnimation_QueryInterface(animation, &IID_IDirect3DRMObject, (void **)&obj);
+    ok(SUCCEEDED(hr), "Failed to get IDirect3DRMObject, hr 0x%08x.\n", hr);
+
+    hr = IDirect3DRMAnimation2_QueryInterface(animation2, &IID_IDirect3DRMObject, (void **)&obj2);
+    ok(SUCCEEDED(hr), "Failed to get IDirect3DRMObject, hr 0x%08x.\n", hr);
+
+    ok(obj == obj2 && obj == (IDirect3DRMObject *)animation, "Unexpected object pointer.\n");
+
+    IDirect3DRMObject_Release(obj);
+    IDirect3DRMObject_Release(obj2);
+
+    IDirect3DRMAnimation2_Release(animation2);
+    IDirect3DRMAnimation_Release(animation);
+
+    IDirect3DRM_Release(d3drm1);
+}
+
 START_TEST(d3drm)
 {
     test_MeshBuilder();
@@ -6663,4 +6777,5 @@ START_TEST(d3drm)
     test_viewport_clear1();
     test_viewport_clear2();
     test_create_texture_from_surface();
+    test_animation();
 }

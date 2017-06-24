@@ -2394,6 +2394,8 @@ static void fbo_blitter_destroy(struct wined3d_blitter *blitter, struct wined3d_
 
     if ((next = blitter->next))
         next->ops->blitter_destroy(next, context);
+
+    HeapFree(GetProcessHeap(), 0, blitter);
 }
 
 static void fbo_blitter_clear(struct wined3d_blitter *blitter, struct wined3d_device *device,
@@ -2476,6 +2478,8 @@ static void ffp_blitter_destroy(struct wined3d_blitter *blitter, struct wined3d_
 
     if ((next = blitter->next))
         next->ops->blitter_destroy(next, context);
+
+    HeapFree(GetProcessHeap(), 0, blitter);
 }
 
 static BOOL ffp_blit_supported(const struct wined3d_gl_info *gl_info,
@@ -2766,6 +2770,8 @@ static void cpu_blitter_destroy(struct wined3d_blitter *blitter, struct wined3d_
 
     if ((next = blitter->next))
         next->ops->blitter_destroy(next, context);
+
+    HeapFree(GetProcessHeap(), 0, blitter);
 }
 
 static HRESULT surface_cpu_blt_compressed(const BYTE *src_data, BYTE *dst_data,
@@ -3337,6 +3343,12 @@ release:
     context_unmap_bo_address(context, &dst_data, GL_PIXEL_UNPACK_BUFFER);
     if (!same_sub_resource)
         context_unmap_bo_address(context, &src_data, GL_PIXEL_UNPACK_BUFFER);
+    if (SUCCEEDED(hr) && dst_texture->swapchain && dst_texture->swapchain->front_buffer == dst_texture)
+    {
+        SetRect(&dst_texture->swapchain->front_buffer_update,
+                dst_box->left, dst_box->top, dst_box->right, dst_box->bottom);
+        dst_texture->swapchain->swapchain_ops->swapchain_frontbuffer_updated(dst_texture->swapchain);
+    }
     if (converted_texture)
         wined3d_texture_decref(converted_texture);
     if (context)
