@@ -1,3 +1,9 @@
+wine-development (2.11-2) unstable; urgency=medium
+
+  * Update to using Unicode 10 (closes: #867106).
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Sat, 08 Jul 2017 13:37:04 +0200
+
 wine-development (2.11-1) unstable; urgency=medium
 
   * New upstream release 2.11, released Jun 23, 2017.
