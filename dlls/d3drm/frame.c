@@ -2666,18 +2666,33 @@ static HRESULT WINAPI d3drm_frame3_InverseTransformVectors(IDirect3DRMFrame3 *if
     return E_NOTIMPL;
 }
 
-static HRESULT WINAPI d3drm_frame3_SetTraversalOptions(IDirect3DRMFrame3 *iface, DWORD flags)
+static HRESULT WINAPI d3drm_frame3_SetTraversalOptions(IDirect3DRMFrame3 *iface, DWORD options)
 {
-    FIXME("iface %p, flags %#x stub!\n", iface, flags);
+    static const DWORD supported_options = D3DRMFRAME_RENDERENABLE | D3DRMFRAME_PICKENABLE;
+    struct d3drm_frame *frame = impl_from_IDirect3DRMFrame3(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, options %#x.\n", iface, options);
+
+    if (options & ~supported_options)
+        return D3DRMERR_BADVALUE;
+
+    frame->traversal_options = options;
+
+    return D3DRM_OK;
 }
 
-static HRESULT WINAPI d3drm_frame3_GetTraversalOptions(IDirect3DRMFrame3 *iface, DWORD *flags)
+static HRESULT WINAPI d3drm_frame3_GetTraversalOptions(IDirect3DRMFrame3 *iface, DWORD *options)
 {
-    FIXME("iface %p, flags %p stub!\n", iface, flags);
+    struct d3drm_frame *frame = impl_from_IDirect3DRMFrame3(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, options %p.\n", iface, options);
+
+    if (!options)
+        return D3DRMERR_BADVALUE;
+
+    *options = frame->traversal_options;
+
+    return D3DRM_OK;
 }
 
 static HRESULT WINAPI d3drm_frame3_SetSceneFogMethod(IDirect3DRMFrame3 *iface, DWORD flags)
@@ -2991,6 +3006,7 @@ HRESULT d3drm_frame_create(struct d3drm_frame **frame, IUnknown *parent_frame, I
     object->d3drm = d3drm;
     object->ref = 1;
     d3drm_set_color(&object->scenebackground, 0.0f, 0.0f, 0.0f, 1.0f);
+    object->traversal_options = D3DRMFRAME_RENDERENABLE | D3DRMFRAME_PICKENABLE;
 
     d3drm_object_init(&object->obj, classname);
 
@@ -3079,6 +3095,9 @@ static ULONG WINAPI d3drm_animation2_Release(IDirect3DRMAnimation2 *iface)
     {
         d3drm_object_cleanup((IDirect3DRMObject *)&animation->IDirect3DRMAnimation_iface, &animation->obj);
         IDirect3DRM_Release(animation->d3drm);
+        HeapFree(GetProcessHeap(), 0, animation->rotate.keys);
+        HeapFree(GetProcessHeap(), 0, animation->scale.keys);
+        HeapFree(GetProcessHeap(), 0, animation->position.keys);
         HeapFree(GetProcessHeap(), 0, animation);
     }
 
@@ -3238,48 +3257,295 @@ static HRESULT WINAPI d3drm_animation1_GetClassName(IDirect3DRMAnimation *iface,
     return d3drm_animation2_GetClassName(&animation->IDirect3DRMAnimation2_iface, size, name);
 }
 
+static HRESULT WINAPI d3drm_animation2_SetOptions(IDirect3DRMAnimation2 *iface, D3DRMANIMATIONOPTIONS options)
+{
+    struct d3drm_animation *animation = impl_from_IDirect3DRMAnimation2(iface);
+    static const DWORD supported_options = D3DRMANIMATION_OPEN | D3DRMANIMATION_CLOSED | D3DRMANIMATION_LINEARPOSITION
+        | D3DRMANIMATION_SPLINEPOSITION | D3DRMANIMATION_SCALEANDROTATION | D3DRMANIMATION_POSITION;
+
+    TRACE("iface %p, options %#x.\n", iface, options);
+
+    if (!(options & supported_options))
+        return D3DRMERR_BADVALUE;
+
+    if ((options & (D3DRMANIMATION_OPEN | D3DRMANIMATION_CLOSED)) == (D3DRMANIMATION_OPEN | D3DRMANIMATION_CLOSED) ||
+            (options & (D3DRMANIMATION_LINEARPOSITION | D3DRMANIMATION_SPLINEPOSITION)) ==
+            (D3DRMANIMATION_LINEARPOSITION | D3DRMANIMATION_SPLINEPOSITION) ||
+            (options & (D3DRMANIMATION_SCALEANDROTATION | D3DRMANIMATION_POSITION)) ==
+            (D3DRMANIMATION_SCALEANDROTATION | D3DRMANIMATION_POSITION))
+    {
+        return D3DRMERR_BADVALUE;
+    }
+
+    animation->options = options;
+
+    return D3DRM_OK;
+}
+
 static HRESULT WINAPI d3drm_animation1_SetOptions(IDirect3DRMAnimation *iface, D3DRMANIMATIONOPTIONS options)
 {
-    FIXME("iface %p, %#x.\n", iface, options);
+    struct d3drm_animation *animation = impl_from_IDirect3DRMAnimation(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, %#x.\n", iface, options);
+
+    return d3drm_animation2_SetOptions(&animation->IDirect3DRMAnimation2_iface, options);
+}
+
+static SIZE_T d3drm_animation_lookup_key(const struct d3drm_animation_key *keys,
+        SIZE_T count, D3DVALUE time)
+{
+    SIZE_T start = 0, cur = 0, end = count;
+
+    while (start < end)
+    {
+        cur = start + (end - start) / 2;
+
+        if (time == keys[cur].time)
+            return cur;
+
+        if (time < keys[cur].time)
+            end = cur;
+        else
+            start = cur + 1;
+    }
+
+    return cur;
+}
+
+static SIZE_T d3drm_animation_get_index_min(const struct d3drm_animation_key *keys, SIZE_T count, D3DVALUE time)
+{
+    SIZE_T i;
+
+    i = d3drm_animation_lookup_key(keys, count, time);
+    while (i > 0 && keys[i - 1].time == time)
+        --i;
+
+    return i;
+}
+
+static SIZE_T d3drm_animation_get_index_max(const struct d3drm_animation_key *keys, SIZE_T count, D3DVALUE time)
+{
+    SIZE_T i;
+
+    i = d3drm_animation_lookup_key(keys, count, time);
+    while (i < count - 1 && keys[i + 1].time == time)
+        ++i;
+
+    return i;
+}
+
+static SIZE_T d3drm_animation_get_insert_position(const struct d3drm_animation_keys *keys, D3DVALUE time)
+{
+    if (!keys->count || time < keys->keys[0].time)
+        return 0;
+
+    if (time >= keys->keys[keys->count - 1].time)
+        return keys->count;
+
+    return d3drm_animation_get_index_max(keys->keys, keys->count, time);
+}
+
+static const struct d3drm_animation_key *d3drm_animation_get_range(const struct d3drm_animation_keys *keys,
+        D3DVALUE time_min, D3DVALUE time_max, SIZE_T *count)
+{
+    SIZE_T min;
+
+    if (!keys->count || time_max < keys->keys[0].time
+            || time_min > keys->keys[keys->count - 1].time)
+        return NULL;
+
+    min = d3drm_animation_get_index_min(keys->keys, keys->count, time_min);
+    if (count)
+        *count = d3drm_animation_get_index_max(&keys->keys[min], keys->count - min, time_max) - min + 1;
+
+    return &keys->keys[min];
+}
+
+static HRESULT WINAPI d3drm_animation2_AddKey(IDirect3DRMAnimation2 *iface, D3DRMANIMATIONKEY *key)
+{
+    struct d3drm_animation *animation = impl_from_IDirect3DRMAnimation2(iface);
+    struct d3drm_animation_keys *keys;
+    SIZE_T index;
+
+    TRACE("iface %p, key %p.\n", iface, key);
+
+    if (!key || key->dwSize != sizeof(*key))
+        return E_INVALIDARG;
+
+    switch (key->dwKeyType)
+    {
+        case D3DRMANIMATION_POSITIONKEY:
+            keys = &animation->position;
+            break;
+        case D3DRMANIMATION_SCALEKEY:
+            keys = &animation->scale;
+            break;
+        case D3DRMANIMATION_ROTATEKEY:
+            keys = &animation->rotate;
+            break;
+        default:
+            return E_INVALIDARG;
+    }
+
+    index = d3drm_animation_get_insert_position(keys, key->dvTime);
+
+    if (!d3drm_array_reserve((void **)&keys->keys, &keys->size, keys->count + 1, sizeof(*keys->keys)))
+        return E_OUTOFMEMORY;
+
+    if (index < keys->count)
+        memmove(&keys->keys[index + 1], &keys->keys[index], sizeof(*keys->keys) * (keys->count - index));
+    keys->keys[index].time = key->dvTime;
+    switch (key->dwKeyType)
+    {
+        case D3DRMANIMATION_POSITIONKEY:
+            keys->keys[index].u.position = key->u.dvPositionKey;
+            break;
+        case D3DRMANIMATION_SCALEKEY:
+            keys->keys[index].u.scale = key->u.dvScaleKey;
+            break;
+        case D3DRMANIMATION_ROTATEKEY:
+            keys->keys[index].u.rotate = key->u.dqRotateKey;
+            break;
+    }
+    ++keys->count;
+
+    return D3DRM_OK;
+}
+
+static HRESULT WINAPI d3drm_animation2_AddRotateKey(IDirect3DRMAnimation2 *iface, D3DVALUE time, D3DRMQUATERNION *q)
+{
+    D3DRMANIMATIONKEY key;
+
+    TRACE("iface %p, time %.8e, q %p.\n", iface, time, q);
+
+    key.dwSize = sizeof(key);
+    key.dwKeyType = D3DRMANIMATION_ROTATEKEY;
+    key.dvTime = time;
+    key.dwID = 0;
+    key.u.dqRotateKey = *q;
+
+    return d3drm_animation2_AddKey(iface, &key);
 }
 
 static HRESULT WINAPI d3drm_animation1_AddRotateKey(IDirect3DRMAnimation *iface, D3DVALUE time, D3DRMQUATERNION *q)
 {
-    FIXME("iface %p, time %.8e, q %p.\n", iface, time, q);
+    struct d3drm_animation *animation = impl_from_IDirect3DRMAnimation(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, time %.8e, q %p.\n", iface, time, q);
+
+    return d3drm_animation2_AddRotateKey(&animation->IDirect3DRMAnimation2_iface, time, q);
+}
+
+static HRESULT WINAPI d3drm_animation2_AddPositionKey(IDirect3DRMAnimation2 *iface, D3DVALUE time,
+        D3DVALUE x, D3DVALUE y, D3DVALUE z)
+{
+    D3DRMANIMATIONKEY key;
+
+    TRACE("iface %p, time %.8e, x %.8e, y %.8e, z %.8e.\n", iface, time, x, y, z);
+
+    key.dwSize = sizeof(key);
+    key.dwKeyType = D3DRMANIMATION_POSITIONKEY;
+    key.dvTime = time;
+    key.dwID = 0;
+    key.u.dvPositionKey.u1.x = x;
+    key.u.dvPositionKey.u2.y = y;
+    key.u.dvPositionKey.u3.z = z;
+
+    return d3drm_animation2_AddKey(iface, &key);
 }
 
 static HRESULT WINAPI d3drm_animation1_AddPositionKey(IDirect3DRMAnimation *iface, D3DVALUE time,
         D3DVALUE x, D3DVALUE y, D3DVALUE z)
 {
-    FIXME("iface %p, time %.8e, x %.8e, y %.8e, z %.8e.\n", iface, time, x, y, z);
+    struct d3drm_animation *animation = impl_from_IDirect3DRMAnimation(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, time %.8e, x %.8e, y %.8e, z %.8e.\n", iface, time, x, y, z);
+
+    return d3drm_animation2_AddPositionKey(&animation->IDirect3DRMAnimation2_iface, time, x, y, z);
+}
+
+static HRESULT WINAPI d3drm_animation2_AddScaleKey(IDirect3DRMAnimation2 *iface, D3DVALUE time,
+        D3DVALUE x, D3DVALUE y, D3DVALUE z)
+{
+    D3DRMANIMATIONKEY key;
+
+    TRACE("iface %p, time %.8e, x %.8e, y %.8e, z %.8e.\n", iface, time, x, y, z);
+
+    key.dwSize = sizeof(key);
+    key.dwKeyType = D3DRMANIMATION_SCALEKEY;
+    key.dvTime = time;
+    key.dwID = 0;
+    key.u.dvScaleKey.u1.x = x;
+    key.u.dvScaleKey.u2.y = y;
+    key.u.dvScaleKey.u3.z = z;
+
+    return d3drm_animation2_AddKey(iface, &key);
 }
 
 static HRESULT WINAPI d3drm_animation1_AddScaleKey(IDirect3DRMAnimation *iface, D3DVALUE time,
         D3DVALUE x, D3DVALUE y, D3DVALUE z)
 {
-    FIXME("iface %p, time %.8e, x %.8e, y %.8e, z %.8e.\n", iface, time, x, y, z);
+    struct d3drm_animation *animation = impl_from_IDirect3DRMAnimation(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, time %.8e, x %.8e, y %.8e, z %.8e.\n", iface, time, x, y, z);
+
+    return d3drm_animation2_AddScaleKey(&animation->IDirect3DRMAnimation2_iface, time, x, y, z);
+}
+
+static void d3drm_animation_delete_key(struct d3drm_animation_keys *keys, const struct d3drm_animation_key *key)
+{
+    SIZE_T index = key - keys->keys;
+
+    if (index < keys->count - 1)
+        memmove(&keys->keys[index], &keys->keys[index + 1], sizeof(*keys->keys) * (keys->count - index - 1));
+    --keys->count;
+}
+
+static HRESULT WINAPI d3drm_animation2_DeleteKey(IDirect3DRMAnimation2 *iface, D3DVALUE time)
+{
+    struct d3drm_animation *animation = impl_from_IDirect3DRMAnimation2(iface);
+    const struct d3drm_animation_key *key;
+
+    TRACE("iface %p, time %.8e.\n", iface, time);
+
+    if ((key = d3drm_animation_get_range(&animation->rotate, time, time, NULL)))
+        d3drm_animation_delete_key(&animation->rotate, key);
+
+    if ((key = d3drm_animation_get_range(&animation->position, time, time, NULL)))
+        d3drm_animation_delete_key(&animation->position, key);
+
+    if ((key = d3drm_animation_get_range(&animation->scale, time, time, NULL)))
+        d3drm_animation_delete_key(&animation->scale, key);
+
+    return D3DRM_OK;
 }
 
 static HRESULT WINAPI d3drm_animation1_DeleteKey(IDirect3DRMAnimation *iface, D3DVALUE time)
 {
-    FIXME("iface %p, time %.8e.\n", iface, time);
+    struct d3drm_animation *animation = impl_from_IDirect3DRMAnimation(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, time %.8e.\n", iface, time);
+
+    return d3drm_animation2_DeleteKey(&animation->IDirect3DRMAnimation2_iface, time);
 }
 
 static HRESULT WINAPI d3drm_animation1_SetFrame(IDirect3DRMAnimation *iface, IDirect3DRMFrame *frame)
 {
-    FIXME("iface %p, frame %p.\n", iface, frame);
+    struct d3drm_animation *animation = impl_from_IDirect3DRMAnimation(iface);
+    HRESULT hr = D3DRM_OK;
 
-    return E_NOTIMPL;
+    TRACE("iface %p, frame %p.\n", iface, frame);
+
+    if (frame)
+    {
+        hr = IDirect3DRMFrame_QueryInterface(frame, &IID_IDirect3DRMFrame3, (void **)&animation->frame);
+        if (SUCCEEDED(hr))
+            IDirect3DRMFrame3_Release(animation->frame);
+    }
+    else
+        animation->frame = NULL;
+
+    return hr;
 }
 
 static HRESULT WINAPI d3drm_animation1_SetTime(IDirect3DRMAnimation *iface, D3DVALUE time)
@@ -3289,55 +3555,33 @@ static HRESULT WINAPI d3drm_animation1_SetTime(IDirect3DRMAnimation *iface, D3DV
     return E_NOTIMPL;
 }
 
+static D3DRMANIMATIONOPTIONS WINAPI d3drm_animation2_GetOptions(IDirect3DRMAnimation2 *iface)
+{
+    struct d3drm_animation *animation = impl_from_IDirect3DRMAnimation2(iface);
+
+    TRACE("iface %p.\n", iface);
+
+    return animation->options;
+}
+
 static D3DRMANIMATIONOPTIONS WINAPI d3drm_animation1_GetOptions(IDirect3DRMAnimation *iface)
 {
-    FIXME("iface %p.\n", iface);
+    struct d3drm_animation *animation = impl_from_IDirect3DRMAnimation(iface);
 
-    return 0;
-}
+    TRACE("iface %p.\n", iface);
 
-static HRESULT WINAPI d3drm_animation2_SetOptions(IDirect3DRMAnimation2 *iface, D3DRMANIMATIONOPTIONS options)
-{
-    FIXME("iface %p, options %#x.\n", iface, options);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI d3drm_animation2_AddRotateKey(IDirect3DRMAnimation2 *iface, D3DVALUE time, D3DRMQUATERNION *q)
-{
-    FIXME("iface %p, time %.8e, q %p.\n", iface, time, q);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI d3drm_animation2_AddPositionKey(IDirect3DRMAnimation2 *iface, D3DVALUE time,
-        D3DVALUE x, D3DVALUE y, D3DVALUE z)
-{
-    FIXME("iface %p, time %.8e, x %.8e, y %.8e, z %.8e.\n", iface, time, x, y, z);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI d3drm_animation2_AddScaleKey(IDirect3DRMAnimation2 *iface, D3DVALUE time,
-        D3DVALUE x, D3DVALUE y, D3DVALUE z)
-{
-    FIXME("iface %p, time %.8e, x %.8e, y %.8e, z %.8e.\n", iface, time, x, y, z);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI d3drm_animation2_DeleteKey(IDirect3DRMAnimation2 *iface, D3DVALUE time)
-{
-    FIXME("iface %p, time %.8e.\n", iface, time);
-
-    return E_NOTIMPL;
+    return d3drm_animation2_GetOptions(&animation->IDirect3DRMAnimation2_iface);
 }
 
 static HRESULT WINAPI d3drm_animation2_SetFrame(IDirect3DRMAnimation2 *iface, IDirect3DRMFrame3 *frame)
 {
-    FIXME("iface %p, frame %p.\n", iface, frame);
+    struct d3drm_animation *animation = impl_from_IDirect3DRMAnimation2(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, frame %p.\n", iface, frame);
+
+    animation->frame = frame;
+
+    return D3DRM_OK;
 }
 
 static HRESULT WINAPI d3drm_animation2_SetTime(IDirect3DRMAnimation2 *iface, D3DVALUE time)
@@ -3347,30 +3591,25 @@ static HRESULT WINAPI d3drm_animation2_SetTime(IDirect3DRMAnimation2 *iface, D3D
     return E_NOTIMPL;
 }
 
-static D3DRMANIMATIONOPTIONS WINAPI d3drm_animation2_GetOptions(IDirect3DRMAnimation2 *iface)
-{
-    FIXME("iface %p.\n", iface);
-
-    return 0;
-}
-
 static HRESULT WINAPI d3drm_animation2_GetFrame(IDirect3DRMAnimation2 *iface, IDirect3DRMFrame3 **frame)
 {
-    FIXME("iface %p, frame %p.\n", iface, frame);
+    struct d3drm_animation *animation = impl_from_IDirect3DRMAnimation2(iface);
 
-    return E_NOTIMPL;
+    TRACE("iface %p, frame %p.\n", iface, frame);
+
+    if (!frame)
+        return D3DRMERR_BADVALUE;
+
+    *frame = animation->frame;
+    if (*frame)
+        IDirect3DRMFrame3_AddRef(*frame);
+
+    return D3DRM_OK;
 }
 
 static HRESULT WINAPI d3drm_animation2_DeleteKeyByID(IDirect3DRMAnimation2 *iface, DWORD id)
 {
     FIXME("iface %p, id %#x.\n", iface, id);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI d3drm_animation2_AddKey(IDirect3DRMAnimation2 *iface, D3DRMANIMATIONKEY *key)
-{
-    FIXME("iface %p, key %p.\n", iface, key);
 
     return E_NOTIMPL;
 }
@@ -3385,9 +3624,70 @@ static HRESULT WINAPI d3drm_animation2_ModifyKey(IDirect3DRMAnimation2 *iface, D
 static HRESULT WINAPI d3drm_animation2_GetKeys(IDirect3DRMAnimation2 *iface, D3DVALUE time_min, D3DVALUE time_max,
         DWORD *key_count, D3DRMANIMATIONKEY *keys)
 {
-    FIXME("iface %p, time min %.e, time max %.e, count %p, keys %p.\n", iface, time_min, time_max, key_count, keys);
+    struct d3drm_animation *animation = impl_from_IDirect3DRMAnimation2(iface);
+    const struct d3drm_animation_key *key;
+    SIZE_T count, i;
 
-    return E_NOTIMPL;
+    TRACE("iface %p, time min %.8e, time max %.8e, key_count %p, keys %p.\n",
+            iface, time_min, time_max, key_count, keys);
+
+    if (!key_count)
+        return D3DRMERR_BADVALUE;
+
+    *key_count = 0;
+
+    if ((key = d3drm_animation_get_range(&animation->rotate, time_min, time_max, &count)))
+    {
+        if (keys)
+        {
+            for (i = 0; i < count; ++i)
+            {
+                keys[i].dwSize = sizeof(*keys);
+                keys[i].dwKeyType = D3DRMANIMATION_ROTATEKEY;
+                keys[i].dvTime = key[i].time;
+                keys[i].dwID = 0; /* FIXME */
+                keys[i].u.dqRotateKey = key[i].u.rotate;
+            }
+            keys += count;
+        }
+        *key_count += count;
+    }
+
+    if ((key = d3drm_animation_get_range(&animation->position, time_min, time_max, &count)))
+    {
+        if (keys)
+        {
+            for (i = 0; i < count; ++i)
+            {
+                keys[i].dwSize = sizeof(*keys);
+                keys[i].dwKeyType = D3DRMANIMATION_POSITIONKEY;
+                keys[i].dvTime = key[i].time;
+                keys[i].dwID = 0; /* FIXME */
+                keys[i].u.dvPositionKey = key[i].u.position;
+            }
+            keys += count;
+        }
+        *key_count += count;
+    }
+
+    if ((key = d3drm_animation_get_range(&animation->scale, time_min, time_max, &count)))
+    {
+        if (keys)
+        {
+            for (i = 0; keys && i < count; ++i)
+            {
+                keys[i].dwSize = sizeof(*keys);
+                keys[i].dwKeyType = D3DRMANIMATION_SCALEKEY;
+                keys[i].dvTime = key[i].time;
+                keys[i].dwID = 0; /* FIXME */
+                keys[i].u.dvScaleKey = key[i].u.scale;
+            }
+            keys += count;
+        }
+        *key_count += count;
+    }
+
+    return *key_count ? D3DRM_OK : D3DRMERR_NOSUCHKEY;
 }
 
 static const struct IDirect3DRMAnimationVtbl d3drm_animation1_vtbl =
@@ -3456,6 +3756,7 @@ HRESULT d3drm_animation_create(struct d3drm_animation **animation, IDirect3DRM *
     object->IDirect3DRMAnimation2_iface.lpVtbl = &d3drm_animation2_vtbl;
     object->d3drm = d3drm;
     object->ref = 1;
+    object->options = D3DRMANIMATION_CLOSED | D3DRMANIMATION_LINEARPOSITION;
 
     d3drm_object_init(&object->obj, classname);
 

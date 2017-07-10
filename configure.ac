@@ -1765,7 +1765,7 @@ then
 fi
 
 dnl **** Check for any sound system ****
-if test "x$enable_winealsa_drv$enable_winecoreaudio_drv$enable_winepulse_drv$enable_wineoss_drv" = xnononono -a \
+if test "x$enable_winealsa_drv$enable_winecoreaudio_drv$enable_winepulse_drv$enable_wineoss_drv$enable_wineandroid_drv" = xnonononono -a \
         "x$with_alsa$with_coreaudio$with_oss$with_pulse" != xnononono
 then
     WINE_WARNING([No sound system was found. Windows applications will be silent.])
@@ -3097,16 +3097,21 @@ WINE_CONFIG_DLL(ext-ms-win-gdi-devcaps-l1-1-0)
 WINE_CONFIG_DLL(ext-ms-win-gdi-draw-l1-1-1)
 WINE_CONFIG_DLL(ext-ms-win-gdi-render-l1-1-0)
 WINE_CONFIG_DLL(ext-ms-win-kernel32-package-current-l1-1-0)
+WINE_CONFIG_DLL(ext-ms-win-kernel32-package-l1-1-1)
 WINE_CONFIG_DLL(ext-ms-win-ntuser-message-l1-1-1)
 WINE_CONFIG_DLL(ext-ms-win-ntuser-private-l1-1-1)
 WINE_CONFIG_DLL(ext-ms-win-ntuser-rectangle-ext-l1-1-0)
 WINE_CONFIG_DLL(ext-ms-win-ntuser-uicontext-ext-l1-1-0)
 WINE_CONFIG_DLL(ext-ms-win-ntuser-window-l1-1-1)
+WINE_CONFIG_DLL(ext-ms-win-ntuser-windowclass-l1-1-1)
+WINE_CONFIG_DLL(ext-ms-win-ras-rasapi32-l1-1-0)
 WINE_CONFIG_DLL(ext-ms-win-rtcore-gdi-object-l1-1-0)
 WINE_CONFIG_DLL(ext-ms-win-rtcore-gdi-rgn-l1-1-0)
 WINE_CONFIG_DLL(ext-ms-win-rtcore-ntuser-dc-access-l1-1-0)
 WINE_CONFIG_DLL(ext-ms-win-rtcore-ntuser-dpi-l1-1-0)
 WINE_CONFIG_DLL(ext-ms-win-rtcore-ntuser-sysparams-l1-1-0)
+WINE_CONFIG_DLL(ext-ms-win-security-credui-l1-1-0)
+WINE_CONFIG_DLL(ext-ms-win-security-cryptui-l1-1-0)
 WINE_CONFIG_DLL(faultrep,,[implib])
 WINE_CONFIG_TEST(dlls/faultrep/tests)
 WINE_CONFIG_DLL(fltlib)

@@ -1643,7 +1643,7 @@ todo_wine
             ok(k == 99, "Expected 99, got %d\n", k);
             }
         }
-        else /* <= 2003 the tests differ between TCP and UDP, UDP silenty accepts */
+        else /* <= 2003 the tests differ between TCP and UDP, UDP silently accepts */
         {
             SetLastError(0xdeadbeef);
             k = 99;
@@ -4757,7 +4757,7 @@ static void test_gethostbyname_hack(void)
         }
 
         ok(memcmp(he->h_addr_list[0], loopback, he->h_length) == 0,
-           "gethostbyname(\"localhost\") returned %d.%d.%d.%d\n",
+           "gethostbyname(\"localhost\") returned %u.%u.%u.%u\n",
            he->h_addr_list[0][0], he->h_addr_list[0][1], he->h_addr_list[0][2],
            he->h_addr_list[0][3]);
     }
@@ -4781,7 +4781,7 @@ static void test_gethostbyname_hack(void)
         if (he->h_addr_list[0][0] == 127)
         {
             ok(memcmp(he->h_addr_list[0], magic_loopback, he->h_length) == 0,
-               "gethostbyname(\"%s\") returned %d.%d.%d.%d not 127.12.34.56\n",
+               "gethostbyname(\"%s\") returned %u.%u.%u.%u not 127.12.34.56\n",
                name, he->h_addr_list[0][0], he->h_addr_list[0][1],
                he->h_addr_list[0][2], he->h_addr_list[0][3]);
         }

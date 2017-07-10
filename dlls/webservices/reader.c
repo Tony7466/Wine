@@ -1314,11 +1314,20 @@ static HRESULT read_encode_base64( struct reader *reader, ULONG len, unsigned ch
     return S_OK;
 }
 
+static HRESULT lookup_string( struct reader *reader, ULONG id, const WS_XML_STRING **ret )
+{
+    const WS_XML_DICTIONARY *dict = (id & 1) ? reader->dict : reader->dict_static;
+    if (!dict || (id >>= 1) >= dict->stringCount) return WS_E_INVALID_FORMAT;
+    *ret = &dict->strings[id];
+    return S_OK;
+}
+
 static HRESULT read_attribute_value_bin( struct reader *reader, WS_XML_ATTRIBUTE *attr )
 {
     static const unsigned char zero[] = {'0'}, one[] = {'1'};
     static const unsigned char false[] = {'f','a','l','s','e'}, true[] = {'t','r','u','e'};
     WS_XML_UTF8_TEXT *utf8 = NULL;
+    const WS_XML_STRING *str;
     unsigned char type, buf[46];
     BOOL val_bool;
     INT8 val_int8;
@@ -1418,7 +1427,7 @@ static HRESULT read_attribute_value_bin( struct reader *reader, WS_XML_ATTRIBUTE
         break;
 
     case RECORD_BYTES16_TEXT:
-        if ((hr = read_byte( reader, (unsigned char *)&val_uint16 )) != S_OK) return hr;
+        if ((hr = read_bytes( reader, (unsigned char *)&val_uint16, sizeof(val_uint16) )) != S_OK) return hr;
         if (!(utf8 = alloc_utf8_text( NULL, ((4 * val_uint16 / 3) + 3) & ~3 ))) return E_OUTOFMEMORY;
         if ((hr = read_encode_base64( reader, val_uint16, utf8->value.bytes, &utf8->value.length )) != S_OK)
         {
@@ -1428,7 +1437,7 @@ static HRESULT read_attribute_value_bin( struct reader *reader, WS_XML_ATTRIBUTE
         break;
 
     case RECORD_BYTES32_TEXT:
-        if ((hr = read_byte( reader, (unsigned char *)&val_int32 )) != S_OK) return hr;
+        if ((hr = read_bytes( reader, (unsigned char *)&val_int32, sizeof(val_int32) )) != S_OK) return hr;
         if (val_int32 < 0) return WS_E_INVALID_FORMAT;
         if (!(utf8 = alloc_utf8_text( NULL, ((4 * val_int32 / 3) + 3) & ~3 ))) return E_OUTOFMEMORY;
         if ((hr = read_encode_base64( reader, val_int32, utf8->value.bytes, &utf8->value.length )) != S_OK)
@@ -1444,9 +1453,8 @@ static HRESULT read_attribute_value_bin( struct reader *reader, WS_XML_ATTRIBUTE
 
     case RECORD_DICTIONARY_TEXT:
         if ((hr = read_int31( reader, &id )) != S_OK) return hr;
-        if (!reader->dict || (id >>= 1) >= reader->dict->stringCount) return WS_E_INVALID_FORMAT;
-        if (!(utf8 = alloc_utf8_text( reader->dict->strings[id].bytes, reader->dict->strings[id].length )))
-            return E_OUTOFMEMORY;
+        if ((hr = lookup_string( reader, id, &str )) != S_OK) return hr;
+        if (!(utf8 = alloc_utf8_text( str->bytes, str->length ))) return E_OUTOFMEMORY;
         break;
 
     case RECORD_UNIQUEID_TEXT:
@@ -1973,6 +1981,7 @@ static HRESULT read_text_bin( struct reader *reader )
     unsigned char type, buf[46];
     struct node *node = NULL, *parent;
     WS_XML_UTF8_TEXT *utf8;
+    const WS_XML_STRING *str;
     BOOL val_bool;
     INT8 val_int8;
     INT16 val_int16;
@@ -2086,7 +2095,7 @@ static HRESULT read_text_bin( struct reader *reader )
 
     case RECORD_BYTES16_TEXT:
     case RECORD_BYTES16_TEXT_WITH_ENDELEMENT:
-        if ((hr = read_byte( reader, (unsigned char *)&val_uint16 )) != S_OK) return hr;
+        if ((hr = read_bytes( reader, (unsigned char *)&val_uint16, sizeof(val_uint16) )) != S_OK) return hr;
         if (!(node = alloc_text_node( NULL, ((4 * val_uint16 / 3) + 3) & ~3, &utf8 ))) return E_OUTOFMEMORY;
         if ((hr = read_encode_base64( reader, val_uint16, utf8->value.bytes, &utf8->value.length )) != S_OK)
         {
@@ -2097,7 +2106,7 @@ static HRESULT read_text_bin( struct reader *reader )
 
     case RECORD_BYTES32_TEXT:
     case RECORD_BYTES32_TEXT_WITH_ENDELEMENT:
-        if ((hr = read_byte( reader, (unsigned char *)&val_int32 )) != S_OK) return hr;
+        if ((hr = read_bytes( reader, (unsigned char *)&val_int32, sizeof(val_int32) )) != S_OK) return hr;
         if (val_int32 < 0) return WS_E_INVALID_FORMAT;
         if (!(node = alloc_text_node( NULL, ((4 * val_int32 / 3) + 3) & ~3, &utf8 ))) return E_OUTOFMEMORY;
         if ((hr = read_encode_base64( reader, val_int32, utf8->value.bytes, &utf8->value.length )) != S_OK)
@@ -2115,9 +2124,8 @@ static HRESULT read_text_bin( struct reader *reader )
     case RECORD_DICTIONARY_TEXT:
     case RECORD_DICTIONARY_TEXT_WITH_ENDELEMENT:
         if ((hr = read_int31( reader, &id )) != S_OK) return hr;
-        if (!reader->dict || (id >>= 1) >= reader->dict->stringCount) return WS_E_INVALID_FORMAT;
-        if (!(node = alloc_text_node( reader->dict->strings[id].bytes, reader->dict->strings[id].length, NULL )))
-            return E_OUTOFMEMORY;
+        if ((hr = lookup_string( reader, id, &str )) != S_OK) return hr;
+        if (!(node = alloc_text_node( str->bytes, str->length, NULL ))) return E_OUTOFMEMORY;
         break;
 
     case RECORD_UNIQUEID_TEXT:
@@ -2163,6 +2171,7 @@ static HRESULT read_text_bin( struct reader *reader )
         }
     }
 
+    if (type & 1) node->flags |= NODE_FLAG_TEXT_WITH_IMPLICIT_END_ELEMENT;
     read_insert_node( reader, parent, node );
     reader->state = READER_STATE_TEXT;
     reader->text_conv_offset = 0;
@@ -2341,9 +2350,11 @@ static HRESULT read_endelement_bin( struct reader *reader )
     unsigned char type;
     HRESULT hr;
 
-    if ((hr = read_byte( reader, &type )) != S_OK) return hr;
-    if (type != RECORD_ENDELEMENT) return WS_E_INVALID_FORMAT;
-
+    if (!(reader->current->flags & NODE_FLAG_TEXT_WITH_IMPLICIT_END_ELEMENT))
+    {
+        if ((hr = read_byte( reader, &type )) != S_OK) return hr;
+        if (type != RECORD_ENDELEMENT) return WS_E_INVALID_FORMAT;
+    }
     if (!(parent = find_parent( reader ))) return WS_E_INVALID_FORMAT;
 
     reader->current = LIST_ENTRY( list_tail( &parent->children ), struct node, entry );
@@ -2551,7 +2562,7 @@ static HRESULT read_node_bin( struct reader *reader )
     unsigned char type;
     HRESULT hr;
 
-    if (node_type( reader->current ) == WS_XML_NODE_TYPE_TEXT)
+    if (reader->current->flags & NODE_FLAG_TEXT_WITH_IMPLICIT_END_ELEMENT)
     {
         reader->current = LIST_ENTRY( list_tail( &reader->current->parent->children ), struct node, entry );
         reader->last    = reader->current;
@@ -3452,14 +3463,10 @@ static HRESULT str_to_guid( const unsigned char *str, ULONG len, GUID *ret )
 
 static HRESULT str_to_string( const unsigned char *str, ULONG len, WS_HEAP *heap, WS_STRING *ret )
 {
-    const unsigned char *p = str;
-    int len_utf16;
-
-    len_utf16 = MultiByteToWideChar( CP_UTF8, 0, (const char *)p, len, NULL, 0 );
+    int len_utf16 = MultiByteToWideChar( CP_UTF8, 0, (const char *)str, len, NULL, 0 );
     if (!(ret->chars = ws_alloc( heap, len_utf16 * sizeof(WCHAR) ))) return WS_E_QUOTA_EXCEEDED;
-    MultiByteToWideChar( CP_UTF8, 0, (const char *)p, len, ret->chars, len_utf16 );
+    MultiByteToWideChar( CP_UTF8, 0, (const char *)str, len, ret->chars, len_utf16 );
     ret->length = len_utf16;
-
     return S_OK;
 }
 
@@ -3550,10 +3557,8 @@ static HRESULT str_to_bytes( const unsigned char *str, ULONG len, WS_HEAP *heap,
 
 static HRESULT str_to_xml_string( const unsigned char *str, ULONG len, WS_HEAP *heap, WS_XML_STRING *ret )
 {
-    const unsigned char *p = str;
-
     if (!(ret->bytes = ws_alloc( heap, len ))) return WS_E_QUOTA_EXCEEDED;
-    memcpy( ret->bytes, p, len );
+    memcpy( ret->bytes, str, len );
     ret->length     = len;
     ret->dictionary = NULL;
     ret->id         = 0;
@@ -3818,18 +3823,13 @@ HRESULT WINAPI WsFileTimeToDateTime( const FILETIME *ft, WS_DATETIME *dt, WS_ERR
 
 static HRESULT read_get_node_text( struct reader *reader, WS_XML_UTF8_TEXT **ret )
 {
-    WS_XML_TEXT_NODE *text;
-
-    if (node_type( reader->current ) != WS_XML_NODE_TYPE_TEXT)
-        return WS_E_INVALID_FORMAT;
-
-    text = (WS_XML_TEXT_NODE *)&reader->current->hdr.node;
-    if (text->text->textType != WS_XML_TEXT_TYPE_UTF8)
+    WS_XML_TEXT_NODE *node = (WS_XML_TEXT_NODE *)&reader->current->hdr.node;
+    if (node->text->textType != WS_XML_TEXT_TYPE_UTF8)
     {
-        FIXME( "text type %u not supported\n", text->text->textType );
+        FIXME( "text type %u not supported\n", node->text->textType );
         return E_NOTIMPL;
     }
-    *ret = (WS_XML_UTF8_TEXT *)text->text;
+    *ret = (WS_XML_UTF8_TEXT *)node->text;
     return S_OK;
 }
 
@@ -3921,6 +3921,24 @@ HRESULT WINAPI WsFindAttribute( WS_XML_READER *handle, const WS_XML_STRING *loca
     return hr;
 }
 
+static BOOL match_element( const struct node *node, const WS_XML_STRING *localname, const WS_XML_STRING *ns )
+{
+    const WS_XML_ELEMENT_NODE *elem = (const WS_XML_ELEMENT_NODE *)node;
+    if (node_type( node ) != WS_XML_NODE_TYPE_ELEMENT) return FALSE;
+    return WsXmlStringEquals( localname, elem->localName, NULL ) == S_OK &&
+           WsXmlStringEquals( ns, elem->ns, NULL ) == S_OK;
+}
+
+static HRESULT read_next_node( struct reader *reader )
+{
+    if (reader->current == reader->last) return read_node( reader );
+    if (move_to_child_node( &reader->current )) return S_OK;
+    if (move_to_next_node( &reader->current )) return S_OK;
+    if (!move_to_parent_node( &reader->current )) return WS_E_INVALID_FORMAT;
+    if (move_to_next_node( &reader->current )) return S_OK;
+    return WS_E_INVALID_FORMAT;
+}
+
 static HRESULT read_get_text( struct reader *reader, WS_TYPE_MAPPING mapping,
                               const WS_XML_STRING *localname, const WS_XML_STRING *ns,
                               WS_XML_UTF8_TEXT **ret, BOOL *found )
@@ -3937,19 +3955,27 @@ static HRESULT read_get_text( struct reader *reader, WS_TYPE_MAPPING mapping,
     case WS_ELEMENT_CONTENT_TYPE_MAPPING:
     case WS_ANY_ELEMENT_TYPE_MAPPING:
     {
-        HRESULT hr;
         *found = TRUE;
         if (localname)
         {
-            const WS_XML_ELEMENT_NODE *elem = &reader->current->hdr;
-
-            if (WsXmlStringEquals( localname, elem->localName, NULL ) != S_OK ||
-                WsXmlStringEquals( ns, elem->ns, NULL ) != S_OK)
+            HRESULT hr;
+            if (!match_element( reader->current, localname, ns ))
             {
                 *found = FALSE;
                 return S_OK;
             }
-            if ((hr = read_startelement( reader )) != S_OK) return hr;
+            if ((hr = read_next_node( reader )) != S_OK) return hr;
+            if (node_type( reader->current ) != WS_XML_NODE_TYPE_TEXT)
+            {
+                if (!move_to_parent_element( &reader->current )) return WS_E_INVALID_FORMAT;
+                *found = FALSE;
+                return S_OK;
+            }
+        }
+        if (node_type( reader->current ) != WS_XML_NODE_TYPE_TEXT)
+        {
+            *found = FALSE;
+            return S_OK;
         }
         return read_get_node_text( reader, ret );
     }
@@ -4532,7 +4558,7 @@ static HRESULT read_type_wsz( struct reader *reader, WS_TYPE_MAPPING mapping,
     switch (option)
     {
     case WS_READ_REQUIRED_POINTER:
-        if (!found) return WS_E_INVALID_FORMAT;
+        if (!found && !(str = ws_alloc_zero( heap, 1 ))) return WS_E_QUOTA_EXCEEDED;
         /* fall through */
 
     case WS_READ_OPTIONAL_POINTER:
@@ -4786,18 +4812,20 @@ static HRESULT read_type_string( struct reader *reader, WS_TYPE_MAPPING mapping,
     switch (option)
     {
     case WS_READ_REQUIRED_VALUE:
-        if (!found) return WS_E_INVALID_FORMAT;
-        /* fall through */
-
     case WS_READ_NILLABLE_VALUE:
         if (size != sizeof(val)) return E_INVALIDARG;
         *(WS_STRING *)ret = val;
         break;
 
     case WS_READ_REQUIRED_POINTER:
-        if (!found) return WS_E_INVALID_FORMAT;
-        /* fall through */
-
+    {
+        WS_STRING *heap_val;
+        if (size != sizeof(heap_val)) return E_INVALIDARG;
+        if (!(heap_val = ws_alloc( heap, sizeof(*heap_val) ))) return WS_E_QUOTA_EXCEEDED;
+        *heap_val = val;
+        *(WS_STRING **)ret = heap_val;
+        break;
+    }
     case WS_READ_OPTIONAL_POINTER:
     case WS_READ_NILLABLE_POINTER:
     {
@@ -4838,18 +4866,20 @@ static HRESULT read_type_bytes( struct reader *reader, WS_TYPE_MAPPING mapping,
     switch (option)
     {
     case WS_READ_REQUIRED_VALUE:
-        if (!found) return WS_E_INVALID_FORMAT;
-        /* fall through */
-
     case WS_READ_NILLABLE_VALUE:
         if (size != sizeof(val)) return E_INVALIDARG;
         *(WS_BYTES *)ret = val;
         break;
 
     case WS_READ_REQUIRED_POINTER:
-        if (!found) return WS_E_INVALID_FORMAT;
-        /* fall through */
-
+    {
+        WS_BYTES *heap_val;
+        if (size != sizeof(heap_val)) return E_INVALIDARG;
+        if (!(heap_val = ws_alloc( heap, sizeof(*heap_val) ))) return WS_E_QUOTA_EXCEEDED;
+        *heap_val = val;
+        *(WS_BYTES **)ret = heap_val;
+        break;
+    }
     case WS_READ_OPTIONAL_POINTER:
     case WS_READ_NILLABLE_POINTER:
     {
@@ -4890,18 +4920,20 @@ static HRESULT read_type_xml_string( struct reader *reader, WS_TYPE_MAPPING mapp
     switch (option)
     {
     case WS_READ_REQUIRED_VALUE:
-        if (!found) return WS_E_INVALID_FORMAT;
-        /* fall through */
-
     case WS_READ_NILLABLE_VALUE:
         if (size != sizeof(val)) return E_INVALIDARG;
         *(WS_XML_STRING *)ret = val;
         break;
 
     case WS_READ_REQUIRED_POINTER:
-        if (!found) return WS_E_INVALID_FORMAT;
-        /* fall through */
-
+    {
+        WS_XML_STRING *heap_val;
+        if (size != sizeof(heap_val)) return E_INVALIDARG;
+        if (!(heap_val = ws_alloc( heap, sizeof(*heap_val) ))) return WS_E_QUOTA_EXCEEDED;
+        *heap_val = val;
+        *(WS_XML_STRING **)ret = heap_val;
+        break;
+    }
     case WS_READ_OPTIONAL_POINTER:
     case WS_READ_NILLABLE_POINTER:
     {
@@ -4996,16 +5028,6 @@ static BOOL is_empty_text_node( const struct node *node )
     return TRUE;
 }
 
-static HRESULT read_next_node( struct reader *reader )
-{
-    if (reader->current == reader->last) return read_node( reader );
-    if (move_to_child_node( &reader->current )) return S_OK;
-    if (move_to_next_node( &reader->current )) return S_OK;
-    if (!move_to_parent_node( &reader->current )) return WS_E_INVALID_FORMAT;
-    if (move_to_next_node( &reader->current )) return S_OK;
-    return WS_E_INVALID_FORMAT;
-}
-
 /* skips comment and empty text nodes */
 static HRESULT read_type_next_node( struct reader *reader )
 {
@@ -5022,15 +5044,6 @@ static HRESULT read_type_next_node( struct reader *reader )
     }
 }
 
-static BOOL match_current_element( struct reader *reader, const WS_XML_STRING *localname,
-                                   const WS_XML_STRING *ns )
-{
-    const WS_XML_ELEMENT_NODE *elem = &reader->current->hdr;
-    if (node_type( reader->current ) != WS_XML_NODE_TYPE_ELEMENT) return FALSE;
-    return WsXmlStringEquals( localname, elem->localName, NULL ) == S_OK &&
-           WsXmlStringEquals( ns, elem->ns, NULL ) == S_OK;
-}
-
 static HRESULT read_type_next_element_node( struct reader *reader, const WS_XML_STRING *localname,
                                             const WS_XML_STRING *ns )
 {
@@ -5045,13 +5058,13 @@ static HRESULT read_type_next_element_node( struct reader *reader, const WS_XML_
         if ((hr = read_to_startelement( reader, &found )) != S_OK) return hr;
         if (!found) return WS_E_INVALID_FORMAT;
     }
-    if (match_current_element( reader, localname, ns )) return S_OK;
+    if (match_element( reader->current, localname, ns )) return S_OK;
 
     node = reader->current;
     attr = reader->current_attr;
 
     if ((hr = read_type_next_node( reader )) != S_OK) return hr;
-    if (match_current_element( reader, localname, ns )) return S_OK;
+    if (match_element( reader->current, localname, ns )) return S_OK;
 
     reader->current = node;
     reader->current_attr = attr;

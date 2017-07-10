@@ -96,8 +96,8 @@ static HWND create_window(void)
 static void test_class_name_(unsigned int line, IDirect3DRMObject *object, const char *name)
 {
     char cname[64] = {0};
+    DWORD size, size2;
     HRESULT hr;
-    DWORD size;
 
     hr = IDirect3DRMObject_GetClassName(object, NULL, cname);
     ok_(__FILE__, line)(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
@@ -109,10 +109,10 @@ static void test_class_name_(unsigned int line, IDirect3DRMObject *object, const
     ok_(__FILE__, line)(hr == D3DRM_OK, "Failed to get classname size, hr %#x.\n", hr);
     ok_(__FILE__, line)(size == strlen(name) + 1, "wrong size: %u\n", size);
 
-    size = 1;
+    size = size2 = !!*name ? 1 : 0;
     hr = IDirect3DRMObject_GetClassName(object, &size, cname);
     ok_(__FILE__, line)(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
-    ok_(__FILE__, line)(size == 1, "Got size %u.\n", size);
+    ok_(__FILE__, line)(size == size2, "Got size %u.\n", size);
 
     size = sizeof(cname);
     hr = IDirect3DRMObject_GetClassName(object, &size, cname);
@@ -781,6 +781,7 @@ static void test_Face(void)
     IDirect3DRMFaceArray *array1;
     D3DRMLOADMEMORY info;
     D3DVECTOR v1[4], n1[4], v2[4], n2[4];
+    D3DCOLOR color;
     DWORD count;
     int icount;
 
@@ -963,6 +964,17 @@ static void test_Face(void)
         IDirect3DRMFaceArray_Release(array1);
     }
 
+    /* Setting face color. */
+    hr = IDirect3DRMFace2_SetColor(face2, 0x1f180587);
+    ok(SUCCEEDED(hr), "Failed to set face color, hr %#x.\n", hr);
+    color = IDirect3DRMFace2_GetColor(face2);
+    ok(color == 0x1f180587, "Unexpected color %8x.\n", color);
+
+    hr = IDirect3DRMFace2_SetColorRGB(face2, 0.5f, 0.5f, 0.5f);
+    ok(SUCCEEDED(hr), "Failed to set color, hr %#x.\n", hr);
+    color = IDirect3DRMFace2_GetColor(face2);
+    ok(color == 0xff7f7f7f, "Unexpected color %8x.\n", color);
+
     IDirect3DRMFace2_Release(face2);
     IDirect3DRMMeshBuilder3_Release(MeshBuilder3);
     IDirect3DRM3_Release(d3drm3);
@@ -987,9 +999,10 @@ static void test_Frame(void)
     IDirect3DRMLight *light1;
     IDirect3DRMLight *light_tmp;
     IDirect3DRMLightArray *light_array;
+    IDirect3DRMFrame3 *frame3;
+    DWORD count, options;
     ULONG ref, ref2;
     D3DCOLOR color;
-    DWORD count;
 
     hr = Direct3DRMCreate(&d3drm);
     ok(hr == D3DRM_OK, "Cannot get IDirect3DRM interface (hr = %x)\n", hr);
@@ -1315,6 +1328,42 @@ static void test_Frame(void)
     color = IDirect3DRMFrame_GetSceneBackground(pFrameP1);
     ok(color == 0xff7f7f7f, "wrong color (%x)\n", color);
 
+    /* Traversal options. */
+    hr = IDirect3DRMFrame_QueryInterface(pFrameP2, &IID_IDirect3DRMFrame3, (void **)&frame3);
+    ok(SUCCEEDED(hr), "Failed to get IDirect3DRMFrame3 interface, hr %#x.\n", hr);
+
+    hr = IDirect3DRMFrame3_GetTraversalOptions(frame3, NULL);
+    ok(hr == D3DRMERR_BADVALUE, "Unexpected hr %#x.\n", hr);
+
+    options = 0;
+    hr = IDirect3DRMFrame3_GetTraversalOptions(frame3, &options);
+    ok(SUCCEEDED(hr), "Failed to get traversal options, hr %#x.\n", hr);
+    ok(options == (D3DRMFRAME_RENDERENABLE | D3DRMFRAME_PICKENABLE), "Unexpected default options %#x.\n", options);
+
+    hr = IDirect3DRMFrame3_SetTraversalOptions(frame3, 0);
+    ok(SUCCEEDED(hr), "Unexpected hr %#x.\n", hr);
+
+    hr = IDirect3DRMFrame3_SetTraversalOptions(frame3, 0xf0000000);
+    ok(hr == D3DRMERR_BADVALUE, "Unexpected hr %#x.\n", hr);
+
+    hr = IDirect3DRMFrame3_SetTraversalOptions(frame3, 0xf0000000 | D3DRMFRAME_PICKENABLE);
+    ok(hr == D3DRMERR_BADVALUE, "Unexpected hr %#x.\n", hr);
+
+    options = 0xf;
+    hr = IDirect3DRMFrame3_GetTraversalOptions(frame3, &options);
+    ok(SUCCEEDED(hr), "Failed to get traversal options, hr %#x.\n", hr);
+    ok(options == 0, "Unexpected traversal options %#x.\n", options);
+
+    hr = IDirect3DRMFrame3_SetTraversalOptions(frame3, D3DRMFRAME_PICKENABLE);
+    ok(SUCCEEDED(hr), "Failed to set traversal options, hr %#x.\n", hr);
+
+    options = 0;
+    hr = IDirect3DRMFrame3_GetTraversalOptions(frame3, &options);
+    ok(SUCCEEDED(hr), "Failed to get traversal options, hr %#x.\n", hr);
+    ok(options == D3DRMFRAME_PICKENABLE, "Unexpected traversal options %#x.\n", options);
+
+    IDirect3DRMFrame3_Release(frame3);
+
     /* Cleanup */
     IDirect3DRMFrame_Release(pFrameP2);
     CHECK_REFCOUNT(pFrameC, 1);
@@ -1490,6 +1539,7 @@ static void test_object(void)
         { &CLSID_CDirect3DRMMesh,        &IID_IDirect3DRMMesh,         TRUE },
         { &CLSID_CDirect3DRMAnimation,   &IID_IDirect3DRMAnimation,    TRUE },
         { &CLSID_CDirect3DRMAnimation,   &IID_IDirect3DRMAnimation2,   TRUE },
+        { &CLSID_CDirect3DRMWrap,        &IID_IDirect3DRMWrap },
     };
     IDirect3DRM *d3drm1;
     IDirect3DRM2 *d3drm2;
@@ -6705,9 +6755,17 @@ static void test_animation(void)
 {
     IDirect3DRMAnimation2 *animation2;
     IDirect3DRMAnimation *animation;
+    D3DRMANIMATIONOPTIONS options;
     IDirect3DRMObject *obj, *obj2;
+    D3DRMANIMATIONKEY keys[10];
+    IDirect3DRMFrame3 *frame3;
+    IDirect3DRMFrame *frame;
+    D3DRMANIMATIONKEY key;
     IDirect3DRM *d3drm1;
+    D3DRMQUATERNION q;
+    DWORD count, i;
     HRESULT hr;
+    D3DVECTOR v;
 
     hr = Direct3DRMCreate(&d3drm1);
     ok(SUCCEEDED(hr), "Failed to create IDirect3DRM instance, hr 0x%08x.\n", hr);
@@ -6737,12 +6795,516 @@ static void test_animation(void)
     IDirect3DRMObject_Release(obj);
     IDirect3DRMObject_Release(obj2);
 
+    /* Set animated frame, get it back. */
+    hr = IDirect3DRM_CreateFrame(d3drm1, NULL, &frame);
+    ok(SUCCEEDED(hr), "Failed to create a frame, hr %#x.\n", hr);
+
+    hr = IDirect3DRMAnimation_SetFrame(animation, NULL);
+    ok(SUCCEEDED(hr), "Failed to reset frame, hr %#x.\n", hr);
+
+    CHECK_REFCOUNT(frame, 1);
+    hr = IDirect3DRMAnimation_SetFrame(animation, frame);
+    ok(SUCCEEDED(hr), "Failed to set a frame, hr %#x.\n", hr);
+    CHECK_REFCOUNT(frame, 1);
+
+    hr = IDirect3DRMAnimation2_GetFrame(animation2, NULL);
+    ok(hr == D3DRMERR_BADVALUE, "Unexpected hr %#x.\n", hr);
+
+    hr = IDirect3DRMAnimation2_GetFrame(animation2, &frame3);
+    ok(SUCCEEDED(hr), "Failed to get the frame, %#x.\n", hr);
+    ok(frame3 != (void *)frame, "Unexpected interface pointer.\n");
+    CHECK_REFCOUNT(frame, 2);
+
+    IDirect3DRMFrame3_Release(frame3);
+
+    hr = IDirect3DRMAnimation_SetFrame(animation, NULL);
+    ok(SUCCEEDED(hr), "Failed to reset frame, hr %#x.\n", hr);
+
+    hr = IDirect3DRMFrame_QueryInterface(frame, &IID_IDirect3DRMFrame3, (void **)&frame3);
+    ok(SUCCEEDED(hr), "Failed to get IDirect3DRMFrame3, hr %#x.\n", hr);
+
+    CHECK_REFCOUNT(frame3, 2);
+    hr = IDirect3DRMAnimation2_SetFrame(animation2, frame3);
+    ok(SUCCEEDED(hr), "Failed to set a frame, hr %#x.\n", hr);
+    CHECK_REFCOUNT(frame3, 2);
+
+    IDirect3DRMFrame3_Release(frame3);
+    IDirect3DRMFrame_Release(frame);
+
+    /* Animation options. */
+    options = IDirect3DRMAnimation_GetOptions(animation);
+    ok(options == (D3DRMANIMATION_CLOSED | D3DRMANIMATION_LINEARPOSITION),
+            "Unexpected default options %#x.\n", options);
+
+    /* Undefined mask value */
+    hr = IDirect3DRMAnimation_SetOptions(animation, 0xf0000000);
+    ok(hr == D3DRMERR_BADVALUE, "Unexpected hr %#x.\n", hr);
+
+    options = IDirect3DRMAnimation_GetOptions(animation);
+    ok(options == (D3DRMANIMATION_CLOSED | D3DRMANIMATION_LINEARPOSITION),
+            "Unexpected default options %#x.\n", options);
+
+    /* Ambiguous mask */
+    hr = IDirect3DRMAnimation_SetOptions(animation, D3DRMANIMATION_OPEN | D3DRMANIMATION_CLOSED);
+    ok(hr == D3DRMERR_BADVALUE, "Unexpected hr %#x.\n", hr);
+
+    hr = IDirect3DRMAnimation_SetOptions(animation, D3DRMANIMATION_LINEARPOSITION | D3DRMANIMATION_SPLINEPOSITION);
+    ok(hr == D3DRMERR_BADVALUE, "Unexpected hr %#x.\n", hr);
+
+    hr = IDirect3DRMAnimation_SetOptions(animation, D3DRMANIMATION_SCALEANDROTATION | D3DRMANIMATION_POSITION);
+    ok(hr == D3DRMERR_BADVALUE, "Unexpected hr %#x.\n", hr);
+
+    options = IDirect3DRMAnimation_GetOptions(animation);
+    ok(options == (D3DRMANIMATION_CLOSED | D3DRMANIMATION_LINEARPOSITION),
+            "Unexpected default options %#x.\n", options);
+
+    /* Mask contains undefined bits together with valid one. */
+    hr = IDirect3DRMAnimation_SetOptions(animation, 0xf0000000 | D3DRMANIMATION_OPEN);
+    ok(SUCCEEDED(hr), "Failed to set animation options, hr %#x.\n", hr);
+
+    options = IDirect3DRMAnimation_GetOptions(animation);
+    ok(options == (0xf0000000 | D3DRMANIMATION_OPEN), "Unexpected animation options %#x.\n", options);
+
+    hr = IDirect3DRMAnimation_SetOptions(animation, D3DRMANIMATION_SCALEANDROTATION);
+    ok(SUCCEEDED(hr), "Failed to set animation options, hr %#x.\n", hr);
+
+    options = IDirect3DRMAnimation_GetOptions(animation);
+    ok(options == D3DRMANIMATION_SCALEANDROTATION, "Unexpected options %#x.\n", options);
+
+    hr = IDirect3DRMAnimation_SetOptions(animation, D3DRMANIMATION_OPEN);
+    ok(SUCCEEDED(hr), "Failed to set animation options, hr %#x.\n", hr);
+
+    options = IDirect3DRMAnimation_GetOptions(animation);
+    ok(options == D3DRMANIMATION_OPEN, "Unexpected options %#x.\n", options);
+
+    hr = IDirect3DRMAnimation_SetOptions(animation, 0);
+    ok(hr == D3DRMERR_BADVALUE, "Unexpected hr %#x.\n", hr);
+
+    options = IDirect3DRMAnimation_GetOptions(animation);
+    ok(options == D3DRMANIMATION_OPEN, "Unexpected options %#x.\n", options);
+
+    /* Key management. */
+    hr = IDirect3DRMAnimation_AddPositionKey(animation, 0.0f, 1.0f, 0.0f, 0.0f);
+    ok(SUCCEEDED(hr), "Failed to add position key, hr %#x.\n", hr);
+
+    hr = IDirect3DRMAnimation_AddScaleKey(animation, 0.0f, 1.0f, 2.0f, 1.0f);
+    ok(SUCCEEDED(hr), "Failed to add scale key, hr %#x.\n", hr);
+
+    hr = IDirect3DRMAnimation_AddPositionKey(animation, 0.0f, 2.0f, 0.0f, 0.0f);
+    ok(SUCCEEDED(hr), "Failed to add position key, hr %#x.\n", hr);
+
+    hr = IDirect3DRMAnimation_AddPositionKey(animation, 99.0f, 3.0f, 1.0f, 0.0f);
+    ok(SUCCEEDED(hr), "Failed to add position key, hr %#x.\n", hr);
+
+    hr = IDirect3DRMAnimation_AddPositionKey(animation, 80.0f, 4.0f, 1.0f, 0.0f);
+    ok(SUCCEEDED(hr), "Failed to add position key, hr %#x.\n", hr);
+
+    v.x = 1.0f;
+    v.y = 0.0f;
+    v.z = 0.0f;
+    D3DRMQuaternionFromRotation(&q, &v, 1.0f);
+
+    /* NULL quaternion pointer leads to a crash on Windows. */
+    hr = IDirect3DRMAnimation_AddRotateKey(animation, 0.0f, &q);
+    ok(SUCCEEDED(hr), "Failed to add rotation key, hr %#.x\n", hr);
+
+    count = 0;
+    memset(keys, 0, sizeof(keys));
+    hr = IDirect3DRMAnimation2_GetKeys(animation2, 0.0f, 99.0f, &count, keys);
+    ok(SUCCEEDED(hr), "Failed to get animation keys, hr %#x.\n", hr);
+    ok(count == 6, "Unexpected key count %u.\n", count);
+
+    ok(keys[0].dwKeyType == D3DRMANIMATION_ROTATEKEY, "Unexpected key type %u.\n", keys[0].dwKeyType);
+    ok(keys[1].dwKeyType == D3DRMANIMATION_POSITIONKEY, "Unexpected key type %u.\n", keys[1].dwKeyType);
+    ok(keys[2].dwKeyType == D3DRMANIMATION_POSITIONKEY, "Unexpected key type %u.\n", keys[2].dwKeyType);
+    ok(keys[3].dwKeyType == D3DRMANIMATION_POSITIONKEY, "Unexpected key type %u.\n", keys[3].dwKeyType);
+    ok(keys[4].dwKeyType == D3DRMANIMATION_POSITIONKEY, "Unexpected key type %u.\n", keys[4].dwKeyType);
+    ok(keys[5].dwKeyType == D3DRMANIMATION_SCALEKEY, "Unexpected key type %u.\n", keys[5].dwKeyType);
+
+    /* Relative order, keys are returned sorted by time. */
+    ok(keys[1].dvTime == 0.0f, "Unexpected key time %.8e.\n", keys[1].dvTime);
+    ok(keys[2].dvTime == 0.0f, "Unexpected key time %.8e.\n", keys[2].dvTime);
+    ok(keys[3].dvTime == 80.0f, "Unexpected key time %.8e.\n", keys[3].dvTime);
+    ok(keys[4].dvTime == 99.0f, "Unexpected key time %.8e.\n", keys[4].dvTime);
+
+    /* For keys with same time, order they were added in is kept. */
+    ok(keys[1].dvPositionKey.x == 1.0f, "Unexpected key position x %.8e.\n", keys[1].dvPositionKey.x);
+    ok(keys[2].dvPositionKey.x == 2.0f, "Unexpected key position x %.8e.\n", keys[2].dvPositionKey.x);
+    ok(keys[3].dvPositionKey.x == 4.0f, "Unexpected key position x %.8e.\n", keys[3].dvPositionKey.x);
+    ok(keys[4].dvPositionKey.x == 3.0f, "Unexpected key position x %.8e.\n", keys[4].dvPositionKey.x);
+
+    for (i = 0; i < count; i++)
+    {
+        ok(keys[i].dwSize == sizeof(*keys), "%u: unexpected dwSize value %u.\n", i, keys[i].dwSize);
+
+    todo_wine
+    {
+        switch (keys[i].dwKeyType)
+        {
+        case D3DRMANIMATION_ROTATEKEY:
+            ok((keys[i].dwID & 0xf0000000) == 0x40000000, "%u: unexpected id mask %#x.\n", i, keys[i].dwID);
+            break;
+        case D3DRMANIMATION_POSITIONKEY:
+            ok((keys[i].dwID & 0xf0000000) == 0x80000000, "%u: unexpected id mask %#x.\n", i, keys[i].dwID);
+            break;
+        case D3DRMANIMATION_SCALEKEY:
+            ok((keys[i].dwID & 0xf0000000) == 0xc0000000, "%u: unexpected id mask %#x.\n", i, keys[i].dwID);
+            break;
+        default:
+            ok(0, "%u: unknown key type %d.\n", i, keys[i].dwKeyType);
+        }
+    }
+    }
+
+    /* No keys in this range. */
+    count = 10;
+    hr = IDirect3DRMAnimation2_GetKeys(animation2, 100.0f, 200.0f, &count, NULL);
+    ok(hr == D3DRMERR_NOSUCHKEY, "Unexpected hr %#x.\n", hr);
+    ok(count == 0, "Unexpected key count %u.\n", count);
+
+    count = 10;
+    hr = IDirect3DRMAnimation2_GetKeys(animation2, 100.0f, 200.0f, &count, keys);
+    ok(hr == D3DRMERR_NOSUCHKEY, "Unexpected hr %#x.\n", hr);
+    ok(count == 0, "Unexpected key count %u.\n", count);
+
+    count = 10;
+    hr = IDirect3DRMAnimation2_GetKeys(animation2, 0.0f, 0.0f, &count, NULL);
+    ok(SUCCEEDED(hr), "Failed to get animation keys, hr %#x.\n", hr);
+    ok(count == 4, "Unexpected key count %u.\n", count);
+
+    hr = IDirect3DRMAnimation2_GetKeys(animation2, 0.0f, 100.0f, NULL, NULL);
+    ok(hr == D3DRMERR_BADVALUE, "Unexpected hr %#x.\n", hr);
+
+    /* Time is 0-based. */
+    hr = IDirect3DRMAnimation2_GetKeys(animation2, -100.0f, -50.0f, NULL, NULL);
+    ok(hr == D3DRMERR_BADVALUE, "Unexpected hr %#x.\n", hr);
+
+    count = 10;
+    hr = IDirect3DRMAnimation2_GetKeys(animation2, -100.0f, -50.0f, &count, NULL);
+    ok(hr == D3DRMERR_NOSUCHKEY, "Unexpected hr %#x.\n", hr);
+    ok(count == 0, "Unexpected key count %u.\n", count);
+
+    count = 10;
+    hr = IDirect3DRMAnimation2_GetKeys(animation2, -100.0f, 100.0f, &count, NULL);
+    ok(SUCCEEDED(hr), "Failed to get animation keys, hr %#x.\n", hr);
+    ok(count == 6, "Unexpected key count %u.\n", count);
+
+    /* AddKey() tests. */
+    hr = IDirect3DRMAnimation2_AddKey(animation2, NULL);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    memset(&key, 0, sizeof(key));
+    key.dwKeyType = D3DRMANIMATION_POSITIONKEY;
+    hr = IDirect3DRMAnimation2_AddKey(animation2, &key);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    memset(&key, 0, sizeof(key));
+    key.dwSize = sizeof(key) - 1;
+    key.dwKeyType = D3DRMANIMATION_POSITIONKEY;
+    hr = IDirect3DRMAnimation2_AddKey(animation2, &key);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    memset(&key, 0, sizeof(key));
+    key.dwSize = sizeof(key) + 1;
+    key.dwKeyType = D3DRMANIMATION_POSITIONKEY;
+    hr = IDirect3DRMAnimation2_AddKey(animation2, &key);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    memset(&key, 0, sizeof(key));
+    key.dwSize = sizeof(key);
+    key.dwKeyType = D3DRMANIMATION_POSITIONKEY;
+    key.dvPositionKey.x = 8.0f;
+    hr = IDirect3DRMAnimation2_AddKey(animation2, &key);
+    ok(SUCCEEDED(hr), "Failed to add key, hr %#x.\n", hr);
+
+    /* Delete tests. */
+    hr = IDirect3DRMAnimation_AddRotateKey(animation, 0.0f, &q);
+    ok(SUCCEEDED(hr), "Failed to add rotation key, hr %#.x\n", hr);
+
+    hr = IDirect3DRMAnimation_AddScaleKey(animation, 0.0f, 1.0f, 2.0f, 1.0f);
+    ok(SUCCEEDED(hr), "Failed to add scale key, hr %#x.\n", hr);
+
+    count = 0;
+    memset(keys, 0, sizeof(keys));
+    hr = IDirect3DRMAnimation2_GetKeys(animation2, -1000.0f, 1000.0f, &count, keys);
+    ok(SUCCEEDED(hr), "Failed to get key count, hr %#x.\n", hr);
+    ok(count == 9, "Unexpected key count %u.\n", count);
+
+    ok(keys[0].dwKeyType == D3DRMANIMATION_ROTATEKEY, "Unexpected key type %u.\n", keys[0].dwKeyType);
+    ok(keys[1].dwKeyType == D3DRMANIMATION_ROTATEKEY, "Unexpected key type %u.\n", keys[1].dwKeyType);
+    ok(keys[2].dwKeyType == D3DRMANIMATION_POSITIONKEY, "Unexpected key type %u.\n", keys[2].dwKeyType);
+    ok(keys[3].dwKeyType == D3DRMANIMATION_POSITIONKEY, "Unexpected key type %u.\n", keys[3].dwKeyType);
+    ok(keys[4].dwKeyType == D3DRMANIMATION_POSITIONKEY, "Unexpected key type %u.\n", keys[4].dwKeyType);
+    ok(keys[5].dwKeyType == D3DRMANIMATION_POSITIONKEY, "Unexpected key type %u.\n", keys[5].dwKeyType);
+    ok(keys[6].dwKeyType == D3DRMANIMATION_POSITIONKEY, "Unexpected key type %u.\n", keys[6].dwKeyType);
+    ok(keys[7].dwKeyType == D3DRMANIMATION_SCALEKEY, "Unexpected key type %u.\n", keys[7].dwKeyType);
+    ok(keys[8].dwKeyType == D3DRMANIMATION_SCALEKEY, "Unexpected key type %u.\n", keys[8].dwKeyType);
+
+    ok(keys[0].dvTime == 0.0f, "Unexpected key time %.8e.\n", keys[0].dvTime);
+    ok(keys[1].dvTime == 0.0f, "Unexpected key time %.8e.\n", keys[1].dvTime);
+    ok(keys[2].dvTime == 0.0f, "Unexpected key time %.8e.\n", keys[2].dvTime);
+    ok(keys[3].dvTime == 0.0f, "Unexpected key time %.8e.\n", keys[3].dvTime);
+    ok(keys[4].dvTime == 0.0f, "Unexpected key time %.8e.\n", keys[4].dvTime);
+    ok(keys[5].dvTime == 80.0f, "Unexpected key time %.8e.\n", keys[5].dvTime);
+    ok(keys[6].dvTime == 99.0f, "Unexpected key time %.8e.\n", keys[6].dvTime);
+    ok(keys[7].dvTime == 0.0f, "Unexpected key time %.8e.\n", keys[7].dvTime);
+    ok(keys[8].dvTime == 0.0f, "Unexpected key time %.8e.\n", keys[8].dvTime);
+
+    hr = IDirect3DRMAnimation_DeleteKey(animation, -100.0f);
+    ok(SUCCEEDED(hr), "Failed to delete keys, hr %#x.\n", hr);
+
+    hr = IDirect3DRMAnimation_DeleteKey(animation, 100.0f);
+    ok(SUCCEEDED(hr), "Failed to delete keys, hr %#x.\n", hr);
+
+    /* Only first Position keys are not removed. */
+    hr = IDirect3DRMAnimation_DeleteKey(animation, 0.0f);
+    ok(SUCCEEDED(hr), "Failed to delete keys, hr %#x.\n", hr);
+
+    count = 0;
+    memset(keys, 0, sizeof(keys));
+    hr = IDirect3DRMAnimation2_GetKeys(animation2, 0.0f, 100.0f, &count, keys);
+    ok(SUCCEEDED(hr), "Failed to get key count, hr %#x.\n", hr);
+    ok(count == 6, "Unexpected key count %u.\n", count);
+
+    ok(keys[0].dwKeyType == D3DRMANIMATION_ROTATEKEY, "Unexpected key type %u.\n", keys[0].dwKeyType);
+    ok(keys[1].dwKeyType == D3DRMANIMATION_POSITIONKEY, "Unexpected key type %u.\n", keys[1].dwKeyType);
+    ok(keys[2].dwKeyType == D3DRMANIMATION_POSITIONKEY, "Unexpected key type %u.\n", keys[2].dwKeyType);
+    ok(keys[3].dwKeyType == D3DRMANIMATION_POSITIONKEY, "Unexpected key type %u.\n", keys[3].dwKeyType);
+    ok(keys[4].dwKeyType == D3DRMANIMATION_POSITIONKEY, "Unexpected key type %u.\n", keys[4].dwKeyType);
+    ok(keys[5].dwKeyType == D3DRMANIMATION_SCALEKEY, "Unexpected key type %u.\n", keys[5].dwKeyType);
+
+    ok(keys[0].dvTime == 0.0f, "Unexpected key time %.8e.\n", keys[0].dvTime);
+    ok(keys[1].dvTime == 0.0f, "Unexpected key time %.8e.\n", keys[1].dvTime);
+    ok(keys[2].dvTime == 0.0f, "Unexpected key time %.8e.\n", keys[2].dvTime);
+    ok(keys[3].dvTime == 80.0f, "Unexpected key time %.8e.\n", keys[3].dvTime);
+    ok(keys[4].dvTime == 99.0f, "Unexpected key time %.8e.\n", keys[4].dvTime);
+    ok(keys[5].dvTime == 0.0f, "Unexpected key time %.8e.\n", keys[5].dvTime);
+
+    hr = IDirect3DRMAnimation_DeleteKey(animation, 0.0f);
+    ok(SUCCEEDED(hr), "Failed to delete keys, hr %#x.\n", hr);
+
+    count = 0;
+    hr = IDirect3DRMAnimation2_GetKeys(animation2, 0.0f, 100.0f, &count, NULL);
+    ok(SUCCEEDED(hr), "Failed to get key count, hr %#x.\n", hr);
+    ok(count == 3, "Unexpected key count %u.\n", count);
+
     IDirect3DRMAnimation2_Release(animation2);
     IDirect3DRMAnimation_Release(animation);
 
     IDirect3DRM_Release(d3drm1);
 }
 
+static void test_animation_qi(void)
+{
+    static const struct qi_test tests[] =
+    {
+        { &IID_IDirect3DRMAnimation2,      &IID_IUnknown, &IID_IDirect3DRMAnimation2, S_OK                      },
+        { &IID_IDirect3DRMAnimation,       &IID_IUnknown, &IID_IDirect3DRMAnimation,  S_OK                      },
+        { &IID_IDirect3DRM,                NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMDevice,          NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMObject,          &IID_IUnknown, &IID_IDirect3DRMAnimation,  S_OK                      },
+        { &IID_IDirect3DRMDevice2,         NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMDevice3,         NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMViewport,        NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMViewport2,       NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRM3,               NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRM2,               NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMVisual,          NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMMesh,            NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMMeshBuilder,     NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMMeshBuilder2,    NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMMeshBuilder3,    NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMFace,            NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMFace2,           NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMLight,           NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMTexture,         NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMTexture2,        NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMTexture3,        NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMMaterial,        NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMMaterial2,       NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMAnimationSet,    NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMAnimationSet2,   NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMObjectArray,     NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMDeviceArray,     NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMViewportArray,   NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMFrameArray,      NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMVisualArray,     NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMLightArray,      NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMPickedArray,     NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMFaceArray,       NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMAnimationArray,  NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMUserVisual,      NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMShadow,          NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMShadow2,         NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMInterpolator,    NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMProgressiveMesh, NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMPicked2Array,    NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMClippedVisual,   NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDrawClipper,         NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDrawSurface7,        NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDrawSurface4,        NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDrawSurface3,        NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDrawSurface2,        NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDrawSurface,         NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DDevice7,           NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DDevice3,           NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DDevice2,           NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DDevice,            NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3D7,                 NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3D3,                 NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3D2,                 NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3D,                  NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDraw7,               NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDraw4,               NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDraw3,               NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDraw2,               NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDraw,                NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DLight,             NULL,          NULL,                       CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IUnknown,                   &IID_IUnknown, NULL,                       S_OK                      },
+    };
+    IDirect3DRMAnimation2 *animation2;
+    IDirect3DRMAnimation *animation;
+    IDirect3DRM3 *d3drm3;
+    IDirect3DRM *d3drm1;
+    IUnknown *unknown;
+    HRESULT hr;
+
+    hr = Direct3DRMCreate(&d3drm1);
+    ok(SUCCEEDED(hr), "Failed to create d3drm instance, hr %#x.\n", hr);
+
+    hr = IDirect3DRM_CreateAnimation(d3drm1, &animation);
+    ok(SUCCEEDED(hr), "Failed to create animation hr %#x.\n", hr);
+
+    hr = IDirect3DRMAnimation_QueryInterface(animation, &IID_IUnknown, (void **)&unknown);
+    ok(SUCCEEDED(hr), "Failed to get IUnknown from animation, hr %#x.\n", hr);
+    IDirect3DRMAnimation_Release(animation);
+
+    test_qi("animation_qi", unknown, &IID_IUnknown, tests, sizeof(tests) / sizeof(*tests));
+    IUnknown_Release(unknown);
+
+    hr = IDirect3DRM_QueryInterface(d3drm1, &IID_IDirect3DRM3, (void **)&d3drm3);
+    ok(SUCCEEDED(hr), "Failed to get IDirect3DRM3, hr %#x.\n", hr);
+
+    hr = IDirect3DRM3_CreateAnimation(d3drm3, &animation2);
+    ok(SUCCEEDED(hr), "Failed to create animation hr %#x.\n", hr);
+
+    hr = IDirect3DRMAnimation2_QueryInterface(animation2, &IID_IUnknown, (void **)&unknown);
+    ok(SUCCEEDED(hr), "Failed to get IUnknown from animation, hr %#x.\n", hr);
+    IDirect3DRMAnimation2_Release(animation2);
+
+    test_qi("animation2_qi", unknown, &IID_IUnknown, tests, sizeof(tests) / sizeof(*tests));
+    IUnknown_Release(unknown);
+
+    IDirect3DRM3_Release(d3drm3);
+    IDirect3DRM_Release(d3drm1);
+}
+
+static void test_wrap(void)
+{
+    IDirect3DRMWrap *wrap;
+    IDirect3DRM *d3drm1;
+    HRESULT hr;
+
+    hr = Direct3DRMCreate(&d3drm1);
+    ok(SUCCEEDED(hr), "Failed to create IDirect3DRM instance, hr %#x.\n", hr);
+
+    hr = IDirect3DRM_CreateObject(d3drm1, &CLSID_CDirect3DRMWrap, NULL, &IID_IDirect3DRMWrap, (void **)&wrap);
+    ok(SUCCEEDED(hr), "Failed to create wrap instance, hr %#x.\n", hr);
+
+    test_class_name((IDirect3DRMObject *)wrap, "");
+
+    IDirect3DRMWrap_Release(wrap);
+    IDirect3DRM_Release(d3drm1);
+}
+
+static void test_wrap_qi(void)
+{
+    static const struct qi_test tests[] =
+    {
+        { &IID_IDirect3DRMWrap,            &IID_IUnknown, &IID_IDirect3DRMWrap,   S_OK                      },
+        { &IID_IDirect3DRM,                NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMDevice,          NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMObject,          &IID_IUnknown, &IID_IDirect3DRMWrap,   S_OK                      },
+        { &IID_IDirect3DRMDevice2,         NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMDevice3,         NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMViewport,        NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMViewport2,       NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRM3,               NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRM2,               NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMVisual,          NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMMesh,            NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMMeshBuilder,     NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMMeshBuilder2,    NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMMeshBuilder3,    NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMFace,            NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMFace2,           NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMLight,           NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMTexture,         NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMTexture2,        NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMTexture3,        NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMMaterial,        NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMMaterial2,       NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMAnimation,       NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMAnimation2,      NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMAnimationSet,    NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMAnimationSet2,   NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMObjectArray,     NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMDeviceArray,     NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMViewportArray,   NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMFrameArray,      NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMVisualArray,     NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMLightArray,      NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMPickedArray,     NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMFaceArray,       NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMAnimationArray,  NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMUserVisual,      NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMShadow,          NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMShadow2,         NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMInterpolator,    NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMProgressiveMesh, NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMPicked2Array,    NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DRMClippedVisual,   NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDrawClipper,         NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDrawSurface7,        NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDrawSurface4,        NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDrawSurface3,        NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDrawSurface2,        NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDrawSurface,         NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DDevice7,           NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DDevice3,           NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DDevice2,           NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DDevice,            NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3D7,                 NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3D3,                 NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3D2,                 NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3D,                  NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDraw7,               NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDraw4,               NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDraw3,               NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDraw2,               NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirectDraw,                NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IDirect3DLight,             NULL,          NULL,                   CLASS_E_CLASSNOTAVAILABLE },
+        { &IID_IUnknown,                   &IID_IUnknown, NULL,                   S_OK                      },
+    };
+    IDirect3DRMWrap *wrap;
+    IDirect3DRM *d3drm1;
+    IUnknown *unknown;
+    HRESULT hr;
+
+    hr = Direct3DRMCreate(&d3drm1);
+    ok(SUCCEEDED(hr), "Failed to create d3drm instance, hr %#x.\n", hr);
+
+    hr = IDirect3DRM_CreateObject(d3drm1, &CLSID_CDirect3DRMWrap, NULL, &IID_IDirect3DRMWrap, (void **)&wrap);
+    ok(SUCCEEDED(hr), "Failed to create wrap instance, hr %#x.\n", hr);
+
+    hr = IDirect3DRMWrap_QueryInterface(wrap, &IID_IUnknown, (void **)&unknown);
+    ok(SUCCEEDED(hr), "Failed to get IUnknown from wrap (hr = %#x)\n", hr);
+    IDirect3DRMWrap_Release(wrap);
+    test_qi("wrap_qi", unknown, &IID_IUnknown, tests, sizeof(tests) / sizeof(*tests));
+    IUnknown_Release(unknown);
+
+    IDirect3DRM_Release(d3drm1);
+}
 START_TEST(d3drm)
 {
     test_MeshBuilder();
@@ -6778,4 +7340,7 @@ START_TEST(d3drm)
     test_viewport_clear2();
     test_create_texture_from_surface();
     test_animation();
+    test_animation_qi();
+    test_wrap();
+    test_wrap_qi();
 }

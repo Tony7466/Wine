@@ -153,8 +153,8 @@ void format_value_data(HWND hwndLV, int index, DWORD type, void *data, DWORD siz
 
 int AddEntryToList(HWND hwndLV, WCHAR *Name, DWORD dwValType, void *ValBuf, DWORD dwCount, int pos)
 {
+    LVITEMW item = { 0 };
     LINE_INFO* linfo;
-    LVITEMW item;
     int index;
 
     linfo = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(LINE_INFO) + dwCount);
@@ -173,8 +173,6 @@ int AddEntryToList(HWND hwndLV, WCHAR *Name, DWORD dwValType, void *ValBuf, DWOR
 
     item.mask = LVIF_TEXT | LVIF_PARAM | LVIF_STATE | LVIF_IMAGE;
     item.iItem = (pos == -1) ? SendMessageW(hwndLV, LVM_GETITEMCOUNT, 0, 0) : pos;
-    item.iSubItem = 0;
-    item.state = 0;
     item.stateMask = LVIS_FOCUSED | LVIS_SELECTED;
     item.pszText = Name ? Name : LPSTR_TEXTCALLBACKW;
     item.cchTextMax = Name ? lstrlenW(item.pszText) : 0;
@@ -191,10 +189,6 @@ int AddEntryToList(HWND hwndLV, WCHAR *Name, DWORD dwValType, void *ValBuf, DWOR
         break;
     }
     item.lParam = (LPARAM)linfo;
-
-#if (_WIN32_IE >= 0x0300)
-    item.iIndent = 0;
-#endif
 
     if ((index = ListView_InsertItemW(hwndLV, &item)) != -1)
         format_value_data(hwndLV, index, dwValType, ValBuf, dwCount);
@@ -411,6 +405,14 @@ static LRESULT CALLBACK ListWndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		HeapFree(GetProcessHeap(), 0, oldName);
 		return 0;
 	    }
+        case LVN_DELETEITEM: {
+                NMLISTVIEW *nmlv = (NMLISTVIEW *)lParam;
+                LINE_INFO *info = (LINE_INFO *)nmlv->lParam;
+
+                HeapFree(GetProcessHeap(), 0, info->name);
+                HeapFree(GetProcessHeap(), 0, info);
+            }
+            break;
         case NM_RETURN: {
             int cnt = SendMessageW(hWnd, LVM_GETNEXTITEM, -1, MAKELPARAM(LVNI_FOCUSED | LVNI_SELECTED, 0));
             if (cnt != -1)
@@ -427,18 +429,6 @@ static LRESULT CALLBACK ListWndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
                 /* if (nmitem->hdr.hwndFrom != hWnd) break; unnecessary because of WM_NOTIFY_REFLECT */
                 /*            if (nmitem->hdr.idFrom != IDW_LISTVIEW) break;  */
                 /*            if (nmitem->hdr.code != ???) break;  */
-#ifdef _MSC_VER
-                switch (nmitem->uKeyFlags) {
-                case LVKF_ALT:     /*  The ALT key is pressed.   */
-                    /* properties dialog box ? */
-                    break;
-                case LVKF_CONTROL: /*  The CTRL key is pressed. */
-                    /* run dialog box for providing parameters... */
-                    break;
-                case LVKF_SHIFT:   /*  The SHIFT key is pressed.    */
-                    break;
-                }
-#endif
                 info.pt.x = nmitem->ptAction.x;
                 info.pt.y = nmitem->ptAction.y;
                 if (SendMessageW(hWnd, LVM_HITTEST, 0, (LPARAM)&info) != -1) {
@@ -515,7 +505,6 @@ BOOL RefreshListView(HWND hwndLV, HKEY hKeyRoot, LPCWSTR keyPath, LPCWSTR highli
     BYTE* valBuf = 0;
     HKEY hKey = 0;
     LONG errCode;
-    INT count, i;
     LVITEMW item;
 
     if (!hwndLV) return FALSE;
@@ -525,16 +514,8 @@ BOOL RefreshListView(HWND hwndLV, HKEY hKeyRoot, LPCWSTR keyPath, LPCWSTR highli
     errCode = RegOpenKeyExW(hKeyRoot, keyPath, 0, KEY_READ, &hKey);
     if (errCode != ERROR_SUCCESS) goto done;
 
-    count = SendMessageW(hwndLV, LVM_GETITEMCOUNT, 0, 0);
-    for (i = 0; i < count; i++) {
-        item.mask = LVIF_PARAM;
-        item.iItem = i;
-        SendMessageW( hwndLV, LVM_GETITEMW, 0, (LPARAM)&item );
-        HeapFree(GetProcessHeap(), 0, ((LINE_INFO*)item.lParam)->name);
-        HeapFree(GetProcessHeap(), 0, (void*)item.lParam);
-    }
     g_columnToSort = ~0U;
-    SendMessageW( hwndLV, LVM_DELETEALLITEMS, 0, 0L );
+    SendMessageW(hwndLV, LVM_DELETEALLITEMS, 0, 0);
 
     /* get size information and resize the buffers if necessary */
     errCode = RegQueryInfoKeyW(hKey, NULL, NULL, NULL, NULL, &max_sub_key_len, NULL,

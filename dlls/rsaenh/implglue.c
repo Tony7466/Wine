@@ -50,6 +50,8 @@ BOOL WINAPI SystemFunction036(PVOID pbBuffer, ULONG dwLen);
         
 BOOL init_hash_impl(ALG_ID aiAlgid, HASH_CONTEXT *pHashContext) 
 {
+    const WCHAR *algid = NULL;
+
     switch (aiAlgid) 
     {
         case CALG_MD2:
@@ -69,18 +71,30 @@ BOOL init_hash_impl(ALG_ID aiAlgid, HASH_CONTEXT *pHashContext)
             break;
 
         case CALG_SHA_256:
-            SHA256_Init(&pHashContext->sha256);
+            algid = BCRYPT_SHA256_ALGORITHM;
             break;
 
         case CALG_SHA_384:
-            SHA384_Init(&pHashContext->sha384);
+            algid = BCRYPT_SHA384_ALGORITHM;
             break;
 
         case CALG_SHA_512:
-            SHA512_Init(&pHashContext->sha512);
+            algid = BCRYPT_SHA512_ALGORITHM;
             break;
     }
 
+    if (algid)
+    {
+        BCRYPT_ALG_HANDLE provider;
+        NTSTATUS status;
+
+        status = BCryptOpenAlgorithmProvider(&provider, algid, MS_PRIMITIVE_PROVIDER, 0);
+        if (status) return FALSE;
+
+        status = BCryptCreateHash(provider, &pHashContext->bcrypt_hash, NULL, 0, NULL, 0, 0);
+        BCryptCloseAlgorithmProvider(provider, 0);
+        if (status) return FALSE;
+    }
     return TRUE;
 }
 
@@ -105,21 +119,8 @@ BOOL update_hash_impl(ALG_ID aiAlgid, HASH_CONTEXT *pHashContext, const BYTE *pb
             A_SHAUpdate(&pHashContext->sha, pbData, dwDataLen);
             break;
         
-        case CALG_SHA_256:
-            SHA256_Update(&pHashContext->sha256, pbData, dwDataLen);
-            break;
-
-        case CALG_SHA_384:
-            SHA384_Update(&pHashContext->sha384, pbData, dwDataLen);
-            break;
-
-        case CALG_SHA_512:
-            SHA512_Update(&pHashContext->sha512, pbData, dwDataLen);
-            break;
-
         default:
-            SetLastError(NTE_BAD_ALGID);
-            return FALSE;
+            BCryptHashData(pHashContext->bcrypt_hash, (UCHAR*)pbData, dwDataLen, 0);
     }
 
     return TRUE;
@@ -147,21 +148,10 @@ BOOL finalize_hash_impl(ALG_ID aiAlgid, HASH_CONTEXT *pHashContext, BYTE *pbHash
             A_SHAFinal(&pHashContext->sha, (PULONG)pbHashValue);
             break;
         
-        case CALG_SHA_256:
-            SHA256_Final(pbHashValue, &pHashContext->sha256);
-            break;
-
-        case CALG_SHA_384:
-            SHA384_Final(pbHashValue, &pHashContext->sha384);
-            break;
-
-        case CALG_SHA_512:
-            SHA512_Final(pbHashValue, &pHashContext->sha512);
-            break;
-
         default:
-            SetLastError(NTE_BAD_ALGID);
-            return FALSE;
+            BCryptFinishHash(pHashContext->bcrypt_hash, pbHashValue, RSAENH_MAX_HASH_SIZE, 0);
+            BCryptDestroyHash(pHashContext->bcrypt_hash);
+            break;
     }
 
     return TRUE;
@@ -170,9 +160,17 @@ BOOL finalize_hash_impl(ALG_ID aiAlgid, HASH_CONTEXT *pHashContext, BYTE *pbHash
 BOOL duplicate_hash_impl(ALG_ID aiAlgid, const HASH_CONTEXT *pSrcHashContext,
                          HASH_CONTEXT *pDestHashContext) 
 {
-    *pDestHashContext = *pSrcHashContext;
-
-    return TRUE;
+    switch (aiAlgid)
+    {
+        case CALG_MD2:
+        case CALG_MD4:
+        case CALG_MD5:
+        case CALG_SHA:
+            *pDestHashContext = *pSrcHashContext;
+            return TRUE;
+        default:
+            return !BCryptDuplicateHash(pSrcHashContext->bcrypt_hash, &pDestHashContext->bcrypt_hash, NULL, 0, 0);
+    }
 }
 
 BOOL new_key_impl(ALG_ID aiAlgid, KEY_CONTEXT *pKeyContext, DWORD dwKeyLen) 
