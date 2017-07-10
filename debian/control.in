@@ -35,7 +35,8 @@ Build-Depends:
  pkg-config,
  dctrl-tools,
  khronos-api,
- unicode-data (>= 10.0),
+ unicode-data (>= 10),
+ unicode-data (<< 11),
  libpng-dev,
  libssl-dev,
  libxml2-dev,
@@ -68,7 +69,7 @@ Build-Depends:
  librsvg2-bin,
  imagemagick,
  fontforge-nox | fontforge,
-Standards-Version: 3.9.8
+Standards-Version: 4.0.0
 Homepage: http://www.winehq.org/
 Vcs-Browser: https://anonscm.debian.org/git/pkg-wine/wine.git
 Vcs-Git: https://anonscm.debian.org/git/pkg-wine/wine.git

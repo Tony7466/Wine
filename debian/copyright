@@ -35,14 +35,14 @@ Files-Excluded:
 
 Files: *
 Copyright:
- Copyright (c) 1993-2016 Wine project authors (see AUTHORS file)
+ Copyright (c) 1993-2017 Wine project authors (see AUTHORS file)
 License: LGPL-2.1+
 
 Files: debian/*
 Copyright:
- Copyright (c) 2015-2016 Jens Reyer <jre.winesim@gmail.com>
+ Copyright (c) 2015-2017 Jens Reyer <jre.winesim@gmail.com>
  Copyright (c) 2014-2016 Stephen Kitt <skitt@debian.org>
- Copyright (c) 2012-2016 Michael Gilbert <mgilbert@debian.org>
+ Copyright (c) 2012-2017 Michael Gilbert <mgilbert@debian.org>
 License: LGPL-2.1+
 
 Files: debian/org.winehq.wine*.appdata.xml
