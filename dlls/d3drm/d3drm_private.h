@@ -76,6 +76,7 @@ struct d3drm_frame
     IDirect3DRMLight **lights;
     D3DRMMATRIX4D transform;
     D3DCOLOR scenebackground;
+    DWORD traversal_options;
 };
 
 struct d3drm_viewport
@@ -119,6 +120,7 @@ struct d3drm_face
     IDirect3DRMFace IDirect3DRMFace_iface;
     IDirect3DRMFace2 IDirect3DRMFace2_iface;
     LONG ref;
+    D3DCOLOR color;
 };
 
 struct d3drm_mesh_builder
@@ -206,6 +208,24 @@ struct d3drm_material
     struct color_rgb ambient;
 };
 
+struct d3drm_animation_key
+{
+    D3DVALUE time;
+    union
+    {
+        D3DVECTOR position;
+        D3DVECTOR scale;
+        D3DRMQUATERNION rotate;
+    } u;
+};
+
+struct d3drm_animation_keys
+{
+    struct d3drm_animation_key *keys;
+    SIZE_T count;
+    SIZE_T size;
+};
+
 struct d3drm_animation
 {
     struct d3drm_object obj;
@@ -213,8 +233,19 @@ struct d3drm_animation
     IDirect3DRMAnimation IDirect3DRMAnimation_iface;
     LONG ref;
     IDirect3DRM *d3drm;
+    IDirect3DRMFrame3 *frame;
+    D3DRMANIMATIONOPTIONS options;
+    struct d3drm_animation_keys position;
+    struct d3drm_animation_keys scale;
+    struct d3drm_animation_keys rotate;
 };
 
+struct d3drm_wrap
+{
+    struct d3drm_object obj;
+    IDirect3DRMWrap IDirect3DRMWrap_iface;
+    LONG ref;
+};
 
 HRESULT d3drm_device_create(struct d3drm_device **device, IDirect3DRM *d3drm) DECLSPEC_HIDDEN;
 HRESULT d3drm_device_create_surfaces_from_clipper(struct d3drm_device *object, IDirectDraw *ddraw,
@@ -243,6 +274,7 @@ HRESULT d3drm_light_create(struct d3drm_light **light, IDirect3DRM *d3drm) DECLS
 HRESULT d3drm_material_create(struct d3drm_material **material, IDirect3DRM *d3drm) DECLSPEC_HIDDEN;
 HRESULT d3drm_mesh_create(struct d3drm_mesh **mesh, IDirect3DRM *d3drm) DECLSPEC_HIDDEN;
 HRESULT d3drm_animation_create(struct d3drm_animation **animation, IDirect3DRM *d3drm) DECLSPEC_HIDDEN;
+HRESULT d3drm_wrap_create(struct d3drm_wrap **wrap, IDirect3DRM *d3drm) DECLSPEC_HIDDEN;
 
 HRESULT load_mesh_data(IDirect3DRMMeshBuilder3 *iface, IDirectXFileData *data,
                        D3DRMLOADTEXTURECALLBACK load_texture_proc, void *arg) DECLSPEC_HIDDEN;
@@ -270,5 +302,7 @@ static inline void d3drm_set_color(D3DCOLOR *color, float r, float g, float b, f
     *color = RGBA_MAKE(d3drm_color_component(r), d3drm_color_component(g),
             d3drm_color_component(b), d3drm_color_component(a));
 }
+
+BOOL d3drm_array_reserve(void **elements, SIZE_T *capacity, SIZE_T element_count, SIZE_T element_size) DECLSPEC_HIDDEN;
 
 #endif /* __D3DRM_PRIVATE_INCLUDED__ */

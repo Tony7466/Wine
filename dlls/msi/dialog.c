@@ -30,7 +30,6 @@
 #include "winuser.h"
 #include "winnls.h"
 #include "msi.h"
-#include "msipriv.h"
 #include "msidefs.h"
 #include "ocidl.h"
 #include "olectl.h"
@@ -38,11 +37,14 @@
 #include "commctrl.h"
 #include "winreg.h"
 #include "shlwapi.h"
-#include "msiserver.h"
 #include "shellapi.h"
 
 #include "wine/debug.h"
 #include "wine/unicode.h"
+
+#include "msipriv.h"
+#include "msiserver.h"
+#include "resource.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(msi);
 
@@ -3916,7 +3918,6 @@ static msi_dialog *dialog_create( MSIPACKAGE *package, const WCHAR *name, msi_di
         return NULL;
     strcpyW( dialog->name, name );
     dialog->parent = parent;
-    msiobj_addref( &package->hdr );
     dialog->package = package;
     dialog->event_handler = event_handler;
     dialog->finished = 0;
@@ -3927,7 +3928,6 @@ static msi_dialog *dialog_create( MSIPACKAGE *package, const WCHAR *name, msi_di
     rec = msi_get_dialog_record( dialog );
     if( !rec )
     {
-        msiobj_release( &package->hdr );
         msi_free( dialog );
         return NULL;
     }
@@ -4054,7 +4054,6 @@ void msi_dialog_destroy( msi_dialog *dialog )
 
     msi_free( dialog->control_default );
     msi_free( dialog->control_cancel );
-    msiobj_release( &dialog->package->hdr );
     dialog->package = NULL;
     msi_free( dialog );
 }
@@ -4508,6 +4507,44 @@ static UINT event_reset( msi_dialog *dialog, const WCHAR *argument )
     return ERROR_SUCCESS;
 }
 
+UINT ACTION_ShowDialog( MSIPACKAGE *package, const WCHAR *dialog )
+{
+    static const WCHAR szDialog[] = {'D','i','a','l','o','g',0};
+    MSIRECORD *row;
+    INT rc;
+
+    if (!TABLE_Exists(package->db, szDialog)) return ERROR_FUNCTION_NOT_CALLED;
+
+    row = MSI_CreateRecord(0);
+    if (!row) return ERROR_OUTOFMEMORY;
+    MSI_RecordSetStringW(row, 0, dialog);
+    rc = MSI_ProcessMessage(package, INSTALLMESSAGE_SHOWDIALOG, row);
+    msiobj_release(&row->hdr);
+    if (rc == -1) return ERROR_INSTALL_USEREXIT;
+
+    if (!rc)
+    {
+        static const WCHAR szActionNotFound[] =
+            {'D','E','B','U','G',':',' ','E','r','r','o','r',' ','[','1',']',':',' ',' ',
+             'A','c','t','i','o','n',' ','n','o','t',' ','f','o','u','n','d',':',' ','[','2',']',0};
+        WCHAR template[1024];
+        MSIRECORD *row = MSI_CreateRecord(2);
+        if (!row) return -1;
+        MSI_RecordSetStringW(row, 0, szActionNotFound); /* FIXME: this shouldn't attach "Info [1]." */
+        MSI_RecordSetInteger(row, 1, 2726);
+        MSI_RecordSetStringW(row, 2, dialog);
+        MSI_ProcessMessage(package, INSTALLMESSAGE_INFO, row);
+
+        LoadStringW(msi_hInstance, IDS_INSTALLERROR, template, 1024);
+        MSI_RecordSetStringW(row, 0, template);
+        MSI_ProcessMessage(package, INSTALLMESSAGE_INFO, row);
+
+        msiobj_release(&row->hdr);
+        return ERROR_FUNCTION_NOT_CALLED;
+    }
+    return ERROR_SUCCESS;
+}
+
 /* Return ERROR_SUCCESS if dialog is process and ERROR_FUNCTION_FAILED
  * if the given parameter is not a dialog box
  */
@@ -4536,6 +4573,17 @@ UINT ACTION_DialogBox( MSIPACKAGE *package, const WCHAR *dialog )
         msi_free( name );
     }
     if (r == ERROR_IO_PENDING) r = ERROR_SUCCESS;
+    if (r == ERROR_SUCCESS)
+    {
+        static const WCHAR szDialogCreated[] =
+            {'D','i','a','l','o','g',' ','c','r','e','a','t','e','d',0};
+        MSIRECORD *row = MSI_CreateRecord(2);
+        if (!row) return ERROR_OUTOFMEMORY;
+        MSI_RecordSetStringW(row, 1, dialog);
+        MSI_RecordSetStringW(row, 2, szDialogCreated);
+        MSI_ProcessMessage(package, INSTALLMESSAGE_ACTIONSTART, row);
+        msiobj_release(&row->hdr);
+    }
     return r;
 }
 

@@ -88,9 +88,10 @@ public class WineActivity extends Activity
         HashMap<String,String> env = new HashMap<String,String>();
         env.put( "WINELOADER", loader.toString() );
         env.put( "WINEPREFIX", prefix.toString() );
-        env.put( "LD_LIBRARY_PATH", libdir.toString() );
+        env.put( "LD_LIBRARY_PATH", libdir.toString() + ":" + getApplicationInfo().nativeLibraryDir );
         env.put( "LC_ALL", locale );
         env.put( "LANG", locale );
+        env.put( "PATH", bindir.toString() + ":" + System.getenv( "PATH" ));
 
         if (cmdline == null)
         {
@@ -111,7 +112,14 @@ public class WineActivity extends Activity
 
         createProgressDialog( 0, "Setting up the Windows environment..." );
 
-        System.load( libdir.toString() + "/libwine.so" );
+        try
+        {
+            System.loadLibrary( "wine" );
+        }
+        catch (java.lang.UnsatisfiedLinkError e)
+        {
+            System.load( libdir.toString() + "/libwine.so" );
+        }
         prefix.mkdirs();
 
         runWine( cmdline, env );
@@ -351,7 +359,8 @@ public class WineActivity extends Activity
         {
             if (window_group != null)
             {
-                if (parent != null) parent.client_group.removeView( window_group );
+                if (parent != null && parent.client_group != null)
+                    parent.client_group.removeView( window_group );
                 window_group.destroy_view();
             }
             if (client_group != null) client_group.destroy_view();

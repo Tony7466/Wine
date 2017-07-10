@@ -269,6 +269,7 @@ struct const_upload_info
     unsigned int major_stride;
     unsigned int major_count;
     unsigned int count;
+    unsigned int minor_remainder;
 };
 
 static enum pres_value_type table_type_from_param_type(D3DXPARAMETER_TYPE type)
@@ -653,10 +654,28 @@ static HRESULT get_constants_desc(unsigned int *byte_code, struct d3dx_const_tab
         if (FAILED(hr = get_ctab_constant_desc(ctab, hc, &cdesc[i])))
             goto err_out;
         inputs_param[i] = get_parameter_by_name(base, NULL, cdesc[i].Name);
-        if (cdesc[i].Class == D3DXPC_OBJECT)
-            TRACE("Object %s, parameter %p.\n", cdesc[i].Name, inputs_param[i]);
-        else if (!inputs_param[i])
+        if (!inputs_param[i])
+        {
             WARN("Could not find parameter %s in effect.\n", cdesc[i].Name);
+            continue;
+        }
+        if (cdesc[i].Class == D3DXPC_OBJECT)
+        {
+            TRACE("Object %s, parameter %p.\n", cdesc[i].Name, inputs_param[i]);
+            if (cdesc[i].RegisterSet != D3DXRS_SAMPLER || inputs_param[i]->class != D3DXPC_OBJECT
+                    || !is_param_type_sampler(inputs_param[i]->type))
+            {
+                WARN("Unexpected object type, constant %s.\n", debugstr_a(cdesc[i].Name));
+                hr = D3DERR_INVALIDCALL;
+                goto err_out;
+            }
+            if (max(inputs_param[i]->element_count, 1) < cdesc[i].RegisterCount)
+            {
+                WARN("Register count exceeds parameter size, constant %s.\n", debugstr_a(cdesc[i].Name));
+                hr = D3DERR_INVALIDCALL;
+                goto err_out;
+            }
+        }
     }
     out->input_count = desc.Constants;
     out->inputs = cdesc;
@@ -1038,10 +1057,22 @@ static void get_const_upload_info(struct d3dx_const_param_eval_output *const_set
         info->major = param->rows;
         info->minor = param->columns;
     }
-    info->major_stride = max(info->minor, get_reg_components(table));
-    info->major_count = min(info->major * info->major_stride,
-            get_offset_reg(table, const_set->register_count) + info->major_stride - 1) / info->major_stride;
-    info->count = info->major_count * info->minor;
+
+    if (get_reg_components(table) == 1)
+    {
+        unsigned int const_length = get_offset_reg(table, const_set->register_count);
+
+        info->major_stride = info->minor;
+        info->major_count = const_length / info->major_stride;
+        info->minor_remainder = const_length % info->major_stride;
+    }
+    else
+    {
+        info->major_stride = get_reg_components(table);
+        info->major_count = const_set->register_count;
+        info->minor_remainder = 0;
+    }
+    info->count = info->major_count * info->minor + info->minor_remainder;
 }
 
 static void pres_int_from_float(void *out, const void *in, unsigned int count)
@@ -1128,7 +1159,6 @@ static void set_constants(struct d3dx_regstore *rs, struct d3dx_const_tab *const
         unsigned int table = const_set->table;
         struct d3dx_parameter *param = const_set->param;
         unsigned int element, i, j, start_offset;
-        unsigned int param_offset;
         struct const_upload_info info;
         unsigned int *data = param->data;
         enum pres_value_type param_type;
@@ -1168,26 +1198,20 @@ static void set_constants(struct d3dx_regstore *rs, struct d3dx_const_tab *const
 
             /* Store reshaped but (possibly) not converted yet data temporarily in the same constants buffer.
              * All the supported types of parameters and table values have the same size. */
-            for (i = 0; i < info.major_count; ++i)
+            if (info.transpose)
             {
-                for (j = 0; j < info.minor; ++j)
-                {
-                    unsigned int offset;
+                for (i = 0; i < info.major_count; ++i)
+                    for (j = 0; j < info.minor; ++j)
+                        out[i * info.major_stride + j] = data[i + j * info.major];
 
-                    offset = i * info.major_stride + j;
-                    if (get_reg_offset(table, offset) >= const_set->register_count)
-                        break;
-                    if (info.transpose)
-                        param_offset = i + j * info.major;
-                    else
-                        param_offset = i * info.minor + j;
-                    if (param_offset * sizeof(unsigned int) >= param->bytes)
-                    {
-                        WARN("Parameter data is too short, name %s, component %u.\n", debugstr_a(param->name), i);
-                        break;
-                    }
-                    out[offset] = data[param_offset];
-                }
+                for (j = 0; j < info.minor_remainder; ++j)
+                    out[i * info.major_stride + j] = data[i + j * info.major];
+            }
+            else
+            {
+                for (i = 0; i < info.major_count; ++i)
+                    for (j = 0; j < info.minor; ++j)
+                        out[i * info.major_stride + j] = data[i * info.minor + j];
             }
             start_offset += get_offset_reg(table, const_set->register_count);
             data += param->rows * param->columns;
@@ -1422,6 +1446,16 @@ static HRESULT init_set_constants_param(struct d3dx_const_tab *const_tab, ID3DXC
             && !info.transpose && info.minor == info.major_stride
             && info.count == get_offset_reg(const_set.table, const_set.register_count)
             && info.count * sizeof(unsigned int) <= param->bytes;
+    if (info.minor_remainder && !const_set.direct_copy && !info.transpose)
+        FIXME("Incomplete last row for not transposed matrix which cannot be directly copied, parameter %s.\n",
+                debugstr_a(param->name));
+
+    if (info.major_count > info.major
+            || (info.major_count == info.major && info.minor_remainder))
+    {
+        WARN("Constant dimensions exceed parameter size.\n");
+        return D3DERR_INVALIDCALL;
+    }
 
     if (FAILED(hr = append_const_set(const_tab, &const_set)))
         return hr;

@@ -144,6 +144,14 @@ my @dll_groups =
   "ext-ms-win-authz-context-l1-1-0",
  ],
  [
+  "credui",
+  "ext-ms-win-security-credui-l1-1-0",
+ ],
+ [
+  "cryptui",
+  "ext-ms-win-security-cryptui-l1-1-0",
+ ],
+ [
   "netapi32",
   "ext-ms-win-domainjoin-netjoin-l1-1-0",
  ],
@@ -160,6 +168,10 @@ my @dll_groups =
  [
   "ntdsapi",
   "api-ms-win-security-activedirectoryclient-l1-1-0",
+ ],
+ [
+  "rasapi32",
+  "ext-ms-win-ras-rasapi32-l1-1-0",
  ],
  [
   "kernel32",
@@ -240,6 +252,7 @@ my @dll_groups =
   "api-ms-win-core-errorhandling-l1-1-2",
   "api-ms-win-core-util-l1-1-0",
   "ext-ms-win-kernel32-package-current-l1-1-0",
+  "ext-ms-win-kernel32-package-l1-1-1",
  ],
  [
   "kernel32",
@@ -307,6 +320,7 @@ my @dll_groups =
   "ext-ms-win-ntuser-private-l1-1-1",
   "ext-ms-win-ntuser-rectangle-ext-l1-1-0",
   "ext-ms-win-ntuser-uicontext-ext-l1-1-0",
+  "ext-ms-win-ntuser-windowclass-l1-1-1",
   "ext-ms-win-ntuser-window-l1-1-1",
   "ext-ms-win-rtcore-ntuser-dc-access-l1-1-0",
   "ext-ms-win-rtcore-ntuser-dpi-l1-1-0",

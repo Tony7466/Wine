@@ -1047,7 +1047,7 @@
 @ extern _daylight msvcr120._daylight
 @ cdecl _dclass(double) msvcr120._dclass
 @ cdecl _difftime32(long long) msvcr120._difftime32
-@ cdecl _difftime64(long long) msvcr120._difftime64
+@ cdecl _difftime64(int64 int64) msvcr120._difftime64
 @ stub _dosmaperr
 @ cdecl _dpcomp(double double) msvcr120._dpcomp
 @ cdecl _dsign(double) msvcr120._dsign
@@ -1593,7 +1593,7 @@
 @ cdecl -ret64 _wcstoui64(wstr ptr long) msvcr120._wcstoui64
 @ cdecl -ret64 _wcstoui64_l(wstr ptr long ptr) msvcr120._wcstoui64_l
 @ cdecl _wcstoul_l(wstr ptr long ptr) msvcr120._wcstoul_l
-@ stub _wcstoull_l
+@ cdecl -ret64 _wcstoull_l(wstr ptr long ptr) msvcr120._wcstoull_l
 @ stub _wcstoumax_l
 @ cdecl _wcsupr(wstr) msvcr120._wcsupr
 @ cdecl _wcsupr_l(wstr ptr) msvcr120._wcsupr_l
@@ -2142,7 +2142,7 @@
 @ cdecl wcstombs(ptr ptr long) msvcr120.wcstombs
 @ cdecl wcstombs_s(ptr ptr long wstr long) msvcr120.wcstombs_s
 @ cdecl wcstoul(wstr ptr long) msvcr120.wcstoul
-@ stub wcstoull
+@ cdecl -ret64 wcstoull(wstr ptr long) msvcr120.wcstoull
 @ stub wcstoumax
 @ cdecl wcsxfrm(ptr wstr long) msvcr120.wcsxfrm
 @ cdecl wctob(long) msvcr120.wctob
