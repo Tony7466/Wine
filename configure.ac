@@ -983,6 +983,7 @@ then
                            done],
                           [AC_MSG_RESULT([no])])
         CC="$ac_save_CC"
+        AC_SUBST(CROSSCFLAGS,${CROSSCFLAGS:-$CFLAGS})
     fi
 fi
 
@@ -2247,6 +2248,9 @@ AC_CACHE_CHECK([for if_nameindex],wine_cv_have_if_nameindex,
                AC_LINK_IFELSE([AC_LANG_PROGRAM([[#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
+#ifdef HAVE_SYS_SOCKET_H
+#include <sys/socket.h>
+#endif
 #ifdef HAVE_NET_IF_H
 # include <net/if.h>
 #endif]],
@@ -2593,20 +2597,30 @@ then
 fi
 
 AC_CHECK_FUNCS(\
+	acosh \
+	acoshf \
 	asinh \
 	asinhf \
+	atanh \
+	atanhf \
 	cbrt \
 	cbrtf \
 	erf \
+	erfc \
+	erfcf \
 	erff \
 	exp2 \
 	exp2f \
+	expm1 \
+	expm1f \
 	lgamma \
 	lgammaf \
 	llrint \
 	llrintf \
 	llround \
 	llroundf \
+	log1p \
+	log1pf \
 	log2 \
 	log2f \
 	lrint \
@@ -2784,6 +2798,7 @@ WINE_CONFIG_DLL(api-ms-win-core-processthreads-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-core-processthreads-l1-1-1)
 WINE_CONFIG_DLL(api-ms-win-core-processthreads-l1-1-2)
 WINE_CONFIG_DLL(api-ms-win-core-profile-l1-1-0)
+WINE_CONFIG_DLL(api-ms-win-core-psapi-ansi-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-core-psapi-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-core-psapi-obsolete-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-core-quirks-l1-1-0)
@@ -2861,6 +2876,7 @@ WINE_CONFIG_DLL(api-ms-win-eventing-provider-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-eventlog-legacy-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-mm-misc-l1-1-1)
 WINE_CONFIG_DLL(api-ms-win-mm-mme-l1-1-0)
+WINE_CONFIG_DLL(api-ms-win-mm-time-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-ntuser-dc-access-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-power-base-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-power-setting-l1-1-0)
@@ -2876,6 +2892,7 @@ WINE_CONFIG_DLL(api-ms-win-security-lsalookup-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-security-lsalookup-l1-1-1)
 WINE_CONFIG_DLL(api-ms-win-security-lsalookup-l2-1-1)
 WINE_CONFIG_DLL(api-ms-win-security-lsapolicy-l1-1-0)
+WINE_CONFIG_DLL(api-ms-win-security-provider-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-security-sddl-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-security-systemfunctions-l1-1-0)
 WINE_CONFIG_DLL(api-ms-win-service-core-l1-1-0)
@@ -3685,6 +3702,7 @@ WINE_CONFIG_PROGRAM(notepad,,[clean,install,installbin,manpage])
 WINE_CONFIG_PROGRAM(oleview,,[clean,install])
 WINE_CONFIG_PROGRAM(ping,,[install])
 WINE_CONFIG_PROGRAM(plugplay,,[install])
+WINE_CONFIG_PROGRAM(powershell,,[install])
 WINE_CONFIG_PROGRAM(presentationfontcache,,[install])
 WINE_CONFIG_PROGRAM(progman,,[clean,install])
 WINE_CONFIG_PROGRAM(reg,,[clean,install])

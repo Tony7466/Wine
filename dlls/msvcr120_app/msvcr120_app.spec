@@ -1677,23 +1677,23 @@
 @ cdecl abs(long) msvcr120.abs
 @ cdecl acos(double) msvcr120.acos
 @ cdecl -arch=arm,x86_64 acosf(float) msvcr120.acosf
-@ stub acosh
-@ stub acoshf
-@ stub acoshl
+@ cdecl acosh(double) msvcr120.acosh
+@ cdecl acoshf(float) msvcr120.acoshf
+@ cdecl acoshl(double) msvcr120.acoshl
 @ cdecl asctime(ptr) msvcr120.asctime
 @ cdecl asctime_s(ptr long ptr) msvcr120.asctime_s
 @ cdecl asin(double) msvcr120.asin
 @ cdecl -arch=arm,x86_64 asinf(float) msvcr120.asinf
-@ cdecl asinh(double double) msvcr120.asinh
-@ cdecl asinhf(float float) msvcr120.asinhf
-@ cdecl asinhl(double double) msvcr120.asinhl
+@ cdecl asinh(double) msvcr120.asinh
+@ cdecl asinhf(float) msvcr120.asinhf
+@ cdecl asinhl(double) msvcr120.asinhl
 @ cdecl atan(double) msvcr120.atan
 @ cdecl -arch=arm,x86_64 atanf(float) msvcr120.atanf
 @ cdecl atan2(double double) msvcr120.atan2
 @ cdecl -arch=arm,x86_64 atan2f(float float) msvcr120.atan2f
-@ stub atanh
-@ stub atanhf
-@ stub atanhl
+@ cdecl atanh(double) msvcr120.atanh
+@ cdecl atanhf(float) msvcr120.atanhf
+@ cdecl atanhl(double) msvcr120.atanhl
 @ cdecl -private atexit(ptr) msvcr120.atexit
 @ cdecl atof(str) msvcr120.atof
 @ cdecl atoi(str) msvcr120.atoi
@@ -1789,10 +1789,10 @@
 @ stub ctanl
 @ cdecl -ret64 div(long long) msvcr120.div
 @ cdecl erf(double) msvcr120.erf
-@ stub erfc
-@ stub erfcf
-@ stub erfcl
-@ cdecl erff(double) msvcr120.erff
+@ cdecl erfc(double) msvcr120.erfc
+@ cdecl erfcf(float) msvcr120.erfcf
+@ cdecl erfcl(double) msvcr120.erfcl
+@ cdecl erff(float) msvcr120.erff
 @ cdecl erfl(double) msvcr120.erfl
 @ cdecl exit(long) msvcr120.exit
 @ cdecl exp(double) msvcr120.exp
@@ -1800,9 +1800,9 @@
 @ cdecl exp2f(float) msvcr120.exp2f
 @ cdecl exp2l(double) msvcr120.exp2l
 @ cdecl -arch=arm,x86_64 expf(float) msvcr120.expf
-@ stub expm1
-@ stub expm1f
-@ stub expm1l
+@ cdecl expm1(double) msvcr120.expm1
+@ cdecl expm1f(float) msvcr120.expm1f
+@ cdecl expm1l(double) msvcr120.expm1l
 @ cdecl fabs(double) msvcr120.fabs
 @ cdecl -arch=arm,x86_64 fabsf(float) msvcr120.fabsf
 @ cdecl fclose(ptr) msvcr120.fclose
@@ -1922,9 +1922,9 @@
 @ cdecl -arch=arm,x86_64 logf(float) msvcr120.logf
 @ cdecl log10(double) msvcr120.log10
 @ cdecl -arch=arm,x86_64 log10f(float) msvcr120.log10f
-@ stub log1p
-@ stub log1pf
-@ stub log1pl
+@ cdecl log1p(double) msvcr120.log1p
+@ cdecl log1pf(float) msvcr120.log1pf
+@ cdecl log1pl(double) msvcr120.log1pl
 @ cdecl log2(double) msvcr120.log2
 @ cdecl log2f(float) msvcr120.log2f
 @ cdecl log2l(double) msvcr120.log2l

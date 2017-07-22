@@ -2011,23 +2011,23 @@
 @ cdecl abs(long) MSVCRT_abs
 @ cdecl acos(double) MSVCRT_acos
 @ cdecl -arch=arm,x86_64 acosf(float) MSVCRT_acosf
-@ stub acosh
-@ stub acoshf
-@ stub acoshl
+@ cdecl acosh(double) MSVCR120_acosh
+@ cdecl acoshf(float) MSVCR120_acoshf
+@ cdecl acoshl(double) MSVCR120_acoshl
 @ cdecl asctime(ptr) MSVCRT_asctime
 @ cdecl asctime_s(ptr long ptr) MSVCRT_asctime_s
 @ cdecl asin(double) MSVCRT_asin
 @ cdecl -arch=arm,x86_64 asinf(float) MSVCRT_asinf
-@ cdecl asinh(double double) MSVCR120_asinh
-@ cdecl asinhf(float float) MSVCR120_asinhf
-@ cdecl asinhl(double double) MSVCR120_asinhl
+@ cdecl asinh(double) MSVCR120_asinh
+@ cdecl asinhf(float) MSVCR120_asinhf
+@ cdecl asinhl(double) MSVCR120_asinhl
 @ cdecl atan(double) MSVCRT_atan
 @ cdecl -arch=arm,x86_64 atanf(float) MSVCRT_atanf
 @ cdecl atan2(double double) MSVCRT_atan2
 @ cdecl -arch=arm,x86_64 atan2f(float float) MSVCRT_atan2f
-@ stub atanh
-@ stub atanhf
-@ stub atanhl
+@ cdecl atanh(double) MSVCR120_atanh
+@ cdecl atanhf(float) MSVCR120_atanhf
+@ cdecl atanhl(double) MSVCR120_atanhl
 @ cdecl -private atexit(ptr) MSVCRT_atexit  # not imported to avoid conflicts with Mingw
 @ cdecl atof(str) MSVCRT_atof
 @ cdecl atoi(str) MSVCRT_atoi
@@ -2123,10 +2123,10 @@
 @ stub ctanl
 @ cdecl -ret64 div(long long) MSVCRT_div
 @ cdecl erf(double) MSVCR120_erf
-@ stub erfc
-@ stub erfcf
-@ stub erfcl
-@ cdecl erff(double) MSVCR120_erff
+@ cdecl erfc(double) MSVCR120_erfc
+@ cdecl erfcf(float) MSVCR120_erfcf
+@ cdecl erfcl(double) MSVCR120_erfcl
+@ cdecl erff(float) MSVCR120_erff
 @ cdecl erfl(double) MSVCR120_erfl
 @ cdecl exit(long) MSVCRT_exit
 @ cdecl exp(double) MSVCRT_exp
@@ -2134,9 +2134,9 @@
 @ cdecl exp2f(float) MSVCR120_exp2f
 @ cdecl exp2l(double) MSVCR120_exp2l
 @ cdecl -arch=arm,x86_64 expf(float) MSVCRT_expf
-@ stub expm1
-@ stub expm1f
-@ stub expm1l
+@ cdecl expm1(double) MSVCR120_expm1
+@ cdecl expm1f(float) MSVCR120_expm1f
+@ cdecl expm1l(double) MSVCR120_expm1l
 @ cdecl fabs(double) MSVCRT_fabs
 @ cdecl -arch=arm,x86_64 fabsf(float) MSVCRT_fabsf
 @ cdecl fclose(ptr) MSVCRT_fclose
@@ -2259,9 +2259,9 @@
 @ cdecl -arch=arm,x86_64 logf(float) MSVCRT_logf
 @ cdecl log10(double) MSVCRT_log10
 @ cdecl -arch=arm,x86_64 log10f(float) MSVCRT_log10f
-@ stub log1p
-@ stub log1pf
-@ stub log1pl
+@ cdecl log1p(double) MSVCR120_log1p
+@ cdecl log1pf(float) MSVCR120_log1pf
+@ cdecl log1pl(double) MSVCR120_log1pl
 @ cdecl log2(double) MSVCR120_log2
 @ cdecl log2f(float) MSVCR120_log2f
 @ cdecl log2l(double) MSVCR120_log2l

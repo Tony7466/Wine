@@ -65,14 +65,14 @@ struct d3drm_frame
     IDirect3DRM *d3drm;
     LONG ref;
     struct d3drm_frame *parent;
-    ULONG nb_children;
-    ULONG children_capacity;
+    SIZE_T nb_children;
+    SIZE_T children_size;
     IDirect3DRMFrame3 **children;
-    ULONG nb_visuals;
-    ULONG visuals_capacity;
+    SIZE_T nb_visuals;
+    SIZE_T visuals_size;
     IDirect3DRMVisual **visuals;
-    ULONG nb_lights;
-    ULONG lights_capacity;
+    SIZE_T nb_lights;
+    SIZE_T lights_size;
     IDirect3DRMLight **lights;
     D3DRMMATRIX4D transform;
     D3DCOLOR scenebackground;
@@ -168,8 +168,8 @@ struct d3drm_mesh
     IDirect3DRMMesh IDirect3DRMMesh_iface;
     LONG ref;
     IDirect3DRM *d3drm;
-    DWORD groups_capacity;
-    DWORD nb_groups;
+    SIZE_T nb_groups;
+    SIZE_T groups_size;
     struct mesh_group *groups;
 };
 

@@ -2098,6 +2098,10 @@ static GpStatus get_visible_clip_region(GpGraphics *graphics, GpRegion *rgn)
     GpRectF rectf;
     GpRegion* tmp;
 
+    /* Ignore graphics image bounds for metafiles */
+    if (graphics->image && graphics->image_type == ImageTypeMetafile)
+        return GdipCombineRegionRegion(rgn, graphics->clip, CombineModeReplace);
+
     if((stat = get_graphics_bounds(graphics, &rectf)) != Ok)
         return stat;
 
@@ -2871,6 +2875,13 @@ GpStatus WINGDIPAPI GdipDrawImagePointsRect(GpGraphics *graphics, GpImage *image
 
     TRACE("%s %s %s\n", debugstr_pointf(&points[0]), debugstr_pointf(&points[1]),
         debugstr_pointf(&points[2]));
+
+    if (graphics->image && graphics->image->type == ImageTypeMetafile)
+    {
+        return METAFILE_DrawImagePointsRect((GpMetafile*)graphics->image,
+                image, points, count, srcx, srcy, srcwidth, srcheight,
+                srcUnit, imageAttributes, callback, callbackData);
+    }
 
     memcpy(ptf, points, 3 * sizeof(GpPointF));
 
@@ -3812,7 +3823,9 @@ GpStatus WINGDIPAPI GdipDrawPath(GpGraphics *graphics, GpPen *pen, GpPath *path)
     if (path->pathdata.Count == 0)
         return Ok;
 
-    if (!graphics->hdc || !brush_can_fill_path(pen->brush, FALSE))
+    if (graphics->image && graphics->image->type == ImageTypeMetafile)
+        retval = METAFILE_DrawPath((GpMetafile*)graphics->image, pen, path);
+    else if (!graphics->hdc || !brush_can_fill_path(pen->brush, FALSE))
         retval = SOFTWARE_GdipDrawPath(graphics, pen, path);
     else
         retval = GDI32_GdipDrawPath(graphics, pen, path);
@@ -4130,6 +4143,9 @@ GpStatus WINGDIPAPI GdipFillPath(GpGraphics *graphics, GpBrush *brush, GpPath *p
 
     if(graphics->busy)
         return ObjectBusy;
+
+    if (graphics->image && graphics->image->type == ImageTypeMetafile)
+        return METAFILE_FillPath((GpMetafile*)graphics->image, brush, path);
 
     if (!graphics->image && !graphics->alpha_hdc)
         stat = GDI32_GdipFillPath(graphics, brush, path);
@@ -5801,6 +5817,19 @@ GpStatus WINGDIPAPI GdipSetCompositingMode(GpGraphics *graphics,
     if(graphics->busy)
         return ObjectBusy;
 
+    if(graphics->compmode == mode)
+        return Ok;
+
+    if(graphics->image && graphics->image->type == ImageTypeMetafile)
+    {
+        GpStatus stat;
+
+        stat = METAFILE_AddSimpleProperty((GpMetafile*)graphics->image,
+                EmfPlusRecordTypeSetCompositingMode, mode);
+        if(stat != Ok)
+            return stat;
+    }
+
     graphics->compmode = mode;
 
     return Ok;
@@ -5816,6 +5845,19 @@ GpStatus WINGDIPAPI GdipSetCompositingQuality(GpGraphics *graphics,
 
     if(graphics->busy)
         return ObjectBusy;
+
+    if(graphics->compqual == quality)
+        return Ok;
+
+    if(graphics->image && graphics->image->type == ImageTypeMetafile)
+    {
+        GpStatus stat;
+
+        stat = METAFILE_AddSimpleProperty((GpMetafile*)graphics->image,
+                EmfPlusRecordTypeSetCompositingQuality, quality);
+        if(stat != Ok)
+            return stat;
+    }
 
     graphics->compqual = quality;
 
@@ -5838,6 +5880,19 @@ GpStatus WINGDIPAPI GdipSetInterpolationMode(GpGraphics *graphics,
 
     if (mode == InterpolationModeHighQuality)
         mode = InterpolationModeHighQualityBicubic;
+
+    if (mode == graphics->interpolation)
+        return Ok;
+
+    if (graphics->image && graphics->image->type == ImageTypeMetafile)
+    {
+        GpStatus stat;
+
+        stat = METAFILE_AddSimpleProperty((GpMetafile*)graphics->image,
+                EmfPlusRecordTypeSetInterpolationMode, mode);
+        if (stat != Ok)
+            return stat;
+    }
 
     graphics->interpolation = mode;
 
@@ -5906,6 +5961,19 @@ GpStatus WINGDIPAPI GdipSetPixelOffsetMode(GpGraphics *graphics, PixelOffsetMode
     if(graphics->busy)
         return ObjectBusy;
 
+    if(graphics->pixeloffset == mode)
+        return Ok;
+
+    if(graphics->image && graphics->image->type == ImageTypeMetafile)
+    {
+        GpStatus stat;
+
+        stat = METAFILE_AddSimpleProperty((GpMetafile*)graphics->image,
+                EmfPlusRecordTypeSetPixelOffsetMode, mode);
+        if(stat != Ok)
+            return stat;
+    }
+
     graphics->pixeloffset = mode;
 
     return Ok;
@@ -5952,6 +6020,20 @@ GpStatus WINGDIPAPI GdipSetSmoothingMode(GpGraphics *graphics, SmoothingMode mod
     if(graphics->busy)
         return ObjectBusy;
 
+    if(graphics->smoothing == mode)
+        return Ok;
+
+    if(graphics->image && graphics->image->type == ImageTypeMetafile) {
+         GpStatus stat;
+         BOOL antialias = (mode != SmoothingModeDefault &&
+                 mode != SmoothingModeNone && mode != SmoothingModeHighSpeed);
+
+         stat = METAFILE_AddSimpleProperty((GpMetafile*)graphics->image,
+                 EmfPlusRecordTypeSetAntiAliasMode, (mode << 1) + antialias);
+         if(stat != Ok)
+             return stat;
+     }
+
     graphics->smoothing = mode;
 
     return Ok;
@@ -5979,6 +6061,18 @@ GpStatus WINGDIPAPI GdipSetTextRenderingHint(GpGraphics *graphics,
 
     if(graphics->busy)
         return ObjectBusy;
+
+    if(graphics->texthint == hint)
+        return Ok;
+
+    if(graphics->image && graphics->image->type == ImageTypeMetafile) {
+        GpStatus stat;
+
+        stat = METAFILE_AddSimpleProperty((GpMetafile*)graphics->image,
+                EmfPlusRecordTypeSetTextRenderingHint, hint);
+        if(stat != Ok)
+            return stat;
+    }
 
     graphics->texthint = hint;
 
