@@ -47,7 +47,7 @@ static void test_directory(void)
 {
     IDirectMusicLoader8 *loader = NULL;
     HRESULT hr;
-    WCHAR con[] = {'c', 'o', 'n'};
+    WCHAR con[] = {'c', 'o', 'n', 0};
     WCHAR path[MAX_PATH];
     WCHAR invalid_path[] = {'/', 'i', 'n', 'v', 'a', 'l', 'i', 'd', ' ', 'p', 'a', 't', 'h', 0};
 
@@ -66,11 +66,11 @@ static void test_directory(void)
     /* Two consecutive SetSearchDirectory with the same path */
     GetTempPathW(ARRAY_SIZE(path), path);
     hr = IDirectMusicLoader_SetSearchDirectory(loader, &GUID_DirectMusicAllTypes, path, 0);
-    todo_wine ok(hr == S_OK, "SetSearchDirectory failed with %#x\n", hr);
-    hr = IDirectMusicLoader_SetSearchDirectory(loader, &GUID_DirectMusicAllTypes, path, 0);
-    ok(hr == S_FALSE, "Second SetSearchDirectory failed with %#x\n", hr);
-    hr = IDirectMusicLoader_SetSearchDirectory(loader, &CLSID_DirectSoundWave, path, 0);
     ok(hr == S_OK, "SetSearchDirectory failed with %#x\n", hr);
+    hr = IDirectMusicLoader_SetSearchDirectory(loader, &GUID_DirectMusicAllTypes, path, 0);
+    todo_wine ok(hr == S_FALSE, "Second SetSearchDirectory failed with %#x\n", hr);
+    hr = IDirectMusicLoader_SetSearchDirectory(loader, &CLSID_DirectSoundWave, path, 0);
+    todo_wine ok(hr == S_OK, "SetSearchDirectory failed with %#x\n", hr);
     hr = IDirectMusicLoader_SetSearchDirectory(loader, &CLSID_DirectSoundWave, path, 0);
     ok(hr == S_FALSE, "Second SetSearchDirectory failed with %#x\n", hr);
 

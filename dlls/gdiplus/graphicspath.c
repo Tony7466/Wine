@@ -188,8 +188,8 @@ static BOOL flatten_bezier(path_list_node_t *start, REAL x2, REAL y2, REAL x3, R
  * NOTES
  *  This functions takes the newfigure value of the given path into account,
  *  i.e. the arc is connected to the end of the given path if it was set to
- *  FALSE, otherwise the arc's first point gets the the PathPointTypeStart
- *  value. In both cases, the value of newfigure of the given path is FALSE
+ *  FALSE, otherwise the arc's first point gets the PathPointTypeStart value.
+ *  In both cases, the value of newfigure of the given path is FALSE
  *  afterwards.
  */
 GpStatus WINGDIPAPI GdipAddPathArc(GpPath *path, REAL x1, REAL y1, REAL x2,
@@ -2187,6 +2187,7 @@ static void widen_dashed_figure(GpPath *path, GpPen *pen, int start, int end,
             closed ? LineCapFlat : pen->endcap, pen->customend, last_point);
     }
 
+    heap_free(dash_pattern_scaled);
     heap_free(tmp_points);
 }
 
@@ -2452,4 +2453,78 @@ GpStatus WINGDIPAPI GdipWindingModeOutline(GpPath *path, GpMatrix *matrix, REAL 
 {
    FIXME("stub: %p, %p, %.2f\n", path, matrix, flatness);
    return NotImplemented;
+}
+
+#define FLAGS_INTPATH 0x4000
+
+struct path_header
+{
+    DWORD version;
+    DWORD count;
+    DWORD flags;
+};
+
+/* Test to see if the path could be stored as an array of shorts */
+static BOOL is_integer_path(const GpPath *path)
+{
+    int i;
+
+    if (!path->pathdata.Count) return FALSE;
+
+    for (i = 0; i < path->pathdata.Count; i++)
+    {
+        short x, y;
+        x = gdip_round(path->pathdata.Points[i].X);
+        y = gdip_round(path->pathdata.Points[i].Y);
+        if (path->pathdata.Points[i].X != (REAL)x || path->pathdata.Points[i].Y != (REAL)y)
+            return FALSE;
+    }
+    return TRUE;
+}
+
+DWORD write_path_data(GpPath *path, void *data)
+{
+    struct path_header *header = data;
+    BOOL integer_path = is_integer_path(path);
+    DWORD i, size;
+    BYTE *types;
+
+    size = sizeof(struct path_header) + path->pathdata.Count;
+    if (integer_path)
+        size += sizeof(short[2]) * path->pathdata.Count;
+    else
+        size += sizeof(float[2]) * path->pathdata.Count;
+    size = (size + 3) & ~3;
+
+    if (!data) return size;
+
+    header->version = VERSION_MAGIC2;
+    header->count = path->pathdata.Count;
+    header->flags = integer_path ? FLAGS_INTPATH : 0;
+
+    if (integer_path)
+    {
+        short *points = (short*)(header + 1);
+        for (i = 0; i < path->pathdata.Count; i++)
+        {
+            points[2*i] = path->pathdata.Points[i].X;
+            points[2*i + 1] = path->pathdata.Points[i].Y;
+        }
+        types = (BYTE*)(points + 2*i);
+    }
+    else
+    {
+        float *points = (float*)(header + 1);
+        for (i = 0; i < path->pathdata.Count; i++)
+        {
+            points[2*i]  = path->pathdata.Points[i].X;
+            points[2*i + 1] = path->pathdata.Points[i].Y;
+        }
+        types = (BYTE*)(points + 2*i);
+    }
+
+    for (i=0; i<path->pathdata.Count; i++)
+        types[i] = path->pathdata.Types[i];
+    memset(types + i, 0, ((path->pathdata.Count + 3) & ~3) - path->pathdata.Count);
+    return size;
 }

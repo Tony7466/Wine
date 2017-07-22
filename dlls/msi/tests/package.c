@@ -38,9 +38,7 @@ static const WCHAR msifileW[] =
     {'w','i','n','e','t','e','s','t','-','p','a','c','k','a','g','e','.','m','s','i',0};
 static char CURR_DIR[MAX_PATH];
 
-static UINT (WINAPI *pMsiApplyMultiplePatchesA)(LPCSTR, LPCSTR, LPCSTR);
 static INSTALLSTATE (WINAPI *pMsiGetComponentPathExA)(LPCSTR, LPCSTR, LPCSTR, MSIINSTALLCONTEXT, LPSTR, LPDWORD);
-static UINT (WINAPI *pMsiSetExternalUIRecord)(INSTALLUI_HANDLER_RECORD, DWORD, LPVOID, PINSTALLUI_HANDLER_RECORD);
 static HRESULT (WINAPI *pSHGetFolderPathA)(HWND, int, HANDLE, DWORD, LPSTR);
 
 static BOOL (WINAPI *pCheckTokenMembership)(HANDLE,PSID,PBOOL);
@@ -67,9 +65,7 @@ static void init_functionpointers(void)
 #define GET_PROC(mod, func) \
     p ## func = (void*)GetProcAddress(mod, #func);
 
-    GET_PROC(hmsi, MsiApplyMultiplePatchesA);
     GET_PROC(hmsi, MsiGetComponentPathExA);
-    GET_PROC(hmsi, MsiSetExternalUIRecord);
     GET_PROC(hshell32, SHGetFolderPathA);
 
     GET_PROC(hadvapi32, CheckTokenMembership);
@@ -678,6 +674,19 @@ static UINT create_control_table( MSIHANDLE hdb )
             "PRIMARY KEY `Dialog_`, `Control`)");
 }
 
+static UINT create_controlevent_table( MSIHANDLE hdb )
+{
+    return run_query(hdb,
+            "CREATE TABLE `ControlEvent` ("
+            "`Dialog_` CHAR(72) NOT NULL, "
+            "`Control_` CHAR(50) NOT NULL, "
+            "`Event` CHAR(50) NOT NULL, "
+            "`Argument` CHAR(255) NOT NULL, "
+            "`Condition` CHAR(255), "
+            "`Ordering` SHORT "
+            "PRIMARY KEY `Dialog_`, `Control_`, `Event`, `Argument`, `Condition`)");
+}
+
 #define make_add_entry(type, qtext) \
     static UINT add##_##type##_##entry( MSIHANDLE hdb, const char *values ) \
     { \
@@ -760,6 +769,18 @@ make_add_entry(inilocator,
 make_add_entry(custom_action,
                "INSERT INTO `CustomAction`  "
                "(`Action`, `Type`, `Source`, `Target`) VALUES( %s )")
+
+make_add_entry(dialog,
+               "INSERT INTO `Dialog` "
+               "(`Dialog`, `HCentering`, `VCentering`, `Width`, `Height`, `Attributes`, `Control_First`) VALUES ( %s )")
+
+make_add_entry(control,
+               "INSERT INTO `Control` "
+               "(`Dialog_`, `Control`, `Type`, `X`, `Y`, `Width`, `Height`, `Attributes`, `Text`) VALUES( %s )");
+
+make_add_entry(controlevent,
+               "INSERT INTO `ControlEvent` "
+               "(`Dialog_`, `Control_`, `Event`, `Argument`, `Condition`, `Ordering`) VALUES( %s )");
 
 static UINT add_reglocator_entry( MSIHANDLE hdb, const char *sig, UINT root, const char *path,
                                   const char *name, UINT type )
@@ -8795,48 +8816,43 @@ static void test_MsiApplyMultiplePatches(void)
 {
     UINT r, type = GetDriveTypeW(NULL);
 
-    if (!pMsiApplyMultiplePatchesA) {
-        win_skip("MsiApplyMultiplePatchesA not found\n");
-        return;
-    }
-
-    r = pMsiApplyMultiplePatchesA(NULL, NULL, NULL);
+    r = MsiApplyMultiplePatchesA(NULL, NULL, NULL);
     ok(r == ERROR_INVALID_PARAMETER, "Expected ERROR_INVALID_PARAMETER, got %u\n", r);
 
-    r = pMsiApplyMultiplePatchesA("", NULL, NULL);
+    r = MsiApplyMultiplePatchesA("", NULL, NULL);
     ok(r == ERROR_INVALID_PARAMETER, "Expected ERROR_INVALID_PARAMETER, got %u\n", r);
 
-    r = pMsiApplyMultiplePatchesA(";", NULL, NULL);
+    r = MsiApplyMultiplePatchesA(";", NULL, NULL);
     if (type == DRIVE_FIXED)
         todo_wine ok(r == ERROR_PATH_NOT_FOUND, "Expected ERROR_PATH_NOT_FOUND, got %u\n", r);
     else
         ok(r == ERROR_INVALID_NAME, "Expected ERROR_INVALID_NAME, got %u\n", r);
 
-    r = pMsiApplyMultiplePatchesA("  ;", NULL, NULL);
+    r = MsiApplyMultiplePatchesA("  ;", NULL, NULL);
     if (type == DRIVE_FIXED)
         todo_wine ok(r == ERROR_PATCH_PACKAGE_OPEN_FAILED, "Expected ERROR_PATCH_PACKAGE_OPEN_FAILED, got %u\n", r);
     else
         ok(r == ERROR_INVALID_NAME, "Expected ERROR_INVALID_NAME, got %u\n", r);
 
-    r = pMsiApplyMultiplePatchesA(";;", NULL, NULL);
+    r = MsiApplyMultiplePatchesA(";;", NULL, NULL);
     if (type == DRIVE_FIXED)
         todo_wine ok(r == ERROR_PATH_NOT_FOUND, "Expected ERROR_PATH_NOT_FOUND, got %u\n", r);
     else
         ok(r == ERROR_INVALID_NAME, "Expected ERROR_INVALID_NAME, got %u\n", r);
 
-    r = pMsiApplyMultiplePatchesA("nosuchpatchpackage;", NULL, NULL);
+    r = MsiApplyMultiplePatchesA("nosuchpatchpackage;", NULL, NULL);
     todo_wine ok(r == ERROR_FILE_NOT_FOUND, "Expected ERROR_FILE_NOT_FOUND, got %u\n", r);
 
-    r = pMsiApplyMultiplePatchesA(";nosuchpatchpackage", NULL, NULL);
+    r = MsiApplyMultiplePatchesA(";nosuchpatchpackage", NULL, NULL);
     if (type == DRIVE_FIXED)
         todo_wine ok(r == ERROR_PATH_NOT_FOUND, "Expected ERROR_PATH_NOT_FOUND, got %u\n", r);
     else
         ok(r == ERROR_INVALID_NAME, "Expected ERROR_INVALID_NAME, got %u\n", r);
 
-    r = pMsiApplyMultiplePatchesA("nosuchpatchpackage;nosuchpatchpackage", NULL, NULL);
+    r = MsiApplyMultiplePatchesA("nosuchpatchpackage;nosuchpatchpackage", NULL, NULL);
     todo_wine ok(r == ERROR_FILE_NOT_FOUND, "Expected ERROR_FILE_NOT_FOUND, got %u\n", r);
 
-    r = pMsiApplyMultiplePatchesA("  nosuchpatchpackage  ;  nosuchpatchpackage  ", NULL, NULL);
+    r = MsiApplyMultiplePatchesA("  nosuchpatchpackage  ;  nosuchpatchpackage  ", NULL, NULL);
     todo_wine ok(r == ERROR_FILE_NOT_FOUND, "Expected ERROR_FILE_NOT_FOUND, got %u\n", r);
 }
 
@@ -9154,6 +9170,7 @@ static void test_externalui(void)
     INSTALLUI_HANDLER_RECORD prev_record;
     MSIHANDLE hpkg, hrecord;
     UINT r;
+    INT retval = 0;
 
     prev = MsiSetExternalUIA(externalui_callback, INSTALLLOGMODE_USER, NULL);
 
@@ -9178,48 +9195,41 @@ static void test_externalui(void)
     ok(r == 0, "expected 0, got %u\n", r);
     ok(externalui_ran == 1, "external UI callback did not run\n");
 
-    if (pMsiSetExternalUIRecord)
-    {
-        INT retval = 0;
+    prev = MsiSetExternalUIA(prev, 0, NULL);
+    ok(prev == externalui_callback, "wrong callback function %p\n", prev);
+    r = MsiSetExternalUIRecord(externalui_record_callback, INSTALLLOGMODE_USER, &retval, &prev_record);
+    ok(r == ERROR_SUCCESS, "MsiSetExternalUIRecord failed %u\n", r);
 
-        prev = MsiSetExternalUIA(prev, 0, NULL);
-        ok(prev == externalui_callback, "wrong callback function %p\n", prev);
-        r = pMsiSetExternalUIRecord(externalui_record_callback, INSTALLLOGMODE_USER, &retval, &prev_record);
-        ok(r == ERROR_SUCCESS, "MsiSetExternalUIRecord failed %u\n", r);
+    externalui_ran = externalui_record_ran = 0;
+    r = MsiProcessMessage(hpkg, INSTALLMESSAGE_USER, hrecord);
+    ok(r == 0, "expected 0, got %u\n", r);
+    ok(externalui_ran == 0, "external UI callback should not have run\n");
+    ok(externalui_record_ran == 1, "external UI record callback did not run\n");
 
-        externalui_ran = externalui_record_ran = 0;
-        r = MsiProcessMessage(hpkg, INSTALLMESSAGE_USER, hrecord);
-        ok(r == 0, "expected 0, got %u\n", r);
-        ok(externalui_ran == 0, "external UI callback should not have run\n");
-        ok(externalui_record_ran == 1, "external UI record callback did not run\n");
+    MsiSetExternalUIA(externalui_callback, INSTALLLOGMODE_USER, NULL);
 
-        MsiSetExternalUIA(externalui_callback, INSTALLLOGMODE_USER, NULL);
+    externalui_ran = externalui_record_ran = 0;
+    r = MsiProcessMessage(hpkg, INSTALLMESSAGE_USER, hrecord);
+    ok(r == 0, "expected 0, got %u\n", r);
+    ok(externalui_ran == 1, "external UI callback did not run\n");
+    ok(externalui_record_ran == 1, "external UI record callback did not run\n");
 
-        externalui_ran = externalui_record_ran = 0;
-        r = MsiProcessMessage(hpkg, INSTALLMESSAGE_USER, hrecord);
-        ok(r == 0, "expected 0, got %u\n", r);
-        ok(externalui_ran == 1, "external UI callback did not run\n");
-        ok(externalui_record_ran == 1, "external UI record callback did not run\n");
+    retval = 1;
+    externalui_ran = externalui_record_ran = 0;
+    r = MsiProcessMessage(hpkg, INSTALLMESSAGE_USER, hrecord);
+    ok(r == 1, "expected 1, got %u\n", r);
+    ok(externalui_ran == 0, "external UI callback should not have run\n");
+    ok(externalui_record_ran == 1, "external UI record callback did not run\n");
 
-        retval = 1;
-        externalui_ran = externalui_record_ran = 0;
-        r = MsiProcessMessage(hpkg, INSTALLMESSAGE_USER, hrecord);
-        ok(r == 1, "expected 1, got %u\n", r);
-        ok(externalui_ran == 0, "external UI callback should not have run\n");
-        ok(externalui_record_ran == 1, "external UI record callback did not run\n");
+    /* filter and context should be kept separately */
+    r = MsiSetExternalUIRecord(externalui_record_callback, INSTALLLOGMODE_ERROR, &retval, &prev_record);
+    ok(r == ERROR_SUCCESS, "MsiSetExternalUIRecord failed %u\n", r);
 
-        /* filter and context should be kept separately */
-        r = pMsiSetExternalUIRecord(externalui_record_callback, INSTALLLOGMODE_ERROR, &retval, &prev_record);
-        ok(r == ERROR_SUCCESS, "MsiSetExternalUIRecord failed %u\n", r);
-
-        externalui_ran = externalui_record_ran = 0;
-        r = MsiProcessMessage(hpkg, INSTALLMESSAGE_USER, hrecord);
-        ok(r == 0, "expected 0, got %u\n", r);
-        ok(externalui_ran == 1, "external UI callback did not run\n");
-        ok(externalui_record_ran == 0, "external UI record callback should not have run\n");
-    }
-    else
-        win_skip("MsiSetExternalUIRecord is not available\n");
+    externalui_ran = externalui_record_ran = 0;
+    r = MsiProcessMessage(hpkg, INSTALLMESSAGE_USER, hrecord);
+    ok(r == 0, "expected 0, got %u\n", r);
+    ok(externalui_ran == 1, "external UI callback did not run\n");
+    ok(externalui_record_ran == 0, "external UI record callback should not have run\n");
 
     MsiCloseHandle(hpkg);
     DeleteFileA(msifile);
@@ -9352,6 +9362,21 @@ static const struct externalui_message openpackage_sequence[] = {
     {0}
 };
 
+static const struct externalui_message processmessage_info_sequence[] = {
+    {INSTALLMESSAGE_INFO, 3, {"zero", "one", "two", "three"}, {1, 1, 1, 1}},
+    {0}
+};
+
+static const struct externalui_message processmessage_actionstart_sequence[] = {
+    {INSTALLMESSAGE_ACTIONSTART, 3, {"", "name", "description", "template"}, {0, 1, 1, 1}},
+    {0}
+};
+
+static const struct externalui_message processmessage_actiondata_sequence[] = {
+    {INSTALLMESSAGE_ACTIONDATA, 3, {"{{name: }}template", "cherry", "banana", "guava"}, {1, 1, 1, 1}},
+    {0}
+};
+
 static const struct externalui_message doaction_costinitialize_sequence[] = {
     {INSTALLMESSAGE_ACTIONSTART, 3, {"", "CostInitialize", "", ""}, {0, 1, 0, 1}},
     {INSTALLMESSAGE_INFO, 2, {"", "CostInitialize", ""}, {0, 1, 1}},
@@ -9371,6 +9396,11 @@ static const struct externalui_message doaction_custom_fullui_sequence[] = {
     {INSTALLMESSAGE_INFO, 2, {"", "custom", ""}, {0, 1, 1}},
     {INSTALLMESSAGE_SHOWDIALOG, 0, {"custom"}, {1}},
     {INSTALLMESSAGE_INFO, 2, {"", "custom", "1"}, {0, 1, 1}},
+    {0}
+};
+
+static const struct externalui_message doaction_custom_cancel_sequence[] = {
+    {INSTALLMESSAGE_ACTIONSTART, 3, {"", "custom", "", ""}, {0, 1, 1, 1}},
     {0}
 };
 
@@ -9397,6 +9427,22 @@ static const struct externalui_message doaction_dialog_error_sequence[] = {
     {INSTALLMESSAGE_ACTIONSTART, 3, {"", "error", "", ""}, {0, 1, 1, 1}},
     {INSTALLMESSAGE_INFO, 2, {"", "error", "1"}, {0, 1, 1}},
     {INSTALLMESSAGE_SHOWDIALOG, 0, {"error"}, {1}},
+    {0}
+};
+
+static const struct externalui_message doaction_dialog_3_sequence[] = {
+    {INSTALLMESSAGE_ACTIONSTART, 3, {"", "dialog", "", ""}, {0, 1, 1, 1}},
+    {INSTALLMESSAGE_INFO, 2, {"", "dialog", "0"}, {0, 1, 1}},
+    {INSTALLMESSAGE_SHOWDIALOG, 0, {"dialog"}, {1}},
+    {INSTALLMESSAGE_INFO, 2, {"", "dialog", "3"}, {0, 1, 1}},
+    {0}
+};
+
+static const struct externalui_message doaction_dialog_12345_sequence[] = {
+    {INSTALLMESSAGE_ACTIONSTART, 3, {"", "dialog", "", ""}, {0, 1, 1, 1}},
+    {INSTALLMESSAGE_INFO, 2, {"", "dialog", "3"}, {0, 1, 1}},
+    {INSTALLMESSAGE_SHOWDIALOG, 0, {"dialog"}, {1}},
+    {INSTALLMESSAGE_INFO, 2, {"", "dialog", "12345"}, {0, 1, 1}},
     {0}
 };
 
@@ -9452,7 +9498,7 @@ static void test_externalui_message(void)
     /* test that events trigger the correct sequence of messages */
 
     INSTALLUI_HANDLER_RECORD prev;
-    MSIHANDLE hdb, hpkg;
+    MSIHANDLE hdb, hpkg, hrecord;
     INT retval = 1;
     UINT r;
 
@@ -9460,7 +9506,7 @@ static void test_externalui_message(void)
 
     /* processing SHOWDIALOG with a record handler causes a crash on XP */
     MsiSetExternalUIA(externalui_message_string_callback, INSTALLLOGMODE_SHOWDIALOG, &retval);
-    r = pMsiSetExternalUIRecord(externalui_message_callback, 0xffffffff ^ INSTALLLOGMODE_PROGRESS ^ INSTALLLOGMODE_SHOWDIALOG, &retval, &prev);
+    r = MsiSetExternalUIRecord(externalui_message_callback, 0xffffffff ^ INSTALLLOGMODE_PROGRESS ^ INSTALLLOGMODE_SHOWDIALOG, &retval, &prev);
 
     flush_sequence();
 
@@ -9489,12 +9535,39 @@ static void test_externalui_message(void)
         return;
     }
     ok(r == ERROR_SUCCESS, "failed to create package %u\n", r);
-    ok_sequence(openpackage_sequence, "MsiOpenPackage with valid db", TRUE);
+    ok_sequence(openpackage_sequence, "MsiOpenPackage with valid db", FALSE);
+
+    /* Test MsiProcessMessage */
+    hrecord = MsiCreateRecord(3);
+    ok(hrecord, "failed to create record\n");
+
+    MsiRecordSetStringA(hrecord, 0, "zero");
+    MsiRecordSetStringA(hrecord, 1, "one");
+    MsiRecordSetStringA(hrecord, 2, "two");
+    MsiRecordSetStringA(hrecord, 3, "three");
+    r = MsiProcessMessage(hpkg, INSTALLMESSAGE_INFO, hrecord);
+    ok(r == 1, "Expected 1, got %d\n", r);
+    ok_sequence(processmessage_info_sequence, "MsiProcessMessage(INSTALLMESSAGE_INFO)", FALSE);
+
+    MsiRecordSetStringA(hrecord, 1, "name");
+    MsiRecordSetStringA(hrecord, 2, "description");
+    MsiRecordSetStringA(hrecord, 3, "template");
+    r = MsiProcessMessage(hpkg, INSTALLMESSAGE_ACTIONSTART, hrecord);
+    ok(r == 1, "Expected 1, got %d\n", r);
+    ok_sequence(processmessage_actionstart_sequence, "MsiProcessMessage(INSTALLMESSAGE_ACTIONSTART)", FALSE);
+
+    MsiRecordSetStringA(hrecord, 0, "apple");
+    MsiRecordSetStringA(hrecord, 1, "cherry");
+    MsiRecordSetStringA(hrecord, 2, "banana");
+    MsiRecordSetStringA(hrecord, 3, "guava");
+    r = MsiProcessMessage(hpkg, INSTALLMESSAGE_ACTIONDATA, hrecord);
+    ok(r == 1, "Expected 1, got %d\n", r);
+    ok_sequence(processmessage_actiondata_sequence, "MsiProcessMessage(INSTALLMESSAGE_ACTIONDATA)", FALSE);
 
     /* Test a standard action */
     r = MsiDoActionA(hpkg, "CostInitialize");
     ok(r == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", r);
-    ok_sequence(doaction_costinitialize_sequence, "MsiDoAction(\"CostInitialize\")", TRUE);
+    ok_sequence(doaction_costinitialize_sequence, "MsiDoAction(\"CostInitialize\")", FALSE);
 
     /* Test a custom action */
     r = MsiDoActionA(hpkg, "custom");
@@ -9514,40 +9587,192 @@ static void test_externalui_message(void)
 
     r = create_dialog_table(hdb);
     ok(r == ERROR_SUCCESS, "failed to create dialog table %u\n", r);
-    r = run_query(hdb, "INSERT INTO `Dialog` (`Dialog`, `HCentering`, "
-                  "`VCentering`, `Width`, `Height`, `Control_First`) "
-                  "VALUES ('dialog', 5, 5, 100, 100, 'dummy')");
+    r = add_dialog_entry(hdb, "'dialog', 50, 50, 100, 100, 0, 'dummy'");
     ok(r == ERROR_SUCCESS, "failed to insert into dialog table %u\n", r);
 
     r = create_control_table(hdb);
     ok(r == ERROR_SUCCESS, "failed to create control table %u\n", r);
-    r = run_query(hdb, "INSERT INTO `Control` (`Dialog_`, `Control`, "
-                  "`Type`, `X`, `Y`, `Width`, `Height`) "
-                  "VALUES('dialog', 'dummy', 'Text', 5, 5, 5, 5)");
+    r = add_control_entry(hdb, "'dialog', 'dummy', 'Text', 5, 5, 5, 5, 3, 'dummy'");
     ok(r == ERROR_SUCCESS, "failed to insert into control table %u", r);
 
     r = package_from_db(hdb, &hpkg);
     ok(r == ERROR_SUCCESS, "failed to create package %u\n", r);
-    ok_sequence(openpackage_sequence, "MsiOpenPackage with valid db", TRUE);
+    ok_sequence(openpackage_sequence, "MsiOpenPackage with valid db", FALSE);
 
     /* Test a custom action */
     r = MsiDoActionA(hpkg, "custom");
     ok(r == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", r);
-    ok_sequence(doaction_custom_fullui_sequence, "MsiDoAction(\"custom\")", TRUE);
+    ok_sequence(doaction_custom_fullui_sequence, "MsiDoAction(\"custom\")", FALSE);
+
+    retval = 2;
+    r = MsiDoActionA(hpkg, "custom");
+    ok(r == ERROR_INSTALL_USEREXIT, "Expected ERROR_INSTALL_USEREXIT, got %d\n", r);
+    ok_sequence(doaction_custom_cancel_sequence, "MsiDoAction(\"custom\")", FALSE);
 
     retval = 0;
     r = MsiDoActionA(hpkg, "custom");
     ok(r == ERROR_FUNCTION_NOT_CALLED, "Expected ERROR_FUNCTION_NOT_CALLED, got %d\n", r);
-    ok_sequence(doaction_dialog_nonexistent_sequence, "MsiDoAction(\"custom\")", TRUE);
+    ok_sequence(doaction_dialog_nonexistent_sequence, "MsiDoAction(\"custom\")", FALSE);
 
     r = MsiDoActionA(hpkg, "dialog");
     ok(r == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", r);
-    ok_sequence(doaction_dialog_sequence, "MsiDoAction(\"dialog\")", TRUE);
+    ok_sequence(doaction_dialog_sequence, "MsiDoAction(\"dialog\")", FALSE);
 
     retval = -1;
     r = MsiDoActionA(hpkg, "error");
     ok(r == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", r);
     ok_sequence(doaction_dialog_error_sequence, "MsiDoAction(\"error\")", FALSE);
+
+    r = MsiDoActionA(hpkg, "error");
+    ok(r == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", r);
+    ok_sequence(doaction_dialog_error_sequence, "MsiDoAction(\"error\")", FALSE);
+
+    retval = -2;
+    r = MsiDoActionA(hpkg, "custom");
+    ok(r == ERROR_FUNCTION_NOT_CALLED, "Expected ERROR_FUNCTION_NOT_CALLED, got %d\n", r);
+    ok_sequence(doaction_dialog_nonexistent_sequence, "MsiDoAction(\"custom\")", FALSE);
+
+    retval = 3;
+    r = MsiDoActionA(hpkg, "dialog");
+    ok(r == ERROR_INSTALL_FAILURE, "Expected ERROR_INSTALL_FAILURE, got %d\n", r);
+    ok_sequence(doaction_dialog_3_sequence, "MsiDoAction(\"dialog\")", FALSE);
+
+    retval = 12345;
+    r = MsiDoActionA(hpkg, "dialog");
+    ok(r == ERROR_FUNCTION_FAILED, "Expected ERROR_INSTALL_FAILURE, got %d\n", r);
+    ok_sequence(doaction_dialog_12345_sequence, "MsiDoAction(\"dialog\")", FALSE);
+
+    MsiCloseHandle(hpkg);
+    ok_sequence(closehandle_sequence, "MsiCloseHandle()", FALSE);
+
+    MsiCloseHandle(hrecord);
+    CoUninitialize();
+    DeleteFileA(msifile);
+    DeleteFileA("forcecodepage.idt");
+}
+
+static const struct externalui_message controlevent_spawn_sequence[] = {
+    {INSTALLMESSAGE_ACTIONSTART, 3, {"", "spawn", "", ""}, {0, 1, 1, 1}},
+    {INSTALLMESSAGE_INFO, 2, {"", "spawn", ""}, {0, 1, 1}},
+    {INSTALLMESSAGE_SHOWDIALOG, 0, {"spawn"}, {1}},
+    {INSTALLMESSAGE_ACTIONSTART, 2, {"", "spawn", "Dialog created"}, {0, 1, 1}},
+
+    {INSTALLMESSAGE_ACTIONSTART, 3, {"", "custom", "", ""}, {0, 1, 1, 1}},
+    {INSTALLMESSAGE_INFO, 2, {"", "custom", ""}, {0, 1, 1}},
+    {INSTALLMESSAGE_INFO, 2, {"", "custom", "1"}, {0, 1, 1}},
+
+    {INSTALLMESSAGE_ACTIONSTART, 2, {"", "child1", "Dialog created"}, {0, 1, 1}},
+
+    {INSTALLMESSAGE_INFO, 2, {"", "spawn", "2"}, {0, 1, 1}},
+    {0}
+};
+
+static const struct externalui_message controlevent_spawn2_sequence[] = {
+    {INSTALLMESSAGE_ACTIONSTART, 3, {"", "spawn2", "", ""}, {0, 1, 1, 1}},
+    {INSTALLMESSAGE_INFO, 2, {"", "spawn2", "2"}, {0, 1, 1}},
+    {INSTALLMESSAGE_SHOWDIALOG, 0, {"spawn2"}, {1}},
+    {INSTALLMESSAGE_ACTIONSTART, 2, {"", "spawn2", "Dialog created"}, {0, 1, 1}},
+
+    {INSTALLMESSAGE_ACTIONSTART, 3, {"", "custom", "", ""}, {0, 1, 1, 1}},
+    {INSTALLMESSAGE_INFO, 2, {"", "custom", "2"}, {0, 1, 1}},
+    {INSTALLMESSAGE_INFO, 2, {"", "custom", "1"}, {0, 1, 1}},
+
+    {INSTALLMESSAGE_ACTIONSTART, 2, {"", "child2", "Dialog created"}, {0, 1, 1}},
+
+    {INSTALLMESSAGE_INFO, 2, {"", "spawn2", "2"}, {0, 1, 1}},
+    {0}
+};
+
+static void test_controlevent(void)
+{
+    INSTALLUI_HANDLER_RECORD prev;
+    MSIHANDLE hdb, hpkg;
+    UINT r;
+
+    if (!winetest_interactive)
+    {
+        skip("interactive ControlEvent tests\n");
+        return;
+    }
+
+    MsiSetInternalUI(INSTALLUILEVEL_FULL, NULL);
+
+    /* processing SHOWDIALOG with a record handler causes a crash on XP */
+    MsiSetExternalUIA(externalui_message_string_callback, INSTALLLOGMODE_SHOWDIALOG, NULL);
+    r = MsiSetExternalUIRecord(externalui_message_callback, 0xffffffff ^ INSTALLLOGMODE_PROGRESS ^ INSTALLLOGMODE_SHOWDIALOG, NULL, &prev);
+
+    flush_sequence();
+
+    CoInitialize(NULL);
+
+    hdb = create_package_db();
+    ok(hdb, "failed to create database\n");
+
+    create_file_data("forcecodepage.idt", "\r\n\r\n1252\t_ForceCodepage\r\n");
+    r = MsiDatabaseImportA(hdb, CURR_DIR, "forcecodepage.idt");
+    ok(r == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", r);
+
+    r = create_dialog_table(hdb);
+    ok(r == ERROR_SUCCESS, "failed to create Dialog table: %u\n", r);
+    r = add_dialog_entry(hdb, "'spawn', 50, 50, 100, 100, 3, 'button'");
+    ok(r == ERROR_SUCCESS, "failed to insert into Dialog table: %u\n", r);
+    r = add_dialog_entry(hdb, "'spawn2', 50, 50, 100, 100, 3, 'button'");
+    ok(r == ERROR_SUCCESS, "failed to insert into Dialog table: %u\n", r);
+    r = add_dialog_entry(hdb, "'child1', 50, 50, 80, 40, 3, 'exit'");
+    ok(r == ERROR_SUCCESS, "failed to insert into Dialog table: %u\n", r);
+    r = add_dialog_entry(hdb, "'child2', 50, 50, 80, 40, 3, 'exit'");
+    ok(r == ERROR_SUCCESS, "failed to insert into Dialog table: %u\n", r);
+
+    r = create_control_table(hdb);
+    ok(r == ERROR_SUCCESS, "failed to create Control table: %u\n", r);
+    r = add_control_entry(hdb, "'spawn', 'button', 'PushButton', 10, 10, 66, 17, 3, 'Click me'");
+    ok(r == ERROR_SUCCESS, "failed to insert into Control table: %u\n", r);
+    r = add_control_entry(hdb, "'spawn2', 'button', 'PushButton', 10, 10, 66, 17, 3, 'Click me'");
+    ok(r == ERROR_SUCCESS, "failed to insert into Control table: %u\n", r);
+    r = add_control_entry(hdb, "'child1', 'exit', 'PushButton', 10, 10, 66, 17, 3, 'Click me'");
+    ok(r == ERROR_SUCCESS, "failed to insert into Control table: %u\n", r);
+    r = add_control_entry(hdb, "'child2', 'exit', 'PushButton', 10, 10, 66, 17, 3, 'Click me'");
+    ok(r == ERROR_SUCCESS, "failed to insert into Control table: %u\n", r);
+
+    r = create_controlevent_table(hdb);
+    ok(r == ERROR_SUCCESS, "failed to create ControlEvent table: %u\n", r);
+    r = add_controlevent_entry(hdb, "'child1', 'exit', 'EndDialog', 'Exit', 1, 1");
+    ok(r == ERROR_SUCCESS, "failed to insert into ControlEvent table: %u\n", r);
+    r = add_controlevent_entry(hdb, "'child2', 'exit', 'EndDialog', 'Exit', 1, 1");
+    ok(r == ERROR_SUCCESS, "failed to insert into ControlEvent table: %u\n", r);
+
+    r = create_custom_action_table(hdb);
+    ok(r == ERROR_SUCCESS, "failed to create CustomAction table: %u\n", r);
+    r = add_custom_action_entry(hdb, "'custom', 51, 'dummy', 'dummy value'");
+    ok(r == ERROR_SUCCESS, "failed to insert into CustomAction table: %u\n", r);
+
+    /* SpawnDialog and EndDialog should trigger after all other events */
+    r = add_controlevent_entry(hdb, "'spawn', 'button', 'SpawnDialog', 'child1', 1, 1");
+    ok(r == ERROR_SUCCESS, "failed to insert into ControlEvent table: %u\n", r);
+    r = add_controlevent_entry(hdb, "'spawn', 'button', 'DoAction', 'custom', 1, 2");
+    ok(r == ERROR_SUCCESS, "failed to insert into ControlEvent table: %u\n", r);
+
+    /* Multiple dialog events cause only the last one to be triggered */
+    r = add_controlevent_entry(hdb, "'spawn2', 'button', 'SpawnDialog', 'child1', 1, 1");
+    ok(r == ERROR_SUCCESS, "failed to insert into ControlEvent table: %u\n", r);
+    r = add_controlevent_entry(hdb, "'spawn2', 'button', 'SpawnDialog', 'child2', 1, 2");
+    ok(r == ERROR_SUCCESS, "failed to insert into ControlEvent table: %u\n", r);
+    r = add_controlevent_entry(hdb, "'spawn2', 'button', 'DoAction', 'custom', 1, 3");
+    ok(r == ERROR_SUCCESS, "failed to insert into ControlEvent table: %u\n", r);
+
+    r = package_from_db(hdb, &hpkg);
+    ok(r == ERROR_SUCCESS, "failed to create package: %u\n", r);
+    ok_sequence(openpackage_sequence, "MsiOpenPackage()", FALSE);
+
+    r = MsiDoActionA(hpkg, "spawn");
+    todo_wine
+    ok(r == ERROR_INSTALL_USEREXIT, "expected ERROR_INSTALL_USEREXIT, got %u\n", r);
+    ok_sequence(controlevent_spawn_sequence, "control event: spawn", TRUE);
+
+    r = MsiDoActionA(hpkg, "spawn2");
+    todo_wine
+    ok(r == ERROR_INSTALL_USEREXIT, "expected ERROR_INSTALL_USEREXIT, got %u\n", r);
+    ok_sequence(controlevent_spawn2_sequence, "control event: spawn2", TRUE);
 
     MsiCloseHandle(hpkg);
     ok_sequence(closehandle_sequence, "MsiCloseHandle()", FALSE);
@@ -9615,8 +9840,8 @@ START_TEST(package)
     test_MsiEnumComponentCosts();
     test_MsiDatabaseCommit();
     test_externalui();
-    if (pMsiSetExternalUIRecord)
-        test_externalui_message();
+    test_externalui_message();
+    test_controlevent();
 
     if (pSRSetRestorePointA && !pMsiGetComponentPathExA && ret)
     {

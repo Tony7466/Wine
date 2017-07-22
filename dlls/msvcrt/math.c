@@ -225,10 +225,10 @@ float CDECL MSVCRT_fmodf( float x, float y )
 /*********************************************************************
  *      MSVCRT_logf (MSVCRT.@)
  */
-float CDECL MSVCRT_logf( float x)
+float CDECL MSVCRT_logf( float x )
 {
-  if (x < 0.0 || !finitef(x)) *MSVCRT__errno() = MSVCRT_EDOM;
-  if (x == 0.0) *MSVCRT__errno() = MSVCRT_ERANGE;
+  if (x < 0.0) *MSVCRT__errno() = MSVCRT_EDOM;
+  else if (x == 0.0) *MSVCRT__errno() = MSVCRT_ERANGE;
   return logf(x);
 }
 
@@ -237,8 +237,8 @@ float CDECL MSVCRT_logf( float x)
  */
 float CDECL MSVCRT_log10f( float x )
 {
-  if (x < 0.0 || !finitef(x)) *MSVCRT__errno() = MSVCRT_EDOM;
-  if (x == 0.0) *MSVCRT__errno() = MSVCRT_ERANGE;
+  if (x < 0.0) *MSVCRT__errno() = MSVCRT_EDOM;
+  else if (x == 0.0) *MSVCRT__errno() = MSVCRT_ERANGE;
   return log10f(x);
 }
 
@@ -420,10 +420,10 @@ double CDECL MSVCRT_fmod( double x, double y )
 /*********************************************************************
  *		MSVCRT_log (MSVCRT.@)
  */
-double CDECL MSVCRT_log( double x)
+double CDECL MSVCRT_log( double x )
 {
-  if (x < 0.0 || !isfinite(x)) *MSVCRT__errno() = MSVCRT_EDOM;
-  if (x == 0.0) *MSVCRT__errno() = MSVCRT_ERANGE;
+  if (x < 0.0) *MSVCRT__errno() = MSVCRT_EDOM;
+  else if (x == 0.0) *MSVCRT__errno() = MSVCRT_ERANGE;
   return log(x);
 }
 
@@ -432,8 +432,8 @@ double CDECL MSVCRT_log( double x)
  */
 double CDECL MSVCRT_log10( double x )
 {
-  if (x < 0.0 || !isfinite(x)) *MSVCRT__errno() = MSVCRT_EDOM;
-  if (x == 0.0) *MSVCRT__errno() = MSVCRT_ERANGE;
+  if (x < 0.0) *MSVCRT__errno() = MSVCRT_EDOM;
+  else if (x == 0.0) *MSVCRT__errno() = MSVCRT_ERANGE;
   return log10(x);
 }
 
@@ -2412,10 +2412,84 @@ LDOUBLE CDECL MSVCR120_exp2l(LDOUBLE x)
 }
 
 /*********************************************************************
+ *      expm1 (MSVCR120.@)
+ */
+double CDECL MSVCR120_expm1(double x)
+{
+#ifdef HAVE_EXPM1
+    double ret = expm1(x);
+#else
+    double ret = exp(x) - 1;
+#endif
+    if (!isfinite(ret)) *MSVCRT__errno() = MSVCRT_ERANGE;
+    return ret;
+}
+
+/*********************************************************************
+ *      expm1f (MSVCR120.@)
+ */
+float CDECL MSVCR120_expm1f(float x)
+{
+#ifdef HAVE_EXPM1F
+    double ret = expm1f(x);
+#else
+    double ret = exp(x) - 1;
+#endif
+    if (!isfinite(ret)) *MSVCRT__errno() = MSVCRT_ERANGE;
+    return ret;
+}
+
+/*********************************************************************
+ *      expm1l (MSVCR120.@)
+ */
+LDOUBLE CDECL MSVCR120_expm1l(LDOUBLE x)
+{
+    return MSVCR120_expm1(x);
+}
+
+/*********************************************************************
+ *      log1p (MSVCR120.@)
+ */
+double CDECL MSVCR120_log1p(double x)
+{
+    if (x < -1) *MSVCRT__errno() = MSVCRT_EDOM;
+    else if (x == -1) *MSVCRT__errno() = MSVCRT_ERANGE;
+#ifdef HAVE_LOG1P
+    return log1p(x);
+#else
+    return log(1 + x);
+#endif
+}
+
+/*********************************************************************
+ *      log1pf (MSVCR120.@)
+ */
+float CDECL MSVCR120_log1pf(float x)
+{
+    if (x < -1) *MSVCRT__errno() = MSVCRT_EDOM;
+    else if (x == -1) *MSVCRT__errno() = MSVCRT_ERANGE;
+#ifdef HAVE_LOG1PF
+    return log1pf(x);
+#else
+    return log(1 + x);
+#endif
+}
+
+/*********************************************************************
+ *      log1pl (MSVCR120.@)
+ */
+LDOUBLE CDECL MSVCR120_log1pl(LDOUBLE x)
+{
+    return MSVCR120_log1p(x);
+}
+
+/*********************************************************************
  *      log2 (MSVCR120.@)
  */
 double CDECL MSVCR120_log2(double x)
 {
+    if (x < 0) *MSVCRT__errno() = MSVCRT_EDOM;
+    else if (x == 0) *MSVCRT__errno() = MSVCRT_ERANGE;
 #ifdef HAVE_LOG2
     return log2(x);
 #else
@@ -2428,6 +2502,8 @@ double CDECL MSVCR120_log2(double x)
  */
 float CDECL MSVCR120_log2f(float x)
 {
+    if (x < 0) *MSVCRT__errno() = MSVCRT_EDOM;
+    else if (x == 0) *MSVCRT__errno() = MSVCRT_ERANGE;
 #ifdef HAVE_LOG2F
     return log2f(x);
 #else
@@ -2733,19 +2809,6 @@ short CDECL MSVCR120__ldtest(LDOUBLE *x)
 }
 
 /*********************************************************************
- *      erff (MSVCR120.@)
- */
-float CDECL MSVCR120_erff(float x)
-{
-#ifdef HAVE_ERFF
-    return erff(x);
-#else
-    FIXME( "not implemented\n" );
-    return 0.0f;
-#endif
-}
-
-/*********************************************************************
  *      erf (MSVCR120.@)
  */
 double CDECL MSVCR120_erf(double x)
@@ -2753,8 +2816,27 @@ double CDECL MSVCR120_erf(double x)
 #ifdef HAVE_ERF
     return erf(x);
 #else
-    FIXME( "not implemented\n" );
-    return 0.0;
+    /* Abramowitz and Stegun approximation, maximum error: 1.5*10^-7 */
+    double t, y;
+    int sign = signbit(x);
+
+    if (sign) x = -x;
+    t = 1 / (1 + 0.3275911 * x);
+    y = ((((1.061405429*t - 1.453152027)*t + 1.421413741)*t - 0.284496736)*t + 0.254829592)*t;
+    y = 1.0 - y*exp(-x*x);
+    return sign ? -y : y;
+#endif
+}
+
+/*********************************************************************
+ *      erff (MSVCR120.@)
+ */
+float CDECL MSVCR120_erff(float x)
+{
+#ifdef HAVE_ERFF
+    return erff(x);
+#else
+    return MSVCR120_erf(x);
 #endif
 }
 
@@ -2764,6 +2846,38 @@ double CDECL MSVCR120_erf(double x)
 LDOUBLE CDECL MSVCR120_erfl(LDOUBLE x)
 {
     return MSVCR120_erf(x);
+}
+
+/*********************************************************************
+ *      erfc (MSVCR120.@)
+ */
+double CDECL MSVCR120_erfc(double x)
+{
+#ifdef HAVE_ERFC
+    return erfc(x);
+#else
+    return 1 - MSVCR120_erf(x);
+#endif
+}
+
+/*********************************************************************
+ *      erfcf (MSVCR120.@)
+ */
+float CDECL MSVCR120_erfcf(float x)
+{
+#ifdef HAVE_ERFCF
+    return erfcf(x);
+#else
+    return MSVCR120_erfc(x);
+#endif
+}
+
+/*********************************************************************
+ *      erfcl (MSVCR120.@)
+ */
+LDOUBLE CDECL MSVCR120_erfcl(LDOUBLE x)
+{
+    return MSVCR120_erfc(x);
 }
 
 /*********************************************************************
@@ -2867,8 +2981,8 @@ double CDECL MSVCR120_asinh(double x)
 #ifdef HAVE_ASINH
     return asinh(x);
 #else
-    FIXME( "not implemented\n" );
-    return 0.0;
+    if (!isfinite(x*x+1)) return log(2) + log(x);
+    return log(x + sqrt(x*x+1));
 #endif
 }
 
@@ -2880,8 +2994,7 @@ float CDECL MSVCR120_asinhf(float x)
 #ifdef HAVE_ASINHF
     return asinhf(x);
 #else
-    FIXME( "not implemented\n" );
-    return 0.0f;
+    return MSVCR120_asinh(x);
 #endif
 }
 
@@ -2891,6 +3004,117 @@ float CDECL MSVCR120_asinhf(float x)
 LDOUBLE CDECL MSVCR120_asinhl(LDOUBLE x)
 {
     return MSVCR120_asinh(x);
+}
+
+/*********************************************************************
+ *      acosh (MSVCR120.@)
+ */
+double CDECL MSVCR120_acosh(double x)
+{
+    if (x < 1) *MSVCRT__errno() = MSVCRT_EDOM;
+
+#ifdef HAVE_ACOSH
+    return acosh(x);
+#else
+    if (x < 1) {
+        MSVCRT_fenv_t env;
+
+        MSVCRT_fegetenv(&env);
+        env.status |= MSVCRT__SW_INVALID;
+        MSVCRT_fesetenv(&env);
+        return NAN;
+    }
+    if (!isfinite(x*x)) return log(2) + log(x);
+    return log(x + sqrt(x*x-1));
+#endif
+}
+
+/*********************************************************************
+ *      acoshf (MSVCR120.@)
+ */
+float CDECL MSVCR120_acoshf(float x)
+{
+#ifdef HAVE_ACOSHF
+    if (x < 1) *MSVCRT__errno() = MSVCRT_EDOM;
+
+    return acoshf(x);
+#else
+    return MSVCR120_acosh(x);
+#endif
+}
+
+/*********************************************************************
+ *      acoshl (MSVCR120.@)
+ */
+LDOUBLE CDECL MSVCR120_acoshl(LDOUBLE x)
+{
+    return MSVCR120_acosh(x);
+}
+
+/*********************************************************************
+ *      atanh (MSVCR120.@)
+ */
+double CDECL MSVCR120_atanh(double x)
+{
+    double ret;
+
+    if (x > 1 || x < -1) {
+        MSVCRT_fenv_t env;
+
+        *MSVCRT__errno() = MSVCRT_EDOM;
+
+        /* on Linux atanh returns -NAN in this case */
+        MSVCRT_fegetenv(&env);
+        env.status |= MSVCRT__SW_INVALID;
+        MSVCRT_fesetenv(&env);
+        return NAN;
+    }
+
+#ifdef HAVE_ATANH
+    ret = atanh(x);
+#else
+    if (-1e-6 < x && x < 1e-6) ret = x + x*x*x/3;
+    else ret = (log(1+x) - log(1-x)) / 2;
+#endif
+
+    if (!isfinite(ret)) *MSVCRT__errno() = MSVCRT_ERANGE;
+    return ret;
+}
+
+/*********************************************************************
+ *      atanhf (MSVCR120.@)
+ */
+float CDECL MSVCR120_atanhf(float x)
+{
+#ifdef HAVE_ATANHF
+    double ret;
+
+    if (x > 1 || x < -1) {
+        MSVCRT_fenv_t env;
+
+        *MSVCRT__errno() = MSVCRT_EDOM;
+
+        MSVCRT_fegetenv(&env);
+        env.status |= MSVCRT__SW_INVALID;
+        MSVCRT_fesetenv(&env);
+        return NAN;
+    }
+
+    ret = atanhf(x);
+
+    if (!isfinite(ret)) *MSVCRT__errno() = MSVCRT_ERANGE;
+    return ret;
+#else
+    return MSVCR120_atanh(x);
+#endif
+}
+
+/*********************************************************************
+ *      atanhl (MSVCR120.@)
+ */
+LDOUBLE CDECL MSVCR120_atanhl(LDOUBLE x)
+{
+    return MSVCR120_atanh(x);
 }
 
 /*********************************************************************

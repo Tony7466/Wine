@@ -124,21 +124,21 @@
 @ cdecl _yn(long double) ucrtbase._yn
 @ cdecl acos(double) ucrtbase.acos
 @ cdecl -arch=arm,x86_64 acosf(float) ucrtbase.acosf
-@ stub acosh
-@ stub acoshf
-@ stub acoshl
+@ cdecl acosh(double) ucrtbase.acosh
+@ cdecl acoshf(float) ucrtbase.acoshf
+@ cdecl acoshl(double) ucrtbase.acoshl
 @ cdecl asin(double) ucrtbase.asin
 @ cdecl -arch=arm,x86_64 asinf(float) ucrtbase.asinf
-@ cdecl asinh(double double) ucrtbase.asinh
-@ cdecl asinhf(float float) ucrtbase.asinhf
-@ cdecl asinhl(double double) ucrtbase.asinhl
+@ cdecl asinh(double) ucrtbase.asinh
+@ cdecl asinhf(float) ucrtbase.asinhf
+@ cdecl asinhl(double) ucrtbase.asinhl
 @ cdecl atan(double) ucrtbase.atan
 @ cdecl atan2(double double) ucrtbase.atan2
 @ cdecl -arch=arm,x86_64 atan2f(float float) ucrtbase.atan2f
 @ cdecl -arch=arm,x86_64 atanf(float) ucrtbase.atanf
-@ stub atanh
-@ stub atanhf
-@ stub atanhl
+@ cdecl atanh(double) ucrtbase.atanh
+@ cdecl atanhf(float) ucrtbase.atanhf
+@ cdecl atanhl(double) ucrtbase.atanhl
 @ stub cabs
 @ stub cabsf
 @ stub cabsl
@@ -221,19 +221,19 @@
 @ stub ctanhl
 @ stub ctanl
 @ cdecl erf(double) ucrtbase.erf
-@ stub erfc
-@ stub erfcf
-@ stub erfcl
-@ cdecl erff(double) ucrtbase.erff
+@ cdecl erfc(double) ucrtbase.erfc
+@ cdecl erfcf(float) ucrtbase.erfcf
+@ cdecl erfcl(double) ucrtbase.erfcl
+@ cdecl erff(float) ucrtbase.erff
 @ cdecl erfl(double) ucrtbase.erfl
 @ cdecl exp(double) ucrtbase.exp
 @ cdecl exp2(double) ucrtbase.exp2
 @ cdecl exp2f(float) ucrtbase.exp2f
 @ cdecl exp2l(double) ucrtbase.exp2l
 @ cdecl -arch=arm,x86_64 expf(float) ucrtbase.expf
-@ stub expm1
-@ stub expm1f
-@ stub expm1l
+@ cdecl expm1(double) ucrtbase.expm1
+@ cdecl expm1f(float) ucrtbase.expm1f
+@ cdecl expm1l(double) ucrtbase.expm1l
 @ cdecl fabs(double) ucrtbase.fabs
 @ cdecl -arch=arm fabsf(float) ucrtbase.fabsf
 @ stub fdim
@@ -270,9 +270,9 @@
 @ cdecl log(double) ucrtbase.log
 @ cdecl log10(double) ucrtbase.log10
 @ cdecl -arch=arm,x86_64 log10f(float) ucrtbase.log10f
-@ stub log1p
-@ stub log1pf
-@ stub log1pl
+@ cdecl log1p(double) ucrtbase.log1p
+@ cdecl log1pf(float) ucrtbase.log1pf
+@ cdecl log1pl(double) ucrtbase.log1pl
 @ cdecl log2(double) ucrtbase.log2
 @ cdecl log2f(float) ucrtbase.log2f
 @ cdecl log2l(double) ucrtbase.log2l

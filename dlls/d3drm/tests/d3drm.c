@@ -109,7 +109,7 @@ static void test_class_name_(unsigned int line, IDirect3DRMObject *object, const
     ok_(__FILE__, line)(hr == D3DRM_OK, "Failed to get classname size, hr %#x.\n", hr);
     ok_(__FILE__, line)(size == strlen(name) + 1, "wrong size: %u\n", size);
 
-    size = size2 = !!*name ? 1 : 0;
+    size = size2 = !!*name;
     hr = IDirect3DRMObject_GetClassName(object, &size, cname);
     ok_(__FILE__, line)(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
     ok_(__FILE__, line)(size == size2, "Got size %u.\n", size);
@@ -1504,6 +1504,8 @@ static void test_destroy_callback(unsigned int test_idx, REFCLSID clsid, REFIID 
                 "Expected callback = %p, context = %p. Got callback = %p, context = %p.\n", d3drm_corder[i].callback,
                 d3drm_corder[i].context, corder[i].callback, corder[i].context);
     }
+
+    IDirect3DRM_Release(d3drm);
 }
 
 static void test_object(void)

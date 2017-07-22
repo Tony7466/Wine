@@ -129,6 +129,7 @@ my @dll_groups =
   "api-ms-win-security-lsalookup-l1-1-1",
   "api-ms-win-security-lsalookup-l2-1-1",
   "api-ms-win-security-lsapolicy-l1-1-0",
+  "api-ms-win-security-provider-l1-1-0",
   "api-ms-win-security-sddl-l1-1-0",
   "api-ms-win-security-systemfunctions-l1-1-0",
   "api-ms-win-service-core-l1-1-0",
@@ -233,6 +234,7 @@ my @dll_groups =
   "api-ms-win-core-processenvironment-l1-1-0",
   "api-ms-win-core-processenvironment-l1-2-0",
   "api-ms-win-core-psapi-l1-1-0",
+  "api-ms-win-core-psapi-ansi-l1-1-0",
   "api-ms-win-core-psapi-obsolete-l1-1-0",
   "api-ms-win-core-threadpool-l1-1-0",
   "api-ms-win-core-threadpool-l1-2-0",
@@ -337,6 +339,7 @@ my @dll_groups =
   "winmm",
   "api-ms-win-mm-misc-l1-1-1",
   "api-ms-win-mm-mme-l1-1-0",
+  "api-ms-win-mm-time-l1-1-0",
  ],
  [
   "msvcrt",

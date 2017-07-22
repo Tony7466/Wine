@@ -6803,7 +6803,7 @@ msgstr "%s yolu bulunamadı"
 
 #: msi.rc:33
 msgid "insert disk %s"
-msgstr "%s nolu diski yerleştirin"
+msgstr "%s numaralı diski yerleştirin"
 
 #: msi.rc:34
 msgid ""
@@ -6873,11 +6873,11 @@ msgstr "%s öğesini içeren dizini girin"
 
 #: msi.rc:62
 msgid "install source for feature missing"
-msgstr "özellik için kurulum kaynağı yok"
+msgstr "bulunmayan özellik için kurulum kaynağı"
 
 #: msi.rc:63
 msgid "network drive for feature missing"
-msgstr "özellik için ağ sürücüsü yok"
+msgstr "bulunmayan özellik için ağ sürücüsü"
 
 #: msi.rc:64
 msgid "feature from:"
@@ -6888,483 +6888,423 @@ msgid "choose which folder contains %s"
 msgstr "%s öğesini içeren dizini seçin"
 
 #: msi.rc:71
-msgid "Action %s: [1]. [2]"
-msgstr ""
+msgid "{{Fatal error: }}"
+msgstr "{{Ciddi hata: }}"
 
 #: msi.rc:72
-msgid "Info [1]. "
-msgstr ""
+msgid "{{Error [1]. }}"
+msgstr "{{Hata [1]. }}"
 
 #: msi.rc:73
+msgid "Warning [1]."
+msgstr "Uyarı [1]."
+
+#: msi.rc:74
+msgid "Info [1]."
+msgstr "Bilgi [1]."
+
+#: msi.rc:75
+msgid "{{Disk full: }}"
+msgstr "{{Disk dolu: }}"
+
+#: msi.rc:76
+msgid "Action %s: [1]. [2]"
+msgstr "%s eylemi: [1]. [2]"
+
+#: msi.rc:77
 msgid "Message type: [1], Argument: [2]{, [3]}"
-msgstr ""
+msgstr "İleti türü: [1], Değişken: [2]{, [3]}"
 
-#: msi.rc:79
+#: msi.rc:83
 msgid "Action start %s: [1]."
-msgstr ""
+msgstr "%s eylem başlangıcı: [1]."
 
-#: msi.rc:80
+#: msi.rc:84
 msgid "Action ended %s: [1]. Return value [2]."
-msgstr ""
+msgstr "%s eylem bitişi: [1]. Dönüş değeri [2]."
 
-#: msi.rc:81
+#: msi.rc:85
 msgid "=== Logging started: %s  %s ==="
-msgstr ""
+msgstr "=== Günlük başlangıcı: %s  %s ==="
 
-#: msi.rc:82
+#: msi.rc:86
 msgid ""
 "The installer has encountered an unexpected error installing this package. "
 "This may indicate a problem with this package. The error code is [1]. {{The "
 "arguments are: [2], [3], [4]}}"
 msgstr ""
+"Yükleyici, bu paketi yüklerken beklenmedik bir hatayla karşılaştı. Bu, "
+"pakette bir sorun olduğunu gösterebilir. Hata kodu: [1]. {{Değişkenler: [2], "
+"[3], [4]}}"
 
-#: msi.rc:88
-#, fuzzy
-#| msgid "No registry log space.\n"
+#: msi.rc:92
 msgid "Allocating registry space"
-msgstr "Kayıt günlük boşluğu yok.\n"
+msgstr "Kayıt günlük boşluğu ayarlanıyor"
 
-#: msi.rc:89
-#, fuzzy
-#| msgid "Single-instance application.\n"
+#: msi.rc:93
 msgid "Searching for installed applications"
-msgstr "Tek durumlu uygulama.\n"
-
-#: msi.rc:90
-msgid "Binding executables"
-msgstr ""
-
-#: msi.rc:91 msi.rc:134
-#, fuzzy
-#| msgid "Searching for %s"
-msgid "Searching for qualifying products"
-msgstr "Aranan %s"
-
-#: msi.rc:92 msi.rc:93 msi.rc:98
-msgid "Computing space requirements"
-msgstr ""
+msgstr "Yüklü uygulamalar aranıyor"
 
 #: msi.rc:94
-#, fuzzy
-#| msgid "Target folder"
+msgid "Binding executables"
+msgstr "Çalıştırılabilir dosyalar eşleniyor"
+
+#: msi.rc:95 msi.rc:138
+msgid "Searching for qualifying products"
+msgstr "Uygun ürünler aranıyor"
+
+#: msi.rc:96 msi.rc:97 msi.rc:102
+msgid "Computing space requirements"
+msgstr "Yer gereksinimi hesaplanıyor"
+
+#: msi.rc:98
 msgid "Creating folders"
-msgstr "Hedef Klasör"
-
-#: msi.rc:95
-#, fuzzy
-#| msgid "Create Shor&tcut"
-msgid "Creating shortcuts"
-msgstr "K&ısayol Oluştur"
-
-#: msi.rc:96
-#, fuzzy
-#| msgid "Exception in service.\n"
-msgid "Deleting services"
-msgstr "Hizmette hata.\n"
-
-#: msi.rc:97
-#, fuzzy
-#| msgid "Creation date"
-msgid "Creating duplicate files"
-msgstr "Oluşturma tarihi"
+msgstr "Dizinler oluşturuluyor"
 
 #: msi.rc:99
-#, fuzzy
-#| msgid "No associated application.\n"
-msgid "Searching for related applications"
-msgstr "İlişkili uygulama yok.\n"
+msgid "Creating shortcuts"
+msgstr "Kısayol oluşturuluyor"
 
 #: msi.rc:100
-msgid "Copying network install files"
-msgstr ""
+msgid "Deleting services"
+msgstr "Hizmetler siliniyor."
 
 #: msi.rc:101
-#, fuzzy
-#| msgid "Copying Files..."
-msgid "Copying new files"
-msgstr "Dosyalar Kopyalanıyor..."
-
-#: msi.rc:102
-#, fuzzy
-#| msgid "Installation of component failed: %08x"
-msgid "Installing ODBC components"
-msgstr "Bileşen yüklemesi başarısız: %08x"
+msgid "Creating duplicate files"
+msgstr "Tekrarlanmış dosyalar oluşturuluyor"
 
 #: msi.rc:103
-#, fuzzy
-#| msgid "Installer service failed.\n"
-msgid "Installing new services"
-msgstr "Kurulum hizmeti başarısız.\n"
+msgid "Searching for related applications"
+msgstr "İlgili uygulamalar aranıyor"
 
 #: msi.rc:104
-#, fuzzy
-#| msgid "Install/Uninstall"
-msgid "Installing system catalog"
-msgstr "Yükle/Kaldır"
+msgid "Copying network install files"
+msgstr "Ağdan yükleme dosyaları kopyalanıyor"
 
 #: msi.rc:105
-#, fuzzy
-#| msgid "Wine Application Uninstaller"
-msgid "Validating install"
-msgstr "Wine Uygulama Kaldırıcı"
+msgid "Copying new files"
+msgstr "Yeni dosyalar kopyalanıyor"
 
 #: msi.rc:106
-msgid "Evaluating launch conditions"
-msgstr ""
+msgid "Installing ODBC components"
+msgstr "ODBC bileşenleri yükleniyor"
 
 #: msi.rc:107
-msgid "Migrating feature states from related applications"
-msgstr ""
+msgid "Installing new services"
+msgstr "Yeni hizmetler yükleniyor."
 
 #: msi.rc:108
-#, fuzzy
-#| msgid "Icon files"
-msgid "Moving files"
-msgstr "Simge dosyaları"
+msgid "Installing system catalog"
+msgstr "Sistem kataloğu yükleniyor"
 
 #: msi.rc:109
-#, fuzzy
-#| msgid "Version information"
-msgid "Publishing assembly information"
-msgstr "Sürüm Bilgisi"
+msgid "Validating install"
+msgstr "Yükleme doğrulanıyor"
 
 #: msi.rc:110
-msgid "Unpublishing assembly information"
-msgstr ""
+msgid "Evaluating launch conditions"
+msgstr "Başlangıç koşulları değerlendiriliyor"
 
 #: msi.rc:111
-#, fuzzy
-#| msgid "Icon files"
-msgid "Patching files"
-msgstr "Simge dosyaları"
+msgid "Migrating feature states from related applications"
+msgstr "İlgili uygulamalardan özellik durumları alınıyor"
 
 #: msi.rc:112
-msgid "Updating component registration"
-msgstr ""
+msgid "Moving files"
+msgstr "Dosyalar taşınıyor"
 
 #: msi.rc:113
-msgid "Publishing Qualified Components"
-msgstr ""
+msgid "Publishing assembly information"
+msgstr "Derleme bilgisi yayınlanıyor"
 
 #: msi.rc:114
-msgid "Publishing Product Features"
-msgstr ""
+msgid "Unpublishing assembly information"
+msgstr "Derleme bilgisi yayından kaldırılıyor"
 
 #: msi.rc:115
-#, fuzzy
-#| msgid "Client Information"
-msgid "Publishing product information"
-msgstr "İstemci Bilgisi"
+msgid "Patching files"
+msgstr "Dosyalar yamanıyor"
 
 #: msi.rc:116
-msgid "Registering Class servers"
-msgstr ""
+msgid "Updating component registration"
+msgstr "Bileşen kaydı güncelleniyor"
 
 #: msi.rc:117
-msgid "Registering COM+ Applications and Components"
-msgstr ""
+msgid "Publishing Qualified Components"
+msgstr "Uygun Bileşenler Yayınlanıyor"
 
 #: msi.rc:118
-msgid "Registering extension servers"
-msgstr ""
+msgid "Publishing Product Features"
+msgstr "Ürün Özellikleri Yayınlanıyor"
 
 #: msi.rc:119
-msgid "Registering fonts"
-msgstr ""
+msgid "Publishing product information"
+msgstr "Ürün bilgisi yayınlanıyor"
 
 #: msi.rc:120
-#, fuzzy
-#| msgid "Registry Editor"
-msgid "Registering MIME info"
-msgstr "Kayıt Defteri Düzenleyicisi"
+msgid "Registering Class servers"
+msgstr "Sınıf sunucuları kaydediliyor"
 
 #: msi.rc:121
-#, fuzzy
-#| msgid "Registry is corrupt.\n"
-msgid "Registering product"
-msgstr "Kayıt defteri bozuk.\n"
+msgid "Registering COM+ Applications and Components"
+msgstr "COM+ Uygulamaları ve Bileşenleri Kaydediliyor"
 
 #: msi.rc:122
-msgid "Registering program identifiers"
-msgstr ""
+msgid "Registering extension servers"
+msgstr "Eklenti sunucuları kaydediliyor"
 
 #: msi.rc:123
-#, fuzzy
-#| msgid "Type Libraries"
-msgid "Registering type libraries"
-msgstr "Tür Kitaplıkları"
+msgid "Registering fonts"
+msgstr "Yazı tipleri kaydediliyor"
 
 #: msi.rc:124
-#, fuzzy
-#| msgid "Resource in use.\n"
-msgid "Registering user"
-msgstr "Kaynak kullanımda.\n"
+msgid "Registering MIME info"
+msgstr "MIME bilgisi kaydediliyor"
 
 #: msi.rc:125
-#, fuzzy
-#| msgid "&Remove duplicates"
-msgid "Removing duplicated files"
-msgstr "&Tekrarları sil"
+msgid "Registering product"
+msgstr "Ürün kaydediliyor"
 
-#: msi.rc:126 msi.rc:150
-#, fuzzy
-#| msgid "Applying font settings"
-msgid "Updating environment strings"
-msgstr "Yazı tipi ayarları uygulanıyor"
+#: msi.rc:126
+msgid "Registering program identifiers"
+msgstr "Uygulama tanımlayıcıları kaydediliyor"
 
 #: msi.rc:127
-#, fuzzy
-#| msgid "&Remove application"
-msgid "Removing applications"
-msgstr "Uygulama &Kaldır"
+msgid "Registering type libraries"
+msgstr "Tür kitaplıkları kaydediliyor"
 
 #: msi.rc:128
-#, fuzzy
-#| msgid "Icon files"
-msgid "Removing files"
-msgstr "Simge dosyaları"
+msgid "Registering user"
+msgstr "Kullanıcı kaydediliyor"
 
 #: msi.rc:129
-msgid "Removing folders"
-msgstr ""
+msgid "Removing duplicated files"
+msgstr "Tekrarlanmış dosyalar kaldırılıyor"
 
-#: msi.rc:130
-msgid "Removing INI files entries"
-msgstr ""
+#: msi.rc:130 msi.rc:154
+msgid "Updating environment strings"
+msgstr "Çevresel değişkenler güncelleniyor"
 
 #: msi.rc:131
-#, fuzzy
-#| msgid "Domain Component"
-msgid "Removing ODBC components"
-msgstr "Alan Adı Bileşeni"
+msgid "Removing applications"
+msgstr "Uygulamalar kaldırılıyor"
 
 #: msi.rc:132
-#, fuzzy
-#| msgid "Unable to modify the selected registry value."
-msgid "Removing system registry values"
-msgstr "Seçilen kayıt değeri değiştirilemiyor."
+msgid "Removing files"
+msgstr "Dosyalar kaldırılıyor"
 
 #: msi.rc:133
-msgid "Removing shortcuts"
-msgstr ""
+msgid "Removing folders"
+msgstr "Dizinler kaldırılıyor"
+
+#: msi.rc:134
+msgid "Removing INI files entries"
+msgstr "INI dosya girdileri kaldırılıyor"
 
 #: msi.rc:135
-msgid "Registering modules"
-msgstr ""
+msgid "Removing ODBC components"
+msgstr "ODBC bileşenleri kaldırılıyor"
 
 #: msi.rc:136
-msgid "Unregistering modules"
-msgstr ""
+msgid "Removing system registry values"
+msgstr "Kayıt defter değerleri kaldırılıyor"
 
 #: msi.rc:137
-#, fuzzy
-#| msgid "Initializing; "
-msgid "Initializing ODBC directories"
-msgstr "Hazırlanıyor; "
-
-#: msi.rc:138
-#, fuzzy
-#| msgid "Starting Wordpad failed"
-msgid "Starting services"
-msgstr "Wordpad başlatılamadı"
+msgid "Removing shortcuts"
+msgstr "Kısayollar kaldırılıyor"
 
 #: msi.rc:139
-#, fuzzy
-#| msgid "Stopping dependent service: %1\n"
-msgid "Stopping services"
-msgstr "Bağımlı hizmet durduruluyor: %1\n"
+msgid "Registering modules"
+msgstr "Modüller kaydediliyor"
 
 #: msi.rc:140
-msgid "Unpublishing Qualified Components"
-msgstr ""
+msgid "Unregistering modules"
+msgstr "Modül kayıtları kaldırılıyor"
 
 #: msi.rc:141
-msgid "Unpublishing Product Features"
-msgstr ""
+msgid "Initializing ODBC directories"
+msgstr "ODBC dizinleri başlatılıyor"
 
 #: msi.rc:142
-#, fuzzy
-#| msgid "Client Information"
-msgid "Unpublishing product information"
-msgstr "İstemci Bilgisi"
+msgid "Starting services"
+msgstr "Hizmetler başlatılıyor"
 
 #: msi.rc:143
-msgid "Unregister Class servers"
-msgstr ""
+msgid "Stopping services"
+msgstr "Hizmetler durduruluyor"
 
 #: msi.rc:144
-msgid "Unregistering COM+ Applications and Components"
-msgstr ""
+msgid "Unpublishing Qualified Components"
+msgstr "Uygun Bileşenler Yayından Kaldırılıyor"
 
 #: msi.rc:145
-msgid "Unregistering extension servers"
-msgstr ""
+msgid "Unpublishing Product Features"
+msgstr "Ürün Özellikleri Yayından Kaldırılıyor"
 
 #: msi.rc:146
-msgid "Unregistering fonts"
-msgstr ""
+msgid "Unpublishing product information"
+msgstr "Ürün bilgisi yayından kaldırılıyor"
 
 #: msi.rc:147
-msgid "Unregistering MIME info"
-msgstr ""
+msgid "Unregister Class servers"
+msgstr "Sınıf sunucuları kaldırılıyor"
 
 #: msi.rc:148
-msgid "Unregistering program identifiers"
-msgstr ""
+msgid "Unregistering COM+ Applications and Components"
+msgstr "COM+ Uygulamaları ve Bileşenleri Kayıttan Kaldırılıyor"
 
 #: msi.rc:149
-msgid "Unregistering type libraries"
-msgstr ""
+msgid "Unregistering extension servers"
+msgstr "Eklenti sunucuları kayıttan kaldırılıyor"
+
+#: msi.rc:150
+msgid "Unregistering fonts"
+msgstr "Yazı tipleri kayıttan kaldırılıyor"
 
 #: msi.rc:151
-msgid "Writing INI files values"
-msgstr ""
+msgid "Unregistering MIME info"
+msgstr "MIME bilgisi kayıttan kaldırılıyor"
 
 #: msi.rc:152
-#, fuzzy
-#| msgid "Warning: system library"
+msgid "Unregistering program identifiers"
+msgstr "Uygulama tanımlayıcıları kayıttan kaldırılıyor"
+
+#: msi.rc:153
+msgid "Unregistering type libraries"
+msgstr "Tür kitaplıkları kayıttan kaldırılıyor"
+
+#: msi.rc:155
+msgid "Writing INI files values"
+msgstr "INI dosya değerleri yazılıyor"
+
+#: msi.rc:156
 msgid "Writing system registry values"
-msgstr "Uyarı: sistem kitaplığı"
+msgstr "Kayıt defter değerleri yazılıyor"
 
-#: msi.rc:158
+#: msi.rc:162
 msgid "Free space: [1]"
-msgstr ""
+msgstr "Boş alan: [1]"
 
-#: msi.rc:159
+#: msi.rc:163
 msgid "Property: [1], Signature: [2]"
-msgstr ""
+msgstr "Özellik: [1], İmza: [2]"
 
-#: msi.rc:160
-#, fuzzy
-#| msgid "File:"
+#: msi.rc:164
 msgid "File: [1]"
-msgstr "Dosya:"
+msgstr "Dosya: [1]"
 
-#: msi.rc:161 msi.rc:188
-#, fuzzy
-#| msgid "Folder:"
+#: msi.rc:165 msi.rc:192
 msgid "Folder: [1]"
-msgstr "Klasör:"
+msgstr "Dizin: [1]"
 
-#: msi.rc:162 msi.rc:191
+#: msi.rc:166 msi.rc:195
 msgid "Shortcut: [1]"
-msgstr ""
+msgstr "Kısayol: [1]"
 
-#: msi.rc:163 msi.rc:194 msi.rc:195
-#, fuzzy
-#| msgid "De&vice:"
+#: msi.rc:167 msi.rc:198 msi.rc:199
 msgid "Service: [1]"
-msgstr "Ay&gıt:"
+msgstr "Hizmet: [1]"
 
-#: msi.rc:164 msi.rc:167 msi.rc:171
+#: msi.rc:168 msi.rc:171 msi.rc:175
 msgid "File: [1],  Directory: [9],  Size: [6]"
-msgstr ""
-
-#: msi.rc:165
-#, fuzzy
-#| msgid "application"
-msgid "Found application: [1]"
-msgstr "uygulama"
-
-#: msi.rc:166
-msgid "File: [1], Directory: [9], Size: [6]"
-msgstr ""
-
-#: msi.rc:168
-#, fuzzy
-#| msgid "De&vice:"
-msgid "Service: [2]"
-msgstr "Ay&gıt:"
+msgstr "Dosya: [1],  Dizin: [9],  Boyut: [6]"
 
 #: msi.rc:169
-msgid "File: [1],  Dependencies: [2]"
-msgstr ""
+msgid "Found application: [1]"
+msgstr "Şu uygulama bulundu: [1]"
 
 #: msi.rc:170
-#, fuzzy
-#| msgid "Applications"
-msgid "Application: [1]"
-msgstr "Uygulamalar"
+msgid "File: [1], Directory: [9], Size: [6]"
+msgstr "Dosya: [1], Dizin: [9], Boyut: [6]"
 
-#: msi.rc:172 msi.rc:173
-msgid "Application Context:[1], Assembly Name:[2]"
-msgstr ""
+#: msi.rc:172
+msgid "Service: [2]"
+msgstr "Hizmet: [2]"
+
+#: msi.rc:173
+msgid "File: [1],  Dependencies: [2]"
+msgstr "Dosya: [1],  Bağlılıklar: [2]"
 
 #: msi.rc:174
-msgid "File: [1],  Directory: [2],  Size: [3]"
-msgstr ""
+msgid "Application: [1]"
+msgstr "Uygulama: [1]"
 
-#: msi.rc:175 msi.rc:196
-msgid "Component ID: [1], Qualifier: [2]"
-msgstr ""
-
-#: msi.rc:176 msi.rc:197
-msgid "Feature: [1]"
-msgstr ""
-
-#: msi.rc:177 msi.rc:198
-msgid "Class Id: [1]"
-msgstr ""
+#: msi.rc:176 msi.rc:177
+msgid "Application Context:[1], Assembly Name:[2]"
+msgstr "Uygulama İçeriği:[1], Derleme Adı:[2]"
 
 #: msi.rc:178
-msgid "AppId: [1]{{, AppType: [2], Users: [3], RSN: [4]}}"
-msgstr ""
+msgid "File: [1],  Directory: [2],  Size: [3]"
+msgstr "Dosya: [1],  Dizin: [2],  Boyut: [3]"
 
 #: msi.rc:179 msi.rc:200
-#, fuzzy
-#| msgid "Extensions Only"
-msgid "Extension: [1]"
-msgstr "Sadece Eklentiler"
+msgid "Component ID: [1], Qualifier: [2]"
+msgstr "Bileşen Kimliği: [1], Yayıncı: [2]"
 
 #: msi.rc:180 msi.rc:201
-#, fuzzy
-#| msgid "&Font:"
-msgid "Font: [1]"
-msgstr "&Yazı Tipi:"
+msgid "Feature: [1]"
+msgstr "Özellik: [1]"
 
 #: msi.rc:181 msi.rc:202
-msgid "MIME Content Type: [1], Extension: [2]"
-msgstr ""
+msgid "Class Id: [1]"
+msgstr "Sınıf Kimliği: [1]"
 
-#: msi.rc:182 msi.rc:203
-msgid "ProgId: [1]"
+#: msi.rc:182
+msgid "AppId: [1]{{, AppType: [2], Users: [3], RSN: [4]}}"
 msgstr ""
+"Uygulama Kimliği: [1]{{, Uygulama Türü: [2], Kullanıcılar: [3], RSN: [4]}}"
 
 #: msi.rc:183 msi.rc:204
+msgid "Extension: [1]"
+msgstr "Eklenti: [1]"
+
+#: msi.rc:184 msi.rc:205
+msgid "Font: [1]"
+msgstr "Yazı Tipi: [1]"
+
+#: msi.rc:185 msi.rc:206
+msgid "MIME Content Type: [1], Extension: [2]"
+msgstr "MIME İçerik Türü: [1], Eklenti: [2]"
+
+#: msi.rc:186 msi.rc:207
+msgid "ProgId: [1]"
+msgstr "Uygulama Kimliği: [1]"
+
+#: msi.rc:187 msi.rc:208
 msgid "LibID: [1]"
-msgstr ""
+msgstr "Kitaplık Kimliği: [1]"
 
-#: msi.rc:184 msi.rc:187
+#: msi.rc:188 msi.rc:191
 msgid "File: [1], Directory: [9]"
-msgstr ""
+msgstr "Dosya: [1], Dizin: [9]"
 
-#: msi.rc:185 msi.rc:205
+#: msi.rc:189 msi.rc:209
 msgid "Name: [1], Value: [2], Action [3]"
-msgstr ""
-
-#: msi.rc:186
-msgid "Application: [1], Command line: [2]"
-msgstr ""
-
-#: msi.rc:189 msi.rc:206
-msgid "File: [1],  Section: [2],  Key: [3], Value: [4]"
-msgstr ""
+msgstr "Ad: [1], Değer: [2], Eylem: [3]"
 
 #: msi.rc:190
+msgid "Application: [1], Command line: [2]"
+msgstr "Uygulama: [1], Komut satırı: [2]"
+
+#: msi.rc:193 msi.rc:210
+msgid "File: [1],  Section: [2],  Key: [3], Value: [4]"
+msgstr "Dosya: [1],  Bölüm: [2],  Anahtar: [3], Değer: [4]"
+
+#: msi.rc:194
 msgid "Key: [1], Name: [2]"
-msgstr ""
+msgstr "Anahtar: [1], Ad: [2]"
 
-#: msi.rc:192 msi.rc:193
+#: msi.rc:196 msi.rc:197
 msgid "File: [1], Folder: [2]"
-msgstr ""
+msgstr "Dosya: [1], Dizin: [2]"
 
-#: msi.rc:199
+#: msi.rc:203
 msgid "AppId: [1]{{, AppType: [2]}}"
-msgstr ""
+msgstr "Uygulama Kimliği: [1]{{, Uygulama Türü: [2]}}"
 
-#: msi.rc:207
+#: msi.rc:211
 msgid "Key: [1], Name: [2], Value: [3]"
-msgstr ""
+msgstr "Anahtar: [1], Ad: [1], Değer: [3]"
 
 #: msrle32.rc:31
 msgid "Wine MS-RLE video codec"
@@ -12453,6 +12393,38 @@ msgstr ""
 "değil."
 
 #: regedit.rc:408
+#, fuzzy
+#| msgid ""
+#| "Usage:\n"
+#| "  regedit [options] [filename] [reg_key]\n"
+#| "\n"
+#| "Options:\n"
+#| "  [no option]    Launch the graphical version of this program.\n"
+#| "  /L:system.dat  The location of the system.dat file to be modified.\n"
+#| "                 Compatible with any other switch. Ignored.\n"
+#| "  /R:user.dat    The location of the user.dat file to be modified.\n"
+#| "                 Compatible with any other switch. Ignored.\n"
+#| "  /C             Import the contents of a registry file.\n"
+#| "  /D             Delete a specified registry key.\n"
+#| "  /E             Export the contents of a specified registry key to a "
+#| "file.\n"
+#| "                 If no key is specified, the entire registry is "
+#| "exported.\n"
+#| "  /S             Silent mode. No messages will be displayed.\n"
+#| "  /V             Launch the GUI in advanced mode. Ignored.\n"
+#| "  /?             Display this information and exit.\n"
+#| "  [filename]     The location of the file containing registry information "
+#| "to\n"
+#| "                 be imported. When used with [/E], this option specifies "
+#| "the\n"
+#| "                 file location where registry information will be "
+#| "exported.\n"
+#| "  [reg_key]      The registry key to be modified.\n"
+#| "\n"
+#| "Usage examples:\n"
+#| "  regedit \"import.reg\"\n"
+#| "  regedit /E \"export.reg\" \"HKEY_CURRENT_USER\\Console\"\n"
+#| "  regedit /D \"HKEY_LOCAL_MACHINE\\Error\\Path\"\n"
 msgid ""
 "Usage:\n"
 "  regedit [options] [filename] [reg_key]\n"
@@ -12480,7 +12452,7 @@ msgid ""
 "Usage examples:\n"
 "  regedit \"import.reg\"\n"
 "  regedit /E \"export.reg\" \"HKEY_CURRENT_USER\\Console\"\n"
-"  regedit /D \"HKEY_LOCAL_MACHINE\\Error\\Path\"\n"
+"  regedit /D \"HKEY_LOCAL_MACHINE\\Key\\Path\"\n"
 msgstr ""
 "Kullanım:\n"
 "  regedit [seçenek] [dosyaadı] [kayıt_anahtarı]\n"
@@ -12565,10 +12537,8 @@ msgstr ""
 "\n"
 
 #: regedit.rc:420
-#, fuzzy
-#| msgid "regedit: Unsupported registry data type [%1]\n"
 msgid "regedit: Unsupported registry data type [0x%1!x!]\n"
-msgstr "regedit: Desteklenmeyen kayıt defteri veri türü [%1]\n"
+msgstr "regedit: Desteklenmeyen kayıt defteri veri türü [0x%1!x!]\n"
 
 #: regedit.rc:421
 msgid "regedit: Unexpected end of line in '%1'.\n"
@@ -12587,7 +12557,10 @@ msgid "regedit: Unable to open the registry key '%1'.\n"
 msgstr "regedit: '%1' kayıt anahtarı açılamıyor.\n"
 
 #: regedit.rc:425
-msgid "regedit: Unsupported registry data type [%1] encountered in '%2'.\n"
+#, fuzzy
+#| msgid "regedit: Unsupported registry data type [%1] encountered in '%2'.\n"
+msgid ""
+"regedit: Unsupported registry data type [0x%1!x!] encountered in '%2'.\n"
 msgstr ""
 "regedit: Desteklenmeyen [%1] kayıt veri türüyle '%2''de karşılaşıldı.\n"
 
@@ -12596,8 +12569,10 @@ msgid "regedit: The registry value '%1' will be exported as binary data.\n"
 msgstr "regedit: '%1' kayıt değeri ikili veri olarak dışa verilecek.\n"
 
 #: regedit.rc:427
-msgid "regedit: Incorrect registry class specification in '%1'.\n"
-msgstr "'%1''de yanlış kayıt sınıfı özelliği.\n"
+#, fuzzy
+#| msgid "reg: Invalid key name\n"
+msgid "regedit: Invalid system key [%1]\n"
+msgstr "reg: Geçersiz anahtar adı\n"
 
 #: regedit.rc:428
 msgid ""
@@ -12605,7 +12580,9 @@ msgid ""
 msgstr "regedit: '%1' verilemiyor. Belirtilen kayıt anahtarı bulunamadı.\n"
 
 #: regedit.rc:429
-msgid "regedit: Unable to delete the registry class '%1'.\n"
+#, fuzzy
+#| msgid "regedit: Unable to delete the registry class '%1'.\n"
+msgid "regedit: Unable to delete the registry key '%1'.\n"
 msgstr "regedit: '%1' kayıt sınıfı silinemiyor.\n"
 
 #: regedit.rc:431
@@ -12753,8 +12730,12 @@ msgid "Confirm Key Delete"
 msgstr "Anahtar Silmeyi Onayla"
 
 #: regedit.rc:213
+#, fuzzy
+#| msgid ""
+#| "Are you sure you want to delete the registry key '%1' and all of its "
+#| "subkeys?"
 msgid ""
-"Are you sure you want to delete the registry key '%1' and all of its subkeys?"
+"Are you sure you want to delete this registry key and all of its subkeys?"
 msgstr ""
 "'%1' kayıt defteri anahtarını ve bütün alt anahtarlarını silmek "
 "istediğinizden emin misiniz?"
