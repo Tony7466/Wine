@@ -1,3 +1,18 @@
+wine-development (2.13-1) unstable; urgency=medium
+
+  * New upstream release 2.13, released Jul 21, 2017.
+    - Unicode data updated to Unicode 10.0.0.
+    - Nicer looking default mouse cursors.
+    - Persistent connections support in WinHTTP.
+    - Message Framing protocol support in WebServices.
+    - Improved metafile support in GdiPlus.
+    - Debug registers support in x86-64 exception handling.
+    - Anti-aliasing improvements in DirectWrite.
+    - Various bug fixes.
+  * Drop VerticalOrientation handling from unicode.patch, applied upstream.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 22 Jul 2017 15:17:52 +0000
+
 wine-development (2.12-1) unstable; urgency=medium
 
   * New upstream release 2.12, released Jul 7, 2017.

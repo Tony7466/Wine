@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -104,15 +104,6 @@ CONFIGURE_TARGETS   = @CONFIGURE_TARGETS
+@@ -105,15 +105,6 @@ CONFIGURE_TARGETS   = @CONFIGURE_TARGETS
  all: wine
  	@echo "Wine build complete."
  
