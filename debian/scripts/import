@@ -20,16 +20,17 @@ git update-index --assume-unchanged configure include/config.h.in
 # pull specified tag from upstream repository
 version="$1"
 debian="https://anonscm.debian.org/git/pkg-wine/wine.git"
-upstream_branch="upstream"
+debian_branch="$(git rev-parse --abbrev-ref HEAD)"
+upstream_branch="upstream-stable"
 winehq="git://source.winehq.org/git/wine.git"
 tag="wine-$version"
 git checkout ${upstream_branch}
 git pull $debian ${upstream_branch}
 git pull --no-edit $winehq tag "$tag" || echo "unable to fetch tag $tag"
 
-# merge upstream into master (favoring "their" changes)
-git checkout master
-git merge --strategy-option=theirs upstream
+# merge upstream into our branch (favoring "their" changes)
+git checkout ${debian_branch}
+git merge --strategy-option=theirs ${upstream_branch}
 
 # format the "New upstream release" message
 tag_time=`git cat-file tag "$tag" | sed -n 's/tagger .*<.*> \([0-9]*\) .*/\1/p'`
