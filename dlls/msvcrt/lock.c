@@ -556,6 +556,63 @@ unsigned int __cdecl _GetConcurrency(void)
     return val;
 }
 
+typedef struct
+{
+    volatile void *wait;
+    void *reset;
+    critical_section cs;
+} event;
+
+/* ??0event@Concurrency@@QAE@XZ */
+/* ??0event@Concurrency@@QEAA@XZ */
+DEFINE_THISCALL_WRAPPER(event_ctor, 4)
+event* __thiscall event_ctor(event *this)
+{
+    FIXME("(%p) stub\n", this);
+    return this;
+}
+
+/* ??1event@Concurrency@@QAE@XZ */
+/* ??1event@Concurrency@@QEAA@XZ */
+DEFINE_THISCALL_WRAPPER(event_dtor, 4)
+void __thiscall event_dtor(event *this)
+{
+    FIXME("(%p) stub\n", this);
+}
+
+/* ?reset@event@Concurrency@@QAEXXZ */
+/* ?reset@event@Concurrency@@QEAAXXZ */
+DEFINE_THISCALL_WRAPPER(event_reset, 4)
+void __thiscall event_reset(event *this)
+{
+    FIXME("(%p) stub\n", this);
+}
+
+/* ?set@event@Concurrency@@QAEXXZ */
+/* ?set@event@Concurrency@@QEAAXXZ */
+DEFINE_THISCALL_WRAPPER(event_set, 4)
+void __thiscall event_set(event *this)
+{
+    FIXME("(%p) stub\n", this);
+}
+
+/* ?wait@event@Concurrency@@QAEII@Z */
+/* ?wait@event@Concurrency@@QEAA_KI@Z */
+DEFINE_THISCALL_WRAPPER(event_wait, 8)
+size_t __thiscall event_wait(event *this, unsigned int timeout)
+{
+    FIXME("(%p %u) stub\n", this, timeout);
+    return COOPERATIVE_WAIT_TIMEOUT;
+}
+
+/* ?wait_for_multiple@event@Concurrency@@SAIPAPAV12@I_NI@Z */
+/* ?wait_for_multiple@event@Concurrency@@SA_KPEAPEAV12@_K_NI@Z */
+int __cdecl event_wait_for_multiple(event **events, MSVCRT_size_t count, MSVCRT_bool wait_all, unsigned int timeout)
+{
+    FIXME("(%p %ld %d %u) stub\n", events, count, wait_all, timeout);
+    return COOPERATIVE_WAIT_TIMEOUT;
+}
+
 #endif
 
 #if _MSVCR_VER >= 110
@@ -719,6 +776,160 @@ void __thiscall _Condition_variable_notify_all(_Condition_variable *this)
             HeapFree(GetProcessHeap(), 0, ptr);
         ptr = next;
     }
+}
+#endif
+
+#if _MSVCR_VER >= 100
+typedef struct rwl_queue
+{
+    struct rwl_queue *next;
+} rwl_queue;
+
+#define WRITER_WAITING 0x80000000
+/* FIXME: reader_writer_lock structure is not binary compatible
+ * it can't exceed 28/56 bytes */
+typedef struct
+{
+    LONG count;
+    LONG thread_id;
+    rwl_queue active;
+    rwl_queue *writer_head;
+    rwl_queue *writer_tail;
+    rwl_queue *reader_head;
+} reader_writer_lock;
+
+/* ??0reader_writer_lock@Concurrency@@QAE@XZ */
+/* ??0reader_writer_lock@Concurrency@@QEAA@XZ */
+DEFINE_THISCALL_WRAPPER(reader_writer_lock_ctor, 4)
+reader_writer_lock* __thiscall reader_writer_lock_ctor(reader_writer_lock *this)
+{
+    FIXME("(%p) stub\n", this);
+    return this;
+}
+
+/* ??1reader_writer_lock@Concurrency@@QAE@XZ */
+/* ??1reader_writer_lock@Concurrency@@QEAA@XZ */
+DEFINE_THISCALL_WRAPPER(reader_writer_lock_dtor, 4)
+void __thiscall reader_writer_lock_dtor(reader_writer_lock *this)
+{
+    FIXME("(%p) stub\n", this);
+}
+
+/* ?lock@reader_writer_lock@Concurrency@@QAEXXZ */
+/* ?lock@reader_writer_lock@Concurrency@@QEAAXXZ */
+DEFINE_THISCALL_WRAPPER(reader_writer_lock_lock, 4)
+void __thiscall reader_writer_lock_lock(reader_writer_lock *this)
+{
+    FIXME("(%p) stub\n", this);
+}
+
+/* ?lock_read@reader_writer_lock@Concurrency@@QAEXXZ */
+/* ?lock_read@reader_writer_lock@Concurrency@@QEAAXXZ */
+DEFINE_THISCALL_WRAPPER(reader_writer_lock_lock_read, 4)
+void __thiscall reader_writer_lock_lock_read(reader_writer_lock *this)
+{
+    FIXME("(%p) stub\n", this);
+}
+
+/* ?try_lock@reader_writer_lock@Concurrency@@QAE_NXZ */
+/* ?try_lock@reader_writer_lock@Concurrency@@QEAA_NXZ */
+DEFINE_THISCALL_WRAPPER(reader_writer_lock_try_lock, 4)
+MSVCRT_bool __thiscall reader_writer_lock_try_lock(reader_writer_lock *this)
+{
+    FIXME("(%p) stub\n", this);
+    return FALSE;
+}
+
+/* ?try_lock_read@reader_writer_lock@Concurrency@@QAE_NXZ */
+/* ?try_lock_read@reader_writer_lock@Concurrency@@QEAA_NXZ */
+DEFINE_THISCALL_WRAPPER(reader_writer_lock_try_lock_read, 4)
+MSVCRT_bool __thiscall reader_writer_lock_try_lock_read(reader_writer_lock *this)
+{
+    FIXME("(%p) stub\n", this);
+    return FALSE;
+}
+
+/* ?unlock@reader_writer_lock@Concurrency@@QAEXXZ */
+/* ?unlock@reader_writer_lock@Concurrency@@QEAAXXZ */
+DEFINE_THISCALL_WRAPPER(reader_writer_lock_unlock, 4)
+void __thiscall reader_writer_lock_unlock(reader_writer_lock *this)
+{
+    FIXME("(%p) stub\n", this);
+}
+
+typedef struct {
+    CRITICAL_SECTION cs;
+} _ReentrantBlockingLock;
+
+/* ??0_ReentrantBlockingLock@details@Concurrency@@QAE@XZ */
+/* ??0_ReentrantBlockingLock@details@Concurrency@@QEAA@XZ */
+DEFINE_THISCALL_WRAPPER(_ReentrantBlockingLock_ctor, 4)
+_ReentrantBlockingLock* __thiscall _ReentrantBlockingLock_ctor(_ReentrantBlockingLock *this)
+{
+    TRACE("(%p)\n", this);
+
+    InitializeCriticalSection(&this->cs);
+    this->cs.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": _ReentrantBlockingLock");
+    return this;
+}
+
+/* ??1_ReentrantBlockingLock@details@Concurrency@@QAE@XZ */
+/* ??1_ReentrantBlockingLock@details@Concurrency@@QEAA@XZ */
+DEFINE_THISCALL_WRAPPER(_ReentrantBlockingLock_dtor, 4)
+void __thiscall _ReentrantBlockingLock_dtor(_ReentrantBlockingLock *this)
+{
+    TRACE("(%p)\n", this);
+
+    this->cs.DebugInfo->Spare[0] = 0;
+    DeleteCriticalSection(&this->cs);
+}
+
+/* ?_Acquire@_ReentrantBlockingLock@details@Concurrency@@QAEXXZ */
+/* ?_Acquire@_ReentrantBlockingLock@details@Concurrency@@QEAAXXZ */
+DEFINE_THISCALL_WRAPPER(_ReentrantBlockingLock__Acquire, 4)
+void __thiscall _ReentrantBlockingLock__Acquire(_ReentrantBlockingLock *this)
+{
+    TRACE("(%p)\n", this);
+    EnterCriticalSection(&this->cs);
+}
+
+/* ?_Release@_ReentrantBlockingLock@details@Concurrency@@QAEXXZ */
+/* ?_Release@_ReentrantBlockingLock@details@Concurrency@@QEAAXXZ */
+DEFINE_THISCALL_WRAPPER(_ReentrantBlockingLock__Release, 4)
+void __thiscall _ReentrantBlockingLock__Release(_ReentrantBlockingLock *this)
+{
+    TRACE("(%p)\n", this);
+    LeaveCriticalSection(&this->cs);
+}
+
+/* ?_TryAcquire@_ReentrantBlockingLock@details@Concurrency@@QAE_NXZ */
+/* ?_TryAcquire@_ReentrantBlockingLock@details@Concurrency@@QEAA_NXZ */
+DEFINE_THISCALL_WRAPPER(_ReentrantBlockingLock__TryAcquire, 4)
+MSVCRT_bool __thiscall _ReentrantBlockingLock__TryAcquire(_ReentrantBlockingLock *this)
+{
+    TRACE("(%p)\n", this);
+    return TryEnterCriticalSection(&this->cs);
+}
+#endif
+
+#if _MSVCR_VER == 110
+static LONG shared_ptr_lock;
+
+void __cdecl _Lock_shared_ptr_spin_lock(void)
+{
+    LONG l = 0;
+
+    while(InterlockedCompareExchange(&shared_ptr_lock, 1, 0) != 0) {
+        if(l++ == 1000) {
+            Sleep(0);
+            l = 0;
+        }
+    }
+}
+
+void __cdecl _Unlock_shared_ptr_spin_lock(void)
+{
+    shared_ptr_lock = 0;
 }
 #endif
 

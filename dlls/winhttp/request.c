@@ -368,25 +368,21 @@ static int get_header_index( request_t *request, LPCWSTR field, int requested_in
 
 static BOOL insert_header( request_t *request, header_t *header )
 {
-    DWORD count;
+    DWORD count = request->num_headers + 1;
     header_t *hdrs;
 
-    count = request->num_headers + 1;
-    if (count > 1)
+    if (request->headers)
         hdrs = heap_realloc_zero( request->headers, sizeof(header_t) * count );
     else
-        hdrs = heap_alloc_zero( sizeof(header_t) * count );
+        hdrs = heap_alloc_zero( sizeof(header_t) );
+    if (!hdrs) return FALSE;
 
-    if (hdrs)
-    {
-        request->headers = hdrs;
-        request->headers[count - 1].field = strdupW( header->field );
-        request->headers[count - 1].value = strdupW( header->value );
-        request->headers[count - 1].is_request = header->is_request;
-        request->num_headers++;
-        return TRUE;
-    }
-    return FALSE;
+    request->headers = hdrs;
+    request->headers[count - 1].field = strdupW( header->field );
+    request->headers[count - 1].value = strdupW( header->value );
+    request->headers[count - 1].is_request = header->is_request;
+    request->num_headers = count;
+    return TRUE;
 }
 
 static BOOL delete_header( request_t *request, DWORD index )
@@ -1315,7 +1311,7 @@ static DWORD auth_scheme_from_header( WCHAR *header )
 
 static BOOL query_auth_schemes( request_t *request, DWORD level, LPDWORD supported, LPDWORD first )
 {
-    DWORD index = 0;
+    DWORD index = 0, supported_schemes = 0, first_scheme = 0;
     BOOL ret = FALSE;
 
     for (;;)
@@ -1336,14 +1332,18 @@ static BOOL query_auth_schemes( request_t *request, DWORD level, LPDWORD support
         }
         scheme = auth_scheme_from_header( buffer );
         heap_free( buffer );
-        if (!scheme) break;
+        if (!scheme) continue;
 
-        if (first && index == 1)
-            *first = *supported = scheme;
-        else
-            *supported |= scheme;
+        if (!first_scheme) first_scheme = scheme;
+        supported_schemes |= scheme;
 
         ret = TRUE;
+    }
+
+    if (ret)
+    {
+        *supported = supported_schemes;
+        *first = first_scheme;
     }
     return ret;
 }

@@ -1339,3 +1339,146 @@ void __cdecl threads__Mtx_unlock(void *mtx)
 {
     LeaveCriticalSection(mtx);
 }
+
+#if _MSVCP_VER >= 110
+static LONG shared_ptr_lock;
+
+void __cdecl _Lock_shared_ptr_spin_lock(void)
+{
+    LONG l = 0;
+
+    while(InterlockedCompareExchange(&shared_ptr_lock, 1, 0) != 0) {
+        if(l++ == 1000) {
+            Sleep(0);
+            l = 0;
+        }
+    }
+}
+
+void __cdecl _Unlock_shared_ptr_spin_lock(void)
+{
+    shared_ptr_lock = 0;
+}
+#endif
+
+#if _MSVCP_VER >= 140
+typedef struct {
+    void *unk0;
+    BYTE unk1;
+} task_continuation_context;
+
+/* ??0task_continuation_context@Concurrency@@AAE@XZ */
+/* ??0task_continuation_context@Concurrency@@AEAA@XZ */
+DEFINE_THISCALL_WRAPPER(task_continuation_context_ctor, 4)
+task_continuation_context* __thiscall task_continuation_context_ctor(task_continuation_context *this)
+{
+    TRACE("(%p)\n", this);
+    memset(this, 0, sizeof(*this));
+    return this;
+}
+
+typedef struct {
+    const vtable_ptr *vtable;
+    void (__cdecl *func)(void);
+    int unk[4];
+    void *unk2[3];
+    void *this;
+} function_void_cdecl_void;
+
+/* ?_Assign@_ContextCallback@details@Concurrency@@AAEXPAX@Z */
+/* ?_Assign@_ContextCallback@details@Concurrency@@AEAAXPEAX@Z */
+DEFINE_THISCALL_WRAPPER(_ContextCallback__Assign, 8)
+void __thiscall _ContextCallback__Assign(void *this, void *v)
+{
+    TRACE("(%p %p)\n", this, v);
+}
+
+#define call_function_do_call(this) CALL_VTBL_FUNC(this, 8, void, (function_void_cdecl_void*), (this))
+#define call_function_do_clean(this,b) CALL_VTBL_FUNC(this, 16, void, (function_void_cdecl_void*,MSVCP_bool), (this, b))
+/* ?_CallInContext@_ContextCallback@details@Concurrency@@QBEXV?$function@$$A6AXXZ@std@@_N@Z */
+/* ?_CallInContext@_ContextCallback@details@Concurrency@@QEBAXV?$function@$$A6AXXZ@std@@_N@Z */
+DEFINE_THISCALL_WRAPPER(_ContextCallback__CallInContext, 48)
+void __thiscall _ContextCallback__CallInContext(const void *this, function_void_cdecl_void func, MSVCP_bool b)
+{
+    TRACE("(%p %p %x)\n", this, func.func, b);
+    call_function_do_call(func.this);
+    call_function_do_clean(func.this, func.this!=&func);
+}
+
+/* ?_Capture@_ContextCallback@details@Concurrency@@AAEXXZ */
+/* ?_Capture@_ContextCallback@details@Concurrency@@AEAAXXZ */
+DEFINE_THISCALL_WRAPPER(_ContextCallback__Capture, 4)
+void __thiscall _ContextCallback__Capture(void *this)
+{
+    TRACE("(%p)\n", this);
+}
+
+/* ?_Reset@_ContextCallback@details@Concurrency@@AAEXXZ */
+/* ?_Reset@_ContextCallback@details@Concurrency@@AEAAXXZ */
+DEFINE_THISCALL_WRAPPER(_ContextCallback__Reset, 4)
+void __thiscall _ContextCallback__Reset(void *this)
+{
+    TRACE("(%p)\n", this);
+}
+
+/* ?_IsCurrentOriginSTA@_ContextCallback@details@Concurrency@@CA_NXZ */
+MSVCP_bool __cdecl _ContextCallback__IsCurrentOriginSTA(void *this)
+{
+    TRACE("(%p)\n", this);
+    return FALSE;
+}
+
+typedef struct {
+    /*_Task_impl_base*/void *task;
+    MSVCP_bool scheduled;
+    MSVCP_bool started;
+} _TaskEventLogger;
+
+/* ?_LogCancelTask@_TaskEventLogger@details@Concurrency@@QAEXXZ */
+/* ?_LogCancelTask@_TaskEventLogger@details@Concurrency@@QEAAXXZ */
+DEFINE_THISCALL_WRAPPER(_TaskEventLogger__LogCancelTask, 4)
+void __thiscall _TaskEventLogger__LogCancelTask(_TaskEventLogger *this)
+{
+    TRACE("(%p)\n", this);
+}
+
+/* ?_LogScheduleTask@_TaskEventLogger@details@Concurrency@@QAEX_N@Z */
+/* ?_LogScheduleTask@_TaskEventLogger@details@Concurrency@@QEAAX_N@Z */
+DEFINE_THISCALL_WRAPPER(_TaskEventLogger__LogScheduleTask, 8)
+void __thiscall _TaskEventLogger__LogScheduleTask(_TaskEventLogger *this, MSVCP_bool continuation)
+{
+    TRACE("(%p %x)\n", this, continuation);
+}
+
+/* ?_LogTaskCompleted@_TaskEventLogger@details@Concurrency@@QAEXXZ */
+/* ?_LogTaskCompleted@_TaskEventLogger@details@Concurrency@@QEAAXXZ */
+DEFINE_THISCALL_WRAPPER(_TaskEventLogger__LogTaskCompleted, 4)
+void __thiscall _TaskEventLogger__LogTaskCompleted(_TaskEventLogger *this)
+{
+    TRACE("(%p)\n", this);
+}
+
+/* ?_LogTaskExecutionCompleted@_TaskEventLogger@details@Concurrency@@QAEXXZ */
+/* ?_LogTaskExecutionCompleted@_TaskEventLogger@details@Concurrency@@QEAAXXZ */
+DEFINE_THISCALL_WRAPPER(_TaskEventLogger__LogTaskExecutionCompleted, 4)
+void __thiscall _TaskEventLogger__LogTaskExecutionCompleted(_TaskEventLogger *this)
+{
+    TRACE("(%p)\n", this);
+}
+
+/* ?_LogWorkItemCompleted@_TaskEventLogger@details@Concurrency@@QAEXXZ */
+/* ?_LogWorkItemCompleted@_TaskEventLogger@details@Concurrency@@QEAAXXZ */
+DEFINE_THISCALL_WRAPPER(_TaskEventLogger__LogWorkItemCompleted, 4)
+void __thiscall _TaskEventLogger__LogWorkItemCompleted(_TaskEventLogger *this)
+{
+    TRACE("(%p)\n", this);
+}
+
+/* ?_LogWorkItemStarted@_TaskEventLogger@details@Concurrency@@QAEXXZ */
+/* ?_LogWorkItemStarted@_TaskEventLogger@details@Concurrency@@QEAAXXZ */
+DEFINE_THISCALL_WRAPPER(_TaskEventLogger__LogWorkItemStarted, 4)
+void __thiscall _TaskEventLogger__LogWorkItemStarted(_TaskEventLogger *this)
+{
+    TRACE("(%p)\n", this);
+}
+#endif

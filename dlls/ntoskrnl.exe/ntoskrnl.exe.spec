@@ -41,6 +41,7 @@
 @ stub IoWritePartitionTable
 @ stdcall -norelay IofCallDriver(ptr ptr)
 @ stdcall -norelay IofCompleteRequest(ptr long)
+@ stdcall -norelay KeAcquireInStackQueuedSpinLock(ptr ptr)
 @ stub KeAcquireInStackQueuedSpinLockAtDpcLevel
 @ stub KeReleaseInStackQueuedSpinLockFromDpcLevel
 @ stub KeSetTimeUpdateNotifyRoutine
@@ -439,7 +440,7 @@
 @ stub IoRemoveShareAccess
 @ stub IoReportDetectedDevice
 @ stub IoReportHalResourceUsage
-@ stub IoReportResourceForDetection
+@ stdcall IoReportResourceForDetection(ptr ptr long ptr ptr long ptr)
 @ stdcall IoReportResourceUsage(ptr ptr ptr long ptr ptr long long ptr)
 @ stub IoReportTargetDeviceChange
 @ stub IoReportTargetDeviceChangeAsynchronous

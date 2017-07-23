@@ -1232,6 +1232,25 @@ int CDECL __fpe_flt_rounds(void)
 }
 
 /*********************************************************************
+ *		fegetround (MSVCR120.@)
+ */
+int CDECL MSVCRT_fegetround(void)
+{
+    return _controlfp(0, 0) & MSVCRT__RC_CHOP;
+}
+
+/*********************************************************************
+ *		fesetround (MSVCR120.@)
+ */
+int CDECL MSVCRT_fesetround(int round_mode)
+{
+    if (round_mode & (~MSVCRT__RC_CHOP))
+        return 1;
+    _controlfp(round_mode, MSVCRT__RC_CHOP);
+    return 0;
+}
+
+/*********************************************************************
  *		_copysign (MSVCRT.@)
  */
 double CDECL MSVCRT__copysign(double num, double sign)
@@ -1843,6 +1862,19 @@ MSVCRT_ldiv_t CDECL MSVCRT_ldiv(MSVCRT_long num, MSVCRT_long denom)
   return ret;
 }
 #endif /* ifdef __i386__ */
+
+/*********************************************************************
+ *		lldiv (MSVCRT.@)
+ */
+MSVCRT_lldiv_t CDECL MSVCRT_lldiv(MSVCRT_longlong num, MSVCRT_longlong denom)
+{
+  MSVCRT_lldiv_t ret;
+
+  ret.quot = num / denom;
+  ret.rem = num % denom;
+
+  return ret;
+}
 
 #ifdef __i386__
 

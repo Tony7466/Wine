@@ -1453,6 +1453,20 @@ VOID WINAPI IoUnregisterShutdownNotification( PDEVICE_OBJECT obj )
 
 
 /***********************************************************************
+ *           IoReportResourceForDetection   (NTOSKRNL.EXE.@)
+ */
+NTSTATUS WINAPI IoReportResourceForDetection( DRIVER_OBJECT *drv_obj, CM_RESOURCE_LIST *drv_list, ULONG drv_size,
+                                              DEVICE_OBJECT *dev_obj, CM_RESOURCE_LIST *dev_list, ULONG dev_size,
+                                              BOOLEAN *conflict )
+{
+    FIXME( "(%p, %p, %u, %p, %p, %u, %p): stub\n", drv_obj, drv_list, drv_size,
+           dev_obj, dev_list, dev_size, conflict );
+
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+
+/***********************************************************************
  *           IoReportResourceUsage    (NTOSKRNL.EXE.@)
  */
 NTSTATUS WINAPI IoReportResourceUsage(PUNICODE_STRING name, PDRIVER_OBJECT drv_obj, PCM_RESOURCE_LIST drv_list,
@@ -3187,4 +3201,17 @@ NTSTATUS WINAPI IoCreateFile(HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBUT
 VOID WINAPI KeClearEvent(PRKEVENT event)
 {
     FIXME("stub: %p\n", event);
+}
+
+/***********************************************************************
+ *           KeAcquireInStackQueuedSpinLock (NTOSKRNL.EXE.@)
+ */
+#ifdef DEFINE_FASTCALL2_ENTRYPOINT
+DEFINE_FASTCALL2_ENTRYPOINT( KeAcquireInStackQueuedSpinLock )
+void WINAPI __regs_KeAcquireInStackQueuedSpinLock( KSPIN_LOCK *spinlock, KLOCK_QUEUE_HANDLE *handle )
+#else
+void WINAPI KeAcquireInStackQueuedSpinLock( KSPIN_LOCK *spinlock, KLOCK_QUEUE_HANDLE *handle )
+#endif
+{
+    FIXME( "stub: %p %p\n", spinlock, handle );
 }
