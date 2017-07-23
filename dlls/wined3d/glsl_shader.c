@@ -59,7 +59,7 @@ static const struct
 resource_type_info[] =
 {
     {0, 0, ""},        /* WINED3D_SHADER_RESOURCE_NONE */
-    {1, 1, ""},        /* WINED3D_SHADER_RESOURCE_BUFFER */
+    {1, 1, "Buffer"},  /* WINED3D_SHADER_RESOURCE_BUFFER */
     {1, 1, "1D"},      /* WINED3D_SHADER_RESOURCE_TEXTURE_1D */
     {2, 2, "2D"},      /* WINED3D_SHADER_RESOURCE_TEXTURE_2D */
     {2, 2, ""},        /* WINED3D_SHADER_RESOURCE_TEXTURE_2DMS */
@@ -2032,6 +2032,10 @@ static void shader_generate_glsl_declarations(const struct wined3d_context *cont
         shadow_sampler = glsl_is_shadow_sampler(shader, ps_args, entry->resource_idx, entry->sampler_idx);
         switch (reg_maps->resource_info[entry->resource_idx].type)
         {
+            case WINED3D_SHADER_RESOURCE_BUFFER:
+                sampler_type = "samplerBuffer";
+                break;
+
             case WINED3D_SHADER_RESOURCE_TEXTURE_1D:
                 if (shadow_sampler)
                     sampler_type = "sampler1DShadow";
@@ -4908,10 +4912,12 @@ static void shader_glsl_resinfo(const struct wined3d_shader_instruction *ins)
 /* FIXME: The current implementation does not handle multisample textures correctly. */
 static void shader_glsl_ld(const struct wined3d_shader_instruction *ins)
 {
+    const struct wined3d_shader_reg_maps *reg_maps = ins->ctx->reg_maps;
     unsigned int resource_idx, sampler_idx, sampler_bind_idx;
     struct glsl_src_param coord_param, lod_param;
     struct glsl_sample_function sample_function;
     DWORD flags = WINED3D_GLSL_SAMPLE_LOAD;
+    BOOL has_lod_param;
 
     if (wined3d_shader_instruction_has_texel_offset(ins))
         flags |= WINED3D_GLSL_SAMPLE_OFFSET;
@@ -4919,12 +4925,20 @@ static void shader_glsl_ld(const struct wined3d_shader_instruction *ins)
     resource_idx = ins->src[1].reg.idx[0].offset;
     sampler_idx = WINED3D_SAMPLER_DEFAULT;
 
+    if (resource_idx >= ARRAY_SIZE(reg_maps->resource_info))
+    {
+        ERR("Invalid resource index %u.\n", resource_idx);
+        return;
+    }
+    has_lod_param = reg_maps->resource_info[resource_idx].type != WINED3D_SHADER_RESOURCE_BUFFER;
+
     shader_glsl_get_sample_function(ins->ctx, resource_idx, sampler_idx, flags, &sample_function);
     shader_glsl_add_src_param(ins, &ins->src[0], sample_function.coord_mask, &coord_param);
     shader_glsl_add_src_param(ins, &ins->src[0], WINED3DSP_WRITEMASK_3, &lod_param);
-    sampler_bind_idx = shader_glsl_find_sampler(&ins->ctx->reg_maps->sampler_map, resource_idx, sampler_idx);
+    sampler_bind_idx = shader_glsl_find_sampler(&reg_maps->sampler_map, resource_idx, sampler_idx);
     shader_glsl_gen_sample_code(ins, sampler_bind_idx, &sample_function, ins->src[1].swizzle,
-            NULL, NULL, lod_param.param_str, &ins->texel_offset, "%s", coord_param.param_str);
+            NULL, NULL, has_lod_param ? lod_param.param_str : NULL, &ins->texel_offset,
+            "%s", coord_param.param_str);
     shader_glsl_release_sample_function(ins->ctx, &sample_function);
 }
 

@@ -448,6 +448,11 @@ typedef struct MSVCRT__ldiv_t {
     MSVCRT_long rem;   /* remainder */
 } MSVCRT_ldiv_t;
 
+typedef struct MSVCRT__lldiv_t {
+    MSVCRT_longlong quot;  /* quotient */
+    MSVCRT_longlong rem;   /* remainder */
+} MSVCRT_lldiv_t;
+
 struct MSVCRT__heapinfo {
   int*           _pentry;
   MSVCRT_size_t  _size;
@@ -1175,6 +1180,8 @@ extern char* __cdecl __unDName(char *,const char*,int,malloc_func_t,free_func_t,
 #define UCRTBASE_SCANF_LEGACY_MSVCRT_COMPATIBILITY       (0x0004)
 
 #define UCRTBASE_SCANF_MASK                              (0x0007)
+
+#define COOPERATIVE_WAIT_TIMEOUT     ~0
 
 typedef enum {
     _FpCodeUnspecified,

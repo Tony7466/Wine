@@ -44,7 +44,7 @@
 @ cdecl _W_Getdays()
 @ cdecl _W_Getmonths()
 @ cdecl _W_Gettnames()
-@ stub _Wcsftime
+@ cdecl _Wcsftime(ptr long wstr ptr ptr)
 @ cdecl __AdjustPointer(ptr ptr)
 @ stub __BuildCatchObject
 @ stub __BuildCatchObjectHelper
@@ -91,7 +91,7 @@
 @ cdecl __dstbias() MSVCRT___p__dstbias
 @ cdecl __fpe_flt_rounds()
 @ cdecl __fpecode()
-@ stub __initialize_lconv_for_unsigned_char
+@ cdecl __initialize_lconv_for_unsigned_char() __lconv_init
 @ stub __intrinsic_abnormal_termination
 @ cdecl -arch=i386,x86_64,arm -norelay __intrinsic_setjmp(ptr) MSVCRT__setjmp
 @ stub __intrinsic_setjmpex
@@ -361,7 +361,7 @@
 @ cdecl _get_current_locale() MSVCRT__get_current_locale
 @ cdecl _get_daylight(ptr)
 @ cdecl _get_doserrno(ptr)
-@ stub _get_dstbias
+@ cdecl _get_dstbias(ptr) MSVCRT__get_dstbias
 @ cdecl _get_errno(ptr)
 @ cdecl _get_fmode(ptr) MSVCRT__get_fmode
 @ cdecl _get_heap_handle()
@@ -2289,13 +2289,13 @@
 @ stub feclearexcept
 @ cdecl fegetenv(ptr) MSVCRT_fegetenv
 @ stub fegetexceptflag
-@ stub fegetround
+@ cdecl fegetround() MSVCRT_fegetround
 @ stub feholdexcept
 @ cdecl feof(ptr) MSVCRT_feof
 @ cdecl ferror(ptr) MSVCRT_ferror
 @ cdecl fesetenv(ptr) MSVCRT_fesetenv
 @ stub fesetexceptflag
-@ stub fesetround
+@ cdecl fesetround(long) MSVCRT_fesetround
 @ stub fetestexcept
 @ cdecl fflush(ptr) MSVCRT_fflush
 @ cdecl fgetc(ptr) MSVCRT_fgetc
@@ -2381,7 +2381,7 @@
 @ cdecl lgammaf(float) MSVCR120_lgammaf
 @ cdecl lgammal(double) MSVCR120_lgammal
 @ cdecl -ret64 llabs(int64) MSVCRT_llabs
-@ stub lldiv
+@ cdecl lldiv(int64 int64) MSVCRT_lldiv
 @ cdecl -ret64 llrint(double) MSVCR120_llrint
 @ cdecl -ret64 llrintf(float) MSVCR120_llrintf
 @ cdecl -ret64 llrintl(double) MSVCR120_llrintl

@@ -5,7 +5,7 @@
 @ cdecl _W_Getdays() ucrtbase._W_Getdays
 @ cdecl _W_Getmonths() ucrtbase._W_Getmonths
 @ cdecl _W_Gettnames() ucrtbase._W_Gettnames
-@ stub _Wcsftime
+@ cdecl _Wcsftime(ptr long wstr ptr ptr) ucrtbase._Wcsftime
 @ cdecl __daylight() ucrtbase.__daylight
 @ cdecl __dstbias() ucrtbase.__dstbias
 @ cdecl __timezone() ucrtbase.__timezone
@@ -23,7 +23,7 @@
 @ cdecl _futime32(long ptr) ucrtbase._futime32
 @ cdecl _futime64(long ptr) ucrtbase._futime64
 @ cdecl _get_daylight(ptr) ucrtbase._get_daylight
-@ stub _get_dstbias
+@ cdecl _get_dstbias(ptr) ucrtbase._get_dstbias
 @ cdecl _get_timezone(ptr) ucrtbase._get_timezone
 @ cdecl _get_tzname(ptr str long long) ucrtbase._get_tzname
 @ cdecl _getsystime(ptr) ucrtbase._getsystime

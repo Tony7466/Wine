@@ -2032,6 +2032,8 @@ enum wined3d_pci_device
     CARD_NVIDIA_GEFORCE_GTX1060     = 0x1c03,
     CARD_NVIDIA_GEFORCE_GTX1070     = 0x1b81,
     CARD_NVIDIA_GEFORCE_GTX1080     = 0x1b80,
+    CARD_NVIDIA_GEFORCE_GTX1080TI   = 0x1b06,
+    CARD_NVIDIA_TITANX_PASCAL       = 0x1b00,
 
     CARD_VMWARE_SVGA3D              = 0x0405,
 
@@ -2592,6 +2594,7 @@ struct wined3d_device
         GLuint tex_3d;
         GLuint tex_cube;
         GLuint tex_2d_array;
+        GLuint tex_buffer;
     } dummy_textures;
 
     /* Default sampler used to emulate the direct resource access without using wined3d_sampler */
@@ -3264,6 +3267,8 @@ DWORD wined3d_buffer_get_memory(struct wined3d_buffer *buffer,
 void wined3d_buffer_invalidate_location(struct wined3d_buffer *buffer, DWORD location) DECLSPEC_HIDDEN;
 void wined3d_buffer_load(struct wined3d_buffer *buffer, struct wined3d_context *context,
         const struct wined3d_state *state) DECLSPEC_HIDDEN;
+BOOL wined3d_buffer_load_location(struct wined3d_buffer *buffer,
+        struct wined3d_context *context, DWORD location) DECLSPEC_HIDDEN;
 BYTE *wined3d_buffer_load_sysmem(struct wined3d_buffer *buffer, struct wined3d_context *context) DECLSPEC_HIDDEN;
 HRESULT wined3d_buffer_copy(struct wined3d_buffer *dst_buffer, unsigned int dst_offset,
         struct wined3d_buffer *src_buffer, unsigned int src_offset, unsigned int size) DECLSPEC_HIDDEN;
