@@ -30,6 +30,10 @@
 #include "gdiplus.h"
 #include "wine/test.h"
 
+static GpStatus (WINAPI *pGdipBitmapGetHistogramSize)(HistogramFormat,UINT*);
+static GpStatus (WINAPI *pGdipBitmapGetHistogram)(GpBitmap*,HistogramFormat,UINT,UINT*,UINT*,UINT*,UINT*);
+static GpStatus (WINAPI *pGdipImageSetAbort)(GpImage*,GdiplusAbort*);
+
 #define expect(expected, got) ok((got) == (expected), "Expected %d, got %d\n", (UINT)(expected), (UINT)(got))
 #define expectf(expected, got) ok(fabs((expected) - (got)) < 0.0001, "Expected %f, got %f\n", (expected), (got))
 
@@ -55,9 +59,7 @@ static void expect_guid(REFGUID expected, REFGUID got, int line, BOOL todo)
     WideCharToMultiByte(CP_ACP, 0, bufferW, sizeof(bufferW)/sizeof(bufferW[0]), buffer, sizeof(buffer), NULL, NULL);
     StringFromGUID2(expected, bufferW, sizeof(bufferW)/sizeof(bufferW[0]));
     WideCharToMultiByte(CP_ACP, 0, bufferW, sizeof(bufferW)/sizeof(bufferW[0]), buffer2, sizeof(buffer2), NULL, NULL);
-    if(todo)
-        todo_wine ok_(__FILE__, line)(IsEqualGUID(expected, got), "Expected %s, got %s\n", buffer2, buffer);
-    else
+    todo_wine_if (todo)
         ok_(__FILE__, line)(IsEqualGUID(expected, got), "Expected %s, got %s\n", buffer2, buffer);
 }
 
@@ -1448,36 +1450,36 @@ static void test_loadwmf(void)
 
     stat = GdipGetImageBounds(img, &bounds, &unit);
     expect(Ok, stat);
-    todo_wine expect(UnitPixel, unit);
+    expect(UnitPixel, unit);
     expectf(0.0, bounds.X);
     expectf(0.0, bounds.Y);
-    todo_wine expectf(320.0, bounds.Width);
-    todo_wine expectf(320.0, bounds.Height);
+    expectf(320.0, bounds.Width);
+    expectf(320.0, bounds.Height);
 
     stat = GdipGetImageHorizontalResolution(img, &res);
     expect(Ok, stat);
-    todo_wine expectf(1440.0, res);
+    expectf(1440.0, res);
 
     stat = GdipGetImageVerticalResolution(img, &res);
     expect(Ok, stat);
-    todo_wine expectf(1440.0, res);
+    expectf(1440.0, res);
 
     memset(&header, 0, sizeof(header));
     stat = GdipGetMetafileHeaderFromMetafile((GpMetafile*)img, &header);
     expect(Ok, stat);
     if (stat == Ok)
     {
-        todo_wine expect(MetafileTypeWmfPlaceable, header.Type);
+        expect(MetafileTypeWmfPlaceable, header.Type);
         todo_wine expect(sizeof(wmfimage)-sizeof(WmfPlaceableFileHeader), header.Size);
         todo_wine expect(0x300, header.Version);
         expect(0, header.EmfPlusFlags);
-        todo_wine expectf(1440.0, header.DpiX);
-        todo_wine expectf(1440.0, header.DpiY);
+        expectf(1440.0, header.DpiX);
+        expectf(1440.0, header.DpiY);
         expect(0, header.X);
         expect(0, header.Y);
-        todo_wine expect(320, header.Width);
-        todo_wine expect(320, header.Height);
-        todo_wine expect(1, U(header).WmfHeader.mtType);
+        expect(320, header.Width);
+        expect(320, header.Height);
+        expect(1, U(header).WmfHeader.mtType);
         expect(0, header.EmfPlusHeaderSize);
         expect(0, header.LogicalDpiX);
         expect(0, header.LogicalDpiY);
@@ -1525,17 +1527,17 @@ static void test_createfromwmf(void)
     expect(Ok, stat);
     if (stat == Ok)
     {
-        todo_wine expect(MetafileTypeWmfPlaceable, header.Type);
+        expect(MetafileTypeWmfPlaceable, header.Type);
         todo_wine expect(sizeof(wmfimage)-sizeof(WmfPlaceableFileHeader), header.Size);
         todo_wine expect(0x300, header.Version);
         expect(0, header.EmfPlusFlags);
-        todo_wine expectf(1440.0, header.DpiX);
-        todo_wine expectf(1440.0, header.DpiY);
+        expectf(1440.0, header.DpiX);
+        expectf(1440.0, header.DpiY);
         expect(0, header.X);
         expect(0, header.Y);
-        todo_wine expect(320, header.Width);
-        todo_wine expect(320, header.Height);
-        todo_wine expect(1, U(header).WmfHeader.mtType);
+        expect(320, header.Width);
+        expect(320, header.Height);
+        expect(1, U(header).WmfHeader.mtType);
         expect(0, header.EmfPlusHeaderSize);
         expect(0, header.LogicalDpiX);
         expect(0, header.LogicalDpiY);
@@ -3169,12 +3171,7 @@ static void test_image_properties(void)
 
         status = GdipGetPropertyCount(image, &prop_count);
         ok(status == Ok, "%u: GdipGetPropertyCount error %d\n", i, status);
-        if (td[i].image_data == pngimage || td[i].image_data == jpgimage)
-        todo_wine
-        ok(td[i].prop_count == prop_count || td[i].prop_count2 == prop_count,
-           " %u: expected property count %u or %u, got %u\n",
-           i, td[i].prop_count, td[i].prop_count2, prop_count);
-        else
+        todo_wine_if(td[i].image_data == pngimage || td[i].image_data == jpgimage)
         ok(td[i].prop_count == prop_count || td[i].prop_count2 == prop_count,
            " %u: expected property count %u or %u, got %u\n",
            i, td[i].prop_count, td[i].prop_count2, prop_count);
@@ -4298,10 +4295,8 @@ static void test_DrawImage_scale(void)
         expect(Ok, status);
 
         match = memcmp(dst_8x1, td[i].image, sizeof(dst_8x1)) == 0;
-        if (!match && td[i].todo)
-        todo_wine ok(match, "%d: data should match\n", i);
-        else
-        ok(match, "%d: data should match\n", i);
+        todo_wine_if (!match && td[i].todo)
+            ok(match, "%d: data should match\n", i);
         if (!match)
         {
             UINT i, size = sizeof(dst_8x1);
@@ -4679,9 +4674,7 @@ static void test_supported_encoders(void)
         ok(hr == S_OK, "CreateStreamOnHGlobal error %#x\n", hr);
 
         status = GdipSaveImageToStream((GpImage *)bm, stream, &clsid, NULL);
-        if (td[i].todo)
-            todo_wine ok(status == Ok, "GdipSaveImageToStream error %d\n", status);
-        else
+        todo_wine_if (td[i].todo)
             ok(status == Ok, "GdipSaveImageToStream error %d\n", status);
 
         IStream_Release(stream);
@@ -4796,8 +4789,161 @@ static void test_getadjustedpalette(void)
     GdipDisposeImageAttributes(imageattributes);
 }
 
+static void test_histogram(void)
+{
+    UINT ch0[256], ch1[256], ch2[256], ch3[256];
+    HistogramFormat test_formats[] =
+    {
+        HistogramFormatARGB,
+        HistogramFormatPARGB,
+        HistogramFormatRGB,
+        HistogramFormatGray,
+        HistogramFormatB,
+        HistogramFormatG,
+        HistogramFormatR,
+        HistogramFormatA,
+    };
+    const UINT WIDTH = 8, HEIGHT = 16;
+    UINT num, i, x;
+    GpStatus stat;
+    GpBitmap *bm;
+
+    if (!pGdipBitmapGetHistogramSize)
+    {
+        win_skip("GdipBitmapGetHistogramSize is not supported\n");
+        return;
+    }
+
+    stat = pGdipBitmapGetHistogramSize(HistogramFormatARGB, NULL);
+    expect(InvalidParameter, stat);
+
+    stat = pGdipBitmapGetHistogramSize(0xff, NULL);
+    expect(InvalidParameter, stat);
+
+    num = 123;
+    stat = pGdipBitmapGetHistogramSize(10, &num);
+    expect(Ok, stat);
+    expect(256, num);
+
+    for (i = 0; i < sizeof(test_formats)/sizeof(test_formats[0]); i++)
+    {
+        num = 0;
+        stat = pGdipBitmapGetHistogramSize(test_formats[i], &num);
+        expect(Ok, stat);
+        expect(256, num);
+    }
+
+    bm = NULL;
+    stat = GdipCreateBitmapFromScan0(WIDTH, HEIGHT, 0, PixelFormat24bppRGB, NULL, &bm);
+    expect(Ok, stat);
+
+    /* Three solid rgb rows, next three rows are rgb shades. */
+    for (x = 0; x < WIDTH; x++)
+    {
+        GdipBitmapSetPixel(bm, x, 0, 0xffff0000);
+        GdipBitmapSetPixel(bm, x, 1, 0xff00ff00);
+        GdipBitmapSetPixel(bm, x, 2, 0xff0000ff);
+
+        GdipBitmapSetPixel(bm, x, 3, 0xff010000);
+        GdipBitmapSetPixel(bm, x, 4, 0xff003f00);
+        GdipBitmapSetPixel(bm, x, 5, 0xff000020);
+    }
+
+    stat = pGdipBitmapGetHistogram(NULL, HistogramFormatRGB, 256, ch0, ch1, ch2, ch3);
+    expect(InvalidParameter, stat);
+
+    stat = pGdipBitmapGetHistogram(bm, 123, 256, ch0, ch1, ch2, ch3);
+    expect(InvalidParameter, stat);
+
+    stat = pGdipBitmapGetHistogram(bm, 123, 256, ch0, ch1, ch2, NULL);
+    expect(InvalidParameter, stat);
+
+    stat = pGdipBitmapGetHistogram(bm, 123, 256, ch0, ch1, NULL, NULL);
+    expect(InvalidParameter, stat);
+
+    stat = pGdipBitmapGetHistogram(bm, 123, 256, ch0, NULL, NULL, NULL);
+    expect(InvalidParameter, stat);
+
+    /* Requested format matches bitmap format */
+    stat = pGdipBitmapGetHistogram(bm, HistogramFormatRGB, 256, ch0, ch1, ch2, ch3);
+    expect(InvalidParameter, stat);
+
+    stat = pGdipBitmapGetHistogram(bm, HistogramFormatRGB, 100, ch0, ch1, ch2, NULL);
+    expect(InvalidParameter, stat);
+
+    stat = pGdipBitmapGetHistogram(bm, HistogramFormatRGB, 257, ch0, ch1, ch2, NULL);
+    expect(InvalidParameter, stat);
+
+    /* Channel 3 is not used, must be NULL */
+    stat = pGdipBitmapGetHistogram(bm, HistogramFormatRGB, 256, ch0, ch1, ch2, NULL);
+    expect(Ok, stat);
+
+    ok(ch0[0xff] == WIDTH, "Got red (0xff) %u\n", ch0[0xff]);
+    ok(ch1[0xff] == WIDTH, "Got green (0xff) %u\n", ch1[0xff]);
+    ok(ch2[0xff] == WIDTH, "Got blue (0xff) %u\n", ch1[0xff]);
+    ok(ch0[0x01] == WIDTH, "Got red (0x01) %u\n", ch0[0x01]);
+    ok(ch1[0x3f] == WIDTH, "Got green (0x3f) %u\n", ch1[0x3f]);
+    ok(ch2[0x20] == WIDTH, "Got blue (0x20) %u\n", ch1[0x20]);
+
+    /* ARGB histogram from RGB data. */
+    stat = pGdipBitmapGetHistogram(bm, HistogramFormatARGB, 256, ch0, ch1, ch2, NULL);
+    expect(InvalidParameter, stat);
+
+    stat = pGdipBitmapGetHistogram(bm, HistogramFormatARGB, 256, ch0, ch1, ch2, ch3);
+    expect(Ok, stat);
+
+    ok(ch1[0xff] == WIDTH, "Got red (0xff) %u\n", ch1[0xff]);
+    ok(ch2[0xff] == WIDTH, "Got green (0xff) %u\n", ch2[0xff]);
+    ok(ch3[0xff] == WIDTH, "Got blue (0xff) %u\n", ch3[0xff]);
+    ok(ch1[0x01] == WIDTH, "Got red (0x01) %u\n", ch1[0x01]);
+    ok(ch2[0x3f] == WIDTH, "Got green (0x3f) %u\n", ch2[0x3f]);
+    ok(ch3[0x20] == WIDTH, "Got blue (0x20) %u\n", ch3[0x20]);
+
+    ok(ch0[0xff] == WIDTH * HEIGHT, "Got alpha (0xff) %u\n", ch0[0xff]);
+
+    /* Request grayscale histogram from RGB bitmap. */
+    stat = pGdipBitmapGetHistogram(bm, HistogramFormatGray, 256, ch0, ch1, ch2, ch3);
+    expect(InvalidParameter, stat);
+
+    stat = pGdipBitmapGetHistogram(bm, HistogramFormatGray, 256, ch0, ch1, ch2, NULL);
+    expect(InvalidParameter, stat);
+
+    stat = pGdipBitmapGetHistogram(bm, HistogramFormatGray, 256, ch0, ch1, NULL, NULL);
+    expect(InvalidParameter, stat);
+
+    stat = pGdipBitmapGetHistogram(bm, HistogramFormatGray, 256, ch0, NULL, NULL, NULL);
+    expect(Ok, stat);
+
+    GdipDisposeImage((GpImage*)bm);
+}
+
+static void test_imageabort(void)
+{
+    GpStatus stat;
+    GpBitmap *bm;
+
+    if (!pGdipImageSetAbort)
+    {
+        win_skip("GdipImageSetAbort() is not supported.\n");
+        return;
+    }
+
+    bm = NULL;
+    stat = GdipCreateBitmapFromScan0(8, 8, 0, PixelFormat24bppRGB, NULL, &bm);
+    expect(Ok, stat);
+
+    stat = pGdipImageSetAbort(NULL, NULL);
+    expect(InvalidParameter, stat);
+
+    stat = pGdipImageSetAbort((GpImage*)bm, NULL);
+    expect(Ok, stat);
+
+    GdipDisposeImage((GpImage*)bm);
+}
+
 START_TEST(image)
 {
+    HMODULE mod = GetModuleHandleA("gdiplus.dll");
     struct GdiplusStartupInput gdiplusStartupInput;
     ULONG_PTR gdiplusToken;
 
@@ -4807,6 +4953,10 @@ START_TEST(image)
     gdiplusStartupInput.SuppressExternalCodecs      = 0;
 
     GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+
+    pGdipBitmapGetHistogramSize = (void*)GetProcAddress(mod, "GdipBitmapGetHistogramSize");
+    pGdipBitmapGetHistogram = (void*)GetProcAddress(mod, "GdipBitmapGetHistogram");
+    pGdipImageSetAbort = (void*)GetProcAddress(mod, "GdipImageSetAbort");
 
     test_supported_encoders();
     test_CloneBitmapArea();
@@ -4854,6 +5004,8 @@ START_TEST(image)
     test_dispose();
     test_createeffect();
     test_getadjustedpalette();
+    test_histogram();
+    test_imageabort();
 
     GdiplusShutdown(gdiplusToken);
 }

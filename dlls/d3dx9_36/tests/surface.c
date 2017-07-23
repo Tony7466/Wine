@@ -175,6 +175,7 @@ static HRESULT create_file(const char *filename, const unsigned char *data, cons
 #define DDS_LINEARSIZE 0x00080000
 
 /* dds_header.caps */
+#define DDSCAPS_ALPHA    0x00000002
 #define DDS_CAPS_TEXTURE 0x00001000
 
 /* dds_pixel_format.flags */
@@ -199,7 +200,6 @@ struct dds_pixel_format
 
 struct dds_header
 {
-    DWORD magic;
     DWORD size;
     DWORD flags;
     DWORD height;
@@ -211,7 +211,9 @@ struct dds_header
     struct dds_pixel_format pixel_format;
     DWORD caps;
     DWORD caps2;
-    DWORD reserved2[3];
+    DWORD caps3;
+    DWORD caps4;
+    DWORD reserved2;
 };
 
 /* fills dds_header with reasonable default values */
@@ -219,7 +221,6 @@ static void fill_dds_header(struct dds_header *header)
 {
     memset(header, 0, sizeof(*header));
 
-    header->magic = MAKEFOURCC('D','D','S',' ');
     header->size = sizeof(*header);
     header->flags = DDS_CAPS | DDS_WIDTH | DDS_HEIGHT | DDS_PIXELFORMAT;
     header->height = 4;
@@ -247,10 +248,12 @@ static void check_dds_pixel_format_(unsigned int line,
     D3DXIMAGE_INFO info;
     struct
     {
+        DWORD magic;
         struct dds_header header;
         BYTE data[256];
     } dds;
 
+    dds.magic = MAKEFOURCC('D','D','S',' ');
     fill_dds_header(&dds.header);
     dds.header.pixel_format.flags = flags;
     dds.header.pixel_format.fourcc = fourcc;
@@ -278,6 +281,7 @@ static void test_dds_header_handling(void)
     D3DXIMAGE_INFO info;
     struct
     {
+        DWORD magic;
         struct dds_header header;
         BYTE data[4096 * 1024];
     } *dds;
@@ -396,9 +400,10 @@ static void test_dds_header_handling(void)
 
     for (i = 0; i < sizeof(tests) / sizeof(tests[0]); i++)
     {
-        DWORD file_size = sizeof(dds->header) + tests[i].pixel_data_size;
+        DWORD file_size = sizeof(dds->magic) + sizeof(dds->header) + tests[i].pixel_data_size;
         assert(file_size <= sizeof(*dds));
 
+        dds->magic = MAKEFOURCC('D','D','S',' ');
         fill_dds_header(&dds->header);
         dds->header.flags |= tests[i].flags;
         dds->header.width = tests[i].width;
@@ -803,7 +808,7 @@ static void test_D3DXLoadSurface(IDirect3DDevice9 *device)
     hr = D3DXLoadSurfaceFromMemory(surf, NULL, &destrect, pixdata, D3DFMT_A8R8G8B8, sizeof(pixdata), NULL, &rect, D3DX_FILTER_NONE, 0);
     ok(hr == D3DERR_INVALIDCALL, "D3DXLoadSurfaceFromMemory returned %#x, expected %#x\n", hr, D3DERR_INVALIDCALL);
 
-    SetRect(&destrect, 0, 0, 0, 0); /* left = right, top = bottom */
+    SetRect(&destrect, 1, 2, 1, 2); /* left = right, top = bottom */
     hr = D3DXLoadSurfaceFromMemory(surf, NULL, &destrect, pixdata, D3DFMT_A8R8G8B8, sizeof(pixdata), NULL, &rect, D3DX_FILTER_NONE, 0);
     /* fails when debug version of d3d9 is used */
     ok(hr == D3D_OK || broken(hr == D3DERR_INVALIDCALL), "D3DXLoadSurfaceFromMemory returned %#x, expected %#x\n", hr, D3D_OK);
@@ -1231,6 +1236,12 @@ static void test_D3DXSaveSurfaceToFileInMemory(IDirect3DDevice9 *device)
     RECT rect;
     ID3DXBuffer *buffer;
     IDirect3DSurface9 *surface;
+    struct
+    {
+         DWORD magic;
+         struct dds_header header;
+         BYTE *data;
+    } *dds;
 
     hr = IDirect3DDevice9_CreateOffscreenPlainSurface(device, 4, 4, D3DFMT_A8R8G8B8, D3DPOOL_SCRATCH, &surface, NULL);
     if (FAILED(hr)) {
@@ -1238,7 +1249,7 @@ static void test_D3DXSaveSurfaceToFileInMemory(IDirect3DDevice9 *device)
        return;
     }
 
-    SetRect(&rect, 0, 0, 0, 0);
+    SetRectEmpty(&rect);
     hr = D3DXSaveSurfaceToFileInMemory(&buffer, D3DXIFF_BMP, surface, NULL, &rect);
     /* fails with the debug version of d3d9 */
     ok(hr == D3D_OK || broken(hr == D3DERR_INVALIDCALL), "D3DXSaveSurfaceToFileInMemory returned %#x, expected %#x\n", hr, D3D_OK);
@@ -1247,6 +1258,42 @@ static void test_D3DXSaveSurfaceToFileInMemory(IDirect3DDevice9 *device)
         ok(size > 0, "ID3DXBuffer_GetBufferSize returned %u, expected > 0\n", size);
         ID3DXBuffer_Release(buffer);
     }
+
+    SetRectEmpty(&rect);
+    hr = D3DXSaveSurfaceToFileInMemory(&buffer, D3DXIFF_DDS, surface, NULL, &rect);
+    todo_wine ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    if (SUCCEEDED(hr))
+    {
+        dds = ID3DXBuffer_GetBufferPointer(buffer);
+
+        ok(dds->magic == MAKEFOURCC('D','D','S',' '), "Got unexpected DDS signature %#x.\n", dds->magic);
+        ok(dds->header.size == sizeof(dds->header), "Got unexpected DDS size %u.\n", dds->header.size);
+        ok(!dds->header.height, "Got unexpected height %u.\n", dds->header.height);
+        ok(!dds->header.width, "Got unexpected width %u.\n", dds->header.width);
+        ok(!dds->header.depth, "Got unexpected depth %u.\n", dds->header.depth);
+        ok(!dds->header.miplevels, "Got unexpected miplevels %u.\n", dds->header.miplevels);
+        ok(!dds->header.pitch_or_linear_size, "Got unexpected pitch_or_linear_size %u.\n", dds->header.pitch_or_linear_size);
+        ok(dds->header.caps == (DDS_CAPS_TEXTURE | DDSCAPS_ALPHA), "Got unexpected caps %#x.\n", dds->header.caps);
+        ok(dds->header.flags == (DDS_CAPS | DDS_HEIGHT | DDS_WIDTH | DDS_PIXELFORMAT),
+                "Got unexpected flags %#x.\n", dds->header.flags);
+        ID3DXBuffer_Release(buffer);
+    }
+
+    hr = D3DXSaveSurfaceToFileInMemory(&buffer, D3DXIFF_DDS, surface, NULL, NULL);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+
+    dds = ID3DXBuffer_GetBufferPointer(buffer);
+    ok(dds->magic == MAKEFOURCC('D','D','S',' '), "Got unexpected DDS signature %#x.\n", dds->magic);
+    ok(dds->header.size == sizeof(dds->header), "Got unexpected DDS size %u.\n", dds->header.size);
+    ok(dds->header.height == 4, "Got unexpected height %u.\n", dds->header.height);
+    ok(dds->header.width == 4, "Got unexpected width %u.\n", dds->header.width);
+    ok(!dds->header.depth, "Got unexpected depth %u.\n", dds->header.depth);
+    ok(!dds->header.miplevels, "Got unexpected miplevels %u.\n", dds->header.miplevels);
+    ok(!dds->header.pitch_or_linear_size, "Got unexpected pitch_or_linear_size %u.\n", dds->header.pitch_or_linear_size);
+    todo_wine ok(dds->header.caps == (DDS_CAPS_TEXTURE | DDSCAPS_ALPHA), "Got unexpected caps %#x.\n", dds->header.caps);
+    ok(dds->header.flags == (DDS_CAPS | DDS_HEIGHT | DDS_WIDTH | DDS_PIXELFORMAT),
+            "Got unexpected flags %#x.\n", dds->header.flags);
+    ID3DXBuffer_Release(buffer);
 
     IDirect3DSurface9_Release(surface);
 }
@@ -1341,7 +1388,7 @@ next_tests:
     SetRect(&rect, -1, -1, 2, 2);
     hr = D3DXSaveSurfaceToFileA("saved_surface.bmp", D3DXIFF_BMP, surface, NULL, &rect);
     ok(hr == D3DERR_INVALIDCALL, "D3DXSaveSurfaceToFileA returned %#x, expected %#x\n", hr, D3DERR_INVALIDCALL);
-    SetRect(&rect, 0, 0, 0, 0);
+    SetRectEmpty(&rect);
     hr = D3DXSaveSurfaceToFileA("saved_surface.bmp", D3DXIFF_BMP, surface, NULL, &rect);
     /* fails when debug version of d3d9 is used */
     ok(hr == D3D_OK || broken(hr == D3DERR_INVALIDCALL), "D3DXSaveSurfaceToFileA returned %#x, expected %#x\n", hr, D3D_OK);

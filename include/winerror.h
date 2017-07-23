@@ -60,6 +60,7 @@
 #define FACILITY_FVE                         49
 #define FACILITY_WINDOWS_DEFENDER            80
 #define FACILITY_DIRECT3D11                  0x87c
+#define FACILITY_AUDCLNT                     0x889
 
 #define SEVERITY_SUCCESS    0
 #define SEVERITY_ERROR      1
@@ -2639,6 +2640,16 @@ static inline HRESULT HRESULT_FROM_WIN32(unsigned int x)
 #define NTE_TOKEN_KEYSET_STORAGE_FULL                      _HRESULT_TYPEDEF_(0x80090023)
 #define NTE_TEMPORARY_PROFILE                              _HRESULT_TYPEDEF_(0x80090024)
 #define NTE_FIXEDPARAMETER                                 _HRESULT_TYPEDEF_(0x80090025)
+#define NTE_INVALID_HANDLE                                 _HRESULT_TYPEDEF_(0x80090026)
+#define NTE_INVALID_PARAMETER                              _HRESULT_TYPEDEF_(0x80090027)
+#define NTE_BUFFER_TOO_SMALL                               _HRESULT_TYPEDEF_(0x80090028)
+#define NTE_NOT_SUPPORTED                                  _HRESULT_TYPEDEF_(0x80090029)
+#define NTE_NO_MORE_ITEMS                                  _HRESULT_TYPEDEF_(0x8009002A)
+#define NTE_BUFFERS_OVERLAP                                _HRESULT_TYPEDEF_(0x8009002B)
+#define NTE_DECRYPTION_FAILURE                             _HRESULT_TYPEDEF_(0x8009002C)
+#define NTE_INTERNAL_ERROR                                 _HRESULT_TYPEDEF_(0x8009002D)
+#define NTE_UI_REQUIRED                                    _HRESULT_TYPEDEF_(0x8009002E)
+#define NTE_HMAC_NOT_SUPPORTED                             _HRESULT_TYPEDEF_(0x8009002F)
 #define NTE_OP_OK                                          _HRESULT_TYPEDEF_(0)
 
 #define SEC_E_INSUFFICIENT_MEMORY                          _HRESULT_TYPEDEF_(0x80090300)
@@ -2998,6 +3009,11 @@ static inline HRESULT HRESULT_FROM_WIN32(unsigned int x)
 #define SCARD_W_CACHE_ITEM_NOT_FOUND                       _HRESULT_TYPEDEF_(0x80100070)
 #define SCARD_W_CACHE_ITEM_STALE                           _HRESULT_TYPEDEF_(0x80100071)
 #define SCARD_W_CACHE_ITEM_TOO_BIG                         _HRESULT_TYPEDEF_(0x80100072)
+
+#define D3D11_ERROR_TOO_MANY_UNIQUE_STATE_OBJECTS          _HRESULT_TYPEDEF_(0x887c0001)
+#define D3D11_ERROR_FILE_NOT_FOUND                         _HRESULT_TYPEDEF_(0x887c0002)
+#define D3D11_ERROR_TOO_MANY_UNIQUE_VIEW_OBJECTS           _HRESULT_TYPEDEF_(0x887c0003)
+#define D3D11_ERROR_DEFERRED_CONTEXT_MAP_WITHOUT_INITIAL_DISCARD  _HRESULT_TYPEDEF_(0x887c0004)
 
 #define WINCODEC_ERR_WRONGSTATE                            _HRESULT_TYPEDEF_(0x88982f04)
 #define WINCODEC_ERR_VALUEOUTOFRANGE                       _HRESULT_TYPEDEF_(0x88982f05)

@@ -292,6 +292,7 @@ DWORD WINAPI GetLongPathNameW( LPCWSTR shortpath, LPWSTR longpath, DWORD longlen
     BOOL                unixabsolute;
     WIN32_FIND_DATAW    wfd;
     HANDLE              goit;
+    BOOL                is_legal_8dot3;
 
     if (!shortpath)
     {
@@ -334,22 +335,12 @@ DWORD WINAPI GetLongPathNameW( LPCWSTR shortpath, LPWSTR longpath, DWORD longlen
         /* check for path delimiters and reproduce them */
         if (shortpath[sp] == '\\' || shortpath[sp] == '/')
         {
-            if (!lp || tmplongpath[lp-1] != '\\')
-            {
-                /* strip double "\\" */
-                tmplongpath[lp++] = '\\';
-            }
+            tmplongpath[lp++] = shortpath[sp++];
             tmplongpath[lp] = 0; /* terminate string */
-            sp++;
             continue;
         }
 
         p = shortpath + sp;
-        if (sp == 0 && p[0] == '.' && (p[1] == '/' || p[1] == '\\'))
-        {
-            tmplongpath[lp++] = *p++;
-            tmplongpath[lp++] = *p++;
-        }
         for (; *p && *p != '/' && *p != '\\'; p++);
         tmplen = p - (shortpath + sp);
         lstrcpynW(tmplongpath + lp, shortpath + sp, tmplen + 1);
@@ -364,7 +355,7 @@ DWORD WINAPI GetLongPathNameW( LPCWSTR shortpath, LPWSTR longpath, DWORD longlen
             }
         }
 
-        /* Check if the file exists and use the existing file name */
+        /* Check if the file exists */
         goit = FindFirstFileW(tmplongpath, &wfd);
         if (goit == INVALID_HANDLE_VALUE)
         {
@@ -373,7 +364,12 @@ DWORD WINAPI GetLongPathNameW( LPCWSTR shortpath, LPWSTR longpath, DWORD longlen
             return 0;
         }
         FindClose(goit);
-        strcpyW(tmplongpath + lp, wfd.cFileName);
+
+        is_legal_8dot3 = FALSE;
+        CheckNameLegalDOS8Dot3W(tmplongpath + lp, NULL, 0, NULL, &is_legal_8dot3);
+        /* Use the existing file name if it's a short name */
+        if (is_legal_8dot3)
+            strcpyW(tmplongpath + lp, wfd.cFileName);
         lp += strlenW(tmplongpath + lp);
         sp += tmplen;
     }
@@ -491,24 +487,12 @@ DWORD WINAPI GetShortPathNameW( LPCWSTR longpath, LPWSTR shortpath, DWORD shortl
         /* check for path delimiters and reproduce them */
         if (longpath[lp] == '\\' || longpath[lp] == '/')
         {
-            if (!sp || tmpshortpath[sp-1] != '\\')
-            {
-                /* strip double "\\" */
-                tmpshortpath[sp] = '\\';
-                sp++;
-            }
+            tmpshortpath[sp++] = longpath[lp++];
             tmpshortpath[sp] = 0; /* terminate string */
-            lp++;
             continue;
         }
 
         p = longpath + lp;
-        if (lp == 0 && p[0] == '.' && (p[1] == '/' || p[1] == '\\'))
-        {
-            tmpshortpath[sp++] = *p++;
-            tmpshortpath[sp++] = *p++;
-            lp += 2;
-        }
         for (; *p && *p != '/' && *p != '\\'; p++);
         tmplen = p - (longpath + lp);
         lstrcpynW(tmpshortpath + sp, longpath + lp, tmplen + 1);
@@ -1648,13 +1632,19 @@ BOOL WINAPI RemoveDirectoryW( LPCWSTR path )
     status = NtOpenFile( &handle, DELETE | SYNCHRONIZE, &attr, &io,
                          FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                          FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT );
-    if (status == STATUS_SUCCESS)
-        status = wine_nt_to_unix_file_name( &nt_name, &unix_name, FILE_OPEN, FALSE );
-    RtlFreeUnicodeString( &nt_name );
-
     if (status != STATUS_SUCCESS)
     {
         SetLastError( RtlNtStatusToDosError(status) );
+        RtlFreeUnicodeString( &nt_name );
+        return FALSE;
+    }
+
+    status = wine_nt_to_unix_file_name( &nt_name, &unix_name, FILE_OPEN, FALSE );
+    RtlFreeUnicodeString( &nt_name );
+    if (status != STATUS_SUCCESS)
+    {
+        SetLastError( RtlNtStatusToDosError(status) );
+        NtClose( handle );
         return FALSE;
     }
 
@@ -2080,4 +2070,24 @@ BOOL WINAPI CheckNameLegalDOS8Dot3W(const WCHAR *name, char *oemname, DWORD oemn
     if (contains_spaces_ret) *contains_spaces_ret = contains_spaces;
 
     return TRUE;
+}
+
+/*************************************************************************
+ *           SetSearchPathMode   (KERNEL32.@)
+ */
+BOOL WINAPI SetSearchPathMode(DWORD flags)
+{
+    FIXME("(%x): stub\n", flags);
+    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+    return FALSE;
+}
+
+/*************************************************************************
+ *           SetDefaultDllDirectories   (KERNEL32.@)
+ */
+BOOL WINAPI SetDefaultDllDirectories(DWORD flags)
+{
+    FIXME("(%x): stub\n", flags);
+    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+    return FALSE;
 }

@@ -152,6 +152,7 @@ static void test_customdraw(void) {
    DWORD       iterationNumber;
    WNDCLASSA wc;
    LRESULT   lResult;
+   POINT orig_pos;
 
    /* Create a class to use the custom draw wndproc */
    wc.style = CS_HREDRAW | CS_VREDRAW;
@@ -165,6 +166,8 @@ static void test_customdraw(void) {
    wc.lpszClassName = "CustomDrawClass";
    wc.lpfnWndProc = custom_draw_wnd_proc;
    RegisterClassA(&wc);
+
+   GetCursorPos(&orig_pos);
 
    for (iterationNumber = 0;
         iterationNumber < sizeof(expectedResults)/sizeof(expectedResults[0]);
@@ -238,7 +241,7 @@ static void test_customdraw(void) {
        DestroyWindow(parent);
    }
 
-
+   SetCursorPos(orig_pos.x, orig_pos.y);
 }
 
 static const CHAR testcallbackA[]  = "callback";
@@ -294,7 +297,7 @@ static void test_gettext(void)
     TTTOOLINFOA toolinfoA;
     TTTOOLINFOW toolinfoW;
     LRESULT r;
-    CHAR bufA[10] = "";
+    CHAR bufA[16] = "";
     WCHAR bufW[10] = { 0 };
     DWORD length, style;
 
@@ -476,7 +479,7 @@ todo_wine
     toolinfoA.lpszText = bufA;
     r = SendMessageA(hwnd, TTM_GETTEXTA, 0, (LPARAM)&toolinfoA);
     ok(!r, "got %ld\n", r);
-    ok(!strcmp(toolinfoA.lpszText, testtip2A), "expected %s, got %s\n", testtipA, toolinfoA.lpszText);
+    ok(!strcmp(toolinfoA.lpszText, testtip2A), "expected %s, got %s\n", testtip2A, toolinfoA.lpszText);
 
     DestroyWindow(hwnd);
 }
@@ -1010,6 +1013,43 @@ static void test_setinfo(void)
    DestroyWindow(parent2);
 }
 
+static void test_margin(void)
+{
+    RECT r, r1;
+    HWND hwnd;
+    DWORD ret;
+
+    hwnd = CreateWindowExA(0, TOOLTIPS_CLASSA, NULL, 0,
+                           10, 10, 300, 100,
+                           NULL, NULL, NULL, 0);
+    ok(hwnd != NULL, "failed to create tooltip wnd\n");
+
+    ret = SendMessageA(hwnd, TTM_SETMARGIN, 0, 0);
+    ok(!ret, "got %d\n", ret);
+
+    SetRect(&r, -1, -1, 1, 1);
+    ret = SendMessageA(hwnd, TTM_SETMARGIN, 0, (LPARAM)&r);
+    ok(!ret, "got %d\n", ret);
+
+    SetRectEmpty(&r1);
+    ret = SendMessageA(hwnd, TTM_GETMARGIN, 0, (LPARAM)&r1);
+    ok(!ret, "got %d\n", ret);
+    ok(EqualRect(&r, &r1), "got %s, was %s\n", wine_dbgstr_rect(&r1), wine_dbgstr_rect(&r));
+
+    ret = SendMessageA(hwnd, TTM_SETMARGIN, 0, 0);
+    ok(!ret, "got %d\n", ret);
+
+    SetRectEmpty(&r1);
+    ret = SendMessageA(hwnd, TTM_GETMARGIN, 0, (LPARAM)&r1);
+    ok(!ret, "got %d\n", ret);
+    ok(EqualRect(&r, &r1), "got %s, was %s\n", wine_dbgstr_rect(&r1), wine_dbgstr_rect(&r));
+
+    ret = SendMessageA(hwnd, TTM_GETMARGIN, 0, 0);
+    ok(!ret, "got %d\n", ret);
+
+    DestroyWindow(hwnd);
+}
+
 START_TEST(tooltips)
 {
     InitCommonControls();
@@ -1022,4 +1062,5 @@ START_TEST(tooltips)
     test_longtextW();
     test_track();
     test_setinfo();
+    test_margin();
 }

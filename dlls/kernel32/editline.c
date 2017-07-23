@@ -428,9 +428,9 @@ static void    WCEL_MoveToHist(WCEL_Context* ctx, int idx)
     if (WCEL_Grow(ctx, len))
     {
 	WCEL_InsertString(ctx, data);
-	HeapFree(GetProcessHeap(), 0, data);
 	ctx->histPos = idx;
     }
+    HeapFree(GetProcessHeap(), 0, data);
 }
 
 static void    WCEL_FindPrevInHist(WCEL_Context* ctx)
@@ -469,6 +469,7 @@ static void    WCEL_FindPrevInHist(WCEL_Context* ctx)
               return;
            }
        }
+       HeapFree(GetProcessHeap(), 0, data);
     } while (ctx->histPos != startPos);
 
     return;
@@ -917,6 +918,7 @@ WCHAR* CONSOLE_Readline(HANDLE hConsoleIn, BOOL can_pos_cursor)
     void		(*func)(struct WCEL_Context* ctx);
     DWORD               mode, input_mode, ks;
     int                 use_emacs;
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
 
     memset(&ctx, 0, sizeof(ctx));
     ctx.hConIn = hConsoleIn;
@@ -996,6 +998,10 @@ WCHAR* CONSOLE_Readline(HANDLE hConsoleIn, BOOL can_pos_cursor)
                      (ENABLE_INSERT_MODE|ENABLE_EXTENDED_FLAGS);
         if (ctx.insertkey)
             ctx.insert = !ctx.insert;
+
+        GetConsoleScreenBufferInfo(ctx.hConOut, &csbi);
+        if (ctx.csbi.wAttributes != csbi.wAttributes)
+            ctx.csbi.wAttributes = csbi.wAttributes;
 
 	if (func)
 	    (func)(&ctx);

@@ -96,7 +96,7 @@ typedef struct tagTREEVIEW_INFO
   HTREEITEM	focusedItem;    /* item that was under the cursor when WM_LBUTTONDOWN was received */
   HTREEITEM     editItem;       /* item being edited with builtin edit box */
 
-  HTREEITEM     firstVisible;   /* handle to first visible item */
+  HTREEITEM     firstVisible;   /* handle to item whose top edge is at y = 0 */
   LONG          maxVisibleOrder;
   HTREEITEM     dropItem;       /* handle to item selected by drag cursor */
   HTREEITEM     insertMarkItem; /* item after which insertion mark is placed */
@@ -162,7 +162,10 @@ typedef struct _TREEITEM    /* HTREEITEM is a _TREEINFO *. */
   LONG      imageOffset;
   LONG      textOffset;
   LONG      textWidth;      /* horizontal text extent for pszText */
-  LONG      visibleOrder;   /* visible ordering, 0 is first visible item */
+  LONG      visibleOrder;   /* Depth-first numbering of the items whose ancestors are all expanded,
+                               corresponding to a top-to-bottom ordering in the tree view.
+                               Each item takes up "item.iIntegral" spots in the visible order.
+                               0 is the root's first child. */
   const TREEVIEW_INFO *infoPtr; /* tree data this item belongs to */
 } TREEVIEW_ITEM;
 
@@ -1556,6 +1559,7 @@ TREEVIEW_DeleteItem(TREEVIEW_INFO *infoPtr, HTREEITEM item)
 
 	if (infoPtr->firstVisible == item)
 	{
+	    visible = TRUE;
 	    if (item->nextSibling)
 	       newFirstVisible = item->nextSibling;
 	    else if (item->prevSibling)
@@ -1591,11 +1595,13 @@ TREEVIEW_DeleteItem(TREEVIEW_INFO *infoPtr, HTREEITEM item)
 
     TREEVIEW_VerifyTree(infoPtr);
 
+    if (visible)
+        TREEVIEW_SetFirstVisible(infoPtr, newFirstVisible, TRUE);
+
     if (!infoPtr->bRedraw) return TRUE;
 
     if (visible)
     {
-       TREEVIEW_SetFirstVisible(infoPtr, newFirstVisible, TRUE);
        TREEVIEW_RecalculateVisibleOrder(infoPtr, prev);
        TREEVIEW_UpdateScrollBars(infoPtr);
        TREEVIEW_Invalidate(infoPtr, NULL);
@@ -2546,6 +2552,8 @@ TREEVIEW_DrawItem(const TREEVIEW_INFO *infoPtr, HDC hdc, TREEVIEW_ITEM *item)
     }
 
     hOldFont = SelectObject(hdc, TREEVIEW_FontForItem(infoPtr, item));
+    oldTextColor = SetTextColor(hdc, nmcdhdr.clrText);
+    oldTextBkColor = SetBkColor(hdc, nmcdhdr.clrTextBk);
 
     /* The custom draw handler can query the text rectangle,
      * so get ready. */
@@ -2580,9 +2588,9 @@ TREEVIEW_DrawItem(const TREEVIEW_INFO *infoPtr, HDC hdc, TREEVIEW_ITEM *item)
 
     TREEVIEW_DrawItemLines(infoPtr, hdc, item);
 
-    /* Set colors. Custom draw handler can change these so we do this after it. */
-    oldTextColor = SetTextColor(hdc, nmcdhdr.clrText);
-    oldTextBkColor = SetBkColor(hdc, nmcdhdr.clrTextBk);
+    /* reset colors. Custom draw handler can change them */
+    SetTextColor(hdc, nmcdhdr.clrText);
+    SetBkColor(hdc, nmcdhdr.clrTextBk);
 
     centery = (item->rect.top + item->rect.bottom) / 2;
 
@@ -3695,6 +3703,9 @@ TREEVIEW_HitTest(const TREEVIEW_INFO *infoPtr, LPTVHITTESTINFO lpht)
         return NULL;
     }
 
+    if (!item->textWidth)
+        TREEVIEW_ComputeTextWidth(infoPtr, item, 0);
+
     if (x >= item->textOffset + item->textWidth)
     {
 	lpht->flags = TVHT_ONITEMRIGHT;
@@ -4198,9 +4209,9 @@ TREEVIEW_LButtonDoubleClick(TREEVIEW_INFO *infoPtr, LPARAM lParam)
 static LRESULT
 TREEVIEW_LButtonDown(TREEVIEW_INFO *infoPtr, LPARAM lParam)
 {
+    BOOL do_track, do_select, bDoLabelEdit;
     HWND hwnd = infoPtr->hwnd;
     TVHITTESTINFO ht;
-    BOOL bTrack, bDoLabelEdit;
 
     /* If Edit control is active - kill it and return.
      * The best way to do it is to set focus to itself.
@@ -4220,15 +4231,32 @@ TREEVIEW_LButtonDown(TREEVIEW_INFO *infoPtr, LPARAM lParam)
     TRACE("item %d\n", TREEVIEW_GetItemIndex(infoPtr, ht.hItem));
 
     /* update focusedItem and redraw both items */
-    if(ht.hItem && (ht.flags & TVHT_ONITEM))
+    if (ht.hItem)
     {
-        infoPtr->focusedItem = ht.hItem;
-        TREEVIEW_InvalidateItem(infoPtr, infoPtr->focusedItem);
-        TREEVIEW_InvalidateItem(infoPtr, infoPtr->selectedItem);
+        BOOL do_focus;
+
+        if (TREEVIEW_IsFullRowSelect(infoPtr))
+            do_focus = ht.flags & (TVHT_ONITEMINDENT | TVHT_ONITEM | TVHT_ONITEMRIGHT);
+        else
+            do_focus = ht.flags & TVHT_ONITEM;
+
+        if (do_focus)
+        {
+            infoPtr->focusedItem = ht.hItem;
+            TREEVIEW_InvalidateItem(infoPtr, infoPtr->focusedItem);
+            TREEVIEW_InvalidateItem(infoPtr, infoPtr->selectedItem);
+        }
     }
 
-    bTrack = (ht.flags & TVHT_ONITEM)
-	&& !(infoPtr->dwStyle & TVS_DISABLEDRAGDROP);
+    if (!(infoPtr->dwStyle & TVS_DISABLEDRAGDROP))
+    {
+        if (TREEVIEW_IsFullRowSelect(infoPtr))
+            do_track = ht.flags & (TVHT_ONITEMINDENT | TVHT_ONITEM | TVHT_ONITEMRIGHT);
+        else
+            do_track = ht.flags & TVHT_ONITEM;
+    }
+    else
+        do_track = FALSE;
 
     /*
      * If the style allows editing and the node is already selected
@@ -4238,16 +4266,15 @@ TREEVIEW_LButtonDown(TREEVIEW_INFO *infoPtr, LPARAM lParam)
         (ht.flags & TVHT_ONITEMLABEL) && (infoPtr->selectedItem == ht.hItem);
 
     /* Send NM_CLICK right away */
-    if (!bTrack)
-	if (TREEVIEW_SendSimpleNotify(infoPtr, NM_CLICK))
-	    goto setfocus;
+    if (!do_track && TREEVIEW_SendSimpleNotify(infoPtr, NM_CLICK))
+        goto setfocus;
 
     if (ht.flags & TVHT_ONITEMBUTTON)
     {
 	TREEVIEW_Toggle(infoPtr, ht.hItem, TRUE);
 	goto setfocus;
     }
-    else if (bTrack)
+    else if (do_track)
     {   /* if TREEVIEW_TrackMouse == 1 dragging occurred and the cursor left the dragged item's rectangle */
 	if (TREEVIEW_TrackMouse(infoPtr, ht.pt))
 	{
@@ -4269,8 +4296,13 @@ TREEVIEW_LButtonDown(TREEVIEW_INFO *infoPtr, LPARAM lParam)
         }
     }
 
-    if (bTrack && TREEVIEW_SendSimpleNotify(infoPtr, NM_CLICK))
+    if (do_track && TREEVIEW_SendSimpleNotify(infoPtr, NM_CLICK))
         goto setfocus;
+
+    if (TREEVIEW_IsFullRowSelect(infoPtr))
+        do_select = ht.flags & (TVHT_ONITEMINDENT | TVHT_ONITEMICON | TVHT_ONITEMLABEL | TVHT_ONITEMRIGHT);
+    else
+        do_select = ht.flags & (TVHT_ONITEMICON | TVHT_ONITEMLABEL);
 
     if (bDoLabelEdit)
     {
@@ -4280,7 +4312,7 @@ TREEVIEW_LButtonDown(TREEVIEW_INFO *infoPtr, LPARAM lParam)
 	SetTimer(hwnd, TV_EDIT_TIMER, GetDoubleClickTime(), 0);
 	infoPtr->Timer |= TV_EDIT_TIMER_SET;
     }
-    else if (ht.flags & (TVHT_ONITEMICON|TVHT_ONITEMLABEL)) /* select the item if the hit was inside of the icon or text */
+    else if (do_select)
     {
         TREEVIEW_ITEM *selection = infoPtr->selectedItem;
 
@@ -4421,7 +4453,7 @@ TREEVIEW_DoSelectItem(TREEVIEW_INFO *infoPtr, INT action, HTREEITEM newSelect,
 
     assert(newSelect == NULL || TREEVIEW_ValidItem(infoPtr, newSelect));
 
-    TRACE("Entering item %p (%s), flag 0x%x, cause 0x%x, state %d\n",
+    TRACE("Entering item %p (%s), flag 0x%x, cause 0x%x, state 0x%x\n",
 	  newSelect, TREEVIEW_ItemName(newSelect), action, cause,
 	  newSelect ? newSelect->state : 0);
 
@@ -4496,7 +4528,7 @@ TREEVIEW_DoSelectItem(TREEVIEW_INFO *infoPtr, INT action, HTREEITEM newSelect,
 	break;
     }
 
-    TRACE("Leaving state %d\n", newSelect ? newSelect->state : 0);
+    TRACE("Leaving state 0x%x\n", newSelect ? newSelect->state : 0);
     return TRUE;
 }
 

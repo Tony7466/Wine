@@ -224,7 +224,7 @@ void put_surround512stereo(const IDirectSoundBufferImpl *dsb, DWORD pos, DWORD c
         break;
 
     case 0: /* front left */
-        value *= 0.503; /* 1 / (sum of left volumes) */
+        value *= 0.503f; /* 1 / (sum of left volumes) */
         dsb->put_aux(dsb, pos, 0, value);
         break;
 
@@ -247,6 +247,33 @@ void put_surround512stereo(const IDirectSoundBufferImpl *dsb, DWORD pos, DWORD c
     case 3: /* LFE */
         value *= 0.189f; /* 0.375 / (sum of left/right volumes) */
         dsb->put_aux(dsb, pos, 0, value);
+        dsb->put_aux(dsb, pos, 1, value);
+        break;
+    }
+}
+
+void put_quad2stereo(const IDirectSoundBufferImpl *dsb, DWORD pos, DWORD channel, float value)
+{
+    /* based on pulseaudio's downmix algorithm */
+    switch(channel){
+
+    case 2: /* back left */
+        value *= 0.1f; /* (1/9) / (sum of left volumes) */
+        dsb->put_aux(dsb, pos, 0, value);
+        break;
+
+    case 0: /* front left */
+        value *= 0.9f; /* 1 / (sum of left volumes) */
+        dsb->put_aux(dsb, pos, 0, value);
+        break;
+
+    case 3: /* back right */
+        value *= 0.1f; /* (1/9) / (sum of right volumes) */
+        dsb->put_aux(dsb, pos, 1, value);
+        break;
+
+    case 1: /* front right */
+        value *= 0.9f; /* 1 / (sum of right volumes) */
         dsb->put_aux(dsb, pos, 1, value);
         break;
     }
@@ -309,27 +336,9 @@ static void norm32(float *src, INT *dst, unsigned len)
     }
 }
 
-static void normieee32(float *src, float *dst, unsigned len)
-{
-    TRACE("%p - %p %d\n", src, dst, len);
-    len /= 4;
-    while (len--)
-    {
-        if(*src > 1)
-            *dst = 1;
-        else if(*src < -1)
-            *dst = -1;
-        else
-            *dst = *src;
-        ++dst;
-        ++src;
-    }
-}
-
-const normfunc normfunctions[5] = {
+const normfunc normfunctions[4] = {
     (normfunc)norm8,
     (normfunc)norm16,
     (normfunc)norm24,
     (normfunc)norm32,
-    (normfunc)normieee32
 };

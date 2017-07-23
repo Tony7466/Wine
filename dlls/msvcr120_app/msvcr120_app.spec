@@ -819,19 +819,19 @@
 @ cdecl -arch=i386 _CItan() msvcr120._CItan
 @ cdecl -arch=i386 _CItanh() msvcr120._CItanh
 @ stub _Cbuild
-@ stub _CreateFrameInfo
+@ cdecl _CreateFrameInfo(ptr ptr) msvcr120._CreateFrameInfo
 @ stdcall _CxxThrowException(long long) msvcr120._CxxThrowException
 @ cdecl -arch=i386 -norelay _EH_prolog() msvcr120._EH_prolog
 @ stub -arch=arm _FPE_Raise
 @ stub _FCbuild
-@ stub _FindAndUnlinkFrame
+@ cdecl _FindAndUnlinkFrame(ptr) msvcr120._FindAndUnlinkFrame
 @ stub -arch=win64 _GetImageBase
 @ stub -arch=win64 _GetThrowImageBase
 @ cdecl _Getdays() msvcr120._Getdays
 @ cdecl _Getmonths() msvcr120._Getmonths
 @ cdecl _Gettnames() msvcr120._Gettnames
 @ extern _HUGE msvcr120._HUGE
-@ stub _IsExceptionObjectToBeDestroyed
+@ cdecl _IsExceptionObjectToBeDestroyed(ptr) msvcr120._IsExceptionObjectToBeDestroyed
 @ stub _LCbuild
 @ stub -arch=i386 _NLG_Dispatch2
 @ stub -arch=arm,win64 __NLG_Dispatch2
@@ -859,9 +859,9 @@
 @ cdecl -arch=i386,x86_64,arm -norelay __CxxFrameHandler3(ptr ptr ptr ptr) msvcr120.__CxxFrameHandler3
 @ stdcall -arch=i386 __CxxLongjmpUnwind(ptr) msvcr120.__CxxLongjmpUnwind
 @ cdecl -arch=i386,x86_64,arm __CxxQueryExceptionSize() msvcr120.__CxxQueryExceptionSize
-@ stub __CxxRegisterExceptionObject
-@ stub __CxxUnregisterExceptionObject
-@ stub __DestructExceptionObject
+@ cdecl __CxxRegisterExceptionObject(ptr ptr) msvcr120.__CxxRegisterExceptionObject
+@ cdecl __CxxUnregisterExceptionObject(ptr long) msvcr120.__CxxUnregisterExceptionObject
+@ cdecl __DestructExceptionObject(ptr) msvcr120.__DestructExceptionObject
 @ stub __FrameUnwindFilter
 @ stub __GetPlatformExceptionInfo
 @ cdecl __RTCastToVoid(ptr) msvcr120.__RTCastToVoid
@@ -917,27 +917,27 @@
 @ stub -arch=arm __jump_unwind
 # extern __lconv
 @ cdecl __lconv_init() msvcr120.__lconv_init
-@ cdecl -arch=i386 __libm_sse2_acos() msvcr120.__libm_sse2_acos
-@ cdecl -arch=i386 __libm_sse2_acosf() msvcr120.__libm_sse2_acosf
-@ cdecl -arch=i386 __libm_sse2_asin() msvcr120.__libm_sse2_asin
-@ cdecl -arch=i386 __libm_sse2_asinf() msvcr120.__libm_sse2_asinf
-@ cdecl -arch=i386 __libm_sse2_atan() msvcr120.__libm_sse2_atan
-@ cdecl -arch=i386 __libm_sse2_atan2() msvcr120.__libm_sse2_atan2
-@ cdecl -arch=i386 __libm_sse2_atanf() msvcr120.__libm_sse2_atanf
-@ cdecl -arch=i386 __libm_sse2_cos() msvcr120.__libm_sse2_cos
-@ cdecl -arch=i386 __libm_sse2_cosf() msvcr120.__libm_sse2_cosf
-@ cdecl -arch=i386 __libm_sse2_exp() msvcr120.__libm_sse2_exp
-@ cdecl -arch=i386 __libm_sse2_expf() msvcr120.__libm_sse2_expf
-@ cdecl -arch=i386 __libm_sse2_log() msvcr120.__libm_sse2_log
-@ cdecl -arch=i386 __libm_sse2_log10() msvcr120.__libm_sse2_log10
-@ cdecl -arch=i386 __libm_sse2_log10f() msvcr120.__libm_sse2_log10f
-@ cdecl -arch=i386 __libm_sse2_logf() msvcr120.__libm_sse2_logf
-@ cdecl -arch=i386 __libm_sse2_pow() msvcr120.__libm_sse2_pow
-@ cdecl -arch=i386 __libm_sse2_powf() msvcr120.__libm_sse2_powf
-@ cdecl -arch=i386 __libm_sse2_sin() msvcr120.__libm_sse2_sin
-@ cdecl -arch=i386 __libm_sse2_sinf() msvcr120.__libm_sse2_sinf
-@ cdecl -arch=i386 __libm_sse2_tan() msvcr120.__libm_sse2_tan
-@ cdecl -arch=i386 __libm_sse2_tanf() msvcr120.__libm_sse2_tanf
+@ cdecl -arch=i386 -norelay __libm_sse2_acos() msvcr120.__libm_sse2_acos
+@ cdecl -arch=i386 -norelay __libm_sse2_acosf() msvcr120.__libm_sse2_acosf
+@ cdecl -arch=i386 -norelay __libm_sse2_asin() msvcr120.__libm_sse2_asin
+@ cdecl -arch=i386 -norelay __libm_sse2_asinf() msvcr120.__libm_sse2_asinf
+@ cdecl -arch=i386 -norelay __libm_sse2_atan() msvcr120.__libm_sse2_atan
+@ cdecl -arch=i386 -norelay __libm_sse2_atan2() msvcr120.__libm_sse2_atan2
+@ cdecl -arch=i386 -norelay __libm_sse2_atanf() msvcr120.__libm_sse2_atanf
+@ cdecl -arch=i386 -norelay __libm_sse2_cos() msvcr120.__libm_sse2_cos
+@ cdecl -arch=i386 -norelay __libm_sse2_cosf() msvcr120.__libm_sse2_cosf
+@ cdecl -arch=i386 -norelay __libm_sse2_exp() msvcr120.__libm_sse2_exp
+@ cdecl -arch=i386 -norelay __libm_sse2_expf() msvcr120.__libm_sse2_expf
+@ cdecl -arch=i386 -norelay __libm_sse2_log() msvcr120.__libm_sse2_log
+@ cdecl -arch=i386 -norelay __libm_sse2_log10() msvcr120.__libm_sse2_log10
+@ cdecl -arch=i386 -norelay __libm_sse2_log10f() msvcr120.__libm_sse2_log10f
+@ cdecl -arch=i386 -norelay __libm_sse2_logf() msvcr120.__libm_sse2_logf
+@ cdecl -arch=i386 -norelay __libm_sse2_pow() msvcr120.__libm_sse2_pow
+@ cdecl -arch=i386 -norelay __libm_sse2_powf() msvcr120.__libm_sse2_powf
+@ cdecl -arch=i386 -norelay __libm_sse2_sin() msvcr120.__libm_sse2_sin
+@ cdecl -arch=i386 -norelay __libm_sse2_sinf() msvcr120.__libm_sse2_sinf
+@ cdecl -arch=i386 -norelay __libm_sse2_tan() msvcr120.__libm_sse2_tan
+@ cdecl -arch=i386 -norelay __libm_sse2_tanf() msvcr120.__libm_sse2_tanf
 @ extern __mb_cur_max msvcr120.__mb_cur_max
 @ cdecl __p___argc() msvcr120.__p___argc
 @ cdecl __p___argv() msvcr120.__p___argv
@@ -1011,7 +1011,7 @@
 @ stub _atol_l
 @ cdecl _atoldbl(ptr str) msvcr120._atoldbl
 @ stub _atoldbl_l
-@ stub _atoll_l
+@ cdecl -ret64 _atoll_l(str ptr) msvcr120._atoll_l
 @ cdecl _byteswap_uint64(int64) msvcr120._byteswap_uint64
 @ cdecl _byteswap_ulong(long) msvcr120._byteswap_ulong
 @ cdecl _byteswap_ushort(long) msvcr120._byteswap_ushort
@@ -1049,7 +1049,7 @@
 @ cdecl _difftime32(long long) msvcr120._difftime32
 @ cdecl _difftime64(long long) msvcr120._difftime64
 @ stub _dosmaperr
-@ stub _dpcomp
+@ cdecl _dpcomp(double double) msvcr120._dpcomp
 @ cdecl _dsign(double) msvcr120._dsign
 @ extern _dstbias msvcr120._dstbias
 @ cdecl _dtest(ptr) msvcr120._dtest
@@ -1060,7 +1060,7 @@
 @ extern _environ msvcr120._environ
 @ cdecl _eof(long) msvcr120._eof
 @ cdecl _errno() msvcr120._errno
-@ stub _except1
+@ cdecl _except1(long long double double long ptr) msvcr120._except1
 @ cdecl -arch=i386 _except_handler2(ptr ptr ptr ptr) msvcr120._except_handler2
 @ cdecl -arch=i386 _except_handler3(ptr ptr ptr ptr) msvcr120._except_handler3
 @ cdecl -arch=i386 _except_handler4_common(ptr ptr ptr ptr ptr ptr) msvcr120._except_handler4_common
@@ -1072,7 +1072,7 @@
 @ cdecl _fcvt_s(ptr long double long ptr ptr) msvcr120._fcvt_s
 @ cdecl _fdclass(float) msvcr120._fdclass
 @ cdecl _fdopen(long str) msvcr120._fdopen
-@ stub _fdpcomp
+@ cdecl _fdpcomp(float float) msvcr120._fdpcomp
 @ cdecl _fdsign(float) msvcr120._fdsign
 @ cdecl _fdtest(ptr) msvcr120._fdtest
 @ cdecl _fflush_nolock(ptr) msvcr120._fflush_nolock
@@ -1123,7 +1123,7 @@
 @ cdecl _fseeki64_nolock(ptr int64 long) msvcr120._fseeki64_nolock
 @ cdecl _fsopen(str str long) msvcr120._fsopen
 @ cdecl _fstat32(long ptr) msvcr120._fstat32
-@ stub _fstat32i64
+@ cdecl _fstat32i64(long ptr) msvcr120._fstat32i64
 @ cdecl _fstat64(long ptr) msvcr120._fstat64
 @ cdecl _fstat64i32(long ptr) msvcr120._fstat64i32
 @ cdecl _ftell_nolock(ptr) msvcr120._ftell_nolock
@@ -1256,22 +1256,22 @@
 @ cdecl _j1(double) msvcr120._j1
 @ cdecl _jn(long double) msvcr120._jn
 @ cdecl _ldclass(double) msvcr120._ldclass
-@ stub _ldpcomp
+@ cdecl _ldpcomp(double double) msvcr120._ldpcomp
 @ cdecl _ldsign(double) msvcr120._ldsign
 @ cdecl _ldtest(ptr) msvcr120._ldtest
 @ cdecl _lfind(ptr ptr ptr long ptr) msvcr120._lfind
-@ stub _lfind_s
-@ cdecl -arch=i386  _libm_sse2_acos_precise() msvcr120._libm_sse2_acos_precise
-@ cdecl -arch=i386  _libm_sse2_asin_precise() msvcr120._libm_sse2_asin_precise
-@ cdecl -arch=i386  _libm_sse2_atan_precise() msvcr120._libm_sse2_atan_precise
-@ cdecl -arch=i386  _libm_sse2_cos_precise() msvcr120._libm_sse2_cos_precise
-@ cdecl -arch=i386  _libm_sse2_exp_precise() msvcr120._libm_sse2_exp_precise
-@ cdecl -arch=i386  _libm_sse2_log10_precise() msvcr120._libm_sse2_log10_precise
-@ cdecl -arch=i386  _libm_sse2_log_precise() msvcr120._libm_sse2_log_precise
-@ cdecl -arch=i386  _libm_sse2_pow_precise() msvcr120._libm_sse2_pow_precise
-@ cdecl -arch=i386  _libm_sse2_sin_precise() msvcr120._libm_sse2_sin_precise
-@ cdecl -arch=i386  _libm_sse2_sqrt_precise() msvcr120._libm_sse2_sqrt_precise
-@ cdecl -arch=i386  _libm_sse2_tan_precise() msvcr120._libm_sse2_tan_precise
+@ cdecl _lfind_s(ptr ptr ptr long ptr ptr) msvcr120._lfind_s
+@ cdecl -arch=i386 -norelay _libm_sse2_acos_precise() msvcr120._libm_sse2_acos_precise
+@ cdecl -arch=i386 -norelay _libm_sse2_asin_precise() msvcr120._libm_sse2_asin_precise
+@ cdecl -arch=i386 -norelay _libm_sse2_atan_precise() msvcr120._libm_sse2_atan_precise
+@ cdecl -arch=i386 -norelay _libm_sse2_cos_precise() msvcr120._libm_sse2_cos_precise
+@ cdecl -arch=i386 -norelay _libm_sse2_exp_precise() msvcr120._libm_sse2_exp_precise
+@ cdecl -arch=i386 -norelay _libm_sse2_log10_precise() msvcr120._libm_sse2_log10_precise
+@ cdecl -arch=i386 -norelay _libm_sse2_log_precise() msvcr120._libm_sse2_log_precise
+@ cdecl -arch=i386 -norelay _libm_sse2_pow_precise() msvcr120._libm_sse2_pow_precise
+@ cdecl -arch=i386 -norelay _libm_sse2_sin_precise() msvcr120._libm_sse2_sin_precise
+@ cdecl -arch=i386 -norelay _libm_sse2_sqrt_precise() msvcr120._libm_sse2_sqrt_precise
+@ cdecl -arch=i386 -norelay _libm_sse2_tan_precise() msvcr120._libm_sse2_tan_precise
 @ cdecl -arch=x86_64 _local_unwind(ptr ptr) msvcr120._local_unwind
 @ cdecl -arch=i386 _local_unwind2(ptr long) msvcr120._local_unwind2
 @ cdecl -arch=i386 _local_unwind4(ptr ptr long) msvcr120._local_unwind4
@@ -1419,7 +1419,7 @@
 @ cdecl _strdup(str) msvcr120._strdup
 @ cdecl _strerror(long) msvcr120._strerror
 @ stub _strerror_s
-@ stub _strftime_l
+@ cdecl _strftime_l(str long str ptr ptr) msvcr120._strftime_l
 @ cdecl _stricmp(str str) msvcr120._stricmp
 @ cdecl _stricmp_l(str str ptr) msvcr120._stricmp_l
 @ cdecl _stricoll(str str) msvcr120._stricoll
@@ -1446,7 +1446,7 @@
 @ cdecl -ret64 _strtoi64(str ptr long) msvcr120._strtoi64
 @ cdecl -ret64 _strtoi64_l(str ptr long ptr) msvcr120._strtoi64_l
 @ stub _strtoimax_l
-@ stub _strtol_l
+@ cdecl _strtol_l(str ptr long ptr) msvcr120._strtol_l
 @ stub _strtold_l
 @ cdecl -ret64 _strtoll_l(str ptr long ptr) msvcr120._strtoll_l
 @ cdecl -ret64 _strtoui64(str ptr long) msvcr120._strtoui64
@@ -1555,12 +1555,12 @@
 @ cdecl _wchmod(wstr long) msvcr120._wchmod
 @ extern _wcmdln msvcr120._wcmdln
 @ cdecl _wcreat(wstr long) msvcr120._wcreat
-@ stub _wcreate_locale
+@ cdecl _wcreate_locale(long wstr) msvcr120._wcreate_locale
 @ cdecl _wcscoll_l(wstr wstr ptr) msvcr120._wcscoll_l
 @ cdecl _wcsdup(wstr) msvcr120._wcsdup
 @ cdecl _wcserror(long) msvcr120._wcserror
 @ cdecl _wcserror_s(ptr long long) msvcr120._wcserror_s
-@ stub _wcsftime_l
+@ cdecl _wcsftime_l(ptr long wstr ptr ptr) msvcr120._wcsftime_l
 @ cdecl _wcsicmp(wstr wstr) msvcr120._wcsicmp
 @ cdecl _wcsicmp_l(wstr wstr ptr) msvcr120._wcsicmp_l
 @ cdecl _wcsicoll(wstr wstr) msvcr120._wcsicoll
@@ -1581,13 +1581,13 @@
 @ cdecl _wcsset(wstr long) msvcr120._wcsset
 @ cdecl _wcsset_s(wstr long long) msvcr120._wcsset_s
 @ cdecl _wcstod_l(wstr ptr) msvcr120._wcstod_l
-@ stub _wcstof_l
+@ cdecl _wcstof_l(wstr ptr ptr) msvcr120._wcstof_l
 @ cdecl -ret64 _wcstoi64(wstr ptr long) msvcr120._wcstoi64
 @ cdecl -ret64 _wcstoi64_l(wstr ptr long ptr) msvcr120._wcstoi64_l
 @ stub _wcstoimax_l
 @ cdecl _wcstol_l(wstr ptr long ptr) msvcr120._wcstol_l
 @ stub _wcstold_l
-@ stub _wcstoll_l
+@ cdecl -ret64 _wcstoll_l(wstr ptr long ptr) msvcr120._wcstoll_l
 @ cdecl _wcstombs_l(ptr ptr long ptr) msvcr120._wcstombs_l
 @ cdecl _wcstombs_s_l(ptr ptr long wstr long ptr) msvcr120._wcstombs_s_l
 @ cdecl -ret64 _wcstoui64(wstr ptr long) msvcr120._wcstoui64
@@ -1613,7 +1613,7 @@
 @ stub _wfindfirst32i64
 @ cdecl _wfindfirst64(wstr ptr) msvcr120._wfindfirst64
 @ cdecl _wfindfirst64i32(wstr ptr) msvcr120._wfindfirst64i32
-@ stub _wfindnext32
+@ cdecl _wfindnext32(long ptr) msvcr120._wfindnext32
 @ stub _wfindnext32i64
 @ cdecl _wfindnext64(long ptr) msvcr120._wfindnext64
 @ cdecl _wfindnext64i32(long ptr) msvcr120._wfindnext64i32
@@ -1665,8 +1665,8 @@
 @ cdecl _wtoi_l(wstr ptr) msvcr120._wtoi_l
 @ cdecl _wtol(wstr) msvcr120._wtol
 @ cdecl _wtol_l(wstr ptr) msvcr120._wtol_l
-@ stub _wtoll
-@ stub _wtoll_l
+@ cdecl -ret64 _wtoll(wstr) msvcr120._wtoll
+@ cdecl -ret64 _wtoll_l(wstr ptr) msvcr120._wtoll_l
 @ cdecl _wunlink(wstr) msvcr120._wunlink
 @ cdecl _wutime32(wstr ptr) msvcr120._wutime32
 @ cdecl _wutime64(wstr ptr) msvcr120._wutime64
@@ -1684,9 +1684,9 @@
 @ cdecl asctime_s(ptr long ptr) msvcr120.asctime_s
 @ cdecl asin(double) msvcr120.asin
 @ cdecl -arch=arm,x86_64 asinf(float) msvcr120.asinf
-@ stub asinh
-@ stub asinhf
-@ stub asinhl
+@ cdecl asinh(double double) msvcr120.asinh
+@ cdecl asinhf(float float) msvcr120.asinhf
+@ cdecl asinhl(double double) msvcr120.asinhl
 @ cdecl atan(double) msvcr120.atan
 @ cdecl -arch=arm,x86_64 atanf(float) msvcr120.atanf
 @ cdecl atan2(double double) msvcr120.atan2
@@ -1694,11 +1694,11 @@
 @ stub atanh
 @ stub atanhf
 @ stub atanhl
-@ cdecl atexit(ptr) msvcr120.atexit
+@ cdecl -private atexit(ptr) msvcr120.atexit
 @ cdecl atof(str) msvcr120.atof
 @ cdecl atoi(str) msvcr120.atoi
 @ cdecl atol(str) msvcr120.atol
-@ stub atoll
+@ cdecl -ret64 atoll(str) msvcr120.atoll
 @ cdecl bsearch(ptr ptr long long ptr) msvcr120.bsearch
 @ cdecl bsearch_s(ptr ptr long long ptr ptr) msvcr120.bsearch_s
 @ cdecl btowc(long) msvcr120.btowc
@@ -1810,14 +1810,14 @@
 @ stub fdimf
 @ stub fdiml
 @ stub feclearexcept
-@ stub fegetenv
+@ cdecl fegetenv(ptr) msvcr120.fegetenv
 @ stub fegetexceptflag
 @ stub fegetround
 @ stub feholdexcept
 @ cdecl feof(ptr) msvcr120.feof
 @ stub feraiseexcept
 @ cdecl ferror(ptr) msvcr120.ferror
-@ stub fesetenv
+@ cdecl fesetenv(ptr) msvcr120.fesetenv
 @ stub fesetexceptflag
 @ stub fesetround
 @ stub fetestexcept
@@ -1906,9 +1906,9 @@
 @ cdecl labs(long) msvcr120.labs
 @ cdecl ldexp(double long) msvcr120.ldexp
 @ cdecl ldiv(long long) msvcr120.ldiv
-@ stub lgamma
-@ stub lgammaf
-@ stub lgammal
+@ cdecl lgamma(double) msvcr120.lgamma
+@ cdecl lgammaf(float) msvcr120.lgammaf
+@ cdecl lgammal(double) msvcr120.lgammal
 @ cdecl -ret64 llabs(int64) msvcr120.llabs
 @ stub lldiv
 @ cdecl -ret64 llrint(double) msvcr120.llrint
@@ -1956,12 +1956,12 @@
 @ cdecl memset(ptr long long) msvcr120.memset
 @ cdecl modf(double ptr) msvcr120.modf
 @ cdecl -arch=arm,x86_64 modff(float ptr) msvcr120.modff
-@ stub nan
-@ stub nanf
-@ stub nanl
-@ stub nearbyint
-@ stub nearbyintf
-@ stub nearbyintl
+@ cdecl nan(str) msvcr120.nan
+@ cdecl nanf(str) msvcr120.nanf
+@ cdecl nanl(str) msvcr120.nanl
+@ cdecl nearbyint(double) msvcr120.nearbyint
+@ cdecl nearbyintf(float) msvcr120.nearbyintf
+@ cdecl nearbyintl(double) msvcr120.nearbyintl
 @ cdecl nextafter(double double) msvcr120.nextafter
 @ cdecl nextafterf(float float) msvcr120.nextafterf
 @ cdecl nextafterl(double double) msvcr120.nextafterl
@@ -1987,9 +1987,9 @@
 @ cdecl rand() msvcr120.rand
 @ cdecl rand_s(ptr) msvcr120.rand_s
 @ cdecl realloc(ptr long) msvcr120.realloc
-@ stub remainder
-@ stub remainderf
-@ stub remainderl
+@ cdecl remainder(double double) msvcr120.remainder
+@ cdecl remainderf(float float) msvcr120.remainderf
+@ cdecl remainderl(double double) msvcr120.remainderl
 @ cdecl remove(str) msvcr120.remove
 @ stub remquo
 @ stub remquof
@@ -2002,12 +2002,12 @@
 @ cdecl round(double) msvcr120.round
 @ cdecl roundf(float) msvcr120.roundf
 @ cdecl roundl(double) msvcr120.roundl
-@ stub scalbln
-@ stub scalblnf
-@ stub scalblnl
-@ stub scalbn
-@ stub scalbnf
-@ stub scalbnl
+@ cdecl scalbln(double long) msvcr120.scalbln
+@ cdecl scalblnf(float long) msvcr120.scalblnf
+@ cdecl scalblnl(double long) msvcr120.scalblnl
+@ cdecl scalbn(double long) msvcr120.scalbn
+@ cdecl scalbnf(float long) msvcr120.scalbnf
+@ cdecl scalbnl(double long) msvcr120.scalbnl
 @ varargs scanf(str) msvcr120.scanf
 @ varargs scanf_s(str) msvcr120.scanf_s
 @ cdecl setbuf(ptr ptr) msvcr120.setbuf
@@ -2132,13 +2132,13 @@
 @ cdecl wcsspn(wstr wstr) msvcr120.wcsspn
 @ cdecl wcsstr(wstr wstr) msvcr120.wcsstr
 @ cdecl wcstod(wstr ptr) msvcr120.wcstod
-@ stub wcstof
+@ cdecl wcstof(ptr ptr) msvcr120.wcstof
 @ stub wcstoimax
 @ cdecl wcstok(wstr wstr) msvcr120.wcstok
 @ cdecl wcstok_s(ptr wstr ptr) msvcr120.wcstok_s
 @ cdecl wcstol(wstr ptr long) msvcr120.wcstol
 @ stub wcstold
-@ stub wcstoll
+@ cdecl -ret64 wcstoll(wstr ptr long) msvcr120.wcstoll
 @ cdecl wcstombs(ptr ptr long) msvcr120.wcstombs
 @ cdecl wcstombs_s(ptr ptr long wstr long) msvcr120.wcstombs_s
 @ cdecl wcstoul(wstr ptr long) msvcr120.wcstoul

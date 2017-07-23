@@ -29,8 +29,6 @@
 
 #include "objbase.h"
 #include "ocidl.h"
-#include "wincodec.h"
-#include "wincodecsdk.h"
 
 #include "wine/debug.h"
 #include "wine/unicode.h"
@@ -1454,6 +1452,7 @@ static GUID const * const converter_formats[] = {
     &GUID_WICPixelFormat32bppBGR,
     &GUID_WICPixelFormat32bppBGRA,
     &GUID_WICPixelFormat32bppPBGRA,
+    &GUID_WICPixelFormat32bppGrayFloat,
     &GUID_WICPixelFormat48bppRGB,
     &GUID_WICPixelFormat64bppRGBA,
     &GUID_WICPixelFormat32bppCMYK,
@@ -1513,6 +1512,21 @@ static const struct reader_containers pnggama_containers[] = {
     {
         &GUID_ContainerFormatPng,
         pnggama_metadata_pattern
+    },
+    { NULL } /* list terminator */
+};
+
+static const BYTE cHRM[] = "cHRM";
+
+static const struct metadata_pattern pngchrm_metadata_pattern[] = {
+    { 4, 4, cHRM, mask_all, 4 },
+    { 0 }
+};
+
+static const struct reader_containers pngchrm_containers[] = {
+    {
+        &GUID_ContainerFormatPng,
+        pngchrm_metadata_pattern
     },
     { NULL } /* list terminator */
 };
@@ -1611,6 +1625,16 @@ static struct regsvr_metadatareader const metadatareader_list[] = {
         &GUID_MetadataFormatIfd,
         1, 1, 0,
         ifd_containers
+    },
+    {   &CLSID_WICPngChrmMetadataReader,
+        "The Wine Project",
+        "Chunk cHRM Reader",
+        "1.0.0.0",
+        "1.0.0.0",
+        &GUID_VendorMicrosoft,
+        &GUID_MetadataFormatChunkcHRM,
+        0, 0, 0,
+        pngchrm_containers
     },
     {   &CLSID_WICPngGamaMetadataReader,
         "The Wine Project",

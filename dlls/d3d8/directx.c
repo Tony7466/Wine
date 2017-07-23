@@ -220,6 +220,9 @@ static HRESULT WINAPI d3d8_CheckDeviceType(IDirect3D8 *iface, UINT adapter, D3DD
     TRACE("iface %p, adapter %u, device_type %#x, display_format %#x, backbuffer_format %#x, windowed %#x.\n",
             iface, adapter, device_type, display_format, backbuffer_format, windowed);
 
+    if (!windowed && display_format != D3DFMT_X8R8G8B8 && display_format != D3DFMT_R5G6B5)
+        return WINED3DERR_NOTAVAILABLE;
+
     wined3d_mutex_lock();
     hr = wined3d_check_device_type(d3d8->wined3d, adapter, device_type, wined3dformat_from_d3dformat(display_format),
             wined3dformat_from_d3dformat(backbuffer_format), windowed);
@@ -238,16 +241,31 @@ static HRESULT WINAPI d3d8_CheckDeviceFormat(IDirect3D8 *iface, UINT adapter, D3
     TRACE("iface %p, adapter %u, device_type %#x, adapter_format %#x, usage %#x, resource_type %#x, format %#x.\n",
             iface, adapter, device_type, adapter_format, usage, resource_type, format);
 
+    usage = usage & (WINED3DUSAGE_MASK | WINED3DUSAGE_QUERY_MASK);
     switch (resource_type)
     {
+        case D3DRTYPE_CUBETEXTURE:
+            usage |= WINED3DUSAGE_LEGACY_CUBEMAP;
+        case D3DRTYPE_TEXTURE:
+            usage |= WINED3DUSAGE_TEXTURE;
+        case D3DRTYPE_SURFACE:
+            wined3d_rtype = WINED3D_RTYPE_TEXTURE_2D;
+            break;
+
+        case D3DRTYPE_VOLUMETEXTURE:
+        case D3DRTYPE_VOLUME:
+            usage |= WINED3DUSAGE_TEXTURE;
+            wined3d_rtype = WINED3D_RTYPE_TEXTURE_3D;
+            break;
+
         case D3DRTYPE_VERTEXBUFFER:
         case D3DRTYPE_INDEXBUFFER:
             wined3d_rtype = WINED3D_RTYPE_BUFFER;
             break;
 
         default:
-            wined3d_rtype = resource_type;
-            break;
+            FIXME("Unhandled resource type %#x.\n", resource_type);
+            return WINED3DERR_INVALIDCALL;
     }
 
     wined3d_mutex_lock();
@@ -266,6 +284,9 @@ static HRESULT WINAPI d3d8_CheckDeviceMultiSampleType(IDirect3D8 *iface, UINT ad
 
     TRACE("iface %p, adapter %u, device_type %#x, format %#x, windowed %#x, multisample_type %#x.\n",
             iface, adapter, device_type, format, windowed, multisample_type);
+
+    if (multisample_type > D3DMULTISAMPLE_16_SAMPLES)
+        return D3DERR_INVALIDCALL;
 
     wined3d_mutex_lock();
     hr = wined3d_check_device_multisample_type(d3d8->wined3d, adapter, device_type,
@@ -410,7 +431,8 @@ static const struct IDirect3D8Vtbl d3d8_vtbl =
 BOOL d3d8_init(struct d3d8 *d3d8)
 {
     DWORD flags = WINED3D_LEGACY_DEPTH_BIAS | WINED3D_VIDMEM_ACCOUNTING
-            | WINED3D_HANDLE_RESTORE | WINED3D_PIXEL_CENTER_INTEGER;
+            | WINED3D_HANDLE_RESTORE | WINED3D_PIXEL_CENTER_INTEGER
+            | WINED3D_LEGACY_UNBOUND_RESOURCE_COLOR | WINED3D_NO_PRIMITIVE_RESTART;
 
     d3d8->IDirect3D8_iface.lpVtbl = &d3d8_vtbl;
     d3d8->refcount = 1;

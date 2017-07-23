@@ -1644,6 +1644,44 @@ typedef struct _REASON_CONTEXT
 #define RESOURCE_ENUM_MUI_SYSTEM  0x0004
 #define RESOURCE_ENUM_VALIDATE    0x0008
 
+typedef struct _PROC_THREAD_ATTRIBUTE_LIST
+*PPROC_THREAD_ATTRIBUTE_LIST, *LPPROC_THREAD_ATTRIBUTE_LIST;
+
+#define PROC_THREAD_ATTRIBUTE_NUMBER   0x0000ffff
+#define PROC_THREAD_ATTRIBUTE_THREAD   0x00010000
+#define PROC_THREAD_ATTRIBUTE_INPUT    0x00020000
+#define PROC_THREAD_ATTRIBUTE_ADDITIVE 0x00040000
+
+typedef enum _PROC_THREAD_ATTRIBUTE_NUM
+{
+    ProcThreadAttributeParentProcess = 0,
+    ProcThreadAttributeHandleList = 2,
+    ProcThreadAttributeGroupAffinity = 3,
+    ProcThreadAttributeIdealProcessor = 5,
+    ProcThreadAttributeUmsThread = 6,
+    ProcThreadAttributeMitigationPolicy = 7,
+    ProcThreadAttributeSecurityCapabilities = 9,
+    ProcThreadAttributeProtectionLevel = 11,
+    ProcThreadAttributeJobList = 13,
+    ProcThreadAttributeChildProcessPolicy = 14,
+    ProcThreadAttributeAllApplicationPackagesPolicy = 15,
+    ProcThreadAttributeWin32kFilter = 16,
+    ProcThreadAttributeSafeOpenPromptOriginClaim = 17,
+} PROC_THREAD_ATTRIBUTE_NUM;
+
+#define PROC_THREAD_ATTRIBUTE_PARENT_PROCESS (ProcThreadAttributeParentProcess | PROC_THREAD_ATTRIBUTE_INPUT)
+#define PROC_THREAD_ATTRIBUTE_HANDLE_LIST (ProcThreadAttributeHandleList | PROC_THREAD_ATTRIBUTE_INPUT)
+#define PROC_THREAD_ATTRIBUTE_GROUP_AFFINITY (ProcThreadAttributeGroupAffinity | PROC_THREAD_ATTRIBUTE_THREAD | PROC_THREAD_ATTRIBUTE_INPUT)
+#define PROC_THREAD_ATTRIBUTE_IDEAL_PROCESSOR (ProcThreadAttributeIdealProcessor | PROC_THREAD_ATTRIBUTE_THREAD | PROC_THREAD_ATTRIBUTE_INPUT)
+#define PROC_THREAD_ATTRIBUTE_UMS_THREAD (ProcThreadAttributeUmsThread | PROC_THREAD_ATTRIBUTE_THREAD | PROC_THREAD_ATTRIBUTE_INPUT)
+#define PROC_THREAD_ATTRIBUTE_MIGITATION_POLICY (ProcThreadAttributeMitigationPolicy | PROC_THREAD_ATTRIBUTE_INPUT)
+#define PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES (ProcThreadAttributeSecurityCapabilities | PROC_THREAD_ATTRIBUTE_INPUT)
+#define PROC_THREAD_ATTRIBUTE_PROTECTION_LEVEL (ProcThreadAttributeProtectionLevel | PROC_THREAD_ATTRIBUTE_INPUT)
+#define PROC_THREAD_ATTRIBUTE_JOB_LIST (ProcThreadAttributeJobList | PROC_THREAD_ATTRIBUTE_INPUT)
+#define PROC_THREAD_ATTRIBUTE_CHILD_PROCESS_POLICY (ProcThreadAttributeChildProcessPolicy | PROC_THREAD_ATTRIBUTE_INPUT)
+#define PROC_THREAD_ATTRIBUTE_ALL_APPLICATION_PACKAGES_POLICY (ProcThreadAttributeAllApplicationPackagesPolicy | PROC_THREAD_ATTRIBUTE_INPUT)
+#define PROC_THREAD_ATTRIBUTE_WIN32K_FILTER (ProcThreadAttributeWin32kFilter | PROC_THREAD_ATTRIBUTE_INPUT)
+
 WINBASEAPI BOOL        WINAPI ActivateActCtx(HANDLE,ULONG_PTR *);
 WINADVAPI  BOOL        WINAPI AddAccessAllowedAce(PACL,DWORD,DWORD,PSID);
 WINADVAPI  BOOL        WINAPI AddAccessAllowedAceEx(PACL,DWORD,DWORD,DWORD,PSID);
@@ -1699,6 +1737,7 @@ WINBASEAPI BOOL        WINAPI CancelTimerQueueTimer(HANDLE,HANDLE);
 WINBASEAPI BOOL        WINAPI CancelWaitableTimer(HANDLE);
 WINBASEAPI BOOL        WINAPI CheckNameLegalDOS8Dot3A(const char*,char*,DWORD,BOOL*,BOOL*);
 WINBASEAPI BOOL        WINAPI CheckNameLegalDOS8Dot3W(const WCHAR*, char*,DWORD,BOOL*,BOOL*);
+WINBASEAPI BOOL        WINAPI CheckRemoteDebuggerPresent(HANDLE,BOOL*);
 WINBASEAPI BOOL        WINAPI ChangeTimerQueueTimer(HANDLE,HANDLE,ULONG,ULONG);
 WINADVAPI  BOOL        WINAPI CheckTokenMembership(HANDLE,PSID,PBOOL);
 WINBASEAPI BOOL        WINAPI ClearCommBreak(HANDLE);
@@ -1710,6 +1749,9 @@ WINADVAPI  BOOL        WINAPI ClearEventLogW(HANDLE,LPCWSTR);
 WINADVAPI  BOOL        WINAPI CloseEventLog(HANDLE);
 WINBASEAPI BOOL        WINAPI CloseHandle(HANDLE);
 WINBASEAPI VOID        WINAPI CloseThreadpool(PTP_POOL);
+WINBASEAPI VOID        WINAPI CloseThreadpoolCleanupGroup(PTP_CLEANUP_GROUP);
+WINBASEAPI VOID        WINAPI CloseThreadpoolCleanupGroupMembers(PTP_CLEANUP_GROUP,BOOL,PVOID);
+WINBASEAPI VOID        WINAPI CloseThreadpoolWait(PTP_WAIT);
 WINBASEAPI VOID        WINAPI CloseThreadpoolWork(PTP_WORK);
 WINBASEAPI BOOL        WINAPI CommConfigDialogA(LPCSTR,HWND,LPCOMMCONFIG);
 WINBASEAPI BOOL        WINAPI CommConfigDialogW(LPCWSTR,HWND,LPCOMMCONFIG);
@@ -1772,8 +1814,11 @@ WINBASEAPI HANDLE      WINAPI CreateNamedPipeW(LPCWSTR,DWORD,DWORD,DWORD,DWORD,D
 #define                       CreateNamedPipe WINELIB_NAME_AW(CreateNamedPipe)
 WINBASEAPI BOOL        WINAPI CreatePipe(PHANDLE,PHANDLE,LPSECURITY_ATTRIBUTES,DWORD);
 WINADVAPI  BOOL        WINAPI CreatePrivateObjectSecurity(PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR*,BOOL,HANDLE,PGENERIC_MAPPING);
+WINADVAPI  BOOL        WINAPI CreatePrivateObjectSecurityEx(PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR*,GUID*,BOOL,ULONG,HANDLE,PGENERIC_MAPPING);
 WINADVAPI  BOOL        WINAPI CreatePrivateObjectSecurityWithMultipleInheritance(PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR*,GUID**,ULONG,BOOL,ULONG,HANDLE,PGENERIC_MAPPING);
 WINBASEAPI PTP_POOL    WINAPI CreateThreadpool(PVOID);
+WINBASEAPI PTP_CLEANUP_GROUP WINAPI CreateThreadpoolCleanupGroup(void);
+WINBASEAPI PTP_WAIT    WINAPI CreateThreadpoolWait(PTP_WAIT_CALLBACK,PVOID,PTP_CALLBACK_ENVIRON);
 WINBASEAPI PTP_WORK    WINAPI CreateThreadpoolWork(PTP_WORK_CALLBACK,PVOID,PTP_CALLBACK_ENVIRON);
 WINBASEAPI BOOL        WINAPI CreateProcessA(LPCSTR,LPSTR,LPSECURITY_ATTRIBUTES,LPSECURITY_ATTRIBUTES,BOOL,DWORD,LPVOID,LPCSTR,LPSTARTUPINFOA,LPPROCESS_INFORMATION);
 WINBASEAPI BOOL        WINAPI CreateProcessW(LPCWSTR,LPWSTR,LPSECURITY_ATTRIBUTES,LPSECURITY_ATTRIBUTES,BOOL,DWORD,LPVOID,LPCWSTR,LPSTARTUPINFOW,LPPROCESS_INFORMATION);
@@ -1813,7 +1858,8 @@ WINBASEAPI BOOL        WINAPI DebugActiveProcessStop(DWORD);
 WINBASEAPI void        WINAPI DebugBreak(void);
 WINBASEAPI BOOL        WINAPI DebugBreakProcess(HANDLE);
 WINBASEAPI BOOL        WINAPI DebugSetProcessKillOnExit(BOOL);
-WINBASEAPI PVOID       WINAPI DecodePointer(PVOID);
+WINBASEAPI void *      WINAPI DecodePointer(void *);
+WINBASEAPI void *      WINAPI DecodeSystemPointer(void *);
 WINADVAPI  BOOL        WINAPI DecryptFileA(LPCSTR,DWORD);
 WINADVAPI  BOOL        WINAPI DecryptFileW(LPCWSTR,DWORD);
 #define                       DecryptFile WINELIB_NAME_AW(DecryptFile)
@@ -1828,6 +1874,7 @@ WINBASEAPI void        WINAPI DeleteFiber(LPVOID);
 WINBASEAPI BOOL        WINAPI DeleteFileA(LPCSTR);
 WINBASEAPI BOOL        WINAPI DeleteFileW(LPCWSTR);
 #define                       DeleteFile WINELIB_NAME_AW(DeleteFile)
+WINBASEAPI void        WINAPI DeleteProcThreadAttributeList(struct _PROC_THREAD_ATTRIBUTE_LIST*);
 WINBASEAPI BOOL        WINAPI DeleteTimerQueue(HANDLE);
 WINBASEAPI BOOL        WINAPI DeleteTimerQueueEx(HANDLE,HANDLE);
 WINBASEAPI BOOL        WINAPI DeleteTimerQueueTimer(HANDLE,HANDLE,HANDLE);
@@ -1847,7 +1894,8 @@ WINBASEAPI BOOL        WINAPI DuplicateHandle(HANDLE,HANDLE,HANDLE,HANDLE*,DWORD
 WINADVAPI  BOOL        WINAPI DuplicateToken(HANDLE,SECURITY_IMPERSONATION_LEVEL,PHANDLE);
 WINADVAPI  BOOL        WINAPI DuplicateTokenEx(HANDLE,DWORD,LPSECURITY_ATTRIBUTES,SECURITY_IMPERSONATION_LEVEL,TOKEN_TYPE,PHANDLE);
 WINBASEAPI BOOL        WINAPI EscapeCommFunction(HANDLE,UINT);
-WINBASEAPI PVOID       WINAPI EncodePointer(PVOID);
+WINBASEAPI void *      WINAPI EncodePointer(void *);
+WINBASEAPI void *      WINAPI EncodeSystemPointer(void *);
 WINADVAPI  BOOL        WINAPI EncryptFileA(LPCSTR);
 WINADVAPI  BOOL        WINAPI EncryptFileW(LPCWSTR);
 #define                       EncryptFile WINELIB_NAME_AW(EncryptFile)
@@ -2084,6 +2132,7 @@ WINBASEAPI BOOL        WINAPI GetLogicalProcessorInformation(PSYSTEM_LOGICAL_PRO
 WINBASEAPI BOOL        WINAPI GetLogicalProcessorInformationEx(LOGICAL_PROCESSOR_RELATIONSHIP,PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX,PDWORD);
 WINBASEAPI DWORD       WINAPI GetProcessHeaps(DWORD,PHANDLE);
 WINBASEAPI DWORD       WINAPI GetProcessId(HANDLE);
+WINBASEAPI DWORD       WINAPI GetProcessIdOfThread(HANDLE);
 WINBASEAPI BOOL        WINAPI GetProcessIoCounters(HANDLE,PIO_COUNTERS);
 WINBASEAPI BOOL        WINAPI GetProcessPriorityBoost(HANDLE,PBOOL);
 WINBASEAPI BOOL        WINAPI GetProcessShutdownParameters(LPDWORD,LPDWORD);
@@ -2224,6 +2273,7 @@ WINBASEAPI VOID        WINAPI InitializeConditionVariable(PCONDITION_VARIABLE);
 WINBASEAPI void        WINAPI InitializeCriticalSection(CRITICAL_SECTION *lpCrit);
 WINBASEAPI BOOL        WINAPI InitializeCriticalSectionAndSpinCount(CRITICAL_SECTION *,DWORD);
 WINBASEAPI BOOL        WINAPI InitializeCriticalSectionEx(CRITICAL_SECTION *,DWORD,DWORD);
+WINBASEAPI BOOL        WINAPI InitializeProcThreadAttributeList(struct _PROC_THREAD_ATTRIBUTE_LIST*,DWORD,DWORD,SIZE_T*);
 WINADVAPI  BOOL        WINAPI InitializeSecurityDescriptor(PSECURITY_DESCRIPTOR,DWORD);
 WINADVAPI  BOOL        WINAPI InitializeSid(PSID,PSID_IDENTIFIER_AUTHORITY,BYTE);
 WINBASEAPI VOID        WINAPI InitializeSListHead(PSLIST_HEADER);
@@ -2508,6 +2558,7 @@ WINBASEAPI DWORD       WINAPI SetThreadIdealProcessor(HANDLE,DWORD);
 WINBASEAPI BOOL        WINAPI SetThreadPriority(HANDLE,INT);
 WINBASEAPI BOOL        WINAPI SetThreadPriorityBoost(HANDLE,BOOL);
 WINADVAPI  BOOL        WINAPI SetThreadToken(PHANDLE,HANDLE);
+WINBASEAPI VOID        WINAPI SetThreadpoolWait(PTP_WAIT,HANDLE,FILETIME *);
 WINBASEAPI HANDLE      WINAPI SetTimerQueueTimer(HANDLE,WAITORTIMERCALLBACK,PVOID,DWORD,DWORD,BOOL);
 WINBASEAPI BOOL        WINAPI SetTimeZoneInformation(const TIME_ZONE_INFORMATION *);
 WINADVAPI  BOOL        WINAPI SetTokenInformation(HANDLE,TOKEN_INFORMATION_CLASS,LPVOID,DWORD);
@@ -2545,6 +2596,7 @@ WINBASEAPI BOOL        WINAPI TransmitCommChar(HANDLE,CHAR);
 WINBASEAPI BOOLEAN     WINAPI TryAcquireSRWLockExclusive(PSRWLOCK);
 WINBASEAPI BOOLEAN     WINAPI TryAcquireSRWLockShared(PSRWLOCK);
 WINBASEAPI BOOL        WINAPI TryEnterCriticalSection(CRITICAL_SECTION *lpCrit);
+WINBASEAPI BOOL        WINAPI TrySubmitThreadpoolCallback(PTP_SIMPLE_CALLBACK,void*,TP_CALLBACK_ENVIRON*);
 WINBASEAPI BOOL        WINAPI TzSpecificLocalTimeToSystemTime(const TIME_ZONE_INFORMATION*,const SYSTEMTIME*,LPSYSTEMTIME);
 WINBASEAPI LONG        WINAPI UnhandledExceptionFilter(PEXCEPTION_POINTERS);
 WINBASEAPI BOOL        WINAPI UnlockFile(HANDLE,DWORD,DWORD,DWORD,DWORD);
@@ -2554,6 +2606,7 @@ WINBASEAPI BOOL        WINAPI UnmapViewOfFile(LPCVOID);
 WINBASEAPI HRESULT     WINAPI UnregisterApplicationRestart(void);
 WINBASEAPI BOOL        WINAPI UnregisterWait(HANDLE);
 WINBASEAPI BOOL        WINAPI UnregisterWaitEx(HANDLE,HANDLE);
+WINBASEAPI BOOL        WINAPI UpdateProcThreadAttribute(struct _PROC_THREAD_ATTRIBUTE_LIST*,DWORD,DWORD_PTR,void*,SIZE_T,void*,SIZE_T*);
 WINBASEAPI BOOL        WINAPI UpdateResourceA(HANDLE,LPCSTR,LPCSTR,WORD,LPVOID,DWORD);
 WINBASEAPI BOOL        WINAPI UpdateResourceW(HANDLE,LPCWSTR,LPCWSTR,WORD,LPVOID,DWORD);
 #define                       UpdateResource WINELIB_NAME_AW(UpdateResource)
@@ -2901,13 +2954,19 @@ static FORCEINLINE LONG WINAPI InterlockedDecrement( LONG volatile *dest )
 
 /* A few optimizations for gcc */
 
-#if defined(__GNUC__) && !defined(__MINGW32__) && (defined(__i386__) || (defined(__x86_64__) && !defined(__APPLE__))) && ((__GNUC__ > 3) || ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 2)))
+#if defined(__GNUC__) && !defined(__MINGW32__) && (defined(__i386__) || defined(__x86_64__)) && ((__GNUC__ > 3) || ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 2)))
 
 static FORCEINLINE DWORD WINAPI GetLastError(void)
 {
     DWORD ret;
 #ifdef __x86_64__
+#ifdef __APPLE__
+    DWORD* teb;
+    __asm__ __volatile__( ".byte 0x65\n\tmovq 0x30,%0" : "=r" (teb) );
+    ret = teb[0x68 / sizeof(DWORD)];
+#else
     __asm__ __volatile__( ".byte 0x65\n\tmovl 0x68,%0" : "=r" (ret) );
+#endif
 #else
     __asm__ __volatile__( ".byte 0x64\n\tmovl 0x34,%0" : "=r" (ret) );
 #endif
@@ -2918,7 +2977,13 @@ static FORCEINLINE DWORD WINAPI GetCurrentProcessId(void)
 {
     DWORD ret;
 #ifdef __x86_64__
+#ifdef __APPLE__
+    DWORD* teb;
+    __asm__ __volatile__( ".byte 0x65\n\tmovq 0x30,%0" : "=r" (teb) );
+    ret = teb[0x40 / sizeof(DWORD)];
+#else
     __asm__ __volatile__( ".byte 0x65\n\tmovl 0x40,%0" : "=r" (ret) );
+#endif
 #else
     __asm__ __volatile__( ".byte 0x64\n\tmovl 0x20,%0" : "=r" (ret) );
 #endif
@@ -2929,7 +2994,13 @@ static FORCEINLINE DWORD WINAPI GetCurrentThreadId(void)
 {
     DWORD ret;
 #ifdef __x86_64__
+#ifdef __APPLE__
+    DWORD* teb;
+    __asm__ __volatile__( ".byte 0x65\n\tmovq 0x30,%0" : "=r" (teb) );
+    ret = teb[0x48 / sizeof(DWORD)];
+#else
     __asm__ __volatile__( ".byte 0x65\n\tmovl 0x48,%0" : "=r" (ret) );
+#endif
 #else
     __asm__ __volatile__( ".byte 0x64\n\tmovl 0x24,%0" : "=r" (ret) );
 #endif
@@ -2939,7 +3010,13 @@ static FORCEINLINE DWORD WINAPI GetCurrentThreadId(void)
 static FORCEINLINE void WINAPI SetLastError( DWORD err )
 {
 #ifdef __x86_64__
+#ifdef __APPLE__
+    DWORD* teb;
+    __asm__ __volatile__( ".byte 0x65\n\tmovq 0x30,%0" : "=r" (teb) );
+    teb[0x68 / sizeof(DWORD)] = err;
+#else
     __asm__ __volatile__( ".byte 0x65\n\tmovl %0,0x68" : : "r" (err) : "memory" );
+#endif
 #else
     __asm__ __volatile__( ".byte 0x64\n\tmovl %0,0x34" : : "r" (err) : "memory" );
 #endif
@@ -2949,7 +3026,13 @@ static FORCEINLINE HANDLE WINAPI GetProcessHeap(void)
 {
     HANDLE *pdb;
 #ifdef __x86_64__
+#ifdef __APPLE__
+    HANDLE** teb;
+    __asm__ __volatile__( ".byte 0x65\n\tmovq 0x30,%0" : "=r" (teb) );
+    pdb = teb[0x60 / sizeof(HANDLE*)];
+#else
     __asm__ __volatile__( ".byte 0x65\n\tmovq 0x60,%0" : "=r" (pdb) );
+#endif
     return pdb[0x30 / sizeof(HANDLE)];  /* get dword at offset 0x30 in pdb */
 #else
     __asm__ __volatile__( ".byte 0x64\n\tmovl 0x30,%0" : "=r" (pdb) );

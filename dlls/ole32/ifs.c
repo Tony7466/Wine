@@ -373,17 +373,22 @@ static const IMallocVtbl VT_IMalloc32 =
  * Retrieves the current IMalloc interface for the process.
  *
  * PARAMS
- *  dwMemContext [I]
- *  lpMalloc     [O] Address where memory allocator object will be stored.
+ *  context [I] Should always be MEMCTX_TASK.
+ *  imalloc [O] Address where memory allocator object will be stored.
  *
  * RETURNS
  *	Success: S_OK.
  *  Failure: HRESULT code.
  */
-HRESULT WINAPI CoGetMalloc(DWORD dwMemContext, LPMALLOC *lpMalloc)
+HRESULT WINAPI CoGetMalloc(DWORD context, IMalloc **imalloc)
 {
-        *lpMalloc = &Malloc32.IMalloc_iface;
-        return S_OK;
+    if (context != MEMCTX_TASK) {
+        *imalloc = NULL;
+        return E_INVALIDARG;
+    }
+
+    *imalloc = &Malloc32.IMalloc_iface;
+    return S_OK;
 }
 
 /***********************************************************************
@@ -459,13 +464,15 @@ HRESULT WINAPI CoRegisterMallocSpy(LPMALLOCSPY pMallocSpy)
 	IMallocSpy* pSpy;
         HRESULT hres = E_INVALIDARG;
 
-	TRACE("\n");
+	TRACE("%p\n", pMallocSpy);
 
-	if(Malloc32.pSpy) return CO_E_OBJISREG;
+	if(!pMallocSpy) return E_INVALIDARG;
 
         EnterCriticalSection(&IMalloc32_SpyCS);
 
-	if (SUCCEEDED(IMallocSpy_QueryInterface(pMallocSpy, &IID_IMallocSpy, (void**)&pSpy))) {
+	if (Malloc32.pSpy)
+	    hres = CO_E_OBJISREG;
+	else if (SUCCEEDED(IMallocSpy_QueryInterface(pMallocSpy, &IID_IMallocSpy, (void**)&pSpy))) {
 	    Malloc32.pSpy = pSpy;
 	    hres = S_OK;
 	}
@@ -499,7 +506,9 @@ HRESULT WINAPI CoRevokeMallocSpy(void)
 
         EnterCriticalSection(&IMalloc32_SpyCS);
 
-	if (Malloc32.SpyedAllocationsLeft) {
+	if (!Malloc32.pSpy)
+	    hres = CO_E_OBJNOTREG;
+	else if (Malloc32.SpyedAllocationsLeft) {
             TRACE("SpyReleasePending with %u allocations left\n", Malloc32.SpyedAllocationsLeft);
 	    Malloc32.SpyReleasePending = TRUE;
 	    hres = E_ACCESSDENIED;

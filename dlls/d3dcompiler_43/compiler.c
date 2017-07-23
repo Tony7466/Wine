@@ -471,8 +471,8 @@ HRESULT WINAPI D3DAssemble(const void *data, SIZE_T datasize, const char *filena
 {
     HRESULT hr;
 
-    TRACE("data %p, datasize %lu, filename %s, defines %p, include %p, sflags %#x,\n"
-            "shader %p, error_messages %p\n",
+    TRACE("data %p, datasize %lu, filename %s, defines %p, include %p, sflags %#x, "
+            "shader %p, error_messages %p.\n",
             data, datasize, debugstr_a(filename), defines, include, flags, shader, error_messages);
 
     EnterCriticalSection(&wpp_mutex);
@@ -700,9 +700,9 @@ HRESULT WINAPI D3DCompile2(const void *data, SIZE_T data_size, const char *filen
 {
     HRESULT hr;
 
-    TRACE("data %p, data_size %lu, filename %s, defines %p, include %p, entrypoint %s,\n"
-            "target %s, sflags %#x, eflags %#x, secondary_flags %#x, secondary_data %p,\n"
-            "secondary_data_size %lu, shader %p, error_messages %p\n",
+    TRACE("data %p, data_size %lu, filename %s, defines %p, include %p, entrypoint %s, "
+            "target %s, sflags %#x, eflags %#x, secondary_flags %#x, secondary_data %p, "
+            "secondary_data_size %lu, shader %p, error_messages %p.\n",
             data, data_size, debugstr_a(filename), defines, include, debugstr_a(entrypoint),
             debugstr_a(target), sflags, eflags, secondary_flags, secondary_data,
             secondary_data_size, shader, error_messages);
@@ -728,8 +728,8 @@ HRESULT WINAPI D3DCompile(const void *data, SIZE_T data_size, const char *filena
         const D3D_SHADER_MACRO *defines, ID3DInclude *include, const char *entrypoint,
         const char *target, UINT sflags, UINT eflags, ID3DBlob **shader, ID3DBlob **error_messages)
 {
-    TRACE("data %p, data_size %lu, filename %s, defines %p, include %p, entrypoint %s,\n"
-            "target %s, sflags %#x, eflags %#x, shader %p, error_messages %p\n",
+    TRACE("data %p, data_size %lu, filename %s, defines %p, include %p, entrypoint %s, "
+            "target %s, sflags %#x, eflags %#x, shader %p, error_messages %p.\n",
             data, data_size, debugstr_a(filename), defines, include, debugstr_a(entrypoint),
             debugstr_a(target), sflags, eflags, shader, error_messages);
 
@@ -790,5 +790,11 @@ HRESULT WINAPI D3DCompileFromFile(const WCHAR *filename, const D3D_SHADER_MACRO 
     FIXME("filename %s, defines %p, includes %p, entrypoint %s, target %s, flags1 %x, flags2 %x, code %p, errors %p\n",
             debugstr_w(filename), defines, includes, debugstr_a(entrypoint), debugstr_a(target), flags1, flags2, code, errors);
 
+    return E_NOTIMPL;
+}
+
+HRESULT WINAPI D3DLoadModule(const void *data, SIZE_T size, ID3D11Module **module)
+{
+    FIXME("data %p, size %lu, module %p stub!\n", data, size, module);
     return E_NOTIMPL;
 }

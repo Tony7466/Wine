@@ -4318,7 +4318,7 @@ static void _SHCreateSymbolicLinks(void)
         }
 
         /* Replace 'My Documents' directory with a symlink or fail silently if not empty. */
-        rmdir(pszPersonal);
+        remove(pszPersonal);
         symlink(szPersonalTarget, pszPersonal);
     }
     else
@@ -4374,7 +4374,7 @@ static void _SHCreateSymbolicLinks(void)
             strcpy(szMyStuffTarget, szPersonalTarget);
             break;
         }
-        rmdir(pszMyStuff);
+        remove(pszMyStuff);
         symlink(szMyStuffTarget, pszMyStuff);
         HeapFree(GetProcessHeap(), 0, pszMyStuff);
     }
@@ -4395,7 +4395,7 @@ static void _SHCreateSymbolicLinks(void)
                               SHGFP_TYPE_DEFAULT, wszTempPath);
         if (SUCCEEDED(hr) && (pszDesktop = wine_get_unix_file_name(wszTempPath))) 
         {
-            rmdir(pszDesktop);
+            remove(pszDesktop);
             if (xdg_desktop_dir)
                 symlink(xdg_desktop_dir, pszDesktop);
             else
@@ -5643,8 +5643,49 @@ static HRESULT WINAPI foldermanager_GetFolderByName(
     LPCWSTR pszCanonicalName,
     IKnownFolder **ppkf)
 {
-    FIXME("%s, %p\n", debugstr_w(pszCanonicalName), ppkf);
-    return E_NOTIMPL;
+    struct foldermanager *fm = impl_from_IKnownFolderManager( iface );
+    struct knownfolder *kf;
+    BOOL found = FALSE;
+    HRESULT hr;
+    UINT i;
+
+    TRACE( "%s, %p\n", debugstr_w(pszCanonicalName), ppkf );
+
+    for (i = 0; i < fm->num_ids; i++)
+    {
+        WCHAR *path, *name;
+        hr = get_known_folder_registry_path( &fm->ids[i], NULL, &path );
+        if (FAILED( hr )) return hr;
+
+        hr = get_known_folder_wstr( path, szName, &name );
+        HeapFree( GetProcessHeap(), 0, path );
+        if (FAILED( hr )) return hr;
+
+        found = !strcmpiW( pszCanonicalName, name );
+        CoTaskMemFree( name );
+        if (found) break;
+    }
+
+    if (found)
+    {
+        hr = knownfolder_create( &kf );
+        if (FAILED( hr )) return hr;
+
+        hr = knownfolder_set_id( kf, &fm->ids[i] );
+        if (FAILED( hr ))
+        {
+            IKnownFolder_Release( &kf->IKnownFolder_iface );
+            return hr;
+        }
+        *ppkf = &kf->IKnownFolder_iface;
+    }
+    else
+    {
+        hr = HRESULT_FROM_WIN32( ERROR_FILE_NOT_FOUND );
+        *ppkf = NULL;
+    }
+
+    return hr;
 }
 
 static HRESULT register_folder(const KNOWNFOLDERID *rfid, const KNOWNFOLDER_DEFINITION *pKFD)

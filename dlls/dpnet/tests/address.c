@@ -123,6 +123,15 @@ static void address_addcomponents(void)
         hr = IDirectPlay8Address_AddComponent(localaddr, DPNA_KEY_HOSTNAME, &localhost, sizeof(localhost)+2, DPNA_DATATYPE_STRING);
         ok(hr == DPNERR_INVALIDPARAM, "got 0x%08x\n", hr);
 
+        size = 0;
+        hr = IDirectPlay8Address_GetComponentByName(localaddr, DPNA_KEY_HOSTNAME, NULL, &size, &type);
+        ok(hr == DPNERR_BUFFERTOOSMALL, "got 0x%08x\n", hr);
+        ok(size == sizeof(localhost), "Invalid string length: %d\n", size);
+
+        size = 1;
+        hr = IDirectPlay8Address_GetComponentByName(localaddr, DPNA_KEY_HOSTNAME, NULL, &size, &type);
+        ok(hr == E_POINTER, "got 0x%08x\n", hr);
+
         size = sizeof(buffer);
         hr = IDirectPlay8Address_GetComponentByName(localaddr, DPNA_KEY_HOSTNAME, buffer, &size, &type);
         ok(hr == S_OK, "got 0x%08x\n", hr);
@@ -344,9 +353,43 @@ static void address_duplicate(void)
     }
 }
 
+/* taken from programs/winetest/main.c */
+static BOOL is_stub_dll(const char *filename)
+{
+    DWORD size, ver;
+    BOOL isstub = FALSE;
+    char *p, *data;
+
+    size = GetFileVersionInfoSizeA(filename, &ver);
+    if (!size) return FALSE;
+
+    data = HeapAlloc(GetProcessHeap(), 0, size);
+    if (!data) return FALSE;
+
+    if (GetFileVersionInfoA(filename, ver, size, data))
+    {
+        char buf[256];
+
+        sprintf(buf, "\\StringFileInfo\\%04x%04x\\OriginalFilename", MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US), 1200);
+        if (VerQueryValueA(data, buf, (void**)&p, &size))
+            isstub = !lstrcmpiA("wcodstub.dll", p);
+    }
+    HeapFree(GetProcessHeap(), 0, data);
+
+    return isstub;
+}
+
 START_TEST(address)
 {
     HRESULT hr;
+
+    if (!winetest_interactive &&
+        (is_stub_dll("c:\\windows\\system32\\dpnet.dll") ||
+         is_stub_dll("c:\\windows\\syswow64\\dpnet.dll")))
+    {
+        win_skip("dpnet is a stub dll, skipping tests\n");
+        return;
+    }
 
     hr = CoInitialize(0);
     ok(hr == S_OK, "failed to init com\n");

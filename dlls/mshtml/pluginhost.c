@@ -124,10 +124,7 @@ static void update_readystate(PluginHost *host)
 /* FIXME: We shouldn't need this function and we should embed plugin directly in the main document */
 static void get_pos_rect(PluginHost *host, RECT *ret)
 {
-    ret->top = 0;
-    ret->left = 0;
-    ret->bottom = host->rect.bottom - host->rect.top;
-    ret->right = host->rect.right - host->rect.left;
+    SetRect(ret, 0, 0, host->rect.right - host->rect.left, host->rect.bottom - host->rect.top);
 }
 
 static void load_prop_bag(PluginHost *host, IPersistPropertyBag *persist_prop_bag)
@@ -314,7 +311,7 @@ void update_plugin_window(PluginHost *host, HWND hwnd, const RECT *rect)
 
     TRACE("%p %s\n", hwnd, wine_dbgstr_rect(rect));
 
-    if(memcmp(rect, &host->rect, sizeof(RECT))) {
+    if(!EqualRect(rect, &host->rect)) {
         host->rect = *rect;
         rect_changed = TRUE;
     }

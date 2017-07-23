@@ -95,7 +95,7 @@ static void test_tr2_sys__Last_write_time(void)
     newtime = last_write_time + 222222;
     p_tr2_sys__Last_write_time_set("tr2_test_dir/f1", newtime);
     ok(last_write_time != p_tr2_sys__Last_write_time("tr2_test_dir/f1"),
-            "last_write_time before modfied should not equal to last_write_time %s\n",
+            "last_write_time should have changed: %s\n",
             debugstr_longlong(last_write_time));
 
     /* test the formula */
@@ -155,9 +155,45 @@ static void test_tr2_sys__Last_write_time(void)
     ok(ret == 1, "test_tr2_sys__Remove_dir(): expect 1 got %d\n", ret);
 }
 
+static struct {
+    int value[2];
+    const char* export_name;
+} vbtable_size_exports_list[] = {
+    {{0x20, 0x20}, "??_8?$basic_iostream@DU?$char_traits@D@std@@@std@@7B?$basic_istream@DU?$char_traits@D@std@@@1@@"},
+    {{0x10, 0x10}, "??_8?$basic_iostream@DU?$char_traits@D@std@@@std@@7B?$basic_ostream@DU?$char_traits@D@std@@@1@@"},
+    {{0x20, 0x20}, "??_8?$basic_iostream@GU?$char_traits@G@std@@@std@@7B?$basic_istream@GU?$char_traits@G@std@@@1@@"},
+    {{0x10, 0x10}, "??_8?$basic_iostream@GU?$char_traits@G@std@@@std@@7B?$basic_ostream@GU?$char_traits@G@std@@@1@@"},
+    {{0x20, 0x20}, "??_8?$basic_iostream@_WU?$char_traits@_W@std@@@std@@7B?$basic_istream@_WU?$char_traits@_W@std@@@1@@"},
+    {{0x10, 0x10}, "??_8?$basic_iostream@_WU?$char_traits@_W@std@@@std@@7B?$basic_ostream@_WU?$char_traits@_W@std@@@1@@"},
+    {{0x18, 0x18}, "??_8?$basic_istream@DU?$char_traits@D@std@@@std@@7B@"},
+    {{0x18, 0x18}, "??_8?$basic_istream@GU?$char_traits@G@std@@@std@@7B@"},
+    {{0x18, 0x18}, "??_8?$basic_istream@_WU?$char_traits@_W@std@@@std@@7B@"},
+    {{ 0x8, 0x10}, "??_8?$basic_ostream@DU?$char_traits@D@std@@@std@@7B@"},
+    {{ 0x8, 0x10}, "??_8?$basic_ostream@GU?$char_traits@G@std@@@std@@7B@"},
+    {{ 0x8, 0x10}, "??_8?$basic_ostream@_WU?$char_traits@_W@std@@@std@@7B@"},
+    {{ 0x0,  0x0}, 0}
+};
+
+static void test_vbtable_size_exports(void)
+{
+    int i;
+    const int *p_vbtable;
+    int arch_idx = (sizeof(void*) == 8);
+
+    for (i = 0; vbtable_size_exports_list[i].export_name; i++)
+    {
+        SET(p_vbtable, vbtable_size_exports_list[i].export_name);
+
+        ok(p_vbtable[0] == 0, "vbtable[0] wrong, got 0x%x\n", p_vbtable[0]);
+        ok(p_vbtable[1] == vbtable_size_exports_list[i].value[arch_idx],
+                "%d: %s[1] wrong, got 0x%x\n", i, vbtable_size_exports_list[i].export_name, p_vbtable[1]);
+    }
+}
+
 START_TEST(msvcp110)
 {
     if(!init()) return;
     test_tr2_sys__Last_write_time();
+    test_vbtable_size_exports();
     FreeLibrary(msvcp);
 }

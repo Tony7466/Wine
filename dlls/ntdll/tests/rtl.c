@@ -82,7 +82,6 @@ static RTL_HANDLE * (WINAPI * pRtlAllocateHandle)(RTL_HANDLE_TABLE *, ULONG *);
 static BOOLEAN   (WINAPI * pRtlFreeHandle)(RTL_HANDLE_TABLE *, RTL_HANDLE *);
 static NTSTATUS  (WINAPI *pRtlAllocateAndInitializeSid)(PSID_IDENTIFIER_AUTHORITY,BYTE,DWORD,DWORD,DWORD,DWORD,DWORD,DWORD,DWORD,DWORD,PSID*);
 static NTSTATUS  (WINAPI *pRtlFreeSid)(PSID);
-static struct _TEB * (WINAPI *pNtCurrentTeb)(void);
 static DWORD     (WINAPI *pRtlGetThreadErrorMode)(void);
 static NTSTATUS  (WINAPI *pRtlSetThreadErrorMode)(DWORD, LPDWORD);
 static IMAGE_BASE_RELOCATION *(WINAPI *pLdrProcessRelocationBlock)(void*,UINT,USHORT*,INT_PTR);
@@ -98,6 +97,7 @@ static NTSTATUS  (WINAPI *pRtlDecompressFragment)(USHORT, PUCHAR, ULONG, const U
 static NTSTATUS  (WINAPI *pRtlCompressBuffer)(USHORT, const UCHAR*, ULONG, PUCHAR, ULONG, ULONG, PULONG, PVOID);
 static BOOL      (WINAPI *pRtlIsCriticalSectionLocked)(CRITICAL_SECTION *);
 static BOOL      (WINAPI *pRtlIsCriticalSectionLockedByThread)(CRITICAL_SECTION *);
+static NTSTATUS  (WINAPI *pRtlInitializeCriticalSectionEx)(CRITICAL_SECTION *, ULONG, ULONG);
 
 static HMODULE hkernel32 = 0;
 static BOOL      (WINAPI *pIsWow64Process)(HANDLE, PBOOL);
@@ -135,7 +135,6 @@ static void InitFunctionPtrs(void)
 	pRtlFreeHandle = (void *)GetProcAddress(hntdll, "RtlFreeHandle");
         pRtlAllocateAndInitializeSid = (void *)GetProcAddress(hntdll, "RtlAllocateAndInitializeSid");
         pRtlFreeSid = (void *)GetProcAddress(hntdll, "RtlFreeSid");
-        pNtCurrentTeb = (void *)GetProcAddress(hntdll, "NtCurrentTeb");
         pRtlGetThreadErrorMode = (void *)GetProcAddress(hntdll, "RtlGetThreadErrorMode");
         pRtlSetThreadErrorMode = (void *)GetProcAddress(hntdll, "RtlSetThreadErrorMode");
         pLdrProcessRelocationBlock  = (void *)GetProcAddress(hntdll, "LdrProcessRelocationBlock");
@@ -151,6 +150,7 @@ static void InitFunctionPtrs(void)
         pRtlCompressBuffer = (void *)GetProcAddress(hntdll, "RtlCompressBuffer");
         pRtlIsCriticalSectionLocked = (void *)GetProcAddress(hntdll, "RtlIsCriticalSectionLocked");
         pRtlIsCriticalSectionLockedByThread = (void *)GetProcAddress(hntdll, "RtlIsCriticalSectionLockedByThread");
+        pRtlInitializeCriticalSectionEx = (void *)GetProcAddress(hntdll, "RtlInitializeCriticalSectionEx");
     }
     hkernel32 = LoadLibraryA("kernel32.dll");
     ok(hkernel32 != 0, "LoadLibrary failed\n");
@@ -895,10 +895,12 @@ static void test_RtlThreadErrorMode(void)
        mode, oldmode);
     ok(pRtlGetThreadErrorMode() == 0x70,
        "RtlGetThreadErrorMode returned 0x%x, expected 0x%x\n", mode, 0x70);
-    if (!is_wow64 && pNtCurrentTeb)
-        ok(pNtCurrentTeb()->HardErrorDisabled == 0x70,
+    if (!is_wow64)
+    {
+        ok(NtCurrentTeb()->HardErrorDisabled == 0x70,
            "The TEB contains 0x%x, expected 0x%x\n",
-           pNtCurrentTeb()->HardErrorDisabled, 0x70);
+           NtCurrentTeb()->HardErrorDisabled, 0x70);
+    }
 
     status = pRtlSetThreadErrorMode(0, &mode);
     ok(status == STATUS_SUCCESS ||
@@ -909,10 +911,12 @@ static void test_RtlThreadErrorMode(void)
        mode, 0x70);
     ok(pRtlGetThreadErrorMode() == 0,
        "RtlGetThreadErrorMode returned 0x%x, expected 0x%x\n", mode, 0);
-    if (!is_wow64 && pNtCurrentTeb)
-        ok(pNtCurrentTeb()->HardErrorDisabled == 0,
+    if (!is_wow64)
+    {
+        ok(NtCurrentTeb()->HardErrorDisabled == 0,
            "The TEB contains 0x%x, expected 0x%x\n",
-           pNtCurrentTeb()->HardErrorDisabled, 0);
+           NtCurrentTeb()->HardErrorDisabled, 0);
+    }
 
     for (mode = 1; mode; mode <<= 1)
     {
@@ -2056,6 +2060,40 @@ static void test_RtlIsCriticalSectionLocked(void)
     DeleteCriticalSection(&info.crit);
 }
 
+static void test_RtlInitializeCriticalSectionEx(void)
+{
+    static const CRITICAL_SECTION_DEBUG *no_debug = (void *)~(ULONG_PTR)0;
+    CRITICAL_SECTION cs;
+
+    if (!pRtlInitializeCriticalSectionEx)
+    {
+        win_skip("RtlInitializeCriticalSectionEx is not available\n");
+        return;
+    }
+
+    memset(&cs, 0x11, sizeof(cs));
+    pRtlInitializeCriticalSectionEx(&cs, 0, 0);
+    ok((cs.DebugInfo != NULL && cs.DebugInfo != no_debug) || broken(cs.DebugInfo == no_debug) /* >= Win 8 */,
+       "expected DebugInfo != NULL and DebugInfo != ~0, got %p\n", cs.DebugInfo);
+    ok(cs.LockCount == -1, "expected LockCount == -1, got %d\n", cs.LockCount);
+    ok(cs.RecursionCount == 0, "expected RecursionCount == 0, got %d\n", cs.RecursionCount);
+    ok(cs.LockSemaphore == NULL, "expected LockSemaphore == NULL, got %p\n", cs.LockSemaphore);
+    ok(cs.SpinCount == 0 || broken(cs.SpinCount != 0) /* >= Win 8 */,
+       "expected SpinCount == 0, got %ld\n", cs.SpinCount);
+    RtlDeleteCriticalSection(&cs);
+
+    memset(&cs, 0x11, sizeof(cs));
+    pRtlInitializeCriticalSectionEx(&cs, 0, RTL_CRITICAL_SECTION_FLAG_NO_DEBUG_INFO);
+    todo_wine
+    ok(cs.DebugInfo == no_debug, "expected DebugInfo == ~0, got %p\n", cs.DebugInfo);
+    ok(cs.LockCount == -1, "expected LockCount == -1, got %d\n", cs.LockCount);
+    ok(cs.RecursionCount == 0, "expected RecursionCount == 0, got %d\n", cs.RecursionCount);
+    ok(cs.LockSemaphore == NULL, "expected LockSemaphore == NULL, got %p\n", cs.LockSemaphore);
+    ok(cs.SpinCount == 0 || broken(cs.SpinCount != 0) /* >= Win 8 */,
+       "expected SpinCount == 0, got %ld\n", cs.SpinCount);
+    RtlDeleteCriticalSection(&cs);
+}
+
 START_TEST(rtl)
 {
     InitFunctionPtrs();
@@ -2086,4 +2124,5 @@ START_TEST(rtl)
     test_RtlGetCompressionWorkSpaceSize();
     test_RtlDecompressBuffer();
     test_RtlIsCriticalSectionLocked();
+    test_RtlInitializeCriticalSectionEx();
 }

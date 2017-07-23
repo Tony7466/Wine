@@ -99,6 +99,8 @@ static HRESULT WINAPI IDirectPlay8LobbiedApplicationImpl_Initialize(IDirectPlay8
     This->usercontext = pvUserContext;
     This->connection = pdpnhConnection;
 
+    init_winsock();
+
     return DPN_OK;
 }
 

@@ -42,9 +42,10 @@ static WCHAR initstring_default[] = {'D','a','t','a',' ','S','o','u','r','c','e'
 #define EXPECT_REF(obj,ref) _expect_ref((IUnknown*)obj, ref, __LINE__)
 static void _expect_ref(IUnknown* obj, ULONG ref, int line)
 {
-    ULONG rc = IUnknown_AddRef(obj);
-    IUnknown_Release(obj);
-    ok_(__FILE__,line)(rc-1 == ref, "expected refcount %d, got %d\n", ref, rc-1);
+    ULONG rc;
+    IUnknown_AddRef(obj);
+    rc = IUnknown_Release(obj);
+    ok_(__FILE__, line)(rc == ref, "expected refcount %d, got %d\n", ref, rc);
 }
 
 static void test_GetDataSource(WCHAR *initstring)
@@ -313,73 +314,179 @@ static void test_database(void)
     test_GetDataSource2(extended_prop);
 }
 
+static void free_dispparams(DISPPARAMS *params)
+{
+    unsigned int i;
+
+    for (i = 0; i < params->cArgs && params->rgvarg; i++)
+        VariantClear(&params->rgvarg[i]);
+    CoTaskMemFree(params->rgvarg);
+    CoTaskMemFree(params->rgdispidNamedArgs);
+}
+
 static void test_errorinfo(void)
 {
+    ICreateErrorInfo *createerror;
+    ERRORINFO info, info2, info3;
+    IErrorInfo *errorinfo, *errorinfo2;
+    IErrorRecords *errrecs;
+    IUnknown *unk = NULL, *unk2;
+    DISPPARAMS dispparams;
+    DISPID dispid;
+    DWORD context;
+    ULONG cnt = 0;
+    VARIANT arg;
     HRESULT hr;
-    IUnknown *unk = NULL;
+    GUID guid;
+    BSTR str;
 
-    hr = CoCreateInstance(&CSLID_MSDAER, NULL, CLSCTX_INPROC_SERVER, &IID_IUnknown,(void**)&unk);
+    hr = CoCreateInstance(&CSLID_MSDAER, NULL, CLSCTX_INPROC_SERVER, &IID_IUnknown, (void**)&unk);
     ok(hr == S_OK, "got %08x\n", hr);
-    if(hr == S_OK)
-    {
-        IErrorInfo *errorinfo;
-        IErrorRecords *errrecs;
 
-        hr = IUnknown_QueryInterface(unk, &IID_IErrorInfo, (void**)&errorinfo);
-        ok(hr == S_OK, "got %08x\n", hr);
-        if(hr == S_OK)
-        {
-            IErrorInfo_Release(errorinfo);
-        }
+    hr = IUnknown_QueryInterface(unk, &IID_IErrorInfo, (void**)&errorinfo);
+    ok(hr == S_OK, "got %08x\n", hr);
 
-        hr = IUnknown_QueryInterface(unk, &IID_IErrorRecords, (void**)&errrecs);
-        ok(hr == S_OK, "got %08x\n", hr);
-        if(hr == S_OK)
-        {
-            ERRORINFO info, info2, info3;
-            ULONG cnt = 0;
+    hr = IErrorInfo_GetGUID(errorinfo, NULL);
+    ok(hr == E_INVALIDARG, "got %08x\n", hr);
 
-            memset(&info, 0, sizeof(ERRORINFO));
-            info.dwMinor = 1;
-            memset(&info2, 0, sizeof(ERRORINFO));
-            info2.dwMinor = 2;
-            memset(&info3, 0, sizeof(ERRORINFO));
+    hr = IErrorInfo_GetSource(errorinfo, NULL);
+    ok(hr == E_INVALIDARG, "got %08x\n", hr);
 
-            hr = IErrorRecords_AddErrorRecord(errrecs, NULL, 268435456, NULL, NULL, 0);
-            ok(hr == E_INVALIDARG, "got %08x\n", hr);
+    hr = IErrorInfo_GetDescription(errorinfo, NULL);
+    ok(hr == E_INVALIDARG, "got %08x\n", hr);
 
-            hr = IErrorRecords_AddErrorRecord(errrecs, &info, 1, NULL, NULL, 0);
-            ok(hr == S_OK, "got %08x\n", hr);
+    hr = IErrorInfo_GetHelpFile(errorinfo, NULL);
+    ok(hr == E_INVALIDARG, "got %08x\n", hr);
 
-            hr = IErrorRecords_GetRecordCount(errrecs, &cnt);
-            ok(hr == S_OK, "got %08x\n", hr);
-            ok(cnt == 1, "expected 1 got %d\n", cnt);
+    hr = IErrorInfo_GetHelpContext(errorinfo, NULL);
+    ok(hr == E_INVALIDARG, "got %08x\n", hr);
 
-            hr = IErrorRecords_AddErrorRecord(errrecs, &info2, 2, NULL, NULL, 0);
-            ok(hr == S_OK, "got %08x\n", hr);
+    memset(&guid, 0xac, sizeof(guid));
+    hr = IErrorInfo_GetGUID(errorinfo, &guid);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(IsEqualGUID(&guid, &GUID_NULL), "got wrong guid\n");
 
-            hr = IErrorRecords_GetRecordCount(errrecs, &cnt);
-            ok(hr == S_OK, "got %08x\n", hr);
-            ok(cnt == 2, "expected 2 got %d\n", cnt);
+    str = (BSTR)0x1;
+    hr = IErrorInfo_GetSource(errorinfo, &str);
+    ok(hr == E_FAIL, "got %08x\n", hr);
+    ok(str == NULL, "got %s\n", wine_dbgstr_w(str));
 
-            hr = IErrorRecords_GetBasicErrorInfo(errrecs, 0, NULL);
-            ok(hr == E_INVALIDARG, "got %08x\n", hr);
+    str = (BSTR)0x1;
+    hr = IErrorInfo_GetDescription(errorinfo, &str);
+    ok(hr == E_FAIL, "got %08x\n", hr);
+    ok(str == NULL, "got %s\n", wine_dbgstr_w(str));
 
-            hr = IErrorRecords_GetBasicErrorInfo(errrecs, 100, &info3);
-            ok(hr == DB_E_BADRECORDNUM, "got %08x\n", hr);
+    str = (BSTR)0x1;
+    hr = IErrorInfo_GetHelpFile(errorinfo, &str);
+    ok(hr == E_FAIL, "got %08x\n", hr);
+    ok(str == NULL, "got %s\n", wine_dbgstr_w(str));
 
-            hr = IErrorRecords_GetBasicErrorInfo(errrecs, 0, &info3);
-            todo_wine ok(hr == S_OK, "got %08x\n", hr);
-            if(hr == S_OK)
-            {
-                ok(info3.dwMinor == 2, "expected 2 got %d\n", info3.dwMinor);
-            }
+    context = 1;
+    hr = IErrorInfo_GetHelpContext(errorinfo, &context);
+    ok(hr == E_FAIL, "got %08x\n", hr);
+    ok(context == 0, "got %d\n", context);
 
-            IErrorRecords_Release(errrecs);
-        }
+    IErrorInfo_Release(errorinfo);
 
-        IUnknown_Release(unk);
-    }
+    hr = IErrorInfo_QueryInterface(errorinfo, &IID_ICreateErrorInfo, (void**)&createerror);
+    ok(hr == E_NOINTERFACE, "got %08x\n", hr);
+
+    hr = IUnknown_QueryInterface(unk, &IID_IErrorRecords, (void**)&errrecs);
+    ok(hr == S_OK, "got %08x\n", hr);
+
+    hr = IErrorRecords_GetRecordCount(errrecs, &cnt);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(cnt == 0, "Got unexpected record count %u\n", cnt);
+
+    hr = IErrorRecords_GetBasicErrorInfo(errrecs, 0, &info3);
+    ok(hr == DB_E_BADRECORDNUM, "got %08x\n", hr);
+
+    hr = IErrorRecords_GetCustomErrorObject(errrecs, 0, &IID_IUnknown, &unk2);
+    ok(hr == DB_E_BADRECORDNUM, "got %08x\n", hr);
+
+    hr = IErrorRecords_GetErrorInfo(errrecs, 0, 0, &errorinfo2);
+    ok(hr == DB_E_BADRECORDNUM, "got %08x\n", hr);
+
+    hr = IErrorRecords_GetErrorParameters(errrecs, 0, &dispparams);
+    ok(hr == DB_E_BADRECORDNUM, "got %08x\n", hr);
+
+    memset(&info, 0, sizeof(ERRORINFO));
+    info.dwMinor = 1;
+    memset(&info2, 0, sizeof(ERRORINFO));
+    info2.dwMinor = 2;
+    memset(&info3, 0, sizeof(ERRORINFO));
+
+    hr = IErrorRecords_AddErrorRecord(errrecs, NULL, 268435456, NULL, NULL, 0);
+    ok(hr == E_INVALIDARG, "got %08x\n", hr);
+
+    hr = IErrorRecords_AddErrorRecord(errrecs, &info, 1, NULL, NULL, 0);
+    ok(hr == S_OK, "got %08x\n", hr);
+
+    hr = IErrorRecords_GetRecordCount(errrecs, &cnt);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(cnt == 1, "expected 1 got %d\n", cnt);
+
+    /* Record does not contain custom error object. */
+    unk2 = (void*)0xdeadbeef;
+    hr = IErrorRecords_GetCustomErrorObject(errrecs, 0, &IID_IUnknown, &unk2);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(unk2 == NULL, "Got custom object %p.\n", unk2);
+
+    hr = IErrorRecords_AddErrorRecord(errrecs, &info2, 2, NULL, NULL, 0);
+    ok(hr == S_OK, "got %08x\n", hr);
+
+    hr = IErrorRecords_GetRecordCount(errrecs, &cnt);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(cnt == 2, "expected 2 got %d\n", cnt);
+
+    hr = IErrorRecords_GetBasicErrorInfo(errrecs, 0, NULL);
+    ok(hr == E_INVALIDARG, "got %08x\n", hr);
+
+    hr = IErrorRecords_GetBasicErrorInfo(errrecs, 100, &info3);
+    ok(hr == DB_E_BADRECORDNUM, "got %08x\n", hr);
+
+    hr = IErrorRecords_GetBasicErrorInfo(errrecs, 0, &info3);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(info3.dwMinor == 2, "expected 2 got %d\n", info3.dwMinor);
+
+    hr = IErrorRecords_GetErrorParameters(errrecs, 0, NULL);
+    ok(hr == E_INVALIDARG, "got %08x\n", hr);
+
+    memset(&dispparams, 0xcc, sizeof(dispparams));
+    hr = IErrorRecords_GetErrorParameters(errrecs, 0, &dispparams);
+    ok(hr == S_OK, "got %08x\n", hr);
+    ok(dispparams.rgvarg == NULL, "Got arguments %p\n", dispparams.rgvarg);
+    ok(dispparams.rgdispidNamedArgs == NULL, "Got named arguments %p\n", dispparams.rgdispidNamedArgs);
+    ok(dispparams.cArgs == 0, "Got argument count %u\n", dispparams.cArgs);
+    ok(dispparams.cNamedArgs == 0, "Got named argument count %u\n", dispparams.cNamedArgs);
+
+    V_VT(&arg) = VT_BSTR;
+    V_BSTR(&arg) = SysAllocStringLen(NULL, 0);
+    dispid = 0x123;
+
+    dispparams.rgvarg = &arg;
+    dispparams.cArgs = 1;
+    dispparams.rgdispidNamedArgs = &dispid;
+    dispparams.cNamedArgs = 1;
+    hr = IErrorRecords_AddErrorRecord(errrecs, &info2, 0, &dispparams, NULL, 0);
+    ok(hr == S_OK, "got %08x\n", hr);
+
+    memset(&dispparams, 0, sizeof(dispparams));
+    hr = IErrorRecords_GetErrorParameters(errrecs, 0, &dispparams);
+    ok(hr == S_OK, "got %08x\n", hr);
+
+    ok(V_VT(&dispparams.rgvarg[0]) == VT_BSTR, "Got arg type %d\n", V_VT(&dispparams.rgvarg[0]));
+    ok(V_BSTR(&dispparams.rgvarg[0]) != V_BSTR(&arg), "Got arg bstr %d\n", V_VT(&dispparams.rgvarg[0]));
+
+    ok(dispparams.rgdispidNamedArgs[0] == 0x123, "Got named argument %d\n", dispparams.rgdispidNamedArgs[0]);
+    ok(dispparams.cArgs == 1, "Got argument count %u\n", dispparams.cArgs);
+    ok(dispparams.cNamedArgs == 1, "Got named argument count %u\n", dispparams.cNamedArgs);
+
+    free_dispparams(&dispparams);
+    VariantClear(&arg);
+
+    IErrorRecords_Release(errrecs);
+    IUnknown_Release(unk);
 }
 
 static void test_initializationstring(void)

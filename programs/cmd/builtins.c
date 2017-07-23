@@ -444,7 +444,7 @@ static BOOL WCMD_AppendEOF(WCHAR *filename)
     h = CreateFileW(filename, GENERIC_WRITE, 0, NULL,
                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
-    if (h == NULL) {
+    if (h == INVALID_HANDLE_VALUE) {
       WINE_ERR("Failed to open %s (%d)\n", wine_dbgstr_w(filename), GetLastError());
       return FALSE;
     } else {
@@ -508,7 +508,7 @@ static BOOL WCMD_ManualCopy(WCHAR *srcname, WCHAR *dstname, BOOL ascii, BOOL app
 
     in  = CreateFileW(srcname, GENERIC_READ, 0, NULL,
                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (in == NULL) {
+    if (in == INVALID_HANDLE_VALUE) {
       WINE_ERR("Failed to open %s (%d)\n", wine_dbgstr_w(srcname), GetLastError());
       return FALSE;
     }
@@ -516,7 +516,7 @@ static BOOL WCMD_ManualCopy(WCHAR *srcname, WCHAR *dstname, BOOL ascii, BOOL app
     /* Open the output file, overwriting if not appending */
     out = CreateFileW(dstname, GENERIC_WRITE, 0, NULL,
                       append?OPEN_EXISTING:CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (out == NULL) {
+    if (out == INVALID_HANDLE_VALUE) {
       WINE_ERR("Failed to open %s (%d)\n", wine_dbgstr_w(dstname), GetLastError());
       CloseHandle(in);
       return FALSE;
@@ -3689,7 +3689,7 @@ static WCHAR WCMD_popoperator(OPSTACK **opstack) {
  * Returns non-zero on error.
  */
 static int WCMD_reduce(OPSTACK **opstack, VARSTACK **varstack) {
-  OPSTACK *thisop;
+  WCHAR thisop;
   int var1,var2;
   int rc = 0;
 
@@ -3699,13 +3699,12 @@ static int WCMD_reduce(OPSTACK **opstack, VARSTACK **varstack) {
   }
 
   /* Remove the top operator */
-  thisop = *opstack;
-  *opstack = (*opstack)->next;
-  WINE_TRACE("Reducing the stacks - processing operator %c\n", thisop->op);
+  thisop = WCMD_popoperator(opstack);
+  WINE_TRACE("Reducing the stacks - processing operator %c\n", thisop);
 
   /* One variable operators */
   var1 = WCMD_popnumber(varstack);
-  switch (thisop->op) {
+  switch (thisop) {
   case '!': WCMD_pushnumber(NULL, !var1, varstack);
             break;
   case '~': WCMD_pushnumber(NULL, ~var1, varstack);
@@ -3721,7 +3720,7 @@ static int WCMD_reduce(OPSTACK **opstack, VARSTACK **varstack) {
     WINE_TRACE("No operands left for the reduce?\n");
     return WCMD_NOOPERAND;
   }
-  switch (thisop->op) {
+  switch (thisop) {
   case '!':
   case '~':
   case OP_POSITIVE:
@@ -3792,11 +3791,11 @@ static int WCMD_reduce(OPSTACK **opstack, VARSTACK **varstack) {
           /* Make the operand stack grow by pushing the assign operator plus the
              operator to perform                                                 */
           while (calcassignments[i].op != ' ' &&
-                 calcassignments[i].calculatedop != thisop->op) {
+                 calcassignments[i].calculatedop != thisop) {
             i++;
           }
           if (calcassignments[i].calculatedop == ' ') {
-            WINE_ERR("Unexpected operator %c\n", thisop->op);
+            WINE_ERR("Unexpected operator %c\n", thisop);
             return WCMD_NOOPERATOR;
           }
           WCMD_pushoperator('=', WCMD_getprecedence('='), opstack);
@@ -3820,10 +3819,9 @@ static int WCMD_reduce(OPSTACK **opstack, VARSTACK **varstack) {
           break;
         }
 
-  default:  WINE_ERR("Unrecognized operator %c\n", thisop->op);
+  default:  WINE_ERR("Unrecognized operator %c\n", thisop);
   }
 
-  heap_free(thisop);
   return rc;
 }
 
@@ -3981,7 +3979,7 @@ static int WCMD_handleExpression(WCHAR **expr, int *ret, int depth)
     case ',':
                {
                  int prevresult = -1;
-                 WINE_TRACE("Found expression delimiter - reducing exising stacks\n");
+                 WINE_TRACE("Found expression delimiter - reducing existing stacks\n");
                  while (!rc && opstackhead) {
                    rc = WCMD_reduce(&opstackhead, &varstackhead);
                  }

@@ -75,7 +75,6 @@ static HRESULT WINAPI layer_create(enum dxgi_device_layer_id id, void **layer_ba
         void *device_object, REFIID riid, void **device_layer)
 {
     struct d3d_device *object;
-    HRESULT hr;
 
     TRACE("id %#x, layer_base %p, unknown0 %#x, device_object %p, riid %s, device_layer %p\n",
             id, layer_base, unknown0, device_object, debugstr_guid(riid), device_layer);
@@ -88,12 +87,7 @@ static HRESULT WINAPI layer_create(enum dxgi_device_layer_id id, void **layer_ba
     }
 
     object = *layer_base;
-    if (FAILED(hr = d3d_device_init(object, device_object)))
-    {
-        WARN("Failed to initialize device, hr %#x.\n", hr);
-        *device_layer = NULL;
-        return hr;
-    }
+    d3d_device_init(object, device_object);
     *device_layer = &object->IUnknown_inner;
 
     TRACE("Created d3d10 device at %p\n", object);
@@ -101,11 +95,27 @@ static HRESULT WINAPI layer_create(enum dxgi_device_layer_id id, void **layer_ba
     return S_OK;
 }
 
+static void WINAPI layer_set_feature_level(enum dxgi_device_layer_id id, void *device,
+        D3D_FEATURE_LEVEL feature_level)
+{
+    struct d3d_device *d3d_device = device;
+
+    TRACE("id %#x, device %p, feature_level %#x.\n", id, device, feature_level);
+
+    if (id != DXGI_DEVICE_LAYER_D3D10_DEVICE)
+    {
+        WARN("Unknown layer id %#x.\n", id);
+        return;
+    }
+
+    d3d_device->feature_level = feature_level;
+}
+
 HRESULT WINAPI D3D11CoreRegisterLayers(void)
 {
     static const struct dxgi_device_layer layers[] =
     {
-        {DXGI_DEVICE_LAYER_D3D10_DEVICE, layer_init, layer_get_size, layer_create},
+        {DXGI_DEVICE_LAYER_D3D10_DEVICE, layer_init, layer_get_size, layer_create, layer_set_feature_level},
     };
 
     DXGID3D10RegisterLayers(layers, sizeof(layers)/sizeof(*layers));
@@ -123,10 +133,8 @@ HRESULT WINAPI D3D11CoreCreateDevice(IDXGIFactory *factory, IDXGIAdapter *adapte
     TRACE("factory %p, adapter %p, flags %#x, feature_levels %p, levels %u, device %p.\n",
             factory, adapter, flags, feature_levels, levels, device);
 
-    FIXME("Ignoring feature levels.\n");
-
     d3d11 = GetModuleHandleA("d3d11.dll");
-    hr = DXGID3D10CreateDevice(d3d11, factory, adapter, flags, 0, (void **)&dxgi_device);
+    hr = DXGID3D10CreateDevice(d3d11, factory, adapter, flags, feature_levels, levels, (void **)&dxgi_device);
     if (FAILED(hr))
     {
         WARN("Failed to create device, returning %#x.\n", hr);
@@ -148,6 +156,15 @@ HRESULT WINAPI D3D11CreateDevice(IDXGIAdapter *adapter, D3D_DRIVER_TYPE driver_t
         const D3D_FEATURE_LEVEL *feature_levels, UINT levels, UINT sdk_version, ID3D11Device **device_out,
         D3D_FEATURE_LEVEL *obtained_feature_level, ID3D11DeviceContext **immediate_context)
 {
+    static const D3D_FEATURE_LEVEL default_feature_levels[] =
+    {
+        D3D_FEATURE_LEVEL_11_0,
+        D3D_FEATURE_LEVEL_10_1,
+        D3D_FEATURE_LEVEL_10_0,
+        D3D_FEATURE_LEVEL_9_3,
+        D3D_FEATURE_LEVEL_9_2,
+        D3D_FEATURE_LEVEL_9_1,
+    };
     IDXGIFactory *factory;
     ID3D11Device *device;
     HRESULT hr;
@@ -245,6 +262,11 @@ HRESULT WINAPI D3D11CreateDevice(IDXGIAdapter *adapter, D3D_DRIVER_TYPE driver_t
         }
     }
 
+    if (!feature_levels)
+    {
+        feature_levels = default_feature_levels;
+        levels = sizeof(default_feature_levels) / sizeof(default_feature_levels[0]);
+    }
     hr = D3D11CoreCreateDevice(factory, adapter, flags, feature_levels, levels, &device);
     IDXGIAdapter_Release(adapter);
     IDXGIFactory_Release(factory);
@@ -267,7 +289,7 @@ HRESULT WINAPI D3D11CreateDevice(IDXGIAdapter *adapter, D3D_DRIVER_TYPE driver_t
     else
         ID3D11Device_Release(device);
 
-    return S_OK;
+    return (device_out || immediate_context) ? S_OK : S_FALSE;
 }
 
 HRESULT WINAPI D3D11CreateDeviceAndSwapChain(IDXGIAdapter *adapter, D3D_DRIVER_TYPE driver_type,
@@ -331,7 +353,7 @@ HRESULT WINAPI D3D11CreateDeviceAndSwapChain(IDXGIAdapter *adapter, D3D_DRIVER_T
             goto cleanup;
         }
 
-        TRACE("Created IDXGISwapChain %p.\n", swapchain);
+        TRACE("Created IDXGISwapChain %p.\n", *swapchain);
     }
 
     if (device_out)
@@ -339,7 +361,7 @@ HRESULT WINAPI D3D11CreateDeviceAndSwapChain(IDXGIAdapter *adapter, D3D_DRIVER_T
     else
         ID3D11Device_Release(device);
 
-    return S_OK;
+    return (swapchain || device_out || immediate_context) ? S_OK : S_FALSE;
 
 cleanup:
     ID3D11Device_Release(device);

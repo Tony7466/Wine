@@ -84,6 +84,8 @@ static const struct object_ops console_input_ops =
     default_get_sd,                   /* get_sd */
     default_set_sd,                   /* set_sd */
     no_lookup_name,                   /* lookup_name */
+    no_link_name,                     /* link_name */
+    NULL,                             /* unlink_name */
     no_open_file,                     /* open_file */
     no_close_handle,                  /* close_handle */
     console_input_destroy             /* destroy */
@@ -116,6 +118,8 @@ static const struct object_ops console_input_events_ops =
     default_get_sd,                   /* get_sd */
     default_set_sd,                   /* set_sd */
     no_lookup_name,                   /* lookup_name */
+    no_link_name,                     /* link_name */
+    NULL,                             /* unlink_name */
     no_open_file,                     /* open_file */
     no_close_handle,                  /* close_handle */
     console_input_events_destroy      /* destroy */
@@ -142,7 +146,9 @@ struct screen_buffer
     int                   max_width;     /* size (w-h) of the window given font size */
     int                   max_height;
     char_info_t          *data;          /* the data for each cell - a width x height matrix */
-    unsigned short        attr;          /* default attribute for screen buffer */
+    unsigned short        attr;          /* default fill attributes (screen colors) */
+    unsigned short        popup_attr;    /* pop-up color attributes */
+    unsigned int          color_map[16]; /* color table */
     rectangle_t           win;           /* current visible window on the screen buffer *
 					  * as seen in wineconsole */
     struct font_info      font;          /* console font information */
@@ -168,6 +174,8 @@ static const struct object_ops screen_buffer_ops =
     default_get_sd,                   /* get_sd */
     default_set_sd,                   /* set_sd */
     no_lookup_name,                   /* lookup_name */
+    no_link_name,                     /* link_name */
+    NULL,                             /* unlink_name */
     no_open_file,                     /* open_file */
     no_close_handle,                  /* close_handle */
     screen_buffer_destroy             /* destroy */
@@ -185,8 +193,7 @@ static const struct fd_ops console_fd_ops =
     no_fd_flush,                  /* flush */
     default_fd_ioctl,             /* ioctl */
     default_fd_queue_async,       /* queue_async */
-    default_fd_reselect_async,    /* reselect_async */
-    default_fd_cancel_async       /* cancel_async */
+    default_fd_reselect_async     /* reselect_async */
 };
 
 static struct list screen_buffer_list = LIST_INIT(screen_buffer_list);
@@ -413,6 +420,7 @@ static struct screen_buffer *create_console_output( struct console_input *consol
     screen_buffer->cursor_x       = 0;
     screen_buffer->cursor_y       = 0;
     screen_buffer->attr           = 0x0F;
+    screen_buffer->popup_attr     = 0xF5;
     screen_buffer->win.left       = 0;
     screen_buffer->win.right      = screen_buffer->max_width - 1;
     screen_buffer->win.top        = 0;
@@ -420,6 +428,7 @@ static struct screen_buffer *create_console_output( struct console_input *consol
     screen_buffer->data           = NULL;
     screen_buffer->font.width     = 0;
     screen_buffer->font.height    = 0;
+    memset( screen_buffer->color_map, 0, sizeof(screen_buffer->color_map) );
     list_add_head( &screen_buffer_list, &screen_buffer->entry );
 
     if (fd == -1)
@@ -480,7 +489,7 @@ int free_console( struct process *process )
 /* let process inherit the console from parent... this handle two cases :
  *	1/ generic console inheritance
  *	2/ parent is a renderer which launches process, and process should attach to the console
- *	   renderered by parent
+ *	   rendered by parent
  */
 void inherit_console(struct thread *parent_thread, struct process *process, obj_handle_t hconin)
 {
@@ -991,6 +1000,10 @@ static int set_console_output_info( struct screen_buffer *screen_buffer,
     {
 	screen_buffer->attr = req->attr;
     }
+    if (req->mask & SET_CONSOLE_OUTPUT_INFO_POPUP_ATTR)
+    {
+        screen_buffer->popup_attr = req->popup_attr;
+    }
     if (req->mask & SET_CONSOLE_OUTPUT_INFO_DISPLAY_WINDOW)
     {
 	if (req->win_left < 0 || req->win_left > req->win_right ||
@@ -1018,13 +1031,6 @@ static int set_console_output_info( struct screen_buffer *screen_buffer,
     }
     if (req->mask & SET_CONSOLE_OUTPUT_INFO_MAX_SIZE)
     {
-	/* can only be done by renderer */
-	if (current->process->console != screen_buffer->input)
-	{
-	    set_error( STATUS_INVALID_PARAMETER );
-	    return 0;
-	}
-
 	screen_buffer->max_width  = req->max_width;
 	screen_buffer->max_height = req->max_height;
     }
@@ -1032,6 +1038,11 @@ static int set_console_output_info( struct screen_buffer *screen_buffer,
     {
         screen_buffer->font.width  = req->font_width;
         screen_buffer->font.height = req->font_height;
+    }
+    if (req->mask & SET_CONSOLE_OUTPUT_INFO_COLORTABLE)
+    {
+        memcpy( screen_buffer->color_map, get_req_data(),
+                min( sizeof(screen_buffer->color_map), get_req_data_size() ));
     }
 
     return 1;
@@ -1056,7 +1067,7 @@ static void console_input_append_hist( struct console_input* console, const WCHA
     ptr[len] = 0;
 
     if (console->history_mode && console->history_index &&
-	strncmpW( console->history[console->history_index - 1], ptr, len ) == 0)
+        !strcmpW( console->history[console->history_index - 1], ptr ))
     {
 	/* ok, mode ask us to not use twice the same string...
 	 * so just free mem and returns
@@ -1683,6 +1694,7 @@ DECL_HANDLER(get_console_output_info)
         reply->width          = screen_buffer->width;
         reply->height         = screen_buffer->height;
         reply->attr           = screen_buffer->attr;
+        reply->popup_attr     = screen_buffer->popup_attr;
         reply->win_left       = screen_buffer->win.left;
         reply->win_top        = screen_buffer->win.top;
         reply->win_right      = screen_buffer->win.right;
@@ -1691,6 +1703,8 @@ DECL_HANDLER(get_console_output_info)
         reply->max_height     = screen_buffer->max_height;
         reply->font_width     = screen_buffer->font.width;
         reply->font_height    = screen_buffer->font.height;
+        set_reply_data( screen_buffer->color_map,
+                        min( sizeof(screen_buffer->color_map), get_reply_max_size() ));
         release_object( screen_buffer );
     }
 }

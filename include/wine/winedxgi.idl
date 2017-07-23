@@ -28,7 +28,7 @@ import "dxgi.idl";
 interface IWineDXGIDevice : IDXGIDevice1
 {
     HRESULT create_surface(
-        [in] struct wined3d_resource *wined3d_resource,
+        [in] struct wined3d_texture *wined3d_texture,
         [in] DXGI_USAGE usage,
         [in] const DXGI_SHARED_RESOURCE *shared_resource,
         [in] IUnknown *outer,
@@ -36,6 +36,7 @@ interface IWineDXGIDevice : IDXGIDevice1
     );
     HRESULT create_swapchain(
         [in] struct wined3d_swapchain_desc *desc,
+        [in] BOOL implicit,
         [out] struct wined3d_swapchain **wined3d_swapchain
     );
 }

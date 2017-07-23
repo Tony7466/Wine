@@ -6,7 +6,7 @@
 @ stub HSTRING_UserSize64
 @ stub HSTRING_UserUnmarshal
 @ stub HSTRING_UserUnmarshal64
-@ stub WindowsCompareStringOrdinal
+@ stdcall WindowsCompareStringOrdinal(ptr ptr ptr) combase.WindowsCompareStringOrdinal
 @ stdcall WindowsConcatString(ptr ptr ptr) combase.WindowsConcatString
 @ stdcall WindowsCreateString(wstr long ptr) combase.WindowsCreateString
 @ stdcall WindowsCreateStringReference(wstr long ptr ptr) combase.WindowsCreateStringReference
@@ -23,5 +23,5 @@
 @ stdcall WindowsStringHasEmbeddedNull(ptr ptr) combase.WindowsStringHasEmbeddedNull
 @ stdcall WindowsSubstring(ptr long ptr) combase.WindowsSubstring
 @ stdcall WindowsSubstringWithSpecifiedLength(ptr long long ptr) combase.WindowsSubstringWithSpecifiedLength
-@ stub WindowsTrimStringEnd
-@ stub WindowsTrimStringStart
+@ stdcall WindowsTrimStringEnd(ptr ptr ptr) combase.WindowsTrimStringEnd
+@ stdcall WindowsTrimStringStart(ptr ptr ptr) combase.WindowsTrimStringStart

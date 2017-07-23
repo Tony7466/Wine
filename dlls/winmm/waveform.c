@@ -206,12 +206,14 @@ void WINMM_DeleteWaveform(void)
             WINMM_Device *device = mmdevice->devices[j];
             if(device->handle)
                 CloseHandle(device->handle);
+            device->lock.DebugInfo->Spare[0] = 0;
             DeleteCriticalSection(&device->lock);
         }
 
         if(mmdevice->volume)
             ISimpleAudioVolume_Release(mmdevice->volume);
         CoTaskMemFree(mmdevice->dev_id);
+        mmdevice->lock.DebugInfo->Spare[0] = 0;
         DeleteCriticalSection(&mmdevice->lock);
     }
 
@@ -222,12 +224,14 @@ void WINMM_DeleteWaveform(void)
             WINMM_Device *device = mmdevice->devices[j];
             if(device->handle)
                 CloseHandle(device->handle);
+            device->lock.DebugInfo->Spare[0] = 0;
             DeleteCriticalSection(&device->lock);
         }
 
         if(mmdevice->volume)
             ISimpleAudioVolume_Release(mmdevice->volume);
         CoTaskMemFree(mmdevice->dev_id);
+        mmdevice->lock.DebugInfo->Spare[0] = 0;
         DeleteCriticalSection(&mmdevice->lock);
     }
 
@@ -895,8 +899,7 @@ static MMRESULT WINMM_TryDeviceMapping(WINMM_Device *device, WAVEFORMATEX *fmt,
 
     hr = IAudioClient_IsFormatSupported(device->client,
             AUDCLNT_SHAREMODE_SHARED, &target, &closer_fmt);
-    if(closer_fmt)
-        CoTaskMemFree(closer_fmt);
+    CoTaskMemFree(closer_fmt);
     if(hr != S_OK)
         return WAVERR_BADFORMAT;
 
@@ -1115,8 +1118,7 @@ static LRESULT WINMM_OpenDevice(WINMM_Device *device, WINMM_OpenInfo *info,
 
         hr = IAudioClient_IsFormatSupported(device->client,
                 AUDCLNT_SHAREMODE_SHARED, device->orig_fmt, &closer_fmt);
-        if(closer_fmt)
-            CoTaskMemFree(closer_fmt);
+        CoTaskMemFree(closer_fmt);
         if((hr == S_FALSE || hr == AUDCLNT_E_UNSUPPORTED_FORMAT) && !(info->flags & WAVE_FORMAT_DIRECT))
             ret = WINMM_MapDevice(device, TRUE, is_out);
         else
@@ -1415,6 +1417,8 @@ static HRESULT WINMM_CloseDevice(WINMM_Device *device)
 
     IAudioClock_Release(device->clock);
     device->clock = NULL;
+
+    HeapFree(GetProcessHeap(), 0, device->orig_fmt);
 
     return S_OK;
 }
@@ -4286,6 +4290,8 @@ UINT WINAPI mixerGetLineInfoW(HMIXEROBJ hmix, LPMIXERLINEW lpmliW, DWORD fdwInfo
     mmdevice = WINMM_GetMixerMMDevice(hmix, fdwInfo, &mmdev_index);
     if(!mmdevice)
         return MMSYSERR_INVALHANDLE;
+
+    lpmliW->dwUser = 0;
 
     switch(fdwInfo & MIXER_GETLINEINFOF_QUERYMASK){
     case MIXER_GETLINEINFOF_DESTINATION:

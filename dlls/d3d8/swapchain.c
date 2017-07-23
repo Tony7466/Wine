@@ -100,9 +100,12 @@ static HRESULT WINAPI DECLSPEC_HOTPATCH d3d8_swapchain_Present(IDirect3DSwapChai
     if (device->device_state != D3D8_DEVICE_STATE_OK)
         return D3DERR_DEVICELOST;
 
+    if (dirty_region)
+        FIXME("Ignoring dirty_region %p.\n", dirty_region);
+
     wined3d_mutex_lock();
-    hr = wined3d_swapchain_present(swapchain->wined3d_swapchain, src_rect,
-            dst_rect, dst_window_override, dirty_region, 0);
+    hr = wined3d_swapchain_present(swapchain->wined3d_swapchain,
+            src_rect, dst_rect, dst_window_override, 0);
     wined3d_mutex_unlock();
 
     return hr;
@@ -112,7 +115,6 @@ static HRESULT WINAPI d3d8_swapchain_GetBackBuffer(IDirect3DSwapChain8 *iface,
         UINT backbuffer_idx, D3DBACKBUFFER_TYPE backbuffer_type, IDirect3DSurface8 **backbuffer)
 {
     struct d3d8_swapchain *swapchain = impl_from_IDirect3DSwapChain8(iface);
-    struct wined3d_resource *wined3d_resource;
     struct wined3d_texture *wined3d_texture;
     struct d3d8_surface *surface_impl;
     HRESULT hr = D3D_OK;
@@ -131,8 +133,7 @@ static HRESULT WINAPI d3d8_swapchain_GetBackBuffer(IDirect3DSwapChain8 *iface,
     wined3d_mutex_lock();
     if ((wined3d_texture = wined3d_swapchain_get_back_buffer(swapchain->wined3d_swapchain, backbuffer_idx)))
     {
-        wined3d_resource = wined3d_texture_get_sub_resource(wined3d_texture, 0);
-        surface_impl = wined3d_resource_get_parent(wined3d_resource);
+        surface_impl = wined3d_texture_get_sub_resource_parent(wined3d_texture, 0);
         *backbuffer = &surface_impl->IDirect3DSurface8_iface;
         IDirect3DSurface8_AddRef(*backbuffer);
     }

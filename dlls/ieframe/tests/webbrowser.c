@@ -29,6 +29,7 @@
 #include "ole2.h"
 #include "exdisp.h"
 #include "htiframe.h"
+#include "htiface.h"
 #include "mshtmhst.h"
 #include "mshtmcid.h"
 #include "mshtml.h"
@@ -259,7 +260,7 @@ static void _test_LocationURL(unsigned line, IWebBrowser2 *wb, const char *exurl
 
     hres = IWebBrowser2_get_LocationURL(wb, &url);
     ok_(__FILE__,line) (hres == (*exurl ? S_OK : S_FALSE), "get_LocationURL failed: %08x\n", hres);
-    if (hres == S_OK)
+    if (SUCCEEDED(hres))
     {
         ok_(__FILE__,line) (!strcmp_wa(url, exurl), "unexpected URL: %s\n", wine_dbgstr_w(url));
         SysFreeString(url);
@@ -913,12 +914,7 @@ static HRESULT WINAPI WebBrowserEvents2_Invoke(IDispatch *iface, DISPID dispIdMe
 
         if (V_I4(pDispParams->rgvarg+1) == CSC_NAVIGATEFORWARD)
         {
-            if(nav_forward_todo) {
-                if(V_BOOL(pDispParams->rgvarg))
-                    todo_wine CHECK_EXPECT2(Invoke_COMMANDSTATECHANGE_NAVIGATEFORWARD_TRUE);
-                else
-                    todo_wine CHECK_EXPECT2(Invoke_COMMANDSTATECHANGE_NAVIGATEFORWARD_FALSE);
-            }else {
+            todo_wine_if(nav_forward_todo) {
                 if(V_BOOL(pDispParams->rgvarg))
                     CHECK_EXPECT2(Invoke_COMMANDSTATECHANGE_NAVIGATEFORWARD_TRUE);
                 else
@@ -927,12 +923,7 @@ static HRESULT WINAPI WebBrowserEvents2_Invoke(IDispatch *iface, DISPID dispIdMe
         }
         else if (V_I4(pDispParams->rgvarg+1) == CSC_NAVIGATEBACK)
         {
-            if(nav_back_todo) {
-                if(V_BOOL(pDispParams->rgvarg))
-                    todo_wine CHECK_EXPECT2(Invoke_COMMANDSTATECHANGE_NAVIGATEBACK_TRUE);
-                else
-                    todo_wine CHECK_EXPECT2(Invoke_COMMANDSTATECHANGE_NAVIGATEBACK_FALSE);
-            }else {
+            todo_wine_if(nav_back_todo) {
                 if(V_BOOL(pDispParams->rgvarg))
                     CHECK_EXPECT2(Invoke_COMMANDSTATECHANGE_NAVIGATEBACK_TRUE);
                 else
@@ -1122,6 +1113,7 @@ static const IOleClientSiteVtbl ClientSiteVtbl = {
 };
 
 static IOleClientSite ClientSite = { &ClientSiteVtbl };
+static IOleClientSite ClientSite2 = { &ClientSiteVtbl };
 
 static HRESULT WINAPI IOleControlSite_fnQueryInterface(IOleControlSite *iface, REFIID riid, void **ppv)
 {
@@ -1660,9 +1652,7 @@ static HRESULT WINAPI DocHostUIHandler_GetExternal(IDocHostUIHandler2 *iface, ID
 static HRESULT WINAPI DocHostUIHandler_TranslateUrl(IDocHostUIHandler2 *iface, DWORD dwTranslate,
         OLECHAR *pchURLIn, OLECHAR **ppchURLOut)
 {
-    if(is_downloading && !(dwl_flags & DWL_EXPECT_BEFORE_NAVIGATE))
-        todo_wine CHECK_EXPECT(TranslateUrl);
-    else
+    todo_wine_if(is_downloading && !(dwl_flags & DWL_EXPECT_BEFORE_NAVIGATE))
         CHECK_EXPECT(TranslateUrl);
     return E_NOTIMPL;
 }
@@ -2029,6 +2019,61 @@ static void test_ClientSite(IWebBrowser2 *unk, IOleClientSite *client, BOOL stop
 
     IOleInPlaceObject_Release(inplace);
     IOleObject_Release(oleobj);
+}
+
+static void test_change_ClientSite(IWebBrowser2 *unk)
+{
+    BOOL old_use_container_olecmd = use_container_olecmd;
+    IOleClientSite *doc_clientsite;
+    IOleInPlaceObject *inplace;
+    IOleCommandTarget *olecmd;
+    IOleObject *oleobj;
+    HRESULT hres;
+    HWND hwnd;
+
+    hres = IWebBrowser2_QueryInterface(unk, &IID_IOleObject, (void**)&oleobj);
+    ok(hres == S_OK, "QueryInterface(IID_OleObject) failed: %08x\n", hres);
+    if(FAILED(hres))
+        return;
+
+    use_container_olecmd = FALSE;
+
+    SET_EXPECT(Site_GetWindow);
+    SET_EXPECT(Invoke_AMBIENT_OFFLINEIFNOTCONNECTED);
+    SET_EXPECT(Invoke_AMBIENT_SILENT);
+
+    hres = IOleObject_SetClientSite(oleobj, &ClientSite2);
+    ok(hres == S_OK, "SetClientSite failed: %08x\n", hres);
+    IOleObject_Release(oleobj);
+
+    CHECK_CALLED(Site_GetWindow);
+    CHECK_CALLED(Invoke_AMBIENT_OFFLINEIFNOTCONNECTED);
+    CHECK_CALLED(Invoke_AMBIENT_SILENT);
+
+    doc_clientsite = get_dochost(unk);
+    hres = IOleClientSite_QueryInterface(doc_clientsite, &IID_IOleCommandTarget, (void**)&olecmd);
+    ok(hres == S_OK, "QueryInterface(IOleCommandTarget) failed: %08x\n", hres);
+    IOleClientSite_Release(doc_clientsite);
+
+    hres = IWebBrowser2_QueryInterface(unk, &IID_IOleInPlaceObject, (void**)&inplace);
+    ok(hres == S_OK, "QueryInterface(OleInPlaceObject) failed: %08x\n", hres);
+    hres = IOleInPlaceObject_GetWindow(inplace, &hwnd);
+    ok(hres == S_OK, "GetWindow failed: %08x\n", hres);
+    ok(hwnd == shell_embedding_hwnd, "unexpected hwnd %p\n", hwnd);
+    IOleInPlaceObject_Release(inplace);
+
+    if(old_use_container_olecmd) {
+        SET_EXPECT(Exec_UPDATECOMMANDS);
+
+        hres = IOleCommandTarget_Exec(olecmd, NULL, OLECMDID_UPDATECOMMANDS,
+                OLECMDEXECOPT_DONTPROMPTUSER, NULL, NULL);
+        ok(hres == S_OK, "Exec(OLECMDID_UPDATECOMMAND) failed: %08x\n", hres);
+
+        CHECK_CALLED(Exec_UPDATECOMMANDS);
+        use_container_olecmd = TRUE;
+    }
+
+    IOleCommandTarget_Release(olecmd);
 }
 
 static void test_ClassInfo(IWebBrowser2 *unk)
@@ -2812,10 +2857,7 @@ static void test_QueryStatusWB(IWebBrowser2 *webbrowser, BOOL has_document)
     if (use_container_olecmd) SET_EXPECT(QueryStatus_STOP);
     hres = IWebBrowser2_QueryStatusWB(webbrowser, OLECMDID_STOP, &status);
     ok(hres == success_state, "QueryStatusWB failed: %08x %08x\n", hres, success_state);
-    if (!use_container_olecmd && has_document)
-        todo_wine ok((has_document && status == success_flags) || (!has_document && status == 0xdeadbeef),
-                     "OLECMDID_STOP not enabled/supported: %08x %08x\n", status, success_flags);
-    else
+    todo_wine_if (!use_container_olecmd && has_document)
         ok((has_document && status == success_flags) || (!has_document && status == 0xdeadbeef),
            "OLECMDID_STOP not enabled/supported: %08x %08x\n", status, success_flags);
     status = 0xdeadbeef;
@@ -2976,12 +3018,7 @@ static void test_download(DWORD flags)
         CLEAR_CALLED(EnableModeless_FALSE); /* IE 8 */
 
     if(!(flags & DWL_REFRESH)) {
-        if(nav_back_todo) {
-            if(flags & (DWL_FROM_GOFORWARD|DWL_BACK_ENABLE))
-                todo_wine CHECK_CALLED(Invoke_COMMANDSTATECHANGE_NAVIGATEBACK_TRUE);
-            else
-                todo_wine CHECK_CALLED(Invoke_COMMANDSTATECHANGE_NAVIGATEBACK_FALSE);
-        }else {
+        todo_wine_if(nav_back_todo) {
             if(flags & (DWL_FROM_GOFORWARD|DWL_BACK_ENABLE))
                 CHECK_CALLED(Invoke_COMMANDSTATECHANGE_NAVIGATEBACK_TRUE);
             else
@@ -3186,24 +3223,14 @@ static void test_go_back(IWebBrowser2 *wb, const char *back_url, int back_enable
     CHECK_CALLED(Invoke_BEFORENAVIGATE2);
     nav_forward_todo = FALSE;
 
-    if(nav_back_todo) {
-        if(back_enable)
-            todo_wine CHECK_CALLED(Invoke_COMMANDSTATECHANGE_NAVIGATEBACK_TRUE);
-        else
-            todo_wine CHECK_CALLED(Invoke_COMMANDSTATECHANGE_NAVIGATEBACK_FALSE);
-    }else {
+    todo_wine_if(nav_back_todo) {
         if(back_enable)
             CHECK_CALLED(Invoke_COMMANDSTATECHANGE_NAVIGATEBACK_TRUE);
         else
             CHECK_CALLED(Invoke_COMMANDSTATECHANGE_NAVIGATEBACK_FALSE);
     }
 
-    if(forward_todo) {
-        if(forward_enable)
-            todo_wine CHECK_CALLED(Invoke_COMMANDSTATECHANGE_NAVIGATEFORWARD_TRUE);
-        else
-            todo_wine CHECK_CALLED(Invoke_COMMANDSTATECHANGE_NAVIGATEFORWARD_FALSE);
-    }else {
+    todo_wine_if(forward_todo) {
         if(forward_enable)
             CHECK_CALLED(Invoke_COMMANDSTATECHANGE_NAVIGATEFORWARD_TRUE);
         else
@@ -3318,9 +3345,7 @@ static void test_UIActivate(IWebBrowser2 *unk, BOOL activate)
         }
 
         hres = IOleDocumentView_UIActivate(docview, activate);
-        if(activate)
-            todo_wine ok(hres == S_OK, "Got 0x%08x\n", hres);
-        else
+        todo_wine_if(activate)
             ok(hres == S_OK, "Got 0x%08x\n", hres);
 
         if(activate) {
@@ -3368,6 +3393,7 @@ static void test_external(IWebBrowser2 *unk)
         hres = IDispatch_QueryInterface(disp, &IID_IShellUIHelper, (void**)&uihelper);
         ok(hres == S_OK, "Could not get IShellUIHelper iface: %08x\n", hres);
         IShellUIHelper_Release(uihelper);
+        IDispatch_Release(disp);
     }
 
     IDocHostUIHandler2_Release(dochost);
@@ -3556,6 +3582,11 @@ static void test_dochost_qs(IWebBrowser2 *webbrowser)
     IUnknown_Release(service);
 
     hres = IServiceProvider_QueryService(serv_prov, &IID_IWebBrowserApp, &IID_IHlinkFrame, (void**)&service);
+    ok(hres == S_OK, "QueryService failed: %08x\n", hres);
+    ok(iface_cmp(service, (IUnknown*)webbrowser), "service != unk\n");
+    IUnknown_Release(service);
+
+    hres = IServiceProvider_QueryService(serv_prov, &IID_ITargetFrame, &IID_ITargetFrame, (void**)&service);
     ok(hres == S_OK, "QueryService failed: %08x\n", hres);
     ok(iface_cmp(service, (IUnknown*)webbrowser), "service != unk\n");
     IUnknown_Release(service);
@@ -3778,10 +3809,12 @@ static void test_WebBrowser(DWORD flags, BOOL do_close)
     test_external(webbrowser);
     test_htmlwindow_close(webbrowser);
 
-    if(do_close)
+    if(do_close) {
         test_Close(webbrowser, do_download);
-    else
+    }else {
+        test_change_ClientSite(webbrowser);
         test_ClientSite(webbrowser, NULL, !do_download);
+    }
     test_ie_funcs(webbrowser);
     test_GetControlInfo(webbrowser);
     test_wb_funcs(webbrowser, FALSE);

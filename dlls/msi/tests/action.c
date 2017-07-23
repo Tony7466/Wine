@@ -227,14 +227,14 @@ static const char service_install_dat[] =
     "s72\ts255\tL255\ti4\ti4\ti4\tS255\tS255\tS255\tS255\tS255\ts72\tL255\n"
     "ServiceInstall\tServiceInstall\n"
     "TestService\t[SERVNAME]\t[SERVDISP]\t2\t3\t0\t\tservice1[~]+group1[~]service2[~]+group2[~][~]\tTestService\t\t-a arg\tservice_comp\tdescription\n"
-    "TestService2\tSERVNAME2]\t[SERVDISP2]\t2\t3\t0\t\tservice1[~]+group1[~]service2[~]+group2[~][~]\tTestService2\t\t-a arg\tservice_comp2\tdescription";
+    "TestService2\t[SERVNAME2]\t[SERVDISP2]\t2\t3\t0\t\tservice1[~]+group1[~]service2[~]+group2[~][~]\tTestService2\t\t-a arg\tservice_comp2\tdescription\n";
 
 static const char service_install2_dat[] =
     "ServiceInstall\tName\tDisplayName\tServiceType\tStartType\tErrorControl\t"
     "LoadOrderGroup\tDependencies\tStartName\tPassword\tArguments\tComponent_\tDescription\n"
     "s72\ts255\tL255\ti4\ti4\ti4\tS255\tS255\tS255\tS255\tS255\ts72\tL255\n"
     "ServiceInstall\tServiceInstall\n"
-    "TestService\tTestService\tTestService\t2\t3\t0\t\t\tTestService\t\t\tservice_comp\t\n"
+    "TestService\tTestService\tTestService\t2\t3\t32768\t\t\tTestService\t\t\tservice_comp\t\n"
     "TestService4\tTestService4\tTestService4\t2\t3\t0\t\t\tTestService4\t\t\tservice_comp3\t\n";
 
 static const char service_control_dat[] =
@@ -5427,6 +5427,25 @@ static void test_start_stop_services(void)
     DeleteFileA(msifile);
 }
 
+static void delete_test_service(const char *name)
+{
+    BOOL ret;
+    SC_HANDLE manager, service;
+
+    manager = OpenSCManagerA(NULL, NULL, SC_MANAGER_ALL_ACCESS);
+    ok(manager != NULL, "can't open service manager\n");
+    if (!manager) return;
+
+    service = OpenServiceA(manager, name, GENERIC_ALL);
+    if (service)
+    {
+        ret = DeleteService( service );
+        ok( ret, "failed to delete service %u\n", GetLastError() );
+        CloseServiceHandle(service);
+    }
+    CloseServiceHandle(manager);
+}
+
 static void test_delete_services(void)
 {
     UINT r;
@@ -5449,7 +5468,7 @@ static void test_delete_services(void)
     ok(service != NULL, "can't create service %u\n", GetLastError());
     CloseServiceHandle(service);
     CloseServiceHandle(manager);
-    if (!service) goto error;
+    if (!service) return;
 
     create_test_files();
     create_database(msifile, sds_tables, sizeof(sds_tables) / sizeof(msi_table));
@@ -5492,6 +5511,9 @@ static void test_delete_services(void)
     ok(delete_pf("msitest", FALSE), "Directory not created\n");
 
 error:
+    delete_test_service("TestService");
+    delete_test_service("TestService2");
+    delete_test_service("TestService3");
     delete_test_files();
     DeleteFileA(msifile);
 }
@@ -5500,7 +5522,9 @@ static void test_install_services(void)
 {
     UINT r;
     SC_HANDLE manager, service;
-    BOOL ret;
+    LONG res;
+    HKEY hKey;
+    DWORD err_control, err_controlsize, err_controltype;
 
     if (is_process_limited())
     {
@@ -5531,10 +5555,27 @@ static void test_install_services(void)
 
     service = OpenServiceA(manager, "TestService4", GENERIC_ALL);
     ok(service == NULL, "TestService4 installed\n");
-    CloseServiceHandle(manager);
+
+    res = RegOpenKeyA(HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\TestService", &hKey);
+    ok(res == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", res);
+
+    if (res == ERROR_SUCCESS)
+    {
+        err_control = 0xBEEF;
+        err_controltype = REG_DWORD;
+        err_controlsize = sizeof(err_control);
+        res = RegQueryValueExA(hKey, "ErrorControl", NULL, &err_controltype, (LPBYTE)&err_control, &err_controlsize);
+        ok(err_control == 0, "TestService.ErrorControl wrong, expected 0, got %u\n", err_control);
+        RegCloseKey(hKey);
+    }
 
     r = MsiInstallProductA(msifile, "REMOVE=ALL");
     ok(r == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %u\n", r);
+
+    service = OpenServiceA(manager, "TestService", GENERIC_ALL);
+    ok(service != NULL, "TestService deleted\n");
+    CloseServiceHandle(service);
+    CloseServiceHandle(manager);
 
     ok(delete_pf("msitest\\cabout\\new\\five.txt", TRUE), "File not installed\n");
     ok(delete_pf("msitest\\cabout\\new", FALSE), "Directory not created\n");
@@ -5550,20 +5591,8 @@ static void test_install_services(void)
     ok(delete_pf("msitest\\service2.exe", TRUE), "File not installed\n");
     ok(delete_pf("msitest", FALSE), "Directory not created\n");
 
-    manager = OpenSCManagerA(NULL, NULL, SC_MANAGER_ALL_ACCESS);
-    ok(manager != NULL, "can't open service manager\n");
-    if (!manager) goto error;
-
-    service = OpenServiceA(manager, "TestService", GENERIC_ALL);
-    ok(service != NULL, "TestService doesn't exist\n");
-
-    ret = DeleteService( service );
-    ok( ret, "failed to delete service %u\n", GetLastError() );
-
-    CloseServiceHandle(service);
-    CloseServiceHandle(manager);
-
 error:
+    delete_test_service("TestService");
     delete_test_files();
     DeleteFileA(msifile);
 }
@@ -5886,7 +5915,7 @@ static void test_publish_components(void)
     size = 0;
     r = MsiProvideQualifiedComponentA("{92AFCBC0-9CA6-4270-8454-47C5EE2B8FAA}",
             "english.txt", INSTALLMODE_DEFAULT, NULL, &size);
-    ok(r == ERROR_SUCCESS, "MsiProvideQualifiedCompontent returned %d\n", r);
+    ok(r == ERROR_SUCCESS, "MsiProvideQualifiedComponent returned %d\n", r);
 
     res = RegOpenKeyA(HKEY_CURRENT_USER, keypath, &key);
     ok(res == ERROR_SUCCESS, "components key not created %d\n", res);
@@ -5912,7 +5941,7 @@ static void test_publish_components(void)
     size = 0;
     r = MsiProvideQualifiedComponentA("{92AFCBC0-9CA6-4270-8454-47C5EE2B8FAA}",
             "english.txt", INSTALLMODE_DEFAULT, NULL, &size);
-    ok(r == ERROR_SUCCESS, "MsiProvideQualifiedCompontent returned %d\n", r);
+    ok(r == ERROR_SUCCESS, "MsiProvideQualifiedComponent returned %d\n", r);
 
     if (pRegDeleteKeyExA)
         res = pRegDeleteKeyExA(HKEY_LOCAL_MACHINE, keypath2, KEY_WOW64_64KEY, 0);

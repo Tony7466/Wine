@@ -101,6 +101,15 @@ extern "C" {
 #define FD_ACCEPT_BIT              3
 #define FD_CONNECT_BIT             4
 #define FD_CLOSE_BIT               5
+#define FD_QOS_BIT                 6
+#define FD_GROUP_QOS_BIT           7
+#define FD_ROUTING_INTERFACE_CHANGE_BIT 8
+#define FD_ADDRESS_LIST_CHANGE_BIT 9
+
+#define FD_QOS                      0x00000040
+#define FD_GROUP_QOS                0x00000080
+#define FD_ROUTING_INTERFACE_CHANGE 0x00000100
+#define FD_ADDRESS_LIST_CHANGE      0x00000200
 
 /* Constants for LPCONDITIONPROC */
 #define CF_ACCEPT                  0x0000
@@ -113,8 +122,8 @@ extern "C" {
 #define SD_BOTH                    0x02
 
 /* Constants for WSAPoll() */
-#ifndef __WINE_WINE_PORT_H
 #ifndef USE_WS_PREFIX
+#ifndef __WINE_WINE_PORT_H
 #define POLLERR                    0x0001
 #define POLLHUP                    0x0002
 #define POLLNVAL                   0x0004
@@ -125,6 +134,7 @@ extern "C" {
 #define POLLPRI                    0x0400
 #define POLLIN                     (POLLRDNORM|POLLRDBAND)
 #define POLLOUT                    (POLLWRNORM)
+#endif
 #else
 #define WS_POLLERR                 0x0001
 #define WS_POLLHUP                 0x0002
@@ -136,7 +146,6 @@ extern "C" {
 #define WS_POLLPRI                 0x0400
 #define WS_POLLIN                  (WS_POLLRDNORM|WS_POLLRDBAND)
 #define WS_POLLOUT                 (WS_POLLWRNORM)
-#endif
 #endif
 
 /* Constants for WSAIoctl() */

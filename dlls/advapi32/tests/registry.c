@@ -41,7 +41,8 @@ static const char * sTestpath2 = "%FOO%\\subdir1";
 static const DWORD ptr_size = 8 * sizeof(void*);
 
 static DWORD (WINAPI *pRegGetValueA)(HKEY,LPCSTR,LPCSTR,DWORD,LPDWORD,PVOID,LPDWORD);
-static DWORD (WINAPI *pRegDeleteTreeA)(HKEY,LPCSTR);
+static LONG (WINAPI *pRegCopyTreeA)(HKEY,const char *,HKEY);
+static LONG (WINAPI *pRegDeleteTreeA)(HKEY,const char *);
 static DWORD (WINAPI *pRegDeleteKeyExA)(HKEY,LPCSTR,REGSAM,DWORD);
 static BOOL (WINAPI *pIsWow64Process)(HANDLE,PBOOL);
 static NTSTATUS (WINAPI * pNtDeleteKey)(HANDLE);
@@ -135,6 +136,7 @@ static void InitFunctionPtrs(void)
 
     /* This function was introduced with Windows 2003 SP1 */
     ADVAPI32_GET_PROC(RegGetValueA);
+    ADVAPI32_GET_PROC(RegCopyTreeA);
     ADVAPI32_GET_PROC(RegDeleteTreeA);
     ADVAPI32_GET_PROC(RegDeleteKeyExA);
     ADVAPI32_GET_PROC(RegDeleteKeyValueA);
@@ -2101,10 +2103,106 @@ static void test_string_termination(void)
     RegCloseKey(subkey);
 }
 
+static void test_reg_copy_tree(void)
+{
+    HKEY src, dst, subkey;
+    CHAR buffer[MAX_PATH];
+    DWORD dwsize, type;
+    LONG size, ret;
+
+    if (!pRegCopyTreeA)
+    {
+        win_skip("Skipping RegCopyTreeA tests, function not present\n");
+        return;
+    }
+
+    ret = RegCreateKeyA(hkey_main, "src", &src);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+    ret = RegCreateKeyA(hkey_main, "dst", &dst);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+
+    /* Copy nonexistent subkey */
+    ret = pRegCopyTreeA(src, "nonexistent_subkey", dst);
+    ok(ret == ERROR_FILE_NOT_FOUND, "Expected ERROR_FILE_NOT_FOUND, got %d\n", ret);
+
+    /*  Create test keys and values */
+    ret = RegSetValueA(src, NULL, REG_SZ, "data", 4);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+    ret = RegSetValueExA(src, "value", 0, REG_SZ, (const BYTE *)"data2", 5);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+
+    ret = RegCreateKeyA(src, "subkey2", &subkey);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+    ret = RegSetValueA(subkey, NULL, REG_SZ, "data3", 5);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+    ret = RegSetValueExA(subkey, "value", 0, REG_SZ, (const BYTE *)"data4", 5);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+    ret = RegCloseKey(subkey);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+
+    ret = RegCreateKeyA(src, "subkey3", &subkey);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+    ret = RegCloseKey(subkey);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+
+    /* Copy subkey */
+    ret = pRegCopyTreeA(src, "subkey2", dst);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+
+    size = MAX_PATH;
+    ret = RegQueryValueA(dst, NULL, buffer, &size);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+    ok(!strcmp(buffer, "data3"), "Expected 'data3', got '%s'\n", buffer);
+
+    dwsize = MAX_PATH;
+    ret = RegQueryValueExA(dst, "value", NULL, &type, (BYTE *)buffer, &dwsize);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+    ok(type == REG_SZ, "Expected REG_SZ, got %u\n", type);
+    ok(!strcmp(buffer, "data4"), "Expected 'data4', got '%s'\n", buffer);
+
+    /* Copy full tree */
+    ret = pRegCopyTreeA(src, NULL, dst);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+
+    size = MAX_PATH;
+    ret = RegQueryValueA(dst, NULL, buffer, &size);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+    ok(!strcmp(buffer, "data"), "Expected 'data', got '%s'\n", buffer);
+
+    dwsize = MAX_PATH;
+    ret = RegQueryValueExA(dst, "value", NULL, &type, (BYTE *)buffer, &dwsize);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+    ok(type == REG_SZ, "Expected REG_SZ, got %u\n", type);
+    ok(!strcmp(buffer, "data2"), "Expected 'data2', got '%s'\n", buffer);
+
+    ret = RegOpenKeyA(dst, "subkey2", &subkey);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+    size = MAX_PATH;
+    ret = RegQueryValueA(subkey, NULL, buffer, &size);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+    ok(!strcmp(buffer, "data3"), "Expected 'data3', got '%s'\n", buffer);
+    dwsize = MAX_PATH;
+    ret = RegQueryValueExA(subkey, "value", NULL, &type, (BYTE *)buffer, &dwsize);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+    ok(type == REG_SZ, "Expected REG_SZ, got %u\n", type);
+    ok(!strcmp(buffer, "data4"), "Expected 'data4', got '%s'\n", buffer);
+    ret = RegCloseKey(subkey);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+
+    ret = RegOpenKeyA(dst, "subkey3", &subkey);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+    ret = RegCloseKey(subkey);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+
+    delete_key(src);
+    delete_key(dst);
+}
+
 static void test_reg_delete_tree(void)
 {
     CHAR buffer[MAX_PATH];
     HKEY subkey, subkey2;
+    DWORD dwsize, type;
     LONG size, ret;
 
     if(!pRegDeleteTreeA) {
@@ -2129,7 +2227,7 @@ static void test_reg_delete_tree(void)
         "subkey2 was not deleted\n");
     size = MAX_PATH;
     ok(!RegQueryValueA(subkey, NULL, buffer, &size),
-        "Default value of subkey not longer present\n");
+        "Default value of subkey no longer present\n");
 
     ret = RegCreateKeyA(subkey, "subkey2", &subkey2);
     ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
@@ -2140,7 +2238,7 @@ static void test_reg_delete_tree(void)
     ok(RegOpenKeyA(subkey, "subkey2", &subkey2),
         "subkey2 was not deleted\n");
     ok(!RegQueryValueA(subkey, NULL, buffer, &size),
-        "Default value of subkey not longer present\n");
+        "Default value of subkey no longer present\n");
 
     ret = RegCreateKeyA(subkey, "subkey2", &subkey2);
     ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
@@ -2150,7 +2248,9 @@ static void test_reg_delete_tree(void)
     ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
     ret = RegCloseKey(subkey2);
     ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
-    ret = RegSetValueA(subkey, "value", REG_SZ, "data2", 5);
+    ret = RegSetValueA(subkey, NULL, REG_SZ, "data", 4);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+    ret = RegSetValueExA(subkey, "value", 0, REG_SZ, (const BYTE *)"data2", 5);
     ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
     ret = pRegDeleteTreeA(subkey, NULL);
     ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
@@ -2165,9 +2265,23 @@ static void test_reg_delete_tree(void)
     ok(ret == ERROR_SUCCESS,
         "Default value of subkey is not present\n");
     ok(!buffer[0], "Expected length 0 got length %u(%s)\n", lstrlenA(buffer), buffer);
-    size = MAX_PATH;
-    ok(RegQueryValueA(subkey, "value", buffer, &size),
+    dwsize = MAX_PATH;
+    ok(RegQueryValueExA(subkey, "value", NULL, &type, (BYTE *)buffer, &dwsize),
         "Value is still present\n");
+    ret = RegCloseKey(subkey);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+
+    ret = RegOpenKeyA(hkey_main, "subkey", &subkey);
+    ok(ret == ERROR_SUCCESS, "subkey was deleted\n");
+    ret = pRegDeleteTreeA(subkey, "");
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+    ret = RegCloseKey(subkey);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
+
+    ret = RegOpenKeyA(hkey_main, "subkey", &subkey);
+    ok(ret == ERROR_SUCCESS, "subkey was deleted\n");
+    ret = RegCloseKey(subkey);
+    ok(ret == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", ret);
 
     ret = pRegDeleteTreeA(hkey_main, "not-here");
     ok(ret == ERROR_FILE_NOT_FOUND,
@@ -2587,8 +2701,8 @@ static void test_redirection(void)
     check_key_value( key, "Winetest", 0, ptr_size );
     check_key_value( key, "Winetest", KEY_WOW64_64KEY, is_vista ? 64 : ptr_size );
     dw = get_key_value( key, "Winetest", KEY_WOW64_32KEY );
-    if (ptr_size == 32) ok( dw == 32, "wrong value %u\n", dw );
-    else todo_wine ok( dw == 32, "wrong value %u\n", dw );
+    todo_wine_if (ptr_size != 32)
+        ok( dw == 32, "wrong value %u\n", dw );
     RegCloseKey( key );
 
     if (ptr_size == 32)
@@ -3248,6 +3362,19 @@ static void test_delete_value(void)
     res = RegDeleteValueA( hkey_main, longname );
     ok(res == ERROR_FILE_NOT_FOUND || broken(res == ERROR_MORE_DATA), /* nt4, win2k */
        "expect ERROR_FILE_NOT_FOUND, got %i\n", res);
+
+    /* Default registry value */
+    res = RegSetValueExA(hkey_main, "", 0, REG_SZ, (const BYTE *)"value", 6);
+    ok(res == ERROR_SUCCESS, "expected ERROR_SUCCESS, got %d\n", res);
+
+    res = RegQueryValueExA(hkey_main, "", NULL, NULL, NULL, NULL);
+    ok(res == ERROR_SUCCESS, "expected ERROR_SUCCESS, got %d\n", res);
+
+    res = RegDeleteValueA(hkey_main, "" );
+    ok(res == ERROR_SUCCESS, "expected ERROR_SUCCESS, got %d\n", res);
+
+    res = RegQueryValueExA(hkey_main, "", NULL, NULL, NULL, NULL);
+    ok(res == ERROR_FILE_NOT_FOUND, "expected ERROR_FILE_NOT_FOUND, got %d\n", res);
 }
 
 static void test_delete_key_value(void)
@@ -3296,6 +3423,19 @@ static void test_delete_key_value(void)
     ret = RegQueryValueExA(subkey, "test", NULL, NULL, NULL, NULL);
     ok(ret == ERROR_FILE_NOT_FOUND, "got %d\n", ret);
 
+    /* Default registry value */
+    ret = RegSetValueExA(subkey, "", 0, REG_SZ, (const BYTE *)"value", 6);
+    ok(ret == ERROR_SUCCESS, "expected ERROR_SUCCESS, got %d\n", ret);
+
+    ret = RegQueryValueExA(subkey, "", NULL, NULL, NULL, NULL);
+    ok(ret == ERROR_SUCCESS, "expected ERROR_SUCCESS, got %d\n", ret);
+
+    ret = pRegDeleteKeyValueA(hkey_main, "Subkey1", "" );
+    ok(ret == ERROR_SUCCESS, "expected ERROR_SUCCESS, got %d\n", ret);
+
+    ret = RegQueryValueExA(subkey, "", NULL, NULL, NULL, NULL);
+    ok(ret == ERROR_FILE_NOT_FOUND, "expected ERROR_FILE_NOT_FOUND, got %d\n", ret);
+
     RegDeleteKeyA(subkey, "");
     RegCloseKey(subkey);
 }
@@ -3310,6 +3450,33 @@ static void test_RegOpenCurrentUser(void)
     ok(!ret, "got %d, error %d\n", ret, GetLastError());
     ok(key != HKEY_CURRENT_USER, "got %p\n", key);
     RegCloseKey(key);
+}
+
+static void test_RegNotifyChangeKeyValue(void)
+{
+    HKEY key, subkey;
+    HANDLE event;
+    DWORD dwret;
+    LONG ret;
+
+    event = CreateEventW(NULL, FALSE, TRUE, NULL);
+    ok(event != NULL, "CreateEvent failed, error %u\n", GetLastError());
+    ret = RegCreateKeyA(hkey_main, "TestKey", &key);
+    ok(ret == ERROR_SUCCESS, "expected ERROR_SUCCESS, got %d\n", ret);
+
+    ret = RegNotifyChangeKeyValue(key, TRUE, REG_NOTIFY_CHANGE_NAME, event, TRUE);
+    ok(ret == ERROR_SUCCESS, "expected ERROR_SUCCESS, got %d\n", ret);
+    dwret = WaitForSingleObject(event, 0);
+    ok(dwret == WAIT_TIMEOUT, "expected WAIT_TIMEOUT, got %u\n", dwret);
+
+    ret = RegCreateKeyA(key, "SubKey", &subkey);
+    ok(ret == ERROR_SUCCESS, "expected ERROR_SUCCESS, got %d\n", ret);
+    dwret = WaitForSingleObject(event, 0);
+    ok(dwret == WAIT_OBJECT_0, "expected WAIT_OBJECT_0, got %u\n", dwret);
+
+    RegDeleteKeyA(key, "");
+    RegCloseKey(key);
+    CloseHandle(event);
 }
 
 START_TEST(registry)
@@ -3339,12 +3506,14 @@ START_TEST(registry)
     test_reg_save_key();
     test_reg_load_key();
     test_reg_unload_key();
+    test_reg_copy_tree();
     test_reg_delete_tree();
     test_rw_order();
     test_deleted_key();
     test_delete_value();
     test_delete_key_value();
     test_RegOpenCurrentUser();
+    test_RegNotifyChangeKeyValue();
 
     /* cleanup */
     delete_key( hkey_main );

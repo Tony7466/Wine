@@ -79,6 +79,38 @@ CONFIGRET WINAPI CM_Disconnect_Machine(HMACHINE handle)
 }
 
 /***********************************************************************
+ *             CM_Open_DevNode_Key  (SETUPAPI.@)
+ */
+CONFIGRET WINAPI CM_Open_DevNode_Key(
+    DEVINST dnDevInst, REGSAM access, ULONG ulHardwareProfile, REGDISPOSITION disposition,
+    PHKEY phkDevice, ULONG ulFlags)
+{
+    FIXME("0x%08x 0x%08x 0x%08x 0x%08x %p 0x%08x : stub\n", dnDevInst, access, ulHardwareProfile,
+          disposition, phkDevice, ulFlags);
+    return CR_SUCCESS;
+}
+
+/***********************************************************************
+ *             CM_Get_Child  (SETUPAPI.@)
+ */
+CONFIGRET WINAPI CM_Get_Child(
+    PDEVINST pdnDevInst, DEVINST dnDevInst, ULONG ulFlags)
+{
+    FIXME("%p 0x%08x 0x%08x: stub\n", pdnDevInst, dnDevInst, ulFlags);
+    return CR_SUCCESS;
+}
+
+/***********************************************************************
+ *             CM_Get_Child_Ex  (SETUPAPI.@)
+ */
+CONFIGRET WINAPI CM_Get_Child_Ex(
+    PDEVINST pdnDevInst, DEVINST dnDevInst, ULONG ulFlags, HMACHINE hMachine)
+{
+    FIXME("%p 0x%08x 0x%08x %p: stub\n", pdnDevInst, dnDevInst, ulFlags, hMachine);
+    return CR_SUCCESS;
+}
+
+/***********************************************************************
  *             CM_Get_Device_ID_ExA  (SETUPAPI.@)
  */
 DWORD WINAPI CM_Get_Device_ID_ExA(
@@ -608,6 +640,17 @@ BOOL WINAPI SetupDiGetClassBitmapIndex(const GUID *ClassGuid, PINT MiniIconIndex
 BOOL WINAPI SetupDiLoadClassIcon(const GUID *ClassGuid, HICON *LargeIcon, PINT MiniIconIndex)
 {
     FIXME(": stub %s, %p, %p\n", debugstr_guid(ClassGuid), LargeIcon, MiniIconIndex);
+
+    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
+    return FALSE;
+}
+
+/***********************************************************************
+ *              SetupDiSelectBestCompatDrv (SETUPAPI.@)
+ */
+BOOL WINAPI SetupDiSelectBestCompatDrv(HDEVINFO DeviceInfoSet, PSP_DEVINFO_DATA DeviceInfoData)
+{
+    FIXME(": stub %p, %p\n", DeviceInfoSet, DeviceInfoData);
 
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;

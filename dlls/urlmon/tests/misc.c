@@ -641,7 +641,7 @@ static const struct {
     {data50, sizeof(data50), "video/mpeg"},
     {data51, sizeof(data51), "video/mpeg"},
     {data52, sizeof(data52), "application/octet-stream", "image/pjpeg"},
-    {data53, sizeof(data53), "application/octet-stream", "image/pjpeg"},
+    {data53, sizeof(data53), "application/octet-stream", "image/pjpeg", "image/x-icon"},
     {data54, sizeof(data54), "text/html", "video/mpeg"},
     {data55, sizeof(data55), "application/x-gzip-compressed"},
     {data56, sizeof(data56), "text/plain"},
@@ -1636,7 +1636,7 @@ static void test_MkParseDisplayNameEx(void)
     ok(mon != NULL, "mon == NULL\n");
 
     hres = IMoniker_GetDisplayName(mon, NULL, 0, &name);
-    ok(hres == S_OK, "GetDiasplayName failed: %08x\n", hres);
+    ok(hres == S_OK, "GetDisplayName failed: %08x\n", hres);
     ok(!lstrcmpW(name, url9), "wrong display name %s\n", wine_dbgstr_w(name));
     CoTaskMemFree(name);
 
@@ -1724,14 +1724,9 @@ static void test_internet_feature_defaults(void) {
 
     for(i = 0; i < sizeof(default_feature_tests)/sizeof(default_feature_tests[0]); ++i) {
         hres = pCoInternetIsFeatureEnabled(default_feature_tests[i].feature, default_feature_tests[i].get_flags);
-        if(default_feature_tests[i].todo) {
-            todo_wine
+        todo_wine_if (default_feature_tests[i].todo)
             ok(hres == default_feature_tests[i].expected, "CoInternetIsFeatureEnabled returned %08x, expected %08x on test %d\n",
                 hres, default_feature_tests[i].expected, i);
-        } else {
-            ok(hres == default_feature_tests[i].expected, "CoInternetIsFeatureEnabled returned %08x, expected %08x on test %d\n",
-                hres, default_feature_tests[i].expected, i);
-        }
     }
 }
 
@@ -1877,24 +1872,15 @@ static void test_CoInternetSetFeatureEnabled(void) {
     for(i = 0; i < sizeof(internet_feature_tests)/sizeof(internet_feature_tests[0]); ++i) {
         hres = pCoInternetSetFeatureEnabled(internet_feature_tests[i].feature, internet_feature_tests[i].set_flags,
                                             internet_feature_tests[i].enable);
-        if(internet_feature_tests[i].set_todo) {
-            todo_wine
+        todo_wine_if (internet_feature_tests[i].set_todo)
             ok(hres == internet_feature_tests[i].set_expected, "CoInternetSetFeatureEnabled returned %08x, expected %08x on test %d\n",
                 hres, internet_feature_tests[i].set_expected, i);
-        } else {
-            ok(hres == internet_feature_tests[i].set_expected, "CoInternetSetFeatureEnabled returned %08x, expected %08x on test %d\n",
-                hres, internet_feature_tests[i].set_expected, i);
-        }
 
         hres = pCoInternetIsFeatureEnabled(internet_feature_tests[i].feature, internet_feature_tests[i].set_flags);
-        if(internet_feature_tests[i].get_todo) {
-            todo_wine
+        todo_wine_if (internet_feature_tests[i].get_todo)
             ok(hres == internet_feature_tests[i].get_expected, "CoInternetIsFeatureEnabled returned %08x, expected %08x on test %d\n",
                 hres, internet_feature_tests[i].get_expected, i);
-        } else {
-            ok(hres == internet_feature_tests[i].get_expected, "CoInternetIsFeatureEnabled returned %08x, expected %08x on test %d\n",
-                hres, internet_feature_tests[i].get_expected, i);
-        }
+
     }
 }
 

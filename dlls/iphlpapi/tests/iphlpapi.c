@@ -50,6 +50,7 @@
 
 static HMODULE hLibrary = NULL;
 
+static DWORD (WINAPI *pAllocateAndGetTcpExTableFromStack)(void**,BOOL,HANDLE,DWORD,DWORD);
 static DWORD (WINAPI *pGetNumberOfInterfaces)(PDWORD);
 static DWORD (WINAPI *pGetIpAddrTable)(PMIB_IPADDRTABLE,PULONG,BOOL);
 static DWORD (WINAPI *pGetIfEntry)(PMIB_IFROW);
@@ -97,6 +98,7 @@ static void loadIPHlpApi(void)
 {
   hLibrary = LoadLibraryA("iphlpapi.dll");
   if (hLibrary) {
+    pAllocateAndGetTcpExTableFromStack = (void *)GetProcAddress(hLibrary, "AllocateAndGetTcpExTableFromStack");
     pGetNumberOfInterfaces = (void *)GetProcAddress(hLibrary, "GetNumberOfInterfaces");
     pGetIpAddrTable = (void *)GetProcAddress(hLibrary, "GetIpAddrTable");
     pGetIfEntry = (void *)GetProcAddress(hLibrary, "GetIfEntry");
@@ -1382,13 +1384,14 @@ static void test_GetAdaptersAddresses(void)
     size *= 2;
     osize = size;
     ptr = HeapAlloc(GetProcessHeap(), 0, osize);
-    ret = pGetAdaptersAddresses(AF_UNSPEC, 0, NULL, ptr, &osize);
+    ret = pGetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL, ptr, &osize);
     ok(!ret, "expected ERROR_SUCCESS got %u\n", ret);
     ok(osize == size, "expected %d, got %d\n", size, osize);
 
     for (aa = ptr; !ret && aa; aa = aa->Next)
     {
         char temp[128];
+        IP_ADAPTER_PREFIX *prefix;
 
         ok(S(U(*aa)).Length == sizeof(IP_ADAPTER_ADDRESSES_LH) ||
            S(U(*aa)).Length == sizeof(IP_ADAPTER_ADDRESSES_XP),
@@ -1455,6 +1458,18 @@ static void test_GetAdaptersAddresses(void)
             sprintf(temp + strlen(temp), "%d ", aa->ZoneIndices[i]);
         trace("ZoneIndices:           %s\n", temp);
         trace("FirstPrefix:           %p\n", aa->FirstPrefix);
+        prefix = aa->FirstPrefix;
+        while (prefix)
+        {
+            trace("\tLength:                  %u\n", S(U(*prefix)).Length);
+            trace("\tFlags:                   0x%08x\n", S(U(*prefix)).Flags);
+            trace("\tNext:                    %p\n", prefix->Next);
+            trace("\tAddress.lpSockaddr:      %p\n", prefix->Address.lpSockaddr);
+            trace("\tAddress.iSockaddrLength: %d\n", prefix->Address.iSockaddrLength);
+            trace("\tPrefixLength:            %u\n", prefix->PrefixLength);
+            trace("\n");
+            prefix = prefix->Next;
+        }
 
         if (S(U(*aa)).Length < sizeof(IP_ADAPTER_ADDRESSES_LH)) continue;
         trace("TransmitLinkSpeed:     %s\n", debugstr_longlong(aa->TransmitLinkSpeed));
@@ -1547,6 +1562,52 @@ static void test_GetExtendedTcpTable(void)
     ret = pGetExtendedTcpTable( table_module, &size, TRUE, AF_INET, TCP_TABLE_OWNER_MODULE_LISTENER, 0 );
     ok( ret == ERROR_SUCCESS, "got %u\n", ret );
     HeapFree( GetProcessHeap(), 0, table_module );
+}
+
+static void test_AllocateAndGetTcpExTableFromStack(void)
+{
+    DWORD ret;
+    MIB_TCPTABLE_OWNER_PID *table_ex = NULL;
+
+    if (!pAllocateAndGetTcpExTableFromStack)
+    {
+        skip("AllocateAndGetTcpExTableFromStack not available\n");
+        return;
+    }
+
+    if (0)
+    {
+        /* crashes on native */
+        ret = pAllocateAndGetTcpExTableFromStack( NULL, FALSE, INVALID_HANDLE_VALUE, 0, 0 );
+        ok( ret == ERROR_INVALID_PARAMETER, "got %u\n", ret );
+        ret = pAllocateAndGetTcpExTableFromStack( (void **)&table_ex, FALSE, INVALID_HANDLE_VALUE, 0, AF_INET );
+        ok( ret == ERROR_INVALID_PARAMETER, "got %u\n", ret );
+        ret = pAllocateAndGetTcpExTableFromStack( (void **)NULL, FALSE, GetProcessHeap(), 0, AF_INET );
+        ok( ret == ERROR_INVALID_PARAMETER, "got %u\n", ret );
+    }
+
+    ret = pAllocateAndGetTcpExTableFromStack( (void **)&table_ex, FALSE, GetProcessHeap(), 0, 0 );
+    ok( ret == ERROR_INVALID_PARAMETER || broken(ret == ERROR_NOT_SUPPORTED) /* win2k */, "got %u\n", ret );
+
+    ret = pAllocateAndGetTcpExTableFromStack( (void **)&table_ex, FALSE, GetProcessHeap(), 0, AF_INET );
+    ok( ret == ERROR_SUCCESS, "got %u\n", ret );
+
+    if (ret == NO_ERROR && winetest_debug > 1)
+    {
+        DWORD i;
+        trace( "AllocateAndGetTcpExTableFromStack table: %u entries\n", table_ex->dwNumEntries );
+        for (i = 0; i < table_ex->dwNumEntries; i++)
+        {
+          trace( "%u: local %s:%u remote %s:%u state %u pid %u\n", i,
+                 ntoa(table_ex->table[i].dwLocalAddr), ntohs(table_ex->table[i].dwLocalPort),
+                 ntoa( table_ex->table[i].dwRemoteAddr ), ntohs(table_ex->table[i].dwRemotePort),
+                 U(table_ex->table[i]).dwState, table_ex->table[i].dwOwningPid );
+        }
+    }
+    HeapFree(GetProcessHeap(), 0, table_ex);
+
+    ret = pAllocateAndGetTcpExTableFromStack( (void **)&table_ex, FALSE, GetProcessHeap(), 0, AF_INET6 );
+    ok( ret == ERROR_NOT_SUPPORTED, "got %u\n", ret );
 }
 
 static void test_GetExtendedUdpTable(void)
@@ -1910,6 +1971,7 @@ START_TEST(iphlpapi)
     test_GetAdaptersAddresses();
     test_GetExtendedTcpTable();
     test_GetExtendedUdpTable();
+    test_AllocateAndGetTcpExTableFromStack();
     test_CreateSortedAddressPairs();
     test_interface_identifier_conversion();
     test_GetIfEntry2();

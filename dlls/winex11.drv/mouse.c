@@ -132,6 +132,7 @@ static Cursor create_cursor( HANDLE handle );
 static BOOL xinput2_available;
 static BOOL broken_rawevents;
 #define MAKE_FUNCPTR(f) static typeof(f) * p##f
+MAKE_FUNCPTR(XIGetClientPointer);
 MAKE_FUNCPTR(XIFreeDeviceInfo);
 MAKE_FUNCPTR(XIQueryDevice);
 MAKE_FUNCPTR(XIQueryVersion);
@@ -255,7 +256,7 @@ static void enable_xinput2(void)
     XIEventMask mask;
     XIDeviceInfo *devices;
     unsigned char mask_bits[XIMaskLen(XI_LASTEVENT)];
-    int i, j, count;
+    int i;
 
     if (!xinput2_available) return;
 
@@ -272,29 +273,8 @@ static void enable_xinput2(void)
     if (data->xi2_state == xi_unavailable) return;
 
     if (data->xi2_devices) pXIFreeDeviceInfo( data->xi2_devices );
+    if (!pXIGetClientPointer( data->display, None, &data->xi2_core_pointer )) return;
     data->xi2_devices = devices = pXIQueryDevice( data->display, XIAllDevices, &data->xi2_device_count );
-    for (i = 0; i < data->xi2_device_count; ++i)
-    {
-        if (devices[i].use != XIMasterPointer) continue;
-        for (j = count = 0; j < devices[i].num_classes; j++)
-        {
-            XIValuatorClassInfo *class = (XIValuatorClassInfo *)devices[i].classes[j];
-
-            if (devices[i].classes[j]->type != XIValuatorClass) continue;
-            TRACE( "Device %u (%s) num %u %f,%f res %u mode %u label %s\n",
-                   devices[i].deviceid, debugstr_a(devices[i].name),
-                   class->number, class->min, class->max, class->resolution, class->mode,
-                   XGetAtomName( data->display, class->label ));
-            if (class->label == x11drv_atom( Rel_X ) || class->label == x11drv_atom( Rel_Y )) count++;
-            /* workaround for drivers that don't provide labels */
-            if (!class->label && class->number <= 1 && class->mode == XIModeRelative) count++;
-        }
-        if (count < 2) continue;
-        TRACE( "Using %u (%s) as core pointer\n",
-               devices[i].deviceid, debugstr_a(devices[i].name) );
-        data->xi2_core_pointer = devices[i].deviceid;
-        break;
-    }
 
     mask.mask     = mask_bits;
     mask.mask_len = sizeof(mask_bits);
@@ -602,7 +582,7 @@ static void send_mouse_input( HWND hwnd, Window window, unsigned int state, INPU
 
     /* update the wine server Z-order */
 
-    if (window != x11drv_thread_data()->grab_window &&
+    if (hwnd != x11drv_thread_data()->grab_hwnd &&
         /* ignore event if a button is pressed, since the mouse is then grabbed too */
         !(state & (Button1Mask|Button2Mask|Button3Mask|Button4Mask|Button5Mask|Button6Mask|Button7Mask)))
     {
@@ -1388,7 +1368,7 @@ BOOL CDECL X11DRV_GetCursorPos(LPPOINT pos)
     {
         POINT old = *pos;
         *pos = root_to_virtual_screen( winX, winY );
-        TRACE( "pointer at (%d,%d) server pos %d,%d\n", pos->x, pos->y, old.x, old.y );
+        TRACE( "pointer at %s server pos %s\n", wine_dbgstr_point(pos), wine_dbgstr_point(&old) );
     }
     return ret;
 }
@@ -1458,7 +1438,7 @@ void move_resize_window( HWND hwnd, int dir )
     else if (GetKeyState( VK_MBUTTON ) & 0x8000) button = 2;
     else if (GetKeyState( VK_RBUTTON ) & 0x8000) button = 3;
 
-    TRACE( "hwnd %p/%lx, x %d, y %d, dir %d, button %d\n", hwnd, win, pos.x, pos.y, dir, button );
+    TRACE( "hwnd %p/%lx, pos %s, dir %d, button %d\n", hwnd, win, wine_dbgstr_point(&pos), dir, button );
 
     xev.xclient.type = ClientMessage;
     xev.xclient.window = win;
@@ -1527,13 +1507,13 @@ void move_resize_window( HWND hwnd, int dir )
 /***********************************************************************
  *           X11DRV_ButtonPress
  */
-void X11DRV_ButtonPress( HWND hwnd, XEvent *xev )
+BOOL X11DRV_ButtonPress( HWND hwnd, XEvent *xev )
 {
     XButtonEvent *event = &xev->xbutton;
     int buttonNum = event->button - 1;
     INPUT input;
 
-    if (buttonNum >= NB_BUTTONS) return;
+    if (buttonNum >= NB_BUTTONS) return FALSE;
 
     TRACE( "hwnd %p/%lx button %u pos %d,%d\n", hwnd, event->window, buttonNum, event->x, event->y );
 
@@ -1546,19 +1526,20 @@ void X11DRV_ButtonPress( HWND hwnd, XEvent *xev )
 
     update_user_time( event->time );
     send_mouse_input( hwnd, event->window, event->state, &input );
+    return TRUE;
 }
 
 
 /***********************************************************************
  *           X11DRV_ButtonRelease
  */
-void X11DRV_ButtonRelease( HWND hwnd, XEvent *xev )
+BOOL X11DRV_ButtonRelease( HWND hwnd, XEvent *xev )
 {
     XButtonEvent *event = &xev->xbutton;
     int buttonNum = event->button - 1;
     INPUT input;
 
-    if (buttonNum >= NB_BUTTONS || !button_up_flags[buttonNum]) return;
+    if (buttonNum >= NB_BUTTONS || !button_up_flags[buttonNum]) return FALSE;
 
     TRACE( "hwnd %p/%lx button %u pos %d,%d\n", hwnd, event->window, buttonNum, event->x, event->y );
 
@@ -1570,13 +1551,14 @@ void X11DRV_ButtonRelease( HWND hwnd, XEvent *xev )
     input.u.mi.dwExtraInfo = 0;
 
     send_mouse_input( hwnd, event->window, event->state, &input );
+    return TRUE;
 }
 
 
 /***********************************************************************
  *           X11DRV_MotionNotify
  */
-void X11DRV_MotionNotify( HWND hwnd, XEvent *xev )
+BOOL X11DRV_MotionNotify( HWND hwnd, XEvent *xev )
 {
     XMotionEvent *event = &xev->xmotion;
     INPUT input;
@@ -1594,24 +1576,25 @@ void X11DRV_MotionNotify( HWND hwnd, XEvent *xev )
     if (!hwnd && is_old_motion_event( event->serial ))
     {
         TRACE( "pos %d,%d old serial %lu, ignoring\n", input.u.mi.dx, input.u.mi.dy, event->serial );
-        return;
+        return FALSE;
     }
     send_mouse_input( hwnd, event->window, event->state, &input );
+    return TRUE;
 }
 
 
 /***********************************************************************
  *           X11DRV_EnterNotify
  */
-void X11DRV_EnterNotify( HWND hwnd, XEvent *xev )
+BOOL X11DRV_EnterNotify( HWND hwnd, XEvent *xev )
 {
     XCrossingEvent *event = &xev->xcrossing;
     INPUT input;
 
     TRACE( "hwnd %p/%lx pos %d,%d detail %d\n", hwnd, event->window, event->x, event->y, event->detail );
 
-    if (event->detail == NotifyVirtual) return;
-    if (event->window == x11drv_thread_data()->grab_window) return;
+    if (event->detail == NotifyVirtual) return FALSE;
+    if (hwnd == x11drv_thread_data()->grab_hwnd) return FALSE;
 
     /* simulate a mouse motion event */
     input.u.mi.dx          = event->x;
@@ -1624,9 +1607,10 @@ void X11DRV_EnterNotify( HWND hwnd, XEvent *xev )
     if (is_old_motion_event( event->serial ))
     {
         TRACE( "pos %d,%d old serial %lu, ignoring\n", input.u.mi.dx, input.u.mi.dy, event->serial );
-        return;
+        return FALSE;
     }
     send_mouse_input( hwnd, event->window, event->state, &input );
+    return TRUE;
 }
 
 #ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
@@ -1634,7 +1618,7 @@ void X11DRV_EnterNotify( HWND hwnd, XEvent *xev )
 /***********************************************************************
  *           X11DRV_RawMotion
  */
-static void X11DRV_RawMotion( XGenericEventCookie *xev )
+static BOOL X11DRV_RawMotion( XGenericEventCookie *xev )
 {
     XIRawEvent *event = xev->data;
     const double *values = event->valuators.values;
@@ -1645,8 +1629,8 @@ static void X11DRV_RawMotion( XGenericEventCookie *xev )
     struct x11drv_thread_data *thread_data = x11drv_thread_data();
     XIDeviceInfo *devices = thread_data->xi2_devices;
 
-    if (!event->valuators.mask_len) return;
-    if (thread_data->xi2_state != xi_enabled) return;
+    if (!event->valuators.mask_len) return FALSE;
+    if (thread_data->xi2_state != xi_enabled) return FALSE;
 
     input.u.mi.mouseData   = 0;
     input.u.mi.dwFlags     = MOUSEEVENTF_MOVE;
@@ -1691,13 +1675,14 @@ static void X11DRV_RawMotion( XGenericEventCookie *xev )
     if (broken_rawevents && is_old_motion_event( xev->serial ))
     {
         TRACE( "pos %d,%d old serial %lu, ignoring\n", input.u.mi.dx, input.u.mi.dy, xev->serial );
-        return;
+        return FALSE;
     }
 
     TRACE( "pos %d,%d (event %f,%f)\n", input.u.mi.dx, input.u.mi.dy, dx, dy );
 
     input.type = INPUT_MOUSE;
     __wine_send_input( 0, &input );
+    return TRUE;
 }
 
 #endif /* HAVE_X11_EXTENSIONS_XINPUT2_H */
@@ -1724,6 +1709,7 @@ void X11DRV_XInput2_Init(void)
         return; \
     }
 
+    LOAD_FUNCPTR(XIGetClientPointer);
     LOAD_FUNCPTR(XIFreeDeviceInfo);
     LOAD_FUNCPTR(XIQueryDevice);
     LOAD_FUNCPTR(XIQueryVersion);
@@ -1746,18 +1732,19 @@ void X11DRV_XInput2_Init(void)
 /***********************************************************************
  *           X11DRV_GenericEvent
  */
-void X11DRV_GenericEvent( HWND hwnd, XEvent *xev )
+BOOL X11DRV_GenericEvent( HWND hwnd, XEvent *xev )
 {
+    BOOL ret = FALSE;
 #ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
     XGenericEventCookie *event = &xev->xcookie;
 
-    if (!event->data) return;
-    if (event->extension != xinput2_opcode) return;
+    if (!event->data) return FALSE;
+    if (event->extension != xinput2_opcode) return FALSE;
 
     switch (event->evtype)
     {
     case XI_RawMotion:
-        X11DRV_RawMotion( event );
+        ret = X11DRV_RawMotion( event );
         break;
 
     default:
@@ -1765,4 +1752,5 @@ void X11DRV_GenericEvent( HWND hwnd, XEvent *xev )
         break;
     }
 #endif
+    return ret;
 }

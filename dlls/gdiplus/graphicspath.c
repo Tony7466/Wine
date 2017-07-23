@@ -881,6 +881,7 @@ static GpStatus format_string_callback(HDC dc,
         start = (char *)ph;
         if (!ph || !lengthen_path(path, len / sizeof(POINTFX)))
         {
+            heap_free(ph);
             status = OutOfMemory;
             break;
         }
@@ -1581,17 +1582,49 @@ GpStatus WINGDIPAPI GdipIsOutlineVisiblePathPointI(GpPath* path, INT x, INT y,
 GpStatus WINGDIPAPI GdipIsOutlineVisiblePathPoint(GpPath* path, REAL x, REAL y,
     GpPen *pen, GpGraphics *graphics, BOOL *result)
 {
-    static int calls;
+    GpStatus stat;
+    GpPath *wide_path;
+    GpMatrix *transform = NULL;
 
     TRACE("(%p,%0.2f,%0.2f,%p,%p,%p)\n", path, x, y, pen, graphics, result);
 
     if(!path || !pen)
         return InvalidParameter;
 
-    if(!(calls++))
-        FIXME("not implemented\n");
+    stat = GdipClonePath(path, &wide_path);
 
-    return NotImplemented;
+    if (stat != Ok)
+        return stat;
+
+    if (pen->unit == UnitPixel && graphics != NULL)
+    {
+        stat = GdipCreateMatrix(&transform);
+
+        if (stat == Ok)
+            stat = get_graphics_transform(graphics, CoordinateSpaceDevice,
+                CoordinateSpaceWorld, transform);
+    }
+
+    if (stat == Ok)
+        stat = GdipWidenPath(wide_path, pen, transform, 1.0);
+
+    if (pen->unit == UnitPixel && graphics != NULL)
+    {
+        if (stat == Ok)
+            stat = GdipInvertMatrix(transform);
+
+        if (stat == Ok)
+            stat = GdipTransformPath(wide_path, transform);
+    }
+
+    if (stat == Ok)
+        stat = GdipIsVisiblePathPoint(wide_path, x, y, graphics, result);
+
+    GdipDeleteMatrix(transform);
+
+    GdipDeletePath(wide_path);
+
+    return stat;
 }
 
 GpStatus WINGDIPAPI GdipIsVisiblePathPointI(GpPath* path, INT x, INT y, GpGraphics *graphics, BOOL *result)
@@ -1888,7 +1921,7 @@ static void widen_closed_figure(GpPath *path, GpPen *pen, int start, int end,
     int i;
     path_list_node_t *prev_point;
 
-    if (end <= start+1)
+    if (end <= start)
         return;
 
     /* left outline */
@@ -2072,7 +2105,7 @@ GpStatus WINGDIPAPI GdipWidenPath(GpPath *path, GpPen *pen, GpMatrix *matrix,
     status = GdipClonePath(path, &flat_path);
 
     if (status == Ok)
-        status = GdipFlattenPath(flat_path, matrix, flatness);
+        status = GdipFlattenPath(flat_path, pen->unit == UnitPixel ? matrix : NULL, flatness);
 
     if (status == Ok && !init_path_list(&points, 314.0, 22.0))
         status = OutOfMemory;
@@ -2144,6 +2177,9 @@ GpStatus WINGDIPAPI GdipWidenPath(GpPath *path, GpPen *pen, GpMatrix *matrix,
     free_path_list(points);
 
     GdipDeletePath(flat_path);
+
+    if (status == Ok && pen->unit != UnitPixel)
+        status = GdipTransformPath(path, matrix);
 
     return status;
 }

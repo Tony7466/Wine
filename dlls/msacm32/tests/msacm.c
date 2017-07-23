@@ -31,6 +31,7 @@
 #define NOBITMAP
 #include "mmreg.h"
 #include "msacm.h"
+#include "msacmdrv.h"
 
 static BOOL CALLBACK FormatTagEnumProc(HACMDRIVERID hadid,
                                        PACMFORMATTAGDETAILSA paftd,
@@ -591,17 +592,21 @@ static void test_prepareheader(void)
     hdr.cbDstLength = sizeof(pcm);
 
     mr = acmStreamPrepareHeader(has, &hdr, 0);
-todo_wine
     ok(mr == MMSYSERR_INVALPARAM, "expected 0x0b, got 0x%x\n", mr);
 
     hdr.cbSrcLength = src->wfx.nBlockAlign - 1; /* less than block align */
     mr = acmStreamPrepareHeader(has, &hdr, 0);
-todo_wine
     ok(mr == ACMERR_NOTPOSSIBLE, "expected 0x200, got 0x%x\n", mr);
+
+    hdr.cbSrcLength = src->wfx.nBlockAlign + 1; /* more than block align */
+    mr = acmStreamPrepareHeader(has, &hdr, 0);
+    ok(mr == MMSYSERR_NOERROR, "prepare failed: 0x%x\n", mr);
+
+    mr = acmStreamUnprepareHeader(has, &hdr, 0);
+    ok(mr == MMSYSERR_NOERROR, "unprepare failed: 0x%x\n", mr);
 
     hdr.cbSrcLength = src->wfx.nBlockAlign;
     mr = acmStreamPrepareHeader(has, &hdr, 1); /* invalid use of reserved parameter */
-todo_wine
     ok(mr == MMSYSERR_INVALFLAG, "expected 0x0a, got 0x%x\n", mr);
 
     mr = acmStreamPrepareHeader(has, &hdr, 0);
@@ -675,7 +680,6 @@ todo_wine
     hdr.pbDst = pcm;
     hdr.cbDstLength = -4;
     mr = acmStreamPrepareHeader(has, &hdr, 0);
-todo_wine {
     ok(mr == ACMERR_NOTPOSSIBLE, "expected 0x200, got 0x%x\n", mr);
     ok(hdr.fdwStatus == 0, "expected 0, got 0x%x\n", hdr.fdwStatus);
 
@@ -688,7 +692,7 @@ todo_wine {
 
     mr = acmStreamUnprepareHeader(has, &hdr, 0);
     ok(mr == ACMERR_UNPREPARED, "expected 0x202, got 0x%x\n", mr);
-}
+
     /* Less output space than required */
     memset(&hdr, 0, sizeof(hdr));
     hdr.cbStruct = sizeof(hdr);
@@ -826,9 +830,174 @@ todo_wine
     ok(rc == MMSYSERR_INVALPARAM, "failed with error 0x%x\n", rc);
 }
 
+static struct
+{
+    struct
+    {
+        int load, free, open, close, enable, disable, install,
+            remove, details, notify, querycfg, about;
+    } driver;
+    struct
+    {
+        int tag_details, details, suggest;
+    } format;
+    struct
+    {
+        int open, close, size, convert, prepare, unprepare, reset;
+    } stream;
+    int other;
+} driver_calls;
+
+static LRESULT CALLBACK acm_driver_func(DWORD_PTR id, HDRVR handle, UINT msg, LPARAM param1, LPARAM param2)
+{
+    switch (msg)
+    {
+        /* Driver messages */
+        case DRV_LOAD:
+            driver_calls.driver.load++;
+            return 1;
+        case DRV_FREE:
+            driver_calls.driver.free++;
+            return 1;
+        case DRV_OPEN:
+            driver_calls.driver.open++;
+            return 1;
+        case DRV_CLOSE:
+            driver_calls.driver.close++;
+            return 1;
+        case DRV_ENABLE:
+            driver_calls.driver.enable++;
+            return 1;
+        case DRV_DISABLE:
+            driver_calls.driver.disable++;
+            return 1;
+        case DRV_QUERYCONFIGURE:
+            driver_calls.driver.querycfg++;
+            return 1;
+        case DRV_INSTALL:
+            driver_calls.driver.install++;
+            return DRVCNF_RESTART;
+        case DRV_REMOVE:
+            driver_calls.driver.remove++;
+            return DRVCNF_RESTART;
+        case ACMDM_DRIVER_ABOUT:
+            driver_calls.driver.about++;
+            return MMSYSERR_NOTSUPPORTED;
+        case ACMDM_DRIVER_DETAILS:
+        {
+            ACMDRIVERDETAILSA *ptr = (ACMDRIVERDETAILSA *)param1;
+
+            /* copied from pcmconverter.c */
+            ptr->fccType = ACMDRIVERDETAILS_FCCTYPE_AUDIOCODEC;
+            ptr->fccComp = ACMDRIVERDETAILS_FCCCOMP_UNDEFINED;
+            ptr->wMid = MM_MICROSOFT;
+            ptr->wPid = MM_MSFT_ACM_PCM;
+            ptr->vdwACM = 0x01000000;
+            ptr->vdwDriver = 0x01000000;
+            ptr->fdwSupport = ACMDRIVERDETAILS_SUPPORTF_CONVERTER;
+            ptr->cFormatTags = 1;
+            ptr->cFilterTags = 0;
+            ptr->hicon = NULL;
+            strcpy(ptr->szShortName, "TEST-CODEC");
+            strcpy(ptr->szLongName, "Wine Test Codec");
+            strcpy(ptr->szCopyright, "Brought to you by the Wine team...");
+            strcpy(ptr->szLicensing, "Refer to LICENSE file");
+            ptr->szFeatures[0] = 0;
+
+            driver_calls.driver.details++;
+            break;
+        }
+        case ACMDM_DRIVER_NOTIFY:
+            driver_calls.driver.notify++;
+            return MMSYSERR_NOTSUPPORTED;
+
+        /* Format messages */
+        case ACMDM_FORMATTAG_DETAILS:
+            driver_calls.format.tag_details++;
+            break;
+        case ACMDM_FORMAT_DETAILS:
+            driver_calls.format.details++;
+            break;
+        case ACMDM_FORMAT_SUGGEST:
+            driver_calls.format.suggest++;
+            break;
+
+        /* Stream messages */
+        case ACMDM_STREAM_OPEN:
+            driver_calls.stream.open++;
+            break;
+        case ACMDM_STREAM_CLOSE:
+            driver_calls.stream.close++;
+            break;
+        case ACMDM_STREAM_SIZE:
+            driver_calls.stream.size++;
+            break;
+        case ACMDM_STREAM_CONVERT:
+            driver_calls.stream.convert++;
+            break;
+        case ACMDM_STREAM_RESET:
+            driver_calls.stream.reset++;
+            return MMSYSERR_NOTSUPPORTED;
+        case ACMDM_STREAM_PREPARE:
+            driver_calls.stream.prepare++;
+            break;
+        case ACMDM_STREAM_UNPREPARE:
+            driver_calls.stream.unprepare++;
+            break;
+
+        default:
+            driver_calls.other++;
+            return DefDriverProc(id, handle, msg, param1, param2);
+    }
+    return MMSYSERR_NOERROR;
+}
+
+static void test_acmDriverAdd(void)
+{
+    MMRESULT res;
+    HACMDRIVERID drvid;
+    union
+    {
+      ACMDRIVERDETAILSA drv_details;
+    } acm;
+
+    /* Driver load steps:
+     * - acmDriverAdd checks the passed parameters
+     * - DRV_LOAD message is sent - required
+     * - DRV_ENABLE message is sent - required
+     * - DRV_OPEN message is sent - required
+     * - DRV_DETAILS message is sent - required
+     * - ACMDM_FORMATTAG_DETAILS message is sent - optional
+     * - DRV_QUERYCONFIGURE message is sent - optional
+     * - ACMDM_DRIVER_ABOUT message is sent - optional
+     */
+
+    res = acmDriverAddA(&drvid, GetModuleHandleA(NULL), (LPARAM)acm_driver_func, 0, ACM_DRIVERADDF_FUNCTION);
+    ok(res == MMSYSERR_NOERROR, "Expected 0, got %d\n", res);
+todo_wine
+    ok(driver_calls.driver.open == 1, "Expected 1, got %d\n", driver_calls.driver.open);
+    ok(driver_calls.driver.details == 1, "Expected 1, got %d\n", driver_calls.driver.details);
+
+    memset(&acm, 0, sizeof(acm));
+    res = acmDriverDetailsA(drvid, &acm.drv_details, 0);
+    ok(res == MMSYSERR_INVALPARAM, "Expected 11, got %d\n", res);
+
+    acm.drv_details.cbStruct = sizeof(acm.drv_details);
+    res = acmDriverDetailsA(drvid, &acm.drv_details, 0);
+    ok(res == MMSYSERR_NOERROR, "Expected 0, got %d\n", res);
+todo_wine
+    ok(driver_calls.driver.open == 1, "Expected 1, got %d\n", driver_calls.driver.open);
+    ok(driver_calls.driver.details == 2, "Expected 2, got %d\n", driver_calls.driver.details);
+todo_wine
+    ok(driver_calls.driver.close == 0, "Expected 0, got %d\n", driver_calls.driver.close);
+}
+
 START_TEST(msacm)
 {
     driver_tests();
     test_prepareheader();
     test_acmFormatSuggest();
+    /* Test acmDriverAdd in the end as it may conflict
+     * with other tests due to codec lookup order */
+    test_acmDriverAdd();
 }

@@ -128,7 +128,7 @@ static void remove_startup_notification(Display *display, Window window)
 
     pos = snprintf(message, sizeof(message), "remove: ID=");
     message[pos++] = '"';
-    for (i = 0; id[i] && pos < sizeof(message) - 2; i++)
+    for (i = 0; id[i] && pos < sizeof(message) - 3; i++)
     {
         if (id[i] == '"' || id[i] == '\\')
             message[pos++] = '\\';
@@ -748,9 +748,15 @@ static void set_style_hints( struct x11drv_win_data *data, DWORD style, DWORD ex
 {
     Window group_leader = data->whole_window;
     HWND owner = GetWindow( data->hwnd, GW_OWNER );
-    Window owner_win = X11DRV_get_whole_window( owner );
+    Window owner_win = 0;
     XWMHints *wm_hints;
     Atom window_type;
+
+    if (owner)
+    {
+        owner = GetAncestor( owner, GA_ROOT );
+        owner_win = X11DRV_get_whole_window( owner );
+    }
 
     if (owner_win)
     {
@@ -1174,7 +1180,7 @@ void make_window_embedded( struct x11drv_win_data *data )
     /* the window cannot be mapped before being embedded */
     if (data->mapped)
     {
-        if (data->managed) XUnmapWindow( data->display, data->whole_window );
+        if (!data->managed) XUnmapWindow( data->display, data->whole_window );
         else XWithdrawWindow( data->display, data->whole_window, data->vis.screen );
         data->net_wm_state = 0;
     }
@@ -1676,18 +1682,19 @@ void CDECL X11DRV_DestroyWindow( HWND hwnd )
 /***********************************************************************
  *		X11DRV_DestroyNotify
  */
-void X11DRV_DestroyNotify( HWND hwnd, XEvent *event )
+BOOL X11DRV_DestroyNotify( HWND hwnd, XEvent *event )
 {
     struct x11drv_win_data *data;
     BOOL embedded;
 
-    if (!(data = get_win_data( hwnd ))) return;
+    if (!(data = get_win_data( hwnd ))) return FALSE;
     embedded = data->embedded;
     if (!embedded) FIXME( "window %p/%lx destroyed from the outside\n", hwnd, data->whole_window );
 
     destroy_whole_window( data, TRUE );
     release_win_data( data );
     if (embedded) SendMessageW( hwnd, WM_CLOSE, 0, 0 );
+    return TRUE;
 }
 
 
@@ -1787,6 +1794,7 @@ BOOL CDECL X11DRV_CreateWindow( HWND hwnd )
                                            CWOverrideRedirect | CWEventMask, &attr );
         XFlush( data->display );
         SetPropA( hwnd, clip_window_prop, (HANDLE)data->clip_window );
+        X11DRV_InitClipboard();
     }
     return TRUE;
 }
@@ -2116,27 +2124,31 @@ BOOL CDECL X11DRV_ScrollDC( HDC hdc, INT dx, INT dy, HRGN update )
 void CDECL X11DRV_SetCapture( HWND hwnd, UINT flags )
 {
     struct x11drv_thread_data *thread_data = x11drv_thread_data();
+    struct x11drv_win_data *data;
 
-    if (!thread_data) return;
     if (!(flags & (GUI_INMOVESIZE | GUI_INMENUMODE))) return;
 
     if (hwnd)
     {
-        Window grab_win = X11DRV_get_whole_window( GetAncestor( hwnd, GA_ROOT ) );
-
-        if (!grab_win) return;
-        XFlush( gdi_display );
-        XGrabPointer( thread_data->display, grab_win, False,
-                      PointerMotionMask | ButtonPressMask | ButtonReleaseMask,
-                      GrabModeAsync, GrabModeAsync, None, None, CurrentTime );
-        thread_data->grab_window = grab_win;
+        if (!(data = get_win_data( GetAncestor( hwnd, GA_ROOT )))) return;
+        if (data->whole_window)
+        {
+            XFlush( gdi_display );
+            XGrabPointer( data->display, data->whole_window, False,
+                          PointerMotionMask | ButtonPressMask | ButtonReleaseMask,
+                          GrabModeAsync, GrabModeAsync, None, None, CurrentTime );
+            thread_data->grab_hwnd = data->hwnd;
+        }
+        release_win_data( data );
     }
     else  /* release capture */
     {
+        if (!(data = get_win_data( thread_data->grab_hwnd ))) return;
         XFlush( gdi_display );
-        XUngrabPointer( thread_data->display, CurrentTime );
-        XFlush( thread_data->display );
-        thread_data->grab_window = None;
+        XUngrabPointer( data->display, CurrentTime );
+        XFlush( data->display );
+        thread_data->grab_hwnd = NULL;
+        release_win_data( data );
     }
 }
 
@@ -2231,7 +2243,7 @@ void CDECL X11DRV_WindowPosChanging( HWND hwnd, HWND insert_after, UINT swp_flag
     surface_rect = get_surface_rect( visible_rect );
     if (data->surface)
     {
-        if (!memcmp( &data->surface->rect, &surface_rect, sizeof(surface_rect) ))
+        if (EqualRect( &data->surface->rect, &surface_rect ))
         {
             /* existing surface is good enough */
             window_surface_add_ref( data->surface );
@@ -2299,7 +2311,7 @@ void CDECL X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags
             old_client_rect.right  - data->client_rect.right  == x_offset &&
             old_client_rect.top    - data->client_rect.top    == y_offset &&
             old_client_rect.bottom - data->client_rect.bottom == y_offset &&
-            !memcmp( &valid_rects[0], &data->client_rect, sizeof(RECT) ))
+            EqualRect( &valid_rects[0], &data->client_rect ))
         {
             /* if we have an X window the bits will be moved by the X server */
             if (!window && (x_offset != 0 || y_offset != 0))
@@ -2400,6 +2412,16 @@ void CDECL X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags
     release_win_data( data );
 }
 
+/* check if the window icon should be hidden (i.e. moved off-screen) */
+static BOOL hide_icon( struct x11drv_win_data *data )
+{
+    static const WCHAR trayW[] = {'S','h','e','l','l','_','T','r','a','y','W','n','d',0};
+
+    if (data->managed) return TRUE;
+    /* hide icons in desktop mode when the taskbar is active */
+    if (root_window == DefaultRootWindow( gdi_display )) return FALSE;
+    return IsWindowVisible( FindWindowW( trayW, NULL ));
+}
 
 /***********************************************************************
  *           ShowWindow   (X11DRV.@)
@@ -2414,18 +2436,18 @@ UINT CDECL X11DRV_ShowWindow( HWND hwnd, INT cmd, RECT *rect, UINT swp )
     struct x11drv_thread_data *thread_data = x11drv_thread_data();
     struct x11drv_win_data *data = get_win_data( hwnd );
 
-    if (!data || !data->whole_window || !data->managed) goto done;
+    if (!data || !data->whole_window) goto done;
     if (IsRectEmpty( rect )) goto done;
     if (style & WS_MINIMIZE)
     {
-        if (rect->left != -32000 || rect->top != -32000)
+        if (((rect->left != -32000 || rect->top != -32000)) && hide_icon( data ))
         {
             OffsetRect( rect, -32000 - rect->left, -32000 - rect->top );
             swp &= ~(SWP_NOMOVE | SWP_NOCLIENTMOVE);
         }
         goto done;
     }
-    if (!data->mapped || data->iconic) goto done;
+    if (!data->managed || !data->mapped || data->iconic) goto done;
 
     /* only fetch the new rectangle if the ShowWindow was a result of a window manager event */
 
@@ -2573,7 +2595,7 @@ BOOL CDECL X11DRV_UpdateLayeredWindow( HWND hwnd, const UPDATELAYEREDWINDOWINFO 
     OffsetRect( &rect, -window_rect->left, -window_rect->top );
 
     surface = data->surface;
-    if (!surface || memcmp( &surface->rect, &rect, sizeof(RECT) ))
+    if (!surface || !EqualRect( &surface->rect, &rect ))
     {
         data->surface = create_surface( data->whole_window, &data->vis, &rect,
                                         color_key, !data->embedded );
@@ -2639,9 +2661,8 @@ LRESULT CDECL X11DRV_WindowMessage( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp )
 
     switch(msg)
     {
-    case WM_X11DRV_ACQUIRE_SELECTION:
-        X11DRV_AcquireClipboard( hwnd );
-        return 0;
+    case WM_X11DRV_UPDATE_CLIPBOARD:
+        return update_clipboard( hwnd );
     case WM_X11DRV_SET_WIN_REGION:
         if ((data = get_win_data( hwnd )))
         {

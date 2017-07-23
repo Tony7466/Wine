@@ -1203,7 +1203,7 @@ static HRESULT WINAPI AudioClient_GetStreamLatency(IAudioClient *iface,
 
     /* pretend we process audio in Period chunks, so max latency includes
      * the period time.  Some native machines add .6666ms in shared mode. */
-    *latency = This->period_us * 10 + 6666;
+    *latency = (REFERENCE_TIME)This->period_us * 10 + 6666;
 
     LeaveCriticalSection(&This->lock);
 
@@ -2629,7 +2629,7 @@ static HRESULT WINAPI SimpleAudioVolume_SetMute(ISimpleAudioVolume *iface,
     AudioSessionWrapper *This = impl_from_ISimpleAudioVolume(iface);
     AudioSession *session = This->session;
 
-    TRACE("(%p)->(%u, %p)\n", session, mute, context);
+    TRACE("(%p)->(%u, %s)\n", session, mute, debugstr_guid(context));
 
     EnterCriticalSection(&session->lock);
 

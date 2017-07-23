@@ -431,13 +431,13 @@ int xmlnode_get_inst_cnt(xmlnode *node)
 
 /* _private field holds a number of COM instances spawned from this libxml2 node
  * most significant bits are used to store information about ignorrable whitespace nodes */
-static void xmlnode_add_ref(xmlNodePtr node)
+void xmlnode_add_ref(xmlNodePtr node)
 {
     if (node->type == XML_DOCUMENT_NODE) return;
     InterlockedIncrement((LONG*)&node->_private);
 }
 
-static void xmlnode_release(xmlNodePtr node)
+void xmlnode_release(xmlNodePtr node)
 {
     if (node->type == XML_DOCUMENT_NODE) return;
     InterlockedDecrement((LONG*)&node->_private);
@@ -778,8 +778,8 @@ static xmlChar* do_get_text(xmlNodePtr node, BOOL trim, DWORD *first, DWORD *las
                         xmlFree(tmp);
                         tmp = NULL;
                     }
-                    break;
                 }
+                break;
             case XML_CDATA_SECTION_NODE:
             case XML_ENTITY_REF_NODE:
             case XML_ENTITY_NODE:

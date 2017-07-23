@@ -421,9 +421,10 @@ static const unsigned int message_unicode_flags[] =
 };
 
 /* check whether a given message type includes pointers */
-static inline BOOL is_pointer_message( UINT message )
+static inline BOOL is_pointer_message( UINT message, WPARAM wparam )
 {
     if (message >= 8*sizeof(message_pointer_flags)) return FALSE;
+    if (message == WM_DEVICECHANGE && !(wparam & 0x8000)) return FALSE;
     return (message_pointer_flags[message / 32] & SET(message)) != 0;
 }
 
@@ -3230,6 +3231,10 @@ static LRESULT send_inter_thread_callback( HWND hwnd, UINT msg, WPARAM wp, LPARA
     return send_inter_thread_message( info, result );
 }
 
+static BOOL is_message_broadcastable(UINT msg)
+{
+    return msg < WM_USER || msg >= 0xc000;
+}
 
 /***********************************************************************
  *		send_message
@@ -3244,7 +3249,8 @@ static BOOL send_message( struct send_message_info *info, DWORD_PTR *res_ptr, BO
 
     if (is_broadcast(info->hwnd))
     {
-        EnumWindows( broadcast_message_callback, (LPARAM)info );
+        if (is_message_broadcastable( info->msg ))
+            EnumWindows( broadcast_message_callback, (LPARAM)info );
         if (res_ptr) *res_ptr = 1;
         return TRUE;
     }
@@ -3491,7 +3497,7 @@ BOOL WINAPI SendNotifyMessageA( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpara
 {
     struct send_message_info info;
 
-    if (is_pointer_message(msg))
+    if (is_pointer_message( msg, wparam ))
     {
         SetLastError( ERROR_MESSAGE_SYNC_ONLY );
         return FALSE;
@@ -3516,7 +3522,7 @@ BOOL WINAPI SendNotifyMessageW( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpara
 {
     struct send_message_info info;
 
-    if (is_pointer_message(msg))
+    if (is_pointer_message( msg, wparam ))
     {
         SetLastError( ERROR_MESSAGE_SYNC_ONLY );
         return FALSE;
@@ -3541,7 +3547,7 @@ BOOL WINAPI SendMessageCallbackA( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
 {
     struct send_message_info info;
 
-    if (is_pointer_message(msg))
+    if (is_pointer_message( msg, wparam ))
     {
         SetLastError( ERROR_MESSAGE_SYNC_ONLY );
         return FALSE;
@@ -3569,7 +3575,7 @@ BOOL WINAPI SendMessageCallbackW( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
 {
     struct send_message_info info;
 
-    if (is_pointer_message(msg))
+    if (is_pointer_message( msg, wparam ))
     {
         SetLastError( ERROR_MESSAGE_SYNC_ONLY );
         return FALSE;
@@ -3606,7 +3612,7 @@ BOOL WINAPI ReplyMessage( LRESULT result )
  */
 BOOL WINAPI InSendMessage(void)
 {
-    return (InSendMessageEx(NULL) & (ISMEX_SEND|ISMEX_REPLIED)) == ISMEX_SEND;
+    return (InSendMessageEx( NULL ) & (ISMEX_SEND | ISMEX_NOTIFY | ISMEX_CALLBACK)) != 0;
 }
 
 
@@ -3639,7 +3645,7 @@ BOOL WINAPI PostMessageW( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam )
 {
     struct send_message_info info;
 
-    if (is_pointer_message( msg ))
+    if (is_pointer_message( msg, wparam ))
     {
         SetLastError( ERROR_MESSAGE_SYNC_ONLY );
         return FALSE;
@@ -3657,7 +3663,8 @@ BOOL WINAPI PostMessageW( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam )
 
     if (is_broadcast(hwnd))
     {
-        EnumWindows( broadcast_message_callback, (LPARAM)&info );
+        if (is_message_broadcastable( info.msg ))
+            EnumWindows( broadcast_message_callback, (LPARAM)&info );
         return TRUE;
     }
 
@@ -3688,7 +3695,7 @@ BOOL WINAPI PostThreadMessageW( DWORD thread, UINT msg, WPARAM wparam, LPARAM lp
 {
     struct send_message_info info;
 
-    if (is_pointer_message( msg ))
+    if (is_pointer_message( msg, wparam ))
     {
         SetLastError( ERROR_MESSAGE_SYNC_ONLY );
         return FALSE;

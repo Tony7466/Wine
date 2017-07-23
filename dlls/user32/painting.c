@@ -56,6 +56,8 @@ struct dce
 
 static struct list dce_list = LIST_INIT(dce_list);
 
+#define DCE_CACHE_SIZE 64
+
 static BOOL CALLBACK dc_hook( HDC hDC, WORD code, DWORD_PTR data, LPARAM lParam );
 
 static const WCHAR displayW[] = { 'D','I','S','P','L','A','Y',0 };
@@ -311,7 +313,6 @@ static struct dce *get_window_dce( HWND hwnd )
                 {
                     win->dce = dce;
                     dce->hwnd = hwnd;
-                    dce->count++;
                     list_add_tail( &dce_list, &dce->entry );
                 }
                 WIN_ReleasePtr( win );
@@ -430,10 +431,11 @@ void invalidate_dce( WND *win, const RECT *extra_rect )
 
     LIST_FOR_EACH_ENTRY( dce, &dce_list, struct dce, entry )
     {
+        if (!dce->hwnd) continue;
+
         TRACE( "%p: hwnd %p dcx %08x %s %s\n", dce, dce->hwnd, dce->flags,
                (dce->flags & DCX_CACHE) ? "Cache" : "Owned", dce->count ? "InUse" : "" );
 
-        if (!dce->hwnd) continue;
         if ((dce->hwnd == win->parent) && !(dce->flags & DCX_CLIPCHILDREN))
             continue;  /* child window positions don't bother us */
 
@@ -509,14 +511,10 @@ static BOOL CALLBACK dc_hook( HDC hDC, WORD code, DWORD_PTR data, LPARAM lParam 
             WARN("DC is not in use!\n");
         break;
     case DCHC_DELETEDC:
-        /*
-         * Windows will not let you delete a DC that is busy
-         * (between GetDC and ReleaseDC)
-         */
         USER_Lock();
-        if (dce->count > 1)
+        if (!(dce->flags & DCX_CACHE))
         {
-            WARN("Application trying to delete a busy DC %p\n", dce->hdc);
+            WARN("Application trying to delete an owned DC %p\n", dce->hdc);
             retv = FALSE;
         }
         else
@@ -982,7 +980,8 @@ HDC WINAPI GetDCEx( HWND hwnd, HRGN hrgnClip, DWORD flags )
 
     if ((flags & DCX_CACHE) || !(dce = get_window_dce( hwnd )))
     {
-        struct dce *dceEmpty = NULL, *dceUnused = NULL;
+        struct dce *dceEmpty = NULL, *dceUnused = NULL, *found = NULL;
+        unsigned int count = 0;
 
         /* Strategy: First, we attempt to find a non-empty but unused DCE with
          * compatible flags. Next, we look for an empty entry. If the cache is
@@ -991,24 +990,23 @@ HDC WINAPI GetDCEx( HWND hwnd, HRGN hrgnClip, DWORD flags )
         USER_Lock();
         LIST_FOR_EACH_ENTRY( dce, &dce_list, struct dce, entry )
         {
-            if ((dce->flags & DCX_CACHE) && !dce->count)
+            if (!(dce->flags & DCX_CACHE)) break;
+            count++;
+            if (dce->count) continue;
+            dceUnused = dce;
+            if (!dce->hwnd) dceEmpty = dce;
+            else if ((dce->hwnd == hwnd) && !((dce->flags ^ flags) & clip_flags))
             {
-                dceUnused = dce;
-
-                if (!dce->hwnd) dceEmpty = dce;
-                else if ((dce->hwnd == hwnd) && !((dce->flags ^ flags) & clip_flags))
-                {
-                    TRACE("\tfound valid %p dce [%p], flags %08x\n",
-                          dce, hwnd, dce->flags );
-                    bUpdateVisRgn = FALSE;
-                    break;
-                }
+                TRACE( "found valid %p dce [%p], flags %08x\n", dce, hwnd, dce->flags );
+                found = dce;
+                bUpdateVisRgn = FALSE;
+                break;
             }
         }
+        if (!found) found = dceEmpty;
+        if (!found && count >= DCE_CACHE_SIZE) found = dceUnused;
 
-        if (&dce->entry == &dce_list)  /* nothing found */
-            dce = dceEmpty ? dceEmpty : dceUnused;
-
+        dce = found;
         if (dce) dce->count = 1;
 
         USER_Unlock();
@@ -1384,8 +1382,8 @@ INT WINAPI ExcludeUpdateRgn( HDC hdc, HWND hwnd )
         MapWindowPoints( 0, hwnd, &pt, 1 );
         OffsetRgn( update_rgn, -pt.x, -pt.y );
         ret = ExtSelectClipRgn( hdc, update_rgn, RGN_DIFF );
-        DeleteObject( update_rgn );
     }
+    DeleteObject( update_rgn );
     return ret;
 }
 
@@ -1486,6 +1484,13 @@ static INT scroll_window( HWND hwnd, INT dx, INT dy, const RECT *rect, const REC
                 SetRectRgn( hrgnTemp, rc.left + dx, rc.top + dy, rc.right+dx, rc.bottom + dy);
                 CombineRgn( hrgnTemp, hrgnTemp, hrgnClip, RGN_AND );
                 CombineRgn( hrgnUpdate, hrgnUpdate, hrgnTemp, RGN_OR );
+
+                if (rcUpdate)
+                {
+                    RECT rcTemp;
+                    GetRgnBox( hrgnTemp, &rcTemp );
+                    UnionRect( rcUpdate, rcUpdate, &rcTemp );
+                }
 
                 if( !bOwnRgn)
                     CombineRgn( hrgnWinupd, hrgnWinupd, hrgnTemp, RGN_OR );

@@ -108,9 +108,9 @@ static const struct message restore_parent_seq[] = {
 
 #define expect(EXPECTED,GOT) ok((GOT)==(EXPECTED), "Expected %d, got %d\n", (EXPECTED), (GOT))
 
-#define check_rect(name, val, exp, ...) ok(val.top == exp.top && val.bottom == exp.bottom && \
-    val.left == exp.left && val.right == exp.right, "invalid rect (%d,%d) (%d,%d) - expected (%d,%d) (%d,%d) - (" name ")\n", \
-    val.left, val.top, val.right, val.bottom, exp.left, exp.top, exp.right, exp.bottom, __VA_ARGS__);
+#define check_rect(name, val, exp, ...) ok(EqualRect(&val, &exp), \
+    "invalid rect %s - expected %s - (" name ")\n", \
+    wine_dbgstr_rect(&val), wine_dbgstr_rect(&exp), __VA_ARGS__);
  
 #define compare(val, exp, format) ok((val) == (exp), #val " value " format " expected " format "\n", (val), (exp));
 
@@ -399,7 +399,7 @@ static void basic_test(void)
     ok(SendMessageA(hToolbar, TB_ISBUTTONCHECKED, 1005, 0), "A6 pressed\n");
     ok(!SendMessageA(hToolbar, TB_ISBUTTONCHECKED, 1004, 0), "A5 not pressed anymore\n");
 
-    /* test for inter-group crosstalk, ie. two radio groups interfering with each other */
+    /* test for inter-group crosstalk, i.e. two radio groups interfering with each other */
     SendMessageA(hToolbar, TB_CHECKBUTTON, 1007, 1); /* press B2 */
     ok(SendMessageA(hToolbar, TB_ISBUTTONCHECKED, 1005, 0), "A6 still pressed, no inter-group crosstalk\n");
     ok(!SendMessageA(hToolbar, TB_ISBUTTONCHECKED, 1000, 0), "A1 still not pressed\n");
@@ -1232,14 +1232,11 @@ static DWORD tbsize_alt_numtests = 0;
         for (i=0; i<min(buttonCount, res->nButtons); i++) { \
             ok(SendMessageA(hToolbar, TB_GETITEMRECT, i, (LPARAM)&rc) == 1, "TB_GETITEMRECT\n"); \
             if (broken(tbsize_alt_numtests < sizeof(tbsize_alt_results)/sizeof(tbsize_alt_results[0]) && \
-                       memcmp(&rc, &tbsize_alt_results[tbsize_alt_numtests].rcButton, sizeof(RECT)) == 0)) { \
+                       EqualRect(&rc, &tbsize_alt_results[tbsize_alt_numtests].rcButton))) { \
                 win_skip("Alternate rect found\n"); \
                 tbsize_alt_numtests++; \
-            } else if (!(mask&1)) { \
+            } else todo_wine_if(mask&1) \
                 check_rect("button = %d, tbsize_numtests = %d", rc, res->prcButtons[i], i, tbsize_numtests); \
-            } else {\
-                todo_wine { check_rect("button = %d, tbsize_numtests = %d", rc, res->prcButtons[i], i, tbsize_numtests); } \
-            } \
             mask >>= 1; \
         } \
         tbsize_numtests++; \

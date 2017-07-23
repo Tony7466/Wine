@@ -167,11 +167,11 @@
 @ stub BaseCheckAppcompatCache
 # @ stub BaseCheckAppcompatCacheEx
 # @ stub BaseCheckRunApp
-@ stub BaseCleanupAppcompatCache 
+@ stub BaseCleanupAppcompatCache
 @ stub BaseCleanupAppcompatCacheSupport
 # @ stub BaseDllReadWriteIniFile
 @ stub BaseDumpAppcompatCache
-@ stub BaseFlushAppcompatCache
+@ stdcall BaseFlushAppcompatCache()
 # @ stub BaseFormatObjectAttributes
 # @ stub BaseFormatTimeOut
 # @ stub BaseGenerateAppCompatData
@@ -355,7 +355,7 @@
 @ stdcall DebugBreakProcess(long)
 @ stdcall DebugSetProcessKillOnExit(long)
 @ stdcall DecodePointer(ptr) ntdll.RtlDecodePointer
-# @ stub DecodeSystemPointer ( -> ntdll.RtlDecodeSystemPointer)
+@ stdcall DecodeSystemPointer(ptr) ntdll.RtlDecodeSystemPointer
 @ stdcall DefineDosDeviceA(long str str)
 @ stdcall DefineDosDeviceW(long wstr wstr)
 @ stdcall DelayLoadFailureHook(str str)
@@ -367,7 +367,7 @@
 # @ stub DeleteFileTransactedA
 # @ stub DeleteFileTransactedW
 @ stdcall DeleteFileW(wstr)
-# @ stub DeleteProcThreadAttributeList
+@ stdcall DeleteProcThreadAttributeList(ptr)
 # @ stub DisableThreadProfiling
 @ stdcall DisassociateCurrentThreadFromCallback(ptr) ntdll.TpDisassociateCallback
 @ stdcall DeleteTimerQueue(long)
@@ -390,7 +390,7 @@
 @ stdcall DuplicateHandle(long long long ptr long long long)
 # @ stub EnableThreadProfiling
 @ stdcall EncodePointer(ptr) ntdll.RtlEncodePointer
-# @ stub EncodeSystemPointer ( -> ntdll.RtlEncodeSystemPointer)
+@ stdcall EncodeSystemPointer(ptr) ntdll.RtlEncodeSystemPointer
 @ stdcall EndUpdateResourceA(long long)
 @ stdcall EndUpdateResourceW(long long)
 @ stdcall EnterCriticalSection(ptr) ntdll.RtlEnterCriticalSection
@@ -751,7 +751,7 @@
 # @ stub GetNumaProximityNode
 # @ stub GetNumaProximityNodeEx
 @ stdcall GetNumberFormatA(long long str ptr ptr long)
-# @ stub GetNumberFormatEx
+@ stdcall GetNumberFormatEx(wstr long wstr ptr ptr long)
 @ stdcall GetNumberFormatW(long long wstr ptr ptr long)
 @ stdcall GetNumberOfConsoleFonts()
 @ stdcall GetNumberOfConsoleInputEvents(long ptr)
@@ -945,7 +945,7 @@
 @ stdcall InitializeCriticalSection(ptr)
 @ stdcall InitializeCriticalSectionAndSpinCount(ptr long)
 @ stdcall InitializeCriticalSectionEx(ptr long long)
-# @ stub InitializeProcThreadAttributeList
+@ stdcall InitializeProcThreadAttributeList(ptr long long ptr)
 @ stdcall InitializeSListHead(ptr) ntdll.RtlInitializeSListHead
 @ stdcall InitializeSRWLock(ptr) ntdll.RtlInitializeSRWLock
 @ stdcall -arch=i386 InterlockedCompareExchange (ptr long long)
@@ -1293,7 +1293,7 @@
 @ stdcall RtlMoveMemory(ptr ptr long) ntdll.RtlMoveMemory
 @ stdcall -arch=x86_64,arm RtlPcToFileHeader(ptr ptr) ntdll.RtlPcToFileHeader
 @ stdcall -arch=arm -register RtlRaiseException(ptr) ntdll.RtlRaiseException
-# @ stub -arch=x86_64 RtlRestoreContext
+@ stdcall -arch=x86_64 RtlRestoreContext(ptr ptr) ntdll.RtlRestoreContext
 @ stdcall RtlUnwind(ptr ptr ptr long) ntdll.RtlUnwind
 @ stdcall -arch=x86_64 RtlUnwindEx(long long ptr long ptr) ntdll.RtlUnwindEx
 @ stdcall -arch=x86_64 RtlVirtualUnwind(long long long ptr ptr ptr ptr ptr) ntdll.RtlVirtualUnwind
@@ -1346,7 +1346,7 @@
 @ stub SetConsoleCursorMode
 @ stdcall SetConsoleCursorPosition(long long)
 @ stdcall SetConsoleDisplayMode(long long ptr)
-@ stub SetConsoleFont
+@ stdcall SetConsoleFont(long long)
 @ stub SetConsoleHardwareState
 @ stdcall SetConsoleIcon(ptr)
 @ stdcall SetConsoleInputExeNameA(ptr)
@@ -1369,13 +1369,13 @@
 @ stdcall SetConsoleTitleW(wstr)
 @ stdcall SetConsoleWindowInfo(long long ptr)
 @ stdcall SetCriticalSectionSpinCount(ptr long) ntdll.RtlSetCriticalSectionSpinCount
-# @ stub SetCurrentConsoleFontEx
+@ stdcall SetCurrentConsoleFontEx(long long ptr)
 @ stdcall SetCurrentDirectoryA(str)
 @ stdcall SetCurrentDirectoryW(wstr)
 @ stub SetDaylightFlag
 @ stdcall SetDefaultCommConfigA(str ptr long)
 @ stdcall SetDefaultCommConfigW(wstr ptr long)
-# @ stub SetDefaultDllDirectories
+@ stdcall SetDefaultDllDirectories(long)
 @ stdcall SetDllDirectoryA(str)
 @ stdcall SetDllDirectoryW(wstr)
 # @ stub SetDynamicTimeZoneInformation
@@ -1430,7 +1430,7 @@
 # @ stub SetProcessUserModeExceptionPolicy
 @ stdcall SetProcessWorkingSetSize(long long long)
 # @ stub SetProcessWorkingSetSizeEx
-# @ stub SetSearchPathMode
+@ stdcall SetSearchPathMode(long)
 @ stdcall SetStdHandle(long long)
 # @ stub SetStdHandleEx
 @ stdcall SetSystemFileCacheSize(long long long)
@@ -1538,7 +1538,7 @@
 @ stdcall UnregisterWait(long)
 @ stdcall UnregisterWaitEx(long long)
 # @ stub UpdateCalendarDayOfWeek
-# @ stub UpdateProcThreadAttribute
+@ stdcall UpdateProcThreadAttribute(ptr long long ptr long ptr ptr)
 @ stdcall UpdateResourceA(long str str long ptr long)
 @ stdcall UpdateResourceW(long wstr wstr long ptr long)
 @ stub VDMConsoleOperation

@@ -95,17 +95,17 @@ static BOOL get_item_path(HWND hwndTV, HTREEITEM hItem, HKEY* phKey, LPWSTR* pKe
 
 LPWSTR GetItemPath(HWND hwndTV, HTREEITEM hItem, HKEY* phRootKey)
 {
-    int pathLen = 0, maxLen;
+    int pathLen = 0, maxLen = 1024;
     WCHAR *pathBuffer;
 
-    pathBuffer = HeapAlloc(GetProcessHeap(), 0, 1024*sizeof(WCHAR));
+    if (!hItem) {
+         hItem = (HTREEITEM)SendMessageW(hwndTV, TVM_GETNEXTITEM, TVGN_CARET, 0);
+         if (!hItem) return NULL;
+    }
+
+    pathBuffer = HeapAlloc(GetProcessHeap(), 0, maxLen*sizeof(WCHAR));
     if (!pathBuffer) return NULL;
     *pathBuffer = 0;
-    maxLen = HeapSize(GetProcessHeap(), 0, pathBuffer);
-    if (maxLen == (SIZE_T) - 1) return NULL;
-    maxLen = maxLen / sizeof(WCHAR);
-    if (!hItem) hItem = (HTREEITEM)SendMessageW(hwndTV, TVM_GETNEXTITEM, TVGN_CARET, 0);
-    if (!hItem) return NULL;
     if (!get_item_path(hwndTV, hItem, phRootKey, &pathBuffer, &pathLen, &maxLen)) return NULL;
     return pathBuffer;
 }
@@ -529,6 +529,7 @@ HWND StartKeyRename(HWND hwndTV)
     HTREEITEM hItem;
 
     if(!(hItem = (HTREEITEM)SendMessageW(hwndTV, TVM_GETNEXTITEM, TVGN_CARET, 0))) return 0;
+    SetWindowLongPtrW(hwndTV, GWLP_USERDATA, 1);
     return (HWND)SendMessageW(hwndTV, TVM_EDITLABELW, 0, (LPARAM)hItem);
 }
 

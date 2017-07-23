@@ -118,7 +118,8 @@ static void test_getat(IPropertyStore *store)
 	if (IsEqualPropertyKey(pkey, DEVPKEY_Device_DeviceDesc))
 	    found_desc = TRUE;
     }
-    ok(found_name, "DEVPKEY_Device_FriendlyName not found\n");
+    ok(found_name ||
+            broken(!found_name) /* vista */, "DEVPKEY_Device_FriendlyName not found\n");
     ok(found_desc, "DEVPKEY_Device_DeviceDesc not found\n");
 }
 
@@ -173,7 +174,7 @@ static void test_setvalue_on_wow64(IPropertyStore *store)
 
     /* Note: the registry key exists even without calling IPropStore::Commit */
     size = sizeof(regval);
-    ret = RegGetValueW(props, NULL, bogusW, RRF_RT_DWORD, &type, &regval, &size);
+    ret = RegQueryValueExW(props, bogusW, NULL, &type, (LPBYTE)&regval, &size);
     ok(ret == ERROR_SUCCESS, "Couldn't get bogus propertykey value: %u\n", ret);
     ok(type == REG_DWORD, "Got wrong value type: %u\n", type);
     ok(regval == 0xAB, "Got wrong value: 0x%x\n", regval);

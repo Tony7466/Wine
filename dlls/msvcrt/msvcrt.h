@@ -204,6 +204,23 @@ typedef struct MSVCRT_localeinfo_struct
     MSVCRT_pthreadmbcinfo mbcinfo;
 } MSVCRT__locale_tstruct, *MSVCRT__locale_t;
 
+typedef struct _frame_info
+{
+    void *object;
+    struct _frame_info *next;
+} frame_info;
+
+typedef struct
+{
+    frame_info frame_info;
+    EXCEPTION_RECORD *rec;
+    void *unk;
+} cxx_frame_info;
+
+frame_info* __cdecl _CreateFrameInfo(frame_info *fi, void *obj);
+BOOL __cdecl __CxxRegisterExceptionObject(EXCEPTION_RECORD**, cxx_frame_info*);
+void __cdecl __CxxUnregisterExceptionObject(cxx_frame_info*, BOOL);
+void CDECL __DestructExceptionObject(EXCEPTION_RECORD*);
 
 /* TLS data */
 extern DWORD msvcrt_tls_index DECLSPEC_HIDDEN;
@@ -242,12 +259,16 @@ struct __thread_data {
     void                           *unk6[3];
     int                             unk7;
     EXCEPTION_RECORD               *exc_record;
-    void                           *unk8[7];
+    frame_info                     *frame_info_head;
+    void                           *unk8[6];
     LCID                            cached_lcid;
     int                             unk9[3];
     DWORD                           cached_cp;
     char                            cached_locale[131];
     void                           *unk10[100];
+#if _MSVCR_VER >= 140
+    MSVCRT_invalid_parameter_handler invalid_parameter_handler;
+#endif
 };
 
 typedef struct __thread_data thread_data_t;
@@ -392,7 +413,7 @@ struct MSVCRT_lconv {
     char n_sep_by_space;
     char p_sign_posn;
     char n_sign_posn;
-#if _MSVCR_VER >= 120
+#if _MSVCR_VER >= 100
     MSVCRT_wchar_t* _W_decimal_point;
     MSVCRT_wchar_t* _W_thousands_sep;
     MSVCRT_wchar_t* _W_int_curr_symbol;
@@ -889,6 +910,12 @@ struct MSVCRT__stat64 {
 #define MSVCRT__DN_SAVE_OPERANDS_FLUSH_RESULTS 0x03000000
 #define MSVCRT__EM_AMBIGUOUS  0x80000000
 
+typedef struct
+{
+    unsigned int control;
+    unsigned int status;
+} MSVCRT_fenv_t;
+
 #define MSVCRT_CLOCKS_PER_SEC 1000
 
 /* signals */
@@ -1024,7 +1051,9 @@ int            __cdecl _ismbclegal(unsigned int c);
 int            __cdecl _ismbstrail(const unsigned char* start, const unsigned char* str);
 int            __cdecl MSVCRT_mbtowc(MSVCRT_wchar_t*,const char*,MSVCRT_size_t);
 MSVCRT_size_t  __cdecl MSVCRT_mbstowcs(MSVCRT_wchar_t*,const char*,MSVCRT_size_t);
+MSVCRT_size_t  __cdecl MSVCRT__mbstowcs_l(MSVCRT_wchar_t*, const char*, MSVCRT_size_t, MSVCRT__locale_t);
 MSVCRT_size_t  __cdecl MSVCRT_wcstombs(char*,const MSVCRT_wchar_t*,MSVCRT_size_t);
+MSVCRT_size_t  __cdecl MSVCRT__wcstombs_l(char*, const MSVCRT_wchar_t*, MSVCRT_size_t, MSVCRT__locale_t);
 MSVCRT_intptr_t __cdecl MSVCRT__spawnve(int,const char*,const char* const *,const char* const *);
 MSVCRT_intptr_t __cdecl MSVRT__spawnvpe(int,const char*,const char* const *,const char* const *);
 MSVCRT_intptr_t __cdecl MSVCRT__wspawnve(int,const MSVCRT_wchar_t*,const MSVCRT_wchar_t* const *,const MSVCRT_wchar_t* const *);

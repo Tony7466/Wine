@@ -70,6 +70,24 @@ static HRESULT (WINAPI *pSKDeleteValueW)(DWORD, LPCWSTR, LPCWSTR);
 static HRESULT (WINAPI *pSKAllocValueW)(DWORD, LPCWSTR, LPCWSTR, DWORD*, void**, DWORD*);
 static HWND    (WINAPI *pSHSetParentHwnd)(HWND, HWND);
 static HRESULT (WINAPI *pIUnknown_GetClassID)(IUnknown*, CLSID*);
+static HRESULT (WINAPI *pDllGetVersion)(DLLVERSIONINFO2*);
+
+typedef struct SHELL_USER_SID {
+    SID_IDENTIFIER_AUTHORITY sidAuthority;
+    DWORD                    dwUserGroupID;
+    DWORD                    dwUserID;
+} SHELL_USER_SID, *PSHELL_USER_SID;
+typedef struct SHELL_USER_PERMISSION {
+
+    SHELL_USER_SID susID;
+    DWORD          dwAccessType;
+    BOOL           fInherit;
+    DWORD          dwAccessMask;
+    DWORD          dwInheritMask;
+    DWORD          dwInheritAccessMask;
+} SHELL_USER_PERMISSION, *PSHELL_USER_PERMISSION;
+
+static SECURITY_DESCRIPTOR* (WINAPI *pGetShellSecurityDescriptor)(const SHELL_USER_PERMISSION**,int);
 
 static HMODULE hmlang;
 static HRESULT (WINAPI *pLcidToRfc1766A)(LCID, LPSTR, INT);
@@ -675,39 +693,22 @@ static void test_fdsa(void)
     HeapFree(GetProcessHeap(), 0, mem);
 }
 
-
-typedef struct SHELL_USER_SID {
-    SID_IDENTIFIER_AUTHORITY sidAuthority;
-    DWORD                    dwUserGroupID;
-    DWORD                    dwUserID;
-} SHELL_USER_SID, *PSHELL_USER_SID;
-typedef struct SHELL_USER_PERMISSION {
-    SHELL_USER_SID susID;
-    DWORD          dwAccessType;
-    BOOL           fInherit;
-    DWORD          dwAccessMask;
-    DWORD          dwInheritMask;
-    DWORD          dwInheritAccessMask;
-} SHELL_USER_PERMISSION, *PSHELL_USER_PERMISSION;
 static void test_GetShellSecurityDescriptor(void)
 {
-    SHELL_USER_PERMISSION supCurrentUserFull = {
+    static const SHELL_USER_PERMISSION supCurrentUserFull = {
         { {SECURITY_NULL_SID_AUTHORITY}, 0, 0 },
         ACCESS_ALLOWED_ACE_TYPE, FALSE,
         GENERIC_ALL, 0, 0 };
 #define MY_INHERITANCE 0xBE /* invalid value to proof behavior */
-    SHELL_USER_PERMISSION supEveryoneDenied = {
+    static const SHELL_USER_PERMISSION supEveryoneDenied = {
         { {SECURITY_WORLD_SID_AUTHORITY}, SECURITY_WORLD_RID, 0 },
         ACCESS_DENIED_ACE_TYPE, TRUE,
         GENERIC_WRITE, MY_INHERITANCE | 0xDEADBA00, GENERIC_READ };
-    PSHELL_USER_PERMISSION rgsup[2] = {
+    const SHELL_USER_PERMISSION* rgsup[2] = {
         &supCurrentUserFull, &supEveryoneDenied,
     };
     SECURITY_DESCRIPTOR* psd;
-    SECURITY_DESCRIPTOR* (WINAPI*pGetShellSecurityDescriptor)(PSHELL_USER_PERMISSION*,int);
     void *pChrCmpIW = GetProcAddress(hShlwapi, "ChrCmpIW");
-
-    pGetShellSecurityDescriptor=(void*)GetProcAddress(hShlwapi,(char*)475);
 
     if(!pGetShellSecurityDescriptor)
     {
@@ -1003,7 +1004,8 @@ static HRESULT WINAPI Disp_Invoke(
         EXCEPINFO *pExcepInfo,
         UINT *puArgErr)
 {
-    trace("%p %x %p %x %x %p %p %p %p\n",This,dispIdMember,riid,lcid,wFlags,pDispParams,pVarResult,pExcepInfo,puArgErr);
+    trace("%p %x %s %x %x %p %p %p %p\n", This, dispIdMember, wine_dbgstr_guid(riid), lcid, wFlags,
+          pDispParams, pVarResult, pExcepInfo, puArgErr);
 
     ok(dispIdMember == 0xa0 || dispIdMember == 0xa1, "Unknown dispIdMember\n");
     ok(pDispParams != NULL, "Invoked with NULL pDispParams\n");
@@ -3063,6 +3065,7 @@ static void init_pointers(void)
     MAKEFUNC(SHFormatDateTimeA, 353);
     MAKEFUNC(SHFormatDateTimeW, 354);
     MAKEFUNC(SHIShellFolder_EnumObjects, 404);
+    MAKEFUNC(GetShellSecurityDescriptor, 475);
     MAKEFUNC(SHGetObjectCompatFlags, 476);
     MAKEFUNC(IUnknown_QueryServiceExec, 484);
     MAKEFUNC(SHGetShellKey, 491);
@@ -3073,6 +3076,8 @@ static void init_pointers(void)
     MAKEFUNC(SKDeleteValueW, 518);
     MAKEFUNC(SKAllocValueW, 519);
 #undef MAKEFUNC
+
+    pDllGetVersion = (void*)GetProcAddress(hShlwapi, "DllGetVersion");
 }
 
 static void test_SHSetParentHwnd(void)
@@ -3219,8 +3224,8 @@ static void test_IUnknown_GetClassID(void)
     CLSID clsid, clsid2, clsid3;
     HRESULT hr;
 
-if (0) /* crashes on native systems */
-    hr = pIUnknown_GetClassID(NULL, NULL);
+    if (0) /* crashes on native systems */
+        hr = pIUnknown_GetClassID(NULL, NULL);
 
     memset(&clsid, 0xcc, sizeof(clsid));
     memset(&clsid3, 0xcc, sizeof(clsid3));
@@ -3244,6 +3249,14 @@ if (0) /* crashes on native systems */
     ok(hr == 0x8fff2222, "got 0x%08x\n", hr);
     ok(IsEqualCLSID(&clsid, &clsid2) || broken(IsEqualCLSID(&clsid, &clsid3)) /* win2k3 */,
         "got wrong clsid %s\n", wine_dbgstr_guid(&clsid));
+}
+
+static void test_DllGetVersion(void)
+{
+    HRESULT hr;
+
+    hr = pDllGetVersion(NULL);
+    ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
 }
 
 START_TEST(ordinal)
@@ -3301,6 +3314,7 @@ START_TEST(ordinal)
     test_SHGetShellKey();
     test_SHSetParentHwnd();
     test_IUnknown_GetClassID();
+    test_DllGetVersion();
 
     FreeLibrary(hshell32);
     FreeLibrary(hmlang);

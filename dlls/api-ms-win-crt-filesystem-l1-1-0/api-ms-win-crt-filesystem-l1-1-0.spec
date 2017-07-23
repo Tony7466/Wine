@@ -13,7 +13,7 @@
 @ cdecl _findnext64(long ptr) ucrtbase._findnext64
 @ cdecl _findnext64i32(long ptr) ucrtbase._findnext64i32
 @ cdecl _fstat32(long ptr) ucrtbase._fstat32
-@ stub _fstat32i64
+@ cdecl _fstat32i64(long ptr) ucrtbase._fstat32i64
 @ cdecl _fstat64(long ptr) ucrtbase._fstat64
 @ cdecl _fstat64i32(long ptr) ucrtbase._fstat64i32
 @ cdecl _fullpath(ptr str long) ucrtbase._fullpath
@@ -43,7 +43,7 @@
 @ stub _wfindfirst32i64
 @ cdecl _wfindfirst64(wstr ptr) ucrtbase._wfindfirst64
 @ cdecl _wfindfirst64i32(wstr ptr) ucrtbase._wfindfirst64i32
-@ stub _wfindnext32
+@ cdecl _wfindnext32(long ptr) ucrtbase._wfindnext32
 @ stub _wfindnext32i64
 @ cdecl _wfindnext64(long ptr) ucrtbase._wfindnext64
 @ cdecl _wfindnext64i32(long ptr) ucrtbase._wfindnext64i32

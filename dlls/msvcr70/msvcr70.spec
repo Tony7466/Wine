@@ -123,9 +123,9 @@
 @ cdecl -arch=i386,x86_64,arm -norelay __CxxFrameHandler(ptr ptr ptr ptr)
 @ stdcall -arch=i386 __CxxLongjmpUnwind(ptr)
 @ cdecl -arch=i386,x86_64,arm __CxxQueryExceptionSize()
-@ stub __CxxRegisterExceptionObject
-@ stub __CxxUnregisterExceptionObject
-@ stub __DestructExceptionObject
+@ cdecl __CxxRegisterExceptionObject(ptr ptr)
+@ cdecl __CxxUnregisterExceptionObject(ptr long)
+@ cdecl __DestructExceptionObject(ptr)
 @ cdecl __RTCastToVoid(ptr) MSVCRT___RTCastToVoid
 @ cdecl __RTDynamicCast(ptr long ptr ptr long) MSVCRT___RTDynamicCast
 @ cdecl __RTtypeid(ptr) MSVCRT___RTtypeid
@@ -641,7 +641,7 @@
 @ cdecl _wmkdir(wstr) MSVCRT__wmkdir
 @ cdecl _wmktemp(wstr) MSVCRT__wmktemp
 @ varargs _wopen(wstr long) MSVCRT__wopen
-@ stub _wperror(wstr)
+@ cdecl _wperror(wstr) MSVCRT__wperror
 @ extern _wpgmptr MSVCRT__wpgmptr
 @ cdecl _wpopen(wstr wstr) MSVCRT__wpopen
 @ cdecl _wputenv(wstr)
@@ -686,7 +686,7 @@
 @ cdecl asin(double) MSVCRT_asin
 @ cdecl atan(double) MSVCRT_atan
 @ cdecl atan2(double double) MSVCRT_atan2
-@ cdecl atexit(ptr) MSVCRT_atexit
+@ cdecl -private atexit(ptr) MSVCRT_atexit  # not imported to avoid conflicts with Mingw
 @ cdecl atof(str) MSVCRT_atof
 @ cdecl atoi(str) MSVCRT_atoi
 @ cdecl atol(str) ntdll.atol

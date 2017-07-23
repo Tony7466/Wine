@@ -49,10 +49,6 @@ LCID MSVCRT___lc_handle[MSVCRT_LC_MAX - MSVCRT_LC_MIN + 1] = { 0 };
 int MSVCRT___mb_cur_max = 1;
 static unsigned char charmax = CHAR_MAX;
 
-/* MT */
-#define LOCK_LOCALE   _mlock(_SETLOCALE_LOCK);
-#define UNLOCK_LOCALE _munlock(_SETLOCALE_LOCK);
-
 #define MSVCRT_LEADBYTE  0x8000
 #define MSVCRT_C1_DEFINED 0x200
 
@@ -769,7 +765,7 @@ void free_locinfo(MSVCRT_pthreadlocinfo locinfo)
         MSVCRT_free(locinfo->lconv->mon_grouping);
         MSVCRT_free(locinfo->lconv->positive_sign);
         MSVCRT_free(locinfo->lconv->negative_sign);
-#if _MSVCR_VER >= 120
+#if _MSVCR_VER >= 100
         MSVCRT_free(locinfo->lconv->_W_decimal_point);
         MSVCRT_free(locinfo->lconv->_W_thousands_sep);
         MSVCRT_free(locinfo->lconv->_W_int_curr_symbol);
@@ -908,7 +904,7 @@ static MSVCRT_pthreadlocinfo create_locinfo(int category,
     LCID lcid[6] = { 0 }, lcid_tmp;
     unsigned short cp[6] = { 0 };
     char buf[256];
-#if _MSVCR_VER >= 120
+#if _MSVCR_VER >= 100
     MSVCRT_wchar_t wbuf[256];
 #endif
     int i, ret, size;
@@ -1262,7 +1258,7 @@ static MSVCRT_pthreadlocinfo create_locinfo(int category,
             return NULL;
         }
 
-#if _MSVCR_VER >= 120
+#if _MSVCR_VER >= 100
         i = GetLocaleInfoW(lcid[MSVCRT_LC_MONETARY], LOCALE_SINTLSYMBOL
                 |LOCALE_NOUSEROVERRIDE, wbuf, 256);
         if(i && (locinfo->lconv->_W_int_curr_symbol = MSVCRT_malloc(i * sizeof(MSVCRT_wchar_t))))
@@ -1355,7 +1351,7 @@ static MSVCRT_pthreadlocinfo create_locinfo(int category,
         locinfo->lconv->p_sign_posn = 127;
         locinfo->lconv->n_sign_posn = 127;
 
-#if _MSVCR_VER >= 120
+#if _MSVCR_VER >= 100
         locinfo->lconv->_W_int_curr_symbol = MSVCRT_malloc(sizeof(MSVCRT_wchar_t));
         locinfo->lconv->_W_currency_symbol = MSVCRT_malloc(sizeof(MSVCRT_wchar_t));
         locinfo->lconv->_W_mon_decimal_point = MSVCRT_malloc(sizeof(MSVCRT_wchar_t));
@@ -1436,7 +1432,7 @@ static MSVCRT_pthreadlocinfo create_locinfo(int category,
             return NULL;
         }
 
-#if _MSVCR_VER >= 120
+#if _MSVCR_VER >= 100
         i = GetLocaleInfoW(lcid[MSVCRT_LC_NUMERIC], LOCALE_SDECIMAL
                 |LOCALE_NOUSEROVERRIDE, wbuf, 256);
         if(i && (locinfo->lconv->_W_decimal_point = MSVCRT_malloc(i * sizeof(MSVCRT_wchar_t))))
@@ -1475,7 +1471,7 @@ static MSVCRT_pthreadlocinfo create_locinfo(int category,
         locinfo->lconv->thousands_sep[0] = '\0';
         locinfo->lconv->grouping[0] = '\0';
 
-#if _MSVCR_VER >= 120
+#if _MSVCR_VER >= 100
         locinfo->lconv->_W_decimal_point = MSVCRT_malloc(sizeof(MSVCRT_wchar_t[2]));
         locinfo->lconv->_W_thousands_sep = MSVCRT_malloc(sizeof(MSVCRT_wchar_t));
 
@@ -1596,7 +1592,7 @@ static MSVCRT_pthreadlocinfo create_locinfo(int category,
  */
 void CDECL _lock_locales(void)
 {
-    LOCK_LOCALE
+    _mlock(_SETLOCALE_LOCK);
 }
 
 /*********************************************************************
@@ -1604,7 +1600,7 @@ void CDECL _lock_locales(void)
  */
 void CDECL _unlock_locales(void)
 {
-    UNLOCK_LOCALE
+    _munlock(_SETLOCALE_LOCK);
 }
 
 /*********************************************************************
@@ -1638,6 +1634,31 @@ MSVCRT__locale_t CDECL MSVCRT__create_locale(int category, const char *locale)
 }
 
 /*********************************************************************
+ *      _wcreate_locale (MSVCRT.@)
+ */
+MSVCRT__locale_t CDECL MSVCRT__wcreate_locale(int category, const MSVCRT_wchar_t *locale)
+{
+    MSVCRT__locale_t loc;
+    MSVCRT_size_t len;
+    char *str;
+
+    if(category<MSVCRT_LC_MIN || category>MSVCRT_LC_MAX || !locale)
+        return NULL;
+
+    len = MSVCRT_wcstombs(NULL, locale, 0);
+    if(len == -1)
+        return NULL;
+    if(!(str = MSVCRT_malloc(++len)))
+        return NULL;
+    MSVCRT_wcstombs(str, locale, len);
+
+    loc = MSVCRT__create_locale(category, str);
+
+    MSVCRT_free(str);
+    return loc;
+}
+
+/*********************************************************************
  *             setlocale (MSVCRT.@)
  */
 char* CDECL MSVCRT_setlocale(int category, const char* locale)
@@ -1661,7 +1682,7 @@ char* CDECL MSVCRT_setlocale(int category, const char* locale)
         return NULL;
     }
 
-    LOCK_LOCALE;
+    _lock_locales();
 
     if(locinfo->lc_handle[MSVCRT_LC_COLLATE]!=newlocinfo->lc_handle[MSVCRT_LC_COLLATE]
             || locinfo->lc_id[MSVCRT_LC_COLLATE].wCodePage!=newlocinfo->lc_id[MSVCRT_LC_COLLATE].wCodePage) {
@@ -1735,7 +1756,7 @@ char* CDECL MSVCRT_setlocale(int category, const char* locale)
         swap_pointers((void**)&locinfo->lconv->negative_sign,
                 (void**)&newlocinfo->lconv->negative_sign);
 
-#if _MSVCR_VER >= 120
+#if _MSVCR_VER >= 100
         swap_pointers((void**)&locinfo->lconv->_W_int_curr_symbol,
                 (void**)&newlocinfo->lconv->_W_int_curr_symbol);
         swap_pointers((void**)&locinfo->lconv->_W_currency_symbol,
@@ -1783,7 +1804,7 @@ char* CDECL MSVCRT_setlocale(int category, const char* locale)
         swap_pointers((void**)&locinfo->lconv->grouping,
                 (void**)&newlocinfo->lconv->grouping);
 
-#if _MSVCR_VER >= 120
+#if _MSVCR_VER >= 100
         swap_pointers((void**)&locinfo->lconv->_W_decimal_point,
                 (void**)&newlocinfo->lconv->_W_decimal_point);
         swap_pointers((void**)&locinfo->lconv->_W_thousands_sep,
@@ -1816,7 +1837,7 @@ char* CDECL MSVCRT_setlocale(int category, const char* locale)
     }
 
     free_locinfo(newlocinfo);
-    UNLOCK_LOCALE;
+    _unlock_locales();
 
     if(locinfo == MSVCRT_locale->locinfo) {
         int i;
@@ -1858,14 +1879,14 @@ MSVCRT_wchar_t* CDECL MSVCRT__wsetlocale(int category, const MSVCRT_wchar_t* wlo
         MSVCRT_wcstombs(locale, wlocale, len);
     }
 
-    LOCK_LOCALE;
+    _lock_locales();
     ret = MSVCRT_setlocale(category, locale);
     MSVCRT_free(locale);
 
     if(ret && MSVCRT_mbstowcs(current_lc_all, ret, MAX_LOCALE_LENGTH)==-1)
         ret = NULL;
 
-    UNLOCK_LOCALE;
+    _unlock_locales();
     return ret ? current_lc_all : NULL;
 }
 
@@ -1921,9 +1942,9 @@ BOOL msvcrt_init_locale(void)
 {
     int i;
 
-    LOCK_LOCALE;
+    _lock_locales();
     MSVCRT_locale = MSVCRT__create_locale(0, "C");
-    UNLOCK_LOCALE;
+    _unlock_locales();
     if(!MSVCRT_locale)
         return FALSE;
 

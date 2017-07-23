@@ -35,26 +35,11 @@
 #include "olectl.h"
 
 #include "wine/unicode.h"
-#include "wine/list.h"
 
 #include "msctf.h"
 #include "msctf_internal.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(msctf);
-
-typedef struct tagThreadMgrSink {
-    struct list         entry;
-    union {
-        /* ThreadMgr Sinks */
-        IUnknown            *pIUnknown;
-        /* ITfActiveLanguageProfileNotifySink *pITfActiveLanguageProfileNotifySink; */
-        /* ITfDisplayAttributeNotifySink *pITfDisplayAttributeNotifySink; */
-        /* ITfKeyTraceEventSink *pITfKeyTraceEventSink; */
-        /* ITfPreservedKeyNotifySink *pITfPreservedKeyNotifySink; */
-        /* ITfThreadFocusSink *pITfThreadFocusSink; */
-        ITfThreadMgrEventSink *pITfThreadMgrEventSink;
-    } interfaces;
-} ThreadMgrSink;
 
 typedef struct tagPreservedKey
 {
@@ -99,8 +84,8 @@ typedef struct tagACLMulti {
     ITfDocumentMgr *focus;
     LONG activationCount;
 
-    ITfKeyEventSink *forgroundKeyEventSink;
-    CLSID forgroundTextService;
+    ITfKeyEventSink *foregroundKeyEventSink;
+    CLSID foregroundTextService;
 
     struct list CurrentPreservedKeys;
     struct list CreatedDocumentMgrs;
@@ -172,12 +157,6 @@ static inline EnumTfDocumentMgr *impl_from_IEnumTfDocumentMgrs(IEnumTfDocumentMg
     return CONTAINING_RECORD(iface, EnumTfDocumentMgr, IEnumTfDocumentMgrs_iface);
 }
 
-static void free_sink(ThreadMgrSink *sink)
-{
-        IUnknown_Release(sink->interfaces.pIUnknown);
-        HeapFree(GetProcessHeap(),0,sink);
-}
-
 static void ThreadMgr_Destructor(ThreadMgr *This)
 {
     struct list *cursor, *cursor2;
@@ -191,43 +170,12 @@ static void ThreadMgr_Destructor(ThreadMgr *This)
     if (This->focus)
         ITfDocumentMgr_Release(This->focus);
 
-    /* free sinks */
-    LIST_FOR_EACH_SAFE(cursor, cursor2, &This->ActiveLanguageProfileNotifySink)
-    {
-        ThreadMgrSink* sink = LIST_ENTRY(cursor,ThreadMgrSink,entry);
-        list_remove(cursor);
-        free_sink(sink);
-    }
-    LIST_FOR_EACH_SAFE(cursor, cursor2, &This->DisplayAttributeNotifySink)
-    {
-        ThreadMgrSink* sink = LIST_ENTRY(cursor,ThreadMgrSink,entry);
-        list_remove(cursor);
-        free_sink(sink);
-    }
-    LIST_FOR_EACH_SAFE(cursor, cursor2, &This->KeyTraceEventSink)
-    {
-        ThreadMgrSink* sink = LIST_ENTRY(cursor,ThreadMgrSink,entry);
-        list_remove(cursor);
-        free_sink(sink);
-    }
-    LIST_FOR_EACH_SAFE(cursor, cursor2, &This->PreservedKeyNotifySink)
-    {
-        ThreadMgrSink* sink = LIST_ENTRY(cursor,ThreadMgrSink,entry);
-        list_remove(cursor);
-        free_sink(sink);
-    }
-    LIST_FOR_EACH_SAFE(cursor, cursor2, &This->ThreadFocusSink)
-    {
-        ThreadMgrSink* sink = LIST_ENTRY(cursor,ThreadMgrSink,entry);
-        list_remove(cursor);
-        free_sink(sink);
-    }
-    LIST_FOR_EACH_SAFE(cursor, cursor2, &This->ThreadMgrEventSink)
-    {
-        ThreadMgrSink* sink = LIST_ENTRY(cursor,ThreadMgrSink,entry);
-        list_remove(cursor);
-        free_sink(sink);
-    }
+    free_sinks(&This->ActiveLanguageProfileNotifySink);
+    free_sinks(&This->DisplayAttributeNotifySink);
+    free_sinks(&This->KeyTraceEventSink);
+    free_sinks(&This->PreservedKeyNotifySink);
+    free_sinks(&This->ThreadFocusSink);
+    free_sinks(&This->ThreadMgrEventSink);
 
     LIST_FOR_EACH_SAFE(cursor, cursor2, &This->CurrentPreservedKeys)
     {
@@ -658,7 +606,6 @@ static HRESULT WINAPI ThreadMgrSource_AdviseSink(ITfSource *iface,
         REFIID riid, IUnknown *punk, DWORD *pdwCookie)
 {
     ThreadMgr *This = impl_from_ITfSource(iface);
-    ThreadMgrSink *tms;
 
     TRACE("(%p) %s %p %p\n",This,debugstr_guid(riid),punk,pdwCookie);
 
@@ -666,47 +613,28 @@ static HRESULT WINAPI ThreadMgrSource_AdviseSink(ITfSource *iface,
         return E_INVALIDARG;
 
     if (IsEqualIID(riid, &IID_ITfThreadMgrEventSink))
+        return advise_sink(&This->ThreadMgrEventSink, &IID_ITfThreadMgrEventSink, COOKIE_MAGIC_TMSINK, punk, pdwCookie);
+
+    if (IsEqualIID(riid, &IID_ITfThreadFocusSink))
     {
-        tms = HeapAlloc(GetProcessHeap(),0,sizeof(ThreadMgrSink));
-        if (!tms)
-            return E_OUTOFMEMORY;
-        if (FAILED(IUnknown_QueryInterface(punk, riid, (LPVOID *)&tms->interfaces.pITfThreadMgrEventSink)))
-        {
-            HeapFree(GetProcessHeap(),0,tms);
-            return CONNECT_E_CANNOTCONNECT;
-        }
-        list_add_head(&This->ThreadMgrEventSink,&tms->entry);
-        *pdwCookie = generate_Cookie(COOKIE_MAGIC_TMSINK, tms);
-    }
-    else
-    {
-        FIXME("(%p) Unhandled Sink: %s\n",This,debugstr_guid(riid));
-        return E_NOTIMPL;
+        WARN("semi-stub for ITfThreadFocusSink: sink won't be used.\n");
+        return advise_sink(&This->ThreadMgrEventSink, &IID_ITfThreadMgrEventSink, COOKIE_MAGIC_TMSINK, punk, pdwCookie);
     }
 
-    TRACE("cookie %x\n",*pdwCookie);
-
-    return S_OK;
+    FIXME("(%p) Unhandled Sink: %s\n",This,debugstr_guid(riid));
+    return E_NOTIMPL;
 }
 
 static HRESULT WINAPI ThreadMgrSource_UnadviseSink(ITfSource *iface, DWORD pdwCookie)
 {
     ThreadMgr *This = impl_from_ITfSource(iface);
-    ThreadMgrSink *sink;
 
     TRACE("(%p) %x\n",This,pdwCookie);
 
     if (get_Cookie_magic(pdwCookie)!=COOKIE_MAGIC_TMSINK)
         return E_INVALIDARG;
 
-    sink = remove_Cookie(pdwCookie);
-    if (!sink)
-        return CONNECT_E_NOCONNECTION;
-
-    list_remove(&sink->entry);
-    free_sink(sink);
-
-    return S_OK;
+    return unadvise_sink(pdwCookie);
 }
 
 static const ITfSourceVtbl ThreadMgrSourceVtbl =
@@ -767,15 +695,15 @@ static HRESULT WINAPI KeystrokeMgr_AdviseKeyEventSink(ITfKeystrokeMgr *iface,
 
     if (fForeground)
     {
-        if (This->forgroundKeyEventSink)
+        if (This->foregroundKeyEventSink)
         {
-            ITfKeyEventSink_OnSetFocus(This->forgroundKeyEventSink, FALSE);
-            ITfKeyEventSink_Release(This->forgroundKeyEventSink);
+            ITfKeyEventSink_OnSetFocus(This->foregroundKeyEventSink, FALSE);
+            ITfKeyEventSink_Release(This->foregroundKeyEventSink);
         }
         ITfKeyEventSink_AddRef(check);
         ITfKeyEventSink_OnSetFocus(check, TRUE);
-        This->forgroundKeyEventSink = check;
-        This->forgroundTextService = textservice;
+        This->foregroundKeyEventSink = check;
+        This->foregroundTextService = textservice;
     }
     return S_OK;
 }
@@ -803,11 +731,11 @@ static HRESULT WINAPI KeystrokeMgr_UnadviseKeyEventSink(ITfKeystrokeMgr *iface,
     set_textservice_sink(tid, &IID_ITfKeyEventSink, NULL);
     ITfKeyEventSink_Release(check);
 
-    if (This->forgroundKeyEventSink == check)
+    if (This->foregroundKeyEventSink == check)
     {
-        ITfKeyEventSink_Release(This->forgroundKeyEventSink);
-        This->forgroundKeyEventSink = NULL;
-        This->forgroundTextService = GUID_NULL;
+        ITfKeyEventSink_Release(This->foregroundKeyEventSink);
+        This->foregroundKeyEventSink = NULL;
+        This->foregroundTextService = GUID_NULL;
     }
     return S_OK;
 }
@@ -820,10 +748,10 @@ static HRESULT WINAPI KeystrokeMgr_GetForeground(ITfKeystrokeMgr *iface,
     if (!pclsid)
         return E_INVALIDARG;
 
-    if (IsEqualCLSID(&This->forgroundTextService,&GUID_NULL))
+    if (IsEqualCLSID(&This->foregroundTextService,&GUID_NULL))
         return S_FALSE;
 
-    *pclsid = This->forgroundTextService;
+    *pclsid = This->foregroundTextService;
     return S_OK;
 }
 
@@ -832,7 +760,8 @@ static HRESULT WINAPI KeystrokeMgr_TestKeyDown(ITfKeystrokeMgr *iface,
 {
     ThreadMgr *This = impl_from_ITfKeystrokeMgr(iface);
     FIXME("STUB:(%p)\n",This);
-    return E_NOTIMPL;
+    *pfEaten = FALSE;
+    return S_OK;
 }
 
 static HRESULT WINAPI KeystrokeMgr_TestKeyUp(ITfKeystrokeMgr *iface,
@@ -840,7 +769,8 @@ static HRESULT WINAPI KeystrokeMgr_TestKeyUp(ITfKeystrokeMgr *iface,
 {
     ThreadMgr *This = impl_from_ITfKeystrokeMgr(iface);
     FIXME("STUB:(%p)\n",This);
-    return E_NOTIMPL;
+    *pfEaten = FALSE;
+    return S_OK;
 }
 
 static HRESULT WINAPI KeystrokeMgr_KeyDown(ITfKeystrokeMgr *iface,
@@ -1155,15 +1085,15 @@ static ULONG WINAPI ThreadMgrEventSink_Release(ITfThreadMgrEventSink *iface)
 static HRESULT WINAPI ThreadMgrEventSink_OnInitDocumentMgr(
         ITfThreadMgrEventSink *iface,ITfDocumentMgr *pdim)
 {
-    struct list *cursor;
     ThreadMgr *This = impl_from_ITfThreadMgrEventSink(iface);
+    ITfThreadMgrEventSink *sink;
+    struct list *cursor;
 
     TRACE("(%p) %p\n",This,pdim);
 
-    LIST_FOR_EACH(cursor, &This->ThreadMgrEventSink)
+    SINK_FOR_EACH(cursor, &This->ThreadMgrEventSink, ITfThreadMgrEventSink, sink)
     {
-        ThreadMgrSink* sink = LIST_ENTRY(cursor,ThreadMgrSink,entry);
-        ITfThreadMgrEventSink_OnInitDocumentMgr(sink->interfaces.pITfThreadMgrEventSink,pdim);
+        ITfThreadMgrEventSink_OnInitDocumentMgr(sink, pdim);
     }
 
     return S_OK;
@@ -1172,15 +1102,15 @@ static HRESULT WINAPI ThreadMgrEventSink_OnInitDocumentMgr(
 static HRESULT WINAPI ThreadMgrEventSink_OnUninitDocumentMgr(
         ITfThreadMgrEventSink *iface, ITfDocumentMgr *pdim)
 {
-    struct list *cursor;
     ThreadMgr *This = impl_from_ITfThreadMgrEventSink(iface);
+    ITfThreadMgrEventSink *sink;
+    struct list *cursor;
 
     TRACE("(%p) %p\n",This,pdim);
 
-    LIST_FOR_EACH(cursor, &This->ThreadMgrEventSink)
+    SINK_FOR_EACH(cursor, &This->ThreadMgrEventSink, ITfThreadMgrEventSink, sink)
     {
-        ThreadMgrSink* sink = LIST_ENTRY(cursor,ThreadMgrSink,entry);
-        ITfThreadMgrEventSink_OnUninitDocumentMgr(sink->interfaces.pITfThreadMgrEventSink,pdim);
+        ITfThreadMgrEventSink_OnUninitDocumentMgr(sink, pdim);
     }
 
     return S_OK;
@@ -1190,15 +1120,15 @@ static HRESULT WINAPI ThreadMgrEventSink_OnSetFocus(
         ITfThreadMgrEventSink *iface, ITfDocumentMgr *pdimFocus,
         ITfDocumentMgr *pdimPrevFocus)
 {
-    struct list *cursor;
     ThreadMgr *This = impl_from_ITfThreadMgrEventSink(iface);
+    ITfThreadMgrEventSink *sink;
+    struct list *cursor;
 
     TRACE("(%p) %p %p\n",This,pdimFocus, pdimPrevFocus);
 
-    LIST_FOR_EACH(cursor, &This->ThreadMgrEventSink)
+    SINK_FOR_EACH(cursor, &This->ThreadMgrEventSink, ITfThreadMgrEventSink, sink)
     {
-        ThreadMgrSink* sink = LIST_ENTRY(cursor,ThreadMgrSink,entry);
-        ITfThreadMgrEventSink_OnSetFocus(sink->interfaces.pITfThreadMgrEventSink, pdimFocus, pdimPrevFocus);
+        ITfThreadMgrEventSink_OnSetFocus(sink, pdimFocus, pdimPrevFocus);
     }
 
     return S_OK;
@@ -1207,15 +1137,15 @@ static HRESULT WINAPI ThreadMgrEventSink_OnSetFocus(
 static HRESULT WINAPI ThreadMgrEventSink_OnPushContext(
         ITfThreadMgrEventSink *iface, ITfContext *pic)
 {
-    struct list *cursor;
     ThreadMgr *This = impl_from_ITfThreadMgrEventSink(iface);
+    ITfThreadMgrEventSink *sink;
+    struct list *cursor;
 
     TRACE("(%p) %p\n",This,pic);
 
-    LIST_FOR_EACH(cursor, &This->ThreadMgrEventSink)
+    SINK_FOR_EACH(cursor, &This->ThreadMgrEventSink, ITfThreadMgrEventSink, sink)
     {
-        ThreadMgrSink* sink = LIST_ENTRY(cursor,ThreadMgrSink,entry);
-        ITfThreadMgrEventSink_OnPushContext(sink->interfaces.pITfThreadMgrEventSink,pic);
+        ITfThreadMgrEventSink_OnPushContext(sink, pic);
     }
 
     return S_OK;
@@ -1224,15 +1154,15 @@ static HRESULT WINAPI ThreadMgrEventSink_OnPushContext(
 static HRESULT WINAPI ThreadMgrEventSink_OnPopContext(
         ITfThreadMgrEventSink *iface, ITfContext *pic)
 {
-    struct list *cursor;
     ThreadMgr *This = impl_from_ITfThreadMgrEventSink(iface);
+    ITfThreadMgrEventSink *sink;
+    struct list *cursor;
 
     TRACE("(%p) %p\n",This,pic);
 
-    LIST_FOR_EACH(cursor, &This->ThreadMgrEventSink)
+    SINK_FOR_EACH(cursor, &This->ThreadMgrEventSink, ITfThreadMgrEventSink, sink)
     {
-        ThreadMgrSink* sink = LIST_ENTRY(cursor,ThreadMgrSink,entry);
-        ITfThreadMgrEventSink_OnPopContext(sink->interfaces.pITfThreadMgrEventSink,pic);
+        ITfThreadMgrEventSink_OnPopContext(sink, pic);
     }
 
     return S_OK;
@@ -1406,7 +1336,7 @@ HRESULT ThreadMgr_Constructor(IUnknown *pUnkOuter, IUnknown **ppOut)
     This->refCount = 1;
     TlsSetValue(tlsIndex,This);
 
-    CompartmentMgr_Constructor((IUnknown*)This, &IID_IUnknown, (IUnknown**)&This->CompartmentMgr);
+    CompartmentMgr_Constructor((IUnknown*)&This->ITfThreadMgrEx_iface, &IID_IUnknown, (IUnknown**)&This->CompartmentMgr);
 
     list_init(&This->CurrentPreservedKeys);
     list_init(&This->CreatedDocumentMgrs);
@@ -1564,8 +1494,8 @@ static HRESULT EnumTfDocumentMgr_Constructor(struct list* head, IEnumTfDocumentM
     This->head = head;
     This->index = list_head(This->head);
 
-    TRACE("returning %p\n", This);
-    *ppOut = (IEnumTfDocumentMgrs*)This;
+    TRACE("returning %p\n", &This->IEnumTfDocumentMgrs_iface);
+    *ppOut = &This->IEnumTfDocumentMgrs_iface;
     return S_OK;
 }
 

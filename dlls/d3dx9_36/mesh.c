@@ -27,23 +27,18 @@
 #include "config.h"
 #include "wine/port.h"
 
-#define COBJMACROS
-#define NONAMELESSUNION
 #include <assert.h>
 #ifdef HAVE_FLOAT_H
 # include <float.h>
 #endif
-#include "windef.h"
-#include "wingdi.h"
-#include "d3dx9.h"
+
+#include "d3dx9_private.h"
 #undef MAKE_DDHRESULT
 #include "dxfile.h"
 #include "rmxfguid.h"
 #include "rmxftmpl.h"
-#include "wine/debug.h"
 #include "wine/unicode.h"
 #include "wine/list.h"
-#include "d3dx9_36_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(d3dx);
 
@@ -5667,7 +5662,6 @@ static HRESULT create_outline(struct glyphinfo *glyph, void *raw_outline, int da
                         pt->corner = POINTTYPE_CURVE_END;
                 }
                 outline->count--;
-                lastpt = &outline->items[outline->count - 1];
             } else {
                 /* outline closed with a line from end to start point */
                 attempt_line_merge(outline, outline->count - 1, &pt->pos, FALSE, cos_table);
@@ -7549,6 +7543,15 @@ HRESULT WINAPI D3DXTessellateNPatches(ID3DXMesh *mesh, const DWORD *adjacency_in
 {
     FIXME("mesh %p, adjacency_in %p, num_segs %f, quadratic_normals %d, mesh_out %p, adjacency_out %p stub.\n",
             mesh, adjacency_in, num_segs, quadratic_normals, mesh_out, adjacency_out);
+
+    return E_NOTIMPL;
+}
+
+HRESULT WINAPI D3DXConvertMeshSubsetToSingleStrip(struct ID3DXBaseMesh *mesh_in, DWORD attribute_id,
+        DWORD ib_flags, struct IDirect3DIndexBuffer9 **index_buffer, DWORD *index_count)
+{
+    FIXME("mesh_in %p, attribute_id %u, ib_flags %u, index_buffer %p, index_count %p stub.\n",
+            mesh_in, attribute_id, ib_flags, index_buffer, index_count);
 
     return E_NOTIMPL;
 }

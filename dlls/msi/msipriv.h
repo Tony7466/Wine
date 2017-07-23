@@ -713,7 +713,7 @@ typedef struct tagMSISCRIPT
 #define MSI_BUILDNUMBER 6001
 
 #define GUID_SIZE 39
-#define SQUISH_GUID_SIZE 33
+#define SQUASHED_GUID_SIZE 33
 
 #define MSIHANDLE_MAGIC 0x4d434923
 
@@ -915,10 +915,11 @@ extern UINT MSIREG_OpenUserUpgradeCodesKey(LPCWSTR szProduct, HKEY* key, BOOL cr
 extern UINT MSIREG_DeleteProductKey(LPCWSTR szProduct) DECLSPEC_HIDDEN;
 extern UINT MSIREG_DeleteUserProductKey(LPCWSTR szProduct) DECLSPEC_HIDDEN;
 extern UINT MSIREG_DeleteUserDataPatchKey(LPCWSTR patch, MSIINSTALLCONTEXT context) DECLSPEC_HIDDEN;
-extern UINT MSIREG_DeleteUserDataProductKey(LPCWSTR szProduct) DECLSPEC_HIDDEN;
+extern UINT MSIREG_DeleteUserDataProductKey(LPCWSTR, MSIINSTALLCONTEXT) DECLSPEC_HIDDEN;
 extern UINT MSIREG_DeleteUserFeaturesKey(LPCWSTR szProduct) DECLSPEC_HIDDEN;
 extern UINT MSIREG_DeleteUserDataComponentKey(LPCWSTR szComponent, LPCWSTR szUserSid) DECLSPEC_HIDDEN;
 extern UINT MSIREG_DeleteUserUpgradeCodesKey(LPCWSTR szUpgradeCode) DECLSPEC_HIDDEN;
+extern UINT MSIREG_DeleteUpgradeCodesKey(const WCHAR *) DECLSPEC_HIDDEN;
 extern UINT MSIREG_DeleteClassesUpgradeCodesKey(LPCWSTR szUpgradeCode) DECLSPEC_HIDDEN;
 extern UINT MSIREG_OpenClassesUpgradeCodesKey(LPCWSTR szUpgradeCode, HKEY* key, BOOL create) DECLSPEC_HIDDEN;
 extern UINT MSIREG_DeleteLocalClassesProductKey(LPCWSTR szProductCode) DECLSPEC_HIDDEN;
@@ -954,7 +955,6 @@ extern LPWSTR msi_suminfo_dup_string( MSISUMMARYINFO *si, UINT uiProperty ) DECL
 extern INT msi_suminfo_get_int32( MSISUMMARYINFO *si, UINT uiProperty ) DECLSPEC_HIDDEN;
 extern LPWSTR msi_get_suminfo_product( IStorage *stg ) DECLSPEC_HIDDEN;
 extern UINT msi_add_suminfo( MSIDATABASE *db, LPWSTR **records, int num_records, int num_columns ) DECLSPEC_HIDDEN;
-extern enum platform parse_platform( const WCHAR *str ) DECLSPEC_HIDDEN;
 extern UINT msi_load_suminfo_properties( MSIPACKAGE *package ) DECLSPEC_HIDDEN;
 
 /* undocumented functions */

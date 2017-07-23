@@ -436,11 +436,10 @@ static const tid_t HTMLDOMChildrenCollection_iface_tids[] = {
 static dispex_static_data_t HTMLDOMChildrenCollection_dispex = {
     &HTMLDOMChildrenCollection_dispex_vtbl,
     DispDOMChildrenCollection_tid,
-    NULL,
     HTMLDOMChildrenCollection_iface_tids
 };
 
-static IHTMLDOMChildrenCollection *create_child_collection(HTMLDocumentNode *doc, nsIDOMNodeList *nslist)
+IHTMLDOMChildrenCollection *create_child_collection(HTMLDocumentNode *doc, nsIDOMNodeList *nslist)
 {
     HTMLDOMChildrenCollection *ret;
 
@@ -1168,10 +1167,10 @@ HRESULT HTMLDOMNode_QI(HTMLDOMNode *This, REFIID riid, void **ppv)
         *ppv = &This->IHTMLDOMNode2_iface;
     }else if(IsEqualGUID(&IID_nsXPCOMCycleCollectionParticipant, riid)) {
         *ppv = &node_ccp;
-        return NS_OK;
+        return S_OK;
     }else if(IsEqualGUID(&IID_nsCycleCollectionISupports, riid)) {
         *ppv = &This->IHTMLDOMNode_iface;
-        return NS_OK;
+        return S_OK;
     }else if(dispex_query_interface(&This->event_target.dispex, riid, ppv)) {
         return *ppv ? S_OK : E_NOINTERFACE;
     }else {

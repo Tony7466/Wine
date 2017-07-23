@@ -53,8 +53,8 @@
 @ stub CM_Free_Res_Des
 @ stub CM_Free_Res_Des_Ex
 @ stub CM_Free_Res_Des_Handle
-@ stub CM_Get_Child
-@ stub CM_Get_Child_Ex
+@ stdcall CM_Get_Child(ptr long long)
+@ stdcall CM_Get_Child_Ex(ptr long long ptr)
 @ stub CM_Get_Class_Key_NameA
 @ stub CM_Get_Class_Key_NameW
 @ stub CM_Get_Class_Key_Name_ExA
@@ -144,7 +144,7 @@
 @ stub CM_Open_Class_KeyW
 @ stub CM_Open_Class_Key_ExA
 @ stub CM_Open_Class_Key_ExW
-@ stub CM_Open_DevNode_Key
+@ stdcall CM_Open_DevNode_Key(long long long long ptr long)
 @ stub CM_Open_DevNode_Key_Ex
 @ stub CM_Query_And_Remove_SubTreeA
 @ stub CM_Query_And_Remove_SubTreeW
@@ -342,6 +342,7 @@
 @ stub SetupDiGetDeviceInterfaceAlias
 @ stdcall SetupDiGetDeviceInterfaceDetailA(long ptr ptr long ptr ptr)
 @ stdcall SetupDiGetDeviceInterfaceDetailW(long ptr ptr long ptr ptr)
+@ stdcall SetupDiGetDevicePropertyW(ptr ptr ptr ptr ptr long ptr long)
 @ stdcall SetupDiGetDeviceRegistryPropertyA(long ptr long ptr ptr long ptr)
 @ stdcall SetupDiGetDeviceRegistryPropertyW(long ptr long ptr ptr long ptr)
 @ stub SetupDiGetDriverInfoDetailA
@@ -380,13 +381,14 @@
 @ stdcall SetupDiOpenDeviceInterfaceW(ptr wstr long ptr)
 @ stdcall SetupDiRegisterDeviceInfo(ptr ptr long ptr ptr ptr)
 @ stdcall SetupDiRemoveDevice(ptr ptr)
-@ stub SetupDiRemoveDeviceInterface
+@ stdcall SetupDiRemoveDeviceInterface(ptr ptr)
+@ stdcall SetupDiSelectBestCompatDrv(ptr ptr)
 @ stub SetupDiSelectDevice
 @ stub SetupDiSelectOEMDrv
 @ stdcall SetupDiSetClassInstallParamsA(ptr ptr ptr long)
 @ stdcall SetupDiSetClassInstallParamsW(ptr ptr ptr long)
 @ stdcall SetupDiSetDeviceInstallParamsA(ptr ptr ptr)
-@ stub SetupDiSetDeviceInstallParamsW
+@ stdcall SetupDiSetDeviceInstallParamsW(ptr ptr ptr)
 @ stdcall SetupDiSetDeviceRegistryPropertyA(ptr ptr long ptr ptr)
 @ stdcall SetupDiSetDeviceRegistryPropertyW(ptr ptr long ptr ptr)
 @ stub SetupDiSetDriverInstallParamsA

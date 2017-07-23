@@ -422,7 +422,7 @@ struct symt_block* symt_close_func_block(struct module* module,
 
     if (pc) block->size = func->address + pc - block->address;
     return (block->container->tag == SymTagBlock) ? 
-        GET_ENTRY(block->container, struct symt_block, symt) : NULL;
+        CONTAINING_RECORD(block->container, struct symt_block, symt) : NULL;
 }
 
 struct symt_hierarchy_point* symt_add_function_point(struct module* module,
@@ -564,7 +564,7 @@ static void symt_fill_sym_info(struct module_pair* pair,
 
     if (!symt_get_info(pair->effective, sym, TI_GET_TYPE, &sym_info->TypeIndex))
         sym_info->TypeIndex = 0;
-    sym_info->info = symt_ptr2index(pair->effective, sym);
+    sym_info->Index = symt_ptr2index(pair->effective, sym);
     sym_info->Reserved[0] = sym_info->Reserved[1] = 0;
     if (!symt_get_info(pair->effective, sym, TI_GET_LENGTH, &size) &&
         (!sym_info->TypeIndex ||
@@ -723,7 +723,7 @@ static BOOL send_symbol(const struct sym_enum* se, struct module_pair* pair,
                         const struct symt_function* func, const struct symt* sym)
 {
     symt_fill_sym_info(pair, func, sym, se->sym_info);
-    if (se->index && se->sym_info->info != se->index) return FALSE;
+    if (se->index && se->sym_info->Index != se->index) return FALSE;
     if (se->tag && se->sym_info->Tag != se->tag) return FALSE;
     if (se->addr && !(se->addr >= se->sym_info->Address && se->addr < se->sym_info->Address + se->sym_info->Size)) return FALSE;
     return !se->cb(se->sym_info, se->sym_info->Size, se->user);
@@ -741,7 +741,7 @@ static BOOL symt_enum_module(struct module_pair* pair, const WCHAR* match,
     hash_table_iter_init(&pair->effective->ht_symbols, &hti, NULL);
     while ((ptr = hash_table_iter_up(&hti)))
     {
-        sym = GET_ENTRY(ptr, struct symt_ht, hash_elt);
+        sym = CONTAINING_RECORD(ptr, struct symt_ht, hash_elt);
         nameW = symt_get_nameW(&sym->symt);
         ret = SymMatchStringW(nameW, match, FALSE);
         HeapFree(GetProcessHeap(), 0, nameW);
@@ -987,7 +987,7 @@ void copy_symbolW(SYMBOL_INFOW* siw, const SYMBOL_INFO* si)
     siw->TypeIndex = si->TypeIndex; 
     siw->Reserved[0] = si->Reserved[0];
     siw->Reserved[1] = si->Reserved[1];
-    siw->Index = si->info; /* FIXME: see dbghelp.h */
+    siw->Index = si->Index;
     siw->Size = si->Size;
     siw->ModBase = si->ModBase;
     siw->Flags = si->Flags;
@@ -1329,7 +1329,7 @@ static BOOL find_name(struct process* pcs, struct module* module, const char* na
     hash_table_iter_init(&pair.effective->ht_symbols, &hti, name);
     while ((ptr = hash_table_iter_up(&hti)))
     {
-        sym = GET_ENTRY(ptr, struct symt_ht, hash_elt);
+        sym = CONTAINING_RECORD(ptr, struct symt_ht, hash_elt);
 
         if (!strcmp(sym->hash_elt.name, name))
         {
@@ -2148,7 +2148,7 @@ BOOL WINAPI SymEnumLines(HANDLE hProcess, ULONG64 base, PCSTR compiland,
     {
         unsigned int    i;
 
-        sym = GET_ENTRY(ptr, struct symt_ht, hash_elt);
+        sym = CONTAINING_RECORD(ptr, struct symt_ht, hash_elt);
         if (sym->symt.tag != SymTagFunction) continue;
 
         sci.FileName[0] = '\0';

@@ -274,7 +274,10 @@ char * CDECL MSVCRT_strtok_s(char *str, const char *delim, char **ctx)
     while(*str && strchr(delim, *str))
         str++;
     if(!*str)
+    {
+        *ctx = str;
         return NULL;
+    }
 
     *ctx = str+1;
     while(**ctx && !strchr(delim, **ctx))
@@ -364,12 +367,12 @@ static double strtod_helper(const char *str, char **end, MSVCRT__locale_t locale
     }
 #endif
 
-    while(isdigit(*p) ||
+    while((*p>='0' && *p<='9') ||
           (base == 16 && ((*p >= 'a' && *p <= 'f') || (*p >= 'A' && *p <= 'F')))) {
         char c = *p++;
         int val;
         found_digit = TRUE;
-        if (isdigit(c))
+        if (c>='0' && c<='9')
             val = c - '0';
         else if (c >= 'a' && c <= 'f')
             val = 10 + c - 'a';
@@ -382,7 +385,7 @@ static double strtod_helper(const char *str, char **end, MSVCRT__locale_t locale
         } else
             d = hlp;
     }
-    while(isdigit(*p) ||
+    while((*p>='0' && *p<='9') ||
           (base == 16 && ((*p >= 'a' && *p <= 'f') || (*p >= 'A' && *p <= 'F')))) {
         exp++;
         p++;
@@ -391,12 +394,12 @@ static double strtod_helper(const char *str, char **end, MSVCRT__locale_t locale
     if(*p == *locinfo->lconv->decimal_point)
         p++;
 
-    while(isdigit(*p) ||
+    while((*p>='0' && *p<='9') ||
           (base == 16 && ((*p >= 'a' && *p <= 'f') || (*p >= 'A' && *p <= 'F')))) {
         char c = *p++;
         int val;
         found_digit = TRUE;
-        if (isdigit(c))
+        if (c>='0' && c<='9')
             val = c - '0';
         else if (c >= 'a' && c <= 'f')
             val = 10 + c - 'a';
@@ -408,7 +411,7 @@ static double strtod_helper(const char *str, char **end, MSVCRT__locale_t locale
         d = hlp;
         exp--;
     }
-    while(isdigit(*p) ||
+    while((*p>='0' && *p<='9') ||
           (base == 16 && ((*p >= 'a' && *p <= 'f') || (*p >= 'A' && *p <= 'F'))))
         p++;
 
@@ -432,8 +435,8 @@ static double strtod_helper(const char *str, char **end, MSVCRT__locale_t locale
         } else if(*p == '+')
             p++;
 
-        if(isdigit(*p)) {
-            while(isdigit(*p)) {
+        if(*p>='0' && *p<='9') {
+            while(*p>='0' && *p<='9') {
                 if(e>INT_MAX/10 || (e=e*10+*p-'0')<0)
                     e = INT_MAX;
                 p++;
@@ -941,7 +944,7 @@ __int64 CDECL MSVCRT_strtoi64_l(const char *nptr, char **endptr, int base, MSVCR
         char cur = tolower(*nptr);
         int v;
 
-        if(isdigit(cur)) {
+        if(cur>='0' && cur<='9') {
             if(cur >= '0'+base)
                 break;
             v = cur-'0';
@@ -1034,11 +1037,28 @@ int CDECL MSVCRT_atoi(const char *str)
 #endif
 
 /******************************************************************
- *		strtol (MSVCRT.@)
+ *      _atoll_l (MSVCR120.@)
  */
-MSVCRT_long CDECL MSVCRT_strtol(const char* nptr, char** end, int base)
+MSVCRT_longlong CDECL MSVCRT__atoll_l(const char* str, MSVCRT__locale_t locale)
 {
-    __int64 ret = MSVCRT_strtoi64_l(nptr, end, base, NULL);
+    return MSVCRT_strtoi64_l(str, NULL, 10, locale);
+}
+
+/******************************************************************
+ *      atoll (MSVCR120.@)
+ */
+MSVCRT_longlong CDECL MSVCRT_atoll(const char* str)
+{
+    return MSVCRT__atoll_l(str, NULL);
+}
+
+/******************************************************************
+ *		_strtol_l (MSVCRT.@)
+ */
+MSVCRT_long CDECL MSVCRT__strtol_l(const char* nptr,
+        char** end, int base, MSVCRT__locale_t locale)
+{
+    __int64 ret = MSVCRT_strtoi64_l(nptr, end, base, locale);
 
     if(ret > MSVCRT_LONG_MAX) {
         ret = MSVCRT_LONG_MAX;
@@ -1049,6 +1069,14 @@ MSVCRT_long CDECL MSVCRT_strtol(const char* nptr, char** end, int base)
     }
 
     return ret;
+}
+
+/******************************************************************
+ *		strtol (MSVCRT.@)
+ */
+MSVCRT_long CDECL MSVCRT_strtol(const char* nptr, char** end, int base)
+{
+    return MSVCRT__strtol_l(nptr, end, base, NULL);
 }
 
 /******************************************************************
@@ -1119,7 +1147,7 @@ unsigned __int64 CDECL MSVCRT_strtoui64_l(const char *nptr, char **endptr, int b
         char cur = tolower(*nptr);
         int v;
 
-        if(isdigit(cur)) {
+        if(cur>='0' && cur<='9') {
             if(cur >= '0'+base)
                 break;
             v = *nptr-'0';

@@ -574,11 +574,7 @@ static HWND create_child_editcontrol (DWORD style, DWORD exstyle)
     HWND editWnd;
     RECT rect;
     BOOL b;
-    
-    rect.left = 0;
-    rect.top = 0;
-    rect.right = 300;
-    rect.bottom = 300;
+    SetRect(&rect, 0, 0, 300, 300);
     b = AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, FALSE);
     ok(b, "AdjustWindowRect failed\n");
     
@@ -1288,8 +1284,7 @@ static void test_edit_control_5(void)
     assert(hWnd);
     GetClientRect( hWnd, &rc);
     ok( rc.right == rc1.right - rc1.left && rc.bottom == rc1.bottom - rc1.top,
-            "Client rectangle not the expected size (%d,%d,%d,%d)\n",
-            rc.left, rc.top, rc.right, rc.bottom);
+            "Client rectangle not the expected size %s\n", wine_dbgstr_rect( &rc ));
     len = SendMessageA(hWnd, WM_GETTEXTLENGTH, 0, 0);
     ok(lstrlenA(str) == len, "text shouldn't have been truncated\n");
     DestroyWindow(hWnd);
@@ -1303,8 +1298,7 @@ static void test_edit_control_5(void)
     assert(hWnd);
     GetClientRect( hWnd, &rc);
     ok( rc.right == rc1.right - rc1.left && rc.bottom == rc1.bottom - rc1.top,
-            "Client rectangle not the expected size (%d,%d,%d,%d)\n",
-            rc.left, rc.top, rc.right, rc.bottom);
+            "Client rectangle not the expected size %s\n", wine_dbgstr_rect( &rc ));
     len = SendMessageA(hWnd, WM_GETTEXTLENGTH, 0, 0);
     ok(lstrlenA(str) == len, "text shouldn't have been truncated\n");
     DestroyWindow(hWnd);
@@ -1427,14 +1421,118 @@ static void test_edit_control_scroll(void)
     DestroyWindow (hwEdit);
 }
 
+static void test_margins_usefontinfo(UINT charset)
+{
+    HWND hwnd;
+    HDC hdc;
+    SIZE size;
+    BOOL cjk = FALSE;
+    LOGFONTA lf;
+    HFONT hfont;
+    RECT rect;
+    INT margins, threshold, expect, empty_expect, small_expect;
+
+    memset(&lf, 0, sizeof(lf));
+    lf.lfHeight = -11;
+    lf.lfWeight = FW_NORMAL;
+    lf.lfCharSet = charset;
+    strcpy(lf.lfFaceName, "Tahoma");
+
+    hfont = CreateFontIndirectA(&lf);
+    ok(hfont != NULL, "got %p\n", hfont);
+
+    /* Big window rectangle */
+    hwnd = CreateWindowExA(0, "Edit", "A", WS_POPUP, 0, 0, 5000, 1000, NULL, NULL, NULL, NULL);
+    ok(hwnd != NULL, "got %p\n", hwnd);
+    GetClientRect(hwnd, &rect);
+    ok(!IsRectEmpty(&rect), "got rect %s\n", wine_dbgstr_rect(&rect));
+
+    hdc = GetDC(hwnd);
+    hfont = SelectObject(hdc, hfont);
+    size.cx = GdiGetCharDimensions( hdc, NULL, &size.cy );
+    expect = MAKELONG(size.cx / 2, size.cx / 2);
+    small_expect = 0;
+    empty_expect = size.cx >= 28 ? small_expect : expect;
+
+    charset = GetTextCharset(hdc);
+    switch (charset)
+    {
+    case SHIFTJIS_CHARSET:
+    case HANGUL_CHARSET:
+    case GB2312_CHARSET:
+    case CHINESEBIG5_CHARSET:
+        cjk = TRUE;
+    }
+
+    hfont = SelectObject(hdc, hfont);
+    ReleaseDC(hwnd, hdc);
+
+    margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
+    ok(margins == 0, "got %x\n", margins);
+    SendMessageA(hwnd, WM_SETFONT, (WPARAM)hfont, MAKELPARAM(TRUE, 0));
+    margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
+    if (!cjk)
+        ok(margins == expect, "%d: got %d, %d\n", charset, HIWORD(margins), LOWORD(margins));
+    else
+    {
+        ok(HIWORD(margins) > 0 && LOWORD(margins) > 0, "%d: got %d, %d\n", charset, HIWORD(margins), LOWORD(margins));
+        expect = empty_expect = small_expect = margins;
+    }
+    DestroyWindow(hwnd);
+
+    threshold = (size.cx / 2 + size.cx) * 2;
+
+    /* Size below which non-cjk margins are zero */
+    hwnd = CreateWindowExA(0, "Edit", "A", WS_POPUP, 0, 0, threshold - 1, 100, NULL, NULL, NULL, NULL);
+    ok(hwnd != NULL, "got %p\n", hwnd);
+    GetClientRect(hwnd, &rect);
+    ok(!IsRectEmpty(&rect), "got rect %s\n", wine_dbgstr_rect(&rect));
+
+    margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
+    ok(margins == 0, "got %x\n", margins);
+
+    SendMessageA(hwnd, WM_SETFONT, (WPARAM)hfont, MAKELPARAM(TRUE, 0));
+    margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
+    ok(margins == small_expect, "%d: got %d, %d\n", charset, HIWORD(margins), LOWORD(margins));
+    DestroyWindow(hwnd);
+
+    /* Size at which non-cjk margins become non-zero */
+    hwnd = CreateWindowExA(0, "Edit", "A", WS_POPUP, 0, 0, threshold, 100, NULL, NULL, NULL, NULL);
+    ok(hwnd != NULL, "got %p\n", hwnd);
+    GetClientRect(hwnd, &rect);
+    ok(!IsRectEmpty(&rect), "got rect %s\n", wine_dbgstr_rect(&rect));
+
+    margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
+    ok(margins == 0, "got %x\n", margins);
+
+    SendMessageA(hwnd, WM_SETFONT, (WPARAM)hfont, MAKELPARAM(TRUE, 0));
+    margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
+    ok(margins == expect, "%d: got %d, %d\n", charset, HIWORD(margins), LOWORD(margins));
+    DestroyWindow(hwnd);
+
+    /* Empty rect */
+    hwnd = CreateWindowExA(0, "Edit", "A", WS_POPUP, 0, 0, 0, 0, NULL, NULL, NULL, NULL);
+    ok(hwnd != NULL, "got %p\n", hwnd);
+    GetClientRect(hwnd, &rect);
+    ok(IsRectEmpty(&rect), "got rect %s\n", wine_dbgstr_rect(&rect));
+
+    margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
+    ok(margins == 0, "got %x\n", margins);
+
+    SendMessageA(hwnd, WM_SETFONT, (WPARAM)hfont, MAKELPARAM(TRUE, 0));
+    margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
+    ok(margins == empty_expect, "%d: got %d, %d\n", charset, HIWORD(margins), LOWORD(margins));
+    DestroyWindow(hwnd);
+
+    DeleteObject(hfont);
+}
+
 static void test_margins(void)
 {
     HWND hwEdit;
     RECT old_rect, new_rect;
     INT old_right_margin;
     DWORD old_margins, new_margins;
-    LOGFONTA lf;
-    HFONT hfont;
 
     hwEdit = create_editcontrol(WS_BORDER | ES_AUTOHSCROLL | ES_AUTOVSCROLL, 0);
 
@@ -1468,10 +1566,7 @@ static void test_margins(void)
        the rectangle must not change */
 
     SendMessageA(hwEdit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(10, 10));
-    old_rect.left = 1;
-    old_rect.right = 99;
-    old_rect.top = 1;
-    old_rect.bottom = 99;
+    SetRect(&old_rect, 1, 1, 99, 99);
     SendMessageA(hwEdit, EM_SETRECT, 0, (LPARAM)&old_rect);
     SendMessageA(hwEdit, EM_GETRECT, 0, (LPARAM)&old_rect);
     SendMessageA(hwEdit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(10, 10));
@@ -1496,45 +1591,16 @@ static void test_margins(void)
 
     DestroyWindow (hwEdit);
 
-    memset(&lf, 0, sizeof(lf));
-    lf.lfHeight = -11;
-    lf.lfWeight = FW_NORMAL;
-    lf.lfCharSet = DEFAULT_CHARSET;
-    strcpy(lf.lfFaceName, "Tahoma");
+    test_margins_usefontinfo(ANSI_CHARSET);
+    test_margins_usefontinfo(EASTEUROPE_CHARSET);
 
-    hfont = CreateFontIndirectA(&lf);
-    ok(hfont != NULL, "got %p\n", hfont);
+    test_margins_usefontinfo(SHIFTJIS_CHARSET);
+    test_margins_usefontinfo(HANGUL_CHARSET);
+    test_margins_usefontinfo(CHINESEBIG5_CHARSET);
+    /* Don't test JOHAB_CHARSET.  Treated as CJK by Win 8,
+       but not by < Win 8 and Win 10. */
 
-    /* Empty window rectangle */
-    hwEdit = CreateWindowExA(0, "Edit", "A", WS_POPUP, 0, 0, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, NULL, NULL);
-    ok(hwEdit != NULL, "got %p\n", hwEdit);
-    GetClientRect(hwEdit, &old_rect);
-    ok(IsRectEmpty(&old_rect), "got rect %d,%d-%d,%d\n", old_rect.left, old_rect.top, old_rect.right, old_rect.bottom);
-
-    old_margins = SendMessageA(hwEdit, EM_GETMARGINS, 0, 0);
-    ok(old_margins == 0, "got %x\n", old_margins);
-
-    SendMessageA(hwEdit, WM_SETFONT, (WPARAM)hfont, MAKELPARAM(TRUE, 0));
-    old_margins = SendMessageA(hwEdit, EM_GETMARGINS, 0, 0);
-    ok(HIWORD(old_margins) > 0 && LOWORD(old_margins) > 0, "got %d, %d\n", HIWORD(old_margins), LOWORD(old_margins));
-
-    DestroyWindow(hwEdit);
-
-    /* Size is not enough to display a text, but not empty */
-    hwEdit = CreateWindowExA(0, "Edit", "A", WS_POPUP, 0, 0, 2, 2, NULL, NULL, NULL, NULL);
-    ok(hwEdit != NULL, "got %p\n", hwEdit);
-    GetClientRect(hwEdit, &old_rect);
-    ok(!IsRectEmpty(&old_rect), "got rect %d,%d-%d,%d\n", old_rect.left, old_rect.top, old_rect.right, old_rect.bottom);
-
-    old_margins = SendMessageA(hwEdit, EM_GETMARGINS, 0, 0);
-    ok(old_margins == 0, "got %x\n", old_margins);
-
-    SendMessageA(hwEdit, WM_SETFONT, (WPARAM)hfont, MAKELPARAM(TRUE, 0));
-    old_margins = SendMessageA(hwEdit, EM_GETMARGINS, 0, 0);
-    ok(old_margins == 0, "got %d, %d\n", HIWORD(old_margins), LOWORD(old_margins));
-
-    DeleteObject(hfont);
-    DestroyWindow(hwEdit);
+    test_margins_usefontinfo(DEFAULT_CHARSET);
 }
 
 static INT CALLBACK find_font_proc(const LOGFONTA *elf, const TEXTMETRICA *ntm, DWORD type, LPARAM lParam)
@@ -1679,7 +1745,7 @@ static void test_text_position_style(DWORD style)
 
     /* Get a stock font for which we can determine the metrics */
     font = GetStockObject(SYSTEM_FONT);
-    ok (font != NULL, "GetStockObjcet SYSTEM_FONT failed\n");
+    ok (font != NULL, "GetStockObject SYSTEM_FONT failed\n");
     dc = GetDC(NULL);
     ok (dc != NULL, "GetDC() failed\n");
     oldFont = SelectObject(dc, font);

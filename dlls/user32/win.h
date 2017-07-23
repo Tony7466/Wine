@@ -77,6 +77,7 @@ typedef struct tagWND
 #define WIN_ISUNICODE             0x0010 /* Window is Unicode */
 #define WIN_NEEDS_SHOW_OWNEDPOPUP 0x0020 /* WM_SHOWWINDOW:SC_SHOW must be sent in the next ShowOwnedPopup call */
 #define WIN_CHILDREN_MOVED        0x0040 /* children may have moved, ignore stored positions */
+#define WIN_HAS_IME_WIN           0x0080 /* the window has been registered with imm32 */
 
   /* Window functions */
 extern HWND get_hwnd_message_parent(void) DECLSPEC_HIDDEN;
@@ -88,6 +89,7 @@ extern WND *WIN_GetPtr( HWND hwnd ) DECLSPEC_HIDDEN;
 extern HWND WIN_GetFullHandle( HWND hwnd ) DECLSPEC_HIDDEN;
 extern HWND WIN_IsCurrentProcess( HWND hwnd ) DECLSPEC_HIDDEN;
 extern HWND WIN_IsCurrentThread( HWND hwnd ) DECLSPEC_HIDDEN;
+extern UINT win_set_flags( HWND hwnd, UINT set_mask, UINT clear_mask ) DECLSPEC_HIDDEN;
 extern HWND WIN_SetOwner( HWND hwnd, HWND owner ) DECLSPEC_HIDDEN;
 extern ULONG WIN_SetStyle( HWND hwnd, ULONG set_bits, ULONG clear_bits ) DECLSPEC_HIDDEN;
 extern BOOL WIN_GetRectangles( HWND hwnd, enum coords_relative relative, RECT *rectWindow, RECT *rectClient ) DECLSPEC_HIDDEN;
@@ -135,6 +137,11 @@ static inline void mirror_rect( const RECT *window_rect, RECT *rect )
     int tmp = rect->left;
     rect->left = width - rect->right;
     rect->right = width - tmp;
+}
+
+static inline UINT win_get_flags( HWND hwnd )
+{
+    return win_set_flags( hwnd, 0, 0 );
 }
 
 #endif  /* __WINE_WIN_H */

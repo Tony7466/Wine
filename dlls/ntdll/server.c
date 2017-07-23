@@ -876,22 +876,25 @@ static BOOL add_fd_to_cache( HANDLE handle, int fd, enum server_fd_type type,
 /***********************************************************************
  *           get_cached_fd
  */
-static inline int get_cached_fd( HANDLE handle, enum server_fd_type *type,
-                                 unsigned int *access, unsigned int *options )
+static inline NTSTATUS get_cached_fd( HANDLE handle, int *fd, enum server_fd_type *type,
+                                      unsigned int *access, unsigned int *options )
 {
     unsigned int entry, idx = handle_to_index( handle, &entry );
-    int fd = -1;
+    union fd_cache_entry cache;
 
-    if (entry < FD_CACHE_ENTRIES && fd_cache[entry])
-    {
-        union fd_cache_entry cache;
-        cache.data = interlocked_cmpxchg64( &fd_cache[entry][idx].data, 0, 0 );
-        fd = cache.s.fd - 1;
-        if (type) *type = cache.s.type;
-        if (access) *access = cache.s.access;
-        if (options) *options = cache.s.options;
-    }
-    return fd;
+    if (entry >= FD_CACHE_ENTRIES || !fd_cache[entry]) return STATUS_INVALID_HANDLE;
+
+    cache.data = interlocked_cmpxchg64( &fd_cache[entry][idx].data, 0, 0 );
+    if (!cache.data) return STATUS_INVALID_HANDLE;
+
+    /* if fd type is invalid, fd stores an error value */
+    if (cache.s.type == FD_TYPE_INVALID) return cache.s.fd - 1;
+
+    *fd = cache.s.fd - 1;
+    if (type) *type = cache.s.type;
+    if (access) *access = cache.s.access;
+    if (options) *options = cache.s.options;
+    return STATUS_SUCCESS;
 }
 
 
@@ -907,7 +910,7 @@ int server_remove_fd_from_cache( HANDLE handle )
     {
         union fd_cache_entry cache;
         cache.data = interlocked_xchg64( &fd_cache[entry][idx].data, 0 );
-        fd = cache.s.fd - 1;
+        if (cache.s.type != FD_TYPE_INVALID) fd = cache.s.fd - 1;
     }
 
     return fd;
@@ -924,19 +927,19 @@ int server_get_unix_fd( HANDLE handle, unsigned int wanted_access, int *unix_fd,
 {
     sigset_t sigset;
     obj_handle_t fd_handle;
-    int ret = 0, fd;
+    int ret, fd = -1;
     unsigned int access = 0;
 
     *unix_fd = -1;
     *needs_close = 0;
     wanted_access &= FILE_READ_DATA | FILE_WRITE_DATA | FILE_APPEND_DATA;
 
-    fd = get_cached_fd( handle, type, &access, options );
-    if (fd != -1) goto done;
+    ret = get_cached_fd( handle, &fd, type, &access, options );
+    if (ret != STATUS_INVALID_HANDLE) goto done;
 
     server_enter_uninterrupted_section( &fd_cache_section, &sigset );
-    fd = get_cached_fd( handle, type, &access, options );
-    if (fd == -1)
+    ret = get_cached_fd( handle, &fd, type, &access, options );
+    if (ret == STATUS_INVALID_HANDLE)
     {
         SERVER_START_REQ( get_handle_fd )
         {
@@ -954,6 +957,10 @@ int server_get_unix_fd( HANDLE handle, unsigned int wanted_access, int *unix_fd,
                                                       reply->access, reply->options ));
                 }
                 else ret = STATUS_TOO_MANY_OPENED_FILES;
+            }
+            else if (reply->cacheable)
+            {
+                add_fd_to_cache( handle, ret, FD_TYPE_INVALID, 0, 0 );
             }
         }
         SERVER_END_REQ;
@@ -1368,7 +1375,15 @@ void server_init_process(void)
             fatal_perror( "Bad server socket %d", fd_socket );
         unsetenv( "WINESERVERSOCKET" );
     }
-    else fd_socket = server_connect();
+    else
+    {
+        const char *arch = getenv( "WINEARCH" );
+
+        if (arch && strcmp( arch, "win32" ) && strcmp( arch, "win64" ))
+            fatal_error( "WINEARCH set to invalid value '%s', it must be either win32 or win64.\n", arch );
+
+        fd_socket = server_connect();
+    }
 
     /* setup the signal mask */
     sigemptyset( &server_block_set );

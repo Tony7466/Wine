@@ -28,13 +28,20 @@
 #include "winsvc.h"
 #include "wine/test.h"
 
+#include "initguid.h"
+
 #define EXPECT_HR(hr,hr_exp) \
     ok(hr == hr_exp, "got 0x%08x, expected 0x%08x\n", hr, hr_exp)
+
+static const WCHAR winetestW[] = {'w','i','n','e','t','e','s','t',0};
 
 static HRESULT (WINAPI *pSHGetFolderPathW)(HWND, int, HANDLE, DWORD, LPWSTR);
 static HRESULT (WINAPI *pSHGetNameFromIDList)(PCIDLIST_ABSOLUTE,SIGDN,PWSTR*);
 static HRESULT (WINAPI *pSHGetSpecialFolderLocation)(HWND, int, LPITEMIDLIST *);
 static DWORD (WINAPI *pGetLongPathNameW)(LPCWSTR, LPWSTR, DWORD);
+
+/* Updated Windows 7 has a new IShellDispatch6 in its typelib */
+DEFINE_GUID(IID_IWin7ShellDispatch6, 0x34936ba1, 0x67ad, 0x4c41, 0x99,0xb8, 0x8c,0x12,0xdf,0xf1,0xe9,0x74);
 
 static void init_function_pointers(void)
 {
@@ -51,7 +58,48 @@ static void init_function_pointers(void)
 
 static void test_namespace(void)
 {
-    static const WCHAR winetestW[] = {'w','i','n','e','t','e','s','t',0};
+    static const ShellSpecialFolderConstants special_folders[] =
+    {
+        ssfDESKTOP,
+        ssfPROGRAMS,
+        ssfCONTROLS,
+        ssfPRINTERS,
+        ssfPERSONAL,
+        ssfFAVORITES,
+        ssfSTARTUP,
+        ssfRECENT,
+        ssfSENDTO,
+        ssfBITBUCKET,
+        ssfSTARTMENU,
+        ssfDESKTOPDIRECTORY,
+        ssfDRIVES,
+        ssfNETWORK,
+        ssfNETHOOD,
+        ssfFONTS,
+        ssfTEMPLATES,
+        ssfCOMMONSTARTMENU,
+        ssfCOMMONPROGRAMS,
+        ssfCOMMONSTARTUP,
+        ssfCOMMONDESKTOPDIR,
+        ssfAPPDATA,
+        ssfPRINTHOOD,
+        ssfLOCALAPPDATA,
+        ssfALTSTARTUP,
+        ssfCOMMONALTSTARTUP,
+        ssfCOMMONFAVORITES,
+        ssfINTERNETCACHE,
+        ssfCOOKIES,
+        ssfHISTORY,
+        ssfCOMMONAPPDATA,
+        ssfWINDOWS,
+        ssfSYSTEM,
+        ssfPROGRAMFILES,
+        ssfMYPICTURES,
+        ssfPROFILE,
+        ssfSYSTEMx86,
+        ssfPROGRAMFILESx86,
+    };
+
     static const WCHAR backslashW[] = {'\\',0};
     static const WCHAR clsidW[] = {
         ':',':','{','6','4','5','F','F','0','4','0','-','5','0','8','1','-',
@@ -67,7 +115,7 @@ static void test_namespace(void)
     FolderItem *item;
     VARIANT var;
     BSTR title, item_path;
-    int len;
+    int len, i;
 
     r = CoCreateInstance(&CLSID_Shell, NULL, CLSCTX_INPROC_SERVER,
      &IID_IShellDispatch, (LPVOID*)&sd);
@@ -86,6 +134,21 @@ static void test_namespace(void)
     ok(r == S_FALSE, "expected S_FALSE, got %08x\n", r);
     ok(folder == NULL, "expected NULL, got %p\n", folder);
 
+    /* test valid folder ids */
+    for (i = 0; i < sizeof(special_folders)/sizeof(special_folders[0]); i++)
+    {
+        V_VT(&var) = VT_I4;
+        V_I4(&var) = special_folders[i];
+        folder = (void*)0xdeadbeef;
+        r = IShellDispatch_NameSpace(sd, var, &folder);
+        if (special_folders[i] == ssfALTSTARTUP || special_folders[i] == ssfCOMMONALTSTARTUP)
+            ok(r == S_OK || broken(r == S_FALSE) /* winxp */, "Failed to get folder for index %#x, got %08x\n", special_folders[i], r);
+        else
+            ok(r == S_OK, "Failed to get folder for index %#x, got %08x\n", special_folders[i], r);
+        if (folder)
+            Folder_Release(folder);
+    }
+
     V_VT(&var) = VT_I4;
     V_I4(&var) = -1;
     folder = (void*)0xdeadbeef;
@@ -93,6 +156,8 @@ static void test_namespace(void)
     todo_wine {
     ok(r == S_FALSE, "expected S_FALSE, got %08x\n", r);
     ok(folder == NULL, "got %p\n", folder);
+    if (r == S_OK)
+        Folder_Release(folder);
 }
     V_VT(&var) = VT_I4;
     V_I4(&var) = ssfPROGRAMFILES;
@@ -307,6 +372,136 @@ static void test_namespace(void)
     IShellDispatch_Release(sd);
 }
 
+static void test_items(void)
+{
+    WCHAR wstr[MAX_PATH], orig_dir[MAX_PATH];
+    HRESULT r;
+    IShellDispatch *sd = NULL;
+    Folder *folder = NULL;
+    FolderItems *items = NULL;
+    FolderItems2 *items2 = NULL;
+    FolderItems3 *items3 = NULL;
+    FolderItem *item = (FolderItem*)0xdeadbeef;
+    IDispatch *disp = NULL;
+    IUnknown *unk = NULL;
+    FolderItemVerbs *verbs = (FolderItemVerbs*)0xdeadbeef;
+    VARIANT var;
+    LONG lcount = -1;
+
+    r = CoCreateInstance(&CLSID_Shell, NULL, CLSCTX_INPROC_SERVER, &IID_IShellDispatch, (void**)&sd);
+    ok(SUCCEEDED(r), "CoCreateInstance failed: %08x\n", r);
+    ok(!!sd, "sd is null\n");
+
+    GetTempPathW(MAX_PATH, wstr);
+    GetCurrentDirectoryW(MAX_PATH, orig_dir);
+    SetCurrentDirectoryW(wstr);
+    CreateDirectoryW(winetestW, NULL);
+    GetFullPathNameW(winetestW, MAX_PATH, wstr, NULL);
+    V_VT(&var) = VT_BSTR;
+    V_BSTR(&var) = SysAllocString(wstr);
+    r = IShellDispatch_NameSpace(sd, var, &folder);
+    ok(r == S_OK, "IShellDispatch::NameSpace failed: %08x\n", r);
+    ok(!!folder, "folder is null\n");
+    SysFreeString(V_BSTR(&var));
+    IShellDispatch_Release(sd);
+    SetCurrentDirectoryW(winetestW);
+
+    r = Folder_Items(folder, &items);
+    ok(r == S_OK, "Folder::Items failed: %08x\n", r);
+    ok(!!items, "items is null\n");
+    r = FolderItems_QueryInterface(items, &IID_FolderItems2, (void**)&items2);
+    ok(r == S_OK || broken(r == E_NOINTERFACE) /* xp and later */, "FolderItems::QueryInterface failed: %08x\n", r);
+    ok(!!items2 || broken(!items2) /* xp and later */, "items2 is null\n");
+    r = FolderItems_QueryInterface(items, &IID_FolderItems3, (void**)&items3);
+    ok(r == S_OK, "FolderItems::QueryInterface failed: %08x\n", r);
+    ok(!!items3, "items3 is null\n");
+    Folder_Release(folder);
+
+    if (0) /* crashes on all versions of Windows */
+        r = FolderItems_get_Count(items, NULL);
+
+    r = FolderItems_get_Count(items, &lcount);
+todo_wine
+    ok(r == S_OK, "FolderItems::get_Count failed: %08x\n", r);
+todo_wine
+    ok(!lcount, "expected 0 files, got %d\n", lcount);
+
+    V_VT(&var) = VT_I4;
+    V_I4(&var) = 0;
+
+    if (0) /* crashes on all versions of Windows */
+        r = FolderItems_Item(items, var, NULL);
+
+    r = FolderItems_Item(items, var, &item);
+todo_wine
+    ok(r == S_FALSE, "expected S_FALSE, got %08x\n", r);
+    ok(!item, "item is not null\n");
+
+    if (0) /* crashes on xp */
+    {
+        r = FolderItems_get_Application(items, NULL);
+        ok(r == E_INVALIDARG, "expected E_INVALIDARG, got %08x\n", r);
+    }
+
+    r = FolderItems_get_Application(items, &disp);
+todo_wine
+    ok(r == S_OK, "FolderItems::get_Application failed: %08x\n", r);
+todo_wine
+    ok(!!disp, "disp is null\n");
+    if (disp) IDispatch_Release(disp);
+
+    if (0) /* crashes on xp */
+    {
+        r = FolderItems_get_Parent(items, NULL);
+        ok(r == E_NOTIMPL, "expected E_NOTIMPL, got %08x\n", r);
+    }
+
+    disp = (IDispatch*)0xdeadbeef;
+    r = FolderItems_get_Parent(items, &disp);
+    ok(r == E_NOTIMPL, "expected E_NOTIMPL, got %08x\n", r);
+    ok(!disp, "disp is not null\n");
+
+    if (0) /* crashes on xp */
+    {
+        r = FolderItems__NewEnum(items, NULL);
+        ok(r == E_INVALIDARG, "expected E_INVALIDARG, got %08x\n", r);
+    }
+
+    r = FolderItems__NewEnum(items, &unk);
+todo_wine
+    ok(r == S_OK, "FolderItems::_NewEnum failed: %08x\n", r);
+todo_wine
+    ok(!!unk, "unk is null\n");
+    if (unk) IUnknown_Release(unk);
+
+    if (items3)
+    {
+        r = FolderItems3_Filter(items3, 0, NULL);
+todo_wine
+        ok(r == S_OK, "expected S_OK, got %08x\n", r);
+
+        if (0) /* crashes on xp */
+        {
+            r = FolderItems3_get_Verbs(items3, NULL);
+            ok(r == E_INVALIDARG, "expected E_INVALIDARG, got %08x\n", r);
+        }
+
+        r = FolderItems3_get_Verbs(items3, &verbs);
+todo_wine
+        ok(r == S_FALSE, "expected S_FALSE, got %08x\n", r);
+        ok(!verbs, "verbs is not null\n");
+    }
+
+    GetTempPathW(MAX_PATH, wstr);
+    SetCurrentDirectoryW(wstr);
+    RemoveDirectoryW(winetestW);
+    SetCurrentDirectoryW(orig_dir);
+
+    FolderItems_Release(items);
+    if (items2) FolderItems2_Release(items2);
+    if (items3) FolderItems3_Release(items3);
+}
+
 static void test_service(void)
 {
     static const WCHAR spooler[] = {'S','p','o','o','l','e','r',0};
@@ -399,6 +594,7 @@ static void test_ShellFolderViewDual(void)
         &IID_IShellDispatch5,
         &IID_IShellDispatch4,
         &IID_IShellDispatch2,
+        &IID_IWin7ShellDispatch6,
         &IID_NULL
     };
     IShellFolderViewDual *viewdual;
@@ -597,9 +793,9 @@ todo_wine
         hr = IWebBrowser2_get_Document(wb, &doc);
 todo_wine
         ok(hr == S_OK, "got 0x%08x\n", hr);
-if (hr == S_OK)
+if (hr == S_OK) {
         test_dispatch_typeinfo(doc, viewdual_riids);
-
+}
         IWebBrowser2_Release(wb);
 
         /* IServiceProvider */
@@ -880,6 +1076,7 @@ START_TEST(shelldispatch)
 
     init_function_pointers();
     test_namespace();
+    test_items();
     test_service();
     test_ShellFolderViewDual();
     test_ShellWindows();

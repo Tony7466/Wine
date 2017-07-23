@@ -22,8 +22,6 @@
 #define NONAMELESSUNION
 #define COBJMACROS
 
-#include "initguid.h"
-
 #include "xaudio_private.h"
 
 #include "ole2.h"
@@ -182,7 +180,13 @@ static void WINAPI XA2SRC_GetVoiceDetails(IXAudio2SourceVoice *iface,
         XAUDIO2_VOICE_DETAILS *pVoiceDetails)
 {
     XA2SourceImpl *This = impl_from_IXAudio2SourceVoice(iface);
+
     TRACE("%p, %p\n", This, pVoiceDetails);
+
+    pVoiceDetails->CreationFlags = 0;
+    pVoiceDetails->ActiveFlags = 0;
+    pVoiceDetails->InputChannels = This->fmt->nChannels;
+    pVoiceDetails->InputSampleRate = This->fmt->nSamplesPerSec;
 }
 
 static HRESULT WINAPI XA2SRC_SetOutputVoices(IXAudio2SourceVoice *iface,
@@ -468,6 +472,7 @@ static ALenum get_al_format(const WAVEFORMATEX *fmt)
             case 8:
                 return AL_FORMAT_71CHN8;
             }
+            break;
         case 16:
             switch(fmt->nChannels){
             case 1:
@@ -483,6 +488,7 @@ static ALenum get_al_format(const WAVEFORMATEX *fmt)
             case 8:
                 return AL_FORMAT_71CHN16;
             }
+            break;
         }
     }else if(fmt->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||
             (fmt->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
@@ -814,6 +820,7 @@ static void WINAPI XA2M_GetVoiceDetails(IXAudio2MasteringVoice *iface,
     IXAudio2Impl *This = impl_from_IXAudio2MasteringVoice(iface);
     TRACE("%p, %p\n", This, pVoiceDetails);
     pVoiceDetails->CreationFlags = 0;
+    pVoiceDetails->ActiveFlags = 0;
     pVoiceDetails->InputChannels = This->fmt.Format.nChannels;
     pVoiceDetails->InputSampleRate = This->fmt.Format.nSamplesPerSec;
 }
@@ -978,11 +985,11 @@ static void WINAPI XA2M_DestroyVoice(IXAudio2MasteringVoice *iface)
     IAudioClient_Release(This->aclient);
     This->aclient = NULL;
 
-    alcCloseDevice(This->al_device);
-    This->al_device = NULL;
-
     alcDestroyContext(This->al_ctx);
     This->al_ctx = NULL;
+
+    alcCloseDevice(This->al_device);
+    This->al_device = NULL;
 
     LeaveCriticalSection(&This->lock);
 }
@@ -1025,7 +1032,10 @@ static void WINAPI XA2SUB_GetVoiceDetails(IXAudio2SubmixVoice *iface,
         XAUDIO2_VOICE_DETAILS *pVoiceDetails)
 {
     XA2SubmixImpl *This = impl_from_IXAudio2SubmixVoice(iface);
+
     TRACE("%p, %p\n", This, pVoiceDetails);
+
+    *pVoiceDetails = This->details;
 }
 
 static HRESULT WINAPI XA2SUB_SetOutputVoices(IXAudio2SubmixVoice *iface,
@@ -1210,16 +1220,19 @@ static HRESULT WINAPI IXAudio2Impl_QueryInterface(IXAudio2 *iface, REFIID riid,
     TRACE("(%p)->(%s, %p)\n", This, debugstr_guid(riid), ppvObject);
 
     if(IsEqualGUID(riid, &IID_IUnknown) ||
+            IsEqualGUID(riid, &IID_IXAudio28) ||
             IsEqualGUID(riid, &IID_IXAudio2))
         *ppvObject = &This->IXAudio2_iface;
     else if(IsEqualGUID(riid, &IID_IXAudio27)){
         /* all xaudio versions before 28 share an IID */
 #if XAUDIO2_VER == 0
         *ppvObject = &This->IXAudio20_iface;
-#elif XAUDIO2_VER == 1 || XAUDIO2_VER == 2
+#elif XAUDIO2_VER <= 2
         *ppvObject = &This->IXAudio22_iface;
-#else
+#elif XAUDIO2_VER <= 7
         *ppvObject = &This->IXAudio27_iface;
+#else
+        *ppvObject = NULL;
 #endif
     }else
         *ppvObject = NULL;
@@ -1399,10 +1412,15 @@ static HRESULT WINAPI IXAudio2Impl_CreateSourceVoice(IXAudio2 *iface,
 
         list_add_head(&This->source_voices, &src->entry);
 
-        src->IXAudio20SourceVoice_iface.lpVtbl = &XAudio20SourceVoice_Vtbl;
-        src->IXAudio23SourceVoice_iface.lpVtbl = &XAudio23SourceVoice_Vtbl;
-        src->IXAudio27SourceVoice_iface.lpVtbl = &XAudio27SourceVoice_Vtbl;
         src->IXAudio2SourceVoice_iface.lpVtbl = &XAudio2SourceVoice_Vtbl;
+
+#if XAUDIO2_VER == 0
+        src->IXAudio20SourceVoice_iface.lpVtbl = &XAudio20SourceVoice_Vtbl;
+#elif XAUDIO2_VER <= 3
+        src->IXAudio23SourceVoice_iface.lpVtbl = &XAudio23SourceVoice_Vtbl;
+#elif XAUDIO2_VER <= 7
+        src->IXAudio27SourceVoice_iface.lpVtbl = &XAudio27SourceVoice_Vtbl;
+#endif
 
         InitializeCriticalSection(&src->lock);
         src->lock.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": XA2SourceImpl.lock");
@@ -1502,9 +1520,15 @@ static HRESULT WINAPI IXAudio2Impl_CreateSubmixVoice(IXAudio2 *iface,
 
         list_add_head(&This->submix_voices, &sub->entry);
 
-        sub->IXAudio20SubmixVoice_iface.lpVtbl = &XAudio20SubmixVoice_Vtbl;
-        sub->IXAudio23SubmixVoice_iface.lpVtbl = &XAudio23SubmixVoice_Vtbl;
         sub->IXAudio2SubmixVoice_iface.lpVtbl = &XAudio2SubmixVoice_Vtbl;
+
+#if XAUDIO2_VER == 0
+        sub->IXAudio20SubmixVoice_iface.lpVtbl = &XAudio20SubmixVoice_Vtbl;
+#elif XAUDIO2_VER <= 3
+        sub->IXAudio23SubmixVoice_iface.lpVtbl = &XAudio23SubmixVoice_Vtbl;
+#elif XAUDIO2_VER <= 7
+        sub->IXAudio27SubmixVoice_iface.lpVtbl = &XAudio27SubmixVoice_Vtbl;
+#endif
 
         InitializeCriticalSection(&sub->lock);
         sub->lock.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": XA2SubmixImpl.lock");
@@ -1514,6 +1538,11 @@ static HRESULT WINAPI IXAudio2Impl_CreateSubmixVoice(IXAudio2 *iface,
 
     sub->in_use = TRUE;
 
+    sub->details.CreationFlags = flags;
+    sub->details.ActiveFlags = flags;
+    sub->details.InputChannels = inputChannels;
+    sub->details.InputSampleRate = inputSampleRate;
+
     LeaveCriticalSection(&This->lock);
     LeaveCriticalSection(&sub->lock);
 
@@ -1521,6 +1550,8 @@ static HRESULT WINAPI IXAudio2Impl_CreateSubmixVoice(IXAudio2 *iface,
     *ppSubmixVoice = (IXAudio2SubmixVoice*)&sub->IXAudio20SubmixVoice_iface;
 #elif XAUDIO2_VER <= 3
     *ppSubmixVoice = (IXAudio2SubmixVoice*)&sub->IXAudio23SubmixVoice_iface;
+#elif XAUDIO2_VER <= 7
+    *ppSubmixVoice = (IXAudio2SubmixVoice*)&sub->IXAudio27SubmixVoice_iface;
 #else
     *ppSubmixVoice = &sub->IXAudio2SubmixVoice_iface;
 #endif
@@ -1586,7 +1617,7 @@ static HRESULT WINAPI IXAudio2Impl_CreateMasteringVoice(IXAudio2 *iface,
     if(!deviceId){
         if(This->ndevs == 0){
             LeaveCriticalSection(&This->lock);
-            return ERROR_NOT_FOUND;
+            return E_NOTFOUND;
         }
         deviceId = This->devids[0];
     }
@@ -1750,6 +1781,8 @@ static HRESULT WINAPI IXAudio2Impl_CreateMasteringVoice(IXAudio2 *iface,
     *ppMasteringVoice = (IXAudio2MasteringVoice*)&This->IXAudio20MasteringVoice_iface;
 #elif XAUDIO2_VER <= 3
     *ppMasteringVoice = (IXAudio2MasteringVoice*)&This->IXAudio23MasteringVoice_iface;
+#elif XAUDIO2_VER <= 7
+    *ppMasteringVoice = (IXAudio2MasteringVoice*)&This->IXAudio27MasteringVoice_iface;
 #else
     *ppMasteringVoice = &This->IXAudio2MasteringVoice_iface;
 #endif
@@ -1985,13 +2018,24 @@ static HRESULT WINAPI XAudio2CF_CreateInstance(IClassFactory *iface, IUnknown *p
     if(!object)
         return E_OUTOFMEMORY;
 
-    object->IXAudio20_iface.lpVtbl = &XAudio20_Vtbl;
-    object->IXAudio22_iface.lpVtbl = &XAudio22_Vtbl;
-    object->IXAudio27_iface.lpVtbl = &XAudio27_Vtbl;
     object->IXAudio2_iface.lpVtbl = &XAudio2_Vtbl;
-    object->IXAudio20MasteringVoice_iface.lpVtbl = &XAudio20MasteringVoice_Vtbl;
-    object->IXAudio23MasteringVoice_iface.lpVtbl = &XAudio23MasteringVoice_Vtbl;
     object->IXAudio2MasteringVoice_iface.lpVtbl = &XAudio2MasteringVoice_Vtbl;
+
+#if XAUDIO2_VER == 0
+    object->IXAudio20_iface.lpVtbl = &XAudio20_Vtbl;
+#elif XAUDIO2_VER <= 2
+    object->IXAudio22_iface.lpVtbl = &XAudio22_Vtbl;
+#elif XAUDIO2_VER <= 7
+    object->IXAudio27_iface.lpVtbl = &XAudio27_Vtbl;
+#endif
+
+#if XAUDIO2_VER == 0
+    object->IXAudio20MasteringVoice_iface.lpVtbl = &XAudio20MasteringVoice_Vtbl;
+#elif XAUDIO2_VER <= 3
+    object->IXAudio23MasteringVoice_iface.lpVtbl = &XAudio23MasteringVoice_Vtbl;
+#elif XAUDIO2_VER <= 7
+    object->IXAudio27MasteringVoice_iface.lpVtbl = &XAudio27MasteringVoice_Vtbl;
+#endif
 
     list_init(&object->source_voices);
     list_init(&object->submix_voices);
@@ -2061,65 +2105,25 @@ HRESULT WINAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void **ppv)
             IsEqualGUID(rclsid, &CLSID_XAudio27)){
         factory = make_xaudio2_factory();
 
-    }else if(IsEqualGUID(rclsid, &CLSID_AudioVolumeMeter20)){
-        factory = make_xapo_factory(&CLSID_AudioVolumeMeter27, 20);
-    }else if(IsEqualGUID(rclsid, &CLSID_AudioVolumeMeter21)){
-        factory = make_xapo_factory(&CLSID_AudioVolumeMeter27, 21);
-    }else if(IsEqualGUID(rclsid, &CLSID_AudioVolumeMeter22)){
-        factory = make_xapo_factory(&CLSID_AudioVolumeMeter27, 22);
-    }else if(IsEqualGUID(rclsid, &CLSID_AudioVolumeMeter23)){
-        factory = make_xapo_factory(&CLSID_AudioVolumeMeter27, 23);
-    }else if(IsEqualGUID(rclsid, &CLSID_AudioVolumeMeter24)){
-        factory = make_xapo_factory(&CLSID_AudioVolumeMeter27, 24);
-    }else if(IsEqualGUID(rclsid, &CLSID_AudioVolumeMeter25)){
-        factory = make_xapo_factory(&CLSID_AudioVolumeMeter27, 25);
-    }else if(IsEqualGUID(rclsid, &CLSID_AudioVolumeMeter26)){
-        factory = make_xapo_factory(&CLSID_AudioVolumeMeter27, 26);
-    }else if(IsEqualGUID(rclsid, &CLSID_AudioVolumeMeter27)){
-        factory = make_xapo_factory(&CLSID_AudioVolumeMeter27, 27);
+    }else if(IsEqualGUID(rclsid, &CLSID_AudioVolumeMeter20) ||
+                IsEqualGUID(rclsid, &CLSID_AudioVolumeMeter21) ||
+                IsEqualGUID(rclsid, &CLSID_AudioVolumeMeter22) ||
+                IsEqualGUID(rclsid, &CLSID_AudioVolumeMeter23) ||
+                IsEqualGUID(rclsid, &CLSID_AudioVolumeMeter24) ||
+                IsEqualGUID(rclsid, &CLSID_AudioVolumeMeter25) ||
+                IsEqualGUID(rclsid, &CLSID_AudioVolumeMeter26) ||
+                IsEqualGUID(rclsid, &CLSID_AudioVolumeMeter27)){
+        factory = make_xapo_factory(&CLSID_AudioVolumeMeter27);
 
-    }else if(IsEqualGUID(rclsid, &CLSID_AudioReverb20)){
-        factory = make_xapo_factory(&CLSID_AudioReverb27, 20);
-
-    }else if(IsEqualGUID(rclsid, &CLSID_AudioReverb21) ||
-            IsEqualGUID(rclsid, &CLSID_WINE_FXReverb10)){
-        factory = make_xapo_factory(&CLSID_AudioReverb27, 21);
-
-    }else if(IsEqualGUID(rclsid, &CLSID_AudioReverb22) ||
-            IsEqualGUID(rclsid, &CLSID_WINE_FXReverb11)){
-        factory = make_xapo_factory(&CLSID_AudioReverb27, 22);
-
-    }else if(IsEqualGUID(rclsid, &CLSID_AudioReverb23) ||
-            IsEqualGUID(rclsid, &CLSID_WINE_FXReverb12)){
-        factory = make_xapo_factory(&CLSID_AudioReverb27, 23);
-
-    }else if(IsEqualGUID(rclsid, &CLSID_AudioReverb24) ||
-            IsEqualGUID(rclsid, &CLSID_WINE_FXReverb13)){
-        factory = make_xapo_factory(&CLSID_AudioReverb27, 24);
-
-    }else if(IsEqualGUID(rclsid, &CLSID_AudioReverb25)){
-        factory = make_xapo_factory(&CLSID_AudioReverb27, 25);
-
-    }else if(IsEqualGUID(rclsid, &CLSID_AudioReverb26) ||
-            IsEqualGUID(rclsid, &CLSID_WINE_FXReverb14)){
-        factory = make_xapo_factory(&CLSID_AudioReverb27, 26);
-
-    }else if(IsEqualGUID(rclsid, &CLSID_AudioReverb27) ||
-            IsEqualGUID(rclsid, &CLSID_WINE_FXReverb15)){
-        factory = make_xapo_factory(&CLSID_AudioReverb27, 27);
-
-    }else if(IsEqualGUID(rclsid, &CLSID_WINE_FXEQ10)){
-        factory = make_xapo_factory(&CLSID_FXEQ, 21);
-    }else if(IsEqualGUID(rclsid, &CLSID_WINE_FXEQ11)){
-        factory = make_xapo_factory(&CLSID_FXEQ, 22);
-    }else if(IsEqualGUID(rclsid, &CLSID_WINE_FXEQ12)){
-        factory = make_xapo_factory(&CLSID_FXEQ, 23);
-    }else if(IsEqualGUID(rclsid, &CLSID_WINE_FXEQ13)){
-        factory = make_xapo_factory(&CLSID_FXEQ, 24);
-    }else if(IsEqualGUID(rclsid, &CLSID_WINE_FXEQ14)){
-        factory = make_xapo_factory(&CLSID_FXEQ, 26);
-    }else if(IsEqualGUID(rclsid, &CLSID_WINE_FXEQ15)){
-        factory = make_xapo_factory(&CLSID_FXEQ, 27);
+    }else if(IsEqualGUID(rclsid, &CLSID_AudioReverb20) ||
+                IsEqualGUID(rclsid, &CLSID_AudioReverb21) ||
+                IsEqualGUID(rclsid, &CLSID_AudioReverb22) ||
+                IsEqualGUID(rclsid, &CLSID_AudioReverb23) ||
+                IsEqualGUID(rclsid, &CLSID_AudioReverb24) ||
+                IsEqualGUID(rclsid, &CLSID_AudioReverb25) ||
+                IsEqualGUID(rclsid, &CLSID_AudioReverb26) ||
+                IsEqualGUID(rclsid, &CLSID_AudioReverb27)){
+        factory = make_xapo_factory(&CLSID_FXReverb);
     }
 
     if(!factory) return CLASS_E_CLASSNOTAVAILABLE;
@@ -2127,13 +2131,21 @@ HRESULT WINAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void **ppv)
     return IClassFactory_QueryInterface(factory, riid, ppv);
 }
 
+HRESULT xaudio2_initialize(IXAudio2Impl *This, UINT32 flags, XAUDIO2_PROCESSOR proc)
+{
+    if(flags)
+        FIXME("Unimplemented flags: 0x%x\n", flags);
+    return S_OK;
+}
+
 #if XAUDIO2_VER >= 8
 HRESULT WINAPI XAudio2Create(IXAudio2 **ppxa2, UINT32 flags, XAUDIO2_PROCESSOR proc)
 {
     HRESULT hr;
     IXAudio2 *xa2;
-    IXAudio27 *xa27;
     IClassFactory *cf;
+
+    TRACE("%p 0x%x 0x%x\n", ppxa2, flags, proc);
 
     cf = make_xaudio2_factory();
 
@@ -2142,20 +2154,11 @@ HRESULT WINAPI XAudio2Create(IXAudio2 **ppxa2, UINT32 flags, XAUDIO2_PROCESSOR p
     if(FAILED(hr))
         return hr;
 
-    hr = IXAudio2_QueryInterface(xa2, &IID_IXAudio27, (void**)&xa27);
+    hr = xaudio2_initialize(impl_from_IXAudio2(xa2), flags, proc);
     if(FAILED(hr)){
         IXAudio2_Release(xa2);
         return hr;
     }
-
-    hr = IXAudio27_Initialize(xa27, flags, proc);
-    if(FAILED(hr)){
-        IXAudio27_Release(xa27);
-        IXAudio2_Release(xa2);
-        return hr;
-    }
-
-    IXAudio27_Release(xa27);
 
     *ppxa2 = xa2;
 

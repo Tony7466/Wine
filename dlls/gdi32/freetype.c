@@ -162,6 +162,7 @@ MAKE_FUNCPTR(FT_Render_Glyph);
 MAKE_FUNCPTR(FT_Select_Charmap);
 MAKE_FUNCPTR(FT_Set_Charmap);
 MAKE_FUNCPTR(FT_Set_Pixel_Sizes);
+MAKE_FUNCPTR(FT_Vector_Length);
 MAKE_FUNCPTR(FT_Vector_Transform);
 MAKE_FUNCPTR(FT_Vector_Unit);
 static FT_Error (*pFT_Outline_Embolden)(FT_Outline *, FT_Pos);
@@ -230,6 +231,10 @@ MAKE_FUNCPTR(FcPatternGetString);
 /* 'gasp' flags */
 #define GASP_GRIDFIT 0x01
 #define GASP_DOGRAY  0x02
+
+#ifndef WINE_FONT_DIR
+#define WINE_FONT_DIR "fonts"
+#endif
 
 /* This is basically a copy of FT_Bitmap_Size with an extra element added */
 typedef struct {
@@ -1960,9 +1965,17 @@ static inline DWORD get_ntm_flags( FT_Face ft_face )
 {
     DWORD flags = 0;
     FT_ULong table_size = 0;
+    FT_WinFNT_HeaderRec winfnt_header;
 
     if (ft_face->style_flags & FT_STYLE_FLAG_ITALIC) flags |= NTM_ITALIC;
     if (ft_face->style_flags & FT_STYLE_FLAG_BOLD)   flags |= NTM_BOLD;
+
+    /* fixup the flag for our fake-bold implementation. */
+    if (!FT_IS_SCALABLE( ft_face ) &&
+        !pFT_Get_WinFNT_Header( ft_face, &winfnt_header ) &&
+        winfnt_header.weight > FW_NORMAL )
+        flags |= NTM_BOLD;
+
     if (flags == 0) flags = NTM_REGULAR;
 
     if (!pFT_Load_Sfnt_Table( ft_face, FT_MAKE_TAG( 'C','F','F',' ' ), 0, NULL, &table_size ))
@@ -2396,7 +2409,7 @@ static void LoadReplaceList(void)
                         replace += strlenW(replace) + 1;
                     }
                 }
-                else
+                else if (type == REG_SZ)
                     map_font_family(value, data);
             }
             else
@@ -2920,33 +2933,40 @@ static void load_mac_fonts(void)
     for (i = 0; i < CFArrayGetCount(descs); i++)
     {
         CTFontDescriptorRef desc;
-        CTFontRef font;
-        ATSFontRef atsFont;
-        OSStatus status;
-        FSRef fsref;
         CFURLRef url;
         CFStringRef ext;
         CFStringRef path;
 
         desc = CFArrayGetValueAtIndex(descs, i);
 
-        /* CTFontDescriptor doesn't support kCTFontURLAttribute until 10.6, so
+#if defined(MAC_OS_X_VERSION_10_6) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6
+        url = CTFontDescriptorCopyAttribute(desc, kCTFontURLAttribute);
+#else
+        /* CTFontDescriptor doesn't support kCTFontURLAttribute prior to 10.6, so
            we have to go CFFontDescriptor -> CTFont -> ATSFont -> FSRef -> CFURL. */
-        font = CTFontCreateWithFontDescriptor(desc, 0, NULL);
-        if (!font) continue;
-
-        atsFont = CTFontGetPlatformFont(font, NULL);
-        if (!atsFont)
         {
+            CTFontRef font;
+            ATSFontRef atsFont;
+            OSStatus status;
+            FSRef fsref;
+
+            font = CTFontCreateWithFontDescriptor(desc, 0, NULL);
+            if (!font) continue;
+
+            atsFont = CTFontGetPlatformFont(font, NULL);
+            if (!atsFont)
+            {
+                CFRelease(font);
+                continue;
+            }
+
+            status = ATSFontGetFileReference(atsFont, &fsref);
             CFRelease(font);
-            continue;
+            if (status != noErr) continue;
+
+            url = CFURLCreateFromFSRef(NULL, &fsref);
         }
-
-        status = ATSFontGetFileReference(atsFont, &fsref);
-        CFRelease(font);
-        if (status != noErr) continue;
-
-        url = CFURLCreateFromFSRef(NULL, &fsref);
+#endif
         if (!url) continue;
 
         ext = CFURLCopyPathExtension(url);
@@ -2978,22 +2998,44 @@ static void load_mac_fonts(void)
 
 #endif
 
+static char *get_font_dir(void)
+{
+    const char *build_dir, *data_dir;
+    char *name = NULL;
+
+    if ((data_dir = wine_get_data_dir()))
+    {
+        if (!(name = HeapAlloc( GetProcessHeap(), 0, strlen(data_dir) + 1 + sizeof(WINE_FONT_DIR) )))
+            return NULL;
+        strcpy( name, data_dir );
+        strcat( name, "/" );
+        strcat( name, WINE_FONT_DIR );
+    }
+    else if ((build_dir = wine_get_build_dir()))
+    {
+        if (!(name = HeapAlloc( GetProcessHeap(), 0, strlen(build_dir) + sizeof("/fonts") )))
+            return NULL;
+        strcpy( name, build_dir );
+        strcat( name, "/fonts" );
+    }
+    return name;
+}
+
 static char *get_data_dir_path( LPCWSTR file )
 {
     char *unix_name = NULL;
-    const char *data_dir = wine_get_data_dir();
+    char *font_dir = get_font_dir();
 
-    if (!data_dir) data_dir = wine_get_build_dir();
-
-    if (data_dir)
+    if (font_dir)
     {
         INT len = WideCharToMultiByte(CP_UNIXCP, 0, file, -1, NULL, 0, NULL, NULL);
 
-        unix_name = HeapAlloc(GetProcessHeap(), 0, strlen(data_dir) + len + sizeof("/fonts/"));
-        strcpy(unix_name, data_dir);
-        strcat(unix_name, "/fonts/");
+        unix_name = HeapAlloc(GetProcessHeap(), 0, strlen(font_dir) + len + 1 );
+        strcpy(unix_name, font_dir);
+        strcat(unix_name, "/");
 
         WideCharToMultiByte(CP_UNIXCP, 0, file, -1, unix_name + strlen(unix_name), len, NULL, NULL);
+        HeapFree( GetProcessHeap(), 0, font_dir );
     }
     return unix_name;
 }
@@ -4095,6 +4137,7 @@ static BOOL init_freetype(void)
     LOAD_FUNCPTR(FT_Select_Charmap)
     LOAD_FUNCPTR(FT_Set_Charmap)
     LOAD_FUNCPTR(FT_Set_Pixel_Sizes)
+    LOAD_FUNCPTR(FT_Vector_Length)
     LOAD_FUNCPTR(FT_Vector_Transform)
     LOAD_FUNCPTR(FT_Vector_Unit)
 #undef LOAD_FUNCPTR
@@ -4140,7 +4183,6 @@ static void init_font_list(void)
     DWORD valuelen, datalen, i = 0, type, dlen, vlen;
     WCHAR windowsdir[MAX_PATH];
     char *unixname;
-    const char *data_dir;
 
     delete_external_font_keys();
 
@@ -4156,13 +4198,9 @@ static void init_font_list(void)
         HeapFree(GetProcessHeap(), 0, unixname);
     }
 
-    /* load the system truetype fonts */
-    data_dir = wine_get_data_dir();
-    if (!data_dir) data_dir = wine_get_build_dir();
-    if (data_dir && (unixname = HeapAlloc(GetProcessHeap(), 0, strlen(data_dir) + sizeof("/fonts/"))))
+    /* load the wine fonts */
+    if ((unixname = get_font_dir()))
     {
-        strcpy(unixname, data_dir);
-        strcat(unixname, "/fonts/");
         ReadFontDir(unixname, TRUE);
         HeapFree(GetProcessHeap(), 0, unixname);
     }
@@ -4226,6 +4264,8 @@ static void init_font_list(void)
     load_fontconfig_fonts();
 #elif defined(HAVE_CARBON_CARBON_H)
     load_mac_fonts();
+#elif defined(__ANDROID__)
+    ReadFontDir("/system/fonts", TRUE);
 #endif
 
     /* then look in any directories that we've specified in the config file */
@@ -4677,10 +4717,8 @@ static DWORD get_font_data( GdiFont *font, DWORD table, DWORD offset, LPVOID buf
     err = pFT_Load_Sfnt_Table(ft_face, table, offset, buf, &len);
     if (err)
     {
-        TRACE("Can't find table %c%c%c%c\n",
-              /* bytes were reversed */
-              HIBYTE(HIWORD(table)), LOBYTE(HIWORD(table)),
-              HIBYTE(LOWORD(table)), LOBYTE(LOWORD(table)));
+        table = RtlUlongByteSwap( table );
+        TRACE("Can't find table %s\n", debugstr_an((char*)&table, 4));
 	return GDI_ERROR;
     }
     return len;
@@ -5325,14 +5363,13 @@ static HFONT freetype_SelectFont( PHYSDEV dev, HFONT hfont, UINT *aa_flags )
     CHARSETINFO csi;
     FMAT2 dcmat;
     FontSubst *psub = NULL;
-    DC *dc = get_dc_ptr( dev->hdc );
+    DC *dc = get_physdev_dc( dev );
     const SYSTEM_LINKS *font_link;
 
     if (!hfont)  /* notification that the font has been changed by another driver */
     {
         release_font( physdev->font );
         physdev->font = NULL;
-        release_dc_ptr( dc );
         return 0;
     }
 
@@ -5782,7 +5819,6 @@ done:
         physdev->font = ret;
     }
     LeaveCriticalSection( &freetype_cs );
-    release_dc_ptr( dc );
     return ret ? hfont : 0;
 }
 
@@ -6412,42 +6448,46 @@ static inline BOOL is_identity_MAT2(const MAT2 *matrix)
     return !memcmp(matrix, &identity, sizeof(MAT2));
 }
 
-static void synthesize_bold_glyph(FT_GlyphSlot glyph, LONG ppem, FT_Glyph_Metrics *metrics)
+static inline FT_Vector normalize_vector(FT_Vector *vec)
+{
+    FT_Vector out;
+    FT_Fixed len;
+    len = pFT_Vector_Length(vec);
+    if (len) {
+        out.x = (vec->x << 6) / len;
+        out.y = (vec->y << 6) / len;
+    }
+    else
+        out.x = out.y = 0;
+    return out;
+}
+
+static BOOL get_bold_glyph_outline(FT_GlyphSlot glyph, LONG ppem, FT_Glyph_Metrics *metrics)
 {
     FT_Error err;
-    static UINT once;
+    FT_Pos strength;
+    FT_BBox bbox;
 
-    switch(glyph->format) {
-    case FT_GLYPH_FORMAT_OUTLINE:
-    {
-        FT_Pos strength;
-        FT_BBox bbox;
-        if(!pFT_Outline_Embolden)
-            break;
+    if(glyph->format != FT_GLYPH_FORMAT_OUTLINE)
+        return FALSE;
+    if(!pFT_Outline_Embolden)
+        return FALSE;
 
-        strength = MulDiv(ppem, 1 << 6, 24);
-        err = pFT_Outline_Embolden(&glyph->outline, strength);
-        if(err) {
-            TRACE("FT_Ouline_Embolden returns %d, ignored\n", err);
-            break;
-        }
-
-        pFT_Outline_Get_CBox(&glyph->outline, &bbox);
-        metrics->width = bbox.xMax - bbox.xMin;
-        metrics->height = bbox.yMax - bbox.yMin;
-        metrics->horiBearingX = bbox.xMin;
-        metrics->horiBearingY = bbox.yMax;
-        metrics->horiAdvance += (1 << 6);
-        metrics->vertAdvance += (1 << 6);
-        metrics->vertBearingX = metrics->horiBearingX - metrics->horiAdvance / 2;
-        metrics->vertBearingY = (metrics->vertAdvance - metrics->height) / 2;
-        break;
+    strength = MulDiv(ppem, 1 << 6, 24);
+    err = pFT_Outline_Embolden(&glyph->outline, strength);
+    if(err) {
+        TRACE("FT_Ouline_Embolden returns %d\n", err);
+        return FALSE;
     }
-    default:
-        if (!once++)
-            WARN("Emboldening format 0x%x is not supported\n", glyph->format);
-        return;
-    }
+
+    pFT_Outline_Get_CBox(&glyph->outline, &bbox);
+    metrics->width = bbox.xMax - bbox.xMin;
+    metrics->height = bbox.yMax - bbox.yMin;
+    metrics->horiBearingX = bbox.xMin;
+    metrics->horiBearingY = bbox.yMax;
+    metrics->vertBearingX = metrics->horiBearingX - metrics->horiAdvance / 2;
+    metrics->vertBearingY = (metrics->vertAdvance - metrics->height) / 2;
+    return TRUE;
 }
 
 static inline BYTE get_max_level( UINT format )
@@ -6461,7 +6501,7 @@ static inline BYTE get_max_level( UINT format )
     return 255;
 }
 
-extern const unsigned short vertical_orientation_table[];
+extern const unsigned short vertical_orientation_table[] DECLSPEC_HIDDEN;
 
 static BOOL check_unicode_tategaki(WCHAR uchar)
 {
@@ -6470,6 +6510,68 @@ static BOOL check_unicode_tategaki(WCHAR uchar)
     /* We only reach this code if typographical substitution did not occur */
     /* Type: U or Type: Tu */
     return (orientation ==  1 || orientation == 3);
+}
+
+static FT_Vector get_advance_metric(GdiFont *incoming_font, GdiFont *font,
+                                    const FT_Glyph_Metrics *metrics,
+                                    const FT_Matrix *transMat, BOOL vertical_metrics)
+{
+    FT_Vector adv;
+    FT_Fixed base_advance, em_scale = 0;
+    BOOL fixed_pitch_full = FALSE;
+
+    if (vertical_metrics)
+        base_advance = metrics->vertAdvance;
+    else
+        base_advance = metrics->horiAdvance;
+
+    adv.x = base_advance;
+    adv.y = 0;
+
+    /* In fixed-pitch font, we adjust the fullwidth character advance so that
+       they have double halfwidth character width. E.g. if the font is 19 ppem,
+       we return 20 (not 19) for fullwidth characters as we return 10 for
+       halfwidth characters. */
+    if(FT_IS_SCALABLE(incoming_font->ft_face) &&
+       (incoming_font->potm || get_outline_text_metrics(incoming_font)) &&
+       !(incoming_font->potm->otmTextMetrics.tmPitchAndFamily & TMPF_FIXED_PITCH)) {
+        UINT avg_advance;
+        em_scale = MulDiv(incoming_font->ppem, 1 << 16,
+                          incoming_font->ft_face->units_per_EM);
+        avg_advance = pFT_MulFix(incoming_font->ntmAvgWidth, em_scale);
+        fixed_pitch_full = (avg_advance > 0 &&
+                            (base_advance + 63) >> 6 ==
+                            pFT_MulFix(incoming_font->ntmAvgWidth*2, em_scale));
+        if (fixed_pitch_full && !transMat)
+            adv.x = (avg_advance * 2) << 6;
+    }
+
+    if (transMat) {
+        pFT_Vector_Transform(&adv, transMat);
+        if (fixed_pitch_full && adv.y == 0) {
+            FT_Vector vec;
+            vec.x = incoming_font->ntmAvgWidth;
+            vec.y = 0;
+            pFT_Vector_Transform(&vec, transMat);
+            adv.x = (pFT_MulFix(vec.x, em_scale) * 2) << 6;
+        }
+    }
+
+    if (font->fake_bold) {
+        if (!transMat)
+            adv.x += 1 << 6;
+        else {
+            FT_Vector fake_bold_adv, vec = { 1 << 6, 0 };
+            pFT_Vector_Transform(&vec, transMat);
+            fake_bold_adv = normalize_vector(&vec);
+            adv.x += fake_bold_adv.x;
+            adv.y += fake_bold_adv.y;
+        }
+    }
+
+    adv.x = (adv.x + 63) & -64;
+    adv.y = -((adv.y + 63) & -64);
+    return adv;
 }
 
 static unsigned int get_native_glyph_outline(FT_Outline *outline, unsigned int buflen, char *buf)
@@ -6684,7 +6786,8 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
     DWORD width, height, pitch, needed = 0;
     FT_Bitmap ft_bitmap;
     FT_Error err;
-    INT left, right, top = 0, bottom = 0, adv;
+    INT left, right, top = 0, bottom = 0;
+    FT_Vector adv;
     INT origin_x = 0, origin_y = 0;
     FT_Angle angle = 0;
     FT_Int load_flags = FT_LOAD_DEFAULT | FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH;
@@ -6696,8 +6799,6 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
     BOOL tategaki = (font->name[0] == '@');
     BOOL vertical_metrics;
     UINT original_index;
-    LONG avgAdvance = 0;
-    FT_Fixed em_scale;
 
     TRACE("%p, %04x, %08x, %p, %08x, %p, %p\n", font, glyph, format, lpgm,
 	  buflen, buf, lpmat);
@@ -6878,8 +6979,10 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
     }
 
     metrics = ft_face->glyph->metrics;
-    if(font->fake_bold)
-        synthesize_bold_glyph(ft_face->glyph, font->ppem, &metrics);
+    if(font->fake_bold) {
+        if (!get_bold_glyph_outline(ft_face->glyph, font->ppem, &metrics) && metrics.width)
+            metrics.width += 1 << 6;
+    }
 
     /* Some poorly-created fonts contain glyphs that exceed the boundaries set
      * by the text metrics. The proper behavior is to clip the glyph metrics to
@@ -6896,32 +6999,13 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
         /* metrics.width = min( metrics.width, ptm->tmMaxCharWidth << 6 ); */
     }
 
-    em_scale = MulDiv(incoming_font->ppem, 1 << 16, incoming_font->ft_face->units_per_EM);
-
-    if(FT_IS_SCALABLE(incoming_font->ft_face) && !font->fake_bold) {
-        TEXTMETRICW tm;
-        if (get_text_metrics(incoming_font, &tm) &&
-            !(tm.tmPitchAndFamily & TMPF_FIXED_PITCH)) {
-            avgAdvance = pFT_MulFix(incoming_font->ntmAvgWidth, em_scale);
-            if (avgAdvance &&
-                (metrics.horiAdvance+63) >> 6 == pFT_MulFix(incoming_font->ntmAvgWidth*2, em_scale))
-                TRACE("Fixed-pitch full-width character detected\n");
-            else
-                avgAdvance = 0; /* cancel this feature */
-        }
-    }
-
     if(!needsTransform) {
         left = (INT)(metrics.horiBearingX) & -64;
         right = (INT)((metrics.horiBearingX + metrics.width) + 63) & -64;
-        if (!avgAdvance)
-            adv = (INT)(metrics.horiAdvance + 63) >> 6;
-        else
-            adv = (INT)avgAdvance * 2;
-
 	top = (metrics.horiBearingY + 63) & -64;
 	bottom = (metrics.horiBearingY - metrics.height) & -64;
-	gm.gmCellIncX = adv;
+	adv = get_advance_metric(incoming_font, font, &metrics, NULL, vertical_metrics);
+	gm.gmCellIncX = adv.x >> 6;
 	gm.gmCellIncY = 0;
         origin_x = left;
         origin_y = top;
@@ -6977,36 +7061,11 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
         }
 
 	TRACE("transformed box: (%d,%d - %d,%d)\n", left, top, right, bottom);
-        if (vertical_metrics)
-            vec.x = metrics.vertAdvance;
-        else
-            vec.x = metrics.horiAdvance;
-	vec.y = 0;
-	pFT_Vector_Transform(&vec, &transMat);
-	gm.gmCellIncY = -((vec.y+63) >> 6);
-	if (!avgAdvance || vec.y)
-	    gm.gmCellIncX = (vec.x+63) >> 6;
-	else {
-	    vec.x = incoming_font->ntmAvgWidth;
-	    vec.y = 0;
-	    pFT_Vector_Transform(&vec, &transMat);
-	    gm.gmCellIncX = pFT_MulFix(vec.x, em_scale) * 2;
-	}
+        adv = get_advance_metric(incoming_font, font, &metrics, &transMat, vertical_metrics);
+        gm.gmCellIncX = adv.x >> 6;
+        gm.gmCellIncY = adv.y >> 6;
 
-        if (vertical_metrics)
-            vec.x = metrics.vertAdvance;
-        else
-            vec.x = metrics.horiAdvance;
-        vec.y = 0;
-        pFT_Vector_Transform(&vec, &transMatUnrotated);
-        if (!avgAdvance || vec.y)
-            adv = (vec.x+63) >> 6;
-        else {
-            vec.x = incoming_font->ntmAvgWidth;
-            vec.y = 0;
-            pFT_Vector_Transform(&vec, &transMatUnrotated);
-            adv = pFT_MulFix(vec.x, em_scale) * 2;
-        }
+        adv = get_advance_metric(incoming_font, font, &metrics, &transMatUnrotated, vertical_metrics);
 
         vec.x = lsb;
         vec.y = 0;
@@ -7029,7 +7088,7 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
     gm.gmptGlyphOrigin.x = origin_x >> 6;
     gm.gmptGlyphOrigin.y = origin_y >> 6;
     if (!abc->abcB) abc->abcB = 1;
-    abc->abcC = adv - abc->abcA - abc->abcB;
+    abc->abcC = (adv.x >> 6) - abc->abcA - abc->abcB;
 
     TRACE("%u,%u,%s,%d,%d\n", gm.gmBlackBoxX, gm.gmBlackBoxY,
           wine_dbgstr_point(&gm.gmptGlyphOrigin),
@@ -7073,7 +7132,17 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
 	    INT w = min( pitch, (ft_face->glyph->bitmap.width + 7) >> 3 );
 	    INT h = min( height, ft_face->glyph->bitmap.rows );
 	    while(h--) {
-	        memcpy(dst, src, w);
+		if (!font->fake_bold)
+		    memcpy(dst, src, w);
+		else {
+		    INT x;
+		    dst[0] = 0;
+		    for (x = 0; x < w; x++) {
+			dst[x  ] = (dst[x] & 0x80) | (src[x] >> 1) | src[x];
+			if (x+1 < pitch)
+			    dst[x+1] = (src[x] & 0x01) << 7;
+		    }
+		}
 		src += ft_face->glyph->bitmap.pitch;
 		dst += pitch;
 	    }
@@ -7129,8 +7198,12 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
             INT x;
             memset( buf, 0, needed );
             while(h--) {
-                for(x = 0; x < pitch && x < ft_face->glyph->bitmap.width; x++)
-                    if (src[x / 8] & masks[x % 8]) dst[x] = max_level;
+                for(x = 0; x < pitch && x < ft_face->glyph->bitmap.width; x++) {
+                    if (src[x / 8] & masks[x % 8]) {
+                        dst[x] = max_level;
+                        if (font->fake_bold && x+1 < pitch) dst[x+1] = max_level;
+                    }
+                }
                 src += ft_face->glyph->bitmap.pitch;
                 dst += pitch;
             }
@@ -7204,7 +7277,10 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
                 for (x = 0; x < width && x < ft_face->glyph->bitmap.width; x++)
                 {
                     if ( src[x / 8] & masks[x % 8] )
+                    {
                         ((unsigned int *)dst)[x] = ~0u;
+                        if (font->fake_bold && x+1 < width) ((unsigned int *)dst)[x+1] = ~0u;
+                    }
                 }
                 src += src_pitch;
                 dst += pitch;
@@ -7444,7 +7520,7 @@ static BOOL get_bitmap_text_metrics(GdiFont *font)
         TM.tmUnderlined = font->underline;
         TM.tmStruckOut = font->strikeout;
         /* NB inverted meaning of TMPF_FIXED_PITCH */
-        TM.tmPitchAndFamily = ft_face->face_flags & FT_FACE_FLAG_FIXED_WIDTH ? 0 : TMPF_FIXED_PITCH;
+        TM.tmPitchAndFamily = FT_IS_FIXED_WIDTH(ft_face) ? 0 : TMPF_FIXED_PITCH;
         TM.tmCharSet = font->charset;
     }
 #undef TM
@@ -7834,6 +7910,10 @@ static BOOL get_outline_text_metrics(GdiFont *font)
     font->potm->otmFiller = 0;
     memcpy(&font->potm->otmPanoseNumber, pOS2->panose, PANOSE_COUNT);
     font->potm->otmfsSelection = pOS2->fsSelection;
+    if (font->fake_italic)
+        font->potm->otmfsSelection |= 1;
+    if (font->fake_bold)
+        font->potm->otmfsSelection |= 1 << 5;
     font->potm->otmfsType = pOS2->fsType;
     font->potm->otmsCharSlopeRise = pHori->caret_Slope_Rise;
     font->potm->otmsCharSlopeRun = pHori->caret_Slope_Run;
@@ -8207,9 +8287,8 @@ static DWORD freetype_GetFontData( PHYSDEV dev, DWORD table, DWORD offset, LPVOI
         return dev->funcs->pGetFontData( dev, table, offset, buf, cbData );
     }
 
-    TRACE("font=%p, table=%c%c%c%c, offset=0x%x, buf=%p, cbData=0x%x\n",
-          physdev->font, LOBYTE(LOWORD(table)), HIBYTE(LOWORD(table)),
-          LOBYTE(HIWORD(table)), HIBYTE(HIWORD(table)), offset, buf, cbData);
+    TRACE("font=%p, table=%s, offset=0x%x, buf=%p, cbData=0x%x\n",
+          physdev->font, debugstr_an((char*)&table, 4), offset, buf, cbData);
 
     return get_font_data( physdev->font, table, offset, buf, cbData );
 }

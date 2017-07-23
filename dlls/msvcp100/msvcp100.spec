@@ -1126,14 +1126,14 @@
 @ cdecl -arch=win64 ?_Makewloc@_Locimp@locale@std@@CAXAEBV_Locinfo@3@HPEAV123@PEBV23@@Z(ptr long ptr ptr) locale__Locimp__Makewloc
 @ cdecl -arch=win32 ?_Makexloc@_Locimp@locale@std@@CAXABV_Locinfo@3@HPAV123@PBV23@@Z(ptr long ptr ptr) locale__Locimp__Makexloc
 @ cdecl -arch=win64 ?_Makexloc@_Locimp@locale@std@@CAXAEBV_Locinfo@3@HPEAV123@PEBV23@@Z(ptr long ptr ptr) locale__Locimp__Makexloc
-@ stub -arch=win32 ?_Mtx_delete@threads@stdext@@YAXPAX@Z
-@ stub -arch=win64 ?_Mtx_delete@threads@stdext@@YAXPEAX@Z
-@ stub -arch=win32 ?_Mtx_lock@threads@stdext@@YAXPAX@Z
-@ stub -arch=win64 ?_Mtx_lock@threads@stdext@@YAXPEAX@Z
-@ stub -arch=win32 ?_Mtx_new@threads@stdext@@YAXAAPAX@Z
-@ stub -arch=win64 ?_Mtx_new@threads@stdext@@YAXAEAPEAX@Z
-@ stub -arch=win32 ?_Mtx_unlock@threads@stdext@@YAXPAX@Z
-@ stub -arch=win64 ?_Mtx_unlock@threads@stdext@@YAXPEAX@Z
+@ cdecl -arch=win32 ?_Mtx_delete@threads@stdext@@YAXPAX@Z(ptr) threads__Mtx_delete
+@ cdecl -arch=win64 ?_Mtx_delete@threads@stdext@@YAXPEAX@Z(ptr) threads__Mtx_delete
+@ cdecl -arch=win32 ?_Mtx_lock@threads@stdext@@YAXPAX@Z(ptr) threads__Mtx_lock
+@ cdecl -arch=win64 ?_Mtx_lock@threads@stdext@@YAXPEAX@Z(ptr) threads__Mtx_lock
+@ cdecl -arch=win32 ?_Mtx_new@threads@stdext@@YAXAAPAX@Z(ptr) threads__Mtx_new
+@ cdecl -arch=win64 ?_Mtx_new@threads@stdext@@YAXAEAPEAX@Z(ptr) threads__Mtx_new
+@ cdecl -arch=win32 ?_Mtx_unlock@threads@stdext@@YAXPAX@Z(ptr) threads__Mtx_unlock
+@ cdecl -arch=win64 ?_Mtx_unlock@threads@stdext@@YAXPEAX@Z(ptr) threads__Mtx_unlock
 @ cdecl -arch=win32 ?_Mutex_Lock@_Mutex@std@@CAXPAV12@@Z(ptr) mutex_mutex_lock
 @ cdecl -arch=win64 ?_Mutex_Lock@_Mutex@std@@CAXPEAV12@@Z(ptr) mutex_mutex_lock
 @ cdecl -arch=win32 ?_Mutex_Unlock@_Mutex@std@@CAXPAV12@@Z(ptr) mutex_mutex_unlock
@@ -1742,8 +1742,8 @@
 @ cdecl -arch=win64 ?gcount@?$basic_istream@GU?$char_traits@G@std@@@std@@QEBA_JXZ(ptr) basic_istream_wchar_gcount
 @ thiscall -ret64 -arch=win32 ?gcount@?$basic_istream@_WU?$char_traits@_W@std@@@std@@QBE_JXZ(ptr) basic_istream_wchar_gcount
 @ cdecl -arch=win64 ?gcount@?$basic_istream@_WU?$char_traits@_W@std@@@std@@QEBA_JXZ(ptr) basic_istream_wchar_gcount
-@ stub -arch=win32 ?generic_category@std@@YAABVerror_category@1@XZ
-@ stub -arch=win64 ?generic_category@std@@YAAEBVerror_category@1@XZ
+@ cdecl -arch=win32 ?generic_category@std@@YAABVerror_category@1@XZ() std_generic_category
+@ cdecl -arch=win64 ?generic_category@std@@YAAEBVerror_category@1@XZ() std_generic_category
 @ thiscall -arch=win32 ?get@?$basic_istream@DU?$char_traits@D@std@@@std@@QAEAAV12@AAD@Z(ptr ptr) basic_istream_char_get_ch
 @ cdecl -arch=win64 ?get@?$basic_istream@DU?$char_traits@D@std@@@std@@QEAAAEAV12@AEAD@Z(ptr ptr) basic_istream_char_get_ch
 @ thiscall -arch=win32 ?get@?$basic_istream@DU?$char_traits@D@std@@@std@@QAEAAV12@AAV?$basic_streambuf@DU?$char_traits@D@std@@@2@@Z(ptr ptr) basic_istream_char_get_streambuf
@@ -2145,23 +2145,23 @@
 @ cdecl -ret64 ?max@?$numeric_limits@_K@std@@SA_KXZ() std_numeric_limits_unsigned_int64_max
 @ cdecl ?max@?$numeric_limits@_N@std@@SA_NXZ() std_numeric_limits_bool_max
 @ cdecl ?max@?$numeric_limits@_W@std@@SA_WXZ() std_numeric_limits_wchar_t_max
-@ stub ?max_digits10@?$numeric_limits@C@std@@2HB
-@ stub ?max_digits10@?$numeric_limits@D@std@@2HB
-@ stub ?max_digits10@?$numeric_limits@E@std@@2HB
-@ stub ?max_digits10@?$numeric_limits@F@std@@2HB
-@ stub ?max_digits10@?$numeric_limits@G@std@@2HB
-@ stub ?max_digits10@?$numeric_limits@H@std@@2HB
-@ stub ?max_digits10@?$numeric_limits@I@std@@2HB
-@ stub ?max_digits10@?$numeric_limits@J@std@@2HB
-@ stub ?max_digits10@?$numeric_limits@K@std@@2HB
-@ stub ?max_digits10@?$numeric_limits@M@std@@2HB
-@ stub ?max_digits10@?$numeric_limits@N@std@@2HB
-@ stub ?max_digits10@?$numeric_limits@O@std@@2HB
-@ stub ?max_digits10@?$numeric_limits@_J@std@@2HB
-@ stub ?max_digits10@?$numeric_limits@_K@std@@2HB
-@ stub ?max_digits10@?$numeric_limits@_N@std@@2HB
-@ stub ?max_digits10@?$numeric_limits@_W@std@@2HB
-@ stub ?max_digits10@_Num_base@std@@2HB
+# extern ?max_digits10@?$numeric_limits@C@std@@2HB
+# extern ?max_digits10@?$numeric_limits@D@std@@2HB
+# extern ?max_digits10@?$numeric_limits@E@std@@2HB
+# extern ?max_digits10@?$numeric_limits@F@std@@2HB
+# extern ?max_digits10@?$numeric_limits@G@std@@2HB
+# extern ?max_digits10@?$numeric_limits@H@std@@2HB
+# extern ?max_digits10@?$numeric_limits@I@std@@2HB
+# extern ?max_digits10@?$numeric_limits@J@std@@2HB
+# extern ?max_digits10@?$numeric_limits@K@std@@2HB
+# extern ?max_digits10@?$numeric_limits@M@std@@2HB
+# extern ?max_digits10@?$numeric_limits@N@std@@2HB
+# extern ?max_digits10@?$numeric_limits@O@std@@2HB
+# extern ?max_digits10@?$numeric_limits@_J@std@@2HB
+# extern ?max_digits10@?$numeric_limits@_K@std@@2HB
+# extern ?max_digits10@?$numeric_limits@_N@std@@2HB
+# extern ?max_digits10@?$numeric_limits@_W@std@@2HB
+# extern ?max_digits10@_Num_base@std@@2HB
 @ extern ?max_exponent10@?$numeric_limits@M@std@@2HB std_numeric_limits_float_max_exponent10
 @ extern ?max_exponent10@?$numeric_limits@N@std@@2HB std_numeric_limits_double_max_exponent10
 @ extern ?max_exponent10@?$numeric_limits@O@std@@2HB std_numeric_limits_long_double_max_exponent10
@@ -2731,8 +2731,8 @@
 @ thiscall -arch=win32 ?sync@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MAEHXZ(ptr) basic_streambuf_wchar_sync
 @ cdecl -arch=win64 ?sync@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MEAAHXZ(ptr) basic_streambuf_wchar_sync
 @ cdecl ?sync_with_stdio@ios_base@std@@SA_N_N@Z(long) ios_base_sync_with_stdio
-@ stub -arch=win32 ?system_category@std@@YAABVerror_category@1@XZ
-@ stub -arch=win64 ?system_category@std@@YAAEBVerror_category@1@XZ
+@ cdecl -arch=win32 ?system_category@std@@YAABVerror_category@1@XZ() std_system_category
+@ cdecl -arch=win64 ?system_category@std@@YAAEBVerror_category@1@XZ() std_system_category
 @ stub -arch=win32 ?table@?$ctype@D@std@@QBEPBFXZ
 @ stub -arch=win64 ?table@?$ctype@D@std@@QEBAPEBFXZ
 @ extern -arch=win32 ?table_size@?$ctype@D@std@@2IB ctype_char_table_size

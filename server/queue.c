@@ -178,6 +178,8 @@ static const struct object_ops msg_queue_ops =
     default_get_sd,            /* get_sd */
     default_set_sd,            /* set_sd */
     no_lookup_name,            /* lookup_name */
+    no_link_name,              /* link_name */
+    NULL,                      /* unlink_name */
     no_open_file,              /* open_file */
     no_close_handle,           /* close_handle */
     msg_queue_destroy          /* destroy */
@@ -211,6 +213,8 @@ static const struct object_ops thread_input_ops =
     default_get_sd,               /* get_sd */
     default_set_sd,               /* set_sd */
     no_lookup_name,               /* lookup_name */
+    no_link_name,                 /* link_name */
+    NULL,                         /* unlink_name */
     no_open_file,                 /* open_file */
     no_close_handle,              /* close_handle */
     thread_input_destroy          /* destroy */
@@ -2108,6 +2112,33 @@ void post_message( user_handle_t win, unsigned int message, lparam_t wparam, lpa
     release_object( thread );
 }
 
+/* send a notify message to a window */
+void send_notify_message( user_handle_t win, unsigned int message, lparam_t wparam, lparam_t lparam )
+{
+    struct message *msg;
+    struct thread *thread = get_window_thread( win );
+
+    if (!thread) return;
+
+    if (thread->queue && (msg = mem_alloc( sizeof(*msg) )))
+    {
+        msg->type      = MSG_NOTIFY;
+        msg->win       = get_user_full_handle( win );
+        msg->msg       = message;
+        msg->wparam    = wparam;
+        msg->lparam    = lparam;
+        msg->result    = NULL;
+        msg->data      = NULL;
+        msg->data_size = 0;
+
+        get_message_defaults( thread->queue, &msg->x, &msg->y, &msg->time );
+
+        list_add_tail( &thread->queue->msg_list[SEND_MESSAGE], &msg->entry );
+        set_queue_bits( thread->queue, QS_SENDMESSAGE );
+    }
+    release_object( thread );
+}
+
 /* post a win event */
 void post_win_event( struct thread *thread, unsigned int event,
                      user_handle_t win, unsigned int object_id,
@@ -2654,10 +2685,9 @@ DECL_HANDLER(register_hotkey)
 
     if (win_handle)
     {
-        if (!get_user_object_handle( &win_handle, USER_WINDOW ))
+        if (!(win_handle = get_valid_window_handle( win_handle )))
         {
             release_object( desktop );
-            set_win32_error( ERROR_INVALID_WINDOW_HANDLE );
             return;
         }
 
@@ -2723,10 +2753,9 @@ DECL_HANDLER(unregister_hotkey)
 
     if (win_handle)
     {
-        if (!get_user_object_handle( &win_handle, USER_WINDOW ))
+        if (!(win_handle = get_valid_window_handle( win_handle )))
         {
             release_object( desktop );
-            set_win32_error( ERROR_INVALID_WINDOW_HANDLE );
             return;
         }
 
@@ -3047,8 +3076,15 @@ DECL_HANDLER(set_caret_info)
     }
     if (req->flags & SET_CARET_STATE)
     {
-        if (req->state == -1) input->caret_state = !input->caret_state;
-        else input->caret_state = !!req->state;
+        switch (req->state)
+        {
+        case CARET_STATE_OFF:    input->caret_state = 0; break;
+        case CARET_STATE_ON:     input->caret_state = 1; break;
+        case CARET_STATE_TOGGLE: input->caret_state = !input->caret_state; break;
+        case CARET_STATE_ON_IF_MOVED:
+            if (req->x != reply->old_rect.left || req->y != reply->old_rect.top) input->caret_state = 1;
+            break;
+        }
     }
 }
 

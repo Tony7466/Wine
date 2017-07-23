@@ -99,20 +99,15 @@ extern int winetest_vok( int condition, const char *msg, __winetest_va_list ap )
 extern void winetest_vskip( const char *msg, __winetest_va_list ap );
 
 #ifdef __GNUC__
+# define WINETEST_PRINTF_ATTR(fmt,args) __attribute__((format (printf,fmt,args)))
+#else
+# define WINETEST_PRINTF_ATTR(fmt,args)
+#endif
 
-extern void __winetest_cdecl winetest_ok( int condition, const char *msg, ... ) __attribute__((format (printf,2,3) ));
-extern void __winetest_cdecl winetest_skip( const char *msg, ... ) __attribute__((format (printf,1,2)));
-extern void __winetest_cdecl winetest_win_skip( const char *msg, ... ) __attribute__((format (printf,1,2)));
-extern void __winetest_cdecl winetest_trace( const char *msg, ... ) __attribute__((format (printf,1,2)));
-
-#else /* __GNUC__ */
-
-extern void __winetest_cdecl winetest_ok( int condition, const char *msg, ... );
-extern void __winetest_cdecl winetest_skip( const char *msg, ... );
-extern void __winetest_cdecl winetest_win_skip( const char *msg, ... );
-extern void __winetest_cdecl winetest_trace( const char *msg, ... );
-
-#endif /* __GNUC__ */
+extern void __winetest_cdecl winetest_ok( int condition, const char *msg, ... ) WINETEST_PRINTF_ATTR(2,3);
+extern void __winetest_cdecl winetest_skip( const char *msg, ... ) WINETEST_PRINTF_ATTR(1,2);
+extern void __winetest_cdecl winetest_win_skip( const char *msg, ... ) WINETEST_PRINTF_ATTR(1,2);
+extern void __winetest_cdecl winetest_trace( const char *msg, ... ) WINETEST_PRINTF_ATTR(1,2);
 
 #define ok_(file, line)       (winetest_set_location(file, line), 0) ? (void)0 : winetest_ok
 #define skip_(file, line)     (winetest_set_location(file, line), 0) ? (void)0 : winetest_skip
@@ -312,9 +307,9 @@ int winetest_vok( int condition, const char *msg, __winetest_va_list args )
     {
         if (condition)
         {
-            fprintf( stdout, "%s:%d: Test succeeded inside todo block: ",
-                     data->current_file, data->current_line );
-            vfprintf(stdout, msg, args);
+            printf( "%s:%d: Test succeeded inside todo block: ",
+                    data->current_file, data->current_line );
+            vprintf(msg, args);
             InterlockedIncrement(&todo_failures);
             return 0;
         }
@@ -322,9 +317,9 @@ int winetest_vok( int condition, const char *msg, __winetest_va_list args )
         {
             if (winetest_debug > 0)
             {
-                fprintf( stdout, "%s:%d: Test marked todo: ",
-                         data->current_file, data->current_line );
-                vfprintf(stdout, msg, args);
+                printf( "%s:%d: Test marked todo: ",
+                        data->current_file, data->current_line );
+                vprintf(msg, args);
             }
             InterlockedIncrement(&todo_successes);
             return 1;
@@ -334,17 +329,17 @@ int winetest_vok( int condition, const char *msg, __winetest_va_list args )
     {
         if (!condition)
         {
-            fprintf( stdout, "%s:%d: Test failed: ",
-                     data->current_file, data->current_line );
-            vfprintf(stdout, msg, args);
+            printf( "%s:%d: Test failed: ",
+                    data->current_file, data->current_line );
+            vprintf(msg, args);
             InterlockedIncrement(&failures);
             return 0;
         }
         else
         {
             if (report_success)
-                fprintf( stdout, "%s:%d: Test succeeded\n",
-                         data->current_file, data->current_line);
+                printf( "%s:%d: Test succeeded\n",
+                        data->current_file, data->current_line);
             InterlockedIncrement(&successes);
             return 1;
         }
@@ -367,9 +362,9 @@ void __winetest_cdecl winetest_trace( const char *msg, ... )
 
     if (winetest_debug > 0)
     {
-        fprintf( stdout, "%s:%d: ", data->current_file, data->current_line );
+        printf( "%s:%d: ", data->current_file, data->current_line );
         __winetest_va_start(valist, msg);
-        vfprintf(stdout, msg, valist);
+        vprintf(msg, valist);
         __winetest_va_end(valist);
     }
 }
@@ -378,8 +373,8 @@ void winetest_vskip( const char *msg, __winetest_va_list args )
 {
     tls_data* data=get_tls_data();
 
-    fprintf( stdout, "%s:%d: Tests skipped: ", data->current_file, data->current_line );
-    vfprintf(stdout, msg, args);
+    printf( "%s:%d: Tests skipped: ", data->current_file, data->current_line );
+    vprintf(msg, args);
     skipped++;
 }
 
@@ -445,7 +440,7 @@ void winetest_wait_child_process( HANDLE process )
     DWORD exit_code = 1;
 
     if (WaitForSingleObject( process, 30000 ))
-        fprintf( stdout, "%s: child process wait failed\n", current_test->name );
+        printf( "%s: child process wait failed\n", current_test->name );
     else
         GetExitCodeProcess( process, &exit_code );
 
@@ -453,13 +448,13 @@ void winetest_wait_child_process( HANDLE process )
     {
         if (exit_code > 255)
         {
-            fprintf( stdout, "%s: exception 0x%08x in child process\n", current_test->name, exit_code );
+            printf( "%s: exception 0x%08x in child process\n", current_test->name, exit_code );
             InterlockedIncrement( &failures );
         }
         else
         {
-            fprintf( stdout, "%s: %u failures in child process\n",
-                     current_test->name, exit_code );
+            printf( "%s: %u failures in child process\n",
+                    current_test->name, exit_code );
             while (exit_code-- > 0)
                 InterlockedIncrement(&failures);
         }
@@ -571,8 +566,9 @@ static void list_tests(void)
 {
     const struct test *test;
 
-    fprintf( stdout, "Valid test names:\n" );
-    for (test = winetest_testlist; test->name; test++) fprintf( stdout, "    %s\n", test->name );
+    printf( "Valid test names:\n" );
+    for (test = winetest_testlist; test->name; test++)
+        printf( "    %s\n", test->name );
 }
 
 
@@ -584,7 +580,7 @@ static int run_test( const char *name )
 
     if (!(test = find_test( name )))
     {
-        fprintf( stdout, "Fatal: test '%s' does not exist.\n", name );
+        printf( "Fatal: test '%s' does not exist.\n", name );
         exit_process(1);
     }
     successes = failures = todo_successes = todo_failures = 0;
@@ -594,11 +590,11 @@ static int run_test( const char *name )
 
     if (winetest_debug)
     {
-        fprintf( stdout, "%s: %d tests executed (%d marked as todo, %d %s), %d skipped.\n",
-                 test->name, successes + failures + todo_successes + todo_failures,
-                 todo_successes, failures + todo_failures,
-                 (failures + todo_failures != 1) ? "failures" : "failure",
-                 skipped );
+        printf( "%s: %d tests executed (%d marked as todo, %d %s), %d skipped.\n",
+                test->name, successes + failures + todo_successes + todo_failures,
+                todo_successes, failures + todo_failures,
+                (failures + todo_failures != 1) ? "failures" : "failure",
+                skipped );
     }
     status = (failures + todo_failures < 255) ? failures + todo_failures : 255;
     return status;
@@ -608,7 +604,7 @@ static int run_test( const char *name )
 /* Display usage and exit */
 static void usage( const char *argv0 )
 {
-    fprintf( stdout, "Usage: %s test_name\n\n", argv0 );
+    printf( "Usage: %s test_name\n\n", argv0 );
     list_tests();
     exit_process(1);
 }
@@ -619,10 +615,10 @@ static LONG CALLBACK exc_filter( EXCEPTION_POINTERS *ptrs )
     tls_data *data = get_tls_data();
 
     if (data->current_file)
-        fprintf( stdout, "%s:%d: this is the last test seen before the exception\n",
-                 data->current_file, data->current_line );
-    fprintf( stdout, "%s: unhandled exception %08x at %p\n", current_test->name,
-             ptrs->ExceptionRecord->ExceptionCode, ptrs->ExceptionRecord->ExceptionAddress );
+        printf( "%s:%d: this is the last test seen before the exception\n",
+                data->current_file, data->current_line );
+    printf( "%s: unhandled exception %08x at %p\n", current_test->name,
+            ptrs->ExceptionRecord->ExceptionCode, ptrs->ExceptionRecord->ExceptionAddress );
     fflush( stdout );
     return EXCEPTION_EXECUTE_HANDLER;
 }

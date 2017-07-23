@@ -3087,14 +3087,10 @@ static void test_BindToStorage(int protocol, DWORD flags, DWORD t)
     if(!no_callback) {
         CLEAR_CALLED(QueryInterface_IBindStatusCallbackEx); /* IE 8 */
         CHECK_CALLED(GetBindInfo);
-        if(abort_start)
-            todo_wine CHECK_CALLED(QueryInterface_IInternetProtocol);
-        else
+        todo_wine_if(abort_start)
             CHECK_CALLED(QueryInterface_IInternetProtocol);
         if(!emulate_protocol) {
-            if(abort_start)
-                todo_wine CHECK_CALLED(QueryService_IInternetProtocol);
-            else
+            todo_wine_if(abort_start)
                 CHECK_CALLED(QueryService_IInternetProtocol);
         }
         CHECK_CALLED(OnStartBinding);
@@ -3414,10 +3410,7 @@ static void test_BindToObject(int protocol, DWORD flags, HRESULT exhres)
     }
 
     ok(IMoniker_Release(mon) == 0, "mon should be destroyed here\n");
-    if(test_protocol != HTTP_TEST || emulate_protocol || !(bindf & BINDF_ASYNCHRONOUS))
-        ok(IBindCtx_Release(bctx) == 0, "bctx should be destroyed here\n");
-    else
-        IBindCtx_Release(bctx);
+    IBindCtx_Release(bctx);
 
     if(emulate_protocol)
         CoRevokeClassObject(regid);

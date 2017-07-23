@@ -19,9 +19,10 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "wine/unicode.h"
-#include "wine/debug.h"
-#include "d3dx9_36_private.h"
+#include "config.h"
+#include "wine/port.h"
+
+#include "d3dx9_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(d3dx);
 
@@ -678,7 +679,7 @@ HRESULT WINAPI D3DXCreateTextureFromFileInMemoryEx(struct IDirect3DDevice9 *devi
     dynamic_texture = (caps.Caps2 & D3DCAPS2_DYNAMICTEXTURES) && (usage & D3DUSAGE_DYNAMIC);
     if (pool == D3DPOOL_DEFAULT && !dynamic_texture)
     {
-        hr = D3DXCreateTexture(device, width, height, miplevels, usage, format, D3DPOOL_SYSTEMMEM, &buftex);
+        hr = D3DXCreateTexture(device, width, height, miplevels, 0, format, D3DPOOL_SYSTEMMEM, &buftex);
         texptr = &buftex;
     }
     else
@@ -1377,6 +1378,12 @@ HRESULT WINAPI D3DXFillTexture(struct IDirect3DTexture9 *texture, LPD3DXFILL2D f
     return D3D_OK;
 }
 
+HRESULT WINAPI D3DXFillTextureTX(struct IDirect3DTexture9 *texture, ID3DXTextureShader *texture_shader)
+{
+    FIXME("texture %p, texture_shader %p stub.\n", texture, texture_shader);
+    return E_NOTIMPL;
+}
+
 HRESULT WINAPI D3DXCreateCubeTextureFromFileInMemoryEx(IDirect3DDevice9 *device,
                                                        const void *src_data,
                                                        UINT src_data_size,
@@ -1746,6 +1753,12 @@ HRESULT WINAPI D3DXFillCubeTexture(struct IDirect3DCubeTexture9 *texture, LPD3DX
     return D3D_OK;
 }
 
+HRESULT WINAPI D3DXFillCubeTextureTX(struct IDirect3DCubeTexture9 *texture, ID3DXTextureShader *texture_shader)
+{
+    FIXME("texture %p, texture_shader %p stub.\n", texture, texture_shader);
+    return E_NOTIMPL;
+}
+
 HRESULT WINAPI D3DXFillVolumeTexture(struct IDirect3DVolumeTexture9 *texture, LPD3DXFILL3D function, void *funcdata)
 {
     DWORD miplevels;
@@ -1808,6 +1821,12 @@ HRESULT WINAPI D3DXFillVolumeTexture(struct IDirect3DVolumeTexture9 *texture, LP
     }
 
     return D3D_OK;
+}
+
+HRESULT WINAPI D3DXFillVolumeTextureTX(struct IDirect3DVolumeTexture9 *texture, ID3DXTextureShader *texture_shader)
+{
+    FIXME("texture %p, texture_shader %p stub.\n", texture, texture_shader);
+    return E_NOTIMPL;
 }
 
 HRESULT WINAPI D3DXSaveTextureToFileA(const char *dst_filename, D3DXIMAGE_FILEFORMAT file_format,

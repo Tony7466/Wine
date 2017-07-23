@@ -160,7 +160,11 @@ static const struct
     { "x86_64",  CPU_x86_64 },
     { "powerpc", CPU_POWERPC },
     { "arm",     CPU_ARM },
-    { "aarch64", CPU_ARM64 }
+    { "armv5",   CPU_ARM },
+    { "armv6",   CPU_ARM },
+    { "armv7",   CPU_ARM },
+    { "arm64",   CPU_ARM64 },
+    { "aarch64", CPU_ARM64 },
 };
 
 static const struct
@@ -954,7 +958,7 @@ static void build(struct options* opts)
                 strarray_add(link_args, name);
                 break;
             case 'a':
-                if (strchr(name, '/'))
+                if (!opts->lib_suffix && strchr(name, '/'))
                 {
                     /* turn the path back into -Ldir -lfoo options
                      * this makes sure that we use the specified libs even
@@ -1126,11 +1130,14 @@ static void build(struct options* opts)
         }
         break;
     case PLATFORM_ANDROID:
-        /* not supported on Android */
+        /* the Android loader requires a soname for all libraries */
+        strarray_add( link_args, strmake( "-Wl,-soname,%s.so", output_name ));
         break;
     default:
         if (opts->image_base)
         {
+            if (!try_link(opts->prefix, link_args, "-Wl,-z,max-page-size=0x1000"))
+                strarray_add(link_args, "-Wl,-z,max-page-size=0x1000");
             if (!try_link(opts->prefix, link_args, strmake("-Wl,-Ttext-segment=%s", opts->image_base)))
                 strarray_add(link_args, strmake("-Wl,-Ttext-segment=%s", opts->image_base));
             else
@@ -1456,6 +1463,11 @@ int main(int argc, char **argv)
                         objdir[strlen(objdir) - sizeof("/tools/winebuild") + 1] = 0;
                         opts.wine_objdir = objdir;
                         /* don't pass it to the compiler, this generates warnings */
+                        raw_compiler_arg = raw_linker_arg = 0;
+                    }
+                    else if (!strcmp(str, "tools/winebuild"))
+                    {
+                        opts.wine_objdir = ".";
                         raw_compiler_arg = raw_linker_arg = 0;
                     }
                     if (!opts.prefix) opts.prefix = strarray_alloc();

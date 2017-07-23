@@ -90,7 +90,7 @@
 @ stdcall CoFreeUnusedLibrariesEx(long long) ole32.CoFreeUnusedLibrariesEx
 @ stdcall CoGetActivationState(int128 long ptr) ole32.CoGetActivationState
 @ stub CoGetApartmentID
-@ stub CoGetApartmentType
+@ stdcall CoGetApartmentType(ptr ptr) ole32.CoGetApartmentType
 @ stdcall CoGetCallContext(ptr ptr) ole32.CoGetCallContext
 @ stdcall CoGetCallState(long ptr) ole32.CoGetCallState
 @ stdcall CoGetCallerTID(ptr) ole32.CoGetCallerTID
@@ -287,7 +287,7 @@
 @ stub WdtpInterfacePointer_UserSize64
 @ stdcall WdtpInterfacePointer_UserUnmarshal(ptr ptr ptr ptr) ole32.WdtpInterfacePointer_UserUnmarshal
 @ stub WdtpInterfacePointer_UserUnmarshal64
-@ stub WindowsCompareStringOrdinal
+@ stdcall WindowsCompareStringOrdinal(ptr ptr ptr)
 @ stdcall WindowsConcatString(ptr ptr ptr)
 @ stdcall WindowsCreateString(wstr long ptr)
 @ stdcall WindowsCreateStringReference(wstr long ptr ptr)
@@ -304,5 +304,5 @@
 @ stdcall WindowsStringHasEmbeddedNull(ptr ptr)
 @ stdcall WindowsSubstring(ptr long ptr)
 @ stdcall WindowsSubstringWithSpecifiedLength(ptr long long ptr)
-@ stub WindowsTrimStringEnd
-@ stub WindowsTrimStringStart
+@ stdcall WindowsTrimStringEnd(ptr ptr ptr)
+@ stdcall WindowsTrimStringStart(ptr ptr ptr)

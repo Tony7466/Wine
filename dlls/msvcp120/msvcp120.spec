@@ -310,12 +310,12 @@
 @ cdecl -arch=arm ??0_Lockit@std@@QAA@XZ(ptr) _Lockit_ctor
 @ thiscall -arch=i386 ??0_Lockit@std@@QAE@XZ(ptr) _Lockit_ctor
 @ cdecl -arch=win64 ??0_Lockit@std@@QEAA@XZ(ptr) _Lockit_ctor
-@ stub -arch=arm ??0_Pad@std@@QAA@ABV01@@Z
-@ stub -arch=i386 ??0_Pad@std@@QAE@ABV01@@Z
-@ stub -arch=win64 ??0_Pad@std@@QEAA@AEBV01@@Z
-@ stub -arch=arm ??0_Pad@std@@QAA@XZ
-@ stub -arch=i386 ??0_Pad@std@@QAE@XZ
-@ stub -arch=win64 ??0_Pad@std@@QEAA@XZ
+@ cdecl -arch=arm ??0_Pad@std@@QAA@ABV01@@Z(ptr ptr) _Pad_copy_ctor
+@ thiscall -arch=i386 ??0_Pad@std@@QAE@ABV01@@Z(ptr ptr) _Pad_copy_ctor
+@ cdecl -arch=win64 ??0_Pad@std@@QEAA@AEBV01@@Z(ptr ptr) _Pad_copy_ctor
+@ cdecl -arch=arm ??0_Pad@std@@QAA@XZ(ptr) _Pad_ctor
+@ thiscall -arch=i386 ??0_Pad@std@@QAE@XZ(ptr) _Pad_ctor
+@ cdecl -arch=win64 ??0_Pad@std@@QEAA@XZ(ptr) _Pad_ctor
 @ stub -arch=arm ??0_Runtime_object@details@Concurrency@@QAA@H@Z
 @ stub -arch=i386 ??0_Runtime_object@details@Concurrency@@QAE@H@Z
 @ stub -arch=win64 ??0_Runtime_object@details@Concurrency@@QEAA@H@Z
@@ -496,9 +496,9 @@
 @ cdecl -arch=arm ??1_Lockit@std@@QAA@XZ(ptr) _Lockit_dtor
 @ thiscall -arch=i386 ??1_Lockit@std@@QAE@XZ(ptr) _Lockit_dtor
 @ cdecl -arch=win64 ??1_Lockit@std@@QEAA@XZ(ptr) _Lockit_dtor
-@ stub -arch=arm ??1_Pad@std@@QAA@XZ
-@ stub -arch=i386 ??1_Pad@std@@QAE@XZ
-@ stub -arch=win64 ??1_Pad@std@@QEAA@XZ
+@ cdecl -arch=arm ??1_Pad@std@@QAA@XZ(ptr) _Pad_dtor
+@ thiscall -arch=i386 ??1_Pad@std@@QAE@XZ(ptr) _Pad_dtor
+@ cdecl -arch=win64 ??1_Pad@std@@QEAA@XZ(ptr) _Pad_dtor
 @ cdecl -arch=arm ??1_Timevec@std@@QAA@XZ(ptr) _Timevec_dtor
 @ thiscall -arch=i386 ??1_Timevec@std@@QAE@XZ(ptr) _Timevec_dtor
 @ cdecl -arch=win64 ??1_Timevec@std@@QEAA@XZ(ptr) _Timevec_dtor
@@ -589,9 +589,9 @@
 @ stub -arch=arm ??4_Init_locks@std@@QAAAAV01@ABV01@@Z
 @ stub -arch=i386 ??4_Init_locks@std@@QAEAAV01@ABV01@@Z
 @ stub -arch=win64 ??4_Init_locks@std@@QEAAAEAV01@AEBV01@@Z
-@ stub -arch=arm ??4_Pad@std@@QAAAAV01@ABV01@@Z
-@ stub -arch=i386 ??4_Pad@std@@QAEAAV01@ABV01@@Z
-@ stub -arch=win64 ??4_Pad@std@@QEAAAEAV01@AEBV01@@Z
+@ cdecl -arch=arm ??4_Pad@std@@QAAAAV01@ABV01@@Z(ptr ptr) _Pad_op_assign
+@ thiscall -arch=i386 ??4_Pad@std@@QAEAAV01@ABV01@@Z(ptr ptr) _Pad_op_assign
+@ cdecl -arch=win64 ??4_Pad@std@@QEAAAEAV01@AEBV01@@Z(ptr ptr) _Pad_op_assign
 @ cdecl -arch=arm ??4_Timevec@std@@QAAAAV01@ABV01@@Z(ptr ptr) _Timevec_op_assign
 @ thiscall -arch=i386 ??4_Timevec@std@@QAEAAV01@ABV01@@Z(ptr ptr) _Timevec_op_assign
 @ cdecl -arch=win64 ??4_Timevec@std@@QEAAAEAV01@AEBV01@@Z(ptr ptr) _Timevec_op_assign
@@ -949,9 +949,9 @@
 @ extern ??_7?$time_put@DV?$ostreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@6B@ MSVCP_time_put_char_vtable
 @ extern ??_7?$time_put@GV?$ostreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@6B@ MSVCP_time_put_short_vtable
 @ extern ??_7?$time_put@_WV?$ostreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@6B@ MSVCP_time_put_wchar_vtable
-@ stub ??_7_Facet_base@std@@6B@
+@ extern ??_7_Facet_base@std@@6B@ MSVCP__Facet_base_vtable
 @ extern ??_7_Locimp@locale@std@@6B@ MSVCP_locale__Locimp_vtable
-@ stub ??_7_Pad@std@@6B@
+@ extern ??_7_Pad@std@@6B@ MSVCP__Pad_vtable
 @ extern ??_7codecvt_base@std@@6B@ MSVCP_codecvt_base_vtable
 @ extern ??_7ctype_base@std@@6B@ MSVCP_ctype_base_vtable
 @ extern ??_7facet@locale@std@@6B@ MSVCP_locale_facet_vtable
@@ -1078,26 +1078,26 @@
 @ stub -arch=win64 ?NFS_Free@details@Concurrency@@YAXPEAX@Z
 @ stub -arch=win32 ?NFS_GetLineSize@details@Concurrency@@YAIXZ
 @ stub -arch=win64 ?NFS_GetLineSize@details@Concurrency@@YA_KXZ
-@ stub ?_10@placeholders@std@@3V?$_Ph@$09@2@A
-@ stub ?_11@placeholders@std@@3V?$_Ph@$0L@@2@A
-@ stub ?_12@placeholders@std@@3V?$_Ph@$0M@@2@A
-@ stub ?_13@placeholders@std@@3V?$_Ph@$0N@@2@A
-@ stub ?_14@placeholders@std@@3V?$_Ph@$0O@@2@A
-@ stub ?_15@placeholders@std@@3V?$_Ph@$0P@@2@A
-@ stub ?_16@placeholders@std@@3V?$_Ph@$0BA@@2@A
-@ stub ?_17@placeholders@std@@3V?$_Ph@$0BB@@2@A
-@ stub ?_18@placeholders@std@@3V?$_Ph@$0BC@@2@A
-@ stub ?_19@placeholders@std@@3V?$_Ph@$0BD@@2@A
-@ stub ?_1@placeholders@std@@3V?$_Ph@$00@2@A
-@ stub ?_20@placeholders@std@@3V?$_Ph@$0BE@@2@A
-@ stub ?_2@placeholders@std@@3V?$_Ph@$01@2@A
-@ stub ?_3@placeholders@std@@3V?$_Ph@$02@2@A
-@ stub ?_4@placeholders@std@@3V?$_Ph@$03@2@A
-@ stub ?_5@placeholders@std@@3V?$_Ph@$04@2@A
-@ stub ?_6@placeholders@std@@3V?$_Ph@$05@2@A
-@ stub ?_7@placeholders@std@@3V?$_Ph@$06@2@A
-@ stub ?_8@placeholders@std@@3V?$_Ph@$07@2@A
-@ stub ?_9@placeholders@std@@3V?$_Ph@$08@2@A
+# extern ?_10@placeholders@std@@3V?$_Ph@$09@2@A
+# extern ?_11@placeholders@std@@3V?$_Ph@$0L@@2@A
+# extern ?_12@placeholders@std@@3V?$_Ph@$0M@@2@A
+# extern ?_13@placeholders@std@@3V?$_Ph@$0N@@2@A
+# extern ?_14@placeholders@std@@3V?$_Ph@$0O@@2@A
+# extern ?_15@placeholders@std@@3V?$_Ph@$0P@@2@A
+# extern ?_16@placeholders@std@@3V?$_Ph@$0BA@@2@A
+# extern ?_17@placeholders@std@@3V?$_Ph@$0BB@@2@A
+# extern ?_18@placeholders@std@@3V?$_Ph@$0BC@@2@A
+# extern ?_19@placeholders@std@@3V?$_Ph@$0BD@@2@A
+# extern ?_1@placeholders@std@@3V?$_Ph@$00@2@A
+# extern ?_20@placeholders@std@@3V?$_Ph@$0BE@@2@A
+# extern ?_2@placeholders@std@@3V?$_Ph@$01@2@A
+# extern ?_3@placeholders@std@@3V?$_Ph@$02@2@A
+# extern ?_4@placeholders@std@@3V?$_Ph@$03@2@A
+# extern ?_5@placeholders@std@@3V?$_Ph@$04@2@A
+# extern ?_6@placeholders@std@@3V?$_Ph@$05@2@A
+# extern ?_7@placeholders@std@@3V?$_Ph@$06@2@A
+# extern ?_8@placeholders@std@@3V?$_Ph@$07@2@A
+# extern ?_9@placeholders@std@@3V?$_Ph@$08@2@A
 @ cdecl -arch=arm ?_Addcats@_Locinfo@std@@QAAAAV12@HPBD@Z(ptr long str) _Locinfo__Addcats
 @ thiscall -arch=i386 ?_Addcats@_Locinfo@std@@QAEAAV12@HPBD@Z(ptr long str) _Locinfo__Addcats
 @ cdecl -arch=win64 ?_Addcats@_Locinfo@std@@QEAAAEAV12@HPEBD@Z(ptr long str) _Locinfo__Addcats
@@ -1114,7 +1114,7 @@
 @ stub -arch=win64 ?_Assign@_Concurrent_queue_iterator_base_v4@details@Concurrency@@IEAAXAEBV123@@Z
 @ stub ?_Atexit@@YAXP6AXXZ@Z
 @ extern ?_BADOFF@std@@3_JB std_BADOFF
-@ stub ?_Byte_reverse_table@details@Concurrency@@3QBEB
+# extern ?_Byte_reverse_table@details@Concurrency@@3QBEB
 @ cdecl -arch=arm ?_C_str@?$_Yarn@D@std@@QBAPBDXZ(ptr) _Yarn_char_c_str
 @ thiscall -arch=i386 ?_C_str@?$_Yarn@D@std@@QBEPBDXZ(ptr) _Yarn_char_c_str
 @ cdecl -arch=win64 ?_C_str@?$_Yarn@D@std@@QEBAPEBDXZ(ptr) _Yarn_char_c_str
@@ -1126,8 +1126,8 @@
 @ cdecl -arch=win64 ?_Callfns@ios_base@std@@AEAAXW4event@12@@Z(ptr long) ios_base_Callfns
 @ extern -arch=win32 ?_Clocptr@_Locimp@locale@std@@0PAV123@A locale__Locimp__Clocptr
 @ extern -arch=win64 ?_Clocptr@_Locimp@locale@std@@0PEAV123@EA locale__Locimp__Clocptr
-@ stub -arch=win32 ?_Close_dir@sys@tr2@std@@YAXPAX@Z
-@ stub -arch=win64 ?_Close_dir@sys@tr2@std@@YAXPEAX@Z
+@ cdecl -arch=win32 ?_Close_dir@sys@tr2@std@@YAXPAX@Z(ptr) tr2_sys__Close_dir
+@ cdecl -arch=win64 ?_Close_dir@sys@tr2@std@@YAXPEAX@Z(ptr) tr2_sys__Close_dir
 @ cdecl -arch=win32 ?_Copy_file@sys@tr2@std@@YAHPBD0_N@Z(str str long) tr2_sys__Copy_file
 @ cdecl -arch=win64 ?_Copy_file@sys@tr2@std@@YAHPEBD0_N@Z(str str long) tr2_sys__Copy_file
 @ cdecl -arch=win32 ?_Copy_file@sys@tr2@std@@YAHPB_W0_N@Z(wstr wstr long) tr2_sys__Copy_file_wchar
@@ -1528,11 +1528,11 @@
 @ cdecl -ret64 -arch=win64 ?_Last_write_time@sys@tr2@std@@YA_JPEBD@Z(str) tr2_sys__Last_write_time
 @ stub -arch=win32 ?_Last_write_time@sys@tr2@std@@YA_JPB_W@Z
 @ stub -arch=win64 ?_Last_write_time@sys@tr2@std@@YA_JPEB_W@Z
-@ stub -arch=arm ?_Launch@_Pad@std@@QAAXPAU_Thrd_imp_t@@@Z
-@ stub -arch=i386 ?_Launch@_Pad@std@@QAEXPAU_Thrd_imp_t@@@Z
-@ stub -arch=win64 ?_Launch@_Pad@std@@QEAAXPEAU_Thrd_imp_t@@@Z
-@ stub -arch=win32 ?_Link@sys@tr2@std@@YAHPBD0@Z
-@ stub -arch=win64 ?_Link@sys@tr2@std@@YAHPEBD0@Z
+@ cdecl -arch=arm ?_Launch@_Pad@std@@QAAXPAU_Thrd_imp_t@@@Z(ptr ptr) _Pad__Launch
+@ thiscall -arch=i386 ?_Launch@_Pad@std@@QAEXPAU_Thrd_imp_t@@@Z(ptr ptr) _Pad__Launch
+@ cdecl -arch=win64 ?_Launch@_Pad@std@@QEAAXPEAU_Thrd_imp_t@@@Z(ptr ptr) _Pad__Launch
+@ cdecl -arch=win32 ?_Link@sys@tr2@std@@YAHPBD0@Z(str str) tr2_sys__Link
+@ cdecl -arch=win64 ?_Link@sys@tr2@std@@YAHPEBD0@Z(str str) tr2_sys__Link
 @ stub -arch=win32 ?_Link@sys@tr2@std@@YAHPB_W0@Z
 @ stub -arch=win64 ?_Link@sys@tr2@std@@YAHPEB_W0@Z
 @ cdecl -arch=win32 ?_Locimp_Addfac@_Locimp@locale@std@@CAXPAV123@PAVfacet@23@I@Z(ptr ptr long) locale__Locimp__Locimp_Addfac
@@ -1568,8 +1568,8 @@
 @ cdecl ?_Lockit_dtor@_Lockit@std@@SAXH@Z(long) _Lockit_free
 @ cdecl -arch=win32 ?_Lstat@sys@tr2@std@@YA?AW4file_type@123@PBDAAH@Z(str ptr) tr2_sys__Lstat
 @ cdecl -arch=win64 ?_Lstat@sys@tr2@std@@YA?AW4file_type@123@PEBDAEAH@Z(str ptr) tr2_sys__Lstat
-@ stub -arch=win32 ?_Lstat@sys@tr2@std@@YA?AW4file_type@123@PB_WAAH@Z
-@ stub -arch=win64 ?_Lstat@sys@tr2@std@@YA?AW4file_type@123@PEB_WAEAH@Z
+@ cdecl -arch=win32 ?_Lstat@sys@tr2@std@@YA?AW4file_type@123@PB_WAAH@Z(wstr ptr) tr2_sys__Lstat_wchar
+@ cdecl -arch=win64 ?_Lstat@sys@tr2@std@@YA?AW4file_type@123@PEB_WAEAH@Z(wstr ptr) tr2_sys__Lstat_wchar
 @ stub -arch=win32 ?_MP_Add@std@@YAXQA_K_K@Z
 @ stub -arch=win64 ?_MP_Add@std@@YAXQEA_K_K@Z
 @ stub -arch=win32 ?_MP_Get@std@@YA_KQA_K@Z
@@ -1590,14 +1590,14 @@
 @ cdecl -arch=win64 ?_Makewloc@_Locimp@locale@std@@CAXAEBV_Locinfo@3@HPEAV123@PEBV23@@Z(ptr long ptr ptr) locale__Locimp__Makewloc
 @ cdecl -arch=win32 ?_Makexloc@_Locimp@locale@std@@CAXABV_Locinfo@3@HPAV123@PBV23@@Z(ptr long ptr ptr) locale__Locimp__Makexloc
 @ cdecl -arch=win64 ?_Makexloc@_Locimp@locale@std@@CAXAEBV_Locinfo@3@HPEAV123@PEBV23@@Z(ptr long ptr ptr) locale__Locimp__Makexloc
-@ stub -arch=win32 ?_Mtx_delete@threads@stdext@@YAXPAX@Z
-@ stub -arch=win64 ?_Mtx_delete@threads@stdext@@YAXPEAX@Z
-@ stub -arch=win32 ?_Mtx_lock@threads@stdext@@YAXPAX@Z
-@ stub -arch=win64 ?_Mtx_lock@threads@stdext@@YAXPEAX@Z
-@ stub -arch=win32 ?_Mtx_new@threads@stdext@@YAXAAPAX@Z
-@ stub -arch=win64 ?_Mtx_new@threads@stdext@@YAXAEAPEAX@Z
-@ stub -arch=win32 ?_Mtx_unlock@threads@stdext@@YAXPAX@Z
-@ stub -arch=win64 ?_Mtx_unlock@threads@stdext@@YAXPEAX@Z
+@ cdecl -arch=win32 ?_Mtx_delete@threads@stdext@@YAXPAX@Z(ptr) threads__Mtx_delete
+@ cdecl -arch=win64 ?_Mtx_delete@threads@stdext@@YAXPEAX@Z(ptr) threads__Mtx_delete
+@ cdecl -arch=win32 ?_Mtx_lock@threads@stdext@@YAXPAX@Z(ptr) threads__Mtx_lock
+@ cdecl -arch=win64 ?_Mtx_lock@threads@stdext@@YAXPEAX@Z(ptr) threads__Mtx_lock
+@ cdecl -arch=win32 ?_Mtx_new@threads@stdext@@YAXAAPAX@Z(ptr) threads__Mtx_new
+@ cdecl -arch=win64 ?_Mtx_new@threads@stdext@@YAXAEAPEAX@Z(ptr) threads__Mtx_new
+@ cdecl -arch=win32 ?_Mtx_unlock@threads@stdext@@YAXPAX@Z(ptr) threads__Mtx_unlock
+@ cdecl -arch=win64 ?_Mtx_unlock@threads@stdext@@YAXPEAX@Z(ptr) threads__Mtx_unlock
 @ cdecl -arch=win32 ?_New_Locimp@_Locimp@locale@std@@CAPAV123@ABV123@@Z(ptr) locale__Locimp__New_Locimp
 @ cdecl -arch=win64 ?_New_Locimp@_Locimp@locale@std@@CAPEAV123@AEBV123@@Z(ptr) locale__Locimp__New_Locimp
 @ cdecl -arch=win32 ?_New_Locimp@_Locimp@locale@std@@CAPAV123@_N@Z(long) locale__Locimp__New_Locimp_transparent
@@ -1672,13 +1672,13 @@
 @ stub -arch=win32 ?_Raise_handler@std@@3P6AXABVexception@stdext@@@ZA
 @ stub -arch=win64 ?_Raise_handler@std@@3P6AXAEBVexception@stdext@@@ZEA
 @ cdecl ?_Random_device@std@@YAIXZ() _Random_device
-@ stub -arch=win32 ?_Read_dir@sys@tr2@std@@YAPADAAY0BAE@DPAXAAW4file_type@123@@Z
-@ stub -arch=win64 ?_Read_dir@sys@tr2@std@@YAPEADAEAY0BAE@DPEAXAEAW4file_type@123@@Z
+@ cdecl -arch=win32 ?_Read_dir@sys@tr2@std@@YAPADAAY0BAE@DPAXAAW4file_type@123@@Z(ptr ptr ptr) tr2_sys__Read_dir
+@ cdecl -arch=win64 ?_Read_dir@sys@tr2@std@@YAPEADAEAY0BAE@DPEAXAEAW4file_type@123@@Z(ptr ptr ptr) tr2_sys__Read_dir
 @ stub -arch=win32 ?_Read_dir@sys@tr2@std@@YAPA_WAAY0BAE@_WPAXAAW4file_type@123@@Z
 @ stub -arch=win64 ?_Read_dir@sys@tr2@std@@YAPEA_WAEAY0BAE@_WPEAXAEAW4file_type@123@@Z
-@ stub -arch=arm ?_Release@_Pad@std@@QAAXXZ
-@ stub -arch=i386 ?_Release@_Pad@std@@QAEXXZ
-@ stub -arch=win64 ?_Release@_Pad@std@@QEAAXXZ
+@ cdecl -arch=arm ?_Release@_Pad@std@@QAAXXZ(ptr) _Pad__Release
+@ thiscall -arch=i386 ?_Release@_Pad@std@@QAEXXZ(ptr) _Pad__Release
+@ cdecl -arch=win64 ?_Release@_Pad@std@@QEAAXXZ(ptr) _Pad__Release
 @ cdecl -arch=win32 ?_Remove_dir@sys@tr2@std@@YA_NPBD@Z(str) tr2_sys__Remove_dir
 @ cdecl -arch=win64 ?_Remove_dir@sys@tr2@std@@YA_NPEBD@Z(str) tr2_sys__Remove_dir
 @ cdecl -arch=win32 ?_Remove_dir@sys@tr2@std@@YA_NPB_W@Z(wstr) tr2_sys__Remove_dir_wchar
@@ -1720,8 +1720,8 @@
 @ stub -arch=win64 ?_Src@?3??_Getffld@?$num_get@_WV?$istreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@AEBAHPEADAEAV?$istreambuf_iterator@_WU?$char_traits@_W@std@@@3@1AEAVios_base@3@PEAH@Z@4QBDB
 @ cdecl -arch=win32 ?_Stat@sys@tr2@std@@YA?AW4file_type@123@PBDAAH@Z(str ptr) tr2_sys__Stat
 @ cdecl -arch=win64 ?_Stat@sys@tr2@std@@YA?AW4file_type@123@PEBDAEAH@Z(str ptr) tr2_sys__Stat
-@ stub -arch=win32 ?_Stat@sys@tr2@std@@YA?AW4file_type@123@PB_WAAH@Z
-@ stub -arch=win64 ?_Stat@sys@tr2@std@@YA?AW4file_type@123@PEB_WAEAH@Z
+@ cdecl -arch=win32 ?_Stat@sys@tr2@std@@YA?AW4file_type@123@PB_WAAH@Z(wstr ptr) tr2_sys__Stat_wchar
+@ cdecl -arch=win64 ?_Stat@sys@tr2@std@@YA?AW4file_type@123@PEB_WAEAH@Z(wstr ptr) tr2_sys__Stat_wchar
 @ cdecl -arch=win32 ?_Statvfs@sys@tr2@std@@YA?AUspace_info@123@PBD@Z(ptr str) tr2_sys__Statvfs
 @ cdecl -arch=win64 ?_Statvfs@sys@tr2@std@@YA?AUspace_info@123@PEBD@Z(ptr str) tr2_sys__Statvfs
 @ cdecl -arch=win32 ?_Statvfs@sys@tr2@std@@YA?AUspace_info@123@PB_W@Z(ptr wstr) tr2_sys__Statvfs_wchar
@@ -1732,8 +1732,8 @@
 @ cdecl -arch=arm ?_Swap_all@_Container_base12@std@@QAAXAAU12@@Z(ptr ptr) _Container_base12__Swap_all
 @ thiscall -arch=i386 ?_Swap_all@_Container_base12@std@@QAEXAAU12@@Z(ptr ptr) _Container_base12__Swap_all
 @ cdecl -arch=win64 ?_Swap_all@_Container_base12@std@@QEAAXAEAU12@@Z(ptr ptr) _Container_base12__Swap_all
-@ stub -arch=win32 ?_Symlink@sys@tr2@std@@YAHPBD0@Z
-@ stub -arch=win64 ?_Symlink@sys@tr2@std@@YAHPEBD0@Z
+@ cdecl -arch=win32 ?_Symlink@sys@tr2@std@@YAHPBD0@Z(str str) tr2_sys__Symlink
+@ cdecl -arch=win64 ?_Symlink@sys@tr2@std@@YAHPEBD0@Z(str str) tr2_sys__Symlink
 @ stub -arch=win32 ?_Symlink@sys@tr2@std@@YAHPB_W0@Z
 @ stub -arch=win64 ?_Symlink@sys@tr2@std@@YAHPEB_W0@Z
 @ extern ?_Sync@ios_base@std@@0_NA ios_base_Sync
@@ -1766,8 +1766,8 @@
 @ cdecl -arch=win32 ?_Tidy@ios_base@std@@AAAXXZ(ptr) ios_base_Tidy
 @ stub -arch=i386 ?_Tidy@ios_base@std@@AAEXXZ
 @ cdecl -arch=win64 ?_Tidy@ios_base@std@@AEAAXXZ(ptr) ios_base_Tidy
-@ stub -arch=win32 ?_Unlink@sys@tr2@std@@YAHPBD@Z
-@ stub -arch=win64 ?_Unlink@sys@tr2@std@@YAHPEBD@Z
+@ cdecl -arch=win32 ?_Unlink@sys@tr2@std@@YAHPBD@Z(str) tr2_sys__Unlink
+@ cdecl -arch=win64 ?_Unlink@sys@tr2@std@@YAHPEBD@Z(str) tr2_sys__Unlink
 @ stub -arch=win32 ?_Unlink@sys@tr2@std@@YAHPB_W@Z
 @ stub -arch=win64 ?_Unlink@sys@tr2@std@@YAHPEB_W@Z
 @ cdecl -arch=arm ?_Unlock@?$basic_streambuf@DU?$char_traits@D@std@@@std@@UAAXXZ(ptr) basic_streambuf_char__Unlock
@@ -1806,7 +1806,7 @@
 @ stub ?_Xregex_error@std@@YAXW4error_type@regex_constants@1@@Z
 @ cdecl -arch=win32 ?_Xruntime_error@std@@YAXPBD@Z(str) _Xruntime_error
 @ cdecl -arch=win64 ?_Xruntime_error@std@@YAXPEBD@Z(str) _Xruntime_error
-@ stub ?adopt_lock@std@@3Uadopt_lock_t@1@B
+# extern ?adopt_lock@std@@3Uadopt_lock_t@1@B
 @ cdecl -arch=arm ?always_noconv@codecvt_base@std@@QBA_NXZ(ptr) codecvt_base_always_noconv
 @ thiscall -arch=i386 ?always_noconv@codecvt_base@std@@QBE_NXZ(ptr) codecvt_base_always_noconv
 @ cdecl -arch=win64 ?always_noconv@codecvt_base@std@@QEBA_NXZ(ptr) codecvt_base_always_noconv
@@ -1875,10 +1875,10 @@
 @ stub -arch=arm ?date_order@?$time_get@_WV?$istreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@QBA?AW4dateorder@time_base@2@XZ
 @ stub -arch=i386 ?date_order@?$time_get@_WV?$istreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@QBE?AW4dateorder@time_base@2@XZ
 @ stub -arch=win64 ?date_order@?$time_get@_WV?$istreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@QEBA?AW4dateorder@time_base@2@XZ
-@ stub ?defer_lock@std@@3Udefer_lock_t@1@B
-@ stub -arch=arm ?do_always_noconv@?$codecvt@DDH@std@@MBA_NXZ
-@ stub -arch=i386 ?do_always_noconv@?$codecvt@DDH@std@@MBE_NXZ
-@ stub -arch=win64 ?do_always_noconv@?$codecvt@DDH@std@@MEBA_NXZ
+# extern ?defer_lock@std@@3Udefer_lock_t@1@B
+@ cdecl -arch=arm ?do_always_noconv@?$codecvt@DDH@std@@MBA_NXZ(ptr) codecvt_char_do_always_noconv
+@ thiscall -arch=i386 ?do_always_noconv@?$codecvt@DDH@std@@MBE_NXZ(ptr) codecvt_char_do_always_noconv
+@ cdecl -arch=win64 ?do_always_noconv@?$codecvt@DDH@std@@MEBA_NXZ(ptr) codecvt_char_do_always_noconv
 @ cdecl -arch=arm ?do_always_noconv@?$codecvt@GDH@std@@MBA_NXZ(ptr) codecvt_wchar_do_always_noconv
 @ thiscall -arch=i386 ?do_always_noconv@?$codecvt@GDH@std@@MBE_NXZ(ptr) codecvt_wchar_do_always_noconv
 @ cdecl -arch=win64 ?do_always_noconv@?$codecvt@GDH@std@@MEBA_NXZ(ptr) codecvt_wchar_do_always_noconv
@@ -1897,12 +1897,12 @@
 @ stub -arch=arm ?do_date_order@?$time_get@_WV?$istreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@MBA?AW4dateorder@time_base@2@XZ
 @ stub -arch=i386 ?do_date_order@?$time_get@_WV?$istreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@MBE?AW4dateorder@time_base@2@XZ
 @ stub -arch=win64 ?do_date_order@?$time_get@_WV?$istreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@MEBA?AW4dateorder@time_base@2@XZ
-@ stub -arch=arm ?do_encoding@?$codecvt@GDH@std@@MBAHXZ
-@ stub -arch=i386 ?do_encoding@?$codecvt@GDH@std@@MBEHXZ
-@ stub -arch=win64 ?do_encoding@?$codecvt@GDH@std@@MEBAHXZ
-@ stub -arch=arm ?do_encoding@?$codecvt@_WDH@std@@MBAHXZ
-@ stub -arch=i386 ?do_encoding@?$codecvt@_WDH@std@@MBEHXZ
-@ stub -arch=win64 ?do_encoding@?$codecvt@_WDH@std@@MEBAHXZ
+@ cdecl -arch=arm ?do_encoding@?$codecvt@GDH@std@@MBAHXZ(ptr) codecvt_wchar_do_encoding
+@ thiscall -arch=i386 ?do_encoding@?$codecvt@GDH@std@@MBEHXZ(ptr) codecvt_wchar_do_encoding
+@ cdecl -arch=win64 ?do_encoding@?$codecvt@GDH@std@@MEBAHXZ(ptr) codecvt_wchar_do_encoding
+@ cdecl -arch=arm ?do_encoding@?$codecvt@_WDH@std@@MBAHXZ(ptr) codecvt_wchar_do_encoding
+@ thiscall -arch=i386 ?do_encoding@?$codecvt@_WDH@std@@MBEHXZ(ptr) codecvt_wchar_do_encoding
+@ cdecl -arch=win64 ?do_encoding@?$codecvt@_WDH@std@@MEBAHXZ(ptr) codecvt_wchar_do_encoding
 @ cdecl -arch=arm ?do_encoding@codecvt_base@std@@MBAHXZ(ptr) codecvt_base_do_encoding
 @ thiscall -arch=i386 ?do_encoding@codecvt_base@std@@MBEHXZ(ptr) codecvt_base_do_encoding
 @ cdecl -arch=win64 ?do_encoding@codecvt_base@std@@MEBAHXZ(ptr) codecvt_base_do_encoding
@@ -3546,7 +3546,7 @@
 @ cdecl -arch=arm ?toupper@?$ctype@_W@std@@QBA_W_W@Z(ptr long) ctype_wchar_toupper_ch
 @ thiscall -arch=i386 ?toupper@?$ctype@_W@std@@QBE_W_W@Z(ptr long) ctype_wchar_toupper_ch
 @ cdecl -arch=win64 ?toupper@?$ctype@_W@std@@QEBA_W_W@Z(ptr long) ctype_wchar_toupper_ch
-@ stub ?try_to_lock@std@@3Utry_to_lock_t@1@B
+# extern ?try_to_lock@std@@3Utry_to_lock_t@1@B
 @ cdecl -arch=arm ?uflow@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MAAHXZ(ptr) basic_streambuf_char_uflow
 @ thiscall -arch=i386 ?uflow@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MAEHXZ(ptr) basic_streambuf_char_uflow
 @ cdecl -arch=win64 ?uflow@?$basic_streambuf@DU?$char_traits@D@std@@@std@@MEAAHXZ(ptr) basic_streambuf_char_uflow
@@ -3672,12 +3672,12 @@
 @ cdecl _Call_onceEx(ptr ptr ptr)
 @ cdecl _Cnd_broadcast(ptr)
 @ cdecl _Cnd_destroy(ptr)
-@ stub _Cnd_do_broadcast_at_thread_exit
+@ cdecl _Cnd_do_broadcast_at_thread_exit()
 @ cdecl _Cnd_init(ptr)
-@ stub _Cnd_register_at_thread_exit
+@ cdecl _Cnd_register_at_thread_exit(ptr ptr ptr)
 @ cdecl _Cnd_signal(ptr)
 @ cdecl _Cnd_timedwait(ptr ptr ptr)
-@ stub _Cnd_unregister_at_thread_exit
+@ cdecl _Cnd_unregister_at_thread_exit(ptr)
 @ cdecl _Cnd_wait(ptr ptr)
 @ stub _Cosh
 @ extern _Denorm
@@ -3763,7 +3763,7 @@
 @ stub _Lock_shared_ptr_spin_lock
 @ cdecl _Mbrtowc(ptr ptr long ptr ptr)
 @ stub _Mtx_clear_owner
-@ stub _Mtx_current_owns
+@ cdecl _Mtx_current_owns(ptr)
 @ cdecl _Mtx_destroy(ptr)
 @ cdecl _Mtx_getconcrtcs(ptr)
 @ cdecl _Mtx_init(ptr long)
@@ -3805,13 +3805,13 @@
 @ stub _Thrd_abort
 @ cdecl _Thrd_create(ptr ptr ptr)
 @ cdecl _Thrd_current()
-@ stub _Thrd_detach
+@ cdecl _Thrd_detach(ptr)
 @ cdecl _Thrd_equal(ptr ptr)
 @ stub _Thrd_exit
 @ cdecl _Thrd_join(ptr long)
 @ cdecl _Thrd_lt(ptr ptr)
 @ cdecl _Thrd_sleep(ptr)
-@ stub _Thrd_start
+@ cdecl _Thrd_start(ptr ptr ptr)
 @ cdecl _Thrd_yield()
 @ cdecl _Tolower(long ptr)
 @ cdecl _Toupper(long ptr)

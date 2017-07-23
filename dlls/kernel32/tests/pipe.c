@@ -110,6 +110,13 @@ static BOOL RpcReadFile(HANDLE hFile, LPVOID buffer, DWORD bytesToRead, LPDWORD 
     return (BOOL)rpcargs.returnValue;
 }
 
+#define test_signaled(h) _test_signaled(__LINE__,h)
+static void _test_signaled(unsigned line, HANDLE handle)
+{
+    DWORD res = WaitForSingleObject(handle, 0);
+    ok_(__FILE__,line)(res == WAIT_OBJECT_0, "WaitForSingleObject returned %u\n", res);
+}
+
 static void test_CreateNamedPipe(int pipemode)
 {
     HANDLE hnp;
@@ -176,6 +183,7 @@ static void test_CreateNamedPipe(int pipemode)
         /* nDefaultWait */ NMPWAIT_USE_DEFAULT_WAIT,
         /* lpSecurityAttrib */ NULL);
     ok(hnp != INVALID_HANDLE_VALUE, "CreateNamedPipe failed\n");
+    test_signaled(hnp);
 
     ret = WaitNamedPipeA(PIPENAME, 2000);
     ok(ret, "WaitNamedPipe failed (%d)\n", GetLastError());
@@ -1356,8 +1364,8 @@ static void test_CreatePipe(void)
     ok(written == sizeof(PIPENAME), "Write to anonymous pipe wrote %d bytes\n", written);
     /* and close the write end, read should still succeed*/
     ok(CloseHandle(pipewrite), "CloseHandle for the Write Pipe failed\n");
-    ok(ReadFile(piperead,readbuf,sizeof(readbuf),&read, NULL), "Read from broken pipe withe with pending data failed\n");
-    ok(read == sizeof(PIPENAME), "Read from  anonymous pipe got %d bytes\n", read);
+    ok(ReadFile(piperead,readbuf,sizeof(readbuf),&read, NULL), "Read from broken pipe with pending data failed\n");
+    ok(read == sizeof(PIPENAME), "Read from anonymous pipe got %d bytes\n", read);
     /* But now we need to get informed that the pipe is closed */
     ok(ReadFile(piperead,readbuf,sizeof(readbuf),&read, NULL) == 0, "Broken pipe not detected\n");
     ok(CloseHandle(piperead), "CloseHandle for the read pipe failed\n");
@@ -1372,8 +1380,8 @@ static void test_CreatePipe(void)
     /* and close the write end, read should still succeed*/
     ok(CloseHandle(pipewrite), "CloseHandle for the Write Pipe failed\n");
     memset( buffer, 0, size );
-    ok(ReadFile(piperead, buffer, size, &read, NULL), "Read from broken pipe withe with pending data failed\n");
-    ok(read == size, "Read from  anonymous pipe got %d bytes\n", read);
+    ok(ReadFile(piperead, buffer, size, &read, NULL), "Read from broken pipe with pending data failed\n");
+    ok(read == size, "Read from anonymous pipe got %d bytes\n", read);
     for (i = 0; i < size; i++) ok( buffer[i] == (BYTE)i, "invalid data %x at %x\n", buffer[i], i );
     /* But now we need to get informed that the pipe is closed */
     ok(ReadFile(piperead,readbuf,sizeof(readbuf),&read, NULL) == 0, "Broken pipe not detected\n");
@@ -1464,6 +1472,11 @@ static void test_CloseHandle(void)
     ret = ReadFile(hfile, buffer, sizeof(buffer), &numbytes, NULL);
     todo_wine ok(ret, "ReadFile failed with %u\n", GetLastError());
     ok(numbytes == 0, "expected 0, got %u\n", numbytes);
+
+    SetLastError(0xdeadbeef);
+    ret = ReadFile(hfile, buffer, 0, &numbytes, NULL);
+    ok(!ret, "ReadFile unexpectedly succeeded\n");
+    todo_wine ok(GetLastError() == ERROR_BROKEN_PIPE, "expected ERROR_BROKEN_PIPE, got %u\n", GetLastError());
 
     ret = GetNamedPipeHandleStateA(hfile, &state, NULL, NULL, NULL, NULL, 0);
     ok(ret, "GetNamedPipeHandleState failed with %u\n", GetLastError());
@@ -1558,6 +1571,11 @@ static void test_CloseHandle(void)
     ret = ReadFile(hpipe, buffer, sizeof(buffer), &numbytes, NULL);
     todo_wine ok(ret, "ReadFile failed with %u\n", GetLastError());
     ok(numbytes == 0, "expected 0, got %u\n", numbytes);
+
+    SetLastError(0xdeadbeef);
+    ret = ReadFile(hpipe, buffer, 0, &numbytes, NULL);
+    ok(!ret, "ReadFile unexpectedly succeeded\n");
+    ok(GetLastError() == ERROR_BROKEN_PIPE, "expected ERROR_BROKEN_PIPE, got %u\n", GetLastError());
 
     ret = GetNamedPipeHandleStateA(hpipe, &state, NULL, NULL, NULL, NULL, 0);
     ok(ret, "GetNamedPipeHandleState failed with %u\n", GetLastError());
@@ -2060,6 +2078,20 @@ static DWORD CALLBACK overlapped_server(LPVOID arg)
     ok(ret == 1, "ret %d\n", ret);
 
     DisconnectNamedPipe(pipe);
+
+    ret = ConnectNamedPipe(pipe, &ol);
+    err = GetLastError();
+    ok(ret == 0, "ret %d\n", ret);
+    ok(err == ERROR_IO_PENDING, "gle %d\n", err);
+    CancelIo(pipe);
+    ret = WaitForSingleObjectEx(ol.hEvent, INFINITE, 1);
+    ok(ret == WAIT_OBJECT_0, "ret %x\n", ret);
+
+    ret = GetOverlappedResult(pipe, &ol, &num, 1);
+    err = GetLastError();
+    ok(ret == 0, "ret %d\n", ret);
+    ok(err == ERROR_OPERATION_ABORTED, "gle %d\n", err);
+
     CloseHandle(ol.hEvent);
     CloseHandle(pipe);
     return 1;
@@ -2089,6 +2121,64 @@ static void test_overlapped(void)
     CloseHandle(pipe);
     CloseHandle(args.pipe_created);
     CloseHandle(thread);
+}
+
+static void test_overlapped_error(void)
+{
+    HANDLE pipe, file, event;
+    DWORD err, numbytes;
+    OVERLAPPED overlapped;
+    BOOL ret;
+
+    event = CreateEventA(NULL, TRUE, FALSE, NULL);
+    ok(event != NULL, "CreateEventA failed with %u\n", GetLastError());
+
+    pipe = CreateNamedPipeA(PIPENAME, PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
+                            PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
+                            1, 1024, 1024, NMPWAIT_WAIT_FOREVER, NULL);
+    ok(pipe != INVALID_HANDLE_VALUE, "CreateNamedPipe failed with %u\n", GetLastError());
+
+    memset(&overlapped, 0, sizeof(overlapped));
+    overlapped.hEvent = event;
+    ret = ConnectNamedPipe(pipe, &overlapped);
+    err = GetLastError();
+    ok(ret == FALSE, "ConnectNamedPipe succeeded\n");
+    ok(err == ERROR_IO_PENDING, "expected ERROR_IO_PENDING, got %u\n", err);
+
+    file = CreateFileA(PIPENAME, GENERIC_READ | GENERIC_WRITE, 0, NULL,
+                       OPEN_EXISTING, FILE_FLAG_OVERLAPPED, 0);
+    ok(file != INVALID_HANDLE_VALUE, "CreateFile failed with %u\n", GetLastError());
+
+    numbytes = 0xdeadbeef;
+    ret = GetOverlappedResult(pipe, &overlapped, &numbytes, TRUE);
+    ok(ret == TRUE, "GetOverlappedResult failed\n");
+    ok(numbytes == 0, "expected 0, got %u\n", numbytes);
+    ok(overlapped.Internal == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08lx\n", overlapped.Internal);
+
+    CloseHandle(file);
+    CloseHandle(pipe);
+
+    pipe = CreateNamedPipeA(PIPENAME, PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
+                            PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
+                            1, 1024, 1024, NMPWAIT_WAIT_FOREVER, NULL);
+    ok(pipe != INVALID_HANDLE_VALUE, "CreateNamedPipe failed with %u\n", GetLastError());
+
+    file = CreateFileA(PIPENAME, GENERIC_READ | GENERIC_WRITE, 0, NULL,
+                       OPEN_EXISTING, FILE_FLAG_OVERLAPPED, 0);
+    ok(file != INVALID_HANDLE_VALUE, "CreateFile failed with %u\n", GetLastError());
+
+    memset(&overlapped, 0, sizeof(overlapped));
+    overlapped.hEvent = event;
+    ret = ConnectNamedPipe(pipe, &overlapped);
+    err = GetLastError();
+    ok(ret == FALSE, "ConnectNamedPipe succeeded\n");
+    ok(err == ERROR_PIPE_CONNECTED, "expected ERROR_PIPE_CONNECTED, got %u\n", err);
+    ok(overlapped.Internal == STATUS_PENDING, "expected STATUS_PENDING, got %08lx\n", overlapped.Internal);
+
+    CloseHandle(file);
+    CloseHandle(pipe);
+
+    CloseHandle(event);
 }
 
 static void test_NamedPipeHandleState(void)
@@ -2189,6 +2279,77 @@ static void test_NamedPipeHandleState(void)
     ok(ret, "SetNamedPipeHandleState failed: %d\n", GetLastError());
 
     CloseHandle(client);
+    CloseHandle(server);
+}
+
+#define test_pipe_info(a,b,c,d,e) _test_pipe_info(__LINE__,a,b,c,d,e)
+static void _test_pipe_info(unsigned line, HANDLE pipe, DWORD ex_flags, DWORD ex_out_buf_size, DWORD ex_in_buf_size, DWORD ex_max_instances)
+{
+    DWORD flags = 0xdeadbeef, out_buf_size = 0xdeadbeef, in_buf_size = 0xdeadbeef, max_instances = 0xdeadbeef;
+    BOOL res;
+
+    res = GetNamedPipeInfo(pipe, &flags, &out_buf_size, &in_buf_size, &max_instances);
+    ok_(__FILE__,line)(res, "GetNamedPipeInfo failed: %x\n", res);
+    ok_(__FILE__,line)(flags == ex_flags, "flags = %x, expected %x\n", flags, ex_flags);
+    ok_(__FILE__,line)(out_buf_size == ex_out_buf_size, "out_buf_size = %x, expected %u\n", out_buf_size, ex_out_buf_size);
+    ok_(__FILE__,line)(in_buf_size == ex_in_buf_size, "in_buf_size = %x, expected %u\n", in_buf_size, ex_in_buf_size);
+    ok_(__FILE__,line)(max_instances == ex_max_instances, "max_instances = %x, expected %u\n", max_instances, ex_max_instances);
+}
+
+static void test_GetNamedPipeInfo(void)
+{
+    HANDLE server;
+
+    server = CreateNamedPipeA(PIPENAME, PIPE_ACCESS_DUPLEX,
+        /* dwOpenMode */ PIPE_TYPE_BYTE | PIPE_WAIT,
+        /* nMaxInstances */ 1,
+        /* nOutBufSize */ 1024,
+        /* nInBufSize */ 1024,
+        /* nDefaultWait */ NMPWAIT_USE_DEFAULT_WAIT,
+        /* lpSecurityAttrib */ NULL);
+    ok(server != INVALID_HANDLE_VALUE, "CreateNamedPipe failed\n");
+
+    test_pipe_info(server, PIPE_SERVER_END | PIPE_TYPE_BYTE, 1024, 1024, 1);
+
+    CloseHandle(server);
+
+    server = CreateNamedPipeA(PIPENAME, PIPE_ACCESS_DUPLEX,
+        /* dwOpenMode */ PIPE_TYPE_MESSAGE | PIPE_NOWAIT,
+        /* nMaxInstances */ 3,
+        /* nOutBufSize */ 1024,
+        /* nInBufSize */ 1024,
+        /* nDefaultWait */ NMPWAIT_USE_DEFAULT_WAIT,
+        /* lpSecurityAttrib */ NULL);
+    ok(server != INVALID_HANDLE_VALUE, "CreateNamedPipe failed\n");
+
+    test_pipe_info(server, PIPE_SERVER_END | PIPE_TYPE_MESSAGE, 1024, 1024, 3);
+
+    CloseHandle(server);
+
+    server = CreateNamedPipeA(PIPENAME, FILE_FLAG_OVERLAPPED | PIPE_ACCESS_DUPLEX,
+        /* dwOpenMode */ PIPE_TYPE_MESSAGE | PIPE_WAIT,
+        /* nMaxInstances */ 1,
+        /* nOutBufSize */ 0,
+        /* nInBufSize */ 0,
+        /* nDefaultWait */ NMPWAIT_USE_DEFAULT_WAIT,
+        /* lpSecurityAttrib */ NULL);
+    ok(server != INVALID_HANDLE_VALUE, "CreateNamedPipe failed\n");
+
+    test_pipe_info(server, PIPE_SERVER_END | PIPE_TYPE_MESSAGE, 0, 0, 1);
+
+    CloseHandle(server);
+
+    server = CreateNamedPipeA(PIPENAME, FILE_FLAG_OVERLAPPED | PIPE_ACCESS_DUPLEX,
+        /* dwOpenMode */ PIPE_TYPE_MESSAGE | PIPE_WAIT,
+        /* nMaxInstances */ 1,
+        /* nOutBufSize */ 0xf000,
+        /* nInBufSize */ 0xf000,
+        /* nDefaultWait */ NMPWAIT_USE_DEFAULT_WAIT,
+        /* lpSecurityAttrib */ NULL);
+    ok(server != INVALID_HANDLE_VALUE, "CreateNamedPipe failed\n");
+
+    test_pipe_info(server, PIPE_SERVER_END | PIPE_TYPE_MESSAGE, 0xf000, 0xf000, 1);
+
     CloseHandle(server);
 }
 
@@ -2372,6 +2533,8 @@ START_TEST(pipe)
     test_CloseHandle();
     test_impersonation();
     test_overlapped();
+    test_overlapped_error();
     test_NamedPipeHandleState();
+    test_GetNamedPipeInfo();
     test_readfileex_pending();
 }

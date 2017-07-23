@@ -617,7 +617,7 @@ static void test_WinHttpAddHeaders(void)
         test_header_name, NULL, &len, &index);
     ok(ret == FALSE, "WinHttpQueryHeaders unexpectedly succeeded.\n");
     ok(GetLastError() == ERROR_INSUFFICIENT_BUFFER,
-        "WinHttpQueryHeaders set incorrect error: expected ERROR_INSUFFICENT_BUFFER, go %u\n", GetLastError());
+        "WinHttpQueryHeaders set incorrect error: expected ERROR_INSUFFICENT_BUFFER, got %u\n", GetLastError());
     ok(len > 40, "WinHttpQueryHeaders returned invalid length: expected greater than 40, got %d\n", len);
     ok(index == 0, "WinHttpQueryHeaders incorrectly incremented header index.\n");
 
@@ -994,6 +994,12 @@ static void test_secure_connection(void)
     req = WinHttpOpenRequest(con, NULL, NULL, NULL, NULL, NULL, 0);
     ok(req != NULL, "failed to open a request %u\n", GetLastError());
 
+    ret = WinHttpSetOption(req, WINHTTP_OPTION_CLIENT_CERT_CONTEXT, WINHTTP_NO_CLIENT_CERT_CONTEXT, 0);
+    err = GetLastError();
+    ok(!ret, "unexpected success\n");
+    ok(err == ERROR_WINHTTP_INCORRECT_HANDLE_STATE || broken(err == ERROR_INVALID_PARAMETER) /* winxp */,
+       "setting client cert context returned %u\n", err);
+
     ret = WinHttpSendRequest(req, NULL, 0, NULL, 0, 0, 0);
     err = GetLastError();
     if (!ret && (err == ERROR_WINHTTP_CANNOT_CONNECT || err == ERROR_WINHTTP_TIMEOUT))
@@ -1016,6 +1022,10 @@ static void test_secure_connection(void)
 
     req = WinHttpOpenRequest(con, NULL, NULL, NULL, NULL, NULL, WINHTTP_FLAG_SECURE);
     ok(req != NULL, "failed to open a request %u\n", GetLastError());
+
+    ret = WinHttpSetOption(req, WINHTTP_OPTION_CLIENT_CERT_CONTEXT, WINHTTP_NO_CLIENT_CERT_CONTEXT, 0);
+    err = GetLastError();
+    ok(ret || broken(!ret && err == ERROR_INVALID_PARAMETER) /* winxp */, "failed to set client cert context %u\n", err);
 
     WinHttpSetStatusCallback(req, cert_error, WINHTTP_CALLBACK_STATUS_SECURE_FAILURE, 0);
 
@@ -1207,21 +1217,28 @@ static DWORD get_default_proxy_reg_value( BYTE *buf, DWORD len, DWORD *type )
     return ret;
 }
 
+static void set_proxy( REGSAM access, BYTE *buf, DWORD len, DWORD type )
+{
+    HKEY hkey;
+    if (!RegCreateKeyExW( HKEY_LOCAL_MACHINE, Connections, 0, NULL, 0, access, NULL, &hkey, NULL ))
+    {
+        if (len) RegSetValueExW( hkey, WinHttpSettings, 0, type, buf, len );
+        else RegDeleteValueW( hkey, WinHttpSettings );
+        RegCloseKey( hkey );
+    }
+}
+
 static void set_default_proxy_reg_value( BYTE *buf, DWORD len, DWORD type )
 {
-    LONG l;
-    HKEY key;
-
-    l = RegCreateKeyExW( HKEY_LOCAL_MACHINE, Connections, 0, NULL, 0,
-        KEY_WRITE, NULL, &key, NULL );
-    if (!l)
+    BOOL wow64;
+    IsWow64Process( GetCurrentProcess(), &wow64 );
+    if (sizeof(void *) > sizeof(int) || wow64)
     {
-        if (len)
-            RegSetValueExW( key, WinHttpSettings, 0, type, buf, len );
-        else
-            RegDeleteValueW( key, WinHttpSettings );
-        RegCloseKey( key );
+        set_proxy( KEY_WRITE|KEY_WOW64_64KEY, buf, len, type );
+        set_proxy( KEY_WRITE|KEY_WOW64_32KEY, buf, len, type );
     }
+    else
+        set_proxy( KEY_WRITE, buf, len, type );
 }
 
 static void test_set_default_proxy_config(void)
@@ -2319,9 +2336,7 @@ static void test_basic_authentication(int port)
     ok(ret || broken(error == ERROR_WINHTTP_SHUTDOWN || error == ERROR_WINHTTP_TIMEOUT) /* XP */, "failed to read data %u\n", GetLastError());
     if (ret)
     {
-todo_wine
         ok(size == 12, "expected 12, got %u\n", size);
-todo_wine
         ok(!memcmp(buffer, unauthorized, 12), "got %s\n", buffer);
     }
 
@@ -3653,7 +3668,6 @@ static void test_IWinHttpRequest(int port)
 
     hr = IWinHttpRequest_get_ResponseText( req, &response );
     ok( hr == S_OK, "got %08x\n", hr );
-todo_wine
     ok( !memcmp( response, unauthW, sizeof(unauthW) ), "got %s\n", wine_dbgstr_w(response) );
     SysFreeString( response );
 
@@ -3825,8 +3839,8 @@ static void test_IWinHttpRequest_Invoke(void)
     ok(hr == DISP_E_UNKNOWNINTERFACE, "error %#x\n", hr);
 
     VariantInit(&ret);
-if (0) /* crashes */
-    hr = IWinHttpRequest_Invoke(request, DISPID_HTTPREQUEST_OPTION, &IID_NULL, 0, DISPATCH_PROPERTYPUT, NULL, &ret, NULL, &err);
+    if (0) /* crashes */
+        hr = IWinHttpRequest_Invoke(request, DISPID_HTTPREQUEST_OPTION, &IID_NULL, 0, DISPATCH_PROPERTYPUT, NULL, &ret, NULL, &err);
 
     params.cArgs = 1;
     hr = IWinHttpRequest_Invoke(request, DISPID_HTTPREQUEST_OPTION, &IID_NULL, 0, DISPATCH_PROPERTYPUT, &params, &ret, NULL, &err);

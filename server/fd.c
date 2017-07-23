@@ -214,6 +214,8 @@ static const struct object_ops fd_ops =
     default_get_sd,           /* get_sd */
     default_set_sd,           /* set_sd */
     no_lookup_name,           /* lookup_name */
+    no_link_name,             /* link_name */
+    NULL,                     /* unlink_name */
     no_open_file,             /* open_file */
     no_close_handle,          /* close_handle */
     fd_destroy                /* destroy */
@@ -251,6 +253,8 @@ static const struct object_ops device_ops =
     default_get_sd,           /* get_sd */
     default_set_sd,           /* set_sd */
     no_lookup_name,           /* lookup_name */
+    no_link_name,             /* link_name */
+    NULL,                     /* unlink_name */
     no_open_file,             /* open_file */
     no_close_handle,          /* close_handle */
     device_destroy            /* destroy */
@@ -287,6 +291,8 @@ static const struct object_ops inode_ops =
     default_get_sd,           /* get_sd */
     default_set_sd,           /* set_sd */
     no_lookup_name,           /* lookup_name */
+    no_link_name,             /* link_name */
+    NULL,                     /* unlink_name */
     no_open_file,             /* open_file */
     no_close_handle,          /* close_handle */
     inode_destroy             /* destroy */
@@ -325,6 +331,8 @@ static const struct object_ops file_lock_ops =
     default_get_sd,             /* get_sd */
     default_set_sd,             /* set_sd */
     no_lookup_name,             /* lookup_name */
+    no_link_name,               /* link_name */
+    NULL,                       /* unlink_name */
     no_open_file,               /* open_file */
     no_close_handle,            /* close_handle */
     no_destroy                  /* destroy */
@@ -571,8 +579,8 @@ static inline void set_fd_epoll_events( struct fd *fd, int user, int events )
 
     if (kqueue_fd == -1) return;
 
-    EV_SET( &ev[0], fd->unix_fd, EVFILT_READ, 0, NOTE_LOWAT, 1, (void *)user );
-    EV_SET( &ev[1], fd->unix_fd, EVFILT_WRITE, 0, NOTE_LOWAT, 1, (void *)user );
+    EV_SET( &ev[0], fd->unix_fd, EVFILT_READ, 0, NOTE_LOWAT, 1, (void *)(long)user );
+    EV_SET( &ev[1], fd->unix_fd, EVFILT_WRITE, 0, NOTE_LOWAT, 1, (void *)(long)user );
 
     if (events == -1)  /* stop waiting on this fd completely */
     {
@@ -1957,7 +1965,7 @@ void set_fd_signaled( struct fd *fd, int signaled )
     if (signaled) wake_up( fd->user, 0 );
 }
 
-/* set or clear the fd signaled state */
+/* check if fd is signaled */
 int is_fd_signaled( struct fd *fd )
 {
     return fd->signaled;
@@ -2022,7 +2030,7 @@ void default_poll_event( struct fd *fd, int event )
     else if (!fd->inode) set_fd_events( fd, fd->fd_ops->get_poll_events( fd ) );
 }
 
-struct async *fd_queue_async( struct fd *fd, const async_data_t *data, int type )
+struct async *fd_queue_async( struct fd *fd, const async_data_t *data, struct iosb *iosb, int type )
 {
     struct async_queue *queue;
     struct async *async;
@@ -2046,7 +2054,7 @@ struct async *fd_queue_async( struct fd *fd, const async_data_t *data, int type 
         assert(0);
     }
 
-    if ((async = create_async( current, queue, data )) && type != ASYNC_TYPE_WAIT)
+    if ((async = create_async( current, queue, data, iosb )) && type != ASYNC_TYPE_WAIT)
     {
         if (!fd->inode)
             set_fd_events( fd, fd->fd_ops->get_poll_events( fd ) );
@@ -2088,7 +2096,7 @@ void default_fd_queue_async( struct fd *fd, const async_data_t *data, int type, 
 {
     struct async *async;
 
-    if ((async = fd_queue_async( fd, data, type )))
+    if ((async = fd_queue_async( fd, data, NULL, type )))
     {
         release_object( async );
         set_error( STATUS_PENDING );
@@ -2105,17 +2113,6 @@ void default_fd_reselect_async( struct fd *fd, struct async_queue *queue )
         if (events) fd->fd_ops->poll_event( fd, events );
         else set_fd_events( fd, poll_events );
     }
-}
-
-/* default cancel_async() fd routine */
-int default_fd_cancel_async( struct fd *fd, struct process *process, struct thread *thread, client_ptr_t iosb )
-{
-    int n = 0;
-
-    n += async_wake_up_by( fd->read_q, process, thread, iosb, STATUS_CANCELLED );
-    n += async_wake_up_by( fd->write_q, process, thread, iosb, STATUS_CANCELLED );
-    n += async_wake_up_by( fd->wait_q, process, thread, iosb, STATUS_CANCELLED );
-    return n;
 }
 
 static inline int is_valid_mounted_device( struct stat *st )
@@ -2389,29 +2386,14 @@ DECL_HANDLER(flush)
 /* open a file object */
 DECL_HANDLER(open_file_object)
 {
-    struct unicode_str name;
-    struct directory *root = NULL;
-    struct object *obj, *result;
+    struct unicode_str name = get_req_unicode_str();
+    struct object *obj, *result, *root = NULL;
 
-    get_req_unicode_str( &name );
-    if (req->rootdir && !(root = get_directory_obj( current->process, req->rootdir, 0 )))
-    {
-        if (get_error() != STATUS_OBJECT_TYPE_MISMATCH) return;
-        if (!(obj = (struct object *)get_file_obj( current->process, req->rootdir, 0 ))) return;
-        if (name.len)
-        {
-            release_object( obj );
-            set_error( STATUS_OBJECT_PATH_NOT_FOUND );
-            return;
-        }
-        clear_error();
-    }
-    else
-    {
-        obj = open_object_dir( root, &name, req->attributes, NULL );
-        if (root) release_object( root );
-        if (!obj) return;
-    }
+    if (req->rootdir && !(root = get_handle_obj( current->process, req->rootdir, 0, NULL ))) return;
+
+    obj = open_named_object( root, NULL, &name, req->attributes );
+    if (root) release_object( root );
+    if (!obj) return;
 
     if ((result = obj->ops->open_file( obj, req->access, req->sharing, req->options )))
     {
@@ -2448,10 +2430,10 @@ DECL_HANDLER(get_handle_fd)
     if ((fd = get_handle_fd_obj( current->process, req->handle, 0 )))
     {
         int unix_fd = get_unix_fd( fd );
+        reply->cacheable = fd->cacheable;
         if (unix_fd != -1)
         {
             reply->type = fd->fd_ops->get_fd_type( fd );
-            reply->cacheable = fd->cacheable;
             reply->options = fd->options;
             reply->access = get_handle_access( current->process, req->handle );
             send_client_fd( current->process, unix_fd, req->handle );
@@ -2522,20 +2504,6 @@ DECL_HANDLER(register_async)
     if ((fd = get_handle_fd_obj( current->process, req->async.handle, access )))
     {
         if (get_unix_fd( fd ) != -1) fd->fd_ops->queue_async( fd, &req->async, req->type, req->count );
-        release_object( fd );
-    }
-}
-
-/* cancels all async I/O */
-DECL_HANDLER(cancel_async)
-{
-    struct fd *fd = get_handle_fd_obj( current->process, req->handle, 0 );
-    struct thread *thread = req->only_thread ? current : NULL;
-
-    if (fd)
-    {
-        int count = fd->fd_ops->cancel_async( fd, current->process, thread, req->iosb );
-        if (!count && req->iosb) set_error( STATUS_NOT_FOUND );
         release_object( fd );
     }
 }

@@ -27,8 +27,7 @@
 
 #include "initguid.h"
 #include "windows.h"
-#include "dwrite.h"
-#include "dwrite_2.h"
+#include "dwrite_3.h"
 
 #include "wine/test.h"
 
@@ -113,13 +112,6 @@ static inline void flush_sequence(struct call_sequence **seg, int sequence_index
     HeapFree(GetProcessHeap(), 0, call_seq->sequence);
     call_seq->sequence = NULL;
     call_seq->count = call_seq->size = 0;
-}
-
-static inline void flush_sequences(struct call_sequence **seq, int n)
-{
-    int i;
-    for (i = 0; i < n; i++)
-        flush_sequence(seq, i);
 }
 
 static void init_call_sequences(struct call_sequence **seq, int n)
@@ -292,14 +284,22 @@ static HRESULT WINAPI analysissink_SetLineBreakpoints(IDWriteTextAnalysisSink *i
     return S_OK;
 }
 
+#define BIDI_LEVELS_COUNT 10
+static UINT8 g_explicit_levels[BIDI_LEVELS_COUNT];
+static UINT8 g_resolved_levels[BIDI_LEVELS_COUNT];
 static HRESULT WINAPI analysissink_SetBidiLevel(IDWriteTextAnalysisSink *iface,
         UINT32 position,
         UINT32 length,
         UINT8 explicitLevel,
         UINT8 resolvedLevel)
 {
-    ok(0, "unexpected\n");
-    return E_NOTIMPL;
+    if (position + length > BIDI_LEVELS_COUNT) {
+        ok(0, "SetBidiLevel: reported pos=%u, len=%u overflows expected length %d\n", position, length, BIDI_LEVELS_COUNT);
+        return E_FAIL;
+    }
+    memset(g_explicit_levels + position, explicitLevel, length);
+    memset(g_resolved_levels + position, resolvedLevel, length);
+    return S_OK;
 }
 
 static HRESULT WINAPI analysissink_SetNumberSubstitution(IDWriteTextAnalysisSink *iface,
@@ -353,20 +353,32 @@ static ULONG WINAPI analysissource_Release(IDWriteTextAnalysisSource *iface)
     return 1;
 }
 
-static const WCHAR *g_source;
+struct testanalysissource
+{
+    IDWriteTextAnalysisSource IDWriteTextAnalysisSource_iface;
+    const WCHAR *text;
+    DWRITE_READING_DIRECTION direction;
+};
+
+static inline struct testanalysissource *impl_from_IDWriteTextAnalysisSource(IDWriteTextAnalysisSource *iface)
+{
+    return CONTAINING_RECORD(iface, struct testanalysissource, IDWriteTextAnalysisSource_iface);
+}
 
 static HRESULT WINAPI analysissource_GetTextAtPosition(IDWriteTextAnalysisSource *iface,
     UINT32 position, WCHAR const** text, UINT32* text_len)
 {
-    if (position >= lstrlenW(g_source))
+    struct testanalysissource *source = impl_from_IDWriteTextAnalysisSource(iface);
+
+    if (position >= lstrlenW(source->text))
     {
         *text = NULL;
         *text_len = 0;
     }
     else
     {
-        *text = &g_source[position];
-        *text_len = lstrlenW(g_source) - position;
+        *text = source->text + position;
+        *text_len = lstrlenW(source->text) - position;
     }
 
     return S_OK;
@@ -382,8 +394,8 @@ static HRESULT WINAPI analysissource_GetTextBeforePosition(IDWriteTextAnalysisSo
 static DWRITE_READING_DIRECTION WINAPI analysissource_GetParagraphReadingDirection(
     IDWriteTextAnalysisSource *iface)
 {
-    ok(0, "unexpected\n");
-    return DWRITE_READING_DIRECTION_RIGHT_TO_LEFT;
+    struct testanalysissource *source = impl_from_IDWriteTextAnalysisSource(iface);
+    return source->direction;
 }
 
 static HRESULT WINAPI analysissource_GetLocaleName(IDWriteTextAnalysisSource *iface,
@@ -412,7 +424,7 @@ static IDWriteTextAnalysisSourceVtbl analysissourcevtbl = {
     analysissource_GetNumberSubstitution
 };
 
-static IDWriteTextAnalysisSource analysissource = { &analysissourcevtbl };
+static struct testanalysissource analysissource = { { &analysissourcevtbl } };
 
 static IDWriteFontFace *create_fontface(void)
 {
@@ -894,7 +906,57 @@ static struct sa_test sa_tests[] = {
             { 2, 2, DWRITE_SCRIPT_SHAPES_DEFAULT   },
             { 4, 2, DWRITE_SCRIPT_SHAPES_NO_VISUAL } }
     },
-    /* keep this as end marker */
+    {
+      /* Inherited on its own */
+      {0x300,0x300,0}, 1,
+          { { 0, 2, DWRITE_SCRIPT_SHAPES_DEFAULT } }
+    },
+    {
+      /* Inherited followed by Latin */
+      {0x300,0x300,'a',0}, 1,
+          { { 0, 3, DWRITE_SCRIPT_SHAPES_DEFAULT } }
+    },
+    {
+      /* Inherited mixed with Arabic and Latin */
+      {0x300,'+',0x627,0x300,'a',0}, 2,
+          { { 0, 4, DWRITE_SCRIPT_SHAPES_DEFAULT },
+            { 4, 1, DWRITE_SCRIPT_SHAPES_DEFAULT } }
+    },
+    {
+      {'a',0x300,'+',0x627,0x300,')','a',0}, 3,
+          { { 0, 3, DWRITE_SCRIPT_SHAPES_DEFAULT },
+            { 3, 3, DWRITE_SCRIPT_SHAPES_DEFAULT },
+            { 6, 1, DWRITE_SCRIPT_SHAPES_DEFAULT } }
+    },
+    /* Paired punctuation */
+    {
+      {0x627,'(','a',')','a',0}, 2,
+          { { 0, 2, DWRITE_SCRIPT_SHAPES_DEFAULT },
+            { 2, 3, DWRITE_SCRIPT_SHAPES_DEFAULT } }
+    },
+    {
+      {0x627,'[','a',']',0x627,0}, 3,
+          { { 0, 2, DWRITE_SCRIPT_SHAPES_DEFAULT },
+            { 2, 2, DWRITE_SCRIPT_SHAPES_DEFAULT },
+            { 4, 1, DWRITE_SCRIPT_SHAPES_DEFAULT } }
+    },
+    /* Combining marks */
+    {
+      /* dotted circle - Common, followed by accent - Inherited */
+      {0x25cc,0x300,0}, 1,
+          { { 0, 2, DWRITE_SCRIPT_SHAPES_DEFAULT } }
+    },
+    {
+      /* combining mark with explicit script value */
+      {0x25cc,0x300,0x5c4,0}, 1,
+          { { 0, 3, DWRITE_SCRIPT_SHAPES_DEFAULT } }
+    },
+    {
+      /* inherited merges with following explicit script */
+      {0x25cc,0x300,'a',0}, 1,
+          { { 0, 3, DWRITE_SCRIPT_SHAPES_DEFAULT } }
+    },
+    /* keep this as end test data marker */
     { {0} }
 };
 
@@ -903,7 +965,7 @@ static void init_expected_sa(struct call_sequence **seq, const struct sa_test *t
     static const struct call_entry end_of_sequence = { LastKind };
     int i;
 
-    flush_sequence(seq, 0);
+    flush_sequence(seq, ANALYZER_ID);
 
     /* add expected calls */
     for (i = 0; i < test->item_count; i++)
@@ -926,12 +988,12 @@ static void get_script_analysis(const WCHAR *str, DWRITE_SCRIPT_ANALYSIS *sa)
     IDWriteTextAnalyzer *analyzer;
     HRESULT hr;
 
-    g_source = str;
-
+    analysissource.text = str;
     hr = IDWriteFactory_CreateTextAnalyzer(factory, &analyzer);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
-    hr = IDWriteTextAnalyzer_AnalyzeScript(analyzer, &analysissource, 0, lstrlenW(g_source), &analysissink2);
+    hr = IDWriteTextAnalyzer_AnalyzeScript(analyzer, &analysissource.IDWriteTextAnalysisSource_iface, 0,
+        lstrlenW(analysissource.text), &analysissink2);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
     *sa = g_sa;
@@ -948,10 +1010,11 @@ static void test_AnalyzeScript(void)
 
     while (*ptr->string)
     {
-        g_source = ptr->string;
+        analysissource.text = ptr->string;
 
         init_expected_sa(expected_seq, ptr);
-        hr = IDWriteTextAnalyzer_AnalyzeScript(analyzer, &analysissource, 0, lstrlenW(g_source), &analysissink);
+        hr = IDWriteTextAnalyzer_AnalyzeScript(analyzer, &analysissource.IDWriteTextAnalysisSource_iface, 0,
+            lstrlenW(ptr->string), &analysissink);
         ok(hr == S_OK, "got 0x%08x\n", hr);
         ok_sequence(sequences, ANALYZER_ID, expected_seq[0]->sequence, wine_dbgstr_w(ptr->string), FALSE);
         ptr++;
@@ -966,21 +1029,44 @@ struct linebreaks_test {
 };
 
 static struct linebreaks_test linebreaks_tests[] = {
-    { {'A','-','B',' ','C',0x58a,'D',0x2010,'E',0x2012,'F',0x2013,'\t',0},
+    { {'A','-','B',' ','C',0x58a,'D',0x2010,'E',0x2012,'F',0x2013,'\t',0xc,0xb,0x2028,0x2029,0x200b,0},
       {
-          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, FALSE, FALSE },
-          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_CAN_BREAK,     FALSE, FALSE },
-          { DWRITE_BREAK_CONDITION_CAN_BREAK,     DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, FALSE, FALSE },
-          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_CAN_BREAK,     TRUE,  FALSE },
-          { DWRITE_BREAK_CONDITION_CAN_BREAK,     DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, FALSE, FALSE },
-          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_CAN_BREAK,     FALSE, FALSE },
-          { DWRITE_BREAK_CONDITION_CAN_BREAK,     DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, FALSE, FALSE },
-          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_CAN_BREAK,     FALSE, FALSE },
-          { DWRITE_BREAK_CONDITION_CAN_BREAK,     DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, FALSE, FALSE },
-          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_CAN_BREAK,     FALSE, FALSE },
-          { DWRITE_BREAK_CONDITION_CAN_BREAK,     DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, FALSE, FALSE },
-          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, FALSE, FALSE },
-          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_CAN_BREAK,     TRUE,  FALSE }
+          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, 0, 0 },
+          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_CAN_BREAK,     0, 0 },
+          { DWRITE_BREAK_CONDITION_CAN_BREAK,     DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, 0, 0 },
+          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_CAN_BREAK,     1, 0 },
+          { DWRITE_BREAK_CONDITION_CAN_BREAK,     DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, 0, 0 },
+          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_CAN_BREAK,     0, 0 },
+          { DWRITE_BREAK_CONDITION_CAN_BREAK,     DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, 0, 0 },
+          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_CAN_BREAK,     0, 0 },
+          { DWRITE_BREAK_CONDITION_CAN_BREAK,     DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, 0, 0 },
+          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_CAN_BREAK,     0, 0 },
+          { DWRITE_BREAK_CONDITION_CAN_BREAK,     DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, 0, 0 },
+          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, 0, 0 },
+          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, 1, 0 },
+          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_MUST_BREAK,    1, 0 },
+          { DWRITE_BREAK_CONDITION_MUST_BREAK,    DWRITE_BREAK_CONDITION_MUST_BREAK,    1, 0 },
+          { DWRITE_BREAK_CONDITION_MUST_BREAK,    DWRITE_BREAK_CONDITION_MUST_BREAK,    1, 0 },
+          { DWRITE_BREAK_CONDITION_MUST_BREAK,    DWRITE_BREAK_CONDITION_MUST_BREAK,    1, 0 },
+          { DWRITE_BREAK_CONDITION_MUST_BREAK,    DWRITE_BREAK_CONDITION_CAN_BREAK,     0, 0 },
+      }
+    },
+    /* Soft hyphen, visible word dividers */
+    { {'A',0xad,'B',0x5be,'C',0xf0b,'D',0x1361,'E',0x17d8,'F',0x17da,'G',0},
+      {
+          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, 0, 0 },
+          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_CAN_BREAK,     0, 1 },
+          { DWRITE_BREAK_CONDITION_CAN_BREAK,     DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, 0, 0 },
+          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_CAN_BREAK,     0, 0 },
+          { DWRITE_BREAK_CONDITION_CAN_BREAK,     DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, 0, 0 },
+          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_CAN_BREAK,     0, 0 },
+          { DWRITE_BREAK_CONDITION_CAN_BREAK,     DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, 0, 0 },
+          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_CAN_BREAK,     0, 0 },
+          { DWRITE_BREAK_CONDITION_CAN_BREAK,     DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, 0, 0 },
+          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_CAN_BREAK,     0, 0 },
+          { DWRITE_BREAK_CONDITION_CAN_BREAK,     DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, 0, 0 },
+          { DWRITE_BREAK_CONDITION_MAY_NOT_BREAK, DWRITE_BREAK_CONDITION_CAN_BREAK,     0, 0 },
+          { DWRITE_BREAK_CONDITION_CAN_BREAK,     DWRITE_BREAK_CONDITION_CAN_BREAK,     0, 0 },
       }
     },
     { { 0 } }
@@ -988,6 +1074,7 @@ static struct linebreaks_test linebreaks_tests[] = {
 
 static void compare_breakpoints(const struct linebreaks_test *test, DWRITE_LINE_BREAKPOINT *actual)
 {
+    static const char *conditions[] = {"N","CB","NB","B"};
     const WCHAR *text = test->text;
     int cmp = memcmp(test->bp, actual, sizeof(*actual)*BREAKPOINT_COUNT);
     ok(!cmp, "%s: got wrong breakpoint data\n", wine_dbgstr_w(test->text));
@@ -995,16 +1082,19 @@ static void compare_breakpoints(const struct linebreaks_test *test, DWRITE_LINE_
         int i = 0;
         while (*text) {
             ok(!memcmp(&test->bp[i], &actual[i], sizeof(*actual)),
-                "%s: got (%d, %d, %d, %d), expected (%d, %d, %d, %d)\n",
+                "%s: got [%s, %s] (%s, %s), expected [%s, %s] (%s, %s)\n",
                 wine_dbgstr_wn(&test->text[i], 1),
-                g_actual_bp[i].breakConditionBefore,
-                g_actual_bp[i].breakConditionAfter,
-                g_actual_bp[i].isWhitespace,
-                g_actual_bp[i].isSoftHyphen,
-                test->bp[i].breakConditionBefore,
-                test->bp[i].breakConditionAfter,
-                test->bp[i].isWhitespace,
-                test->bp[i].isSoftHyphen);
+                conditions[g_actual_bp[i].breakConditionBefore],
+                conditions[g_actual_bp[i].breakConditionAfter],
+                g_actual_bp[i].isWhitespace ? "WS"  : "0",
+                g_actual_bp[i].isSoftHyphen ? "SHY" : "0",
+                conditions[test->bp[i].breakConditionBefore],
+                conditions[test->bp[i].breakConditionAfter],
+                test->bp[i].isWhitespace ? "WS"  : "0",
+                test->bp[i].isSoftHyphen ? "SHY" : "0");
+            if (g_actual_bp[i].isSoftHyphen)
+                ok(!g_actual_bp[i].isWhitespace, "%s: soft hyphen marked as a whitespace\n",
+                    wine_dbgstr_wn(&test->text[i], 1));
             text++;
             i++;
         }
@@ -1016,24 +1106,38 @@ static void test_AnalyzeLineBreakpoints(void)
     static const WCHAR emptyW[] = {0};
     const struct linebreaks_test *ptr = linebreaks_tests;
     IDWriteTextAnalyzer *analyzer;
+    UINT32 i = 0;
     HRESULT hr;
 
     hr = IDWriteFactory_CreateTextAnalyzer(factory, &analyzer);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
-    g_source = emptyW;
-    hr = IDWriteTextAnalyzer_AnalyzeLineBreakpoints(analyzer, &analysissource, 0, 0, &analysissink);
+    analysissource.text = emptyW;
+    hr = IDWriteTextAnalyzer_AnalyzeLineBreakpoints(analyzer, &analysissource.IDWriteTextAnalysisSource_iface, 0, 0,
+        &analysissink);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
     while (*ptr->text)
     {
-        g_source = ptr->text;
+        UINT32 len;
+
+        analysissource.text = ptr->text;
+        len = lstrlenW(ptr->text);
+
+        if (len > BREAKPOINT_COUNT) {
+            ok(0, "test %u: increase BREAKPOINT_COUNT to at least %u\n", i, len);
+            i++;
+            ptr++;
+            continue;
+        }
 
         memset(g_actual_bp, 0, sizeof(g_actual_bp));
-        hr = IDWriteTextAnalyzer_AnalyzeLineBreakpoints(analyzer, &analysissource, 0, lstrlenW(g_source), &analysissink);
+        hr = IDWriteTextAnalyzer_AnalyzeLineBreakpoints(analyzer, &analysissource.IDWriteTextAnalysisSource_iface,
+            0, len, &analysissink);
         ok(hr == S_OK, "got 0x%08x\n", hr);
         compare_breakpoints(ptr, g_actual_bp);
 
+        i++;
         ptr++;
     }
 
@@ -1062,8 +1166,8 @@ static void test_GetScriptProperties(void)
     hr = IDWriteTextAnalyzer1_GetScriptProperties(analyzer1, sa, &props);
     ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
 
-if (0) /* crashes on native */
-    hr = IDWriteTextAnalyzer1_GetScriptProperties(analyzer1, sa, NULL);
+    if (0) /* crashes on native */
+        hr = IDWriteTextAnalyzer1_GetScriptProperties(analyzer1, sa, NULL);
 
     sa.script = 0;
     hr = IDWriteTextAnalyzer1_GetScriptProperties(analyzer1, sa, &props);
@@ -1169,7 +1273,13 @@ static void test_numbersubstitution(void)
     IDWriteNumberSubstitution *substitution;
     HRESULT hr;
 
+    /* locale is not specified, method does not require it */
     hr = IDWriteFactory_CreateNumberSubstitution(factory, DWRITE_NUMBER_SUBSTITUTION_METHOD_NONE, NULL, FALSE, &substitution);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    IDWriteNumberSubstitution_Release(substitution);
+
+    /* invalid locale name, method does not require it */
+    hr = IDWriteFactory_CreateNumberSubstitution(factory, DWRITE_NUMBER_SUBSTITUTION_METHOD_NONE, dummyW, FALSE, &substitution);
     ok(hr == S_OK, "got 0x%08x\n", hr);
     IDWriteNumberSubstitution_Release(substitution);
 
@@ -1182,6 +1292,9 @@ static void test_numbersubstitution(void)
     ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
 
     /* invalid locale */
+    hr = IDWriteFactory_CreateNumberSubstitution(factory, DWRITE_NUMBER_SUBSTITUTION_METHOD_TRADITIONAL, NULL, FALSE, &substitution);
+    ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
+
     hr = IDWriteFactory_CreateNumberSubstitution(factory, DWRITE_NUMBER_SUBSTITUTION_METHOD_TRADITIONAL, dummyW, FALSE, &substitution);
     ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
 
@@ -1354,6 +1467,18 @@ if (0) {
     ok(hr == S_OK, "got 0x%08x\n", hr);
     ok(advances[0] == advances2[0], "got %.2f, expected %.2f\n", advances[0], advances2[0]);
     ok(advances[1] == advances2[1], "got %.2f, expected %.2f\n", advances[1], advances2[1]);
+
+    /* DWRITE_SCRIPT_SHAPES_NO_VISUAL run */
+    maxglyphcount = 10;
+    actual_count = 0;
+    sa.script = 0;
+    sa.shapes = DWRITE_SCRIPT_SHAPES_NO_VISUAL;
+    hr = IDWriteTextAnalyzer_GetGlyphs(analyzer, test1W, lstrlenW(test1W), fontface, FALSE, FALSE, &sa, NULL,
+        NULL, NULL, NULL, 0, maxglyphcount, clustermap, props, glyphs1, shapingprops, &actual_count);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(actual_count == 4, "got %d\n", actual_count);
+    ok(sa.script == 0, "got %u\n", sa.script);
+    ok(!shapingprops[0].isZeroWidthSpace, "got %d\n", shapingprops[0].isZeroWidthSpace);
 
     IDWriteTextAnalyzer_Release(analyzer);
     IDWriteFontFace_Release(fontface);
@@ -1544,6 +1669,33 @@ static void test_GetGlyphPlacements(void)
     ok(offsets[0].advanceOffset == 0.0 && offsets[0].ascenderOffset == 0.0, "got %.2f,%.2f\n",
         offsets[0].advanceOffset, offsets[0].ascenderOffset);
 
+    /* DWRITE_SCRIPT_SHAPES_NO_VISUAL has no effect on placement */
+    sa.shapes = DWRITE_SCRIPT_SHAPES_NO_VISUAL;
+    advances[0] = advances[1] = 1.0f;
+    memset(offsets, 0xcc, sizeof(offsets));
+    hr = IDWriteTextAnalyzer_GetGlyphPlacements(analyzer, aW, clustermap, textprops,
+        len, glyphs, glyphprops, len, fontface, 2048.0f, FALSE, FALSE, &sa, NULL, NULL,
+        NULL, 0, advances, offsets);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(advances[0] == 1000.0f, "got %.2f\n", advances[0]);
+    ok(advances[1] == 1000.0f, "got %.2f\n", advances[1]);
+    ok(offsets[0].advanceOffset == 0.0f && offsets[0].ascenderOffset == 0.0f, "got %.2f,%.2f\n",
+        offsets[0].advanceOffset, offsets[0].ascenderOffset);
+
+    /* isZeroWidthSpace */
+    sa.shapes = DWRITE_SCRIPT_SHAPES_DEFAULT;
+    advances[0] = advances[1] = 1.0f;
+    memset(offsets, 0xcc, sizeof(offsets));
+    glyphprops[0].isZeroWidthSpace = 1;
+    hr = IDWriteTextAnalyzer_GetGlyphPlacements(analyzer, aW, clustermap, textprops,
+        len, glyphs, glyphprops, len, fontface, 2048.0f, FALSE, FALSE, &sa, NULL, NULL,
+        NULL, 0, advances, offsets);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(advances[0] == 0.0f, "got %.2f\n", advances[0]);
+    ok(advances[1] == 1000.0f, "got %.2f\n", advances[1]);
+    ok(offsets[0].advanceOffset == 0.0f && offsets[0].ascenderOffset == 0.0f, "got %.2f,%.2f\n",
+        offsets[0].advanceOffset, offsets[0].ascenderOffset);
+
     IDWriteTextAnalyzer_Release(analyzer);
     IDWriteFontFace_Release(fontface);
     DELETE_FONTFILE(path);
@@ -1637,7 +1789,7 @@ static void test_ApplyCharacterSpacing(void)
         offsets[0].advanceOffset = ptr->offsets[0];
         offsets[1].advanceOffset = ptr->offsets[1];
         offsets[2].advanceOffset = ptr->offsets[2];
-        /* Ascender offsets are never thouched as spacing applies in reading direction only,
+        /* Ascender offsets are never touched as spacing applies in reading direction only,
            we'll only test them to see if they are not changed */
         offsets[0].ascenderOffset = 23.0;
         offsets[1].ascenderOffset = 32.0;
@@ -1672,11 +1824,8 @@ static void test_ApplyCharacterSpacing(void)
             props,
             advances,
             offsets);
-        /* invalid argument cases */
-        if (ptr->min_advance < 0.0)
-            ok(hr == E_INVALIDARG, "%d: got 0x%08x\n", i, hr);
-        else
-            ok(hr == S_OK, "%d: got 0x%08x\n", i, hr);
+        ok(hr == (ptr->min_advance < 0.0f ? E_INVALIDARG : S_OK), "%d: got 0x%08x\n", i, hr);
+
         if (hr == S_OK) {
             ok(ptr->modified_advances[0] == advances[0], "%d: got advance[0] %.2f, expected %.2f\n", i, advances[0], ptr->modified_advances[0]);
             ok(ptr->modified_advances[1] == advances[1], "%d: got advance[1] %.2f, expected %.2f\n", i, advances[1], ptr->modified_advances[1]);
@@ -1704,6 +1853,61 @@ static void test_ApplyCharacterSpacing(void)
                 offsets[1].advanceOffset, ptr->modified_offsets[1]);
             ok(offsets[0].ascenderOffset == 23.0, "%d: unexpected ascenderOffset %.2f\n", i, offsets[0].ascenderOffset);
             ok(offsets[1].ascenderOffset == 32.0, "%d: unexpected ascenderOffset %.2f\n", i, offsets[1].ascenderOffset);
+        }
+
+        /* same, with argument aliasing */
+        memcpy(advances, ptr->advances, glyph_count * sizeof(*advances));
+        offsets[0].advanceOffset = ptr->offsets[0];
+        offsets[1].advanceOffset = ptr->offsets[1];
+        offsets[2].advanceOffset = ptr->offsets[2];
+        /* Ascender offsets are never touched as spacing applies in reading direction only,
+           we'll only test them to see if they are not changed */
+        offsets[0].ascenderOffset = 23.0f;
+        offsets[1].ascenderOffset = 32.0f;
+        offsets[2].ascenderOffset = 31.0f;
+
+        hr = IDWriteTextAnalyzer1_ApplyCharacterSpacing(analyzer1,
+            ptr->leading,
+            ptr->trailing,
+            ptr->min_advance,
+            sizeof(clustermap)/sizeof(clustermap[0]),
+            glyph_count,
+            clustermap,
+            advances,
+            offsets,
+            props,
+            advances,
+            offsets);
+        ok(hr == (ptr->min_advance < 0.0f ? E_INVALIDARG : S_OK), "%d: got 0x%08x\n", i, hr);
+
+        if (hr == S_OK) {
+            ok(ptr->modified_advances[0] == advances[0], "%d: got advance[0] %.2f, expected %.2f\n", i, advances[0], ptr->modified_advances[0]);
+            ok(ptr->modified_advances[1] == advances[1], "%d: got advance[1] %.2f, expected %.2f\n", i, advances[1], ptr->modified_advances[1]);
+            if (glyph_count > 2)
+                ok(ptr->modified_advances[2] == advances[2], "%d: got advance[2] %.2f, expected %.2f\n", i, advances[2], ptr->modified_advances[2]);
+
+            ok(ptr->modified_offsets[0] == offsets[0].advanceOffset, "%d: got offset[0] %.2f, expected %.2f\n", i,
+                offsets[0].advanceOffset, ptr->modified_offsets[0]);
+            ok(ptr->modified_offsets[1] == offsets[1].advanceOffset, "%d: got offset[1] %.2f, expected %.2f\n", i,
+                offsets[1].advanceOffset, ptr->modified_offsets[1]);
+            if (glyph_count > 2)
+                ok(ptr->modified_offsets[2] == offsets[2].advanceOffset, "%d: got offset[2] %.2f, expected %.2f\n", i,
+                    offsets[2].advanceOffset, ptr->modified_offsets[2]);
+
+            ok(offsets[0].ascenderOffset == 23.0f, "%d: unexpected ascenderOffset %.2f\n", i, offsets[0].ascenderOffset);
+            ok(offsets[1].ascenderOffset == 32.0f, "%d: unexpected ascenderOffset %.2f\n", i, offsets[1].ascenderOffset);
+            ok(offsets[2].ascenderOffset == 31.0f, "%d: unexpected ascenderOffset %.2f\n", i, offsets[2].ascenderOffset);
+        }
+        else {
+            /* with aliased advances original values are retained */
+            ok(ptr->advances[0] == advances[0], "%d: got advance[0] %.2f, expected %.2f\n", i, advances[0], ptr->advances[0]);
+            ok(ptr->advances[1] == advances[1], "%d: got advance[1] %.2f, expected %.2f\n", i, advances[1], ptr->advances[1]);
+            ok(ptr->offsets[0] == offsets[0].advanceOffset, "%d: got offset[0] %.2f, expected %.2f\n", i,
+                offsets[0].advanceOffset, ptr->modified_offsets[0]);
+            ok(ptr->offsets[1] == offsets[1].advanceOffset, "%d: got offset[1] %.2f, expected %.2f\n", i,
+                offsets[1].advanceOffset, ptr->modified_offsets[1]);
+            ok(offsets[0].ascenderOffset == 23.0f, "%d: unexpected ascenderOffset %.2f\n", i, offsets[0].ascenderOffset);
+            ok(offsets[1].ascenderOffset == 32.0f, "%d: unexpected ascenderOffset %.2f\n", i, offsets[1].ascenderOffset);
         }
     }
 
@@ -1999,6 +2203,101 @@ static void test_GetGdiCompatibleGlyphPlacements(void)
     IDWriteTextAnalyzer_Release(analyzer);
 }
 
+struct bidi_test
+{
+    const WCHAR text[BIDI_LEVELS_COUNT];
+    DWRITE_READING_DIRECTION direction;
+    UINT8 explicit[BIDI_LEVELS_COUNT];
+    UINT8 resolved[BIDI_LEVELS_COUNT];
+};
+
+static const struct bidi_test bidi_tests[] = {
+    {
+      { 0x645, 0x6cc, 0x200c, 0x6a9, 0x646, 0x645, 0 },
+      DWRITE_READING_DIRECTION_RIGHT_TO_LEFT,
+      { 1, 1, 1, 1, 1, 1 },
+      { 1, 1, 1, 1, 1, 1 }
+    },
+    {
+      { 0x645, 0x6cc, 0x200c, 0x6a9, 0x646, 0x645, 0 },
+      DWRITE_READING_DIRECTION_LEFT_TO_RIGHT,
+      { 0, 0, 0, 0, 0, 0 },
+      { 1, 1, 1, 1, 1, 1 }
+    },
+    {
+      { 0x200c, 0x645, 0x6cc, 0x6a9, 0x646, 0x645, 0 },
+      DWRITE_READING_DIRECTION_RIGHT_TO_LEFT,
+      { 1, 1, 1, 1, 1, 1 },
+      { 1, 1, 1, 1, 1, 1 }
+    },
+    {
+      { 0x200c, 0x645, 0x6cc, 0x6a9, 0x646, 0x645, 0 },
+      DWRITE_READING_DIRECTION_LEFT_TO_RIGHT,
+      { 0, 0, 0, 0, 0, 0 },
+      { 0, 1, 1, 1, 1, 1 }
+    },
+    {
+      { 'A', 0x200c, 'B', 0 },
+      DWRITE_READING_DIRECTION_RIGHT_TO_LEFT,
+      { 1, 1, 1 },
+      { 2, 2, 2 }
+    },
+    {
+      { 'A', 0x200c, 'B', 0 },
+      DWRITE_READING_DIRECTION_LEFT_TO_RIGHT,
+      { 0, 0, 0 },
+      { 0, 0, 0 }
+    },
+    {
+      { 0 }
+    }
+};
+
+static void compare_bidi_levels(const struct bidi_test *test, UINT32 len, UINT8 *explicit, UINT8 *resolved)
+{
+    ok(!memcmp(explicit, test->explicit, len), "wrong explicit levels\n");
+    ok(!memcmp(resolved, test->resolved, len), "wrong resolved levels\n");
+}
+
+static void test_AnalyzeBidi(void)
+{
+    const struct bidi_test *ptr = bidi_tests;
+    IDWriteTextAnalyzer *analyzer;
+    UINT32 i = 0;
+    HRESULT hr;
+
+    hr = IDWriteFactory_CreateTextAnalyzer(factory, &analyzer);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    while (*ptr->text)
+    {
+        UINT32 len;
+
+        analysissource.text = ptr->text;
+        len = lstrlenW(ptr->text);
+        analysissource.direction = ptr->direction;
+
+        if (len > BIDI_LEVELS_COUNT) {
+            ok(0, "test %u: increase BIDI_LEVELS_COUNT to at least %u\n", i, len);
+            i++;
+            ptr++;
+            continue;
+        }
+
+        memset(g_explicit_levels, 0, sizeof(g_explicit_levels));
+        memset(g_resolved_levels, 0, sizeof(g_resolved_levels));
+        hr = IDWriteTextAnalyzer_AnalyzeBidi(analyzer, &analysissource.IDWriteTextAnalysisSource_iface, 0,
+            len, &analysissink);
+        ok(hr == S_OK, "%u: got 0x%08x\n", i, hr);
+        compare_bidi_levels(ptr, len, g_explicit_levels, g_resolved_levels);
+
+        i++;
+        ptr++;
+    }
+
+    IDWriteTextAnalyzer_Release(analyzer);
+}
+
 START_TEST(analyzer)
 {
     HRESULT hr;
@@ -2016,6 +2315,7 @@ START_TEST(analyzer)
 
     test_AnalyzeScript();
     test_AnalyzeLineBreakpoints();
+    test_AnalyzeBidi();
     test_GetScriptProperties();
     test_GetTextComplexity();
     test_GetGlyphs();

@@ -73,73 +73,97 @@ static inline int interlocked_dec_if_nonzero( int *dest )
 }
 
 /* creates a struct security_descriptor and contained information in one contiguous piece of memory */
-NTSTATUS NTDLL_create_struct_sd(PSECURITY_DESCRIPTOR nt_sd, struct security_descriptor **server_sd,
-                                data_size_t *server_sd_len)
+NTSTATUS alloc_object_attributes( const OBJECT_ATTRIBUTES *attr, struct object_attributes **ret,
+                                  data_size_t *ret_len )
 {
-    unsigned int len;
+    unsigned int len = sizeof(**ret);
     PSID owner, group;
     ACL *dacl, *sacl;
-    BOOLEAN owner_present, group_present, dacl_present, sacl_present;
-    BOOLEAN defaulted;
+    BOOLEAN owner_present, group_present, dacl_present, sacl_present, defaulted;
+    PSECURITY_DESCRIPTOR sd;
     NTSTATUS status;
-    unsigned char *ptr;
 
-    if (!nt_sd)
+    *ret = NULL;
+    *ret_len = 0;
+
+    if (!attr) return STATUS_SUCCESS;
+
+    if (attr->Length != sizeof(*attr)) return STATUS_INVALID_PARAMETER;
+
+    if ((sd = attr->SecurityDescriptor))
     {
-        *server_sd = NULL;
-        *server_sd_len = 0;
-        return STATUS_SUCCESS;
+        len += sizeof(struct security_descriptor);
+
+        if ((status = RtlGetOwnerSecurityDescriptor( sd, &owner, &owner_present ))) return status;
+        if ((status = RtlGetGroupSecurityDescriptor( sd, &group, &group_present ))) return status;
+        if ((status = RtlGetSaclSecurityDescriptor( sd, &sacl_present, &sacl, &defaulted ))) return status;
+        if ((status = RtlGetDaclSecurityDescriptor( sd, &dacl_present, &dacl, &defaulted ))) return status;
+        if (owner_present) len += RtlLengthSid( owner );
+        if (group_present) len += RtlLengthSid( group );
+        if (sacl_present && sacl) len += sacl->AclSize;
+        if (dacl_present && dacl) len += dacl->AclSize;
+
+        /* fix alignment for the Unicode name that follows the structure */
+        len = (len + sizeof(WCHAR) - 1) & ~(sizeof(WCHAR) - 1);
     }
 
-    len = sizeof(struct security_descriptor);
+    if (attr->ObjectName)
+    {
+        if (attr->ObjectName->Length & (sizeof(WCHAR) - 1)) return STATUS_OBJECT_NAME_INVALID;
+        len += attr->ObjectName->Length;
+    }
+    else if (attr->RootDirectory) return STATUS_OBJECT_NAME_INVALID;
 
-    status = RtlGetOwnerSecurityDescriptor(nt_sd, &owner, &owner_present);
-    if (status != STATUS_SUCCESS) return status;
-    status = RtlGetGroupSecurityDescriptor(nt_sd, &group, &group_present);
-    if (status != STATUS_SUCCESS) return status;
-    status = RtlGetSaclSecurityDescriptor(nt_sd, &sacl_present, &sacl, &defaulted);
-    if (status != STATUS_SUCCESS) return status;
-    status = RtlGetDaclSecurityDescriptor(nt_sd, &dacl_present, &dacl, &defaulted);
-    if (status != STATUS_SUCCESS) return status;
+    *ret = RtlAllocateHeap( GetProcessHeap(), HEAP_ZERO_MEMORY, len );
+    if (!*ret) return STATUS_NO_MEMORY;
 
-    if (owner_present)
-        len += RtlLengthSid(owner);
-    if (group_present)
-        len += RtlLengthSid(group);
-    if (sacl_present && sacl)
-        len += sacl->AclSize;
-    if (dacl_present && dacl)
-        len += dacl->AclSize;
+    (*ret)->rootdir = wine_server_obj_handle( attr->RootDirectory );
+    (*ret)->attributes = attr->Attributes;
 
-    /* fix alignment for the Unicode name that follows the structure */
-    len = (len + sizeof(WCHAR) - 1) & ~(sizeof(WCHAR) - 1);
-    *server_sd = RtlAllocateHeap(GetProcessHeap(), 0, len);
-    if (!*server_sd) return STATUS_NO_MEMORY;
+    if (attr->SecurityDescriptor)
+    {
+        struct security_descriptor *descr = (struct security_descriptor *)(*ret + 1);
+        unsigned char *ptr = (unsigned char *)(descr + 1);
 
-    (*server_sd)->control = ((SECURITY_DESCRIPTOR *)nt_sd)->Control & ~SE_SELF_RELATIVE;
-    (*server_sd)->owner_len = owner_present ? RtlLengthSid(owner) : 0;
-    (*server_sd)->group_len = group_present ? RtlLengthSid(group) : 0;
-    (*server_sd)->sacl_len = (sacl_present && sacl) ? sacl->AclSize : 0;
-    (*server_sd)->dacl_len = (dacl_present && dacl) ? dacl->AclSize : 0;
+        descr->control = ((SECURITY_DESCRIPTOR *)sd)->Control & ~SE_SELF_RELATIVE;
+        if (owner_present) descr->owner_len = RtlLengthSid( owner );
+        if (group_present) descr->group_len = RtlLengthSid( group );
+        if (sacl_present && sacl) descr->sacl_len = sacl->AclSize;
+        if (dacl_present && dacl) descr->dacl_len = dacl->AclSize;
 
-    ptr = (unsigned char *)(*server_sd + 1);
-    memcpy(ptr, owner, (*server_sd)->owner_len);
-    ptr += (*server_sd)->owner_len;
-    memcpy(ptr, group, (*server_sd)->group_len);
-    ptr += (*server_sd)->group_len;
-    memcpy(ptr, sacl, (*server_sd)->sacl_len);
-    ptr += (*server_sd)->sacl_len;
-    memcpy(ptr, dacl, (*server_sd)->dacl_len);
+        memcpy( ptr, owner, descr->owner_len );
+        ptr += descr->owner_len;
+        memcpy( ptr, group, descr->group_len );
+        ptr += descr->group_len;
+        memcpy( ptr, sacl, descr->sacl_len );
+        ptr += descr->sacl_len;
+        memcpy( ptr, dacl, descr->dacl_len );
+        (*ret)->sd_len = (sizeof(*descr) + descr->owner_len + descr->group_len + descr->sacl_len +
+                          descr->dacl_len + sizeof(WCHAR) - 1) & ~(sizeof(WCHAR) - 1);
+    }
 
-    *server_sd_len = len;
+    if (attr->ObjectName)
+    {
+        unsigned char *ptr = (unsigned char *)(*ret + 1) + (*ret)->sd_len;
+        (*ret)->name_len = attr->ObjectName->Length;
+        memcpy( ptr, attr->ObjectName->Buffer, (*ret)->name_len );
+    }
 
+    *ret_len = len;
     return STATUS_SUCCESS;
 }
 
-/* frees a struct security_descriptor allocated by NTDLL_create_struct_sd */
-void NTDLL_free_struct_sd(struct security_descriptor *server_sd)
+NTSTATUS validate_open_object_attributes( const OBJECT_ATTRIBUTES *attr )
 {
-    RtlFreeHeap(GetProcessHeap(), 0, server_sd);
+    if (!attr || attr->Length != sizeof(*attr)) return STATUS_INVALID_PARAMETER;
+
+    if (attr->ObjectName)
+    {
+        if (attr->ObjectName->Length & (sizeof(WCHAR) - 1)) return STATUS_OBJECT_NAME_INVALID;
+    }
+    else if (attr->RootDirectory) return STATUS_OBJECT_NAME_INVALID;
+
+    return STATUS_SUCCESS;
 }
 
 /*
@@ -155,63 +179,48 @@ NTSTATUS WINAPI NtCreateSemaphore( OUT PHANDLE SemaphoreHandle,
                                    IN LONG InitialCount,
                                    IN LONG MaximumCount )
 {
-    DWORD len = attr && attr->ObjectName ? attr->ObjectName->Length : 0;
     NTSTATUS ret;
-    struct object_attributes objattr;
-    struct security_descriptor *sd = NULL;
+    data_size_t len;
+    struct object_attributes *objattr;
 
     if (MaximumCount <= 0 || InitialCount < 0 || InitialCount > MaximumCount)
         return STATUS_INVALID_PARAMETER;
-    if (len >= MAX_PATH * sizeof(WCHAR)) return STATUS_NAME_TOO_LONG;
 
-    objattr.rootdir = wine_server_obj_handle( attr ? attr->RootDirectory : 0 );
-    objattr.sd_len = 0;
-    objattr.name_len = len;
-    if (attr)
-    {
-        ret = NTDLL_create_struct_sd( attr->SecurityDescriptor, &sd, &objattr.sd_len );
-        if (ret != STATUS_SUCCESS) return ret;
-    }
+    if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
 
     SERVER_START_REQ( create_semaphore )
     {
         req->access  = access;
-        req->attributes = (attr) ? attr->Attributes : 0;
         req->initial = InitialCount;
         req->max     = MaximumCount;
-        wine_server_add_data( req, &objattr, sizeof(objattr) );
-        if (objattr.sd_len) wine_server_add_data( req, sd, objattr.sd_len );
-        if (len) wine_server_add_data( req, attr->ObjectName->Buffer, len );
+        wine_server_add_data( req, objattr, len );
         ret = wine_server_call( req );
         *SemaphoreHandle = wine_server_ptr_handle( reply->handle );
     }
     SERVER_END_REQ;
 
-    NTDLL_free_struct_sd( sd );
-
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
     return ret;
 }
 
 /******************************************************************************
  *  NtOpenSemaphore (NTDLL.@)
  */
-NTSTATUS WINAPI NtOpenSemaphore( OUT PHANDLE SemaphoreHandle,
-                                 IN ACCESS_MASK access,
-                                 IN const OBJECT_ATTRIBUTES *attr )
+NTSTATUS WINAPI NtOpenSemaphore( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    DWORD len = attr && attr->ObjectName ? attr->ObjectName->Length : 0;
     NTSTATUS ret;
 
-    if (len >= MAX_PATH * sizeof(WCHAR)) return STATUS_NAME_TOO_LONG;
+    if ((ret = validate_open_object_attributes( attr ))) return ret;
 
     SERVER_START_REQ( open_semaphore )
     {
-        req->access  = access;
-        req->attributes = (attr) ? attr->Attributes : 0;
-        req->rootdir = wine_server_obj_handle( attr ? attr->RootDirectory : 0 );
-        if (len) wine_server_add_data( req, attr->ObjectName->Buffer, len );
+        req->access     = access;
+        req->attributes = attr->Attributes;
+        req->rootdir    = wine_server_obj_handle( attr->RootDirectory );
+        if (attr->ObjectName)
+            wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
         ret = wine_server_call( req );
-        *SemaphoreHandle = wine_server_ptr_handle( reply->handle );
+        *handle = wine_server_ptr_handle( reply->handle );
     }
     SERVER_END_REQ;
     return ret;
@@ -225,6 +234,8 @@ NTSTATUS WINAPI NtQuerySemaphore( HANDLE handle, SEMAPHORE_INFORMATION_CLASS cla
 {
     NTSTATUS ret;
     SEMAPHORE_BASIC_INFORMATION *out = info;
+
+    TRACE("(%p, %u, %p, %u, %p)\n", handle, class, info, len, ret_len);
 
     if (class != SemaphoreBasicInformation)
     {
@@ -279,38 +290,24 @@ NTSTATUS WINAPI NtReleaseSemaphore( HANDLE handle, ULONG count, PULONG previous 
 NTSTATUS WINAPI NtCreateEvent( PHANDLE EventHandle, ACCESS_MASK DesiredAccess,
                                const OBJECT_ATTRIBUTES *attr, EVENT_TYPE type, BOOLEAN InitialState)
 {
-    DWORD len = attr && attr->ObjectName ? attr->ObjectName->Length : 0;
     NTSTATUS ret;
-    struct security_descriptor *sd = NULL;
-    struct object_attributes objattr;
+    data_size_t len;
+    struct object_attributes *objattr;
 
-    if (len >= MAX_PATH * sizeof(WCHAR)) return STATUS_NAME_TOO_LONG;
-
-    objattr.rootdir = wine_server_obj_handle( attr ? attr->RootDirectory : 0 );
-    objattr.sd_len = 0;
-    objattr.name_len = len;
-    if (attr)
-    {
-        ret = NTDLL_create_struct_sd( attr->SecurityDescriptor, &sd, &objattr.sd_len );
-        if (ret != STATUS_SUCCESS) return ret;
-    }
+    if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
 
     SERVER_START_REQ( create_event )
     {
         req->access = DesiredAccess;
-        req->attributes = (attr) ? attr->Attributes : 0;
         req->manual_reset = (type == NotificationEvent);
         req->initial_state = InitialState;
-        wine_server_add_data( req, &objattr, sizeof(objattr) );
-        if (objattr.sd_len) wine_server_add_data( req, sd, objattr.sd_len );
-        if (len) wine_server_add_data( req, attr->ObjectName->Buffer, len );
+        wine_server_add_data( req, objattr, len );
         ret = wine_server_call( req );
         *EventHandle = wine_server_ptr_handle( reply->handle );
     }
     SERVER_END_REQ;
 
-    NTDLL_free_struct_sd( sd );
-
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
     return ret;
 }
 
@@ -318,24 +315,21 @@ NTSTATUS WINAPI NtCreateEvent( PHANDLE EventHandle, ACCESS_MASK DesiredAccess,
  *  NtOpenEvent (NTDLL.@)
  *  ZwOpenEvent (NTDLL.@)
  */
-NTSTATUS WINAPI NtOpenEvent(
-	OUT PHANDLE EventHandle,
-	IN ACCESS_MASK DesiredAccess,
-	IN const OBJECT_ATTRIBUTES *attr )
+NTSTATUS WINAPI NtOpenEvent( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    DWORD len = attr && attr->ObjectName ? attr->ObjectName->Length : 0;
     NTSTATUS ret;
 
-    if (len >= MAX_PATH * sizeof(WCHAR)) return STATUS_NAME_TOO_LONG;
+    if ((ret = validate_open_object_attributes( attr ))) return ret;
 
     SERVER_START_REQ( open_event )
     {
-        req->access  = DesiredAccess;
-        req->attributes = (attr) ? attr->Attributes : 0;
-        req->rootdir = wine_server_obj_handle( attr ? attr->RootDirectory : 0 );
-        if (len) wine_server_add_data( req, attr->ObjectName->Buffer, len );
+        req->access     = access;
+        req->attributes = attr->Attributes;
+        req->rootdir    = wine_server_obj_handle( attr->RootDirectory );
+        if (attr->ObjectName)
+            wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
         ret = wine_server_call( req );
-        *EventHandle = wine_server_ptr_handle( reply->handle );
+        *handle = wine_server_ptr_handle( reply->handle );
     }
     SERVER_END_REQ;
     return ret;
@@ -425,6 +419,8 @@ NTSTATUS WINAPI NtQueryEvent( HANDLE handle, EVENT_INFORMATION_CLASS class,
     NTSTATUS ret;
     EVENT_BASIC_INFORMATION *out = info;
 
+    TRACE("(%p, %u, %p, %u, %p)\n", handle, class, info, len, ret_len);
+
     if (class != EventBasicInformation)
     {
         FIXME("(%p, %d, %d) Unknown class\n",
@@ -463,36 +459,22 @@ NTSTATUS WINAPI NtCreateMutant(OUT HANDLE* MutantHandle,
                                IN BOOLEAN InitialOwner)
 {
     NTSTATUS status;
-    DWORD len = attr && attr->ObjectName ? attr->ObjectName->Length : 0;
-    struct security_descriptor *sd = NULL;
-    struct object_attributes objattr;
+    data_size_t len;
+    struct object_attributes *objattr;
 
-    if (len >= MAX_PATH * sizeof(WCHAR)) return STATUS_NAME_TOO_LONG;
-
-    objattr.rootdir = wine_server_obj_handle( attr ? attr->RootDirectory : 0 );
-    objattr.sd_len = 0;
-    objattr.name_len = len;
-    if (attr)
-    {
-        status = NTDLL_create_struct_sd( attr->SecurityDescriptor, &sd, &objattr.sd_len );
-        if (status != STATUS_SUCCESS) return status;
-    }
+    if ((status = alloc_object_attributes( attr, &objattr, &len ))) return status;
 
     SERVER_START_REQ( create_mutex )
     {
         req->access  = access;
-        req->attributes = (attr) ? attr->Attributes : 0;
         req->owned   = InitialOwner;
-        wine_server_add_data( req, &objattr, sizeof(objattr) );
-        if (objattr.sd_len) wine_server_add_data( req, sd, objattr.sd_len );
-        if (len) wine_server_add_data( req, attr->ObjectName->Buffer, len );
+        wine_server_add_data( req, objattr, len );
         status = wine_server_call( req );
         *MutantHandle = wine_server_ptr_handle( reply->handle );
     }
     SERVER_END_REQ;
 
-    NTDLL_free_struct_sd( sd );
-
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
     return status;
 }
 
@@ -500,23 +482,21 @@ NTSTATUS WINAPI NtCreateMutant(OUT HANDLE* MutantHandle,
  *		NtOpenMutant				[NTDLL.@]
  *		ZwOpenMutant				[NTDLL.@]
  */
-NTSTATUS WINAPI NtOpenMutant(OUT HANDLE* MutantHandle, 
-                             IN ACCESS_MASK access, 
-                             IN const OBJECT_ATTRIBUTES* attr )
+NTSTATUS WINAPI NtOpenMutant( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
     NTSTATUS    status;
-    DWORD       len = attr && attr->ObjectName ? attr->ObjectName->Length : 0;
 
-    if (len >= MAX_PATH * sizeof(WCHAR)) return STATUS_NAME_TOO_LONG;
+    if ((status = validate_open_object_attributes( attr ))) return status;
 
     SERVER_START_REQ( open_mutex )
     {
         req->access  = access;
-        req->attributes = (attr) ? attr->Attributes : 0;
-        req->rootdir = wine_server_obj_handle( attr ? attr->RootDirectory : 0 );
-        if (len) wine_server_add_data( req, attr->ObjectName->Buffer, len );
+        req->attributes = attr->Attributes;
+        req->rootdir = wine_server_obj_handle( attr->RootDirectory );
+        if (attr->ObjectName)
+            wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
         status = wine_server_call( req );
-        *MutantHandle = wine_server_ptr_handle( reply->handle );
+        *handle = wine_server_ptr_handle( reply->handle );
     }
     SERVER_END_REQ;
     return status;
@@ -534,7 +514,7 @@ NTSTATUS WINAPI NtReleaseMutant( IN HANDLE handle, OUT PLONG prev_count OPTIONAL
     {
         req->handle = wine_server_obj_handle( handle );
         status = wine_server_call( req );
-        if (prev_count) *prev_count = reply->prev_count;
+        if (prev_count) *prev_count = 1 - reply->prev_count;
     }
     SERVER_END_REQ;
     return status;
@@ -544,15 +524,37 @@ NTSTATUS WINAPI NtReleaseMutant( IN HANDLE handle, OUT PLONG prev_count OPTIONAL
  *		NtQueryMutant                   [NTDLL.@]
  *		ZwQueryMutant                   [NTDLL.@]
  */
-NTSTATUS WINAPI NtQueryMutant(IN HANDLE handle, 
-                              IN MUTANT_INFORMATION_CLASS MutantInformationClass, 
-                              OUT PVOID MutantInformation, 
-                              IN ULONG MutantInformationLength, 
-                              OUT PULONG ResultLength OPTIONAL )
+NTSTATUS WINAPI NtQueryMutant( HANDLE handle, MUTANT_INFORMATION_CLASS class,
+                               void *info, ULONG len, ULONG *ret_len )
 {
-    FIXME("(%p %u %p %u %p): stub!\n", 
-          handle, MutantInformationClass, MutantInformation, MutantInformationLength, ResultLength);
-    return STATUS_NOT_IMPLEMENTED;
+    NTSTATUS ret;
+    MUTANT_BASIC_INFORMATION *out = info;
+
+    TRACE("(%p, %u, %p, %u, %p)\n", handle, class, info, len, ret_len);
+
+    if (class != MutantBasicInformation)
+    {
+        FIXME("(%p, %d, %d) Unknown class\n",
+              handle, class, len);
+        return STATUS_INVALID_INFO_CLASS;
+    }
+
+    if (len != sizeof(MUTANT_BASIC_INFORMATION)) return STATUS_INFO_LENGTH_MISMATCH;
+
+    SERVER_START_REQ( query_mutex )
+    {
+        req->handle = wine_server_obj_handle( handle );
+        if (!(ret = wine_server_call( req )))
+        {
+            out->CurrentCount   = 1 - reply->count;
+            out->OwnedByCaller  = reply->owned;
+            out->AbandonedState = reply->abandoned;
+            if (ret_len) *ret_len = sizeof(MUTANT_BASIC_INFORMATION);
+        }
+    }
+    SERVER_END_REQ;
+
+    return ret;
 }
 
 /*
@@ -565,35 +567,22 @@ NTSTATUS WINAPI NtQueryMutant(IN HANDLE handle,
  */
 NTSTATUS WINAPI NtCreateJobObject( PHANDLE handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    DWORD len = attr && attr->ObjectName ? attr->ObjectName->Length : 0;
     NTSTATUS ret;
-    struct security_descriptor *sd = NULL;
-    struct object_attributes objattr;
+    data_size_t len;
+    struct object_attributes *objattr;
 
-    if (len >= MAX_PATH * sizeof(WCHAR)) return STATUS_NAME_TOO_LONG;
-
-    objattr.rootdir = wine_server_obj_handle( attr ? attr->RootDirectory : 0 );
-    objattr.sd_len = 0;
-    objattr.name_len = len;
-    if (attr)
-    {
-        ret = NTDLL_create_struct_sd( attr->SecurityDescriptor, &sd, &objattr.sd_len );
-        if (ret != STATUS_SUCCESS) return ret;
-    }
+    if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
 
     SERVER_START_REQ( create_job )
     {
         req->access = access;
-        req->attributes = attr ? attr->Attributes : 0;
-        wine_server_add_data( req, &objattr, sizeof(objattr) );
-        if (objattr.sd_len) wine_server_add_data( req, sd, objattr.sd_len );
-        if (len) wine_server_add_data( req, attr->ObjectName->Buffer, len );
+        wine_server_add_data( req, objattr, len );
         ret = wine_server_call( req );
         *handle = wine_server_ptr_handle( reply->handle );
     }
     SERVER_END_REQ;
 
-    NTDLL_free_struct_sd( sd );
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
     return ret;
 }
 
@@ -601,10 +590,24 @@ NTSTATUS WINAPI NtCreateJobObject( PHANDLE handle, ACCESS_MASK access, const OBJ
  *              NtOpenJobObject   [NTDLL.@]
  *              ZwOpenJobObject   [NTDLL.@]
  */
-NTSTATUS WINAPI NtOpenJobObject( PHANDLE handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
+NTSTATUS WINAPI NtOpenJobObject( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    FIXME( "stub: %p %x %s\n", handle, access, attr ? debugstr_us(attr->ObjectName) : "" );
-    return STATUS_NOT_IMPLEMENTED;
+    NTSTATUS ret;
+
+    if ((ret = validate_open_object_attributes( attr ))) return ret;
+
+    SERVER_START_REQ( open_job )
+    {
+        req->access     = access;
+        req->attributes = attr->Attributes;
+        req->rootdir    = wine_server_obj_handle( attr->RootDirectory );
+        if (attr->ObjectName)
+            wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
+        ret = wine_server_call( req );
+        *handle = wine_server_ptr_handle( reply->handle );
+    }
+    SERVER_END_REQ;
+    return ret;
 }
 
 /******************************************************************************
@@ -791,25 +794,26 @@ NTSTATUS WINAPI NtCreateTimer(OUT HANDLE *handle,
                               IN const OBJECT_ATTRIBUTES *attr OPTIONAL,
                               IN TIMER_TYPE timer_type)
 {
-    DWORD       len = (attr && attr->ObjectName) ? attr->ObjectName->Length : 0;
-    NTSTATUS    status;
-
-    if (len >= MAX_PATH * sizeof(WCHAR)) return STATUS_NAME_TOO_LONG;
+    NTSTATUS status;
+    data_size_t len;
+    struct object_attributes *objattr;
 
     if (timer_type != NotificationTimer && timer_type != SynchronizationTimer)
         return STATUS_INVALID_PARAMETER;
 
+    if ((status = alloc_object_attributes( attr, &objattr, &len ))) return status;
+
     SERVER_START_REQ( create_timer )
     {
         req->access  = access;
-        req->attributes = (attr) ? attr->Attributes : 0;
-        req->rootdir = wine_server_obj_handle( attr ? attr->RootDirectory : 0 );
         req->manual  = (timer_type == NotificationTimer);
-        if (len) wine_server_add_data( req, attr->ObjectName->Buffer, len );
+        wine_server_add_data( req, objattr, len );
         status = wine_server_call( req );
         *handle = wine_server_ptr_handle( reply->handle );
     }
     SERVER_END_REQ;
+
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
     return status;
 
 }
@@ -818,21 +822,19 @@ NTSTATUS WINAPI NtCreateTimer(OUT HANDLE *handle,
  *		NtOpenTimer				[NTDLL.@]
  *		ZwOpenTimer				[NTDLL.@]
  */
-NTSTATUS WINAPI NtOpenTimer(OUT PHANDLE handle,
-                            IN ACCESS_MASK access,
-                            IN const OBJECT_ATTRIBUTES* attr )
+NTSTATUS WINAPI NtOpenTimer( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    DWORD       len = (attr && attr->ObjectName) ? attr->ObjectName->Length : 0;
-    NTSTATUS    status;
+    NTSTATUS status;
 
-    if (len >= MAX_PATH * sizeof(WCHAR)) return STATUS_NAME_TOO_LONG;
+    if ((status = validate_open_object_attributes( attr ))) return status;
 
     SERVER_START_REQ( open_timer )
     {
-        req->access  = access;
-        req->attributes = (attr) ? attr->Attributes : 0;
-        req->rootdir = wine_server_obj_handle( attr ? attr->RootDirectory : 0 );
-        if (len) wine_server_add_data( req, attr->ObjectName->Buffer, len );
+        req->access     = access;
+        req->attributes = attr->Attributes;
+        req->rootdir    = wine_server_obj_handle( attr->RootDirectory );
+        if (attr->ObjectName)
+            wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
         status = wine_server_call( req );
         *handle = wine_server_ptr_handle( reply->handle );
     }
@@ -854,7 +856,7 @@ NTSTATUS WINAPI NtSetTimer(IN HANDLE handle,
 {
     NTSTATUS    status = STATUS_SUCCESS;
 
-    TRACE("(%p,%p,%p,%p,%08x,0x%08x,%p) stub\n",
+    TRACE("(%p,%p,%p,%p,%08x,0x%08x,%p)\n",
           handle, when, callback, callback_arg, resume, period, state);
 
     SERVER_START_REQ( set_timer )
@@ -1108,35 +1110,22 @@ NTSTATUS WINAPI NtDelayExecution( BOOLEAN alertable, const LARGE_INTEGER *timeou
 NTSTATUS WINAPI NtCreateKeyedEvent( HANDLE *handle, ACCESS_MASK access,
                                     const OBJECT_ATTRIBUTES *attr, ULONG flags )
 {
-    DWORD len = attr && attr->ObjectName ? attr->ObjectName->Length : 0;
     NTSTATUS ret;
-    struct security_descriptor *sd = NULL;
-    struct object_attributes objattr;
+    data_size_t len;
+    struct object_attributes *objattr;
 
-    if (len >= MAX_PATH * sizeof(WCHAR)) return STATUS_NAME_TOO_LONG;
-
-    objattr.rootdir = wine_server_obj_handle( attr ? attr->RootDirectory : 0 );
-    objattr.sd_len = 0;
-    objattr.name_len = len;
-    if (attr)
-    {
-        ret = NTDLL_create_struct_sd( attr->SecurityDescriptor, &sd, &objattr.sd_len );
-        if (ret != STATUS_SUCCESS) return ret;
-    }
+    if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
 
     SERVER_START_REQ( create_keyed_event )
     {
         req->access = access;
-        req->attributes = attr ? attr->Attributes : 0;
-        wine_server_add_data( req, &objattr, sizeof(objattr) );
-        if (objattr.sd_len) wine_server_add_data( req, sd, objattr.sd_len );
-        if (len) wine_server_add_data( req, attr->ObjectName->Buffer, len );
+        wine_server_add_data( req, objattr, len );
         ret = wine_server_call( req );
         *handle = wine_server_ptr_handle( reply->handle );
     }
     SERVER_END_REQ;
 
-    NTDLL_free_struct_sd( sd );
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
     return ret;
 }
 
@@ -1145,17 +1134,17 @@ NTSTATUS WINAPI NtCreateKeyedEvent( HANDLE *handle, ACCESS_MASK access,
  */
 NTSTATUS WINAPI NtOpenKeyedEvent( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    DWORD len = attr && attr->ObjectName ? attr->ObjectName->Length : 0;
     NTSTATUS ret;
 
-    if (len >= MAX_PATH * sizeof(WCHAR)) return STATUS_NAME_TOO_LONG;
+    if ((ret = validate_open_object_attributes( attr ))) return ret;
 
     SERVER_START_REQ( open_keyed_event )
     {
-        req->access  = access;
-        req->attributes = attr ? attr->Attributes : 0;
-        req->rootdir = wine_server_obj_handle( attr ? attr->RootDirectory : 0 );
-        if (len) wine_server_add_data( req, attr->ObjectName->Buffer, len );
+        req->access     = access;
+        req->attributes = attr->Attributes;
+        req->rootdir    = wine_server_obj_handle( attr->RootDirectory );
+        if (attr->ObjectName)
+            wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
         ret = wine_server_call( req );
         *handle = wine_server_ptr_handle( reply->handle );
     }
@@ -1211,29 +1200,30 @@ NTSTATUS WINAPI NtReleaseKeyedEvent( HANDLE handle, const void *key,
  *
  */
 NTSTATUS WINAPI NtCreateIoCompletion( PHANDLE CompletionPort, ACCESS_MASK DesiredAccess,
-                                      POBJECT_ATTRIBUTES ObjectAttributes, ULONG NumberOfConcurrentThreads )
+                                      POBJECT_ATTRIBUTES attr, ULONG NumberOfConcurrentThreads )
 {
     NTSTATUS status;
+    data_size_t len;
+    struct object_attributes *objattr;
 
-    TRACE("(%p, %x, %p, %d)\n", CompletionPort, DesiredAccess,
-          ObjectAttributes, NumberOfConcurrentThreads);
+    TRACE("(%p, %x, %p, %d)\n", CompletionPort, DesiredAccess, attr, NumberOfConcurrentThreads);
 
     if (!CompletionPort)
         return STATUS_INVALID_PARAMETER;
 
+    if ((status = alloc_object_attributes( attr, &objattr, &len ))) return status;
+
     SERVER_START_REQ( create_completion )
     {
         req->access     = DesiredAccess;
-        req->attributes = ObjectAttributes ? ObjectAttributes->Attributes : 0;
-        req->rootdir    = wine_server_obj_handle( ObjectAttributes ? ObjectAttributes->RootDirectory : 0 );
         req->concurrent = NumberOfConcurrentThreads;
-        if (ObjectAttributes && ObjectAttributes->ObjectName)
-            wine_server_add_data( req, ObjectAttributes->ObjectName->Buffer,
-                                       ObjectAttributes->ObjectName->Length );
+        wine_server_add_data( req, objattr, len );
         if (!(status = wine_server_call( req )))
             *CompletionPort = wine_server_ptr_handle( reply->handle );
     }
     SERVER_END_REQ;
+
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
     return status;
 }
 
@@ -1329,24 +1319,22 @@ NTSTATUS WINAPI NtRemoveIoCompletion( HANDLE CompletionPort, PULONG_PTR Completi
  *      ObjectAttributes   [I] completion object name
  *
  */
-NTSTATUS WINAPI NtOpenIoCompletion( PHANDLE CompletionPort, ACCESS_MASK DesiredAccess,
-                                    POBJECT_ATTRIBUTES ObjectAttributes )
+NTSTATUS WINAPI NtOpenIoCompletion( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
     NTSTATUS status;
 
-    TRACE("(%p, 0x%x, %p)\n", CompletionPort, DesiredAccess, ObjectAttributes);
-
-    if (!CompletionPort || !ObjectAttributes || !ObjectAttributes->ObjectName)
-        return STATUS_INVALID_PARAMETER;
+    if (!handle) return STATUS_INVALID_PARAMETER;
+    if ((status = validate_open_object_attributes( attr ))) return status;
 
     SERVER_START_REQ( open_completion )
     {
-        req->access     = DesiredAccess;
-        req->rootdir    = wine_server_obj_handle( ObjectAttributes->RootDirectory );
-        wine_server_add_data( req, ObjectAttributes->ObjectName->Buffer,
-                                   ObjectAttributes->ObjectName->Length );
-        if (!(status = wine_server_call( req )))
-            *CompletionPort = wine_server_ptr_handle( reply->handle );
+        req->access     = access;
+        req->attributes = attr->Attributes;
+        req->rootdir    = wine_server_obj_handle( attr->RootDirectory );
+        if (attr->ObjectName)
+            wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
+        status = wine_server_call( req );
+        *handle = wine_server_ptr_handle( reply->handle );
     }
     SERVER_END_REQ;
     return status;
@@ -1549,7 +1537,7 @@ DWORD WINAPI RtlRunOnceExecuteOnce( RTL_RUN_ONCE *once, PRTL_RUN_ONCE_INIT_FN fu
  * purposes. The following table lists all possible states the lock can be
  * in, notation: [X, #exclusive, #shared]:
  *
- * [0,   0,   N] -> locked by N shared access threads, if N=0 its unlocked
+ * [0,   0,   N] -> locked by N shared access threads, if N=0 it's unlocked
  * [0, >=1, >=1] -> threads are requesting exclusive locks, but there are
  * still shared access threads inside. #shared should not be incremented
  * anymore!

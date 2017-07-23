@@ -4,7 +4,7 @@
 @ cdecl __stdio_common_vfprintf(int64 ptr str ptr ptr) ucrtbase.__stdio_common_vfprintf
 @ stub __stdio_common_vfprintf_p
 @ stub __stdio_common_vfprintf_s
-@ stub __stdio_common_vfscanf
+@ cdecl __stdio_common_vfscanf(int64 ptr str ptr ptr) ucrtbase.__stdio_common_vfscanf
 @ cdecl __stdio_common_vfwprintf(int64 ptr wstr ptr ptr) ucrtbase.__stdio_common_vfwprintf
 @ stub __stdio_common_vfwprintf_p
 @ stub __stdio_common_vfwprintf_s
@@ -16,7 +16,7 @@
 @ cdecl __stdio_common_vsprintf_s(int64 ptr long str ptr ptr) ucrtbase.__stdio_common_vsprintf_s
 @ cdecl __stdio_common_vsscanf(int64 ptr long str ptr ptr) ucrtbase.__stdio_common_vsscanf
 @ cdecl __stdio_common_vswprintf(int64 ptr long wstr ptr ptr) ucrtbase.__stdio_common_vswprintf
-@ stub __stdio_common_vswprintf_p
+@ cdecl __stdio_common_vswprintf_p(int64 ptr long wstr ptr ptr) ucrtbase.__stdio_common_vswprintf_p
 @ cdecl __stdio_common_vswprintf_s(int64 ptr long wstr ptr ptr) ucrtbase.__stdio_common_vswprintf_s
 @ cdecl __stdio_common_vswscanf(int64 ptr long wstr ptr ptr) ucrtbase.__stdio_common_vswscanf
 @ cdecl _chsize(long long) ucrtbase._chsize
@@ -87,7 +87,7 @@
 @ cdecl _setmaxstdio(long) ucrtbase._setmaxstdio
 @ cdecl _setmode(long long) ucrtbase._setmode
 @ varargs _sopen(str long long) ucrtbase._sopen
-@ stub _sopen_dispatch
+@ cdecl _sopen_dispatch(str long long long ptr long) ucrtbase._sopen_dispatch
 @ cdecl _sopen_s(ptr str long long long) ucrtbase._sopen_s
 @ cdecl _tell(long) ucrtbase._tell
 @ cdecl -ret64 _telli64(long) ucrtbase._telli64
@@ -107,7 +107,7 @@
 @ cdecl _wpopen(wstr wstr) ucrtbase._wpopen
 @ cdecl _write(long ptr long) ucrtbase._write
 @ varargs _wsopen(wstr long long) ucrtbase._wsopen
-@ stub _wsopen_dispatch
+@ cdecl _wsopen_dispatch(wstr long long long ptr long) ucrtbase._wsopen_dispatch
 @ cdecl _wsopen_s(ptr wstr long long long) ucrtbase._wsopen_s
 @ cdecl _wtempnam(wstr wstr) ucrtbase._wtempnam
 @ cdecl _wtmpnam(ptr) ucrtbase._wtmpnam

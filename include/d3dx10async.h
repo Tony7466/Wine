@@ -19,6 +19,12 @@
 #ifndef __D3DX10ASYNC_H__
 #define __D3DX10ASYNC_H__
 
+#include "d3dx10.h"
+
+HRESULT WINAPI D3DX10CompileFromMemory(const char *data, SIZE_T data_size, const char *filename,
+        const D3D10_SHADER_MACRO *defines, ID3D10Include *include, const char *entry_point,
+        const char *target, UINT sflags, UINT eflags, ID3DX10ThreadPump *pump, ID3D10Blob **shader,
+        ID3D10Blob **error_messages, HRESULT *hresult);
 
 HRESULT WINAPI D3DX10CreateEffectFromFileA(const char *filename, const D3D10_SHADER_MACRO *defines,
         ID3D10Include *include, const char *profile, UINT hlslflags, UINT fxflags, ID3D10Device *device,
@@ -35,9 +41,23 @@ HRESULT WINAPI D3DX10CreateEffectFromMemory(const void *data, SIZE_T datasize, c
         UINT fxflags, ID3D10Device *device, ID3D10EffectPool *effectpool, ID3DX10ThreadPump *pump,
         ID3D10Effect **effect, ID3D10Blob **errors, HRESULT *hresult);
 
+HRESULT WINAPI D3DX10CreateEffectPoolFromFileA(const char *filename, const D3D10_SHADER_MACRO *defines,
+        ID3D10Include *include, const char *profile, UINT hlslflags, UINT fxflags, ID3D10Device *device,
+        ID3DX10ThreadPump *pump, ID3D10EffectPool **effectpool, ID3D10Blob **errors, HRESULT *hresult);
+
+HRESULT WINAPI D3DX10CreateEffectPoolFromFileW(const WCHAR *filename, const D3D10_SHADER_MACRO *defines,
+        ID3D10Include *include, const char *profile, UINT hlslflags, UINT fxflags, ID3D10Device *device,
+        ID3DX10ThreadPump *pump, ID3D10EffectPool **effectpool, ID3D10Blob **errors, HRESULT *hresult);
+
 HRESULT WINAPI D3DX10CreateEffectPoolFromMemory(const void *data, SIZE_T datasize, const char *filename,
         const D3D10_SHADER_MACRO *defines, ID3D10Include *include, const char *profile, UINT hlslflags,
         UINT fxflags, ID3D10Device *device, ID3DX10ThreadPump *pump, ID3D10EffectPool **effectpool,
         ID3D10Blob **errors, HRESULT *hresult);
+
+HRESULT WINAPI D3DX10CreateAsyncFileLoaderW(const WCHAR *filename, ID3DX10DataLoader **loader);
+HRESULT WINAPI D3DX10CreateAsyncFileLoaderA(const char *filename, ID3DX10DataLoader **loader);
+HRESULT WINAPI D3DX10CreateAsyncMemoryLoader(const void *data, SIZE_T datasize, ID3DX10DataLoader **loader);
+HRESULT WINAPI D3DX10CreateAsyncResourceLoaderA(HMODULE module, const char *resource, ID3DX10DataLoader **loader);
+HRESULT WINAPI D3DX10CreateAsyncResourceLoaderW(HMODULE module, const WCHAR *resource, ID3DX10DataLoader **loader);
 
 #endif

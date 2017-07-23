@@ -78,6 +78,7 @@ struct process
     unsigned int         is_terminating:1;/* is process terminating? */
     struct job          *job;             /* job object ascoicated with this process */
     struct list          job_entry;       /* list entry for job object */
+    struct list          asyncs;          /* list of async object owned by the process */
     struct list          locks;           /* list of file locks owned by the process */
     struct list          classes;         /* window classes owned by the process */
     struct console_input*console;         /* console input */
@@ -90,6 +91,7 @@ struct process
     struct list          dlls;            /* list of loaded dlls */
     client_ptr_t         peb;             /* PEB address in client address space */
     client_ptr_t         ldt_copy;        /* pointer to LDT copy in client addr space */
+    struct dir_cache    *dir_cache;       /* map of client-side directory cache */
     unsigned int         trace_data;      /* opaque data used by the process tracing mechanism */
     struct list          rawinput_devices;/* list of registered rawinput devices */
     const struct rawinput_device *rawinput_mouse; /* rawinput mouse device, if any */
@@ -103,7 +105,6 @@ struct process_snapshot
     int             threads;  /* number of threads */
     int             priority; /* priority class */
     int             handles;  /* number of handles */
-    int             unix_pid; /* Unix pid */
 };
 
 #define CPU_FLAG(cpu) (1 << (cpu))

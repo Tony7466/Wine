@@ -677,7 +677,7 @@ static void read_file_test(void)
     apc_count = 0;
     U(iosb).Status = 0xdeadbabe;
     iosb.Information = 0xdeadbeef;
-    ok( !is_signaled( read ), "read handle is not signaled\n" );
+    ok( !is_signaled( read ), "read handle is signaled\n" );
     status = pNtReadFile( read, 0, apc, &apc_count, &iosb, buffer, 1, NULL, NULL );
     ok( status == STATUS_PENDING, "wrong status %x\n", status );
     ok( !is_signaled( read ), "read handle is signaled\n" );
@@ -690,7 +690,7 @@ static void read_file_test(void)
     Sleep(1);  /* FIXME: needed for wine to run the i/o apc  */
     ok( U(iosb).Status == 0, "wrong status %x\n", U(iosb).Status );
     ok( iosb.Information == 1, "wrong info %lu\n", iosb.Information );
-    ok( is_signaled( read ), "read handle is signaled\n" );
+    ok( is_signaled( read ), "read handle is not signaled\n" );
     ok( !apc_count, "apc was called\n" );
     apc_count = 0;
     SleepEx( 1, FALSE ); /* non-alertable sleep */
@@ -731,7 +731,7 @@ static void read_file_test(void)
     ok(ret && written == 1, "WriteFile error %d\n", GetLastError());
     /* partial read is good enough */
     Sleep(1);  /* FIXME: needed for wine to run the i/o apc  */
-    ok( is_signaled( event ), "event is signaled\n" );
+    ok( is_signaled( event ), "event is not signaled\n" );
     ok( U(iosb).Status == 0, "wrong status %x\n", U(iosb).Status );
     ok( iosb.Information == 1, "wrong info %lu\n", iosb.Information );
     ok( !apc_count, "apc was called\n" );
@@ -762,7 +762,7 @@ static void read_file_test(void)
     ok( status == STATUS_INVALID_HANDLE, "wrong status %x\n", status );
     ok( U(iosb).Status == 0xdeadbabe, "wrong status %x\n", U(iosb).Status );
     ok( iosb.Information == 0xdeadbeef, "wrong info %lu\n", iosb.Information );
-    ok( is_signaled( event ), "event is signaled\n" );  /* not reset on invalid handle */
+    ok( is_signaled( event ), "event is not signaled\n" );  /* not reset on invalid handle */
     ok( !apc_count, "apc was called\n" );
     SleepEx( 1, TRUE ); /* alertable sleep */
     ok( !apc_count, "apc was called\n" );
@@ -782,7 +782,7 @@ static void read_file_test(void)
     Sleep(1);  /* FIXME: needed for wine to run the i/o apc  */
     ok( U(iosb).Status == STATUS_PIPE_BROKEN, "wrong status %x\n", U(iosb).Status );
     ok( iosb.Information == 0, "wrong info %lu\n", iosb.Information );
-    ok( is_signaled( event ), "event is signaled\n" );
+    ok( is_signaled( event ), "event is not signaled\n" );
     ok( !apc_count, "apc was called\n" );
     SleepEx( 1, TRUE ); /* alertable sleep */
     ok( apc_count == 1, "apc was not called\n" );
@@ -807,7 +807,7 @@ static void read_file_test(void)
     Sleep(1);  /* FIXME: needed for wine to run the i/o apc  */
     ok( U(iosb).Status == STATUS_CANCELLED, "wrong status %x\n", U(iosb).Status );
     ok( iosb.Information == 0, "wrong info %lu\n", iosb.Information );
-    ok( is_signaled( event ), "event is signaled\n" );
+    ok( is_signaled( event ), "event is not signaled\n" );
     ok( !apc_count, "apc was called\n" );
     SleepEx( 1, TRUE ); /* alertable sleep */
     ok( apc_count == 1, "apc was not called\n" );
@@ -833,7 +833,7 @@ static void read_file_test(void)
     Sleep(1);  /* FIXME: needed for wine to run the i/o apc  */
     ok( U(iosb).Status == STATUS_CANCELLED, "wrong status %x\n", U(iosb).Status );
     ok( iosb.Information == 0, "wrong info %lu\n", iosb.Information );
-    ok( is_signaled( event ), "event is signaled\n" );
+    ok( is_signaled( event ), "event is not signaled\n" );
     ok( !apc_count, "apc was called\n" );
     SleepEx( 1, TRUE ); /* alertable sleep */
     ok( apc_count == 1, "apc was not called\n" );
@@ -859,7 +859,7 @@ static void read_file_test(void)
         Sleep(1);  /* FIXME: needed for wine to run the i/o apc  */
         ok( U(iosb).Status == STATUS_CANCELLED, "wrong status %x\n", U(iosb).Status );
         ok( iosb.Information == 0, "wrong info %lu\n", iosb.Information );
-        ok( is_signaled( event ), "event is signaled\n" );
+        ok( is_signaled( event ), "event is not signaled\n" );
         ok( !apc_count, "apc was called\n" );
         SleepEx( 1, TRUE ); /* alertable sleep */
         ok( apc_count == 1, "apc was not called\n" );
@@ -885,7 +885,7 @@ static void read_file_test(void)
         Sleep(1);  /* FIXME: needed for wine to run the i/o apc  */
         ok( U(iosb).Status == STATUS_CANCELLED, "wrong status %x\n", U(iosb).Status );
         ok( iosb.Information == 0, "wrong info %lu\n", iosb.Information );
-        ok( is_signaled( event ), "event is signaled\n" );
+        ok( is_signaled( event ), "event is not signaled\n" );
         ok( !apc_count, "apc was called\n" );
         SleepEx( 1, TRUE ); /* alertable sleep */
         ok( apc_count == 2, "apc was not called\n" );
@@ -906,7 +906,7 @@ static void read_file_test(void)
     if (status == STATUS_PENDING) WaitForSingleObject( event, 1000 );
     ok( U(iosb).Status == STATUS_SUCCESS, "wrong status %x\n", U(iosb).Status );
     ok( iosb.Information == strlen(text), "wrong info %lu\n", iosb.Information );
-    ok( is_signaled( event ), "event is signaled\n" );
+    ok( is_signaled( event ), "event is not signaled\n" );
     ok( !apc_count, "apc was called\n" );
     SleepEx( 1, TRUE ); /* alertable sleep */
     ok( apc_count == 1, "apc was not called\n" );
@@ -923,7 +923,7 @@ static void read_file_test(void)
     if (status == STATUS_PENDING) WaitForSingleObject( event, 1000 );
     ok( U(iosb).Status == STATUS_SUCCESS, "wrong status %x\n", U(iosb).Status );
     ok( iosb.Information == strlen(text), "wrong info %lu\n", iosb.Information );
-    ok( is_signaled( event ), "event is signaled\n" );
+    ok( is_signaled( event ), "event is not signaled\n" );
     ok( !apc_count, "apc was called\n" );
     SleepEx( 1, TRUE ); /* alertable sleep */
     ok( apc_count == 1, "apc was not called\n" );
@@ -940,7 +940,7 @@ static void read_file_test(void)
         WaitForSingleObject( event, 1000 );
         ok( U(iosb).Status == STATUS_END_OF_FILE, "wrong status %x\n", U(iosb).Status );
         ok( iosb.Information == 0, "wrong info %lu\n", iosb.Information );
-        ok( is_signaled( event ), "event is signaled\n" );
+        ok( is_signaled( event ), "event is not signaled\n" );
         ok( !apc_count, "apc was called\n" );
         SleepEx( 1, TRUE ); /* alertable sleep */
         ok( apc_count == 1, "apc was not called\n" );
@@ -961,7 +961,7 @@ static void read_file_test(void)
     if (status == STATUS_PENDING) WaitForSingleObject( event, 1000 );
     ok( U(iosb).Status == STATUS_SUCCESS, "wrong status %x\n", U(iosb).Status );
     ok( iosb.Information == strlen(text), "wrong info %lu\n", iosb.Information );
-    ok( is_signaled( event ), "event is signaled\n" );
+    ok( is_signaled( event ), "event is not signaled\n" );
     ok( !apc_count, "apc was called\n" );
     SleepEx( 1, TRUE ); /* alertable sleep */
     ok( apc_count == 1, "apc was not called\n" );
@@ -975,7 +975,7 @@ static void read_file_test(void)
     ok( status == STATUS_SUCCESS, "wrong status %x\n", status );
     ok( U(iosb).Status == STATUS_SUCCESS, "wrong status %x\n", U(iosb).Status );
     ok( iosb.Information == strlen(text), "wrong info %lu\n", iosb.Information );
-    ok( is_signaled( event ), "event is signaled\n" );
+    ok( is_signaled( event ), "event is not signaled\n" );
     ok( !apc_count, "apc was called\n" );
     SleepEx( 1, TRUE ); /* alertable sleep */
     todo_wine ok( !apc_count, "apc was called\n" );
@@ -1137,39 +1137,6 @@ static void nt_mailslot_test(void)
     ok( hslot != 0, "Handle is invalid\n");
 
     if  ( rc == STATUS_SUCCESS ) pNtClose(hslot);
-
-    /*
-     * Test that the length field is checked properly
-     */
-    attr.Length = 0;
-    rc = pNtCreateMailslotFile(&hslot, DesiredAccess,
-         &attr, &IoStatusBlock, CreateOptions, MailslotQuota, MaxMessageSize,
-         &TimeOut);
-    todo_wine ok( rc == STATUS_INVALID_PARAMETER, "rc = %x not c000000d STATUS_INVALID_PARAMETER\n", rc);
-
-    if  (rc == STATUS_SUCCESS) pNtClose(hslot);
-
-    attr.Length = sizeof(OBJECT_ATTRIBUTES)+1;
-    rc = pNtCreateMailslotFile(&hslot, DesiredAccess,
-         &attr, &IoStatusBlock, CreateOptions, MailslotQuota, MaxMessageSize,
-         &TimeOut);
-    todo_wine ok( rc == STATUS_INVALID_PARAMETER, "rc = %x not c000000d STATUS_INVALID_PARAMETER\n", rc);
-
-    if  (rc == STATUS_SUCCESS) pNtClose(hslot);
-
-    /*
-     * Test handling of a NULL unicode string in ObjectName
-     */
-    InitializeObjectAttributes(&attr, &str, OBJ_CASE_INSENSITIVE, 0, NULL);
-    attr.ObjectName = NULL;
-    rc = pNtCreateMailslotFile(&hslot, DesiredAccess,
-         &attr, &IoStatusBlock, CreateOptions, MailslotQuota, MaxMessageSize,
-         &TimeOut);
-    ok( rc == STATUS_OBJECT_PATH_SYNTAX_BAD ||
-        rc == STATUS_INVALID_PARAMETER,
-        "rc = %x not STATUS_OBJECT_PATH_SYNTAX_BAD or STATUS_INVALID_PARAMETER\n", rc);
-
-    if  (rc == STATUS_SUCCESS) pNtClose(hslot);
 
     /*
      * Test a valid call
@@ -1604,7 +1571,7 @@ static void test_file_rename_information(void)
     res = pNtQueryInformationFile( handle, &io, fni, sizeof(FILE_NAME_INFORMATION) + MAX_PATH * sizeof(WCHAR), FileNameInformation );
     ok( res == STATUS_SUCCESS, "res expected STATUS_SUCCESS, got %x\n", res );
     fni->FileName[ fni->FileNameLength / sizeof(WCHAR) ] = 0;
-    ok( !lstrcmpW(fni->FileName, newpath + 2), "FileName expected %s, got %s\n",
+    ok( !lstrcmpiW(fni->FileName, newpath + 2), "FileName expected %s, got %s\n",
         wine_dbgstr_w(newpath + 2), wine_dbgstr_w(fni->FileName) );
     HeapFree( GetProcessHeap(), 0, fni );
 
@@ -1774,7 +1741,7 @@ static void test_file_rename_information(void)
     res = pNtQueryInformationFile( handle, &io, fni, sizeof(FILE_NAME_INFORMATION) + MAX_PATH * sizeof(WCHAR), FileNameInformation );
     ok( res == STATUS_SUCCESS, "res expected STATUS_SUCCESS, got %x\n", res );
     fni->FileName[ fni->FileNameLength / sizeof(WCHAR) ] = 0;
-    ok( !lstrcmpW(fni->FileName, newpath + 2), "FileName expected %s, got %s\n",
+    ok( !lstrcmpiW(fni->FileName, newpath + 2), "FileName expected %s, got %s\n",
         wine_dbgstr_w(newpath + 2), wine_dbgstr_w(fni->FileName) );
     HeapFree( GetProcessHeap(), 0, fni );
 
@@ -2180,7 +2147,7 @@ static void test_file_rename_information(void)
     res = pNtQueryInformationFile( handle, &io, fni, sizeof(FILE_NAME_INFORMATION) + MAX_PATH * sizeof(WCHAR), FileNameInformation );
     ok( res == STATUS_SUCCESS, "res expected STATUS_SUCCESS, got %x\n", res );
     fni->FileName[ fni->FileNameLength / sizeof(WCHAR) ] = 0;
-    todo_wine ok( !lstrcmpW(fni->FileName, newpath + 2), "FileName expected %s, got %s\n",
+    todo_wine ok( !lstrcmpiW(fni->FileName, newpath + 2), "FileName expected %s, got %s\n",
                   wine_dbgstr_w(newpath + 2), wine_dbgstr_w(fni->FileName) );
     HeapFree( GetProcessHeap(), 0, fni );
 
@@ -2236,7 +2203,7 @@ static void test_file_link_information(void)
     res = pNtQueryInformationFile( handle, &io, fni, sizeof(FILE_NAME_INFORMATION) + MAX_PATH * sizeof(WCHAR), FileNameInformation );
     ok( res == STATUS_SUCCESS, "res expected STATUS_SUCCESS, got %x\n", res );
     fni->FileName[ fni->FileNameLength / sizeof(WCHAR) ] = 0;
-    ok( !lstrcmpW(fni->FileName, oldpath + 2), "FileName expected %s, got %s\n",
+    ok( !lstrcmpiW(fni->FileName, oldpath + 2), "FileName expected %s, got %s\n",
         wine_dbgstr_w(oldpath + 2), wine_dbgstr_w(fni->FileName) );
     HeapFree( GetProcessHeap(), 0, fni );
 
@@ -2406,7 +2373,7 @@ static void test_file_link_information(void)
     res = pNtQueryInformationFile( handle, &io, fni, sizeof(FILE_NAME_INFORMATION) + MAX_PATH * sizeof(WCHAR), FileNameInformation );
     ok( res == STATUS_SUCCESS, "res expected STATUS_SUCCESS, got %x\n", res );
     fni->FileName[ fni->FileNameLength / sizeof(WCHAR) ] = 0;
-    ok( !lstrcmpW(fni->FileName, oldpath + 2), "FileName expected %s, got %s\n",
+    ok( !lstrcmpiW(fni->FileName, oldpath + 2), "FileName expected %s, got %s\n",
         wine_dbgstr_w(oldpath + 2), wine_dbgstr_w(fni->FileName) );
     HeapFree( GetProcessHeap(), 0, fni );
 
@@ -2809,7 +2776,7 @@ static void test_file_link_information(void)
     res = pNtQueryInformationFile( handle, &io, fni, sizeof(FILE_NAME_INFORMATION) + MAX_PATH * sizeof(WCHAR), FileNameInformation );
     ok( res == STATUS_SUCCESS, "res expected STATUS_SUCCESS, got %x\n", res );
     fni->FileName[ fni->FileNameLength / sizeof(WCHAR) ] = 0;
-    ok( !lstrcmpW(fni->FileName, oldpath + 2), "FileName expected %s, got %s\n",
+    ok( !lstrcmpiW(fni->FileName, oldpath + 2), "FileName expected %s, got %s\n",
         wine_dbgstr_w(oldpath + 2), wine_dbgstr_w(fni->FileName) );
     HeapFree( GetProcessHeap(), 0, fni );
 

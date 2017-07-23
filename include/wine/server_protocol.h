@@ -377,8 +377,9 @@ struct security_descriptor
 struct object_attributes
 {
     obj_handle_t rootdir;
-    data_size_t sd_len;
-    data_size_t name_len;
+    unsigned int attributes;
+    data_size_t  sd_len;
+    data_size_t  name_len;
 
 
 };
@@ -676,6 +677,30 @@ typedef union
     } ioctl;
 } irp_params_t;
 
+
+typedef struct
+{
+    client_ptr_t   base;
+    client_ptr_t   entry_point;
+    mem_size_t     map_size;
+    mem_size_t     stack_size;
+    mem_size_t     stack_commit;
+    unsigned int   zerobits;
+    unsigned int   subsystem;
+    unsigned short subsystem_low;
+    unsigned short subsystem_high;
+    unsigned int   gp;
+    unsigned short image_charact;
+    unsigned short dll_charact;
+    unsigned short machine;
+    unsigned char  contains_code;
+    unsigned char  image_flags;
+    unsigned int   loader_flags;
+    unsigned int   header_size;
+    unsigned int   file_size;
+    unsigned int   checksum;
+} pe_image_info_t;
+
 struct rawinput_device
 {
     unsigned short usage_page;
@@ -857,7 +882,8 @@ struct get_process_info_reply
     int          exit_code;
     int          priority;
     cpu_type_t   cpu;
-    int          debugger_present;
+    short int    debugger_present;
+    short int    debug_children;
 };
 
 
@@ -1156,11 +1182,9 @@ struct create_event_request
 {
     struct request_header __header;
     unsigned int access;
-    unsigned int attributes;
     int          manual_reset;
     int          initial_state;
     /* VARARG(objattr,object_attributes); */
-    char __pad_28[4];
 };
 struct create_event_reply
 {
@@ -1217,9 +1241,7 @@ struct create_keyed_event_request
 {
     struct request_header __header;
     unsigned int access;
-    unsigned int attributes;
     /* VARARG(objattr,object_attributes); */
-    char __pad_20[4];
 };
 struct create_keyed_event_reply
 {
@@ -1250,9 +1272,9 @@ struct create_mutex_request
 {
     struct request_header __header;
     unsigned int access;
-    unsigned int attributes;
     int          owned;
     /* VARARG(objattr,object_attributes); */
+    char __pad_20[4];
 };
 struct create_mutex_reply
 {
@@ -1294,15 +1316,29 @@ struct open_mutex_reply
 
 
 
+struct query_mutex_request
+{
+    struct request_header __header;
+    obj_handle_t  handle;
+};
+struct query_mutex_reply
+{
+    struct reply_header __header;
+    unsigned int count;
+    int          owned;
+    int          abandoned;
+    char __pad_20[4];
+};
+
+
+
 struct create_semaphore_request
 {
     struct request_header __header;
     unsigned int access;
-    unsigned int attributes;
     unsigned int initial;
     unsigned int max;
     /* VARARG(objattr,object_attributes); */
-    char __pad_28[4];
 };
 struct create_semaphore_reply
 {
@@ -1361,14 +1397,12 @@ struct create_file_request
 {
     struct request_header __header;
     unsigned int access;
-    unsigned int attributes;
     unsigned int sharing;
     int          create;
     unsigned int options;
     unsigned int attrs;
     /* VARARG(objattr,object_attributes); */
     /* VARARG(filename,string); */
-    char __pad_36[4];
 };
 struct create_file_reply
 {
@@ -1454,6 +1488,21 @@ enum server_fd_type
     FD_TYPE_CHAR,
     FD_TYPE_DEVICE,
     FD_TYPE_NB_TYPES
+};
+
+
+
+struct get_directory_cache_entry_request
+{
+    struct request_header __header;
+    obj_handle_t handle;
+};
+struct get_directory_cache_entry_reply
+{
+    struct reply_header __header;
+    int          entry;
+    /* VARARG(free,ints); */
+    char __pad_12[4];
 };
 
 
@@ -1890,6 +1939,7 @@ struct set_console_output_info_request
     short int    width;
     short int    height;
     short int    attr;
+    short int    popup_attr;
     short int    win_left;
     short int    win_top;
     short int    win_right;
@@ -1898,19 +1948,22 @@ struct set_console_output_info_request
     short int    max_height;
     short int    font_width;
     short int    font_height;
-    char __pad_50[6];
+    /* VARARG(colors,uints); */
+    char __pad_52[4];
 };
 struct set_console_output_info_reply
 {
     struct reply_header __header;
 };
-#define SET_CONSOLE_OUTPUT_INFO_CURSOR_GEOM     0x01
-#define SET_CONSOLE_OUTPUT_INFO_CURSOR_POS      0x02
-#define SET_CONSOLE_OUTPUT_INFO_SIZE            0x04
-#define SET_CONSOLE_OUTPUT_INFO_ATTR            0x08
-#define SET_CONSOLE_OUTPUT_INFO_DISPLAY_WINDOW  0x10
-#define SET_CONSOLE_OUTPUT_INFO_MAX_SIZE        0x20
-#define SET_CONSOLE_OUTPUT_INFO_FONT            0x40
+#define SET_CONSOLE_OUTPUT_INFO_CURSOR_GEOM     0x0001
+#define SET_CONSOLE_OUTPUT_INFO_CURSOR_POS      0x0002
+#define SET_CONSOLE_OUTPUT_INFO_SIZE            0x0004
+#define SET_CONSOLE_OUTPUT_INFO_ATTR            0x0008
+#define SET_CONSOLE_OUTPUT_INFO_DISPLAY_WINDOW  0x0010
+#define SET_CONSOLE_OUTPUT_INFO_MAX_SIZE        0x0020
+#define SET_CONSOLE_OUTPUT_INFO_FONT            0x0040
+#define SET_CONSOLE_OUTPUT_INFO_COLORTABLE      0x0080
+#define SET_CONSOLE_OUTPUT_INFO_POPUP_ATTR      0x0100
 
 
 
@@ -1929,6 +1982,7 @@ struct get_console_output_info_reply
     short int    width;
     short int    height;
     short int    attr;
+    short int    popup_attr;
     short int    win_left;
     short int    win_top;
     short int    win_right;
@@ -1937,7 +1991,7 @@ struct get_console_output_info_reply
     short int    max_height;
     short int    font_width;
     short int    font_height;
-    char __pad_38[2];
+    /* VARARG(colors,uints); */
 };
 
 
@@ -2104,7 +2158,7 @@ struct create_mapping_request
 {
     struct request_header __header;
     unsigned int access;
-    unsigned int attributes;
+    unsigned int flags;
     unsigned int protect;
     mem_size_t   size;
     obj_handle_t file_handle;
@@ -2162,11 +2216,11 @@ struct get_mapping_info_reply
 {
     struct reply_header __header;
     mem_size_t   size;
+    unsigned int flags;
     int          protect;
-    int          header_size;
-    client_ptr_t base;
     obj_handle_t mapping;
     obj_handle_t shared_file;
+    /* VARARG(image,pe_image_info); */
 };
 
 
@@ -2399,13 +2453,11 @@ struct write_process_memory_reply
 struct create_key_request
 {
     struct request_header __header;
-    obj_handle_t parent;
     unsigned int access;
-    unsigned int attributes;
     unsigned int options;
-    data_size_t  namelen;
-    /* VARARG(name,unicode_str,namelen); */
+    /* VARARG(objattr,object_attributes); */
     /* VARARG(class,unicode_str); */
+    char __pad_20[4];
 };
 struct create_key_reply
 {
@@ -2549,10 +2601,8 @@ struct delete_key_value_reply
 struct load_registry_request
 {
     struct request_header __header;
-    obj_handle_t hkey;
     obj_handle_t file;
-    /* VARARG(name,unicode_str); */
-    char __pad_20[4];
+    /* VARARG(objattr,object_attributes); */
 };
 struct load_registry_reply
 {
@@ -2607,11 +2657,9 @@ struct create_timer_request
 {
     struct request_header __header;
     unsigned int access;
-    unsigned int attributes;
-    obj_handle_t rootdir;
     int          manual;
-    /* VARARG(name,unicode_str); */
-    char __pad_28[4];
+    /* VARARG(objattr,object_attributes); */
+    char __pad_20[4];
 };
 struct create_timer_reply
 {
@@ -3175,6 +3223,22 @@ struct cancel_async_reply
 
 
 
+struct get_async_result_request
+{
+    struct request_header __header;
+    char __pad_12[4];
+    client_ptr_t   user_arg;
+};
+struct get_async_result_reply
+{
+    struct reply_header __header;
+    data_size_t    size;
+    /* VARARG(out_data,bytes); */
+    char __pad_12[4];
+};
+
+
+
 struct read_request
 {
     struct request_header __header;
@@ -3246,32 +3310,16 @@ struct set_irp_result_reply
 
 
 
-struct get_irp_result_request
-{
-    struct request_header __header;
-    obj_handle_t   handle;
-    client_ptr_t   user_arg;
-};
-struct get_irp_result_reply
-{
-    struct reply_header __header;
-    data_size_t    size;
-    /* VARARG(out_data,bytes); */
-    char __pad_12[4];
-};
-
-
-
 struct create_named_pipe_request
 {
     struct request_header __header;
     unsigned int   access;
-    unsigned int   attributes;
     unsigned int   options;
     unsigned int   sharing;
     unsigned int   maxinstances;
     unsigned int   outsize;
     unsigned int   insize;
+    char __pad_36[4];
     timeout_t      timeout;
     unsigned int   flags;
     /* VARARG(objattr,object_attributes); */
@@ -3807,7 +3855,9 @@ struct create_winstation_request
     unsigned int flags;
     unsigned int access;
     unsigned int attributes;
+    obj_handle_t rootdir;
     /* VARARG(name,unicode_str); */
+    char __pad_28[4];
 };
 struct create_winstation_reply
 {
@@ -3823,8 +3873,8 @@ struct open_winstation_request
     struct request_header __header;
     unsigned int access;
     unsigned int attributes;
+    obj_handle_t rootdir;
     /* VARARG(name,unicode_str); */
-    char __pad_20[4];
 };
 struct open_winstation_reply
 {
@@ -4232,6 +4282,13 @@ struct set_caret_info_reply
 #define SET_CARET_POS        0x01
 #define SET_CARET_HIDE       0x02
 #define SET_CARET_STATE      0x04
+enum caret_state
+{
+    CARET_STATE_OFF,
+    CARET_STATE_ON,
+    CARET_STATE_TOGGLE,
+    CARET_STATE_ON_IF_MOVED
+};
 
 
 
@@ -4403,34 +4460,31 @@ struct set_class_info_reply
 
 
 
-struct set_clipboard_info_request
+struct open_clipboard_request
 {
     struct request_header __header;
-    unsigned int   flags;
-    user_handle_t  clipboard;
-    user_handle_t  owner;
-    user_handle_t  viewer;
-    unsigned int   seqno;
+    user_handle_t  window;
 };
-struct set_clipboard_info_reply
+struct open_clipboard_reply
 {
     struct reply_header __header;
-    unsigned int   flags;
-    user_handle_t  old_clipboard;
-    user_handle_t  old_owner;
-    user_handle_t  old_viewer;
-    unsigned int   seqno;
-    char __pad_28[4];
+    user_handle_t  owner;
+    char __pad_12[4];
 };
 
-#define SET_CB_OPEN      0x001
-#define SET_CB_VIEWER    0x004
-#define SET_CB_SEQNO     0x008
-#define SET_CB_RELOWNER  0x010
-#define SET_CB_CLOSE     0x020
-#define CB_OPEN          0x040
-#define CB_OWNER         0x080
-#define CB_PROCESS       0x100
+
+
+struct close_clipboard_request
+{
+    struct request_header __header;
+    char __pad_12[4];
+};
+struct close_clipboard_reply
+{
+    struct reply_header __header;
+    user_handle_t  viewer;
+    user_handle_t  owner;
+};
 
 
 
@@ -4440,6 +4494,141 @@ struct empty_clipboard_request
     char __pad_12[4];
 };
 struct empty_clipboard_reply
+{
+    struct reply_header __header;
+};
+
+
+
+struct set_clipboard_data_request
+{
+    struct request_header __header;
+    unsigned int   format;
+    unsigned int   lcid;
+    /* VARARG(data,bytes); */
+    char __pad_20[4];
+};
+struct set_clipboard_data_reply
+{
+    struct reply_header __header;
+    unsigned int   seqno;
+    char __pad_12[4];
+};
+
+
+
+struct get_clipboard_data_request
+{
+    struct request_header __header;
+    unsigned int   format;
+    int            cached;
+    unsigned int   seqno;
+};
+struct get_clipboard_data_reply
+{
+    struct reply_header __header;
+    unsigned int   from;
+    user_handle_t  owner;
+    unsigned int   seqno;
+    data_size_t    total;
+    /* VARARG(data,bytes); */
+};
+
+
+
+struct get_clipboard_formats_request
+{
+    struct request_header __header;
+    unsigned int   format;
+};
+struct get_clipboard_formats_reply
+{
+    struct reply_header __header;
+    unsigned int   count;
+    /* VARARG(formats,uints); */
+    char __pad_12[4];
+};
+
+
+
+struct enum_clipboard_formats_request
+{
+    struct request_header __header;
+    unsigned int   previous;
+};
+struct enum_clipboard_formats_reply
+{
+    struct reply_header __header;
+    unsigned int   format;
+    char __pad_12[4];
+};
+
+
+
+struct release_clipboard_request
+{
+    struct request_header __header;
+    user_handle_t  owner;
+};
+struct release_clipboard_reply
+{
+    struct reply_header __header;
+    user_handle_t  viewer;
+    user_handle_t  owner;
+};
+
+
+
+struct get_clipboard_info_request
+{
+    struct request_header __header;
+    char __pad_12[4];
+};
+struct get_clipboard_info_reply
+{
+    struct reply_header __header;
+    user_handle_t  window;
+    user_handle_t  owner;
+    user_handle_t  viewer;
+    unsigned int   seqno;
+};
+
+
+
+struct set_clipboard_viewer_request
+{
+    struct request_header __header;
+    user_handle_t  viewer;
+    user_handle_t  previous;
+    char __pad_20[4];
+};
+struct set_clipboard_viewer_reply
+{
+    struct reply_header __header;
+    user_handle_t  old_viewer;
+    user_handle_t  owner;
+};
+
+
+
+struct add_clipboard_listener_request
+{
+    struct request_header __header;
+    user_handle_t  window;
+};
+struct add_clipboard_listener_reply
+{
+    struct reply_header __header;
+};
+
+
+
+struct remove_clipboard_listener_request
+{
+    struct request_header __header;
+    user_handle_t  window;
+};
+struct remove_clipboard_listener_reply
 {
     struct reply_header __header;
 };
@@ -4654,16 +4843,37 @@ struct get_security_object_reply
 };
 
 
+struct handle_info
+{
+    process_id_t owner;
+    obj_handle_t handle;
+    unsigned int access;
+};
+
+
+struct get_system_handles_request
+{
+    struct request_header __header;
+    char __pad_12[4];
+};
+struct get_system_handles_reply
+{
+    struct reply_header __header;
+    unsigned int    count;
+    /* VARARG(data,handle_infos); */
+    char __pad_12[4];
+};
+
+
+
 struct create_mailslot_request
 {
     struct request_header __header;
     unsigned int   access;
-    unsigned int   attributes;
-    obj_handle_t   rootdir;
     timeout_t      read_timeout;
     unsigned int   max_msgsize;
-    /* VARARG(name,unicode_str); */
-    char __pad_36[4];
+    /* VARARG(objattr,object_attributes); */
+    char __pad_28[4];
 };
 struct create_mailslot_reply
 {
@@ -4697,9 +4907,7 @@ struct create_directory_request
 {
     struct request_header __header;
     unsigned int   access;
-    unsigned int   attributes;
-    obj_handle_t   rootdir;
-    /* VARARG(directory_name,unicode_str); */
+    /* VARARG(objattr,object_attributes); */
 };
 struct create_directory_reply
 {
@@ -4749,12 +4957,8 @@ struct create_symlink_request
 {
     struct request_header __header;
     unsigned int   access;
-    unsigned int   attributes;
-    obj_handle_t   rootdir;
-    data_size_t    name_len;
-    /* VARARG(name,unicode_str,name_len); */
+    /* VARARG(objattr,object_attributes); */
     /* VARARG(target_name,unicode_str); */
-    char __pad_28[4];
 };
 struct create_symlink_reply
 {
@@ -4973,11 +5177,9 @@ struct create_completion_request
 {
     struct request_header __header;
     unsigned int access;
-    unsigned int attributes;
     unsigned int concurrent;
-    obj_handle_t rootdir;
-    /* VARARG(filename,unicode_str); */
-    char __pad_28[4];
+    /* VARARG(objattr,object_attributes); */
+    char __pad_20[4];
 };
 struct create_completion_reply
 {
@@ -5247,11 +5449,26 @@ struct create_job_request
 {
     struct request_header __header;
     unsigned int access;
-    unsigned int attributes;
     /* VARARG(objattr,object_attributes); */
-    char __pad_20[4];
 };
 struct create_job_reply
+{
+    struct reply_header __header;
+    obj_handle_t handle;
+    char __pad_12[4];
+};
+
+
+
+struct open_job_request
+{
+    struct request_header __header;
+    unsigned int access;
+    unsigned int attributes;
+    obj_handle_t rootdir;
+    /* VARARG(name,unicode_str); */
+};
+struct open_job_reply
 {
     struct reply_header __header;
     obj_handle_t handle;
@@ -5367,6 +5584,7 @@ enum request
     REQ_create_mutex,
     REQ_release_mutex,
     REQ_open_mutex,
+    REQ_query_mutex,
     REQ_create_semaphore,
     REQ_release_semaphore,
     REQ_query_semaphore,
@@ -5376,6 +5594,7 @@ enum request
     REQ_alloc_file_handle,
     REQ_get_handle_unix_name,
     REQ_get_handle_fd,
+    REQ_get_directory_cache_entry,
     REQ_flush,
     REQ_lock_file,
     REQ_unlock_file,
@@ -5474,11 +5693,11 @@ enum request
     REQ_set_serial_info,
     REQ_register_async,
     REQ_cancel_async,
+    REQ_get_async_result,
     REQ_read,
     REQ_write,
     REQ_ioctl,
     REQ_set_irp_result,
-    REQ_get_irp_result,
     REQ_create_named_pipe,
     REQ_get_named_pipe_info,
     REQ_set_named_pipe_info,
@@ -5544,8 +5763,18 @@ enum request
     REQ_create_class,
     REQ_destroy_class,
     REQ_set_class_info,
-    REQ_set_clipboard_info,
+    REQ_open_clipboard,
+    REQ_close_clipboard,
     REQ_empty_clipboard,
+    REQ_set_clipboard_data,
+    REQ_get_clipboard_data,
+    REQ_get_clipboard_formats,
+    REQ_enum_clipboard_formats,
+    REQ_release_clipboard,
+    REQ_get_clipboard_info,
+    REQ_set_clipboard_viewer,
+    REQ_add_clipboard_listener,
+    REQ_remove_clipboard_listener,
     REQ_open_token,
     REQ_set_global_windows,
     REQ_adjust_token_privileges,
@@ -5559,6 +5788,7 @@ enum request
     REQ_set_token_default_dacl,
     REQ_set_security_object,
     REQ_get_security_object,
+    REQ_get_system_handles,
     REQ_create_mailslot,
     REQ_set_mailslot_info,
     REQ_create_directory,
@@ -5596,6 +5826,7 @@ enum request
     REQ_get_suspend_context,
     REQ_set_suspend_context,
     REQ_create_job,
+    REQ_open_job,
     REQ_assign_job,
     REQ_process_in_job,
     REQ_set_job_limits,
@@ -5643,6 +5874,7 @@ union generic_request
     struct create_mutex_request create_mutex_request;
     struct release_mutex_request release_mutex_request;
     struct open_mutex_request open_mutex_request;
+    struct query_mutex_request query_mutex_request;
     struct create_semaphore_request create_semaphore_request;
     struct release_semaphore_request release_semaphore_request;
     struct query_semaphore_request query_semaphore_request;
@@ -5652,6 +5884,7 @@ union generic_request
     struct alloc_file_handle_request alloc_file_handle_request;
     struct get_handle_unix_name_request get_handle_unix_name_request;
     struct get_handle_fd_request get_handle_fd_request;
+    struct get_directory_cache_entry_request get_directory_cache_entry_request;
     struct flush_request flush_request;
     struct lock_file_request lock_file_request;
     struct unlock_file_request unlock_file_request;
@@ -5750,11 +5983,11 @@ union generic_request
     struct set_serial_info_request set_serial_info_request;
     struct register_async_request register_async_request;
     struct cancel_async_request cancel_async_request;
+    struct get_async_result_request get_async_result_request;
     struct read_request read_request;
     struct write_request write_request;
     struct ioctl_request ioctl_request;
     struct set_irp_result_request set_irp_result_request;
-    struct get_irp_result_request get_irp_result_request;
     struct create_named_pipe_request create_named_pipe_request;
     struct get_named_pipe_info_request get_named_pipe_info_request;
     struct set_named_pipe_info_request set_named_pipe_info_request;
@@ -5820,8 +6053,18 @@ union generic_request
     struct create_class_request create_class_request;
     struct destroy_class_request destroy_class_request;
     struct set_class_info_request set_class_info_request;
-    struct set_clipboard_info_request set_clipboard_info_request;
+    struct open_clipboard_request open_clipboard_request;
+    struct close_clipboard_request close_clipboard_request;
     struct empty_clipboard_request empty_clipboard_request;
+    struct set_clipboard_data_request set_clipboard_data_request;
+    struct get_clipboard_data_request get_clipboard_data_request;
+    struct get_clipboard_formats_request get_clipboard_formats_request;
+    struct enum_clipboard_formats_request enum_clipboard_formats_request;
+    struct release_clipboard_request release_clipboard_request;
+    struct get_clipboard_info_request get_clipboard_info_request;
+    struct set_clipboard_viewer_request set_clipboard_viewer_request;
+    struct add_clipboard_listener_request add_clipboard_listener_request;
+    struct remove_clipboard_listener_request remove_clipboard_listener_request;
     struct open_token_request open_token_request;
     struct set_global_windows_request set_global_windows_request;
     struct adjust_token_privileges_request adjust_token_privileges_request;
@@ -5835,6 +6078,7 @@ union generic_request
     struct set_token_default_dacl_request set_token_default_dacl_request;
     struct set_security_object_request set_security_object_request;
     struct get_security_object_request get_security_object_request;
+    struct get_system_handles_request get_system_handles_request;
     struct create_mailslot_request create_mailslot_request;
     struct set_mailslot_info_request set_mailslot_info_request;
     struct create_directory_request create_directory_request;
@@ -5872,6 +6116,7 @@ union generic_request
     struct get_suspend_context_request get_suspend_context_request;
     struct set_suspend_context_request set_suspend_context_request;
     struct create_job_request create_job_request;
+    struct open_job_request open_job_request;
     struct assign_job_request assign_job_request;
     struct process_in_job_request process_in_job_request;
     struct set_job_limits_request set_job_limits_request;
@@ -5917,6 +6162,7 @@ union generic_reply
     struct create_mutex_reply create_mutex_reply;
     struct release_mutex_reply release_mutex_reply;
     struct open_mutex_reply open_mutex_reply;
+    struct query_mutex_reply query_mutex_reply;
     struct create_semaphore_reply create_semaphore_reply;
     struct release_semaphore_reply release_semaphore_reply;
     struct query_semaphore_reply query_semaphore_reply;
@@ -5926,6 +6172,7 @@ union generic_reply
     struct alloc_file_handle_reply alloc_file_handle_reply;
     struct get_handle_unix_name_reply get_handle_unix_name_reply;
     struct get_handle_fd_reply get_handle_fd_reply;
+    struct get_directory_cache_entry_reply get_directory_cache_entry_reply;
     struct flush_reply flush_reply;
     struct lock_file_reply lock_file_reply;
     struct unlock_file_reply unlock_file_reply;
@@ -6024,11 +6271,11 @@ union generic_reply
     struct set_serial_info_reply set_serial_info_reply;
     struct register_async_reply register_async_reply;
     struct cancel_async_reply cancel_async_reply;
+    struct get_async_result_reply get_async_result_reply;
     struct read_reply read_reply;
     struct write_reply write_reply;
     struct ioctl_reply ioctl_reply;
     struct set_irp_result_reply set_irp_result_reply;
-    struct get_irp_result_reply get_irp_result_reply;
     struct create_named_pipe_reply create_named_pipe_reply;
     struct get_named_pipe_info_reply get_named_pipe_info_reply;
     struct set_named_pipe_info_reply set_named_pipe_info_reply;
@@ -6094,8 +6341,18 @@ union generic_reply
     struct create_class_reply create_class_reply;
     struct destroy_class_reply destroy_class_reply;
     struct set_class_info_reply set_class_info_reply;
-    struct set_clipboard_info_reply set_clipboard_info_reply;
+    struct open_clipboard_reply open_clipboard_reply;
+    struct close_clipboard_reply close_clipboard_reply;
     struct empty_clipboard_reply empty_clipboard_reply;
+    struct set_clipboard_data_reply set_clipboard_data_reply;
+    struct get_clipboard_data_reply get_clipboard_data_reply;
+    struct get_clipboard_formats_reply get_clipboard_formats_reply;
+    struct enum_clipboard_formats_reply enum_clipboard_formats_reply;
+    struct release_clipboard_reply release_clipboard_reply;
+    struct get_clipboard_info_reply get_clipboard_info_reply;
+    struct set_clipboard_viewer_reply set_clipboard_viewer_reply;
+    struct add_clipboard_listener_reply add_clipboard_listener_reply;
+    struct remove_clipboard_listener_reply remove_clipboard_listener_reply;
     struct open_token_reply open_token_reply;
     struct set_global_windows_reply set_global_windows_reply;
     struct adjust_token_privileges_reply adjust_token_privileges_reply;
@@ -6109,6 +6366,7 @@ union generic_reply
     struct set_token_default_dacl_reply set_token_default_dacl_reply;
     struct set_security_object_reply set_security_object_reply;
     struct get_security_object_reply get_security_object_reply;
+    struct get_system_handles_reply get_system_handles_reply;
     struct create_mailslot_reply create_mailslot_reply;
     struct set_mailslot_info_reply set_mailslot_info_reply;
     struct create_directory_reply create_directory_reply;
@@ -6146,6 +6404,7 @@ union generic_reply
     struct get_suspend_context_reply get_suspend_context_reply;
     struct set_suspend_context_reply set_suspend_context_reply;
     struct create_job_reply create_job_reply;
+    struct open_job_reply open_job_reply;
     struct assign_job_reply assign_job_reply;
     struct process_in_job_reply process_in_job_reply;
     struct set_job_limits_reply set_job_limits_reply;
@@ -6153,6 +6412,6 @@ union generic_reply
     struct terminate_job_reply terminate_job_reply;
 };
 
-#define SERVER_PROTOCOL_VERSION 490
+#define SERVER_PROTOCOL_VERSION 524
 
 #endif /* __WINE_WINE_SERVER_PROTOCOL_H */

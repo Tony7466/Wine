@@ -1,15 +1,13 @@
-The Wine maintenance release 1.8.7 is now available.
-This is the final release in the 1.8.x series.
+The Wine maintenance release 2.0.1 is now available.
 
 What's new in this release (see below for details):
-  - Various bug fixes.
-  - A few more cards added to the GPU description table.
-  - Turkish translation updates.
+  - Various bug fixes
+  - Deprecated tools/wineinstall
 
 The source is available from the following locations:
 
-  http://dl.winehq.org/wine/source/1.8/wine-1.8.7.tar.bz2
-  http://mirrors.ibiblio.org/wine/source/1.8/wine-1.8.7.tar.bz2
+  http://dl.winehq.org/wine/source/2.0/wine-2.0.1.tar.xz
+  http://mirrors.ibiblio.org/wine/source/2.0/wine-2.0.1.tar.xz
 
 Binary packages for various distributions will be available from:
 
@@ -25,162 +23,209 @@ AUTHORS in the distribution for the complete list.
 
 ----------------------------------------------------------------
 
-Bugs fixed in 1.8.7 (total 38):
+Bugs fixed in 2.0.1 (total 47):
 
-  11808  winefile: broken horizontal scrolling
-  17196  Text Editor Cursor can be scrolled outside editor
-  19862  CodeCreatures crashes.
-  30355  DVDSubEdit 1.52 crashes on startup, broken TBM_SETRANGEMAX handling
-  30385  Multiple applications need support for shell32.SHGetKnownFolderPath KF_FLAG_DEFAULT_PATH option (Windows Live Essentials 2011 web installer, MediaMonkey 4.1.x in Vista+ mode)
-  31222  Hitman: Blood Money crashes when changing screen resolution
-  32682  Multiple .NET 4.0 applications fail to load the pen cursor (IDC_PEN, 32631, 0x7F77 missing)
-  33859  Visual Web Developer Express 2008 crashes when clicking "Browse" (bug in PropertySheet common control)
-  34127  FIFA 2000 demo crashes after 'Press Any Key'
-  34465  process hacker 2.31 crashes in toolbar code
-  35495  sharing violation and prompt for copy /B file1+file2 file1
-  37762  Runaway & Runaway 2: wrong colors
-  38207  Unreal Tournament 3 uninstaller fails when invoking from 'wine uninstaller' (removes wrong entries)
-  39509  OneDrive for Business installer crashes in Win8 mode (user32.dll 'SetCoalescableTimer' stub missing)
-  39661  Font width incorrect in wineconsole
-  39714  Halo some sounds in cut scenes don't play
-  40112  kernel32:time regression
-  40243  Korg Nano editor USB MIDI driver won't install, requires Administrator Privileges
-  40247  Wine returns the loopback IP as first item in GetIpAddrTable causing some licensed programs to fail due to invalid MAC address
-  40845  Uninstaller does not remove missing applications from the list
-  40978  Wrong colors on i915 and similar GPUs in GTA Vice City
-  41001  64-bit Core Temp 1.x kernel driver 'ALSysIO.sys' crashes on unimplemented function ntoskrnl.exe.RtlUnwindEx
-  41055  "Texture ... does not have a drawable" on i915 with D3D8
-  41141  gcc6: d3drm build warnings
-  41218  curl 7.50: HTTPS fails with InitializeSecurityContext failed: SEC_E_INVALID_TOKEN
-  41252  Helldivers gives this error when trying to run on MacOS
-  41476  Cannot paste in WinAuth 3.5.1 (32-bit)
-  41508  Menu infinitely loops, the application hangs.
-  41572  Windows API crash (GetTimeZoneInformationForYear)
-  41599  Battle.net and Hearthstone play loud static when receiving messages
-  41732  wineconsole: changing to emacs mode requires restart
-  41733  wineconsole: crashes in emacs mode when pasting (Ctrl+Y) empty buffer
-  41898  ToCA Race Driver 3 needs ntoskrnl.exe.RtlCopyMemory
-  41909  Calling TBM_SETPOS after TBM_SETRANGEMIN/TBM_SETRANGEMAX does not draw slider control properly
-  42090  Highway Pursuit constantly emits loud noise when sound effects enabled
-  42110  regression: commit "xinput1_3 prefer builtin dll" aliens versus predator classic 2000 (steam) fails to launch
-  42187  Radeon R9 285 GPU incorrectly recognized
-  42211  redefinition of typedef 'REFERENCE_TIME'
+  14897  DirectDraw games (Jojo's Fashion Show 2: Las Cruces demo, The Chosen: Well of Souls) try to lock surface with invalid dwSize
+  14939  Black & White: DXTC to ARGB converter not implemented
+  17495  Open dialog crashes if the desktop folder is at a Unicode path that cannot be represented in the current locale
+  18477  Need For Speed Most Wanted crashes after accepting video settings changes
+  19888  Venom Codename: Outbreak - initial menu screen is black (no menu items)
+  25700  MessageBox does not display last word if string contains '&' (ampersand)
+  26603  iMesh 10 crashes at startup (needs wmvcore.dll.WMCreateReaderPriv)
+  27580  Wine Notepad command line parser eats the first 2 letters when the path starts with / (it should only do this for valid command line options)
+  30308  Property sheet fails to display Page Title
+  35993  Graphical Glitches in Agarest Generations of War
+  38354  Multiple games and applications need msvcr120.dll._except1 (Audacity 2.1.0, Tera Online)
+  38485  New Marvel Heroes 2015 Launcher crashes on unimplemented function dhcpcsvc.dll.DhcpRequestParams
+  39048  MIDI Clock Messages are Corrupted Between Wine and ALSA
+  39920  Nanocad 5.: file open/import dialog does not open
+  40392  ComicRack 0.9.x (.NET 4.5 app) hangs/crashes on startup when executing WMI query
+  40938  UE4 games (Ether One Redux, Into the Stars) crash while loading with "BackBuffer->GetResource() has 3 refs, expected 1" error
+  40952  improper escaping of quotes in command line
+  41448  Civilization II Unhandled page fault on read access
+  41579  Rush for Berlin Gold crashes after the intro videos
+  41623  Odallus The Dark Call crashes while starting if a force feedback enabled controller is plugged in
+  41648  AmiBroker 6.00 fails, when run, with raise_exception Unhandled exception
+  41725  Unimplemented function api-ms-win-crt-math-l1-1-0.dll._except1 (Starcraft 2 main menu, Firefox)
+  41830  Updating group box text causes garbage
+  41926  Zafehouse demo crashes with Call from 0x7b43c14c to unimplemented function ddraw.dll.GetSurfaceFromDC, aborting
+  42001  SC2 unimplemented function ucrtbase.dll._except1
+  42022  The Magic School Bus Explores The Solar System needs msvideo.dll16.DRAWDIBPROFILEDISPLAY
+  42023  The Magic School Bus Explores The Solar System crashes on launch; appears to be missing some files
+  42078  Dungeons & Dragons: Chronicles of Mystara needs d3dx11_43.dll.D3DX11CreateShaderResourceViewFromMemory
+  42093  Git for Windows 2.7.0 needs unimplemented function rstrtmgr.dll.RmShutdown
+  42094  winamp needs unimplemented function ntoskrnl.exe.IoStopTimer
+  42096  Steam -> RPGMaker 2003 needs unimplemented function KERNEL32.dll.BaseFlushAppcompatCache
+  42159  Sega Bug crashes immediately
+  42212  WOLF RPG Editor: Division by zero when winegstreamer is enabled
+  42218  mshtml/tests/dom crashes in xul while running test_doc_elem
+  42244  QQ 2013 needs ntoskrnl.exe.IoCreateFile
+  42245  QQ 2013 needs ntoskrnl.exe.KeClearEvent
+  42257  Warpath 21st Century does not have sound
+  42303  Magic: The Gathering Online 4.0 crashes when entering the battle
+  42306  One Note Free Retail installer crashes in xmllite
+  42315  Piriform Speccy 1.3 needs setupapi.dll.CM_Get_Child_Ex
+  42361  DX Library: PlaySoundFile() doesn't play MP3 files with specific extra headers
+  42365  Unimplemented function msvcr120.dll.fesetenv
+  42367  KiriKiri Z based games: main screen doesn't update.
+  42469  GetOpenFileName should expand environment variables in lpstrInitialDir
+  42483  Build for Ubuntu Precise fails because MPG123_IGNORE_INFOFRAME is undeclared
+  42557  NVIDIA GeForce GT 525M detected as GeForce GTX 470
+  42567  Acid Pro Trial 7.0e  fails to install
 
 ----------------------------------------------------------------
 
-Changes since 1.8.6:
+Changes since 2.0:
 
 Adam Bolte (1):
       wined3d: Add GPU information for AMD FIJI.
 
-Alex Henrie (1):
-      user32: Tell MENU_SuspendPopup which message to remove.
+Akihiro Sagawa (3):
+      d3d9/tests: Add LockRect tests with dynamic textures.
+      d3d8/tests: Add LockRect tests with dynamic textures.
+      wined3d: Upload textures if NO_DIRTY_UPDATE flag is set when locking dynamic textures.
 
-Alexandre Julliard (3):
-      winex11: Also ignore BadWindow errors caused by XSendEvent.
-      wineconsole: Leave room for wide characters only when using a DBCS codepage.
-      Update copyright info for 2017.
+Alex Henrie (3):
+      ddraw: Don't crash if writing out a new ddraw1 surface segfaults.
+      comdlg32: Don't crash if an IShellFolder could not be created.
+      user32: Include space for ampersands when determining MessageBox size.
 
-Andrew Eikum (5):
-      user32: Support IDC_PEN.
-      dsound: Handle default case in dsound3d mode switch (Coverity).
-      dsound: Use the value from SetVolume when 3D processing is disabled.
-      msacm32: Support conversion from 24-bit PCM.
-      dsound: Fix rolloff factor calculation.
+Alexandre Julliard (1):
+      make_announce: Update version number parsing for the new versioning scheme.
 
-Austin English (1):
-      ntoskrnl.exe: Forward RtlUnwindEx to ntdll.
+Alistair Leslie-Hughes (1):
+      include: Add dhcpcsdk.h.
 
-Brock York (1):
-      msctf: Remove incorrect dereference of double pointer.
+Andrew Wesie (1):
+      ntdll: Read entry point in LdrInitializeThunk.
 
-Bruno Jesus (1):
-      iphlpapi: Ensure GetIpAddrTable returns loopback addresses in the end.
+Andrey Gusev (2):
+      setupapi: Add CM_Get_Child_Ex stub.
+      d3dx11: Add D3DX11CreateShaderResourceViewFromMemory stub.
+
+Anton Romanov (1):
+      user32: Add OCR_RDR* cursors.
+
+Austin English (6):
+      ntoskrnl.exe: Add IoCreateFile stub.
+      ntoskrnl.exe: Add stub KeClearEvent.
+      kernel32: Add BaseFlushAppcompatCache stub.
+      rstrtmgr: Add RmShutdown stub.
+      dhcpsvc: Add DhcpRequestParams stub.
+      readme: Remove wineinstall.
+
+Bruno Jesus (8):
+      winmm: Fix the ordinal number for function PlaySound.
+      dinput: DISFFC_RESET will not release the effects.
+      notepad: Only skip valid command options.
+      winemp3.acm: Ignore XING headers when parsing MP3 files.
+      winemp3.acm: Fixes compilation for older mpg123 library versions.
+      winealsa.drv: Fix handling of system real time MIDI messages.
+      wined3d: Recognize Geforce GT 525M.
+      wined3d: Recognize GeForce 940M.
 
 Can Taşan (3):
+      wine.desktop: Add Turkish translation.
+      kernel32: Add Unicode character for Turkish lira.
       documentation: Update Turkish translation.
-      documentation: Update Turkish translation.
-      po: Update Turkish translation.
 
-Carlos Rodriguez (1):
-      wined3d: Recognize Geforce GTX 1050.
+Christoph Brill (1):
+      setupapi: Stub CM_Open_DevNode_Key and CM_Get_Child.
 
-Henri Verbeet (4):
-      wined3d: Properly check for the required extensions before selecting the GLSL FFP implementations.
-      d3drm: Introduce d3drm_set_color().
-      wined3d: Add GPU information for AMD TONGA.
-      wine.inf: Add Dynamic DST data for Asia/Tehran.
+Daniel Lehman (1):
+      msvcrt: Implement nan.
 
-Hugh McMaster (4):
-      kernel32: Check for a valid pointer before yanking the line.
-      kernel32: Use Emacs keymap mode immediately after wineconsole configuration change.
-      appwiz.cpl: Remove list entries left over from an earlier uninstall.
-      appwiz.cpl: Do not overwrite application IDs when changing registry keys.
+Dmitry Timoshkov (4):
+      avifil32: AVIFileGetStream should set stream to NULL in case of an error.
+      user32: BUTTON_CalcLabelRect should use the button font.
+      user32: Fix groupbox rectangle calculation in the button's WM_SETTEXT handler.
+      kernel32: Replace Peb->BeingDebugged check by CheckRemoteDebuggerPresent().
+
+Fabian Maurer (1):
+      msvcr120: Add fesetenv stub.
+
+François Gouget (3):
+      readme: Note that Wine may also use Mac APIs.
+      readme: Adjust a couple of section separators.
+      readme: Update and rewrap the French translation.
+
+Gerald Pfeifer (1):
+      winedump: Increase buffer size and potential string length inoutput_spec_symbol.
+
+Hans Leidekker (1):
+      wbemprox: Only include matching rows in the table row count.
+
+Henri Verbeet (5):
+      ddraw/tests: Rewrite GetDCTest().
+      ddraw: Implement GetSurfaceFromDC().
+      ddraw: Kill stray tabs.
+      wined3d: Allow decompression blits on system memory resources in arbfp_blit_supported().
+      wined3d: Disallow upload conversion from compressed formats in surface_convert_format().
 
 Jacek Caban (1):
-      secur32: Don't change input buffer in InitializeSecurityContext.
+      mshtml: Initialize nsAString in IHTMLDocument3::get_dir.
 
-Jarkko Korpi (2):
-      wined3d: Add Amd Rx 480 binary driver.
-      winex11.drv: Add 640x400 mode to virtual desktop.
+Jacob Lifshay (1):
+      kernel32: Fix improper escaping of quotes in command line.
 
-Józef Kucia (5):
-      wined3d: Update "screen_format" when ChangeDisplaySettingsEx() call is redundant.
-      d3d8/tests: Add more tests for UnlockRect().
-      d3d8: Return D3D_OK from UnlockRect() for not locked textures.
-      d3d9/tests: Add test showing WM_SIZE is not sent during fullscreen mode change.
-      wined3d: Filter messages for fullscreen mode changes.
+Jarkko Korpi (1):
+      ntoskrnl: Add IoStopTimer stub.
 
-Lauri Kenttä (3):
-      user32: Fix caret disappearing after scrolling.
-      cmd: Fix copying when the dest is one of the sources.
-      winefile: Fix horizontal scrolling.
+Jefferson Carpenter (1):
+      wmvcore: Implement WMCreateReaderPriv.
 
-Louis Lenders (1):
-      wine.inf: Add Drivers32 registry key.
+Julian Rüger (2):
+      readme: Update German translation.
+      readme: Fix typo in German translation.
 
-Matteo Bruni (3):
-      wined3d: Also check BLENDWEIGHT for immediate mode fallback.
-      d3d9/tests: Add a vertex blending test with D3DCOLOR weights.
-      wined3d: Swizzle D3DCOLOR attributes in the GLSL FFP replacement when necessary.
+Józef Kucia (6):
+      d3d11/tests: Add tests showing that views do not keep resource reference.
+      d3d11: Do not keep reference to resources.
+      ddraw: Relax "dwSize" validation in ddraw_surface*_Lock().
+      ddraw: Implement D3DOP_TEXTURELOAD.
+      ddraw/tests: Add basic test for D3DOP_TEXTURELOAD.
+      d3d9: Do not decrease swapchain surface refcount when it is already 0.
 
-Michael Cronenworth (1):
-      wined3d: Add Iris Haswell PCI ids and descriptions.
+Lauri Kenttä (2):
+      readme: Update Finnish translation.
+      readme: Update Swedish translation.
+
+Louis Lenders (2):
+      xmllite/reader: Handle NULL node type argument in Read().
+      wmvcore: Add version resource.
+
+Masanori Kakura (1):
+      winegstreamer: Avoid zero division in amt_from_gst_caps_video().
+
+Matteo Bruni (1):
+      d3d9: Fix DrawIndexedPrimitiveUP with non-zero min_vertex_idx.
+
+Michael Müller (2):
+      msvideo.dll16: Implement DrawDibProfileDisplay.
+      msvideo.dll16: Check if any 16 bit thunks have been allocated before accessing pointer.
 
 Michael Stefaniuc (1):
-      include: Make wine_dbgstr_rect() available for tests too.
+      tools: Get the ANNOUNCE bug list from the stable-notes git notes.
 
-Nikolay Sivov (8):
-      ntoskrnl: Added RtlCopyMemory() export.
-      shell32: Move retrieving folder path logic to SHGetKnownFolderPath().
-      shell32: Don't access uninitialized buffer (Coverity).
-      comctl32/tests: Trackbar test to show that thumb is updated on TBM_SETTICFREQ.
-      comctl32/trackbar: Update thumb unconditionally on TBM_SETTICFREQ.
-      comctl32/trackbar: Fix TBM_SETRANGEMAX handling when new limit is less than current min boundary.
-      comctl32/toolbar: Protect from NULL pointer access in TB_GETBUTTONINFOW handler.
-      comctl32/propsheet: Double size of a template buffer passed to PSCB_PRECREATE.
-
-Olivier F. R. Dierick (1):
-      xinput1_3: Add DECLSPEC_HOTPATCH to XInputEnable() definition.
+Nikolay Sivov (5):
+      comdlg32: Always use original Open File dialog template.
+      comctl32/propsheet: Force wizard header if any of pages has title/subtitle.
+      comctl32/propsheet: Only use header bitmap when asked for it.
+      comdlg32: Expand initial directory path for file open dialog.
+      readme: Update Russian translation.
 
 Piotr Caban (2):
-      server: Avoid infinite loop when we're out of timers in set_win_timer server call.
-      user32: Test error returned in out of timers case.
+      msvcrt: Add fesetenv implementation.
+      msvcr120: Add _except1 implementation.
 
-Sebastian Lackner (2):
-      include: Avoid duplicate definition of REFERENCE_TIME.
-      user32: Implement SetCoalescableTimer and add basic tests.
-
-Stefan Dösinger (1):
-      d3d8/tests: Test invalid locks with textures.
-
-VRan Liu (1):
-      shell32/tests: Simple test for KF_FLAG_DEFAULT_PATH.
-
-Vincent Povirk (3):
-      kernel32/tests: Add tests for GetTimeZoneInformationForYear.
-      kernel32: Implement GetTimeZoneInformationForYear.
-      kernel32/tests: Avoid testing for a hard-coded timezone name.
+Zebediah Figura (7):
+      storage.dll16: Fix bad type in IStorage16_fnOpenStorage.
+      winebuild: Use unsigned int in spec file variable parameters.
+      compobj: Implement several IIDs.
+      ole2: Implement several IIDs.
+      avifile: Implement several IIDs.
+      ole2disp: Implement several IIDs.
+      typelib: Implement several IIDs.
 
 --
 Michael Stefaniuc

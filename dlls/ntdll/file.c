@@ -223,13 +223,13 @@ static NTSTATUS FILE_CreateFile( PHANDLE handle, ACCESS_MASK access, POBJECT_ATT
 
     if (io->u.Status == STATUS_SUCCESS)
     {
-        struct security_descriptor *sd;
-        struct object_attributes objattr;
+        static UNICODE_STRING empty_string;
+        OBJECT_ATTRIBUTES unix_attr = *attr;
+        data_size_t len;
+        struct object_attributes *objattr;
 
-        objattr.rootdir = wine_server_obj_handle( attr->RootDirectory );
-        objattr.name_len = 0;
-        io->u.Status = NTDLL_create_struct_sd( attr->SecurityDescriptor, &sd, &objattr.sd_len );
-        if (io->u.Status != STATUS_SUCCESS)
+        unix_attr.ObjectName = &empty_string;  /* we send the unix name instead */
+        if ((io->u.Status = alloc_object_attributes( &unix_attr, &objattr, &len )))
         {
             RtlFreeAnsiString( &unix_name );
             return io->u.Status;
@@ -238,19 +238,17 @@ static NTSTATUS FILE_CreateFile( PHANDLE handle, ACCESS_MASK access, POBJECT_ATT
         SERVER_START_REQ( create_file )
         {
             req->access     = access;
-            req->attributes = attr->Attributes;
             req->sharing    = sharing;
             req->create     = disposition;
             req->options    = options;
             req->attrs      = attributes;
-            wine_server_add_data( req, &objattr, sizeof(objattr) );
-            if (objattr.sd_len) wine_server_add_data( req, sd, objattr.sd_len );
+            wine_server_add_data( req, objattr, len );
             wine_server_add_data( req, unix_name.Buffer, unix_name.Length );
             io->u.Status = wine_server_call( req );
             *handle = wine_server_ptr_handle( reply->handle );
         }
         SERVER_END_REQ;
-        NTDLL_free_struct_sd( sd );
+        RtlFreeHeap( GetProcessHeap(), 0, objattr );
         RtlFreeAnsiString( &unix_name );
     }
     else WARN("%s not found (%x)\n", debugstr_us(attr->ObjectName), io->u.Status );
@@ -422,9 +420,8 @@ static NTSTATUS irp_completion( void *user, IO_STATUS_BLOCK *io, NTSTATUS status
 
     if (status == STATUS_ALERTED)
     {
-        SERVER_START_REQ( get_irp_result )
+        SERVER_START_REQ( get_async_result )
         {
-            req->handle   = wine_server_obj_handle( async->io.handle );
             req->user_arg = wine_server_client_ptr( async );
             wine_server_set_reply( req, async->buffer, async->size );
             status = wine_server_call( req );
@@ -528,13 +525,7 @@ static NTSTATUS FILE_AsyncReadService( void *user, IO_STATUS_BLOCK *iosb,
             if (fileio->already >= fileio->count || fileio->avail_mode)
                 status = STATUS_SUCCESS;
             else
-            {
-                /* if we only have to read the available data, and none is available,
-                 * simply cancel the request. If data was available, it has been read
-                 * while in by previous call (NtDelayExecution)
-                 */
-                status = (fileio->avail_mode) ? STATUS_SUCCESS : STATUS_PENDING;
-            }
+                status = STATUS_PENDING;
         }
         break;
 
@@ -1569,6 +1560,8 @@ static NTSTATUS server_ioctl_file( HANDLE handle, HANDLE event,
         req->async.event    = wine_server_obj_handle( event );
         req->async.cvalue   = cvalue;
         wine_server_add_data( req, in_buffer, in_size );
+        if ((code & 3) != METHOD_BUFFERED)
+            wine_server_add_data( req, out_buffer, out_size );
         wine_server_set_reply( req, out_buffer, out_size );
         status = wine_server_call( req );
         wait_handle = wine_server_ptr_handle( reply->wait );
@@ -1794,6 +1787,11 @@ NTSTATUS WINAPI NtFsControlFile(HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc
         }
         break;
 
+    case FSCTL_PIPE_LISTEN:
+        status = server_ioctl_file( handle, event, apc, apc_context, io, code,
+                                    in_buffer, in_size, out_buffer, out_size );
+        return status;
+
     case FSCTL_PIPE_IMPERSONATE:
         FIXME("FSCTL_PIPE_IMPERSONATE: impersonating self\n");
         status = RtlImpersonateSelf( SecurityImpersonation );
@@ -1834,7 +1832,6 @@ NTSTATUS WINAPI NtFsControlFile(HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc
         io->Information = 0;
         status = STATUS_SUCCESS;
         break;
-    case FSCTL_PIPE_LISTEN:
     case FSCTL_PIPE_WAIT:
     default:
         status = server_ioctl_file( handle, event, apc, apc_context, io, code,
@@ -2222,6 +2219,13 @@ NTSTATUS fill_file_info( const struct stat *st, ULONG attr, void *ptr,
     case FileIdBothDirectoryInformation:
         {
             FILE_ID_BOTH_DIRECTORY_INFORMATION *info = ptr;
+            info->FileId.QuadPart = st->st_ino;
+            fill_file_info( st, attr, info, FileDirectoryInformation );
+        }
+        break;
+    case FileIdGlobalTxDirectoryInformation:
+        {
+            FILE_ID_GLOBAL_TX_DIR_INFORMATION *info = ptr;
             info->FileId.QuadPart = st->st_ino;
             fill_file_info( st, attr, info, FileDirectoryInformation );
         }
@@ -3546,30 +3550,26 @@ NTSTATUS WINAPI NtCreateNamedPipeFile( PHANDLE handle, ULONG access,
                                        ULONG inbound_quota, ULONG outbound_quota,
                                        PLARGE_INTEGER timeout)
 {
-    struct security_descriptor *sd = NULL;
-    struct object_attributes objattr;
     NTSTATUS status;
+    data_size_t len;
+    struct object_attributes *objattr;
 
     TRACE("(%p %x %s %p %x %d %x %d %d %d %d %d %d %p)\n",
           handle, access, debugstr_w(attr->ObjectName->Buffer), iosb, sharing, dispo,
           options, pipe_type, read_mode, completion_mode, max_inst, inbound_quota,
           outbound_quota, timeout);
 
+    if (!attr) return STATUS_INVALID_PARAMETER;
+
     /* assume we only get relative timeout */
     if (timeout->QuadPart > 0)
         FIXME("Wrong time %s\n", wine_dbgstr_longlong(timeout->QuadPart));
 
-    objattr.rootdir = wine_server_obj_handle( attr->RootDirectory );
-    objattr.sd_len = 0;
-    objattr.name_len = attr->ObjectName->Length;
-
-    status = NTDLL_create_struct_sd( attr->SecurityDescriptor, &sd, &objattr.sd_len );
-    if (status != STATUS_SUCCESS) return status;
+    if ((status = alloc_object_attributes( attr, &objattr, &len ))) return status;
 
     SERVER_START_REQ( create_named_pipe )
     {
         req->access  = access;
-        req->attributes = attr->Attributes;
         req->options = options;
         req->sharing = sharing;
         req->flags = 
@@ -3580,15 +3580,13 @@ NTSTATUS WINAPI NtCreateNamedPipeFile( PHANDLE handle, ULONG access,
         req->outsize = outbound_quota;
         req->insize  = inbound_quota;
         req->timeout = timeout->QuadPart;
-        wine_server_add_data( req, &objattr, sizeof(objattr) );
-        if (objattr.sd_len) wine_server_add_data( req, sd, objattr.sd_len );
-        wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
+        wine_server_add_data( req, objattr, len );
         status = wine_server_call( req );
         if (!status) *handle = wine_server_ptr_handle( reply->handle );
     }
     SERVER_END_REQ;
 
-    NTDLL_free_struct_sd( sd );
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
     return status;
 }
 
@@ -3678,6 +3676,8 @@ NTSTATUS WINAPI NtCreateMailslotFile(PHANDLE pHandle, ULONG DesiredAccess,
 {
     LARGE_INTEGER timeout;
     NTSTATUS ret;
+    data_size_t len;
+    struct object_attributes *objattr;
 
     TRACE("%p %08x %p %p %08x %08x %08x %p\n",
               pHandle, DesiredAccess, attr, IoStatusBlock,
@@ -3685,7 +3685,8 @@ NTSTATUS WINAPI NtCreateMailslotFile(PHANDLE pHandle, ULONG DesiredAccess,
 
     if (!pHandle) return STATUS_ACCESS_VIOLATION;
     if (!attr) return STATUS_INVALID_PARAMETER;
-    if (!attr->ObjectName) return STATUS_OBJECT_PATH_SYNTAX_BAD;
+
+    if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
 
     /*
      *  For a NULL TimeOut pointer set the default timeout value
@@ -3698,17 +3699,15 @@ NTSTATUS WINAPI NtCreateMailslotFile(PHANDLE pHandle, ULONG DesiredAccess,
     SERVER_START_REQ( create_mailslot )
     {
         req->access = DesiredAccess;
-        req->attributes = attr->Attributes;
-        req->rootdir = wine_server_obj_handle( attr->RootDirectory );
         req->max_msgsize = MaxMessageSize;
         req->read_timeout = timeout.QuadPart;
-        wine_server_add_data( req, attr->ObjectName->Buffer,
-                              attr->ObjectName->Length );
+        wine_server_add_data( req, objattr, len );
         ret = wine_server_call( req );
         if( ret == STATUS_SUCCESS )
             *pHandle = wine_server_ptr_handle( reply->handle );
     }
     SERVER_END_REQ;
- 
+
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
     return ret;
 }

@@ -103,7 +103,7 @@ WINE_DEFAULT_DEBUG_CHANNEL(mdi);
 
 #define MDI_MAXTITLELENGTH      0xa1
 
-#define WM_MDICALCCHILDSCROLL   0x10ac /* this is exactly what Windows uses */
+#define WM_MDICALCCHILDSCROLL   0x003f /* this is exactly what Windows uses */
 
 /* "More Windows..." definitions */
 #define MDI_MOREWINDOWSLIMIT    9       /* after this number of windows, a "More Windows..."
@@ -370,17 +370,6 @@ static LRESULT MDISetMenu( HWND hwnd, HMENU hmenuFrame,
             return (LRESULT)oldFrameMenu;
         }
     }
-    else
-    {
-        /* SetMenu() may already have been called, meaning that this window
-         * already has its menu. But they may have done a SetMenu() on
-         * an MDI window, and called MDISetMenu() after the fact, meaning
-         * that the "if" to this "else" wouldn't catch the need to
-         * augment the frame menu.
-         */
-        if( ci->hwndChildMaximized )
-            MDI_AugmentFrameMenu( hwndFrame, ci->hwndChildMaximized );
-    }
 
     return 0;
 }
@@ -400,7 +389,7 @@ static LRESULT MDI_RefreshMenu(MDICLIENTINFO *ci)
 
     if (!IsMenu(ci->hWindowMenu))
     {
-        WARN("Window menu handle %p is no more valid\n", ci->hWindowMenu);
+        WARN("Window menu handle %p is no longer valid\n", ci->hWindowMenu);
         return 0;
     }
 
@@ -501,8 +490,7 @@ static void MDI_ChildGetMinMaxInfo( HWND client, HWND hwnd, MINMAXINFO* lpMinMax
     lpMinMax->ptMaxPosition.x = rect.left;
     lpMinMax->ptMaxPosition.y = rect.top;
 
-    TRACE("max rect (%d,%d - %d, %d)\n",
-                        rect.left,rect.top,rect.right,rect.bottom);
+    TRACE("max rect %s\n", wine_dbgstr_rect(&rect));
 }
 
 /**********************************************************************
@@ -1055,12 +1043,7 @@ LRESULT MDIClientWndProc_common( HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
     if (!(ci = get_client_info( hwnd )))
     {
-        if (message == WM_NCCREATE)
-        {
-            WND *wndPtr = WIN_GetPtr( hwnd );
-            wndPtr->flags |= WIN_ISMDICLIENT;
-            WIN_ReleasePtr( wndPtr );
-        }
+        if (message == WM_NCCREATE) win_set_flags( hwnd, WIN_ISMDICLIENT, 0 );
         return unicode ? DefWindowProcW( hwnd, message, wParam, lParam ) :
                          DefWindowProcA( hwnd, message, wParam, lParam );
     }
@@ -1250,10 +1233,7 @@ LRESULT MDIClientWndProc_common( HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 	{
 	    RECT	rect;
 
-	    rect.left = 0;
-	    rect.top = 0;
-	    rect.right = LOWORD(lParam);
-	    rect.bottom = HIWORD(lParam);
+            SetRect(&rect, 0, 0, LOWORD(lParam), HIWORD(lParam));
 	    AdjustWindowRectEx(&rect, GetWindowLongA(ci->hwndActiveChild, GWL_STYLE),
                                0, GetWindowLongA(ci->hwndActiveChild, GWL_EXSTYLE) );
 	    MoveWindow(ci->hwndActiveChild, rect.left, rect.top,
@@ -1485,7 +1465,8 @@ LRESULT WINAPI DefMDIChildProcW( HWND hwnd, UINT message,
         break;
 
     case WM_CHILDACTIVATE:
-        MDI_ChildActivate( client, hwnd );
+        if (IsWindowEnabled( hwnd ))
+            MDI_ChildActivate( client, hwnd );
         return 0;
 
     case WM_SYSCOMMAND:

@@ -99,6 +99,12 @@ struct builtin_load_info
 static struct builtin_load_info default_load_info;
 static struct builtin_load_info *builtin_load_info = &default_load_info;
 
+struct start_params
+{
+    void                   *kernel_start;
+    LPTHREAD_START_ROUTINE  entry;
+};
+
 static HANDLE main_exe_file;
 static UINT tls_module_count;      /* number of modules with TLS directory */
 static IMAGE_TLS_DIRECTORY *tls_dirs;  /* array of TLS directories */
@@ -355,7 +361,6 @@ static WINE_MODREF *get_modref( HMODULE hmod )
         mod = CONTAINING_RECORD(entry, LDR_MODULE, InMemoryOrderModuleList);
         if (mod->BaseAddress == hmod)
             return cached_modref = CONTAINING_RECORD(mod, WINE_MODREF, ldr);
-        if (mod->BaseAddress > (void*)hmod) break;
     }
     return NULL;
 }
@@ -819,6 +824,10 @@ static SHORT alloc_tls_slot( LDR_MODULE *mod )
             if (!new) return -1;
             if (old) memcpy( new, old, tls_module_count * sizeof(*new) );
             teb->ThreadLocalStoragePointer = new;
+#if defined(__APPLE__) && defined(__x86_64__)
+            if (teb->Reserved5[0])
+                ((TEB*)teb->Reserved5[0])->ThreadLocalStoragePointer = new;
+#endif
             TRACE( "thread %04lx tls block %p -> %p\n", (ULONG_PTR)teb->ClientId.UniqueThread, old, new );
             /* FIXME: can't free old block here, should be freed at thread exit */
         }
@@ -932,7 +941,6 @@ static WINE_MODREF *alloc_module( HMODULE hModule, LPCWSTR filename )
     WINE_MODREF *wm;
     const WCHAR *p;
     const IMAGE_NT_HEADERS *nt = RtlImageNtHeader(hModule);
-    PLIST_ENTRY entry, mark;
 
     if (!(wm = RtlAllocateHeap( GetProcessHeap(), 0, sizeof(*wm) ))) return NULL;
 
@@ -965,18 +973,8 @@ static WINE_MODREF *alloc_module( HMODULE hModule, LPCWSTR filename )
 
     InsertTailList(&NtCurrentTeb()->Peb->LdrData->InLoadOrderModuleList,
                    &wm->ldr.InLoadOrderModuleList);
-
-    /* insert module in MemoryList, sorted in increasing base addresses */
-    mark = &NtCurrentTeb()->Peb->LdrData->InMemoryOrderModuleList;
-    for (entry = mark->Flink; entry != mark; entry = entry->Flink)
-    {
-        if (CONTAINING_RECORD(entry, LDR_MODULE, InMemoryOrderModuleList)->BaseAddress > wm->ldr.BaseAddress)
-            break;
-    }
-    entry->Blink->Flink = &wm->ldr.InMemoryOrderModuleList;
-    wm->ldr.InMemoryOrderModuleList.Blink = entry->Blink;
-    wm->ldr.InMemoryOrderModuleList.Flink = entry;
-    entry->Blink = &wm->ldr.InMemoryOrderModuleList;
+    InsertTailList(&NtCurrentTeb()->Peb->LdrData->InMemoryOrderModuleList,
+                   &wm->ldr.InMemoryOrderModuleList);
 
     /* wait until init is called for inserting into this list */
     wm->ldr.InInitializationOrderModuleList.Flink = NULL;
@@ -1029,6 +1027,11 @@ static NTSTATUS alloc_thread_tls(void)
                GetCurrentThreadId(), i, size, dir->SizeOfZeroFill, pointers[i] );
     }
     NtCurrentTeb()->ThreadLocalStoragePointer = pointers;
+#if defined(__APPLE__) && defined(__x86_64__)
+    __asm__ volatile (".byte 0x65\n\tmovq %0,%c1"
+                      :
+                      : "r" (pointers), "n" (FIELD_OFFSET(TEB, ThreadLocalStoragePointer)));
+#endif
     return STATUS_SUCCESS;
 }
 
@@ -1386,7 +1389,6 @@ NTSTATUS WINAPI LdrFindEntryForAddress(const void* addr, PLDR_MODULE* pmod)
             *pmod = mod;
             return STATUS_SUCCESS;
         }
-        if (mod->BaseAddress > addr) break;
     }
     return STATUS_NO_MORE_ENTRIES;
 }
@@ -1876,7 +1878,7 @@ static NTSTATUS load_builtin_dll( LPCWSTR load_path, LPCWSTR path, HANDLE file,
     char error[256], dllname[MAX_PATH];
     const WCHAR *name, *p;
     DWORD len, i;
-    void *handle = NULL;
+    void *handle;
     struct builtin_load_info info, *prev_info;
 
     /* Fix the name in case we have a full path and extension */
@@ -3046,9 +3048,10 @@ static void load_global_options(void)
 /***********************************************************************
  *           start_process
  */
-static void start_process( void *kernel_start )
+static void start_process( void *arg )
 {
-    call_thread_entry_point( kernel_start, NtCurrentTeb()->Peb );
+    struct start_params *start_params = (struct start_params *)arg;
+    call_thread_entry_point( start_params->kernel_start, start_params->entry );
 }
 
 /******************************************************************
@@ -3063,6 +3066,7 @@ void WINAPI LdrInitializeThunk( void *kernel_start, ULONG_PTR unknown2,
     WINE_MODREF *wm;
     LPCWSTR load_path;
     PEB *peb = NtCurrentTeb()->Peb;
+    struct start_params start_params;
 
     if (main_exe_file) NtClose( main_exe_file );  /* at this point the main module is created */
 
@@ -3088,6 +3092,8 @@ void WINAPI LdrInitializeThunk( void *kernel_start, ULONG_PTR unknown2,
     /* the main exe needs to be the first in the load order list */
     RemoveEntryList( &wm->ldr.InLoadOrderModuleList );
     InsertHeadList( &peb->LdrData->InLoadOrderModuleList, &wm->ldr.InLoadOrderModuleList );
+    RemoveEntryList( &wm->ldr.InMemoryOrderModuleList );
+    InsertHeadList( &peb->LdrData->InMemoryOrderModuleList, &wm->ldr.InMemoryOrderModuleList );
 
     if ((status = virtual_alloc_thread_stack( NtCurrentTeb(), 0, 0 )) != STATUS_SUCCESS) goto error;
     if ((status = server_init_process_done()) != STATUS_SUCCESS) goto error;
@@ -3097,12 +3103,16 @@ void WINAPI LdrInitializeThunk( void *kernel_start, ULONG_PTR unknown2,
     if ((status = fixup_imports( wm, load_path )) != STATUS_SUCCESS) goto error;
     heap_set_debug_flags( GetProcessHeap() );
 
+    /* Store original entrypoint (in case it gets corrupted) */
+    start_params.kernel_start = kernel_start;
+    start_params.entry = wm->ldr.EntryPoint;
+
     status = wine_call_on_stack( attach_process_dlls, wm, NtCurrentTeb()->Tib.StackBase );
     if (status != STATUS_SUCCESS) goto error;
 
     virtual_release_address_space();
     virtual_clear_thread_stack();
-    wine_switch_to_stack( start_process, kernel_start, NtCurrentTeb()->Tib.StackBase );
+    wine_switch_to_stack( start_process, &start_params, NtCurrentTeb()->Tib.StackBase );
 
 error:
     ERR( "Main exe initialization for %s failed, status %x\n",

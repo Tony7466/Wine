@@ -215,10 +215,14 @@ void dump_DIEFFECT(LPCDIEFFECT eff, REFGUID guid, DWORD dwFlags)
             _dump_DIRAMPFORCE(eff->lpvTypeSpecificParams);
         }
     } else if (type == DIEFT_CONDITION) {
-        if (eff->cbTypeSpecificParams != sizeof(DICONDITION)) {
-            WARN("Effect claims to be a condition but the type-specific params are the wrong size!\n");
-        } else {
+        if (eff->cbTypeSpecificParams == sizeof(DICONDITION)) {
             _dump_DICONDITION(eff->lpvTypeSpecificParams);
+        } else if (eff->cbTypeSpecificParams == 2 * sizeof(DICONDITION)) {
+            DICONDITION *condition = eff->lpvTypeSpecificParams;
+            _dump_DICONDITION(&condition[0]);
+            _dump_DICONDITION(&condition[1]);
+        } else {
+            WARN("Effect claims to be a condition but the type-specific params are the wrong size!\n");
         }
     } else if (type == DIEFT_CUSTOMFORCE) {
         if (eff->cbTypeSpecificParams != sizeof(DICUSTOMFORCE)) {
@@ -409,7 +413,7 @@ HRESULT WINAPI JoystickAGenericImpl_SetProperty(LPDIRECTINPUTDEVICE8A iface, REF
 void _dump_DIDEVCAPS(const DIDEVCAPS *lpDIDevCaps)
 {
     int type = GET_DIDEVICE_TYPE(lpDIDevCaps->dwDevType);
-    const char *str;
+    const char *str, *hid = "";
     TRACE("dwSize: %d\n", lpDIDevCaps->dwSize);
     TRACE("dwFlags: %08x\n", lpDIDevCaps->dwFlags);
     switch(type)
@@ -419,7 +423,6 @@ void _dump_DIDEVCAPS(const DIDEVCAPS *lpDIDevCaps)
         DEBUG_TYPE(DIDEVTYPE_MOUSE);
         DEBUG_TYPE(DIDEVTYPE_KEYBOARD);
         DEBUG_TYPE(DIDEVTYPE_JOYSTICK);
-        DEBUG_TYPE(DIDEVTYPE_HID);
         /* Direct X >= 8 definitions */
         DEBUG_TYPE(DI8DEVTYPE_DEVICE);
         DEBUG_TYPE(DI8DEVTYPE_MOUSE);
@@ -436,7 +439,10 @@ void _dump_DIDEVCAPS(const DIDEVCAPS *lpDIDevCaps)
         default: str = "UNKNOWN";
     }
 
-    TRACE("dwDevType: %08x %s\n", lpDIDevCaps->dwDevType, str);
+    if (lpDIDevCaps->dwDevType & DIDEVTYPE_HID)
+        hid = " (HID)";
+
+    TRACE("dwDevType: %08x %s%s\n", lpDIDevCaps->dwDevType, str, hid);
     TRACE("dwAxes: %d\n", lpDIDevCaps->dwAxes);
     TRACE("dwButtons: %d\n", lpDIDevCaps->dwButtons);
     TRACE("dwPOVs: %d\n", lpDIDevCaps->dwPOVs);
@@ -581,6 +587,7 @@ HRESULT WINAPI JoystickWGenericImpl_GetProperty(LPDIRECTINPUTDEVICE8W iface, REF
             }
             break;
         }
+        case (DWORD_PTR) DIPROP_PRODUCTNAME:
         case (DWORD_PTR) DIPROP_INSTANCENAME: {
             DIPROPSTRING *ps = (DIPROPSTRING*) pdiph;
             DIDEVICEINSTANCEW didev;
@@ -588,7 +595,10 @@ HRESULT WINAPI JoystickWGenericImpl_GetProperty(LPDIRECTINPUTDEVICE8W iface, REF
             didev.dwSize = sizeof(didev);
 
             IDirectInputDevice_GetDeviceInfo(iface, &didev);
-            lstrcpynW(ps->wsz, didev.tszInstanceName, MAX_PATH);
+            if (LOWORD(rguid) == (DWORD_PTR) DIPROP_PRODUCTNAME)
+                lstrcpynW(ps->wsz, didev.tszProductName, MAX_PATH);
+            else
+                lstrcpynW(ps->wsz, didev.tszInstanceName, MAX_PATH);
 
             return DI_OK;
         }

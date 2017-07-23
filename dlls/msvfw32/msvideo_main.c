@@ -248,7 +248,7 @@ static BOOL enum_drivers(DWORD fccType, enum_handler_t handler, void* param)
 	    lRet = RegEnumValueA(hKey, i++, buf, &name, 0, &type, (LPBYTE)(buf+name), &data);
 	    if (lRet == ERROR_NO_MORE_ITEMS) break;
 	    if (lRet != ERROR_SUCCESS) continue;
-	    if (name != 9 || strncasecmp(buf, fccTypeStr, 5)) continue;
+	    if (fccType && (name != 9 || strncasecmp(buf, fccTypeStr, 5))) continue;
 	    buf[name] = '=';
 	    if ((result = handler(buf, cnt++, param))) break;
 	}
@@ -262,7 +262,7 @@ static BOOL enum_drivers(DWORD fccType, enum_handler_t handler, void* param)
 	for (s = buf; *s; s += strlen(s) + 1)
 	{
             TRACE("got %s\n", s);
-	    if (strncasecmp(s, fccTypeStr, 5) || s[9] != '=') continue;
+	    if (fccType && (strncasecmp(s, fccTypeStr, 5) || s[9] != '=')) continue;
 	    if ((result = handler(s, cnt++, param))) break;
 	}
     }
@@ -449,7 +449,7 @@ HIC VFWAPI ICOpen(DWORD fccType, DWORD fccHandler, UINT wMode)
             local = ICOpen(fccType, info.fccHandler, wMode);
             if (local != 0)
             {
-                TRACE("Returning %s as defult handler for %s\n",
+                TRACE("Returning %s as default handler for %s\n",
                       wine_dbgstr_fcc(info.fccHandler), wine_dbgstr_fcc(fccType));
                 return local;
             }
@@ -621,7 +621,6 @@ LRESULT VFWAPI ICGetInfo(HIC hic, ICINFO *picinfo, DWORD cb)
         lstrcpyW(picinfo->szDriver, ii.szDriver);
     }
 
-    TRACE("	-> %s\n", wine_dbgstr_icerr(ret));
     return ret;
 }
 
@@ -817,8 +816,6 @@ DWORD VFWAPIV  ICDecompress(HIC hic,DWORD dwFlags,LPBITMAPINFOHEADER lpbiFormat,
 	icd.lpOutput	= lpBits;
 	icd.ckid	= 0;
 	ret = ICSendMessage(hic,ICM_DECOMPRESS,(DWORD_PTR)&icd,sizeof(ICDECOMPRESS));
-
-	TRACE("-> %s\n",wine_dbgstr_icerr(ret));
 
 	return ret;
 }

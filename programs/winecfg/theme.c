@@ -532,14 +532,14 @@ static struct
     {-1,                COLOR_INACTIVEBORDER,   "InactiveBorder" }, /* IDC_SYSPARAMS_INACTIVE_BORDER */
     {-1,                COLOR_BTNSHADOW,        "ButtonShadow"  }, /* IDC_SYSPARAMS_BUTTON_SHADOW */
     {-1,                COLOR_GRAYTEXT,         "GrayText"      }, /* IDC_SYSPARAMS_GRAY_TEXT */
-    {-1,                COLOR_BTNHILIGHT,       "ButtonHilight" }, /* IDC_SYSPARAMS_BUTTON_HILIGHT */
+    {-1,                COLOR_BTNHIGHLIGHT,     "ButtonHilight" }, /* IDC_SYSPARAMS_BUTTON_HIGHLIGHT */
     {-1,                COLOR_3DDKSHADOW,       "ButtonDkShadow" }, /* IDC_SYSPARAMS_BUTTON_DARK_SHADOW */
     {-1,                COLOR_3DLIGHT,          "ButtonLight"   }, /* IDC_SYSPARAMS_BUTTON_LIGHT */
     {-1,                COLOR_ALTERNATEBTNFACE, "ButtonAlternateFace" }, /* IDC_SYSPARAMS_BUTTON_ALTERNATE */
     {-1,                COLOR_HOTLIGHT,         "HotTrackingColor" }, /* IDC_SYSPARAMS_HOT_TRACKING */
     {-1,                COLOR_GRADIENTACTIVECAPTION, "GradientActiveTitle" }, /* IDC_SYSPARAMS_ACTIVE_TITLE_GRADIENT */
     {-1,                COLOR_GRADIENTINACTIVECAPTION, "GradientInactiveTitle" }, /* IDC_SYSPARAMS_INACTIVE_TITLE_GRADIENT */
-    {-1,                COLOR_MENUHILIGHT,      "MenuHilight"   }, /* IDC_SYSPARAMS_MENU_HILIGHT */
+    {-1,                COLOR_MENUHILIGHT,      "MenuHilight"   }, /* IDC_SYSPARAMS_MENU_HIGHLIGHT */
     {-1,                COLOR_MENUBAR,          "MenuBar"       }, /* IDC_SYSPARAMS_MENUBAR */
 };
 
@@ -1011,35 +1011,42 @@ static void read_sysparams(HWND hDlg)
 
 static void apply_sysparams(void)
 {
-    NONCLIENTMETRICSW nonclient_metrics;
+    NONCLIENTMETRICSW ncm;
     int i, cnt = 0;
     int colors_idx[sizeof(metrics) / sizeof(metrics[0])];
     COLORREF colors[sizeof(metrics) / sizeof(metrics[0])];
+    HDC hdc;
+    int dpi;
 
-    nonclient_metrics.cbSize = sizeof(nonclient_metrics);
-    SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(nonclient_metrics), &nonclient_metrics, 0);
+    hdc = GetDC( 0 );
+    dpi = GetDeviceCaps( hdc, LOGPIXELSY );
+    ReleaseDC( 0, hdc );
 
-    nonclient_metrics.iMenuWidth = nonclient_metrics.iMenuHeight =
-            metrics[IDC_SYSPARAMS_MENU - IDC_SYSPARAMS_BUTTON].size;
-    nonclient_metrics.iCaptionWidth = nonclient_metrics.iCaptionHeight =
-            metrics[IDC_SYSPARAMS_ACTIVE_TITLE - IDC_SYSPARAMS_BUTTON].size;
-    nonclient_metrics.iScrollWidth = nonclient_metrics.iScrollHeight =
-            metrics[IDC_SYSPARAMS_SCROLLBAR - IDC_SYSPARAMS_BUTTON].size;
+    ncm.cbSize = sizeof(ncm);
+    SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
 
-    memcpy(&(nonclient_metrics.lfMenuFont),
-           &(metrics[IDC_SYSPARAMS_MENU_TEXT - IDC_SYSPARAMS_BUTTON].lf),
-           sizeof(LOGFONTW));
-    memcpy(&(nonclient_metrics.lfCaptionFont),
-           &(metrics[IDC_SYSPARAMS_ACTIVE_TITLE_TEXT - IDC_SYSPARAMS_BUTTON].lf),
-           sizeof(LOGFONTW));
-    memcpy(&(nonclient_metrics.lfStatusFont),
-           &(metrics[IDC_SYSPARAMS_TOOLTIP_TEXT - IDC_SYSPARAMS_BUTTON].lf),
-           sizeof(LOGFONTW));
-    memcpy(&(nonclient_metrics.lfMessageFont),
-           &(metrics[IDC_SYSPARAMS_MSGBOX_TEXT - IDC_SYSPARAMS_BUTTON].lf),
-           sizeof(LOGFONTW));
+    /* convert metrics back to twips */
+    ncm.iMenuWidth = ncm.iMenuHeight =
+        MulDiv( metrics[IDC_SYSPARAMS_MENU - IDC_SYSPARAMS_BUTTON].size, -1440, dpi );
+    ncm.iCaptionWidth = ncm.iCaptionHeight =
+        MulDiv( metrics[IDC_SYSPARAMS_ACTIVE_TITLE - IDC_SYSPARAMS_BUTTON].size, -1440, dpi );
+    ncm.iScrollWidth = ncm.iScrollHeight =
+        MulDiv( metrics[IDC_SYSPARAMS_SCROLLBAR - IDC_SYSPARAMS_BUTTON].size, -1440, dpi );
+    ncm.iSmCaptionWidth = MulDiv( ncm.iSmCaptionWidth, -1440, dpi );
+    ncm.iSmCaptionHeight = MulDiv( ncm.iSmCaptionHeight, -1440, dpi );
 
-    SystemParametersInfoW(SPI_SETNONCLIENTMETRICS, sizeof(nonclient_metrics), &nonclient_metrics,
+    ncm.lfMenuFont    = metrics[IDC_SYSPARAMS_MENU_TEXT - IDC_SYSPARAMS_BUTTON].lf;
+    ncm.lfCaptionFont = metrics[IDC_SYSPARAMS_ACTIVE_TITLE_TEXT - IDC_SYSPARAMS_BUTTON].lf;
+    ncm.lfStatusFont  = metrics[IDC_SYSPARAMS_TOOLTIP_TEXT - IDC_SYSPARAMS_BUTTON].lf;
+    ncm.lfMessageFont = metrics[IDC_SYSPARAMS_MSGBOX_TEXT - IDC_SYSPARAMS_BUTTON].lf;
+
+    ncm.lfMenuFont.lfHeight    = MulDiv( ncm.lfMenuFont.lfHeight, -72, dpi );
+    ncm.lfCaptionFont.lfHeight = MulDiv( ncm.lfCaptionFont.lfHeight, -72, dpi );
+    ncm.lfStatusFont.lfHeight  = MulDiv( ncm.lfStatusFont.lfHeight, -72, dpi );
+    ncm.lfMessageFont.lfHeight = MulDiv( ncm.lfMessageFont.lfHeight, -72, dpi );
+    ncm.lfSmCaptionFont.lfHeight = MulDiv( ncm.lfSmCaptionFont.lfHeight, -72, dpi );
+
+    SystemParametersInfoW(SPI_SETNONCLIENTMETRICS, sizeof(ncm), &ncm,
                           SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
 
     for (i = 0; i < sizeof(metrics) / sizeof(metrics[0]); i++)

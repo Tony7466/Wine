@@ -1,53 +1,53 @@
-@ stub _vcomp_atomic_add_i1
-@ stub _vcomp_atomic_add_i2
+@ cdecl _vcomp_atomic_add_i1(ptr long)
+@ cdecl _vcomp_atomic_add_i2(ptr long)
 @ cdecl _vcomp_atomic_add_i4(ptr long)
 @ cdecl _vcomp_atomic_add_i8(ptr int64)
 @ cdecl _vcomp_atomic_add_r4(ptr float)
 @ cdecl _vcomp_atomic_add_r8(ptr double)
-@ stub _vcomp_atomic_and_i1
-@ stub _vcomp_atomic_and_i2
+@ cdecl _vcomp_atomic_and_i1(ptr long)
+@ cdecl _vcomp_atomic_and_i2(ptr long)
 @ cdecl _vcomp_atomic_and_i4(ptr long)
 @ cdecl _vcomp_atomic_and_i8(ptr int64)
-@ stub _vcomp_atomic_div_i1
-@ stub _vcomp_atomic_div_i2
+@ cdecl _vcomp_atomic_div_i1(ptr long)
+@ cdecl _vcomp_atomic_div_i2(ptr long)
 @ cdecl _vcomp_atomic_div_i4(ptr long)
 @ cdecl _vcomp_atomic_div_i8(ptr int64)
 @ cdecl _vcomp_atomic_div_r4(ptr float)
 @ cdecl _vcomp_atomic_div_r8(ptr double)
-@ stub _vcomp_atomic_div_ui1
-@ stub _vcomp_atomic_div_ui2
+@ cdecl _vcomp_atomic_div_ui1(ptr long)
+@ cdecl _vcomp_atomic_div_ui2(ptr long)
 @ cdecl _vcomp_atomic_div_ui4(ptr long)
 @ cdecl _vcomp_atomic_div_ui8(ptr int64)
-@ stub _vcomp_atomic_mul_i1
-@ stub _vcomp_atomic_mul_i2
+@ cdecl _vcomp_atomic_mul_i1(ptr long)
+@ cdecl _vcomp_atomic_mul_i2(ptr long)
 @ cdecl _vcomp_atomic_mul_i4(ptr long)
 @ cdecl _vcomp_atomic_mul_i8(ptr int64)
 @ cdecl _vcomp_atomic_mul_r4(ptr float)
 @ cdecl _vcomp_atomic_mul_r8(ptr double)
-@ stub _vcomp_atomic_or_i1
-@ stub _vcomp_atomic_or_i2
+@ cdecl _vcomp_atomic_or_i1(ptr long)
+@ cdecl _vcomp_atomic_or_i2(ptr long)
 @ cdecl _vcomp_atomic_or_i4(ptr long)
 @ cdecl _vcomp_atomic_or_i8(ptr int64)
-@ stub _vcomp_atomic_shl_i1
-@ stub _vcomp_atomic_shl_i2
+@ cdecl _vcomp_atomic_shl_i1(ptr long)
+@ cdecl _vcomp_atomic_shl_i2(ptr long)
 @ cdecl _vcomp_atomic_shl_i4(ptr long)
 @ cdecl _vcomp_atomic_shl_i8(ptr long)
-@ stub _vcomp_atomic_shr_i1
-@ stub _vcomp_atomic_shr_i2
+@ cdecl _vcomp_atomic_shr_i1(ptr long)
+@ cdecl _vcomp_atomic_shr_i2(ptr long)
 @ cdecl _vcomp_atomic_shr_i4(ptr long)
 @ cdecl _vcomp_atomic_shr_i8(ptr long)
-@ stub _vcomp_atomic_shr_ui1
-@ stub _vcomp_atomic_shr_ui2
+@ cdecl _vcomp_atomic_shr_ui1(ptr long)
+@ cdecl _vcomp_atomic_shr_ui2(ptr long)
 @ cdecl _vcomp_atomic_shr_ui4(ptr long)
 @ cdecl _vcomp_atomic_shr_ui8(ptr long)
-@ stub _vcomp_atomic_sub_i1
-@ stub _vcomp_atomic_sub_i2
+@ cdecl _vcomp_atomic_sub_i1(ptr long)
+@ cdecl _vcomp_atomic_sub_i2(ptr long)
 @ cdecl _vcomp_atomic_sub_i4(ptr long)
 @ cdecl _vcomp_atomic_sub_i8(ptr int64)
 @ cdecl _vcomp_atomic_sub_r4(ptr float)
 @ cdecl _vcomp_atomic_sub_r8(ptr double)
-@ stub _vcomp_atomic_xor_i1
-@ stub _vcomp_atomic_xor_i2
+@ cdecl _vcomp_atomic_xor_i1(ptr long)
+@ cdecl _vcomp_atomic_xor_i2(ptr long)
 @ cdecl _vcomp_atomic_xor_i4(ptr long)
 @ cdecl _vcomp_atomic_xor_i8(ptr int64)
 @ cdecl _vcomp_barrier()
@@ -73,16 +73,16 @@
 @ stub _vcomp_ordered_begin
 @ stub _vcomp_ordered_end
 @ stub _vcomp_ordered_loop_end
-@ stub _vcomp_reduction_i1
-@ stub _vcomp_reduction_i2
-@ stub _vcomp_reduction_i4
-@ stub _vcomp_reduction_i8
-@ stub _vcomp_reduction_r4
-@ stub _vcomp_reduction_r8
-@ stub _vcomp_reduction_u1
-@ stub _vcomp_reduction_u2
-@ stub _vcomp_reduction_u4
-@ stub _vcomp_reduction_u8
+@ cdecl _vcomp_reduction_i1(long ptr long)
+@ cdecl _vcomp_reduction_i2(long ptr long)
+@ cdecl _vcomp_reduction_i4(long ptr long)
+@ cdecl _vcomp_reduction_i8(long ptr int64)
+@ cdecl _vcomp_reduction_r4(long ptr float)
+@ cdecl _vcomp_reduction_r8(long ptr double)
+@ cdecl _vcomp_reduction_u1(long ptr long) _vcomp_reduction_i1
+@ cdecl _vcomp_reduction_u2(long ptr long) _vcomp_reduction_i2
+@ cdecl _vcomp_reduction_u4(long ptr long) _vcomp_reduction_i4
+@ cdecl _vcomp_reduction_u8(long ptr int64) _vcomp_reduction_i8
 @ cdecl _vcomp_sections_init(long)
 @ cdecl _vcomp_sections_next()
 @ cdecl _vcomp_set_num_threads(long)

@@ -801,15 +801,14 @@ static const NodeImplVtbl HTMLAnchorElementImplVtbl = {
 static const tid_t HTMLAnchorElement_iface_tids[] = {
     IHTMLAnchorElement_tid,
     HTMLELEMENT_TIDS,
-    IHTMLUniqueName_tid,
     0
 };
 
 static dispex_static_data_t HTMLAnchorElement_dispex = {
     NULL,
     DispHTMLAnchorElement_tid,
-    NULL,
-    HTMLAnchorElement_iface_tids
+    HTMLAnchorElement_iface_tids,
+    HTMLElement_init_dispex_info
 };
 
 HRESULT HTMLAnchorElement_Create(HTMLDocumentNode *doc, nsIDOMHTMLElement *nselem, HTMLElement **elem)

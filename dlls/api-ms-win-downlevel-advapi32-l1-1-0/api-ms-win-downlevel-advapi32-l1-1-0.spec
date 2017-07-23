@@ -26,7 +26,7 @@
 @ stub ConvertToAutoInheritPrivateObjecSecurity
 @ stdcall CopySid(long ptr ptr) advapi32.CopySid
 @ stdcall CreatePrivateObjectSecurity(ptr ptr ptr long long ptr) advapi32.CreatePrivateObjectSecurity
-@ stub CreatePrivateObjectSecurityEx
+@ stdcall CreatePrivateObjectSecurityEx(ptr ptr ptr ptr long long long ptr) advapi32.CreatePrivateObjectSecurityEx
 @ stdcall CreatePrivateObjectSecurityWithMultipleInheritance(ptr ptr ptr ptr long long long long ptr) advapi32.CreatePrivateObjectSecurityWithMultipleInheritance
 @ stdcall CreateProcessAsUserW(long wstr wstr ptr ptr long long ptr wstr ptr ptr) advapi32.CreateProcessAsUserW
 @ stdcall CreateRestrictedToken(long long long ptr long ptr long ptr ptr) advapi32.CreateRestrictedToken
@@ -45,7 +45,7 @@
 @ stdcall EventUnregister(int64) advapi32.EventUnregister
 @ stdcall EventWrite(int64 ptr long ptr) advapi32.EventWrite
 @ stub EventWriteString
-@ stub EventWriteTransfer
+@ stdcall EventWriteTransfer(int64 ptr ptr ptr long ptr) advapi32.EventWriteTransfer
 @ stdcall FindFirstFreeAce(ptr ptr) advapi32.FindFirstFreeAce
 @ stdcall FreeSid(ptr) advapi32.FreeSid
 @ stdcall GetAce(ptr long ptr) advapi32.GetAce
@@ -84,7 +84,7 @@
 @ stdcall PrivilegedServiceAuditAlarmW(wstr wstr long ptr long) advapi32.PrivilegedServiceAuditAlarmW
 @ stub QuerySecurityAccessMask
 @ stdcall RegCloseKey(long) advapi32.RegCloseKey
-@ stub RegCopyTreeW
+@ stdcall RegCopyTreeW(long wstr long) advapi32.RegCopyTreeW
 @ stdcall RegCreateKeyExA(long str long ptr long long ptr ptr ptr) advapi32.RegCreateKeyExA
 @ stdcall RegCreateKeyExW(long wstr long ptr long long ptr ptr ptr) advapi32.RegCreateKeyExW
 @ stdcall RegDeleteKeyExA(long str long long) advapi32.RegDeleteKeyExA

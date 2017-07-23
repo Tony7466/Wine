@@ -18,7 +18,6 @@
 # sgmlpages:       compile sgml source for the Wine API Guide
 # xmlpages:        compile xml source for the Wine API Guide
 
-# Start of common header
 # The following variable definitions are copied into all makefiles
 
 prefix          = @prefix@
@@ -71,15 +70,11 @@ CONVERT         = @CONVERT@
 ICOTOOL         = @ICOTOOL@
 MSGFMT          = @MSGFMT@
 CROSSTARGET     = @CROSSTARGET@
-LINGUAS         = @LINGUAS@
+SUBDIRS         = @SUBDIRS@
 RUNTESTFLAGS    = -q -P wine
 MAKEDEP         = $(TOOLSDIR)/tools/makedep$(TOOLSEXT)
 WINEBUILD       = $(TOOLSDIR)/tools/winebuild/winebuild$(TOOLSEXT)
 WRC             = $(TOOLSDIR)/tools/wrc/wrc$(TOOLSEXT)
-LIBPORT         = $(top_builddir)/libs/port/libwine_port.a
-LIBWPP          = $(top_builddir)/libs/wpp/libwpp.a
-LIBWINE         = -L$(top_builddir)/libs/wine -lwine
-LIBWINE_STATIC  = $(top_builddir)/libs/wine/libwine_static.a
 PACKAGE_VERSION = @PACKAGE_VERSION@
 SED_CMD         = LC_ALL=C sed -e 's,@bindir\@,$(bindir),g' -e 's,@dlldir\@,$(dlldir),g' -e 's,@PACKAGE_STRING\@,@PACKAGE_STRING@,g' -e 's,@PACKAGE_VERSION\@,@PACKAGE_VERSION@,g'
 LDRPATH_INSTALL = @LDRPATH_INSTALL@
@@ -100,10 +95,10 @@ LIBWINE_INSTALL_DEV = @LIBWINE_INSTALL_DEV@
 LIBWINE_LDFLAGS     = @LIBWINE_LDFLAGS@
 LIBWINE_DEPENDS     = @LIBWINE_DEPENDS@
 ALL_TEST_RESOURCES  = @ALL_TEST_RESOURCES@
+DISABLED_SUBDIRS    = @DISABLED_SUBDIRS@
+CONFIGURE_TARGETS   = @CONFIGURE_TARGETS@
 @ALL_VARS_RULES@
 @SET_MAKE@
-
-# End of common header
 
 all: wine
 	@echo "Wine build complete."
@@ -123,7 +118,6 @@ include/stamp-h: $(srcdir)/include/config.h.in config.status
 
 clean:: __clean__
 distclean:: clean
-	$(RM) config.* configure.lineno TAGS tags include/config.h include/stamp-h Makefile Make.tmp .gitignore
 	$(RM) -r autom4te.cache documentation/html documentation/api-guide documentation/api-guide-xml documentation/man$(api_manext)
 
 # Rules for uninstalling
@@ -143,8 +137,8 @@ install-manpages:: manpages
 # Dependencies between directories
 
 # dependencies needed to build any dll or program
-__tooldeps__: libs/port libs/wine libs/wpp
-__builddeps__: __tooldeps__ include
+__tooldeps__: libs/port libs/wpp
+__builddeps__: __tooldeps__ libs/wine include po
 .PHONY: depend dummy check test testclean crosstest __tooldeps__ __builddeps__
 
 dummy:
@@ -153,8 +147,7 @@ server: libs/port libs/wine tools include
 fonts: tools/sfnt2fon
 include: tools tools/widl
 libs/wine tools: libs/port
-tools/wmc tools/wrc: tools
-tools/sfnt2fon tools/wmc tools/wrc: libs/wine
+tools/sfnt2fon tools/wmc tools/wrc: tools
 tools/widl tools/wmc tools/wrc: libs/wpp
 libs/port libs/wine libs/wpp: include/config.h
 

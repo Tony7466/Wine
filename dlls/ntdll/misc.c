@@ -27,11 +27,14 @@
 #include <sys/utsname.h>
 #endif
 
+#include "ntstatus.h"
+#define WIN32_NO_STATUS
 #include "wine/library.h"
 #include "wine/debug.h"
 #include "ntdll_misc.h"
 #include "wmistr.h"
 #include "evntrace.h"
+#include "evntprov.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(ntdll);
 
@@ -329,13 +332,62 @@ void * __cdecl _lfind( const void *key, const void *base, unsigned int *nmemb,
     return NULL;
 }
 
+/******************************************************************************
+ *                  WinSqmEndSession   (NTDLL.@)
+ */
+NTSTATUS WINAPI WinSqmEndSession(HANDLE session)
+{
+    FIXME("(%p): stub\n", session);
+    return STATUS_NOT_IMPLEMENTED;
+}
+
 /*********************************************************************
  *                  WinSqmIsOptedIn   (NTDLL.@)
  */
 BOOL WINAPI WinSqmIsOptedIn(void)
 {
-    FIXME("() stub\n");
+    FIXME("(): stub\n");
     return FALSE;
+}
+
+/******************************************************************************
+ *                  WinSqmStartSession   (NTDLL.@)
+ */
+HANDLE WINAPI WinSqmStartSession(GUID *sessionguid, DWORD sessionid, DWORD unknown1)
+{
+    FIXME("(%p, 0x%x, 0x%x): stub\n", sessionguid, sessionid, unknown1);
+    return INVALID_HANDLE_VALUE;
+}
+
+/******************************************************************************
+ *                  EtwEventRegister (NTDLL.@)
+ */
+ULONG WINAPI EtwEventRegister( LPCGUID provider, PENABLECALLBACK callback, PVOID context,
+                PREGHANDLE handle )
+{
+    FIXME("(%s, %p, %p, %p) stub.\n", debugstr_guid(provider), callback, context, handle);
+
+    *handle = 0xdeadbeef;
+    return ERROR_SUCCESS;
+}
+
+/******************************************************************************
+ *                  EtwEventUnregister (NTDLL.@)
+ */
+ULONG WINAPI EtwEventUnregister( REGHANDLE handle )
+{
+    FIXME("(%s) stub.\n", wine_dbgstr_longlong(handle));
+    return ERROR_SUCCESS;
+}
+
+/*********************************************************************
+ *                  EtwEventSetInformation   (NTDLL.@)
+ */
+ULONG WINAPI EtwEventSetInformation( REGHANDLE handle, EVENT_INFO_CLASS class, void *info,
+                                     ULONG length )
+{
+    FIXME("(%s, %u, %p, %u) stub\n", wine_dbgstr_longlong(handle), class, info, length);
+    return ERROR_SUCCESS;
 }
 
 /******************************************************************************

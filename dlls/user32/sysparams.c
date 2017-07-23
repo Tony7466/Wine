@@ -1683,7 +1683,7 @@ BOOL WINAPI SystemParametersInfoW( UINT uiAction, UINT uiParam,
         if (!pvParam) return FALSE;
 
         spi_idx = SPI_SETWORKAREA_IDX;
-        CopyRect( &work_area, pvParam );
+        work_area = *(RECT*)pvParam;
         spi_loaded[spi_idx] = TRUE;
         ret = TRUE;
         break;
@@ -1702,7 +1702,7 @@ BOOL WINAPI SystemParametersInfoW( UINT uiAction, UINT uiParam,
             EnumDisplayMonitors( 0, NULL, enum_monitors, (LPARAM)&work_area );
             spi_loaded[spi_idx] = TRUE;
         }
-        CopyRect( pvParam, &work_area );
+        *(RECT*)pvParam = work_area;
         ret = TRUE;
         TRACE("work area %s\n", wine_dbgstr_rect( &work_area ));
         break;
@@ -2817,6 +2817,15 @@ LONG WINAPI ChangeDisplaySettingsExW( LPCWSTR devname, LPDEVMODEW devmode, HWND 
 
 
 /***********************************************************************
+ *              DisplayConfigGetDeviceInfo (USER32.@)
+ */
+LONG WINAPI DisplayConfigGetDeviceInfo(DISPLAYCONFIG_DEVICE_INFO_HEADER *packet)
+{
+    FIXME("stub: %p\n", packet);
+    return ERROR_NOT_SUPPORTED;
+}
+
+/***********************************************************************
  *		EnumDisplaySettingsW (USER32.@)
  *
  * RETURNS
@@ -2894,4 +2903,13 @@ BOOL WINAPI SetProcessDPIAware( VOID )
     FIXME( "stub!\n");
 
     return TRUE;
+}
+
+/***********************************************************************
+ *              IsProcessDPIAware   (USER32.@)
+ */
+BOOL WINAPI IsProcessDPIAware(void)
+{
+    FIXME( "stub!\n");
+    return FALSE;
 }

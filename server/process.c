@@ -81,6 +81,8 @@ static const struct object_ops process_ops =
     default_get_sd,              /* get_sd */
     default_set_sd,              /* set_sd */
     no_lookup_name,              /* lookup_name */
+    no_link_name,                /* link_name */
+    NULL,                        /* unlink_name */
     no_open_file,                /* open_file */
     no_close_handle,             /* close_handle */
     process_destroy              /* destroy */
@@ -129,6 +131,8 @@ static const struct object_ops startup_info_ops =
     default_get_sd,                /* get_sd */
     default_set_sd,                /* set_sd */
     no_lookup_name,                /* lookup_name */
+    no_link_name,                  /* link_name */
+    NULL,                          /* unlink_name */
     no_open_file,                  /* open_file */
     no_close_handle,               /* close_handle */
     startup_info_destroy           /* destroy */
@@ -170,25 +174,23 @@ static const struct object_ops job_ops =
     default_get_sd,                /* get_sd */
     default_set_sd,                /* set_sd */
     no_lookup_name,                /* lookup_name */
+    directory_link_name,           /* link_name */
+    default_unlink_name,           /* unlink_name */
     no_open_file,                  /* open_file */
     job_close_handle,              /* close_handle */
     job_destroy                    /* destroy */
 };
 
-static struct job *create_job_object( struct directory *root, const struct unicode_str *name,
+static struct job *create_job_object( struct object *root, const struct unicode_str *name,
                                       unsigned int attr, const struct security_descriptor *sd )
 {
     struct job *job;
 
-    if ((job = create_named_object_dir( root, name, attr, &job_ops )))
+    if ((job = create_named_object( root, &job_ops, name, attr, sd )))
     {
         if (get_error() != STATUS_OBJECT_NAME_EXISTS)
         {
             /* initialize it if it didn't already exist */
-            if (sd) default_set_sd( &job->obj, sd, OWNER_SECURITY_INFORMATION |
-                                                   GROUP_SECURITY_INFORMATION |
-                                                   DACL_SECURITY_INFORMATION |
-                                                   SACL_SECURITY_INFORMATION );
             list_init( &job->process_list );
             job->num_processes = 0;
             job->limit_flags = 0;
@@ -336,6 +338,7 @@ static unsigned int used_ptid_entries;      /* number of entries in use */
 static unsigned int alloc_ptid_entries;     /* number of allocated entries */
 static unsigned int next_free_ptid;         /* next free entry */
 static unsigned int last_free_ptid;         /* last free entry */
+static unsigned int num_free_ptids;         /* number of free ptids */
 
 static void kill_all_processes(void);
 
@@ -352,16 +355,17 @@ unsigned int alloc_ptid( void *ptr )
         id = used_ptid_entries + PTID_OFFSET;
         entry = &ptid_entries[used_ptid_entries++];
     }
-    else if (next_free_ptid)
+    else if (next_free_ptid && num_free_ptids >= 256)
     {
         id = next_free_ptid;
         entry = &ptid_entries[id - PTID_OFFSET];
         if (!(next_free_ptid = entry->next)) last_free_ptid = 0;
+        num_free_ptids--;
     }
     else  /* need to grow the array */
     {
         unsigned int count = alloc_ptid_entries + (alloc_ptid_entries / 2);
-        if (!count) count = 64;
+        if (!count) count = 512;
         if (!(entry = realloc( ptid_entries, count * sizeof(*entry) )))
         {
             set_error( STATUS_NO_MEMORY );
@@ -388,8 +392,8 @@ void free_ptid( unsigned int id )
     /* append to end of free list so that we don't reuse it too early */
     if (last_free_ptid) ptid_entries[last_free_ptid - PTID_OFFSET].next = id;
     else next_free_ptid = id;
-
     last_free_ptid = id;
+    num_free_ptids++;
 }
 
 /* retrieve the pointer corresponding to a process or thread id */
@@ -513,7 +517,7 @@ struct thread *create_process( int fd, struct thread *parent_thread, int inherit
     process->priority        = PROCESS_PRIOCLASS_NORMAL;
     process->suspend         = 0;
     process->is_system       = 0;
-    process->debug_children  = 0;
+    process->debug_children  = 1;
     process->is_terminating  = 0;
     process->job             = NULL;
     process->console         = NULL;
@@ -522,6 +526,7 @@ struct thread *create_process( int fd, struct thread *parent_thread, int inherit
     process->idle_event      = NULL;
     process->peb             = 0;
     process->ldt_copy        = 0;
+    process->dir_cache       = NULL;
     process->winstation      = 0;
     process->desktop         = 0;
     process->token           = NULL;
@@ -530,6 +535,7 @@ struct thread *create_process( int fd, struct thread *parent_thread, int inherit
     process->rawinput_kbd    = NULL;
     list_init( &process->thread_list );
     list_init( &process->locks );
+    list_init( &process->asyncs );
     list_init( &process->classes );
     list_init( &process->dlls );
     list_init( &process->rawinput_devices );
@@ -609,6 +615,7 @@ static void process_destroy( struct object *obj )
 
     /* we can't have a thread remaining */
     assert( list_empty( &process->thread_list ));
+    assert( list_empty( &process->asyncs ));
 
     assert( !process->sigkill_timeout );  /* timeout should hold a reference to the process */
 
@@ -626,6 +633,7 @@ static void process_destroy( struct object *obj )
     if (process->idle_event) release_object( process->idle_event );
     if (process->id) free_ptid( process->id );
     if (process->token) release_object( process->token );
+    free( process->dir_cache );
 }
 
 /* dump a process on stdout for debugging purposes */
@@ -832,6 +840,7 @@ static void process_killed( struct process *process )
     process->winstation = 0;
     process->desktop = 0;
     close_process_handles( process );
+    cancel_process_asyncs( process );
     if (process->idle_event)
     {
         release_object( process->idle_event );
@@ -1061,7 +1070,6 @@ struct process_snapshot *process_snap( int *count )
         ptr->count    = process->obj.refcount;
         ptr->priority = process->priority;
         ptr->handles  = get_handle_table_count(process);
-        ptr->unix_pid = process->unix_pid;
         grab_object( process );
         ptr++;
     }
@@ -1227,7 +1235,7 @@ DECL_HANDLER(new_process)
     else if (parent->debugger && parent->debug_children)
     {
         set_process_debugger( process, parent->debugger );
-        process->debug_children = 1;
+        /* debug_children is set to 1 by default */
     }
 
     if (!(req->create_flags & CREATE_NEW_PROCESS_GROUP))
@@ -1358,6 +1366,7 @@ DECL_HANDLER(get_process_info)
         reply->end_time         = process->end_time;
         reply->cpu              = process->cpu;
         reply->debugger_present = !!process->debugger;
+        reply->debug_children   = process->debug_children;
         release_object( process );
     }
 }
@@ -1463,7 +1472,7 @@ DECL_HANDLER(get_dll_info)
 {
     struct process *process;
 
-    if ((process = get_process_from_handle( req->handle, PROCESS_QUERY_INFORMATION )))
+    if ((process = get_process_from_handle( req->handle, PROCESS_QUERY_LIMITED_INFORMATION )))
     {
         struct process_dll *dll;
 
@@ -1536,26 +1545,31 @@ DECL_HANDLER(create_job)
 {
     struct job *job;
     struct unicode_str name;
-    struct directory *root = NULL;
-    const struct object_attributes *objattr = get_req_data();
+    struct object *root;
     const struct security_descriptor *sd;
+    const struct object_attributes *objattr = get_req_object_attributes( &sd, &name, &root );
 
-    if (!objattr_is_valid( objattr, get_req_data_size() )) return;
+    if (!objattr) return;
 
-    sd = objattr->sd_len ? (const struct security_descriptor *)(objattr + 1) : NULL;
-    objattr_get_name( objattr, &name );
-
-    if (objattr->rootdir && !(root = get_directory_obj( current->process, objattr->rootdir, 0 ))) return;
-
-    if ((job = create_job_object( root, &name, req->attributes, sd )))
+    if ((job = create_job_object( root, &name, objattr->attributes, sd )))
     {
         if (get_error() == STATUS_OBJECT_NAME_EXISTS)
-            reply->handle = alloc_handle( current->process, job, req->access, req->attributes );
+            reply->handle = alloc_handle( current->process, job, req->access, objattr->attributes );
         else
-            reply->handle = alloc_handle_no_access_check( current->process, job, req->access, req->attributes );
+            reply->handle = alloc_handle_no_access_check( current->process, job,
+                                                          req->access, objattr->attributes );
         release_object( job );
     }
     if (root) release_object( root );
+}
+
+/* open a job object */
+DECL_HANDLER(open_job)
+{
+    struct unicode_str name = get_req_unicode_str();
+
+    reply->handle = open_object( current->process, req->rootdir, req->access,
+                                 &job_ops, &name, req->attributes );
 }
 
 /* assign a job object to a process */

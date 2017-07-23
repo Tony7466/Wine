@@ -316,7 +316,6 @@ static void test_ICInfo(void)
                "ICInfo failed on fcc 0x%08x using uppercase fccHandler\n", info.fccHandler);
         }
     }
-todo_wine
     ok(found != 0, "expected at least one codec\n");
 }
 

@@ -110,9 +110,15 @@ static HRESULT WINAPI DirectDrawMediaStreamImpl_IAMMediaStream_GetMultiMediaStre
 {
     DirectDrawMediaStreamImpl *This = impl_from_DirectDrawMediaStream_IAMMediaStream(iface);
 
-    FIXME("(%p/%p)->(%p) stub!\n", This, iface, multi_media_stream);
+    TRACE("(%p/%p)->(%p)\n", This, iface, multi_media_stream);
 
-    return S_FALSE;
+    if (!multi_media_stream)
+        return E_POINTER;
+
+    IMultiMediaStream_AddRef(This->parent);
+    *multi_media_stream = This->parent;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI DirectDrawMediaStreamImpl_IAMMediaStream_GetInformation(IAMMediaStream *iface,
@@ -517,9 +523,15 @@ static HRESULT WINAPI AudioMediaStreamImpl_IAMMediaStream_GetMultiMediaStream(IA
 {
     AudioMediaStreamImpl *This = impl_from_AudioMediaStream_IAMMediaStream(iface);
 
-    FIXME("(%p/%p)->(%p) stub!\n", This, iface, multi_media_stream);
+    TRACE("(%p/%p)->(%p)\n", This, iface, multi_media_stream);
 
-    return S_FALSE;
+    if (!multi_media_stream)
+        return E_POINTER;
+
+    IMultiMediaStream_AddRef(This->parent);
+    *multi_media_stream = This->parent;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI AudioMediaStreamImpl_IAMMediaStream_GetInformation(IAMMediaStream *iface,
@@ -674,13 +686,19 @@ static ULONG WINAPI AudioMediaStreamImpl_IAudioMediaStream_Release(IAudioMediaSt
 
 /*** IMediaStream methods ***/
 static HRESULT WINAPI AudioMediaStreamImpl_IAudioMediaStream_GetMultiMediaStream(IAudioMediaStream *iface,
-        IMultiMediaStream** multimedia_stream)
+        IMultiMediaStream **multi_media_stream)
 {
     AudioMediaStreamImpl *This = impl_from_IAudioMediaStream(iface);
 
-    FIXME("(%p/%p)->(%p) stub!\n", iface, This, multimedia_stream);
+    TRACE("(%p/%p)->(%p)\n", iface, This, multi_media_stream);
 
-    return S_FALSE;
+    if (!multi_media_stream)
+        return E_POINTER;
+
+    IMultiMediaStream_AddRef(This->parent);
+    *multi_media_stream = This->parent;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI AudioMediaStreamImpl_IAudioMediaStream_GetInformation(IAudioMediaStream *iface,
@@ -1028,11 +1046,7 @@ static HRESULT ddrawstreamsample_create(IDirectDrawMediaStream *parent, IDirectD
         DDSURFACEDESC desc = { sizeof(desc) };
         hr = IDirectDrawSurface_GetSurfaceDesc(object->surface, &desc);
         if (hr == S_OK)
-        {
-            object->rect.left = object->rect.top = 0;
-            object->rect.right = desc.dwWidth;
-            object->rect.bottom = desc.dwHeight;
-        }
+            SetRect(&object->rect, 0, 0, desc.dwWidth, desc.dwHeight);
     }
 
     *ddraw_stream_sample = &object->IDirectDrawStreamSample_iface;

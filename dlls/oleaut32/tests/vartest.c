@@ -723,12 +723,13 @@ static void test_VariantClear(void)
 
   /* DISPATCH */
   V_VT(&v) = VT_DISPATCH;
-  V_DISPATCH(&v) = (IDispatch*)&test_myVariantClearImpl;
+  V_DISPATCH(&v) = (IDispatch*)&test_myVariantClearImpl.IUnknown_iface;
   test_myVariantClearImpl.events = 0;
   hres = VariantClear(&v);
   ok(hres == S_OK, "ret %08x\n", hres);
   ok(V_VT(&v) == 0, "vt %04x\n", V_VT(&v));
-  ok(V_DISPATCH(&v) == (IDispatch*)&test_myVariantClearImpl, "dispatch %p\n", V_DISPATCH(&v));
+  ok(V_DISPATCH(&v) == (IDispatch*)&test_myVariantClearImpl.IUnknown_iface,
+     "dispatch %p\n", V_DISPATCH(&v));
   /* Check that Release got called, but nothing else */
   ok(test_myVariantClearImpl.events ==  0x4, "Unexpected call. events %08x\n", test_myVariantClearImpl.events);
 
@@ -2544,7 +2545,7 @@ static void test_VarSub(void)
     hres = pVarSub(&left, &right, &result);
     ok(hres == S_OK && V_VT(&result) == VT_R8,
         "VarSub: expected coerced type VT_R8, got %s!\n", vtstr(V_VT(&result)));
-    ok(hres == S_OK && EQ_DOUBLE(V_R8(&result), 0),
+    ok(hres == S_OK && EQ_DOUBLE(V_R8(&result), 0.0),
         "VarSub: BSTR + BSTR, expected %f got %f\n", 0.0, V_R8(&result));
 
     /* Manually test some VT_CY and VT_DECIMAL variants */
@@ -2565,7 +2566,7 @@ static void test_VarSub(void)
     ok(hres == S_OK && V_VT(&result) == VT_CY,
         "VarSub: expected coerced type VT_CY, got %s!\n", vtstr(V_VT(&result)));
     hres = VarR8FromCy(V_CY(&result), &r);
-    ok(hres == S_OK && EQ_DOUBLE(r, 4702),
+    ok(hres == S_OK && EQ_DOUBLE(r, 4702.0),
         "VarSub: CY value %f, expected %f\n", r, (double)4720);
 
     hres = pVarSub(&left, &dec, &result);
@@ -5384,7 +5385,7 @@ static void test_VarMul(void)
     hres = pVarMul(&cy, &right, &result);
     ok(hres == S_OK && V_VT(&result) == VT_CY, "VarMul: expected coerced type VT_CY, got %s!\n", vtstr(V_VT(&result)));
     hres = VarR8FromCy(V_CY(&result), &r);
-    ok(hres == S_OK && EQ_DOUBLE(r, 42399), "VarMul: CY value %f, expected %f\n", r, (double)42399);
+    ok(hres == S_OK && EQ_DOUBLE(r, 42399.0), "VarMul: CY value %f, expected %f\n", r, (double)42399);
 
     hres = pVarMul(&left, &dec, &result);
     ok(hres == S_OK && V_VT(&result) == VT_DECIMAL, "VarMul: expected coerced type VT_DECIMAL, got %s!\n", vtstr(V_VT(&result)));
@@ -5555,7 +5556,7 @@ static void test_VarAdd(void)
     hres = pVarAdd(&left, &right, &result);
     ok(hres == S_OK && V_VT(&result) == VT_BSTR, "VarAdd: expected coerced type VT_BSTR, got %s!\n", vtstr(V_VT(&result)));
     hres = VarR8FromStr(V_BSTR(&result), 0, 0, &r);
-    ok(hres == S_OK && EQ_DOUBLE(r, 1212), "VarAdd: BSTR value %f, expected %f\n", r, (double)1212);
+    ok(hres == S_OK && EQ_DOUBLE(r, 1212.0), "VarAdd: BSTR value %f, expected %f\n", r, (double)1212);
     VariantClear(&result);
 
     /* Manuly test some VT_CY and VT_DECIMAL variants */
@@ -5575,7 +5576,7 @@ static void test_VarAdd(void)
     hres = pVarAdd(&cy, &right, &result);
     ok(hres == S_OK && V_VT(&result) == VT_CY, "VarAdd: expected coerced type VT_CY, got %s!\n", vtstr(V_VT(&result)));
     hres = VarR8FromCy(V_CY(&result), &r);
-    ok(hres == S_OK && EQ_DOUBLE(r, 4720), "VarAdd: CY value %f, expected %f\n", r, (double)4720);
+    ok(hres == S_OK && EQ_DOUBLE(r, 4720.0), "VarAdd: CY value %f, expected %f\n", r, (double)4720);
 
     hres = pVarAdd(&left, &dec, &result);
     ok(hres == S_OK && V_VT(&result) == VT_DECIMAL, "VarAdd: expected coerced type VT_DECIMAL, got %s!\n", vtstr(V_VT(&result)));

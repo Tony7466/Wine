@@ -555,6 +555,7 @@ static void initialize_launchers( HWND hwnd )
     title_offset_cy = BORDER_SIZE + icon_size + PADDING_SIZE;
     desktop_width = GetSystemMetrics( SM_CXSCREEN );
     launchers_per_row = desktop_width / launcher_size;
+    if (!launchers_per_row) launchers_per_row = 1;
 
     hr = SHGetKnownFolderPath( &FOLDERID_Desktop, KF_FLAG_CREATE, NULL, &desktop_folder );
     if (FAILED( hr ))
@@ -636,7 +637,7 @@ static LRESULT WINAPI desktop_wnd_proc( HWND hwnd, UINT message, WPARAM wp, LPAR
         return 0;
 
     case WM_PARENTNOTIFY:
-        if (LOWORD(wp) == WM_DESTROY) cleanup_systray_window( (HWND)lp );
+        handle_parent_notify( (HWND)lp, wp );
         return 0;
 
     case WM_LBUTTONDBLCLK:

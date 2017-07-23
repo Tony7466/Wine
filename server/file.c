@@ -68,6 +68,7 @@ static struct object_type *file_get_type( struct object *obj );
 static struct fd *file_get_fd( struct object *obj );
 static struct security_descriptor *file_get_sd( struct object *obj );
 static int file_set_sd( struct object *obj, const struct security_descriptor *sd, unsigned int set_info );
+static struct object *file_lookup_name( struct object *obj, struct unicode_str *name, unsigned int attr );
 static struct object *file_open_file( struct object *obj, unsigned int access,
                                       unsigned int sharing, unsigned int options );
 static void file_destroy( struct object *obj );
@@ -90,7 +91,9 @@ static const struct object_ops file_ops =
     default_fd_map_access,        /* map_access */
     file_get_sd,                  /* get_sd */
     file_set_sd,                  /* set_sd */
-    no_lookup_name,               /* lookup_name */
+    file_lookup_name,             /* lookup_name */
+    no_link_name,                 /* link_name */
+    NULL,                         /* unlink_name */
     file_open_file,               /* open_file */
     fd_close_handle,              /* close_handle */
     file_destroy                  /* destroy */
@@ -106,8 +109,7 @@ static const struct fd_ops file_fd_ops =
     file_flush,                   /* flush */
     default_fd_ioctl,             /* ioctl */
     default_fd_queue_async,       /* queue_async */
-    default_fd_reselect_async,    /* reselect_async */
-    default_fd_cancel_async       /* cancel_async */
+    default_fd_reselect_async     /* reselect_async */
 };
 
 static inline int is_overlapped( const struct file *file )
@@ -607,6 +609,14 @@ static int file_set_sd( struct object *obj, const struct security_descriptor *sd
     return 1;
 }
 
+static struct object *file_lookup_name( struct object *obj, struct unicode_str *name, unsigned int attr )
+{
+    if (!name || !name->len) return NULL;  /* open the file itself */
+
+    set_error( STATUS_OBJECT_PATH_NOT_FOUND );
+    return NULL;
+}
+
 static struct object *file_open_file( struct object *obj, unsigned int access,
                                       unsigned int sharing, unsigned int options )
 {
@@ -686,17 +696,16 @@ DECL_HANDLER(create_file)
 {
     struct object *file;
     struct fd *root_fd = NULL;
-    const struct object_attributes *objattr = get_req_data();
+    struct unicode_str unicode_name;
     const struct security_descriptor *sd;
+    const struct object_attributes *objattr = get_req_object_attributes( &sd, &unicode_name, NULL );
     const char *name;
     data_size_t name_len;
 
-    reply->handle = 0;
+    if (!objattr) return;
 
-    if (!objattr_is_valid( objattr, get_req_data_size() ))
-        return;
     /* name is transferred in the unix codepage outside of the objattr structure */
-    if (objattr->name_len)
+    if (unicode_name.len)
     {
         set_error( STATUS_INVALID_PARAMETER );
         return;
@@ -712,16 +721,13 @@ DECL_HANDLER(create_file)
         if (!root_fd) return;
     }
 
-    sd = objattr->sd_len ? (const struct security_descriptor *)(objattr + 1) : NULL;
-
-    name = (const char *)get_req_data() + sizeof(*objattr) + objattr->sd_len;
-    name_len = get_req_data_size() - sizeof(*objattr) - objattr->sd_len;
+    name = get_req_data_after_objattr( objattr, &name_len );
 
     reply->handle = 0;
     if ((file = create_file( root_fd, name, name_len, req->access, req->sharing,
                              req->create, req->options, req->attrs, sd )))
     {
-        reply->handle = alloc_handle( current->process, file, req->access, req->attributes );
+        reply->handle = alloc_handle( current->process, file, req->access, objattr->attributes );
         release_object( file );
     }
     if (root_fd) release_object( root_fd );

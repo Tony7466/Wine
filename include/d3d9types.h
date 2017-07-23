@@ -39,7 +39,7 @@
 #define D3DCLIPPLANE4 (1 << 4)
 #define D3DCLIPPLANE5 (1 << 5)
 
-#define D3DCOLOR_ARGB(a,r,g,b)       ((D3DCOLOR)((((a)&0xff)<<24)|(((r)&0xff)<<16)|(((g)&0xff)<<8)|((b)&0xff)))
+#define D3DCOLOR_ARGB(a,r,g,b)       ((D3DCOLOR)((((a)&0xffu)<<24)|(((r)&0xffu)<<16)|(((g)&0xffu)<<8)|((b)&0xffu)))
 #define D3DCOLOR_COLORVALUE(r,g,b,a) D3DCOLOR_RGBA((DWORD)((r)*255.f),(DWORD)((g)*255.f),(DWORD)((b)*255.f),(DWORD)((a)*255.f))
 #define D3DCOLOR_RGBA(r,g,b,a)       D3DCOLOR_ARGB(a,r,g,b)
 #define D3DCOLOR_XRGB(r,g,b)         D3DCOLOR_ARGB(0xff,r,g,b)
@@ -112,6 +112,14 @@
 #define D3DUSAGE_DYNAMIC            __MSABI_LONG(0x00000200)
 #define D3DUSAGE_AUTOGENMIPMAP      __MSABI_LONG(0x00000400)
 #define D3DUSAGE_DMAP               __MSABI_LONG(0x00004000)
+
+/* Parts added with d3d9ex */
+#if !defined(D3D_DISABLE_9EX)
+#define D3DUSAGE_RESTRICTED_CONTENT              __MSABI_LONG(0x00000800)
+#define D3DUSAGE_RESTRICT_SHARED_RESOURCE_DRIVER __MSABI_LONG(0x00001000)
+#define D3DUSAGE_RESTRICT_SHARED_RESOURCE        __MSABI_LONG(0x00002000)
+#define D3DUSAGE_TEXTAPI                         __MSABI_LONG(0x10000000)
+#endif /* D3D_DISABLE_9EX */
 
 #define D3DUSAGE_QUERY_FILTER                   __MSABI_LONG(0x00020000)
 #define D3DUSAGE_QUERY_LEGACYBUMPMAP            __MSABI_LONG(0x00008000)

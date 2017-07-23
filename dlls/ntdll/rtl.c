@@ -45,6 +45,7 @@
 #include "wine/unicode.h"
 #include "ntdll_misc.h"
 #include "inaddr.h"
+#include "ddk/ntddk.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(ntdll);
 
@@ -563,9 +564,10 @@ void WINAPI RtlCopyMemory(void *dest, const void *src, SIZE_T len)
  * NOTES
  * Not implemented in non-debug versions.
  */
-void WINAPI RtlAssert(LPVOID x1,LPVOID x2,DWORD x3, DWORD x4)
+void WINAPI RtlAssert(void *assertion, void *filename, ULONG linenumber, char *message)
 {
-	FIXME("(%p,%p,0x%08x,0x%08x),stub\n",x1,x2,x3,x4);
+    FIXME("(%s, %s, %u, %s): stub\n", debugstr_a((char*)assertion), debugstr_a((char*)filename),
+        linenumber, debugstr_a(message));
 }
 
 /*************************************************************************
@@ -1619,4 +1621,34 @@ void WINAPI RtlGetCurrentProcessorNumberEx(PROCESSOR_NUMBER *processor)
     processor->Group = 0;
     processor->Number = NtGetCurrentProcessorNumber();
     processor->Reserved = 0;
+}
+
+/***********************************************************************
+ *           RtlInitializeGenericTableAvl  (NTDLL.@)
+ */
+void WINAPI RtlInitializeGenericTableAvl(PRTL_AVL_TABLE table, PRTL_AVL_COMPARE_ROUTINE compare,
+                                         PRTL_AVL_ALLOCATE_ROUTINE allocate, PRTL_AVL_FREE_ROUTINE free, void *context)
+{
+    FIXME("%p %p %p %p %p: stub\n", table, compare, allocate, free, context);
+}
+
+/***********************************************************************
+ *           RtlInsertElementGenericTableAvl  (NTDLL.@)
+ */
+void WINAPI RtlInsertElementGenericTableAvl(PRTL_AVL_TABLE table, void *buffer, ULONG size, BOOL *element)
+{
+    FIXME("%p %p %u %p: stub\n", table, buffer, size, element);
+}
+
+/**********************************************************************
+ *           RtlCreateUserProcess [NTDLL.@]
+ */
+NTSTATUS WINAPI RtlCreateUserProcess(UNICODE_STRING *path, ULONG attributes, RTL_USER_PROCESS_PARAMETERS *parameters,
+                                     SECURITY_DESCRIPTOR *process_descriptor, SECURITY_DESCRIPTOR *thread_descriptor,
+                                     HANDLE parent, BOOLEAN inherit, HANDLE debug, HANDLE exception,
+                                     RTL_USER_PROCESS_INFORMATION *info)
+{
+    FIXME("(%p %u %p %p %p %p %d %p %p %p): stub\n", path, attributes, parameters, process_descriptor, thread_descriptor,
+                                     parent, inherit, debug, exception, info);
+    return STATUS_NOT_IMPLEMENTED;
 }

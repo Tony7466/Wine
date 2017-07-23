@@ -388,6 +388,14 @@ static void test_EnumObjects(IShellFolder *iFolder)
         SFGAO_CAPABILITYMASK | SFGAO_FILESYSTEM,
         SFGAO_CAPABILITYMASK | SFGAO_FILESYSTEM,
     };
+    static const ULONG full_attrs[5] =
+    {
+        SFGAO_CAPABILITYMASK | SFGAO_STORAGE | SFGAO_STORAGEANCESTOR | SFGAO_FILESYSTEM | SFGAO_FOLDER | SFGAO_FILESYSANCESTOR,
+        SFGAO_CAPABILITYMASK | SFGAO_STORAGE | SFGAO_STORAGEANCESTOR | SFGAO_FILESYSTEM | SFGAO_FOLDER | SFGAO_FILESYSANCESTOR,
+        SFGAO_CAPABILITYMASK | SFGAO_STREAM | SFGAO_FILESYSTEM,
+        SFGAO_CAPABILITYMASK | SFGAO_STREAM | SFGAO_FILESYSTEM,
+        SFGAO_CAPABILITYMASK | SFGAO_STREAM | SFGAO_FILESYSTEM,
+    };
 
     hr = IShellFolder_EnumObjects(iFolder, NULL, SHCONTF_FOLDERS | SHCONTF_NONFOLDERS | SHCONTF_INCLUDEHIDDEN, &iEnumList);
     ok(hr == S_OK, "EnumObjects failed %08x\n", hr);
@@ -440,6 +448,11 @@ static void test_EnumObjects(IShellFolder *iFolder)
         ok(flags == attrs[i] ||
            flags == (attrs[i] & ~SFGAO_FILESYSANCESTOR), /* Win9x, NT4 */
            "GetAttributesOf[%i] got %08x, expected %08x\n", i, flags, attrs[i]);
+
+        flags = ~0u;
+        hr = IShellFolder_GetAttributesOf(iFolder, 1, (LPCITEMIDLIST*)(idlArr + i), &flags);
+        ok(hr == S_OK, "GetAttributesOf returns %08x\n", hr);
+        ok((flags & ~SFGAO_HASSUBFOLDER) == full_attrs[i], "%d: got %08x expected %08x\n", i, flags, full_attrs[i]);
     }
 
     for (i=0;i<5;i++)
@@ -1129,7 +1142,7 @@ static void test_GetAttributesOf(void)
     todo_wine
     ok (hr == E_INVALIDARG ||
         broken(hr == S_OK), /* W2K and earlier */
-        "MyComputer->GetAttributesOf(emtpy pidl) should fail! hr = %08x\n", hr);
+        "MyComputer->GetAttributesOf(empty pidl) should fail! hr = %08x\n", hr);
 
     dwFlags = 0xffffffff;
     hr = IShellFolder_GetAttributesOf(psfMyComputer, 0, NULL, &dwFlags);
@@ -1575,7 +1588,8 @@ static void test_FolderShortcut(void) {
     if (hr != S_OK) return;
 
     hr = IShellFolder_GetDisplayNameOf(pShellFolder, NULL, SHGDN_FORPARSING, &strret);
-    ok(hr == S_OK, "IShellFolder_GetDisplayNameOf(NULL) failed! hr = %08x\n", hr);
+    ok(hr == S_OK || broken(hr == E_INVALIDARG) /* win10 */,
+       "IShellFolder_GetDisplayNameOf(NULL) failed! hr = %08x\n", hr);
     if (hr != S_OK) {
         IShellFolder_Release(pShellFolder);
         return;
@@ -1889,14 +1903,14 @@ static void test_SHGetFolderPathA(void)
     if (!pIsWow64Process || !pIsWow64Process( GetCurrentProcess(), &is_wow64 )) is_wow64 = FALSE;
 
     hr = pSHGetFolderPathA( 0, CSIDL_PROGRAM_FILES, 0, SHGFP_TYPE_CURRENT, path );
-    ok( !hr, "SHGetFolderPathA failed %x\n", hr );
+    ok( hr == S_OK, "SHGetFolderPathA failed %x\n", hr );
     hr = pSHGetFolderPathA( 0, CSIDL_PROGRAM_FILESX86, 0, SHGFP_TYPE_CURRENT, path_x86 );
     if (hr == E_FAIL)
     {
         win_skip( "Program Files (x86) not supported\n" );
         return;
     }
-    ok( !hr, "SHGetFolderPathA failed %x\n", hr );
+    ok( hr == S_OK, "SHGetFolderPathA failed %x\n", hr );
     if (is_win64)
     {
         ok( lstrcmpiA( path, path_x86 ), "paths are identical '%s'\n", path );
@@ -1924,14 +1938,14 @@ static void test_SHGetFolderPathA(void)
     }
 
     hr = pSHGetFolderPathA( 0, CSIDL_PROGRAM_FILES_COMMON, 0, SHGFP_TYPE_CURRENT, path );
-    ok( !hr, "SHGetFolderPathA failed %x\n", hr );
+    ok( hr == S_OK, "SHGetFolderPathA failed %x\n", hr );
     hr = pSHGetFolderPathA( 0, CSIDL_PROGRAM_FILES_COMMONX86, 0, SHGFP_TYPE_CURRENT, path_x86 );
     if (hr == E_FAIL)
     {
         win_skip( "Common Files (x86) not supported\n" );
         return;
     }
-    ok( !hr, "SHGetFolderPathA failed %x\n", hr );
+    ok( hr == S_OK, "SHGetFolderPathA failed %x\n", hr );
     if (is_win64)
     {
         ok( lstrcmpiA( path, path_x86 ), "paths are identical '%s'\n", path );
@@ -3075,7 +3089,7 @@ static void test_SHGetIDListFromObject(void)
     punkimpl->ifaces = ifaces;
     punkimpl->unknown = 0;
 
-    hres = pSHGetIDListFromObject((IUnknown*)punkimpl, &pidl);
+    hres = pSHGetIDListFromObject(&punkimpl->IUnknown_iface, &pidl);
     ok(hres == E_NOINTERFACE, "Got %x\n", hres);
     ok(ifaces[0].count, "interface not requested.\n");
     ok(ifaces[1].count, "interface not requested.\n");
@@ -3247,7 +3261,7 @@ static void test_SHGetItemFromObject(void)
     punkimpl->unknown = 0;
 
     /* The same as SHGetIDListFromObject */
-    hres = pSHGetIDListFromObject((IUnknown*)punkimpl, &pidl);
+    hres = pSHGetIDListFromObject(&punkimpl->IUnknown_iface, &pidl);
     ok(hres == E_NOINTERFACE, "Got %x\n", hres);
     ok(ifaces[0].count, "interface not requested.\n");
     ok(ifaces[1].count, "interface not requested.\n");

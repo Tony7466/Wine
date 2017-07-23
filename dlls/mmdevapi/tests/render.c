@@ -361,7 +361,7 @@ static void test_audioclient(void)
     ok(hr == S_OK, "Reset on an initialized stream returns %08x\n", hr);
 
     hr = IAudioClient_Reset(ac);
-    ok(hr == S_OK, "Reset on a resetted stream returns %08x\n", hr);
+    ok(hr == S_OK, "Reset on an already reset stream returns %08x\n", hr);
 
     hr = IAudioClient_Stop(ac);
     ok(hr == S_FALSE, "Stop on a stopped stream returns %08x\n", hr);
@@ -730,7 +730,7 @@ static void test_padding(void)
     ok(defp == 100000 || broken(defp == 101587) || defp == 200000,
        "Expected 10ms default period: %u\n", (ULONG)defp);
     ok(minp != 0, "Minimum period is 0\n");
-    ok(minp <= defp, "Mininum period is greater than default period\n");
+    ok(minp <= defp, "Minimum period is greater than default period\n");
 
     hr = IAudioClient_GetService(ac, &IID_IAudioRenderClient, (void**)&arc);
     ok(hr == S_OK, "GetService failed: %08x\n", hr);
@@ -1090,7 +1090,7 @@ static void test_clock(int share)
     slept = sum = 0;
 
     hr = IAudioClient_Reset(ac);
-    ok(hr == S_OK, "Reset on a resetted stream returns %08x\n", hr);
+    ok(hr == S_OK, "Reset on an already reset stream returns %08x\n", hr);
 
     hr = IAudioClock_GetPosition(acl, &pos, &pcpos);
     ok(hr == S_OK, "GetPosition failed: %08x\n", hr);
@@ -1164,7 +1164,7 @@ static void test_clock(int share)
     ok(QueryPerformanceCounter(&hpctime0), "PerfCounter unavailable\n");
 
     hr = IAudioClient_Reset(ac);
-    ok(hr == S_OK, "Reset on a resetted stream returns %08x\n", hr);
+    ok(hr == S_OK, "Reset on an already reset stream returns %08x\n", hr);
 
     hr = IAudioClient_Start(ac);
     ok(hr == S_OK, "Start failed: %08x\n", hr);
@@ -1854,7 +1854,7 @@ static void test_volume_dependence(void)
     }
 
     hr = IAudioClient_GetService(ac, &IID_IChannelAudioVolume, (void**)&cav);
-    ok(hr == S_OK, "GetService (ChannelAudioVolme) failed: %08x\n", hr);
+    ok(hr == S_OK, "GetService (ChannelAudioVolume) failed: %08x\n", hr);
 
     hr = IAudioClient_GetService(ac, &IID_IAudioStreamVolume, (void**)&asv);
     ok(hr == S_OK, "GetService (AudioStreamVolume) failed: %08x\n", hr);
@@ -2247,7 +2247,8 @@ static void test_endpointvolume(void)
 {
     HRESULT hr;
     IAudioEndpointVolume *aev;
-    float mindb, maxdb, increment;
+    float mindb, maxdb, increment, volume;
+    BOOL mute;
 
     hr = IMMDevice_Activate(dev, &IID_IAudioEndpointVolume,
             CLSCTX_INPROC_SERVER, NULL, (void**)&aev);
@@ -2261,6 +2262,21 @@ static void test_endpointvolume(void)
     hr = IAudioEndpointVolume_GetVolumeRange(aev, &mindb, &maxdb, &increment);
     ok(hr == S_OK, "GetVolumeRange failed: 0x%08x\n", hr);
     trace("got range: [%f,%f]/%f\n", mindb, maxdb, increment);
+
+    hr = IAudioEndpointVolume_SetMasterVolumeLevel(aev, mindb - increment, NULL);
+    ok(hr == E_INVALIDARG, "SetMasterVolumeLevel failed: 0x%08x\n", hr);
+
+    hr = IAudioEndpointVolume_GetMasterVolumeLevel(aev, &volume);
+    ok(hr == S_OK, "GetMasterVolumeLevel failed: 0x%08x\n", hr);
+
+    hr = IAudioEndpointVolume_SetMasterVolumeLevel(aev, volume, NULL);
+    ok(hr == S_OK, "SetMasterVolumeLevel failed: 0x%08x\n", hr);
+
+    hr = IAudioEndpointVolume_GetMute(aev, &mute);
+    ok(hr == S_OK, "GetMute failed: %08x\n", hr);
+
+    hr = IAudioEndpointVolume_SetMute(aev, mute, NULL);
+    ok(hr == S_OK || hr == S_FALSE, "SetMute failed: %08x\n", hr);
 
     IAudioEndpointVolume_Release(aev);
 }

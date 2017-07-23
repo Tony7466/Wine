@@ -172,6 +172,11 @@ struct collection {
     struct list collections;
 };
 
+struct caps_stack {
+    struct list entry;
+    struct caps caps;
+};
+
 static const char* debugstr_usages(struct caps *caps)
 {
     if (!caps->IsRange)
@@ -378,7 +383,7 @@ static void debug_print_preparsed(WINE_HIDP_PREPARSED_DATA *data)
     }
 }
 
-static int getValue(int bsize, int source)
+static int getValue(int bsize, int source, BOOL allow_negative)
 {
     int mask = 0xff;
     int negative = 0x80;
@@ -396,7 +401,7 @@ static int getValue(int bsize, int source)
         outofrange = (outofrange<<8);
     }
     value = (source&mask);
-    if (value&negative)
+    if (allow_negative && value&negative)
         value = -1 * (outofrange - value);
     return value;
 }
@@ -458,7 +463,10 @@ static void new_caps(struct caps *caps)
     caps->usage_count = 0;
 }
 
-static int parse_descriptor(BYTE *descriptor, unsigned int index, unsigned int length, unsigned int *feature_index, unsigned int *collection_index, struct collection *collection, struct caps *caps, struct list *features)
+static int parse_descriptor(BYTE *descriptor, unsigned int index, unsigned int length,
+                            unsigned int *feature_index, unsigned int *collection_index,
+                            struct collection *collection, struct caps *caps,
+                            struct list *features, struct list *stack)
 {
     unsigned int i;
     for (i = index; i < length;)
@@ -544,7 +552,7 @@ static int parse_descriptor(BYTE *descriptor, unsigned int index, unsigned int l
 
                         parse_collection(bSize, itemVal, subcollection);
 
-                        i = parse_descriptor(descriptor, i+1, length, feature_index, collection_index, subcollection, caps, features);
+                        i = parse_descriptor(descriptor, i+1, length, feature_index, collection_index, subcollection, caps, features, stack);
                         continue;
                     }
                     case TAG_MAIN_END_COLLECTION:
@@ -558,41 +566,60 @@ static int parse_descriptor(BYTE *descriptor, unsigned int index, unsigned int l
                 switch(bTag)
                 {
                     case TAG_GLOBAL_USAGE_PAGE:
-                        caps->UsagePage = getValue(bSize, itemVal);
+                        caps->UsagePage = getValue(bSize, itemVal, FALSE);
                         break;
                     case TAG_GLOBAL_LOGICAL_MINIMUM:
-                        caps->LogicalMin = getValue(bSize, itemVal);
+                        caps->LogicalMin = getValue(bSize, itemVal, TRUE);
                         break;
                     case TAG_GLOBAL_LOGICAL_MAXIMUM:
-                        caps->LogicalMax = getValue(bSize, itemVal);
+                        caps->LogicalMax = getValue(bSize, itemVal, TRUE);
                         break;
                     case TAG_GLOBAL_PHYSICAL_MINIMUM:
-                        caps->PhysicalMin = getValue(bSize, itemVal);
+                        caps->PhysicalMin = getValue(bSize, itemVal, TRUE);
                         break;
                     case TAG_GLOBAL_PHYSICAL_MAXIMUM:
-                        caps->PhysicalMax = getValue(bSize, itemVal);
+                        caps->PhysicalMax = getValue(bSize, itemVal, TRUE);
                         break;
                     case TAG_GLOBAL_UNIT_EXPONENT:
-                        caps->UnitsExp = getValue(bSize, itemVal);
+                        caps->UnitsExp = getValue(bSize, itemVal, TRUE);
                         break;
                     case TAG_GLOBAL_UNIT:
-                        caps->Units = getValue(bSize, itemVal);
+                        caps->Units = getValue(bSize, itemVal, TRUE);
                         break;
                     case TAG_GLOBAL_REPORT_SIZE:
-                        caps->BitSize = getValue(bSize, itemVal);
+                        caps->BitSize = getValue(bSize, itemVal, FALSE);
                         break;
                     case TAG_GLOBAL_REPORT_ID:
-                        caps->ReportID = getValue(bSize, itemVal);
+                        caps->ReportID = getValue(bSize, itemVal, FALSE);
                         break;
                     case TAG_GLOBAL_REPORT_COUNT:
-                        caps->ReportCount = getValue(bSize, itemVal);
+                        caps->ReportCount = getValue(bSize, itemVal, FALSE);
                         break;
                     case TAG_GLOBAL_PUSH:
-                        FIXME("Unhandled Push\n");
+                    {
+                        struct caps_stack *saved = HeapAlloc(GetProcessHeap(), 0, sizeof(*saved));
+                        saved->caps = *caps;
+                        TRACE("Push\n");
+                        list_add_tail(stack, &saved->entry);
                         break;
+                    }
                     case TAG_GLOBAL_POP:
-                        FIXME("Unhandled Pop\n");
+                    {
+                        struct list *tail;
+                        struct caps_stack *saved;
+                        TRACE("Pop\n");
+                        tail = list_tail(stack);
+                        if (tail)
+                        {
+                            saved = LIST_ENTRY(tail, struct caps_stack, entry);
+                            *caps = saved->caps;
+                            list_remove(tail);
+                            HeapFree(GetProcessHeap(), 0, saved);
+                        }
+                        else
+                            ERR("Pop but no stack!\n");
                         break;
+                    }
                     default:
                         ERR("Unknown (bTag: 0x%x, bType: 0x%x)\n", bTag, bType);
                 }
@@ -606,46 +633,46 @@ static int parse_descriptor(BYTE *descriptor, unsigned int index, unsigned int l
                             FIXME("More than %i individual usages defined\n",USAGE_MAX);
                         else
                         {
-                            caps->u.NotRange.Usage[caps->usage_count++] = getValue(bSize, itemVal);
+                            caps->u.NotRange.Usage[caps->usage_count++] = getValue(bSize, itemVal, FALSE);
                             caps->IsRange = FALSE;
                         }
                         break;
                     case TAG_LOCAL_USAGE_MINIMUM:
                         caps->usage_count = 1;
-                        caps->u.Range.UsageMin = getValue(bSize, itemVal);
+                        caps->u.Range.UsageMin = getValue(bSize, itemVal, FALSE);
                         caps->IsRange = TRUE;
                         break;
                     case TAG_LOCAL_USAGE_MAXIMUM:
                         caps->usage_count = 1;
-                        caps->u.Range.UsageMax = getValue(bSize, itemVal);
+                        caps->u.Range.UsageMax = getValue(bSize, itemVal, FALSE);
                         caps->IsRange = TRUE;
                         break;
                     case TAG_LOCAL_DESIGNATOR_INDEX:
-                        caps->u.NotRange.DesignatorIndex = getValue(bSize, itemVal);
+                        caps->u.NotRange.DesignatorIndex = getValue(bSize, itemVal, FALSE);
                         caps->IsDesignatorRange = FALSE;
                         break;
                     case TAG_LOCAL_DESIGNATOR_MINIMUM:
-                        caps->u.Range.DesignatorMin = getValue(bSize, itemVal);
+                        caps->u.Range.DesignatorMin = getValue(bSize, itemVal, FALSE);
                         caps->IsDesignatorRange = TRUE;
                         break;
                     case TAG_LOCAL_DESIGNATOR_MAXIMUM:
-                        caps->u.Range.DesignatorMax = getValue(bSize, itemVal);
+                        caps->u.Range.DesignatorMax = getValue(bSize, itemVal, FALSE);
                         caps->IsDesignatorRange = TRUE;
                         break;
                     case TAG_LOCAL_STRING_INDEX:
-                        caps->u.NotRange.StringIndex = getValue(bSize, itemVal);
+                        caps->u.NotRange.StringIndex = getValue(bSize, itemVal, FALSE);
                         caps->IsStringRange = FALSE;
                         break;
                     case TAG_LOCAL_STRING_MINIMUM:
-                        caps->u.Range.StringMin = getValue(bSize, itemVal);
+                        caps->u.Range.StringMin = getValue(bSize, itemVal, FALSE);
                         caps->IsStringRange = TRUE;
                         break;
                     case TAG_LOCAL_STRING_MAXIMUM:
-                        caps->u.Range.StringMax = getValue(bSize, itemVal);
+                        caps->u.Range.StringMax = getValue(bSize, itemVal, FALSE);
                         caps->IsStringRange = TRUE;
                         break;
                     case TAG_LOCAL_DELIMITER:
-                        caps->Delim = getValue(bSize, itemVal);
+                        caps->Delim = getValue(bSize, itemVal, FALSE);
                         break;
                     default:
                         ERR("Unknown (bTag: 0x%x, bType: 0x%x)\n", bTag, bType);
@@ -725,7 +752,12 @@ static void build_elements(WINE_HID_REPORT *wine_report, struct feature* feature
             wine_element->caps.value.HasNull = feature->HasNull;
             wine_element->caps.value.BitSize = feature->caps.BitSize;
             if (feature->caps.usage_count > 1)
-                wine_element->caps.value.ReportCount = 1;
+            {
+                if (feature->caps.ReportCount > feature->caps.usage_count)
+                    wine_element->caps.value.ReportCount = feature->caps.ReportCount / feature->caps.usage_count;
+                else
+                    wine_element->caps.value.ReportCount = 1;
+            }
             else
                 wine_element->caps.value.ReportCount = feature->caps.ReportCount;
             wine_element->bitCount = (feature->caps.BitSize * wine_element->caps.value.ReportCount);
@@ -887,10 +919,8 @@ static WINE_HIDP_PREPARSED_DATA* build_PreparseData(
         new_report(wine_report, input_features[0]);
         data->dwInputReportCount++;
 
-        if (input_features[0]->caps.ReportID != 0)
-            bitOffset = 8;
-        else
-            bitOffset = 0;
+        /* Room for the reportID */
+        bitOffset = 8;
 
         for (i = 0; i < i_count; i++)
         {
@@ -901,10 +931,7 @@ static WINE_HIDP_PREPARSED_DATA* build_PreparseData(
                 new_report(wine_report, input_features[i]);
                 data->dwInputReportCount++;
                 bitLength = max(bitOffset, bitLength);
-                if (input_features[i]->caps.ReportID != 0)
-                    bitOffset = 8;
-                else
-                    bitOffset = 0;
+                bitOffset = 8;
             }
             build_elements(wine_report, input_features[i], &bitOffset);
             count_elements(input_features[i], &data->caps.NumberInputButtonCaps,
@@ -922,10 +949,7 @@ static WINE_HIDP_PREPARSED_DATA* build_PreparseData(
         data->dwOutputReportOffset = (BYTE*)wine_report - (BYTE*)data->InputReports;
         new_report(wine_report, output_features[0]);
         data->dwOutputReportCount++;
-        if (output_features[0]->caps.ReportID != 0)
-            bitOffset = 8;
-        else
-            bitOffset = 0;
+        bitOffset = 8;
 
         for (i = 0; i < o_count; i++)
         {
@@ -936,10 +960,7 @@ static WINE_HIDP_PREPARSED_DATA* build_PreparseData(
                 new_report(wine_report, output_features[i]);
                 data->dwOutputReportCount++;
                 bitLength = max(bitOffset, bitLength);
-                if (output_features[0]->caps.ReportID != 0)
-                    bitOffset = 8;
-                else
-                    bitOffset = 0;
+                bitOffset = 8;
             }
             build_elements(wine_report, output_features[i], &bitOffset);
             count_elements(output_features[i], &data->caps.NumberOutputButtonCaps,
@@ -957,10 +978,7 @@ static WINE_HIDP_PREPARSED_DATA* build_PreparseData(
         data->dwFeatureReportOffset = (BYTE*)wine_report - (BYTE*)data->InputReports;
         new_report(wine_report, feature_features[0]);
         data->dwFeatureReportCount++;
-        if (feature_features[0]->caps.ReportID != 0)
-            bitOffset = 8;
-        else
-            bitOffset = 0;
+        bitOffset = 8;
 
         for (i = 0; i < f_count; i++)
         {
@@ -971,10 +989,7 @@ static WINE_HIDP_PREPARSED_DATA* build_PreparseData(
                 new_report(wine_report, feature_features[i]);
                 data->dwFeatureReportCount++;
                 bitLength = max(bitOffset, bitLength);
-                if (feature_features[0]->caps.ReportID != 0)
-                    bitOffset = 8;
-                else
-                    bitOffset = 0;
+                bitOffset = 8;
             }
             build_elements(wine_report, feature_features[i], &bitOffset);
             count_elements(feature_features[i], &data->caps.NumberFeatureButtonCaps,
@@ -1020,6 +1035,7 @@ WINE_HIDP_PREPARSED_DATA* ParseDescriptor(BYTE *descriptor, unsigned int length)
     struct caps caps;
 
     struct list features;
+    struct list caps_stack;
 
     unsigned int feature_count = 0;
     unsigned int cidx;
@@ -1030,13 +1046,14 @@ WINE_HIDP_PREPARSED_DATA* ParseDescriptor(BYTE *descriptor, unsigned int length)
         for (cidx = 0; cidx < length; cidx++)
         {
             TRACE("%x ",descriptor[cidx]);
-            if (cidx % 80 == 0)
+            if ((cidx+1) % 80 == 0)
                 TRACE("\n");
         }
         TRACE("\n");
     }
 
     list_init(&features);
+    list_init(&caps_stack);
 
     base = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*base));
     base->index = 1;
@@ -1045,9 +1062,20 @@ WINE_HIDP_PREPARSED_DATA* ParseDescriptor(BYTE *descriptor, unsigned int length)
     memset(&caps, 0, sizeof(caps));
 
     cidx = 0;
-    parse_descriptor(descriptor, 0, length, &feature_count, &cidx, base, &caps, &features);
+    parse_descriptor(descriptor, 0, length, &feature_count, &cidx, base, &caps, &features, &caps_stack);
 
     debug_collection(base);
+
+    if (!list_empty(&caps_stack))
+    {
+        struct caps_stack *entry, *cursor;
+        ERR("%i unpopped device caps on the stack\n", list_count(&caps_stack));
+        LIST_FOR_EACH_ENTRY_SAFE(entry, cursor, &caps_stack, struct caps_stack, entry)
+        {
+            list_remove(&entry->entry);
+            HeapFree(GetProcessHeap(), 0, entry);
+        }
+    }
 
     cidx = 2;
     if (feature_count)

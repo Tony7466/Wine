@@ -51,21 +51,21 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(appwizcpl);
 
-#define GECKO_VERSION "2.40"
+#define GECKO_VERSION "2.47"
 
 #ifdef __i386__
 #define ARCH_STRING "x86"
-#define GECKO_SHA "7001a6ed5b02d0ae4e73b14c92018d604b87f3ad"
+#define GECKO_SHA "f9a937e9a46d47fda701d257e60601f22e7a4510"
 #elif defined(__x86_64__)
 #define ARCH_STRING "x86_64"
-#define GECKO_SHA "356c414527b08b015b6dc53dbbf78d752320ae90"
+#define GECKO_SHA "8efa810b1ac83d59e0171d4347d21730560926da"
 #else
 #define ARCH_STRING ""
 #define GECKO_SHA "???"
 #endif
 
-#define MONO_VERSION "4.5.6"
-#define MONO_SHA "12ec9a4fa5958426292effd40d9230c7acbba1e8"
+#define MONO_VERSION "4.6.4"
+#define MONO_SHA "d58509c3a4e5fa88c56c14e0413a803aa82f6118"
 
 typedef struct {
     const char *version;

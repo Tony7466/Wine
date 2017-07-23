@@ -201,47 +201,52 @@ typedef void (CALLBACK *PFNSHGETSETTINGSPROC)(LPSHELLFLAGSTATE lpsfs, DWORD dwMa
  * ##### helperfunctions for communication with ICommDlgBrowser #####
  */
 static BOOL IsInCommDlg(IShellViewImpl * This)
-{	return(This->pCommDlgBrowser != NULL);
+{
+    return This->pCommDlgBrowser != NULL;
 }
 
 static HRESULT IncludeObject(IShellViewImpl * This, LPCITEMIDLIST pidl)
 {
-	HRESULT ret = S_OK;
+    HRESULT ret = S_OK;
 
-	if ( IsInCommDlg(This) )
-	{
-	  TRACE("ICommDlgBrowser::IncludeObject pidl=%p\n", pidl);
-	  ret = ICommDlgBrowser_IncludeObject(This->pCommDlgBrowser, (IShellView*)This, pidl);
-	  TRACE("--0x%08x\n", ret);
-	}
-	return ret;
+    if (IsInCommDlg(This))
+    {
+        TRACE("ICommDlgBrowser::IncludeObject pidl=%p\n", pidl);
+        ret = ICommDlgBrowser_IncludeObject(This->pCommDlgBrowser, (IShellView *)&This->IShellView3_iface, pidl);
+        TRACE("-- returns 0x%08x\n", ret);
+    }
+
+    return ret;
 }
 
 static HRESULT OnDefaultCommand(IShellViewImpl * This)
 {
-	HRESULT ret = S_FALSE;
+    HRESULT ret = S_FALSE;
 
-	if (IsInCommDlg(This))
-	{
-	  TRACE("ICommDlgBrowser::OnDefaultCommand\n");
-	  ret = ICommDlgBrowser_OnDefaultCommand(This->pCommDlgBrowser, (IShellView*)This);
-	  TRACE("-- returns %08x\n", ret);
-	}
-	return ret;
+    if (IsInCommDlg(This))
+    {
+        TRACE("ICommDlgBrowser::OnDefaultCommand\n");
+        ret = ICommDlgBrowser_OnDefaultCommand(This->pCommDlgBrowser, (IShellView *)&This->IShellView3_iface);
+        TRACE("-- returns 0x%08x\n", ret);
+    }
+
+    return ret;
 }
 
-static HRESULT OnStateChange(IShellViewImpl * This, UINT uFlags)
+static HRESULT OnStateChange(IShellViewImpl * This, UINT change)
 {
-	HRESULT ret = S_FALSE;
+    HRESULT ret = S_FALSE;
 
-	if (IsInCommDlg(This))
-	{
-	  TRACE("ICommDlgBrowser::OnStateChange flags=%x\n", uFlags);
-	  ret = ICommDlgBrowser_OnStateChange(This->pCommDlgBrowser, (IShellView*)This, uFlags);
-	  TRACE("--\n");
-	}
-	return ret;
+    if (IsInCommDlg(This))
+    {
+        TRACE("ICommDlgBrowser::OnStateChange change=%d\n", change);
+        ret = ICommDlgBrowser_OnStateChange(This->pCommDlgBrowser, (IShellView *)&This->IShellView3_iface, change);
+        TRACE("-- returns 0x%08x\n", ret);
+    }
+
+    return ret;
 }
+
 /**********************************************************
  *	set the toolbar of the filedialog buttons
  *
@@ -1213,7 +1218,7 @@ static LRESULT ShellView_OnSetFocus(IShellViewImpl * This)
 	should always be done before merging menus (OnActivate merges the
 	menus) if one of our windows has the focus.*/
 
-	IShellBrowser_OnViewWindowActive(This->pShellBrowser,(IShellView*) This);
+	IShellBrowser_OnViewWindowActive(This->pShellBrowser, (IShellView *)&This->IShellView3_iface);
 	ShellView_OnActivate(This, SVUIA_ACTIVATE_FOCUS);
 
 	/* Set the focus to the listview */
@@ -1589,7 +1594,7 @@ static LRESULT ShellView_OnNotify(IShellViewImpl * This, UINT CtlID, LPNMHDR lpn
 
 	      case VK_F5:
                 /* Initiate a refresh */
-		IShellView_Refresh((IShellView*)This);
+		IShellView3_Refresh(&This->IShellView3_iface);
 		break;
 
 	      case VK_BACK:
@@ -3502,8 +3507,8 @@ static HRESULT WINAPI shellfolderviewdual_GetIDsOfNames(
     ITypeInfo *ti;
     HRESULT hr;
 
-    TRACE("(%p,%p,%p,%u,%d,%p)\n", This, riid, rgszNames, cNames, lcid,
-            rgDispId);
+    TRACE("(%p, %s, %p, %u, %d, %p)\n", This, debugstr_guid(riid), rgszNames,
+            cNames, lcid, rgDispId);
 
     hr = get_typeinfo(IShellFolderViewDual3_tid, &ti);
     if (SUCCEEDED(hr))
@@ -3520,8 +3525,9 @@ static HRESULT WINAPI shellfolderviewdual_Invoke(IShellFolderViewDual3 *iface,
     ITypeInfo *ti;
     HRESULT hr;
 
-    TRACE("(%p,%d,%p,%d,%u,%p,%p,%p,%p)\n", This, dispIdMember, riid, lcid,
-            wFlags, pDispParams, pVarResult, pExcepInfo, puArgErr);
+    TRACE("(%p, %d, %s, %d, %u, %p, %p, %p, %p)\n", This, dispIdMember,
+            debugstr_guid(riid), lcid, wFlags, pDispParams, pVarResult,
+            pExcepInfo, puArgErr);
 
     hr = get_typeinfo(IShellFolderViewDual3_tid, &ti);
     if (SUCCEEDED(hr))

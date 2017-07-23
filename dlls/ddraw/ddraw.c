@@ -26,6 +26,8 @@
 
 #include "ddraw_private.h"
 
+#include "wine/exception.h"
+
 WINE_DEFAULT_DEBUG_CHANNEL(ddraw);
 
 static const struct ddraw *exclusive_ddraw;
@@ -631,6 +633,7 @@ static HRESULT ddraw_create_swapchain(struct ddraw *ddraw, HWND window, BOOL win
     swapchain_desc.swap_effect = WINED3D_SWAP_EFFECT_COPY;
     swapchain_desc.device_window = window;
     swapchain_desc.windowed = windowed;
+    swapchain_desc.flags = WINED3D_SWAPCHAIN_ALLOW_MODE_SWITCH;
 
     if (!(ddraw->flags & DDRAW_NO3D))
         hr = ddraw_attach_d3d_device(ddraw, &swapchain_desc);
@@ -651,6 +654,9 @@ static HRESULT ddraw_create_swapchain(struct ddraw *ddraw, HWND window, BOOL win
 
     wined3d_swapchain_incref(ddraw->wined3d_swapchain);
     ddraw_set_swapchain_window(ddraw, window);
+
+    if (ddraw->primary && ddraw->primary->palette)
+        wined3d_swapchain_set_palette(ddraw->wined3d_swapchain, ddraw->primary->palette->wined3d_palette);
 
     return DD_OK;
 }
@@ -889,7 +895,7 @@ static HRESULT ddraw_set_cooperative_level(struct ddraw *ddraw, HWND window,
     if ((cooplevel & DDSCL_FULLSCREEN) != (ddraw->cooperative_level & DDSCL_FULLSCREEN) || window != ddraw->dest_window)
     {
         if (ddraw->cooperative_level & DDSCL_FULLSCREEN)
-            wined3d_device_restore_fullscreen_window(ddraw->wined3d_device, ddraw->dest_window);
+            wined3d_device_restore_fullscreen_window(ddraw->wined3d_device, ddraw->dest_window, NULL);
 
         if (cooplevel & DDSCL_FULLSCREEN)
         {
@@ -1604,7 +1610,7 @@ static HRESULT WINAPI ddraw1_Compact(IDirectDraw *iface)
  *
  * Returns information about the current display mode
  *
- * Exists in Version 1, 2, 4 and 7
+ * Exists in versions 1, 2, 4 and 7
  *
  * Params:
  *  DDSD: Address of a surface description structure to write the info to
@@ -1695,7 +1701,7 @@ static HRESULT WINAPI ddraw1_GetDisplayMode(IDirectDraw *iface, DDSURFACEDESC *s
  *
  * Returns an array of supported FourCC codes.
  *
- * Exists in Version 1, 2, 4 and 7
+ * Exists in versions 1, 2, 4 and 7
  *
  * Params:
  *  NumCodes: Contains the number of Codes that Codes can carry. Returns the number
@@ -1733,7 +1739,7 @@ static HRESULT WINAPI ddraw7_GetFourCCCodes(IDirectDraw7 *iface, DWORD *NumCodes
     for (i = 0; i < (sizeof(formats) / sizeof(formats[0])); ++i)
     {
         if (SUCCEEDED(wined3d_check_device_format(ddraw->wined3d, WINED3DADAPTER_DEFAULT, WINED3D_DEVICE_TYPE_HAL,
-                mode.format_id, 0, WINED3D_RTYPE_SURFACE, formats[i])))
+                mode.format_id, 0, WINED3D_RTYPE_TEXTURE_2D, formats[i])))
         {
             if (count < outsize)
                 Codes[count] = formats[i];
@@ -1894,7 +1900,9 @@ static HRESULT WINAPI ddraw1_GetVerticalBlankStatus(IDirectDraw *iface, BOOL *st
 static HRESULT WINAPI ddraw7_GetAvailableVidMem(IDirectDraw7 *iface, DDSCAPS2 *Caps, DWORD *total,
         DWORD *free)
 {
+    unsigned int framebuffer_size, total_vidmem, free_vidmem;
     struct ddraw *ddraw = impl_from_IDirectDraw7(iface);
+    struct wined3d_display_mode mode;
     HRESULT hr = DD_OK;
 
     TRACE("iface %p, caps %p, total %p, free %p.\n", iface, Caps, total, free);
@@ -1917,14 +1925,34 @@ static HRESULT WINAPI ddraw7_GetAvailableVidMem(IDirectDraw7 *iface, DDSCAPS2 *C
         return DDERR_INVALIDPARAMS;
     }
 
+    /* Some applications (e.g. 3DMark 2000) assume that the reported amount of
+     * video memory doesn't include the memory used by the default framebuffer.
+     */
+    if (FAILED(hr = wined3d_get_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode, NULL)))
+    {
+        WARN("Failed to get display mode, hr %#x.\n", hr);
+        wined3d_mutex_unlock();
+        return hr;
+    }
+    framebuffer_size = wined3d_calculate_format_pitch(ddraw->wined3d, WINED3DADAPTER_DEFAULT,
+            mode.format_id, mode.width);
+    framebuffer_size *= mode.height;
+
     if (free)
-        *free = wined3d_device_get_available_texture_mem(ddraw->wined3d_device);
+    {
+        free_vidmem = wined3d_device_get_available_texture_mem(ddraw->wined3d_device);
+        *free = framebuffer_size > free_vidmem ? 0 : free_vidmem - framebuffer_size;
+        TRACE("Free video memory %#x.\n", *free);
+    }
+
     if (total)
     {
         struct wined3d_adapter_identifier desc = {0};
 
         hr = wined3d_get_adapter_identifier(ddraw->wined3d, WINED3DADAPTER_DEFAULT, 0, &desc);
-        *total = min(UINT_MAX, desc.video_memory);
+        total_vidmem = min(UINT_MAX, desc.video_memory);
+        *total = framebuffer_size > total_vidmem ? 0 : total_vidmem - framebuffer_size;
+        TRACE("Total video memory %#x.\n", *total);
     }
 
     wined3d_mutex_unlock();
@@ -2621,29 +2649,38 @@ static HRESULT WINAPI ddraw4_GetDeviceIdentifier(IDirectDraw4 *iface,
  *  Always returns DD_OK because it's a stub
  *
  *****************************************************************************/
-static HRESULT WINAPI ddraw7_GetSurfaceFromDC(IDirectDraw7 *iface, HDC hdc,
-        IDirectDrawSurface7 **Surface)
+static HRESULT WINAPI ddraw7_GetSurfaceFromDC(IDirectDraw7 *iface,
+        HDC dc, IDirectDrawSurface7 **surface)
 {
     struct ddraw *ddraw = impl_from_IDirectDraw7(iface);
-    struct wined3d_surface *wined3d_surface;
     struct ddraw_surface *surface_impl;
 
-    TRACE("iface %p, dc %p, surface %p.\n", iface, hdc, Surface);
+    TRACE("iface %p, dc %p, surface %p.\n", iface, dc, surface);
 
-    if (!Surface) return E_INVALIDARG;
+    if (!surface)
+        return E_INVALIDARG;
 
-    if (!(wined3d_surface = wined3d_device_get_surface_from_dc(ddraw->wined3d_device, hdc)))
+    if (!dc)
+        goto done;
+
+    wined3d_mutex_lock();
+    LIST_FOR_EACH_ENTRY(surface_impl, &ddraw->surface_list, struct ddraw_surface, surface_list_entry)
     {
-        TRACE("No surface found for dc %p.\n", hdc);
-        *Surface = NULL;
-        return DDERR_NOTFOUND;
-    }
+        if (surface_impl->dc != dc)
+            continue;
 
-    surface_impl = wined3d_surface_get_parent(wined3d_surface);
-    *Surface = &surface_impl->IDirectDrawSurface7_iface;
-    IDirectDrawSurface7_AddRef(*Surface);
-    TRACE("Returning surface %p.\n", Surface);
-    return DD_OK;
+        TRACE("Found surface %p for dc %p.\n", surface_impl, dc);
+        *surface = &surface_impl->IDirectDrawSurface7_iface;
+        IDirectDrawSurface7_AddRef(*surface);
+        wined3d_mutex_unlock();
+        return DD_OK;
+    }
+    wined3d_mutex_unlock();
+
+done:
+    TRACE("No surface found for dc %p.\n", dc);
+    *surface = NULL;
+    return DDERR_NOTFOUND;
 }
 
 static HRESULT WINAPI ddraw4_GetSurfaceFromDC(IDirectDraw4 *iface, HDC dc,
@@ -2942,20 +2979,25 @@ static HRESULT WINAPI ddraw1_CreateSurface(IDirectDraw *iface,
     DDSD_to_DDSD2(surface_desc, &surface_desc2);
     hr = ddraw_surface_create(ddraw, &surface_desc2, &impl, outer_unknown, 1);
     wined3d_mutex_unlock();
-    if (FAILED(hr))
-    {
-        *surface = NULL;
-        return hr;
-    }
 
-    *surface = &impl->IDirectDrawSurface_iface;
-    impl->ifaceToRelease = NULL;
+    __TRY
+    {
+        if (FAILED(hr))
+        {
+            *surface = NULL;
+            break;
+        }
+        *surface = &impl->IDirectDrawSurface_iface;
+        impl->ifaceToRelease = NULL;
+    }
+    __EXCEPT_PAGE_FAULT
+    {
+        hr = E_INVALIDARG;
+    }
+    __ENDTRY;
 
     return hr;
 }
-
-#define DDENUMSURFACES_SEARCHTYPE (DDENUMSURFACES_CANBECREATED|DDENUMSURFACES_DOESEXIST)
-#define DDENUMSURFACES_MATCHTYPE (DDENUMSURFACES_ALL|DDENUMSURFACES_MATCH|DDENUMSURFACES_NOMATCH)
 
 static BOOL
 Main_DirectDraw_DDPIXELFORMAT_Match(const DDPIXELFORMAT *requested,
@@ -3062,9 +3104,6 @@ static BOOL ddraw_match_surface_desc(const DDSURFACEDESC2 *requested, const DDSU
 
     return TRUE;
 }
-
-#undef DDENUMSURFACES_SEARCHTYPE
-#undef DDENUMSURFACES_MATCHTYPE
 
 struct surfacescallback2_context
 {
@@ -3608,7 +3647,7 @@ static HRESULT WINAPI d3d7_EnumDevices(IDirect3D7 *iface, LPD3DENUMDEVICESCALLBA
  * Enumerates all supported Direct3DDevice interfaces. This is the
  * implementation for Direct3D 1 to Direc3D 3, Version 7 has its own.
  *
- * Version 1, 2 and 3
+ * Versions 1, 2 and 3
  *
  * Params:
  *  callback: Application-provided routine to call for each enumerated device
@@ -3750,7 +3789,7 @@ static HRESULT WINAPI d3d1_EnumDevices(IDirect3D *iface, LPD3DENUMDEVICESCALLBAC
  * by the DIRECT3DLIGHT7 structure. Wine's Direct3DLight implementation
  * uses the IDirect3DDevice7 interface with D3D7 lights.
  *
- * Version 1, 2 and 3
+ * Versions 1, 2 and 3
  *
  * Params:
  *  light: Address to store the new interface pointer
@@ -3813,7 +3852,7 @@ static HRESULT WINAPI d3d1_CreateLight(IDirect3D *iface, IDirect3DLight **light,
  * and older versions. The IDirect3DMaterial implementation wraps its
  * functionality to IDirect3DDevice7::SetMaterial and friends.
  *
- * Version 1, 2 and 3
+ * Versions 1, 2 and 3
  *
  * Params:
  *  material: Address to store the new interface's pointer to
@@ -3962,7 +4001,7 @@ static HRESULT WINAPI d3d1_CreateViewport(IDirect3D *iface, IDirect3DViewport **
  * This method finds a device with the requested properties and returns a
  * device description
  *
- * Verion 1, 2 and 3
+ * Versions 1, 2 and 3
  * Params:
  *  fds: Describes the requested device characteristics
  *  fdr: Returns the device description
@@ -4044,7 +4083,7 @@ static HRESULT WINAPI d3d1_FindDevice(IDirect3D *iface, D3DFINDDEVICESEARCH *fds
  *
  * Creates an IDirect3DDevice7 interface.
  *
- * Version 2, 3 and 7. IDirect3DDevice 1 interfaces are interfaces to
+ * Versions 2, 3 and 7. IDirect3DDevice 1 interfaces are interfaces to
  * DirectDraw surfaces and are created with
  * IDirectDrawSurface::QueryInterface. This method uses CreateDevice to
  * create the device object and QueryInterfaces for IDirect3DDevice
@@ -4146,7 +4185,7 @@ static HRESULT WINAPI d3d2_CreateDevice(IDirect3D2 *iface, REFCLSID riid,
  * Creates a new vertex buffer object and returns a IDirect3DVertexBuffer7
  * interface.
  *
- * Version 3 and 7
+ * Versions 3 and 7
  *
  * Params:
  *  desc: Requested Vertex buffer properties
@@ -4216,7 +4255,7 @@ static HRESULT WINAPI d3d3_CreateVertexBuffer(IDirect3D3 *iface, D3DVERTEXBUFFER
  *
  * Enumerates all supported Z buffer pixel formats
  *
- * Version 3 and 7
+ * Versions 3 and 7
  *
  * Params:
  *  device_iid:
@@ -4301,7 +4340,7 @@ static HRESULT WINAPI d3d7_EnumZBufferFormats(IDirect3D7 *iface, REFCLSID device
     for (i = 0; i < (sizeof(formats) / sizeof(*formats)); ++i)
     {
         if (SUCCEEDED(wined3d_check_device_format(ddraw->wined3d, WINED3DADAPTER_DEFAULT, type, mode.format_id,
-                WINED3DUSAGE_DEPTHSTENCIL, WINED3D_RTYPE_SURFACE, formats[i])))
+                WINED3DUSAGE_DEPTHSTENCIL, WINED3D_RTYPE_TEXTURE_2D, formats[i])))
         {
             DDPIXELFORMAT pformat;
 
@@ -4325,7 +4364,7 @@ static HRESULT WINAPI d3d7_EnumZBufferFormats(IDirect3D7 *iface, REFCLSID device
      * pixel format, so we use dwZBufferBitDepth=32. Some games expect 24. Windows Vista and
      * newer enumerate both versions, so we do the same(bug 22434) */
     if (SUCCEEDED(wined3d_check_device_format(ddraw->wined3d, WINED3DADAPTER_DEFAULT, type, mode.format_id,
-            WINED3DUSAGE_DEPTHSTENCIL, WINED3D_RTYPE_SURFACE, WINED3DFMT_X8D24_UNORM)))
+            WINED3DUSAGE_DEPTHSTENCIL, WINED3D_RTYPE_TEXTURE_2D, WINED3DFMT_X8D24_UNORM)))
     {
         DDPIXELFORMAT x8d24 =
         {
@@ -4360,7 +4399,7 @@ static HRESULT WINAPI d3d3_EnumZBufferFormats(IDirect3D3 *iface, REFCLSID device
  * Removes all managed textures (=surfaces with DDSCAPS2_TEXTUREMANAGE or
  * DDSCAPS2_D3DTEXTUREMANAGE caps) to be removed from video memory.
  *
- * Version 3 and 7
+ * Versions 3 and 7
  *
  * Returns:
  *  D3D_OK, because it's a stub
@@ -4741,14 +4780,14 @@ void ddraw_update_lost_surfaces(struct ddraw *ddraw)
 }
 
 static HRESULT CDECL device_parent_surface_created(struct wined3d_device_parent *device_parent,
-        struct wined3d_texture *wined3d_texture, unsigned int sub_resource_idx, struct wined3d_surface *surface,
+        struct wined3d_texture *wined3d_texture, unsigned int sub_resource_idx,
         void **parent, const struct wined3d_parent_ops **parent_ops)
 {
     struct ddraw *ddraw = ddraw_from_device_parent(device_parent);
     struct ddraw_surface *ddraw_surface;
 
-    TRACE("device_parent %p, wined3d_texture %p, sub_resource_idx %u, surface %p, parent %p, parent_ops %p.\n",
-            device_parent, wined3d_texture, sub_resource_idx, surface, parent, parent_ops);
+    TRACE("device_parent %p, wined3d_texture %p, sub_resource_idx %u, parent %p, parent_ops %p.\n",
+            device_parent, wined3d_texture, sub_resource_idx, parent, parent_ops);
 
     /* We have a swapchain or wined3d internal texture. */
     if (!wined3d_texture_get_parent(wined3d_texture) || wined3d_texture_get_parent(wined3d_texture) == ddraw)
@@ -4765,7 +4804,7 @@ static HRESULT CDECL device_parent_surface_created(struct wined3d_device_parent 
         return DDERR_OUTOFVIDEOMEMORY;
     }
 
-    ddraw_surface_init(ddraw_surface, ddraw, wined3d_texture_get_parent(wined3d_texture), surface, parent_ops);
+    ddraw_surface_init(ddraw_surface, ddraw, wined3d_texture, sub_resource_idx, parent_ops);
     *parent = ddraw_surface;
 
     ddraw_update_lost_surfaces(ddraw);
@@ -4815,14 +4854,14 @@ static HRESULT CDECL device_parent_create_swapchain_texture(struct wined3d_devic
         return E_FAIL;
     }
 
-    if (FAILED(hr = wined3d_texture_create(ddraw->wined3d_device, desc, 1,
-            WINED3D_SURFACE_MAPPABLE, NULL, ddraw, &ddraw_frontbuffer_parent_ops, texture)))
+    if (FAILED(hr = wined3d_texture_create(ddraw->wined3d_device, desc, 1, 1,
+            WINED3D_TEXTURE_CREATE_MAPPABLE, NULL, ddraw, &ddraw_frontbuffer_parent_ops, texture)))
     {
         WARN("Failed to create texture, hr %#x.\n", hr);
         return hr;
     }
 
-    ddraw->wined3d_frontbuffer = wined3d_surface_from_resource(wined3d_texture_get_sub_resource(*texture, 0));
+    ddraw->wined3d_frontbuffer = *texture;
 
     return hr;
 }

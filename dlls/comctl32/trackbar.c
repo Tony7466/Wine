@@ -450,7 +450,7 @@ TRACKBAR_AutoPage (TRACKBAR_INFO *infoPtr, POINT clickPoint)
     LONG dir = TRACKBAR_GetAutoPageDirection(infoPtr, clickPoint);
     LONG prevPos = infoPtr->lPos;
 
-    TRACE("x=%d, y=%d, dir=%d\n", clickPoint.x, clickPoint.y, dir);
+    TRACE("clickPoint=%s, dir=%d\n", wine_dbgstr_point(&clickPoint), dir);
 
     if (dir > 0 && (infoPtr->flags & TB_AUTO_PAGE_RIGHT))
 	TRACKBAR_PageDown(infoPtr);
@@ -498,16 +498,12 @@ TRACKBAR_DrawOneTic (const TRACKBAR_INFO *infoPtr, HDC hdc, LONG ticPos, int fla
 
     if (flags & TBS_VERT) {
         offsetthumb = (infoPtr->rcThumb.bottom - infoPtr->rcThumb.top)/2;
-	rcTics.left = infoPtr->rcThumb.left - 2;
-	rcTics.right = infoPtr->rcThumb.right + 2;
-	rcTics.top    = infoPtr->rcChannel.top + offsetthumb;
-	rcTics.bottom = infoPtr->rcChannel.bottom - offsetthumb - 1;
+        SetRect(&rcTics, infoPtr->rcThumb.left - 2, infoPtr->rcChannel.top + offsetthumb,
+                infoPtr->rcThumb.right + 2, infoPtr->rcChannel.bottom - offsetthumb - 1);
     } else {
         offsetthumb = (infoPtr->rcThumb.right - infoPtr->rcThumb.left)/2;
-	rcTics.left   = infoPtr->rcChannel.left + offsetthumb;
-	rcTics.right  = infoPtr->rcChannel.right - offsetthumb - 1;
-	rcTics.top = infoPtr->rcThumb.top - 2;
-	rcTics.bottom = infoPtr->rcThumb.bottom + 2;
+        SetRect(&rcTics, infoPtr->rcChannel.left + offsetthumb, infoPtr->rcThumb.top - 2,
+                infoPtr->rcChannel.right - offsetthumb - 1, infoPtr->rcThumb.bottom + 2);
     }
 
     if (flags & (TBS_TOP | TBS_LEFT)) {

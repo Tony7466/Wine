@@ -103,6 +103,8 @@ static const struct object_ops serial_ops =
     default_get_sd,               /* get_sd */
     default_set_sd,               /* set_sd */
     no_lookup_name,               /* lookup_name */
+    no_link_name,                 /* link_name */
+    NULL,                         /* unlink_name */
     no_open_file,                 /* open_file */
     fd_close_handle,              /* close_handle */
     serial_destroy                /* destroy */
@@ -118,8 +120,7 @@ static const struct fd_ops serial_fd_ops =
     no_fd_flush,                  /* flush */
     default_fd_ioctl,             /* ioctl */
     serial_queue_async,           /* queue_async */
-    serial_reselect_async,        /* reselect_async */
-    default_fd_cancel_async       /* cancel_async */
+    serial_reselect_async         /* reselect_async */
 };
 
 /* check if the given fd is a serial port */
@@ -200,7 +201,7 @@ static void serial_queue_async( struct fd *fd, const async_data_t *data, int typ
         break;
     }
 
-    if ((async = fd_queue_async( fd, data, type )))
+    if ((async = fd_queue_async( fd, data, NULL, type )))
     {
         if (timeout) async_set_timeout( async, timeout * -10000, STATUS_TIMEOUT );
         release_object( async );

@@ -512,7 +512,7 @@ unsigned msvcrt_create_io_inherit_block(WORD *size, BYTE **block)
   last_fd++;
 
   *size = sizeof(unsigned) + (sizeof(char) + sizeof(HANDLE)) * last_fd;
-  *block = MSVCRT_calloc(*size, 1);
+  *block = MSVCRT_calloc(1, *size);
   if (!*block)
   {
     *size = 0;
@@ -660,7 +660,7 @@ static BOOL msvcrt_alloc_buffer(MSVCRT_FILE* file)
             && MSVCRT__isatty(file->_file))
         return FALSE;
 
-    file->_base = MSVCRT_calloc(MSVCRT_INTERNAL_BUFSIZ,1);
+    file->_base = MSVCRT_calloc(1, MSVCRT_INTERNAL_BUFSIZ);
     if(file->_base) {
         file->_bufsiz = MSVCRT_INTERNAL_BUFSIZ;
         file->_flag |= MSVCRT__IOMYBUF;
@@ -1021,6 +1021,14 @@ int CDECL MSVCRT__close(int fd)
   TRACE(":fd (%d) handle (%p)\n", fd, info->handle);
   if (!(info->wxflag & WX_OPEN)) {
     ret = -1;
+  } else if (fd == MSVCRT_STDOUT_FILENO &&
+          info->handle == get_ioinfo_nolock(MSVCRT_STDERR_FILENO)->handle) {
+    msvcrt_free_fd(fd);
+    ret = 0;
+  } else if (fd == MSVCRT_STDERR_FILENO &&
+          info->handle == get_ioinfo_nolock(MSVCRT_STDOUT_FILENO)->handle) {
+    msvcrt_free_fd(fd);
+    ret = 0;
   } else {
     ret = CloseHandle(info->handle) ? 0 : -1;
     msvcrt_free_fd(fd);
@@ -1781,6 +1789,20 @@ int CDECL MSVCRT__fstat32(int fd, struct MSVCRT__stat32* buf)
 }
 
 /*********************************************************************
+ *		_fstat32i64 (MSVCR80.@)
+ */
+int CDECL MSVCRT__fstat32i64(int fd, struct MSVCRT__stat32i64* buf)
+{
+    int ret;
+    struct MSVCRT__stat64 buf64;
+
+    ret = MSVCRT__fstat64(fd, &buf64);
+    if (!ret)
+        msvcrt_stat64_to_stat32i64(&buf64, buf);
+    return ret;
+}
+
+/*********************************************************************
  *		_fstat64i32 (MSVCR80.@)
  */
 int CDECL MSVCRT__fstat64i32(int fd, struct MSVCRT__stat64i32* buf)
@@ -2122,9 +2144,10 @@ static int check_bom(HANDLE h, int oflags, BOOL seek)
 }
 
 /*********************************************************************
- *              _wsopen_s (MSVCRT.@)
+ *              _wsopen_dispatch (UCRTBASE.@)
  */
-int CDECL MSVCRT__wsopen_s( int *fd, const MSVCRT_wchar_t* path, int oflags, int shflags, int pmode )
+int CDECL MSVCRT__wsopen_dispatch( const MSVCRT_wchar_t* path, int oflags, int shflags, int pmode,
+    int *fd, int secure )
 {
   DWORD access = 0, creation = 0, attrib;
   SECURITY_ATTRIBUTES sa;
@@ -2132,8 +2155,8 @@ int CDECL MSVCRT__wsopen_s( int *fd, const MSVCRT_wchar_t* path, int oflags, int
   int wxflag;
   HANDLE hand;
 
-  TRACE("fd*: %p :file (%s) oflags: 0x%04x shflags: 0x%04x pmode: 0x%04x\n",
-        fd, debugstr_w(path), oflags, shflags, pmode);
+  TRACE("path: (%s) oflags: 0x%04x shflags: 0x%04x pmode: 0x%04x fd*: %p secure: %d\n",
+        debugstr_w(path), oflags, shflags, pmode, fd, secure);
 
   if (!MSVCRT_CHECK_PMT( fd != NULL )) return MSVCRT_EINVAL;
 
@@ -2284,6 +2307,15 @@ int CDECL MSVCRT__wsopen_s( int *fd, const MSVCRT_wchar_t* path, int oflags, int
   return 0;
 }
 
+
+/*********************************************************************
+ *              _wsopen_s (MSVCRT.@)
+ */
+int CDECL MSVCRT__wsopen_s( int *fd, const MSVCRT_wchar_t* path, int oflags, int shflags, int pmode )
+{
+    return MSVCRT__wsopen_dispatch( path, oflags, shflags, pmode, fd, 1 );
+}
+
 /*********************************************************************
  *              _wsopen (MSVCRT.@)
  */
@@ -2303,14 +2335,15 @@ int CDECL MSVCRT__wsopen( const MSVCRT_wchar_t *path, int oflags, int shflags, .
   else
     pmode = 0;
 
-  MSVCRT__wsopen_s(&fd, path, oflags, shflags, pmode);
-  return fd;
+  return MSVCRT__wsopen_dispatch(path, oflags, shflags, pmode, &fd, 0) ? -1 : fd;
 }
 
+
 /*********************************************************************
- *              _sopen_s (MSVCRT.@)
+ *              _sopen_dispatch (UCRTBASE.@)
  */
-int CDECL MSVCRT__sopen_s( int *fd, const char *path, int oflags, int shflags, int pmode )
+int CDECL MSVCRT__sopen_dispatch( const char *path, int oflags, int shflags,
+    int pmode, int *fd, int secure)
 {
     MSVCRT_wchar_t *pathW;
     int ret;
@@ -2321,9 +2354,17 @@ int CDECL MSVCRT__sopen_s( int *fd, const char *path, int oflags, int shflags, i
     if(!MSVCRT_CHECK_PMT(path && (pathW = msvcrt_wstrdupa(path))))
         return MSVCRT_EINVAL;
 
-    ret = MSVCRT__wsopen_s(fd, pathW, oflags, shflags, pmode);
+    ret = MSVCRT__wsopen_dispatch(pathW, oflags, shflags, pmode, fd, secure);
     MSVCRT_free(pathW);
     return ret;
+}
+
+/*********************************************************************
+ *              _sopen_s (MSVCRT.@)
+ */
+int CDECL MSVCRT__sopen_s( int *fd, const char *path, int oflags, int shflags, int pmode )
+{
+    return MSVCRT__sopen_dispatch(path, oflags, shflags, pmode, fd, 1);
 }
 
 /*********************************************************************
@@ -2345,8 +2386,7 @@ int CDECL MSVCRT__sopen( const char *path, int oflags, int shflags, ... )
   else
     pmode = 0;
 
-  MSVCRT__sopen_s(&fd, path, oflags, shflags, pmode);
-  return fd;
+  return MSVCRT__sopen_dispatch(path, oflags, shflags, pmode, &fd, 0) ? -1 : fd;
 }
 
 /*********************************************************************
@@ -3476,8 +3516,7 @@ int CDECL MSVCRT__write(int fd, const void* buf, unsigned int count)
         if (!WriteFile(hand, q, size, &num_written, NULL))
             num_written = -1;
         release_ioinfo(info);
-        if(p)
-            MSVCRT_free(p);
+        MSVCRT_free(p);
         if (num_written != size)
         {
             TRACE("WriteFile (fd %d, hand %p) failed-last error (%d), num_written %d\n",

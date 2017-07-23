@@ -2105,7 +2105,7 @@ static BOOL urlcache_entry_get_file(const char *url, void *entry_info, DWORD *si
 
     if (!urlcache_find_hash_entry(header, url, &hash_entry)) {
         cache_container_unlock_index(container, header);
-        TRACE("entry %s not found!\n", url);
+        TRACE("entry %s not found!\n", debugstr_a(url));
         SetLastError(ERROR_FILE_NOT_FOUND);
         return FALSE;
     }
@@ -2562,7 +2562,7 @@ BOOL WINAPI UnlockUrlCacheEntryFileA(LPCSTR lpszUrlName, DWORD dwReserved)
     if (!urlcache_find_hash_entry(pHeader, lpszUrlName, &pHashEntry))
     {
         cache_container_unlock_index(pContainer, pHeader);
-        TRACE("entry %s not found!\n", lpszUrlName);
+        TRACE("entry %s not found!\n", debugstr_a(lpszUrlName));
         SetLastError(ERROR_FILE_NOT_FOUND);
         return FALSE;
     }
@@ -3309,7 +3309,7 @@ BOOL WINAPI DeleteUrlCacheEntryA(LPCSTR lpszUrlName)
     if (!urlcache_find_hash_entry(pHeader, lpszUrlName, &pHashEntry))
     {
         cache_container_unlock_index(pContainer, pHeader);
-        TRACE("entry %s not found!\n", lpszUrlName);
+        TRACE("entry %s not found!\n", debugstr_a(lpszUrlName));
         SetLastError(ERROR_FILE_NOT_FOUND);
         return FALSE;
     }

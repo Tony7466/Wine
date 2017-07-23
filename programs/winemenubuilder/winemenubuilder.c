@@ -262,35 +262,12 @@ static int winemenubuilder_rb_string_compare(const void *key, const struct wine_
     return strcmp((char*)key, t->string);
 }
 
-static void *winemenubuilder_rb_alloc(size_t size)
-{
-    return HeapAlloc(GetProcessHeap(), 0, size);
-}
-
-static void *winemenubuilder_rb_realloc(void *ptr, size_t size)
-{
-    return HeapReAlloc(GetProcessHeap(), 0, ptr, size);
-}
-
-static void winemenubuilder_rb_free(void *ptr)
-{
-    HeapFree(GetProcessHeap(), 0, ptr);
-}
-
 static void winemenubuilder_rb_destroy(struct wine_rb_entry *entry, void *context)
 {
     struct rb_string_entry *t = WINE_RB_ENTRY_VALUE(entry, struct rb_string_entry, entry);
     HeapFree(GetProcessHeap(), 0, t->string);
     HeapFree(GetProcessHeap(), 0, t);
 }
-
-static const struct wine_rb_functions winemenubuilder_rb_functions =
-{
-    winemenubuilder_rb_alloc,
-    winemenubuilder_rb_realloc,
-    winemenubuilder_rb_free,
-    winemenubuilder_rb_string_compare,
-};
 
 static void write_xml_text(FILE *file, const char *text)
 {
@@ -1005,13 +982,8 @@ static HRESULT write_native_icon(IStream *iconStream, ICONDIRENTRY *pIconDirEntr
 
     position.QuadPart = 0;
     hr = IStream_Seek(iconStream, position, STREAM_SEEK_SET, NULL);
-    if (FAILED(hr))
-        goto end;
-    hr = convert_to_native_icon(iconStream, &nIndex, 1, &CLSID_WICPngEncoder, icon_name, szFileName);
-
-end:
-    HeapFree(GetProcessHeap(), 0, pIconDirEntry);
-    return hr;
+    if (FAILED(hr)) return hr;
+    return convert_to_native_icon(iconStream, &nIndex, 1, &CLSID_WICPngEncoder, icon_name, szFileName);
 }
 
 static WCHAR* assoc_query(ASSOCSTR assocStr, LPCWSTR name, LPCWSTR extra)
@@ -2102,15 +2074,12 @@ static void free_native_mime_types(struct list *native_mime_types)
         HeapFree(GetProcessHeap(), 0, mime_type_entry->mimeType);
         HeapFree(GetProcessHeap(), 0, mime_type_entry);
     }
-    HeapFree(GetProcessHeap(), 0, native_mime_types);
 }
 
-static BOOL build_native_mime_types(const char *xdg_data_home, struct list **mime_types)
+static BOOL build_native_mime_types(const char *xdg_data_home, struct list *mime_types)
 {
     char *xdg_data_dirs;
     BOOL ret;
-
-    *mime_types = NULL;
 
     xdg_data_dirs = getenv("XDG_DATA_DIRS");
     if (xdg_data_dirs == NULL)
@@ -2120,39 +2089,29 @@ static BOOL build_native_mime_types(const char *xdg_data_home, struct list **mim
 
     if (xdg_data_dirs)
     {
-        *mime_types = HeapAlloc(GetProcessHeap(), 0, sizeof(struct list));
-        if (*mime_types)
-        {
-            const char *begin;
-            char *end;
+        const char *begin;
+        char *end;
 
-            list_init(*mime_types);
-            ret = add_mimes(xdg_data_home, *mime_types);
-            if (ret)
+        ret = add_mimes(xdg_data_home, mime_types);
+        if (ret)
+        {
+            for (begin = xdg_data_dirs; (end = strchr(begin, ':')); begin = end + 1)
             {
-                for (begin = xdg_data_dirs; (end = strchr(begin, ':')); begin = end + 1)
-                {
-                    *end = '\0';
-                    ret = add_mimes(begin, *mime_types);
-                    *end = ':';
-                    if (!ret)
-                        break;
-                }
-                if (ret)
-                    ret = add_mimes(begin, *mime_types);
+                *end = '\0';
+                ret = add_mimes(begin, mime_types);
+                *end = ':';
+                if (!ret)
+                    break;
             }
+            if (ret)
+                ret = add_mimes(begin, mime_types);
         }
-        else
-            ret = FALSE;
         HeapFree(GetProcessHeap(), 0, xdg_data_dirs);
     }
     else
         ret = FALSE;
-    if (!ret && *mime_types)
-    {
-        free_native_mime_types(*mime_types);
-        *mime_types = NULL;
-    }
+    if (!ret)
+        free_native_mime_types(mime_types);
     return ret;
 }
 
@@ -2556,17 +2515,12 @@ static BOOL write_freedesktop_association_entry(const char *desktopPath, const c
 static BOOL generate_associations(const char *xdg_data_home, const char *packages_dir, const char *applications_dir)
 {
     static const WCHAR openW[] = {'o','p','e','n',0};
-    struct wine_rb_tree mimeProgidTree;
-    struct list *nativeMimeTypes = NULL;
+    struct wine_rb_tree mimeProgidTree = { winemenubuilder_rb_string_compare };
+    struct list nativeMimeTypes = LIST_INIT(nativeMimeTypes);
     LSTATUS ret = 0;
     int i;
     BOOL hasChanged = FALSE;
 
-    if (wine_rb_init(&mimeProgidTree, &winemenubuilder_rb_functions))
-    {
-        WINE_ERR("wine_rb_init failed\n");
-        return FALSE;
-    }
     if (!build_native_mime_types(xdg_data_home, &nativeMimeTypes))
     {
         WINE_ERR("could not build native MIME types\n");
@@ -2634,7 +2588,7 @@ static BOOL generate_associations(const char *xdg_data_home, const char *package
             if (contentTypeW)
                 strlwrW(contentTypeW);
 
-            if (!freedesktop_mime_type_for_extension(nativeMimeTypes, extensionA, extensionW, &mimeTypeA))
+            if (!freedesktop_mime_type_for_extension(&nativeMimeTypes, extensionA, extensionW, &mimeTypeA))
                 goto end;
 
             if (mimeTypeA == NULL)
@@ -2780,7 +2734,7 @@ static BOOL generate_associations(const char *xdg_data_home, const char *package
     }
 
     wine_rb_destroy(&mimeProgidTree, winemenubuilder_rb_destroy, NULL);
-    free_native_mime_types(nativeMimeTypes);
+    free_native_mime_types(&nativeMimeTypes);
     return hasChanged;
 }
 

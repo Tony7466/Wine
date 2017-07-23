@@ -37,9 +37,11 @@ typedef SSIZE_T streamsize;
 #define STREAMSIZE_BITS 32
 #endif
 
+void __cdecl _invalid_parameter_noinfo(void);
 void __cdecl _invalid_parameter(const wchar_t*, const wchar_t*,
         const wchar_t*, unsigned int, uintptr_t);
 BOOL __cdecl __uncaught_exception(void);
+int __cdecl _callnewh(size_t);
 
 extern void* (__cdecl *MSVCRT_operator_new)(MSVCP_size_t);
 extern void (__cdecl *MSVCRT_operator_delete)(void*);
@@ -142,6 +144,7 @@ typedef struct
     char null_str;
 } _Yarn_char;
 
+_Yarn_char* __thiscall _Yarn_char_ctor(_Yarn_char*);
 _Yarn_char* __thiscall _Yarn_char_ctor_cstr(_Yarn_char*, const char*);
 _Yarn_char* __thiscall _Yarn_char_copy_ctor(_Yarn_char*, const _Yarn_char*);
 const char* __thiscall _Yarn_char_c_str(const _Yarn_char*);
@@ -184,6 +187,17 @@ typedef struct {
 #endif
 } _Ctypevec;
 
+#if _MSVCP_VER >= 140
+typedef struct {
+    int wchar;
+    unsigned short byte, state;
+} _Mbstatet;
+#define MBSTATET_TO_INT(state) ((state)->wchar)
+#else
+typedef int _Mbstatet;
+#define MBSTATET_TO_INT(state) (*(state))
+#endif
+
 /* class codecvt_base */
 typedef struct {
     locale_facet facet;
@@ -195,10 +209,10 @@ typedef struct {
 } codecvt_char;
 
 MSVCP_bool __thiscall codecvt_base_always_noconv(const codecvt_base*);
-int __thiscall codecvt_char_unshift(const codecvt_char*, int*, char*, char*, char**);
-int __thiscall codecvt_char_out(const codecvt_char*, int*, const char*,
+int __thiscall codecvt_char_unshift(const codecvt_char*, _Mbstatet*, char*, char*, char**);
+int __thiscall codecvt_char_out(const codecvt_char*, _Mbstatet*, const char*,
         const char*, const char**, char*, char*, char**);
-int __thiscall codecvt_char_in(const codecvt_char*, int*, const char*,
+int __thiscall codecvt_char_in(const codecvt_char*, _Mbstatet*, const char*,
         const char*, const char**, char*, char*, char**);
 int __thiscall codecvt_base_max_length(const codecvt_base*);
 
@@ -220,10 +234,10 @@ typedef struct {
     _Cvtvec cvt;
 } codecvt_wchar;
 
-int __thiscall codecvt_wchar_unshift(const codecvt_wchar*, int*, char*, char*, char**);
-int __thiscall codecvt_wchar_out(const codecvt_wchar*, int*, const wchar_t*,
+int __thiscall codecvt_wchar_unshift(const codecvt_wchar*, _Mbstatet*, char*, char*, char**);
+int __thiscall codecvt_wchar_out(const codecvt_wchar*, _Mbstatet*, const wchar_t*,
         const wchar_t*, const wchar_t**, char*, char*, char**);
-int __thiscall codecvt_wchar_in(const codecvt_wchar*, int*, const char*,
+int __thiscall codecvt_wchar_in(const codecvt_wchar*, _Mbstatet*, const char*,
         const char*, const char**, wchar_t*, wchar_t*, wchar_t**);
 
 /* class ctype_base */
@@ -255,6 +269,9 @@ wchar_t __thiscall ctype_wchar_widen_ch(const ctype_wchar*, char);
 /* class locale */
 typedef struct
 {
+#if _MSVCP_VER >= 140
+    int unused;
+#endif
     struct _locale__Locimp *ptr;
 } locale;
 
@@ -493,7 +510,9 @@ unsigned short __thiscall basic_streambuf_wchar_sputc(basic_streambuf_wchar*, wc
 /* class num_get<char> */
 typedef struct {
     locale_facet facet;
+#if _MSVCP_VER <= 100
     _Cvtvec cvt;
+#endif
 } num_get;
 
 num_get* num_get_char_use_facet(const locale*);
@@ -633,3 +652,9 @@ static inline int mbstowcs_wrapper( size_t *ret, wchar_t *wcs, size_t size, cons
 #endif
 
 void free_misc(void);
+
+#if _MSVCP_VER >= 140
+#define UCRTBASE_PRINTF_STANDARD_SNPRINTF_BEHAVIOUR      (0x0002)
+int __cdecl __stdio_common_vsprintf(unsigned __int64 options, char *str, size_t len, const char *format,
+                                    _locale_t locale, __ms_va_list valist);
+#endif

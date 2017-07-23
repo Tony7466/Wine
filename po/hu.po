@@ -48,7 +48,7 @@ msgid "&Modify..."
 msgstr "&Módosítás..."
 
 #: appwiz.rc:69 appwiz.rc:45 cryptui.rc:346 msacm32.rc:40 winecfg.rc:200
-#: winecfg.rc:237 wordpad.rc:248
+#: winecfg.rc:237 wordpad.rc:256
 msgid "&Remove"
 msgstr "E&ltávolítás"
 
@@ -56,20 +56,20 @@ msgstr "E&ltávolítás"
 msgid "Support Information"
 msgstr "Támogatási információ"
 
-#: appwiz.rc:78 avifil32.rc:54 comctl32.rc:55 comdlg32.rc:231 comdlg32.rc:261
-#: comdlg32.rc:304 comdlg32.rc:358 comdlg32.rc:397 comdlg32.rc:451 credui.rc:52
+#: appwiz.rc:78 avifil32.rc:54 comctl32.rc:55 comdlg32.rc:232 comdlg32.rc:262
+#: comdlg32.rc:305 comdlg32.rc:359 comdlg32.rc:398 comdlg32.rc:452 credui.rc:52
 #: cryptui.rc:263 cryptui.rc:275 cryptui.rc:365 dinput.rc:46 ieframe.rc:96
 #: localui.rc:44 localui.rc:57 mpr.rc:49 msacm32.rc:53 mshtml.rc:47
 #: mshtml.rc:57 msvfw32.rc:36 oledlg.rc:62 oledlg.rc:94 serialui.rc:41
-#: setupapi.rc:59 shell32.rc:276 shell32.rc:300 shell32.rc:322 shell32.rc:340
+#: setupapi.rc:59 shell32.rc:276 shell32.rc:300 shell32.rc:322 shell32.rc:341
 #: shlwapi.rc:44 user32.rc:83 user32.rc:98 wininet.rc:51 wininet.rc:71
 #: winspool.rc:42 net.rc:47 notepad.rc:117 oleview.rc:162 oleview.rc:175
 #: progman.rc:106 progman.rc:124 progman.rc:142 progman.rc:158 progman.rc:180
 #: progman.rc:199 progman.rc:216 regedit.rc:247 regedit.rc:258 regedit.rc:271
 #: regedit.rc:287 regedit.rc:300 regedit.rc:313 taskmgr.rc:442 taskmgr.rc:517
-#: winecfg.rc:214 winecfg.rc:224 wineconsole.rc:135 winefile.rc:131
-#: winefile.rc:154 winefile.rc:184 winemine.rc:71 winemine.rc:81 winemine.rc:95
-#: wordpad.rc:207 wordpad.rc:218 wordpad.rc:236 wordpad.rc:249
+#: winecfg.rc:214 winecfg.rc:224 wineconsole.rc:135 winefile.rc:128
+#: winefile.rc:151 winefile.rc:181 winemine.rc:71 winemine.rc:81 winemine.rc:95
+#: wordpad.rc:215 wordpad.rc:226 wordpad.rc:244 wordpad.rc:257
 msgid "OK"
 msgstr "OK"
 
@@ -83,7 +83,7 @@ msgstr ""
 msgid "Publisher:"
 msgstr "Kiadó:"
 
-#: appwiz.rc:81 winefile.rc:169
+#: appwiz.rc:81 winefile.rc:166
 msgid "Version:"
 msgstr "Verzió:"
 
@@ -138,22 +138,22 @@ msgid "&Install"
 msgstr "&Telepítés"
 
 #: appwiz.rc:110 appwiz.rc:125 avifil32.rc:55 browseui.rc:40 comctl32.rc:56
-#: comctl32.rc:71 comdlg32.rc:170 comdlg32.rc:192 comdlg32.rc:210
-#: comdlg32.rc:232 comdlg32.rc:262 comdlg32.rc:305 comdlg32.rc:327
-#: comdlg32.rc:347 comdlg32.rc:359 comdlg32.rc:398 comdlg32.rc:452
-#: comdlg32.rc:477 comdlg32.rc:500 credui.rc:53 cryptui.rc:264 cryptui.rc:276
+#: comctl32.rc:71 comdlg32.rc:171 comdlg32.rc:193 comdlg32.rc:211
+#: comdlg32.rc:233 comdlg32.rc:263 comdlg32.rc:306 comdlg32.rc:328
+#: comdlg32.rc:348 comdlg32.rc:360 comdlg32.rc:399 comdlg32.rc:453
+#: comdlg32.rc:478 comdlg32.rc:501 credui.rc:53 cryptui.rc:264 cryptui.rc:276
 #: cryptui.rc:366 dinput.rc:47 ieframe.rc:97 inetcpl.rc:81 localui.rc:45
 #: localui.rc:58 mpr.rc:50 msacm32.rc:54 mshtml.rc:48 mshtml.rc:58
 #: msvfw32.rc:37 oledlg.rc:63 oledlg.rc:95 serialui.rc:42 setupapi.rc:42
-#: setupapi.rc:60 shell32.rc:277 shell32.rc:301 shell32.rc:312 shell32.rc:341
+#: setupapi.rc:60 shell32.rc:277 shell32.rc:301 shell32.rc:312 shell32.rc:342
 #: shlwapi.rc:45 user32.rc:84 user32.rc:99 wininet.rc:52 wininet.rc:72
 #: winspool.rc:43 notepad.rc:118 oleview.rc:163 oleview.rc:176 progman.rc:107
 #: progman.rc:125 progman.rc:143 progman.rc:159 progman.rc:181 progman.rc:200
 #: progman.rc:217 regedit.rc:248 regedit.rc:259 regedit.rc:272 regedit.rc:288
 #: regedit.rc:301 regedit.rc:314 taskmgr.rc:443 taskmgr.rc:518 wineboot.rc:34
-#: winecfg.rc:215 winecfg.rc:225 wineconsole.rc:136 winefile.rc:132
-#: winefile.rc:155 winefile.rc:185 winemine.rc:96 wordpad.rc:208 wordpad.rc:219
-#: wordpad.rc:237 wordpad.rc:250
+#: winecfg.rc:215 winecfg.rc:225 wineconsole.rc:136 winefile.rc:129
+#: winefile.rc:152 winefile.rc:182 winemine.rc:96 wordpad.rc:216 wordpad.rc:227
+#: wordpad.rc:245 wordpad.rc:258
 msgid "Cancel"
 msgstr "Mégse"
 
@@ -317,15 +317,15 @@ msgstr "tömörítetlen"
 msgid "Canceling..."
 msgstr "Megszakítás..."
 
-#: comctl32.rc:52 winefile.rc:160
+#: comctl32.rc:52 winefile.rc:157
 msgid "Properties for %s"
 msgstr "Tulajdonságok: %s"
 
-#: comctl32.rc:57 comdlg32.rc:263
+#: comctl32.rc:57 comdlg32.rc:264
 msgid "&Apply"
 msgstr "&Alkalmaz"
 
-#: comctl32.rc:58 comctl32.rc:72 comdlg32.rc:306 user32.rc:88
+#: comctl32.rc:58 comctl32.rc:72 comdlg32.rc:307 user32.rc:88
 msgid "Help"
 msgstr "Súgó"
 
@@ -358,13 +358,13 @@ msgstr "&Bezárás"
 msgid "R&eset"
 msgstr "Alaph&elyzet"
 
-#: comctl32.rc:86 comdlg32.rc:171 comdlg32.rc:193 comdlg32.rc:264
-#: comdlg32.rc:328 comdlg32.rc:348 comdlg32.rc:360 comdlg32.rc:478
-#: comdlg32.rc:501 ieframe.rc:58 msacm32.rc:52 oledlg.rc:96 shell32.rc:128
+#: comctl32.rc:86 comdlg32.rc:172 comdlg32.rc:194 comdlg32.rc:265
+#: comdlg32.rc:329 comdlg32.rc:349 comdlg32.rc:361 comdlg32.rc:479
+#: comdlg32.rc:502 ieframe.rc:58 msacm32.rc:52 oledlg.rc:96 shell32.rc:128
 #: clock.rc:44 notepad.rc:60 notepad.rc:119 oleview.rc:72 progman.rc:55
 #: progman.rc:108 progman.rc:126 progman.rc:144 progman.rc:160 progman.rc:184
 #: progman.rc:202 progman.rc:219 regedit.rc:79 taskmgr.rc:87 winefile.rc:82
-#: winemine.rc:51 winhlp32.rc:57 wordpad.rc:94
+#: winemine.rc:51 winhlp32.rc:57 wordpad.rc:102
 msgid "&Help"
 msgstr "&Súgó"
 
@@ -402,7 +402,7 @@ msgid "None"
 msgstr "Nincs"
 
 #: comctl32.rc:31 cryptui.rc:230 regedit.rc:237 taskmgr.rc:434 winedbg.rc:60
-#: winedbg.rc:75 wordpad.rc:172
+#: winedbg.rc:75 wordpad.rc:180
 msgid "Close"
 msgstr "Bezárás"
 
@@ -414,400 +414,400 @@ msgstr "Ma:"
 msgid "Go to today"
 msgstr "Ugrás mára"
 
-#: comdlg32.rc:156 comdlg32.rc:169 comdlg32.rc:458 comdlg32.rc:484
+#: comdlg32.rc:157 comdlg32.rc:170 comdlg32.rc:459 comdlg32.rc:485
 #: shell32.rc:167 oleview.rc:102
 msgid "Open"
 msgstr "Megnyitás"
 
-#: comdlg32.rc:159 comdlg32.rc:181
+#: comdlg32.rc:160 comdlg32.rc:182
 msgid "File &Name:"
 msgstr "Fájl&név:"
 
-#: comdlg32.rc:162 comdlg32.rc:184
+#: comdlg32.rc:163 comdlg32.rc:185
 msgid "&Directories:"
 msgstr "&Könyvtár:"
 
-#: comdlg32.rc:165 comdlg32.rc:187
+#: comdlg32.rc:166 comdlg32.rc:188
 msgid "List Files of &Type:"
 msgstr "Fájl&típus:"
 
-#: comdlg32.rc:167 comdlg32.rc:189
+#: comdlg32.rc:168 comdlg32.rc:190
 msgid "Dri&ves:"
 msgstr "&Meghajtó:"
 
-#: comdlg32.rc:172 comdlg32.rc:194 winefile.rc:176
+#: comdlg32.rc:173 comdlg32.rc:195 winefile.rc:173
 msgid "&Read Only"
 msgstr "&Csak olvasható"
 
-#: comdlg32.rc:178
+#: comdlg32.rc:179
 msgid "Save As..."
 msgstr "Mentés másként..."
 
-#: comdlg32.rc:191 comdlg32.rc:145
+#: comdlg32.rc:192 comdlg32.rc:145
 msgid "Save As"
 msgstr "Mentés másként"
 
-#: comdlg32.rc:200 comdlg32.rc:209 comdlg32.rc:355 comdlg32.rc:54 hhctrl.rc:49
-#: wordpad.rc:165
+#: comdlg32.rc:201 comdlg32.rc:210 comdlg32.rc:356 comdlg32.rc:54 hhctrl.rc:49
+#: wordpad.rc:173
 msgid "Print"
 msgstr "Nyomtatás"
 
-#: comdlg32.rc:203
+#: comdlg32.rc:204
 msgid "Printer:"
 msgstr "Nyomtató:"
 
-#: comdlg32.rc:205 comdlg32.rc:382
+#: comdlg32.rc:206 comdlg32.rc:383
 msgid "Print range"
 msgstr "Nyomtatási terület"
 
-#: comdlg32.rc:206 comdlg32.rc:383 regedit.rc:219
+#: comdlg32.rc:207 comdlg32.rc:384 regedit.rc:219
 msgid "&All"
 msgstr "&Mind"
 
-#: comdlg32.rc:207
+#: comdlg32.rc:208
 msgid "S&election"
 msgstr "&Kiválasztott"
 
-#: comdlg32.rc:208
+#: comdlg32.rc:209
 msgid "&Pages"
 msgstr "&Lapok"
 
-#: comdlg32.rc:211 comdlg32.rc:233
+#: comdlg32.rc:212 comdlg32.rc:234
 msgid "&Setup"
 msgstr "&Beállítás"
 
-#: comdlg32.rc:212
+#: comdlg32.rc:213
 msgid "&From:"
 msgstr "Et&tõl:"
 
-#: comdlg32.rc:213
+#: comdlg32.rc:214
 msgid "&To:"
 msgstr "Ed&dig:"
 
-#: comdlg32.rc:214 wineps.rc:42
+#: comdlg32.rc:215 wineps.rc:42
 msgid "Print &Quality:"
 msgstr "Mi&nőség:"
 
-#: comdlg32.rc:216
+#: comdlg32.rc:217
 msgid "Print to Fi&le"
 msgstr "&Fájlba nyomtat"
 
-#: comdlg32.rc:217
+#: comdlg32.rc:218
 msgid "Condensed"
 msgstr "Sűrű"
 
-#: comdlg32.rc:223 comdlg32.rc:394
+#: comdlg32.rc:224 comdlg32.rc:395
 msgid "Print Setup"
 msgstr "Nyomtató beállítása"
 
-#: comdlg32.rc:226 comdlg32.rc:362 comdlg32.rc:401
+#: comdlg32.rc:227 comdlg32.rc:363 comdlg32.rc:402
 msgid "Printer"
 msgstr "Nyomtató"
 
-#: comdlg32.rc:227
+#: comdlg32.rc:228
 msgid "&Default Printer"
 msgstr "&Alapértelmezett nyomtató"
 
-#: comdlg32.rc:228
+#: comdlg32.rc:229
 msgid "[none]"
 msgstr "[nincs]"
 
-#: comdlg32.rc:229
+#: comdlg32.rc:230
 msgid "Specific &Printer"
 msgstr "&Adott nyomtató"
 
-#: comdlg32.rc:234 comdlg32.rc:420 comdlg32.rc:439 wineps.rc:34
+#: comdlg32.rc:235 comdlg32.rc:421 comdlg32.rc:440 wineps.rc:34
 msgid "Orientation"
 msgstr "Írásirány"
 
-#: comdlg32.rc:235
+#: comdlg32.rc:236
 msgid "Po&rtrait"
 msgstr "Á&lló"
 
-#: comdlg32.rc:236 comdlg32.rc:441 wineps.rc:37
+#: comdlg32.rc:237 comdlg32.rc:442 wineps.rc:37
 msgid "&Landscape"
 msgstr "&Vízszintes"
 
-#: comdlg32.rc:239 comdlg32.rc:414 comdlg32.rc:434 wineps.rc:28
+#: comdlg32.rc:240 comdlg32.rc:415 comdlg32.rc:435 wineps.rc:28
 msgid "Paper"
 msgstr "Papír"
 
-#: comdlg32.rc:240
+#: comdlg32.rc:241
 msgid "Si&ze"
 msgstr "&Méret"
 
-#: comdlg32.rc:241
+#: comdlg32.rc:242
 msgid "&Source"
 msgstr "Fo&rrás"
 
-#: comdlg32.rc:249 wineconsole.rc:85
+#: comdlg32.rc:250 wineconsole.rc:85
 msgid "Font"
 msgstr "Betûtípus"
 
-#: comdlg32.rc:252
+#: comdlg32.rc:253
 msgid "&Font:"
 msgstr "&Betûtípus:"
 
-#: comdlg32.rc:255
+#: comdlg32.rc:256
 msgid "Font St&yle:"
 msgstr "Betû&stílus:"
 
-#: comdlg32.rc:258 comdlg32.rc:435 winecfg.rc:294
+#: comdlg32.rc:259 comdlg32.rc:436 winecfg.rc:294
 msgid "&Size:"
 msgstr "&Méret:"
 
-#: comdlg32.rc:265
+#: comdlg32.rc:266
 msgid "Effects"
 msgstr "Effektusok"
 
-#: comdlg32.rc:266
+#: comdlg32.rc:267
 msgid "Stri&keout"
 msgstr "Á&thúzott"
 
-#: comdlg32.rc:267
+#: comdlg32.rc:268
 msgid "&Underline"
 msgstr "&Aláhúzott"
 
-#: comdlg32.rc:268 winecfg.rc:292
+#: comdlg32.rc:269 winecfg.rc:292
 msgid "&Color:"
 msgstr "Szín:"
 
-#: comdlg32.rc:271
+#: comdlg32.rc:272
 msgid "Sample"
 msgstr "Minta"
 
-#: comdlg32.rc:273
+#: comdlg32.rc:274
 msgid "Scr&ipt:"
 msgstr "Szkr&ipt:"
 
-#: comdlg32.rc:281
+#: comdlg32.rc:282
 msgid "Color"
 msgstr "Szín"
 
-#: comdlg32.rc:284
+#: comdlg32.rc:285
 msgid "&Basic Colors:"
 msgstr "&Alapszínek:"
 
-#: comdlg32.rc:285
+#: comdlg32.rc:286
 msgid "&Custom Colors:"
 msgstr "&Egyéni színek:"
 
-#: comdlg32.rc:286 comdlg32.rc:309
+#: comdlg32.rc:287 comdlg32.rc:310
 msgid "Color |  Sol&id"
 msgstr "Szín | Egy&színű"
 
-#: comdlg32.rc:287
+#: comdlg32.rc:288
 msgid "&Red:"
 msgstr "&Vörös:"
 
-#: comdlg32.rc:289
+#: comdlg32.rc:290
 msgid "&Green:"
 msgstr "&Zöld:"
 
-#: comdlg32.rc:291
+#: comdlg32.rc:292
 msgid "&Blue:"
 msgstr "&Kék:"
 
-#: comdlg32.rc:293
+#: comdlg32.rc:294
 msgid "&Hue:"
 msgstr "Á&rny.:"
 
-#: comdlg32.rc:295
+#: comdlg32.rc:296
 msgctxt "Saturation"
 msgid "&Sat:"
 msgstr "&Telít.:"
 
-#: comdlg32.rc:297
+#: comdlg32.rc:298
 msgctxt "Luminance"
 msgid "&Lum:"
 msgstr "&Fény.:"
 
-#: comdlg32.rc:307
+#: comdlg32.rc:308
 msgid "&Add to Custom Colors"
 msgstr "&Hozzáadás az egyéni színekhez"
 
-#: comdlg32.rc:308
+#: comdlg32.rc:309
 msgid "&Define Custom Colors >>"
 msgstr "E&gyéni színek definiálása >>"
 
-#: comdlg32.rc:315 regedit.rc:226 regedit.rc:236
+#: comdlg32.rc:316 regedit.rc:226 regedit.rc:236
 msgid "Find"
 msgstr "Keresés"
 
-#: comdlg32.rc:318 comdlg32.rc:337
+#: comdlg32.rc:319 comdlg32.rc:338
 msgid "Fi&nd What:"
 msgstr "&Mit keressen:"
 
-#: comdlg32.rc:320 comdlg32.rc:341
+#: comdlg32.rc:321 comdlg32.rc:342
 msgid "Match &Whole Word Only"
 msgstr "Teljes &szavak keresése"
 
-#: comdlg32.rc:321 comdlg32.rc:342
+#: comdlg32.rc:322 comdlg32.rc:343
 msgid "Match &Case"
 msgstr "Kis/&nagybetű különbség"
 
-#: comdlg32.rc:322 joy.rc:71
+#: comdlg32.rc:323 joy.rc:71
 msgid "Direction"
 msgstr "Irány"
 
-#: comdlg32.rc:323 view.rc:42
+#: comdlg32.rc:324 view.rc:42
 msgid "&Up"
 msgstr "&Vissza"
 
-#: comdlg32.rc:324 view.rc:43
+#: comdlg32.rc:325 view.rc:43
 msgid "&Down"
 msgstr "&Előre"
 
-#: comdlg32.rc:326 comdlg32.rc:344
+#: comdlg32.rc:327 comdlg32.rc:345
 msgid "&Find Next"
 msgstr "&Következő"
 
-#: comdlg32.rc:334
+#: comdlg32.rc:335
 msgid "Replace"
 msgstr "Csere"
 
-#: comdlg32.rc:339
+#: comdlg32.rc:340
 msgid "Re&place With:"
 msgstr "Mire &cserélje:"
 
-#: comdlg32.rc:345
+#: comdlg32.rc:346
 msgid "&Replace"
 msgstr "C&serél"
 
-#: comdlg32.rc:346
+#: comdlg32.rc:347
 msgid "Replace &All"
 msgstr "M&indent cserél"
 
-#: comdlg32.rc:363
+#: comdlg32.rc:364
 msgid "Print to fi&le"
 msgstr "Nyomtatás fáj&lba"
 
-#: comdlg32.rc:364 comdlg32.rc:402 ieframe.rc:42 shdoclc.rc:61 shell32.rc:108
+#: comdlg32.rc:365 comdlg32.rc:403 ieframe.rc:42 shdoclc.rc:61 shell32.rc:108
 #: clock.rc:31 wineconsole.rc:30
 msgid "&Properties"
 msgstr "&Tulajdonságok"
 
-#: comdlg32.rc:365 comdlg32.rc:403 msacm32.rc:34 winefile.rc:141
+#: comdlg32.rc:366 comdlg32.rc:404 msacm32.rc:34 winefile.rc:138
 msgid "&Name:"
 msgstr "&Név:"
 
-#: comdlg32.rc:367 comdlg32.rc:405
+#: comdlg32.rc:368 comdlg32.rc:406
 msgid "Status:"
 msgstr "Állapot:"
 
-#: comdlg32.rc:369 comdlg32.rc:407
+#: comdlg32.rc:370 comdlg32.rc:408
 msgid "Type:"
 msgstr "Típus:"
 
-#: comdlg32.rc:371 comdlg32.rc:409
+#: comdlg32.rc:372 comdlg32.rc:410
 msgid "Where:"
 msgstr "Hely:"
 
-#: comdlg32.rc:373 comdlg32.rc:411
+#: comdlg32.rc:374 comdlg32.rc:412
 msgid "Comment:"
 msgstr "Megjegyzés:"
 
-#: comdlg32.rc:376
+#: comdlg32.rc:377
 msgid "Copies"
 msgstr "Másolatok"
 
-#: comdlg32.rc:377
+#: comdlg32.rc:378
 msgid "Number of &copies:"
 msgstr "Másola&tok száma:"
 
-#: comdlg32.rc:379
+#: comdlg32.rc:380
 msgid "C&ollate"
 msgstr "Le&válogatás"
 
-#: comdlg32.rc:384
+#: comdlg32.rc:385
 msgid "Pa&ges"
 msgstr "Oldala&k"
 
-#: comdlg32.rc:385
+#: comdlg32.rc:386
 msgid "&Selection"
 msgstr "&Kijelölés"
 
-#: comdlg32.rc:388
+#: comdlg32.rc:389
 msgid "&from:"
 msgstr "Et&tõl:"
 
-#: comdlg32.rc:389
+#: comdlg32.rc:390
 msgid "&to:"
 msgstr "Ed&dig:"
 
-#: comdlg32.rc:415 winecfg.rc:300
+#: comdlg32.rc:416 winecfg.rc:300
 msgid "Si&ze:"
 msgstr "&Méret:"
 
-#: comdlg32.rc:417
+#: comdlg32.rc:418
 msgid "&Source:"
 msgstr "&Forrás:"
 
-#: comdlg32.rc:422
+#: comdlg32.rc:423
 msgid "P&ortrait"
 msgstr "&Álló"
 
-#: comdlg32.rc:423
+#: comdlg32.rc:424
 msgid "L&andscape"
 msgstr "Fe&kvõ"
 
-#: comdlg32.rc:428
+#: comdlg32.rc:429
 msgid "Setup Page"
 msgstr "Oldalbeállítás"
 
-#: comdlg32.rc:437
+#: comdlg32.rc:438
 msgid "&Tray:"
 msgstr "&Forrás:"
 
-#: comdlg32.rc:440 wineps.rc:35
+#: comdlg32.rc:441 wineps.rc:35
 msgid "&Portrait"
 msgstr "&Függőleges"
 
-#: comdlg32.rc:443
+#: comdlg32.rc:444
 msgid "L&eft:"
 msgstr "&Bal:"
 
-#: comdlg32.rc:445 notepad.rc:112
+#: comdlg32.rc:446 notepad.rc:112
 msgid "&Right:"
 msgstr "&Jobb:"
 
-#: comdlg32.rc:447
+#: comdlg32.rc:448
 msgid "T&op:"
 msgstr "F&elül:"
 
-#: comdlg32.rc:449 notepad.rc:114
+#: comdlg32.rc:450 notepad.rc:114
 msgid "&Bottom:"
 msgstr "&Alsó:"
 
-#: comdlg32.rc:453
+#: comdlg32.rc:454
 msgid "P&rinter..."
 msgstr "Ny&omtató..."
 
-#: comdlg32.rc:461
+#: comdlg32.rc:462
 msgid "Look &in:"
 msgstr "H&ely:"
 
-#: comdlg32.rc:467
+#: comdlg32.rc:468
 msgid "File &name:"
 msgstr "Fájl&név:"
 
-#: comdlg32.rc:471
+#: comdlg32.rc:472
 msgid "Files of &type:"
 msgstr "Fájl&típus:"
 
-#: comdlg32.rc:474
+#: comdlg32.rc:475
 msgid "Open as &read-only"
 msgstr "Me&gnyitás csak olvashatóként"
 
-#: comdlg32.rc:476 comdlg32.rc:494 shdoclc.rc:127 shell32.rc:99
+#: comdlg32.rc:477 comdlg32.rc:495 shdoclc.rc:127 shell32.rc:99
 msgid "&Open"
 msgstr "&Megnyitás"
 
-#: comdlg32.rc:487
+#: comdlg32.rc:488
 msgid "File name:"
 msgstr "Fájlnév:"
 
-#: comdlg32.rc:490
+#: comdlg32.rc:491
 msgid "Files of type:"
 msgstr "Fájl&típus:"
 
@@ -895,67 +895,67 @@ msgstr "Dõlt"
 msgid "Bold Italic"
 msgstr "Félkövér dõlt"
 
-#: comdlg32.rc:121 wordpad.rc:117
+#: comdlg32.rc:121 wordpad.rc:125
 msgid "Black"
 msgstr "Fekete"
 
-#: comdlg32.rc:122 wordpad.rc:118
+#: comdlg32.rc:122 wordpad.rc:126
 msgid "Maroon"
 msgstr "Gesztenyebarna"
 
-#: comdlg32.rc:123 wordpad.rc:119
+#: comdlg32.rc:123 wordpad.rc:127
 msgid "Green"
 msgstr "Zöld"
 
-#: comdlg32.rc:124 wordpad.rc:120
+#: comdlg32.rc:124 wordpad.rc:128
 msgid "Olive"
 msgstr "Olajzöld"
 
-#: comdlg32.rc:125 wordpad.rc:121
+#: comdlg32.rc:125 wordpad.rc:129
 msgid "Navy"
 msgstr "Tengerkék"
 
-#: comdlg32.rc:126 wordpad.rc:122
+#: comdlg32.rc:126 wordpad.rc:130
 msgid "Purple"
 msgstr "Lila"
 
-#: comdlg32.rc:127 wordpad.rc:123
+#: comdlg32.rc:127 wordpad.rc:131
 msgid "Teal"
 msgstr "Kékeszöld"
 
-#: comdlg32.rc:128 wordpad.rc:124
+#: comdlg32.rc:128 wordpad.rc:132
 msgid "Gray"
 msgstr "Szürke"
 
-#: comdlg32.rc:129 wordpad.rc:125
+#: comdlg32.rc:129 wordpad.rc:133
 msgid "Silver"
 msgstr "Ezüst"
 
-#: comdlg32.rc:130 wordpad.rc:126
+#: comdlg32.rc:130 wordpad.rc:134
 msgid "Red"
 msgstr "Piros"
 
-#: comdlg32.rc:131 wordpad.rc:127
+#: comdlg32.rc:131 wordpad.rc:135
 msgid "Lime"
 msgstr "Borostnyán"
 
-#: comdlg32.rc:132 wordpad.rc:128
+#: comdlg32.rc:132 wordpad.rc:136
 msgid "Yellow"
 msgstr "Sárga"
 
-#: comdlg32.rc:133 wordpad.rc:129
+#: comdlg32.rc:133 wordpad.rc:137
 msgid "Blue"
 msgstr "Kék"
 
-#: comdlg32.rc:134 wordpad.rc:130
+#: comdlg32.rc:134 wordpad.rc:138
 msgid "Fuchsia"
 msgstr "Vöröses lila"
 
-#: comdlg32.rc:135 wordpad.rc:131
+#: comdlg32.rc:135 wordpad.rc:139
 msgid "Aqua"
 msgstr "Kékeszöld"
 
-#: comdlg32.rc:136 wordpad.rc:132
+#: comdlg32.rc:136 wordpad.rc:140
 msgid "White"
 msgstr "Fehér"
 
@@ -1053,6 +1053,10 @@ msgstr "Fájl megnyitása"
 #| msgid "New Folder"
 msgid "Select Folder"
 msgstr "Új mappa"
+
+#: comdlg32.rc:148
+msgid "Font size has to be a number."
+msgstr ""
 
 #: comdlg32.rc:83 oleview.rc:98
 msgid "Ready"
@@ -3174,13 +3178,13 @@ msgid "Proper&ties"
 msgstr "Tulajdonságok"
 
 #: hhctrl.rc:87 shdoclc.rc:79 shdoclc.rc:93 shdoclc.rc:117 shdoclc.rc:159
-#: shdoclc.rc:183 user32.rc:60 wordpad.rc:104
+#: shdoclc.rc:183 user32.rc:60 wordpad.rc:112
 msgid "Cu&t"
 msgstr "Kivá&gás"
 
 #: hhctrl.rc:88 shdoclc.rc:80 shdoclc.rc:94 shdoclc.rc:118 shdoclc.rc:133
 #: shdoclc.rc:160 shdoclc.rc:184 shell32.rc:102 user32.rc:61 wineconsole.rc:32
-#: winhlp32.rc:40 wordpad.rc:105
+#: winhlp32.rc:40 wordpad.rc:113
 msgid "&Copy"
 msgstr "&Másolás"
 
@@ -3245,7 +3249,7 @@ msgstr "Kezdőlap"
 msgid "Sync"
 msgstr "Szink."
 
-#: hhctrl.rc:50 wineconsole.rc:60 wordpad.rc:158
+#: hhctrl.rc:50 wineconsole.rc:60 wordpad.rc:166
 msgid "Options"
 msgstr "Opciók"
 
@@ -7476,7 +7480,7 @@ msgid "Source:"
 msgstr "Forrás:"
 
 #: oledlg.rc:86 shdoclc.rc:50 shdoclc.rc:82 shdoclc.rc:95 shdoclc.rc:135
-#: shdoclc.rc:162 shdoclc.rc:186 user32.rc:62 wineconsole.rc:33 wordpad.rc:106
+#: shdoclc.rc:162 shdoclc.rc:186 user32.rc:62 wineconsole.rc:33 wordpad.rc:114
 msgid "&Paste"
 msgstr "&Beillesztés"
 
@@ -8025,7 +8029,7 @@ msgstr "Ikonok igazítása"
 msgid "Paste as Link"
 msgstr "Beillesztés linkként"
 
-#: shell32.rc:67 progman.rc:100 wordpad.rc:213
+#: shell32.rc:67 progman.rc:100 wordpad.rc:221
 msgid "New"
 msgstr "Új"
 
@@ -8119,7 +8123,13 @@ msgstr "Ezen fut: %s"
 msgid "Wine was brought to you by:"
 msgstr "A Wine-t készítették:"
 
-#: shell32.rc:337
+#: shell32.rc:334
+#, fuzzy
+#| msgid "&Run..."
+msgid "Run"
+msgstr "&Futtatás..."
+
+#: shell32.rc:338
 msgid ""
 "Type the name of a program, folder, document, or Internet resource, and Wine "
 "will open it for you."
@@ -8127,12 +8137,12 @@ msgstr ""
 "Adja meg a program, a mappa, a dokumentum, vagy az internetes erőforrás "
 "nevét és a Wine megnyitja azt."
 
-#: shell32.rc:338
+#: shell32.rc:339
 msgid "&Open:"
 msgstr "&Megnyitás:"
 
-#: shell32.rc:342 progman.rc:182 progman.rc:201 progman.rc:218 winecfg.rc:243
-#: winefile.rc:133
+#: shell32.rc:343 progman.rc:182 progman.rc:201 progman.rc:218 winecfg.rc:243
+#: winefile.rc:130
 msgid "&Browse..."
 msgstr "&Tallózás..."
 
@@ -8148,7 +8158,7 @@ msgstr "Típus"
 msgid "Modified"
 msgstr "Módosítva"
 
-#: shell32.rc:141 winefile.rc:175 winefile.rc:114
+#: shell32.rc:141 winefile.rc:172 winefile.rc:114
 msgid "Attributes"
 msgstr "Attribútumok"
 
@@ -10359,12 +10369,12 @@ msgstr ""
 msgid "Are you sure?"
 msgstr "Biztos benne?"
 
-#: cmd.rc:354 xcopy.rc:43
+#: cmd.rc:354 reg.rc:50 xcopy.rc:43
 msgctxt "Yes key"
 msgid "Y"
 msgstr "I"
 
-#: cmd.rc:355 xcopy.rc:44
+#: cmd.rc:355 reg.rc:51 xcopy.rc:44
 msgctxt "No key"
 msgid "N"
 msgstr "N"
@@ -10502,7 +10512,7 @@ msgstr "%1!c! meghajtó kötet neve %2\n"
 msgid "Volume in drive %1!c! has no label.\n"
 msgstr "%1!c! kötetnek nincs címkéje.\n"
 
-#: cmd.rc:390
+#: cmd.rc:390 reg.rc:49
 msgid " (Yes|No)"
 msgstr " (Igen|Nem)"
 
@@ -10648,6 +10658,12 @@ msgstr "Alapértelmezett átjáró"
 #| msgid "IP address"
 msgid "IPv6 address"
 msgstr "IP cím"
+
+#: msinfo32.rc:28
+#, fuzzy
+#| msgid "System Configuration"
+msgid "System Information"
+msgstr "Rendszer konfiguráció"
 
 #: net.rc:30
 msgid ""
@@ -11036,42 +11052,42 @@ msgstr "F&első:"
 msgid "Encoding:"
 msgstr "Kódolás:"
 
-#: notepad.rc:132 wordpad.rc:281
+#: notepad.rc:132 wordpad.rc:289
 msgctxt "accelerator Select All"
 msgid "A"
 msgstr "A"
 
-#: notepad.rc:133 wordpad.rc:283
+#: notepad.rc:133 wordpad.rc:291
 msgctxt "accelerator Copy"
 msgid "C"
 msgstr "C"
 
-#: notepad.rc:134 regedit.rc:323 wordpad.rc:279
+#: notepad.rc:134 regedit.rc:323 wordpad.rc:287
 msgctxt "accelerator Find"
 msgid "F"
 msgstr "F"
 
-#: notepad.rc:135 wordpad.rc:280
+#: notepad.rc:135 wordpad.rc:288
 msgctxt "accelerator Replace"
 msgid "H"
 msgstr "H"
 
-#: notepad.rc:136 wordpad.rc:289
+#: notepad.rc:136 wordpad.rc:297
 msgctxt "accelerator New"
 msgid "N"
 msgstr "N"
 
-#: notepad.rc:137 wordpad.rc:290
+#: notepad.rc:137 wordpad.rc:298
 msgctxt "accelerator Open"
 msgid "O"
 msgstr "O"
 
-#: notepad.rc:138 regedit.rc:324 wordpad.rc:292
+#: notepad.rc:138 regedit.rc:324 wordpad.rc:300
 msgctxt "accelerator Print"
 msgid "P"
 msgstr "P"
 
-#: notepad.rc:139 wordpad.rc:291
+#: notepad.rc:139 wordpad.rc:299
 msgctxt "accelerator Save"
 msgid "S"
 msgstr "S"
@@ -11081,12 +11097,12 @@ msgctxt "accelerator Paste"
 msgid "V"
 msgstr "V"
 
-#: notepad.rc:141 wordpad.rc:282
+#: notepad.rc:141 wordpad.rc:290
 msgctxt "accelerator Cut"
 msgid "X"
 msgstr "X"
 
-#: notepad.rc:142 wordpad.rc:284
+#: notepad.rc:142 wordpad.rc:292
 msgctxt "accelerator Undo"
 msgid "Z"
 msgstr "Z"
@@ -11232,11 +11248,11 @@ msgstr "&Bővített mód"
 msgid "&Hidden component categories"
 msgstr "&Rejtett komponensek kategóriák"
 
-#: oleview.rc:67 oleview.rc:89 winefile.rc:65 wordpad.rc:71 wordpad.rc:264
+#: oleview.rc:67 oleview.rc:89 winefile.rc:65 wordpad.rc:71 wordpad.rc:272
 msgid "&Toolbar"
 msgstr "&Eszköztár"
 
-#: oleview.rc:68 oleview.rc:90 winefile.rc:67 wordpad.rc:74 wordpad.rc:267
+#: oleview.rc:68 oleview.rc:90 winefile.rc:67 wordpad.rc:74 wordpad.rc:275
 msgid "&Status Bar"
 msgstr "&Állapotsor"
 
@@ -11714,19 +11730,20 @@ msgstr "Ikon fájlok"
 msgid "Icons (*.ico)"
 msgstr "Ikonok (*.ico)"
 
-#: reg.rc:30
+#: reg.rc:35
 msgid ""
-"The syntax of this command is:\n"
+"Usage:\n"
+"  REG [operation] [parameters]\n"
 "\n"
-"REG [ ADD | DELETE | QUERY ]\n"
-"REG command /?\n"
+"Supported operations:\n"
+"  ADD | DELETE | QUERY\n"
+"\n"
+"For help on a specific operation, type:\n"
+"  REG [operation] /?\n"
+"\n"
 msgstr ""
-"A parancs szintaxisa:\n"
-"\n"
-"REG [ ADD | DELETE | QUERY ]\n"
-"REG parancs /?\n"
 
-#: reg.rc:31
+#: reg.rc:36
 msgid ""
 "REG ADD key_name [/v value_name | /ve] [/t type] [/s separator] [/d data] [/"
 "f]\n"
@@ -11734,43 +11751,138 @@ msgstr ""
 "REG ADD kulcs_név [/v érték_név | /ve] [/t típus] [/s elválasztó] [/d adat] "
 "[/f]\n"
 
-#: reg.rc:32
+#: reg.rc:37
 msgid "REG DELETE key_name [/v value_name | /ve | /va] [/f]\n"
 msgstr "REG DELETE kulcs_név [/v érték_név | /ve | /va] [/f]\n"
 
-#: reg.rc:33
+#: reg.rc:38
 msgid "REG QUERY key_name [/v value_name | /ve] [/s]\n"
 msgstr "REG QUERY kulcs_név [/v érték_név | /ve] [/s]\n"
 
-#: reg.rc:34
+#: reg.rc:39
 msgid "The operation completed successfully\n"
 msgstr "A művelet sikresen befejeződött\n"
 
-#: reg.rc:35
-msgid "Error: Invalid key name\n"
+#: reg.rc:40
+#, fuzzy
+#| msgid "Error: Invalid key name\n"
+msgid "reg: Invalid key name\n"
 msgstr "Hiba: Érvénytelen kulcsnév\n"
 
-#: reg.rc:36
-msgid "Error: Invalid command line parameters\n"
+#: reg.rc:41
+#, fuzzy
+#| msgid "Error: Invalid command line parameters\n"
+msgid "reg: Invalid command line parameters\n"
 msgstr "Hiba: Érvénytelen parancssor paraméterek\n"
 
-#: reg.rc:37
+#: reg.rc:42
 #, fuzzy
 #| msgid "Error: Unable to add keys to remote machine\n"
-msgid "Error: Unable to access remote machine\n"
+msgid "reg: Unable to access remote machine\n"
 msgstr "Hiba: nem lehet kulcsokat hozzáadni a távoli gépnél\n"
 
-#: reg.rc:38
+#: reg.rc:43
+#, fuzzy
+#| msgid ""
+#| "Error: The system was unable to find the specified registry key or value\n"
 msgid ""
-"Error: The system was unable to find the specified registry key or value\n"
+"reg: The system was unable to find the specified registry key or value\n"
 msgstr ""
 "Hiba: A rendszer nem találta a megadott regisztrációs kulcsot vagy értéket\n"
 
-#: reg.rc:39
+#: reg.rc:44
 #, fuzzy
 #| msgid "Unsupported type.\n"
-msgid "Error: Unsupported type\n"
+msgid "reg: Unsupported registry data type [%1]\n"
 msgstr "Nem támogatott típus.\n"
+
+#: reg.rc:45
+msgid "reg: The option [/d] must be followed by a valid integer\n"
+msgstr ""
+
+#: reg.rc:46
+msgid "reg: The option [/d] must be followed by a valid hexadecimal value\n"
+msgstr ""
+
+#: reg.rc:47
+msgid "reg: Unhandled registry data type [/t 0x%1!x!, /d %2]\n"
+msgstr ""
+
+#: reg.rc:48
+#, fuzzy
+#| msgid "The specified file already exists. Do you want to replace it?"
+msgid "The registry value '%1' already exists. Do you want to overwrite it?"
+msgstr "A fájl már létezik. Lecseréli a fájlt?"
+
+#: reg.rc:52
+msgid "The registry operation was cancelled\n"
+msgstr ""
+
+#: reg.rc:53 regedit.rc:204
+msgid "(Default)"
+msgstr "(Alapérték)"
+
+#: reg.rc:54
+#, fuzzy
+#| msgid "Are you sure you want to delete these values?"
+msgid "Are you sure you want to delete the registry value '%1'?"
+msgstr "Biztosan törölni szeretné ezeket az értékeket?"
+
+#: reg.rc:55
+#, fuzzy
+#| msgid "Are you sure you want to delete value '%s'?"
+msgid "Are you sure you want to delete all registry values in '%1'?"
+msgstr "Biztos hogy törölni szeretné a(z) '%s' kulcsot?"
+
+#: reg.rc:56
+#, fuzzy
+#| msgid "Are you sure you want to delete '%1'?"
+msgid "Are you sure you want to delete the registry key '%1'?"
+msgstr "Biztos hogy törölni szeretné ezt: '%1'?"
+
+#: reg.rc:57
+msgid "reg: The option [/d] must be followed by a valid string\n"
+msgstr ""
+
+#: reg.rc:58
+msgid ""
+"reg: Unable to delete all registry values in '%1'. An unexpected error "
+"occurred.\n"
+msgstr ""
+
+#: reg.rc:59
+msgid ""
+"reg: Unable to complete the specified operation. An unexpected error "
+"occurred.\n"
+msgstr ""
+
+#: reg.rc:60
+msgid "Search complete. Number of matches found: %1!d!\n"
+msgstr ""
+
+#: reg.rc:61
+#, fuzzy
+#| msgid "Error: Invalid key name\n"
+msgid "reg: Invalid syntax. "
+msgstr "Hiba: Érvénytelen kulcsnév\n"
+
+#: reg.rc:62
+#, fuzzy
+#| msgid "Error: Invalid option '%c'.\n"
+msgid "reg: Invalid option [%1]. "
+msgstr "Hiba: Érvénytelen opció '%c'.\n"
+
+#: reg.rc:63
+msgid "Type \"REG /?\" for help.\n"
+msgstr ""
+
+#: reg.rc:64
+msgid "Type \"REG %1 /?\" for help.\n"
+msgstr ""
+
+#: reg.rc:65 regedit.rc:205
+msgid "(value not set)"
+msgstr "(nem beállított)"
 
 #: regedit.rc:34
 msgid "&Registry"
@@ -11978,14 +12090,6 @@ msgstr "Regisztrációs adatbázis fájlok (*.reg)"
 msgid "Win9x/NT4 Registry files (REGEDIT4)"
 msgstr "Win9x/NT4 Regisztrációs fájlok (REGEDIT4)"
 
-#: regedit.rc:204
-msgid "(Default)"
-msgstr "(Alapérték)"
-
-#: regedit.rc:205
-msgid "(value not set)"
-msgstr "(nem beállított)"
-
 #: regedit.rc:206
 msgid "(cannot display value)"
 msgstr "(nem kijelezhető)"
@@ -11993,6 +12097,150 @@ msgstr "(nem kijelezhető)"
 #: regedit.rc:207
 msgid "(unknown %d)"
 msgstr "(ismeretlen %d)"
+
+#: regedit.rc:359
+msgid ""
+"Usage:\n"
+"  regedit [options] [filename] [reg_key]\n"
+"\n"
+"Options:\n"
+"  [no option]    Launch the graphical version of this program.\n"
+"  /L:system.dat  The location of the system.dat file to be modified.\n"
+"                 Compatible with any other switch. Ignored.\n"
+"  /R:user.dat    The location of the user.dat file to be modified.\n"
+"                 Compatible with any other switch. Ignored.\n"
+"  /C             Import the contents of a registry file.\n"
+"  /D             Delete a specified registry key.\n"
+"  /E             Export the contents of a specified registry key to a file.\n"
+"                 If no key is specified, the entire registry is exported.\n"
+"  /S             Silent mode. No messages will be displayed.\n"
+"  /V             Launch the GUI in advanced mode. Ignored.\n"
+"  /?             Display this information and exit.\n"
+"  [filename]     The location of the file containing registry information "
+"to\n"
+"                 be imported. When used with [/E], this option specifies "
+"the\n"
+"                 file location where registry information will be exported.\n"
+"  [reg_key]      The registry key to be modified.\n"
+"\n"
+"Usage examples:\n"
+"  regedit \"import.reg\"\n"
+"  regedit /E \"export.reg\" \"HKEY_CURRENT_USER\\Console\"\n"
+"  regedit /D \"HKEY_LOCAL_MACHINE\\Error\\Path\"\n"
+msgstr ""
+
+#: regedit.rc:360
+msgid "regedit: Invalid or unrecognized switch [%1]\n"
+msgstr ""
+
+#: regedit.rc:361
+msgid "Type \"regedit /?\" for help.\n"
+msgstr ""
+
+#: regedit.rc:362
+#, fuzzy
+#| msgid "No command was specified."
+msgid "regedit: No filename was specified.\n"
+msgstr "Nem volt parancs meghatározva."
+
+#: regedit.rc:363
+msgid "regedit: No registry key was specified for removal.\n"
+msgstr ""
+
+#: regedit.rc:364
+msgid "regedit: The file '%1' was not found.\n"
+msgstr ""
+
+#: regedit.rc:365
+#, fuzzy
+#| msgid "Error: Unable to add keys to remote machine\n"
+msgid "regedit: Unable to open the file '%1'.\n"
+msgstr "Hiba: nem lehet kulcsokat hozzáadni a távoli gépnél\n"
+
+#: regedit.rc:366
+#, fuzzy
+#| msgid "Invalid handle operation.\n"
+msgid "regedit: Unhandled action.\n"
+msgstr "Érvénytelen kezelő művelet.\n"
+
+#: regedit.rc:367
+msgid "regedit: Out of memory! (%1!S!, line %2!u!)\n"
+msgstr ""
+
+#: regedit.rc:368
+#, fuzzy
+#| msgid "Error: Invalid key name\n"
+msgid "regedit: Invalid hexadecimal value.\n"
+msgstr "Hiba: Érvénytelen kulcsnév\n"
+
+#: regedit.rc:369
+msgid ""
+"regedit: Unable to convert hexadecimal data. An invalid value was "
+"encountered at '%1'.\n"
+msgstr ""
+
+#: regedit.rc:370
+msgid "regedit: Unrecognized escape sequence [\\%1!c!]\n"
+msgstr ""
+
+#: regedit.rc:371
+#, fuzzy
+#| msgid "Unsupported type.\n"
+msgid "regedit: Unsupported registry data type [%1]\n"
+msgstr "Nem támogatott típus.\n"
+
+#: regedit.rc:372
+#, fuzzy
+#| msgid "Error: Unable to add keys to remote machine\n"
+msgid "regedit: Unexpected end of line in '%1'.\n"
+msgstr "Hiba: nem lehet kulcsokat hozzáadni a távoli gépnél\n"
+
+#: regedit.rc:373
+#, fuzzy
+#| msgid "No command was specified."
+msgid "regedit: The line '%1' was not recognized.\n"
+msgstr "Nem volt parancs meghatározva."
+
+#: regedit.rc:374
+#, fuzzy
+#| msgid "Error: Unable to add keys to remote machine\n"
+msgid "regedit: Unable to add the registry value '%1' to '%2'.\n"
+msgstr "Hiba: nem lehet kulcsokat hozzáadni a távoli gépnél\n"
+
+#: regedit.rc:375
+#, fuzzy
+#| msgid "Error: Unable to add keys to remote machine\n"
+msgid "regedit: Unable to open the registry key '%1'.\n"
+msgstr "Hiba: nem lehet kulcsokat hozzáadni a távoli gépnél\n"
+
+#: regedit.rc:376
+#, fuzzy
+#| msgid "Unsupported type.\n"
+msgid "regedit: Unsupported registry data type [%1] encountered in '%2'.\n"
+msgstr "Nem támogatott típus.\n"
+
+#: regedit.rc:377
+msgid "regedit: The registry value '%1' will be exported as binary data.\n"
+msgstr ""
+
+#: regedit.rc:378
+msgid "regedit: Incorrect registry class specification in '%1'.\n"
+msgstr ""
+
+#: regedit.rc:379
+#, fuzzy
+#| msgid ""
+#| "Error: The system was unable to find the specified registry key or value\n"
+msgid ""
+"regedit: Unable to export '%1'. The specified registry key was not found.\n"
+msgstr ""
+"Hiba: A rendszer nem találta a megadott regisztrációs kulcsot vagy értéket\n"
+
+#: regedit.rc:380
+#, fuzzy
+#| msgid "Error: Unable to add keys to remote machine\n"
+msgid "regedit: Unable to delete the registry class '%1'.\n"
+msgstr "Hiba: nem lehet kulcsokat hozzáadni a távoli gépnél\n"
 
 #: regedit.rc:163
 msgid "Quits the registry editor"
@@ -13195,7 +13443,9 @@ msgstr ""
 "is."
 
 #: winecfg.rc:159
-msgid "&Add application..."
+#, fuzzy
+#| msgid "&Add application..."
+msgid "Add appli&cation..."
 msgstr "&Alkalmazás hozzáadás..."
 
 #: winecfg.rc:160
@@ -13256,9 +13506,9 @@ msgstr ""
 msgid "&New override for library:"
 msgstr "Új felülbírálás könyvtárhoz:"
 
-#: winecfg.rc:196 wordpad.rc:247
-msgid "&Add"
-msgstr "Hozzá&adás"
+#: winecfg.rc:196
+msgid "A&dd"
+msgstr ""
 
 #: winecfg.rc:197
 msgid "Existing &overrides:"
@@ -13285,7 +13535,9 @@ msgid "&Native (Windows)"
 msgstr "&Natív (Windows)"
 
 #: winecfg.rc:211
-msgid "Bui&ltin then Native"
+#, fuzzy
+#| msgid "Bui&ltin then Native"
+msgid "Buil&tin then Native"
 msgstr "Beépítet&t, natív"
 
 #: winecfg.rc:212
@@ -13311,11 +13563,14 @@ msgstr ""
 "szerkeszteni."
 
 #: winecfg.rc:236
-msgid "&Add..."
+#, fuzzy
+#| msgid "&Add..."
+msgid "A&dd..."
 msgstr "Hozzá&ad..."
 
 #: winecfg.rc:238
-msgid "Auto&detect"
+#, fuzzy
+msgid "Aut&odetect"
 msgstr "Automata &felismerés"
 
 #: winecfg.rc:241
@@ -13323,7 +13578,9 @@ msgid "&Path:"
 msgstr "&Útvonal:"
 
 #: winecfg.rc:248 winecfg.rc:38
-msgid "Show &Advanced"
+#, fuzzy
+#| msgid "Show &Advanced"
+msgid "Show Advan&ced"
 msgstr "Haladó >>"
 
 #: winecfg.rc:249
@@ -13343,7 +13600,9 @@ msgid "S&erial:"
 msgstr "S&orozatszám:"
 
 #: winecfg.rc:258
-msgid "Show &dot files"
+#, fuzzy
+#| msgid "Show &dot files"
+msgid "&Show dot files"
 msgstr "Rejtett fájlok megjelenítése"
 
 #: winecfg.rc:265
@@ -13425,7 +13684,9 @@ msgid "Select the Unix target directory, please."
 msgstr "Kérem válasszon unix célkönyvtárat."
 
 #: winecfg.rc:37
-msgid "Hide &Advanced"
+#, fuzzy
+#| msgid "Hide &Advanced"
+msgid "Hide Advan&ced"
 msgstr "Haladó <<"
 
 #: winecfg.rc:39
@@ -13902,7 +14163,11 @@ msgid "Configuration error"
 msgstr "Beállítási hiba"
 
 #: wineconsole.rc:42
-msgid "Screen buffer size must be greater or equal to the window's one"
+#, fuzzy
+#| msgid "Screen buffer size must be greater or equal to the window's one"
+msgid ""
+"The size of the screen buffer must be greater than or equal to the size of "
+"the window."
 msgstr ""
 "Képernyő pufferméretnek nagyobbnak egy egyenlőnek kell lennie az ablakénál"
 
@@ -14123,79 +14388,79 @@ msgstr "Mozaikszerű elrendezés fü&ggőlegesen\tCtrl+F4"
 msgid "&About Wine File Manager"
 msgstr "&Névjegy"
 
-#: winefile.rc:125
+#: winefile.rc:122
 msgid "Select destination"
 msgstr "Célhely kiválasztása"
 
-#: winefile.rc:138
+#: winefile.rc:135
 msgid "By File Type"
 msgstr "&Típus szerint"
 
-#: winefile.rc:143
+#: winefile.rc:140
 msgid "File type"
 msgstr "Fájltípus"
 
-#: winefile.rc:144
+#: winefile.rc:141
 msgid "&Directories"
 msgstr "&Mappák"
 
-#: winefile.rc:146
+#: winefile.rc:143
 msgid "&Programs"
 msgstr "&Programok"
 
-#: winefile.rc:148
+#: winefile.rc:145
 msgid "Docu&ments"
 msgstr "Doku&mentumok"
 
-#: winefile.rc:150
+#: winefile.rc:147
 msgid "&Other files"
 msgstr "Egyéb fájlok"
 
-#: winefile.rc:152
+#: winefile.rc:149
 msgid "Show Hidden/&System Files"
 msgstr "Rejtett/&Rendszerfájlok mutatása"
 
-#: winefile.rc:163
+#: winefile.rc:160
 msgid "&File Name:"
 msgstr "&Fájl neve:"
 
-#: winefile.rc:165
+#: winefile.rc:162
 msgid "Full &Path:"
 msgstr "Teljes &útvonal:"
 
-#: winefile.rc:167
+#: winefile.rc:164
 msgid "Last Change:"
 msgstr "Utolsó módosítás:"
 
-#: winefile.rc:171
+#: winefile.rc:168
 msgid "Cop&yright:"
 msgstr "Szerzői &jog:"
 
-#: winefile.rc:173
+#: winefile.rc:170
 msgid "Size:"
 msgstr "Méret:"
 
-#: winefile.rc:177
+#: winefile.rc:174
 msgid "H&idden"
 msgstr "Re&jtett"
 
-#: winefile.rc:178
+#: winefile.rc:175
 msgid "&Archive"
 msgstr "&Archivált"
 
-#: winefile.rc:179
+#: winefile.rc:176
 msgid "&System"
 msgstr "&Rendszer"
 
-#: winefile.rc:180
+#: winefile.rc:177
 msgid "&Compressed"
 msgstr "&Tömörített"
 
-#: winefile.rc:181
+#: winefile.rc:178
 msgid "Version information"
 msgstr "Verziós információ"
 
-#: winefile.rc:197
+#: winefile.rc:194
 msgctxt "accelerator Fullscreen"
 msgid "S"
 msgstr "S"
@@ -14253,21 +14518,6 @@ msgstr "Index"
 #: winefile.rc:117
 msgid "%1 of %2 free"
 msgstr "%1/%2"
-
-#: winefile.rc:118
-msgctxt "unit kilobyte"
-msgid "kB"
-msgstr "kB"
-
-#: winefile.rc:119
-msgctxt "unit megabyte"
-msgid "MB"
-msgstr "MB"
-
-#: winefile.rc:120
-msgctxt "unit gigabyte"
-msgid "GB"
-msgstr "GB"
 
 #: winemine.rc:37
 msgid "&Game"
@@ -14471,6 +14721,12 @@ msgstr "Beállítás nem található.\n"
 msgid "Error: Invalid query\n"
 msgstr "Hiba: Érvénytelen kulcsnév\n"
 
+#: wmic.rc:31
+#, fuzzy
+#| msgid "Error: Invalid key name\n"
+msgid "Error: Invalid syntax for PATH\n"
+msgstr "Hiba: Érvénytelen kulcsnév\n"
+
 #: wordpad.rc:31
 msgid "&New...\tCtrl+N"
 msgstr "&Új...\tCtrl+N"
@@ -14523,11 +14779,11 @@ msgstr "&Bekezdés formátum"
 msgid "&Get text"
 msgstr "Sz&övegszerzés"
 
-#: wordpad.rc:72 wordpad.rc:265
+#: wordpad.rc:72 wordpad.rc:273
 msgid "&Format Bar"
 msgstr "&Formátum ablak"
 
-#: wordpad.rc:73 wordpad.rc:266
+#: wordpad.rc:73 wordpad.rc:274
 msgid "&Ruler"
 msgstr "&Vonalzó"
 
@@ -14543,253 +14799,285 @@ msgstr "&Dátum és idő..."
 msgid "F&ormat"
 msgstr "F&ormátum"
 
-#: wordpad.rc:85 wordpad.rc:108
+#: wordpad.rc:85
+#, fuzzy
+#| msgid "&List"
+msgid "&Lists"
+msgstr "&Lista"
+
+#: wordpad.rc:87 wordpad.rc:116
 msgid "&Bullet points"
 msgstr "&Lista kezdése"
 
-#: wordpad.rc:86 wordpad.rc:109
+#: wordpad.rc:88
+#, fuzzy
+#| msgid "CRL Number"
+msgid "Numbers"
+msgstr "CRL szám"
+
+#: wordpad.rc:89
+msgid "Letters - lower case"
+msgstr ""
+
+#: wordpad.rc:90
+msgid "Letters - upper case"
+msgstr ""
+
+#: wordpad.rc:91
+msgid "Roman numerals - lower case"
+msgstr ""
+
+#: wordpad.rc:92
+msgid "Roman numerals - upper case"
+msgstr ""
+
+#: wordpad.rc:94 wordpad.rc:117
 msgid "&Paragraph..."
 msgstr "Be&kezdés..."
 
-#: wordpad.rc:87
+#: wordpad.rc:95
 msgid "&Tabs..."
 msgstr "&Tabulátorok..."
 
-#: wordpad.rc:88
+#: wordpad.rc:96
 msgid "Backgroun&d"
 msgstr "&Háttér"
 
-#: wordpad.rc:90
+#: wordpad.rc:98
 msgid "&System\tCtrl+1"
 msgstr "&Rendszer\tCtrl+1"
 
-#: wordpad.rc:91
+#: wordpad.rc:99
 msgid "&Pale yellow\tCtrl+2"
 msgstr "&Sárgában kérem\tCtrl+2"
 
-#: wordpad.rc:96
+#: wordpad.rc:104
 msgid "&About Wine Wordpad"
 msgstr "&Névjegy"
 
-#: wordpad.rc:133
+#: wordpad.rc:141
 msgid "Automatic"
 msgstr "Automatikus elrendezés"
 
-#: wordpad.rc:202
+#: wordpad.rc:210
 msgid "Date and time"
 msgstr "Dátum és idő"
 
-#: wordpad.rc:205
+#: wordpad.rc:213
 msgid "Available formats"
 msgstr "Elérhető formátumok"
 
-#: wordpad.rc:216
+#: wordpad.rc:224
 msgid "New document type"
 msgstr "Új dokumentum"
 
-#: wordpad.rc:224
+#: wordpad.rc:232
 msgid "Paragraph format"
 msgstr "&Bekezdés formátum"
 
-#: wordpad.rc:227
+#: wordpad.rc:235
 msgid "Indentation"
 msgstr "&Behúzás"
 
-#: wordpad.rc:228 wordpad.rc:151
+#: wordpad.rc:236 wordpad.rc:159
 msgid "Left"
 msgstr "Szöveg balra igazítása"
 
-#: wordpad.rc:230 wordpad.rc:152
+#: wordpad.rc:238 wordpad.rc:160
 msgid "Right"
 msgstr "Szöveg jobbra igazítása"
 
-#: wordpad.rc:232
+#: wordpad.rc:240
 msgid "First line"
 msgstr "Első sor"
 
-#: wordpad.rc:234
+#: wordpad.rc:242
 msgid "Alignment"
 msgstr "Igazítás"
 
-#: wordpad.rc:242
+#: wordpad.rc:250
 msgid "Tabs"
 msgstr "Tabulátorok"
 
-#: wordpad.rc:245
+#: wordpad.rc:253
 msgid "Tab stops"
 msgstr "Tab sorrend"
 
-#: wordpad.rc:251
+#: wordpad.rc:255
+msgid "&Add"
+msgstr "Hozzá&adás"
+
+#: wordpad.rc:259
 msgid "Remove al&l"
 msgstr "Az összes &eltávolítása"
 
-#: wordpad.rc:259
+#: wordpad.rc:267
 msgid "Line wrapping"
 msgstr "Hosszú sorok tördelése"
 
-#: wordpad.rc:260
+#: wordpad.rc:268
 msgid "&No line wrapping"
 msgstr "&Nincs sortörés"
 
-#: wordpad.rc:261
+#: wordpad.rc:269
 msgid "Wrap text by the &window border"
 msgstr "Sortörés az &ablak szélénél"
 
-#: wordpad.rc:262
+#: wordpad.rc:270
 msgid "Wrap text by the &margin"
 msgstr "Sortörés a &margónál"
 
-#: wordpad.rc:263
+#: wordpad.rc:271
 msgid "Toolbars"
 msgstr "Eszköztár"
 
-#: wordpad.rc:276
+#: wordpad.rc:284
 msgctxt "accelerator Align Left"
 msgid "L"
 msgstr "L"
 
-#: wordpad.rc:277
+#: wordpad.rc:285
 msgctxt "accelerator Align Center"
 msgid "E"
 msgstr "E"
 
-#: wordpad.rc:278
+#: wordpad.rc:286
 msgctxt "accelerator Align Right"
 msgid "R"
 msgstr "R"
 
-#: wordpad.rc:285
+#: wordpad.rc:293
 msgctxt "accelerator Redo"
 msgid "Y"
 msgstr "Y"
 
-#: wordpad.rc:286
+#: wordpad.rc:294
 msgctxt "accelerator Bold"
 msgid "B"
 msgstr "B"
 
-#: wordpad.rc:287
+#: wordpad.rc:295
 msgctxt "accelerator Italic"
 msgid "I"
 msgstr "I"
 
-#: wordpad.rc:288
+#: wordpad.rc:296
 msgctxt "accelerator Underline"
 msgid "U"
 msgstr "U"
 
-#: wordpad.rc:139
+#: wordpad.rc:147
 msgid "All documents (*.*)"
 msgstr "Minden fájl (*.*)"
 
-#: wordpad.rc:140
+#: wordpad.rc:148
 msgid "Text documents (*.txt)"
 msgstr "Egyszerű szöveges dokumentum (*.txt)"
 
-#: wordpad.rc:141
+#: wordpad.rc:149
 msgid "Unicode text document (*.txt)"
 msgstr "Unicode szöveges dokumentum (*.txt)"
 
-#: wordpad.rc:142
+#: wordpad.rc:150
 msgid "Rich text format (*.rtf)"
 msgstr "Rich text dokumentum (*.rtf)"
 
-#: wordpad.rc:143
+#: wordpad.rc:151
 msgid "Rich text document"
 msgstr "Rich text dokumentum"
 
-#: wordpad.rc:144
+#: wordpad.rc:152
 msgid "Text document"
 msgstr "Egyszerű szöveges dokumentum"
 
-#: wordpad.rc:145
+#: wordpad.rc:153
 msgid "Unicode text document"
 msgstr "Unicode szöveges dokumentum"
 
-#: wordpad.rc:146
+#: wordpad.rc:154
 msgid "Printer files (*.prn)"
 msgstr "Nyomató fájlok (*.prn)"
 
-#: wordpad.rc:153
+#: wordpad.rc:161
 msgid "Center"
 msgstr "Középre"
 
-#: wordpad.rc:159
+#: wordpad.rc:167
 msgid "Text"
 msgstr "Szöveg"
 
-#: wordpad.rc:160
+#: wordpad.rc:168
 msgid "Rich text"
 msgstr "Rich text szöveg"
 
-#: wordpad.rc:166
+#: wordpad.rc:174
 msgid "Next page"
 msgstr "Köv. oldal"
 
-#: wordpad.rc:167
+#: wordpad.rc:175
 msgid "Previous page"
 msgstr "Előző oldal"
 
-#: wordpad.rc:168
+#: wordpad.rc:176
 msgid "Two pages"
 msgstr "Két oldal"
 
-#: wordpad.rc:169
+#: wordpad.rc:177
 msgid "One page"
 msgstr "Egy oldal"
 
-#: wordpad.rc:170
+#: wordpad.rc:178
 msgid "Zoom in"
 msgstr "Nagyít"
 
-#: wordpad.rc:171
+#: wordpad.rc:179
 msgid "Zoom out"
 msgstr "Kicsinyít"
 
-#: wordpad.rc:173
+#: wordpad.rc:181
 msgid "Page"
 msgstr "Oldal"
 
-#: wordpad.rc:174
+#: wordpad.rc:182
 msgid "Pages"
 msgstr "Oldalak"
 
-#: wordpad.rc:175
+#: wordpad.rc:183
 msgctxt "unit: centimeter"
 msgid "cm"
 msgstr "cm"
 
-#: wordpad.rc:176
+#: wordpad.rc:184
 msgctxt "unit: inch"
 msgid "in"
 msgstr "in"
 
-#: wordpad.rc:177
+#: wordpad.rc:185
 msgid "inch"
 msgstr "inch"
 
-#: wordpad.rc:178
+#: wordpad.rc:186
 msgctxt "unit: point"
 msgid "pt"
 msgstr "pt"
 
-#: wordpad.rc:183
+#: wordpad.rc:191
 msgid "Document"
 msgstr "Dokumentum"
 
-#: wordpad.rc:184
+#: wordpad.rc:192
 msgid "Save changes to '%s'?"
 msgstr "Váloztatások mentése ide '%s'?"
 
-#: wordpad.rc:185
+#: wordpad.rc:193
 msgid "Finished searching the document."
 msgstr "A keresés befejeződött."
 
-#: wordpad.rc:186
+#: wordpad.rc:194
 msgid "Failed to load the RichEdit library."
 msgstr "Nem sikerült betölteni a RichEdit könyvtárat."
 
-#: wordpad.rc:187
+#: wordpad.rc:195
 msgid ""
 "You have chosen to save in plain text format, which will cause all "
 "formatting to be lost. Are you sure that you wish to do this?"
@@ -14797,35 +15085,35 @@ msgstr ""
 "A szövegmentéshez egyszerű szöveges formátumot választott, így minden eddigi "
 "formázás el fog veszni. Biztosan ezt szeretné csinálni?"
 
-#: wordpad.rc:190
+#: wordpad.rc:198
 msgid "Invalid number format."
 msgstr "Érvénytelen szám szintakszis."
 
-#: wordpad.rc:191
+#: wordpad.rc:199
 msgid "OLE storage documents are not supported."
 msgstr "OLE dokumentumok nem támogatottak."
 
-#: wordpad.rc:192
+#: wordpad.rc:200
 msgid "Could not save the file."
 msgstr "Ezt a fájlt nem sikerült elmenteni."
 
-#: wordpad.rc:193
+#: wordpad.rc:201
 msgid "You do not have access to save the file."
 msgstr "Nincs hozzáférési joga, a fájl mentéséhez."
 
-#: wordpad.rc:194
+#: wordpad.rc:202
 msgid "Could not open the file."
 msgstr "Nem lehet megnyitni a fájlt."
 
-#: wordpad.rc:195
+#: wordpad.rc:203
 msgid "You do not have access to open the file."
 msgstr "Nincs hozzáférési joga, a fájl megnyitásához."
 
-#: wordpad.rc:196
+#: wordpad.rc:204
 msgid "Printing not implemented."
 msgstr "Nyomtatás nincs implementálva."
 
-#: wordpad.rc:197
+#: wordpad.rc:205
 msgid "Cannot add more than 32 tab stops."
 msgstr "Nem lehet 32 tabulátor sorrendnél több."
 

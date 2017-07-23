@@ -67,8 +67,8 @@ static void init_bit_fields(dib_info *dib, const DWORD *bit_fields)
     calc_shift_and_len(dib->blue_mask,  &dib->blue_shift,  &dib->blue_len);
 }
 
-static void init_dib_info(dib_info *dib, const BITMAPINFOHEADER *bi, const DWORD *bit_fields,
-                          const RGBQUAD *color_table, void *bits)
+static void init_dib_info(dib_info *dib, const BITMAPINFOHEADER *bi, int stride,
+                          const DWORD *bit_fields, const RGBQUAD *color_table, void *bits)
 {
     dib->bit_count    = bi->biBitCount;
     dib->width        = bi->biWidth;
@@ -78,7 +78,7 @@ static void init_dib_info(dib_info *dib, const BITMAPINFOHEADER *bi, const DWORD
     dib->rect.right   = bi->biWidth;
     dib->rect.bottom  = abs( bi->biHeight );
     dib->compression  = bi->biCompression;
-    dib->stride       = get_dib_stride( dib->width, dib->bit_count );
+    dib->stride       = stride;
     dib->bits.ptr     = bits;
     dib->bits.is_copy = FALSE;
     dib->bits.free    = NULL;
@@ -154,7 +154,8 @@ static void init_dib_info(dib_info *dib, const BITMAPINFOHEADER *bi, const DWORD
 
 void init_dib_info_from_bitmapinfo(dib_info *dib, const BITMAPINFO *info, void *bits)
 {
-    init_dib_info( dib, &info->bmiHeader, (const DWORD *)info->bmiColors, info->bmiColors, bits );
+    init_dib_info( dib, &info->bmiHeader, get_dib_stride( info->bmiHeader.biWidth, info->bmiHeader.biBitCount ),
+                   (const DWORD *)info->bmiColors, info->bmiColors, bits );
 }
 
 BOOL init_dib_info_from_bitmapobj(dib_info *dib, BITMAPOBJ *bmp)
@@ -173,8 +174,8 @@ BOOL init_dib_info_from_bitmapobj(dib_info *dib, BITMAPOBJ *bmp)
         }
         init_dib_info_from_bitmapinfo( dib, &info, bmp->dib.dsBm.bmBits );
     }
-    else init_dib_info( dib, &bmp->dib.dsBmih, bmp->dib.dsBitfields,
-                        bmp->color_table, bmp->dib.dsBm.bmBits );
+    else init_dib_info( dib, &bmp->dib.dsBmih, bmp->dib.dsBm.bmWidthBytes,
+                        bmp->dib.dsBitfields, bmp->color_table, bmp->dib.dsBm.bmBits );
     return TRUE;
 }
 
@@ -279,7 +280,7 @@ int get_clipped_rects( const dib_info *dib, const RECT *rc, HRGN clip, struct cl
 
     if (!(region = get_wine_region( clip ))) return 0;
 
-    for (i = 0; i < region->numRects; i++)
+    for (i = region_find_pt( region, rect.left, rect.top, NULL ); i < region->numRects; i++)
     {
         if (region->rects[i].top >= rect.bottom) break;
         if (!intersect_rect( out, &rect, &region->rects[i] )) continue;
@@ -423,7 +424,7 @@ const struct gdi_dc_funcs dib_driver =
     dibdrv_ExtFloodFill,                /* pExtFloodFill */
     NULL,                               /* pExtSelectClipRgn */
     dibdrv_ExtTextOut,                  /* pExtTextOut */
-    NULL,                               /* pFillPath */
+    dibdrv_FillPath,                    /* pFillPath */
     NULL,                               /* pFillRgn */
     NULL,                               /* pFlattenPath */
     NULL,                               /* pFontIsLinked */
@@ -518,8 +519,8 @@ const struct gdi_dc_funcs dib_driver =
     NULL,                               /* pStartPage */
     dibdrv_StretchBlt,                  /* pStretchBlt */
     NULL,                               /* pStretchDIBits */
-    NULL,                               /* pStrokeAndFillPath */
-    NULL,                               /* pStrokePath */
+    dibdrv_StrokeAndFillPath,           /* pStrokeAndFillPath */
+    dibdrv_StrokePath,                  /* pStrokePath */
     NULL,                               /* pUnrealizePalette */
     NULL,                               /* pWidenPath */
     dibdrv_wine_get_wgl_driver,         /* wine_get_wgl_driver */

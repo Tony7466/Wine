@@ -212,6 +212,29 @@ static BOOL WINECON_SetEditionMode(HANDLE hConIn, int edition_mode)
 }
 
 /******************************************************************
+ *		WINECON_SetColors
+ *
+ * Sets ColorTable and Pop-up menu colors
+ */
+static void WINECON_SetColors(struct inner_data *data, const struct config_data* cfg)
+{
+    size_t color_map_size = sizeof(data->curcfg.color_map);
+
+    memcpy(data->curcfg.color_map, cfg->color_map, color_map_size);
+    data->curcfg.popup_attr = cfg->popup_attr;
+
+    SERVER_START_REQ( set_console_output_info )
+    {
+        req->handle = wine_server_obj_handle( data->hConOut );
+        req->mask = SET_CONSOLE_OUTPUT_INFO_COLORTABLE | SET_CONSOLE_OUTPUT_INFO_POPUP_ATTR;
+        req->popup_attr = cfg->popup_attr;
+        wine_server_add_data( req, cfg->color_map, color_map_size );
+        wine_server_call( req );
+    }
+    SERVER_END_REQ;
+}
+
+/******************************************************************
  *		WINECON_GrabChanges
  *
  * A change occurs, try to figure out which
@@ -424,11 +447,15 @@ void     WINECON_SetConfig(struct inner_data* data, const struct config_data* cf
     if (strcmpiW(data->curcfg.face_name, cfg->face_name) || data->curcfg.cell_width != cfg->cell_width ||
         data->curcfg.cell_height != cfg->cell_height || data->curcfg.font_weight != cfg->font_weight)
     {
+        RECT r;
         data->fnSetFont(data, cfg->face_name, cfg->cell_height, cfg->font_weight);
+        SystemParametersInfoW(SPI_GETWORKAREA, 0, &r, 0);
         SERVER_START_REQ(set_console_output_info)
         {
             req->handle = wine_server_obj_handle( data->hConOut );
-            req->mask = SET_CONSOLE_OUTPUT_INFO_FONT;
+            req->mask = SET_CONSOLE_OUTPUT_INFO_MAX_SIZE | SET_CONSOLE_OUTPUT_INFO_FONT;
+            req->max_width  = (r.right - r.left) / cfg->cell_width;
+            req->max_height = (r.bottom - r.top - GetSystemMetrics(SM_CYCAPTION)) / cfg->cell_height;
             req->font_width = cfg->cell_width;
             req->font_height = cfg->cell_height;
             wine_server_call( req );
@@ -437,9 +464,15 @@ void     WINECON_SetConfig(struct inner_data* data, const struct config_data* cf
     }
     if (data->curcfg.def_attr != cfg->def_attr)
     {
+        DWORD screen_size, written;
+        COORD top_left = {0,0};
+
         data->curcfg.def_attr = cfg->def_attr;
+        screen_size = cfg->win_width * (cfg->win_height + 1);
+        FillConsoleOutputAttribute(data->hConOut, cfg->def_attr, screen_size, top_left, &written);
         SetConsoleTextAttribute(data->hConOut, cfg->def_attr);
     }
+    WINECON_SetColors(data, cfg);
     /* now let's look at the window / sb size changes...
      * since the server checks that sb is always bigger than window, 
      * we have to take care of doing the operations in the right order

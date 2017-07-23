@@ -1344,6 +1344,9 @@ static HRESULT WINAPI convert_GetConversionSize(IDataConvert* iface,
     if ((*dst_len = get_length(dst_type)))
         return S_OK;
 
+    if(src_type == DBTYPE_VARIANT && V_VT((VARIANT*)src) == VT_NULL)
+        return S_OK;
+
     switch (dst_type)
     {
     case DBTYPE_STR:
@@ -1372,10 +1375,16 @@ static HRESULT WINAPI convert_GetConversionSize(IDataConvert* iface,
         switch (src_type)
         {
         case DBTYPE_VARIANT:
-            if(V_VT((VARIANT*)src) == VT_BSTR)
-                *dst_len = (SysStringLen(V_BSTR((VARIANT*)src))+1) * sizeof(WCHAR);
-            else
-                WARN("DBTYPE_VARIANT(%d)->DBTYPE_WSTR unimplemented\n", V_VT((VARIANT*)src));
+        {
+            VARIANT v;
+
+            VariantInit(&v);
+            if ((hr = VariantChangeType(&v, (VARIANT*)src, 0, VT_BSTR)) == S_OK)
+            {
+                *dst_len = (SysStringLen(V_BSTR(&v))+1) * sizeof(WCHAR);
+                VariantClear(&v);
+            }
+        }
             break;
         case DBTYPE_STR:
             if(src_len)

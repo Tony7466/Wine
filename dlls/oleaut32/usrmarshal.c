@@ -82,6 +82,10 @@ unsigned char * WINAPI CLEANLOCALSTORAGE_UserMarshal(ULONG *pFlags, unsigned cha
 {
     ALIGN_POINTER(Buffer, 3);
     *(DWORD*)Buffer = pstg->flags;
+
+    if (!pstg->pInterface)
+        return Buffer + sizeof(DWORD);
+
     switch(pstg->flags)
     {
     case CLS_LIBATTR:
@@ -349,10 +353,6 @@ static unsigned char *interface_variant_unmarshal(ULONG *pFlags, unsigned char *
   ptr = *(DWORD*)Buffer;
   Buffer += sizeof(DWORD);
 
-  /* Clear any existing interface which WdtpInterfacePointer_UserUnmarshal()
-     would try to release.  This has been done already with a VariantClear(). */
-  *ppunk = NULL;
-
   if(!ptr)
       return Buffer;
 
@@ -520,10 +520,22 @@ unsigned char * WINAPI VARIANT_UserUnmarshal(ULONG *pFlags, unsigned char *Buffe
         {
             VariantClear(pvar);
             V_BYREF(pvar) = CoTaskMemAlloc(mem_size);
+            memset(V_BYREF(pvar), 0, mem_size);
         }
         else if (!V_BYREF(pvar))
+        {
             V_BYREF(pvar) = CoTaskMemAlloc(mem_size);
-        memcpy(V_BYREF(pvar), Pos, type_size);
+            memset(V_BYREF(pvar), 0, mem_size);
+        }
+
+        if(!(header->vt & VT_ARRAY)
+                && (header->vt & VT_TYPEMASK) != VT_BSTR
+                && (header->vt & VT_TYPEMASK) != VT_VARIANT
+                && (header->vt & VT_TYPEMASK) != VT_UNKNOWN
+                && (header->vt & VT_TYPEMASK) != VT_DISPATCH
+                && (header->vt & VT_TYPEMASK) != VT_RECORD)
+            memcpy(V_BYREF(pvar), Pos, type_size);
+
         if((header->vt & VT_TYPEMASK) != VT_VARIANT)
             Pos += type_size;
         else
@@ -532,7 +544,17 @@ unsigned char * WINAPI VARIANT_UserUnmarshal(ULONG *pFlags, unsigned char *Buffe
     else
     {
         VariantClear(pvar);
-        if((header->vt & VT_TYPEMASK) == VT_DECIMAL)
+        if(header->vt & VT_ARRAY)
+            V_ARRAY(pvar) = NULL;
+        else if((header->vt & VT_TYPEMASK) == VT_BSTR)
+            V_BSTR(pvar) = NULL;
+        else if((header->vt & VT_TYPEMASK) == VT_UNKNOWN)
+            V_UNKNOWN(pvar) = NULL;
+        else if((header->vt & VT_TYPEMASK) == VT_DISPATCH)
+            V_DISPATCH(pvar) = NULL;
+        else if((header->vt & VT_TYPEMASK) == VT_RECORD)
+            V_RECORD(pvar) = NULL;
+        else if((header->vt & VT_TYPEMASK) == VT_DECIMAL)
             memcpy(pvar, Pos, type_size);
         else
             memcpy(&pvar->n1.n2.n3, Pos, type_size);
@@ -556,11 +578,9 @@ unsigned char * WINAPI VARIANT_UserUnmarshal(ULONG *pFlags, unsigned char *Buffe
         switch (header->vt)
         {
         case VT_BSTR:
-            V_BSTR(pvar) = NULL;
             Pos = BSTR_UserUnmarshal(pFlags, Pos, &V_BSTR(pvar));
             break;
         case VT_BSTR | VT_BYREF:
-            *V_BSTRREF(pvar) = NULL;
             Pos = BSTR_UserUnmarshal(pFlags, Pos, V_BSTRREF(pvar));
             break;
         case VT_VARIANT | VT_BYREF:
@@ -963,6 +983,7 @@ unsigned char * WINAPI LPSAFEARRAY_UserUnmarshal(ULONG *pFlags, unsigned char *B
 
     if (!ptr)
     {
+        SafeArrayDestroy(*ppsa);
         *ppsa = NULL;
 
         TRACE("NULL safe array unmarshaled\n");
@@ -999,13 +1020,34 @@ unsigned char * WINAPI LPSAFEARRAY_UserUnmarshal(ULONG *pFlags, unsigned char *B
     wiresab = (SAFEARRAYBOUND *)Buffer;
     Buffer += sizeof(wiresab[0]) * wiresa->cDims;
 
-    if(vt)
+    if(*ppsa && (*ppsa)->cDims==wiresa->cDims)
     {
+        if(((*ppsa)->fFeatures & ~FADF_AUTOSETFLAGS) != (wiresa->fFeatures & ~FADF_AUTOSETFLAGS))
+            RpcRaiseException(DISP_E_BADCALLEE);
+
+        if(SAFEARRAY_GetCellCount(*ppsa)*(*ppsa)->cbElements != cell_count*elem_mem_size(wiresa, sftype))
+        {
+            if((*ppsa)->fFeatures & (FADF_AUTO|FADF_STATIC|FADF_EMBEDDED|FADF_FIXEDSIZE))
+                RpcRaiseException(DISP_E_BADCALLEE);
+
+            hr = SafeArrayDestroyData(*ppsa);
+            if(FAILED(hr))
+                RpcRaiseException(hr);
+        }
+        memcpy((*ppsa)->rgsabound, wiresab, sizeof(*wiresab)*wiresa->cDims);
+
+        if((*ppsa)->fFeatures & FADF_HAVEVARTYPE)
+            ((DWORD*)(*ppsa))[-1] = vt;
+    }
+    else if(vt)
+    {
+        SafeArrayDestroy(*ppsa);
         *ppsa = SafeArrayCreateEx(vt, wiresa->cDims, wiresab, NULL);
         if (!*ppsa) RpcRaiseException(E_OUTOFMEMORY);
     }
     else
     {
+        SafeArrayDestroy(*ppsa);
         if (FAILED(SafeArrayAllocDescriptor(wiresa->cDims, ppsa)))
             RpcRaiseException(E_OUTOFMEMORY);
         memcpy((*ppsa)->rgsabound, wiresab, sizeof(SAFEARRAYBOUND) * wiresa->cDims);
@@ -1017,11 +1059,10 @@ unsigned char * WINAPI LPSAFEARRAY_UserUnmarshal(ULONG *pFlags, unsigned char *B
     (*ppsa)->fFeatures |= (wiresa->fFeatures & ~(FADF_AUTOSETFLAGS));
     /* FIXME: there should be a limit on how large wiresa->cbElements can be */
     (*ppsa)->cbElements = elem_mem_size(wiresa, sftype);
-    (*ppsa)->cLocks = 0;
 
     /* SafeArrayCreateEx allocates the data for us, but
      * SafeArrayAllocDescriptor doesn't */
-    if(!vt)
+    if(!(*ppsa)->pvData)
     {
         hr = SafeArrayAllocData(*ppsa);
         if (FAILED(hr))
@@ -1091,6 +1132,7 @@ void WINAPI LPSAFEARRAY_UserFree(ULONG *pFlags, LPSAFEARRAY *ppsa)
     TRACE("("); dump_user_flags(pFlags); TRACE(", &%p\n", *ppsa);
 
     SafeArrayDestroy(*ppsa);
+    *ppsa = NULL;
 }
 
 
@@ -1369,52 +1411,145 @@ static void free_embedded_elemdesc(ELEMDESC *edesc)
 
 HRESULT CALLBACK ITypeComp_Bind_Proxy(
     ITypeComp* This,
-    LPOLESTR szName,
+    LPOLESTR name,
     ULONG lHashVal,
-    WORD wFlags,
-    ITypeInfo** ppTInfo,
-    DESCKIND* pDescKind,
-    BINDPTR* pBindPtr)
+    WORD flags,
+    ITypeInfo **ti,
+    DESCKIND *desckind,
+    BINDPTR *bindptr)
 {
-  FIXME("not implemented\n");
-  return E_FAIL;
+    CLEANLOCALSTORAGE stg = { 0 };
+    ITypeComp *typecomp;
+    FUNCDESC *funcdesc;
+    VARDESC *vardesc;
+    HRESULT hr;
+
+    TRACE("(%p, %s, %#x, %#x, %p, %p, %p)\n", This, debugstr_w(name), lHashVal, flags, ti,
+        desckind, bindptr);
+
+    *desckind = DESCKIND_NONE;
+    memset(bindptr, 0, sizeof(*bindptr));
+
+    hr = ITypeComp_RemoteBind_Proxy(This, name, lHashVal, flags, ti, desckind,
+        &funcdesc, &vardesc, &typecomp, &stg);
+
+    if (hr == S_OK)
+    {
+        switch (*desckind)
+        {
+        case DESCKIND_FUNCDESC:
+            bindptr->lpfuncdesc = funcdesc;
+            break;
+        case DESCKIND_VARDESC:
+        case DESCKIND_IMPLICITAPPOBJ:
+            bindptr->lpvardesc = vardesc;
+            break;
+        case DESCKIND_TYPECOMP:
+            bindptr->lptcomp = typecomp;
+            break;
+        default:
+            ;
+        }
+    }
+
+    return hr;
 }
 
 HRESULT __RPC_STUB ITypeComp_Bind_Stub(
     ITypeComp* This,
-    LPOLESTR szName,
+    LPOLESTR name,
     ULONG lHashVal,
-    WORD wFlags,
-    ITypeInfo** ppTInfo,
-    DESCKIND* pDescKind,
-    LPFUNCDESC* ppFuncDesc,
-    LPVARDESC* ppVarDesc,
-    ITypeComp** ppTypeComp,
-    CLEANLOCALSTORAGE* pDummy)
+    WORD flags,
+    ITypeInfo **ti,
+    DESCKIND *desckind,
+    FUNCDESC **funcdesc,
+    VARDESC **vardesc,
+    ITypeComp **typecomp,
+    CLEANLOCALSTORAGE *stg)
 {
-  FIXME("not implemented\n");
-  return E_FAIL;
+    BINDPTR bindptr;
+    HRESULT hr;
+
+    TRACE("(%p, %s, %#x, %#x, %p, %p, %p, %p, %p, %p)\n", This, debugstr_w(name),
+        lHashVal, flags, ti, desckind, funcdesc, vardesc, typecomp, stg);
+
+    memset(stg, 0, sizeof(*stg));
+    memset(&bindptr, 0, sizeof(bindptr));
+
+    *funcdesc = NULL;
+    *vardesc = NULL;
+    *typecomp = NULL;
+    *ti = NULL;
+
+    hr = ITypeComp_Bind(This, name, lHashVal, flags, ti, desckind, &bindptr);
+    if(hr != S_OK)
+        return hr;
+
+    switch (*desckind)
+    {
+    case DESCKIND_FUNCDESC:
+        *funcdesc = bindptr.lpfuncdesc;
+        stg->pInterface = (IUnknown*)*ti;
+        stg->pStorage = funcdesc;
+        stg->flags = CLS_FUNCDESC;
+        break;
+    case DESCKIND_VARDESC:
+    case DESCKIND_IMPLICITAPPOBJ:
+        *vardesc = bindptr.lpvardesc;
+        stg->pInterface = (IUnknown*)*ti;
+        stg->pStorage = vardesc;
+        stg->flags = CLS_VARDESC;
+        break;
+    case DESCKIND_TYPECOMP:
+        *typecomp = bindptr.lptcomp;
+        break;
+    default:
+        ;
+    }
+
+    if (stg->pInterface)
+        IUnknown_AddRef(stg->pInterface);
+
+    return hr;
 }
 
 HRESULT CALLBACK ITypeComp_BindType_Proxy(
     ITypeComp* This,
-    LPOLESTR szName,
+    LPOLESTR name,
     ULONG lHashVal,
-    ITypeInfo** ppTInfo,
-    ITypeComp** ppTComp)
+    ITypeInfo **ti,
+    ITypeComp **typecomp)
 {
-  FIXME("not implemented\n");
-  return E_FAIL;
+    HRESULT hr;
+
+    TRACE("(%p, %s, %#x, %p, %p)\n", This, debugstr_w(name), lHashVal, ti, typecomp);
+
+    hr = ITypeComp_RemoteBindType_Proxy(This, name, lHashVal, ti);
+    if (hr == S_OK)
+        ITypeInfo_GetTypeComp(*ti, typecomp);
+    else if (typecomp)
+        *typecomp = NULL;
+
+    return hr;
 }
 
 HRESULT __RPC_STUB ITypeComp_BindType_Stub(
     ITypeComp* This,
-    LPOLESTR szName,
+    LPOLESTR name,
     ULONG lHashVal,
-    ITypeInfo** ppTInfo)
+    ITypeInfo **ti)
 {
-  FIXME("not implemented\n");
-  return E_FAIL;
+    ITypeComp *typecomp = NULL;
+    HRESULT hr;
+
+    TRACE("(%p, %s, %#x, %p)\n", This, debugstr_w(name), lHashVal, ti);
+
+    hr = ITypeComp_BindType(This, name, lHashVal, ti, &typecomp);
+
+    if (typecomp)
+        ITypeComp_Release(typecomp);
+
+    return hr;
 }
 
 /* ITypeInfo */

@@ -362,26 +362,91 @@ static void test_NtOpenKey(void)
     status = pNtOpenKey(&key, am, &attr);
     ok(status == STATUS_INVALID_PARAMETER, "Expected STATUS_INVALID_PARAMETER, got: 0x%08x\n", status);
 
+    /* Zero accessmask */
+    attr.Length = sizeof(attr);
+    key = (HANDLE)0xdeadbeef;
+    status = pNtOpenKey(&key, 0, &attr);
+todo_wine
+    ok(status == STATUS_ACCESS_DENIED, "Expected STATUS_ACCESS_DENIED, got: 0x%08x\n", status);
+todo_wine
+    ok(!key, "key = %p\n", key);
+    if (status == STATUS_SUCCESS) NtClose(key);
+
     /* Calling without parent key requres full registry path. */
     pRtlCreateUnicodeStringFromAsciiz( &str, "Machine" );
     InitializeObjectAttributes(&attr, &str, 0, 0, 0);
+    key = (HANDLE)0xdeadbeef;
     status = pNtOpenKey(&key, KEY_READ, &attr);
     todo_wine ok(status == STATUS_OBJECT_PATH_SYNTAX_BAD, "NtOpenKey Failed: 0x%08x\n", status);
-    if (!status)
-        pNtClose(key);
+todo_wine
+    ok(!key, "key = %p\n", key);
+    pRtlFreeUnicodeString( &str );
 
     /* Open is case sensitive unless OBJ_CASE_INSENSITIVE is specified. */
     pRtlCreateUnicodeStringFromAsciiz( &str, "\\Registry\\Machine" );
     status = pNtOpenKey(&key, KEY_READ, &attr);
     todo_wine ok(status == STATUS_OBJECT_PATH_NOT_FOUND, "NtOpenKey Failed: 0x%08x\n", status);
-    if (!status)
-        pNtClose(key);
 
     attr.Attributes = OBJ_CASE_INSENSITIVE;
     status = pNtOpenKey(&key, KEY_READ, &attr);
     ok(status == STATUS_SUCCESS, "NtOpenKey Failed: 0x%08x\n", status);
-    if (!status)
-        pNtClose(key);
+    pNtClose(key);
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "" );
+    status = pNtOpenKey(&key, KEY_READ, &attr);
+    todo_wine
+    ok( status == STATUS_OBJECT_PATH_SYNTAX_BAD, "NtOpenKey failed: 0x%08x\n", status );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\" );
+    status = pNtOpenKey(&key, KEY_READ, &attr);
+    todo_wine
+    ok( status == STATUS_OBJECT_TYPE_MISMATCH, "NtOpenKey failed: 0x%08x\n", status );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\Registry" );
+    status = pNtOpenKey(&key, KEY_READ, &attr);
+    todo_wine
+    ok( status == STATUS_SUCCESS, "NtOpenKey failed: 0x%08x\n", status );
+    pNtClose( key );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\Registry\\" );
+    status = pNtOpenKey(&key, KEY_READ, &attr);
+    ok( status == STATUS_SUCCESS, "NtOpenKey failed: 0x%08x\n", status );
+    pNtClose( key );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\Foobar" );
+    status = pNtOpenKey(&key, KEY_READ, &attr);
+    todo_wine
+    ok( status == STATUS_OBJECT_NAME_NOT_FOUND, "NtOpenKey failed: 0x%08x\n", status );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\Foobar\\Machine" );
+    status = pNtOpenKey(&key, KEY_READ, &attr);
+    todo_wine
+    ok( status == STATUS_OBJECT_PATH_NOT_FOUND, "NtOpenKey failed: 0x%08x\n", status );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\Machine\\Software\\Classes" );
+    status = pNtOpenKey(&key, KEY_READ, &attr);
+    todo_wine
+    ok( status == STATUS_OBJECT_PATH_NOT_FOUND, "NtOpenKey failed: 0x%08x\n", status );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "Machine\\Software\\Classes" );
+    status = pNtOpenKey(&key, KEY_READ, &attr);
+    todo_wine
+    ok( status == STATUS_OBJECT_PATH_SYNTAX_BAD, "NtOpenKey failed: 0x%08x\n", status );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\Device\\Null" );
+    status = pNtOpenKey(&key, KEY_READ, &attr);
+    todo_wine
+    ok( status == STATUS_OBJECT_TYPE_MISMATCH, "NtOpenKey failed: 0x%08x\n", status );
+    pRtlFreeUnicodeString( &str );
 
     if (!pNtOpenKeyEx)
     {
@@ -476,6 +541,95 @@ static void test_NtCreateKey(void)
     pRtlFreeUnicodeString( &str );
     pNtDeleteKey( subkey );
     pNtClose( subkey );
+
+    attr.RootDirectory = 0;
+    attr.Attributes = OBJ_CASE_INSENSITIVE;
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "" );
+    status = pNtCreateKey( &subkey, am, &attr, 0, 0, 0, 0 );
+    todo_wine
+    ok( status == STATUS_OBJECT_PATH_SYNTAX_BAD, "NtCreateKey failed: 0x%08x\n", status );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\" );
+    status = pNtCreateKey( &subkey, am, &attr, 0, 0, 0, 0 );
+    todo_wine
+    ok( status == STATUS_OBJECT_TYPE_MISMATCH, "NtCreateKey failed: 0x%08x\n", status );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\Registry" );
+    status = pNtCreateKey( &subkey, am, &attr, 0, 0, 0, 0 );
+    todo_wine
+    ok( status == STATUS_SUCCESS || status == STATUS_ACCESS_DENIED,
+        "NtCreateKey failed: 0x%08x\n", status );
+    if (!status) pNtClose( subkey );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\Registry\\" );
+    status = pNtCreateKey( &subkey, am, &attr, 0, 0, 0, 0 );
+    ok( status == STATUS_SUCCESS || status == STATUS_ACCESS_DENIED,
+        "NtCreateKey failed: 0x%08x\n", status );
+    if (!status) pNtClose( subkey );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\Foobar" );
+    status = pNtCreateKey( &subkey, am, &attr, 0, 0, 0, 0 );
+    todo_wine
+    ok( status == STATUS_OBJECT_NAME_NOT_FOUND, "NtCreateKey failed: 0x%08x\n", status );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\Foobar\\Machine" );
+    status = pNtCreateKey( &subkey, am, &attr, 0, 0, 0, 0 );
+    todo_wine
+    ok( status == STATUS_OBJECT_PATH_NOT_FOUND, "NtCreateKey failed: 0x%08x\n", status );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\Machine\\Software\\Classes" );
+    status = pNtCreateKey( &subkey, am, &attr, 0, 0, 0, 0 );
+    todo_wine
+    ok( status == STATUS_OBJECT_PATH_NOT_FOUND, "NtCreateKey failed: 0x%08x\n", status );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "Machine\\Software\\Classes" );
+    status = pNtCreateKey( &subkey, am, &attr, 0, 0, 0, 0 );
+    todo_wine
+    ok( status == STATUS_OBJECT_PATH_SYNTAX_BAD, "NtCreateKey failed: 0x%08x\n", status );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\Device\\Null" );
+    status = pNtCreateKey( &subkey, am, &attr, 0, 0, 0, 0 );
+    todo_wine
+    ok( status == STATUS_OBJECT_TYPE_MISMATCH, "NtCreateKey failed: 0x%08x\n", status );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\Registry\\Machine\\Software\\Classes" );
+    status = pNtCreateKey( &subkey, am, &attr, 0, 0, 0, 0 );
+    ok( status == STATUS_SUCCESS || status == STATUS_ACCESS_DENIED,
+        "NtCreateKey failed: 0x%08x\n", status );
+    if (!status) pNtClose( subkey );
+    pRtlFreeUnicodeString( &str );
+
+    /* the REGISTRY part is case-sensitive unless OBJ_CASE_INSENSITIVE is specified */
+    attr.Attributes = 0;
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\Registry\\Machine\\Software\\Classes" );
+    status = pNtCreateKey( &subkey, am, &attr, 0, 0, 0, 0 );
+    todo_wine
+    ok( status == STATUS_OBJECT_PATH_NOT_FOUND, "NtCreateKey failed: 0x%08x\n", status );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\REGISTRY\\Machine\\Software\\Classes" );
+    status = pNtCreateKey( &subkey, am, &attr, 0, 0, 0, 0 );
+    ok( status == STATUS_SUCCESS || status == STATUS_ACCESS_DENIED,
+        "NtCreateKey failed: 0x%08x\n", status );
+    if (!status) pNtClose( subkey );
+    pRtlFreeUnicodeString( &str );
+
+    pRtlCreateUnicodeStringFromAsciiz( &str, "\\REGISTRY\\MACHINE\\SOFTWARE\\CLASSES" );
+    status = pNtCreateKey( &subkey, am, &attr, 0, 0, 0, 0 );
+    ok( status == STATUS_SUCCESS || status == STATUS_ACCESS_DENIED,
+        "NtCreateKey failed: 0x%08x\n", status );
+    if (!status) pNtClose( subkey );
+    pRtlFreeUnicodeString( &str );
 
     pNtClose(key);
 }
@@ -922,8 +1076,10 @@ static void test_symlinks(void)
     /* try opening the target through the link */
 
     attr.ObjectName = &link_str;
+    key = (HANDLE)0xdeadbeef;
     status = pNtOpenKey( &key, KEY_ALL_ACCESS, &attr );
     ok( status == STATUS_OBJECT_NAME_NOT_FOUND, "NtOpenKey wrong status 0x%08x\n", status );
+    ok( !key, "key = %p\n", key );
 
     attr.ObjectName = &target_str;
     status = pNtCreateKey( &key, KEY_ALL_ACCESS, &attr, 0, 0, 0, 0 );
@@ -987,6 +1143,40 @@ static void test_symlinks(void)
         "wrong len %u\n", len );
     pNtClose( key );
 
+    if (pNtOpenKeyEx)
+    {
+        /* REG_OPTION_OPEN_LINK flag doesn't matter */
+        status = pNtOpenKeyEx( &key, KEY_ALL_ACCESS, &attr, REG_OPTION_OPEN_LINK );
+        ok( status == STATUS_SUCCESS, "NtOpenKey failed: 0x%08x\n", status );
+
+        len = sizeof(buffer);
+        status = pNtQueryValueKey( key, &symlink_str, KeyValuePartialInformation, info, len, &len );
+        ok( status == STATUS_SUCCESS, "NtQueryValueKey failed: 0x%08x\n", status );
+        ok( len == FIELD_OFFSET(KEY_VALUE_PARTIAL_INFORMATION,Data) + target_len - sizeof(WCHAR),
+            "wrong len %u\n", len );
+        pNtClose( key );
+
+        status = pNtOpenKeyEx( &key, KEY_ALL_ACCESS, &attr, 0 );
+        ok( status == STATUS_SUCCESS, "NtOpenKey failed: 0x%08x\n", status );
+
+        len = sizeof(buffer);
+        status = pNtQueryValueKey( key, &symlink_str, KeyValuePartialInformation, info, len, &len );
+        ok( status == STATUS_SUCCESS, "NtQueryValueKey failed: 0x%08x\n", status );
+        ok( len == FIELD_OFFSET(KEY_VALUE_PARTIAL_INFORMATION,Data) + target_len - sizeof(WCHAR),
+            "wrong len %u\n", len );
+        pNtClose( key );
+
+        attr.Attributes = 0;
+        status = pNtOpenKeyEx( &key, KEY_ALL_ACCESS, &attr, REG_OPTION_OPEN_LINK );
+        ok( status == STATUS_SUCCESS, "NtOpenKey failed: 0x%08x\n", status );
+
+        len = sizeof(buffer);
+        status = pNtQueryValueKey( key, &symlink_str, KeyValuePartialInformation, info, len, &len );
+        ok( status == STATUS_OBJECT_NAME_NOT_FOUND, "NtQueryValueKey failed: 0x%08x\n", status );
+        pNtClose( key );
+    }
+
+    attr.Attributes = OBJ_OPENLINK;
     status = pNtCreateKey( &key, KEY_ALL_ACCESS, &attr, 0, 0, 0, 0 );
     ok( status == STATUS_SUCCESS, "NtCreateKey failed: 0x%08x\n", status );
     len = sizeof(buffer);
@@ -995,6 +1185,36 @@ static void test_symlinks(void)
     ok( len == FIELD_OFFSET(KEY_VALUE_PARTIAL_INFORMATION,Data) + target_len - sizeof(WCHAR),
         "wrong len %u\n", len );
     pNtClose( key );
+
+    /* delete target and create by NtCreateKey on link */
+    attr.ObjectName = &target_str;
+    status = pNtOpenKey( &key, KEY_ALL_ACCESS, &attr );
+    ok( status == STATUS_SUCCESS, "NtOpenKey failed: 0x%08x\n", status );
+    status = pNtDeleteKey( key );
+    ok( status == STATUS_SUCCESS, "NtDeleteKey failed: 0x%08x\n", status );
+    pNtClose( key );
+
+    attr.ObjectName = &link_str;
+    attr.Attributes = 0;
+    status = pNtOpenKey( &key, KEY_ALL_ACCESS, &attr );
+    ok( status == STATUS_OBJECT_NAME_NOT_FOUND, "NtOpenKey wrong status 0x%08x\n", status );
+
+    status = pNtCreateKey( &key, KEY_ALL_ACCESS, &attr, 0, 0, 0, 0 );
+    todo_wine ok( status == STATUS_SUCCESS, "NtCreateKey failed: 0x%08x\n", status );
+    pNtClose( key );
+    if (status) /* can be removed once todo_wine above is fixed */
+    {
+        attr.ObjectName = &target_str;
+        attr.Attributes = OBJ_OPENLINK;
+        status = pNtCreateKey( &key, KEY_ALL_ACCESS, &attr, 0, 0, 0, 0 );
+        ok( status == STATUS_SUCCESS, "NtCreateKey failed: 0x%08x\n", status );
+        pNtClose( key );
+    }
+
+    attr.ObjectName = &target_str;
+    attr.Attributes = OBJ_OPENLINK;
+    status = pNtOpenKey( &key, KEY_ALL_ACCESS, &attr );
+    ok( status == STATUS_SUCCESS, "NtOpenKey wrong status 0x%08x\n", status );
 
     if (0)  /* crashes the Windows kernel on some Vista systems */
     {
@@ -1059,8 +1279,10 @@ static void test_symlinks(void)
     ok( status == STATUS_SUCCESS || status == STATUS_OBJECT_NAME_NOT_FOUND,
         "NtOpenKey wrong status 0x%08x\n", status );
 
-    status = pNtCreateKey( &key, KEY_ALL_ACCESS, &attr, 0, 0, REG_OPTION_CREATE_LINK, 0 );
+    key = (HKEY)0xdeadbeef;
+    status = pNtCreateKey( &key, KEY_ALL_ACCESS, &attr, 0, 0, REG_OPTION_CREATE_LINK, NULL );
     ok( status == STATUS_OBJECT_NAME_COLLISION, "NtCreateKey failed: 0x%08x\n", status );
+    ok( !key, "key = %p\n", key );
 
     status = pNtDeleteKey( link );
     ok( status == STATUS_SUCCESS, "NtDeleteKey failed: 0x%08x\n", status );
@@ -1546,6 +1768,7 @@ static void test_NtQueryKey(void)
     pRtlCreateUnicodeStringFromAsciiz(&str, "test_subkey");
     status = pNtCreateKey(&subkey, GENERIC_ALL, &attr, 0, 0, 0, 0);
     ok(status == STATUS_SUCCESS, "NtCreateKey failed: 0x%08x\n", status);
+    pRtlFreeUnicodeString(&str);
 
     status = pNtQueryKey(subkey, KeyCachedInformation, &cached_info, sizeof(cached_info), &len);
     ok(status == STATUS_SUCCESS, "NtQueryKey Failed: 0x%08x\n", status);
@@ -1566,11 +1789,13 @@ static void test_NtQueryKey(void)
     pRtlCreateUnicodeStringFromAsciiz(&str, "test_subkey2");
     status = pNtCreateKey(&subkey2, GENERIC_ALL, &attr, 0, 0, 0, 0);
     ok(status == STATUS_SUCCESS, "NtCreateKey failed: 0x%08x\n", status);
+    pRtlFreeUnicodeString(&str);
 
     pRtlCreateUnicodeStringFromAsciiz(&str, "val");
     dw = 64;
     status = pNtSetValueKey( subkey, &str, 0, REG_DWORD, &dw, sizeof(dw) );
     ok( status == STATUS_SUCCESS, "NtSetValueKey failed: 0x%08x\n", status );
+    pRtlFreeUnicodeString(&str);
 
     status = pNtQueryKey(subkey, KeyCachedInformation, &cached_info, sizeof(cached_info), &len);
     ok(status == STATUS_SUCCESS, "NtQueryKey Failed: 0x%08x\n", status);
@@ -1631,6 +1856,7 @@ static void test_notify(void)
     pRtlCreateUnicodeStringFromAsciiz(&str, "test_subkey");
     status = pNtCreateKey(&subkey, GENERIC_ALL, &attr, 0, 0, 0, 0);
     ok(status == STATUS_SUCCESS, "NtCreateKey failed: 0x%08x\n", status);
+    pRtlFreeUnicodeString(&str);
 
     status = pNtWaitForSingleObject(events[0], FALSE, &timeout);
     todo_wine ok(status == STATUS_SUCCESS, "NtWaitForSingleObject returned %x\n", status);
@@ -1682,6 +1908,7 @@ static void test_notify(void)
         pRtlCreateUnicodeStringFromAsciiz(&str, "test_subkey");
         status = pNtCreateKey(&subkey, GENERIC_ALL, &attr, 0, 0, 0, 0);
         ok(status == STATUS_SUCCESS, "NtCreateKey failed: 0x%08x\n", status);
+        pRtlFreeUnicodeString(&str);
 
         status = pNtWaitForSingleObject(events[0], FALSE, &timeout);
         ok(status == STATUS_SUCCESS, "NtWaitForSingleObject returned %x\n", status);

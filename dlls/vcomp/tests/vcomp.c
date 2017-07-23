@@ -2,7 +2,7 @@
  * Unit test suite for vcomp
  *
  * Copyright 2012 Dan Kegel
- * Copyright 2015 Sebastian Lackner
+ * Copyright 2015-2016 Sebastian Lackner
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,6 +19,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include <stdio.h>
 #include "wine/test.h"
 
 static char         vcomp_manifest_file[MAX_PATH];
@@ -34,25 +35,58 @@ static VOID   (WINAPI *pReleaseActCtx)(HANDLE);
 typedef CRITICAL_SECTION *omp_lock_t;
 typedef CRITICAL_SECTION *omp_nest_lock_t;
 
+static void  (CDECL   *p_vcomp_atomic_add_i1)(char *dest, char val);
+static void  (CDECL   *p_vcomp_atomic_add_i2)(short *dest, short val);
 static void  (CDECL   *p_vcomp_atomic_add_i4)(int *dest, int val);
+static void  (CDECL   *p_vcomp_atomic_add_i8)(LONG64 *dest, LONG64 val);
 static void  (CDECL   *p_vcomp_atomic_add_r4)(float *dest, float val);
 static void  (CDECL   *p_vcomp_atomic_add_r8)(double *dest, double val);
+static void  (CDECL   *p_vcomp_atomic_and_i1)(char *dest, char val);
+static void  (CDECL   *p_vcomp_atomic_and_i2)(short *dest, short val);
 static void  (CDECL   *p_vcomp_atomic_and_i4)(int *dest, int val);
+static void  (CDECL   *p_vcomp_atomic_and_i8)(LONG64 *dest, LONG64 val);
+static void  (CDECL   *p_vcomp_atomic_div_i1)(char *dest, char val);
+static void  (CDECL   *p_vcomp_atomic_div_i2)(short *dest, short val);
 static void  (CDECL   *p_vcomp_atomic_div_i4)(int *dest, int val);
+static void  (CDECL   *p_vcomp_atomic_div_i8)(LONG64 *dest, LONG64 val);
 static void  (CDECL   *p_vcomp_atomic_div_r4)(float *dest, float val);
 static void  (CDECL   *p_vcomp_atomic_div_r8)(double *dest, double val);
+static void  (CDECL   *p_vcomp_atomic_div_ui1)(unsigned char *dest, unsigned char val);
+static void  (CDECL   *p_vcomp_atomic_div_ui2)(unsigned short *dest, unsigned short val);
 static void  (CDECL   *p_vcomp_atomic_div_ui4)(unsigned int *dest, unsigned int val);
+static void  (CDECL   *p_vcomp_atomic_div_ui8)(ULONG64 *dest, ULONG64 val);
+static void  (CDECL   *p_vcomp_atomic_mul_i1)(char *dest, char val);
+static void  (CDECL   *p_vcomp_atomic_mul_i2)(short *dest, short val);
 static void  (CDECL   *p_vcomp_atomic_mul_i4)(int *dest, int val);
+static void  (CDECL   *p_vcomp_atomic_mul_i8)(LONG64 *dest, LONG64 val);
 static void  (CDECL   *p_vcomp_atomic_mul_r4)(float *dest, float val);
 static void  (CDECL   *p_vcomp_atomic_mul_r8)(double *dest, double val);
+static void  (CDECL   *p_vcomp_atomic_or_i1)(char *dest, char val);
+static void  (CDECL   *p_vcomp_atomic_or_i2)(short *dest, short val);
 static void  (CDECL   *p_vcomp_atomic_or_i4)(int *dest, int val);
+static void  (CDECL   *p_vcomp_atomic_or_i8)(LONG64 *dest, LONG64 val);
+static void  (CDECL   *p_vcomp_atomic_shl_i1)(char *dest, unsigned int val);
+static void  (CDECL   *p_vcomp_atomic_shl_i2)(short *dest, unsigned int val);
 static void  (CDECL   *p_vcomp_atomic_shl_i4)(int *dest, int val);
+static void  (CDECL   *p_vcomp_atomic_shl_i8)(LONG64 *dest, unsigned int val);
+static void  (CDECL   *p_vcomp_atomic_shr_i1)(char *dest, unsigned int val);
+static void  (CDECL   *p_vcomp_atomic_shr_i2)(short *dest, unsigned int val);
 static void  (CDECL   *p_vcomp_atomic_shr_i4)(int *dest, int val);
+static void  (CDECL   *p_vcomp_atomic_shr_i8)(LONG64 *dest, unsigned int val);
+static void  (CDECL   *p_vcomp_atomic_shr_ui1)(unsigned char *dest, unsigned int val);
+static void  (CDECL   *p_vcomp_atomic_shr_ui2)(unsigned short *dest, unsigned int val);
 static void  (CDECL   *p_vcomp_atomic_shr_ui4)(unsigned int *dest, unsigned int val);
+static void  (CDECL   *p_vcomp_atomic_shr_ui8)(ULONG64 *dest, unsigned int val);
+static void  (CDECL   *p_vcomp_atomic_sub_i1)(char *dest, char val);
+static void  (CDECL   *p_vcomp_atomic_sub_i2)(short *dest, short val);
 static void  (CDECL   *p_vcomp_atomic_sub_i4)(int *dest, int val);
+static void  (CDECL   *p_vcomp_atomic_sub_i8)(LONG64 *dest, LONG64 val);
 static void  (CDECL   *p_vcomp_atomic_sub_r4)(float *dest, float val);
 static void  (CDECL   *p_vcomp_atomic_sub_r8)(double *dest, double val);
+static void  (CDECL   *p_vcomp_atomic_xor_i1)(char *dest, char val);
+static void  (CDECL   *p_vcomp_atomic_xor_i2)(short *dest, short val);
 static void  (CDECL   *p_vcomp_atomic_xor_i4)(int *dest, int val);
+static void  (CDECL   *p_vcomp_atomic_xor_i8)(LONG64 *dest, LONG64 val);
 static void  (CDECL   *p_vcomp_barrier)(void);
 static void  (CDECL   *p_vcomp_enter_critsect)(CRITICAL_SECTION **critsect);
 static void  (CDECL   *p_vcomp_flush)(void);
@@ -69,6 +103,16 @@ static int   (CDECL   *p_vcomp_get_thread_num)(void);
 static void  (CDECL   *p_vcomp_leave_critsect)(CRITICAL_SECTION *critsect);
 static int   (CDECL   *p_vcomp_master_begin)(void);
 static void  (CDECL   *p_vcomp_master_end)(void);
+static void  (CDECL   *p_vcomp_reduction_i1)(unsigned int flags, char *dest, char val);
+static void  (CDECL   *p_vcomp_reduction_i2)(unsigned int flags, short *dest, short val);
+static void  (CDECL   *p_vcomp_reduction_i4)(unsigned int flags, int *dest, int val);
+static void  (CDECL   *p_vcomp_reduction_i8)(unsigned int flags, LONG64 *dest, LONG64 val);
+static void  (CDECL   *p_vcomp_reduction_r4)(unsigned int flags, float *dest, float val);
+static void  (CDECL   *p_vcomp_reduction_r8)(unsigned int flags, double *dest, double val);
+static void  (CDECL   *p_vcomp_reduction_u1)(unsigned int flags, unsigned char *dest, unsigned char val);
+static void  (CDECL   *p_vcomp_reduction_u2)(unsigned int flags, unsigned short *dest, unsigned short val);
+static void  (CDECL   *p_vcomp_reduction_u4)(unsigned int flags, unsigned int *dest, unsigned int val);
+static void  (CDECL   *p_vcomp_reduction_u8)(unsigned int flags, ULONG64 *dest, ULONG64 val);
 static void  (CDECL   *p_vcomp_sections_init)(int n);
 static int   (CDECL   *p_vcomp_sections_next)(void);
 static void  (CDECL   *p_vcomp_set_num_threads)(int num_threads);
@@ -96,6 +140,14 @@ static void  (CDECL   *pomp_unset_nest_lock)(omp_nest_lock_t *lock);
 #define VCOMP_DYNAMIC_FLAGS_CHUNKED     0x02
 #define VCOMP_DYNAMIC_FLAGS_GUIDED      0x03
 #define VCOMP_DYNAMIC_FLAGS_INCREMENT   0x40
+
+#define VCOMP_REDUCTION_FLAGS_ADD       0x100
+#define VCOMP_REDUCTION_FLAGS_MUL       0x200
+#define VCOMP_REDUCTION_FLAGS_AND       0x300
+#define VCOMP_REDUCTION_FLAGS_OR        0x400
+#define VCOMP_REDUCTION_FLAGS_XOR       0x500
+#define VCOMP_REDUCTION_FLAGS_BOOL_AND  0x600
+#define VCOMP_REDUCTION_FLAGS_BOOL_OR   0x700
 
 #ifdef __i386__
 #define ARCH "x86"
@@ -133,6 +185,16 @@ static const char vcomp_manifest[] =
     "</assembly>\n";
 
 #undef ARCH
+
+static const char *debugstr_longlong(ULONGLONG ll)
+{
+    static char str[17];
+    if (sizeof(ll) > sizeof(unsigned long) && ll >> 32)
+        sprintf(str, "%lx%08lx", (unsigned long)(ll >> 32), (unsigned long)ll);
+    else
+        sprintf(str, "%lx", (unsigned long)ll);
+    return str;
+}
 
 static void create_vcomp_manifest(void)
 {
@@ -227,25 +289,58 @@ static BOOL init_vcomp(void)
         return FALSE;
     }
 
+    VCOMP_GET_PROC(_vcomp_atomic_add_i1);
+    VCOMP_GET_PROC(_vcomp_atomic_add_i2);
     VCOMP_GET_PROC(_vcomp_atomic_add_i4);
+    VCOMP_GET_PROC(_vcomp_atomic_add_i8);
     VCOMP_GET_PROC(_vcomp_atomic_add_r4);
     VCOMP_GET_PROC(_vcomp_atomic_add_r8);
+    VCOMP_GET_PROC(_vcomp_atomic_and_i1);
+    VCOMP_GET_PROC(_vcomp_atomic_and_i2);
     VCOMP_GET_PROC(_vcomp_atomic_and_i4);
+    VCOMP_GET_PROC(_vcomp_atomic_and_i8);
+    VCOMP_GET_PROC(_vcomp_atomic_div_i1);
+    VCOMP_GET_PROC(_vcomp_atomic_div_i2);
     VCOMP_GET_PROC(_vcomp_atomic_div_i4);
+    VCOMP_GET_PROC(_vcomp_atomic_div_i8);
     VCOMP_GET_PROC(_vcomp_atomic_div_r4);
     VCOMP_GET_PROC(_vcomp_atomic_div_r8);
+    VCOMP_GET_PROC(_vcomp_atomic_div_ui1);
+    VCOMP_GET_PROC(_vcomp_atomic_div_ui2);
     VCOMP_GET_PROC(_vcomp_atomic_div_ui4);
+    VCOMP_GET_PROC(_vcomp_atomic_div_ui8);
+    VCOMP_GET_PROC(_vcomp_atomic_mul_i1);
+    VCOMP_GET_PROC(_vcomp_atomic_mul_i2);
     VCOMP_GET_PROC(_vcomp_atomic_mul_i4);
+    VCOMP_GET_PROC(_vcomp_atomic_mul_i8);
     VCOMP_GET_PROC(_vcomp_atomic_mul_r4);
     VCOMP_GET_PROC(_vcomp_atomic_mul_r8);
+    VCOMP_GET_PROC(_vcomp_atomic_or_i1);
+    VCOMP_GET_PROC(_vcomp_atomic_or_i2);
     VCOMP_GET_PROC(_vcomp_atomic_or_i4);
+    VCOMP_GET_PROC(_vcomp_atomic_or_i8);
+    VCOMP_GET_PROC(_vcomp_atomic_shl_i1);
+    VCOMP_GET_PROC(_vcomp_atomic_shl_i2);
     VCOMP_GET_PROC(_vcomp_atomic_shl_i4);
+    VCOMP_GET_PROC(_vcomp_atomic_shl_i8);
+    VCOMP_GET_PROC(_vcomp_atomic_shr_i1);
+    VCOMP_GET_PROC(_vcomp_atomic_shr_i2);
     VCOMP_GET_PROC(_vcomp_atomic_shr_i4);
+    VCOMP_GET_PROC(_vcomp_atomic_shr_i8);
+    VCOMP_GET_PROC(_vcomp_atomic_shr_ui1);
+    VCOMP_GET_PROC(_vcomp_atomic_shr_ui2);
     VCOMP_GET_PROC(_vcomp_atomic_shr_ui4);
+    VCOMP_GET_PROC(_vcomp_atomic_shr_ui8);
+    VCOMP_GET_PROC(_vcomp_atomic_sub_i1);
+    VCOMP_GET_PROC(_vcomp_atomic_sub_i2);
     VCOMP_GET_PROC(_vcomp_atomic_sub_i4);
+    VCOMP_GET_PROC(_vcomp_atomic_sub_i8);
     VCOMP_GET_PROC(_vcomp_atomic_sub_r4);
     VCOMP_GET_PROC(_vcomp_atomic_sub_r8);
+    VCOMP_GET_PROC(_vcomp_atomic_xor_i1);
+    VCOMP_GET_PROC(_vcomp_atomic_xor_i2);
     VCOMP_GET_PROC(_vcomp_atomic_xor_i4);
+    VCOMP_GET_PROC(_vcomp_atomic_xor_i8);
     VCOMP_GET_PROC(_vcomp_barrier);
     VCOMP_GET_PROC(_vcomp_enter_critsect);
     VCOMP_GET_PROC(_vcomp_flush);
@@ -259,6 +354,16 @@ static BOOL init_vcomp(void)
     VCOMP_GET_PROC(_vcomp_leave_critsect);
     VCOMP_GET_PROC(_vcomp_master_begin);
     VCOMP_GET_PROC(_vcomp_master_end);
+    VCOMP_GET_PROC(_vcomp_reduction_i1);
+    VCOMP_GET_PROC(_vcomp_reduction_i2);
+    VCOMP_GET_PROC(_vcomp_reduction_i4);
+    VCOMP_GET_PROC(_vcomp_reduction_i8);
+    VCOMP_GET_PROC(_vcomp_reduction_r4);
+    VCOMP_GET_PROC(_vcomp_reduction_r8);
+    VCOMP_GET_PROC(_vcomp_reduction_u1);
+    VCOMP_GET_PROC(_vcomp_reduction_u2);
+    VCOMP_GET_PROC(_vcomp_reduction_u4);
+    VCOMP_GET_PROC(_vcomp_reduction_u8);
     VCOMP_GET_PROC(_vcomp_sections_init);
     VCOMP_GET_PROC(_vcomp_sections_next);
     VCOMP_GET_PROC(_vcomp_set_num_threads);
@@ -1389,6 +1494,195 @@ static void test_omp_init_nest_lock(void)
     pomp_destroy_nest_lock(&lock);
 }
 
+static void test_atomic_integer8(void)
+{
+    struct
+    {
+        void (CDECL *func)(char *, char);
+        char v1, v2, expected;
+    }
+    tests1[] =
+    {
+        { p_vcomp_atomic_add_i1,  0x11,  0x77, -0x78 },
+        { p_vcomp_atomic_and_i1,  0x11,  0x77,  0x11 },
+        { p_vcomp_atomic_div_i1,  0x77,  0x11,     7 },
+        { p_vcomp_atomic_div_i1,  0x77, -0x11,    -7 },
+        { p_vcomp_atomic_mul_i1,  0x11,  0x77, -0x19 },
+        { p_vcomp_atomic_mul_i1,  0x11, -0x77,  0x19 },
+        { p_vcomp_atomic_or_i1,   0x11,  0x77,  0x77 },
+        { p_vcomp_atomic_sub_i1,  0x11,  0x77, -0x66 },
+        { p_vcomp_atomic_xor_i1,  0x11,  0x77,  0x66 },
+    };
+    struct
+    {
+        void (CDECL *func)(char *, unsigned int);
+        char v1;
+        unsigned int v2;
+        char expected;
+    }
+    tests2[] =
+    {
+        { p_vcomp_atomic_shl_i1,  0x11,  3, -0x78 },
+        { p_vcomp_atomic_shl_i1, -0x11,  3,  0x78 },
+        { p_vcomp_atomic_shr_i1,  0x11,  3,     2 },
+        { p_vcomp_atomic_shr_i1, -0x11,  3,    -3 },
+#if defined(__i386__) || defined(__x86_64__)
+        { p_vcomp_atomic_shl_i1,  0x11, 11,     0 },
+        { p_vcomp_atomic_shl_i1,  0x11, 19,     0 },
+        { p_vcomp_atomic_shl_i1,  0x11, 35, -0x78 },
+        { p_vcomp_atomic_shr_i1,  0x11, 11,     0 },
+        { p_vcomp_atomic_shr_i1,  0x11, 19,     0 },
+        { p_vcomp_atomic_shr_i1,  0x11, 35,     2 },
+#endif
+    };
+    struct
+    {
+        void (CDECL *func)(unsigned char *, unsigned char);
+        unsigned char v1, v2, expected;
+    }
+    tests3[] =
+    {
+        { p_vcomp_atomic_div_ui1, 0x77, 0x11, 7 },
+        { p_vcomp_atomic_div_ui1, 0x77, 0xef, 0 },
+    };
+    struct
+    {
+        void (CDECL *func)(unsigned char *, unsigned int);
+        unsigned char v1;
+        unsigned int v2;
+        unsigned char expected;
+    }
+    tests4[] =
+    {
+        { p_vcomp_atomic_shr_ui1, 0x11,  3,    2 },
+        { p_vcomp_atomic_shr_ui1, 0xef,  3, 0x1d },
+#if defined(__i386__) || defined(__x86_64__)
+        { p_vcomp_atomic_shr_ui1, 0x11, 11,    0 },
+        { p_vcomp_atomic_shr_ui1, 0x11, 19,    0 },
+        { p_vcomp_atomic_shr_ui1, 0x11, 35,    2 },
+#endif
+    };
+    int i;
+
+    for (i = 0; i < sizeof(tests1)/sizeof(tests1[0]); i++)
+    {
+        char val = tests1[i].v1;
+        tests1[i].func(&val, tests1[i].v2);
+        ok(val == tests1[i].expected, "test %d: expected val == %d, got %d\n", i, tests1[i].expected, val);
+    }
+    for (i = 0; i < sizeof(tests2)/sizeof(tests2[0]); i++)
+    {
+        char val = tests2[i].v1;
+        tests2[i].func(&val, tests2[i].v2);
+        ok(val == tests2[i].expected, "test %d: expected val == %d, got %d\n", i, tests2[i].expected, val);
+    }
+    for (i = 0; i < sizeof(tests3)/sizeof(tests3[0]); i++)
+    {
+        unsigned char val = tests3[i].v1;
+        tests3[i].func(&val, tests3[i].v2);
+        ok(val == tests3[i].expected, "test %d: expected val == %u, got %u\n", i, tests3[i].expected, val);
+    }
+    for (i = 0; i < sizeof(tests4)/sizeof(tests4[0]); i++)
+    {
+        unsigned char val = tests4[i].v1;
+        tests4[i].func(&val, tests4[i].v2);
+        ok(val == tests4[i].expected, "test %d: expected val == %u, got %u\n", i, tests4[i].expected, val);
+    }
+}
+
+static void test_atomic_integer16(void)
+{
+    struct
+    {
+        void (CDECL *func)(short *, short);
+        short v1, v2, expected;
+    }
+    tests1[] =
+    {
+        { p_vcomp_atomic_add_i2,  0x1122,  0x7766, -0x7778 },
+        { p_vcomp_atomic_and_i2,  0x1122,  0x7766,  0x1122 },
+        { p_vcomp_atomic_div_i2,  0x7766,  0x1122,       6 },
+        { p_vcomp_atomic_div_i2,  0x7766, -0x1122,      -6 },
+        { p_vcomp_atomic_mul_i2,  0x1122,  0x7766, -0x5e74 },
+        { p_vcomp_atomic_mul_i2,  0x1122, -0x7766,  0x5e74 },
+        { p_vcomp_atomic_or_i2,   0x1122,  0x7766,  0x7766 },
+        { p_vcomp_atomic_sub_i2,  0x1122,  0x7766, -0x6644 },
+        { p_vcomp_atomic_xor_i2,  0x1122,  0x7766,  0x6644 },
+    };
+    struct
+    {
+        void (CDECL *func)(short *, unsigned int);
+        short v1;
+        unsigned int v2;
+        short expected;
+    }
+    tests2[] =
+    {
+        { p_vcomp_atomic_shl_i2,  0x1122,  3, -0x76f0 },
+        { p_vcomp_atomic_shl_i2, -0x1122,  3,  0x76f0 },
+        { p_vcomp_atomic_shr_i2,  0x1122,  3,   0x224 },
+        { p_vcomp_atomic_shr_i2, -0x1122,  3,  -0x225 },
+#if defined(__i386__) || defined(__x86_64__)
+        { p_vcomp_atomic_shl_i2,  0x1122, 19,       0 },
+        { p_vcomp_atomic_shl_i2,  0x1122, 35, -0x76f0 },
+        { p_vcomp_atomic_shr_i2,  0x1122, 19,       0 },
+        { p_vcomp_atomic_shr_i2,  0x1122, 35,   0x224 },
+#endif
+    };
+    struct
+    {
+        void (CDECL *func)(unsigned short *, unsigned short);
+        unsigned short v1, v2, expected;
+    }
+    tests3[] =
+    {
+        { p_vcomp_atomic_div_ui2, 0x7766, 0x1122, 6 },
+        { p_vcomp_atomic_div_ui2, 0x7766, 0xeede, 0 },
+    };
+    struct
+    {
+        void (CDECL *func)(unsigned short *, unsigned int);
+        unsigned short v1;
+        unsigned int v2;
+        unsigned short expected;
+    }
+    tests4[] =
+    {
+        { p_vcomp_atomic_shr_ui2, 0x1122,  3,  0x224 },
+        { p_vcomp_atomic_shr_ui2, 0xeede,  3, 0x1ddb },
+#if defined(__i386__) || defined(__x86_64__)
+        { p_vcomp_atomic_shr_ui2, 0x1122, 19,      0 },
+        { p_vcomp_atomic_shr_ui2, 0x1122, 35,  0x224 },
+#endif
+    };
+    int i;
+
+    for (i = 0; i < sizeof(tests1)/sizeof(tests1[0]); i++)
+    {
+        short val = tests1[i].v1;
+        tests1[i].func(&val, tests1[i].v2);
+        ok(val == tests1[i].expected, "test %d: expected val == %d, got %d\n", i, tests1[i].expected, val);
+    }
+    for (i = 0; i < sizeof(tests2)/sizeof(tests2[0]); i++)
+    {
+        short val = tests2[i].v1;
+        tests2[i].func(&val, tests2[i].v2);
+        ok(val == tests2[i].expected, "test %d: expected val == %d, got %d\n", i, tests2[i].expected, val);
+    }
+    for (i = 0; i < sizeof(tests3)/sizeof(tests3[0]); i++)
+    {
+        unsigned short val = tests3[i].v1;
+        tests3[i].func(&val, tests3[i].v2);
+        ok(val == tests3[i].expected, "test %d: expected val == %u, got %u\n", i, tests3[i].expected, val);
+    }
+    for (i = 0; i < sizeof(tests4)/sizeof(tests4[0]); i++)
+    {
+        unsigned short val = tests4[i].v1;
+        tests4[i].func(&val, tests4[i].v2);
+        ok(val == tests4[i].expected, "test %d: expected val == %u, got %u\n", i, tests4[i].expected, val);
+    }
+}
+
 static void test_atomic_integer32(void)
 {
     struct
@@ -1447,6 +1741,114 @@ static void test_atomic_integer32(void)
     }
 }
 
+static void test_atomic_integer64(void)
+{
+    struct
+    {
+        void (CDECL *func)(LONG64 *, LONG64);
+        LONG64 v1, v2, expected;
+    }
+    tests1[] =
+    {
+        { p_vcomp_atomic_add_i8,  0x1122334455667788,  0x7766554433221100, -0x7777777777777778 },
+        { p_vcomp_atomic_and_i8,  0x1122334455667788,  0x7766554433221100,  0x1122114411221100 },
+        { p_vcomp_atomic_div_i8,  0x7766554433221100,  0x1122334455667788,                   6 },
+        { p_vcomp_atomic_div_i8,  0x7766554433221100, -0x1122334455667788,                  -6 },
+        { p_vcomp_atomic_mul_i8,  0x1122334455667788,  0x7766554433221100,  0x3e963337c6000800 },
+        { p_vcomp_atomic_mul_i8,  0x1122334455667788, -0x7766554433221100,  0xc169ccc839fff800 },
+        { p_vcomp_atomic_or_i8,   0x1122334455667788,  0x7766554433221100,  0x7766774477667788 },
+        { p_vcomp_atomic_sub_i8,  0x1122334455667788,  0x7766554433221100, -0x664421ffddbb9978 },
+        { p_vcomp_atomic_xor_i8,  0x1122334455667788,  0x7766554433221100,  0x6644660066446688 },
+    };
+    struct
+    {
+        void (CDECL *func)(LONG64 *, unsigned int);
+        LONG64 v1;
+        unsigned int v2;
+        LONG64 expected;
+        BOOL todo;
+    }
+    tests2[] =
+    {
+        { p_vcomp_atomic_shl_i8,  0x1122334455667788,  3, -0x76ee65dd54cc43c0 },
+        { p_vcomp_atomic_shl_i8,  0x1122334455667788, 60,  0x8000000000000000 },
+        { p_vcomp_atomic_shl_i8, -0x1122334455667788,  3,  0x76ee65dd54cc43c0 },
+        { p_vcomp_atomic_shr_i8,  0x1122334455667788,  3,   0x22446688aaccef1 },
+        { p_vcomp_atomic_shr_i8,  0x1122334455667788, 60,                   1 },
+        { p_vcomp_atomic_shr_i8, -0x1122334455667788,  3,  -0x22446688aaccef1 },
+#if defined(__i386__)
+        { p_vcomp_atomic_shl_i8,  0x1122334455667788, 64,                   0, TRUE },
+        { p_vcomp_atomic_shl_i8,  0x1122334455667788, 67,                   0, TRUE },
+        { p_vcomp_atomic_shr_i8,  0x1122334455667788, 64,                   0, TRUE },
+        { p_vcomp_atomic_shr_i8,  0x1122334455667788, 67,                   0, TRUE },
+#elif defined(__x86_64__)
+        { p_vcomp_atomic_shl_i8,  0x1122334455667788, 64,  0x1122334455667788 },
+        { p_vcomp_atomic_shl_i8,  0x1122334455667788, 67, -0x76ee65dd54cc43c0 },
+        { p_vcomp_atomic_shr_i8,  0x1122334455667788, 64,  0x1122334455667788 },
+        { p_vcomp_atomic_shr_i8,  0x1122334455667788, 67,   0x22446688aaccef1 },
+#endif
+    };
+    struct
+    {
+        void (CDECL *func)(ULONG64 *, ULONG64);
+        ULONG64 v1, v2, expected;
+    }
+    tests3[] =
+    {
+        { p_vcomp_atomic_div_ui8, 0x7766554455667788, 0x1122334433221100, 6 },
+        { p_vcomp_atomic_div_ui8, 0x7766554455667788, 0xeeddccbbaa998878, 0 },
+    };
+    struct
+    {
+        void (CDECL *func)(ULONG64 *, unsigned int);
+        ULONG64 v1;
+        unsigned int v2;
+        ULONG64 expected;
+        BOOL todo;
+    }
+    tests4[] =
+    {
+        { p_vcomp_atomic_shr_ui8, 0x1122334455667788,  3,  0x22446688aaccef1 },
+        { p_vcomp_atomic_shr_ui8, 0x1122334455667788, 60,                  1 },
+        { p_vcomp_atomic_shr_ui8, 0xeeddccbbaa998878,  3, 0x1ddbb9977553310f },
+#if defined(__i386__)
+        { p_vcomp_atomic_shr_ui8, 0x1122334455667788, 64,                  0, TRUE },
+        { p_vcomp_atomic_shr_ui8, 0x1122334455667788, 67,                  0, TRUE },
+#elif defined(__x86_64__)
+        { p_vcomp_atomic_shr_ui8, 0x1122334455667788, 64, 0x1122334455667788 },
+        { p_vcomp_atomic_shr_ui8, 0x1122334455667788, 67,  0x22446688aaccef1 },
+#endif
+    };
+    int i;
+
+    for (i = 0; i < sizeof(tests1)/sizeof(tests1[0]); i++)
+    {
+        LONG64 val = tests1[i].v1;
+        tests1[i].func(&val, tests1[i].v2);
+        ok(val == tests1[i].expected, "test %d: unexpectedly got %s\n", i, debugstr_longlong(val));
+    }
+    for (i = 0; i < sizeof(tests2)/sizeof(tests2[0]); i++)
+    {
+        LONG64 val = tests2[i].v1;
+        tests2[i].func(&val, tests2[i].v2);
+        todo_wine_if(tests2[i].todo)
+        ok(val == tests2[i].expected, "test %d: unexpectedly got %s\n", i, debugstr_longlong(val));
+    }
+    for (i = 0; i < sizeof(tests3)/sizeof(tests3[0]); i++)
+    {
+        ULONG64 val = tests3[i].v1;
+        tests3[i].func(&val, tests3[i].v2);
+        ok(val == tests3[i].expected, "test %d: unexpectedly got %s\n", i, debugstr_longlong(val));
+    }
+    for (i = 0; i < sizeof(tests4)/sizeof(tests4[0]); i++)
+    {
+        ULONG64 val = tests4[i].v1;
+        tests4[i].func(&val, tests4[i].v2);
+        todo_wine_if(tests4[i].todo)
+        ok(val == tests4[i].expected, "test %d: unexpectedly got %s\n", i, debugstr_longlong(val));
+    }
+}
+
 static void test_atomic_float(void)
 {
     struct
@@ -1497,6 +1899,279 @@ static void test_atomic_double(void)
     }
 }
 
+static void test_reduction_integer8(void)
+{
+    static const struct
+    {
+        unsigned int flags;
+        char v1, v2, expected;
+    }
+    tests[] =
+    {
+        { 0x000,                            0x11,  0x77, -0x78 },
+        { VCOMP_REDUCTION_FLAGS_ADD,        0x11,  0x77, -0x78 },
+        { VCOMP_REDUCTION_FLAGS_MUL,        0x11,  0x77, -0x19 },
+        { VCOMP_REDUCTION_FLAGS_MUL,        0x11, -0x77,  0x19 },
+        { VCOMP_REDUCTION_FLAGS_AND,        0x11,  0x77,  0x11 },
+        { VCOMP_REDUCTION_FLAGS_OR,         0x11,  0x77,  0x77 },
+        { VCOMP_REDUCTION_FLAGS_XOR,        0x11,  0x77,  0x66 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,      1,     2,     1 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,       0,     2,     1 },
+        { 0x800,                               0,     2,     1 },
+        { 0x900,                               0,     2,     1 },
+        { 0xa00,                               0,     2,     1 },
+        { 0xb00,                               0,     2,     1 },
+        { 0xc00,                               0,     2,     1 },
+        { 0xd00,                               0,     2,     1 },
+        { 0xe00,                               0,     2,     1 },
+        { 0xf00,                               0,     2,     1 },
+    };
+    int i;
+
+    for (i = 0; i < sizeof(tests)/sizeof(tests[0]); i++)
+    {
+        char val = tests[i].v1;
+        p_vcomp_reduction_i1(tests[i].flags, &val, tests[i].v2);
+        ok(val == tests[i].expected, "test %d: expected val == %d, got %d\n", i, tests[i].expected, val);
+    }
+    for (i = 0; i < sizeof(tests)/sizeof(tests[0]); i++)
+    {
+        unsigned char val = tests[i].v1;
+        p_vcomp_reduction_u1(tests[i].flags, &val, tests[i].v2);
+        ok(val == (unsigned char)tests[i].expected,
+           "test %d: expected val == %u, got %u\n", i, (unsigned char)tests[i].expected, val);
+    }
+}
+
+static void test_reduction_integer16(void)
+{
+    static const struct
+    {
+        unsigned int flags;
+        short v1, v2, expected;
+    }
+    tests[] =
+    {
+        { 0x000,                            0x1122,  0x7766, -0x7778 },
+        { VCOMP_REDUCTION_FLAGS_ADD,        0x1122,  0x7766, -0x7778 },
+        { VCOMP_REDUCTION_FLAGS_MUL,        0x1122,  0x7766, -0x5e74 },
+        { VCOMP_REDUCTION_FLAGS_MUL,        0x1122, -0x7766,  0x5e74 },
+        { VCOMP_REDUCTION_FLAGS_AND,        0x1122,  0x7766,  0x1122 },
+        { VCOMP_REDUCTION_FLAGS_OR,         0x1122,  0x7766,  0x7766 },
+        { VCOMP_REDUCTION_FLAGS_XOR,        0x1122,  0x7766,  0x6644 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,        1,       2,       1 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,         0,       2,       1 },
+        { 0x800,                                 0,       2,       1 },
+        { 0x900,                                 0,       2,       1 },
+        { 0xa00,                                 0,       2,       1 },
+        { 0xb00,                                 0,       2,       1 },
+        { 0xc00,                                 0,       2,       1 },
+        { 0xd00,                                 0,       2,       1 },
+        { 0xe00,                                 0,       2,       1 },
+        { 0xf00,                                 0,       2,       1 },
+    };
+    int i;
+
+    for (i = 0; i < sizeof(tests)/sizeof(tests[0]); i++)
+    {
+        short val = tests[i].v1;
+        p_vcomp_reduction_i2(tests[i].flags, &val, tests[i].v2);
+        ok(val == tests[i].expected, "test %d: expected val == %d, got %d\n", i, tests[i].expected, val);
+    }
+    for (i = 0; i < sizeof(tests)/sizeof(tests[0]); i++)
+    {
+        unsigned short val = tests[i].v1;
+        p_vcomp_reduction_u2(tests[i].flags, &val, tests[i].v2);
+        ok(val == (unsigned short)tests[i].expected,
+           "test %d: expected val == %u, got %u\n", i, (unsigned short)tests[i].expected, val);
+    }
+}
+
+static void CDECL reduction_cb(int *a, int *b)
+{
+    p_vcomp_reduction_i4(VCOMP_REDUCTION_FLAGS_ADD, a, 1);
+    p_vcomp_reduction_i4(VCOMP_REDUCTION_FLAGS_ADD | 0xfffff0ff, b, 1);
+}
+
+static void test_reduction_integer32(void)
+{
+    static const struct
+    {
+        unsigned int flags;
+        int v1, v2, expected;
+    }
+    tests[] =
+    {
+        { 0x000,                            0x11223344,  0x77665544, -0x77777778 },
+        { VCOMP_REDUCTION_FLAGS_ADD,        0x11223344,  0x77665544, -0x77777778 },
+        { VCOMP_REDUCTION_FLAGS_MUL,        0x11223344,  0x77665544,  -0xecccdf0 },
+        { VCOMP_REDUCTION_FLAGS_MUL,        0x11223344, -0x77665544,   0xecccdf0 },
+        { VCOMP_REDUCTION_FLAGS_AND,        0x11223344,  0x77665544,  0x11221144 },
+        { VCOMP_REDUCTION_FLAGS_OR,         0x11223344,  0x77665544,  0x77667744 },
+        { VCOMP_REDUCTION_FLAGS_XOR,        0x11223344,  0x77665544,  0x66446600 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,            0,           0,           0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,            0,           2,           0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,            1,           0,           0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,            1,           2,           1 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,            2,           0,           0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,            2,           2,           1 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,             0,           0,           0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,             0,           2,           1 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,             1,           0,           1 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,             1,           2,           1 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,             2,           0,           2 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,             2,           2,           2 },
+        { 0x800,                                     0,           2,           1 },
+        { 0x900,                                     0,           2,           1 },
+        { 0xa00,                                     0,           2,           1 },
+        { 0xb00,                                     0,           2,           1 },
+        { 0xc00,                                     0,           2,           1 },
+        { 0xd00,                                     0,           2,           1 },
+        { 0xe00,                                     0,           2,           1 },
+        { 0xf00,                                     0,           2,           1 },
+    };
+    int max_threads = pomp_get_max_threads();
+    int a, b, i;
+
+    a = b = 42;
+    reduction_cb(&a, &b);
+    ok(a == 43, "expected a == 43, got %d\n", a);
+    ok(b == 43, "expected b == 43, got %d\n", b);
+
+    for (i = 1; i <= 4; i++)
+    {
+        pomp_set_num_threads(i);
+
+        a = b = 42;
+        p_vcomp_fork(TRUE, 2, reduction_cb, &a, &b);
+        ok(a == 42 + i, "expected a == %d, got %d\n", 42 + i, a);
+        ok(b == 42 + i, "expected b == %d, got %d\n", 42 + i, b);
+
+        a = b = 42;
+        p_vcomp_fork(FALSE, 2, reduction_cb, &a, &b);
+        ok(a == 43, "expected a == 43, got %d\n", a);
+        ok(b == 43, "expected b == 43, got %d\n", b);
+    }
+
+    pomp_set_num_threads(max_threads);
+
+    for (i = 0; i < sizeof(tests)/sizeof(tests[0]); i++)
+    {
+        int val = tests[i].v1;
+        p_vcomp_reduction_i4(tests[i].flags, &val, tests[i].v2);
+        ok(val == tests[i].expected, "test %d: expected val == %d, got %d\n", i, tests[i].expected, val);
+    }
+    for (i = 0; i < sizeof(tests)/sizeof(tests[0]); i++)
+    {
+        unsigned int val = tests[i].v1;
+        p_vcomp_reduction_u4(tests[i].flags, &val, tests[i].v2);
+        ok(val == tests[i].expected, "test %d: expected val == %u, got %u\n", i, tests[i].expected, val);
+    }
+}
+
+static void test_reduction_integer64(void)
+{
+    static const struct
+    {
+        unsigned int flags;
+        LONG64 v1, v2, expected;
+    }
+    tests[] =
+    {
+        { 0x000,                            0x1122334455667788,  0x7766554433221100, -0x7777777777777778 },
+        { VCOMP_REDUCTION_FLAGS_ADD,        0x1122334455667788,  0x7766554433221100, -0x7777777777777778 },
+        { VCOMP_REDUCTION_FLAGS_MUL,        0x1122334455667788,  0x7766554433221100,  0x3e963337c6000800 },
+        { VCOMP_REDUCTION_FLAGS_MUL,        0x1122334455667788, -0x7766554433221100,  0xc169ccc839fff800 },
+        { VCOMP_REDUCTION_FLAGS_AND,        0x1122334455667788,  0x7766554433221100,  0x1122114411221100 },
+        { VCOMP_REDUCTION_FLAGS_OR,         0x1122334455667788,  0x7766554433221100,  0x7766774477667788 },
+        { VCOMP_REDUCTION_FLAGS_XOR,        0x1122334455667788,  0x7766554433221100,  0x6644660066446688 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,                    1,                   2,                   1 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,                     0,                   2,                   1 },
+        { 0x800,                                             0,                   2,                   1 },
+        { 0x900,                                             0,                   2,                   1 },
+        { 0xa00,                                             0,                   2,                   1 },
+        { 0xb00,                                             0,                   2,                   1 },
+        { 0xc00,                                             0,                   2,                   1 },
+        { 0xd00,                                             0,                   2,                   1 },
+        { 0xe00,                                             0,                   2,                   1 },
+        { 0xf00,                                             0,                   2,                   1 },
+    };
+    int i;
+
+    for (i = 0; i < sizeof(tests)/sizeof(tests[0]); i++)
+    {
+        LONG64 val = tests[i].v1;
+        p_vcomp_reduction_i8(tests[i].flags, &val, tests[i].v2);
+        ok(val == tests[i].expected, "test %d: unexpectedly got %s\n", i, debugstr_longlong(val));
+    }
+    for (i = 0; i < sizeof(tests)/sizeof(tests[0]); i++)
+    {
+        ULONG64 val = tests[i].v1;
+        p_vcomp_reduction_u8(tests[i].flags, &val, tests[i].v2);
+        ok(val == tests[i].expected, "test %d: unexpectedly got %s\n", i, debugstr_longlong(val));
+    }
+}
+
+static void test_reduction_float_double(void)
+{
+    static const struct
+    {
+        unsigned int flags;
+        float v1, v2, expected;
+    }
+    tests[] =
+    {
+        { 0x000,                            42.0,   17.0, 42.0 + 17.0 },
+        { VCOMP_REDUCTION_FLAGS_ADD,        42.0,   17.0, 42.0 + 17.0 },
+        { VCOMP_REDUCTION_FLAGS_MUL,        42.0,   17.0, 42.0 * 17.0 },
+        { 0x300,                             0.0,    2.0,         1.0 },
+        { 0x400,                             0.0,    2.0,         1.0 },
+        { 0x500,                             0.0,    2.0,         1.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,   -0.0,    1.0,         0.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,    0.0,    0.0,         0.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,    0.0,    2.0,         0.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,    1.0,   -0.0,         0.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,    1.0,    0.0,         0.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,    1.0, 1.0e-5,         1.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,    1.0,    2.0,         1.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,    2.0,    0.0,         0.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_AND,    2.0,    2.0,         1.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,    -0.0,    0.0,         0.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,     0.0,   -0.0,         0.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,     0.0,    0.0,         0.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,     0.0, 1.0e-5,         1.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,     0.0,    2.0,         1.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,     1.0,    0.0,         1.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,     1.0,    2.0,         1.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,     2.0,    0.0,         2.0 },
+        { VCOMP_REDUCTION_FLAGS_BOOL_OR,     2.0,    2.0,         2.0 },
+        { 0x800,                             0.0,    2.0,         1.0 },
+        { 0x900,                             0.0,    2.0,         1.0 },
+        { 0xa00,                             0.0,    2.0,         1.0 },
+        { 0xb00,                             0.0,    2.0,         1.0 },
+        { 0xc00,                             0.0,    2.0,         1.0 },
+        { 0xd00,                             0.0,    2.0,         1.0 },
+        { 0xe00,                             0.0,    2.0,         1.0 },
+        { 0xf00,                             0.0,    2.0,         1.0 },
+    };
+    int i;
+
+    for (i = 0; i < sizeof(tests)/sizeof(tests[0]); i++)
+    {
+        float val = tests[i].v1;
+        p_vcomp_reduction_r4(tests[i].flags, &val, tests[i].v2);
+        ok(tests[i].expected - 0.001 < val && val < tests[i].expected + 0.001,
+           "test %d: expected val == %f, got %f\n", i, tests[i].expected, val);
+    }
+    for (i = 0; i < sizeof(tests)/sizeof(tests[0]); i++)
+    {
+        double val = tests[i].v1;
+        p_vcomp_reduction_r8(tests[i].flags, &val, tests[i].v2);
+        ok(tests[i].expected - 0.001 < val && val < tests[i].expected + 0.001,
+           "test %d: expected val == %f, got %f\n", i, tests[i].expected, val);
+    }
+}
+
 START_TEST(vcomp)
 {
     if (!init_vcomp())
@@ -1515,9 +2190,17 @@ START_TEST(vcomp)
     test_vcomp_flush();
     test_omp_init_lock();
     test_omp_init_nest_lock();
+    test_atomic_integer8();
+    test_atomic_integer16();
     test_atomic_integer32();
+    test_atomic_integer64();
     test_atomic_float();
     test_atomic_double();
+    test_reduction_integer8();
+    test_reduction_integer16();
+    test_reduction_integer32();
+    test_reduction_integer64();
+    test_reduction_float_double();
 
     release_vcomp();
 }

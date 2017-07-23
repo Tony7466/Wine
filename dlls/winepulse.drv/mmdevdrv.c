@@ -304,7 +304,7 @@ static void pulse_contextcallback(pa_context *c, void *userdata)
             break;
 
         case PA_CONTEXT_FAILED:
-            ERR("Context failed: %s\n", pa_strerror(pa_context_errno(c)));
+            WARN("Context failed: %s\n", pa_strerror(pa_context_errno(c)));
             break;
     }
     pthread_cond_signal(&pulse_cond);
@@ -415,13 +415,17 @@ static void pulse_probe_settings(int render, WAVEFORMATEXTENSIBLE *fmt) {
             {}
         }
     }
+
     if (stream)
         pa_stream_unref(stream);
+
     if (length)
         pulse_def_period[!render] = pulse_min_period[!render] = pa_bytes_to_usec(10 * length, &ss);
-    else
+
+    if (pulse_min_period[!render] < MinimumPeriod)
         pulse_min_period[!render] = MinimumPeriod;
-    if (pulse_def_period[!render] <= DefaultPeriod)
+
+    if (pulse_def_period[!render] < DefaultPeriod)
         pulse_def_period[!render] = DefaultPeriod;
 
     wfx->wFormatTag = WAVE_FORMAT_EXTENSIBLE;
@@ -661,7 +665,7 @@ static void pulse_wr_callback(pa_stream *s, size_t bytes, void *userdata)
     UINT32 oldpad = This->pad;
 
     if(This->local_buffer){
-        size_t to_write;
+        UINT32 to_write;
         BYTE *buf = This->local_buffer + This->lcl_offs_bytes;
 
         if(This->pad > bytes){
@@ -977,7 +981,7 @@ HRESULT WINAPI AUDDRV_GetAudioEndpoint(GUID *guid, IMMDevice *dev, IAudioClient 
     for (i = 0; i < PA_CHANNELS_MAX; ++i)
         This->vol[i] = 1.f;
 
-    hr = CoCreateFreeThreadedMarshaler((IUnknown*)This, &This->marshal);
+    hr = CoCreateFreeThreadedMarshaler((IUnknown*)&This->IAudioClient_iface, &This->marshal);
     if (hr) {
         HeapFree(GetProcessHeap(), 0, This);
         return hr;
@@ -1454,8 +1458,7 @@ static HRESULT WINAPI AudioClient_Initialize(IAudioClient *iface,
 
 exit:
     if (FAILED(hr)) {
-        if(This->local_buffer)
-            HeapFree(GetProcessHeap(), 0, This->local_buffer);
+        HeapFree(GetProcessHeap(), 0, This->local_buffer);
         This->local_buffer = NULL;
         if (This->stream) {
             pa_stream_disconnect(This->stream);
@@ -1507,9 +1510,10 @@ static HRESULT WINAPI AudioClient_GetStreamLatency(IAudioClient *iface,
         return hr;
     }
     attr = pa_stream_get_buffer_attr(This->stream);
-    if (This->dataflow == eRender)
+    if (This->dataflow == eRender){
         lat = attr->minreq / pa_frame_size(&This->ss);
-    else
+        lat += pulse_def_period[0];
+    }else
         lat = attr->fragsize / pa_frame_size(&This->ss);
     *latency = 10000000;
     *latency *= lat;
@@ -3198,7 +3202,7 @@ static HRESULT WINAPI SimpleAudioVolume_SetMute(ISimpleAudioVolume *iface,
     AudioSessionWrapper *This = impl_from_ISimpleAudioVolume(iface);
     AudioSession *session = This->session;
 
-    TRACE("(%p)->(%u, %p)\n", session, mute, context);
+    TRACE("(%p)->(%u, %s)\n", session, mute, debugstr_guid(context));
 
     if (context)
         FIXME("Notifications not supported yet\n");

@@ -280,7 +280,7 @@ NTSTATUS WINAPI NtQueryInformationToken(
         0,    /* TokenUIAccess */
         0,    /* TokenMandatoryPolicy */
         0,    /* TokenLogonSid */
-        0,    /* TokenIsAppContainer */
+        sizeof(DWORD), /* TokenIsAppContainer */
         0,    /* TokenCapabilities */
         sizeof(TOKEN_APPCONTAINER_INFORMATION) + sizeof(SID), /* TokenAppContainerSid */
         0,    /* TokenAppContainerNumber */
@@ -541,6 +541,12 @@ NTSTATUS WINAPI NtQueryInformationToken(
             container->TokenAppContainer = NULL;
         }
         break;
+    case TokenIsAppContainer:
+        {
+            TRACE("TokenIsAppContainer semi-stub\n");
+            *(DWORD*)tokeninfo = 0;
+            break;
+        }
     default:
         {
             ERR("Unhandled Token Information class %d!\n", tokeninfoclass);
@@ -643,25 +649,6 @@ NTSTATUS WINAPI NtPrivilegeCheck(
     }
     SERVER_END_REQ;
     return status;
-}
-
-/*
- *	Section
- */
-
-/******************************************************************************
- *  NtQuerySection	[NTDLL.@]
- */
-NTSTATUS WINAPI NtQuerySection(
-	IN HANDLE SectionHandle,
-	IN SECTION_INFORMATION_CLASS SectionInformationClass,
-	OUT PVOID SectionInformation,
-	IN ULONG Length,
-	OUT PULONG ResultLength)
-{
-	FIXME("(%p,%d,%p,0x%08x,%p) stub!\n",
-	SectionHandle,SectionInformationClass,SectionInformation,Length,ResultLength);
-	return 0;
 }
 
 /*
@@ -2081,7 +2068,7 @@ NTSTATUS WINAPI NtQuerySystemInformation(
                     int i;
                     cpus = min(cpus,out_cpus);
                     len = sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION) * cpus;
-                    sppi = RtlAllocateHeap(GetProcessHeap(), 0,len);
+                    sppi = RtlAllocateHeap(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
                     for (i = 0; i < cpus; i++)
                     {
                         sppi[i].IdleTime.QuadPart = pinfo[i].cpu_ticks[CPU_STATE_IDLE];
@@ -2137,7 +2124,7 @@ NTSTATUS WINAPI NtQuerySystemInformation(
                 unsigned int n;
                 cpus = min(NtCurrentTeb()->Peb->NumberOfProcessors, out_cpus);
                 len = sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION) * cpus;
-                sppi = RtlAllocateHeap(GetProcessHeap(), 0, len);
+                sppi = RtlAllocateHeap(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
                 FIXME("stub info_class SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION\n");
                 /* many programs expect these values to change so fake change */
                 for (n = 0; n < cpus; n++)
@@ -2166,18 +2153,51 @@ NTSTATUS WINAPI NtQuerySystemInformation(
         break;
     case SystemHandleInformation:
         {
-            SYSTEM_HANDLE_INFORMATION shi;
+            struct handle_info *info;
+            DWORD i, num_handles;
 
-            memset(&shi, 0, sizeof(shi));
-            len = sizeof(shi);
-
-            if ( Length >= len)
+            if (Length < sizeof(SYSTEM_HANDLE_INFORMATION))
             {
-                if (!SystemInformation) ret = STATUS_ACCESS_VIOLATION;
-                else memcpy( SystemInformation, &shi, len);
+                ret = STATUS_INFO_LENGTH_MISMATCH;
+                break;
             }
-            else ret = STATUS_INFO_LENGTH_MISMATCH;
-            FIXME("info_class SYSTEM_HANDLE_INFORMATION\n");
+
+            if (!SystemInformation)
+            {
+                ret = STATUS_ACCESS_VIOLATION;
+                break;
+            }
+
+            num_handles = (Length - FIELD_OFFSET( SYSTEM_HANDLE_INFORMATION, Handle )) / sizeof(SYSTEM_HANDLE_ENTRY);
+            if (!(info = RtlAllocateHeap( GetProcessHeap(), 0, sizeof(*info) * num_handles )))
+                return STATUS_NO_MEMORY;
+
+            SERVER_START_REQ( get_system_handles )
+            {
+                wine_server_set_reply( req, info, sizeof(*info) * num_handles );
+                if (!(ret = wine_server_call( req )))
+                {
+                    SYSTEM_HANDLE_INFORMATION *shi = SystemInformation;
+                    shi->Count = wine_server_reply_size( req ) / sizeof(*info);
+                    len = FIELD_OFFSET( SYSTEM_HANDLE_INFORMATION, Handle[shi->Count] );
+                    for (i = 0; i < shi->Count; i++)
+                    {
+                        memset( &shi->Handle[i], 0, sizeof(shi->Handle[i]) );
+                        shi->Handle[i].OwnerPid     = info[i].owner;
+                        shi->Handle[i].HandleValue  = info[i].handle;
+                        shi->Handle[i].AccessMask   = info[i].access;
+                        /* FIXME: Fill out ObjectType, HandleFlags, ObjectPointer */
+                    }
+                }
+                else if (ret == STATUS_BUFFER_TOO_SMALL)
+                {
+                    len = FIELD_OFFSET( SYSTEM_HANDLE_INFORMATION, Handle[reply->count] );
+                    ret = STATUS_INFO_LENGTH_MISMATCH;
+                }
+            }
+            SERVER_END_REQ;
+
+            RtlFreeHeap( GetProcessHeap(), 0, info );
         }
         break;
     case SystemCacheInformation:
@@ -2282,6 +2302,17 @@ NTSTATUS WINAPI NtQuerySystemInformation(
             }
             else ret = STATUS_INFO_LENGTH_MISMATCH;
             RtlFreeHeap(GetProcessHeap(), 0, buf);
+        }
+        break;
+    case SystemRecommendedSharedDataAlignment:
+        {
+            len = sizeof(DWORD);
+            if (Length >= len)
+            {
+                if (!SystemInformation) ret = STATUS_ACCESS_VIOLATION;
+                else *((DWORD *)SystemInformation) = 64;
+            }
+            else ret = STATUS_INFO_LENGTH_MISMATCH;
         }
         break;
     default:

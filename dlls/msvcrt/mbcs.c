@@ -520,6 +520,9 @@ unsigned int CDECL _mbcjmstojis(unsigned int c)
  */
 unsigned char* CDECL _mbsdec(const unsigned char* start, const unsigned char* cur)
 {
+  if(start >= cur)
+    return NULL;
+
   if(get_mbcinfo()->ismbcodepage)
     return (unsigned char *)(_ismbstrail(start,cur-1) ? cur - 2 : cur -1);
 
@@ -661,7 +664,7 @@ int CDECL _mbsnbcpy_s_l(unsigned char* dst, MSVCRT_size_t size,
 
     if((locale ? locale->mbcinfo : get_mbcinfo())->ismbcodepage)
     {
-        int is_lead = 0;
+        BOOL is_lead = FALSE;
         while (*src && n)
         {
             if(pos == size)
@@ -742,7 +745,7 @@ unsigned char* CDECL _mbsnbcpy(unsigned char* dst, const unsigned char* src, MSV
     return dst;
   if(get_mbcinfo()->ismbcodepage)
   {
-    int is_lead = 0;
+    BOOL is_lead = FALSE;
     while (*src && n)
     {
       is_lead = (!is_lead && _ismbblead(*src));
@@ -1202,7 +1205,10 @@ unsigned char* CDECL _mbstok_s_l(unsigned char *str, const unsigned char *delim,
     while((c=_mbsnextc(str)) && _mbschr(delim, c))
         str += c>255 ? 2 : 1;
     if(!*str)
+    {
+        *ctx = str;
         return NULL;
+    }
 
     *ctx = str + (c>255 ? 2 : 1);
     while((c=_mbsnextc(*ctx)) && !_mbschr(delim, c))
@@ -2250,6 +2256,17 @@ MSVCRT_size_t CDECL MSVCRT__mbstowcs_l(MSVCRT_wchar_t *wcstr, const char *mbstr,
     else
         locinfo = locale->locinfo;
 
+    if(!locinfo->lc_codepage) {
+        if(!wcstr)
+            return strlen(mbstr);
+
+        for(i=0; i<count; i++) {
+            wcstr[i] = (unsigned char)mbstr[i];
+            if(!wcstr[i]) break;
+        }
+        return i;
+    }
+
     /* Ignore count parameter */
     if(!wcstr)
         return MultiByteToWideChar(locinfo->lc_codepage, 0, mbstr, -1, NULL, 0)-1;
@@ -2263,6 +2280,11 @@ MSVCRT_size_t CDECL MSVCRT__mbstowcs_l(MSVCRT_wchar_t *wcstr, const char *mbstr,
 
     size = MultiByteToWideChar(locinfo->lc_codepage, 0,
             mbstr, size, wcstr, count);
+    if(!size) {
+        if(count) wcstr[0] = '\0';
+        *MSVCRT__errno() = MSVCRT_EILSEQ;
+        return -1;
+    }
 
     if(size<count && wcstr)
         wcstr[size] = '\0';
@@ -2341,26 +2363,29 @@ MSVCRT_size_t CDECL MSVCRT_mbsrtowcs(MSVCRT_wchar_t *wcstr,
     MSVCRT_mbstate_t s = (state ? *state : 0);
     MSVCRT_wchar_t tmpdst;
     MSVCRT_size_t ret = 0;
+    const char *p;
 
     if(!MSVCRT_CHECK_PMT(pmbstr != NULL))
         return -1;
 
+    p = *pmbstr;
     while(!wcstr || count>ret) {
-        int ch_len = MSVCRT_mbrtowc(&tmpdst, *pmbstr, 2, &s);
+        int ch_len = MSVCRT_mbrtowc(&tmpdst, p, 2, &s);
         if(wcstr)
             wcstr[ret] = tmpdst;
 
         if(ch_len < 0) {
             return -1;
         }else if(ch_len == 0) {
-            *pmbstr = NULL;
+            if(wcstr) *pmbstr = NULL;
             return ret;
         }
 
-        *pmbstr += ch_len;
+        p += ch_len;
         ret++;
     }
 
+    if(wcstr) *pmbstr = p;
     return ret;
 }
 

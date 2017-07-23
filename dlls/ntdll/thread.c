@@ -251,6 +251,10 @@ HANDLE thread_init(void)
     peb->TlsExpansionBitmap = &tls_expansion_bitmap;
     peb->FlsBitmap          = &fls_bitmap;
     peb->LdrData            = &ldr;
+    peb->OSMajorVersion     = 5;
+    peb->OSMinorVersion     = 1;
+    peb->OSBuildNumber      = 0xA28;
+    peb->OSPlatformId       = VER_PLATFORM_WIN32_NT;
     params.CurrentDirectory.DosPath.Buffer = current_dir;
     params.CurrentDirectory.DosPath.MaximumLength = sizeof(current_dir);
     params.wShowWindow = 1; /* SW_SHOWNORMAL */
@@ -463,7 +467,7 @@ NTSTATUS WINAPI RtlCreateUserThread( HANDLE process, const SECURITY_DESCRIPTOR *
     pthread_t pthread_id;
     pthread_attr_t attr;
     struct ntdll_thread_data *thread_data;
-    struct startup_info *info = NULL;
+    struct startup_info *info;
     HANDLE handle = 0, actctx = 0;
     TEB *teb = NULL;
     DWORD tid = 0;
@@ -732,7 +736,7 @@ NTSTATUS WINAPI NtSetContextThread( HANDLE handle, const CONTEXT *context )
 {
     NTSTATUS ret;
     DWORD dummy, i;
-    BOOL self = FALSE;
+    BOOL self;
 
 #ifdef __i386__
     /* on i386 debug registers always require a server call */
@@ -746,6 +750,8 @@ NTSTATUS WINAPI NtSetContextThread( HANDLE handle, const CONTEXT *context )
                 ntdll_get_thread_data()->dr6 == context->Dr6 &&
                 ntdll_get_thread_data()->dr7 == context->Dr7);
     }
+#else
+    self = FALSE;
 #endif
 
     if (!self)
@@ -1039,11 +1045,22 @@ NTSTATUS WINAPI NtQueryInformationThread( HANDLE handle, THREADINFOCLASS class,
                     tdi->Entry.HighWord.Bits.Granularity = 1;
                     tdi->Entry.HighWord.Bits.Default_Big = 1;
                     tdi->Entry.HighWord.Bits.Type        = 0x12;
+                    tdi->Entry.HighWord.Bits.Reserved_0  = 0;
                     /* it has to be one of the system GDT selectors */
                     if (sel != (wine_get_ds() & ~3) && sel != (wine_get_ss() & ~3))
                     {
                         if (sel == (wine_get_cs() & ~3))
                             tdi->Entry.HighWord.Bits.Type |= 8;  /* code segment */
+                        else if (sel == (ntdll_get_thread_data()->fs & ~3))
+                        {
+                            ULONG_PTR fs_base = (ULONG_PTR)NtCurrentTeb();
+                            tdi->Entry.BaseLow                   = fs_base & 0xffff;
+                            tdi->Entry.HighWord.Bits.BaseMid     = (fs_base >> 16) & 0xff;
+                            tdi->Entry.HighWord.Bits.BaseHi      = (fs_base >> 24) & 0xff;
+                            tdi->Entry.LimitLow                  = 0x0fff;
+                            tdi->Entry.HighWord.Bits.LimitHi     = 0;
+                            tdi->Entry.HighWord.Bits.Granularity = 0;
+                        }
                         else status = STATUS_ACCESS_DENIED;
                     }
                 }

@@ -3,63 +3,63 @@
 @ stub WsAbortChannel
 @ stub WsAbortListener
 @ stub WsAbortServiceHost
-@ stub WsAbortServiceProxy
+@ stdcall WsAbortServiceProxy(ptr ptr)
 @ stub WsAcceptChannel
-@ stub WsAddCustomHeader
+@ stdcall WsAddCustomHeader(ptr ptr long ptr long long ptr)
 @ stub WsAddErrorString
-@ stub WsAddMappedHeader
-@ stub WsAddressMessage
+@ stdcall WsAddMappedHeader(ptr ptr long long ptr long ptr)
+@ stdcall WsAddressMessage(ptr ptr ptr)
 @ stdcall WsAlloc(ptr long ptr ptr)
 @ stub WsAsyncExecute
-@ stub WsCall
+@ stdcall WsCall(ptr ptr ptr ptr ptr long ptr ptr)
 @ stub WsCheckMustUnderstandHeaders
-@ stub WsCloseChannel
+@ stdcall WsCloseChannel(ptr ptr ptr)
 @ stub WsCloseListener
 @ stub WsCloseServiceHost
-@ stub WsCloseServiceProxy
+@ stdcall WsCloseServiceProxy(ptr ptr ptr)
 @ stub WsCombineUrl
 @ stub WsCopyError
-@ stub WsCopyNode
-@ stub WsCreateChannel
+@ stdcall WsCopyNode(ptr ptr ptr)
+@ stdcall WsCreateChannel(long long ptr long ptr ptr ptr)
 @ stub WsCreateChannelForListener
 @ stdcall WsCreateError(ptr long ptr)
 @ stub WsCreateFaultFromError
 @ stdcall WsCreateHeap(long long ptr long ptr ptr)
 @ stub WsCreateListener
-@ stub WsCreateMessage
-@ stub WsCreateMessageForChannel
+@ stdcall WsCreateMessage(long long ptr long ptr ptr)
+@ stdcall WsCreateMessageForChannel(ptr ptr long ptr ptr)
 @ stub WsCreateMetadata
 @ stdcall WsCreateReader(ptr long ptr ptr)
 @ stub WsCreateServiceEndpointFromTemplate
 @ stub WsCreateServiceHost
-@ stub WsCreateServiceProxy
-@ stub WsCreateServiceProxyFromTemplate
+@ stdcall WsCreateServiceProxy(long long ptr ptr long ptr long ptr ptr)
+@ stdcall WsCreateServiceProxyFromTemplate(long ptr long long ptr long ptr long ptr ptr)
 @ stdcall WsCreateWriter(ptr long ptr ptr)
 @ stdcall WsCreateXmlBuffer(ptr ptr long ptr ptr)
 @ stub WsCreateXmlSecurityToken
-@ stub WsDateTimeToFileTime
-@ stub WsDecodeUrl
-@ stub WsEncodeUrl
+@ stdcall WsDateTimeToFileTime(ptr ptr ptr)
+@ stdcall WsDecodeUrl(ptr long ptr ptr ptr)
+@ stdcall WsEncodeUrl(ptr long ptr ptr ptr)
 @ stub WsEndReaderCanonicalization
 @ stub WsEndWriterCanonicalization
-@ stub WsFileTimeToDateTime
+@ stdcall WsFileTimeToDateTime(ptr ptr ptr)
 @ stub WsFillBody
 @ stdcall WsFillReader(ptr long ptr ptr)
-@ stub WsFindAttribute
+@ stdcall WsFindAttribute(ptr ptr ptr long ptr ptr)
 @ stub WsFlushBody
 @ stub WsFlushWriter
-@ stub WsFreeChannel
+@ stdcall WsFreeChannel(ptr)
 @ stdcall WsFreeError(ptr)
 @ stdcall WsFreeHeap(ptr)
 @ stub WsFreeListener
-@ stub WsFreeMessage
+@ stdcall WsFreeMessage(ptr)
 @ stub WsFreeMetadata
 @ stdcall WsFreeReader(ptr)
 @ stub WsFreeSecurityToken
 @ stub WsFreeServiceHost
-@ stub WsFreeServiceProxy
+@ stdcall WsFreeServiceProxy(ptr)
 @ stdcall WsFreeWriter(ptr)
-@ stub WsGetChannelProperty
+@ stdcall WsGetChannelProperty(ptr long ptr long ptr)
 @ stub WsGetCustomHeader
 @ stub WsGetDictionary
 @ stdcall WsGetErrorProperty(ptr long ptr long)
@@ -71,71 +71,71 @@
 @ stdcall WsGetHeapProperty(ptr long ptr long ptr)
 @ stub WsGetListenerProperty
 @ stub WsGetMappedHeader
-@ stub WsGetMessageProperty
+@ stdcall WsGetMessageProperty(ptr long ptr long ptr)
 @ stub WsGetMetadataEndpoints
 @ stub WsGetMetadataProperty
 @ stub WsGetMissingMetadataDocumentAddress
-@ stub WsGetNamespaceFromPrefix
+@ stdcall WsGetNamespaceFromPrefix(ptr ptr long ptr ptr)
 @ stub WsGetOperationContextProperty
 @ stub WsGetPolicyAlternativeCount
 @ stub WsGetPolicyProperty
-@ stub WsGetPrefixFromNamespace
+@ stdcall WsGetPrefixFromNamespace(ptr ptr long ptr ptr)
 @ stdcall WsGetReaderNode(ptr ptr ptr)
-@ stub WsGetReaderPosition
+@ stdcall WsGetReaderPosition(ptr ptr ptr)
 @ stdcall WsGetReaderProperty(ptr long ptr long ptr)
 @ stub WsGetSecurityContextProperty
 @ stub WsGetSecurityTokenProperty
 @ stub WsGetServiceHostProperty
-@ stub WsGetServiceProxyProperty
-@ stub WsGetWriterPosition
+@ stdcall WsGetServiceProxyProperty(ptr long ptr long ptr)
+@ stdcall WsGetWriterPosition(ptr ptr ptr)
 @ stdcall WsGetWriterProperty(ptr long ptr long ptr)
 @ stdcall WsGetXmlAttribute(ptr ptr ptr ptr ptr ptr)
-@ stub WsInitializeMessage
+@ stdcall WsInitializeMessage(ptr long ptr ptr)
 @ stub WsMarkHeaderAsUnderstood
 @ stub WsMatchPolicyAlternative
 @ stdcall WsMoveReader(ptr long ptr ptr)
-@ stub WsMoveWriter
-@ stub WsOpenChannel
+@ stdcall WsMoveWriter(ptr long ptr ptr)
+@ stdcall WsOpenChannel(ptr ptr ptr ptr)
 @ stub WsOpenListener
 @ stub WsOpenServiceHost
-@ stub WsOpenServiceProxy
+@ stdcall WsOpenServiceProxy(ptr ptr ptr ptr)
 @ stub WsPullBytes
 @ stub WsPushBytes
 @ stub WsReadArray
 @ stub WsReadAttribute
-@ stub WsReadBody
-@ stub WsReadBytes
-@ stub WsReadChars
-@ stub WsReadCharsUtf8
-@ stub WsReadElement
-@ stub WsReadEndAttribute
+@ stdcall WsReadBody(ptr ptr long ptr ptr long ptr)
+@ stdcall WsReadBytes(ptr ptr long ptr ptr)
+@ stdcall WsReadChars(ptr ptr long ptr ptr)
+@ stdcall WsReadCharsUtf8(ptr ptr long ptr ptr)
+@ stdcall WsReadElement(ptr ptr long ptr ptr long ptr)
+@ stdcall WsReadEndAttribute(ptr ptr)
 @ stdcall WsReadEndElement(ptr ptr)
 @ stub WsReadEndpointAddressExtension
-@ stub WsReadEnvelopeEnd
-@ stub WsReadEnvelopeStart
+@ stdcall WsReadEnvelopeEnd(ptr ptr)
+@ stdcall WsReadEnvelopeStart(ptr ptr ptr ptr ptr)
 @ stub WsReadMessageEnd
 @ stub WsReadMessageStart
 @ stub WsReadMetadata
 @ stdcall WsReadNode(ptr ptr)
 @ stub WsReadQualifiedName
-@ stub WsReadStartAttribute
+@ stdcall WsReadStartAttribute(ptr long ptr)
 @ stdcall WsReadStartElement(ptr ptr)
 @ stdcall WsReadToStartElement(ptr ptr ptr ptr ptr)
 @ stdcall WsReadType(ptr long long ptr long ptr ptr long ptr)
-@ stub WsReadValue
+@ stdcall WsReadValue(ptr long ptr long ptr)
 @ stub WsReadXmlBuffer
 @ stub WsReadXmlBufferFromBytes
-@ stub WsReceiveMessage
+@ stdcall WsReceiveMessage(ptr ptr ptr long long long ptr ptr long ptr ptr ptr)
 @ stub WsRegisterOperationForCancel
-@ stub WsRemoveCustomHeader
-@ stub WsRemoveHeader
-@ stub WsRemoveMappedHeader
+@ stdcall WsRemoveCustomHeader(ptr ptr ptr ptr)
+@ stdcall WsRemoveHeader(ptr long ptr)
+@ stdcall WsRemoveMappedHeader(ptr ptr ptr)
 @ stub WsRemoveNode
 @ stub WsRequestReply
 @ stub WsRequestSecurityToken
 @ stub WsResetChannel
-@ stub WsResetError
-@ stub WsResetHeap
+@ stdcall WsResetError(ptr)
+@ stdcall WsResetHeap(ptr ptr)
 @ stub WsResetListener
 @ stub WsResetMessage
 @ stub WsResetMetadata
@@ -143,51 +143,51 @@
 @ stub WsResetServiceProxy
 @ stub WsRevokeSecurityContext
 @ stub WsSendFaultMessageForError
-@ stub WsSendMessage
+@ stdcall WsSendMessage(ptr ptr ptr long ptr long ptr ptr)
 @ stub WsSendReplyMessage
-@ stub WsSetChannelProperty
+@ stdcall WsSetChannelProperty(ptr long ptr long ptr)
 @ stdcall WsSetErrorProperty(ptr long ptr long)
 @ stub WsSetFaultErrorDetail
 @ stub WsSetFaultErrorProperty
-@ stub WsSetHeader
+@ stdcall WsSetHeader(ptr long long long ptr long ptr)
 @ stdcall WsSetInput(ptr ptr ptr ptr long ptr)
 @ stdcall WsSetInputToBuffer(ptr ptr ptr long ptr)
 @ stub WsSetListenerProperty
-@ stub WsSetMessageProperty
+@ stdcall WsSetMessageProperty(ptr long ptr long ptr)
 @ stdcall WsSetOutput(ptr ptr ptr ptr long ptr)
 @ stdcall WsSetOutputToBuffer(ptr ptr ptr long ptr)
-@ stub WsSetReaderPosition
-@ stub WsSetWriterPosition
+@ stdcall WsSetReaderPosition(ptr ptr ptr)
+@ stdcall WsSetWriterPosition(ptr ptr ptr)
 @ stub WsShutdownSessionChannel
 @ stub WsSkipNode
 @ stub WsStartReaderCanonicalization
 @ stub WsStartWriterCanonicalization
 @ stub WsTrimXmlWhitespace
 @ stub WsVerifyXmlNCName
-@ stub WsWriteArray
-@ stub WsWriteAttribute
-@ stub WsWriteBody
+@ stdcall WsWriteArray(ptr ptr ptr long ptr long long long ptr)
+@ stdcall WsWriteAttribute(ptr ptr long ptr long ptr)
+@ stdcall WsWriteBody(ptr ptr long ptr long ptr)
 @ stub WsWriteBytes
 @ stub WsWriteChars
 @ stub WsWriteCharsUtf8
-@ stub WsWriteElement
+@ stdcall WsWriteElement(ptr ptr long ptr long ptr)
 @ stdcall WsWriteEndAttribute(ptr ptr)
-@ stub WsWriteEndCData
+@ stdcall WsWriteEndCData(ptr ptr)
 @ stdcall WsWriteEndElement(ptr ptr)
 @ stdcall WsWriteEndStartElement(ptr ptr)
-@ stub WsWriteEnvelopeEnd
-@ stub WsWriteEnvelopeStart
+@ stdcall WsWriteEnvelopeEnd(ptr ptr)
+@ stdcall WsWriteEnvelopeStart(ptr ptr ptr ptr ptr)
 @ stub WsWriteMessageEnd
 @ stub WsWriteMessageStart
-@ stub WsWriteNode
+@ stdcall WsWriteNode(ptr ptr ptr)
 @ stub WsWriteQualifiedName
 @ stdcall WsWriteStartAttribute(ptr ptr ptr ptr long ptr)
-@ stub WsWriteStartCData
+@ stdcall WsWriteStartCData(ptr ptr)
 @ stdcall WsWriteStartElement(ptr ptr ptr ptr ptr)
 @ stdcall WsWriteText(ptr ptr ptr)
-@ stub WsWriteType
-@ stub WsWriteValue
-@ stub WsWriteXmlBuffer
-@ stub WsWriteXmlBufferToBytes
-@ stub WsWriteXmlnsAttribute
+@ stdcall WsWriteType(ptr long long ptr long ptr long ptr)
+@ stdcall WsWriteValue(ptr long ptr long ptr)
+@ stdcall WsWriteXmlBuffer(ptr ptr ptr)
+@ stdcall WsWriteXmlBufferToBytes(ptr ptr ptr ptr long ptr ptr ptr ptr)
+@ stdcall WsWriteXmlnsAttribute(ptr ptr ptr long ptr)
 @ stdcall WsXmlStringEquals(ptr ptr ptr)

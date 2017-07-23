@@ -395,8 +395,7 @@ static UINT_PTR WINAPI resize_template_hook(HWND dlg, UINT msg, WPARAM wParam, L
             } else if( count == 1){
                 resize  = resize_testcases[index].resize_check;
                 GetWindowRect( parent, &rc);
-                if( resize_testcases[index].todo){
-                    todo_wine {
+                todo_wine_if( resize_testcases[index].todo){
                         ok( resize == rc.right - rc.left - initrc.right + initrc.left,
                             "testid %d size-x change %d expected %d\n", index,
                             rc.right - rc.left - initrc.right + initrc.left, resize);
@@ -404,14 +403,6 @@ static UINT_PTR WINAPI resize_template_hook(HWND dlg, UINT msg, WPARAM wParam, L
                             "testid %d size-y change %d expected %d\n", index,
                             rc.bottom - rc.top - initrc.bottom + initrc.top, resize);
                     }
-                }else{
-                    ok( resize == rc.right - rc.left - initrc.right + initrc.left,
-                        "testid %d size-x change %d expected %d\n", index,
-                        rc.right - rc.left - initrc.right + initrc.left, resize);
-                    ok( resize == rc.bottom - rc.top - initrc.bottom + initrc.top,
-                        "testid %d size-y change %d expected %d\n", index,
-                        rc.bottom - rc.top - initrc.bottom + initrc.top, resize);
-                }
                 if( resize_testcases[index].testcontrols) {
                     int i;
                     RECT rc;
@@ -431,63 +422,56 @@ static UINT_PTR WINAPI resize_template_hook(HWND dlg, UINT msg, WPARAM wParam, L
                             case cmb1:
                             case edt1:
                                 ok( TESTRECTS( ctrlrcs[i], rc, 0, 10, 10, 0),
-                                    "control id %03x should have sized horizontally and moved vertically, before %d,%d-%d,%d after  %d,%d-%d,%d\n",
-                                    ctrlids[i], ctrlrcs[i].left, ctrlrcs[i].top,
-                                    ctrlrcs[i].right, ctrlrcs[i].bottom,
-                                    rc.left, rc.top, rc.right, rc.bottom);
+                                    "control id %03x should have sized horizontally and moved vertically, before %s after %s\n",
+                                    ctrlids[i], wine_dbgstr_rect( &ctrlrcs[i] ),
+                                    wine_dbgstr_rect( &rc ));
                                 break;
                             /* sized horizontal and vertical */
                             case lst2:
                                 ok( TESTRECTS( ctrlrcs[i], rc, 0, 0, 10, 10),
-                                    "control id %03x should have sized horizontally and vertically, before %d,%d-%d,%d after  %d,%d-%d,%d\n",
-                                    ctrlids[i], ctrlrcs[i].left, ctrlrcs[i].top,
-                                    ctrlrcs[i].right, ctrlrcs[i].bottom,
-                                    rc.left, rc.top, rc.right, rc.bottom);
+                                    "control id %03x should have sized horizontally and vertically, before %s after %s\n",
+                                    ctrlids[i], wine_dbgstr_rect( &ctrlrcs[i] ),
+                                    wine_dbgstr_rect( &rc ));
                                 break;
                             /* moved horizontal and vertical */
                             case IDCANCEL:
                             case pshHelp:
                                 ok( TESTRECTS( ctrlrcs[i], rc, 10, 10, 0, 0),
-                                    "control id %03x should have moved horizontally and vertically, before %d,%d-%d,%d after  %d,%d-%d,%d\n",
-                                    ctrlids[i], ctrlrcs[i].left, ctrlrcs[i].top,
-                                    ctrlrcs[i].right, ctrlrcs[i].bottom,
-                                    rc.left, rc.top, rc.right, rc.bottom);
+                                    "control id %03x should have moved horizontally and vertically, before %s after %s\n",
+                                    ctrlids[i], wine_dbgstr_rect( &ctrlrcs[i] ),
+                                    wine_dbgstr_rect( &rc ));
                                 break;
                             /* moved vertically */
                             case chx1:
                             case stc2:
                             case stc3:
                                 ok( TESTRECTS( ctrlrcs[i], rc, 0, 10, 0, 0),
-                                    "control id %03x should have moved vertically, before %d,%d-%d,%d after  %d,%d-%d,%d\n",
-                                    ctrlids[i], ctrlrcs[i].left, ctrlrcs[i].top,
-                                    ctrlrcs[i].right, ctrlrcs[i].bottom,
-                                    rc.left, rc.top, rc.right, rc.bottom);
+                                    "control id %03x should have moved vertically, before %s after %s\n",
+                                    ctrlids[i], wine_dbgstr_rect( &ctrlrcs[i] ),
+                                    wine_dbgstr_rect( &rc ));
                                 break;
                             /* resized horizontal */
                             case cmb2: /* aka IDC_LOOKIN */
                                 ok( TESTRECTS( ctrlrcs[i], rc, 0, 0, 10, 0)||
                                         TESTRECTS( ctrlrcs[i], rc, 0, 0, 0, 0), /* Vista and higher */
-                                    "control id %03x should have resized horizontally, before %d,%d-%d,%d after  %d,%d-%d,%d\n",
-                                    ctrlids[i], ctrlrcs[i].left, ctrlrcs[i].top,
-                                    ctrlrcs[i].right, ctrlrcs[i].bottom,
-                                    rc.left, rc.top, rc.right, rc.bottom);
+                                    "control id %03x should have resized horizontally, before %s after %s\n",
+                                    ctrlids[i], wine_dbgstr_rect( &ctrlrcs[i] ),
+                                    wine_dbgstr_rect( &rc ));
                                 break;
                             /* non moving non sizing controls */
                             case stc4:
                                 ok( TESTRECTS( rc, ctrlrcs[i], 0, 0, 0, 0),
-                                    "control id %03x was moved/resized, before %d,%d-%d,%d after  %d,%d-%d,%d\n",
-                                    ctrlids[i], ctrlrcs[i].left, ctrlrcs[i].top,
-                                    ctrlrcs[i].right, ctrlrcs[i].bottom,
-                                    rc.left, rc.top, rc.right, rc.bottom);
+                                    "control id %03x was moved/resized, before %s after %s\n",
+                                    ctrlids[i], wine_dbgstr_rect( &ctrlrcs[i] ),
+                                    wine_dbgstr_rect( &rc ));
                                 break;
                             /* todo_wine: non moving non sizing controls */
                             case lst1:
 todo_wine
                                 ok( TESTRECTS( rc, ctrlrcs[i], 0, 0, 0, 0),
-                                    "control id %03x was moved/resized, before %d,%d-%d,%d after  %d,%d-%d,%d\n",
-                                    ctrlids[i], ctrlrcs[i].left, ctrlrcs[i].top,
-                                    ctrlrcs[i].right, ctrlrcs[i].bottom,
-                                    rc.left, rc.top, rc.right, rc.bottom);
+                                    "control id %03x was moved/resized, before %s after %s\n",
+                                    ctrlids[i], wine_dbgstr_rect( &ctrlrcs[i] ),
+                                    wine_dbgstr_rect( &rc ));
                                 break;
                             /* don't test: id is not unique */
                             case IDOK:
@@ -496,10 +480,9 @@ todo_wine
                             case  -1:
                                 break;
                             default:
-                                trace("untested control id %03x before %d,%d-%d,%d after  %d,%d-%d,%d\n",
-                                    ctrlids[i], ctrlrcs[i].left, ctrlrcs[i].top,
-                                    ctrlrcs[i].right, ctrlrcs[i].bottom,
-                                    rc.left, rc.top, rc.right, rc.bottom);
+                                trace("untested control id %03x before %s after %s\n",
+                                    ctrlids[i], wine_dbgstr_rect( &ctrlrcs[i] ),
+                                    wine_dbgstr_rect( &rc ));
 #undef TESTRECTS
 #undef MAXNRCTRLS
                         }

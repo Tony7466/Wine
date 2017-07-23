@@ -299,7 +299,8 @@ static OLEPictureImpl* OLEPictureImpl_Construct(LPPICTDESC pictDesc, BOOL fOwn)
   newObject->IConnectionPointContainer_iface.lpVtbl = &OLEPictureImpl_IConnectionPointContainer_VTable;
 
   newObject->pCP = NULL;
-  CreateConnectionPoint((IUnknown*)newObject,&IID_IPropertyNotifySink,&newObject->pCP);
+  CreateConnectionPoint((IUnknown*)&newObject->IPicture_iface, &IID_IPropertyNotifySink,
+                        &newObject->pCP);
   if (!newObject->pCP)
   {
     HeapFree(GetProcessHeap(), 0, newObject);
@@ -636,8 +637,7 @@ static HRESULT WINAPI OLEPictureImpl_Render(IPicture *iface, HDC hdc,
   TRACE("(%p)->(%p, (%d,%d), (%d,%d) <- (%d,%d), (%d,%d), %p)\n",
 	This, hdc, x, y, cx, cy, xSrc, ySrc, cxSrc, cySrc, prcWBounds);
   if(prcWBounds)
-    TRACE("prcWBounds (%d,%d) - (%d,%d)\n", prcWBounds->left, prcWBounds->top,
-	  prcWBounds->right, prcWBounds->bottom);
+  TRACE("prcWBounds %s\n", wine_dbgstr_rect(prcWBounds));
 
   if(cx == 0 || cy == 0 || cxSrc == 0 || cySrc == 0){
     return CTL_E_INVALIDPROPERTYVALUE;

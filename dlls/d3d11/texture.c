@@ -443,11 +443,25 @@ static const struct wined3d_parent_ops d3d_texture2d_wined3d_parent_ops =
     d3d_texture2d_wined3d_object_released,
 };
 
+static BOOL is_gdi_compatible_texture(const D3D11_TEXTURE2D_DESC *desc)
+{
+    if (!(desc->Format == DXGI_FORMAT_B8G8R8A8_UNORM
+            || desc->Format == DXGI_FORMAT_B8G8R8A8_TYPELESS
+            || desc->Format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB))
+        return FALSE;
+
+    if (desc->Usage != D3D11_USAGE_DEFAULT)
+        return FALSE;
+
+    return TRUE;
+}
+
 static HRESULT d3d_texture2d_init(struct d3d_texture2d *texture, struct d3d_device *device,
         const D3D11_TEXTURE2D_DESC *desc, const D3D11_SUBRESOURCE_DATA *data)
 {
     struct wined3d_resource_desc wined3d_desc;
     unsigned int levels;
+    DWORD flags = 0;
     HRESULT hr;
 
     texture->ID3D11Texture2D_iface.lpVtbl = &d3d11_texture2d_vtbl;
@@ -457,12 +471,10 @@ static HRESULT d3d_texture2d_init(struct d3d_texture2d *texture, struct d3d_devi
     wined3d_private_store_init(&texture->private_store);
     texture->desc = *desc;
 
-    if (desc->ArraySize != 1)
-        FIXME("Array textures not implemented.\n");
     if (desc->SampleDesc.Count > 1)
         FIXME("Multisampled textures not implemented.\n");
 
-    wined3d_desc.resource_type = WINED3D_RTYPE_TEXTURE;
+    wined3d_desc.resource_type = WINED3D_RTYPE_TEXTURE_2D;
     wined3d_desc.format = wined3dformat_from_dxgi_format(desc->Format);
     wined3d_desc.multisample_type = desc->SampleDesc.Count > 1 ? desc->SampleDesc.Count : WINED3D_MULTISAMPLE_NONE;
     wined3d_desc.multisample_quality = desc->SampleDesc.Quality;
@@ -475,13 +487,28 @@ static HRESULT d3d_texture2d_init(struct d3d_texture2d *texture, struct d3d_devi
 
     levels = desc->MipLevels ? desc->MipLevels : wined3d_log2i(max(desc->Width, desc->Height)) + 1;
 
+    if (desc->MiscFlags & D3D11_RESOURCE_MISC_GDI_COMPATIBLE)
+    {
+        if (is_gdi_compatible_texture(desc))
+            flags |= WINED3D_TEXTURE_CREATE_GET_DC;
+        else
+        {
+            WARN("Incompatible description used to create GDI compatible texture.\n");
+            wined3d_private_store_cleanup(&texture->private_store);
+            wined3d_mutex_unlock();
+            return E_INVALIDARG;
+        }
+    }
+
     if (FAILED(hr = wined3d_texture_create(device->wined3d_device, &wined3d_desc,
-            levels, 0, (struct wined3d_sub_resource_data *)data, texture,
-            &d3d_texture2d_wined3d_parent_ops, &texture->wined3d_texture)))
+            desc->ArraySize, levels, flags, (struct wined3d_sub_resource_data *)data,
+            texture, &d3d_texture2d_wined3d_parent_ops, &texture->wined3d_texture)))
     {
         WARN("Failed to create wined3d texture, hr %#x.\n", hr);
         wined3d_private_store_cleanup(&texture->private_store);
         wined3d_mutex_unlock();
+        if (hr == WINED3DERR_NOTAVAILABLE || hr == WINED3DERR_INVALIDCALL)
+            hr = E_INVALIDARG;
         return hr;
     }
     texture->desc.MipLevels = levels;
@@ -499,8 +526,8 @@ static HRESULT d3d_texture2d_init(struct d3d_texture2d *texture, struct d3d_devi
             return E_FAIL;
         }
 
-        hr = IWineDXGIDevice_create_surface(wine_device, wined3d_texture_get_resource(texture->wined3d_texture),
-                0, NULL, (IUnknown *)&texture->ID3D10Texture2D_iface, (void **)&texture->dxgi_surface);
+        hr = IWineDXGIDevice_create_surface(wine_device, texture->wined3d_texture, 0, NULL,
+                (IUnknown *)&texture->ID3D10Texture2D_iface, (void **)&texture->dxgi_surface);
         IWineDXGIDevice_Release(wine_device);
         if (FAILED(hr))
         {
@@ -914,7 +941,7 @@ static HRESULT d3d_texture3d_init(struct d3d_texture3d *texture, struct d3d_devi
     wined3d_private_store_init(&texture->private_store);
     texture->desc = *desc;
 
-    wined3d_desc.resource_type = WINED3D_RTYPE_VOLUME_TEXTURE;
+    wined3d_desc.resource_type = WINED3D_RTYPE_TEXTURE_3D;
     wined3d_desc.format = wined3dformat_from_dxgi_format(desc->Format);
     wined3d_desc.multisample_type = WINED3D_MULTISAMPLE_NONE;
     wined3d_desc.multisample_quality = 0;
@@ -928,12 +955,14 @@ static HRESULT d3d_texture3d_init(struct d3d_texture3d *texture, struct d3d_devi
     levels = desc->MipLevels ? desc->MipLevels : wined3d_log2i(max(max(desc->Width, desc->Height), desc->Depth)) + 1;
 
     if (FAILED(hr = wined3d_texture_create(device->wined3d_device, &wined3d_desc,
-            levels, 0, (struct wined3d_sub_resource_data *)data, texture,
+            1, levels, 0, (struct wined3d_sub_resource_data *)data, texture,
             &d3d_texture3d_wined3d_parent_ops, &texture->wined3d_texture)))
     {
         WARN("Failed to create wined3d texture, hr %#x.\n", hr);
         wined3d_private_store_cleanup(&texture->private_store);
         wined3d_mutex_unlock();
+        if (hr == WINED3DERR_INVALIDCALL)
+            hr = E_INVALIDARG;
         return hr;
     }
     wined3d_mutex_unlock();

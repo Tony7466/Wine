@@ -1,10 +1,10 @@
-@ stub _CreateFrameInfo
+@ cdecl _CreateFrameInfo(ptr ptr) ucrtbase._CreateFrameInfo
 @ stdcall _CxxThrowException(long long) ucrtbase._CxxThrowException
 @ cdecl -arch=i386 -norelay _EH_prolog() ucrtbase._EH_prolog
-@ stub _FindAndUnlinkFrame
+@ cdecl _FindAndUnlinkFrame(ptr) ucrtbase._FindAndUnlinkFrame
 @ stub _GetImageBase
 @ stub _GetThrowImageBase
-@ stub _IsExceptionObjectToBeDestroyed
+@ cdecl _IsExceptionObjectToBeDestroyed(ptr) ucrtbase._IsExceptionObjectToBeDestroyed
 @ stub _NLG_Dispatch2
 @ stub _NLG_Return
 @ stub _NLG_Return2
@@ -22,9 +22,9 @@
 @ cdecl -arch=i386,x86_64,arm -norelay __CxxFrameHandler3(ptr ptr ptr ptr) ucrtbase.__CxxFrameHandler3
 @ stdcall -arch=i386 __CxxLongjmpUnwind(ptr) ucrtbase.__CxxLongjmpUnwind
 @ cdecl -arch=i386,x86_64,arm __CxxQueryExceptionSize() ucrtbase.__CxxQueryExceptionSize
-@ stub __CxxRegisterExceptionObject
-@ stub __CxxUnregisterExceptionObject
-@ stub __DestructExceptionObject
+@ cdecl __CxxRegisterExceptionObject(ptr ptr) ucrtbase.__CxxRegisterExceptionObject
+@ cdecl __CxxUnregisterExceptionObject(ptr long) ucrtbase.__CxxUnregisterExceptionObject
+@ cdecl __DestructExceptionObject(ptr) ucrtbase.__DestructExceptionObject
 @ stub __FrameUnwindFilter
 @ stub __GetPlatformExceptionInfo
 @ stub __NLG_Dispatch2
@@ -42,12 +42,12 @@
 @ stub __intrinsic_setjmpex
 @ stub __processing_throw
 @ stub __report_gsfailure
-@ stub __std_exception_copy
-@ stub __std_exception_destroy
+@ cdecl __std_exception_copy(ptr ptr) ucrtbase.__std_exception_copy
+@ cdecl __std_exception_destroy(ptr) ucrtbase.__std_exception_destroy
 @ cdecl __std_type_info_compare(ptr ptr) ucrtbase.__std_type_info_compare
-@ stub __std_type_info_destroy_list
-@ stub __std_type_info_hash
-@ stub __std_type_info_name
+@ cdecl __std_type_info_destroy_list(ptr) ucrtbase.__std_type_info_destroy_list
+@ cdecl __std_type_info_hash(ptr) ucrtbase.__std_type_info_hash
+@ cdecl __std_type_info_name(ptr ptr) ucrtbase.__std_type_info_name
 @ cdecl __unDName(ptr str long ptr ptr long) ucrtbase.__unDName
 @ cdecl __unDNameEx(ptr str long ptr ptr ptr long) ucrtbase.__unDNameEx
 @ cdecl __uncaught_exception() ucrtbase.__uncaught_exception
@@ -1149,14 +1149,14 @@
 @ stdcall -arch=i386 _seh_longjmp_unwind(ptr) ucrtbase._seh_longjmp_unwind
 @ stdcall -arch=i386 _seh_longjmp_unwind4(ptr) ucrtbase._seh_longjmp_unwind4
 @ cdecl _set_purecall_handler(ptr) ucrtbase._set_purecall_handler
-@ stub _set_se_translator
+@ cdecl _set_se_translator(ptr) ucrtbase._set_se_translator
 @ cdecl -arch=i386 -norelay _setjmp3(ptr long) ucrtbase._setjmp3
 @ cdecl -arch=i386,x86_64,arm longjmp(ptr long) ucrtbase.longjmp
 @ cdecl memchr(ptr long long) ucrtbase.memchr
 @ cdecl memcmp(ptr ptr long) ucrtbase.memcmp
 @ cdecl memcpy(ptr ptr long) ucrtbase.memcpy
 @ cdecl memmove(ptr ptr long) ucrtbase.memmove
-@ stub set_unexpected
+@ cdecl set_unexpected(ptr) ucrtbase.set_unexpected
 @ cdecl -arch=arm,x86_64 -norelay -private setjmp(ptr) ucrtbase.setjmp
 @ cdecl strchr(str long) ucrtbase.strchr
 @ cdecl strrchr(str long) ucrtbase.strrchr

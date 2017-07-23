@@ -27,8 +27,6 @@
 #include "windef.h"
 #include "winbase.h"
 #include "objbase.h"
-#include "wincodec.h"
-#include "wincodecsdk.h"
 
 #include "ungif.h"
 
@@ -251,7 +249,7 @@ static HRESULT load_GCE_metadata(IStream *stream, const GUID *vendor, DWORD opti
                                  MetadataItem **items, DWORD *count)
 {
 #include "pshpack1.h"
-    struct graphic_control_extenstion
+    struct graphic_control_extension
     {
         BYTE packed;
         /* reservred: 3;
@@ -329,7 +327,7 @@ static HRESULT load_APE_metadata(IStream *stream, const GUID *vendor, DWORD opti
                                  MetadataItem **items, DWORD *count)
 {
 #include "pshpack1.h"
-    struct application_extenstion
+    struct application_extension
     {
         BYTE extension_introducer;
         BYTE extension_label;
@@ -436,7 +434,7 @@ static HRESULT load_GifComment_metadata(IStream *stream, const GUID *vendor, DWO
                                         MetadataItem **items, DWORD *count)
 {
 #include "pshpack1.h"
-    struct gif_extenstion
+    struct gif_extension
     {
         BYTE extension_introducer;
         BYTE extension_label;
@@ -816,8 +814,14 @@ static HRESULT WINAPI GifFrameDecode_CopyPixels(IWICBitmapFrameDecode *iface,
 static HRESULT WINAPI GifFrameDecode_GetMetadataQueryReader(IWICBitmapFrameDecode *iface,
     IWICMetadataQueryReader **ppIMetadataQueryReader)
 {
+    GifFrameDecode *This = impl_from_IWICBitmapFrameDecode(iface);
+
     TRACE("(%p,%p)\n", iface, ppIMetadataQueryReader);
-    return WINCODEC_ERR_UNSUPPORTEDOPERATION;
+
+    if (!ppIMetadataQueryReader)
+        return E_INVALIDARG;
+
+    return MetadataQueryReader_CreateInstance(&This->IWICMetadataBlockReader_iface, ppIMetadataQueryReader);
 }
 
 static HRESULT WINAPI GifFrameDecode_GetColorContexts(IWICBitmapFrameDecode *iface,

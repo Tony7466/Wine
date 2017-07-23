@@ -3734,7 +3734,6 @@ static HRESULT create_outline(struct glyphinfo *glyph, void *raw_outline, int da
                         pt->corner = POINTTYPE_CURVE_END;
                 }
                 outline->count--;
-                lastpt = &outline->items[outline->count - 1];
             } else {
                 /* outline closed with a line from end to start point */
                 attempt_line_merge(outline, outline->count - 1, &pt->pos, FALSE);
@@ -4426,7 +4425,7 @@ static void D3DXCreateTextTest(void)
     ok(hr == D3D_OK, "Got result %x, expected %x (D3D_OK)\n", hr, D3D_OK);
     number_of_vertices = d3dxmesh->lpVtbl->GetNumVertices(d3dxmesh);
     number_of_faces = d3dxmesh->lpVtbl->GetNumFaces(d3dxmesh);
-    if (SUCCEEDED(hr) && d3dxmesh) d3dxmesh->lpVtbl->Release(d3dxmesh);
+    d3dxmesh->lpVtbl->Release(d3dxmesh);
 
     hr = D3DXCreateTextA(device, hdc, "wine", 0.0f, 0.4f, &d3dxmesh, NULL, NULL);
     ok(hr == D3D_OK, "Got result %x, expected %x (D3D_OK)\n", hr, D3D_OK);
@@ -4436,7 +4435,7 @@ static void D3DXCreateTextTest(void)
     ok(number_of_faces == d3dxmesh->lpVtbl->GetNumFaces(d3dxmesh),
        "Got %d faces, expected %d\n",
        d3dxmesh->lpVtbl->GetNumVertices(d3dxmesh), number_of_faces);
-    if (SUCCEEDED(hr) && d3dxmesh) d3dxmesh->lpVtbl->Release(d3dxmesh);
+    d3dxmesh->lpVtbl->Release(d3dxmesh);
 
 if (0)
 {
@@ -4848,7 +4847,7 @@ static void test_update_semantics(void)
     }
 
     hr = mesh->lpVtbl->UpdateSemantics(mesh, declaration);
-    ok(hr == D3D_OK, "Test UpdateSematics, got %#x expected %#x\n", hr, D3D_OK);
+    ok(hr == D3D_OK, "Test UpdateSemantics, got %#x expected %#x\n", hr, D3D_OK);
 
     /* Check that declaration was written by getting it again */
     memset(declaration, 0, sizeof(declaration));
@@ -4863,7 +4862,7 @@ static void test_update_semantics(void)
     {
         if (decl_ptr->Usage == D3DDECLUSAGE_POSITION)
         {
-            ok(decl_ptr->Offset == offset, "Test UpdateSematics, got offset %d expected %d\n",
+            ok(decl_ptr->Offset == offset, "Test UpdateSemantics, got offset %d expected %d\n",
                decl_ptr->Offset, offset);
         }
     }
@@ -4874,7 +4873,7 @@ static void test_update_semantics(void)
     memset(declaration, filler_a, sizeof(declaration));
     memcpy(declaration, declaration0, sizeof(declaration0));
     hr = mesh->lpVtbl->UpdateSemantics(mesh, declaration);
-    ok(hr == D3D_OK, "Test UpdateSematics, "
+    ok(hr == D3D_OK, "Test UpdateSemantics, "
        "got %#x expected D3D_OK\n", hr);
     memset(declaration, filler_b, sizeof(declaration));
     hr = mesh->lpVtbl->GetDeclaration(mesh, declaration);
@@ -4907,12 +4906,12 @@ static void test_update_semantics(void)
     }
 
     hr = mesh->lpVtbl->UpdateSemantics(mesh, declaration);
-    ok(hr == D3D_OK, "Test UpdateSematics for overlapping fields, "
+    ok(hr == D3D_OK, "Test UpdateSemantics for overlapping fields, "
        "got %#x expected D3D_OK\n", hr);
 
     /* Set the position type to color instead of float3 */
     hr = mesh->lpVtbl->UpdateSemantics(mesh, declaration_pos_type_color);
-    ok(hr == D3D_OK, "Test UpdateSematics position type color, "
+    ok(hr == D3D_OK, "Test UpdateSemantics position type color, "
        "got %#x expected D3D_OK\n", hr);
 
     /* The following test cases show that NULL, smaller or larger declarations,
@@ -4925,7 +4924,7 @@ static void test_update_semantics(void)
     /* Null declaration (invalid declaration) */
     mesh->lpVtbl->UpdateSemantics(mesh, declaration0); /* Set a valid declaration */
     hr = mesh->lpVtbl->UpdateSemantics(mesh, NULL);
-    ok(hr == D3DERR_INVALIDCALL, "Test UpdateSematics null pointer declaration, "
+    ok(hr == D3DERR_INVALIDCALL, "Test UpdateSemantics null pointer declaration, "
        "got %#x expected D3DERR_INVALIDCALL\n", hr);
     vertex_size = mesh->lpVtbl->GetNumBytesPerVertex(mesh);
     ok(vertex_size == exp_vertex_size, "Got vertex declaration size %u, expected %u\n",
@@ -4939,7 +4938,7 @@ static void test_update_semantics(void)
     /* Smaller vertex declaration (invalid declaration) */
     mesh->lpVtbl->UpdateSemantics(mesh, declaration0); /* Set a valid declaration */
     hr = mesh->lpVtbl->UpdateSemantics(mesh, declaration_smaller);
-    ok(hr == D3DERR_INVALIDCALL, "Test UpdateSematics for smaller vertex declaration, "
+    ok(hr == D3DERR_INVALIDCALL, "Test UpdateSemantics for smaller vertex declaration, "
        "got %#x expected D3DERR_INVALIDCALL\n", hr);
     vertex_size = mesh->lpVtbl->GetNumBytesPerVertex(mesh);
     ok(vertex_size == exp_vertex_size, "Got vertex declaration size %u, expected %u\n",
@@ -4953,7 +4952,7 @@ static void test_update_semantics(void)
     /* Larger vertex declaration (invalid declaration) */
     mesh->lpVtbl->UpdateSemantics(mesh, declaration0); /* Set a valid declaration */
     hr = mesh->lpVtbl->UpdateSemantics(mesh, declaration_larger);
-    ok(hr == D3DERR_INVALIDCALL, "Test UpdateSematics for larger vertex declaration, "
+    ok(hr == D3DERR_INVALIDCALL, "Test UpdateSemantics for larger vertex declaration, "
        "got %#x expected D3DERR_INVALIDCALL\n", hr);
     vertex_size = mesh->lpVtbl->GetNumBytesPerVertex(mesh);
     ok(vertex_size == exp_vertex_size, "Got vertex declaration size %u, expected %u\n",
@@ -4967,7 +4966,7 @@ static void test_update_semantics(void)
     /* Use multiple streams and keep the same vertex size (invalid declaration) */
     mesh->lpVtbl->UpdateSemantics(mesh, declaration0); /* Set a valid declaration */
     hr = mesh->lpVtbl->UpdateSemantics(mesh, declaration_multiple_streams);
-    ok(hr == D3DERR_INVALIDCALL, "Test UpdateSematics using multiple streams, "
+    ok(hr == D3DERR_INVALIDCALL, "Test UpdateSemantics using multiple streams, "
                  "got %#x expected D3DERR_INVALIDCALL\n", hr);
     vertex_size = mesh->lpVtbl->GetNumBytesPerVertex(mesh);
     ok(vertex_size == exp_vertex_size, "Got vertex declaration size %u, expected %u\n",
@@ -4987,7 +4986,7 @@ static void test_update_semantics(void)
     /* Double usage (invalid declaration) */
     mesh->lpVtbl->UpdateSemantics(mesh, declaration0); /* Set a valid declaration */
     hr = mesh->lpVtbl->UpdateSemantics(mesh, declaration_double_usage);
-    ok(hr == D3D_OK, "Test UpdateSematics double usage, "
+    ok(hr == D3D_OK, "Test UpdateSemantics double usage, "
        "got %#x expected D3D_OK\n", hr);
     vertex_size = mesh->lpVtbl->GetNumBytesPerVertex(mesh);
     ok(vertex_size == exp_vertex_size, "Got vertex declaration size %u, expected %u\n",
@@ -5001,7 +5000,7 @@ static void test_update_semantics(void)
     /* Set the position to an undefined type (invalid declaration) */
     mesh->lpVtbl->UpdateSemantics(mesh, declaration0); /* Set a valid declaration */
     hr = mesh->lpVtbl->UpdateSemantics(mesh, declaration_undefined_type);
-    ok(hr == D3D_OK, "Test UpdateSematics undefined type, "
+    ok(hr == D3D_OK, "Test UpdateSemantics undefined type, "
        "got %#x expected D3D_OK\n", hr);
     vertex_size = mesh->lpVtbl->GetNumBytesPerVertex(mesh);
     ok(vertex_size == exp_vertex_size, "Got vertex declaration size %u, expected %u\n",
@@ -5015,7 +5014,7 @@ static void test_update_semantics(void)
     /* Use a not 4 byte aligned offset (invalid declaration) */
     mesh->lpVtbl->UpdateSemantics(mesh, declaration0); /* Set a valid declaration */
     hr = mesh->lpVtbl->UpdateSemantics(mesh, declaration_not_4_byte_aligned_offset);
-    ok(hr == D3D_OK, "Test UpdateSematics not 4 byte aligned offset, "
+    ok(hr == D3D_OK, "Test UpdateSemantics not 4 byte aligned offset, "
        "got %#x expected D3D_OK\n", hr);
     vertex_size = mesh->lpVtbl->GetNumBytesPerVertex(mesh);
     ok(vertex_size == exp_vertex_size, "Got vertex declaration size %u, expected %u\n",
@@ -11125,6 +11124,70 @@ static void test_compute_normals(void)
     free_test_context(test_context);
 }
 
+static void D3DXCreateAnimationControllerTest(void)
+{
+    HRESULT hr;
+    ID3DXAnimationController *animation;
+    UINT value;
+
+    hr = D3DXCreateAnimationController(0, 0, 0, 0, NULL);
+    ok(hr == D3D_OK, "Got unexpected hr returned %#x.\n", hr);
+
+    animation = (void*)0xdeadbeef;
+    hr = D3DXCreateAnimationController(0, 1, 1, 1, &animation);
+    ok(hr == D3D_OK, "Got unexpected hr returned %#x.\n", hr);
+    ok(animation == (void*)0xdeadbeef, "Got unexpected animation %p.\n", animation);
+
+    animation = (void*)0xdeadbeef;
+    hr = D3DXCreateAnimationController(1, 0, 1, 1, &animation);
+    ok(hr == D3D_OK, "Got unexpected hr returned %#x.\n", hr);
+    ok(animation == (void*)0xdeadbeef, "Got unexpected animation %p.\n", animation);
+
+    animation = (void*)0xdeadbeef;
+    hr = D3DXCreateAnimationController(1, 1, 0, 1, &animation);
+    ok(hr == D3D_OK, "Got unexpected hr returned %#x.\n", hr);
+    ok(animation == (void*)0xdeadbeef, "Got unexpected animation %p.\n", animation);
+
+    animation = (void*)0xdeadbeef;
+    hr = D3DXCreateAnimationController(1, 1, 1, 0, &animation);
+    ok(hr == D3D_OK, "Got unexpected hr returned %#x.\n", hr);
+    ok(animation == (void*)0xdeadbeef, "Got unexpected animation %p.\n", animation);
+
+    hr = D3DXCreateAnimationController(1, 1, 1, 1, &animation);
+    ok(hr == D3D_OK, "Got unexpected hr returned %#x.\n", hr);
+
+    value = animation->lpVtbl->GetMaxNumAnimationOutputs(animation);
+    ok(value == 1, "Got unexpected value %u.\n", value);
+
+    value = animation->lpVtbl->GetMaxNumAnimationSets(animation);
+    ok(value == 1, "Got unexpected value %u.\n", value);
+
+    value = animation->lpVtbl->GetMaxNumTracks(animation);
+    ok(value == 1, "Got unexpected value %u.\n", value);
+
+    value = animation->lpVtbl->GetMaxNumEvents(animation);
+    ok(value == 1, "Got unexpected value %u.\n", value);
+
+    animation->lpVtbl->Release(animation);
+
+    hr = D3DXCreateAnimationController(100, 101, 102, 103, &animation);
+    ok(hr == D3D_OK, "Got unexpected hr returned %#x.\n", hr);
+
+    value = animation->lpVtbl->GetMaxNumAnimationOutputs(animation);
+    ok(value == 100, "Got unexpected value %u.\n", value);
+
+    value = animation->lpVtbl->GetMaxNumAnimationSets(animation);
+    ok(value == 101, "Got unexpected value %u.\n", value);
+
+    value = animation->lpVtbl->GetMaxNumTracks(animation);
+    ok(value == 102, "Got unexpected value %u.\n", value);
+
+    value = animation->lpVtbl->GetMaxNumEvents(animation);
+    ok(value == 103, "Got unexpected value %u.\n", value);
+
+    animation->lpVtbl->Release(animation);
+}
+
 START_TEST(mesh)
 {
     D3DXBoundProbeTest();
@@ -11141,6 +11204,7 @@ START_TEST(mesh)
     D3DXCreateCylinderTest();
     D3DXCreateTextTest();
     D3DXCreateTorusTest();
+    D3DXCreateAnimationControllerTest();
     test_get_decl_length();
     test_get_decl_vertex_size();
     test_fvf_decl_conversion();

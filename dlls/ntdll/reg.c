@@ -42,8 +42,6 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(reg);
 
-/* maximum length of a key name in bytes (without terminating null) */
-#define MAX_NAME_LENGTH  (255 * sizeof(WCHAR))
 /* maximum length of a value name in bytes (without terminating null) */
 #define MAX_VALUE_LENGTH (16383 * sizeof(WCHAR))
 
@@ -56,31 +54,31 @@ NTSTATUS WINAPI NtCreateKey( PHANDLE retkey, ACCESS_MASK access, const OBJECT_AT
                              PULONG dispos )
 {
     NTSTATUS ret;
+    data_size_t len;
+    struct object_attributes *objattr;
 
     if (!retkey || !attr) return STATUS_ACCESS_VIOLATION;
     if (attr->Length > sizeof(OBJECT_ATTRIBUTES)) return STATUS_INVALID_PARAMETER;
-    if (attr->ObjectName->Length > MAX_NAME_LENGTH) return STATUS_BUFFER_OVERFLOW;
 
     TRACE( "(%p,%s,%s,%x,%x,%p)\n", attr->RootDirectory, debugstr_us(attr->ObjectName),
            debugstr_us(class), options, access, retkey );
 
+    if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
+
     SERVER_START_REQ( create_key )
     {
-        req->parent     = wine_server_obj_handle( attr->RootDirectory );
         req->access     = access;
-        req->attributes = attr->Attributes;
         req->options    = options;
-        req->namelen    = attr->ObjectName->Length;
-        wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
+        wine_server_add_data( req, objattr, len );
         if (class) wine_server_add_data( req, class->Buffer, class->Length );
-        if (!(ret = wine_server_call( req )))
-        {
-            *retkey = wine_server_ptr_handle( reply->hkey );
-            if (dispos) *dispos = reply->created ? REG_CREATED_NEW_KEY : REG_OPENED_EXISTING_KEY;
-        }
+        ret = wine_server_call( req );
+        *retkey = wine_server_ptr_handle( reply->hkey );
+        if (dispos && !ret) *dispos = reply->created ? REG_CREATED_NEW_KEY : REG_OPENED_EXISTING_KEY;
     }
     SERVER_END_REQ;
+
     TRACE("<- %p\n", *retkey);
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
     return ret;
 }
 
@@ -123,24 +121,21 @@ NTSTATUS WINAPI RtlpNtCreateKey( PHANDLE retkey, ACCESS_MASK access, const OBJEC
 static NTSTATUS open_key( PHANDLE retkey, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr, ULONG options )
 {
     NTSTATUS ret;
-    DWORD len;
 
-    if (!retkey || !attr) return STATUS_ACCESS_VIOLATION;
-    if (attr->Length > sizeof(OBJECT_ATTRIBUTES)) return STATUS_INVALID_PARAMETER;
-    len = attr->ObjectName->Length;
+    if (!retkey || !attr || !attr->ObjectName) return STATUS_ACCESS_VIOLATION;
+    if ((ret = validate_open_object_attributes( attr ))) return ret;
+
     TRACE( "(%p,%s,%x,%p)\n", attr->RootDirectory,
            debugstr_us(attr->ObjectName), access, retkey );
-    if (options)
+    if (options & ~REG_OPTION_OPEN_LINK)
         FIXME("options %x not implemented\n", options);
-
-    if (len > MAX_NAME_LENGTH) return STATUS_BUFFER_OVERFLOW;
 
     SERVER_START_REQ( open_key )
     {
         req->parent     = wine_server_obj_handle( attr->RootDirectory );
         req->access     = access;
         req->attributes = attr->Attributes;
-        wine_server_add_data( req, attr->ObjectName->Buffer, len );
+        wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
         ret = wine_server_call( req );
         *retkey = wine_server_ptr_handle( reply->hkey );
     }
@@ -541,7 +536,7 @@ NTSTATUS WINAPI NtQueryValueKey( HANDLE handle, const UNICODE_STRING *name,
 {
     NTSTATUS ret;
     UCHAR *data_ptr;
-    unsigned int fixed_size = 0, min_size = 0;
+    unsigned int fixed_size, min_size;
 
     TRACE( "(%p,%s,%d,%p,%d)\n", handle, debugstr_us(name), info_class, info, length );
 
@@ -662,6 +657,8 @@ NTSTATUS WINAPI NtLoadKey( const OBJECT_ATTRIBUTES *attr, OBJECT_ATTRIBUTES *fil
     NTSTATUS ret;
     HANDLE hive;
     IO_STATUS_BLOCK io;
+    data_size_t len;
+    struct object_attributes *objattr;
 
     TRACE("(%p,%p)\n", attr, file);
 
@@ -669,17 +666,18 @@ NTSTATUS WINAPI NtLoadKey( const OBJECT_ATTRIBUTES *attr, OBJECT_ATTRIBUTES *fil
                        FILE_OPEN, 0, NULL, 0);
     if (ret) return ret;
 
+    if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
+
     SERVER_START_REQ( load_registry )
     {
-        req->hkey = wine_server_obj_handle( attr->RootDirectory );
         req->file = wine_server_obj_handle( hive );
-        wine_server_add_data(req, attr->ObjectName->Buffer, attr->ObjectName->Length);
+        wine_server_add_data( req, objattr, len );
         ret = wine_server_call( req );
     }
     SERVER_END_REQ;
 
     NtClose(hive);
-   
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
     return ret;
 }
 
@@ -911,42 +909,33 @@ NTSTATUS WINAPI NtUnloadKey(IN POBJECT_ATTRIBUTES attr)
 NTSTATUS WINAPI RtlFormatCurrentUserKeyPath( IN OUT PUNICODE_STRING KeyPath)
 {
     static const WCHAR pathW[] = {'\\','R','e','g','i','s','t','r','y','\\','U','s','e','r','\\'};
-    HANDLE token;
+    char buffer[sizeof(TOKEN_USER) + sizeof(SID) + sizeof(DWORD)*SID_MAX_SUB_AUTHORITIES];
+    DWORD len = sizeof(buffer);
     NTSTATUS status;
 
-    status = NtOpenThreadToken(GetCurrentThread(), TOKEN_READ, TRUE, &token);
-    if (status == STATUS_NO_TOKEN)
-        status = NtOpenProcessToken(GetCurrentProcess(), TOKEN_READ, &token);
+    status = NtQueryInformationToken(GetCurrentThreadEffectiveToken(), TokenUser, buffer, len, &len);
     if (status == STATUS_SUCCESS)
     {
-        char buffer[sizeof(TOKEN_USER) + sizeof(SID) + sizeof(DWORD)*SID_MAX_SUB_AUTHORITIES];
-        DWORD len = sizeof(buffer);
-
-        status = NtQueryInformationToken(token, TokenUser, buffer, len, &len);
-        if (status == STATUS_SUCCESS)
+        KeyPath->MaximumLength = 0;
+        status = RtlConvertSidToUnicodeString(KeyPath, ((TOKEN_USER *)buffer)->User.Sid, FALSE);
+        if (status == STATUS_BUFFER_OVERFLOW)
         {
-            KeyPath->MaximumLength = 0;
-            status = RtlConvertSidToUnicodeString(KeyPath, ((TOKEN_USER *)buffer)->User.Sid, FALSE);
-            if (status == STATUS_BUFFER_OVERFLOW)
+            PWCHAR buf = RtlAllocateHeap(GetProcessHeap(), 0,
+                                         sizeof(pathW) + KeyPath->Length + sizeof(WCHAR));
+            if (buf)
             {
-                PWCHAR buf = RtlAllocateHeap(GetProcessHeap(), 0,
-                                             sizeof(pathW) + KeyPath->Length + sizeof(WCHAR));
-                if (buf)
-                {
-                    memcpy(buf, pathW, sizeof(pathW));
-                    KeyPath->MaximumLength = KeyPath->Length + sizeof(WCHAR);
-                    KeyPath->Buffer = (PWCHAR)((LPBYTE)buf + sizeof(pathW));
-                    status = RtlConvertSidToUnicodeString(KeyPath,
-                                                          ((TOKEN_USER *)buffer)->User.Sid, FALSE);
-                    KeyPath->Buffer = buf;
-                    KeyPath->Length += sizeof(pathW);
-                    KeyPath->MaximumLength += sizeof(pathW);
-                }
-                else
-                    status = STATUS_NO_MEMORY;
+                memcpy(buf, pathW, sizeof(pathW));
+                KeyPath->MaximumLength = KeyPath->Length + sizeof(WCHAR);
+                KeyPath->Buffer = (PWCHAR)((LPBYTE)buf + sizeof(pathW));
+                status = RtlConvertSidToUnicodeString(KeyPath,
+                                                      ((TOKEN_USER *)buffer)->User.Sid, FALSE);
+                KeyPath->Buffer = buf;
+                KeyPath->Length += sizeof(pathW);
+                KeyPath->MaximumLength += sizeof(pathW);
             }
+            else
+                status = STATUS_NO_MEMORY;
         }
-        NtClose(token);
     }
     return status;
 }
@@ -1209,7 +1198,7 @@ static NTSTATUS RTL_GetKeyHandle(ULONG RelativeTo, PCWSTR Path, PHANDLE handle)
 /*************************************************************************
  * RtlQueryRegistryValues   [NTDLL.@]
  *
- * Query multiple registry values with a signle call.
+ * Query multiple registry values with a single call.
  *
  * PARAMS
  *  RelativeTo  [I] Registry path that Path refers to
@@ -1386,7 +1375,7 @@ out:
 /*************************************************************************
  * RtlCheckRegistryKey   [NTDLL.@]
  *
- * Query multiple registry values with a signle call.
+ * Query multiple registry values with a single call.
  *
  * PARAMS
  *  RelativeTo [I] Registry path that Path refers to
@@ -1416,7 +1405,7 @@ NTSTATUS WINAPI RtlCheckRegistryKey(IN ULONG RelativeTo, IN PWSTR Path)
 /*************************************************************************
  * RtlDeleteRegistryValue   [NTDLL.@]
  *
- * Query multiple registry values with a signle call.
+ * Query multiple registry values with a single call.
  *
  * PARAMS
  *  RelativeTo [I] Registry path that Path refers to

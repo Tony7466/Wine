@@ -8,7 +8,7 @@
 @ stub D3DCreateLinker
 @ stub D3DDecompressShaders
 @ stdcall D3DDisassemble(ptr long long ptr ptr)
-@ stdcall D3DDisassemble10Effect(ptr long ptr) d3dcompiler_43.D3DDisassemble10Effect
+@ stub D3DDisassemble10Effect(ptr long ptr)
 @ stub D3DDisassemble11Trace
 @ stub D3DDisassembleRegion
 @ stdcall D3DGetBlobPart(ptr long long long ptr)
@@ -17,7 +17,7 @@
 @ stdcall D3DGetInputSignatureBlob(ptr long ptr)
 @ stdcall D3DGetOutputSignatureBlob(ptr long ptr)
 @ stub D3DGetTraceInstructionOffsets
-@ stub D3DLoadModule
+@ stdcall D3DLoadModule(ptr long ptr)
 @ stdcall D3DPreprocess(ptr long str ptr ptr ptr ptr)
 @ stdcall D3DReadFileToBlob(wstr ptr)
 @ stdcall D3DReflect(ptr long ptr ptr)

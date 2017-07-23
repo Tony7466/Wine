@@ -4045,7 +4045,7 @@ BOOL WINAPI IsOS(DWORD feature)
     case OS_SMALLBUSINESSSERVER:
         ISOS_RETURN(platform == VER_PLATFORM_WIN32_NT)
     case OS_TABLETPC:
-        FIXME("(OS_TABLEPC) What should we return here?\n");
+        FIXME("(OS_TABLETPC) What should we return here?\n");
         return FALSE;
     case OS_SERVERADMINUI:
         FIXME("(OS_SERVERADMINUI) What should we return here?\n");
@@ -4842,7 +4842,7 @@ typedef struct SHELL_USER_PERMISSION { /* ...and this should be in shlwapi.h */
  * NOTES
  *  Call should free returned descriptor with LocalFree
  */
-PSECURITY_DESCRIPTOR WINAPI GetShellSecurityDescriptor(PSHELL_USER_PERMISSION *apUserPerm, int cUserPerm)
+PSECURITY_DESCRIPTOR WINAPI GetShellSecurityDescriptor(const PSHELL_USER_PERMISSION *apUserPerm, int cUserPerm)
 {
     PSID *sidlist;
     PSID  cur_user = NULL;

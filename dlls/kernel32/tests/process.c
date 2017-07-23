@@ -70,7 +70,6 @@ static BOOL   (WINAPI *pVirtualFreeEx)(HANDLE, LPVOID, SIZE_T, DWORD);
 static BOOL   (WINAPI *pQueryFullProcessImageNameA)(HANDLE hProcess, DWORD dwFlags, LPSTR lpExeName, PDWORD lpdwSize);
 static BOOL   (WINAPI *pQueryFullProcessImageNameW)(HANDLE hProcess, DWORD dwFlags, LPWSTR lpExeName, PDWORD lpdwSize);
 static DWORD  (WINAPI *pK32GetProcessImageFileNameA)(HANDLE,LPSTR,DWORD);
-static struct _TEB * (WINAPI *pNtCurrentTeb)(void);
 static HANDLE (WINAPI *pCreateJobObjectW)(LPSECURITY_ATTRIBUTES sa, LPCWSTR name);
 static BOOL   (WINAPI *pAssignProcessToJobObject)(HANDLE job, HANDLE process);
 static BOOL   (WINAPI *pIsProcessInJob)(HANDLE process, HANDLE job, PBOOL result);
@@ -89,6 +88,9 @@ static BOOL   (WINAPI *pThread32First)(HANDLE, THREADENTRY32*);
 static BOOL   (WINAPI *pThread32Next)(HANDLE, THREADENTRY32*);
 static BOOL   (WINAPI *pGetLogicalProcessorInformationEx)(LOGICAL_PROCESSOR_RELATIONSHIP,SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*,DWORD*);
 static SIZE_T (WINAPI *pGetLargePageMinimum)(void);
+static BOOL   (WINAPI *pInitializeProcThreadAttributeList)(struct _PROC_THREAD_ATTRIBUTE_LIST*, DWORD, DWORD, SIZE_T*);
+static BOOL   (WINAPI *pUpdateProcThreadAttribute)(struct _PROC_THREAD_ATTRIBUTE_LIST*, DWORD, DWORD_PTR, void *,SIZE_T,void*,SIZE_T*);
+static void   (WINAPI *pDeleteProcThreadAttributeList)(struct _PROC_THREAD_ATTRIBUTE_LIST*);
 
 /* ############################### */
 static char     base[MAX_PATH];
@@ -226,7 +228,6 @@ static BOOL init(void)
     hkernel32 = GetModuleHandleA("kernel32");
     hntdll    = GetModuleHandleA("ntdll.dll");
 
-    pNtCurrentTeb = (void *)GetProcAddress(hntdll, "NtCurrentTeb");
     pNtQueryInformationProcess = (void *)GetProcAddress(hntdll, "NtQueryInformationProcess");
 
     pGetNativeSystemInfo = (void *) GetProcAddress(hkernel32, "GetNativeSystemInfo");
@@ -254,6 +255,9 @@ static BOOL init(void)
     pThread32Next = (void *)GetProcAddress(hkernel32, "Thread32Next");
     pGetLogicalProcessorInformationEx = (void *)GetProcAddress(hkernel32, "GetLogicalProcessorInformationEx");
     pGetLargePageMinimum = (void *)GetProcAddress(hkernel32, "GetLargePageMinimum");
+    pInitializeProcThreadAttributeList = (void *)GetProcAddress(hkernel32, "InitializeProcThreadAttributeList");
+    pUpdateProcThreadAttribute = (void *)GetProcAddress(hkernel32, "UpdateProcThreadAttribute");
+    pDeleteProcThreadAttributeList = (void *)GetProcAddress(hkernel32, "DeleteProcThreadAttributeList");
 
     return TRUE;
 }
@@ -277,7 +281,7 @@ static void     get_file_name(char* buf)
  *		static void     childPrintf
  *
  */
-static void     childPrintf(HANDLE h, const char* fmt, ...)
+static void WINETEST_PRINTF_ATTR(2,3) childPrintf(HANDLE h, const char* fmt, ...)
 {
     va_list     valist;
     char        buffer[1024+4*MAX_LISTED_ENV_VAR];
@@ -297,6 +301,7 @@ static void     childPrintf(HANDLE h, const char* fmt, ...)
  */
 static void     doChild(const char* file, const char* option)
 {
+    RTL_USER_PROCESS_PARAMETERS *params = NtCurrentTeb()->Peb->ProcessParameters;
     STARTUPINFOA        siA;
     STARTUPINFOW        siW;
     int                 i;
@@ -314,10 +319,10 @@ static void     doChild(const char* file, const char* option)
     /* output of startup info (Ansi) */
     GetStartupInfoA(&siA);
     childPrintf(hFile,
-                "[StartupInfoA]\ncb=%08ld\nlpDesktop=%s\nlpTitle=%s\n"
-                "dwX=%lu\ndwY=%lu\ndwXSize=%lu\ndwYSize=%lu\n"
-                "dwXCountChars=%lu\ndwYCountChars=%lu\ndwFillAttribute=%lu\n"
-                "dwFlags=%lu\nwShowWindow=%u\n"
+                "[StartupInfoA]\ncb=%08u\nlpDesktop=%s\nlpTitle=%s\n"
+                "dwX=%u\ndwY=%u\ndwXSize=%u\ndwYSize=%u\n"
+                "dwXCountChars=%u\ndwYCountChars=%u\ndwFillAttribute=%u\n"
+                "dwFlags=%u\nwShowWindow=%u\n"
                 "hStdInput=%lu\nhStdOutput=%lu\nhStdError=%lu\n\n",
                 siA.cb, encodeA(siA.lpDesktop), encodeA(siA.lpTitle),
                 siA.dwX, siA.dwY, siA.dwXSize, siA.dwYSize,
@@ -325,15 +330,10 @@ static void     doChild(const char* file, const char* option)
                 siA.dwFlags, siA.wShowWindow,
                 (DWORD_PTR)siA.hStdInput, (DWORD_PTR)siA.hStdOutput, (DWORD_PTR)siA.hStdError);
 
-    if (pNtCurrentTeb)
-    {
-        RTL_USER_PROCESS_PARAMETERS *params = pNtCurrentTeb()->Peb->ProcessParameters;
-
-        /* check the console handles in the TEB */
-        childPrintf(hFile, "[TEB]\nhStdInput=%lu\nhStdOutput=%lu\nhStdError=%lu\n\n",
-                    (DWORD_PTR)params->hStdInput, (DWORD_PTR)params->hStdOutput,
-                    (DWORD_PTR)params->hStdError);
-    }
+    /* check the console handles in the TEB */
+    childPrintf(hFile, "[TEB]\nhStdInput=%lu\nhStdOutput=%lu\nhStdError=%lu\n\n",
+                (DWORD_PTR)params->hStdInput, (DWORD_PTR)params->hStdOutput,
+                (DWORD_PTR)params->hStdError);
 
     /* since GetStartupInfoW is only implemented in win2k,
      * zero out before calling so we can notice the difference
@@ -341,10 +341,10 @@ static void     doChild(const char* file, const char* option)
     memset(&siW, 0, sizeof(siW));
     GetStartupInfoW(&siW);
     childPrintf(hFile,
-                "[StartupInfoW]\ncb=%08ld\nlpDesktop=%s\nlpTitle=%s\n"
-                "dwX=%lu\ndwY=%lu\ndwXSize=%lu\ndwYSize=%lu\n"
-                "dwXCountChars=%lu\ndwYCountChars=%lu\ndwFillAttribute=%lu\n"
-                "dwFlags=%lu\nwShowWindow=%u\n"
+                "[StartupInfoW]\ncb=%08u\nlpDesktop=%s\nlpTitle=%s\n"
+                "dwX=%u\ndwY=%u\ndwXSize=%u\ndwYSize=%u\n"
+                "dwXCountChars=%u\ndwYCountChars=%u\ndwFillAttribute=%u\n"
+                "dwFlags=%u\nwShowWindow=%u\n"
                 "hStdInput=%lu\nhStdOutput=%lu\nhStdError=%lu\n\n",
                 siW.cb, encodeW(siW.lpDesktop), encodeW(siW.lpTitle),
                 siW.dwX, siW.dwY, siW.dwXSize, siW.dwYSize,
@@ -447,9 +447,9 @@ static void     doChild(const char* file, const char* option)
         childPrintf(hFile, "InputCP=%d\nOutputCP=%d\n",
                     GetConsoleCP(), GetConsoleOutputCP());
         if (GetConsoleMode(hConIn, &modeIn))
-            childPrintf(hFile, "InputMode=%ld\n", modeIn);
+            childPrintf(hFile, "InputMode=%u\n", modeIn);
         if (GetConsoleMode(hConOut, &modeOut))
-            childPrintf(hFile, "OutputMode=%ld\n", modeOut);
+            childPrintf(hFile, "OutputMode=%u\n", modeOut);
 
         /* now that we have written all relevant information, let's change it */
         SetLastError(0xdeadbeef);
@@ -584,18 +584,16 @@ static void ok_child_stringWA( int line, const char *sect, const char *key,
     HeapFree(GetProcessHeap(),0,resultA);
 }
 
+static void ok_child_int( int line, const char *sect, const char *key, UINT expect )
+{
+    UINT result = GetPrivateProfileIntA( sect, key, !expect, resfile );
+    ok_(__FILE__, line)( result == expect, "%s:%s expected %u, but got %u\n", sect, key, expect, result );
+}
+
 #define okChildString(sect, key, expect) ok_child_string(__LINE__, (sect), (key), (expect), 1 )
 #define okChildIString(sect, key, expect) ok_child_string(__LINE__, (sect), (key), (expect), 0 )
 #define okChildStringWA(sect, key, expect) ok_child_stringWA(__LINE__, (sect), (key), (expect), 1 )
-
-/* using !expect ensures that the test will fail if the sect/key isn't present
- * in result file
- */
-#define okChildInt(sect, key, expect) \
-    do { \
-        UINT result = GetPrivateProfileIntA((sect), (key), !(expect), resfile); \
-        ok(result == expect, "%s:%s expected %u, but got %u\n", (sect), (key), (UINT)(expect), result); \
-   } while (0)
+#define okChildInt(sect, key, expect) ok_child_int(__LINE__, (sect), (key), (expect))
 
 static void test_Startup(void)
 {
@@ -1961,7 +1959,7 @@ static void test_QueryFullProcessImageNameW(void)
     expect_eq_d(lstrlenW(buf), size);
     expect_eq_ws_i(buf, module_name);
 
-    hSelf = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, GetCurrentProcessId());
+    hSelf = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, GetCurrentProcessId());
     /* Real handle */
     size = sizeof(buf) / sizeof(buf[0]);
     expect_eq_d(TRUE, pQueryFullProcessImageNameW(hSelf, 0, buf, &size));
@@ -2875,13 +2873,6 @@ static void test_StartupNoConsole(void)
     char                buffer[MAX_PATH];
     STARTUPINFOA        startup;
     PROCESS_INFORMATION info;
-    DWORD               code;
-
-    if (!pNtCurrentTeb)
-    {
-        win_skip( "NtCurrentTeb not supported\n" );
-        return;
-    }
 
     memset(&startup, 0, sizeof(startup));
     startup.cb = sizeof(startup);
@@ -2892,7 +2883,6 @@ static void test_StartupNoConsole(void)
     ok(CreateProcessA(NULL, buffer, NULL, NULL, TRUE, DETACHED_PROCESS, NULL, NULL, &startup,
                       &info), "CreateProcess\n");
     ok(WaitForSingleObject(info.hProcess, 30000) == WAIT_OBJECT_0, "Child process termination\n");
-    ok(GetExitCodeProcess(info.hProcess, &code), "Getting exit code\n");
     WritePrivateProfileStringA(NULL, NULL, NULL, resfile);
     okChildInt("StartupInfoA", "hStdInput", (UINT)INVALID_HANDLE_VALUE);
     okChildInt("StartupInfoA", "hStdOutput", (UINT)INVALID_HANDLE_VALUE);
@@ -2997,7 +2987,7 @@ static void test_process_info(void)
         sizeof(buf) /* ProcessHandleTracing */,
         sizeof(ULONG) /* ProcessIoPriority */,
         sizeof(ULONG) /* ProcessExecuteFlags */,
-#if 0 /* FIXME: Add remaning classes */
+#if 0 /* FIXME: Add remaining classes */
         ProcessResourceManagement,
         sizeof(ULONG) /* ProcessCookie */,
         sizeof(SECTION_IMAGE_INFORMATION) /* ProcessImageInformation */,
@@ -3077,11 +3067,7 @@ static void test_process_info(void)
         case ProcessWow64Information:
         case ProcessDefaultHardErrorMode:
         case ProcessHandleCount:
-            ok(status == STATUS_SUCCESS, "for info %u expected STATUS_SUCCESS, got %08x (ret_len %u)\n", i, status, ret_len);
-            break;
-
         case ProcessImageFileName:
-todo_wine
             ok(status == STATUS_SUCCESS, "for info %u expected STATUS_SUCCESS, got %08x (ret_len %u)\n", i, status, ret_len);
             break;
 
@@ -3157,6 +3143,122 @@ static void test_largepages(void)
     ok((size == 0) || (size == 2*1024*1024) || (size == 4*1024*1024), "GetLargePageMinimum reports %ld size\n", size);
 }
 
+struct proc_thread_attr
+{
+    DWORD_PTR attr;
+    SIZE_T size;
+    void *value;
+};
+
+struct _PROC_THREAD_ATTRIBUTE_LIST
+{
+    DWORD mask;  /* bitmask of items in list */
+    DWORD size;  /* max number of items in list */
+    DWORD count; /* number of items in list */
+    DWORD pad;
+    DWORD_PTR unk;
+    struct proc_thread_attr attrs[10];
+};
+
+static void test_ProcThreadAttributeList(void)
+{
+    BOOL ret;
+    SIZE_T size, needed;
+    int i;
+    struct _PROC_THREAD_ATTRIBUTE_LIST list, expect_list;
+    HANDLE handles[4];
+
+    if (!pInitializeProcThreadAttributeList)
+    {
+        win_skip("No support for ProcThreadAttributeList\n");
+        return;
+    }
+
+    for (i = 0; i <= 10; i++)
+    {
+        needed = FIELD_OFFSET(struct _PROC_THREAD_ATTRIBUTE_LIST, attrs[i]);
+        ret = pInitializeProcThreadAttributeList(NULL, i, 0, &size);
+        ok(!ret, "got %d\n", ret);
+        if(i >= 4 && GetLastError() == ERROR_INVALID_PARAMETER) /* Vista only allows a maximium of 3 slots */
+            break;
+        ok(GetLastError() == ERROR_INSUFFICIENT_BUFFER, "got %d\n", GetLastError());
+        ok(size == needed, "%d: got %ld expect %ld\n", i, size, needed);
+
+        memset(&list, 0xcc, sizeof(list));
+        ret = pInitializeProcThreadAttributeList(&list, i, 0, &size);
+        ok(ret, "got %d\n", ret);
+        ok(list.mask == 0, "%d: got %08x\n", i, list.mask);
+        ok(list.size == i, "%d: got %08x\n", i, list.size);
+        ok(list.count == 0, "%d: got %08x\n", i, list.count);
+        ok(list.unk == 0, "%d: got %08lx\n", i, list.unk);
+    }
+
+    memset(handles, 0, sizeof(handles));
+    memset(&expect_list, 0xcc, sizeof(expect_list));
+    expect_list.mask = 0;
+    expect_list.size = i - 1;
+    expect_list.count = 0;
+    expect_list.unk = 0;
+
+    ret = pUpdateProcThreadAttribute(&list, 0, 0xcafe, handles, sizeof(PROCESSOR_NUMBER), NULL, NULL);
+    ok(!ret, "got %d\n", ret);
+    ok(GetLastError() == ERROR_NOT_SUPPORTED, "got %d\n", GetLastError());
+
+    ret = pUpdateProcThreadAttribute(&list, 0, PROC_THREAD_ATTRIBUTE_PARENT_PROCESS, handles, sizeof(handles[0]) / 2, NULL, NULL);
+    ok(!ret, "got %d\n", ret);
+    ok(GetLastError() == ERROR_BAD_LENGTH, "got %d\n", GetLastError());
+
+    ret = pUpdateProcThreadAttribute(&list, 0, PROC_THREAD_ATTRIBUTE_PARENT_PROCESS, handles, sizeof(handles[0]) * 2, NULL, NULL);
+    ok(!ret, "got %d\n", ret);
+    ok(GetLastError() == ERROR_BAD_LENGTH, "got %d\n", GetLastError());
+
+    ret = pUpdateProcThreadAttribute(&list, 0, PROC_THREAD_ATTRIBUTE_PARENT_PROCESS, handles, sizeof(handles[0]), NULL, NULL);
+    ok(ret, "got %d\n", ret);
+
+    expect_list.mask |= 1 << ProcThreadAttributeParentProcess;
+    expect_list.attrs[0].attr = PROC_THREAD_ATTRIBUTE_PARENT_PROCESS;
+    expect_list.attrs[0].size = sizeof(handles[0]);
+    expect_list.attrs[0].value = handles;
+    expect_list.count++;
+
+    ret = pUpdateProcThreadAttribute(&list, 0, PROC_THREAD_ATTRIBUTE_PARENT_PROCESS, handles, sizeof(handles[0]), NULL, NULL);
+    ok(!ret, "got %d\n", ret);
+    ok(GetLastError() == ERROR_OBJECT_NAME_EXISTS, "got %d\n", GetLastError());
+
+    ret = pUpdateProcThreadAttribute(&list, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, handles, sizeof(handles) - 1, NULL, NULL);
+    ok(!ret, "got %d\n", ret);
+    ok(GetLastError() == ERROR_BAD_LENGTH, "got %d\n", GetLastError());
+
+    ret = pUpdateProcThreadAttribute(&list, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, handles, sizeof(handles), NULL, NULL);
+    ok(ret, "got %d\n", ret);
+
+    expect_list.mask |= 1 << ProcThreadAttributeHandleList;
+    expect_list.attrs[1].attr = PROC_THREAD_ATTRIBUTE_HANDLE_LIST;
+    expect_list.attrs[1].size = sizeof(handles);
+    expect_list.attrs[1].value = handles;
+    expect_list.count++;
+
+    ret = pUpdateProcThreadAttribute(&list, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, handles, sizeof(handles), NULL, NULL);
+    ok(!ret, "got %d\n", ret);
+    ok(GetLastError() == ERROR_OBJECT_NAME_EXISTS, "got %d\n", GetLastError());
+
+    ret = pUpdateProcThreadAttribute(&list, 0, PROC_THREAD_ATTRIBUTE_IDEAL_PROCESSOR, handles, sizeof(PROCESSOR_NUMBER), NULL, NULL);
+    ok(ret || (!ret && GetLastError() == ERROR_NOT_SUPPORTED), "got %d gle %d\n", ret, GetLastError());
+
+    if (ret)
+    {
+        expect_list.mask |= 1 << ProcThreadAttributeIdealProcessor;
+        expect_list.attrs[2].attr = PROC_THREAD_ATTRIBUTE_IDEAL_PROCESSOR;
+        expect_list.attrs[2].size = sizeof(PROCESSOR_NUMBER);
+        expect_list.attrs[2].value = handles;
+        expect_list.count++;
+    }
+
+    ok(!memcmp(&list, &expect_list, size), "mismatch\n");
+
+    pDeleteProcThreadAttributeList(&list);
+}
+
 START_TEST(process)
 {
     HANDLE job;
@@ -3230,6 +3332,7 @@ START_TEST(process)
     test_session_info();
     test_GetLogicalProcessorInformationEx();
     test_largepages();
+    test_ProcThreadAttributeList();
 
     /* things that can be tested:
      *  lookup:         check the way program to be executed is searched

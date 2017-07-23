@@ -21,6 +21,7 @@
 #include "windows.h"
 #include "winerror.h"
 #include "hstring.h"
+#include "wine/unicode.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(winstring);
@@ -371,4 +372,91 @@ BOOL WINAPI WindowsIsStringEmpty(HSTRING str)
     if (str == NULL)
         return TRUE;
     return priv->length == 0;
+}
+
+/***********************************************************************
+ *      WindowsCompareStringOrdinal (combase.@)
+ */
+HRESULT WINAPI WindowsCompareStringOrdinal(HSTRING str1, HSTRING str2, INT32 *res)
+{
+    struct hstring_private *priv1 = impl_from_HSTRING(str1);
+    struct hstring_private *priv2 = impl_from_HSTRING(str2);
+    const WCHAR *buf1 = empty, *buf2 = empty;
+    UINT32 len1 = 0, len2 = 0;
+
+    TRACE("(%p, %p, %p)\n", str1, str2, res);
+
+    if (res == NULL)
+        return E_INVALIDARG;
+    if (str1 == str2)
+    {
+        *res = 0;
+        return S_OK;
+    }
+    if (str1)
+    {
+        buf1 = priv1->buffer;
+        len1 = priv1->length;
+    }
+    if (str2)
+    {
+        buf2 = priv2->buffer;
+        len2 = priv2->length;
+    }
+    *res = CompareStringOrdinal(buf1, len1, buf2, len2, FALSE) - CSTR_EQUAL;
+    return S_OK;
+}
+
+/***********************************************************************
+ *      WindowsTrimStringStart (combase.@)
+ */
+HRESULT WINAPI WindowsTrimStringStart(HSTRING str1, HSTRING str2, HSTRING *out)
+{
+    struct hstring_private *priv1 = impl_from_HSTRING(str1);
+    struct hstring_private *priv2 = impl_from_HSTRING(str2);
+    UINT32 start;
+
+    TRACE("(%p, %p, %p)\n", str1, str2, out);
+
+    if (!out || !str2 || !priv2->length)
+        return E_INVALIDARG;
+    if (!str1)
+    {
+        *out = NULL;
+        return S_OK;
+    }
+    for (start = 0; start < priv1->length; start++)
+    {
+        if (!memchrW(priv2->buffer, priv1->buffer[start], priv2->length))
+            break;
+    }
+    return start ? WindowsCreateString(&priv1->buffer[start], priv1->length - start, out) :
+                   WindowsDuplicateString(str1, out);
+}
+
+/***********************************************************************
+ *      WindowsTrimStringEnd (combase.@)
+ */
+HRESULT WINAPI WindowsTrimStringEnd(HSTRING str1, HSTRING str2, HSTRING *out)
+{
+    struct hstring_private *priv1 = impl_from_HSTRING(str1);
+    struct hstring_private *priv2 = impl_from_HSTRING(str2);
+    UINT32 len;
+
+    TRACE("(%p, %p, %p)\n", str1, str2, out);
+
+    if (!out || !str2 || !priv2->length)
+        return E_INVALIDARG;
+    if (!str1)
+    {
+        *out = NULL;
+        return S_OK;
+    }
+    for (len = priv1->length; len > 0; len--)
+    {
+        if (!memchrW(priv2->buffer, priv1->buffer[len - 1], priv2->length))
+            break;
+    }
+    return (len < priv1->length) ? WindowsCreateString(priv1->buffer, len, out) :
+                                   WindowsDuplicateString(str1, out);
 }

@@ -704,11 +704,13 @@ static void event_subscribe( msi_dialog *dialog, const WCHAR *event, const WCHAR
 {
     struct subscriber *sub;
 
-    TRACE("event %s control %s attribute %s\n", debugstr_w(event), debugstr_w(control), debugstr_w(attribute));
+    TRACE("dialog %s event %s control %s attribute %s\n", debugstr_w(dialog->name), debugstr_w(event),
+          debugstr_w(control), debugstr_w(attribute));
 
     LIST_FOR_EACH_ENTRY( sub, &dialog->package->subscriptions, struct subscriber, entry )
     {
-        if (!strcmpiW( sub->event, event ) &&
+        if (sub->dialog == dialog &&
+            !strcmpiW( sub->event, event ) &&
             !strcmpiW( sub->control, control ) &&
             !strcmpiW( sub->attribute, attribute ))
         {
@@ -3607,7 +3609,7 @@ static void msi_dialog_adjust_dialog_pos( msi_dialog *dialog, MSIRECORD *rec, LP
     dialog->size.cx = sz.cx;
     dialog->size.cy = sz.cy;
 
-    TRACE("%u %u %u %u\n", pos->left, pos->top, pos->right, pos->bottom);
+    TRACE("%s\n", wine_dbgstr_rect(pos));
 
     style = GetWindowLongPtrW( dialog->hwnd, GWL_STYLE );
     AdjustWindowRect( pos, style, FALSE );

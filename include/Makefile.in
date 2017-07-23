@@ -24,6 +24,7 @@ IDL_SRCS = \
 	chprst.idl \
 	cmdbas.idl \
 	cmdtxt.idl \
+	colinf.idl \
 	comcat.idl \
 	commoncontrols.idl \
 	control.idl \
@@ -35,11 +36,13 @@ IDL_SRCS = \
 	d2d1.idl \
 	d3d10.idl \
 	d3d10_1.idl \
+	d3d10sdklayers.idl \
 	d3d11.idl \
 	d3d11_1.idl \
 	d3d11sdklayers.idl \
 	d3dcommon.idl \
 	d3dx10core.idl \
+	d3dx11core.idl \
 	dbccmd.idl \
 	dbcses.idl \
 	dbdsad.idl \
@@ -57,6 +60,7 @@ IDL_SRCS = \
 	dwrite.idl \
 	dwrite_1.idl \
 	dwrite_2.idl \
+	dwrite_3.idl \
 	dxgi.idl \
 	dxgi1_2.idl \
 	dxva2api.idl \
@@ -135,6 +139,7 @@ IDL_SRCS = \
 	servprov.idl \
 	sesprp.idl \
 	shdeprecated.idl \
+	shimgdata.idl \
 	shldisp.idl \
 	shobjidl.idl \
 	shtypes.idl \
@@ -198,6 +203,7 @@ HEADER_SRCS = \
 	atlwin.h \
 	audevcod.h \
 	audiosessiontypes.h \
+	authz.h \
 	aviriff.h \
 	avrt.h \
 	basetsd.h \
@@ -206,6 +212,8 @@ HEADER_SRCS = \
 	bdaiface_enums.h \
 	bdatypes.h \
 	bitsmsg.h \
+	bluetoothapis.h \
+	bthsdpdef.h \
 	cderr.h \
 	cfgmgr32.h \
 	cguid.h \
@@ -244,9 +252,15 @@ HEADER_SRCS = \
 	d3drmobj.h \
 	d3drmwin.h \
 	d3dtypes.h \
+	d3dukmdt.h \
 	d3dvec.inl \
 	d3dx10.h \
 	d3dx10async.h \
+	d3dx10math.h \
+	d3dx10tex.h \
+	d3dx11.h \
+	d3dx11async.h \
+	d3dx11tex.h \
 	d3dx9.h \
 	d3dx9anim.h \
 	d3dx9core.h \
@@ -269,6 +283,7 @@ HEADER_SRCS = \
 	ddeml.h \
 	ddk/compstui.h \
 	ddk/csq.h \
+	ddk/d3dkmthk.h \
 	ddk/hidclass.h \
 	ddk/hidpi.h \
 	ddk/hidport.h \
@@ -298,6 +313,7 @@ HEADER_SRCS = \
 	devguid.h \
 	devpkey.h \
 	devpropdef.h \
+	dhcpcsdk.h \
 	difxapi.h \
 	digitalv.h \
 	dinput.h \
@@ -377,6 +393,7 @@ HEADER_SRCS = \
 	ifdef.h \
 	ifmib.h \
 	imagehlp.h \
+	ime.h \
 	imm.h \
 	in6addr.h \
 	inaddr.h \
@@ -458,6 +475,7 @@ HEADER_SRCS = \
 	msvcrt/errno.h \
 	msvcrt/fcntl.h \
 	msvcrt/float.h \
+	msvcrt/fpieee.h \
 	msvcrt/io.h \
 	msvcrt/limits.h \
 	msvcrt/locale.h \
@@ -490,6 +508,7 @@ HEADER_SRCS = \
 	msxml6did.h \
 	msxmldid.h \
 	nb30.h \
+	ncrypt.h \
 	ndrtypes.h \
 	netioapi.h \
 	nldef.h \
@@ -610,6 +629,7 @@ HEADER_SRCS = \
 	wfext.h \
 	wia.h \
 	wiadef.h \
+	wimgapi.h \
 	winbase.h \
 	wincon.h \
 	wincred.h \
@@ -656,6 +676,7 @@ HEADER_SRCS = \
 	winver.h \
 	wlanapi.h \
 	wmistr.h \
+	wmium.h \
 	wnaspi32.h \
 	wownt32.h \
 	ws2def.h \
