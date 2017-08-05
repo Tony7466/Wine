@@ -24,6 +24,7 @@ IDL_SRCS = \
 	chprst.idl \
 	cmdbas.idl \
 	cmdtxt.idl \
+	cmnquery.idl \
 	colinf.idl \
 	comcat.idl \
 	commoncontrols.idl \
@@ -161,6 +162,7 @@ IDL_SRCS = \
 	txdtc.idl \
 	uiautomationclient.idl \
 	uiautomationcore.idl \
+	uiribbon.idl \
 	unknwn.idl \
 	urlhist.idl \
 	urlmon.idl \

@@ -82,6 +82,8 @@ static void test_wmreader_interfaces(void)
     IWMDRMReader2      *drmreader2;
     IWMDRMReader3      *drmreader3;
     IWMReaderPlaylistBurn *playlist;
+    IWMLanguageList       *langlist;
+    IReferenceClock       *refclock;
 
     hr = WMCreateReader( NULL, 0, &reader );
     ok(hr == S_OK, "WMCreateReader failed 0x%08x\n", hr);
@@ -98,28 +100,28 @@ static void test_wmreader_interfaces(void)
     ok(hr == S_OK, "Failed 0x%08x\n", hr);
 
     hr = IWMReader_QueryInterface(reader, &IID_IWMHeaderInfo, (void **)&header);
-    todo_wine ok(hr == S_OK, "Failed 0x%08x\n", hr);
+    ok(hr == S_OK, "Failed 0x%08x\n", hr);
 
     hr = IWMReader_QueryInterface(reader, &IID_IWMHeaderInfo2, (void **)&header2);
-    todo_wine ok(hr == S_OK, "Failed 0x%08x\n", hr);
+    ok(hr == S_OK, "Failed 0x%08x\n", hr);
 
     hr = IWMReader_QueryInterface(reader, &IID_IWMHeaderInfo3, (void **)&header3);
-    todo_wine ok(hr == S_OK, "Failed 0x%08x\n", hr);
+    ok(hr == S_OK, "Failed 0x%08x\n", hr);
 
     hr = IWMReader_QueryInterface(reader, &IID_IWMProfile, (void **)&profile);
-    todo_wine ok(hr == S_OK, "Failed 0x%08x\n", hr);
+    ok(hr == S_OK, "Failed 0x%08x\n", hr);
 
     hr = IWMReader_QueryInterface(reader, &IID_IWMProfile2, (void **)&profile2);
-    todo_wine ok(hr == S_OK, "Failed 0x%08x\n", hr);
+    ok(hr == S_OK, "Failed 0x%08x\n", hr);
 
     hr = IWMReader_QueryInterface(reader, &IID_IWMProfile3, (void **)&profile3);
-    todo_wine ok(hr == S_OK, "Failed 0x%08x\n", hr);
+    ok(hr == S_OK, "Failed 0x%08x\n", hr);
 
     hr = IWMReader_QueryInterface(reader, &IID_IWMPacketSize, (void **)&packet);
-    todo_wine ok(hr == S_OK, "Failed 0x%08x\n", hr);
+    ok(hr == S_OK, "Failed 0x%08x\n", hr);
 
     hr = IWMReader_QueryInterface(reader, &IID_IWMPacketSize2, (void **)&packet2);
-    todo_wine ok(hr == S_OK, "Failed 0x%08x\n", hr);
+    ok(hr == S_OK, "Failed 0x%08x\n", hr);
 
     hr = IWMReader_QueryInterface(reader, &IID_IWMReaderAccelerator, (void **)&accel);
     ok(hr == S_OK, "Failed 0x%08x\n", hr);
@@ -149,6 +151,12 @@ static void test_wmreader_interfaces(void)
     ok(hr == E_NOINTERFACE, "Failed 0x%08x\n", hr);
 
     hr = IWMReader_QueryInterface(reader, &IID_IWMReaderPlaylistBurn, (void **)&playlist);
+    ok(hr == S_OK, "Failed 0x%08x\n", hr);
+
+    hr = IWMReader_QueryInterface(reader, &IID_IWMLanguageList, (void **)&langlist);
+    ok(hr == S_OK, "Failed 0x%08x\n", hr);
+
+    hr = IWMReader_QueryInterface(reader, &IID_IReferenceClock, (void **)&refclock);
     ok(hr == S_OK, "Failed 0x%08x\n", hr);
 
     if(packet)
@@ -185,6 +193,10 @@ static void test_wmreader_interfaces(void)
         IWMReaderTypeNegotiation_Release(negotiation);
     if(playlist)
         IWMReaderPlaylistBurn_Release(playlist);
+    if(langlist)
+        IWMLanguageList_Release(langlist);
+    if(refclock)
+        IReferenceClock_Release(refclock);
 
     IWMReader_Release(reader);
 }
