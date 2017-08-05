@@ -9,8 +9,8 @@ author: Michael Gilbert <mgilbert@debian.org>
  #
 -# Fetch the registry files
 -#
---f "gl.xml" || system "wget --no-check-certificate https://cvs.khronos.org/svn/repos/ogl/trunk/doc/registry/public/api/gl.xml" || die "cannot download gl.xml";
---f "wgl.xml" || system "wget --no-check-certificate https://cvs.khronos.org/svn/repos/ogl/trunk/doc/registry/public/api/wgl.xml" || die "cannot download wgl.xml";
+--f "gl.xml" || system "wget https://raw.github.com/KhronosGroup/OpenGL-Registry/master/xml/gl.xml" || die "cannot download gl.xml";
+--f "wgl.xml" || system "wget https://raw.github.com/KhronosGroup/OpenGL-Registry/master/xml/wgl.xml" || die "cannot download wgl.xml";
 -
 -
 -#

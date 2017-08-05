@@ -1,3 +1,11 @@
+wine-development (2.14-1) unstable; urgency=medium
+
+  * New upstream release 2.14, released Aug 3, 2017.
+    - C++ calling convention workarounds in the IDL compiler.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 05 Aug 2017 05:27:07 +0000
+
 wine-development (2.13-1) unstable; urgency=medium
 
   * New upstream release 2.13, released Jul 21, 2017.

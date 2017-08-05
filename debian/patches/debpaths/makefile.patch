@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -678,7 +678,7 @@ AC_CHECK_HEADERS([libprocstat.h],,,
+@@ -676,7 +676,7 @@ AC_CHECK_HEADERS([libprocstat.h],,,
  
  dnl **** Check for working dll ****
  
