@@ -127,6 +127,7 @@ typedef struct EventTarget EventTarget;
     XDIID(HTMLElementEvents2) \
     XIID(IDocumentSelector) \
     XIID(IElementSelector) \
+    XIID(IElementTraversal) \
     XIID(IHTMLAnchorElement) \
     XIID(IHTMLAreaElement) \
     XIID(IHTMLAttributeCollection) \
@@ -757,6 +758,7 @@ typedef struct {
     IHTMLElement6 IHTMLElement6_iface;
     IHTMLUniqueName IHTMLUniqueName_iface;
     IElementSelector IElementSelector_iface;
+    IElementTraversal IElementTraversal_iface;
     IProvideMultipleClassInfo IProvideMultipleClassInfo_iface;
 
     nsIDOMHTMLElement *nselem;

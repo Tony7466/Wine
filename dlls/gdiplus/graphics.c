@@ -1493,8 +1493,17 @@ static GpStatus brush_fill_pixels(GpGraphics *graphics, GpBrush *brush,
                         REAL blend_amount, pdy, pdx;
                         pdy = yf - center_point.Y;
                         pdx = xf - center_point.X;
-                        blend_amount = ( (center_point.Y - start_point.Y) * pdx + (start_point.X - center_point.X) * pdy ) / ( dy * pdx - dx * pdy );
-                        outer_color = blend_colors(start_color, end_color, blend_amount);
+
+                        if (fabs(pdx) <= 0.001 && fabs(pdy) <= 0.001)
+                        {
+                            /* Too close to center point, don't try to calculate outer color */
+                            outer_color = start_color;
+                        }
+                        else
+                        {
+                            blend_amount = ( (center_point.Y - start_point.Y) * pdx + (start_point.X - center_point.X) * pdy ) / ( dy * pdx - dx * pdy );
+                            outer_color = blend_colors(start_color, end_color, blend_amount);
+                        }
                     }
 
                     distance = (end_point.Y - start_point.Y) * (start_point.X - xf) +
@@ -3614,6 +3623,9 @@ static GpStatus SOFTWARE_GdipDrawThinPath(GpGraphics *graphics, GpPen *pen, GpPa
                 start_pointi.Y = floorf(start_point.Y);
                 end_pointi.X = floorf(end_point.X);
                 end_pointi.Y = floorf(end_point.Y);
+
+                if(start_pointi.X == end_pointi.X && start_pointi.Y == end_pointi.Y)
+                    continue;
 
                 /* draw line segment */
                 if (abs(start_pointi.Y - end_pointi.Y) > abs(start_pointi.X - end_pointi.X))
@@ -7134,4 +7146,17 @@ GpStatus WINGDIPAPI GdipResetPageTransform(GpGraphics *graphics)
         FIXME("not implemented\n");
 
     return NotImplemented;
+}
+
+GpStatus WINGDIPAPI GdipGraphicsSetAbort(GpGraphics *graphics, GdiplusAbort *pabort)
+{
+    TRACE("(%p, %p)\n", graphics, pabort);
+
+    if (!graphics)
+        return InvalidParameter;
+
+    if (pabort)
+        FIXME("Abort callback is not supported.\n");
+
+    return Ok;
 }

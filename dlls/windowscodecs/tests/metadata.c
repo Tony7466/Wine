@@ -1750,6 +1750,7 @@ static void test_metadata_gif(void)
         hr = IWICMetadataQueryReader_GetMetadataByName(queryreader, queryW, &value);
         ok(hr == S_OK, "GetMetadataByName(%s) error %#x\n", wine_dbgstr_w(queryW), hr);
         ok(value.vt == VT_UNKNOWN, "expected VT_UNKNOWN, got %#x\n", value.vt);
+        PropVariantClear(&value);
 
         IWICMetadataQueryReader_Release(queryreader);
     }
@@ -2460,21 +2461,6 @@ struct metadata_block
 struct metadata
 {
     const GUID *container_format;
-    UINT count;
-    const struct metadata_block *block;
-};
-
-struct metadata_reader
-{
-    IWICMetadataReader IWICMetadataReader_iface;
-    LONG ref;
-    const struct metadata_block *block;
-};
-
-struct metadata_block_reader
-{
-    IWICMetadataBlockReader IWICMetadataBlockReader_iface;
-    LONG ref;
     UINT count;
     const struct metadata_block *block;
 };
