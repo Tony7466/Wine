@@ -2113,6 +2113,7 @@ WINBASEAPI BOOL        WINAPI GetNamedPipeHandleStateA(HANDLE,LPDWORD,LPDWORD,LP
 WINBASEAPI BOOL        WINAPI GetNamedPipeHandleStateW(HANDLE,LPDWORD,LPDWORD,LPDWORD,LPDWORD,LPWSTR,DWORD);
 #define                       GetNamedPipeHandleState WINELIB_NAME_AW(GetNamedPipeHandleState)
 WINBASEAPI BOOL        WINAPI GetNamedPipeInfo(HANDLE,LPDWORD,LPDWORD,LPDWORD,LPDWORD);
+WINBASEAPI BOOL        WINAPI GetNamedPipeClientProcessId(HANDLE,PULONG);
 WINBASEAPI VOID        WINAPI GetNativeSystemInfo(LPSYSTEM_INFO);
 WINBASEAPI BOOL        WINAPI GetNumaProcessorNode(UCHAR,PUCHAR);
 WINADVAPI  BOOL        WINAPI GetNumberOfEventLogRecords(HANDLE,PDWORD);
@@ -2511,6 +2512,7 @@ WINBASEAPI BOOL        WINAPI SetCurrentDirectoryW(LPCWSTR);
 WINBASEAPI BOOL        WINAPI SetDefaultCommConfigA(LPCSTR,LPCOMMCONFIG,DWORD);
 WINBASEAPI BOOL        WINAPI SetDefaultCommConfigW(LPCWSTR,LPCOMMCONFIG,DWORD);
 #define                       SetDefaultCommConfig WINELIB_NAME_AW(SetDefaultCommConfig)
+WINBASEAPI BOOL        WINAPI SetDefaultDllDirectories(DWORD);
 WINBASEAPI BOOL        WINAPI SetDllDirectoryA(LPCSTR);
 WINBASEAPI BOOL        WINAPI SetDllDirectoryW(LPCWSTR);
 #define                       SetDllDirectory WINELIB_NAME_AW(SetDllDirectory)

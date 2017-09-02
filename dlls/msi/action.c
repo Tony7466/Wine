@@ -160,13 +160,26 @@ static const WCHAR szWriteEnvironmentStrings[] =
 
 static INT ui_actionstart(MSIPACKAGE *package, LPCWSTR action, LPCWSTR description, LPCWSTR template)
 {
-    MSIRECORD *row = MSI_CreateRecord(3);
+    WCHAR query[] = {'S','E','L','E','C','T',' ','*',' ','F','R','O','M',' ',
+        '`','A','c','t','i','o','n','T','e','x','t','`',' ','W','H','E','R','E',' ',
+        '`','A','c','t','i','o','n','`',' ','=',' ','\'','%','s','\'',0};
+    MSIRECORD *row, *textrow;
     INT rc;
+
+    textrow = MSI_QueryGetRecord(package->db, query, action);
+    if (textrow)
+    {
+        description = MSI_RecordGetString(textrow, 2);
+        template = MSI_RecordGetString(textrow, 3);
+    }
+
+    row = MSI_CreateRecord(3);
     if (!row) return -1;
     MSI_RecordSetStringW(row, 1, action);
     MSI_RecordSetStringW(row, 2, description);
     MSI_RecordSetStringW(row, 3, template);
     rc = MSI_ProcessMessage(package, INSTALLMESSAGE_ACTIONSTART, row);
+    if (textrow) msiobj_release(&textrow->hdr);
     msiobj_release(&row->hdr);
     return rc;
 }
@@ -175,23 +188,18 @@ static void ui_actioninfo(MSIPACKAGE *package, LPCWSTR action, BOOL start,
                           INT rc)
 {
     MSIRECORD *row;
-    WCHAR template[1024];
-    static const WCHAR format[] = 
-        {'H','H','\'',':','\'','m','m','\'',':','\'','s','s',0};
-    WCHAR message[1024];
-    WCHAR timet[0x100];
+    WCHAR *template;
 
-    GetTimeFormatW(LOCALE_USER_DEFAULT, 0, NULL, format, timet, 0x100);
-    LoadStringW(msi_hInstance, start ? IDS_INFO_ACTIONSTART : IDS_INFO_ACTIONENDED, template, 1024);
-    sprintfW(message, template, timet);
+    template = msi_get_error_message(package->db, start ? MSIERR_INFO_ACTIONSTART : MSIERR_INFO_ACTIONENDED);
 
     row = MSI_CreateRecord(2);
     if (!row) return;
-    MSI_RecordSetStringW(row, 0, message);
+    MSI_RecordSetStringW(row, 0, template);
     MSI_RecordSetStringW(row, 1, action);
     MSI_RecordSetInteger(row, 2, start ? package->LastActionResult : rc);
     MSI_ProcessMessage(package, INSTALLMESSAGE_INFO, row);
     msiobj_release(&row->hdr);
+    msi_free(template);
     if (!start) package->LastActionResult = rc;
 }
 
@@ -502,9 +510,6 @@ static UINT ITERATE_Actions(MSIRECORD *row, LPVOID param)
         rc = ACTION_PerformAction(package, action, SCRIPT_NONE);
 
     msi_dialog_check_messages( NULL );
-
-    if (package->CurrentInstallState != ERROR_SUCCESS)
-        rc = package->CurrentInstallState;
 
     if (rc == ERROR_FUNCTION_NOT_CALLED)
         rc = ERROR_SUCCESS;
@@ -5448,43 +5453,6 @@ UINT ACTION_ForceReboot(MSIPACKAGE *package)
     return ERROR_INSTALL_SUSPEND;
 }
 
-WCHAR *msi_build_error_string( MSIPACKAGE *package, UINT error, DWORD count, ... )
-{
-    static const WCHAR query[] =
-        {'S','E','L','E','C','T',' ','`','M','e','s','s','a','g','e','`',' ',
-         'F','R','O','M',' ','`','E','r','r','o','r','`',' ','W','H','E','R','E',' ',
-         '`','E','r','r','o','r','`',' ','=',' ','%','i',0};
-    MSIRECORD *rec, *row;
-    DWORD i, size = 0;
-    va_list va;
-    const WCHAR *str;
-    WCHAR *data;
-
-    if (!(row = MSI_QueryGetRecord( package->db, query, error ))) return 0;
-
-    rec = MSI_CreateRecord( count + 2 );
-    str = MSI_RecordGetString( row, 1 );
-    MSI_RecordSetStringW( rec, 0, str );
-    msiobj_release( &row->hdr );
-    MSI_RecordSetInteger( rec, 1, error );
-
-    va_start( va, count );
-    for (i = 0; i < count; i++)
-    {
-        str = va_arg( va, const WCHAR *);
-        MSI_RecordSetStringW( rec, i + 2, str );
-    }
-    va_end( va );
-
-    MSI_FormatRecordW( package, rec, NULL, &size );
-    size++;
-    data = msi_alloc( size * sizeof(WCHAR) );
-    if (size > 1) MSI_FormatRecordW( package, rec, data, &size );
-    else data[0] = 0;
-    msiobj_release( &rec->hdr );
-    return data;
-}
-
 static UINT ACTION_ResolveSource(MSIPACKAGE* package)
 {
     DWORD attrib;
@@ -5502,7 +5470,8 @@ static UINT ACTION_ResolveSource(MSIPACKAGE* package)
     attrib = GetFileAttributesW(package->db->path);
     if (attrib == INVALID_FILE_ATTRIBUTES)
     {
-        LPWSTR prompt, msg;
+        MSIRECORD *record;
+        LPWSTR prompt;
         DWORD size = 0;
 
         rc = MsiSourceListGetInfoW(package->ProductCode, NULL, 
@@ -5518,19 +5487,18 @@ static UINT ACTION_ResolveSource(MSIPACKAGE* package)
         else
             prompt = strdupW(package->db->path);
 
-        msg = msi_build_error_string(package, 1302, 1, prompt);
+        record = MSI_CreateRecord(2);
+        MSI_RecordSetInteger(record, 1, MSIERR_INSERTDISK);
+        MSI_RecordSetStringW(record, 2, prompt);
         msi_free(prompt);
         while(attrib == INVALID_FILE_ATTRIBUTES)
         {
-            rc = MessageBoxW(NULL, msg, NULL, MB_OKCANCEL);
+            MSI_RecordSetStringW(record, 0, NULL);
+            rc = MSI_ProcessMessage(package, INSTALLMESSAGE_ERROR, record);
             if (rc == IDCANCEL)
-            {
-                msi_free(msg);
                 return ERROR_INSTALL_USEREXIT;
-            }
             attrib = GetFileAttributesW(package->db->path);
         }
-        msi_free(msg);
         rc = ERROR_SUCCESS;
     }
     else

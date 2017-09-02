@@ -661,27 +661,21 @@ static void STDMETHODCALLTYPE d3d11_immediate_context_OMSetRenderTargetsAndUnord
         wined3d_mutex_lock();
         for (i = 0; i < unordered_access_view_start_slot; ++i)
         {
-            wined3d_device_set_unordered_access_view(device->wined3d_device, i, NULL);
+            wined3d_device_set_unordered_access_view(device->wined3d_device, i, NULL, ~0u);
         }
         for (i = 0; i < unordered_access_view_count; ++i)
         {
             struct d3d11_unordered_access_view *view
                     = unsafe_impl_from_ID3D11UnorderedAccessView(unordered_access_views[i]);
 
-        if (initial_counts && view && view->desc.ViewDimension == D3D11_UAV_DIMENSION_BUFFER
-                && (view->desc.u.Buffer.Flags & (D3D11_BUFFER_UAV_FLAG_APPEND | D3D11_BUFFER_UAV_FLAG_COUNTER))
-                && initial_counts[i] != ~(UINT)0)
-            FIXME("Ignoring initial count %u for slot %u.\n",
-                    initial_counts[i], unordered_access_view_start_slot + i);
-
             wined3d_device_set_unordered_access_view(device->wined3d_device,
                     unordered_access_view_start_slot + i,
-                    view ? view->wined3d_view : NULL);
+                    view ? view->wined3d_view : NULL, initial_counts ? initial_counts[i] : ~0u);
         }
         for (; unordered_access_view_start_slot + i < D3D11_PS_CS_UAV_REGISTER_COUNT; ++i)
         {
             wined3d_device_set_unordered_access_view(device->wined3d_device,
-                    unordered_access_view_start_slot + i, NULL);
+                    unordered_access_view_start_slot + i, NULL, ~0u);
         }
         wined3d_mutex_unlock();
     }
@@ -874,7 +868,17 @@ static void STDMETHODCALLTYPE d3d11_immediate_context_Dispatch(ID3D11DeviceConte
 static void STDMETHODCALLTYPE d3d11_immediate_context_DispatchIndirect(ID3D11DeviceContext *iface,
         ID3D11Buffer *buffer, UINT offset)
 {
-    FIXME("iface %p, buffer %p, offset %u stub!\n", iface, buffer, offset);
+    struct d3d_device *device = device_from_immediate_ID3D11DeviceContext(iface);
+    struct d3d_buffer *buffer_impl;
+
+    TRACE("iface %p, buffer %p, offset %u.\n", iface, buffer, offset);
+
+    buffer_impl = unsafe_impl_from_ID3D11Buffer(buffer);
+
+    wined3d_mutex_lock();
+    wined3d_device_dispatch_compute_indirect(device->wined3d_device,
+            buffer_impl->wined3d_buffer, offset);
+    wined3d_mutex_unlock();
 }
 
 static void STDMETHODCALLTYPE d3d11_immediate_context_RSSetState(ID3D11DeviceContext *iface,
@@ -1025,8 +1029,20 @@ static void STDMETHODCALLTYPE d3d11_immediate_context_UpdateSubresource(ID3D11De
 static void STDMETHODCALLTYPE d3d11_immediate_context_CopyStructureCount(ID3D11DeviceContext *iface,
         ID3D11Buffer *dst_buffer, UINT dst_offset, ID3D11UnorderedAccessView *src_view)
 {
-    FIXME("iface %p, dst_buffer %p, dst_offset %u, src_view %p stub!\n",
+    struct d3d_device *device = device_from_immediate_ID3D11DeviceContext(iface);
+    struct d3d11_unordered_access_view *uav;
+    struct d3d_buffer *buffer_impl;
+
+    TRACE("iface %p, dst_buffer %p, dst_offset %u, src_view %p.\n",
             iface, dst_buffer, dst_offset, src_view);
+
+    buffer_impl = unsafe_impl_from_ID3D11Buffer(dst_buffer);
+    uav = unsafe_impl_from_ID3D11UnorderedAccessView(src_view);
+
+    wined3d_mutex_lock();
+    wined3d_device_copy_uav_counter(device->wined3d_device,
+            buffer_impl->wined3d_buffer, dst_offset, uav->wined3d_view);
+    wined3d_mutex_unlock();
 }
 
 static void STDMETHODCALLTYPE d3d11_immediate_context_ClearRenderTargetView(ID3D11DeviceContext *iface,
@@ -1321,13 +1337,8 @@ static void STDMETHODCALLTYPE d3d11_immediate_context_CSSetUnorderedAccessViews(
     {
         struct d3d11_unordered_access_view *view = unsafe_impl_from_ID3D11UnorderedAccessView(views[i]);
 
-        if (initial_counts && view && view->desc.ViewDimension == D3D11_UAV_DIMENSION_BUFFER
-                && (view->desc.u.Buffer.Flags & (D3D11_BUFFER_UAV_FLAG_APPEND | D3D11_BUFFER_UAV_FLAG_COUNTER))
-                && initial_counts[i] != ~(UINT)0)
-            FIXME("Ignoring initial count %u for slot %u.\n", initial_counts[i], start_slot + i);
-
         wined3d_device_set_cs_uav(device->wined3d_device, start_slot + i,
-                view ? view->wined3d_view : NULL);
+                view ? view->wined3d_view : NULL, initial_counts ? initial_counts[i] : ~0u);
     }
     wined3d_mutex_unlock();
 }
@@ -2469,8 +2480,8 @@ static void STDMETHODCALLTYPE d3d11_immediate_context_ClearState(ID3D11DeviceCon
     wined3d_device_set_depth_stencil_view(device->wined3d_device, NULL);
     for (i = 0; i < D3D11_PS_CS_UAV_REGISTER_COUNT; ++i)
     {
-        wined3d_device_set_unordered_access_view(device->wined3d_device, i, NULL);
-        wined3d_device_set_cs_uav(device->wined3d_device, i, NULL);
+        wined3d_device_set_unordered_access_view(device->wined3d_device, i, NULL, ~0u);
+        wined3d_device_set_cs_uav(device->wined3d_device, i, NULL, ~0u);
     }
     ID3D11DeviceContext_OMSetDepthStencilState(iface, NULL, 0);
     ID3D11DeviceContext_OMSetBlendState(iface, NULL, blend_factor, D3D11_DEFAULT_SAMPLE_MASK);

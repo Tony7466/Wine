@@ -687,6 +687,16 @@ static UINT create_controlevent_table( MSIHANDLE hdb )
             "PRIMARY KEY `Dialog_`, `Control_`, `Event`, `Argument`, `Condition`)");
 }
 
+static UINT create_actiontext_table( MSIHANDLE hdb )
+{
+    return run_query(hdb,
+            "CREATE TABLE `ActionText` ("
+            "`Action` CHAR(72) NOT NULL, "
+            "`Description` CHAR(64) LOCALIZABLE, "
+            "`Template` CHAR(128) LOCALIZABLE "
+            "PRIMARY KEY `Action`)");
+}
+
 #define make_add_entry(type, qtext) \
     static UINT add##_##type##_##entry( MSIHANDLE hdb, const char *values ) \
     { \
@@ -781,6 +791,10 @@ make_add_entry(control,
 make_add_entry(controlevent,
                "INSERT INTO `ControlEvent` "
                "(`Dialog_`, `Control_`, `Event`, `Argument`, `Condition`, `Ordering`) VALUES( %s )");
+
+make_add_entry(actiontext,
+               "INSERT INTO `ActionText` "
+               "(`Action`, `Description`, `Template`) VALUES( %s )");
 
 static UINT add_reglocator_entry( MSIHANDLE hdb, const char *sig, UINT root, const char *path,
                                   const char *name, UINT type )
@@ -9377,15 +9391,31 @@ static const struct externalui_message processmessage_actiondata_sequence[] = {
     {0}
 };
 
+static const struct externalui_message processmessage_error_sequence[] = {
+    {INSTALLMESSAGE_USER, 3, {"", "1311", "banana", "guava"}, {0, 1, 1, 1}},
+    {0}
+};
+
+static const struct externalui_message processmessage_internal_error_sequence[] = {
+    {INSTALLMESSAGE_INFO, 3, {"DEBUG: Error [1]:  Action not found: [2]", "2726", "banana", "guava"}, {1, 1, 1, 1}},
+    {INSTALLMESSAGE_USER, 3, {"internal error", "2726", "banana", "guava"}, {1, 1, 1, 1}},
+    {0}
+};
+
+static const struct externalui_message processmessage_error_format_sequence[] = {
+    {INSTALLMESSAGE_USER, 3, {"", "2726", "banana", "guava"}, {0, 1, 1, 1}},
+    {0}
+};
+
 static const struct externalui_message doaction_costinitialize_sequence[] = {
-    {INSTALLMESSAGE_ACTIONSTART, 3, {"", "CostInitialize", "", ""}, {0, 1, 0, 1}},
+    {INSTALLMESSAGE_ACTIONSTART, 3, {"", "CostInitialize", "cost description", "cost template"}, {0, 1, 1, 1}},
     {INSTALLMESSAGE_INFO, 2, {"", "CostInitialize", ""}, {0, 1, 1}},
     {INSTALLMESSAGE_INFO, 2, {"", "CostInitialize", "1"}, {0, 1, 1}},
     {0}
 };
 
 static const struct externalui_message doaction_custom_sequence[] = {
-    {INSTALLMESSAGE_ACTIONSTART, 3, {"", "custom", "", ""}, {0, 1, 1, 1}},
+    {INSTALLMESSAGE_ACTIONSTART, 3, {"", "custom", "description", "template"}, {0, 1, 1, 1}},
     {INSTALLMESSAGE_INFO, 2, {"", "custom", "1"}, {0, 1, 1}},
     {INSTALLMESSAGE_INFO, 2, {"", "custom", "0"}, {0, 1, 1}},
     {0}
@@ -9519,6 +9549,18 @@ static void test_externalui_message(void)
     r = MsiDatabaseImportA(hdb, CURR_DIR, "forcecodepage.idt");
     ok(r == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", r);
 
+    r = run_query(hdb, "CREATE TABLE `Error` (`Error` SHORT NOT NULL, `Message` CHAR(0) PRIMARY KEY `Error`)");
+    ok(r == ERROR_SUCCESS, "Failed to create Error table: %u\n", r);
+    r = run_query(hdb, "INSERT INTO `Error` (`Error`, `Message`) VALUES (5, 'internal error')");
+    ok(r == ERROR_SUCCESS, "Failed to insert into Error table: %u\n", r);
+
+    r = create_actiontext_table(hdb);
+    ok(r == ERROR_SUCCESS, "Failed to create ActionText table: %u\n", r);
+    r = add_actiontext_entry(hdb, "'custom', 'description', 'template'");
+    ok(r == ERROR_SUCCESS, "Failed to insert into ActionText table: %u\n", r);
+    r = add_actiontext_entry(hdb, "'CostInitialize', 'cost description', 'cost template'");
+    ok(r == ERROR_SUCCESS, "Failed to insert into ActionText table: %u\n", r);
+
     r = MsiOpenPackageA(NULL, &hpkg);
     ok(r == ERROR_INVALID_PARAMETER, "Expected ERROR_INVALID_PARAMETER, got %d\n", r);
     ok_sequence(empty_sequence, "MsiOpenPackage with NULL db", FALSE);
@@ -9564,6 +9606,26 @@ static void test_externalui_message(void)
     ok(r == 1, "Expected 1, got %d\n", r);
     ok_sequence(processmessage_actiondata_sequence, "MsiProcessMessage(INSTALLMESSAGE_ACTIONDATA)", FALSE);
 
+    /* non-internal error */
+    MsiRecordSetStringA(hrecord, 0, NULL);
+    MsiRecordSetInteger(hrecord, 1, 1311);
+    r = MsiProcessMessage(hpkg, INSTALLMESSAGE_USER, hrecord);
+    ok(r == 1, "Expected 1, got %d\n", r);
+    ok_sequence(processmessage_error_sequence, "MsiProcessMessage non-internal error", FALSE);
+
+    /* internal error */
+    MsiRecordSetStringA(hrecord, 0, NULL);
+    MsiRecordSetInteger(hrecord, 1, 2726);
+    r = MsiProcessMessage(hpkg, INSTALLMESSAGE_USER, hrecord);
+    ok(r == 0, "Expected 0, got %d\n", r);
+    ok_sequence(processmessage_internal_error_sequence, "MsiProcessMessage internal error", FALSE);
+
+    /* with format field */
+    MsiRecordSetStringA(hrecord, 0, "starfruit");
+    r = MsiProcessMessage(hpkg, INSTALLMESSAGE_USER, hrecord);
+    ok(r == 1, "Expected 1, got %d\n", r);
+    ok_sequence(processmessage_error_format_sequence, "MsiProcessMessage error", FALSE);
+
     /* Test a standard action */
     r = MsiDoActionA(hpkg, "CostInitialize");
     ok(r == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", r);
@@ -9583,7 +9645,7 @@ static void test_externalui_message(void)
     ok(hdb, "failed to create database\n");
 
     r = MsiDatabaseImportA(hdb, CURR_DIR, "forcecodepage.idt");
-    ok(r == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d", r);
+    ok(r == ERROR_SUCCESS, "Expected ERROR_SUCCESS, got %d\n", r);
 
     r = create_dialog_table(hdb);
     ok(r == ERROR_SUCCESS, "failed to create dialog table %u\n", r);
@@ -9593,7 +9655,7 @@ static void test_externalui_message(void)
     r = create_control_table(hdb);
     ok(r == ERROR_SUCCESS, "failed to create control table %u\n", r);
     r = add_control_entry(hdb, "'dialog', 'dummy', 'Text', 5, 5, 5, 5, 3, 'dummy'");
-    ok(r == ERROR_SUCCESS, "failed to insert into control table %u", r);
+    ok(r == ERROR_SUCCESS, "failed to insert into control table %u\n", r);
 
     r = package_from_db(hdb, &hpkg);
     ok(r == ERROR_SUCCESS, "failed to create package %u\n", r);
@@ -9765,14 +9827,12 @@ static void test_controlevent(void)
     ok_sequence(openpackage_sequence, "MsiOpenPackage()", FALSE);
 
     r = MsiDoActionA(hpkg, "spawn");
-    todo_wine
     ok(r == ERROR_INSTALL_USEREXIT, "expected ERROR_INSTALL_USEREXIT, got %u\n", r);
-    ok_sequence(controlevent_spawn_sequence, "control event: spawn", TRUE);
+    ok_sequence(controlevent_spawn_sequence, "control event: spawn", FALSE);
 
     r = MsiDoActionA(hpkg, "spawn2");
-    todo_wine
     ok(r == ERROR_INSTALL_USEREXIT, "expected ERROR_INSTALL_USEREXIT, got %u\n", r);
-    ok_sequence(controlevent_spawn2_sequence, "control event: spawn2", TRUE);
+    ok_sequence(controlevent_spawn2_sequence, "control event: spawn2", FALSE);
 
     MsiCloseHandle(hpkg);
     ok_sequence(closehandle_sequence, "MsiCloseHandle()", FALSE);
