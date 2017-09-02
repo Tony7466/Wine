@@ -2154,6 +2154,8 @@ static const emfplus_record clipping_records[] = {
     {0, EmfPlusRecordTypeRestore},
     {0, EmfPlusRecordTypeSetClipRect},
     {0, EmfPlusRecordTypeFillRects},
+    {0, EmfPlusRecordTypeObject, 1},
+    {0, EmfPlusRecordTypeSetClipRegion, 1},
     {0, EmfPlusRecordTypeEndOfFile},
     {0, EMR_EOF},
     {0}
@@ -2165,6 +2167,7 @@ static void test_clipping(void)
     GpMetafile *metafile;
     GpGraphics *graphics;
     GpBitmap *bitmap;
+    GpRegion *region;
     GpBrush *brush;
     GpRectF rect;
     ARGB color;
@@ -2229,6 +2232,15 @@ static void test_clipping(void)
     expect(Ok, stat);
 
     stat = GdipDeleteBrush(brush);
+    expect(Ok, stat);
+
+    stat = GdipCreateRegionRect(&rect, &region);
+    expect(Ok, stat);
+
+    stat = GdipSetClipRegion(graphics, region, CombineModeIntersect);
+    expect(Ok, stat);
+
+    stat = GdipDeleteRegion(region);
     expect(Ok, stat);
 
     stat = GdipDeleteGraphics(graphics);
@@ -2690,6 +2702,7 @@ static void test_fillpath(void)
 {
     static const WCHAR description[] = {'w','i','n','e','t','e','s','t',0};
     static const GpRectF frame = {0.0, 0.0, 100.0, 100.0};
+    static const WCHAR winetestemfW[] = {'w','i','n','e','t','e','s','t','.','e','m','f',0};
 
     GpMetafile *metafile;
     GpGraphics *graphics;
@@ -2733,10 +2746,26 @@ static void test_fillpath(void)
     expect(Ok, stat);
 
     check_emfplus(hemf, fill_path_records, "fill path");
+
+    /* write to disk */
+    DeleteEnhMetaFile(CopyEnhMetaFileW(hemf, winetestemfW));
+
     DeleteEnhMetaFile(hemf);
 
     stat = GdipDisposeImage((GpImage*)metafile);
     expect(Ok, stat);
+
+    /* should succeed when given path to an EMF */
+    stat = GdipCreateMetafileFromWmfFile(winetestemfW, NULL, &metafile);
+    expect(Ok, stat);
+
+    stat = GdipDisposeImage((GpImage*)metafile);
+    expect(Ok, stat);
+
+    DeleteFileW(winetestemfW);
+
+    stat = GdipCreateMetafileFromWmfFile(winetestemfW, NULL, &metafile);
+    expect(GenericError, stat);
 }
 
 START_TEST(metafile)

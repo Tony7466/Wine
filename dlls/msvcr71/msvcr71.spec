@@ -376,7 +376,7 @@
 @ cdecl _ismbcgraph(long)
 @ cdecl _ismbchira(long)
 @ cdecl _ismbckata(long)
-@ stub _ismbcl0(long)
+@ cdecl _ismbcl0(long)
 @ stub _ismbcl1(long)
 @ stub _ismbcl2(long)
 @ cdecl _ismbclegal(long)
@@ -809,7 +809,7 @@
 @ cdecl strchr(str long) MSVCRT_strchr
 @ cdecl strcmp(str str) MSVCRT_strcmp
 @ cdecl strcoll(str str) MSVCRT_strcoll
-@ cdecl strcpy(ptr str) ntdll.strcpy
+@ cdecl strcpy(ptr str) MSVCRT_strcpy
 @ cdecl strcspn(str str) ntdll.strcspn
 @ cdecl strerror(long) MSVCRT_strerror
 @ cdecl strftime(ptr long str ptr) MSVCRT_strftime
