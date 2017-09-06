@@ -3718,7 +3718,14 @@ static GpStatus decode_frame_wic(IWICBitmapDecoder *decoder, BOOL force_conversi
     if (status == Ok)
     {
         /* Native GDI+ used to be smarter, but since Win7 it just sets these flags. */
-        bitmap->image.flags |= ImageFlagsReadOnly|ImageFlagsHasRealPixelSize|ImageFlagsHasRealDPI|ImageFlagsColorSpaceRGB;
+        bitmap->image.flags |= ImageFlagsReadOnly|ImageFlagsHasRealPixelSize|ImageFlagsHasRealDPI;
+        if (IsEqualGUID(&wic_format, &GUID_WICPixelFormat2bppGray) ||
+            IsEqualGUID(&wic_format, &GUID_WICPixelFormat4bppGray) ||
+            IsEqualGUID(&wic_format, &GUID_WICPixelFormat8bppGray) ||
+            IsEqualGUID(&wic_format, &GUID_WICPixelFormat16bppGray))
+            bitmap->image.flags |= ImageFlagsColorSpaceGRAY;
+        else
+            bitmap->image.flags |= ImageFlagsColorSpaceRGB;
         bitmap->image.frame_count = frame_count;
         bitmap->image.current_frame = active_frame;
         bitmap->image.decoder = decoder;
@@ -3961,7 +3968,37 @@ static GpStatus decode_image_jpeg(IStream* stream, GpImage **image)
 
 static GpStatus decode_image_png(IStream* stream, GpImage **image)
 {
-    return decode_image_wic(stream, &GUID_ContainerFormatPng, png_metadata_reader, image);
+    IWICBitmapDecoder *decoder;
+    IWICBitmapFrameDecode *frame;
+    GpStatus status;
+    HRESULT hr;
+    GUID format;
+    BOOL force_conversion = FALSE;
+
+    status = initialize_decoder_wic(stream, &GUID_ContainerFormatPng, &decoder);
+    if (status != Ok)
+        return status;
+
+    hr = IWICBitmapDecoder_GetFrame(decoder, 0, &frame);
+    if (hr == S_OK)
+    {
+        hr = IWICBitmapFrameDecode_GetPixelFormat(frame, &format);
+        if (hr == S_OK)
+        {
+            if (IsEqualGUID(&format, &GUID_WICPixelFormat8bppGray))
+                force_conversion = TRUE;
+            status = decode_frame_wic(decoder, force_conversion, 0, png_metadata_reader, image);
+        }
+        else
+            status = hresult_to_status(hr);
+
+        IWICBitmapFrameDecode_Release(frame);
+    }
+    else
+        status = hresult_to_status(hr);
+
+    IWICBitmapDecoder_Release(decoder);
+    return status;
 }
 
 static GpStatus decode_image_gif(IStream* stream, GpImage **image)

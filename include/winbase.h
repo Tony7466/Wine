@@ -37,6 +37,8 @@ extern "C" {
 #define WINADVAPI DECLSPEC_IMPORT
 #endif
 
+#include <libloaderapi.h>
+
   /* Windows Exit Procedure flag values */
 #define	WEP_FREE_DLL        0
 #define	WEP_SYSTEM_EXIT     1
@@ -1002,6 +1004,12 @@ DECL_WINELIB_TYPE_AW(ENUMRESLANGPROC)
 #define GET_MODULE_HANDLE_EX_FLAG_PIN                 1
 #define GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT  2
 #define GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS        4
+
+/* flags for SetSearchPathMode */
+#define BASE_SEARCH_PATH_ENABLE_SAFE_SEARCHMODE  0x00001
+#define BASE_SEARCH_PATH_DISABLE_SAFE_SEARCHMODE 0x10000
+#define BASE_SEARCH_PATH_PERMANENT               0x08000
+#define BASE_SEARCH_PATH_INVALID_FLAGS         (~0x18001)
 
 typedef PLDT_ENTRY LPLDT_ENTRY;
 
@@ -2512,7 +2520,6 @@ WINBASEAPI BOOL        WINAPI SetCurrentDirectoryW(LPCWSTR);
 WINBASEAPI BOOL        WINAPI SetDefaultCommConfigA(LPCSTR,LPCOMMCONFIG,DWORD);
 WINBASEAPI BOOL        WINAPI SetDefaultCommConfigW(LPCWSTR,LPCOMMCONFIG,DWORD);
 #define                       SetDefaultCommConfig WINELIB_NAME_AW(SetDefaultCommConfig)
-WINBASEAPI BOOL        WINAPI SetDefaultDllDirectories(DWORD);
 WINBASEAPI BOOL        WINAPI SetDllDirectoryA(LPCSTR);
 WINBASEAPI BOOL        WINAPI SetDllDirectoryW(LPCWSTR);
 #define                       SetDllDirectory WINELIB_NAME_AW(SetDllDirectory)
@@ -2550,6 +2557,7 @@ WINBASEAPI BOOL        WINAPI SetProcessAffinityMask(HANDLE,DWORD_PTR);
 WINBASEAPI BOOL        WINAPI SetProcessPriorityBoost(HANDLE,BOOL);
 WINBASEAPI BOOL        WINAPI SetProcessShutdownParameters(DWORD,DWORD);
 WINBASEAPI BOOL        WINAPI SetProcessWorkingSetSize(HANDLE,SIZE_T,SIZE_T);
+WINBASEAPI BOOL        WINAPI SetSearchPathMode(DWORD);
 WINADVAPI  BOOL        WINAPI SetSecurityDescriptorControl(PSECURITY_DESCRIPTOR,SECURITY_DESCRIPTOR_CONTROL,SECURITY_DESCRIPTOR_CONTROL);
 WINADVAPI  BOOL        WINAPI SetSecurityDescriptorDacl(PSECURITY_DESCRIPTOR,BOOL,PACL,BOOL);
 WINADVAPI  BOOL        WINAPI SetSecurityDescriptorGroup(PSECURITY_DESCRIPTOR,PSID,BOOL);

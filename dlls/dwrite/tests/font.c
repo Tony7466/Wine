@@ -2291,7 +2291,9 @@ static void test_system_fontcollection(void)
 
     hr = IDWriteFontCollection_QueryInterface(collection, &IID_IDWriteFontCollection1, (void**)&collection1);
     if (hr == S_OK) {
+        IDWriteFontSet *fontset, *fontset2;
         IDWriteFontFamily1 *family1;
+        IDWriteFactory3 *factory3;
 
         hr = IDWriteFontCollection1_QueryInterface(collection1, &IID_IDWriteFontCollection, (void**)&coll2);
         ok(hr == S_OK, "got 0x%08x\n", hr);
@@ -2306,6 +2308,39 @@ static void test_system_fontcollection(void)
         hr = IDWriteFontCollection1_GetFontFamily(collection1, 0, &family1);
         ok(hr == S_OK, "got 0x%08x\n", hr);
         IDWriteFontFamily1_Release(family1);
+
+        /* system fontset */
+        EXPECT_REF(collection1, 2);
+        EXPECT_REF(factory, 2);
+        hr = IDWriteFontCollection1_GetFontSet(collection1, &fontset);
+    todo_wine
+        ok(hr == S_OK, "Failed to get fontset, hr %#x.\n", hr);
+    if (hr == S_OK) {
+        EXPECT_REF(collection1, 2);
+        EXPECT_REF(factory, 2);
+        EXPECT_REF(fontset, 1);
+
+        hr = IDWriteFontCollection1_GetFontSet(collection1, &fontset2);
+        ok(hr == S_OK, "Failed to get fontset, hr %#x.\n", hr);
+        ok(fontset != fontset2, "Expected new fontset instance.\n");
+        EXPECT_REF(fontset2, 1);
+        IDWriteFontSet_Release(fontset2);
+
+        hr = IDWriteFactory_QueryInterface(factory, &IID_IDWriteFactory3, (void **)&factory3);
+        ok(hr == S_OK, "Failed to get IDWriteFactory3 interface, hr %#x.\n", hr);
+
+        EXPECT_REF(factory, 3);
+        hr = IDWriteFactory3_GetSystemFontSet(factory3, &fontset2);
+        ok(hr == S_OK, "Failed to get system font set, hr %#x.\n", hr);
+        ok(fontset != fontset2, "Expected new fontset instance.\n");
+        EXPECT_REF(fontset2, 1);
+        EXPECT_REF(factory, 4);
+
+        IDWriteFontSet_Release(fontset2);
+        IDWriteFontSet_Release(fontset);
+
+        IDWriteFactory3_Release(factory3);
+    }
         IDWriteFontCollection1_Release(collection1);
     }
     else
@@ -3026,7 +3061,7 @@ if (face2) {
 
     hr = IDWriteFontFace_GetGlyphIndices(face, codePoints, 1, indices);
     ok(hr == S_OK, "got 0x%08x\n", hr);
-    ok(indices[0] == 6, "got index %i\n", indices[0]);
+    ok(indices[0] == 7, "Unexpected glyph index, %u.\n", indices[0]);
     IDWriteFontFace_Release(face);
     IDWriteFontFile_Release(file);
 
@@ -4385,6 +4420,18 @@ static void test_GetGlyphRunOutline(void)
     hr = IDWriteFontFace_GetGlyphRunOutline(face, 1024.0, glyphs, NULL, NULL, 0, FALSE, FALSE, &test_geomsink2);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
+    /* Glyph with open figure, single contour point. */
+    codepoint = 'B';
+    glyphs[0] = 0;
+    hr = IDWriteFontFace_GetGlyphIndices(face, &codepoint, 1, glyphs);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(glyphs[0] > 0, "got %u\n", glyphs[0]);
+
+    SET_EXPECT(setfillmode);
+    hr = IDWriteFontFace_GetGlyphRunOutline(face, 1024.0, glyphs, NULL, NULL, 1, FALSE, FALSE, &test_geomsink2);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    CHECK_CALLED(setfillmode);
+
     IDWriteFactory_Release(factory);
     IDWriteFontFace_Release(face);
     DELETE_FONTFILE(path);
@@ -4543,7 +4590,7 @@ static void test_GetGlyphCount(void)
     IDWriteFontFile_Release(file);
 
     count = IDWriteFontFace_GetGlyphCount(fontface);
-    ok(count == 7, "got %u\n", count);
+    ok(count == 8, "got %u\n", count);
 
     IDWriteFontFace_Release(fontface);
     ref = IDWriteFactory_Release(factory);

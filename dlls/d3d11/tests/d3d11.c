@@ -997,6 +997,7 @@ static ID3D11Device *create_device(const struct device_desc *desc)
     static const D3D_FEATURE_LEVEL default_feature_level[] =
     {
         D3D_FEATURE_LEVEL_11_0,
+        D3D_FEATURE_LEVEL_10_1,
         D3D_FEATURE_LEVEL_10_0,
     };
     const D3D_FEATURE_LEVEL *feature_level;
@@ -6638,7 +6639,7 @@ static void test_texture(void)
         ID3D11Texture2D_Release(texture);
     ID3D11PixelShader_Release(ps);
 
-    if (is_warp_device(device) && feature_level < D3D_FEATURE_LEVEL_10_1)
+    if (is_warp_device(device) && feature_level < D3D_FEATURE_LEVEL_11_0)
     {
         win_skip("SRV tests are broken on WARP.\n");
         ID3D11Buffer_Release(cb);
@@ -11302,7 +11303,6 @@ static void test_draw_depth_only(void)
     check_texture_float(texture, 0.5f, 1);
 
     ID3D11DeviceContext_ClearDepthStencilView(context, dsv, D3D11_CLEAR_DEPTH, 1.0f, 0);
-    depth.x = 0.1f;
     for (i = 0; i < 4; ++i)
     {
         for (j = 0; j < 4; ++j)
@@ -14270,7 +14270,7 @@ static void test_face_culling(void)
         ID3D11RasterizerState_Release(state);
     }
 
-    broken_warp = is_warp_device(device) && ID3D11Device_GetFeatureLevel(device) < D3D_FEATURE_LEVEL_10_1;
+    broken_warp = is_warp_device(device) && ID3D11Device_GetFeatureLevel(device) < D3D_FEATURE_LEVEL_11_0;
 
     /* Test SV_IsFrontFace. */
     ID3D11PixelShader_Release(test_context.ps);

@@ -3103,8 +3103,8 @@ static HRESULT WINAPI HTMLDocument6_get_documentMode(IHTMLDocument6 *iface, VARI
         return E_UNEXPECTED;
     }
 
-    V_VT(p) = VT_I4;
-    V_I4(p) = compat_mode_info[This->doc_node->document_mode].document_mode;
+    V_VT(p) = VT_R4;
+    V_R4(p) = compat_mode_info[This->doc_node->document_mode].document_mode;
     return S_OK;
 }
 
@@ -3142,8 +3142,44 @@ static HRESULT WINAPI HTMLDocument6_getElementById(IHTMLDocument6 *iface,
         BSTR bstrId, IHTMLElement2 **p)
 {
     HTMLDocument *This = impl_from_IHTMLDocument6(iface);
-    FIXME("(%p)->(%s %p)\n", This, debugstr_w(bstrId), p);
-    return E_NOTIMPL;
+    nsIDOMElement *nselem;
+    HTMLElement *elem;
+    nsAString nsstr;
+    nsresult nsres;
+    HRESULT hres;
+
+    TRACE("(%p)->(%s %p)\n", This, debugstr_w(bstrId), p);
+
+    /*
+     * Unlike IHTMLDocument3 implementation, this is standard compliant and does
+     * not search for name attributes, so we may simply let Gecko do the right thing.
+     */
+
+    if(!This->doc_node->nsdoc) {
+        FIXME("Not a document\n");
+        return E_FAIL;
+    }
+
+    nsAString_InitDepend(&nsstr, bstrId);
+    nsres = nsIDOMHTMLDocument_GetElementById(This->doc_node->nsdoc, &nsstr, &nselem);
+    nsAString_Finish(&nsstr);
+    if(NS_FAILED(nsres)) {
+        ERR("GetElementById failed: %08x\n", nsres);
+        return E_FAIL;
+    }
+
+    if(!nselem) {
+        *p = NULL;
+        return S_OK;
+    }
+
+    hres = get_elem(This->doc_node, nselem, &elem);
+    nsIDOMElement_Release(nselem);
+    if(FAILED(hres))
+        return hres;
+
+    *p = &elem->IHTMLElement2_iface;
+    return S_OK;
 }
 
 static HRESULT WINAPI HTMLDocument6_updateSettings(IHTMLDocument6 *iface)
@@ -4813,6 +4849,16 @@ static HRESULT HTMLDocumentNode_invoke(DispatchEx *dispex, DISPID id, LCID lcid,
     return S_OK;
 }
 
+static compat_mode_t HTMLDocumentNode_get_compat_mode(DispatchEx *dispex)
+{
+    HTMLDocumentNode *This = impl_from_DispatchEx(dispex);
+
+    TRACE("(%p) returning %u\n", This, This->document_mode);
+
+    This->document_mode_locked = TRUE;
+    return This->document_mode;
+}
+
 static void HTMLDocumentNode_bind_event(DispatchEx *dispex, int eid)
 {
     HTMLDocumentNode *This = impl_from_DispatchEx(dispex);
@@ -4823,6 +4869,7 @@ static const dispex_static_data_vtbl_t HTMLDocumentNode_dispex_vtbl = {
     NULL,
     NULL,
     HTMLDocumentNode_invoke,
+    HTMLDocumentNode_get_compat_mode,
     NULL,
     NULL,
     HTMLDocumentNode_bind_event
@@ -4840,18 +4887,32 @@ static const tid_t HTMLDocumentNode_iface_tids[] = {
     IHTMLDOMNode_tid,
     IHTMLDOMNode2_tid,
     IHTMLDocument2_tid,
-    IHTMLDocument3_tid,
     IHTMLDocument4_tid,
     IHTMLDocument5_tid,
-    IHTMLDocument6_tid,
     IDocumentSelector_tid,
     0
 };
 
+void HTMLDocumentNode_init_dispex_info(dispex_data_t *info, compat_mode_t mode)
+{
+    HTMLDOMNode_init_dispex_info(info, mode);
+
+    /* Depending on compatibility version, we add interfaces in different order
+     * so that the right getElementById implementation is used. */
+    if(mode < COMPAT_MODE_IE8) {
+        dispex_info_add_interface(info, IHTMLDocument3_tid, NULL);
+        dispex_info_add_interface(info, IHTMLDocument6_tid, NULL);
+    }else {
+        dispex_info_add_interface(info, IHTMLDocument6_tid, NULL);
+        dispex_info_add_interface(info, IHTMLDocument3_tid, NULL);
+    }
+}
+
 static dispex_static_data_t HTMLDocumentNode_dispex = {
     &HTMLDocumentNode_dispex_vtbl,
     DispHTMLDocument_tid,
-    HTMLDocumentNode_iface_tids
+    HTMLDocumentNode_iface_tids,
+    HTMLDocumentNode_init_dispex_info
 };
 
 static HTMLDocumentNode *alloc_doc_node(HTMLDocumentObj *doc_obj, HTMLInnerWindow *window)
