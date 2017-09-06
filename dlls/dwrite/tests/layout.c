@@ -782,6 +782,17 @@ static IDWriteInlineObject testinlineobj = { &testinlineobjvtbl };
 static IDWriteInlineObject testinlineobj2 = { &testinlineobjvtbl };
 static IDWriteInlineObject testinlineobj3 = { &testinlineobjvtbl2 };
 
+struct test_effect
+{
+    IUnknown IUnknown_iface;
+    LONG ref;
+};
+
+static inline struct test_effect *test_effect_from_IUnknown(IUnknown *iface)
+{
+    return CONTAINING_RECORD(iface, struct test_effect, IUnknown_iface);
+}
+
 static HRESULT WINAPI testeffect_QI(IUnknown *iface, REFIID riid, void **obj)
 {
     if (IsEqualIID(riid, &IID_IUnknown)) {
@@ -790,18 +801,26 @@ static HRESULT WINAPI testeffect_QI(IUnknown *iface, REFIID riid, void **obj)
         return S_OK;
     }
 
+    ok(0, "Unexpected riid %s.\n", wine_dbgstr_guid(riid));
     *obj = NULL;
     return E_NOINTERFACE;
 }
 
 static ULONG WINAPI testeffect_AddRef(IUnknown *iface)
 {
-    return 2;
+    struct test_effect *effect = test_effect_from_IUnknown(iface);
+    return InterlockedIncrement(&effect->ref);
 }
 
 static ULONG WINAPI testeffect_Release(IUnknown *iface)
 {
-    return 1;
+    struct test_effect *effect = test_effect_from_IUnknown(iface);
+    LONG ref = InterlockedDecrement(&effect->ref);
+
+    if (!ref)
+        HeapFree(GetProcessHeap(), 0, effect);
+
+    return ref;
 }
 
 static const IUnknownVtbl testeffectvtbl = {
@@ -810,7 +829,16 @@ static const IUnknownVtbl testeffectvtbl = {
     testeffect_Release
 };
 
-static IUnknown testeffect = { &testeffectvtbl };
+static IUnknown *create_test_effect(void)
+{
+    struct test_effect *effect;
+
+    effect = HeapAlloc(GetProcessHeap(), 0, sizeof(*effect));
+    effect->IUnknown_iface.lpVtbl = &testeffectvtbl;
+    effect->ref = 1;
+
+    return &effect->IUnknown_iface;
+}
 
 static void test_CreateTextLayout(void)
 {
@@ -1200,24 +1228,26 @@ static void test_GetLocaleName(void)
 }
 
 static const struct drawcall_entry drawellipsis_seq[] = {
-    { DRAW_GLYPHRUN, {0x2026, 0}, {'e','n','-','u','s',0}, 1 },
+    { DRAW_GLYPHRUN, {0x2026, 0}, {'e','n','-','g','b',0}, 1 },
     { DRAW_LAST_KIND }
 };
 
 static void test_CreateEllipsisTrimmingSign(void)
 {
+    static const WCHAR engbW[] = {'e','n','-','G','B',0};
     DWRITE_INLINE_OBJECT_METRICS metrics;
     DWRITE_BREAK_CONDITION before, after;
+    struct renderer_context ctxt;
     IDWriteTextFormat *format;
     IDWriteInlineObject *sign;
     IDWriteFactory *factory;
-    IUnknown *unk;
+    IUnknown *unk, *effect;
     HRESULT hr;
 
     factory = create_factory();
 
     hr = IDWriteFactory_CreateTextFormat(factory, tahomaW, NULL, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
-        DWRITE_FONT_STRETCH_NORMAL, 10.0, enusW, &format);
+        DWRITE_FONT_STRETCH_NORMAL, 10.0, engbW, &format);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
     EXPECT_REF(format, 1);
@@ -1254,6 +1284,42 @@ if (0) {/* crashes on native */
     hr = IDWriteInlineObject_Draw(sign, NULL, &testrenderer, 0.0, 0.0, FALSE, FALSE, NULL);
     ok(hr == S_OK, "got 0x%08x\n", hr);
     ok_sequence(sequences, RENDERER_ID, drawellipsis_seq, "ellipsis sign draw test", FALSE);
+
+    effect = create_test_effect();
+
+    EXPECT_REF(effect, 1);
+    flush_sequence(sequences, RENDERER_ID);
+    hr = IDWriteInlineObject_Draw(sign, NULL, &testrenderer, 0.0f, 0.0f, FALSE, FALSE, effect);
+    ok(hr == S_OK, "Failed to draw trimming sign, hr %#x.\n", hr);
+    ok_sequence(sequences, RENDERER_ID, drawellipsis_seq, "ellipsis sign draw with effect test", FALSE);
+    EXPECT_REF(effect, 1);
+
+    IUnknown_Release(effect);
+
+    flush_sequence(sequences, RENDERER_ID);
+    hr = IDWriteInlineObject_Draw(sign, NULL, &testrenderer, 0.0f, 0.0f, FALSE, FALSE, (void *)0xdeadbeef);
+    ok(hr == S_OK, "Failed to draw trimming sign, hr %#x.\n", hr);
+    ok_sequence(sequences, RENDERER_ID, drawellipsis_seq, "ellipsis sign draw with effect test", FALSE);
+
+    memset(&ctxt, 0, sizeof(ctxt));
+    hr = IDWriteInlineObject_Draw(sign, &ctxt, &testrenderer, 123.0f, 456.0f, FALSE, FALSE, NULL);
+    ok(hr == S_OK, "Failed to draw trimming sign, hr %#x.\n", hr);
+    ok(ctxt.originX == 123.0f && ctxt.originY == 456.0f, "Unexpected drawing origin\n");
+
+    IDWriteInlineObject_Release(sign);
+
+    /* Centered format */
+    hr = IDWriteTextFormat_SetTextAlignment(format, DWRITE_TEXT_ALIGNMENT_CENTER);
+    ok(hr == S_OK, "Failed to set text alignment, hr %#x.\n", hr);
+
+    hr = IDWriteFactory_CreateEllipsisTrimmingSign(factory, format, &sign);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    memset(&ctxt, 0, sizeof(ctxt));
+    hr = IDWriteInlineObject_Draw(sign, &ctxt, &testrenderer, 123.0f, 456.0f, FALSE, FALSE, NULL);
+    ok(hr == S_OK, "Failed to draw trimming sign, hr %#x.\n", hr);
+    ok(ctxt.originX == 123.0f && ctxt.originY == 456.0f, "Unexpected drawing origin\n");
+
     IDWriteInlineObject_Release(sign);
 
     /* non-orthogonal flow/reading combination */
@@ -3265,11 +3331,14 @@ static void test_SetDrawingEffect(void)
     IDWriteTextFormat *format;
     IDWriteTextLayout *layout;
     IDWriteFactory *factory;
+    IUnknown *unk, *effect;
     DWRITE_TEXT_RANGE r;
-    IUnknown *unk;
     HRESULT hr;
+    LONG ref;
 
     factory = create_factory();
+
+    effect = create_test_effect();
 
     hr = IDWriteFactory_CreateTextFormat(factory, tahomaW, NULL, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
         DWRITE_FONT_STRETCH_NORMAL, 10.0, enusW, &format);
@@ -3282,13 +3351,14 @@ static void test_SetDrawingEffect(void)
     /* set effect past the end of text */
     r.startPosition = 100;
     r.length = 10;
-    hr = IDWriteTextLayout_SetDrawingEffect(layout, &testeffect, r);
+    hr = IDWriteTextLayout_SetDrawingEffect(layout, effect, r);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
     r.startPosition = r.length = 0;
     hr = IDWriteTextLayout_GetDrawingEffect(layout, 101, &unk, &r);
     ok(hr == S_OK, "got 0x%08x\n", hr);
     ok(r.startPosition == 100 && r.length == 10, "got %u, %u\n", r.startPosition, r.length);
+    IUnknown_Release(unk);
 
     r.startPosition = r.length = 0;
     unk = (void*)0xdeadbeef;
@@ -3300,7 +3370,7 @@ static void test_SetDrawingEffect(void)
     /* effect is applied to clusters, not individual text positions */
     r.startPosition = 0;
     r.length = 2;
-    hr = IDWriteTextLayout_SetDrawingEffect(layout, &testeffect, r);
+    hr = IDWriteTextLayout_SetDrawingEffect(layout, effect, r);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
     flush_sequence(sequences, RENDERER_ID);
@@ -3315,7 +3385,7 @@ static void test_SetDrawingEffect(void)
 
     r.startPosition = 0;
     r.length = 2;
-    hr = IDWriteTextLayout_SetDrawingEffect(layout, &testeffect, r);
+    hr = IDWriteTextLayout_SetDrawingEffect(layout, effect, r);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
     flush_sequence(sequences, RENDERER_ID);
@@ -3336,7 +3406,7 @@ static void test_SetDrawingEffect(void)
     hr = IDWriteTextLayout_SetInlineObject(layout, sign, r);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
-    hr = IDWriteTextLayout_SetDrawingEffect(layout, &testeffect, r);
+    hr = IDWriteTextLayout_SetDrawingEffect(layout, effect, r);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
     flush_sequence(sequences, RENDERER_ID);
@@ -3350,7 +3420,7 @@ static void test_SetDrawingEffect(void)
 
     r.startPosition = 1;
     r.length = 1;
-    hr = IDWriteTextLayout_SetDrawingEffect(layout, &testeffect, r);
+    hr = IDWriteTextLayout_SetDrawingEffect(layout, effect, r);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
     /* no effect is reported in this case */
@@ -3366,7 +3436,7 @@ static void test_SetDrawingEffect(void)
 
     r.startPosition = 0;
     r.length = 1;
-    hr = IDWriteTextLayout_SetDrawingEffect(layout, &testeffect, r);
+    hr = IDWriteTextLayout_SetDrawingEffect(layout, effect, r);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
     /* first range position is all that matters for inline ranges */
@@ -3377,6 +3447,8 @@ static void test_SetDrawingEffect(void)
 
     IDWriteTextLayout_Release(layout);
 
+    ref = IUnknown_Release(effect);
+    ok(ref == 0, "Unexpected effect refcount %u\n", ref);
     IDWriteInlineObject_Release(sign);
     IDWriteTextFormat_Release(format);
     IDWriteFactory_Release(factory);
@@ -3701,6 +3773,33 @@ static void test_GetLineMetrics(void)
     }
 
     IDWriteTextLayout_Release(layout);
+
+    /* Switch to proportional */
+    hr = IDWriteTextFormat_SetLineSpacing(format, DWRITE_LINE_SPACING_METHOD_PROPORTIONAL, 2.0f, 4.0f);
+    if (hr == S_OK) {
+        hr = IDWriteFactory_CreateTextLayout(factory, str4W, 1, format, 100.0f, 300.0f, &layout);
+        ok(hr == S_OK, "Failed to create layout, hr %#x.\n", hr);
+
+        hr = IDWriteTextLayout_GetLineMetrics(layout, metrics, sizeof(metrics)/sizeof(metrics[0]), &count);
+        ok(hr == S_OK, "Failed to get line metrics, hr %#x.\n", hr);
+        ok(count == 1, "Unexpected line count %u\n", count);
+
+        /* Back to default mode. */
+        hr = IDWriteTextLayout_SetLineSpacing(layout, DWRITE_LINE_SPACING_METHOD_DEFAULT, 0.0f, 0.0f);
+        ok(hr == S_OK, "Failed to set spacing method, hr %#x.\n", hr);
+
+        hr = IDWriteTextLayout_GetLineMetrics(layout, metrics + 1, 1, &count);
+        ok(hr == S_OK, "Failed to get line metrics, hr %#x.\n", hr);
+        ok(count == 1, "Unexpected line count %u\n", count);
+
+        /* Proportional spacing applies multipliers to default, content based spacing. */
+        ok(metrics[0].height == 2.0f * metrics[1].height, "Unexpected line height %f.\n", metrics[0].height);
+        ok(metrics[0].baseline == 4.0f * metrics[1].baseline, "Unexpected line baseline %f.\n", metrics[0].baseline);
+
+        IDWriteTextLayout_Release(layout);
+    }
+    else
+        win_skip("Proportional spacing is not supported.\n");
 
     IDWriteTextFormat_Release(format);
     IDWriteFontFace_Release(fontface);

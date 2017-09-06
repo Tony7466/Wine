@@ -1317,10 +1317,10 @@ static void wined3d_cs_exec_set_unordered_access_view(struct wined3d_cs *cs, con
     if (prev)
         InterlockedDecrement(&prev->resource->bind_count);
 
-    device_invalidate_state(cs->device, STATE_UNORDERED_ACCESS_VIEW_BINDING(op->pipeline));
-
-    if (op->initial_count != ~0u)
+    if (op->view && op->initial_count != ~0u)
         wined3d_unordered_access_view_set_counter(op->view, op->initial_count);
+
+    device_invalidate_state(cs->device, STATE_UNORDERED_ACCESS_VIEW_BINDING(op->pipeline));
 }
 
 void wined3d_cs_emit_set_unordered_access_view(struct wined3d_cs *cs, enum wined3d_pipeline pipeline,
@@ -2413,8 +2413,9 @@ static const struct wined3d_cs_ops wined3d_cs_st_ops =
     wined3d_cs_st_push_constants,
 };
 
-static BOOL wined3d_cs_queue_is_empty(const struct wined3d_cs_queue *queue)
+static BOOL wined3d_cs_queue_is_empty(const struct wined3d_cs *cs, const struct wined3d_cs_queue *queue)
 {
+    wined3d_from_cs(cs);
     return *(volatile LONG *)&queue->head == queue->tail;
 }
 
@@ -2513,7 +2514,7 @@ static void wined3d_cs_mt_finish(struct wined3d_cs *cs, enum wined3d_cs_queue_id
     if (cs->thread_id == GetCurrentThreadId())
         return wined3d_cs_st_finish(cs, queue_id);
 
-    while (!wined3d_cs_queue_is_empty(&cs->queue[queue_id]))
+    while (cs->queue[queue_id].head != *(volatile LONG *)&cs->queue[queue_id].tail)
         wined3d_pause();
 }
 
@@ -2551,8 +2552,8 @@ static void wined3d_cs_wait_event(struct wined3d_cs *cs)
      * Likewise, we can race with the main thread when resetting
      * "waiting_for_event", in which case we would need to call
      * WaitForSingleObject() because the main thread called SetEvent(). */
-    if (!(wined3d_cs_queue_is_empty(&cs->queue[WINED3D_CS_QUEUE_DEFAULT])
-            && wined3d_cs_queue_is_empty(&cs->queue[WINED3D_CS_QUEUE_MAP]))
+    if (!(wined3d_cs_queue_is_empty(cs, &cs->queue[WINED3D_CS_QUEUE_DEFAULT])
+            && wined3d_cs_queue_is_empty(cs, &cs->queue[WINED3D_CS_QUEUE_MAP]))
             && InterlockedCompareExchange(&cs->waiting_for_event, FALSE, TRUE))
         return;
 
@@ -2582,10 +2583,10 @@ static DWORD WINAPI wined3d_cs_run(void *ctx)
         }
 
         queue = &cs->queue[WINED3D_CS_QUEUE_MAP];
-        if (wined3d_cs_queue_is_empty(queue))
+        if (wined3d_cs_queue_is_empty(cs, queue))
         {
             queue = &cs->queue[WINED3D_CS_QUEUE_DEFAULT];
-            if (wined3d_cs_queue_is_empty(queue))
+            if (wined3d_cs_queue_is_empty(cs, queue))
             {
                 if (++spin_count >= WINED3D_CS_SPIN_COUNT && list_empty(&cs->query_poll_list))
                     wined3d_cs_wait_event(cs);
@@ -2615,8 +2616,8 @@ static DWORD WINAPI wined3d_cs_run(void *ctx)
         InterlockedExchange(&queue->tail, tail);
     }
 
-    cs->queue[WINED3D_CS_QUEUE_MAP].tail = cs->queue[WINED3D_CS_QUEUE_MAP].head = 0;
-    cs->queue[WINED3D_CS_QUEUE_DEFAULT].tail = cs->queue[WINED3D_CS_QUEUE_DEFAULT].head = 0;
+    cs->queue[WINED3D_CS_QUEUE_MAP].tail = cs->queue[WINED3D_CS_QUEUE_MAP].head;
+    cs->queue[WINED3D_CS_QUEUE_DEFAULT].tail = cs->queue[WINED3D_CS_QUEUE_DEFAULT].head;
     TRACE("Stopped.\n");
     FreeLibraryAndExitThread(cs->wined3d_module, 0);
 }

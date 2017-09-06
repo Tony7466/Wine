@@ -1122,8 +1122,8 @@ void ME_RTFSpecialCharHook(RTF_Info *info)
   }
 }
 
-static BOOL ME_RTFInsertOleObject(RTF_Info *info, HENHMETAFILE hemf, HBITMAP hbmp,
-                                  const SIZEL* sz)
+static HRESULT insert_static_object(ME_TextEditor *editor, HENHMETAFILE hemf, HBITMAP hbmp,
+                                    const SIZEL* sz)
 {
   LPOLEOBJECT         lpObject = NULL;
   LPSTORAGE           lpStorage = NULL;
@@ -1133,7 +1133,7 @@ static BOOL ME_RTFInsertOleObject(RTF_Info *info, HENHMETAFILE hemf, HBITMAP hbm
   STGMEDIUM           stgm;
   FORMATETC           fm;
   CLSID               clsid;
-  BOOL                ret = FALSE;
+  HRESULT             hr = E_FAIL;
   DWORD               conn;
 
   if (hemf)
@@ -1155,13 +1155,14 @@ static BOOL ME_RTFInsertOleObject(RTF_Info *info, HENHMETAFILE hemf, HBITMAP hbm
   fm.lindex = -1;
   fm.tymed = stgm.tymed;
 
-  if (!info->lpRichEditOle)
+  if (!editor->reOle)
   {
-    CreateIRichEditOle(NULL, info->editor, (VOID**)&info->lpRichEditOle);
+    if (!CreateIRichEditOle(NULL, editor, (LPVOID *)&editor->reOle))
+      return hr;
   }
 
   if (OleCreateDefaultHandler(&CLSID_NULL, NULL, &IID_IOleObject, (void**)&lpObject) == S_OK &&
-      IRichEditOle_GetClientSite(info->lpRichEditOle, &lpClientSite) == S_OK &&
+      IRichEditOle_GetClientSite(editor->reOle, &lpClientSite) == S_OK &&
       IOleObject_SetClientSite(lpObject, lpClientSite) == S_OK &&
       IOleObject_GetUserClassID(lpObject, &clsid) == S_OK &&
       IOleObject_QueryInterface(lpObject, &IID_IOleCache, (void**)&lpOleCache) == S_OK &&
@@ -1184,8 +1185,8 @@ static BOOL ME_RTFInsertOleObject(RTF_Info *info, HENHMETAFILE hemf, HBITMAP hbm
     reobject.dwFlags = 0; /* FIXME */
     reobject.dwUser = 0;
 
-    ME_InsertOLEFromCursor(info->editor, &reobject, 0);
-    ret = TRUE;
+    ME_InsertOLEFromCursor(editor, &reobject, 0);
+    hr = S_OK;
   }
 
   if (lpObject)       IOleObject_Release(lpObject);
@@ -1194,7 +1195,7 @@ static BOOL ME_RTFInsertOleObject(RTF_Info *info, HENHMETAFILE hemf, HBITMAP hbm
   if (lpDataObject)   IDataObject_Release(lpDataObject);
   if (lpOleCache)     IOleCache_Release(lpOleCache);
 
-  return ret;
+  return hr;
 }
 
 static void ME_RTFReadShpPictGroup( RTF_Info *info )
@@ -1353,11 +1354,11 @@ static void ME_RTFReadPictGroup(RTF_Info *info)
         {
         case gfx_enhmetafile:
             if ((hemf = SetEnhMetaFileBits( size, buffer )))
-                ME_RTFInsertOleObject( info, hemf, NULL, &sz );
+                insert_static_object( info->editor, hemf, NULL, &sz );
             break;
         case gfx_metafile:
             if ((hemf = SetWinMetaFileBits( size, buffer, NULL, &mfp )))
-                ME_RTFInsertOleObject( info, hemf, NULL, &sz );
+                insert_static_object( info->editor, hemf, NULL, &sz );
             break;
         case gfx_dib:
         {
@@ -1371,7 +1372,7 @@ static void ME_RTFReadPictGroup(RTF_Info *info)
             if ((hbmp = CreateDIBitmap( hdc, &bi->bmiHeader,
                                         CBM_INIT, (char*)(bi + 1) + nc * sizeof(RGBQUAD),
                                         bi, DIB_RGB_COLORS)) )
-                ME_RTFInsertOleObject( info, NULL, hbmp, &sz );
+                insert_static_object( info->editor, NULL, hbmp, &sz );
             ReleaseDC( 0, hdc );
             break;
         }
@@ -1727,8 +1728,6 @@ static LRESULT ME_StreamIn(ME_TextEditor *editor, DWORD format, EDITSTREAM *stre
       }
       ME_CheckTablesForCorruption(editor);
       RTFDestroy(&parser);
-      if (parser.lpRichEditOle)
-        IRichEditOle_Release(parser.lpRichEditOle);
 
       if (parser.stackTop > 0)
       {
@@ -2210,31 +2209,122 @@ static DWORD CALLBACK ME_ReadFromHGLOBALRTF(DWORD_PTR dwCookie, LPBYTE lpBuff, L
   return 0;
 }
 
-static BOOL ME_Paste(ME_TextEditor *editor)
+static const WCHAR rtfW[] = {'R','i','c','h',' ','T','e','x','t',' ','F','o','r','m','a','t',0};
+
+static HRESULT paste_rtf(ME_TextEditor *editor, FORMATETC *fmt, STGMEDIUM *med)
 {
-  DWORD dwFormat = 0;
-  EDITSTREAM es;
-  ME_GlobalDestStruct gds;
-  UINT nRTFFormat = RegisterClipboardFormatA("Rich Text Format");
-  UINT cf = 0;
+    EDITSTREAM es;
+    ME_GlobalDestStruct gds;
+    HRESULT hr;
 
-  if (IsClipboardFormatAvailable(nRTFFormat))
-    cf = nRTFFormat, dwFormat = SF_RTF;
-  else if (IsClipboardFormatAvailable(CF_UNICODETEXT))
-    cf = CF_UNICODETEXT, dwFormat = SF_TEXT|SF_UNICODE;
-  else
-    return FALSE;
+    gds.hData = med->u.hGlobal;
+    gds.nLength = 0;
+    es.dwCookie = (DWORD_PTR)&gds;
+    es.pfnCallback = ME_ReadFromHGLOBALRTF;
+    hr = ME_StreamIn( editor, SF_RTF | SFF_SELECTION, &es, FALSE ) == 0 ? E_FAIL : S_OK;
+    ReleaseStgMedium( med );
+    return hr;
+}
 
-  if (!OpenClipboard(editor->hWnd))
-    return FALSE;
-  gds.hData = GetClipboardData(cf);
-  gds.nLength = 0;
-  es.dwCookie = (DWORD_PTR)&gds;
-  es.pfnCallback = dwFormat == SF_RTF ? ME_ReadFromHGLOBALRTF : ME_ReadFromHGLOBALUnicode;
-  ME_StreamIn(editor, dwFormat|SFF_SELECTION, &es, FALSE);
+static HRESULT paste_text(ME_TextEditor *editor, FORMATETC *fmt, STGMEDIUM *med)
+{
+    EDITSTREAM es;
+    ME_GlobalDestStruct gds;
+    HRESULT hr;
 
-  CloseClipboard();
-  return TRUE;
+    gds.hData = med->u.hGlobal;
+    gds.nLength = 0;
+    es.dwCookie = (DWORD_PTR)&gds;
+    es.pfnCallback = ME_ReadFromHGLOBALUnicode;
+    hr = ME_StreamIn( editor, SF_TEXT | SF_UNICODE | SFF_SELECTION, &es, FALSE ) == 0 ? E_FAIL : S_OK;
+    ReleaseStgMedium( med );
+    return hr;
+}
+
+static HRESULT paste_emf(ME_TextEditor *editor, FORMATETC *fmt, STGMEDIUM *med)
+{
+    HRESULT hr;
+    SIZEL sz = {0, 0};
+
+    hr = insert_static_object( editor, med->u.hEnhMetaFile, NULL, &sz );
+    if (SUCCEEDED(hr))
+    {
+        ME_CommitUndo( editor );
+        ME_UpdateRepaint( editor, FALSE );
+    }
+    else
+        ReleaseStgMedium( med );
+
+    return hr;
+}
+
+static struct paste_format
+{
+    FORMATETC fmt;
+    HRESULT (*paste)(ME_TextEditor *, FORMATETC *, STGMEDIUM *);
+    const WCHAR *name;
+} paste_formats[] =
+{
+    {{ -1,             NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL }, paste_rtf, rtfW },
+    {{ CF_UNICODETEXT, NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL }, paste_text },
+    {{ CF_ENHMETAFILE, NULL, DVASPECT_CONTENT, -1, TYMED_ENHMF },   paste_emf },
+    {{ 0 }}
+};
+
+static void init_paste_formats(void)
+{
+    struct paste_format *format;
+    static int done;
+
+    if (!done)
+    {
+        for (format = paste_formats; format->fmt.cfFormat; format++)
+        {
+            if (format->name)
+                format->fmt.cfFormat = RegisterClipboardFormatW( format->name );
+        }
+        done = 1;
+    }
+}
+
+static BOOL paste_special(ME_TextEditor *editor, UINT cf, REPASTESPECIAL *ps, BOOL check_only)
+{
+    HRESULT hr;
+    STGMEDIUM med;
+    struct paste_format *format;
+    IDataObject *data;
+
+    init_paste_formats();
+
+    if (ps && ps->dwAspect != DVASPECT_CONTENT)
+        FIXME("Ignoring aspect %x\n", ps->dwAspect);
+
+    hr = OleGetClipboard( &data );
+    if (hr != S_OK) return FALSE;
+
+    if (cf == CF_TEXT) cf = CF_UNICODETEXT;
+
+    hr = S_FALSE;
+    for (format = paste_formats; format->fmt.cfFormat; format++)
+    {
+        if (cf && cf != format->fmt.cfFormat) continue;
+        hr = IDataObject_QueryGetData( data, &format->fmt );
+        if (hr == S_OK)
+        {
+            if (!check_only)
+            {
+                hr = IDataObject_GetData( data, &format->fmt, &med );
+                if (hr != S_OK) goto done;
+                hr = format->paste( editor, &format->fmt, &med );
+            }
+            break;
+        }
+    }
+
+done:
+    IDataObject_Release( data );
+
+    return hr == S_OK;
 }
 
 static BOOL ME_Copy(ME_TextEditor *editor, const ME_Cursor *start, int nChars)
@@ -2550,7 +2640,7 @@ ME_KeyDown(ME_TextEditor *editor, WORD nKey)
       break;
     case 'V':
       if (ctrl_is_down)
-        return ME_Paste(editor);
+        return paste_special( editor, 0, NULL, FALSE );
       break;
     case 'C':
     case 'X':
@@ -2884,7 +2974,7 @@ static BOOL ME_ShowContextMenu(ME_TextEditor *editor, int x, int y)
   return TRUE;
 }
 
-ME_TextEditor *ME_MakeEditor(ITextHost *texthost, BOOL bEmulateVersion10, DWORD csStyle)
+ME_TextEditor *ME_MakeEditor(ITextHost *texthost, BOOL bEmulateVersion10)
 {
   ME_TextEditor *ed = ALLOC_OBJ(ME_TextEditor);
   int i;
@@ -2898,11 +2988,7 @@ ME_TextEditor *ME_MakeEditor(ITextHost *texthost, BOOL bEmulateVersion10, DWORD 
   ed->reOle = NULL;
   ed->bEmulateVersion10 = bEmulateVersion10;
   ed->styleFlags = 0;
-  ed->alignStyle = PFA_LEFT;
-  if (csStyle & ES_RIGHT)
-      ed->alignStyle = PFA_RIGHT;
-  if (csStyle & ES_CENTER)
-      ed->alignStyle = PFA_CENTER;
+  ed->exStyleFlags = 0;
   ITextHost_TxGetPropertyBits(texthost,
                               (TXTBIT_RICHTEXT|TXTBIT_MULTILINE|
                                TXTBIT_READONLY|TXTBIT_USEPASSWORD|
@@ -2963,6 +3049,7 @@ ME_TextEditor *ME_MakeEditor(ITextHost *texthost, BOOL bEmulateVersion10, DWORD 
   }
 
   ME_CheckCharOffsets(ed);
+  SetRectEmpty(&ed->rcFormat);
   ed->bDefaultFormatRect = TRUE;
   ITextHost_TxGetSelectionBarWidth(ed->texthost, &selbarwidth);
   if (selbarwidth) {
@@ -3414,7 +3501,6 @@ LRESULT ME_HandleMessage(ME_TextEditor *editor, UINT msg, WPARAM wParam,
   UNSUPPORTED_MSG(EM_GETTYPOGRAPHYOPTIONS)
   UNSUPPORTED_MSG(EM_GETUNDONAME)
   UNSUPPORTED_MSG(EM_GETWORDBREAKPROCEX)
-  UNSUPPORTED_MSG(EM_PASTESPECIAL)
   UNSUPPORTED_MSG(EM_SELECTIONTYPE)
   UNSUPPORTED_MSG(EM_SETBIDIOPTIONS)
   UNSUPPORTED_MSG(EM_SETEDITSTYLE)
@@ -3971,17 +4057,14 @@ LRESULT ME_HandleMessage(ME_TextEditor *editor, UINT msg, WPARAM wParam,
     return 1;
   }
   case EM_CANPASTE:
-  {
-    UINT nRTFFormat = RegisterClipboardFormatA("Rich Text Format");
-    if (IsClipboardFormatAvailable(nRTFFormat))
-      return TRUE;
-    if (IsClipboardFormatAvailable(CF_UNICODETEXT))
-      return TRUE;
-    return FALSE;
-  }
+    return paste_special( editor, 0, NULL, TRUE );
   case WM_PASTE:
   case WM_MBUTTONDOWN:
-    ME_Paste(editor);
+    wParam = 0;
+    lParam = 0;
+    /* fall through */
+  case EM_PASTESPECIAL:
+    paste_special( editor, wParam, (REPASTESPECIAL *)lParam, FALSE );
     return 0;
   case WM_CUT:
   case WM_COPY:
@@ -4792,6 +4875,30 @@ LRESULT ME_HandleMessage(ME_TextEditor *editor, UINT msg, WPARAM wParam,
   return 0L;
 }
 
+static BOOL create_windowed_editor(HWND hwnd, CREATESTRUCTW *create, BOOL emulate_10)
+{
+    ITextHost *host = ME_CreateTextHost( hwnd, create, emulate_10 );
+    ME_TextEditor *editor;
+
+    if (!host) return FALSE;
+
+    editor = ME_MakeEditor( host, emulate_10 );
+    if (!editor)
+    {
+        ITextHost_Release( host );
+        return FALSE;
+    }
+
+    editor->exStyleFlags = GetWindowLongW( hwnd, GWL_EXSTYLE );
+    editor->styleFlags |= GetWindowLongW( hwnd, GWL_STYLE ) & ES_WANTRETURN;
+    editor->hWnd = hwnd; /* FIXME: Remove editor's dependence on hWnd */
+    editor->hwndParent = create->hwndParent;
+
+    SetWindowLongPtrW( hwnd, 0, (LONG_PTR)editor );
+
+    return TRUE;
+}
+
 static LRESULT RichEditWndProc_common(HWND hWnd, UINT msg, WPARAM wParam,
                                       LPARAM lParam, BOOL unicode)
 {
@@ -4808,11 +4915,9 @@ static LRESULT RichEditWndProc_common(HWND hWnd, UINT msg, WPARAM wParam,
     if (msg == WM_NCCREATE)
     {
       CREATESTRUCTW *pcs = (CREATESTRUCTW *)lParam;
-      ITextHost *texthost;
 
       TRACE("WM_NCCREATE: hWnd %p style 0x%08x\n", hWnd, pcs->style);
-      texthost = ME_CreateTextHost(hWnd, pcs, FALSE);
-      return texthost != NULL;
+      return create_windowed_editor( hWnd, pcs, FALSE );
     }
     else
     {
@@ -4938,12 +5043,10 @@ LRESULT WINAPI RichEdit10ANSIWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM 
 {
   if (msg == WM_NCCREATE && !GetWindowLongPtrW(hWnd, 0))
   {
-    ITextHost *texthost;
     CREATESTRUCTW *pcs = (CREATESTRUCTW *)lParam;
 
     TRACE("WM_NCCREATE: hWnd %p style 0x%08x\n", hWnd, pcs->style);
-    texthost = ME_CreateTextHost(hWnd, pcs, TRUE);
-    return texthost != NULL;
+    return create_windowed_editor( hWnd, pcs, TRUE );
   }
   return RichEditANSIWndProc(hWnd, msg, wParam, lParam);
 }

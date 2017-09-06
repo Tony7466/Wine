@@ -166,10 +166,10 @@ static void d2d_rt_draw(struct d2d_d3d_render_target *render_target, enum d2d_sh
         const D2D1_RECT_F *clip_rect;
 
         clip_rect = &render_target->clip_stack.stack[render_target->clip_stack.count - 1];
-        scissor_rect.left = clip_rect->left + 0.5f;
-        scissor_rect.top = clip_rect->top + 0.5f;
-        scissor_rect.right = clip_rect->right + 0.5f;
-        scissor_rect.bottom = clip_rect->bottom + 0.5f;
+        scissor_rect.left = ceilf(clip_rect->left - 0.5f);
+        scissor_rect.top = ceilf(clip_rect->top - 0.5f);
+        scissor_rect.right = ceilf(clip_rect->right - 0.5f);
+        scissor_rect.bottom = ceilf(clip_rect->bottom - 0.5f);
     }
     else
     {
@@ -1982,10 +1982,26 @@ static HRESULT STDMETHODCALLTYPE d2d_text_renderer_DrawStrikethrough(IDWriteText
 static HRESULT STDMETHODCALLTYPE d2d_text_renderer_DrawInlineObject(IDWriteTextRenderer *iface, void *ctx,
         float origin_x, float origin_y, IDWriteInlineObject *object, BOOL is_sideways, BOOL is_rtl, IUnknown *effect)
 {
+    struct d2d_draw_text_layout_ctx *context = ctx;
+    ID2D1Brush *brush;
+    HRESULT hr;
+
     TRACE("iface %p, ctx %p, origin_x %.8e, origin_y %.8e, object %p, is_sideways %#x, is_rtl %#x, effect %p.\n",
             iface, ctx, origin_x, origin_y, object, is_sideways, is_rtl, effect);
 
-    return IDWriteInlineObject_Draw(object, ctx, iface, origin_x, origin_y, is_sideways, is_rtl, effect);
+    /* Inline objects may not pass effects all the way down, when using layout object internally for example.
+       This is how default trimming sign object in DirectWrite works - it does not use effect passed to Draw(),
+       and resulting DrawGlyphRun() is always called with NULL effect, however original effect is used and correct
+       brush is selected at Direct2D level. */
+    brush = context->brush;
+    context->brush = d2d_draw_get_text_brush(context, effect);
+
+    hr = IDWriteInlineObject_Draw(object, ctx, iface, origin_x, origin_y, is_sideways, is_rtl, effect);
+
+    ID2D1Brush_Release(context->brush);
+    context->brush = brush;
+
+    return hr;
 }
 
 static const struct IDWriteTextRendererVtbl d2d_text_renderer_vtbl =

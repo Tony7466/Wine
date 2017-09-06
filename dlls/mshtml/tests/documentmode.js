@@ -39,6 +39,37 @@ function test_elem_props() {
     next_test();
 }
 
+function test_doc_props() {
+    function test_exposed(prop, expect) {
+        if(expect)
+            ok(prop in document, prop + " not found in document.");
+        else
+            ok(!(prop in document), prop + " found in document.");
+    }
+
+    var v = document.documentMode;
+
+    test_exposed("textContent", v >= 9);
+    test_exposed("prefix", v >= 9);
+
+    next_test();
+}
+
+function test_elem_by_id() {
+    document.body.innerHTML = '<form id="testid" name="testname"></form>';
+
+    var id_elem = document.getElementById("testid");
+    ok(id_elem.tagName === "FORM", "id_elem.tagName = " + id_elem.tagName);
+
+    var name_elem = document.getElementById("testname");
+    if(document.documentMode < 8)
+        ok(id_elem === name_elem, "id_elem != id_elem");
+    else
+        ok(name_elem === null, "name_elem != null");
+
+    next_test();
+}
+
 function test_doc_mode() {
     compat_version = parseInt(document.location.search.substring(1));
 
@@ -99,5 +130,7 @@ function test_conditional_comments() {
 var tests = [
     test_doc_mode,
     test_elem_props,
+    test_doc_props,
+    test_elem_by_id,
     test_conditional_comments
 ];

@@ -766,13 +766,16 @@ static BOOL test_import_wstr_(unsigned line, const char *file_contents, DWORD *r
     memsize = len * sizeof(WCHAR);
     wstr = HeapAlloc(GetProcessHeap(), 0, memsize);
     if (!wstr) return FALSE;
-    MultiByteToWideChar(CP_UTF8, 0, file_contents, lenA, wstr, memsize);
+    MultiByteToWideChar(CP_UTF8, 0, file_contents, lenA, wstr, len);
 
     regfile = CreateFileA("test.reg", GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
                           FILE_ATTRIBUTE_NORMAL, NULL);
     lok(regfile != INVALID_HANDLE_VALUE, "Failed to create test.reg file\n");
-    if(regfile == INVALID_HANDLE_VALUE)
+    if (regfile == INVALID_HANDLE_VALUE)
+    {
+        HeapFree(GetProcessHeap(), 0, wstr);
         return FALSE;
+    }
 
     ret = WriteFile(regfile, wstr, memsize, &written, NULL);
     lok(ret, "WriteFile failed: %u\n", GetLastError());
@@ -1730,6 +1733,28 @@ static void test_import(void)
     ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
     verify_key_nonexist(hkey, "Subkey3a");
     verify_key_nonexist(hkey, "Subkey3b");
+
+    /* Test mixed key creation and deletion. We start by creating a subkey. */
+    test_import_str("REGEDIT4\n\n"
+                    "[HKEY_CURRENT_USER\\" KEY_BASE "\\Subkey4a]\n\n", &r);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(hkey, "Subkey4a");
+
+    test_import_str("REGEDIT4\n\n"
+                    "[HKEY_CURRENT_USER\\" KEY_BASE "]\n\n"
+                    "[-HKEY_CURRENT_USER\\" KEY_BASE "\\Subkey4a]\n"
+                    "\"Wine46a\"=dword:12345678\n\n", &r);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key_nonexist(hkey, "Subkey4a");
+    verify_reg_nonexist(hkey, "Wine46a");
+
+    test_import_str("REGEDIT4\n\n"
+                    "[HKEY_CURRENT_USER\\" KEY_BASE "]\n\n"
+                    "[HKEY_CURRENT_USERS\\" KEY_BASE "\\Subkey4b]\n"
+                    "\"Wine46b\"=dword:12345678\n\n", &r);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key_nonexist(hkey, "Subkey4b");
+    verify_reg_nonexist(hkey, "Wine46b");
 
     /* Test value deletion. We start by creating some registry values. */
     test_import_str("REGEDIT4\n\n"
@@ -2784,7 +2809,7 @@ static void test_unicode_import(void)
                      "  63,00,61,00,74,00,;comment\n"
                      "  65,00,6e,00,61,00,74,00,69,00,6f,00,6e,00,00,00,00,00\n\n", &r);
     ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    verify_reg(hkey, "Multi-Line2", REG_MULTI_SZ, "Line concat", 12, TODO_REG_SIZE);
+    verify_reg(hkey, "Multi-Line2", REG_MULTI_SZ, "Line concat", 12, 0);
 
     test_import_wstr("\xef\xbb\xbfREGEDIT4\n\n"
                      "[HKEY_CURRENT_USER\\" KEY_BASE "]\n"
@@ -2980,7 +3005,7 @@ static void test_unicode_import(void)
     err = RegQueryValueExA(hkey, "Wine44i", NULL, &type, (BYTE *)&buffer, &size);
     ok(err == ERROR_SUCCESS, "RegQueryValueExA failed: %d\n", err);
     ok(type == REG_EXPAND_SZ, "got wrong type %u, expected %u\n", type, REG_EXPAND_SZ);
-    todo_wine ok(size == 6 || broken(size == 5) /* WinXP */, "got wrong size %u, expected 6\n", size);
+    ok(size == 6 || broken(size == 5) /* WinXP */, "got wrong size %u, expected 6\n", size);
     ok(memcmp(buffer, "%PATH", size) == 0, "got wrong data\n");
     /* Wine44j */
     size = sizeof(buffer);
@@ -2988,7 +3013,7 @@ static void test_unicode_import(void)
     err = RegQueryValueExA(hkey, "Wine44j", NULL, &type, (BYTE *)&buffer, &size);
     ok(err == ERROR_SUCCESS, "RegQueryValueExA failed: %d\n", err);
     ok(type == REG_EXPAND_SZ, "got wrong type %u, expected %u\n", type, REG_EXPAND_SZ);
-    todo_wine ok(size == 6 || broken(size == 5) /* WinXP */, "got wrong size %u, expected 6\n", size);
+    ok(size == 6 || broken(size == 5) /* WinXP */, "got wrong size %u, expected 6\n", size);
     ok(memcmp(buffer, "%PATH", size) == 0, "got wrong data\n");
     /* Wine44k */
     verify_reg_nonexist(hkey, "Wine44k");
@@ -3186,6 +3211,28 @@ static void test_unicode_import(void)
     ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
     verify_key_nonexist(hkey, "Subkey3a");
     verify_key_nonexist(hkey, "Subkey3b");
+
+    /* Test mixed key creation and deletion. We start by creating a subkey. */
+    test_import_wstr("\xef\xbb\xbfWindows Registry Editor Version 5.00\n\n"
+                     "[HKEY_CURRENT_USER\\" KEY_BASE "\\Subkey4a]\n\n", &r);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(hkey, "Subkey4a");
+
+    test_import_wstr("\xef\xbb\xbfWindows Registry Editor Version 5.00\n\n"
+                     "[HKEY_CURRENT_USER\\" KEY_BASE "]\n\n"
+                     "[-HKEY_CURRENT_USER\\" KEY_BASE "\\Subkey4a]\n"
+                     "\"Wine46a\"=dword:12345678\n\n", &r);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key_nonexist(hkey, "Subkey4a");
+    verify_reg_nonexist(hkey, "Wine46a");
+
+    test_import_wstr("\xef\xbb\xbfWindows Registry Editor Version 5.00\n\n"
+                     "[HKEY_CURRENT_USER\\" KEY_BASE "]\n\n"
+                     "[HKEY_CURRENT_USERS\\" KEY_BASE "\\Subkey4b]\n"
+                     "\"Wine46b\"=dword:12345678\n\n", &r);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key_nonexist(hkey, "Subkey4b");
+    verify_reg_nonexist(hkey, "Wine46b");
 
     /* Test value deletion. We start by creating some registry values. */
     test_import_wstr("\xef\xbb\xbfWindows Registry Editor Version 5.00\n\n"
@@ -3602,7 +3649,7 @@ static void test_unicode_import(void)
     ok(err == ERROR_SUCCESS || broken(err == ERROR_FILE_NOT_FOUND) /* WinXP */,
        "got %u, expected 0\n", err);
     if (err == ERROR_SUCCESS)
-        verify_reg(hkey, "Wine62b", REG_EXPAND_SZ, "%PATH%", 7, TODO_REG_SIZE);
+        verify_reg(hkey, "Wine62b", REG_EXPAND_SZ, "%PATH%", 7, 0);
 
     test_import_wstr("\xef\xbb\xbfWindows Registry Editor Version 5.00\n\n"
                      "[HKEY_CURRENT_USER\\" KEY_BASE "]\n"
@@ -3622,7 +3669,7 @@ static void test_unicode_import(void)
     ok(err == ERROR_SUCCESS || broken(err == ERROR_FILE_NOT_FOUND) /* WinXP */,
        "got %u, expected 0\n", err);
     if (err == ERROR_SUCCESS)
-        verify_reg(hkey, "Wine62d", REG_MULTI_SZ, "Line", 5, TODO_REG_SIZE);
+        verify_reg(hkey, "Wine62d", REG_MULTI_SZ, "Line", 5, 0);
 
     test_import_wstr("\xef\xbb\xbfWindows Registry Editor Version 5.00\n\n"
                      "[HKEY_CURRENT_USER\\" KEY_BASE "]\n"
@@ -3680,14 +3727,14 @@ static void test_unicode_import(void)
     err = RegQueryValueExA(hkey, "Wine64d", NULL, &type, (BYTE *)&buffer, &size);
     ok(err == ERROR_SUCCESS, "RegQueryValueExA failed: %d\n", err);
     ok(type == REG_MULTI_SZ, "got wrong type %u, expected %u\n", type, REG_MULTI_SZ);
-    todo_wine ok(size == 12 || broken(size == 11) /* WinXP */, "got wrong size %u, expected 12\n", size);
+    ok(size == 12 || broken(size == 11) /* WinXP */, "got wrong size %u, expected 12\n", size);
     ok(memcmp(buffer, "Line concat", size) == 0, "got wrong data\n");
     /* Wine64e */
     size = sizeof(buffer);
     err = RegQueryValueExA(hkey, "Wine64e", NULL, &type, (BYTE *)&buffer, &size);
     ok(err == ERROR_SUCCESS, "RegQueryValueExA failed: %d\n", err);
     ok(type == REG_MULTI_SZ, "got wrong type %u, expected %u\n", type, REG_MULTI_SZ);
-    todo_wine ok(size == 12 || broken(size == 11) /* WinXP */, "got wrong size %u, expected 12\n", size);
+    ok(size == 12 || broken(size == 11) /* WinXP */, "got wrong size %u, expected 12\n", size);
     ok(memcmp(buffer, "Line concat", size) == 0, "got wrong data\n");
 
     test_import_wstr("\xef\xbb\xbfWindows Registry Editor Version 5.00\n\n"
@@ -3721,8 +3768,8 @@ static void test_unicode_import(void)
                      "\"Wine66e\"=hex(7):4c,00,69,00,6e,00,65,00,00,00,00,00\n"
                      "\"Wine66f\"=hex(7):4c,00,69,00,6e,00,65,00,00,00,00,00,\n\n", &r);
     ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    verify_reg(hkey, "Wine66a", REG_MULTI_SZ, "Line", 5, TODO_REG_SIZE);
-    verify_reg(hkey, "Wine66b", REG_MULTI_SZ, "Line", 5, TODO_REG_SIZE);
+    verify_reg(hkey, "Wine66a", REG_MULTI_SZ, "Line", 5, 0);
+    verify_reg(hkey, "Wine66b", REG_MULTI_SZ, "Line", 5, 0);
     verify_reg(hkey, "Wine66c", REG_MULTI_SZ, "Line", 5, 0);
     verify_reg(hkey, "Wine66d", REG_MULTI_SZ, "Line", 5, 0);
     verify_reg(hkey, "Wine66e", REG_MULTI_SZ, "Line\0", 6, 0);
@@ -3735,8 +3782,8 @@ static void test_unicode_import(void)
                      "\"Wine67c\"=hex(2):25,00,50,00,41,00,54,00,48,00,25,00,00,00\n"
                      "\"Wine67d\"=hex(2):25,00,50,00,41,00,54,00,48,00,25,00,00,00,\n\n", &r);
     ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    verify_reg(hkey, "Wine67a", REG_EXPAND_SZ, "%PATH%", 7, TODO_REG_SIZE);
-    verify_reg(hkey, "Wine67b", REG_EXPAND_SZ, "%PATH%", 7, TODO_REG_SIZE);
+    verify_reg(hkey, "Wine67a", REG_EXPAND_SZ, "%PATH%", 7, 0);
+    verify_reg(hkey, "Wine67b", REG_EXPAND_SZ, "%PATH%", 7, 0);
     verify_reg(hkey, "Wine67c", REG_EXPAND_SZ, "%PATH%", 7, 0);
     verify_reg(hkey, "Wine67d", REG_EXPAND_SZ, "%PATH%", 7, 0);
 
