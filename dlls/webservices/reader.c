@@ -156,9 +156,9 @@ static WS_XML_ATTRIBUTE *dup_attribute( const WS_XML_ATTRIBUTE *src )
     dst->isXmlNs     = src->isXmlNs;
 
     if (!prefix) dst->prefix = NULL;
-    else if (!(dst->prefix = dup_xml_string( prefix ))) goto error;
-    if (!(dst->localName = dup_xml_string( localname ))) goto error;
-    if (!(dst->ns = dup_xml_string( ns ))) goto error;
+    else if (!(dst->prefix = dup_xml_string( prefix, FALSE ))) goto error;
+    if (!(dst->localName = dup_xml_string( localname, FALSE ))) goto error;
+    if (!(dst->ns = dup_xml_string( ns, FALSE ))) goto error;
 
     if (text)
     {
@@ -209,9 +209,9 @@ static struct node *dup_element_node( const WS_XML_ELEMENT_NODE *src )
     if (count && !(dst->attributes = dup_attributes( attrs, count ))) goto error;
     dst->attributeCount = count;
 
-    if (prefix && !(dst->prefix = dup_xml_string( prefix ))) goto error;
-    if (localname && !(dst->localName = dup_xml_string( localname ))) goto error;
-    if (ns && !(dst->ns = dup_xml_string( ns ))) goto error;
+    if (prefix && !(dst->prefix = dup_xml_string( prefix, FALSE ))) goto error;
+    if (localname && !(dst->localName = dup_xml_string( localname, FALSE ))) goto error;
+    if (ns && !(dst->ns = dup_xml_string( ns, FALSE ))) goto error;
     return node;
 
 error:
@@ -420,10 +420,10 @@ static HRESULT set_prefix( struct prefix *prefix, const WS_XML_STRING *str, cons
     if (str)
     {
         free_xml_string( prefix->str );
-        if (!(prefix->str = dup_xml_string( str ))) return E_OUTOFMEMORY;
+        if (!(prefix->str = dup_xml_string( str, FALSE ))) return E_OUTOFMEMORY;
     }
     if (prefix->ns) free_xml_string( prefix->ns );
-    if (!(prefix->ns = dup_xml_string( ns ))) return E_OUTOFMEMORY;
+    if (!(prefix->ns = dup_xml_string( ns, FALSE ))) return E_OUTOFMEMORY;
     return S_OK;
 }
 
@@ -787,18 +787,6 @@ WS_XML_UTF8_TEXT *alloc_utf8_text( const BYTE *data, ULONG len )
     return ret;
 }
 
-WS_XML_UTF16_TEXT *alloc_utf16_text( const BYTE *data, ULONG len )
-{
-    WS_XML_UTF16_TEXT *ret;
-
-    if (!(ret = heap_alloc( sizeof(*ret) + len ))) return NULL;
-    ret->text.textType = WS_XML_TEXT_TYPE_UTF16;
-    ret->byteCount     = len;
-    ret->bytes         = len ? (BYTE *)(ret + 1) : NULL;
-    if (data) memcpy( ret->bytes, data, len );
-    return ret;
-}
-
 WS_XML_BASE64_TEXT *alloc_base64_text( const BYTE *data, ULONG len )
 {
     WS_XML_BASE64_TEXT *ret;
@@ -1113,7 +1101,7 @@ static HRESULT parse_qname( const BYTE *str, ULONG len, WS_XML_STRING **prefix_r
 
     if ((hr = split_qname( str, len, &prefix, &localname )) != S_OK) return hr;
     if (!(*prefix_ret = alloc_xml_string( NULL, prefix.length ))) return E_OUTOFMEMORY;
-    if (!(*localname_ret = dup_xml_string( &localname )))
+    if (!(*localname_ret = dup_xml_string( &localname, FALSE )))
     {
         free_xml_string( *prefix_ret );
         return E_OUTOFMEMORY;
@@ -1821,7 +1809,7 @@ static HRESULT set_namespaces( struct reader *reader, WS_XML_ELEMENT_NODE *elem 
     ULONG i;
 
     if (!(ns = get_namespace( reader, elem->prefix ))) return WS_E_INVALID_FORMAT;
-    if (!(elem->ns = dup_xml_string( ns ))) return E_OUTOFMEMORY;
+    if (!(elem->ns = dup_xml_string( ns, FALSE ))) return E_OUTOFMEMORY;
 
     for (i = 0; i < elem->attributeCount; i++)
     {
@@ -6931,6 +6919,8 @@ HRESULT WINAPI WsSetInputToBuffer( WS_XML_READER *handle, WS_XML_BUFFER *buffer,
 
     reader->input_enc     = xmlbuf->encoding;
     reader->input_charset = xmlbuf->charset;
+    reader->dict_static   = xmlbuf->dict_static;
+    reader->dict          = xmlbuf->dict;
     set_input_buffer( reader, xmlbuf, xmlbuf->bytes.bytes, xmlbuf->bytes.length );
 
     if (!(node = alloc_node( WS_XML_NODE_TYPE_BOF ))) hr = E_OUTOFMEMORY;
@@ -7264,6 +7254,33 @@ HRESULT WINAPI WsReadXmlBuffer( WS_XML_READER *handle, WS_HEAP *heap, WS_XML_BUF
 done:
     if (hr != S_OK) free_xmlbuf( (struct xmlbuf *)buffer );
     WsFreeWriter( writer );
+    LeaveCriticalSection( &reader->cs );
+    return hr;
+}
+
+HRESULT create_header_buffer( WS_XML_READER *handle, WS_HEAP *heap, WS_XML_BUFFER **ret )
+{
+    struct reader *reader = (struct reader *)handle;
+    HRESULT hr = WS_E_QUOTA_EXCEEDED;
+    struct xmlbuf *xmlbuf;
+
+    EnterCriticalSection( &reader->cs );
+
+    if (reader->magic != READER_MAGIC)
+    {
+        LeaveCriticalSection( &reader->cs );
+        return E_INVALIDARG;
+    }
+
+    if ((xmlbuf = alloc_xmlbuf( heap, reader->read_pos, reader->input_enc, reader->input_charset,
+                                reader->dict_static, reader->dict )))
+    {
+        memcpy( xmlbuf->bytes.bytes, reader->read_bufptr, reader->read_pos );
+        xmlbuf->bytes.length = reader->read_pos;
+        *ret = (WS_XML_BUFFER *)xmlbuf;
+        hr = S_OK;
+    }
+
     LeaveCriticalSection( &reader->cs );
     return hr;
 }

@@ -42,7 +42,7 @@
 @ stdcall MFCreateAttributes(ptr long)
 @ stub MFCreateAudioMediaType
 @ stub MFCreateCollection
-@ stub MFCreateEventQueue
+@ stdcall MFCreateEventQueue(ptr)
 @ stub MFCreateFile
 @ stub MFCreateLegacyMediaBufferOnMFMediaBuffer
 @ stub MFCreateMFByteStreamOnStream
@@ -59,7 +59,7 @@
 @ stub MFCreateSocket
 @ stub MFCreateSocketListener
 @ stdcall MFCreateSourceResolver(ptr)
-@ stub MFCreateStreamDescriptor
+@ stdcall MFCreateStreamDescriptor(long long ptr ptr)
 @ stub MFCreateSystemTimeSource
 @ stub MFCreateSystemUnderlyingClock
 @ stub MFCreateTempFile

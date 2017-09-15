@@ -333,6 +333,10 @@ static const struct wined3d_format_base_flags format_base_flags[] =
     {WINED3DFMT_D32_FLOAT,            WINED3DFMT_FLAG_FLOAT},
     {WINED3DFMT_S8_UINT_D24_FLOAT,    WINED3DFMT_FLAG_FLOAT},
     {WINED3DFMT_D32_FLOAT_S8X24_UINT, WINED3DFMT_FLAG_FLOAT},
+    {WINED3DFMT_INST,                 WINED3DFMT_FLAG_EXTENSION},
+    {WINED3DFMT_NULL,                 WINED3DFMT_FLAG_EXTENSION},
+    {WINED3DFMT_NVDB,                 WINED3DFMT_FLAG_EXTENSION},
+    {WINED3DFMT_RESZ,                 WINED3DFMT_FLAG_EXTENSION},
 };
 
 struct wined3d_format_block_info
@@ -3220,7 +3224,8 @@ static void apply_format_fixups(struct wined3d_adapter *adapter, struct wined3d_
                 0, CHANNEL_SOURCE_X, 0, CHANNEL_SOURCE_W, 0, CHANNEL_SOURCE_ONE, 0, CHANNEL_SOURCE_ONE);
     }
 
-    if (!gl_info->supported[APPLE_YCBCR_422])
+    if (!gl_info->supported[APPLE_YCBCR_422] && gl_info->supported[ARB_FRAGMENT_PROGRAM]
+            && gl_info->supported[WINED3D_GL_LEGACY_CONTEXT])
     {
         idx = get_format_idx(WINED3DFMT_YUY2);
         gl_info->formats[idx].color_fixup = create_complex_fixup_desc(COMPLEX_FIXUP_YUY2);
@@ -3228,18 +3233,38 @@ static void apply_format_fixups(struct wined3d_adapter *adapter, struct wined3d_
         idx = get_format_idx(WINED3DFMT_UYVY);
         gl_info->formats[idx].color_fixup = create_complex_fixup_desc(COMPLEX_FIXUP_UYVY);
     }
+    else if (!gl_info->supported[APPLE_YCBCR_422] && (!gl_info->supported[ARB_FRAGMENT_PROGRAM]
+            || !gl_info->supported[WINED3D_GL_LEGACY_CONTEXT]))
+    {
+        idx = get_format_idx(WINED3DFMT_YUY2);
+        gl_info->formats[idx].glInternal = 0;
 
-    idx = get_format_idx(WINED3DFMT_YV12);
-    format_set_flag(&gl_info->formats[idx], WINED3DFMT_FLAG_HEIGHT_SCALE);
-    gl_info->formats[idx].height_scale.numerator = 3;
-    gl_info->formats[idx].height_scale.denominator = 2;
-    gl_info->formats[idx].color_fixup = create_complex_fixup_desc(COMPLEX_FIXUP_YV12);
+        idx = get_format_idx(WINED3DFMT_UYVY);
+        gl_info->formats[idx].glInternal = 0;
+    }
 
-    idx = get_format_idx(WINED3DFMT_NV12);
-    format_set_flag(&gl_info->formats[idx], WINED3DFMT_FLAG_HEIGHT_SCALE);
-    gl_info->formats[idx].height_scale.numerator = 3;
-    gl_info->formats[idx].height_scale.denominator = 2;
-    gl_info->formats[idx].color_fixup = create_complex_fixup_desc(COMPLEX_FIXUP_NV12);
+    if (gl_info->supported[ARB_FRAGMENT_PROGRAM] && gl_info->supported[WINED3D_GL_LEGACY_CONTEXT])
+    {
+        idx = get_format_idx(WINED3DFMT_YV12);
+        format_set_flag(&gl_info->formats[idx], WINED3DFMT_FLAG_HEIGHT_SCALE);
+        gl_info->formats[idx].height_scale.numerator = 3;
+        gl_info->formats[idx].height_scale.denominator = 2;
+        gl_info->formats[idx].color_fixup = create_complex_fixup_desc(COMPLEX_FIXUP_YV12);
+
+        idx = get_format_idx(WINED3DFMT_NV12);
+        format_set_flag(&gl_info->formats[idx], WINED3DFMT_FLAG_HEIGHT_SCALE);
+        gl_info->formats[idx].height_scale.numerator = 3;
+        gl_info->formats[idx].height_scale.denominator = 2;
+        gl_info->formats[idx].color_fixup = create_complex_fixup_desc(COMPLEX_FIXUP_NV12);
+    }
+    else
+    {
+        idx = get_format_idx(WINED3DFMT_YV12);
+        gl_info->formats[idx].glInternal = 0;
+
+        idx = get_format_idx(WINED3DFMT_NV12);
+        gl_info->formats[idx].glInternal = 0;
+    }
 
     if (!gl_info->supported[WINED3D_GL_LEGACY_CONTEXT])
     {

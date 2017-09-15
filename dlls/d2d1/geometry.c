@@ -503,6 +503,14 @@ static float d2d_point_ccw(const D2D1_POINT_2F *a, const D2D1_POINT_2F *b, const
     return det_d[det_d_len - 1];
 }
 
+static void d2d_rect_union(D2D1_RECT_F *l, const D2D1_RECT_F *r)
+{
+    l->left   = min(l->left, r->left);
+    l->top    = min(l->top, r->top);
+    l->right  = max(l->right, r->right);
+    l->bottom = max(l->bottom, r->bottom);
+}
+
 static BOOL d2d_rect_check_overlap(const D2D_RECT_F *p, const D2D_RECT_F *q)
 {
     return p->left < q->right && p->top < q->bottom && p->right > q->left && p->bottom > q->top;
@@ -2527,12 +2535,17 @@ static void STDMETHODCALLTYPE d2d_geometry_sink_AddBeziers(ID2D1GeometrySink *if
 
     for (i = 0; i < count; ++i)
     {
+        D2D1_RECT_F bezier_bounds;
+
         /* FIXME: This tries to approximate a cubic bezier with a quadratic one. */
         p.x = (beziers[i].point1.x + beziers[i].point2.x) * 0.75f;
         p.y = (beziers[i].point1.y + beziers[i].point2.y) * 0.75f;
         p.x -= (figure->vertices[figure->vertex_count - 1].x + beziers[i].point3.x) * 0.25f;
         p.y -= (figure->vertices[figure->vertex_count - 1].y + beziers[i].point3.y) * 0.25f;
         figure->vertex_types[figure->vertex_count - 1] = D2D_VERTEX_TYPE_BEZIER;
+
+        d2d_rect_get_bezier_bounds(&bezier_bounds, &figure->vertices[figure->vertex_count - 1],
+                &p, &beziers[i].point3);
 
         if (!d2d_figure_add_bezier_control(figure, &p))
         {
@@ -2547,6 +2560,8 @@ static void STDMETHODCALLTYPE d2d_geometry_sink_AddBeziers(ID2D1GeometrySink *if
             geometry->u.path.state = D2D_GEOMETRY_STATE_ERROR;
             return;
         }
+
+        d2d_rect_union(&figure->bounds, &bezier_bounds);
     }
 
     geometry->u.path.segment_count += count;
@@ -3064,9 +3079,106 @@ static void STDMETHODCALLTYPE d2d_path_geometry_GetFactory(ID2D1PathGeometry *if
 static HRESULT STDMETHODCALLTYPE d2d_path_geometry_GetBounds(ID2D1PathGeometry *iface,
         const D2D1_MATRIX_3X2_F *transform, D2D1_RECT_F *bounds)
 {
-    FIXME("iface %p, transform %p, bounds %p stub!\n", iface, transform, bounds);
+    struct d2d_geometry *geometry = impl_from_ID2D1PathGeometry(iface);
+    size_t i;
 
-    return E_NOTIMPL;
+    TRACE("iface %p, transform %p, bounds %p.\n", iface, transform, bounds);
+
+    if (geometry->u.path.state != D2D_GEOMETRY_STATE_CLOSED)
+        return D2DERR_WRONG_STATE;
+
+    bounds->left = FLT_MAX;
+    bounds->top = FLT_MAX;
+    bounds->right = -FLT_MAX;
+    bounds->bottom = -FLT_MAX;
+
+    if (!transform)
+    {
+        if (geometry->u.path.bounds.left > geometry->u.path.bounds.right)
+        {
+            for (i = 0; i < geometry->u.path.figure_count; ++i)
+                d2d_rect_union(&geometry->u.path.bounds, &geometry->u.path.figures[i].bounds);
+        }
+
+        *bounds = geometry->u.path.bounds;
+        return S_OK;
+    }
+
+    for (i = 0; i < geometry->u.path.figure_count; ++i)
+    {
+        const struct d2d_figure *figure = &geometry->u.path.figures[i];
+        enum d2d_vertex_type type = D2D_VERTEX_TYPE_NONE;
+        D2D1_RECT_F bezier_bounds;
+        D2D1_POINT_2F p, p1, p2;
+        size_t j, bezier_idx;
+
+        /* Single vertex figures are reduced by CloseFigure(). */
+        if (figure->vertex_count == 0)
+        {
+            d2d_point_transform(&p, transform, figure->bounds.left, figure->bounds.top);
+            d2d_rect_expand(bounds, &p);
+            continue;
+        }
+
+        for (j = 0; j < figure->vertex_count; ++j)
+        {
+            if (figure->vertex_types[j] == D2D_VERTEX_TYPE_NONE)
+                continue;
+
+            p = figure->vertices[j];
+            type = figure->vertex_types[j];
+            d2d_point_transform(&p, transform, p.x, p.y);
+            d2d_rect_expand(bounds, &p);
+            break;
+        }
+
+        for (bezier_idx = 0, ++j; j < figure->vertex_count; ++j)
+        {
+            if (figure->vertex_types[j] == D2D_VERTEX_TYPE_NONE
+                    || figure->vertex_types[j] == D2D_VERTEX_TYPE_SPLIT_BEZIER)
+                continue;
+
+            switch (type)
+            {
+                case D2D_VERTEX_TYPE_LINE:
+                    p = figure->vertices[j];
+                    d2d_point_transform(&p, transform, p.x, p.y);
+                    d2d_rect_expand(bounds, &p);
+                    break;
+
+                case D2D_VERTEX_TYPE_BEZIER:
+                    p1 = figure->original_bezier_controls[bezier_idx++];
+                    d2d_point_transform(&p1, transform, p1.x, p1.y);
+                    p2 = figure->vertices[j];
+                    d2d_point_transform(&p2, transform, p2.x, p2.y);
+                    d2d_rect_get_bezier_bounds(&bezier_bounds, &p, &p1, &p2);
+                    d2d_rect_union(bounds, &bezier_bounds);
+                    p = p2;
+                    break;
+
+                default:
+                    FIXME("Unhandled vertex type %#x.\n", type);
+                    p = figure->vertices[j];
+                    d2d_point_transform(&p, transform, p.x, p.y);
+                    d2d_rect_expand(bounds, &p);
+                    break;
+            }
+
+            type = figure->vertex_types[j];
+        }
+
+        if (type == D2D_VERTEX_TYPE_BEZIER)
+        {
+            p1 = figure->original_bezier_controls[bezier_idx++];
+            d2d_point_transform(&p1, transform, p1.x, p1.y);
+            p2 = figure->vertices[0];
+            d2d_point_transform(&p2, transform, p2.x, p2.y);
+            d2d_rect_get_bezier_bounds(&bezier_bounds, &p, &p1, &p2);
+            d2d_rect_union(bounds, &bezier_bounds);
+        }
+    }
+
+    return S_OK;
 }
 
 static HRESULT STDMETHODCALLTYPE d2d_path_geometry_GetWidenedBounds(ID2D1PathGeometry *iface, float stroke_width,
@@ -3413,6 +3525,10 @@ void d2d_path_geometry_init(struct d2d_geometry *geometry, ID2D1Factory *factory
 {
     d2d_geometry_init(geometry, factory, &identity, (ID2D1GeometryVtbl *)&d2d_path_geometry_vtbl);
     geometry->u.path.ID2D1GeometrySink_iface.lpVtbl = &d2d_geometry_sink_vtbl;
+    geometry->u.path.bounds.left = FLT_MAX;
+    geometry->u.path.bounds.right = -FLT_MAX;
+    geometry->u.path.bounds.top = FLT_MAX;
+    geometry->u.path.bounds.bottom = -FLT_MAX;
 }
 
 static inline struct d2d_geometry *impl_from_ID2D1RectangleGeometry(ID2D1RectangleGeometry *iface)

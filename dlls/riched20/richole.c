@@ -5257,6 +5257,7 @@ void ME_GetOLEObjectSize(const ME_Context *c, ME_Run *run, SIZE *pSize)
       return;
     }
   }
+  IDataObject_Release(ido);
 
   switch (stgm.tymed)
   {
@@ -5264,19 +5265,17 @@ void ME_GetOLEObjectSize(const ME_Context *c, ME_Run *run, SIZE *pSize)
     GetObjectW(stgm.u.hBitmap, sizeof(dibsect), &dibsect);
     pSize->cx = dibsect.dsBm.bmWidth;
     pSize->cy = dibsect.dsBm.bmHeight;
-    if (!stgm.pUnkForRelease) DeleteObject(stgm.u.hBitmap);
     break;
   case TYMED_ENHMF:
     GetEnhMetaFileHeader(stgm.u.hEnhMetaFile, sizeof(emh), &emh);
     pSize->cx = emh.rclBounds.right - emh.rclBounds.left;
     pSize->cy = emh.rclBounds.bottom - emh.rclBounds.top;
-    if (!stgm.pUnkForRelease) DeleteEnhMetaFile(stgm.u.hEnhMetaFile);
     break;
   default:
     FIXME("Unsupported tymed %d\n", stgm.tymed);
     break;
   }
-  IDataObject_Release(ido);
+  ReleaseStgMedium(&stgm);
   if (c->editor->nZoomNumerator != 0)
   {
     pSize->cx = MulDiv(pSize->cx, c->editor->nZoomNumerator, c->editor->nZoomDenominator);
@@ -5284,8 +5283,7 @@ void ME_GetOLEObjectSize(const ME_Context *c, ME_Run *run, SIZE *pSize)
   }
 }
 
-void ME_DrawOLE(ME_Context *c, int x, int y, ME_Run *run,
-                ME_Paragraph *para, BOOL selected)
+void ME_DrawOLE(ME_Context *c, int x, int y, ME_Run *run, BOOL selected)
 {
   IDataObject*  ido;
   FORMATETC     fmt;
@@ -5295,6 +5293,8 @@ void ME_DrawOLE(ME_Context *c, int x, int y, ME_Run *run,
   HDC           hMemDC;
   SIZE          sz;
   BOOL          has_size;
+  HBITMAP       old_bm;
+  RECT          rc;
 
   assert(run->nFlags & MERF_GRAPHICS);
   assert(run->ole_obj);
@@ -5320,36 +5320,31 @@ void ME_DrawOLE(ME_Context *c, int x, int y, ME_Run *run,
       return;
     }
   }
+  IDataObject_Release(ido);
+
   switch (stgm.tymed)
   {
   case TYMED_GDI:
     GetObjectW(stgm.u.hBitmap, sizeof(dibsect), &dibsect);
     hMemDC = CreateCompatibleDC(c->hDC);
-    SelectObject(hMemDC, stgm.u.hBitmap);
+    old_bm = SelectObject(hMemDC, stgm.u.hBitmap);
     if (has_size)
     {
       convert_sizel(c, &run->ole_obj->sizel, &sz);
     } else {
-      sz.cx = MulDiv(dibsect.dsBm.bmWidth, c->dpi.cx, 96);
-      sz.cy = MulDiv(dibsect.dsBm.bmHeight, c->dpi.cy, 96);
+      sz.cx = dibsect.dsBm.bmWidth;
+      sz.cy = dibsect.dsBm.bmHeight;
     }
     if (c->editor->nZoomNumerator != 0)
     {
       sz.cx = MulDiv(sz.cx, c->editor->nZoomNumerator, c->editor->nZoomDenominator);
       sz.cy = MulDiv(sz.cy, c->editor->nZoomNumerator, c->editor->nZoomDenominator);
     }
-    if (sz.cx == dibsect.dsBm.bmWidth && sz.cy == dibsect.dsBm.bmHeight)
-    {
-      BitBlt(c->hDC, x, y - sz.cy,
-             dibsect.dsBm.bmWidth, dibsect.dsBm.bmHeight,
-             hMemDC, 0, 0, SRCCOPY);
-    } else {
-      StretchBlt(c->hDC, x, y - sz.cy, sz.cx, sz.cy,
-                 hMemDC, 0, 0, dibsect.dsBm.bmWidth,
-                 dibsect.dsBm.bmHeight, SRCCOPY);
-    }
+    StretchBlt(c->hDC, x, y - sz.cy, sz.cx, sz.cy,
+               hMemDC, 0, 0, dibsect.dsBm.bmWidth, dibsect.dsBm.bmHeight, SRCCOPY);
+
+    SelectObject(hMemDC, old_bm);
     DeleteDC(hMemDC);
-    if (!stgm.pUnkForRelease) DeleteObject(stgm.u.hBitmap);
     break;
   case TYMED_ENHMF:
     GetEnhMetaFileHeader(stgm.u.hEnhMetaFile, sizeof(emh), &emh);
@@ -5357,8 +5352,8 @@ void ME_DrawOLE(ME_Context *c, int x, int y, ME_Run *run,
     {
       convert_sizel(c, &run->ole_obj->sizel, &sz);
     } else {
-      sz.cy = MulDiv(emh.rclBounds.bottom - emh.rclBounds.top, c->dpi.cx, 96);
-      sz.cx = MulDiv(emh.rclBounds.right - emh.rclBounds.left, c->dpi.cy, 96);
+      sz.cx = emh.rclBounds.right - emh.rclBounds.left;
+      sz.cy = emh.rclBounds.bottom - emh.rclBounds.top;
     }
     if (c->editor->nZoomNumerator != 0)
     {
@@ -5366,25 +5361,21 @@ void ME_DrawOLE(ME_Context *c, int x, int y, ME_Run *run,
       sz.cy = MulDiv(sz.cy, c->editor->nZoomNumerator, c->editor->nZoomDenominator);
     }
 
-    {
-      RECT    rc;
-
-      rc.left = x;
-      rc.top = y - sz.cy;
-      rc.right = x + sz.cx;
-      rc.bottom = y;
-      PlayEnhMetaFile(c->hDC, stgm.u.hEnhMetaFile, &rc);
-    }
-    if (!stgm.pUnkForRelease) DeleteEnhMetaFile(stgm.u.hEnhMetaFile);
+    rc.left = x;
+    rc.top = y - sz.cy;
+    rc.right = x + sz.cx;
+    rc.bottom = y;
+    PlayEnhMetaFile(c->hDC, stgm.u.hEnhMetaFile, &rc);
     break;
   default:
     FIXME("Unsupported tymed %d\n", stgm.tymed);
     selected = FALSE;
     break;
   }
+  ReleaseStgMedium(&stgm);
+
   if (selected && !c->editor->bHideSelection)
     PatBlt(c->hDC, x, y - sz.cy, sz.cx, sz.cy, DSTINVERT);
-  IDataObject_Release(ido);
 }
 
 void ME_DeleteReObject(REOBJECT* reo)

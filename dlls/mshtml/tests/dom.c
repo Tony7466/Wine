@@ -1091,15 +1091,26 @@ static IHTMLDOMAttribute2 *_get_attr2_iface(unsigned line, IUnknown *unk)
 static void _test_node_name(unsigned line, IUnknown *unk, const char *exname)
 {
     IHTMLDOMNode *node = _get_node_iface(line, unk);
+    IHTMLElement6 *elem;
     BSTR name;
     HRESULT hres;
 
     hres = IHTMLDOMNode_get_nodeName(node, &name);
-    IHTMLDOMNode_Release(node);
     ok_(__FILE__, line) (hres == S_OK, "get_nodeName failed: %08x\n", hres);
     ok_(__FILE__, line) (!strcmp_wa(name, exname), "got name: %s, expected %s\n", wine_dbgstr_w(name), exname);
-
     SysFreeString(name);
+
+    hres = IHTMLDOMNode_QueryInterface(node, &IID_IHTMLElement6, (void**)&elem);
+    if(SUCCEEDED(hres)) {
+        hres = IHTMLElement6_get_nodeName(elem, &name);
+        ok_(__FILE__, line) (hres == S_OK, "(elem) get_nodeName failed: %08x\n", hres);
+        ok_(__FILE__, line) (!strcmp_wa(name, exname), "(elem) got name: %s, expected %s\n",
+                             wine_dbgstr_w(name), exname);
+        SysFreeString(name);
+        IHTMLElement6_Release(elem);
+    }
+
+    IHTMLDOMNode_Release(node);
 }
 
 #define get_owner_doc(u) _get_owner_doc(__LINE__,u)
@@ -1157,15 +1168,26 @@ static IHTMLDOMNode *_clone_node(unsigned line, IUnknown *unk, VARIANT_BOOL deep
 static void _test_elem_tag(unsigned line, IUnknown *unk, const char *extag)
 {
     IHTMLElement *elem = _get_elem_iface(line, unk);
+    IHTMLElement6 *elem6;
     BSTR tag;
     HRESULT hres;
 
     hres = IHTMLElement_get_tagName(elem, &tag);
-    IHTMLElement_Release(elem);
     ok_(__FILE__, line) (hres == S_OK, "get_tagName failed: %08x\n", hres);
     ok_(__FILE__, line) (!strcmp_wa(tag, extag), "got tag: %s, expected %s\n", wine_dbgstr_w(tag), extag);
-
     SysFreeString(tag);
+
+    hres = IHTMLElement_QueryInterface(elem, &IID_IHTMLElement6, (void**)&elem6);
+    if(SUCCEEDED(hres)) {
+        hres = IHTMLElement6_get_tagName(elem6, &tag);
+        ok_(__FILE__, line)(hres == S_OK, "(elem6) get_tagName failed: %08x\n", hres);
+        ok_(__FILE__, line)(!strcmp_wa(tag, extag), "(elem6) got tag: %s, expected %s\n",
+                            wine_dbgstr_w(tag), extag);
+        SysFreeString(tag);
+        IHTMLElement6_Release(elem6);
+    }
+
+    IHTMLElement_Release(elem);
 }
 
 #define test_elem_type(ifc,t) _test_elem_type(__LINE__,ifc,t)
@@ -9445,6 +9467,8 @@ static void test_create_elems(IHTMLDocument2 *doc)
             node2 = clone_node((IUnknown*)comment, VARIANT_TRUE);
             test_comment_text((IUnknown*)node2, "<!--testing-->");
             IHTMLDOMNode_Release(node2);
+
+            test_elem_getelembytag((IUnknown*)comment, ET_COMMENT, 0, NULL);
 
             IHTMLDOMNode_Release(comment);
         }
