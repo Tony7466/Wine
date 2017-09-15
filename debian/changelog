@@ -1,3 +1,15 @@
+wine-development (2.16-1) unstable; urgency=medium
+
+  * New upstream release 2.16, released Sep 1, 2017.
+    - Support for pasting metafiles in RichEdit.
+    - Better support for grayscale PNG images.
+    - Support for safety features in library loading.
+    - Better handling of transforms in GdiPlus.
+    - Rendering improvements in DirectWrite.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Wed, 06 Sep 2017 13:29:51 +0000
+
 wine-development (2.15-1) unstable; urgency=medium
 
   * New upstream release 2.15, released Aug 20, 2017.
