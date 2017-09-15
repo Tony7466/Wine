@@ -1148,6 +1148,19 @@ static HRESULT shader_get_registers_used(struct wined3d_shader *shader, const st
                 FIXME("Invalid instruction %#x for shader type %#x.\n",
                         ins.handler_idx, shader_version.type);
         }
+        else if (ins.handler_idx == WINED3DSIH_DCL_OUTPUT)
+        {
+            if (ins.declaration.dst.reg.type == WINED3DSPR_DEPTHOUT
+                    || ins.declaration.dst.reg.type == WINED3DSPR_DEPTHOUTGE
+                    || ins.declaration.dst.reg.type == WINED3DSPR_DEPTHOUTLE)
+            {
+                if (shader_version.type == WINED3D_SHADER_TYPE_PIXEL)
+                    shader->u.ps.depth_output = ins.declaration.dst.reg.type;
+                else
+                    FIXME("Invalid instruction %#x for shader type %#x.\n",
+                            ins.handler_idx, shader_version.type);
+            }
+        }
         else if (ins.handler_idx == WINED3DSIH_DCL_OUTPUT_CONTROL_POINT_COUNT)
         {
             if (shader_version.type == WINED3D_SHADER_TYPE_HULL)
@@ -2141,6 +2154,14 @@ static void shader_dump_register(struct wined3d_string_buffer *buffer,
 
         case WINED3DSPR_DEPTHOUT:
             shader_addline(buffer, "oDepth");
+            break;
+
+        case WINED3DSPR_DEPTHOUTGE:
+            shader_addline(buffer, "oDepthGE");
+            break;
+
+        case WINED3DSPR_DEPTHOUTLE:
+            shader_addline(buffer, "oDepthLE");
             break;
 
         case WINED3DSPR_ATTROUT:

@@ -1055,6 +1055,22 @@ HRESULT channel_send_message( WS_CHANNEL *handle, WS_MESSAGE *msg )
     return hr;
 }
 
+static HRESULT CALLBACK dict_cb( void *state, const WS_XML_STRING *str, BOOL *found, ULONG *id, WS_ERROR *error )
+{
+    struct dictionary *dict = state;
+    HRESULT hr = S_OK;
+    int index;
+
+    if ((index = find_string( dict, str->bytes, str->length, id )) == -1 ||
+        (hr = insert_string( dict, str->bytes, str->length, index, id )) == S_OK)
+    {
+        *found = TRUE;
+        return S_OK;
+    }
+    *found = FALSE;
+    return hr;
+}
+
 static HRESULT init_writer( struct channel *channel )
 {
     WS_XML_WRITER_BUFFER_OUTPUT buf = {{WS_XML_WRITER_OUTPUT_TYPE_BUFFER}};
@@ -1073,8 +1089,13 @@ static HRESULT init_writer( struct channel *channel )
         break;
 
     case WS_ENCODING_XML_BINARY_SESSION_1:
-        bin.staticDictionary = (WS_XML_DICTIONARY *)&dict_builtin_static.dict;
-        /* fall through */
+        if ((hr = writer_enable_lookup( channel->writer )) != S_OK) return hr;
+        clear_dict( &channel->dict );
+        bin.staticDictionary           = (WS_XML_DICTIONARY *)&dict_builtin_static.dict;
+        bin.dynamicStringCallback      = dict_cb;
+        bin.dynamicStringCallbackState = &channel->dict;
+        encoding = &bin.encoding;
+        break;
 
     case WS_ENCODING_XML_BINARY_1:
         encoding = &bin.encoding;
@@ -1123,6 +1144,48 @@ HRESULT WINAPI WsSendMessage( WS_CHANNEL *handle, WS_MESSAGE *msg, const WS_MESS
 
 done:
     LeaveCriticalSection( &channel->cs );
+    return hr;
+}
+
+/**************************************************************************
+ *          WsSendReplyMessage		[webservices.@]
+ */
+HRESULT WINAPI WsSendReplyMessage( WS_CHANNEL *handle, WS_MESSAGE *msg, const WS_MESSAGE_DESCRIPTION *desc,
+                                   WS_WRITE_OPTION option, const void *body, ULONG size, WS_MESSAGE *request,
+                                   const WS_ASYNC_CONTEXT *ctx, WS_ERROR *error )
+{
+    struct channel *channel = (struct channel *)handle;
+    GUID req_id;
+    HRESULT hr;
+
+    TRACE( "%p %p %p %08x %p %u %p %p %p\n", handle, msg, desc, option, body, size, request, ctx, error );
+    if (error) FIXME( "ignoring error parameter\n" );
+    if (ctx) FIXME( "ignoring ctx parameter\n" );
+
+    if (!channel || !msg || !desc || !request) return E_INVALIDARG;
+
+    EnterCriticalSection( &channel->cs );
+
+    if (channel->magic != CHANNEL_MAGIC)
+    {
+        LeaveCriticalSection( &channel->cs );
+        return E_INVALIDARG;
+    }
+
+    if ((hr = WsInitializeMessage( msg, WS_REPLY_MESSAGE, NULL, NULL )) != S_OK) goto done;
+    if ((hr = WsAddressMessage( msg, &channel->addr, NULL )) != S_OK) goto done;
+    if ((hr = message_set_action( msg, desc->action )) != S_OK) goto done;
+    if ((hr = message_get_id( request, &req_id )) != S_OK) goto done;
+    if ((hr = message_set_request_id( msg, &req_id )) != S_OK) goto done;
+
+    if ((hr = init_writer( channel )) != S_OK) goto done;
+    if ((hr = write_message( msg, channel->writer, desc->bodyElementDescription, option, body, size )) != S_OK)
+        goto done;
+    hr = send_message( channel, msg );
+
+done:
+    LeaveCriticalSection( &channel->cs );
+    FIXME( "returning %08x\n", hr );
     return hr;
 }
 
@@ -1458,10 +1521,10 @@ static HRESULT build_dict( const BYTE *buf, ULONG buflen, struct dictionary *dic
             ptr += size;
             continue;
         }
-        if (!insert_string( dict, bytes, size, index, NULL ))
+        if ((hr = insert_string( dict, bytes, size, index, NULL )) != S_OK)
         {
             clear_dict( dict );
-            return E_OUTOFMEMORY;
+            return hr;
         }
         ptr += size;
     }
@@ -1605,26 +1668,12 @@ HRESULT WINAPI WsReceiveMessage( WS_CHANNEL *handle, WS_MESSAGE *msg, const WS_M
 {
     struct channel *channel = (struct channel *)handle;
     HRESULT hr;
+    ULONG i;
 
     TRACE( "%p %p %p %u %08x %08x %p %p %u %p %p %p\n", handle, msg, desc, count, option, read_option, heap,
            value, size, index, ctx, error );
     if (error) FIXME( "ignoring error parameter\n" );
     if (ctx) FIXME( "ignoring ctx parameter\n" );
-    if (index)
-    {
-        FIXME( "index parameter not supported\n" );
-        return E_NOTIMPL;
-    }
-    if (count != 1)
-    {
-        FIXME( "no support for multiple descriptions\n" );
-        return E_NOTIMPL;
-    }
-    if (option != WS_RECEIVE_REQUIRED_MESSAGE)
-    {
-        FIXME( "receive option %08x not supported\n", option );
-        return E_NOTIMPL;
-    }
 
     if (!channel || !msg || !desc || !count) return E_INVALIDARG;
 
@@ -1636,8 +1685,22 @@ HRESULT WINAPI WsReceiveMessage( WS_CHANNEL *handle, WS_MESSAGE *msg, const WS_M
         return E_INVALIDARG;
     }
 
-    if ((hr = receive_message( channel )) != S_OK) goto done;
-    hr = read_message( msg, channel->reader, desc[0]->bodyElementDescription, read_option, heap, value, size );
+    if (!channel->read_size) hr = receive_message( channel );
+    else if (option == WS_RECEIVE_OPTIONAL_MESSAGE) hr = WS_S_END;
+    else hr = WS_E_INVALID_FORMAT;
+
+    if (hr != S_OK) goto done;
+
+    for (i = 0; i < count; i++)
+    {
+        if ((hr = read_message( msg, channel->reader, desc[i]->bodyElementDescription, read_option, heap,
+                                value, size )) == S_OK)
+        {
+            if (index) *index = i;
+            break;
+        }
+        if ((hr = init_reader( channel )) != S_OK) break;
+    }
 
 done:
     LeaveCriticalSection( &channel->cs );
