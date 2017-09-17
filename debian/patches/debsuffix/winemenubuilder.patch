@@ -23,7 +23,7 @@ author: Jens Reyer <jre.winesim@gmail.com>
  /* link file formats */
  
  #include "pshpack1.h"
-@@ -1460,8 +1462,8 @@ static BOOL write_desktop_entry(const ch
+@@ -1461,8 +1463,8 @@ static BOOL write_desktop_entry(const ch
  
      fprintf(file, "[Desktop Entry]\n");
      fprintf(file, "Name=%s\n", linkname);
@@ -34,7 +34,7 @@ author: Jens Reyer <jre.winesim@gmail.com>
      fprintf(file, "Type=Application\n");
      fprintf(file, "StartupNotify=true\n");
      if (descr && lstrlenA(descr))
-@@ -2540,7 +2542,8 @@ static BOOL write_freedesktop_associatio
+@@ -2543,7 +2545,8 @@ static BOOL write_freedesktop_associatio
          fprintf(desktop, "Type=Application\n");
          fprintf(desktop, "Name=%s\n", friendlyAppName);
          fprintf(desktop, "MimeType=%s;\n", mimeType);
