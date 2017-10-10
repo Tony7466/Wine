@@ -1,5 +1,5 @@
-Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0
-Source: http://www.winehq.org
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Source: https://www.winehq.org
 Files-Excluded:
  *.ttf
  configure

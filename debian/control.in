@@ -70,7 +70,7 @@ Build-Depends:
  imagemagick,
  fontforge-nox | fontforge,
 Standards-Version: 3.9.8
-Homepage: http://www.winehq.org/
+Homepage: https://www.winehq.org
 Vcs-Browser: https://anonscm.debian.org/git/pkg-wine/wine.git/?h=buster-2.0
 Vcs-Git: https://anonscm.debian.org/git/pkg-wine/wine.git -b buster-2.0
 
