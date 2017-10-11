@@ -76,7 +76,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  static void dump_new_process_request( const struct new_process_request *req )
  {
-@@ -5437,8 +5438,7 @@ static const struct
+@@ -5436,8 +5437,7 @@ static const struct
      { NULL, 0 }
  };
  
