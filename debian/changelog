@@ -1,3 +1,18 @@
+wine (2.0.2-2) unstable; urgency=medium
+
+  [ Jens Reyer ]
+  * Add upstream patches to fix ftbfs and crash with freetype 2.8.1
+    (closes: #877178).
+  * Update some links to https.
+  * Update standards-version to 4.1.1.
+  * Adjust branch to "buster" in Vcs fields.
+  * Refresh patches.
+
+  [ Michael Gilbert ]
+  * Update copyright notices.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Wed, 11 Oct 2017 20:54:36 +0200
+
 wine (2.0.2-1) unstable; urgency=medium
 
   [ Michael Gilbert ]
