@@ -71,8 +71,8 @@ Build-Depends:
  fontforge-nox | fontforge,
 Standards-Version: 4.1.1
 Homepage: https://www.winehq.org
-Vcs-Browser: https://anonscm.debian.org/git/pkg-wine/wine.git/?h=buster-2.0
-Vcs-Git: https://anonscm.debian.org/git/pkg-wine/wine.git -b buster-2.0
+Vcs-Browser: https://anonscm.debian.org/git/pkg-wine/wine.git/?h=buster
+Vcs-Git: https://anonscm.debian.org/git/pkg-wine/wine.git -b buster
 
 Package: wineVERSION
 Architecture: all
