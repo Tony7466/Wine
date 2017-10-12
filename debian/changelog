@@ -1,3 +1,15 @@
+wine-development (2.18-1) UNRELEASED; urgency=medium
+
+  * New upstream release 2.18, released Sep 29, 2017.
+    - Radial gradients in Direct2D.
+    - Asynchronous message support in WebServices.
+    - Virtual memory write watches improvements.
+    - FreeType 2.8.1 compatibility fixes.
+    - Various bug fixes.
+  * Refresh patches.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Thu, 12 Oct 2017 23:04:12 +0200
+
 wine-development (2.17-1) unstable; urgency=medium
 
   * New upstream release 2.17, released Sep 15, 2017.
