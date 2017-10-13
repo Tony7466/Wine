@@ -1,4 +1,4 @@
-wine-development (2.18-1) UNRELEASED; urgency=medium
+wine-development (2.18-1) unstable; urgency=medium
 
   * New upstream release 2.18, released Sep 29, 2017.
     - Radial gradients in Direct2D.
@@ -7,8 +7,12 @@ wine-development (2.18-1) UNRELEASED; urgency=medium
     - FreeType 2.8.1 compatibility fixes.
     - Various bug fixes.
   * Refresh patches.
+  * Update some links to https.
+  * Update standards-version to 4.1.1.
+  * Use unversioned solinks in sonames2elf (closes: #827770).
+  * Add patch to drop new ARB_texture_filter_anisotropic extension.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Thu, 12 Oct 2017 23:04:12 +0200
+ -- Jens Reyer <jre.winesim@gmail.com>  Fri, 13 Oct 2017 19:07:33 +0200
 
 wine-development (2.17-1) unstable; urgency=medium
 
