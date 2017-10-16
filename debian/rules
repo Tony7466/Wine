@@ -1,11 +1,11 @@
 #!/usr/bin/make -f
 
-DEB_HOST_ARCH=$(shell dpkg-architecture -qDEB_HOST_ARCH)
-DEB_HOST_ARCH_OS=$(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
-DEB_BUILD_ARCH_OS=$(shell dpkg-architecture -qDEB_BUILD_ARCH_OS)
-DEB_BUILD_ARCH_BITS=$(shell dpkg-architecture -qDEB_BUILD_ARCH_BITS)
+# Needed for DEB_* variables
+include /usr/share/dpkg/architecture.mk
+include /usr/share/dpkg/pkg-info.mk
+include /usr/share/dpkg/vendor.mk
 
-VERSION=$(shell dpkg-parsechangelog -S Source | sed s/wine//g)
+VERSION=$(shell echo $(DEB_SOURCE) | sed s/wine//g)
 ifeq (x$(VERSION), x)
 DEBSUFFIX=-stable
 else
@@ -17,9 +17,9 @@ MANDIR=usr/share/man
 BINDIR=usr/lib/wine$(VERSION)
 DATDIR=usr/share/wine$(VERSION)
 INCDIR=usr/include/wine$(VERSION)
-LIBDIR=usr/lib/$(shell dpkg-architecture -qDEB_HOST_MULTIARCH)/wine$(VERSION)
+LIBDIR=usr/lib/$(DEB_HOST_MULTIARCH)/wine$(VERSION)
 
-export VENDOR=$(shell dpkg-vendor --query Vendor && dpkg-parsechangelog -S Version)
+export VENDOR=$(DEB_VENDOR) $(DEB_VERSION)
 
 # enable verbose build log
 export DH_VERBOSE=1
@@ -44,7 +44,7 @@ CONFLAGS=--with-gnutls \
          --mandir=/$(MANDIR) \
          --includedir=/$(INCDIR) \
          --datarootdir=/$(DATDIR) \
-         $(shell dpkg-buildflags --export=configure) \
+         $(shell dpkg-buildflags --export=cmdline) \
 
 # flags specific to kfreebsd
 ifeq ($(DEB_BUILD_ARCH_OS), kfreebsd)
@@ -71,7 +71,7 @@ endif
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-error
 
 # use date of the latest changelog update as the build date
-export WIDL_TIME_OVERRIDE=$(shell date --date="$(dpkg-parsechangelog -S Date)" +%s)
+export WIDL_TIME_OVERRIDE=$(SOURCE_DATE_EPOCH)
 
 # additional files to generate
 INSTALLS=$(shell ls debian/*VERSION* | sed s/VERSION/$(VERSION)/) \
