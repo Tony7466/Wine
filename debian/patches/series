@@ -22,4 +22,3 @@ binary-indep/sfnt2fon.patch
 glu32.patch
 font-divbyzero.patch
 printer-resolution.patch
-freetype_2.8.1.patch
