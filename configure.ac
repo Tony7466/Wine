@@ -2534,20 +2534,28 @@ then
 fi
 
 AC_CHECK_FUNCS(\
+	acosh \
+	acoshf \
 	asinh \
 	asinhf \
+	atanh \
+	atanhf \
 	cbrt \
 	cbrtf \
 	erf \
 	erff \
 	exp2 \
 	exp2f \
+	expm1 \
+	expm1f \
 	lgamma \
 	lgammaf \
 	llrint \
 	llrintf \
 	llround \
 	llroundf \
+	log1p \
+	log1pf \
 	log2 \
 	log2f \
 	lrint \

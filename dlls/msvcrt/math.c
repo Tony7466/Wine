@@ -2416,6 +2416,78 @@ LDOUBLE CDECL MSVCR120_exp2l(LDOUBLE x)
 }
 
 /*********************************************************************
+ *      expm1 (MSVCR120.@)
+ */
+double CDECL MSVCR120_expm1(double x)
+{
+#ifdef HAVE_EXPM1
+    double ret = expm1(x);
+#else
+    double ret = exp(x) - 1;
+#endif
+    if (!isfinite(ret)) *MSVCRT__errno() = MSVCRT_ERANGE;
+    return ret;
+}
+
+/*********************************************************************
+ *      expm1f (MSVCR120.@)
+ */
+float CDECL MSVCR120_expm1f(float x)
+{
+#ifdef HAVE_EXPM1F
+    double ret = expm1f(x);
+#else
+    double ret = exp(x) - 1;
+#endif
+    if (!isfinite(ret)) *MSVCRT__errno() = MSVCRT_ERANGE;
+    return ret;
+}
+
+/*********************************************************************
+ *      expm1l (MSVCR120.@)
+ */
+LDOUBLE CDECL MSVCR120_expm1l(LDOUBLE x)
+{
+    return MSVCR120_expm1(x);
+}
+
+/*********************************************************************
+ *      log1p (MSVCR120.@)
+ */
+double CDECL MSVCR120_log1p(double x)
+{
+    if (x < -1) *MSVCRT__errno() = MSVCRT_EDOM;
+    else if (x == -1) *MSVCRT__errno() = MSVCRT_ERANGE;
+#ifdef HAVE_LOG1P
+    return log1p(x);
+#else
+    return log(1 + x);
+#endif
+}
+
+/*********************************************************************
+ *      log1pf (MSVCR120.@)
+ */
+float CDECL MSVCR120_log1pf(float x)
+{
+    if (x < -1) *MSVCRT__errno() = MSVCRT_EDOM;
+    else if (x == -1) *MSVCRT__errno() = MSVCRT_ERANGE;
+#ifdef HAVE_LOG1PF
+    return log1pf(x);
+#else
+    return log(1 + x);
+#endif
+}
+
+/*********************************************************************
+ *      log1pl (MSVCR120.@)
+ */
+LDOUBLE CDECL MSVCR120_log1pl(LDOUBLE x)
+{
+    return MSVCR120_log1p(x);
+}
+
+/*********************************************************************
  *      log2 (MSVCR120.@)
  */
 double CDECL MSVCR120_log2(double x)
@@ -2895,6 +2967,117 @@ float CDECL MSVCR120_asinhf(float x)
 LDOUBLE CDECL MSVCR120_asinhl(LDOUBLE x)
 {
     return MSVCR120_asinh(x);
+}
+
+/*********************************************************************
+ *      acosh (MSVCR120.@)
+ */
+double CDECL MSVCR120_acosh(double x)
+{
+    if (x < 1) *MSVCRT__errno() = MSVCRT_EDOM;
+
+#ifdef HAVE_ACOSH
+    return acosh(x);
+#else
+    if (x < 1) {
+        MSVCRT_fenv_t env;
+
+        MSVCRT_fegetenv(&env);
+        env.status |= MSVCRT__SW_INVALID;
+        MSVCRT_fesetenv(&env);
+        return NAN;
+    }
+    if (!isfinite(x*x)) return log(2) + log(x);
+    return log(x + sqrt(x*x-1));
+#endif
+}
+
+/*********************************************************************
+ *      acoshf (MSVCR120.@)
+ */
+float CDECL MSVCR120_acoshf(float x)
+{
+#ifdef HAVE_ACOSHF
+    if (x < 1) *MSVCRT__errno() = MSVCRT_EDOM;
+
+    return acoshf(x);
+#else
+    return MSVCR120_acosh(x);
+#endif
+}
+
+/*********************************************************************
+ *      acoshl (MSVCR120.@)
+ */
+LDOUBLE CDECL MSVCR120_acoshl(LDOUBLE x)
+{
+    return MSVCR120_acosh(x);
+}
+
+/*********************************************************************
+ *      atanh (MSVCR120.@)
+ */
+double CDECL MSVCR120_atanh(double x)
+{
+    double ret;
+
+    if (x > 1 || x < -1) {
+        MSVCRT_fenv_t env;
+
+        *MSVCRT__errno() = MSVCRT_EDOM;
+
+        /* on Linux atanh returns -NAN in this case */
+        MSVCRT_fegetenv(&env);
+        env.status |= MSVCRT__SW_INVALID;
+        MSVCRT_fesetenv(&env);
+        return NAN;
+    }
+
+#ifdef HAVE_ATANH
+    ret = atanh(x);
+#else
+    if (-1e-6 < x && x < 1e-6) ret = x + x*x*x/3;
+    else ret = (log(1+x) - log(1-x)) / 2;
+#endif
+
+    if (!isfinite(ret)) *MSVCRT__errno() = MSVCRT_ERANGE;
+    return ret;
+}
+
+/*********************************************************************
+ *      atanhf (MSVCR120.@)
+ */
+float CDECL MSVCR120_atanhf(float x)
+{
+#ifdef HAVE_ATANHF
+    double ret;
+
+    if (x > 1 || x < -1) {
+        MSVCRT_fenv_t env;
+
+        *MSVCRT__errno() = MSVCRT_EDOM;
+
+        MSVCRT_fegetenv(&env);
+        env.status |= MSVCRT__SW_INVALID;
+        MSVCRT_fesetenv(&env);
+        return NAN;
+    }
+
+    ret = atanhf(x);
+
+    if (!isfinite(ret)) *MSVCRT__errno() = MSVCRT_ERANGE;
+    return ret;
+#else
+    return MSVCR120_atanh(x);
+#endif
+}
+
+/*********************************************************************
+ *      atanhl (MSVCR120.@)
+ */
+LDOUBLE CDECL MSVCR120_atanhl(LDOUBLE x)
+{
+    return MSVCR120_atanh(x);
 }
 
 /*********************************************************************

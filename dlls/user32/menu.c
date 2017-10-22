@@ -3077,7 +3077,6 @@ static BOOL MENU_TrackMenu( HMENU hmenu, UINT wFlags, INT x, INT y,
 	    break;
 	}
 
-        TranslateMessage( &msg );
         mt.pt = msg.pt;
 
 	if ( (msg.hwnd==menu->hWnd) || (msg.message!=WM_TIMER) )
@@ -3206,6 +3205,7 @@ static BOOL MENU_TrackMenu( HMENU hmenu, UINT wFlags, INT x, INT y,
 		    }
 
 		default:
+		    TranslateMessage( &msg );
 		    break;
 		}
 		break;  /* WM_KEYDOWN */
@@ -3288,6 +3288,7 @@ static BOOL MENU_TrackMenu( HMENU hmenu, UINT wFlags, INT x, INT y,
         if( menu ) menu->bTimeToHide = FALSE;
     }
 
+    SetLastError( ERROR_SUCCESS );
     /* The return value is only used by TrackPopupMenu */
     if (!(wFlags & TPM_RETURNCMD)) return TRUE;
     if (executedMenuId == -1) executedMenuId = 0;

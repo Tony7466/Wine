@@ -3215,3 +3215,42 @@ void WINAPI KeAcquireInStackQueuedSpinLock( KSPIN_LOCK *spinlock, KLOCK_QUEUE_HA
 {
     FIXME( "stub: %p %p\n", spinlock, handle );
 }
+
+/***********************************************************************
+ *           KeReleaseInStackQueuedSpinLock (NTOSKRNL.EXE.@)
+ */
+#ifdef DEFINE_FASTCALL1_ENTRYPOINT
+DEFINE_FASTCALL1_ENTRYPOINT( KeReleaseInStackQueuedSpinLock )
+void WINAPI __regs_KeReleaseInStackQueuedSpinLock( KLOCK_QUEUE_HANDLE *handle )
+#else
+void WINAPI KeReleaseInStackQueuedSpinLock( KLOCK_QUEUE_HANDLE *handle )
+#endif
+{
+    FIXME( "stub: %p\n", handle );
+}
+
+/***********************************************************************
+ *           KeAcquireSpinLockRaiseToDpc (NTOSKRNL.EXE.@)
+ */
+KIRQL WINAPI KeAcquireSpinLockRaiseToDpc(KSPIN_LOCK *spinlock)
+{
+    FIXME( "stub: %p\n", spinlock );
+    return 0;
+}
+
+/***********************************************************************
+ *           KeReleaseSpinLock (NTOSKRNL.EXE.@)
+ */
+void WINAPI KeReleaseSpinLock( KSPIN_LOCK *spinlock, KIRQL irql )
+{
+    FIXME( "stub: %p %u\n", spinlock, irql );
+}
+
+/***********************************************************************
+ *           IoCreateNotificationEvent (NTOSKRNL.EXE.@)
+ */
+PKEVENT WINAPI IoCreateNotificationEvent(UNICODE_STRING *name, HANDLE *handle)
+{
+    FIXME( "stub: %s %p\n", debugstr_us(name), handle );
+    return NULL;
+}

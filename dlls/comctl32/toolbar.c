@@ -2809,18 +2809,22 @@ TOOLBAR_AddBitmap (TOOLBAR_INFO *infoPtr, INT count, const TBADDBITMAP *lpAddBmp
         switch (lpAddBmp->nID)
         {
             case IDB_STD_SMALL_COLOR:
+            case 2:
 	        info.nButtons = 15;
 	        info.nID = IDB_STD_SMALL;
 	        break;
             case IDB_STD_LARGE_COLOR:
+            case 3:
 	        info.nButtons = 15;
 	        info.nID = IDB_STD_LARGE;
 	        break;
             case IDB_VIEW_SMALL_COLOR:
+            case 6:
 	        info.nButtons = 12;
 	        info.nID = IDB_VIEW_SMALL;
 	        break;
             case IDB_VIEW_LARGE_COLOR:
+            case 7:
 	        info.nButtons = 12;
 	        info.nID = IDB_VIEW_LARGE;
 	        break;
@@ -2833,6 +2837,7 @@ TOOLBAR_AddBitmap (TOOLBAR_INFO *infoPtr, INT count, const TBADDBITMAP *lpAddBmp
 	        info.nID = IDB_HIST_LARGE;
 	        break;
 	    default:
+                WARN("unknown bitmap id, %ld\n", lpAddBmp->nID);
 	        return -1;
 	}
 
@@ -4345,7 +4350,7 @@ TOOLBAR_SetBitmapSize (TOOLBAR_INFO *infoPtr, WPARAM wParam, LPARAM lParam)
     short width = (short)LOWORD(lParam);
     short height = (short)HIWORD(lParam);
 
-    TRACE("hwnd=%p, wParam=%ld, lParam=%ld\n", infoPtr->hwndSelf, wParam, lParam);
+    TRACE("hwnd=%p, wParam=%ld, size %d x %d\n", infoPtr->hwndSelf, wParam, width, height);
 
     if (wParam != 0)
         FIXME("wParam is %ld. Perhaps image list index?\n", wParam);
@@ -4546,17 +4551,16 @@ TOOLBAR_SetDisabledImageList (TOOLBAR_INFO *infoPtr, WPARAM wParam, HIMAGELIST h
 
 
 static LRESULT
-TOOLBAR_SetDrawTextFlags (TOOLBAR_INFO *infoPtr, WPARAM wParam, LPARAM lParam)
+TOOLBAR_SetDrawTextFlags (TOOLBAR_INFO *infoPtr, DWORD mask, DWORD flags)
 {
-    DWORD dwTemp;
+    DWORD old_flags;
 
-    TRACE("hwnd = %p, dwMask = 0x%08x, dwDTFlags = 0x%08x\n", infoPtr->hwndSelf, (DWORD)wParam, (DWORD)lParam);
+    TRACE("hwnd = %p, mask = 0x%08x, flags = 0x%08x\n", infoPtr->hwndSelf, mask, flags);
 
-    dwTemp = infoPtr->dwDTFlags;
-    infoPtr->dwDTFlags =
-	(infoPtr->dwDTFlags & (DWORD)wParam) | (DWORD)lParam;
+    old_flags = infoPtr->dwDTFlags;
+    infoPtr->dwDTFlags = (old_flags & ~mask) | (flags & mask);
 
-    return (LRESULT)dwTemp;
+    return (LRESULT)old_flags;
 }
 
 /* This function differs a bit from what MSDN says it does:
@@ -6903,6 +6907,10 @@ static HIMAGELIST TOOLBAR_InsertImageList(PIMLENTRY **pies, INT *cies, HIMAGELIS
 
     /* Check if the entry already exists */
     c = TOOLBAR_GetImageListEntry(*pies, *cies, id);
+
+    /* Don't add new entry for NULL imagelist */
+    if (!c && !himl)
+        return NULL;
 
     /* If this is a new entry we must create it and insert into the array */
     if (!c)
