@@ -10,6 +10,12 @@
 /* Define to the file extension for executables. */
 #undef EXEEXT
 
+/* Define to 1 if you have the `acosh' function. */
+#undef HAVE_ACOSH
+
+/* Define to 1 if you have the `acoshf' function. */
+#undef HAVE_ACOSHF
+
 /* Define to 1 if you have the <alias.h> header file. */
 #undef HAVE_ALIAS_H
 
@@ -43,6 +49,12 @@
 
 /* Define to 1 if you have the <asm/user.h> header file. */
 #undef HAVE_ASM_USER_H
+
+/* Define to 1 if you have the `atanh' function. */
+#undef HAVE_ATANH
+
+/* Define to 1 if you have the `atanhf' function. */
+#undef HAVE_ATANHF
 
 /* Define to 1 if you have the <AudioToolbox/AudioConverter.h> header file. */
 #undef HAVE_AUDIOTOOLBOX_AUDIOCONVERTER_H
@@ -134,6 +146,12 @@
 
 /* Define to 1 if you have the `exp2f' function. */
 #undef HAVE_EXP2F
+
+/* Define to 1 if you have the `expm1' function. */
+#undef HAVE_EXPM1
+
+/* Define to 1 if you have the `expm1f' function. */
+#undef HAVE_EXPM1F
 
 /* Define to 1 if you have the `fallocate' function. */
 #undef HAVE_FALLOCATE
@@ -488,6 +506,12 @@
 
 /* Define to 1 if you have the `llroundf' function. */
 #undef HAVE_LLROUNDF
+
+/* Define to 1 if you have the `log1p' function. */
+#undef HAVE_LOG1P
+
+/* Define to 1 if you have the `log1pf' function. */
+#undef HAVE_LOG1PF
 
 /* Define to 1 if you have the `log2' function. */
 #undef HAVE_LOG2

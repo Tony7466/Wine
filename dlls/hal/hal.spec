@@ -9,7 +9,7 @@
 @ stub KeAcquireQueuedSpinLock
 @ stub KeAcquireQueuedSpinLockRaiseToSynch
 @ stub KeAcquireSpinLockRaiseToSynch
-@ stub KeReleaseInStackQueuedSpinLock
+@ stdcall -norelay KeReleaseInStackQueuedSpinLock(ptr) ntoskrnl.exe.KeReleaseInStackQueuedSpinLock
 @ stub KeReleaseQueuedSpinLock
 @ stub KeTryToAcquireQueuedSpinLock
 @ stub KeTryToAcquireQueuedSpinLockRaiseToSynch
@@ -76,7 +76,7 @@
 @ stub KeRaiseIrql
 @ stub KeRaiseIrqlToDpcLevel
 @ stub KeRaiseIrqlToSynchLevel
-@ stub KeReleaseSpinLock
+@ stdcall KeReleaseSpinLock(ptr long) ntoskrnl.exe.KeReleaseSpinLock
 @ stub KeStallExecutionProcessor
 @ stub READ_PORT_BUFFER_UCHAR
 @ stub READ_PORT_BUFFER_ULONG

@@ -43,6 +43,7 @@
 @ stdcall -norelay IofCompleteRequest(ptr long)
 @ stdcall -norelay KeAcquireInStackQueuedSpinLock(ptr ptr)
 @ stub KeAcquireInStackQueuedSpinLockAtDpcLevel
+@ stdcall -norelay KeReleaseInStackQueuedSpinLock(ptr)
 @ stub KeReleaseInStackQueuedSpinLockFromDpcLevel
 @ stub KeSetTimeUpdateNotifyRoutine
 @ stub KefAcquireSpinLockAtDpcLevel
@@ -342,7 +343,7 @@
 @ stdcall IoCreateDriver(ptr ptr)
 @ stdcall IoCreateFile(ptr long ptr ptr long long long ptr long long ptr long ptr long)
 @ stub IoCreateFileSpecifyDeviceObjectHint
-@ stub IoCreateNotificationEvent
+@ stdcall IoCreateNotificationEvent(ptr ptr)
 @ stub IoCreateStreamFileObject
 @ stub IoCreateStreamFileObjectEx
 @ stub IoCreateStreamFileObjectLite
@@ -509,6 +510,7 @@
 @ stdcall Ke386SetIoAccessMap(long ptr)
 @ stub KeAcquireInterruptSpinLock
 @ stub KeAcquireSpinLockAtDpcLevel
+@ stdcall -arch=x86_64 KeAcquireSpinLockRaiseToDpc(ptr)
 @ stub KeAddSystemServiceTable
 @ stub KeAreApcsDisabled
 @ stub KeAttachProcess
@@ -590,6 +592,7 @@
 @ stub KeReleaseMutant
 @ stdcall KeReleaseMutex(ptr long)
 @ stdcall KeReleaseSemaphore(ptr long long long)
+@ stdcall KeReleaseSpinLock(ptr long)
 @ stub KeReleaseSpinLockFromDpcLevel
 @ stub KeRemoveByKeyDeviceQueue
 @ stub KeRemoveByKeyDeviceQueueIfBusy

@@ -4970,7 +4970,7 @@ MSVCRT_wchar_t * CDECL MSVCRT__wtmpnam(MSVCRT_wchar_t *s)
  */
 MSVCRT_FILE* CDECL MSVCRT_tmpfile(void)
 {
-  char *filename = MSVCRT_tmpnam(NULL);
+  char *filename = MSVCRT__tempnam(",", "t");
   int fd;
   MSVCRT_FILE* file = NULL;
 
@@ -4989,6 +4989,7 @@ MSVCRT_FILE* CDECL MSVCRT_tmpfile(void)
 
   if(fd != -1 && !file)
       MSVCRT__close(fd);
+  MSVCRT_free(filename);
   UNLOCK_FILES();
   return file;
 }
