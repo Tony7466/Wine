@@ -1,3 +1,16 @@
+wine (2.0.3-1) unstable; urgency=medium
+
+  * New upstream release 2.0.3, released Oct 20, 2017.
+    - Various bug fixes
+    - FreeType 2.8.1 compatibility fixes
+  * Drop freetype_2.8.1.patch (applied upstream).
+  * Use unversioned solinks in sonames2elf.
+  * Use dpkg libraries to get DEB_* variables.
+  * Use secure URI in watch file.
+  * Refresh patches.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 23 Oct 2017 20:03:33 +0200
+
 wine (2.0.2-2) unstable; urgency=medium
 
   [ Jens Reyer ]
