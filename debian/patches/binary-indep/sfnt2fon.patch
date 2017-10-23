@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3546,7 +3546,6 @@ WINE_CONFIG_TEST(dlls/xmllite/tests)
+@@ -3554,7 +3554,6 @@ WINE_CONFIG_TEST(dlls/xmllite/tests)
  WINE_CONFIG_DLL(xolehlp)
  WINE_CONFIG_DLL(xpsprint)
  WINE_CONFIG_DLL(xpssvcs)
@@ -11,7 +11,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  WINE_CONFIG_MAKEFILE([include],,[clean,install-dev])
  WINE_CONFIG_MAKEFILE([libs/port])
  WINE_CONFIG_MAKEFILE([libs/wine],,[clean,implib,install-dev,install-lib])
-@@ -3652,7 +3651,6 @@ WINE_CONFIG_PROGRAM(xcopy,,[clean,instal
+@@ -3660,7 +3659,6 @@ WINE_CONFIG_PROGRAM(xcopy,,[clean,instal
  WINE_CONFIG_TEST(programs/xcopy/tests)
  WINE_CONFIG_MAKEFILE([server],,[clean,install-lib])
  WINE_CONFIG_TOOL(tools,[clean])
