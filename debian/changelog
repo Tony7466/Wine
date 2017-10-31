@@ -1,3 +1,15 @@
+wine-development (2.19-1) UNRELEASED; urgency=medium
+
+  * New upstream release 2.19, released Oct 13, 2017.
+    - Support for 32-bit float audio on Android.
+    - Named pipes now fully handled by the Wine server.
+    - Support for a new Microsoft root certificate.
+    - More transform fixes in GdiPlus.
+    - Some heap allocation optimizations.
+    - Various bug fixes.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Tue, 31 Oct 2017 20:02:00 +0100
+
 wine-development (2.18-1) unstable; urgency=medium
 
   * New upstream release 2.18, released Sep 29, 2017.

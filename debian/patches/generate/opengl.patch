@@ -26,7 +26,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 +parse_file( "/usr/share/khronos-api/gl.xml", 1 );
 +parse_file( "/usr/share/khronos-api/wgl.xml", 0 );
 +
-+my $wgl_version = 11;
++my $wgl_version = 16;
  
  #
 -# Get the current wgl_driver.h version
