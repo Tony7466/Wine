@@ -1,4 +1,4 @@
-wine-development (2.19-1) UNRELEASED; urgency=medium
+wine-development (2.19-1) unstable; urgency=medium
 
   * New upstream release 2.19, released Oct 13, 2017.
     - Support for 32-bit float audio on Android.
@@ -7,8 +7,13 @@ wine-development (2.19-1) UNRELEASED; urgency=medium
     - More transform fixes in GdiPlus.
     - Some heap allocation optimizations.
     - Various bug fixes.
+  * Use dpkg libraries to get DEB_* variables.
+  * Use secure URI in watch file.
+  * Set upstream's WINE_WGL_DRIVER_VERSION in opengl.patch.
+  * Cleanup and automatically commit changes by d/s/import.
+  * Refresh patches.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Tue, 31 Oct 2017 20:02:00 +0100
+ -- Jens Reyer <jre.winesim@gmail.com>  Tue, 31 Oct 2017 21:57:48 +0100
 
 wine-development (2.18-1) unstable; urgency=medium
 
