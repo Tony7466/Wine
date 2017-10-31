@@ -40,6 +40,7 @@ dch -v "$(echo $version|sed "s/-/~/")-1" "New upstream release $version, release
 sed -n 's/^  - \(.*\)/- \1/p' ANNOUNCE | while read line; do
   dch $line
 done
+sed -i "s|^  \* -|    -|g" debian/changelog
 
 # Set upstream's SERVER_PROTOCOL_VERSION in request.patch.
 # Upstream stores this in their generated file include/wine/server_protocol.h, and bumps the
@@ -64,3 +65,6 @@ wgl_version=$(expr $(grep "^#define WINE_WGL_DRIVER_VERSION [[:digit:]]*" includ
     echo "error: wgl_version $wgl_version is not valid."
     exit 1;}
 sed -i "s|^\(+my \$wgl_version = \)[[:digit:]]*;|\1${wgl_version};|" debian/patches/generate/opengl.patch
+
+git add debian/changelog debian/patches/generate/request.patch debian/patches/generate/opengl.patch
+git commit -m "Import wine-$1."
