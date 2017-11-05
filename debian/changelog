@@ -1,3 +1,16 @@
+wine-development (2.20-1) UNRELEASED; urgency=medium
+
+  * New upstream release 2.20, released Oct 31, 2017.
+    - Improved event support in MSHTML.
+    - Preloader support on ARM64.
+    - Interpolation modes in Direct3D.
+    - Improved metafile support in GdiPlus.
+    - Initial version of Kerberos5 Authentication Package.
+    - OLE clipboard cache improvements.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 05 Nov 2017 00:15:37 +0000
+
 wine-development (2.19-1) unstable; urgency=medium
 
   * New upstream release 2.19, released Oct 13, 2017.
