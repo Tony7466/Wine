@@ -1,6 +1,6 @@
 --- a/configure.ac
 +++ b/configure.ac
-@@ -1499,7 +1499,7 @@ WINE_NOTICE_WITH(pulse, [test -z "$PULSE
+@@ -1500,7 +1500,7 @@ WINE_NOTICE_WITH(pulse, [test -z "$PULSE
  dnl **** Check for gstreamer ****
  if test "x$with_gstreamer" != "xno"
  then
@@ -9,7 +9,7 @@
          [ac_gst_incl=""
          for i in $GSTREAMER_CFLAGS
          do
-@@ -1507,6 +1507,7 @@ then
+@@ -1508,6 +1508,7 @@ then
                  -I*) ac_gst_incl="$ac_gst_incl $i";;
              esac
          done
