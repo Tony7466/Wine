@@ -1,4 +1,4 @@
-wine-development (2.21-1) UNRELEASED; urgency=medium
+wine-development (2.21-1) unstable; urgency=medium
 
   * New upstream release 2.21, released Nov 11, 2017.
     - Still more metafile support in GdiPlus.
