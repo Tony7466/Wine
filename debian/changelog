@@ -1,3 +1,16 @@
+wine-development (2.21-1) UNRELEASED; urgency=medium
+
+  * New upstream release 2.21, released Nov 11, 2017.
+    - Still more metafile support in GdiPlus.
+    - Indirect draws support in Direct 3D.
+    - Calling convention fixes on ARM.
+    - Improved serial port detection on Linux.
+    - Services fixes on WoW64.
+    - Better DPI scaling in the Shell Explorer.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 11 Nov 2017 18:00:06 +0000
+
 wine-development (2.20-1) unstable; urgency=medium
 
   * New upstream release 2.20, released Oct 31, 2017.
