@@ -168,7 +168,7 @@ Description: Windows API implementation - prelinked 32-bit binary loader
  This package provides the prelinked loader for 32-bit Windows applications.
 
 Package: wine64VERSION-preloader
-Architecture: amd64
+Architecture: amd64 arm64
 Multi-Arch: foreign
 Built-Using: ${built:Using}
 Depends:
