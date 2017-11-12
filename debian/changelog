@@ -1,6 +1,7 @@
 wine-development (2.22-2) UNRELEASED; urgency=medium
 
   * Build wine64VERSION-preloader also on arm64.
+  * Add build-dependendeny on libkrb5-dev for Kerberos support.
 
  -- Jens Reyer <jre.winesim@gmail.com>  Sun, 03 Dec 2017 18:34:40 +0100
 
