@@ -2,6 +2,7 @@ debian/control
 
 config.*
 configure
+configure.tmp
 tools/config.*
 include/config.h.in
 
@@ -42,6 +43,9 @@ include/wine/wgl*
 dlls/opengl32/opengl_ext.c
 dlls/opengl32/opengl_norm.c
 dlls/opengl32/opengl32.spec
+
+# windows help files
+dlls/itss/tests/data.chm
 
 # font files
 fonts/*.fon

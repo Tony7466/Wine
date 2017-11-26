@@ -101,3 +101,11 @@ author: Michael Gilbert <mgilbert@debian.org>
  	joystick.c \
  	mci.c \
  	mcicda.c \
+--- a/dlls/itss/tests/Makefile.in
++++ b/dlls/itss/tests/Makefile.in
+@@ -3,5 +3,3 @@ IMPORTS   = ole32
+ 
+ C_SRCS = \
+ 	protocol.c
+-
+-RC_SRCS = rsrc.rc
