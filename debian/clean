@@ -3,6 +3,7 @@ debian/control
 
 config.*
 configure
+configure.tmp
 tools/config.*
 include/config.h.in
 

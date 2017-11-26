@@ -164,9 +164,6 @@ override_dh_auto_install-arch: $(INSTALLS)
 	test -f debian/tmp/$(BINDIR)/wine-preloader || \
 	    cp debian/scripts/wine-preloader debian/tmp/$(BINDIR)
 
-override_dh_strip:
-	dh_strip --dbgsym-migration='libwine$(VERSION)-dbg (<< 1.9.0-1~)'
-
 override_dh_shlibdeps:
 	mkdir -p debian/tmp
 	./debian/scripts/sonames2elf $(sonamesDepends) > debian/tmp/elf.depends

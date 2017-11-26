@@ -1,4 +1,4 @@
-wine-development (2.22-1) UNRELEASED; urgency=medium
+wine-development (2.22-1) unstable; urgency=medium
 
   * New upstream release 2.22, released Nov 24, 2017.
     - Source selection dialog for scanners.
@@ -7,6 +7,8 @@ wine-development (2.22-1) UNRELEASED; urgency=medium
     - Fixes for DLL injection support.
     - Input methods improvements.
     - Various bug fixes.
+  * Drop dbgsym migration line.
+  * Remove prebuilt microsoft help file from the upstream tarball.
 
  -- Michael Gilbert <mgilbert@debian.org>  Sun, 26 Nov 2017 19:18:02 +0000
 
