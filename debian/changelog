@@ -1,3 +1,15 @@
+wine-development (2.22-1) UNRELEASED; urgency=medium
+
+  * New upstream release 2.22, released Nov 24, 2017.
+    - Source selection dialog for scanners.
+    - Improvements in ARM64 support.
+    - Float audio formats with more than 2 channels in XAudio.
+    - Fixes for DLL injection support.
+    - Input methods improvements.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 26 Nov 2017 19:18:02 +0000
+
 wine-development (2.21-1) unstable; urgency=medium
 
   * New upstream release 2.21, released Nov 11, 2017.
