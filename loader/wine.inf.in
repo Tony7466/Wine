@@ -79,7 +79,7 @@ AddReg=\
 
 [DefaultInstall.ntamd64]
 RegisterDlls=RegisterDllsSection
-WineFakeDlls=FakeDlls
+WineFakeDlls=FakeDllsWin64,FakeDlls
 WinePreInstall=Wow64
 UpdateInis=SystemIni
 CopyFiles=@l_intl.nls
@@ -679,6 +679,7 @@ HKLM,Software\Microsoft\SystemCertificates,,16
 HKLM,Software\Microsoft\TermServLicensing,,16
 HKLM,Software\Microsoft\Transaction Server,,16
 HKLM,Software\Microsoft\WBEM,"Installation Directory",2,"%11%\wbem"
+HKLM,Software\Microsoft\Windows Messaging Subsystem,"MAPI",2,"1"
 HKLM,Software\Policies,,16
 HKLM,Software\Registered Applications,,16
 HKLM,System\CurrentControlSet\Control\hivelist,,16
@@ -2517,6 +2518,8 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 10,,rundll.exe,rundll.exe16
 10,,twain.dll,twain.dll16
 10,,twain_32.dll
+10,twain_32,sane.ds
+10,twain_32,gphoto2.ds
 10,,winhelp.exe,winhelp.exe16
 10,,winhlp32.exe
 10,command,start.exe
@@ -2526,6 +2529,11 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 11,,dosx.exe
 11,,dsound.vxd
 11,,winhlp32.exe
+
+; 64bit-only fake dlls
+[FakeDllsWin64]
+10,twain_64,sane.ds
+10,twain_64,gphoto2.ds
 
 ; Wow64-only fake dlls
 [FakeDllsWow64]

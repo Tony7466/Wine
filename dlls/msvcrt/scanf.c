@@ -663,7 +663,7 @@ int CDECL MSVCRT__snscanf_s_l(char *input, MSVCRT_size_t length,
 
 
 /*********************************************************************
- *		__stdio_common_vsscanf (MSVCRT.@)
+ *              __stdio_common_vsscanf (UCRTBASE.@)
  */
 int CDECL MSVCRT__stdio_common_vsscanf(unsigned __int64 options,
                                        const char *input, MSVCRT_size_t length,
@@ -683,7 +683,7 @@ int CDECL MSVCRT__stdio_common_vsscanf(unsigned __int64 options,
 }
 
 /*********************************************************************
- *		__stdio_common_vswscanf (MSVCRT.@)
+ *              __stdio_common_vswscanf (UCRTBASE.@)
  */
 int CDECL MSVCRT__stdio_common_vswscanf(unsigned __int64 options,
                                         const MSVCRT_wchar_t *input, MSVCRT_size_t length,
@@ -703,7 +703,7 @@ int CDECL MSVCRT__stdio_common_vswscanf(unsigned __int64 options,
 }
 
 /*********************************************************************
- *		__stdio_common_vfscanf (MSVCRT.@)
+ *              __stdio_common_vfscanf (UCRTBASE.@)
  */
 int CDECL MSVCRT__stdio_common_vfscanf(unsigned __int64 options,
                                        MSVCRT_FILE *file,
@@ -720,7 +720,7 @@ int CDECL MSVCRT__stdio_common_vfscanf(unsigned __int64 options,
 }
 
 /*********************************************************************
- *		__stdio_common_vfwscanf (MSVCRT.@)
+ *              __stdio_common_vfwscanf (UCRTBASE.@)
  */
 int CDECL MSVCRT__stdio_common_vfwscanf(unsigned __int64 options,
                                         MSVCRT_FILE *file,
@@ -794,4 +794,24 @@ int CDECL MSVCRT__snwscanf_s_l(MSVCRT_wchar_t *input, MSVCRT_size_t length,
     res = MSVCRT_vsnwscanf_s_l(input, length, format, locale, valist);
     __ms_va_end(valist);
     return res;
+}
+
+/*********************************************************************
+ *		vsscanf (MSVCRT120.@)
+ */
+int CDECL MSVCRT_vsscanf(const char *buffer, const char *format, __ms_va_list valist)
+{
+    if (!MSVCRT_CHECK_PMT(buffer != NULL && format != NULL)) return -1;
+
+    return MSVCRT_vsscanf_l(buffer, format, NULL, valist);
+}
+
+/*********************************************************************
+ *		vswscanf (MSVCRT120.@)
+ */
+int CDECL MSVCRT_vswscanf(const MSVCRT_wchar_t *buffer, const MSVCRT_wchar_t *format, __ms_va_list valist)
+{
+    if (!MSVCRT_CHECK_PMT(buffer != NULL && format != NULL)) return -1;
+
+    return MSVCRT_vswscanf_l(buffer, format, NULL, valist);
 }

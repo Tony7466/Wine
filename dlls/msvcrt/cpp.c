@@ -1347,6 +1347,23 @@ void __cdecl __ExceptionPtrCopy(exception_ptr *ep, const exception_ptr *copy)
 }
 
 /*********************************************************************
+ * ?__ExceptionPtrAssign@@YAXPAXPBX@Z
+ * ?__ExceptionPtrAssign@@YAXPEAXPEBX@Z
+ */
+void __cdecl __ExceptionPtrAssign(exception_ptr *ep, const exception_ptr *assign)
+{
+    TRACE("(%p %p)\n", ep, assign);
+
+    /* don't destroy object stored in ep */
+    if (ep->ref)
+        InterlockedDecrement(ep->ref);
+
+    *ep = *assign;
+    if (ep->ref)
+        InterlockedIncrement(ep->ref);
+}
+
+/*********************************************************************
  * ?__ExceptionPtrRethrow@@YAXPBX@Z
  * ?__ExceptionPtrRethrow@@YAXPEBX@Z
  */

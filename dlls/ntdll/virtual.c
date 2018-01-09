@@ -1326,6 +1326,9 @@ void virtual_init(void)
         {
             preload_reserve_start = (void *)start;
             preload_reserve_end = (void *)end;
+            /* some apps start inside the DOS area */
+            if (preload_reserve_start)
+                address_space_start = min( address_space_start, preload_reserve_start );
         }
     }
 
