@@ -1,3 +1,12 @@
+wine (2.0.4-1) UNRELEASED; urgency=medium
+
+  * New upstream release 2.0.4, released Jan 2, 2018.
+    - Various bug fixes
+    - Updates to the National Language Support files
+    - Documentation updates
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Tue, 09 Jan 2018 23:34:01 +0100
+
 wine (2.0.3-1) unstable; urgency=medium
 
   * New upstream release 2.0.3, released Oct 20, 2017.
