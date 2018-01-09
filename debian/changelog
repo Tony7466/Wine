@@ -1,9 +1,16 @@
-wine (2.0.4-1) UNRELEASED; urgency=medium
+wine (2.0.4-1) unstable; urgency=medium
 
-  * New upstream release 2.0.4, released Jan 2, 2018.
+  [ Jens Reyer ]
+  * New upstream release 2.0.4, released Jan 2, 2018 (closes: #886314).
     - Various bug fixes
     - Updates to the National Language Support files
     - Documentation updates
+  * Set upstream's WINE_WGL_DRIVER_VERSION in opengl.patch.
+  * Cleanup and automatically commit changes by d/s/import.
+
+  [ Michael Gilbert ]
+  * Remove prebuilt microsoft help file from the upstream tarball.
+  * Drop dbgsym migration line.
 
  -- Jens Reyer <jre.winesim@gmail.com>  Tue, 09 Jan 2018 23:34:01 +0100
 
