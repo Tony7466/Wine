@@ -668,8 +668,8 @@
 @ stub -arch=win64 ?_ValidateWrite@@YAHPEAXI@Z
 @ cdecl ?_Value@_SpinCount@details@Concurrency@@SAIXZ() SpinCount__Value
 @ stub ?_Yield@_Context@details@Concurrency@@SAXXZ
-@ stub -arch=win32 ?__ExceptionPtrAssign@@YAXPAXPBX@Z
-@ stub -arch=win64 ?__ExceptionPtrAssign@@YAXPEAXPEBX@Z
+@ cdecl -arch=win32 ?__ExceptionPtrAssign@@YAXPAXPBX@Z(ptr ptr) __ExceptionPtrAssign
+@ cdecl -arch=win64 ?__ExceptionPtrAssign@@YAXPEAXPEBX@Z(ptr ptr) __ExceptionPtrAssign
 @ cdecl -arch=win32 ?__ExceptionPtrCompare@@YA_NPBX0@Z(ptr ptr) __ExceptionPtrCompare
 @ cdecl -arch=win64 ?__ExceptionPtrCompare@@YA_NPEBX0@Z(ptr ptr) __ExceptionPtrCompare
 @ cdecl -arch=win32 ?__ExceptionPtrCopy@@YAXPAXPBX@Z(ptr ptr) __ExceptionPtrCopy
@@ -1337,7 +1337,7 @@
 @ stub _ismbchira_l
 @ cdecl _ismbckata(long)
 @ stub _ismbckata_l
-@ stub _ismbcl0(long)
+@ cdecl _ismbcl0(long)
 @ stub _ismbcl0_l
 @ stub _ismbcl1(long)
 @ stub _ismbcl1_l
@@ -1808,7 +1808,7 @@
 @ stub _vcwprintf_p_l
 @ stub _vcwprintf_s
 @ stub _vcwprintf_s_l
-@ stub _vfprintf_l
+@ cdecl _vfprintf_l(ptr str ptr ptr) MSVCRT__vfprintf_l
 @ stub _vfprintf_p
 @ stub _vfprintf_p_l
 @ stub _vfprintf_s_l
@@ -2368,7 +2368,7 @@
 @ cdecl strchr(str long) MSVCRT_strchr
 @ cdecl strcmp(str str) MSVCRT_strcmp
 @ cdecl strcoll(str str) MSVCRT_strcoll
-@ cdecl strcpy(ptr str) ntdll.strcpy
+@ cdecl strcpy(ptr str) MSVCRT_strcpy
 @ cdecl strcpy_s(ptr long str) MSVCRT_strcpy_s
 @ cdecl strcspn(str str) ntdll.strcspn
 @ cdecl strerror(long) MSVCRT_strerror
@@ -2436,10 +2436,10 @@
 @ stub vscanf_s
 @ cdecl vsprintf(ptr str ptr) MSVCRT_vsprintf
 @ cdecl vsprintf_s(ptr long str ptr) MSVCRT_vsprintf_s
-@ stub vsscanf
+@ cdecl vsscanf(ptr str ptr) MSVCRT_vsscanf
 @ stub vsscanf_s
 @ cdecl vswprintf_s(ptr long wstr ptr) MSVCRT_vswprintf_s
-@ stub vswscanf
+@ cdecl vswscanf(ptr wstr ptr) MSVCRT_vswscanf
 @ stub vswscanf_s
 @ cdecl vwprintf(wstr ptr) MSVCRT_vwprintf
 @ cdecl vwprintf_s(wstr ptr) MSVCRT_vwprintf_s
@@ -2487,7 +2487,7 @@
 @ cdecl wctomb(ptr long) MSVCRT_wctomb
 @ cdecl wctomb_s(ptr ptr long long) MSVCRT_wctomb_s
 @ stub wctrans
-@ stub wctype
+@ cdecl wctype(str)
 @ cdecl wmemcpy_s(ptr long ptr long)
 @ cdecl wmemmove_s(ptr long ptr long)
 @ varargs wprintf(wstr) MSVCRT_wprintf

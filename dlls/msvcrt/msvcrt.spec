@@ -604,7 +604,7 @@
 # stub _ismbchira_l(long ptr)
 @ cdecl _ismbckata(long)
 # stub _ismbckata_l(long ptr)
-@ stub _ismbcl0(long)
+@ cdecl _ismbcl0(long)
 # stub _ismbcl0_l(long ptr)
 @ stub _ismbcl1(long)
 # stub _ismbcl1_l(long ptr)
@@ -1044,7 +1044,7 @@
 # stub _vcwprintf_p_l(wstr ptr ptr)
 # stub _vcwprintf_s(wstr ptr)
 # stub _vcwprintf_s_l(wstr ptr ptr)
-# stub _vfprintf_l(ptr str ptr ptr)
+@ cdecl _vfprintf_l(ptr str ptr ptr) MSVCRT__vfprintf_l
 # stub _vfprintf_p(ptr str ptr)
 # stub _vfprintf_p_l(ptr str ptr ptr)
 # stub _vfprintf_s_l(ptr str ptr ptr)
@@ -1421,7 +1421,7 @@
 @ cdecl strchr(str long) MSVCRT_strchr
 @ cdecl strcmp(str str) MSVCRT_strcmp
 @ cdecl strcoll(str str) MSVCRT_strcoll
-@ cdecl strcpy(ptr str) ntdll.strcpy
+@ cdecl strcpy(ptr str) MSVCRT_strcpy
 @ cdecl strcpy_s(ptr long str) MSVCRT_strcpy_s
 @ cdecl strcspn(str str) ntdll.strcspn
 @ cdecl strerror(long) MSVCRT_strerror

@@ -182,6 +182,8 @@ static int (CDECL *p_fegetenv)(fenv_t*);
 static int (CDECL *p__clearfp)(void);
 static _locale_t (__cdecl *p_wcreate_locale)(int, const wchar_t *);
 static void (__cdecl *p_free_locale)(_locale_t);
+static unsigned short (__cdecl *p_wctype)(const char*);
+static int (__cdecl *p_vsscanf)(const char*, const char *, __ms_va_list valist);
 
 /* make sure we use the correct errno */
 #undef errno
@@ -236,8 +238,10 @@ static BOOL init(void)
     p_errno = (void*)GetProcAddress(module, "_errno");
     p_wcreate_locale = (void*)GetProcAddress(module, "_wcreate_locale");
     p_free_locale = (void*)GetProcAddress(module, "_free_locale");
+    SET(p_wctype, "wctype");
     SET(p_fegetenv, "fegetenv");
     SET(p__clearfp, "_clearfp");
+    SET(p_vsscanf, "vsscanf");
     if(sizeof(void*) == 8) { /* 64-bit initialization */
         SET(p_critical_section_ctor,
                 "??0critical_section@Concurrency@@QEAA@XZ");
@@ -453,11 +457,10 @@ static void test____lc_locale_name_func(void)
         const char *locale;
         const WCHAR name[10];
         const WCHAR broken_name[10];
-        BOOL todo;
     } tests[] = {
         { "American",  {'e','n',0}, {'e','n','-','U','S',0} },
         { "Belgian",   {'n','l','-','B','E',0} },
-        { "Chinese",   {'z','h',0}, {'z','h','-','C','N',0}, TRUE },
+        { "Chinese",   {'z','h',0}, {'z','h','-','C','N',0} },
         { "Dutch",     {'n','l',0}, {'n','l','-','N','L',0} },
         { "English",   {'e','n',0}, {'e','n','-','U','S',0} },
         { "French",    {'f','r',0}, {'f','r','-','F','R',0} },
@@ -476,9 +479,8 @@ static void test____lc_locale_name_func(void)
 
         lc_names = p____lc_locale_name_func();
         ok(lc_names[0] == NULL, "%d - lc_names[0] = %s\n", i, wine_dbgstr_w(lc_names[0]));
-        todo_wine_if(tests[i].todo)
-            ok(!lstrcmpW(lc_names[1], tests[i].name) || broken(!lstrcmpW(lc_names[1], tests[i].broken_name)),
-                    "%d - lc_names[1] = %s\n", i, wine_dbgstr_w(lc_names[1]));
+        ok(!lstrcmpW(lc_names[1], tests[i].name) || broken(!lstrcmpW(lc_names[1], tests[i].broken_name)),
+           "%d - lc_names[1] = %s\n", i, wine_dbgstr_w(lc_names[1]));
 
         for(j=LC_MIN+2; j<=LC_MAX; j++) {
             ok(!lstrcmpW(lc_names[1], lc_names[j]), "%d - lc_names[%d] = %s, expected %s\n",
@@ -882,6 +884,58 @@ static void test__Condition_variable(void)
     CloseHandle(thread_initialized);
 }
 
+static void test_wctype(void)
+{
+    static const struct {
+        const char *name;
+        unsigned short mask;
+    } properties[] = {
+        { "alnum",  0x107 },
+        { "alpha",  0x103 },
+        { "cntrl",  0x020 },
+        { "digit",  0x004 },
+        { "graph",  0x117 },
+        { "lower",  0x002 },
+        { "print",  0x157 },
+        { "punct",  0x010 },
+        { "space",  0x008 },
+        { "upper",  0x001 },
+        { "xdigit", 0x080 },
+        { "ALNUM",  0x000 },
+        { "Alnum",  0x000 },
+        { "",  0x000 }
+    };
+    int i, ret;
+
+    for(i=0; i<sizeof(properties)/sizeof(properties[0]); i++) {
+        ret = p_wctype(properties[i].name);
+        ok(properties[i].mask == ret, "%d - Expected %x, got %x\n", i, properties[i].mask, ret);
+    }
+}
+
+static int __cdecl _vsscanf_wrapper(const char *buffer, const char *format, ...)
+{
+    int ret;
+    __ms_va_list valist;
+    __ms_va_start(valist, format);
+    ret = p_vsscanf(buffer, format, valist);
+    __ms_va_end(valist);
+    return ret;
+}
+
+static void test_vsscanf(void)
+{
+    static const char *fmt = "%d";
+    char buff[16];
+    int ret, v;
+
+    v = 0;
+    strcpy(buff, "10");
+    ret = _vsscanf_wrapper(buff, fmt, &v);
+    ok(ret == 1, "Unexpected ret %d.\n", ret);
+    ok(v == 10, "got %d.\n", v);
+}
+
 START_TEST(msvcr120)
 {
     if (!init()) return;
@@ -898,4 +952,6 @@ START_TEST(msvcr120)
     test_fegetenv();
     test__wcreate_locale();
     test__Condition_variable();
+    test_wctype();
+    test_vsscanf();
 }

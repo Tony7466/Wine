@@ -148,7 +148,7 @@
 @ cdecl __std_type_info_name(ptr ptr) MSVCRT_type_info_name_list
 @ cdecl __stdio_common_vfprintf(int64 ptr str ptr ptr) MSVCRT__stdio_common_vfprintf
 @ stub __stdio_common_vfprintf_p
-@ stub __stdio_common_vfprintf_s
+@ cdecl __stdio_common_vfprintf_s(int64 ptr str ptr ptr) MSVCRT__stdio_common_vfprintf_s
 @ cdecl __stdio_common_vfscanf(int64 ptr str ptr ptr) MSVCRT__stdio_common_vfscanf
 @ cdecl __stdio_common_vfwprintf(int64 ptr wstr ptr ptr) MSVCRT__stdio_common_vfwprintf
 @ stub __stdio_common_vfwprintf_p
@@ -476,7 +476,7 @@
 @ stub _ismbchira_l
 @ cdecl _ismbckata(long)
 @ stub _ismbckata_l
-@ stub _ismbcl0(long)
+@ cdecl _ismbcl0(long)
 @ stub _ismbcl0_l
 @ stub _ismbcl1(long)
 @ stub _ismbcl1_l
@@ -2499,7 +2499,7 @@
 @ cdecl strchr(str long) MSVCRT_strchr
 @ cdecl strcmp(str str) MSVCRT_strcmp
 @ cdecl strcoll(str str) MSVCRT_strcoll
-@ cdecl strcpy(ptr str) ntdll.strcpy
+@ cdecl strcpy(ptr str) MSVCRT_strcpy
 @ cdecl strcpy_s(ptr long str) MSVCRT_strcpy_s
 @ cdecl strcspn(str str) ntdll.strcspn
 @ cdecl strerror(long) MSVCRT_strerror
@@ -2594,6 +2594,6 @@
 @ cdecl wctomb(ptr long) MSVCRT_wctomb
 @ cdecl wctomb_s(ptr ptr long long) MSVCRT_wctomb_s
 @ stub wctrans
-@ stub wctype
+@ cdecl wctype(str)
 @ cdecl wmemcpy_s(ptr long ptr long)
 @ cdecl wmemmove_s(ptr long ptr long)

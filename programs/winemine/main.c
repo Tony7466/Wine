@@ -178,6 +178,8 @@ static void SaveBoard( BOARD *p_board )
         RegSetValueExW( hkey, key_name, 0, REG_DWORD, (LPBYTE) &p_board->best_time[i], sizeof(p_board->best_time[i]) );
     }
     RegCloseKey( hkey );
+
+    WINE_TRACE("Board has been saved.\n");
 }
 
 static void DestroyBoard( BOARD *p_board )
@@ -343,8 +345,8 @@ static void PlaceMines ( BOARD *p_board, int selected_col, int selected_row )
     /* create mines */
     i = 0;
     while( (unsigned) i < p_board->mines ) {
-        col = (int) (p_board->cols * (float) rand() / RAND_MAX + 1);
-        row = (int) (p_board->rows * (float) rand() / RAND_MAX + 1);
+        col = rand() % p_board->cols + 1;
+        row = rand() % p_board->rows + 1;
 
         if( !p_board->box[col][row].IsMine ) {
             i++;
@@ -743,9 +745,9 @@ static void TestMines( BOARD *p_board, POINT pt, int msg )
     case WM_RBUTTONDOWN:
         AddFlag( p_board, col, row );
         break;
-    default:
-        WINE_TRACE("Unknown message type received in TestMines\n");
-        break;
+
+    case WM_RBUTTONUP:
+        return;
     }
 
     if( draw )
@@ -823,6 +825,7 @@ static void TestBoard( HWND hWnd, BOARD *p_board, int x, int y, int msg )
 
             DialogBoxParamW( p_board->hInst, MAKEINTRESOURCEW(DLG_CONGRATS), hWnd,
                              CongratsDlgProc, (LPARAM) p_board);
+            SaveBoard( p_board );
             DialogBoxParamW( p_board->hInst, MAKEINTRESOURCEW(DLG_TIMES), hWnd,
                              TimesDlgProc, (LPARAM) p_board);
         }
@@ -884,7 +887,7 @@ static LRESULT WINAPI MainProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
 
     case WM_LBUTTONDOWN:
         WINE_TRACE("WM_LBUTTONDOWN\n");
-        if( wParam & MK_RBUTTON )
+        if( wParam & ( MK_RBUTTON | MK_SHIFT ) )
             msg = WM_MBUTTONDOWN;
         TestBoard( hWnd, &board, (short)LOWORD(lParam), (short)HIWORD(lParam), msg );
         SetCapture( hWnd );
@@ -892,7 +895,7 @@ static LRESULT WINAPI MainProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
 
     case WM_LBUTTONUP:
         WINE_TRACE("WM_LBUTTONUP\n");
-        if( wParam & MK_RBUTTON )
+        if( wParam & ( MK_RBUTTON | MK_SHIFT ) )
             msg = WM_MBUTTONUP;
         TestBoard( hWnd, &board, (short)LOWORD(lParam), (short)HIWORD(lParam), msg );
         ReleaseCapture();
