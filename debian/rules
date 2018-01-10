@@ -63,6 +63,7 @@ endif
 
 # on armel build for armv5t
 ifeq ($(DEB_HOST_ARCH), armel)
+CONFLAGS+=--with-float-abi=soft
 export DEB_CFLAGS_MAINT_APPEND+=-march=armv5t
 export DEB_LDFLAGS_MAINT_APPEND+=-march=armv5t
 endif

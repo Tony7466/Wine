@@ -1,8 +1,12 @@
-wine-development (3.0~rc1-1) UNRELEASED; urgency=medium
+wine-development (3.0~rc1-1) unstable; urgency=medium
 
+  [ Jens Reyer ]
   * Build wine64VERSION-preloader also on arm64.
   * Add build-dependendeny on libkrb5-dev for Kerberos support.
+
+  [ Michael Gilbert ]
   * New upstream release 3.0-rc1, released Dec 8, 2017.
+    - Reenables support for armel (closes: #881446).
     - Direct3D 11 enabled by default on AMD and Intel GPUs.
     - AES encryption support on macOS.
     - Implementation of the task scheduler.
@@ -13,7 +17,7 @@ wine-development (3.0~rc1-1) UNRELEASED; urgency=medium
     - Relay debugging improvements.
     - Various bug fixes.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Mon, 15 Jan 2018 18:49:30 +0100
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 09 Dec 2017 20:31:43 +0000
 
 wine-development (2.22-1) unstable; urgency=medium
 
