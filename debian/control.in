@@ -7,7 +7,7 @@ Uploaders:
  Stephen Kitt <skitt@debian.org>,
  Jens Reyer <jre.winesim@gmail.com>,
 Build-Depends:
- debhelper (>= 10),
+ debhelper (>= 11),
  libxi-dev,
  libxt-dev,
  libxmu-dev,
