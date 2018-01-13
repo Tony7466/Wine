@@ -33,10 +33,6 @@ export DEB_LDFLAGS_MAINT_APPEND+=-Wl,-rpath,/$(LIBDIR)
 # configure options
 CONFLAGS=--with-gnutls \
          --without-hal \
-         --without-v4l \
-         --without-sane \
-         --without-capi \
-         --without-gphoto \
          --disable-tests \
          --enable-maintainer-mode \
          --libdir=/$(LIBDIR) \
