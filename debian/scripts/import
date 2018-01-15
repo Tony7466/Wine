@@ -67,4 +67,4 @@ wgl_version=$(expr $(grep "^#define WINE_WGL_DRIVER_VERSION [[:digit:]]*" includ
 sed -i "s|^\(+my \$wgl_version = \)[[:digit:]]*;|\1${wgl_version};|" debian/patches/generate/opengl.patch
 
 git add debian/changelog debian/patches/generate/request.patch debian/patches/generate/opengl.patch
-git commit -m "Import wine-$1."
+git commit -m "Finalize automatic import of wine-$1."
