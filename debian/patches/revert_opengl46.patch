@@ -43,7 +43,7 @@ Forwarded: not-needed
      };
      struct wined3d_driver_info *driver_info = &adapter->driver_info;
      const char *gl_vendor_str, *gl_renderer_str, *gl_version_str;
-@@ -5658,7 +5656,7 @@ HRESULT CDECL wined3d_get_device_caps(co
+@@ -5665,7 +5663,7 @@ HRESULT CDECL wined3d_get_device_caps(co
                                       WINED3DPRASTERCAPS_SLOPESCALEDEPTHBIAS |
                                       WINED3DPRASTERCAPS_DEPTHBIAS;
  
@@ -52,7 +52,7 @@ Forwarded: not-needed
      {
          caps->RasterCaps  |= WINED3DPRASTERCAPS_ANISOTROPY    |
                               WINED3DPRASTERCAPS_ZBIAS         |
-@@ -5777,7 +5775,7 @@ HRESULT CDECL wined3d_get_device_caps(co
+@@ -5784,7 +5782,7 @@ HRESULT CDECL wined3d_get_device_caps(co
                                 WINED3DPTFILTERCAPS_MIPNEAREST       |
                                 WINED3DPTFILTERCAPS_NEAREST;
  
@@ -61,7 +61,7 @@ Forwarded: not-needed
      {
          caps->TextureFilterCaps  |= WINED3DPTFILTERCAPS_MAGFANISOTROPIC |
                                      WINED3DPTFILTERCAPS_MINFANISOTROPIC;
-@@ -5798,7 +5796,7 @@ HRESULT CDECL wined3d_get_device_caps(co
+@@ -5805,7 +5803,7 @@ HRESULT CDECL wined3d_get_device_caps(co
                                         WINED3DPTFILTERCAPS_MIPNEAREST       |
                                         WINED3DPTFILTERCAPS_NEAREST;
  
