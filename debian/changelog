@@ -1,9 +1,19 @@
-wine-development (2.22-2) UNRELEASED; urgency=medium
+wine-development (3.0~rc1-1) UNRELEASED; urgency=medium
 
   * Build wine64VERSION-preloader also on arm64.
   * Add build-dependendeny on libkrb5-dev for Kerberos support.
+  * New upstream release 3.0-rc1, released Dec 8, 2017.
+    - Direct3D 11 enabled by default on AMD and Intel GPUs.
+    - AES encryption support on macOS.
+    - Implementation of the task scheduler.
+    - Registry export support in the reg.exe tool.
+    - Progman DDE support.
+    - OLE data cache improvements.
+    - More event support in MSHTML.
+    - Relay debugging improvements.
+    - Various bug fixes.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Sun, 03 Dec 2017 18:34:40 +0100
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 15 Jan 2018 18:49:30 +0100
 
 wine-development (2.22-1) unstable; urgency=medium
 
