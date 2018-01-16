@@ -54,7 +54,7 @@ Build-Depends:
  libxslt1-dev,
  unixodbc-dev,
  libcups2-dev,
- libcapi20-dev,
+ libcapi20-dev [linux-any],
  libopenal-dev,
  libdbus-1-dev,
  freeglut3-dev,
