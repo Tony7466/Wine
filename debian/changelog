@@ -1,9 +1,15 @@
-wine-development (3.0~rc3-1) UNRELEASED; urgency=medium
+wine-development (3.0~rc3-1) unstable; urgency=medium
 
   * New upstream release 3.0-rc3, released Dec 22, 2017.
     - Bug fixes only, we are in code freeze.
+    - Fixes building on armel again.
+    - Fixes executing position-independent (PIE) host executables
+      (closes: #865407).
+  * Restrict v4l support to linux and kfreebsd architectures.
+  * Restrict capi support to linux architectures.
+  * Refresh patches.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Tue, 16 Jan 2018 14:11:36 +0100
+ -- Jens Reyer <jre.winesim@gmail.com>  Tue, 16 Jan 2018 14:28:55 +0100
 
 wine-development (3.0~rc2-1) unstable; urgency=medium
 
