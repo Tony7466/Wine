@@ -24,8 +24,9 @@ export VENDOR=$(DEB_VENDOR) $(DEB_VERSION)
 # enable verbose build log
 export DH_VERBOSE=1
 
-# wine doesn't support fortify hardening and fails to build with pie
-export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-pie,-fortify
+# enable all hardening buildflags
+# fortify and pie are still not enabled in the whole build though
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all
 
 # linker options
 export DEB_LDFLAGS_MAINT_APPEND+=-Wl,-rpath,/$(LIBDIR)
