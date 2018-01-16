@@ -39,7 +39,7 @@ Build-Depends:
  unicode-data (<< 11),
  libpng-dev,
  libssl-dev,
- libv4l-dev,
+ libv4l-dev [linux-any kfreebsd-any],
  libxml2-dev,
  libgsm1-dev,
  libjpeg-dev,
