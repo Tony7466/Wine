@@ -24,3 +24,4 @@ font-divbyzero.patch
 printer-resolution.patch
 
 revert_opengl46.patch
+armel.patch
