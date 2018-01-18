@@ -1,3 +1,10 @@
+wine-development (3.0~rc5-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.0-rc5, released Jan 5, 2018.
+    - Bug fixes only, we are in code freeze.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Thu, 18 Jan 2018 17:09:31 +0100
+
 wine-development (3.0~rc4-1) unstable; urgency=medium
 
   * New upstream release 3.0-rc4, released Dec 29, 2017.
