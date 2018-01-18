@@ -36,12 +36,12 @@ Files-Excluded:
 
 Files: *
 Copyright:
- Copyright (c) 1993-2017 Wine project authors (see AUTHORS file)
+ Copyright (c) 1993-2018 Wine project authors (see AUTHORS file)
 License: LGPL-2.1+
 
 Files: debian/*
 Copyright:
- Copyright (c) 2015-2017 Jens Reyer <jre.winesim@gmail.com>
+ Copyright (c) 2015-2018 Jens Reyer <jre.winesim@gmail.com>
  Copyright (c) 2014-2016 Stephen Kitt <skitt@debian.org>
  Copyright (c) 2012-2017 Michael Gilbert <mgilbert@debian.org>
 License: LGPL-2.1+
@@ -58,7 +58,7 @@ License: Public-Domain
 
 Files: debian/unicode/*
 Copyright:
- Copyright (c) 1991-2015 Unicode, Inc.
+ Copyright (c) 1991-2002 Unicode, Inc.
 License: Unicode
 
 Files: debian/scripts/import*
