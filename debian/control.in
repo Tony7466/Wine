@@ -13,6 +13,7 @@ Build-Depends:
  libxmu-dev,
  libx11-dev,
  libxext-dev,
+ libxfixes-dev,
  libxrandr-dev,
  libxcursor-dev,
  libxrender-dev,
