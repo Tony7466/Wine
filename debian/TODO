@@ -1,2 +1,11 @@
-finish update to tools/make_unicode
-rebuild icons
+- finish update to tools/make_unicode
+  use current allkeys.txt (wip jre)
+  package and use MAPPING files
+- rebuild icons
+- completely build PIE
+  From the Wine 3.0 ANNOUNCE:
+  Position Independent Executables are supported, both for the Wine binary
+  itself and also when starting external binaries.
+- submit .appdata.xml upstream (todo 1 jre)
+- submit alternatives system upstream (todo 2 jre)
+- fully update to OpenGL version 4.6 (for Wine 3.0)
