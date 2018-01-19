@@ -11,7 +11,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  WINE_CONFIG_MAKEFILE([include],,[clean,install-dev])
  WINE_CONFIG_MAKEFILE([libs/port])
  WINE_CONFIG_MAKEFILE([libs/wine],,[clean,implib,install-dev,install-lib])
-@@ -3840,7 +3839,6 @@ WINE_CONFIG_PROGRAM(xcopy,,[clean,instal
+@@ -3841,7 +3840,6 @@ WINE_CONFIG_PROGRAM(xcopy,,[clean,instal
  WINE_CONFIG_TEST(programs/xcopy/tests)
  WINE_CONFIG_MAKEFILE([server],,[clean,install-lib])
  WINE_CONFIG_TOOL(tools,[clean])
