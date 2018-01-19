@@ -1,9 +1,12 @@
-wine-development (3.0~rc6-1) UNRELEASED; urgency=medium
+wine-development (3.0~rc6-1) unstable; urgency=medium
 
   * New upstream release 3.0-rc6, released Jan 12, 2018.
     - Bug fixes only, we are in code freeze.
+  * Explicitly build-depend on libxfixes-dev.
+  * Build-depend on libpcap0.8-dev instead of transitional package libpcap-dev.
+  * Refresh patches.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Fri, 19 Jan 2018 00:54:08 +0100
+ -- Jens Reyer <jre.winesim@gmail.com>  Fri, 19 Jan 2018 15:55:58 +0100
 
 wine-development (3.0~rc5-1) unstable; urgency=medium
 
