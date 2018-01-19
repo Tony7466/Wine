@@ -1,3 +1,36 @@
+wine-development (3.0-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.0, released Jan 18, 2018.
+    - Direct3D 10 and 11 support.
+    - The Direct3D command stream.
+    - The Android graphics driver.
+    - Improved DirectWrite and Direct2D support.
+    - Compute shaders.
+    - Hull and domain (tessellation) shaders.
+    - Stream output.
+    - Format capability queries.
+    - A large number of shader model 4 and 5 shader instructions.
+    - Shader model 4 and 5 interpolation modifiers.
+    - Shader model 4 and 5 clip and cull distances.
+    - Indirect draws and indirect compute dispatch.
+    - Structured buffers.
+    - Byte addressable buffers.
+    - Append and consume buffers.
+    - Unordered access view counters.
+    - Cube-map arrays.
+    - Layered rendering to 3-dimensional textures and texture arrays.
+    - Mip-map generation.
+    - Conservative depth output.
+    - Type-less (sub)resource copies.
+    - Depth bias.
+    - "csmt" (REG_DWORD)
+    - "StrictDrawOrdering"
+    - "OffscreenRenderingMode"
+    - "AlwaysOffscreen"
+    - "MultiSampling"
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Fri, 19 Jan 2018 18:03:07 +0100
+
 wine-development (3.0~rc6-1) unstable; urgency=medium
 
   * New upstream release 3.0-rc6, released Jan 12, 2018.
