@@ -270,6 +270,11 @@ Pre-Depends:
 Breaks:
  wine32VERSION (<< 1.7.51-2~),
  wine64VERSION (<< 1.7.51-2~),
+ wine1.6-amd64 (<< 1:1.8.4ubuntu1~),
+ wine1.6-i386 (<< 1:1.8.4ubuntu1~),
+Replaces:
+ wine1.6-amd64 (<< 1:1.8.4ubuntu1~),
+ wine1.6-i386 (<< 1:1.8.4ubuntu1~),
 Description: Windows API implementation - library
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
