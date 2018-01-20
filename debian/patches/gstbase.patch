@@ -1,3 +1,6 @@
+description: avoid unneeded libgstbase dependency from winegstreamer.dll.so
+author: Michael Gilbert <mgilbert@debian.org>
+
 --- a/configure.ac
 +++ b/configure.ac
 @@ -1522,7 +1522,7 @@ WINE_NOTICE_WITH(pulse, [test -z "$PULSE
