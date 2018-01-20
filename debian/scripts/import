@@ -20,6 +20,7 @@ git update-index --assume-unchanged configure include/config.h.in
 # pull specified tag from upstream repository
 version="$1"
 debian="https://anonscm.debian.org/git/pkg-wine/wine.git"
+debian_branch="master"
 upstream_branch="upstream"
 winehq="git://source.winehq.org/git/wine.git"
 tag="wine-$version"
@@ -28,12 +29,12 @@ git pull $debian ${upstream_branch}
 git pull --no-edit $winehq tag "$tag" || echo "unable to fetch tag $tag"
 
 # merge upstream into master (favoring "their" changes)
-git checkout master
-git merge --strategy-option=theirs upstream
+git checkout ${debian_branch}
+git merge --strategy-option=theirs ${upstream_branch}
 
 # format the "New upstream release" message
-tag_time=`git cat-file tag "$tag" | sed -n 's/tagger .*<.*> \([0-9]*\) .*/\1/p'`
-release_date=`LC_ALL=C date -u -d "@$tag_time" +"%b %-d, %Y"`
+tag_time=$(git cat-file tag "$tag" | sed -n 's/tagger .*<.*> \([0-9]*\) .*/\1/p')
+release_date=$(LC_ALL=C date -u -d "@$tag_time" +"%b %-d, %Y")
 
 # create the initial changelog entry
 dch -v "$(echo $version|sed "s/-/~/")-1" "New upstream release $version, released $release_date."
