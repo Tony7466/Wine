@@ -257,12 +257,6 @@ Suggests:
  ttf-mscorefonts-installer,
 Pre-Depends:
  ${misc:Pre-Depends},
-Breaks:
- wine1.6-amd64 (<< 1:1.8.4ubuntu1~),
- wine1.6-i386 (<< 1:1.8.4ubuntu1~),
-Replaces:
- wine1.6-amd64 (<< 1:1.8.4ubuntu1~),
- wine1.6-i386 (<< 1:1.8.4ubuntu1~),
 Description: Windows API implementation - library
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
@@ -297,10 +291,6 @@ Depends:
  ${misc:Depends},
  wine,
  binfmt-support,
-Breaks:
- wine1.6 (<< 1:1.8.4ubuntu1~),
-Replaces:
- wine1.6 (<< 1:1.8.4ubuntu1~),
 Description: Windows API implementation - binfmt support
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
@@ -314,10 +304,6 @@ Multi-Arch: foreign
 Built-Using: ${built:Using}
 Depends:
  ${misc:Depends},
-Breaks:
- wine1.6 (<< 1:1.8.4ubuntu1~),
-Replaces:
- wine1.6 (<< 1:1.8.4ubuntu1~),
 Description: Windows API implementation - fonts
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
