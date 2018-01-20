@@ -101,8 +101,8 @@ Breaks:
 Replaces:
  wine1.6 (<< 1:1.8.4ubuntu1~),
  wine1.6-i386 (<< 1:1.8.4ubuntu1~),
-Provides:
- wine,
+#Provides:
+# wine,
 Description: Windows API implementation - standard suite
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
