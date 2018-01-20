@@ -95,7 +95,6 @@ Suggests:
  wine-binfmt,
  dosbox (>= 0.74-4.2~),
 Breaks:
- wine (<< 1.8.3-3~),
  wine1.6 (<< 1:1.8.4ubuntu1~),
  wine1.6-i386 (<< 1:1.8.4ubuntu1~),
 Replaces:
@@ -124,9 +123,6 @@ Recommends:
 Suggests:
  libwine-gecko-2.47 [!armel !armhf !arm64],
  wine32VERSION-preloader (= ${binary:Version}),
-Breaks:
- wineVERSION (<< 1.7.50-3~),
- wine32VERSION-preloader (<< 1.7.51-2~),
 Description: Windows API implementation - 32-bit binary loader
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
@@ -148,9 +144,6 @@ Suggests:
  libwine-gecko-2.47 [!armel !armhf !arm64],
  wine64VERSION-preloader (= ${binary:Version}),
 Breaks:
- wine64 (<< 1.8.3-3~),
- wineVERSION (<< 1.7.50-3~),
- wine64VERSION-preloader (<< 1.7.51-2~),
  wine1.6-amd64 (<< 1:1.8.4ubuntu1~),
 Replaces:
  wine1.6-amd64 (<< 1:1.8.4ubuntu1~),
@@ -201,8 +194,6 @@ Recommends:
  wineVERSION (= ${source:Version}),
  g++ | g++-multilib:amd64 [i386],
 Breaks:
- wine32-tools (<< 1.8.3-3~),
- wine64-tools (<< 1.8.3-3~),
  wine1.6 (<< 1:1.8.4ubuntu1~),
 Conflicts:
  wine64VERSION-tools,
@@ -233,8 +224,6 @@ Recommends:
  wineVERSION (= ${source:Version}),
  g++,
 Breaks:
- wine32-tools (<< 1.8.3-3~),
- wine64-tools (<< 1.8.3-3~),
  wine1.6 (<< 1:1.8.4ubuntu1~),
 Conflicts:
  wine32VERSION-tools,
@@ -268,8 +257,6 @@ Suggests:
 Pre-Depends:
  ${misc:Pre-Depends},
 Breaks:
- wine32VERSION (<< 1.7.51-2~),
- wine64VERSION (<< 1.7.51-2~),
  wine1.6-amd64 (<< 1:1.8.4ubuntu1~),
  wine1.6-i386 (<< 1:1.8.4ubuntu1~),
 Replaces:
@@ -293,8 +280,6 @@ Depends:
 Recommends:
  wine64VERSION-tools (= ${binary:Version}) | wine32VERSION-tools (= ${binary:Version}),
 Breaks:
- wine32VERSION (<< 1.7.51-2~),
- wine64VERSION (<< 1.7.51-2~),
  wine1.6-dev (<< 1:1.8.4ubuntu1~),
 Replaces:
  wine1.6-dev (<< 1:1.8.4ubuntu1~),
@@ -329,10 +314,8 @@ Built-Using: ${built:Using}
 Depends:
  ${misc:Depends},
 Breaks:
- libwineVERSION (<< 1.7.41-2~),
  wine1.6 (<< 1:1.8.4ubuntu1~),
 Replaces:
- libwineVERSION (<< 1.7.41-2~),
  wine1.6 (<< 1:1.8.4ubuntu1~),
 Description: Windows API implementation - fonts
  Wine is a free MS-Windows API implementation.
