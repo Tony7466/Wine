@@ -1,35 +1,22 @@
-wine-development (3.0-1) UNRELEASED; urgency=medium
+wine (3.0-1) unstable; urgency=medium
 
   * New upstream release 3.0, released Jan 18, 2018.
+    The main highlights are:
     - Direct3D 10 and 11 support.
     - The Direct3D command stream.
     - The Android graphics driver.
     - Improved DirectWrite and Direct2D support.
-    - Compute shaders.
-    - Hull and domain (tessellation) shaders.
-    - Stream output.
-    - Format capability queries.
-    - A large number of shader model 4 and 5 shader instructions.
-    - Shader model 4 and 5 interpolation modifiers.
-    - Shader model 4 and 5 clip and cull distances.
-    - Indirect draws and indirect compute dispatch.
-    - Structured buffers.
-    - Byte addressable buffers.
-    - Append and consume buffers.
-    - Unordered access view counters.
-    - Cube-map arrays.
-    - Layered rendering to 3-dimensional textures and texture arrays.
-    - Mip-map generation.
-    - Conservative depth output.
-    - Type-less (sub)resource copies.
-    - Depth bias.
-    - "csmt" (REG_DWORD)
-    - "StrictDrawOrdering"
-    - "OffscreenRenderingMode"
-    - "AlwaysOffscreen"
-    - "MultiSampling"
+  * Drop armel.patch, applied upstream.
+  * Switch to src:wine.
+    - Point to branch buster in Vcs fields.
+    - Comment out Provides: wine (not needed in src:wine).
+    - Activate building wine-binfmt and fonts-wine packages.
+    - Readd src:wine-specific breaks/replaces for old Ubuntu packages.
+    - Adapt and rename appdata.xml for src:wine.
+    - Restrict watch file to look in upstream's stable release directory.
+  * Drop obsolete breaks/replaces.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Fri, 19 Jan 2018 18:03:07 +0100
+ -- Jens Reyer <jre.winesim@gmail.com>  Sun, 21 Jan 2018 01:14:34 +0100
 
 wine-development (3.0~rc6-1) unstable; urgency=medium
 
