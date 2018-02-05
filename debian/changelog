@@ -1,3 +1,17 @@
+wine-development (3.1-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.1, released Feb 2, 2018.
+    - Kerberos authentication support.
+    - Window class redirection for Common Controls 6.
+    - Support for X11 ARGB visuals.
+    - DOSBox required for running DOS executables.
+    - Various bug fixes.
+  * Switch to src:wine-development (closes: #889158).
+  * Set Rules-Requires-Root: no.
+  * Make versioned dependency on debhelper backports safe.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 05 Feb 2018 21:24:44 +0100
+
 wine (3.0-1) unstable; urgency=medium
 
   * New upstream release 3.0, released Jan 18, 2018.

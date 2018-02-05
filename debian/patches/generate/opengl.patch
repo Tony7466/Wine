@@ -39,7 +39,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 -    $wgl_version = $1;
 -    last;
 -}
-+my $wgl_version = 16;
++my $wgl_version = 17;
 +
 +#
 +# Generate the wglext.h file
