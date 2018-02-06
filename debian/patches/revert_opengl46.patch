@@ -1,7 +1,9 @@
-Description: Drop new ARB_texture_filter_anisotropic extension.
- This was added upstream as part of OpenGL 4.6, which we don't have yet,
- therefore Wine ftbfs with it.  So revert the upstream change for now.
-Origin: https://source.winehq.org/git/wine.git/commitdiff/5b7a6d424eefb5261049f60473d6c94099a89722
+Description: Drop features requiring OpenGL 4.6.
+ Revert "wined3d: Add ARB_texture_filter_anisotropic extension."
+ Revert "winex11: Implement WGL_ARB_create_context_no_error."
+ These features require a newer khronos-api in Debian.
+Origin: https://source.winehq.org/git/wine.git/commitdiff/5b7a6d424eefb5261049f60473d6c94099a89722 (reverted),
+ https://source.winehq.org/git/wine.git/commitdiff/3eaa23cbbf827247dccdeb6869f2f003a503fcda (reverted)
 Forwarded: not-needed
 
 --- a/dlls/wined3d/directx.c
@@ -114,3 +116,46 @@ Forwarded: not-needed
      EXT_TEXTURE_INTEGER,
      EXT_TEXTURE_LOD_BIAS,
      EXT_TEXTURE_MIRROR_CLAMP,
+--- a/dlls/opengl32/make_opengl
++++ b/dlls/opengl32/make_opengl
+@@ -362,7 +362,6 @@ my %remapped_wgl_functions =
+ my %supported_wgl_extensions =
+    (
+     "WGL_ARB_create_context" => 1,
+-    "WGL_ARB_create_context_no_error" => 1,
+     "WGL_ARB_create_context_profile" => 1,
+     "WGL_ARB_extensions_string" => 1,
+     "WGL_ARB_make_current_read" => 1,
+--- a/dlls/winex11.drv/opengl.c
++++ b/dlls/winex11.drv/opengl.c
+@@ -163,8 +163,6 @@ typedef XID GLXPbuffer;
+ #define GLX_CONTEXT_MAJOR_VERSION_ARB     0x2091
+ #define GLX_CONTEXT_MINOR_VERSION_ARB     0x2092
+ #define GLX_CONTEXT_FLAGS_ARB             0x2094
+-/** GLX_ARB_create_context_no_error */
+-#define GLX_CONTEXT_OPENGL_NO_ERROR_ARB   0x31B3
+ /** GLX_ARB_create_context_profile */
+ #define GLX_CONTEXT_PROFILE_MASK_ARB      0x9126
+ /** GLX_ATI_pixel_format_float */
+@@ -2123,12 +2121,6 @@ static struct wgl_context *X11DRV_wglCre
+                     pContextAttribList += 2;
+                     ret->numAttribs++;
+                     break;
+-                case WGL_CONTEXT_OPENGL_NO_ERROR_ARB:
+-                    pContextAttribList[0] = GLX_CONTEXT_OPENGL_NO_ERROR_ARB;
+-                    pContextAttribList[1] = attribList[1];
+-                    pContextAttribList += 2;
+-                    ret->numAttribs++;
+-                    break;
+                 case WGL_CONTEXT_PROFILE_MASK_ARB:
+                     pContextAttribList[0] = GLX_CONTEXT_PROFILE_MASK_ARB;
+                     pContextAttribList[1] = attribList[1];
+@@ -3190,8 +3182,6 @@ static void X11DRV_WineGL_LoadExtensions
+         register_extension( "WGL_ARB_create_context" );
+         opengl_funcs.ext.p_wglCreateContextAttribsARB = X11DRV_wglCreateContextAttribsARB;
+ 
+-        if (has_extension( WineGLInfo.glxExtensions, "GLX_ARB_create_context_no_error" ))
+-            register_extension( "WGL_ARB_create_context_no_error" );
+         if (has_extension( WineGLInfo.glxExtensions, "GLX_ARB_create_context_profile"))
+             register_extension("WGL_ARB_create_context_profile");
+     }
