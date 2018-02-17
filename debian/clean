@@ -47,6 +47,9 @@ dlls/opengl32/opengl32.spec
 # windows help files
 dlls/itss/tests/data.chm
 
+# ico files
+# programs/winemine/winemine.ico
+
 # font files
 fonts/*.fon
 fonts/*.ttf

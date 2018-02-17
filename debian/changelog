@@ -1,4 +1,4 @@
-wine-development (3.2-1) UNRELEASED; urgency=medium
+wine-development (3.2-1) unstable; urgency=medium
 
   * New upstream release 3.2, released Feb 16, 2018.
     - Separate implementation of USER controls for ComCtl32 v6.
@@ -7,6 +7,7 @@ wine-development (3.2-1) UNRELEASED; urgency=medium
     - More event support in MSHTML.
     - Obsolete DOS code removed.
     - Various bug fixes.
+  * Avoid modifications to po files that are under version control.
 
  -- Michael Gilbert <mgilbert@debian.org>  Sat, 17 Feb 2018 16:20:19 +0000
 
