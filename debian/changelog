@@ -1,3 +1,15 @@
+wine-development (3.2-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.2, released Feb 16, 2018.
+    - Separate implementation of USER controls for ComCtl32 v6.
+    - Multisample texture support in Direct3D.
+    - Support for HID gamepads.
+    - More event support in MSHTML.
+    - Obsolete DOS code removed.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 17 Feb 2018 16:20:19 +0000
+
 wine-development (3.1-1) unstable; urgency=medium
 
   * New upstream release 3.1, released Feb 2, 2018.
