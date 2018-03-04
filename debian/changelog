@@ -1,3 +1,15 @@
+wine-development (3.3-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.3, released Mar 2, 2018.
+    - Beginnings of Vulkan support.
+    - Direct3D multi-threaded command stream enabled by default.
+    - Multisample textures enabled by default.
+    - Support for game controllers through SDL.
+    - Support for loading CIL-only .Net binaries.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 04 Mar 2018 21:54:51 +0000
+
 wine-development (3.2-1) unstable; urgency=medium
 
   * New upstream release 3.2, released Feb 16, 2018.
