@@ -1,3 +1,14 @@
+wine-development (3.4-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.4, released Mar 16, 2018.
+    - More Vulkan support, including integration with the X11 driver.
+    - Better handling of privileged instructions on x86-64.
+    - Hex edit dialog improvements in RegEdit.
+    - Assortment of patches merged from wine-staging.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 01 Apr 2018 18:48:50 +0000
+
 wine-development (3.3-2) unstable; urgency=medium
 
   * Correct arch all manpage build error.
