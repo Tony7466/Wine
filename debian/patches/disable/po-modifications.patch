@@ -3,7 +3,7 @@ author: Michael Gilbert
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -2305,11 +2305,13 @@ static void output_po_files( const struc
+@@ -2422,11 +2422,13 @@ static void output_po_files( const struc
      }
      if (linguas.count)
      {

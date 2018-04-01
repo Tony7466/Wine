@@ -1,27 +1,16 @@
 description: don't append wine to the default path settings
 author: Michael Gilbert <mgilbert@debian.org>
 
---- a/configure.ac
-+++ b/configure.ac
-@@ -699,7 +699,7 @@ AC_CHECK_HEADERS([libprocstat.h],,,
- 
- dnl **** Check for working dll ****
- 
--AC_SUBST(dlldir,"\${libdir}/wine")
-+AC_SUBST(dlldir,"\${libdir}")
- AC_SUBST(DLLFLAGS,"-D_REENTRANT")
- AC_SUBST(LDRPATH_INSTALL,"")
- AC_SUBST(LDRPATH_LOCAL,"")
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -27,8 +27,8 @@ libdir          = @libdir@
- datarootdir     = @datarootdir@
+@@ -28,8 +28,8 @@ datarootdir     = @datarootdir@
  datadir         = @datadir@
  mandir          = @mandir@
+ includedir      = @includedir@
 -fontdir         = ${datadir}/wine/fonts
--includedir      = @includedir@/wine
+-dlldir          = ${libdir}/wine
 +fontdir         = /usr/share/wine/fonts
-+includedir      = @includedir@
- dlldir          = @dlldir@
- fakedlldir      = ${dlldir}/fakedlls
++dlldir          = ${libdir}
  top_srcdir      = @top_srcdir@
+ top_builddir    = @top_builddir@
+ srcdir          = @srcdir@

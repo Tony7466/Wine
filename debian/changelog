@@ -1,4 +1,4 @@
-wine-development (3.3-1) UNRELEASED; urgency=medium
+wine-development (3.3-1) unstable; urgency=medium
 
   * New upstream release 3.3, released Mar 2, 2018.
     - Beginnings of Vulkan support.
@@ -7,8 +7,10 @@ wine-development (3.3-1) UNRELEASED; urgency=medium
     - Support for game controllers through SDL.
     - Support for loading CIL-only .Net binaries.
     - Various bug fixes.
+  * Update patches to handle upstream makefile refactoring.
+  * Correctly specify that root is required to execute debian/rules binary.
 
- -- Michael Gilbert <mgilbert@debian.org>  Sun, 04 Mar 2018 21:54:51 +0000
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 01 Apr 2018 03:46:57 +0000
 
 wine-development (3.2-1) unstable; urgency=medium
 
