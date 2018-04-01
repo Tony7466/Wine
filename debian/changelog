@@ -1,3 +1,9 @@
+wine-development (3.3-2) unstable; urgency=medium
+
+  * Correct arch all manpage build error.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 01 Apr 2018 15:36:58 +0000
+
 wine-development (3.3-1) unstable; urgency=medium
 
   * New upstream release 3.3, released Mar 2, 2018.

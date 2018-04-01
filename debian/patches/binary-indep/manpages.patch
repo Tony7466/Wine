@@ -11,3 +11,24 @@ author: Michael Gilbert <mgilbert@debian.org>
          output_install_rules( make, INSTALL_LIB, "install-lib" );
          output_install_rules( make, INSTALL_DEV, "install-dev" );
          output_uninstall_rules( make );
+--- a/loader/Makefile.in
++++ b/loader/Makefile.in
+@@ -2,13 +2,15 @@ SOURCES = \
+ 	l_intl.nls \
+ 	main.c \
+ 	preloader.c \
+-	wine.de.UTF-8.man.in \
+ 	wine.desktop \
+-	wine.fr.UTF-8.man.in \
+ 	wine.inf.in \
++	wine_info.plist.in
++
++MANPAGES = \
+ 	wine.man.in \
++	wine.de.UTF-8.man.in \
+ 	wine.pl.UTF-8.man.in \
+-	wine_info.plist.in
++	wine.fr.UTF-8.man.in \
+ 
+ PROGRAMS = $(WINELOADER_PROGRAMS)
+ INSTALL_LIB = $(WINELOADER_PROGRAMS) $(WINELOADER_INSTALL)
