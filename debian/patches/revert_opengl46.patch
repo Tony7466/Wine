@@ -25,7 +25,7 @@ Forwarded: not-needed
      {"GL_EXT_texture_integer",              EXT_TEXTURE_INTEGER           },
      {"GL_EXT_texture_lod_bias",             EXT_TEXTURE_LOD_BIAS          },
      {"GL_EXT_texture_mirror_clamp",         EXT_TEXTURE_MIRROR_CLAMP      },
-@@ -3622,9 +3621,9 @@ static void wined3d_adapter_init_limits(
+@@ -3626,9 +3625,9 @@ static void wined3d_adapter_init_limits(
          gl_info->limits.texture3d_size = gl_max;
          TRACE("Max texture3D size: %d.\n", gl_info->limits.texture3d_size);
      }
@@ -37,7 +37,7 @@ Forwarded: not-needed
          gl_info->limits.anisotropy = gl_max;
          TRACE("Max anisotropy: %d.\n", gl_info->limits.anisotropy);
      }
-@@ -3951,7 +3950,6 @@ static BOOL wined3d_adapter_init_gl_caps
+@@ -3955,7 +3954,6 @@ static BOOL wined3d_adapter_init_gl_caps
          {ARB_DERIVATIVE_CONTROL,           MAKEDWORD_VERSION(4, 5)},
  
          {ARB_PIPELINE_STATISTICS_QUERY,    MAKEDWORD_VERSION(4, 6)},
@@ -45,7 +45,7 @@ Forwarded: not-needed
      };
      struct wined3d_driver_info *driver_info = &adapter->driver_info;
      const char *gl_vendor_str, *gl_renderer_str, *gl_version_str;
-@@ -5696,7 +5694,7 @@ HRESULT CDECL wined3d_get_device_caps(co
+@@ -5697,7 +5695,7 @@ HRESULT CDECL wined3d_get_device_caps(co
                                       WINED3DPRASTERCAPS_SLOPESCALEDEPTHBIAS |
                                       WINED3DPRASTERCAPS_DEPTHBIAS;
  
@@ -54,7 +54,7 @@ Forwarded: not-needed
      {
          caps->RasterCaps  |= WINED3DPRASTERCAPS_ANISOTROPY    |
                               WINED3DPRASTERCAPS_ZBIAS         |
-@@ -5815,7 +5813,7 @@ HRESULT CDECL wined3d_get_device_caps(co
+@@ -5816,7 +5814,7 @@ HRESULT CDECL wined3d_get_device_caps(co
                                 WINED3DPTFILTERCAPS_MIPNEAREST       |
                                 WINED3DPTFILTERCAPS_NEAREST;
  
@@ -63,7 +63,7 @@ Forwarded: not-needed
      {
          caps->TextureFilterCaps  |= WINED3DPTFILTERCAPS_MAGFANISOTROPIC |
                                      WINED3DPTFILTERCAPS_MINFANISOTROPIC;
-@@ -5836,7 +5834,7 @@ HRESULT CDECL wined3d_get_device_caps(co
+@@ -5837,7 +5835,7 @@ HRESULT CDECL wined3d_get_device_caps(co
                                         WINED3DPTFILTERCAPS_MIPNEAREST       |
                                         WINED3DPTFILTERCAPS_NEAREST;
  
@@ -87,7 +87,7 @@ Forwarded: not-needed
      GL_EXTCALL(glSamplerParameteri(sampler->name, GL_TEXTURE_COMPARE_FUNC,
 --- a/dlls/wined3d/texture.c
 +++ b/dlls/wined3d/texture.c
-@@ -911,8 +911,8 @@ void wined3d_texture_apply_sampler_desc(
+@@ -1006,8 +1006,8 @@ void wined3d_texture_apply_sampler_desc(
      state = sampler_desc->max_anisotropy;
      if (state != gl_tex->sampler_desc.max_anisotropy)
      {
@@ -137,7 +137,7 @@ Forwarded: not-needed
  /** GLX_ARB_create_context_profile */
  #define GLX_CONTEXT_PROFILE_MASK_ARB      0x9126
  /** GLX_ATI_pixel_format_float */
-@@ -2075,12 +2073,6 @@ static struct wgl_context *X11DRV_wglCre
+@@ -2077,12 +2075,6 @@ static struct wgl_context *X11DRV_wglCre
                      pContextAttribList[1] = attribList[1];
                      pContextAttribList += 2;
                      ret->numAttribs++;

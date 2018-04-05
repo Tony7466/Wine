@@ -1,4 +1,4 @@
-wine-development (3.4-1) UNRELEASED; urgency=medium
+wine-development (3.4-1) unstable; urgency=medium
 
   * New upstream release 3.4, released Mar 16, 2018.
     - More Vulkan support, including integration with the X11 driver.

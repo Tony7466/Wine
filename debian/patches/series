@@ -3,7 +3,6 @@ manpages-wineserver-persistence.patch
 
 disable/tests.patch
 disable/addons-download.patch
-disable/rerun-configure.patch
 disable/po-modifications.patch
 disable/winemenubuilder-blacklist-extensions.patch
 
