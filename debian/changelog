@@ -1,3 +1,14 @@
+wine-development (3.6-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.6, released Apr 13, 2018.
+    - Support for PNG format icons.
+    - Support for 1D textures.
+    - More infrastructure for high DPI support.
+    - OLE data cache improvements.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 22 Apr 2018 23:16:27 +0000
+
 wine-development (3.5-1) unstable; urgency=medium
 
   * New upstream release 3.5, released Mar 30, 2018.
