@@ -45,7 +45,7 @@ Forwarded: not-needed
      };
      struct wined3d_driver_info *driver_info = &adapter->driver_info;
      const char *gl_vendor_str, *gl_renderer_str, *gl_version_str;
-@@ -5678,7 +5676,7 @@ HRESULT CDECL wined3d_get_device_caps(co
+@@ -5692,7 +5690,7 @@ HRESULT CDECL wined3d_get_device_caps(co
                                       WINED3DPRASTERCAPS_SLOPESCALEDEPTHBIAS |
                                       WINED3DPRASTERCAPS_DEPTHBIAS;
  
@@ -54,7 +54,7 @@ Forwarded: not-needed
      {
          caps->RasterCaps  |= WINED3DPRASTERCAPS_ANISOTROPY    |
                               WINED3DPRASTERCAPS_ZBIAS         |
-@@ -5797,7 +5795,7 @@ HRESULT CDECL wined3d_get_device_caps(co
+@@ -5811,7 +5809,7 @@ HRESULT CDECL wined3d_get_device_caps(co
                                 WINED3DPTFILTERCAPS_MIPNEAREST       |
                                 WINED3DPTFILTERCAPS_NEAREST;
  
@@ -63,7 +63,7 @@ Forwarded: not-needed
      {
          caps->TextureFilterCaps  |= WINED3DPTFILTERCAPS_MAGFANISOTROPIC |
                                      WINED3DPTFILTERCAPS_MINFANISOTROPIC;
-@@ -5818,7 +5816,7 @@ HRESULT CDECL wined3d_get_device_caps(co
+@@ -5832,7 +5830,7 @@ HRESULT CDECL wined3d_get_device_caps(co
                                         WINED3DPTFILTERCAPS_MIPNEAREST       |
                                         WINED3DPTFILTERCAPS_NEAREST;
  
@@ -87,7 +87,7 @@ Forwarded: not-needed
      GL_EXTCALL(glSamplerParameteri(sampler->name, GL_TEXTURE_COMPARE_FUNC,
 --- a/dlls/wined3d/texture.c
 +++ b/dlls/wined3d/texture.c
-@@ -1012,8 +1012,8 @@ void wined3d_texture_apply_sampler_desc(
+@@ -1152,8 +1152,8 @@ void wined3d_texture_apply_sampler_desc(
      state = sampler_desc->max_anisotropy;
      if (state != gl_tex->sampler_desc.max_anisotropy)
      {

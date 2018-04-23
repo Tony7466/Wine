@@ -1,4 +1,4 @@
-wine-development (3.6-1) UNRELEASED; urgency=medium
+wine-development (3.6-1) unstable; urgency=medium
 
   * New upstream release 3.6, released Apr 13, 2018.
     - Support for PNG format icons.
@@ -6,6 +6,8 @@ wine-development (3.6-1) UNRELEASED; urgency=medium
     - More infrastructure for high DPI support.
     - OLE data cache improvements.
     - Various bug fixes.
+  * Move version control to salsa.debian.org.
+  * Change maintainer address to wine@tracker.debian.org.
 
  -- Michael Gilbert <mgilbert@debian.org>  Sun, 22 Apr 2018 23:16:27 +0000
 
