@@ -1,4 +1,4 @@
-wine-development (3.7-1) UNRELEASED; urgency=medium
+wine-development (3.7-1) unstable; urgency=medium
 
   * New upstream release 3.7, released Apr 27, 2018.
     - MSI custom actions run in a separate process.
