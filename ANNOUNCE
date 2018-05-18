@@ -261,5 +261,5 @@ Zhiyi Zhang (2):
       kernel32: Fix handling lines with only values in GetPrivateProfileSection.
 
 --
-Alexandre Julliard
-julliard@winehq.org
+Michael Stefaniuc
+mstefani@winehq.org
