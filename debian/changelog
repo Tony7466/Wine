@@ -1,3 +1,11 @@
+wine (3.0.1-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.0.1, released May 14, 2018.
+    - Various bug fixes
+    - Translation updates
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Fri, 18 May 2018 21:50:11 +0200
+
 wine (3.0-1) unstable; urgency=medium
 
   * New upstream release 3.0, released Jan 18, 2018.
