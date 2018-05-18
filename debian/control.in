@@ -95,12 +95,6 @@ Suggests:
  playonlinux,
  wine-binfmt,
  dosbox (>= 0.74-4.2~),
-Breaks:
- wine1.6 (<< 1:1.8.4ubuntu1~),
- wine1.6-i386 (<< 1:1.8.4ubuntu1~),
-Replaces:
- wine1.6 (<< 1:1.8.4ubuntu1~),
- wine1.6-i386 (<< 1:1.8.4ubuntu1~),
 #Provides:
 # wine,
 Description: Windows API implementation - standard suite
@@ -144,10 +138,6 @@ Recommends:
 Suggests:
  libwine-gecko-2.47 [!armel !armhf !arm64],
  wine64VERSION-preloader (= ${binary:Version}),
-Breaks:
- wine1.6-amd64 (<< 1:1.8.4ubuntu1~),
-Replaces:
- wine1.6-amd64 (<< 1:1.8.4ubuntu1~),
 Description: Windows API implementation - 64-bit binary loader
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
@@ -194,12 +184,8 @@ Depends:
 Recommends:
  wineVERSION (= ${source:Version}),
  g++ | g++-multilib:amd64 [i386],
-Breaks:
- wine1.6 (<< 1:1.8.4ubuntu1~),
 Conflicts:
  wine64VERSION-tools,
-Replaces:
- wine1.6 (<< 1:1.8.4ubuntu1~),
 Description: Windows API implementation - 32-bit developer tools
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
@@ -224,12 +210,8 @@ Depends:
 Recommends:
  wineVERSION (= ${source:Version}),
  g++,
-Breaks:
- wine1.6 (<< 1:1.8.4ubuntu1~),
 Conflicts:
  wine32VERSION-tools,
-Replaces:
- wine1.6 (<< 1:1.8.4ubuntu1~),
 Description: Windows API implementation - 64-bit developer tools
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
@@ -257,12 +239,6 @@ Suggests:
  ttf-mscorefonts-installer,
 Pre-Depends:
  ${misc:Pre-Depends},
-Breaks:
- wine1.6-amd64 (<< 1:1.8.4ubuntu1~),
- wine1.6-i386 (<< 1:1.8.4ubuntu1~),
-Replaces:
- wine1.6-amd64 (<< 1:1.8.4ubuntu1~),
- wine1.6-i386 (<< 1:1.8.4ubuntu1~),
 Description: Windows API implementation - library
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
@@ -280,10 +256,6 @@ Depends:
  libc6-dev | libc6.1-dev | libc0.3-dev | libc0.1-dev | libc-dev,
 Recommends:
  wine64VERSION-tools (= ${binary:Version}) | wine32VERSION-tools (= ${binary:Version}),
-Breaks:
- wine1.6-dev (<< 1:1.8.4ubuntu1~),
-Replaces:
- wine1.6-dev (<< 1:1.8.4ubuntu1~),
 Description: Windows API implementation - development files
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
@@ -297,10 +269,6 @@ Depends:
  ${misc:Depends},
  wine,
  binfmt-support,
-Breaks:
- wine1.6 (<< 1:1.8.4ubuntu1~),
-Replaces:
- wine1.6 (<< 1:1.8.4ubuntu1~),
 Description: Activate Wine as interpreter for Windows executables 
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
@@ -324,10 +292,6 @@ Multi-Arch: foreign
 Built-Using: ${built:Using}
 Depends:
  ${misc:Depends},
-Breaks:
- wine1.6 (<< 1:1.8.4ubuntu1~),
-Replaces:
- wine1.6 (<< 1:1.8.4ubuntu1~),
 Description: Windows API implementation - fonts
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
