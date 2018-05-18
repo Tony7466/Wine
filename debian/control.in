@@ -269,7 +269,7 @@ Depends:
  ${misc:Depends},
  wine,
  binfmt-support,
-Description: Activate Wine as interpreter for Windows executables 
+Description: Activate Wine as interpreter for Windows executables
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
  .
