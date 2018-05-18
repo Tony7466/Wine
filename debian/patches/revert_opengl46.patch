@@ -23,7 +23,7 @@ Forwarded: not-needed
      {"GL_EXT_texture_integer",              EXT_TEXTURE_INTEGER           },
      {"GL_EXT_texture_lod_bias",             EXT_TEXTURE_LOD_BIAS          },
      {"GL_EXT_texture_mirror_clamp",         EXT_TEXTURE_MIRROR_CLAMP      },
-@@ -3610,9 +3609,9 @@ static void wined3d_adapter_init_limits(
+@@ -3614,9 +3613,9 @@ static void wined3d_adapter_init_limits(
          gl_info->limits.texture3d_size = gl_max;
          TRACE("Max texture3D size: %d.\n", gl_info->limits.texture3d_size);
      }
@@ -35,7 +35,7 @@ Forwarded: not-needed
          gl_info->limits.anisotropy = gl_max;
          TRACE("Max anisotropy: %d.\n", gl_info->limits.anisotropy);
      }
-@@ -3923,7 +3922,6 @@ static BOOL wined3d_adapter_init_gl_caps
+@@ -3927,7 +3926,6 @@ static BOOL wined3d_adapter_init_gl_caps
          {ARB_DERIVATIVE_CONTROL,           MAKEDWORD_VERSION(4, 5)},
  
          {ARB_PIPELINE_STATISTICS_QUERY,    MAKEDWORD_VERSION(4, 6)},
@@ -43,7 +43,7 @@ Forwarded: not-needed
      };
      struct wined3d_driver_info *driver_info = &adapter->driver_info;
      const char *gl_vendor_str, *gl_renderer_str, *gl_version_str;
-@@ -5665,7 +5663,7 @@ HRESULT CDECL wined3d_get_device_caps(co
+@@ -5669,7 +5667,7 @@ HRESULT CDECL wined3d_get_device_caps(co
                                       WINED3DPRASTERCAPS_SLOPESCALEDEPTHBIAS |
                                       WINED3DPRASTERCAPS_DEPTHBIAS;
  
@@ -52,7 +52,7 @@ Forwarded: not-needed
      {
          caps->RasterCaps  |= WINED3DPRASTERCAPS_ANISOTROPY    |
                               WINED3DPRASTERCAPS_ZBIAS         |
-@@ -5784,7 +5782,7 @@ HRESULT CDECL wined3d_get_device_caps(co
+@@ -5788,7 +5786,7 @@ HRESULT CDECL wined3d_get_device_caps(co
                                 WINED3DPTFILTERCAPS_MIPNEAREST       |
                                 WINED3DPTFILTERCAPS_NEAREST;
  
@@ -61,7 +61,7 @@ Forwarded: not-needed
      {
          caps->TextureFilterCaps  |= WINED3DPTFILTERCAPS_MAGFANISOTROPIC |
                                      WINED3DPTFILTERCAPS_MINFANISOTROPIC;
-@@ -5805,7 +5803,7 @@ HRESULT CDECL wined3d_get_device_caps(co
+@@ -5809,7 +5807,7 @@ HRESULT CDECL wined3d_get_device_caps(co
                                         WINED3DPTFILTERCAPS_MIPNEAREST       |
                                         WINED3DPTFILTERCAPS_NEAREST;
  
