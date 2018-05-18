@@ -8,17 +8,17 @@ various User Guides and manpages:
 https://www.winehq.org/documentation
 
 For resources related to Debian Wine packaging, please visit:
-http://pkg-wine.alioth.debian.org
+https://salsa.debian.org/groups/wine-team
 
 To participate in development and/or discussion about the Debian packages,
-please subscribe to the pkg-wine-party mailing list:
-http://lists.alioth.debian.org/mailman/listinfo/pkg-wine-party
+please subscribe to the Debian Wine mailing list:
+https://lists.debian.org/debian-wine/
 
 The Debian package repository can also be checked out with git:
-$ git clone https://anonscm.debian.org/git/pkg-wine/wine.git
+$ git clone https://salsa.debian.org/wine-team/wine.git
 
 Or viewed online at:
-https://anonscm.debian.org/git/pkg-wine/wine.git
+https://salsa.debian.org/wine-team/wine
 
 
 Debugging
@@ -55,8 +55,8 @@ debsnap fetches source packages by default, which you will then need to build
 Alternative current versions
 ============================
 You can choose between two sets of Wine packages: wine and wine-development.
-wine tracks the stable releases from winehq.org (e.g. version 1.8.3), and
-wine-development the development releases (e.g. version 1.9.24).
+wine tracks the stable releases from winehq.org (e.g. version 3.0.1), and
+wine-development the development releases (e.g. version 3.7).
 
 wine and wine-development use the Debian alternatives system to provide
 /usr/bin/wine and other commands.  If both packages are installed it defaults
@@ -79,7 +79,7 @@ Usually everything is automatically configured, but for fine-tuning a good tool
 is winecfg.
 
 If you need to set up Wine manually, without winecfg, you can force the
-creation of a ~/.wine directory by running:
+creation of a ~/.wine directory (the so called "wine prefix") by running:
 $ wineboot
 
 If something goes horribly wrong, you can always completely wipe your Wine
@@ -142,6 +142,11 @@ Information about which Wine Gecko should be associated with any particular
 Wine version is available at:
 https://wiki.winehq.org/Gecko
 
+Information about available versions in Debian is at:
+https://packages.debian.org/wine-gecko
+As of May 2018 the last available versions are for Debian 8 (Jessie), so help
+in packaging new versions is really appreciated.
+
 If the right libwine-gecko-*.deb package is not currently available, you can
 download the Wine Gecko installers (on 64-bit systems you need both the 32-bit
 and the 64-bit version) and copy them to one of the following locations (in
@@ -178,10 +183,11 @@ up.
 System integration (binfmt)
 ---------------------------
 If you install the package wine-binfmt Wine gets registered as interpreter for
-Windows executables.  So instead of executing "wine foo.exe" you may just use
-"./foo.exe".  Windows executables (including malware) might get auto-started
-this way, even as root.  For this to work, the executable has to be on PATH (or
+Windows executables.  For this to work, the executable has to be on PATH (or
 its path must be specified), and the executable mode bit must be set.
+
+Instead of executing "wine foo.exe" you may just use "./foo.exe" then.  Windows
+executables (including malware) might get auto-started this way, even as root.
 
 This feature is probably most interesting for automatic software testing.
 Desktop users probably don't need it, so don't install wine-binfmt, unless you
@@ -202,6 +208,8 @@ $ sudo cp /usr/share/doc/wine-development/examples/wine.desktop /usr/share/appli
 
 Enable only for your current user:
 $ cp /usr/share/doc/wine/examples/wine.desktop ~/.local/share/applications/
+or
+$ cp /usr/share/doc/wine-development/examples/wine.desktop ~/.local/share/applications/
 
 Remove:
 $ sudo rm -f /usr/share/applications/wine.desktop
@@ -212,13 +220,14 @@ $ update-desktop-database ~/.local/share/applications/
 
 Opening files with Windows applications (MIME)
 ----------------------------------------------
-Some applications register for opening files of a specified type.  Generally
-these associations are propagated to your Linux desktop, so that you can
-directly open files with the matching Windows application.  However it is
-disabled for some common file types to avoid unwanted associations with
-general purpose Windows applications, while a preferred native application
-exists (e.g. it prevents .txt files from being opened with Wine's notepad
-instead of your system's preferred editor).
+Some applications register themselves for opening files of a specified type.
+Generally these associations are propagated to your Linux desktop, so that you
+can directly open files with the matching Windows application.
+
+Creation of these associations is disabled for some common file types to avoid
+unwanted associations with general purpose Windows applications, while a
+preferred native application exists (e.g. it prevents .txt files from being
+opened with Wine's notepad instead of your system's preferred editor).
 
 To remove all these file type associations:
 
