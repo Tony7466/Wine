@@ -1841,7 +1841,8 @@ then
   WINE_TRY_CFLAGS([-Wdeclaration-after-statement])
   WINE_TRY_CFLAGS([-Wempty-body])
   WINE_TRY_CFLAGS([-Wignored-qualifiers])
-  WINE_TRY_CFLAGS([-Wno-packed-not-aligned])
+  WINE_TRY_CFLAGS([-Wpacked-not-aligned],[EXTRACFLAGS="$EXTRACFLAGS -Wno-packed-not-aligned"])
+  WINE_TRY_CFLAGS([-Wpragma-pack],[EXTRACFLAGS="$EXTRACFLAGS -Wno-pragma-pack"])
   WINE_TRY_CFLAGS([-Wshift-overflow=2])
   WINE_TRY_CFLAGS([-Wstrict-prototypes])
   WINE_TRY_CFLAGS([-Wtype-limits])
@@ -2660,6 +2661,9 @@ AC_CHECK_FUNCS(\
 	exp2f \
 	expm1 \
 	expm1f \
+	j0 \
+	j1 \
+	jn \
 	lgamma \
 	lgammaf \
 	llrint \
@@ -2684,7 +2688,10 @@ AC_CHECK_FUNCS(\
 	round \
 	roundf \
 	trunc \
-	truncf
+	truncf \
+	y0 \
+	y1 \
+	yn
 )
 LIBS="$ac_save_LIBS"
 

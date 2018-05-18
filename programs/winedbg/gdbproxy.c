@@ -74,7 +74,7 @@
 
 struct gdb_ctx_Xpoint
 {
-    enum be_xpoint_type         type;   /* -1 means free */
+    enum be_xpoint_type         type;   /* (-1) == be_xpoint_free means free */
     void*                       addr;
     unsigned long               val;
 };
@@ -451,6 +451,7 @@ static inline DWORD64   cpu_register(CONTEXT* ctx, unsigned idx)
 {
     switch (cpu_register_map[idx].ctx_length)
     {
+    case 1: return *(BYTE*)cpu_register_ptr(ctx, idx);
     case 2: return *(WORD*)cpu_register_ptr(ctx, idx);
     case 4: return *(DWORD*)cpu_register_ptr(ctx, idx);
     case 8: return *(DWORD64*)cpu_register_ptr(ctx, idx);
@@ -479,6 +480,7 @@ static inline   void    cpu_register_hex_from(CONTEXT* ctx, unsigned idx, const 
         }
         switch (cpu_register_map[idx].ctx_length)
         {
+        case 1: *(BYTE*)cpu_register_ptr(ctx, idx) = (BYTE)val; break;
         case 2: *(WORD*)cpu_register_ptr(ctx, idx) = (WORD)val; break;
         case 4: *(DWORD*)cpu_register_ptr(ctx, idx) = (DWORD)val; break;
         case 8: *(DWORD64*)cpu_register_ptr(ctx, idx) = val; break;
@@ -1499,6 +1501,28 @@ static enum packet_return packet_thread(struct gdb_context* gdbctx)
     }
 }
 
+static BOOL read_memory(struct gdb_context *gdbctx, char *addr, char *buffer, SIZE_T blk_len, SIZE_T *r)
+{
+    /* Wrapper around process_io->read() that replaces values displaced by breakpoints. */
+
+    BOOL ret;
+
+    ret = gdbctx->process->process_io->read(gdbctx->process->handle, addr, buffer, blk_len, r);
+    if (ret)
+    {
+        struct gdb_ctx_Xpoint *xpt;
+
+        for (xpt = &gdbctx->Xpoints[NUM_XPOINT - 1]; xpt >= gdbctx->Xpoints; xpt--)
+        {
+            char *xpt_addr = xpt->addr;
+
+            if (xpt->type != be_xpoint_free && xpt_addr >= addr && xpt_addr < addr + blk_len)
+                buffer[xpt_addr - addr] = xpt->val;
+        }
+    }
+    return ret;
+}
+
 static enum packet_return packet_read_memory(struct gdb_context* gdbctx)
 {
     char               *addr;
@@ -1515,8 +1539,7 @@ static enum packet_return packet_read_memory(struct gdb_context* gdbctx)
     for (nread = 0; nread < len; nread += r, addr += r)
     {
         blk_len = min(sizeof(buffer), len - nread);
-        if (!gdbctx->process->process_io->read(gdbctx->process->handle, addr, buffer, blk_len, &r) ||
-            r == 0)
+        if (!read_memory(gdbctx, addr, buffer, blk_len, &r) || r == 0)
         {
             /* fail at first address, return error */
             if (nread == 0) return packet_reply_error(gdbctx, EFAULT);
@@ -2102,7 +2125,7 @@ static enum packet_return packet_remove_breakpoint(struct gdb_context* gdbctx)
                                       gdbctx->process->process_io, &gdbctx->context,
                                       t, xpt->addr, xpt->val, len))
             {
-                xpt->type = -1;
+                xpt->type = be_xpoint_free;
                 return packet_ok;
             }
             break;
@@ -2143,7 +2166,7 @@ static enum packet_return packet_set_breakpoint(struct gdb_context* gdbctx)
     /* really set the Xpoint */
     for (xpt = &gdbctx->Xpoints[NUM_XPOINT - 1]; xpt >= gdbctx->Xpoints; xpt--)
     {
-        if (xpt->type == -1)
+        if (xpt->type == be_xpoint_free)
         {
             if (be_cpu->insert_Xpoint(gdbctx->process->handle,
                                       gdbctx->process->process_io, &gdbctx->context, 

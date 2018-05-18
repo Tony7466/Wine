@@ -7008,7 +7008,7 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
         origin_x = left;
         origin_y = top;
         abc->abcA = origin_x >> 6;
-        abc->abcB = metrics.width >> 6;
+        abc->abcB = (metrics.width + 63) >> 6;
     } else {
         INT xc, yc;
 	FT_Vector vec;
@@ -7064,19 +7064,20 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
         gm.gmCellIncY = adv.y >> 6;
 
         adv = get_advance_metric(incoming_font, font, &metrics, &transMatUnrotated, vertical_metrics);
+        adv.x = pFT_Vector_Length(&adv);
+        adv.y = 0;
 
         vec.x = lsb;
         vec.y = 0;
         pFT_Vector_Transform(&vec, &transMatUnrotated);
-        abc->abcA = vec.x >> 6;
+        if(lsb > 0) abc->abcA = pFT_Vector_Length(&vec) >> 6;
+        else abc->abcA = -((pFT_Vector_Length(&vec) + 63) >> 6);
 
-        vec.x = metrics.width;
+        /* We use lsb again to avoid rounding errors */
+        vec.x = lsb + metrics.width;
         vec.y = 0;
         pFT_Vector_Transform(&vec, &transMatUnrotated);
-        if (vec.x >= 0)
-            abc->abcB = vec.x >> 6;
-        else
-            abc->abcB = -vec.x >> 6;
+        abc->abcB = ((pFT_Vector_Length(&vec) + 63) >> 6) - abc->abcA;
     }
 
     width  = (right - left) >> 6;
@@ -7521,6 +7522,9 @@ static BOOL get_bitmap_text_metrics(GdiFont *font)
         TM.tmPitchAndFamily = FT_IS_FIXED_WIDTH(ft_face) ? 0 : TMPF_FIXED_PITCH;
         TM.tmCharSet = font->charset;
     }
+
+    if(font->fake_bold)
+        TM.tmWeight = FW_BOLD;
 #undef TM
 
     return TRUE;
@@ -7550,8 +7554,15 @@ static void scale_font_metrics(const GdiFont *font, LPTEXTMETRICW ptm)
     SCALE_Y(ptm->tmDescent);
     SCALE_Y(ptm->tmInternalLeading);
     SCALE_Y(ptm->tmExternalLeading);
-    SCALE_Y(ptm->tmOverhang);
 
+    SCALE_X(ptm->tmOverhang);
+    if(font->fake_bold)
+    {
+        if(!FT_IS_SCALABLE(font->ft_face))
+            ptm->tmOverhang++;
+        ptm->tmAveCharWidth++;
+        ptm->tmMaxCharWidth++;
+    }
     SCALE_X(ptm->tmAveCharWidth);
     SCALE_X(ptm->tmMaxCharWidth);
 
@@ -7776,11 +7787,8 @@ static BOOL get_outline_text_metrics(GdiFont *font)
     }
     TM.tmMaxCharWidth = SCALE_X(ft_face->bbox.xMax - ft_face->bbox.xMin);
     TM.tmWeight = FW_REGULAR;
-    if (font->fake_bold) {
-        TM.tmAveCharWidth++;
-        TM.tmMaxCharWidth++;
+    if (font->fake_bold)
         TM.tmWeight = FW_BOLD;
-    }
     else
     {
         if (ft_face->style_flags & FT_STYLE_FLAG_BOLD)

@@ -35,9 +35,9 @@
 @ cdecl -arch=arm ??0_NonReentrantBlockingLock@details@Concurrency@@QAA@XZ(ptr) _ReentrantBlockingLock_ctor
 @ thiscall -arch=i386 ??0_NonReentrantBlockingLock@details@Concurrency@@QAE@XZ(ptr) _ReentrantBlockingLock_ctor
 @ cdecl -arch=win64 ??0_NonReentrantBlockingLock@details@Concurrency@@QEAA@XZ(ptr) _ReentrantBlockingLock_ctor
-@ stub -arch=arm ??0_NonReentrantPPLLock@details@Concurrency@@QAA@XZ
-@ stub -arch=i386 ??0_NonReentrantPPLLock@details@Concurrency@@QAE@XZ
-@ stub -arch=win64 ??0_NonReentrantPPLLock@details@Concurrency@@QEAA@XZ
+@ cdecl -arch=arm ??0_NonReentrantPPLLock@details@Concurrency@@QAA@XZ(ptr) _NonReentrantPPLLock_ctor
+@ thiscall -arch=i386 ??0_NonReentrantPPLLock@details@Concurrency@@QAE@XZ(ptr) _NonReentrantPPLLock_ctor
+@ cdecl -arch=win64 ??0_NonReentrantPPLLock@details@Concurrency@@QEAA@XZ(ptr) _NonReentrantPPLLock_ctor
 @ stub -arch=arm ??0_ReaderWriterLock@details@Concurrency@@QAA@XZ
 @ stub -arch=i386 ??0_ReaderWriterLock@details@Concurrency@@QAE@XZ
 @ stub -arch=win64 ??0_ReaderWriterLock@details@Concurrency@@QEAA@XZ
@@ -466,9 +466,9 @@
 @ cdecl -arch=arm ?_Acquire@_NonReentrantBlockingLock@details@Concurrency@@QAAXXZ(ptr) _ReentrantBlockingLock__Acquire
 @ thiscall -arch=i386 ?_Acquire@_NonReentrantBlockingLock@details@Concurrency@@QAEXXZ(ptr) _ReentrantBlockingLock__Acquire
 @ cdecl -arch=win64 ?_Acquire@_NonReentrantBlockingLock@details@Concurrency@@QEAAXXZ(ptr) _ReentrantBlockingLock__Acquire
-@ stub -arch=arm ?_Acquire@_NonReentrantPPLLock@details@Concurrency@@QAAXPAX@Z
-@ stub -arch=i386 ?_Acquire@_NonReentrantPPLLock@details@Concurrency@@QAEXPAX@Z
-@ stub -arch=win64 ?_Acquire@_NonReentrantPPLLock@details@Concurrency@@QEAAXPEAX@Z
+@ cdecl -arch=arm ?_Acquire@_NonReentrantPPLLock@details@Concurrency@@QAAXPAX@Z(ptr ptr) _NonReentrantPPLLock__Acquire
+@ thiscall -arch=i386 ?_Acquire@_NonReentrantPPLLock@details@Concurrency@@QAEXPAX@Z(ptr ptr) _NonReentrantPPLLock__Acquire
+@ cdecl -arch=win64 ?_Acquire@_NonReentrantPPLLock@details@Concurrency@@QEAAXPEAX@Z(ptr ptr) _NonReentrantPPLLock__Acquire
 @ cdecl -arch=arm ?_Acquire@_ReentrantBlockingLock@details@Concurrency@@QAAXXZ(ptr) _ReentrantBlockingLock__Acquire
 @ thiscall -arch=i386 ?_Acquire@_ReentrantBlockingLock@details@Concurrency@@QAEXXZ(ptr) _ReentrantBlockingLock__Acquire
 @ cdecl -arch=win64 ?_Acquire@_ReentrantBlockingLock@details@Concurrency@@QEAAXXZ(ptr) _ReentrantBlockingLock__Acquire
@@ -580,9 +580,9 @@
 @ cdecl -arch=arm ?_Release@_NonReentrantBlockingLock@details@Concurrency@@QAAXXZ(ptr) _ReentrantBlockingLock__Release
 @ thiscall -arch=i386 ?_Release@_NonReentrantBlockingLock@details@Concurrency@@QAEXXZ(ptr) _ReentrantBlockingLock__Release
 @ cdecl -arch=win64 ?_Release@_NonReentrantBlockingLock@details@Concurrency@@QEAAXXZ(ptr) _ReentrantBlockingLock__Release
-@ stub -arch=arm ?_Release@_NonReentrantPPLLock@details@Concurrency@@QAAXXZ
-@ stub -arch=i386 ?_Release@_NonReentrantPPLLock@details@Concurrency@@QAEXXZ
-@ stub -arch=win64 ?_Release@_NonReentrantPPLLock@details@Concurrency@@QEAAXXZ
+@ cdecl -arch=arm ?_Release@_NonReentrantPPLLock@details@Concurrency@@QAAXXZ(ptr) _NonReentrantPPLLock__Release
+@ thiscall -arch=i386 ?_Release@_NonReentrantPPLLock@details@Concurrency@@QAEXXZ(ptr) _NonReentrantPPLLock__Release
+@ cdecl -arch=win64 ?_Release@_NonReentrantPPLLock@details@Concurrency@@QEAAXXZ(ptr) _NonReentrantPPLLock__Release
 @ cdecl -arch=arm ?_Release@_ReentrantBlockingLock@details@Concurrency@@QAAXXZ(ptr) _ReentrantBlockingLock__Release
 @ thiscall -arch=i386 ?_Release@_ReentrantBlockingLock@details@Concurrency@@QAEXXZ(ptr) _ReentrantBlockingLock__Release
 @ cdecl -arch=win64 ?_Release@_ReentrantBlockingLock@details@Concurrency@@QEAAXXZ(ptr) _ReentrantBlockingLock__Release
@@ -657,7 +657,7 @@
 @ stub -arch=arm ?_Tidy@exception@std@@AAAXXZ
 @ stub -arch=i386 ?_Tidy@exception@std@@AAEXXZ
 @ stub -arch=win64 ?_Tidy@exception@std@@AEAAXXZ
-@ stub ?_Trace_agents@Concurrency@@YAXW4Agents_EventType@1@_JZZ
+@ varargs ?_Trace_agents@Concurrency@@YAXW4Agents_EventType@1@_JZZ(long int64) _Trace_agents
 @ cdecl -arch=win32 ?_Trace_ppl_function@Concurrency@@YAXABU_GUID@@EW4ConcRT_EventType@1@@Z(ptr long long) Concurrency__Trace_ppl_function
 @ cdecl -arch=win64 ?_Trace_ppl_function@Concurrency@@YAXAEBU_GUID@@EW4ConcRT_EventType@1@@Z(ptr long long) Concurrency__Trace_ppl_function
 @ cdecl -arch=arm ?_TryAcquire@_NonReentrantBlockingLock@details@Concurrency@@QAA_NXZ(ptr) _ReentrantBlockingLock__TryAcquire

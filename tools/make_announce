@@ -73,7 +73,7 @@ sub get_bugs($)
     my $csv = Text::CSV::Encoded->new({ encoding_in => "utf-8", encoding_out => "utf-8" });
     my %bugs;
 
-    open QUERY, "-|" or exec "wget", "-qO-", "https://bugs.winehq.org/buglist.cgi?columnlist=short_desc&query_format=advanced&ctype=csv&$filter"
+    open QUERY, "-|" or exec "git", "log", "--notes=stable-notes", "--format=%N", "wine-" . get_current_version() . ".."
         or die "cannot query bug list";
     <QUERY>;  # skip header line
     while (<QUERY>)
