@@ -1,11 +1,15 @@
 Source: wineVERSION
 Section: otherosfs
 Priority: optional
+Homepage: https://www.winehq.org
 Maintainer: Debian Wine Team <debian-wine@lists.debian.org>
 Uploaders:
  Michael Gilbert <mgilbert@debian.org>,
  Stephen Kitt <skitt@debian.org>,
  Jens Reyer <jre.winesim@gmail.com>,
+Vcs-Git: https://salsa.debian.org/wine-team/wine.git -b buster
+Vcs-Browser: https://salsa.debian.org/wine-team/wine/tree/buster
+Standards-Version: 4.1.4
 Build-Depends:
  debhelper (>= 11~),
  libxi-dev,
@@ -75,10 +79,6 @@ Build-Depends:
  librsvg2-bin,
  imagemagick,
  fontforge-nox | fontforge,
-Standards-Version: 4.1.4
-Homepage: https://www.winehq.org
-Vcs-Browser: https://salsa.debian.org/wine-team/wine/tree/buster
-Vcs-Git: https://salsa.debian.org/wine-team/wine.git -b buster
 
 Package: wineVERSION
 Architecture: all
