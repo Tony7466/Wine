@@ -1,4 +1,4 @@
-wine-development (3.8-1) UNRELEASED; urgency=medium
+wine-development (3.8-1) unstable; urgency=medium
 
   * New upstream release 3.8, released May 11, 2018.
     - Infrastructure for writing kernel driver tests.
@@ -7,8 +7,13 @@ wine-development (3.8-1) UNRELEASED; urgency=medium
     - More support for the Task Scheduler.
     - Support for COM aggregation in UrlMon.
     - Various bug fixes.
+  * Drop opengl compatibility patch (closes: #899095).
+  * Drop font patch, now fixed in freetype (closes: #899100).
+  * Build with support for sdl2 and vulkan (closes: #896928).
+  * Change maintainer address to debian-wine@lists.debian.org.
+    - Thanks to Jens Reyer.
 
- -- Michael Gilbert <mgilbert@debian.org>  Sat, 19 May 2018 06:34:50 +0000
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 19 May 2018 09:10:53 +0000
 
 wine-development (3.7-1) unstable; urgency=medium
 

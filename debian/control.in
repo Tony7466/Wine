@@ -2,7 +2,7 @@ Source: wineVERSION
 Section: otherosfs
 Priority: optional
 Homepage: https://www.winehq.org
-Maintainer: Debian Wine Party <wine@tracker.debian.org>
+Maintainer: Debian Wine Party <debian-wine@lists.debian.org>
 Uploaders:
  Michael Gilbert <mgilbert@debian.org>,
  Stephen Kitt <skitt@debian.org>,
@@ -40,12 +40,13 @@ Build-Depends:
  sharutils,
  pkg-config,
  dctrl-tools,
- khronos-api,
+ khronos-api (>= 4.6),
  unicode-data (>= 10),
  unicode-data (<< 11),
  libpng-dev,
  libssl-dev,
  libv4l-dev [linux-any kfreebsd-any],
+ libsdl2-dev,
  libxml2-dev,
  libgsm1-dev,
  libjpeg-dev,
@@ -60,6 +61,7 @@ Build-Depends:
  unixodbc-dev,
  libcups2-dev,
  libcapi20-dev [linux-any],
+ libvulkan-dev,
  libopenal-dev,
  libdbus-1-dev,
  freeglut3-dev,
@@ -71,7 +73,7 @@ Build-Depends:
  libgnutls28-dev,
  libncurses5-dev,
  libgettextpo-dev,
- libfreetype6-dev (>= 2.5.1),
+ libfreetype6-dev (>= 2.6.2),
  libfontconfig1-dev,
  libgstreamer-plugins-base1.0-dev,
  freebsd-glue [kfreebsd-any],

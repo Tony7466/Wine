@@ -20,7 +20,4 @@ binary-indep/manpages.patch
 binary-indep/sfnt2fon.patch
 
 gstbase.patch
-font-divbyzero.patch
 printer-resolution.patch
-
-revert_opengl46.patch
