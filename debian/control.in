@@ -40,7 +40,7 @@ Build-Depends:
  sharutils,
  pkg-config,
  dctrl-tools,
- khronos-api,
+ khronos-api (>= 4.6),
  unicode-data (>= 10),
  unicode-data (<< 11),
  libpng-dev,
