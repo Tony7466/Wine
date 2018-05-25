@@ -1,3 +1,15 @@
+wine-development (3.9-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.9, released May 25, 2018.
+    - OpenGL core contexts enabled by default in Direct 3D.
+    - Beginnings of Direct 3D 12 implementation using vkd3d.
+    - More support for the Task Scheduler.
+    - Some more Task Dialog support.
+    - Better arrow support in GdiPlus.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Fri, 25 May 2018 19:45:29 +0000
+
 wine-development (3.8-2) unstable; urgency=medium
 
   * Upstream now requires clang for arm64.
