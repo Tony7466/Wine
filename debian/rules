@@ -39,6 +39,7 @@ export DEB_LDFLAGS_MAINT_APPEND+=-Wl,-rpath,/$(LIBDIR)
 # configure options
 CONFLAGS=--with-gnutls \
          --without-hal \
+         --without-netapi \
          --disable-tests \
          --enable-maintainer-mode \
          --libdir=/$(LIBDIR) \

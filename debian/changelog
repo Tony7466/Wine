@@ -1,4 +1,4 @@
-wine-development (3.9-1) UNRELEASED; urgency=medium
+wine-development (3.9-1) unstable; urgency=medium
 
   * New upstream release 3.9, released May 25, 2018.
     - OpenGL core contexts enabled by default in Direct 3D.
@@ -7,6 +7,7 @@ wine-development (3.9-1) UNRELEASED; urgency=medium
     - Some more Task Dialog support.
     - Better arrow support in GdiPlus.
     - Various bug fixes.
+  * Fix typo in a previous changelog entry.
 
  -- Michael Gilbert <mgilbert@debian.org>  Fri, 25 May 2018 19:45:29 +0000
 
@@ -1388,7 +1389,7 @@ wine-development (1.7.44-1) unstable; urgency=medium
   * Add version constraints to the libwine dependency (closes: #786797).
   * Remove all of the calls to exit in the shared library.
   * Set wine as Multi-Arch foreign (closes: #787180).
-  * Add sylink to wine32 (closes: #786866).
+  * Add symlink to wine32 (closes: #786866).
 
  -- Michael Gilbert <mgilbert@debian.org>  Sat, 30 May 2015 17:09:25 +0000
 
