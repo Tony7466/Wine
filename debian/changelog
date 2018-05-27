@@ -1,3 +1,11 @@
+wine (3.0.1-2~bpo9+1) stretch-backports; urgency=medium
+
+  * Rebuild for stretch-backports.
+    No changes to unstable version needed anymore.
+    Requires backported version of khronos-api.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Sun, 27 May 2018 19:07:44 +0200
+
 wine (3.0.1-2) unstable; urgency=medium
 
   * Drop font patch, now fixed in freetype.
