@@ -1143,7 +1143,7 @@ static int CALLBACK create_font_proc(const LOGFONTA *lpelfe,
     return 1;
 }
 
-static void ABCWidths_helper(const char* description, HDC hdc, WORD *glyphs, ABC *base_abci, ABC *base_abcw, ABCFLOAT *base_abcf, INT todo)
+static void ABCWidths_helper(const char* description, HDC hdc, WORD *glyphs, const ABC *base_abci, const ABC *base_abcw, const ABCFLOAT *base_abcf)
 {
     ABC abc[1];
     ABCFLOAT abcf[1];
@@ -1152,26 +1152,20 @@ static void ABCWidths_helper(const char* description, HDC hdc, WORD *glyphs, ABC
     ret = pGetCharABCWidthsI(hdc, 0, 1, glyphs, abc);
     ok(ret, "%s: GetCharABCWidthsI should have succeeded\n", description);
     ok ((INT)abc->abcB > 0, "%s: abcB should be positive\n", description);
-    todo_wine_if (todo)
-        ok(abc->abcA * base_abci->abcA >= 0, "%s: abcA's sign should be unchanged\n", description);
-    todo_wine_if (todo)
-        ok(abc->abcC * base_abci->abcC >= 0, "%s: abcC's sign should be unchanged\n", description);
+    ok(abc->abcA * base_abci->abcA >= 0, "%s: abcA's sign should be unchanged\n", description);
+    ok(abc->abcC * base_abci->abcC >= 0, "%s: abcC's sign should be unchanged\n", description);
 
     ret = pGetCharABCWidthsW(hdc, 'i', 'i', abc);
     ok(ret, "%s: GetCharABCWidthsW should have succeeded\n", description);
     ok ((INT)abc->abcB > 0, "%s: abcB should be positive\n", description);
-    todo_wine_if (todo)
-        ok(abc->abcA * base_abcw->abcA >= 0, "%s: abcA's sign should be unchanged\n", description);
-    todo_wine_if (todo)
-        ok(abc->abcC * base_abcw->abcC >= 0, "%s: abcC's sign should be unchanged\n", description);
+    ok(abc->abcA * base_abcw->abcA >= 0, "%s: abcA's sign should be unchanged\n", description);
+    ok(abc->abcC * base_abcw->abcC >= 0, "%s: abcC's sign should be unchanged\n", description);
 
     ret = pGetCharABCWidthsFloatW(hdc, 'i', 'i', abcf);
     ok(ret, "%s: GetCharABCWidthsFloatW should have succeeded\n", description);
     ok (abcf->abcfB > 0.0, "%s: abcfB should be positive\n", description);
-    todo_wine_if (todo)
-        ok(abcf->abcfA * base_abcf->abcfA >= 0.0, "%s: abcfA's sign should be unchanged\n", description);
-    todo_wine_if (todo)
-        ok(abcf->abcfC * base_abcf->abcfC >= 0.0, "%s: abcfC's sign should be unchanged\n", description);
+    ok(abcf->abcfA * base_abcf->abcfA >= 0.0, "%s: abcfA's sign should be unchanged\n", description);
+    ok(abcf->abcfC * base_abcf->abcfC >= 0.0, "%s: abcfC's sign should be unchanged\n", description);
 }
 
 static void test_GetCharABCWidths(void)
@@ -1384,17 +1378,17 @@ static void test_GetCharABCWidths(void)
     ret = pGetCharABCWidthsFloatW(hdc, 'i', 'i', abcf);
     ok(ret, "GetCharABCWidthsFloatW should have succeeded\n");
 
-    ABCWidths_helper("LTR", hdc, glyphs, abc, abcw, abcf, 0);
+    ABCWidths_helper("LTR", hdc, glyphs, abc, abcw, abcf);
     SetWindowExtEx(hdc, -1, -1, NULL);
     SetGraphicsMode(hdc, GM_COMPATIBLE);
-    ABCWidths_helper("LTR -1 compatible", hdc, glyphs, abc, abcw, abcf, 0);
+    ABCWidths_helper("LTR -1 compatible", hdc, glyphs, abc, abcw, abcf);
     SetGraphicsMode(hdc, GM_ADVANCED);
-    ABCWidths_helper("LTR -1 advanced", hdc, glyphs, abc, abcw, abcf, 1);
+    ABCWidths_helper("LTR -1 advanced", hdc, glyphs, abc, abcw, abcf);
     SetWindowExtEx(hdc, 1, 1, NULL);
     SetGraphicsMode(hdc, GM_COMPATIBLE);
-    ABCWidths_helper("LTR 1 compatible", hdc, glyphs, abc, abcw, abcf, 0);
+    ABCWidths_helper("LTR 1 compatible", hdc, glyphs, abc, abcw, abcf);
     SetGraphicsMode(hdc, GM_ADVANCED);
-    ABCWidths_helper("LTR 1 advanced", hdc, glyphs, abc, abcw, abcf, 0);
+    ABCWidths_helper("LTR 1 advanced", hdc, glyphs, abc, abcw, abcf);
 
     ReleaseDC(hwnd, hdc);
     DestroyWindow(hwnd);
@@ -1406,17 +1400,17 @@ static void test_GetCharABCWidths(void)
     SetMapMode(hdc, MM_ANISOTROPIC);
     SelectObject(hdc, hfont);
 
-    ABCWidths_helper("RTL", hdc, glyphs, abc, abcw, abcf, 0);
+    ABCWidths_helper("RTL", hdc, glyphs, abc, abcw, abcf);
     SetWindowExtEx(hdc, -1, -1, NULL);
     SetGraphicsMode(hdc, GM_COMPATIBLE);
-    ABCWidths_helper("RTL -1 compatible", hdc, glyphs, abc, abcw, abcf, 0);
+    ABCWidths_helper("RTL -1 compatible", hdc, glyphs, abc, abcw, abcf);
     SetGraphicsMode(hdc, GM_ADVANCED);
-    ABCWidths_helper("RTL -1 advanced", hdc, glyphs, abc, abcw, abcf, 0);
+    ABCWidths_helper("RTL -1 advanced", hdc, glyphs, abc, abcw, abcf);
     SetWindowExtEx(hdc, 1, 1, NULL);
     SetGraphicsMode(hdc, GM_COMPATIBLE);
-    ABCWidths_helper("RTL 1 compatible", hdc, glyphs, abc, abcw, abcf, 0);
+    ABCWidths_helper("RTL 1 compatible", hdc, glyphs, abc, abcw, abcf);
     SetGraphicsMode(hdc, GM_ADVANCED);
-    ABCWidths_helper("RTL 1 advanced", hdc, glyphs, abc, abcw, abcf, 1);
+    ABCWidths_helper("RTL 1 advanced", hdc, glyphs, abc, abcw, abcf);
 
     ReleaseDC(hwnd, hdc);
     DestroyWindow(hwnd);
@@ -6387,7 +6381,7 @@ static void test_GetCharWidth32(void)
     SetGraphicsMode(hdc, GM_ADVANCED);
     ret = pGetCharWidth32W(hdc, 'a', 'a', &bufferW);
     ok(ret, "GetCharWidth32W should have succeeded\n");
-    todo_wine ok (bufferW > 0," Width should be greater than zero\n");
+    ok (bufferW > 0," Width should be greater than zero\n");
     SetWindowExtEx(hdc, 1,1,NULL);
     SetGraphicsMode(hdc, GM_COMPATIBLE);
     ret = pGetCharWidth32W(hdc, 'a', 'a', &bufferW);
@@ -6427,7 +6421,7 @@ static void test_GetCharWidth32(void)
     SetGraphicsMode(hdc, GM_ADVANCED);
     ret = pGetCharWidth32W(hdc, 'a', 'a', &bufferW);
     ok(ret, "GetCharWidth32W should have succeeded\n");
-    todo_wine ok (bufferW > 0," Width should be greater than zero\n");
+    ok (bufferW > 0," Width should be greater than zero\n");
 
     ReleaseDC(hwnd, hdc);
     DestroyWindow(hwnd);
@@ -6445,7 +6439,7 @@ static void test_fake_bold_font(void)
         ABC abc;
         INT w;
         GLYPHMETRICS gm;
-    } data[2];
+    } data[4];
     int i;
     DWORD r;
 
@@ -6502,6 +6496,60 @@ static void test_fake_bold_font(void)
        "expected %d, got %d\n", data[0].gm.gmCellIncX + 1, data[1].gm.gmCellIncX);
     ok(data[0].gm.gmCellIncY == data[1].gm.gmCellIncY,
        "expected %d, got %d\n", data[0].gm.gmCellIncY, data[1].gm.gmCellIncY);
+
+    /* Test bitmap font */
+    memset(&data, 0xaa, sizeof(data));
+    memset(&lf, 0, sizeof(lf));
+    strcpy(lf.lfFaceName, "Courier");
+    lf.lfCharSet = ANSI_CHARSET;
+
+    hdc = GetDC(NULL);
+
+    for (i = 0; i < 4; i++)
+    {
+        HFONT hfont, hfont_old;
+
+        lf.lfWeight = (i % 2) ? FW_BOLD : FW_NORMAL;
+        lf.lfHeight = (i > 1) ? data[0].tm.tmHeight * x2_mat.eM11.value : 0;
+        hfont = CreateFontIndirectA(&lf);
+        hfont_old = SelectObject(hdc, hfont);
+
+        ret = GetTextMetricsA(hdc, &data[i].tm);
+        ok(ret, "got %d\n", ret);
+        ret = pGetCharWidth32A(hdc, 0x76, 0x76, &data[i].w);
+        ok(ret, "got %d\n", ret);
+
+        SelectObject(hdc, hfont_old);
+        DeleteObject(hfont);
+    }
+    ReleaseDC(NULL, hdc);
+
+    /* compare results (bitmap) */
+    for (i = 0; i < 4; i+=2)
+    {
+        int diff = (i > 1) ? x2_mat.eM11.value : 1;
+        if (data[i].tm.tmPitchAndFamily & TMPF_TRUETYPE)
+        {
+            skip("TrueType font is selected (expected a bitmap one)\n");
+            continue;
+        }
+        ok(data[i].tm.tmHeight == data[i+1].tm.tmHeight,
+           "expected %d, got %d\n", data[i].tm.tmHeight, data[i+1].tm.tmHeight);
+        ok(data[i].tm.tmAscent == data[i+1].tm.tmAscent,
+           "expected %d, got %d\n", data[i].tm.tmAscent, data[i+1].tm.tmAscent);
+        ok(data[i].tm.tmDescent == data[i+1].tm.tmDescent,
+           "expected %d, got %d\n", data[i].tm.tmDescent, data[i+1].tm.tmDescent);
+        ok(data[i+1].tm.tmAveCharWidth - data[i].tm.tmAveCharWidth == diff,
+           "expected %d, got %d\n", diff, data[i+1].tm.tmAveCharWidth - data[i].tm.tmAveCharWidth);
+        ok(data[i+1].tm.tmMaxCharWidth - data[i].tm.tmMaxCharWidth == diff,
+           "expected %d, got %d\n", diff, data[i+1].tm.tmMaxCharWidth - data[i].tm.tmMaxCharWidth);
+        ok(data[i].tm.tmOverhang == 0,
+           "expected 0, got %d\n", data[i].tm.tmOverhang);
+        ok(data[i+1].tm.tmOverhang == 1,
+           "expected 1, got %d\n", data[i+1].tm.tmOverhang);
+        ok(data[i].w + 1 == data[i+1].w,
+           "expected %d, got %d\n", data[i].w + 1, data[i+1].w);
+    }
 }
 
 static void test_bitmap_font_glyph_index(void)

@@ -2762,7 +2762,9 @@ __ASM_STDCALL_FUNC( RtlUnwind, 16,
                     "movl %esp,%ebp\n\t"
                     __ASM_CFI(".cfi_def_cfa_register %ebp\n\t")
                     "leal -(0x2cc+8)(%esp),%esp\n\t" /* sizeof(CONTEXT) + alignment */
-                    "pushl %esp\n\t"                 /* context */
+                    "pushl %eax\n\t"
+                    "leal 4(%esp),%eax\n\t"          /* context */
+                    "xchgl %eax,(%esp)\n\t"
                     "call " __ASM_NAME("RtlCaptureContext") __ASM_STDCALL(4) "\n\t"
                     "leal 24(%ebp),%eax\n\t"
                     "movl %eax,0xc4(%esp)\n\t"       /* context->Esp */
@@ -2902,6 +2904,7 @@ __ASM_GLOBAL_FUNC( start_thread,
 
 extern void DECLSPEC_NORETURN call_thread_exit_func( int status, void (*func)(int) );
 __ASM_GLOBAL_FUNC( call_thread_exit_func,
+                   "movl 8(%esp),%ecx\n\t"
                    /* fetch exit frame */
                    "movl %fs:0x1f4,%edx\n\t"    /* x86_thread_data()->exit_frame */
                    "testl %edx,%edx\n\t"
@@ -2909,7 +2912,6 @@ __ASM_GLOBAL_FUNC( call_thread_exit_func,
                    "jmp *%ecx\n\t"
                    /* switch to exit frame stack */
                    "1:\tmovl 4(%esp),%eax\n\t"
-                   "movl 8(%esp),%ecx\n\t"
                    "movl $0,%fs:0x1f4\n\t"
                    "movl %edx,%ebp\n\t"
                    __ASM_CFI(".cfi_def_cfa %ebp,4\n\t")

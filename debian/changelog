@@ -1,3 +1,35 @@
+wine (3.0.1-2) unstable; urgency=medium
+
+  * Drop font patch, now fixed in freetype.
+  * Drop opengl compatibility patch and build-depend on khronos-api >= 4.6.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Sat, 19 May 2018 22:18:15 +0200
+
+wine (3.0.1-1) unstable; urgency=medium
+
+  * New upstream release 3.0.1, released May 14, 2018.
+    - Various bug fixes
+    - Translation updates
+  * Make versioned dependency on debhelper backports safe.
+  * Activate Wine as interpreter for Windows executables in wine-binfmt
+    (closes: #819255).
+  * Set branch names for stable releases/buster.
+  * Update maintainer address to debian-wine@lists.debian.org (closes: #897120).
+  * Move version control to salsa.debian.org.
+  * Update Standards-Version to 4.1.4 (no changes needed).
+  * Set Rules-Requires-Root: no.
+  * Drop breaks/replaces to old Ubuntu packages.
+    The transition to the Debian packages has been done now in Ubuntu 18.04.
+  * Update README.debian:
+    - Update links.
+    - Adapt examples to new upstream versioning system.
+    - Hint to wine-gecko status (closes: #891461).
+    - Editorial changes.
+  * Update copyright years.
+  * Refresh patches.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Fri, 18 May 2018 22:12:51 +0200
+
 wine (3.0-1~bpo9+1) stretch-backports; urgency=medium
 
   * Rebuild for stretch-backports.

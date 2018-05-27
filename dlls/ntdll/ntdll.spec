@@ -111,7 +111,7 @@
 @ stdcall NtAlertThread(long)
 @ stdcall NtAllocateLocallyUniqueId(ptr)
 # @ stub NtAllocateUserPhysicalPages
-@ stdcall NtAllocateUuids(ptr ptr ptr)
+@ stdcall NtAllocateUuids(ptr ptr ptr ptr)
 @ stdcall NtAllocateVirtualMemory(long ptr long ptr long long)
 @ stdcall NtAreMappedFilesTheSame(ptr ptr)
 @ stdcall NtAssignProcessToJobObject(long long)
@@ -152,6 +152,7 @@
 @ stdcall NtCreateSemaphore(ptr long ptr long long)
 @ stdcall NtCreateSymbolicLinkObject(ptr long ptr ptr)
 @ stub NtCreateThread
+@ stdcall NtCreateThreadEx(ptr long ptr long ptr ptr long long long long ptr)
 @ stdcall NtCreateTimer(ptr long ptr long)
 @ stub NtCreateToken
 # @ stub NtCreateWaitablePort
@@ -508,7 +509,7 @@
 @ stdcall RtlCreateProcessParameters(ptr ptr ptr ptr ptr ptr ptr ptr ptr ptr)
 @ stub RtlCreatePropertySet
 @ stdcall RtlCreateQueryDebugBuffer(long long)
-@ stub RtlCreateRegistryKey
+@ stdcall RtlCreateRegistryKey(long wstr)
 @ stdcall RtlCreateSecurityDescriptor(ptr long)
 # @ stub RtlCreateSystemVolumeInformationFolder
 @ stub RtlCreateTagHeap
@@ -1039,7 +1040,7 @@
 @ stdcall -private ZwAlertThread(long) NtAlertThread
 @ stdcall -private ZwAllocateLocallyUniqueId(ptr) NtAllocateLocallyUniqueId
 # @ stub ZwAllocateUserPhysicalPages
-@ stdcall -private ZwAllocateUuids(ptr ptr ptr) NtAllocateUuids
+@ stdcall -private ZwAllocateUuids(ptr ptr ptr ptr) NtAllocateUuids
 @ stdcall -private ZwAllocateVirtualMemory(long ptr long ptr long long) NtAllocateVirtualMemory
 @ stdcall -private ZwAreMappedFilesTheSame(ptr ptr) NtAreMappedFilesTheSame
 @ stdcall -private ZwAssignProcessToJobObject(long long) NtAssignProcessToJobObject
@@ -1334,18 +1335,18 @@
 @ cdecl -private __iscsym(long) NTDLL___iscsym
 @ cdecl -private __iscsymf(long) NTDLL___iscsymf
 @ cdecl -private __toascii(long) NTDLL___toascii
-@ stdcall -private -arch=i386 -ret64 _alldiv(int64 int64)
+@ stdcall -arch=i386 -ret64 _alldiv(int64 int64)
 # @ stub _alldvrm
-@ stdcall -private -arch=i386 -ret64 _allmul(int64 int64)
-@ stdcall -private -arch=i386 -norelay _alloca_probe()
-@ stdcall -private -arch=i386 -ret64 _allrem(int64 int64)
-@ stdcall -private -arch=i386 -ret64 _allshl(int64 long)
-@ stdcall -private -arch=i386 -ret64 _allshr(int64 long)
+@ stdcall -arch=i386 -ret64 _allmul(int64 int64)
+@ stdcall -arch=i386 -norelay _alloca_probe()
+@ stdcall -arch=i386 -ret64 _allrem(int64 int64)
+@ stdcall -arch=i386 -ret64 _allshl(int64 long)
+@ stdcall -arch=i386 -ret64 _allshr(int64 long)
 @ cdecl -private -ret64 _atoi64(str)
-@ stdcall -private -arch=i386 -ret64 _aulldiv(int64 int64)
+@ stdcall -arch=i386 -ret64 _aulldiv(int64 int64)
 # @ stub _aulldvrm
-@ stdcall -private -arch=i386 -ret64 _aullrem(int64 int64)
-@ stdcall -private -arch=i386 -ret64 _aullshr(int64 long)
+@ stdcall -arch=i386 -ret64 _aullrem(int64 int64)
+@ stdcall -arch=i386 -ret64 _aullshr(int64 long)
 @ stdcall -private -arch=i386 -norelay _chkstk()
 @ stub _fltused
 @ cdecl -private -arch=i386 -ret64 _ftol() NTDLL__ftol

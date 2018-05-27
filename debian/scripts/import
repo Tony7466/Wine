@@ -1,5 +1,7 @@
 #!/bin/sh -e
-# Copyright: 2013-2015 Michael Gilbert <mgilbert@debian.org>
+# Copyright:
+#  2013-2017 Michael Gilbert <mgilbert@debian.org>
+#  2016-2018 Jens Reyer <jre.winesim@gmail.com>
 # License: LGPL-2.1+
 
 # check for version argument
@@ -20,8 +22,8 @@ git update-index --assume-unchanged configure include/config.h.in
 # pull specified tag from upstream repository
 version="$1"
 debian="https://anonscm.debian.org/git/pkg-wine/wine.git"
-debian_branch="master"
-upstream_branch="upstream"
+debian_branch="buster"
+upstream_branch="upstream-stable"
 winehq="git://source.winehq.org/git/wine.git"
 tag="wine-$version"
 git checkout ${upstream_branch}
