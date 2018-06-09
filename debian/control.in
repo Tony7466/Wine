@@ -100,6 +100,12 @@ Suggests:
  playonlinux,
  wine-binfmt,
  dosbox (>= 0.74-4.2~),
+Breaks:
+ wine-stable (<< 3.0.1ubuntu1~),
+Replaces:
+ wine-stable (<< 3.0.1ubuntu1~),
+#Provides:
+# wine,
 Description: Windows API implementation - standard suite
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
