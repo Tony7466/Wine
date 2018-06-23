@@ -34,7 +34,7 @@ author: Jens Reyer <jre.winesim@gmail.com>
      fprintf(file, "Type=Application\n");
      fprintf(file, "StartupNotify=true\n");
      if (descr && lstrlenA(descr))
-@@ -2543,7 +2545,8 @@ static BOOL write_freedesktop_associatio
+@@ -2502,7 +2504,8 @@ static BOOL write_freedesktop_associatio
          fprintf(desktop, "Type=Application\n");
          fprintf(desktop, "Name=%s\n", friendlyAppName);
          fprintf(desktop, "MimeType=%s;\n", mimeType);

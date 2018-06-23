@@ -11,7 +11,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  WINE_CONFIG_MAKEFILE(include)
  WINE_CONFIG_MAKEFILE(libs/port)
  WINE_CONFIG_MAKEFILE(libs/wine)
-@@ -3960,7 +3959,6 @@ WINE_CONFIG_MAKEFILE(programs/xcopy)
+@@ -3963,7 +3962,6 @@ WINE_CONFIG_MAKEFILE(programs/xcopy)
  WINE_CONFIG_MAKEFILE(programs/xcopy/tests)
  WINE_CONFIG_MAKEFILE(server,,[test -n "$with_wine64"])
  WINE_CONFIG_MAKEFILE(tools,,[test "x$enable_tools" = xno])

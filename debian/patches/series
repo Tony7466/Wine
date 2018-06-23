@@ -1,23 +1,21 @@
-version-string.patch
-manpages-wineserver-persistence.patch
+debianization/addons.patch
+debianization/makefile.patch
+debianization/version-string.patch
+debianization/winemenubuilder.patch
 
 disable/tests.patch
 disable/addons-download.patch
 disable/po-modifications.patch
-disable/winemenubuilder-blacklist-extensions.patch
+disable/blacklist-extensions.patch
 
 generate/fonts.patch
 generate/opengl.patch
 generate/unicode.patch
 generate/request.patch
 
-debpaths/addons.patch
-debpaths/makefile.patch
-
-debsuffix/winemenubuilder.patch
-
 binary-indep/manpages.patch
 binary-indep/sfnt2fon.patch
 
-gstbase.patch
-printer-resolution.patch
+fixes/gstbase.patch
+fixes/printer-resolution.patch
+fixes/wineserver-persistence.patch
