@@ -1,3 +1,14 @@
+wine-development (3.10-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.10, released Jun 11, 2018.
+    - Swapchain support in Direct 3D 12.
+    - Vulkan support updated to the latest spec.
+    - Debugger support for Wow64 processes.
+    - Still more support for the Task Scheduler.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 23 Jun 2018 22:33:31 +0000
+
 wine-development (3.9-1) unstable; urgency=medium
 
   * New upstream release 3.9, released May 25, 2018.
