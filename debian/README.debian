@@ -15,10 +15,10 @@ please subscribe to the pkg-wine-party mailing list:
 http://lists.alioth.debian.org/mailman/listinfo/pkg-wine-party
 
 The Debian package repository can also be checked out with git:
-$ git clone https://anonscm.debian.org/git/pkg-wine/wine.git
+$ git clone https://salsa.debian.org/wine-team/wine.git
 
 Or viewed online at:
-https://anonscm.debian.org/git/pkg-wine/wine.git
+https://salsa.debian.org/wine-team/wine
 
 
 Debugging
