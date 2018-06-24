@@ -1,4 +1,4 @@
-wine-development (3.11-1) UNRELEASED; urgency=medium
+wine-development (3.11-1) unstable; urgency=medium
 
   * New upstream release 3.11, released Jun 22, 2018.
     - More debugger support for Wow64 processes.
