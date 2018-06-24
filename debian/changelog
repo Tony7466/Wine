@@ -1,4 +1,4 @@
-wine-development (3.10-1) UNRELEASED; urgency=medium
+wine-development (3.10-1) unstable; urgency=medium
 
   * New upstream release 3.10, released Jun 11, 2018.
     - Swapchain support in Direct 3D 12.
