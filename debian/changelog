@@ -1,3 +1,14 @@
+wine-development (3.11-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.11, released Jun 22, 2018.
+    - More debugger support for Wow64 processes.
+    - Support for sha256/sha384 hashes in ECDSA signatures.
+    - Better reporting of hyper-threaded CPUs.
+    - Improvements to the standard Task Dialog.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 24 Jun 2018 18:04:42 +0000
+
 wine-development (3.10-1) unstable; urgency=medium
 
   * New upstream release 3.10, released Jun 11, 2018.
