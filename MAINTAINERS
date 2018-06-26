@@ -38,7 +38,6 @@ F:	programs/winedbg/be_arm*
 Audio I/O
 M:	Andrew Eikum <aeikum@codeweavers.com>
 F:	dlls/dsound/
-F:	dlls/dswave/
 F:	dlls/mmdevapi/
 F:	dlls/winealsa.drv/
 F:	dlls/winecoreaudio.drv/
@@ -90,6 +89,11 @@ F:	dlls/d3dxof/
 DirectInput
 P:	Andrew Eikum <aeikum@codeweavers.com>
 F:	dlls/dinput/
+
+DirectMusic
+M:	Michael Stefaniuc <mstefani@winehq.org>
+F:	dlls/dm*/
+F:	dlls/dswave/
 
 DirectPlay
 M:	Alistair Leslie-Hughes <leslie_alistair@hotmail.com>
@@ -320,7 +324,7 @@ M:	Michael Stefaniuc <mstefani@winehq.org>
 W:	https://wiki.winehq.org/StableRules
 
 Staging Branch
-M:	Sebastian Lackner <sebastian@fds-team.de>
-M:	Michael Müller <michael@fds-team.de>
+M:	Alistair Leslie-Hughes <leslie_alistair@hotmail.com>
+P:	Zebediah Figura <z.figura12@gmail.com>
 P:	Erich E. Hoover <erich.e.hoover@wine-staging.com>
 W:	https://wine-staging.com/

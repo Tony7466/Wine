@@ -170,9 +170,12 @@ DWORD WINAPI ConvertInterfaceLuidToNameA(const NET_LUID*,char*,SIZE_T);
 DWORD WINAPI ConvertInterfaceLuidToNameW(const NET_LUID*,WCHAR*,SIZE_T);
 DWORD WINAPI ConvertInterfaceNameToLuidA(const char*,NET_LUID*);
 DWORD WINAPI ConvertInterfaceNameToLuidW(const WCHAR*,NET_LUID*);
+DWORD WINAPI ConvertLengthToIpv4Mask(ULONG,ULONG*);
 void WINAPI FreeMibTable(void*);
 DWORD WINAPI GetIfEntry2(MIB_IF_ROW2*);
 DWORD WINAPI GetIfTable2(MIB_IF_TABLE2**);
 DWORD WINAPI GetUnicastIpAddressEntry(MIB_UNICASTIPADDRESS_ROW*);
+PCHAR WINAPI if_indextoname(NET_IFINDEX,PCHAR);
+NET_IFINDEX WINAPI if_nametoindex(PCSTR);
 
 #endif /* __WINE_NETIOAPI_H */
