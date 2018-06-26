@@ -96,7 +96,9 @@ static DWORD (WINAPI *pConvertInterfaceLuidToNameW)(const NET_LUID*,WCHAR*,SIZE_
 static DWORD (WINAPI *pConvertInterfaceLuidToNameA)(const NET_LUID*,char*,SIZE_T);
 static DWORD (WINAPI *pConvertInterfaceNameToLuidA)(const char*,NET_LUID*);
 static DWORD (WINAPI *pConvertInterfaceNameToLuidW)(const WCHAR*,NET_LUID*);
+static DWORD (WINAPI *pConvertLengthToIpv4Mask)(ULONG,ULONG*);
 
+static PCHAR (WINAPI *pif_indextoname)(NET_IFINDEX,PCHAR);
 static NET_IFINDEX (WINAPI *pif_nametoindex)(const char*);
 
 static void loadIPHlpApi(void)
@@ -148,6 +150,8 @@ static void loadIPHlpApi(void)
     pConvertInterfaceLuidToNameW = (void *)GetProcAddress(hLibrary, "ConvertInterfaceLuidToNameW");
     pConvertInterfaceNameToLuidA = (void *)GetProcAddress(hLibrary, "ConvertInterfaceNameToLuidA");
     pConvertInterfaceNameToLuidW = (void *)GetProcAddress(hLibrary, "ConvertInterfaceNameToLuidW");
+    pConvertLengthToIpv4Mask = (void *)GetProcAddress(hLibrary, "ConvertLengthToIpv4Mask");
+    pif_indextoname = (void *)GetProcAddress(hLibrary, "if_indextoname");
     pif_nametoindex = (void *)GetProcAddress(hLibrary, "if_nametoindex");
   }
 }
@@ -1786,7 +1790,7 @@ static void test_interface_identifier_conversion(void)
     GUID guid;
     SIZE_T len;
     WCHAR nameW[IF_MAX_STRING_SIZE + 1];
-    char nameA[IF_MAX_STRING_SIZE + 1];
+    char nameA[IF_MAX_STRING_SIZE + 1], *name;
     NET_IFINDEX index, index2;
 
     if (!pConvertInterfaceIndexToLuid)
@@ -1947,22 +1951,37 @@ static void test_interface_identifier_conversion(void)
     ok( luid.Info.NetLuidIndex != 0xdead, "index not set\n" );
     ok( luid.Info.IfType == IF_TYPE_ETHERNET_CSMACD, "got %u\n", luid.Info.IfType );
 
-    /* if_nametoindex */
-    if (pif_nametoindex)
+    if (!pif_nametoindex || !pif_indextoname)
     {
-        index2 = pif_nametoindex( NULL );
-        ok( !index2, "Got unexpected index %u\n", index2 );
-        index2 = pif_nametoindex( nameA );
-        ok( index2 == index, "Got index %u for %s, expected %u\n", index2, nameA, index );
-        /* Wargaming.net Game Center passes a GUID-like string. */
-        index2 = pif_nametoindex( "{00000001-0000-0000-0000-000000000000}" );
-        ok( !index2, "Got unexpected index %u\n", index2 );
-        index2 = pif_nametoindex( wine_dbgstr_guid( &guid ) );
-        ok( !index2, "Got unexpected index %u for input %s\n", index2, wine_dbgstr_guid( &guid ) );
+        skip("if_nametoindex/if_indextoname not supported\n");
+        return;
     }
-    else
+
+    index2 = pif_nametoindex( NULL );
+    ok( !index2, "Got unexpected index %u\n", index2 );
+    index2 = pif_nametoindex( nameA );
+    ok( index2 == index, "Got index %u for %s, expected %u\n", index2, nameA, index );
+    /* Wargaming.net Game Center passes a GUID-like string. */
+    index2 = pif_nametoindex( "{00000001-0000-0000-0000-000000000000}" );
+    ok( !index2, "Got unexpected index %u\n", index2 );
+    index2 = pif_nametoindex( wine_dbgstr_guid( &guid ) );
+    ok( !index2, "Got unexpected index %u for input %s\n", index2, wine_dbgstr_guid( &guid ) );
+
+    name = pif_indextoname( 0, NULL );
+    ok( name == NULL, "got %s\n", name );
+
+    name = pif_indextoname( 0, nameA );
+    ok( name == NULL, "got %p\n", name );
+
+    name = pif_indextoname( ~0u, nameA );
+    ok( name == NULL, "got %p\n", name );
+
+    nameA[0] = 0;
+    name = pif_indextoname( 1, nameA );
+    if (name != NULL)
     {
-        skip("if_nametoindex not supported\n");
+        ok( name[0], "empty name\n" );
+        ok( name == nameA, "got %p\n", name );
     }
 }
 
@@ -2206,6 +2225,39 @@ static void test_GetUnicastIpAddressTable(void)
     pFreeMibTable(table);
 }
 
+static void test_ConvertLengthToIpv4Mask(void)
+{
+    DWORD ret;
+    DWORD n;
+    ULONG mask;
+    ULONG expected;
+
+    if (!pConvertLengthToIpv4Mask)
+    {
+        win_skip( "ConvertLengthToIpv4Mask not available\n" );
+        return;
+    }
+
+    for (n = 0; n <= 32; n++)
+    {
+        mask = 0xdeadbeef;
+        if (n > 0)
+            expected = htonl( ~0u << (32 - n) );
+        else
+            expected = 0;
+
+        ret = pConvertLengthToIpv4Mask( n, &mask );
+        ok( ret == NO_ERROR, "ConvertLengthToIpv4Mask returned 0x%08x, expected 0x%08x\n", ret, NO_ERROR );
+        ok( mask == expected, "ConvertLengthToIpv4Mask mask value 0x%08x, expected 0x%08x\n", mask, expected );
+    }
+
+    /* Testing for out of range. In this case both mask and return are changed to indicate error. */
+    mask = 0xdeadbeef;
+    ret = pConvertLengthToIpv4Mask( 33, &mask );
+    ok( ret == ERROR_INVALID_PARAMETER, "ConvertLengthToIpv4Mask returned 0x%08x, expected 0x%08x\n", ret, ERROR_INVALID_PARAMETER );
+    ok( mask == INADDR_NONE, "ConvertLengthToIpv4Mask mask value 0x%08x, expected 0x%08x\n", mask, INADDR_NONE );
+}
+
 START_TEST(iphlpapi)
 {
 
@@ -2233,6 +2285,7 @@ START_TEST(iphlpapi)
     test_GetIfTable2Ex();
     test_GetUnicastIpAddressEntry();
     test_GetUnicastIpAddressTable();
+    test_ConvertLengthToIpv4Mask();
     freeIPHlpApi();
   }
 }
