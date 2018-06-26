@@ -1,11 +1,12 @@
-wine (3.0.2-1) UNRELEASED; urgency=medium
+wine (3.0.2-1) unstable; urgency=medium
 
   * New upstream release 3.0.2, released Jun 26, 2018.
     - Various bug fixes
   * Let wine break/replace the old non-transitional package wine-stable.
     Needed until the next Ubuntu LTS (20.04) is released (LP: #1769649).
+  * Refresh patches.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Tue, 26 Jun 2018 18:55:02 +0200
+ -- Jens Reyer <jre.winesim@gmail.com>  Tue, 26 Jun 2018 23:15:28 +0200
 
 wine (3.0.1-2) unstable; urgency=medium
 
