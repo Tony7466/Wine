@@ -8,6 +8,7 @@ disable/winemenubuilder-blacklist-extensions.patch
 
 generate/fonts.patch
 generate/opengl.patch
+generate/unicode11.patch
 generate/unicode.patch
 generate/request.patch
 

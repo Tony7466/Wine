@@ -9,7 +9,7 @@ Uploaders:
  Jens Reyer <jre.winesim@gmail.com>,
 Vcs-Git: https://salsa.debian.org/wine-team/wine.git -b buster
 Vcs-Browser: https://salsa.debian.org/wine-team/wine/tree/buster
-Standards-Version: 4.1.4
+Standards-Version: 4.1.5
 Rules-Requires-Root: no
 Build-Depends:
  debhelper (>= 11~),
@@ -41,8 +41,8 @@ Build-Depends:
  pkg-config,
  dctrl-tools,
  khronos-api (>= 4.6),
- unicode-data (>= 10),
- unicode-data (<< 11),
+ unicode-data (>= 11),
+ unicode-data (<< 12),
  libpng-dev,
  libssl-dev,
  libv4l-dev [linux-any kfreebsd-any],
