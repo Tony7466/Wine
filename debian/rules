@@ -30,8 +30,8 @@ export DH_VERBOSE=1
 # indicate that binary targets do not require root
 export DEB_RULES_REQUIRES_ROOT=no
 
-# enable all hardening buildflags (fortify and pie will be disabled by upstream however)
-export DEB_BUILD_MAINT_OPTIONS=hardening=+all
+# enable hardening buildflags (fortify is not yet supported upstream)
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify
 
 # linker options
 export DEB_LDFLAGS_MAINT_APPEND+=-Wl,-rpath,/$(LIBDIR)
@@ -76,9 +76,6 @@ ifeq ($(DEB_HOST_ARCH), arm64)
 export CC=clang-6.0
 export CXX=clang++-6.0
 endif
-
-# override maintainer mode config
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-error
 
 # use date of the latest changelog update as the build date
 export WIDL_TIME_OVERRIDE=$(SOURCE_DATE_EPOCH)

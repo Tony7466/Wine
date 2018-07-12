@@ -18,4 +18,5 @@ binary-indep/sfnt2fon.patch
 
 fixes/gstbase.patch
 fixes/printer-resolution.patch
+fixes/temporary-directory.patch
 fixes/wineserver-persistence.patch

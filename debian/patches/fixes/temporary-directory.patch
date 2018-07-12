@@ -1,0 +1,30 @@
+description: use /run/user for safer temporary file handling
+author: Michael Gilbert <mgilbert@debian.org>
+bug-debian: https://bugs.debian.org/903622
+bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
+
+--- a/libs/wine/config.c
++++ b/libs/wine/config.c
+@@ -36,7 +36,7 @@
+ #include "wine/library.h"
+ 
+ static const char server_config_dir[] = "/.wine";        /* config dir relative to $HOME */
+-static const char server_root_prefix[] = "/tmp/.wine";   /* prefix for server root dir */
++static const char server_root_prefix[] = "/run/user";    /* prefix for server root dir */
+ static const char server_dir_prefix[] = "/server-";      /* prefix for server dir */
+ 
+ static char *bindir;
+@@ -225,10 +225,10 @@ static void init_server_dir( dev_t dev,
+ #ifdef __ANDROID__  /* there's no /tmp dir on Android */
+     root = build_path( config_dir, ".wineserver" );
+ #elif defined(HAVE_GETUID)
+-    root = xmalloc( sizeof(server_root_prefix) + 12 );
+-    sprintf( root, "%s-%u", server_root_prefix, getuid() );
++    root = xmalloc( sizeof(server_root_prefix) + 17 );
++    sprintf( root, "%s/%u/wine", server_root_prefix, getuid() );
+ #else
+-    root = xstrdup( server_root_prefix );
++    fatal_error("unable to get user id for temporary files");
+ #endif
+ 
+     server_dir = xmalloc( strlen(root) + sizeof(server_dir_prefix) + 2*sizeof(dev) + 2*sizeof(ino) + 2 );
