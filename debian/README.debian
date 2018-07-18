@@ -11,8 +11,8 @@ For resources related to Debian Wine packaging, please visit:
 http://pkg-wine.alioth.debian.org
 
 To participate in development and/or discussion about the Debian packages,
-please subscribe to the pkg-wine-party mailing list:
-http://lists.alioth.debian.org/mailman/listinfo/pkg-wine-party
+please subscribe to the Debian wine mailing list:
+http://lists.debian.org/debian-wine
 
 The Debian package repository can also be checked out with git:
 $ git clone https://salsa.debian.org/wine-team/wine.git
@@ -40,8 +40,8 @@ Old Versions
 ============
 If you want to install a previous version of Wine, you should be able to fetch
 prior Debian versions from:
-http://snapshot.debian.org/package/wine
-http://snapshot.debian.org/package/wine-development
+http://snapshot.debian.org/package/wine/
+http://snapshot.debian.org/package/wine-development/
 
 You can also use debsnap from the devscripts package, for example:
 $ debsnap -v -d . wine 1.6.1-1
@@ -135,8 +135,7 @@ $ winegcc -m32 -L/usr/lib/i386-linux-gnu/wine-development ...
 Wine Gecko
 ==========
 The downloader for Wine Gecko is intentionally disabled in the Debian packages.
-Instead libwine-gecko-* packages are available in the official Debian archives,
-which provide Wine Gecko support.
+Unfortunately Wine Gecko is not available in the official Debian archives.
 
 Information about which Wine Gecko should be associated with any particular
 Wine version is available at:
@@ -173,7 +172,6 @@ You can configure your system to automatically launch Windows executables.  But
 this increases the risk of inadvertently launching Windows malware, so please
 make sure that you understand the security risks before blindly setting this
 up.
-
 
 You can directly launch Windows executables from the command line if they have
 the executable bit set, and if they are either in PATH or you specify the path
@@ -213,4 +211,3 @@ $ rm -f ~/.local/share/applications/wine-extension-*
 $ update-desktop-database ~/.local/share/applications/
 
 The Wine FAQ has further information about this topic.
-

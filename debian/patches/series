@@ -4,6 +4,7 @@ debianization/version-string.patch
 debianization/winemenubuilder.patch
 
 disable/tests.patch
+disable/i386-only.patch
 disable/addons-download.patch
 disable/po-modifications.patch
 disable/blacklist-extensions.patch
@@ -20,3 +21,8 @@ fixes/gstbase.patch
 fixes/printer-resolution.patch
 fixes/temporary-directory.patch
 fixes/wineserver-persistence.patch
+
+warnings/dword64-winmm.patch
+warnings/dword64-setupapi.patch
+warnings/unused-functions.patch
+warnings/discarded-qualifiers.patch
