@@ -17,7 +17,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/dlls/winmm/winmm.c
 +++ b/dlls/winmm/winmm.c
-@@ -1103,8 +1103,13 @@ static	BOOL	MMSYSTEM_MidiStream_MessageH
+@@ -1106,8 +1106,13 @@ static	BOOL	MMSYSTEM_MidiStream_MessageH
  #endif
              if (((LPMIDIEVENT)lpData)->dwStreamID != 0 &&
                  ((LPMIDIEVENT)lpData)->dwStreamID != 0xFFFFFFFF &&
@@ -31,7 +31,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                        (lpMidiHdr->dwFlags & MHDR_ISSTRM) ? "stream" : "regular",
                        ((LPMIDIEVENT)lpData)->dwStreamID);
                  lpMidiHdr->dwFlags &= ~MHDR_INQUEUE;
-@@ -1334,7 +1339,11 @@ MMRESULT WINAPI midiStreamOpen(HMIDISTRM
+@@ -1341,7 +1346,11 @@ MMRESULT WINAPI midiStreamOpen(HMIDISTRM
      lpMidiStrm->status = MSM_STATUS_PAUSED;
      lpMidiStrm->dwElapsedMS = 0;
  

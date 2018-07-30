@@ -17,6 +17,7 @@ generate/request.patch
 binary-indep/manpages.patch
 binary-indep/sfnt2fon.patch
 
+fixes/arm.patch
 fixes/gstbase.patch
 fixes/printer-resolution.patch
 fixes/temporary-directory.patch
@@ -24,5 +25,13 @@ fixes/wineserver-persistence.patch
 
 warnings/dword64-winmm.patch
 warnings/dword64-setupapi.patch
+
+warnings/array-bounds.patch
+warnings/format-overflow.patch
+warnings/stringop-overflow.patch
+
 warnings/unused-functions.patch
+warnings/incompatible-type.patch
+warnings/argument-promotion.patch
 warnings/discarded-qualifiers.patch
+warnings/uninitialized-variables.patch

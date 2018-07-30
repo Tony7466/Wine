@@ -1,15 +1,14 @@
-wine-development (3.13-1) UNRELEASED; urgency=medium
+wine-development (3.13-1) unstable; urgency=medium
 
   * New upstream release 3.13, released Jul 20, 2018.
-    - Vulkan support on macOS using MoltenVK.
     - Initial support for performance data in the registry.
     - Mono engine updated with some bug fixes.
     - Support for fetching BIOS information on Linux.
-    - GnuTLS also used on macOS when available.
     - Improvements in the standard Task Dialog.
     - Various bug fixes.
+  * Fix compiler warnings introduced by gcc 8.
 
- -- Michael Gilbert <mgilbert@debian.org>  Tue, 24 Jul 2018 01:03:58 +0000
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 29 Jul 2018 05:19:42 +0000
 
 wine-development (3.12-3) unstable; urgency=medium
 

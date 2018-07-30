@@ -126,8 +126,8 @@ override_dh_auto_configure:
 	./tools/make_unicode
 	./tools/make_requests
 	cd dlls/opengl32 && ./make_opengl
-	ln -s /usr/share/misc/config.sub tools || true
-	ln -s /usr/share/misc/config.guess tools || true
+	ln -sf /usr/share/misc/config.sub tools
+	ln -sf /usr/share/misc/config.guess tools
 	# execute wine's configure script
 	./configure $(CONFLAGS)
 
