@@ -1,3 +1,9 @@
+wine-development (3.13-2) unstable; urgency=medium
+
+  * Fix build errors on arm.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Thu, 02 Aug 2018 00:51:19 +0000
+
 wine-development (3.13-1) unstable; urgency=medium
 
   * New upstream release 3.13, released Jul 20, 2018.

@@ -23,6 +23,9 @@ fixes/printer-resolution.patch
 fixes/temporary-directory.patch
 fixes/wineserver-persistence.patch
 
+warnings/arm-messages.patch
+warnings/arm-longdouble.patch
+
 warnings/dword64-winmm.patch
 warnings/dword64-setupapi.patch
 

@@ -1,0 +1,25 @@
+desciption: use #pragma message to avoid warining turned into an error
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/dlls/rpcrt4/cproxy.c
++++ b/dlls/rpcrt4/cproxy.c
+@@ -169,7 +169,7 @@ static inline void init_thunk( struct th
+ 
+ #else  /* __i386__ */
+ 
+-#warning You must implement stubless proxies for your CPU
++#pragma message "warning You must implement stubless proxies for your CPU"
+ 
+ struct thunk
+ {
+--- a/dlls/rpcrt4/cstub.c
++++ b/dlls/rpcrt4/cstub.c
+@@ -176,7 +176,7 @@ static const BYTE opcodes[16] = { 0x48,
+                                   0xff, 0xa0, 0, 0, 0, 0, 0x48, 0x8d, 0x36 };
+ #else
+ 
+-#warning You must implement delegated proxies/stubs for your CPU
++#pragma message "warning You must implement delegated proxies/stubs for your CPU"
+ typedef struct
+ {
+     DWORD offset;

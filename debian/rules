@@ -36,6 +36,9 @@ export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify
 # linker options
 export DEB_LDFLAGS_MAINT_APPEND+=-Wl,-rpath,/$(LIBDIR)
 
+# ignore shift overflow warnings (currently only an issue on arm)
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-shift-overflow
+
 # configure options
 CONFLAGS=--with-gnutls \
          --without-hal \
