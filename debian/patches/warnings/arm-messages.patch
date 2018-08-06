@@ -1,4 +1,4 @@
-desciption: use #pragma message to avoid warining turned into an error
+desciption: use #pragma message to avoid warning turned into an error
 author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/rpcrt4/cproxy.c
@@ -23,3 +23,14 @@ author: Michael Gilbert <mgilbert@debian.org>
  typedef struct
  {
      DWORD offset;
+--- a/dlls/rpcrt4/ndr_stubless.c
++++ b/dlls/rpcrt4/ndr_stubless.c
+@@ -1128,7 +1128,7 @@ __ASM_GLOBAL_FUNC( call_server_func,
+                    "mov SP, r5\n\t"
+                    "pop {r4, r5, PC}" )
+ #else
+-#warning call_server_func not implemented for your architecture
++#pragma message "call_server_func not implemented for your architecture"
+ LONG_PTR __cdecl call_server_func(SERVER_ROUTINE func, unsigned char * args, unsigned short stack_size)
+ {
+     FIXME("Not implemented for your architecture\n");

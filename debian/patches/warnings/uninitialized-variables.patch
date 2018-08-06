@@ -31,3 +31,14 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      hr = get_code_page(enc, &cp);
      if (FAILED(hr)) return;
+--- a/dlls/comdlg32/filedlg.c
++++ b/dlls/comdlg32/filedlg.c
+@@ -251,7 +251,7 @@ static BOOL get_config_key_dword(HKEY hk
+ 
+ static BOOL get_config_key_string(HKEY hkey, const WCHAR *name, WCHAR **value)
+ {
+-    DWORD type, size;
++    DWORD type, size = 0;
+     WCHAR *str;
+ 
+     if (hkey && !RegQueryValueExW(hkey, name, 0, &type, NULL, &size))

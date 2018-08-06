@@ -1,3 +1,9 @@
+wine-development (3.13-3) unstable; urgency=medium
+
+  * Fix build errors on arm64 (closes: #903789).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 05 Aug 2018 23:15:10 +0000
+
 wine-development (3.13-2) unstable; urgency=medium
 
   * Fix build errors on arm.

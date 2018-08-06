@@ -78,6 +78,7 @@ endif
 ifeq ($(DEB_HOST_ARCH), arm64)
 export CC=clang-6.0
 export CXX=clang++-6.0
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-enum-conversion -Wno-absolute-value
 endif
 
 # use date of the latest changelog update as the build date

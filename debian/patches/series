@@ -25,6 +25,10 @@ fixes/wineserver-persistence.patch
 
 warnings/arm-messages.patch
 warnings/arm-longdouble.patch
+warnings/arm64-array-bounds.patch
+warnings/arm64-excess-precision.patch
+warnings/arm64-unused-functions.patch
+warnings/arm64-uninitialized-variables.patch
 
 warnings/dword64-winmm.patch
 warnings/dword64-setupapi.patch

@@ -1,4 +1,4 @@
-description: fix pointer conversion warnings in setupapi on amd64
+description: fix pointer conversion warnings in setupapi on 64 bit archs
 author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/setupapi/devinst.c
@@ -7,7 +7,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      struct DeviceInfoSet *set;
      HKEY                  key;
      BOOL                  phantom;
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    DWORD64               devId;
 +#else
      DWORD                 devId;
@@ -19,7 +19,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (devInfo)
      {
          devInfo->set = set;
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +        devInfo->devId = (DWORD64)devInst;
 +#else
          devInfo->devId = (DWORD)devInst;
@@ -31,7 +31,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      struct DeviceInfoSet *set = DeviceInfoSet;
      struct DeviceInfo *devInfo;
  
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    TRACE("%04lx %p %d %p %p %d %p\n", (DWORD64)DeviceInfoSet, DeviceInfoData,
 +        Property, PropertyRegDataType, PropertyBuffer, PropertyBufferSize,
 +        RequiredSize);
@@ -47,7 +47,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      struct DeviceInfoSet *set = DeviceInfoSet;
      struct DeviceInfo *devInfo;
  
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    TRACE("%04lx %p %d %p %p %d %p\n", (DWORD64)DeviceInfoSet, DeviceInfoData,
 +        Property, PropertyRegDataType, PropertyBuffer, PropertyBufferSize,
 +        RequiredSize);
@@ -63,7 +63,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  {
      struct DeviceInfo *devInfo = GlobalLock((HANDLE)dnDevInst);
  
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    TRACE("%lx->%p, %p, %u %u\n", dnDevInst, devInfo, Buffer, BufferLen, ulFlags);
 +#else
      TRACE("%x->%p, %p, %u %u\n", dnDevInst, devInfo, Buffer, BufferLen, ulFlags);
@@ -75,7 +75,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  {
      struct DeviceInfo *devInfo = GlobalLock((HANDLE)dnDevInst);
  
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    TRACE("%lx->%p, %p, %u %u\n", dnDevInst, devInfo, Buffer, BufferLen, ulFlags);
 +#else
      TRACE("%x->%p, %p, %u %u\n", dnDevInst, devInfo, Buffer, BufferLen, ulFlags);
@@ -83,7 +83,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (!devInfo)
      {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +        WARN("dev instance %ld not found!\n", dnDevInst);
 +#else
          WARN("dev instance %d not found!\n", dnDevInst);
@@ -95,7 +95,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  {
      struct DeviceInfo *ppdevInfo = GlobalLock((HANDLE)dnDevInst);
  
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    TRACE("%lx->%p, %p, %u\n", dnDevInst, ppdevInfo, pulLen, ulFlags);
 +#else
      TRACE("%x->%p, %p, %u\n", dnDevInst, ppdevInfo, pulLen, ulFlags);
@@ -103,7 +103,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (!ppdevInfo)
      {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +        WARN("dev instance %ld not found!\n", dnDevInst);
 +#else
          WARN("dev instance %d not found!\n", dnDevInst);
@@ -117,7 +117,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  {
     DWORD     cbSize;
     GUID      ClassGuid;
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +   DWORD64   DevInst;   /* DEVINST handle */
 +#else
     DWORD     DevInst;   /* DEVINST handle */
@@ -131,7 +131,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #define CM_REGISTRY_USER                0x0100
  #define CM_REGISTRY_CONFIG              0x0200
  
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +typedef DWORD64 DEVINST, *PDEVINST;
 +#else
  typedef DWORD DEVINST, *PDEVINST;
@@ -145,7 +145,7 @@ author: Michael Gilbert <mgilbert@debian.org>
   */
  CONFIGRET WINAPI CM_Create_DevNodeA(PDEVINST pdnDevInst, DEVINSTID_A pDeviceID, DEVINST dnParent, ULONG ulFlags)
  {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +  FIXME("(%p %s 0x%08lx 0x%08x) stub\n", pdnDevInst, pDeviceID, dnParent, ulFlags);
 +#else
    FIXME("(%p %s 0x%08x 0x%08x) stub\n", pdnDevInst, pDeviceID, dnParent, ulFlags);
@@ -157,7 +157,7 @@ author: Michael Gilbert <mgilbert@debian.org>
   */
  CONFIGRET WINAPI CM_Create_DevNodeW(PDEVINST pdnDevInst, DEVINSTID_W pDeviceID, DEVINST dnParent, ULONG ulFlags)
  {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +  FIXME("(%p %s 0x%08lx 0x%08x) stub\n", pdnDevInst, debugstr_w(pDeviceID), dnParent, ulFlags);
 +#else
    FIXME("(%p %s 0x%08x 0x%08x) stub\n", pdnDevInst, debugstr_w(pDeviceID), dnParent, ulFlags);
@@ -169,7 +169,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      DEVINST dnDevInst, REGSAM access, ULONG ulHardwareProfile, REGDISPOSITION disposition,
      PHKEY phkDevice, ULONG ulFlags)
  {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    FIXME("0x%08lx 0x%08x 0x%08x 0x%08x %p 0x%08x : stub\n", dnDevInst, access, ulHardwareProfile,
 +#else
      FIXME("0x%08x 0x%08x 0x%08x 0x%08x %p 0x%08x : stub\n", dnDevInst, access, ulHardwareProfile,
@@ -181,7 +181,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  CONFIGRET WINAPI CM_Get_Child(
      PDEVINST pdnDevInst, DEVINST dnDevInst, ULONG ulFlags)
  {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    FIXME("%p 0x%08lx 0x%08x: stub\n", pdnDevInst, dnDevInst, ulFlags);
 +#else
      FIXME("%p 0x%08x 0x%08x: stub\n", pdnDevInst, dnDevInst, ulFlags);
@@ -193,7 +193,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  CONFIGRET WINAPI CM_Get_Child_Ex(
      PDEVINST pdnDevInst, DEVINST dnDevInst, ULONG ulFlags, HMACHINE hMachine)
  {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    FIXME("%p 0x%08lx 0x%08x %p: stub\n", pdnDevInst, dnDevInst, ulFlags, hMachine);
 +#else
      FIXME("%p 0x%08x 0x%08x %p: stub\n", pdnDevInst, dnDevInst, ulFlags, hMachine);
@@ -205,7 +205,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  DWORD WINAPI CM_Get_Device_ID_ExA(
      DEVINST dnDevInst, PCHAR Buffer, ULONG BufferLen, ULONG ulFlags, HMACHINE hMachine)
  {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    FIXME("0x%08lx %p 0x%08x 0x%08x %p: stub\n", dnDevInst, Buffer, BufferLen, ulFlags, hMachine);
 +#else
      FIXME("0x%08x %p 0x%08x 0x%08x %p: stub\n", dnDevInst, Buffer, BufferLen, ulFlags, hMachine);
@@ -217,7 +217,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  DWORD WINAPI CM_Get_Device_ID_ExW(
      DEVINST dnDevInst, PWCHAR Buffer, ULONG BufferLen, ULONG ulFlags, HMACHINE hMachine)
  {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    FIXME("0x%08lx %p 0x%08x 0x%08x %p: stub\n", dnDevInst, Buffer, BufferLen, ulFlags, hMachine);
 +#else
      FIXME("0x%08x %p 0x%08x 0x%08x %p: stub\n", dnDevInst, Buffer, BufferLen, ulFlags, hMachine);
@@ -229,7 +229,7 @@ author: Michael Gilbert <mgilbert@debian.org>
   */
  DWORD WINAPI CM_Get_Parent(PDEVINST pdnDevInst, DEVINST dnDevInst, ULONG ulFlags)
  {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    FIXME("%p 0x%08lx 0x%08x stub\n", pdnDevInst, dnDevInst, ulFlags);
 +#else
      FIXME("%p 0x%08x 0x%08x stub\n", pdnDevInst, dnDevInst, ulFlags);
@@ -241,7 +241,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  CONFIGRET WINAPI CM_Get_DevNode_Registry_Property_ExA(DEVINST dev, ULONG prop, PULONG regdatatype,
      PVOID buf, PULONG len, ULONG flags, HMACHINE machine)
  {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    FIXME("0x%08lx %u %p %p %p 0x%08x %p: stub\n", dev, prop, regdatatype, buf, len, flags, machine);
 +#else
      FIXME("0x%08x %u %p %p %p 0x%08x %p: stub\n", dev, prop, regdatatype, buf, len, flags, machine);
@@ -253,7 +253,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  CONFIGRET WINAPI CM_Get_DevNode_Registry_Property_ExW(DEVINST dev, ULONG prop, PULONG regdatatype,
      PVOID buf, PULONG len, ULONG flags, HMACHINE machine)
  {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    FIXME("0x%08lx %u %p %p %p 0x%08x %p: stub\n", dev, prop, regdatatype, buf, len, flags, machine);
 +#else
      FIXME("0x%08x %u %p %p %p 0x%08x %p: stub\n", dev, prop, regdatatype, buf, len, flags, machine);
@@ -265,7 +265,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  CONFIGRET WINAPI CM_Get_DevNode_Status(ULONG *status, ULONG *problem, DEVINST dev,
                                         ULONG flags)
  {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    FIXME("%p %p 0x%08lx 0x%08x: stub\n", status, problem, dev, flags);
 +#else
      FIXME("%p %p 0x%08x 0x%08x: stub\n", status, problem, dev, flags);
@@ -277,7 +277,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  CONFIGRET WINAPI CM_Get_DevNode_Status_Ex(ULONG *status, ULONG *problem, DEVINST dev,
                                            ULONG flags, HMACHINE machine)
  {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    FIXME("%p %p 0x%08lx 0x%08x %p: stub\n", status, problem, dev, flags, machine);
 +#else
      FIXME("%p %p 0x%08x 0x%08x %p: stub\n", status, problem, dev, flags, machine);
@@ -289,7 +289,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  CONFIGRET WINAPI CM_Get_Sibling_Ex(
      PDEVINST pdnDevInst, DEVINST DevInst, ULONG ulFlags, HMACHINE hMachine)
  {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    FIXME("%p 0x%08lx 0x%08x %p: stub\n", pdnDevInst, DevInst, ulFlags, hMachine);
 +#else
      FIXME("%p 0x%08x 0x%08x %p: stub\n", pdnDevInst, DevInst, ulFlags, hMachine);
@@ -299,7 +299,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  CONFIGRET WINAPI CM_Reenumerate_DevNode(DEVINST dnDevInst, ULONG ulFlags)
  {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    FIXME("0x%08lx 0x%08x: stub\n", dnDevInst, ulFlags);
 +#else
      FIXME("0x%08x 0x%08x: stub\n", dnDevInst, ulFlags);
@@ -309,7 +309,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  CONFIGRET WINAPI CM_Reenumerate_DevNode_Ex(DEVINST dnDevInst, ULONG ulFlags, HMACHINE machine)
  {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined (__aarch64__)
 +    FIXME("0x%08lx 0x%08x %p: stub\n", dnDevInst, ulFlags, machine);
 +#else
      FIXME("0x%08x 0x%08x %p: stub\n", dnDevInst, ulFlags, machine);

@@ -1,0 +1,13 @@
+description: ignore array bounds warning in kernel32 for now
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/dlls/kernel32/Makefile.in
++++ b/dlls/kernel32/Makefile.in
+@@ -2,6 +2,7 @@ EXTRADEFS = -D_KERNEL32_ -D_NORMALIZE_
+ MODULE    = kernel32.dll
+ IMPORTLIB = kernel32
+ IMPORTS   = winecrt0 ntdll
++CFLAGS   += -Wno-array-bounds
+ EXTRALIBS = $(COREFOUNDATION_LIBS) $(POLL_LIBS)
+ EXTRADLLFLAGS = -nodefaultlibs -Wb,-F,KERNEL32.dll -Wl,--image-base,0x7b400000
+ 

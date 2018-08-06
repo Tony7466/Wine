@@ -1,4 +1,4 @@
-description: fix pointer conversion warnings in winmm on amd64
+description: fix pointer conversion warnings in winmm on 64 bit archs
 author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/include/mmddk.h
@@ -7,7 +7,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  } WAVEOPENDESC, *LPWAVEOPENDESC;
  
  typedef struct {
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined(__aarch64__)
 +        DWORD64			dwStreamID;
 +#else
          DWORD  			dwStreamID;
@@ -21,7 +21,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #endif
              if (((LPMIDIEVENT)lpData)->dwStreamID != 0 &&
                  ((LPMIDIEVENT)lpData)->dwStreamID != 0xFFFFFFFF &&
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined(__aarch64__)
 +                ((LPMIDIEVENT)lpData)->dwStreamID != (DWORD64)lpMidiStrm) {
 +                FIXME("Dropping bad %s lpMidiHdr (streamID=%08lx)\n",
 +#else
@@ -35,7 +35,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      lpMidiStrm->status = MSM_STATUS_PAUSED;
      lpMidiStrm->dwElapsedMS = 0;
  
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined(__aarch64__)
 +    mosm.dwStreamID = (DWORD64)lpMidiStrm;
 +#else
      mosm.dwStreamID = (DWORD)lpMidiStrm;
@@ -49,7 +49,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  typedef struct midievent_tag {
      DWORD dwDeltaTime;	/* Time, in MIDI ticks, between the previous
  			 * event and the current event. */
-+#if defined(__x86_64__)
++#if defined(__x86_64__) || defined(__aarch64__)
 +    DWORD64 dwStreamID;/* Reserved; must be zero. */
 +#else
      DWORD dwStreamID;	/* Reserved; must be zero. */
