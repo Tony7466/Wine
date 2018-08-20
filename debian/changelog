@@ -1,3 +1,15 @@
+wine-development (3.14-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.14, released Aug 17, 2018.
+    - Support for DXTn texture decompression.
+    - Deferral support for MSI install actions.
+    - Support for Japanese keyboard in DirectInput.
+    - More improvements in the standard Task Dialog.
+    - A few more icons in Shell32.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Mon, 20 Aug 2018 02:16:58 +0000
+
 wine-development (3.13-3) unstable; urgency=medium
 
   * Fix build errors on arm64 (closes: #903789).
