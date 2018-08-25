@@ -2,9 +2,11 @@ debianization/addons.patch
 debianization/makefile.patch
 debianization/version-string.patch
 debianization/winemenubuilder.patch
+debianization/wineserver-persistence.patch
 
 disable/tests.patch
 disable/i386-only.patch
+disable/line-wrapping.patch
 disable/addons-download.patch
 disable/po-modifications.patch
 disable/blacklist-extensions.patch
@@ -21,7 +23,6 @@ fixes/arm.patch
 fixes/gstbase.patch
 fixes/printer-resolution.patch
 fixes/temporary-directory.patch
-fixes/wineserver-persistence.patch
 
 warnings/arm-messages.patch
 warnings/arm-longdouble.patch
@@ -30,15 +31,10 @@ warnings/arm64-excess-precision.patch
 warnings/arm64-unused-functions.patch
 warnings/arm64-uninitialized-variables.patch
 
-warnings/dword64-winmm.patch
-warnings/dword64-setupapi.patch
-
 warnings/array-bounds.patch
+warnings/dword64-winmm.patch
 warnings/format-overflow.patch
-warnings/stringop-overflow.patch
-
 warnings/unused-functions.patch
-warnings/incompatible-type.patch
 warnings/argument-promotion.patch
 warnings/discarded-qualifiers.patch
 warnings/uninitialized-variables.patch

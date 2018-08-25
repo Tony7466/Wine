@@ -14,16 +14,16 @@ author: Jens Reyer <jre.winesim@gmail.com>
  	winemenubuilder.c
 --- a/programs/winemenubuilder/winemenubuilder.c
 +++ b/programs/winemenubuilder/winemenubuilder.c
-@@ -104,6 +104,8 @@ WINE_DEFAULT_DEBUG_CHANNEL(menubuilder);
- #define in_startmenu(csidl)   ((csidl)==CSIDL_STARTMENU || \
-                                (csidl)==CSIDL_COMMON_STARTMENU)
+@@ -107,6 +107,8 @@ WINE_DEFAULT_DEBUG_CHANNEL(menubuilder);
+ #define IS_OPTION_TRUE(ch) \
+     ((ch) == 'y' || (ch) == 'Y' || (ch) == 't' || (ch) == 'T' || (ch) == '1')
  
 +static const char wine_debsuffix[] = "wine" DEBSUFFIX;
 +
  /* link file formats */
  
  #include "pshpack1.h"
-@@ -1461,8 +1463,8 @@ static BOOL write_desktop_entry(const ch
+@@ -1464,8 +1466,8 @@ static BOOL write_desktop_entry(const ch
  
      fprintf(file, "[Desktop Entry]\n");
      fprintf(file, "Name=%s\n", linkname);
@@ -34,7 +34,7 @@ author: Jens Reyer <jre.winesim@gmail.com>
      fprintf(file, "Type=Application\n");
      fprintf(file, "StartupNotify=true\n");
      if (descr && lstrlenA(descr))
-@@ -2502,7 +2504,8 @@ static BOOL write_freedesktop_associatio
+@@ -2505,7 +2507,8 @@ static BOOL write_freedesktop_associatio
          fprintf(desktop, "Type=Application\n");
          fprintf(desktop, "Name=%s\n", friendlyAppName);
          fprintf(desktop, "MimeType=%s;\n", mimeType);

@@ -1,25 +1,6 @@
 description: fix uninitialized variable compiler warnings
 author: Michael Gilbert <mgilbert@debian.org>
 
---- a/tools/widl/typegen.c
-+++ b/tools/widl/typegen.c
-@@ -3715,8 +3715,14 @@ static unsigned int get_required_buffer_
-     case TGT_USER_TYPE:
-     {
-         const char *uname;
--        const type_t *utype = get_user_type(type, &uname);
--        return get_required_buffer_size_type(utype, uname, NULL, FALSE, alignment);
-+        const type_t *utype;
-+        if ((utype = get_user_type(type, &uname)))
-+        {
-+            return get_required_buffer_size_type(utype, uname, NULL, FALSE, alignment);
-+        } else {
-+            error("get_required_buffer_size: error getting user type 0x%02x\n",
-+                  get_basic_fc(type));
-+        }
-     }
-     case TGT_BASIC:
-         switch (get_basic_fc(type))
 --- a/dlls/xmllite/reader.c
 +++ b/dlls/xmllite/reader.c
 @@ -1021,7 +1021,7 @@ static void readerinput_switchencoding(x

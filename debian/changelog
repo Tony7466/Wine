@@ -1,4 +1,4 @@
-wine-development (3.14-1) UNRELEASED; urgency=medium
+wine-development (3.14-1) unstable; urgency=medium
 
   * New upstream release 3.14, released Aug 17, 2018.
     - Support for DXTn texture decompression.
@@ -8,7 +8,7 @@ wine-development (3.14-1) UNRELEASED; urgency=medium
     - A few more icons in Shell32.
     - Various bug fixes.
 
- -- Michael Gilbert <mgilbert@debian.org>  Mon, 20 Aug 2018 02:16:58 +0000
+ -- Michael Gilbert <mgilbert@debian.org>  Mon, 20 Aug 2018 02:20:12 +0000
 
 wine-development (3.13-3) unstable; urgency=medium
 

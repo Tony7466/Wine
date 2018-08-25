@@ -25,7 +25,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      int         style;
 --- a/dlls/winealsa.drv/mmdevdrv.c
 +++ b/dlls/winealsa.drv/mmdevdrv.c
-@@ -631,7 +631,7 @@ HRESULT WINAPI AUDDRV_GetEndpointIDs(EDa
+@@ -630,7 +630,7 @@ HRESULT WINAPI AUDDRV_GetEndpointIDs(EDa
  static snd_config_t *make_handle_underrun_config(const char *name)
  {
      snd_config_t *lconf, *dev_node, *hu_node, *type_node;
@@ -34,3 +34,14 @@ author: Michael Gilbert <mgilbert@debian.org>
      const char *type_str;
      int err;
  
+--- a/dlls/wined3d/arb_program_shader.c
++++ b/dlls/wined3d/arb_program_shader.c
+@@ -226,7 +226,7 @@ struct recorded_instruction
+ 
+ struct shader_arb_ctx_priv
+ {
+-    char addr_reg[20];
++    char addr_reg[50];
+     enum
+     {
+         /* plain GL_ARB_vertex_program or GL_ARB_fragment_program */

@@ -34,29 +34,6 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      TRACE("(%p)->(%s, %p, %p)\n", This, debugstr_w(pszPropName), pVar, pErrorLog);
  
---- a/dlls/msi/custom.c
-+++ b/dlls/msi/custom.c
-@@ -570,18 +570,17 @@ UINT CDECL __wine_msi_call_dll_function(
-                 r = ERROR_SUCCESS;
-             }
-             __ENDTRY;
--
--            MsiCloseHandle( hPackage );
-         }
-         else
-             ERR("failed to create handle for %x\n", remote_package );
-+
-+        MsiCloseHandle(hPackage);
-     }
-     else
-         ERR("GetProcAddress(%s) failed\n", debugstr_a(proc));
- 
-     FreeLibrary(hModule);
- 
--    MsiCloseHandle(hPackage);
-     midl_user_free(dll);
-     midl_user_free(proc);
- 
 --- a/dlls/user32/sysparams.c
 +++ b/dlls/user32/sysparams.c
 @@ -1727,7 +1727,7 @@ BOOL WINAPI SystemParametersInfoW( UINT

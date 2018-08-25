@@ -18,18 +18,3 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  /* wait for a ptraced child to get a certain signal */
  static int waitpid_thread( struct thread *thread, int signal )
---- a/dlls/strmbase/transform.c
-+++ b/dlls/strmbase/transform.c
-@@ -51,10 +51,12 @@ static inline BaseInputPin *impl_BaseInp
-     return CONTAINING_RECORD(iface, BaseInputPin, pin);
- }
- 
-+/*
- static inline BasePin *impl_BasePin_from_IPin( IPin *iface )
- {
-     return CONTAINING_RECORD(iface, BasePin, IPin_iface);
- }
-+*/
- 
- static inline BaseInputPin *impl_BaseInputPin_from_IPin( IPin *iface )
- {

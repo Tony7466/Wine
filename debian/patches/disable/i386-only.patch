@@ -1,3 +1,6 @@
+description: disable i386 specific routines on non i386 archs
+author: Michael Gilbert <mgilbert@debian.org>
+
 --- a/dlls/oleaut32/tmarshal.c
 +++ b/dlls/oleaut32/tmarshal.c
 @@ -48,10 +48,15 @@

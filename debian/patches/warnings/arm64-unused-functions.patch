@@ -1,52 +1,6 @@
 description: disable functions that are unused on arm64
 author: Michael Gilbert <mgilbert@debian.org>
 
---- a/dlls/dmime/audiopath.c
-+++ b/dlls/dmime/audiopath.c
-@@ -39,10 +39,12 @@ static inline struct IDirectMusicAudioPa
-     return CONTAINING_RECORD(iface, struct IDirectMusicAudioPathImpl, IDirectMusicAudioPath_iface);
- }
- 
-+#ifndef __aarch64__
- static inline struct IDirectMusicAudioPathImpl *impl_from_IDirectMusicObject(IDirectMusicObject *iface)
- {
-     return CONTAINING_RECORD(iface, struct IDirectMusicAudioPathImpl, dmobj.IDirectMusicObject_iface);
- }
-+#endif
- 
- static inline struct IDirectMusicAudioPathImpl *impl_from_IPersistStream(IPersistStream *iface)
- {
---- a/dlls/dmime/graph.c
-+++ b/dlls/dmime/graph.c
-@@ -35,10 +35,12 @@ static inline IDirectMusicGraphImpl *imp
-     return CONTAINING_RECORD(iface, IDirectMusicGraphImpl, IDirectMusicGraph_iface);
- }
- 
-+#ifndef __aarch64__
- static inline IDirectMusicGraphImpl *impl_from_IDirectMusicObject(IDirectMusicObject *iface)
- {
-     return CONTAINING_RECORD(iface, IDirectMusicGraphImpl, dmobj.IDirectMusicObject_iface);
- }
-+#endif
- 
- static inline IDirectMusicGraphImpl *impl_from_IPersistStream(IPersistStream *iface)
- {
---- a/dlls/dmloader/container.c
-+++ b/dlls/dmloader/container.c
-@@ -193,11 +193,13 @@ static const IDirectMusicContainerVtbl d
-     IDirectMusicContainerImpl_EnumObject
- };
- 
-+#ifndef __aarch64__
- /* IDirectMusicObject part: */
- static inline IDirectMusicContainerImpl *impl_from_IDirectMusicObject(IDirectMusicObject *iface)
- {
-     return CONTAINING_RECORD(iface, IDirectMusicContainerImpl, dmobj.IDirectMusicObject_iface);
- }
-+#endif
- 
- static HRESULT WINAPI cont_IDirectMusicObject_ParseDescriptor(IDirectMusicObject *iface,
-         IStream *stream, DMUS_OBJECTDESC *desc)
 --- a/dlls/dmusic/collection.c
 +++ b/dlls/dmusic/collection.c
 @@ -49,10 +49,12 @@ static inline IDirectMusicCollectionImpl
@@ -62,22 +16,6 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  static inline IDirectMusicCollectionImpl *impl_from_IPersistStream(IPersistStream *iface)
  {
---- a/dlls/dmstyle/style.c
-+++ b/dlls/dmstyle/style.c
-@@ -206,11 +206,13 @@ static const IDirectMusicStyle8Vtbl dmst
-     IDirectMusicStyle8Impl_EnumPattern
- };
- 
-+#ifndef __aarch64__
- /* IDirectMusicStyle8Impl IDirectMusicObject part: */
- static inline IDirectMusicStyle8Impl *impl_from_IDirectMusicObject(IDirectMusicObject *iface)
- {
-     return CONTAINING_RECORD(iface, IDirectMusicStyle8Impl, dmobj.IDirectMusicObject_iface);
- }
-+#endif
- 
- static HRESULT WINAPI style_IDirectMusicObject_ParseDescriptor(IDirectMusicObject *iface,
-         IStream *stream, DMUS_OBJECTDESC *desc)
 --- a/dlls/dwrite/font.c
 +++ b/dlls/dwrite/font.c
 @@ -5101,10 +5101,12 @@ static HRESULT WINAPI glyphrunanalysis_G
