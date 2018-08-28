@@ -1,0 +1,122 @@
+description: regenerate all (currently used) icon files
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/tools/makedep.c
++++ b/tools/makedep.c
+@@ -1508,6 +1508,9 @@ static struct file *open_include_file( c
+     }
+     if (pFile->type == INCL_SYSTEM) return NULL;  /* ignore system files we cannot find */
+ 
++    /* no reason to check that files exist here, may be built later */
++    return file;
++
+     /* try in src file directory */
+     if ((file = open_file_same_dir( pFile->included_by, pFile->name, &pFile->filename ))) return file;
+ 
+@@ -2742,6 +2745,14 @@ static void output_source_svg( struct ma
+ 
+         if (images[i])
+         {
++            struct incl_file *src;
++            LIST_FOR_EACH_ENTRY( src, &make->sources, struct incl_file, entry )
++            {
++                if (strendswith( src->name, ".rc" ))
++                {
++                output( "%s: %s.%s\n", replace_extension( src->name, "rc", "res" ), src_dir_path( make, obj ), images[i] );
++                }
++            }
+             output( "%s.%s: %s\n", src_dir_path( make, obj ), images[i], source->filename );
+             output( "\tCONVERT=\"%s\" ICOTOOL=\"%s\" RSVG=\"%s\" %s %s $@\n", convert, icotool, rsvg,
+                     top_src_dir_path( make, "tools/buildimage" ), source->filename );
+--- a/dlls/comctl32/comctl32.rc
++++ b/dlls/comctl32/comctl32.rc
+@@ -155,15 +155,3 @@ IDC_DIVIDEROPEN CURSOR idc_divideropen.c
+ 
+ /* @makedep: idc_movebutton.cur */
+ IDC_MOVEBUTTON CURSOR idc_movebutton.cur
+-
+-/* @makedep: idi_dragarrow.ico */
+-IDI_DRAGARROW ICON idi_dragarrow.ico
+-
+-/* @makedep: idi_tt_info_sm.ico */
+-IDI_TT_INFO_SM ICON idi_tt_info_sm.ico
+-
+-/* @makedep: idi_tt_warn_sm.ico */
+-IDI_TT_WARN_SM ICON idi_tt_warn_sm.ico
+-
+-/* @makedep: idi_tt_error_sm.ico */
+-IDI_TT_ERROR_SM ICON idi_tt_error_sm.ico
+--- a/programs/regedit/regedit.rc
++++ b/programs/regedit/regedit.rc
+@@ -434,21 +434,6 @@ STRINGTABLE
+ 
+ LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+ 
+-/* @makedep: folderopen.ico */
+-IDI_OPEN_FILE ICON folderopen.ico
+-
+-/* @makedep: folder.ico */
+-IDI_CLOSED_FILE ICON folder.ico
+-
+-/* @makedep: computer.ico */
+-IDI_ROOT ICON computer.ico
+-
+-/* @makedep: string.ico */
+-IDI_STRING ICON string.ico
+-
+-/* @makedep: bin.ico */
+-IDI_BIN  ICON bin.ico
+-
+ /* @makedep: regedit.ico */
+ IDI_REGEDIT ICON regedit.ico
+ 
+--- a/programs/taskmgr/taskmgr.rc
++++ b/programs/taskmgr/taskmgr.rc
+@@ -580,12 +580,6 @@ LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+ /* @makedep: taskmgr.ico */
+ IDI_TASKMANAGER         ICON taskmgr.ico
+ 
+-/* @makedep: window.ico */
+-IDI_WINDOW              ICON window.ico
+-
+-/* @makedep: windowsm.ico */
+-IDI_WINDOWSM            ICON windowsm.ico
+-
+ /*
+  Version
+ */
+--- a/dlls/comdlg32/comdlg32.rc
++++ b/dlls/comdlg32/comdlg32.rc
+@@ -579,23 +579,5 @@ PD32_PORTRAIT ICON pd32_portrait.ico
+ /* @makedep: pd32_landscape.ico */
+ PD32_LANDSCAPE ICON pd32_landscape.ico
+ 
+-/* @makedep: folder.ico */
+-FOLDER ICON folder.ico
+-
+-/* @makedep: folder2.ico */
+-FOLDER2 ICON folder2.ico
+-
+-/* @makedep: floppy.ico */
+-FLOPPY ICON floppy.ico
+-
+-/* @makedep: cdrom.ico */
+-CDROM ICON cdrom.ico
+-
+-/* @makedep: hdisk.ico */
+-HDISK ICON hdisk.ico
+-
+-/* @makedep: network.ico */
+-NETWORK ICON network.ico
+-
+ /* @makedep: fontpics.bmp */
+ 38 BITMAP fontpics.bmp
+--- a/dlls/display.drv16/display.rc
++++ b/dlls/display.drv16/display.rc
+@@ -52,6 +52,3 @@
+ 	0x00000000L,	/* btn text */
+ 	0x00000000L		/* inactive caption text */
+ }
+-
+-/* @makedep: oic_hand.ico */
+-1 ICON oic_hand.ico

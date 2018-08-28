@@ -66,3 +66,33 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  static inline float to_sRGB_component(float f)
  {
+--- a/dlls/dmscript/script.c
++++ b/dlls/dmscript/script.c
+@@ -203,11 +203,13 @@ static const IDirectMusicScriptVtbl dmsc
+     IDirectMusicScriptImpl_EnumVariable
+ };
+ 
++#ifndef __aarch64__
+ /* IDirectMusicScriptImpl IDirectMusicObject part: */
+ static inline IDirectMusicScriptImpl *impl_from_IDirectMusicObject(IDirectMusicObject *iface)
+ {
+     return CONTAINING_RECORD(iface, IDirectMusicScriptImpl, dmobj.IDirectMusicObject_iface);
+ }
++#endif
+ 
+ static HRESULT WINAPI script_IDirectMusicObject_ParseDescriptor(IDirectMusicObject *iface,
+         IStream *stream, DMUS_OBJECTDESC *desc)
+--- a/programs/winedbg/gdbproxy.c
++++ b/programs/winedbg/gdbproxy.c
+@@ -740,11 +740,6 @@ static inline void packet_reply_add(stru
+     gdbctx->out_len += len;
+ }
+ 
+-static inline void packet_reply_cat(struct gdb_context* gdbctx, const char* str)
+-{
+-    packet_reply_add(gdbctx, str, strlen(str));
+-}
+-
+ static inline void packet_reply_catc(struct gdb_context* gdbctx, char ch)
+ {
+     packet_reply_add(gdbctx, &ch, 1);
