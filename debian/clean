@@ -44,8 +44,9 @@ dlls/opengl32/opengl_ext.c
 dlls/opengl32/opengl_norm.c
 dlls/opengl32/opengl32.spec
 
-# windows help files
-dlls/itss/tests/data.chm
+# automatically generated icon files
+*/*/*.ico
+*/*/*/*.ico
 
 # font files
 fonts/*.fon
@@ -55,6 +56,9 @@ fonts/Makefile
 tools/sfnt2fon/sfnt2fon
 tools/sfnt2fon/sfnt2fon.o
 tools/sfnt2fon/Makefile
+
+# windows help files
+dlls/itss/tests/data.chm
 
 # things that wine's clean doesn't clean
 po/LINGUAS

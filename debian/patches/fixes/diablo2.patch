@@ -1,0 +1,16 @@
+description: fix out-of-bounds read when tls_dirs is empty (can cause Diablo II to hang)
+author: Michael Gilbert <mgilbert@debian.org>
+bug: http://bugs.winehq.org/show_bug.cgi?id=44178
+
+--- a/dlls/ntdll/loader.c
++++ b/dlls/ntdll/loader.c
+@@ -870,6 +870,9 @@ static SHORT alloc_tls_slot( LDR_MODULE
+     size = dir->EndAddressOfRawData - dir->StartAddressOfRawData;
+     if (!size && !dir->SizeOfZeroFill && !dir->AddressOfCallBacks) return -1;
+ 
++    if (!tls_dirs)
++        return -1;
++
+     for (i = 0; i < tls_module_count; i++)
+     {
+         if (!tls_dirs[i].StartAddressOfRawData && !tls_dirs[i].EndAddressOfRawData &&

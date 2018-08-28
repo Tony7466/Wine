@@ -1,7 +1,6 @@
 - finish update to tools/make_unicode
   use current allkeys.txt (wip jre)
   package and use MAPPING files
-- rebuild icons
 - completely build PIE
   From the Wine 3.0 ANNOUNCE:
   Position Independent Executables are supported, both for the Wine binary

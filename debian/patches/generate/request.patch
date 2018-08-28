@@ -1,4 +1,4 @@
-description: generate automatically generated request code 
+description: generate automatically generated request code
 author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/make_requests
