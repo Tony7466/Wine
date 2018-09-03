@@ -1,3 +1,15 @@
+wine-development (3.15-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.15, released Aug 31, 2018.
+    - Support for DPI scaling on Android.
+    - HID device support in Raw Input.
+    - Many more new icons in Shell32.
+    - WinHTTP converted to use Windows Sockets.
+    - Syntax fixes in the command line interpreter.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Mon, 03 Sep 2018 01:31:01 +0000
+
 wine-development (3.14-2) unstable; urgency=medium
 
   * Fix new build errors on arm64.
