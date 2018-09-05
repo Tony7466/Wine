@@ -1,7 +1,6 @@
-wine-development (3.15-1) UNRELEASED; urgency=medium
+wine-development (3.15-1) unstable; urgency=medium
 
   * New upstream release 3.15, released Aug 31, 2018.
-    - Support for DPI scaling on Android.
     - HID device support in Raw Input.
     - Many more new icons in Shell32.
     - WinHTTP converted to use Windows Sockets.

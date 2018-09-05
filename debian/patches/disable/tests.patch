@@ -23,7 +23,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  	metafile.c \
 --- a/dlls/kernel32/tests/Makefile.in
 +++ b/dlls/kernel32/tests/Makefile.in
-@@ -15,7 +15,6 @@ C_SRCS = \
+@@ -17,7 +17,6 @@ SOURCES = \
  	fiber.c \
  	file.c \
  	format_msg.c \

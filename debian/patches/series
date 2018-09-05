@@ -41,3 +41,5 @@ warnings/unused-functions.patch
 warnings/argument-promotion.patch
 warnings/discarded-qualifiers.patch
 warnings/uninitialized-variables.patch
+
+fixes/registry-regression.patch

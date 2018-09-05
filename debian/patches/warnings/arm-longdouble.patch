@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/msvcrt/string.c
 +++ b/dlls/msvcrt/string.c
-@@ -890,7 +890,13 @@ int CDECL MSVCRT__atoldbl(MSVCRT__LDOUBL
+@@ -893,7 +893,13 @@ int CDECL MSVCRT__atoldbl(MSVCRT__LDOUBL
    long double ld;
    TRACE("str %s value %p\n",str,value);
    ld = strtold(str,0);
@@ -17,7 +17,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #else
    FIXME("stub, str %s value %p\n",str,value);
  #endif
-@@ -906,7 +912,13 @@ int CDECL __STRINGTOLD( MSVCRT__LDOUBLE
+@@ -909,7 +915,13 @@ int CDECL __STRINGTOLD( MSVCRT__LDOUBLE
      long double ld;
      FIXME("%p %p %s %x partial stub\n", value, endptr, str, flags );
      ld = strtold(str,0);
@@ -31,7 +31,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #else
      FIXME("%p %p %s %x stub\n", value, endptr, str, flags );
  #endif
-@@ -1794,7 +1806,12 @@ int CDECL MSVCRT_I10_OUTPUT(MSVCRT__LDOU
+@@ -1797,7 +1809,12 @@ int CDECL MSVCRT_I10_OUTPUT(MSVCRT__LDOU
      char buf[I10_OUTPUT_MAX_PREC+9]; /* 9 = strlen("0.e+0000") + '\0' */
      char *p;
  
