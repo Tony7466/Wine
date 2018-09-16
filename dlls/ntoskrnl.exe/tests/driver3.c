@@ -1,7 +1,5 @@
 /*
- * XML parsing library
- *
- * Copyright 2009 Christian Costa
+ * Copyright 2018 Dmitry Timoshkov
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,28 +16,16 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-
 #include <stdarg.h>
 
-#include "windef.h"
-#include "winbase.h"
-#include "wine/debug.h"
+#include "ntstatus.h"
+#define WIN32_NO_STATUS
+#include "winternl.h"
+#include "ddk/wdm.h"
 
-WINE_DEFAULT_DEBUG_CHANNEL(xmllite);
-
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
+NTSTATUS WINAPI DriverEntry(DRIVER_OBJECT *obj, UNICODE_STRING *path)
 {
-    TRACE("(%p, %u, %p)\n", hinstDLL, fdwReason, lpvReserved);
+    DbgPrint("driver3: DriverEntry\n");
 
-    switch (fdwReason)
-    {
-        case DLL_WINE_PREATTACH:
-            return FALSE;    /* prefer native version */
-        case DLL_PROCESS_ATTACH:
-            DisableThreadLibraryCalls(hinstDLL);
-            break;
-    }
-
-    return TRUE;
+    return STATUS_NOT_IMPLEMENTED;
 }

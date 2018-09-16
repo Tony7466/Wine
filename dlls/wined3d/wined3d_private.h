@@ -201,20 +201,6 @@ struct wined3d_d3d_info
 static const struct color_fixup_desc COLOR_FIXUP_IDENTITY =
         {0, CHANNEL_SOURCE_X, 0, CHANNEL_SOURCE_Y, 0, CHANNEL_SOURCE_Z, 0, CHANNEL_SOURCE_W};
 
-static inline struct color_fixup_desc create_color_fixup_desc(
-        int sign0, enum fixup_channel_source src0, int sign1, enum fixup_channel_source src1,
-        int sign2, enum fixup_channel_source src2, int sign3, enum fixup_channel_source src3)
-{
-    struct color_fixup_desc fixup =
-    {
-        sign0, src0,
-        sign1, src1,
-        sign2, src2,
-        sign3, src3,
-    };
-    return fixup;
-}
-
 static inline struct color_fixup_desc create_complex_fixup_desc(enum complex_fixup complex_fixup)
 {
     struct color_fixup_desc fixup =
@@ -4306,6 +4292,8 @@ extern enum wined3d_format_id pixelformat_for_depth(DWORD depth) DECLSPEC_HIDDEN
 #define WINED3DFMT_FLAG_BLOCKS_NO_VERIFY            0x00100000
 #define WINED3DFMT_FLAG_INTEGER                     0x00200000
 #define WINED3DFMT_FLAG_GEN_MIPMAP                  0x00400000
+#define WINED3DFMT_FLAG_NORMALISED                  0x00800000
+#define WINED3DFMT_FLAG_VERTEX_ATTRIBUTE            0x01000000
 
 struct wined3d_rational
 {
@@ -4325,6 +4313,7 @@ struct wined3d_format
     enum wined3d_format_id id;
 
     D3DDDIFORMAT ddi_format;
+    unsigned int component_count;
     DWORD red_size;
     DWORD green_size;
     DWORD blue_size;
@@ -4342,11 +4331,8 @@ struct wined3d_format
     UINT block_byte_count;
 
     enum wined3d_ffp_emit_idx emit_idx;
-    GLint component_count;
     GLenum gl_vtx_type;
     GLint gl_vtx_format;
-    GLboolean gl_normalized;
-    unsigned int attribute_size;
 
     GLint glInternal;
     GLint glGammaInternal;

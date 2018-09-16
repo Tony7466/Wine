@@ -220,7 +220,7 @@ static HRESULT vertexdeclaration_init(struct wined3d_vertex_declaration *declara
         if (e->input_slot >= MAX_STREAMS)
             continue;
 
-        if (!e->format->gl_vtx_format)
+        if (!(e->format->flags[WINED3D_GL_RES_TYPE_BUFFER] & WINED3DFMT_FLAG_VERTEX_ATTRIBUTE))
         {
             FIXME("The application tries to use an unsupported format (%s), returning E_FAIL.\n",
                     debug_d3dformat(elements[i].format));
@@ -315,7 +315,7 @@ static void append_decl_element(struct wined3d_fvf_convert_state *state,
     elements[idx].usage_idx = usage_idx;
 
     format = wined3d_get_format(state->adapter, format_id, 0);
-    state->offset += format->attribute_size;
+    state->offset += format->byte_count;
     ++state->idx;
 }
 

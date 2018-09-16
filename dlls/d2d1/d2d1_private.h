@@ -117,14 +117,21 @@ struct d2d_ps_cb
     struct d2d_brush_cb opacity_brush;
 };
 
+struct d2d_device_context_ops
+{
+    HRESULT (*device_context_present)(IUnknown *outer_unknown);
+};
+
 struct d2d_device_context
 {
     ID2D1DeviceContext ID2D1DeviceContext_iface;
     ID2D1GdiInteropRenderTarget ID2D1GdiInteropRenderTarget_iface;
     IDWriteTextRenderer IDWriteTextRenderer_iface;
+    IUnknown IUnknown_iface;
     LONG refcount;
 
     IUnknown *outer_unknown;
+    const struct d2d_device_context_ops *ops;
 
     ID2D1Factory *factory;
     ID3D10Device *device;
@@ -139,7 +146,7 @@ struct d2d_device_context
     ID3D10BlendState *bs;
 
     struct d2d_error_state error;
-    D2D1_DRAWING_STATE_DESCRIPTION drawing_state;
+    D2D1_DRAWING_STATE_DESCRIPTION1 drawing_state;
     IDWriteRenderingParams *text_rendering_params;
     IDWriteRenderingParams *default_text_rendering_params;
 
@@ -149,16 +156,18 @@ struct d2d_device_context
 };
 
 HRESULT d2d_d3d_create_render_target(ID2D1Factory *factory, IDXGISurface *surface, IUnknown *outer_unknown,
-        const D2D1_RENDER_TARGET_PROPERTIES *desc, ID2D1RenderTarget **render_target) DECLSPEC_HIDDEN;
+        const struct d2d_device_context_ops *ops, const D2D1_RENDER_TARGET_PROPERTIES *desc,
+        void **render_target) DECLSPEC_HIDDEN;
 HRESULT d2d_d3d_render_target_create_rtv(ID2D1RenderTarget *render_target, IDXGISurface1 *surface) DECLSPEC_HIDDEN;
 
 struct d2d_wic_render_target
 {
-    ID2D1RenderTarget ID2D1RenderTarget_iface;
+    IUnknown IUnknown_iface;
     LONG refcount;
 
     IDXGISurface *dxgi_surface;
     ID2D1RenderTarget *dxgi_target;
+    IUnknown *dxgi_inner;
     ID3D10Texture2D *readback_texture;
     IWICBitmap *bitmap;
 
@@ -177,6 +186,7 @@ struct d2d_dc_render_target
 
     IDXGISurface1 *dxgi_surface;
     ID2D1RenderTarget *dxgi_target;
+    IUnknown *dxgi_inner;
 
     RECT dst_rect;
     HDC hdc;
@@ -191,6 +201,7 @@ struct d2d_hwnd_render_target
     LONG refcount;
 
     ID2D1RenderTarget *dxgi_target;
+    IUnknown *dxgi_inner;
     IDXGISwapChain *swapchain;
     UINT sync_interval;
     HWND hwnd;
@@ -206,6 +217,7 @@ struct d2d_bitmap_render_target
     LONG refcount;
 
     ID2D1RenderTarget *dxgi_target;
+    IUnknown *dxgi_inner;
     ID2D1Bitmap *bitmap;
 };
 
@@ -331,28 +343,29 @@ struct d2d_bitmap
     D2D1_PIXEL_FORMAT format;
     float dpi_x;
     float dpi_y;
+    D2D1_BITMAP_OPTIONS options;
 };
 
 HRESULT d2d_bitmap_create(ID2D1Factory *factory, ID3D10Device *device, D2D1_SIZE_U size, const void *src_data,
-        UINT32 pitch, const D2D1_BITMAP_PROPERTIES *desc, struct d2d_bitmap **bitmap) DECLSPEC_HIDDEN;
+        UINT32 pitch, const D2D1_BITMAP_PROPERTIES1 *desc, struct d2d_bitmap **bitmap) DECLSPEC_HIDDEN;
 HRESULT d2d_bitmap_create_shared(ID2D1DeviceContext *context, ID3D10Device *device, REFIID iid, void *data,
-        const D2D1_BITMAP_PROPERTIES *desc, struct d2d_bitmap **bitmap) DECLSPEC_HIDDEN;
+        const D2D1_BITMAP_PROPERTIES1 *desc, struct d2d_bitmap **bitmap) DECLSPEC_HIDDEN;
 HRESULT d2d_bitmap_create_from_wic_bitmap(ID2D1Factory *factory, ID3D10Device *device, IWICBitmapSource *bitmap_source,
-        const D2D1_BITMAP_PROPERTIES *desc, struct d2d_bitmap **bitmap) DECLSPEC_HIDDEN;
+        const D2D1_BITMAP_PROPERTIES1 *desc, struct d2d_bitmap **bitmap) DECLSPEC_HIDDEN;
 struct d2d_bitmap *unsafe_impl_from_ID2D1Bitmap(ID2D1Bitmap *iface) DECLSPEC_HIDDEN;
 
 struct d2d_state_block
 {
-    ID2D1DrawingStateBlock ID2D1DrawingStateBlock_iface;
+    ID2D1DrawingStateBlock1 ID2D1DrawingStateBlock1_iface;
     LONG refcount;
 
     ID2D1Factory *factory;
-    D2D1_DRAWING_STATE_DESCRIPTION drawing_state;
+    D2D1_DRAWING_STATE_DESCRIPTION1 drawing_state;
     IDWriteRenderingParams *text_rendering_params;
 };
 
 void d2d_state_block_init(struct d2d_state_block *state_block, ID2D1Factory *factory,
-        const D2D1_DRAWING_STATE_DESCRIPTION *desc, IDWriteRenderingParams *text_rendering_params) DECLSPEC_HIDDEN;
+        const D2D1_DRAWING_STATE_DESCRIPTION1 *desc, IDWriteRenderingParams *text_rendering_params) DECLSPEC_HIDDEN;
 struct d2d_state_block *unsafe_impl_from_ID2D1DrawingStateBlock(ID2D1DrawingStateBlock *iface) DECLSPEC_HIDDEN;
 
 enum d2d_geometry_state
