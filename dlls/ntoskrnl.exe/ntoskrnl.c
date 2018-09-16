@@ -1353,7 +1353,7 @@ NTSTATUS WINAPI IoSetDeviceInterfaceState( UNICODE_STRING *name, BOOLEAN enable 
     if (!guid_from_string( (refstr ? refstr : name->Buffer + namelen) - 38, &class ))
         return STATUS_INVALID_PARAMETER;
 
-    len = strlenW(DeviceClassesW) + 38 + 1 + namelen + 2;
+    len = strlenW(DeviceClassesW) + 38 + 1 + namelen + 2 + 1;
 
     if (!(path = heap_alloc( len * sizeof(WCHAR) )))
         return STATUS_NO_MEMORY;
@@ -2048,6 +2048,16 @@ NTSTATUS WINAPI ExInitializeZone(PZONE_HEADER Zone,
 }
 
 /***********************************************************************
+*           FsRtlIsNameInExpression   (NTOSKRNL.EXE.@)
+*/
+BOOLEAN WINAPI FsRtlIsNameInExpression(PUNICODE_STRING expression, PUNICODE_STRING name,
+                                       BOOLEAN ignore, PWCH upcase)
+{
+    FIXME("stub: %p %p %d %p\n", expression, name, ignore, upcase);
+    return FALSE;
+}
+
+/***********************************************************************
 *           FsRtlRegisterUncProvider   (NTOSKRNL.EXE.@)
 */
 NTSTATUS WINAPI FsRtlRegisterUncProvider(PHANDLE MupHandle, PUNICODE_STRING RedirDevName,
@@ -2355,6 +2365,18 @@ PMDL WINAPI MmAllocatePagesForMdl(PHYSICAL_ADDRESS lowaddress, PHYSICAL_ADDRESS 
     FIXME("%s %s %s %lu: stub\n", wine_dbgstr_longlong(lowaddress.QuadPart), wine_dbgstr_longlong(highaddress.QuadPart),
                                   wine_dbgstr_longlong(skipbytes.QuadPart), size);
     return NULL;
+}
+
+/***********************************************************************
+ *           MmCreateSection   (NTOSKRNL.EXE.@)
+ */
+NTSTATUS WINAPI MmCreateSection( HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBUTES *attr,
+                                 LARGE_INTEGER *size, ULONG protect, ULONG alloc_attr,
+                                 HANDLE file, FILE_OBJECT *file_obj )
+{
+    FIXME("%p %#x %p %s %#x %#x %p %p: stub\n", handle, access, attr,
+        wine_dbgstr_longlong(size->QuadPart), protect, alloc_attr, file, file_obj);
+    return STATUS_NOT_IMPLEMENTED;
 }
 
 /***********************************************************************
@@ -3973,4 +3995,9 @@ NTSTATUS WINAPI DbgQueryDebugFilterState(ULONG component, ULONG level)
 {
     FIXME("stub: %d %d\n", component, level);
     return STATUS_NOT_IMPLEMENTED;
+}
+
+void WINAPI ExReleaseResourceLite(PERESOURCE resource)
+{
+    FIXME("stub: %p\n", resource);
 }

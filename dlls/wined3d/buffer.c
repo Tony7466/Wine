@@ -309,7 +309,7 @@ static BOOL buffer_process_converted_attribute(struct wined3d_buffer *buffer,
     }
 
     data = ((DWORD_PTR)attrib->data.addr) % buffer->stride;
-    for (i = 0; i < format->attribute_size; ++i)
+    for (i = 0; i < format->byte_count; ++i)
     {
         DWORD_PTR idx = (data + i) % buffer->stride;
         if (buffer->conversion_map[idx] != conversion_type)
@@ -1230,6 +1230,28 @@ void wined3d_buffer_upload_data(struct wined3d_buffer *buffer, struct wined3d_co
     wined3d_buffer_upload_ranges(buffer, context, data, range.offset, 1, &range);
 }
 
+static void wined3d_buffer_init_data(struct wined3d_buffer *buffer,
+        struct wined3d_device *device, const struct wined3d_sub_resource_data *data)
+{
+    struct wined3d_resource *resource = &buffer->resource;
+    struct wined3d_bo_address bo;
+    struct wined3d_box box;
+
+    if (buffer->flags & WINED3D_BUFFER_USE_BO)
+    {
+        wined3d_box_set(&box, 0, 0, resource->size, 1, 0, 1);
+        wined3d_cs_emit_update_sub_resource(device->cs, resource,
+                0, &box, data->data, data->row_pitch, data->slice_pitch);
+    }
+    else
+    {
+        wined3d_buffer_get_memory(buffer, &bo, WINED3D_LOCATION_SYSMEM);
+        memcpy(bo.addr, data->data, resource->size);
+        wined3d_buffer_validate_location(buffer, WINED3D_LOCATION_SYSMEM);
+        wined3d_buffer_invalidate_location(buffer, ~WINED3D_LOCATION_SYSMEM);
+    }
+}
+
 static ULONG buffer_resource_incref(struct wined3d_resource *resource)
 {
     return wined3d_buffer_incref(buffer_from_resource(resource));
@@ -1326,7 +1348,6 @@ static HRESULT buffer_init(struct wined3d_buffer *buffer, struct wined3d_device 
     const struct wined3d_format *format = wined3d_get_format(device->adapter, format_id, usage);
     const struct wined3d_gl_info *gl_info = &device->adapter->gl_info;
     struct wined3d_resource *resource = &buffer->resource;
-    struct wined3d_box box;
     BOOL dynamic_buffer_ok;
     HRESULT hr;
 
@@ -1358,9 +1379,6 @@ static HRESULT buffer_init(struct wined3d_buffer *buffer, struct wined3d_device 
     buffer->bind_flags = bind_flags;
     buffer->locations = data ? WINED3D_LOCATION_DISCARDED : WINED3D_LOCATION_SYSMEM;
 
-    if (!wined3d_resource_allocate_sysmem(&buffer->resource))
-        return E_OUTOFMEMORY;
-
     TRACE("buffer %p, size %#x, usage %#x, format %s, memory @ %p.\n",
             buffer, buffer->resource.size, buffer->resource.usage,
             debug_d3dformat(buffer->resource.format->id), buffer->resource.heap_memory);
@@ -1373,6 +1391,7 @@ static HRESULT buffer_init(struct wined3d_buffer *buffer, struct wined3d_device 
          * the buffer to provide the same behavior to the application. */
         TRACE("Pinning system memory.\n");
         buffer->flags |= WINED3D_BUFFER_PIN_SYSMEM;
+        buffer->locations = WINED3D_LOCATION_SYSMEM;
     }
 
     /* Observations show that draw_primitive_immediate_mode() is faster on
@@ -1397,6 +1416,12 @@ static HRESULT buffer_init(struct wined3d_buffer *buffer, struct wined3d_device 
         buffer->flags |= WINED3D_BUFFER_USE_BO;
     }
 
+    if (buffer->locations & WINED3D_LOCATION_SYSMEM || !(buffer->flags & WINED3D_BUFFER_USE_BO))
+    {
+        if (!wined3d_resource_allocate_sysmem(&buffer->resource))
+            return E_OUTOFMEMORY;
+    }
+
     if (!(buffer->maps = heap_alloc(sizeof(*buffer->maps))))
     {
         ERR("Out of memory.\n");
@@ -1408,11 +1433,7 @@ static HRESULT buffer_init(struct wined3d_buffer *buffer, struct wined3d_device 
     buffer->maps_size = 1;
 
     if (data)
-    {
-        wined3d_box_set(&box, 0, 0, resource->size, 1, 0, 1);
-        wined3d_cs_emit_update_sub_resource(device->cs, resource,
-                0, &box, data->data, data->row_pitch, data->slice_pitch);
-    }
+        wined3d_buffer_init_data(buffer, device, data);
 
     return WINED3D_OK;
 }
