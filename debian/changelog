@@ -1,3 +1,14 @@
+wine-development (3.16-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.16, released Sep 14, 2018.
+    - Initial implementation of OPC Services.
+    - Support for rendering buttons from an ImageList.
+    - Better support for CSS properties in MSHTML.
+    - Namespace fixes in XML Writer.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 16 Sep 2018 17:31:48 +0000
+
 wine-development (3.15-1) unstable; urgency=medium
 
   * New upstream release 3.15, released Aug 31, 2018.
