@@ -52,6 +52,12 @@ CONFLAGS=--with-gnutls \
          --datarootdir=/$(DATDIR) \
          $(shell dpkg-buildflags --export=cmdline) \
 
+# change build optimization to -O1 (see bug #908012)
+ifeq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+export DEB_CFLAGS_MAINT_STRIP=-O2 -O3
+export DEB_CFLAGS_MAINT_PREPEND=-O1
+endif
+
 # flags specific to kfreebsd
 ifeq ($(DEB_BUILD_ARCH_OS), kfreebsd)
 export DEB_LDFLAGS_MAINT_APPEND+=-lfreebsd-glue
@@ -121,7 +127,7 @@ debian/bug-control: debian/bug-control.in
 
 override_dh_auto_configure:
 	# output compiler information
-	$(CXX) --version
+	$(CC) --version
 	# automatically generated files
 	./debian/scripts/generate libs/port/cptable.generated cpmap
 	./debian/scripts/generate server/trace.generated make_requests

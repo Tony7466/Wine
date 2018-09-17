@@ -94,6 +94,7 @@ Depends:
  wine64VERSION (>= ${source:Version}) | wine32VERSION (>= ${source:Version}),
  wine64VERSION (<< ${source:Version}.1~) | wine32VERSION (<< ${source:Version}.1~),
 Suggests:
+ q4wine,
  winbind,
  winetricks,
  playonlinux,
@@ -126,7 +127,6 @@ Depends:
 Recommends:
  wineVERSION (= ${source:Version}),
 Suggests:
- libwine-gecko-2.47 [!armel !armhf !arm64],
  wine32VERSION-preloader (= ${binary:Version}),
 Description: Windows API implementation - 32-bit binary loader
  Wine is a free MS-Windows API implementation.
@@ -146,7 +146,6 @@ Recommends:
  wineVERSION (= ${source:Version}),
  wine32VERSION (= ${binary:Version}),
 Suggests:
- libwine-gecko-2.47 [!armel !armhf !arm64],
  wine64VERSION-preloader (= ${binary:Version}),
 Breaks:
  wine1.6-amd64 (<< 1:1.8.4ubuntu1~),

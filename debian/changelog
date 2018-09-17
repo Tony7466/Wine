@@ -1,4 +1,4 @@
-wine-development (3.16-1) UNRELEASED; urgency=medium
+wine-development (3.16-1) unstable; urgency=medium
 
   * New upstream release 3.16, released Sep 14, 2018.
     - Initial implementation of OPC Services.
@@ -6,6 +6,10 @@ wine-development (3.16-1) UNRELEASED; urgency=medium
     - Better support for CSS properties in MSHTML.
     - Namespace fixes in XML Writer.
     - Various bug fixes.
+  * Add q4wine to the suggested packages (closes: #908962).
+  * Build with -O1 optimization by default (closes: #908012).
+  * Reenable support for systems that do not have /run/user available for
+    temporary files (closes: #904041).
 
  -- Michael Gilbert <mgilbert@debian.org>  Sun, 16 Sep 2018 17:31:48 +0000
 

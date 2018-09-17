@@ -14,7 +14,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      ULONG ret;
 --- a/include/evntrace.h
 +++ b/include/evntrace.h
-@@ -283,7 +283,7 @@ ULONG WINAPI StartTraceA(PTRACEHANDLE,LP
+@@ -308,7 +308,7 @@ ULONG WINAPI StartTraceA(PTRACEHANDLE,LP
  ULONG WINAPI StartTraceW(PTRACEHANDLE,LPCWSTR,PEVENT_TRACE_PROPERTIES);
  #define      StartTrace WINELIB_NAME_AW(StartTrace)
  ULONG WINAPI TraceEvent(TRACEHANDLE,PEVENT_TRACE_HEADER);

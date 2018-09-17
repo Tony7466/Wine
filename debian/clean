@@ -1,6 +1,7 @@
 debian/control
 
 config.*
+con*.file
 configure
 configure.tmp
 tools/config.*

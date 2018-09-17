@@ -45,3 +45,25 @@ author: Michael Gilbert <mgilbert@debian.org>
      enum
      {
          /* plain GL_ARB_vertex_program or GL_ARB_fragment_program */
+--- a/dlls/krnl386.exe16/interrupts.c
++++ b/dlls/krnl386.exe16/interrupts.c
+@@ -459,7 +459,7 @@ static void WINAPI DOSVM_Int11Handler( C
+     for (x=0; x < 9; x++)
+     {
+         HANDLE handle;
+-        char file[10];
++        char file[20];
+ 
+         /* serial port name */
+         sprintf( file, "\\\\.\\COM%d", x+1 );
+--- a/dlls/msvcrt/string.c
++++ b/dlls/msvcrt/string.c
+@@ -1805,7 +1805,7 @@ int CDECL MSVCRT_I10_OUTPUT(MSVCRT__LDOU
+      * Assume long double uses 80 bit FP, never seen 128 bit FP. */
+     long double ld = 0;
+     double d;
+-    char format[8];
++    char format[16];
+     char buf[I10_OUTPUT_MAX_PREC+9]; /* 9 = strlen("0.e+0000") + '\0' */
+     char *p;
+ 
