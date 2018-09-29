@@ -1997,7 +1997,7 @@ out:
     return NULL;
 }
 
-BOOL wined3d_adapter_opengl_create_context(struct wined3d_context *context,
+BOOL wined3d_adapter_gl_create_context(struct wined3d_context *context,
         struct wined3d_texture *target, const struct wined3d_format *ds_format)
 {
     struct wined3d_device *device = context->device;
@@ -3868,6 +3868,7 @@ static void context_bind_unordered_access_views(struct wined3d_context *context,
 {
     const struct wined3d_gl_info *gl_info = context->gl_info;
     struct wined3d_unordered_access_view *view;
+    const struct wined3d_format_gl *format_gl;
     GLuint texture_name;
     unsigned int i;
     GLint level;
@@ -3903,8 +3904,9 @@ static void context_bind_unordered_access_views(struct wined3d_context *context,
             continue;
         }
 
+        format_gl = wined3d_format_gl(view->format);
         GL_EXTCALL(glBindImageTexture(i, texture_name, level, GL_TRUE, 0, GL_READ_WRITE,
-                view->format->glInternal));
+                format_gl->internal));
 
         if (view->counter_bo)
             GL_EXTCALL(glBindBufferBase(GL_ATOMIC_COUNTER_BUFFER, i, view->counter_bo));
@@ -5045,6 +5047,7 @@ void context_load_tex_coords(const struct wined3d_context *context, const struct
         GLuint *current_bo, const struct wined3d_state *state)
 {
     const struct wined3d_gl_info *gl_info = context->gl_info;
+    const struct wined3d_format_gl *format_gl;
     unsigned int mapped_stage = 0;
     unsigned int texture_idx;
 
@@ -5079,7 +5082,8 @@ void context_load_tex_coords(const struct wined3d_context *context, const struct
             checkGLcall("glClientActiveTextureARB");
 
             /* The coords to supply depend completely on the fvf/vertex shader. */
-            gl_info->gl_ops.gl.p_glTexCoordPointer(e->format->gl_vtx_format, e->format->gl_vtx_type, e->stride,
+            format_gl = wined3d_format_gl(e->format);
+            gl_info->gl_ops.gl.p_glTexCoordPointer(format_gl->vtx_format, format_gl->vtx_type, e->stride,
                     e->data.addr + state->load_base_vertex_index * e->stride);
             gl_info->gl_ops.gl.p_glEnableClientState(GL_TEXTURE_COORD_ARRAY);
         }
@@ -5121,6 +5125,7 @@ static void context_load_vertex_data(struct wined3d_context *context,
 {
     const struct wined3d_gl_info *gl_info = context->gl_info;
     const struct wined3d_stream_info_element *e;
+    const struct wined3d_format_gl *format_gl;
     GLuint current_bo;
 
     TRACE("context %p, si %p, state %p.\n", context, si, state);
@@ -5151,6 +5156,7 @@ static void context_load_vertex_data(struct wined3d_context *context,
     if (si->use_map & (1u << WINED3D_FFP_POSITION))
     {
         e = &si->elements[WINED3D_FFP_POSITION];
+        format_gl = wined3d_format_gl(e->format);
 
         if (current_bo != e->data.buffer_object)
         {
@@ -5160,9 +5166,9 @@ static void context_load_vertex_data(struct wined3d_context *context,
         }
 
         TRACE("glVertexPointer(%#x, %#x, %#x, %p);\n",
-                e->format->gl_vtx_format, e->format->gl_vtx_type, e->stride,
+                format_gl->vtx_format, format_gl->vtx_type, e->stride,
                 e->data.addr + state->load_base_vertex_index * e->stride);
-        gl_info->gl_ops.gl.p_glVertexPointer(e->format->gl_vtx_format, e->format->gl_vtx_type, e->stride,
+        gl_info->gl_ops.gl.p_glVertexPointer(format_gl->vtx_format, format_gl->vtx_type, e->stride,
                 e->data.addr + state->load_base_vertex_index * e->stride);
         checkGLcall("glVertexPointer(...)");
         gl_info->gl_ops.gl.p_glEnableClientState(GL_VERTEX_ARRAY);
@@ -5173,6 +5179,7 @@ static void context_load_vertex_data(struct wined3d_context *context,
     if (si->use_map & (1u << WINED3D_FFP_NORMAL))
     {
         e = &si->elements[WINED3D_FFP_NORMAL];
+        format_gl = wined3d_format_gl(e->format);
 
         if (current_bo != e->data.buffer_object)
         {
@@ -5181,9 +5188,9 @@ static void context_load_vertex_data(struct wined3d_context *context,
             current_bo = e->data.buffer_object;
         }
 
-        TRACE("glNormalPointer(%#x, %#x, %p);\n", e->format->gl_vtx_type, e->stride,
+        TRACE("glNormalPointer(%#x, %#x, %p);\n", format_gl->vtx_type, e->stride,
                 e->data.addr + state->load_base_vertex_index * e->stride);
-        gl_info->gl_ops.gl.p_glNormalPointer(e->format->gl_vtx_type, e->stride,
+        gl_info->gl_ops.gl.p_glNormalPointer(format_gl->vtx_type, e->stride,
                 e->data.addr + state->load_base_vertex_index * e->stride);
         checkGLcall("glNormalPointer(...)");
         gl_info->gl_ops.gl.p_glEnableClientState(GL_NORMAL_ARRAY);
@@ -5200,6 +5207,7 @@ static void context_load_vertex_data(struct wined3d_context *context,
     if (si->use_map & (1u << WINED3D_FFP_DIFFUSE))
     {
         e = &si->elements[WINED3D_FFP_DIFFUSE];
+        format_gl = wined3d_format_gl(e->format);
 
         if (current_bo != e->data.buffer_object)
         {
@@ -5209,9 +5217,9 @@ static void context_load_vertex_data(struct wined3d_context *context,
         }
 
         TRACE("glColorPointer(%#x, %#x %#x, %p);\n",
-                e->format->gl_vtx_format, e->format->gl_vtx_type, e->stride,
+                format_gl->vtx_format, format_gl->vtx_type, e->stride,
                 e->data.addr + state->load_base_vertex_index * e->stride);
-        gl_info->gl_ops.gl.p_glColorPointer(e->format->gl_vtx_format, e->format->gl_vtx_type, e->stride,
+        gl_info->gl_ops.gl.p_glColorPointer(format_gl->vtx_format, format_gl->vtx_type, e->stride,
                 e->data.addr + state->load_base_vertex_index * e->stride);
         checkGLcall("glColorPointer(4, GL_UNSIGNED_BYTE, ...)");
         gl_info->gl_ops.gl.p_glEnableClientState(GL_COLOR_ARRAY);
@@ -5233,8 +5241,12 @@ static void context_load_vertex_data(struct wined3d_context *context,
 
         if (gl_info->supported[EXT_SECONDARY_COLOR])
         {
-            GLenum type = e->format->gl_vtx_type;
-            GLint format = e->format->gl_vtx_format;
+            GLint format;
+            GLenum type;
+
+            format_gl = wined3d_format_gl(e->format);
+            type = format_gl->vtx_type;
+            format = format_gl->vtx_format;
 
             if (current_bo != e->data.buffer_object)
             {
@@ -5342,6 +5354,7 @@ static void context_load_numbered_arrays(struct wined3d_context *context,
     {
         const struct wined3d_stream_info_element *element = &stream_info->elements[i];
         const struct wined3d_stream_state *stream;
+        const struct wined3d_format_gl *format_gl;
 
         if (!(stream_info->use_map & (1u << i)))
         {
@@ -5354,6 +5367,7 @@ static void context_load_numbered_arrays(struct wined3d_context *context,
             continue;
         }
 
+        format_gl = wined3d_format_gl(element->format);
         stream = &state->streams[element->stream_idx];
 
         if ((stream->flags & WINED3DSTREAMSOURCE_INSTANCEDATA) && !context->instance_count)
@@ -5376,7 +5390,7 @@ static void context_load_numbered_arrays(struct wined3d_context *context,
 
         if (element->stride)
         {
-            DWORD format_flags = element->format->flags[WINED3D_GL_RES_TYPE_BUFFER];
+            DWORD format_flags = format_gl->f.flags[WINED3D_GL_RES_TYPE_BUFFER];
 
             if (current_bo != element->data.buffer_object)
             {
@@ -5390,12 +5404,12 @@ static void context_load_numbered_arrays(struct wined3d_context *context,
              * won't be load converted attributes anyway. */
             if (vs && vs->reg_maps.shader_version.major >= 4 && (format_flags & WINED3DFMT_FLAG_INTEGER))
             {
-                GL_EXTCALL(glVertexAttribIPointer(i, element->format->gl_vtx_format, element->format->gl_vtx_type,
+                GL_EXTCALL(glVertexAttribIPointer(i, format_gl->vtx_format, format_gl->vtx_type,
                         element->stride, element->data.addr + state->load_base_vertex_index * element->stride));
             }
             else
             {
-                GL_EXTCALL(glVertexAttribPointer(i, element->format->gl_vtx_format, element->format->gl_vtx_type,
+                GL_EXTCALL(glVertexAttribPointer(i, format_gl->vtx_format, format_gl->vtx_type,
                         !!(format_flags & WINED3DFMT_FLAG_NORMALISED), element->stride,
                         element->data.addr + state->load_base_vertex_index * element->stride));
             }
@@ -5419,7 +5433,7 @@ static void context_load_numbered_arrays(struct wined3d_context *context,
             if (context->numbered_array_mask & (1u << i))
                 context_unload_numbered_array(context, i);
 
-            switch (element->format->id)
+            switch (format_gl->f.id)
             {
                 case WINED3DFMT_R32_FLOAT:
                     GL_EXTCALL(glVertexAttrib1fv(i, (const GLfloat *)ptr));

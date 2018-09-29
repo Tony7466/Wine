@@ -758,8 +758,10 @@ UINT WINAPI MsiSummaryInfoGetPropertyA(
         }
         __ENDTRY
 
-        if (!r)
+        if (!r && buf)
+        {
             r = msi_strncpyWtoA( buf, -1, szValueBuf, pcchValueBuf, TRUE );
+        }
 
         midl_user_free( buf );
         return r;
@@ -808,7 +810,7 @@ UINT WINAPI MsiSummaryInfoGetPropertyW(
         }
         __ENDTRY
 
-        if (!r)
+        if (!r && buf)
             r = msi_strncpyW( buf, -1, szValueBuf, pcchValueBuf );
 
         midl_user_free( buf );
@@ -877,25 +879,31 @@ static UINT set_prop( MSISUMMARYINFO *si, UINT uiProperty, UINT type,
     return ERROR_SUCCESS;
 }
 
+static UINT msi_set_prop( MSISUMMARYINFO *si, UINT uiProperty, UINT uiDataType,
+                          INT iValue, FILETIME *pftValue, awcstring *str )
+{
+    UINT type = get_type( uiProperty );
+    if( type == VT_EMPTY || type != uiDataType )
+        return ERROR_DATATYPE_MISMATCH;
+
+    if( uiDataType == VT_LPSTR && !str->str.a )
+        return ERROR_INVALID_PARAMETER;
+
+    if( uiDataType == VT_FILETIME && !pftValue )
+        return ERROR_INVALID_PARAMETER;
+
+    return set_prop( si, uiProperty, type, iValue, pftValue, str );
+}
+
 UINT WINAPI MsiSummaryInfoSetPropertyW( MSIHANDLE handle, UINT uiProperty, UINT uiDataType,
                                         INT iValue, FILETIME *pftValue, LPCWSTR szValue )
 {
     awcstring str;
     MSISUMMARYINFO *si;
-    UINT type, ret;
+    UINT ret;
 
     TRACE("%u, %u, %u, %d, %p, %s\n", handle, uiProperty, uiDataType, iValue, pftValue,
           debugstr_w(szValue) );
-
-    type = get_type( uiProperty );
-    if( type == VT_EMPTY || type != uiDataType )
-        return ERROR_DATATYPE_MISMATCH;
-
-    if( uiDataType == VT_LPSTR && !szValue )
-        return ERROR_INVALID_PARAMETER;
-
-    if( uiDataType == VT_FILETIME && !pftValue )
-        return ERROR_INVALID_PARAMETER;
 
     if (!(si = msihandle2msiinfo( handle, MSIHANDLETYPE_SUMMARYINFO )))
     {
@@ -913,7 +921,7 @@ UINT WINAPI MsiSummaryInfoSetPropertyW( MSIHANDLE handle, UINT uiProperty, UINT 
     str.unicode = TRUE;
     str.str.w = szValue;
 
-    ret = set_prop( si, uiProperty, type, iValue, pftValue, &str );
+    ret = msi_set_prop( si, uiProperty, uiDataType, iValue, pftValue, &str );
     msiobj_release( &si->hdr );
     return ret;
 }
@@ -923,20 +931,10 @@ UINT WINAPI MsiSummaryInfoSetPropertyA( MSIHANDLE handle, UINT uiProperty, UINT 
 {
     awcstring str;
     MSISUMMARYINFO *si;
-    UINT type, ret;
+    UINT ret;
 
     TRACE("%u, %u, %u, %d, %p, %s\n", handle, uiProperty, uiDataType, iValue, pftValue,
           debugstr_a(szValue) );
-
-    type = get_type( uiProperty );
-    if( type == VT_EMPTY || type != uiDataType )
-        return ERROR_DATATYPE_MISMATCH;
-
-    if( uiDataType == VT_LPSTR && !szValue )
-        return ERROR_INVALID_PARAMETER;
-
-    if( uiDataType == VT_FILETIME && !pftValue )
-        return ERROR_INVALID_PARAMETER;
 
     if (!(si = msihandle2msiinfo( handle, MSIHANDLETYPE_SUMMARYINFO )))
     {
@@ -954,7 +952,7 @@ UINT WINAPI MsiSummaryInfoSetPropertyA( MSIHANDLE handle, UINT uiProperty, UINT 
     str.unicode = FALSE;
     str.str.a = szValue;
 
-    ret = set_prop( si, uiProperty, uiDataType, iValue, pftValue, &str );
+    ret = msi_set_prop( si, uiProperty, uiDataType, iValue, pftValue, &str );
     msiobj_release( &si->hdr );
     return ret;
 }

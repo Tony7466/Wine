@@ -189,6 +189,9 @@ static const struct driver_version_information driver_version_table[] =
 
     /* VMware */
     {DRIVER_VMWARE,             DRIVER_MODEL_NT5X,  "vm3dum.dll",   14, 1,  1134},
+
+    /* Wine */
+    {DRIVER_WINE,               DRIVER_MODEL_GENERIC, "wined3d.dll", 0, 0,     0},
 };
 
 /* The amount of video memory stored in the gpu description table is the minimum amount of video memory
@@ -563,6 +566,13 @@ void wined3d_driver_info_init(struct wined3d_driver_info *driver_info,
     driver_info->vram_bytes = vram_bytes ? vram_bytes : (UINT64)gpu_desc->vidmem * 1024 * 1024;
     driver = gpu_desc->driver;
 
+    if (wined3d_settings.emulated_textureram)
+    {
+        driver_info->vram_bytes = wined3d_settings.emulated_textureram;
+        TRACE("Overriding amount of video memory with 0x%s bytes.\n",
+                wine_dbgstr_longlong(driver_info->vram_bytes));
+    }
+
     /**
      * Diablo 2 crashes when the amount of video memory is greater than 0x7fffffff.
      * In order to avoid this application bug we limit the amount of video memory
@@ -607,49 +617,48 @@ void wined3d_driver_info_init(struct wined3d_driver_info *driver_info,
 enum wined3d_pci_device wined3d_gpu_from_feature_level(enum wined3d_pci_vendor *vendor,
         enum wined3d_feature_level feature_level)
 {
-    unsigned int i;
-
-    static const enum wined3d_pci_device card_fallback_nvidia[] =
+    static const struct wined3d_fallback_card
     {
-        CARD_NVIDIA_RIVA_128,           /* D3D5 */
-        CARD_NVIDIA_RIVA_TNT,           /* D3D6 */
-        CARD_NVIDIA_GEFORCE,            /* D3D7 */
-        CARD_NVIDIA_GEFORCE3,           /* D3D8 */
-        CARD_NVIDIA_GEFORCEFX_5800,     /* D3D9_SM2 */
-        CARD_NVIDIA_GEFORCE_6800,       /* D3D9_SM3 */
-        CARD_NVIDIA_GEFORCE_8800GTX,    /* D3D10 */
-        CARD_NVIDIA_GEFORCE_GTX470,     /* D3D11 */
+        enum wined3d_feature_level feature_level;
+        enum wined3d_pci_device device_id;
+    }
+    card_fallback_nvidia[] =
+    {
+        {WINED3D_FEATURE_LEVEL_5,     CARD_NVIDIA_RIVA_128},
+        {WINED3D_FEATURE_LEVEL_6,     CARD_NVIDIA_RIVA_TNT},
+        {WINED3D_FEATURE_LEVEL_7,     CARD_NVIDIA_GEFORCE},
+        {WINED3D_FEATURE_LEVEL_8,     CARD_NVIDIA_GEFORCE3},
+        {WINED3D_FEATURE_LEVEL_9_SM2, CARD_NVIDIA_GEFORCEFX_5800},
+        {WINED3D_FEATURE_LEVEL_9_SM3, CARD_NVIDIA_GEFORCE_6800},
+        {WINED3D_FEATURE_LEVEL_10,    CARD_NVIDIA_GEFORCE_8800GTX},
+        {WINED3D_FEATURE_LEVEL_11,    CARD_NVIDIA_GEFORCE_GTX470},
+        {WINED3D_FEATURE_LEVEL_NONE},
     },
     card_fallback_amd[] =
     {
-        CARD_AMD_RAGE_128PRO,           /* D3D5 */
-        CARD_AMD_RAGE_128PRO,           /* D3D6 */
-        CARD_AMD_RADEON_7200,           /* D3D7 */
-        CARD_AMD_RADEON_8500,           /* D3D8 */
-        CARD_AMD_RADEON_9500,           /* D3D9_SM2 */
-        CARD_AMD_RADEON_X1600,          /* D3D9_SM3 */
-        CARD_AMD_RADEON_HD2900,         /* D3D10 */
-        CARD_AMD_RADEON_HD5600,         /* D3D11 */
+        {WINED3D_FEATURE_LEVEL_5,     CARD_AMD_RAGE_128PRO},
+        {WINED3D_FEATURE_LEVEL_7,     CARD_AMD_RADEON_7200},
+        {WINED3D_FEATURE_LEVEL_8,     CARD_AMD_RADEON_8500},
+        {WINED3D_FEATURE_LEVEL_9_SM2, CARD_AMD_RADEON_9500},
+        {WINED3D_FEATURE_LEVEL_9_SM3, CARD_AMD_RADEON_X1600},
+        {WINED3D_FEATURE_LEVEL_10,    CARD_AMD_RADEON_HD2900},
+        {WINED3D_FEATURE_LEVEL_11,    CARD_AMD_RADEON_HD5600},
+        {WINED3D_FEATURE_LEVEL_NONE},
     },
     card_fallback_intel[] =
     {
-        CARD_INTEL_845G,                /* D3D5 */
-        CARD_INTEL_845G,                /* D3D6 */
-        CARD_INTEL_845G,                /* D3D7 */
-        CARD_INTEL_915G,                /* D3D8 */
-        CARD_INTEL_915G,                /* D3D9_SM2 */
-        CARD_INTEL_945G,                /* D3D9_SM3 */
-        CARD_INTEL_G45,                 /* D3D10 */
-        CARD_INTEL_IVBD,                /* D3D11 */
+        {WINED3D_FEATURE_LEVEL_5,     CARD_INTEL_845G},
+        {WINED3D_FEATURE_LEVEL_8,     CARD_INTEL_915G},
+        {WINED3D_FEATURE_LEVEL_9_SM3, CARD_INTEL_945G},
+        {WINED3D_FEATURE_LEVEL_10,    CARD_INTEL_G45},
+        {WINED3D_FEATURE_LEVEL_11,    CARD_INTEL_IVBD},
+        {WINED3D_FEATURE_LEVEL_NONE},
     };
-    C_ASSERT(ARRAY_SIZE(card_fallback_nvidia)  == WINED3D_FEATURE_LEVEL_COUNT);
-    C_ASSERT(ARRAY_SIZE(card_fallback_amd)     == WINED3D_FEATURE_LEVEL_COUNT);
-    C_ASSERT(ARRAY_SIZE(card_fallback_intel)   == WINED3D_FEATURE_LEVEL_COUNT);
 
     static const struct
     {
         enum wined3d_pci_vendor vendor;
-        const enum wined3d_pci_device *device;
+        const struct wined3d_fallback_card *cards;
     }
     fallbacks[] =
     {
@@ -659,15 +668,29 @@ enum wined3d_pci_device wined3d_gpu_from_feature_level(enum wined3d_pci_vendor *
         {HW_VENDOR_INTEL,  card_fallback_intel},
     };
 
+    const struct wined3d_fallback_card *cards;
+    enum wined3d_pci_device device_id;
+    unsigned int i;
+
+    cards = NULL;
     for (i = 0; i < ARRAY_SIZE(fallbacks); ++i)
     {
         if (*vendor == fallbacks[i].vendor)
-            return fallbacks[i].device[feature_level];
+            cards = fallbacks[i].cards;
+    }
+    if (!cards)
+    {
+        *vendor = HW_VENDOR_NVIDIA;
+        cards = card_fallback_nvidia;
     }
 
-    *vendor = HW_VENDOR_NVIDIA;
-
-    return card_fallback_nvidia[feature_level];
+    device_id = cards->device_id;
+    for (i = 0; cards[i].feature_level; ++i)
+    {
+        if (feature_level >= cards[i].feature_level)
+            device_id = cards[i].device_id;
+    }
+    return device_id;
 }
 
 UINT CDECL wined3d_get_adapter_count(const struct wined3d *wined3d)
@@ -1464,41 +1487,9 @@ static BOOL CheckRenderTargetCapability(const struct wined3d_adapter *adapter,
     return FALSE;
 }
 
-static BOOL wined3d_check_surface_capability(const struct wined3d_format *format, BOOL no3d)
+static BOOL wined3d_check_surface_capability(const struct wined3d_format *format)
 {
-    if (no3d)
-    {
-        switch (format->id)
-        {
-            case WINED3DFMT_B8G8R8_UNORM:
-                TRACE("[FAILED] - Not enumerated on Windows.\n");
-                return FALSE;
-            case WINED3DFMT_B8G8R8A8_UNORM:
-            case WINED3DFMT_B8G8R8X8_UNORM:
-            case WINED3DFMT_B5G6R5_UNORM:
-            case WINED3DFMT_B5G5R5X1_UNORM:
-            case WINED3DFMT_B5G5R5A1_UNORM:
-            case WINED3DFMT_B4G4R4A4_UNORM:
-            case WINED3DFMT_B2G3R3_UNORM:
-            case WINED3DFMT_A8_UNORM:
-            case WINED3DFMT_B2G3R3A8_UNORM:
-            case WINED3DFMT_B4G4R4X4_UNORM:
-            case WINED3DFMT_R10G10B10A2_UNORM:
-            case WINED3DFMT_R8G8B8A8_UNORM:
-            case WINED3DFMT_R8G8B8X8_UNORM:
-            case WINED3DFMT_R16G16_UNORM:
-            case WINED3DFMT_B10G10R10A2_UNORM:
-            case WINED3DFMT_R16G16B16A16_UNORM:
-            case WINED3DFMT_P8_UINT:
-                TRACE("[OK]\n");
-                return TRUE;
-            default:
-                TRACE("[FAILED] - Not available on GDI surfaces.\n");
-                return FALSE;
-        }
-    }
-
-    if (format->glInternal)
+    if ((format->flags[WINED3D_GL_RES_TYPE_TEX_2D] | format->flags[WINED3D_GL_RES_TYPE_RB]) & WINED3DFMT_FLAG_BLIT)
     {
         TRACE("[OK]\n");
         return TRUE;
@@ -1579,7 +1570,7 @@ HRESULT CDECL wined3d_check_device_format(const struct wined3d *wined3d, UINT ad
                 allowed_usage |= WINED3DUSAGE_QUERY_SRGBWRITE;
             if (!(usage & WINED3DUSAGE_TEXTURE))
             {
-                if (!wined3d_check_surface_capability(format, wined3d->flags & WINED3D_NO3D))
+                if (!wined3d_check_surface_capability(format))
                 {
                     TRACE("[FAILED] - Not supported for plain surfaces.\n");
                     return WINED3DERR_NOTAVAILABLE;
@@ -2008,31 +1999,27 @@ HRESULT CDECL wined3d_get_device_caps(const struct wined3d *wined3d, UINT adapte
                           WINED3DPTEXTURECAPS_PROJECTED          |
                           WINED3DPTEXTURECAPS_PERSPECTIVE;
 
-    if (!gl_info->supported[ARB_TEXTURE_NON_POWER_OF_TWO])
+    if (!d3d_info->texture_npot)
     {
         caps->TextureCaps |= WINED3DPTEXTURECAPS_POW2;
-        if (gl_info->supported[WINED3D_GL_NORMALIZED_TEXRECT] || gl_info->supported[ARB_TEXTURE_RECTANGLE])
+        if (d3d_info->texture_npot_conditional)
             caps->TextureCaps |= WINED3DPTEXTURECAPS_NONPOW2CONDITIONAL;
     }
 
     if (gl_info->supported[EXT_TEXTURE3D])
     {
-        caps->TextureCaps  |=  WINED3DPTEXTURECAPS_VOLUMEMAP      |
-                               WINED3DPTEXTURECAPS_MIPVOLUMEMAP;
-        if (!gl_info->supported[ARB_TEXTURE_NON_POWER_OF_TWO])
-        {
+        caps->TextureCaps |= WINED3DPTEXTURECAPS_VOLUMEMAP
+                | WINED3DPTEXTURECAPS_MIPVOLUMEMAP;
+        if (!d3d_info->texture_npot)
             caps->TextureCaps |= WINED3DPTEXTURECAPS_VOLUMEMAP_POW2;
-        }
     }
 
     if (gl_info->supported[ARB_TEXTURE_CUBE_MAP])
     {
-        caps->TextureCaps  |= WINED3DPTEXTURECAPS_CUBEMAP     |
-                              WINED3DPTEXTURECAPS_MIPCUBEMAP;
-        if (!gl_info->supported[ARB_TEXTURE_NON_POWER_OF_TWO])
-        {
+        caps->TextureCaps |= WINED3DPTEXTURECAPS_CUBEMAP
+                | WINED3DPTEXTURECAPS_MIPCUBEMAP;
+        if (!d3d_info->texture_npot)
             caps->TextureCaps |= WINED3DPTEXTURECAPS_CUBEMAP_POW2;
-        }
     }
 
     caps->TextureFilterCaps =  WINED3DPTFILTERCAPS_MAGFLINEAR       |
@@ -2149,8 +2136,8 @@ HRESULT CDECL wined3d_get_device_caps(const struct wined3d *wined3d, UINT adapte
      * idea how generating the smoothing alpha values works; the result is different
      */
 
-    caps->MaxTextureWidth = gl_info->limits.texture_size;
-    caps->MaxTextureHeight = gl_info->limits.texture_size;
+    caps->MaxTextureWidth = d3d_info->limits.texture_size;
+    caps->MaxTextureHeight = d3d_info->limits.texture_size;
 
     if (gl_info->supported[EXT_TEXTURE3D])
         caps->MaxVolumeExtent = gl_info->limits.texture3d_size;
@@ -2158,7 +2145,7 @@ HRESULT CDECL wined3d_get_device_caps(const struct wined3d *wined3d, UINT adapte
         caps->MaxVolumeExtent = 0;
 
     caps->MaxTextureRepeat = 32768;
-    caps->MaxTextureAspectRatio = gl_info->limits.texture_size;
+    caps->MaxTextureAspectRatio = d3d_info->limits.texture_size;
     caps->MaxVertexW = 1.0f;
 
     caps->GuardBandLeft = 0.0f;
@@ -2398,24 +2385,24 @@ HRESULT CDECL wined3d_get_device_caps(const struct wined3d *wined3d, UINT adapte
     caps->ddraw_caps.ssb_color_key_caps = ckey_caps;
     caps->ddraw_caps.ssb_fx_caps = fx_caps;
 
-    caps->ddraw_caps.dds_caps =         WINEDDSCAPS_ALPHA                   |
-                                        WINEDDSCAPS_BACKBUFFER              |
-                                        WINEDDSCAPS_FLIP                    |
-                                        WINEDDSCAPS_FRONTBUFFER             |
-                                        WINEDDSCAPS_OFFSCREENPLAIN          |
-                                        WINEDDSCAPS_PALETTE                 |
-                                        WINEDDSCAPS_PRIMARYSURFACE          |
-                                        WINEDDSCAPS_SYSTEMMEMORY            |
-                                        WINEDDSCAPS_VIDEOMEMORY             |
-                                        WINEDDSCAPS_VISIBLE;
+    caps->ddraw_caps.dds_caps = WINEDDSCAPS_ALPHA
+            | WINEDDSCAPS_BACKBUFFER
+            | WINEDDSCAPS_FLIP
+            | WINEDDSCAPS_FRONTBUFFER
+            | WINEDDSCAPS_OFFSCREENPLAIN
+            | WINEDDSCAPS_PALETTE
+            | WINEDDSCAPS_PRIMARYSURFACE
+            | WINEDDSCAPS_SYSTEMMEMORY
+            | WINEDDSCAPS_VISIBLE;
 
     if (!(wined3d->flags & WINED3D_NO3D))
     {
-        caps->ddraw_caps.dds_caps |=    WINEDDSCAPS_3DDEVICE                |
-                                        WINEDDSCAPS_MIPMAP                  |
-                                        WINEDDSCAPS_TEXTURE                 |
-                                        WINEDDSCAPS_ZBUFFER;
-        caps->ddraw_caps.caps |=        WINEDDCAPS_3D;
+        caps->ddraw_caps.dds_caps |= WINEDDSCAPS_3DDEVICE
+                | WINEDDSCAPS_MIPMAP
+                | WINEDDSCAPS_TEXTURE
+                | WINEDDSCAPS_VIDEOMEMORY
+                | WINEDDSCAPS_ZBUFFER;
+        caps->ddraw_caps.caps |= WINEDDCAPS_3D;
     }
 
     caps->shader_double_precision = d3d_info->shader_double_precision;
@@ -2425,27 +2412,28 @@ HRESULT CDECL wined3d_get_device_caps(const struct wined3d *wined3d, UINT adapte
     return WINED3D_OK;
 }
 
-HRESULT CDECL wined3d_device_create(struct wined3d *wined3d, UINT adapter_idx, enum wined3d_device_type device_type,
-        HWND focus_window, DWORD flags, BYTE surface_alignment, struct wined3d_device_parent *device_parent,
-        struct wined3d_device **device)
+HRESULT CDECL wined3d_device_create(struct wined3d *wined3d, unsigned int adapter_idx,
+        enum wined3d_device_type device_type, HWND focus_window, DWORD flags, BYTE surface_alignment,
+        const enum wined3d_feature_level *feature_levels, unsigned int feature_level_count,
+        struct wined3d_device_parent *device_parent, struct wined3d_device **device)
 {
     struct wined3d_device *object;
     HRESULT hr;
 
-    TRACE("wined3d %p, adapter_idx %u, device_type %#x, focus_window %p, flags %#x, surface_alignment %u, device_parent %p, device %p.\n",
-            wined3d, adapter_idx, device_type, focus_window, flags, surface_alignment, device_parent, device);
+    TRACE("wined3d %p, adapter_idx %u, device_type %#x, focus_window %p, flags %#x, "
+            "surface_alignment %u, feature_levels %p, feature_level_count %u, device_parent %p, device %p.\n",
+            wined3d, adapter_idx, device_type, focus_window, flags, surface_alignment,
+            feature_levels, feature_level_count, device_parent, device);
 
-    /* Validate the adapter number. If no adapters are available(no GL), ignore the adapter
-     * number and create a device without a 3D adapter for 2D only operation. */
-    if (wined3d->adapter_count && adapter_idx >= wined3d->adapter_count)
+    if (adapter_idx >= wined3d->adapter_count)
         return WINED3DERR_INVALIDCALL;
 
     if (!(object = heap_alloc_zero(sizeof(*object))))
         return E_OUTOFMEMORY;
 
-    hr = device_init(object, wined3d, adapter_idx, device_type,
-            focus_window, flags, surface_alignment, device_parent);
-    if (FAILED(hr))
+    if (FAILED(hr = device_init(object, wined3d, adapter_idx,
+            device_type, focus_window, flags, surface_alignment,
+            feature_levels, feature_level_count, device_parent)))
     {
         WARN("Failed to initialize device, hr %#x.\n", hr);
         heap_free(object);
@@ -2471,24 +2459,38 @@ static const struct wined3d_adapter_ops wined3d_adapter_no3d_ops =
     wined3d_adapter_no3d_create_context,
 };
 
-static BOOL wined3d_adapter_no3d_init(struct wined3d_adapter *adapter)
+static void wined3d_adapter_no3d_init_d3d_info(struct wined3d_adapter *adapter, DWORD wined3d_creation_flags)
 {
+    struct wined3d_d3d_info *d3d_info = &adapter->d3d_info;
+
+    d3d_info->wined3d_creation_flags = wined3d_creation_flags;
+    d3d_info->texture_npot = TRUE;
+    d3d_info->feature_level = WINED3D_FEATURE_LEVEL_5;
+}
+
+static BOOL wined3d_adapter_no3d_init(struct wined3d_adapter *adapter, DWORD wined3d_creation_flags)
+{
+    static const struct wined3d_gpu_description gpu_description =
+    {
+        HW_VENDOR_SOFTWARE, CARD_WINE, "WineD3D DirectDraw Emulation", DRIVER_WINE, 128,
+    };
+
     TRACE("adapter %p.\n", adapter);
 
-    adapter->driver_info.name = "Display";
-    adapter->driver_info.description = "WineD3D DirectDraw Emulation";
-    if (wined3d_settings.emulated_textureram)
-        adapter->vram_bytes = wined3d_settings.emulated_textureram;
-    else
-        adapter->vram_bytes = 128 * 1024 * 1024;
+    wined3d_driver_info_init(&adapter->driver_info, &gpu_description, 0);
+    adapter->vram_bytes = adapter->driver_info.vram_bytes;
+    adapter->vram_bytes_used = 0;
+    TRACE("Emulating 0x%s bytes of video ram.\n", wine_dbgstr_longlong(adapter->vram_bytes));
 
-    if (!wined3d_adapter_init_format_info(adapter, NULL))
+    if (!wined3d_adapter_no3d_init_format_info(adapter))
         return FALSE;
 
     adapter->vertex_pipe = &none_vertex_pipe;
     adapter->fragment_pipe = &none_fragment_pipe;
     adapter->shader_backend = &none_shader_backend;
     adapter->adapter_ops = &wined3d_adapter_no3d_ops;
+
+    wined3d_adapter_no3d_init_d3d_info(adapter, wined3d_creation_flags);
 
     return TRUE;
 }
@@ -2513,11 +2515,10 @@ static BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int o
             adapter->luid.HighPart, adapter->luid.LowPart, adapter);
 
     adapter->formats = NULL;
-    adapter->format_count = 0;
 
     if (wined3d_creation_flags & WINED3D_NO3D)
-        return wined3d_adapter_no3d_init(adapter);
-    return wined3d_adapter_opengl_init(adapter, wined3d_creation_flags);
+        return wined3d_adapter_no3d_init(adapter, wined3d_creation_flags);
+    return wined3d_adapter_gl_init(adapter, wined3d_creation_flags);
 }
 
 static void STDMETHODCALLTYPE wined3d_null_wined3d_object_destroyed(void *parent) {}

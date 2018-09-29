@@ -7219,6 +7219,13 @@ static void test_texture(void)
         0xffb1c4de, 0xfff0f1f2, 0xfffafdfe, 0xff5a560f,
         0xffd5ff00, 0xffc8f99f, 0xffaa00aa, 0xffdd55bb,
     };
+    static const WORD r8g8_data[] =
+    {
+        0x0000, 0xffff, 0x0000, 0x7fff,
+        0x0203, 0xff10, 0x0b0c, 0x8000,
+        0xc4de, 0xfff0, 0xfdfe, 0x5a6f,
+        0xff00, 0xffc8, 0x00aa, 0xdd5b,
+    };
     static const BYTE a8_data[] =
     {
         0x00, 0x10, 0x20, 0x30,
@@ -7346,10 +7353,14 @@ static void test_texture(void)
             {blue_data,  5 * sizeof(*blue_data)},
         }
     };
+    static const struct texture r32f_float = {4, 4, 1, 1, DXGI_FORMAT_R32_FLOAT,
+        {{r32_float, 4 * sizeof(*r32_float)}}};
     static const struct texture r32f_typeless = {4, 4, 1, 1, DXGI_FORMAT_R32_TYPELESS,
         {{r32_float, 4 * sizeof(*r32_float)}}};
     static const struct texture r32u_typeless = {4, 4, 1, 1, DXGI_FORMAT_R32_TYPELESS,
         {{r32_uint, 4 * sizeof(*r32_uint)}}};
+    static const struct texture r8g8_snorm = {4, 4, 1, 1, DXGI_FORMAT_R8G8_SNORM,
+        {{r8g8_data, 4 * sizeof(*r8g8_data)}}};
     static const struct texture r9g9b9e5_texture = {4, 4, 1, 1, DXGI_FORMAT_R9G9B9E5_SHAREDEXP,
         {{r9g9b9e5_data, 4 * sizeof(*r9g9b9e5_data)}}};
     static const DWORD red_colors[] =
@@ -7435,6 +7446,13 @@ static void test_texture(void)
         0x7e7e8080, 0x7e7e7f7f, 0x7e808080, 0x7effffff,
         0x7e7e7e7e, 0x7e7e7e7e, 0x7e7e7e7e, 0x7e808080,
         0x7e7e7e7e, 0x7e7f7f7f, 0x7e7f7f7f, 0x7e7f7f7f,
+    };
+    static const DWORD snorm_colors[] =
+    {
+        0xff000000, 0xff000000, 0xff000000, 0xff00ff00,
+        0xff000406, 0xff000020, 0xff001618, 0xff000000,
+        0xff000000, 0xff000000, 0xff000000, 0xff00b5df,
+        0xff000000, 0xff000000, 0xff000000, 0xff0000b7,
     };
     static const DWORD r32f_colors[] =
     {
@@ -7605,6 +7623,7 @@ static void test_texture(void)
 #define BC3_UNORM_SRGB      DXGI_FORMAT_BC3_UNORM_SRGB
 #define R8G8B8A8_UNORM_SRGB DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
 #define R8G8B8A8_UNORM      DXGI_FORMAT_R8G8B8A8_UNORM
+#define R8G8_SNORM          DXGI_FORMAT_R8G8_SNORM
 #define R32_FLOAT           DXGI_FORMAT_R32_FLOAT
 #define R32_UINT            DXGI_FORMAT_R32_UINT
 #define FMT_UNKNOWN         DXGI_FORMAT_UNKNOWN
@@ -7617,6 +7636,8 @@ static void test_texture(void)
         {&ps_sample,          &srgb_typeless,    {R8G8B8A8_UNORM_SRGB, TEX_2D,       0, 1},       0.0f, srgb_colors},
         {&ps_sample,          &srgb_typeless,    {R8G8B8A8_UNORM,      TEX_2D,       0, 1},       0.0f, srgb_data},
         {&ps_sample,          &r32f_typeless,    {R32_FLOAT,           TEX_2D,       0, 1},       0.0f, r32f_colors},
+        {&ps_sample,          &r32f_float,       {R32_FLOAT,           TEX_2D,       0, 1},       0.0f, r32f_colors},
+        {&ps_sample,          &r8g8_snorm,       {R8G8_SNORM,          TEX_2D,       0, 1},       0.0f, snorm_colors},
         {&ps_sample,          &array_2d_texture, {FMT_UNKNOWN,         TEX_2D,       0, 1},       0.0f, red_colors},
         {&ps_sample_2d_array, &array_2d_texture, {FMT_UNKNOWN,         TEX_2D_ARRAY, 0, 1, 0, 1}, 0.0f, red_colors},
         {&ps_sample_2d_array, &array_2d_texture, {FMT_UNKNOWN,         TEX_2D_ARRAY, 0, 1, 1, 1}, 0.0f, green_data},
@@ -7632,6 +7653,7 @@ static void test_texture(void)
 #undef BC3_UNORM_SRGB
 #undef R8G8B8A8_UNORM_SRGB
 #undef R8G8B8A8_UNORM
+#undef R8G8_SNORM
 #undef R32_FLOAT
 #undef R32_UINT
 #undef FMT_UNKNOWN
@@ -9575,10 +9597,7 @@ static void test_scissor(void)
     hr = ID3D11Device_CreateRasterizerState(device, &rs_desc, &rs);
     ok(SUCCEEDED(hr), "Failed to create rasterizer state, hr %#x.\n", hr);
 
-    scissor_rect.left = 160;
-    scissor_rect.top = 120;
-    scissor_rect.right = 480;
-    scissor_rect.bottom = 360;
+    SetRect(&scissor_rect, 160, 120, 480, 360);
     ID3D11DeviceContext_RSSetScissorRects(immediate_context, 1, &scissor_rect);
 
     ID3D11DeviceContext_ClearRenderTargetView(immediate_context, test_context.backbuffer_rtv, red);
@@ -27250,10 +27269,7 @@ static void test_multiple_viewports(void)
     ID3D11DeviceContext_ClearRenderTargetView(context, rtv, clear_color);
     ID3D11DeviceContext_RSSetViewports(context, 2, vp);
 
-    rects[0].left = 0;
-    rects[0].top = 0;
-    rects[0].right = width;
-    rects[0].bottom = texture_desc.Height / 2;
+    SetRect(&rects[0], 0, 0, width, texture_desc.Height / 2);
     memset(&rects[1], 0, sizeof(*rects));
     ID3D11DeviceContext_RSSetScissorRects(context, 1, rects);
     constant.draw_id = 4;
@@ -27268,14 +27284,8 @@ static void test_multiple_viewports(void)
     check_texture_sub_resource_vec4(texture, 0, &rect, &expected_values[7], 1);
 
     /* Set both rectangles. */
-    rects[0].left = 0;
-    rects[0].top = 0;
-    rects[0].right = width;
-    rects[0].bottom = texture_desc.Height / 2;
-    rects[1].left = width;
-    rects[1].top = 0;
-    rects[1].right = width * 2;
-    rects[1].bottom = texture_desc.Height / 2;
+    SetRect(&rects[0], 0, 0, width, texture_desc.Height / 2);
+    SetRect(&rects[1], width, 0, 2 * width, texture_desc.Height / 2);
     ID3D11DeviceContext_ClearRenderTargetView(context, rtv, clear_color);
     ID3D11DeviceContext_RSSetScissorRects(context, 2, rects);
     constant.draw_id = 5;

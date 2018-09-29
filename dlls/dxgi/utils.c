@@ -23,7 +23,6 @@
 #include "dxgi_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(dxgi);
-WINE_DECLARE_DEBUG_CHANNEL(winediag);
 
 #define WINE_DXGI_TO_STR(x) case x: return #x
 
@@ -619,65 +618,4 @@ HRESULT dxgi_set_private_data_interface(struct wined3d_private_store *store,
     wined3d_mutex_unlock();
 
     return hr;
-}
-
-D3D_FEATURE_LEVEL dxgi_check_feature_level_support(struct dxgi_factory *factory, struct dxgi_adapter *adapter,
-        const D3D_FEATURE_LEVEL *feature_levels, unsigned int level_count)
-{
-    static const struct
-    {
-        D3D_FEATURE_LEVEL d3d;
-        enum wined3d_feature_level wined3d;
-    }
-    wined3d_feature_levels[] =
-    {
-        {D3D_FEATURE_LEVEL_11_1, WINED3D_FEATURE_LEVEL_11},
-        {D3D_FEATURE_LEVEL_11_0, WINED3D_FEATURE_LEVEL_11},
-        {D3D_FEATURE_LEVEL_10_1, WINED3D_FEATURE_LEVEL_10},
-        {D3D_FEATURE_LEVEL_10_0, WINED3D_FEATURE_LEVEL_10},
-        {D3D_FEATURE_LEVEL_9_3,  WINED3D_FEATURE_LEVEL_9_SM3},
-        {D3D_FEATURE_LEVEL_9_2,  WINED3D_FEATURE_LEVEL_9_SM2},
-        {D3D_FEATURE_LEVEL_9_1,  WINED3D_FEATURE_LEVEL_9_SM2},
-    };
-    D3D_FEATURE_LEVEL selected_feature_level = 0;
-    struct wined3d_caps caps;
-    unsigned int i, j;
-    HRESULT hr;
-
-    wined3d_mutex_lock();
-    hr = wined3d_get_device_caps(factory->wined3d, adapter->ordinal, WINED3D_DEVICE_TYPE_HAL, &caps);
-    wined3d_mutex_unlock();
-
-    if (FAILED(hr))
-        level_count = 0;
-
-    for (i = 0; i < level_count; ++i)
-    {
-        for (j = 0; j < ARRAY_SIZE(wined3d_feature_levels); ++j)
-        {
-            if (feature_levels[i] == wined3d_feature_levels[j].d3d)
-            {
-                if (caps.max_feature_level >= wined3d_feature_levels[j].wined3d)
-                {
-                    selected_feature_level = feature_levels[i];
-                    TRACE("Choosing supported feature level %s.\n",
-                            debug_feature_level(selected_feature_level));
-                }
-                break;
-            }
-        }
-        if (selected_feature_level)
-            break;
-
-        if (j == ARRAY_SIZE(wined3d_feature_levels))
-            FIXME("Unexpected feature level %#x.\n", feature_levels[i]);
-        else
-            TRACE("Feature level %s not supported, trying next fallback if available.\n",
-                    debug_feature_level(feature_levels[i]));
-    }
-    if (!selected_feature_level)
-        FIXME_(winediag)("None of the requested D3D feature levels is supported on this GPU "
-                "with the current shader backend.\n");
-
-    return selected_feature_level;
 }

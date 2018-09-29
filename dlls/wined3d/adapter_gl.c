@@ -58,6 +58,7 @@ static const struct wined3d_extension_map gl_extension_map[] =
     /* ARB */
     {"GL_ARB_base_instance",                ARB_BASE_INSTANCE             },
     {"GL_ARB_blend_func_extended",          ARB_BLEND_FUNC_EXTENDED       },
+    {"GL_ARB_buffer_storage",               ARB_BUFFER_STORAGE            },
     {"GL_ARB_clear_buffer_object",          ARB_CLEAR_BUFFER_OBJECT       },
     {"GL_ARB_clear_texture",                ARB_CLEAR_TEXTURE             },
     {"GL_ARB_clip_control",                 ARB_CLIP_CONTROL              },
@@ -103,6 +104,7 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_ARB_point_parameters",             ARB_POINT_PARAMETERS          },
     {"GL_ARB_point_sprite",                 ARB_POINT_SPRITE              },
     {"GL_ARB_provoking_vertex",             ARB_PROVOKING_VERTEX          },
+    {"GL_ARB_query_buffer_object",          ARB_QUERY_BUFFER_OBJECT       },
     {"GL_ARB_sample_shading",               ARB_SAMPLE_SHADING            },
     {"GL_ARB_sampler_objects",              ARB_SAMPLER_OBJECTS           },
     {"GL_ARB_seamless_cube_map",            ARB_SEAMLESS_CUBE_MAP         },
@@ -113,6 +115,7 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_ARB_shader_storage_buffer_object", ARB_SHADER_STORAGE_BUFFER_OBJECT},
     {"GL_ARB_shader_texture_image_samples", ARB_SHADER_TEXTURE_IMAGE_SAMPLES},
     {"GL_ARB_shader_texture_lod",           ARB_SHADER_TEXTURE_LOD        },
+    {"GL_ARB_shader_viewport_layer_array",  ARB_SHADER_VIEWPORT_LAYER_ARRAY},
     {"GL_ARB_shading_language_100",         ARB_SHADING_LANGUAGE_100      },
     {"GL_ARB_shading_language_420pack",     ARB_SHADING_LANGUAGE_420PACK  },
     {"GL_ARB_shading_language_packing",     ARB_SHADING_LANGUAGE_PACKING  },
@@ -432,11 +435,11 @@ static BOOL match_apple(const struct wined3d_gl_info *gl_info, struct wined3d_ca
      *
      * Detecting this isn't really easy. The vendor string doesn't mention
      * Apple. Compile-time checks aren't sufficient either because a Linux
-     * binary may display on a MacOS X server via remote X11. So try to detect
+     * binary may display on a macOS X server via remote X11. So try to detect
      * the OpenGL implementation by looking at certain Apple extensions. Some
      * extensions like client storage might be supported on other
      * implementations too, but GL_APPLE_flush_render is specific to the
-     * MacOS X window management, and GL_APPLE_ycbcr_422 is QuickTime
+     * macOS X window management, and GL_APPLE_ycbcr_422 is QuickTime
      * specific. So the chance that other implementations support them is
      * rather small since Win32 QuickTime uses DirectDraw, not OpenGL.
      *
@@ -892,11 +895,11 @@ static void quirk_no_np2(struct wined3d_gl_info *gl_info)
 
 static void quirk_texcoord_w(struct wined3d_gl_info *gl_info)
 {
-    /* The Intel GPUs on MacOS set the .w register of texcoords to 0.0 by
+    /* The Intel GPUs on macOS set the .w register of texcoords to 0.0 by
      * default, which causes problems with fixed-function fragment processing.
      * Ideally this flag should be detected with a test shader and OpenGL
-     * feedback mode, but some OpenGL implementations (MacOS ATI at least,
-     * probably all MacOS ones) do not like vertex shaders in feedback mode
+     * feedback mode, but some OpenGL implementations (macOS ATI at least,
+     * probably all macOS ones) do not like vertex shaders in feedback mode
      * and return an error, even though it should be valid according to the
      * spec.
      *
@@ -905,8 +908,8 @@ static void quirk_texcoord_w(struct wined3d_gl_info *gl_info)
      * instruction slots which should be available to the Direct3D
      * application.
      *
-     * ATI Radeon HD 2xxx cards on MacOS have the issue. Instead of checking
-     * for the buggy cards, blacklist all Radeon cards on MacOS and whitelist
+     * ATI Radeon HD 2xxx cards on macOS have the issue. Instead of checking
+     * for the buggy cards, blacklist all Radeon cards on macOS and whitelist
      * the good ones. That way we're prepared for the future. If this
      * workaround is activated on cards that do not need it, it won't break
      * things, just affect performance negatively. */
@@ -1013,13 +1016,6 @@ static const struct wined3d_gpu_description *query_gpu_description(const struct 
     {
         device = wined3d_settings.pci_device_id;
         TRACE("Overriding device PCI ID with 0x%04x.\n", device);
-    }
-
-    if (wined3d_settings.emulated_textureram)
-    {
-        *vram_bytes = wined3d_settings.emulated_textureram;
-        TRACE("Overriding amount of video memory with 0x%s bytes.\n",
-                wine_dbgstr_longlong(*vram_bytes));
     }
 
     if (!(gpu_description = wined3d_get_gpu_description(vendor, device))
@@ -1263,10 +1259,14 @@ static enum wined3d_feature_level feature_level_from_caps(const struct wined3d_g
         if (shader_model >= 5
                 && gl_info->supported[ARB_DRAW_INDIRECT]
                 && gl_info->supported[ARB_TEXTURE_COMPRESSION_BPTC])
-            return WINED3D_FEATURE_LEVEL_11;
+            return WINED3D_FEATURE_LEVEL_11_1;
 
         if (shader_model >= 4)
+        {
+            if (gl_info->supported[ARB_TEXTURE_CUBE_MAP_ARRAY])
+                return WINED3D_FEATURE_LEVEL_10_1;
             return WINED3D_FEATURE_LEVEL_10;
+        }
     }
 
     if (shader_model >= 3)
@@ -2063,6 +2063,8 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     /* GL_ARB_blend_func_extended */
     USE_GL_FUNC(glBindFragDataLocationIndexed)
     USE_GL_FUNC(glGetFragDataIndex)
+    /* GL_ARB_buffer_storage */
+    USE_GL_FUNC(glBufferStorage)
     /* GL_ARB_clear_buffer_object */
     USE_GL_FUNC(glClearBufferData)
     USE_GL_FUNC(glClearBufferSubData)
@@ -2813,7 +2815,7 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
 #undef MAP_GL_FUNCTION_CAST
 }
 
-static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
+static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info, struct wined3d_d3d_info *d3d_info)
 {
     unsigned int i, sampler_count;
     GLfloat gl_floatv[2];
@@ -2855,13 +2857,12 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
     }
 
     gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_TEXTURE_SIZE, &gl_max);
-    gl_info->limits.texture_size = gl_max;
+    d3d_info->limits.texture_size = gl_max;
     TRACE("Maximum texture size support - max texture size %d.\n", gl_max);
 
     gl_info->gl_ops.gl.p_glGetFloatv(gl_info->supported[WINED3D_GL_LEGACY_CONTEXT]
             ? GL_ALIASED_POINT_SIZE_RANGE : GL_POINT_SIZE_RANGE, gl_floatv);
-    gl_info->limits.pointsize_min = gl_floatv[0];
-    gl_info->limits.pointsize_max = gl_floatv[1];
+    d3d_info->limits.pointsize_max = gl_floatv[1];
     TRACE("Maximum point size support - max point size %f.\n", gl_floatv[1]);
 
     if (gl_info->supported[ARB_MAP_BUFFER_ALIGNMENT])
@@ -3146,8 +3147,8 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
     }
     else
     {
-        gl_info->limits.framebuffer_width = gl_info->limits.texture_size;
-        gl_info->limits.framebuffer_height = gl_info->limits.texture_size;
+        gl_info->limits.framebuffer_width = d3d_info->limits.texture_size;
+        gl_info->limits.framebuffer_height = d3d_info->limits.texture_size;
     }
 
     gl_info->limits.samplers[WINED3D_SHADER_TYPE_PIXEL] =
@@ -3304,7 +3305,9 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
         {ARB_TEXTURE_STORAGE_MULTISAMPLE,  MAKEDWORD_VERSION(4, 2)},
         {ARB_TEXTURE_VIEW,                 MAKEDWORD_VERSION(4, 3)},
 
+        {ARB_BUFFER_STORAGE,               MAKEDWORD_VERSION(4, 4)},
         {ARB_CLEAR_TEXTURE,                MAKEDWORD_VERSION(4, 4)},
+        {ARB_QUERY_BUFFER_OBJECT,          MAKEDWORD_VERSION(4, 4)},
 
         {ARB_CLIP_CONTROL,                 MAKEDWORD_VERSION(4, 5)},
         {ARB_CULL_DISTANCE,                MAKEDWORD_VERSION(4, 5)},
@@ -3632,7 +3635,7 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
         gl_info->supported[ARB_TEXTURE_MULTISAMPLE] = FALSE;
     }
 
-    wined3d_adapter_init_limits(gl_info);
+    wined3d_adapter_init_limits(gl_info, d3d_info);
 
     if (gl_info->supported[ARB_VERTEX_PROGRAM] && test_arb_vs_offset_limit(gl_info))
         gl_info->quirks |= WINED3D_QUIRK_ARB_VS_OFFSET_LIMIT;
@@ -3658,7 +3661,7 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
     adapter->fragment_pipe = select_fragment_implementation(gl_info, adapter->shader_backend);
 
     d3d_info->limits.max_rt_count = gl_info->limits.buffers;
-    d3d_info->limits.pointsize_max = gl_info->limits.pointsize_max;
+    d3d_info->limits.max_clip_distances = gl_info->limits.user_clip_distances;
 
     adapter->shader_backend->shader_get_caps(gl_info, &shader_caps);
     d3d_info->vs_clipping = shader_caps.wined3d_caps & WINED3D_SHADER_CAP_VS_CLIPPING;
@@ -3671,7 +3674,7 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
     d3d_info->limits.vs_uniform_count = shader_caps.vs_uniform_count;
     d3d_info->limits.ps_uniform_count = shader_caps.ps_uniform_count;
     d3d_info->limits.varying_count = shader_caps.varying_count;
-    d3d_info->shader_double_precision = shader_caps.wined3d_caps & WINED3D_SHADER_CAP_DOUBLE_PRECISION;
+    d3d_info->shader_double_precision = !!(shader_caps.wined3d_caps & WINED3D_SHADER_CAP_DOUBLE_PRECISION);
 
     adapter->vertex_pipe->vp_get_caps(gl_info, &vertex_caps);
     d3d_info->xyzrhw = vertex_caps.xyzrhw;
@@ -3683,9 +3686,13 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
     adapter->fragment_pipe->get_caps(gl_info, &fragment_caps);
     d3d_info->limits.ffp_blend_stages = fragment_caps.MaxTextureBlendStages;
     d3d_info->limits.ffp_textures = fragment_caps.MaxSimultaneousTextures;
-    d3d_info->shader_color_key = fragment_caps.wined3d_caps & WINED3D_FRAGMENT_CAP_COLOR_KEY;
+    d3d_info->shader_color_key = !!(fragment_caps.wined3d_caps & WINED3D_FRAGMENT_CAP_COLOR_KEY);
     d3d_info->wined3d_creation_flags = wined3d_creation_flags;
     d3d_info->feature_level = feature_level_from_caps(gl_info, &shader_caps, &fragment_caps);
+
+    d3d_info->texture_npot = !!gl_info->supported[ARB_TEXTURE_NON_POWER_OF_TWO];
+    d3d_info->texture_npot_conditional = gl_info->supported[WINED3D_GL_NORMALIZED_TEXRECT]
+            || gl_info->supported[ARB_TEXTURE_RECTANGLE];
 
     TRACE("Max texture stages: %u.\n", d3d_info->limits.ffp_blend_stages);
 
@@ -3815,6 +3822,10 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
     wined3d_driver_info_init(driver_info, gpu_description, vram_bytes);
     TRACE("Reporting (fake) driver version 0x%08x-0x%08x.\n",
             driver_info->version_high, driver_info->version_low);
+
+    adapter->vram_bytes = driver_info->vram_bytes;
+    adapter->vram_bytes_used = 0;
+    TRACE("Emulating 0x%s bytes of video ram.\n", wine_dbgstr_longlong(adapter->vram_bytes));
 
     gl_ext_emul_mask = adapter->vertex_pipe->vp_get_emul_mask(gl_info)
             | adapter->fragment_pipe->get_emul_mask(gl_info);
@@ -4181,12 +4192,12 @@ static DWORD get_max_gl_version(const struct wined3d_gl_info *gl_info, DWORD fla
     return wined3d_settings.max_gl_version;
 }
 
-static const struct wined3d_adapter_ops wined3d_adapter_opengl_ops =
+static const struct wined3d_adapter_ops wined3d_adapter_gl_ops =
 {
-    wined3d_adapter_opengl_create_context,
+    wined3d_adapter_gl_create_context,
 };
 
-BOOL wined3d_adapter_opengl_init(struct wined3d_adapter *adapter, DWORD wined3d_creation_flags)
+BOOL wined3d_adapter_gl_init(struct wined3d_adapter *adapter, DWORD wined3d_creation_flags)
 {
     static const DWORD supported_gl_versions[] =
     {
@@ -4278,7 +4289,7 @@ BOOL wined3d_adapter_opengl_init(struct wined3d_adapter *adapter, DWORD wined3d_
         return FALSE;
     }
 
-    if (!wined3d_adapter_init_format_info(adapter, &caps_gl_ctx))
+    if (!wined3d_adapter_gl_init_format_info(adapter, &caps_gl_ctx))
     {
         ERR("Failed to initialize GL format info.\n");
         wined3d_caps_gl_ctx_destroy(&caps_gl_ctx);
@@ -4286,14 +4297,10 @@ BOOL wined3d_adapter_opengl_init(struct wined3d_adapter *adapter, DWORD wined3d_
         return FALSE;
     }
 
-    adapter->vram_bytes = adapter->driver_info.vram_bytes;
-    adapter->vram_bytes_used = 0;
-    TRACE("Emulating 0x%s bytes of video ram.\n", wine_dbgstr_longlong(adapter->vram_bytes));
-
     wined3d_caps_gl_ctx_destroy(&caps_gl_ctx);
 
     wined3d_adapter_init_ffp_attrib_ops(adapter);
-    adapter->adapter_ops = &wined3d_adapter_opengl_ops;
+    adapter->adapter_ops = &wined3d_adapter_gl_ops;
 
     return TRUE;
 }

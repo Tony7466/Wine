@@ -134,7 +134,8 @@ struct d2d_device_context
     const struct d2d_device_context_ops *ops;
 
     ID2D1Factory *factory;
-    ID3D10Device *device;
+    ID2D1Device *device;
+    ID3D10Device *d3d_device;
     ID3D10RenderTargetView *view;
     ID3D10StateBlock *stateblock;
     struct d2d_shape_resources shape_resources[D2D_SHAPE_TYPE_COUNT];
@@ -155,10 +156,15 @@ struct d2d_device_context
     struct d2d_clip_stack clip_stack;
 };
 
-HRESULT d2d_d3d_create_render_target(ID2D1Factory *factory, IDXGISurface *surface, IUnknown *outer_unknown,
+HRESULT d2d_d3d_create_render_target(ID2D1Device *device, IDXGISurface *surface, IUnknown *outer_unknown,
         const struct d2d_device_context_ops *ops, const D2D1_RENDER_TARGET_PROPERTIES *desc,
         void **render_target) DECLSPEC_HIDDEN;
 HRESULT d2d_d3d_render_target_create_rtv(ID2D1RenderTarget *render_target, IDXGISurface1 *surface) DECLSPEC_HIDDEN;
+
+static inline BOOL d2d_device_context_is_dxgi_target(const struct d2d_device_context *context)
+{
+    return !context->ops;
+}
 
 struct d2d_wic_render_target
 {
@@ -176,8 +182,8 @@ struct d2d_wic_render_target
     unsigned int bpp;
 };
 
-HRESULT d2d_wic_render_target_init(struct d2d_wic_render_target *render_target, ID2D1Factory *factory,
-        ID3D10Device1 *device, IWICBitmap *bitmap, const D2D1_RENDER_TARGET_PROPERTIES *desc) DECLSPEC_HIDDEN;
+HRESULT d2d_wic_render_target_init(struct d2d_wic_render_target *render_target, ID2D1Factory1 *factory,
+        ID3D10Device1 *d3d_device, IWICBitmap *bitmap, const D2D1_RENDER_TARGET_PROPERTIES *desc) DECLSPEC_HIDDEN;
 
 struct d2d_dc_render_target
 {
@@ -192,8 +198,8 @@ struct d2d_dc_render_target
     HDC hdc;
 };
 
-HRESULT d2d_dc_render_target_init(struct d2d_dc_render_target *render_target, ID2D1Factory *factory,
-        ID3D10Device1 *device, const D2D1_RENDER_TARGET_PROPERTIES *desc) DECLSPEC_HIDDEN;
+HRESULT d2d_dc_render_target_init(struct d2d_dc_render_target *render_target, ID2D1Factory1 *factory,
+        ID3D10Device1 *d3d_device, const D2D1_RENDER_TARGET_PROPERTIES *desc) DECLSPEC_HIDDEN;
 
 struct d2d_hwnd_render_target
 {
@@ -207,8 +213,8 @@ struct d2d_hwnd_render_target
     HWND hwnd;
 };
 
-HRESULT d2d_hwnd_render_target_init(struct d2d_hwnd_render_target *render_target, ID2D1Factory *factory,
-        ID3D10Device1 *device, const D2D1_RENDER_TARGET_PROPERTIES *desc,
+HRESULT d2d_hwnd_render_target_init(struct d2d_hwnd_render_target *render_target, ID2D1Factory1 *factory,
+        ID3D10Device1 *d3d_device, const D2D1_RENDER_TARGET_PROPERTIES *desc,
         const D2D1_HWND_RENDER_TARGET_PROPERTIES *hwnd_desc) DECLSPEC_HIDDEN;
 
 struct d2d_bitmap_render_target
@@ -275,7 +281,7 @@ struct d2d_brush
             struct d2d_bitmap *bitmap;
             D2D1_EXTEND_MODE extend_mode_x;
             D2D1_EXTEND_MODE extend_mode_y;
-            D2D1_BITMAP_INTERPOLATION_MODE interpolation_mode;
+            D2D1_INTERPOLATION_MODE interpolation_mode;
             ID3D10SamplerState *sampler_state;
         } bitmap;
     } u;
@@ -290,7 +296,7 @@ HRESULT d2d_radial_gradient_brush_create(ID2D1Factory *factory,
         const D2D1_RADIAL_GRADIENT_BRUSH_PROPERTIES *gradient_desc, const D2D1_BRUSH_PROPERTIES *brush_desc,
         ID2D1GradientStopCollection *gradient, struct d2d_brush **brush) DECLSPEC_HIDDEN;
 HRESULT d2d_bitmap_brush_create(ID2D1Factory *factory, ID2D1Bitmap *bitmap,
-        const D2D1_BITMAP_BRUSH_PROPERTIES *bitmap_brush_desc, const D2D1_BRUSH_PROPERTIES *brush_desc,
+        const D2D1_BITMAP_BRUSH_PROPERTIES1 *bitmap_brush_desc, const D2D1_BRUSH_PROPERTIES *brush_desc,
         struct d2d_brush **brush) DECLSPEC_HIDDEN;
 void d2d_brush_bind_resources(struct d2d_brush *brush, ID3D10Device *device, unsigned int brush_idx) DECLSPEC_HIDDEN;
 HRESULT d2d_brush_get_ps_cb(struct d2d_brush *brush, struct d2d_brush *opacity_brush, BOOL outline,
@@ -339,6 +345,7 @@ struct d2d_bitmap
 
     ID2D1Factory *factory;
     ID3D10ShaderResourceView *view;
+    IDXGISurface *surface;
     D2D1_SIZE_U pixel_size;
     D2D1_PIXEL_FORMAT format;
     float dpi_x;
@@ -346,11 +353,11 @@ struct d2d_bitmap
     D2D1_BITMAP_OPTIONS options;
 };
 
-HRESULT d2d_bitmap_create(ID2D1Factory *factory, ID3D10Device *device, D2D1_SIZE_U size, const void *src_data,
+HRESULT d2d_bitmap_create(struct d2d_device_context *context, D2D1_SIZE_U size, const void *src_data,
         UINT32 pitch, const D2D1_BITMAP_PROPERTIES1 *desc, struct d2d_bitmap **bitmap) DECLSPEC_HIDDEN;
-HRESULT d2d_bitmap_create_shared(ID2D1DeviceContext *context, ID3D10Device *device, REFIID iid, void *data,
+HRESULT d2d_bitmap_create_shared(struct d2d_device_context *context, REFIID iid, void *data,
         const D2D1_BITMAP_PROPERTIES1 *desc, struct d2d_bitmap **bitmap) DECLSPEC_HIDDEN;
-HRESULT d2d_bitmap_create_from_wic_bitmap(ID2D1Factory *factory, ID3D10Device *device, IWICBitmapSource *bitmap_source,
+HRESULT d2d_bitmap_create_from_wic_bitmap(struct d2d_device_context *context, IWICBitmapSource *bitmap_source,
         const D2D1_BITMAP_PROPERTIES1 *desc, struct d2d_bitmap **bitmap) DECLSPEC_HIDDEN;
 struct d2d_bitmap *unsafe_impl_from_ID2D1Bitmap(ID2D1Bitmap *iface) DECLSPEC_HIDDEN;
 
@@ -496,6 +503,14 @@ struct d2d_device
 
 void d2d_device_init(struct d2d_device *device, ID2D1Factory1 *factory, IDXGIDevice *dxgi_device) DECLSPEC_HIDDEN;
 
+struct d2d_effect
+{
+    ID2D1Effect ID2D1Effect_iface;
+    LONG refcount;
+};
+
+void d2d_effect_init(struct d2d_effect *effect) DECLSPEC_HIDDEN;
+
 static inline BOOL d2d_array_reserve(void **elements, size_t *capacity, size_t count, size_t size)
 {
     size_t new_capacity, max_capacity;
@@ -578,6 +593,13 @@ static inline void d2d_rect_expand(D2D1_RECT_F *dst, const D2D1_POINT_2F *point)
         dst->top = point->y;
     if (point->y > dst->bottom)
         dst->bottom = point->y;
+}
+
+static inline const char *debug_d2d_point_2f(const D2D1_POINT_2F *point)
+{
+    if (!point)
+        return "(null)";
+    return wine_dbg_sprintf("{%.8e, %.8e}", point->x, point->y);
 }
 
 static inline const char *debug_d2d_rect_f(const D2D1_RECT_F *rect)
