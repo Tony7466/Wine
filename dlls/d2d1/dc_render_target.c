@@ -247,8 +247,8 @@ static void STDMETHODCALLTYPE d2d_dc_render_target_DrawLine(ID2D1DCRenderTarget 
 {
     struct d2d_dc_render_target *render_target = impl_from_ID2D1DCRenderTarget(iface);
 
-    TRACE("iface %p, p0 {%.8e, %.8e}, p1 {%.8e, %.8e}, brush %p, stroke_width %.8e, stroke_style %p.\n",
-            iface, p0.x, p0.y, p1.x, p1.y, brush, stroke_width, stroke_style);
+    TRACE("iface %p, p0 %s, p1 %s, brush %p, stroke_width %.8e, stroke_style %p.\n",
+            iface, debug_d2d_point_2f(&p0), debug_d2d_point_2f(&p1), brush, stroke_width, stroke_style);
 
     ID2D1RenderTarget_DrawLine(render_target->dxgi_target, p0, p1, brush, stroke_width, stroke_style);
 }
@@ -393,8 +393,8 @@ static void STDMETHODCALLTYPE d2d_dc_render_target_DrawTextLayout(ID2D1DCRenderT
 {
     struct d2d_dc_render_target *render_target = impl_from_ID2D1DCRenderTarget(iface);
 
-    TRACE("iface %p, origin {%.8e, %.8e}, layout %p, brush %p, options %#x.\n",
-            iface, origin.x, origin.y, layout, brush, options);
+    TRACE("iface %p, origin %s, layout %p, brush %p, options %#x.\n",
+            iface, debug_d2d_point_2f(&origin), layout, brush, options);
 
     ID2D1RenderTarget_DrawTextLayout(render_target->dxgi_target, origin, layout, brush, options);
 }
@@ -405,8 +405,8 @@ static void STDMETHODCALLTYPE d2d_dc_render_target_DrawGlyphRun(ID2D1DCRenderTar
 {
     struct d2d_dc_render_target *render_target = impl_from_ID2D1DCRenderTarget(iface);
 
-    TRACE("iface %p, baseline_origin {%.8e, %.8e}, glyph_run %p, brush %p, measuring_mode %#x.\n",
-            iface, baseline_origin.x, baseline_origin.y, glyph_run, brush, measuring_mode);
+    TRACE("iface %p, baseline_origin %s, glyph_run %p, brush %p, measuring_mode %#x.\n",
+            iface, debug_d2d_point_2f(&baseline_origin), glyph_run, brush, measuring_mode);
 
     ID2D1RenderTarget_DrawGlyphRun(render_target->dxgi_target,
             baseline_origin, glyph_run, brush, measuring_mode);
@@ -813,11 +813,13 @@ static const struct d2d_device_context_ops d2d_dc_render_target_ops =
     d2d_dc_render_target_present,
 };
 
-HRESULT d2d_dc_render_target_init(struct d2d_dc_render_target *render_target, ID2D1Factory *factory,
-        ID3D10Device1 *device, const D2D1_RENDER_TARGET_PROPERTIES *desc)
+HRESULT d2d_dc_render_target_init(struct d2d_dc_render_target *render_target, ID2D1Factory1 *factory,
+        ID3D10Device1 *d3d_device, const D2D1_RENDER_TARGET_PROPERTIES *desc)
 {
     D3D10_TEXTURE2D_DESC texture_desc;
     ID3D10Texture2D *texture;
+    IDXGIDevice *dxgi_device;
+    ID2D1Device *device;
     HRESULT hr;
 
     render_target->ID2D1DCRenderTarget_iface.lpVtbl = &d2d_dc_render_target_vtbl;
@@ -852,7 +854,7 @@ HRESULT d2d_dc_render_target_init(struct d2d_dc_render_target *render_target, ID
     texture_desc.CPUAccessFlags = 0;
     texture_desc.MiscFlags = D3D10_RESOURCE_MISC_GDI_COMPATIBLE;
 
-    if (FAILED(hr = ID3D10Device1_CreateTexture2D(device, &texture_desc, NULL, &texture)))
+    if (FAILED(hr = ID3D10Device1_CreateTexture2D(d3d_device, &texture_desc, NULL, &texture)))
     {
         WARN("Failed to create texture, hr %#x.\n", hr);
         return hr;
@@ -866,9 +868,25 @@ HRESULT d2d_dc_render_target_init(struct d2d_dc_render_target *render_target, ID
         return hr;
     }
 
-    if (FAILED(hr = d2d_d3d_create_render_target(factory, (IDXGISurface *)render_target->dxgi_surface,
+    if (FAILED(hr = ID3D10Device1_QueryInterface(d3d_device, &IID_IDXGIDevice, (void **)&dxgi_device)))
+    {
+        WARN("Failed to get DXGI device interface, hr %#x.\n", hr);
+        return hr;
+    }
+
+    hr = ID2D1Factory1_CreateDevice(factory, dxgi_device, &device);
+    IDXGIDevice_Release(dxgi_device);
+    if (FAILED(hr))
+    {
+        WARN("Failed to create D2D device, hr %#x.\n", hr);
+        return hr;
+    }
+
+    hr = d2d_d3d_create_render_target(device, (IDXGISurface *)render_target->dxgi_surface,
             (IUnknown *)&render_target->ID2D1DCRenderTarget_iface, &d2d_dc_render_target_ops,
-            desc, (void **)&render_target->dxgi_inner)))
+            desc, (void **)&render_target->dxgi_inner);
+    ID2D1Device_Release(device);
+    if (FAILED(hr))
     {
         WARN("Failed to create DXGI surface render target, hr %#x.\n", hr);
         IDXGISurface1_Release(render_target->dxgi_surface);

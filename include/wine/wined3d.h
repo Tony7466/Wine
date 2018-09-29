@@ -90,15 +90,18 @@ enum wined3d_device_type
 
 enum wined3d_feature_level
 {
-    WINED3D_FEATURE_LEVEL_5,
-    WINED3D_FEATURE_LEVEL_6,
-    WINED3D_FEATURE_LEVEL_7,
-    WINED3D_FEATURE_LEVEL_8,
-    WINED3D_FEATURE_LEVEL_9_SM2,
-    WINED3D_FEATURE_LEVEL_9_SM3,
-    WINED3D_FEATURE_LEVEL_10,
-    WINED3D_FEATURE_LEVEL_11,
-    WINED3D_FEATURE_LEVEL_COUNT
+    WINED3D_FEATURE_LEVEL_NONE   = 0x0000,
+    WINED3D_FEATURE_LEVEL_5      = 0x5000,
+    WINED3D_FEATURE_LEVEL_6      = 0x6000,
+    WINED3D_FEATURE_LEVEL_7      = 0x7000,
+    WINED3D_FEATURE_LEVEL_8      = 0x8000,
+    WINED3D_FEATURE_LEVEL_9_1    = 0x9100,
+    WINED3D_FEATURE_LEVEL_9_SM2  = 0x9200,
+    WINED3D_FEATURE_LEVEL_9_SM3  = 0x9300,
+    WINED3D_FEATURE_LEVEL_10     = 0xa000,
+    WINED3D_FEATURE_LEVEL_10_1   = 0xa100,
+    WINED3D_FEATURE_LEVEL_11     = 0xb000,
+    WINED3D_FEATURE_LEVEL_11_1   = 0xb100,
 };
 
 enum wined3d_degree_type
@@ -1012,6 +1015,7 @@ enum wined3d_shader_type
 #define WINED3DCLEAR_TARGET                                     0x00000001
 #define WINED3DCLEAR_ZBUFFER                                    0x00000002
 #define WINED3DCLEAR_STENCIL                                    0x00000004
+#define WINED3DCLEAR_SYNCHRONOUS                                0x80000000
 
 /* Stream source flags */
 #define WINED3DSTREAMSOURCE_INDEXEDDATA                         (1u << 30)
@@ -2060,7 +2064,6 @@ struct wined3d_shader_desc
     struct wined3d_shader_signature input_signature;
     struct wined3d_shader_signature output_signature;
     struct wined3d_shader_signature patch_constant_signature;
-    unsigned int max_version;
 };
 
 struct wined3d_stream_output_element
@@ -2245,8 +2248,9 @@ HRESULT __cdecl wined3d_device_copy_sub_resource_region(struct wined3d_device *d
         unsigned int src_sub_resource_idx, const struct wined3d_box *src_box, unsigned int flags);
 void __cdecl wined3d_device_copy_uav_counter(struct wined3d_device *device,
         struct wined3d_buffer *dst_buffer, unsigned int offset, struct wined3d_unordered_access_view *uav);
-HRESULT __cdecl wined3d_device_create(struct wined3d *wined3d, UINT adapter_idx,
+HRESULT __cdecl wined3d_device_create(struct wined3d *wined3d, unsigned int adapter_idx,
         enum wined3d_device_type device_type, HWND focus_window, DWORD behaviour_flags, BYTE surface_alignment,
+        const enum wined3d_feature_level *feature_levels, unsigned int feature_level_count,
         struct wined3d_device_parent *device_parent, struct wined3d_device **device);
 ULONG __cdecl wined3d_device_decref(struct wined3d_device *device);
 void __cdecl wined3d_device_dispatch_compute(struct wined3d_device *device,
@@ -2291,6 +2295,7 @@ struct wined3d_shader * __cdecl wined3d_device_get_domain_shader(const struct wi
 struct wined3d_shader_resource_view * __cdecl wined3d_device_get_ds_resource_view(const struct wined3d_device *device,
         unsigned int idx);
 struct wined3d_sampler * __cdecl wined3d_device_get_ds_sampler(const struct wined3d_device *device, unsigned int idx);
+enum wined3d_feature_level __cdecl wined3d_device_get_feature_level(const struct wined3d_device *device);
 void __cdecl wined3d_device_get_gamma_ramp(const struct wined3d_device *device,
         UINT swapchain_idx, struct wined3d_gamma_ramp *ramp);
 struct wined3d_shader * __cdecl wined3d_device_get_geometry_shader(const struct wined3d_device *device);

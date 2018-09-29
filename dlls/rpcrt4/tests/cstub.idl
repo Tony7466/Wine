@@ -1,7 +1,7 @@
 /*
- * Web Services on Devices
+ * IDL to test COM object proxy/stub functions
  *
- * Copyright 2017 Owen Rudge for CodeWeavers
+ * Copyright 2018 Zebediah Figura
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,26 +18,20 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include <stdarg.h>
+#pragma makedep proxy
 
-#include "windef.h"
-#include "winbase.h"
-#include "wine/debug.h"
+import "oleidl.idl";
 
-WINE_DEFAULT_DEBUG_CHANNEL(wsdapi);
-
-BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
+[
+    uuid(deadbeef-0001-44c7-850f-2a0f465c0c6c),
+    object
+]
+interface ITest1 : IPersist
 {
-    TRACE("(%p, %u, %p)\n", instance, reason, reserved);
-
-    switch (reason)
-    {
-        case DLL_WINE_PREATTACH:
-            return FALSE;    /* prefer native version */
-        case DLL_PROCESS_ATTACH:
-            DisableThreadLibraryCalls(instance);
-            break;
-    }
-
-    return TRUE;
+    int square(int x);
 }
+
+[
+    uuid(deadbeef-ffff-44c7-850f-2a0f465c0c6c)
+]
+coclass test_ps { interface IPSFactoryBuffer; }

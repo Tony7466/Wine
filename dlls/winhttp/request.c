@@ -747,7 +747,7 @@ static BOOL query_headers( request_t *request, DWORD level, LPCWSTR name, LPVOID
         return ret;
 
     default:
-        if (attr >= sizeof(attribute_table)/sizeof(attribute_table[0]) || !attribute_table[attr])
+        if (attr >= ARRAY_SIZE(attribute_table) || !attribute_table[attr])
         {
             FIXME("attribute %u not implemented\n", attr);
             return FALSE;
@@ -766,7 +766,6 @@ static BOOL query_headers( request_t *request, DWORD level, LPCWSTR name, LPVOID
         set_last_error( ERROR_WINHTTP_HEADER_NOT_FOUND );
         return FALSE;
     }
-    if (index) *index += 1;
     if (level & WINHTTP_QUERY_FLAG_NUMBER)
     {
         if (!buffer || sizeof(int) > *buflen)
@@ -813,6 +812,7 @@ static BOOL query_headers( request_t *request, DWORD level, LPCWSTR name, LPVOID
         }
         *buflen = len;
     }
+    if (ret && index) *index += 1;
     return ret;
 }
 
@@ -866,13 +866,12 @@ auth_schemes[] =
     { digestW,    ARRAY_SIZE(digestW) - 1,    WINHTTP_AUTH_SCHEME_DIGEST },
     { negotiateW, ARRAY_SIZE(negotiateW) - 1, WINHTTP_AUTH_SCHEME_NEGOTIATE }
 };
-static const unsigned int num_auth_schemes = sizeof(auth_schemes)/sizeof(auth_schemes[0]);
 
 static enum auth_scheme scheme_from_flag( DWORD flag )
 {
     int i;
 
-    for (i = 0; i < num_auth_schemes; i++) if (flag == auth_schemes[i].scheme) return i;
+    for (i = 0; i < ARRAY_SIZE( auth_schemes ); i++) if (flag == auth_schemes[i].scheme) return i;
     return SCHEME_INVALID;
 }
 
@@ -880,7 +879,7 @@ static DWORD auth_scheme_from_header( WCHAR *header )
 {
     unsigned int i;
 
-    for (i = 0; i < num_auth_schemes; i++)
+    for (i = 0; i < ARRAY_SIZE( auth_schemes ); i++)
     {
         if (!strncmpiW( header, auth_schemes[i].str, auth_schemes[i].len ) &&
             (header[auth_schemes[i].len] == ' ' || !header[auth_schemes[i].len])) return auth_schemes[i].scheme;
@@ -902,7 +901,6 @@ static BOOL query_auth_schemes( request_t *request, DWORD level, LPDWORD support
         query_headers( request, level, NULL, NULL, &size, &index );
         if (get_last_error() != ERROR_INSUFFICIENT_BUFFER) break;
 
-        index--;
         if (!(buffer = heap_alloc( size ))) return FALSE;
         if (!query_headers( request, level, NULL, buffer, &size, &index ))
         {
@@ -966,6 +964,7 @@ BOOL WINAPI WinHttpQueryAuthSchemes( HINTERNET hrequest, LPDWORD supported, LPDW
         *target = WINHTTP_AUTH_TARGET_PROXY;
         ret = TRUE;
     }
+    else set_last_error( ERROR_INVALID_OPERATION );
 
     release_object( &request->hdr );
     if (ret) set_last_error( ERROR_SUCCESS );
@@ -2310,7 +2309,7 @@ static BOOL handle_authorization( request_t *request, DWORD status )
     if (do_authorization( request, target, first )) return TRUE;
 
     schemes &= ~first;
-    for (i = 0; i < num_auth_schemes; i++)
+    for (i = 0; i < ARRAY_SIZE( auth_schemes ); i++)
     {
         if (!(schemes & auth_schemes[i].scheme)) continue;
         if (do_authorization( request, target, auth_schemes[i].scheme )) return TRUE;
@@ -3121,7 +3120,7 @@ void release_typelib(void)
 {
     unsigned i;
 
-    for (i = 0; i < sizeof(winhttp_typeinfo)/sizeof(*winhttp_typeinfo); i++)
+    for (i = 0; i < ARRAY_SIZE(winhttp_typeinfo); i++)
         if (winhttp_typeinfo[i])
             ITypeInfo_Release(winhttp_typeinfo[i]);
 
@@ -3447,7 +3446,7 @@ static HRESULT WINAPI winhttp_request_Open(
         goto error;
     }
 
-    len = sizeof(httpsW) / sizeof(WCHAR);
+    len = ARRAY_SIZE( httpsW );
     if (uc.dwSchemeLength == len && !memcmp( uc.lpszScheme, httpsW, len * sizeof(WCHAR) ))
     {
         flags |= WINHTTP_FLAG_SECURE;

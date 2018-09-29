@@ -79,6 +79,13 @@ typedef struct
     AUTOCOMPLETEOPTIONS options;
 } IAutoCompleteImpl;
 
+enum autoappend_flag
+{
+    autoappend_flag_yes,
+    autoappend_flag_no,
+    autoappend_flag_displayempty
+};
+
 static const WCHAR autocomplete_propertyW[] = {'W','i','n','e',' ','A','u','t','o',
                                                'c','o','m','p','l','e','t','e',' ',
                                                'c','o','n','t','r','o','l',0};
@@ -91,6 +98,14 @@ static inline IAutoCompleteImpl *impl_from_IAutoComplete2(IAutoComplete2 *iface)
 static inline IAutoCompleteImpl *impl_from_IAutoCompleteDropDown(IAutoCompleteDropDown *iface)
 {
     return CONTAINING_RECORD(iface, IAutoCompleteImpl, IAutoCompleteDropDown_iface);
+}
+
+static void set_text_and_selection(IAutoCompleteImpl *ac, HWND hwnd, WCHAR *text, WPARAM start, LPARAM end)
+{
+    /* Send it directly to the edit control to match Windows behavior */
+    WNDPROC proc = ac->wpOrigEditProc;
+    if (CallWindowProcW(proc, hwnd, WM_SETTEXT, 0, (LPARAM)text))
+        CallWindowProcW(proc, hwnd, EM_SETSEL, start, end);
 }
 
 static size_t format_quick_complete(WCHAR *dst, const WCHAR *qc, const WCHAR *str, size_t str_len)
@@ -119,6 +134,173 @@ static size_t format_quick_complete(WCHAR *dst, const WCHAR *qc, const WCHAR *st
     return dst - base;
 }
 
+static LRESULT change_selection(IAutoCompleteImpl *ac, HWND hwnd, UINT key)
+{
+    INT count = SendMessageW(ac->hwndListBox, LB_GETCOUNT, 0, 0);
+    INT sel = SendMessageW(ac->hwndListBox, LB_GETCURSEL, 0, 0);
+    if (key == VK_PRIOR || key == VK_NEXT)
+    {
+        if (sel < 0)
+            sel = (key == VK_PRIOR) ? count - 1 : 0;
+        else
+        {
+            INT base = SendMessageW(ac->hwndListBox, LB_GETTOPINDEX, 0, 0);
+            INT pgsz = SendMessageW(ac->hwndListBox, LB_GETLISTBOXINFO, 0, 0);
+            pgsz = max(pgsz - 1, 1);
+            if (key == VK_PRIOR)
+            {
+                if (sel == 0)
+                    sel = -1;
+                else
+                {
+                    if (sel == base) base -= min(base, pgsz);
+                    sel = base;
+                }
+            }
+            else
+            {
+                if (sel == count - 1)
+                    sel = -1;
+                else
+                {
+                    base += pgsz;
+                    if (sel >= base) base += pgsz;
+                    sel = min(base, count - 1);
+                }
+            }
+        }
+    }
+    else if (key == VK_UP)
+        sel = ((sel - 1) < -1) ? count - 1 : sel - 1;
+    else
+        sel = ((sel + 1) >= count) ? -1 : sel + 1;
+
+    SendMessageW(ac->hwndListBox, LB_SETCURSEL, sel, 0);
+    if (sel >= 0)
+    {
+        WCHAR *msg;
+        UINT len = SendMessageW(ac->hwndListBox, LB_GETTEXTLEN, sel, 0);
+        if (!(msg = heap_alloc((len + 1) * sizeof(WCHAR))))
+            return 0;
+        len = SendMessageW(ac->hwndListBox, LB_GETTEXT, sel, (LPARAM)msg);
+        set_text_and_selection(ac, hwnd, msg, len, len);
+        heap_free(msg);
+    }
+    else
+    {
+        UINT len = strlenW(ac->txtbackup);
+        set_text_and_selection(ac, hwnd, ac->txtbackup, len, len);
+    }
+    return 0;
+}
+
+static void autoappend_str(IAutoCompleteImpl *ac, WCHAR *text, UINT len, WCHAR *str, HWND hwnd)
+{
+    DWORD sel_start;
+    WCHAR *tmp;
+    size_t size;
+
+    /* Don't auto-append unless the caret is at the end */
+    SendMessageW(hwnd, EM_GETSEL, (WPARAM)&sel_start, 0);
+    if (sel_start != len)
+        return;
+
+    /* The character capitalization can be different,
+       so merge text and str into a new string */
+    size = len + strlenW(&str[len]) + 1;
+
+    if ((tmp = heap_alloc(size * sizeof(*tmp))))
+    {
+        memcpy(tmp, text, len * sizeof(*tmp));
+        memcpy(&tmp[len], &str[len], (size - len) * sizeof(*tmp));
+    }
+    else tmp = str;
+
+    set_text_and_selection(ac, hwnd, tmp, len, size - 1);
+    if (tmp != str)
+        heap_free(tmp);
+}
+
+static void autocomplete_text(IAutoCompleteImpl *ac, HWND hwnd, enum autoappend_flag flag)
+{
+    HRESULT hr;
+    WCHAR *text;
+    UINT cpt, size, len = SendMessageW(hwnd, WM_GETTEXTLENGTH, 0, 0);
+
+    if (flag != autoappend_flag_displayempty && len == 0)
+    {
+        if (ac->options & ACO_AUTOSUGGEST)
+            ShowWindow(ac->hwndListBox, SW_HIDE);
+        return;
+    }
+
+    size = len + 1;
+    if (!(text = heap_alloc(size * sizeof(WCHAR))))
+        return;
+    len = SendMessageW(hwnd, WM_GETTEXT, size, (LPARAM)text);
+    if (len + 1 != size)
+        text = heap_realloc(text, (len + 1) * sizeof(WCHAR));
+
+    /* Set txtbackup to point to text itself (which must not be released) */
+    heap_free(ac->txtbackup);
+    ac->txtbackup = text;
+
+    if (ac->options & ACO_AUTOSUGGEST)
+    {
+        SendMessageW(ac->hwndListBox, WM_SETREDRAW, FALSE, 0);
+        SendMessageW(ac->hwndListBox, LB_RESETCONTENT, 0, 0);
+    }
+    IEnumString_Reset(ac->enumstr);
+    for (cpt = 0;;)
+    {
+        LPOLESTR strs = NULL;
+        ULONG fetched;
+
+        hr = IEnumString_Next(ac->enumstr, 1, &strs, &fetched);
+        if (hr != S_OK)
+            break;
+
+        if (!strncmpiW(text, strs, len))
+        {
+            if (cpt == 0 && flag == autoappend_flag_yes)
+            {
+                autoappend_str(ac, text, len, strs, hwnd);
+                if (!(ac->options & ACO_AUTOSUGGEST))
+                {
+                    CoTaskMemFree(strs);
+                    break;
+                }
+            }
+
+            if (ac->options & ACO_AUTOSUGGEST)
+                SendMessageW(ac->hwndListBox, LB_ADDSTRING, 0, (LPARAM)strs);
+
+            cpt++;
+        }
+
+        CoTaskMemFree(strs);
+    }
+
+    if (ac->options & ACO_AUTOSUGGEST)
+    {
+        if (cpt)
+        {
+            RECT r;
+            UINT height = SendMessageW(ac->hwndListBox, LB_GETITEMHEIGHT, 0, 0);
+            SendMessageW(ac->hwndListBox, LB_CARETOFF, 0, 0);
+            GetWindowRect(hwnd, &r);
+            /* It seems that Windows XP displays 7 lines at most
+               and otherwise displays a vertical scroll bar */
+            SetWindowPos(ac->hwndListBox, HWND_TOP,
+                         r.left, r.bottom + 1, r.right - r.left, height * min(cpt + 1, 7),
+                         SWP_SHOWWINDOW );
+            SendMessageW(ac->hwndListBox, WM_SETREDRAW, TRUE, 0);
+        }
+        else
+            ShowWindow(ac->hwndListBox, SW_HIDE);
+    }
+}
+
 static void destroy_autocomplete_object(IAutoCompleteImpl *ac)
 {
     ac->hwndEdit = NULL;
@@ -128,17 +310,81 @@ static void destroy_autocomplete_object(IAutoCompleteImpl *ac)
 }
 
 /*
+   Helper for ACEditSubclassProc
+*/
+static LRESULT ACEditSubclassProc_KeyDown(IAutoCompleteImpl *ac, HWND hwnd, UINT uMsg,
+                                          WPARAM wParam, LPARAM lParam)
+{
+    switch (wParam)
+    {
+        case VK_RETURN:
+            /* If quickComplete is set and control is pressed, replace the string */
+            if (ac->quickComplete && (GetKeyState(VK_CONTROL) & 0x8000))
+            {
+                WCHAR *text, *buf;
+                size_t sz;
+                UINT len = SendMessageW(hwnd, WM_GETTEXTLENGTH, 0, 0);
+                if (!(text = heap_alloc((len + 1) * sizeof(WCHAR))))
+                    return 0;
+                len = SendMessageW(hwnd, WM_GETTEXT, len + 1, (LPARAM)text);
+                sz = strlenW(ac->quickComplete) + 1 + len;
+
+                if ((buf = heap_alloc(sz * sizeof(WCHAR))))
+                {
+                    len = format_quick_complete(buf, ac->quickComplete, text, len);
+                    set_text_and_selection(ac, hwnd, buf, 0, len);
+                    heap_free(buf);
+                }
+
+                if (ac->options & ACO_AUTOSUGGEST)
+                    ShowWindow(ac->hwndListBox, SW_HIDE);
+                heap_free(text);
+                return 0;
+            }
+
+            if (ac->options & ACO_AUTOSUGGEST)
+                ShowWindow(ac->hwndListBox, SW_HIDE);
+            break;
+        case VK_UP:
+        case VK_DOWN:
+        case VK_PRIOR:
+        case VK_NEXT:
+            /* Two cases here:
+               - if the listbox is not visible and ACO_UPDOWNKEYDROPSLIST is
+                 set, display it with all the entries, without selecting any
+               - if the listbox is visible, change the selection
+            */
+            if (!(ac->options & ACO_AUTOSUGGEST))
+                break;
+
+            if (!IsWindowVisible(ac->hwndListBox))
+            {
+                if (ac->options & ACO_UPDOWNKEYDROPSLIST)
+                {
+                    autocomplete_text(ac, hwnd, autoappend_flag_displayempty);
+                    return 0;
+                }
+            }
+            else
+                return change_selection(ac, hwnd, wParam);
+            break;
+        case VK_DELETE:
+        {
+            LRESULT ret = CallWindowProcW(ac->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
+            autocomplete_text(ac, hwnd, autoappend_flag_no);
+            return ret;
+        }
+    }
+    return CallWindowProcW(ac->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
+}
+
+/*
   Window procedure for autocompletion
  */
 static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     IAutoCompleteImpl *This = GetPropW(hwnd, autocomplete_propertyW);
-    HRESULT hr;
-    WCHAR *hwndText;
-    UINT len, size, cpt;
-    RECT r;
-    BOOL displayall = FALSE;
-    int height, sel;
+    LRESULT ret;
 
     if (!This->enabled) return CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
 
@@ -147,176 +393,51 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
         case CB_SHOWDROPDOWN:
             if (This->options & ACO_AUTOSUGGEST)
                 ShowWindow(This->hwndListBox, SW_HIDE);
-            break;
+            return 0;
         case WM_KILLFOCUS:
             if ((This->options & ACO_AUTOSUGGEST) && ((HWND)wParam != This->hwndListBox))
             {
                 ShowWindow(This->hwndListBox, SW_HIDE);
             }
-            return CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
-        case WM_KEYUP:
-            len = SendMessageW(hwnd, WM_GETTEXTLENGTH, 0, 0);
-            size = len + 1;
-            if (!(hwndText = heap_alloc(size * sizeof(WCHAR))))
-                return 0;
-            len = SendMessageW(hwnd, WM_GETTEXT, size, (LPARAM)hwndText);
-
-            switch(wParam) {
-                case VK_RETURN:
-                    /* If quickComplete is set and control is pressed, replace the string */
-                    if (This->quickComplete && (GetKeyState(VK_CONTROL) & 0x8000))
-                    {
-                        WCHAR *buf;
-                        size_t sz = strlenW(This->quickComplete) + 1 + len;
-                        if ((buf = heap_alloc(sz * sizeof(WCHAR))))
-                        {
-                            len = format_quick_complete(buf, This->quickComplete, hwndText, len);
-                            SendMessageW(hwnd, WM_SETTEXT, 0, (LPARAM)buf);
-                            SendMessageW(hwnd, EM_SETSEL, 0, len);
-                            heap_free(buf);
-                        }
-                    }
-
-                    if (This->options & ACO_AUTOSUGGEST)
-                        ShowWindow(This->hwndListBox, SW_HIDE);
-                    heap_free(hwndText);
-                    return 0;
-                case VK_LEFT:
-                case VK_RIGHT:
-                    heap_free(hwndText);
-                    return 0;
-                case VK_UP:
-                case VK_DOWN:
-                    /* Two cases here :
-                       - if the listbox is not visible, displays it
-                       with all the entries if the style ACO_UPDOWNKEYDROPSLIST
-                       is present but does not select anything.
-                       - if the listbox is visible, change the selection
-                    */
-                    if ( (This->options & (ACO_AUTOSUGGEST | ACO_UPDOWNKEYDROPSLIST))
-                         && (!IsWindowVisible(This->hwndListBox) && (! *hwndText)) )
-                    {
-                         /* We must display all the entries */
-                         displayall = TRUE;
-                    } else {
-                        heap_free(hwndText);
-                        if (IsWindowVisible(This->hwndListBox)) {
-                            int count;
-
-                            count = SendMessageW(This->hwndListBox, LB_GETCOUNT, 0, 0);
-                            /* Change the selection */
-                            sel = SendMessageW(This->hwndListBox, LB_GETCURSEL, 0, 0);
-                            if (wParam == VK_UP)
-                                sel = ((sel-1) < 0) ? count-1 : sel-1;
-                            else
-                                sel = ((sel+1) >= count) ? -1 : sel+1;
-                            SendMessageW(This->hwndListBox, LB_SETCURSEL, sel, 0);
-                            if (sel != -1) {
-                                WCHAR *msg;
-                                int len;
-
-                                len = SendMessageW(This->hwndListBox, LB_GETTEXTLEN, sel, 0);
-                                if (!(msg = heap_alloc((len + 1) * sizeof(WCHAR))))
-                                    return 0;
-                                len = SendMessageW(This->hwndListBox, LB_GETTEXT, sel, (LPARAM)msg);
-                                SendMessageW(hwnd, WM_SETTEXT, 0, (LPARAM)msg);
-                                SendMessageW(hwnd, EM_SETSEL, len, len);
-                                heap_free(msg);
-                            } else {
-                                UINT len;
-                                SendMessageW(hwnd, WM_SETTEXT, 0, (LPARAM)This->txtbackup);
-                                len = strlenW(This->txtbackup);
-                                SendMessageW(hwnd, EM_SETSEL, len, len);
-                            }
-                        }
-                        return 0;
-                    }
-                    break;
-                case VK_BACK:
-                case VK_DELETE:
-                    if ((! *hwndText) && (This->options & ACO_AUTOSUGGEST)) {
-                        heap_free(hwndText);
-                        ShowWindow(This->hwndListBox, SW_HIDE);
-                        return CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
-                    }
-                    break;
-            }
-
-            if (len + 1 != size)
-                hwndText = heap_realloc(hwndText, (len + 1) * sizeof(WCHAR));
-
-            SendMessageW(This->hwndListBox, LB_RESETCONTENT, 0, 0);
-
-            /* Set txtbackup to point to hwndText itself (which must not be released) */
-            heap_free(This->txtbackup);
-            This->txtbackup = hwndText;
-
-            if (!displayall && !len)
+            break;
+        case WM_KEYDOWN:
+            return ACEditSubclassProc_KeyDown(This, hwnd, uMsg, wParam, lParam);
+        case WM_CHAR:
+        case WM_UNICHAR:
+            /* Don't autocomplete at all on most control characters */
+            if (iscntrlW(wParam) && !(wParam >= '\b' && wParam <= '\r'))
                 break;
 
-            IEnumString_Reset(This->enumstr);
-            for(cpt = 0;;) {
-                LPOLESTR strs = NULL;
-                ULONG fetched;
-
-                hr = IEnumString_Next(This->enumstr, 1, &strs, &fetched);
-                if (hr != S_OK)
-                    break;
-
-                if (!strncmpiW(hwndText, strs, len)) {
-                    if (cpt == 0 && (This->options & ACO_AUTOAPPEND)) {
-                        WCHAR buffW[255];
-
-                        strcpyW(buffW, hwndText);
-                        strcatW(buffW, &strs[len]);
-                        SetWindowTextW(hwnd, buffW);
-                        SendMessageW(hwnd, EM_SETSEL, len, strlenW(strs));
-                        if (!(This->options & ACO_AUTOSUGGEST)) {
-                            CoTaskMemFree(strs);
-                            break;
-                        }
-                    }
-
-                    if (This->options & ACO_AUTOSUGGEST)
-                        SendMessageW(This->hwndListBox, LB_ADDSTRING, 0, (LPARAM)strs);
-
-                    cpt++;
-                }
-
-                CoTaskMemFree(strs);
-            }
-
-            if (This->options & ACO_AUTOSUGGEST) {
-                if (cpt) {
-                    height = SendMessageW(This->hwndListBox, LB_GETITEMHEIGHT, 0, 0);
-                    SendMessageW(This->hwndListBox, LB_CARETOFF, 0, 0);
-                    GetWindowRect(hwnd, &r);
-                    SetParent(This->hwndListBox, HWND_DESKTOP);
-                    /* It seems that Windows XP displays 7 lines at most
-                       and otherwise displays a vertical scroll bar */
-                    SetWindowPos(This->hwndListBox, HWND_TOP,
-                                 r.left, r.bottom + 1, r.right - r.left, min(height * 7, height*(cpt+1)),
-                                 SWP_SHOWWINDOW );
-                } else {
-                    ShowWindow(This->hwndListBox, SW_HIDE);
-                }
-            }
-
+            ret = CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
+            autocomplete_text(This, hwnd, (This->options & ACO_AUTOAPPEND) && wParam >= ' '
+                                          ? autoappend_flag_yes : autoappend_flag_no);
+            return ret;
+        case WM_SETTEXT:
+        case WM_CUT:
+        case WM_CLEAR:
+        case WM_UNDO:
+            ret = CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
+            autocomplete_text(This, hwnd, autoappend_flag_no);
+            return ret;
+        case WM_PASTE:
+            ret = CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
+            autocomplete_text(This, hwnd, autoappend_flag_yes);
+            return ret;
+        case WM_SETFONT:
+            if (This->hwndListBox)
+                SendMessageW(This->hwndListBox, WM_SETFONT, wParam, lParam);
             break;
         case WM_DESTROY:
         {
             WNDPROC proc = This->wpOrigEditProc;
 
-            RemovePropW(hwnd, autocomplete_propertyW);
             SetWindowLongPtrW(hwnd, GWLP_WNDPROC, (LONG_PTR)proc);
+            RemovePropW(hwnd, autocomplete_propertyW);
             destroy_autocomplete_object(This);
             return CallWindowProcW(proc, hwnd, uMsg, wParam, lParam);
         }
-        default:
-            return CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
     }
-
-    return 0;
+    return CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
 }
 
 static LRESULT APIENTRY ACLBoxSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -334,12 +455,11 @@ static LRESULT APIENTRY ACLBoxSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
             sel = SendMessageW(hwnd, LB_GETCURSEL, 0, 0);
             if (sel < 0)
                 break;
-            len = SendMessageW(This->hwndListBox, LB_GETTEXTLEN, sel, 0);
+            len = SendMessageW(hwnd, LB_GETTEXTLEN, sel, 0);
             if (!(msg = heap_alloc((len + 1) * sizeof(WCHAR))))
                 break;
             len = SendMessageW(hwnd, LB_GETTEXT, sel, (LPARAM)msg);
-            SendMessageW(This->hwndEdit, WM_SETTEXT, 0, (LPARAM)msg);
-            SendMessageW(This->hwndEdit, EM_SETSEL, 0, len);
+            set_text_and_selection(This, This->hwndEdit, msg, 0, len);
             ShowWindow(hwnd, SW_HIDE);
             heap_free(msg);
             break;
@@ -351,19 +471,22 @@ static LRESULT APIENTRY ACLBoxSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
 
 static void create_listbox(IAutoCompleteImpl *This)
 {
-    HWND hwndParent;
-
-    hwndParent = GetParent(This->hwndEdit);
-
     /* FIXME : The listbox should be resizable with the mouse. WS_THICKFRAME looks ugly */
     This->hwndListBox = CreateWindowExW(0, WC_LISTBOXW, NULL,
                                     WS_BORDER | WS_CHILD | WS_VSCROLL | LBS_HASSTRINGS | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT,
-                                    CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                                    hwndParent, NULL, shell32_hInstance, NULL );
+                                    0, 0, 0, 0, GetParent(This->hwndEdit), NULL, shell32_hInstance, NULL);
 
     if (This->hwndListBox) {
+        HFONT edit_font;
+
         This->wpOrigLBoxProc = (WNDPROC) SetWindowLongPtrW( This->hwndListBox, GWLP_WNDPROC, (LONG_PTR) ACLBoxSubclassProc);
         SetWindowLongPtrW( This->hwndListBox, GWLP_USERDATA, (LONG_PTR)This);
+        SetParent(This->hwndListBox, HWND_DESKTOP);
+
+        /* Use the same font as the edit control, as it gets destroyed before it anyway */
+        edit_font = (HFONT)SendMessageW(This->hwndEdit, WM_GETFONT, 0, 0);
+        if (edit_font)
+            SendMessageW(This->hwndListBox, WM_SETFONT, (WPARAM)edit_font, FALSE);
     }
     else
         This->options &= ~ACO_AUTOSUGGEST;

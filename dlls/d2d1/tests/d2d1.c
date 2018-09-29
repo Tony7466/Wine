@@ -774,29 +774,31 @@ static ID2D1RenderTarget *create_render_target(IDXGISurface *surface)
 }
 
 #define check_bitmap_surface(b, s, o) check_bitmap_surface_(__LINE__, b, s, o)
-static void check_bitmap_surface_(unsigned int line, ID2D1Bitmap1 *bitmap, BOOL has_surface, DWORD expected_options)
+static void check_bitmap_surface_(unsigned int line, ID2D1Bitmap *bitmap, BOOL has_surface, DWORD expected_options)
 {
     D2D1_BITMAP_OPTIONS options;
     IDXGISurface *surface;
+    ID2D1Bitmap1 *bitmap1;
     HRESULT hr;
 
-    options = ID2D1Bitmap1_GetOptions(bitmap);
+    hr = ID2D1Bitmap_QueryInterface(bitmap, &IID_ID2D1Bitmap1, (void **)&bitmap1);
+    if (FAILED(hr))
+        return;
+
+    options = ID2D1Bitmap1_GetOptions(bitmap1);
     ok_(__FILE__, line)(options == expected_options, "Unexpected bitmap options %#x, expected %#x.\n",
             options, expected_options);
 
     surface = (void *)0xdeadbeef;
-    hr = ID2D1Bitmap1_GetSurface(bitmap, &surface);
+    hr = ID2D1Bitmap1_GetSurface(bitmap1, &surface);
     if (has_surface)
     {
         D3D10_TEXTURE2D_DESC desc;
         ID3D10Texture2D *texture;
 
-    todo_wine
         ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to get bitmap surface, hr %#x.\n", hr);
         ok_(__FILE__, line)(!!surface, "Expected surface instance.\n");
 
-    if (SUCCEEDED(hr))
-    {
         /* Correlate with resource configuration. */
         hr = IDXGISurface_QueryInterface(surface, &IID_ID3D10Texture2D, (void **)&texture);
         ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to get texture pointer, hr %#x.\n", hr);
@@ -813,14 +815,13 @@ static void check_bitmap_surface_(unsigned int line, ID2D1Bitmap1 *bitmap, BOOL 
 
         IDXGISurface_Release(surface);
     }
-    }
     else
     {
-    todo_wine {
         ok_(__FILE__, line)(hr == D2DERR_INVALID_CALL, "Unexpected hr %#x.\n", hr);
         ok_(__FILE__, line)(!surface, "Unexpected surface instance.\n");
     }
-    }
+
+    ID2D1Bitmap1_Release(bitmap1);
 }
 
 static inline struct geometry_sink *impl_from_ID2D1SimplifiedGeometrySink(ID2D1SimplifiedGeometrySink *iface)
@@ -1655,6 +1656,7 @@ static void test_bitmap_brush(void)
     D2D1_RECT_F src_rect, dst_rect;
     D2D1_EXTEND_MODE extend_mode;
     IDXGISwapChain *swapchain;
+    ID2D1BitmapBrush1 *brush1;
     ID2D1BitmapBrush *brush;
     ID2D1RenderTarget *rt;
     ID3D10Device1 *device;
@@ -1875,6 +1877,49 @@ static void test_bitmap_brush(void)
     ok(SUCCEEDED(hr), "Failed to end draw, hr %#x.\n", hr);
     match = compare_surface(surface, "cf7b90ba7b139fdfbe9347e1907d635cfb4ed197");
     ok(match, "Surface does not match.\n");
+
+    if (SUCCEEDED(ID2D1BitmapBrush_QueryInterface(brush, &IID_ID2D1BitmapBrush1, (void **)&brush1)))
+    {
+        D2D1_INTERPOLATION_MODE interpolation_mode1;
+
+        interpolation_mode = ID2D1BitmapBrush1_GetInterpolationMode(brush1);
+        ok(interpolation_mode == D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+                "Unexpected interpolation mode %#x.\n", interpolation_mode);
+
+        interpolation_mode1 = ID2D1BitmapBrush1_GetInterpolationMode1(brush1);
+        ok(interpolation_mode1 == D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+                "Unexpected interpolation mode %#x.\n", interpolation_mode1);
+
+        ID2D1BitmapBrush1_SetInterpolationMode1(brush1, D2D1_INTERPOLATION_MODE_CUBIC);
+        interpolation_mode = ID2D1BitmapBrush1_GetInterpolationMode(brush1);
+        ok(interpolation_mode == D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,
+                "Unexpected interpolation mode %#x.\n", interpolation_mode);
+
+        interpolation_mode1 = ID2D1BitmapBrush1_GetInterpolationMode1(brush1);
+        ok(interpolation_mode1 == D2D1_INTERPOLATION_MODE_CUBIC,
+                "Unexpected interpolation mode %#x.\n", interpolation_mode1);
+
+        ID2D1BitmapBrush1_SetInterpolationMode1(brush1, 100);
+        interpolation_mode1 = ID2D1BitmapBrush1_GetInterpolationMode1(brush1);
+        ok(interpolation_mode1 == D2D1_INTERPOLATION_MODE_CUBIC,
+                "Unexpected interpolation mode %#x.\n", interpolation_mode1);
+
+        ID2D1BitmapBrush1_SetInterpolationMode(brush1, 100);
+        interpolation_mode1 = ID2D1BitmapBrush1_GetInterpolationMode1(brush1);
+        ok(interpolation_mode1 == D2D1_INTERPOLATION_MODE_CUBIC,
+                "Unexpected interpolation mode %#x.\n", interpolation_mode1);
+
+        ID2D1BitmapBrush1_SetInterpolationMode(brush1, D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR);
+        interpolation_mode = ID2D1BitmapBrush1_GetInterpolationMode(brush1);
+        ok(interpolation_mode == D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+                "Unexpected interpolation mode %#x.\n", interpolation_mode);
+
+        interpolation_mode1 = ID2D1BitmapBrush1_GetInterpolationMode1(brush1);
+        ok(interpolation_mode1 == D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+                "Unexpected interpolation mode %#x.\n", interpolation_mode1);
+
+        ID2D1BitmapBrush1_Release(brush1);
+    }
 
     ID2D1BitmapBrush_Release(brush);
     refcount = ID2D1Bitmap_Release(bitmap);
@@ -4078,6 +4123,7 @@ static void test_shared_bitmap(void)
     IWICImagingFactory *wic_factory;
     ID2D1Bitmap *bitmap1, *bitmap2;
     DXGI_SURFACE_DESC surface_desc;
+    D2D1_PIXEL_FORMAT pixel_format;
     D2D1_SIZE_U size = {4, 4};
     IDXGISurface1 *surface3;
     HWND window1, window2;
@@ -4132,12 +4178,14 @@ static void test_shared_bitmap(void)
     hr = ID2D1Factory_CreateDxgiSurfaceRenderTarget(factory1, surface1, &desc, &rt1);
     ok(SUCCEEDED(hr), "Failed to create render target, hr %#x.\n", hr);
     hr = ID2D1RenderTarget_CreateBitmap(rt1, size, NULL, 0, &bitmap_desc, &bitmap1);
+    check_bitmap_surface(bitmap1, TRUE, 0);
     ok(SUCCEEDED(hr), "Failed to create bitmap, hr %#x.\n", hr);
 
     hr = ID2D1Factory_CreateDxgiSurfaceRenderTarget(factory1, surface2, &desc, &rt2);
     ok(SUCCEEDED(hr), "Failed to create render target, hr %#x.\n", hr);
     hr = ID2D1RenderTarget_CreateSharedBitmap(rt2, &IID_ID2D1Bitmap, bitmap1, NULL, &bitmap2);
     ok(SUCCEEDED(hr), "Failed to create bitmap, hr %#x.\n", hr);
+    check_bitmap_surface(bitmap2, TRUE, 0);
     ID2D1Bitmap_Release(bitmap2);
     hr = ID2D1RenderTarget_CreateSharedBitmap(rt2, &IID_IUnknown, bitmap1, NULL, &bitmap2);
     ok(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
@@ -4206,6 +4254,7 @@ static void test_shared_bitmap(void)
     ok(SUCCEEDED(hr), "Failed to create render target, hr %#x.\n", hr);
     hr = ID2D1RenderTarget_CreateSharedBitmap(rt2, &IID_ID2D1Bitmap, bitmap1, NULL, &bitmap2);
     ok(SUCCEEDED(hr), "Failed to create bitmap, hr %#x.\n", hr);
+    check_bitmap_surface(bitmap2, FALSE, 0);
     ID2D1Bitmap_Release(bitmap2);
     ID2D1RenderTarget_Release(rt2);
 
@@ -4231,18 +4280,38 @@ static void test_shared_bitmap(void)
 
     if (SUCCEEDED(hr))
     {
-        ID2D1Bitmap1 *bitmap3;
+        static const struct bitmap_format_test
+        {
+            D2D1_PIXEL_FORMAT original;
+            D2D1_PIXEL_FORMAT result;
+            HRESULT hr;
+        }
+        bitmap_format_tests[] =
+        {
+            { { DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED },
+              { DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED } },
+
+            { { DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_IGNORE },
+              { DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE } },
+
+            { { DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_UNKNOWN }, { 0 }, WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT },
+
+            { { DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_UNKNOWN }, { 0 }, WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT },
+
+            { { DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE },
+              { DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE } },
+
+            { { DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_STRAIGHT }, { 0 }, WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT },
+            { { DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_STRAIGHT }, { 0 }, WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT },
+        };
+        unsigned int i;
 
         size = ID2D1Bitmap_GetPixelSize(bitmap2);
         hr = IDXGISurface_GetDesc(surface2, &surface_desc);
         ok(SUCCEEDED(hr), "Failed to get surface description, hr %#x.\n", hr);
         ok(size.width == surface_desc.Width && size.height == surface_desc.Height, "Got wrong bitmap size.\n");
 
-        hr = ID2D1Bitmap_QueryInterface(bitmap2, &IID_ID2D1Bitmap1, (void **)&bitmap3);
-        ok(SUCCEEDED(hr), "Failed to get ID2D1Bitmap1 pointer, hr %#x.\n", hr);
-
-        check_bitmap_surface(bitmap3, TRUE, D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW);
-        ID2D1Bitmap1_Release(bitmap3);
+        check_bitmap_surface(bitmap2, TRUE, D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW);
 
         ID2D1Bitmap_Release(bitmap2);
 
@@ -4254,6 +4323,26 @@ static void test_shared_bitmap(void)
 
             ID2D1Bitmap_Release(bitmap2);
             IDXGISurface1_Release(surface3);
+        }
+
+        for (i = 0; i < ARRAY_SIZE(bitmap_format_tests); ++i)
+        {
+            bitmap_desc.pixelFormat = bitmap_format_tests[i].original;
+
+            hr = ID2D1RenderTarget_CreateSharedBitmap(rt2, &IID_IDXGISurface, surface2, &bitmap_desc, &bitmap2);
+        todo_wine_if(i == 2 || i == 3 || i == 5 || i == 6)
+            ok(hr == bitmap_format_tests[i].hr, "%u: unexpected hr %#x.\n", i, hr);
+
+            if (SUCCEEDED(bitmap_format_tests[i].hr))
+            {
+                pixel_format = ID2D1Bitmap_GetPixelFormat(bitmap2);
+                ok(pixel_format.format == bitmap_format_tests[i].result.format, "%u: unexpected pixel format %#x.\n",
+                        i, pixel_format.format);
+                ok(pixel_format.alphaMode == bitmap_format_tests[i].result.alphaMode, "%u: unexpected alpha mode %d.\n",
+                        i, pixel_format.alphaMode);
+
+                ID2D1Bitmap_Release(bitmap2);
+            }
         }
     }
 
@@ -6661,9 +6750,12 @@ static void check_rt_bitmap_surface_(unsigned int line, ID2D1RenderTarget *rt, B
 {
     D2D1_BITMAP_PROPERTIES bitmap_desc;
     ID2D1RenderTarget *compatible_rt;
+    IWICImagingFactory *wic_factory;
     ID2D1DeviceContext *context;
-    ID2D1Bitmap1 *bitmap1;
+    ID2D1DCRenderTarget *dc_rt;
+    IWICBitmap *wic_bitmap;
     ID2D1Bitmap *bitmap;
+    ID2D1Image *target;
     D2D1_SIZE_U size;
     HRESULT hr;
 
@@ -6672,6 +6764,7 @@ static void check_rt_bitmap_surface_(unsigned int line, ID2D1RenderTarget *rt, B
         0x7f7f0000,
     };
 
+    /* Raw data bitmap. */
     set_size_u(&size, 1, 1);
     bitmap_desc.pixelFormat.format = DXGI_FORMAT_B8G8R8A8_UNORM;
     bitmap_desc.pixelFormat.alphaMode = D2D1_ALPHA_MODE_IGNORE;
@@ -6680,39 +6773,130 @@ static void check_rt_bitmap_surface_(unsigned int line, ID2D1RenderTarget *rt, B
     hr = ID2D1RenderTarget_CreateBitmap(rt, size, bitmap_data, sizeof(*bitmap_data), &bitmap_desc, &bitmap);
     ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to create bitmap, hr %#x.\n", hr);
 
-    hr = ID2D1Bitmap_QueryInterface(bitmap, &IID_ID2D1Bitmap1, (void **)&bitmap1);
-    ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to get ID2D1Bitmap1 interface, hr %#x.\n", hr);
+    check_bitmap_surface_(line, bitmap, has_surface, options);
 
-    check_bitmap_surface_(line, bitmap1, has_surface, options);
-
-    ID2D1Bitmap1_Release(bitmap1);
     ID2D1Bitmap_Release(bitmap);
 
-    if (FAILED(ID2D1RenderTarget_QueryInterface(rt, &IID_ID2D1DeviceContext, (void **)&context)))
+    /* WIC bitmap. */
+    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+
+    hr = CoCreateInstance(&CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER,
+            &IID_IWICImagingFactory, (void **)&wic_factory);
+    ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to create WIC imaging factory, hr %#x.\n", hr);
+
+    hr = IWICImagingFactory_CreateBitmap(wic_factory, 16, 16,
+            &GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnDemand, &wic_bitmap);
+    ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to create WIC bitmap, hr %#x.\n", hr);
+    IWICImagingFactory_Release(wic_factory);
+
+    hr = ID2D1RenderTarget_CreateBitmapFromWicBitmap(rt, (IWICBitmapSource *)wic_bitmap, NULL, &bitmap);
+    ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to create bitmap from WIC source, hr %#x.\n", hr);
+
+    check_bitmap_surface_(line, bitmap, has_surface, options);
+
+    ID2D1Bitmap_Release(bitmap);
+
+    CoUninitialize();
+
+    /* Compatible target follows its parent. */
+    hr = ID2D1RenderTarget_QueryInterface(rt, &IID_ID2D1DeviceContext, (void **)&context);
+    ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to get device context, hr %#x.\n", hr);
+
+    dc_rt = NULL;
+    ID2D1RenderTarget_QueryInterface(rt, &IID_ID2D1DCRenderTarget, (void **)&dc_rt);
+
+    bitmap = NULL;
+    target = NULL;
+    ID2D1DeviceContext_GetTarget(context, &target);
+    if (target && FAILED(ID2D1Image_QueryInterface(target, &IID_ID2D1Bitmap, (void **)&bitmap)))
     {
-        /* Compatible target follows its parent. */
+        ID2D1Image_Release(target);
+        target = NULL;
+    }
+    if (bitmap)
+    {
+        D2D1_PIXEL_FORMAT rt_format, bitmap_format;
+
+        rt_format = ID2D1RenderTarget_GetPixelFormat(rt);
+        bitmap_format = ID2D1Bitmap_GetPixelFormat(bitmap);
+        ok_(__FILE__, line)(!memcmp(&rt_format, &bitmap_format, sizeof(rt_format)), "Unexpected bitmap format.\n");
+
+        ID2D1Bitmap_Release(bitmap);
+    }
+
+    /* Pixel format is not defined until target is set, for DC target it's specified on creation. */
+    if (target || dc_rt)
+    {
+        ID2D1Device *device, *device2;
+        ID2D1DeviceContext *context2;
+
+        ID2D1DeviceContext_GetDevice(context, &device);
+
         hr = ID2D1RenderTarget_CreateCompatibleRenderTarget(rt, NULL, NULL, NULL,
                 D2D1_COMPATIBLE_RENDER_TARGET_OPTIONS_NONE, (ID2D1BitmapRenderTarget **)&compatible_rt);
         ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to create compatible render target, hr %#x.\n", hr);
 
+        hr = ID2D1RenderTarget_QueryInterface(compatible_rt, &IID_ID2D1DeviceContext, (void **)&context2);
+        ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to get device context, hr %#x.\n", hr);
+
+        ID2D1DeviceContext_GetDevice(context2, &device2);
+        ok_(__FILE__, line)(device == device2, "Unexpected device.\n");
+
+        ID2D1Device_Release(device);
+        ID2D1Device_Release(device2);
+
+        ID2D1DeviceContext_Release(context2);
+
         hr = ID2D1RenderTarget_CreateBitmap(compatible_rt, size, bitmap_data, sizeof(*bitmap_data), &bitmap_desc, &bitmap);
         ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to create bitmap, hr %#x.\n", hr);
 
-        hr = ID2D1Bitmap_QueryInterface(bitmap, &IID_ID2D1Bitmap1, (void **)&bitmap1);
-        ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to get ID2D1Bitmap1 interface, hr %#x.\n", hr);
-
-        check_bitmap_surface_(line, bitmap1, has_surface, options);
+        check_bitmap_surface_(line, bitmap, has_surface, options);
         ID2D1RenderTarget_Release(compatible_rt);
 
-        ID2D1Bitmap1_Release(bitmap1);
         ID2D1Bitmap_Release(bitmap);
     }
     else
-        ID2D1DeviceContext_Release(context);
+    {
+        hr = ID2D1RenderTarget_CreateCompatibleRenderTarget(rt, NULL, NULL, NULL,
+                 D2D1_COMPATIBLE_RENDER_TARGET_OPTIONS_NONE, (ID2D1BitmapRenderTarget **)&compatible_rt);
+    todo_wine
+        ok_(__FILE__, line)(hr == WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT, "Unexpected hr %#x.\n", hr);
+    }
+
+    ID2D1DeviceContext_Release(context);
+    if (target)
+        ID2D1Image_Release(target);
+    if (dc_rt)
+        ID2D1DCRenderTarget_Release(dc_rt);
 }
 
 static void test_bitmap_surface(void)
 {
+    static const struct bitmap_format_test
+    {
+        D2D1_PIXEL_FORMAT original;
+        D2D1_PIXEL_FORMAT result;
+        HRESULT hr;
+    }
+    bitmap_format_tests[] =
+    {
+        { { DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED },
+          { DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED } },
+
+        { { DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_STRAIGHT }, { 0 }, WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT },
+
+        { { DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_IGNORE },
+          { DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE } },
+
+        { { DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_UNKNOWN }, { 0 }, WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT },
+
+        { { DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_UNKNOWN }, { 0 }, WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT },
+
+        { { DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE },
+          { DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE } },
+
+        { { DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_STRAIGHT }, { 0 }, WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT },
+    };
     D2D1_HWND_RENDER_TARGET_PROPERTIES hwnd_rt_desc;
     D2D1_RENDER_TARGET_PROPERTIES rt_desc;
     D2D1_BITMAP_PROPERTIES1 bitmap_desc;
@@ -6725,6 +6909,8 @@ static void test_bitmap_surface(void)
     IDXGISurface *surface;
     ID2D1Bitmap1 *bitmap;
     ID2D1Device *device;
+    ID2D1Image *target;
+    unsigned int i;
     HWND window;
     HRESULT hr;
 
@@ -6752,7 +6938,23 @@ static void test_bitmap_surface(void)
     rt = create_render_target(surface);
     ok(!!rt, "Failed to create render target.\n");
 
+    hr = ID2D1RenderTarget_QueryInterface(rt, &IID_ID2D1DeviceContext, (void **)&device_context);
+    ok(SUCCEEDED(hr), "Failed to get device context, hr %#x.\n", hr);
+
+    bitmap = NULL;
+    ID2D1DeviceContext_GetTarget(device_context, (ID2D1Image **)&bitmap);
+todo_wine
+    ok(!!bitmap, "Unexpected target.\n");
+
+if (bitmap)
+{
+    check_bitmap_surface((ID2D1Bitmap *)bitmap, TRUE, D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW);
+    ID2D1Bitmap1_Release(bitmap);
+}
     check_rt_bitmap_surface(rt, TRUE, D2D1_BITMAP_OPTIONS_NONE);
+
+    ID2D1DeviceContext_Release(device_context);
+
     ID2D1RenderTarget_Release(rt);
 
     /* Bitmap created from DXGI surface. */
@@ -6768,18 +6970,44 @@ todo_wine
 
 if (SUCCEEDED(hr))
 {
-    memset(&bitmap_desc, 0, sizeof(bitmap_desc));
-    bitmap_desc.pixelFormat.format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    bitmap_desc.pixelFormat.alphaMode = D2D1_ALPHA_MODE_IGNORE;
-    bitmap_desc.dpiX = 96.0f;
-    bitmap_desc.dpiY = 96.0f;
+    for (i = 0; i < ARRAY_SIZE(bitmap_format_tests); ++i)
+    {
+        D2D1_PIXEL_FORMAT pixel_format;
+
+        memset(&bitmap_desc, 0, sizeof(bitmap_desc));
+        bitmap_desc.pixelFormat = bitmap_format_tests[i].original;
+        bitmap_desc.bitmapOptions = D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW;
+
+        hr = ID2D1DeviceContext_CreateBitmapFromDxgiSurface(device_context, surface, &bitmap_desc, &bitmap);
+        ok(hr == bitmap_format_tests[i].hr, "%u: unexpected hr %#x.\n", i, hr);
+
+        if (SUCCEEDED(hr))
+        {
+            pixel_format = ID2D1Bitmap1_GetPixelFormat(bitmap);
+
+            ok(pixel_format.format == bitmap_format_tests[i].result.format, "%u: unexpected pixel format %#x.\n",
+                    i, pixel_format.format);
+            ok(pixel_format.alphaMode == bitmap_format_tests[i].result.alphaMode, "%u: unexpected alpha mode %d.\n",
+                    i, pixel_format.alphaMode);
+
+            ID2D1Bitmap1_Release(bitmap);
+        }
+    }
+
     hr = ID2D1DeviceContext_CreateBitmapFromDxgiSurface(device_context, surface, NULL, &bitmap);
     ok(SUCCEEDED(hr), "Failed to create a bitmap, hr %#x.\n", hr);
 
-    check_bitmap_surface(bitmap, TRUE, D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW);
+    check_bitmap_surface((ID2D1Bitmap *)bitmap, TRUE, D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW);
+    check_rt_bitmap_surface((ID2D1RenderTarget *)device_context, TRUE, D2D1_BITMAP_OPTIONS_NONE);
+
+    ID2D1DeviceContext_SetTarget(device_context, (ID2D1Image *)bitmap);
+    ID2D1DeviceContext_GetTarget(device_context, &target);
+    ok(target == (ID2D1Image *)bitmap, "Unexpected target.\n");
+
     check_rt_bitmap_surface((ID2D1RenderTarget *)device_context, TRUE, D2D1_BITMAP_OPTIONS_NONE);
 
     ID2D1DeviceContext_Release(device_context);
+    ID2D1Bitmap1_Release(bitmap);
 }
     ID2D1Device_Release(device);
     IDXGIDevice_Release(dxgi_device);

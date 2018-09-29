@@ -233,8 +233,8 @@ static void STDMETHODCALLTYPE d2d_hwnd_render_target_DrawLine(ID2D1HwndRenderTar
 {
     struct d2d_hwnd_render_target *render_target = impl_from_ID2D1HwndRenderTarget(iface);
 
-    TRACE("iface %p, p0 {%.8e, %.8e}, p1 {%.8e, %.8e}, brush %p, stroke_width %.8e, stroke_style %p.\n",
-            iface, p0.x, p0.y, p1.x, p1.y, brush, stroke_width, stroke_style);
+    TRACE("iface %p, p0 %s, p1 %s, brush %p, stroke_width %.8e, stroke_style %p.\n",
+            iface, debug_d2d_point_2f(&p0), debug_d2d_point_2f(&p1), brush, stroke_width, stroke_style);
 
     ID2D1RenderTarget_DrawLine(render_target->dxgi_target, p0, p1, brush, stroke_width, stroke_style);
 }
@@ -379,8 +379,8 @@ static void STDMETHODCALLTYPE d2d_hwnd_render_target_DrawTextLayout(ID2D1HwndRen
 {
     struct d2d_hwnd_render_target *render_target = impl_from_ID2D1HwndRenderTarget(iface);
 
-    TRACE("iface %p, origin {%.8e, %.8e}, layout %p, brush %p, options %#x.\n",
-            iface, origin.x, origin.y, layout, brush, options);
+    TRACE("iface %p, origin %s, layout %p, brush %p, options %#x.\n",
+            iface, debug_d2d_point_2f(&origin), layout, brush, options);
 
     ID2D1RenderTarget_DrawTextLayout(render_target->dxgi_target, origin, layout, brush, options);
 }
@@ -391,8 +391,8 @@ static void STDMETHODCALLTYPE d2d_hwnd_render_target_DrawGlyphRun(ID2D1HwndRende
 {
     struct d2d_hwnd_render_target *render_target = impl_from_ID2D1HwndRenderTarget(iface);
 
-    TRACE("iface %p, baseline_origin {%.8e, %.8e}, glyph_run %p, brush %p, measuring_mode %#x.\n",
-            iface, baseline_origin.x, baseline_origin.y, glyph_run, brush, measuring_mode);
+    TRACE("iface %p, baseline_origin %s, glyph_run %p, brush %p, measuring_mode %#x.\n",
+            iface, debug_d2d_point_2f(&baseline_origin), glyph_run, brush, measuring_mode);
 
     ID2D1RenderTarget_DrawGlyphRun(render_target->dxgi_target,
             baseline_origin, glyph_run, brush, measuring_mode);
@@ -776,8 +776,8 @@ static const struct d2d_device_context_ops d2d_hwnd_render_target_ops =
     d2d_hwnd_render_target_present,
 };
 
-HRESULT d2d_hwnd_render_target_init(struct d2d_hwnd_render_target *render_target, ID2D1Factory *factory,
-        ID3D10Device1 *device, const D2D1_RENDER_TARGET_PROPERTIES *desc,
+HRESULT d2d_hwnd_render_target_init(struct d2d_hwnd_render_target *render_target, ID2D1Factory1 *factory,
+        ID3D10Device1 *d3d_device, const D2D1_RENDER_TARGET_PROPERTIES *desc,
         const D2D1_HWND_RENDER_TARGET_PROPERTIES *hwnd_rt_desc)
 {
     D2D1_RENDER_TARGET_PROPERTIES dxgi_rt_desc;
@@ -786,6 +786,7 @@ HRESULT d2d_hwnd_render_target_init(struct d2d_hwnd_render_target *render_target
     IDXGIFactory *dxgi_factory;
     IDXGISurface *dxgi_surface;
     IDXGIDevice *dxgi_device;
+    ID2D1Device *device;
     HRESULT hr;
 
     if (!IsWindow(hwnd_rt_desc->hwnd))
@@ -795,7 +796,7 @@ HRESULT d2d_hwnd_render_target_init(struct d2d_hwnd_render_target *render_target
     render_target->hwnd = hwnd_rt_desc->hwnd;
     render_target->sync_interval = hwnd_rt_desc->presentOptions & D2D1_PRESENT_OPTIONS_IMMEDIATELY ? 0 : 1;
 
-    if (FAILED(hr = ID3D10Device1_QueryInterface(device, &IID_IDXGIDevice, (void **)&dxgi_device)))
+    if (FAILED(hr = ID3D10Device1_QueryInterface(d3d_device, &IID_IDXGIDevice, (void **)&dxgi_device)))
     {
         WARN("Failed to get IDXGIDevice interface, hr %#x.\n", hr);
         return hr;
@@ -819,7 +820,7 @@ HRESULT d2d_hwnd_render_target_init(struct d2d_hwnd_render_target *render_target
 
     dxgi_rt_desc = *desc;
     if (dxgi_rt_desc.dpiX == 0.0f && dxgi_rt_desc.dpiY == 0.0f)
-        ID2D1Factory_GetDesktopDpi(factory, &dxgi_rt_desc.dpiX, &dxgi_rt_desc.dpiY);
+        ID2D1Factory1_GetDesktopDpi(factory, &dxgi_rt_desc.dpiX, &dxgi_rt_desc.dpiY);
 
     if (dxgi_rt_desc.pixelFormat.format == DXGI_FORMAT_UNKNOWN)
     {
@@ -844,7 +845,7 @@ HRESULT d2d_hwnd_render_target_init(struct d2d_hwnd_render_target *render_target
         DXGI_SWAP_EFFECT_SEQUENTIAL : DXGI_SWAP_EFFECT_DISCARD;
     swapchain_desc.Flags = DXGI_SWAP_CHAIN_FLAG_GDI_COMPATIBLE;
 
-    hr = IDXGIFactory_CreateSwapChain(dxgi_factory, (IUnknown *)device, &swapchain_desc, &render_target->swapchain);
+    hr = IDXGIFactory_CreateSwapChain(dxgi_factory, (IUnknown *)d3d_device, &swapchain_desc, &render_target->swapchain);
     IDXGIFactory_Release(dxgi_factory);
     if (FAILED(hr))
     {
@@ -860,10 +861,30 @@ HRESULT d2d_hwnd_render_target_init(struct d2d_hwnd_render_target *render_target
     }
 
     render_target->ID2D1HwndRenderTarget_iface.lpVtbl = &d2d_hwnd_render_target_vtbl;
-    hr = d2d_d3d_create_render_target(factory, dxgi_surface,
+
+    if (FAILED(hr = IDXGISurface_GetDevice(dxgi_surface, &IID_IDXGIDevice, (void **)&dxgi_device)))
+    {
+        WARN("Failed to get DXGI device, hr %#X.\n", hr);
+        IDXGISurface_Release(dxgi_surface);
+        IDXGISwapChain_Release(render_target->swapchain);
+        return hr;
+    }
+
+    hr = ID2D1Factory1_CreateDevice(factory, dxgi_device, &device);
+    IDXGIDevice_Release(dxgi_device);
+    if (FAILED(hr))
+    {
+        WARN("Failed to create D2D device, hr %#X.\n", hr);
+        IDXGISurface_Release(dxgi_surface);
+        IDXGISwapChain_Release(render_target->swapchain);
+        return hr;
+    }
+
+    hr = d2d_d3d_create_render_target(device, dxgi_surface,
             (IUnknown *)&render_target->ID2D1HwndRenderTarget_iface, &d2d_hwnd_render_target_ops,
             &dxgi_rt_desc, (void **)&render_target->dxgi_inner);
     IDXGISurface_Release(dxgi_surface);
+    ID2D1Device_Release(device);
     if (FAILED(hr))
     {
         WARN("Failed to create DXGI surface render target, hr %#x.\n", hr);

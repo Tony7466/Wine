@@ -39,7 +39,8 @@ static void resource_check_usage(DWORD usage)
             | WINED3DUSAGE_SCRATCH
             | WINED3DUSAGE_PRIVATE
             | WINED3DUSAGE_LEGACY_CUBEMAP
-            | WINED3DUSAGE_TEXTURE;
+            | WINED3DUSAGE_TEXTURE
+            | ~WINED3DUSAGE_MASK;
 
     /* WINED3DUSAGE_WRITEONLY is supposed to result in write-combined mappings
      * being returned. OpenGL doesn't give us explicit control over that, but
@@ -60,6 +61,7 @@ HRESULT resource_init(struct wined3d_resource *resource, struct wined3d_device *
         unsigned int size, void *parent, const struct wined3d_parent_ops *parent_ops,
         const struct wined3d_resource_ops *resource_ops)
 {
+    const struct wined3d_d3d_info *d3d_info = &device->adapter->d3d_info;
     enum wined3d_gl_resource_type base_type = WINED3D_GL_RES_TYPE_COUNT;
     enum wined3d_gl_resource_type gl_type = WINED3D_GL_RES_TYPE_COUNT;
     const struct wined3d_gl_info *gl_info = &device->adapter->gl_info;
@@ -129,7 +131,7 @@ HRESULT resource_init(struct wined3d_resource *resource, struct wined3d_device *
             continue;
         }
         if (((width & (width - 1)) || (height & (height - 1)))
-                && !gl_info->supported[ARB_TEXTURE_NON_POWER_OF_TWO]
+                && !d3d_info->texture_npot
                 && !gl_info->supported[WINED3D_GL_NORMALIZED_TEXRECT]
                 && gl_type == WINED3D_GL_RES_TYPE_TEX_2D)
         {
@@ -478,7 +480,7 @@ void wined3d_resource_update_draw_binding(struct wined3d_resource *resource)
     }
 }
 
-const struct wined3d_format *wined3d_resource_get_decompress_format(struct wined3d_resource *resource)
+const struct wined3d_format *wined3d_resource_get_decompress_format(const struct wined3d_resource *resource)
 {
     const struct wined3d_adapter *adapter = resource->device->adapter;
     if (resource->format_flags & (WINED3DFMT_FLAG_SRGB_READ | WINED3DFMT_FLAG_SRGB_WRITE)

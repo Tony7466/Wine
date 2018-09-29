@@ -671,6 +671,8 @@ void wined3d_cs_emit_clear_rendertarget_view(struct wined3d_cs *cs, struct wined
     wined3d_resource_acquire(view->resource);
 
     cs->ops->submit(cs, WINED3D_CS_QUEUE_DEFAULT);
+    if (flags & WINED3DCLEAR_SYNCHRONOUS)
+        cs->ops->finish(cs, WINED3D_CS_QUEUE_DEFAULT);
 }
 
 static void acquire_shader_resources(const struct wined3d_state *state, unsigned int shader_mask)
@@ -1984,7 +1986,10 @@ static void wined3d_cs_exec_query_issue(struct wined3d_cs *cs, const void *data)
 
     if (poll && list_empty(&query->poll_list_entry))
     {
-        list_add_tail(&cs->query_poll_list, &query->poll_list_entry);
+        if (query->buffer_object)
+            InterlockedIncrement(&query->counter_retrieved);
+        else
+            list_add_tail(&cs->query_poll_list, &query->poll_list_entry);
         return;
     }
 
