@@ -196,6 +196,26 @@ static BOOL has_owned_popups( HWND hwnd )
     return result.found;
 }
 
+
+/***********************************************************************
+ *              alloc_win_data
+ */
+static struct x11drv_win_data *alloc_win_data( Display *display, HWND hwnd )
+{
+    struct x11drv_win_data *data;
+
+    if ((data = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*data))))
+    {
+        data->display = display;
+        data->vis = default_visual;
+        data->hwnd = hwnd;
+        EnterCriticalSection( &win_data_section );
+        XSaveContext( gdi_display, (XID)hwnd, win_data_context, (char *)data );
+    }
+    return data;
+}
+
+
 /***********************************************************************
  *		is_window_managed
  *
@@ -1418,14 +1438,23 @@ static Window get_dummy_parent(void)
 /**********************************************************************
  *		create_client_window
  */
-Window create_client_window( struct x11drv_win_data *data, const XVisualInfo *visual )
+Window create_client_window( HWND hwnd, const XVisualInfo *visual )
 {
     Window dummy_parent = get_dummy_parent();
+    struct x11drv_win_data *data = get_win_data( hwnd );
     XSetWindowAttributes attr;
-    int x = data->client_rect.left - data->whole_rect.left;
-    int y = data->client_rect.top - data->whole_rect.top;
-    int cx = min( max( 1, data->client_rect.right - data->client_rect.left ), 65535 );
-    int cy = min( max( 1, data->client_rect.bottom - data->client_rect.top ), 65535 );
+    Window ret;
+    int x, y, cx, cy;
+
+    if (!data)
+    {
+        /* explicitly create data for HWND_MESSAGE windows since they can be used for OpenGL */
+        HWND parent = GetAncestor( hwnd, GA_PARENT );
+        if (parent == GetDesktopWindow() || GetAncestor( parent, GA_PARENT )) return 0;
+        if (!(data = alloc_win_data( thread_init_display(), hwnd ))) return 0;
+        GetClientRect( hwnd, &data->client_rect );
+        data->window_rect = data->whole_rect = data->client_rect;
+    }
 
     if (data->client_window)
     {
@@ -1445,18 +1474,26 @@ Window create_client_window( struct x11drv_win_data *data, const XVisualInfo *vi
     attr.backing_store = NotUseful;
     attr.border_pixel = 0;
 
-    data->client_window = XCreateWindow( gdi_display, data->whole_window, x, y, cx, cy,
-                                         0, default_visual.depth, InputOutput, visual->visual,
-                                         CWBitGravity | CWWinGravity | CWBackingStore |
-                                         CWColormap | CWBorderPixel, &attr );
-    if (!data->client_window) return 0;
-    TRACE( "%p xwin %lx/%lx\n", data->hwnd, data->whole_window, data->client_window );
+    x = data->client_rect.left - data->whole_rect.left;
+    y = data->client_rect.top - data->whole_rect.top;
+    cx = min( max( 1, data->client_rect.right - data->client_rect.left ), 65535 );
+    cy = min( max( 1, data->client_rect.bottom - data->client_rect.top ), 65535 );
 
-    XSaveContext( data->display, data->client_window, winContext, (char *)data->hwnd );
-    XMapWindow( gdi_display, data->client_window );
-    XSync( gdi_display, False );
-    XSelectInput( data->display, data->client_window, ExposureMask );
-    return data->client_window;
+    ret = data->client_window = XCreateWindow( gdi_display,
+                                               data->whole_window ? data->whole_window : dummy_parent,
+                                               x, y, cx, cy, 0, default_visual.depth, InputOutput,
+                                               visual->visual, CWBitGravity | CWWinGravity |
+                                               CWBackingStore | CWColormap | CWBorderPixel, &attr );
+    if (data->client_window)
+    {
+        XSaveContext( data->display, data->client_window, winContext, (char *)data->hwnd );
+        XMapWindow( gdi_display, data->client_window );
+        XSync( gdi_display, False );
+        if (data->whole_window) XSelectInput( data->display, data->client_window, ExposureMask );
+        TRACE( "%p xwin %lx/%lx\n", data->hwnd, data->whole_window, data->client_window );
+    }
+    release_win_data( data );
+    return ret;
 }
 
 
@@ -1540,6 +1577,10 @@ done:
  */
 static void destroy_whole_window( struct x11drv_win_data *data, BOOL already_destroyed )
 {
+    TRACE( "win %p xwin %lx/%lx\n", data->hwnd, data->whole_window, data->client_window );
+
+    if (data->client_window) XDeleteContext( data->display, data->client_window, winContext );
+
     if (!data->whole_window)
     {
         if (data->embedded)
@@ -1551,23 +1592,20 @@ static void destroy_whole_window( struct x11drv_win_data *data, BOOL already_des
                 XDeleteContext( data->display, xwin, winContext );
                 RemovePropA( data->hwnd, foreign_window_prop );
             }
+            return;
         }
-        return;
     }
-
-
-    TRACE( "win %p xwin %lx/%lx\n", data->hwnd, data->whole_window, data->client_window );
-    XDeleteContext( data->display, data->whole_window, winContext );
-    if (data->client_window)
+    else
     {
-        XDeleteContext( data->display, data->client_window, winContext );
-        if (!already_destroyed)
+        if (data->client_window && !already_destroyed)
         {
             XSelectInput( data->display, data->client_window, 0 );
             XReparentWindow( data->display, data->client_window, get_dummy_parent(), 0, 0 );
+            XSync( data->display, False );
         }
+        XDeleteContext( data->display, data->whole_window, winContext );
+        if (!already_destroyed) XDestroyWindow( data->display, data->whole_window );
     }
-    if (!already_destroyed) XDestroyWindow( data->display, data->whole_window );
     if (data->colormap) XFreeColormap( data->display, data->colormap );
     data->whole_window = data->client_window = 0;
     data->colormap = 0;
@@ -1593,16 +1631,19 @@ static void destroy_whole_window( struct x11drv_win_data *data, BOOL already_des
  *
  * Change the visual by destroying and recreating the X window if needed.
  */
-void set_window_visual( struct x11drv_win_data *data, const XVisualInfo *vis )
+void set_window_visual( struct x11drv_win_data *data, const XVisualInfo *vis, BOOL use_alpha )
 {
     Window client_window = data->client_window;
     Window whole_window = data->whole_window;
 
+    if (!data->use_alpha == !use_alpha) return;
+    if (data->surface) window_surface_release( data->surface );
+    data->surface = NULL;
+    data->use_alpha = use_alpha;
+
     if (data->vis.visualid == vis->visualid) return;
     data->client_window = 0;
     destroy_whole_window( data, client_window != 0 /* don't destroy whole_window until reparented */ );
-    if (data->surface) window_surface_release( data->surface );
-    data->surface = NULL;
     data->vis = *vis;
     create_whole_window( data );
     if (!client_window) return;
@@ -1649,7 +1690,7 @@ void CDECL X11DRV_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style )
     if (offset == GWL_EXSTYLE && (changed & WS_EX_LAYERED)) /* changing WS_EX_LAYERED resets attributes */
     {
         data->layered = FALSE;
-        set_window_visual( data, &default_visual );
+        set_window_visual( data, &default_visual, FALSE );
         sync_window_opacity( data->display, data->whole_window, 0, 0, 0 );
         if (data->surface) set_surface_color_key( data->surface, CLR_INVALID );
     }
@@ -1697,22 +1738,6 @@ BOOL X11DRV_DestroyNotify( HWND hwnd, XEvent *event )
     release_win_data( data );
     if (embedded) SendMessageW( hwnd, WM_CLOSE, 0, 0 );
     return TRUE;
-}
-
-
-static struct x11drv_win_data *alloc_win_data( Display *display, HWND hwnd )
-{
-    struct x11drv_win_data *data;
-
-    if ((data = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*data))))
-    {
-        data->display = display;
-        data->vis = default_visual;
-        data->hwnd = hwnd;
-        EnterCriticalSection( &win_data_section );
-        XSaveContext( gdi_display, (XID)hwnd, win_data_context, (char *)data );
-    }
-    return data;
 }
 
 
@@ -2186,17 +2211,17 @@ done:
 }
 
 
-static inline RECT get_surface_rect( const RECT *visible_rect )
+static inline BOOL get_surface_rect( const RECT *visible_rect, RECT *surface_rect )
 {
-    RECT rect = get_virtual_screen_rect();
+    *surface_rect = get_virtual_screen_rect();
 
-    IntersectRect( &rect, &rect, visible_rect );
-    OffsetRect( &rect, -visible_rect->left, -visible_rect->top );
-    rect.left &= ~31;
-    rect.top  &= ~31;
-    rect.right  = max( rect.left + 32, (rect.right + 31) & ~31 );
-    rect.bottom = max( rect.top + 32, (rect.bottom + 31) & ~31 );
-    return rect;
+    if (!IntersectRect( surface_rect, surface_rect, visible_rect )) return FALSE;
+    OffsetRect( surface_rect, -visible_rect->left, -visible_rect->top );
+    surface_rect->left &= ~31;
+    surface_rect->top  &= ~31;
+    surface_rect->right  = max( surface_rect->left + 32, (surface_rect->right + 31) & ~31 );
+    surface_rect->bottom = max( surface_rect->top + 32, (surface_rect->bottom + 31) & ~31 );
+    return TRUE;
 }
 
 
@@ -2232,7 +2257,8 @@ void CDECL X11DRV_WindowPosChanging( HWND hwnd, HWND insert_after, UINT swp_flag
 
     if (!data->whole_window && !data->embedded) goto done;
     if (swp_flags & SWP_HIDEWINDOW) goto done;
-    if (data->vis.visualid != default_visual.visualid) goto done;
+    if (data->use_alpha) goto done;
+    if (!get_surface_rect( visible_rect, &surface_rect )) goto done;
 
     if (*surface) window_surface_release( *surface );
     *surface = NULL;  /* indicate that we want to draw directly to the window */
@@ -2242,7 +2268,6 @@ void CDECL X11DRV_WindowPosChanging( HWND hwnd, HWND insert_after, UINT swp_flag
     if (data->client_window) goto done;
     if (!client_side_graphics && !layered) goto done;
 
-    surface_rect = get_surface_rect( visible_rect );
     if (data->surface)
     {
         if (EqualRect( &data->surface->rect, &surface_rect ))
@@ -2339,13 +2364,13 @@ void CDECL X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags
 
     if (!data->whole_window)
     {
-        int width  = data->client_rect.right - data->client_rect.left;
-        int height = data->client_rect.bottom - data->client_rect.top;
-
+        BOOL needs_resize = (!data->client_window &&
+                             (data->client_rect.right - data->client_rect.left !=
+                              old_client_rect.right - old_client_rect.left ||
+                              data->client_rect.bottom - data->client_rect.top !=
+                              old_client_rect.bottom - old_client_rect.top));
         release_win_data( data );
-        if (width != old_client_rect.right - old_client_rect.left ||
-            height != old_client_rect.bottom - old_client_rect.top)
-            sync_gl_drawable( hwnd, width, height );
+        if (needs_resize) sync_gl_drawable( hwnd );
         return;
     }
 
@@ -2542,7 +2567,7 @@ void CDECL X11DRV_SetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alph
 
     if (data)
     {
-        set_window_visual( data, &default_visual );
+        set_window_visual( data, &default_visual, FALSE );
 
         if (data->whole_window)
             sync_window_opacity( data->display, data->whole_window, key, alpha, flags );
@@ -2598,7 +2623,7 @@ BOOL CDECL X11DRV_UpdateLayeredWindow( HWND hwnd, const UPDATELAYEREDWINDOWINFO 
     if (!(data = get_win_data( hwnd ))) return FALSE;
 
     data->layered = TRUE;
-    if (!data->embedded && argb_visual.visualid) set_window_visual( data, &argb_visual );
+    if (!data->embedded && argb_visual.visualid) set_window_visual( data, &argb_visual, TRUE );
 
     rect = *window_rect;
     OffsetRect( &rect, -window_rect->left, -window_rect->top );

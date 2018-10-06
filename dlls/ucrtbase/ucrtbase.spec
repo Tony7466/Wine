@@ -39,7 +39,7 @@
 @ stub _NLG_Dispatch2
 @ stub _NLG_Return
 @ stub _NLG_Return2
-@ stub _SetWinRTOutOfMemoryExceptionCallback
+@ cdecl _SetWinRTOutOfMemoryExceptionCallback(ptr) MSVCR120__SetWinRTOutOfMemoryExceptionCallback
 @ cdecl _Strftime(ptr long str ptr ptr)
 @ cdecl _W_Getdays()
 @ cdecl _W_Getmonths()
@@ -2337,7 +2337,7 @@
 @ cdecl getenv(str) MSVCRT_getenv
 @ cdecl getenv_s(ptr ptr long str)
 @ cdecl gets(str) MSVCRT_gets
-@ stub gets_s
+@ cdecl gets_s(ptr long) MSVCRT_gets_s
 @ cdecl getwc(ptr) MSVCRT_getwc
 @ cdecl getwchar() MSVCRT_getwchar
 @ cdecl hypot(double double) _hypot
