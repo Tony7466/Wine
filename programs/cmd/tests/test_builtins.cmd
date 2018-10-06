@@ -418,6 +418,7 @@ if 1==1 (echo n1) else echo n2|echo n3
 if 1==1 (echo o1) else echo o2&&echo o3
 if 1==1 (echo p1) else echo p2||echo p3
 if 1==1 (echo q1) else echo q2&echo q3
+echo ---
 echo --- chain else (if false)
 if 1==0 echo a1 else echo a2
 if 1==0 echo b1|echo b2 else echo b3
@@ -1112,9 +1113,16 @@ mkdir foobar & cd foobar
 mkdir foo
 mkdir bar
 mkdir baz
+mkdir pop
 echo > bazbaz
 echo --- basic wildcards
 for %%i in (ba*) do echo %%i
+echo --- wildcards in subdirs
+echo something>pop\bar1
+echo something>pop\bar2.txt
+echo something>pop\bar3
+for %%f in (pop\ba*) do ( call echo %%f )
+rmdir /s/q pop
 echo --- for /d
 for /d %%i in (baz foo bar) do echo %%i 2>&1
 rem Confirm we don't match files:
@@ -1320,6 +1328,39 @@ rem Test zero iteration skips the body of the for
 for /L %%i in (2,2,1) do (
   echo %%i
   echo FAILED
+)
+echo --- ifs inside for loops
+for %%i in (test) do (
+    echo a1
+    if 1==1 (
+        echo b1
+    ) else (
+        echo c1
+    )
+    echo d1
+)
+for %%i in (test) do (
+    echo a2
+    if 1==1 (
+        echo b2
+    ) else echo c2
+    echo d2
+)
+for %%i in (test) do (
+    echo a3
+    if 1==0 (
+        echo b3
+    ) else echo c3
+    echo d3
+)
+for %%i in (test) do (
+    echo a4
+    if 1==0 (
+        echo b4
+    ) else (
+        echo c4
+    )
+    echo d4
 )
 echo --- set /a
 goto :testseta
@@ -2987,6 +3028,45 @@ path=try3
 path
 set path=%WINE_backup_path%
 set WINE_backup_path=
+
+echo ------------ Testing start /W ------------
+echo start /W failed to wait>foobar.txt
+start /W "" cmd /C "ping -n1 & echo start /W seems to really wait>foobar.txt"& type foobar.txt& del foobar.txt
+
+echo ------------ Testing changing the drive letter ----------
+pushd C:\
+
+echo Normal:
+call :setError 0
+C:
+if errorlevel 1 echo Normal drive change failed
+
+echo Normal+space
+call :setError 0
+C:@space@
+if errorlevel 1 echo Normal+space drive change failed
+
+echo Normal+space+garbage
+call :setError 0
+C: garbage
+if errorlevel 1 echo Normal+space+garbage drive change failed
+
+call :setError 0
+echo Quoted should fail
+"C:"
+if not errorlevel 1 echo quoted drive change unexpectedly worked
+
+echo Normal+tab
+call :setError 0
+C:@tab@
+if errorlevel 1 echo Normal+tab drive change failed
+
+echo Normal+tab+garbage
+call :setError 0
+C:@tab@garbagetab
+if errorlevel 1 echo Normal+tab+garbage drive change failed
+
+popd
 
 echo ------------ Testing combined CALLs/GOTOs ------------
 echo @echo off>foo.cmd

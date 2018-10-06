@@ -1571,10 +1571,12 @@ static void WCMD_part_execute(CMD_LIST **cmdList, const WCHAR *firstcmd,
       /* execute all appropriate commands */
       curPosition = *cmdList;
 
-      WINE_TRACE("Processing cmdList(%p) - delim(%d) bd(%d / %d)\n",
+      WINE_TRACE("Processing cmdList(%p) - delim(%d) bd(%d / %d) processThese(%d)\n",
                  *cmdList,
                  (*cmdList)->prevDelim,
-                 (*cmdList)->bracketDepth, myDepth);
+                 (*cmdList)->bracketDepth,
+                 myDepth,
+                 processThese);
 
       /* Execute any statements appended to the line */
       /* FIXME: Only if previous call worked for && or failed for || */
@@ -1613,6 +1615,18 @@ static void WCMD_part_execute(CMD_LIST **cmdList, const WCHAR *firstcmd,
             if (*cmd) {
               WCMD_execute (cmd, (*cmdList)->redirects, cmdList, FALSE);
             }
+          } else {
+              /* Loop skipping all commands until we get back to the current
+                 depth, including skipping commands and their subsequent
+                 pipes (eg cmd | prog)                                       */
+              do {
+                *cmdList = (*cmdList)->nextcommand;
+              } while (*cmdList &&
+                      ((*cmdList)->bracketDepth > myDepth ||
+                      (*cmdList)->prevDelim));
+
+              /* After the else is complete, we need to now process subsequent commands */
+              processThese = TRUE;
           }
           if (curPosition == *cmdList) *cmdList = (*cmdList)->nextcommand;
         } else if (!processThese) {
@@ -2261,19 +2275,25 @@ void WCMD_for (WCHAR *p, CMD_LIST **cmdList) {
            thisSet->bracketDepth >= thisDepth) {
 
       /* Loop through all entries on the same line */
-      WCHAR *item;
+      WCHAR *staticitem;
       WCHAR *itemStart;
       WCHAR buffer[MAXSTRING];
 
       WINE_TRACE("Processing for set %p\n", thisSet);
       i = 0;
-      while (*(item = WCMD_parameter (thisSet->command, i, &itemStart, TRUE, FALSE))) {
+      while (*(staticitem = WCMD_parameter (thisSet->command, i, &itemStart, TRUE, FALSE))) {
 
         /*
          * If the parameter within the set has a wildcard then search for matching files
          * otherwise do a literal substitution.
          */
         static const WCHAR wildcards[] = {'*','?','\0'};
+
+        /* Take a copy of the item returned from WCMD_parameter as it is held in a
+           static buffer which can be overwritten during parsing of the for body   */
+        WCHAR item[MAXSTRING];
+        strcpyW(item, staticitem);
+
         thisCmdStart = cmdStart;
 
         itemNum++;
@@ -4322,7 +4342,7 @@ void WCMD_start(WCHAR *args)
     int argno;
     int have_title;
     WCHAR file[MAX_PATH];
-    WCHAR *cmdline;
+    WCHAR *cmdline, *cmdline_params;
     STARTUPINFOW st;
     PROCESS_INFORMATION pi;
 
@@ -4331,6 +4351,7 @@ void WCMD_start(WCHAR *args)
     cmdline = heap_alloc( (strlenW(file) + strlenW(args) + 8) * sizeof(WCHAR) );
     strcpyW( cmdline, file );
     strcatW( cmdline, spaceW );
+    cmdline_params = cmdline + strlenW(cmdline);
 
     /* The start built-in has some special command-line parsing properties
      * which will be outlined here.
@@ -4382,17 +4403,17 @@ void WCMD_start(WCHAR *args)
             have_title = TRUE;
 
             /* Copy all of the cmdline processed */
-            memcpy(cmdline, args, sizeof(WCHAR) * (argN - args));
-            cmdline[argN - args] = '\0';
+            memcpy(cmdline_params, args, sizeof(WCHAR) * (argN - args));
+            cmdline_params[argN - args] = '\0';
 
             /* Add quoted title */
-            strcatW(cmdline, prefixQuote);
-            strcatW(cmdline, thisArg);
-            strcatW(cmdline, postfixQuote);
+            strcatW(cmdline_params, prefixQuote);
+            strcatW(cmdline_params, thisArg);
+            strcatW(cmdline_params, postfixQuote);
 
             /* Concatenate remaining command-line */
             thisArg = WCMD_parameter_with_delims(args, argno, &argN, TRUE, FALSE, startDelims);
-            strcatW(cmdline, argN + strlenW(thisArg));
+            strcatW(cmdline_params, argN + strlenW(thisArg));
 
             break;
         }
@@ -4882,7 +4903,7 @@ void WCMD_assoc (const WCHAR *args, BOOL assoc) {
               LoadStringW(hinst, WCMD_NOFTYPE, msgbuffer,
                           sizeof(msgbuffer)/sizeof(WCHAR));
             }
-            WCMD_output_stderr(msgbuffer, keyValue);
+            WCMD_output_stderr(msgbuffer, args);
             errorlevel = 2;
           }
 
