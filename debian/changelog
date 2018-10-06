@@ -1,3 +1,10 @@
+wine (3.0.3-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.0.3, released Sep 13, 2018.
+    - Various bug fixes
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Sun, 07 Oct 2018 00:44:39 +0200
+
 wine (3.0.2-3) unstable; urgency=medium
 
   * Move ttf fonts back to /usr/share/wine/fonts (closes: #904372).
