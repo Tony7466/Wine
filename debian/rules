@@ -126,7 +126,7 @@ override_dh_auto_build-indep:
 
 override_dh_auto_install-indep: $(INSTALLS)
 	mkdir -p debian/tmp
-	cp ANNOUNCE debian/tmp/changelog
+	cp ANNOUNCE debian/tmp/NEWS
 	cp programs/winedbg/README debian/tmp/README.winedbg
 	sed "s|BINDIR|$(BINDIR)|g" debian/scripts/wineserver.in > debian/tmp/wineserver
 	chmod 755 debian/tmp/wineserver
@@ -149,7 +149,7 @@ override_dh_auto_install-indep: $(INSTALLS)
 
 override_dh_auto_install-arch: $(INSTALLS)
 	mkdir -p debian/tmp
-	cp ANNOUNCE debian/tmp/changelog
+	cp ANNOUNCE debian/tmp/NEWS
 	cp tools/winedump/README debian/tmp/README.winedump
 	cp server/wineserver debian/tmp/wineserver$(DEB_BUILD_ARCH_BITS)
 	sed "s|BINDIR|$(BINDIR)|g" debian/scripts/winegcc.in > debian/tmp/winegcc$(DEBSUFFIX)
