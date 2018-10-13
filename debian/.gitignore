@@ -1,1 +1,11 @@
+files
 control
+bug-control
+autoreconf.*
+debhelper-build-stamp
+
+tmp
+wine-development*
+wine32-development*
+wine64-development*
+libwine-development*
