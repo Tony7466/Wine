@@ -40,8 +40,8 @@ Old Versions
 ============
 If you want to install a previous version of Wine, you should be able to fetch
 prior Debian versions from:
-http://snapshot.debian.org/package/wine
-http://snapshot.debian.org/package/wine-development
+http://snapshot.debian.org/package/wine/
+http://snapshot.debian.org/package/wine-development/
 
 You can also use debsnap from the devscripts package, for example:
 $ debsnap -v -d . wine 1.6.1-1
@@ -73,26 +73,11 @@ $ winegcc-stable ...
 $ winegcc-development ...
 
 
-Configuration
-=============
-Usually everything is automatically configured, but for fine-tuning a good tool
-is winecfg.
-
-If you need to set up Wine manually, without winecfg, you can force the
-creation of a ~/.wine directory (the so called "wine prefix") by running:
-$ wineboot
-
-If something goes horribly wrong, you can always completely wipe your Wine
-setup with "rm -rf ~/.wine".  This will destroy everything you've installed,
-including configuration and data files, so if you have anything important,
-please back it up first.  You can then start fresh.
-
-
 Running 32-bit Windows applications on 64-bit systems
 =====================================================
-Most Windows binaries are 32-bit applications.  You need to install wine32 (or
-wine32-development) to run them.  wine64 (or wine64-development) alone cannot
-do this.
+Most Windows binaries are 32-bit applications.  Next to the main package wine
+(or wine-development) you need to install wine32 (or wine32-development) to run
+them.  wine64 (or wine64-development) alone cannot do this.
 
 On 64-bit systems you need to enable multiarch to install wine32 (or
 wine32-development).  As root, execute e.g.:
@@ -135,8 +120,10 @@ $ winegcc -m32 -L/usr/lib/i386-linux-gnu/wine-development ...
 Wine Gecko
 ==========
 The downloader for Wine Gecko is intentionally disabled in the Debian packages.
-Instead libwine-gecko-* packages are available in the official Debian archives,
-which provide Wine Gecko support.
+
+Instead libwine-gecko-* packages used to be available in the official Debian
+archives.  However as of October 2018 the last available versions are for Wine
+in Debian 8 (Jessie).  So help in packaging new versions is really needed.
 
 Information about which Wine Gecko should be associated with any particular
 Wine version is available at:
@@ -144,8 +131,6 @@ https://wiki.winehq.org/Gecko
 
 Information about available versions in Debian is at:
 https://packages.debian.org/wine-gecko
-As of May 2018 the last available versions are for Debian 8 (Jessie), so help
-in packaging new versions is really appreciated.
 
 If the right libwine-gecko-*.deb package is not currently available, you can
 download the Wine Gecko installers (on 64-bit systems you need both the 32-bit
