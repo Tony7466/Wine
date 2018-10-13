@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/devenum/createdevenum.c
 +++ b/dlls/devenum/createdevenum.c
-@@ -358,7 +358,7 @@ static void write_filter_data(IPropertyB
+@@ -388,7 +388,7 @@ static void write_filter_data(IPropertyB
      HRESULT hr;
  
      hr = CoCreateInstance(&CLSID_FilterMapper2, NULL, CLSCTX_INPROC, &IID_IAMFilterData, (void **)&fildata);
@@ -12,7 +12,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      hr = IAMFilterData_CreateFilterData(fildata, rgf, &data, &size);
      if (FAILED(hr)) goto cleanup;
-@@ -379,8 +379,9 @@ static void write_filter_data(IPropertyB
+@@ -409,8 +409,9 @@ static void write_filter_data(IPropertyB
      if (FAILED(hr)) goto cleanup;
  
  cleanup:

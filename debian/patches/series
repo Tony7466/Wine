@@ -11,7 +11,6 @@ disable/addons-download.patch
 disable/po-modifications.patch
 disable/blacklist-extensions.patch
 
-generate/fonts.patch
 generate/icons.patch
 generate/opengl.patch
 generate/unicode.patch
@@ -22,7 +21,6 @@ binary-indep/sfnt2fon.patch
 
 fixes/arm.patch
 fixes/arm64.patch
-fixes/diablo2.patch
 fixes/gstbase.patch
 fixes/printer-resolution.patch
 fixes/temporary-directory.patch

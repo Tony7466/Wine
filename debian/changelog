@@ -1,12 +1,15 @@
-wine-development (3.17-1) UNRELEASED; urgency=medium
+wine-development (3.17-1) unstable; urgency=medium
 
   * New upstream release 3.17, released Sep 28, 2018.
     - Improved Shell Autocomplete support.
     - More implementation of OPC Services.
     - Improvements to the Pager common control.
     - Various bug fixes.
+  * Drop Diablo II patch (closes: #908412).
+  * Use default build optimization level again.
+  * Use debhelper compat 9 to avoid always rerunning autoreconf.
 
- -- Michael Gilbert <mgilbert@debian.org>  Sat, 29 Sep 2018 17:22:25 +0000
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 13 Oct 2018 00:10:44 +0000
 
 wine-development (3.16-1) unstable; urgency=medium
 
