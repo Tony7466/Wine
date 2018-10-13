@@ -1,10 +1,11 @@
 #!/usr/bin/make -f
 
-# Needed for DEB_* variables
+# add DEB_* variables to the environment
 include /usr/share/dpkg/architecture.mk
 include /usr/share/dpkg/pkg-info.mk
 include /usr/share/dpkg/vendor.mk
 
+# determine whether this is a stable or development build
 VERSION=$(shell echo $(DEB_SOURCE) | sed s/wine//g)
 ifeq (x$(VERSION), x)
 DEBSUFFIX=-stable
@@ -13,20 +14,21 @@ DEBSUFFIX=$(VERSION)
 endif
 export DEBSUFFIX
 
+# installation paths
 MANDIR=usr/share/man
 BINDIR=usr/lib/wine$(VERSION)
 DATDIR=usr/share/wine$(VERSION)
 INCDIR=usr/include/wine$(VERSION)
 LIBDIR=usr/lib/$(DEB_HOST_MULTIARCH)/wine$(VERSION)
 
+# extra information to add to the version string
 export VENDOR=$(DEB_VENDOR) $(DEB_VERSION)
 
 # enable verbose build log
 export DH_VERBOSE=1
 
-# enable all hardening buildflags
-# fortify and pie are still not enabled in the whole build though
-export DEB_BUILD_MAINT_OPTIONS=hardening=+all
+# enable hardening buildflags (fortify is not yet supported upstream)
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify
 
 # linker options
 export DEB_LDFLAGS_MAINT_APPEND+=-Wl,-rpath,/$(LIBDIR)
@@ -107,6 +109,7 @@ debian/bug-control: debian/bug-control.in
 	dh $@
 
 override_dh_auto_configure:
+	# automatically generated files
 	./debian/scripts/generate libs/port/cptable.generated cpmap
 	./debian/scripts/generate server/trace.generated make_requests
 	./debian/scripts/generate server/request.generated make_requests
@@ -114,8 +117,9 @@ override_dh_auto_configure:
 	./tools/make_unicode
 	./tools/make_requests
 	cd dlls/opengl32 && ./make_opengl
-	ln -s /usr/share/misc/config.sub tools || true
-	ln -s /usr/share/misc/config.guess tools || true
+	ln -sf /usr/share/misc/config.sub tools
+	ln -sf /usr/share/misc/config.guess tools
+	# execute wine's configure script
 	./configure $(CONFLAGS)
 
 override_dh_auto_build-indep:
