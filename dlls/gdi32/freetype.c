@@ -993,18 +993,22 @@ static BOOL is_hinting_enabled(void)
 
 static BOOL is_subpixel_rendering_enabled( void )
 {
-#ifdef FT_LCD_FILTER_H
     static int enabled = -1;
     if (enabled == -1)
     {
-        enabled = (pFT_Library_SetLcdFilter &&
-                   pFT_Library_SetLcdFilter( NULL, 0 ) != FT_Err_Unimplemented_Feature);
+        /* FreeType >= 2.8.1 offers LCD-optimezed rendering without lcd filters. */
+        if (FT_SimpleVersion >= ((2 << 16) | (8 << 8) | (1 << 0)))
+            enabled = TRUE;
+#ifdef FT_LCD_FILTER_H
+        else if (pFT_Library_SetLcdFilter &&
+                 pFT_Library_SetLcdFilter( NULL, 0 ) != FT_Err_Unimplemented_Feature)
+            enabled = TRUE;
+#endif
+        else enabled = FALSE;
+
         TRACE("subpixel rendering is %senabled\n", enabled ? "" : "NOT ");
     }
     return enabled;
-#else
-    return FALSE;
-#endif
 }
 
 
@@ -1385,7 +1389,7 @@ static int match_name_table_language( const FT_SfntName *name, LANGID lang )
         break;
     case TT_PLATFORM_MACINTOSH:
         if (!IsValidCodePage( get_mac_code_page( name ))) return 0;
-        if (name->language_id >= sizeof(mac_langid_table)/sizeof(mac_langid_table[0])) return 0;
+        if (name->language_id >= ARRAY_SIZE( mac_langid_table )) return 0;
         name_lang = mac_langid_table[name->language_id];
         break;
     case TT_PLATFORM_APPLE_UNICODE:
@@ -1395,7 +1399,7 @@ static int match_name_table_language( const FT_SfntName *name, LANGID lang )
         case TT_APPLE_ID_DEFAULT:
         case TT_APPLE_ID_ISO_10646:
         case TT_APPLE_ID_UNICODE_2_0:
-            if (name->language_id >= sizeof(mac_langid_table)/sizeof(mac_langid_table[0])) return 0;
+            if (name->language_id >= ARRAY_SIZE( mac_langid_table )) return 0;
             name_lang = mac_langid_table[name->language_id];
             break;
         default:
@@ -2648,14 +2652,14 @@ static BOOL init_system_links(void)
         goto skip_internal;
     }
 
-    for (i = 0; i < sizeof(font_links_defaults_list)/sizeof(font_links_defaults_list[0]); i++)
+    for (i = 0; i < ARRAY_SIZE(font_links_defaults_list); i++)
     {
         const FontSubst *psub2;
         psub2 = get_font_subst(&font_subst_list, font_links_defaults_list[i].shelldlg, -1);
 
         if ((!strcmpiW(font_links_defaults_list[i].shelldlg, psub->to.name) || (psub2 && !strcmpiW(psub2->to.name,psub->to.name))))
         {
-            for (j = 0; j < sizeof(font_links_list)/sizeof(font_links_list[0]); j++)
+            for (j = 0; j < ARRAY_SIZE(font_links_list); j++)
                 populate_system_links(font_links_list[j], font_links_defaults_list[i].substitutes);
 
             if (!strcmpiW(psub->to.name, font_links_defaults_list[i].substitutes[0]))
@@ -3052,7 +3056,7 @@ static char *get_winfonts_dir_path(LPCWSTR file)
     static const WCHAR slashW[] = {'\\','\0'};
     WCHAR windowsdir[MAX_PATH];
 
-    GetWindowsDirectoryW(windowsdir, sizeof(windowsdir) / sizeof(WCHAR));
+    GetWindowsDirectoryW(windowsdir, ARRAY_SIZE(windowsdir));
     strcatW(windowsdir, fontsW);
     strcatW(windowsdir, slashW);
     strcatW(windowsdir, file);
@@ -3069,7 +3073,7 @@ static void load_system_fonts(void)
     char *unixname;
 
     if(RegOpenKeyW(HKEY_CURRENT_CONFIG, system_fonts_reg_key, &hkey) == ERROR_SUCCESS) {
-        GetWindowsDirectoryW(windowsdir, sizeof(windowsdir) / sizeof(WCHAR));
+        GetWindowsDirectoryW(windowsdir, ARRAY_SIZE(windowsdir));
         strcatW(windowsdir, fontsW);
         for(value = SystemFontValues; *value; value++) { 
             dlen = sizeof(data);
@@ -3138,7 +3142,7 @@ static void update_reg_entries(void)
 
             len = strlenW(name) + 1;
             if (face->scalable)
-                len += sizeof(TrueType) / sizeof(WCHAR);
+                len += ARRAY_SIZE(TrueType);
 
             valueW = HeapAlloc(GetProcessHeap(), 0, len * sizeof(WCHAR));
             strcpyW(valueW, name);
@@ -4025,7 +4029,7 @@ static void update_font_info(void)
     RegSetValueExW(hkey, logpixels, 0, REG_DWORD, (const BYTE *)&screen_dpi, sizeof(screen_dpi));
     RegCloseKey(hkey);
 
-    for (i = 0; i < sizeof(nls_update_font_list)/sizeof(nls_update_font_list[0]); i++)
+    for (i = 0; i < ARRAY_SIZE(nls_update_font_list); i++)
     {
         HKEY hkey;
 
@@ -4186,7 +4190,7 @@ static void init_font_list(void)
     load_system_fonts();
 
     /* load in the fonts from %WINDOWSDIR%\\Fonts first of all */
-    GetWindowsDirectoryW(windowsdir, sizeof(windowsdir) / sizeof(WCHAR));
+    GetWindowsDirectoryW(windowsdir, ARRAY_SIZE(windowsdir));
     strcatW(windowsdir, fontsW);
     if((unixname = wine_get_unix_file_name(windowsdir)))
     {
@@ -7274,7 +7278,6 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
     case WINE_GGO_HBGR_BITMAP:
     case WINE_GGO_VRGB_BITMAP:
     case WINE_GGO_VBGR_BITMAP:
-#ifdef FT_LCD_FILTER_H
       {
         switch (ft_face->glyph->format)
         {
@@ -7320,7 +7323,9 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
             BYTE *src;
             INT x, src_pitch, src_width, src_height, rgb_interval, hmul, vmul;
             INT x_shift, y_shift;
-            BOOL rgb;
+            const INT *sub_order;
+            const INT rgb_order[3] = { 0, 1, 2 };
+            const INT bgr_order[3] = { 2, 1, 0 };
             FT_Render_Mode render_mode =
                 (format == WINE_GGO_HRGB_BITMAP || format == WINE_GGO_HBGR_BITMAP)?
                     FT_RENDER_MODE_LCD: FT_RENDER_MODE_LCD_V;
@@ -7355,13 +7360,14 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
 
             memset(buf, 0, buflen);
             dst = buf;
-            rgb = (format == WINE_GGO_HRGB_BITMAP || format == WINE_GGO_VRGB_BITMAP);
 
             if ( needsTransform )
                 pFT_Outline_Transform (&ft_face->glyph->outline, &transMatTategaki);
 
+#ifdef FT_LCD_FILTER_H
             if ( pFT_Library_SetLcdFilter )
                 pFT_Library_SetLcdFilter( library, FT_LCD_FILTER_DEFAULT );
+#endif
             pFT_Render_Glyph (ft_face->glyph, render_mode);
 
             src = ft_face->glyph->bitmap.buffer;
@@ -7409,24 +7415,16 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
             width = min( width, src_width / hmul );
             height = min( height, src_height / vmul );
 
+            sub_order = (format == WINE_GGO_HRGB_BITMAP || format == WINE_GGO_VRGB_BITMAP)?
+                        rgb_order : bgr_order;
+
             while ( height-- )
             {
                 for ( x = 0; x < width; x++ )
                 {
-                    if ( rgb )
-                    {
-                        dst[x] = ((unsigned int)src[hmul * x + rgb_interval * 0] << 16) |
-                                 ((unsigned int)src[hmul * x + rgb_interval * 1] <<  8) |
-                                 ((unsigned int)src[hmul * x + rgb_interval * 2] <<  0) |
-                                 ((unsigned int)src[hmul * x + rgb_interval * 1] << 24) ;
-                    }
-                    else
-                    {
-                        dst[x] = ((unsigned int)src[hmul * x + rgb_interval * 2] << 16) |
-                                 ((unsigned int)src[hmul * x + rgb_interval * 1] <<  8) |
-                                 ((unsigned int)src[hmul * x + rgb_interval * 0] <<  0) |
-                                 ((unsigned int)src[hmul * x + rgb_interval * 1] << 24) ;
-                    }
+                    dst[x] = ((unsigned int)src[hmul * x + rgb_interval * sub_order[0]] << 16) |
+                             ((unsigned int)src[hmul * x + rgb_interval * sub_order[1]] << 8) |
+                             ((unsigned int)src[hmul * x + rgb_interval * sub_order[2]]);
                 }
                 src += src_pitch * vmul;
                 dst += pitch / sizeof(*dst);
@@ -7442,9 +7440,6 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
 
         break;
       }
-#else
-      return GDI_ERROR;
-#endif
 
     case GGO_NATIVE:
       {
