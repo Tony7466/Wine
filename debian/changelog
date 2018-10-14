@@ -1,3 +1,9 @@
+wine (3.0.3-2) unstable; urgency=medium
+
+  * Revert upstream commit which requires clang >= 5.0 to build on arm64.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Sun, 14 Oct 2018 15:19:16 +0200
+
 wine (3.0.3-1) unstable; urgency=medium
 
   * New upstream release 3.0.3, released Sep 13, 2018.
