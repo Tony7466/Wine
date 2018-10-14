@@ -1,4 +1,4 @@
-wine-development (3.18-1) UNRELEASED; urgency=medium
+wine-development (3.18-1) unstable; urgency=medium
 
   * New upstream release 3.18, released Oct 12, 2018.
     - Subpixel font rendering with FreeType >= 2.8.1.
