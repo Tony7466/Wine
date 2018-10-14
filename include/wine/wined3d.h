@@ -854,12 +854,6 @@ enum wined3d_display_rotation
     WINED3D_DISPLAY_ROTATION_270            = 4,
 };
 
-enum wined3d_shader_byte_code_format
-{
-    WINED3D_SHADER_BYTE_CODE_FORMAT_SM1     = 0,
-    WINED3D_SHADER_BYTE_CODE_FORMAT_SM4     = 1,
-};
-
 enum wined3d_shader_type
 {
     WINED3D_SHADER_TYPE_PIXEL,
@@ -1980,6 +1974,7 @@ struct wined3d_caps
     struct wined3d_ddraw_caps ddraw_caps;
 
     BOOL shader_double_precision;
+    BOOL viewport_array_index_any_shader;
 
     enum wined3d_feature_level max_feature_level;
 };
@@ -2017,6 +2012,7 @@ struct wined3d_blend_state_desc
 struct wined3d_rasterizer_state_desc
 {
     BOOL front_ccw;
+    float depth_bias_clamp;
     BOOL depth_clip;
 };
 
@@ -2060,10 +2056,6 @@ struct wined3d_shader_desc
 {
     const DWORD *byte_code;
     size_t byte_code_size;
-    enum wined3d_shader_byte_code_format format;
-    struct wined3d_shader_signature input_signature;
-    struct wined3d_shader_signature output_signature;
-    struct wined3d_shader_signature patch_constant_signature;
 };
 
 struct wined3d_stream_output_element
