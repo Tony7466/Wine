@@ -1,9 +1,18 @@
-wine (3.0.3-1) UNRELEASED; urgency=medium
+wine (3.0.3-1) unstable; urgency=medium
 
   * New upstream release 3.0.3, released Sep 13, 2018.
     - Various bug fixes
+  * Install upstream ANNOUNCE as NEWS.gz.
+  * Bump Standards-Version to 4.2.1.
+  * Update documentation and take some minor packaging changes from the
+    git master branch.
+  * Add q4wine to the suggested packages (cf. #908962).
+  * Only install the ttf that are intended to be used by Wine.
+  * Refresh patches.
+  * Add gcc-8.1.patch to prevent some apps to crash (cf. #908021).
+  * This version will be built with libsane1 in unstable (closes: #907965).
 
- -- Jens Reyer <jre.winesim@gmail.com>  Sun, 07 Oct 2018 00:44:39 +0200
+ -- Jens Reyer <jre.winesim@gmail.com>  Sun, 14 Oct 2018 02:42:58 +0200
 
 wine (3.0.2-3) unstable; urgency=medium
 
