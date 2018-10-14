@@ -1,3 +1,9 @@
+wine-development (3.18-2) unstable; urgency=medium
+
+  * Fix build error on arm64 (closes: #910944).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 14 Oct 2018 20:57:31 +0000
+
 wine-development (3.18-1) unstable; urgency=medium
 
   * New upstream release 3.18, released Oct 12, 2018.
