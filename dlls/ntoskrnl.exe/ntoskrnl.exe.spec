@@ -1,14 +1,14 @@
-@ stub ExAcquireFastMutexUnsafe
+@ stdcall -norelay ExAcquireFastMutexUnsafe(ptr)
 @ stub ExAcquireRundownProtection
 @ stub ExAcquireRundownProtectionEx
 @ stub ExInitializeRundownProtection
 @ stub ExInterlockedAddLargeStatistic
 @ stub ExInterlockedCompareExchange64
 @ stub ExInterlockedFlushSList
-@ stub ExInterlockedPopEntrySList
+@ stdcall -norelay ExInterlockedPopEntrySList(ptr ptr) NTOSKRNL_ExInterlockedPopEntrySList
 @ stub ExInterlockedPushEntrySList
 @ stub ExReInitializeRundownProtection
-@ stub ExReleaseFastMutexUnsafe
+@ stdcall -norelay ExReleaseFastMutexUnsafe(ptr)
 @ stub ExReleaseResourceLite
 @ stub ExReleaseRundownProtection
 @ stub ExReleaseRundownProtectionEx
@@ -471,7 +471,7 @@
 @ stub IoThreadToProcess
 @ stdcall IoUnregisterFileSystem(ptr)
 @ stub IoUnregisterFsRegistrationChange
-@ stub IoUnregisterPlugPlayNotification
+@ stdcall IoUnregisterPlugPlayNotification(ptr)
 @ stdcall IoUnregisterShutdownNotification(ptr)
 @ stub IoUpdateShareAccess
 @ stub IoValidateDeviceIoControlAccess
@@ -1397,21 +1397,23 @@
 @ stdcall -private ZwWaitForSingleObject(long long ptr) NtWaitForSingleObject
 @ stdcall -private ZwWriteFile(long long ptr ptr ptr ptr long ptr ptr) NtWriteFile
 @ stdcall -private ZwYieldExecution() NtYieldExecution
+@ stdcall -private -arch=arm,x86_64 -norelay __chkstk()
 @ cdecl -private -arch=i386 _CIcos() msvcrt._CIcos
 @ cdecl -private -arch=i386 _CIsin() msvcrt._CIsin
 @ cdecl -private -arch=i386 _CIsqrt() msvcrt._CIsqrt
 @ cdecl -private _abnormal_termination() msvcrt._abnormal_termination
 @ stdcall -private -arch=i386 -ret64 _alldiv(int64 int64)
-@ stub _alldvrm
+@ stdcall -private -arch=i386 -norelay _alldvrm(int64 int64)
 @ stdcall -private -arch=i386 -ret64 _allmul(int64 int64)
 @ stdcall -private -arch=i386 -norelay _alloca_probe()
 @ stdcall -private -arch=i386 -ret64 _allrem(int64 int64)
 @ stdcall -private -arch=i386 -ret64 _allshl(int64 long)
 @ stdcall -private -arch=i386 -ret64 _allshr(int64 long)
 @ stdcall -private -arch=i386 -ret64 _aulldiv(int64 int64)
-@ stub _aulldvrm
+@ stdcall -private -arch=i386 -norelay _aulldvrm(int64 int64)
 @ stdcall -private -arch=i386 -ret64 _aullrem(int64 int64)
 @ stdcall -private -arch=i386 -ret64 _aullshr(int64 long)
+@ stdcall -private -arch=i386 -norelay _chkstk()
 @ cdecl -private -arch=i386 _except_handler2(ptr ptr ptr ptr) msvcrt._except_handler2
 @ cdecl -private -arch=i386 _except_handler3(ptr ptr ptr ptr) msvcrt._except_handler3
 @ cdecl -private -arch=i386 _global_unwind2(ptr) msvcrt._global_unwind2
@@ -1422,9 +1424,9 @@
 @ cdecl -private _purecall() msvcrt._purecall
 @ varargs -private _snprintf(ptr long str) msvcrt._snprintf
 @ varargs -private _snwprintf(ptr long wstr) msvcrt._snwprintf
-@ cdecl -private _stricmp(str str) msvcrt._stricmp
+@ cdecl -private _stricmp(str str)
 @ cdecl -private _strlwr(str) msvcrt._strlwr
-@ cdecl -private _strnicmp(str str long) msvcrt._strnicmp
+@ cdecl -private _strnicmp(str str long) _strnicmp
 @ cdecl -private _strnset(str long long) msvcrt._strnset
 @ cdecl -private _strrev(str) msvcrt._strrev
 @ cdecl -private _strset(str long) msvcrt._strset
@@ -1433,7 +1435,7 @@
 @ cdecl -private _vsnwprintf(ptr long wstr ptr) msvcrt._vsnwprintf
 @ cdecl -private _wcsicmp(wstr wstr) msvcrt._wcsicmp
 @ cdecl -private _wcslwr(wstr) msvcrt._wcslwr
-@ cdecl -private _wcsnicmp(wstr wstr long) msvcrt._wcsnicmp
+@ cdecl -private _wcsnicmp(wstr wstr long) NTOSKRNL__wcsnicmp
 @ cdecl -private _wcsnset(wstr long long) msvcrt._wcsnset
 @ cdecl -private _wcsrev(wstr) msvcrt._wcsrev
 @ cdecl -private _wcsupr(wstr) msvcrt._wcsupr
@@ -1448,9 +1450,9 @@
 @ cdecl -private mbstowcs(ptr str long) msvcrt.mbstowcs
 @ cdecl -private mbtowc(ptr str long) msvcrt.mbtowc
 @ cdecl -private memchr(ptr long long) msvcrt.memchr
-@ cdecl -private memcpy(ptr ptr long) msvcrt.memcpy
+@ cdecl -private memcpy(ptr ptr long) NTOSKRNL_memcpy
 @ cdecl -private memmove(ptr ptr long) msvcrt.memmove
-@ cdecl -private memset(ptr long long) msvcrt.memset
+@ cdecl -private memset(ptr long long) NTOSKRNL_memset
 @ cdecl -private qsort(ptr long long ptr) msvcrt.qsort
 @ cdecl -private rand() msvcrt.rand
 @ varargs -private sprintf(ptr str) msvcrt.sprintf
@@ -1481,7 +1483,7 @@
 @ cdecl -private wcscspn(wstr wstr) msvcrt.wcscspn
 @ cdecl -private wcslen(wstr) msvcrt.wcslen
 @ cdecl -private wcsncat(wstr wstr long) msvcrt.wcsncat
-@ cdecl -private wcsncmp(wstr wstr long) msvcrt.wcsncmp
+@ cdecl -private wcsncmp(wstr wstr long) NTOSKRNL_wcsncmp
 @ cdecl -private wcsncpy(ptr wstr long) msvcrt.wcsncpy
 @ cdecl -private wcsrchr(wstr long) msvcrt.wcsrchr
 @ cdecl -private wcsspn(wstr wstr) msvcrt.wcsspn

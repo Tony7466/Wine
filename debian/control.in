@@ -9,10 +9,27 @@ Uploaders:
  Jens Reyer <jre.winesim@gmail.com>,
 Vcs-Git: https://salsa.debian.org/wine-team/wine.git -b buster
 Vcs-Browser: https://salsa.debian.org/wine-team/wine/tree/buster
-Standards-Version: 4.1.4
+Standards-Version: 4.2.1
 Rules-Requires-Root: no
 Build-Depends:
  debhelper (>= 11~),
+ oss4-dev [kfreebsd-any],
+ freebsd-glue [kfreebsd-any],
+ lzma,
+ flex,
+ bison,
+ quilt,
+ gettext,
+ icoutils,
+ sharutils,
+ pkg-config,
+ dctrl-tools,
+ imagemagick,
+ librsvg2-bin,
+ fontforge-nox,
+ khronos-api (>= 4.6),
+ unicode-data (>= 11),
+ unicode-data (<< 12),
  libxi-dev,
  libxt-dev,
  libxmu-dev,
@@ -31,18 +48,6 @@ Build-Depends:
  libxcomposite-dev,
  libxml-simple-perl,
  libxml-parser-perl,
- lzma,
- flex,
- bison,
- quilt,
- gettext,
- oss4-dev [kfreebsd-any],
- sharutils,
- pkg-config,
- dctrl-tools,
- khronos-api (>= 4.6),
- unicode-data (>= 10),
- unicode-data (<< 11),
  libpng-dev,
  libssl-dev,
  libv4l-dev [linux-any kfreebsd-any],
@@ -73,13 +78,8 @@ Build-Depends:
  libgettextpo-dev,
  libfreetype6-dev (>= 2.5.1),
  libfontconfig1-dev,
- libgstreamer-plugins-base1.0-dev,
- freebsd-glue [kfreebsd-any],
  ocl-icd-opencl-dev,
- icoutils,
- librsvg2-bin,
- imagemagick,
- fontforge-nox | fontforge,
+ libgstreamer-plugins-base1.0-dev,
 
 Package: wineVERSION
 Architecture: all
@@ -90,11 +90,16 @@ Depends:
  wine64VERSION (>= ${source:Version}) | wine32VERSION (>= ${source:Version}),
  wine64VERSION (<< ${source:Version}.1~) | wine32VERSION (<< ${source:Version}.1~),
 Suggests:
+ q4wine,
  winbind,
  winetricks,
  playonlinux,
  wine-binfmt,
  dosbox (>= 0.74-4.2~),
+Breaks:
+ wine-stable (<< 3.0.1ubuntu1~),
+Replaces:
+ wine-stable (<< 3.0.1ubuntu1~),
 #Provides:
 # wine,
 Description: Windows API implementation - standard suite

@@ -1,0 +1,31 @@
+description: update tools/make_unicode to support unicode 11
+author: Nikolay Sivov <nsivov@codeweavers.com>
+origin: upstream commit d4eeb162bb38f83a2ab0eb739fb3d7ca53ac8fa5
+bug-debian: http://bugs.debian.org/903382
+
+--- a/tools/make_unicode
++++ b/tools/make_unicode
+@@ -172,7 +172,8 @@ my %indic_types =
+     "Consonant_With_Stacker" => 0x001f,
+     "Consonant_Prefixed" => 0x0020,
+     "Syllable_Modifier" => 0x0021,
+-    "Consonant_Killer" => 0x0022
++    "Consonant_Killer" => 0x0022,
++    "Consonant_Initial_Postfixed" => 0x0023,
+ );
+ 
+ my %matra_types =
+@@ -1462,7 +1463,12 @@ my %scripts =
+     "Old_Hungarian"          => 134,
+     "Osage"                  => 135,
+     "SignWriting"            => 136,
+-    "Tangut"                 => 137
++    "Tangut"                 => 137,
++    # Win10 RS4
++    "Masaram_Gondi"          => 138,
++    "Nushu"                  => 139,
++    "Soyombo"                => 140,
++    "Zanabazar_Square"       => 141,
+ );
+ 
+ ################################################################

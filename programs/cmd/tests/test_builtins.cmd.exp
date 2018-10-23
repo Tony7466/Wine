@@ -428,6 +428,7 @@ n1
 o1
 p1
 q1
+@todo_wine@---
 --- chain else (if false)
 @todo_wine@j3
 ---
@@ -909,6 +910,10 @@ B C
 B D
 --- basic wildcards
 bazbaz
+--- wildcards in subdirs
+pop\bar1@space@
+pop\bar2.txt@space@
+pop\bar3@space@
 --- for /d
 baz@space@
 foo@space@
@@ -970,6 +975,19 @@ ErrorLevel 0
 -1
 1
 3
+--- ifs inside for loops
+a1
+b1
+d1
+a2
+b2
+d2
+a3
+c3
+d3
+a4
+c4
+d4
 --- set /a
 ------ individual operations
 WINE_foo correctly 3
@@ -1574,6 +1592,15 @@ Correctly ignored trailing information
 PATH=original
 PATH=try2
 PATH=try3
+------------ Testing start /W ------------
+start /W seems to really wait
+------------ Testing changing the drive letter ----------
+Normal:
+Normal+space
+Normal+space+garbage
+Quoted should fail
+Normal+tab
+Normal+tab+garbage
 ------------ Testing combined CALLs/GOTOs ------------
 world
 cheball

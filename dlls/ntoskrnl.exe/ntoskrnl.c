@@ -599,6 +599,34 @@ NTSTATUS CDECL wine_ntoskrnl_main_loop( HANDLE stop_event )
 
 
 /***********************************************************************
+ *           ExAcquireFastMutexUnsafe  (NTOSKRNL.EXE.@)
+ */
+#ifdef DEFINE_FASTCALL1_ENTRYPOINT
+DEFINE_FASTCALL1_ENTRYPOINT(ExAcquireFastMutexUnsafe)
+void WINAPI __regs_ExAcquireFastMutexUnsafe(PFAST_MUTEX FastMutex)
+#else
+void WINAPI ExAcquireFastMutexUnsafe(PFAST_MUTEX FastMutex)
+#endif
+{
+    FIXME("(%p): stub\n", FastMutex);
+}
+
+
+/***********************************************************************
+ *           ExReleaseFastMutexUnsafe  (NTOSKRNL.EXE.@)
+ */
+#ifdef DEFINE_FASTCALL1_ENTRYPOINT
+DEFINE_FASTCALL1_ENTRYPOINT(ExReleaseFastMutexUnsafe)
+void WINAPI __regs_ExReleaseFastMutexUnsafe(PFAST_MUTEX FastMutex)
+#else
+void WINAPI ExReleaseFastMutexUnsafe(PFAST_MUTEX FastMutex)
+#endif
+{
+    FIXME("(%p): stub\n", FastMutex);
+}
+
+
+/***********************************************************************
  *           IoAcquireCancelSpinLock  (NTOSKRNL.EXE.@)
  */
 void WINAPI IoAcquireCancelSpinLock(PKIRQL irql)
@@ -1623,6 +1651,20 @@ PSLIST_ENTRY WINAPI NTOSKRNL_InterlockedPopEntrySList( PSLIST_HEADER list )
 
 
 /***********************************************************************
+ *           ExInterlockedPopEntrySList   (NTOSKRNL.EXE.@)
+ */
+#ifdef DEFINE_FASTCALL2_ENTRYPOINT
+DEFINE_FASTCALL2_ENTRYPOINT( NTOSKRNL_ExInterlockedPopEntrySList )
+PSLIST_ENTRY WINAPI __regs_NTOSKRNL_ExInterlockedPopEntrySList( PSLIST_HEADER list, PKSPIN_LOCK lock )
+#else
+PSLIST_ENTRY WINAPI NTOSKRNL_ExInterlockedPopEntrySList( PSLIST_HEADER list, PKSPIN_LOCK lock )
+#endif
+{
+    return InterlockedPopEntrySList( list );
+}
+
+
+/***********************************************************************
  *           InterlockedPushEntrySList   (NTOSKRNL.EXE.@)
  */
 #ifdef DEFINE_FASTCALL2_ENTRYPOINT
@@ -2608,7 +2650,7 @@ BOOLEAN WINAPI Ke386SetIoAccessMap(ULONG flag, PVOID buffer)
 PKEVENT WINAPI IoCreateSynchronizationEvent(PUNICODE_STRING name, PHANDLE handle)
 {
     FIXME("(%p %p) stub\n", name, handle);
-    return NULL;
+    return (KEVENT *)0xdeadbeaf;
 }
 
 /*****************************************************
@@ -2636,6 +2678,15 @@ NTSTATUS WINAPI IoRegisterPlugPlayNotification(IO_NOTIFICATION_EVENT_CATEGORY ca
                                                PVOID context, PVOID *notification)
 {
     FIXME("(%u %u %p %p %p %p %p) stub\n", category, flags, data, driver, callback, context, notification);
+    return STATUS_SUCCESS;
+}
+
+/*****************************************************
+ *           IoUnregisterPlugPlayNotification    (NTOSKRNL.EXE.@)
+ */
+NTSTATUS WINAPI IoUnregisterPlugPlayNotification(PVOID notification)
+{
+    FIXME("stub: %p\n", notification);
     return STATUS_SUCCESS;
 }
 
@@ -3267,3 +3318,82 @@ PKEVENT WINAPI IoCreateNotificationEvent(UNICODE_STRING *name, HANDLE *handle)
     FIXME( "stub: %s %p\n", debugstr_us(name), handle );
     return NULL;
 }
+
+
+/*********************************************************************
+ *                  memcpy   (NTOSKRNL.@)
+ *
+ * NOTES
+ *  Behaves like memmove.
+ */
+void * __cdecl NTOSKRNL_memcpy( void *dst, const void *src, size_t n )
+{
+    return memmove( dst, src, n );
+}
+
+/*********************************************************************
+ *                  memset   (NTOSKRNL.@)
+ */
+void * __cdecl NTOSKRNL_memset( void *dst, int c, size_t n )
+{
+    return memset( dst, c, n );
+}
+
+int __cdecl _stricmp( LPCSTR str1, LPCSTR str2 )
+{
+    return strcasecmp( str1, str2 );
+}
+
+/*********************************************************************
+ *                  _strnicmp   (NTOSKRNL.@)
+ */
+int __cdecl _strnicmp( LPCSTR str1, LPCSTR str2, size_t n )
+{
+    return strncasecmp( str1, str2, n );
+}
+
+/*********************************************************************
+ *           _wcsnicmp    (NTOSKRNL.@)
+ */
+INT __cdecl NTOSKRNL__wcsnicmp( LPCWSTR str1, LPCWSTR str2, INT n )
+{
+    return strncmpiW( str1, str2, n );
+}
+
+/*********************************************************************
+ *           wcsncmp    (NTOSKRNL.@)
+ */
+INT __cdecl NTOSKRNL_wcsncmp( LPCWSTR str1, LPCWSTR str2, INT n )
+{
+    return strncmpW( str1, str2, n );
+}
+
+
+#ifdef __x86_64__
+/**************************************************************************
+ *		__chkstk (NTOSKRNL.@)
+ *
+ * Supposed to touch all the stack pages, but we shouldn't need that.
+ */
+__ASM_GLOBAL_FUNC( __chkstk, "ret" );
+
+#elif defined(__i386__)
+/**************************************************************************
+ *           _chkstk   (NTOSKRNL.@)
+ */
+__ASM_STDCALL_FUNC( _chkstk, 0,
+                   "negl %eax\n\t"
+                   "addl %esp,%eax\n\t"
+                   "xchgl %esp,%eax\n\t"
+                   "movl 0(%eax),%eax\n\t"  /* copy return address from old location */
+                   "movl %eax,0(%esp)\n\t"
+                   "ret" )
+#elif defined(__arm__)
+/**************************************************************************
+ *		__chkstk (NTDLL.@)
+ *
+ * Incoming r4 contains words to allocate, converting to bytes then return
+ */
+__ASM_GLOBAL_FUNC( __chkstk, "lsl r4, r4, #2\n\t"
+                             "bx lr" )
+#endif

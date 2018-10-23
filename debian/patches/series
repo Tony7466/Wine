@@ -8,6 +8,7 @@ disable/winemenubuilder-blacklist-extensions.patch
 
 generate/fonts.patch
 generate/opengl.patch
+generate/unicode11.patch
 generate/unicode.patch
 generate/request.patch
 
@@ -22,3 +23,5 @@ binary-indep/sfnt2fon.patch
 gstbase.patch
 printer-resolution.patch
 
+gcc-8.1.patch
+revert-clang5.0.patch

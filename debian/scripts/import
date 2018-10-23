@@ -21,7 +21,7 @@ git update-index --assume-unchanged configure include/config.h.in
 
 # pull specified tag from upstream repository
 version="$1"
-debian="https://anonscm.debian.org/git/pkg-wine/wine.git"
+debian="https://salsa.debian.org/wine-team/wine.git"
 debian_branch="buster"
 upstream_branch="upstream-stable"
 winehq="git://source.winehq.org/git/wine.git"

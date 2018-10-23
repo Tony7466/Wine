@@ -103,6 +103,8 @@ static BOOL (WINAPI *pGetThreadPreferredUILanguages)(DWORD, ULONG*, WCHAR*, ULON
 static BOOL (WINAPI *pGetUserPreferredUILanguages)(DWORD, ULONG*, WCHAR*, ULONG*);
 static WCHAR (WINAPI *pRtlUpcaseUnicodeChar)(WCHAR);
 static INT (WINAPI *pGetNumberFormatEx)(LPCWSTR, DWORD, LPCWSTR, const NUMBERFMTW *, LPWSTR, int);
+static LANGID (WINAPI *pSetThreadUILanguage)(LANGID);
+static LANGID (WINAPI *pGetThreadUILanguage)(VOID);
 
 static void InitFunctionPointers(void)
 {
@@ -135,6 +137,8 @@ static void InitFunctionPointers(void)
   X(GetThreadPreferredUILanguages);
   X(GetUserPreferredUILanguages);
   X(GetNumberFormatEx);
+  X(SetThreadUILanguage);
+  X(GetThreadUILanguage);
 
   mod = GetModuleHandleA("ntdll");
   X(RtlUpcaseUnicodeChar);
@@ -2515,6 +2519,27 @@ static void test_lcmapstring_unicode(lcmapstring_wrapper func_ptr, const char *f
     ok(!ret && GetLastError() == ERROR_INSUFFICIENT_BUFFER,
        "%s should return 0 and ERROR_INSUFFICIENT_BUFFER, got %d\n", func_name, ret);
 
+    buf[0] = 'a';
+    buf[1] = 0x30ac;
+    ret = func_ptr(LCMAP_HALFWIDTH | LCMAP_UPPERCASE, buf, 2, buf2, 0);
+    ok(ret == 3, "%s ret %d, expected value 3\n", func_name, ret);
+
+    SetLastError(0xdeadbeef);
+    ret = func_ptr(LCMAP_HALFWIDTH | LCMAP_UPPERCASE, buf, 2, buf2, 1);
+    ok(!ret && GetLastError() == ERROR_INSUFFICIENT_BUFFER,
+       "%s should return 0 and ERROR_INSUFFICIENT_BUFFER, got %d\n", func_name, ret);
+
+    SetLastError(0xdeadbeef);
+    ret = func_ptr(LCMAP_HALFWIDTH | LCMAP_UPPERCASE, buf, 2, buf2, 2);
+    ok(!ret && GetLastError() == ERROR_INSUFFICIENT_BUFFER,
+       "%s should return 0 and ERROR_INSUFFICIENT_BUFFER, got %d\n", func_name, ret);
+
+    ret = func_ptr(LCMAP_HALFWIDTH | LCMAP_UPPERCASE, buf, 2, buf2, 3);
+    ok(ret == 3, "%s ret %d, expected value 3\n", func_name, ret);
+
+    ret = func_ptr(LCMAP_HALFWIDTH | LCMAP_UPPERCASE, buf, 2, buf2, 4);
+    ok(ret == 3, "%s ret %d, expected value 3\n", func_name, ret);
+
     /* LCMAP_UPPERCASE or LCMAP_LOWERCASE should accept src == dst */
     lstrcpyW(buf, lower_case);
     ret = func_ptr(LCMAP_UPPERCASE,
@@ -4491,6 +4516,10 @@ static void test_GetLocaleInfoEx(void)
         ok(ret == 1, "got %d\n", ret);
         ok(!bufferW[0], "got %s\n", wine_dbgstr_w(bufferW));
 
+        ret = pGetLocaleInfoEx(enW, LOCALE_SPARENT | LOCALE_NOUSEROVERRIDE, bufferW, sizeof(bufferW)/sizeof(WCHAR));
+        ok(ret == 1, "got %d\n", ret);
+        ok(!bufferW[0], "got %s\n", wine_dbgstr_w(bufferW));
+
         ret = pGetLocaleInfoEx(enW, LOCALE_SCOUNTRY, bufferW, sizeof(bufferW)/sizeof(WCHAR));
         ok(ret == lstrlenW(bufferW)+1, "got %d\n", ret);
         if ((PRIMARYLANGID(LANGIDFROMLCID(GetSystemDefaultLCID())) != LANG_ENGLISH) ||
@@ -5329,6 +5358,28 @@ static void test_GetUserPreferredUILanguages(void)
     HeapFree(GetProcessHeap(), 0, buffer);
 }
 
+static void test_SetThreadUILanguage(void)
+{
+    LANGID res;
+
+    if (!pGetThreadUILanguage)
+    {
+        win_skip("GetThreadUILanguage isn't implemented, skipping SetThreadUILanguage tests for version < Vista\n");
+        return;   /* BTW SetThreadUILanguage is present on winxp/2003 but doesn`t set the LANGID anyway when tested */
+    }
+
+    res = pSetThreadUILanguage(0);
+    ok(res == pGetThreadUILanguage(), "expected %d got %d\n", pGetThreadUILanguage(), res);
+
+    res = pSetThreadUILanguage(MAKELANGID(LANG_DUTCH, SUBLANG_DUTCH_BELGIAN));
+    ok(res == MAKELANGID(LANG_DUTCH, SUBLANG_DUTCH_BELGIAN),
+    "expected %d got %d\n", MAKELANGID(LANG_DUTCH, SUBLANG_DUTCH_BELGIAN), res);
+
+    res = pSetThreadUILanguage(0);
+    todo_wine ok(res == MAKELANGID(LANG_DUTCH, SUBLANG_DUTCH_BELGIAN),
+    "expected %d got %d\n", MAKELANGID(LANG_DUTCH, SUBLANG_DUTCH_BELGIAN), res);
+}
+
 START_TEST(locale)
 {
   InitFunctionPointers();
@@ -5375,6 +5426,7 @@ START_TEST(locale)
   test_GetSystemPreferredUILanguages();
   test_GetThreadPreferredUILanguages();
   test_GetUserPreferredUILanguages();
+  test_SetThreadUILanguage();
   /* this requires collation table patch to make it MS compatible */
   if (0) test_sorting();
 }

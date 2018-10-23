@@ -1396,8 +1396,10 @@ LANGID WINAPI GetSystemDefaultUILanguage(void)
 LCID WINAPI LocaleNameToLCID( LPCWSTR name, DWORD flags )
 {
     struct locale_name locale_name;
+    static int once;
 
-    if (flags) FIXME( "unsupported flags %x\n", flags );
+    if (flags && !once++)
+        FIXME( "unsupported flags %x\n", flags );
 
     if (name == LOCALE_NAME_USER_DEFAULT)
         return GetUserDefaultLCID();
@@ -1427,7 +1429,8 @@ LCID WINAPI LocaleNameToLCID( LPCWSTR name, DWORD flags )
  */
 INT WINAPI LCIDToLocaleName( LCID lcid, LPWSTR name, INT count, DWORD flags )
 {
-    if (flags) FIXME( "unsupported flags %x\n", flags );
+    static int once;
+    if (flags && !once++) FIXME( "unsupported flags %x\n", flags );
 
     return GetLocaleInfoW( lcid, LOCALE_SNAME | LOCALE_NOUSEROVERRIDE, name, count );
 }
@@ -1809,7 +1812,7 @@ INT WINAPI GetLocaleInfoEx(LPCWSTR locale, LCTYPE info, LPWSTR buffer, INT len)
     /* special handling for neutral locale names */
     if (locale && strlenW(locale) == 2)
     {
-        switch (info)
+        switch (info & ~LOCALE_LOCALEINFOFLAGSMASK)
         {
         case LOCALE_SNAME:
             if (len && len < 3)
@@ -2818,7 +2821,11 @@ BOOL WINAPI SetThreadLocale( LCID lcid )
 LANGID WINAPI SetThreadUILanguage( LANGID langid )
 {
     TRACE("(0x%04x) stub - returning success\n", langid);
-    return langid;
+
+    if (!langid)
+        return GetThreadUILanguage();
+    else
+        return langid;
 }
 
 /******************************************************************************
@@ -3619,21 +3626,17 @@ INT WINAPI LCMapStringEx(LPCWSTR name, DWORD flags, LPCWSTR src, INT srclen, LPW
             {
                 /* map full-width character to half-width one,
                    e.g. U+30A2 -> U+FF71, U+30D7 -> U+FF8C U+FF9F. */
-                if (map_to_halfwidth(wch, dst_ptr, dstlen) == 2)
+                if (map_to_halfwidth(wch, dst_ptr, len) == 2)
                 {
-                    dstlen--;
+                    len--;
                     dst_ptr++;
-                    if (!dstlen)
-                    {
-                        SetLastError(ERROR_INSUFFICIENT_BUFFER);
-                        return 0;
-                    }
+                    if (!len) break;
                 }
             }
             else
                 *dst_ptr = wch;
         }
-        if (!(flags & (LCMAP_UPPERCASE | LCMAP_LOWERCASE)))
+        if (!(flags & (LCMAP_UPPERCASE | LCMAP_LOWERCASE)) || srclen)
             goto done;
 
         srclen = dst_ptr - dst;
