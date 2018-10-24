@@ -1,3 +1,10 @@
+wine (3.0.3-2~bpo9+1) stretch-backports; urgency=medium
+
+  * Rebuild for stretch-backports.
+    No changes needed.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Wed, 24 Oct 2018 19:57:06 +0200
+
 wine (3.0.3-2) unstable; urgency=medium
 
   * Revert upstream commit which requires clang >= 5.0 to build on arm64.
