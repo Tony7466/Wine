@@ -1,3 +1,14 @@
+wine-development (3.19-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.19, released Oct 26, 2018.
+    - Support for file I/O completion modes.
+    - WaitOnAddress synchronization primitives.
+    - Better support for 32-bit .NET binaries on 64-bit.
+    - Improved recovery on broken RPC connection.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 27 Oct 2018 23:56:51 +0000
+
 wine-development (3.18-2) unstable; urgency=medium
 
   * Fix build error on arm64 (closes: #910944).
