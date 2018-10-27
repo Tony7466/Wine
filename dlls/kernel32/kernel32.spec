@@ -313,9 +313,10 @@
 # @ stub CreatePrivateNamespaceA
 # @ stub CreatePrivateNamespaceW
 @ stdcall CreateProcessA(str str ptr ptr long long ptr str ptr ptr)
-# @ stub CreateProcessAsUserW
-# @ stub CreateProcessInternalA
-# @ stub CreateProcessInternalW
+@ stdcall CreateProcessAsUserA(long str str ptr ptr long long ptr str ptr ptr)
+@ stdcall CreateProcessAsUserW(long wstr wstr ptr ptr long long ptr wstr ptr ptr)
+@ stdcall CreateProcessInternalA(long str str ptr ptr long long ptr str ptr ptr ptr)
+@ stdcall CreateProcessInternalW(long wstr wstr ptr ptr long long ptr wstr ptr ptr ptr)
 # @ stub CreateProcessInternalWSecure
 @ stdcall CreateProcessW(wstr wstr ptr ptr long long ptr wstr ptr ptr)
 @ stdcall CreateRemoteThread(long ptr long ptr long long ptr)
@@ -786,6 +787,7 @@
 @ stdcall GetProcessId(long)
 @ stdcall GetProcessIdOfThread(long)
 @ stdcall GetProcessIoCounters(long ptr)
+@ stdcall GetProcessMitigationPolicy(long long ptr long)
 # @ stub GetProcessPreferredUILanguages
 @ stdcall GetProcessPriorityBoost(long ptr)
 @ stdcall GetProcessShutdownParameters(ptr ptr)
@@ -1088,8 +1090,8 @@
 @ stdcall MoveFileA(str str)
 @ stdcall MoveFileExA(str str long)
 @ stdcall MoveFileExW(wstr wstr long)
-# @ stub MoveFileTransactedA
-# @ stub MoveFileTransactedW
+@ stdcall MoveFileTransactedA(str str ptr ptr long ptr)
+@ stdcall MoveFileTransactedW(wstr wstr ptr ptr long ptr)
 @ stdcall MoveFileW(wstr wstr)
 @ stdcall MoveFileWithProgressA(str str ptr ptr long)
 @ stdcall MoveFileWithProgressW(wstr wstr ptr ptr long)

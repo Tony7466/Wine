@@ -28,6 +28,7 @@
 #include "winternl.h"
 #define CRYPT_OID_INFO_HAS_EXTRA_FIELDS
 #include "wincrypt.h"
+#include "snmp.h"
 #include "bcrypt.h"
 #include "winnls.h"
 #include "rpc.h"
@@ -1242,6 +1243,12 @@ BOOL WINAPI CertComparePublicKeyInfo(DWORD dwCertEncodingType,
 
     TRACE("(%08x, %p, %p)\n", dwCertEncodingType, pPublicKey1, pPublicKey2);
 
+    /* RSA public key data should start with ASN_SEQUENCE,
+     * otherwise it's not a RSA_CSP_PUBLICKEYBLOB.
+     */
+    if (!pPublicKey1->PublicKey.cbData || pPublicKey1->PublicKey.pbData[0] != ASN_SEQUENCE)
+        dwCertEncodingType = 0;
+
     switch (GET_CERT_ENCODING_TYPE(dwCertEncodingType))
     {
     case 0:	/* Seems to mean "raw binary bits" */
@@ -1267,32 +1274,21 @@ BOOL WINAPI CertComparePublicKeyInfo(DWORD dwCertEncodingType,
         ret = FALSE;
         if (CryptDecodeObject(dwCertEncodingType, RSA_CSP_PUBLICKEYBLOB,
                     pPublicKey1->PublicKey.pbData, pPublicKey1->PublicKey.cbData,
-                    0, NULL, &length))
+                    CRYPT_DECODE_ALLOC_FLAG, &pblob1, &length))
         {
-            pblob1 = CryptMemAlloc(length);
             if (CryptDecodeObject(dwCertEncodingType, RSA_CSP_PUBLICKEYBLOB,
-                    pPublicKey1->PublicKey.pbData, pPublicKey1->PublicKey.cbData,
-                    0, pblob1, &length))
+                        pPublicKey2->PublicKey.pbData, pPublicKey2->PublicKey.cbData,
+                        CRYPT_DECODE_ALLOC_FLAG, &pblob2, &length))
             {
-                if (CryptDecodeObject(dwCertEncodingType, RSA_CSP_PUBLICKEYBLOB,
-                            pPublicKey2->PublicKey.pbData, pPublicKey2->PublicKey.cbData,
-                            0, NULL, &length))
-                {
-                    pblob2 = CryptMemAlloc(length);
-                    if (CryptDecodeObject(dwCertEncodingType, RSA_CSP_PUBLICKEYBLOB,
-                            pPublicKey2->PublicKey.pbData, pPublicKey2->PublicKey.cbData,
-                            0, pblob2, &length))
-                    {
-                        /* The RSAPUBKEY structure directly follows the BLOBHEADER */
-                        RSAPUBKEY *pk1 = (LPVOID)(pblob1 + 1),
-                                  *pk2 = (LPVOID)(pblob2 + 1);
-                        ret = (pk1->bitlen == pk2->bitlen) && (pk1->pubexp == pk2->pubexp)
-                                 && !memcmp(pk1 + 1, pk2 + 1, pk1->bitlen/8);
-                    }
-                    CryptMemFree(pblob2);
-                }
+                /* The RSAPUBKEY structure directly follows the BLOBHEADER */
+                RSAPUBKEY *pk1 = (LPVOID)(pblob1 + 1),
+                          *pk2 = (LPVOID)(pblob2 + 1);
+                ret = (pk1->bitlen == pk2->bitlen) && (pk1->pubexp == pk2->pubexp)
+                         && !memcmp(pk1 + 1, pk2 + 1, pk1->bitlen/8);
+
+                LocalFree(pblob2);
             }
-            CryptMemFree(pblob1);
+            LocalFree(pblob1);
         }
 
         break;

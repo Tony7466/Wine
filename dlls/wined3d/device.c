@@ -523,7 +523,7 @@ ULONG CDECL wined3d_device_decref(struct wined3d_device *device)
 
         wined3d_decref(device->wined3d);
         device->wined3d = NULL;
-        heap_free(device);
+        heap_free(wined3d_device_gl(device));
         TRACE("Freed device %p.\n", device);
     }
 
@@ -610,7 +610,7 @@ out:
 /* Context activation is done by the caller. */
 static void create_dummy_textures(struct wined3d_device *device, struct wined3d_context *context)
 {
-    struct wined3d_dummy_textures *textures = &device->dummy_textures;
+    struct wined3d_dummy_textures *textures = &wined3d_device_gl(device)->dummy_textures;
     const struct wined3d_d3d_info *d3d_info = context->d3d_info;
     const struct wined3d_gl_info *gl_info = context->gl_info;
     unsigned int i;
@@ -738,13 +738,13 @@ static void create_dummy_textures(struct wined3d_device *device, struct wined3d_
 
     checkGLcall("create dummy textures");
 
-    context_bind_dummy_textures(device, context);
+    context_bind_dummy_textures(context);
 }
 
 /* Context activation is done by the caller. */
 static void destroy_dummy_textures(struct wined3d_device *device, struct wined3d_context *context)
 {
-    struct wined3d_dummy_textures *dummy_textures = &device->dummy_textures;
+    struct wined3d_dummy_textures *dummy_textures = &wined3d_device_gl(device)->dummy_textures;
     const struct wined3d_gl_info *gl_info = context->gl_info;
 
     if (gl_info->supported[ARB_TEXTURE_MULTISAMPLE])
@@ -1968,29 +1968,40 @@ static void resolve_depth_buffer(struct wined3d_device *device)
             src_view->resource, src_view->sub_resource_idx, dst_resource->format->id);
 }
 
-void CDECL wined3d_device_set_blend_state(struct wined3d_device *device, struct wined3d_blend_state *blend_state)
+void CDECL wined3d_device_set_blend_state(struct wined3d_device *device,
+        struct wined3d_blend_state *blend_state, const struct wined3d_color *blend_factor)
 {
+    struct wined3d_state *state = device->update_state;
     struct wined3d_blend_state *prev;
 
-    TRACE("device %p, blend_state %p.\n", device, blend_state);
+    TRACE("device %p, blend_state %p, blend_factor %s.\n", device, blend_state, debug_color(blend_factor));
 
-    prev = device->update_state->blend_state;
-    if (prev == blend_state)
+    if (device->recording)
+        device->recording->changed.blend_state = TRUE;
+
+    prev = state->blend_state;
+    if (prev == blend_state && !memcmp(blend_factor, &state->blend_factor, sizeof(*blend_factor)))
         return;
 
     if (blend_state)
         wined3d_blend_state_incref(blend_state);
-    device->update_state->blend_state = blend_state;
-    wined3d_cs_emit_set_blend_state(device->cs, blend_state);
+    state->blend_state = blend_state;
+    state->blend_factor = *blend_factor;
+    if (!device->recording)
+        wined3d_cs_emit_set_blend_state(device->cs, blend_state, blend_factor);
     if (prev)
         wined3d_blend_state_decref(prev);
 }
 
-struct wined3d_blend_state * CDECL wined3d_device_get_blend_state(const struct wined3d_device *device)
+struct wined3d_blend_state * CDECL wined3d_device_get_blend_state(const struct wined3d_device *device,
+        struct wined3d_color *blend_factor)
 {
-    TRACE("device %p.\n", device);
+    const struct wined3d_state *state = &device->state;
 
-    return device->state.blend_state;
+    TRACE("device %p, blend_factor %p.\n", device, blend_factor);
+
+    *blend_factor = state->blend_factor;
+    return state->blend_state;
 }
 
 void CDECL wined3d_device_set_rasterizer_state(struct wined3d_device *device,
@@ -5315,12 +5326,14 @@ LRESULT device_process_message(struct wined3d_device *device, HWND window, BOOL 
     }
     else if (message == WM_ACTIVATEAPP)
     {
-        UINT i;
+        unsigned int i = device->swapchain_count;
 
-        for (i = 0; i < device->swapchain_count; i++)
+        /* Deactivating the implicit swapchain may cause the application
+         * (e.g. Deus Ex: GOTY) to destroy the device, so take care to
+         * deactivate the implicit swapchain last, and to avoid accessing the
+         * "device" pointer afterwards. */
+        while (i--)
             wined3d_swapchain_activate(device->swapchains[i], wparam);
-
-        device->device_parent->ops->activate(device->device_parent, wparam);
     }
     else if (message == WM_SYSCOMMAND)
     {

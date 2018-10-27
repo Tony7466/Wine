@@ -1743,9 +1743,9 @@ static int context_choose_pixel_format(const struct wined3d_device *device, HDC 
 }
 
 /* Context activation is done by the caller. */
-void context_bind_dummy_textures(const struct wined3d_device *device, const struct wined3d_context *context)
+void context_bind_dummy_textures(const struct wined3d_context *context)
 {
-    const struct wined3d_dummy_textures *textures = &context->device->dummy_textures;
+    const struct wined3d_dummy_textures *textures = &wined3d_device_gl(context->device)->dummy_textures;
     const struct wined3d_gl_info *gl_info = context->gl_info;
     unsigned int i;
 
@@ -2286,8 +2286,8 @@ BOOL wined3d_adapter_gl_create_context(struct wined3d_context *context,
     /* If this happens to be the first context for the device, dummy textures
      * are not created yet. In that case, they will be created (and bound) by
      * create_dummy_textures right after this context is initialized. */
-    if (device->dummy_textures.tex_2d)
-        context_bind_dummy_textures(device, context);
+    if (wined3d_device_gl(device)->dummy_textures.tex_2d)
+        context_bind_dummy_textures(context);
 
     /* Initialise all rectangles to avoid resetting unused ones later. */
     gl_info->gl_ops.gl.p_glScissor(0, 0, 0, 0);
@@ -2520,7 +2520,7 @@ void context_bind_bo(struct wined3d_context *context, GLenum binding, GLuint nam
 
 void context_bind_texture(struct wined3d_context *context, GLenum target, GLuint name)
 {
-    const struct wined3d_dummy_textures *textures = &context->device->dummy_textures;
+    const struct wined3d_dummy_textures *textures = &wined3d_device_gl(context->device)->dummy_textures;
     const struct wined3d_gl_info *gl_info = context->gl_info;
     DWORD unit = context->active_texture;
     DWORD old_texture_type = context->texture_type[unit];
@@ -2846,6 +2846,8 @@ void context_apply_blit_state(struct wined3d_context *context, const struct wine
         }
         context_invalidate_state(context, STATE_SAMPLER(sampler));
     }
+    context_invalidate_compute_state(context, STATE_COMPUTE_SHADER_RESOURCE_BINDING);
+    context_invalidate_state(context, STATE_GRAPHICS_SHADER_RESOURCE_BINDING);
 
     if (gl_info->supported[WINED3D_GL_LEGACY_CONTEXT])
     {
@@ -3670,7 +3672,7 @@ static void context_update_stream_info(struct wined3d_context *context, const st
         if (buffer->fence)
             context->buffer_fences[context->buffer_fence_count++] = buffer->fence;
 
-        TRACE("Load array %u {%#x:%p}.\n", i, element->data.buffer_object, element->data.addr);
+        TRACE("Load array %u %s.\n", i, debug_bo_address(&element->data));
     }
 
     if (prev_all_vbo != stream_info->all_vbo)
@@ -5068,8 +5070,8 @@ void context_load_tex_coords(const struct wined3d_context *context, const struct
         {
             const struct wined3d_stream_info_element *e = &si->elements[WINED3D_FFP_TEXCOORD0 + coord_idx];
 
-            TRACE("Setting up texture %u, idx %d, coord_idx %u, data {%#x:%p}.\n",
-                    texture_idx, mapped_stage, coord_idx, e->data.buffer_object, e->data.addr);
+            TRACE("Setting up texture %u, idx %u, coord_idx %u, data %s.\n",
+                    texture_idx, mapped_stage, coord_idx, debug_bo_address(&e->data));
 
             if (*current_bo != e->data.buffer_object)
             {
@@ -5386,7 +5388,7 @@ static void context_load_numbered_arrays(struct wined3d_context *context,
             continue;
         }
 
-        TRACE("Loading array %u [VBO=%u].\n", i, element->data.buffer_object);
+        TRACE("Loading array %u %s.\n", i, debug_bo_address(&element->data));
 
         if (element->stride)
         {

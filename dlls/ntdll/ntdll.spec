@@ -839,7 +839,7 @@
 @ stdcall -norelay RtlRaiseException(ptr)
 @ stdcall RtlRaiseStatus(long)
 @ stdcall RtlRandom(ptr)
-@ stub RtlRandomEx
+@ stdcall RtlRandomEx(ptr)
 @ stdcall RtlReAllocateHeap(long long ptr long)
 @ stub RtlReadMemoryStream
 @ stub RtlReadOutOfProcessMemoryStream
@@ -978,6 +978,9 @@
 # @ stub RtlValidateUnicodeString
 @ stdcall RtlVerifyVersionInfo(ptr long int64)
 @ stdcall -arch=x86_64 RtlVirtualUnwind(long long long ptr ptr ptr ptr ptr)
+@ stdcall RtlWaitOnAddress(ptr ptr long ptr)
+@ stdcall RtlWakeAddressAll(ptr)
+@ stdcall RtlWakeAddressSingle(ptr)
 @ stdcall RtlWakeAllConditionVariable(ptr)
 @ stdcall RtlWakeConditionVariable(ptr)
 @ stub RtlWalkFrameChain

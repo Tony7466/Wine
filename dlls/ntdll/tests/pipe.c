@@ -77,6 +77,7 @@ static NTSTATUS (WINAPI *pNtQueryVolumeInformationFile)(HANDLE handle, PIO_STATU
 static NTSTATUS (WINAPI *pNtSetInformationFile) (HANDLE handle, PIO_STATUS_BLOCK io, PVOID ptr, ULONG len, FILE_INFORMATION_CLASS class);
 static NTSTATUS (WINAPI *pNtCancelIoFile) (HANDLE hFile, PIO_STATUS_BLOCK io_status);
 static NTSTATUS (WINAPI *pNtCancelIoFileEx) (HANDLE hFile, IO_STATUS_BLOCK *iosb, IO_STATUS_BLOCK *io_status);
+static NTSTATUS (WINAPI *pNtRemoveIoCompletion)(HANDLE, PULONG_PTR, PULONG_PTR, PIO_STATUS_BLOCK, PLARGE_INTEGER);
 static void (WINAPI *pRtlInitUnicodeString) (PUNICODE_STRING target, PCWSTR source);
 
 static HANDLE (WINAPI *pOpenThread)(DWORD dwDesiredAccess, BOOL bInheritHandle, DWORD dwThreadId);
@@ -99,6 +100,7 @@ static BOOL init_func_ptrs(void)
     loadfunc(NtSetInformationFile)
     loadfunc(NtCancelIoFile)
     loadfunc(RtlInitUnicodeString)
+    loadfunc(NtRemoveIoCompletion)
 
     /* not fatal */
     pNtCancelIoFileEx = (void *)GetProcAddress(module, "NtCancelIoFileEx");
@@ -807,30 +809,31 @@ static void test_peek(HANDLE pipe)
 
 static BOOL create_pipe_pair( HANDLE *read, HANDLE *write, ULONG flags, ULONG type, ULONG size )
 {
-    const BOOL server_reader = flags & PIPE_ACCESS_INBOUND;
     HANDLE client, server;
 
     server = CreateNamedPipeA(PIPENAME, flags, PIPE_WAIT | type,
                               1, size, size, NMPWAIT_USE_DEFAULT_WAIT, NULL);
     ok(server != INVALID_HANDLE_VALUE, "CreateNamedPipe failed\n");
 
-    client = CreateFileA(PIPENAME, server_reader ? GENERIC_WRITE : GENERIC_READ | FILE_WRITE_ATTRIBUTES, 0,
+    client = CreateFileA(PIPENAME, (flags & PIPE_ACCESS_INBOUND ? GENERIC_WRITE : 0)
+                         | (flags & PIPE_ACCESS_OUTBOUND ? GENERIC_READ : 0)
+                         | FILE_WRITE_ATTRIBUTES, 0,
                          NULL, OPEN_EXISTING, flags & FILE_FLAG_OVERLAPPED, 0);
     ok(client != INVALID_HANDLE_VALUE, "CreateFile failed (%d)\n", GetLastError());
 
-    if(server_reader)
+    if ((type & PIPE_READMODE_MESSAGE) && (flags & PIPE_ACCESS_OUTBOUND))
+    {
+        DWORD read_mode = PIPE_READMODE_MESSAGE;
+        ok(SetNamedPipeHandleState(client, &read_mode, NULL, NULL), "Change mode\n");
+    }
+
+    if (flags & PIPE_ACCESS_INBOUND)
     {
         *read = server;
         *write = client;
     }
     else
     {
-        if(type & PIPE_READMODE_MESSAGE)
-        {
-            DWORD read_mode = PIPE_READMODE_MESSAGE;
-            ok(SetNamedPipeHandleState(client, &read_mode, NULL, NULL), "Change mode\n");
-        }
-
         *read = client;
         *write = server;
     }
@@ -927,6 +930,24 @@ static void read_pipe_test(ULONG pipe_flags, ULONG pipe_type)
     ResetEvent( event );
     ret = WriteFile( write, buffer, 2, &written, NULL );
     ok(ret && written == 2, "WriteFile error %d\n", GetLastError());
+
+    memset( &iosb, 0xcc, sizeof(iosb) );
+    status = NtFsControlFile( read, NULL, NULL, NULL, &iosb, FSCTL_PIPE_PEEK, NULL, 0, buffer,
+                              FIELD_OFFSET(FILE_PIPE_PEEK_BUFFER, Data[1]) );
+    if (pipe_type & PIPE_TYPE_MESSAGE)
+    {
+        ok( status == STATUS_BUFFER_OVERFLOW || status == STATUS_PENDING,
+            "FSCTL_PIPE_PEEK returned %x\n", status );
+        ok( U(iosb).Status == STATUS_BUFFER_OVERFLOW, "wrong status %x\n", U(iosb).Status );
+    }
+    else
+    {
+        ok( !status || status == STATUS_PENDING, "FSCTL_PIPE_PEEK returned %x\n", status );
+        ok( U(iosb).Status == 0, "wrong status %x\n", U(iosb).Status );
+    }
+    ok( iosb.Information == FIELD_OFFSET(FILE_PIPE_PEEK_BUFFER, Data[1]),
+        "wrong info %lu\n", iosb.Information );
+
     status = NtReadFile( read, event, apc, &apc_count, &iosb, buffer, 1, NULL, NULL );
     if (pipe_type & PIPE_READMODE_MESSAGE)
     {
@@ -1182,6 +1203,146 @@ static void test_transceive(void)
     CloseHandle( callee );
 }
 
+#define test_no_queued_completion(a) _test_no_queued_completion(__LINE__,a)
+static void _test_no_queued_completion(unsigned line, HANDLE port)
+{
+    OVERLAPPED *pov;
+    DWORD num_bytes;
+    ULONG_PTR key;
+    BOOL ret;
+
+    pov = (void *)0xdeadbeef;
+    ret = GetQueuedCompletionStatus(port, &num_bytes, &key, &pov, 10);
+    ok_(__FILE__,line)(!ret && GetLastError() == WAIT_TIMEOUT,
+                       "GetQueuedCompletionStatus returned %x(%u)\n", ret, GetLastError());
+}
+
+#define test_queued_completion(a,b,c,d) _test_queued_completion(__LINE__,a,b,c,d)
+static void _test_queued_completion(unsigned line, HANDLE port, IO_STATUS_BLOCK *io,
+                                    NTSTATUS expected_status, ULONG expected_information)
+{
+    LARGE_INTEGER timeout = {{0}};
+    ULONG_PTR value = 0xdeadbeef;
+    IO_STATUS_BLOCK iosb;
+    ULONG_PTR key;
+    NTSTATUS status;
+
+    status = pNtRemoveIoCompletion(port, &key, &value, &iosb, &timeout);
+    ok_(__FILE__,line)(status == STATUS_SUCCESS, "NtRemoveIoCompletion returned %x\n", status);
+    ok_(__FILE__,line)(value == (ULONG_PTR)io, "value = %lx\n", value);
+    ok_(__FILE__,line)(io->Status == expected_status, "Status = %x\n", io->Status);
+    ok_(__FILE__,line)(io->Information == expected_information,
+                       "Information = %lu\n", io->Information);
+}
+
+static void test_completion(void)
+{
+    static const char buf[] = "testdata";
+    FILE_IO_COMPLETION_NOTIFICATION_INFORMATION info;
+    FILE_PIPE_PEEK_BUFFER peek_buf;
+    char read_buf[16];
+    HANDLE port, pipe, client;
+    OVERLAPPED ov;
+    IO_STATUS_BLOCK io;
+    NTSTATUS status;
+    DWORD num_bytes;
+    BOOL ret;
+
+    create_pipe_pair( &pipe, &client, FILE_FLAG_OVERLAPPED | PIPE_ACCESS_DUPLEX,
+                      PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE, 4096 );
+
+    status = pNtQueryInformationFile(pipe, &io, &info, sizeof(info),
+                                     FileIoCompletionNotificationInformation);
+    ok(status == STATUS_SUCCESS || broken(status == STATUS_INVALID_INFO_CLASS),
+       "status = %x\n", status);
+    if (status)
+    {
+        win_skip("FileIoCompletionNotificationInformation not supported\n");
+        CloseHandle(pipe);
+        CloseHandle(client);
+        return;
+    }
+
+    memset(&ov, 0, sizeof(ov));
+    ov.hEvent = CreateEventA(NULL, TRUE, FALSE, NULL);
+    ok(ov.hEvent != INVALID_HANDLE_VALUE, "CreateEvent failed, error %u\n", GetLastError());
+
+    port = CreateIoCompletionPort(client, NULL, 0xdeadbeef, 0);
+    ok(port != NULL, "CreateIoCompletionPort failed, error %u\n", GetLastError());
+
+    ret = WriteFile(client, buf, sizeof(buf), &num_bytes, &ov);
+    ok(ret, "WriteFile failed, error %u\n", GetLastError());
+    ok(num_bytes == sizeof(buf), "expected sizeof(buf), got %u\n", num_bytes);
+    test_queued_completion(port, (IO_STATUS_BLOCK*)&ov, STATUS_SUCCESS, num_bytes);
+
+    status = NtFsControlFile(client, NULL, NULL, &io, &io, FSCTL_PIPE_PEEK,
+                             NULL, 0, &peek_buf, sizeof(peek_buf));
+    ok(status == STATUS_PENDING || status == STATUS_SUCCESS, "FSCTL_PIPE_PEEK returned %x\n", status);
+    test_queued_completion(port, &io, STATUS_SUCCESS, FIELD_OFFSET(FILE_PIPE_PEEK_BUFFER, Data));
+
+    info.Flags = FILE_SKIP_COMPLETION_PORT_ON_SUCCESS;
+    status = pNtSetInformationFile(client, &io, &info, sizeof(info), FileIoCompletionNotificationInformation);
+    ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status);
+
+    ret = WriteFile(client, buf, sizeof(buf), &num_bytes, &ov);
+    ok(ret, "WriteFile failed, error %u\n", GetLastError());
+    ok(num_bytes == sizeof(buf), "expected sizeof(buf), got %u\n", num_bytes);
+    test_no_queued_completion(port);
+
+    ret = WriteFile(pipe, buf, sizeof(buf), &num_bytes, &ov);
+    ok(ret, "WriteFile failed, error %u\n", GetLastError());
+    ok(num_bytes == sizeof(buf), "expected sizeof(buf), got %u\n", num_bytes);
+
+    status = NtReadFile(client, NULL, NULL, &io, &io, read_buf, 1, NULL, NULL);
+    ok(status == STATUS_BUFFER_OVERFLOW || status == STATUS_PENDING, "status = %x\n", status);
+    ok(io.Status == STATUS_BUFFER_OVERFLOW, "Status = %x\n", io.Status);
+    ok(io.Information == 1, "Information = %lu\n", io.Information);
+    if(status == STATUS_PENDING) /* win8+ */
+        test_queued_completion(port, &io, STATUS_BUFFER_OVERFLOW, 1);
+    else
+        test_no_queued_completion(port);
+
+    status = NtReadFile(client, NULL, NULL, &io, &io, read_buf, sizeof(read_buf), NULL, NULL);
+    ok(status == STATUS_SUCCESS, "status = %x\n", status);
+    ok(io.Status == STATUS_SUCCESS, "Status = %x\n", io.Status);
+    ok(io.Information == sizeof(buf)-1, "Information = %lu\n", io.Information);
+    test_no_queued_completion(port);
+
+    status = NtFsControlFile(client, NULL, NULL, &io, &io, FSCTL_PIPE_PEEK,
+                             NULL, 0, &peek_buf, sizeof(peek_buf));
+    ok(status == STATUS_PENDING || status == STATUS_SUCCESS, "FSCTL_PIPE_PEEK returned %x\n", status);
+    if(status == STATUS_PENDING) /* win8+ */
+        test_queued_completion(port, &io, STATUS_SUCCESS, FIELD_OFFSET(FILE_PIPE_PEEK_BUFFER, Data));
+    else
+        test_no_queued_completion(port);
+
+    memset(&io, 0xcc, sizeof(io));
+    status = NtReadFile(client, ov.hEvent, NULL, &io, &io, read_buf, sizeof(read_buf), NULL, NULL);
+    ok(status == STATUS_PENDING, "status = %x\n", status);
+    ok(!is_signaled(ov.hEvent), "event is signtaled\n");
+    test_no_queued_completion(port);
+
+    ret = WriteFile(pipe, buf, sizeof(buf), &num_bytes, NULL);
+    ok(ret, "WriteFile failed, error %u\n", GetLastError());
+    test_queued_completion(port, &io, STATUS_SUCCESS, sizeof(buf));
+
+    ret = WriteFile(pipe, buf, sizeof(buf), &num_bytes, NULL);
+    ok(ret, "WriteFile failed, error %u\n", GetLastError());
+    status = NtFsControlFile(client, NULL, NULL, &io, &io, FSCTL_PIPE_PEEK,
+                             NULL, 0, &peek_buf, sizeof(peek_buf));
+    ok(status == STATUS_PENDING || status == STATUS_BUFFER_OVERFLOW,
+       "FSCTL_PIPE_PEEK returned %x\n", status);
+    if(status == STATUS_PENDING) /* win8+ */
+        test_queued_completion(port, &io, STATUS_BUFFER_OVERFLOW, sizeof(peek_buf));
+    else
+        test_no_queued_completion(port);
+
+    CloseHandle(ov.hEvent);
+    CloseHandle(client);
+    CloseHandle(pipe);
+    CloseHandle(port);
+}
+
 static void test_volume_info(void)
 {
     FILE_FS_DEVICE_INFORMATION *device_info;
@@ -1330,7 +1491,6 @@ static void test_pipe_state(HANDLE pipe, BOOL is_server, DWORD state)
         expected_status = STATUS_PIPE_BROKEN;
         break;
     }
-    todo_wine_if(expected_status == STATUS_BUFFER_OVERFLOW || expected_status == STATUS_PIPE_DISCONNECTED)
     ok(status == expected_status, "status = %x, expected %x in %s state %u\n",
        status, expected_status, is_server ? "server" : "client", state);
     if (!status)
@@ -1345,7 +1505,6 @@ static void test_pipe_state(HANDLE pipe, BOOL is_server, DWORD state)
                                  buf, 1, buf+1, 1);
         if (!status || status == STATUS_PENDING)
             status = io.Status;
-        todo_wine_if(expected_status == STATUS_PIPE_DISCONNECTED)
         ok(status == expected_status,
             "NtFsControlFile(FSCTL_PIPE_TRANSCEIVE) failed in %s state %u: %x\n",
             is_server ? "server" : "client", state, status);
@@ -1355,7 +1514,6 @@ static void test_pipe_state(HANDLE pipe, BOOL is_server, DWORD state)
     status = NtFlushBuffersFile(pipe, &io);
     if (!is_server && state == FILE_PIPE_DISCONNECTED_STATE)
     {
-        todo_wine
         ok(status == STATUS_PIPE_DISCONNECTED, "status = %x in %s state %u\n",
            status, is_server ? "server" : "client", state);
     }
@@ -1363,8 +1521,8 @@ static void test_pipe_state(HANDLE pipe, BOOL is_server, DWORD state)
     {
         ok(status == STATUS_SUCCESS, "status = %x in %s state %u\n",
            status, is_server ? "server" : "client", state);
-        todo_wine
         ok(io.Status == status, "io.Status = %x\n", io.Status);
+        ok(!io.Information, "io.Information = %lx\n", io.Information);
     }
 
     if (state != FILE_PIPE_CONNECTED_STATE)
@@ -1415,7 +1573,6 @@ static void test_pipe_with_data_state(HANDLE pipe, BOOL is_server, DWORD state)
             "NtQueryInformationFile(FilePipeLocalInformation) failed in %s state %u: %x\n",
             is_server ? "server" : "client", state, status);
     if (!status)
-        todo_wine
         ok(local_info.NamedPipeState == state, "%s NamedPipeState = %u, expected %u\n",
             is_server ? "server" : "client", local_info.NamedPipeState, state);
 
@@ -1455,7 +1612,6 @@ static void test_pipe_with_data_state(HANDLE pipe, BOOL is_server, DWORD state)
         expected_status = STATUS_BUFFER_OVERFLOW;
         break;
     }
-    todo_wine_if(expected_status == STATUS_BUFFER_OVERFLOW || expected_status == STATUS_PIPE_DISCONNECTED)
     ok(status == expected_status, "status = %x, expected %x in %s state %u\n",
        status, expected_status, is_server ? "server" : "client", state);
     if (status == STATUS_BUFFER_OVERFLOW)
@@ -1631,7 +1787,6 @@ static void test_pipe_local_info(HANDLE pipe, BOOL is_server, DWORD state)
         todo_wine
         ok(local_info.WriteQuotaAvailable == (is_server ? 200 : 100), "WriteQuotaAvailable = %u\n",
            local_info.WriteQuotaAvailable);
-        todo_wine
         ok(local_info.NamedPipeState == state, "%s NamedPipeState = %u, expected %u\n",
            is_server ? "server" : "client", local_info.NamedPipeState, state);
         ok(local_info.NamedPipeEnd == is_server, "NamedPipeEnd = %u\n", local_info.NamedPipeEnd);
@@ -1933,6 +2088,9 @@ START_TEST(pipe)
 
     trace("starting overlapped tests\n");
     test_overlapped();
+
+    trace("starting completion tests\n");
+    test_completion();
 
     trace("starting FILE_PIPE_INFORMATION tests\n");
     test_filepipeinfo();

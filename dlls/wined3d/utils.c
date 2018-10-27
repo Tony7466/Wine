@@ -4208,6 +4208,18 @@ const char *debug_vec4(const struct wined3d_vec4 *v)
             v->x, v->y, v->z, v->w);
 }
 
+const char *debug_const_bo_address(const struct wined3d_const_bo_address *address)
+{
+    if (!address)
+        return "(null)";
+    return wine_dbg_sprintf("{%#lx:%p}", address->buffer_object, address->addr);
+}
+
+const char *debug_bo_address(const struct wined3d_bo_address *address)
+{
+    return debug_const_bo_address((const struct wined3d_const_bo_address *)address);
+}
+
 const char *debug_d3dformat(enum wined3d_format_id format_id)
 {
     switch (format_id)
@@ -4762,7 +4774,6 @@ const char *debug_d3drenderstate(enum wined3d_render_state state)
         D3DSTATE_TO_STR(WINED3D_RS_COLORWRITEENABLE1);
         D3DSTATE_TO_STR(WINED3D_RS_COLORWRITEENABLE2);
         D3DSTATE_TO_STR(WINED3D_RS_COLORWRITEENABLE3);
-        D3DSTATE_TO_STR(WINED3D_RS_BLENDFACTOR);
         D3DSTATE_TO_STR(WINED3D_RS_SRGBWRITEENABLE);
         D3DSTATE_TO_STR(WINED3D_RS_DEPTHBIAS);
         D3DSTATE_TO_STR(WINED3D_RS_WRAP8);
@@ -5011,6 +5022,8 @@ const char *debug_d3dstate(DWORD state)
         return "STATE_STREAM_OUTPUT";
     if (STATE_IS_BLEND(state))
         return "STATE_BLEND";
+    if (STATE_IS_BLEND_FACTOR(state))
+        return "STATE_BLEND_FACTOR";
 
     return wine_dbg_sprintf("UNKNOWN_STATE(%#x)", state);
 }

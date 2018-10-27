@@ -5,8 +5,8 @@ msgstr ""
 "Project-Id-Version: Wine\n"
 "Report-Msgid-Bugs-To: https://bugs.winehq.org\n"
 "POT-Creation-Date: N/A\n"
-"PO-Revision-Date: 2018-08-30 00:16-0600\n"
-"Last-Translator: Zixing Liu <liushuyu011@gmail.com>\n"
+"PO-Revision-Date: 2018-10-25 11:43-0500\n"
+"Last-Translator: Mingcong Bai <jeffbai@aosc.xyz>\n"
 "Language-Team: Chinese (PRC)\n"
 "Language: zh_CN\n"
 "MIME-Version: 1.0\n"
@@ -131,7 +131,7 @@ msgstr ""
 msgid "&Install"
 msgstr "安装(&I)"
 
-#: appwiz.rc:110 appwiz.rc:125 avifil32.rc:55 browseui.rc:40 comctl32.rc:72
+#: appwiz.rc:110 appwiz.rc:125 avifil32.rc:55 browseui.rc:45 comctl32.rc:72
 #: comctl32.rc:87 comctl32.rc:56 comdlg32.rc:171 comdlg32.rc:193
 #: comdlg32.rc:211 comdlg32.rc:233 comdlg32.rc:263 comdlg32.rc:306
 #: comdlg32.rc:328 comdlg32.rc:348 comdlg32.rc:360 comdlg32.rc:399
@@ -293,6 +293,26 @@ msgstr "未压缩"
 #: browseui.rc:28
 msgid "Canceling..."
 msgstr "正在取消..."
+
+#: browseui.rc:29
+msgid "%1!u! %2 remaining"
+msgstr "剩余 %1!u! %2"
+
+#: browseui.rc:30
+msgid "%1!u! %2 and %3!u! %4 remaining"
+msgstr "剩余 %1!u! %2 %3!u! %4"
+
+#: browseui.rc:31
+msgid "seconds"
+msgstr "秒"
+
+#: browseui.rc:32
+msgid "minutes"
+msgstr "分"
+
+#: browseui.rc:33
+msgid "hours"
+msgstr "时"
 
 #: comctl32.rc:68 winefile.rc:157
 msgid "Properties for %s"
@@ -10729,9 +10749,7 @@ msgstr "Verify 处于 %1 状态\n"
 
 #: cmd.rc:390
 msgid "Verify must be ON or OFF\n"
-msgstr ""
-"Verify 只能是开启 (ON) 或关闭 (OFF) 状态\n"
-" \n"
+msgstr "Verify 只能是开启 (ON) 或关闭 (OFF) 状态\n"
 
 #: cmd.rc:391
 msgid "Parameter error\n"
@@ -10847,10 +10865,8 @@ msgid "Error: Invalid option '%c'.\n"
 msgstr "错误：无效的选项 '%c'。\n"
 
 #: hostname.rc:32
-#, fuzzy
-#| msgid "Error: Could not find process \"%1\".\n"
 msgid "Error: Could not get hostname: %u.\n"
-msgstr "错误：找不到进程 \"%1\"。\n"
+msgstr "错误：无法获取主机名：%u。\n"
 
 #: hostname.rc:33
 msgid ""
@@ -15475,7 +15491,7 @@ msgstr ""
 "XCOPY - 将源文件或目录拷贝到目标位置。\n"
 "\n"
 "语法:\n"
-"XCOPY 源 [目标] [/I] [/S] [/Q] [/F] [/L] [/W] [/T] [/N] [/U] [/R] [/H] \n"
+"XCOPY 源 [目标] [/I] [/S] [/Q] [/F] [/L] [/W] [/T] [/N] [/U] [/R] [/H]\n"
 "\t     [/C] [/P] [/A] [/M] [/E] [/D] [/Y] [/-Y]\n"
 "\n"
 "说明:\n"

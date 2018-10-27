@@ -753,6 +753,15 @@ ULONG WINAPI RtlRandom (PULONG seed)
 
 
 /*************************************************************************
+ * RtlRandomEx   [NTDLL.@]
+ */
+ULONG WINAPI RtlRandomEx( ULONG *seed )
+{
+    WARN( "semi-stub: should use a different algorithm\n" );
+    return RtlRandom( seed );
+}
+
+/*************************************************************************
  * RtlAreAllAccessesGranted   [NTDLL.@]
  *
  * Check if all desired accesses are granted
@@ -1649,19 +1658,6 @@ void WINAPI RtlInitializeGenericTableAvl(PRTL_AVL_TABLE table, PRTL_AVL_COMPARE_
 void WINAPI RtlInsertElementGenericTableAvl(PRTL_AVL_TABLE table, void *buffer, ULONG size, BOOL *element)
 {
     FIXME("%p %p %u %p: stub\n", table, buffer, size, element);
-}
-
-/**********************************************************************
- *           RtlCreateUserProcess [NTDLL.@]
- */
-NTSTATUS WINAPI RtlCreateUserProcess(UNICODE_STRING *path, ULONG attributes, RTL_USER_PROCESS_PARAMETERS *parameters,
-                                     SECURITY_DESCRIPTOR *process_descriptor, SECURITY_DESCRIPTOR *thread_descriptor,
-                                     HANDLE parent, BOOLEAN inherit, HANDLE debug, HANDLE exception,
-                                     RTL_USER_PROCESS_INFORMATION *info)
-{
-    FIXME("(%p %u %p %p %p %p %d %p %p %p): stub\n", path, attributes, parameters, process_descriptor, thread_descriptor,
-                                     parent, inherit, debug, exception, info);
-    return STATUS_NOT_IMPLEMENTED;
 }
 
 typedef struct _RTL_UNLOAD_EVENT_TRACE

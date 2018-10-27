@@ -30,6 +30,7 @@
 #include "winuser.h"
 #include "objbase.h"
 
+#include "dxgi1_6.h"
 #include "d3d11_4.h"
 #ifdef D3D11_INIT_GUID
 #include "initguid.h"
@@ -539,7 +540,6 @@ struct d3d_device
     struct wine_rb_tree rasterizer_states;
     struct wine_rb_tree sampler_states;
 
-    float blend_factor[4];
     struct d3d_depthstencil_state *depth_stencil_state;
     UINT stencil_ref;
 };
