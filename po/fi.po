@@ -134,7 +134,7 @@ msgstr ""
 msgid "&Install"
 msgstr "&Asenna"
 
-#: appwiz.rc:110 appwiz.rc:125 avifil32.rc:55 browseui.rc:40 comctl32.rc:72
+#: appwiz.rc:110 appwiz.rc:125 avifil32.rc:55 browseui.rc:45 comctl32.rc:72
 #: comctl32.rc:87 comctl32.rc:56 comdlg32.rc:171 comdlg32.rc:193
 #: comdlg32.rc:211 comdlg32.rc:233 comdlg32.rc:263 comdlg32.rc:306
 #: comdlg32.rc:328 comdlg32.rc:348 comdlg32.rc:360 comdlg32.rc:399
@@ -301,6 +301,26 @@ msgstr "pakkaamaton"
 #: browseui.rc:28
 msgid "Canceling..."
 msgstr "Perutaan..."
+
+#: browseui.rc:29
+msgid "%1!u! %2 remaining"
+msgstr "%1!u! %2 jäljellä"
+
+#: browseui.rc:30
+msgid "%1!u! %2 and %3!u! %4 remaining"
+msgstr "%1!u! %2 ja %3!u! %4 jäljellä"
+
+#: browseui.rc:31
+msgid "seconds"
+msgstr "sekuntia"
+
+#: browseui.rc:32
+msgid "minutes"
+msgstr "minuuttia"
+
+#: browseui.rc:33
+msgid "hours"
+msgstr "tuntia"
 
 #: comctl32.rc:68 winefile.rc:157
 msgid "Properties for %s"
@@ -4564,7 +4584,7 @@ msgstr "Ei voida suorittaa koko ruudulla.\n"
 
 #: winerror.mc:1058
 msgid "Nonexistent token.\n"
-msgstr "Lipuketta ei ole.\n"
+msgstr "Tunnusta ei ole.\n"
 
 #: winerror.mc:1063
 msgid "Registry corrupt.\n"
@@ -5276,7 +5296,7 @@ msgstr "Virheellinen ensisijainen ryhmä.\n"
 
 #: winerror.mc:1953
 msgid "No impersonation token.\n"
-msgstr "Ei tekeytymislipuketta.\n"
+msgstr "Ei tekeytymistunnusta.\n"
 
 #: winerror.mc:1958
 msgid "Can't disable mandatory group.\n"
@@ -5424,7 +5444,7 @@ msgstr "Tekeytymistaso ei kelpaa.\n"
 
 #: winerror.mc:2138
 msgid "Can't open anonymous security token.\n"
-msgstr "Nimetöntä suojauslipuketta ei voida avata.\n"
+msgstr "Ei voida avata nimetöntä suojaustunnusta.\n"
 
 #: winerror.mc:2143
 msgid "Bad validation class.\n"
@@ -5432,7 +5452,7 @@ msgstr "Vahvistusluokka ei kelpaa.\n"
 
 #: winerror.mc:2148
 msgid "Bad token type.\n"
-msgstr "Väärä avaintyyppi.\n"
+msgstr "Väärä tunnuksen tyyppi.\n"
 
 #: winerror.mc:2153
 msgid "No security on object.\n"
@@ -11032,10 +11052,8 @@ msgid "Error: Invalid option '%c'.\n"
 msgstr "Virhe: Virheellinen valinta '%c'.\n"
 
 #: hostname.rc:32
-#, fuzzy
-#| msgid "Error: Could not find process \"%1\".\n"
 msgid "Error: Could not get hostname: %u.\n"
-msgstr "Virhe: Prosessia \"%1\" ei löytynyt.\n"
+msgstr "Virhe: Ei saatu haettua isäntänimeä: %u.\n"
 
 #: hostname.rc:33
 msgid ""

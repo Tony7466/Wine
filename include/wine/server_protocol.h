@@ -745,6 +745,20 @@ struct new_process_reply
 
 
 
+struct exec_process_request
+{
+    struct request_header __header;
+    int          socket_fd;
+    obj_handle_t exe_file;
+    cpu_type_t   cpu;
+};
+struct exec_process_reply
+{
+    struct reply_header __header;
+};
+
+
+
 struct get_new_process_info_request
 {
     struct request_header __header;
@@ -3419,23 +3433,6 @@ struct create_named_pipe_reply
 #define NAMED_PIPE_SERVER_END           0x8000
 
 
-struct get_named_pipe_info_request
-{
-    struct request_header __header;
-    obj_handle_t   handle;
-};
-struct get_named_pipe_info_reply
-{
-    struct reply_header __header;
-    unsigned int   flags;
-    unsigned int   sharing;
-    unsigned int   maxinstances;
-    unsigned int   instances;
-    unsigned int   outsize;
-    unsigned int   insize;
-};
-
-
 struct set_named_pipe_info_request
 {
     struct request_header __header;
@@ -5376,9 +5373,23 @@ struct add_fd_completion_request
     apc_param_t    cvalue;
     apc_param_t    information;
     unsigned int   status;
-    char __pad_36[4];
+    int            async;
 };
 struct add_fd_completion_reply
+{
+    struct reply_header __header;
+};
+
+
+
+struct set_fd_completion_mode_request
+{
+    struct request_header __header;
+    obj_handle_t handle;
+    unsigned int flags;
+    char __pad_20[4];
+};
+struct set_fd_completion_mode_reply
 {
     struct reply_header __header;
 };
@@ -5649,6 +5660,7 @@ struct terminate_job_reply
 enum request
 {
     REQ_new_process,
+    REQ_exec_process,
     REQ_get_new_process_info,
     REQ_new_thread,
     REQ_get_startup_info,
@@ -5805,7 +5817,6 @@ enum request
     REQ_ioctl,
     REQ_set_irp_result,
     REQ_create_named_pipe,
-    REQ_get_named_pipe_info,
     REQ_set_named_pipe_info,
     REQ_create_window,
     REQ_destroy_window,
@@ -5921,6 +5932,7 @@ enum request
     REQ_query_completion,
     REQ_set_completion_info,
     REQ_add_fd_completion,
+    REQ_set_fd_completion_mode,
     REQ_set_fd_disp_info,
     REQ_set_fd_name_info,
     REQ_get_window_layered_info,
@@ -5946,6 +5958,7 @@ union generic_request
     struct request_max_size max_size;
     struct request_header request_header;
     struct new_process_request new_process_request;
+    struct exec_process_request exec_process_request;
     struct get_new_process_info_request get_new_process_info_request;
     struct new_thread_request new_thread_request;
     struct get_startup_info_request get_startup_info_request;
@@ -6102,7 +6115,6 @@ union generic_request
     struct ioctl_request ioctl_request;
     struct set_irp_result_request set_irp_result_request;
     struct create_named_pipe_request create_named_pipe_request;
-    struct get_named_pipe_info_request get_named_pipe_info_request;
     struct set_named_pipe_info_request set_named_pipe_info_request;
     struct create_window_request create_window_request;
     struct destroy_window_request destroy_window_request;
@@ -6218,6 +6230,7 @@ union generic_request
     struct query_completion_request query_completion_request;
     struct set_completion_info_request set_completion_info_request;
     struct add_fd_completion_request add_fd_completion_request;
+    struct set_fd_completion_mode_request set_fd_completion_mode_request;
     struct set_fd_disp_info_request set_fd_disp_info_request;
     struct set_fd_name_info_request set_fd_name_info_request;
     struct get_window_layered_info_request get_window_layered_info_request;
@@ -6241,6 +6254,7 @@ union generic_reply
     struct request_max_size max_size;
     struct reply_header reply_header;
     struct new_process_reply new_process_reply;
+    struct exec_process_reply exec_process_reply;
     struct get_new_process_info_reply get_new_process_info_reply;
     struct new_thread_reply new_thread_reply;
     struct get_startup_info_reply get_startup_info_reply;
@@ -6397,7 +6411,6 @@ union generic_reply
     struct ioctl_reply ioctl_reply;
     struct set_irp_result_reply set_irp_result_reply;
     struct create_named_pipe_reply create_named_pipe_reply;
-    struct get_named_pipe_info_reply get_named_pipe_info_reply;
     struct set_named_pipe_info_reply set_named_pipe_info_reply;
     struct create_window_reply create_window_reply;
     struct destroy_window_reply destroy_window_reply;
@@ -6513,6 +6526,7 @@ union generic_reply
     struct query_completion_reply query_completion_reply;
     struct set_completion_info_reply set_completion_info_reply;
     struct add_fd_completion_reply add_fd_completion_reply;
+    struct set_fd_completion_mode_reply set_fd_completion_mode_reply;
     struct set_fd_disp_info_reply set_fd_disp_info_reply;
     struct set_fd_name_info_reply set_fd_name_info_reply;
     struct get_window_layered_info_reply get_window_layered_info_reply;
@@ -6532,6 +6546,6 @@ union generic_reply
     struct terminate_job_reply terminate_job_reply;
 };
 
-#define SERVER_PROTOCOL_VERSION 566
+#define SERVER_PROTOCOL_VERSION 570
 
 #endif /* __WINE_WINE_SERVER_PROTOCOL_H */

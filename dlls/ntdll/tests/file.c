@@ -3315,6 +3315,24 @@ static void test_file_all_name_information(void)
     HeapFree( GetProcessHeap(), 0, file_name );
 }
 
+#define test_completion_flags(a,b) _test_completion_flags(__LINE__,a,b)
+static void _test_completion_flags(unsigned line, HANDLE handle, DWORD expected_flags)
+{
+    FILE_IO_COMPLETION_NOTIFICATION_INFORMATION info;
+    IO_STATUS_BLOCK io;
+    NTSTATUS status;
+
+    info.Flags = 0xdeadbeef;
+    status = pNtQueryInformationFile(handle, &io, &info, sizeof(info),
+                                     FileIoCompletionNotificationInformation);
+    ok_(__FILE__,line)(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status);
+    ok_(__FILE__,line)(io.Status == STATUS_SUCCESS, "Status = %x\n", io.Status);
+    ok_(__FILE__,line)(io.Information == sizeof(info), "Information = %lu\n", io.Information);
+    /* FILE_SKIP_SET_USER_EVENT_ON_FAST_IO is not supported on win2k3 */
+    ok_(__FILE__,line)((info.Flags & ~FILE_SKIP_SET_USER_EVENT_ON_FAST_IO) == expected_flags,
+                       "got %08x\n", info.Flags);
+}
+
 static void test_file_completion_information(void)
 {
     static const char buf[] = "testdata";
@@ -3331,12 +3349,11 @@ static void test_file_completion_information(void)
     if (!(h = create_temp_file(0))) return;
 
     status = pNtSetInformationFile(h, &io, &info, sizeof(info) - 1, FileIoCompletionNotificationInformation);
-    todo_wine
-    ok(status == STATUS_INFO_LENGTH_MISMATCH || status == STATUS_INVALID_INFO_CLASS /* XP */,
+    ok(status == STATUS_INFO_LENGTH_MISMATCH || broken(status == STATUS_INVALID_INFO_CLASS /* XP */),
        "expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
-    if (status == STATUS_INVALID_INFO_CLASS || status == STATUS_NOT_IMPLEMENTED)
+    if (status != STATUS_INFO_LENGTH_MISMATCH)
     {
-        skip("FileIoCompletionNotificationInformation class not supported\n");
+        win_skip("FileIoCompletionNotificationInformation class not supported\n");
         CloseHandle(h);
         return;
     }
@@ -3351,13 +3368,31 @@ static void test_file_completion_information(void)
     info.Flags = FILE_SKIP_SET_EVENT_ON_HANDLE;
     status = pNtSetInformationFile(h, &io, &info, sizeof(info), FileIoCompletionNotificationInformation);
     ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status);
+    test_completion_flags(h, FILE_SKIP_SET_EVENT_ON_HANDLE);
 
     info.Flags = FILE_SKIP_SET_USER_EVENT_ON_FAST_IO;
     status = pNtSetInformationFile(h, &io, &info, sizeof(info), FileIoCompletionNotificationInformation);
     ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status);
+    test_completion_flags(h, FILE_SKIP_SET_EVENT_ON_HANDLE);
+
+    info.Flags = 0;
+    status = pNtSetInformationFile(h, &io, &info, sizeof(info), FileIoCompletionNotificationInformation);
+    ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status);
+    test_completion_flags(h, FILE_SKIP_SET_EVENT_ON_HANDLE);
+
+    info.Flags = FILE_SKIP_COMPLETION_PORT_ON_SUCCESS;
+    status = pNtSetInformationFile(h, &io, &info, sizeof(info), FileIoCompletionNotificationInformation);
+    ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status);
+    test_completion_flags(h, FILE_SKIP_SET_EVENT_ON_HANDLE | FILE_SKIP_COMPLETION_PORT_ON_SUCCESS);
+
+    info.Flags = 0xdeadbeef;
+    status = pNtSetInformationFile(h, &io, &info, sizeof(info), FileIoCompletionNotificationInformation);
+    ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status);
+    test_completion_flags(h, FILE_SKIP_SET_EVENT_ON_HANDLE | FILE_SKIP_COMPLETION_PORT_ON_SUCCESS);
 
     CloseHandle(h);
     if (!(h = create_temp_file(FILE_FLAG_OVERLAPPED))) return;
+    test_completion_flags(h, 0);
 
     memset(&ov, 0, sizeof(ov));
     ov.hEvent = CreateEventA(NULL, TRUE, FALSE, NULL);
@@ -3392,6 +3427,7 @@ static void test_file_completion_information(void)
     info.Flags = FILE_SKIP_COMPLETION_PORT_ON_SUCCESS;
     status = pNtSetInformationFile(h, &io, &info, sizeof(info), FileIoCompletionNotificationInformation);
     ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status);
+    test_completion_flags(h, FILE_SKIP_COMPLETION_PORT_ON_SUCCESS);
 
     for (i = 0; i < 10; i++)
     {
@@ -3417,6 +3453,7 @@ static void test_file_completion_information(void)
     info.Flags = 0;
     status = pNtSetInformationFile(h, &io, &info, sizeof(info), FileIoCompletionNotificationInformation);
     ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status);
+    test_completion_flags(h, FILE_SKIP_COMPLETION_PORT_ON_SUCCESS);
 
     for (i = 0; i < 10; i++)
     {
@@ -4501,11 +4538,9 @@ static void test_flush_buffers_file(void)
     ok(hfileread != INVALID_HANDLE_VALUE, "could not open temp file, error %d.\n", GetLastError());
 
     status = pNtFlushBuffersFile(hfile, NULL);
-    todo_wine
     ok(status == STATUS_ACCESS_VIOLATION, "expected STATUS_ACCESS_VIOLATION, got %#x.\n", status);
 
     status = pNtFlushBuffersFile(hfile, (IO_STATUS_BLOCK *)0xdeadbeaf);
-    todo_wine
     ok(status == STATUS_ACCESS_VIOLATION, "expected STATUS_ACCESS_VIOLATION, got %#x.\n", status);
 
     status = pNtFlushBuffersFile(hfile, &io_status_block);

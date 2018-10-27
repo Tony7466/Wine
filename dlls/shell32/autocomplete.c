@@ -2,6 +2,7 @@
  *	AutoComplete interfaces implementation.
  *
  *	Copyright 2004	Maxime Bellengé <maxime.bellenge@laposte.net>
+ *	Copyright 2018	Gabriel Ivăncescu <gabrielopcode@gmail.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,17 +20,9 @@
  */
 
 /*
-  Implemented:
-  - ACO_AUTOAPPEND style
-  - ACO_AUTOSUGGEST style
-  - ACO_UPDOWNKEYDROPSLIST style
-
-  - Handle pwzsRegKeyPath and pwszQuickComplete in Init
-
   TODO:
   - implement ACO_SEARCH style
   - implement ACO_FILTERPREFIXES style
-  - implement ACO_USETAB style
   - implement ACO_RTLREADING style
   - implement ResetEnumerator
   - string compares should be case-insensitive, the content of the list should be sorted
@@ -76,7 +69,9 @@ typedef struct
     WCHAR *txtbackup;
     WCHAR *quickComplete;
     IEnumString *enumstr;
+    IACList *aclist;
     AUTOCOMPLETEOPTIONS options;
+    WCHAR no_fwd_char;
 } IAutoCompleteImpl;
 
 enum autoappend_flag
@@ -108,6 +103,12 @@ static void set_text_and_selection(IAutoCompleteImpl *ac, HWND hwnd, WCHAR *text
         CallWindowProcW(proc, hwnd, EM_SETSEL, start, end);
 }
 
+static void hide_listbox(IAutoCompleteImpl *ac, HWND hwnd)
+{
+    ShowWindow(hwnd, SW_HIDE);
+    SendMessageW(hwnd, LB_RESETCONTENT, 0, 0);
+}
+
 static size_t format_quick_complete(WCHAR *dst, const WCHAR *qc, const WCHAR *str, size_t str_len)
 {
     /* Replace the first %s directly without using snprintf, to avoid
@@ -132,6 +133,34 @@ static size_t format_quick_complete(WCHAR *dst, const WCHAR *qc, const WCHAR *st
     }
     *dst = '\0';
     return dst - base;
+}
+
+static BOOL select_item_with_return_key(IAutoCompleteImpl *ac, HWND hwnd)
+{
+    WCHAR *text;
+    HWND hwndListBox = ac->hwndListBox;
+    if (!(ac->options & ACO_AUTOSUGGEST))
+        return FALSE;
+
+    if (IsWindowVisible(hwndListBox))
+    {
+        INT sel = SendMessageW(hwndListBox, LB_GETCURSEL, 0, 0);
+        if (sel >= 0)
+        {
+            UINT len = SendMessageW(hwndListBox, LB_GETTEXTLEN, sel, 0);
+            if ((text = heap_alloc((len + 1) * sizeof(WCHAR))))
+            {
+                len = SendMessageW(hwndListBox, LB_GETTEXT, sel, (LPARAM)text);
+                set_text_and_selection(ac, hwnd, text, 0, len);
+                hide_listbox(ac, hwndListBox);
+                ac->no_fwd_char = '\r';  /* RETURN char */
+                heap_free(text);
+                return TRUE;
+            }
+        }
+    }
+    hide_listbox(ac, hwndListBox);
+    return FALSE;
 }
 
 static LRESULT change_selection(IAutoCompleteImpl *ac, HWND hwnd, UINT key)
@@ -170,7 +199,7 @@ static LRESULT change_selection(IAutoCompleteImpl *ac, HWND hwnd, UINT key)
             }
         }
     }
-    else if (key == VK_UP)
+    else if (key == VK_UP || (key == VK_TAB && (GetKeyState(VK_SHIFT) & 0x8000)))
         sel = ((sel - 1) < -1) ? count - 1 : sel - 1;
     else
         sel = ((sel + 1) >= count) ? -1 : sel + 1;
@@ -192,6 +221,49 @@ static LRESULT change_selection(IAutoCompleteImpl *ac, HWND hwnd, UINT key)
         set_text_and_selection(ac, hwnd, ac->txtbackup, len, len);
     }
     return 0;
+}
+
+static BOOL do_aclist_expand(IAutoCompleteImpl *ac, WCHAR *txt, WCHAR *last_delim)
+{
+    WCHAR c = last_delim[1];
+    last_delim[1] = '\0';
+    IACList_Expand(ac->aclist, txt);
+    last_delim[1] = c;
+    return TRUE;
+}
+
+static BOOL aclist_expand(IAutoCompleteImpl *ac, WCHAR *txt)
+{
+    /* call IACList::Expand only when needed, if the
+       new txt and old_txt require different expansions */
+    WCHAR c, *p, *last_delim, *old_txt = ac->txtbackup;
+    size_t i = 0;
+
+    /* '/' is allowed as a delim for unix paths */
+    static const WCHAR delims[] = { '\\', '/', 0 };
+
+    /* skip the shared prefix */
+    while ((c = tolowerW(txt[i])) == tolowerW(old_txt[i]))
+    {
+        if (c == '\0') return FALSE;
+        i++;
+    }
+
+    /* they differ at this point, check for a delim further in txt */
+    for (last_delim = NULL, p = &txt[i]; (p = strpbrkW(p, delims)) != NULL; p++)
+        last_delim = p;
+    if (last_delim) return do_aclist_expand(ac, txt, last_delim);
+
+    /* txt has no delim after i, check for a delim further in old_txt */
+    if (strpbrkW(&old_txt[i], delims))
+    {
+        /* scan backwards to find the first delim before txt[i] (if any) */
+        while (i--)
+            if (strchrW(delims, txt[i]))
+                return do_aclist_expand(ac, txt, &txt[i]);
+    }
+
+    return FALSE;
 }
 
 static void autoappend_str(IAutoCompleteImpl *ac, WCHAR *text, UINT len, WCHAR *str, HWND hwnd)
@@ -230,7 +302,7 @@ static void autocomplete_text(IAutoCompleteImpl *ac, HWND hwnd, enum autoappend_
     if (flag != autoappend_flag_displayempty && len == 0)
     {
         if (ac->options & ACO_AUTOSUGGEST)
-            ShowWindow(ac->hwndListBox, SW_HIDE);
+            hide_listbox(ac, ac->hwndListBox);
         return;
     }
 
@@ -241,6 +313,17 @@ static void autocomplete_text(IAutoCompleteImpl *ac, HWND hwnd, enum autoappend_
     if (len + 1 != size)
         text = heap_realloc(text, (len + 1) * sizeof(WCHAR));
 
+    /* Reset it here to simplify the logic in aclist_expand for
+       empty strings, since it tracks changes using txtbackup,
+       and Reset needs to be called before IACList::Expand */
+    IEnumString_Reset(ac->enumstr);
+    if (ac->aclist)
+    {
+        aclist_expand(ac, text);
+        if (text[len - 1] == '\\' || text[len - 1] == '/')
+            flag = autoappend_flag_no;
+    }
+
     /* Set txtbackup to point to text itself (which must not be released) */
     heap_free(ac->txtbackup);
     ac->txtbackup = text;
@@ -250,7 +333,6 @@ static void autocomplete_text(IAutoCompleteImpl *ac, HWND hwnd, enum autoappend_
         SendMessageW(ac->hwndListBox, WM_SETREDRAW, FALSE, 0);
         SendMessageW(ac->hwndListBox, LB_RESETCONTENT, 0, 0);
     }
-    IEnumString_Reset(ac->enumstr);
     for (cpt = 0;;)
     {
         LPOLESTR strs = NULL;
@@ -297,7 +379,7 @@ static void autocomplete_text(IAutoCompleteImpl *ac, HWND hwnd, enum autoappend_
             SendMessageW(ac->hwndListBox, WM_SETREDRAW, TRUE, 0);
         }
         else
-            ShowWindow(ac->hwndListBox, SW_HIDE);
+            hide_listbox(ac, ac->hwndListBox);
     }
 }
 
@@ -317,6 +399,15 @@ static LRESULT ACEditSubclassProc_KeyDown(IAutoCompleteImpl *ac, HWND hwnd, UINT
 {
     switch (wParam)
     {
+        case VK_ESCAPE:
+            /* When pressing ESC, Windows hides the auto-suggest listbox, if visible */
+            if ((ac->options & ACO_AUTOSUGGEST) && IsWindowVisible(ac->hwndListBox))
+            {
+                hide_listbox(ac, ac->hwndListBox);
+                ac->no_fwd_char = 0x1B;  /* ESC char */
+                return 0;
+            }
+            break;
         case VK_RETURN:
             /* If quickComplete is set and control is pressed, replace the string */
             if (ac->quickComplete && (GetKeyState(VK_CONTROL) & 0x8000))
@@ -324,6 +415,8 @@ static LRESULT ACEditSubclassProc_KeyDown(IAutoCompleteImpl *ac, HWND hwnd, UINT
                 WCHAR *text, *buf;
                 size_t sz;
                 UINT len = SendMessageW(hwnd, WM_GETTEXTLENGTH, 0, 0);
+                ac->no_fwd_char = '\n';  /* CTRL+RETURN char */
+
                 if (!(text = heap_alloc((len + 1) * sizeof(WCHAR))))
                     return 0;
                 len = SendMessageW(hwnd, WM_GETTEXT, len + 1, (LPARAM)text);
@@ -337,13 +430,21 @@ static LRESULT ACEditSubclassProc_KeyDown(IAutoCompleteImpl *ac, HWND hwnd, UINT
                 }
 
                 if (ac->options & ACO_AUTOSUGGEST)
-                    ShowWindow(ac->hwndListBox, SW_HIDE);
+                    hide_listbox(ac, ac->hwndListBox);
                 heap_free(text);
                 return 0;
             }
 
-            if (ac->options & ACO_AUTOSUGGEST)
-                ShowWindow(ac->hwndListBox, SW_HIDE);
+            if (select_item_with_return_key(ac, hwnd))
+                return 0;
+            break;
+        case VK_TAB:
+            if ((ac->options & (ACO_AUTOSUGGEST | ACO_USETAB)) == (ACO_AUTOSUGGEST | ACO_USETAB)
+                && IsWindowVisible(ac->hwndListBox) && !(GetKeyState(VK_CONTROL) & 0x8000))
+            {
+                ac->no_fwd_char = '\t';
+                return change_selection(ac, hwnd, wParam);
+            }
             break;
         case VK_UP:
         case VK_DOWN:
@@ -375,6 +476,7 @@ static LRESULT ACEditSubclassProc_KeyDown(IAutoCompleteImpl *ac, HWND hwnd, UINT
             return ret;
         }
     }
+    ac->no_fwd_char = '\0';
     return CallWindowProcW(ac->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
 }
 
@@ -392,18 +494,21 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
     {
         case CB_SHOWDROPDOWN:
             if (This->options & ACO_AUTOSUGGEST)
-                ShowWindow(This->hwndListBox, SW_HIDE);
+                hide_listbox(This, This->hwndListBox);
             return 0;
         case WM_KILLFOCUS:
             if ((This->options & ACO_AUTOSUGGEST) && ((HWND)wParam != This->hwndListBox))
             {
-                ShowWindow(This->hwndListBox, SW_HIDE);
+                hide_listbox(This, This->hwndListBox);
             }
             break;
         case WM_KEYDOWN:
             return ACEditSubclassProc_KeyDown(This, hwnd, uMsg, wParam, lParam);
         case WM_CHAR:
         case WM_UNICHAR:
+            if (wParam == This->no_fwd_char) return 0;
+            This->no_fwd_char = '\0';
+
             /* Don't autocomplete at all on most control characters */
             if (iscntrlW(wParam) && !(wParam >= '\b' && wParam <= '\r'))
                 break;
@@ -460,7 +565,7 @@ static LRESULT APIENTRY ACLBoxSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
                 break;
             len = SendMessageW(hwnd, LB_GETTEXT, sel, (LPARAM)msg);
             set_text_and_selection(This, This->hwndEdit, msg, 0, len);
-            ShowWindow(hwnd, SW_HIDE);
+            hide_listbox(This, hwnd);
             heap_free(msg);
             break;
         default:
@@ -557,6 +662,8 @@ static ULONG WINAPI IAutoComplete2_fnRelease(
         heap_free(This->txtbackup);
         if (This->enumstr)
             IEnumString_Release(This->enumstr);
+        if (This->aclist)
+            IACList_Release(This->aclist);
         heap_free(This);
     }
     return refCount;
@@ -596,7 +703,6 @@ static HRESULT WINAPI IAutoComplete2_fnInit(
 
     if (This->options & ACO_SEARCH) FIXME(" ACO_SEARCH not supported\n");
     if (This->options & ACO_FILTERPREFIXES) FIXME(" ACO_FILTERPREFIXES not supported\n");
-    if (This->options & ACO_USETAB) FIXME(" ACO_USETAB not supported\n");
     if (This->options & ACO_RTLREADING) FIXME(" ACO_RTLREADING not supported\n");
 
     if (!hwndEdit || !punkACL)
@@ -613,6 +719,17 @@ static HRESULT WINAPI IAutoComplete2_fnInit(
         WARN("No IEnumString interface\n");
         return E_NOINTERFACE;
     }
+
+    /* Prevent txtbackup from ever being NULL to simplify aclist_expand */
+    if ((This->txtbackup = heap_alloc_zero(sizeof(WCHAR))) == NULL)
+    {
+        IEnumString_Release(This->enumstr);
+        This->enumstr = NULL;
+        return E_OUTOFMEMORY;
+    }
+
+    if (FAILED (IUnknown_QueryInterface (punkACL, &IID_IACList, (LPVOID*)&This->aclist)))
+        This->aclist = NULL;
 
     This->initialized = TRUE;
     This->hwndEdit = hwndEdit;
@@ -725,6 +842,8 @@ static HRESULT WINAPI IAutoComplete2_fnSetOptions(
 
     if ((This->options & ACO_AUTOSUGGEST) && This->hwndEdit && !This->hwndListBox)
         create_listbox(This);
+    else if (!(This->options & ACO_AUTOSUGGEST) && This->hwndListBox)
+        hide_listbox(This, This->hwndListBox);
 
     return hr;
 }

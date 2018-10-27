@@ -2200,6 +2200,8 @@ static NTSTATUS server_get_file_info( HANDLE handle, IO_STATUS_BLOCK *io, void *
         io->Information = wine_server_reply_size( reply );
     }
     SERVER_END_REQ;
+    if (io->u.Status == STATUS_NOT_IMPLEMENTED)
+        FIXME( "Unsupported info class %x\n", info_class );
     return io->u.Status;
 
 }
@@ -2234,7 +2236,7 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE hFile, PIO_STATUS_BLOCK io,
         sizeof(FILE_STANDARD_INFORMATION),             /* FileStandardInformation */
         sizeof(FILE_INTERNAL_INFORMATION),             /* FileInternalInformation */
         sizeof(FILE_EA_INFORMATION),                   /* FileEaInformation */
-        sizeof(FILE_ACCESS_INFORMATION),               /* FileAccessInformation */
+        0,                                             /* FileAccessInformation */
         sizeof(FILE_NAME_INFORMATION),                 /* FileNameInformation */
         sizeof(FILE_RENAME_INFORMATION)-sizeof(WCHAR), /* FileRenameInformation */
         0,                                             /* FileLinkInformation */
@@ -2303,20 +2305,14 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE hFile, PIO_STATUS_BLOCK io,
     if (class <= 0 || class >= FileMaximumInformation)
         return io->u.Status = STATUS_INVALID_INFO_CLASS;
     if (!info_sizes[class])
-    {
-        FIXME("Unsupported class (%d)\n", class);
-        return io->u.Status = STATUS_NOT_IMPLEMENTED;
-    }
+        return server_get_file_info( hFile, io, ptr, len, class );
     if (len < info_sizes[class])
         return io->u.Status = STATUS_INFO_LENGTH_MISMATCH;
 
-    if (class != FilePipeInformation && class != FilePipeLocalInformation && class != FileAccessInformation)
+    if ((io->u.Status = server_get_unix_fd( hFile, 0, &fd, &needs_close, NULL, NULL )))
     {
-        if ((io->u.Status = server_get_unix_fd( hFile, 0, &fd, &needs_close, NULL, NULL )))
-        {
-            if (io->u.Status != STATUS_BAD_DEVICE_TYPE) return io->u.Status;
-            return server_get_file_info( hFile, io, ptr, len, class );
-        }
+        if (io->u.Status != STATUS_BAD_DEVICE_TYPE) return io->u.Status;
+        return server_get_file_info( hFile, io, ptr, len, class );
     }
 
     switch (class)
@@ -2357,19 +2353,6 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE hFile, PIO_STATUS_BLOCK io,
         {
             FILE_EA_INFORMATION *info = ptr;
             info->EaSize = 0;
-        }
-        break;
-    case FileAccessInformation:
-        {
-            FILE_ACCESS_INFORMATION *info = ptr;
-            SERVER_START_REQ( get_object_info )
-            {
-                req->handle = wine_server_obj_handle( hFile );
-                io->u.Status = wine_server_call( req );
-                if (io->u.Status == STATUS_SUCCESS)
-                    info->AccessFlags = reply->access;
-            }
-            SERVER_END_REQ;
         }
         break;
     case FileEndOfFileInformation:
@@ -2438,61 +2421,6 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE hFile, PIO_STATUS_BLOCK io,
                     RtlFreeHeap( GetProcessHeap(), 0, tmpbuf );
                 }
             }
-        }
-        break;
-    case FilePipeInformation:
-        {
-            FILE_PIPE_INFORMATION* pi = ptr;
-
-            SERVER_START_REQ( get_named_pipe_info )
-            {
-                req->handle = wine_server_obj_handle( hFile );
-                if (!(io->u.Status = wine_server_call( req )))
-                {
-                    pi->ReadMode       = (reply->flags & NAMED_PIPE_MESSAGE_STREAM_READ) ?
-                        FILE_PIPE_MESSAGE_MODE : FILE_PIPE_BYTE_STREAM_MODE;
-                    pi->CompletionMode = (reply->flags & NAMED_PIPE_NONBLOCKING_MODE) ?
-                        FILE_PIPE_COMPLETE_OPERATION : FILE_PIPE_QUEUE_OPERATION;
-                }
-            }
-            SERVER_END_REQ;
-        }
-        break;
-    case FilePipeLocalInformation:
-        {
-            FILE_PIPE_LOCAL_INFORMATION* pli = ptr;
-
-            SERVER_START_REQ( get_named_pipe_info )
-            {
-                req->handle = wine_server_obj_handle( hFile );
-                if (!(io->u.Status = wine_server_call( req )))
-                {
-                    pli->NamedPipeType = (reply->flags & NAMED_PIPE_MESSAGE_STREAM_WRITE) ? 
-                        FILE_PIPE_TYPE_MESSAGE : FILE_PIPE_TYPE_BYTE;
-                    switch (reply->sharing)
-                    {
-                        case FILE_SHARE_READ:
-                            pli->NamedPipeConfiguration = FILE_PIPE_OUTBOUND;
-                            break;
-                        case FILE_SHARE_WRITE:
-                            pli->NamedPipeConfiguration = FILE_PIPE_INBOUND;
-                            break;
-                        case FILE_SHARE_READ | FILE_SHARE_WRITE:
-                            pli->NamedPipeConfiguration = FILE_PIPE_FULL_DUPLEX;
-                            break;
-                    }
-                    pli->MaximumInstances = reply->maxinstances;
-                    pli->CurrentInstances = reply->instances;
-                    pli->InboundQuota = reply->insize;
-                    pli->ReadDataAvailable = 0; /* FIXME */
-                    pli->OutboundQuota = reply->outsize;
-                    pli->WriteQuotaAvailable = 0; /* FIXME */
-                    pli->NamedPipeState = 0; /* FIXME */
-                    pli->NamedPipeEnd = (reply->flags & NAMED_PIPE_SERVER_END) ?
-                        FILE_PIPE_SERVER_END : FILE_PIPE_CLIENT_END;
-                }
-            }
-            SERVER_END_REQ;
         }
         break;
     case FileNameInformation:
@@ -2726,6 +2654,25 @@ NTSTATUS WINAPI NtSetInformationFile(HANDLE handle, PIO_STATUS_BLOCK io,
             SERVER_END_REQ;
         } else
             io->u.Status = STATUS_INVALID_PARAMETER_3;
+        break;
+
+    case FileIoCompletionNotificationInformation:
+        if (len >= sizeof(FILE_IO_COMPLETION_NOTIFICATION_INFORMATION))
+        {
+            FILE_IO_COMPLETION_NOTIFICATION_INFORMATION *info = ptr;
+
+            if (info->Flags & ~FILE_SKIP_COMPLETION_PORT_ON_SUCCESS)
+                FIXME( "Unsupported completion flags %x\n", info->Flags );
+
+            SERVER_START_REQ( set_fd_completion_mode )
+            {
+                req->handle   = wine_server_obj_handle( handle );
+                req->flags    = info->Flags;
+                io->u.Status  = wine_server_call( req );
+            }
+            SERVER_END_REQ;
+        } else
+            io->u.Status = STATUS_INFO_LENGTH_MISMATCH;
         break;
 
     case FileAllInformation:
@@ -3351,12 +3298,14 @@ NTSTATUS WINAPI NtSetEaFile( HANDLE hFile, PIO_STATUS_BLOCK iosb, PVOID buffer, 
  *  Success: 0. IoStatusBlock is updated.
  *  Failure: An NTSTATUS error code describing the error.
  */
-NTSTATUS WINAPI NtFlushBuffersFile( HANDLE hFile, IO_STATUS_BLOCK* IoStatusBlock )
+NTSTATUS WINAPI NtFlushBuffersFile( HANDLE hFile, IO_STATUS_BLOCK *io )
 {
     NTSTATUS ret;
-    HANDLE hEvent = NULL;
+    HANDLE wait_handle;
     enum server_fd_type type;
     int fd, needs_close;
+
+    if (!io || !virtual_check_buffer_for_write( io, sizeof(io) )) return STATUS_ACCESS_VIOLATION;
 
     ret = server_get_unix_fd( hFile, FILE_WRITE_DATA, &fd, &needs_close, &type, NULL );
     if (ret == STATUS_ACCESS_DENIED)
@@ -3370,16 +3319,21 @@ NTSTATUS WINAPI NtFlushBuffersFile( HANDLE hFile, IO_STATUS_BLOCK* IoStatusBlock
     {
         SERVER_START_REQ( flush )
         {
-            req->async = server_async( hFile, NULL, NULL, NULL, NULL, IoStatusBlock );
+            req->async = server_async( hFile, NULL, NULL, NULL, NULL, io );
             ret = wine_server_call( req );
-            hEvent = wine_server_ptr_handle( reply->event );
+            wait_handle = wine_server_ptr_handle( reply->event );
+            if (wait_handle && ret != STATUS_PENDING)
+            {
+                io->u.Status    = ret;
+                io->Information = 0;
+            }
         }
         SERVER_END_REQ;
 
-        if (hEvent)
+        if (wait_handle)
         {
-            NtWaitForSingleObject( hEvent, FALSE, NULL );
-            ret = STATUS_SUCCESS;
+            NtWaitForSingleObject( wait_handle, FALSE, NULL );
+            ret = io->u.Status;
         }
     }
 

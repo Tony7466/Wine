@@ -627,6 +627,8 @@ static void wined3d_texture_allocate_gl_immutable_storage(struct wined3d_texture
     unsigned int samples = wined3d_texture_get_gl_sample_count(texture);
     GLsizei height = wined3d_texture_get_level_pow2_height(texture, 0);
     GLsizei width = wined3d_texture_get_level_pow2_width(texture, 0);
+    GLboolean standard_pattern = texture->resource.multisample_type != WINED3D_MULTISAMPLE_NON_MASKABLE
+            && texture->resource.multisample_quality == WINED3D_STANDARD_MULTISAMPLE_PATTERN;
 
     switch (texture->target)
     {
@@ -640,11 +642,11 @@ static void wined3d_texture_allocate_gl_immutable_storage(struct wined3d_texture
             break;
         case GL_TEXTURE_2D_MULTISAMPLE:
             GL_EXTCALL(glTexStorage2DMultisample(texture->target, samples,
-                    gl_internal_format, width, height, GL_FALSE));
+                    gl_internal_format, width, height, standard_pattern));
             break;
         case GL_TEXTURE_2D_MULTISAMPLE_ARRAY:
             GL_EXTCALL(glTexStorage3DMultisample(texture->target, samples,
-                    gl_internal_format, width, height, texture->layer_count, GL_FALSE));
+                    gl_internal_format, width, height, texture->layer_count, standard_pattern));
             break;
         case GL_TEXTURE_1D_ARRAY:
             GL_EXTCALL(glTexStorage2D(texture->target, texture->level_count,
@@ -1925,10 +1927,10 @@ void wined3d_texture_upload_data(struct wined3d_texture *texture, unsigned int s
     BOOL decompress;
     GLenum target;
 
-    TRACE("texture %p, sub_resource_idx %u, context %p, format %s, src_box %s, data {%#x:%p}, "
+    TRACE("texture %p, sub_resource_idx %u, context %p, format %s, src_box %s, data %s, "
             "src_row_pitch %#x, src_slice_pitch %#x, dst_x %u, dst_y %u, dst_z %u, srgb %#x.\n",
             texture, sub_resource_idx, context, debug_d3dformat(format->id), debug_box(src_box),
-            data->buffer_object, data->addr, src_row_pitch, src_slice_pitch, dst_x, dst_y, dst_z, srgb);
+            debug_const_bo_address(data), src_row_pitch, src_slice_pitch, dst_x, dst_y, dst_z, srgb);
 
     if (texture->sub_resources[sub_resource_idx].map_count)
     {
@@ -3566,8 +3568,10 @@ HRESULT CDECL wined3d_texture_create(struct wined3d_device *device, const struct
         UINT layer_count, UINT level_count, DWORD flags, const struct wined3d_sub_resource_data *data,
         void *parent, const struct wined3d_parent_ops *parent_ops, struct wined3d_texture **texture)
 {
+    unsigned int sub_count = level_count * layer_count;
     const struct wined3d_texture_ops *texture_ops;
     struct wined3d_texture *object;
+    unsigned int i;
     HRESULT hr;
 
     TRACE("device %p, desc %p, layer_count %u, level_count %u, flags %#x, data %p, "
@@ -3604,7 +3608,7 @@ HRESULT CDECL wined3d_texture_create(struct wined3d_device *device, const struct
         }
         if (desc->multisample_type != WINED3D_MULTISAMPLE_NON_MASKABLE
                 && (!(format->multisample_types & 1u << (desc->multisample_type - 1))
-                || desc->multisample_quality))
+                || (desc->multisample_quality && desc->multisample_quality != WINED3D_STANDARD_MULTISAMPLE_PATTERN)))
         {
             WARN("Unsupported multisample type %u quality %u requested.\n", desc->multisample_type,
                     desc->multisample_quality);
@@ -3628,8 +3632,19 @@ HRESULT CDECL wined3d_texture_create(struct wined3d_device *device, const struct
             return WINED3DERR_INVALIDCALL;
     }
 
-    if (!(object = heap_alloc_zero(FIELD_OFFSET(struct wined3d_texture,
-            sub_resources[level_count * layer_count]))))
+    if (data)
+    {
+        for (i = 0; i < sub_count; ++i)
+        {
+            if (data[i].data)
+                continue;
+
+            WARN("Invalid sub-resource data specified for sub-resource %u.\n", i);
+            return E_INVALIDARG;
+        }
+    }
+
+    if (!(object = heap_alloc_zero(FIELD_OFFSET(struct wined3d_texture, sub_resources[sub_count]))))
         return E_OUTOFMEMORY;
 
     if (FAILED(hr = wined3d_texture_init(object, desc, layer_count,
@@ -3644,24 +3659,19 @@ HRESULT CDECL wined3d_texture_create(struct wined3d_device *device, const struct
      * in this case. */
     if (data)
     {
-        unsigned int sub_count = level_count * layer_count;
-        unsigned int i;
+        unsigned int level, width, height, depth;
+        struct wined3d_box box;
 
         for (i = 0; i < sub_count; ++i)
         {
-            if (!data[i].data)
-            {
-                WARN("Invalid sub-resource data specified for sub-resource %u.\n", i);
-                wined3d_texture_cleanup_sync(object);
-                heap_free(object);
-                return E_INVALIDARG;
-            }
-        }
+            level = i % object->level_count;
+            width = wined3d_texture_get_level_width(object, level);
+            height = wined3d_texture_get_level_height(object, level);
+            depth = wined3d_texture_get_level_depth(object, level);
+            wined3d_box_set(&box, 0, 0, width, height, 0, depth);
 
-        for (i = 0; i < sub_count; ++i)
-        {
-            wined3d_device_update_sub_resource(device, &object->resource,
-                    i, NULL, data[i].data, data[i].row_pitch, data[i].slice_pitch, 0);
+            wined3d_cs_emit_update_sub_resource(device->cs, &object->resource,
+                    i, &box, data[i].data, data[i].row_pitch, data[i].slice_pitch);
         }
     }
 

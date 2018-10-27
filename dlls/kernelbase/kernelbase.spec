@@ -206,10 +206,10 @@
 @ stdcall CreatePrivateObjectSecurityEx(ptr ptr ptr ptr long long long ptr) advapi32.CreatePrivateObjectSecurityEx
 @ stdcall CreatePrivateObjectSecurityWithMultipleInheritance(ptr ptr ptr ptr long long long long ptr) advapi32.CreatePrivateObjectSecurityWithMultipleInheritance
 @ stdcall CreateProcessA(str str ptr ptr long long ptr str ptr ptr) kernel32.CreateProcessA
-@ stdcall CreateProcessAsUserA(long str str ptr ptr long long ptr str ptr ptr) advapi32.CreateProcessAsUserA
-@ stdcall CreateProcessAsUserW(long wstr wstr ptr ptr long long ptr wstr ptr ptr) advapi32.CreateProcessAsUserW
-# @ stub CreateProcessInternalA
-# @ stub CreateProcessInternalW
+@ stdcall CreateProcessAsUserA(long str str ptr ptr long long ptr str ptr ptr) kernel32.CreateProcessAsUserA
+@ stdcall CreateProcessAsUserW(long wstr wstr ptr ptr long long ptr wstr ptr ptr) kernel32.CreateProcessAsUserW
+@ stdcall CreateProcessInternalA(long str str ptr ptr long long ptr str ptr ptr ptr) kernel32.CreateProcessInternalA
+@ stdcall CreateProcessInternalW(long wstr wstr ptr ptr long long ptr wstr ptr ptr ptr) kernel32.CreateProcessInternalW
 @ stdcall CreateProcessW(wstr wstr ptr ptr long long ptr wstr ptr ptr) kernel32.CreateProcessW
 @ stdcall CreateRemoteThread(long ptr long ptr long long ptr) kernel32.CreateRemoteThread
 @ stdcall CreateRemoteThreadEx(long ptr long ptr ptr long ptr ptr) kernel32.CreateRemoteThreadEx
@@ -631,7 +631,7 @@
 # @ stub GetProcessImageFileNameW
 # @ stub GetProcessInformation
 # @ stub GetProcessMemoryInfo
-# @ stub GetProcessMitigationPolicy
+@ stdcall GetProcessMitigationPolicy(long long ptr long) kernel32.GetProcessMitigationPolicy
 @ stub GetProcessPreferredUILanguages
 @ stdcall GetProcessPriorityBoost(long ptr) kernel32.GetProcessPriorityBoost
 @ stdcall GetProcessShutdownParameters(ptr ptr) kernel32.GetProcessShutdownParameters
@@ -1696,10 +1696,10 @@
 @ stdcall WaitForThreadpoolWorkCallbacks(ptr long) kernel32.WaitForThreadpoolWorkCallbacks
 # @ stub WaitForUserPolicyForegroundProcessingInternal
 @ stdcall WaitNamedPipeW(wstr long) kernel32.WaitNamedPipeW
-# @ stub WaitOnAddress
+@ stdcall WaitOnAddress(ptr ptr long long)
 @ stdcall WakeAllConditionVariable(ptr) kernel32.WakeAllConditionVariable
-# @ stub WakeByAddressAll
-# @ stub WakeByAddressSingle
+@ stdcall WakeByAddressAll(ptr) ntdll.RtlWakeAddressAll
+@ stdcall WakeByAddressSingle(ptr) ntdll.RtlWakeAddressSingle
 @ stdcall WakeConditionVariable(ptr) kernel32.WakeConditionVariable
 # @ stub WerGetFlags
 @ stdcall WerRegisterFile(wstr long long) kernel32.WerRegisterFile
