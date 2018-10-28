@@ -98,7 +98,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      packet_reply_add(gdbctx, &ch, 1);
 --- a/dlls/d2d1/device.c
 +++ b/dlls/d2d1/device.c
-@@ -212,11 +212,6 @@ static inline struct d2d_device_context
+@@ -210,11 +210,6 @@ static inline struct d2d_device_context
      return CONTAINING_RECORD(iface, struct d2d_device_context, ID2D1DeviceContext_iface);
  }
  

@@ -1,4 +1,4 @@
-wine-development (3.19-1) UNRELEASED; urgency=medium
+wine-development (3.19-1) unstable; urgency=medium
 
   * New upstream release 3.19, released Oct 26, 2018.
     - Support for file I/O completion modes.

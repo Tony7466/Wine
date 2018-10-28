@@ -33,7 +33,7 @@ author: Jens Reyer <jre.winesim@gmail.com>
 +            wine_get_config_dir(), wine_debsuffix, path, args);
      fprintf(file, "Type=Application\n");
      fprintf(file, "StartupNotify=true\n");
-     if (descr && lstrlenA(descr))
+     if (descr && *descr)
 @@ -2505,7 +2507,8 @@ static BOOL write_freedesktop_associatio
          fprintf(desktop, "Type=Application\n");
          fprintf(desktop, "Name=%s\n", friendlyAppName);

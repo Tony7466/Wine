@@ -27,7 +27,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (format->type == FORMAT_ARGBF16)
 --- a/dlls/kernel32/locale.c
 +++ b/dlls/kernel32/locale.c
-@@ -5755,7 +5755,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
+@@ -5763,7 +5763,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
      extern const unsigned short nameprep_char_type[];
  
      INT i, label_start, label_end, out_label, out = 0;
@@ -73,7 +73,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/dlls/webservices/reader.c
 +++ b/dlls/webservices/reader.c
-@@ -1989,7 +1989,7 @@ static inline BOOL is_element_type( unsi
+@@ -1994,7 +1994,7 @@ static inline BOOL is_element_type( unsi
  
  static HRESULT read_attributes_bin( struct reader *reader, WS_XML_ELEMENT_NODE *elem )
  {
@@ -82,7 +82,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      unsigned char type;
      HRESULT hr;
  
-@@ -6394,7 +6394,7 @@ static HRESULT read_type_struct( struct
+@@ -6379,7 +6379,7 @@ static HRESULT read_type_struct( struct
                                   WS_HEAP *heap, void *ret, ULONG size, BOOL *found )
  {
      ULONG i, offset;

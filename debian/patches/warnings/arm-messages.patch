@@ -25,7 +25,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      DWORD offset;
 --- a/dlls/rpcrt4/ndr_stubless.c
 +++ b/dlls/rpcrt4/ndr_stubless.c
-@@ -1132,7 +1132,7 @@ __ASM_GLOBAL_FUNC( call_server_func,
+@@ -1176,7 +1176,7 @@ __ASM_GLOBAL_FUNC( call_server_func,
                     "mov SP, r5\n\t"
                     "pop {r4, r5, PC}" )
  #else
