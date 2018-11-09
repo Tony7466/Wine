@@ -1,3 +1,15 @@
+wine-development (3.20-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.20, released Nov 9, 2018.
+    - Async interfaces and ACF files in the IDL compiler.
+    - Support for substorage transforms in MSI.
+    - RPC/COM marshalling fixes.
+    - Support for Unicode requests in WinHTTP.
+    - Shell Autocomplete optimizations.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Fri, 09 Nov 2018 21:25:04 +0000
+
 wine-development (3.19-1) unstable; urgency=medium
 
   * New upstream release 3.19, released Oct 26, 2018.
