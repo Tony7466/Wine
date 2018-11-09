@@ -576,6 +576,7 @@ static void device_load_logo(struct wined3d_device *device, const char *filename
     desc.multisample_type = WINED3D_MULTISAMPLE_NONE;
     desc.multisample_quality = 0;
     desc.usage = WINED3DUSAGE_DYNAMIC;
+    desc.bind_flags = 0;
     desc.access = WINED3D_RESOURCE_ACCESS_GPU;
     desc.width = bm.bmWidth;
     desc.height = bm.bmHeight;
@@ -1091,7 +1092,7 @@ HRESULT CDECL wined3d_device_init_3d(struct wined3d_device *device,
         goto err_out;
     }
 
-    if (swapchain_desc->backbuffer_count && swapchain_desc->backbuffer_usage & WINED3DUSAGE_RENDERTARGET)
+    if (swapchain_desc->backbuffer_count && swapchain_desc->backbuffer_bind_flags & WINED3D_BIND_RENDER_TARGET)
     {
         struct wined3d_resource *back_buffer = &swapchain->back_buffers[0]->resource;
         struct wined3d_view_desc view_desc;
@@ -4460,9 +4461,9 @@ HRESULT CDECL wined3d_device_set_rendertarget_view(struct wined3d_device *device
         return WINED3DERR_INVALIDCALL;
     }
 
-    if (view && !(view->resource->usage & WINED3DUSAGE_RENDERTARGET))
+    if (view && !(view->resource->bind_flags & WINED3D_BIND_RENDER_TARGET))
     {
-        WARN("View resource %p doesn't have render target usage.\n", view->resource);
+        WARN("View resource %p doesn't have render target bind flags.\n", view->resource);
         return WINED3DERR_INVALIDCALL;
     }
 
@@ -4548,6 +4549,7 @@ static struct wined3d_texture *wined3d_device_create_cursor_texture(struct wined
     desc.multisample_type = WINED3D_MULTISAMPLE_NONE;
     desc.multisample_quality = 0;
     desc.usage = WINED3DUSAGE_DYNAMIC;
+    desc.bind_flags = 0;
     desc.access = WINED3D_RESOURCE_ACCESS_GPU;
     desc.width = wined3d_texture_get_level_width(cursor_image, texture_level);
     desc.height = wined3d_texture_get_level_height(cursor_image, texture_level);
@@ -4750,6 +4752,21 @@ void CDECL wined3d_device_evict_managed_resources(struct wined3d_device *device)
     }
 }
 
+static void update_swapchain_flags(struct wined3d_texture *texture)
+{
+    unsigned int flags = texture->swapchain->desc.flags;
+
+    if (flags & WINED3D_SWAPCHAIN_LOCKABLE_BACKBUFFER)
+        texture->resource.access |= WINED3D_RESOURCE_ACCESS_MAP_R | WINED3D_RESOURCE_ACCESS_MAP_W;
+    else
+        texture->resource.access &= ~(WINED3D_RESOURCE_ACCESS_MAP_R | WINED3D_RESOURCE_ACCESS_MAP_W);
+
+    if (flags & WINED3D_SWAPCHAIN_GDI_COMPATIBLE)
+        texture->flags |= WINED3D_TEXTURE_GET_DC;
+    else
+        texture->flags &= ~WINED3D_TEXTURE_GET_DC;
+}
+
 HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
         const struct wined3d_swapchain_desc *swapchain_desc, const struct wined3d_display_mode *mode,
         wined3d_device_reset_cb callback, BOOL reset_state)
@@ -4821,8 +4838,8 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
     TRACE("refresh_rate %u\n", swapchain_desc->refresh_rate);
     TRACE("auto_restore_display_mode %#x\n", swapchain_desc->auto_restore_display_mode);
 
-    if (swapchain_desc->backbuffer_usage && swapchain_desc->backbuffer_usage != WINED3DUSAGE_RENDERTARGET)
-        FIXME("Got unexpected backbuffer usage %#x.\n", swapchain_desc->backbuffer_usage);
+    if (swapchain_desc->backbuffer_bind_flags && swapchain_desc->backbuffer_bind_flags != WINED3D_BIND_RENDER_TARGET)
+        FIXME("Got unexpected backbuffer bind flags %#x.\n", swapchain_desc->backbuffer_bind_flags);
 
     if (swapchain_desc->swap_effect != WINED3D_SWAP_EFFECT_DISCARD
             && swapchain_desc->swap_effect != WINED3D_SWAP_EFFECT_SEQUENTIAL
@@ -4833,7 +4850,6 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
     swapchain->desc.swap_effect = swapchain_desc->swap_effect;
     swapchain->desc.enable_auto_depth_stencil = swapchain_desc->enable_auto_depth_stencil;
     swapchain->desc.auto_depth_stencil_format = swapchain_desc->auto_depth_stencil_format;
-    swapchain->desc.flags = swapchain_desc->flags;
     swapchain->desc.refresh_rate = swapchain_desc->refresh_rate;
     swapchain->desc.auto_restore_display_mode = swapchain_desc->auto_restore_display_mode;
 
@@ -4879,6 +4895,17 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
             swapchain_desc->multisample_type, swapchain_desc->multisample_quality)))
         return hr;
 
+    if (swapchain_desc->flags != swapchain->desc.flags)
+    {
+        swapchain->desc.flags = swapchain_desc->flags;
+
+        update_swapchain_flags(swapchain->front_buffer);
+        for (i = 0; i < swapchain->desc.backbuffer_count; ++i)
+        {
+            update_swapchain_flags(swapchain->back_buffers[i]);
+        }
+    }
+
     if (device->auto_depth_stencil_view)
     {
         wined3d_rendertarget_view_decref(device->auto_depth_stencil_view);
@@ -4888,7 +4915,6 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
     {
         struct wined3d_resource_desc texture_desc;
         struct wined3d_texture *texture;
-        DWORD flags = 0;
 
         TRACE("Creating the depth stencil buffer.\n");
 
@@ -4896,18 +4922,16 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
         texture_desc.format = swapchain->desc.auto_depth_stencil_format;
         texture_desc.multisample_type = swapchain->desc.multisample_type;
         texture_desc.multisample_quality = swapchain->desc.multisample_quality;
-        texture_desc.usage = WINED3DUSAGE_DEPTHSTENCIL;
+        texture_desc.usage = 0;
+        texture_desc.bind_flags = WINED3D_BIND_DEPTH_STENCIL;
         texture_desc.access = WINED3D_RESOURCE_ACCESS_GPU;
         texture_desc.width = swapchain->desc.backbuffer_width;
         texture_desc.height = swapchain->desc.backbuffer_height;
         texture_desc.depth = 1;
         texture_desc.size = 0;
 
-        if (swapchain_desc->flags & WINED3D_SWAPCHAIN_GDI_COMPATIBLE)
-            flags |= WINED3D_TEXTURE_CREATE_GET_DC;
-
         if (FAILED(hr = device->device_parent->ops->create_swapchain_texture(device->device_parent,
-                device->device_parent, &texture_desc, flags, &texture)))
+                device->device_parent, &texture_desc, 0, &texture)))
         {
             ERR("Failed to create the auto depth/stencil surface, hr %#x.\n", hr);
             return WINED3DERR_INVALIDCALL;
@@ -4936,7 +4960,7 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
         wined3d_rendertarget_view_decref(device->back_buffer_view);
         device->back_buffer_view = NULL;
     }
-    if (swapchain->desc.backbuffer_count && swapchain->desc.backbuffer_usage & WINED3DUSAGE_RENDERTARGET)
+    if (swapchain->desc.backbuffer_count && swapchain->desc.backbuffer_bind_flags & WINED3D_BIND_RENDER_TARGET)
     {
         struct wined3d_resource *back_buffer = &swapchain->back_buffers[0]->resource;
 

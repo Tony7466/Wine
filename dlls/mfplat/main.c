@@ -448,339 +448,6 @@ HRESULT WINAPI MFCopyImage(BYTE *dest, LONG deststride, const BYTE *src, LONG sr
     return E_NOTIMPL;
 }
 
-typedef struct _mfbytestream
-{
-    IMFByteStream IMFByteStream_iface;
-    LONG ref;
-} mfbytestream;
-
-static inline mfbytestream *impl_from_IMFByteStream(IMFByteStream *iface)
-{
-    return CONTAINING_RECORD(iface, mfbytestream, IMFByteStream_iface);
-}
-
-static HRESULT WINAPI mfbytestream_QueryInterface(IMFByteStream *iface, REFIID riid, void **out)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-
-    TRACE("(%p)->(%s %p)\n", This, debugstr_guid(riid), out);
-
-    if(IsEqualGUID(riid, &IID_IUnknown) ||
-       IsEqualGUID(riid, &IID_IMFByteStream))
-    {
-        *out = &This->IMFByteStream_iface;
-    }
-    else
-    {
-        FIXME("(%s, %p)\n", debugstr_guid(riid), out);
-        *out = NULL;
-        return E_NOINTERFACE;
-    }
-
-    IUnknown_AddRef((IUnknown*)*out);
-    return S_OK;
-}
-
-static ULONG WINAPI mfbytestream_AddRef(IMFByteStream *iface)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-    ULONG ref = InterlockedIncrement(&This->ref);
-
-    TRACE("(%p) ref=%u\n", This, ref);
-
-    return ref;
-}
-
-static ULONG  WINAPI mfbytestream_Release(IMFByteStream *iface)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-    ULONG ref = InterlockedDecrement(&This->ref);
-
-    TRACE("(%p) ref=%u\n", This, ref);
-
-    if (!ref)
-    {
-        HeapFree(GetProcessHeap(), 0, This);
-    }
-
-    return ref;
-}
-
-static HRESULT WINAPI mfbytestream_GetCapabilities(IMFByteStream *iface, DWORD *capabilities)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-
-    FIXME("%p, %p\n", This, capabilities);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfbytestream_GetLength(IMFByteStream *iface, QWORD *length)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-
-    FIXME("%p, %p\n", This, length);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfbytestream_SetLength(IMFByteStream *iface, QWORD length)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-
-    FIXME("%p, %s\n", This, wine_dbgstr_longlong(length));
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfbytestream_GetCurrentPosition(IMFByteStream *iface, QWORD *position)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-
-    FIXME("%p, %p\n", This, position);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfbytestream_SetCurrentPosition(IMFByteStream *iface, QWORD position)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-
-    FIXME("%p, %s\n", This, wine_dbgstr_longlong(position));
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfbytestream_IsEndOfStream(IMFByteStream *iface, BOOL *endstream)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-
-    FIXME("%p, %p\n", This, endstream);
-
-    if(endstream)
-        *endstream = TRUE;
-
-    return S_OK;
-}
-
-static HRESULT WINAPI mfbytestream_Read(IMFByteStream *iface, BYTE *data, ULONG count, ULONG *byte_read)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-
-    FIXME("%p, %p, %u, %p\n", This, data, count, byte_read);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfbytestream_BeginRead(IMFByteStream *iface, BYTE *data, ULONG count,
-                        IMFAsyncCallback *callback, IUnknown *state)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-
-    FIXME("%p, %p, %u, %p, %p\n", This, data, count, callback, state);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfbytestream_EndRead(IMFByteStream *iface, IMFAsyncResult *result, ULONG *byte_read)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-
-    FIXME("%p, %p, %p\n", This, result, byte_read);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfbytestream_Write(IMFByteStream *iface, const BYTE *data, ULONG count, ULONG *written)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-
-    FIXME("%p, %p, %u, %p\n", This, data, count, written);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfbytestream_BeginWrite(IMFByteStream *iface, const BYTE *data, ULONG count,
-                        IMFAsyncCallback *callback, IUnknown *state)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-
-    FIXME("%p, %p, %u, %p, %p\n", This, data, count, callback, state);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfbytestream_EndWrite(IMFByteStream *iface, IMFAsyncResult *result, ULONG *written)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-
-    FIXME("%p, %p, %p\n", This, result, written);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfbytestream_Seek(IMFByteStream *iface, MFBYTESTREAM_SEEK_ORIGIN seek, LONGLONG offset,
-                        DWORD flags, QWORD *current)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-
-    FIXME("%p, %u, %s, 0x%08x, %p\n", This, seek, wine_dbgstr_longlong(offset), flags, current);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfbytestream_Flush(IMFByteStream *iface)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-
-    FIXME("%p\n", This);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfbytestream_Close(IMFByteStream *iface)
-{
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-
-    FIXME("%p\n", This);
-
-    return E_NOTIMPL;
-}
-
-static const IMFByteStreamVtbl mfbytesteam_vtbl =
-{
-    mfbytestream_QueryInterface,
-    mfbytestream_AddRef,
-    mfbytestream_Release,
-    mfbytestream_GetCapabilities,
-    mfbytestream_GetLength,
-    mfbytestream_SetLength,
-    mfbytestream_GetCurrentPosition,
-    mfbytestream_SetCurrentPosition,
-    mfbytestream_IsEndOfStream,
-    mfbytestream_Read,
-    mfbytestream_BeginRead,
-    mfbytestream_EndRead,
-    mfbytestream_Write,
-    mfbytestream_BeginWrite,
-    mfbytestream_EndWrite,
-    mfbytestream_Seek,
-    mfbytestream_Flush,
-    mfbytestream_Close
-};
-
-HRESULT WINAPI MFCreateMFByteStreamOnStream(IStream *stream, IMFByteStream **bytestream)
-{
-    mfbytestream *object;
-
-    TRACE("(%p, %p): stub\n", stream, bytestream);
-
-    object = heap_alloc( sizeof(*object) );
-    if(!object)
-        return E_OUTOFMEMORY;
-
-    object->ref = 1;
-    object->IMFByteStream_iface.lpVtbl = &mfbytesteam_vtbl;
-
-    *bytestream = &object->IMFByteStream_iface;
-
-    return S_OK;
-}
-
-static HRESULT WINAPI MFPluginControl_QueryInterface(IMFPluginControl *iface, REFIID riid, void **ppv)
-{
-    if(IsEqualGUID(riid, &IID_IUnknown)) {
-        TRACE("(IID_IUnknown %p)\n", ppv);
-        *ppv = iface;
-    }else if(IsEqualGUID(riid, &IID_IMFPluginControl)) {
-        TRACE("(IID_IMFPluginControl %p)\n", ppv);
-        *ppv = iface;
-    }else {
-        FIXME("(%s %p)\n", debugstr_guid(riid), ppv);
-        *ppv = NULL;
-        return E_NOINTERFACE;
-    }
-
-    IUnknown_AddRef((IUnknown*)*ppv);
-    return S_OK;
-}
-
-static ULONG WINAPI MFPluginControl_AddRef(IMFPluginControl *iface)
-{
-    TRACE("\n");
-    return 2;
-}
-
-static ULONG WINAPI MFPluginControl_Release(IMFPluginControl *iface)
-{
-    TRACE("\n");
-    return 1;
-}
-
-static HRESULT WINAPI MFPluginControl_GetPreferredClsid(IMFPluginControl *iface, DWORD plugin_type,
-        const WCHAR *selector, CLSID *clsid)
-{
-    FIXME("(%d %s %p)\n", plugin_type, debugstr_w(selector), clsid);
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI MFPluginControl_GetPreferredClsidByIndex(IMFPluginControl *iface, DWORD plugin_type,
-        DWORD index, WCHAR **selector, CLSID *clsid)
-{
-    FIXME("(%d %d %p %p)\n", plugin_type, index, selector, clsid);
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI MFPluginControl_SetPreferredClsid(IMFPluginControl *iface, DWORD plugin_type,
-        const WCHAR *selector, const CLSID *clsid)
-{
-    FIXME("(%d %s %s)\n", plugin_type, debugstr_w(selector), debugstr_guid(clsid));
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI MFPluginControl_IsDisabled(IMFPluginControl *iface, DWORD plugin_type, REFCLSID clsid)
-{
-    FIXME("(%d %s)\n", plugin_type, debugstr_guid(clsid));
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI MFPluginControl_GetDisabledByIndex(IMFPluginControl *iface, DWORD plugin_type, DWORD index, CLSID *clsid)
-{
-    FIXME("(%d %d %p)\n", plugin_type, index, clsid);
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI MFPluginControl_SetDisabled(IMFPluginControl *iface, DWORD plugin_type, REFCLSID clsid, BOOL disabled)
-{
-    FIXME("(%d %s %x)\n", plugin_type, debugstr_guid(clsid), disabled);
-    return E_NOTIMPL;
-}
-
-static const IMFPluginControlVtbl MFPluginControlVtbl = {
-    MFPluginControl_QueryInterface,
-    MFPluginControl_AddRef,
-    MFPluginControl_Release,
-    MFPluginControl_GetPreferredClsid,
-    MFPluginControl_GetPreferredClsidByIndex,
-    MFPluginControl_SetPreferredClsid,
-    MFPluginControl_IsDisabled,
-    MFPluginControl_GetDisabledByIndex,
-    MFPluginControl_SetDisabled
-};
-
-static IMFPluginControl plugin_control = { &MFPluginControlVtbl };
-
-/***********************************************************************
- *      MFGetPluginControl (mfplat.@)
- */
-HRESULT WINAPI MFGetPluginControl(IMFPluginControl **ret)
-{
-    TRACE("(%p)\n", ret);
-
-    *ret = &plugin_control;
-    return S_OK;
-}
-
 typedef struct _mfattributes
 {
     IMFAttributes IMFAttributes_iface;
@@ -1175,6 +842,476 @@ HRESULT WINAPI MFCreateAttributes(IMFAttributes **attributes, UINT32 size)
     init_attribute_object(object, size);
     *attributes = &object->IMFAttributes_iface;
 
+    return S_OK;
+}
+
+typedef struct _mfbytestream
+{
+    mfattributes attributes;
+    IMFByteStream IMFByteStream_iface;
+} mfbytestream;
+
+static inline mfbytestream *impl_from_IMFByteStream(IMFByteStream *iface)
+{
+    return CONTAINING_RECORD(iface, mfbytestream, IMFByteStream_iface);
+}
+
+static HRESULT WINAPI mfbytestream_QueryInterface(IMFByteStream *iface, REFIID riid, void **out)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+
+    TRACE("(%p)->(%s %p)\n", This, debugstr_guid(riid), out);
+
+    if(IsEqualGUID(riid, &IID_IUnknown) ||
+       IsEqualGUID(riid, &IID_IMFByteStream))
+    {
+        *out = &This->IMFByteStream_iface;
+    }
+    else if(IsEqualGUID(riid, &IID_IMFAttributes))
+    {
+        *out = &This->attributes.IMFAttributes_iface;
+    }
+    else
+    {
+        FIXME("(%s, %p)\n", debugstr_guid(riid), out);
+        *out = NULL;
+        return E_NOINTERFACE;
+    }
+
+    IUnknown_AddRef((IUnknown*)*out);
+    return S_OK;
+}
+
+static ULONG WINAPI mfbytestream_AddRef(IMFByteStream *iface)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+    ULONG ref = InterlockedIncrement(&This->attributes.ref);
+
+    TRACE("(%p) ref=%u\n", This, ref);
+
+    return ref;
+}
+
+static ULONG WINAPI mfbytestream_Release(IMFByteStream *iface)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+    ULONG ref = InterlockedDecrement(&This->attributes.ref);
+
+    TRACE("(%p) ref=%u\n", This, ref);
+
+    if (!ref)
+    {
+        HeapFree(GetProcessHeap(), 0, This);
+    }
+
+    return ref;
+}
+
+static HRESULT WINAPI mfbytestream_GetCapabilities(IMFByteStream *iface, DWORD *capabilities)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+
+    FIXME("%p, %p\n", This, capabilities);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI mfbytestream_GetLength(IMFByteStream *iface, QWORD *length)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+
+    FIXME("%p, %p\n", This, length);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI mfbytestream_SetLength(IMFByteStream *iface, QWORD length)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+
+    FIXME("%p, %s\n", This, wine_dbgstr_longlong(length));
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI mfbytestream_GetCurrentPosition(IMFByteStream *iface, QWORD *position)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+
+    FIXME("%p, %p\n", This, position);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI mfbytestream_SetCurrentPosition(IMFByteStream *iface, QWORD position)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+
+    FIXME("%p, %s\n", This, wine_dbgstr_longlong(position));
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI mfbytestream_IsEndOfStream(IMFByteStream *iface, BOOL *endstream)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+
+    FIXME("%p, %p\n", This, endstream);
+
+    if(endstream)
+        *endstream = TRUE;
+
+    return S_OK;
+}
+
+static HRESULT WINAPI mfbytestream_Read(IMFByteStream *iface, BYTE *data, ULONG count, ULONG *byte_read)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+
+    FIXME("%p, %p, %u, %p\n", This, data, count, byte_read);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI mfbytestream_BeginRead(IMFByteStream *iface, BYTE *data, ULONG count,
+                        IMFAsyncCallback *callback, IUnknown *state)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+
+    FIXME("%p, %p, %u, %p, %p\n", This, data, count, callback, state);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI mfbytestream_EndRead(IMFByteStream *iface, IMFAsyncResult *result, ULONG *byte_read)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+
+    FIXME("%p, %p, %p\n", This, result, byte_read);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI mfbytestream_Write(IMFByteStream *iface, const BYTE *data, ULONG count, ULONG *written)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+
+    FIXME("%p, %p, %u, %p\n", This, data, count, written);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI mfbytestream_BeginWrite(IMFByteStream *iface, const BYTE *data, ULONG count,
+                        IMFAsyncCallback *callback, IUnknown *state)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+
+    FIXME("%p, %p, %u, %p, %p\n", This, data, count, callback, state);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI mfbytestream_EndWrite(IMFByteStream *iface, IMFAsyncResult *result, ULONG *written)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+
+    FIXME("%p, %p, %p\n", This, result, written);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI mfbytestream_Seek(IMFByteStream *iface, MFBYTESTREAM_SEEK_ORIGIN seek, LONGLONG offset,
+                        DWORD flags, QWORD *current)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+
+    FIXME("%p, %u, %s, 0x%08x, %p\n", This, seek, wine_dbgstr_longlong(offset), flags, current);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI mfbytestream_Flush(IMFByteStream *iface)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+
+    FIXME("%p\n", This);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI mfbytestream_Close(IMFByteStream *iface)
+{
+    mfbytestream *This = impl_from_IMFByteStream(iface);
+
+    FIXME("%p\n", This);
+
+    return E_NOTIMPL;
+}
+
+static const IMFByteStreamVtbl mfbytestream_vtbl =
+{
+    mfbytestream_QueryInterface,
+    mfbytestream_AddRef,
+    mfbytestream_Release,
+    mfbytestream_GetCapabilities,
+    mfbytestream_GetLength,
+    mfbytestream_SetLength,
+    mfbytestream_GetCurrentPosition,
+    mfbytestream_SetCurrentPosition,
+    mfbytestream_IsEndOfStream,
+    mfbytestream_Read,
+    mfbytestream_BeginRead,
+    mfbytestream_EndRead,
+    mfbytestream_Write,
+    mfbytestream_BeginWrite,
+    mfbytestream_EndWrite,
+    mfbytestream_Seek,
+    mfbytestream_Flush,
+    mfbytestream_Close
+};
+
+static inline mfbytestream *impl_from_IMFByteStream_IMFAttributes(IMFAttributes *iface)
+{
+    return CONTAINING_RECORD(iface, mfbytestream, attributes.IMFAttributes_iface);
+}
+
+static HRESULT WINAPI mfbytestream_attributes_QueryInterface(
+    IMFAttributes *iface, REFIID riid, void **out)
+{
+    mfbytestream *This = impl_from_IMFByteStream_IMFAttributes(iface);
+    return IMFByteStream_QueryInterface(&This->IMFByteStream_iface, riid, out);
+}
+
+static ULONG WINAPI mfbytestream_attributes_AddRef(IMFAttributes *iface)
+{
+    mfbytestream *This = impl_from_IMFByteStream_IMFAttributes(iface);
+    return IMFByteStream_AddRef(&This->IMFByteStream_iface);
+}
+
+static ULONG WINAPI mfbytestream_attributes_Release(IMFAttributes *iface)
+{
+    mfbytestream *This = impl_from_IMFByteStream_IMFAttributes(iface);
+    return IMFByteStream_Release(&This->IMFByteStream_iface);
+}
+
+static const IMFAttributesVtbl mfbytestream_attributes_vtbl =
+{
+    mfbytestream_attributes_QueryInterface,
+    mfbytestream_attributes_AddRef,
+    mfbytestream_attributes_Release,
+    mfattributes_GetItem,
+    mfattributes_GetItemType,
+    mfattributes_CompareItem,
+    mfattributes_Compare,
+    mfattributes_GetUINT32,
+    mfattributes_GetUINT64,
+    mfattributes_GetDouble,
+    mfattributes_GetGUID,
+    mfattributes_GetStringLength,
+    mfattributes_GetString,
+    mfattributes_GetAllocatedString,
+    mfattributes_GetBlobSize,
+    mfattributes_GetBlob,
+    mfattributes_GetAllocatedBlob,
+    mfattributes_GetUnknown,
+    mfattributes_SetItem,
+    mfattributes_DeleteItem,
+    mfattributes_DeleteAllItems,
+    mfattributes_SetUINT32,
+    mfattributes_SetUINT64,
+    mfattributes_SetDouble,
+    mfattributes_SetGUID,
+    mfattributes_SetString,
+    mfattributes_SetBlob,
+    mfattributes_SetUnknown,
+    mfattributes_LockStore,
+    mfattributes_UnlockStore,
+    mfattributes_GetCount,
+    mfattributes_GetItemByIndex,
+    mfattributes_CopyAllItems
+};
+
+HRESULT WINAPI MFCreateMFByteStreamOnStream(IStream *stream, IMFByteStream **bytestream)
+{
+    mfbytestream *object;
+
+    TRACE("(%p, %p): stub\n", stream, bytestream);
+
+    object = heap_alloc( sizeof(*object) );
+    if(!object)
+        return E_OUTOFMEMORY;
+
+    init_attribute_object(&object->attributes, 0);
+    object->IMFByteStream_iface.lpVtbl = &mfbytestream_vtbl;
+    object->attributes.IMFAttributes_iface.lpVtbl = &mfbytestream_attributes_vtbl;
+
+    *bytestream = &object->IMFByteStream_iface;
+
+    return S_OK;
+}
+
+HRESULT WINAPI MFCreateFile(MF_FILE_ACCESSMODE accessmode, MF_FILE_OPENMODE openmode, MF_FILE_FLAGS flags,
+                            LPCWSTR url, IMFByteStream **bytestream)
+{
+    mfbytestream *object;
+    DWORD fileaccessmode = 0;
+    DWORD filesharemode = FILE_SHARE_READ;
+    DWORD filecreation_disposition = 0;
+    DWORD fileattributes = 0;
+    HANDLE file;
+
+    FIXME("(%d, %d, %d, %s, %p): stub\n", accessmode, openmode, flags, debugstr_w(url), bytestream);
+
+    switch (accessmode)
+    {
+        case MF_ACCESSMODE_READ:
+            fileaccessmode = GENERIC_READ;
+            break;
+        case MF_ACCESSMODE_WRITE:
+            fileaccessmode = GENERIC_WRITE;
+            break;
+        case MF_ACCESSMODE_READWRITE:
+            fileaccessmode = GENERIC_READ | GENERIC_WRITE;
+            break;
+    }
+
+    switch (openmode)
+    {
+        case MF_OPENMODE_FAIL_IF_NOT_EXIST:
+            filecreation_disposition = OPEN_EXISTING;
+            break;
+        case MF_OPENMODE_FAIL_IF_EXIST:
+            filecreation_disposition = CREATE_NEW;
+            break;
+        case MF_OPENMODE_RESET_IF_EXIST:
+            filecreation_disposition = TRUNCATE_EXISTING;
+            break;
+        case MF_OPENMODE_APPEND_IF_EXIST:
+            filecreation_disposition = OPEN_ALWAYS;
+            fileaccessmode |= FILE_APPEND_DATA;
+            break;
+        case MF_OPENMODE_DELETE_IF_EXIST:
+            filecreation_disposition = CREATE_ALWAYS;
+            break;
+    }
+
+    if (flags & MF_FILEFLAGS_NOBUFFERING)
+        fileattributes |= FILE_FLAG_NO_BUFFERING;
+
+    /* Open HANDLE to file */
+    file = CreateFileW(url, fileaccessmode, filesharemode, NULL,
+                       filecreation_disposition, fileattributes, 0);
+
+    if(file == INVALID_HANDLE_VALUE)
+        return HRESULT_FROM_WIN32(GetLastError());
+
+    /* Close the file again, since we don't do anything with it yet */
+    CloseHandle(file);
+
+    object = heap_alloc( sizeof(*object) );
+    if(!object)
+        return E_OUTOFMEMORY;
+
+    init_attribute_object(&object->attributes, 0);
+    object->IMFByteStream_iface.lpVtbl = &mfbytestream_vtbl;
+    object->attributes.IMFAttributes_iface.lpVtbl = &mfbytestream_attributes_vtbl;
+
+    *bytestream = &object->IMFByteStream_iface;
+
+    return S_OK;
+}
+
+static HRESULT WINAPI MFPluginControl_QueryInterface(IMFPluginControl *iface, REFIID riid, void **ppv)
+{
+    if(IsEqualGUID(riid, &IID_IUnknown)) {
+        TRACE("(IID_IUnknown %p)\n", ppv);
+        *ppv = iface;
+    }else if(IsEqualGUID(riid, &IID_IMFPluginControl)) {
+        TRACE("(IID_IMFPluginControl %p)\n", ppv);
+        *ppv = iface;
+    }else {
+        FIXME("(%s %p)\n", debugstr_guid(riid), ppv);
+        *ppv = NULL;
+        return E_NOINTERFACE;
+    }
+
+    IUnknown_AddRef((IUnknown*)*ppv);
+    return S_OK;
+}
+
+static ULONG WINAPI MFPluginControl_AddRef(IMFPluginControl *iface)
+{
+    TRACE("\n");
+    return 2;
+}
+
+static ULONG WINAPI MFPluginControl_Release(IMFPluginControl *iface)
+{
+    TRACE("\n");
+    return 1;
+}
+
+static HRESULT WINAPI MFPluginControl_GetPreferredClsid(IMFPluginControl *iface, DWORD plugin_type,
+        const WCHAR *selector, CLSID *clsid)
+{
+    FIXME("(%d %s %p)\n", plugin_type, debugstr_w(selector), clsid);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MFPluginControl_GetPreferredClsidByIndex(IMFPluginControl *iface, DWORD plugin_type,
+        DWORD index, WCHAR **selector, CLSID *clsid)
+{
+    FIXME("(%d %d %p %p)\n", plugin_type, index, selector, clsid);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MFPluginControl_SetPreferredClsid(IMFPluginControl *iface, DWORD plugin_type,
+        const WCHAR *selector, const CLSID *clsid)
+{
+    FIXME("(%d %s %s)\n", plugin_type, debugstr_w(selector), debugstr_guid(clsid));
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MFPluginControl_IsDisabled(IMFPluginControl *iface, DWORD plugin_type, REFCLSID clsid)
+{
+    FIXME("(%d %s)\n", plugin_type, debugstr_guid(clsid));
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MFPluginControl_GetDisabledByIndex(IMFPluginControl *iface, DWORD plugin_type, DWORD index, CLSID *clsid)
+{
+    FIXME("(%d %d %p)\n", plugin_type, index, clsid);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MFPluginControl_SetDisabled(IMFPluginControl *iface, DWORD plugin_type, REFCLSID clsid, BOOL disabled)
+{
+    FIXME("(%d %s %x)\n", plugin_type, debugstr_guid(clsid), disabled);
+    return E_NOTIMPL;
+}
+
+static const IMFPluginControlVtbl MFPluginControlVtbl = {
+    MFPluginControl_QueryInterface,
+    MFPluginControl_AddRef,
+    MFPluginControl_Release,
+    MFPluginControl_GetPreferredClsid,
+    MFPluginControl_GetPreferredClsidByIndex,
+    MFPluginControl_SetPreferredClsid,
+    MFPluginControl_IsDisabled,
+    MFPluginControl_GetDisabledByIndex,
+    MFPluginControl_SetDisabled
+};
+
+static IMFPluginControl plugin_control = { &MFPluginControlVtbl };
+
+/***********************************************************************
+ *      MFGetPluginControl (mfplat.@)
+ */
+HRESULT WINAPI MFGetPluginControl(IMFPluginControl **ret)
+{
+    TRACE("(%p)\n", ret);
+
+    *ret = &plugin_control;
     return S_OK;
 }
 

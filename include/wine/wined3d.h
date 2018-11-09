@@ -914,8 +914,6 @@ enum wined3d_shader_type
 #define WINED3D_BIND_DEPTH_STENCIL                              0x00000040
 #define WINED3D_BIND_UNORDERED_ACCESS                           0x00000080
 
-#define WINED3DUSAGE_RENDERTARGET                               0x00000001
-#define WINED3DUSAGE_DEPTHSTENCIL                               0x00000002
 #define WINED3DUSAGE_WRITEONLY                                  0x00000008
 #define WINED3DUSAGE_SOFTWAREPROCESSING                         0x00000010
 #define WINED3DUSAGE_DONOTCLIP                                  0x00000020
@@ -928,12 +926,11 @@ enum wined3d_shader_type
 #define WINED3DUSAGE_RESTRICT_SHARED_RESOURCE                   0x00002000
 #define WINED3DUSAGE_DMAP                                       0x00004000
 #define WINED3DUSAGE_TEXTAPI                                    0x10000000
-#define WINED3DUSAGE_MASK                                       0x10007bff
+#define WINED3DUSAGE_MASK                                       0x10007bf8
 
-#define WINED3DUSAGE_SCRATCH                                    0x00200000
-#define WINED3DUSAGE_PRIVATE                                    0x00400000
-#define WINED3DUSAGE_LEGACY_CUBEMAP                             0x00800000
-#define WINED3DUSAGE_TEXTURE                                    0x01000000
+#define WINED3DUSAGE_SCRATCH                                    0x00400000
+#define WINED3DUSAGE_PRIVATE                                    0x00800000
+#define WINED3DUSAGE_LEGACY_CUBEMAP                             0x01000000
 #define WINED3DUSAGE_OWNDC                                      0x02000000
 #define WINED3DUSAGE_STATICDECL                                 0x04000000
 #define WINED3DUSAGE_OVERLAY                                    0x08000000
@@ -1747,7 +1744,7 @@ struct wined3d_swapchain_desc
     unsigned int backbuffer_height;
     enum wined3d_format_id backbuffer_format;
     unsigned int backbuffer_count;
-    DWORD backbuffer_usage;
+    unsigned int backbuffer_bind_flags;
     enum wined3d_multisample_type multisample_type;
     DWORD multisample_quality;
     enum wined3d_swap_effect swap_effect;
@@ -1767,6 +1764,7 @@ struct wined3d_resource_desc
     enum wined3d_multisample_type multisample_type;
     unsigned int multisample_quality;
     unsigned int usage;
+    unsigned int bind_flags;
     unsigned int access;
     unsigned int width;
     unsigned int height;
@@ -1780,6 +1778,7 @@ struct wined3d_sub_resource_desc
     enum wined3d_multisample_type multisample_type;
     unsigned int multisample_quality;
     unsigned int usage;
+    unsigned int bind_flags;
     unsigned int access;
     unsigned int width;
     unsigned int height;
@@ -2180,7 +2179,7 @@ HRESULT __cdecl wined3d_check_depth_stencil_match(const struct wined3d *wined3d,
         enum wined3d_format_id render_target_format_id, enum wined3d_format_id depth_stencil_format_id);
 HRESULT __cdecl wined3d_check_device_format(const struct wined3d *wined3d, UINT adaper_idx,
         enum wined3d_device_type device_type, enum wined3d_format_id adapter_format_id, DWORD usage,
-        enum wined3d_resource_type resource_type, enum wined3d_format_id check_format_id);
+        unsigned int bind_flags, enum wined3d_resource_type resource_type, enum wined3d_format_id check_format_id);
 HRESULT __cdecl wined3d_check_device_format_conversion(const struct wined3d *wined3d, UINT adapter_idx,
         enum wined3d_device_type device_type, enum wined3d_format_id source_format_id,
         enum wined3d_format_id target_format_id);

@@ -2845,6 +2845,14 @@ VOID WINAPI KeInitializeDpc(PRKDPC Dpc, PKDEFERRED_ROUTINE DeferredRoutine, PVOI
 }
 
 /***********************************************************************
+ *          KeSetTargetProcessorDpc   (NTOSKRNL.EXE.@)
+ */
+VOID WINAPI KeSetTargetProcessorDpc(PRKDPC dpc, CCHAR number)
+{
+    FIXME("%p, %d stub\n", dpc, number);
+}
+
+/***********************************************************************
  *           READ_REGISTER_BUFFER_UCHAR   (NTOSKRNL.EXE.@)
  */
 VOID WINAPI READ_REGISTER_BUFFER_UCHAR(PUCHAR Register, PUCHAR Buffer, ULONG Count)
@@ -3991,13 +3999,39 @@ void WINAPI IoReleaseRemoveLockAndWaitEx(PIO_REMOVE_LOCK lock, PVOID tag, ULONG 
     FIXME("stub: %p %p %u\n", lock, tag, size);
 }
 
+/*********************************************************************
+ *           DbgQueryDebugFilterState    (NTOSKRNL.@)
+ */
 NTSTATUS WINAPI DbgQueryDebugFilterState(ULONG component, ULONG level)
 {
     FIXME("stub: %d %d\n", component, level);
     return STATUS_NOT_IMPLEMENTED;
 }
 
+/*********************************************************************
+ *           ExReleaseResourceLite    (NTOSKRNL.@)
+ */
 void WINAPI ExReleaseResourceLite(PERESOURCE resource)
 {
     FIXME("stub: %p\n", resource);
+}
+
+/*********************************************************************
+ *           PsGetProcessWow64Process    (NTOSKRNL.@)
+ */
+PVOID WINAPI PsGetProcessWow64Process(PEPROCESS process)
+{
+    FIXME("stub: %p\n", process);
+    return NULL;
+}
+
+/*********************************************************************
+ *           MmCopyVirtualMemory    (NTOSKRNL.@)
+ */
+NTSTATUS WINAPI MmCopyVirtualMemory(PEPROCESS fromprocess, PVOID fromaddress, PEPROCESS toprocess,
+                                    PVOID toaddress, SIZE_T bufsize, KPROCESSOR_MODE mode,
+                                    PSIZE_T copied)
+{
+    FIXME("stub: %p %p %p %p %lu %d %p\n", fromprocess, fromaddress, toprocess, toaddress, bufsize, mode, copied);
+    return STATUS_NOT_IMPLEMENTED;
 }

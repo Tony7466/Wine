@@ -24,9 +24,7 @@
   - implement ACO_SEARCH style
   - implement ACO_FILTERPREFIXES style
   - implement ACO_RTLREADING style
-  - implement ResetEnumerator
-  - string compares should be case-insensitive, the content of the list should be sorted
-  
+  - implement ACO_WORD_FILTER style
  */
 #include "config.h"
 
@@ -62,6 +60,8 @@ typedef struct
     LONG ref;
     BOOL initialized;
     BOOL enabled;
+    UINT enum_strs_num;
+    WCHAR **enum_strs;
     HWND hwndEdit;
     HWND hwndListBox;
     WNDPROC wpOrigEditProc;
@@ -103,10 +103,109 @@ static void set_text_and_selection(IAutoCompleteImpl *ac, HWND hwnd, WCHAR *text
         CallWindowProcW(proc, hwnd, EM_SETSEL, start, end);
 }
 
-static void hide_listbox(IAutoCompleteImpl *ac, HWND hwnd)
+static int enumerate_strings_cmpfn(const void *a, const void *b)
+{
+    return strcmpiW(*(WCHAR* const*)a, *(WCHAR* const*)b);
+}
+
+/*
+   Enumerate all of the strings and sort them in the internal list.
+
+   We don't free the enumerated strings (except on error) to avoid needless
+   copies, until the next reset (or the object itself is destroyed)
+*/
+static void enumerate_strings(IAutoCompleteImpl *ac)
+{
+    UINT cur = 0, array_size = 1024;
+    LPOLESTR *strs = NULL, *tmp;
+    ULONG read;
+
+    do
+    {
+        if ((tmp = heap_realloc(strs, array_size * sizeof(*strs))) == NULL)
+            goto fail;
+        strs = tmp;
+
+        do
+        {
+            if (FAILED(IEnumString_Next(ac->enumstr, array_size - cur, &strs[cur], &read)))
+                read = 0;
+        } while (read != 0 && (cur += read) < array_size);
+
+        array_size *= 2;
+    } while (read != 0);
+
+    /* Allocate even if there were zero strings enumerated, to mark it non-NULL */
+    if ((tmp = heap_realloc(strs, cur * sizeof(*strs))))
+    {
+        strs = tmp;
+        if (cur > 0)
+            qsort(strs, cur, sizeof(*strs), enumerate_strings_cmpfn);
+
+        ac->enum_strs = strs;
+        ac->enum_strs_num = cur;
+        return;
+    }
+
+fail:
+    while (cur--)
+        CoTaskMemFree(strs[cur]);
+    heap_free(strs);
+}
+
+static UINT find_matching_enum_str(IAutoCompleteImpl *ac, UINT start, WCHAR *text,
+                                   UINT len, int direction)
+{
+    WCHAR **strs = ac->enum_strs;
+    UINT index = ~0, a = start, b = ac->enum_strs_num;
+    while (a < b)
+    {
+        UINT i = (a + b - 1) / 2;
+        int cmp = strncmpiW(text, strs[i], len);
+        if (cmp == 0)
+        {
+            index = i;
+            cmp   = direction;
+        }
+        if (cmp <= 0) b = i;
+        else          a = i + 1;
+    }
+    return index;
+}
+
+static void free_enum_strs(IAutoCompleteImpl *ac)
+{
+    WCHAR **strs = ac->enum_strs;
+    if (strs)
+    {
+        UINT i = ac->enum_strs_num;
+        ac->enum_strs = NULL;
+        while (i--)
+            CoTaskMemFree(strs[i]);
+        heap_free(strs);
+    }
+}
+
+static void hide_listbox(IAutoCompleteImpl *ac, HWND hwnd, BOOL reset)
 {
     ShowWindow(hwnd, SW_HIDE);
     SendMessageW(hwnd, LB_RESETCONTENT, 0, 0);
+    if (reset) free_enum_strs(ac);
+}
+
+static void show_listbox(IAutoCompleteImpl *ac, UINT cnt)
+{
+    RECT r;
+    UINT width, height;
+
+    GetWindowRect(ac->hwndEdit, &r);
+    SendMessageW(ac->hwndListBox, LB_CARETOFF, 0, 0);
+
+    /* Windows XP displays 7 lines at most, then it uses a scroll bar */
+    height = SendMessageW(ac->hwndListBox, LB_GETITEMHEIGHT, 0, 0) * min(cnt + 1, 7);
+    width = r.right - r.left;
+
+    SetWindowPos(ac->hwndListBox, HWND_TOP, r.left, r.bottom + 1, width, height, SWP_SHOWWINDOW);
 }
 
 static size_t format_quick_complete(WCHAR *dst, const WCHAR *qc, const WCHAR *str, size_t str_len)
@@ -152,14 +251,14 @@ static BOOL select_item_with_return_key(IAutoCompleteImpl *ac, HWND hwnd)
             {
                 len = SendMessageW(hwndListBox, LB_GETTEXT, sel, (LPARAM)text);
                 set_text_and_selection(ac, hwnd, text, 0, len);
-                hide_listbox(ac, hwndListBox);
+                hide_listbox(ac, hwndListBox, TRUE);
                 ac->no_fwd_char = '\r';  /* RETURN char */
                 heap_free(text);
                 return TRUE;
             }
         }
     }
-    hide_listbox(ac, hwndListBox);
+    hide_listbox(ac, hwndListBox, TRUE);
     return FALSE;
 }
 
@@ -226,6 +325,10 @@ static LRESULT change_selection(IAutoCompleteImpl *ac, HWND hwnd, UINT key)
 static BOOL do_aclist_expand(IAutoCompleteImpl *ac, WCHAR *txt, WCHAR *last_delim)
 {
     WCHAR c = last_delim[1];
+
+    free_enum_strs(ac);
+    IEnumString_Reset(ac->enumstr);  /* call before expand */
+
     last_delim[1] = '\0';
     IACList_Expand(ac->aclist, txt);
     last_delim[1] = c;
@@ -261,6 +364,9 @@ static BOOL aclist_expand(IAutoCompleteImpl *ac, WCHAR *txt)
         while (i--)
             if (strchrW(delims, txt[i]))
                 return do_aclist_expand(ac, txt, &txt[i]);
+
+        /* Windows doesn't expand without a delim, but it does reset */
+        free_enum_strs(ac);
     }
 
     return FALSE;
@@ -293,16 +399,63 @@ static void autoappend_str(IAutoCompleteImpl *ac, WCHAR *text, UINT len, WCHAR *
         heap_free(tmp);
 }
 
+static BOOL display_matching_strs(IAutoCompleteImpl *ac, WCHAR *text, UINT len,
+                                  HWND hwnd, enum autoappend_flag flag)
+{
+    /* Return FALSE if we need to hide the listbox */
+    WCHAR **str = ac->enum_strs;
+    UINT cnt, start, end;
+    if (!str) return (ac->options & ACO_AUTOSUGGEST) ? FALSE : TRUE;
+
+    /* Windows seems to disable autoappend if ACO_NOPREFIXFILTERING is set */
+    if (!(ac->options & ACO_NOPREFIXFILTERING) && len)
+    {
+        start = find_matching_enum_str(ac, 0, text, len, -1);
+        if (start == ~0)
+            return (ac->options & ACO_AUTOSUGGEST) ? FALSE : TRUE;
+
+        if (flag == autoappend_flag_yes)
+            autoappend_str(ac, text, len, str[start], hwnd);
+        if (!(ac->options & ACO_AUTOSUGGEST))
+            return TRUE;
+
+        /* Find the index beyond the last string that matches */
+        end = find_matching_enum_str(ac, start + 1, text, len, 1);
+        end = (end == ~0 ? start : end) + 1;
+    }
+    else
+    {
+        if (!(ac->options & ACO_AUTOSUGGEST))
+            return TRUE;
+        start = 0;
+        end = ac->enum_strs_num;
+        if (end == 0)
+            return FALSE;
+    }
+    cnt = end - start;
+
+    SendMessageW(ac->hwndListBox, WM_SETREDRAW, FALSE, 0);
+    SendMessageW(ac->hwndListBox, LB_RESETCONTENT, 0, 0);
+    SendMessageW(ac->hwndListBox, LB_INITSTORAGE, cnt, 0);
+    for (; start < end; start++)
+        SendMessageW(ac->hwndListBox, LB_INSERTSTRING, -1, (LPARAM)str[start]);
+
+    show_listbox(ac, cnt);
+    SendMessageW(ac->hwndListBox, WM_SETREDRAW, TRUE, 0);
+    return TRUE;
+}
+
 static void autocomplete_text(IAutoCompleteImpl *ac, HWND hwnd, enum autoappend_flag flag)
 {
-    HRESULT hr;
     WCHAR *text;
-    UINT cpt, size, len = SendMessageW(hwnd, WM_GETTEXTLENGTH, 0, 0);
+    BOOL expanded = FALSE;
+    UINT size, len = SendMessageW(hwnd, WM_GETTEXTLENGTH, 0, 0);
 
     if (flag != autoappend_flag_displayempty && len == 0)
     {
         if (ac->options & ACO_AUTOSUGGEST)
-            hide_listbox(ac, ac->hwndListBox);
+            hide_listbox(ac, ac->hwndListBox, FALSE);
+        free_enum_strs(ac);
         return;
     }
 
@@ -313,79 +466,31 @@ static void autocomplete_text(IAutoCompleteImpl *ac, HWND hwnd, enum autoappend_
     if (len + 1 != size)
         text = heap_realloc(text, (len + 1) * sizeof(WCHAR));
 
-    /* Reset it here to simplify the logic in aclist_expand for
-       empty strings, since it tracks changes using txtbackup,
-       and Reset needs to be called before IACList::Expand */
-    IEnumString_Reset(ac->enumstr);
     if (ac->aclist)
     {
-        aclist_expand(ac, text);
         if (text[len - 1] == '\\' || text[len - 1] == '/')
             flag = autoappend_flag_no;
+        expanded = aclist_expand(ac, text);
+    }
+    if (expanded || !ac->enum_strs)
+    {
+        if (!expanded) IEnumString_Reset(ac->enumstr);
+        enumerate_strings(ac);
     }
 
-    /* Set txtbackup to point to text itself (which must not be released) */
+    /* Set txtbackup to point to text itself (which must not be released),
+       and it must be done here since aclist_expand uses it to track changes */
     heap_free(ac->txtbackup);
     ac->txtbackup = text;
 
-    if (ac->options & ACO_AUTOSUGGEST)
-    {
-        SendMessageW(ac->hwndListBox, WM_SETREDRAW, FALSE, 0);
-        SendMessageW(ac->hwndListBox, LB_RESETCONTENT, 0, 0);
-    }
-    for (cpt = 0;;)
-    {
-        LPOLESTR strs = NULL;
-        ULONG fetched;
-
-        hr = IEnumString_Next(ac->enumstr, 1, &strs, &fetched);
-        if (hr != S_OK)
-            break;
-
-        if (!strncmpiW(text, strs, len))
-        {
-            if (cpt == 0 && flag == autoappend_flag_yes)
-            {
-                autoappend_str(ac, text, len, strs, hwnd);
-                if (!(ac->options & ACO_AUTOSUGGEST))
-                {
-                    CoTaskMemFree(strs);
-                    break;
-                }
-            }
-
-            if (ac->options & ACO_AUTOSUGGEST)
-                SendMessageW(ac->hwndListBox, LB_ADDSTRING, 0, (LPARAM)strs);
-
-            cpt++;
-        }
-
-        CoTaskMemFree(strs);
-    }
-
-    if (ac->options & ACO_AUTOSUGGEST)
-    {
-        if (cpt)
-        {
-            RECT r;
-            UINT height = SendMessageW(ac->hwndListBox, LB_GETITEMHEIGHT, 0, 0);
-            SendMessageW(ac->hwndListBox, LB_CARETOFF, 0, 0);
-            GetWindowRect(hwnd, &r);
-            /* It seems that Windows XP displays 7 lines at most
-               and otherwise displays a vertical scroll bar */
-            SetWindowPos(ac->hwndListBox, HWND_TOP,
-                         r.left, r.bottom + 1, r.right - r.left, height * min(cpt + 1, 7),
-                         SWP_SHOWWINDOW );
-            SendMessageW(ac->hwndListBox, WM_SETREDRAW, TRUE, 0);
-        }
-        else
-            hide_listbox(ac, ac->hwndListBox);
-    }
+    if (!display_matching_strs(ac, text, len, hwnd, flag))
+        hide_listbox(ac, ac->hwndListBox, FALSE);
 }
 
 static void destroy_autocomplete_object(IAutoCompleteImpl *ac)
 {
     ac->hwndEdit = NULL;
+    free_enum_strs(ac);
     if (ac->hwndListBox)
         DestroyWindow(ac->hwndListBox);
     IAutoComplete2_Release(&ac->IAutoComplete2_iface);
@@ -403,7 +508,7 @@ static LRESULT ACEditSubclassProc_KeyDown(IAutoCompleteImpl *ac, HWND hwnd, UINT
             /* When pressing ESC, Windows hides the auto-suggest listbox, if visible */
             if ((ac->options & ACO_AUTOSUGGEST) && IsWindowVisible(ac->hwndListBox))
             {
-                hide_listbox(ac, ac->hwndListBox);
+                hide_listbox(ac, ac->hwndListBox, FALSE);
                 ac->no_fwd_char = 0x1B;  /* ESC char */
                 return 0;
             }
@@ -430,7 +535,7 @@ static LRESULT ACEditSubclassProc_KeyDown(IAutoCompleteImpl *ac, HWND hwnd, UINT
                 }
 
                 if (ac->options & ACO_AUTOSUGGEST)
-                    hide_listbox(ac, ac->hwndListBox);
+                    hide_listbox(ac, ac->hwndListBox, TRUE);
                 heap_free(text);
                 return 0;
             }
@@ -494,13 +599,17 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
     {
         case CB_SHOWDROPDOWN:
             if (This->options & ACO_AUTOSUGGEST)
-                hide_listbox(This, This->hwndListBox);
+                hide_listbox(This, This->hwndListBox, TRUE);
             return 0;
         case WM_KILLFOCUS:
-            if ((This->options & ACO_AUTOSUGGEST) && ((HWND)wParam != This->hwndListBox))
+            if (This->options & ACO_AUTOSUGGEST)
             {
-                hide_listbox(This, This->hwndListBox);
+                if ((HWND)wParam == This->hwndListBox) break;
+                hide_listbox(This, This->hwndListBox, FALSE);
             }
+
+            /* Reset the enumerator if it's not visible anymore */
+            if (!IsWindowVisible(hwnd)) free_enum_strs(This);
             break;
         case WM_KEYDOWN:
             return ACEditSubclassProc_KeyDown(This, hwnd, uMsg, wParam, lParam);
@@ -528,6 +637,10 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
             ret = CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
             autocomplete_text(This, hwnd, autoappend_flag_yes);
             return ret;
+        case WM_MOUSEWHEEL:
+            if ((This->options & ACO_AUTOSUGGEST) && IsWindowVisible(This->hwndListBox))
+                return SendMessageW(This->hwndListBox, WM_MOUSEWHEEL, wParam, lParam);
+            break;
         case WM_SETFONT:
             if (This->hwndListBox)
                 SendMessageW(This->hwndListBox, WM_SETFONT, wParam, lParam);
@@ -565,7 +678,7 @@ static LRESULT APIENTRY ACLBoxSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
                 break;
             len = SendMessageW(hwnd, LB_GETTEXT, sel, (LPARAM)msg);
             set_text_and_selection(This, This->hwndEdit, msg, 0, len);
-            hide_listbox(This, hwnd);
+            hide_listbox(This, hwnd, TRUE);
             heap_free(msg);
             break;
         default:
@@ -704,6 +817,7 @@ static HRESULT WINAPI IAutoComplete2_fnInit(
     if (This->options & ACO_SEARCH) FIXME(" ACO_SEARCH not supported\n");
     if (This->options & ACO_FILTERPREFIXES) FIXME(" ACO_FILTERPREFIXES not supported\n");
     if (This->options & ACO_RTLREADING) FIXME(" ACO_RTLREADING not supported\n");
+    if (This->options & ACO_WORD_FILTER) FIXME(" ACO_WORD_FILTER not supported\n");
 
     if (!hwndEdit || !punkACL)
         return E_INVALIDARG;
@@ -843,7 +957,7 @@ static HRESULT WINAPI IAutoComplete2_fnSetOptions(
     if ((This->options & ACO_AUTOSUGGEST) && This->hwndEdit && !This->hwndListBox)
         create_listbox(This);
     else if (!(This->options & ACO_AUTOSUGGEST) && This->hwndListBox)
-        hide_listbox(This, This->hwndListBox);
+        hide_listbox(This, This->hwndListBox, TRUE);
 
     return hr;
 }
@@ -932,9 +1046,15 @@ static HRESULT WINAPI IAutoCompleteDropDown_fnResetEnumerator(
 {
     IAutoCompleteImpl *This = impl_from_IAutoCompleteDropDown(iface);
 
-    FIXME("(%p): stub\n", This);
+    TRACE("(%p)\n", This);
 
-    return E_NOTIMPL;
+    if (This->initialized)
+    {
+        free_enum_strs(This);
+        if ((This->options & ACO_AUTOSUGGEST) && IsWindowVisible(This->hwndListBox))
+            autocomplete_text(This, This->hwndEdit, autoappend_flag_displayempty);
+    }
+    return S_OK;
 }
 
 /**************************************************************************

@@ -3580,49 +3580,64 @@ static WS_WRITE_OPTION get_field_write_option( WS_TYPE type, ULONG options )
     }
 }
 
-static HRESULT write_type_field( struct writer *, const WS_FIELD_DESCRIPTION *, const char *, ULONG );
+static HRESULT find_index( const WS_UNION_DESCRIPTION *desc, int value, ULONG *idx )
+{
+    ULONG i;
 
-static HRESULT write_type( struct writer *, WS_TYPE_MAPPING, WS_TYPE, const void *, WS_WRITE_OPTION,
-                           const void *, ULONG );
+    if (desc->valueIndices)
+    {
+        int c, min = 0, max = desc->fieldCount - 1;
+        while (min <= max)
+        {
+            i = (min + max) / 2;
+            c = value - desc->fields[desc->valueIndices[i]]->value;
+            if (c < 0)
+                max = i - 1;
+            else if (c > 0)
+                min = i + 1;
+            else
+            {
+                *idx = desc->valueIndices[i];
+                return S_OK;
+            }
+        }
+        return WS_E_INVALID_FORMAT;
+    }
+
+    /* fall back to linear search */
+    for (i = 0; i < desc->fieldCount; i++)
+    {
+        if (desc->fields[i]->value == value)
+        {
+            *idx = i;
+            return S_OK;
+        }
+    }
+    return WS_E_INVALID_FORMAT;
+}
+
+static HRESULT write_type_field( struct writer *, const WS_FIELD_DESCRIPTION *, const char *, ULONG );
 
 static HRESULT write_type_union( struct writer *writer, const WS_UNION_DESCRIPTION *desc, WS_WRITE_OPTION option,
                                  const void *value, ULONG size )
 {
-    ULONG i, offset;
+    ULONG i;
     const void *ptr;
     int enum_value;
     HRESULT hr;
 
+    if (size < sizeof(enum_value)) return E_INVALIDARG;
     if ((hr = get_value_ptr( option, value, size, desc->size, &ptr )) != S_OK) return hr;
 
-    if (size < sizeof(enum_value)) return E_INVALIDARG;
-    if ((enum_value = *(int *)(char *)ptr + desc->enumOffset) == desc->noneEnumValue)
-    {
-        switch (option)
-        {
-        case WS_WRITE_REQUIRED_VALUE:
-            return WS_E_INVALID_FORMAT;
+    enum_value = *(int *)(char *)ptr + desc->enumOffset;
+    if (enum_value == desc->noneEnumValue && option == WS_WRITE_NILLABLE_VALUE) return S_OK;
 
-        case WS_WRITE_NILLABLE_VALUE:
-            return S_OK;
-
-        default:
-            ERR( "unhandled write option %u\n", option );
-            return E_INVALIDARG;
-        }
-    }
-
-    for (i = 0; i < desc->fieldCount; i++)
-    {
-        if (desc->fields[i]->value == enum_value)
-        {
-            offset = desc->fields[i]->field.offset;
-            return write_type_field( writer, &desc->fields[i]->field, ptr, offset );
-        }
-    }
-
-    return E_INVALIDARG;
+    if ((hr = find_index( desc, enum_value, &i )) != S_OK) return hr;
+    return write_type_field( writer, &desc->fields[i]->field, ptr, desc->fields[i]->field.offset );
 }
+
+static HRESULT write_type( struct writer *, WS_TYPE_MAPPING, WS_TYPE, const void *, WS_WRITE_OPTION,
+                           const void *, ULONG );
 
 static HRESULT write_type_array( struct writer *writer, const WS_FIELD_DESCRIPTION *desc, const char *buf,
                                  ULONG count )

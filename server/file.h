@@ -88,6 +88,7 @@ extern struct fd *get_fd_object_for_mapping( struct fd *fd, unsigned int access,
 extern void *get_fd_user( struct fd *fd );
 extern void set_fd_user( struct fd *fd, const struct fd_ops *ops, struct object *user );
 extern unsigned int get_fd_options( struct fd *fd );
+extern int is_fd_overlapped( struct fd *fd );
 extern int get_unix_fd( struct fd *fd );
 extern int is_same_file_fd( struct fd *fd1, struct fd *fd2 );
 extern int is_fd_removable( struct fd *fd );
@@ -186,7 +187,7 @@ extern struct object *create_serial( struct fd *fd );
 extern void free_async_queue( struct async_queue *queue );
 extern struct async *create_async( struct fd *fd, struct thread *thread, const async_data_t *data, struct iosb *iosb );
 extern struct async *create_request_async( struct fd *fd, unsigned int comp_flags, const async_data_t *data );
-extern obj_handle_t async_handoff( struct async *async, int success, data_size_t *result );
+extern obj_handle_t async_handoff( struct async *async, int success, data_size_t *result, int force_blocking );
 extern void queue_async( struct async_queue *queue, struct async *async );
 extern void async_set_timeout( struct async *async, timeout_t timeout, unsigned int status );
 extern void async_set_result( struct object *obj, unsigned int status, apc_param_t total );

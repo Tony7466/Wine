@@ -335,7 +335,7 @@ static BOOL wined3d_swapchain_desc_from_present_parameters(struct wined3d_swapch
     swapchain_desc->backbuffer_height = present_parameters->BackBufferHeight;
     swapchain_desc->backbuffer_format = wined3dformat_from_d3dformat(present_parameters->BackBufferFormat);
     swapchain_desc->backbuffer_count = max(1, present_parameters->BackBufferCount);
-    swapchain_desc->backbuffer_usage = WINED3DUSAGE_RENDERTARGET;
+    swapchain_desc->backbuffer_bind_flags = WINED3D_BIND_RENDER_TARGET;
     swapchain_desc->multisample_type = present_parameters->MultiSampleType;
     swapchain_desc->multisample_quality = present_parameters->MultiSampleQuality;
     swapchain_desc->swap_effect = wined3dswapeffect_from_d3dswapeffect(present_parameters->SwapEffect);
@@ -346,6 +346,12 @@ static BOOL wined3d_swapchain_desc_from_present_parameters(struct wined3d_swapch
             = wined3dformat_from_d3dformat(present_parameters->AutoDepthStencilFormat);
     swapchain_desc->flags
             = (present_parameters->Flags & D3DPRESENTFLAGS_MASK) | WINED3D_SWAPCHAIN_ALLOW_MODE_SWITCH;
+    if ((present_parameters->Flags & D3DPRESENTFLAG_LOCKABLE_BACKBUFFER)
+            && (is_gdi_compat_wined3dformat(swapchain_desc->backbuffer_format)
+            /* WINED3DFMT_UNKNOWN creates the swapchain with the current
+             * display format, which is always GDI-compatible. */
+            || swapchain_desc->backbuffer_format == WINED3DFMT_UNKNOWN))
+        swapchain_desc->flags |= WINED3D_SWAPCHAIN_GDI_COMPATIBLE;
     swapchain_desc->refresh_rate = present_parameters->FullScreen_RefreshRateInHz;
     swapchain_desc->auto_restore_display_mode = TRUE;
 
@@ -1392,6 +1398,7 @@ static HRESULT d3d9_device_create_surface(struct d3d9_device *device, UINT width
     desc.usage = usage & WINED3DUSAGE_MASK;
     if (pool == D3DPOOL_SCRATCH)
         desc.usage |= WINED3DUSAGE_SCRATCH;
+    desc.bind_flags = wined3d_bind_flags_from_d3d9_usage(usage);
     desc.access = wined3daccess_from_d3dpool(pool, usage)
             | WINED3D_RESOURCE_ACCESS_MAP_R | WINED3D_RESOURCE_ACCESS_MAP_W;
     desc.width = width;
@@ -1482,7 +1489,7 @@ static HRESULT WINAPI d3d9_device_CreateDepthStencilSurface(IDirect3DDevice9Ex *
         BOOL discard, IDirect3DSurface9 **surface, HANDLE *shared_handle)
 {
     struct d3d9_device *device = impl_from_IDirect3DDevice9Ex(iface);
-    DWORD flags = WINED3D_TEXTURE_CREATE_MAPPABLE;
+    DWORD flags = 0;
 
     TRACE("iface %p, width %u, height %u, format %#x, multisample_type %#x, multisample_quality %u.\n"
             "discard %#x, surface %p, shared_handle %p.\n",
@@ -1667,13 +1674,13 @@ static HRESULT WINAPI d3d9_device_StretchRect(IDirect3DDevice9Ex *iface, IDirect
         goto done;
     }
 
-    if (dst->texture && !(dst_desc.usage & (WINED3DUSAGE_RENDERTARGET | WINED3DUSAGE_DEPTHSTENCIL)))
+    if (dst->texture && !(dst_desc.bind_flags & (WINED3D_BIND_RENDER_TARGET | WINED3D_BIND_DEPTH_STENCIL)))
     {
         WARN("Destination is a regular texture.\n");
         goto done;
     }
 
-    if (src_desc.usage & WINED3DUSAGE_DEPTHSTENCIL)
+    if (src_desc.bind_flags & WINED3D_BIND_DEPTH_STENCIL)
     {
         if (device->in_scene)
         {
@@ -1749,13 +1756,13 @@ static HRESULT WINAPI d3d9_device_ColorFill(IDirect3DDevice9Ex *iface,
         WARN("Colour fills are not allowed on surfaces with resource access %#x.\n", desc.access);
         return D3DERR_INVALIDCALL;
     }
-    if ((desc.usage & (WINED3DUSAGE_RENDERTARGET | WINED3DUSAGE_TEXTURE)) == WINED3DUSAGE_TEXTURE)
+    if ((desc.bind_flags & (WINED3D_BIND_RENDER_TARGET | WINED3D_BIND_SHADER_RESOURCE)) == WINED3D_BIND_SHADER_RESOURCE)
     {
         wined3d_mutex_unlock();
         WARN("Colorfill is not allowed on non-RT textures, returning D3DERR_INVALIDCALL.\n");
         return D3DERR_INVALIDCALL;
     }
-    if (desc.usage & WINED3DUSAGE_DEPTHSTENCIL)
+    if (desc.bind_flags & WINED3D_BIND_DEPTH_STENCIL)
     {
         wined3d_mutex_unlock();
         WARN("Colorfill is not allowed on depth stencil surfaces, returning D3DERR_INVALIDCALL.\n");
@@ -1812,9 +1819,6 @@ static HRESULT WINAPI d3d9_device_CreateOffscreenPlainSurface(IDirect3DDevice9Ex
         }
     }
 
-    /* FIXME: Offscreen surfaces are supposed to be always lockable,
-     * regardless of the pool they're created in. Should we set dynamic usage
-     * here? */
     return d3d9_device_create_surface(device, width, height, format,
             WINED3D_TEXTURE_CREATE_MAPPABLE, surface, 0, pool, D3DMULTISAMPLE_NONE, 0, user_mem);
 }
@@ -3874,7 +3878,7 @@ static HRESULT WINAPI d3d9_device_CreateDepthStencilSurfaceEx(IDirect3DDevice9Ex
         BOOL discard, IDirect3DSurface9 **surface, HANDLE *shared_handle, DWORD usage)
 {
     struct d3d9_device *device = impl_from_IDirect3DDevice9Ex(iface);
-    DWORD flags = WINED3D_TEXTURE_CREATE_MAPPABLE;
+    DWORD flags = 0;
 
     TRACE("iface %p, width %u, height %u, format %#x, multisample_type %#x, multisample_quality %u, "
             "discard %#x, surface %p, shared_handle %p, usage %#x.\n",
@@ -4179,12 +4183,8 @@ static HRESULT CDECL device_parent_create_swapchain_texture(struct wined3d_devic
     if (container_parent == device_parent)
         container_parent = &device->IDirect3DDevice9Ex_iface;
 
-    if (is_gdi_compat_wined3dformat(desc->format))
-        texture_flags |= WINED3D_TEXTURE_CREATE_GET_DC;
-
     if (FAILED(hr = wined3d_texture_create(device->wined3d_device, desc, 1, 1,
-            texture_flags | WINED3D_TEXTURE_CREATE_MAPPABLE, NULL, container_parent,
-            &d3d9_null_wined3d_parent_ops, texture)))
+            texture_flags, NULL, container_parent, &d3d9_null_wined3d_parent_ops, texture)))
     {
         WARN("Failed to create texture, hr %#x.\n", hr);
         return hr;

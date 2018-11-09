@@ -1681,6 +1681,11 @@ BOOL WINAPI ConnectNamedPipe(HANDLE hPipe, LPOVERLAPPED overlapped)
     status = NtFsControlFile(hPipe, overlapped ? overlapped->hEvent : NULL, NULL, cvalue,
                              overlapped ? (IO_STATUS_BLOCK *)overlapped : &status_block,
                              FSCTL_PIPE_LISTEN, NULL, 0, NULL, 0);
+    if (status == STATUS_PENDING && !overlapped)
+    {
+        WaitForSingleObject(hPipe, INFINITE);
+        status = status_block.u.Status;
+    }
 
     if (status == STATUS_SUCCESS) return TRUE;
     SetLastError( RtlNtStatusToDosError(status) );
@@ -1741,6 +1746,11 @@ BOOL WINAPI TransactNamedPipe(
 
     status = NtFsControlFile(handle, event, NULL, cvalue, iosb, FSCTL_PIPE_TRANSCEIVE,
                              write_buf, write_size, read_buf, read_size);
+    if (status == STATUS_PENDING && !overlapped)
+    {
+        WaitForSingleObject(handle, INFINITE);
+        status = iosb->u.Status;
+    }
 
     if (bytes_read) *bytes_read = overlapped && status ? 0 : iosb->Information;
 

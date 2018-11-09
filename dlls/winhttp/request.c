@@ -177,13 +177,13 @@ static const WCHAR *attribute_table[] =
     NULL                            /* WINHTTP_QUERY_PASSPORT_CONFIG            = 78 */
 };
 
-static task_header_t *dequeue_task( request_t *request )
+static struct task_header *dequeue_task( request_t *request )
 {
-    task_header_t *task;
+    struct task_header *task;
 
     EnterCriticalSection( &request->task_cs );
     TRACE("%u tasks queued\n", list_count( &request->task_queue ));
-    task = LIST_ENTRY( list_head( &request->task_queue ), task_header_t, entry );
+    task = LIST_ENTRY( list_head( &request->task_queue ), struct task_header, entry );
     if (task) list_remove( &task->entry );
     LeaveCriticalSection( &request->task_cs );
 
@@ -205,7 +205,7 @@ static DWORD CALLBACK task_proc( LPVOID param )
         {
         case WAIT_OBJECT_0:
         {
-            task_header_t *task;
+            struct task_header *task;
             while ((task = dequeue_task( request )))
             {
                 task->proc( task );
@@ -231,7 +231,7 @@ static DWORD CALLBACK task_proc( LPVOID param )
     return 0;
 }
 
-static BOOL queue_task( task_header_t *task )
+static BOOL queue_task( struct task_header *task )
 {
     request_t *request = task->request;
 
@@ -265,7 +265,7 @@ static BOOL queue_task( task_header_t *task )
     return TRUE;
 }
 
-static void free_header( header_t *header )
+static void free_header( struct header *header )
 {
     heap_free( header->field );
     heap_free( header->value );
@@ -293,10 +293,10 @@ static BOOL valid_token_char( WCHAR c )
     }
 }
 
-static header_t *parse_header( LPCWSTR string )
+static struct header *parse_header( const WCHAR *string )
 {
     const WCHAR *p, *q;
-    header_t *header;
+    struct header *header;
     int len;
 
     p = string;
@@ -320,7 +320,7 @@ static header_t *parse_header( LPCWSTR string )
         p++;
     }
     len = q - string;
-    if (!(header = heap_alloc_zero( sizeof(header_t) ))) return NULL;
+    if (!(header = heap_alloc_zero( sizeof(struct header) ))) return NULL;
     if (!(header->field = heap_alloc( (len + 1) * sizeof(WCHAR) )))
     {
         heap_free( header );
@@ -364,15 +364,15 @@ static int get_header_index( request_t *request, LPCWSTR field, int requested_in
     return index;
 }
 
-static BOOL insert_header( request_t *request, header_t *header )
+static BOOL insert_header( request_t *request, struct header *header )
 {
     DWORD count = request->num_headers + 1;
-    header_t *hdrs;
+    struct header *hdrs;
 
     if (request->headers)
-        hdrs = heap_realloc_zero( request->headers, sizeof(header_t) * count );
+        hdrs = heap_realloc_zero( request->headers, sizeof(struct header) * count );
     else
-        hdrs = heap_alloc_zero( sizeof(header_t) );
+        hdrs = heap_alloc_zero( sizeof(struct header) );
     if (!hdrs) return FALSE;
 
     request->headers = hdrs;
@@ -392,15 +392,16 @@ static BOOL delete_header( request_t *request, DWORD index )
     heap_free( request->headers[index].field );
     heap_free( request->headers[index].value );
 
-    memmove( &request->headers[index], &request->headers[index + 1], (request->num_headers - index) * sizeof(header_t) );
-    memset( &request->headers[request->num_headers], 0, sizeof(header_t) );
+    memmove( &request->headers[index], &request->headers[index + 1],
+             (request->num_headers - index) * sizeof(struct header) );
+    memset( &request->headers[request->num_headers], 0, sizeof(struct header) );
     return TRUE;
 }
 
 static BOOL process_header( request_t *request, LPCWSTR field, LPCWSTR value, DWORD flags, BOOL request_only )
 {
     int index;
-    header_t hdr;
+    struct header hdr;
 
     TRACE("%s: %s 0x%08x\n", debugstr_w(field), debugstr_w(value), flags);
 
@@ -435,7 +436,7 @@ static BOOL process_header( request_t *request, LPCWSTR field, LPCWSTR value, DW
         {
             WCHAR *tmp;
             int len, len_orig, len_value;
-            header_t *header = &request->headers[index];
+            struct header *header = &request->headers[index];
 
             len_orig = strlenW( header->value );
             len_value = strlenW( value );
@@ -466,7 +467,7 @@ BOOL add_request_headers( request_t *request, LPCWSTR headers, DWORD len, DWORD 
 {
     BOOL ret = FALSE;
     WCHAR *buffer, *p, *q;
-    header_t *header;
+    struct header *header;
 
     if (len == ~0u) len = strlenW( headers );
     if (!len) return TRUE;
@@ -540,98 +541,78 @@ BOOL WINAPI WinHttpAddRequestHeaders( HINTERNET hrequest, LPCWSTR headers, DWORD
     return ret;
 }
 
-static WCHAR *build_request_path( request_t *request )
+static WCHAR *build_absolute_request_path( request_t *request )
 {
+    static const WCHAR http[] = {'h','t','t','p',0};
+    static const WCHAR https[] = {'h','t','t','p','s',0};
+    static const WCHAR fmt[] = {'%','s',':','/','/','%','s',0};
+    const WCHAR *scheme;
     WCHAR *ret;
+    int len;
 
-    if (strcmpiW( request->connect->hostname, request->connect->servername ))
+    scheme = (request->netconn ? request->netconn->secure : (request->hdr.flags & WINHTTP_FLAG_SECURE)) ? https : http;
+
+    len = strlenW( scheme ) + strlenW( request->connect->hostname ) + 4; /* '://' + nul */
+    if (request->connect->hostport) len += 6; /* ':' between host and port, up to 5 for port */
+
+    if (request->path) len += strlenW( request->path );
+    if ((ret = heap_alloc( len * sizeof(WCHAR) )))
     {
-        static const WCHAR http[] = { 'h','t','t','p',0 };
-        static const WCHAR https[] = { 'h','t','t','p','s',0 };
-        static const WCHAR fmt[] = { '%','s',':','/','/','%','s',0 };
-        LPCWSTR scheme = (request->netconn ? request->netconn->secure : (request->hdr.flags & WINHTTP_FLAG_SECURE)) ? https : http;
-        int len;
-
-        len = strlenW( scheme ) + strlenW( request->connect->hostname );
-        /* 3 characters for '://', 1 for NUL. */
-        len += 4;
+        len = sprintfW( ret, fmt, scheme, request->connect->hostname );
         if (request->connect->hostport)
         {
-            /* 1 for ':' between host and port, up to 5 for port */
-            len += 6;
+            static const WCHAR port_fmt[] = {':','%','u',0};
+            sprintfW( ret + len, port_fmt, request->connect->hostport );
         }
-        if (request->path)
-            len += strlenW( request->path );
-        if ((ret = heap_alloc( len * sizeof(WCHAR) )))
-        {
-            sprintfW( ret, fmt, scheme, request->connect->hostname );
-            if (request->connect->hostport)
-            {
-                static const WCHAR colonFmt[] = { ':','%','u',0 };
-
-                sprintfW( ret + strlenW( ret ), colonFmt,
-                    request->connect->hostport );
-            }
-            if (request->path)
-                strcatW( ret, request->path );
-        }
+        if (request->path) strcatW( ret, request->path );
     }
-    else
-        ret = request->path;
+
     return ret;
 }
 
 static WCHAR *build_request_string( request_t *request )
 {
-    static const WCHAR space[]   = {' ',0};
-    static const WCHAR crlf[]    = {'\r','\n',0};
-    static const WCHAR colon[]   = {':',' ',0};
-    static const WCHAR twocrlf[] = {'\r','\n','\r','\n',0};
-
+    static const WCHAR spaceW[] = {' ',0}, crlfW[] = {'\r','\n',0}, colonW[] = {':',' ',0};
+    static const WCHAR twocrlfW[] = {'\r','\n','\r','\n',0};
     WCHAR *path, *ret;
-    const WCHAR **headers, **p;
-    unsigned int len, i = 0, j;
+    unsigned int i, len;
 
-    /* allocate space for an array of all the string pointers to be added */
-    len = request->num_headers * 4 + 7;
-    if (!(headers = heap_alloc( len * sizeof(LPCWSTR) ))) return NULL;
+    if (!strcmpiW( request->connect->hostname, request->connect->servername )) path = request->path;
+    else if (!(path = build_absolute_request_path( request ))) return NULL;
 
-    path = build_request_path( request );
-    headers[i++] = request->verb;
-    headers[i++] = space;
-    headers[i++] = path;
-    headers[i++] = space;
-    headers[i++] = request->version;
+    len = strlenW( request->verb ) + 1 /* ' ' */;
+    len += strlenW( path ) + 1 /* ' ' */;
+    len += strlenW( request->version );
 
-    for (j = 0; j < request->num_headers; j++)
+    for (i = 0; i < request->num_headers; i++)
     {
-        if (request->headers[j].is_request)
-        {
-            headers[i++] = crlf;
-            headers[i++] = request->headers[j].field;
-            headers[i++] = colon;
-            headers[i++] = request->headers[j].value;
-
-            TRACE("adding header %s (%s)\n", debugstr_w(request->headers[j].field),
-                  debugstr_w(request->headers[j].value));
-        }
+        if (request->headers[i].is_request)
+            len += strlenW( request->headers[i].field ) + strlenW( request->headers[i].value ) + 4; /* '\r\n: ' */
     }
-    headers[i++] = twocrlf;
-    headers[i] = NULL;
+    len += 4; /* '\r\n\r\n' */
 
-    len = 0;
-    for (p = headers; *p; p++) len += strlenW( *p );
-    len++;
+    if ((ret = heap_alloc( (len + 1) * sizeof(WCHAR) )))
+    {
+        strcpyW( ret, request->verb );
+        strcatW( ret, spaceW );
+        strcatW( ret, path );
+        strcatW( ret, spaceW );
+        strcatW( ret, request->version );
 
-    if (!(ret = heap_alloc( len * sizeof(WCHAR) )))
-        goto out;
-    *ret = 0;
-    for (p = headers; *p; p++) strcatW( ret, *p );
+        for (i = 0; i < request->num_headers; i++)
+        {
+            if (request->headers[i].is_request)
+            {
+                strcatW( ret, crlfW );
+                strcatW( ret, request->headers[i].field );
+                strcatW( ret, colonW );
+                strcatW( ret, request->headers[i].value );
+            }
+        }
+        strcatW( ret, twocrlfW );
+    }
 
-out:
-    if (path != request->path)
-        heap_free( path );
-    heap_free( headers );
+    if (path != request->path) heap_free( path );
     return ret;
 }
 
@@ -639,7 +620,7 @@ out:
 
 static BOOL query_headers( request_t *request, DWORD level, LPCWSTR name, LPVOID buffer, LPDWORD buflen, LPDWORD index )
 {
-    header_t *header = NULL;
+    struct header *header = NULL;
     BOOL request_only, ret = FALSE;
     int requested_index, header_index = -1;
     DWORD attr, len;
@@ -844,7 +825,6 @@ BOOL WINAPI WinHttpQueryHeaders( HINTERNET hrequest, DWORD level, LPCWSTR name, 
     if (ret) set_last_error( ERROR_SUCCESS );
     return ret;
 }
-
 
 static const WCHAR basicW[]     = {'B','a','s','i','c',0};
 static const WCHAR ntlmW[]      = {'N','T','L','M',0};
@@ -2065,6 +2045,176 @@ static void drain_content( request_t *request )
     }
 }
 
+enum escape_flags
+{
+    ESCAPE_FLAG_NON_PRINTABLE = 0x01,
+    ESCAPE_FLAG_SPACE         = 0x02,
+    ESCAPE_FLAG_PERCENT       = 0x04,
+    ESCAPE_FLAG_UNSAFE        = 0x08,
+    ESCAPE_FLAG_DEL           = 0x10,
+    ESCAPE_FLAG_8BIT          = 0x20,
+    ESCAPE_FLAG_STRIP_CRLF    = 0x40,
+};
+
+#define ESCAPE_MASK_DEFAULT (ESCAPE_FLAG_NON_PRINTABLE | ESCAPE_FLAG_SPACE | ESCAPE_FLAG_UNSAFE |\
+                             ESCAPE_FLAG_DEL | ESCAPE_FLAG_8BIT)
+#define ESCAPE_MASK_PERCENT (ESCAPE_FLAG_PERCENT | ESCAPE_MASK_DEFAULT)
+#define ESCAPE_MASK_DISABLE (ESCAPE_FLAG_SPACE | ESCAPE_FLAG_8BIT | ESCAPE_FLAG_STRIP_CRLF)
+
+static inline BOOL need_escape( char ch, enum escape_flags flags )
+{
+    static const char unsafe[] = "\"#<>[\\]^`{|}";
+    const char *ptr = unsafe;
+
+    if ((flags & ESCAPE_FLAG_SPACE) && ch == ' ') return TRUE;
+    if ((flags & ESCAPE_FLAG_PERCENT) && ch == '%') return TRUE;
+    if ((flags & ESCAPE_FLAG_NON_PRINTABLE) && ch < 0x20) return TRUE;
+    if ((flags & ESCAPE_FLAG_DEL) && ch == 0x7f) return TRUE;
+    if ((flags & ESCAPE_FLAG_8BIT) && (ch & 0x80)) return TRUE;
+    if ((flags & ESCAPE_FLAG_UNSAFE)) while (*ptr) { if (ch == *ptr++) return TRUE; }
+    return FALSE;
+}
+
+static DWORD escape_string( const char *src, DWORD len, char *dst, enum escape_flags flags )
+{
+    static const char hex[] = "0123456789ABCDEF";
+    DWORD i, ret = len;
+    char *ptr = dst;
+
+    for (i = 0; i < len; i++)
+    {
+        if ((flags & ESCAPE_FLAG_STRIP_CRLF) && (src[i] == '\r' || src[i] == '\n'))
+        {
+            ret--;
+            continue;
+        }
+        if (need_escape( src[i], flags ))
+        {
+            if (dst)
+            {
+                ptr[0] = '%';
+                ptr[1] = hex[(src[i] >> 4) & 0xf];
+                ptr[2] = hex[src[i] & 0xf];
+                ptr += 3;
+            }
+            ret += 2;
+        }
+        else if (dst) *ptr++ = src[i];
+    }
+
+    if (dst) dst[ret] = 0;
+    return ret;
+}
+
+static DWORD str_to_wire( const WCHAR *src, int src_len, char *dst, enum escape_flags flags )
+{
+    DWORD len;
+    char *utf8;
+
+    if (src_len < 0) src_len = strlenW( src );
+    len = WideCharToMultiByte( CP_UTF8, 0, src, src_len, NULL, 0, NULL, NULL );
+    if (!(utf8 = heap_alloc( len ))) return 0;
+
+    WideCharToMultiByte( CP_UTF8, 0, src, -1, utf8, len, NULL, NULL );
+    len = escape_string( utf8, len, dst, flags );
+    heap_free( utf8 );
+
+    return len;
+}
+
+static char *build_wire_path( request_t *request, DWORD *ret_len )
+{
+    WCHAR *full_path;
+    const WCHAR *path, *query = NULL;
+    DWORD len, len_path = 0, len_query = 0;
+    enum escape_flags path_flags, query_flags;
+    char *ret;
+
+    if (!strcmpiW( request->connect->hostname, request->connect->servername )) full_path = request->path;
+    else if (!(full_path = build_absolute_request_path( request ))) return NULL;
+
+    len = strlenW( full_path );
+    if ((path = strchrW( full_path, '/' )))
+    {
+        len_path = strlenW( path );
+        if ((query = strchrW( path, '?' )))
+        {
+            len_query = strlenW( query );
+            len_path -= len_query;
+        }
+    }
+
+    if (request->hdr.flags & WINHTTP_FLAG_ESCAPE_DISABLE) path_flags = ESCAPE_MASK_DISABLE;
+    else if (request->hdr.flags & WINHTTP_FLAG_ESCAPE_PERCENT) path_flags = ESCAPE_MASK_PERCENT;
+    else path_flags = ESCAPE_MASK_DEFAULT;
+
+    if (request->hdr.flags & WINHTTP_FLAG_ESCAPE_DISABLE_QUERY) query_flags = ESCAPE_MASK_DISABLE;
+    else query_flags = path_flags;
+
+    *ret_len = str_to_wire( full_path, len - len_path - len_query, NULL, 0 );
+    if (path) *ret_len += str_to_wire( path, len_path, NULL, path_flags );
+    if (query) *ret_len += str_to_wire( query, len_query, NULL, query_flags );
+
+    if ((ret = heap_alloc( *ret_len + 1 )))
+    {
+        len = str_to_wire( full_path, len - len_path - len_query, ret, 0 );
+        if (path) len += str_to_wire( path, len_path, ret + len, path_flags );
+        if (query) str_to_wire( query, len_query, ret + len, query_flags );
+    }
+
+    if (full_path != request->path) heap_free( full_path );
+    return ret;
+}
+
+static char *build_wire_request( request_t *request, DWORD *len )
+{
+    char *path, *ptr, *ret;
+    DWORD i, len_path;
+
+    if (!(path = build_wire_path( request, &len_path ))) return NULL;
+
+    *len = str_to_wire( request->verb, -1, NULL, 0 ) + 1; /* ' ' */
+    *len += len_path + 1; /* ' ' */
+    *len += str_to_wire( request->version, -1, NULL, 0 );
+
+    for (i = 0; i < request->num_headers; i++)
+    {
+        if (request->headers[i].is_request)
+        {
+            *len += str_to_wire( request->headers[i].field, -1, NULL, 0 ) + 2; /* ': ' */
+            *len += str_to_wire( request->headers[i].value, -1, NULL, 0 ) + 2; /* '\r\n' */
+        }
+    }
+    *len += 4; /* '\r\n\r\n' */
+
+    if ((ret = ptr = heap_alloc( *len + 1 )))
+    {
+        ptr += str_to_wire( request->verb, -1, ptr, 0 );
+        *ptr++ = ' ';
+        memcpy( ptr, path, len_path );
+        ptr += len_path;
+        *ptr++ = ' ';
+        ptr += str_to_wire( request->version, -1, ptr, 0 );
+
+        for (i = 0; i < request->num_headers; i++)
+        {
+            if (request->headers[i].is_request)
+            {
+                *ptr++ = '\r';
+                *ptr++ = '\n';
+                ptr += str_to_wire( request->headers[i].field, -1, ptr, 0 );
+                *ptr++ = ':';
+                *ptr++ = ' ';
+                ptr += str_to_wire( request->headers[i].value, -1, ptr, 0 );
+            }
+        }
+        memcpy( ptr, "\r\n\r\n", sizeof("\r\n\r\n") );
+    }
+
+    heap_free( path );
+    return ret;
+}
+
 static BOOL send_request( request_t *request, LPCWSTR headers, DWORD headers_len, LPVOID optional,
                           DWORD optional_len, DWORD total_len, DWORD_PTR context, BOOL async )
 {
@@ -2075,8 +2225,7 @@ static BOOL send_request( request_t *request, LPCWSTR headers, DWORD headers_len
     BOOL ret = FALSE;
     connect_t *connect = request->connect;
     session_t *session = connect->session;
-    WCHAR *req = NULL;
-    char *req_ascii;
+    char *wire_req;
     int bytes_sent;
     DWORD len, i, flags;
 
@@ -2126,16 +2275,13 @@ static BOOL send_request( request_t *request, LPCWSTR headers, DWORD headers_len
     if (context) request->hdr.context = context;
 
     if (!(ret = open_connection( request ))) goto end;
-    if (!(req = build_request_string( request ))) goto end;
-
-    if (!(req_ascii = strdupWA( req ))) goto end;
-    TRACE("full request: %s\n", debugstr_a(req_ascii));
-    len = strlen(req_ascii);
+    if (!(wire_req = build_wire_request( request, &len ))) goto end;
+    TRACE("full request: %s\n", debugstr_a(wire_req));
 
     send_callback( &request->hdr, WINHTTP_CALLBACK_STATUS_SENDING_REQUEST, NULL, 0 );
 
-    ret = netconn_send( request->netconn, req_ascii, len, &bytes_sent );
-    heap_free( req_ascii );
+    ret = netconn_send( request->netconn, wire_req, len, &bytes_sent );
+    heap_free( wire_req );
     if (!ret) goto end;
 
     if (optional_len)
@@ -2159,13 +2305,12 @@ end:
             send_callback( &request->hdr, WINHTTP_CALLBACK_STATUS_REQUEST_ERROR, &result, sizeof(result) );
         }
     }
-    heap_free( req );
     return ret;
 }
 
-static void task_send_request( task_header_t *task )
+static void task_send_request( struct task_header *task )
 {
-    send_request_t *s = (send_request_t *)task;
+    struct send_request *s = (struct send_request *)task;
     send_request( s->hdr.request, s->headers, s->headers_len, s->optional, s->optional_len, s->total_len, s->context, TRUE );
     heap_free( s->headers );
 }
@@ -2198,9 +2343,9 @@ BOOL WINAPI WinHttpSendRequest( HINTERNET hrequest, LPCWSTR headers, DWORD heade
 
     if (request->connect->hdr.flags & WINHTTP_FLAG_ASYNC)
     {
-        send_request_t *s;
+        struct send_request *s;
 
-        if (!(s = heap_alloc( sizeof(send_request_t) ))) return FALSE;
+        if (!(s = heap_alloc( sizeof(struct send_request) ))) return FALSE;
         s->hdr.request  = request;
         s->hdr.proc     = task_send_request;
         s->headers      = strdupW( headers );
@@ -2211,7 +2356,7 @@ BOOL WINAPI WinHttpSendRequest( HINTERNET hrequest, LPCWSTR headers, DWORD heade
         s->context      = context;
 
         addref_object( &request->hdr );
-        ret = queue_task( (task_header_t *)s );
+        ret = queue_task( (struct task_header *)s );
     }
     else
         ret = send_request( request, headers, headers_len, optional, optional_len, total_len, context, FALSE );
@@ -2458,7 +2603,7 @@ static BOOL read_reply( request_t *request )
     offset = buflen + crlf_len - 1;
     for (;;)
     {
-        header_t *header;
+        struct header *header;
 
         buflen = MAX_REPLY_LEN;
         if (!read_line( request, buffer, &buflen )) return TRUE;
@@ -2499,7 +2644,7 @@ static void record_cookies( request_t *request )
 
     for (i = 0; i < request->num_headers; i++)
     {
-        header_t *set_cookie = &request->headers[i];
+        struct header *set_cookie = &request->headers[i];
         if (!strcmpiW( set_cookie->field, attr_set_cookie ) && !set_cookie->is_request)
         {
             set_cookies( request, set_cookie->value );
@@ -2543,18 +2688,19 @@ static BOOL handle_redirect( request_t *request, DWORD status )
 
         if (location[0] == '/')
         {
-            len = escape_string( NULL, location, len_loc, 0 );
-            if (!(path = heap_alloc( (len + 1) * sizeof(WCHAR) ))) goto end;
-            escape_string( path, location, len_loc, 0 );
+            if (!(path = heap_alloc( (len_loc + 1) * sizeof(WCHAR) ))) goto end;
+            memcpy( path, location, len_loc * sizeof(WCHAR) );
+            path[len_loc] = 0;
         }
         else
         {
             if ((p = strrchrW( request->path, '/' ))) *p = 0;
-            len = strlenW( request->path ) + 1 + escape_string( NULL, location, len_loc, 0 );
+            len = strlenW( request->path ) + 1 + len_loc;
             if (!(path = heap_alloc( (len + 1) * sizeof(WCHAR) ))) goto end;
             strcpyW( path, request->path );
             strcatW( path, slashW );
-            escape_string( path + strlenW(path), location, len_loc, 0 );
+            memcpy( path + strlenW(path), location, len_loc * sizeof(WCHAR) );
+            path[len_loc] = 0;
         }
         heap_free( request->path );
         request->path = path;
@@ -2605,9 +2751,10 @@ static BOOL handle_redirect( request_t *request, DWORD status )
         request->path = NULL;
         if (uc.dwUrlPathLength)
         {
-            len = escape_string( NULL, uc.lpszUrlPath, uc.dwUrlPathLength + uc.dwExtraInfoLength, 0 );
+            len = uc.dwUrlPathLength + uc.dwExtraInfoLength;
             if (!(request->path = heap_alloc( (len + 1) * sizeof(WCHAR) ))) goto end;
-            escape_string( request->path, uc.lpszUrlPath, uc.dwUrlPathLength + uc.dwExtraInfoLength, 0 );
+            memcpy( request->path, uc.lpszUrlPath, (len + 1) * sizeof(WCHAR) );
+            request->path[len] = 0;
         }
         else request->path = strdupW( slashW );
     }
@@ -2690,7 +2837,7 @@ static BOOL receive_response( request_t *request, BOOL async )
     return ret;
 }
 
-static void task_receive_response( task_header_t *task )
+static void task_receive_response( struct task_header *task )
 {
     receive_response_t *r = (receive_response_t *)task;
     receive_response( r->hdr.request, TRUE );
@@ -2727,7 +2874,7 @@ BOOL WINAPI WinHttpReceiveResponse( HINTERNET hrequest, LPVOID reserved )
         r->hdr.proc    = task_receive_response;
 
         addref_object( &request->hdr );
-        ret = queue_task( (task_header_t *)r );
+        ret = queue_task( (struct task_header *)r );
     }
     else
         ret = receive_response( request, FALSE );
@@ -2761,7 +2908,7 @@ done:
     return TRUE;
 }
 
-static void task_query_data_available( task_header_t *task )
+static void task_query_data_available( struct task_header *task )
 {
     query_data_t *q = (query_data_t *)task;
     query_data_available( q->hdr.request, q->available, TRUE );
@@ -2799,7 +2946,7 @@ BOOL WINAPI WinHttpQueryDataAvailable( HINTERNET hrequest, LPDWORD available )
         q->available   = available;
 
         addref_object( &request->hdr );
-        ret = queue_task( (task_header_t *)q );
+        ret = queue_task( (struct task_header *)q );
     }
     else
         ret = query_data_available( request, available, FALSE );
@@ -2809,7 +2956,7 @@ BOOL WINAPI WinHttpQueryDataAvailable( HINTERNET hrequest, LPDWORD available )
     return ret;
 }
 
-static void task_read_data( task_header_t *task )
+static void task_read_data( struct task_header *task )
 {
     read_data_t *r = (read_data_t *)task;
     read_data( r->hdr.request, r->buffer, r->to_read, r->read, TRUE );
@@ -2849,7 +2996,7 @@ BOOL WINAPI WinHttpReadData( HINTERNET hrequest, LPVOID buffer, DWORD to_read, L
         r->read        = read;
 
         addref_object( &request->hdr );
-        ret = queue_task( (task_header_t *)r );
+        ret = queue_task( (struct task_header *)r );
     }
     else
         ret = read_data( request, buffer, to_read, read, FALSE );
@@ -2881,7 +3028,7 @@ static BOOL write_data( request_t *request, LPCVOID buffer, DWORD to_write, LPDW
     return ret;
 }
 
-static void task_write_data( task_header_t *task )
+static void task_write_data( struct task_header *task )
 {
     write_data_t *w = (write_data_t *)task;
     write_data( w->hdr.request, w->buffer, w->to_write, w->written, TRUE );
@@ -2921,7 +3068,7 @@ BOOL WINAPI WinHttpWriteData( HINTERNET hrequest, LPCVOID buffer, DWORD to_write
         w->written     = written;
 
         addref_object( &request->hdr );
-        ret = queue_task( (task_header_t *)w );
+        ret = queue_task( (struct task_header *)w );
     }
     else
         ret = write_data( request, buffer, to_write, written, FALSE );

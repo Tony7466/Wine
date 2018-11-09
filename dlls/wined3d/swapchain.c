@@ -340,10 +340,10 @@ static void swapchain_blit(const struct wined3d_swapchain *swapchain,
 }
 
 /* Context activation is done by the caller. */
-static void wined3d_swapchain_rotate(struct wined3d_swapchain *swapchain, struct wined3d_context *context)
+static void wined3d_swapchain_gl_rotate(struct wined3d_swapchain *swapchain, struct wined3d_context *context)
 {
     struct wined3d_texture_sub_resource *sub_resource;
-    struct wined3d_texture *texture, *texture_prev;
+    struct wined3d_texture_gl *texture, *texture_prev;
     struct gl_texture tex0;
     GLuint rb0;
     DWORD locations0;
@@ -353,26 +353,26 @@ static void wined3d_swapchain_rotate(struct wined3d_swapchain *swapchain, struct
     if (swapchain->desc.backbuffer_count < 2 || !swapchain->render_to_fbo)
         return;
 
-    texture_prev = swapchain->back_buffers[0];
+    texture_prev = wined3d_texture_gl(swapchain->back_buffers[0]);
 
     /* Back buffer 0 is already in the draw binding. */
     tex0 = texture_prev->texture_rgb;
     rb0 = texture_prev->rb_multisample;
-    locations0 = texture_prev->sub_resources[0].locations;
+    locations0 = texture_prev->t.sub_resources[0].locations;
 
     for (i = 1; i < swapchain->desc.backbuffer_count; ++i)
     {
-        texture = swapchain->back_buffers[i];
-        sub_resource = &texture->sub_resources[0];
+        texture = wined3d_texture_gl(swapchain->back_buffers[i]);
+        sub_resource = &texture->t.sub_resources[0];
 
         if (!(sub_resource->locations & supported_locations))
-            wined3d_texture_load_location(texture, 0, context, texture->resource.draw_binding);
+            wined3d_texture_load_location(&texture->t, 0, context, texture->t.resource.draw_binding);
 
         texture_prev->texture_rgb = texture->texture_rgb;
         texture_prev->rb_multisample = texture->rb_multisample;
 
-        wined3d_texture_validate_location(texture_prev, 0, sub_resource->locations & supported_locations);
-        wined3d_texture_invalidate_location(texture_prev, 0, ~(sub_resource->locations & supported_locations));
+        wined3d_texture_validate_location(&texture_prev->t, 0, sub_resource->locations & supported_locations);
+        wined3d_texture_invalidate_location(&texture_prev->t, 0, ~(sub_resource->locations & supported_locations));
 
         texture_prev = texture;
     }
@@ -380,8 +380,8 @@ static void wined3d_swapchain_rotate(struct wined3d_swapchain *swapchain, struct
     texture_prev->texture_rgb = tex0;
     texture_prev->rb_multisample = rb0;
 
-    wined3d_texture_validate_location(texture_prev, 0, locations0 & supported_locations);
-    wined3d_texture_invalidate_location(texture_prev, 0, ~(locations0 & supported_locations));
+    wined3d_texture_validate_location(&texture_prev->t, 0, locations0 & supported_locations);
+    wined3d_texture_invalidate_location(&texture_prev->t, 0, ~(locations0 & supported_locations));
 
     device_invalidate_state(swapchain->device, STATE_FRAMEBUFFER);
 }
@@ -483,7 +483,7 @@ static void swapchain_gl_present(struct wined3d_swapchain *swapchain,
     /* call wglSwapBuffers through the gl table to avoid confusing the Steam overlay */
     gl_info->gl_ops.wgl.p_wglSwapBuffers(context->hdc);
 
-    wined3d_swapchain_rotate(swapchain, context);
+    wined3d_swapchain_gl_rotate(swapchain, context);
 
     TRACE("SwapBuffers called, Starting new frame\n");
     /* FPS support */
@@ -669,7 +669,7 @@ static void wined3d_swapchain_apply_sample_count_override(const struct wined3d_s
 
     adapter = swapchain->device->adapter;
     gl_info = &adapter->gl_info;
-    if (!(format = wined3d_get_format(adapter, format_id, WINED3DUSAGE_RENDERTARGET)))
+    if (!(format = wined3d_get_format(adapter, format_id, WINED3D_BIND_RENDER_TARGET)))
         return;
 
     if ((t = min(wined3d_settings.sample_count, gl_info->limits.samples)))
@@ -726,7 +726,7 @@ static void wined3d_swapchain_cs_init(void *object)
      * request a depth/stencil buffer in the likely case it's needed later. */
     for (i = 0; i < ARRAY_SIZE(formats); ++i)
     {
-        swapchain->ds_format = wined3d_get_format(adapter, formats[i], WINED3DUSAGE_DEPTHSTENCIL);
+        swapchain->ds_format = wined3d_get_format(adapter, formats[i], WINED3D_BIND_DEPTH_STENCIL);
         if ((swapchain->context[0] = context_create(swapchain, swapchain->front_buffer, swapchain->ds_format)))
             break;
         TRACE("Depth stencil format %s is not supported, trying next format.\n", debug_d3dformat(formats[i]));
@@ -836,7 +836,10 @@ static HRESULT swapchain_init(struct wined3d_swapchain *swapchain, struct wined3
     texture_desc.usage = 0;
     if (device->wined3d->flags & WINED3D_NO3D)
         texture_desc.usage |= WINED3DUSAGE_OWNDC;
+    texture_desc.bind_flags = 0;
     texture_desc.access = WINED3D_RESOURCE_ACCESS_GPU;
+    if (swapchain->desc.flags & WINED3D_SWAPCHAIN_LOCKABLE_BACKBUFFER)
+        texture_desc.access |= WINED3D_RESOURCE_ACCESS_MAP_R | WINED3D_RESOURCE_ACCESS_MAP_W;
     texture_desc.width = swapchain->desc.backbuffer_width;
     texture_desc.height = swapchain->desc.backbuffer_height;
     texture_desc.depth = 1;
@@ -916,7 +919,8 @@ static HRESULT swapchain_init(struct wined3d_swapchain *swapchain, struct wined3
             goto err;
         }
 
-        texture_desc.usage = swapchain->desc.backbuffer_usage;
+        texture_desc.bind_flags = swapchain->desc.backbuffer_bind_flags;
+        texture_desc.usage = 0;
         if (device->wined3d->flags & WINED3D_NO3D)
             texture_desc.usage |= WINED3DUSAGE_OWNDC;
         for (i = 0; i < swapchain->desc.backbuffer_count; ++i)
@@ -943,10 +947,12 @@ static HRESULT swapchain_init(struct wined3d_swapchain *swapchain, struct wined3
             struct wined3d_texture *ds;
 
             texture_desc.format = swapchain->desc.auto_depth_stencil_format;
-            texture_desc.usage = WINED3DUSAGE_DEPTHSTENCIL;
+            texture_desc.usage = 0;
+            texture_desc.bind_flags = WINED3D_BIND_DEPTH_STENCIL;
+            texture_desc.access = WINED3D_RESOURCE_ACCESS_GPU;
 
             if (FAILED(hr = device->device_parent->ops->create_swapchain_texture(device->device_parent,
-                    device->device_parent, &texture_desc, texture_flags, &ds)))
+                    device->device_parent, &texture_desc, 0, &ds)))
             {
                 WARN("Failed to create the auto depth/stencil surface, hr %#x.\n", hr);
                 goto err;
