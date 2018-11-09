@@ -34,12 +34,8 @@ enum IWidget_dispids
     DISPID_TM_CLONEDISPATCH,
     DISPID_TM_CLONECOCLASS,
     DISPID_TM_VALUE,
-    DISPID_TM_ARRAY,
     DISPID_TM_VARARRAYPTR,
-    DISPID_TM_VARCARRAY,
-    DISPID_TM_VARIANT,
     DISPID_TM_VARARG,
-    DISPID_TM_STRUCTARGS,
     DISPID_TM_ERROR,
     DISPID_TM_CLONEINTERFACE,
     DISPID_TM_TESTDUAL,
@@ -57,6 +53,23 @@ enum IWidget_dispids
 
     DISPID_TM_BASETYPES_IN,
     DISPID_TM_BASETYPES_OUT,
+    DISPID_TM_FLOAT_ABI,
+    DISPID_TM_INT_PTR,
+    DISPID_TM_INT_PTR_PTR,
+    DISPID_TM_IFACE_IN,
+    DISPID_TM_IFACE_OUT,
+    DISPID_TM_IFACE_PTR,
+    DISPID_TM_BSTR,
+    DISPID_TM_VARIANT,
+    DISPID_TM_SAFEARRAY,
+    DISPID_TM_STRUCT,
+    DISPID_TM_STRUCT_PTR_PTR,
+    DISPID_TM_THIN_STRUCT,
+    DISPID_TM_RECT,
+    DISPID_TM_ARRAY,
+    DISPID_TM_VARIANT_ARRAY,
+    DISPID_TM_STRUCT_ARRAY,
+    DISPID_TM_TYPEDEF,
 };
 
 static const int DISPID_TM_NEG_RESTRICTED = -26;
@@ -89,10 +102,13 @@ library TestTypelib
         UINT uarr[8];
     } MYSTRUCT;
 
+    typedef [public] int myint_t;
+
     coclass ApplicationObject2;
 
     [
         odl,
+        oleautomation,
         uuid(12345678-1234-4321-1234-121212121212)
     ]
     interface ISomethingFromDispatch : IDispatch
@@ -173,23 +189,11 @@ library TestTypelib
         [propget, id(DISPID_VALUE)]
         HRESULT Value([in] VARIANT *value, [out, retval] VARIANT *retval);
 
-        [id(DISPID_TM_ARRAY)]
-        HRESULT Array([in] SAFEARRAY(BSTR) values);
-
         [id(DISPID_TM_VARARRAYPTR)]
         HRESULT VariantArrayPtr([in] SAFEARRAY(VARIANT) *values);
 
-        [id(DISPID_TM_VARCARRAY)]
-        HRESULT VariantCArray([in] ULONG count, [in, out] VARIANT values[2]);
-
-        [id(DISPID_TM_VARIANT)]
-        HRESULT Variant([in] VARIANT var);
-
         [vararg, id(DISPID_TM_VARARG)]
         HRESULT VarArg([in] int numexpect, [in] SAFEARRAY(VARIANT) values);
-
-        [id(DISPID_TM_STRUCTARGS)]
-        HRESULT StructArgs([in] MYSTRUCT byval, [in] MYSTRUCT *byptr, [in] MYSTRUCT arr[5]);
 
         [id(DISPID_TM_ERROR)]
         HRESULT Error();
@@ -242,6 +246,65 @@ library TestTypelib
         HRESULT basetypes_out([out] signed char *c, [out] short *s, [out] int *i, [out] hyper *h,
                 [out] unsigned char *uc, [out] unsigned short *us, [out] unsigned int *ui,
                 [out] unsigned hyper *uh, [out] float *f, [out] double *d, [out] STATE *st);
+
+        [id(DISPID_TM_FLOAT_ABI)]
+        HRESULT float_abi([in] float f, [in] double d, [in] int i, [in] float f2, [in] double d2);
+
+        [id(DISPID_TM_INT_PTR)]
+        HRESULT int_ptr([in] int *in, [out] int *out, [in, out] int *in_out);
+
+        [id(DISPID_TM_INT_PTR_PTR)]
+        HRESULT int_ptr_ptr([in] int **in, [out] int **out, [in, out] int **in_out);
+
+        [id(DISPID_TM_IFACE_IN)]
+        HRESULT iface_in([in] IUnknown *unk, [in] IDispatch *disp, [in] ISomethingFromDispatch *sfd);
+
+        [id(DISPID_TM_IFACE_OUT)]
+        HRESULT iface_out([out] IUnknown **unk, [out] IDispatch **disp, [out] ISomethingFromDispatch **sfd);
+
+        [id(DISPID_TM_IFACE_PTR)]
+        HRESULT iface_ptr([in] ISomethingFromDispatch **in, [out] ISomethingFromDispatch **out, [in, out] ISomethingFromDispatch **in_out);
+
+        [id(DISPID_TM_BSTR)]
+        HRESULT bstr([in] BSTR in, [out] BSTR *out, [in] BSTR *in_ptr, [in, out] BSTR *in_out);
+
+        [id(DISPID_TM_VARIANT)]
+        HRESULT variant([in] VARIANT in, [out] VARIANT *out, [in] VARIANT *in_ptr, [in, out] VARIANT *in_out);
+
+        [id(DISPID_TM_SAFEARRAY)]
+        HRESULT safearray([in] SAFEARRAY(int) in, [out] SAFEARRAY(int) *out, [in] SAFEARRAY(int) *in_ptr, [in, out] SAFEARRAY(int) *in_out);
+
+        [id(DISPID_TM_STRUCT)]
+        HRESULT mystruct([in] MYSTRUCT in, [out] MYSTRUCT *out, [in] MYSTRUCT *in_ptr, [in, out] MYSTRUCT *in_out);
+
+        [id(DISPID_TM_STRUCT_PTR_PTR)]
+        HRESULT mystruct_ptr_ptr([in] MYSTRUCT **in);
+
+        struct thin
+        {
+            short a;
+            char b;
+        };
+
+        [id(DISPID_TM_THIN_STRUCT)]
+        HRESULT thin_struct([in] struct thin in);
+
+        [id(DISPID_TM_RECT)]
+        HRESULT rect([in] RECT in, [out] RECT *out, [in] RECT *in_ptr, [in, out] RECT *in_out);
+
+        typedef int array_t[4];
+
+        [id(DISPID_TM_ARRAY)]
+        HRESULT array([in] array_t in, [out] array_t out, [in, out] array_t in_out);
+
+        [id(DISPID_TM_VARIANT_ARRAY)]
+        HRESULT variant_array([in] VARIANT in[2], [out] VARIANT out[2], [in, out] VARIANT in_out[2]);
+
+        [id(DISPID_TM_STRUCT_ARRAY)]
+        HRESULT mystruct_array([in] MYSTRUCT in[2]);
+
+        [id(DISPID_TM_TYPEDEF)]
+        HRESULT myint([in] myint_t val, [in] myint_t *ptr, [in] myint_t **ptr_ptr);
     }
 
     [

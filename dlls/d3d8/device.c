@@ -301,7 +301,7 @@ static BOOL wined3d_swapchain_desc_from_present_parameters(struct wined3d_swapch
     swapchain_desc->backbuffer_height = present_parameters->BackBufferHeight;
     swapchain_desc->backbuffer_format = wined3dformat_from_d3dformat(present_parameters->BackBufferFormat);
     swapchain_desc->backbuffer_count = max(1, present_parameters->BackBufferCount);
-    swapchain_desc->backbuffer_usage = WINED3DUSAGE_RENDERTARGET;
+    swapchain_desc->backbuffer_bind_flags = WINED3D_BIND_RENDER_TARGET;
     swapchain_desc->multisample_type = present_parameters->MultiSampleType;
     swapchain_desc->multisample_quality = 0; /* d3d9 only */
     swapchain_desc->swap_effect = wined3dswapeffect_from_d3dswapeffect(present_parameters->SwapEffect);
@@ -1165,6 +1165,7 @@ static HRESULT d3d8_device_create_surface(struct d3d8_device *device, UINT width
     desc.usage = usage & WINED3DUSAGE_MASK;
     if (pool == D3DPOOL_SCRATCH)
         desc.usage |= WINED3DUSAGE_SCRATCH;
+    desc.bind_flags = wined3d_bind_flags_from_d3d8_usage(usage);
     desc.access = wined3daccess_from_d3dpool(pool, usage)
             | WINED3D_RESOURCE_ACCESS_MAP_R | WINED3D_RESOURCE_ACCESS_MAP_W;
     desc.width = width;
@@ -1266,7 +1267,7 @@ static HRESULT WINAPI d3d8_device_CopyRects(IDirect3DDevice8 *iface,
 
     wined3d_mutex_lock();
     wined3d_texture_get_sub_resource_desc(src->wined3d_texture, src->sub_resource_idx, &wined3d_desc);
-    if (wined3d_desc.usage & WINED3DUSAGE_DEPTHSTENCIL)
+    if (wined3d_desc.bind_flags & WINED3D_BIND_DEPTH_STENCIL)
     {
         WARN("Source %p is a depth stencil surface, returning D3DERR_INVALIDCALL.\n", src_surface);
         wined3d_mutex_unlock();
@@ -1277,7 +1278,7 @@ static HRESULT WINAPI d3d8_device_CopyRects(IDirect3DDevice8 *iface,
     src_h = wined3d_desc.height;
 
     wined3d_texture_get_sub_resource_desc(dst->wined3d_texture, dst->sub_resource_idx, &wined3d_desc);
-    if (wined3d_desc.usage & WINED3DUSAGE_DEPTHSTENCIL)
+    if (wined3d_desc.bind_flags & WINED3D_BIND_DEPTH_STENCIL)
     {
         WARN("Destination %p is a depth stencil surface, returning D3DERR_INVALIDCALL.\n", dst_surface);
         wined3d_mutex_unlock();
@@ -3328,9 +3329,8 @@ static HRESULT CDECL device_parent_create_swapchain_texture(struct wined3d_devic
     TRACE("device_parent %p, container_parent %p, desc %p, texture flags %#x, texture %p.\n",
             device_parent, container_parent, desc, texture_flags, texture);
 
-    if (FAILED(hr = wined3d_texture_create(device->wined3d_device, desc, 1, 1,
-            texture_flags | WINED3D_TEXTURE_CREATE_MAPPABLE,  NULL, &device->IDirect3DDevice8_iface,
-            &d3d8_null_wined3d_parent_ops, texture)))
+    if (FAILED(hr = wined3d_texture_create(device->wined3d_device, desc, 1, 1, texture_flags,
+            NULL, &device->IDirect3DDevice8_iface, &d3d8_null_wined3d_parent_ops, texture)))
     {
         WARN("Failed to create texture, hr %#x.\n", hr);
         return hr;

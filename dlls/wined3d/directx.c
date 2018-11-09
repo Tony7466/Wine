@@ -763,7 +763,7 @@ UINT CDECL wined3d_get_adapter_mode_count(const struct wined3d *wined3d, UINT ad
         return 0;
 
     adapter = &wined3d->adapters[adapter_idx];
-    format = wined3d_get_format(adapter, format_id, WINED3DUSAGE_RENDERTARGET);
+    format = wined3d_get_format(adapter, format_id, WINED3D_BIND_RENDER_TARGET);
     format_bits = format->byte_count * CHAR_BIT;
 
     memset(&mode, 0, sizeof(mode));
@@ -817,7 +817,7 @@ HRESULT CDECL wined3d_enum_adapter_modes(const struct wined3d *wined3d, UINT ada
         return WINED3DERR_INVALIDCALL;
 
     adapter = &wined3d->adapters[adapter_idx];
-    format = wined3d_get_format(adapter, format_id, WINED3DUSAGE_RENDERTARGET);
+    format = wined3d_get_format(adapter, format_id, WINED3D_BIND_RENDER_TARGET);
     format_bits = format->byte_count * CHAR_BIT;
 
     memset(&m, 0, sizeof(m));
@@ -1076,7 +1076,7 @@ HRESULT CDECL wined3d_set_adapter_display_mode(struct wined3d *wined3d,
         TRACE("mode %ux%u@%u %s %#x.\n", mode->width, mode->height, mode->refresh_rate,
                 debug_d3dformat(mode->format_id), mode->scanline_ordering);
 
-        format = wined3d_get_format(adapter, mode->format_id, WINED3DUSAGE_RENDERTARGET);
+        format = wined3d_get_format(adapter, mode->format_id, WINED3D_BIND_RENDER_TARGET);
 
         new_mode.dmFields = DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT;
         new_mode.dmBitsPerPel = format->byte_count * CHAR_BIT;
@@ -1318,8 +1318,8 @@ HRESULT CDECL wined3d_check_depth_stencil_match(const struct wined3d *wined3d,
         return WINED3DERR_INVALIDCALL;
 
     adapter = &wined3d->adapters[adapter_idx];
-    rt_format = wined3d_get_format(adapter, render_target_format_id, WINED3DUSAGE_RENDERTARGET);
-    ds_format = wined3d_get_format(adapter, depth_stencil_format_id, WINED3DUSAGE_DEPTHSTENCIL);
+    rt_format = wined3d_get_format(adapter, render_target_format_id, WINED3D_BIND_RENDER_TARGET);
+    ds_format = wined3d_get_format(adapter, depth_stencil_format_id, WINED3D_BIND_DEPTH_STENCIL);
     if (wined3d_settings.offscreen_rendering_mode == ORM_FBO)
     {
         if ((rt_format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_RENDERTARGET)
@@ -1518,33 +1518,35 @@ static BOOL wined3d_check_surface_capability(const struct wined3d_format *format
  * restrict it to some should applications need that. */
 HRESULT CDECL wined3d_check_device_format(const struct wined3d *wined3d, UINT adapter_idx,
         enum wined3d_device_type device_type, enum wined3d_format_id adapter_format_id, DWORD usage,
-        enum wined3d_resource_type resource_type, enum wined3d_format_id check_format_id)
+        unsigned int bind_flags, enum wined3d_resource_type resource_type, enum wined3d_format_id check_format_id)
 {
     const struct wined3d_format *adapter_format, *format;
     enum wined3d_gl_resource_type gl_type, gl_type_end;
     const struct wined3d_adapter *adapter;
     BOOL mipmap_gen_supported = TRUE;
+    unsigned int allowed_bind_flags;
     DWORD format_flags = 0;
     DWORD allowed_usage;
 
     TRACE("wined3d %p, adapter_idx %u, device_type %s, adapter_format %s, usage %s, %s, "
-            "resource_type %s, check_format %s.\n",
+            "bind_flags %s, resource_type %s, check_format %s.\n",
             wined3d, adapter_idx, debug_d3ddevicetype(device_type), debug_d3dformat(adapter_format_id),
-            debug_d3dusage(usage), debug_d3dusagequery(usage), debug_d3dresourcetype(resource_type),
-            debug_d3dformat(check_format_id));
+            debug_d3dusage(usage), debug_d3dusagequery(usage), wined3d_debug_bind_flags(bind_flags),
+            debug_d3dresourcetype(resource_type), debug_d3dformat(check_format_id));
 
     if (adapter_idx >= wined3d->adapter_count)
         return WINED3DERR_INVALIDCALL;
 
     adapter = &wined3d->adapters[adapter_idx];
-    adapter_format = wined3d_get_format(adapter, adapter_format_id, WINED3DUSAGE_RENDERTARGET);
-    format = wined3d_get_format(adapter, check_format_id, usage);
+    adapter_format = wined3d_get_format(adapter, adapter_format_id, WINED3D_BIND_RENDER_TARGET);
+    format = wined3d_get_format(adapter, check_format_id, bind_flags);
 
     switch (resource_type)
     {
         case WINED3D_RTYPE_NONE:
-            allowed_usage = WINED3DUSAGE_DEPTHSTENCIL
-                    | WINED3DUSAGE_RENDERTARGET;
+            allowed_usage = 0;
+            allowed_bind_flags = WINED3D_BIND_RENDER_TARGET
+                    | WINED3D_BIND_DEPTH_STENCIL;
             gl_type = WINED3D_GL_RES_TYPE_TEX_2D;
             gl_type_end = WINED3D_GL_RES_TYPE_TEX_3D;
             break;
@@ -1552,7 +1554,6 @@ HRESULT CDECL wined3d_check_device_format(const struct wined3d *wined3d, UINT ad
         case WINED3D_RTYPE_TEXTURE_1D:
             allowed_usage = WINED3DUSAGE_DYNAMIC
                     | WINED3DUSAGE_SOFTWAREPROCESSING
-                    | WINED3DUSAGE_TEXTURE
                     | WINED3DUSAGE_QUERY_FILTER
                     | WINED3DUSAGE_QUERY_GENMIPMAP
                     | WINED3DUSAGE_QUERY_POSTPIXELSHADER_BLENDING
@@ -1560,16 +1561,17 @@ HRESULT CDECL wined3d_check_device_format(const struct wined3d *wined3d, UINT ad
                     | WINED3DUSAGE_QUERY_SRGBWRITE
                     | WINED3DUSAGE_QUERY_VERTEXTEXTURE
                     | WINED3DUSAGE_QUERY_WRAPANDMIP;
+            allowed_bind_flags = WINED3D_BIND_SHADER_RESOURCE;
             gl_type = gl_type_end = WINED3D_GL_RES_TYPE_TEX_1D;
             break;
 
         case WINED3D_RTYPE_TEXTURE_2D:
-            allowed_usage = WINED3DUSAGE_DEPTHSTENCIL
-                    | WINED3DUSAGE_RENDERTARGET
-                    | WINED3DUSAGE_QUERY_POSTPIXELSHADER_BLENDING;
-            if (usage & WINED3DUSAGE_RENDERTARGET)
+            allowed_usage = WINED3DUSAGE_QUERY_POSTPIXELSHADER_BLENDING;
+            if (bind_flags & WINED3D_BIND_RENDER_TARGET)
                 allowed_usage |= WINED3DUSAGE_QUERY_SRGBWRITE;
-            if (!(usage & WINED3DUSAGE_TEXTURE))
+            allowed_bind_flags = WINED3D_BIND_RENDER_TARGET
+                    | WINED3D_BIND_DEPTH_STENCIL;
+            if (!(bind_flags & WINED3D_BIND_SHADER_RESOURCE))
             {
                 if (!wined3d_check_surface_capability(format))
                 {
@@ -1583,7 +1585,6 @@ HRESULT CDECL wined3d_check_device_format(const struct wined3d *wined3d, UINT ad
             allowed_usage |= WINED3DUSAGE_DYNAMIC
                     | WINED3DUSAGE_LEGACY_CUBEMAP
                     | WINED3DUSAGE_SOFTWAREPROCESSING
-                    | WINED3DUSAGE_TEXTURE
                     | WINED3DUSAGE_QUERY_FILTER
                     | WINED3DUSAGE_QUERY_GENMIPMAP
                     | WINED3DUSAGE_QUERY_LEGACYBUMPMAP
@@ -1591,13 +1592,15 @@ HRESULT CDECL wined3d_check_device_format(const struct wined3d *wined3d, UINT ad
                     | WINED3DUSAGE_QUERY_SRGBWRITE
                     | WINED3DUSAGE_QUERY_VERTEXTEXTURE
                     | WINED3DUSAGE_QUERY_WRAPANDMIP;
+            allowed_bind_flags |= WINED3D_BIND_SHADER_RESOURCE;
             gl_type = gl_type_end = WINED3D_GL_RES_TYPE_TEX_2D;
             if (usage & WINED3DUSAGE_LEGACY_CUBEMAP)
             {
-                allowed_usage &= ~(WINED3DUSAGE_DEPTHSTENCIL | WINED3DUSAGE_QUERY_LEGACYBUMPMAP);
+                allowed_usage &= ~WINED3DUSAGE_QUERY_LEGACYBUMPMAP;
+                allowed_bind_flags &= ~WINED3D_BIND_DEPTH_STENCIL;
                 gl_type = gl_type_end = WINED3D_GL_RES_TYPE_TEX_CUBE;
             }
-            else if ((usage & WINED3DUSAGE_DEPTHSTENCIL)
+            else if ((bind_flags & WINED3D_BIND_DEPTH_STENCIL)
                     && (format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_SHADOW)
                     && !adapter->gl_info.supported[ARB_SHADOW])
             {
@@ -1609,13 +1612,13 @@ HRESULT CDECL wined3d_check_device_format(const struct wined3d *wined3d, UINT ad
         case WINED3D_RTYPE_TEXTURE_3D:
             allowed_usage = WINED3DUSAGE_DYNAMIC
                     | WINED3DUSAGE_SOFTWAREPROCESSING
-                    | WINED3DUSAGE_TEXTURE
                     | WINED3DUSAGE_QUERY_FILTER
                     | WINED3DUSAGE_QUERY_POSTPIXELSHADER_BLENDING
                     | WINED3DUSAGE_QUERY_SRGBREAD
                     | WINED3DUSAGE_QUERY_SRGBWRITE
                     | WINED3DUSAGE_QUERY_VERTEXTEXTURE
                     | WINED3DUSAGE_QUERY_WRAPANDMIP;
+            allowed_bind_flags = WINED3D_BIND_SHADER_RESOURCE;
             gl_type = gl_type_end = WINED3D_GL_RES_TYPE_TEX_3D;
             break;
 
@@ -1631,7 +1634,15 @@ HRESULT CDECL wined3d_check_device_format(const struct wined3d *wined3d, UINT ad
         return WINED3DERR_NOTAVAILABLE;
     }
 
-    if (usage & WINED3DUSAGE_TEXTURE)
+    if ((bind_flags & allowed_bind_flags) != bind_flags)
+    {
+        TRACE("Requested bind flags %s, but resource type %s only allows %s.\n",
+                wined3d_debug_bind_flags(bind_flags), debug_d3dresourcetype(resource_type),
+                wined3d_debug_bind_flags(allowed_bind_flags));
+        return WINED3DERR_NOTAVAILABLE;
+    }
+
+    if (bind_flags & WINED3D_BIND_SHADER_RESOURCE)
         format_flags |= WINED3DFMT_FLAG_TEXTURE;
     if (usage & WINED3DUSAGE_QUERY_FILTER)
         format_flags |= WINED3DFMT_FLAG_FILTERING;
@@ -1661,22 +1672,22 @@ HRESULT CDECL wined3d_check_device_format(const struct wined3d *wined3d, UINT ad
             return WINED3DERR_NOTAVAILABLE;
         }
 
-        if ((usage & WINED3DUSAGE_RENDERTARGET)
+        if ((bind_flags & WINED3D_BIND_RENDER_TARGET)
                 && !CheckRenderTargetCapability(adapter, adapter_format, format, gl_type))
         {
-            TRACE("Requested WINED3DUSAGE_RENDERTARGET, but format %s is not supported for render targets.\n",
+            TRACE("Requested WINED3D_BIND_RENDER_TARGET, but format %s is not supported for render targets.\n",
                     debug_d3dformat(check_format_id));
             return WINED3DERR_NOTAVAILABLE;
         }
 
         /* 3D depth / stencil textures are never supported. */
-        if (usage == WINED3DUSAGE_DEPTHSTENCIL && gl_type == WINED3D_GL_RES_TYPE_TEX_3D)
+        if (bind_flags == WINED3D_BIND_DEPTH_STENCIL && gl_type == WINED3D_GL_RES_TYPE_TEX_3D)
             continue;
 
-        if ((usage & WINED3DUSAGE_DEPTHSTENCIL)
+        if ((bind_flags & WINED3D_BIND_DEPTH_STENCIL)
                 && !CheckDepthStencilCapability(adapter, adapter_format, format, gl_type))
         {
-            TRACE("Requested WINED3DUSAGE_DEPTHSTENCIL, but format %s is not supported for depth / stencil buffers.\n",
+            TRACE("Requested WINED3D_BIND_DEPTH_STENCIL, but format %s is not supported for depth/stencil buffers.\n",
                     debug_d3dformat(check_format_id));
             return WINED3DERR_NOTAVAILABLE;
         }
@@ -1827,7 +1838,7 @@ HRESULT CDECL wined3d_check_device_type(const struct wined3d *wined3d, UINT adap
 
     /* Validate that the back buffer format is usable for render targets. */
     if (FAILED(wined3d_check_device_format(wined3d, adapter_idx, device_type, display_format,
-            WINED3DUSAGE_RENDERTARGET, WINED3D_RTYPE_TEXTURE_2D, backbuffer_format)))
+            0, WINED3D_BIND_RENDER_TARGET, WINED3D_RTYPE_TEXTURE_2D, backbuffer_format)))
     {
         TRACE("Format %s not allowed for render targets.\n", debug_d3dformat(backbuffer_format));
         return WINED3DERR_NOTAVAILABLE;

@@ -176,9 +176,6 @@ MAKE_FUNCPTR(FcConfigSubstitute);
 MAKE_FUNCPTR(FcFontList);
 MAKE_FUNCPTR(FcFontSetDestroy);
 MAKE_FUNCPTR(FcInit);
-MAKE_FUNCPTR(FcObjectSetAdd);
-MAKE_FUNCPTR(FcObjectSetCreate);
-MAKE_FUNCPTR(FcObjectSetDestroy);
 MAKE_FUNCPTR(FcPatternCreate);
 MAKE_FUNCPTR(FcPatternDestroy);
 MAKE_FUNCPTR(FcPatternGetBool);
@@ -2775,7 +2772,7 @@ static UINT parse_aa_pattern( FcPattern *pattern )
         case FC_RGBA_BGR:  aa_flags = WINE_GGO_HBGR_BITMAP; break;
         case FC_RGBA_VRGB: aa_flags = WINE_GGO_VRGB_BITMAP; break;
         case FC_RGBA_VBGR: aa_flags = WINE_GGO_VBGR_BITMAP; break;
-        case FC_RGBA_NONE: aa_flags = GGO_GRAY4_BITMAP; break;
+        case FC_RGBA_NONE: aa_flags = aa_flags ? aa_flags : GGO_GRAY4_BITMAP; break;
         }
     }
     return aa_flags;
@@ -2796,9 +2793,6 @@ static void init_fontconfig(void)
     LOAD_FUNCPTR(FcFontList);
     LOAD_FUNCPTR(FcFontSetDestroy);
     LOAD_FUNCPTR(FcInit);
-    LOAD_FUNCPTR(FcObjectSetAdd);
-    LOAD_FUNCPTR(FcObjectSetCreate);
-    LOAD_FUNCPTR(FcObjectSetDestroy);
     LOAD_FUNCPTR(FcPatternCreate);
     LOAD_FUNCPTR(FcPatternDestroy);
     LOAD_FUNCPTR(FcPatternGetBool);
@@ -2812,6 +2806,15 @@ static void init_fontconfig(void)
         pFcConfigSubstitute( NULL, pattern, FcMatchFont );
         default_aa_flags = parse_aa_pattern( pattern );
         pFcPatternDestroy( pattern );
+
+        if (!default_aa_flags)
+        {
+            FcPattern *pattern = pFcPatternCreate();
+            pFcConfigSubstitute( NULL, pattern, FcMatchPattern );
+            default_aa_flags = parse_aa_pattern( pattern );
+            pFcPatternDestroy( pattern );
+        }
+
         TRACE( "enabled, default flags = %x\n", default_aa_flags );
         fontconfig_enabled = TRUE;
     }
@@ -2820,7 +2823,6 @@ static void init_fontconfig(void)
 static void load_fontconfig_fonts(void)
 {
     FcPattern *pat;
-    FcObjectSet *os;
     FcFontSet *fontset;
     int i, len;
     char *file;
@@ -2829,13 +2831,15 @@ static void load_fontconfig_fonts(void)
     if (!fontconfig_enabled) return;
 
     pat = pFcPatternCreate();
-    os = pFcObjectSetCreate();
-    pFcObjectSetAdd(os, FC_FILE);
-    pFcObjectSetAdd(os, FC_SCALABLE);
-    pFcObjectSetAdd(os, FC_ANTIALIAS);
-    pFcObjectSetAdd(os, FC_RGBA);
-    fontset = pFcFontList(NULL, pat, os);
-    if(!fontset) return;
+    if (!pat) return;
+
+    fontset = pFcFontList(NULL, pat, NULL);
+    if (!fontset)
+    {
+        pFcPatternDestroy(pat);
+        return;
+    }
+
     for(i = 0; i < fontset->nfont; i++) {
         FcBool scalable;
         DWORD aa_flags;
@@ -2866,7 +2870,6 @@ static void load_fontconfig_fonts(void)
                           ADDFONT_EXTERNAL_FONT | ADDFONT_ADD_TO_CACHE | ADDFONT_AA_FLAGS(aa_flags) );
     }
     pFcFontSetDestroy(fontset);
-    pFcObjectSetDestroy(os);
     pFcPatternDestroy(pat);
 }
 

@@ -66,13 +66,6 @@ struct _object_header_t
     struct list children;
 };
 
-typedef struct
-{
-    struct list entry;
-    WCHAR *name;
-    struct list cookies;
-} domain_t;
-
 typedef struct {
     struct list entry;
     LONG ref;
@@ -136,12 +129,12 @@ typedef struct
     size_t peek_len;
 } netconn_t;
 
-typedef struct
+struct header
 {
-    LPWSTR field;
-    LPWSTR value;
+    WCHAR *field;
+    WCHAR *value;
     BOOL is_request; /* part of request headers? */
-} header_t;
+};
 
 enum auth_target
 {
@@ -203,7 +196,7 @@ typedef struct
     DWORD read_pos;       /* current read position in read_buf */
     DWORD read_size;      /* valid data size in read_buf */
     char  read_buf[8192]; /* buffer for already read but not returned data */
-    header_t *headers;
+    struct header *headers;
     DWORD num_headers;
     WCHAR **accept_types;
     DWORD num_accept_types;
@@ -221,40 +214,38 @@ typedef struct
     } creds[TARGET_MAX][SCHEME_MAX];
 } request_t;
 
-typedef struct _task_header_t task_header_t;
-
-struct _task_header_t
+struct task_header
 {
     struct list entry;
     request_t *request;
-    void (*proc)( task_header_t * );
+    void (*proc)( struct task_header * );
+};
+
+struct send_request
+{
+    struct task_header hdr;
+    WCHAR *headers;
+    DWORD headers_len;
+    void *optional;
+    DWORD optional_len;
+    DWORD total_len;
+    DWORD_PTR context;
 };
 
 typedef struct
 {
-    task_header_t hdr;
-    LPWSTR headers;
-    DWORD headers_len;
-    LPVOID optional;
-    DWORD optional_len;
-    DWORD total_len;
-    DWORD_PTR context;
-} send_request_t;
-
-typedef struct
-{
-    task_header_t hdr;
+    struct task_header hdr;
 } receive_response_t;
 
 typedef struct
 {
-    task_header_t hdr;
+    struct task_header hdr;
     LPDWORD available;
 } query_data_t;
 
 typedef struct
 {
-    task_header_t hdr;
+    struct task_header hdr;
     LPVOID buffer;
     DWORD to_read;
     LPDWORD read;
@@ -262,7 +253,7 @@ typedef struct
 
 typedef struct
 {
-    task_header_t hdr;
+    struct task_header hdr;
     LPCVOID buffer;
     DWORD to_write;
     LPDWORD written;
@@ -295,20 +286,11 @@ int netconn_get_cipher_strength( netconn_t * ) DECLSPEC_HIDDEN;
 BOOL set_cookies( request_t *, const WCHAR * ) DECLSPEC_HIDDEN;
 BOOL add_cookie_headers( request_t * ) DECLSPEC_HIDDEN;
 BOOL add_request_headers( request_t *, LPCWSTR, DWORD, DWORD ) DECLSPEC_HIDDEN;
-void delete_domain( domain_t * ) DECLSPEC_HIDDEN;
+void destroy_cookies( session_t * ) DECLSPEC_HIDDEN;
 BOOL set_server_for_hostname( connect_t *, LPCWSTR, INTERNET_PORT ) DECLSPEC_HIDDEN;
 void destroy_authinfo( struct authinfo * ) DECLSPEC_HIDDEN;
 
 void release_host( hostdata_t *host ) DECLSPEC_HIDDEN;
-
-enum escape_flags
-{
-    ESCAPE_FLAG_REMOVE_CRLF = 0x01,
-    ESCAPE_FLAG_SPACE_ONLY  = 0x02,
-    ESCAPE_FLAG_PERCENT     = 0x04,
-    ESCAPE_FLAG_TILDE       = 0x08,
-};
-DWORD escape_string( WCHAR *, const WCHAR *, DWORD, enum escape_flags ) DECLSPEC_HIDDEN;
 
 extern HRESULT WinHttpRequest_create( void ** ) DECLSPEC_HIDDEN;
 void release_typelib( void ) DECLSPEC_HIDDEN;

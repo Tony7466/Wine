@@ -395,6 +395,11 @@ static HRESULT create_channel( WS_CHANNEL_TYPE type, WS_CHANNEL_BINDING binding,
 
     for (i = 0; i < count; i++)
     {
+        TRACE( "property id %u value ptr %p size %u\n", properties[i].id, properties[i].value,
+               properties[i].valueSize );
+        if (properties[i].valueSize == sizeof(ULONG) && properties[i].value)
+            TRACE( " value %08x\n", *(ULONG *)properties[i].value );
+
         switch (properties[i].id)
         {
         case WS_CHANNEL_PROPERTY_ENCODING:
@@ -622,6 +627,8 @@ static HRESULT open_channel( struct channel *channel, const WS_ENDPOINT_ADDRESS 
         FIXME( "headers, extensions or identity not supported\n" );
         return E_NOTIMPL;
     }
+
+    TRACE( "endpoint %s\n", debugstr_wn(endpoint->url.chars, endpoint->url.length) );
 
     if (!(channel->addr.url.chars = heap_alloc( endpoint->url.length * sizeof(WCHAR) ))) return E_OUTOFMEMORY;
     memcpy( channel->addr.url.chars, endpoint->url.chars, endpoint->url.length * sizeof(WCHAR) );
@@ -1137,9 +1144,33 @@ done:
     return hr;
 }
 
+static void set_blocking( SOCKET socket, BOOL blocking )
+{
+    ULONG state = !blocking;
+    ioctlsocket( socket, FIONBIO, &state );
+}
+
+static int sock_recv( SOCKET socket, char *buf, int len )
+{
+    int count, ret;
+
+    if ((ret = recv( socket, buf, len, 0 )) <= 0) return ret;
+    len -= ret;
+
+    set_blocking( socket, FALSE );
+    for (;;)
+    {
+        if ((count = recv( socket, buf + ret, len, 0 )) <= 0) break;
+        ret += count;
+        len -= count;
+    }
+    set_blocking( socket, TRUE );
+    return ret;
+}
+
 static HRESULT receive_bytes( struct channel *channel, unsigned char *bytes, int len )
 {
-    int count = recv( channel->u.tcp.socket, (char *)bytes, len, 0 );
+    int count = sock_recv( channel->u.tcp.socket, (char *)bytes, len );
     if (count < 0) return HRESULT_FROM_WIN32( WSAGetLastError() );
     if (count != len) return WS_E_INVALID_FORMAT;
     return S_OK;
@@ -1279,9 +1310,14 @@ static HRESULT init_writer( struct channel *channel )
     WS_XML_WRITER_BUFFER_OUTPUT buf = {{WS_XML_WRITER_OUTPUT_TYPE_BUFFER}};
     WS_XML_WRITER_TEXT_ENCODING text = {{WS_XML_WRITER_ENCODING_TYPE_TEXT}, WS_CHARSET_UTF8};
     WS_XML_WRITER_BINARY_ENCODING bin = {{WS_XML_WRITER_ENCODING_TYPE_BINARY}};
+    WS_XML_WRITER_PROPERTY prop;
+    ULONG max_size = (1 << 17);
     HRESULT hr;
 
-    if (!channel->writer && (hr = WsCreateWriter( NULL, 0, &channel->writer, NULL )) != S_OK) return hr;
+    prop.id        = WS_XML_WRITER_PROPERTY_BUFFER_MAX_SIZE;
+    prop.value     = &max_size;
+    prop.valueSize = sizeof(max_size);
+    if (!channel->writer && (hr = WsCreateWriter( &prop, 1, &channel->writer, NULL )) != S_OK) return hr;
 
     switch (channel->encoding)
     {
@@ -1494,7 +1530,7 @@ static HRESULT receive_message_unsized( struct channel *channel, SOCKET socket )
     if ((hr = resize_read_buffer( channel, max_len )) != S_OK) return hr;
 
     channel->read_size = 0;
-    if ((bytes_read = recv( socket, channel->read_buf, max_len, 0 )) < 0)
+    if ((bytes_read = sock_recv( socket, channel->read_buf, max_len )) < 0)
     {
         return HRESULT_FROM_WIN32( WSAGetLastError() );
     }
@@ -1513,7 +1549,7 @@ static HRESULT receive_message_sized( struct channel *channel, unsigned int size
     channel->read_size = 0;
     while (channel->read_size < size)
     {
-        if ((bytes_read = recv( channel->u.tcp.socket, channel->read_buf + offset, to_read, 0 )) < 0)
+        if ((bytes_read = sock_recv( channel->u.tcp.socket, channel->read_buf + offset, to_read )) < 0)
         {
             return HRESULT_FROM_WIN32( WSAGetLastError() );
         }
@@ -1959,6 +1995,121 @@ HRESULT WINAPI WsReceiveMessage( WS_CHANNEL *handle, WS_MESSAGE *msg, const WS_M
         hr = queue_receive_message( channel, msg, desc, count, option, read_option, heap, value, size, index, ctx );
     else
         hr = receive_message( channel, msg, desc, count, option, read_option, heap, value, size, index );
+
+    LeaveCriticalSection( &channel->cs );
+    TRACE( "returning %08x\n", hr );
+    return hr;
+}
+
+static HRESULT request_reply( struct channel *channel, WS_MESSAGE *request,
+                              const WS_MESSAGE_DESCRIPTION *request_desc, WS_WRITE_OPTION write_option,
+                              const void *request_body, ULONG request_size, WS_MESSAGE *reply,
+                              const WS_MESSAGE_DESCRIPTION *reply_desc, WS_READ_OPTION read_option,
+                              WS_HEAP *heap, void *value, ULONG size )
+{
+    HRESULT hr;
+    WsInitializeMessage( request, WS_REQUEST_MESSAGE, NULL, NULL );
+    if ((hr = WsAddressMessage( request, &channel->addr, NULL )) != S_OK) return hr;
+    if ((hr = message_set_action( request, request_desc->action )) != S_OK) return hr;
+
+    if ((hr = init_writer( channel )) != S_OK) return hr;
+    if ((hr = write_message( channel, request, request_desc->bodyElementDescription, write_option, request_body,
+                             request_size )) != S_OK) return hr;
+    if ((hr = send_message( channel, request )) != S_OK) return hr;
+
+    return receive_message( channel, reply, &reply_desc, 1, WS_RECEIVE_OPTIONAL_MESSAGE, read_option, heap,
+                            value, size, NULL );
+}
+
+struct request_reply
+{
+    struct task                   task;
+    struct channel               *channel;
+    WS_MESSAGE                   *request;
+    const WS_MESSAGE_DESCRIPTION *request_desc;
+    WS_WRITE_OPTION               write_option;
+    const void                   *request_body;
+    ULONG                         request_size;
+    WS_MESSAGE                   *reply;
+    const WS_MESSAGE_DESCRIPTION *reply_desc;
+    WS_READ_OPTION                read_option;
+    WS_HEAP                      *heap;
+    void                         *value;
+    ULONG                         size;
+    WS_ASYNC_CONTEXT              ctx;
+};
+
+static void request_reply_proc( struct task *task )
+{
+    struct request_reply *r = (struct request_reply *)task;
+    HRESULT hr;
+
+    hr = request_reply( r->channel, r->request, r->request_desc, r->write_option, r->request_body, r->request_size,
+                        r->reply, r->reply_desc, r->read_option, r->heap, r->value, r->size );
+
+    TRACE( "calling %p(%08x)\n", r->ctx.callback, hr );
+    r->ctx.callback( hr, WS_LONG_CALLBACK, r->ctx.callbackState );
+    TRACE( "%p returned\n", r->ctx.callback );
+}
+
+static HRESULT queue_request_reply( struct channel *channel, WS_MESSAGE *request,
+                                    const WS_MESSAGE_DESCRIPTION *request_desc, WS_WRITE_OPTION write_option,
+                                    const void *request_body, ULONG request_size, WS_MESSAGE *reply,
+                                    const WS_MESSAGE_DESCRIPTION *reply_desc, WS_READ_OPTION read_option,
+                                    WS_HEAP *heap, void *value, ULONG size, const WS_ASYNC_CONTEXT *ctx )
+{
+    struct request_reply *r;
+
+    if (!(r = heap_alloc( sizeof(*r) ))) return E_OUTOFMEMORY;
+    r->task.proc    = request_reply_proc;
+    r->channel      = channel;
+    r->request      = request;
+    r->request_desc = request_desc;
+    r->write_option = write_option;
+    r->request_body = request_body;
+    r->request_size = request_size;
+    r->reply        = reply;
+    r->reply_desc   = reply_desc;
+    r->read_option  = read_option;
+    r->heap         = heap;
+    r->value        = value;
+    r->size         = size;
+    r->ctx          = *ctx;
+    return queue_task( &channel->recv_q, &r->task );
+}
+
+/**************************************************************************
+ *          WsRequestReply		[webservices.@]
+ */
+HRESULT WINAPI WsRequestReply( WS_CHANNEL *handle, WS_MESSAGE *request, const WS_MESSAGE_DESCRIPTION *request_desc,
+                               WS_WRITE_OPTION write_option, const void *request_body, ULONG request_size,
+                               WS_MESSAGE *reply, const WS_MESSAGE_DESCRIPTION *reply_desc, WS_READ_OPTION read_option,
+                               WS_HEAP *heap, void *value, ULONG size, const WS_ASYNC_CONTEXT *ctx, WS_ERROR *error )
+{
+    struct channel *channel = (struct channel *)handle;
+    HRESULT hr;
+
+    TRACE( "%p %p %p %08x %p %u %p %p %08x %p %p %u %p %p\n", handle, request, request_desc, write_option,
+           request_body, request_size, reply, reply_desc, read_option, heap, value, size, ctx, error );
+    if (error) FIXME( "ignoring error parameter\n" );
+    if (ctx) FIXME( "ignoring ctx parameter\n" );
+
+    if (!channel || !request || !reply) return E_INVALIDARG;
+
+    EnterCriticalSection( &channel->cs );
+
+    if (channel->magic != CHANNEL_MAGIC)
+    {
+        LeaveCriticalSection( &channel->cs );
+        return E_INVALIDARG;
+    }
+
+    if (ctx)
+        hr = queue_request_reply( channel, request, request_desc, write_option, request_body, request_size, reply,
+                                  reply_desc, read_option, heap, value, size, ctx );
+    else
+        hr = request_reply( channel, request, request_desc, write_option, request_body, request_size, reply,
+                            reply_desc, read_option, heap, value, size );
 
     LeaveCriticalSection( &channel->cs );
     TRACE( "returning %08x\n", hr );
