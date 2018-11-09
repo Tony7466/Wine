@@ -1,3 +1,10 @@
+wine-development (3.20-2) unstable; urgency=medium
+
+  * Build using the default version of clang on arm64 (closes: #912795).
+  * Add clang as a dependency to the tools package on arm64 (closes: #912676).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Fri, 09 Nov 2018 22:28:34 +0000
+
 wine-development (3.20-1) unstable; urgency=medium
 
   * New upstream release 3.20, released Nov 9, 2018.

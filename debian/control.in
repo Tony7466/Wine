@@ -13,7 +13,7 @@ Standards-Version: 4.2.1
 Rules-Requires-Root: no
 Build-Depends:
  debhelper (>= 11~),
- clang-6.0 [arm64],
+ clang [arm64],
  oss4-dev [kfreebsd-any],
  freebsd-glue [kfreebsd-any],
  lzma,
@@ -226,7 +226,7 @@ Depends:
  libwineVERSION-dev:armhf (= ${binary:Version}) [arm64],
 Recommends:
  wineVERSION (= ${source:Version}),
- g++,
+ g++ | clang [arm64],
 Breaks:
  wine1.6 (<< 1:1.8.4ubuntu1~),
 Conflicts:
