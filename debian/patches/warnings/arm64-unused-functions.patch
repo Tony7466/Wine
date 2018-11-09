@@ -18,7 +18,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  {
 --- a/dlls/dwrite/font.c
 +++ b/dlls/dwrite/font.c
-@@ -5101,10 +5101,12 @@ static HRESULT WINAPI glyphrunanalysis_G
+@@ -5103,10 +5103,12 @@ static HRESULT WINAPI glyphrunanalysis_G
      return S_OK;
  }
  

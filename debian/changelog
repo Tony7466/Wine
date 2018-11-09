@@ -1,4 +1,4 @@
-wine-development (3.20-1) UNRELEASED; urgency=medium
+wine-development (3.20-1) unstable; urgency=medium
 
   * New upstream release 3.20, released Nov 9, 2018.
     - Async interfaces and ACF files in the IDL compiler.

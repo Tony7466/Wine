@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/rpcrt4/cproxy.c
 +++ b/dlls/rpcrt4/cproxy.c
-@@ -172,7 +172,7 @@ static inline void init_thunk( struct th
+@@ -157,7 +157,7 @@ static inline void init_thunk( struct th
  
  #else  /* __i386__ */
  
