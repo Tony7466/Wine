@@ -1,3 +1,14 @@
+wine-development (3.21-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.21, released Nov 23, 2018.
+    - Typelib marshaller rewrite using NDR functions.
+    - Graphics support on recent Android versions.
+    - Support for memory font resources in DirectWrite.
+    - Joystick support improvements.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 25 Nov 2018 01:41:42 +0000
+
 wine-development (3.20-2) unstable; urgency=medium
 
   * Build using the default version of clang on arm64 (closes: #912795).
