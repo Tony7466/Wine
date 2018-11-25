@@ -282,6 +282,10 @@ HRESULT vertexbuffer_init(struct d3d8_vertexbuffer *buffer, struct d3d8_device *
         return D3DERR_INVALIDCALL;
     }
 
+    /* In d3d8, buffers can't be used as rendertarget or depth/stencil buffer. */
+    if (usage & (D3DUSAGE_RENDERTARGET | D3DUSAGE_DEPTHSTENCIL))
+        return D3DERR_INVALIDCALL;
+
     buffer->IDirect3DVertexBuffer8_iface.lpVtbl = &Direct3DVertexBuffer8_Vtbl;
     d3d8_resource_init(&buffer->resource);
     buffer->fvf = fvf;
@@ -572,6 +576,13 @@ HRESULT indexbuffer_init(struct d3d8_indexbuffer *buffer, struct d3d8_device *de
 {
     struct wined3d_buffer_desc desc;
     HRESULT hr;
+
+    if (pool == D3DPOOL_SCRATCH)
+        return D3DERR_INVALIDCALL;
+
+    /* In d3d8, buffers can't be used as rendertarget or depth/stencil buffer. */
+    if (usage & (D3DUSAGE_RENDERTARGET | D3DUSAGE_DEPTHSTENCIL))
+        return D3DERR_INVALIDCALL;
 
     desc.byte_width = size;
     desc.usage = (usage & WINED3DUSAGE_MASK) | WINED3DUSAGE_STATICDECL;

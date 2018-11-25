@@ -195,7 +195,6 @@
 # @ stub BasepFreeActivationContextActivationBlock
 # @ stub BasepFreeAppCompatData
 # @ stub BasepMapModuleHandle
-# @ stub BaseVerifyUnicodeString
 @ stdcall Beep(long long)
 @ stdcall BeginUpdateResourceA(str long)
 @ stdcall BeginUpdateResourceW(wstr long)
@@ -286,13 +285,11 @@
 @ stdcall CreateFileMappingA(long ptr long long long str)
 # @ stub CreateFileMappingNumaA
 # @ stub CreateFileMappingNumaW
-@ stdcall CreateHardLinkTransactedA(str str ptr ptr)
-@ stdcall CreateHardLinkTransactedW(wstr wstr ptr ptr)
 @ stdcall CreateFileMappingW(long ptr long long long wstr)
 @ stdcall CreateFileW(wstr long long ptr long long long)
 @ stdcall CreateHardLinkA(str str ptr)
-# @ stub CreateHardLinkTransactedA
-# @ stub CreateHardLinkTransactedW
+@ stdcall CreateHardLinkTransactedA(str str ptr ptr)
+@ stdcall CreateHardLinkTransactedW(wstr wstr ptr ptr)
 @ stdcall CreateHardLinkW(wstr wstr ptr)
 @ stdcall CreateIoCompletionPort(long long long long)
 @ stdcall CreateJobObjectA(ptr str)
@@ -718,7 +715,7 @@
 # @ stub GetLongPathNameTransactedW
 @ stdcall GetLongPathNameW (wstr long long)
 @ stdcall GetMailslotInfo(long ptr ptr ptr ptr)
-# @ stub GetMaximumProcessorCount
+@ stdcall GetMaximumProcessorCount(long)
 # @ stub GetMaximumProcessorGroupCount
 @ stdcall GetModuleFileNameA(long ptr long)
 @ stdcall GetModuleFileNameW(long ptr long)
@@ -1287,17 +1284,17 @@
 @ stdcall ResolveLocaleName(wstr ptr long)
 @ stdcall RestoreLastError(long) ntdll.RtlRestoreLastWin32Error
 @ stdcall ResumeThread(long)
-@ cdecl -arch=arm,x86_64 RtlAddFunctionTable(ptr long long) ntdll.RtlAddFunctionTable
+@ cdecl -arch=arm,arm64,x86_64 RtlAddFunctionTable(ptr long long) ntdll.RtlAddFunctionTable
 @ stdcall -norelay RtlCaptureContext(ptr) ntdll.RtlCaptureContext
 @ stdcall RtlCaptureStackBackTrace(long long ptr ptr) ntdll.RtlCaptureStackBackTrace
 @ stdcall -arch=x86_64 RtlCompareMemory(ptr ptr long) ntdll.RtlCompareMemory
 @ stdcall -arch=x86_64 RtlCopyMemory(ptr ptr long) ntdll.RtlCopyMemory
-@ cdecl -arch=arm,x86_64 RtlDeleteFunctionTable(ptr) ntdll.RtlDeleteFunctionTable
+@ cdecl -arch=arm,arm64,x86_64 RtlDeleteFunctionTable(ptr) ntdll.RtlDeleteFunctionTable
 @ stdcall RtlFillMemory(ptr long long) ntdll.RtlFillMemory
 @ cdecl -arch=x86_64 RtlInstallFunctionTableCallback(long long long ptr ptr ptr) ntdll.RtlInstallFunctionTableCallback
 @ stdcall -arch=arm,x86_64 RtlLookupFunctionEntry(long ptr ptr) ntdll.RtlLookupFunctionEntry
 @ stdcall RtlMoveMemory(ptr ptr long) ntdll.RtlMoveMemory
-@ stdcall -arch=x86_64,arm RtlPcToFileHeader(ptr ptr) ntdll.RtlPcToFileHeader
+@ stdcall -arch=x86_64,arm,arm64 RtlPcToFileHeader(ptr ptr) ntdll.RtlPcToFileHeader
 @ stdcall -arch=arm -norelay RtlRaiseException(ptr) ntdll.RtlRaiseException
 @ stdcall -arch=x86_64 RtlRestoreContext(ptr ptr) ntdll.RtlRestoreContext
 @ stdcall RtlUnwind(ptr ptr ptr long) ntdll.RtlUnwind

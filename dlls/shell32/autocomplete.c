@@ -193,15 +193,16 @@ static void hide_listbox(IAutoCompleteImpl *ac, HWND hwnd, BOOL reset)
     if (reset) free_enum_strs(ac);
 }
 
-static void show_listbox(IAutoCompleteImpl *ac, UINT cnt)
+static void show_listbox(IAutoCompleteImpl *ac)
 {
     RECT r;
-    UINT width, height;
+    UINT cnt, width, height;
 
     GetWindowRect(ac->hwndEdit, &r);
     SendMessageW(ac->hwndListBox, LB_CARETOFF, 0, 0);
 
     /* Windows XP displays 7 lines at most, then it uses a scroll bar */
+    cnt    = SendMessageW(ac->hwndListBox, LB_GETCOUNT, 0, 0);
     height = SendMessageW(ac->hwndListBox, LB_GETITEMHEIGHT, 0, 0) * min(cnt + 1, 7);
     width = r.right - r.left;
 
@@ -404,7 +405,7 @@ static BOOL display_matching_strs(IAutoCompleteImpl *ac, WCHAR *text, UINT len,
 {
     /* Return FALSE if we need to hide the listbox */
     WCHAR **str = ac->enum_strs;
-    UINT cnt, start, end;
+    UINT start, end;
     if (!str) return (ac->options & ACO_AUTOSUGGEST) ? FALSE : TRUE;
 
     /* Windows seems to disable autoappend if ACO_NOPREFIXFILTERING is set */
@@ -432,15 +433,14 @@ static BOOL display_matching_strs(IAutoCompleteImpl *ac, WCHAR *text, UINT len,
         if (end == 0)
             return FALSE;
     }
-    cnt = end - start;
 
     SendMessageW(ac->hwndListBox, WM_SETREDRAW, FALSE, 0);
     SendMessageW(ac->hwndListBox, LB_RESETCONTENT, 0, 0);
-    SendMessageW(ac->hwndListBox, LB_INITSTORAGE, cnt, 0);
+    SendMessageW(ac->hwndListBox, LB_INITSTORAGE, end - start, 0);
     for (; start < end; start++)
         SendMessageW(ac->hwndListBox, LB_INSERTSTRING, -1, (LPARAM)str[start]);
 
-    show_listbox(ac, cnt);
+    show_listbox(ac);
     SendMessageW(ac->hwndListBox, WM_SETREDRAW, TRUE, 0);
     return TRUE;
 }
@@ -611,6 +611,15 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
             /* Reset the enumerator if it's not visible anymore */
             if (!IsWindowVisible(hwnd)) free_enum_strs(This);
             break;
+        case WM_WINDOWPOSCHANGED:
+        {
+            WINDOWPOS *pos = (WINDOWPOS*)lParam;
+
+            if ((pos->flags & (SWP_NOMOVE | SWP_NOSIZE)) != (SWP_NOMOVE | SWP_NOSIZE) &&
+                This->hwndListBox && IsWindowVisible(This->hwndListBox))
+                show_listbox(This);
+            break;
+        }
         case WM_KEYDOWN:
             return ACEditSubclassProc_KeyDown(This, hwnd, uMsg, wParam, lParam);
         case WM_CHAR:
@@ -627,6 +636,9 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
                                           ? autoappend_flag_yes : autoappend_flag_no);
             return ret;
         case WM_SETTEXT:
+            if (This->options & ACO_AUTOSUGGEST)
+                hide_listbox(This, This->hwndListBox, TRUE);
+            break;
         case WM_CUT:
         case WM_CLEAR:
         case WM_UNDO:

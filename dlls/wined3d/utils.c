@@ -328,8 +328,10 @@ struct wined3d_format_base_flags
  * resource size. */
 static const struct wined3d_format_base_flags format_base_flags[] =
 {
-    {WINED3DFMT_ATI1N,                WINED3DFMT_FLAG_BROKEN_PITCH},
-    {WINED3DFMT_ATI2N,                WINED3DFMT_FLAG_BROKEN_PITCH},
+    {WINED3DFMT_ATI1N,                WINED3DFMT_FLAG_MAPPABLE | WINED3DFMT_FLAG_BROKEN_PITCH},
+    {WINED3DFMT_ATI2N,                WINED3DFMT_FLAG_MAPPABLE | WINED3DFMT_FLAG_BROKEN_PITCH},
+    {WINED3DFMT_D16_LOCKABLE,         WINED3DFMT_FLAG_MAPPABLE},
+    {WINED3DFMT_INTZ,                 WINED3DFMT_FLAG_MAPPABLE},
     {WINED3DFMT_R11G11B10_FLOAT,      WINED3DFMT_FLAG_FLOAT},
     {WINED3DFMT_D32_FLOAT,            WINED3DFMT_FLAG_FLOAT},
     {WINED3DFMT_S8_UINT_D24_FLOAT,    WINED3DFMT_FLAG_FLOAT},
@@ -1531,6 +1533,10 @@ static const struct wined3d_format_texture_info format_texture_info[] =
             GL_BGRA,                    GL_UNSIGNED_SHORT_4_4_4_4_REV,    0,
             WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_POSTPIXELSHADER_BLENDING | WINED3DFMT_FLAG_FILTERING,
             WINED3D_GL_EXT_NONE,        NULL},
+    {WINED3DFMT_R10G10B10A2_UINT,       GL_RGB10_A2UI,                    GL_RGB10_A2UI,                          0,
+            GL_RGBA_INTEGER,            GL_UNSIGNED_INT_2_10_10_10_REV,   0,
+            WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_RENDERTARGET,
+            ARB_TEXTURE_RGB10_A2UI,     NULL},
     {WINED3DFMT_R10G10B10A2_UNORM,      GL_RGB10_A2,                      GL_RGB10_A2,                            0,
             GL_RGBA,                    GL_UNSIGNED_INT_2_10_10_10_REV,   0,
             WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_POSTPIXELSHADER_BLENDING | WINED3DFMT_FLAG_FILTERING

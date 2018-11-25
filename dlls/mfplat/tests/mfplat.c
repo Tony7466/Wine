@@ -40,6 +40,9 @@ static HRESULT (WINAPI *pMFCreateSourceResolver)(IMFSourceResolver **resolver);
 static HRESULT (WINAPI *pMFCreateMFByteStreamOnStream)(IStream *stream, IMFByteStream **bytestream);
 static HRESULT (WINAPI *pMFCreateMemoryBuffer)(DWORD max_length, IMFMediaBuffer **buffer);
 
+DEFINE_GUID(GUID_NULL,0,0,0,0,0,0,0,0,0,0,0);
+
+DEFINE_GUID(MF_BYTESTREAM_CONTENT_TYPE, 0xfc358289,0x3cb6,0x460c,0xa4,0x24,0xb6,0x68,0x12,0x60,0x37,0x5a);
 
 DEFINE_GUID(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, 0xa634a91c, 0x822b, 0x41b9, 0xa4, 0x94, 0x4d, 0xe4, 0x64, 0x36, 0x12, 0xb0);
 
@@ -199,13 +202,23 @@ if(0)
 static void test_source_resolver(void)
 {
     IMFSourceResolver *resolver, *resolver2;
+    IMFByteStream *bytestream;
+    IMFAttributes *attributes;
+    IMFMediaSource *mediasource;
+    MF_OBJECT_TYPE obj_type;
     HRESULT hr;
+    WCHAR *filename;
+
+    static const WCHAR file_type[] = {'v','i','d','e','o','/','m','p','4',0};
 
     if (!pMFCreateSourceResolver)
     {
         win_skip("MFCreateSourceResolver() not found\n");
         return;
     }
+
+    hr = MFStartup(MF_VERSION, MFSTARTUP_FULL);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
 
     hr = pMFCreateSourceResolver(NULL);
     ok(hr == E_POINTER, "got %#x\n", hr);
@@ -217,8 +230,70 @@ static void test_source_resolver(void)
     ok(hr == S_OK, "got %#x\n", hr);
     ok(resolver != resolver2, "Expected new instance\n");
 
-    IMFSourceResolver_Release(resolver);
     IMFSourceResolver_Release(resolver2);
+
+    filename = load_resource(mp4file);
+
+    hr = MFCreateFile(MF_ACCESSMODE_READ, MF_OPENMODE_FAIL_IF_NOT_EXIST,
+                      MF_FILEFLAGS_NONE, filename, &bytestream);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    hr = IMFSourceResolver_CreateObjectFromByteStream(
+        resolver, NULL, NULL, MF_RESOLUTION_MEDIASOURCE, NULL,
+        &obj_type, (IUnknown **)&mediasource);
+    ok(hr == E_POINTER, "got 0x%08x\n", hr);
+
+    hr = IMFSourceResolver_CreateObjectFromByteStream(
+        resolver, bytestream, NULL, MF_RESOLUTION_MEDIASOURCE, NULL,
+        NULL, (IUnknown **)&mediasource);
+    ok(hr == E_POINTER, "got 0x%08x\n", hr);
+
+    hr = IMFSourceResolver_CreateObjectFromByteStream(
+        resolver, bytestream, NULL, MF_RESOLUTION_MEDIASOURCE, NULL,
+        &obj_type, NULL);
+    ok(hr == E_POINTER, "got 0x%08x\n", hr);
+
+    hr = IMFSourceResolver_CreateObjectFromByteStream(
+        resolver, bytestream, NULL, MF_RESOLUTION_MEDIASOURCE, NULL,
+        &obj_type, (IUnknown **)&mediasource);
+    todo_wine ok(hr == MF_E_UNSUPPORTED_BYTESTREAM_TYPE, "got 0x%08x\n", hr);
+    if (hr == S_OK) IMFMediaSource_Release(mediasource);
+
+    hr = IMFSourceResolver_CreateObjectFromByteStream(
+        resolver, bytestream, NULL, MF_RESOLUTION_BYTESTREAM, NULL,
+        &obj_type, (IUnknown **)&mediasource);
+    todo_wine ok(hr == MF_E_UNSUPPORTED_BYTESTREAM_TYPE, "got 0x%08x\n", hr);
+
+    IMFByteStream_Release(bytestream);
+
+    /* We have to create a new bytestream here, because all following
+     * calls to CreateObjectFromByteStream will fail. */
+    hr = MFCreateFile(MF_ACCESSMODE_READ, MF_OPENMODE_FAIL_IF_NOT_EXIST,
+                      MF_FILEFLAGS_NONE, filename, &bytestream);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    hr = IUnknown_QueryInterface(bytestream, &IID_IMFAttributes,
+                                 (void **)&attributes);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    hr = IMFAttributes_SetString(attributes, &MF_BYTESTREAM_CONTENT_TYPE, file_type);
+    todo_wine ok(hr == S_OK, "got 0x%08x\n", hr);
+    IMFAttributes_Release(attributes);
+
+    hr = IMFSourceResolver_CreateObjectFromByteStream(
+        resolver, bytestream, NULL, MF_RESOLUTION_MEDIASOURCE, NULL,
+        &obj_type, (IUnknown **)&mediasource);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(mediasource != NULL, "got %p\n", mediasource);
+    ok(obj_type == MF_OBJECT_MEDIASOURCE, "got %d\n", obj_type);
+
+    IMFMediaSource_Release(mediasource);
+    IMFByteStream_Release(bytestream);
+
+    IMFSourceResolver_Release(resolver);
+
+    MFShutdown();
+
+    DeleteFileW(filename);
 }
 
 static void init_functions(void)
@@ -259,6 +334,70 @@ if(0)
     IMFMediaType_Release(mediatype);
 
     MFShutdown();
+}
+
+static void test_MFCreateMediaEvent(void)
+{
+    HRESULT hr;
+    IMFMediaEvent *mediaevent;
+
+    MediaEventType type;
+    GUID extended_type;
+    HRESULT status;
+    PROPVARIANT value;
+
+    PropVariantInit(&value);
+    value.vt = VT_UNKNOWN;
+
+    hr = MFCreateMediaEvent(MEError, &GUID_NULL, E_FAIL, &value, &mediaevent);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    PropVariantClear(&value);
+
+    hr = IMFMediaEvent_GetType(mediaevent, &type);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(type == MEError, "got %#x\n", type);
+
+    hr = IMFMediaEvent_GetExtendedType(mediaevent, &extended_type);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(IsEqualGUID(&extended_type, &GUID_NULL), "got %s\n",
+       wine_dbgstr_guid(&extended_type));
+
+    hr = IMFMediaEvent_GetStatus(mediaevent, &status);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(status == E_FAIL, "got 0x%08x\n", status);
+
+    PropVariantInit(&value);
+    hr = IMFMediaEvent_GetValue(mediaevent, &value);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(value.vt == VT_UNKNOWN, "got %#x\n", value.vt);
+    PropVariantClear(&value);
+
+    IMFMediaEvent_Release(mediaevent);
+
+    hr = MFCreateMediaEvent(MEUnknown, &DUMMY_GUID1, S_OK, NULL, &mediaevent);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    hr = IMFMediaEvent_GetType(mediaevent, &type);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(type == MEUnknown, "got %#x\n", type);
+
+    hr = IMFMediaEvent_GetExtendedType(mediaevent, &extended_type);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(IsEqualGUID(&extended_type, &DUMMY_GUID1), "got %s\n",
+       wine_dbgstr_guid(&extended_type));
+
+    hr = IMFMediaEvent_GetStatus(mediaevent, &status);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(status == S_OK, "got 0x%08x\n", status);
+
+    PropVariantInit(&value);
+    hr = IMFMediaEvent_GetValue(mediaevent, &value);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(value.vt == VT_EMPTY, "got %#x\n", value.vt);
+    PropVariantClear(&value);
+
+    IMFMediaEvent_Release(mediaevent);
 }
 
 static void test_MFCreateAttributes(void)
@@ -554,13 +693,14 @@ START_TEST(mfplat)
     init_functions();
 
     test_register();
-    test_source_resolver();
     test_MFCreateMediaType();
+    test_MFCreateMediaEvent();
     test_MFCreateAttributes();
     test_MFSample();
     test_MFCreateFile();
     test_MFCreateMFByteStreamOnStream();
     test_MFCreateMemoryBuffer();
+    test_source_resolver();
 
     CoUninitialize();
 }
