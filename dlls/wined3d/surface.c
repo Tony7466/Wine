@@ -640,8 +640,7 @@ static struct wined3d_texture *surface_convert_format(struct wined3d_texture *sr
     desc.height = wined3d_texture_get_level_height(src_texture, texture_level);
     desc.depth = 1;
     desc.size = 0;
-    if (FAILED(wined3d_texture_create(device, &desc, 1, 1,
-            WINED3D_TEXTURE_CREATE_MAPPABLE | WINED3D_TEXTURE_CREATE_DISCARD,
+    if (FAILED(wined3d_texture_create(device, &desc, 1, 1, WINED3D_TEXTURE_CREATE_DISCARD,
             NULL, NULL, &wined3d_null_parent_ops, &dst_texture)))
     {
         ERR("Failed to create a destination texture for conversion.\n");
@@ -3275,7 +3274,8 @@ HRESULT texture2d_blt(struct wined3d_texture *dst_texture, unsigned int dst_sub_
         }
     }
     else if (!(src_sub_resource->locations & surface_simple_locations)
-            && (dst_sub_resource->locations & dst_texture->resource.map_binding))
+            && (dst_sub_resource->locations & dst_texture->resource.map_binding)
+            && !(dst_texture->resource.access & WINED3D_RESOURCE_ACCESS_GPU))
     {
         /* Download */
         if (scale)

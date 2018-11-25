@@ -653,6 +653,8 @@ typedef DWORD FLONG;
 #define PROCESSOR_ARCHITECTURE_IA32_ON_WIN64    10
 #define PROCESSOR_ARCHITECTURE_NEUTRAL          11
 #define PROCESSOR_ARCHITECTURE_ARM64            12
+#define PROCESSOR_ARCHITECTURE_ARM32_ON_WIN64   13
+#define PROCESSOR_ARCHITECTURE_IA32_ON_ARM64    14
 #define PROCESSOR_ARCHITECTURE_UNKNOWN	0xFFFF
 
 /* dwProcessorType */
@@ -1872,6 +1874,9 @@ typedef struct _CONTEXT
     DWORD Wcr[ARM64_MAX_WATCHPOINTS];   /* 378 */
     DWORD64 Wvr[ARM64_MAX_WATCHPOINTS]; /* 380 */
 } CONTEXT;
+
+BOOLEAN CDECL            RtlAddFunctionTable(RUNTIME_FUNCTION*,DWORD,ULONG_PTR);
+BOOLEAN CDECL            RtlDeleteFunctionTable(RUNTIME_FUNCTION*);
 
 #endif /* __aarch64__ */
 
@@ -3490,6 +3495,7 @@ typedef const IMAGE_DELAYLOAD_DESCRIPTOR *PCIMAGE_DELAYLOAD_DESCRIPTOR;
 #define IMAGE_REL_ARM64_TOKEN           0x000C
 #define IMAGE_REL_ARM64_SECTION         0x000D
 #define IMAGE_REL_ARM64_ADDR64          0x000E
+#define IMAGE_REL_ARM64_BRANCH19        0x000F
 
 /* IA64 relocation types */
 #define IMAGE_REL_IA64_ABSOLUTE		0x0000
@@ -3736,6 +3742,7 @@ typedef struct _IMAGE_DEBUG_DIRECTORY {
 #define IMAGE_DEBUG_TYPE_POGO          13
 #define IMAGE_DEBUG_TYPE_ILTCG         14
 #define IMAGE_DEBUG_TYPE_MPX           15
+#define IMAGE_DEBUG_TYPE_REPRO         16
 
 typedef enum ReplacesCorHdrNumericDefines
 {

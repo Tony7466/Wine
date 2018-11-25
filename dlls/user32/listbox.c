@@ -799,8 +799,9 @@ static LRESULT LISTBOX_GetText( LB_DESCR *descr, INT index, LPWSTR buffer, BOOL 
         __ENDTRY
     } else {
         if (buffer)
-            *((LPDWORD)buffer)=*(LPDWORD)(&descr->items[index].data);
-        len = sizeof(DWORD);
+            *((ULONG_PTR *)buffer) = (descr->style & LBS_NODATA)
+                                     ? 0 : descr->items[index].data;
+        len = sizeof(ULONG_PTR);
     }
     return len;
 }
@@ -915,6 +916,12 @@ static INT LISTBOX_FindString( LB_DESCR *descr, INT start, LPCWSTR str, BOOL exa
 {
     INT i;
     LB_ITEMDATA *item;
+
+    if (descr->style & LBS_NODATA)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return LB_ERR;
+    }
 
     if (start >= descr->nb_items) start = -1;
     item = descr->items + start + 1;
@@ -1757,7 +1764,7 @@ static LRESULT LISTBOX_SetCount( LB_DESCR *descr, INT count )
 {
     LRESULT ret;
 
-    if (HAS_STRINGS(descr))
+    if (!(descr->style & LBS_NODATA))
     {
         SetLastError(ERROR_SETCOUNT_ON_BAD_LB);
         return LB_ERR;
@@ -2454,7 +2461,7 @@ static LRESULT LISTBOX_HandleChar( LB_DESCR *descr, WCHAR charW )
                                 (LPARAM)descr->self );
         if (caret == -2) return 0;
     }
-    if (caret == -1)
+    if (caret == -1 && !(descr->style & LBS_NODATA))
         caret = LISTBOX_FindString( descr, descr->focus_item, str, FALSE);
     if (caret != -1)
     {
@@ -2521,10 +2528,14 @@ static BOOL LISTBOX_Create( HWND hwnd, LPHEADCOMBO lphc )
     if (descr->style & LBS_EXTENDEDSEL) descr->style |= LBS_MULTIPLESEL;
     if (descr->style & LBS_MULTICOLUMN) descr->style &= ~LBS_OWNERDRAWVARIABLE;
     if (descr->style & LBS_OWNERDRAWVARIABLE) descr->style |= LBS_NOINTEGRALHEIGHT;
+    if ((descr->style & (LBS_OWNERDRAWFIXED | LBS_HASSTRINGS | LBS_SORT)) != LBS_OWNERDRAWFIXED)
+        descr->style &= ~LBS_NODATA;
     descr->item_height = LISTBOX_SetFont( descr, 0 );
 
     if (descr->style & LBS_OWNERDRAWFIXED)
     {
+        descr->style &= ~LBS_OWNERDRAWVARIABLE;
+
 	if( descr->lphc && (descr->lphc->dwStyle & CBS_DROPDOWN))
 	{
 	    /* WinWord gets VERY unhappy if we send WM_MEASUREITEM from here */
@@ -2679,7 +2690,7 @@ LRESULT ListBoxWndProc_common( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             SetLastError(ERROR_INVALID_INDEX);
             return LB_ERR;
         }
-        return descr->items[wParam].data;
+        return (descr->style & LBS_NODATA) ? 0 : descr->items[wParam].data;
 
     case LB_SETITEMDATA:
         if (((INT)wParam < 0) || ((INT)wParam >= descr->nb_items))
@@ -2687,7 +2698,7 @@ LRESULT ListBoxWndProc_common( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             SetLastError(ERROR_INVALID_INDEX);
             return LB_ERR;
         }
-        descr->items[wParam].data = lParam;
+        if (!(descr->style & LBS_NODATA)) descr->items[wParam].data = lParam;
         /* undocumented: returns TRUE, not LB_OKAY (0) */
         return TRUE;
 
@@ -2703,7 +2714,7 @@ LRESULT ListBoxWndProc_common( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             SetLastError(ERROR_INVALID_INDEX);
             return LB_ERR;
         }
-        if (!HAS_STRINGS(descr)) return sizeof(DWORD);
+        if (!HAS_STRINGS(descr)) return sizeof(ULONG_PTR);
         if (unicode) return strlenW( descr->items[wParam].str );
         return WideCharToMultiByte( CP_ACP, 0, descr->items[wParam].str,
                                     strlenW(descr->items[wParam].str), NULL, 0, NULL, NULL );

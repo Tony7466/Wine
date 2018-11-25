@@ -70,22 +70,16 @@ struct pipe_end
 
 struct pipe_server
 {
-    struct pipe_end      pipe_end;   /* common header for pipe_client and pipe_server */
+    struct pipe_end      pipe_end;   /* common header for both pipe ends */
     struct list          entry;      /* entry in named pipe servers list */
     unsigned int         options;    /* pipe options */
     struct async_queue   listen_q;   /* listen queue */
 };
 
-struct pipe_client
-{
-    struct pipe_end      pipe_end;   /* common header for pipe_client and pipe_server */
-    unsigned int         flags;      /* file flags */
-};
-
 struct named_pipe
 {
     struct object       obj;         /* object header */
-    unsigned int        flags;
+    int                 message_mode;
     unsigned int        sharing;
     unsigned int        maxinstances;
     unsigned int        outsize;
@@ -201,7 +195,7 @@ static int pipe_client_ioctl( struct fd *fd, ioctl_code_t code, struct async *as
 
 static const struct object_ops pipe_client_ops =
 {
-    sizeof(struct pipe_client),   /* size */
+    sizeof(struct pipe_end),      /* size */
     pipe_client_dump,             /* dump */
     pipe_end_get_type,            /* get_type */
     add_queue,                    /* add_queue */
@@ -333,9 +327,9 @@ static void pipe_server_dump( struct object *obj, int verbose )
 
 static void pipe_client_dump( struct object *obj, int verbose )
 {
-    struct pipe_client *client = (struct pipe_client *) obj;
+    struct pipe_end *client = (struct pipe_end *) obj;
     assert( obj->ops == &pipe_client_ops );
-    fprintf( stderr, "Named pipe client server=%p\n", client->pipe_end.connection );
+    fprintf( stderr, "Named pipe client server=%p\n", client->connection );
 }
 
 static void named_pipe_destroy( struct object *obj)
@@ -661,7 +655,7 @@ static void pipe_end_get_file_info( struct fd *fd, obj_handle_t handle, unsigned
             }
 
             if (!(pipe_info = set_reply_data_size( sizeof(*pipe_info) ))) return;
-            pipe_info->NamedPipeType = (pipe_end->flags & NAMED_PIPE_MESSAGE_STREAM_WRITE) != 0;
+            pipe_info->NamedPipeType = pipe->message_mode;
             switch (pipe->sharing)
             {
             case FILE_SHARE_READ:
@@ -899,7 +893,7 @@ static int pipe_end_write( struct fd *fd, struct async *async, file_pos_t pos )
         return 0;
     }
 
-    if (!(pipe_end->flags & NAMED_PIPE_MESSAGE_STREAM_WRITE) && !get_req_data_size()) return 1;
+    if (!pipe_end->pipe->message_mode && !get_req_data_size()) return 1;
 
     iosb = async_get_iosb( async );
     message = queue_message( pipe_end->connection, iosb );
@@ -962,7 +956,7 @@ static int pipe_end_peek( struct pipe_end *pipe_end )
         avail += message->iosb->in_size - message->read_pos;
     reply_size = min( reply_size, avail );
 
-    if (avail && (pipe_end->flags & NAMED_PIPE_MESSAGE_STREAM_WRITE))
+    if (avail && pipe_end->pipe->message_mode)
     {
         message = LIST_ENTRY( list_head(&pipe_end->message_queue), struct pipe_message, entry );
         message_length = message->iosb->in_size - message->read_pos;
@@ -1002,8 +996,7 @@ static int pipe_end_transceive( struct pipe_end *pipe_end, struct async *async )
         return 0;
     }
 
-    if ((pipe_end->flags & (NAMED_PIPE_MESSAGE_STREAM_WRITE | NAMED_PIPE_MESSAGE_STREAM_READ))
-        != (NAMED_PIPE_MESSAGE_STREAM_WRITE | NAMED_PIPE_MESSAGE_STREAM_READ))
+    if (!(pipe_end->flags & NAMED_PIPE_MESSAGE_STREAM_READ))
     {
         set_error( STATUS_INVALID_READ_MODE );
         return 0;
@@ -1136,7 +1129,7 @@ static int pipe_server_ioctl( struct fd *fd, ioctl_code_t code, struct async *as
 
 static int pipe_client_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
 {
-    struct pipe_client *client = get_fd_user( fd );
+    struct pipe_end *client = get_fd_user( fd );
 
     switch(code)
     {
@@ -1145,7 +1138,7 @@ static int pipe_client_ioctl( struct fd *fd, ioctl_code_t code, struct async *as
         return 0;
 
     default:
-        return pipe_end_ioctl( &client->pipe_end, code, async );
+        return pipe_end_ioctl( client, code, async );
     }
 }
 
@@ -1175,6 +1168,7 @@ static struct pipe_server *create_pipe_server( struct named_pipe *pipe, unsigned
     init_pipe_end( &server->pipe_end, pipe, pipe_flags, pipe->insize );
     server->pipe_end.state = FILE_PIPE_LISTENING_STATE;
     server->pipe_end.server_pid = get_process_id( current->process );
+    init_async_queue( &server->listen_q );
 
     list_add_head( &pipe->servers, &server->entry );
     if (!(server->pipe_end.fd = alloc_pseudo_fd( &pipe_server_fd_ops, &server->pipe_end.obj, options )))
@@ -1184,32 +1178,29 @@ static struct pipe_server *create_pipe_server( struct named_pipe *pipe, unsigned
     }
     allow_fd_caching( server->pipe_end.fd );
     set_fd_signaled( server->pipe_end.fd, 1 );
-    init_async_queue( &server->listen_q );
     return server;
 }
 
-static struct pipe_client *create_pipe_client( unsigned int flags, struct named_pipe *pipe,
-                                               data_size_t buffer_size, unsigned int options )
+static struct pipe_end *create_pipe_client( struct named_pipe *pipe, data_size_t buffer_size, unsigned int options )
 {
-    struct pipe_client *client;
+    struct pipe_end *client;
 
     client = alloc_object( &pipe_client_ops );
     if (!client)
         return NULL;
 
-    client->flags = flags;
-    init_pipe_end( &client->pipe_end, pipe, pipe->flags, buffer_size );
-    client->pipe_end.state = FILE_PIPE_CONNECTED_STATE;
-    client->pipe_end.client_pid = get_process_id( current->process );
+    init_pipe_end( client, pipe, 0, buffer_size );
+    client->state = FILE_PIPE_CONNECTED_STATE;
+    client->client_pid = get_process_id( current->process );
 
-    client->pipe_end.fd = alloc_pseudo_fd( &pipe_client_fd_ops, &client->pipe_end.obj, options );
-    if (!client->pipe_end.fd)
+    client->fd = alloc_pseudo_fd( &pipe_client_fd_ops, &client->obj, options );
+    if (!client->fd)
     {
         release_object( client );
         return NULL;
     }
-    allow_fd_caching( client->pipe_end.fd );
-    set_fd_signaled( client->pipe_end.fd, 1 );
+    allow_fd_caching( client->fd );
+    set_fd_signaled( client->fd, 1 );
 
     return client;
 }
@@ -1254,7 +1245,7 @@ static struct object *named_pipe_open_file( struct object *obj, unsigned int acc
 {
     struct named_pipe *pipe = (struct named_pipe *)obj;
     struct pipe_server *server;
-    struct pipe_client *client;
+    struct pipe_end *client;
     unsigned int pipe_sharing;
 
     if (!(server = find_available_server( pipe )))
@@ -1272,17 +1263,17 @@ static struct object *named_pipe_open_file( struct object *obj, unsigned int acc
         return NULL;
     }
 
-    if ((client = create_pipe_client( options, pipe, pipe->outsize, options )))
+    if ((client = create_pipe_client( pipe, pipe->outsize, options )))
     {
         async_wake_up( &server->listen_q, STATUS_SUCCESS );
         server->pipe_end.state = FILE_PIPE_CONNECTED_STATE;
-        server->pipe_end.connection = &client->pipe_end;
-        client->pipe_end.connection = &server->pipe_end;
-        server->pipe_end.client_pid = client->pipe_end.client_pid;
-        client->pipe_end.server_pid = server->pipe_end.server_pid;
+        server->pipe_end.connection = client;
+        client->connection = &server->pipe_end;
+        server->pipe_end.client_pid = client->client_pid;
+        client->server_pid = server->pipe_end.server_pid;
     }
     release_object( server );
-    return &client->pipe_end.obj;
+    return &client->obj;
 }
 
 static int named_pipe_device_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
@@ -1375,7 +1366,7 @@ DECL_HANDLER(create_named_pipe)
         pipe->outsize = req->outsize;
         pipe->maxinstances = req->maxinstances;
         pipe->timeout = req->timeout;
-        pipe->flags = req->flags & NAMED_PIPE_MESSAGE_STREAM_WRITE;
+        pipe->message_mode = (req->flags & NAMED_PIPE_MESSAGE_STREAM_WRITE) != 0;
         pipe->sharing = req->sharing;
         if (sd) default_set_sd( &pipe->obj, sd, OWNER_SECURITY_INFORMATION |
                                                 GROUP_SECURITY_INFORMATION |
@@ -1427,14 +1418,18 @@ DECL_HANDLER(set_named_pipe_info)
         if (!pipe_end) return;
     }
 
-    if ((req->flags & ~(NAMED_PIPE_MESSAGE_STREAM_READ | NAMED_PIPE_NONBLOCKING_MODE)) ||
-            ((req->flags & NAMED_PIPE_MESSAGE_STREAM_READ) && !(pipe_end->pipe->flags & NAMED_PIPE_MESSAGE_STREAM_WRITE)))
+    if (!pipe_end->pipe)
+    {
+        set_error( STATUS_PIPE_DISCONNECTED );
+    }
+    else if ((req->flags & ~(NAMED_PIPE_MESSAGE_STREAM_READ | NAMED_PIPE_NONBLOCKING_MODE)) ||
+            ((req->flags & NAMED_PIPE_MESSAGE_STREAM_READ) && !pipe_end->pipe->message_mode))
     {
         set_error( STATUS_INVALID_PARAMETER );
     }
     else
     {
-        pipe_end->flags = pipe_end->pipe->flags | req->flags;
+        pipe_end->flags = req->flags;
     }
 
     release_object( pipe_end );

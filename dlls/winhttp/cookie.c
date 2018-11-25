@@ -45,7 +45,7 @@ struct domain
     struct list cookies;
 };
 
-static struct domain *add_domain( session_t *session, WCHAR *name )
+static struct domain *add_domain( struct session *session, WCHAR *name )
 {
     struct domain *domain;
 
@@ -117,7 +117,7 @@ static void delete_domain( struct domain *domain )
     heap_free( domain );
 }
 
-void destroy_cookies( session_t *session )
+void destroy_cookies( struct session *session )
 {
     struct list *item, *next;
     struct domain *domain;
@@ -129,7 +129,7 @@ void destroy_cookies( session_t *session )
     }
 }
 
-static BOOL add_cookie( session_t *session, struct cookie *cookie, WCHAR *domain_name, WCHAR *path )
+static BOOL add_cookie( struct session *session, struct cookie *cookie, WCHAR *domain_name, WCHAR *path )
 {
     struct domain *domain = NULL;
     struct cookie *old_cookie;
@@ -260,7 +260,7 @@ static struct attr *parse_attr( const WCHAR *str, int *used )
     return attr;
 }
 
-BOOL set_cookies( request_t *request, const WCHAR *cookies )
+BOOL set_cookies( struct request *request, const WCHAR *cookies )
 {
     static const WCHAR pathW[] = {'p','a','t','h',0};
     static const WCHAR domainW[] = {'d','o','m','a','i','n',0};
@@ -268,7 +268,7 @@ BOOL set_cookies( request_t *request, const WCHAR *cookies )
     WCHAR *buffer, *p;
     WCHAR *cookie_domain = NULL, *cookie_path = NULL;
     struct attr *attr, *domain = NULL, *path = NULL;
-    session_t *session = request->connect->session;
+    struct session *session = request->connect->session;
     struct cookie *cookie;
     int len, used;
 
@@ -321,10 +321,10 @@ end:
     return ret;
 }
 
-BOOL add_cookie_headers( request_t *request )
+BOOL add_cookie_headers( struct request *request )
 {
     struct list *domain_cursor;
-    session_t *session = request->connect->session;
+    struct session *session = request->connect->session;
 
     EnterCriticalSection( &session->cs );
 
@@ -344,7 +344,7 @@ BOOL add_cookie_headers( request_t *request )
 
                 if (strstrW( request->path, cookie->path ) == request->path)
                 {
-                    const WCHAR cookieW[] = {'C','o','o','k','i','e',':',' '};
+                    static const WCHAR cookieW[] = {'C','o','o','k','i','e',':',' '};
                     int len, len_cookie = ARRAY_SIZE( cookieW ), len_name = strlenW( cookie->name );
                     WCHAR *header;
 

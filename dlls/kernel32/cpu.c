@@ -157,6 +157,9 @@ VOID WINAPI GetSystemInfo(
         default: si->dwProcessorType = PROCESSOR_ARM920;
         }
         break;
+    case PROCESSOR_ARCHITECTURE_ARM64:
+        si->dwProcessorType = 0;
+        break;
     default:
         FIXME("Unknown processor architecture %x\n", sci.Architecture);
         si->dwProcessorType = 0;
@@ -317,6 +320,21 @@ WORD WINAPI GetActiveProcessorGroupCount(void)
  *           GetActiveProcessorCount (KERNEL32.@)
  */
 DWORD WINAPI GetActiveProcessorCount(WORD group)
+{
+    SYSTEM_INFO si;
+    DWORD cpus;
+
+    GetSystemInfo( &si );
+    cpus = si.dwNumberOfProcessors;
+
+    FIXME("semi-stub, returning %u\n", cpus);
+    return cpus;
+}
+
+/***********************************************************************
+ *           GetMaximumProcessorCount (KERNEL32.@)
+ */
+DWORD WINAPI GetMaximumProcessorCount(WORD group)
 {
     SYSTEM_INFO si;
     DWORD cpus;

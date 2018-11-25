@@ -1017,6 +1017,15 @@ int CDECL MSVCRT__vscprintf( const char *format, __ms_va_list valist )
 }
 
 /*********************************************************************
+ *              _vscprintf_l (MSVCRT.@)
+ */
+int CDECL MSVCRT__vscprintf_l(const char *format,
+        MSVCRT__locale_t locale, __ms_va_list valist)
+{
+    return MSVCRT_vsnprintf_l(NULL, INT_MAX, format, locale, valist);
+}
+
+/*********************************************************************
  *		_vscprintf_p_l (MSVCRT.@)
  */
 int CDECL MSVCRT__vscprintf_p_l(const char *format,
@@ -1807,6 +1816,14 @@ INT CDECL MSVCRT_iswalnum( MSVCRT_wchar_t wc )
 }
 
 /*********************************************************************
+ *		_iswalnum_l (MSVCRT.@)
+ */
+int CDECL MSVCRT__iswalnum_l( MSVCRT_wchar_t wc, MSVCRT__locale_t locale )
+{
+    return isalnumW( wc );
+}
+
+/*********************************************************************
  *		iswalpha (MSVCRT.@)
  */
 INT CDECL MSVCRT_iswalpha( MSVCRT_wchar_t wc )
@@ -1826,6 +1843,14 @@ INT CDECL MSVCRT__iswalpha_l( MSVCRT_wchar_t wc, MSVCRT__locale_t locale )
  *		iswcntrl (MSVCRT.@)
  */
 INT CDECL MSVCRT_iswcntrl( MSVCRT_wchar_t wc )
+{
+    return iscntrlW( wc );
+}
+
+/*********************************************************************
+ *		_iswcntrl_l (MSVCRT.@)
+ */
+int CDECL MSVCRT__iswcntrl_l( MSVCRT_wchar_t wc, MSVCRT__locale_t locale )
 {
     return iscntrlW( wc );
 }
@@ -1855,6 +1880,14 @@ INT CDECL MSVCRT_iswgraph( MSVCRT_wchar_t wc )
 }
 
 /*********************************************************************
+ *		_iswgraph_l (MSVCRT.@)
+ */
+int CDECL MSVCRT__iswgraph_l( MSVCRT_wchar_t wc, MSVCRT__locale_t locale )
+{
+    return isgraphW( wc );
+}
+
+/*********************************************************************
  *		iswlower (MSVCRT.@)
  */
 INT CDECL MSVCRT_iswlower( MSVCRT_wchar_t wc )
@@ -1863,9 +1896,25 @@ INT CDECL MSVCRT_iswlower( MSVCRT_wchar_t wc )
 }
 
 /*********************************************************************
+ *		_iswlower_l (MSVCRT.@)
+ */
+int CDECL MSVCRT__iswlower_l( MSVCRT_wchar_t wc, MSVCRT__locale_t locale )
+{
+    return islowerW( wc );
+}
+
+/*********************************************************************
  *		iswprint (MSVCRT.@)
  */
 INT CDECL MSVCRT_iswprint( MSVCRT_wchar_t wc )
+{
+    return isprintW( wc );
+}
+
+/*********************************************************************
+ *		_iswprint_l (MSVCRT.@)
+ */
+int CDECL MSVCRT__iswprint_l( MSVCRT_wchar_t wc, MSVCRT__locale_t locale )
 {
     return isprintW( wc );
 }
@@ -1911,9 +1960,25 @@ INT CDECL MSVCRT_iswupper( MSVCRT_wchar_t wc )
 }
 
 /*********************************************************************
+ *		_iswupper_l (MSVCRT.@)
+ */
+int CDECL MSVCRT__iswupper_l( MSVCRT_wchar_t wc, MSVCRT__locale_t locale )
+{
+    return isupperW( wc );
+}
+
+/*********************************************************************
  *		iswxdigit (MSVCRT.@)
  */
 INT CDECL MSVCRT_iswxdigit( MSVCRT_wchar_t wc )
+{
+    return isxdigitW( wc );
+}
+
+/*********************************************************************
+ *		_iswxdigit_l (MSVCRT.@)
+ */
+int CDECL MSVCRT__iswxdigit_l( MSVCRT_wchar_t wc, MSVCRT__locale_t locale )
 {
     return isxdigitW( wc );
 }

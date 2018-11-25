@@ -1016,20 +1016,20 @@
 @ stub _ispunct_l
 @ cdecl _isspace_l(long ptr) MSVCRT__isspace_l
 @ cdecl _isupper_l(long ptr) MSVCRT__isupper_l
-@ stub _iswalnum_l
+@ cdecl _iswalnum_l(long ptr) MSVCRT__iswalnum_l
 @ cdecl _iswalpha_l(long ptr) MSVCRT__iswalpha_l
-@ stub _iswcntrl_l
+@ cdecl _iswcntrl_l(long ptr) MSVCRT__iswcntrl_l
 @ stub _iswcsym_l
 @ stub _iswcsymf_l
 @ cdecl _iswctype_l(long long ptr) MSVCRT__iswctype_l
 @ cdecl _iswdigit_l(long ptr) MSVCRT__iswdigit_l
-@ stub _iswgraph_l
-@ stub _iswlower_l
-@ stub _iswprint_l
+@ cdecl _iswgraph_l(long ptr) MSVCRT__iswgraph_l
+@ cdecl _iswlower_l(long ptr) MSVCRT__iswlower_l
+@ cdecl _iswprint_l(long ptr) MSVCRT__iswprint_l
 @ cdecl _iswpunct_l(long ptr) MSVCRT__iswpunct_l
 @ cdecl _iswspace_l(long ptr) MSVCRT__iswspace_l
-@ stub _iswupper_l
-@ stub _iswxdigit_l
+@ cdecl _iswupper_l(long ptr) MSVCRT__iswupper_l
+@ cdecl _iswxdigit_l(long ptr) MSVCRT__iswxdigit_l
 @ cdecl _isxdigit_l(long ptr) MSVCRT__isxdigit_l
 @ cdecl _itoa(long ptr long) MSVCRT__itoa
 @ cdecl _itoa_s(long ptr long long) MSVCRT__itoa_s
@@ -1446,7 +1446,7 @@
 @ stub _vprintf_p_l
 @ stub _vprintf_s_l
 @ cdecl _vscprintf(str ptr) MSVCRT__vscprintf
-@ stub _vscprintf_l
+@ cdecl _vscprintf_l(str ptr ptr) MSVCRT__vscprintf_l
 @ cdecl _vscprintf_p(str ptr) MSVCRT__vscprintf_p
 @ cdecl _vscprintf_p_l(str ptr ptr) MSVCRT__vscprintf_p_l
 @ cdecl _vscwprintf(wstr ptr) MSVCRT__vscwprintf

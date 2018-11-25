@@ -445,6 +445,7 @@ enum wined3d_shader_resource_type
 #define WINED3D_SHADER_CONST_FFP_LIGHTS      0x00080000
 #define WINED3D_SHADER_CONST_FFP_PS          0x00100000
 #define WINED3D_SHADER_CONST_FFP_COLOR_KEY   0x00200000
+#define WINED3D_SHADER_CONST_BASE_VERTEX_ID  0x00400000
 
 enum wined3d_shader_register_type
 {
@@ -2648,6 +2649,7 @@ struct wined3d_driver_info
     const char *name;
     const char *description;
     UINT64 vram_bytes;
+    UINT64 sysmem_bytes;
     DWORD version_high;
     DWORD version_low;
 };
@@ -2674,12 +2676,12 @@ struct wined3d_adapter
     struct wined3d_gl_info  gl_info;
     struct wined3d_d3d_info d3d_info;
     struct wined3d_driver_info driver_info;
-    WCHAR                   DeviceName[CCHDEVICENAME]; /* DeviceName for use with e.g. ChangeDisplaySettings */
-    unsigned int cfg_count;
-    struct wined3d_pixel_format *cfgs;
-    UINT64 vram_bytes;
     UINT64 vram_bytes_used;
     LUID luid;
+
+    WCHAR device_name[CCHDEVICENAME]; /* for use with e.g. ChangeDisplaySettings() */
+    unsigned int cfg_count;
+    struct wined3d_pixel_format *cfgs;
 
     void *formats;
     size_t format_size;
@@ -3830,7 +3832,6 @@ struct wined3d_rendertarget_view
     void *parent;
     const struct wined3d_parent_ops *parent_ops;
 
-    struct wined3d_gl_view gl_view;
     const struct wined3d_format *format;
     unsigned int format_flags;
     unsigned int sub_resource_idx;
@@ -3853,6 +3854,18 @@ void wined3d_rendertarget_view_prepare_location(struct wined3d_rendertarget_view
 void wined3d_rendertarget_view_validate_location(struct wined3d_rendertarget_view *view,
         DWORD location) DECLSPEC_HIDDEN;
 
+struct wined3d_rendertarget_view_gl
+{
+    struct wined3d_rendertarget_view v;
+    struct wined3d_gl_view gl_view;
+};
+
+static inline struct wined3d_rendertarget_view_gl *wined3d_rendertarget_view_gl(
+        struct wined3d_rendertarget_view *view)
+{
+    return CONTAINING_RECORD(view, struct wined3d_rendertarget_view_gl, v);
+}
+
 struct wined3d_shader_resource_view
 {
     LONG refcount;
@@ -3861,14 +3874,26 @@ struct wined3d_shader_resource_view
     void *parent;
     const struct wined3d_parent_ops *parent_ops;
 
-    struct wined3d_gl_view gl_view;
     const struct wined3d_format *format;
 
     struct wined3d_view_desc desc;
 };
 
 void shader_resource_view_generate_mipmaps(struct wined3d_shader_resource_view *view) DECLSPEC_HIDDEN;
-void wined3d_shader_resource_view_bind(struct wined3d_shader_resource_view *view, unsigned int unit,
+
+struct wined3d_shader_resource_view_gl
+{
+    struct wined3d_shader_resource_view v;
+    struct wined3d_gl_view gl_view;
+};
+
+static inline struct wined3d_shader_resource_view_gl *wined3d_shader_resource_view_gl(
+        struct wined3d_shader_resource_view *view)
+{
+    return CONTAINING_RECORD(view, struct wined3d_shader_resource_view_gl, v);
+}
+
+void wined3d_shader_resource_view_gl_bind(struct wined3d_shader_resource_view_gl *view_gl, unsigned int unit,
         struct wined3d_sampler *sampler, struct wined3d_context *context) DECLSPEC_HIDDEN;
 
 struct wined3d_unordered_access_view
@@ -3879,9 +3904,7 @@ struct wined3d_unordered_access_view
     void *parent;
     const struct wined3d_parent_ops *parent_ops;
 
-    struct wined3d_gl_view gl_view;
     const struct wined3d_format *format;
-    GLuint counter_bo;
 
     struct wined3d_view_desc desc;
 };
@@ -3894,6 +3917,19 @@ void wined3d_unordered_access_view_invalidate_location(struct wined3d_unordered_
         DWORD location) DECLSPEC_HIDDEN;
 void wined3d_unordered_access_view_set_counter(struct wined3d_unordered_access_view *view,
         unsigned int value) DECLSPEC_HIDDEN;
+
+struct wined3d_unordered_access_view_gl
+{
+    struct wined3d_unordered_access_view v;
+    struct wined3d_gl_view gl_view;
+    GLuint counter_bo;
+};
+
+static inline struct wined3d_unordered_access_view_gl *wined3d_unordered_access_view_gl(
+        struct wined3d_unordered_access_view *view)
+{
+    return CONTAINING_RECORD(view, struct wined3d_unordered_access_view_gl, v);
+}
 
 struct wined3d_swapchain_ops
 {
@@ -4367,6 +4403,7 @@ extern enum wined3d_format_id pixelformat_for_depth(DWORD depth) DECLSPEC_HIDDEN
 #define WINED3DFMT_FLAG_NORMALISED                  0x00800000
 #define WINED3DFMT_FLAG_VERTEX_ATTRIBUTE            0x01000000
 #define WINED3DFMT_FLAG_BLIT                        0x02000000
+#define WINED3DFMT_FLAG_MAPPABLE                    0x04000000
 
 struct wined3d_rational
 {

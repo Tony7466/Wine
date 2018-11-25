@@ -5335,6 +5335,7 @@ static void fill_fileinfo_from_face( GdiFont *font, Face *face )
     if (!face->file)
     {
         font->fileinfo = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*font->fileinfo));
+        font->fileinfo->size.QuadPart = face->font_data_size;
         return;
     }
 
@@ -6801,6 +6802,37 @@ static unsigned int get_bezier_glyph_outline(FT_Outline *outline, unsigned int b
     return needed;
 }
 
+static FT_Int get_load_flags( UINT format )
+{
+    FT_Int load_flags = FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH;
+
+    if (format & GGO_UNHINTED)
+        return load_flags | FT_LOAD_NO_HINTING;
+
+    switch (format & ~GGO_GLYPH_INDEX)
+    {
+    case GGO_BITMAP:
+        load_flags |= FT_LOAD_TARGET_MONO;
+        break;
+    case GGO_GRAY2_BITMAP:
+    case GGO_GRAY4_BITMAP:
+    case GGO_GRAY8_BITMAP:
+    case WINE_GGO_GRAY16_BITMAP:
+        load_flags |= FT_LOAD_TARGET_NORMAL;
+        break;
+    case WINE_GGO_HRGB_BITMAP:
+    case WINE_GGO_HBGR_BITMAP:
+        load_flags |= FT_LOAD_TARGET_LCD;
+        break;
+    case WINE_GGO_VRGB_BITMAP:
+    case WINE_GGO_VBGR_BITMAP:
+        load_flags |= FT_LOAD_TARGET_LCD_V;
+        break;
+    }
+
+    return load_flags;
+}
+
 static const BYTE masks[8] = {0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01};
 
 static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
@@ -6820,7 +6852,7 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
     FT_Vector adv;
     INT origin_x = 0, origin_y = 0;
     FT_Angle angle = 0;
-    FT_Int load_flags = FT_LOAD_DEFAULT | FT_LOAD_IGNORE_GLOBAL_ADVANCE_WIDTH;
+    FT_Int load_flags = get_load_flags(format);
     double widthRatio = 1.0;
     FT_Matrix transMat = identityMat;
     FT_Matrix transMatUnrotated;
@@ -6859,10 +6891,7 @@ static DWORD get_glyph_outline(GdiFont *incoming_font, UINT glyph, UINT format,
             tategaki = check_unicode_tategaki(glyph);
     }
 
-    if(format & GGO_UNHINTED) {
-        load_flags |= FT_LOAD_NO_HINTING;
-        format &= ~GGO_UNHINTED;
-    }
+    format &= ~GGO_UNHINTED;
 
     if(original_index >= font->gmsize * GM_BLOCK_SIZE) {
 	font->gmsize = (original_index / GM_BLOCK_SIZE + 1);
@@ -8088,8 +8117,30 @@ static UINT freetype_GetOutlineTextMetrics( PHYSDEV dev, UINT cbSize, OUTLINETEX
 
 static BOOL load_child_font(GdiFont *font, CHILD_FONT *child)
 {
+    const struct list *face_list;
+    Face *child_face = NULL, *best_face = NULL;
+    UINT penalty = 0, new_penalty = 0;
+    BOOL bold, italic, bd, it;
+
+    italic = font->font_desc.lf.lfItalic ? TRUE : FALSE;
+    bold = font->font_desc.lf.lfWeight > FW_MEDIUM ? TRUE : FALSE;
+
+    face_list = get_face_list_from_family( child->face->family );
+    LIST_FOR_EACH_ENTRY( child_face, face_list, Face, entry )
+    {
+        it = child_face->ntmFlags & NTM_ITALIC ? TRUE : FALSE;
+        bd = child_face->ntmFlags & NTM_BOLD ? TRUE : FALSE;
+        new_penalty = ( it ^ italic ) + ( bd ^ bold );
+        if (!best_face || new_penalty < penalty)
+        {
+            penalty = new_penalty;
+            best_face = child_face;
+        }
+    }
+    child_face = best_face ? best_face : child->face;
+
     child->font = alloc_font();
-    child->font->ft_face = OpenFontFace(child->font, child->face, 0, -font->ppem);
+    child->font->ft_face = OpenFontFace( child->font, child_face, 0, -font->ppem );
     if(!child->font->ft_face)
     {
         free_font(child->font);
@@ -8097,11 +8148,13 @@ static BOOL load_child_font(GdiFont *font, CHILD_FONT *child)
         return FALSE;
     }
 
+    child->font->fake_italic = italic && !( child_face->ntmFlags & NTM_ITALIC );
+    child->font->fake_bold = bold && !( child_face->ntmFlags & NTM_BOLD );
     child->font->font_desc = font->font_desc;
-    child->font->ntmFlags = child->face->ntmFlags;
+    child->font->ntmFlags = child_face->ntmFlags;
     child->font->orientation = font->orientation;
     child->font->scale_y = font->scale_y;
-    child->font->name = strdupW(child->face->family->FamilyName);
+    child->font->name = strdupW( child_face->family->FamilyName );
     child->font->base_font = font;
     TRACE("created child font %p for base %p\n", child->font, font);
     return TRUE;
@@ -8522,11 +8575,42 @@ static BOOL freetype_GetFontRealizationInfo( PHYSDEV dev, void *ptr )
 }
 
 /*************************************************************************
- *             GetFontFileInfo   (GDI32.@)
+ *             GetFontFileData   (GDI32.@)
  */
-BOOL WINAPI GetFontFileInfo( DWORD instance_id, DWORD unknown, struct font_fileinfo *info, DWORD size, DWORD *needed )
+BOOL WINAPI GetFontFileData( DWORD instance_id, DWORD unknown, UINT64 offset, void *buff, DWORD buff_size )
 {
     struct font_handle_entry *entry = handle_entry( instance_id );
+    DWORD tag = 0, size;
+    GdiFont *font;
+
+    if (!entry)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+
+    font = entry->obj;
+    if (font->ttc_item_offset)
+        tag = MS_TTCF_TAG;
+
+    size = get_font_data( font, tag, 0, NULL, 0 );
+    if (size < buff_size || offset > size - buff_size)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+
+    /* For now this only works for SFNT case. */
+    return get_font_data( font, tag, offset, buff, buff_size ) != 0;
+}
+
+/*************************************************************************
+ *             GetFontFileInfo   (GDI32.@)
+ */
+BOOL WINAPI GetFontFileInfo( DWORD instance_id, DWORD unknown, struct font_fileinfo *info, SIZE_T size, SIZE_T *needed )
+{
+    struct font_handle_entry *entry = handle_entry( instance_id );
+    SIZE_T required_size;
     const GdiFont *font;
 
     if (!entry)
@@ -8534,6 +8618,9 @@ BOOL WINAPI GetFontFileInfo( DWORD instance_id, DWORD unknown, struct font_filei
         SetLastError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
+
+    if (!needed)
+        needed = &required_size;
 
     font = entry->obj;
     *needed = sizeof(*info) + strlenW(font->fileinfo->path) * sizeof(WCHAR);
@@ -8981,6 +9068,14 @@ BOOL WINAPI GetRasterizerCaps( LPRASTERIZER_STATUS lprs, UINT cbNumBytes)
     lprs->wFlags = 0;
     lprs->nLanguageID = 0;
     return TRUE;
+}
+
+/*************************************************************************
+ *             GetFontFileData   (GDI32.@)
+ */
+BOOL WINAPI GetFontFileData( DWORD instance_id, DWORD unknown, UINT64 offset, void *buff, DWORD buff_size )
+{
+    return FALSE;
 }
 
 /*************************************************************************

@@ -2444,17 +2444,17 @@ static HANDLE map_pdb_file(const struct process* pcs,
                            struct module* module)
 {
     HANDLE      hFile, hMap = NULL;
-    char        dbg_file_path[MAX_PATH];
+    WCHAR       dbg_file_path[MAX_PATH];
     BOOL        ret = FALSE;
 
     switch (lookup->kind)
     {
     case PDB_JG:
-        ret = path_find_symbol_file(pcs, lookup->filename, NULL, lookup->timestamp,
+        ret = path_find_symbol_file(pcs, module, lookup->filename, NULL, lookup->timestamp,
                                     lookup->age, dbg_file_path, &module->module.PdbUnmatched);
         break;
     case PDB_DS:
-        ret = path_find_symbol_file(pcs, lookup->filename, &lookup->guid, 0,
+        ret = path_find_symbol_file(pcs, module, lookup->filename, &lookup->guid, 0,
                                     lookup->age, dbg_file_path, &module->module.PdbUnmatched);
         break;
     }
@@ -2463,7 +2463,7 @@ static HANDLE map_pdb_file(const struct process* pcs,
         WARN("\tCouldn't find %s\n", lookup->filename);
         return NULL;
     }
-    if ((hFile = CreateFileA(dbg_file_path, GENERIC_READ, FILE_SHARE_READ, NULL,
+    if ((hFile = CreateFileW(dbg_file_path, GENERIC_READ, FILE_SHARE_READ, NULL,
                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL)) != INVALID_HANDLE_VALUE)
     {
         hMap = CreateFileMappingW(hFile, NULL, PAGE_READONLY, 0, 0, NULL);

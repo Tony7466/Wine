@@ -1302,14 +1302,18 @@ void CDECL wined3d_device_set_multithreaded(struct wined3d_device *device)
 
 UINT CDECL wined3d_device_get_available_texture_mem(const struct wined3d_device *device)
 {
+    const struct wined3d_driver_info *driver_info;
+
     TRACE("device %p.\n", device);
 
-    TRACE("Emulating 0x%s bytes. 0x%s used, returning 0x%s left.\n",
-            wine_dbgstr_longlong(device->adapter->vram_bytes),
-            wine_dbgstr_longlong(device->adapter->vram_bytes_used),
-            wine_dbgstr_longlong(device->adapter->vram_bytes - device->adapter->vram_bytes_used));
+    driver_info = &device->adapter->driver_info;
 
-    return min(UINT_MAX, device->adapter->vram_bytes - device->adapter->vram_bytes_used);
+    TRACE("Emulating 0x%s bytes. 0x%s used, returning 0x%s left.\n",
+            wine_dbgstr_longlong(driver_info->vram_bytes),
+            wine_dbgstr_longlong(device->adapter->vram_bytes_used),
+            wine_dbgstr_longlong(driver_info->vram_bytes - device->adapter->vram_bytes_used));
+
+    return min(UINT_MAX, driver_info->vram_bytes - device->adapter->vram_bytes_used);
 }
 
 void CDECL wined3d_device_set_stream_output(struct wined3d_device *device, UINT idx,
@@ -3467,12 +3471,6 @@ HRESULT CDECL wined3d_device_set_texture(struct wined3d_device *device,
         return WINED3D_OK;
     }
 
-    if (texture && texture->resource.usage & WINED3DUSAGE_SCRATCH)
-    {
-        WARN("Rejecting attempt to set scratch texture.\n");
-        return WINED3DERR_INVALIDCALL;
-    }
-
     if (device->recording)
         device->recording->changed.textures |= 1u << stage;
 
@@ -4504,17 +4502,25 @@ HRESULT CDECL wined3d_device_set_rendertarget_view(struct wined3d_device *device
     return WINED3D_OK;
 }
 
-void CDECL wined3d_device_set_depth_stencil_view(struct wined3d_device *device, struct wined3d_rendertarget_view *view)
+HRESULT CDECL wined3d_device_set_depth_stencil_view(struct wined3d_device *device,
+        struct wined3d_rendertarget_view *view)
 {
     struct wined3d_rendertarget_view *prev;
 
     TRACE("device %p, view %p.\n", device, view);
 
+    if (view && !(view->resource->bind_flags & WINED3D_BIND_DEPTH_STENCIL))
+    {
+        WARN("View resource %p has incompatible %s bind flags.\n",
+                view->resource, wined3d_debug_bind_flags(view->resource->bind_flags));
+        return WINED3DERR_INVALIDCALL;
+    }
+
     prev = device->fb.depth_stencil;
     if (prev == view)
     {
         TRACE("Trying to do a NOP SetRenderTarget operation.\n");
-        return;
+        return WINED3D_OK;
     }
 
     if ((device->fb.depth_stencil = view))
@@ -4522,6 +4528,8 @@ void CDECL wined3d_device_set_depth_stencil_view(struct wined3d_device *device, 
     wined3d_cs_emit_set_depth_stencil_view(device->cs, view);
     if (prev)
         wined3d_rendertarget_view_decref(prev);
+
+    return WINED3D_OK;
 }
 
 static struct wined3d_texture *wined3d_device_create_cursor_texture(struct wined3d_device *device,

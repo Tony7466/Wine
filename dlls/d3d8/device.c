@@ -1144,30 +1144,26 @@ static HRESULT WINAPI d3d8_device_CreateIndexBuffer(IDirect3DDevice8 *iface, UIN
     return D3D_OK;
 }
 
-static HRESULT d3d8_device_create_surface(struct d3d8_device *device, UINT width, UINT height,
-        D3DFORMAT format, DWORD flags, IDirect3DSurface8 **surface, UINT usage, D3DPOOL pool,
-        D3DMULTISAMPLE_TYPE multisample_type, DWORD multisample_quality)
+static HRESULT d3d8_device_create_surface(struct d3d8_device *device, enum wined3d_format_id format,
+        enum wined3d_multisample_type multisample_type, unsigned int bind_flags, unsigned int access,
+        unsigned int width, unsigned int height, IDirect3DSurface8 **surface)
 {
     struct wined3d_resource_desc desc;
     struct d3d8_surface *surface_impl;
     struct wined3d_texture *texture;
     HRESULT hr;
 
-    TRACE("device %p, width %u, height %u, format %#x, flags %#x, surface %p, "
-            "usage %#x, pool %#x, multisample_type %#x, multisample_quality %u.\n",
-            device, width, height, format, flags, surface,
-            usage, pool, multisample_type, multisample_quality);
+    TRACE("device %p, format %#x, multisample_type %#x, bind_flags %#x, "
+            "access %#x, width %u, height %u, surface %p.\n",
+            device, format, multisample_type, bind_flags, access, width, height, surface);
 
     desc.resource_type = WINED3D_RTYPE_TEXTURE_2D;
-    desc.format = wined3dformat_from_d3dformat(format);
+    desc.format = format;
     desc.multisample_type = multisample_type;
-    desc.multisample_quality = multisample_quality;
-    desc.usage = usage & WINED3DUSAGE_MASK;
-    if (pool == D3DPOOL_SCRATCH)
-        desc.usage |= WINED3DUSAGE_SCRATCH;
-    desc.bind_flags = wined3d_bind_flags_from_d3d8_usage(usage);
-    desc.access = wined3daccess_from_d3dpool(pool, usage)
-            | WINED3D_RESOURCE_ACCESS_MAP_R | WINED3D_RESOURCE_ACCESS_MAP_W;
+    desc.multisample_quality = 0;
+    desc.usage = 0;
+    desc.bind_flags = bind_flags;
+    desc.access = access;
     desc.width = width;
     desc.height = height;
     desc.depth = 1;
@@ -1176,7 +1172,7 @@ static HRESULT d3d8_device_create_surface(struct d3d8_device *device, UINT width
     wined3d_mutex_lock();
 
     if (FAILED(hr = wined3d_texture_create(device->wined3d_device, &desc,
-            1, 1, flags, NULL, NULL, &d3d8_null_wined3d_parent_ops, &texture)))
+            1, 1, 0, NULL, NULL, &d3d8_null_wined3d_parent_ops, &texture)))
     {
         wined3d_mutex_unlock();
         WARN("Failed to create texture, hr %#x.\n", hr);
@@ -1199,7 +1195,7 @@ static HRESULT WINAPI d3d8_device_CreateRenderTarget(IDirect3DDevice8 *iface, UI
         IDirect3DSurface8 **surface)
 {
     struct d3d8_device *device = impl_from_IDirect3DDevice8(iface);
-    DWORD flags = 0;
+    unsigned int access = WINED3D_RESOURCE_ACCESS_GPU;
 
     TRACE("iface %p, width %u, height %u, format %#x, multisample_type %#x, lockable %#x, surface %p.\n",
             iface, width, height, format, multisample_type, lockable, surface);
@@ -1209,10 +1205,10 @@ static HRESULT WINAPI d3d8_device_CreateRenderTarget(IDirect3DDevice8 *iface, UI
 
     *surface = NULL;
     if (lockable)
-        flags |= WINED3D_TEXTURE_CREATE_MAPPABLE;
+        access |= WINED3D_RESOURCE_ACCESS_MAP_R | WINED3D_RESOURCE_ACCESS_MAP_W;
 
-    return d3d8_device_create_surface(device, width, height, format, flags, surface,
-            D3DUSAGE_RENDERTARGET, D3DPOOL_DEFAULT, multisample_type, 0);
+    return d3d8_device_create_surface(device, wined3dformat_from_d3dformat(format),
+            multisample_type, WINED3D_BIND_RENDER_TARGET, access, width, height, surface);
 }
 
 static HRESULT WINAPI d3d8_device_CreateDepthStencilSurface(IDirect3DDevice8 *iface,
@@ -1229,9 +1225,9 @@ static HRESULT WINAPI d3d8_device_CreateDepthStencilSurface(IDirect3DDevice8 *if
 
     *surface = NULL;
 
-    /* TODO: Verify that Discard is false */
-    return d3d8_device_create_surface(device, width, height, format, WINED3D_TEXTURE_CREATE_MAPPABLE,
-            surface, D3DUSAGE_DEPTHSTENCIL, D3DPOOL_DEFAULT, multisample_type, 0);
+    return d3d8_device_create_surface(device, wined3dformat_from_d3dformat(format),
+            multisample_type, WINED3D_BIND_DEPTH_STENCIL,
+            WINED3D_RESOURCE_ACCESS_GPU, width, height, surface);
 }
 
 /*  IDirect3DDevice8Impl::CreateImageSurface returns surface with pool type SYSTEMMEM */
@@ -1239,14 +1235,16 @@ static HRESULT WINAPI d3d8_device_CreateImageSurface(IDirect3DDevice8 *iface, UI
         UINT height, D3DFORMAT format, IDirect3DSurface8 **surface)
 {
     struct d3d8_device *device = impl_from_IDirect3DDevice8(iface);
+    unsigned int access = WINED3D_RESOURCE_ACCESS_CPU
+            | WINED3D_RESOURCE_ACCESS_MAP_R | WINED3D_RESOURCE_ACCESS_MAP_W;
 
     TRACE("iface %p, width %u, height %u, format %#x, surface %p.\n",
             iface, width, height, format, surface);
 
     *surface = NULL;
 
-    return d3d8_device_create_surface(device, width, height, format, WINED3D_TEXTURE_CREATE_MAPPABLE,
-            surface, 0, D3DPOOL_SYSTEMMEM, D3DMULTISAMPLE_NONE, 0);
+    return d3d8_device_create_surface(device, wined3dformat_from_d3dformat(format),
+            WINED3D_MULTISAMPLE_NONE, 0, access, width, height, surface);
 }
 
 static HRESULT WINAPI d3d8_device_CopyRects(IDirect3DDevice8 *iface,
@@ -1439,12 +1437,15 @@ static HRESULT WINAPI d3d8_device_SetRenderTarget(IDirect3DDevice8 *iface,
 
     original_dsv = wined3d_device_get_depth_stencil_view(device->wined3d_device);
     rtv = ds_impl ? d3d8_surface_acquire_rendertarget_view(ds_impl) : NULL;
-    wined3d_device_set_depth_stencil_view(device->wined3d_device, rtv);
+    hr = wined3d_device_set_depth_stencil_view(device->wined3d_device, rtv);
     d3d8_surface_release_rendertarget_view(ds_impl, rtv);
-    rtv = render_target ? d3d8_surface_acquire_rendertarget_view(rt_impl) : NULL;
-    if (render_target && FAILED(hr = wined3d_device_set_rendertarget_view(device->wined3d_device, 0, rtv, TRUE)))
-        wined3d_device_set_depth_stencil_view(device->wined3d_device, original_dsv);
-    d3d8_surface_release_rendertarget_view(rt_impl, rtv);
+    if (SUCCEEDED(hr))
+    {
+        rtv = render_target ? d3d8_surface_acquire_rendertarget_view(rt_impl) : NULL;
+        if (render_target && FAILED(hr = wined3d_device_set_rendertarget_view(device->wined3d_device, 0, rtv, TRUE)))
+            wined3d_device_set_depth_stencil_view(device->wined3d_device, original_dsv);
+        d3d8_surface_release_rendertarget_view(rt_impl, rtv);
+    }
 
     wined3d_mutex_unlock();
 
