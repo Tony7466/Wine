@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/rpcrt4/cproxy.c
 +++ b/dlls/rpcrt4/cproxy.c
-@@ -157,7 +157,7 @@ static inline void init_thunk( struct th
+@@ -198,7 +198,7 @@ static inline void init_thunk( struct th
  
  #else  /* __i386__ */
  
@@ -14,8 +14,8 @@ author: Michael Gilbert <mgilbert@debian.org>
  {
 --- a/dlls/rpcrt4/cstub.c
 +++ b/dlls/rpcrt4/cstub.c
-@@ -176,7 +176,7 @@ static const BYTE opcodes[16] = { 0x48,
-                                   0xff, 0xa0, 0, 0, 0, 0, 0x48, 0x8d, 0x36 };
+@@ -188,7 +188,7 @@ typedef struct
+ 
  #else
  
 -#warning You must implement delegated proxies/stubs for your CPU

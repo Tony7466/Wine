@@ -1,17 +1,17 @@
 description: fix string format warnings, output buffers were not large enough
 author: Michael Gilbert <mgilbert@debian.org>
 
---- a/dlls/oleaut32/tmarshal.c
-+++ b/dlls/oleaut32/tmarshal.c
-@@ -333,7 +333,7 @@ static HRESULT reg_get_typelib_module(RE
-     HKEY	ikey;
-     REGSAM	opposite = (sizeof(void*) == 8) ? KEY_WOW64_32KEY : KEY_WOW64_64KEY;
-     BOOL	is_wow64;
--    char	tlguid[200],typelibkey[300],interfacekey[300],ver[100];
-+    char	tlguid[200],typelibkey[316],interfacekey[300],ver[100];
-     char	tlfn[260];
-     DWORD	tlguidlen, verlen, type;
-     LONG	tlfnlen, err;
+--- a/dlls/oleaut32/oleaut.c
++++ b/dlls/oleaut32/oleaut.c
+@@ -832,7 +832,7 @@ static BOOL actctx_get_typelib_module(RE
+ static HRESULT reg_get_typelib_module(REFIID iid, WCHAR *module, DWORD len)
+ {
+     REGSAM opposite = (sizeof(void*) == 8) ? KEY_WOW64_32KEY : KEY_WOW64_64KEY;
+-    char tlguid[200], typelibkey[300], interfacekey[300], ver[100], tlfn[260];
++    char tlguid[200], typelibkey[316], interfacekey[300], ver[100], tlfn[260];
+     DWORD tlguidlen, verlen, type;
+     LONG tlfnlen, err;
+     BOOL is_wow64;
 --- a/programs/winhlp32/hlpfile.h
 +++ b/programs/winhlp32/hlpfile.h
 @@ -26,7 +26,7 @@ typedef struct

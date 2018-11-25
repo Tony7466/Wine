@@ -5,7 +5,6 @@ debianization/winemenubuilder.patch
 debianization/wineserver-persistence.patch
 
 disable/tests.patch
-disable/i386-only.patch
 disable/line-wrapping.patch
 disable/addons-download.patch
 disable/po-modifications.patch

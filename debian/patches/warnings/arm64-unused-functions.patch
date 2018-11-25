@@ -31,24 +31,6 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  static inline BYTE *get_pixel_ptr(BYTE *ptr, DWRITE_TEXTURE_TYPE type, const RECT *runbounds, const RECT *bounds)
  {
---- a/dlls/oleaut32/tmarshal.c
-+++ b/dlls/oleaut32/tmarshal.c
-@@ -1411,6 +1411,7 @@ static HRESULT get_funcdesc(ITypeInfo *t
-     return S_OK;
- }
- 
-+#ifndef __aarch64__
- static inline BOOL is_in_elem(const ELEMDESC *elem)
- {
-     return (elem->u.paramdesc.wParamFlags & PARAMFLAG_FIN || !elem->u.paramdesc.wParamFlags);
-@@ -1420,6 +1421,7 @@ static inline BOOL is_out_elem(const ELE
- {
-     return (elem->u.paramdesc.wParamFlags & PARAMFLAG_FOUT || !elem->u.paramdesc.wParamFlags);
- }
-+#endif
- 
- #ifdef __i386__
- static DWORD WINAPI xCall(int method, void **args)
 --- a/dlls/windowscodecs/converter.c
 +++ b/dlls/windowscodecs/converter.c
 @@ -80,12 +80,14 @@ typedef struct FormatConverter {
@@ -82,20 +64,6 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  static HRESULT WINAPI script_IDirectMusicObject_ParseDescriptor(IDirectMusicObject *iface,
          IStream *stream, DMUS_OBJECTDESC *desc)
---- a/programs/winedbg/gdbproxy.c
-+++ b/programs/winedbg/gdbproxy.c
-@@ -740,11 +740,6 @@ static inline void packet_reply_add(stru
-     gdbctx->out_len += len;
- }
- 
--static inline void packet_reply_cat(struct gdb_context* gdbctx, const char* str)
--{
--    packet_reply_add(gdbctx, str, strlen(str));
--}
--
- static inline void packet_reply_catc(struct gdb_context* gdbctx, char ch)
- {
-     packet_reply_add(gdbctx, &ch, 1);
 --- a/dlls/d2d1/device.c
 +++ b/dlls/d2d1/device.c
 @@ -210,11 +210,6 @@ static inline struct d2d_device_context

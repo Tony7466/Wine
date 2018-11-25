@@ -39,6 +39,9 @@ export DEB_LDFLAGS_MAINT_APPEND+=-Wl,-rpath,/$(LIBDIR)
 # ignore shift overflow warnings (currently only an issue on arm)
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-shift-overflow
 
+# ignore warning about deprecated CUPS API for now
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-deprecated-declarations
+
 # configure options
 CONFLAGS=--with-gnutls \
          --without-hal \
