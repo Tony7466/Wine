@@ -1,4 +1,4 @@
-description: ignore array bounds warning in kernel32 for now
+description: ignore array bounds warnings involving ANYSIZE_ARRAY
 author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/kernel32/Makefile.in
@@ -11,3 +11,13 @@ author: Michael Gilbert <mgilbert@debian.org>
  EXTRALIBS = $(COREFOUNDATION_LIBS) $(POLL_LIBS)
  EXTRADLLFLAGS = -nodefaultlibs -Wb,-F,KERNEL32.dll -Wl,--image-base,0x7b400000
  
+--- a/dlls/ntoskrnl.exe/Makefile.in
++++ b/dlls/ntoskrnl.exe/Makefile.in
+@@ -1,6 +1,7 @@
+ MODULE    = ntoskrnl.exe
+ IMPORTLIB = ntoskrnl
+ IMPORTS   = advapi32
++CFLAGS   += -Wno-array-bounds
+ DELAYIMPORTS = setupapi user32
+ 
+ C_SRCS = \
