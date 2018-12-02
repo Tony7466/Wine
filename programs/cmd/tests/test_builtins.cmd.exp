@@ -475,6 +475,9 @@ foo
 'jim fred'
 'jim'
 'apple"banana"grape'
+I'm here!@space@
+I'm here!@space@
+I'm here!@space@
 ------------ Testing variable expansion ------------
 ~p0 should be path containing batch file
 @path@
@@ -574,6 +577,9 @@ N
 @drive@
 ''
 '.eh'@or_broken@''
+------------ Testing parameter zero ------------
+:func parm1
+[:func] [@drive@] [@path@] [test] [.cmd] [@drive@@shortpath@test.cmd]
 ------------ Testing variable delayed expansion ------------
 --- default mode (load-time expansion)
 foo
@@ -975,6 +981,7 @@ ErrorLevel 0
 -1
 1
 3
+--- rems inside for loops
 --- ifs inside for loops
 a1
 b1
@@ -1159,7 +1166,9 @@ WINE_bar correctly 6@or_broken@ERROR: WINE_bar incorrectly 5 [6]
 --- for /F
 ------ string argument
 a
+XaX
 a@or_broken@no output
+XaX@or_broken@no output
 a
 a@or_broken@no output
 a
@@ -1195,6 +1204,10 @@ c
 Passed1@or_broken@Missing functionality - Broken1
 Passed2@or_broken@Missing functionality - Broken2
 Passed3@or_broken@Missing functionality - Broken3
+Passed4@or_broken@Missing functionality - Broken4
+Passed5@or_broken@Missing functionality - Broken5
+Passed6@or_broken@Missing functionality - Broken6
+Passed7@or_broken@Missing functionality - Broken7
 ------ eol option
 and@or_broken@Broken NT4 functionality1
 Line@or_broken@Broken NT4 functionality2
@@ -1240,9 +1253,15 @@ h=%h i=a j=b k=c l=d e f g m=%m n=%n o=%o@or_broken@h=%h i=a j=b k=c l=d e f g m
 h=%h i=a j=c k= l= m=%m n=%n o=%o@or_broken@h=%h i=a j=c k= l= m= n=%n o=%o
 h=%h i=b j=c k= l= m=%m n=%n o=%o@or_broken@h=%h i=b j=c k= l= m= n=%n o=%o
 h=%h i=b j=c k= l= m=%m n=%n o=%o@or_broken@h=%h i=b j=c k= l= m= n=%n o=%o
+1:3.14,%B
+2:3.14,
+4:3,14
 ------ parameter splitting
 :forFParameterSplittingFunc myparam1=myvalue1 myparam2=myparam2 mytest@space@@space@@space@
 :forFParameterSplittingFunc myparam1=myvalue1 myparam2=myparam2 mytest@space@@space@@space@
+4:3.14,%B
+5:3,14
+6:14,
 ------------ Testing del ------------
 deleting 'file'
 errorlevel is 0, good
