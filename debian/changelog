@@ -1,3 +1,11 @@
+wine (3.0.4-1) UNRELEASED; urgency=medium
+
+  * New upstream release 3.0.4, released Nov 29, 2018.
+    - Added a lot of icons in Shell32
+    - Various bug fixes
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Sun, 02 Dec 2018 22:03:44 +0100
+
 wine (3.0.3-2) unstable; urgency=medium
 
   * Revert upstream commit which requires clang >= 5.0 to build on arm64.
