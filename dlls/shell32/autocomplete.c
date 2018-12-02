@@ -93,6 +93,14 @@ static inline IAutoCompleteImpl *impl_from_IAutoCompleteDropDown(IAutoCompleteDr
     return CONTAINING_RECORD(iface, IAutoCompleteImpl, IAutoCompleteDropDown_iface);
 }
 
+static void destroy_autocomplete_object(IAutoCompleteImpl *ac)
+{
+    ac->hwndEdit = NULL;
+    if (ac->hwndListBox)
+        DestroyWindow(ac->hwndListBox);
+    IAutoComplete2_Release(&ac->IAutoComplete2_iface);
+}
+
 /*
   Window procedure for autocompletion
  */
@@ -192,19 +200,7 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
                         ShowWindow(This->hwndListBox, SW_HIDE);
                         return CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
                     }
-                    if (This->options & ACO_AUTOAPPEND) {
-                        DWORD b;
-                        SendMessageW(hwnd, EM_GETSEL, (WPARAM)&b, 0);
-                        if (b>1) {
-                            hwndText[b-1] = '\0';
-                        } else {
-                            hwndText[0] = '\0';
-                            SetWindowTextW(hwnd, hwndText);
-                        }
-                    }
                     break;
-                default:
-                    ;
             }
 
             SendMessageW(This->hwndListBox, LB_RESETCONTENT, 0, 0);
@@ -277,10 +273,7 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
 
             RemovePropW(hwnd, autocomplete_propertyW);
             SetWindowLongPtrW(hwnd, GWLP_WNDPROC, (LONG_PTR)proc);
-            This->hwndEdit = NULL;
-            if (This->hwndListBox)
-                    DestroyWindow(This->hwndListBox);
-            IAutoComplete2_Release(&This->IAutoComplete2_iface);
+            destroy_autocomplete_object(This);
             return CallWindowProcW(proc, hwnd, uMsg, wParam, lParam);
         }
         default:
@@ -435,7 +428,7 @@ static HRESULT WINAPI IAutoComplete2_fnInit(
     LPCOLESTR pwzsRegKeyPath,
     LPCOLESTR pwszQuickComplete)
 {
-    IAutoCompleteImpl *This = impl_from_IAutoComplete2(iface);
+    IAutoCompleteImpl *prev, *This = impl_from_IAutoComplete2(iface);
 
     TRACE("(%p)->(%p, %p, %s, %s)\n",
 	  This, hwndEdit, punkACL, debugstr_w(pwzsRegKeyPath), debugstr_w(pwszQuickComplete));
@@ -462,10 +455,22 @@ static HRESULT WINAPI IAutoComplete2_fnInit(
 
     This->initialized = TRUE;
     This->hwndEdit = hwndEdit;
-    This->wpOrigEditProc = (WNDPROC) SetWindowLongPtrW( hwndEdit, GWLP_WNDPROC, (LONG_PTR) ACEditSubclassProc);
-    /* Keep at least one reference to the object until the edit window is destroyed. */
+
+    /* If another AutoComplete object was previously assigned to this edit control,
+       release it but keep the same callback on the control, to avoid an infinite
+       recursive loop in ACEditSubclassProc while the property is set to this object */
+    prev = GetPropW(hwndEdit, autocomplete_propertyW);
+    SetPropW(hwndEdit, autocomplete_propertyW, This);
+
+    if (prev && prev->initialized) {
+        This->wpOrigEditProc = prev->wpOrigEditProc;
+        destroy_autocomplete_object(prev);
+    }
+    else
+        This->wpOrigEditProc = (WNDPROC) SetWindowLongPtrW(hwndEdit, GWLP_WNDPROC, (LONG_PTR) ACEditSubclassProc);
+
+    /* Keep at least one reference to the object until the edit window is destroyed */
     IAutoComplete2_AddRef(&This->IAutoComplete2_iface);
-    SetPropW( hwndEdit, autocomplete_propertyW, This );
 
     if (This->options & ACO_AUTOSUGGEST)
         create_listbox(This);

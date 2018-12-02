@@ -272,7 +272,7 @@ static inline IMalloc *get_malloc(void)
  *  See BSTR.
  *  str may be NULL, in which case this function does nothing.
  */
-void WINAPI SysFreeString(BSTR str)
+void WINAPI DECLSPEC_HOTPATCH SysFreeString(BSTR str)
 {
     bstr_cache_entry_t *cache_entry;
     bstr_t *bstr;
@@ -429,7 +429,7 @@ int WINAPI SysReAllocStringLen(BSTR* old, const OLECHAR* str, unsigned int len)
  *  without checking for a terminating NUL.
  *  See BSTR.
  */
-BSTR WINAPI SysAllocStringByteLen(LPCSTR str, UINT len)
+BSTR WINAPI DECLSPEC_HOTPATCH SysAllocStringByteLen(LPCSTR str, UINT len)
 {
     bstr_t *bstr;
 

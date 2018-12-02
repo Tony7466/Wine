@@ -45,17 +45,17 @@
 @ stdcall MFCreateEventQueue(ptr)
 @ stub MFCreateFile
 @ stub MFCreateLegacyMediaBufferOnMFMediaBuffer
-@ stub MFCreateMFByteStreamOnStream
+@ stdcall MFCreateMFByteStreamOnStream(ptr ptr)
 @ stub MFCreateMFVideoFormatFromMFMediaType
 @ stub MFCreateMediaBufferWrapper
 @ stub MFCreateMediaEvent
 @ stdcall MFCreateMediaType(ptr)
 @ stub MFCreateMediaTypeFromRepresentation
-@ stub MFCreateMemoryBuffer
+@ stdcall MFCreateMemoryBuffer(long ptr)
 @ stub MFCreateMemoryStream
 @ stub MFCreatePathFromURL
 @ stub MFCreatePresentationDescriptor
-@ stub MFCreateSample
+@ stdcall MFCreateSample(ptr)
 @ stub MFCreateSocket
 @ stub MFCreateSocketListener
 @ stdcall MFCreateSourceResolver(ptr)
@@ -138,7 +138,7 @@
 @ stdcall MFTEnumEx(int128 long ptr ptr ptr ptr)
 @ stub MFTGetInfo
 @ stdcall MFTRegister(int128 int128 wstr long long ptr long ptr ptr)
-@ stub MFTRegisterLocal
+@ stdcall MFTRegisterLocal(ptr ptr wstr long long  ptr long ptr)
 @ stub MFTRegisterLocalByCLSID
 @ stdcall MFTUnregister(int128)
 @ stub MFTUnregisterLocal
