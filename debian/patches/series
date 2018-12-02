@@ -23,4 +23,3 @@ binary-indep/sfnt2fon.patch
 gstbase.patch
 printer-resolution.patch
 
-gcc-8.1.patch
