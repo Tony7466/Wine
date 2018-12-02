@@ -24,4 +24,3 @@ gstbase.patch
 printer-resolution.patch
 
 gcc-8.1.patch
-revert-clang5.0.patch
