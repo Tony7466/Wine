@@ -1,3 +1,9 @@
+wine (4.0~rc1-1) UNRELEASED; urgency=medium
+
+  * Switch to the wine stable branch.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Tue, 11 Dec 2018 01:10:23 +0000
+
 wine-development (3.21-2) unstable; urgency=medium
 
   * Fix build error on arm64.
