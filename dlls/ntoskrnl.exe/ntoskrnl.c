@@ -1371,15 +1371,15 @@ static NTSTATUS create_device_symlink( DEVICE_OBJECT *device, UNICODE_STRING *sy
  */
 NTSTATUS WINAPI IoSetDeviceInterfaceState( UNICODE_STRING *name, BOOLEAN enable )
 {
-    const WCHAR DeviceClassesW[] = {'\\','R','E','G','I','S','T','R','Y','\\',
+    static const WCHAR DeviceClassesW[] = {'\\','R','E','G','I','S','T','R','Y','\\',
         'M','a','c','h','i','n','e','\\','S','y','s','t','e','m','\\',
         'C','u','r','r','e','n','t','C','o','n','t','r','o','l','S','e','t','\\',
         'C','o','n','t','r','o','l','\\',
         'D','e','v','i','c','e','C','l','a','s','s','e','s','\\',0};
-    const WCHAR controlW[] = {'C','o','n','t','r','o','l',0};
-    const WCHAR linkedW[] = {'L','i','n','k','e','d',0};
-    const WCHAR slashW[] = {'\\',0};
-    const WCHAR hashW[] = {'#',0};
+    static const WCHAR controlW[] = {'C','o','n','t','r','o','l',0};
+    static const WCHAR linkedW[] = {'L','i','n','k','e','d',0};
+    static const WCHAR slashW[] = {'\\',0};
+    static const WCHAR hashW[] = {'#',0};
 
     size_t namelen = name->Length / sizeof(WCHAR);
     DEV_BROADCAST_DEVICEINTERFACE_W *broadcast;
@@ -2278,80 +2278,11 @@ PRKTHREAD WINAPI KeGetCurrentThread(void)
 }
 
 /***********************************************************************
- *           KeInitializeEvent   (NTOSKRNL.EXE.@)
- */
-void WINAPI KeInitializeEvent( PRKEVENT Event, EVENT_TYPE Type, BOOLEAN State )
-{
-    FIXME( "stub: %p %d %d\n", Event, Type, State );
-}
-
-
- /***********************************************************************
- *           KeInitializeMutex   (NTOSKRNL.EXE.@)
- */
-void WINAPI KeInitializeMutex(PRKMUTEX Mutex, ULONG Level)
-{
-    FIXME( "stub: %p, %u\n", Mutex, Level );
-}
-
-
- /***********************************************************************
- *           KeWaitForMutexObject   (NTOSKRNL.EXE.@)
- */
-NTSTATUS WINAPI KeWaitForMutexObject(PRKMUTEX Mutex, KWAIT_REASON WaitReason, KPROCESSOR_MODE WaitMode,
-                                     BOOLEAN Alertable, PLARGE_INTEGER Timeout)
-{
-    FIXME( "stub: %p, %d, %d, %d, %p\n", Mutex, WaitReason, WaitMode, Alertable, Timeout );
-    return STATUS_NOT_IMPLEMENTED;
-}
-
-
- /***********************************************************************
- *           KeReleaseMutex   (NTOSKRNL.EXE.@)
- */
-LONG WINAPI KeReleaseMutex(PRKMUTEX Mutex, BOOLEAN Wait)
-{
-    FIXME( "stub: %p, %d\n", Mutex, Wait );
-    return STATUS_NOT_IMPLEMENTED;
-}
-
-
-/***********************************************************************
- *           KeInitializeSemaphore   (NTOSKRNL.EXE.@)
- */
-void WINAPI KeInitializeSemaphore( PRKSEMAPHORE Semaphore, LONG Count, LONG Limit )
-{
-    FIXME( "(%p %d %d) stub\n", Semaphore , Count, Limit );
-}
-
-
-/***********************************************************************
  *           KeInitializeSpinLock   (NTOSKRNL.EXE.@)
  */
 void WINAPI KeInitializeSpinLock( PKSPIN_LOCK SpinLock )
 {
     FIXME( "stub: %p\n", SpinLock );
-}
-
-
-/***********************************************************************
- *           KeInitializeTimerEx   (NTOSKRNL.EXE.@)
- */
-void WINAPI KeInitializeTimerEx( PKTIMER Timer, TIMER_TYPE Type )
-{
-    FIXME( "stub: %p %d\n", Timer, Type );
-
-    RtlZeroMemory(Timer, sizeof(KTIMER));
-    Timer->Header.Type = Type ? 9 : 8;
-}
-
-
-/***********************************************************************
- *           KeInitializeTimer   (NTOSKRNL.EXE.@)
- */
-void WINAPI KeInitializeTimer( PKTIMER Timer )
-{
-    KeInitializeTimerEx(Timer, NotificationTimer);
 }
 
 /***********************************************************************
@@ -2419,42 +2350,11 @@ void WINAPI KeQueryTickCount( LARGE_INTEGER *count )
 
 
 /***********************************************************************
- *           KeReleaseSemaphore   (NTOSKRNL.EXE.@)
- */
-LONG WINAPI KeReleaseSemaphore( PRKSEMAPHORE Semaphore, KPRIORITY Increment,
-                                LONG Adjustment, BOOLEAN Wait )
-{
-    FIXME("(%p %d %d %d) stub\n", Semaphore, Increment, Adjustment, Wait );
-    return 0;
-}
-
-
-/***********************************************************************
  *           KeQueryTimeIncrement   (NTOSKRNL.EXE.@)
  */
 ULONG WINAPI KeQueryTimeIncrement(void)
 {
     return 10000;
-}
-
-
-/***********************************************************************
- *           KeResetEvent   (NTOSKRNL.EXE.@)
- */
-LONG WINAPI KeResetEvent( PRKEVENT Event )
-{
-    FIXME("(%p): stub\n", Event);
-    return 0;
-}
-
-
-/***********************************************************************
- *           KeSetEvent   (NTOSKRNL.EXE.@)
- */
-LONG WINAPI KeSetEvent( PRKEVENT Event, KPRIORITY Increment, BOOLEAN Wait )
-{
-    FIXME("(%p, %d, %d): stub\n", Event, Increment, Wait);
-    return 0;
 }
 
 
@@ -2473,32 +2373,6 @@ KPRIORITY WINAPI KeSetPriorityThread( PKTHREAD Thread, KPRIORITY Priority )
 VOID WINAPI KeSetSystemAffinityThread(KAFFINITY Affinity)
 {
     FIXME("(%lx) stub\n", Affinity);
-}
-
-/***********************************************************************
- *           KeWaitForSingleObject   (NTOSKRNL.EXE.@)
- */
-NTSTATUS WINAPI KeWaitForSingleObject(PVOID Object,
-                                      KWAIT_REASON WaitReason,
-                                      KPROCESSOR_MODE WaitMode,
-                                      BOOLEAN Alertable,
-                                      PLARGE_INTEGER Timeout)
-{
-    FIXME( "stub: %p, %d, %d, %d, %p\n", Object, WaitReason, WaitMode, Alertable, Timeout );
-    return STATUS_NOT_IMPLEMENTED;
-}
-
-/***********************************************************************
- *           KeWaitForMultipleObjects   (NTOSKRNL.EXE.@)
- */
-NTSTATUS WINAPI KeWaitForMultipleObjects(ULONG Count, PVOID Object[], WAIT_TYPE WaitType,
-                                         KWAIT_REASON WaitReason, KPROCESSOR_MODE WaitMode,
-                                         BOOLEAN Alertable, PLARGE_INTEGER Timeout,
-                                         PKWAIT_BLOCK WaitBlockArray)
-{
-    FIXME( "stub: %u, %p, %d, %d, %d, %d, %p, %p\n", Count, Object, WaitType, WaitReason, WaitMode,
-           Alertable, Timeout, WaitBlockArray );
-    return STATUS_NOT_IMPLEMENTED;
 }
 
 /***********************************************************************
@@ -3324,15 +3198,6 @@ NTSTATUS WINAPI CmUnRegisterCallback(LARGE_INTEGER cookie)
 }
 
 /***********************************************************************
- *           KeDelayExecutionThread  (NTOSKRNL.EXE.@)
- */
-NTSTATUS WINAPI KeDelayExecutionThread(KPROCESSOR_MODE waitmode, BOOLEAN alertable, PLARGE_INTEGER interval)
-{
-    FIXME("(%u, %u, %p): stub\n", waitmode, alertable, interval);
-    return STATUS_NOT_IMPLEMENTED;
-}
-
-/***********************************************************************
  *           IoAttachDevice  (NTOSKRNL.EXE.@)
  */
 NTSTATUS WINAPI IoAttachDevice(DEVICE_OBJECT *source, UNICODE_STRING *target, DEVICE_OBJECT *attached)
@@ -3458,8 +3323,7 @@ static HMODULE load_driver_module( const WCHAR *name )
 
         if ((rel = RtlImageDirectoryEntryToData( module, TRUE, IMAGE_DIRECTORY_ENTRY_BASERELOC, &size )))
         {
-            WINE_TRACE( "%s: relocating from %p to %p\n",
-                        wine_dbgstr_w(name), (char *)module - delta, module );
+            TRACE( "%s: relocating from %p to %p\n", wine_dbgstr_w(name), (char *)module - delta, module );
             end = (IMAGE_BASE_RELOCATION *)((char *)rel + size);
             while (rel < end && rel->SizeOfBlock)
             {
@@ -3514,7 +3378,7 @@ static HMODULE load_driver( const WCHAR *driver_name, const UNICODE_STRING *keyn
 
     if (RegOpenKeyW( HKEY_LOCAL_MACHINE, keyname->Buffer + 18 /* skip \registry\machine */, &driver_hkey ))
     {
-        WINE_ERR( "cannot open key %s, err=%u\n", wine_dbgstr_w(keyname->Buffer), GetLastError() );
+        ERR( "cannot open key %s, err=%u\n", wine_dbgstr_w(keyname->Buffer), GetLastError() );
         return NULL;
     }
 
@@ -3570,7 +3434,7 @@ static HMODULE load_driver( const WCHAR *driver_name, const UNICODE_STRING *keyn
     }
     RegCloseKey( driver_hkey );
 
-    WINE_TRACE( "loading driver %s\n", wine_dbgstr_w(str) );
+    TRACE( "loading driver %s\n", wine_dbgstr_w(str) );
 
     module = load_driver_module( str );
     HeapFree( GetProcessHeap(), 0, path );
@@ -3608,12 +3472,12 @@ static NTSTATUS WINAPI init_driver( DRIVER_OBJECT *driver_object, UNICODE_STRING
     TRACE_(relay)( "\1Ret  driver init %p (obj=%p,str=%s) retval=%08x\n",
                    driver_object->DriverInit, driver_object, wine_dbgstr_w(keyname->Buffer), status );
 
-    WINE_TRACE( "init done for %s obj %p\n", wine_dbgstr_w(driver_name), driver_object );
-    WINE_TRACE( "- DriverInit = %p\n", driver_object->DriverInit );
-    WINE_TRACE( "- DriverStartIo = %p\n", driver_object->DriverStartIo );
-    WINE_TRACE( "- DriverUnload = %p\n", driver_object->DriverUnload );
+    TRACE( "init done for %s obj %p\n", wine_dbgstr_w(driver_name), driver_object );
+    TRACE( "- DriverInit = %p\n", driver_object->DriverInit );
+    TRACE( "- DriverStartIo = %p\n", driver_object->DriverStartIo );
+    TRACE( "- DriverUnload = %p\n", driver_object->DriverUnload );
     for (i = 0; i <= IRP_MJ_MAXIMUM_FUNCTION; i++)
-        WINE_TRACE( "- MajorFunction[%d] = %p\n", i, driver_object->MajorFunction[i] );
+        TRACE( "- MajorFunction[%d] = %p\n", i, driver_object->MajorFunction[i] );
 
     return status;
 }
@@ -3951,15 +3815,6 @@ void WINAPI IoInvalidateDeviceRelations( DEVICE_OBJECT *device_object, DEVICE_RE
 }
 
 /***********************************************************************
- *           KeSetTimerEx (NTOSKRNL.EXE.@)
- */
-BOOL WINAPI KeSetTimerEx( KTIMER *timer, LARGE_INTEGER duetime, LONG period, KDPC *dpc )
-{
-    FIXME("stub: %p %s %u %p\n", timer, wine_dbgstr_longlong(duetime.QuadPart), period, dpc);
-    return TRUE;
-}
-
-/***********************************************************************
  *           IoCreateFile (NTOSKRNL.EXE.@)
  */
 NTSTATUS WINAPI IoCreateFile(HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBUTES *attr,
@@ -3969,14 +3824,6 @@ NTSTATUS WINAPI IoCreateFile(HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBUT
 {
     FIXME(": stub\n");
     return STATUS_NOT_IMPLEMENTED;
-}
-
-/***********************************************************************
- *           KeClearEvent (NTOSKRNL.EXE.@)
- */
-VOID WINAPI KeClearEvent(PRKEVENT event)
-{
-    FIXME("stub: %p\n", event);
 }
 
 /***********************************************************************

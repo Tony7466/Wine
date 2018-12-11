@@ -2520,11 +2520,11 @@ ME_KeyDown(ME_TextEditor *editor, WORD nKey)
 
       if (editor->styleFlags & ES_MULTILINE)
       {
+        static const WCHAR endl = '\r';
+        static const WCHAR endlv10[] = {'\r','\n'};
         ME_Cursor cursor = editor->pCursors[0];
         ME_DisplayItem *para = cursor.pPara;
         int from, to;
-        const WCHAR endl = '\r';
-        const WCHAR endlv10[] = {'\r','\n'};
         ME_Style *style, *eop_style;
 
         if (editor->styleFlags & ES_READONLY) {
@@ -2564,7 +2564,8 @@ ME_KeyDown(ME_TextEditor *editor, WORD nKey)
                                       editor->pCursors[0].pRun->member.run.style);
               para = editor->pBuffer->pFirst->member.para.next_para;
               ME_SetDefaultParaFormat(editor, &para->member.para.fmt);
-              para->member.para.nFlags = MEPF_REWRAP;
+              para->member.para.nFlags = 0;
+              mark_para_rewrap(editor, para);
               editor->pCursors[0].pPara = para;
               editor->pCursors[0].pRun = ME_FindItemFwd(para, diRun);
               editor->pCursors[1] = editor->pCursors[0];
@@ -3034,6 +3035,8 @@ ME_TextEditor *ME_MakeEditor(ITextHost *texthost, BOOL bEmulateVersion10)
   ed->bEmulateVersion10 = bEmulateVersion10;
   ed->styleFlags = 0;
   ed->exStyleFlags = 0;
+  ed->first_marked_para = NULL;
+  ed->total_rows = 0;
   ITextHost_TxGetPropertyBits(texthost,
                               (TXTBIT_RICHTEXT|TXTBIT_MULTILINE|
                                TXTBIT_READONLY|TXTBIT_USEPASSWORD|
@@ -3164,7 +3167,10 @@ void ME_DestroyEditor(ME_TextEditor *editor)
   ME_EmptyUndoStack(editor);
   while(p) {
     pNext = p->next;
-    ME_DestroyDisplayItem(p);
+    if (p->type == diParagraph)
+      destroy_para(editor, p);
+    else
+      ME_DestroyDisplayItem(p);
     p = pNext;
   }
 
@@ -4210,22 +4216,12 @@ LRESULT ME_HandleMessage(ME_TextEditor *editor, UINT msg, WPARAM wParam,
   }
   case EM_GETLINECOUNT:
   {
-    ME_DisplayItem *item = editor->pBuffer->pFirst->next;
-    int nRows = 0;
-
+    ME_DisplayItem *item = editor->pBuffer->pLast;
+    int nRows = editor->total_rows;
     ME_DisplayItem *prev_para = NULL, *last_para = NULL;
 
-    while (item != editor->pBuffer->pLast)
-    {
-      assert(item->type == diParagraph);
-      prev_para = ME_FindItemBack(item, diRun);
-      if (prev_para) {
-        assert(prev_para->member.run.nFlags & MERF_ENDPARA);
-      }
-      nRows += item->member.para.nRows;
-      item = item->member.para.next_para;
-    }
     last_para = ME_FindItemBack(item, diRun);
+    prev_para = ME_FindItemBack(last_para, diRun);
     assert(last_para);
     assert(last_para->member.run.nFlags & MERF_ENDPARA);
     if (editor->bEmulateVersion10 && prev_para &&

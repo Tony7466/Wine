@@ -67,6 +67,7 @@ typedef struct
     INT         height;         /* Window height */
     LB_ITEMDATA  *items;        /* Array of items */
     INT         nb_items;       /* Number of items */
+    UINT        items_size;     /* Total number of allocated items in the array */
     INT         top_item;       /* Top visible item */
     INT         selected_item;  /* Selected item */
     INT         focus_item;     /* Item that has the focus */
@@ -119,6 +120,11 @@ typedef enum
 static TIMER_DIRECTION LISTBOX_Timer = LB_TIMER_NONE;
 
 static LRESULT LISTBOX_GetItemRect( const LB_DESCR *descr, INT index, RECT *rect );
+
+static BOOL is_item_selected( const LB_DESCR *descr, UINT index )
+{
+    return descr->items[index].selected;
+}
 
 /*********************************************************************
  * listbox class descriptor
@@ -510,8 +516,16 @@ static INT LISTBOX_GetItemFromPoint( const LB_DESCR *descr, INT x, INT y )
 static void LISTBOX_PaintItem( LB_DESCR *descr, HDC hdc, const RECT *rect, 
 			       INT index, UINT action, BOOL ignoreFocus )
 {
+    BOOL selected = FALSE, focused;
     LB_ITEMDATA *item = NULL;
-    if (index < descr->nb_items) item = &descr->items[index];
+
+    if (index < descr->nb_items)
+    {
+        item = &descr->items[index];
+        selected = is_item_selected(descr, index);
+    }
+
+    focused = !ignoreFocus && descr->focus_item == index && descr->caret_on && descr->in_focus;
 
     if (IS_OWNERDRAW(descr))
     {
@@ -542,15 +556,15 @@ static void LISTBOX_PaintItem( LB_DESCR *descr, HDC hdc, const RECT *rect,
         dis.hDC          = hdc;
         dis.itemID       = index;
         dis.itemState    = 0;
-        if (item->selected) dis.itemState |= ODS_SELECTED;
-        if (!ignoreFocus && (descr->focus_item == index) &&
-            (descr->caret_on) &&
-            (descr->in_focus)) dis.itemState |= ODS_FOCUS;
+        if (selected)
+            dis.itemState |= ODS_SELECTED;
+        if (focused)
+            dis.itemState |= ODS_FOCUS;
         if (!IsWindowEnabled(descr->self)) dis.itemState |= ODS_DISABLED;
-        dis.itemData     = item->data;
+        dis.itemData     = item ? item->data : 0;
         dis.rcItem       = *rect;
         TRACE("[%p]: drawitem %d (%s) action=%02x state=%02x rect=%s\n",
-              descr->self, index, debugstr_w(item->str), action,
+              descr->self, index, item ? debugstr_w(item->str) : "", action,
               dis.itemState, wine_dbgstr_rect(rect) );
         SendMessageW(descr->owner, WM_DRAWITEM, dis.CtlID, (LPARAM)&dis);
         SelectClipRgn( hdc, hrgn );
@@ -565,7 +579,7 @@ static void LISTBOX_PaintItem( LB_DESCR *descr, HDC hdc, const RECT *rect,
             DrawFocusRect( hdc, rect );
             return;
         }
-        if (item && item->selected)
+        if (selected)
         {
             oldBk = SetBkColor( hdc, GetSysColor( COLOR_HIGHLIGHT ) );
             oldText = SetTextColor( hdc, GetSysColor(COLOR_HIGHLIGHTTEXT));
@@ -590,14 +604,13 @@ static void LISTBOX_PaintItem( LB_DESCR *descr, HDC hdc, const RECT *rect,
                             item->str, strlenW(item->str),
                             descr->nb_tabs, descr->tabs, 0);
 	}
-        if (item && item->selected)
+        if (selected)
         {
             SetBkColor( hdc, oldBk );
             SetTextColor( hdc, oldText );
         }
-        if (!ignoreFocus && (descr->focus_item == index) &&
-            (descr->caret_on) &&
-            (descr->in_focus)) DrawFocusRect( hdc, rect );
+        if (focused)
+            DrawFocusRect( hdc, rect );
     }
 }
 
@@ -701,7 +714,7 @@ static LRESULT LISTBOX_InitStorage( LB_DESCR *descr, INT nb_items )
     nb_items += LB_ARRAY_GRANULARITY - 1;
     nb_items -= (nb_items % LB_ARRAY_GRANULARITY);
     if (descr->items) {
-        nb_items += HeapSize( GetProcessHeap(), 0, descr->items ) / sizeof(*item);
+        nb_items += descr->items_size;
 	item = HeapReAlloc( GetProcessHeap(), 0, descr->items,
                               nb_items * sizeof(LB_ITEMDATA));
     }
@@ -715,6 +728,7 @@ static LRESULT LISTBOX_InitStorage( LB_DESCR *descr, INT nb_items )
         SEND_NOTIFICATION( descr, LBN_ERRSPACE );
         return LB_ERRSPACE;
     }
+    descr->items_size = nb_items;
     descr->items = item;
     return LB_OKAY;
 }
@@ -1525,12 +1539,10 @@ static LRESULT LISTBOX_InsertItem( LB_DESCR *descr, INT index,
 
     if (index == -1) index = descr->nb_items;
     else if ((index < 0) || (index > descr->nb_items)) return LB_ERR;
-    if (!descr->items) max_items = 0;
-    else max_items = HeapSize( GetProcessHeap(), 0, descr->items ) / sizeof(*item);
-    if (descr->nb_items == max_items)
+    if (descr->nb_items == descr->items_size)
     {
         /* We need to grow the array */
-        max_items += LB_ARRAY_GRANULARITY;
+        max_items = descr->items_size + LB_ARRAY_GRANULARITY;
 	if (descr->items)
     	    item = HeapReAlloc( GetProcessHeap(), 0, descr->items,
                                   max_items * sizeof(LB_ITEMDATA) );
@@ -1542,6 +1554,7 @@ static LRESULT LISTBOX_InsertItem( LB_DESCR *descr, INT index,
             SEND_NOTIFICATION( descr, LBN_ERRSPACE );
             return LB_ERRSPACE;
         }
+        descr->items_size = max_items;
         descr->items = item;
     }
 
@@ -1701,13 +1714,17 @@ static LRESULT LISTBOX_RemoveItem( LB_DESCR *descr, INT index )
 
     /* Shrink the item array if possible */
 
-    max_items = HeapSize( GetProcessHeap(), 0, descr->items ) / sizeof(LB_ITEMDATA);
+    max_items = descr->items_size;
     if (descr->nb_items < max_items - 2*LB_ARRAY_GRANULARITY)
     {
         max_items -= LB_ARRAY_GRANULARITY;
         item = HeapReAlloc( GetProcessHeap(), 0, descr->items,
                             max_items * sizeof(LB_ITEMDATA) );
-        if (item) descr->items = item;
+        if (item)
+        {
+            descr->items_size = max_items;
+            descr->items = item;
+        }
     }
     /* Repaint the items */
 
@@ -1753,6 +1770,7 @@ static void LISTBOX_ResetContent( LB_DESCR *descr )
     descr->selected_item = -1;
     descr->focus_item    = 0;
     descr->anchor_item   = -1;
+    descr->items_size    = 0;
     descr->items         = NULL;
 }
 
@@ -2494,6 +2512,7 @@ static BOOL LISTBOX_Create( HWND hwnd, LPHEADCOMBO lphc )
     descr->width         = rect.right - rect.left;
     descr->height        = rect.bottom - rect.top;
     descr->items         = NULL;
+    descr->items_size    = 0;
     descr->nb_items      = 0;
     descr->top_item      = 0;
     descr->selected_item = -1;
@@ -2866,7 +2885,7 @@ LRESULT ListBoxWndProc_common( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
     case LB_GETSEL:
         if (((INT)wParam < 0) || ((INT)wParam >= descr->nb_items))
             return LB_ERR;
-        return descr->items[wParam].selected;
+        return is_item_selected(descr, wParam);
 
     case LB_SETSEL:
         ret = LISTBOX_SetSelection( descr, lParam, wParam, FALSE );

@@ -33,27 +33,9 @@
 #include "wine/heap.h"
 #include "wine/test.h"
 
-/* function pointers */
-static HDEVINFO (WINAPI *pSetupDiCreateDeviceInfoListExW)(GUID*,HWND,PCWSTR,PVOID);
-static BOOL     (WINAPI *pSetupDiCallClassInstaller)(DI_FUNCTION, HDEVINFO, PSP_DEVINFO_DATA);
-static BOOL     (WINAPI *pSetupDiDestroyDeviceInfoList)(HDEVINFO);
-static BOOL     (WINAPI *pSetupDiGetINFClassA)(PCSTR, LPGUID, PSTR, DWORD, PDWORD);
-static HKEY     (WINAPI *pSetupDiOpenClassRegKeyExA)(GUID*,REGSAM,DWORD,PCSTR,PVOID);
-
 /* This is a unique guid for testing purposes */
 static GUID guid = {0x6a55b5a4, 0x3f65, 0x11db, {0xb7,0x04,0x00,0x11,0x95,0x5c,0x2b,0xdb}};
 static GUID guid2 = {0x6a55b5a5, 0x3f65, 0x11db, {0xb7,0x04,0x00,0x11,0x95,0x5c,0x2b,0xdb}};
-
-static void init_function_pointers(void)
-{
-    HMODULE hSetupAPI = GetModuleHandleA("setupapi.dll");
-
-    pSetupDiCreateDeviceInfoListExW = (void *)GetProcAddress(hSetupAPI, "SetupDiCreateDeviceInfoListExW");
-    pSetupDiDestroyDeviceInfoList = (void *)GetProcAddress(hSetupAPI, "SetupDiDestroyDeviceInfoList");
-    pSetupDiCallClassInstaller = (void *)GetProcAddress(hSetupAPI, "SetupDiCallClassInstaller");
-    pSetupDiOpenClassRegKeyExA = (void *)GetProcAddress(hSetupAPI, "SetupDiOpenClassRegKeyExA");
-    pSetupDiGetINFClassA = (void *)GetProcAddress(hSetupAPI, "SetupDiGetINFClassA");
-}
 
 static LSTATUS devinst_RegDeleteTreeW(HKEY hKey, LPCWSTR lpszSubKey)
 {
@@ -121,95 +103,66 @@ cleanup:
     return ret;
 }
 
-static void test_SetupDiCreateDeviceInfoListEx(void)
+static void test_create_device_list_ex(void)
 {
-    HDEVINFO devlist;
-    BOOL ret;
-    DWORD error;
-    static CHAR notnull[] = "NotNull";
     static const WCHAR machine[] = { 'd','u','m','m','y',0 };
     static const WCHAR empty[] = { 0 };
+    static char notnull[] = "NotNull";
+    HDEVINFO set;
+    BOOL ret;
 
     SetLastError(0xdeadbeef);
-    /* create empty DeviceInfoList, but set Reserved to a value, which is not NULL */
-    devlist = pSetupDiCreateDeviceInfoListExW(NULL, NULL, NULL, notnull);
-
-    error = GetLastError();
-    if (error == ERROR_CALL_NOT_IMPLEMENTED)
-    {
-        win_skip("SetupDiCreateDeviceInfoListExW is not implemented\n");
-        return;
-    }
-    ok(devlist == INVALID_HANDLE_VALUE, "SetupDiCreateDeviceInfoListExW failed : %p %d (expected %p)\n", devlist, error, INVALID_HANDLE_VALUE);
-    ok(error == ERROR_INVALID_PARAMETER, "GetLastError returned wrong value : %d, (expected %d)\n", error, ERROR_INVALID_PARAMETER);
+    set = SetupDiCreateDeviceInfoListExW(NULL, NULL, NULL, notnull);
+    ok(set == INVALID_HANDLE_VALUE, "Expected failure.\n");
+    ok(GetLastError() == ERROR_INVALID_PARAMETER, "Got unexpected error %#x.\n", GetLastError());
 
     SetLastError(0xdeadbeef);
-    /* create empty DeviceInfoList, but set MachineName to something */
-    devlist = pSetupDiCreateDeviceInfoListExW(NULL, NULL, machine, NULL);
+    set = SetupDiCreateDeviceInfoListExW(NULL, NULL, machine, NULL);
+    ok(set == INVALID_HANDLE_VALUE, "Expected failure.\n");
+    ok(GetLastError() == ERROR_INVALID_MACHINENAME
+            || GetLastError() == ERROR_MACHINE_UNAVAILABLE
+            || GetLastError() == ERROR_CALL_NOT_IMPLEMENTED,
+            "Got unexpected error %#x.\n", GetLastError());
 
-    error = GetLastError();
-    if (error == ERROR_CALL_NOT_IMPLEMENTED)
-    {
-        /* win10 reports ERROR_CALL_NOT_IMPLEMENTED at first here */
-        win_skip("SetupDiCreateDeviceInfoListExW is not implemented\n");
-        return;
-    }
-    ok(devlist == INVALID_HANDLE_VALUE, "SetupDiCreateDeviceInfoListExW failed : %p %d (expected %p)\n", devlist, error, INVALID_HANDLE_VALUE);
-    ok(error == ERROR_INVALID_MACHINENAME || error == ERROR_MACHINE_UNAVAILABLE, "GetLastError returned wrong value : %d, (expected %d or %d)\n", error, ERROR_INVALID_MACHINENAME, ERROR_MACHINE_UNAVAILABLE);
+    set = SetupDiCreateDeviceInfoListExW(NULL, NULL, NULL, NULL);
+    ok(set && set != INVALID_HANDLE_VALUE, "Failed to create device list, error %#x.", GetLastError());
 
-    /* create empty DeviceInfoList */
-    devlist = pSetupDiCreateDeviceInfoListExW(NULL, NULL, NULL, NULL);
-    ok(devlist && devlist != INVALID_HANDLE_VALUE, "SetupDiCreateDeviceInfoListExW failed : %p %d (expected != %p)\n", devlist, error, INVALID_HANDLE_VALUE);
+    ret = SetupDiDestroyDeviceInfoList(set);
+    ok(ret, "Failed to destroy device list, error %#x.\n", GetLastError());
 
-    /* destroy DeviceInfoList */
-    ret = pSetupDiDestroyDeviceInfoList(devlist);
-    ok(ret, "SetupDiDestroyDeviceInfoList failed : %d\n", error);
+    set = SetupDiCreateDeviceInfoListExW(NULL, NULL, empty, NULL);
+    ok(set && set != INVALID_HANDLE_VALUE, "Failed to create device list, error %#x.", GetLastError());
 
-    /* create empty DeviceInfoList with empty machine name */
-    devlist = pSetupDiCreateDeviceInfoListExW(NULL, NULL, empty, NULL);
-    ok(devlist && devlist != INVALID_HANDLE_VALUE, "SetupDiCreateDeviceInfoListExW failed : %p %d (expected != %p)\n", devlist, error, INVALID_HANDLE_VALUE);
-
-    /* destroy DeviceInfoList */
-    ret = pSetupDiDestroyDeviceInfoList(devlist);
-    ok(ret, "SetupDiDestroyDeviceInfoList failed : %d\n", error);
+    ret = SetupDiDestroyDeviceInfoList(set);
+    ok(ret, "Failed to destroy device list, error %#x.\n", GetLastError());
 }
 
-static void test_SetupDiOpenClassRegKeyExA(void)
+static void test_open_class_key(void)
 {
-    static const CHAR guidString[] = "{6a55b5a4-3f65-11db-b704-0011955c2bdb}";
-    HKEY hkey;
+    static const char guidstr[] = "{6a55b5a4-3f65-11db-b704-0011955c2bdb}";
+    HKEY root_key, class_key;
+    LONG res;
 
-    /* Check return value for nonexistent key */
-    hkey = pSetupDiOpenClassRegKeyExA(&guid, KEY_ALL_ACCESS,
-        DIOCR_INSTALLER, NULL, NULL);
-    ok(hkey == INVALID_HANDLE_VALUE,
-        "returned %p (expected INVALID_HANDLE_VALUE)\n", hkey);
+    SetLastError(0xdeadbeef);
+    class_key = SetupDiOpenClassRegKeyExA(&guid, KEY_ALL_ACCESS, DIOCR_INSTALLER, NULL, NULL);
+    ok(class_key == INVALID_HANDLE_VALUE, "Expected failure.\n");
+todo_wine
+    ok(GetLastError() == ERROR_INVALID_CLASS, "Got unexpected error %#x.\n", GetLastError());
 
-    /* Test it for a key that exists */
-    hkey = SetupDiOpenClassRegKey(NULL, KEY_ALL_ACCESS);
-    if (hkey != INVALID_HANDLE_VALUE)
-    {
-        HKEY classKey;
-        if (RegCreateKeyA(hkey, guidString, &classKey) == ERROR_SUCCESS)
-        {
-            RegCloseKey(classKey);
-            SetLastError(0xdeadbeef);
-            classKey = pSetupDiOpenClassRegKeyExA(&guid, KEY_ALL_ACCESS,
-                DIOCR_INSTALLER, NULL, NULL);
-            ok(classKey != INVALID_HANDLE_VALUE,
-                "opening class registry key failed with error %d\n",
-                GetLastError());
-            if (classKey != INVALID_HANDLE_VALUE)
-                RegCloseKey(classKey);
-            RegDeleteKeyA(hkey, guidString);
-        }
-        else
-            trace("failed to create registry key for test\n");
+    root_key = SetupDiOpenClassRegKey(NULL, KEY_ALL_ACCESS);
+    ok(root_key != INVALID_HANDLE_VALUE, "Failed to open root key, error %#x.\n", GetLastError());
 
-        RegCloseKey(hkey);
-    }
-    else
-        trace("failed to open classes key %u\n", GetLastError());
+    res = RegCreateKeyA(root_key, guidstr, &class_key);
+    ok(!res, "Failed to create class key, error %#x.\n", GetLastError());
+    RegCloseKey(class_key);
+
+    SetLastError(0xdeadbeef);
+    class_key = SetupDiOpenClassRegKeyExA(&guid, KEY_ALL_ACCESS, DIOCR_INSTALLER, NULL, NULL);
+    ok(class_key != INVALID_HANDLE_VALUE, "Failed to open class key, error %#x.\n", GetLastError());
+    RegCloseKey(class_key);
+
+    RegDeleteKeyA(root_key, guidstr);
+    RegCloseKey(root_key);
 }
 
 static void create_inf_file(LPCSTR filename)
@@ -318,8 +271,8 @@ static void test_device_info(void)
 {
     static const GUID deadbeef = {0xdeadbeef,0xdead,0xbeef,{0xde,0xad,0xbe,0xef,0xde,0xad,0xbe,0xef}};
     SP_DEVINFO_DATA device = {0}, ret_device = {sizeof(ret_device)};
+    char id[MAX_DEVICE_ID_LEN + 2];
     HDEVINFO set;
-    char id[50];
     BOOL ret;
 
     SetLastError(0xdeadbeef);
@@ -384,26 +337,31 @@ static void test_device_info(void)
     check_device_info(set, 2, &guid, "ROOT\\LEGACY_BOGUS\\0002");
     check_device_info(set, 3, &guid, NULL);
 
+    ret = SetupDiEnumDeviceInfo(set, 0, &ret_device);
+    ok(ret, "Failed to enumerate devices, error %#x.\n", GetLastError());
+    ret = SetupDiDeleteDeviceInfo(set, &ret_device);
+    ok(ret, "Failed to delete device, error %#x.\n", GetLastError());
+
+    check_device_info(set, 0, &guid, "ROOT\\LEGACY_BOGUS\\0001");
+    check_device_info(set, 1, &guid, "ROOT\\LEGACY_BOGUS\\0002");
+    check_device_info(set, 2, &guid, NULL);
+
     ret = SetupDiRemoveDevice(set, &device);
-todo_wine
     ok(ret, "Got unexpected error %#x.\n", GetLastError());
 
-    check_device_info(set, 0, &guid, "ROOT\\LEGACY_BOGUS\\0000");
-    check_device_info(set, 1, &guid, "ROOT\\LEGACY_BOGUS\\0001");
+    check_device_info(set, 0, &guid, "ROOT\\LEGACY_BOGUS\\0001");
 
-    ret = SetupDiEnumDeviceInfo(set, 2, &ret_device);
+    ret = SetupDiEnumDeviceInfo(set, 1, &ret_device);
     ok(ret, "Got unexpected error %#x.\n", GetLastError());
     ok(IsEqualGUID(&ret_device.ClassGuid, &guid), "Got unexpected class %s.\n",
             wine_dbgstr_guid(&ret_device.ClassGuid));
     ret = SetupDiGetDeviceInstanceIdA(set, &ret_device, id, sizeof(id), NULL);
-todo_wine {
     ok(!ret, "Expected failure.\n");
     ok(GetLastError() == ERROR_NO_SUCH_DEVINST, "Got unexpected error %#x.\n", GetLastError());
-}
     ok(ret_device.DevInst == device.DevInst, "Expected device node %#x, got %#x.\n",
             device.DevInst, ret_device.DevInst);
 
-    check_device_info(set, 3, &guid, NULL);
+    check_device_info(set, 2, &guid, NULL);
 
     SetupDiDestroyDeviceInfoList(set);
 
@@ -428,6 +386,24 @@ todo_wine {
     check_device_info(set, 1, &GUID_NULL, "ROOT\\LEGACY_BOGUS\\null");
     check_device_info(set, 2, &guid, "ROOT\\LEGACY_BOGUS\\testguid");
     check_device_info(set, 3, NULL, NULL);
+
+    memset(id, 'x', sizeof(id));
+    memcpy(id, "Root\\LEGACY_BOGUS\\", strlen("Root\\LEGACY_BOGUS\\"));
+    id[MAX_DEVICE_ID_LEN + 1] = 0;
+    SetLastError(0xdeadbeef);
+    ret = SetupDiCreateDeviceInfoA(set, id, &guid, NULL, NULL, 0, NULL);
+    ok(!ret, "Expected failure.\n");
+    ok(GetLastError() == ERROR_INVALID_DEVINST_NAME, "Got unexpected error %#x.\n", GetLastError());
+
+    id[MAX_DEVICE_ID_LEN] = 0;
+    SetLastError(0xdeadbeef);
+    ret = SetupDiCreateDeviceInfoA(set, id, &guid, NULL, NULL, 0, NULL);
+    ok(!ret, "Expected failure.\n");
+    ok(GetLastError() == ERROR_INVALID_DEVINST_NAME, "Got unexpected error %#x.\n", GetLastError());
+
+    id[MAX_DEVICE_ID_LEN - 1] = 0;
+    ret = SetupDiCreateDeviceInfoA(set, id, &guid, NULL, NULL, 0, NULL);
+    ok(ret, "Failed to create device, error %#x.\n", GetLastError());
 
     SetupDiDestroyDeviceInfoList(set);
 }
@@ -498,13 +474,10 @@ static void test_get_device_instance_id(void)
 
 static void test_register_device_info(void)
 {
-    static const WCHAR bogus[] = {'S','y','s','t','e','m','\\',
-     'C','u','r','r','e','n','t','C','o','n','t','r','o','l','S','e','t','\\',
-     'E','n','u','m','\\','R','o','o','t','\\','L','E','G','A','C','Y','_','B','O','G','U','S',0};
     SP_DEVINFO_DATA device = {0};
     BOOL ret;
     HDEVINFO set;
-    char id[30];
+    int i = 0;
 
     SetLastError(0xdeadbeef);
     ret = SetupDiRegisterDeviceInfo(NULL, NULL, 0, NULL, NULL, NULL);
@@ -532,11 +505,24 @@ static void test_register_device_info(void)
 
     ret = SetupDiCreateDeviceInfoA(set, "Root\\LEGACY_BOGUS\\0000", &guid, NULL, NULL, 0, &device);
     ok(ret, "Failed to create device, error %#x.\n", GetLastError());
-
     ret = SetupDiRegisterDeviceInfo(set, &device, 0, NULL, NULL, NULL);
     ok(ret, "Failed to register device, error %#x.\n", GetLastError());
 
     ret = SetupDiCreateDeviceInfoA(set, "Root\\LEGACY_BOGUS\\0001", &guid, NULL, NULL, 0, &device);
+    ok(ret, "Failed to create device, error %#x.\n", GetLastError());
+    ret = SetupDiRegisterDeviceInfo(set, &device, 0, NULL, NULL, NULL);
+    ok(ret, "Failed to register device, error %#x.\n", GetLastError());
+    ret = SetupDiRemoveDevice(set, &device);
+    ok(ret, "Failed to remove device, error %#x.\n", GetLastError());
+
+    ret = SetupDiCreateDeviceInfoA(set, "Root\\LEGACY_BOGUS\\0002", &guid, NULL, NULL, 0, &device);
+    ok(ret, "Failed to create device, error %#x.\n", GetLastError());
+    ret = SetupDiRegisterDeviceInfo(set, &device, 0, NULL, NULL, NULL);
+    ok(ret, "Failed to register device, error %#x.\n", GetLastError());
+    ret = SetupDiDeleteDeviceInfo(set, &device);
+    ok(ret, "Failed to remove device, error %#x.\n", GetLastError());
+
+    ret = SetupDiCreateDeviceInfoA(set, "Root\\LEGACY_BOGUS\\0003", &guid, NULL, NULL, 0, &device);
     ok(ret, "Failed to create device, error %#x.\n", GetLastError());
 
     SetupDiDestroyDeviceInfoList(set);
@@ -544,24 +530,17 @@ static void test_register_device_info(void)
     set = SetupDiGetClassDevsA(&guid, NULL, NULL, 0);
     ok(set != NULL, "Failed to create device list, error %#x.\n", GetLastError());
 
-    ret = SetupDiEnumDeviceInfo(set, 0, &device);
-    ok(ret, "Failed to enumerate devices, error %#x.\n", GetLastError());
-    ret = SetupDiGetDeviceInstanceIdA(set, &device, id, sizeof(id), NULL);
-    ok(ret, "Failed to get device id, error %#x.\n", GetLastError());
-    ok(!strcasecmp(id, "Root\\LEGACY_BOGUS\\0000"), "Got unexpected id %s.\n", id);
+    check_device_info(set, 0, &guid, "Root\\LEGACY_BOGUS\\0000");
+    check_device_info(set, 1, &guid, "Root\\LEGACY_BOGUS\\0002");
+    check_device_info(set, 2, &guid, NULL);
 
-    ret = SetupDiRemoveDevice(set, &device);
-todo_wine
-    ok(ret, "Failed to remove device, error %#x.\n", GetLastError());
-
-    ret = SetupDiEnumDeviceInfo(set, 1, &device);
-    ok(!ret, "Expected failure.\n");
-    ok(GetLastError() == ERROR_NO_MORE_ITEMS, "Got unexpected error %#x.\n", GetLastError());
+    while (SetupDiEnumDeviceInfo(set, i++, &device))
+    {
+        ret = SetupDiRemoveDevice(set, &device);
+        ok(ret, "Failed to remove device, error %#x.\n", GetLastError());
+    }
 
     SetupDiDestroyDeviceInfoList(set);
-
-    /* remove once Wine is fixed */
-    devinst_RegDeleteTreeW(HKEY_LOCAL_MACHINE, bogus);
 }
 
 static void check_device_iface_(int line, HDEVINFO set, SP_DEVINFO_DATA *device,
@@ -581,7 +560,6 @@ static void check_device_iface_(int line, HDEVINFO set, SP_DEVINFO_DATA *device,
         ok_(__FILE__, line)(ret, "Failed to enumerate interfaces, error %#x.\n", GetLastError());
         ok_(__FILE__, line)(IsEqualGUID(&iface.InterfaceClassGuid, class),
                 "Got unexpected class %s.\n", wine_dbgstr_guid(&iface.InterfaceClassGuid));
-todo_wine_if(flags & SPINT_REMOVED)
         ok_(__FILE__, line)(iface.Flags == flags, "Got unexpected flags %#x.\n", iface.Flags);
         ret = SetupDiGetDeviceInterfaceDetailA(set, &iface, detail, sizeof(buffer), NULL, NULL);
         ok_(__FILE__, line)(ret, "Failed to get interface detail, error %#x.\n", GetLastError());
@@ -685,11 +663,19 @@ static void test_device_iface(void)
     ret = SetupDiEnumDeviceInterfaces(set, &device, &guid2, 0, &iface);
     ok(ret, "Failed to enumerate interfaces, error %#x.\n", GetLastError());
     ret = SetupDiRemoveDeviceInterface(set, &iface);
-todo_wine
     ok(ret, "Failed to remove interface, error %#x.\n", GetLastError());
 
     check_device_iface(set, &device, &guid2, 0, SPINT_REMOVED, "\\\\?\\ROOT#LEGACY_BOGUS#0000#{6A55B5A5-3F65-11DB-B704-0011955C2BDB}");
     check_device_iface(set, &device, &guid2, 1, 0, NULL);
+
+    ret = SetupDiEnumDeviceInterfaces(set, &device, &guid, 0, &iface);
+    ok(ret, "Failed to enumerate interfaces, error %#x.\n", GetLastError());
+    ret = SetupDiDeleteDeviceInterfaceData(set, &iface);
+    ok(ret, "Failed to delete interface, error %#x.\n", GetLastError());
+
+    check_device_iface(set, &device, &guid, 0, 0, "\\\\?\\ROOT#LEGACY_BOGUS#0000#{6A55B5A4-3F65-11DB-B704-0011955C2BDB}\\Oogah");
+    check_device_iface(set, &device, &guid, 1, 0, "\\\\?\\ROOT#LEGACY_BOGUS#0000#{6A55B5A4-3F65-11DB-B704-0011955C2BDB}\\test");
+    check_device_iface(set, &device, &guid, 2, 0, NULL);
 
     ret = SetupDiDestroyDeviceInfoList(set);
     ok(ret, "Failed to destroy device list, error %#x.\n", GetLastError());
@@ -697,16 +683,6 @@ todo_wine
 
 static void test_device_iface_detail(void)
 {
-    static const WCHAR bogus[] = {'S','y','s','t','e','m','\\',
-     'C','u','r','r','e','n','t','C','o','n','t','r','o','l','S','e','t','\\',
-     'E','n','u','m','\\','R','o','o','t','\\',
-     'L','E','G','A','C','Y','_','B','O','G','U','S',0};
-    static const WCHAR devclass[] = {'S','y','s','t','e','m','\\',
-     'C','u','r','r','e','n','t','C','o','n','t','r','o','l','S','e','t','\\',
-     'C','o','n','t','r','o','l','\\','D','e','v','i','c','e','C','l','a','s','s','e','s','\\',
-     '{','6','a','5','5','b','5','a','4','-','3','f','6','5','-',
-     '1','1','d','b','-','b','7','0','4','-',
-     '0','0','1','1','9','5','5','c','2','b','d','b','}',0};
     static const char path[] = "\\\\?\\root#legacy_bogus#0000#{6a55b5a4-3f65-11db-b704-0011955c2bdb}";
     SP_DEVICE_INTERFACE_DETAIL_DATA_A *detail;
     SP_DEVICE_INTERFACE_DATA iface = {sizeof(iface)};
@@ -776,12 +752,15 @@ static void test_device_iface_detail(void)
     ok(GetLastError() == ERROR_INSUFFICIENT_BUFFER, "Got unexpected error %#x.\n", GetLastError());
     ok(size == expectedsize, "Got unexpected size %d.\n", size);
 
+    memset(&device, 0, sizeof(device));
+    device.cbSize = sizeof(device);
+    ret = SetupDiGetDeviceInterfaceDetailW(set, &iface, NULL, 0, &size, &device);
+    ok(!ret, "Expected failure.\n");
+    ok(GetLastError() == ERROR_INSUFFICIENT_BUFFER, "Got unexpected error %#x.\n", GetLastError());
+    ok(IsEqualGUID(&device.ClassGuid, &guid), "Got unexpected class %s.\n", wine_dbgstr_guid(&device.ClassGuid));
+
     heap_free(detail);
     SetupDiDestroyDeviceInfoList(set);
-
-    /* remove once Wine is fixed */
-    devinst_RegDeleteTreeW(HKEY_LOCAL_MACHINE, bogus);
-    devinst_RegDeleteTreeW(HKEY_LOCAL_MACHINE, devclass);
 }
 
 static void test_device_key(void)
@@ -887,12 +866,10 @@ todo_wine {
     }
 
     ret = SetupDiRemoveDevice(set, &device);
-todo_wine
     ok(ret, "Failed to remove device, error %#x.\n", GetLastError());
     SetupDiDestroyDeviceInfoList(set);
 
     /* remove once Wine is fixed */
-    devinst_RegDeleteTreeW(HKEY_LOCAL_MACHINE, bogus);
     devinst_RegDeleteTreeW(HKEY_LOCAL_MACHINE, classKey);
 }
 
@@ -919,24 +896,34 @@ static void test_register_device_iface(void)
     ok(ret, "Failed to create device, error %#x.\n", GetLastError());
     ret = SetupDiCreateDeviceInterfaceA(set, &device, &guid, NULL, 0, &iface);
     ok(ret, "Failed to create interface, error %#x.\n", GetLastError());
+    ret = SetupDiCreateDeviceInterfaceA(set, &device, &guid, "removed", 0, &iface);
+    ok(ret, "Failed to create interface, error %#x.\n", GetLastError());
+    ret = SetupDiCreateDeviceInterfaceA(set, &device, &guid, "deleted", 0, &iface);
+    ok(ret, "Failed to create interface, error %#x.\n", GetLastError());
     ret = SetupDiRegisterDeviceInfo(set, &device, 0, NULL, NULL, NULL);
     ok(ret, "Failed to register device, error %#x.\n", GetLastError());
+
+    ret = SetupDiEnumDeviceInterfaces(set, &device, &guid, 1, &iface);
+    ok(ret, "Failed to enumerate interfaces, error %#x.\n", GetLastError());
+    ret = SetupDiRemoveDeviceInterface(set, &iface);
+    ok(ret, "Failed to delete interface, error %#x.\n", GetLastError());
+    ret = SetupDiEnumDeviceInterfaces(set, &device, &guid, 2, &iface);
+    ok(ret, "Failed to enumerate interfaces, error %#x.\n", GetLastError());
+    ret = SetupDiDeleteDeviceInterfaceData(set, &iface);
+    ok(ret, "Failed to delete interface, error %#x.\n", GetLastError());
 
     set2 = SetupDiGetClassDevsA(&guid, NULL, 0, DIGCF_DEVICEINTERFACE);
     ok(set2 != INVALID_HANDLE_VALUE, "Failed to create device list, error %#x.\n", GetLastError());
 
     check_device_iface(set2, NULL, &guid, 0, 0, "\\\\?\\root#legacy_bogus#0000#{6a55b5a4-3f65-11db-b704-0011955c2bdb}");
-    check_device_iface(set2, NULL, &guid, 1, 0, NULL);
+    check_device_iface(set2, NULL, &guid, 1, 0, "\\\\?\\root#legacy_bogus#0000#{6a55b5a4-3f65-11db-b704-0011955c2bdb}\\deleted");
+    check_device_iface(set2, NULL, &guid, 2, 0, NULL);
 
     ret = SetupDiRemoveDevice(set, &device);
-todo_wine
     ok(ret, "Failed to remove device, error %#x.\n", GetLastError());
 
     SetupDiDestroyDeviceInfoList(set);
     SetupDiDestroyDeviceInfoList(set2);
-
-    /* remove once Wine is fixed */
-    devinst_RegDeleteTreeW(HKEY_LOCAL_MACHINE, bogus);
 }
 
 static void test_registry_property_a(void)
@@ -1036,14 +1023,7 @@ todo_wine {
     SetupDiDestroyDeviceInfoList(set);
 
     res = RegOpenKeyA(HKEY_LOCAL_MACHINE, bogus, &key);
-todo_wine
     ok(res == ERROR_FILE_NOT_FOUND, "Key should not exist.\n");
-    /* FIXME: Remove when Wine is fixed */
-    if (res == ERROR_SUCCESS)
-    {
-        /* Wine doesn't delete the information currently */
-        RegDeleteKeyA(HKEY_LOCAL_MACHINE, bogus);
-    }
 }
 
 static void test_registry_property_w(void)
@@ -1147,17 +1127,10 @@ todo_wine {
     SetupDiDestroyDeviceInfoList(set);
 
     res = RegOpenKeyW(HKEY_LOCAL_MACHINE, bogus, &key);
-todo_wine
     ok(res == ERROR_FILE_NOT_FOUND, "Key should not exist.\n");
-    /* FIXME: Remove when Wine is fixed */
-    if (res == ERROR_SUCCESS)
-    {
-        /* Wine doesn't delete the information currently */
-        RegDeleteKeyW(HKEY_LOCAL_MACHINE, bogus);
-    }
 }
 
-static void testSetupDiGetINFClassA(void)
+static void test_get_inf_class(void)
 {
     static const char inffile[] = "winetest.inf";
     static const char content[] = "[Version]\r\n\r\n";
@@ -1171,19 +1144,7 @@ static void testSetupDiGetINFClassA(void)
     HANDLE h;
     int i;
 
-    if(!pSetupDiGetINFClassA)
-    {
-        win_skip("SetupDiGetINFClassA not present\n");
-        return;
-    }
-
-    count = GetTempPathA(MAX_PATH, filename);
-    if(!count)
-    {
-        win_skip("GetTempPathA failed\n");
-        return;
-    }
-
+    GetTempPathA(MAX_PATH, filename);
     strcat(filename, inffile);
     DeleteFileA(filename);
 
@@ -1191,11 +1152,6 @@ static void testSetupDiGetINFClassA(void)
     SetLastError(0xdeadbeef);
     retval = SetupDiGetINFClassA(filename, &guid, cn, MAX_PATH, &count);
     ok(!retval, "expected SetupDiGetINFClassA to fail!\n");
-    if (ERROR_CALL_NOT_IMPLEMENTED == GetLastError())
-    {
-        skip("SetupDiGetINFClassA is not implemented\n");
-        return;
-    }
     ok(ERROR_FILE_NOT_FOUND == GetLastError(),
         "expected error ERROR_FILE_NOT_FOUND, got %u\n", GetLastError());
 
@@ -1227,12 +1183,8 @@ static void testSetupDiGetINFClassA(void)
     /* test file content */
     h = CreateFileA(filename, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
                     FILE_ATTRIBUTE_NORMAL, NULL);
-    if(h == INVALID_HANDLE_VALUE)
-    {
-        win_skip("failed to create file %s (error %u)\n", filename, GetLastError());
-        return;
-    }
-    CloseHandle( h);
+    ok(h != INVALID_HANDLE_VALUE, "Failed to create file, error %#x.\n", GetLastError());
+    CloseHandle(h);
 
     retval = SetupDiGetINFClassA(filename, &guid, cn, MAX_PATH, &count);
     ok(!retval, "expected SetupDiGetINFClassA to fail!\n");
@@ -1242,13 +1194,9 @@ static void testSetupDiGetINFClassA(void)
         trace("testing signature %s\n", signatures[i]);
         h = CreateFileA(filename, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
                         FILE_ATTRIBUTE_NORMAL, NULL);
-        if(h == INVALID_HANDLE_VALUE)
-        {
-            win_skip("failed to create file %s (error %u)\n", filename, GetLastError());
-            return;
-        }
-        WriteFile( h, content, sizeof(content), &count, NULL);
-        CloseHandle( h);
+        ok(h != INVALID_HANDLE_VALUE, "Failed to create file, error %#x.\n", GetLastError());
+        WriteFile(h, content, sizeof(content), &count, NULL);
+        CloseHandle(h);
 
         retval = SetupDiGetINFClassA(filename, &guid, cn, MAX_PATH, &count);
         ok(!retval, "expected SetupDiGetINFClassA to fail!\n");
@@ -1300,10 +1248,8 @@ static void testSetupDiGetINFClassA(void)
         SetLastError(0xdeadbeef);
         retval = SetupDiGetINFClassA(filename, &guid, cn, 0, &count);
         ok(!retval, "expected SetupDiGetINFClassA to fail!\n");
-        ok(ERROR_INSUFFICIENT_BUFFER == GetLastError() ||
-           ERROR_INVALID_PARAMETER == GetLastError(),
-            "expected error ERROR_INSUFFICIENT_BUFFER or ERROR_INVALID_PARAMETER, "
-            "got %u\n", GetLastError());
+        ok(GetLastError() == ERROR_INSUFFICIENT_BUFFER || GetLastError() == ERROR_INVALID_PARAMETER /* 2k3+ */,
+                "Got unexpected error %#x.\n", GetLastError());
 
         DeleteFileA(filename);
 
@@ -1313,10 +1259,8 @@ static void testSetupDiGetINFClassA(void)
         SetLastError(0xdeadbeef);
         retval = SetupDiGetINFClassA(filename, &guid, cn, MAX_PATH, &count);
         ok(!retval, "expected SetupDiGetINFClassA to fail!\n");
-        ok(RPC_S_INVALID_STRING_UUID == GetLastError() ||
-           ERROR_INVALID_PARAMETER == GetLastError(),
-            "expected error RPC_S_INVALID_STRING_UUID or ERROR_INVALID_PARAMETER, "
-            "got %u\n", GetLastError());
+        ok(GetLastError() == RPC_S_INVALID_STRING_UUID || GetLastError() == ERROR_INVALID_PARAMETER /* 7+ */,
+                "Got unexpected error %#x.\n", GetLastError());
 
         /* network adapter guid */
         WritePrivateProfileStringA("Version", "ClassGUID",
@@ -1411,8 +1355,6 @@ START_TEST(devinst)
 {
     HKEY hkey;
 
-    init_function_pointers();
-
     if ((hkey = SetupDiOpenClassRegKey(NULL, KEY_ALL_ACCESS)) == INVALID_HANDLE_VALUE)
     {
         skip("needs admin rights\n");
@@ -1420,16 +1362,8 @@ START_TEST(devinst)
     }
     RegCloseKey(hkey);
 
-    if (pSetupDiCreateDeviceInfoListExW)
-        test_SetupDiCreateDeviceInfoListEx();
-    else
-        win_skip("SetupDiCreateDeviceInfoListExW is not available\n");
-
-    if (pSetupDiOpenClassRegKeyExA)
-        test_SetupDiOpenClassRegKeyExA();
-    else
-        win_skip("SetupDiOpenClassRegKeyExA is not available\n");
-
+    test_create_device_list_ex();
+    test_open_class_key();
     test_install_class();
     test_device_info();
     test_get_device_instance_id();
@@ -1440,7 +1374,7 @@ START_TEST(devinst)
     test_register_device_iface();
     test_registry_property_a();
     test_registry_property_w();
-    testSetupDiGetINFClassA();
+    test_get_inf_class();
     test_devnode();
     test_device_interface_key();
 }

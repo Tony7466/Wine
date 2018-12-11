@@ -2665,6 +2665,166 @@ static void test_resize_target(void)
     ok(!refcount, "Factory has %u references left.\n", refcount);
 }
 
+static LRESULT CALLBACK resize_target_wndproc(HWND hwnd, unsigned int message, WPARAM wparam, LPARAM lparam)
+{
+    IDXGISwapChain *swapchain = (IDXGISwapChain *)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
+    DXGI_SWAP_CHAIN_DESC desc;
+    HRESULT hr;
+
+    switch (message)
+    {
+        case WM_SIZE:
+            ok(!!swapchain, "GWLP_USERDATA is NULL.\n");
+            hr = IDXGISwapChain_GetDesc(swapchain, &desc);
+            ok(hr == S_OK, "Failed to get desc, hr %#x.\n", hr);
+            ok(desc.BufferDesc.Width == 800, "Got unexpected buffer width %u.\n", desc.BufferDesc.Width);
+            ok(desc.BufferDesc.Height == 600, "Got unexpected buffer height %u.\n", desc.BufferDesc.Height);
+            return 0;
+
+        default:
+            return DefWindowProcA(hwnd, message, wparam, lparam);
+    }
+}
+
+struct window_thread_data
+{
+    HWND window;
+    HANDLE window_created;
+    HANDLE finished;
+};
+
+static DWORD WINAPI window_thread(void *data)
+{
+    struct window_thread_data *thread_data = data;
+    unsigned int ret;
+    WNDCLASSA wc;
+    MSG msg;
+
+    memset(&wc, 0, sizeof(wc));
+    wc.lpfnWndProc = resize_target_wndproc;
+    wc.lpszClassName = "dxgi_resize_target_wndproc_wc";
+    ok(RegisterClassA(&wc), "Failed to register window class.\n");
+
+    thread_data->window = CreateWindowA("dxgi_resize_target_wndproc_wc", "dxgi_test", 0, 0, 0, 400, 200, 0, 0, 0, 0);
+    ok(!!thread_data->window, "Failed to create window.\n");
+
+    ret = SetEvent(thread_data->window_created);
+    ok(ret, "Failed to set event, last error %#x.\n", GetLastError());
+
+    for (;;)
+    {
+        while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE))
+            DispatchMessageA(&msg);
+
+        ret = WaitForSingleObject(thread_data->finished, 0);
+        if (ret != WAIT_TIMEOUT)
+            break;
+    }
+    ok(ret == WAIT_OBJECT_0, "Failed to wait for event, ret %#x, last error %#x.\n", ret, GetLastError());
+
+    DestroyWindow(thread_data->window);
+    thread_data->window = NULL;
+
+    UnregisterClassA("dxgi_test_wndproc_wc", GetModuleHandleA(NULL));
+
+    return 0;
+}
+
+static void test_resize_target_wndproc(void)
+{
+    struct window_thread_data thread_data;
+    DXGI_SWAP_CHAIN_DESC swapchain_desc;
+    IDXGISwapChain *swapchain;
+    IDXGIFactory *factory;
+    IDXGIAdapter *adapter;
+    DXGI_MODE_DESC mode;
+    IDXGIDevice *device;
+    unsigned int ret;
+    ULONG refcount;
+    LONG_PTR data;
+    HANDLE thread;
+    HRESULT hr;
+    RECT rect;
+
+    if (!(device = create_device(0)))
+    {
+        skip("Failed to create device.\n");
+        return;
+    }
+
+    memset(&thread_data, 0, sizeof(thread_data));
+    thread_data.window_created = CreateEventA(NULL, FALSE, FALSE, NULL);
+    ok(!!thread_data.window_created, "Failed to create event, last error %#x.\n", GetLastError());
+    thread_data.finished = CreateEventA(NULL, FALSE, FALSE, NULL);
+    ok(!!thread_data.finished, "Failed to create event, last error %#x.\n", GetLastError());
+
+    thread = CreateThread(NULL, 0, window_thread, &thread_data, 0, NULL);
+    ok(!!thread, "Failed to create thread, last error %#x.\n", GetLastError());
+    ret = WaitForSingleObject(thread_data.window_created, INFINITE);
+    ok(ret == WAIT_OBJECT_0, "Failed to wait for thread, ret %#x, last error %#x.\n", ret, GetLastError());
+
+    hr = IDXGIDevice_GetAdapter(device, &adapter);
+    ok(hr == S_OK, "Failed to get adapter, hr %#x.\n", hr);
+    hr = IDXGIAdapter_GetParent(adapter, &IID_IDXGIFactory, (void **)&factory);
+    ok(hr == S_OK, "Failed to get parent, hr %#x.\n", hr);
+
+    swapchain_desc.BufferDesc.Width = 800;
+    swapchain_desc.BufferDesc.Height = 600;
+    swapchain_desc.BufferDesc.RefreshRate.Numerator = 60;
+    swapchain_desc.BufferDesc.RefreshRate.Denominator = 1;
+    swapchain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    swapchain_desc.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+    swapchain_desc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+    swapchain_desc.SampleDesc.Count = 1;
+    swapchain_desc.SampleDesc.Quality = 0;
+    swapchain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    swapchain_desc.BufferCount = 1;
+    swapchain_desc.OutputWindow = thread_data.window;
+    swapchain_desc.Windowed = TRUE;
+    swapchain_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    swapchain_desc.Flags = 0;
+    hr = IDXGIFactory_CreateSwapChain(factory, (IUnknown *)device, &swapchain_desc, &swapchain);
+    ok(hr == S_OK, "Failed to create swapchain, hr %#x.\n", hr);
+
+    data = SetWindowLongPtrA(thread_data.window, GWLP_USERDATA, (LONG_PTR)swapchain);
+    ok(!data, "Got unexpected GWLP_USERDATA %p.\n", (void *)data);
+
+    memset(&mode, 0, sizeof(mode));
+    mode.Width = 600;
+    mode.Height = 400;
+    hr = IDXGISwapChain_ResizeTarget(swapchain, &mode);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDXGISwapChain_GetDesc(swapchain, &swapchain_desc);
+    ok(hr == S_OK, "Getswapchain_desc failed, hr %#x.\n", hr);
+    ok(swapchain_desc.BufferDesc.Width == 800,
+            "Got unexpected buffer width %u.\n", swapchain_desc.BufferDesc.Width);
+    ok(swapchain_desc.BufferDesc.Height == 600,
+            "Got unexpected buffer height %u.\n", swapchain_desc.BufferDesc.Height);
+
+    ret = GetClientRect(swapchain_desc.OutputWindow, &rect);
+    ok(ret, "Failed to get client rect.\n");
+    ok(rect.right == mode.Width && rect.bottom == mode.Height,
+            "Got unexpected client rect %s.\n", wine_dbgstr_rect(&rect));
+
+    refcount = IDXGISwapChain_Release(swapchain);
+    ok(!refcount, "IDXGISwapChain has %u references left.\n", refcount);
+
+    IDXGIAdapter_Release(adapter);
+    refcount = IDXGIDevice_Release(device);
+    ok(!refcount, "Device has %u references left.\n", refcount);
+    refcount = IDXGIFactory_Release(factory);
+    ok(!refcount, "Factory has %u references left.\n", refcount);
+
+    ret = SetEvent(thread_data.finished);
+    ok(ret, "Failed to set event, last error %#x.\n", GetLastError());
+    ret = WaitForSingleObject(thread, INFINITE);
+    ok(ret == WAIT_OBJECT_0, "Failed to wait for thread, ret %#x, last error %#x.\n", ret, GetLastError());
+    CloseHandle(thread);
+    CloseHandle(thread_data.window_created);
+    CloseHandle(thread_data.finished);
+}
+
 static void test_inexact_modes(void)
 {
     struct swapchain_fullscreen_state initial_state, expected_state;
@@ -4675,6 +4835,118 @@ static void test_swapchain_window_styles(void)
     ok(!refcount, "Factory has %u references left.\n", refcount);
 }
 
+static void test_gamma_control(void)
+{
+    DXGI_GAMMA_CONTROL_CAPABILITIES caps;
+    DXGI_SWAP_CHAIN_DESC swapchain_desc;
+    IDXGISwapChain *swapchain;
+    DXGI_GAMMA_CONTROL gamma;
+    IDXGIFactory *factory;
+    IDXGIAdapter *adapter;
+    IDXGIDevice *device;
+    IDXGIOutput *output;
+    unsigned int i;
+    ULONG refcount;
+    HRESULT hr;
+
+    if (!(device = create_device(0)))
+    {
+        skip("Failed to create device.\n");
+        return;
+    }
+
+    hr = IDXGIDevice_GetAdapter(device, &adapter);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDXGIAdapter_EnumOutputs(adapter, 0, &output);
+    if (hr == DXGI_ERROR_NOT_FOUND)
+    {
+        skip("Adapter doesn't have any outputs.\n");
+        IDXGIAdapter_Release(adapter);
+        IDXGIDevice_Release(device);
+        return;
+    }
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDXGIOutput_GetGammaControlCapabilities(output, &caps);
+    todo_wine
+    ok(hr == DXGI_ERROR_INVALID_CALL, "Got unexpected hr %#x.\n", hr);
+    IDXGIOutput_Release(output);
+
+    swapchain_desc.BufferDesc.Width = 800;
+    swapchain_desc.BufferDesc.Height = 600;
+    swapchain_desc.BufferDesc.RefreshRate.Numerator = 60;
+    swapchain_desc.BufferDesc.RefreshRate.Denominator = 60;
+    swapchain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    swapchain_desc.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+    swapchain_desc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+    swapchain_desc.SampleDesc.Count = 1;
+    swapchain_desc.SampleDesc.Quality = 0;
+    swapchain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    swapchain_desc.BufferCount = 1;
+    swapchain_desc.OutputWindow = CreateWindowA("static", "dxgi_test", 0, 0, 0, 400, 200, 0, 0, 0, 0);
+    swapchain_desc.Windowed = TRUE;
+    swapchain_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    swapchain_desc.Flags = 0;
+
+    hr = IDXGIAdapter_GetParent(adapter, &IID_IDXGIFactory, (void **)&factory);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDXGIFactory_CreateSwapChain(factory, (IUnknown *)device, &swapchain_desc, &swapchain);
+    ok(hr == S_OK, "Failed to create swapchain, hr %#x.\n", hr);
+    hr = IDXGISwapChain_SetFullscreenState(swapchain, TRUE, NULL);
+    ok(hr == S_OK || hr == DXGI_ERROR_NOT_CURRENTLY_AVAILABLE
+            || broken(hr == DXGI_ERROR_UNSUPPORTED), /* Win 7 testbot */
+            "Failed to enter fullscreen, hr %#x.\n", hr);
+    if (FAILED(hr))
+    {
+        skip("Could not change fullscreen state.\n");
+        goto done;
+    }
+
+    hr = IDXGISwapChain_GetContainingOutput(swapchain, &output);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+
+    memset(&caps, 0, sizeof(caps));
+    hr = IDXGIOutput_GetGammaControlCapabilities(output, &caps);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+
+    ok(caps.MaxConvertedValue > caps.MinConvertedValue
+            || broken(caps.MaxConvertedValue == 0.0f && caps.MinConvertedValue == 1.0f) /* WARP */,
+            "Expected max gamma value (%.8e) to be bigger than min value (%.8e).\n",
+            caps.MaxConvertedValue, caps.MinConvertedValue);
+
+    for (i = 1; i < caps.NumGammaControlPoints; ++i)
+    {
+        ok(caps.ControlPointPositions[i] > caps.ControlPointPositions[i - 1],
+                "Expected control point positions to be strictly monotonically increasing (%.8e > %.8e).\n",
+                caps.ControlPointPositions[i], caps.ControlPointPositions[i - 1]);
+    }
+
+    memset(&gamma, 0, sizeof(gamma));
+    hr = IDXGIOutput_GetGammaControl(output, &gamma);
+    todo_wine
+    ok(hr == DXGI_ERROR_INVALID_CALL, "Got unexpected hr %#x.\n", hr);
+    hr = IDXGIOutput_SetGammaControl(output, &gamma);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+
+    IDXGIOutput_Release(output);
+
+    hr = IDXGISwapChain_SetFullscreenState(swapchain, FALSE, NULL);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+
+done:
+    refcount = IDXGISwapChain_Release(swapchain);
+    ok(!refcount, "IDXGISwapChain has %u references left.\n", refcount);
+    DestroyWindow(swapchain_desc.OutputWindow);
+
+    IDXGIAdapter_Release(adapter);
+    refcount = IDXGIDevice_Release(device);
+    ok(!refcount, "Device has %u references left.\n", refcount);
+    refcount = IDXGIFactory_Release(factory);
+    ok(!refcount, "Factory has %u references left.\n", refcount);
+}
+
 static void run_on_d3d10(void (*test_func)(IUnknown *device, BOOL is_d3d12))
 {
     IDXGIDevice *device;
@@ -4753,6 +5025,7 @@ START_TEST(dxgi)
     queue_test(test_output);
     queue_test(test_find_closest_matching_mode);
     queue_test(test_get_containing_output);
+    queue_test(test_resize_target_wndproc);
     queue_test(test_create_factory);
     queue_test(test_private_data);
     queue_test(test_swapchain_present);
@@ -4768,6 +5041,7 @@ START_TEST(dxgi)
     test_default_fullscreen_target_output();
     test_resize_target();
     test_inexact_modes();
+    test_gamma_control();
     test_swapchain_parameters();
     test_swapchain_window_messages();
     test_swapchain_window_styles();

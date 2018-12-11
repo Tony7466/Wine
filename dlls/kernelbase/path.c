@@ -308,6 +308,63 @@ HRESULT WINAPI PathAllocCanonicalize(const WCHAR *path_in, DWORD flags, WCHAR **
     return S_OK;
 }
 
+HRESULT WINAPI PathAllocCombine(const WCHAR *path1, const WCHAR *path2, DWORD flags, WCHAR **out)
+{
+    SIZE_T combined_length, length2;
+    WCHAR *combined_path;
+    BOOL from_path2 = FALSE;
+    HRESULT hr;
+
+    TRACE("%s %s %#x %p\n", wine_dbgstr_w(path1), wine_dbgstr_w(path2), flags, out);
+
+    if ((!path1 && !path2) || !out)
+    {
+        if (out) *out = NULL;
+        return E_INVALIDARG;
+    }
+
+    if (!path1 || !path2) return PathAllocCanonicalize(path1 ? path1 : path2, flags, out);
+
+    /* If path2 is fully qualified, use path2 only */
+    if (path2 && ((isalphaW(path2[0]) && path2[1] == ':') || (path2[0] == '\\' && path2[1] == '\\')))
+    {
+        path1 = path2;
+        path2 = NULL;
+        from_path2 = TRUE;
+    }
+
+    length2 = path2 ? strlenW(path2) : 0;
+    /* path1 length + path2 length + possible backslash + NULL */
+    combined_length = strlenW(path1) + length2 + 2;
+
+    combined_path = HeapAlloc(GetProcessHeap(), 0, combined_length * sizeof(WCHAR));
+    if (!combined_path)
+    {
+        *out = NULL;
+        return E_OUTOFMEMORY;
+    }
+
+    lstrcpyW(combined_path, path1);
+    PathCchStripPrefix(combined_path, combined_length);
+    if (from_path2) PathCchAddBackslashEx(combined_path, combined_length, NULL, NULL);
+
+    if (path2 && path2[0])
+    {
+        if (path2[0] == '\\' && path2[1] != '\\')
+        {
+            PathCchStripToRoot(combined_path, combined_length);
+            path2++;
+        }
+
+        PathCchAddBackslashEx(combined_path, combined_length, NULL, NULL);
+        lstrcatW(combined_path, path2);
+    }
+
+    hr = PathAllocCanonicalize(combined_path, flags, out);
+    HeapFree(GetProcessHeap(), 0, combined_path);
+    return hr;
+}
+
 HRESULT WINAPI PathCchAddBackslash(WCHAR *path, SIZE_T size)
 {
     return PathCchAddBackslashEx(path, size, NULL, NULL);
@@ -389,6 +446,38 @@ HRESULT WINAPI PathCchAddExtension(WCHAR *path, SIZE_T size, const WCHAR *extens
     return S_OK;
 }
 
+HRESULT WINAPI PathCchAppend(WCHAR *path1, SIZE_T size, const WCHAR *path2)
+{
+    TRACE("%s %lu %s\n", wine_dbgstr_w(path1), size, wine_dbgstr_w(path2));
+
+    return PathCchAppendEx(path1, size, path2, PATHCCH_NONE);
+}
+
+HRESULT WINAPI PathCchAppendEx(WCHAR *path1, SIZE_T size, const WCHAR *path2, DWORD flags)
+{
+    HRESULT hr;
+    WCHAR *result;
+
+    TRACE("%s %lu %s %#x\n", wine_dbgstr_w(path1), size, wine_dbgstr_w(path2), flags);
+
+    if (!path1 || !size) return E_INVALIDARG;
+
+    /* Create a temporary buffer for result because we need to keep path1 unchanged if error occurs.
+     * And PathCchCombineEx writes empty result if there is error so we can't just use path1 as output
+     * buffer for PathCchCombineEx */
+    result = HeapAlloc(GetProcessHeap(), 0, size * sizeof(WCHAR));
+    if (!result) return E_OUTOFMEMORY;
+
+    /* Avoid the single backslash behavior with PathCchCombineEx when appending */
+    if (path2 && path2[0] == '\\' && path2[1] != '\\') path2++;
+
+    hr = PathCchCombineEx(result, size, path1, path2, flags);
+    if (SUCCEEDED(hr)) memcpy(path1, result, size * sizeof(WCHAR));
+
+    HeapFree(GetProcessHeap(), 0, result);
+    return hr;
+}
+
 HRESULT WINAPI PathCchCanonicalize(WCHAR *out, SIZE_T size, const WCHAR *in)
 {
     TRACE("%p %lu %s\n", out, size, wine_dbgstr_w(in));
@@ -437,6 +526,45 @@ HRESULT WINAPI PathCchCanonicalizeEx(WCHAR *out, SIZE_T size, const WCHAR *in, D
 
     LocalFree(buffer);
     return hr;
+}
+
+HRESULT WINAPI PathCchCombine(WCHAR *out, SIZE_T size, const WCHAR *path1, const WCHAR *path2)
+{
+    TRACE("%p %s %s\n", out, wine_dbgstr_w(path1), wine_dbgstr_w(path2));
+
+    return PathCchCombineEx(out, size, path1, path2, PATHCCH_NONE);
+}
+
+HRESULT WINAPI PathCchCombineEx(WCHAR *out, SIZE_T size, const WCHAR *path1, const WCHAR *path2, DWORD flags)
+{
+    HRESULT hr;
+    WCHAR *buffer;
+    SIZE_T length;
+
+    TRACE("%p %s %s %#x\n", out, wine_dbgstr_w(path1), wine_dbgstr_w(path2), flags);
+
+    if (!out || !size || size > PATHCCH_MAX_CCH) return E_INVALIDARG;
+
+    hr = PathAllocCombine(path1, path2, flags, &buffer);
+    if (FAILED(hr))
+    {
+        out[0] = 0;
+        return hr;
+    }
+
+    length = strlenW(buffer);
+    if (length + 1 > size)
+    {
+        out[0] = 0;
+        LocalFree(buffer);
+        return STRSAFE_E_INSUFFICIENT_BUFFER;
+    }
+    else
+    {
+        memcpy(out, buffer, (length + 1) * sizeof(WCHAR));
+        LocalFree(buffer);
+        return S_OK;
+    }
 }
 
 HRESULT WINAPI PathCchFindExtension(const WCHAR *path, SIZE_T size, const WCHAR **extension)

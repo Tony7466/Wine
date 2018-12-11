@@ -1622,7 +1622,7 @@ HRESULT CDECL wined3d_texture_update_desc(struct wined3d_texture *texture, UINT 
         struct wined3d_texture_idx texture_idx = {texture, 0};
 
         wined3d_cs_destroy_object(device->cs, wined3d_texture_destroy_dc, &texture_idx);
-        device->cs->ops->finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
+        wined3d_cs_finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
         create_dib = TRUE;
     }
 
@@ -1692,7 +1692,7 @@ HRESULT CDECL wined3d_texture_update_desc(struct wined3d_texture *texture, UINT 
         struct wined3d_texture_idx texture_idx = {texture, 0};
 
         wined3d_cs_init_object(device->cs, wined3d_texture_create_dc, &texture_idx);
-        device->cs->ops->finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
+        wined3d_cs_finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
     }
 
     return WINED3D_OK;
@@ -2906,10 +2906,6 @@ static HRESULT wined3d_texture_init(struct wined3d_texture *texture, const struc
         return WINED3DERR_INVALIDCALL;
     }
 
-    if ((flags & WINED3D_TEXTURE_CREATE_MAPPABLE) && !((desc->usage & WINED3DUSAGE_DYNAMIC)
-            || (desc->bind_flags & (WINED3D_BIND_RENDER_TARGET | WINED3D_BIND_DEPTH_STENCIL))))
-        WARN("Creating a mappable texture that doesn't specify dynamic usage.\n");
-
     pow2_width = desc->width;
     pow2_height = desc->height;
     if (((desc->width & (desc->width - 1)) || (desc->height & (desc->height - 1)) || (desc->depth & (desc->depth - 1)))
@@ -3010,8 +3006,6 @@ static HRESULT wined3d_texture_init(struct wined3d_texture *texture, const struc
         return hr;
     }
     wined3d_resource_update_draw_binding(&texture->resource);
-    if (flags & WINED3D_TEXTURE_CREATE_MAPPABLE)
-        texture->resource.access |= WINED3D_RESOURCE_ACCESS_MAP_R | WINED3D_RESOURCE_ACCESS_MAP_W;
 
     texture->texture_ops = texture_ops;
 
@@ -3123,7 +3117,7 @@ static HRESULT wined3d_texture_init(struct wined3d_texture *texture, const struc
             struct wined3d_texture_idx texture_idx = {texture, i};
 
             wined3d_cs_init_object(device->cs, wined3d_texture_create_dc, &texture_idx);
-            device->cs->ops->finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
+            wined3d_cs_finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
             if (!texture->dc_info || !texture->dc_info[i].dc)
             {
                 wined3d_texture_cleanup_sync(texture);
@@ -3743,7 +3737,7 @@ HRESULT CDECL wined3d_texture_get_dc(struct wined3d_texture *texture, unsigned i
         struct wined3d_texture_idx texture_idx = {texture, sub_resource_idx};
 
         wined3d_cs_init_object(device->cs, wined3d_texture_create_dc, &texture_idx);
-        device->cs->ops->finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
+        wined3d_cs_finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
         if (!(dc_info = texture->dc_info) || !dc_info[sub_resource_idx].dc)
             return WINED3DERR_INVALIDCALL;
     }
@@ -3791,7 +3785,7 @@ HRESULT CDECL wined3d_texture_release_dc(struct wined3d_texture *texture, unsign
         struct wined3d_texture_idx texture_idx = {texture, sub_resource_idx};
 
         wined3d_cs_destroy_object(device->cs, wined3d_texture_destroy_dc, &texture_idx);
-        device->cs->ops->finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
+        wined3d_cs_finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
     }
 
     --sub_resource->map_count;

@@ -173,9 +173,12 @@ static FT_Error (*pFT_Library_SetLcdFilter)(FT_Library, FT_LcdFilter);
 #ifdef SONAME_LIBFONTCONFIG
 #include <fontconfig/fontconfig.h>
 MAKE_FUNCPTR(FcConfigSubstitute);
+MAKE_FUNCPTR(FcDefaultSubstitute);
 MAKE_FUNCPTR(FcFontList);
+MAKE_FUNCPTR(FcFontMatch);
 MAKE_FUNCPTR(FcFontSetDestroy);
 MAKE_FUNCPTR(FcInit);
+MAKE_FUNCPTR(FcPatternAddString);
 MAKE_FUNCPTR(FcPatternCreate);
 MAKE_FUNCPTR(FcPatternDestroy);
 MAKE_FUNCPTR(FcPatternGetBool);
@@ -2011,7 +2014,6 @@ static inline void get_bitmap_size( FT_Face ft_face, Bitmap_Size *face_size )
 static inline void get_fontsig( FT_Face ft_face, FONTSIGNATURE *fs )
 {
     TT_OS2 *os2;
-    FT_UInt dummy;
     CHARSETINFO csi;
     FT_WinFNT_HeaderRec winfnt_header;
     int i;
@@ -2028,10 +2030,10 @@ static inline void get_fontsig( FT_Face ft_face, FONTSIGNATURE *fs )
 
         if (os2->version == 0)
         {
-            if (pFT_Get_First_Char( ft_face, &dummy ) < 0x100)
-                fs->fsCsb[0] = FS_LATIN1;
-            else
+            if (os2->usFirstCharIndex >= 0xf000 && os2->usFirstCharIndex < 0xf100)
                 fs->fsCsb[0] = FS_SYMBOL;
+            else
+                fs->fsCsb[0] = FS_LATIN1;
         }
         else
         {
@@ -2790,9 +2792,12 @@ static void init_fontconfig(void)
 
 #define LOAD_FUNCPTR(f) if((p##f = wine_dlsym(fc_handle, #f, NULL, 0)) == NULL){WARN("Can't find symbol %s\n", #f); return;}
     LOAD_FUNCPTR(FcConfigSubstitute);
+    LOAD_FUNCPTR(FcDefaultSubstitute);
     LOAD_FUNCPTR(FcFontList);
+    LOAD_FUNCPTR(FcFontMatch);
     LOAD_FUNCPTR(FcFontSetDestroy);
     LOAD_FUNCPTR(FcInit);
+    LOAD_FUNCPTR(FcPatternAddString);
     LOAD_FUNCPTR(FcPatternCreate);
     LOAD_FUNCPTR(FcPatternDestroy);
     LOAD_FUNCPTR(FcPatternGetBool);
@@ -5196,6 +5201,82 @@ done:
     return ret;
 }
 
+#ifdef SONAME_LIBFONTCONFIG
+static Family* get_fontconfig_family(DWORD pitch_and_family, const CHARSETINFO *csi)
+{
+    const char *name;
+    WCHAR nameW[LF_FACESIZE];
+    FcChar8 *str;
+    FcPattern *pat = NULL, *best = NULL;
+    FcResult result;
+    FcBool r;
+    int ret, i;
+    Family *family = NULL;
+
+    if (!csi->fs.fsCsb[0]) return NULL;
+
+    if((pitch_and_family & FIXED_PITCH) ||
+       (pitch_and_family & 0xF0) == FF_MODERN)
+        name = "monospace";
+    else if((pitch_and_family & 0xF0) == FF_ROMAN)
+        name = "serif";
+    else
+        name = "sans-serif";
+
+    pat = pFcPatternCreate();
+    if (!pat) return NULL;
+    r = pFcPatternAddString(pat, FC_FAMILY, (const FcChar8 *)name);
+    if (!r) goto end;
+    r = pFcPatternAddString(pat, FC_NAMELANG, (const FcChar8 *)"en-us");
+    if (!r) goto end;
+    r = pFcPatternAddString(pat, FC_PRGNAME, (const FcChar8 *)"wine");
+    if (!r) goto end;
+    r = pFcConfigSubstitute(NULL, pat, FcMatchPattern);
+    if (!r) goto end;
+    pFcDefaultSubstitute(pat);
+
+    best = pFcFontMatch(NULL, pat, &result);
+    if (!best || result != FcResultMatch) goto end;
+
+    for (i = 0;
+         !family && pFcPatternGetString(best, FC_FAMILY, i, &str) == FcResultMatch;
+         i++)
+    {
+        Face *face;
+        const SYSTEM_LINKS *font_link;
+        const struct list *face_list;
+
+        ret = MultiByteToWideChar(CP_UTF8, 0, (const char*)str, -1,
+                                  nameW, ARRAY_SIZE(nameW));
+        if (!ret) continue;
+        family = find_family_from_any_name(nameW);
+        if (!family) continue;
+
+        font_link = find_font_link(family->FamilyName);
+        face_list = get_face_list_from_family(family);
+        LIST_FOR_EACH_ENTRY( face, face_list, Face, entry ) {
+            if (!face->scalable)
+                continue;
+            if (csi->fs.fsCsb[0] & face->fs.fsCsb[0])
+                goto found;
+            if (font_link != NULL &&
+                csi->fs.fsCsb[0] & font_link->fs.fsCsb[0])
+                goto found;
+        }
+        family = NULL;
+    }
+
+found:
+    if (family)
+        TRACE("got %s\n", wine_dbgstr_w(nameW));
+
+end:
+    if (!pat) pFcPatternDestroy(pat);
+    if (!best) pFcPatternDestroy(best);
+    return family;
+}
+#endif
+
 static const GSUB_Script* GSUB_get_script_table( const GSUB_Header* header, const char* tag)
 {
     const GSUB_ScriptList *script;
@@ -5583,6 +5664,12 @@ static HFONT freetype_SelectFont( PHYSDEV dev, HFONT hfont, UINT *aa_flags )
             }
         }
     }
+
+#ifdef SONAME_LIBFONTCONFIG
+    /* Try FontConfig substitutions if the face isn't found */
+    family = get_fontconfig_family(lf.lfPitchAndFamily, &csi);
+    if (family) goto found;
+#endif
 
     last_resort_family = NULL;
     LIST_FOR_EACH_ENTRY( family, &font_list, Family, entry ) {
@@ -7750,7 +7837,7 @@ static BOOL get_outline_text_metrics(GdiFont *font)
     full_nameW = get_face_name( ft_face, TT_NAME_ID_UNIQUE_ID, GetSystemDefaultLangID() );
     if (!full_nameW)
     {
-        WCHAR fake_nameW[] = {'f','a','k','e',' ','n','a','m','e', 0};
+        static const WCHAR fake_nameW[] = {'f','a','k','e',' ','n','a','m','e', 0};
         FIXME("failed to read full_nameW for font %s!\n", wine_dbgstr_w(font->name));
         full_nameW = strdupW(fake_nameW);
     }
@@ -9081,7 +9168,7 @@ BOOL WINAPI GetFontFileData( DWORD instance_id, DWORD unknown, UINT64 offset, vo
 /*************************************************************************
  *             GetFontFileInfo   (GDI32.@)
  */
-BOOL WINAPI GetFontFileInfo( DWORD instance_id, DWORD unknown, struct font_fileinfo *info, DWORD size, DWORD *needed)
+BOOL WINAPI GetFontFileInfo( DWORD instance_id, DWORD unknown, struct font_fileinfo *info, SIZE_T size, SIZE_T *needed)
 {
     *needed = 0;
     return FALSE;

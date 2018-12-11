@@ -1,14 +1,14 @@
 @ stdcall PathAllocCanonicalize(wstr long ptr) kernelbase.PathAllocCanonicalize
-@ stub PathAllocCombine
+@ stdcall PathAllocCombine(wstr wstr long ptr) kernelbase.PathAllocCombine
 @ stdcall PathCchAddBackslash(wstr long) kernelbase.PathCchAddBackslash
 @ stdcall PathCchAddBackslashEx(wstr long ptr ptr) kernelbase.PathCchAddBackslashEx
 @ stdcall PathCchAddExtension(wstr long wstr) kernelbase.PathCchAddExtension
-@ stub PathCchAppend
-@ stub PathCchAppendEx
+@ stdcall PathCchAppend(wstr long wstr) kernelbase.PathCchAppend
+@ stdcall PathCchAppendEx(wstr long wstr long) kernelbase.PathCchAppendEx
 @ stdcall PathCchCanonicalize(ptr long wstr) kernelbase.PathCchCanonicalize
 @ stdcall PathCchCanonicalizeEx(ptr long wstr long) kernelbase.PathCchCanonicalizeEx
-@ stub PathCchCombine
-@ stub PathCchCombineEx
+@ stdcall PathCchCombine(ptr long wstr wstr) kernelbase.PathCchCombine
+@ stdcall PathCchCombineEx(ptr long wstr wstr long) kernelbase.PathCchCombineEx
 @ stdcall PathCchFindExtension(wstr long ptr) kernelbase.PathCchFindExtension
 @ stdcall PathCchIsRoot(wstr) kernelbase.PathCchIsRoot
 @ stdcall PathCchRemoveBackslash(wstr long) kernelbase.PathCchRemoveBackslash

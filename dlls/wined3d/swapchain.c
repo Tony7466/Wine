@@ -66,7 +66,7 @@ static void swapchain_cleanup(struct wined3d_swapchain *swapchain)
     }
 
     wined3d_cs_destroy_object(swapchain->device->cs, wined3d_swapchain_destroy_object, swapchain);
-    swapchain->device->cs->ops->finish(swapchain->device->cs, WINED3D_CS_QUEUE_DEFAULT);
+    wined3d_cs_finish(swapchain->device->cs, WINED3D_CS_QUEUE_DEFAULT);
 
     /* Restore the screen resolution if we rendered in fullscreen.
      * This will restore the screen resolution to what it was before creating
@@ -114,12 +114,15 @@ ULONG CDECL wined3d_swapchain_decref(struct wined3d_swapchain *swapchain)
 
     if (!refcount)
     {
-        struct wined3d_device *device = swapchain->device;
+        wined3d_mutex_lock();
 
-        device->cs->ops->finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
+        wined3d_cs_finish(swapchain->device->cs, WINED3D_CS_QUEUE_DEFAULT);
 
         swapchain_cleanup(swapchain);
         swapchain->parent_ops->wined3d_object_destroyed(swapchain->parent);
+
+        wined3d_mutex_unlock();
+
         heap_free(swapchain);
     }
 
@@ -135,8 +138,6 @@ void * CDECL wined3d_swapchain_get_parent(const struct wined3d_swapchain *swapch
 
 void CDECL wined3d_swapchain_set_window(struct wined3d_swapchain *swapchain, HWND window)
 {
-    struct wined3d_device *device = swapchain->device;
-
     if (!window)
         window = swapchain->device_window;
     if (window == swapchain->win_handle)
@@ -145,7 +146,7 @@ void CDECL wined3d_swapchain_set_window(struct wined3d_swapchain *swapchain, HWN
     TRACE("Setting swapchain %p window from %p to %p.\n",
             swapchain, swapchain->win_handle, window);
 
-    device->cs->ops->finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
+    wined3d_cs_finish(swapchain->device->cs, WINED3D_CS_QUEUE_DEFAULT);
 
     swapchain->win_handle = window;
 }
@@ -163,9 +164,12 @@ HRESULT CDECL wined3d_swapchain_present(struct wined3d_swapchain *swapchain,
     if (flags)
         FIXME("Ignoring flags %#x.\n", flags);
 
+    wined3d_mutex_lock();
+
     if (!swapchain->back_buffers)
     {
         WARN("Swapchain doesn't have a backbuffer, returning WINED3DERR_INVALIDCALL.\n");
+        wined3d_mutex_unlock();
         return WINED3DERR_INVALIDCALL;
     }
 
@@ -184,6 +188,8 @@ HRESULT CDECL wined3d_swapchain_present(struct wined3d_swapchain *swapchain,
 
     wined3d_cs_emit_present(swapchain->device->cs, swapchain, src_rect,
             dst_rect, dst_window_override, swap_interval, flags);
+
+    wined3d_mutex_unlock();
 
     return WINED3D_OK;
 }
@@ -900,7 +906,7 @@ static HRESULT swapchain_init(struct wined3d_swapchain *swapchain, struct wined3
         }
 
         wined3d_cs_init_object(device->cs, wined3d_swapchain_cs_init, swapchain);
-        device->cs->ops->finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
+        wined3d_cs_finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
 
         if (!swapchain->context[0])
         {
@@ -1001,8 +1007,8 @@ err:
         heap_free(swapchain->back_buffers);
     }
 
-    wined3d_cs_destroy_object(swapchain->device->cs, wined3d_swapchain_destroy_object, swapchain);
-    swapchain->device->cs->ops->finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
+    wined3d_cs_destroy_object(device->cs, wined3d_swapchain_destroy_object, swapchain);
+    wined3d_cs_finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
 
     if (swapchain->front_buffer)
     {
@@ -1025,7 +1031,9 @@ HRESULT CDECL wined3d_swapchain_create(struct wined3d_device *device, struct win
     if (!(object = heap_alloc_zero(sizeof(*object))))
         return E_OUTOFMEMORY;
 
+    wined3d_mutex_lock();
     hr = swapchain_init(object, device, desc, parent, parent_ops);
+    wined3d_mutex_unlock();
     if (FAILED(hr))
     {
         WARN("Failed to initialize swapchain, hr %#x.\n", hr);
@@ -1206,7 +1214,6 @@ HRESULT CDECL wined3d_swapchain_resize_buffers(struct wined3d_swapchain *swapcha
         unsigned int width, unsigned int height, enum wined3d_format_id format_id,
         enum wined3d_multisample_type multisample_type, unsigned int multisample_quality)
 {
-    struct wined3d_device *device = swapchain->device;
     BOOL update_desc = FALSE;
 
     TRACE("swapchain %p, buffer_count %u, width %u, height %u, format %s, "
@@ -1219,7 +1226,7 @@ HRESULT CDECL wined3d_swapchain_resize_buffers(struct wined3d_swapchain *swapcha
     if (buffer_count && buffer_count != swapchain->desc.backbuffer_count)
         FIXME("Cannot change the back buffer count yet.\n");
 
-    device->cs->ops->finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
+    wined3d_cs_finish(swapchain->device->cs, WINED3D_CS_QUEUE_DEFAULT);
 
     if (!width || !height)
     {
@@ -1327,29 +1334,38 @@ static HRESULT wined3d_swapchain_set_display_mode(struct wined3d_swapchain *swap
 HRESULT CDECL wined3d_swapchain_resize_target(struct wined3d_swapchain *swapchain,
         const struct wined3d_display_mode *mode)
 {
-    struct wined3d_device *device = swapchain->device;
     struct wined3d_display_mode actual_mode;
     RECT original_window_rect, window_rect;
+    struct wined3d_device *device;
+    HWND window;
     HRESULT hr;
 
     TRACE("swapchain %p, mode %p.\n", swapchain, mode);
+
+    wined3d_mutex_lock();
+
+    device = swapchain->device;
+    window = swapchain->device_window;
 
     if (swapchain->desc.windowed)
     {
         SetRect(&window_rect, 0, 0, mode->width, mode->height);
         AdjustWindowRectEx(&window_rect,
-                GetWindowLongW(swapchain->device_window, GWL_STYLE), FALSE,
-                GetWindowLongW(swapchain->device_window, GWL_EXSTYLE));
+                GetWindowLongW(window, GWL_STYLE), FALSE,
+                GetWindowLongW(window, GWL_EXSTYLE));
         SetRect(&window_rect, 0, 0,
                 window_rect.right - window_rect.left, window_rect.bottom - window_rect.top);
-        GetWindowRect(swapchain->device_window, &original_window_rect);
+        GetWindowRect(window, &original_window_rect);
         OffsetRect(&window_rect, original_window_rect.left, original_window_rect.top);
     }
     else if (swapchain->desc.flags & WINED3D_SWAPCHAIN_ALLOW_MODE_SWITCH)
     {
         actual_mode = *mode;
         if (FAILED(hr = wined3d_swapchain_set_display_mode(swapchain, &actual_mode)))
+        {
+            wined3d_mutex_unlock();
             return hr;
+        }
         SetRect(&window_rect, 0, 0, actual_mode.width, actual_mode.height);
     }
     else
@@ -1358,15 +1374,17 @@ HRESULT CDECL wined3d_swapchain_resize_target(struct wined3d_swapchain *swapchai
                 &actual_mode, NULL)))
         {
             ERR("Failed to get display mode, hr %#x.\n", hr);
+            wined3d_mutex_unlock();
             return hr;
         }
 
         SetRect(&window_rect, 0, 0, actual_mode.width, actual_mode.height);
     }
 
-    MoveWindow(swapchain->device_window, window_rect.left, window_rect.top,
-            window_rect.right - window_rect.left,
-            window_rect.bottom - window_rect.top, TRUE);
+    wined3d_mutex_unlock();
+
+    MoveWindow(window, window_rect.left, window_rect.top,
+            window_rect.right - window_rect.left, window_rect.bottom - window_rect.top, TRUE);
 
     return WINED3D_OK;
 }
