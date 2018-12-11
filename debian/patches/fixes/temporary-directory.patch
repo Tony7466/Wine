@@ -23,7 +23,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  static const char server_dir_prefix[] = "/server-";      /* prefix for server dir */
  
  static char *bindir;
-@@ -220,15 +221,110 @@ static char *get_runtime_argvdir( const
+@@ -235,15 +236,110 @@ static char *get_runtime_argvdir( const
  /* initialize the server directory value */
  static void init_server_dir( dev_t dev, ino_t ino )
  {

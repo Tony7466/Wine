@@ -1,15 +1,14 @@
-wine (4.0~rc1-1) UNRELEASED; urgency=medium
+wine (4.0~rc1-1) unstable; urgency=medium
 
-  * Switch to the wine stable branch.
   * New upstream release 4.0-rc1, released Dec 7, 2018.
-    - Preloader implemented on mac OS.
-    - Mouse cursor support on Android.
     - Updates to the timezone database.
     - Vulkan support updated to the latest spec.
     - Stream I/O support in WebServices.
     - Better palette support in WindowsCodecs.
     - Synchronization objects support for kernel drivers.
     - Various bug fixes.
+  * Switch to the stable branch.
+    - Safer temporary directory handling (closes: #816034).
 
  -- Michael Gilbert <mgilbert@debian.org>  Tue, 11 Dec 2018 01:42:16 +0000
 

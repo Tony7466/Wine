@@ -73,7 +73,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/dlls/webservices/reader.c
 +++ b/dlls/webservices/reader.c
-@@ -1994,7 +1994,7 @@ static inline BOOL is_element_type( unsi
+@@ -2042,7 +2042,7 @@ static inline BOOL is_element_type( unsi
  
  static HRESULT read_attributes_bin( struct reader *reader, WS_XML_ELEMENT_NODE *elem )
  {
@@ -82,7 +82,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      unsigned char type;
      HRESULT hr;
  
-@@ -6379,7 +6379,7 @@ static HRESULT read_type_struct( struct
+@@ -6434,7 +6434,7 @@ static HRESULT read_type_struct( struct
                                   WS_HEAP *heap, void *ret, ULONG size, BOOL *found )
  {
      ULONG i, offset;
