@@ -225,21 +225,11 @@ enable_win64=${enable_win64:-no}
 dnl Disable winetest too if tests are disabled
 enable_winetest=${enable_winetest:-$enable_tests}
 
-dnl Some special cases for the wow64 build
-if test -n "$with_wine64"
+dnl Some special cases for the 64-bit build
+if test "x$enable_win64" = "xyes"
 then
-    if test "x$enable_win64" = "xyes"
-    then
-        AC_MSG_ERROR([--enable-win64 and --with-wine64 are mutually exclusive.
+    test -z "$with_wine64" || AC_MSG_ERROR([--enable-win64 and --with-wine64 are mutually exclusive.
 --enable-win64 should be used in the 64-bit build tree, --with-wine64 in the 32-bit Wow64 build tree.])
-    fi
-    test "$srcdir" != . || AC_MSG_ERROR([--with-wine64 cannot be used when building inside the source tree.
-You should create a separate build directory and run configure from there.])
-    enable_fonts=${enable_fonts:-no}
-    enable_server=${enable_server:-no}
-    AC_SUBST(wine64_disable,[\#])
-elif test "x$enable_win64" = "xyes"
-then
     test "x$libdir" != "x\${exec_prefix}/lib" || libdir="\${exec_prefix}/lib64"
 fi
 
@@ -302,7 +292,6 @@ fi
 
 AC_CHECK_TOOLS(AR,[ar gar],ar)
 AC_CHECK_TOOL(STRIP,strip,strip)
-AC_SUBST(ARFLAGS,rc)
 AC_PROG_RANLIB
 AC_PROG_LN_S
 AC_PROG_EGREP
@@ -714,7 +703,10 @@ AC_SUBST(DLLFLAGS,"-D_REENTRANT")
 AC_SUBST(LDRPATH_INSTALL,"")
 AC_SUBST(LDRPATH_LOCAL,"")
 AC_SUBST(LDEXECFLAGS,"")
+AC_SUBST(TOP_INSTALL_LIB,"")
+AC_SUBST(TOP_INSTALL_DEV,"")
 AC_SUBST(WINELOADER_LDFLAGS,"")
+AC_SUBST(WINEPRELOADER_LDFLAGS,"")
 LIBEXT="so"
 DLLEXT=".so"
 IMPLIBEXT="def"
@@ -753,10 +745,10 @@ case $host_os in
 
     AC_SUBST(LIBWINE_SHAREDLIB,"libwine.dll")
     AC_SUBST(LIBWINE_IMPORTLIB,"libwine.a")
-    AC_SUBST(LIBWINE_INSTALL_LIB,"libwine.dll")
-    AC_SUBST(LIBWINE_INSTALL_DEV,"libwine.a")
     AC_SUBST(LIBWINE_LDFLAGS,"-shared \$(srcdir)/wine.def")
     AC_SUBST(LIBWINE_DEPENDS,"wine.def")
+    TOP_INSTALL_LIB="$TOP_INSTALL_LIB libs/wine/libwine.dll"
+    TOP_INSTALL_DEV="$TOP_INSTALL_DEV libs/wine/libwine.a"
     ;;
 
   darwin*|macosx*)
@@ -775,9 +767,15 @@ case $host_os in
     AC_SUBST(APPLICATIONSERVICES_LIBS,"-framework ApplicationServices")
     AC_SUBST(CORESERVICES_LIBS,"-framework CoreServices")
     AC_SUBST(APPKIT_LIBS,"-framework AppKit")
-    WINELOADER_LDFLAGS="-image_base 0x7bf00000 -Wl,-pagezero_size,0x1000,-segaddr,WINE_DOS,0x00001000,-segaddr,WINE_SHAREDHEAP,0x7f000000,-sectcreate,__TEXT,__info_plist,wine_info.plist"
+
+    WINELOADER_LDFLAGS="-Wl,-pie,-pagezero_size,0x1000,-sectcreate,__TEXT,__info_plist,wine_info.plist"
+
+    WINEPRELOADER_LDFLAGS="-nostartfiles -nodefaultlibs -e _start -ldylib1.o -Wl,-image_base,0x7c400000,-pagezero_size,0x1000,-sectcreate,__TEXT,__info_plist,wine_info.plist"
+    WINE_TRY_CFLAGS([-Wl,-no_new_main -e _main],
+                    [WINEPRELOADER_LDFLAGS="-Wl,-no_new_main $WINEPRELOADER_LDFLAGS"])
     WINE_TRY_CFLAGS([-Wl,-no_pie],
-                    [WINELOADER_LDFLAGS="-Wl,-no_pie $WINELOADER_LDFLAGS"])
+                    [WINEPRELOADER_LDFLAGS="-Wl,-no_pie $WINEPRELOADER_LDFLAGS"])
+
     if test "$ac_cv_header_DiskArbitration_DiskArbitration_h" = "yes"
     then
         dnl DiskArbitration API is not public on Darwin < 8.0, use it only if header found
@@ -881,10 +879,10 @@ case $host_os in
     fi
 
     AC_SUBST(LIBWINE_SHAREDLIB,"libwine.$libwine_version.dylib")
-    AC_SUBST(LIBWINE_INSTALL_LIB,"libwine.$libwine_version.dylib libwine.$libwine_soversion.dylib")
-    AC_SUBST(LIBWINE_INSTALL_DEV,"libwine.dylib")
     AC_SUBST(LIBWINE_LDFLAGS,["-dynamiclib -install_name @rpath/libwine.$libwine_soversion.dylib -Wl,-rpath,@loader_path/ -compatibility_version $libwine_soversion -current_version $libwine_version"])
     AC_SUBST(WINELOADER_DEPENDS,"wine_info.plist")
+    TOP_INSTALL_LIB="$TOP_INSTALL_LIB libs/wine/libwine.$libwine_version.dylib libs/wine/libwine.$libwine_soversion.dylib"
+    TOP_INSTALL_DEV="$TOP_INSTALL_DEV libs/wine/libwine.dylib"
     ;;
 
   linux-android*)
@@ -893,6 +891,7 @@ case $host_os in
     enable_wineandroid_drv=${enable_wineandroid_drv:-yes}
     WINE_TRY_CFLAGS([-fPIC -Wl,--export-dynamic],
                     [WINELOADER_LDFLAGS="-Wl,--export-dynamic"])
+    WINEPRELOADER_LDFLAGS="-static -nostartfiles -nodefaultlibs -Wl,-Ttext=0x7c400000"
     WINE_TRY_CFLAGS([-fPIC -Wl,--rpath,\$ORIGIN/../lib],
                     [LDRPATH_INSTALL="-Wl,--rpath,\\\$\$ORIGIN/\`\$(MAKEDEP) -R \${bindir} \${libdir}\`"
                      LDRPATH_LOCAL="-Wl,--rpath,\\\$\$ORIGIN/\$(top_builddir)/libs/wine"],
@@ -903,8 +902,8 @@ case $host_os in
                     [LDRPATH_INSTALL="$LDRPATH_INSTALL -Wl,--enable-new-dtags"])
 
     AC_SUBST(LIBWINE_SHAREDLIB,"libwine.so")
-    AC_SUBST(LIBWINE_INSTALL_LIB,"libwine.so")
     AC_SUBST(LIBWINE_LDFLAGS,["-shared -Wl,-soname,libwine.so"])
+    TOP_INSTALL_LIB="$TOP_INSTALL_LIB libs/wine/libwine.so"
 
     WINE_CHECK_SONAME(EGL,eglGetProcAddress)
     WINE_CHECK_SONAME(GLESv2,glFlush)
@@ -940,6 +939,7 @@ case $host_os in
 
       WINE_TRY_CFLAGS([-fPIC -Wl,--export-dynamic],
                       [WINELOADER_LDFLAGS="-Wl,--export-dynamic"])
+      WINEPRELOADER_LDFLAGS="-static -nostartfiles -nodefaultlibs -Wl,-Ttext=0x7c400000"
 
       WINE_TRY_CFLAGS([-fPIC -Wl,--rpath,\$ORIGIN/../lib],
                       [LDRPATH_INSTALL="-Wl,--rpath,\\\$\$ORIGIN/\`\$(MAKEDEP) -R \${bindir} \${libdir}\`"
@@ -983,9 +983,9 @@ case $host_os in
       fi
     fi
     AC_SUBST(LIBWINE_SHAREDLIB,"libwine.so.$libwine_version")
-    AC_SUBST(LIBWINE_INSTALL_LIB,"libwine.so.$libwine_version libwine.so.$libwine_soversion")
-    AC_SUBST(LIBWINE_INSTALL_DEV,"libwine.so")
     AC_SUBST(LIBWINE_DEPENDS,"wine.map")
+    TOP_INSTALL_LIB="$TOP_INSTALL_LIB libs/wine/libwine.so.$libwine_version libs/wine/libwine.so.$libwine_soversion"
+    TOP_INSTALL_DEV="$TOP_INSTALL_DEV libs/wine/libwine.so"
     ;;
 esac
 
@@ -2119,6 +2119,14 @@ case $host_os in
         ;;
     esac
     ;;
+  darwin*|macosx*)
+    case $host_cpu in
+      *i[[3456789]]86*|x86_64*)
+        test "$wine_binary" = wine || WINE_IGNORE_FILE("loader/wine-preloader")
+        WINELOADER_PROGRAMS="$WINELOADER_PROGRAMS $wine_binary-preloader"
+        ;;
+    esac
+    ;;
 esac
 
 dnl **** Check for functions ****
@@ -2832,10 +2840,10 @@ Makefile: $srcdir/Makefile.in config.status \$(MAKEDEP)
 depend: \$(MAKEDEP) dummy
 	\$(MAKEDEP)])
 
-WINE_CONFIG_SYMLINK(fonts,fonts,[marlett.ttf,symbol.ttf,tahoma.ttf,tahomabd.ttf,wingding.ttf],enable_fonts)
+WINE_CONFIG_SYMLINK(fonts,fonts,[marlett.ttf,symbol.ttf,tahoma.ttf,tahomabd.ttf,wingding.ttf],["x$enable_fonts" != xno])
 WINE_CONFIG_SYMLINK(loader,loader,[l_intl.nls])
 WINE_CONFIG_SYMLINK(,tools,[wine],,winewrapper)
-WINE_CONFIG_SYMLINK(,tools,[wine64],enable_win64,winewrapper)
+WINE_CONFIG_SYMLINK(,tools,[wine64],["x$enable_win64" != xno -o -n "$with_wine64"],winewrapper)
 
 WINE_CONFIG_MAKEFILE(dlls/acledit)
 WINE_CONFIG_MAKEFILE(dlls/aclui)
@@ -3110,6 +3118,7 @@ WINE_CONFIG_MAKEFILE(dlls/commdlg.dll16,enable_win16)
 WINE_CONFIG_MAKEFILE(dlls/compobj.dll16,enable_win16)
 WINE_CONFIG_MAKEFILE(dlls/compstui)
 WINE_CONFIG_MAKEFILE(dlls/comsvcs)
+WINE_CONFIG_MAKEFILE(dlls/comsvcs/tests)
 WINE_CONFIG_MAKEFILE(dlls/concrt140)
 WINE_CONFIG_MAKEFILE(dlls/connect)
 WINE_CONFIG_MAKEFILE(dlls/credui)
@@ -3292,6 +3301,7 @@ WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-draw-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-gui-l1-3-0)
 WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-keyboard-l1-3-0)
 WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-message-l1-1-1)
+WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-misc-l1-2-0)
 WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-misc-l1-5-1)
 WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-mouse-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-private-l1-1-1)
@@ -3654,6 +3664,7 @@ WINE_CONFIG_MAKEFILE(dlls/setupx.dll16,enable_win16)
 WINE_CONFIG_MAKEFILE(dlls/sfc)
 WINE_CONFIG_MAKEFILE(dlls/sfc_os)
 WINE_CONFIG_MAKEFILE(dlls/shcore)
+WINE_CONFIG_MAKEFILE(dlls/shcore/tests)
 WINE_CONFIG_MAKEFILE(dlls/shdoclc)
 WINE_CONFIG_MAKEFILE(dlls/shdocvw)
 WINE_CONFIG_MAKEFILE(dlls/shdocvw/tests)
@@ -3700,6 +3711,7 @@ WINE_CONFIG_MAKEFILE(dlls/twain.dll16,enable_win16)
 WINE_CONFIG_MAKEFILE(dlls/twain_32)
 WINE_CONFIG_MAKEFILE(dlls/twain_32/tests)
 WINE_CONFIG_MAKEFILE(dlls/typelib.dll16,enable_win16)
+WINE_CONFIG_MAKEFILE(dlls/tzres)
 WINE_CONFIG_MAKEFILE(dlls/ucrtbase)
 WINE_CONFIG_MAKEFILE(dlls/ucrtbase/tests)
 WINE_CONFIG_MAKEFILE(dlls/uiautomationcore)
@@ -3874,7 +3886,7 @@ WINE_CONFIG_MAKEFILE(dlls/xmllite/tests)
 WINE_CONFIG_MAKEFILE(dlls/xolehlp)
 WINE_CONFIG_MAKEFILE(dlls/xpsprint)
 WINE_CONFIG_MAKEFILE(dlls/xpssvcs)
-WINE_CONFIG_MAKEFILE(fonts,,[test -n "$with_wine64"])
+WINE_CONFIG_MAKEFILE(fonts)
 WINE_CONFIG_MAKEFILE(include)
 WINE_CONFIG_MAKEFILE(libs/port)
 WINE_CONFIG_MAKEFILE(libs/wine)
@@ -3984,7 +3996,7 @@ WINE_CONFIG_MAKEFILE(programs/wscript/tests)
 WINE_CONFIG_MAKEFILE(programs/wusa)
 WINE_CONFIG_MAKEFILE(programs/xcopy)
 WINE_CONFIG_MAKEFILE(programs/xcopy/tests)
-WINE_CONFIG_MAKEFILE(server,,[test -n "$with_wine64"])
+WINE_CONFIG_MAKEFILE(server)
 WINE_CONFIG_MAKEFILE(tools,,[test "x$enable_tools" = xno])
 WINE_CONFIG_MAKEFILE(tools/sfnt2fon,,[test "x$enable_tools" = xno])
 WINE_CONFIG_MAKEFILE(tools/widl,,[test "x$enable_tools" = xno])
@@ -4058,21 +4070,44 @@ fi
 
 if test -n "$with_wine64"
 then
+    case "$with_wine64" in
+      /*) reldir="" ;;
+      *)  reldir="../" ;;
+    esac
+    dnl Get rid of old symlinks
+    rm -f fonts server 2>/dev/null
     WINE_APPEND_RULE(
-[all: fonts server $with_wine64/loader/wine $with_wine64/loader/wine-preloader
-fonts server:
-	\$(RM) \$[@] && \$(LN_S) $with_wine64/\$[@] \$[@]
+[all: loader/wine64 loader/wine64-preloader $with_wine64/loader/wine $with_wine64/loader/wine-preloader
+loader/wine64 loader/wine64-preloader:
+	rm -f \$[@] && \$(LN_S) $reldir$with_wine64/\$[@] \$[@]
 $with_wine64/loader/wine:
-	\$(RM) \$[@] && \$(LN_S) $ac_pwd/loader/wine \$[@]
+	rm -f \$[@] && \$(LN_S) $ac_pwd/loader/wine \$[@]
 $with_wine64/loader/wine-preloader:
-	\$(RM) \$[@] && \$(LN_S) $ac_pwd/loader/wine-preloader \$[@]
+	rm -f \$[@] && \$(LN_S) $ac_pwd/loader/wine-preloader \$[@]
 clean::
-	\$(RM) fonts server $with_wine64/loader/wine $with_wine64/loader/wine-preloader])
+	rm -f loader/wine64 loader/wine64-preloader $with_wine64/loader/wine $with_wine64/loader/wine-preloader])
 else
-    AC_SUBST(WINELOADER_INSTALL,"wine.inf l_intl.nls")
+    TOP_INSTALL_DEV="$TOP_INSTALL_DEV include"
+    TOP_INSTALL_LIB="$TOP_INSTALL_LIB \
+fonts \
+loader/l_intl.nls \
+loader/wine.inf \
+programs/msiexec/msiexec \
+programs/notepad/notepad \
+programs/regedit/regedit \
+programs/regsvr32/regsvr32 \
+programs/wineboot/wineboot \
+programs/winecfg/winecfg \
+programs/wineconsole/wineconsole \
+programs/winedbg/winedbg \
+programs/winefile/winefile \
+programs/winemine/winemine \
+programs/winepath/winepath \
+server/wineserver"
+
     case $host_os in
       cygwin*|mingw32*|darwin*|macosx*|linux-android*) ;;
-      *) WINELOADER_INSTALL="$WINELOADER_INSTALL wine.desktop" ;;
+      *) TOP_INSTALL_LIB="$TOP_INSTALL_LIB loader/wine.desktop" ;;
     esac
 fi
 

@@ -471,7 +471,7 @@
 # @ stub GetCurrentTargetPlatformContext
 @ stdcall -norelay GetCurrentThread() kernel32.GetCurrentThread
 @ stdcall -norelay GetCurrentThreadId() kernel32.GetCurrentThreadId
-# @ stub GetCurrentThreadStackLimits
+@ stdcall GetCurrentThreadStackLimits(ptr ptr) kernel32.GetCurrentThreadStackLimits
 @ stdcall GetDateFormatA(long long ptr str ptr long) kernel32.GetDateFormatA
 @ stdcall GetDateFormatEx(wstr long ptr wstr ptr long wstr) kernel32.GetDateFormatEx
 @ stdcall GetDateFormatW(long long ptr wstr ptr long) kernel32.GetDateFormatW
@@ -1024,7 +1024,7 @@
 @ stdcall PathAddExtensionA(str str) shlwapi.PathAddExtensionA
 @ stdcall PathAddExtensionW(wstr wstr) shlwapi.PathAddExtensionW
 @ stdcall PathAllocCanonicalize(wstr long ptr)
-# @ stub PathAllocCombine
+@ stdcall PathAllocCombine(wstr wstr long ptr)
 @ stdcall PathAppendA(str str) shlwapi.PathAppendA
 @ stdcall PathAppendW(wstr wstr) shlwapi.PathAppendW
 @ stdcall PathCanonicalizeA(ptr str) shlwapi.PathCanonicalizeA
@@ -1032,12 +1032,12 @@
 @ stdcall PathCchAddBackslash(wstr long)
 @ stdcall PathCchAddBackslashEx(wstr long ptr ptr)
 @ stdcall PathCchAddExtension(wstr long wstr)
-# @ stub PathCchAppend
-# @ stub PathCchAppendEx
+@ stdcall PathCchAppend(wstr long wstr)
+@ stdcall PathCchAppendEx(wstr long wstr long)
 @ stdcall PathCchCanonicalize(ptr long wstr)
 @ stdcall PathCchCanonicalizeEx(ptr long wstr long)
-# @ stub PathCchCombine
-# @ stub PathCchCombineEx
+@ stdcall PathCchCombine(ptr long wstr wstr)
+@ stdcall PathCchCombineEx(ptr long wstr wstr long)
 @ stdcall PathCchFindExtension(wstr long ptr)
 @ stdcall PathCchIsRoot(wstr)
 @ stdcall PathCchRemoveBackslash(wstr long)

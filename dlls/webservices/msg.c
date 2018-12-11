@@ -831,6 +831,33 @@ done:
     return hr;
 }
 
+/**************************************************************************
+ *          WsFlushBody		[webservices.@]
+ */
+HRESULT WINAPI WsFlushBody( WS_MESSAGE *handle, ULONG size, const WS_ASYNC_CONTEXT *ctx, WS_ERROR *error )
+{
+    struct msg *msg = (struct msg *)handle;
+    HRESULT hr;
+
+    TRACE( "%p %u %p %p\n", handle, size, ctx, error );
+
+    if (!msg) return E_INVALIDARG;
+
+    EnterCriticalSection( &msg->cs );
+
+    if (msg->magic != MSG_MAGIC)
+    {
+        LeaveCriticalSection( &msg->cs );
+        return E_INVALIDARG;
+    }
+
+    hr = WsFlushWriter( msg->writer_body, size, ctx, error );
+
+    LeaveCriticalSection( &msg->cs );
+    TRACE( "returning %08x\n", hr );
+    return hr;
+}
+
 static BOOL match_current_element( WS_XML_READER *reader, const WS_XML_STRING *localname )
 {
     const WS_XML_NODE *node;
@@ -938,13 +965,6 @@ HRESULT WINAPI WsReadEnvelopeStart( WS_MESSAGE *handle, WS_XML_READER *reader, W
     return hr;
 }
 
-static HRESULT read_envelope_end( WS_XML_READER *reader )
-{
-    HRESULT hr;
-    if ((hr = WsReadEndElement( reader, NULL )) != S_OK) return hr; /* </s:Body> */
-    return WsReadEndElement( reader, NULL ); /* </s:Envelope> */
-}
-
 /**************************************************************************
  *          WsReadEnvelopeEnd		[webservices.@]
  */
@@ -967,7 +987,7 @@ HRESULT WINAPI WsReadEnvelopeEnd( WS_MESSAGE *handle, WS_ERROR *error )
     }
 
     if (msg->state != WS_MESSAGE_STATE_READING) hr = WS_E_INVALID_OPERATION;
-    else if ((hr = read_envelope_end( msg->reader_body )) == S_OK)
+    else if ((hr = WsReadEndElement( msg->reader_body, NULL )) == S_OK)
         msg->state = WS_MESSAGE_STATE_DONE;
 
     LeaveCriticalSection( &msg->cs );
@@ -999,6 +1019,33 @@ HRESULT WINAPI WsReadBody( WS_MESSAGE *handle, const WS_ELEMENT_DESCRIPTION *des
 
     if (msg->state != WS_MESSAGE_STATE_READING) hr = WS_E_INVALID_OPERATION;
     else hr = WsReadElement( msg->reader_body, desc, option, heap, value, size, NULL );
+
+    LeaveCriticalSection( &msg->cs );
+    TRACE( "returning %08x\n", hr );
+    return hr;
+}
+
+/**************************************************************************
+ *          WsFillBody		[webservices.@]
+ */
+HRESULT WINAPI WsFillBody( WS_MESSAGE *handle, ULONG size, const WS_ASYNC_CONTEXT *ctx, WS_ERROR *error )
+{
+    struct msg *msg = (struct msg *)handle;
+    HRESULT hr;
+
+    TRACE( "%p %u %p %p\n", handle, size, ctx, error );
+
+    if (!msg) return E_INVALIDARG;
+
+    EnterCriticalSection( &msg->cs );
+
+    if (msg->magic != MSG_MAGIC)
+    {
+        LeaveCriticalSection( &msg->cs );
+        return E_INVALIDARG;
+    }
+
+    hr = WsFillReader( msg->reader_body, size, ctx, error );
 
     LeaveCriticalSection( &msg->cs );
     TRACE( "returning %08x\n", hr );

@@ -60,6 +60,8 @@
  *  http://www.linuxbase.org/spec/booksets/LSB-Embedded/LSB-Embedded/book387.html
  */
 
+#ifdef __linux__
+
 #include "config.h"
 #include "wine/port.h"
 
@@ -1374,3 +1376,5 @@ void* wld_start( void **stack )
 
     return (void *)ld_so_map.l_entry;
 }
+
+#endif /* __linux__ */

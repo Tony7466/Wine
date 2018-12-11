@@ -434,6 +434,7 @@
 @ stdcall RtlAddMandatoryAce(ptr long long long long ptr)
 # @ stub RtlAddRange
 @ cdecl -arch=arm,arm64,x86_64 RtlAddFunctionTable(ptr long long)
+@ cdecl -arch=arm,arm64,x86_64 RtlAddGrowableFunctionTable(ptr ptr long long long long)
 @ stdcall RtlAddRefActivationContext(ptr)
 # @ stub RtlAddRefMemoryStream
 @ stdcall RtlAddVectoredContinueHandler(long ptr)
@@ -680,8 +681,10 @@
 # @ stub RtlGetSetBootStatusData
 @ stdcall RtlGetThreadErrorMode()
 @ stdcall RtlGetUnloadEventTrace()
+@ stdcall RtlGetUnloadEventTraceEx(ptr ptr ptr)
 @ stub RtlGetUserInfoHeap
 @ stdcall RtlGetVersion(ptr)
+@ stdcall -arch=arm,arm64,x86_64 RtlGrowFunctionTable(ptr long)
 @ stub RtlGuidToPropertySetName
 @ stdcall RtlHashUnicodeString(ptr long long ptr)
 @ stdcall RtlIdentifierAuthoritySid(ptr)

@@ -70,6 +70,7 @@ enum android_ioctl
     IOCTL_PERFORM,
     IOCTL_SET_SWAP_INT,
     IOCTL_SET_CAPTURE,
+    IOCTL_SET_CURSOR,
     NB_IOCTLS
 };
 
@@ -212,6 +213,17 @@ struct ioctl_android_set_capture
     struct ioctl_header hdr;
 };
 
+struct ioctl_android_set_cursor
+{
+    struct ioctl_header hdr;
+    int                 id;
+    int                 width;
+    int                 height;
+    int                 hotspotx;
+    int                 hotspoty;
+    int                 bits[1];
+};
+
 static struct gralloc_module_t *gralloc_module;
 static struct gralloc1_device *gralloc1_device;
 static BOOL gralloc1_caps[GRALLOC1_LAST_CAPABILITY + 1];
@@ -240,13 +252,39 @@ static inline BOOL is_client_in_process(void)
     return current_client_id() == GetCurrentProcessId();
 }
 
-#ifdef __i386__  /* the Java VM uses %fs for its own purposes, so we need to wrap the calls */
+#ifdef __i386__  /* the Java VM uses %fs/%gs for its own purposes, so we need to wrap the calls */
+
 static WORD orig_fs, java_fs;
 static inline void wrap_java_call(void)   { wine_set_fs( java_fs ); }
 static inline void unwrap_java_call(void) { wine_set_fs( orig_fs ); }
+static inline void init_java_thread( JavaVM *java_vm )
+{
+    orig_fs = wine_get_fs();
+    (*java_vm)->AttachCurrentThread( java_vm, &jni_env, 0 );
+    java_fs = wine_get_fs();
+    wine_set_fs( orig_fs );
+}
+
+#elif defined(__x86_64__)
+
+#include <asm/prctl.h>
+#include <asm/unistd.h>
+static void *orig_teb, *java_teb;
+static inline int arch_prctl( int func, void *ptr ) { return syscall( __NR_arch_prctl, func, ptr ); }
+static inline void wrap_java_call(void)   { arch_prctl( ARCH_SET_GS, java_teb ); }
+static inline void unwrap_java_call(void) { arch_prctl( ARCH_SET_GS, orig_teb ); }
+static inline void init_java_thread( JavaVM *java_vm )
+{
+    arch_prctl( ARCH_GET_GS, &orig_teb );
+    (*java_vm)->AttachCurrentThread( java_vm, &jni_env, 0 );
+    arch_prctl( ARCH_GET_GS, &java_teb );
+    arch_prctl( ARCH_SET_GS, orig_teb );
+}
+
 #else
 static inline void wrap_java_call(void) { }
 static inline void unwrap_java_call(void) { }
+static inline void init_java_thread( JavaVM *java_vm ) { (*java_vm)->AttachCurrentThread( java_vm, &jni_env, 0 ); }
 #endif  /* __i386__ */
 
 static struct native_win_data *data_map[65536];
@@ -1015,6 +1053,44 @@ static NTSTATUS setCapture_ioctl( void *data, DWORD in_size, DWORD out_size, ULO
     return STATUS_SUCCESS;
 }
 
+static NTSTATUS setCursor_ioctl( void *data, DWORD in_size, DWORD out_size, ULONG_PTR *ret_size )
+{
+    static jmethodID method;
+    jobject object;
+    int size;
+    struct ioctl_android_set_cursor *res = data;
+
+    if (in_size < offsetof( struct ioctl_android_set_cursor, bits )) return STATUS_INVALID_PARAMETER;
+
+    if (res->width < 0 || res->height < 0 || res->width > 256 || res->height > 256)
+        return STATUS_INVALID_PARAMETER;
+
+    size = res->width * res->height;
+    if (in_size != offsetof( struct ioctl_android_set_cursor, bits[size] ))
+        return STATUS_INVALID_PARAMETER;
+
+    TRACE( "hwnd %08x size %d\n", res->hdr.hwnd, size );
+
+    if (!(object = load_java_method( &method, "setCursor", "(IIIII[I)V" )))
+        return STATUS_NOT_SUPPORTED;
+
+    wrap_java_call();
+
+    if (size)
+    {
+        jintArray array = (*jni_env)->NewIntArray( jni_env, size );
+        (*jni_env)->SetIntArrayRegion( jni_env, array, 0, size, (jint *)res->bits );
+        (*jni_env)->CallVoidMethod( jni_env, object, method, 0, res->width, res->height,
+                                    res->hotspotx, res->hotspoty, array );
+        (*jni_env)->DeleteLocalRef( jni_env, array );
+    }
+    else (*jni_env)->CallVoidMethod( jni_env, object, method, res->id, 0, 0, 0, 0, 0 );
+
+    unwrap_java_call();
+
+    return STATUS_SUCCESS;
+}
+
 typedef NTSTATUS (*ioctl_func)( void *in, DWORD in_size, DWORD out_size, ULONG_PTR *ret_size );
 static const ioctl_func ioctl_funcs[] =
 {
@@ -1029,6 +1105,7 @@ static const ioctl_func ioctl_funcs[] =
     perform_ioctl,              /* IOCTL_PERFORM */
     setSwapInterval_ioctl,      /* IOCTL_SET_SWAP_INT */
     setCapture_ioctl,           /* IOCTL_SET_CAPTURE */
+    setCursor_ioctl,            /* IOCTL_SET_CURSOR */
 };
 
 static NTSTATUS WINAPI ioctl_callback( DEVICE_OBJECT *device, IRP *irp )
@@ -1092,15 +1169,7 @@ static DWORD CALLBACK device_thread( void *arg )
 
     if (!(java_vm = wine_get_java_vm())) return 0;  /* not running under Java */
 
-#ifdef __i386__
-    orig_fs = wine_get_fs();
-    (*java_vm)->AttachCurrentThread( java_vm, &jni_env, 0 );
-    java_fs = wine_get_fs();
-    wine_set_fs( orig_fs );
-    if (java_fs != orig_fs) TRACE( "%%fs changed from %04x to %04x by Java VM\n", orig_fs, java_fs );
-#else
-    (*java_vm)->AttachCurrentThread( java_vm, &jni_env, 0 );
-#endif
+    init_java_thread( java_vm );
 
     create_desktop_window( GetDesktopWindow() );
 
@@ -1116,7 +1185,9 @@ static DWORD CALLBACK device_thread( void *arg )
 
     ret = wine_ntoskrnl_main_loop( stop_event );
 
+    wrap_java_call();
     (*java_vm)->DetachCurrentThread( java_vm );
+    unwrap_java_call();
     return ret;
 }
 
@@ -1563,4 +1634,25 @@ int ioctl_set_capture( HWND hwnd )
     req.hdr.hwnd  = HandleToLong( hwnd );
     req.hdr.opengl = FALSE;
     return android_ioctl( IOCTL_SET_CAPTURE, &req, sizeof(req), NULL, NULL );
+}
+
+int ioctl_set_cursor( int id, int width, int height,
+                      int hotspotx, int hotspoty, const unsigned int *bits )
+{
+    struct ioctl_android_set_cursor *req;
+    unsigned int size = offsetof( struct ioctl_android_set_cursor, bits[width * height] );
+    int ret;
+
+    if (!(req = HeapAlloc( GetProcessHeap(), 0, size ))) return -ENOMEM;
+    req->hdr.hwnd   = 0;  /* unused */
+    req->hdr.opengl = FALSE;
+    req->id       = id;
+    req->width    = width;
+    req->height   = height;
+    req->hotspotx = hotspotx;
+    req->hotspoty = hotspoty;
+    memcpy( req->bits, bits, width * height * sizeof(req->bits[0]) );
+    ret = android_ioctl( IOCTL_SET_CURSOR, req, size, NULL, NULL );
+    HeapFree( GetProcessHeap(), 0, req );
+    return ret;
 }

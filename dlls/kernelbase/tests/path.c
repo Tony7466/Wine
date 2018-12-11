@@ -31,11 +31,15 @@
 #include "wine/test.h"
 
 HRESULT (WINAPI *pPathAllocCanonicalize)(const WCHAR *path_in, DWORD flags, WCHAR **path_out);
+HRESULT (WINAPI *pPathAllocCombine)(const WCHAR *path1, const WCHAR *path2, DWORD flags, WCHAR **out);
 HRESULT (WINAPI *pPathCchAddBackslash)(WCHAR *out, SIZE_T size);
 HRESULT (WINAPI *pPathCchAddBackslashEx)(WCHAR *out, SIZE_T size, WCHAR **endptr, SIZE_T *remaining);
 HRESULT (WINAPI *pPathCchAddExtension)(WCHAR *path, SIZE_T size, const WCHAR *extension);
+HRESULT (WINAPI *pPathCchAppend)(WCHAR *path1, SIZE_T size, const WCHAR *path2);
+HRESULT (WINAPI *pPathCchAppendEx)(WCHAR *path1, SIZE_T size, const WCHAR *path2, DWORD flags);
 HRESULT (WINAPI *pPathCchCanonicalize)(WCHAR *out, SIZE_T size, const WCHAR *in);
 HRESULT (WINAPI *pPathCchCanonicalizeEx)(WCHAR *out, SIZE_T size, const WCHAR *in, DWORD flags);
+HRESULT (WINAPI *pPathCchCombine)(WCHAR *out, SIZE_T size, const WCHAR *path1, const WCHAR *path2);
 HRESULT (WINAPI *pPathCchCombineEx)(WCHAR *out, SIZE_T size, const WCHAR *path1, const WCHAR *path2, DWORD flags);
 HRESULT (WINAPI *pPathCchFindExtension)(const WCHAR *path, SIZE_T size, const WCHAR **extension);
 BOOL    (WINAPI *pPathCchIsRoot)(const WCHAR *path);
@@ -352,13 +356,14 @@ static void test_PathAllocCanonicalize(void)
     }
 }
 
-static const struct
+struct combine_test
 {
-    const char *path1;
-    const char *path2;
-    const char *result;
-}
-combine_test[] =
+    const CHAR *path1;
+    const CHAR *path2;
+    const CHAR *result;
+};
+
+static const struct combine_test combine_tests[] =
 {
     /* normal paths */
     {"C:\\",  "a",     "C:\\a" },
@@ -366,20 +371,172 @@ combine_test[] =
     {"C:",    "a",     "C:\\a" },
     {"C:\\",  ".",     "C:\\" },
     {"C:\\",  "..",    "C:\\" },
-    {"\\a",   "b",      "\\a\\b" },
+    {"C:\\a", "",      "C:\\a" },
+    {"\\",    "a",     "\\a"},
+    {"\\a",   "b",     "\\a\\b" },
 
     /* normal UNC paths */
     {"\\\\192.168.1.1\\test", "a",  "\\\\192.168.1.1\\test\\a" },
     {"\\\\192.168.1.1\\test", "..", "\\\\192.168.1.1" },
+    {"\\\\", "a", "\\\\a"},
+    {"\\\\?\\Volume{e51a1864-6f2d-4019-b73d-f4e60e600c26}\\", "a",
+     "\\\\?\\Volume{e51a1864-6f2d-4019-b73d-f4e60e600c26}\\a"},
 
     /* NT paths */
     {"\\\\?\\C:\\", "a",  "C:\\a" },
     {"\\\\?\\C:\\", "..", "C:\\" },
+    {"\\\\?\\C:", "a", "C:\\a"},
 
     /* NT UNC path */
+    {"\\\\?\\UNC\\", "a", "\\\\a"},
     {"\\\\?\\UNC\\192.168.1.1\\test", "a",  "\\\\192.168.1.1\\test\\a" },
     {"\\\\?\\UNC\\192.168.1.1\\test", "..", "\\\\192.168.1.1" },
+
+    /* Second path begins with a single backslash */
+    {"C:a\\b", "\\1", "C:\\1"},
+    {"C:\\a\\b", "\\1", "C:\\1"},
+    {"\\a\\b", "\\1", "\\1"},
+    {"\\\\a\\b", "\\1", "\\\\a\\b\\1"},
+    {"\\\\a\\b\\c", "\\1", "\\\\a\\b\\1"},
+    {"\\\\?\\UNC\\a", "\\1", "\\\\a\\1"},
+    {"\\\\?\\Volume{e51a1864-6f2d-4019-b73d-f4e60e600c26}a", "\\1",
+     "\\\\?\\Volume{e51a1864-6f2d-4019-b73d-f4e60e600c26}\\1"},
+    {"\\\\?\\Volume{e51a1864-6f2d-4019-b73d-f4e60e600c26}\\a", "\\1",
+     "\\\\?\\Volume{e51a1864-6f2d-4019-b73d-f4e60e600c26}\\1"},
+    {"C:\\a\\b", "\\", "C:\\"},
+
+    /* Second path is fully qualified */
+    {"X:\\", "C:", "C:\\"},
+    {"X:\\", "C:\\", "C:\\"},
+    {"X:\\", "\\\\", "\\\\"},
+    {"X:\\", "\\\\?\\C:", "C:\\"},
+    {"X:\\", "\\\\?\\C:\\", "C:\\"},
+    {"X:\\", "\\\\?\\UNC\\", "\\\\"},
+    {"X:\\", "\\\\?\\Volume{e51a1864-6f2d-4019-b73d-f4e60e600c26}\\",
+     "\\\\?\\Volume{e51a1864-6f2d-4019-b73d-f4e60e600c26}\\"},
+
+    /* Canonicalization */
+    {"C:\\a", ".\\b", "C:\\a\\b"},
+    {"C:\\a", "..\\b", "C:\\b"},
+
+    /* Other */
+    {"", "", "\\"},
+    {"a", "b", "a\\b"}
 };
+
+static void test_PathAllocCombine(void)
+{
+    WCHAR path1W[PATHCCH_MAX_CCH];
+    WCHAR path2W[PATHCCH_MAX_CCH];
+    WCHAR *resultW;
+    CHAR resultA[PATHCCH_MAX_CCH];
+    HRESULT hr;
+    INT i;
+
+    if (!pPathAllocCombine)
+    {
+        win_skip("PathAllocCombine() is not available.\n");
+        return;
+    }
+
+    resultW = (WCHAR *)0xdeadbeef;
+    hr = pPathAllocCombine(NULL, NULL, 0, &resultW);
+    ok(hr == E_INVALIDARG, "expect hr %#x, got %#x\n", E_INVALIDARG, hr);
+    ok(resultW == NULL, "expect resultW null, got %p\n", resultW);
+
+    MultiByteToWideChar(CP_ACP, 0, "\\a", -1, path1W, ARRAY_SIZE(path1W));
+    hr = pPathAllocCombine(path1W, NULL, 0, &resultW);
+    ok(hr == S_OK, "expect hr %#x, got %#x\n", S_OK, hr);
+    WideCharToMultiByte(CP_ACP, 0, resultW, -1, resultA, ARRAY_SIZE(resultA), NULL, NULL);
+    ok(!lstrcmpA(resultA, "\\a"), "expect \\a, got %s\n", resultA);
+
+    MultiByteToWideChar(CP_ACP, 0, "\\b", -1, path2W, ARRAY_SIZE(path2W));
+    hr = pPathAllocCombine(NULL, path2W, 0, &resultW);
+    ok(hr == S_OK, "expect hr %#x, got %#x\n", S_OK, hr);
+    WideCharToMultiByte(CP_ACP, 0, resultW, -1, resultA, ARRAY_SIZE(resultA), NULL, NULL);
+    ok(!lstrcmpA(resultA, "\\b"), "expect \\b, got %s\n", resultA);
+
+    hr = pPathAllocCombine(path1W, path2W, 0, NULL);
+    ok(hr == E_INVALIDARG, "expect hr %#x, got %#x\n", E_INVALIDARG, hr);
+
+    for (i = 0; i < ARRAY_SIZE(combine_tests); i++)
+    {
+        const struct combine_test *t = combine_tests + i;
+
+        MultiByteToWideChar(CP_ACP, 0, t->path1, -1, path1W, ARRAY_SIZE(path1W));
+        MultiByteToWideChar(CP_ACP, 0, t->path2, -1, path2W, ARRAY_SIZE(path2W));
+        hr = pPathAllocCombine(path1W, path2W, 0, &resultW);
+        ok(hr == S_OK, "combine %s %s expect hr %#x, got %#x\n", t->path1, t->path2, S_OK, hr);
+        if (SUCCEEDED(hr))
+        {
+            WideCharToMultiByte(CP_ACP, 0, resultW, -1, resultA, ARRAY_SIZE(resultA), NULL, NULL);
+            ok(!lstrcmpA(resultA, t->result), "combine %s %s expect result %s, got %s\n", t->path1, t->path2, t->result,
+               resultA);
+            LocalFree(resultW);
+        }
+    }
+}
+
+static void test_PathCchCombine(void)
+{
+    WCHAR expected[PATHCCH_MAX_CCH] = {'C', ':', '\\', 'a', 0};
+    WCHAR p1[PATHCCH_MAX_CCH] = {'C', ':', '\\', 0};
+    WCHAR p2[PATHCCH_MAX_CCH] = {'a', 0};
+    WCHAR output[PATHCCH_MAX_CCH];
+    HRESULT hr;
+    INT i;
+
+    if (!pPathCchCombine)
+    {
+        win_skip("PathCchCombine() is not available.\n");
+        return;
+    }
+
+    hr = pPathCchCombine(output, 5, NULL, NULL);
+    ok(hr == E_INVALIDARG, "Expected E_INVALIDARG, got %08x\n", hr);
+
+    hr = pPathCchCombine(NULL, 2, p1, p2);
+    ok(hr == E_INVALIDARG, "Expected E_INVALIDARG, got %08x\n", hr);
+
+    memset(output, 0xff, sizeof(output));
+    hr = pPathCchCombine(output, 0, p1, p2);
+    ok(hr == E_INVALIDARG, "Expected E_INVALIDARG, got %08x\n", hr);
+    ok(output[0] == 0xffff, "Expected output buffer to be unchanged\n");
+
+    memset(output, 0xff, sizeof(output));
+    hr = pPathCchCombine(output, 1, p1, p2);
+    ok(hr == STRSAFE_E_INSUFFICIENT_BUFFER, "Expected STRSAFE_E_INSUFFICIENT_BUFFER, got %08x\n", hr);
+    ok(output[0] == 0, "Expected output buffer to contain NULL string\n");
+
+    memset(output, 0xff, sizeof(output));
+    hr = pPathCchCombine(output, 4, p1, p2);
+    ok(hr == STRSAFE_E_INSUFFICIENT_BUFFER, "Expected STRSAFE_E_INSUFFICIENT_BUFFER, got %08x\n", hr);
+    ok(output[0] == 0x0, "Expected output buffer to contain NULL string\n");
+
+    memset(output, 0xff, sizeof(output));
+    hr = pPathCchCombine(output, 5, p1, p2);
+    ok(hr == S_OK, "Expected S_OK, got %08x\n", hr);
+    ok(!lstrcmpW(output, expected), "Combination of %s + %s returned %s, expected %s\n", wine_dbgstr_w(p1),
+       wine_dbgstr_w(p2), wine_dbgstr_w(output), wine_dbgstr_w(expected));
+
+    hr = pPathCchCombine(output, PATHCCH_MAX_CCH + 1, p1, p2);
+    ok(hr == E_INVALIDARG, "Expected E_INVALIDARG, got %08x\n", hr);
+
+    hr = pPathCchCombine(output, PATHCCH_MAX_CCH, p1, p2);
+    ok(hr == S_OK, "Expected S_OK, got %08x\n", hr);
+
+    for (i = 0; i < ARRAY_SIZE(combine_tests); i++)
+    {
+        MultiByteToWideChar(CP_ACP, 0, combine_tests[i].path1, -1, p1, ARRAY_SIZE(p1));
+        MultiByteToWideChar(CP_ACP, 0, combine_tests[i].path2, -1, p2, ARRAY_SIZE(p2));
+        MultiByteToWideChar(CP_ACP, 0, combine_tests[i].result, -1, expected, ARRAY_SIZE(expected));
+
+        hr = pPathCchCombine(output, ARRAY_SIZE(output), p1, p2);
+        ok(hr == S_OK, "Expected S_OK, got %08x\n", hr);
+        ok(!lstrcmpW(output, expected), "Combining %s with %s returned %s, expected %s\n", wine_dbgstr_w(p1),
+           wine_dbgstr_w(p2), wine_dbgstr_w(output), wine_dbgstr_w(expected));
+    }
+}
 
 static void test_PathCchCombineEx(void)
 {
@@ -392,12 +549,19 @@ static void test_PathCchCombineEx(void)
 
     if (!pPathCchCombineEx)
     {
-        skip("PathCchCombineEx() is not available.\n");
+        win_skip("PathCchCombineEx() is not available.\n");
         return;
     }
 
+    output[0] = 0xff;
+    hr = pPathCchCombineEx(output, 5, NULL, NULL, 0);
+    ok(hr == E_INVALIDARG, "Expected E_INVALIDARG, got %08x\n", hr);
+    ok(output[0] == 0, "Expected output buffer to be empty\n");
+
+    output[0] = 0xff;
     hr = pPathCchCombineEx(NULL, 2, p1, p2, 0);
     ok(hr == E_INVALIDARG, "Expected E_INVALIDARG, got %08x\n", hr);
+    ok(output[0] == 0xff, "Expected output buffer to be unchanged\n");
 
     memset(output, 0xff, sizeof(output));
     hr = pPathCchCombineEx(output, 0, p1, p2, 0);
@@ -414,6 +578,14 @@ static void test_PathCchCombineEx(void)
     ok(hr == STRSAFE_E_INSUFFICIENT_BUFFER, "Expected STRSAFE_E_INSUFFICIENT_BUFFER, got %08x\n", hr);
     ok(output[0] == 0x0, "Expected output buffer to contain NULL string\n");
 
+    output[0] = 0xff;
+    hr = pPathCchCombineEx(output, PATHCCH_MAX_CCH + 1, p1, p2, 0);
+    ok(hr == E_INVALIDARG, "Expected E_INVALIDARG, got %08x\n", hr);
+    ok(output[0] == 0xff, "Expected output buffer to be 0xff\n");
+
+    hr = pPathCchCombineEx(output, PATHCCH_MAX_CCH, p1, p2, 0);
+    ok(hr == S_OK, "Expected S_OK, got %08x\n", hr);
+
     memset(output, 0xff, sizeof(output));
     hr = pPathCchCombineEx(output, 5, p1, p2, 0);
     ok(hr == S_OK, "Expected S_OK, got %08x\n", hr);
@@ -421,11 +593,11 @@ static void test_PathCchCombineEx(void)
         "Combination of %s + %s returned %s, expected %s\n",
         wine_dbgstr_w(p1), wine_dbgstr_w(p2), wine_dbgstr_w(output), wine_dbgstr_w(expected));
 
-    for (i = 0; i < ARRAY_SIZE(combine_test); i++)
+    for (i = 0; i < ARRAY_SIZE(combine_tests); i++)
     {
-        MultiByteToWideChar(CP_ACP, 0, combine_test[i].path1, -1, p1, MAX_PATH);
-        MultiByteToWideChar(CP_ACP, 0, combine_test[i].path2, -1, p2, MAX_PATH);
-        MultiByteToWideChar(CP_ACP, 0, combine_test[i].result, -1, expected, MAX_PATH);
+        MultiByteToWideChar(CP_ACP, 0, combine_tests[i].path1, -1, p1, MAX_PATH);
+        MultiByteToWideChar(CP_ACP, 0, combine_tests[i].path2, -1, p2, MAX_PATH);
+        MultiByteToWideChar(CP_ACP, 0, combine_tests[i].result, -1, expected, MAX_PATH);
 
         hr = pPathCchCombineEx(output, MAX_PATH, p1, p2, 0);
         ok(hr == S_OK, "Expected S_OK, got %08x\n", hr);
@@ -615,6 +787,173 @@ static const struct addextension_test addextension_tests[] =
     {"C:\\", ".a\\", NULL, E_INVALIDARG},
     {"C:\\1.exe", " ", NULL, E_INVALIDARG}
 };
+
+struct append_test
+{
+    const CHAR *path1;
+    const CHAR *path2;
+    const CHAR *result;
+};
+
+static const struct append_test append_tests[] =
+{
+    /* normal paths */
+    {"C:\\", "a", "C:\\a"},
+    {"C:\\b", "..\\a", "C:\\a"},
+    {"C:", "a", "C:\\a"},
+    {"C:\\", ".", "C:\\"},
+    {"C:\\", "..", "C:\\"},
+    {"C:\\a", "", "C:\\a"},
+
+    /* normal UNC paths */
+    {"\\\\192.168.1.1\\test", "a", "\\\\192.168.1.1\\test\\a"},
+    {"\\\\192.168.1.1\\test", "..", "\\\\192.168.1.1"},
+    {"\\a", "b", "\\a\\b"},
+    {"\\", "a", "\\a"},
+    {"\\\\", "a", "\\\\a"},
+    {"\\\\?\\Volume{e51a1864-6f2d-4019-b73d-f4e60e600c26}\\", "a",
+     "\\\\?\\Volume{e51a1864-6f2d-4019-b73d-f4e60e600c26}\\a"},
+
+    /* NT paths */
+    {"\\\\?\\C:\\", "a", "C:\\a"},
+    {"\\\\?\\C:\\", "..", "C:\\"},
+    {"\\\\?\\C:", "a", "C:\\a"},
+
+    /* NT UNC path */
+    {"\\\\?\\UNC\\", "a", "\\\\a"},
+    {"\\\\?\\UNC\\192.168.1.1\\test", "a", "\\\\192.168.1.1\\test\\a"},
+    {"\\\\?\\UNC\\192.168.1.1\\test", "..", "\\\\192.168.1.1"},
+
+    /* Second path begins with a single backslash */
+    {"C:a\\b", "\\1", "C:a\\b\\1"},
+    {"C:\\a\\b", "\\1", "C:\\a\\b\\1"},
+    {"\\a\\b", "\\1", "\\a\\b\\1"},
+    {"\\\\a\\b", "\\1", "\\\\a\\b\\1"},
+    {"\\\\a\\b\\c", "\\1", "\\\\a\\b\\c\\1"},
+    {"\\\\?\\UNC\\a", "\\1", "\\\\a\\1"},
+    {"\\\\?\\Volume{e51a1864-6f2d-4019-b73d-f4e60e600c26}a", "\\1",
+     "\\\\?\\Volume{e51a1864-6f2d-4019-b73d-f4e60e600c26}a\\1"},
+    {"\\\\?\\Volume{e51a1864-6f2d-4019-b73d-f4e60e600c26}\\a", "\\1",
+     "\\\\?\\Volume{e51a1864-6f2d-4019-b73d-f4e60e600c26}\\a\\1"},
+    {"C:\\a\\b", "\\", "C:\\a\\b"},
+
+    /* Second path is fully qualified */
+    {"X:\\", "C:", "C:\\"},
+    {"X:\\", "C:\\", "C:\\"},
+    {"X:\\", "\\\\", "\\\\"},
+    {"X:\\", "\\\\?\\C:", "C:\\"},
+    {"X:\\", "\\\\?\\C:\\", "C:\\"},
+    {"X:\\", "\\\\?\\UNC\\", "\\\\"},
+    {"X:\\", "\\\\?\\Volume{e51a1864-6f2d-4019-b73d-f4e60e600c26}\\",
+     "\\\\?\\Volume{e51a1864-6f2d-4019-b73d-f4e60e600c26}\\"},
+
+    /* Canonicalization */
+    {"C:\\a", ".\\b", "C:\\a\\b"},
+    {"C:\\a", "..\\b", "C:\\b"},
+
+    /* Other */
+    {"", "", "\\"},
+    {"a", "b", "a\\b"}
+};
+
+static void test_PathCchAppend(void)
+{
+    WCHAR path1W[PATHCCH_MAX_CCH];
+    WCHAR path2W[PATHCCH_MAX_CCH];
+    CHAR path1A[PATHCCH_MAX_CCH];
+    HRESULT hr;
+    INT i;
+
+    if (!pPathCchAppend)
+    {
+        win_skip("PathCchAppend() is not available.\n");
+        return;
+    }
+
+    MultiByteToWideChar(CP_ACP, 0, "\\a", -1, path1W, ARRAY_SIZE(path1W));
+    MultiByteToWideChar(CP_ACP, 0, "\\b", -1, path2W, ARRAY_SIZE(path2W));
+    hr = pPathCchAppend(NULL, PATHCCH_MAX_CCH, path2W);
+    ok(hr == E_INVALIDARG, "expect hr %#x, got %#x\n", E_INVALIDARG, hr);
+
+    hr = pPathCchAppend(path1W, 0, path2W);
+    ok(hr == E_INVALIDARG, "expect hr %#x, got %#x\n", E_INVALIDARG, hr);
+
+    hr = pPathCchAppend(path1W, PATHCCH_MAX_CCH + 1, path2W);
+    ok(hr == E_INVALIDARG, "expect hr %#x, got %#x\n", E_INVALIDARG, hr);
+
+    hr = pPathCchAppend(path1W, PATHCCH_MAX_CCH, NULL);
+    ok(hr == S_OK, "expect hr %#x, got %#x\n", S_OK, hr);
+    WideCharToMultiByte(CP_ACP, 0, path1W, -1, path1A, ARRAY_SIZE(path1A), NULL, NULL);
+    ok(!lstrcmpA(path1A, "\\a"), "expect \\a, got %s\n", path1A);
+
+    for (i = 0; i < ARRAY_SIZE(append_tests); i++)
+    {
+        const struct append_test *t = append_tests + i;
+
+        MultiByteToWideChar(CP_ACP, 0, t->path1, -1, path1W, ARRAY_SIZE(path1W));
+        MultiByteToWideChar(CP_ACP, 0, t->path2, -1, path2W, ARRAY_SIZE(path2W));
+        hr = pPathCchAppend(path1W, PATHCCH_MAX_CCH, path2W);
+        ok(hr == S_OK, "append \"%s\" \"%s\" expect hr %#x, got %#x\n", t->path1, t->path2, S_OK, hr);
+        if (SUCCEEDED(hr))
+        {
+            WideCharToMultiByte(CP_ACP, 0, path1W, -1, path1A, ARRAY_SIZE(path1A), NULL, NULL);
+            ok(!lstrcmpA(path1A, t->result), "append \"%s\" \"%s\" expect result \"%s\", got \"%s\"\n", t->path1,
+               t->path2, t->result, path1A);
+        }
+    }
+}
+
+static void test_PathCchAppendEx(void)
+{
+    WCHAR path1W[PATHCCH_MAX_CCH];
+    WCHAR path2W[PATHCCH_MAX_CCH];
+    CHAR path1A[PATHCCH_MAX_CCH];
+    HRESULT hr;
+    INT i;
+
+    if (!pPathCchAppendEx)
+    {
+        win_skip("PathCchAppendEx() is not available.\n");
+        return;
+    }
+
+    MultiByteToWideChar(CP_ACP, 0, "\\a", -1, path1W, ARRAY_SIZE(path1W));
+    MultiByteToWideChar(CP_ACP, 0, "\\b", -1, path2W, ARRAY_SIZE(path2W));
+    hr = pPathCchAppendEx(NULL, ARRAY_SIZE(path1W), path2W, 0);
+    ok(hr == E_INVALIDARG, "expect hr %#x, got %#x\n", E_INVALIDARG, hr);
+
+    hr = pPathCchAppendEx(path1W, 0, path2W, 0);
+    ok(hr == E_INVALIDARG, "expect hr %#x, got %#x\n", E_INVALIDARG, hr);
+    ok(path1W[0] == '\\', "expect path1 unchanged\n");
+
+    hr = pPathCchAppendEx(path1W, PATHCCH_MAX_CCH + 1, path2W, 0);
+    ok(hr == E_INVALIDARG, "expect hr %#x, got %#x\n", E_INVALIDARG, hr);
+    ok(path1W[0] == '\\', "expect path1 unchanged\n");
+
+    hr = pPathCchAppendEx(path1W,  ARRAY_SIZE(path1W), NULL, 0);
+    ok(hr == S_OK, "expect hr %#x, got %#x\n", S_OK, hr);
+    WideCharToMultiByte(CP_ACP, 0, path1W, -1, path1A, ARRAY_SIZE(path1A), NULL, NULL);
+    ok(!lstrcmpA(path1A, "\\a"), "expect \\a, got %s\n", path1A);
+
+    hr = pPathCchAppendEx(path1W, PATHCCH_MAX_CCH, path2W, 0);
+    ok(hr == S_OK, "expect hr %#x, got %#x\n", S_OK, hr);
+
+    for (i = 0; i < ARRAY_SIZE(append_tests); i++)
+    {
+        const struct append_test *t = append_tests + i;
+
+        MultiByteToWideChar(CP_ACP, 0, t->path1, -1, path1W, ARRAY_SIZE(path1W));
+        MultiByteToWideChar(CP_ACP, 0, t->path2, -1, path2W, ARRAY_SIZE(path2W));
+        hr = pPathCchAppendEx(path1W, PATHCCH_MAX_CCH, path2W, 0);
+        ok(hr == S_OK, "append \"%s\" \"%s\" expect hr %#x, got %#x\n", t->path1, t->path2, S_OK, hr);
+        if (SUCCEEDED(hr))
+        {
+            WideCharToMultiByte(CP_ACP, 0, path1W, -1, path1A, ARRAY_SIZE(path1A), NULL, NULL);
+            ok(!lstrcmpA(path1A, t->result), "append \"%s\" \"%s\" expect result \"%s\", got \"%s\"\n", t->path1,
+               t->path2, t->result, path1A);
+        }
+    }
+}
 
 static void test_PathCchAddExtension(void)
 {
@@ -1935,12 +2274,16 @@ START_TEST(path)
     HMODULE hmod = LoadLibraryA("kernelbase.dll");
 
     pPathAllocCanonicalize = (void *)GetProcAddress(hmod, "PathAllocCanonicalize");
-    pPathCchCombineEx = (void *)GetProcAddress(hmod, "PathCchCombineEx");
+    pPathAllocCombine = (void *)GetProcAddress(hmod, "PathAllocCombine");
     pPathCchAddBackslash = (void *)GetProcAddress(hmod, "PathCchAddBackslash");
     pPathCchAddBackslashEx = (void *)GetProcAddress(hmod, "PathCchAddBackslashEx");
     pPathCchAddExtension = (void *)GetProcAddress(hmod, "PathCchAddExtension");
+    pPathCchAppend = (void *)GetProcAddress(hmod, "PathCchAppend");
+    pPathCchAppendEx = (void *)GetProcAddress(hmod, "PathCchAppendEx");
     pPathCchCanonicalize = (void *)GetProcAddress(hmod, "PathCchCanonicalize");
     pPathCchCanonicalizeEx = (void *)GetProcAddress(hmod, "PathCchCanonicalizeEx");
+    pPathCchCombine = (void *)GetProcAddress(hmod, "PathCchCombine");
+    pPathCchCombineEx = (void *)GetProcAddress(hmod, "PathCchCombineEx");
     pPathCchFindExtension = (void *)GetProcAddress(hmod, "PathCchFindExtension");
     pPathCchIsRoot = (void *)GetProcAddress(hmod, "PathCchIsRoot");
     pPathCchRemoveBackslash = (void *)GetProcAddress(hmod, "PathCchRemoveBackslash");
@@ -1954,12 +2297,16 @@ START_TEST(path)
     pPathIsUNCEx = (void *)GetProcAddress(hmod, "PathIsUNCEx");
 
     test_PathAllocCanonicalize();
-    test_PathCchCombineEx();
+    test_PathAllocCombine();
     test_PathCchAddBackslash();
     test_PathCchAddBackslashEx();
     test_PathCchAddExtension();
+    test_PathCchAppend();
+    test_PathCchAppendEx();
     test_PathCchCanonicalize();
     test_PathCchCanonicalizeEx();
+    test_PathCchCombine();
+    test_PathCchCombineEx();
     test_PathCchFindExtension();
     test_PathCchIsRoot();
     test_PathCchRemoveBackslash();
