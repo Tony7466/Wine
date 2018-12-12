@@ -216,7 +216,8 @@ Depends:
  libwineVERSION-dev:armhf (= ${binary:Version}) [arm64],
 Recommends:
  wineVERSION (= ${source:Version}),
- g++ | clang [arm64],
+ clang [arm64],
+ g++ [!arm64],
 Conflicts:
  wine32VERSION-tools,
 Description: Windows API implementation - 64-bit developer tools
