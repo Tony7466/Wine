@@ -110,11 +110,7 @@ development files.  As root, execute e.g. on amd64:
 # apt install libwine-dev:i386
 # apt install libwine-development-dev:i386
 
-Use the programs with the option "-m32" (for winemaker --wine32).  If you are
-using wine64(-development)-tools specify the arch-specific path to some files
-additionally, e.g.:
-$ winegcc -m32 -L/usr/lib/i386-linux-gnu/wine ...
-$ winegcc -m32 -L/usr/lib/i386-linux-gnu/wine-development ...
+Use the programs with the option "-m32" (for winemaker --wine32).
 
 
 Wine Gecko
