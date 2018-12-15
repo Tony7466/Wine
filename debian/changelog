@@ -1,5 +1,6 @@
-wine (4.0~rc1-2) UNRELEASED; urgency=medium
+wine (4.0~rc2-1) UNRELEASED; urgency=medium
 
+  [ Jens Reyer ]
   * Don't check for new upstream development versions in src:wine.
   * Import changes from src:wine on git branch buster to this version:
     - Activate Wine as interpreter for Windows executables in wine-binfmt
@@ -17,7 +18,11 @@ wine (4.0~rc1-2) UNRELEASED; urgency=medium
   * Build-depend on libvkd3d-dev only on linux.
   * Drop note about i386 paths for 32-bit results with wine64-tools.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Fri, 14 Dec 2018 16:02:02 +0100
+  [ Michael Gilbert ]
+  * New upstream release 4.0-rc2, released Dec 14, 2018.
+    - Bug fixes only, we are in code freeze.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 15 Dec 2018 21:27:59 +0000
 
 wine (4.0~rc1-1) unstable; urgency=medium
 
