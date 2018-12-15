@@ -33,7 +33,7 @@ int MSVCRT___argc = 0;
 static int argc_expand;
 static int wargc_expand;
 unsigned int MSVCRT__commode = 0;
-unsigned int MSVCRT__fmode = 0;
+int MSVCRT__fmode = 0;
 unsigned int MSVCRT__osver = 0;
 unsigned int MSVCRT__osplatform = 0;
 unsigned int MSVCRT__winmajor = 0;
@@ -180,7 +180,7 @@ int CDECL _get_wpgmptr(WCHAR** p)
 /***********************************************************************
  *		__p__fmode (MSVCRT.@)
  */
-unsigned int* CDECL __p__fmode(void) { return &MSVCRT__fmode; }
+int* CDECL MSVCRT___p__fmode(void) { return &MSVCRT__fmode; }
 
 /***********************************************************************
  *              _set_fmode (MSVCRT.@)
@@ -230,12 +230,12 @@ unsigned int* CDECL __p__winver(void) { return &MSVCRT__winver; }
 /*********************************************************************
  *		__p__acmdln (MSVCRT.@)
  */
-char** CDECL __p__acmdln(void) { return &MSVCRT__acmdln; }
+char** CDECL MSVCRT___p__acmdln(void) { return &MSVCRT__acmdln; }
 
 /*********************************************************************
  *		__p__wcmdln (MSVCRT.@)
  */
-MSVCRT_wchar_t** CDECL __p__wcmdln(void) { return &MSVCRT__wcmdln; }
+MSVCRT_wchar_t** CDECL MSVCRT___p__wcmdln(void) { return &MSVCRT__wcmdln; }
 
 /*********************************************************************
  *		__p___argv (MSVCRT.@)
