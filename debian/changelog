@@ -1,4 +1,4 @@
-wine (4.0~rc2-1) UNRELEASED; urgency=medium
+wine (4.0~rc2-1) unstable; urgency=medium
 
   [ Jens Reyer ]
   * Don't check for new upstream development versions in src:wine.
@@ -20,7 +20,7 @@ wine (4.0~rc2-1) UNRELEASED; urgency=medium
 
   [ Michael Gilbert ]
   * New upstream release 4.0-rc2, released Dec 14, 2018.
-    - Bug fixes only, we are in code freeze.
+  * Restore note about winecfg and wineboot in README.debian.
 
  -- Michael Gilbert <mgilbert@debian.org>  Sat, 15 Dec 2018 21:27:59 +0000
 

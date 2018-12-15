@@ -73,6 +73,21 @@ $ winegcc-stable ...
 $ winegcc-development ...
 
 
+Configuring Wine's Options
+==========================
+Usually everything is automatically configured, but for fine-tuning a good tool
+is winecfg.
+
+If you want to set up Wine manually in a command line only setting, you can
+force the creation of a ~/.wine directory by running:
+$ wineboot
+
+If something goes horribly wrong, you can always completely wipe your Wine
+setup with "rm -rf ~/.wine".  This will destroy everything you've installed,
+including configuration and data files, so if you have anything important,
+please back it up first.  You can then start fresh.
+
+
 Running 32-bit Windows applications on 64-bit systems
 =====================================================
 Most Windows binaries are 32-bit applications.  Next to the main package wine
