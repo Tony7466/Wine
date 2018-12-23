@@ -8366,6 +8366,7 @@ static void test_IUri_GetPropertyLength(void) {
                 /* Value may be unicode encoded */
                 expectedValueW = a2w(prop.value);
                 expectedLen = lstrlenW(expectedValueW);
+                heap_free(expectedValueW);
 
                 /* This won't be necessary once GetPropertyLength is implemented. */
                 receivedLen = -1;
@@ -10528,7 +10529,7 @@ static void test_IUriBuilderFactory(void) {
                 ok(hr == S_OK, "Error: GetIUri return 0x%08x, expected 0x%08x.\n",
                     hr, S_OK);
                 ok(tmp == uri, "Error: Expected tmp to be %p, but was %p.\n", uri, tmp);
-                if(uri) IUri_Release(uri);
+                if(tmp) IUri_Release(tmp);
             }
             if(builder) IUriBuilder_Release(builder);
         }
@@ -11538,6 +11539,7 @@ static void test_IPersistStream(void)
         ok(hr == S_OK, "%d) Error creating uninitialized Uri: 0x%08x.\n", i, hr);
         hr = IUri_QueryInterface(uri, &IID_IMarshal, (void**)&marshal);
         ok(hr == S_OK, "%d) QueryInterface failed 0x%08x, expected S_OK.\n", i, hr);
+        IUri_Release(uri);
         hr = IMarshal_UnmarshalInterface(marshal, stream, &IID_IUri, (void**)&uri);
         ok(hr == S_OK, "%d) UnmarshalInterface failed 0x%08x, expected S_OK.\n", i, hr);
         hr = IUri_GetRawUri(uri, &raw_uri);
