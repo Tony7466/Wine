@@ -185,6 +185,7 @@ static HRESULT find_decoder(IStream *pIStream, const GUID *pguidVendor,
                             IWICBitmapDecoder_Release(*decoder);
                             IWICBitmapDecoderInfo_Release(decoderinfo);
                             IUnknown_Release(unkdecoderinfo);
+                            IEnumUnknown_Release(enumdecoders);
                             *decoder = NULL;
                             return res;
                         }
@@ -506,7 +507,7 @@ static HRESULT create_bitmap_from_source_rect(IWICBitmapSource *piBitmapSource, 
     IWICPixelFormatInfo2 *formatinfo;
     WICPixelFormatNumericRepresentation format_type;
 
-    assert(!rect || (rect && option == WICBitmapCacheOnLoad));
+    assert(!rect || option == WICBitmapCacheOnLoad);
 
     if (!piBitmapSource || !ppIBitmap)
         return E_INVALIDARG;
