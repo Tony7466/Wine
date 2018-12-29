@@ -1,3 +1,10 @@
+wine (4.0~rc4-1) UNRELEASED; urgency=medium
+
+  * New upstream release 4.0-rc4, released Dec 28, 2018.
+    - Bug fixes only, we are in code freeze.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 29 Dec 2018 21:55:32 +0000
+
 wine (4.0~rc3-1) unstable; urgency=medium
 
   * New upstream release 4.0-rc3, released Dec 21, 2018.
