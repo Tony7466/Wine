@@ -11,7 +11,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #include "wine/unicode.h"
  #include "objbase.h"
  #include "dinput_private.h"
-@@ -300,7 +301,13 @@ static void assign_action(HWND dialog)
+@@ -299,7 +300,13 @@ static void assign_action(HWND dialog)
      int old_action = lv_get_item_data(dialog, obj);
      int used_obj;
  

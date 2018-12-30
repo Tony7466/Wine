@@ -1,7 +1,7 @@
-wine (4.0~rc4-1) UNRELEASED; urgency=medium
+wine (4.0~rc4-1) unstable; urgency=medium
 
   * New upstream release 4.0-rc4, released Dec 28, 2018.
-    - Bug fixes only, we are in code freeze.
+    - Fixes startup error when running TreePad X Enterprise (closes: #917005).
 
  -- Michael Gilbert <mgilbert@debian.org>  Sat, 29 Dec 2018 21:55:32 +0000
 

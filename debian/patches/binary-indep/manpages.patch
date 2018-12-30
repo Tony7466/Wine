@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -3753,6 +3753,7 @@ static void output_sources( struct makef
+@@ -3756,6 +3756,7 @@ static void output_sources( struct makef
              output_filenames_obj_dir( make, make->all_targets );
              output( "\n" );
          }
