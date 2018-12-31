@@ -1,4 +1,4 @@
-wine (3.0.1-1) unstable; urgency=medium
+wine (4.0~rc2-1) unstable; urgency=medium
 
   The package wine-binfmt (not part of a standard Wine installation) will now
   automatically register Wine as interpreter for Windows executables.  This

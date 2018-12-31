@@ -133,8 +133,15 @@ override_dh_auto_configure:
 	./tools/make_unicode
 	./tools/make_requests
 	cd dlls/opengl32 && ./make_opengl
+	# autotools files
 	ln -sf /usr/share/misc/config.sub tools
 	ln -sf /usr/share/misc/config.guess tools
+	# image files used to generate icons for regedit
+	ln -sf ../../dlls/shell32/resources/image.svg programs/regedit/bin.svg
+	ln -sf ../../dlls/shell32/resources/folder.svg programs/regedit/folder.svg
+	ln -sf ../../dlls/shell32/resources/document.svg programs/regedit/string.svg
+	ln -sf ../../dlls/shell32/resources/mycomputer.svg programs/regedit/computer.svg
+	ln -sf ../../dlls/shell32/resources/folder_open.svg programs/regedit/folderopen.svg
 	# execute wine's configure script
 	./configure $(CONFLAGS)
 

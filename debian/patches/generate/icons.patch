@@ -46,30 +46,6 @@ author: Michael Gilbert <mgilbert@debian.org>
 -
 -/* @makedep: idi_tt_error_sm.ico */
 -IDI_TT_ERROR_SM ICON idi_tt_error_sm.ico
---- a/programs/regedit/regedit.rc
-+++ b/programs/regedit/regedit.rc
-@@ -434,21 +434,6 @@ STRINGTABLE
- 
- LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
- 
--/* @makedep: folderopen.ico */
--IDI_OPEN_FILE ICON folderopen.ico
--
--/* @makedep: folder.ico */
--IDI_CLOSED_FILE ICON folder.ico
--
--/* @makedep: computer.ico */
--IDI_ROOT ICON computer.ico
--
--/* @makedep: string.ico */
--IDI_STRING ICON string.ico
--
--/* @makedep: bin.ico */
--IDI_BIN  ICON bin.ico
--
- /* @makedep: regedit.ico */
- IDI_REGEDIT ICON regedit.ico
- 
 --- a/programs/taskmgr/taskmgr.rc
 +++ b/programs/taskmgr/taskmgr.rc
 @@ -580,12 +580,6 @@ LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
@@ -120,3 +96,11 @@ author: Michael Gilbert <mgilbert@debian.org>
 -
 -/* @makedep: oic_hand.ico */
 -1 ICON oic_hand.ico
+--- a/programs/regedit/Makefile.in
++++ b/programs/regedit/Makefile.in
+@@ -19,4 +19,4 @@ RC_SRCS = regedit.rc
+ 
+ MANPAGES = regedit.man.in
+ 
+-SVG_SRCS = regedit.svg
++SVG_SRCS = regedit.svg folderopen.svg folder.svg computer.svg string.svg bin.svg

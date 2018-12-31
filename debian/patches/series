@@ -1,5 +1,6 @@
 debianization/addons.patch
 debianization/makefile.patch
+debianization/winebuild.patch
 debianization/version-string.patch
 debianization/winemenubuilder.patch
 debianization/wineserver-persistence.patch
@@ -26,6 +27,7 @@ fixes/temporary-directory.patch
 
 warnings/arm-messages.patch
 warnings/arm-longdouble.patch
+warnings/arm64-dword.patch
 warnings/arm64-array-bounds.patch
 warnings/arm64-excess-precision.patch
 warnings/arm64-unused-functions.patch

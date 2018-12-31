@@ -1,3 +1,12 @@
+wine (4.0~rc4-2) unstable; urgency=medium
+
+  * Fix new build failure on arm64.
+  * Fix version number in NEWS.debian.
+  * Reformat a long manpage line to fit into 80 characters.
+  * Generate missing icons needed by regedit (closes: #917359).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Tue, 01 Jan 2019 03:21:38 +0000
+
 wine (4.0~rc4-1) unstable; urgency=medium
 
   * New upstream release 4.0-rc4, released Dec 28, 2018.

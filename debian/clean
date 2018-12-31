@@ -49,6 +49,13 @@ dlls/opengl32/opengl32.spec
 */*/*.ico
 */*/*/*.ico
 
+# symlinked svg files
+programs/regedit/bin.svg
+programs/regedit/folder.svg
+programs/regedit/string.svg
+programs/regedit/computer.svg
+programs/regedit/folderopen.svg
+
 # font files
 fonts/*.fon
 fonts/*.ttf
