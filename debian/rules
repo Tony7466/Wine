@@ -136,12 +136,25 @@ override_dh_auto_configure:
 	# autotools files
 	ln -sf /usr/share/misc/config.sub tools
 	ln -sf /usr/share/misc/config.guess tools
-	# image files used to generate icons for regedit
+	# image files used to generate icons for parts of wine
+	ln -sf ../../dlls/user32/resources/oic_hand.svg dlls/display.drv16/oic_hand.svg
+	ln -sf ../../dlls/user32/resources/oic_bang.svg dlls/comctl32/idi_tt_warn_sm.svg
+	ln -sf ../../dlls/user32/resources/oic_note.svg dlls/comctl32/idi_tt_info_sm.svg
+	ln -sf ../../dlls/user32/resources/oic_hand.svg dlls/comctl32/idi_tt_error_sm.svg
+	ln -sf ../../dlls/shell32/resources/move.svg dlls/comctl32/idi_dragarrow.svg
 	ln -sf ../../dlls/shell32/resources/image.svg programs/regedit/bin.svg
 	ln -sf ../../dlls/shell32/resources/folder.svg programs/regedit/folder.svg
 	ln -sf ../../dlls/shell32/resources/document.svg programs/regedit/string.svg
 	ln -sf ../../dlls/shell32/resources/mycomputer.svg programs/regedit/computer.svg
 	ln -sf ../../dlls/shell32/resources/folder_open.svg programs/regedit/folderopen.svg
+	ln -sf ../../dlls/shell32/resources/window.svg programs/taskmgr/window.svg
+	ln -sf ../../dlls/shell32/resources/window.svg programs/taskmgr/windowsm.svg
+	ln -sf ../../dlls/shell32/resources/drive.svg dlls/comdlg32/hdisk.svg
+	ln -sf ../../dlls/shell32/resources/folder.svg dlls/comdlg32/folder.svg
+	ln -sf ../../dlls/shell32/resources/network.svg dlls/comdlg32/network.svg
+	ln -sf ../../dlls/shell32/resources/folder_open.svg dlls/comdlg32/folder2.svg
+	ln -sf ../../dlls/shell32/resources/disk_drive.svg dlls/comdlg32/floppy.svg
+	ln -sf ../../dlls/shell32/resources/optical_drive.svg dlls/comdlg32/cdrom.svg
 	# execute wine's configure script
 	./configure $(CONFLAGS)
 

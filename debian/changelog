@@ -1,7 +1,9 @@
-wine (4.0~rc5-1) UNRELEASED; urgency=medium
+wine (4.0~rc5-1) unstable; urgency=medium
 
   * New upstream release 4.0-rc5, released Jan 4, 2019.
-    - Bug fixes only, we are in code freeze.
+  * Update standards version to 4.3.0.
+  * Regenerate all missing icon files.
+  * Drop libsane from the build dependencies.
 
  -- Michael Gilbert <mgilbert@debian.org>  Tue, 08 Jan 2019 01:52:57 +0000
 
