@@ -1203,6 +1203,40 @@ static void create_ico_file(const char *filename, const test_icon_entries_t *tes
     HeapFree(GetProcessHeap(), 0, buf);
 }
 
+static void create_bitmap_file(const char *filename, const BITMAPINFO *bmi, const unsigned char *bits)
+{
+    unsigned int clr_used, bmi_size, bits_size, stride;
+    const BITMAPINFOHEADER *h = &bmi->bmiHeader;
+    BITMAPFILEHEADER hdr;
+    DWORD bytes_written;
+    HANDLE file;
+    BOOL ret;
+
+    clr_used = h->biBitCount <= 8 ? 1u << h->biBitCount : 0;
+    stride = ((h->biBitCount * h->biWidth + 7) / 8 + 3) & ~3;
+    bits_size = h->biHeight * stride;
+    bmi_size = h->biSize + clr_used * sizeof(RGBQUAD);
+
+    hdr.bfType = 0x4d42;
+    hdr.bfOffBits = (DWORD)sizeof(BITMAPFILEHEADER) + bmi_size;
+    hdr.bfSize = hdr.bfOffBits + bits_size;
+    hdr.bfReserved1 = 0;
+    hdr.bfReserved2 = 0;
+
+    file = CreateFileA(filename, GENERIC_READ | GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+    ok(file != INVALID_HANDLE_VALUE, "CreateFileA failed, result %u.\n", GetLastError());
+    ret = WriteFile(file, &hdr, sizeof(hdr), &bytes_written, NULL);
+    ok(ret && bytes_written == sizeof(hdr), "Unexpected WriteFile() result, ret %#x, bytes_written %u.\n",
+            ret, bytes_written);
+    ret = WriteFile(file, bmi, bmi_size, &bytes_written, NULL);
+    ok(ret && bytes_written == bmi_size, "Unexpected WriteFile() result, ret %#x, bytes_written %u.\n",
+            ret, bytes_written);
+    ret = WriteFile(file, bits, bits_size, &bytes_written, NULL);
+    ok(ret && bytes_written == bits_size, "Unexpected WriteFile() result, ret %#x, bytes_written %u.\n",
+            ret, bytes_written);
+    CloseHandle(file);
+}
+
 static void test_LoadImage_working_directory_run(char *path)
 {
     DWORD bytes_written;
@@ -2755,21 +2789,58 @@ static COLORREF get_color_from_bits(const unsigned char *bits, const BITMAPINFO 
         unsigned int row, unsigned int column)
 {
     const BITMAPINFOHEADER *h = &bmi->bmiHeader;
+    unsigned int stride, shift, mask;
     const unsigned char *data;
-    unsigned int stride;
     RGBQUAD color;
+    WORD color16;
 
-    ok(h->biBitCount == 1 || h->biBitCount >= 24, "Unsupported bit count %u.\n", h->biBitCount);
     stride = ((h->biBitCount * h->biWidth + 7) / 8 + 3) & ~3;
     data = bits + row * stride + column * h->biBitCount / 8;
     if (h->biBitCount >= 24)
         return RGB(data[2], data[1], data[0]);
 
-    color = bmi->bmiColors[!!(data[0] & (1u << (7 - (column % 8))))];
+    if (h->biBitCount == 16)
+    {
+        color16 = ((WORD)data[1] << 8) | data[0];
+        return RGB(((color16 >> 10) & 0x1f) << 3, ((color16 >> 5) & 0x1f) << 3,
+                (color16 & 0x1f) << 3);
+    }
+    shift = 8 - h->biBitCount - (column * h->biBitCount) % 8;
+    mask = ~(~0u << h->biBitCount);
+    color = bmi->bmiColors[(data[0] >> shift) & mask];
     return RGB(color.rgbRed, color.rgbGreen, color.rgbBlue);
 }
 
-static void test_CopyImage_StretchMode(void)
+#define compare_bitmap_bits(a, b, c, d, e, f, g) compare_bitmap_bits_(__LINE__, a, b, c, d, e, f, g)
+static void compare_bitmap_bits_(unsigned int line, HDC hdc, HBITMAP bitmap, BITMAPINFO *bmi,
+        size_t result_bits_size, const unsigned char *expected_bits, unsigned int test_index, BOOL todo)
+{
+    unsigned char *result_bits;
+    unsigned int row, column;
+    int ret;
+
+    result_bits = HeapAlloc(GetProcessHeap(), 0, result_bits_size);
+    ret = GetDIBits(hdc, bitmap, 0, bmi->bmiHeader.biHeight,
+            result_bits, bmi, DIB_RGB_COLORS);
+    ok(ret == bmi->bmiHeader.biHeight, "Unexpected GetDIBits result %d, GetLastError() %u.\n",
+            ret, GetLastError());
+    for (row = 0; row < bmi->bmiHeader.biHeight; ++row)
+        for (column = 0; column < bmi->bmiHeader.biWidth; ++column)
+        {
+            COLORREF result, expected;
+
+            result = get_color_from_bits(result_bits, bmi, row, column);
+            expected = get_color_from_bits(expected_bits, bmi, row, column);
+
+            todo_wine_if(todo)
+            ok_(__FILE__, line)(result == expected, "Colors do not match, "
+                    "got 0x%06x, expected 0x%06x, test_index %u, row %u, column %u.\n",
+                    result, expected, test_index, row, column);
+        }
+    HeapFree(GetProcessHeap(), 0, result_bits);
+}
+
+static void test_Image_StretchMode(void)
 {
     static const unsigned char test_bits_24[] =
     {
@@ -2783,6 +2854,32 @@ static void test_CopyImage_StretchMode(void)
         0x3f, 0xff, 0x00,  0x3f, 0xff, 0x3f,  0x00, 0x00,
         0x3f, 0xff, 0x7f,  0x00, 0xff, 0x3f,  0x00, 0x00,
     };
+#define rgb16(r, g, b) ((WORD)(((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3)))
+    static const WORD test_bits_16[] =
+    {
+        rgb16(0x00, 0x20, 0x00), rgb16(0x00, 0x40, 0x00), rgb16(0x00, 0x40, 0xff), rgb16(0x00, 0x20, 0x00),
+        rgb16(0x00, 0x60, 0x00), rgb16(0xff, 0x80, 0x00), rgb16(0xff, 0x60, 0x00), rgb16(0x00, 0x80, 0x00),
+        rgb16(0x00, 0x20, 0xff), rgb16(0x00, 0x40, 0x00), rgb16(0x00, 0x40, 0xff), rgb16(0x00, 0x20, 0x00),
+        rgb16(0xff, 0x80, 0x00), rgb16(0x00, 0x60, 0xff), rgb16(0x00, 0x80, 0x00), rgb16(0x00, 0x60, 0x00),
+    };
+    static const WORD expected_bits_16[] =
+    {
+        rgb16(0x00, 0x40, 0x00), rgb16(0x00, 0x20, 0x00),
+        rgb16(0x00, 0x40, 0x00), rgb16(0x00, 0x20, 0x00),
+    };
+#undef rgb16
+    static const unsigned char test_bits_8[] =
+    {
+        0x00, 0xff, 0x00, 0xff,
+        0x00, 0x00, 0x00, 0x00,
+        0xff, 0x55, 0x00, 0xff,
+        0x00, 0xff, 0xff, 0x00,
+    };
+    static const unsigned char expected_bits_8[] =
+    {
+        0xff, 0xff, 0x00, 0x00,
+        0x55, 0xff, 0x00, 0x00,
+    };
     static const unsigned char test_bits_1[] =
     {
         0x30, 0x0, 0x0, 0x0,
@@ -2795,6 +2892,12 @@ static void test_CopyImage_StretchMode(void)
         0x40, 0x0, 0x0, 0x0,
         0x0,  0x0, 0x0, 0x0,
     };
+    static const RGBQUAD colors_bits_1[] =
+    {
+        {0, 0, 0},
+        {0xff, 0xff, 0xff},
+    };
+    static RGBQUAD colors_bits_8[256];
 
     static const struct
     {
@@ -2802,40 +2905,57 @@ static void test_CopyImage_StretchMode(void)
         WORD bit_count;
         const unsigned char *test_bits, *expected_bits;
         size_t test_bits_size, result_bits_size;
+        const RGBQUAD *bmi_colors;
+        size_t bmi_colors_size;
         BOOL todo;
     }
     tests[] =
     {
         {4, 4, 2, 2, 24, test_bits_24, expected_bits_24,
-                sizeof(test_bits_24), sizeof(expected_bits_24), TRUE},
+                sizeof(test_bits_24), sizeof(expected_bits_24), NULL, 0, TRUE},
         {4, 4, 2, 2, 1, test_bits_1, expected_bits_1,
-                sizeof(test_bits_1), sizeof(expected_bits_1), FALSE},
+                sizeof(test_bits_1), sizeof(expected_bits_1), colors_bits_1,
+                sizeof(colors_bits_1), FALSE},
+        {4, 4, 2, 2, 8, test_bits_8, expected_bits_8,
+                sizeof(test_bits_8), sizeof(expected_bits_8), colors_bits_8,
+                sizeof(colors_bits_8), TRUE},
+        {4, 4, 2, 2, 16, (const unsigned char *)test_bits_16, (const unsigned char *)expected_bits_16,
+                sizeof(test_bits_16), sizeof(expected_bits_16), NULL, 0, TRUE},
     };
-
+    static const char filename[] = "test.bmp";
+    BITMAPINFO *bmi, *bmi_output;
     HBITMAP bitmap, bitmap_copy;
-    unsigned char *result_bits;
-    unsigned int row, column;
     unsigned int test_index;
     unsigned char *bits;
-    BITMAPINFO *bmi;
+    size_t bmi_size;
+    unsigned int i;
     HDC hdc;
-    int ret;
 
-    bmi = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(BITMAPINFOHEADER) + 256 * sizeof(RGBQUAD));
+    bmi_size = sizeof(BITMAPINFOHEADER) + 256 * sizeof(RGBQUAD);
+    bmi = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, bmi_size);
+    bmi_output = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, bmi_size);
     bmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
     bmi->bmiHeader.biPlanes = 1;
     bmi->bmiHeader.biCompression = BI_RGB;
-    bmi->bmiColors[1].rgbRed = 0xff;
-    bmi->bmiColors[1].rgbGreen = 0xff;
-    bmi->bmiColors[1].rgbBlue = 0xff;
+
+    for (i = 0; i < 256; ++i)
+        colors_bits_8[i].rgbRed = colors_bits_8[i].rgbGreen = colors_bits_8[i].rgbBlue = i;
 
     hdc = GetDC(NULL);
 
     for (test_index = 0; test_index < ARRAY_SIZE(tests); ++test_index)
     {
+        if (tests[test_index].bmi_colors)
+            memcpy(bmi->bmiColors, tests[test_index].bmi_colors, tests[test_index].bmi_colors_size);
+        else
+            memset(bmi->bmiColors, 0, 256 * sizeof(RGBQUAD));
+
         bmi->bmiHeader.biWidth = tests[test_index].width;
         bmi->bmiHeader.biHeight = tests[test_index].height;
         bmi->bmiHeader.biBitCount = tests[test_index].bit_count;
+        memcpy(bmi_output, bmi, bmi_size);
+        bmi_output->bmiHeader.biWidth = tests[test_index].output_width;
+        bmi_output->bmiHeader.biHeight = tests[test_index].output_height;
 
         bitmap = CreateDIBSection(hdc, bmi, DIB_RGB_COLORS, (void **)&bits, NULL, 0);
         ok(bitmap && bits, "CreateDIBSection() failed, result %u.\n", GetLastError());
@@ -2845,33 +2965,22 @@ static void test_CopyImage_StretchMode(void)
                 tests[test_index].output_height, LR_CREATEDIBSECTION);
         ok(!!bitmap_copy, "CopyImage() failed, result %u.\n", GetLastError());
 
-        result_bits = HeapAlloc(GetProcessHeap(), 0, tests[test_index].result_bits_size);
-
-        bmi->bmiHeader.biWidth = tests[test_index].output_width;
-        bmi->bmiHeader.biHeight = tests[test_index].output_height;
-        ret = GetDIBits(hdc, bitmap_copy, 0, tests[test_index].output_height,
-                result_bits, bmi, DIB_RGB_COLORS);
-        ok(ret == tests[test_index].output_height, "Unexpected GetDIBits result %d, GetLastError() %u.\n",
-                ret, GetLastError());
-
-        for (row = 0; row < tests[test_index].output_height; ++row)
-            for (column = 0; column < tests[test_index].output_width; ++column)
-            {
-                COLORREF result, expected;
-
-                result = get_color_from_bits(result_bits, bmi, row, column);
-                expected = get_color_from_bits(tests[test_index].expected_bits, bmi, row, column);
-
-                todo_wine_if(tests[test_index].todo)
-                ok(result == expected, "Colors do not match, "
-                        "got 0x%06x, expected 0x%06x, test_index %u, row %u, column %u.\n",
-                        result, expected, test_index, row, column);
-            }
+        compare_bitmap_bits(hdc, bitmap_copy, bmi_output, tests[test_index].result_bits_size,
+                tests[test_index].expected_bits, test_index, tests[test_index].todo);
         DeleteObject(bitmap);
         DeleteObject(bitmap_copy);
-        HeapFree(GetProcessHeap(), 0, result_bits);
+
+        create_bitmap_file(filename, bmi, tests[test_index].test_bits);
+        bitmap = LoadImageA(NULL, filename, IMAGE_BITMAP, tests[test_index].output_width,
+                tests[test_index].output_height, LR_CREATEDIBSECTION | LR_LOADFROMFILE);
+        ok(!!bitmap, "LoadImageA() failed, result %u.\n", GetLastError());
+        DeleteFileA(filename);
+        compare_bitmap_bits(hdc, bitmap, bmi_output, tests[test_index].result_bits_size,
+                tests[test_index].expected_bits, test_index, tests[test_index].todo);
+        DeleteObject(bitmap);
     }
     ReleaseDC(0, hdc);
+    HeapFree(GetProcessHeap(), 0, bmi_output);
     HeapFree(GetProcessHeap(), 0, bmi);
 }
 
@@ -2902,7 +3011,7 @@ START_TEST(cursoricon)
     test_CopyImage_Bitmap(16);
     test_CopyImage_Bitmap(24);
     test_CopyImage_Bitmap(32);
-    test_CopyImage_StretchMode();
+    test_Image_StretchMode();
     test_initial_cursor();
     test_CreateIcon();
     test_LoadImage();

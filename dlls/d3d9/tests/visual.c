@@ -28,6 +28,7 @@
  * causes visible results in games can be tested in a way that does not depend on pixel exactness
  */
 
+#include <limits.h>
 #include <math.h>
 
 #define COBJMACROS
@@ -71,6 +72,30 @@ static BOOL color_match(D3DCOLOR c1, D3DCOLOR c2, BYTE max_diff)
     c1 >>= 8; c2 >>= 8;
     if (abs((int)(c1 & 0xff) - (int)(c2 & 0xff)) > max_diff) return FALSE;
     return TRUE;
+}
+
+static BOOL compare_float(float f, float g, unsigned int ulps)
+{
+    int x = *(int *)&f;
+    int y = *(int *)&g;
+
+    if (x < 0)
+        x = INT_MIN - x;
+    if (y < 0)
+        y = INT_MIN - y;
+
+    if (abs(x - y) > ulps)
+        return FALSE;
+
+    return TRUE;
+}
+
+static BOOL compare_vec4(const struct vec4 *vec, float x, float y, float z, float w, unsigned int ulps)
+{
+    return compare_float(vec->x, x, ulps)
+            && compare_float(vec->y, y, ulps)
+            && compare_float(vec->z, z, ulps)
+            && compare_float(vec->w, w, ulps);
 }
 
 static BOOL adapter_is_warp(const D3DADAPTER_IDENTIFIER9 *identifier)
@@ -214,10 +239,10 @@ static DWORD getPixelColor(IDirect3DDevice9 *device, UINT x, UINT y)
 #define check_rt_color(a, b) check_rt_color_(__LINE__, a, b)
 static void check_rt_color_(unsigned int line, IDirect3DSurface9 *rt, D3DCOLOR expected_color)
 {
+    D3DCOLOR color = 0xdeadbeef;
     struct surface_readback rb;
     D3DSURFACE_DESC desc;
     unsigned int x, y;
-    D3DCOLOR color;
     HRESULT hr;
 
     hr = IDirect3DSurface9_GetDesc(rt, &desc);
@@ -236,7 +261,7 @@ static void check_rt_color_(unsigned int line, IDirect3DSurface9 *rt, D3DCOLOR e
             break;
     }
     release_surface_readback(&rb);
-    ok_(__FILE__, line)(color == 0x000000ff, "Got unexpected color 0x%08x.\n", color);
+    ok_(__FILE__, line)(color == expected_color, "Got unexpected color 0x%08x.\n", color);
 }
 
 static IDirect3DDevice9 *create_device(IDirect3D9 *d3d, HWND device_window, HWND focus_window, BOOL windowed)
@@ -1319,6 +1344,108 @@ static void clear_test(void)
     IDirect3DTexture9_Release(texture);
     refcount = IDirect3DDevice9_Release(device);
     ok(!refcount, "Device has %u references left.\n", refcount);
+done:
+    IDirect3D9_Release(d3d);
+    DestroyWindow(window);
+}
+
+static void test_clear_different_size_surfaces(void)
+{
+    IDirect3DSurface9 *ds, *rt, *rt2;
+    IDirect3DDevice9 *device;
+    D3DFORMAT ds_format;
+    D3DLOCKED_RECT lr;
+    unsigned int x, y;
+    D3DVIEWPORT9 vp;
+    IDirect3D9 *d3d;
+    D3DCAPS9 caps;
+    WORD *depth;
+    HWND window;
+    HRESULT hr;
+
+    window = create_window();
+    d3d = Direct3DCreate9(D3D_SDK_VERSION);
+    ok(!!d3d, "Failed to create D3D object.\n");
+    if (!(device = create_device(d3d, window, window, TRUE)))
+    {
+        skip("Failed to create D3D device.\n");
+        goto done;
+    }
+
+    hr = IDirect3DDevice9_GetDeviceCaps(device, &caps);
+    ok(hr == D3D_OK, "Failed to get device caps, hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_CreateRenderTarget(device, 1, 1, D3DFMT_A8R8G8B8,
+            D3DMULTISAMPLE_NONE, 0, TRUE, &rt, NULL);
+    ok(hr == D3D_OK, "Failed to create render target surface, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_CreateRenderTarget(device, 1, 2, D3DFMT_A8R8G8B8,
+            D3DMULTISAMPLE_NONE, 0, TRUE, &rt2, NULL);
+    ok(hr == D3D_OK, "Failed to create render target surface, hr %#x.\n", hr);
+
+    if (SUCCEEDED(IDirect3D9_CheckDeviceFormat(d3d, D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL,
+            D3DFMT_A8R8G8B8, D3DUSAGE_DEPTHSTENCIL, D3DRTYPE_SURFACE, D3DFMT_D16_LOCKABLE)))
+    {
+        ds_format = D3DFMT_D16_LOCKABLE;
+    }
+    else
+    {
+        ds_format = D3DFMT_D24S8;
+    }
+
+    hr = IDirect3DDevice9_CreateDepthStencilSurface(device, 4, 4, ds_format,
+            D3DMULTISAMPLE_NONE, 0, FALSE, &ds, NULL);
+    ok(hr == D3D_OK, "Failed to create depth surface, hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_SetDepthStencilSurface(device, ds);
+    ok(hr == D3D_OK, "Failed to set depth stencil surface, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_SetRenderTarget(device, 0, rt);
+    ok(hr == D3D_OK, "Failed to set render target, hr %#x.\n", hr);
+    if (caps.NumSimultaneousRTs >= 2)
+    {
+        hr = IDirect3DDevice9_SetRenderTarget(device, 1, rt2);
+        ok(hr == D3D_OK, "Failed to set render target, hr %#x.\n", hr);
+    }
+
+    vp.X = 0;
+    vp.Y = 0;
+    vp.Width = 640;
+    vp.Height = 640;
+    vp.MinZ = 0.0f;
+    vp.MaxZ = 1.0f;
+    hr = IDirect3DDevice9_SetViewport(device, &vp);
+    ok(hr == D3D_OK, "Failed to set viewport, hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_Clear(device, 0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, 0xffff0000, 0.5f, 0);
+    ok(hr == D3D_OK, "Failed to clear, hr %#x.\n", hr);
+
+    check_rt_color(rt, 0x00ff0000);
+
+    if (caps.NumSimultaneousRTs >= 2)
+        check_rt_color(rt2, 0x00ff0000);
+
+    if (ds_format == D3DFMT_D16_LOCKABLE)
+    {
+        hr = IDirect3DSurface9_LockRect(ds, &lr, NULL, D3DLOCK_READONLY);
+        ok(hr == D3D_OK, "Failed to lock rect, hr %#x.\n", hr);
+        for (y = 0; y < 4; ++y)
+        {
+            depth = (WORD *)((BYTE *)lr.pBits + y * lr.Pitch);
+            for (x = 0; x < 4; ++x)
+            {
+                ok(abs(depth[x] - 0x7fff) <= 2, "Got depth 0x%04x at %u, %u.\n", depth[x], x, y);
+            }
+        }
+        hr = IDirect3DSurface9_UnlockRect(ds);
+        ok(hr == D3D_OK, "Failed to unlock rect, hr %#x.\n", hr);
+        IDirect3DSurface9_Release(ds);
+    }
+    else
+    {
+        skip("D3DFMT_D16_LOCKABLE is not supported.\n");
+    }
+
+    IDirect3DSurface9_Release(rt);
+    IDirect3DSurface9_Release(rt2);
 done:
     IDirect3D9_Release(d3d);
     DestroyWindow(window);
@@ -24199,12 +24326,14 @@ static void test_color_vertex(void)
 
 static void test_sysmem_draw(void)
 {
+    IDirect3DVertexBuffer9 *vb, *vb_s0, *vb_s1, *dst_vb;
     IDirect3DVertexDeclaration9 *vertex_declaration;
-    IDirect3DVertexBuffer9 *vb, *vb_s0, *vb_s1;
     IDirect3DIndexBuffer9 *ib;
     IDirect3DDevice9 *device;
+    struct vec4 *dst_data;
     IDirect3D9 *d3d;
     D3DCOLOR colour;
+    unsigned int i;
     ULONG refcount;
     HWND window;
     HRESULT hr;
@@ -24223,13 +24352,18 @@ static void test_sysmem_draw(void)
     }
     quad[] =
     {
-        {{-1.0f, -1.0f, 0.0f}, 0xffff0000},
-        {{-1.0f,  1.0f, 0.0f}, 0xff00ff00},
-        {{ 1.0f, -1.0f, 0.0f}, 0xff0000ff},
-        {{ 1.0f,  1.0f, 0.0f}, 0xffffffff},
+        {{-0.5f, -0.5f, 0.0f}, 0xffff0000},
+        {{-0.5f,  0.5f, 0.0f}, 0xff00ff00},
+        {{ 0.5f, -0.5f, 0.0f}, 0xff0000ff},
+        {{ 0.5f,  0.5f, 0.0f}, 0xffffffff},
     };
     static const struct vec3 quad_s0[] =
     {
+        {-1.0f, -1.0f, 0.0f},
+        {-1.0f,  1.0f, 0.0f},
+        { 1.0f, -1.0f, 0.0f},
+        { 1.0f,  1.0f, 0.0f},
+
         {-1.0f, -1.0f, 0.0f},
         {-1.0f,  1.0f, 0.0f},
         { 1.0f, -1.0f, 0.0f},
@@ -24241,6 +24375,11 @@ static void test_sysmem_draw(void)
         0xff00ff00,
         0xff0000ff,
         0xffffffff,
+
+        0xff443322,
+        0xff443322,
+        0xff443322,
+        0xff443322,
     };
     static const short indices[] = {0, 1, 2, 3};
 
@@ -24285,6 +24424,23 @@ static void test_sysmem_draw(void)
 
     colour = getPixelColor(device, 320, 240);
     ok(color_match(colour, 0x00007f7f, 1), "Got unexpected colour 0x%08x.\n", colour);
+
+    hr = IDirect3DDevice9_CreateVertexBuffer(device, ARRAY_SIZE(quad) * sizeof(*dst_data),
+            0, D3DFVF_XYZRHW, D3DPOOL_SYSTEMMEM, &dst_vb, NULL);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice9_ProcessVertices(device, 0, 0, ARRAY_SIZE(quad), dst_vb, NULL, 0);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DVertexBuffer9_Lock(dst_vb, 0, 0, (void **)&dst_data, 0);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    for (i = 0; i < ARRAY_SIZE(quad); ++i)
+    {
+        ok(compare_vec4(&dst_data[i], quad[i].position.x * 320.0f + 320.0f,
+                -quad[i].position.y * 240.0f + 240.0f, 0.0f, 1.0f, 1),
+                "Got unexpected vertex %u {%.8e, %.8e, %.8e, %.8e}.\n",
+                i, dst_data[i].x, dst_data[i].y, dst_data[i].z, dst_data[i].w);
+    }
+    hr = IDirect3DVertexBuffer9_Unlock(dst_vb);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
 
     hr = IDirect3DDevice9_CreateIndexBuffer(device, sizeof(indices), 0,
             D3DFMT_INDEX16, D3DPOOL_SYSTEMMEM, &ib, NULL);
@@ -24349,6 +24505,19 @@ static void test_sysmem_draw(void)
     colour = getPixelColor(device, 320, 240);
     ok(color_match(colour, 0x00007f7f, 1), "Got unexpected colour 0x%08x.\n", colour);
 
+    hr = IDirect3DDevice9_Clear(device, 0, NULL, D3DCLEAR_TARGET, 0x77777777, 0.0f, 0);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_BeginScene(device);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice9_DrawIndexedPrimitive(device, D3DPT_TRIANGLESTRIP, 4, 0, 4, 0, 2);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice9_EndScene(device);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+
+    colour = getPixelColor(device, 320, 240);
+    ok(color_match(colour, 0x00443322, 1), "Got unexpected colour 0x%08x.\n", colour);
+
     hr = IDirect3DDevice9_Present(device, NULL, NULL, NULL, NULL);
     ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
 
@@ -24356,6 +24525,7 @@ static void test_sysmem_draw(void)
     IDirect3DVertexBuffer9_Release(vb_s0);
     IDirect3DVertexDeclaration9_Release(vertex_declaration);
     IDirect3DIndexBuffer9_Release(ib);
+    IDirect3DVertexBuffer9_Release(dst_vb);
     IDirect3DVertexBuffer9_Release(vb);
     refcount = IDirect3DDevice9_Release(device);
     ok(!refcount, "Device has %u references left.\n", refcount);
@@ -24397,6 +24567,7 @@ START_TEST(visual)
     lighting_test();
     test_specular_lighting();
     clear_test();
+    test_clear_different_size_surfaces();
     color_fill_test();
     fog_test();
     test_cube_wrap();
