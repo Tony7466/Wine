@@ -4977,7 +4977,7 @@ static void fill_surface(IDirectDrawSurface *surface, D3DCOLOR color)
 
     for (y = 0; y < surface_desc.dwHeight; ++y)
     {
-        ptr = (DWORD *)((BYTE *)surface_desc.lpSurface + y * surface_desc.lPitch);
+        ptr = (DWORD *)((BYTE *)surface_desc.lpSurface + y * U1(surface_desc).lPitch);
         for (x = 0; x < surface_desc.dwWidth; ++x)
         {
             ptr[x] = color;
@@ -6014,6 +6014,53 @@ static void test_surface_attachment(void)
     IDirectDrawSurface_Release(surface3);
     IDirectDrawSurface_Release(surface2);
     IDirectDrawSurface_Release(surface1);
+
+    /* Test depth surfaces of different sizes. */
+    memset(&surface_desc, 0, sizeof(surface_desc));
+    surface_desc.dwSize = sizeof(surface_desc);
+    surface_desc.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
+    surface_desc.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN | DDSCAPS_3DDEVICE;
+    surface_desc.dwWidth = 64;
+    surface_desc.dwHeight = 64;
+    hr = IDirectDraw2_CreateSurface(ddraw, &surface_desc, &surface1, NULL);
+    ok(hr == D3D_OK, "Failed to create surface, hr %#x.\n", hr);
+
+    memset(&surface_desc, 0, sizeof(surface_desc));
+    surface_desc.dwSize = sizeof(surface_desc);
+    surface_desc.dwFlags = DDSD_CAPS | DDSD_PIXELFORMAT | DDSD_WIDTH | DDSD_HEIGHT;
+    surface_desc.ddsCaps.dwCaps = DDSCAPS_ZBUFFER;
+    surface_desc.ddpfPixelFormat.dwSize = sizeof(surface_desc.ddpfPixelFormat);
+    surface_desc.ddpfPixelFormat.dwFlags = DDPF_ZBUFFER;
+    U1(surface_desc.ddpfPixelFormat).dwZBufferBitDepth = 16;
+    U3(surface_desc.ddpfPixelFormat).dwZBitMask = 0x0000ffff;
+    surface_desc.dwWidth = 32;
+    surface_desc.dwHeight = 32;
+    hr = IDirectDraw2_CreateSurface(ddraw, &surface_desc, &surface2, NULL);
+    ok(hr == D3D_OK, "Failed to create surface, hr %#x.\n", hr);
+    surface_desc.dwWidth = 64;
+    surface_desc.dwHeight = 64;
+    hr = IDirectDraw2_CreateSurface(ddraw, &surface_desc, &surface3, NULL);
+    ok(hr == D3D_OK, "Failed to create surface, hr %#x.\n", hr);
+    surface_desc.dwWidth = 128;
+    surface_desc.dwHeight = 128;
+    hr = IDirectDraw2_CreateSurface(ddraw, &surface_desc, &surface4, NULL);
+    ok(hr == D3D_OK, "Failed to create surface, hr %#x.\n", hr);
+
+    hr = IDirectDrawSurface_AddAttachedSurface(surface1, surface2);
+    todo_wine ok(hr == DDERR_CANNOTATTACHSURFACE, "Got unexpected hr %#x.\n", hr);
+    if (SUCCEEDED(hr))
+        IDirectDrawSurface2_DeleteAttachedSurface(surface1, 0, surface3);
+    hr = IDirectDrawSurface_AddAttachedSurface(surface1, surface3);
+    ok(hr == D3D_OK, "Failed to attach depth buffer, hr %#x.\n", hr);
+    hr = IDirectDrawSurface2_DeleteAttachedSurface(surface1, 0, surface3);
+    ok(hr == D3D_OK, "Failed to detach depth buffer, hr %#x.\n", hr);
+    hr = IDirectDrawSurface_AddAttachedSurface(surface1, surface4);
+    todo_wine ok(hr == DDERR_CANNOTATTACHSURFACE, "Got unexpected hr %#x.\n", hr);
+
+    IDirectDrawSurface2_Release(surface4);
+    IDirectDrawSurface2_Release(surface3);
+    IDirectDrawSurface2_Release(surface2);
+    IDirectDrawSurface2_Release(surface1);
 
     /* Test DeleteAttachedSurface() and automatic detachment of attached surfaces on release. */
     memset(&surface_desc, 0, sizeof(surface_desc));
@@ -10199,11 +10246,11 @@ static void test_blt_z_alpha(void)
 
     for (i = 0; i < ARRAY_SIZE(blt_flags); ++i)
     {
-        fx.dwFillColor = 0x3300ff00;
+        U5(fx).dwFillColor = 0x3300ff00;
         hr = IDirectDrawSurface_Blt(src_surface, NULL, NULL, NULL, DDBLT_COLORFILL | DDBLT_WAIT, &fx);
         ok(SUCCEEDED(hr), "Test %u: Got unexpected hr %#x.\n", i, hr);
 
-        fx.dwFillColor = 0xccff0000;
+        U5(fx).dwFillColor = 0xccff0000;
         hr = IDirectDrawSurface_Blt(dst_surface, NULL, NULL, NULL, DDBLT_COLORFILL | DDBLT_WAIT, &fx);
         ok(SUCCEEDED(hr), "Test %u: Got unexpected hr %#x.\n", i, hr);
 
@@ -10269,7 +10316,7 @@ static void test_cross_device_blt(void)
     surface_desc.dwSize = sizeof(surface_desc);
     surface_desc.dwFlags = DDSD_CAPS | DDSD_BACKBUFFERCOUNT;
     surface_desc.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE | DDSCAPS_COMPLEX | DDSCAPS_FLIP | DDSCAPS_VIDEOMEMORY;
-    U5(surface_desc).dwBackBufferCount = 2;
+    surface_desc.dwBackBufferCount = 2;
     hr = IDirectDraw2_CreateSurface(ddraw, &surface_desc, &surface, NULL);
     ok(SUCCEEDED(hr), "Failed to create surface, hr %#x.\n", hr);
 
@@ -11918,7 +11965,7 @@ static void test_ck_operation(void)
     surface_desc.dwWidth = 4;
     surface_desc.dwHeight = 1;
     surface_desc.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
-    U4(surface_desc).ddpfPixelFormat.dwFlags = DDPF_RGB;
+    surface_desc.ddpfPixelFormat.dwFlags = DDPF_RGB;
     U1(surface_desc.ddpfPixelFormat).dwRGBBitCount = 32;
     U2(surface_desc.ddpfPixelFormat).dwRBitMask = 0x00ff0000;
     U3(surface_desc.ddpfPixelFormat).dwGBitMask = 0x0000ff00;
@@ -12641,10 +12688,10 @@ static void test_clear(void)
 
     /* negative x, negative y.
      * Also ignored, except on WARP, which clears the entire screen. */
-    rect_negneg.x1 = 640;
-    rect_negneg.y1 = 240;
-    rect_negneg.x2 = 320;
-    rect_negneg.y2 = 0;
+    U1(rect_negneg).x1 = 640;
+    U2(rect_negneg).y1 = 240;
+    U3(rect_negneg).x2 = 320;
+    U4(rect_negneg).y2 = 0;
     viewport_set_background(device, viewport, green);
     hr = IDirect3DViewport2_Clear(viewport, 1, &rect_negneg, D3DCLEAR_TARGET);
     ok(SUCCEEDED(hr), "Failed to clear, hr %#x.\n", hr);
@@ -12946,7 +12993,7 @@ static void test_viewport(void)
     memset(&surface_desc, 0, sizeof(surface_desc));
     surface_desc.dwSize = sizeof(surface_desc);
     hr = IDirectDrawSurface_GetSurfaceDesc(ds, &surface_desc);
-    z_fmt = U4(surface_desc).ddpfPixelFormat;
+    z_fmt = surface_desc.ddpfPixelFormat;
 
     for (i = 0; i < ARRAY_SIZE(rt_sizes); ++i)
     {
@@ -12963,7 +13010,7 @@ static void test_viewport(void)
 
             surface_desc.dwFlags = DDSD_CAPS | DDSD_PIXELFORMAT | DDSD_WIDTH | DDSD_HEIGHT;
             surface_desc.ddsCaps.dwCaps = DDSCAPS_ZBUFFER;
-            U4(surface_desc).ddpfPixelFormat = z_fmt;
+            surface_desc.ddpfPixelFormat = z_fmt;
             hr = IDirectDraw2_CreateSurface(ddraw, &surface_desc, &ds, NULL);
             ok(SUCCEEDED(hr), "Failed to create depth buffer, hr %#x (i %u).\n", hr, i);
             hr = IDirectDrawSurface_AddAttachedSurface(rt, ds);
