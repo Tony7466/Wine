@@ -1,3 +1,10 @@
+wine (4.0~rc7-1) UNRELEASED; urgency=medium
+
+  * New upstream release 4.0-rc7, released Jan 18, 2019.
+    - Bug fixes only, we are in code freeze.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Fri, 25 Jan 2019 20:45:48 +0100
+
 wine (4.0~rc6-1) unstable; urgency=medium
 
   * New upstream release 4.0-rc6, released Jan 11, 2019.
