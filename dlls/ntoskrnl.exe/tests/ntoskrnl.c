@@ -33,6 +33,7 @@
 static HANDLE device;
 
 static BOOL     (WINAPI *pRtlDosPathNameToNtPathName_U)( LPCWSTR, PUNICODE_STRING, PWSTR*, CURDIR* );
+static BOOL     (WINAPI *pRtlFreeUnicodeString)( PUNICODE_STRING );
 
 static void load_resource(const char *name, char *filename)
 {
@@ -144,7 +145,7 @@ static void main_test(void)
     WCHAR temppathW[MAX_PATH], pathW[MAX_PATH];
     struct test_input *test_input;
     UNICODE_STRING pathU;
-    DWORD written, read;
+    DWORD len, written, read;
     LONG new_failures;
     char buffer[512];
     HANDLE okfile;
@@ -155,13 +156,14 @@ static void main_test(void)
     GetTempFileNameW(temppathW, dokW, 0, pathW);
     pRtlDosPathNameToNtPathName_U( pathW, &pathU, NULL, NULL );
 
-    test_input = heap_alloc( offsetof( struct test_input, path[pathU.Length / sizeof(WCHAR)]) );
+    len = pathU.Length + sizeof(WCHAR);
+    test_input = heap_alloc( offsetof( struct test_input, path[len / sizeof(WCHAR)]) );
     test_input->running_under_wine = !strcmp(winetest_platform, "wine");
     test_input->winetest_report_success = winetest_report_success;
     test_input->winetest_debug = winetest_debug;
-    memcpy(test_input->path, pathU.Buffer, pathU.Length + sizeof(WCHAR));
+    memcpy(test_input->path, pathU.Buffer, len);
     res = DeviceIoControl(device, IOCTL_WINETEST_MAIN_TEST, test_input,
-                          offsetof( struct test_input, path[pathU.Length / sizeof(WCHAR)]),
+                          offsetof( struct test_input, path[len / sizeof(WCHAR)]),
                           &new_failures, sizeof(new_failures), &written, NULL);
     ok(res, "DeviceIoControl failed: %u\n", GetLastError());
     ok(written == sizeof(new_failures), "got size %x\n", written);
@@ -176,6 +178,8 @@ static void main_test(void)
     } while (read == sizeof(buffer));
     winetest_add_failures(new_failures);
 
+    pRtlFreeUnicodeString(&pathU);
+    heap_free(test_input);
     CloseHandle(okfile);
     DeleteFileW(pathW);
 }
@@ -248,6 +252,7 @@ START_TEST(ntoskrnl)
 
     HMODULE hntdll = GetModuleHandleA("ntdll.dll");
     pRtlDosPathNameToNtPathName_U = (void *)GetProcAddress(hntdll, "RtlDosPathNameToNtPathName_U");
+    pRtlFreeUnicodeString = (void *)GetProcAddress(hntdll, "RtlFreeUnicodeString");
 
     if (!(service = load_driver(filename, "driver.dll", "WineTestDriver")))
         return;
