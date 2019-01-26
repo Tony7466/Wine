@@ -1,3 +1,11 @@
+wine (4.0-1) unstable; urgency=medium
+
+  * New upstream release 4.0, released Jan 22, 2019.
+  * Make sure /run/user/$uid exists before choosing to use it as the location
+    for wine's temporary directory (closes: #918666).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 26 Jan 2019 19:21:02 +0000
+
 wine (4.0~rc7-1) unstable; urgency=medium
 
   * New upstream release 4.0-rc7, released Jan 18, 2019.
