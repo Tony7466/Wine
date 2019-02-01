@@ -49,6 +49,8 @@ export DEB_CFLAGS_MAINT_APPEND+=-Wno-deprecated-declarations
 CONFLAGS=--with-gnutls \
          --without-hal \
          --without-netapi \
+         --without-vkd3d \
+         --without-vulkan \
          --disable-tests \
          --enable-maintainer-mode \
          --libdir=/$(LIBDIR) \
