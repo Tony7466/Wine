@@ -5,14 +5,14 @@ msgstr ""
 "Project-Id-Version: Wine\n"
 "Report-Msgid-Bugs-To: https://bugs.winehq.org\n"
 "POT-Creation-Date: N/A\n"
-"PO-Revision-Date: 2019-01-07 21:15+0530\n"
+"PO-Revision-Date: 2019-01-19 06:54+0530\n"
 "Last-Translator: Isira Seneviratne <isirasen96@gmail.com>\n"
 "Language-Team: Sinhala\n"
 "Language: si\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Poedit 2.2\n"
+"X-Generator: Lokalize 18.12.1\n"
 
 #: appwiz.rc:58
 msgid "Install/Uninstall"
@@ -23,6 +23,8 @@ msgid ""
 "To install a new program from a floppy disk, CD-ROM drive, or your hard "
 "drive, click Install."
 msgstr ""
+"Floppy තැටියකින්, CD-ROM තැටියකින් හෝ දෘඪ තැටියකින් අලුත් මෘදුකාංගයක් ස්ථාපනය කරන්නට, "
+"\"ස්ථාපනය කරන්න\" ඔබන්න."
 
 #: appwiz.rc:62
 msgid "&Install..."
@@ -34,6 +36,8 @@ msgid ""
 "to modify its installed components, select it from the list and click Modify/"
 "Remove."
 msgstr ""
+"පහත මෘදුකාංග ස්වයංක්රීයවට ඉවත් කරන්න පුළුවන්. මෘදුකාංගයක් ඉවත් හෝ වෙනස් කරන්නට, ඒක ලිස්තුවෙන් "
+"තෝරන්න හා \"වෙනස්/ඉවත් කරන්න\" ඔබන්න."
 
 #: appwiz.rc:67
 msgid "&Support Information"
@@ -46,7 +50,7 @@ msgstr "වෙනස් කරන්න... (&M)"
 #: appwiz.rc:69 appwiz.rc:45 cryptui.rc:351 msacm32.rc:40 winecfg.rc:200
 #: winecfg.rc:237 wordpad.rc:256
 msgid "&Remove"
-msgstr ""
+msgstr "ඉවත් කරන්න (&R)"
 
 #: appwiz.rc:75
 msgid "Support Information"
@@ -96,7 +100,7 @@ msgstr "සහාය දුරකතනය:"
 
 #: appwiz.rc:85
 msgid "Readme:"
-msgstr ""
+msgstr "කියවන්න:"
 
 #: appwiz.rc:86
 msgid "Product Updates:"
@@ -104,7 +108,7 @@ msgstr ""
 
 #: appwiz.rc:87
 msgid "Comments:"
-msgstr ""
+msgstr "අදහස්:"
 
 #: appwiz.rc:100
 msgid "Wine Gecko Installer"
@@ -173,7 +177,7 @@ msgstr ""
 
 #: appwiz.rc:33 taskmgr.rc:262 winecfg.rc:33
 msgid "Applications"
-msgstr ""
+msgstr "මෘදුකාංග"
 
 #: appwiz.rc:35
 msgid ""
@@ -208,11 +212,11 @@ msgstr "මෘදුකාංග (*.exe)"
 #: appwiz.rc:43 avifil32.rc:33 cryptui.rc:83 shell32.rc:199 notepad.rc:76
 #: oleview.rc:103 progman.rc:82 regedit.rc:225 winedbg.rc:43 winhlp32.rc:90
 msgid "All files (*.*)"
-msgstr ""
+msgstr "සියලුම ගොනු (*.*)"
 
 #: appwiz.rc:46
 msgid "&Modify/Remove"
-msgstr ""
+msgstr "වෙනස්/ඉවත් කරන්න (&M)"
 
 #: appwiz.rc:51
 msgid "Downloading..."
@@ -233,8 +237,9 @@ msgid "Compress options"
 msgstr ""
 
 #: avifil32.rc:45
+#, fuzzy
 msgid "&Choose a stream:"
-msgstr ""
+msgstr "තෝරන්න (&C):"
 
 #: avifil32.rc:48 wordpad.rc:76
 msgid "&Options..."
@@ -254,11 +259,11 @@ msgstr ""
 
 #: avifil32.rc:30
 msgid "Waveform: %s"
-msgstr "තරංග ආකාරයයි: %s"
+msgstr "තරංග ආකාරය: %s"
 
 #: avifil32.rc:31
 msgid "Waveform"
-msgstr "තරංග ආකාරයයි"
+msgstr "තරංග ආකාරය"
 
 #: avifil32.rc:32
 msgid "All multimedia files"
@@ -266,19 +271,19 @@ msgstr ""
 
 #: avifil32.rc:34
 msgid "video"
-msgstr ""
+msgstr "වීඩියෝ"
 
 #: avifil32.rc:35
 msgid "audio"
-msgstr ""
+msgstr "ශ්රව්ය උපකරණ"
 
 #: avifil32.rc:36
 msgid "Wine AVI-default-filehandler"
-msgstr ""
+msgstr "Wine AVI පෙරනිමි ගොනු හසුරුවය"
 
 #: avifil32.rc:37
 msgid "uncompressed"
-msgstr ""
+msgstr "අසමත් විය"
 
 #: browseui.rc:28
 msgid "Canceling..."
@@ -322,11 +327,11 @@ msgstr ""
 
 #: comctl32.rc:84
 msgid "< &Back"
-msgstr ""
+msgstr "< කලින් (&B)"
 
 #: comctl32.rc:85
 msgid "&Next >"
-msgstr ""
+msgstr "ඊළඟ (&N) >"
 
 #: comctl32.rc:86
 msgid "Finish"
@@ -334,7 +339,7 @@ msgstr "ඉවර කරන්න"
 
 #: comctl32.rc:97
 msgid "Customize Toolbar"
-msgstr ""
+msgstr "මෙවලම් තීරුව අභිමතකරණය කරන්න"
 
 #: comctl32.rc:100 comctl32.rc:57 cryptui.rc:356 ieframe.rc:43 oleview.rc:83
 #: oleview.rc:187 oleview.rc:200 oleview.rc:212 taskmgr.rc:139
@@ -343,7 +348,7 @@ msgstr "වහන්න (&C)"
 
 #: comctl32.rc:101
 msgid "R&eset"
-msgstr ""
+msgstr "යලි සකසන්න (&E)"
 
 #: comctl32.rc:102 comdlg32.rc:172 comdlg32.rc:194 comdlg32.rc:265
 #: comdlg32.rc:329 comdlg32.rc:349 comdlg32.rc:361 comdlg32.rc:479
@@ -373,7 +378,7 @@ msgstr ""
 
 #: comctl32.rc:108
 msgid "<- &Remove"
-msgstr ""
+msgstr "<- ඉවත් කරන්න (&R)"
 
 #: comctl32.rc:109
 msgid "&Toolbar buttons:"
@@ -398,7 +403,7 @@ msgstr "නැ (&N)"
 
 #: comctl32.rc:54 user32.rc:82
 msgid "&Retry"
-msgstr ""
+msgstr "අයෙත් කරන්න හදන්න (&R)"
 
 #: comctl32.rc:62
 msgid "Hide details"
@@ -440,12 +445,12 @@ msgstr ""
 
 #: comdlg32.rc:168 comdlg32.rc:190
 msgid "Dri&ves:"
-msgstr ""
+msgstr "තැටි (&V):"
 
 #: comdlg32.rc:173 comdlg32.rc:195 shell32.rc:370 shell32.rc:407
 #: winefile.rc:173
 msgid "&Read Only"
-msgstr ""
+msgstr "කියවීම පමණි (&R)"
 
 #: comdlg32.rc:179
 msgid "Save As..."
@@ -462,11 +467,11 @@ msgstr "මුද්රණය කරන්න"
 
 #: comdlg32.rc:204
 msgid "Printer:"
-msgstr ""
+msgstr "මුද්රණ යන්ත්රය:"
 
 #: comdlg32.rc:206 comdlg32.rc:383
 msgid "Print range"
-msgstr ""
+msgstr "මුද්රිත පරාසය"
 
 #: comdlg32.rc:207 comdlg32.rc:384 regedit.rc:268
 msgid "&All"
@@ -498,7 +503,7 @@ msgstr ""
 
 #: comdlg32.rc:217
 msgid "Print to Fi&le"
-msgstr ""
+msgstr "මුද්රණය කරන්න ගොනුවකකට (&L)"
 
 #: comdlg32.rc:218
 msgid "Condensed"
@@ -510,11 +515,11 @@ msgstr ""
 
 #: comdlg32.rc:227 comdlg32.rc:363 comdlg32.rc:402
 msgid "Printer"
-msgstr ""
+msgstr "මුද්රකය"
 
 #: comdlg32.rc:228
 msgid "&Default Printer"
-msgstr ""
+msgstr "ප්රකෘති මුද්රකය (&D)"
 
 #: comdlg32.rc:229
 msgid "[none]"
@@ -526,15 +531,15 @@ msgstr ""
 
 #: comdlg32.rc:235 comdlg32.rc:421 comdlg32.rc:440 wineps.rc:34
 msgid "Orientation"
-msgstr ""
+msgstr "දිශානතිය"
 
 #: comdlg32.rc:236
 msgid "Po&rtrait"
-msgstr ""
+msgstr "සිරස් (&R)"
 
 #: comdlg32.rc:237 comdlg32.rc:442 wineps.rc:37
 msgid "&Landscape"
-msgstr ""
+msgstr "තිරස් (&L)"
 
 #: comdlg32.rc:240 comdlg32.rc:415 comdlg32.rc:435 wineps.rc:28
 msgid "Paper"
@@ -550,11 +555,11 @@ msgstr ""
 
 #: comdlg32.rc:250 wineconsole.rc:85
 msgid "Font"
-msgstr ""
+msgstr "අකුරු"
 
 #: comdlg32.rc:253
 msgid "&Font:"
-msgstr ""
+msgstr "අකුරු (&F):"
 
 #: comdlg32.rc:256
 msgid "Font St&yle:"
@@ -594,11 +599,11 @@ msgstr "පාට"
 
 #: comdlg32.rc:285
 msgid "&Basic Colors:"
-msgstr ""
+msgstr "මූලික පාට (&B):"
 
 #: comdlg32.rc:286
 msgid "&Custom Colors:"
-msgstr ""
+msgstr "චාරිත්ර පාට (&C):"
 
 #: comdlg32.rc:287 comdlg32.rc:310
 msgid "Color |  Sol&id"
@@ -623,12 +628,12 @@ msgstr "පැහැය (&H):"
 #: comdlg32.rc:296
 msgctxt "Saturation"
 msgid "&Sat:"
-msgstr ""
+msgstr "සන්තෘප්තිය (&S):"
 
 #: comdlg32.rc:298
 msgctxt "Luminance"
 msgid "&Lum:"
-msgstr ""
+msgstr "දීප්තිය (&L):"
 
 #: comdlg32.rc:308
 msgid "&Add to Custom Colors"
@@ -688,12 +693,12 @@ msgstr ""
 
 #: comdlg32.rc:364
 msgid "Print to fi&le"
-msgstr ""
+msgstr "මුද්රණය කරන්න ගොනුවකකට (&L)"
 
 #: comdlg32.rc:365 comdlg32.rc:403 ieframe.rc:42 shdoclc.rc:61 shell32.rc:108
 #: clock.rc:31 wineconsole.rc:30
 msgid "&Properties"
-msgstr ""
+msgstr "දේපළ (&P)"
 
 #: comdlg32.rc:366 comdlg32.rc:404 msacm32.rc:34 winefile.rc:138
 msgid "&Name:"
@@ -713,7 +718,7 @@ msgstr "කොහෙද:"
 
 #: comdlg32.rc:374 comdlg32.rc:412
 msgid "Comment:"
-msgstr ""
+msgstr "අදහස:"
 
 #: comdlg32.rc:377
 msgid "Copies"
@@ -753,11 +758,11 @@ msgstr ""
 
 #: comdlg32.rc:423
 msgid "P&ortrait"
-msgstr ""
+msgstr "සිරස් (&O)"
 
 #: comdlg32.rc:424
 msgid "L&andscape"
-msgstr ""
+msgstr "තිරස් (&A)"
 
 #: comdlg32.rc:429
 msgid "Setup Page"
@@ -769,7 +774,7 @@ msgstr ""
 
 #: comdlg32.rc:441 wineps.rc:35
 msgid "&Portrait"
-msgstr ""
+msgstr "සිරස් (&P)"
 
 #: comdlg32.rc:444
 msgid "L&eft:"
@@ -789,11 +794,11 @@ msgstr ""
 
 #: comdlg32.rc:454
 msgid "P&rinter..."
-msgstr ""
+msgstr "මුද්රකය ... (&R)"
 
 #: comdlg32.rc:462 comdlg32.rc:487
 msgid "Look &in:"
-msgstr ""
+msgstr "ඇතුලේ බලන්න (&I):"
 
 #: comdlg32.rc:468 comdlg32.rc:494
 msgid "File &name:"
@@ -801,11 +806,11 @@ msgstr "ගොනුව නම (&N):"
 
 #: comdlg32.rc:472 comdlg32.rc:498
 msgid "Files of &type:"
-msgstr ""
+msgstr "වර්ගයේ ගොනු (&T):"
 
 #: comdlg32.rc:475 comdlg32.rc:501
 msgid "Open as &read-only"
-msgstr ""
+msgstr "අරින්න කියවීම පමණි (&R)"
 
 #: comdlg32.rc:477 comdlg32.rc:503 comdlg32.rc:521 shdoclc.rc:127 shell32.rc:99
 msgid "&Open"
@@ -817,7 +822,7 @@ msgstr "ගොනුව නම:"
 
 #: comdlg32.rc:517
 msgid "Files of type:"
-msgstr ""
+msgstr "වර්ගයේ ගොනු:"
 
 #: comdlg32.rc:32
 msgid "File not found"
@@ -848,6 +853,8 @@ msgid ""
 "A filename cannot contain any of the following characters:\n"
 "                          / : < > |"
 msgstr ""
+"ගොනුව නමක මේ අකුරු තියෙන්න බැහැ:\n"
+"                          / : < > |"
 
 #: comdlg32.rc:38
 msgid "Path does not exist"
@@ -867,7 +874,7 @@ msgstr ""
 
 #: comdlg32.rc:46
 msgid "Create New Folder"
-msgstr ""
+msgstr "අලුත් ෆෝල්ඩරයක් හදන්න"
 
 #: comdlg32.rc:47
 msgid "List"
@@ -911,7 +918,7 @@ msgstr "හරිත"
 
 #: comdlg32.rc:124 wordpad.rc:128
 msgid "Olive"
-msgstr ""
+msgstr "ඔලිව්"
 
 #: comdlg32.rc:125 wordpad.rc:129
 msgid "Navy"
@@ -983,7 +990,7 @@ msgstr ""
 
 #: comdlg32.rc:64
 msgid "The 'Number of copies' field cannot be empty."
-msgstr ""
+msgstr "'පිටපත් නොම්බරය' හිස් වෙන්න බැහැ."
 
 #: comdlg32.rc:66
 msgid ""
@@ -993,7 +1000,7 @@ msgstr ""
 
 #: comdlg32.rc:67
 msgid "A printer error occurred."
-msgstr "මුද්රණ යන්ත්රයේ දෝෂයක් උනා."
+msgstr "මුද්රකයේ දෝෂයක් උනා."
 
 #: comdlg32.rc:68
 msgid "No default printer defined."
@@ -1039,15 +1046,15 @@ msgstr ""
 
 #: comdlg32.rc:146
 msgid "Open File"
-msgstr ""
+msgstr "ගොනුව අරින්න"
 
 #: comdlg32.rc:147
 msgid "Select Folder"
-msgstr ""
+msgstr "ෆෝල්ඩරය තෝරන්න"
 
 #: comdlg32.rc:148
 msgid "Font size has to be a number."
-msgstr ""
+msgstr "අකුරු ප්රමාණය නොම්බරයක් වෙන්න ඕනේ."
 
 #: comdlg32.rc:83 oleview.rc:98
 msgid "Ready"
@@ -1055,7 +1062,7 @@ msgstr "ලැස්ති"
 
 #: comdlg32.rc:84
 msgid "Paused; "
-msgstr ""
+msgstr "නැවතුණා; "
 
 #: comdlg32.rc:85
 msgid "Error; "
@@ -1079,7 +1086,7 @@ msgstr ""
 
 #: comdlg32.rc:90
 msgid "Paper problem; "
-msgstr ""
+msgstr "කොල ප්‍රශ්නයක්; "
 
 #: comdlg32.rc:91
 msgid "Printer offline; "
@@ -1123,11 +1130,11 @@ msgstr ""
 
 #: comdlg32.rc:101
 msgid "Toner low; "
-msgstr ""
+msgstr "ටෝනර් අඩුයි; "
 
 #: comdlg32.rc:102
 msgid "No toner; "
-msgstr ""
+msgstr "ටෝනර් නැහැ; "
 
 #: comdlg32.rc:103
 msgid "Page punt; "
@@ -1155,11 +1162,11 @@ msgstr ""
 
 #: comdlg32.rc:77
 msgid "Default Printer; "
-msgstr ""
+msgstr "ප්රකෘති මුද්රකය;"
 
 #: comdlg32.rc:78
 msgid "There are %d documents in the queue"
-msgstr ""
+msgstr "ලියවිලි %d පෝලිමේ තියෙනවා"
 
 #: comdlg32.rc:79
 msgid "Margins [inches]"
@@ -1172,11 +1179,11 @@ msgstr ""
 #: comdlg32.rc:81 sane.rc:33
 msgctxt "unit: millimeters"
 msgid "mm"
-msgstr ""
+msgstr "mm"
 
 #: credui.rc:45
 msgid "&User name:"
-msgstr ""
+msgstr "පරිශීලක නම (&U):"
 
 #: credui.rc:48 cryptui.rc:402
 msgid "&Password:"
@@ -1343,7 +1350,7 @@ msgstr ""
 
 #: crypt32.rc:61
 msgid "Certificate Type"
-msgstr ""
+msgstr "සහතික වර්ගය"
 
 #: crypt32.rc:62
 msgid "Certificate Manifold"
@@ -1351,7 +1358,7 @@ msgstr ""
 
 #: crypt32.rc:63
 msgid "Netscape Cert Type"
-msgstr ""
+msgstr "Netscape සහතික වර්ගය"
 
 #: crypt32.rc:64
 msgid "Netscape Base URL"
@@ -1387,7 +1394,7 @@ msgstr "රට/කලාපය"
 
 #: crypt32.rc:72
 msgid "Organization"
-msgstr ""
+msgstr "සංවිධානය"
 
 #: crypt32.rc:73
 msgid "Organizational Unit"
@@ -1415,7 +1422,7 @@ msgstr ""
 
 #: crypt32.rc:79
 msgid "Initials"
-msgstr ""
+msgstr "ආරම්භය"
 
 #: crypt32.rc:80
 msgid "Surname"
@@ -1435,7 +1442,7 @@ msgstr ""
 
 #: crypt32.rc:84
 msgid "CA Version"
-msgstr ""
+msgstr "CA පිටපත"
 
 #: crypt32.rc:85
 msgid "Cross CA Version"
@@ -1823,7 +1830,7 @@ msgstr ""
 
 #: crypt32.rc:189
 msgid "URL="
-msgstr ""
+msgstr "URL="
 
 #: crypt32.rc:190
 msgid "IP Address="
@@ -2022,7 +2029,7 @@ msgstr "අත්සන"
 
 #: crypt32.rc:238
 msgid "SSL CA"
-msgstr ""
+msgstr "SSL සහතික අධිකාරිය"
 
 #: crypt32.rc:239
 msgid "S/MIME CA"
@@ -2030,7 +2037,7 @@ msgstr ""
 
 #: crypt32.rc:240
 msgid "Signature CA"
-msgstr "CA අත්සන"
+msgstr "අත්සනේ සහතික අධිකාරිය"
 
 #: cryptdlg.rc:30
 msgid "Certificate Policy"
@@ -2058,7 +2065,7 @@ msgstr ""
 
 #: cryptdlg.rc:38
 msgid "Organization="
-msgstr ""
+msgstr "සංවිධානය="
 
 #: cryptdlg.rc:39
 msgid "Notice Number="
@@ -2074,7 +2081,7 @@ msgstr ""
 
 #: cryptui.rc:196
 msgid "&Install Certificate..."
-msgstr ""
+msgstr "සහතිකය ස්ථාපනය කරන්න... (&I)"
 
 #: cryptui.rc:197
 msgid "Issuer &Statement"
@@ -2086,7 +2093,7 @@ msgstr "පෙන්නන්න (&S):"
 
 #: cryptui.rc:210
 msgid "&Edit Properties..."
-msgstr ""
+msgstr "දේපළ් වෙනස් කරන්න... (&E)"
 
 #: cryptui.rc:211
 msgid "&Copy to File..."
@@ -2615,7 +2622,7 @@ msgstr ""
 
 #: cryptui.rc:91 shell32.rc:137
 msgid "File"
-msgstr "ගොනු"
+msgstr "ගොනුව"
 
 #: cryptui.rc:92 inetcpl.rc:108
 msgid "Content"
@@ -3068,7 +3075,7 @@ msgstr ""
 
 #: hhctrl.rc:65 hhctrl.rc:80 winhlp32.rc:34
 msgid "&Print..."
-msgstr ""
+msgstr "මුද්රණය කරන්න... (&P)"
 
 #: hhctrl.rc:76 hhctrl.rc:90 shdoclc.rc:49 shdoclc.rc:98 shdoclc.rc:120
 #: user32.rc:65
@@ -3081,7 +3088,7 @@ msgstr ""
 
 #: hhctrl.rc:83
 msgid "Proper&ties"
-msgstr ""
+msgstr "දේපළ (&T)"
 
 #: hhctrl.rc:87 shdoclc.rc:79 shdoclc.rc:93 shdoclc.rc:117 shdoclc.rc:159
 #: shdoclc.rc:183 user32.rc:60 wordpad.rc:112
@@ -3100,7 +3107,7 @@ msgstr ""
 
 #: hhctrl.rc:91 shdoclc.rc:121
 msgid "&Print"
-msgstr ""
+msgstr "මුද්රණය කරන්න (&P)"
 
 #: hhctrl.rc:31 taskmgr.rc:89
 msgid "&Contents"
@@ -3108,7 +3115,7 @@ msgstr ""
 
 #: hhctrl.rc:32
 msgid "I&ndex"
-msgstr ""
+msgstr "දර්ශකය (&N)"
 
 #: hhctrl.rc:33 notepad.rc:55
 msgid "&Search"
@@ -3128,7 +3135,7 @@ msgstr ""
 
 #: hhctrl.rc:42
 msgid "Show"
-msgstr ""
+msgstr "පෙන්නන්න"
 
 #: hhctrl.rc:43 winemac.rc:34
 msgid "Hide"
@@ -3235,7 +3242,7 @@ msgstr ""
 
 #: ieframe.rc:94
 msgid "Open:"
-msgstr ""
+msgstr "අරින්න:"
 
 #: ieframe.rc:70
 msgctxt "home page"
@@ -3353,7 +3360,7 @@ msgstr ""
 
 #: inetcpl.rc:114
 msgid "Certificates..."
-msgstr ""
+msgstr "සහතික..."
 
 #: inetcpl.rc:115
 msgid "Publishers..."
@@ -3763,7 +3770,7 @@ msgstr ""
 
 #: winerror.mc:143
 msgid "CRC error.\n"
-msgstr ""
+msgstr "CRC දෝෂයක්.\n"
 
 #: winerror.mc:148
 msgid "Bad length.\n"
@@ -6846,7 +6853,7 @@ msgstr ""
 
 #: msi.rc:97
 msgid "Creating folders"
-msgstr ""
+msgstr "ෆෝල්ඩර හදනවා"
 
 #: msi.rc:98
 msgid "Creating shortcuts"
@@ -7198,7 +7205,7 @@ msgstr ""
 
 #: msi.rc:73
 msgid "{{Error [1]. }}"
-msgstr ""
+msgstr "{{දෝෂයක් [1]. }}"
 
 #: msi.rc:74
 msgid "Warning [1]."
@@ -7597,7 +7604,7 @@ msgstr ""
 #: oleacc.rc:104
 msgctxt "object state"
 msgid "read only"
-msgstr ""
+msgstr "කියවීම පමණි"
 
 #: oleacc.rc:105
 msgctxt "object state"
@@ -8268,7 +8275,7 @@ msgstr ""
 
 #: shell32.rc:32 shell32.rc:47 shell32.rc:124 shell32.rc:164
 msgid "&List"
-msgstr ""
+msgstr "ලැයිස්තුව (&L)"
 
 #: shell32.rc:33 shell32.rc:48 shell32.rc:125 shell32.rc:165 taskmgr.rc:67
 #: taskmgr.rc:112 taskmgr.rc:254
@@ -8812,7 +8819,7 @@ msgstr ""
 
 #: shlwapi.rc:38 user32.rc:71 regedit.rc:204 winecfg.rc:87 winefile.rc:97
 msgid "Error"
-msgstr ""
+msgstr "දෝෂයක්"
 
 #: shlwapi.rc:43
 msgid "Don't show me th&is message again"
@@ -9730,7 +9737,7 @@ msgstr ""
 
 #: winemac.rc:36
 msgid "Show All"
-msgstr ""
+msgstr "සියලුම පෙන්නන්න"
 
 #: winemac.rc:37
 msgid "Quit %@"
@@ -11254,7 +11261,7 @@ msgstr ""
 
 #: cmd.rc:405
 msgid "Division by zero error.\n"
-msgstr ""
+msgstr "බිංදුවෙන් බෙදීම දෝෂයක්.\n"
 
 #: cmd.rc:406
 msgid "Expected an operand.\n"
@@ -11300,25 +11307,28 @@ msgstr ""
 
 #: hostname.rc:31
 msgid "Error: Invalid option '%c'.\n"
-msgstr ""
+msgstr "දෝෂයක්: විකල්පය '%c' වලංගු නැත.\n"
 
 #: hostname.rc:32
+#, fuzzy
 msgid "Error: Could not get hostname: %u.\n"
-msgstr ""
+msgstr "දෝෂයක්:"
 
 #: hostname.rc:33
+#, fuzzy
 msgid ""
 "Error: Setting the system hostname is not possible with the hostname "
 "utility.\n"
-msgstr ""
+msgstr "දෝෂයක්:"
 
 #: ipconfig.rc:30
 msgid "Usage: ipconfig [ /? | /all ]\n"
 msgstr ""
 
 #: ipconfig.rc:31
+#, fuzzy
 msgid "Error: Unknown or invalid command line parameters specified\n"
-msgstr ""
+msgstr "දෝෂයක්:"
 
 #: ipconfig.rc:32
 msgid "%1 adapter %2\n"
@@ -11543,7 +11553,7 @@ msgstr ""
 
 #: netstat.rc:42
 msgid "Errors"
-msgstr ""
+msgstr "දෝෂ"
 
 #: netstat.rc:43
 msgid "Unknown protocols"
@@ -12329,12 +12339,14 @@ msgid "Not implemented"
 msgstr ""
 
 #: progman.rc:71
+#, fuzzy
 msgid "Error reading `%s'."
-msgstr ""
+msgstr "දෝෂයක්"
 
 #: progman.rc:72
+#, fuzzy
 msgid "Error writing `%s'."
-msgstr ""
+msgstr "දෝෂයක්"
 
 #: progman.rc:75
 msgid ""
@@ -12564,7 +12576,7 @@ msgstr ""
 
 #: regedit.rc:57 regedit.rc:110 regedit.rc:137
 msgid "&Rename\tF2"
-msgstr ""
+msgstr "නම වෙනස් කරන්න (&R)\tF2"
 
 #: regedit.rc:59 regedit.rc:114
 msgid "&Copy Key Name"
@@ -12660,7 +12672,7 @@ msgstr ""
 
 #: regedit.rc:326
 msgid "Edit DWORD"
-msgstr ""
+msgstr "DWORD වෙනස් කරන්න"
 
 #: regedit.rc:333
 msgid "Base"
@@ -12709,7 +12721,7 @@ msgstr ""
 
 #: regedit.rc:149
 msgid "Data"
-msgstr ""
+msgstr "දත්ත"
 
 #: regedit.rc:154
 msgid "Registry Editor"
@@ -13148,24 +13160,29 @@ msgid "Usage: taskkill [/?] [/f] [/im ProcessName | /pid ProcessID]\n"
 msgstr ""
 
 #: taskkill.rc:31
+#, fuzzy
 msgid "Error: Unknown or invalid command line option specified.\n"
-msgstr ""
+msgstr "දෝෂයක්:"
 
 #: taskkill.rc:32
+#, fuzzy
 msgid "Error: Invalid command line parameter specified.\n"
-msgstr ""
+msgstr "දෝෂයක්:"
 
 #: taskkill.rc:33
+#, fuzzy
 msgid "Error: One of options /im or /pid must be specified.\n"
-msgstr ""
+msgstr "දෝෂයක්:"
 
 #: taskkill.rc:34
+#, fuzzy
 msgid "Error: Option %1 expects a command line parameter.\n"
-msgstr ""
+msgstr "දෝෂයක්:"
 
 #: taskkill.rc:35
+#, fuzzy
 msgid "Error: Options /im and /pid are mutually exclusive.\n"
-msgstr ""
+msgstr "දෝෂයක්:"
 
 #: taskkill.rc:36
 msgid "Close message sent to top-level windows of process with PID %1!u!.\n"
@@ -13185,20 +13202,24 @@ msgid "Process \"%1\" with PID %2!u! was forcibly terminated.\n"
 msgstr ""
 
 #: taskkill.rc:40
+#, fuzzy
 msgid "Error: Could not find process \"%1\".\n"
-msgstr ""
+msgstr "දෝෂයක්:"
 
 #: taskkill.rc:41
+#, fuzzy
 msgid "Error: Unable to enumerate the process list.\n"
-msgstr ""
+msgstr "දෝෂයක්:"
 
 #: taskkill.rc:42
+#, fuzzy
 msgid "Error: Unable to terminate process \"%1\".\n"
-msgstr ""
+msgstr "දෝෂයක්:"
 
 #: taskkill.rc:43
+#, fuzzy
 msgid "Error: Process self-termination is not permitted.\n"
-msgstr ""
+msgstr "දෝෂයක්:"
 
 #: taskmgr.rc:37 taskmgr.rc:108
 msgid "&New Task (Run...)"
@@ -13350,7 +13371,7 @@ msgstr ""
 
 #: taskmgr.rc:372
 msgid "CPU usage"
-msgstr ""
+msgstr "CPU භාවිතය"
 
 #: taskmgr.rc:373
 msgid "Mem usage"
@@ -13432,135 +13453,135 @@ msgstr ""
 
 #: taskmgr.rc:446
 msgid "CPU 0"
-msgstr ""
+msgstr "CPU 0"
 
 #: taskmgr.rc:448
 msgid "CPU 1"
-msgstr ""
+msgstr "CPU 1"
 
 #: taskmgr.rc:450
 msgid "CPU 2"
-msgstr ""
+msgstr "CPU 2"
 
 #: taskmgr.rc:452
 msgid "CPU 3"
-msgstr ""
+msgstr "CPU 3"
 
 #: taskmgr.rc:454
 msgid "CPU 4"
-msgstr ""
+msgstr "CPU 4"
 
 #: taskmgr.rc:456
 msgid "CPU 5"
-msgstr ""
+msgstr "CPU 5"
 
 #: taskmgr.rc:458
 msgid "CPU 6"
-msgstr ""
+msgstr "CPU 6"
 
 #: taskmgr.rc:460
 msgid "CPU 7"
-msgstr ""
+msgstr "CPU 7"
 
 #: taskmgr.rc:462
 msgid "CPU 8"
-msgstr ""
+msgstr "CPU 8"
 
 #: taskmgr.rc:464
 msgid "CPU 9"
-msgstr ""
+msgstr "CPU 9"
 
 #: taskmgr.rc:466
 msgid "CPU 10"
-msgstr ""
+msgstr "CPU 10"
 
 #: taskmgr.rc:468
 msgid "CPU 11"
-msgstr ""
+msgstr "CPU 11"
 
 #: taskmgr.rc:470
 msgid "CPU 12"
-msgstr ""
+msgstr "CPU 12"
 
 #: taskmgr.rc:472
 msgid "CPU 13"
-msgstr ""
+msgstr "CPU 13"
 
 #: taskmgr.rc:474
 msgid "CPU 14"
-msgstr ""
+msgstr "CPU 14"
 
 #: taskmgr.rc:476
 msgid "CPU 15"
-msgstr ""
+msgstr "CPU 15"
 
 #: taskmgr.rc:478
 msgid "CPU 16"
-msgstr ""
+msgstr "CPU 16"
 
 #: taskmgr.rc:480
 msgid "CPU 17"
-msgstr ""
+msgstr "CPU 17"
 
 #: taskmgr.rc:482
 msgid "CPU 18"
-msgstr ""
+msgstr "CPU 18"
 
 #: taskmgr.rc:484
 msgid "CPU 19"
-msgstr ""
+msgstr "CPU 19"
 
 #: taskmgr.rc:486
 msgid "CPU 20"
-msgstr ""
+msgstr "CPU 20"
 
 #: taskmgr.rc:488
 msgid "CPU 21"
-msgstr ""
+msgstr "CPU 21"
 
 #: taskmgr.rc:490
 msgid "CPU 22"
-msgstr ""
+msgstr "CPU 22"
 
 #: taskmgr.rc:492
 msgid "CPU 23"
-msgstr ""
+msgstr "CPU 23"
 
 #: taskmgr.rc:494
 msgid "CPU 24"
-msgstr ""
+msgstr "CPU 24"
 
 #: taskmgr.rc:496
 msgid "CPU 25"
-msgstr ""
+msgstr "CPU 25"
 
 #: taskmgr.rc:498
 msgid "CPU 26"
-msgstr ""
+msgstr "CPU 26"
 
 #: taskmgr.rc:500
 msgid "CPU 27"
-msgstr ""
+msgstr "CPU 27"
 
 #: taskmgr.rc:502
 msgid "CPU 28"
-msgstr ""
+msgstr "CPU 28"
 
 #: taskmgr.rc:504
 msgid "CPU 29"
-msgstr ""
+msgstr "CPU 29"
 
 #: taskmgr.rc:506
 msgid "CPU 30"
-msgstr ""
+msgstr "CPU 30"
 
 #: taskmgr.rc:508
 msgid "CPU 31"
-msgstr ""
+msgstr "CPU 31"
 
 #: taskmgr.rc:514
 msgid "Select Columns"
-msgstr ""
+msgstr "තීරු තෝරන්න"
 
 #: taskmgr.rc:519
 msgid ""
@@ -13577,7 +13598,7 @@ msgstr ""
 
 #: taskmgr.rc:525
 msgid "&CPU Usage"
-msgstr ""
+msgstr "CPU භාවිතය (&C)"
 
 #: taskmgr.rc:527
 msgid "CPU Tim&e"
@@ -13841,7 +13862,7 @@ msgstr ""
 
 #: taskmgr.rc:265
 msgid "CPU Usage: %3d%%"
-msgstr ""
+msgstr "CPU භාවිතය: %3d%%"
 
 #: taskmgr.rc:266
 msgid "Processes: %d"
@@ -13857,11 +13878,11 @@ msgstr ""
 
 #: taskmgr.rc:273
 msgid "PID"
-msgstr ""
+msgstr "PID"
 
 #: taskmgr.rc:274
 msgid "CPU"
-msgstr ""
+msgstr "CPU"
 
 #: taskmgr.rc:275
 msgid "CPU Time"
@@ -14085,7 +14106,7 @@ msgstr ""
 
 #: winecfg.rc:146
 msgid "Organi&zation:"
-msgstr ""
+msgstr "සංවිධානය (&Z):"
 
 #: winecfg.rc:154
 msgid "Application settings"
@@ -14167,7 +14188,7 @@ msgstr ""
 
 #: winecfg.rc:199
 msgid "&Edit..."
-msgstr ""
+msgstr "වෙනස් කරන්න... (&E)"
 
 #: winecfg.rc:205
 msgid "Edit Override"
@@ -14297,11 +14318,11 @@ msgstr ""
 
 #: winecfg.rc:298
 msgid "C&olor:"
-msgstr ""
+msgstr "පාට (&O):"
 
 #: winecfg.rc:304
 msgid "MIME types"
-msgstr ""
+msgstr "MIME වර්ග"
 
 #: winecfg.rc:305
 msgid "Manage file &associations"
@@ -14471,7 +14492,7 @@ msgstr "Floppy තැටිය"
 
 #: winecfg.rc:73
 msgid "CD-ROM"
-msgstr ""
+msgstr "CD-ROM"
 
 #: winecfg.rc:74
 msgid ""
@@ -14495,7 +14516,7 @@ msgstr ""
 #: winecfg.rc:77
 msgctxt "Drive letter"
 msgid "Letter"
-msgstr ""
+msgstr "අකුර"
 
 #: winecfg.rc:78
 msgid "Target folder"
@@ -14686,7 +14707,7 @@ msgstr ""
 
 #: wineconsole.rc:88
 msgid "&Font"
-msgstr ""
+msgstr "අකුරු (&F)"
 
 #: wineconsole.rc:90
 msgid "&Color"
@@ -14788,7 +14809,7 @@ msgstr ""
 
 #: wineconsole.rc:38
 msgid "This is a test"
-msgstr ""
+msgstr "මේ පරීක්ෂණයක්"
 
 #: wineconsole.rc:44
 msgid "wineconsole: Couldn't parse event id\n"
@@ -14844,7 +14865,7 @@ msgstr ""
 
 #: winedbg.rc:50 winedbg.rc:38
 msgid "Program Error"
-msgstr ""
+msgstr "මෘදුකාංගයේ දෝෂයක්"
 
 #: winedbg.rc:55
 msgid ""
@@ -14865,7 +14886,7 @@ msgstr "විස්තර පෙන්නන්න (&D)"
 
 #: winedbg.rc:67
 msgid "Program Error Details"
-msgstr ""
+msgstr "මෘදුකාංගයේ දෝෂයකේ විස්තර"
 
 #: winedbg.rc:74
 msgid ""
@@ -14895,15 +14916,15 @@ msgstr ""
 
 #: winefile.rc:29
 msgid "&Open\tEnter"
-msgstr ""
+msgstr "අරින්න (&O)\tEnter"
 
 #: winefile.rc:33
 msgid "Re&name..."
-msgstr ""
+msgstr "නම වෙනස් කරන්න... (&N)"
 
 #: winefile.rc:34
 msgid "Propert&ies\tAlt+Enter"
-msgstr ""
+msgstr "දේපළ (&I)\\tAlt+Enter"
 
 #: winefile.rc:38
 msgid "Cr&eate Directory..."
@@ -14935,11 +14956,11 @@ msgstr "නම අනුව වර්ග කරන්න (&S)"
 
 #: winefile.rc:55
 msgid "Sort &by Type"
-msgstr "වර්ගය අනුව වර්ග කරන්න"
+msgstr "වර්ගය අනුව වර්ග කරන්න (&B)"
 
 #: winefile.rc:56
 msgid "Sort by Si&ze"
-msgstr ""
+msgstr "ප්රමාණය අනුව වර්ග කරන්න (&Z)"
 
 #: winefile.rc:57
 msgid "Sort by &Date"
@@ -14955,7 +14976,7 @@ msgstr ""
 
 #: winefile.rc:68
 msgid "F&ull Screen\tCtrl+Shift+S"
-msgstr ""
+msgstr "පුන් තිරය (&U)\tCtrl+Shift+S"
 
 #: winefile.rc:74
 msgid "New &Window"
@@ -14979,11 +15000,11 @@ msgstr ""
 
 #: winefile.rc:135
 msgid "By File Type"
-msgstr ""
+msgstr "ගොනුවේ වර්ගයෙන්"
 
 #: winefile.rc:140
 msgid "File type"
-msgstr ""
+msgstr "ගොනුවේ වර්ගය"
 
 #: winefile.rc:141
 msgid "&Directories"
@@ -15019,7 +15040,7 @@ msgstr ""
 
 #: winefile.rc:168
 msgid "Cop&yright:"
-msgstr ""
+msgstr "කතුහිමිකම (&Y):"
 
 #: winefile.rc:176
 msgid "&System"
@@ -15104,7 +15125,7 @@ msgstr ""
 
 #: winemine.rc:46
 msgid "&Expert"
-msgstr ""
+msgstr "විශේෂඥයෙක් (&E)"
 
 #: winemine.rc:47
 msgid "&Custom..."
@@ -15112,7 +15133,7 @@ msgstr ""
 
 #: winemine.rc:49
 msgid "&Fastest Times"
-msgstr ""
+msgstr "වේගවත්ම කාල (&F)"
 
 #: winemine.rc:54
 msgid "&About WineMine"
@@ -15120,11 +15141,11 @@ msgstr ""
 
 #: winemine.rc:61
 msgid "Fastest Times"
-msgstr ""
+msgstr "වේගවත්ම කාල"
 
 #: winemine.rc:63
 msgid "Fastest times"
-msgstr ""
+msgstr "වේගවත්ම කාල"
 
 #: winemine.rc:64
 msgid "Beginner"
@@ -15136,7 +15157,7 @@ msgstr ""
 
 #: winemine.rc:66
 msgid "Expert"
-msgstr ""
+msgstr "විශේෂඥයෙක්"
 
 #: winemine.rc:74 winemine.rc:33
 msgid "Reset Results"
@@ -15156,15 +15177,15 @@ msgstr ""
 
 #: winemine.rc:92
 msgid "Rows"
-msgstr ""
+msgstr "පේලි"
 
 #: winemine.rc:93
 msgid "Columns"
-msgstr ""
+msgstr "තීරු"
 
 #: winemine.rc:94
 msgid "Mines"
-msgstr ""
+msgstr "පතල්"
 
 #: winemine.rc:34
 msgid "All results will be lost. Are you sure?"
@@ -15200,11 +15221,11 @@ msgstr ""
 
 #: winhlp32.rc:48
 msgid "Always on &top"
-msgstr ""
+msgstr "හැම වෙලේම උඩ (&T)"
 
 #: winhlp32.rc:50 winhlp32.rc:70
 msgid "Fonts"
-msgstr ""
+msgstr "අකුරු"
 
 #: winhlp32.rc:52 winhlp32.rc:72
 msgid "Small"
@@ -15228,7 +15249,7 @@ msgstr ""
 
 #: winhlp32.rc:67
 msgid "Annotation..."
-msgstr ""
+msgstr "සංඥාව..."
 
 #: winhlp32.rc:68
 msgid "Copy"
@@ -15236,7 +15257,7 @@ msgstr ""
 
 #: winhlp32.rc:100
 msgid "Index"
-msgstr ""
+msgstr "දර්ශකය"
 
 #: winhlp32.rc:108
 msgid "Search"
@@ -15244,23 +15265,23 @@ msgstr "සොයන්න"
 
 #: winhlp32.rc:81
 msgid "Wine Help"
-msgstr ""
+msgstr "Wine උදවු"
 
 #: winhlp32.rc:86
 msgid "Error while reading the help file `%s'"
-msgstr ""
+msgstr "උදවු ගොනුව `%s' කියවන ගමං දෝෂයක් ආවා"
 
 #: winhlp32.rc:88
 msgid "Summary"
-msgstr ""
+msgstr "සාරාංශය"
 
 #: winhlp32.rc:87
 msgid "&Index"
-msgstr ""
+msgstr "දර්ශකය (&I)"
 
 #: winhlp32.rc:91
 msgid "Help files (*.hlp)"
-msgstr ""
+msgstr "උදවු ගොනු (*.hlp)"
 
 #: winhlp32.rc:92
 msgid "Cannot find '%s'. Do you want to find this file yourself?"
@@ -15272,23 +15293,26 @@ msgstr ""
 
 #: winhlp32.rc:94
 msgid "Help topics: "
-msgstr ""
+msgstr "උදව් මාතෘකා:"
 
 #: wmic.rc:28
 msgid "Error: Command line not supported\n"
-msgstr ""
+msgstr "දෝෂයක්: විධාන රේඛාව සහාය නොදක්වයි\n"
 
 #: wmic.rc:29
+#, fuzzy
 msgid "Error: Alias not found\n"
-msgstr ""
+msgstr "දෝෂයක්:"
 
 #: wmic.rc:30
+#, fuzzy
 msgid "Error: Invalid query\n"
-msgstr ""
+msgstr "දෝෂයක්:"
 
 #: wmic.rc:31
+#, fuzzy
 msgid "Error: Invalid syntax for PATH\n"
-msgstr ""
+msgstr "දෝෂයක්:"
 
 #: wordpad.rc:31
 msgid "&New...\tCtrl+N"
@@ -15296,7 +15320,7 @@ msgstr "අලුත්... (&N)\tCtrl+N"
 
 #: wordpad.rc:45
 msgid "R&edo\tCtrl+Y"
-msgstr ""
+msgstr "අයෙත් කරන්න (&E)\tCtrl+Y"
 
 #: wordpad.rc:50
 msgid "&Clear\tDel"
@@ -15304,7 +15328,7 @@ msgstr ""
 
 #: wordpad.rc:51
 msgid "&Select all\tCtrl+A"
-msgstr ""
+msgstr "ඔක්කොම තෝරන්න (&S)\\tCtrl+A"
 
 #: wordpad.rc:54
 msgid "Find &next\tF3"
@@ -15312,7 +15336,7 @@ msgstr ""
 
 #: wordpad.rc:57
 msgid "Read-&only"
-msgstr ""
+msgstr "කියවීම පමණි (&O)"
 
 #: wordpad.rc:58
 msgid "&Modified"
@@ -15364,7 +15388,7 @@ msgstr ""
 
 #: wordpad.rc:85
 msgid "&Lists"
-msgstr ""
+msgstr "ලැයිස්තු (&L)"
 
 #: wordpad.rc:87 wordpad.rc:116
 msgid "&Bullet points"
@@ -15416,7 +15440,7 @@ msgstr ""
 
 #: wordpad.rc:141
 msgid "Automatic"
-msgstr ""
+msgstr "ස්වයංක්රීයව"
 
 #: wordpad.rc:210
 msgid "Date and time"
@@ -15468,7 +15492,7 @@ msgstr ""
 
 #: wordpad.rc:259
 msgid "Remove al&l"
-msgstr ""
+msgstr "සියලුම ඉවත් කරන්න (&L)"
 
 #: wordpad.rc:267
 msgid "Line wrapping"
@@ -15527,7 +15551,7 @@ msgstr "U"
 
 #: wordpad.rc:147
 msgid "All documents (*.*)"
-msgstr ""
+msgstr "සියලුම ලියවිලි (*.*)"
 
 #: wordpad.rc:148
 msgid "Text documents (*.txt)"
@@ -15551,11 +15575,11 @@ msgstr "පෙළ ලියවිල්ලක්"
 
 #: wordpad.rc:153
 msgid "Unicode text document"
-msgstr ""
+msgstr "Unicode පෙළ ලියවිල්ලක්"
 
 #: wordpad.rc:154
 msgid "Printer files (*.prn)"
-msgstr ""
+msgstr "මුද්රණ ගොනු (*.prn)"
 
 #: wordpad.rc:161
 msgid "Center"
@@ -15604,25 +15628,25 @@ msgstr "පිටු"
 #: wordpad.rc:183
 msgctxt "unit: centimeter"
 msgid "cm"
-msgstr ""
+msgstr "cm"
 
 #: wordpad.rc:184
 msgctxt "unit: inch"
 msgid "in"
-msgstr ""
+msgstr "in"
 
 #: wordpad.rc:185
 msgid "inch"
-msgstr ""
+msgstr "අඟල්"
 
 #: wordpad.rc:186
 msgctxt "unit: point"
 msgid "pt"
-msgstr ""
+msgstr "pt"
 
 #: wordpad.rc:191
 msgid "Document"
-msgstr ""
+msgstr "ලියවිල්ල"
 
 #: wordpad.rc:192
 msgid "Save changes to '%s'?"
@@ -15688,15 +15712,15 @@ msgstr ""
 
 #: xcopy.rc:32
 msgid "Press <Enter> to begin copying\n"
-msgstr ""
+msgstr "<Enter> ඔබන්න පිටපත් කරන එක පටන්ගන්නට\n"
 
 #: xcopy.rc:33
 msgid "%1!d! file(s) would be copied\n"
-msgstr ""
+msgstr "%1!d! ගොනු(න්) පිටපත් කෙරෙනු ඇත\n"
 
 #: xcopy.rc:34
 msgid "%1!d! file(s) copied\n"
-msgstr ""
+msgstr "%1!d! ගොනු(න්) පිටපත් කරා\n"
 
 #: xcopy.rc:37
 msgid ""

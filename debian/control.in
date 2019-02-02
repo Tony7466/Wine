@@ -99,6 +99,7 @@ Suggests:
  playonlinux,
  wine-binfmt,
  dosbox (>= 0.74-4.2~),
+ exe-thumbnailer | kio-extras,
 Breaks:
  wine-stable (<< 3.0.1ubuntu1~),
 Replaces:
