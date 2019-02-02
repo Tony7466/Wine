@@ -1,3 +1,11 @@
+wine (4.0-1~bpo9+1) stretch-backports; urgency=medium
+
+  * Rebuild for stretch-backports.
+  * Don't export DEB_RULES_REQUIRES_ROOT in stretch-backports.
+  * Build without vkd3d and vulkan support.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Sat, 02 Feb 2019 21:29:10 +0100
+
 wine (4.0-1) unstable; urgency=medium
 
   * New upstream release 4.0, released Jan 22, 2019.
