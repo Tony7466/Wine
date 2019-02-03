@@ -84,8 +84,8 @@ endif
 
 # on arm64 build using clang
 ifeq ($(DEB_HOST_ARCH), arm64)
-export CC=clang
-export CXX=clang++
+export CC=clang-6.0
+export CXX=clang++-6.0
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-enum-conversion -Wno-absolute-value
 endif
 
