@@ -142,6 +142,8 @@ static const WCHAR prop_adapterramW[] =
     {'A','d','a','p','t','e','r','R','A','M',0};
 static const WCHAR prop_adaptertypeW[] =
     {'A','d','a','p','t','e','r','T','y','p','e',0};
+static const WCHAR prop_adaptertypeidW[] =
+    {'A','d','a','p','t','e','r','T','y','p','e','I','D',0};
 static const WCHAR prop_addresswidthW[] =
     {'A','d','d','r','e','s','s','W','i','d','t','h',0};
 static const WCHAR prop_architectureW[] =
@@ -543,6 +545,8 @@ static const struct column col_logicaldisk[] =
 static const struct column col_networkadapter[] =
 {
     { prop_adaptertypeW,         CIM_STRING },
+    { prop_adaptertypeidW,       CIM_UINT16, VT_I4 },
+    { prop_descriptionW,         CIM_STRING|COL_FLAG_DYNAMIC },
     { prop_deviceidW,            CIM_STRING|COL_FLAG_DYNAMIC|COL_FLAG_KEY },
     { prop_indexW,               CIM_UINT32, VT_I4 },
     { prop_interfaceindexW,      CIM_UINT32, VT_I4 },
@@ -967,6 +971,8 @@ struct record_logicaldisk
 struct record_networkadapter
 {
     const WCHAR *adaptertype;
+    UINT16       adaptertypeid;
+    const WCHAR *description;
     const WCHAR *device_id;
     UINT32       index;
     UINT32       interface_index;
@@ -1359,38 +1365,47 @@ static UINT get_processor_count(void)
     return info.NumberOfProcessors;
 }
 
-static UINT get_logical_processor_count( UINT *num_cores )
+static UINT get_logical_processor_count( UINT *num_physical, UINT *num_packages )
 {
-    SYSTEM_LOGICAL_PROCESSOR_INFORMATION *info;
-    UINT i, j, count = 0;
+    SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *buf, *entry;
+    UINT core_relation_count = 0, package_relation_count = 0;
     NTSTATUS status;
-    ULONG len;
+    ULONG len, offset = 0;
+    BOOL smt_enabled = FALSE;
+    DWORD all;
 
-    if (num_cores) *num_cores = get_processor_count();
-    status = NtQuerySystemInformation( SystemLogicalProcessorInformation, NULL, 0, &len );
+    if (num_packages) *num_packages = 1;
+    status = NtQuerySystemInformationEx( SystemLogicalProcessorInformationEx, &all, sizeof(all), NULL, 0, &len );
     if (status != STATUS_INFO_LENGTH_MISMATCH) return get_processor_count();
 
-    if (!(info = heap_alloc( len ))) return get_processor_count();
-    status = NtQuerySystemInformation( SystemLogicalProcessorInformation, info, len, &len );
+    if (!(buf = heap_alloc( len ))) return get_processor_count();
+    status = NtQuerySystemInformationEx( SystemLogicalProcessorInformationEx, &all, sizeof(all), buf, len, NULL );
     if (status != STATUS_SUCCESS)
     {
-        heap_free( info );
+        heap_free( buf );
         return get_processor_count();
     }
-    if (num_cores) *num_cores = 0;
-    for (i = 0; i < len / sizeof(*info); i++)
+
+    while (offset < len)
     {
-        if (info[i].Relationship == RelationProcessorCore)
+        entry = (SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *)((char *)buf + offset);
+
+        if (entry->Relationship == RelationProcessorCore)
         {
-            for (j = 0; j < sizeof(ULONG_PTR); j++) if (info[i].ProcessorMask & (1 << j)) count++;
+            core_relation_count++;
+            if (entry->u.Processor.Flags & LTP_PC_SMT) smt_enabled = TRUE;
         }
-        else if (info[i].Relationship == RelationProcessorPackage && num_cores)
+        else if (entry->Relationship == RelationProcessorPackage)
         {
-            for (j = 0; j < sizeof(ULONG_PTR); j++) if (info[i].ProcessorMask & (1 << j)) (*num_cores)++;
+            package_relation_count++;
         }
+        offset += entry->Size;
     }
-    heap_free( info );
-    return count;
+
+    heap_free( buf );
+    if (num_physical) *num_physical = core_relation_count;
+    if (num_packages) *num_packages = package_relation_count;
+    return smt_enabled ? core_relation_count * 2 : core_relation_count;
 }
 
 static UINT64 get_total_physical_memory(void)
@@ -1454,8 +1469,7 @@ static enum fill_status fill_compsys( struct table *table, const struct expr *co
     rec->manufacturer           = compsys_manufacturerW;
     rec->model                  = compsys_modelW;
     rec->name                   = get_computername();
-    rec->num_logical_processors = get_logical_processor_count( NULL );
-    rec->num_processors         = get_processor_count();
+    rec->num_logical_processors = get_logical_processor_count( NULL, &rec->num_processors );
     rec->total_physical_memory  = get_total_physical_memory();
     rec->username               = get_username();
     if (!match_row( table, row, cond, &status )) free_row_values( table, row );
@@ -2299,7 +2313,7 @@ static WCHAR *get_mac_address( const BYTE *addr, DWORD len )
     sprintfW( ret, fmtW, addr[0], addr[1], addr[2], addr[3], addr[4], addr[5] );
     return ret;
 }
-static const WCHAR *get_adaptertype( DWORD type, int *physical )
+static const WCHAR *get_adaptertype( DWORD type, int *id, int *physical )
 {
     static const WCHAR ethernetW[] = {'E','t','h','e','r','n','e','t',' ','8','0','2','.','3',0};
     static const WCHAR wirelessW[] = {'W','i','r','e','l','e','s','s',0};
@@ -2308,11 +2322,26 @@ static const WCHAR *get_adaptertype( DWORD type, int *physical )
 
     switch (type)
     {
-    case IF_TYPE_ETHERNET_CSMACD: *physical = -1; return ethernetW;
-    case IF_TYPE_IEEE80211:       *physical = -1; return wirelessW;
-    case IF_TYPE_IEEE1394:        *physical = -1; return firewireW;
-    case IF_TYPE_TUNNEL:          *physical = 0; return tunnelW;
-    default:                      *physical = 0; return NULL;
+    case IF_TYPE_ETHERNET_CSMACD:
+        *id = 0;
+        *physical = -1;
+        return ethernetW;
+    case IF_TYPE_IEEE80211:
+        *id = 9;
+        *physical = -1;
+        return wirelessW;
+    case IF_TYPE_IEEE1394:
+        *id = 13;
+        *physical = -1;
+        return firewireW;
+    case IF_TYPE_TUNNEL:
+        *id = 15;
+        *physical = 0;
+        return tunnelW;
+    default:
+        *id = -1;
+        *physical = 0;
+        return NULL;
     }
 }
 
@@ -2324,7 +2353,7 @@ static enum fill_status fill_networkadapter( struct table *table, const struct e
     IP_ADAPTER_ADDRESSES *aa, *buffer;
     UINT row = 0, offset = 0, count = 0;
     DWORD size = 0, ret;
-    int physical;
+    int adaptertypeid, physical;
     enum fill_status status = FILL_STATUS_UNFILTERED;
 
     ret = GetAdaptersAddresses( WS_AF_UNSPEC, 0, NULL, NULL, &size );
@@ -2351,7 +2380,9 @@ static enum fill_status fill_networkadapter( struct table *table, const struct e
 
         rec = (struct record_networkadapter *)(table->data + offset);
         sprintfW( device_id, fmtW, aa->u.s.IfIndex );
-        rec->adaptertype          = get_adaptertype( aa->IfType, &physical );
+        rec->adaptertype          = get_adaptertype( aa->IfType, &adaptertypeid, &physical );
+        rec->adaptertypeid        = adaptertypeid;
+        rec->description          = heap_strdupW( aa->Description );
         rec->device_id            = heap_strdupW( device_id );
         rec->index                = aa->u.s.IfIndex;
         rec->interface_index      = aa->u.s.IfIndex;
@@ -2781,63 +2812,57 @@ done:
     return status;
 }
 
-static inline void do_cpuid( unsigned int ax, unsigned int *p )
+extern void do_cpuid( unsigned int ax, unsigned int *p );
+#if defined(_MSC_VER)
+void do_cpuid( unsigned int ax, unsigned int *p )
 {
-#ifdef __i386__
-#ifdef _MSC_VER
-    __cpuid(p, ax);
+    __cpuid( p, ax );
+}
+#elif defined(__i386__)
+__ASM_GLOBAL_FUNC( do_cpuid,
+                   "pushl %esi\n\t"
+                   "pushl %ebx\n\t"
+                   "movl 12(%esp),%eax\n\t"
+                   "movl 16(%esp),%esi\n\t"
+                   "cpuid\n\t"
+                   "movl %eax,(%esi)\n\t"
+                   "movl %ebx,4(%esi)\n\t"
+                   "movl %ecx,8(%esi)\n\t"
+                   "movl %edx,12(%esi)\n\t"
+                   "popl %ebx\n\t"
+                   "popl %esi\n\t"
+                   "ret" )
+#elif defined(__x86_64__)
+__ASM_GLOBAL_FUNC( do_cpuid,
+                   "pushq %rbx\n\t"
+                   "movl %edi,%eax\n\t"
+                   "cpuid\n\t"
+                   "movl %eax,(%rsi)\n\t"
+                   "movl %ebx,4(%rsi)\n\t"
+                   "movl %ecx,8(%rsi)\n\t"
+                   "movl %edx,12(%rsi)\n\t"
+                   "popq %rbx\n\t"
+                   "ret" )
 #else
-    __asm__("pushl %%ebx\n\t"
-                "cpuid\n\t"
-                "movl %%ebx, %%esi\n\t"
-                "popl %%ebx"
-                : "=a" (p[0]), "=S" (p[1]), "=c" (p[2]), "=d" (p[3])
-                :  "0" (ax));
+void do_cpuid( unsigned int ax, unsigned int *p )
+{
+    FIXME("\n");
+}
 #endif
-#endif
-}
-static const WCHAR *get_osarchitecture(void)
-{
-    SYSTEM_INFO info;
-    GetNativeSystemInfo( &info );
-    if (info.u.s.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64) return os_64bitW;
-    return os_32bitW;
-}
-static void get_processor_caption( WCHAR *caption )
-{
-    static const WCHAR fmtW[] =
-        {'%','s',' ','F','a','m','i','l','y',' ','%','u',' ',
-         'M','o','d','e','l',' ','%','u',' ','S','t','e','p','p','i','n','g',' ','%','u',0};
-    static const WCHAR x86W[] = {'x','8','6',0};
-    static const WCHAR intel64W[] = {'I','n','t','e','l','6','4',0};
-    const WCHAR *arch = (get_osarchitecture() == os_32bitW) ? x86W : intel64W;
-    unsigned int regs[4] = {0, 0, 0, 0};
 
-    do_cpuid( 1, regs );
-    sprintfW( caption, fmtW, arch, (regs[0] & (15 << 8)) >> 8, (regs[0] & (15 << 4)) >> 4, regs[0] & 15 );
-}
-static void get_processor_version( WCHAR *version )
+static unsigned int get_processor_model( unsigned int reg0, unsigned int *stepping, unsigned int *family )
 {
-    static const WCHAR fmtW[] =
-        {'M','o','d','e','l',' ','%','u',',',' ','S','t','e','p','p','i','n','g',' ','%','u',0};
-    unsigned int regs[4] = {0, 0, 0, 0};
+    unsigned int model, family_id = (reg0 & (0x0f << 8)) >> 8;
 
-    do_cpuid( 1, regs );
-    sprintfW( version, fmtW, (regs[0] & (15 << 4)) >> 4, regs[0] & 15 );
-}
-static UINT16 get_processor_revision(void)
-{
-    unsigned int regs[4] = {0, 0, 0, 0};
-    do_cpuid( 1, regs );
-    return regs[0];
-}
-static void get_processor_id( WCHAR *processor_id )
-{
-    static const WCHAR fmtW[] = {'%','0','8','X','%','0','8','X',0};
-    unsigned int regs[4] = {0, 0, 0, 0};
-
-    do_cpuid( 1, regs );
-    sprintfW( processor_id, fmtW, regs[3], regs[0] );
+    model = (reg0 & (0x0f << 4)) >> 4;
+    if (family_id == 6 || family_id == 15) model |= (reg0 & (0x0f << 16)) >> 12;
+    if (family)
+    {
+        *family = family_id;
+        if (family_id == 15) *family += (reg0 & (0xff << 20)) >> 20;
+    }
+    *stepping = reg0 & 0x0f;
+    return model;
 }
 static void regs_to_str( unsigned int *regs, unsigned int len, WCHAR *buffer )
 {
@@ -2858,9 +2883,65 @@ static void get_processor_manufacturer( WCHAR *manufacturer )
 
     regs_to_str( regs + 1, 12, manufacturer );
 }
+static const WCHAR *get_osarchitecture(void)
+{
+    SYSTEM_INFO info;
+    GetNativeSystemInfo( &info );
+    if (info.u.s.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64) return os_64bitW;
+    return os_32bitW;
+}
+static void get_processor_caption( WCHAR *caption )
+{
+    static const WCHAR fmtW[] =
+        {'%','s',' ','F','a','m','i','l','y',' ','%','u',' ',
+         'M','o','d','e','l',' ','%','u',' ','S','t','e','p','p','i','n','g',' ','%','u',0};
+    static const WCHAR x86W[] = {'x','8','6',0};
+    static const WCHAR intel64W[] = {'I','n','t','e','l','6','4',0};
+    static const WCHAR amd64W[] = {'A','M','D','6','4',0};
+    static const WCHAR authenticamdW[] = {'A','u','t','h','e','n','t','i','c','A','M','D',0};
+    const WCHAR *arch;
+    WCHAR manufacturer[13];
+    unsigned int regs[4] = {0, 0, 0, 0}, family, model, stepping;
+
+    get_processor_manufacturer( manufacturer );
+    if (get_osarchitecture() == os_32bitW) arch = x86W;
+    else if (!strcmpW( manufacturer, authenticamdW )) arch = amd64W;
+    else arch = intel64W;
+
+    do_cpuid( 1, regs );
+
+    model = get_processor_model( regs[0], &stepping, &family );
+    sprintfW( caption, fmtW, arch, family, model, stepping );
+}
+static void get_processor_version( WCHAR *version )
+{
+    static const WCHAR fmtW[] =
+        {'M','o','d','e','l',' ','%','u',',',' ','S','t','e','p','p','i','n','g',' ','%','u',0};
+    unsigned int regs[4] = {0, 0, 0, 0}, model, stepping;
+
+    do_cpuid( 1, regs );
+
+    model = get_processor_model( regs[0], &stepping, NULL );
+    sprintfW( version, fmtW, model, stepping );
+}
+static UINT16 get_processor_revision(void)
+{
+    unsigned int regs[4] = {0, 0, 0, 0};
+    do_cpuid( 1, regs );
+    return regs[0];
+}
+static void get_processor_id( WCHAR *processor_id )
+{
+    static const WCHAR fmtW[] = {'%','0','8','X','%','0','8','X',0};
+    unsigned int regs[4] = {0, 0, 0, 0};
+
+    do_cpuid( 1, regs );
+    sprintfW( processor_id, fmtW, regs[3], regs[0] );
+}
 static void get_processor_name( WCHAR *name )
 {
     unsigned int regs[4] = {0, 0, 0, 0};
+    int i;
 
     do_cpuid( 0x80000000, regs );
     if (regs[0] >= 0x80000004)
@@ -2872,6 +2953,7 @@ static void get_processor_name( WCHAR *name )
         do_cpuid( 0x80000004, regs );
         regs_to_str( regs, 16, name + 32 );
     }
+    for (i = strlenW(name) - 1; i >= 0 && name[i] == ' '; i--) name[i] = 0;
 }
 static UINT get_processor_currentclockspeed( UINT index )
 {
@@ -2907,10 +2989,12 @@ static enum fill_status fill_processor( struct table *table, const struct expr *
     static const WCHAR fmtW[] = {'C','P','U','%','u',0};
     WCHAR caption[100], device_id[14], processor_id[17], manufacturer[13], name[49] = {0}, version[50];
     struct record_processor *rec;
-    UINT i, offset = 0, num_rows = 0, num_cores, num_logical_processors, count = get_processor_count();
+    UINT i, offset = 0, num_rows = 0, num_logical, num_physical, num_packages;
     enum fill_status status = FILL_STATUS_UNFILTERED;
 
-    if (!resize_table( table, count, sizeof(*rec) )) return FILL_STATUS_FAILED;
+    num_logical = get_logical_processor_count( &num_physical, &num_packages );
+
+    if (!resize_table( table, num_packages, sizeof(*rec) )) return FILL_STATUS_FAILED;
 
     get_processor_caption( caption );
     get_processor_id( processor_id );
@@ -2918,10 +3002,7 @@ static enum fill_status fill_processor( struct table *table, const struct expr *
     get_processor_name( name );
     get_processor_version( version );
 
-    num_logical_processors = get_logical_processor_count( &num_cores ) / count;
-    num_cores /= count;
-
-    for (i = 0; i < count; i++)
+    for (i = 0; i < num_packages; i++)
     {
         rec = (struct record_processor *)(table->data + offset);
         rec->addresswidth           = get_osarchitecture() == os_32bitW ? 32 : 64;
@@ -2938,8 +3019,8 @@ static enum fill_status fill_processor( struct table *table, const struct expr *
         rec->manufacturer           = heap_strdupW( manufacturer );
         rec->maxclockspeed          = get_processor_maxclockspeed( i );
         rec->name                   = heap_strdupW( name );
-        rec->num_cores              = num_cores;
-        rec->num_logical_processors = num_logical_processors;
+        rec->num_cores              = num_physical / num_packages;
+        rec->num_logical_processors = num_logical / num_packages;
         rec->processor_id           = heap_strdupW( processor_id );
         rec->processortype          = 3; /* central processor */
         rec->revision               = get_processor_revision();

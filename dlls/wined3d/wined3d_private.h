@@ -2968,6 +2968,21 @@ struct wined3d_dummy_textures
  * wined3d_device_create() ignores it. */
 #define WINED3DCREATE_MULTITHREADED 0x00000004
 
+struct wined3d_stateblock_state
+{
+    struct wined3d_shader *vs;
+    struct wined3d_vec4 vs_consts_f[WINED3D_MAX_VS_CONSTS_F];
+    struct wined3d_ivec4 vs_consts_i[WINED3D_MAX_CONSTS_I];
+    BOOL vs_consts_b[WINED3D_MAX_CONSTS_B];
+
+    struct wined3d_shader *ps;
+    struct wined3d_vec4 ps_consts_f[WINED3D_MAX_PS_CONSTS_F];
+    struct wined3d_ivec4 ps_consts_i[WINED3D_MAX_CONSTS_I];
+    BOOL ps_consts_b[WINED3D_MAX_CONSTS_B];
+
+    DWORD rs[WINEHIGHEST_RENDER_STATE + 1];
+};
+
 struct wined3d_device
 {
     LONG ref;
@@ -3006,6 +3021,8 @@ struct wined3d_device
     struct wined3d_state state;
     struct wined3d_state *update_state;
     struct wined3d_stateblock *recording;
+    struct wined3d_stateblock_state stateblock_state;
+    struct wined3d_stateblock_state *update_stateblock_state;
 
     /* Internal use fields  */
     struct wined3d_device_creation_parameters create_parms;
@@ -3556,6 +3573,7 @@ struct wined3d_stateblock
     /* Array indicating whether things have been set or changed */
     struct wined3d_saved_states changed;
     struct wined3d_state state;
+    struct wined3d_stateblock_state stateblock_state;
 
     /* Contained state management */
     DWORD                     contained_render_states[WINEHIGHEST_RENDER_STATE + 1];
@@ -3581,6 +3599,10 @@ struct wined3d_stateblock
 };
 
 void stateblock_init_contained_states(struct wined3d_stateblock *stateblock) DECLSPEC_HIDDEN;
+
+void wined3d_stateblock_state_init(struct wined3d_stateblock_state *state,
+        const struct wined3d_device *device, DWORD flags) DECLSPEC_HIDDEN;
+void wined3d_stateblock_state_cleanup(struct wined3d_stateblock_state *state) DECLSPEC_HIDDEN;
 
 void state_cleanup(struct wined3d_state *state) DECLSPEC_HIDDEN;
 void wined3d_state_enable_light(struct wined3d_state *state, const struct wined3d_d3d_info *d3d_info,
@@ -4580,13 +4602,6 @@ static inline BOOL is_rasterization_disabled(const struct wined3d_shader *geomet
 {
     return geometry_shader
             && geometry_shader->u.gs.so_desc.rasterizer_stream_idx == WINED3D_NO_RASTERIZER_STREAM;
-}
-
-static inline int wined3d_bit_scan(unsigned int *x)
-{
-    int bit_offset = ffs(*x) - 1;
-    *x ^= 1u << bit_offset;
-    return bit_offset;
 }
 
 static inline DWORD wined3d_extract_bits(const DWORD *bitstream,

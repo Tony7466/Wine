@@ -4758,20 +4758,6 @@ BOOL WINAPI CryptEncodeObjectEx(DWORD dwCertEncodingType, LPCSTR lpszStructType,
     return ret;
 }
 
-BOOL WINAPI PFXExportCertStore(HCERTSTORE hStore, CRYPT_DATA_BLOB *pPFX,
- LPCWSTR szPassword, DWORD dwFlags)
-{
-    return PFXExportCertStoreEx(hStore, pPFX, szPassword, NULL, dwFlags);
-}
-
-BOOL WINAPI PFXExportCertStoreEx(HCERTSTORE hStore, CRYPT_DATA_BLOB *pPFX,
- LPCWSTR szPassword, void *pvReserved, DWORD dwFlags)
-{
-    FIXME_(crypt)("(%p, %p, %p, %p, %08x): stub\n", hStore, pPFX, szPassword,
-     pvReserved, dwFlags);
-    return FALSE;
-}
-
 BOOL WINAPI CryptExportPublicKeyInfo(HCRYPTPROV_OR_NCRYPT_KEY_HANDLE hCryptProv, DWORD dwKeySpec,
  DWORD dwCertEncodingType, PCERT_PUBLIC_KEY_INFO pInfo, DWORD *pcbInfo)
 {
@@ -5064,4 +5050,14 @@ BOOL WINAPI CryptImportPublicKeyInfoEx(HCRYPTPROV hCryptProv,
     if (hFunc)
         CryptFreeOIDFunctionAddress(hFunc, 0);
     return ret;
+}
+
+BOOL WINAPI CryptImportPublicKeyInfoEx2(DWORD dwCertEncodingType,
+ PCERT_PUBLIC_KEY_INFO pInfo, DWORD dwFlags, void *pvAuxInfo,
+ BCRYPT_KEY_HANDLE *phKey)
+{
+    FIXME_(crypt)("(%d, %p, %08x, %p, %p): stub\n", dwCertEncodingType, pInfo,
+     dwFlags, pvAuxInfo, phKey);
+    SetLastError(ERROR_FILE_NOT_FOUND);
+    return FALSE;
 }

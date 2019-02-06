@@ -168,12 +168,14 @@ typedef struct _OBJECT_TYPE *POBJECT_TYPE;
 typedef struct _OBJECT_HANDLE_INFORMATION *POBJECT_HANDLE_INFORMATION;
 typedef struct _ZONE_HEADER *PZONE_HEADER;
 
+#define FM_LOCK_BIT 0x1
+
 typedef struct _FAST_MUTEX
 {
     LONG Count;
     PKTHREAD Owner;
     ULONG Contention;
-    KEVENT Gate;
+    KEVENT Event;
     ULONG OldIrql;
 } FAST_MUTEX, *PFAST_MUTEX;
 
@@ -1386,8 +1388,10 @@ void      WINAPI ExFreePool(PVOID);
 void      WINAPI ExFreePoolWithTag(PVOID,ULONG);
 PSLIST_ENTRY WINAPI ExInterlockedPopEntrySList(PSLIST_HEADER,PKSPIN_LOCK);
 PSLIST_ENTRY WINAPI ExInterlockedPushEntrySList(PSLIST_HEADER,PSLIST_ENTRY,PKSPIN_LOCK);
+LIST_ENTRY * WINAPI ExInterlockedRemoveHeadList(LIST_ENTRY*,KSPIN_LOCK*);
 void      WINAPI ExReleaseFastMutexUnsafe(PFAST_MUTEX);
 
+void      WINAPI IoAcquireCancelSpinLock(KIRQL*);
 NTSTATUS  WINAPI IoAllocateDriverObjectExtension(PDRIVER_OBJECT,PVOID,ULONG,PVOID*);
 PVOID     WINAPI IoAllocateErrorLogEntry(PVOID,UCHAR);
 PIRP      WINAPI IoAllocateIrp(CCHAR,BOOLEAN);
@@ -1419,6 +1423,13 @@ void      WINAPI IoReleaseCancelSpinLock(KIRQL);
 NTSTATUS  WINAPI IoSetDeviceInterfaceState(UNICODE_STRING*,BOOLEAN);
 NTSTATUS  WINAPI IoWMIRegistrationControl(PDEVICE_OBJECT,ULONG);
 
+#ifdef __i386__
+void      WINAPI KeAcquireSpinLock(KSPIN_LOCK*,KIRQL*);
+#else
+#define KeAcquireSpinLock( lock, irql ) *(irql) = KeAcquireSpinLockRaiseToDpc( lock )
+KIRQL     WINAPI KeAcquireSpinLockRaiseToDpc(KSPIN_LOCK*);
+#endif
+void      WINAPI KeAcquireSpinLockAtDpcLevel(KSPIN_LOCK*);
 BOOLEAN   WINAPI KeCancelTimer(KTIMER*);
 void      WINAPI KeClearEvent(PRKEVENT);
 NTSTATUS  WINAPI KeDelayExecutionThread(KPROCESSOR_MODE,BOOLEAN,LARGE_INTEGER*);
@@ -1426,6 +1437,7 @@ PKTHREAD  WINAPI KeGetCurrentThread(void);
 void      WINAPI KeInitializeEvent(PRKEVENT,EVENT_TYPE,BOOLEAN);
 void      WINAPI KeInitializeMutex(PRKMUTEX,ULONG);
 void      WINAPI KeInitializeSemaphore(PRKSEMAPHORE,LONG,LONG);
+void      WINAPI KeInitializeSpinLock(KSPIN_LOCK*);
 void      WINAPI KeInitializeTimerEx(PKTIMER,TIMER_TYPE);
 void      WINAPI KeInitializeTimer(KTIMER*);
 void      WINAPI KeQuerySystemTime(LARGE_INTEGER*);
@@ -1433,6 +1445,8 @@ void      WINAPI KeQueryTickCount(LARGE_INTEGER*);
 ULONG     WINAPI KeQueryTimeIncrement(void);
 LONG      WINAPI KeReleaseMutex(PRKMUTEX,BOOLEAN);
 LONG      WINAPI KeReleaseSemaphore(PRKSEMAPHORE,KPRIORITY,LONG,BOOLEAN);
+void      WINAPI KeReleaseSpinLock(KSPIN_LOCK*,KIRQL);
+void      WINAPI KeReleaseSpinLockFromDpcLevel(KSPIN_LOCK*);
 LONG      WINAPI KeResetEvent(PRKEVENT);
 LONG      WINAPI KeSetEvent(PRKEVENT,KPRIORITY,BOOLEAN);
 KPRIORITY WINAPI KeSetPriorityThread(PKTHREAD,KPRIORITY);
@@ -1580,5 +1594,13 @@ NTSTATUS  WINAPI ZwWaitForSingleObject(HANDLE,BOOLEAN,const LARGE_INTEGER*);
 NTSTATUS  WINAPI ZwWaitForMultipleObjects(ULONG,const HANDLE*,BOOLEAN,BOOLEAN,const LARGE_INTEGER*);
 NTSTATUS  WINAPI ZwWriteFile(HANDLE,HANDLE,PIO_APC_ROUTINE,PVOID,PIO_STATUS_BLOCK,const void*,ULONG,PLARGE_INTEGER,PULONG);
 NTSTATUS  WINAPI ZwYieldExecution(void);
+
+static inline void ExInitializeFastMutex( FAST_MUTEX *mutex )
+{
+    mutex->Count = FM_LOCK_BIT;
+    mutex->Owner = NULL;
+    mutex->Contention = 0;
+    KeInitializeEvent( &mutex->Event, SynchronizationEvent, FALSE );
+}
 
 #endif
