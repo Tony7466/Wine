@@ -14,7 +14,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  #include <errno.h>
  #include <sys/stat.h>
  #ifdef HAVE_UNISTD_H
-@@ -36,7 +37,7 @@
+@@ -43,7 +44,7 @@
  #include "wine/library.h"
  
  static const char server_config_dir[] = "/.wine";        /* config dir relative to $HOME */
@@ -23,7 +23,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  static const char server_dir_prefix[] = "/server-";      /* prefix for server dir */
  
  static char *bindir;
-@@ -235,15 +236,113 @@ static char *get_runtime_argvdir( const
+@@ -242,15 +243,113 @@ static char *get_runtime_argvdir( const
  /* initialize the server directory value */
  static void init_server_dir( dev_t dev, ino_t ino )
  {

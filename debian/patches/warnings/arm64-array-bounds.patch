@@ -16,7 +16,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 @@ -1,6 +1,7 @@
  MODULE    = ntoskrnl.exe
  IMPORTLIB = ntoskrnl
- IMPORTS   = advapi32
+ IMPORTS   = advapi32 hal
 +CFLAGS   += -Wno-array-bounds
  DELAYIMPORTS = setupapi user32
  

@@ -1,12 +1,13 @@
-wine (4.1-1) UNRELEASED; urgency=medium
+wine-development (4.1-1) unstable; urgency=medium
 
   * New upstream release 4.1, released Feb 4, 2019.
     - Support for NT kernel spinlocks.
     - Better glyph positioning in DirectWrite.
     - More accurate reporting of CPU information.
     - Context handle fixes in the IDL compiler.
-    - Preloader fixes on macOS.
     - Various bug fixes.
+  * Switch to the development branch.
+    - Checks that /run/user/$uid exists (closes: #921126).
 
  -- Michael Gilbert <mgilbert@debian.org>  Wed, 06 Feb 2019 00:19:39 +0000
 
