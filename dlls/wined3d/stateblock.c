@@ -521,6 +521,23 @@ void state_unbind_resources(struct wined3d_state *state)
     }
 }
 
+void wined3d_stateblock_state_cleanup(struct wined3d_stateblock_state *state)
+{
+    struct wined3d_shader *shader;
+
+    if ((shader = state->vs))
+    {
+        state->vs = NULL;
+        wined3d_shader_decref(shader);
+    }
+
+    if ((shader = state->ps))
+    {
+        state->ps = NULL;
+        wined3d_shader_decref(shader);
+    }
+}
+
 void state_cleanup(struct wined3d_state *state)
 {
     unsigned int counter;
@@ -554,6 +571,7 @@ ULONG CDECL wined3d_stateblock_decref(struct wined3d_stateblock *stateblock)
     if (!refcount)
     {
         state_cleanup(&stateblock->state);
+        wined3d_stateblock_state_cleanup(&stateblock->stateblock_state);
         heap_free(stateblock);
     }
 
@@ -669,6 +687,7 @@ static void wined3d_state_record_lights(struct wined3d_state *dst_state, const s
 
 void CDECL wined3d_stateblock_capture(struct wined3d_stateblock *stateblock)
 {
+    const struct wined3d_stateblock_state *state = &stateblock->device->stateblock_state;
     const struct wined3d_state *src_state = &stateblock->device->state;
     unsigned int i;
     DWORD map;
@@ -677,18 +696,15 @@ void CDECL wined3d_stateblock_capture(struct wined3d_stateblock *stateblock)
 
     TRACE("Capturing state %p.\n", src_state);
 
-    if (stateblock->changed.vertexShader && stateblock->state.shader[WINED3D_SHADER_TYPE_VERTEX]
-            != src_state->shader[WINED3D_SHADER_TYPE_VERTEX])
+    if (stateblock->changed.vertexShader && stateblock->stateblock_state.vs != state->vs)
     {
-        TRACE("Updating vertex shader from %p to %p\n",
-                stateblock->state.shader[WINED3D_SHADER_TYPE_VERTEX],
-                src_state->shader[WINED3D_SHADER_TYPE_VERTEX]);
+        TRACE("Updating vertex shader from %p to %p.\n", stateblock->stateblock_state.vs, state->vs);
 
-        if (src_state->shader[WINED3D_SHADER_TYPE_VERTEX])
-            wined3d_shader_incref(src_state->shader[WINED3D_SHADER_TYPE_VERTEX]);
-        if (stateblock->state.shader[WINED3D_SHADER_TYPE_VERTEX])
-            wined3d_shader_decref(stateblock->state.shader[WINED3D_SHADER_TYPE_VERTEX]);
-        stateblock->state.shader[WINED3D_SHADER_TYPE_VERTEX] = src_state->shader[WINED3D_SHADER_TYPE_VERTEX];
+        if (state->vs)
+            wined3d_shader_incref(state->vs);
+        if (stateblock->stateblock_state.vs)
+            wined3d_shader_decref(stateblock->stateblock_state.vs);
+        stateblock->stateblock_state.vs = state->vs;
     }
 
     /* Vertex shader float constants. */
@@ -696,9 +712,9 @@ void CDECL wined3d_stateblock_capture(struct wined3d_stateblock *stateblock)
     {
         unsigned int idx = stateblock->contained_vs_consts_f[i];
 
-        TRACE("Setting vs_consts_f[%u] to %s.\n", idx, debug_vec4(&src_state->vs_consts_f[idx]));
+        TRACE("Setting vs_consts_f[%u] to %s.\n", idx, debug_vec4(&state->vs_consts_f[idx]));
 
-        stateblock->state.vs_consts_f[idx] = src_state->vs_consts_f[idx];
+        stateblock->stateblock_state.vs_consts_f[idx] = state->vs_consts_f[idx];
     }
 
     /* Vertex shader integer constants. */
@@ -706,9 +722,9 @@ void CDECL wined3d_stateblock_capture(struct wined3d_stateblock *stateblock)
     {
         unsigned int idx = stateblock->contained_vs_consts_i[i];
 
-        TRACE("Setting vs_consts[%u] to %s.\n", idx, debug_ivec4(&src_state->vs_consts_i[idx]));
+        TRACE("Setting vs_consts_i[%u] to %s.\n", idx, debug_ivec4(&state->vs_consts_i[idx]));
 
-        stateblock->state.vs_consts_i[idx] = src_state->vs_consts_i[idx];
+        stateblock->stateblock_state.vs_consts_i[idx] = state->vs_consts_i[idx];
     }
 
     /* Vertex shader boolean constants. */
@@ -717,9 +733,9 @@ void CDECL wined3d_stateblock_capture(struct wined3d_stateblock *stateblock)
         unsigned int idx = stateblock->contained_vs_consts_b[i];
 
         TRACE("Setting vs_consts_b[%u] to %s.\n",
-                idx, src_state->vs_consts_b[idx] ? "TRUE" : "FALSE");
+                idx, state->vs_consts_b[idx] ? "TRUE" : "FALSE");
 
-        stateblock->state.vs_consts_b[idx] = src_state->vs_consts_b[idx];
+        stateblock->stateblock_state.vs_consts_b[idx] = state->vs_consts_b[idx];
     }
 
     /* Pixel shader float constants. */
@@ -727,9 +743,9 @@ void CDECL wined3d_stateblock_capture(struct wined3d_stateblock *stateblock)
     {
         unsigned int idx = stateblock->contained_ps_consts_f[i];
 
-        TRACE("Setting ps_consts_f[%u] to %s.\n", idx, debug_vec4(&src_state->ps_consts_f[idx]));
+        TRACE("Setting ps_consts_f[%u] to %s.\n", idx, debug_vec4(&state->ps_consts_f[idx]));
 
-        stateblock->state.ps_consts_f[idx] = src_state->ps_consts_f[idx];
+        stateblock->stateblock_state.ps_consts_f[idx] = state->ps_consts_f[idx];
     }
 
     /* Pixel shader integer constants. */
@@ -737,19 +753,20 @@ void CDECL wined3d_stateblock_capture(struct wined3d_stateblock *stateblock)
     {
         unsigned int idx = stateblock->contained_ps_consts_i[i];
 
-        TRACE("Setting ps_consts_i[%u] to %s.\n", idx, debug_ivec4(&src_state->ps_consts_i[idx]));
+        TRACE("Setting ps_consts_i[%u] to %s.\n", idx, debug_ivec4(&state->ps_consts_i[idx]));
 
-        stateblock->state.ps_consts_i[idx] = src_state->ps_consts_i[idx];
+        stateblock->stateblock_state.ps_consts_i[idx] = state->ps_consts_i[idx];
     }
 
     /* Pixel shader boolean constants. */
     for (i = 0; i < stateblock->num_contained_ps_consts_b; ++i)
     {
         unsigned int idx = stateblock->contained_ps_consts_b[i];
-        TRACE("Setting ps_consts_b[%u] to %s.\n",
-                idx, src_state->ps_consts_b[idx] ? "TRUE" : "FALSE");
 
-        stateblock->state.ps_consts_b[idx] = src_state->ps_consts_b[idx];
+        TRACE("Setting ps_consts_b[%u] to %s.\n",
+                idx, state->ps_consts_b[idx] ? "TRUE" : "FALSE");
+
+        stateblock->stateblock_state.ps_consts_b[idx] = state->ps_consts_b[idx];
     }
 
     /* Others + Render & Texture */
@@ -899,9 +916,9 @@ void CDECL wined3d_stateblock_capture(struct wined3d_stateblock *stateblock)
     {
         enum wined3d_render_state rs = stateblock->contained_render_states[i];
 
-        TRACE("Updating render state %#x to %u.\n", rs, src_state->render_states[rs]);
+        TRACE("Updating render state %#x to %u.\n", rs, state->rs[rs]);
 
-        stateblock->state.render_states[rs] = src_state->render_states[rs];
+        stateblock->stateblock_state.rs[rs] = state->rs[rs];
     }
 
     /* Texture states */
@@ -943,14 +960,13 @@ void CDECL wined3d_stateblock_capture(struct wined3d_stateblock *stateblock)
         stateblock->state.sampler_states[stage][state] = src_state->sampler_states[stage][state];
     }
 
-    if (stateblock->changed.pixelShader && stateblock->state.shader[WINED3D_SHADER_TYPE_PIXEL]
-            != src_state->shader[WINED3D_SHADER_TYPE_PIXEL])
+    if (stateblock->changed.pixelShader && stateblock->stateblock_state.ps != state->ps)
     {
-        if (src_state->shader[WINED3D_SHADER_TYPE_PIXEL])
-            wined3d_shader_incref(src_state->shader[WINED3D_SHADER_TYPE_PIXEL]);
-        if (stateblock->state.shader[WINED3D_SHADER_TYPE_PIXEL])
-            wined3d_shader_decref(stateblock->state.shader[WINED3D_SHADER_TYPE_PIXEL]);
-        stateblock->state.shader[WINED3D_SHADER_TYPE_PIXEL] = src_state->shader[WINED3D_SHADER_TYPE_PIXEL];
+        if (state->ps)
+            wined3d_shader_incref(state->ps);
+        if (stateblock->stateblock_state.ps)
+            wined3d_shader_decref(stateblock->stateblock_state.ps);
+        stateblock->stateblock_state.ps = state->ps;
     }
 
     wined3d_state_record_lights(&stateblock->state, src_state);
@@ -978,6 +994,7 @@ static void apply_lights(struct wined3d_device *device, const struct wined3d_sta
 
 void CDECL wined3d_stateblock_apply(const struct wined3d_stateblock *stateblock)
 {
+    struct wined3d_stateblock_state *state = &stateblock->device->stateblock_state;
     struct wined3d_device *device = stateblock->device;
     unsigned int i;
     DWORD map;
@@ -985,52 +1002,73 @@ void CDECL wined3d_stateblock_apply(const struct wined3d_stateblock *stateblock)
     TRACE("Applying stateblock %p to device %p.\n", stateblock, device);
 
     if (stateblock->changed.vertexShader)
-        wined3d_device_set_vertex_shader(device, stateblock->state.shader[WINED3D_SHADER_TYPE_VERTEX]);
+    {
+        if (stateblock->stateblock_state.vs)
+            wined3d_shader_incref(stateblock->stateblock_state.vs);
+        if (state->vs)
+            wined3d_shader_decref(state->vs);
+        state->vs = stateblock->stateblock_state.vs;
+        wined3d_device_set_vertex_shader(device, stateblock->stateblock_state.vs);
+    }
 
     /* Vertex Shader Constants. */
     for (i = 0; i < stateblock->num_contained_vs_consts_f; ++i)
     {
+        state->vs_consts_f[i] = stateblock->stateblock_state.vs_consts_f[i];
         wined3d_device_set_vs_consts_f(device, stateblock->contained_vs_consts_f[i],
-                1, &stateblock->state.vs_consts_f[stateblock->contained_vs_consts_f[i]]);
+                1, &stateblock->stateblock_state.vs_consts_f[stateblock->contained_vs_consts_f[i]]);
     }
     for (i = 0; i < stateblock->num_contained_vs_consts_i; ++i)
     {
+        state->vs_consts_i[i] = stateblock->stateblock_state.vs_consts_i[i];
         wined3d_device_set_vs_consts_i(device, stateblock->contained_vs_consts_i[i],
-                1, &stateblock->state.vs_consts_i[stateblock->contained_vs_consts_i[i]]);
+                1, &stateblock->stateblock_state.vs_consts_i[stateblock->contained_vs_consts_i[i]]);
     }
     for (i = 0; i < stateblock->num_contained_vs_consts_b; ++i)
     {
+        state->vs_consts_b[i] = stateblock->stateblock_state.vs_consts_b[i];
         wined3d_device_set_vs_consts_b(device, stateblock->contained_vs_consts_b[i],
-                1, &stateblock->state.vs_consts_b[stateblock->contained_vs_consts_b[i]]);
+                1, &stateblock->stateblock_state.vs_consts_b[stateblock->contained_vs_consts_b[i]]);
     }
 
     apply_lights(device, &stateblock->state);
 
     if (stateblock->changed.pixelShader)
-        wined3d_device_set_pixel_shader(device, stateblock->state.shader[WINED3D_SHADER_TYPE_PIXEL]);
+    {
+        if (stateblock->stateblock_state.ps)
+            wined3d_shader_incref(stateblock->stateblock_state.ps);
+        if (state->ps)
+            wined3d_shader_decref(state->ps);
+        state->ps = stateblock->stateblock_state.ps;
+        wined3d_device_set_pixel_shader(device, stateblock->stateblock_state.ps);
+    }
 
     /* Pixel Shader Constants. */
     for (i = 0; i < stateblock->num_contained_ps_consts_f; ++i)
     {
+        state->ps_consts_f[i] = stateblock->stateblock_state.ps_consts_f[i];
         wined3d_device_set_ps_consts_f(device, stateblock->contained_ps_consts_f[i],
-                1, &stateblock->state.ps_consts_f[stateblock->contained_ps_consts_f[i]]);
+                1, &stateblock->stateblock_state.ps_consts_f[stateblock->contained_ps_consts_f[i]]);
     }
     for (i = 0; i < stateblock->num_contained_ps_consts_i; ++i)
     {
+        state->ps_consts_i[i] = stateblock->stateblock_state.ps_consts_i[i];
         wined3d_device_set_ps_consts_i(device, stateblock->contained_ps_consts_i[i],
-                1, &stateblock->state.ps_consts_i[stateblock->contained_ps_consts_i[i]]);
+                1, &stateblock->stateblock_state.ps_consts_i[stateblock->contained_ps_consts_i[i]]);
     }
     for (i = 0; i < stateblock->num_contained_ps_consts_b; ++i)
     {
+        state->ps_consts_b[i] = stateblock->stateblock_state.ps_consts_b[i];
         wined3d_device_set_ps_consts_b(device, stateblock->contained_ps_consts_b[i],
-                1, &stateblock->state.ps_consts_b[stateblock->contained_ps_consts_b[i]]);
+                1, &stateblock->stateblock_state.ps_consts_b[stateblock->contained_ps_consts_b[i]]);
     }
 
     /* Render states. */
     for (i = 0; i < stateblock->num_contained_render_states; ++i)
     {
+        state->rs[i] = stateblock->stateblock_state.rs[i];
         wined3d_device_set_render_state(device, stateblock->contained_render_states[i],
-                stateblock->state.render_states[stateblock->contained_render_states[i]]);
+                stateblock->stateblock_state.rs[stateblock->contained_render_states[i]]);
     }
 
     /* Texture states. */
@@ -1122,7 +1160,7 @@ void CDECL wined3d_stateblock_apply(const struct wined3d_stateblock *stateblock)
     TRACE("Applied stateblock %p.\n", stateblock);
 }
 
-static void state_init_default(struct wined3d_state *state, const struct wined3d_d3d_info *d3d_info)
+static void init_default_render_states(DWORD rs[WINEHIGHEST_RENDER_STATE + 1], const struct wined3d_d3d_info *d3d_info)
 {
     union
     {
@@ -1134,6 +1172,157 @@ static void state_init_default(struct wined3d_state *state, const struct wined3d
         float f;
         DWORD d;
     } tmpfloat;
+
+    rs[WINED3D_RS_ZENABLE] = WINED3D_ZB_TRUE;
+    rs[WINED3D_RS_FILLMODE] = WINED3D_FILL_SOLID;
+    rs[WINED3D_RS_SHADEMODE] = WINED3D_SHADE_GOURAUD;
+    lp.lp.repeat_factor = 0;
+    lp.lp.line_pattern = 0;
+    rs[WINED3D_RS_LINEPATTERN] = lp.d;
+    rs[WINED3D_RS_ZWRITEENABLE] = TRUE;
+    rs[WINED3D_RS_ALPHATESTENABLE] = FALSE;
+    rs[WINED3D_RS_LASTPIXEL] = TRUE;
+    rs[WINED3D_RS_SRCBLEND] = WINED3D_BLEND_ONE;
+    rs[WINED3D_RS_DESTBLEND] = WINED3D_BLEND_ZERO;
+    rs[WINED3D_RS_CULLMODE] = WINED3D_CULL_BACK;
+    rs[WINED3D_RS_ZFUNC] = WINED3D_CMP_LESSEQUAL;
+    rs[WINED3D_RS_ALPHAFUNC] = WINED3D_CMP_ALWAYS;
+    rs[WINED3D_RS_ALPHAREF] = 0;
+    rs[WINED3D_RS_DITHERENABLE] = FALSE;
+    rs[WINED3D_RS_ALPHABLENDENABLE] = FALSE;
+    rs[WINED3D_RS_FOGENABLE] = FALSE;
+    rs[WINED3D_RS_SPECULARENABLE] = FALSE;
+    rs[WINED3D_RS_ZVISIBLE] = 0;
+    rs[WINED3D_RS_FOGCOLOR] = 0;
+    rs[WINED3D_RS_FOGTABLEMODE] = WINED3D_FOG_NONE;
+    tmpfloat.f = 0.0f;
+    rs[WINED3D_RS_FOGSTART] = tmpfloat.d;
+    tmpfloat.f = 1.0f;
+    rs[WINED3D_RS_FOGEND] = tmpfloat.d;
+    tmpfloat.f = 1.0f;
+    rs[WINED3D_RS_FOGDENSITY] = tmpfloat.d;
+    rs[WINED3D_RS_EDGEANTIALIAS] = FALSE;
+    rs[WINED3D_RS_RANGEFOGENABLE] = FALSE;
+    rs[WINED3D_RS_STENCILENABLE] = FALSE;
+    rs[WINED3D_RS_STENCILFAIL] = WINED3D_STENCIL_OP_KEEP;
+    rs[WINED3D_RS_STENCILZFAIL] = WINED3D_STENCIL_OP_KEEP;
+    rs[WINED3D_RS_STENCILPASS] = WINED3D_STENCIL_OP_KEEP;
+    rs[WINED3D_RS_STENCILREF] = 0;
+    rs[WINED3D_RS_STENCILMASK] = 0xffffffff;
+    rs[WINED3D_RS_STENCILFUNC] = WINED3D_CMP_ALWAYS;
+    rs[WINED3D_RS_STENCILWRITEMASK] = 0xffffffff;
+    rs[WINED3D_RS_TEXTUREFACTOR] = 0xffffffff;
+    rs[WINED3D_RS_WRAP0] = 0;
+    rs[WINED3D_RS_WRAP1] = 0;
+    rs[WINED3D_RS_WRAP2] = 0;
+    rs[WINED3D_RS_WRAP3] = 0;
+    rs[WINED3D_RS_WRAP4] = 0;
+    rs[WINED3D_RS_WRAP5] = 0;
+    rs[WINED3D_RS_WRAP6] = 0;
+    rs[WINED3D_RS_WRAP7] = 0;
+    rs[WINED3D_RS_CLIPPING] = TRUE;
+    rs[WINED3D_RS_LIGHTING] = TRUE;
+    rs[WINED3D_RS_AMBIENT] = 0;
+    rs[WINED3D_RS_FOGVERTEXMODE] = WINED3D_FOG_NONE;
+    rs[WINED3D_RS_COLORVERTEX] = TRUE;
+    rs[WINED3D_RS_LOCALVIEWER] = TRUE;
+    rs[WINED3D_RS_NORMALIZENORMALS] = FALSE;
+    rs[WINED3D_RS_DIFFUSEMATERIALSOURCE] = WINED3D_MCS_COLOR1;
+    rs[WINED3D_RS_SPECULARMATERIALSOURCE] = WINED3D_MCS_COLOR2;
+    rs[WINED3D_RS_AMBIENTMATERIALSOURCE] = WINED3D_MCS_MATERIAL;
+    rs[WINED3D_RS_EMISSIVEMATERIALSOURCE] = WINED3D_MCS_MATERIAL;
+    rs[WINED3D_RS_VERTEXBLEND] = WINED3D_VBF_DISABLE;
+    rs[WINED3D_RS_CLIPPLANEENABLE] = 0;
+    rs[WINED3D_RS_SOFTWAREVERTEXPROCESSING] = FALSE;
+    tmpfloat.f = 1.0f;
+    rs[WINED3D_RS_POINTSIZE] = tmpfloat.d;
+    tmpfloat.f = 1.0f;
+    rs[WINED3D_RS_POINTSIZE_MIN] = tmpfloat.d;
+    rs[WINED3D_RS_POINTSPRITEENABLE] = FALSE;
+    rs[WINED3D_RS_POINTSCALEENABLE] = FALSE;
+    tmpfloat.f = 1.0f;
+    rs[WINED3D_RS_POINTSCALE_A] = tmpfloat.d;
+    tmpfloat.f = 0.0f;
+    rs[WINED3D_RS_POINTSCALE_B] = tmpfloat.d;
+    tmpfloat.f = 0.0f;
+    rs[WINED3D_RS_POINTSCALE_C] = tmpfloat.d;
+    rs[WINED3D_RS_MULTISAMPLEANTIALIAS] = TRUE;
+    rs[WINED3D_RS_MULTISAMPLEMASK] = 0xffffffff;
+    rs[WINED3D_RS_PATCHEDGESTYLE] = WINED3D_PATCH_EDGE_DISCRETE;
+    tmpfloat.f = 1.0f;
+    rs[WINED3D_RS_PATCHSEGMENTS] = tmpfloat.d;
+    rs[WINED3D_RS_DEBUGMONITORTOKEN] = 0xbaadcafe;
+    tmpfloat.f = d3d_info->limits.pointsize_max;
+    rs[WINED3D_RS_POINTSIZE_MAX] = tmpfloat.d;
+    rs[WINED3D_RS_INDEXEDVERTEXBLENDENABLE] = FALSE;
+    rs[WINED3D_RS_COLORWRITEENABLE] = 0x0000000f;
+    tmpfloat.f = 0.0f;
+    rs[WINED3D_RS_TWEENFACTOR] = tmpfloat.d;
+    rs[WINED3D_RS_BLENDOP] = WINED3D_BLEND_OP_ADD;
+    rs[WINED3D_RS_POSITIONDEGREE] = WINED3D_DEGREE_CUBIC;
+    rs[WINED3D_RS_NORMALDEGREE] = WINED3D_DEGREE_LINEAR;
+    /* states new in d3d9 */
+    rs[WINED3D_RS_SCISSORTESTENABLE] = FALSE;
+    rs[WINED3D_RS_SLOPESCALEDEPTHBIAS] = 0;
+    tmpfloat.f = 1.0f;
+    rs[WINED3D_RS_MINTESSELLATIONLEVEL] = tmpfloat.d;
+    rs[WINED3D_RS_MAXTESSELLATIONLEVEL] = tmpfloat.d;
+    rs[WINED3D_RS_ANTIALIASEDLINEENABLE] = FALSE;
+    tmpfloat.f = 0.0f;
+    rs[WINED3D_RS_ADAPTIVETESS_X] = tmpfloat.d;
+    rs[WINED3D_RS_ADAPTIVETESS_Y] = tmpfloat.d;
+    tmpfloat.f = 1.0f;
+    rs[WINED3D_RS_ADAPTIVETESS_Z] = tmpfloat.d;
+    tmpfloat.f = 0.0f;
+    rs[WINED3D_RS_ADAPTIVETESS_W] = tmpfloat.d;
+    rs[WINED3D_RS_ENABLEADAPTIVETESSELLATION] = FALSE;
+    rs[WINED3D_RS_TWOSIDEDSTENCILMODE] = FALSE;
+    rs[WINED3D_RS_BACK_STENCILFAIL] = WINED3D_STENCIL_OP_KEEP;
+    rs[WINED3D_RS_BACK_STENCILZFAIL] = WINED3D_STENCIL_OP_KEEP;
+    rs[WINED3D_RS_BACK_STENCILPASS] = WINED3D_STENCIL_OP_KEEP;
+    rs[WINED3D_RS_BACK_STENCILFUNC] = WINED3D_CMP_ALWAYS;
+    rs[WINED3D_RS_COLORWRITEENABLE1] = 0x0000000f;
+    rs[WINED3D_RS_COLORWRITEENABLE2] = 0x0000000f;
+    rs[WINED3D_RS_COLORWRITEENABLE3] = 0x0000000f;
+    rs[WINED3D_RS_SRGBWRITEENABLE] = 0;
+    rs[WINED3D_RS_DEPTHBIAS] = 0;
+    rs[WINED3D_RS_WRAP8] = 0;
+    rs[WINED3D_RS_WRAP9] = 0;
+    rs[WINED3D_RS_WRAP10] = 0;
+    rs[WINED3D_RS_WRAP11] = 0;
+    rs[WINED3D_RS_WRAP12] = 0;
+    rs[WINED3D_RS_WRAP13] = 0;
+    rs[WINED3D_RS_WRAP14] = 0;
+    rs[WINED3D_RS_WRAP15] = 0;
+    rs[WINED3D_RS_SEPARATEALPHABLENDENABLE] = FALSE;
+    rs[WINED3D_RS_SRCBLENDALPHA] = WINED3D_BLEND_ONE;
+    rs[WINED3D_RS_DESTBLENDALPHA] = WINED3D_BLEND_ZERO;
+    rs[WINED3D_RS_BLENDOPALPHA] = WINED3D_BLEND_OP_ADD;
+}
+
+static void init_default_texture_state(unsigned int i, DWORD stage[WINED3D_HIGHEST_TEXTURE_STATE + 1])
+{
+    stage[WINED3D_TSS_COLOR_OP] = i ? WINED3D_TOP_DISABLE : WINED3D_TOP_MODULATE;
+    stage[WINED3D_TSS_COLOR_ARG1] = WINED3DTA_TEXTURE;
+    stage[WINED3D_TSS_COLOR_ARG2] = WINED3DTA_CURRENT;
+    stage[WINED3D_TSS_ALPHA_OP] = i ? WINED3D_TOP_DISABLE : WINED3D_TOP_SELECT_ARG1;
+    stage[WINED3D_TSS_ALPHA_ARG1] = WINED3DTA_TEXTURE;
+    stage[WINED3D_TSS_ALPHA_ARG2] = WINED3DTA_CURRENT;
+    stage[WINED3D_TSS_BUMPENV_MAT00] = 0;
+    stage[WINED3D_TSS_BUMPENV_MAT01] = 0;
+    stage[WINED3D_TSS_BUMPENV_MAT10] = 0;
+    stage[WINED3D_TSS_BUMPENV_MAT11] = 0;
+    stage[WINED3D_TSS_TEXCOORD_INDEX] = i;
+    stage[WINED3D_TSS_BUMPENV_LSCALE] = 0;
+    stage[WINED3D_TSS_BUMPENV_LOFFSET] = 0;
+    stage[WINED3D_TSS_TEXTURE_TRANSFORM_FLAGS] = WINED3D_TTFF_DISABLE;
+    stage[WINED3D_TSS_COLOR_ARG0] = WINED3DTA_CURRENT;
+    stage[WINED3D_TSS_ALPHA_ARG0] = WINED3DTA_CURRENT;
+    stage[WINED3D_TSS_RESULT_ARG] = WINED3DTA_CURRENT;
+}
+
+static void state_init_default(struct wined3d_state *state, const struct wined3d_d3d_info *d3d_info)
+{
     unsigned int i;
     struct wined3d_matrix identity;
 
@@ -1151,156 +1340,14 @@ static void state_init_default(struct wined3d_state *state, const struct wined3d
         state->transforms[WINED3D_TS_WORLD_MATRIX(i)] = identity;
     }
 
-    TRACE("Render states\n");
-    /* Render states: */
-    state->render_states[WINED3D_RS_ZENABLE] = WINED3D_ZB_TRUE;
-    state->render_states[WINED3D_RS_FILLMODE] = WINED3D_FILL_SOLID;
-    state->render_states[WINED3D_RS_SHADEMODE] = WINED3D_SHADE_GOURAUD;
-    lp.lp.repeat_factor = 0;
-    lp.lp.line_pattern = 0;
-    state->render_states[WINED3D_RS_LINEPATTERN] = lp.d;
-    state->render_states[WINED3D_RS_ZWRITEENABLE] = TRUE;
-    state->render_states[WINED3D_RS_ALPHATESTENABLE] = FALSE;
-    state->render_states[WINED3D_RS_LASTPIXEL] = TRUE;
-    state->render_states[WINED3D_RS_SRCBLEND] = WINED3D_BLEND_ONE;
-    state->render_states[WINED3D_RS_DESTBLEND] = WINED3D_BLEND_ZERO;
-    state->render_states[WINED3D_RS_CULLMODE] = WINED3D_CULL_BACK;
-    state->render_states[WINED3D_RS_ZFUNC] = WINED3D_CMP_LESSEQUAL;
-    state->render_states[WINED3D_RS_ALPHAFUNC] = WINED3D_CMP_ALWAYS;
-    state->render_states[WINED3D_RS_ALPHAREF] = 0;
-    state->render_states[WINED3D_RS_DITHERENABLE] = FALSE;
-    state->render_states[WINED3D_RS_ALPHABLENDENABLE] = FALSE;
-    state->render_states[WINED3D_RS_FOGENABLE] = FALSE;
-    state->render_states[WINED3D_RS_SPECULARENABLE] = FALSE;
-    state->render_states[WINED3D_RS_ZVISIBLE] = 0;
-    state->render_states[WINED3D_RS_FOGCOLOR] = 0;
-    state->render_states[WINED3D_RS_FOGTABLEMODE] = WINED3D_FOG_NONE;
-    tmpfloat.f = 0.0f;
-    state->render_states[WINED3D_RS_FOGSTART] = tmpfloat.d;
-    tmpfloat.f = 1.0f;
-    state->render_states[WINED3D_RS_FOGEND] = tmpfloat.d;
-    tmpfloat.f = 1.0f;
-    state->render_states[WINED3D_RS_FOGDENSITY] = tmpfloat.d;
-    state->render_states[WINED3D_RS_EDGEANTIALIAS] = FALSE;
-    state->render_states[WINED3D_RS_RANGEFOGENABLE] = FALSE;
-    state->render_states[WINED3D_RS_STENCILENABLE] = FALSE;
-    state->render_states[WINED3D_RS_STENCILFAIL] = WINED3D_STENCIL_OP_KEEP;
-    state->render_states[WINED3D_RS_STENCILZFAIL] = WINED3D_STENCIL_OP_KEEP;
-    state->render_states[WINED3D_RS_STENCILPASS] = WINED3D_STENCIL_OP_KEEP;
-    state->render_states[WINED3D_RS_STENCILREF] = 0;
-    state->render_states[WINED3D_RS_STENCILMASK] = 0xffffffff;
-    state->render_states[WINED3D_RS_STENCILFUNC] = WINED3D_CMP_ALWAYS;
-    state->render_states[WINED3D_RS_STENCILWRITEMASK] = 0xffffffff;
-    state->render_states[WINED3D_RS_TEXTUREFACTOR] = 0xffffffff;
-    state->render_states[WINED3D_RS_WRAP0] = 0;
-    state->render_states[WINED3D_RS_WRAP1] = 0;
-    state->render_states[WINED3D_RS_WRAP2] = 0;
-    state->render_states[WINED3D_RS_WRAP3] = 0;
-    state->render_states[WINED3D_RS_WRAP4] = 0;
-    state->render_states[WINED3D_RS_WRAP5] = 0;
-    state->render_states[WINED3D_RS_WRAP6] = 0;
-    state->render_states[WINED3D_RS_WRAP7] = 0;
-    state->render_states[WINED3D_RS_CLIPPING] = TRUE;
-    state->render_states[WINED3D_RS_LIGHTING] = TRUE;
-    state->render_states[WINED3D_RS_AMBIENT] = 0;
-    state->render_states[WINED3D_RS_FOGVERTEXMODE] = WINED3D_FOG_NONE;
-    state->render_states[WINED3D_RS_COLORVERTEX] = TRUE;
-    state->render_states[WINED3D_RS_LOCALVIEWER] = TRUE;
-    state->render_states[WINED3D_RS_NORMALIZENORMALS] = FALSE;
-    state->render_states[WINED3D_RS_DIFFUSEMATERIALSOURCE] = WINED3D_MCS_COLOR1;
-    state->render_states[WINED3D_RS_SPECULARMATERIALSOURCE] = WINED3D_MCS_COLOR2;
-    state->render_states[WINED3D_RS_AMBIENTMATERIALSOURCE] = WINED3D_MCS_MATERIAL;
-    state->render_states[WINED3D_RS_EMISSIVEMATERIALSOURCE] = WINED3D_MCS_MATERIAL;
-    state->render_states[WINED3D_RS_VERTEXBLEND] = WINED3D_VBF_DISABLE;
-    state->render_states[WINED3D_RS_CLIPPLANEENABLE] = 0;
-    state->render_states[WINED3D_RS_SOFTWAREVERTEXPROCESSING] = FALSE;
-    tmpfloat.f = 1.0f;
-    state->render_states[WINED3D_RS_POINTSIZE] = tmpfloat.d;
-    tmpfloat.f = 1.0f;
-    state->render_states[WINED3D_RS_POINTSIZE_MIN] = tmpfloat.d;
-    state->render_states[WINED3D_RS_POINTSPRITEENABLE] = FALSE;
-    state->render_states[WINED3D_RS_POINTSCALEENABLE] = FALSE;
-    tmpfloat.f = 1.0f;
-    state->render_states[WINED3D_RS_POINTSCALE_A] = tmpfloat.d;
-    tmpfloat.f = 0.0f;
-    state->render_states[WINED3D_RS_POINTSCALE_B] = tmpfloat.d;
-    tmpfloat.f = 0.0f;
-    state->render_states[WINED3D_RS_POINTSCALE_C] = tmpfloat.d;
-    state->render_states[WINED3D_RS_MULTISAMPLEANTIALIAS] = TRUE;
-    state->render_states[WINED3D_RS_MULTISAMPLEMASK] = 0xffffffff;
-    state->render_states[WINED3D_RS_PATCHEDGESTYLE] = WINED3D_PATCH_EDGE_DISCRETE;
-    tmpfloat.f = 1.0f;
-    state->render_states[WINED3D_RS_PATCHSEGMENTS] = tmpfloat.d;
-    state->render_states[WINED3D_RS_DEBUGMONITORTOKEN] = 0xbaadcafe;
-    tmpfloat.f = d3d_info->limits.pointsize_max;
-    state->render_states[WINED3D_RS_POINTSIZE_MAX] = tmpfloat.d;
-    state->render_states[WINED3D_RS_INDEXEDVERTEXBLENDENABLE] = FALSE;
-    state->render_states[WINED3D_RS_COLORWRITEENABLE] = 0x0000000f;
-    tmpfloat.f = 0.0f;
-    state->render_states[WINED3D_RS_TWEENFACTOR] = tmpfloat.d;
-    state->render_states[WINED3D_RS_BLENDOP] = WINED3D_BLEND_OP_ADD;
-    state->render_states[WINED3D_RS_POSITIONDEGREE] = WINED3D_DEGREE_CUBIC;
-    state->render_states[WINED3D_RS_NORMALDEGREE] = WINED3D_DEGREE_LINEAR;
-    /* states new in d3d9 */
-    state->render_states[WINED3D_RS_SCISSORTESTENABLE] = FALSE;
-    state->render_states[WINED3D_RS_SLOPESCALEDEPTHBIAS] = 0;
-    tmpfloat.f = 1.0f;
-    state->render_states[WINED3D_RS_MINTESSELLATIONLEVEL] = tmpfloat.d;
-    state->render_states[WINED3D_RS_MAXTESSELLATIONLEVEL] = tmpfloat.d;
-    state->render_states[WINED3D_RS_ANTIALIASEDLINEENABLE] = FALSE;
-    tmpfloat.f = 0.0f;
-    state->render_states[WINED3D_RS_ADAPTIVETESS_X] = tmpfloat.d;
-    state->render_states[WINED3D_RS_ADAPTIVETESS_Y] = tmpfloat.d;
-    tmpfloat.f = 1.0f;
-    state->render_states[WINED3D_RS_ADAPTIVETESS_Z] = tmpfloat.d;
-    tmpfloat.f = 0.0f;
-    state->render_states[WINED3D_RS_ADAPTIVETESS_W] = tmpfloat.d;
-    state->render_states[WINED3D_RS_ENABLEADAPTIVETESSELLATION] = FALSE;
-    state->render_states[WINED3D_RS_TWOSIDEDSTENCILMODE] = FALSE;
-    state->render_states[WINED3D_RS_BACK_STENCILFAIL] = WINED3D_STENCIL_OP_KEEP;
-    state->render_states[WINED3D_RS_BACK_STENCILZFAIL] = WINED3D_STENCIL_OP_KEEP;
-    state->render_states[WINED3D_RS_BACK_STENCILPASS] = WINED3D_STENCIL_OP_KEEP;
-    state->render_states[WINED3D_RS_BACK_STENCILFUNC] = WINED3D_CMP_ALWAYS;
-    state->render_states[WINED3D_RS_COLORWRITEENABLE1] = 0x0000000f;
-    state->render_states[WINED3D_RS_COLORWRITEENABLE2] = 0x0000000f;
-    state->render_states[WINED3D_RS_COLORWRITEENABLE3] = 0x0000000f;
-    state->render_states[WINED3D_RS_SRGBWRITEENABLE] = 0;
-    state->render_states[WINED3D_RS_DEPTHBIAS] = 0;
-    state->render_states[WINED3D_RS_WRAP8] = 0;
-    state->render_states[WINED3D_RS_WRAP9] = 0;
-    state->render_states[WINED3D_RS_WRAP10] = 0;
-    state->render_states[WINED3D_RS_WRAP11] = 0;
-    state->render_states[WINED3D_RS_WRAP12] = 0;
-    state->render_states[WINED3D_RS_WRAP13] = 0;
-    state->render_states[WINED3D_RS_WRAP14] = 0;
-    state->render_states[WINED3D_RS_WRAP15] = 0;
-    state->render_states[WINED3D_RS_SEPARATEALPHABLENDENABLE] = FALSE;
-    state->render_states[WINED3D_RS_SRCBLENDALPHA] = WINED3D_BLEND_ONE;
-    state->render_states[WINED3D_RS_DESTBLENDALPHA] = WINED3D_BLEND_ZERO;
-    state->render_states[WINED3D_RS_BLENDOPALPHA] = WINED3D_BLEND_OP_ADD;
+    init_default_render_states(state->render_states, d3d_info);
 
     /* Texture Stage States - Put directly into state block, we will call function below */
     for (i = 0; i < MAX_TEXTURES; ++i)
     {
         TRACE("Setting up default texture states for texture Stage %u.\n", i);
         state->transforms[WINED3D_TS_TEXTURE0 + i] = identity;
-        state->texture_states[i][WINED3D_TSS_COLOR_OP] = i ? WINED3D_TOP_DISABLE : WINED3D_TOP_MODULATE;
-        state->texture_states[i][WINED3D_TSS_COLOR_ARG1] = WINED3DTA_TEXTURE;
-        state->texture_states[i][WINED3D_TSS_COLOR_ARG2] = WINED3DTA_CURRENT;
-        state->texture_states[i][WINED3D_TSS_ALPHA_OP] = i ? WINED3D_TOP_DISABLE : WINED3D_TOP_SELECT_ARG1;
-        state->texture_states[i][WINED3D_TSS_ALPHA_ARG1] = WINED3DTA_TEXTURE;
-        state->texture_states[i][WINED3D_TSS_ALPHA_ARG2] = WINED3DTA_CURRENT;
-        state->texture_states[i][WINED3D_TSS_BUMPENV_MAT00] = 0;
-        state->texture_states[i][WINED3D_TSS_BUMPENV_MAT01] = 0;
-        state->texture_states[i][WINED3D_TSS_BUMPENV_MAT10] = 0;
-        state->texture_states[i][WINED3D_TSS_BUMPENV_MAT11] = 0;
-        state->texture_states[i][WINED3D_TSS_TEXCOORD_INDEX] = i;
-        state->texture_states[i][WINED3D_TSS_BUMPENV_LSCALE] = 0;
-        state->texture_states[i][WINED3D_TSS_BUMPENV_LOFFSET] = 0;
-        state->texture_states[i][WINED3D_TSS_TEXTURE_TRANSFORM_FLAGS] = WINED3D_TTFF_DISABLE;
-        state->texture_states[i][WINED3D_TSS_COLOR_ARG0] = WINED3DTA_CURRENT;
-        state->texture_states[i][WINED3D_TSS_ALPHA_ARG0] = WINED3DTA_CURRENT;
-        state->texture_states[i][WINED3D_TSS_RESULT_ARG] = WINED3DTA_CURRENT;
+        init_default_texture_state(i, state->texture_states[i]);
     }
 
     for (i = 0 ; i <  MAX_COMBINED_SAMPLERS; ++i)
@@ -1346,6 +1393,19 @@ void state_init(struct wined3d_state *state, struct wined3d_fb_state *fb,
         state_init_default(state, d3d_info);
 }
 
+static void stateblock_state_init_default(struct wined3d_stateblock_state *state,
+        const struct wined3d_d3d_info *d3d_info)
+{
+    init_default_render_states(state->rs, d3d_info);
+}
+
+void wined3d_stateblock_state_init(struct wined3d_stateblock_state *state,
+        const struct wined3d_device *device, DWORD flags)
+{
+    if (flags & WINED3D_STATE_INIT_DEFAULT)
+        stateblock_state_init_default(state, &device->adapter->d3d_info);
+}
+
 static HRESULT stateblock_init(struct wined3d_stateblock *stateblock,
         struct wined3d_device *device, enum wined3d_stateblock_type type)
 {
@@ -1354,6 +1414,7 @@ static HRESULT stateblock_init(struct wined3d_stateblock *stateblock,
     stateblock->ref = 1;
     stateblock->device = device;
     state_init(&stateblock->state, NULL, d3d_info, 0);
+    wined3d_stateblock_state_init(&stateblock->stateblock_state, device, 0);
 
     if (type == WINED3D_SBT_RECORDED)
         return WINED3D_OK;

@@ -169,7 +169,7 @@ enum wined3d_format_id wined3dformat_from_d3dformat(D3DFORMAT format)
     }
 }
 
-unsigned int wined3dmapflags_from_d3dmapflags(unsigned int flags)
+unsigned int wined3dmapflags_from_d3dmapflags(unsigned int flags, unsigned int usage)
 {
     static const unsigned int handled = D3DLOCK_NOSYSLOCK
             | D3DLOCK_NOOVERWRITE
@@ -179,12 +179,12 @@ unsigned int wined3dmapflags_from_d3dmapflags(unsigned int flags)
     unsigned int wined3d_flags;
 
     wined3d_flags = flags & handled;
-    if (!(flags & (D3DLOCK_NOOVERWRITE | D3DLOCK_DISCARD)))
+    if (~usage & D3DUSAGE_WRITEONLY && !(flags & (D3DLOCK_NOOVERWRITE | D3DLOCK_DISCARD)))
         wined3d_flags |= WINED3D_MAP_READ;
     if (!(flags & D3DLOCK_READONLY))
         wined3d_flags |= WINED3D_MAP_WRITE;
     if (!(wined3d_flags & (WINED3D_MAP_READ | WINED3D_MAP_WRITE)))
-        wined3d_flags |= WINED3D_MAP_READ | WINED3D_MAP_WRITE;
+        wined3d_flags |= WINED3D_MAP_WRITE;
     flags &= ~(handled | D3DLOCK_READONLY);
 
     if (flags)
@@ -1757,6 +1757,9 @@ static HRESULT WINAPI d3d9_device_ColorFill(IDirect3DDevice9Ex *iface,
 
     TRACE("iface %p, surface %p, rect %p, color 0x%08x.\n", iface, surface, rect, color);
 
+    if (!surface)
+        return D3DERR_INVALIDCALL;
+
     wined3d_mutex_lock();
 
     if (FAILED(wined3d_texture_get_sub_resource_desc(surface_impl->wined3d_texture,
@@ -2729,8 +2732,7 @@ static void d3d9_device_upload_sysmem_vertex_buffers(struct d3d9_device *device,
     map = device->sysmem_vb;
     while (map)
     {
-        i = ffs(map) - 1;
-        map ^= 1u << i;
+        i = wined3d_bit_scan(&map);
 
         if (FAILED(hr = wined3d_device_get_stream_source(device->wined3d_device, i, &dst_buffer, &offset, &stride)))
             ERR("Failed to get stream source.\n");
@@ -2852,9 +2854,9 @@ static HRESULT d3d9_device_prepare_vertex_buffer(struct d3d9_device *device, UIN
         TRACE("Growing vertex buffer to %u bytes.\n", size);
 
         desc.byte_width = size;
-        desc.usage = WINED3DUSAGE_DYNAMIC | WINED3DUSAGE_WRITEONLY;
+        desc.usage = WINED3DUSAGE_DYNAMIC;
         desc.bind_flags = WINED3D_BIND_VERTEX_BUFFER;
-        desc.access = WINED3D_RESOURCE_ACCESS_GPU | WINED3D_RESOURCE_ACCESS_MAP_R | WINED3D_RESOURCE_ACCESS_MAP_W;
+        desc.access = WINED3D_RESOURCE_ACCESS_GPU | WINED3D_RESOURCE_ACCESS_MAP_W;
         desc.misc_flags = 0;
         desc.structure_byte_stride = 0;
 
@@ -2957,9 +2959,9 @@ static HRESULT d3d9_device_prepare_index_buffer(struct d3d9_device *device, UINT
         TRACE("Growing index buffer to %u bytes.\n", size);
 
         desc.byte_width = size;
-        desc.usage = WINED3DUSAGE_DYNAMIC | WINED3DUSAGE_WRITEONLY | WINED3DUSAGE_STATICDECL;
+        desc.usage = WINED3DUSAGE_DYNAMIC | WINED3DUSAGE_STATICDECL;
         desc.bind_flags = WINED3D_BIND_INDEX_BUFFER;
-        desc.access = WINED3D_RESOURCE_ACCESS_GPU | WINED3D_RESOURCE_ACCESS_MAP_R | WINED3D_RESOURCE_ACCESS_MAP_W;
+        desc.access = WINED3D_RESOURCE_ACCESS_GPU | WINED3D_RESOURCE_ACCESS_MAP_W;
         desc.misc_flags = 0;
         desc.structure_byte_stride = 0;
 
@@ -3108,8 +3110,7 @@ static HRESULT WINAPI d3d9_device_ProcessVertices(IDirect3DDevice9Ex *iface,
     map = device->sysmem_vb;
     while (map)
     {
-        i = ffs(map) - 1;
-        map ^= 1u << i;
+        i = wined3d_bit_scan(&map);
 
         if (FAILED(wined3d_device_get_stream_source(device->wined3d_device,
                 i, &wined3d_buffer, &offset, &stride)))
@@ -3127,8 +3128,7 @@ static HRESULT WINAPI d3d9_device_ProcessVertices(IDirect3DDevice9Ex *iface,
     map = device->sysmem_vb;
     while (map)
     {
-        i = ffs(map) - 1;
-        map ^= 1u << i;
+        i = wined3d_bit_scan(&map);
 
         if (FAILED(wined3d_device_get_stream_source(device->wined3d_device,
                 i, &wined3d_buffer, &offset, &stride)))

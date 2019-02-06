@@ -19,6 +19,7 @@
  */
 
 #include "config.h"
+#include "wine/port.h"
 #include "d3d8_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(d3d8);
@@ -244,7 +245,7 @@ static HRESULT WINAPI d3d8_surface_LockRect(IDirect3DSurface8 *iface,
     }
 
     hr = wined3d_resource_map(wined3d_texture_get_resource(surface->wined3d_texture), surface->sub_resource_idx,
-            &map_desc, rect ? &box : NULL, wined3dmapflags_from_d3dmapflags(flags));
+            &map_desc, rect ? &box : NULL, wined3dmapflags_from_d3dmapflags(flags, 0));
     wined3d_mutex_unlock();
 
     if (SUCCEEDED(hr))

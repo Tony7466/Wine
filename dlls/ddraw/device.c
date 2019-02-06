@@ -3469,9 +3469,9 @@ static HRESULT d3d_device_prepare_vertex_buffer(struct d3d_device *device, UINT 
         TRACE("Growing vertex buffer to %u bytes\n", size);
 
         desc.byte_width = size;
-        desc.usage = WINED3DUSAGE_DYNAMIC | WINED3DUSAGE_WRITEONLY;
+        desc.usage = WINED3DUSAGE_DYNAMIC;
         desc.bind_flags = WINED3D_BIND_VERTEX_BUFFER;
-        desc.access = WINED3D_RESOURCE_ACCESS_GPU | WINED3D_RESOURCE_ACCESS_MAP_R | WINED3D_RESOURCE_ACCESS_MAP_W;
+        desc.access = WINED3D_RESOURCE_ACCESS_GPU | WINED3D_RESOURCE_ACCESS_MAP_W;
         desc.misc_flags = 0;
         desc.structure_byte_stride = 0;
 
@@ -3661,9 +3661,9 @@ static HRESULT d3d_device_prepare_index_buffer(struct d3d_device *device, UINT m
         TRACE("Growing index buffer to %u bytes\n", size);
 
         desc.byte_width = size;
-        desc.usage = WINED3DUSAGE_DYNAMIC | WINED3DUSAGE_WRITEONLY | WINED3DUSAGE_STATICDECL;
+        desc.usage = WINED3DUSAGE_DYNAMIC | WINED3DUSAGE_STATICDECL;
         desc.bind_flags = WINED3D_BIND_INDEX_BUFFER;
-        desc.access = WINED3D_RESOURCE_ACCESS_GPU | WINED3D_RESOURCE_ACCESS_MAP_R | WINED3D_RESOURCE_ACCESS_MAP_W;
+        desc.access = WINED3D_RESOURCE_ACCESS_GPU | WINED3D_RESOURCE_ACCESS_MAP_W;
         desc.misc_flags = 0;
         desc.structure_byte_stride = 0;
 
@@ -4410,6 +4410,8 @@ static HRESULT d3d_device7_DrawIndexedPrimitiveVB(IDirect3DDevice7 *iface,
     {
         TRACE("Drawing from D3DVBCAPS_SYSTEMMEMORY vertex buffer, forwarding to DrawIndexedPrimitive().\n");
         wined3d_mutex_lock();
+        wined3d_box.left = start_vertex * stride;
+        wined3d_box.right = wined3d_box.left + vertex_count * stride;
         wined3d_resource = wined3d_buffer_get_resource(vb_impl->wined3d_buffer);
         if (FAILED(hr = wined3d_resource_map(wined3d_resource, 0, &wined3d_map_desc,
                 &wined3d_box, WINED3D_MAP_READ)))
@@ -4417,8 +4419,8 @@ static HRESULT d3d_device7_DrawIndexedPrimitiveVB(IDirect3DDevice7 *iface,
             wined3d_mutex_unlock();
             return D3DERR_VERTEXBUFFERLOCKED;
         }
-        hr = d3d_device7_DrawIndexedPrimitive(iface, primitive_type, vb_impl->fvf, wined3d_map_desc.data,
-                start_vertex + vertex_count, indices, index_count, flags);
+        hr = d3d_device7_DrawIndexedPrimitive(iface, primitive_type, vb_impl->fvf,
+                wined3d_map_desc.data, vertex_count, indices, index_count, flags);
         wined3d_resource_unmap(wined3d_resource, 0);
         wined3d_mutex_unlock();
         return hr;

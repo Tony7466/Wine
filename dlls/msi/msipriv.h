@@ -243,10 +243,25 @@ typedef struct tagMSIVIEWOPS
     UINT (*fetch_stream)( struct tagMSIVIEW *view, UINT row, UINT col, IStream **stm );
 
     /*
-     * get_row - gets values from a row
-     *
+     * set_int - set the integer value at {row, col}
+     * This function has undefined behaviour if the column does not contain
+     * integers.
      */
-    UINT (*get_row)( struct tagMSIVIEW *view, UINT row, MSIRECORD **rec );
+    UINT (*set_int)( struct tagMSIVIEW *view, UINT row, UINT col, int val );
+
+    /*
+     * set_string - set the string value at {row, col}
+     * This function has undefined behaviour if the column does not contain
+     * strings.
+     */
+    UINT (*set_string)( struct tagMSIVIEW *view, UINT row, UINT col, const WCHAR *val, int len );
+
+    /*
+     * set_stream - set the stream value at {row, col}
+     * This function has undefined behaviour if the column does not contain
+     * streams.
+     */
+    UINT (*set_stream)( struct tagMSIVIEW *view, UINT row, UINT col, IStream *stream );
 
     /*
      * set_row - sets values in a row as specified by mask
@@ -302,19 +317,6 @@ typedef struct tagMSIVIEWOPS
     UINT (*delete)( struct tagMSIVIEW * );
 
     /*
-     * find_matching_rows - iterates through rows that match a value
-     *
-     * If the column type is a string then a string ID should be passed in.
-     *  If the value to be looked up is an integer then no transformation of
-     *  the input value is required, except if the column is a string, in which
-     *  case a string ID should be passed in.
-     * The handle is an input/output parameter that keeps track of the current
-     *  position in the iteration. It must be initialised to zero before the
-     *  first call and continued to be passed in to subsequent calls.
-     */
-    UINT (*find_matching_rows)( struct tagMSIVIEW *view, UINT col, UINT val, UINT *row, MSIITERHANDLE *handle );
-
-    /*
      * add_ref - increases the reference count of the table
      */
     UINT (*add_ref)( struct tagMSIVIEW *view );
@@ -328,11 +330,6 @@ typedef struct tagMSIVIEWOPS
      * add_column - adds a column to the table
      */
     UINT (*add_column)( struct tagMSIVIEW *view, LPCWSTR table, UINT number, LPCWSTR column, UINT type, BOOL hold );
-
-    /*
-     * remove_column - removes the column represented by table name and column number from the table
-     */
-    UINT (*remove_column)( struct tagMSIVIEW *view, LPCWSTR table, UINT number );
 
     /*
      * sort - orders the table by columns
@@ -760,13 +757,7 @@ extern UINT msi_commit_streams( MSIDATABASE *db ) DECLSPEC_HIDDEN;
 
 
 /* string table functions */
-enum StringPersistence
-{
-    StringPersistent = 0,
-    StringNonPersistent = 1
-};
-
-extern BOOL msi_add_string( string_table *st, const WCHAR *data, int len, enum StringPersistence persistence ) DECLSPEC_HIDDEN;
+extern BOOL msi_add_string( string_table *st, const WCHAR *data, int len, BOOL persistent ) DECLSPEC_HIDDEN;
 extern UINT msi_string2id( const string_table *st, const WCHAR *data, int len, UINT *id ) DECLSPEC_HIDDEN;
 extern VOID msi_destroy_stringtable( string_table *st ) DECLSPEC_HIDDEN;
 extern const WCHAR *msi_string_lookup( const string_table *st, UINT id, int *len ) DECLSPEC_HIDDEN;

@@ -52,6 +52,8 @@
 #include "wine/rbtree.h"
 #include "wine/svcctl.h"
 
+#include "ntoskrnl_private.h"
+
 WINE_DEFAULT_DEBUG_CHANNEL(ntoskrnl);
 WINE_DECLARE_DEBUG_CHANNEL(relay);
 WINE_DECLARE_DEBUG_CHANNEL(plugplay);
@@ -142,29 +144,6 @@ static CRITICAL_SECTION_DEBUG critsect_debug =
       0, 0, { (DWORD_PTR)(__FILE__ ": drivers_cs") }
 };
 static CRITICAL_SECTION drivers_cs = { &critsect_debug, -1, 0, 0, 0, 0 };
-
-#ifdef __i386__
-#define DEFINE_FASTCALL1_ENTRYPOINT( name ) \
-    __ASM_STDCALL_FUNC( name, 4, \
-                       "popl %eax\n\t" \
-                       "pushl %ecx\n\t" \
-                       "pushl %eax\n\t" \
-                       "jmp " __ASM_NAME("__regs_") #name __ASM_STDCALL(4))
-#define DEFINE_FASTCALL2_ENTRYPOINT( name ) \
-    __ASM_STDCALL_FUNC( name, 8, \
-                       "popl %eax\n\t" \
-                       "pushl %edx\n\t" \
-                       "pushl %ecx\n\t" \
-                       "pushl %eax\n\t" \
-                       "jmp " __ASM_NAME("__regs_") #name __ASM_STDCALL(8))
-#define DEFINE_FASTCALL3_ENTRYPOINT( name ) \
-    __ASM_STDCALL_FUNC( name, 12, \
-                       "popl %eax\n\t" \
-                       "pushl %edx\n\t" \
-                       "pushl %ecx\n\t" \
-                       "pushl %eax\n\t" \
-                       "jmp " __ASM_NAME("__regs_") #name __ASM_STDCALL(12))
-#endif
 
 static inline LPCSTR debugstr_us( const UNICODE_STRING *us )
 {
@@ -747,53 +726,6 @@ done:
     wine_rb_destroy( &wine_drivers, unload_driver, NULL );
     return status;
 }
-
-
-/***********************************************************************
- *           ExAcquireFastMutexUnsafe  (NTOSKRNL.EXE.@)
- */
-#ifdef DEFINE_FASTCALL1_ENTRYPOINT
-DEFINE_FASTCALL1_ENTRYPOINT(ExAcquireFastMutexUnsafe)
-void WINAPI __regs_ExAcquireFastMutexUnsafe(PFAST_MUTEX FastMutex)
-#else
-void WINAPI ExAcquireFastMutexUnsafe(PFAST_MUTEX FastMutex)
-#endif
-{
-    FIXME("(%p): stub\n", FastMutex);
-}
-
-
-/***********************************************************************
- *           ExReleaseFastMutexUnsafe  (NTOSKRNL.EXE.@)
- */
-#ifdef DEFINE_FASTCALL1_ENTRYPOINT
-DEFINE_FASTCALL1_ENTRYPOINT(ExReleaseFastMutexUnsafe)
-void WINAPI __regs_ExReleaseFastMutexUnsafe(PFAST_MUTEX FastMutex)
-#else
-void WINAPI ExReleaseFastMutexUnsafe(PFAST_MUTEX FastMutex)
-#endif
-{
-    FIXME("(%p): stub\n", FastMutex);
-}
-
-
-/***********************************************************************
- *           IoAcquireCancelSpinLock  (NTOSKRNL.EXE.@)
- */
-void WINAPI IoAcquireCancelSpinLock(PKIRQL irql)
-{
-    FIXME("(%p): stub\n", irql);
-}
-
-
-/***********************************************************************
- *           IoReleaseCancelSpinLock  (NTOSKRNL.EXE.@)
- */
-void WINAPI IoReleaseCancelSpinLock(KIRQL irql)
-{
-    FIXME("(%u): stub\n", irql);
-}
-
 
 /***********************************************************************
  *           IoAllocateDriverObjectExtension  (NTOSKRNL.EXE.@)
@@ -2278,14 +2210,6 @@ PRKTHREAD WINAPI KeGetCurrentThread(void)
 }
 
 /***********************************************************************
- *           KeInitializeSpinLock   (NTOSKRNL.EXE.@)
- */
-void WINAPI KeInitializeSpinLock( PKSPIN_LOCK SpinLock )
-{
-    FIXME( "stub: %p\n", SpinLock );
-}
-
-/***********************************************************************
  *           KeInsertQueue   (NTOSKRNL.EXE.@)
  */
 LONG WINAPI KeInsertQueue(PRKQUEUE Queue, PLIST_ENTRY Entry)
@@ -2381,6 +2305,25 @@ VOID WINAPI KeSetSystemAffinityThread(KAFFINITY Affinity)
 VOID WINAPI IoRegisterFileSystem(PDEVICE_OBJECT DeviceObject)
 {
     FIXME("(%p): stub\n", DeviceObject);
+}
+
+/***********************************************************************
+ *           KeExpandKernelStackAndCalloutEx   (NTOSKRNL.EXE.@)
+ */
+NTSTATUS WINAPI KeExpandKernelStackAndCalloutEx(PEXPAND_STACK_CALLOUT callout, void *parameter, SIZE_T size,
+                                                BOOLEAN wait, void *context)
+{
+    WARN("(%p %p %lu %x %p) semi-stub: ignoring stack expand\n", callout, parameter, size, wait, context);
+    callout(parameter);
+    return STATUS_SUCCESS;
+}
+
+/***********************************************************************
+ *           KeExpandKernelStackAndCallout   (NTOSKRNL.EXE.@)
+ */
+NTSTATUS WINAPI KeExpandKernelStackAndCallout(PEXPAND_STACK_CALLOUT callout, void *parameter, SIZE_T size)
+{
+    return KeExpandKernelStackAndCalloutEx(callout, parameter, size, TRUE, NULL);
 }
 
 /***********************************************************************
@@ -2851,10 +2794,10 @@ NTSTATUS WINAPI PsRemoveCreateThreadNotifyRoutine( PCREATE_THREAD_NOTIFY_ROUTINE
 /***********************************************************************
  *           PsTerminateSystemThread   (NTOSKRNL.EXE.@)
  */
-NTSTATUS WINAPI PsTerminateSystemThread(NTSTATUS ExitStatus)
+NTSTATUS WINAPI PsTerminateSystemThread(NTSTATUS status)
 {
-    FIXME( "stub: %u\n", ExitStatus );
-    return STATUS_NOT_IMPLEMENTED;
+    TRACE("status %#x.\n", status);
+    ExitThread( status );
 }
 
 
@@ -3114,29 +3057,6 @@ NTSTATUS WINAPI ExDeleteResourceLite(PERESOURCE resource)
 {
     FIXME("(%p): stub\n", resource);
     return STATUS_NOT_IMPLEMENTED;
-}
-
-/*****************************************************
- *           ExInterlockedRemoveHeadList  (NTOSKRNL.EXE.@)
- */
-PLIST_ENTRY WINAPI ExInterlockedRemoveHeadList(PLIST_ENTRY head, PKSPIN_LOCK lock)
-{
-    FIXME("(%p %p) stub\n", head, lock);
-    return NULL;
-}
-
-/***********************************************************************
- *           ExfInterlockedRemoveHeadList   (NTOSKRNL.EXE.@)
- */
-#ifdef DEFINE_FASTCALL2_ENTRYPOINT
-DEFINE_FASTCALL2_ENTRYPOINT( ExfInterlockedRemoveHeadList )
-PLIST_ENTRY WINAPI DECLSPEC_HIDDEN __regs_ExfInterlockedRemoveHeadList(PLIST_ENTRY head, PKSPIN_LOCK lock)
-#else
-PLIST_ENTRY WINAPI ExfInterlockedRemoveHeadList(PLIST_ENTRY head, PKSPIN_LOCK lock)
-#endif
-{
-    FIXME("(%p %p) stub\n", head, lock);
-    return ExInterlockedRemoveHeadList( head, lock );
 }
 
 /***********************************************************************
@@ -3836,50 +3756,6 @@ NTSTATUS WINAPI IoCreateFile(HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBUT
 }
 
 /***********************************************************************
- *           KeAcquireInStackQueuedSpinLock (NTOSKRNL.EXE.@)
- */
-#ifdef DEFINE_FASTCALL2_ENTRYPOINT
-DEFINE_FASTCALL2_ENTRYPOINT( KeAcquireInStackQueuedSpinLock )
-void WINAPI DECLSPEC_HIDDEN __regs_KeAcquireInStackQueuedSpinLock( KSPIN_LOCK *spinlock,
-                                                                   KLOCK_QUEUE_HANDLE *handle )
-#else
-void WINAPI KeAcquireInStackQueuedSpinLock( KSPIN_LOCK *spinlock, KLOCK_QUEUE_HANDLE *handle )
-#endif
-{
-    FIXME( "stub: %p %p\n", spinlock, handle );
-}
-
-/***********************************************************************
- *           KeReleaseInStackQueuedSpinLock (NTOSKRNL.EXE.@)
- */
-#ifdef DEFINE_FASTCALL1_ENTRYPOINT
-DEFINE_FASTCALL1_ENTRYPOINT( KeReleaseInStackQueuedSpinLock )
-void WINAPI DECLSPEC_HIDDEN __regs_KeReleaseInStackQueuedSpinLock( KLOCK_QUEUE_HANDLE *handle )
-#else
-void WINAPI KeReleaseInStackQueuedSpinLock( KLOCK_QUEUE_HANDLE *handle )
-#endif
-{
-    FIXME( "stub: %p\n", handle );
-}
-
-/***********************************************************************
- *           KeAcquireSpinLockRaiseToDpc (NTOSKRNL.EXE.@)
- */
-KIRQL WINAPI KeAcquireSpinLockRaiseToDpc(KSPIN_LOCK *spinlock)
-{
-    FIXME( "stub: %p\n", spinlock );
-    return 0;
-}
-
-/***********************************************************************
- *           KeReleaseSpinLock (NTOSKRNL.EXE.@)
- */
-void WINAPI KeReleaseSpinLock( KSPIN_LOCK *spinlock, KIRQL irql )
-{
-    FIXME( "stub: %p %u\n", spinlock, irql );
-}
-
-/***********************************************************************
  *           IoCreateNotificationEvent (NTOSKRNL.EXE.@)
  */
 PKEVENT WINAPI IoCreateNotificationEvent(UNICODE_STRING *name, HANDLE *handle)
@@ -4082,4 +3958,20 @@ NTSTATUS WINAPI MmCopyVirtualMemory(PEPROCESS fromprocess, PVOID fromaddress, PE
 {
     FIXME("stub: %p %p %p %p %lu %d %p\n", fromprocess, fromaddress, toprocess, toaddress, bufsize, mode, copied);
     return STATUS_NOT_IMPLEMENTED;
+}
+
+/*********************************************************************
+ *           KeEnterGuardedRegion    (NTOSKRNL.@)
+ */
+void WINAPI KeEnterGuardedRegion(void)
+{
+    FIXME("\n");
+}
+
+/*********************************************************************
+ *           KeLeaveGuardedRegion    (NTOSKRNL.@)
+ */
+void WINAPI KeLeaveGuardedRegion(void)
+{
+    FIXME("\n");
 }

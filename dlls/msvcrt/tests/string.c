@@ -2788,13 +2788,19 @@ static void test_tolower(void)
 
     errno = 0xdeadbeef;
     ret = p_tolower((char)0xF4);
-    todo_wine ok(ret == (char)0xF4, "ret = %x\n", ret);
-    todo_wine ok(errno == 0xdeadbeef, "errno = %d\n", errno);
+    ok(ret == (char)0xF4, "ret = %x\n", ret);
+    ok(errno == 0xdeadbeef, "errno = %d\n", errno);
 
     errno = 0xdeadbeef;
     ret = p_tolower((char)0xD0);
-    todo_wine ok(ret == (char)0xD0, "ret = %x\n", ret);
-    todo_wine ok(errno == 0xdeadbeef, "errno = %d\n", errno);
+    ok(ret == (char)0xD0, "ret = %x\n", ret);
+    ok(errno == 0xdeadbeef, "errno = %d\n", errno);
+
+    setlocale(LC_ALL, "C");
+    errno = 0xdeadbeef;
+    ret = p_tolower((char)0xF4);
+    ok(ret == (char)0xF4, "ret = %x\n", ret);
+    ok(errno == 0xdeadbeef, "errno = %d\n", errno);
 
     /* test C locale after setting locale */
     if(!setlocale(LC_ALL, "us")) {
@@ -3627,7 +3633,6 @@ static void test_C_locale(void)
             ok(ret == exp, "expected %x, got %x for C locale\n", exp, ret);
         }
         else
-        todo_wine_if(ret != i)
             ok(ret == i, "expected self %x, got %x for C locale\n", i, ret);
 
         ret = p_towupper(i);
@@ -3637,7 +3642,6 @@ static void test_C_locale(void)
             ok(ret == exp, "expected %x, got %x for C locale\n", exp, ret);
         }
         else
-        todo_wine_if(ret != i)
             ok(ret == i, "expected self %x, got %x for C locale\n", i, ret);
     }
 
@@ -3658,7 +3662,6 @@ static void test_C_locale(void)
                 ok(ret == exp, "expected %x, got %x for C locale\n", exp, ret);
             }
             else
-            todo_wine_if(ret != j)
                 ok(ret == j, "expected self %x, got %x for C locale\n", j, ret);
 
             ret = p__towupper_l(j, locale);
@@ -3668,7 +3671,6 @@ static void test_C_locale(void)
                 ok(ret == exp, "expected %x, got %x for C locale\n", exp, ret);
             }
             else
-            todo_wine_if(ret != j)
                 ok(ret == j, "expected self %x, got %x for C locale\n", j, ret);
         }
 

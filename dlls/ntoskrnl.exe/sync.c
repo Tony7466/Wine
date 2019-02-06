@@ -18,6 +18,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include "config.h"
 #include <stdarg.h>
 
 #include "ntstatus.h"
@@ -29,6 +30,8 @@
 #include "ddk/wdm.h"
 
 #include "wine/debug.h"
+
+#include "ntoskrnl_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(ntoskrnl);
 
@@ -188,14 +191,14 @@ void WINAPI KeInitializeEvent( PRKEVENT event, EVENT_TYPE type, BOOLEAN state )
  */
 LONG WINAPI KeSetEvent( PRKEVENT event, KPRIORITY increment, BOOLEAN wait )
 {
-    HANDLE handle = event->Header.WaitListHead.Blink;
+    HANDLE handle;
     LONG ret;
 
     TRACE("event %p, increment %d, wait %u.\n", event, increment, wait);
 
     EnterCriticalSection( &sync_cs );
     ret = InterlockedExchange( &event->Header.SignalState, TRUE );
-    if (handle)
+    if ((handle = event->Header.WaitListHead.Blink))
         SetEvent( handle );
     LeaveCriticalSection( &sync_cs );
 
@@ -207,14 +210,14 @@ LONG WINAPI KeSetEvent( PRKEVENT event, KPRIORITY increment, BOOLEAN wait )
  */
 LONG WINAPI KeResetEvent( PRKEVENT event )
 {
-    HANDLE handle = event->Header.WaitListHead.Blink;
+    HANDLE handle;
     LONG ret;
 
     TRACE("event %p.\n", event);
 
     EnterCriticalSection( &sync_cs );
     ret = InterlockedExchange( &event->Header.SignalState, FALSE );
-    if (handle)
+    if ((handle = event->Header.WaitListHead.Blink))
         ResetEvent( handle );
     LeaveCriticalSection( &sync_cs );
 
@@ -249,7 +252,7 @@ void WINAPI KeInitializeSemaphore( PRKSEMAPHORE semaphore, LONG count, LONG limi
 LONG WINAPI KeReleaseSemaphore( PRKSEMAPHORE semaphore, KPRIORITY increment,
                                 LONG count, BOOLEAN wait )
 {
-    HANDLE handle = semaphore->Header.WaitListHead.Blink;
+    HANDLE handle;
     LONG ret;
 
     TRACE("semaphore %p, increment %d, count %d, wait %u.\n",
@@ -257,7 +260,7 @@ LONG WINAPI KeReleaseSemaphore( PRKSEMAPHORE semaphore, KPRIORITY increment,
 
     EnterCriticalSection( &sync_cs );
     ret = InterlockedExchangeAdd( &semaphore->Header.SignalState, count );
-    if (handle)
+    if ((handle = semaphore->Header.WaitListHead.Blink))
         ReleaseSemaphore( handle, count, NULL );
     LeaveCriticalSection( &sync_cs );
 
@@ -282,7 +285,6 @@ void WINAPI KeInitializeMutex( PRKMUTEX mutex, ULONG level )
  */
 LONG WINAPI KeReleaseMutex( PRKMUTEX mutex, BOOLEAN wait )
 {
-    HANDLE handle = mutex->Header.WaitListHead.Blink;
     LONG ret;
 
     TRACE("mutex %p, wait %u.\n", mutex, wait);
@@ -291,7 +293,7 @@ LONG WINAPI KeReleaseMutex( PRKMUTEX mutex, BOOLEAN wait )
     ret = mutex->Header.SignalState++;
     if (!ret && !mutex->Header.WaitListHead.Flink)
     {
-        CloseHandle( handle );
+        CloseHandle( mutex->Header.WaitListHead.Blink );
         mutex->Header.WaitListHead.Blink = NULL;
     }
     LeaveCriticalSection( &sync_cs );
@@ -327,7 +329,6 @@ void WINAPI KeInitializeTimer( KTIMER *timer )
  */
 BOOLEAN WINAPI KeSetTimerEx( KTIMER *timer, LARGE_INTEGER duetime, LONG period, KDPC *dpc )
 {
-    BOOL manual = timer->Header.Type == TYPE_MANUAL_TIMER;
     BOOL ret;
 
     TRACE("timer %p, duetime %s, period %d, dpc %p.\n",
@@ -340,10 +341,12 @@ BOOLEAN WINAPI KeSetTimerEx( KTIMER *timer, LARGE_INTEGER duetime, LONG period, 
     }
 
     EnterCriticalSection( &sync_cs );
+
     ret = timer->Header.Inserted;
     timer->Header.Inserted = TRUE;
-    timer->Header.WaitListHead.Blink = CreateWaitableTimerW( NULL, manual, NULL );
+    timer->Header.WaitListHead.Blink = CreateWaitableTimerW( NULL, timer->Header.Type == TYPE_MANUAL_TIMER, NULL );
     SetWaitableTimer( timer->Header.WaitListHead.Blink, &duetime, period, NULL, NULL, FALSE );
+
     LeaveCriticalSection( &sync_cs );
 
     return ret;
@@ -372,4 +375,228 @@ NTSTATUS WINAPI KeDelayExecutionThread( KPROCESSOR_MODE mode, BOOLEAN alertable,
 {
     TRACE("mode %d, alertable %u, timeout %p.\n", mode, alertable, timeout);
     return NtDelayExecution( alertable, timeout );
+}
+
+/***********************************************************************
+ *           KeInitializeSpinLock   (NTOSKRNL.EXE.@)
+ */
+void WINAPI KeInitializeSpinLock( KSPIN_LOCK *lock )
+{
+    TRACE("lock %p.\n", lock);
+    *lock = 0;
+}
+
+static inline void small_pause(void)
+{
+#ifdef __x86_64__
+    __asm__ __volatile__( "rep;nop" : : : "memory" );
+#else
+    __asm__ __volatile__( "" : : : "memory" );
+#endif
+}
+
+/***********************************************************************
+ *           KeAcquireSpinLockAtDpcLevel (NTOSKRNL.EXE.@)
+ */
+void WINAPI KeAcquireSpinLockAtDpcLevel( KSPIN_LOCK *lock )
+{
+    TRACE("lock %p.\n", lock);
+    while (!InterlockedCompareExchangePointer( (void **)lock, (void *)1, (void *)0 ))
+        small_pause();
+}
+
+/***********************************************************************
+ *           KeReleaseSpinLockFromDpcLevel (NTOSKRNL.EXE.@)
+ */
+void WINAPI KeReleaseSpinLockFromDpcLevel( KSPIN_LOCK *lock )
+{
+    TRACE("lock %p.\n", lock);
+    InterlockedExchangePointer( (void **)lock, 0 );
+}
+
+#define QUEUED_SPINLOCK_OWNED   0x2
+
+/***********************************************************************
+ *           KeAcquireInStackQueuedSpinLockAtDpcLevel  (NTOSKRNL.EXE.@)
+ */
+#ifdef DEFINE_FASTCALL2_ENTRYPOINT
+DEFINE_FASTCALL2_ENTRYPOINT( KeAcquireInStackQueuedSpinLockAtDpcLevel )
+void WINAPI DECLSPEC_HIDDEN __regs_KeAcquireInStackQueuedSpinLockAtDpcLevel( KSPIN_LOCK *lock, KLOCK_QUEUE_HANDLE *queue )
+#else
+void WINAPI KeAcquireInStackQueuedSpinLockAtDpcLevel( KSPIN_LOCK *lock, KLOCK_QUEUE_HANDLE *queue )
+#endif
+{
+    KSPIN_LOCK_QUEUE *tail;
+
+    TRACE("lock %p, queue %p.\n", lock, queue);
+
+    queue->LockQueue.Next = NULL;
+
+    if (!(tail = InterlockedExchangePointer( (void **)lock, &queue->LockQueue )))
+        queue->LockQueue.Lock = (KSPIN_LOCK *)((ULONG_PTR)lock | QUEUED_SPINLOCK_OWNED);
+    else
+    {
+        queue->LockQueue.Lock = lock;
+        InterlockedExchangePointer( (void **)&tail->Next, &queue->LockQueue );
+
+        while (!((ULONG_PTR)InterlockedCompareExchangePointer( (void **)&queue->LockQueue.Lock, 0, 0 )
+                 & QUEUED_SPINLOCK_OWNED))
+        {
+            small_pause();
+        }
+    }
+}
+
+/***********************************************************************
+ *           KeReleaseInStackQueuedSpinLockFromDpcLevel  (NTOSKRNL.EXE.@)
+ */
+#ifdef DEFINE_FASTCALL1_ENTRYPOINT
+DEFINE_FASTCALL1_ENTRYPOINT( KeReleaseInStackQueuedSpinLockFromDpcLevel )
+void WINAPI DECLSPEC_HIDDEN __regs_KeReleaseInStackQueuedSpinLockFromDpcLevel( KLOCK_QUEUE_HANDLE *queue )
+#else
+void WINAPI KeReleaseInStackQueuedSpinLockFromDpcLevel( KLOCK_QUEUE_HANDLE *queue )
+#endif
+{
+    KSPIN_LOCK *lock = (KSPIN_LOCK *)((ULONG_PTR)queue->LockQueue.Lock & ~QUEUED_SPINLOCK_OWNED);
+    KSPIN_LOCK_QUEUE *next;
+
+    TRACE("lock %p, queue %p.\n", lock, queue);
+
+    queue->LockQueue.Lock = NULL;
+
+    if (!(next = queue->LockQueue.Next))
+    {
+        /* If we are truly the last in the queue, the lock will point to us. */
+        if (InterlockedCompareExchangePointer( (void **)lock, NULL, &queue->LockQueue ) == queue)
+            return;
+
+        /* Otherwise, someone just queued themselves, but hasn't yet set
+         * themselves as successor. Spin waiting for them to do so. */
+        while (!(next = queue->LockQueue.Next))
+            small_pause();
+    }
+
+    InterlockedExchangePointer( (void **)&next->Lock, (KSPIN_LOCK *)((ULONG_PTR)lock | QUEUED_SPINLOCK_OWNED) );
+}
+
+#ifndef __i386__
+/***********************************************************************
+ *           KeReleaseSpinLock (NTOSKRNL.EXE.@)
+ */
+void WINAPI KeReleaseSpinLock( KSPIN_LOCK *lock, KIRQL irql )
+{
+    TRACE("lock %p, irql %u.\n", lock, irql);
+    KeReleaseSpinLockFromDpcLevel( lock );
+}
+
+/***********************************************************************
+ *           KeAcquireSpinLockRaiseToDpc (NTOSKRNL.EXE.@)
+ */
+KIRQL WINAPI KeAcquireSpinLockRaiseToDpc( KSPIN_LOCK *lock )
+{
+    TRACE("lock %p.\n", lock);
+    KeAcquireSpinLockAtDpcLevel( lock );
+    return 0;
+}
+
+/***********************************************************************
+ *           KeAcquireInStackQueuedSpinLock (NTOSKRNL.EXE.@)
+ */
+void WINAPI KeAcquireInStackQueuedSpinLock( KSPIN_LOCK *lock, KLOCK_QUEUE_HANDLE *queue )
+{
+    TRACE("lock %p, queue %p.\n", lock, queue);
+    KeAcquireInStackQueuedSpinLockAtDpcLevel( lock, queue );
+}
+
+/***********************************************************************
+ *           KeReleaseInStackQueuedSpinLock (NTOSKRNL.EXE.@)
+ */
+void WINAPI KeReleaseInStackQueuedSpinLock( KLOCK_QUEUE_HANDLE *queue )
+{
+    TRACE("queue %p.\n", queue);
+    KeReleaseInStackQueuedSpinLockFromDpcLevel( queue );
+}
+#endif
+
+static KSPIN_LOCK cancel_lock;
+
+/***********************************************************************
+ *           IoAcquireCancelSpinLock  (NTOSKRNL.EXE.@)
+ */
+void WINAPI IoAcquireCancelSpinLock( KIRQL *irql )
+{
+    TRACE("irql %p.\n", irql);
+    KeAcquireSpinLock( &cancel_lock, irql );
+}
+
+/***********************************************************************
+ *           IoReleaseCancelSpinLock  (NTOSKRNL.EXE.@)
+ */
+void WINAPI IoReleaseCancelSpinLock( KIRQL irql )
+{
+    TRACE("irql %u.\n", irql);
+    KeReleaseSpinLock( &cancel_lock, irql );
+}
+
+#ifdef __i386__
+DEFINE_FASTCALL2_ENTRYPOINT( ExfInterlockedRemoveHeadList )
+PLIST_ENTRY WINAPI DECLSPEC_HIDDEN __regs_ExfInterlockedRemoveHeadList( LIST_ENTRY *list, KSPIN_LOCK *lock )
+{
+    return ExInterlockedRemoveHeadList( list, lock );
+}
+#endif
+
+/***********************************************************************
+ *           ExInterlockedRemoveHeadList  (NTOSKRNL.EXE.@)
+ */
+LIST_ENTRY * WINAPI ExInterlockedRemoveHeadList( LIST_ENTRY *list, KSPIN_LOCK *lock )
+{
+    LIST_ENTRY *ret;
+    KIRQL irql;
+
+    TRACE("list %p, lock %p.\n", list, lock);
+
+    KeAcquireSpinLock( lock, &irql );
+    ret = RemoveHeadList( list );
+    KeReleaseSpinLock( lock, irql );
+
+    return ret;
+}
+
+/***********************************************************************
+ *           ExAcquireFastMutexUnsafe  (NTOSKRNL.EXE.@)
+ */
+#ifdef DEFINE_FASTCALL1_ENTRYPOINT
+DEFINE_FASTCALL1_ENTRYPOINT(ExAcquireFastMutexUnsafe)
+void WINAPI __regs_ExAcquireFastMutexUnsafe( FAST_MUTEX *mutex )
+#else
+void WINAPI ExAcquireFastMutexUnsafe( FAST_MUTEX *mutex )
+#endif
+{
+    LONG count;
+
+    TRACE("mutex %p.\n", mutex);
+
+    count = InterlockedDecrement( &mutex->Count );
+    if (count < 0)
+        KeWaitForSingleObject( &mutex->Event, Executive, KernelMode, FALSE, NULL );
+}
+
+/***********************************************************************
+ *           ExReleaseFastMutexUnsafe  (NTOSKRNL.EXE.@)
+ */
+#ifdef DEFINE_FASTCALL1_ENTRYPOINT
+DEFINE_FASTCALL1_ENTRYPOINT(ExReleaseFastMutexUnsafe)
+void WINAPI __regs_ExReleaseFastMutexUnsafe( FAST_MUTEX *mutex )
+#else
+void WINAPI ExReleaseFastMutexUnsafe( FAST_MUTEX *mutex )
+#endif
+{
+    LONG count;
+
+    TRACE("mutex %p.\n", mutex);
+
+    count = InterlockedIncrement( &mutex->Count );
+    if (count < 1)
+        KeSetEvent( &mutex->Event, IO_NO_INCREMENT, FALSE );
 }

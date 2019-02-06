@@ -435,11 +435,17 @@ static BOOL aclist_expand(IAutoCompleteImpl *ac, WCHAR *txt)
 {
     /* call IACList::Expand only when needed, if the
        new txt and old_txt require different expansions */
-    WCHAR c, *p, *last_delim, *old_txt = ac->txtbackup;
+    static const WCHAR empty[] = { 0 };
+
+    const WCHAR *old_txt = ac->txtbackup;
+    WCHAR c, *p, *last_delim;
     size_t i = 0;
 
     /* '/' is allowed as a delim for unix paths */
     static const WCHAR delims[] = { '\\', '/', 0 };
+
+    /* always expand if the enumerator was reset */
+    if (!ac->enum_strs) old_txt = empty;
 
     /* skip the shared prefix */
     while ((c = tolowerW(txt[i])) == tolowerW(old_txt[i]))
@@ -502,14 +508,14 @@ static BOOL display_matching_strs(IAutoCompleteImpl *ac, WCHAR *text, UINT len,
     /* Return FALSE if we need to hide the listbox */
     WCHAR **str = ac->enum_strs;
     UINT start, end;
-    if (!str) return (ac->options & ACO_AUTOSUGGEST) ? FALSE : TRUE;
+    if (!str) return !(ac->options & ACO_AUTOSUGGEST);
 
     /* Windows seems to disable autoappend if ACO_NOPREFIXFILTERING is set */
     if (!(ac->options & ACO_NOPREFIXFILTERING) && len)
     {
         start = find_matching_enum_str(ac, 0, text, len, pfx_filter, -1);
         if (start == ~0)
-            return (ac->options & ACO_AUTOSUGGEST) ? FALSE : TRUE;
+            return !(ac->options & ACO_AUTOSUGGEST);
 
         if (flag == autoappend_flag_yes)
             autoappend_str(ac, text, len, filter_str_prefix(str[start], pfx_filter), hwnd);
@@ -761,7 +767,8 @@ static LRESULT APIENTRY ACEditSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
             return ret;
         case WM_PASTE:
             ret = CallWindowProcW(This->wpOrigEditProc, hwnd, uMsg, wParam, lParam);
-            autocomplete_text(This, hwnd, autoappend_flag_yes);
+            autocomplete_text(This, hwnd, (This->options & ACO_AUTOAPPEND)
+                                          ? autoappend_flag_yes : autoappend_flag_no);
             return ret;
         case WM_MOUSEWHEEL:
             if ((This->options & ACO_AUTOSUGGEST) && IsWindowVisible(This->hwndListBox))

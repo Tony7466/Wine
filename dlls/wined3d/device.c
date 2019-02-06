@@ -486,6 +486,8 @@ ULONG CDECL wined3d_device_decref(struct wined3d_device *device)
     {
         UINT i;
 
+        wined3d_stateblock_state_cleanup(&device->stateblock_state);
+
         wined3d_cs_destroy(device->cs);
 
         if (device->recording && wined3d_stateblock_decref(device->recording))
@@ -1329,15 +1331,14 @@ void CDECL wined3d_device_set_stream_output(struct wined3d_device *device, UINT 
         return;
     }
 
-    stream = &device->update_state->stream_output[idx];
+    stream = &device->state.stream_output[idx];
     prev_buffer = stream->buffer;
 
     if (buffer)
         wined3d_buffer_incref(buffer);
     stream->buffer = buffer;
     stream->offset = offset;
-    if (!device->recording)
-        wined3d_cs_emit_set_stream_output(device->cs, idx, buffer, offset);
+    wined3d_cs_emit_set_stream_output(device->cs, idx, buffer, offset);
     if (prev_buffer)
         wined3d_buffer_decref(prev_buffer);
 }
@@ -1529,26 +1530,21 @@ void CDECL wined3d_device_get_transform(const struct wined3d_device *device,
 void CDECL wined3d_device_multiply_transform(struct wined3d_device *device,
         enum wined3d_transform_state state, const struct wined3d_matrix *matrix)
 {
-    const struct wined3d_matrix *mat;
-    struct wined3d_matrix temp;
+    struct wined3d_matrix *mat;
 
     TRACE("device %p, state %s, matrix %p.\n", device, debug_d3dtstype(state), matrix);
 
-    /* Note: Using 'updateStateBlock' rather than 'stateblock' in the code
-     * below means it will be recorded in a state block change, but it
-     * works regardless where it is recorded.
-     * If this is found to be wrong, change to StateBlock. */
     if (state > HIGHEST_TRANSFORMSTATE)
     {
         WARN("Unhandled transform state %#x.\n", state);
         return;
     }
 
-    mat = &device->update_state->transforms[state];
-    multiply_matrix(&temp, mat, matrix);
-
-    /* Apply change via set transform - will reapply to eg. lights this way. */
-    wined3d_device_set_transform(device, state, &temp);
+    /* Tests show that stateblock recording is ignored; the change goes directly
+     * into the primary stateblock. */
+    mat = &device->state.transforms[state];
+    multiply_matrix(mat, mat, matrix);
+    wined3d_cs_emit_set_transform(device->cs, state, matrix);
 }
 
 /* Note lights are real special cases. Although the device caps state only
@@ -2037,8 +2033,6 @@ struct wined3d_rasterizer_state * CDECL wined3d_device_get_rasterizer_state(stru
 void CDECL wined3d_device_set_render_state(struct wined3d_device *device,
         enum wined3d_render_state state, DWORD value)
 {
-    DWORD old_value;
-
     TRACE("device %p, state %s (%#x), value %#x.\n", device, debug_d3drenderstate(state), state, value);
 
     if (state > WINEHIGHEST_RENDER_STATE)
@@ -2047,8 +2041,7 @@ void CDECL wined3d_device_set_render_state(struct wined3d_device *device,
         return;
     }
 
-    old_value = device->state.render_states[state];
-    device->update_state->render_states[state] = value;
+    device->update_stateblock_state->rs[state] = value;
 
     /* Handle recording of state blocks. */
     if (device->recording)
@@ -2058,11 +2051,13 @@ void CDECL wined3d_device_set_render_state(struct wined3d_device *device,
         return;
     }
 
-    /* Compared here and not before the assignment to allow proper stateblock recording. */
-    if (value == old_value)
+    if (value == device->state.render_states[state])
         TRACE("Application is setting the old value over, nothing to do.\n");
     else
+    {
+        device->state.render_states[state] = value;
         wined3d_cs_emit_set_render_state(device->cs, state, value);
+    }
 
     if (state == WINED3D_RS_POINTSIZE && value == WINED3D_RESZ_CODE)
     {
@@ -2214,21 +2209,29 @@ struct wined3d_vertex_declaration * CDECL wined3d_device_get_vertex_declaration(
 
 void CDECL wined3d_device_set_vertex_shader(struct wined3d_device *device, struct wined3d_shader *shader)
 {
-    struct wined3d_shader *prev = device->update_state->shader[WINED3D_SHADER_TYPE_VERTEX];
+    struct wined3d_shader *prev = device->state.shader[WINED3D_SHADER_TYPE_VERTEX];
 
     TRACE("device %p, shader %p.\n", device, shader);
 
+    if (shader)
+        wined3d_shader_incref(shader);
+    if (device->update_stateblock_state->vs)
+        wined3d_shader_decref(device->update_stateblock_state->vs);
+    device->update_stateblock_state->vs = shader;
+
     if (device->recording)
+    {
         device->recording->changed.vertexShader = TRUE;
+        return;
+    }
 
     if (shader == prev)
         return;
 
     if (shader)
         wined3d_shader_incref(shader);
-    device->update_state->shader[WINED3D_SHADER_TYPE_VERTEX] = shader;
-    if (!device->recording)
-        wined3d_cs_emit_set_shader(device->cs, WINED3D_SHADER_TYPE_VERTEX, shader);
+    device->state.shader[WINED3D_SHADER_TYPE_VERTEX] = shader;
+    wined3d_cs_emit_set_shader(device->cs, WINED3D_SHADER_TYPE_VERTEX, shader);
     if (prev)
         wined3d_shader_decref(prev);
 }
@@ -2253,15 +2256,14 @@ void CDECL wined3d_device_set_constant_buffer(struct wined3d_device *device,
         return;
     }
 
-    prev = device->update_state->cb[type][idx];
+    prev = device->state.cb[type][idx];
     if (buffer == prev)
         return;
 
     if (buffer)
         wined3d_buffer_incref(buffer);
-    device->update_state->cb[type][idx] = buffer;
-    if (!device->recording)
-        wined3d_cs_emit_set_constant_buffer(device->cs, type, idx, buffer);
+    device->state.cb[type][idx] = buffer;
+    wined3d_cs_emit_set_constant_buffer(device->cs, type, idx, buffer);
     if (prev)
         wined3d_buffer_decref(prev);
 }
@@ -2291,15 +2293,14 @@ static void wined3d_device_set_shader_resource_view(struct wined3d_device *devic
         return;
     }
 
-    prev = device->update_state->shader_resource_view[type][idx];
+    prev = device->state.shader_resource_view[type][idx];
     if (view == prev)
         return;
 
     if (view)
         wined3d_shader_resource_view_incref(view);
-    device->update_state->shader_resource_view[type][idx] = view;
-    if (!device->recording)
-        wined3d_cs_emit_set_shader_resource_view(device->cs, type, idx, view);
+    device->state.shader_resource_view[type][idx] = view;
+    wined3d_cs_emit_set_shader_resource_view(device->cs, type, idx, view);
     if (prev)
         wined3d_shader_resource_view_decref(prev);
 }
@@ -2343,15 +2344,14 @@ static void wined3d_device_set_sampler(struct wined3d_device *device,
         return;
     }
 
-    prev = device->update_state->sampler[type][idx];
+    prev = device->state.sampler[type][idx];
     if (sampler == prev)
         return;
 
     if (sampler)
         wined3d_sampler_incref(sampler);
-    device->update_state->sampler[type][idx] = sampler;
-    if (!device->recording)
-        wined3d_cs_emit_set_sampler(device->cs, type, idx, sampler);
+    device->state.sampler[type][idx] = sampler;
+    wined3d_cs_emit_set_sampler(device->cs, type, idx, sampler);
     if (prev)
         wined3d_sampler_decref(prev);
 }
@@ -2395,22 +2395,23 @@ HRESULT CDECL wined3d_device_set_vs_consts_b(struct wined3d_device *device,
 
     if (count > WINED3D_MAX_CONSTS_B - start_idx)
         count = WINED3D_MAX_CONSTS_B - start_idx;
-    memcpy(&device->update_state->vs_consts_b[start_idx], constants, count * sizeof(*constants));
+
+    memcpy(&device->update_stateblock_state->vs_consts_b[start_idx], constants, count * sizeof(*constants));
+    if (device->recording)
+    {
+        for (i = start_idx; i < count + start_idx; ++i)
+            device->recording->changed.vertexShaderConstantsB |= (1u << i);
+        return WINED3D_OK;
+    }
+
+    memcpy(&device->state.vs_consts_b[start_idx], constants, count * sizeof(*constants));
     if (TRACE_ON(d3d))
     {
         for (i = 0; i < count; ++i)
             TRACE("Set BOOL constant %u to %#x.\n", start_idx + i, constants[i]);
     }
 
-    if (device->recording)
-    {
-        for (i = start_idx; i < count + start_idx; ++i)
-            device->recording->changed.vertexShaderConstantsB |= (1u << i);
-    }
-    else
-    {
-        wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_VS_B, start_idx, count, constants);
-    }
+    wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_VS_B, start_idx, count, constants);
 
     return WINED3D_OK;
 }
@@ -2444,22 +2445,23 @@ HRESULT CDECL wined3d_device_set_vs_consts_i(struct wined3d_device *device,
 
     if (count > WINED3D_MAX_CONSTS_I - start_idx)
         count = WINED3D_MAX_CONSTS_I - start_idx;
-    memcpy(&device->update_state->vs_consts_i[start_idx], constants, count * sizeof(*constants));
+
+    memcpy(&device->update_stateblock_state->vs_consts_i[start_idx], constants, count * sizeof(*constants));
+    if (device->recording)
+    {
+        for (i = start_idx; i < count + start_idx; ++i)
+            device->recording->changed.vertexShaderConstantsI |= (1u << i);
+        return WINED3D_OK;
+    }
+
+    memcpy(&device->state.vs_consts_i[start_idx], constants, count * sizeof(*constants));
     if (TRACE_ON(d3d))
     {
         for (i = 0; i < count; ++i)
             TRACE("Set ivec4 constant %u to %s.\n", start_idx + i, debug_ivec4(&constants[i]));
     }
 
-    if (device->recording)
-    {
-        for (i = start_idx; i < count + start_idx; ++i)
-            device->recording->changed.vertexShaderConstantsI |= (1u << i);
-    }
-    else
-    {
-        wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_VS_I, start_idx, count, constants);
-    }
+    wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_VS_I, start_idx, count, constants);
 
     return WINED3D_OK;
 }
@@ -2492,18 +2494,22 @@ HRESULT CDECL wined3d_device_set_vs_consts_f(struct wined3d_device *device,
             || count > d3d_info->limits.vs_uniform_count - start_idx)
         return WINED3DERR_INVALIDCALL;
 
-    memcpy(&device->update_state->vs_consts_f[start_idx], constants, count * sizeof(*constants));
+    memcpy(&device->update_stateblock_state->vs_consts_f[start_idx], constants, count * sizeof(*constants));
+    if (device->recording)
+    {
+        memset(&device->recording->changed.vs_consts_f[start_idx], 1,
+                count * sizeof(*device->recording->changed.vs_consts_f));
+        return WINED3D_OK;
+    }
+
+    memcpy(&device->state.vs_consts_f[start_idx], constants, count * sizeof(*constants));
     if (TRACE_ON(d3d))
     {
         for (i = 0; i < count; ++i)
             TRACE("Set vec4 constant %u to %s.\n", start_idx + i, debug_vec4(&constants[i]));
     }
 
-    if (device->recording)
-        memset(&device->recording->changed.vs_consts_f[start_idx], 1,
-                count * sizeof(*device->recording->changed.vs_consts_f));
-    else
-        wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_VS_F, start_idx, count, constants);
+    wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_VS_F, start_idx, count, constants);
 
     return WINED3D_OK;
 }
@@ -2527,21 +2533,28 @@ HRESULT CDECL wined3d_device_get_vs_consts_f(const struct wined3d_device *device
 
 void CDECL wined3d_device_set_pixel_shader(struct wined3d_device *device, struct wined3d_shader *shader)
 {
-    struct wined3d_shader *prev = device->update_state->shader[WINED3D_SHADER_TYPE_PIXEL];
+    struct wined3d_shader *prev = device->state.shader[WINED3D_SHADER_TYPE_PIXEL];
 
     TRACE("device %p, shader %p.\n", device, shader);
 
+    if (shader)
+        wined3d_shader_incref(shader);
+    if (device->update_stateblock_state->ps)
+        wined3d_shader_decref(device->update_stateblock_state->ps);
+    device->update_stateblock_state->ps = shader;
     if (device->recording)
+    {
         device->recording->changed.pixelShader = TRUE;
+        return;
+    }
 
     if (shader == prev)
         return;
 
     if (shader)
         wined3d_shader_incref(shader);
-    device->update_state->shader[WINED3D_SHADER_TYPE_PIXEL] = shader;
-    if (!device->recording)
-        wined3d_cs_emit_set_shader(device->cs, WINED3D_SHADER_TYPE_PIXEL, shader);
+    device->state.shader[WINED3D_SHADER_TYPE_PIXEL] = shader;
+    wined3d_cs_emit_set_shader(device->cs, WINED3D_SHADER_TYPE_PIXEL, shader);
     if (prev)
         wined3d_shader_decref(prev);
 }
@@ -2596,22 +2609,23 @@ HRESULT CDECL wined3d_device_set_ps_consts_b(struct wined3d_device *device,
 
     if (count > WINED3D_MAX_CONSTS_B - start_idx)
         count = WINED3D_MAX_CONSTS_B - start_idx;
-    memcpy(&device->update_state->ps_consts_b[start_idx], constants, count * sizeof(*constants));
+
+    memcpy(&device->update_stateblock_state->ps_consts_b[start_idx], constants, count * sizeof(*constants));
+    if (device->recording)
+    {
+        for (i = start_idx; i < count + start_idx; ++i)
+            device->recording->changed.pixelShaderConstantsB |= (1u << i);
+        return WINED3D_OK;
+    }
+
+    memcpy(&device->state.ps_consts_b[start_idx], constants, count * sizeof(*constants));
     if (TRACE_ON(d3d))
     {
         for (i = 0; i < count; ++i)
             TRACE("Set BOOL constant %u to %#x.\n", start_idx + i, constants[i]);
     }
 
-    if (device->recording)
-    {
-        for (i = start_idx; i < count + start_idx; ++i)
-            device->recording->changed.pixelShaderConstantsB |= (1u << i);
-    }
-    else
-    {
-        wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_PS_B, start_idx, count, constants);
-    }
+    wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_PS_B, start_idx, count, constants);
 
     return WINED3D_OK;
 }
@@ -2645,22 +2659,23 @@ HRESULT CDECL wined3d_device_set_ps_consts_i(struct wined3d_device *device,
 
     if (count > WINED3D_MAX_CONSTS_I - start_idx)
         count = WINED3D_MAX_CONSTS_I - start_idx;
-    memcpy(&device->update_state->ps_consts_i[start_idx], constants, count * sizeof(*constants));
+
+    memcpy(&device->update_stateblock_state->ps_consts_i[start_idx], constants, count * sizeof(*constants));
+    if (device->recording)
+    {
+        for (i = start_idx; i < count + start_idx; ++i)
+            device->recording->changed.pixelShaderConstantsI |= (1u << i);
+        return WINED3D_OK;
+    }
+
+    memcpy(&device->state.ps_consts_i[start_idx], constants, count * sizeof(*constants));
     if (TRACE_ON(d3d))
     {
         for (i = 0; i < count; ++i)
             TRACE("Set ivec4 constant %u to %s.\n", start_idx + i, debug_ivec4(&constants[i]));
     }
 
-    if (device->recording)
-    {
-        for (i = start_idx; i < count + start_idx; ++i)
-            device->recording->changed.pixelShaderConstantsI |= (1u << i);
-    }
-    else
-    {
-        wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_PS_I, start_idx, count, constants);
-    }
+    wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_PS_I, start_idx, count, constants);
 
     return WINED3D_OK;
 }
@@ -2694,18 +2709,22 @@ HRESULT CDECL wined3d_device_set_ps_consts_f(struct wined3d_device *device,
             || count > d3d_info->limits.ps_uniform_count - start_idx)
         return WINED3DERR_INVALIDCALL;
 
-    memcpy(&device->update_state->ps_consts_f[start_idx], constants, count * sizeof(*constants));
+    memcpy(&device->update_stateblock_state->ps_consts_f[start_idx], constants, count * sizeof(*constants));
+    if (device->recording)
+    {
+        memset(&device->recording->changed.ps_consts_f[start_idx], 1,
+                count * sizeof(*device->recording->changed.ps_consts_f));
+        return WINED3D_OK;
+    }
+
+    memcpy(&device->state.ps_consts_f[start_idx], constants, count * sizeof(*constants));
     if (TRACE_ON(d3d))
     {
         for (i = 0; i < count; ++i)
             TRACE("Set vec4 constant %u to %s.\n", start_idx + i, debug_vec4(&constants[i]));
     }
 
-    if (device->recording)
-        memset(&device->recording->changed.ps_consts_f[start_idx], 1,
-                count * sizeof(*device->recording->changed.ps_consts_f));
-    else
-        wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_PS_F, start_idx, count, constants);
+    wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_PS_F, start_idx, count, constants);
 
     return WINED3D_OK;
 }
@@ -2839,15 +2858,15 @@ struct wined3d_sampler * CDECL wined3d_device_get_ds_sampler(const struct wined3
 
 void CDECL wined3d_device_set_geometry_shader(struct wined3d_device *device, struct wined3d_shader *shader)
 {
-    struct wined3d_shader *prev = device->update_state->shader[WINED3D_SHADER_TYPE_GEOMETRY];
+    struct wined3d_shader *prev = device->state.shader[WINED3D_SHADER_TYPE_GEOMETRY];
 
     TRACE("device %p, shader %p.\n", device, shader);
 
-    if (device->recording || shader == prev)
+    if (shader == prev)
         return;
     if (shader)
         wined3d_shader_incref(shader);
-    device->update_state->shader[WINED3D_SHADER_TYPE_GEOMETRY] = shader;
+    device->state.shader[WINED3D_SHADER_TYPE_GEOMETRY] = shader;
     wined3d_cs_emit_set_shader(device->cs, WINED3D_SHADER_TYPE_GEOMETRY, shader);
     if (prev)
         wined3d_shader_decref(prev);
@@ -2896,12 +2915,12 @@ void CDECL wined3d_device_set_compute_shader(struct wined3d_device *device, stru
 
     TRACE("device %p, shader %p.\n", device, shader);
 
-    prev = device->update_state->shader[WINED3D_SHADER_TYPE_COMPUTE];
-    if (device->recording || shader == prev)
+    prev = device->state.shader[WINED3D_SHADER_TYPE_COMPUTE];
+    if (shader == prev)
         return;
     if (shader)
         wined3d_shader_incref(shader);
-    device->update_state->shader[WINED3D_SHADER_TYPE_COMPUTE] = shader;
+    device->state.shader[WINED3D_SHADER_TYPE_COMPUTE] = shader;
     wined3d_cs_emit_set_shader(device->cs, WINED3D_SHADER_TYPE_COMPUTE, shader);
     if (prev)
         wined3d_shader_decref(prev);
@@ -2957,15 +2976,14 @@ static void wined3d_device_set_pipeline_unordered_access_view(struct wined3d_dev
         return;
     }
 
-    prev = device->update_state->unordered_access_view[pipeline][idx];
+    prev = device->state.unordered_access_view[pipeline][idx];
     if (uav == prev && initial_count == ~0u)
         return;
 
     if (uav)
         wined3d_unordered_access_view_incref(uav);
-    device->update_state->unordered_access_view[pipeline][idx] = uav;
-    if (!device->recording)
-        wined3d_cs_emit_set_unordered_access_view(device->cs, pipeline, idx, uav, initial_count);
+    device->state.unordered_access_view[pipeline][idx] = uav;
+    wined3d_cs_emit_set_unordered_access_view(device->cs, pipeline, idx, uav, initial_count);
     if (prev)
         wined3d_unordered_access_view_decref(prev);
 }
@@ -3562,6 +3580,7 @@ HRESULT CDECL wined3d_device_begin_stateblock(struct wined3d_device *device)
 
     device->recording = stateblock;
     device->update_state = &stateblock->state;
+    device->update_stateblock_state = &stateblock->stateblock_state;
 
     TRACE("Recording stateblock %p.\n", stateblock);
 
@@ -3587,6 +3606,7 @@ HRESULT CDECL wined3d_device_end_stateblock(struct wined3d_device *device,
     *stateblock = object;
     device->recording = NULL;
     device->update_state = &device->state;
+    device->update_stateblock_state = &device->stateblock_state;
 
     TRACE("Returning stateblock %p.\n", *stateblock);
 
@@ -3666,16 +3686,15 @@ void CDECL wined3d_device_set_predication(struct wined3d_device *device,
 
     TRACE("device %p, predicate %p, value %#x.\n", device, predicate, value);
 
-    prev = device->update_state->predicate;
+    prev = device->state.predicate;
     if (predicate)
     {
         FIXME("Predicated rendering not implemented.\n");
         wined3d_query_incref(predicate);
     }
-    device->update_state->predicate = predicate;
-    device->update_state->predicate_value = value;
-    if (!device->recording)
-        wined3d_cs_emit_set_predication(device->cs, predicate, value);
+    device->state.predicate = predicate;
+    device->state.predicate_value = value;
+    wined3d_cs_emit_set_predication(device->cs, predicate, value);
     if (prev)
         wined3d_query_decref(prev);
 }
@@ -5009,6 +5028,7 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
         }
         wined3d_cs_emit_reset_state(device->cs);
         state_cleanup(&device->state);
+        wined3d_stateblock_state_cleanup(&device->stateblock_state);
 
         if (device->d3d_initialized)
             wined3d_device_delete_opengl_contexts(device);
@@ -5016,6 +5036,9 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
         memset(&device->state, 0, sizeof(device->state));
         state_init(&device->state, &device->fb, &device->adapter->d3d_info, WINED3D_STATE_INIT_DEFAULT);
         device->update_state = &device->state;
+        memset(&device->stateblock_state, 0, sizeof(device->stateblock_state));
+        wined3d_stateblock_state_init(&device->stateblock_state, device, WINED3D_STATE_INIT_DEFAULT);
+        device->update_stateblock_state = &device->stateblock_state;
 
         device_init_swapchain_state(device, swapchain);
         if (wined3d_settings.logo)
@@ -5290,6 +5313,8 @@ HRESULT device_init(struct wined3d_device *device, struct wined3d *wined3d,
 
     state_init(&device->state, &device->fb, &adapter->d3d_info, WINED3D_STATE_INIT_DEFAULT);
     device->update_state = &device->state;
+    wined3d_stateblock_state_init(&device->stateblock_state, device, WINED3D_STATE_INIT_DEFAULT);
+    device->update_stateblock_state = &device->stateblock_state;
 
     device->max_frame_latency = 3;
 
@@ -5297,6 +5322,7 @@ HRESULT device_init(struct wined3d_device *device, struct wined3d *wined3d,
     {
         WARN("Failed to create command stream.\n");
         state_cleanup(&device->state);
+        wined3d_stateblock_state_cleanup(&device->stateblock_state);
         hr = E_FAIL;
         goto err;
     }

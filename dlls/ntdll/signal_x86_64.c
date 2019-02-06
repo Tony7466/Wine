@@ -338,11 +338,12 @@ struct dynamic_unwind_entry
 
     /* memory region which matches this entry */
     DWORD64 base;
-    DWORD size;
+    DWORD64 end;
 
     /* lookup table */
     RUNTIME_FUNCTION *table;
-    DWORD table_size;
+    DWORD count;
+    DWORD max_count;
 
     /* user defined callback */
     PGET_RUNTIME_FUNCTION_CALLBACK callback;
@@ -2516,7 +2517,7 @@ static RUNTIME_FUNCTION *find_function_info( ULONG64 pc, HMODULE module,
                                              RUNTIME_FUNCTION *func, ULONG size )
 {
     int min = 0;
-    int max = size/sizeof(*func) - 1;
+    int max = size - 1;
 
     while (min <= max)
     {
@@ -2551,7 +2552,7 @@ static RUNTIME_FUNCTION *lookup_function_info( ULONG64 pc, ULONG64 *base, LDR_MO
                                                   IMAGE_DIRECTORY_ENTRY_EXCEPTION, &size )))
         {
             /* lookup in function table */
-            func = find_function_info( pc, (*module)->BaseAddress, func, size );
+            func = find_function_info( pc, (*module)->BaseAddress, func, size/sizeof(*func) );
         }
     }
     else
@@ -2561,7 +2562,7 @@ static RUNTIME_FUNCTION *lookup_function_info( ULONG64 pc, ULONG64 *base, LDR_MO
         RtlEnterCriticalSection( &dynamic_unwind_section );
         LIST_FOR_EACH_ENTRY( entry, &dynamic_unwind_list, struct dynamic_unwind_entry, entry )
         {
-            if (pc >= entry->base && pc < entry->base + entry->size)
+            if (pc >= entry->base && pc < entry->end)
             {
                 *base = entry->base;
 
@@ -2569,7 +2570,7 @@ static RUNTIME_FUNCTION *lookup_function_info( ULONG64 pc, ULONG64 *base, LDR_MO
                 if (entry->callback)
                     func = entry->callback( pc, entry->context );
                 else
-                    func = find_function_info( pc, (HMODULE)entry->base, entry->table, entry->table_size );
+                    func = find_function_info( pc, (HMODULE)entry->base, entry->table, entry->count );
                 break;
             }
         }
@@ -3456,12 +3457,13 @@ BOOLEAN CDECL RtlAddFunctionTable( RUNTIME_FUNCTION *table, DWORD count, DWORD64
     if (!entry)
         return FALSE;
 
-    entry->base       = addr;
-    entry->size       = table[count - 1].EndAddress;
-    entry->table      = table;
-    entry->table_size = count * sizeof(RUNTIME_FUNCTION);
-    entry->callback   = NULL;
-    entry->context    = NULL;
+    entry->base      = addr;
+    entry->end       = addr + (count ? table[count - 1].EndAddress : 0);
+    entry->table     = table;
+    entry->count     = count;
+    entry->max_count = 0;
+    entry->callback  = NULL;
+    entry->context   = NULL;
 
     RtlEnterCriticalSection( &dynamic_unwind_section );
     list_add_tail( &dynamic_unwind_list, &entry->entry );
@@ -3491,12 +3493,13 @@ BOOLEAN CDECL RtlInstallFunctionTableCallback( DWORD64 table, DWORD64 base, DWOR
     if (!entry)
         return FALSE;
 
-    entry->base       = base;
-    entry->size       = length;
-    entry->table      = (RUNTIME_FUNCTION *)table;
-    entry->table_size = 0;
-    entry->callback   = callback;
-    entry->context    = context;
+    entry->base      = base;
+    entry->end       = base + length;
+    entry->table     = (RUNTIME_FUNCTION *)table;
+    entry->count     = 0;
+    entry->max_count = 0;
+    entry->callback  = callback;
+    entry->context   = context;
 
     RtlEnterCriticalSection( &dynamic_unwind_section );
     list_add_tail( &dynamic_unwind_list, &entry->entry );
@@ -3512,9 +3515,29 @@ BOOLEAN CDECL RtlInstallFunctionTableCallback( DWORD64 table, DWORD64 base, DWOR
 DWORD WINAPI RtlAddGrowableFunctionTable( void **table, RUNTIME_FUNCTION *functions, DWORD count, DWORD max_count,
                                           ULONG_PTR base, ULONG_PTR end )
 {
-    FIXME( "(%p, %p, %d, %d, %ld, %ld) semi-stub!\n", table, functions, count, max_count, base, end );
-    if (table) *table = NULL;
-    return RtlAddFunctionTable(functions, count, base);
+    struct dynamic_unwind_entry *entry;
+
+    TRACE( "%p, %p, %u, %u, %lx, %lx\n", table, functions, count, max_count, base, end );
+
+    entry = RtlAllocateHeap( GetProcessHeap(), 0, sizeof(*entry) );
+    if (!entry)
+        return STATUS_NO_MEMORY;
+
+    entry->base      = base;
+    entry->end       = end;
+    entry->table     = functions;
+    entry->count     = count;
+    entry->max_count = max_count;
+    entry->callback  = NULL;
+    entry->context   = NULL;
+
+    RtlEnterCriticalSection( &dynamic_unwind_section );
+    list_add_tail( &dynamic_unwind_list, &entry->entry );
+    RtlLeaveCriticalSection( &dynamic_unwind_section );
+
+    *table = entry;
+
+    return STATUS_SUCCESS;
 }
 
 
@@ -3523,7 +3546,46 @@ DWORD WINAPI RtlAddGrowableFunctionTable( void **table, RUNTIME_FUNCTION *functi
  */
 void WINAPI RtlGrowFunctionTable( void *table, DWORD count )
 {
-    FIXME( "(%p, %d) stub!\n", table, count );
+    struct dynamic_unwind_entry *entry;
+
+    TRACE( "%p, %u\n", table, count );
+
+    RtlEnterCriticalSection( &dynamic_unwind_section );
+    LIST_FOR_EACH_ENTRY( entry, &dynamic_unwind_list, struct dynamic_unwind_entry, entry )
+    {
+        if (entry == table)
+        {
+            if (count > entry->count && count <= entry->max_count)
+                entry->count = count;
+            break;
+        }
+    }
+    RtlLeaveCriticalSection( &dynamic_unwind_section );
+}
+
+
+/*************************************************************************
+ *              RtlDeleteGrowableFunctionTable   (NTDLL.@)
+ */
+void WINAPI RtlDeleteGrowableFunctionTable( void *table )
+{
+    struct dynamic_unwind_entry *entry, *to_free = NULL;
+
+    TRACE( "%p\n", table );
+
+    RtlEnterCriticalSection( &dynamic_unwind_section );
+    LIST_FOR_EACH_ENTRY( entry, &dynamic_unwind_list, struct dynamic_unwind_entry, entry )
+    {
+        if (entry == table)
+        {
+            to_free = entry;
+            list_remove( &entry->entry );
+            break;
+        }
+    }
+    RtlLeaveCriticalSection( &dynamic_unwind_section );
+
+    RtlFreeHeap( GetProcessHeap(), 0, to_free );
 }
 
 

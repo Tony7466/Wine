@@ -3969,8 +3969,16 @@ typedef BOOL (WINAPI *PFN_CMSG_IMPORT_KEY_TRANS)(
 #define CMSG_ENCODE_HASHED_SUBJECT_IDENTIFIER_FLAG 0x2
 
 /* PFXImportCertStore flags */
-#define CRYPT_USER_KEYSET           0x00001000
-#define PKCS12_IMPORT_RESERVED_MASK 0xffff0000
+#define CRYPT_USER_KEYSET                       0x00001000
+#define PKCS12_IMPORT_SILENT                    0x00000040
+#define PKCS12_PREFER_CNG_KSP                   0x00000100
+#define PKCS12_ALWAYS_CNG_KSP                   0x00000200
+#define PKCS12_ONLY_CERTIFICATES                0x00000400
+#define PKCS12_ONLY_NOT_ENCRYPTED_CERTIFICATES  0x00000800
+#define PKCS12_ALLOW_OVERWRITE_KEY              0x00004000
+#define PKCS12_NO_PERSIST_KEY                   0x00008000
+#define PKCS12_VIRTUAL_ISOLATION_KEY            0x00010000
+#define PKCS12_IMPORT_RESERVED_MASK             0xffff0000
 /* PFXExportCertStore flags */
 #define REPORT_NO_PRIVATE_KEY                 0x00000001
 #define REPORT_NOT_ABLE_TO_EXPORT_PRIVATE_KEY 0x00000002
@@ -4379,6 +4387,10 @@ BOOL WINAPI CryptHashCertificate(HCRYPTPROV_LEGACY hCryptProv, ALG_ID Algid,
  DWORD dwFlags, const BYTE *pbEncoded, DWORD cbEncoded, BYTE *pbComputedHash,
  DWORD *pcbComputedHash);
 
+BOOL WINAPI CryptHashCertificate2(LPCWSTR pwszCNGHashAlgid, DWORD dwFlags,
+ void *pvReserved, const BYTE *pbEncoded, DWORD cbEncoded, BYTE *pbComputedHash,
+ DWORD *pcbComputedHash);
+
 BOOL WINAPI CryptHashPublicKeyInfo(HCRYPTPROV_LEGACY hCryptProv, ALG_ID Algid,
  DWORD dwFlags, DWORD dwCertEncodingType, PCERT_PUBLIC_KEY_INFO pInfo,
  BYTE *pbComputedHash, DWORD *pcbComputedHash);
@@ -4461,6 +4473,9 @@ BOOL WINAPI CryptImportPublicKeyInfo(HCRYPTPROV hCryptProv,
 BOOL WINAPI CryptImportPublicKeyInfoEx(HCRYPTPROV hCryptProv,
  DWORD dwCertEncodingType, PCERT_PUBLIC_KEY_INFO pInfo, ALG_ID aiKeyAlg,
  DWORD dwFlags, void *pvAuxInfo, HCRYPTKEY *phKey);
+BOOL WINAPI CryptImportPublicKeyInfoEx2(DWORD dwCertEncodingType,
+ PCERT_PUBLIC_KEY_INFO pInfo, DWORD dwFlags, void *pvAuxInfo,
+ BCRYPT_KEY_HANDLE *phKey);
 
 BOOL WINAPI CryptAcquireCertificatePrivateKey(PCCERT_CONTEXT pCert,
  DWORD dwFlags, void *pvReserved, HCRYPTPROV_OR_NCRYPT_KEY_HANDLE *phCryptProv, DWORD *pdwKeySpec,

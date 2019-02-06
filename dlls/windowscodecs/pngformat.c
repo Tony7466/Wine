@@ -620,7 +620,6 @@ static HRESULT WINAPI PngDecoder_Initialize(IWICBitmapDecoder *iface, IStream *p
     if (setjmp(jmpbuf))
     {
         ppng_destroy_read_struct(&This->png_ptr, &This->info_ptr, &This->end_info);
-        HeapFree(GetProcessHeap(), 0, row_pointers);
         This->png_ptr = NULL;
         hr = WINCODEC_ERR_UNKNOWNIMAGEFORMAT;
         goto end;
@@ -815,6 +814,8 @@ static HRESULT WINAPI PngDecoder_Initialize(IWICBitmapDecoder *iface, IStream *p
 
 end:
     LeaveCriticalSection(&This->lock);
+
+    HeapFree(GetProcessHeap(), 0, row_pointers);
 
     return hr;
 }

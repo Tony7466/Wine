@@ -2478,6 +2478,19 @@ MSVCRT_size_t CDECL MSVCRT_wcsnlen(const MSVCRT_wchar_t *s, MSVCRT_size_t maxlen
  */
 int CDECL MSVCRT__towupper_l(MSVCRT_wint_t c, MSVCRT__locale_t locale)
 {
+    MSVCRT_pthreadlocinfo locinfo;
+
+    if(!locale)
+        locinfo = get_locinfo();
+    else
+        locinfo = locale->locinfo;
+
+    if(!locinfo->lc_handle[MSVCRT_LC_CTYPE]) {
+        if(c >= 'a' && c <= 'z')
+            return c + 'A' - 'a';
+        return c;
+    }
+
     return toupperW(c);
 }
 
@@ -2494,6 +2507,19 @@ int CDECL MSVCRT_towupper(MSVCRT_wint_t c)
  */
 int CDECL MSVCRT__towlower_l(MSVCRT_wint_t c, MSVCRT__locale_t locale)
 {
+    MSVCRT_pthreadlocinfo locinfo;
+
+    if(!locale)
+        locinfo = get_locinfo();
+    else
+        locinfo = locale->locinfo;
+
+    if(!locinfo->lc_handle[MSVCRT_LC_CTYPE]) {
+        if(c >= 'A' && c <= 'Z')
+            return c + 'a' - 'A';
+        return c;
+    }
+
     return tolowerW(c);
 }
 
