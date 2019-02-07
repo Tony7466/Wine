@@ -1,3 +1,9 @@
+wine-development (4.1-2) unstable; urgency=medium
+
+  * Fix build failure on arm64.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Thu, 07 Feb 2019 04:56:44 +0000
+
 wine-development (4.1-1) unstable; urgency=medium
 
   * New upstream release 4.1, released Feb 4, 2019.
