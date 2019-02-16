@@ -41,8 +41,11 @@ export DEB_LDFLAGS_MAINT_APPEND+=-Wl,-rpath,/$(LIBDIR)
 # ignore shift overflow warnings (currently only an issue on arm)
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-shift-overflow
 
+# ignore all defined but unused function warnings
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-unused-function
+
 # ignore warning about deprecated CUPS API for now
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-deprecated-declarations
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-deprecated -Wno-deprecated-declarations
 
 # configure options
 CONFLAGS=--with-gnutls \
@@ -83,7 +86,7 @@ endif
 ifeq ($(DEB_HOST_ARCH), arm64)
 export CC=clang
 export CXX=clang++
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-enum-conversion -Wno-absolute-value -Wno-unused-function
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-enum-conversion -Wno-absolute-value
 endif
 
 # use date of the latest changelog update as the build date

@@ -1,3 +1,9 @@
+wine-development (4.2-2) unstable; urgency=medium
+
+  * Ignore unused function warnings on all architectures.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 16 Feb 2019 04:21:53 +0000
+
 wine-development (4.2-1) unstable; urgency=medium
 
   * New upstream release 4.2, released Feb 15, 2019.
