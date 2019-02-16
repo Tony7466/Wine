@@ -327,6 +327,28 @@ static WCHAR *get_refstr_key_path(struct device_iface *iface)
     return path;
 }
 
+static BOOL is_valid_property_type(DEVPROPTYPE prop_type)
+{
+    DWORD type = prop_type & DEVPROP_MASK_TYPE;
+    DWORD typemod = prop_type & DEVPROP_MASK_TYPEMOD;
+
+    if (type > MAX_DEVPROP_TYPE)
+        return FALSE;
+    if (typemod > MAX_DEVPROP_TYPEMOD)
+        return FALSE;
+
+    if (typemod == DEVPROP_TYPEMOD_ARRAY
+        && (type == DEVPROP_TYPE_EMPTY || type == DEVPROP_TYPE_NULL || type == DEVPROP_TYPE_STRING
+            || type == DEVPROP_TYPE_SECURITY_DESCRIPTOR_STRING))
+        return FALSE;
+
+    if (typemod == DEVPROP_TYPEMOD_LIST
+        && !(type == DEVPROP_TYPE_STRING || type == DEVPROP_TYPE_SECURITY_DESCRIPTOR_STRING))
+        return FALSE;
+
+    return TRUE;
+}
+
 static LPWSTR SETUPDI_CreateSymbolicLinkPath(LPCWSTR instanceId,
         const GUID *InterfaceClassGuid, LPCWSTR ReferenceString)
 {
@@ -3410,6 +3432,85 @@ BOOL WINAPI SetupDiSetDeviceInstallParamsW(
     return TRUE;
 }
 
+BOOL WINAPI SetupDiSetDevicePropertyW(HDEVINFO devinfo, PSP_DEVINFO_DATA device_data, const DEVPROPKEY *key,
+                                      DEVPROPTYPE type, const BYTE *buffer, DWORD size, DWORD flags)
+{
+    static const WCHAR propertiesW[] = {'P', 'r', 'o', 'p', 'e', 'r', 't', 'i', 'e', 's', 0};
+    static const WCHAR formatW[] = {'\\', '%', '0', '4', 'X', 0};
+    struct device *device;
+    HKEY properties_hkey, property_hkey;
+    WCHAR property_hkey_path[44];
+    LSTATUS ls;
+
+    TRACE("%p %p %p %#x %p %d %#x\n", devinfo, device_data, key, type, buffer, size, flags);
+
+    if (!(device = get_device(devinfo, device_data)))
+        return FALSE;
+
+    if (!key || !is_valid_property_type(type)
+        || (buffer && !size && !(type == DEVPROP_TYPE_EMPTY || type == DEVPROP_TYPE_NULL))
+        || (buffer && size && (type == DEVPROP_TYPE_EMPTY || type == DEVPROP_TYPE_NULL)))
+    {
+        SetLastError(ERROR_INVALID_DATA);
+        return FALSE;
+    }
+
+    if (size && !buffer)
+    {
+        SetLastError(ERROR_INVALID_USER_BUFFER);
+        return FALSE;
+    }
+
+    if (flags)
+    {
+        SetLastError(ERROR_INVALID_FLAGS);
+        return FALSE;
+    }
+
+    ls = RegCreateKeyExW(device->key, propertiesW, 0, NULL, 0, KEY_READ | KEY_WRITE, NULL, &properties_hkey, NULL);
+    if (ls)
+    {
+        SetLastError(ls);
+        return FALSE;
+    }
+
+    SETUPDI_GuidToString(&key->fmtid, property_hkey_path);
+    sprintfW(property_hkey_path + 38, formatW, key->pid);
+
+    if (type == DEVPROP_TYPE_EMPTY)
+    {
+        ls = RegDeleteKeyW(properties_hkey, property_hkey_path);
+        RegCloseKey(properties_hkey);
+        SetLastError(ls == ERROR_FILE_NOT_FOUND ? ERROR_NOT_FOUND : ls);
+        return !ls;
+    }
+    else if (type == DEVPROP_TYPE_NULL)
+    {
+        if (!(ls = RegOpenKeyW(properties_hkey, property_hkey_path, &property_hkey)))
+        {
+            ls = RegDeleteValueW(property_hkey, NULL);
+            RegCloseKey(property_hkey);
+        }
+
+        RegCloseKey(properties_hkey);
+        SetLastError(ls == ERROR_FILE_NOT_FOUND ? ERROR_NOT_FOUND : ls);
+        return !ls;
+    }
+    else
+    {
+        if (!(ls = RegCreateKeyExW(properties_hkey, property_hkey_path, 0, NULL, 0, KEY_READ | KEY_WRITE, NULL,
+                                  &property_hkey, NULL)))
+        {
+            ls = RegSetValueExW(property_hkey, NULL, 0, 0xffff0000 | (0xffff & type), buffer, size);
+            RegCloseKey(property_hkey);
+        }
+
+        RegCloseKey(properties_hkey);
+        SetLastError(ls);
+        return !ls;
+    }
+}
+
 static HKEY SETUPDI_OpenDevKey(struct device *device, REGSAM samDesired)
 {
     HKEY enumKey, key = INVALID_HANDLE_VALUE;
@@ -3714,13 +3815,74 @@ BOOL WINAPI SetupDiGetINFClassW(PCWSTR inf, LPGUID class_guid, PWSTR class_name,
 /***********************************************************************
  *              SetupDiGetDevicePropertyW (SETUPAPI.@)
  */
-BOOL WINAPI SetupDiGetDevicePropertyW(HDEVINFO info_set, PSP_DEVINFO_DATA info_data,
+BOOL WINAPI SetupDiGetDevicePropertyW(HDEVINFO devinfo, PSP_DEVINFO_DATA device_data,
                 const DEVPROPKEY *prop_key, DEVPROPTYPE *prop_type, BYTE *prop_buff,
                 DWORD prop_buff_size, DWORD *required_size, DWORD flags)
 {
-    FIXME("%p, %p, %p, %p, %p, %d, %p, 0x%08x stub\n", info_set, info_data, prop_key,
-               prop_type, prop_buff, prop_buff_size, required_size, flags);
+    static const WCHAR formatW[] = {'\\', '%', '0', '4', 'X', 0};
+    WCHAR key_path[55] = {'P', 'r', 'o', 'p', 'e', 'r', 't', 'i', 'e', 's', '\\'};
+    HKEY hkey;
+    DWORD value_type;
+    DWORD value_size = 0;
+    LSTATUS ls;
+    struct device *device;
 
-    SetLastError(ERROR_NOT_FOUND);
-    return FALSE;
+    TRACE("%p, %p, %p, %p, %p, %d, %p, %#x\n", devinfo, device_data, prop_key, prop_type, prop_buff, prop_buff_size,
+          required_size, flags);
+
+    if (!(device = get_device(devinfo, device_data)))
+        return FALSE;
+
+    if (!prop_key)
+    {
+        SetLastError(ERROR_INVALID_DATA);
+        return FALSE;
+    }
+
+    if (!prop_type || (!prop_buff && prop_buff_size))
+    {
+        SetLastError(ERROR_INVALID_USER_BUFFER);
+        return FALSE;
+    }
+
+    if (flags)
+    {
+        SetLastError(ERROR_INVALID_FLAGS);
+        return FALSE;
+    }
+
+    SETUPDI_GuidToString(&prop_key->fmtid, key_path + 11);
+    sprintfW(key_path + 49, formatW, prop_key->pid);
+
+    ls = RegOpenKeyExW(device->key, key_path, 0, KEY_QUERY_VALUE, &hkey);
+    if (!ls)
+    {
+        value_size = prop_buff_size;
+        ls = RegQueryValueExW(hkey, NULL, NULL, &value_type, prop_buff, &value_size);
+    }
+
+    switch (ls)
+    {
+    case NO_ERROR:
+    case ERROR_MORE_DATA:
+        *prop_type = 0xffff & value_type;
+        ls = (ls == ERROR_MORE_DATA || !prop_buff) ? ERROR_INSUFFICIENT_BUFFER : NO_ERROR;
+        break;
+    case ERROR_FILE_NOT_FOUND:
+        *prop_type = DEVPROP_TYPE_EMPTY;
+        value_size = 0;
+        ls = ERROR_NOT_FOUND;
+        break;
+    default:
+        *prop_type = DEVPROP_TYPE_EMPTY;
+        value_size = 0;
+        FIXME("Unhandled error %#x\n", ls);
+        break;
+    }
+
+    if (required_size)
+        *required_size = value_size;
+
+    SetLastError(ls);
+    return !ls;
 }

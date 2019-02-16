@@ -63,6 +63,8 @@ static const WCHAR border_bottom_styleW[] =
     {'b','o','r','d','e','r','-','b','o','t','t','o','m','-','s','t','y','l','e',0};
 static const WCHAR border_bottom_widthW[] =
     {'b','o','r','d','e','r','-','b','o','t','t','o','m','-','w','i','d','t','h',0};
+static const WCHAR border_collapseW[] =
+    {'b','o','r','d','e','r','-','c','o','l','l','a','p','s','e',0};
 static const WCHAR border_colorW[] =
     {'b','o','r','d','e','r','-','c','o','l','o','r',0};
 static const WCHAR border_leftW[] =
@@ -81,6 +83,8 @@ static const WCHAR border_right_styleW[] =
     {'b','o','r','d','e','r','-','r','i','g','h','t','-','s','t','y','l','e',0};
 static const WCHAR border_right_widthW[] =
     {'b','o','r','d','e','r','-','r','i','g','h','t','-','w','i','d','t','h',0};
+static const WCHAR border_spacingW[] =
+    {'b','o','r','d','e','r','-','s','p','a','c','i','n','g',0};
 static const WCHAR border_topW[] =
     {'b','o','r','d','e','r','-','t','o','p',0};
 static const WCHAR border_top_colorW[] =
@@ -416,6 +420,11 @@ static const style_tbl_entry_t style_tbl[] = {
         ATTR_FIX_PX
     },
     {
+        border_collapseW,
+        DISPID_IHTMLCSSSTYLEDECLARATION_BORDERCOLLAPSE,
+        DISPID_IHTMLSTYLE2_BORDERCOLLAPSE
+    },
+    {
         border_colorW,
         DISPID_IHTMLCSSSTYLEDECLARATION_BORDERCOLOR,
         DISPID_IHTMLSTYLE_BORDERCOLOR
@@ -467,6 +476,11 @@ static const style_tbl_entry_t style_tbl[] = {
         DISPID_IHTMLCSSSTYLEDECLARATION_BORDERRIGHTWIDTH,
         DISPID_IHTMLSTYLE_BORDERRIGHTWIDTH,
         ATTR_FIX_PX
+    },
+    {
+        border_spacingW,
+        DISPID_IHTMLCSSSTYLEDECLARATION_BORDERSPACING,
+        DISPID_IHTMLSTYLE6_BORDERSPACING
     },
     {
         border_styleW,
@@ -3629,15 +3643,19 @@ static HRESULT WINAPI HTMLStyle2_get_tableLayout(IHTMLStyle2 *iface, BSTR *p)
 static HRESULT WINAPI HTMLStyle2_put_borderCollapse(IHTMLStyle2 *iface, BSTR v)
 {
     HTMLStyle *This = impl_from_IHTMLStyle2(iface);
-    FIXME("(%p)->(%s)\n", This, debugstr_w(v));
-    return E_NOTIMPL;
+
+    TRACE("(%p)->(%s)\n", This, debugstr_w(v));
+
+    return set_style_property(This, STYLEID_BORDER_COLLAPSE, v);
 }
 
 static HRESULT WINAPI HTMLStyle2_get_borderCollapse(IHTMLStyle2 *iface, BSTR *p)
 {
     HTMLStyle *This = impl_from_IHTMLStyle2(iface);
-    FIXME("(%p)->(%p)\n", This, p);
-    return E_NOTIMPL;
+
+    TRACE("(%p)->(%p)\n", This, p);
+
+    return get_style_property(This, STYLEID_BORDER_COLLAPSE, p);
 }
 
 static HRESULT WINAPI HTMLStyle2_put_direction(IHTMLStyle2 *iface, BSTR v)
@@ -4927,18 +4945,22 @@ static HRESULT WINAPI HTMLStyle6_get_boxSizing(IHTMLStyle6 *iface, BSTR *p)
     return get_style_property(This, STYLEID_BOX_SIZING, p);
 }
 
-static HRESULT WINAPI HTMLStyle6_put_boxSpacing(IHTMLStyle6 *iface, BSTR v)
+static HRESULT WINAPI HTMLStyle6_put_borderSpacing(IHTMLStyle6 *iface, BSTR v)
 {
     HTMLStyle *This = impl_from_IHTMLStyle6(iface);
-    FIXME("(%p)->(%s)\n", This, debugstr_w(v));
-    return E_NOTIMPL;
+
+    TRACE("(%p)->(%s)\n", This, debugstr_w(v));
+
+    return set_style_property(This, STYLEID_BORDER_SPACING, v);
 }
 
-static HRESULT WINAPI HTMLStyle6_get_boxSpacing(IHTMLStyle6 *iface, BSTR *p)
+static HRESULT WINAPI HTMLStyle6_get_borderSpacing(IHTMLStyle6 *iface, BSTR *p)
 {
     HTMLStyle *This = impl_from_IHTMLStyle6(iface);
-    FIXME("(%p)->(%p)\n", This, p);
-    return E_NOTIMPL;
+
+    TRACE("(%p)->(%p)\n", This, p);
+
+    return get_style_property(This, STYLEID_BORDER_SPACING, p);
 }
 
 static HRESULT WINAPI HTMLStyle6_put_orphans(IHTMLStyle6 *iface, VARIANT v)
@@ -5051,8 +5073,8 @@ static const IHTMLStyle6Vtbl HTMLStyle6Vtbl = {
     HTMLStyle6_get_outlineColor,
     HTMLStyle6_put_boxSizing,
     HTMLStyle6_get_boxSizing,
-    HTMLStyle6_put_boxSpacing,
-    HTMLStyle6_get_boxSpacing,
+    HTMLStyle6_put_borderSpacing,
+    HTMLStyle6_get_borderSpacing,
     HTMLStyle6_put_orphans,
     HTMLStyle6_get_orphans,
     HTMLStyle6_put_windows,
@@ -6258,15 +6280,15 @@ static HRESULT WINAPI HTMLCSSStyleDeclaration_get_tableLayout(IHTMLCSSStyleDecla
 static HRESULT WINAPI HTMLCSSStyleDeclaration_put_borderCollapse(IHTMLCSSStyleDeclaration *iface, BSTR v)
 {
     HTMLStyle *This = impl_from_IHTMLCSSStyleDeclaration(iface);
-    FIXME("(%p)->(%s)\n", This, debugstr_w(v));
-    return E_NOTIMPL;
+    TRACE("(%p)->(%s)\n", This, debugstr_w(v));
+    return set_style_property(This, STYLEID_BORDER_COLLAPSE, v);
 }
 
 static HRESULT WINAPI HTMLCSSStyleDeclaration_get_borderCollapse(IHTMLCSSStyleDeclaration *iface, BSTR *p)
 {
     HTMLStyle *This = impl_from_IHTMLCSSStyleDeclaration(iface);
-    FIXME("(%p)->(%p)\n", This, p);
-    return E_NOTIMPL;
+    TRACE("(%p)->(%p)\n", This, p);
+    return get_style_property(This, STYLEID_BORDER_COLLAPSE, p);
 }
 
 static HRESULT WINAPI HTMLCSSStyleDeclaration_put_direction(IHTMLCSSStyleDeclaration *iface, BSTR v)
@@ -7028,15 +7050,15 @@ static HRESULT WINAPI HTMLCSSStyleDeclaration_get_boxSizing(IHTMLCSSStyleDeclara
 static HRESULT WINAPI HTMLCSSStyleDeclaration_put_borderSpacing(IHTMLCSSStyleDeclaration *iface, BSTR v)
 {
     HTMLStyle *This = impl_from_IHTMLCSSStyleDeclaration(iface);
-    FIXME("(%p)->(%s)\n", This, debugstr_w(v));
-    return E_NOTIMPL;
+    TRACE("(%p)->(%s)\n", This, debugstr_w(v));
+    return set_style_property(This, STYLEID_BORDER_SPACING, v);
 }
 
 static HRESULT WINAPI HTMLCSSStyleDeclaration_get_borderSpacing(IHTMLCSSStyleDeclaration *iface, BSTR *p)
 {
     HTMLStyle *This = impl_from_IHTMLCSSStyleDeclaration(iface);
-    FIXME("(%p)->(%p)\n", This, p);
-    return E_NOTIMPL;
+    TRACE("(%p)->(%p)\n", This, p);
+    return get_style_property(This, STYLEID_BORDER_SPACING, p);
 }
 
 static HRESULT WINAPI HTMLCSSStyleDeclaration_put_orphans(IHTMLCSSStyleDeclaration *iface, VARIANT v)

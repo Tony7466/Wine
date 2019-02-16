@@ -174,6 +174,23 @@ static void winetest_end_todo(void)
 #define todo_wine_if(is_todo)   todo_if((is_todo) && running_under_wine)
 #define win_skip(...)           win_skip_(__FILE__, __LINE__, __VA_ARGS__)
 
+static void *get_proc_address(const char *name)
+{
+    UNICODE_STRING name_u;
+    ANSI_STRING name_a;
+    NTSTATUS status;
+    void *ret;
+
+    RtlInitAnsiString(&name_a, name);
+    status = RtlAnsiStringToUnicodeString(&name_u, &name_a, TRUE);
+    ok (!status, "RtlAnsiStringToUnicodeString failed: %#x\n", status);
+    if (status) return NULL;
+
+    ret = MmGetSystemRoutineAddress(&name_u);
+    RtlFreeUnicodeString(&name_u);
+    return ret;
+}
+
 static void test_currentprocess(void)
 {
     PEPROCESS current;
@@ -181,6 +198,18 @@ static void test_currentprocess(void)
     current = IoGetCurrentProcess();
 todo_wine
     ok(current != NULL, "Expected current process to be non-NULL\n");
+}
+
+static FILE_OBJECT *last_created_file;
+
+static void test_irp_struct(IRP *irp, DEVICE_OBJECT *device)
+{
+    IO_STACK_LOCATION *irpsp = IoGetCurrentIrpStackLocation( irp );
+
+    ok(last_created_file != NULL, "last_created_file = NULL\n");
+    ok(irpsp->FileObject == last_created_file, "FileObject != last_created_file\n");
+    ok(irpsp->DeviceObject == device, "unexpected DeviceObject\n");
+    ok(irpsp->FileObject->DeviceObject == device, "unexpected FileObject->DeviceObject\n");
 }
 
 static void test_mdl_map(void)
@@ -543,17 +572,9 @@ static void test_stack_callout(void)
 {
     NTSTATUS (WINAPI *pKeExpandKernelStackAndCallout)(PEXPAND_STACK_CALLOUT,void*,SIZE_T);
     NTSTATUS (WINAPI *pKeExpandKernelStackAndCalloutEx)(PEXPAND_STACK_CALLOUT,void*,SIZE_T,BOOLEAN,void*);
-    UNICODE_STRING str;
     NTSTATUS ret;
 
-    static const WCHAR KeExpandKernelStackAndCalloutW[] =
-        {'K','e','E','x','p','a','n','d','K','e','r','n','e','l','S','t','a','c','k','A','n','d','C','a','l','l','o','u','t',0};
-    static const WCHAR KeExpandKernelStackAndCalloutExW[] =
-        {'K','e','E','x','p','a','n','d','K','e','r','n','e','l','S','t','a','c','k','A','n','d','C','a','l','l','o','u','t','E','x',0};
-
-
-    RtlInitUnicodeString(&str, KeExpandKernelStackAndCalloutW);
-    pKeExpandKernelStackAndCallout = MmGetSystemRoutineAddress(&str);
+    pKeExpandKernelStackAndCallout = get_proc_address("KeExpandKernelStackAndCallout");
     if (pKeExpandKernelStackAndCallout)
     {
         callout_cnt = 0;
@@ -563,8 +584,7 @@ static void test_stack_callout(void)
     }
     else win_skip("KeExpandKernelStackAndCallout is not available\n");
 
-    RtlInitUnicodeString(&str, KeExpandKernelStackAndCalloutExW);
-    pKeExpandKernelStackAndCalloutEx = MmGetSystemRoutineAddress(&str);
+    pKeExpandKernelStackAndCalloutEx = get_proc_address("KeExpandKernelStackAndCalloutEx");
     if (pKeExpandKernelStackAndCalloutEx)
     {
         callout_cnt = 0;
@@ -575,7 +595,48 @@ static void test_stack_callout(void)
     else win_skip("KeExpandKernelStackAndCalloutEx is not available\n");
 }
 
-static NTSTATUS main_test(IRP *irp, IO_STACK_LOCATION *stack, ULONG_PTR *info)
+static void test_lookaside_list(void)
+{
+    NPAGED_LOOKASIDE_LIST list;
+    ULONG tag = 0x454e4957; /* WINE */
+
+    ExInitializeNPagedLookasideList(&list, NULL, NULL, POOL_NX_ALLOCATION, LOOKASIDE_MINIMUM_BLOCK_SIZE, tag, 0);
+    ok(list.L.Depth == 4, "Expected 4 got %u\n", list.L.Depth);
+    ok(list.L.MaximumDepth == 256, "Expected 256 got %u\n", list.L.MaximumDepth);
+    ok(list.L.TotalAllocates == 0, "Expected 0 got %u\n", list.L.TotalAllocates);
+    ok(list.L.AllocateMisses == 0, "Expected 0 got %u\n", list.L.AllocateMisses);
+    ok(list.L.TotalFrees == 0, "Expected 0 got %u\n", list.L.TotalFrees);
+    ok(list.L.FreeMisses == 0, "Expected 0 got %u\n", list.L.FreeMisses);
+    ok(list.L.Type == (NonPagedPool|POOL_NX_ALLOCATION),
+       "Expected NonPagedPool|POOL_NX_ALLOCATION got %u\n", list.L.Type);
+    ok(list.L.Tag == tag, "Expected %x got %x\n", tag, list.L.Tag);
+    ok(list.L.Size == LOOKASIDE_MINIMUM_BLOCK_SIZE,
+       "Expected %u got %u\n", LOOKASIDE_MINIMUM_BLOCK_SIZE, list.L.Size);
+    ok(list.L.LastTotalAllocates == 0,"Expected 0 got %u\n", list.L.LastTotalAllocates);
+    ok(list.L.LastAllocateMisses == 0,"Expected 0 got %u\n", list.L.LastAllocateMisses);
+    ExDeleteNPagedLookasideList(&list);
+
+    list.L.Depth = 0;
+    ExInitializeNPagedLookasideList(&list, NULL, NULL, 0, LOOKASIDE_MINIMUM_BLOCK_SIZE, tag, 20);
+    ok(list.L.Depth == 4, "Expected 4 got %u\n", list.L.Depth);
+    ok(list.L.MaximumDepth == 256, "Expected 256 got %u\n", list.L.MaximumDepth);
+    ok(list.L.Type == NonPagedPool, "Expected NonPagedPool got %u\n", list.L.Type);
+    ExDeleteNPagedLookasideList(&list);
+}
+
+static void test_version(void)
+{
+    USHORT *pNtBuildNumber;
+    ULONG build;
+
+    pNtBuildNumber = get_proc_address("NtBuildNumber");
+    ok(!!pNtBuildNumber, "Could not get pointer to NtBuildNumber\n");
+
+    PsGetVersion(NULL, NULL, &build, NULL);
+    ok(*pNtBuildNumber == build, "Expected build number %u, got %u\n", build, *pNtBuildNumber);
+}
+
+static NTSTATUS main_test(DEVICE_OBJECT *device, IRP *irp, IO_STACK_LOCATION *stack, ULONG_PTR *info)
 {
     ULONG length = stack->Parameters.DeviceIoControl.OutputBufferLength;
     void *buffer = irp->AssociatedIrp.SystemBuffer;
@@ -599,12 +660,15 @@ static NTSTATUS main_test(IRP *irp, IO_STACK_LOCATION *stack, ULONG_PTR *info)
     attr.Attributes = OBJ_KERNEL_HANDLE; /* needed to be accessible from system threads */
     ZwOpenFile(&okfile, FILE_APPEND_DATA | SYNCHRONIZE, &attr, &io, 0, FILE_SYNCHRONOUS_IO_NONALERT);
 
+    test_irp_struct(irp, device);
     test_currentprocess();
     test_mdl_map();
     test_init_funcs();
     test_load_driver();
     test_sync();
+    test_version();
     test_stack_callout();
+    test_lookaside_list();
 
     /* print process report */
     if (test_input->winetest_debug)
@@ -656,6 +720,10 @@ static NTSTATUS test_load_driver_ioctl(IRP *irp, IO_STACK_LOCATION *stack, ULONG
 
 static NTSTATUS WINAPI driver_Create(DEVICE_OBJECT *device, IRP *irp)
 {
+    IO_STACK_LOCATION *irpsp = IoGetCurrentIrpStackLocation( irp );
+
+    last_created_file = irpsp->FileObject;
+
     irp->IoStatus.Status = STATUS_SUCCESS;
     IoCompleteRequest(irp, IO_NO_INCREMENT);
     return STATUS_SUCCESS;
@@ -672,7 +740,7 @@ static NTSTATUS WINAPI driver_IoControl(DEVICE_OBJECT *device, IRP *irp)
             status = test_basic_ioctl(irp, stack, &irp->IoStatus.Information);
             break;
         case IOCTL_WINETEST_MAIN_TEST:
-            status = main_test(irp, stack, &irp->IoStatus.Information);
+            status = main_test(device, irp, stack, &irp->IoStatus.Information);
             break;
         case IOCTL_WINETEST_LOAD_DRIVER:
             status = test_load_driver_ioctl(irp, stack, &irp->IoStatus.Information);

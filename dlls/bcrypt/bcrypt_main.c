@@ -114,6 +114,7 @@ alg_props[] =
     /* ALG_ID_SHA256 */ {  286,   32,  512, BCRYPT_SHA256_ALGORITHM, FALSE },
     /* ALG_ID_SHA384 */ {  382,   48, 1024, BCRYPT_SHA384_ALGORITHM, FALSE },
     /* ALG_ID_SHA512 */ {  382,   64, 1024, BCRYPT_SHA512_ALGORITHM, FALSE },
+    /* ALG_ID_ECDH_P256 */  { 0,   0,     0, BCRYPT_ECDH_P256_ALGORITHM, FALSE },
     /* ALG_ID_ECDSA_P256 */ { 0,   0,     0, BCRYPT_ECDSA_P256_ALGORITHM, FALSE  },
     /* ALG_ID_ECDSA_P384 */ { 0,   0,     0, BCRYPT_ECDSA_P384_ALGORITHM, FALSE  },
 };
@@ -184,6 +185,7 @@ NTSTATUS WINAPI BCryptOpenAlgorithmProvider( BCRYPT_ALG_HANDLE *handle, LPCWSTR 
     else if (!strcmpW( id, BCRYPT_SHA256_ALGORITHM )) alg_id = ALG_ID_SHA256;
     else if (!strcmpW( id, BCRYPT_SHA384_ALGORITHM )) alg_id = ALG_ID_SHA384;
     else if (!strcmpW( id, BCRYPT_SHA512_ALGORITHM )) alg_id = ALG_ID_SHA512;
+    else if (!strcmpW( id, BCRYPT_ECDH_P256_ALGORITHM )) alg_id = ALG_ID_ECDH_P256;
     else if (!strcmpW( id, BCRYPT_ECDSA_P256_ALGORITHM )) alg_id = ALG_ID_ECDSA_P256;
     else if (!strcmpW( id, BCRYPT_ECDSA_P384_ALGORITHM )) alg_id = ALG_ID_ECDSA_P384;
     else
@@ -811,6 +813,18 @@ static NTSTATUS key_export( struct key *key, const WCHAR *type, UCHAR *output, U
         memcpy( output + sizeof(len), key->u.s.secret, key->u.s.secret_len );
         return STATUS_SUCCESS;
     }
+    else if (!strcmpW( type, BCRYPT_ECCPUBLIC_BLOB ))
+    {
+        *size = key->u.a.pubkey_len;
+        if (output_len < key->u.a.pubkey_len) return STATUS_SUCCESS;
+
+        memcpy( output, key->u.a.pubkey, key->u.a.pubkey_len );
+        return STATUS_SUCCESS;
+    }
+    else if (!strcmpW( type, BCRYPT_ECCPRIVATE_BLOB ))
+    {
+        return key_export_ecc( key, output, output_len, size );
+    }
 
     FIXME( "unsupported key type %s\n", debugstr_w(type) );
     return STATUS_NOT_IMPLEMENTED;
@@ -1010,6 +1024,11 @@ static NTSTATUS key_import_pair( struct algorithm *alg, const WCHAR *type, BCRYP
 
         switch (alg->id)
         {
+        case ALG_ID_ECDH_P256:
+            key_size = 32;
+            magic = BCRYPT_ECDH_PUBLIC_P256_MAGIC;
+            break;
+
         case ALG_ID_ECDSA_P256:
             key_size = 32;
             magic = BCRYPT_ECDSA_PUBLIC_P256_MAGIC;
@@ -1026,11 +1045,51 @@ static NTSTATUS key_import_pair( struct algorithm *alg, const WCHAR *type, BCRYP
         }
 
         if (ecc_blob->dwMagic != magic) return STATUS_NOT_SUPPORTED;
-        if (ecc_blob->cbKey != key_size) return STATUS_INVALID_PARAMETER;
+        if (ecc_blob->cbKey != key_size || input_len < sizeof(*ecc_blob) + ecc_blob->cbKey * 2)
+            return STATUS_INVALID_PARAMETER;
 
-        if (!(key = heap_alloc( sizeof(*key) ))) return STATUS_NO_MEMORY;
+        if (!(key = heap_alloc_zero( sizeof(*key) ))) return STATUS_NO_MEMORY;
         key->hdr.magic = MAGIC_KEY;
         if ((status = key_asymmetric_init( key, alg, (BYTE *)ecc_blob, sizeof(*ecc_blob) + ecc_blob->cbKey * 2 )))
+        {
+            heap_free( key );
+            return status;
+        }
+
+        *ret_key = key;
+        return STATUS_SUCCESS;
+    }
+    else if (!strcmpW( type, BCRYPT_ECCPRIVATE_BLOB ))
+    {
+        BCRYPT_ECCKEY_BLOB *ecc_blob = (BCRYPT_ECCKEY_BLOB *)input;
+        DWORD key_size, magic;
+
+        if (input_len < sizeof(*ecc_blob)) return STATUS_INVALID_PARAMETER;
+
+        switch (alg->id)
+        {
+        case ALG_ID_ECDH_P256:
+            key_size = 32;
+            magic = BCRYPT_ECDH_PRIVATE_P256_MAGIC;
+            break;
+
+        default:
+            FIXME( "algorithm %u does not yet support importing blob of type %s\n", alg->id, debugstr_w(type) );
+            return STATUS_NOT_SUPPORTED;
+        }
+
+        if (ecc_blob->dwMagic != magic) return STATUS_NOT_SUPPORTED;
+        if (ecc_blob->cbKey != key_size || input_len < sizeof(*ecc_blob) + ecc_blob->cbKey * 3)
+            return STATUS_INVALID_PARAMETER;
+
+        if (!(key = heap_alloc_zero( sizeof(*key) ))) return STATUS_NO_MEMORY;
+        key->hdr.magic = MAGIC_KEY;
+        if ((status = key_asymmetric_init( key, alg, NULL, 0 )))
+        {
+            heap_free( key );
+            return status;
+        }
+        if ((status = key_import_ecc( key, input, input_len )))
         {
             heap_free( key );
             return status;
@@ -1047,7 +1106,7 @@ static NTSTATUS key_import_pair( struct algorithm *alg, const WCHAR *type, BCRYP
         if (input_len < sizeof(*rsa_blob)) return STATUS_INVALID_PARAMETER;
         if (alg->id != ALG_ID_RSA || rsa_blob->Magic != BCRYPT_RSAPUBLIC_MAGIC) return STATUS_NOT_SUPPORTED;
 
-        if (!(key = heap_alloc( sizeof(*key) ))) return STATUS_NO_MEMORY;
+        if (!(key = heap_alloc_zero( sizeof(*key) ))) return STATUS_NO_MEMORY;
         key->hdr.magic = MAGIC_KEY;
 
         size = sizeof(*rsa_blob) + rsa_blob->cbPublicExp + rsa_blob->cbModulus;
@@ -1084,6 +1143,18 @@ NTSTATUS key_set_property( struct key *key, const WCHAR *prop, UCHAR *value, ULO
 }
 
 static NTSTATUS key_duplicate( struct key *key_orig, struct key *key_copy )
+{
+    ERR( "support for keys not available at build time\n" );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+NTSTATUS key_asymmetric_init( struct key *key, struct algorithm *alg, const UCHAR *pubkey, ULONG pubkey_len )
+{
+    ERR( "support for keys not available at build time\n" );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+NTSTATUS key_asymmetric_generate( struct key *key )
 {
     ERR( "support for keys not available at build time\n" );
     return STATUS_NOT_IMPLEMENTED;
@@ -1135,6 +1206,18 @@ static NTSTATUS key_import_pair( struct algorithm *alg, const WCHAR *type, BCRYP
     ERR( "support for keys not available at build time\n" );
     return STATUS_NOT_IMPLEMENTED;
 }
+
+NTSTATUS key_export_ecc( struct key *key, UCHAR *output, ULONG len, ULONG *ret_len )
+{
+    ERR( "support for keys not available at build time\n" );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+NTSTATUS key_import_ecc( struct key *key, UCHAR *input, ULONG len )
+{
+    ERR( "support for keys not available at build time\n" );
+    return STATUS_NOT_IMPLEMENTED;
+}
 #endif
 
 NTSTATUS WINAPI BCryptGenerateSymmetricKey( BCRYPT_ALG_HANDLE algorithm, BCRYPT_KEY_HANDLE *handle,
@@ -1161,6 +1244,41 @@ NTSTATUS WINAPI BCryptGenerateSymmetricKey( BCRYPT_ALG_HANDLE algorithm, BCRYPT_
 
     *handle = key;
     return STATUS_SUCCESS;
+}
+
+NTSTATUS WINAPI BCryptGenerateKeyPair( BCRYPT_ALG_HANDLE algorithm, BCRYPT_KEY_HANDLE *handle, ULONG key_len,
+                                       ULONG flags )
+{
+    struct algorithm *alg = algorithm;
+    struct key *key;
+    NTSTATUS status;
+
+    TRACE( "%p, %p, %u, %08x\n", algorithm, handle, key_len, flags );
+
+    if (!alg || alg->hdr.magic != MAGIC_ALG) return STATUS_INVALID_HANDLE;
+    if (!handle) return STATUS_INVALID_PARAMETER;
+
+    if (!(key = heap_alloc_zero( sizeof(*key) ))) return STATUS_NO_MEMORY;
+    key->hdr.magic = MAGIC_KEY;
+
+    if ((status = key_asymmetric_init( key, alg, NULL, 0 )))
+    {
+        heap_free( key );
+        return status;
+    }
+
+    *handle = key;
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS WINAPI BCryptFinalizeKeyPair( BCRYPT_KEY_HANDLE handle, ULONG flags )
+{
+    struct key *key = handle;
+
+    TRACE( "%p, %08x\n", key, flags );
+    if (!key || key->hdr.magic != MAGIC_KEY) return STATUS_INVALID_HANDLE;
+
+    return key_asymmetric_generate( key );
 }
 
 NTSTATUS WINAPI BCryptImportKey( BCRYPT_ALG_HANDLE algorithm, BCRYPT_KEY_HANDLE decrypt_key, LPCWSTR type,
@@ -1192,7 +1310,7 @@ NTSTATUS WINAPI BCryptExportKey( BCRYPT_KEY_HANDLE export_key, BCRYPT_KEY_HANDLE
     TRACE("%p, %p, %s, %p, %u, %p, %u\n", key, encrypt_key, debugstr_w(type), output, output_len, size, flags);
 
     if (!key || key->hdr.magic != MAGIC_KEY) return STATUS_INVALID_HANDLE;
-    if (!output || !type || !size) return STATUS_INVALID_PARAMETER;
+    if (!type || !size) return STATUS_INVALID_PARAMETER;
 
     if (encrypt_key)
     {
@@ -1341,6 +1459,97 @@ NTSTATUS WINAPI BCryptSetProperty( BCRYPT_HANDLE handle, const WCHAR *prop, UCHA
         WARN( "unknown magic %08x\n", object->magic );
         return STATUS_INVALID_HANDLE;
     }
+}
+
+static NTSTATUS pbkdf2( BCRYPT_ALG_HANDLE algorithm, UCHAR *pwd, ULONG pwd_len, UCHAR *salt, ULONG salt_len,
+                        ULONGLONG iterations, ULONG i, UCHAR *dst, ULONG hash_len )
+{
+    BCRYPT_HASH_HANDLE handle = NULL;
+    NTSTATUS status = STATUS_INVALID_PARAMETER;
+    UCHAR bytes[4], *buf;
+    ULONG j, k;
+
+    if (!(buf = heap_alloc( hash_len ))) return STATUS_NO_MEMORY;
+
+    for (j = 0; j < iterations; j++)
+    {
+        status = BCryptCreateHash( algorithm, &handle, NULL, 0, pwd, pwd_len, 0 );
+        if (status != STATUS_SUCCESS)
+            goto done;
+
+        if (j == 0)
+        {
+            /* use salt || INT(i) */
+            status = BCryptHashData( handle, salt, salt_len, 0 );
+            if (status != STATUS_SUCCESS)
+                goto done;
+            bytes[0] = (i >> 24) & 0xff;
+            bytes[1] = (i >> 16) & 0xff;
+            bytes[2] = (i >> 8) & 0xff;
+            bytes[3] = i & 0xff;
+            status = BCryptHashData( handle, bytes, 4, 0 );
+        }
+        else status = BCryptHashData( handle, buf, hash_len, 0 ); /* use U_j */
+        if (status != STATUS_SUCCESS)
+            goto done;
+
+        status = BCryptFinishHash( handle, buf, hash_len, 0 );
+        if (status != STATUS_SUCCESS)
+            goto done;
+
+        if (j == 0) memcpy( dst, buf, hash_len );
+        else for (k = 0; k < hash_len; k++) dst[k] ^= buf[k];
+
+        BCryptDestroyHash( handle );
+        handle = NULL;
+    }
+
+done:
+    BCryptDestroyHash( handle );
+    heap_free( buf );
+    return status;
+}
+
+NTSTATUS WINAPI BCryptDeriveKeyPBKDF2( BCRYPT_ALG_HANDLE handle, UCHAR *pwd, ULONG pwd_len, UCHAR *salt, ULONG salt_len,
+                                       ULONGLONG iterations, UCHAR *dk, ULONG dk_len, ULONG flags )
+{
+    struct algorithm *alg = handle;
+    ULONG hash_len, block_count, bytes_left, i;
+    UCHAR *partial;
+    NTSTATUS status;
+
+    TRACE( "%p, %p, %u, %p, %u, %s, %p, %u, %08x\n", handle, pwd, pwd_len, salt, salt_len,
+           wine_dbgstr_longlong(iterations), dk, dk_len, flags );
+
+    if (!alg || alg->hdr.magic != MAGIC_ALG) return STATUS_INVALID_HANDLE;
+
+    hash_len = alg_props[alg->id].hash_length;
+    if (dk_len <= 0 || dk_len > ((((ULONGLONG)1) << 32) - 1) * hash_len) return STATUS_INVALID_PARAMETER;
+
+    block_count = 1 + ((dk_len - 1) / hash_len); /* ceil(dk_len / hash_len) */
+    bytes_left = dk_len - (block_count - 1) * hash_len;
+
+    /* full blocks */
+    for (i = 1; i < block_count; i++)
+    {
+        status = pbkdf2( handle, pwd, pwd_len, salt, salt_len, iterations, i, dk + ((i - 1) * hash_len), hash_len );
+        if (status != STATUS_SUCCESS)
+            return status;
+    }
+
+    /* final partial block */
+    if (!(partial = heap_alloc( hash_len ))) return STATUS_NO_MEMORY;
+
+    status = pbkdf2( handle, pwd, pwd_len, salt, salt_len, iterations, block_count, partial, hash_len );
+    if (status != STATUS_SUCCESS)
+    {
+        heap_free( partial );
+        return status;
+    }
+    memcpy( dk + ((block_count - 1) * hash_len), partial, bytes_left );
+    heap_free( partial );
+
+    return STATUS_SUCCESS;
 }
 
 BOOL WINAPI DllMain( HINSTANCE hinst, DWORD reason, LPVOID reserved )

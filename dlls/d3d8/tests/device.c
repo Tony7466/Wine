@@ -27,6 +27,7 @@
 #include <initguid.h>
 #include <d3d8.h>
 #include "wine/test.h"
+#include "wine/heap.h"
 
 struct vec3
 {
@@ -51,7 +52,7 @@ struct device_desc
 
 static DEVMODEW registry_mode;
 
-static HRESULT (WINAPI *ValidateVertexShader)(DWORD *, DWORD *, DWORD *, int, DWORD *);
+static HRESULT (WINAPI *ValidateVertexShader)(const DWORD *, const DWORD *, const D3DCAPS8 *, BOOL, char **);
 static HRESULT (WINAPI *ValidatePixelShader)(DWORD *, DWORD *, int, DWORD *);
 
 static BOOL (WINAPI *pGetCursorInfo)(PCURSORINFO);
@@ -100,6 +101,11 @@ static void flush_events(void)
         while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE)) DispatchMessageA(&msg);
         diff = time - GetTickCount();
     }
+}
+
+static BOOL adapter_is_warp(const D3DADAPTER_IDENTIFIER8 *identifier)
+{
+    return !strcmp(identifier->Driver, "d3d10warp.dll");
 }
 
 static IDirect3DDevice8 *create_device(IDirect3D8 *d3d8, HWND focus_window, const struct device_desc *desc)
@@ -4360,7 +4366,7 @@ static void test_set_rt_vp_scissor(void)
 
 static void test_validate_vs(void)
 {
-    static DWORD vs[] =
+    static DWORD vs_code[] =
     {
         0xfffe0101,                                                             /* vs_1_1                       */
         0x00000009, 0xc0010000, 0x90e40000, 0xa0e40000,                         /* dp4 oPos.x, v0, c0           */
@@ -4369,40 +4375,91 @@ static void test_validate_vs(void)
         0x00000009, 0xc0080000, 0x90e40000, 0xa0e40003,                         /* dp4 oPos.w, v0, c3           */
         0x0000ffff,                                                             /* end                          */
     };
+    D3DCAPS8 caps;
+    char *errors;
     HRESULT hr;
 
-    hr = ValidateVertexShader(0, 0, 0, 0, 0);
-    ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
-    hr = ValidateVertexShader(0, 0, 0, 1, 0);
-    ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
-    hr = ValidateVertexShader(vs, 0, 0, 0, 0);
-    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    static DWORD declaration_valid1[] =
+    {
+        D3DVSD_STREAM(0),
+        D3DVSD_REG(D3DVSDE_POSITION, D3DVSDT_FLOAT4),
+        D3DVSD_END()
+    };
+    static DWORD declaration_valid2[] =
+    {
+        D3DVSD_STREAM(0),
+        D3DVSD_REG(D3DVSDE_POSITION, D3DVSDT_FLOAT2),
+        D3DVSD_END()
+    };
+    static DWORD declaration_invalid[] =
+    {
+        D3DVSD_STREAM(0),
+        D3DVSD_REG(D3DVSDE_NORMAL, D3DVSDT_FLOAT4),
+        D3DVSD_END()
+    };
 
-    hr = ValidateVertexShader(vs, 0, 0, 1, 0);
-    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
-    /* Seems to do some version checking. */
-    *vs = 0xfffe0100;                                                           /* vs_1_0                       */
-    hr = ValidateVertexShader(vs, 0, 0, 0, 0);
-    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    hr = ValidateVertexShader(NULL, NULL, NULL, FALSE, NULL);
+    ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
+    hr = ValidateVertexShader(NULL, NULL, NULL, TRUE, NULL);
+    ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
+    hr = ValidateVertexShader(NULL, NULL, NULL, FALSE, &errors);
+    ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
+    ok(!*errors, "Got unexpected string \"%s\".\n", errors);
+    heap_free(errors);
+    hr = ValidateVertexShader(NULL, NULL, NULL, TRUE, &errors);
+    ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
+    ok(!!*errors, "Got unexpected empty string.\n");
+    heap_free(errors);
 
-    *vs = 0xfffe0102;                                                           /* bogus version                */
-    hr = ValidateVertexShader(vs, 0, 0, 1, 0);
-    ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
-    /* I've seen that applications always pass the 2nd and 3rd parameter as 0.
-     * Simple test with non-zero parameters. */
-    *vs = 0xfffe0101;                                                           /* vs_1_1                       */
-    hr = ValidateVertexShader(vs, vs, 0, 1, 0);
-    ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
+    hr = ValidateVertexShader(vs_code, NULL, NULL, FALSE, NULL);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    hr = ValidateVertexShader(vs_code, NULL, NULL, TRUE, NULL);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    hr = ValidateVertexShader(vs_code, NULL, NULL, TRUE, &errors);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    ok(!*errors, "Got unexpected string \"%s\".\n", errors);
+    heap_free(errors);
 
-    hr = ValidateVertexShader(vs, 0, vs, 1, 0);
+    hr = ValidateVertexShader(vs_code, declaration_valid1, NULL, FALSE, NULL);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    hr = ValidateVertexShader(vs_code, declaration_valid2, NULL, FALSE, NULL);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    hr = ValidateVertexShader(vs_code, declaration_invalid, NULL, FALSE, NULL);
+    todo_wine ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
+
+    memset(&caps, 0, sizeof(caps));
+    caps.VertexShaderVersion = D3DVS_VERSION(1, 1);
+    caps.MaxVertexShaderConst = 4;
+    hr = ValidateVertexShader(vs_code, NULL, &caps, FALSE, NULL);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    caps.VertexShaderVersion = D3DVS_VERSION(1, 0);
+    hr = ValidateVertexShader(vs_code, NULL, &caps, FALSE, NULL);
     ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
-    /* I've seen the 4th parameter always passed as either 0 or 1, but passing
-     * other values doesn't seem to hurt. */
-    hr = ValidateVertexShader(vs, 0, 0, 12345, 0);
+    caps.VertexShaderVersion = D3DVS_VERSION(1, 2);
+    hr = ValidateVertexShader(vs_code, NULL, &caps, FALSE, NULL);
     ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
-    /* What is the 5th parameter? The following seems to work ok. */
-    hr = ValidateVertexShader(vs, 0, 0, 1, vs);
+    caps.VertexShaderVersion = D3DVS_VERSION(8, 8);
+    hr = ValidateVertexShader(vs_code, NULL, &caps, FALSE, NULL);
     ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    caps.VertexShaderVersion = D3DVS_VERSION(1, 1);
+    caps.MaxVertexShaderConst = 3;
+    hr = ValidateVertexShader(vs_code, NULL, &caps, FALSE, NULL);
+    todo_wine ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
+
+    *vs_code = D3DVS_VERSION(1, 0);
+    hr = ValidateVertexShader(vs_code, NULL, NULL, FALSE, NULL);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    *vs_code = D3DVS_VERSION(1, 2);
+    hr = ValidateVertexShader(vs_code, NULL, NULL, TRUE, NULL);
+    ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
+    hr = ValidateVertexShader(vs_code, NULL, NULL, FALSE, &errors);
+    ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
+    ok(!*errors, "Got unexpected string \"%s\".\n", errors);
+    heap_free(errors);
+    hr = ValidateVertexShader(vs_code, NULL, NULL, TRUE, &errors);
+    ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
+    ok(!!*errors, "Got unexpected empty string.\n");
+    heap_free(errors);
 }
 
 static void test_validate_ps(void)
@@ -5163,6 +5220,11 @@ static void test_lockrect_invalid(void)
             ok(SUCCEEDED(hr), "Failed to unlock texture, hr %#x, type %s.\n", hr, resources[r].name);
 
             IDirect3DTexture8_Release(texture);
+
+            hr = IDirect3DDevice8_CreateTexture(device, 128, 128, 1, D3DUSAGE_WRITEONLY,
+                    D3DFMT_A8R8G8B8, resources[r].pool, &texture);
+            ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x for type %s.\n",
+                    hr, resources[r].name);
         }
 
         if (cube_texture)
@@ -5203,6 +5265,11 @@ static void test_lockrect_invalid(void)
             ok(SUCCEEDED(hr), "Failed to unlock texture, hr %#x, type %s.\n", hr, resources[r].name);
 
             IDirect3DTexture8_Release(cube_texture);
+
+            hr = IDirect3DDevice8_CreateCubeTexture(device, 128, 1, D3DUSAGE_WRITEONLY, D3DFMT_A8R8G8B8,
+                    resources[r].pool, &cube_texture);
+            ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x for type %s.\n",
+                    hr, resources[r].name);
         }
     }
 
@@ -6949,6 +7016,11 @@ static void test_lockbox_invalid(void)
     ok(SUCCEEDED(hr), "Failed to unlock volume texture, hr %#x.\n", hr);
 
     IDirect3DVolumeTexture8_Release(texture);
+
+    hr = IDirect3DDevice8_CreateVolumeTexture(device, 4, 4, 2, 1, D3DUSAGE_WRITEONLY,
+            D3DFMT_A8R8G8B8, D3DPOOL_SCRATCH, &texture);
+    ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x.\n", hr);
+
     refcount = IDirect3DDevice8_Release(device);
     ok(!refcount, "Device has %u references left.\n", refcount);
     IDirect3D8_Release(d3d);
@@ -8686,6 +8758,8 @@ static void test_device_caps(void)
     /* AMD gives 6, Nvidia returns 8. */
     ok(caps.MaxUserClipPlanes <= 8,
             "MaxUserClipPlanes field has unexpected value %u.\n", caps.MaxUserClipPlanes);
+    ok(caps.MaxVertexW == 0.0f || caps.MaxVertexW >= 1e10f,
+            "MaxVertexW field has unexpected value %.8e.\n", caps.MaxVertexW);
 
     refcount = IDirect3DDevice8_Release(device);
     ok(!refcount, "Device has %u references left.\n", refcount);
@@ -8738,6 +8812,7 @@ static void test_resource_access(void)
     IDirect3DSurface8 *backbuffer, *depth_stencil;
     D3DFORMAT colour_format, depth_format, format;
     BOOL depth_2d, depth_cube, depth_plain;
+    D3DADAPTER_IDENTIFIER8 identifier;
     struct device_desc device_desc;
     D3DSURFACE_DESC surface_desc;
     IDirect3DDevice8 *device;
@@ -8746,6 +8821,7 @@ static void test_resource_access(void)
     ULONG refcount;
     HWND window;
     HRESULT hr;
+    BOOL warp;
 
     enum surface_type
     {
@@ -8830,6 +8906,9 @@ static void test_resource_access(void)
     window = create_window();
     d3d = Direct3DCreate8(D3D_SDK_VERSION);
     ok(!!d3d, "Failed to create a D3D object.\n");
+    hr = IDirect3D8_GetAdapterIdentifier(d3d, D3DADAPTER_DEFAULT, 0, &identifier);
+    ok(SUCCEEDED(hr), "Failed to get adapter identifier, hr %#x.\n", hr);
+    warp = adapter_is_warp(&identifier);
 
     device_desc.device_window = window;
     device_desc.width = 16;
@@ -8936,7 +9015,9 @@ static void test_resource_access(void)
                     hr = IDirect3DDevice8_CreateDepthStencilSurface(device,
                             16, 16, format, D3DMULTISAMPLE_NONE, &surface);
                     todo_wine_if(tests[j].format == FORMAT_ATI2)
-                        ok(hr == (tests[j].format != FORMAT_COLOUR ? D3D_OK : D3DERR_INVALIDCALL),
+                        ok(hr == (tests[j].format == FORMAT_DEPTH ? D3D_OK
+                                : tests[j].format == FORMAT_COLOUR ? D3DERR_INVALIDCALL : E_INVALIDARG)
+                                || (tests[j].format == FORMAT_ATI2 && hr == D3D_OK),
                                 "Test %s %u: Got unexpected hr %#x.\n", surface_types[i].name, j, hr);
                     if (FAILED(hr))
                         continue;
@@ -9032,17 +9113,20 @@ static void test_resource_access(void)
         HRESULT expected_hr;
         D3DLOCKED_BOX lb;
 
-        if (tests[j].format == FORMAT_DEPTH)
+        if (tests[i].format == FORMAT_DEPTH)
             continue;
 
-        if (tests[j].format == FORMAT_ATI2)
+        if (tests[i].format == FORMAT_ATI2)
             format = MAKEFOURCC('A','T','I','2');
         else
             format = colour_format;
 
         hr = IDirect3DDevice8_CreateVolumeTexture(device, 16, 16, 1, 1,
                 tests[i].usage, format, tests[i].pool, &texture);
-        ok(hr == (!(tests[i].usage & ~D3DUSAGE_DYNAMIC) ? D3D_OK : D3DERR_INVALIDCALL),
+        ok((hr == ((!(tests[i].usage & ~D3DUSAGE_DYNAMIC) && tests[i].format != FORMAT_ATI2)
+                || (tests[i].pool == D3DPOOL_SCRATCH && !tests[i].usage)
+                ? D3D_OK : D3DERR_INVALIDCALL))
+                || (tests[i].format == FORMAT_ATI2 && (hr == D3D_OK || warp)),
                 "Test %u: Got unexpected hr %#x.\n", i, hr);
         if (FAILED(hr))
             continue;
@@ -9060,9 +9144,11 @@ static void test_resource_access(void)
             expected_hr = D3D_OK;
         else
             expected_hr = D3DERR_INVALIDCALL;
-        ok(hr == expected_hr, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(hr == expected_hr || (volume_desc.Pool == D3DPOOL_DEFAULT && hr == D3D_OK),
+                "Test %u: Got unexpected hr %#x.\n", i, hr);
         hr = IDirect3DVolume8_UnlockBox(volume);
-        ok(hr == expected_hr, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(hr == expected_hr || (volume_desc.Pool == D3DPOOL_DEFAULT && hr == D3D_OK),
+                "Test %u: Got unexpected hr %#x.\n", i, hr);
 
         hr = IDirect3DDevice8_SetTexture(device, 0, (IDirect3DBaseTexture8 *)texture);
         ok(hr == D3D_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);

@@ -1266,7 +1266,10 @@ extern const struct wined3d_shader_frontend sm1_shader_frontend DECLSPEC_HIDDEN;
 extern const struct wined3d_shader_frontend sm4_shader_frontend DECLSPEC_HIDDEN;
 
 HRESULT shader_extract_from_dxbc(struct wined3d_shader *shader,
-        unsigned int max_shader_version, enum wined3d_shader_byte_code_format *format);
+        unsigned int max_shader_version, enum wined3d_shader_byte_code_format *format) DECLSPEC_HIDDEN;
+BOOL shader_get_stream_output_register_info(const struct wined3d_shader *shader,
+        const struct wined3d_stream_output_element *so_element, unsigned int *register_idx,
+        unsigned int *component_idx) DECLSPEC_HIDDEN;
 
 typedef void (*SHADER_HANDLER)(const struct wined3d_shader_instruction *);
 
@@ -2888,6 +2891,16 @@ struct wined3d_stream_state
     UINT flags;
 };
 
+#define LIGHTMAP_SIZE 43
+#define LIGHTMAP_HASHFUNC(x) ((x) % LIGHTMAP_SIZE)
+
+struct wined3d_light_state
+{
+    /* Light hashmap. Collisions are handled using linked lists. */
+    struct list light_map[LIGHTMAP_SIZE];
+    const struct wined3d_light_info *lights[MAX_ACTIVE_LIGHTS];
+};
+
 #define WINED3D_STATE_NO_REF        0x00000001
 #define WINED3D_STATE_INIT_DEFAULT  0x00000002
 
@@ -2935,11 +2948,7 @@ struct wined3d_state
     RECT scissor_rects[WINED3D_MAX_VIEWPORTS];
     unsigned int scissor_rect_count;
 
-    /* Light hashmap. Collisions are handled using linked lists. */
-#define LIGHTMAP_SIZE 43
-#define LIGHTMAP_HASHFUNC(x) ((x) % LIGHTMAP_SIZE)
-    struct list light_map[LIGHTMAP_SIZE];
-    const struct wined3d_light_info *lights[MAX_ACTIVE_LIGHTS];
+    struct wined3d_light_state light_state;
 
     DWORD render_states[WINEHIGHEST_RENDER_STATE + 1];
     struct wined3d_blend_state *blend_state;
@@ -2970,6 +2979,12 @@ struct wined3d_dummy_textures
 
 struct wined3d_stateblock_state
 {
+    struct wined3d_vertex_declaration *vertex_declaration;
+    struct wined3d_stream_state streams[MAX_STREAMS + 1];
+    struct wined3d_buffer *index_buffer;
+    enum wined3d_format_id index_format;
+    int base_vertex_index;
+
     struct wined3d_shader *vs;
     struct wined3d_vec4 vs_consts_f[WINED3D_MAX_VS_CONSTS_F];
     struct wined3d_ivec4 vs_consts_i[WINED3D_MAX_CONSTS_I];
@@ -2981,6 +2996,19 @@ struct wined3d_stateblock_state
     BOOL ps_consts_b[WINED3D_MAX_CONSTS_B];
 
     DWORD rs[WINEHIGHEST_RENDER_STATE + 1];
+    struct wined3d_color blend_factor;
+
+    struct wined3d_texture *textures[MAX_COMBINED_SAMPLERS];
+    DWORD sampler_states[MAX_COMBINED_SAMPLERS][WINED3D_HIGHEST_SAMPLER_STATE + 1];
+    DWORD texture_states[MAX_TEXTURES][WINED3D_HIGHEST_TEXTURE_STATE + 1];
+
+    struct wined3d_matrix transforms[HIGHEST_TRANSFORMSTATE + 1];
+    struct wined3d_vec4 clip_planes[MAX_CLIP_DISTANCES];
+    struct wined3d_material material;
+    struct wined3d_viewport viewport;
+    RECT scissor_rect;
+
+    struct wined3d_light_state light_state;
 };
 
 struct wined3d_device
@@ -3019,7 +3047,6 @@ struct wined3d_device
     enum wined3d_feature_level feature_level;
 
     struct wined3d_state state;
-    struct wined3d_state *update_state;
     struct wined3d_stateblock *recording;
     struct wined3d_stateblock_state stateblock_state;
     struct wined3d_stateblock_state *update_stateblock_state;
@@ -3098,6 +3125,11 @@ static inline BOOL isStateDirty(const struct wined3d_context *context, DWORD sta
     DWORD idx = state / (sizeof(*context->isStateDirty) * CHAR_BIT);
     BYTE shift = state & ((sizeof(*context->isStateDirty) * CHAR_BIT) - 1);
     return context->isStateDirty[idx] & (1u << shift);
+}
+
+static inline float wined3d_alpha_ref(const struct wined3d_state *state)
+{
+    return (state->render_states[WINED3D_RS_ALPHAREF] & 0xff) / 255.0f;
 }
 
 const char *wined3d_debug_resource_access(DWORD access) DECLSPEC_HIDDEN;
@@ -3572,7 +3604,6 @@ struct wined3d_stateblock
 
     /* Array indicating whether things have been set or changed */
     struct wined3d_saved_states changed;
-    struct wined3d_state state;
     struct wined3d_stateblock_state stateblock_state;
 
     /* Contained state management */
@@ -3604,11 +3635,14 @@ void wined3d_stateblock_state_init(struct wined3d_stateblock_state *state,
         const struct wined3d_device *device, DWORD flags) DECLSPEC_HIDDEN;
 void wined3d_stateblock_state_cleanup(struct wined3d_stateblock_state *state) DECLSPEC_HIDDEN;
 
-void state_cleanup(struct wined3d_state *state) DECLSPEC_HIDDEN;
-void wined3d_state_enable_light(struct wined3d_state *state, const struct wined3d_d3d_info *d3d_info,
+void wined3d_light_state_enable_light(struct wined3d_light_state *state, const struct wined3d_d3d_info *d3d_info,
         struct wined3d_light_info *light_info, BOOL enable) DECLSPEC_HIDDEN;
-struct wined3d_light_info *wined3d_state_get_light(const struct wined3d_state *state,
+struct wined3d_light_info *wined3d_light_state_get_light(const struct wined3d_light_state *state,
         unsigned int idx) DECLSPEC_HIDDEN;
+HRESULT wined3d_light_state_set_light(struct wined3d_light_state *state, DWORD light_idx,
+        const struct wined3d_light *params, struct wined3d_light_info **light_info) DECLSPEC_HIDDEN;
+
+void state_cleanup(struct wined3d_state *state) DECLSPEC_HIDDEN;
 void state_init(struct wined3d_state *state, struct wined3d_fb_state *fb,
         const struct wined3d_d3d_info *d3d_info, DWORD flags) DECLSPEC_HIDDEN;
 void state_unbind_resources(struct wined3d_state *state) DECLSPEC_HIDDEN;

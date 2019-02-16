@@ -5945,7 +5945,7 @@ static void alpha_test_arbfp(struct wined3d_context *context, const struct wined
         return;
     }
 
-    ref = ((float)state->render_states[WINED3D_RS_ALPHAREF]) / 255.0f;
+    ref = wined3d_alpha_ref(state);
     glParm = wined3d_gl_compare_func(state->render_states[WINED3D_RS_ALPHAFUNC]);
 
     if (glParm)
@@ -7714,7 +7714,7 @@ static BOOL arbfp_blit_supported(enum wined3d_blit_op blit_op, const struct wine
             return FALSE;
     }
 
-    decompress = src_format && (src_format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_COMPRESSED)
+    decompress = (src_format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_COMPRESSED)
             && !(dst_format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_COMPRESSED);
     if (!decompress && !(src_resource->access & dst_resource->access & WINED3D_RESOURCE_ACCESS_GPU))
         return FALSE;
