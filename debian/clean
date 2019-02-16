@@ -22,6 +22,7 @@ libs/wine/wctype.c
 libs/wine/casemap.c
 libs/wine/collation.c
 libs/port/compose.c
+libs/port/combclass.c
 libs/port/digitmap.c
 libs/port/decompose.c
 libs/port/cptable.generated

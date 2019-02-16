@@ -30,13 +30,10 @@ warnings/arm-longdouble.patch
 warnings/arm64-dword.patch
 warnings/arm64-array-bounds.patch
 warnings/arm64-excess-precision.patch
-warnings/arm64-unused-functions.patch
 warnings/arm64-uninitialized-variables.patch
 
-warnings/array-bounds.patch
 warnings/dword64-winmm.patch
 warnings/format-overflow.patch
-warnings/unused-functions.patch
 warnings/argument-promotion.patch
 warnings/discarded-qualifiers.patch
 warnings/uninitialized-variables.patch

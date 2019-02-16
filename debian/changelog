@@ -1,4 +1,4 @@
-wine-development (4.2-1) UNRELEASED; urgency=medium
+wine-development (4.2-1) unstable; urgency=medium
 
   * New upstream release 4.2, released Feb 15, 2019.
     - Unicode string normalization support.

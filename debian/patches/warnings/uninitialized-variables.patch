@@ -27,7 +27,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (format->type == FORMAT_ARGBF16)
 --- a/dlls/kernel32/locale.c
 +++ b/dlls/kernel32/locale.c
-@@ -5763,7 +5763,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
+@@ -5810,7 +5810,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
      extern const unsigned short nameprep_char_type[];
  
      INT i, label_start, label_end, out_label, out = 0;
