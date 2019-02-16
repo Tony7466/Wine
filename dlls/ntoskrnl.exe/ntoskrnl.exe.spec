@@ -5,8 +5,8 @@
 @ stub ExInterlockedAddLargeStatistic
 @ stub ExInterlockedCompareExchange64
 @ stub ExInterlockedFlushSList
-@ stdcall -norelay ExInterlockedPopEntrySList(ptr ptr) NTOSKRNL_ExInterlockedPopEntrySList
-@ stdcall -norelay ExInterlockedPushEntrySList (ptr ptr ptr) NTOSKRNL_ExInterlockedPushEntrySList
+@ stdcall -arch=i386 -norelay ExInterlockedPopEntrySList(ptr ptr) NTOSKRNL_ExInterlockedPopEntrySList
+@ stdcall -arch=i386 -norelay ExInterlockedPushEntrySList (ptr ptr ptr) NTOSKRNL_ExInterlockedPushEntrySList
 @ stub ExReInitializeRundownProtection
 @ stdcall -norelay ExReleaseFastMutexUnsafe(ptr)
 @ stdcall ExReleaseResourceLite(ptr)
@@ -27,14 +27,17 @@
 @ stub Exfi386InterlockedDecrementLong
 @ stub Exfi386InterlockedExchangeUlong
 @ stub Exfi386InterlockedIncrementLong
+@ stdcall -arch=win64 ExpInterlockedPopEntrySList(ptr) RtlInterlockedPopEntrySList
+@ stdcall -arch=win64 ExpInterlockedPushEntrySList(ptr ptr) RtlInterlockedPushEntrySList
 @ stub HalExamineMBR
 @ stdcall -norelay InterlockedCompareExchange(ptr long long) NTOSKRNL_InterlockedCompareExchange
 @ stdcall -norelay InterlockedDecrement(ptr) NTOSKRNL_InterlockedDecrement
 @ stdcall -norelay InterlockedExchange(ptr long) NTOSKRNL_InterlockedExchange
 @ stdcall -norelay InterlockedExchangeAdd(ptr long) NTOSKRNL_InterlockedExchangeAdd
 @ stdcall -norelay InterlockedIncrement(ptr) NTOSKRNL_InterlockedIncrement
-@ stdcall -norelay InterlockedPopEntrySList(ptr) NTOSKRNL_InterlockedPopEntrySList
-@ stdcall -norelay InterlockedPushEntrySList(ptr ptr) NTOSKRNL_InterlockedPushEntrySList
+@ stdcall -arch=win32 -norelay InterlockedPopEntrySList(ptr) NTOSKRNL_InterlockedPopEntrySList
+@ stdcall -arch=win32 -norelay InterlockedPushEntrySList(ptr ptr) NTOSKRNL_InterlockedPushEntrySList
+@ stdcall -arch=win64 ExQueryDepthSList(ptr) RtlQueryDepthSList
 @ stub IoAssignDriveLetters
 @ stub IoReadPartitionTable
 @ stub IoSetPartitionInformation
@@ -608,7 +611,7 @@
 @ stub KeRemoveSystemServiceTable
 @ stdcall KeResetEvent(ptr)
 @ stub KeRestoreFloatingPointState
-@ stub KeRevertToUserAffinityThread
+@ stdcall KeRevertToUserAffinityThread()
 @ stub KeRundownQueue
 @ stub KeSaveFloatingPointState
 @ stub KeSaveStateForHibernate
@@ -748,7 +751,7 @@
 @ stdcall NtAllocateLocallyUniqueId(ptr)
 @ stdcall NtAllocateUuids(ptr ptr ptr ptr)
 @ stdcall NtAllocateVirtualMemory(long ptr long ptr long long)
-@ stub NtBuildNumber
+@ extern NtBuildNumber
 @ stdcall NtClose(long)
 @ stdcall NtConnectPort(ptr ptr ptr ptr ptr ptr ptr ptr)
 @ stdcall NtCreateEvent(ptr long ptr long long)
@@ -914,6 +917,7 @@
 @ stub PsProcessType
 @ stub PsReferenceImpersonationToken
 @ stub PsReferencePrimaryToken
+@ stdcall PsReferenceProcessFilePointer(ptr ptr)
 @ stdcall PsReleaseProcessExitSynchronization(ptr)
 @ stdcall PsRemoveCreateThreadNotifyRoutine(ptr)
 @ stdcall PsRemoveLoadImageNotifyRoutine(ptr)
@@ -922,7 +926,7 @@
 @ stub PsReturnProcessNonPagedPoolQuota
 @ stub PsReturnProcessPagedPoolQuota
 @ stub PsRevertThreadToSelf
-@ stub PsRevertToSelf
+@ stdcall PsRevertToSelf()
 @ stub PsSetContextThread
 @ stdcall PsSetCreateProcessNotifyRoutine(ptr long)
 @ stdcall PsSetCreateProcessNotifyRoutineEx(ptr long)

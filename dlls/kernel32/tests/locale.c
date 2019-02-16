@@ -3762,6 +3762,14 @@ static void test_EnumUILanguageA(void)
   SetLastError(ERROR_SUCCESS);
   ret = pEnumUILanguagesA(luilocale_proc2A, 0, 0);
   ok(ret, "Expected ret != 0, got %d, error %d\n", ret, GetLastError());
+  ok(enumCount == 1, "enumCount = %u\n", enumCount);
+
+  enumCount = 0;
+  SetLastError(ERROR_SUCCESS);
+  ret = pEnumUILanguagesA(luilocale_proc2A, MUI_LANGUAGE_ID, 0);
+  ok(ret || broken(!ret && GetLastError() == ERROR_INVALID_FLAGS), /* winxp */
+     "Expected ret != 0, got %d, error %d\n", ret, GetLastError());
+  if (ret) ok(enumCount == 1, "enumCount = %u\n", enumCount);
 
   SetLastError(ERROR_SUCCESS);
   ret = pEnumUILanguagesA(NULL, 0, 0);
@@ -5685,9 +5693,15 @@ static void test_NormalizeString(void)
     static const WCHAR part1_str10[] = {0x309B,0};
     static const WCHAR part1_nfkc10[] = {0x20,0x3099,0};
 
+    /* ANGSTROM SIGN */
+    static const WCHAR part1_str11[] = {0x212B,0};
+    static const WCHAR part1_nfc11[] = {0xC5,0};
+    static const WCHAR part1_nfd11[] = {'A',0x030A,0};
+
     struct test_data_normal {
         const WCHAR *str;
         const WCHAR *expected[4];
+        BOOL todo[4];
     };
     static const struct test_data_normal test_arr[] =
     {
@@ -5712,6 +5726,7 @@ static void test_NormalizeString(void)
         { part1_str8, { part1_str8, part1_nfd8, part1_str8, part1_nfd8 } },
         { part1_str9, { part1_str9, part1_str9, part1_nfkc9, part1_nfkc9 } },
         { part1_str10, { part1_str10, part1_str10, part1_nfkc10, part1_nfkc10 } },
+        { part1_str11, { part1_nfc11, part1_nfd11, part1_nfc11, part1_nfd11 } },
         { 0 }
     };
     const struct test_data_normal *ptest = test_arr;
@@ -5725,10 +5740,8 @@ static void test_NormalizeString(void)
         return;
     }
 
-    todo_wine {
-        dstlen = pNormalizeString( NormalizationD, ptest->str, -1, dst, 1 );
-        ok(GetLastError() == ERROR_INSUFFICIENT_BUFFER, "Should have failed with ERROR_INSUFFICIENT_BUFFER\n");
-    }
+    dstlen = pNormalizeString( NormalizationD, ptest->str, -1, dst, 1 );
+    ok(GetLastError() == ERROR_INSUFFICIENT_BUFFER, "Should have failed with ERROR_INSUFFICIENT_BUFFER\n");
 
     /*
      * For each string, first test passing -1 as srclen to NormalizeString,
@@ -5742,26 +5755,29 @@ static void test_NormalizeString(void)
 
         for (i = 0; i < 4; i++)
         {
-            todo_wine {
-                dstlen = pNormalizeString( norm_forms[i], ptest->str, -1, NULL, 0 );
-                if (dstlen)
-                {
-                    dstlen = pNormalizeString( norm_forms[i], ptest->str, -1, dst, dstlen );
-                    ok(dstlen == strlenW( ptest->expected[i] )+1, "Copied length differed: was %d, should be %d\n",
-                       dstlen, strlenW( ptest->expected[i] )+1);
-                    str_cmp = strncmpW( ptest->expected[i], dst, dstlen+1 );
-                    ok( str_cmp == 0, "test failed: returned value was %d\n", str_cmp );
-                }
+            dstlen = pNormalizeString( norm_forms[i], ptest->str, -1, NULL, 0 );
+            if (dstlen)
+            {
+                dstlen = pNormalizeString( norm_forms[i], ptest->str, -1, dst, dstlen );
+                ok(dstlen == strlenW( dst )+1, "%s:%d: Copied length differed: was %d, should be %d\n",
+                   wine_dbgstr_w(ptest->str), i, dstlen, strlenW( dst )+1);
+                str_cmp = strncmpW( ptest->expected[i], dst, dstlen+1 );
+todo_wine_if(ptest->todo[i])
+                ok( str_cmp == 0, "%s:%d: string incorrect got %s expect %s\n", wine_dbgstr_w(ptest->str), i,
+                    wine_dbgstr_w(dst), wine_dbgstr_w(ptest->expected[i]) );
+            }
 
-                dstlen = pNormalizeString( norm_forms[i], ptest->str, strlenW(ptest->str), NULL, 0 );
-                if (dstlen)
-                {
-                    dstlen = pNormalizeString( norm_forms[i], ptest->str, strlenW(ptest->str), dst, dstlen );
-                    ok(dstlen == strlenW( ptest->expected[i] ), "Copied length differed: was %d, should be %d\n",
-                       dstlen, strlenW( ptest->expected[i] ));
-                    str_cmp = strncmpW( ptest->expected[i], dst, dstlen );
-                    ok( str_cmp == 0, "test failed: returned value was %d\n", str_cmp );
-                }
+            dstlen = pNormalizeString( norm_forms[i], ptest->str, strlenW(ptest->str), NULL, 0 );
+            if (dstlen)
+            {
+                memset(dst, 0, sizeof(dst));
+                dstlen = pNormalizeString( norm_forms[i], ptest->str, strlenW(ptest->str), dst, dstlen );
+                ok(dstlen == strlenW( dst ), "%s:%d: Copied length differed: was %d, should be %d\n",
+                   wine_dbgstr_w(ptest->str), i, dstlen, strlenW( dst ));
+                str_cmp = strncmpW( ptest->expected[i], dst, dstlen );
+todo_wine_if(ptest->todo[i])
+                ok( str_cmp == 0, "%s:%d: string incorrect got %s expect %s\n", wine_dbgstr_w(ptest->str), i,
+                    wine_dbgstr_w(dst), wine_dbgstr_w(ptest->expected[i]) );
             }
         }
         ptest++;

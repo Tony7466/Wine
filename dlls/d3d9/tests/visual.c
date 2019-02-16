@@ -12419,9 +12419,15 @@ static void stream_test(void)
         goto done;
     }
 
-    /* set the default value because it isn't done in wine? */
+    hr = IDirect3DDevice9_GetStreamSourceFreq(device, 0, &ind);
+    ok(hr == D3D_OK && ind == 1, "IDirect3DDevice9_GetStreamSourceFreq unexpected result, "
+            "hr %#x, ind %#x.\n", hr, ind);
+    hr = IDirect3DDevice9_GetStreamSourceFreq(device, 1, &ind);
+    ok(hr == D3D_OK && ind == 1, "IDirect3DDevice9_GetStreamSourceFreq unexpected result, "
+            "hr %#x, ind %#x.\n", hr, ind);
+
     hr = IDirect3DDevice9_SetStreamSourceFreq(device, 1, 1);
-    ok(hr == D3D_OK, "IDirect3DDevice9_SetStreamSourceFreq failed with %08x\n", hr);
+    ok(hr == D3D_OK, "IDirect3DDevice9_SetStreamSourceFreq failed, hr %#x.\n", hr);
 
     /* check for D3DSTREAMSOURCE_INDEXEDDATA at stream0 */
     hr = IDirect3DDevice9_SetStreamSourceFreq(device, 0, (D3DSTREAMSOURCE_INSTANCEDATA | 1));
@@ -13607,6 +13613,7 @@ static void alphatest_test(void)
     D3DCOLOR color;
     ULONG refcount;
     D3DCAPS9 caps;
+    DWORD value;
     HWND window;
     HRESULT hr;
 
@@ -13738,10 +13745,32 @@ static void alphatest_test(void)
             hr = IDirect3DDevice9_EndScene(device);
             ok(SUCCEEDED(hr), "Failed to end scene, hr %#x.\n", hr);
             color = getPixelColor(device, 320, 240);
-            ok(color_match(color, testdata[i].color_greater, 1), "Alphatest failed. Got color 0x%08x, expected 0x%08x. alpha > ref, func %u\n",
-            color, testdata[i].color_greater, testdata[i].func);
+            ok(color_match(color, testdata[i].color_greater, 1),
+                    "Alphatest failed, color 0x%08x, expected 0x%08x, alpha > ref, func %u.\n",
+                    color, testdata[i].color_greater, testdata[i].func);
             hr = IDirect3DDevice9_Present(device, NULL, NULL, NULL, NULL);
-            ok(SUCCEEDED(hr), "IDirect3DDevice9_Present failed with 0x%08x\n", hr);
+            ok(hr == D3D_OK, "IDirect3DDevice9_Present failed, hr %#x.\n", hr);
+
+            hr = IDirect3DDevice9_Clear(device, 0, NULL, D3DCLEAR_TARGET, ALPHATEST_FAILED, 0.0f, 0);
+            ok(hr == D3D_OK, "IDirect3DDevice9_Clear failed, hr %#x.\n", hr);
+            hr = IDirect3DDevice9_SetRenderState(device, D3DRS_ALPHAREF, 0xff70);
+            ok(hr == D3D_OK, "IDirect3DDevice9_SetRenderState failed, hr %#x.\n", hr);
+            hr = IDirect3DDevice9_GetRenderState(device, D3DRS_ALPHAREF, &value);
+            ok(hr == D3D_OK, "IDirect3DDevice9_GetRenderState failed, hr %#x.\n", hr);
+            ok(value == 0xff70, "Unexpected D3DRS_ALPHAREF value %#x.\n", value);
+            hr = IDirect3DDevice9_BeginScene(device);
+            ok(hr == D3D_OK, "IDirect3DDevice9_BeginScene failed, hr %#x.\n", hr);
+            hr = IDirect3DDevice9_DrawPrimitiveUP(device, D3DPT_TRIANGLESTRIP, 2, quad, sizeof(*quad));
+            ok(hr == D3D_OK, "IDirect3DDevice9_DrawPrimitiveUP failed, hr %#x.\n", hr);
+            hr = IDirect3DDevice9_EndScene(device);
+            ok(hr == D3D_OK, "IDirect3DDevice9_EndScene failed, hr %#x.\n", hr);
+            color = getPixelColor(device, 320, 240);
+            ok(color_match(color, testdata[i].color_greater, 1),
+                    "Alphatest failed, color 0x%08x, expected 0x%08x, alpha > ref, func %u.\n",
+                    color, testdata[i].color_greater, testdata[i].func);
+            hr = IDirect3DDevice9_Present(device, NULL, NULL, NULL, NULL);
+            ok(hr == D3D_OK, "IDirect3DDevice9_Present failed, hr %#x.\n", hr);
+
         }
     }
 
@@ -20123,6 +20152,33 @@ static void test_multisample_mismatch(void)
     ok(SUCCEEDED(hr), "Failed to end scene, hr %#x.\n", hr);
     color = getPixelColor(device, 320, 240);
     ok(color_match(color, 0x000000ff, 1), "Got unexpected color 0x%08x.\n", color);
+    hr = IDirect3DDevice9_Present(device, NULL, NULL, NULL, NULL);
+    ok(SUCCEEDED(hr), "Failed to present, hr %#x.\n", hr);
+
+    /* Draw with both buffers single sampled but multisample quality set to 1 for depth buffer.
+     * The difference in multisample quality parameter is ignored. */
+    IDirect3DSurface9_Release(ds);
+    hr = IDirect3DDevice9_CreateDepthStencilSurface(device, 640, 480, D3DFMT_D24X8,
+            D3DMULTISAMPLE_NONE, 1, FALSE, &ds, NULL);
+    ok(SUCCEEDED(hr), "Failed to create depth/stencil, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_SetRenderTarget(device, 0, rt);
+    ok(SUCCEEDED(hr), "Failed to set render target, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_SetDepthStencilSurface(device, ds);
+    ok(SUCCEEDED(hr), "Failed to set depth stencil surface, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_Clear(device, 0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, 0x0000ff00, 0.5f, 0);
+    ok(SUCCEEDED(hr), "Failed to clear, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_SetRenderState(device, D3DRS_ZENABLE, D3DZB_TRUE);
+    ok(SUCCEEDED(hr), "Failed to set render state, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_BeginScene(device);
+    ok(SUCCEEDED(hr), "Failed to begin scene, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_DrawPrimitiveUP(device, D3DPT_TRIANGLESTRIP, 2, quad, sizeof(*quad));
+    ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_EndScene(device);
+    ok(SUCCEEDED(hr), "Failed to end scene, hr %#x.\n", hr);
+    color = getPixelColor(device, 62, 240);
+    ok(color_match(color, 0x000000ff, 1), "Got unexpected color 0x%08x.\n", color);
+    color = getPixelColor(device, 322, 240);
+    ok(color_match(color, 0x0000ff00, 1), "Got unexpected color 0x%08x.\n", color);
     hr = IDirect3DDevice9_Present(device, NULL, NULL, NULL, NULL);
     ok(SUCCEEDED(hr), "Failed to present, hr %#x.\n", hr);
 

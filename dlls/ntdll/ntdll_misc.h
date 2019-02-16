@@ -80,6 +80,8 @@ extern void virtual_init(void) DECLSPEC_HIDDEN;
 extern void virtual_init_threading(void) DECLSPEC_HIDDEN;
 extern void fill_cpu_info(void) DECLSPEC_HIDDEN;
 extern void heap_set_debug_flags( HANDLE handle ) DECLSPEC_HIDDEN;
+extern void init_user_process_params( SIZE_T data_size ) DECLSPEC_HIDDEN;
+extern void update_user_process_params( const UNICODE_STRING *image ) DECLSPEC_HIDDEN;
 
 /* server support */
 extern timeout_t server_start_time DECLSPEC_HIDDEN;
@@ -109,7 +111,6 @@ extern BOOL invoke_apc( const apc_call_t *call, apc_result_t *result ) DECLSPEC_
 
 /* module handling */
 extern LIST_ENTRY tls_links DECLSPEC_HIDDEN;
-extern NTSTATUS attach_dlls( CONTEXT *context, void **entry ) DECLSPEC_HIDDEN;
 extern FARPROC RELAY_GetProcAddress( HMODULE module, const IMAGE_EXPORT_DIRECTORY *exports,
                                      DWORD exp_size, FARPROC proc, DWORD ordinal, const WCHAR *user ) DECLSPEC_HIDDEN;
 extern FARPROC SNOOP_GetProcAddress( HMODULE hmod, const IMAGE_EXPORT_DIRECTORY *exports, DWORD exp_size,
@@ -216,7 +217,7 @@ enum loadorder
     LO_DEFAULT          /* nothing specified, use default strategy */
 };
 
-extern enum loadorder get_load_order( const WCHAR *app_name, const WCHAR *path ) DECLSPEC_HIDDEN;
+extern enum loadorder get_load_order( const WCHAR *app_name, const UNICODE_STRING *nt_name ) DECLSPEC_HIDDEN;
 
 struct debug_info
 {
@@ -247,11 +248,13 @@ static inline struct ntdll_thread_data *ntdll_get_thread_data(void)
 
 extern mode_t FILE_umask DECLSPEC_HIDDEN;
 extern HANDLE keyed_event DECLSPEC_HIDDEN;
+extern SYSTEM_CPU_INFORMATION cpu_info DECLSPEC_HIDDEN;
 
 #define HASH_STRING_ALGORITHM_DEFAULT  0
 #define HASH_STRING_ALGORITHM_X65599   1
 #define HASH_STRING_ALGORITHM_INVALID  0xffffffff
 
 NTSTATUS WINAPI RtlHashUnicodeString(PCUNICODE_STRING,BOOLEAN,ULONG,ULONG*);
+void     WINAPI LdrInitializeThunk(CONTEXT*,void**,ULONG_PTR,ULONG_PTR);
 
 #endif

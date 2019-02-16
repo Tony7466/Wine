@@ -1389,6 +1389,9 @@ static void draw_quad_vs_(unsigned int line, struct d3d10core_test_context *cont
         ok_(__FILE__, line)(SUCCEEDED(hr), "Failed to create input layout, hr %#x.\n", hr);
     }
 
+    if (!context->vb)
+        context->vb = create_buffer(device, D3D10_BIND_VERTEX_BUFFER, sizeof(quad), quad);
+
     if (context->vs_code != vs_code)
     {
         if (context->vs)
@@ -1399,9 +1402,6 @@ static void draw_quad_vs_(unsigned int line, struct d3d10core_test_context *cont
 
         context->vs_code = vs_code;
     }
-
-    if (!context->vb)
-        context->vb = create_buffer(device, D3D10_BIND_VERTEX_BUFFER, sizeof(quad), quad);
 
     ID3D10Device_IASetInputLayout(context->device, context->input_layout);
     ID3D10Device_IASetPrimitiveTopology(context->device, D3D10_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
@@ -1648,7 +1648,7 @@ static void test_create_texture1d(void)
         desc.Format = DXGI_FORMAT_R32G32B32A32_TYPELESS;
         desc.BindFlags = D3D10_BIND_SHADER_RESOURCE;
         desc.MiscFlags = 0;
-        hr = ID3D10Device_CreateTexture1D(device, &desc, NULL, (ID3D10Texture1D **)&texture);
+        hr = ID3D10Device_CreateTexture1D(device, &desc, NULL, &texture);
         ok(hr == (i ? S_OK : E_INVALIDARG), "Test %u: Got unexpected hr %#x.\n", i, hr);
         if (SUCCEEDED(hr))
             ID3D10Texture1D_Release(texture);
@@ -1979,7 +1979,7 @@ static void test_create_texture2d(void)
         desc.Format = tests[i].format;
         desc.BindFlags = tests[i].bind_flags;
         desc.MiscFlags = tests[i].misc_flags;
-        hr = ID3D10Device_CreateTexture2D(device, &desc, NULL, (ID3D10Texture2D **)&texture);
+        hr = ID3D10Device_CreateTexture2D(device, &desc, NULL, &texture);
 
         todo_wine_if(tests[i].todo)
         ok(hr == (tests[i].succeeds ? S_OK : E_INVALIDARG),
@@ -2223,7 +2223,7 @@ static void test_create_texture3d(void)
     {
         desc.Format = tests[i].format;
         desc.BindFlags = tests[i].bind_flags;
-        hr = ID3D10Device_CreateTexture3D(device, &desc, NULL, (ID3D10Texture3D **)&texture);
+        hr = ID3D10Device_CreateTexture3D(device, &desc, NULL, &texture);
 
         todo_wine_if(tests[i].todo)
         ok(hr == (tests[i].succeeds ? S_OK : E_INVALIDARG), "Test %u: Got unexpected hr %#x.\n", i, hr);
@@ -7634,8 +7634,8 @@ static void test_cube_maps(void)
         {
             for (j = 0; j < ARRAY_SIZE(data); ++j)
                 data[j] = sub_resource_idx;
-            ID3D10Device_UpdateSubresource(device, (ID3D10Resource *)texture, sub_resource_idx, NULL,
-                    data, texture_desc.Width * sizeof(*data), 0);
+            ID3D10Device_UpdateSubresource(device, texture, sub_resource_idx, NULL, data,
+                    texture_desc.Width * sizeof(*data), 0);
         }
 
         expected_result.y = expected_result.z = 0.0f;
@@ -10338,10 +10338,6 @@ static void test_cb_relative_addressing(void)
     DWORD color;
     HRESULT hr;
 
-    static const D3D10_INPUT_ELEMENT_DESC layout_desc[] =
-    {
-        {"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0,  0, D3D10_INPUT_PER_VERTEX_DATA, 0},
-    };
     static const DWORD vs_code[] =
     {
 #if 0
@@ -10450,10 +10446,6 @@ float4 main(const ps_in v) : SV_TARGET
         return;
 
     device = test_context.device;
-
-    hr = ID3D10Device_CreateInputLayout(device, layout_desc, ARRAY_SIZE(layout_desc),
-            vs_code, sizeof(vs_code), &test_context.input_layout);
-    ok(SUCCEEDED(hr), "Failed to create input layout, hr %#x.\n", hr);
 
     colors_cb = create_buffer(device, D3D10_BIND_CONSTANT_BUFFER, sizeof(colors), &colors);
     index_cb = create_buffer(device, D3D10_BIND_CONSTANT_BUFFER, sizeof(index), NULL);

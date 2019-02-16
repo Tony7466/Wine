@@ -973,7 +973,7 @@
 @ stub _ismbbpunct(long)
 @ stub _ismbbpunct_l
 @ cdecl _ismbbtrail(long)
-@ stub _ismbbtrail_l
+@ cdecl _ismbbtrail_l(long ptr)
 @ cdecl _ismbcalnum(long)
 @ stub _ismbcalnum_l
 @ cdecl _ismbcalpha(long)
@@ -987,13 +987,13 @@
 @ cdecl _ismbckata(long)
 @ stub _ismbckata_l
 @ cdecl _ismbcl0(long)
-@ stub _ismbcl0_l
-@ stub _ismbcl1(long)
-@ stub _ismbcl1_l
-@ stub _ismbcl2(long)
-@ stub _ismbcl2_l
+@ cdecl _ismbcl0_l(long ptr)
+@ cdecl _ismbcl1(long)
+@ cdecl _ismbcl1_l(long ptr)
+@ cdecl _ismbcl2(long)
+@ cdecl _ismbcl2_l(long ptr)
 @ cdecl _ismbclegal(long)
-@ stub _ismbclegal_l
+@ cdecl _ismbclegal_l(long ptr)
 @ cdecl _ismbclower(long)
 @ stub _ismbclower_l
 @ cdecl _ismbcprint(long)

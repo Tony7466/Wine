@@ -60,6 +60,7 @@ WINE_DECLARE_DEBUG_CHANNEL(plugplay);
 
 BOOLEAN KdDebuggerEnabled = FALSE;
 ULONG InitSafeBootMode = 0;
+USHORT NtBuildNumber = 0;
 
 extern LONG CALLBACK vectored_handler( EXCEPTION_POINTERS *ptrs );
 
@@ -326,6 +327,7 @@ static NTSTATUS dispatch_create( const irp_params_t *params, void *in_buff, ULON
     irpsp = IoGetNextIrpStackLocation( irp );
     irpsp->MajorFunction = IRP_MJ_CREATE;
     irpsp->DeviceObject = device;
+    irpsp->FileObject = file;
     irpsp->Parameters.Create.SecurityContext = NULL;  /* FIXME */
     irpsp->Parameters.Create.Options = params->create.options;
     irpsp->Parameters.Create.ShareAccess = params->create.sharing;
@@ -370,6 +372,7 @@ static NTSTATUS dispatch_close( const irp_params_t *params, void *in_buff, ULONG
     irpsp = IoGetNextIrpStackLocation( irp );
     irpsp->MajorFunction = IRP_MJ_CLOSE;
     irpsp->DeviceObject = device;
+    irpsp->FileObject = file;
 
     irp->Tail.Overlay.OriginalFileObject = file;
     irp->RequestorMode = UserMode;
@@ -417,6 +420,7 @@ static NTSTATUS dispatch_read( const irp_params_t *params, void *in_buff, ULONG 
     irp->RequestorMode = UserMode;
 
     irpsp = IoGetNextIrpStackLocation( irp );
+    irpsp->FileObject = file;
     irpsp->Parameters.Read.Key = params->read.key;
 
     irp->Flags |= IRP_READ_OPERATION;
@@ -453,6 +457,7 @@ static NTSTATUS dispatch_write( const irp_params_t *params, void *in_buff, ULONG
     irp->RequestorMode = UserMode;
 
     irpsp = IoGetNextIrpStackLocation( irp );
+    irpsp->FileObject = file;
     irpsp->Parameters.Write.Key = params->write.key;
 
     irp->Flags |= IRP_WRITE_OPERATION;
@@ -467,6 +472,7 @@ static NTSTATUS dispatch_flush( const irp_params_t *params, void *in_buff, ULONG
                                 ULONG out_size, HANDLE irp_handle )
 {
     IRP *irp;
+    IO_STACK_LOCATION *irpsp;
     DEVICE_OBJECT *device;
     FILE_OBJECT *file = wine_server_get_ptr( params->flush.file );
 
@@ -483,6 +489,9 @@ static NTSTATUS dispatch_flush( const irp_params_t *params, void *in_buff, ULONG
     irp->Tail.Overlay.OriginalFileObject = file;
     irp->RequestorMode = UserMode;
 
+    irpsp = IoGetNextIrpStackLocation( irp );
+    irpsp->FileObject = file;
+
     dispatch_irp( device, irp, irp_handle );
 
     HeapFree( GetProcessHeap(), 0, in_buff );
@@ -493,6 +502,7 @@ static NTSTATUS dispatch_flush( const irp_params_t *params, void *in_buff, ULONG
 static NTSTATUS dispatch_ioctl( const irp_params_t *params, void *in_buff, ULONG in_size,
                                 ULONG out_size, HANDLE irp_handle )
 {
+    IO_STACK_LOCATION *irpsp;
     IRP *irp;
     void *out_buff = NULL;
     void *to_free = NULL;
@@ -539,6 +549,9 @@ static NTSTATUS dispatch_ioctl( const irp_params_t *params, void *in_buff, ULONG
 
     if (out_size && (params->ioctl.code & 3) != METHOD_BUFFERED)
         HeapReAlloc( GetProcessHeap(), HEAP_REALLOC_IN_PLACE_ONLY, in_buff, in_size );
+
+    irpsp = IoGetNextIrpStackLocation( irp );
+    irpsp->FileObject = file;
 
     irp->Tail.Overlay.OriginalFileObject = file;
     irp->RequestorMode = UserMode;
@@ -1977,63 +1990,6 @@ LONG WINAPI NTOSKRNL_InterlockedIncrement( LONG volatile *dest )
 
 
 /***********************************************************************
- *           InterlockedPopEntrySList   (NTOSKRNL.EXE.@)
- */
-#ifdef DEFINE_FASTCALL1_ENTRYPOINT
-DEFINE_FASTCALL1_ENTRYPOINT( NTOSKRNL_InterlockedPopEntrySList )
-PSLIST_ENTRY WINAPI DECLSPEC_HIDDEN __regs_NTOSKRNL_InterlockedPopEntrySList( PSLIST_HEADER list )
-#else
-PSLIST_ENTRY WINAPI NTOSKRNL_InterlockedPopEntrySList( PSLIST_HEADER list )
-#endif
-{
-    return InterlockedPopEntrySList( list );
-}
-
-
-/***********************************************************************
- *           ExInterlockedPopEntrySList   (NTOSKRNL.EXE.@)
- */
-#ifdef DEFINE_FASTCALL2_ENTRYPOINT
-DEFINE_FASTCALL2_ENTRYPOINT( NTOSKRNL_ExInterlockedPopEntrySList )
-PSLIST_ENTRY WINAPI __regs_NTOSKRNL_ExInterlockedPopEntrySList( PSLIST_HEADER list, PKSPIN_LOCK lock )
-#else
-PSLIST_ENTRY WINAPI NTOSKRNL_ExInterlockedPopEntrySList( PSLIST_HEADER list, PKSPIN_LOCK lock )
-#endif
-{
-    return InterlockedPopEntrySList( list );
-}
-
-
-/***********************************************************************
- *           InterlockedPushEntrySList   (NTOSKRNL.EXE.@)
- */
-#ifdef DEFINE_FASTCALL2_ENTRYPOINT
-DEFINE_FASTCALL2_ENTRYPOINT( NTOSKRNL_InterlockedPushEntrySList )
-PSLIST_ENTRY WINAPI DECLSPEC_HIDDEN __regs_NTOSKRNL_InterlockedPushEntrySList( PSLIST_HEADER list,
-                                                                               PSLIST_ENTRY entry )
-#else
-PSLIST_ENTRY WINAPI NTOSKRNL_InterlockedPushEntrySList( PSLIST_HEADER list, PSLIST_ENTRY entry )
-#endif
-{
-    return InterlockedPushEntrySList( list, entry );
-}
-
-/***********************************************************************
- *           ExInterlockedPushEntrySList   (NTOSKRNL.EXE.@)
- */
-#ifdef DEFINE_FASTCALL3_ENTRYPOINT
-DEFINE_FASTCALL3_ENTRYPOINT( NTOSKRNL_ExInterlockedPushEntrySList )
-PSLIST_ENTRY WINAPI DECLSPEC_HIDDEN __regs_NTOSKRNL_ExInterlockedPushEntrySList( PSLIST_HEADER list,
-                                                                               PSLIST_ENTRY entry,
-                                                                               PKSPIN_LOCK lock )
-#else
-PSLIST_ENTRY WINAPI NTOSKRNL_ExInterlockedPushEntrySList( PSLIST_HEADER list, PSLIST_ENTRY entry, PKSPIN_LOCK lock )
-#endif
-{
-    return InterlockedPushEntrySList( list, entry );
-}
-
-/***********************************************************************
  *           ExAllocatePool   (NTOSKRNL.EXE.@)
  */
 PVOID WINAPI ExAllocatePool( POOL_TYPE type, SIZE_T size )
@@ -2089,7 +2045,12 @@ NTSTATUS WINAPI ExCreateCallback(PCALLBACK_OBJECT *obj, POBJECT_ATTRIBUTES attr,
  */
 void WINAPI ExDeleteNPagedLookasideList( PNPAGED_LOOKASIDE_LIST lookaside )
 {
-    FIXME("(%p) stub\n", lookaside);
+    void *entry;
+
+    TRACE("(%p)\n", lookaside);
+
+    while ((entry = RtlInterlockedPopEntrySList(&lookaside->L.u.ListHead)))
+        lookaside->L.u5.FreeEx(entry, (LOOKASIDE_LIST_EX*)lookaside);
 }
 
 
@@ -2134,15 +2095,32 @@ NTSTATUS WINAPI ExInitializeResourceLite(PERESOURCE Resource)
 /***********************************************************************
  *           ExInitializeNPagedLookasideList   (NTOSKRNL.EXE.@)
  */
-void WINAPI ExInitializeNPagedLookasideList(PNPAGED_LOOKASIDE_LIST Lookaside,
-                                            PALLOCATE_FUNCTION Allocate,
-                                            PFREE_FUNCTION Free,
-                                            ULONG Flags,
-                                            SIZE_T Size,
-                                            ULONG Tag,
-                                            USHORT Depth)
+void WINAPI ExInitializeNPagedLookasideList(PNPAGED_LOOKASIDE_LIST lookaside,
+                                            PALLOCATE_FUNCTION allocate,
+                                            PFREE_FUNCTION free,
+                                            ULONG flags,
+                                            SIZE_T size,
+                                            ULONG tag,
+                                            USHORT depth)
 {
-    FIXME( "stub: %p, %p, %p, %u, %lu, %u, %u\n", Lookaside, Allocate, Free, Flags, Size, Tag, Depth );
+    TRACE( "%p, %p, %p, %u, %lu, %u, %u\n", lookaside, allocate, free, flags, size, tag, depth );
+
+    RtlInitializeSListHead( &lookaside->L.u.ListHead );
+    lookaside->L.Depth                 = 4;
+    lookaside->L.MaximumDepth          = 256;
+    lookaside->L.TotalAllocates        = 0;
+    lookaside->L.u2.AllocateMisses     = 0;
+    lookaside->L.TotalFrees            = 0;
+    lookaside->L.u3.FreeMisses         = 0;
+    lookaside->L.Type                  = NonPagedPool | flags;
+    lookaside->L.Tag                   = tag;
+    lookaside->L.Size                  = size;
+    lookaside->L.u4.Allocate           = allocate ? allocate : ExAllocatePoolWithTag;
+    lookaside->L.u5.Free               = free ? free : ExFreePool;
+    lookaside->L.LastTotalAllocates    = 0;
+    lookaside->L.u6.LastAllocateMisses = 0;
+
+    /* FIXME: insert in global list of lookadside lists */
 }
 
 /***********************************************************************
@@ -2298,6 +2276,16 @@ VOID WINAPI KeSetSystemAffinityThread(KAFFINITY Affinity)
 {
     FIXME("(%lx) stub\n", Affinity);
 }
+
+
+/***********************************************************************
+ *           KeRevertToUserAffinityThread   (NTOSKRNL.EXE.@)
+ */
+void WINAPI KeRevertToUserAffinityThread(void)
+{
+    FIXME("() stub\n");
+}
+
 
 /***********************************************************************
  *           IoRegisterFileSystem   (NTOSKRNL.EXE.@)
@@ -2742,6 +2730,15 @@ NTSTATUS WINAPI PsImpersonateClient(PETHREAD Thread, PACCESS_TOKEN Token, BOOLEA
 
 
 /***********************************************************************
+ *           PsRevertToSelf   (NTOSKRNL.EXE.@)
+ */
+void WINAPI PsRevertToSelf(void)
+{
+    FIXME("\n");
+}
+
+
+/***********************************************************************
  *           PsSetCreateProcessNotifyRoutine   (NTOSKRNL.EXE.@)
  */
 NTSTATUS WINAPI PsSetCreateProcessNotifyRoutine( PCREATE_PROCESS_NOTIFY_ROUTINE callback, BOOLEAN remove )
@@ -2789,6 +2786,16 @@ NTSTATUS WINAPI PsRemoveCreateThreadNotifyRoutine( PCREATE_THREAD_NOTIFY_ROUTINE
     FIXME( "stub: %p\n", NotifyRoutine );
     return STATUS_SUCCESS;
  }
+
+
+/***********************************************************************
+ *           PsReferenceProcessFilePointer  (NTOSKRNL.EXE.@)
+ */
+NTSTATUS WINAPI PsReferenceProcessFilePointer(PEPROCESS process, FILE_OBJECT **file)
+{
+    FIXME("%p %p\n", process, file);
+    return STATUS_NOT_IMPLEMENTED;
+}
 
 
 /***********************************************************************
@@ -2956,6 +2963,7 @@ BOOL WINAPI DllMain( HINSTANCE inst, DWORD reason, LPVOID reserved )
         handler = RtlAddVectoredExceptionHandler( TRUE, vectored_handler );
 #endif
         KeQueryTickCount( &count );  /* initialize the global KeTickCount */
+        NtBuildNumber = NtCurrentTeb()->Peb->OSBuildNumber;
         break;
     case DLL_PROCESS_DETACH:
         if (reserved) break;
