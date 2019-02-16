@@ -1,3 +1,14 @@
+wine-development (4.2-1) UNRELEASED; urgency=medium
+
+  * New upstream release 4.2, released Feb 15, 2019.
+    - Unicode string normalization support.
+    - Support for ECC cryptographic keys.
+    - Support for mixing 32/64-bit dlls in the load path.
+    - Futex-based implementations for more synchronization primitives.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 16 Feb 2019 00:17:09 +0000
+
 wine-development (4.1-2) unstable; urgency=medium
 
   * Fix build failure on arm64.
