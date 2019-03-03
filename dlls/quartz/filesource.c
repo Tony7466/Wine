@@ -37,6 +37,19 @@ WINE_DEFAULT_DEBUG_CHANNEL(quartz);
 
 static const WCHAR wszOutputPinName[] = { 'O','u','t','p','u','t',0 };
 
+static const AM_MEDIA_TYPE default_mt =
+{
+    {0xe436eb83,0x524f,0x11ce,{0x9f,0x53,0x00,0x20,0xaf,0x0b,0xa7,0x70}},   /* MEDIATYPE_Stream */
+    {0,0,0,{0,0,0,0,0,0,0,0}},
+    TRUE,
+    FALSE,
+    1,
+    {0,0,0,{0,0,0,0,0,0,0,0}},
+    NULL,
+    0,
+    NULL
+};
+
 typedef struct AsyncReader
 {
     BaseFilter filter;
@@ -618,19 +631,11 @@ static HRESULT WINAPI FileSource_Load(IFileSourceFilter * iface, LPCOLESTR pszFi
         This->pmt = CoTaskMemAlloc(sizeof(AM_MEDIA_TYPE));
         if (!pmt)
         {
-            This->pmt->bFixedSizeSamples = TRUE;
-            This->pmt->bTemporalCompression = FALSE;
-            This->pmt->cbFormat = 0;
-            This->pmt->pbFormat = NULL;
-            This->pmt->pUnk = NULL;
-            This->pmt->lSampleSize = 0;
-            This->pmt->formattype = FORMAT_None;
-            hr = GetClassMediaFile(pReader, pszFileName, &This->pmt->majortype, &This->pmt->subtype, NULL);
-            if (FAILED(hr))
+            CopyMediaType(This->pmt, &default_mt);
+            if (FAILED(GetClassMediaFile(pReader, pszFileName, &This->pmt->majortype, &This->pmt->subtype, NULL)))
             {
                 This->pmt->majortype = MEDIATYPE_Stream;
                 This->pmt->subtype = MEDIASUBTYPE_NULL;
-                hr = S_OK;
             }
         }
         else
@@ -756,24 +761,27 @@ static HRESULT WINAPI FileAsyncReaderPin_CheckMediaType(BasePin *pin, const AM_M
 {
     AM_MEDIA_TYPE *pmt_filter = impl_from_IBaseFilter(pin->pinInfo.pFilter)->pmt;
 
-    FIXME("(%p, %p)\n", pin, pmt);
-
     if (IsEqualGUID(&pmt->majortype, &pmt_filter->majortype) &&
-        IsEqualGUID(&pmt->subtype, &pmt_filter->subtype) &&
-        IsEqualGUID(&pmt->formattype, &FORMAT_None))
+        IsEqualGUID(&pmt->subtype, &pmt_filter->subtype))
         return S_OK;
 
     return S_FALSE;
 }
 
-static HRESULT WINAPI FileAsyncReaderPin_GetMediaType(BasePin *iface, int iPosition, AM_MEDIA_TYPE *pmt)
+static HRESULT WINAPI FileAsyncReaderPin_GetMediaType(BasePin *iface, int index, AM_MEDIA_TYPE *mt)
 {
     FileAsyncReader *This = impl_from_BasePin(iface);
-    if (iPosition < 0)
+    AsyncReader *filter = impl_from_IBaseFilter(This->pin.pin.pinInfo.pFilter);
+
+    if (index < 0)
         return E_INVALIDARG;
-    if (iPosition > 0)
+    else if (index > 1)
         return VFW_S_NO_MORE_ITEMS;
-    CopyMediaType(pmt, impl_from_IBaseFilter(This->pin.pin.pinInfo.pFilter)->pmt);
+
+    if (index == 0)
+        CopyMediaType(mt, filter->pmt);
+    else if (index == 1)
+        CopyMediaType(mt, &default_mt);
     return S_OK;
 }
 
@@ -1214,7 +1222,6 @@ static HRESULT WINAPI FileAsyncReader_WaitForNext(IAsyncReader * iface, DWORD dw
     if (SUCCEEDED(hr))
     {
         REFERENCE_TIME rtStart, rtStop;
-        REFERENCE_TIME rtSampleStart, rtSampleStop;
         DATAREQUEST *pDataRq = This->sample_list + buffer;
         DWORD dwBytes = 0;
 
@@ -1239,16 +1246,7 @@ static HRESULT WINAPI FileAsyncReader_WaitForNext(IAsyncReader * iface, DWORD dw
         rtStart = MEDIATIME_FROM_BYTES(rtStart);
         rtStop = rtStart + MEDIATIME_FROM_BYTES(dwBytes);
 
-        IMediaSample_GetTime(pDataRq->pSample, &rtSampleStart, &rtSampleStop);
-        assert(rtStart == rtSampleStart);
-        assert(rtStop <= rtSampleStop);
-
         IMediaSample_SetTime(pDataRq->pSample, &rtStart, &rtStop);
-        assert(rtStart == rtSampleStart);
-        if (hr == S_OK)
-            assert(rtStop == rtSampleStop);
-        else
-            assert(rtStop == rtStart);
 
         This->sample_list[buffer].pSample = NULL;
         assert(This->oldest_sample < This->samples);
@@ -1275,64 +1273,81 @@ static HRESULT WINAPI FileAsyncReader_WaitForNext(IAsyncReader * iface, DWORD dw
     return hr;
 }
 
-static HRESULT WINAPI FileAsyncReader_SyncRead(IAsyncReader * iface, LONGLONG llPosition, LONG lLength, BYTE * pBuffer);
-
-static HRESULT WINAPI FileAsyncReader_SyncReadAligned(IAsyncReader * iface, IMediaSample * pSample)
+static BOOL sync_read(HANDLE file, LONGLONG offset, LONG length, BYTE *buffer, DWORD *read_len)
 {
-    BYTE * pBuffer;
-    REFERENCE_TIME tStart;
-    REFERENCE_TIME tStop;
-    HRESULT hr;
+    OVERLAPPED ovl = {0};
+    BOOL ret;
 
-    TRACE("(%p)\n", pSample);
+    ovl.hEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
+    ovl.u.s.Offset = (DWORD)offset;
+    ovl.u.s.OffsetHigh = offset >> 32;
 
-    hr = IMediaSample_GetTime(pSample, &tStart, &tStop);
+    *read_len = 0;
 
-    if (SUCCEEDED(hr))
-        hr = IMediaSample_GetPointer(pSample, &pBuffer);
+    ret = ReadFile(file, buffer, length, NULL, &ovl);
+    if (ret || GetLastError() == ERROR_IO_PENDING)
+        ret = GetOverlappedResult(file, &ovl, read_len, TRUE);
 
-    if (SUCCEEDED(hr))
-        hr = FileAsyncReader_SyncRead(iface, 
-            BYTES_FROM_MEDIATIME(tStart),
-            (LONG) BYTES_FROM_MEDIATIME(tStop - tStart),
-            pBuffer);
+    TRACE("Returning %u bytes.\n", *read_len);
 
-    TRACE("-- %x\n", hr);
-    return hr;
+    CloseHandle(ovl.hEvent);
+    return ret;
 }
 
-static HRESULT WINAPI FileAsyncReader_SyncRead(IAsyncReader * iface, LONGLONG llPosition, LONG lLength, BYTE * pBuffer)
+static HRESULT WINAPI FileAsyncReader_SyncReadAligned(IAsyncReader *iface, IMediaSample *sample)
 {
-    OVERLAPPED ovl;
-    HRESULT hr = S_OK;
-    FileAsyncReader *This = impl_from_IAsyncReader(iface);
+    FileAsyncReader *filter = impl_from_IAsyncReader(iface);
+    REFERENCE_TIME start_time, end_time;
+    DWORD read_len;
+    BYTE *buffer;
+    LONG length;
+    HRESULT hr;
+    BOOL ret;
 
-    TRACE("%p->(%s, %d, %p)\n", This, wine_dbgstr_longlong(llPosition), lLength, pBuffer);
+    TRACE("filter %p, sample %p.\n", filter, sample);
 
-    ZeroMemory(&ovl, sizeof(ovl));
+    hr = IMediaSample_GetTime(sample, &start_time, &end_time);
 
-    ovl.hEvent = CreateEventW(NULL, 0, 0, NULL);
-    /* NOTE: llPosition is the actual byte position to start reading from */
-    ovl.u.s.Offset = (DWORD) llPosition;
-    ovl.u.s.OffsetHigh = (DWORD) (llPosition >> (sizeof(DWORD) * 8));
-
-    if (!ReadFile(This->hFile, pBuffer, lLength, NULL, &ovl))
-        hr = HRESULT_FROM_WIN32(GetLastError());
-
-    if (hr == HRESULT_FROM_WIN32(ERROR_IO_PENDING))
-        hr = S_OK;
+    if (SUCCEEDED(hr))
+        hr = IMediaSample_GetPointer(sample, &buffer);
 
     if (SUCCEEDED(hr))
     {
-        DWORD dwBytesRead;
-
-        if (!GetOverlappedResult(This->hFile, &ovl, &dwBytesRead, TRUE))
+        length = BYTES_FROM_MEDIATIME(end_time - start_time);
+        ret = sync_read(filter->hFile, BYTES_FROM_MEDIATIME(start_time), length, buffer, &read_len);
+        if (ret)
+            hr = (read_len == length) ? S_OK : S_FALSE;
+        else if (GetLastError() == ERROR_HANDLE_EOF)
+            hr = S_OK;
+        else
             hr = HRESULT_FROM_WIN32(GetLastError());
     }
 
-    CloseHandle(ovl.hEvent);
+    if (SUCCEEDED(hr))
+        IMediaSample_SetActualDataLength(sample, read_len);
 
-    TRACE("-- %x\n", hr);
+    return hr;
+}
+
+static HRESULT WINAPI FileAsyncReader_SyncRead(IAsyncReader *iface,
+        LONGLONG offset, LONG length, BYTE *buffer)
+{
+    FileAsyncReader *filter = impl_from_IAsyncReader(iface);
+    DWORD read_len;
+    HRESULT hr;
+    BOOL ret;
+
+    TRACE("filter %p, offset %s, length %d, buffer %p.\n",
+            filter, wine_dbgstr_longlong(offset), length, buffer);
+
+    ret = sync_read(filter->hFile, offset, length, buffer, &read_len);
+    if (ret)
+        hr = (read_len == length) ? S_OK : S_FALSE;
+    else if (GetLastError() == ERROR_HANDLE_EOF)
+        hr = S_FALSE;
+    else
+        hr = HRESULT_FROM_WIN32(GetLastError());
+
     return hr;
 }
 

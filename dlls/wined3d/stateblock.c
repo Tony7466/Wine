@@ -214,11 +214,11 @@ static void stateblock_savedstates_set_all(struct wined3d_saved_states *states, 
     states->streamSource = 0xffff;
     states->streamFreq = 0xffff;
     states->textures = 0xfffff;
-    stateblock_set_bits(states->transform, HIGHEST_TRANSFORMSTATE + 1);
+    stateblock_set_bits(states->transform, WINED3D_HIGHEST_TRANSFORM_STATE + 1);
     stateblock_set_bits(states->renderState, WINEHIGHEST_RENDER_STATE + 1);
-    for (i = 0; i < MAX_TEXTURES; ++i) states->textureState[i] = 0x3ffff;
-    for (i = 0; i < MAX_COMBINED_SAMPLERS; ++i) states->samplerState[i] = 0x3ffe;
-    states->clipplane = (1u << MAX_CLIP_DISTANCES) - 1;
+    for (i = 0; i < WINED3D_MAX_TEXTURES; ++i) states->textureState[i] = 0x3ffff;
+    for (i = 0; i < WINED3D_MAX_COMBINED_SAMPLERS; ++i) states->samplerState[i] = 0x3ffe;
+    states->clipplane = (1u << WINED3D_MAX_CLIP_DISTANCES) - 1;
     states->pixelShaderConstantsB = 0xffff;
     states->pixelShaderConstantsI = 0xffff;
     states->vertexShaderConstantsB = 0xffff;
@@ -246,10 +246,10 @@ static void stateblock_savedstates_set_pixel(struct wined3d_saved_states *states
 
     for (i = 0; i < ARRAY_SIZE(pixel_states_texture); ++i)
         texture_mask |= 1u << pixel_states_texture[i];
-    for (i = 0; i < MAX_TEXTURES; ++i) states->textureState[i] = texture_mask;
+    for (i = 0; i < WINED3D_MAX_TEXTURES; ++i) states->textureState[i] = texture_mask;
     for (i = 0; i < ARRAY_SIZE(pixel_states_sampler); ++i)
         sampler_mask |= 1u << pixel_states_sampler[i];
-    for (i = 0; i < MAX_COMBINED_SAMPLERS; ++i) states->samplerState[i] = sampler_mask;
+    for (i = 0; i < WINED3D_MAX_COMBINED_SAMPLERS; ++i) states->samplerState[i] = sampler_mask;
     states->pixelShaderConstantsB = 0xffff;
     states->pixelShaderConstantsI = 0xffff;
 
@@ -273,10 +273,10 @@ static void stateblock_savedstates_set_vertex(struct wined3d_saved_states *state
 
     for (i = 0; i < ARRAY_SIZE(vertex_states_texture); ++i)
         texture_mask |= 1u << vertex_states_texture[i];
-    for (i = 0; i < MAX_TEXTURES; ++i) states->textureState[i] = texture_mask;
+    for (i = 0; i < WINED3D_MAX_TEXTURES; ++i) states->textureState[i] = texture_mask;
     for (i = 0; i < ARRAY_SIZE(vertex_states_sampler); ++i)
         sampler_mask |= 1u << vertex_states_sampler[i];
-    for (i = 0; i < MAX_COMBINED_SAMPLERS; ++i) states->samplerState[i] = sampler_mask;
+    for (i = 0; i < WINED3D_MAX_COMBINED_SAMPLERS; ++i) states->samplerState[i] = sampler_mask;
     states->vertexShaderConstantsB = 0xffff;
     states->vertexShaderConstantsI = 0xffff;
 
@@ -300,7 +300,7 @@ void stateblock_init_contained_states(struct wined3d_stateblock *stateblock)
         }
     }
 
-    for (i = 0; i <= HIGHEST_TRANSFORMSTATE >> 5; ++i)
+    for (i = 0; i <= WINED3D_HIGHEST_TRANSFORM_STATE >> 5; ++i)
     {
         DWORD map = stateblock->changed.transform[i];
         for (j = 0; map; map >>= 1, ++j)
@@ -366,7 +366,7 @@ void stateblock_init_contained_states(struct wined3d_stateblock *stateblock)
         }
     }
 
-    for (i = 0; i < MAX_TEXTURES; ++i)
+    for (i = 0; i < WINED3D_MAX_TEXTURES; ++i)
     {
         DWORD map = stateblock->changed.textureState[i];
 
@@ -380,7 +380,7 @@ void stateblock_init_contained_states(struct wined3d_stateblock *stateblock)
         }
     }
 
-    for (i = 0; i < MAX_COMBINED_SAMPLERS; ++i)
+    for (i = 0; i < WINED3D_MAX_COMBINED_SAMPLERS; ++i)
     {
         DWORD map = stateblock->changed.samplerState[i];
 
@@ -439,7 +439,7 @@ void state_unbind_resources(struct wined3d_state *state)
         wined3d_vertex_declaration_decref(decl);
     }
 
-    for (i = 0; i < MAX_COMBINED_SAMPLERS; ++i)
+    for (i = 0; i < WINED3D_MAX_COMBINED_SAMPLERS; ++i)
     {
         if ((texture = state->textures[i]))
         {
@@ -457,7 +457,7 @@ void state_unbind_resources(struct wined3d_state *state)
         }
     }
 
-    for (i = 0; i < MAX_STREAMS; ++i)
+    for (i = 0; i < WINED3D_MAX_STREAMS; ++i)
     {
         if ((buffer = state->streams[i].buffer))
         {
@@ -535,7 +535,7 @@ void wined3d_stateblock_state_cleanup(struct wined3d_stateblock_state *state)
         wined3d_vertex_declaration_decref(decl);
     }
 
-    for (i = 0; i < MAX_STREAMS; ++i)
+    for (i = 0; i < WINED3D_MAX_STREAMS; ++i)
     {
         if ((buffer = state->streams[i].buffer))
         {
@@ -562,7 +562,7 @@ void wined3d_stateblock_state_cleanup(struct wined3d_stateblock_state *state)
         wined3d_shader_decref(shader);
     }
 
-    for (i = 0; i < MAX_COMBINED_SAMPLERS; ++i)
+    for (i = 0; i < WINED3D_MAX_COMBINED_SAMPLERS; ++i)
     {
         if ((texture = state->textures[i]))
         {
@@ -579,7 +579,7 @@ void state_cleanup(struct wined3d_state *state)
     if (!(state->flags & WINED3D_STATE_NO_REF))
         state_unbind_resources(state);
 
-    for (counter = 0; counter < MAX_ACTIVE_LIGHTS; ++counter)
+    for (counter = 0; counter < WINED3D_MAX_ACTIVE_LIGHTS; ++counter)
     {
         state->light_state.lights[counter] = NULL;
     }
@@ -1137,7 +1137,7 @@ void CDECL wined3d_stateblock_apply(const struct wined3d_stateblock *stateblock)
         DWORD value = stateblock->stateblock_state.sampler_states[stage][sampler_state];
 
         state->sampler_states[stage][sampler_state] = value;
-        if (stage >= MAX_FRAGMENT_SAMPLERS) stage += WINED3DVERTEXTEXTURESAMPLER0 - MAX_FRAGMENT_SAMPLERS;
+        if (stage >= WINED3D_MAX_FRAGMENT_SAMPLERS) stage += WINED3DVERTEXTEXTURESAMPLER0 - WINED3D_MAX_FRAGMENT_SAMPLERS;
         wined3d_device_set_sampler_state(device, stage, sampler_state, value);
     }
 
@@ -1237,7 +1237,7 @@ void CDECL wined3d_stateblock_apply(const struct wined3d_stateblock *stateblock)
 
         if (!(map & 1)) continue;
 
-        stage = i < MAX_FRAGMENT_SAMPLERS ? i : WINED3DVERTEXTEXTURESAMPLER0 + i - MAX_FRAGMENT_SAMPLERS;
+        stage = i < WINED3D_MAX_FRAGMENT_SAMPLERS ? i : WINED3DVERTEXTEXTURESAMPLER0 + i - WINED3D_MAX_FRAGMENT_SAMPLERS;
         if (stateblock->stateblock_state.textures[i])
             wined3d_texture_incref(stateblock->stateblock_state.textures[i]);
         if (state->textures[i])
@@ -1419,11 +1419,11 @@ static void init_default_texture_state(unsigned int i, DWORD stage[WINED3D_HIGHE
     stage[WINED3D_TSS_RESULT_ARG] = WINED3DTA_CURRENT;
 }
 
-static void init_default_sampler_states(DWORD states[MAX_COMBINED_SAMPLERS][WINED3D_HIGHEST_SAMPLER_STATE + 1])
+static void init_default_sampler_states(DWORD states[WINED3D_MAX_COMBINED_SAMPLERS][WINED3D_HIGHEST_SAMPLER_STATE + 1])
 {
     unsigned int i;
 
-    for (i = 0 ; i < MAX_COMBINED_SAMPLERS; ++i)
+    for (i = 0 ; i < WINED3D_MAX_COMBINED_SAMPLERS; ++i)
     {
         TRACE("Setting up default samplers states for sampler %u.\n", i);
         states[i][WINED3D_SAMP_ADDRESS_U] = WINED3D_TADDRESS_WRAP;
@@ -1466,7 +1466,7 @@ static void state_init_default(struct wined3d_state *state, const struct wined3d
     init_default_render_states(state->render_states, d3d_info);
 
     /* Texture Stage States - Put directly into state block, we will call function below */
-    for (i = 0; i < MAX_TEXTURES; ++i)
+    for (i = 0; i < WINED3D_MAX_TEXTURES; ++i)
     {
         TRACE("Setting up default texture states for texture Stage %u.\n", i);
         state->transforms[WINED3D_TS_TEXTURE0 + i] = identity;
@@ -1480,7 +1480,7 @@ static void state_init_default(struct wined3d_state *state, const struct wined3d
     state->blend_factor.b = 1.0f;
     state->blend_factor.a = 1.0f;
 
-    for (i = 0; i < MAX_STREAMS; ++i)
+    for (i = 0; i < WINED3D_MAX_STREAMS; ++i)
         state->streams[i].frequency = 1;
 }
 
@@ -1518,7 +1518,7 @@ static void stateblock_state_init_default(struct wined3d_stateblock_state *state
 
     init_default_render_states(state->rs, d3d_info);
 
-    for (i = 0; i < MAX_TEXTURES; ++i)
+    for (i = 0; i < WINED3D_MAX_TEXTURES; ++i)
     {
         state->transforms[WINED3D_TS_TEXTURE0 + i] = identity;
         init_default_texture_state(i, state->texture_states[i]);
@@ -1531,7 +1531,7 @@ static void stateblock_state_init_default(struct wined3d_stateblock_state *state
     state->blend_factor.b = 1.0f;
     state->blend_factor.a = 1.0f;
 
-    for (i = 0; i < MAX_STREAMS; ++i)
+    for (i = 0; i < WINED3D_MAX_STREAMS; ++i)
         state->streams[i].frequency = 1;
 }
 

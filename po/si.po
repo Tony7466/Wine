@@ -1,11 +1,12 @@
 # Sinhala translations for Wine
 #
+# Isira Seneviratne <isirasen96@gmail.com>, 2019.
 msgid ""
 msgstr ""
 "Project-Id-Version: Wine\n"
 "Report-Msgid-Bugs-To: https://bugs.winehq.org\n"
 "POT-Creation-Date: N/A\n"
-"PO-Revision-Date: 2019-02-14 16:50+0530\n"
+"PO-Revision-Date: 2019-03-01 11:27+0530\n"
 "Last-Translator: Isira Seneviratne <isirasen96@gmail.com>\n"
 "Language-Team: Sinhala\n"
 "Language: si\n"
@@ -235,7 +236,7 @@ msgstr "වෙනස්/ඉවත් කරන්න (&M)"
 
 #: appwiz.rc:51
 msgid "Downloading..."
-msgstr "බාගත කරනවා..."
+msgstr "බාගැනීම කරනවා..."
 
 #: appwiz.rc:52
 msgid "Installing..."
@@ -246,6 +247,8 @@ msgid ""
 "Unexpected checksum of downloaded file. Aborting installation of corrupted "
 "file."
 msgstr ""
+"බාගත කරපු ගොනුවේ අපේක්ෂා කර නැති checksum එකක් තියෙනවා. සදොස් වෙච්ච ගොනුවේ ස්ථාපනය කිරීම "
+"අහෝසි කරනවා."
 
 #: avifil32.rc:42
 msgid "Compress options"
@@ -477,15 +480,15 @@ msgstr "මෙසේ සුරකින්න"
 #: comdlg32.rc:201 comdlg32.rc:210 comdlg32.rc:356 comdlg32.rc:54 hhctrl.rc:49
 #: wordpad.rc:173
 msgid "Print"
-msgstr "මුද්රණය කරන්න"
+msgstr "මුද්‍රණය කරන්න"
 
 #: comdlg32.rc:204
 msgid "Printer:"
-msgstr "මුද්රකය:"
+msgstr "මුද්‍රකය:"
 
 #: comdlg32.rc:206 comdlg32.rc:373
 msgid "Print range"
-msgstr "මුද්රිත පරාසය"
+msgstr "මුද්‍රිත පරාසය"
 
 #: comdlg32.rc:207 comdlg32.rc:374 regedit.rc:268
 msgid "&All"
@@ -513,11 +516,11 @@ msgstr "වෙනකං (&T):"
 
 #: comdlg32.rc:215 wineps.rc:42
 msgid "Print &Quality:"
-msgstr "මුද්රණ ගුණය (&Q):"
+msgstr "මුද්‍රණ ගුණය (&Q):"
 
 #: comdlg32.rc:217
 msgid "Print to Fi&le"
-msgstr "මුද්රණය කරන්න ගොනුවකකට (&L)"
+msgstr "මුද්‍රණය කරන්න ගොනුවකකට (&L)"
 
 #: comdlg32.rc:218
 msgid "Condensed"
@@ -525,15 +528,15 @@ msgstr "කැටි කරන ලද"
 
 #: comdlg32.rc:224 comdlg32.rc:395
 msgid "Print Setup"
-msgstr "මුද්රණ සැකසුම"
+msgstr "මුද්‍රණ සැකසුම"
 
 #: comdlg32.rc:227 comdlg32.rc:359 comdlg32.rc:398
 msgid "Printer"
-msgstr "මුද්රකය"
+msgstr "මුද්‍රකය"
 
 #: comdlg32.rc:228
 msgid "&Default Printer"
-msgstr "පෙරනිමි මුද්රකය (&D)"
+msgstr "පෙරනිමි මුද්‍රකය (&D)"
 
 #: comdlg32.rc:229
 msgid "[none]"
@@ -541,7 +544,7 @@ msgstr "[කිසිවක් නැත]"
 
 #: comdlg32.rc:230
 msgid "Specific &Printer"
-msgstr "නිශ්චිත මුද්රකය (&P)"
+msgstr "නිශ්චිත මුද්‍රකය (&P)"
 
 #: comdlg32.rc:235 comdlg32.rc:417 comdlg32.rc:441 wineps.rc:34
 msgid "Orientation"
@@ -585,7 +588,7 @@ msgstr "තරම (&S):"
 
 #: comdlg32.rc:266
 msgid "Effects"
-msgstr ""
+msgstr "ප්‍රයෝග"
 
 #: comdlg32.rc:267
 msgid "Stri&keout"
@@ -663,7 +666,7 @@ msgstr "සොයා ගන්න"
 
 #: comdlg32.rc:319 comdlg32.rc:338
 msgid "Fi&nd What:"
-msgstr ""
+msgstr "මොකක් සොයන්න (&N):"
 
 #: comdlg32.rc:321 comdlg32.rc:342
 msgid "Match &Whole Word Only"
@@ -712,7 +715,7 @@ msgstr "ගුණාංග"
 
 #: comdlg32.rc:362
 msgid "Print to fi&le"
-msgstr "මුද්රණය කරන්න ගොනුවකකට (&L)"
+msgstr "මුද්‍රණය කරන්න ගොනුවකකට (&L)"
 
 #: comdlg32.rc:363 comdlg32.rc:399 msacm32.rc:34 winefile.rc:138
 msgid "&Name:"
@@ -808,7 +811,7 @@ msgstr "පතුල (&B):"
 
 #: comdlg32.rc:455
 msgid "P&rinter..."
-msgstr "මුද්රකය... (&R)"
+msgstr "මුද්‍රකය... (&R)"
 
 #: comdlg32.rc:463 comdlg32.rc:488
 msgid "Look &in:"
@@ -904,7 +907,7 @@ msgstr "විස්තර"
 
 #: comdlg32.rc:49
 msgid "Browse to Desktop"
-msgstr ""
+msgstr "වැඩතලය පිරික්සන්න"
 
 #: comdlg32.rc:113
 msgid "Regular"
@@ -938,17 +941,19 @@ msgstr "හරිත"
 msgid "Olive"
 msgstr "ඔලිව්"
 
+# Literal meaning of translation: "dark blue".
 #: comdlg32.rc:125 wordpad.rc:129
 msgid "Navy"
-msgstr ""
+msgstr "තද නිල්"
 
 #: comdlg32.rc:126 wordpad.rc:130
 msgid "Purple"
 msgstr "දම්"
 
+# Literal meaning of translation: "green blue".
 #: comdlg32.rc:127 wordpad.rc:131
 msgid "Teal"
-msgstr ""
+msgstr "හරිත නිල"
 
 #: comdlg32.rc:128 wordpad.rc:132
 msgid "Gray"
@@ -962,9 +967,10 @@ msgstr "රිදී"
 msgid "Red"
 msgstr "රතු"
 
+# Literal meaning of translation: "greenish yellow".
 #: comdlg32.rc:131 wordpad.rc:135
 msgid "Lime"
-msgstr "දෙහි"
+msgstr "කොළට හුරු කහ"
 
 #: comdlg32.rc:132 wordpad.rc:136
 msgid "Yellow"
@@ -974,13 +980,15 @@ msgstr "කහ"
 msgid "Blue"
 msgstr "නිල්"
 
+# The translation actually means "pink", as there seems to be no exact Sinhala equivalent for "fuchsia".
 #: comdlg32.rc:134 wordpad.rc:138
 msgid "Fuchsia"
-msgstr ""
+msgstr "රෝස"
 
+# Literal meaning of translation: "light blue".
 #: comdlg32.rc:135 wordpad.rc:139
 msgid "Aqua"
-msgstr ""
+msgstr "ලා නිල්"
 
 #: comdlg32.rc:136 wordpad.rc:140
 msgid "White"
@@ -988,7 +996,7 @@ msgstr "සුදු"
 
 #: comdlg32.rc:56
 msgid "Unreadable Entry"
-msgstr ""
+msgstr "කියවන්න බැරි සටහනක්"
 
 #: comdlg32.rc:58
 msgid ""
@@ -1003,10 +1011,11 @@ msgid "The 'from' entry cannot exceed the 'to' entry."
 msgstr "'ඉඳලා' ගණන 'වෙනකං' ගණනට වඩා වෙඩි වෙන්න බැහැ."
 
 #: comdlg32.rc:62
+#, fuzzy
 msgid ""
 "Margins overlap or fall outside Paper boundaries.\n"
 "Please reenter margins."
-msgstr ""
+msgstr "කරුණාකරල මායිම් ඉඩ අයෙත් ඇතුල් කරන්න."
 
 #: comdlg32.rc:64
 msgid "The 'Number of copies' field cannot be empty."
@@ -1017,20 +1026,20 @@ msgid ""
 "This large number of copies is not supported by your printer.\n"
 "Please enter a value between 1 and %d."
 msgstr ""
-"මේ ලොකු පිටපත් ගණන ඔබගේ මුද්රකයට මුද්රණ කරන්න බැහැ.\n"
+"මේ ලොකු පිටපත් ගණන ඔබගේ මුද්‍රකයට මුද්‍රණ කරන්න බැහැ.\n"
 "කරුණාකරලා අගයක් 1 හා %d මැද්දේ ඇතුල් කරන්න."
 
 #: comdlg32.rc:67
 msgid "A printer error occurred."
-msgstr "මුද්රකයේ දෝෂයක් උනා."
+msgstr "මුද්‍රකයේ දෝෂයක් උනා."
 
 #: comdlg32.rc:68
 msgid "No default printer defined."
-msgstr "පෙරනිමි මුද්රකයක් අර්ථ කරලා නැහැ."
+msgstr "පෙරනිමි මුද්‍රකයක් අර්ථ කරලා නැහැ."
 
 #: comdlg32.rc:69
 msgid "Cannot find the printer."
-msgstr "මුද්රකය සොයාගන්න බැහැ."
+msgstr "මුද්‍රකය සොයාගන්න බැහැ."
 
 #: comdlg32.rc:70 progman.rc:76
 msgid "Out of memory."
@@ -1042,13 +1051,15 @@ msgstr "දෝෂයක් උනා."
 
 #: comdlg32.rc:72
 msgid "Unknown printer driver."
-msgstr "මුද්රකයේ ධාවකය දන්නේ නැහැ."
+msgstr "මුද්‍රකයේ ධාවකය දන්නේ නැහැ."
 
 #: comdlg32.rc:75
+#, fuzzy
 msgid ""
 "Before you can perform printer-related tasks such as page setup or printing "
 "a document, you need to install a printer. Please install one and retry."
 msgstr ""
+"පිටු හැඩතල හෝ ලේඛයක් මුද්‍රණ කරන්න වගේ මුද්‍රකයක වැඩ කරන්නට කලිං, මුද්රකයක් ස්ථාපන කරන්න ඕනේ."
 
 #: comdlg32.rc:141
 msgid "Select a font size between %1!d! and %2!d! points."
@@ -1092,7 +1103,7 @@ msgstr "දෝෂයක්; "
 
 #: comdlg32.rc:86
 msgid "Pending deletion; "
-msgstr ""
+msgstr "මැකීම වෙන්න යනවා; "
 
 #: comdlg32.rc:87
 msgid "Paper jam; "
@@ -1112,11 +1123,11 @@ msgstr "කොල ප්‍රශ්නයක්; "
 
 #: comdlg32.rc:91
 msgid "Printer offline; "
-msgstr "මුද්රකය නොබැඳි; "
+msgstr "මුද්‍රකය නොබැඳි; "
 
 #: comdlg32.rc:92
 msgid "I/O Active; "
-msgstr ""
+msgstr "I/O සක්‍රියයි; "
 
 #: comdlg32.rc:93
 msgid "Busy; "
@@ -1124,7 +1135,7 @@ msgstr "කාර්යබහුලයි; "
 
 #: comdlg32.rc:94
 msgid "Printing; "
-msgstr "මුද්රණය කරනවා; "
+msgstr "මුද්‍රණය කරනවා; "
 
 #: comdlg32.rc:95
 msgid "Output tray is full; "
@@ -1148,7 +1159,7 @@ msgstr "මුලපුරනවා; "
 
 #: comdlg32.rc:100
 msgid "Warming up; "
-msgstr ""
+msgstr "සූදානම් වේ; "
 
 #: comdlg32.rc:101
 msgid "Toner low; "
@@ -1160,7 +1171,7 @@ msgstr "ටෝනර් නැහැ; "
 
 #: comdlg32.rc:103
 msgid "Page punt; "
-msgstr ""
+msgstr "පිටු තල්ලුව; "
 
 #: comdlg32.rc:104
 msgid "Interrupted by user; "
@@ -1172,19 +1183,19 @@ msgstr "මතකය ඉවරයි; "
 
 #: comdlg32.rc:106
 msgid "The printer door is open; "
-msgstr "මුද්රකයේ දොර ඇරලා; "
+msgstr "මුද්‍රකයේ දොර ඇරලා; "
 
 #: comdlg32.rc:107
 msgid "Print server unknown; "
-msgstr "මුද්රණ සේවාදායකය දන්නේ නැහැ; "
+msgstr "මුද්‍රණ සේවාදායකය දන්නේ නැහැ; "
 
 #: comdlg32.rc:108
 msgid "Power save mode; "
-msgstr ""
+msgstr "බල සුරැකුම් ප්‍රකාරය; "
 
 #: comdlg32.rc:77
 msgid "Default Printer; "
-msgstr "පෙරනිමි මුද්රකය;"
+msgstr "පෙරනිමි මුද්‍රකය; "
 
 #: comdlg32.rc:78
 msgid "There are %d documents in the queue"
@@ -1244,8 +1255,9 @@ msgid ""
 msgstr ""
 
 #: credui.rc:34
+#, fuzzy
 msgid "Caps Lock is On"
-msgstr ""
+msgstr "Caps Lock"
 
 #: crypt32.rc:30
 msgid "Authority Key Identifier"
@@ -1257,7 +1269,7 @@ msgstr "යතුරේ උපලක්ෂණ"
 
 #: crypt32.rc:32
 msgid "Key Usage Restriction"
-msgstr ""
+msgstr "යතුරු භාවිතය තහනම"
 
 #: crypt32.rc:33
 msgid "Subject Alternative Name"
@@ -1277,7 +1289,7 @@ msgstr "යතුරු භාවිතය"
 
 #: crypt32.rc:37
 msgid "Certificate Policies"
-msgstr ""
+msgstr "සහතික වල ප්‍රතිපත්ති"
 
 #: crypt32.rc:38
 msgid "Subject Key Identifier"
@@ -1285,7 +1297,7 @@ msgstr ""
 
 #: crypt32.rc:39
 msgid "CRL Reason Code"
-msgstr ""
+msgstr "CRL හේතුව කේතය"
 
 #: crypt32.rc:40
 msgid "CRL Distribution Points"
@@ -1313,19 +1325,20 @@ msgstr "ඔව් හෝ නෑ විශ්වාසය"
 
 #: crypt32.rc:46
 msgid "Email Address"
-msgstr "විද්යුත් තැපැල් ලිපිනය"
+msgstr "ඊමේල් ලිපිනය"
 
 #: crypt32.rc:47
+#, fuzzy
 msgid "Unstructured Name"
-msgstr ""
+msgstr "නම"
 
 #: crypt32.rc:48
 msgid "Content Type"
-msgstr ""
+msgstr "අන්තර්ගතයේ වර්ගය"
 
 #: crypt32.rc:49
 msgid "Message Digest"
-msgstr ""
+msgstr "පණිවිඩයේ සාරසංග්‍රහය"
 
 #: crypt32.rc:50
 msgid "Signing Time"
@@ -1354,7 +1367,7 @@ msgstr ""
 #: crypt32.rc:56 cryptdlg.rc:34
 msgctxt "Certification Practice Statement"
 msgid "CPS"
-msgstr ""
+msgstr "CPS"
 
 #: crypt32.rc:57 cryptdlg.rc:35
 msgid "User Notice"
@@ -1377,40 +1390,43 @@ msgid "Certificate Type"
 msgstr "සහතික වර්ගය"
 
 #: crypt32.rc:62
+#, fuzzy
 msgid "Certificate Manifold"
-msgstr ""
+msgstr "සහතික"
 
 #: crypt32.rc:63
 msgid "Netscape Cert Type"
 msgstr "Netscape සහතික වර්ගය"
 
 #: crypt32.rc:64
+#, fuzzy
 msgid "Netscape Base URL"
-msgstr ""
+msgstr "Netscape"
 
 #: crypt32.rc:65
 msgid "Netscape Revocation URL"
-msgstr ""
+msgstr "Netscape අවලංගුකිරීම URL"
 
 #: crypt32.rc:66
 msgid "Netscape CA Revocation URL"
-msgstr ""
+msgstr "Netscape CA අවලංගුකිරීම URL"
 
 #: crypt32.rc:67
+#, fuzzy
 msgid "Netscape Cert Renewal URL"
-msgstr ""
+msgstr "Netscape"
 
 #: crypt32.rc:68
 msgid "Netscape CA Policy URL"
-msgstr ""
+msgstr "Netscape CP ප්‍රතිපත්තියේ URL"
 
 #: crypt32.rc:69
 msgid "Netscape SSL ServerName"
-msgstr ""
+msgstr "Netscape SSL සේවාදායකයේ නම"
 
 #: crypt32.rc:70
 msgid "Netscape Comment"
-msgstr ""
+msgstr "Netscape අදහස"
 
 #: crypt32.rc:71
 msgid "Country/Region"
@@ -1454,7 +1470,7 @@ msgstr "වාසගම"
 
 #: crypt32.rc:81
 msgid "Domain Component"
-msgstr ""
+msgstr "වසම සංරචකය"
 
 #: crypt32.rc:82
 msgid "Street Address"
@@ -1530,7 +1546,7 @@ msgstr ""
 
 #: crypt32.rc:100
 msgid "Application Policies"
-msgstr ""
+msgstr "යෙදුම් වල ප්‍රතිපත්ති"
 
 #: crypt32.rc:101
 msgid "Application Policy Mappings"
@@ -1542,11 +1558,11 @@ msgstr ""
 
 #: crypt32.rc:103
 msgid "CMC Data"
-msgstr ""
+msgstr "CMC දත්ත"
 
 #: crypt32.rc:104
 msgid "CMC Response"
-msgstr ""
+msgstr "CMC ප්‍රතිචාරය"
 
 #: crypt32.rc:105
 msgid "Unsigned CMC Request"
@@ -1562,31 +1578,35 @@ msgstr ""
 
 #: crypt32.rc:108
 msgid "CMC Attributes"
-msgstr ""
+msgstr "CMC උපලක්ෂණ"
 
 #: crypt32.rc:109
 msgid "PKCS 7 Data"
-msgstr ""
+msgstr "PKCS 7 දත්ත"
 
 #: crypt32.rc:110
+#, fuzzy
 msgid "PKCS 7 Signed"
-msgstr ""
+msgstr "PKCS 7"
 
 #: crypt32.rc:111
+#, fuzzy
 msgid "PKCS 7 Enveloped"
-msgstr ""
+msgstr "PKCS 7"
 
 #: crypt32.rc:112
+#, fuzzy
 msgid "PKCS 7 Signed Enveloped"
-msgstr ""
+msgstr "PKCS 7"
 
 #: crypt32.rc:113
+#, fuzzy
 msgid "PKCS 7 Digested"
-msgstr ""
+msgstr "PKCS 7"
 
 #: crypt32.rc:114
 msgid "PKCS 7 Encrypted"
-msgstr ""
+msgstr "PKCS 7 සංකේතික"
 
 #: crypt32.rc:115
 msgid "Previous CA Certificate Hash"
@@ -1694,7 +1714,7 @@ msgstr ""
 
 #: crypt32.rc:141
 msgid "Secure Email"
-msgstr "ආරක්ෂිත විද්යුත් තැපැල"
+msgstr "ආරක්ෂිත ඊමේල්"
 
 #: crypt32.rc:142
 msgid "Time Stamping"
@@ -1782,7 +1802,7 @@ msgstr ""
 
 #: crypt32.rc:163
 msgid "All application policies"
-msgstr ""
+msgstr "ඔක්කොම යෙදුම් වල ප්‍රතිපත්ති"
 
 #: crypt32.rc:164 cryptui.rc:149
 msgid "Directory Service Email Replication"
@@ -1806,7 +1826,7 @@ msgstr ""
 
 #: crypt32.rc:173
 msgid "Personal"
-msgstr ""
+msgstr "‍පුද්ගලික"
 
 #: crypt32.rc:174
 msgid "Intermediate Certification Authorities"
@@ -1826,7 +1846,7 @@ msgstr ""
 
 #: crypt32.rc:182
 msgid "KeyID="
-msgstr ""
+msgstr "යතුරේ ID="
 
 #: crypt32.rc:183
 msgid "Certificate Issuer"
@@ -1842,7 +1862,7 @@ msgstr "අනිත් නම="
 
 #: crypt32.rc:186
 msgid "Email Address="
-msgstr "විද්යුත් තැපැල් ලිපිනය="
+msgstr "ඊමේල් ලිපිනය="
 
 #: crypt32.rc:187
 msgid "DNS Name="
@@ -1909,7 +1929,7 @@ msgstr ""
 #: crypt32.rc:202
 msgctxt "Online Certificate Status Protocol"
 msgid "OCSP"
-msgstr ""
+msgstr "OCSP"
 
 #: crypt32.rc:203
 msgid "CA Issuers"
@@ -1941,11 +1961,11 @@ msgstr "RDN නම"
 
 #: crypt32.rc:210
 msgid "CRL Reason="
-msgstr ""
+msgstr "CRL හේතුව="
 
 #: crypt32.rc:211
 msgid "CRL Issuer"
-msgstr ""
+msgstr "CRL නිකුත් කරන්නා"
 
 #: crypt32.rc:212
 msgid "Key Compromise"
@@ -2025,7 +2045,7 @@ msgstr ""
 
 #: crypt32.rc:231
 msgid "CRL Signing"
-msgstr ""
+msgstr "CRL අත්සන් කිරීම"
 
 #: crypt32.rc:232
 msgid "Encipher Only"
@@ -2173,11 +2193,11 @@ msgstr ""
 
 #: cryptui.rc:258
 msgid "Add &Purpose..."
-msgstr ""
+msgstr "අරමුණක් එක් කරන්න..."
 
 #: cryptui.rc:262
 msgid "Add Purpose"
-msgstr ""
+msgstr "අරමුණක් එක් කරන්න"
 
 #: cryptui.rc:265
 msgid ""
@@ -2186,11 +2206,11 @@ msgstr ""
 
 #: cryptui.rc:273 cryptui.rc:69
 msgid "Select Certificate Store"
-msgstr ""
+msgstr "සහතික ගබඩාව තෝරන්න"
 
 #: cryptui.rc:276
 msgid "Select the certificate store you want to use:"
-msgstr ""
+msgstr "ඔබට පාවිච්චි කරන්න ඕනෙ සහතික ගබඩාව තෝරන්න:"
 
 #: cryptui.rc:279
 msgid "&Show physical stores"
@@ -2242,7 +2262,7 @@ msgstr ""
 
 #: cryptui.rc:308 cryptui.rc:81 cryptui.rc:162
 msgid "Microsoft Serialized Certificate Store (*.sst)"
-msgstr ""
+msgstr "Microsoft අනුක්‍රමගත කරපු සහතික ගබඩාව (*.sst)"
 
 #: cryptui.rc:316
 msgid ""
@@ -2320,7 +2340,7 @@ msgstr ""
 #: cryptui.rc:375 cryptui.rc:386 cryptui.rc:399 cryptui.rc:409 cryptui.rc:432
 #: cryptui.rc:441 cryptui.rc:150
 msgid "Certificate Export Wizard"
-msgstr ""
+msgstr "සහතිකය නිර්යාත කිරීම විශාරද"
 
 #: cryptui.rc:378
 msgid "Welcome to the Certificate Export Wizard"
@@ -2395,7 +2415,7 @@ msgstr ""
 
 #: cryptui.rc:427
 msgid "Delete the private &key if the export is successful"
-msgstr ""
+msgstr "පෞද්ගලික යතුර මකන්න නිර්යාත කිරීම හරියට උනොත් (&K)"
 
 #: cryptui.rc:444
 msgid "Completing the Certificate Export Wizard"
@@ -2425,7 +2445,7 @@ msgstr "සහතිකයේ තොරතුරු"
 msgid ""
 "This certificate has an invalid signature. The certificate may have been "
 "altered or corrupted."
-msgstr "මේ සහතිකයට වලංගු නැති අත්සනක් තියෙනවා. සහතිකය සදොස් වෙලා හෝ වෙනස් කරලා ඇති."
+msgstr "මේ සහතිකයට වලංගු නැති අත්සනක් තියෙනවා. සහතිකය වෙනස් කරලා හෝ සදොස් වෙලා ඇති."
 
 #: cryptui.rc:33
 msgid ""
@@ -2527,19 +2547,19 @@ msgstr "වලංගු ඉඳලා"
 
 #: cryptui.rc:58
 msgid "Valid to"
-msgstr ""
+msgstr "වලංගු වෙනකං"
 
 #: cryptui.rc:59
 msgid "Subject"
-msgstr ""
+msgstr "විෂය"
 
 #: cryptui.rc:60
 msgid "Public key"
-msgstr ""
+msgstr "පොදු යතුර"
 
 #: cryptui.rc:61
 msgid "%1 (%2!d! bits)"
-msgstr ""
+msgstr "%1 (%2!d! බිටු)"
 
 #: cryptui.rc:62
 msgid "SHA1 hash"
@@ -2563,15 +2583,15 @@ msgstr "සහතිකයේ ගුණාංග"
 
 #: cryptui.rc:67
 msgid "Please enter an OID in the form 1.2.3.4"
-msgstr ""
+msgstr "කරුණාකරල OID එකක් ඇතුල් කරන්න 1.2.3.4 විදිහට"
 
 #: cryptui.rc:68
 msgid "The OID you entered already exists."
-msgstr ""
+msgstr "ඇතුල් කරපු OID එක දැනටමත් තියෙනවා."
 
 #: cryptui.rc:70
 msgid "Please select a certificate store."
-msgstr ""
+msgstr "කරුණාකරලා සහතික ගබඩාවයක් තෝරන්න."
 
 #: cryptui.rc:72
 msgid ""
@@ -2589,7 +2609,7 @@ msgstr ""
 
 #: cryptui.rc:75 cryptui.rc:98
 msgid "Certificate Store"
-msgstr ""
+msgstr "සහතික ගබඩාවය"
 
 #: cryptui.rc:76
 msgid ""
@@ -2615,7 +2635,7 @@ msgstr ""
 
 #: cryptui.rc:82
 msgid "CMS/PKCS #7 Messages (*.spc; *.p7b)"
-msgstr ""
+msgstr "CMS/PKCS #7 පණිවිඩ (*.spc; *.p7b)"
 
 #: cryptui.rc:84
 msgid "Please select a file."
@@ -2635,11 +2655,11 @@ msgstr ""
 
 #: cryptui.rc:88
 msgid "Please select a store"
-msgstr ""
+msgstr "කරුණාකරලා ගබඩාවයක් තෝරන්න"
 
 #: cryptui.rc:89
 msgid "Certificate Store Selected"
-msgstr ""
+msgstr "සහතික ගබඩාවයක් තෝරලා"
 
 #: cryptui.rc:90
 msgid "Automatically determined by the program"
@@ -2651,7 +2671,7 @@ msgstr "ගොනුව"
 
 #: cryptui.rc:92 inetcpl.rc:108
 msgid "Content"
-msgstr ""
+msgstr "අන්තර්ගතය"
 
 #: cryptui.rc:94
 msgid "Certificate Revocation List"
@@ -2659,7 +2679,7 @@ msgstr ""
 
 #: cryptui.rc:96
 msgid "CMS/PKCS #7 Message"
-msgstr ""
+msgstr "CMS/PKCS #7 පණිවිඩය"
 
 #: cryptui.rc:97
 msgid "Personal Information Exchange"
@@ -2667,15 +2687,15 @@ msgstr ""
 
 #: cryptui.rc:99
 msgid "The import was successful."
-msgstr ""
+msgstr "ආයාත කිරීම හරියට උනා."
 
 #: cryptui.rc:100
 msgid "The import failed."
-msgstr ""
+msgstr "ආයාත කිරීම බැරි උනා."
 
 #: cryptui.rc:101
 msgid "Arial"
-msgstr ""
+msgstr "Arial"
 
 #: cryptui.rc:103
 msgid "<Advanced Purposes>"
@@ -2845,7 +2865,7 @@ msgstr ""
 
 #: cryptui.rc:160
 msgid "CMS/PKCS #7 Messages (*.p7b)"
-msgstr ""
+msgstr "CMS/PKCS #7 පණිවිඩ (*.p7b)"
 
 #: cryptui.rc:161
 msgid "Personal Information Exchange (*.pfx)"
@@ -2873,7 +2893,7 @@ msgstr "නිර්යාත කිරීම බැරි උනා."
 
 #: cryptui.rc:170
 msgid "Export Private Key"
-msgstr ""
+msgstr "පෞද්ගලික යතුර නිර්යාත කරන්න"
 
 #: cryptui.rc:171
 msgid ""
@@ -2883,7 +2903,7 @@ msgstr ""
 
 #: cryptui.rc:172
 msgid "Enter Password"
-msgstr ""
+msgstr "මුර පදය ඇතුල් කරන්න"
 
 #: cryptui.rc:173
 msgid "You may password-protect a private key."
@@ -2898,9 +2918,8 @@ msgid "Note: The private key for this certificate could not be opened."
 msgstr "සටහන: මේ සහතිකයේ පෞද්ගලික යතුර අරින්න බැරි උනා."
 
 #: cryptui.rc:176
-#, fuzzy
 msgid "Note: The private key for this certificate is not exportable."
-msgstr "සටහන:"
+msgstr "සටහන: මේ සහතිකයේ පෞද්ගලික යතුර නිර්යාත කරන්න බැහැ."
 
 #: cryptui.rc:177
 msgid "Intended Use"
@@ -2936,7 +2955,7 @@ msgstr "ආම්පන්නය"
 
 #: dinput.rc:44
 msgid "Actions"
-msgstr ""
+msgstr "ක්‍රියා"
 
 #: dinput.rc:45
 msgid "Mapping"
@@ -2948,11 +2967,11 @@ msgstr ""
 
 #: dinput.rc:28
 msgid "Action"
-msgstr ""
+msgstr "ක්‍රියාව"
 
 #: dinput.rc:29
 msgid "Object"
-msgstr ""
+msgstr "වස්තුව"
 
 #: dxdiagn.rc:28
 msgid "Regional Setting"
@@ -2960,51 +2979,51 @@ msgstr ""
 
 #: dxdiagn.rc:29
 msgid "%1!u!MB used, %2!u!MB available"
-msgstr ""
+msgstr "%1!u!MB පාවිච්චි කරලා, %2!u!MB තියෙනවා"
 
 #: gdi32.rc:28
 msgid "Western"
-msgstr ""
+msgstr "බටහිර"
 
 #: gdi32.rc:29
 msgid "Central European"
-msgstr ""
+msgstr "මධ්‍යම යුරෝප"
 
 #: gdi32.rc:30
 msgid "Cyrillic"
-msgstr ""
+msgstr "සිරිලික්"
 
 #: gdi32.rc:31
 msgid "Greek"
-msgstr ""
+msgstr "ග්‍රීක"
 
 #: gdi32.rc:32
 msgid "Turkish"
-msgstr ""
+msgstr "තුර්කියානු"
 
 #: gdi32.rc:33
 msgid "Hebrew"
-msgstr ""
+msgstr "හීබෲ"
 
 #: gdi32.rc:34
 msgid "Arabic"
-msgstr ""
+msgstr "අරාබි"
 
 #: gdi32.rc:35
 msgid "Baltic"
-msgstr ""
+msgstr "බෝල්ටික්"
 
 #: gdi32.rc:36
 msgid "Vietnamese"
-msgstr ""
+msgstr "වියට්නාම"
 
 #: gdi32.rc:37
 msgid "Thai"
-msgstr ""
+msgstr "තායි"
 
 #: gdi32.rc:38
 msgid "Japanese"
-msgstr ""
+msgstr "ජපන්"
 
 #: gdi32.rc:39
 msgid "CHINESE_GB2312"
@@ -3012,7 +3031,7 @@ msgstr ""
 
 #: gdi32.rc:40
 msgid "Hangul"
-msgstr ""
+msgstr "හැන්ගුල්"
 
 #: gdi32.rc:41
 msgid "CHINESE_BIG5"
@@ -3020,7 +3039,7 @@ msgstr ""
 
 #: gdi32.rc:42
 msgid "Hangul(Johab)"
-msgstr ""
+msgstr "හැන්ගුල්(ජෝහාබ්)"
 
 #: gdi32.rc:43
 msgid "Symbol"
@@ -3028,7 +3047,7 @@ msgstr ""
 
 #: gdi32.rc:44
 msgid "OEM/DOS"
-msgstr ""
+msgstr "OEM/DOS"
 
 #: gdi32.rc:45 wldap32.rc:112
 msgid "Other"
@@ -3040,15 +3059,15 @@ msgstr "කැමරාවේ තියෙන ගොනු"
 
 #: gphoto2.rc:34
 msgid "Import Selected"
-msgstr ""
+msgstr "ආයාත කරන්න"
 
 #: gphoto2.rc:35
 msgid "Preview"
-msgstr ""
+msgstr "පෙරදසුන"
 
 #: gphoto2.rc:36
 msgid "Import All"
-msgstr ""
+msgstr "ඔක්කොම ආයාත කරන්න"
 
 #: gphoto2.rc:37
 msgid "Skip This Dialog"
@@ -3060,11 +3079,11 @@ msgstr "පිටවෙන්න"
 
 #: gphoto2.rc:43
 msgid "Transferring"
-msgstr ""
+msgstr "මාරු කරනවා"
 
 #: gphoto2.rc:46
 msgid "Transferring... Please Wait"
-msgstr ""
+msgstr "මාරු කරනවා... කරුණාකරලා බලාගෙන ඉන්න"
 
 #: gphoto2.rc:51
 msgid "Connecting to camera"
@@ -3101,12 +3120,12 @@ msgstr "නැවුම් කරන්න (&R)"
 
 #: hhctrl.rc:65 hhctrl.rc:80 winhlp32.rc:34
 msgid "&Print..."
-msgstr "මුද්රණය කරන්න... (&P)"
+msgstr "මුද්‍රණය කරන්න... (&P)"
 
 #: hhctrl.rc:76 hhctrl.rc:90 shdoclc.rc:49 shdoclc.rc:98 shdoclc.rc:120
 #: user32.rc:65
 msgid "Select &All"
-msgstr ""
+msgstr "ඔක්කොම තෝරන්න (&A)"
 
 #: hhctrl.rc:78 shdoclc.rc:54
 msgid "&View Source"
@@ -3133,7 +3152,7 @@ msgstr "අලවන්න"
 
 #: hhctrl.rc:91 shdoclc.rc:121
 msgid "&Print"
-msgstr "මුද්රණය කරන්න"
+msgstr "මුද්‍රණය කරන්න"
 
 #: hhctrl.rc:31 taskmgr.rc:89
 msgid "&Contents"
@@ -3198,7 +3217,7 @@ msgstr ""
 
 #: iccvid.rc:28 iccvid.rc:29
 msgid "Cinepak Video codec"
-msgstr ""
+msgstr "Cinepak වීඩියෝ කොඩෙක්"
 
 #: ieframe.rc:28 shell32.rc:114 notepad.rc:29 oleview.rc:30 oleview.rc:80
 #: progman.rc:32 taskmgr.rc:35 view.rc:31 winefile.rc:28 winhlp32.rc:31
@@ -3224,15 +3243,15 @@ msgstr "මෙසේ සුරකින්න... (&A)"
 
 #: ieframe.rc:38
 msgid "Print &format..."
-msgstr "මුද්රණ හැඩතලය... (&F)"
+msgstr "මුද්‍රණ හැඩතලය... (&F)"
 
 #: ieframe.rc:39
 msgid "Pr&int..."
-msgstr "මුද්රණය කරන්න... (&I)"
+msgstr "මුද්‍රණය කරන්න... (&I)"
 
 #: ieframe.rc:40 wordpad.rc:37
 msgid "Print previe&w"
-msgstr "මුද්රණ පෙරදසුන (&W)"
+msgstr "මුද්‍රණ පෙරදසුන (&W)"
 
 #: ieframe.rc:47
 msgid "&Toolbars"
@@ -3256,7 +3275,7 @@ msgstr ""
 
 #: ieframe.rc:60
 msgid "&About Internet Explorer"
-msgstr ""
+msgstr "Internet Explorer ගැන (&A)"
 
 #: ieframe.rc:90
 msgid "Open URL"
@@ -3277,7 +3296,7 @@ msgstr "මුල"
 
 #: ieframe.rc:71 winhlp32.rc:69
 msgid "Print..."
-msgstr "මුද්රණය කරන්න..."
+msgstr "මුද්‍රණය කරන්න..."
 
 #: ieframe.rc:76
 msgid "Address"
@@ -3289,11 +3308,11 @@ msgstr "%s හොයනවා"
 
 #: ieframe.rc:82
 msgid "Start downloading %s"
-msgstr "%s බාගත කරන්න පටන්ගන්න"
+msgstr "%s බාගැනීම කරන්න පටන්ගන්න"
 
 #: ieframe.rc:83
 msgid "Downloading %s"
-msgstr "%s බාගත කරනවා"
+msgstr "%s බාගැනීම කරනවා"
 
 #: ieframe.rc:84
 msgid "Asking for %s"
@@ -3309,7 +3328,7 @@ msgstr ""
 
 #: inetcpl.rc:53
 msgid "&Current page"
-msgstr ""
+msgstr "වත්මන් පිටුව (&C)"
 
 #: inetcpl.rc:54
 msgid "&Default page"
@@ -3321,7 +3340,7 @@ msgstr "හිස් පිටුවක් (&B)"
 
 #: inetcpl.rc:56
 msgid "Browsing history"
-msgstr ""
+msgstr "පිරික්සුම් ඉතිහාසය"
 
 #: inetcpl.rc:57
 msgid "You can delete cached pages, cookies and other data."
@@ -3337,7 +3356,7 @@ msgstr "සැකසුම්... (&S)"
 
 #: inetcpl.rc:68
 msgid "Delete browsing history"
-msgstr ""
+msgstr "පිරික්සුම් ඉතිහාසය මකන්න"
 
 #: inetcpl.rc:71
 msgid ""
@@ -3393,7 +3412,7 @@ msgstr "සහතික..."
 
 #: inetcpl.rc:115
 msgid "Publishers..."
-msgstr ""
+msgstr "ප්රකාශකයෝ..."
 
 #: inetcpl.rc:123
 msgid "Connections"
@@ -3429,7 +3448,7 @@ msgstr "තොට:"
 
 #: inetcpl.rc:31
 msgid "Internet Settings"
-msgstr ""
+msgstr "අන්තර්ජාල සැකසුම්"
 
 #: inetcpl.rc:32
 msgid "Configure Wine Internet Browser and related settings"
@@ -3441,7 +3460,7 @@ msgstr ""
 
 #: inetcpl.rc:34
 msgid "Custom"
-msgstr ""
+msgstr "චාරිත්ර"
 
 #: inetcpl.rc:35
 msgid "Very Low"
@@ -3520,8 +3539,9 @@ msgid "Error converting object to primitive type"
 msgstr ""
 
 #: jscript.rc:29
+#, fuzzy
 msgid "Invalid procedure call or argument"
-msgstr ""
+msgstr "අවලංගු"
 
 #: jscript.rc:30
 msgid "Subscript out of range"
@@ -3529,7 +3549,7 @@ msgstr ""
 
 #: jscript.rc:31
 msgid "Object required"
-msgstr ""
+msgstr "වස්තුවක් ඕනේ"
 
 #: jscript.rc:32
 msgid "Automation server can't create object"
@@ -3573,7 +3593,7 @@ msgstr "අපේක්ෂා කරේ '='"
 
 #: jscript.rc:42
 msgid "Invalid character"
-msgstr "වලංගු නැති අනුලකුණක්"
+msgstr "අවලංගු අනුලකුණක්"
 
 #: jscript.rc:43
 msgid "Unterminated string constant"
@@ -3699,11 +3719,11 @@ msgstr ""
 
 #: ../../include/wine/wine_common_ver.rc:129
 msgid "Wine kernel DLL"
-msgstr ""
+msgstr "Wine කර්නලයේ DLL"
 
 #: ../../include/wine/wine_common_ver.rc:134 winemac.rc:32 wineboot.rc:42
 msgid "Wine"
-msgstr ""
+msgstr "Wine"
 
 #: winerror.mc:28
 msgid "Success.\n"
@@ -3711,7 +3731,7 @@ msgstr ""
 
 #: winerror.mc:33
 msgid "Invalid function.\n"
-msgstr "වලංගු නැති ශ්රිතය.\n"
+msgstr "අවලංගු ශ්රිතය.\n"
 
 #: winerror.mc:38
 msgid "File not found.\n"
@@ -3731,7 +3751,7 @@ msgstr ""
 
 #: winerror.mc:58
 msgid "Invalid handle.\n"
-msgstr "වලංගු නැති හසුරුවක්.\n"
+msgstr "අවලංගු හසුරුවක්.\n"
 
 #: winerror.mc:63
 msgid "Memory trashed.\n"
@@ -3742,8 +3762,9 @@ msgid "Not enough memory.\n"
 msgstr "මතකය මදි.\n"
 
 #: winerror.mc:73
+#, fuzzy
 msgid "Invalid block.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:78
 msgid "Bad environment.\n"
@@ -3755,11 +3776,11 @@ msgstr ""
 
 #: winerror.mc:88
 msgid "Invalid access.\n"
-msgstr ""
+msgstr "අවලංගු ප්‍රවේශය.\n"
 
 #: winerror.mc:93
 msgid "Invalid data.\n"
-msgstr "වලංගු නැති දත්ත.\n"
+msgstr "අවලංගු දත්ත.\n"
 
 #: winerror.mc:98
 msgid "Out of memory.\n"
@@ -3767,7 +3788,7 @@ msgstr "මතකය ඉවරයි.\n"
 
 #: winerror.mc:103
 msgid "Invalid drive.\n"
-msgstr "වලංගු නැති ධාවකය.\n"
+msgstr "අවලංගු ධාවකය.\n"
 
 #: winerror.mc:108
 msgid "Can't delete current directory.\n"
@@ -3807,11 +3828,11 @@ msgstr ""
 
 #: winerror.mc:153 winerror.mc:528
 msgid "Seek error.\n"
-msgstr ""
+msgstr "සෙවීමේ දෝෂයක්.\n"
 
 #: winerror.mc:158
 msgid "Not DOS disk.\n"
-msgstr ""
+msgstr "DOS ඩිස්කයක් නෙමේ.\n"
 
 #: winerror.mc:163
 msgid "Sector not found.\n"
@@ -3903,7 +3924,7 @@ msgstr ""
 
 #: winerror.mc:273
 msgid "Print queue full.\n"
-msgstr "මුද්රණ පෝලිම පිරිලා.\n"
+msgstr "මුද්‍රණ පෝලිම පිරිලා.\n"
 
 #: winerror.mc:278
 msgid "No spool space.\n"
@@ -3911,11 +3932,11 @@ msgstr ""
 
 #: winerror.mc:283
 msgid "Print canceled.\n"
-msgstr ""
+msgstr "මුද්‍රණය අවලංගු කරලා.\n"
 
 #: winerror.mc:288
 msgid "Network name deleted.\n"
-msgstr ""
+msgstr "ජාලයේ නම මකල.\n"
 
 #: winerror.mc:293
 msgid "Network access denied.\n"
@@ -3971,11 +3992,11 @@ msgstr ""
 
 #: winerror.mc:358 winerror.mc:1713
 msgid "Invalid password.\n"
-msgstr "වලංගු නැති මුර පදයක්.\n"
+msgstr "අවලංගු මුර පදයක්.\n"
 
 #: winerror.mc:363
 msgid "Invalid parameter.\n"
-msgstr "වලංගු නැති පරාමිතියක්.\n"
+msgstr "අවලංගු පරාමිතියක්.\n"
 
 #: winerror.mc:368
 msgid "Net write fault.\n"
@@ -4002,8 +4023,9 @@ msgid "Too many semaphore requests.\n"
 msgstr ""
 
 #: winerror.mc:398
+#, fuzzy
 msgid "Invalid at interrupt time.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:403
 msgid "Semaphore owner died.\n"
@@ -4030,24 +4052,27 @@ msgid "Open failed.\n"
 msgstr ""
 
 #: winerror.mc:433
+#, fuzzy
 msgid "Buffer overflow.\n"
-msgstr ""
+msgstr "බෆරය "
 
 #: winerror.mc:443
 msgid "No more search handles.\n"
 msgstr ""
 
 #: winerror.mc:448
+#, fuzzy
 msgid "Invalid target handle.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:453
 msgid "Invalid IOCTL.\n"
-msgstr ""
+msgstr "අවලංගු IOCTL.\n"
 
 #: winerror.mc:458
+#, fuzzy
 msgid "Invalid verify switch.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:463
 msgid "Bad driver level.\n"
@@ -4063,15 +4088,15 @@ msgstr ""
 
 #: winerror.mc:478
 msgid "Insufficient buffer.\n"
-msgstr ""
+msgstr "බෆරය මදි.\n"
 
 #: winerror.mc:483
 msgid "Invalid name.\n"
-msgstr "වලංගු නැති නමක්.\n"
+msgstr "අවලංගු නමක්.\n"
 
 #: winerror.mc:488
 msgid "Invalid level.\n"
-msgstr "වලංගු නැති මට්ටමක්.\n"
+msgstr "අවලංගු මට්ටමක්.\n"
 
 #: winerror.mc:493
 msgid "No volume label.\n"
@@ -4094,8 +4119,9 @@ msgid "Child process has not completed.\n"
 msgstr ""
 
 #: winerror.mc:518
+#, fuzzy
 msgid "Invalid use of direct access handle.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:523
 msgid "Negative seek.\n"
@@ -4183,7 +4209,7 @@ msgstr ""
 
 #: winerror.mc:633
 msgid "DosSemMuxWait list invalid.\n"
-msgstr ""
+msgstr "DosSemMuxWait ලිස්තුව වලංගු නැහැ.\n"
 
 #: winerror.mc:638
 msgid "Volume label too long.\n"
@@ -4243,11 +4269,12 @@ msgstr ""
 
 #: winerror.mc:708
 msgid "Invalid segment number.\n"
-msgstr ""
+msgstr "අවලංගු ඛණ්ඩය නොම්බරය.\n"
 
 #: winerror.mc:713
+#, fuzzy
 msgid "Invalid ordinal for %1.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:718
 msgid "File already exists.\n"
@@ -4255,27 +4282,30 @@ msgstr "ගොනුව දැනටමත් පවතිනවා.\n"
 
 #: winerror.mc:723
 msgid "Invalid flag number.\n"
-msgstr ""
+msgstr "අවලංගු සලකුණ නොම්බරය.\n"
 
 #: winerror.mc:728
 msgid "Semaphore name not found.\n"
 msgstr ""
 
 #: winerror.mc:733
+#, fuzzy
 msgid "Invalid starting code segment for %1.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:738
+#, fuzzy
 msgid "Invalid starting stack segment for %1.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:743
+#, fuzzy
 msgid "Invalid module type for %1.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:748
 msgid "Invalid EXE signature in %1.\n"
-msgstr "වලංගු නැති EXE අත්සනක් %1 ඇතුලේ.\n"
+msgstr "අවලංගු EXE අත්සනක් %1 ඇතුලේ.\n"
 
 #: winerror.mc:753
 msgid "EXE %1 is marked invalid.\n"
@@ -4291,7 +4321,7 @@ msgstr ""
 
 #: winerror.mc:768
 msgid "Invalid MinAllocSize in %1.\n"
-msgstr ""
+msgstr "අවලංගු MinAllocSize %1 ඇතුලෙ.\n"
 
 #: winerror.mc:773
 msgid "Dynlink from invalid ring.\n"
@@ -4303,7 +4333,7 @@ msgstr ""
 
 #: winerror.mc:783
 msgid "Invalid SEGDPL in %1.\n"
-msgstr ""
+msgstr "අවලංගු SEGDPL %1 ඇතුලෙ.\n"
 
 #: winerror.mc:788
 msgid "Auto data segment exceeds 64k.\n"
@@ -4342,8 +4372,9 @@ msgid "Error in use of filename wildcards.\n"
 msgstr ""
 
 #: winerror.mc:833
+#, fuzzy
 msgid "Invalid signal number.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:838
 msgid "Error setting signal handler.\n"
@@ -4387,11 +4418,12 @@ msgstr ""
 
 #: winerror.mc:888
 msgid "Session canceled.\n"
-msgstr ""
+msgstr "සැසිය අවලංගු කරල.\n"
 
 #: winerror.mc:893
+#, fuzzy
 msgid "Invalid extended attribute name.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:898
 msgid "Extended attribute list inconsistent.\n"
@@ -4422,8 +4454,9 @@ msgid "Extended attribute table full.\n"
 msgstr ""
 
 #: winerror.mc:933
+#, fuzzy
 msgid "Invalid extended attribute handle.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:938
 msgid "Extended attributes not supported.\n"
@@ -4446,8 +4479,9 @@ msgid "The oplock wasn't granted.\n"
 msgstr ""
 
 #: winerror.mc:963
+#, fuzzy
 msgid "Invalid oplock message received.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:968
 msgid "Message 0x%1 not found in file %2.\n"
@@ -4455,7 +4489,7 @@ msgstr ""
 
 #: winerror.mc:973
 msgid "Invalid address.\n"
-msgstr ""
+msgstr "අවලංගු යොමුව.\n"
 
 #: winerror.mc:978
 msgid "Arithmetic overflow.\n"
@@ -4475,7 +4509,7 @@ msgstr ""
 
 #: winerror.mc:998
 msgid "I/O operation aborted.\n"
-msgstr ""
+msgstr "I/O මෙහෙයුම අහෝසි කරා.\n"
 
 #: winerror.mc:1003
 msgid "Overlapped I/O incomplete.\n"
@@ -4499,7 +4533,7 @@ msgstr ""
 
 #: winerror.mc:1028
 msgid "Invalid message.\n"
-msgstr ""
+msgstr "අවලංගු පණිවිඩය.\n"
 
 #: winerror.mc:1033
 msgid "Cannot complete.\n"
@@ -4507,7 +4541,7 @@ msgstr ""
 
 #: winerror.mc:1038
 msgid "Invalid flags.\n"
-msgstr ""
+msgstr "අවලංගු සලකුණු.\n"
 
 #: winerror.mc:1043
 msgid "Unrecognized volume.\n"
@@ -4531,7 +4565,7 @@ msgstr ""
 
 #: winerror.mc:1068
 msgid "Invalid key.\n"
-msgstr "වලංගු නැති යතුරක්.\n"
+msgstr "අවලංගු යතුරක්.\n"
 
 #: winerror.mc:1073
 msgid "Can't open registry key.\n"
@@ -4586,8 +4620,9 @@ msgid "Dependent services are running.\n"
 msgstr ""
 
 #: winerror.mc:1138
+#, fuzzy
 msgid "Invalid service control.\n"
-msgstr ""
+msgstr "අවලංගු සේවාව"
 
 #: winerror.mc:1143
 msgid "Service request timeout.\n"
@@ -4607,7 +4642,7 @@ msgstr ""
 
 #: winerror.mc:1163
 msgid "Invalid service account.\n"
-msgstr ""
+msgstr "අවලංගු සේවාව ගිණුම.\n"
 
 #: winerror.mc:1168
 msgid "Service is disabled.\n"
@@ -4639,7 +4674,7 @@ msgstr ""
 
 #: winerror.mc:1203
 msgid "Database does not exist.\n"
-msgstr ""
+msgstr "දත්ත සමුදාය තියෙන්නේ නැහැ.\n"
 
 #: winerror.mc:1208
 msgid "Service-specific error.\n"
@@ -4647,11 +4682,11 @@ msgstr ""
 
 #: winerror.mc:1213
 msgid "Process aborted.\n"
-msgstr ""
+msgstr "සැකසුම අහෝසි කරා.\n"
 
 #: winerror.mc:1218
 msgid "Service dependency failed.\n"
-msgstr ""
+msgstr "සේවාව පරායත්තයේ දෝෂයක් උනා.\n"
 
 #: winerror.mc:1223
 msgid "Service login failed.\n"
@@ -4662,8 +4697,9 @@ msgid "Service start-hang.\n"
 msgstr ""
 
 #: winerror.mc:1233
+#, fuzzy
 msgid "Invalid service lock.\n"
-msgstr ""
+msgstr "අවලංගු සේවාව"
 
 #: winerror.mc:1238
 msgid "Service marked for delete.\n"
@@ -4738,8 +4774,9 @@ msgid "Partition failure.\n"
 msgstr ""
 
 #: winerror.mc:1328
+#, fuzzy
 msgid "Invalid block length.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:1333
 msgid "Device not partitioned.\n"
@@ -4767,7 +4804,7 @@ msgstr ""
 
 #: winerror.mc:1363
 msgid "No Unicode translation.\n"
-msgstr ""
+msgstr "යුනිකෝඩ් පරිවර්තනයක් නැහැ.\n"
 
 #: winerror.mc:1368
 msgid "DLL initialization failed.\n"
@@ -4783,7 +4820,7 @@ msgstr ""
 
 #: winerror.mc:1383
 msgid "I/O device error.\n"
-msgstr ""
+msgstr "I/O ආම්පන්නයේ දෝෂයක්.\n"
 
 #: winerror.mc:1388
 msgid "No serial devices found.\n"
@@ -4818,16 +4855,18 @@ msgid "Floppy registers inconsistent.\n"
 msgstr ""
 
 #: winerror.mc:1428
+#, fuzzy
 msgid "Hard disk recalibrate failed.\n"
-msgstr ""
+msgstr "දෘඩ තැටිය"
 
 #: winerror.mc:1433
+#, fuzzy
 msgid "Hard disk operation failed.\n"
-msgstr ""
+msgstr "දෘඩ තැටිය"
 
 #: winerror.mc:1438
 msgid "Hard disk reset failed.\n"
-msgstr ""
+msgstr "දෘඩ තැටිය නැවත සකසන්න බැරි උනා.\n"
 
 #: winerror.mc:1443
 msgid "End of tape media.\n"
@@ -4875,7 +4914,7 @@ msgstr ""
 
 #: winerror.mc:1498
 msgid "Invalid DLL.\n"
-msgstr "වලංගු නැති DLL එකක්.\n"
+msgstr "අවලංගු DLL එකක්.\n"
 
 #: winerror.mc:1503
 msgid "No associated application.\n"
@@ -4883,7 +4922,7 @@ msgstr ""
 
 #: winerror.mc:1508
 msgid "DDE failure.\n"
-msgstr ""
+msgstr "DDE දෝෂයක්.\n"
 
 #: winerror.mc:1513
 msgid "DLL not found.\n"
@@ -4983,7 +5022,7 @@ msgstr ""
 
 #: winerror.mc:1633
 msgid "Invalid device name.\n"
-msgstr ""
+msgstr "අවලංගු ආම්පන්නය නාමය.\n"
 
 #: winerror.mc:1638
 msgid "Connection unavailable.\n"
@@ -4998,8 +5037,9 @@ msgid "No network or bad path.\n"
 msgstr ""
 
 #: winerror.mc:1653
+#, fuzzy
 msgid "Invalid network provider name.\n"
-msgstr ""
+msgstr "අවලංගු ජාල"
 
 #: winerror.mc:1658
 msgid "Cannot open network connection profile.\n"
@@ -5011,7 +5051,7 @@ msgstr ""
 
 #: winerror.mc:1668
 msgid "Not a container.\n"
-msgstr ""
+msgstr "බහලුවක් නෙමෙයි.\n"
 
 #: winerror.mc:1673
 msgid "Extended error.\n"
@@ -5019,39 +5059,40 @@ msgstr ""
 
 #: winerror.mc:1678
 msgid "Invalid group name.\n"
-msgstr ""
+msgstr "අවලංගු සමූහය නාමය.\n"
 
 #: winerror.mc:1683
 msgid "Invalid computer name.\n"
-msgstr ""
+msgstr "අවලංගු පරිගණක නාමය.\n"
 
 #: winerror.mc:1688
 msgid "Invalid event name.\n"
-msgstr ""
+msgstr "අවලංගු සිද්ධිය නාමය.\n"
 
 #: winerror.mc:1693
 msgid "Invalid domain name.\n"
-msgstr ""
+msgstr "අවලංගු වසම් නාමය.\n"
 
 #: winerror.mc:1698
 msgid "Invalid service name.\n"
-msgstr ""
+msgstr "අවලංගු සේවාව නාමය.\n"
 
 #: winerror.mc:1703
 msgid "Invalid network name.\n"
-msgstr ""
+msgstr "අවලංගු ජාල නාමය.\n"
 
 #: winerror.mc:1708
 msgid "Invalid share name.\n"
-msgstr ""
+msgstr "අවලංගු හවුල නාමය.\n"
 
 #: winerror.mc:1718
 msgid "Invalid message name.\n"
-msgstr ""
+msgstr "අවලංගු පණිවිඩයේ නාමය.\n"
 
 #: winerror.mc:1723
+#, fuzzy
 msgid "Invalid message destination.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:1728
 msgid "Session credential conflict.\n"
@@ -5067,7 +5108,7 @@ msgstr ""
 
 #: winerror.mc:1743
 msgid "No network.\n"
-msgstr ""
+msgstr "ජාලයක් නැහැ.\n"
 
 #: winerror.mc:1748
 msgid "Operation canceled by user.\n"
@@ -5079,7 +5120,7 @@ msgstr ""
 
 #: winerror.mc:1758 winerror.mc:3753
 msgid "Connection refused.\n"
-msgstr ""
+msgstr "සබැඳුම ප්‍රතික්ෂේප කරා.\n"
 
 #: winerror.mc:1763
 msgid "Connection gracefully closed.\n"
@@ -5095,11 +5136,11 @@ msgstr ""
 
 #: winerror.mc:1778
 msgid "Connection invalid.\n"
-msgstr ""
+msgstr "සබැඳුම වලංගු නැහැ.\n"
 
 #: winerror.mc:1783
 msgid "Connection is active.\n"
-msgstr ""
+msgstr "සබැඳුම සක්‍රියයි.\n"
 
 #: winerror.mc:1788
 msgid "Network unreachable.\n"
@@ -5119,11 +5160,11 @@ msgstr ""
 
 #: winerror.mc:1808
 msgid "Request aborted.\n"
-msgstr ""
+msgstr "ඉල්ලීම අහෝසි කරා.\n"
 
 #: winerror.mc:1813
 msgid "Connection aborted.\n"
-msgstr ""
+msgstr "සබැඳුම් අහෝසි කරා.\n"
 
 #: winerror.mc:1818
 msgid "Please retry operation.\n"
@@ -5227,11 +5268,12 @@ msgstr ""
 
 #: winerror.mc:1943
 msgid "Invalid owner.\n"
-msgstr ""
+msgstr "අවලංගු හිමිකරු.\n"
 
 #: winerror.mc:1948
+#, fuzzy
 msgid "Invalid primary group.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:1953
 msgid "No impersonation token.\n"
@@ -5259,11 +5301,11 @@ msgstr ""
 
 #: winerror.mc:1983
 msgid "Invalid account name.\n"
-msgstr ""
+msgstr "අවලංගු ගිණුම් නාමය.\n"
 
 #: winerror.mc:1988
 msgid "User already exists.\n"
-msgstr ""
+msgstr "පරිශීලකය දැනටමත් තියෙනවා.\n"
 
 #: winerror.mc:1993
 msgid "No such user.\n"
@@ -5271,7 +5313,7 @@ msgstr ""
 
 #: winerror.mc:1998
 msgid "Group already exists.\n"
-msgstr ""
+msgstr "සමූහය දැනටමත් තියෙනවා.\n"
 
 #: winerror.mc:2003
 msgid "No such group.\n"
@@ -5295,7 +5337,7 @@ msgstr "වැරදි මුර පදය.\n"
 
 #: winerror.mc:2028
 msgid "Ill-formed password.\n"
-msgstr ""
+msgstr "මුර පදය හොඳට හදල නැහැ.\n"
 
 #: winerror.mc:2033
 msgid "Password restriction.\n"
@@ -5310,12 +5352,13 @@ msgid "Account restriction.\n"
 msgstr ""
 
 #: winerror.mc:2048
+#, fuzzy
 msgid "Invalid logon hours.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2053
 msgid "Invalid workstation.\n"
-msgstr ""
+msgstr "අවලංගු සේවාස්ථානය.\n"
 
 #: winerror.mc:2058
 msgid "Password expired.\n"
@@ -5338,20 +5381,22 @@ msgid "LUIDs exhausted.\n"
 msgstr ""
 
 #: winerror.mc:2083
+#, fuzzy
 msgid "Invalid sub authority.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2088
 msgid "Invalid ACL.\n"
-msgstr ""
+msgstr "අවලංගු ACL.\n"
 
 #: winerror.mc:2093
 msgid "Invalid SID.\n"
-msgstr ""
+msgstr "අවලංගු SID.\n"
 
 #: winerror.mc:2098
+#, fuzzy
 msgid "Invalid security descriptor.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2103
 msgid "Bad inherited ACL.\n"
@@ -5366,16 +5411,18 @@ msgid "Server not disabled.\n"
 msgstr ""
 
 #: winerror.mc:2118
+#, fuzzy
 msgid "Invalid ID authority.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2123
 msgid "Allotted space exceeded.\n"
 msgstr ""
 
 #: winerror.mc:2128
+#, fuzzy
 msgid "Invalid group attributes.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2133
 msgid "Bad impersonation level.\n"
@@ -5402,24 +5449,27 @@ msgid "Can't access domain information.\n"
 msgstr ""
 
 #: winerror.mc:2163
+#, fuzzy
 msgid "Invalid server state.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2168
+#, fuzzy
 msgid "Invalid domain state.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2173
+#, fuzzy
 msgid "Invalid domain role.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2178
 msgid "No such domain.\n"
-msgstr ""
+msgstr "මෙහෙම වසමක් නැහැ.\n"
 
 #: winerror.mc:2183
 msgid "Domain already exists.\n"
-msgstr ""
+msgstr "වසම දැනටමත් පවතිනවා.\n"
 
 #: winerror.mc:2188
 msgid "Domain limit exceeded.\n"
@@ -5462,16 +5512,18 @@ msgid "Logon session ID collision.\n"
 msgstr ""
 
 #: winerror.mc:2238
+#, fuzzy
 msgid "Invalid logon type.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2243
 msgid "Cannot impersonate.\n"
 msgstr ""
 
 #: winerror.mc:2248
+#, fuzzy
 msgid "Invalid transaction state.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2253
 msgid "Security DB commit failure.\n"
@@ -5543,7 +5595,7 @@ msgstr ""
 
 #: winerror.mc:2343
 msgid "Invalid member.\n"
-msgstr ""
+msgstr "අවලංගු සාමාජිකයා.\n"
 
 #: winerror.mc:2348
 msgid "Too many SIDs.\n"
@@ -5587,27 +5639,28 @@ msgstr ""
 
 #: winerror.mc:2398
 msgid "Invalid window handle.\n"
-msgstr "වලංගු නැති කවුළුවේ හසුරුව.\n"
+msgstr "අවලංගු කවුළුවේ හසුරුව.\n"
 
 #: winerror.mc:2403
 msgid "Invalid menu handle.\n"
-msgstr "වලංගු නැති මෙනුවේ හසුරුව.\n"
+msgstr "අවලංගු මෙනුවේ හසුරුව.\n"
 
 #: winerror.mc:2408
 msgid "Invalid cursor handle.\n"
-msgstr "වලංගු නැති කර්සරයේ හසුරුව.\n"
+msgstr "අවලංගු කර්සරයේ හසුරුව.\n"
 
 #: winerror.mc:2413
+#, fuzzy
 msgid "Invalid accelerator table handle.\n"
-msgstr ""
+msgstr "අවලංගු හසුරුව.\n"
 
 #: winerror.mc:2418
 msgid "Invalid hook handle.\n"
-msgstr ""
+msgstr "අවලංගු කොක්ක හසුරුව.\n"
 
 #: winerror.mc:2423
 msgid "Invalid DWP handle.\n"
-msgstr ""
+msgstr "අවලංගු DWP හසුරුව.\n"
 
 #: winerror.mc:2428
 msgid "Can't create top-level child window.\n"
@@ -5638,12 +5691,13 @@ msgid "Class has open windows.\n"
 msgstr ""
 
 #: winerror.mc:2463
+#, fuzzy
 msgid "Invalid index.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2468
 msgid "Invalid icon handle.\n"
-msgstr "වලංගු නැති අයිකන හසුරුවක්.\n"
+msgstr "අවලංගු අයිකන හසුරුවක්.\n"
 
 #: winerror.mc:2473
 msgid "Private dialog index.\n"
@@ -5675,27 +5729,30 @@ msgstr ""
 
 #: winerror.mc:2508
 msgid "Invalid combo box message.\n"
-msgstr ""
+msgstr "අවලංගු සංයුක්ත කොටුවේ පණිවිඩය.\n"
 
 #: winerror.mc:2513
 msgid "Not a combo box window.\n"
 msgstr ""
 
 #: winerror.mc:2518
+#, fuzzy
 msgid "Invalid edit height.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2523
 msgid "DC not found.\n"
 msgstr ""
 
 #: winerror.mc:2528
+#, fuzzy
 msgid "Invalid hook filter.\n"
-msgstr ""
+msgstr "අවලංගු කොක්ක"
 
 #: winerror.mc:2533
+#, fuzzy
 msgid "Invalid filter procedure.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2538
 msgid "Hook procedure needs module handle.\n"
@@ -5715,11 +5772,11 @@ msgstr ""
 
 #: winerror.mc:2558
 msgid "Invalid list box message.\n"
-msgstr ""
+msgstr "අවලංගු ලැයිස්තු කොටුව පණිවිඩය.\n"
 
 #: winerror.mc:2563
 msgid "Invalid LB_SETCOUNT sent.\n"
-msgstr ""
+msgstr "අවලංගු LB_SETCOUNT එකක් යවල.\n"
 
 #: winerror.mc:2568
 msgid "No tab stops on this list box.\n"
@@ -5738,12 +5795,13 @@ msgid "Window has no system menu.\n"
 msgstr ""
 
 #: winerror.mc:2588
+#, fuzzy
 msgid "Invalid message box style.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2593
 msgid "Invalid SPI parameter.\n"
-msgstr "වලංගු නැති SPI පරාමිතියක්.\n"
+msgstr "අවලංගු SPI පරාමිතියක්.\n"
 
 #: winerror.mc:2598
 msgid "Screen already locked.\n"
@@ -5759,11 +5817,11 @@ msgstr ""
 
 #: winerror.mc:2613
 msgid "Invalid GW command.\n"
-msgstr ""
+msgstr "අවලංගු GW විධානය.\n"
 
 #: winerror.mc:2618
 msgid "Invalid thread ID.\n"
-msgstr ""
+msgstr "අවලංගු පොට ID එකක්.\n"
 
 #: winerror.mc:2623
 msgid "Not an MDI child window.\n"
@@ -5779,11 +5837,11 @@ msgstr "අනුචලන තීරු නැහැ.\n"
 
 #: winerror.mc:2638
 msgid "Invalid scrollbar range.\n"
-msgstr "වලංගු නැති අනුචලන තීරුවේ පරාසය.\n"
+msgstr "අවලංගු අනුචලන තීරුවේ පරාසය.\n"
 
 #: winerror.mc:2643
 msgid "Invalid ShowWin command.\n"
-msgstr ""
+msgstr "අවලංගු ShowWin විධානය.\n"
 
 #: winerror.mc:2648
 msgid "No system resources.\n"
@@ -5815,7 +5873,7 @@ msgstr ""
 
 #: winerror.mc:2683
 msgid "Invalid keyboard handle.\n"
-msgstr ""
+msgstr "අවලංගු යතුරුපුවරුව හසුරුව.\n"
 
 #: winerror.mc:2688
 msgid "Hook type not allowed.\n"
@@ -5831,7 +5889,7 @@ msgstr "කාලඡේදනය.\n"
 
 #: winerror.mc:2703
 msgid "Invalid monitor handle.\n"
-msgstr ""
+msgstr "අවලංගු මොනිටරය හසුරුව.\n"
 
 #: winerror.mc:2708
 msgid "Event log file corrupt.\n"
@@ -5855,7 +5913,7 @@ msgstr ""
 
 #: winerror.mc:2733
 msgid "Installation aborted by user.\n"
-msgstr ""
+msgstr "ස්ථාපනය අහෝසි කරා.\n"
 
 #: winerror.mc:2738
 msgid "Installation failure.\n"
@@ -5871,7 +5929,7 @@ msgstr ""
 
 #: winerror.mc:2753
 msgid "Unknown feature.\n"
-msgstr ""
+msgstr "දන්නේ නැති වි‍ශේෂාංගයක්.\n"
 
 #: winerror.mc:2758
 msgid "Unknown component.\n"
@@ -5882,8 +5940,9 @@ msgid "Unknown property.\n"
 msgstr ""
 
 #: winerror.mc:2768
+#, fuzzy
 msgid "Invalid handle state.\n"
-msgstr ""
+msgstr "අවලංගු හසුරුව"
 
 #: winerror.mc:2773
 msgid "Bad configuration.\n"
@@ -5899,15 +5958,16 @@ msgstr ""
 
 #: winerror.mc:2788
 msgid "Wrong installation package version.\n"
-msgstr ""
+msgstr "වැරදි ස්ථාපන පැකේජය අනුවාදය.\n"
 
 #: winerror.mc:2793
 msgid "Product uninstalled.\n"
 msgstr ""
 
 #: winerror.mc:2798
+#, fuzzy
 msgid "Invalid query syntax.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2803
 msgid "Invalid field.\n"
@@ -5923,11 +5983,11 @@ msgstr ""
 
 #: winerror.mc:2818
 msgid "Installation package failed to open.\n"
-msgstr ""
+msgstr "ස්ථාපන පැකේජය ඇරෙන්න බැරි උනා.\n"
 
 #: winerror.mc:2823
 msgid "Installation package is invalid.\n"
-msgstr ""
+msgstr "ස්ථාපන පැකේජය වලංගු නැහැ.\n"
 
 #: winerror.mc:2828
 msgid "Installer user interface failed.\n"
@@ -5947,7 +6007,7 @@ msgstr ""
 
 #: winerror.mc:2848
 msgid "Installation package rejected.\n"
-msgstr ""
+msgstr "ස්ථාපන පැකේජය ප්‍රතික්ෂේප කරා.\n"
 
 #: winerror.mc:2853
 msgid "Function could not be called.\n"
@@ -5959,7 +6019,7 @@ msgstr ""
 
 #: winerror.mc:2863
 msgid "Invalid table.\n"
-msgstr "වලංගු නැති වගුවක්.\n"
+msgstr "අවලංගු වගුවක්.\n"
 
 #: winerror.mc:2868
 msgid "Data type mismatch.\n"
@@ -5990,8 +6050,9 @@ msgid "Failed to open the patch package.\n"
 msgstr ""
 
 #: winerror.mc:2903
+#, fuzzy
 msgid "Invalid patch package.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2908
 msgid "Unsupported patch package.\n"
@@ -6002,8 +6063,9 @@ msgid "Another version is installed.\n"
 msgstr "වෙන අනුවාදයක් ස්ථාපන කරලා තියෙනවා.\n"
 
 #: winerror.mc:2918
+#, fuzzy
 msgid "Invalid command line.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2923
 msgid "Remote installation not allowed.\n"
@@ -6014,44 +6076,49 @@ msgid "Reboot initiated after successful install.\n"
 msgstr ""
 
 #: winerror.mc:2933
+#, fuzzy
 msgid "Invalid string binding.\n"
-msgstr ""
+msgstr "අවලංගු අනුලකුණු වැල"
 
 #: winerror.mc:2938
 msgid "Wrong kind of binding.\n"
 msgstr ""
 
 #: winerror.mc:2943
+#, fuzzy
 msgid "Invalid binding.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2948
 msgid "RPC protocol sequence not supported.\n"
 msgstr ""
 
 #: winerror.mc:2953
+#, fuzzy
 msgid "Invalid RPC protocol sequence.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2958
 msgid "Invalid string UUID.\n"
-msgstr ""
+msgstr "අවලංගු අනුලකුණු වැල UUID.\n"
 
 #: winerror.mc:2963
+#, fuzzy
 msgid "Invalid endpoint format.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2968
 msgid "Invalid network address.\n"
-msgstr ""
+msgstr "අවලංගු ජාල ලිපිනය.\n"
 
 #: winerror.mc:2973
 msgid "No endpoint found.\n"
 msgstr ""
 
 #: winerror.mc:2978
+#, fuzzy
 msgid "Invalid timeout value.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:2983
 msgid "Object UUID not found.\n"
@@ -6111,7 +6178,7 @@ msgstr ""
 
 #: winerror.mc:3053
 msgid "Invalid network options.\n"
-msgstr ""
+msgstr "අවලංගු ජාල විකල්ප.\n"
 
 #: winerror.mc:3058
 msgid "No RPC call active.\n"
@@ -6135,11 +6202,12 @@ msgstr ""
 
 #: winerror.mc:3088
 msgid "Invalid tag.\n"
-msgstr ""
+msgstr "අවලංගු ටැගය.\n"
 
 #: winerror.mc:3093
+#, fuzzy
 msgid "Invalid array bounds.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:3098
 msgid "No entry name.\n"
@@ -6147,7 +6215,7 @@ msgstr ""
 
 #: winerror.mc:3103
 msgid "Invalid name syntax.\n"
-msgstr ""
+msgstr "අවලංගු නමේ රීතිය.\n"
 
 #: winerror.mc:3108
 msgid "Unsupported name syntax.\n"
@@ -6194,16 +6262,18 @@ msgid "Unknown authentication level.\n"
 msgstr ""
 
 #: winerror.mc:3163
+#, fuzzy
 msgid "Invalid authentication identity.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:3168
 msgid "Unknown authorization service.\n"
 msgstr ""
 
 #: winerror.mc:3173
+#, fuzzy
 msgid "Invalid entry.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:3178
 msgid "Can't perform operation.\n"
@@ -6223,7 +6293,7 @@ msgstr ""
 
 #: winerror.mc:3198
 msgid "Invalid version option.\n"
-msgstr ""
+msgstr "අවලංගු අනුවාදය විකල්පය.\n"
 
 #: winerror.mc:3203
 msgid "No more members.\n"
@@ -6251,7 +6321,7 @@ msgstr ""
 
 #: winerror.mc:3233
 msgid "Invalid network address family.\n"
-msgstr ""
+msgstr "අවලංගු ජාල ලිපිනය පවුල.\n"
 
 #: winerror.mc:3238
 msgid "Operation not supported.\n"
@@ -6330,8 +6400,9 @@ msgid "Bad stub data.\n"
 msgstr ""
 
 #: winerror.mc:3333
+#, fuzzy
 msgid "Invalid user buffer.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:3338
 msgid "Unrecognized media.\n"
@@ -6375,7 +6446,7 @@ msgstr ""
 
 #: winerror.mc:3388
 msgid "Printer driver already installed.\n"
-msgstr "මුද්රකයේ ධාවකය දැනටමත් ස්ථාපන කරලා.\n"
+msgstr "මුද්‍රකයේ ධාවකය දැනටමත් ස්ථාපන කරලා.\n"
 
 #: winerror.mc:3393
 msgid "Unknown port.\n"
@@ -6383,7 +6454,7 @@ msgstr ""
 
 #: winerror.mc:3398
 msgid "Unknown printer driver.\n"
-msgstr "දන්නේ නැති මුද්රකයේ ධාවකය.\n"
+msgstr "දන්නේ නැති මුද්‍රකයේ ධාවකය.\n"
 
 #: winerror.mc:3403
 msgid "Unknown print processor.\n"
@@ -6391,31 +6462,32 @@ msgstr ""
 
 #: winerror.mc:3408
 msgid "Invalid separator file.\n"
-msgstr "වලංගු නැති වෙන්කරණ ගොනුව.\n"
+msgstr "අවලංගු වෙන්කරණ ගොනුව.\n"
 
 #: winerror.mc:3413
 msgid "Invalid priority.\n"
-msgstr ""
+msgstr "අවලංගු ප්‍රමුඛතාවය.\n"
 
 #: winerror.mc:3418
 msgid "Invalid printer name.\n"
-msgstr "වලංගු නැති මුද්රකයේ නම.\n"
+msgstr "අවලංගු මුද්‍රකයේ නම.\n"
 
 #: winerror.mc:3423
 msgid "Printer already exists.\n"
-msgstr "මුද්රකය දැනටමත් පවතිනවා.\n"
+msgstr "මුද්‍රකය දැනටමත් පවතිනවා.\n"
 
 #: winerror.mc:3428
 msgid "Invalid printer command.\n"
-msgstr "වලංගු නැති මුද්රකය විධානය.\n"
+msgstr "අවලංගු මුද්‍රකය විධානය.\n"
 
 #: winerror.mc:3433
 msgid "Invalid data type.\n"
-msgstr ""
+msgstr "අවලංගු දත්ත වර්ගය.\n"
 
 #: winerror.mc:3438
+#, fuzzy
 msgid "Invalid environment.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:3443
 msgid "No more bindings.\n"
@@ -6502,8 +6574,9 @@ msgid "Thread not canceled.\n"
 msgstr "පොට අවලංගු කරල නැහැ.\n"
 
 #: winerror.mc:3548
+#, fuzzy
 msgid "Invalid handle operation.\n"
-msgstr ""
+msgstr "අවලංගු හසුරුව"
 
 #: winerror.mc:3553
 msgid "Wrong serializing package version.\n"
@@ -6514,8 +6587,9 @@ msgid "Wrong stub version.\n"
 msgstr ""
 
 #: winerror.mc:3563
+#, fuzzy
 msgid "Invalid pipe object.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:3568
 msgid "Wrong pipe order.\n"
@@ -6535,19 +6609,19 @@ msgstr ""
 
 #: winerror.mc:3588
 msgid "Invalid object.\n"
-msgstr "වලංගු නැති වස්තුව.\n"
+msgstr "අවලංගු වස්තුව.\n"
 
 #: winerror.mc:3593
 msgid "Invalid time.\n"
-msgstr "වලංගු නැති වෙලාව.\n"
+msgstr "අවලංගු වෙලාව.\n"
 
 #: winerror.mc:3598
 msgid "Invalid form name.\n"
-msgstr ""
+msgstr "අවලංගු පෝරමයේ නම.\n"
 
 #: winerror.mc:3603
 msgid "Invalid form size.\n"
-msgstr ""
+msgstr "අවලංගු පෝරමයේ ප්‍රමාණය.\n"
 
 #: winerror.mc:3608
 msgid "Already awaiting printer handle.\n"
@@ -6555,11 +6629,12 @@ msgstr ""
 
 #: winerror.mc:3613
 msgid "Printer deleted.\n"
-msgstr "මුද්රකයව මකලා.\n"
+msgstr "මුද්‍රකයව මකලා.\n"
 
 #: winerror.mc:3618
+#, fuzzy
 msgid "Invalid printer state.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:3623
 msgid "User must change password.\n"
@@ -6574,28 +6649,32 @@ msgid "Account locked out.\n"
 msgstr ""
 
 #: winerror.mc:3638
+#, fuzzy
 msgid "Invalid pixel format.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:3643
 msgid "Invalid driver.\n"
-msgstr ""
+msgstr "අවලංගු ධාවකයක්.\n"
 
 #: winerror.mc:3648
+#, fuzzy
 msgid "Invalid object resolver set.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:3653
 msgid "Incomplete RPC send.\n"
 msgstr ""
 
 #: winerror.mc:3658
+#, fuzzy
 msgid "Invalid asynchronous RPC handle.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:3663
+#, fuzzy
 msgid "Invalid asynchronous RPC call.\n"
-msgstr ""
+msgstr "අවලංගු"
 
 #: winerror.mc:3668
 msgid "RPC pipe closed.\n"
@@ -6719,7 +6798,7 @@ msgstr ""
 
 #: mpr.rc:35 wininet.rc:37
 msgid "Enter Network Password"
-msgstr ""
+msgstr "ජාලයේ මුර පදය ඇතුල් කරන්න"
 
 #: mpr.rc:38 wininet.rc:40 wininet.rc:60
 msgid "Please enter your username and password:"
@@ -6763,11 +6842,11 @@ msgstr ""
 
 #: mshtml.rc:39
 msgid "Hyperlink"
-msgstr ""
+msgstr "අධිබැඳිය"
 
 #: mshtml.rc:42
 msgid "Hyperlink Information"
-msgstr ""
+msgstr "අධිබැඳියේ තොරතුරු"
 
 #: mshtml.rc:43 winecfg.rc:245
 msgid "&Type:"
@@ -6783,11 +6862,11 @@ msgstr "HTML ලේඛය"
 
 #: mshtml.rc:29
 msgid "Downloading from %s..."
-msgstr ""
+msgstr "%s එකිං බාගැනීම කරනවා..."
 
 #: mshtml.rc:28
 msgid "Done"
-msgstr ""
+msgstr "ඉවරයි"
 
 #: msi.rc:31
 msgid ""
@@ -7166,7 +7245,7 @@ msgstr ""
 
 #: msi.rc:179 msi.rc:200
 msgid "Feature: [1]"
-msgstr ""
+msgstr "වි‍ශේෂාංගය: [1]"
 
 #: msi.rc:180 msi.rc:201
 msgid "Class Id: [1]"
@@ -7226,7 +7305,7 @@ msgstr ""
 
 #: msi.rc:210
 msgid "Key: [1], Name: [2], Value: [3]"
-msgstr ""
+msgstr "යතුර: [1], නම: [2], අගය: [3]"
 
 #: msi.rc:72
 msgid "{{Fatal error: }}"
@@ -7253,7 +7332,7 @@ msgstr ""
 
 #: msi.rc:77
 msgid "{{Disk full: }}"
-msgstr ""
+msgstr "{{ඩිස්කය පිරිලා: }}"
 
 #: msi.rc:78
 msgid "Action [Time]: [1]. [2]"
@@ -7265,7 +7344,7 @@ msgstr ""
 
 #: msi.rc:82
 msgid "=== Logging started: [Date]  [Time] ==="
-msgstr ""
+msgstr "=== ලොගනය පටන්ගත්තා: [දිනය]  [වෙලාව] ==="
 
 #: msi.rc:80
 msgid "Action start [Time]: [1]."
@@ -7287,17 +7366,19 @@ msgstr ""
 
 #: msrle32.rc:31
 msgid "Wine MS-RLE video codec"
-msgstr ""
+msgstr "Wine MS-RLE වීඩියෝ කොඩෙක්"
 
 #: msrle32.rc:32
 msgid ""
 "Wine MS-RLE video codec\n"
 "Copyright 2002 by Michael Guennewig"
 msgstr ""
+"Wine MS-RLE වීඩියෝ කොඩෙක්\n"
+"Copyright 2002 by Michael Guennewig"
 
 #: msvfw32.rc:33
 msgid "Video Compression"
-msgstr ""
+msgstr "වීඩියෝ හැකිළීම"
 
 #: msvfw32.rc:39
 msgid "&Compressor:"
@@ -7337,7 +7418,7 @@ msgstr ""
 
 #: oleacc.rc:31
 msgid "unknown object"
-msgstr ""
+msgstr "දන්නේ නැති වස්තුවක්"
 
 #: oleacc.rc:32
 msgid "title bar"
@@ -7409,11 +7490,11 @@ msgstr "ප්රස්තාරය"
 
 #: oleacc.rc:49
 msgid "dialog"
-msgstr ""
+msgstr "දෙබස"
 
 #: oleacc.rc:50
 msgid "border"
-msgstr ""
+msgstr "දාරය"
 
 #: oleacc.rc:51
 msgid "grouping"
@@ -7533,7 +7614,7 @@ msgstr "ප්රගති තීරුව"
 
 #: oleacc.rc:80
 msgid "dial"
-msgstr ""
+msgstr "ඩයල්"
 
 #: oleacc.rc:81
 msgid "hot key field"
@@ -7549,15 +7630,15 @@ msgstr "බැමුම් මංජුසාව"
 
 #: oleacc.rc:84
 msgid "diagram"
-msgstr ""
+msgstr "රූප සටහන"
 
 #: oleacc.rc:85
 msgid "animation"
-msgstr ""
+msgstr "සජීවනය"
 
 #: oleacc.rc:86
 msgid "equation"
-msgstr ""
+msgstr "සමීකරණය"
 
 #: oleacc.rc:87
 msgid "drop down button"
@@ -7573,7 +7654,7 @@ msgstr ""
 
 #: oleacc.rc:90
 msgid "white space"
-msgstr ""
+msgstr "සුදු ඉඩ"
 
 #: oleacc.rc:91
 msgid "page tab list"
@@ -7658,7 +7739,7 @@ msgstr ""
 #: oleacc.rc:109
 msgctxt "object state"
 msgid "busy"
-msgstr ""
+msgstr "කාර්යබහුලයි"
 
 #: oleacc.rc:110
 msgctxt "object state"
@@ -7678,7 +7759,7 @@ msgstr ""
 #: oleacc.rc:113
 msgctxt "object state"
 msgid "invisible"
-msgstr ""
+msgstr "අදෘශ්‍යමාන"
 
 #: oleacc.rc:114
 msgctxt "object state"
@@ -7708,7 +7789,7 @@ msgstr ""
 #: oleacc.rc:119
 msgctxt "object state"
 msgid "selectable"
-msgstr ""
+msgstr "තෝරන්න පුළුවන්"
 
 #: oleacc.rc:120
 msgctxt "object state"
@@ -7757,11 +7838,11 @@ msgstr ""
 
 #: oleaut32.rc:30 oleview.rc:146
 msgid "True"
-msgstr ""
+msgstr "සත්‍ය"
 
 #: oleaut32.rc:31 oleview.rc:147
 msgid "False"
-msgstr ""
+msgstr "අසත්‍ය"
 
 #: oleaut32.rc:34
 msgid "On"
@@ -7781,7 +7862,7 @@ msgstr "වස්තුව වර්ගය:"
 
 #: oledlg.rc:64 oledlg.rc:102
 msgid "Result"
-msgstr ""
+msgstr "ප්‍රතිඵල"
 
 #: oledlg.rc:65
 msgid "Create New"
@@ -7813,7 +7894,7 @@ msgstr "ගොනුව:"
 
 #: oledlg.rc:82
 msgid "Paste Special"
-msgstr ""
+msgstr "ඇලවීම් විශේෂතා"
 
 #: oledlg.rc:85 setupapi.rc:43
 msgid "Source:"
@@ -7866,19 +7947,19 @@ msgstr ""
 
 #: oledlg.rc:35
 msgid "&Convert..."
-msgstr ""
+msgstr "පරිවර්තනය කරන්න... (&C)"
 
 #: oledlg.rc:36
 msgid "%1 %2 &Object"
-msgstr ""
+msgstr "%1 %2 වස්තුව (&O)"
 
 #: oledlg.rc:34
 msgid "%1 &Object"
-msgstr ""
+msgstr "%1 වස්තුව (&O)"
 
 #: oledlg.rc:33 oleview.rc:40
 msgid "&Object"
-msgstr ""
+msgstr "වස්තුව (&O)"
 
 #: oledlg.rc:41
 msgid "Inserts the contents of the clipboard into your document as %s."
@@ -7923,7 +8004,7 @@ msgstr ""
 
 #: oledlg.rc:48 regedit.rc:430
 msgid "Unknown Type"
-msgstr ""
+msgstr "දන්නේ නැති වර්ගය"
 
 #: oledlg.rc:49
 msgid "Unknown Source"
@@ -7935,11 +8016,11 @@ msgstr ""
 
 #: sane.rc:41
 msgid "Scanning"
-msgstr ""
+msgstr "ස්කෑන් කරනවා"
 
 #: sane.rc:44
 msgid "SCANNING... Please Wait"
-msgstr ""
+msgstr "ස්කෑන් කරනවා... කරුණාකරලා බලාගෙන ඉන්න"
 
 #: sane.rc:31
 msgctxt "unit: pixels"
@@ -7968,15 +8049,15 @@ msgstr "us"
 
 #: serialui.rc:28
 msgid "Settings for %s"
-msgstr ""
+msgstr "%s එකේ සැකසුම්"
 
 #: serialui.rc:31
 msgid "Baud Rate"
-msgstr ""
+msgstr "බෝඩ් ශීඝ්‍රතාව"
 
 #: serialui.rc:33
 msgid "Parity"
-msgstr ""
+msgstr "සමතාවs"
 
 #: serialui.rc:35
 msgid "Flow Control"
@@ -7984,7 +8065,7 @@ msgstr ""
 
 #: serialui.rc:37
 msgid "Data Bits"
-msgstr ""
+msgstr "දත්ත බිටු"
 
 #: serialui.rc:39
 msgid "Stop Bits"
@@ -8018,7 +8099,7 @@ msgstr ""
 
 #: setupapi.rc:32 ipconfig.rc:34
 msgid "Unknown"
-msgstr ""
+msgstr "නොදනී"
 
 #: setupapi.rc:33
 msgid "Copy files from:"
@@ -8058,11 +8139,11 @@ msgstr ""
 
 #: shdoclc.rc:56
 msgid "&Encoding"
-msgstr ""
+msgstr "සංකේතනය (&E)"
 
 #: shdoclc.rc:58
 msgid "Pr&int"
-msgstr "මුද්රණය කරන්න (&I)"
+msgstr "මුද්‍රණය කරන්න (&I)"
 
 #: shdoclc.rc:66 shdoclc.rc:149 shdoclc.rc:173
 msgid "&Open Link"
@@ -8094,7 +8175,7 @@ msgstr ""
 
 #: shdoclc.rc:74
 msgid "Pr&int Picture..."
-msgstr "පින්තූරය මුද්රණ කරන්න... (&I)"
+msgstr "පින්තූරය මුද්‍රණ කරන්න... (&I)"
 
 #: shdoclc.rc:75
 msgid "&Go to My Pictures"
@@ -8166,11 +8247,11 @@ msgstr ""
 
 #: shdoclc.rc:166 shdoclc.rc:190
 msgid "Play"
-msgstr ""
+msgstr "ධාවනය කරන්න"
 
 #: shdoclc.rc:192
 msgid "Rewind"
-msgstr ""
+msgstr "පසුධාවනය කරන්න"
 
 #: shdoclc.rc:199
 msgid "Trace Tags"
@@ -8222,7 +8303,7 @@ msgstr ""
 
 #: shdoclc.rc:211
 msgid "Save HTML"
-msgstr ""
+msgstr "HTML සුරකින්න"
 
 #: shdoclc.rc:213
 msgid "&Browse View"
@@ -8262,19 +8343,19 @@ msgstr "පහලට අනුචලනය කරන්න"
 
 #: shdoclc.rc:235
 msgid "Left Edge"
-msgstr ""
+msgstr "වම අග්‍රය"
 
 #: shdoclc.rc:236
 msgid "Right Edge"
-msgstr ""
+msgstr "දකුණ අග්‍රය"
 
 #: shdoclc.rc:238
 msgid "Page Left"
-msgstr ""
+msgstr "පිටුව වමට"
 
 #: shdoclc.rc:239
 msgid "Page Right"
-msgstr ""
+msgstr "පිටුව දකුණට"
 
 #: shdoclc.rc:241
 msgid "Scroll Left"
@@ -8286,7 +8367,7 @@ msgstr "දකුණට අනුචලනය කරන්න"
 
 #: shdoclc.rc:28
 msgid "Wine Internet Explorer"
-msgstr ""
+msgstr "Wine Internet Explorer"
 
 #: shdoclc.rc:33
 msgid "&w&bPage &p"
@@ -8362,7 +8443,7 @@ msgstr "ගුණාංග"
 #: shell32.rc:85
 msgctxt "recycle bin"
 msgid "&Restore"
-msgstr ""
+msgstr "පිළිනගන්න (&R)"
 
 #: shell32.rc:86
 msgid "&Erase"
@@ -8431,7 +8512,7 @@ msgstr "Wine ඔබට ගෙනල්ල තියෙන්නේ මේගො�
 
 #: shell32.rc:334
 msgid "Run"
-msgstr ""
+msgstr "ධාවනය කරන්න"
 
 #: shell32.rc:338
 msgid ""
@@ -8506,7 +8587,7 @@ msgstr ""
 
 #: shell32.rc:141 winefile.rc:172 winefile.rc:114
 msgid "Attributes"
-msgstr ""
+msgstr "උපලක්‍ෂණ"
 
 #: shell32.rc:143
 msgid "Size available"
@@ -8514,7 +8595,7 @@ msgstr ""
 
 #: shell32.rc:145
 msgid "Comments"
-msgstr ""
+msgstr "සටහන්"
 
 #: shell32.rc:146
 msgid "Owner"
@@ -8522,7 +8603,7 @@ msgstr "හිමිකරු"
 
 #: shell32.rc:147
 msgid "Group"
-msgstr ""
+msgstr "සමූහය"
 
 #: shell32.rc:148
 msgid "Original location"
@@ -8547,7 +8628,7 @@ msgstr "පාලක පුවරුව"
 
 #: shell32.rc:166
 msgid "Select"
-msgstr ""
+msgstr "තෝරන්න"
 
 #: shell32.rc:189
 msgid "Restart"
@@ -8591,7 +8672,7 @@ msgstr ""
 
 #: shell32.rc:209
 msgid "My Videos"
-msgstr ""
+msgstr "මගේ වීඩියෝ"
 
 #: shell32.rc:210
 msgctxt "directory"
@@ -8644,7 +8725,7 @@ msgstr ""
 
 #: shell32.rc:223
 msgid "Videos"
-msgstr ""
+msgstr "වීඩියෝ"
 
 #: shell32.rc:216
 msgid "Program Files (x86)"
@@ -8664,7 +8745,7 @@ msgstr ""
 
 #: shell32.rc:227
 msgid "Playlists"
-msgstr ""
+msgstr "ධාවන ලැයිස්තු"
 
 #: shell32.rc:151 taskmgr.rc:326
 msgid "Status"
@@ -8684,11 +8765,11 @@ msgstr ""
 
 #: shell32.rc:230
 msgid "Sample Playlists"
-msgstr ""
+msgstr "නියැදි ධාවන ලැයිස්තු"
 
 #: shell32.rc:231
 msgid "Sample Videos"
-msgstr ""
+msgstr "නියැදි වීඩියෝ"
 
 #: shell32.rc:232
 msgid "Saved Games"
@@ -8704,7 +8785,7 @@ msgstr ""
 
 #: shell32.rc:236
 msgid "Downloads"
-msgstr ""
+msgstr "බාගැනීම්"
 
 #: shell32.rc:169
 msgid "Unable to create new Folder: Permission denied."
@@ -8789,7 +8870,7 @@ msgstr "ක්රියාත්මක කළ ගොනු (*.exe)"
 
 #: shell32.rc:244
 msgid "There is no Windows program configured to open this type of file."
-msgstr ""
+msgstr "Windows යෙදුමක් නැහැ මේ ගොනුව වර්ගය අරින්නට."
 
 #: shell32.rc:246
 msgid "Are you sure you wish to permanently delete '%1'?"
@@ -8852,7 +8933,7 @@ msgstr "දෝෂයක්"
 
 #: shlwapi.rc:43
 msgid "Don't show me th&is message again"
-msgstr ""
+msgstr "මේ පණිවිඩය අයෙත් මට පෙන්නන්න එපා (&I)"
 
 #: shlwapi.rc:30
 msgid "%d bytes"
@@ -8911,19 +8992,19 @@ msgstr "නේපාලයේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:60
 msgid "Cape Verde Standard Time"
-msgstr ""
+msgstr "කේප් වර්ඩෙ සම්මත වෙලාව"
 
 #: tzres.rc:61
 msgid "Cape Verde Daylight Time"
-msgstr ""
+msgstr "කේප් වර්ඩෙ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:74
 msgid "Central European Standard Time"
-msgstr "මධ්යම යුරෝපයේ සම්මත වෙලාව"
+msgstr "මධ්‍යම යුරෝපයේ සම්මත වෙලාව"
 
 #: tzres.rc:75
 msgid "Central European Daylight Time"
-msgstr "මධ්යම යුරෝපයේ දිවා ආලෝකය වෙලාව"
+msgstr "මධ්‍යම යුරෝපයේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:140
 msgid "Morocco Standard Time"
@@ -8935,11 +9016,11 @@ msgstr "මොරොක්කෝවේ දිවා ආලෝකය වෙලා
 
 #: tzres.rc:72
 msgid "Central Europe Standard Time"
-msgstr "මධ්යම යුරෝපයේ සම්මත වෙලාව"
+msgstr "මධ්‍යම යුරෝපයේ සම්මත වෙලාව"
 
 #: tzres.rc:73
 msgid "Central Europe Daylight Time"
-msgstr "මධ්යම යුරෝපයේ දිවා ආලෝකය වෙලාව"
+msgstr "මධ්‍යම යුරෝපයේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:118
 msgid "Iran Standard Time"
@@ -8983,11 +9064,11 @@ msgstr "GMT දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:68
 msgid "Central Asia Standard Time"
-msgstr "මධ්යම ආසියාවේ සම්මත වෙලාව"
+msgstr "මධ්‍යම ආසියාවේ සම්මත වෙලාව"
 
 #: tzres.rc:69
 msgid "Central Asia Daylight Time"
-msgstr "මධ්යම ආසියාවේ දිවා ආලෝකය වෙලාව"
+msgstr "මධ්‍යම ආසියාවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:38
 msgid "Arabic Standard Time"
@@ -8999,19 +9080,19 @@ msgstr "අරාබි දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:132
 msgid "Magadan Standard Time"
-msgstr ""
+msgstr "මාගඩාන් සම්මත වෙලාව"
 
 #: tzres.rc:133
 msgid "Magadan Daylight Time"
-msgstr ""
+msgstr "මාගඩාන් දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:156
 msgid "Newfoundland Standard Time"
-msgstr ""
+msgstr "නිව්ෆවුන්ඩ්ලන්තයේ සම්මත වෙලාව"
 
 #: tzres.rc:157
 msgid "Newfoundland Daylight Time"
-msgstr ""
+msgstr "නිව්ෆවුන්ඩ්ලන්තයේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:224
 msgid "West Pacific Standard Time"
@@ -9031,27 +9112,29 @@ msgstr "පැසිෆිකයේ දිවා ආලෝකය වෙලාව
 
 #: tzres.rc:48
 msgid "Azerbaijan Standard Time"
-msgstr ""
+msgstr "අසර්බයිජානයේ සම්මත වෙලාව"
 
 #: tzres.rc:49
 msgid "Azerbaijan Daylight Time"
-msgstr ""
+msgstr "අසර්බයිජානයේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:182
 msgid "Samoa Standard Time"
-msgstr ""
+msgstr "සැමෝවා සම්මත වෙලාව"
 
 #: tzres.rc:183
 msgid "Samoa Daylight Time"
-msgstr ""
+msgstr "සැමෝවා දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:124
+#, fuzzy
 msgid "Kaliningrad Standard Time"
-msgstr ""
+msgstr "සම්මත වෙලාව"
 
 #: tzres.rc:125
+#, fuzzy
 msgid "Kaliningrad Daylight Time"
-msgstr ""
+msgstr "දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:166
 msgid "Pacific Standard Time (Mexico)"
@@ -9079,43 +9162,43 @@ msgstr "ටෝකියෝවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:130
 msgid "Line Islands Standard Time"
-msgstr ""
+msgstr "රේඛිය දූපත් සම්මත වෙලාව"
 
 #: tzres.rc:131
 msgid "Line Islands Daylight Time"
-msgstr ""
+msgstr "රේඛිය දූපත් දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:122
 msgid "Jordan Standard Time"
-msgstr ""
+msgstr "පෝර්දානයේ සම්මත වෙලාව"
 
 #: tzres.rc:123
 msgid "Jordan Daylight Time"
-msgstr ""
+msgstr "පෝර්දානයේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:78
 msgid "Central Standard Time"
-msgstr ""
+msgstr "මධ්‍යම සම්මත වෙලාව"
 
 #: tzres.rc:79
 msgid "Central Daylight Time"
-msgstr ""
+msgstr "මධ්‍යම දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:50
 msgid "Azores Standard Time"
-msgstr ""
+msgstr "ඇසෝරස් සම්මත වෙලාව"
 
 #: tzres.rc:51
 msgid "Azores Daylight Time"
-msgstr ""
+msgstr "ඇසෝරස් දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:158
 msgid "North Asia East Standard Time"
-msgstr ""
+msgstr "උතුරු ආසියාවේ නැගෙනහිර සම්මත වෙලාව"
 
 #: tzres.rc:159
 msgid "North Asia East Daylight Time"
-msgstr ""
+msgstr "උතුරු ආසියාවේ නැගෙනහිර දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:40
 msgid "Argentina Standard Time"
@@ -9171,11 +9254,11 @@ msgstr "ෆිජියේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:58
 msgid "Canada Central Standard Time"
-msgstr ""
+msgstr "මධ්‍යම කැනඩාවේ සම්මත වෙලාව"
 
 #: tzres.rc:59
 msgid "Canada Central Daylight Time"
-msgstr ""
+msgstr "මධ්‍යම කැනඩාවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:194
 msgid "Taipei Standard Time"
@@ -9195,11 +9278,11 @@ msgstr "බටහිර යුරෝපයේ දිවා ආලෝකය ව�
 
 #: tzres.rc:138
 msgid "Montevideo Standard Time"
-msgstr ""
+msgstr "මොන්ටෙවිඩෝ සම්මත වෙලාව"
 
 #: tzres.rc:139
 msgid "Montevideo Daylight Time"
-msgstr ""
+msgstr "මොන්ටෙවිඩෝ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:168
 msgid "Pakistan Standard Time"
@@ -9211,27 +9294,27 @@ msgstr "පකිස්ථානයේ දිවා ආලෝකය වෙලා
 
 #: tzres.rc:62
 msgid "Caucasus Standard Time"
-msgstr ""
+msgstr "කොකේසස් සම්මත වෙලාව"
 
 #: tzres.rc:63
 msgid "Caucasus Daylight Time"
-msgstr ""
+msgstr "කොකේසස් දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:46
 msgid "AUS Eastern Standard Time"
-msgstr ""
+msgstr "නැගෙනහිර ඕස්ට්රේලියාවේ සම්මත වෙලාව"
 
 #: tzres.rc:47
 msgid "AUS Eastern Daylight Time"
-msgstr ""
+msgstr "නැගෙනහිර ඕස්ට්රේලියාවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:148
 msgid "N. Central Asia Standard Time"
-msgstr ""
+msgstr "උතුරු මධ්‍යම ආසියාවේ සම්මත වෙලාව"
 
 #: tzres.rc:149
 msgid "N. Central Asia Daylight Time"
-msgstr ""
+msgstr "උතුරු මධ්‍යම ආසියාවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:94
 msgid "Eastern Standard Time"
@@ -9243,11 +9326,11 @@ msgstr "නැගෙනහිර දිවා ආලෝකය වේලාව"
 
 #: tzres.rc:80
 msgid "Central Standard Time (Mexico)"
-msgstr ""
+msgstr "මධ්‍යම සම්මත වෙලාව (මෙක්සිකෝව)"
 
 #: tzres.rc:81
 msgid "Central Daylight Time (Mexico)"
-msgstr ""
+msgstr "මධ්‍යම දිවා ආලෝකය වෙලාව (මෙක්සිකෝව)"
 
 #: tzres.rc:42
 msgid "Atlantic Standard Time"
@@ -9283,11 +9366,11 @@ msgstr "ටැස්මේනියාවේ දිවා ආලෝකය වෙ
 
 #: tzres.rc:66
 msgid "Central America Standard Time"
-msgstr "මධ්යම ඇමරිකාවේ සම්මත වෙලාව"
+msgstr "මධ්‍යම ඇමරිකාවේ සම්මත වෙලාව"
 
 #: tzres.rc:67
 msgid "Central America Daylight Time"
-msgstr "මධ්යම ඇමරිකාවේ දිවා ආලෝකය වෙලාව"
+msgstr "මධ්‍යම ඇමරිකාවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:208
 msgid "US Mountain Standard Time"
@@ -9331,19 +9414,21 @@ msgstr "ඇෆ්ඝනිස්ථානයේ දිවා ආලෝකය ව
 
 #: tzres.rc:226
 msgid "Yakutsk Standard Time"
-msgstr ""
+msgstr "යකුට්ස්ක් සම්මත වෙලාව"
 
 #: tzres.rc:227
 msgid "Yakutsk Daylight Time"
-msgstr ""
+msgstr "යකුට්ස්ක් දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:176
+#, fuzzy
 msgid "SA Eastern Standard Time"
-msgstr ""
+msgstr "සම්මත වෙලාව"
 
 #: tzres.rc:177
+#, fuzzy
 msgid "SA Eastern Daylight Time"
-msgstr ""
+msgstr "දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:34
 msgid "Arab Standard Time"
@@ -9370,20 +9455,22 @@ msgid "Russian Daylight Time"
 msgstr "රුසියාවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:172
+#, fuzzy
 msgid "Romance Standard Time"
-msgstr ""
+msgstr "සම්මත වෙලාව"
 
 #: tzres.rc:173
+#, fuzzy
 msgid "Romance Daylight Time"
-msgstr ""
+msgstr "දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:98
 msgid "Ekaterinburg Standard Time"
-msgstr ""
+msgstr "ඊකේටර්බින්බර්ග් සම්මත වෙලාව"
 
 #: tzres.rc:99
 msgid "Ekaterinburg Daylight Time"
-msgstr ""
+msgstr "ඊකේටර්බින්බර්ග් දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:192
 msgid "Syria Standard Time"
@@ -9395,27 +9482,27 @@ msgstr "සිරියාවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:44
 msgid "AUS Central Standard Time"
-msgstr ""
+msgstr "මධ්‍යම ඕස්ට්රේලියාවේ සම්මත වෙලාව"
 
 #: tzres.rc:45
 msgid "AUS Central Daylight Time"
-msgstr ""
+msgstr "මධ්‍යම ඕස්ට්රේලියාවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:110
 msgid "Greenwich Standard Time"
-msgstr ""
+msgstr "ග්රිනිච් සම්මත වෙලාව"
 
 #: tzres.rc:111
 msgid "Greenwich Daylight Time"
-msgstr ""
+msgstr "ග්රිනිච් දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:204
 msgid "Ulaanbaatar Standard Time"
-msgstr ""
+msgstr "උලාන්බාටර් සම්මත වෙලාව"
 
 #: tzres.rc:205
 msgid "Ulaanbaatar Daylight Time"
-msgstr ""
+msgstr "උලාන්බාටර් දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:120
 msgid "Israel Standard Time"
@@ -9435,11 +9522,11 @@ msgstr "බංගලාදේශයේ දිවා ආලෝකය වෙලා
 
 #: tzres.rc:178
 msgid "SA Pacific Standard Time"
-msgstr ""
+msgstr "දකුණු ඇමරිකාව පැසිෆිකයේ සම්මත වෙලාව"
 
 #: tzres.rc:179
 msgid "SA Pacific Daylight Time"
-msgstr ""
+msgstr "දකුණු ඇමරිකාව පැසිෆිකයේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:222
 msgid "West Asia Standard Time"
@@ -9459,19 +9546,19 @@ msgstr "ඇලස්කාවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:170
 msgid "Paraguay Standard Time"
-msgstr ""
+msgstr "පැරගුවේ සම්මත වෙලාව"
 
 #: tzres.rc:171
 msgid "Paraguay Daylight Time"
-msgstr ""
+msgstr "පැරගුවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:84
 msgid "Dateline Standard Time"
-msgstr ""
+msgstr "Dateline සම්මත වෙලාව"
 
 #: tzres.rc:85
 msgid "Dateline Daylight Time"
-msgstr ""
+msgstr "Dateline දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:128
 msgid "Libya Standard Time"
@@ -9491,19 +9578,19 @@ msgstr "බහියාවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:212
 msgid "Venezuela Standard Time"
-msgstr ""
+msgstr "වෙනිසියුලාවේ සම්මත වෙලාව"
 
 #: tzres.rc:213
 msgid "Venezuela Daylight Time"
-msgstr ""
+msgstr "වෙනිසියුලාවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:114
 msgid "Hawaiian Standard Time"
-msgstr ""
+msgstr "හවායි සම්මත වෙලාව"
 
 #: tzres.rc:115
 msgid "Hawaiian Daylight Time"
-msgstr ""
+msgstr "හවායි දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:184
 msgid "SE Asia Standard Time"
@@ -9515,51 +9602,53 @@ msgstr "ගිනිකොනදිග ආසියාවේ දිවා ආල
 
 #: tzres.rc:154
 msgid "New Zealand Standard Time"
-msgstr ""
+msgstr "නවසීලන්තයේ සම්මත වෙලාව"
 
 #: tzres.rc:155
 msgid "New Zealand Daylight Time"
-msgstr ""
+msgstr "නවසීලන්තයේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:70
 msgid "Central Brazilian Standard Time"
-msgstr ""
+msgstr "මධ්‍යම බ්‍රසීලයේ සම්මත වෙලාව"
 
 #: tzres.rc:71
 msgid "Central Brazilian Daylight Time"
-msgstr ""
+msgstr "මධ්‍යම බ්‍රසීලයේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:56
 msgid "Belarus Standard Time"
-msgstr ""
+msgstr "බෙලාරස් සම්මත වෙලාව"
 
 #: tzres.rc:57
 msgid "Belarus Daylight Time"
-msgstr ""
+msgstr "බෙලාරස් දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:180
+#, fuzzy
 msgid "SA Western Standard Time"
-msgstr ""
+msgstr "සම්මත වෙලාව"
 
 #: tzres.rc:181
+#, fuzzy
 msgid "SA Western Daylight Time"
-msgstr ""
+msgstr "දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:108
 msgid "Greenland Standard Time"
-msgstr ""
+msgstr "ග්රීන්ලන්තයේ සම්මත වෙලාව"
 
 #: tzres.rc:109
 msgid "Greenland Daylight Time"
-msgstr ""
+msgstr "ග්රීන්ලන්තයේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:92
 msgid "Easter Island Standard Time"
-msgstr ""
+msgstr "ඊස්ටර් දූපතේ සම්මත වෙලාව"
 
 #: tzres.rc:93
 msgid "Easter Island Daylight Time"
-msgstr ""
+msgstr "ඊස්ටර් දූපතේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:96
 msgid "Egypt Standard Time"
@@ -9571,19 +9660,19 @@ msgstr "ඊජිප්තුවේ දිවා ආලෝකය වෙලාව
 
 #: tzres.rc:134
 msgid "Mauritius Standard Time"
-msgstr ""
+msgstr "මෞරිටුයුස් සම්මත වෙලාව"
 
 #: tzres.rc:135
 msgid "Mauritius Daylight Time"
-msgstr ""
+msgstr "මෞරිටුයුස් දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:214
 msgid "Vladivostok Standard Time"
-msgstr ""
+msgstr "ලාඩිවොස්ටොක් සම්මත වෙලාව"
 
 #: tzres.rc:215
 msgid "Vladivostok Daylight Time"
-msgstr ""
+msgstr "ලාඩිවොස්ටොක් දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:186
 msgid "Singapore Standard Time"
@@ -9603,51 +9692,51 @@ msgstr "කොරියාවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:86
 msgid "E. Africa Standard Time"
-msgstr ""
+msgstr "නැගෙනහිර අප්රිකාවේ සම්මත වෙලාව"
 
 #: tzres.rc:87
 msgid "E. Africa Daylight Time"
-msgstr ""
+msgstr "නැගෙනහිර අප්රිකාවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:102
 msgid "FLE Standard Time"
-msgstr ""
+msgstr "FLE සම්මත වෙලාව"
 
 #: tzres.rc:103
 msgid "FLE Daylight Time"
-msgstr ""
+msgstr "FLE දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:90
 msgid "E. South America Standard Time"
-msgstr ""
+msgstr "නැගෙනහිර දකුණු ඇමරිකාවේ සම්මත වෙලාව"
 
 #: tzres.rc:91
 msgid "E. South America Daylight Time"
-msgstr ""
+msgstr "නැගෙනහිර දකුණු ඇමරිකාවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:76
 msgid "Central Pacific Standard Time"
-msgstr ""
+msgstr "මධ්‍යම පැසිෆිකයේ සම්මත වෙලාව"
 
 #: tzres.rc:77
 msgid "Central Pacific Daylight Time"
-msgstr ""
+msgstr "මධ්‍යම පැසිෆිකයේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:218
 msgid "W. Central Africa Standard Time"
-msgstr ""
+msgstr "බටහිර මධ්‍යම අප්රිකාවේ සම්මත වෙලාව"
 
 #: tzres.rc:219
 msgid "W. Central Africa Daylight Time"
-msgstr ""
+msgstr "බටහිර මධ්‍යම අප්රිකාවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:162
 msgid "Pacific SA Standard Time"
-msgstr ""
+msgstr "පැසිෆිකය දකුණු ඇමරිකාවේ සම්මත වෙලාව"
 
 #: tzres.rc:163
 msgid "Pacific SA Daylight Time"
-msgstr ""
+msgstr "පැසිෆිකය දකුණු ඇමරිකාවේ දිවා ආලෝකය වෙලාව"
 
 #: tzres.rc:88
 msgid "E. Australia Standard Time"
@@ -9702,7 +9791,7 @@ msgstr ""
 
 #: user32.rc:31 user32.rc:44
 msgid "&Move"
-msgstr ""
+msgstr "ගෙනයන්න (&M)"
 
 #: user32.rc:32 user32.rc:45 wineconsole.rc:93
 msgid "&Size"
@@ -9734,11 +9823,11 @@ msgstr "ඊළඟ (&T)\tCtrl+F6"
 
 #: user32.rc:81
 msgid "&Abort"
-msgstr ""
+msgstr "අහෝසි කරන්න (&A)"
 
 #: user32.rc:85
 msgid "&Ignore"
-msgstr ""
+msgstr "නොසලකන්න (&I)"
 
 #: user32.rc:86
 msgid "&Try Again"
@@ -9754,7 +9843,7 @@ msgstr "කවුළුවක් තෝරන්න"
 
 #: user32.rc:72
 msgid "&More Windows..."
-msgstr ""
+msgstr "තව කවුළු... (&M)"
 
 #: winemac.rc:33
 msgid "Hide %@"
@@ -9786,15 +9875,15 @@ msgstr "හකුළන්න"
 
 #: winemac.rc:42
 msgid "Zoom"
-msgstr ""
+msgstr "විශාලනය"
 
 #: winemac.rc:43
 msgid "Enter Full Screen"
-msgstr ""
+msgstr "මුළු තිර ඇතුල් වෙන්න"
 
 #: winemac.rc:44
 msgid "Bring All to Front"
-msgstr ""
+msgstr "ඔක්කොම ඉස්සරහට ගේන්න"
 
 #: wineps.rc:31
 msgid "Paper Si&ze:"
@@ -9802,11 +9891,11 @@ msgstr "කඩදාසි තරම:"
 
 #: wineps.rc:39
 msgid "Duplex:"
-msgstr ""
+msgstr "ද්වීපත:"
 
 #: wineps.rc:50
 msgid "Setup"
-msgstr ""
+msgstr "පිහිටුම"
 
 #: wininet.rc:42 wininet.rc:62
 msgid "Realm"
@@ -10385,7 +10474,7 @@ msgstr ""
 
 #: winmm.rc:137
 msgid "Volume"
-msgstr ""
+msgstr "ශබ්දය"
 
 #: winmm.rc:138
 msgid "Master Volume"
@@ -10393,11 +10482,11 @@ msgstr ""
 
 #: winmm.rc:139
 msgid "Mute"
-msgstr ""
+msgstr "නිහඬ කරන්න"
 
 #: winspool.rc:37
 msgid "Print to File"
-msgstr "මුද්රණය කරන්න ගොනුවකකට"
+msgstr "මුද්‍රණය කරන්න ගොනුවකකට"
 
 #: winspool.rc:40
 msgid "&Output File Name:"
@@ -10493,7 +10582,7 @@ msgstr ""
 
 #: wldap32.rc:53
 msgid "Invalid Syntax"
-msgstr ""
+msgstr "අවලංගු රීති"
 
 #: wldap32.rc:64
 msgid "No Such Object"
@@ -10505,7 +10594,7 @@ msgstr "අන්වර්ථය ප්‍රශ්නයක්"
 
 #: wldap32.rc:66
 msgid "Invalid DN Syntax"
-msgstr ""
+msgstr "අවලංගු DN රීති"
 
 #: wldap32.rc:67
 msgid "Is Leaf"
@@ -10521,7 +10610,7 @@ msgstr ""
 
 #: wldap32.rc:81
 msgid "Invalid Credentials"
-msgstr ""
+msgstr "අවලංගු අක්තපත්‍ර"
 
 #: wldap32.rc:82
 msgid "Insufficient Rights"
@@ -10529,7 +10618,7 @@ msgstr ""
 
 #: wldap32.rc:83
 msgid "Busy"
-msgstr ""
+msgstr "කාර්යබහුලයි"
 
 #: wldap32.rc:84
 msgid "Unavailable"
@@ -10609,7 +10698,7 @@ msgstr ""
 
 #: wldap32.rc:119
 msgid "Filter Error"
-msgstr ""
+msgstr "පෙරහනේ දෝෂය"
 
 #: wldap32.rc:120
 msgid "User Canceled"
@@ -10713,7 +10802,7 @@ msgstr ""
 
 #: clock.rc:45
 msgid "&About Clock"
-msgstr ""
+msgstr "ඔරලෝසුව ගැන (&A)"
 
 #: clock.rc:51
 msgid "Clock"
@@ -11166,7 +11255,7 @@ msgstr ""
 
 #: cmd.rc:374
 msgid "Argument missing\n"
-msgstr ""
+msgstr "විස්තාරකය නැහැ\n"
 
 #: cmd.rc:375
 msgid "Syntax error\n"
@@ -11312,7 +11401,7 @@ msgstr ""
 
 #: dxdiag.rc:30
 msgid "DirectX Diagnostic Tool"
-msgstr ""
+msgstr "DirectX දෝෂ විමර්ශන මෙවලම"
 
 #: dxdiag.rc:31
 msgid "Usage: dxdiag [/whql:off | /whql:on] [/t filename | /x filename]"
@@ -11328,7 +11417,7 @@ msgstr ""
 
 #: explorer.rc:34 winefile.rc:36
 msgid "&Run..."
-msgstr ""
+msgstr "ධාවනය කරන්න... (&R)"
 
 #: hostname.rc:30
 msgid "Usage: hostname\n"
@@ -11336,7 +11425,7 @@ msgstr ""
 
 #: hostname.rc:31
 msgid "Error: Invalid option '%c'.\n"
-msgstr "දෝෂය: විකල්පය '%c' වලංගු නැත.\n"
+msgstr "දෝෂය: අවලංගු විකල්පය '%c'.\n"
 
 #: hostname.rc:32
 msgid "Error: Could not get hostname: %u.\n"
@@ -11655,15 +11744,15 @@ msgstr "සුරකින්න (&S)\tCtrl+S"
 
 #: notepad.rc:35 regedit.rc:39 wordpad.rc:36
 msgid "&Print...\tCtrl+P"
-msgstr "මුද්රණය කරන්න...\tCtrl+P"
+msgstr "මුද්‍රණය කරන්න...\tCtrl+P"
 
 #: notepad.rc:36 wordpad.rc:38
 msgid "Page Se&tup..."
-msgstr "පිටු හැඩතල... (&T)"
+msgstr "පිටු පිහිටුම... (&T)"
 
 #: notepad.rc:37
 msgid "P&rinter Setup..."
-msgstr "මුද්රකය සැකසුම්... (&R)"
+msgstr "මුද්‍රකය පිහිටුම... (&R)"
 
 #: notepad.rc:41 regedit.rc:43 wineconsole.rc:28 winhlp32.rc:39 wordpad.rc:42
 msgid "&Edit"
@@ -11696,7 +11785,7 @@ msgstr ""
 
 #: notepad.rc:50
 msgid "&Time/Date\tF5"
-msgstr ""
+msgstr "වෙලාව/දිනය (&T)\tF5"
 
 #: notepad.rc:52
 msgid "&Wrap long lines"
@@ -11704,7 +11793,7 @@ msgstr ""
 
 #: notepad.rc:56
 msgid "&Search...\tCtrl+F"
-msgstr ""
+msgstr "සොයන්න... (&S)\tCtrl+F"
 
 #: notepad.rc:57
 msgid "&Search next\tF3"
@@ -11720,11 +11809,11 @@ msgstr ""
 
 #: notepad.rc:62
 msgid "&About Notepad"
-msgstr ""
+msgstr "සටහන්පුවරුව ගැන (&A)"
 
 #: notepad.rc:100
 msgid "Page Setup"
-msgstr "පිටු හැඩතල"
+msgstr "පිටු පිහිටුම"
 
 #: notepad.rc:102
 msgid "&Header:"
@@ -11807,7 +11896,7 @@ msgstr "Z"
 
 #: notepad.rc:69
 msgid "Page &p"
-msgstr ""
+msgstr "පිටුව &p"
 
 #: notepad.rc:71
 msgid "Notepad"
@@ -11879,7 +11968,7 @@ msgstr ""
 
 #: oleview.rc:36
 msgid "&Run the Registry Editor"
-msgstr ""
+msgstr "රෙජිස්තරය සකසනය ධාවනය කරන්න (&R)"
 
 #: oleview.rc:42
 msgid "&CoCreateInstance Flag"
@@ -11947,7 +12036,7 @@ msgstr "නැවුම් කරන්න (&R)\tF5"
 
 #: oleview.rc:74
 msgid "&About OleView"
-msgstr ""
+msgstr "OleView ගැන (&A)"
 
 #: oleview.rc:82
 msgid "&Save as..."
@@ -11997,7 +12086,7 @@ msgstr ""
 
 #: oleview.rc:185
 msgid "IID:"
-msgstr ""
+msgstr "IID:"
 
 #: oleview.rc:188
 msgid "&View Type Info"
@@ -12049,7 +12138,7 @@ msgstr ""
 
 #: oleview.rc:108
 msgid "Run the Wine registry editor"
-msgstr ""
+msgstr "Wine රෙජිස්තරය සකසනය ධාවනය කරන්න"
 
 #: oleview.rc:109
 msgid "Quit the application. Prompts to save changes"
@@ -12257,8 +12346,9 @@ msgid "&Arrange Icons"
 msgstr ""
 
 #: progman.rc:57
+#, fuzzy
 msgid "&About Program Manager"
-msgstr ""
+msgstr "ගැන (&A)"
 
 #: progman.rc:103
 msgid "Program &group"
@@ -12384,7 +12474,7 @@ msgstr "උදවු ලද හැකි නැහැ."
 
 #: progman.rc:78
 msgid "Unknown feature in %s"
-msgstr ""
+msgstr "දන්නේ නැති වි‍ශේෂාංගයක් %s ඇතුලෙ"
 
 #: progman.rc:79
 msgid "File `%s' exists. Not overwritten."
@@ -12439,11 +12529,11 @@ msgstr ""
 
 #: reg.rc:40
 msgid "reg: Invalid key name\n"
-msgstr ""
+msgstr "reg: අවලංගු යතුරේ නම\n"
 
 #: reg.rc:41
 msgid "reg: Invalid command line parameters\n"
-msgstr ""
+msgstr "reg: අවලංගු විධාන රේඛා පරාමිති\n"
 
 #: reg.rc:42
 msgid "reg: Unable to access remote machine\n"
@@ -12516,11 +12606,11 @@ msgstr ""
 
 #: reg.rc:61
 msgid "reg: Invalid syntax. "
-msgstr ""
+msgstr "reg: අවලංගු රීති."
 
 #: reg.rc:62
 msgid "reg: Invalid option [%1]. "
-msgstr ""
+msgstr "reg: අවලංගු විකල්පය [%1]."
 
 #: reg.rc:63
 msgid "Type \"REG /?\" for help.\n"
@@ -12576,11 +12666,11 @@ msgstr ""
 
 #: regedit.rc:47 regedit.rc:99 regedit.rc:121
 msgid "&Key"
-msgstr ""
+msgstr "යතුර (&K)"
 
 #: regedit.rc:49 regedit.rc:101 regedit.rc:123
 msgid "&String Value"
-msgstr ""
+msgstr "අනුලකුණු වැල අගය (&S)"
 
 #: regedit.rc:50 regedit.rc:102 regedit.rc:124
 msgid "&Binary Value"
@@ -12588,7 +12678,7 @@ msgstr ""
 
 #: regedit.rc:51 regedit.rc:103 regedit.rc:125
 msgid "&DWORD Value"
-msgstr ""
+msgstr "DWORD අගය (&D)"
 
 #: regedit.rc:52 regedit.rc:104 regedit.rc:126
 msgid "&Multi-String Value"
@@ -12627,8 +12717,9 @@ msgid "&Remove Favorite..."
 msgstr ""
 
 #: regedit.rc:80
+#, fuzzy
 msgid "&About Registry Editor"
-msgstr ""
+msgstr "ගැන (&A)"
 
 #: regedit.rc:89 regedit.rc:96 regedit.rc:230
 msgid "Expand"
@@ -12648,11 +12739,11 @@ msgstr ""
 
 #: regedit.rc:278
 msgid "Find:"
-msgstr "සොයා ගන්න:"
+msgstr "සොයන්න:"
 
 #: regedit.rc:280
 msgid "Find in:"
-msgstr "සොයා ගන්න ඇතුලේ:"
+msgstr "සොයන්න ඇතුලේ:"
 
 #: regedit.rc:281
 msgid "Keys"
@@ -13189,7 +13280,7 @@ msgstr "දෝෂය: දන්නේ නැති හෝ වලංගු නැ
 
 #: taskkill.rc:32
 msgid "Error: Invalid command line parameter specified.\n"
-msgstr "දෝෂය: වලංගු නැති විධාන රේඛා පරාමිතියක් සඳහන් කරලා.\n"
+msgstr "දෝෂය: අවලංගු විධාන රේඛා පරාමිතියක් සඳහන් කරලා.\n"
 
 #: taskkill.rc:33
 msgid "Error: One of options /im or /pid must be specified.\n"
@@ -13287,7 +13378,7 @@ msgstr "තීරු තෝරන්න... (&S)"
 
 #: taskmgr.rc:69 taskmgr.rc:258
 msgid "&CPU History"
-msgstr ""
+msgstr "&CPU ඉතිහාසය"
 
 #: taskmgr.rc:71 taskmgr.rc:259
 msgid "&One Graph, All CPUs"
@@ -13299,7 +13390,7 @@ msgstr ""
 
 #: taskmgr.rc:76 taskmgr.rc:261
 msgid "&Show Kernel Times"
-msgstr ""
+msgstr "කර්නලයේ වෙලාවල් පෙන්නන්න (&S)"
 
 #: taskmgr.rc:80 taskmgr.rc:96 taskmgr.rc:123 winefile.rc:76
 msgid "Tile &Horizontally"
@@ -13319,11 +13410,11 @@ msgstr ""
 
 #: taskmgr.rc:85 taskmgr.rc:101 taskmgr.rc:121
 msgid "&Bring To Front"
-msgstr ""
+msgstr "ඉස්සරහට ගේන්න (&B)"
 
 #: taskmgr.rc:90
 msgid "&About Task Manager"
-msgstr ""
+msgstr "කාර්ය කළමනාකරු ගැන (&A)"
 
 #: taskmgr.rc:120 taskmgr.rc:352
 msgid "&Switch To"
@@ -13347,7 +13438,7 @@ msgstr ""
 
 #: taskmgr.rc:152 winedbg.rc:32
 msgid "&Debug"
-msgstr ""
+msgstr "නිදොසන්න (&D)"
 
 #: taskmgr.rc:154
 msgid "Set &Priority"
@@ -13447,11 +13538,11 @@ msgstr ""
 
 #: taskmgr.rc:414
 msgid "CPU usage history"
-msgstr ""
+msgstr "CPU භාවිතය ඉතිහාසය"
 
 #: taskmgr.rc:415
 msgid "Memory usage history"
-msgstr ""
+msgstr "මතකය භාවිතය ඉතිහාසය"
 
 #: taskmgr.rc:428 taskmgr.rc:327
 msgid "Debug Channels"
@@ -13459,7 +13550,7 @@ msgstr ""
 
 #: taskmgr.rc:439
 msgid "Processor Affinity"
-msgstr ""
+msgstr "සකසුවෙහි බැඳුම් හැකියාව"
 
 #: taskmgr.rc:444
 msgid ""
@@ -13618,7 +13709,7 @@ msgstr "CPU භාවිතය (&C)"
 
 #: taskmgr.rc:527
 msgid "CPU Tim&e"
-msgstr ""
+msgstr "CPU කාලය (&E)"
 
 #: taskmgr.rc:529
 msgid "&Memory Usage"
@@ -13650,7 +13741,7 @@ msgstr ""
 
 #: taskmgr.rc:543
 msgid "&Session ID"
-msgstr ""
+msgstr "සැසියෙ ID (&S)"
 
 #: taskmgr.rc:545
 msgid "User &Name"
@@ -13926,11 +14017,11 @@ msgstr ""
 
 #: taskmgr.rc:283
 msgid "Session ID"
-msgstr ""
+msgstr "සැසියෙ ID"
 
 #: taskmgr.rc:284
 msgid "Username"
-msgstr ""
+msgstr "පරිශීලක නම"
 
 #: taskmgr.rc:285
 msgid "PF Delta"
@@ -13996,7 +14087,7 @@ msgstr ""
 
 #: taskmgr.rc:316
 msgid "Invalid Option"
-msgstr ""
+msgstr "අවලංගු විකල්පය"
 
 #: taskmgr.rc:317
 msgid "Unable to Access or Set Process Affinity"
@@ -14008,7 +14099,7 @@ msgstr ""
 
 #: taskmgr.rc:323
 msgid "Not Responding"
-msgstr ""
+msgstr "ප්‍රතිචාර නොදක්වයි"
 
 #: taskmgr.rc:324
 msgid "Running"
@@ -14016,7 +14107,7 @@ msgstr ""
 
 #: taskmgr.rc:325
 msgid "Task"
-msgstr ""
+msgstr "කාර්යය"
 
 #: uninstaller.rc:29
 msgid "Wine Application Uninstaller"
@@ -14030,17 +14121,18 @@ msgid ""
 msgstr ""
 
 #: uninstaller.rc:31
+#, fuzzy
 msgid "uninstaller: The application with GUID '%1' was not found\n"
-msgstr ""
+msgstr "uninstaller:"
 
 #: uninstaller.rc:32
 msgid ""
 "uninstaller: The option '--remove' must be followed by an application GUID\n"
-msgstr ""
+msgstr "uninstaller: '--remove' විකල්පයට පස්සෙන් යෙදුමක UUID එකක් තියෙන්න ඕනේ\n"
 
 #: uninstaller.rc:33
 msgid "uninstaller: Invalid option [%1]\n"
-msgstr ""
+msgstr "uninstaller: අවලංගු විකල්පය [%1]\n"
 
 #: uninstaller.rc:35
 msgid ""
@@ -14106,7 +14198,7 @@ msgstr ""
 
 #: wineboot.rc:46
 msgid "The Wine configuration in %s is being updated, please wait..."
-msgstr "Wine වින්‍යාසය %s ඇතුලේ යාවත්කාලීන වේ, බලා සිටින්න..."
+msgstr "Wine වින්‍යාසය %s ඇතුලේ යාවත්කාලීන වේ, කරුණාකරලා බලාගෙන ඉන්න"
 
 #: winecfg.rc:141
 msgid ""
@@ -14141,7 +14233,7 @@ msgstr ""
 
 #: winecfg.rc:159
 msgid "Add appli&cation..."
-msgstr ""
+msgstr "යෙදුම එක් කරන්න... (&C)"
 
 #: winecfg.rc:160
 msgid "&Remove application"
@@ -14212,7 +14304,7 @@ msgstr "වෙනස් කරන්න... (&E)"
 
 #: winecfg.rc:205
 msgid "Edit Override"
-msgstr ""
+msgstr "Override එක වෙනස් කරන්න"
 
 #: winecfg.rc:208
 msgid "Load order"
@@ -14290,7 +14382,7 @@ msgstr ""
 
 #: winecfg.rc:267
 msgid "Defaults"
-msgstr ""
+msgstr "පෙරනිමි"
 
 #: winecfg.rc:268
 msgid "Output device:"
@@ -14322,7 +14414,7 @@ msgstr "ස්පීකර"
 
 #: winecfg.rc:288
 msgid "Appearance"
-msgstr ""
+msgstr "පෙනුම"
 
 #: winecfg.rc:289
 msgid "&Theme:"
@@ -14386,11 +14478,11 @@ msgstr ""
 
 #: winecfg.rc:42
 msgid "Audio"
-msgstr ""
+msgstr "ශ්‍රව්‍ය"
 
 #: winecfg.rc:43
 msgid "About"
-msgstr ""
+msgstr "ගැන"
 
 #: winecfg.rc:44
 msgid "Wine configuration"
@@ -14434,7 +14526,7 @@ msgstr "(පද්ධතියේ පෙරනිමිය)"
 
 #: winecfg.rc:91
 msgid "5.1 Surround"
-msgstr ""
+msgstr "5.1 වටාපිටාව"
 
 #: winecfg.rc:92
 msgid "Quadraphonic"
@@ -14442,11 +14534,11 @@ msgstr ""
 
 #: winecfg.rc:93
 msgid "Stereo"
-msgstr ""
+msgstr "ස්ටීරියෝ"
 
 #: winecfg.rc:94
 msgid "Mono"
-msgstr ""
+msgstr "ඒකල"
 
 #: winecfg.rc:54
 msgid ""
@@ -14496,19 +14588,20 @@ msgstr ""
 
 #: winecfg.rc:69
 msgid "Autodetect"
-msgstr ""
+msgstr "ස්වයං අනාවරිත"
 
 #: winecfg.rc:70
+#, fuzzy
 msgid "Local hard disk"
-msgstr ""
+msgstr "දෘඩ තැටිය"
 
 #: winecfg.rc:71
 msgid "Network share"
-msgstr ""
+msgstr "ජාල හවුල"
 
 #: winecfg.rc:72
 msgid "Floppy disk"
-msgstr "Floppy තැටිය"
+msgstr "Floppy ඩිස්කය"
 
 #: winecfg.rc:73
 msgid "CD-ROM"
@@ -14523,7 +14616,7 @@ msgstr ""
 
 #: winecfg.rc:75
 msgid "System drive"
-msgstr ""
+msgstr "පද්ධති තැටිය"
 
 #: winecfg.rc:76
 msgid ""
@@ -14591,7 +14684,7 @@ msgstr "කවුළුවේ පසුබිම"
 
 #: winecfg.rc:110
 msgid "Window Text"
-msgstr ""
+msgstr "කවුළුවේ පෙළ"
 
 #: winecfg.rc:111
 msgid "Active Title Bar"
@@ -14615,7 +14708,7 @@ msgstr "පණිවිඩ කොටුවේ පෙළ"
 
 #: winecfg.rc:116
 msgid "Application Workspace"
-msgstr ""
+msgstr "යෙදුමේ වැඩබිම"
 
 #: winecfg.rc:117
 msgid "Window Frame"
@@ -14715,7 +14808,7 @@ msgstr ""
 
 #: wineconsole.rc:78
 msgid "Console"
-msgstr ""
+msgstr "කොන්සෝලය"
 
 #: wineconsole.rc:79
 msgid "&Quick Edit mode"
@@ -14751,7 +14844,7 @@ msgstr "උස (&H):"
 
 #: wineconsole.rc:112
 msgid "Window size"
-msgstr ""
+msgstr "කවුළු ප්‍රමාණය"
 
 #: wineconsole.rc:113
 msgid "W&idth:"
@@ -14767,11 +14860,11 @@ msgstr ""
 
 #: wineconsole.rc:121
 msgid "&Close console"
-msgstr ""
+msgstr "කොන්සෝලය වහන්න (&C)"
 
 #: wineconsole.rc:123
 msgid "Edition"
-msgstr ""
+msgstr "සංස්කරණය"
 
 #: wineconsole.rc:129
 msgid "Console parameters"
@@ -14803,15 +14896,15 @@ msgstr "අනුචලනය කරන්න (&R)"
 
 #: wineconsole.rc:36
 msgid "S&earch"
-msgstr ""
+msgstr "සොයන්න (&E)"
 
 #: wineconsole.rc:39
 msgid "Setup - Default settings"
-msgstr ""
+msgstr "පිහිටුම - නිශ්චය කළ පසුතල"
 
 #: wineconsole.rc:40
 msgid "Setup - Current settings"
-msgstr ""
+msgstr "පිහිටුම - පවතින සිටුවම්"
 
 #: wineconsole.rc:41
 msgid "Configuration error"
@@ -14836,8 +14929,9 @@ msgid "wineconsole: Couldn't parse event id\n"
 msgstr ""
 
 #: wineconsole.rc:45
+#, fuzzy
 msgid "wineconsole: Invalid backend\n"
-msgstr ""
+msgstr "wineconsole: අවලංගු"
 
 #: wineconsole.rc:46
 msgid "wineconsole: Unrecognized command line option\n"
@@ -14924,7 +15018,7 @@ msgstr ""
 
 #: winedbg.rc:41
 msgid "(unidentified)"
-msgstr ""
+msgstr "(හඳුනා නොගත්)"
 
 #: winedbg.rc:44
 msgid "Saving failed"
@@ -14948,11 +15042,11 @@ msgstr "ගුණාංග (&I)\\tAlt+Enter"
 
 #: winefile.rc:38
 msgid "Cr&eate Directory..."
-msgstr ""
+msgstr "ඩිරෙක්ටරියක් හදන්න... (&E)"
 
 #: winefile.rc:43
 msgid "&Disk"
-msgstr ""
+msgstr "ඩිස්කය (&D)"
 
 #: winefile.rc:44
 msgid "Connect &Network Drive..."
@@ -14968,7 +15062,7 @@ msgstr "නම (&N)"
 
 #: winefile.rc:52
 msgid "&All File Details"
-msgstr ""
+msgstr "ඔක්කොම ගොනුවේ විස්තර (&A)"
 
 #: winefile.rc:54
 msgid "&Sort by Name"
@@ -15012,11 +15106,11 @@ msgstr ""
 
 #: winefile.rc:84
 msgid "&About Wine File Manager"
-msgstr ""
+msgstr "Wine ගොනු කළමනාකරු ගැන (&A)"
 
 #: winefile.rc:122
 msgid "Select destination"
-msgstr ""
+msgstr "ගමනාන්තය තෝරන්න"
 
 #: winefile.rc:135
 msgid "By File Type"
@@ -15072,7 +15166,7 @@ msgstr ""
 
 #: winefile.rc:178
 msgid "Version information"
-msgstr ""
+msgstr "අනුවාදයේ තොරතුරු"
 
 #: winefile.rc:194
 msgctxt "accelerator Fullscreen"
@@ -15085,23 +15179,23 @@ msgstr ""
 
 #: winefile.rc:91
 msgid "Error while selecting new font."
-msgstr ""
+msgstr "අලුත් ෆොන්ටයක් තෝරන ගමං දෝෂයක් උනා."
 
 #: winefile.rc:96
 msgid "Wine File Manager"
-msgstr ""
+msgstr "Wine ගොනු කළමනාකරු"
 
 #: winefile.rc:98
 msgid "root fs"
-msgstr ""
+msgstr "root fs"
 
 #: winefile.rc:99
 msgid "unixfs"
-msgstr ""
+msgstr "unixfs"
 
 #: winefile.rc:101
 msgid "Shell"
-msgstr ""
+msgstr "කවචය"
 
 #: winefile.rc:109
 msgid "Creation date"
@@ -15149,7 +15243,7 @@ msgstr "විශේෂඥයෙක් (&E)"
 
 #: winemine.rc:47
 msgid "&Custom..."
-msgstr ""
+msgstr "චාරිත්ර... (&C)"
 
 #: winemine.rc:49
 msgid "&Fastest Times"
@@ -15157,7 +15251,7 @@ msgstr "වේගවත්ම කාල (&F)"
 
 #: winemine.rc:54
 msgid "&About WineMine"
-msgstr ""
+msgstr "WineMine ගැන (&A)"
 
 #: winemine.rc:61
 msgid "Fastest Times"
@@ -15213,7 +15307,7 @@ msgstr ""
 
 #: winemine.rc:30
 msgid "WineMine"
-msgstr ""
+msgstr "WineMine"
 
 #: winemine.rc:31
 msgid "Nobody"
@@ -15221,23 +15315,23 @@ msgstr ""
 
 #: winemine.rc:32
 msgid "Copyright 2000 Joshua Thielen"
-msgstr ""
+msgstr "Copyright 2000 Joshua Thielen"
 
 #: winhlp32.rc:35
 msgid "Printer &setup..."
-msgstr "මුද්රකය සැකසුම්... (&S)"
+msgstr "මුද්‍රකය පිහිටුම... (&S)"
 
 #: winhlp32.rc:42
 msgid "&Annotate..."
-msgstr ""
+msgstr "විවරණය කරන්න... (&A)"
 
 #: winhlp32.rc:44
 msgid "&Bookmark"
-msgstr ""
+msgstr "පිටුසන් කරන්න (&B)"
 
 #: winhlp32.rc:45
 msgid "&Define..."
-msgstr ""
+msgstr "නිර්වචනය... (&D)"
 
 #: winhlp32.rc:48
 msgid "Always on &top"
@@ -15265,7 +15359,7 @@ msgstr ""
 
 #: winhlp32.rc:59
 msgid "&About Wine Help"
-msgstr ""
+msgstr "Wine උදවු ගැන (&A)"
 
 #: winhlp32.rc:67
 msgid "Annotation..."
@@ -15305,7 +15399,7 @@ msgstr "උදවු ගොනු (*.hlp)"
 
 #: winhlp32.rc:92
 msgid "Cannot find '%s'. Do you want to find this file yourself?"
-msgstr "'%s' සොයාගන්න බැහැ. ඔබට මේ ගොනුව තනියෙන්ම සොයාගන්න ඕනෙද?"
+msgstr "'%s' සොයා ගන්න බැහැ. ඔබට මේ ගොනුව තනියෙන්ම සොයාගන්න ඕනෙද?"
 
 #: winhlp32.rc:93
 msgid "Cannot find a richedit implementation... Aborting"
@@ -15325,7 +15419,7 @@ msgstr "දෝෂය: අන්වර්ථය සොයා ගත්තේ න�
 
 #: wmic.rc:30
 msgid "Error: Invalid query\n"
-msgstr "දෝෂය: විමසුම වලංගු නැහැ\n"
+msgstr "දෝෂය: අවලංගු විමසුම\n"
 
 #: wmic.rc:31
 msgid "Error: Invalid syntax for PATH\n"
@@ -15357,7 +15451,7 @@ msgstr "කියවීම පමණි (&O)"
 
 #: wordpad.rc:58
 msgid "&Modified"
-msgstr ""
+msgstr "වෙනස් කරා (&M)"
 
 #: wordpad.rc:60
 msgid "E&xtras"
@@ -15425,11 +15519,11 @@ msgstr "ලොකු අකුරු"
 
 #: wordpad.rc:91
 msgid "Roman numerals - lower case"
-msgstr ""
+msgstr "රෝමානු සංඛ්‍යා - කුඩකුරු"
 
 #: wordpad.rc:92
 msgid "Roman numerals - upper case"
-msgstr ""
+msgstr "රෝමානු සංඛ්‍යා - මහකුරු"
 
 #: wordpad.rc:94 wordpad.rc:117
 msgid "&Paragraph..."
@@ -15453,7 +15547,7 @@ msgstr "ලා කහ\tCtrl+2"
 
 #: wordpad.rc:104
 msgid "&About Wine Wordpad"
-msgstr ""
+msgstr "Wine Wordpad ගැන (&A)"
 
 #: wordpad.rc:141
 msgid "Automatic"
@@ -15465,7 +15559,7 @@ msgstr "දිනය සහ වෙලාව"
 
 #: wordpad.rc:213
 msgid "Available formats"
-msgstr ""
+msgstr "තියෙන ආකෘති"
 
 #: wordpad.rc:224
 msgid "New document type"
@@ -15477,7 +15571,7 @@ msgstr "ඡේදයේ හැඩතලය"
 
 #: wordpad.rc:235
 msgid "Indentation"
-msgstr ""
+msgstr "එබුම"
 
 #: wordpad.rc:236 wordpad.rc:159
 msgid "Left"
@@ -15489,7 +15583,7 @@ msgstr "දකුණු පැත්ත"
 
 #: wordpad.rc:240
 msgid "First line"
-msgstr ""
+msgstr "පලවෙනි පේලිය"
 
 #: wordpad.rc:242
 msgid "Alignment"
@@ -15575,8 +15669,8 @@ msgid "Text documents (*.txt)"
 msgstr "පෙළ ලේඛ (*.txt)"
 
 #: wordpad.rc:149
-msgid "Unicode text document (*.txt)"
-msgstr "යුනිකෝඩ් පෙළ ලේඛය (*.txt)"
+msgid "Unicode text documents (*.txt)"
+msgstr "යුනිකෝඩ් පෙළ ලේඛ (*.txt)"
 
 #: wordpad.rc:150
 msgid "Rich text format (*.rtf)"
@@ -15596,7 +15690,7 @@ msgstr "යුනිකෝඩ් පෙළ ලේඛය"
 
 #: wordpad.rc:154
 msgid "Printer files (*.prn)"
-msgstr "මුද්රණ ගොනු (*.prn)"
+msgstr "මුද්‍රණ ගොනු (*.prn)"
 
 #: wordpad.rc:161
 msgid "Center"
@@ -15685,7 +15779,7 @@ msgstr ""
 
 #: wordpad.rc:198
 msgid "Invalid number format."
-msgstr "වලංගු නැති නොම්බරේ හැඩතලය."
+msgstr "අවලංගු නොම්බරේ හැඩතලය."
 
 #: wordpad.rc:199
 msgid "OLE storage documents are not supported."
@@ -15709,7 +15803,7 @@ msgstr ""
 
 #: wordpad.rc:204
 msgid "Printing not implemented."
-msgstr "මුද්රණ කිරීම හදල නැහැ."
+msgstr "මුද්‍රණ කිරීම හදල නැහැ."
 
 #: wordpad.rc:205
 msgid "Cannot add more than 32 tab stops."
@@ -15721,11 +15815,11 @@ msgstr "Wordpad ආරම්භ කරන්න බැරි උනා"
 
 #: xcopy.rc:30
 msgid "Invalid number of parameters - Use xcopy /? for help\n"
-msgstr "පරාමිති ගාණ වලංගු නැහැ - xcopy /? ගහන්න උදව්වට\n"
+msgstr "අවලංගු පරාමිති ගාණ - xcopy /? ගහන්න උදව්වට\n"
 
 #: xcopy.rc:31
 msgid "Invalid parameter '%1' - Use xcopy /? for help\n"
-msgstr "පරාමිතිය '%1' වලංගු නැහැ - xcopy /? ගහන්න උදව්වට\n"
+msgstr "අවලංගු පරාමිතිය '%1' - xcopy /? ගහන්න උදව්වට\n"
 
 #: xcopy.rc:32
 msgid "Press <Enter> to begin copying\n"
@@ -15733,11 +15827,11 @@ msgstr "<Enter> ඔබන්න පිටපත් කරන එක පටන්
 
 #: xcopy.rc:33
 msgid "%1!d! file(s) would be copied\n"
-msgstr "%1!d! ගොනු(න්) පිටපත් කෙරෙනු ඇත\n"
+msgstr "%1!d! ගොනුවක් (ගොනු) පිටපත් කෙරෙනු ඇත\n"
 
 #: xcopy.rc:34
 msgid "%1!d! file(s) copied\n"
-msgstr "%1!d! ගොනු(න්) පිටපත් කරා\n"
+msgstr "%1!d! ගොනුවක් (ගොනු) පිටපත් කරා\n"
 
 #: xcopy.rc:37
 msgid ""

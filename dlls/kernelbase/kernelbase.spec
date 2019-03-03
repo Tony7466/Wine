@@ -449,7 +449,7 @@
 @ stdcall GetConsoleScreenBufferInfoEx(long ptr) kernel32.GetConsoleScreenBufferInfoEx
 @ stdcall GetConsoleTitleW(ptr long) kernel32.GetConsoleTitleW
 @ stdcall GetCurrencyFormatEx(wstr long wstr ptr ptr long) kernel32.GetCurrencyFormatEx
-@ stdcall GetCurrencyFormatW(long long str ptr str long) kernel32.GetCurrencyFormatW
+@ stdcall GetCurrencyFormatW(long long wstr ptr ptr long) kernel32.GetCurrencyFormatW
 @ stdcall GetCurrentActCtx(ptr) kernel32.GetCurrentActCtx
 # @ stub GetCurrentApplicationUserModelId
 @ stdcall GetCurrentDirectoryA(long ptr) kernel32.GetCurrentDirectoryA
@@ -821,7 +821,7 @@
 @ stdcall -arch=i386 InterlockedIncrement(ptr) kernel32.InterlockedIncrement
 @ stdcall InterlockedPopEntrySList(ptr) kernel32.InterlockedPopEntrySList
 @ stdcall InterlockedPushEntrySList(ptr ptr) kernel32.InterlockedPushEntrySList
-@ stdcall -norelay InterlockedPushListSList(ptr ptr ptr long) kernel32.InterlockedPushListSList
+@ stdcall -fastcall InterlockedPushListSList(ptr ptr ptr long) kernel32.InterlockedPushListSList
 @ stdcall InterlockedPushListSListEx(ptr ptr ptr long) kernel32.InterlockedPushListSListEx
 @ stub InternalLcidToName
 @ stub Internal_EnumCalendarInfo

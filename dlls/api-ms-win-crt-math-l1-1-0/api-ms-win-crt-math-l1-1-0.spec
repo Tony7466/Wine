@@ -254,9 +254,9 @@
 @ cdecl -arch=arm,x86_64,arm64 fmodf(float float) ucrtbase.fmodf
 @ cdecl frexp(double ptr) ucrtbase.frexp
 @ cdecl hypot(double double) ucrtbase.hypot
-@ stub ilogb
-@ stub ilogbf
-@ stub ilogbl
+@ cdecl ilogb(double) ucrtbase.ilogb
+@ cdecl ilogbf(float) ucrtbase.ilogbf
+@ cdecl ilogbl(double) ucrtbase.ilogbl
 @ cdecl ldexp(double long) ucrtbase.ldexp
 @ cdecl lgamma(double) ucrtbase.lgamma
 @ cdecl lgammaf(float) ucrtbase.lgammaf
@@ -297,9 +297,9 @@
 @ cdecl nextafter(double double) ucrtbase.nextafter
 @ cdecl nextafterf(float float) ucrtbase.nextafterf
 @ cdecl nextafterl(double double) ucrtbase.nextafterl
-@ stub nexttoward
-@ stub nexttowardf
-@ stub nexttowardl
+@ cdecl nexttoward(double double) ucrtbase.nexttoward
+@ cdecl nexttowardf(float double) ucrtbase.nexttowardf
+@ cdecl nexttowardl(double double) ucrtbase.nexttowardl
 @ stub norm
 @ stub normf
 @ stub norml

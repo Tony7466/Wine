@@ -1368,7 +1368,7 @@ HRESULT CDECL wined3d_device_set_stream_source(struct wined3d_device *device, UI
     TRACE("device %p, stream_idx %u, buffer %p, offset %u, stride %u.\n",
             device, stream_idx, buffer, offset, stride);
 
-    if (stream_idx >= MAX_STREAMS)
+    if (stream_idx >= WINED3D_MAX_STREAMS)
     {
         WARN("Stream index %u out of range.\n", stream_idx);
         return WINED3DERR_INVALIDCALL;
@@ -1423,7 +1423,7 @@ HRESULT CDECL wined3d_device_get_stream_source(const struct wined3d_device *devi
     TRACE("device %p, stream_idx %u, buffer %p, offset %p, stride %p.\n",
             device, stream_idx, buffer, offset, stride);
 
-    if (stream_idx >= MAX_STREAMS)
+    if (stream_idx >= WINED3D_MAX_STREAMS)
     {
         WARN("Stream index %u out of range.\n", stream_idx);
         return WINED3DERR_INVALIDCALL;
@@ -1550,7 +1550,7 @@ void CDECL wined3d_device_multiply_transform(struct wined3d_device *device,
 
     TRACE("device %p, state %s, matrix %p.\n", device, debug_d3dtstype(state), matrix);
 
-    if (state > HIGHEST_TRANSFORMSTATE)
+    if (state > WINED3D_HIGHEST_TRANSFORM_STATE)
     {
         WARN("Unhandled transform state %#x.\n", state);
         return;
@@ -2124,7 +2124,7 @@ void CDECL wined3d_device_set_sampler_state(struct wined3d_device *device,
             device, sampler_idx, debug_d3dsamplerstate(state), value);
 
     if (sampler_idx >= WINED3DVERTEXTEXTURESAMPLER0 && sampler_idx <= WINED3DVERTEXTEXTURESAMPLER3)
-        sampler_idx -= (WINED3DVERTEXTEXTURESAMPLER0 - MAX_FRAGMENT_SAMPLERS);
+        sampler_idx -= (WINED3DVERTEXTEXTURESAMPLER0 - WINED3D_MAX_FRAGMENT_SAMPLERS);
 
     if (sampler_idx >= ARRAY_SIZE(device->state.sampler_states))
     {
@@ -2159,7 +2159,7 @@ DWORD CDECL wined3d_device_get_sampler_state(const struct wined3d_device *device
             device, sampler_idx, debug_d3dsamplerstate(state));
 
     if (sampler_idx >= WINED3DVERTEXTEXTURESAMPLER0 && sampler_idx <= WINED3DVERTEXTEXTURESAMPLER3)
-        sampler_idx -= (WINED3DVERTEXTEXTURESAMPLER0 - MAX_FRAGMENT_SAMPLERS);
+        sampler_idx -= (WINED3DVERTEXTEXTURESAMPLER0 - WINED3D_MAX_FRAGMENT_SAMPLERS);
 
     if (sampler_idx >= ARRAY_SIZE(device->state.sampler_states))
     {
@@ -3541,7 +3541,7 @@ HRESULT CDECL wined3d_device_set_texture(struct wined3d_device *device,
     TRACE("device %p, stage %u, texture %p.\n", device, stage, texture);
 
     if (stage >= WINED3DVERTEXTEXTURESAMPLER0 && stage <= WINED3DVERTEXTEXTURESAMPLER3)
-        stage -= (WINED3DVERTEXTEXTURESAMPLER0 - MAX_FRAGMENT_SAMPLERS);
+        stage -= (WINED3DVERTEXTEXTURESAMPLER0 - WINED3D_MAX_FRAGMENT_SAMPLERS);
 
     /* Windows accepts overflowing this array... we do not. */
     if (stage >= ARRAY_SIZE(device->state.textures))
@@ -3588,7 +3588,7 @@ struct wined3d_texture * CDECL wined3d_device_get_texture(const struct wined3d_d
     TRACE("device %p, stage %u.\n", device, stage);
 
     if (stage >= WINED3DVERTEXTEXTURESAMPLER0 && stage <= WINED3DVERTEXTEXTURESAMPLER3)
-        stage -= (WINED3DVERTEXTEXTURESAMPLER0 - MAX_FRAGMENT_SAMPLERS);
+        stage -= (WINED3DVERTEXTEXTURESAMPLER0 - WINED3D_MAX_FRAGMENT_SAMPLERS);
 
     if (stage >= ARRAY_SIZE(device->state.textures))
     {
@@ -3973,7 +3973,7 @@ HRESULT CDECL wined3d_device_validate_device(const struct wined3d_device *device
 
     TRACE("device %p, num_passes %p.\n", device, num_passes);
 
-    for (i = 0; i < MAX_COMBINED_SAMPLERS; ++i)
+    for (i = 0; i < WINED3D_MAX_COMBINED_SAMPLERS; ++i)
     {
         if (state->sampler_states[i][WINED3D_SAMP_MIN_FILTER] == WINED3D_TEXF_NONE)
         {
@@ -5231,7 +5231,7 @@ void device_resource_released(struct wined3d_device *device, struct wined3d_reso
         case WINED3D_RTYPE_TEXTURE_1D:
         case WINED3D_RTYPE_TEXTURE_2D:
         case WINED3D_RTYPE_TEXTURE_3D:
-            for (i = 0; i < MAX_COMBINED_SAMPLERS; ++i)
+            for (i = 0; i < WINED3D_MAX_COMBINED_SAMPLERS; ++i)
             {
                 if (&device->state.textures[i]->resource == resource)
                 {
@@ -5249,7 +5249,7 @@ void device_resource_released(struct wined3d_device *device, struct wined3d_reso
             break;
 
         case WINED3D_RTYPE_BUFFER:
-            for (i = 0; i < MAX_STREAMS; ++i)
+            for (i = 0; i < WINED3D_MAX_STREAMS; ++i)
             {
                 if (&device->state.streams[i].buffer->resource == resource)
                 {
@@ -5336,7 +5336,7 @@ HRESULT device_init(struct wined3d_device *device, struct wined3d *wined3d,
     device->ref = 1;
     device->wined3d = wined3d;
     wined3d_incref(device->wined3d);
-    device->adapter = wined3d->adapter_count ? adapter : NULL;
+    device->adapter = adapter;
     device->device_parent = device_parent;
     list_init(&device->resources);
     list_init(&device->shaders);

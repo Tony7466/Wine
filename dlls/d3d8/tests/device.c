@@ -1327,6 +1327,7 @@ static void test_reset(void)
     IDirect3D8 *d3d8;
     RECT winrect, client_rect;
     D3DVIEWPORT8 vp;
+    ULONG refcount;
     D3DCAPS8 caps;
     DWORD shader;
     DWORD value;
@@ -1694,6 +1695,46 @@ static void test_reset(void)
     {
         skip("Volume textures not supported.\n");
     }
+
+    /* Test with DEFAULT pool resources bound but otherwise not referenced. */
+    hr = IDirect3DDevice8_CreateVertexBuffer(device1, 16, 0,
+            D3DFVF_XYZ, D3DPOOL_DEFAULT, &vb);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice8_SetStreamSource(device1, 0, vb, 16);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    refcount = IDirect3DVertexBuffer8_Release(vb);
+    ok(!refcount, "Unexpected refcount %u.\n", refcount);
+    hr = IDirect3DDevice8_CreateIndexBuffer(device1, 16, 0,
+            D3DFMT_INDEX16, D3DPOOL_DEFAULT, &ib);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice8_SetIndices(device1, ib, 0);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    refcount = IDirect3DIndexBuffer8_Release(ib);
+    ok(!refcount, "Unexpected refcount %u.\n", refcount);
+    hr = IDirect3DDevice8_CreateTexture(device1, 16, 16, 0, 0,
+            D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &texture);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice8_SetTexture(device1, i, (IDirect3DBaseTexture8 *)texture);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDirect3DDevice8_Reset(device1, &d3dpp);
+    ok(hr == D3DERR_DEVICELOST, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice8_TestCooperativeLevel(device1);
+    ok(hr == D3DERR_DEVICENOTRESET, "Got unexpected hr %#x.\n", hr);
+
+    /* Crashes on Windows. */
+    if (0)
+    {
+        hr = IDirect3DDevice8_GetIndices(device1, &ib, &i);
+        todo_wine ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x.\n", hr);
+    }
+    refcount = IDirect3DTexture8_Release(texture);
+    ok(!refcount, "Unexpected refcount %u.\n", refcount);
+
+    hr = IDirect3DDevice8_Reset(device1, &d3dpp);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice8_TestCooperativeLevel(device1);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
 
     /* Scratch, sysmem and managed pool resources are fine. */
     hr = IDirect3DDevice8_CreateTexture(device1, 16, 16, 1, 0, D3DFMT_R5G6B5, D3DPOOL_SCRATCH, &texture);
@@ -3008,8 +3049,9 @@ static void test_wndproc(void)
     /* Remove the maximized state from the SYSCOMMAND test while we're not
      * interfering with a device. */
     ShowWindow(focus_window, SW_SHOWNORMAL);
-    filter_messages = focus_window;
 
+    /* On Windows 10 style change messages are delivered on device
+     * creation. */
     device_desc.device_window = focus_window;
     if (!(device = create_device(d3d8, focus_window, &device_desc)))
     {
@@ -3024,7 +3066,6 @@ static void test_wndproc(void)
     SetForegroundWindow(GetDesktopWindow());
     ok(!expect_messages->message, "Expected message %#x for window %#x, but didn't receive it.\n",
             expect_messages->message, expect_messages->window);
-    ok(!windowposchanged_received, "Received WM_WINDOWPOSCHANGED but did not expect it.\n");
     expect_messages = NULL;
 
     /* The window is iconic even though no message was sent. */
@@ -3080,6 +3121,7 @@ static void test_wndproc(void)
     hr = IDirect3DDevice8_TestCooperativeLevel(device);
     ok(hr == D3DERR_DEVICENOTRESET, "Got unexpected hr %#x.\n", hr);
 
+    filter_messages = NULL;
     hr = reset_device(device, &device_desc);
     ok(SUCCEEDED(hr), "Failed to reset device, hr %#x.\n", hr);
 

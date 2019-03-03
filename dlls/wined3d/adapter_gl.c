@@ -1983,22 +1983,28 @@ static const struct fragment_pipeline *select_fragment_implementation(const stru
 
 static const struct wined3d_shader_backend_ops *select_shader_backend(const struct wined3d_gl_info *gl_info)
 {
-    BOOL glsl = wined3d_settings.use_glsl && gl_info->glsl_version >= MAKEDWORD_VERSION(1, 20);
-    if (!gl_info->supported[WINED3D_GL_LEGACY_CONTEXT] && !wined3d_settings.use_glsl)
+    BOOL glsl = wined3d_settings.shader_backend == WINED3D_SHADER_BACKEND_AUTO
+            || wined3d_settings.shader_backend == WINED3D_SHADER_BACKEND_GLSL;
+    BOOL arb = wined3d_settings.shader_backend == WINED3D_SHADER_BACKEND_AUTO
+            || wined3d_settings.shader_backend == WINED3D_SHADER_BACKEND_ARB;
+
+    if (!gl_info->supported[WINED3D_GL_LEGACY_CONTEXT] && !glsl)
     {
-        ERR_(winediag)("Ignoring the UseGLSL registry key. "
+        ERR_(winediag)("Ignoring the shader backend registry key. "
                 "GLSL is the only shader backend available on core profile contexts. "
                 "You need to explicitly set GL version to use legacy contexts.\n");
         glsl = TRUE;
     }
 
+    glsl = glsl && gl_info->glsl_version >= MAKEDWORD_VERSION(1, 20);
+
     if (glsl && gl_info->supported[ARB_VERTEX_SHADER] && gl_info->supported[ARB_FRAGMENT_SHADER])
         return &glsl_shader_backend;
-    if (gl_info->supported[ARB_VERTEX_PROGRAM] && gl_info->supported[ARB_FRAGMENT_PROGRAM])
+    if (arb && gl_info->supported[ARB_VERTEX_PROGRAM] && gl_info->supported[ARB_FRAGMENT_PROGRAM])
         return &arb_program_shader_backend;
     if (glsl && (gl_info->supported[ARB_VERTEX_SHADER] || gl_info->supported[ARB_FRAGMENT_SHADER]))
         return &glsl_shader_backend;
-    if (gl_info->supported[ARB_VERTEX_PROGRAM] || gl_info->supported[ARB_FRAGMENT_PROGRAM])
+    if (arb && (gl_info->supported[ARB_VERTEX_PROGRAM] || gl_info->supported[ARB_FRAGMENT_PROGRAM]))
         return &arb_program_shader_backend;
     return &none_shader_backend;
 }
@@ -2870,7 +2876,7 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info, struct 
     gl_info->limits.arb_ps_temps = 0;
 
     gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_CLIP_DISTANCES, &gl_max);
-    gl_info->limits.user_clip_distances = min(MAX_CLIP_DISTANCES, gl_max);
+    gl_info->limits.user_clip_distances = min(WINED3D_MAX_CLIP_DISTANCES, gl_max);
     TRACE("Clip plane support - max planes %d.\n", gl_max);
 
     if (gl_info->supported[WINED3D_GL_LEGACY_CONTEXT])
@@ -2915,13 +2921,13 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info, struct 
         if (gl_info->supported[WINED3D_GL_LEGACY_CONTEXT])
         {
             gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_TEXTURE_UNITS_ARB, &gl_max);
-            gl_info->limits.textures = min(MAX_TEXTURES, gl_max);
+            gl_info->limits.textures = min(WINED3D_MAX_TEXTURES, gl_max);
             TRACE("Max textures: %d.\n", gl_info->limits.textures);
 
             if (gl_info->supported[ARB_FRAGMENT_PROGRAM])
             {
                 gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_TEXTURE_COORDS_ARB, &gl_max);
-                gl_info->limits.texture_coords = min(MAX_TEXTURES, gl_max);
+                gl_info->limits.texture_coords = min(WINED3D_MAX_TEXTURES, gl_max);
             }
             else
             {
@@ -2961,7 +2967,7 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info, struct 
              * use any samplers. If fixed-function fragment processing is used
              * we have to make sure that all vertex sampler setups are valid
              * together with all possible fixed-function fragment processing
-             * setups. This is true if vsamplers + MAX_TEXTURES <= max_samplers.
+             * setups. This is true if vsamplers + WINED3D_MAX_TEXTURES <= max_samplers.
              * This is true on all Direct3D 9 cards that support vertex
              * texture fetch (GeForce 6 and GeForce 7 cards). Direct3D 9
              * Radeon cards do not support vertex texture fetch. Direct3D 10
@@ -2973,13 +2979,13 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info, struct 
              * true. If not, write a warning and reduce the number of vertex
              * samplers or probably disable vertex texture fetch. */
             if (vertex_sampler_count && gl_info->limits.combined_samplers < 12
-                    && MAX_TEXTURES + vertex_sampler_count > gl_info->limits.combined_samplers)
+                    && WINED3D_MAX_TEXTURES + vertex_sampler_count > gl_info->limits.combined_samplers)
             {
                 FIXME("OpenGL implementation supports %u vertex samplers and %u total samplers.\n",
                         vertex_sampler_count, gl_info->limits.combined_samplers);
-                FIXME("Expected vertex samplers + MAX_TEXTURES(=8) > combined_samplers.\n");
-                if (gl_info->limits.combined_samplers > MAX_TEXTURES)
-                    vertex_sampler_count = gl_info->limits.combined_samplers - MAX_TEXTURES;
+                FIXME("Expected vertex samplers + WINED3D_MAX_TEXTURES(=8) > combined_samplers.\n");
+                if (gl_info->limits.combined_samplers > WINED3D_MAX_TEXTURES)
+                    vertex_sampler_count = gl_info->limits.combined_samplers - WINED3D_MAX_TEXTURES;
                 else
                     vertex_sampler_count = 0;
                 gl_info->limits.samplers[WINED3D_SHADER_TYPE_VERTEX] = vertex_sampler_count;

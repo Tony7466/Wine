@@ -2284,9 +2284,9 @@ HRESULT WINAPI VarFormatNumber(LPVARIANT pVarIn, INT nDigits, INT nLeading, INT 
 
     if (nGrouping == -2)
     {
-      WCHAR grouping[16];
+      WCHAR grouping[10];
       grouping[2] = '\0';
-      GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SDECIMAL, grouping, ARRAY_SIZE(grouping));
+      GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SGROUPING, grouping, ARRAY_SIZE(grouping));
       numfmt.Grouping = grouping[2] == '2' ? 32 : grouping[0] - '0';
     }
     else if (nGrouping == -1)
@@ -2443,7 +2443,7 @@ HRESULT WINAPI VarFormatCurrency(LPVARIANT pVarIn, INT nDigits, INT nLeading,
 
   if (SUCCEEDED(hRet))
   {
-    WCHAR buff[256], decimal[8], thousands[8], currency[8];
+    WCHAR buff[256], decimal[8], thousands[4], currency[13];
     CURRENCYFMTW numfmt;
 
     if (nDigits < 0)
@@ -2460,9 +2460,9 @@ HRESULT WINAPI VarFormatCurrency(LPVARIANT pVarIn, INT nDigits, INT nLeading,
 
     if (nGrouping == -2)
     {
-      WCHAR grouping[16];
+      WCHAR grouping[10];
       grouping[2] = '\0';
-      GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SDECIMAL, grouping, ARRAY_SIZE(grouping));
+      GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SGROUPING, grouping, ARRAY_SIZE(grouping));
       numfmt.Grouping = grouping[2] == '2' ? 32 : grouping[0] - '0';
     }
     else if (nGrouping == -1)
@@ -2482,9 +2482,9 @@ HRESULT WINAPI VarFormatCurrency(LPVARIANT pVarIn, INT nDigits, INT nLeading,
     numfmt.lpDecimalSep = decimal;
     GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SDECIMAL, decimal, ARRAY_SIZE(decimal));
     numfmt.lpThousandSep = thousands;
-    GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SDECIMAL, thousands, ARRAY_SIZE(thousands));
+    GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_STHOUSAND, thousands, ARRAY_SIZE(thousands));
     numfmt.lpCurrencySymbol = currency;
-    GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SDECIMAL, currency, ARRAY_SIZE(currency));
+    GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SCURRENCY, currency, ARRAY_SIZE(currency));
 
     /* use NLS as per VarFormatNumber() */
     if (GetCurrencyFormatW(LOCALE_USER_DEFAULT, 0, V_BSTR(&vStr), &numfmt, buff, ARRAY_SIZE(buff)))
