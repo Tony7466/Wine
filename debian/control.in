@@ -30,7 +30,7 @@ Build-Depends:
  fontforge-nox,
  khronos-api (>= 4.6),
  unicode-data (>= 11),
- unicode-data (<< 12),
+ unicode-data (<< 13),
  libxi-dev,
  libxt-dev,
  libxmu-dev,
