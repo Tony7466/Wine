@@ -1,3 +1,10 @@
+wine-development (4.2-3) unstable; urgency=medium
+
+  * Fix incorrect uses of sizeof (closes: #927139).
+    - Thanks to Konstantin Demin.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 21 Apr 2019 22:24:40 -0400
+
 wine-development (4.2-2) unstable; urgency=medium
 
   * Ignore unused function warnings on all architectures.
