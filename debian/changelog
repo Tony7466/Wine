@@ -1,3 +1,9 @@
+wine-development (4.2-4) unstable; urgency=medium
+
+  * Support building with unicode-data 12.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Tue, 23 Apr 2019 02:15:34 +0000
+
 wine-development (4.2-3) unstable; urgency=medium
 
   * Fix incorrect uses of sizeof (closes: #927139).
