@@ -1,3 +1,13 @@
+wine (4.0-2~bpo9+1) stretch-backports; urgency=medium
+
+  * Rebuild for stretch-backports.
+  * Current changes for stretch-backports:
+    - Don't export DEB_RULES_REQUIRES_ROOT in stretch-backports.
+    - Build without vkd3d and vulkan support.
+    - Specify clang-6.0 instead of clang for arm64.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Tue, 21 May 2019 01:26:25 +0200
+
 wine (4.0-2) unstable; urgency=medium
 
   * Point to branch buster in the Vcs fields.
