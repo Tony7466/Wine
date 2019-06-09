@@ -118,6 +118,17 @@ interface IMFTopology : IMFAttributes
 
 [
     object,
+    uuid(de9a6157-f660-4643-b56a-df9f7998c7cd),
+    local,
+]
+interface IMFTopoLoader : IUnknown
+{
+    HRESULT Load([in] IMFTopology *input_topology, [out] IMFTopology **output_topology,
+            [in] IMFTopology *current_topology);
+}
+
+[
+    object,
     uuid(90377834-21d0-4dee-8214-ba2e3e6c1127),
 ]
 interface IMFMediaSession : IMFMediaEventGenerator
@@ -307,10 +318,14 @@ interface IMFSequencerSource : IUnknown
 
 cpp_quote("HRESULT WINAPI MFCreateMediaSession(IMFAttributes *config, IMFMediaSession **session);")
 cpp_quote("HRESULT WINAPI MFCreateMFByteStreamOnStream(IStream *stream, IMFByteStream **bytestream);" )
+cpp_quote("HRESULT WINAPI MFCreateMFByteStreamOnStreamEx(IUnknown *stream, IMFByteStream **bytestream);")
+cpp_quote("HRESULT WINAPI MFCreateSequencerSource(IUnknown *reserved, IMFSequencerSource **seq_source);" )
 cpp_quote("HRESULT WINAPI MFCreateSourceResolver(IMFSourceResolver **resolver);")
 cpp_quote("HRESULT WINAPI MFCreateStreamDescriptor(DWORD identifier, DWORD cMediaTypes,")
 cpp_quote("     IMFMediaType **types, IMFStreamDescriptor **descriptor);")
 cpp_quote("HRESULT WINAPI MFCreateTopology(IMFTopology **topology);")
+cpp_quote("HRESULT WINAPI MFCreateTopologyNode(MF_TOPOLOGY_TYPE node_type, IMFTopologyNode **node);")
+cpp_quote("HRESULT WINAPI MFCreateTopoLoader(IMFTopoLoader **loader);")
 cpp_quote("HRESULT WINAPI MFGetSupportedMimeTypes(PROPVARIANT *array);")
 cpp_quote("HRESULT WINAPI MFGetService(IUnknown *object, REFGUID service, REFIID iid, void **obj);")
 cpp_quote("MFTIME  WINAPI MFGetSystemTime(void);")
@@ -340,6 +355,29 @@ interface IMFMediaSource : IMFMediaEventGenerator
 
     HRESULT Stop();
     HRESULT Pause();
+    HRESULT Shutdown();
+}
+
+interface IMFStreamSink;
+interface IMFPresentationClock;
+
+[
+    object,
+    uuid(6ef2a660-47c0-4666-b13d-cbb717f2fa2c)
+]
+interface IMFMediaSink : IUnknown
+{
+    HRESULT GetCharacteristics([out] DWORD *characteristics);
+    HRESULT AddStreamSink(
+        [in] DWORD stream_sink_id,
+        [in] IMFMediaType *media_type,
+        [out] IMFStreamSink **stream_sink);
+    HRESULT RemoveStreamSink([in] DWORD stream_sink_id);
+    HRESULT GetStreamSinkCount([out] DWORD *count);
+    HRESULT GetStreamSinkByIndex([in] DWORD index, [out] IMFStreamSink **sink);
+    HRESULT GetStreamSinkById([in] DWORD stream_sink_id, [out] IMFStreamSink **sink);
+    HRESULT SetPresentationClock([in] IMFPresentationClock *clock);
+    HRESULT GetPresentationClock([out] IMFPresentationClock **clock);
     HRESULT Shutdown();
 }
 

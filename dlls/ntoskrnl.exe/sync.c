@@ -186,6 +186,14 @@ void WINAPI KeInitializeEvent( PRKEVENT event, EVENT_TYPE type, BOOLEAN state )
     event->Header.WaitListHead.Flink = NULL;
 }
 
+static const WCHAR event_type_name[] = {'E','v','e','n','t',0};
+
+static struct _OBJECT_TYPE event_type = {
+    event_type_name,
+};
+
+POBJECT_TYPE ExEventObjectType = &event_type;
+
 /***********************************************************************
  *           KeSetEvent   (NTOSKRNL.EXE.@)
  */
@@ -266,6 +274,15 @@ LONG WINAPI KeReleaseSemaphore( PRKSEMAPHORE semaphore, KPRIORITY increment,
 
     return ret;
 }
+
+static const WCHAR semaphore_type_name[] = {'S','e','m','a','p','h','o','r','e',0};
+
+static struct _OBJECT_TYPE semaphore_type =
+{
+    semaphore_type_name
+};
+
+POBJECT_TYPE ExSemaphoreObjectType = &semaphore_type;
 
 /***********************************************************************
  *           KeInitializeMutex   (NTOSKRNL.EXE.@)
@@ -419,12 +436,8 @@ void WINAPI KeReleaseSpinLockFromDpcLevel( KSPIN_LOCK *lock )
 /***********************************************************************
  *           KeAcquireInStackQueuedSpinLockAtDpcLevel  (NTOSKRNL.EXE.@)
  */
-#ifdef DEFINE_FASTCALL2_ENTRYPOINT
-DEFINE_FASTCALL2_ENTRYPOINT( KeAcquireInStackQueuedSpinLockAtDpcLevel )
-void WINAPI DECLSPEC_HIDDEN __regs_KeAcquireInStackQueuedSpinLockAtDpcLevel( KSPIN_LOCK *lock, KLOCK_QUEUE_HANDLE *queue )
-#else
+DEFINE_FASTCALL_WRAPPER( KeAcquireInStackQueuedSpinLockAtDpcLevel, 8 )
 void WINAPI KeAcquireInStackQueuedSpinLockAtDpcLevel( KSPIN_LOCK *lock, KLOCK_QUEUE_HANDLE *queue )
-#endif
 {
     KSPIN_LOCK_QUEUE *tail;
 
@@ -450,12 +463,8 @@ void WINAPI KeAcquireInStackQueuedSpinLockAtDpcLevel( KSPIN_LOCK *lock, KLOCK_QU
 /***********************************************************************
  *           KeReleaseInStackQueuedSpinLockFromDpcLevel  (NTOSKRNL.EXE.@)
  */
-#ifdef DEFINE_FASTCALL1_ENTRYPOINT
-DEFINE_FASTCALL1_ENTRYPOINT( KeReleaseInStackQueuedSpinLockFromDpcLevel )
-void WINAPI DECLSPEC_HIDDEN __regs_KeReleaseInStackQueuedSpinLockFromDpcLevel( KLOCK_QUEUE_HANDLE *queue )
-#else
+DEFINE_FASTCALL1_WRAPPER( KeReleaseInStackQueuedSpinLockFromDpcLevel )
 void WINAPI KeReleaseInStackQueuedSpinLockFromDpcLevel( KLOCK_QUEUE_HANDLE *queue )
-#endif
 {
     KSPIN_LOCK *lock = (KSPIN_LOCK *)((ULONG_PTR)queue->LockQueue.Lock & ~QUEUED_SPINLOCK_OWNED);
     KSPIN_LOCK_QUEUE *next;
@@ -538,13 +547,14 @@ void WINAPI IoReleaseCancelSpinLock( KIRQL irql )
     KeReleaseSpinLock( &cancel_lock, irql );
 }
 
-#ifdef __i386__
-DEFINE_FASTCALL2_ENTRYPOINT( ExfInterlockedRemoveHeadList )
-PLIST_ENTRY WINAPI DECLSPEC_HIDDEN __regs_ExfInterlockedRemoveHeadList( LIST_ENTRY *list, KSPIN_LOCK *lock )
+/***********************************************************************
+ *           ExfInterlockedRemoveHeadList  (NTOSKRNL.EXE.@)
+ */
+DEFINE_FASTCALL_WRAPPER( ExfInterlockedRemoveHeadList, 8 )
+PLIST_ENTRY WINAPI ExfInterlockedRemoveHeadList( LIST_ENTRY *list, KSPIN_LOCK *lock )
 {
     return ExInterlockedRemoveHeadList( list, lock );
 }
-#endif
 
 /***********************************************************************
  *           ExInterlockedRemoveHeadList  (NTOSKRNL.EXE.@)
@@ -563,17 +573,12 @@ LIST_ENTRY * WINAPI ExInterlockedRemoveHeadList( LIST_ENTRY *list, KSPIN_LOCK *l
     return ret;
 }
 
-#ifndef _WIN64
 
 /***********************************************************************
  *           InterlockedPopEntrySList   (NTOSKRNL.EXE.@)
  */
-#ifdef DEFINE_FASTCALL1_ENTRYPOINT
-DEFINE_FASTCALL1_ENTRYPOINT( NTOSKRNL_InterlockedPopEntrySList )
-PSLIST_ENTRY WINAPI DECLSPEC_HIDDEN __regs_NTOSKRNL_InterlockedPopEntrySList( PSLIST_HEADER list )
-#else
+DEFINE_FASTCALL1_WRAPPER( NTOSKRNL_InterlockedPopEntrySList )
 PSLIST_ENTRY WINAPI NTOSKRNL_InterlockedPopEntrySList( PSLIST_HEADER list )
-#endif
 {
     return RtlInterlockedPopEntrySList( list );
 }
@@ -582,59 +587,38 @@ PSLIST_ENTRY WINAPI NTOSKRNL_InterlockedPopEntrySList( PSLIST_HEADER list )
 /***********************************************************************
  *           InterlockedPushEntrySList   (NTOSKRNL.EXE.@)
  */
-#ifdef DEFINE_FASTCALL2_ENTRYPOINT
-DEFINE_FASTCALL2_ENTRYPOINT( NTOSKRNL_InterlockedPushEntrySList )
-PSLIST_ENTRY WINAPI DECLSPEC_HIDDEN __regs_NTOSKRNL_InterlockedPushEntrySList( PSLIST_HEADER list,
-                                                                               PSLIST_ENTRY entry )
-#else
+DEFINE_FASTCALL_WRAPPER( NTOSKRNL_InterlockedPushEntrySList, 8 )
 PSLIST_ENTRY WINAPI NTOSKRNL_InterlockedPushEntrySList( PSLIST_HEADER list, PSLIST_ENTRY entry )
-#endif
 {
     return RtlInterlockedPushEntrySList( list, entry );
 }
 
-#ifdef __i386__
 
 /***********************************************************************
  *           ExInterlockedPopEntrySList   (NTOSKRNL.EXE.@)
  */
-#ifdef DEFINE_FASTCALL2_ENTRYPOINT
-DEFINE_FASTCALL2_ENTRYPOINT( NTOSKRNL_ExInterlockedPopEntrySList )
-PSLIST_ENTRY WINAPI __regs_NTOSKRNL_ExInterlockedPopEntrySList( PSLIST_HEADER list, PKSPIN_LOCK lock )
-#else
+DEFINE_FASTCALL_WRAPPER( NTOSKRNL_ExInterlockedPopEntrySList, 8 )
 PSLIST_ENTRY WINAPI NTOSKRNL_ExInterlockedPopEntrySList( PSLIST_HEADER list, PKSPIN_LOCK lock )
-#endif
 {
     return RtlInterlockedPopEntrySList( list );
 }
 
+
 /***********************************************************************
  *           ExInterlockedPushEntrySList   (NTOSKRNL.EXE.@)
  */
-#ifdef DEFINE_FASTCALL3_ENTRYPOINT
-DEFINE_FASTCALL3_ENTRYPOINT( NTOSKRNL_ExInterlockedPushEntrySList )
-PSLIST_ENTRY WINAPI DECLSPEC_HIDDEN __regs_NTOSKRNL_ExInterlockedPushEntrySList( PSLIST_HEADER list,
-                                                                                 PSLIST_ENTRY entry,
-                                                                                 PKSPIN_LOCK lock )
-#else
+DEFINE_FASTCALL_WRAPPER( NTOSKRNL_ExInterlockedPushEntrySList, 12 )
 PSLIST_ENTRY WINAPI NTOSKRNL_ExInterlockedPushEntrySList( PSLIST_HEADER list, PSLIST_ENTRY entry, PKSPIN_LOCK lock )
-#endif
 {
     return RtlInterlockedPushEntrySList( list, entry );
 }
 
-#endif /* __i386__ */
-#endif /* _WIN64 */
 
 /***********************************************************************
  *           ExAcquireFastMutexUnsafe  (NTOSKRNL.EXE.@)
  */
-#ifdef DEFINE_FASTCALL1_ENTRYPOINT
-DEFINE_FASTCALL1_ENTRYPOINT(ExAcquireFastMutexUnsafe)
-void WINAPI __regs_ExAcquireFastMutexUnsafe( FAST_MUTEX *mutex )
-#else
+DEFINE_FASTCALL1_WRAPPER(ExAcquireFastMutexUnsafe)
 void WINAPI ExAcquireFastMutexUnsafe( FAST_MUTEX *mutex )
-#endif
 {
     LONG count;
 
@@ -648,12 +632,8 @@ void WINAPI ExAcquireFastMutexUnsafe( FAST_MUTEX *mutex )
 /***********************************************************************
  *           ExReleaseFastMutexUnsafe  (NTOSKRNL.EXE.@)
  */
-#ifdef DEFINE_FASTCALL1_ENTRYPOINT
-DEFINE_FASTCALL1_ENTRYPOINT(ExReleaseFastMutexUnsafe)
-void WINAPI __regs_ExReleaseFastMutexUnsafe( FAST_MUTEX *mutex )
-#else
+DEFINE_FASTCALL1_WRAPPER(ExReleaseFastMutexUnsafe)
 void WINAPI ExReleaseFastMutexUnsafe( FAST_MUTEX *mutex )
-#endif
 {
     LONG count;
 

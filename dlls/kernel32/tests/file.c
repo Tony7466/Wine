@@ -61,6 +61,7 @@ static BOOL (WINAPI *pSetFileInformationByHandle)(HANDLE, FILE_INFO_BY_HANDLE_CL
 static BOOL (WINAPI *pGetQueuedCompletionStatusEx)(HANDLE, OVERLAPPED_ENTRY*, ULONG, ULONG*, DWORD, BOOL);
 static void (WINAPI *pRtlInitAnsiString)(PANSI_STRING,PCSZ);
 static void (WINAPI *pRtlFreeUnicodeString)(PUNICODE_STRING);
+static BOOL (WINAPI *pSetFileCompletionNotificationModes)(HANDLE, UCHAR);
 
 static char filename[MAX_PATH];
 static const char sillytext[] =
@@ -109,6 +110,7 @@ static void InitFunctionPointers(void)
     pGetFinalPathNameByHandleW = (void *) GetProcAddress(hkernel32, "GetFinalPathNameByHandleW");
     pSetFileInformationByHandle = (void *) GetProcAddress(hkernel32, "SetFileInformationByHandle");
     pGetQueuedCompletionStatusEx = (void *) GetProcAddress(hkernel32, "GetQueuedCompletionStatusEx");
+    pSetFileCompletionNotificationModes = (void *)GetProcAddress(hkernel32, "SetFileCompletionNotificationModes");
 }
 
 static void test__hread( void )
@@ -4565,6 +4567,28 @@ static void test_WriteFileGather(void)
     ok( memcmp( rbuf1 + si.dwPageSize / 2, rbuf2, si.dwPageSize - si.dwPageSize / 2 ) == 0,
             "invalid data was read into buffer\n" );
 
+    if (pSetFileCompletionNotificationModes)
+    {
+        br = pSetFileCompletionNotificationModes(hfile, FILE_SKIP_COMPLETION_PORT_ON_SUCCESS);
+        ok(br, "SetFileCompletionNotificationModes failed, error %u.\n", GetLastError());
+
+        br = ReadFileScatter(hfile, fse, si.dwPageSize, NULL, &ovl);
+        ok(br == FALSE, "ReadFileScatter should be asynchronous.\n");
+        ok(GetLastError() == ERROR_IO_PENDING, "ReadFileScatter failed, error %u.\n", GetLastError());
+
+        br = GetQueuedCompletionStatus(hiocp2, &size, &key, &povl, 1000);
+        ok(br, "GetQueuedCompletionStatus failed, err %u.\n", GetLastError());
+        ok(povl == &ovl, "Wrong ovl %p.\n", povl);
+
+        br = GetOverlappedResult(hfile, &ovl, &tx, TRUE);
+        ok(br, "GetOverlappedResult failed, err %u.\n", GetLastError());
+        ok(tx == si.dwPageSize, "Got unexpected size %u.\n", tx);
+
+        ResetEvent(evt);
+    }
+    else
+        win_skip("SetFileCompletionNotificationModes not available.\n");
+
     CloseHandle( hfile );
     CloseHandle( hiocp1 );
     CloseHandle( hiocp2 );
@@ -5140,6 +5164,70 @@ static void test_post_completion(void)
     CloseHandle( port );
 }
 
+#define TEST_OVERLAPPED_READ_SIZE 4096
+
+static void test_overlapped_read(void)
+{
+    DECLSPEC_ALIGN(TEST_OVERLAPPED_READ_SIZE) static unsigned char buffer[TEST_OVERLAPPED_READ_SIZE];
+    static const char prefix[] = "pfx";
+    char temp_path[MAX_PATH];
+    char file_name[MAX_PATH];
+    DWORD bytes_count;
+    OVERLAPPED ov;
+    HANDLE hfile;
+    DWORD err;
+    DWORD ret;
+
+    ret = GetTempPathA(MAX_PATH, temp_path);
+    ok(ret, "Unexpect error %u.\n", GetLastError());
+    ret = GetTempFileNameA(temp_path, prefix, 0, file_name);
+    ok(ret, "Unexpected error %u.\n", GetLastError());
+
+    hfile = CreateFileA(file_name, GENERIC_WRITE, 0,
+            NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_NO_BUFFERING, NULL);
+    ok(hfile != INVALID_HANDLE_VALUE, "Failed to create file, GetLastError() %u.\n", GetLastError());
+    memset(buffer, 0x55, sizeof(buffer));
+    ret = WriteFile(hfile, buffer, TEST_OVERLAPPED_READ_SIZE, &bytes_count, NULL);
+    ok(ret && bytes_count == TEST_OVERLAPPED_READ_SIZE,
+            "Unexpected WriteFile result, ret %#x, bytes_count %u, GetLastError() %u.\n",
+            ret, bytes_count, GetLastError());
+    CloseHandle(hfile);
+
+    hfile = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ,
+            NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED | FILE_FLAG_NO_BUFFERING, NULL);
+    ok(hfile != INVALID_HANDLE_VALUE, "Failed to create file, GetLastError() %u.\n", GetLastError());
+
+    memset(&ov, 0, sizeof(ov));
+
+    bytes_count = 0xffffffff;
+    ret = ReadFile(hfile, buffer, TEST_OVERLAPPED_READ_SIZE, &bytes_count, &ov);
+    ok(!ret && GetLastError() == ERROR_IO_PENDING,
+            "Unexpected ReadFile result, ret %#x, GetLastError() %u.\n", ret, GetLastError());
+    ok(!bytes_count, "Unexpected read size %u.\n", bytes_count);
+    ret = GetOverlappedResult(hfile, &ov, &bytes_count, TRUE);
+    ok(ret, "Unexpected error %u.\n", GetLastError());
+    ok(bytes_count == TEST_OVERLAPPED_READ_SIZE, "Unexpected read size %u.\n", bytes_count);
+
+    S(U(ov)).Offset = bytes_count;
+    ret = ReadFile(hfile, buffer, TEST_OVERLAPPED_READ_SIZE, &bytes_count, &ov);
+    err = GetLastError();
+    /* Win8+ return ERROR_IO_PENDING like stated in MSDN, while older ones
+     * return ERROR_HANDLE_EOF right away. */
+    ok(!ret && (err == ERROR_HANDLE_EOF || err == ERROR_IO_PENDING),
+            "Unexpected ReadFile result, ret %#x, GetLastError() %u.\n", ret, GetLastError());
+    if (err == ERROR_IO_PENDING)
+    {
+        ret = GetOverlappedResult(hfile, &ov, &bytes_count, TRUE);
+        ok(!ret && GetLastError() == ERROR_HANDLE_EOF, "Unexpected result %#x, GetLasttError() %u.\n",
+                ret, GetLastError());
+    }
+    ok(!bytes_count, "Unexpected read size %u.\n", bytes_count);
+
+    CloseHandle(hfile);
+    ret = DeleteFileA(file_name);
+    ok(ret, "Unexpected error %u.\n", GetLastError());
+}
+
 START_TEST(file)
 {
     char temp_path[MAX_PATH];
@@ -5209,4 +5297,5 @@ START_TEST(file)
     test_SetFileInformationByHandle();
     test_GetFileAttributesExW();
     test_post_completion();
+    test_overlapped_read();
 }

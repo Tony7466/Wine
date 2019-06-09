@@ -289,6 +289,7 @@ static HRESULT tiff_get_decode_info(TIFF *tiff, tiff_decode_info *decode_info)
     decode_info->reverse_bgr = 0;
     decode_info->invert_grayscale = 0;
     decode_info->tiled = 0;
+    decode_info->source_bpp = 0;
 
     ret = pTIFFGetField(tiff, TIFFTAG_PHOTOMETRIC, &photometric);
     if (!ret)
@@ -637,6 +638,7 @@ static HRESULT WINAPI TiffDecoder_Initialize(IWICBitmapDecoder *iface, IStream *
 {
     TiffDecoder *This = impl_from_IWICBitmapDecoder(iface);
     TIFF *tiff;
+    tiff_decode_info decode_info;
     HRESULT hr=S_OK;
 
     TRACE("(%p,%p,%x)\n", iface, pIStream, cacheOptions);
@@ -650,10 +652,17 @@ static HRESULT WINAPI TiffDecoder_Initialize(IWICBitmapDecoder *iface, IStream *
     }
 
     tiff = tiff_open_stream(pIStream, "r");
-
     if (!tiff)
     {
         hr = E_FAIL;
+        goto exit;
+    }
+
+    /* make sure that TIFF format is supported */
+    hr = tiff_get_decode_info(tiff, &decode_info);
+    if (hr != S_OK)
+    {
+        pTIFFClose(tiff);
         goto exit;
     }
 
@@ -965,34 +974,25 @@ static HRESULT WINAPI TiffFrameDecode_CopyPalette(IWICBitmapFrameDecode *iface,
 
 static HRESULT TiffFrameDecode_ReadTile(TiffFrameDecode *This, UINT tile_x, UINT tile_y)
 {
-    HRESULT hr=S_OK;
     tsize_t ret;
     int swap_bytes;
 
     swap_bytes = pTIFFIsByteSwapped(This->parent->tiff);
 
     ret = pTIFFSetDirectory(This->parent->tiff, This->index);
+    if (ret == -1)
+        return E_FAIL;
+
+    if (This->decode_info.tiled)
+        ret = pTIFFReadEncodedTile(This->parent->tiff, tile_x + tile_y * This->decode_info.tiles_across, This->cached_tile, This->decode_info.tile_size);
+    else
+        ret = pTIFFReadEncodedStrip(This->parent->tiff, tile_y, This->cached_tile, This->decode_info.tile_size);
 
     if (ret == -1)
-        hr = E_FAIL;
-
-    if (hr == S_OK)
-    {
-        if (This->decode_info.tiled)
-        {
-            ret = pTIFFReadEncodedTile(This->parent->tiff, tile_x + tile_y * This->decode_info.tiles_across, This->cached_tile, This->decode_info.tile_size);
-        }
-        else
-        {
-            ret = pTIFFReadEncodedStrip(This->parent->tiff, tile_y, This->cached_tile, This->decode_info.tile_size);
-        }
-
-        if (ret == -1)
-            hr = E_FAIL;
-    }
+        return E_FAIL;
 
     /* 8bpp grayscale with extra alpha */
-    if (hr == S_OK && This->decode_info.source_bpp == 16 && This->decode_info.samples == 2 && This->decode_info.bpp == 32)
+    if (This->decode_info.source_bpp == 16 && This->decode_info.samples == 2 && This->decode_info.bpp == 32)
     {
         BYTE *src;
         DWORD *dst, count = This->decode_info.tile_width * This->decode_info.tile_height;
@@ -1007,7 +1007,7 @@ static HRESULT TiffFrameDecode_ReadTile(TiffFrameDecode *This, UINT tile_x, UINT
         }
     }
 
-    if (hr == S_OK && This->decode_info.reverse_bgr)
+    if (This->decode_info.reverse_bgr)
     {
         if (This->decode_info.bps == 8)
         {
@@ -1018,7 +1018,7 @@ static HRESULT TiffFrameDecode_ReadTile(TiffFrameDecode *This, UINT tile_x, UINT
         }
     }
 
-    if (hr == S_OK && swap_bytes && This->decode_info.bps > 8)
+    if (swap_bytes && This->decode_info.bps > 8)
     {
         UINT row, i, samples_per_row;
         BYTE *sample, temp;
@@ -1046,7 +1046,7 @@ static HRESULT TiffFrameDecode_ReadTile(TiffFrameDecode *This, UINT tile_x, UINT
         }
     }
 
-    if (hr == S_OK && This->decode_info.invert_grayscale)
+    if (This->decode_info.invert_grayscale)
     {
         BYTE *byte, *end;
 
@@ -1062,13 +1062,10 @@ static HRESULT TiffFrameDecode_ReadTile(TiffFrameDecode *This, UINT tile_x, UINT
             *byte = ~(*byte);
     }
 
-    if (hr == S_OK)
-    {
-        This->cached_tile_x = tile_x;
-        This->cached_tile_y = tile_y;
-    }
+    This->cached_tile_x = tile_x;
+    This->cached_tile_y = tile_y;
 
-    return hr;
+    return S_OK;
 }
 
 static HRESULT WINAPI TiffFrameDecode_CopyPixels(IWICBitmapFrameDecode *iface,

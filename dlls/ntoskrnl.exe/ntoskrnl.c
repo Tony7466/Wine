@@ -41,6 +41,7 @@
 #include "dbt.h"
 #include "winreg.h"
 #include "setupapi.h"
+#include "ntsecapi.h"
 #include "ddk/csq.h"
 #include "ddk/ntddk.h"
 #include "ddk/ntifs.h"
@@ -98,11 +99,10 @@ static DWORD client_pid;
 
 struct wine_driver
 {
-    struct wine_rb_entry entry;
-
     DRIVER_OBJECT driver_obj;
     DRIVER_EXTENSION driver_extension;
     SERVICE_STATUS_HANDLE service_handle;
+    struct wine_rb_entry entry;
 };
 
 struct device_interface
@@ -251,6 +251,146 @@ static HANDLE get_device_manager(void)
     return ret;
 }
 
+
+struct object_header
+{
+    LONG ref;
+    POBJECT_TYPE type;
+};
+
+static void free_kernel_object( void *obj )
+{
+    struct object_header *header = (struct object_header *)obj - 1;
+    HeapFree( GetProcessHeap(), 0, header );
+}
+
+void *alloc_kernel_object( POBJECT_TYPE type, SIZE_T size, LONG ref )
+{
+    struct object_header *header;
+
+    if (!(header = HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*header) + size)) )
+        return NULL;
+
+    header->ref = ref;
+    header->type = type;
+    return header + 1;
+}
+
+
+/***********************************************************************
+ *           ObDereferenceObject   (NTOSKRNL.EXE.@)
+ */
+void WINAPI ObDereferenceObject( void *obj )
+{
+    struct object_header *header = (struct object_header*)obj - 1;
+    LONG ref;
+
+    if (!obj)
+    {
+        FIXME("NULL obj\n");
+        return;
+    }
+
+    ref = InterlockedDecrement( &header->ref );
+    TRACE( "(%p) ref=%u\n", obj, ref );
+    if (!ref)
+    {
+        if (header->type->release) header->type->release( obj );
+        else FIXME( "no destructor\n" );
+    }
+}
+
+static void ObReferenceObject( void *obj )
+{
+    struct object_header *header = (struct object_header*)obj - 1;
+    LONG ref;
+
+    if (!obj)
+    {
+        FIXME("NULL obj\n");
+        return;
+    }
+
+    ref = InterlockedIncrement( &header->ref );
+    TRACE( "(%p) ref=%u\n", obj, ref );
+}
+
+static NTSTATUS kernel_object_from_handle( HANDLE handle, POBJECT_TYPE type, void **ret )
+{
+    char buf[256];
+    OBJECT_TYPE_INFORMATION *type_info = (OBJECT_TYPE_INFORMATION *)buf;
+    ULONG size;
+    void *obj;
+    NTSTATUS status;
+
+    status = NtQueryObject(handle, ObjectTypeInformation, buf, sizeof(buf), &size);
+    if (status) return status;
+
+    if (!!RtlCompareUnicodeStrings(type->name, strlenW(type->name), type_info->TypeName.Buffer,
+                                   type_info->TypeName.Length / sizeof(WCHAR), FALSE))
+        return STATUS_OBJECT_TYPE_MISMATCH;
+
+    FIXME( "semi-stub: returning new %s object instance\n", debugstr_w(type->name) );
+
+    if (type->constructor)
+        obj = type->constructor( handle );
+    else
+    {
+        obj = alloc_kernel_object( type, 0, 0 );
+        FIXME( "No constructor for type %s returning empty %p object\n", debugstr_w(type->name), obj );
+    }
+    if (!obj) return STATUS_NO_MEMORY;
+
+    TRACE( "%p -> %p\n", handle, obj );
+    *ret = obj;
+    return STATUS_SUCCESS;
+}
+
+/***********************************************************************
+ *           ObReferenceObjectByHandle    (NTOSKRNL.EXE.@)
+ */
+NTSTATUS WINAPI ObReferenceObjectByHandle( HANDLE handle, ACCESS_MASK access,
+                                           POBJECT_TYPE type,
+                                           KPROCESSOR_MODE mode, void **ptr,
+                                           POBJECT_HANDLE_INFORMATION info )
+{
+    NTSTATUS status;
+
+    TRACE( "%p %x %p %d %p %p\n", handle, access, type, mode, ptr, info );
+
+    if (mode != KernelMode)
+    {
+        FIXME("UserMode access not implemented\n");
+        return STATUS_NOT_IMPLEMENTED;
+    }
+
+    status = kernel_object_from_handle( handle, type, ptr );
+    if (!status) ObReferenceObject( *ptr );
+    return status;
+}
+
+
+static void *create_file_object( HANDLE handle );
+
+static const WCHAR file_type_name[] = {'F','i','l','e',0};
+
+static struct _OBJECT_TYPE file_type = {
+    file_type_name,
+    create_file_object,
+    free_kernel_object
+};
+
+POBJECT_TYPE IoFileObjectType = &file_type;
+
+static void *create_file_object( HANDLE handle )
+{
+    FILE_OBJECT *file;
+    if (!(file = alloc_kernel_object( IoFileObjectType, sizeof(*file), 0 ))) return NULL;
+    file->Type = 5;  /* MSDN */
+    file->Size = sizeof(*file);
+    return file;
+}
+
 /* transfer result of IRP back to wineserver */
 static NTSTATUS WINAPI dispatch_irp_completion( DEVICE_OBJECT *device, IRP *irp, void *context )
 {
@@ -277,7 +417,7 @@ static NTSTATUS WINAPI dispatch_irp_completion( DEVICE_OBJECT *device, IRP *irp,
 
     if (irp->Flags & IRP_CLOSE_OPERATION)
     {
-        HeapFree( GetProcessHeap(), 0, file );
+        ObDereferenceObject( file );
         irp->Tail.Overlay.OriginalFileObject = NULL;
     }
 
@@ -310,7 +450,7 @@ static NTSTATUS dispatch_create( const irp_params_t *params, void *in_buff, ULON
     FILE_OBJECT *file;
     DEVICE_OBJECT *device = wine_server_get_ptr( params->create.device );
 
-    if (!(file = HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*file) ))) return STATUS_NO_MEMORY;
+    if (!(file = alloc_kernel_object( IoFileObjectType, sizeof(*file), 1 ))) return STATUS_NO_MEMORY;
 
     TRACE( "device %p -> file %p\n", device, file );
 
@@ -320,7 +460,7 @@ static NTSTATUS dispatch_create( const irp_params_t *params, void *in_buff, ULON
 
     if (!(irp = IoAllocateIrp( device->StackSize, FALSE )))
     {
-        HeapFree( GetProcessHeap(), 0, file );
+        ObDereferenceObject( file );
         return STATUS_NO_MEMORY;
     }
 
@@ -365,7 +505,7 @@ static NTSTATUS dispatch_close( const irp_params_t *params, void *in_buff, ULONG
 
     if (!(irp = IoAllocateIrp( device->StackSize, FALSE )))
     {
-        HeapFree( GetProcessHeap(), 0, file );
+        ObDereferenceObject( file );
         return STATUS_NO_MEMORY;
     }
 
@@ -1090,6 +1230,26 @@ static NTSTATUS WINAPI unhandled_irp( DEVICE_OBJECT *device, IRP *irp )
 }
 
 
+static void free_driver_object( void *obj )
+{
+    struct wine_driver *driver = obj;
+    RtlFreeUnicodeString( &driver->driver_obj.DriverName );
+    RtlFreeUnicodeString( &driver->driver_obj.DriverExtension->ServiceKeyName );
+    free_kernel_object( driver );
+}
+
+static const WCHAR driver_type_name[] = {'D','r','i','v','e','r',0};
+
+static struct _OBJECT_TYPE driver_type =
+{
+    driver_type_name,
+    NULL,
+    free_driver_object
+};
+
+POBJECT_TYPE IoDriverObjectType = &driver_type;
+
+
 /***********************************************************************
  *           IoCreateDriver   (NTOSKRNL.EXE.@)
  */
@@ -1101,13 +1261,12 @@ NTSTATUS WINAPI IoCreateDriver( UNICODE_STRING *name, PDRIVER_INITIALIZE init )
 
     TRACE("(%s, %p)\n", debugstr_us(name), init);
 
-    if (!(driver = RtlAllocateHeap( GetProcessHeap(), HEAP_ZERO_MEMORY,
-                                    sizeof(*driver) )))
+    if (!(driver = alloc_kernel_object( IoDriverObjectType, sizeof(*driver), 1 )))
         return STATUS_NO_MEMORY;
 
     if ((status = RtlDuplicateUnicodeString( 1, name, &driver->driver_obj.DriverName )))
     {
-        RtlFreeHeap( GetProcessHeap(), 0, driver );
+        free_kernel_object( driver );
         return status;
     }
 
@@ -1122,9 +1281,7 @@ NTSTATUS WINAPI IoCreateDriver( UNICODE_STRING *name, PDRIVER_INITIALIZE init )
     status = driver->driver_obj.DriverInit( &driver->driver_obj, &driver->driver_extension.ServiceKeyName );
     if (status)
     {
-        RtlFreeUnicodeString( &driver->driver_obj.DriverName );
-        RtlFreeUnicodeString( &driver->driver_extension.ServiceKeyName );
-        RtlFreeHeap( GetProcessHeap(), 0, driver );
+        ObDereferenceObject( driver );
         return status;
     }
 
@@ -1153,10 +1310,20 @@ void WINAPI IoDeleteDriver( DRIVER_OBJECT *driver_object )
     wine_rb_remove_key( &wine_drivers, &driver_object->DriverName );
     LeaveCriticalSection( &drivers_cs );
 
-    RtlFreeUnicodeString( &driver_object->DriverName );
-    RtlFreeUnicodeString( &driver_object->DriverExtension->ServiceKeyName );
-    RtlFreeHeap( GetProcessHeap(), 0, CONTAINING_RECORD( driver_object, struct wine_driver, driver_obj ) );
+    ObDereferenceObject( driver_object );
 }
+
+
+static const WCHAR device_type_name[] = {'D','e','v','i','c','e',0};
+
+static struct _OBJECT_TYPE device_type =
+{
+    device_type_name,
+    NULL,
+    free_kernel_object
+};
+
+POBJECT_TYPE IoDeviceObjectType = &device_type;
 
 
 /***********************************************************************
@@ -1175,7 +1342,7 @@ NTSTATUS WINAPI IoCreateDevice( DRIVER_OBJECT *driver, ULONG ext_size,
     TRACE( "(%p, %u, %s, %u, %x, %u, %p)\n",
            driver, ext_size, debugstr_us(name), type, characteristics, exclusive, ret_device );
 
-    if (!(device = HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*device) + ext_size )))
+    if (!(device = alloc_kernel_object( IoDeviceObjectType, sizeof(DEVICE_OBJECT) + ext_size, 1 )))
         return STATUS_NO_MEMORY;
 
     SERVER_START_REQ( create_device )
@@ -1203,7 +1370,7 @@ NTSTATUS WINAPI IoCreateDevice( DRIVER_OBJECT *driver, ULONG ext_size,
 
         *ret_device = device;
     }
-    else HeapFree( GetProcessHeap(), 0, device );
+    else free_kernel_object( device );
 
     return status;
 }
@@ -1231,7 +1398,7 @@ void WINAPI IoDeleteDevice( DEVICE_OBJECT *device )
         while (*prev && *prev != device) prev = &(*prev)->NextDevice;
         if (*prev) *prev = (*prev)->NextDevice;
         NtClose( device->Reserved );
-        HeapFree( GetProcessHeap(), 0, device );
+        ObDereferenceObject( device );
     }
 }
 
@@ -1573,12 +1740,8 @@ NTSTATUS WINAPI IoCallDriver( DEVICE_OBJECT *device, IRP *irp )
 /***********************************************************************
  *           IofCallDriver   (NTOSKRNL.EXE.@)
  */
-#ifdef DEFINE_FASTCALL2_ENTRYPOINT
-DEFINE_FASTCALL2_ENTRYPOINT( IofCallDriver )
-NTSTATUS WINAPI DECLSPEC_HIDDEN __regs_IofCallDriver( DEVICE_OBJECT *device, IRP *irp )
-#else
+DEFINE_FASTCALL_WRAPPER( IofCallDriver, 8 )
 NTSTATUS WINAPI IofCallDriver( DEVICE_OBJECT *device, IRP *irp )
-#endif
 {
     TRACE( "%p %p\n", device, irp );
     return IoCallDriver( device, irp );
@@ -1907,12 +2070,8 @@ VOID WINAPI IoCompleteRequest( IRP *irp, UCHAR priority_boost )
 /***********************************************************************
  *           IofCompleteRequest   (NTOSKRNL.EXE.@)
  */
-#ifdef DEFINE_FASTCALL2_ENTRYPOINT
-DEFINE_FASTCALL2_ENTRYPOINT( IofCompleteRequest )
-void WINAPI DECLSPEC_HIDDEN __regs_IofCompleteRequest( IRP *irp, UCHAR priority_boost )
-#else
+DEFINE_FASTCALL_WRAPPER( IofCompleteRequest, 8 )
 void WINAPI IofCompleteRequest( IRP *irp, UCHAR priority_boost )
-#endif
 {
     TRACE( "%p %u\n", irp, priority_boost );
     IoCompleteRequest( irp, priority_boost );
@@ -1922,12 +2081,8 @@ void WINAPI IofCompleteRequest( IRP *irp, UCHAR priority_boost )
 /***********************************************************************
  *           InterlockedCompareExchange   (NTOSKRNL.EXE.@)
  */
-#ifdef DEFINE_FASTCALL3_ENTRYPOINT
-DEFINE_FASTCALL3_ENTRYPOINT( NTOSKRNL_InterlockedCompareExchange )
-LONG WINAPI DECLSPEC_HIDDEN __regs_NTOSKRNL_InterlockedCompareExchange( LONG volatile *dest, LONG xchg, LONG compare )
-#else
+DEFINE_FASTCALL_WRAPPER( NTOSKRNL_InterlockedCompareExchange, 12 )
 LONG WINAPI NTOSKRNL_InterlockedCompareExchange( LONG volatile *dest, LONG xchg, LONG compare )
-#endif
 {
     return InterlockedCompareExchange( dest, xchg, compare );
 }
@@ -1936,12 +2091,8 @@ LONG WINAPI NTOSKRNL_InterlockedCompareExchange( LONG volatile *dest, LONG xchg,
 /***********************************************************************
  *           InterlockedDecrement   (NTOSKRNL.EXE.@)
  */
-#ifdef DEFINE_FASTCALL1_ENTRYPOINT
-DEFINE_FASTCALL1_ENTRYPOINT( NTOSKRNL_InterlockedDecrement )
-LONG WINAPI DECLSPEC_HIDDEN __regs_NTOSKRNL_InterlockedDecrement( LONG volatile *dest )
-#else
+DEFINE_FASTCALL1_WRAPPER( NTOSKRNL_InterlockedDecrement )
 LONG WINAPI NTOSKRNL_InterlockedDecrement( LONG volatile *dest )
-#endif
 {
     return InterlockedDecrement( dest );
 }
@@ -1950,12 +2101,8 @@ LONG WINAPI NTOSKRNL_InterlockedDecrement( LONG volatile *dest )
 /***********************************************************************
  *           InterlockedExchange   (NTOSKRNL.EXE.@)
  */
-#ifdef DEFINE_FASTCALL2_ENTRYPOINT
-DEFINE_FASTCALL2_ENTRYPOINT( NTOSKRNL_InterlockedExchange )
-LONG WINAPI DECLSPEC_HIDDEN __regs_NTOSKRNL_InterlockedExchange( LONG volatile *dest, LONG val )
-#else
+DEFINE_FASTCALL_WRAPPER( NTOSKRNL_InterlockedExchange, 8 )
 LONG WINAPI NTOSKRNL_InterlockedExchange( LONG volatile *dest, LONG val )
-#endif
 {
     return InterlockedExchange( dest, val );
 }
@@ -1964,12 +2111,8 @@ LONG WINAPI NTOSKRNL_InterlockedExchange( LONG volatile *dest, LONG val )
 /***********************************************************************
  *           InterlockedExchangeAdd   (NTOSKRNL.EXE.@)
  */
-#ifdef DEFINE_FASTCALL2_ENTRYPOINT
-DEFINE_FASTCALL2_ENTRYPOINT( NTOSKRNL_InterlockedExchangeAdd )
-LONG WINAPI DECLSPEC_HIDDEN __regs_NTOSKRNL_InterlockedExchangeAdd( LONG volatile *dest, LONG incr )
-#else
+DEFINE_FASTCALL_WRAPPER( NTOSKRNL_InterlockedExchangeAdd, 8 )
 LONG WINAPI NTOSKRNL_InterlockedExchangeAdd( LONG volatile *dest, LONG incr )
-#endif
 {
     return InterlockedExchangeAdd( dest, incr );
 }
@@ -1978,12 +2121,8 @@ LONG WINAPI NTOSKRNL_InterlockedExchangeAdd( LONG volatile *dest, LONG incr )
 /***********************************************************************
  *           InterlockedIncrement   (NTOSKRNL.EXE.@)
  */
-#ifdef DEFINE_FASTCALL1_ENTRYPOINT
-DEFINE_FASTCALL1_ENTRYPOINT( NTOSKRNL_InterlockedIncrement )
-LONG WINAPI DECLSPEC_HIDDEN __regs_NTOSKRNL_InterlockedIncrement( LONG volatile *dest )
-#else
+DEFINE_FASTCALL1_WRAPPER( NTOSKRNL_InterlockedIncrement )
 LONG WINAPI NTOSKRNL_InterlockedIncrement( LONG volatile *dest )
-#endif
 {
     return InterlockedIncrement( dest );
 }
@@ -2169,6 +2308,17 @@ NTSTATUS WINAPI FsRtlRegisterUncProvider(PHANDLE MupHandle, PUNICODE_STRING Redi
     return STATUS_NOT_IMPLEMENTED;
 }
 
+
+static const WCHAR process_type_name[] = {'P','r','o','c','e','s','s',0};
+
+static struct _OBJECT_TYPE process_type =
+{
+    process_type_name
+};
+
+POBJECT_TYPE PsProcessType = &process_type;
+
+
 /***********************************************************************
  *           IoGetCurrentProcess / PsGetCurrentProcess   (NTOSKRNL.EXE.@)
  */
@@ -2177,6 +2327,17 @@ PEPROCESS WINAPI IoGetCurrentProcess(void)
     FIXME("() stub\n");
     return NULL;
 }
+
+
+static const WCHAR thread_type_name[] = {'T','h','r','e','a','d',0};
+
+static struct _OBJECT_TYPE thread_type =
+{
+    thread_type_name,
+};
+
+POBJECT_TYPE PsThreadType = &thread_type;
+
 
 /***********************************************************************
  *           KeGetCurrentThread / PsGetCurrentThread   (NTOSKRNL.EXE.@)
@@ -2488,22 +2649,6 @@ VOID WINAPI MmUnmapIoSpace( PVOID BaseAddress, SIZE_T NumberOfBytes )
 
 
  /***********************************************************************
- *           ObReferenceObjectByHandle    (NTOSKRNL.EXE.@)
- */
-NTSTATUS WINAPI ObReferenceObjectByHandle( HANDLE obj, ACCESS_MASK access,
-                                           POBJECT_TYPE type,
-                                           KPROCESSOR_MODE mode, PVOID* ptr,
-                                           POBJECT_HANDLE_INFORMATION info)
-{
-    FIXME( "stub: %p %x %p %d %p %p\n", obj, access, type, mode, ptr, info);
-
-    if(ptr)
-        *ptr = UlongToHandle(0xdeadbeaf);
-
-    return STATUS_SUCCESS;
-}
-
- /***********************************************************************
  *           ObReferenceObjectByName    (NTOSKRNL.EXE.@)
  */
 NTSTATUS WINAPI ObReferenceObjectByName( UNICODE_STRING *ObjectName,
@@ -2543,14 +2688,8 @@ NTSTATUS WINAPI ObReferenceObjectByName( UNICODE_STRING *ObjectName,
     }
 
     driver = WINE_RB_ENTRY_VALUE(entry, struct wine_driver, entry);
-    *Object = &driver->driver_obj;
+    ObReferenceObject( *Object = &driver->driver_obj );
     return STATUS_SUCCESS;
-}
-
-
-static void ObReferenceObject( void *obj )
-{
-    TRACE( "(%p): stub\n", obj );
 }
 
 
@@ -2568,23 +2707,10 @@ NTSTATUS WINAPI ObReferenceObjectByPointer(void *obj, ACCESS_MASK access,
 
 
 /***********************************************************************
- *           ObDereferenceObject   (NTOSKRNL.EXE.@)
- */
-void WINAPI ObDereferenceObject( void *obj )
-{
-    TRACE( "(%p): stub\n", obj );
-}
-
-
-/***********************************************************************
  *           ObfReferenceObject   (NTOSKRNL.EXE.@)
  */
-#ifdef DEFINE_FASTCALL1_ENTRYPOINT
-DEFINE_FASTCALL1_ENTRYPOINT( ObfReferenceObject )
-void WINAPI DECLSPEC_HIDDEN __regs_ObfReferenceObject( void *obj )
-#else
+DEFINE_FASTCALL1_WRAPPER( ObfReferenceObject )
 void WINAPI ObfReferenceObject( void *obj )
-#endif
 {
     ObReferenceObject( obj );
 }
@@ -2593,12 +2719,8 @@ void WINAPI ObfReferenceObject( void *obj )
 /***********************************************************************
  *           ObfDereferenceObject   (NTOSKRNL.EXE.@)
  */
-#ifdef DEFINE_FASTCALL1_ENTRYPOINT
-DEFINE_FASTCALL1_ENTRYPOINT( ObfDereferenceObject )
-void WINAPI DECLSPEC_HIDDEN __regs_ObfDereferenceObject( void *obj )
-#else
+DEFINE_FASTCALL1_WRAPPER( ObfDereferenceObject )
 void WINAPI ObfDereferenceObject( void *obj )
-#endif
 {
     ObDereferenceObject( obj );
 }
@@ -2805,6 +2927,26 @@ NTSTATUS WINAPI PsTerminateSystemThread(NTSTATUS status)
 {
     TRACE("status %#x.\n", status);
     ExitThread( status );
+}
+
+
+/***********************************************************************
+ *           PsSuspendProcess   (NTOSKRNL.EXE.@)
+ */
+NTSTATUS WINAPI PsSuspendProcess(PEPROCESS process)
+{
+    FIXME("stub: %p\n", process);
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+
+/***********************************************************************
+ *           PsResumeProcess   (NTOSKRNL.EXE.@)
+ */
+NTSTATUS WINAPI PsResumeProcess(PEPROCESS process)
+{
+    FIXME("stub: %p\n", process);
+    return STATUS_NOT_IMPLEMENTED;
 }
 
 
@@ -3876,13 +4018,8 @@ typedef struct _EX_PUSH_LOCK_WAIT_BLOCK *PEX_PUSH_LOCK_WAIT_BLOCK;
 /*********************************************************************
  *           ExfUnblockPushLock    (NTOSKRNL.@)
  */
-#ifdef DEFINE_FASTCALL2_ENTRYPOINT
-DEFINE_FASTCALL2_ENTRYPOINT( ExfUnblockPushLock )
-void WINAPI DECLSPEC_HIDDEN __regs_ExfUnblockPushLock( EX_PUSH_LOCK *lock,
-                                                       PEX_PUSH_LOCK_WAIT_BLOCK block)
-#else
+DEFINE_FASTCALL_WRAPPER( ExfUnblockPushLock, 8 )
 void WINAPI ExfUnblockPushLock( EX_PUSH_LOCK *lock, PEX_PUSH_LOCK_WAIT_BLOCK block )
-#endif
 {
     FIXME( "stub: %p, %p\n", lock, block );
 }
@@ -3982,4 +4119,45 @@ void WINAPI KeEnterGuardedRegion(void)
 void WINAPI KeLeaveGuardedRegion(void)
 {
     FIXME("\n");
+}
+
+static const WCHAR token_type_name[] = {'T','o','k','e','n',0};
+
+static struct _OBJECT_TYPE token_type =
+{
+    token_type_name
+};
+
+POBJECT_TYPE SeTokenObjectType = &token_type;
+
+/*************************************************************************
+ *           ExUuidCreate            (NTOSKRNL.@)
+ *
+ * Creates a 128bit UUID.
+ *
+ * RETURNS
+ *
+ *  STATUS_SUCCESS if successful.
+ *  RPC_NT_UUID_LOCAL_ONLY if UUID is only locally unique.
+ *
+ * NOTES
+ *
+ *  Follows RFC 4122, section 4.4 (Algorithms for Creating a UUID from
+ *  Truly Random or Pseudo-Random Numbers)
+ */
+NTSTATUS WINAPI ExUuidCreate(UUID *uuid)
+{
+    RtlGenRandom(uuid, sizeof(*uuid));
+    /* Clear the version bits and set the version (4) */
+    uuid->Data3 &= 0x0fff;
+    uuid->Data3 |= (4 << 12);
+    /* Set the topmost bits of Data4 (clock_seq_hi_and_reserved) as
+     * specified in RFC 4122, section 4.4.
+     */
+    uuid->Data4[0] &= 0x3f;
+    uuid->Data4[0] |= 0x80;
+
+    TRACE("%s\n", debugstr_guid(uuid));
+
+    return STATUS_SUCCESS;
 }

@@ -54,14 +54,14 @@
 @ stub MFCreateSampleGrabberSinkActivate
 @ stub MFCreateSecureHttpSchemePlugin
 @ stub MFCreateSequencerSegmentOffset
-@ stub MFCreateSequencerSource
+@ stdcall MFCreateSequencerSource(ptr ptr)
 @ stub MFCreateSequencerSourceRemoteStream
 @ stub MFCreateSimpleTypeHandler
 @ stdcall MFCreateSourceResolver(ptr) mfplat.MFCreateSourceResolver
 @ stub MFCreateStandardQualityManager
-@ stub MFCreateTopoLoader
+@ stdcall MFCreateTopoLoader(ptr)
 @ stdcall MFCreateTopology(ptr)
-@ stub MFCreateTopologyNode
+@ stdcall MFCreateTopologyNode(long ptr)
 @ stub MFCreateTranscodeProfile
 @ stub MFCreateTranscodeSinkActivate
 @ stub MFCreateTranscodeTopology

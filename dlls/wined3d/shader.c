@@ -966,7 +966,7 @@ static HRESULT shader_calculate_clip_or_cull_distance_mask(
     /* Clip and cull distances are packed in 4 component registers. 0 and 1 are
      * the only allowed semantic indices.
      */
-    if (e->semantic_idx >= MAX_CLIP_DISTANCES / 4)
+    if (e->semantic_idx >= WINED3D_MAX_CLIP_DISTANCES / 4)
     {
         *mask = 0;
         WARN("Invalid clip/cull distance index %u.\n", e->semantic_idx);
@@ -4018,13 +4018,13 @@ void find_ps_compile_args(const struct wined3d_state *state, const struct wined3
     {
         /* In SM4+ we use dcl_sampler in order to determine if we should use shadow sampler. */
         args->shadow = 0;
-        for (i = 0 ; i < MAX_FRAGMENT_SAMPLERS; ++i)
+        for (i = 0 ; i < WINED3D_MAX_FRAGMENT_SAMPLERS; ++i)
             args->color_fixup[i] = COLOR_FIXUP_IDENTITY;
         args->np2_fixup = 0;
     }
     else
     {
-        for (i = 0; i < MAX_FRAGMENT_SAMPLERS; ++i)
+        for (i = 0; i < WINED3D_MAX_FRAGMENT_SAMPLERS; ++i)
         {
             if (!shader->reg_maps.resource_info[i].type)
                 continue;
@@ -4098,7 +4098,7 @@ void find_ps_compile_args(const struct wined3d_state *state, const struct wined3
         const struct wined3d_shader *vs = state->shader[WINED3D_SHADER_TYPE_VERTEX];
 
         args->texcoords_initialized = 0;
-        for (i = 0; i < MAX_TEXTURES; ++i)
+        for (i = 0; i < WINED3D_MAX_TEXTURES; ++i)
         {
             if (vs)
             {
@@ -4112,14 +4112,14 @@ void find_ps_compile_args(const struct wined3d_state *state, const struct wined3
 
                 if ((state->texture_states[i][WINED3D_TSS_TEXCOORD_INDEX] >> WINED3D_FFP_TCI_SHIFT)
                         & WINED3D_FFP_TCI_MASK
-                        || (coord_idx < MAX_TEXTURES && (si->use_map & (1u << (WINED3D_FFP_TEXCOORD0 + coord_idx)))))
+                        || (coord_idx < WINED3D_MAX_TEXTURES && (si->use_map & (1u << (WINED3D_FFP_TEXCOORD0 + coord_idx)))))
                     args->texcoords_initialized |= 1u << i;
             }
         }
     }
     else
     {
-        args->texcoords_initialized = (1u << MAX_TEXTURES) - 1;
+        args->texcoords_initialized = (1u << WINED3D_MAX_TEXTURES) - 1;
     }
 
     args->pointsprite = state->render_states[WINED3D_RS_POINTSPRITEENABLE]

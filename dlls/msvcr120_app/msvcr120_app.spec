@@ -1871,9 +1871,9 @@
 @ cdecl gets_s(ptr long) msvcr120.gets_s
 @ cdecl getwc(ptr) msvcr120.getwc
 @ cdecl getwchar() msvcr120.getwchar
-@ stub ilogb
-@ stub ilogbf
-@ stub ilogbl
+@ cdecl ilogb(double) msvcr120.ilogb
+@ cdecl ilogbf(float) msvcr120.ilogbf
+@ cdecl ilogbl(double) msvcr120.ilogbl
 @ stub imaxabs
 @ stub imaxdiv
 @ cdecl isalnum(long) msvcr120.isalnum
@@ -1965,9 +1965,9 @@
 @ cdecl nextafter(double double) msvcr120.nextafter
 @ cdecl nextafterf(float float) msvcr120.nextafterf
 @ cdecl nextafterl(double double) msvcr120.nextafterl
-@ stub nexttoward
-@ stub nexttowardf
-@ stub nexttowardl
+@ cdecl nexttoward(double double) msvcr120.nexttoward
+@ cdecl nexttowardf(float double) msvcr120.nexttowardf
+@ cdecl nexttowardl(double double) msvcr120.nexttowardl
 @ stub norm
 @ stub normf
 @ stub norml

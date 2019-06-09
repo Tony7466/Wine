@@ -74,7 +74,6 @@ struct wined3d_settings wined3d_settings =
 {
     TRUE,           /* Multithreaded CS by default. */
     MAKEDWORD_VERSION(4, 4), /* Default to OpenGL 4.4 */
-    TRUE,           /* Use of GLSL enabled by default */
     ORM_FBO,        /* Use FBOs to do offscreen rendering */
     PCI_VENDOR_NONE,/* PCI Vendor ID */
     PCI_DEVICE_NONE,/* PCI Device ID */
@@ -83,6 +82,7 @@ struct wined3d_settings wined3d_settings =
     TRUE,           /* Prefer multisample textures to multisample renderbuffers. */
     ~0u,            /* Don't force a specific sample count by default. */
     FALSE,          /* Don't range check relative addressing indices in float constants. */
+    FALSE,          /* No strict shader math by default. */
     ~0U,            /* No VS shader model limit by default. */
     ~0U,            /* No HS shader model limit by default. */
     ~0U,            /* No DS shader model limit by default. */
@@ -90,6 +90,7 @@ struct wined3d_settings wined3d_settings =
     ~0U,            /* No PS shader model limit by default. */
     ~0u,            /* No CS shader model limit by default. */
     FALSE,          /* 3D support enabled by default. */
+    WINED3D_SHADER_BACKEND_AUTO,
 };
 
 struct wined3d * CDECL wined3d_create(DWORD flags)
@@ -218,14 +219,33 @@ static BOOL wined3d_dll_init(HINSTANCE hInstDLL)
                     tmpvalue >> 16, tmpvalue & 0xffff);
             wined3d_settings.max_gl_version = tmpvalue;
         }
-        if ( !get_config_key( hkey, appkey, "UseGLSL", buffer, size) )
+        if (!get_config_key(hkey, appkey, "shader_backend", buffer, size))
         {
-            if (!strcmp(buffer,"disabled"))
+            if (!strcasecmp(buffer, "glsl"))
             {
-                ERR_(winediag)("The GLSL shader backend has been disabled. You get to keep all the pieces if it breaks.\n");
-                TRACE("Use of GL Shading Language disabled.\n");
-                wined3d_settings.use_glsl = FALSE;
+                ERR_(winediag)("Using the GLSL shader backend.\n");
+                wined3d_settings.shader_backend = WINED3D_SHADER_BACKEND_GLSL;
             }
+            else if (!strcasecmp(buffer, "arb"))
+            {
+                ERR_(winediag)("Using the ARB shader backend.\n");
+                wined3d_settings.shader_backend = WINED3D_SHADER_BACKEND_ARB;
+            }
+            else if (!strcasecmp(buffer, "none"))
+            {
+                ERR_(winediag)("Disabling shader backends.\n");
+                wined3d_settings.shader_backend = WINED3D_SHADER_BACKEND_NONE;
+            }
+        }
+        else if (!get_config_key(hkey, appkey, "UseGLSL", buffer, size) && !strcmp(buffer, "disabled"))
+        {
+            wined3d_settings.shader_backend = WINED3D_SHADER_BACKEND_ARB;
+        }
+        if (wined3d_settings.shader_backend == WINED3D_SHADER_BACKEND_ARB
+                || wined3d_settings.shader_backend == WINED3D_SHADER_BACKEND_NONE)
+        {
+            ERR_(winediag)("The GLSL shader backend has been disabled. You get to keep all the pieces if it breaks.\n");
+            TRACE("Use of GL Shading Language disabled.\n");
         }
         if (!get_config_key(hkey, appkey, "OffscreenRenderingMode", buffer, size)
                 && !strcmp(buffer,"backbuffer"))
@@ -293,6 +313,8 @@ static BOOL wined3d_dll_init(HINSTANCE hInstDLL)
             TRACE("Checking relative addressing indices in float constants.\n");
             wined3d_settings.check_float_constants = TRUE;
         }
+        if (!get_config_key_dword(hkey, appkey, "strict_shader_math", &wined3d_settings.strict_shader_math))
+            ERR_(winediag)("Setting strict shader math to %#x.\n", wined3d_settings.strict_shader_math);
         if (!get_config_key_dword(hkey, appkey, "MaxShaderModelVS", &wined3d_settings.max_sm_vs))
             TRACE("Limiting VS shader model to %u.\n", wined3d_settings.max_sm_vs);
         if (!get_config_key_dword(hkey, appkey, "MaxShaderModelHS", &wined3d_settings.max_sm_hs))

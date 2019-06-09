@@ -36,9 +36,15 @@
 
 #include "wine/test.h"
 
+static HRESULT (WINAPI *pMFCopyImage)(BYTE *dest, LONG deststride, const BYTE *src, LONG srcstride,
+        DWORD width, DWORD lines);
 static HRESULT (WINAPI *pMFCreateSourceResolver)(IMFSourceResolver **resolver);
 static HRESULT (WINAPI *pMFCreateMFByteStreamOnStream)(IStream *stream, IMFByteStream **bytestream);
 static HRESULT (WINAPI *pMFCreateMemoryBuffer)(DWORD max_length, IMFMediaBuffer **buffer);
+static void*   (WINAPI *pMFHeapAlloc)(SIZE_T size, ULONG flags, char *file, int line, EAllocationType type);
+static void    (WINAPI *pMFHeapFree)(void *p);
+static HRESULT (WINAPI *pMFPutWaitingWorkItem)(HANDLE event, LONG priority, IMFAsyncResult *result, MFWORKITEM_KEY *key);
+static HRESULT (WINAPI *pMFAllocateSerialWorkQueue)(DWORD queue, DWORD *serial_queue);
 
 DEFINE_GUID(GUID_NULL,0,0,0,0,0,0,0,0,0,0,0);
 
@@ -307,10 +313,15 @@ static void init_functions(void)
 {
     HMODULE mod = GetModuleHandleA("mfplat.dll");
 
-#define X(f) if (!(p##f = (void*)GetProcAddress(mod, #f))) return;
+#define X(f) p##f = (void*)GetProcAddress(mod, #f)
+    X(MFAllocateSerialWorkQueue);
+    X(MFCopyImage);
     X(MFCreateSourceResolver);
     X(MFCreateMFByteStreamOnStream);
     X(MFCreateMemoryBuffer);
+    X(MFHeapAlloc);
+    X(MFHeapFree);
+    X(MFPutWaitingWorkItem);
 #undef X
 }
 
@@ -318,12 +329,6 @@ static void test_MFCreateMediaType(void)
 {
     HRESULT hr;
     IMFMediaType *mediatype;
-
-    hr = MFStartup(MAKELONG( MF_API_VERSION, 0xdead ), MFSTARTUP_FULL);
-    ok(hr == MF_E_BAD_STARTUP_VERSION, "got 0x%08x\n", hr);
-
-    hr = MFStartup(MF_VERSION, MFSTARTUP_FULL);
-    ok(hr == S_OK, "got 0x%08x\n", hr);
 
 if(0)
 {
@@ -339,8 +344,6 @@ if(0)
     todo_wine ok(hr == S_OK, "got 0x%08x\n", hr);
 
     IMFMediaType_Release(mediatype);
-
-    MFShutdown();
 }
 
 static void test_MFCreateMediaEvent(void)
@@ -693,12 +696,516 @@ static void test_MFSample(void)
     IMFSample_Release(sample);
 }
 
+static HRESULT WINAPI testcallback_QueryInterface(IMFAsyncCallback *iface, REFIID riid, void **obj)
+{
+    if (IsEqualIID(riid, &IID_IMFAsyncCallback) ||
+            IsEqualIID(riid, &IID_IUnknown))
+    {
+        *obj = iface;
+        IMFAsyncCallback_AddRef(iface);
+        return S_OK;
+    }
+
+    *obj = NULL;
+    return E_NOINTERFACE;
+}
+
+static ULONG WINAPI testcallback_AddRef(IMFAsyncCallback *iface)
+{
+    return 2;
+}
+
+static ULONG WINAPI testcallback_Release(IMFAsyncCallback *iface)
+{
+    return 1;
+}
+
+static HRESULT WINAPI testcallback_GetParameters(IMFAsyncCallback *iface, DWORD *flags, DWORD *queue)
+{
+    ok(flags != NULL && queue != NULL, "Unexpected arguments.\n");
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI testcallback_Invoke(IMFAsyncCallback *iface, IMFAsyncResult *result)
+{
+    ok(result != NULL, "Unexpected result object.\n");
+    return E_NOTIMPL;
+}
+
+static const IMFAsyncCallbackVtbl testcallbackvtbl =
+{
+    testcallback_QueryInterface,
+    testcallback_AddRef,
+    testcallback_Release,
+    testcallback_GetParameters,
+    testcallback_Invoke,
+};
+
+static void test_MFCreateAsyncResult(void)
+{
+    IMFAsyncCallback callback = { &testcallbackvtbl };
+    IMFAsyncResult *result, *result2;
+    IUnknown *state, *object;
+    MFASYNCRESULT *data;
+    ULONG refcount;
+    HRESULT hr;
+
+    hr = MFCreateAsyncResult(NULL, NULL, NULL, NULL);
+    ok(FAILED(hr), "Unexpected hr %#x.\n", hr);
+
+    hr = MFCreateAsyncResult(NULL, NULL, NULL, &result);
+    ok(hr == S_OK, "Failed to create object, hr %#x.\n", hr);
+
+    data = (MFASYNCRESULT *)result;
+    ok(data->pCallback == NULL, "Unexpected callback value.\n");
+    ok(data->hrStatusResult == S_OK, "Unexpected status %#x.\n", data->hrStatusResult);
+    ok(data->dwBytesTransferred == 0, "Unexpected byte length %u.\n", data->dwBytesTransferred);
+    ok(data->hEvent == NULL, "Unexpected event.\n");
+
+    hr = IMFAsyncResult_GetState(result, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    state = (void *)0xdeadbeef;
+    hr = IMFAsyncResult_GetState(result, &state);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+    ok(state == (void *)0xdeadbeef, "Unexpected state.\n");
+
+    hr = IMFAsyncResult_GetStatus(result);
+    ok(hr == S_OK, "Unexpected status %#x.\n", hr);
+
+    data->hrStatusResult = 123;
+    hr = IMFAsyncResult_GetStatus(result);
+    ok(hr == 123, "Unexpected status %#x.\n", hr);
+
+    hr = IMFAsyncResult_SetStatus(result, E_FAIL);
+    ok(hr == S_OK, "Failed to set status, hr %#x.\n", hr);
+    ok(data->hrStatusResult == E_FAIL, "Unexpected status %#x.\n", hr);
+
+    hr = IMFAsyncResult_GetObject(result, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    object = (void *)0xdeadbeef;
+    hr = IMFAsyncResult_GetObject(result, &object);
+    ok(hr == E_POINTER, "Failed to get object, hr %#x.\n", hr);
+    ok(object == (void *)0xdeadbeef, "Unexpected object.\n");
+
+    state = IMFAsyncResult_GetStateNoAddRef(result);
+    ok(state == NULL, "Unexpected state.\n");
+
+    /* Object. */
+    hr = MFCreateAsyncResult((IUnknown *)result, &callback, NULL, &result2);
+    ok(hr == S_OK, "Failed to create object, hr %#x.\n", hr);
+
+    data = (MFASYNCRESULT *)result2;
+    ok(data->pCallback == &callback, "Unexpected callback value.\n");
+    ok(data->hrStatusResult == S_OK, "Unexpected status %#x.\n", data->hrStatusResult);
+    ok(data->dwBytesTransferred == 0, "Unexpected byte length %u.\n", data->dwBytesTransferred);
+    ok(data->hEvent == NULL, "Unexpected event.\n");
+
+    object = NULL;
+    hr = IMFAsyncResult_GetObject(result2, &object);
+    ok(hr == S_OK, "Failed to get object, hr %#x.\n", hr);
+    ok(object == (IUnknown *)result, "Unexpected object.\n");
+    IUnknown_Release(object);
+
+    IMFAsyncResult_Release(result2);
+
+    /* State object. */
+    hr = MFCreateAsyncResult(NULL, &callback, (IUnknown *)result, &result2);
+    ok(hr == S_OK, "Failed to create object, hr %#x.\n", hr);
+
+    data = (MFASYNCRESULT *)result2;
+    ok(data->pCallback == &callback, "Unexpected callback value.\n");
+    ok(data->hrStatusResult == S_OK, "Unexpected status %#x.\n", data->hrStatusResult);
+    ok(data->dwBytesTransferred == 0, "Unexpected byte length %u.\n", data->dwBytesTransferred);
+    ok(data->hEvent == NULL, "Unexpected event.\n");
+
+    state = NULL;
+    hr = IMFAsyncResult_GetState(result2, &state);
+    ok(hr == S_OK, "Failed to get state object, hr %#x.\n", hr);
+    ok(state == (IUnknown *)result, "Unexpected state.\n");
+    IUnknown_Release(state);
+
+    state = IMFAsyncResult_GetStateNoAddRef(result2);
+    ok(state == (IUnknown *)result, "Unexpected state.\n");
+
+    refcount = IMFAsyncResult_Release(result2);
+    ok(!refcount, "Unexpected refcount %u\n.", refcount);
+    refcount = IMFAsyncResult_Release(result);
+    ok(!refcount, "Unexpected refcount %u\n.", refcount);
+}
+
+static void test_startup(void)
+{
+    DWORD queue;
+    HRESULT hr;
+
+    hr = MFStartup(MAKELONG(MF_API_VERSION, 0xdead), MFSTARTUP_FULL);
+    ok(hr == MF_E_BAD_STARTUP_VERSION, "Unexpected hr %#x.\n", hr);
+
+    hr = MFStartup(MF_VERSION, MFSTARTUP_FULL);
+    ok(hr == S_OK, "Failed to start up, hr %#x.\n", hr);
+
+    hr = MFAllocateWorkQueue(&queue);
+    ok(hr == S_OK, "Failed to allocate a queue, hr %#x.\n", hr);
+    hr = MFUnlockWorkQueue(queue);
+    ok(hr == S_OK, "Failed to unlock the queue, hr %#x.\n", hr);
+
+    hr = MFShutdown();
+    ok(hr == S_OK, "Failed to shut down, hr %#x.\n", hr);
+
+    hr = MFAllocateWorkQueue(&queue);
+    ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#x.\n", hr);
+
+    /* Already shut down, has no effect. */
+    hr = MFShutdown();
+    ok(hr == S_OK, "Failed to shut down, hr %#x.\n", hr);
+
+    hr = MFStartup(MF_VERSION, MFSTARTUP_FULL);
+    ok(hr == S_OK, "Failed to start up, hr %#x.\n", hr);
+
+    hr = MFAllocateWorkQueue(&queue);
+    ok(hr == S_OK, "Failed to allocate a queue, hr %#x.\n", hr);
+    hr = MFUnlockWorkQueue(queue);
+    ok(hr == S_OK, "Failed to unlock the queue, hr %#x.\n", hr);
+
+    hr = MFShutdown();
+    ok(hr == S_OK, "Failed to shut down, hr %#x.\n", hr);
+
+    /* Platform lock. */
+    hr = MFStartup(MF_VERSION, MFSTARTUP_FULL);
+    ok(hr == S_OK, "Failed to start up, hr %#x.\n", hr);
+
+    hr = MFAllocateWorkQueue(&queue);
+    ok(hr == S_OK, "Failed to allocate a queue, hr %#x.\n", hr);
+    hr = MFUnlockWorkQueue(queue);
+    ok(hr == S_OK, "Failed to unlock the queue, hr %#x.\n", hr);
+
+    /* Unlocking implies shutdown. */
+    hr = MFUnlockPlatform();
+    ok(hr == S_OK, "Failed to unlock, %#x.\n", hr);
+
+    hr = MFAllocateWorkQueue(&queue);
+    ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#x.\n", hr);
+
+    hr = MFLockPlatform();
+    ok(hr == S_OK, "Failed to lock, %#x.\n", hr);
+
+    hr = MFAllocateWorkQueue(&queue);
+    ok(hr == S_OK, "Failed to allocate a queue, hr %#x.\n", hr);
+    hr = MFUnlockWorkQueue(queue);
+    ok(hr == S_OK, "Failed to unlock the queue, hr %#x.\n", hr);
+
+    hr = MFShutdown();
+    ok(hr == S_OK, "Failed to shut down, hr %#x.\n", hr);
+}
+
+static void test_allocate_queue(void)
+{
+    DWORD queue, queue2;
+    HRESULT hr;
+
+    hr = MFStartup(MF_VERSION, MFSTARTUP_FULL);
+    ok(hr == S_OK, "Failed to start up, hr %#x.\n", hr);
+
+    hr = MFAllocateWorkQueue(&queue);
+    ok(hr == S_OK, "Failed to allocate a queue, hr %#x.\n", hr);
+    ok(queue & MFASYNC_CALLBACK_QUEUE_PRIVATE_MASK, "Unexpected queue id.\n");
+
+    hr = MFUnlockWorkQueue(queue);
+    ok(hr == S_OK, "Failed to unlock the queue, hr %#x.\n", hr);
+
+    hr = MFUnlockWorkQueue(queue);
+    ok(FAILED(hr), "Unexpected hr %#x.\n", hr);
+
+    hr = MFAllocateWorkQueue(&queue2);
+    ok(hr == S_OK, "Failed to allocate a queue, hr %#x.\n", hr);
+    ok(queue2 & MFASYNC_CALLBACK_QUEUE_PRIVATE_MASK, "Unexpected queue id.\n");
+
+    hr = MFUnlockWorkQueue(queue2);
+    ok(hr == S_OK, "Failed to unlock the queue, hr %#x.\n", hr);
+
+    /* Unlock in system queue range. */
+    hr = MFUnlockWorkQueue(MFASYNC_CALLBACK_QUEUE_STANDARD);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    hr = MFUnlockWorkQueue(MFASYNC_CALLBACK_QUEUE_UNDEFINED);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    hr = MFUnlockWorkQueue(0x20);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    hr = MFShutdown();
+    ok(hr == S_OK, "Failed to shutdown, hr %#x.\n", hr);
+}
+
+static void test_MFCopyImage(void)
+{
+    BYTE dest[16], src[16];
+    HRESULT hr;
+
+    if (!pMFCopyImage)
+    {
+        win_skip("MFCopyImage() is not available.\n");
+        return;
+    }
+
+    memset(dest, 0xaa, sizeof(dest));
+    memset(src, 0x11, sizeof(src));
+
+    hr = pMFCopyImage(dest, 8, src, 8, 4, 1);
+    ok(hr == S_OK, "Failed to copy image %#x.\n", hr);
+    ok(!memcmp(dest, src, 4) && dest[4] == 0xaa, "Unexpected buffer contents.\n");
+
+    memset(dest, 0xaa, sizeof(dest));
+    memset(src, 0x11, sizeof(src));
+
+    hr = pMFCopyImage(dest, 8, src, 8, 16, 1);
+    ok(hr == S_OK, "Failed to copy image %#x.\n", hr);
+    ok(!memcmp(dest, src, 16), "Unexpected buffer contents.\n");
+
+    memset(dest, 0xaa, sizeof(dest));
+    memset(src, 0x11, sizeof(src));
+
+    hr = pMFCopyImage(dest, 8, src, 8, 8, 2);
+    ok(hr == S_OK, "Failed to copy image %#x.\n", hr);
+    ok(!memcmp(dest, src, 16), "Unexpected buffer contents.\n");
+}
+
+static void test_MFCreateCollection(void)
+{
+    IMFCollection *collection;
+    IUnknown *element;
+    DWORD count;
+    HRESULT hr;
+
+    hr = MFCreateCollection(NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    hr = MFCreateCollection(&collection);
+    ok(hr == S_OK, "Failed to create collection, hr %#x.\n", hr);
+
+    hr = IMFCollection_GetElementCount(collection, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    count = 1;
+    hr = IMFCollection_GetElementCount(collection, &count);
+    ok(hr == S_OK, "Failed to get element count, hr %#x.\n", hr);
+    ok(count == 0, "Unexpected count %u.\n", count);
+
+    hr = IMFCollection_GetElement(collection, 0, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    element = (void *)0xdeadbeef;
+    hr = IMFCollection_GetElement(collection, 0, &element);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+    ok(element == (void *)0xdeadbeef, "Unexpected pointer.\n");
+
+    hr = IMFCollection_RemoveElement(collection, 0, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    element = (void *)0xdeadbeef;
+    hr = IMFCollection_RemoveElement(collection, 0, &element);
+    ok(hr == E_INVALIDARG, "Failed to remove element, hr %#x.\n", hr);
+    ok(element == (void *)0xdeadbeef, "Unexpected pointer.\n");
+
+    hr = IMFCollection_RemoveAllElements(collection);
+    ok(hr == S_OK, "Failed to clear, hr %#x.\n", hr);
+
+    hr = IMFCollection_AddElement(collection, (IUnknown *)collection);
+    ok(hr == S_OK, "Failed to add element, hr %#x.\n", hr);
+
+    count = 0;
+    hr = IMFCollection_GetElementCount(collection, &count);
+    ok(hr == S_OK, "Failed to get element count, hr %#x.\n", hr);
+    ok(count == 1, "Unexpected count %u.\n", count);
+
+    hr = IMFCollection_AddElement(collection, NULL);
+    ok(hr == S_OK, "Failed to add element, hr %#x.\n", hr);
+
+    count = 0;
+    hr = IMFCollection_GetElementCount(collection, &count);
+    ok(hr == S_OK, "Failed to get element count, hr %#x.\n", hr);
+    ok(count == 2, "Unexpected count %u.\n", count);
+
+    hr = IMFCollection_InsertElementAt(collection, 10, (IUnknown *)collection);
+    ok(hr == S_OK, "Failed to insert element, hr %#x.\n", hr);
+
+    count = 0;
+    hr = IMFCollection_GetElementCount(collection, &count);
+    ok(hr == S_OK, "Failed to get element count, hr %#x.\n", hr);
+    ok(count == 11, "Unexpected count %u.\n", count);
+
+    hr = IMFCollection_GetElement(collection, 0, &element);
+    ok(hr == S_OK, "Failed to get element, hr %#x.\n", hr);
+    ok(element == (IUnknown *)collection, "Unexpected element.\n");
+    IUnknown_Release(element);
+
+    hr = IMFCollection_GetElement(collection, 1, &element);
+    ok(hr == E_UNEXPECTED, "Unexpected hr %#x.\n", hr);
+    ok(!element, "Unexpected element.\n");
+
+    hr = IMFCollection_GetElement(collection, 2, &element);
+    ok(hr == E_UNEXPECTED, "Unexpected hr %#x.\n", hr);
+    ok(!element, "Unexpected element.\n");
+
+    hr = IMFCollection_GetElement(collection, 10, &element);
+    ok(hr == S_OK, "Failed to get element, hr %#x.\n", hr);
+    ok(element == (IUnknown *)collection, "Unexpected element.\n");
+    IUnknown_Release(element);
+
+    hr = IMFCollection_InsertElementAt(collection, 0, NULL);
+    ok(hr == S_OK, "Failed to insert element, hr %#x.\n", hr);
+
+    hr = IMFCollection_GetElement(collection, 0, &element);
+    ok(hr == E_UNEXPECTED, "Unexpected hr %#x.\n", hr);
+
+    hr = IMFCollection_RemoveAllElements(collection);
+    ok(hr == S_OK, "Failed to clear, hr %#x.\n", hr);
+
+    count = 1;
+    hr = IMFCollection_GetElementCount(collection, &count);
+    ok(hr == S_OK, "Failed to get element count, hr %#x.\n", hr);
+    ok(count == 0, "Unexpected count %u.\n", count);
+
+    hr = IMFCollection_InsertElementAt(collection, 0, NULL);
+    ok(hr == S_OK, "Failed to insert element, hr %#x.\n", hr);
+
+    IMFCollection_Release(collection);
+}
+
+static void test_MFHeapAlloc(void)
+{
+    void *res;
+
+    if (!pMFHeapAlloc)
+    {
+        win_skip("MFHeapAlloc() is not available.\n");
+        return;
+    }
+
+    res = pMFHeapAlloc(16, 0, NULL, 0, eAllocationTypeIgnore);
+    ok(res != NULL, "MFHeapAlloc failed.\n");
+
+    pMFHeapFree(res);
+}
+
+static void test_scheduled_items(void)
+{
+    IMFAsyncCallback callback = { &testcallbackvtbl };
+    IMFAsyncResult *result;
+    MFWORKITEM_KEY key, key2;
+    HRESULT hr;
+
+    hr = MFStartup(MF_VERSION, MFSTARTUP_FULL);
+    ok(hr == S_OK, "Failed to start up, hr %#x.\n", hr);
+
+    hr = MFScheduleWorkItem(&callback, NULL, -5000, &key);
+    ok(hr == S_OK, "Failed to schedule item, hr %#x.\n", hr);
+
+    hr = MFCancelWorkItem(key);
+    ok(hr == S_OK, "Failed to cancel item, hr %#x.\n", hr);
+
+    hr = MFCancelWorkItem(key);
+    ok(hr == MF_E_NOT_FOUND || broken(hr == S_OK) /* < win10 */, "Unexpected hr %#x.\n", hr);
+
+    if (!pMFPutWaitingWorkItem)
+    {
+        win_skip("Waiting items are not supported.\n");
+        return;
+    }
+
+    hr = MFCreateAsyncResult(NULL, &callback, NULL, &result);
+    ok(hr == S_OK, "Failed to create result, hr %#x.\n", hr);
+
+    hr = pMFPutWaitingWorkItem(NULL, 0, result, &key);
+    ok(hr == S_OK, "Failed to add waiting item, hr %#x.\n", hr);
+
+    hr = pMFPutWaitingWorkItem(NULL, 0, result, &key2);
+    ok(hr == S_OK, "Failed to add waiting item, hr %#x.\n", hr);
+
+    hr = MFCancelWorkItem(key);
+    ok(hr == S_OK, "Failed to cancel item, hr %#x.\n", hr);
+
+    hr = MFCancelWorkItem(key2);
+    ok(hr == S_OK, "Failed to cancel item, hr %#x.\n", hr);
+
+    IMFAsyncResult_Release(result);
+
+    hr = MFScheduleWorkItem(&callback, NULL, -5000, &key);
+    ok(hr == S_OK, "Failed to schedule item, hr %#x.\n", hr);
+
+    hr = MFCancelWorkItem(key);
+    ok(hr == S_OK, "Failed to cancel item, hr %#x.\n", hr);
+
+    hr = MFShutdown();
+    ok(hr == S_OK, "Failed to shut down, hr %#x.\n", hr);
+}
+
+static void test_serial_queue(void)
+{
+    static const DWORD queue_ids[] =
+    {
+        MFASYNC_CALLBACK_QUEUE_STANDARD,
+        MFASYNC_CALLBACK_QUEUE_RT,
+        MFASYNC_CALLBACK_QUEUE_IO,
+        MFASYNC_CALLBACK_QUEUE_TIMER,
+        MFASYNC_CALLBACK_QUEUE_MULTITHREADED,
+        MFASYNC_CALLBACK_QUEUE_LONG_FUNCTION,
+    };
+    DWORD queue, serial_queue;
+    unsigned int i;
+    HRESULT hr;
+
+    if (!pMFAllocateSerialWorkQueue)
+    {
+        skip("Serial queues are not supported.\n");
+        return;
+    }
+
+    hr = MFStartup(MF_VERSION, MFSTARTUP_FULL);
+    ok(hr == S_OK, "Failed to start up, hr %#x.\n", hr);
+
+    for (i = 0; i < ARRAY_SIZE(queue_ids); ++i)
+    {
+        BOOL broken_types = queue_ids[i] == MFASYNC_CALLBACK_QUEUE_TIMER ||
+                queue_ids[i] == MFASYNC_CALLBACK_QUEUE_LONG_FUNCTION;
+
+        hr = pMFAllocateSerialWorkQueue(queue_ids[i], &serial_queue);
+        ok(hr == S_OK || broken(broken_types && hr == E_INVALIDARG) /* Win8 */,
+                "%u: failed to allocate a queue, hr %#x.\n", i, hr);
+
+        if (SUCCEEDED(hr))
+        {
+            hr = MFUnlockWorkQueue(serial_queue);
+            ok(hr == S_OK, "%u: failed to unlock the queue, hr %#x.\n", i, hr);
+        }
+    }
+
+    /* Chain them together. */
+    hr = pMFAllocateSerialWorkQueue(MFASYNC_CALLBACK_QUEUE_STANDARD, &serial_queue);
+    ok(hr == S_OK, "Failed to allocate a queue, hr %#x.\n", hr);
+
+    hr = pMFAllocateSerialWorkQueue(serial_queue, &queue);
+    ok(hr == S_OK, "Failed to allocate a queue, hr %#x.\n", hr);
+
+    hr = MFUnlockWorkQueue(serial_queue);
+    ok(hr == S_OK, "Failed to unlock the queue, hr %#x.\n", hr);
+
+    hr = MFUnlockWorkQueue(queue);
+    ok(hr == S_OK, "Failed to unlock the queue, hr %#x.\n", hr);
+
+    hr = MFShutdown();
+    ok(hr == S_OK, "Failed to shut down, hr %#x.\n", hr);
+}
+
 START_TEST(mfplat)
 {
     CoInitialize(NULL);
 
     init_functions();
 
+    test_startup();
     test_register();
     test_MFCreateMediaType();
     test_MFCreateMediaEvent();
@@ -708,6 +1215,13 @@ START_TEST(mfplat)
     test_MFCreateMFByteStreamOnStream();
     test_MFCreateMemoryBuffer();
     test_source_resolver();
+    test_MFCreateAsyncResult();
+    test_allocate_queue();
+    test_MFCopyImage();
+    test_MFCreateCollection();
+    test_MFHeapAlloc();
+    test_scheduled_items();
+    test_serial_queue();
 
     CoUninitialize();
 }

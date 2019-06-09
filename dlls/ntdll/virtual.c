@@ -2712,7 +2712,7 @@ NTSTATUS WINAPI NtProtectVirtualMemory( HANDLE process, PVOID *addr_ptr, SIZE_T 
         {
             *addr_ptr = wine_server_get_ptr( result.virtual_protect.addr );
             *size_ptr = result.virtual_protect.size;
-            if (old_prot) *old_prot = result.virtual_protect.prot;
+            *old_prot = result.virtual_protect.prot;
         }
         return result.virtual_protect.status;
     }
@@ -2819,6 +2819,9 @@ NTSTATUS WINAPI NtQueryVirtualMemory( HANDLE process, LPCVOID addr,
                 return STATUS_INVALID_INFO_CLASS;
         }
     }
+
+    if (len < sizeof(MEMORY_BASIC_INFORMATION))
+        return STATUS_INFO_LENGTH_MISMATCH;
 
     if (process != NtCurrentProcess())
     {

@@ -165,6 +165,9 @@
 /* Define to 1 if you have the `fallocate' function. */
 #undef HAVE_FALLOCATE
 
+/* Define to 1 if you have the <FAudio.h> header file. */
+#undef HAVE_FAUDIO_H
+
 /* Define to 1 if you have the `ffs' function. */
 #undef HAVE_FFS
 
@@ -299,6 +302,12 @@
 
 /* Define to 1 if you have the `if_nameindex' function. */
 #undef HAVE_IF_NAMEINDEX
+
+/* Define to 1 if you have the `ilogb' function. */
+#undef HAVE_ILOGB
+
+/* Define to 1 if you have the `ilogbf' function. */
+#undef HAVE_ILOGBF
 
 /* Define to 1 if you have the `inet_addr' function. */
 #undef HAVE_INET_ADDR
@@ -692,6 +701,12 @@
 
 /* Define to 1 if you have the <net/route.h> header file. */
 #undef HAVE_NET_ROUTE_H
+
+/* Define to 1 if you have the `nexttoward' function. */
+#undef HAVE_NEXTTOWARD
+
+/* Define to 1 if you have the `nexttowardf' function. */
+#undef HAVE_NEXTTOWARDF
 
 /* Define to 1 if `_msg_ptr' is a member of `ns_msg'. */
 #undef HAVE_NS_MSG__MSG_PTR
@@ -1481,6 +1496,9 @@
 
 /* Define to the soname of the libEGL library. */
 #undef SONAME_LIBEGL
+
+/* Define to the soname of the libFAudio library. */
+#undef SONAME_LIBFAUDIO
 
 /* Define to the soname of the libfontconfig library. */
 #undef SONAME_LIBFONTCONFIG

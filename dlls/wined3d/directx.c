@@ -456,6 +456,7 @@ static const struct wined3d_gpu_description gpu_description_table[] =
     {HW_VENDOR_INTEL,      CARD_INTEL_IP580_2,             "Intel(R) Iris(TM) Pro Graphics 580",                        DRIVER_INTEL_HD4000,  2048},
     {HW_VENDOR_INTEL,      CARD_INTEL_IPP580_1,            "Intel(R) Iris(TM) Pro Graphics P580",                       DRIVER_INTEL_HD4000,  2048},
     {HW_VENDOR_INTEL,      CARD_INTEL_IPP580_2,            "Intel(R) Iris(TM) Pro Graphics P580",                       DRIVER_INTEL_HD4000,  2048},
+    {HW_VENDOR_INTEL,      CARD_INTEL_HD620,               "Intel(R) HD Graphics 620",                                  DRIVER_INTEL_HD4000,  3072},
     {HW_VENDOR_INTEL,      CARD_INTEL_HD630,               "Intel(R) HD Graphics 630",                                  DRIVER_INTEL_HD4000,  3072},
 };
 
@@ -2210,7 +2211,7 @@ HRESULT CDECL wined3d_get_device_caps(const struct wined3d *wined3d, UINT adapte
 
     caps->MaxPrimitiveCount   = 0x555555; /* Taken from an AMD Radeon HD 5700 (Evergreen) GPU. */
     caps->MaxVertexIndex      = 0xffffff; /* Taken from an AMD Radeon HD 5700 (Evergreen) GPU. */
-    caps->MaxStreams          = MAX_STREAMS;
+    caps->MaxStreams          = WINED3D_MAX_STREAMS;
     caps->MaxStreamStride     = 1024;
 
     /* d3d9.dll sets D3DDEVCAPS2_CAN_STRETCHRECT_FROM_TEXTURES here because StretchRects is implemented in d3d9 */
