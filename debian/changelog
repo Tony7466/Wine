@@ -1,3 +1,14 @@
+wine-development (4.3-1) UNRELEASED; urgency=medium
+
+  * New upstream release 4.3, released Mar 1, 2019.
+    - Reimplementation of XAudio2 using the FAudio library.
+    - Mono engine updated to the latest upstream.
+    - More modern handling of iconic windows.
+    - Improved handling of kernel objects.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 09 Jun 2019 04:49:25 +0000
+
 wine-development (4.2-4) unstable; urgency=medium
 
   * Support building with unicode-data 12.
