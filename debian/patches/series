@@ -32,6 +32,7 @@ warnings/arm64-array-bounds.patch
 warnings/arm64-excess-precision.patch
 warnings/arm64-uninitialized-variables.patch
 
+warnings/bison.patch
 warnings/dword64-winmm.patch
 warnings/format-overflow.patch
 warnings/argument-promotion.patch

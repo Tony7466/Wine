@@ -45,7 +45,7 @@ export DEB_CFLAGS_MAINT_APPEND+=-Wno-shift-overflow
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-unused-function
 
 # ignore warning about deprecated CUPS API for now
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-deprecated -Wno-deprecated-declarations
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-deprecated-declarations
 
 # configure options
 CONFLAGS=--with-gnutls \

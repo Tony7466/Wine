@@ -1,0 +1,23 @@
+description: ignore warnings from bison
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/tools/makedep.c
++++ b/tools/makedep.c
+@@ -2505,7 +2505,7 @@ static void output_source_y( struct make
+     if (find_include_file( make, header ))
+     {
+         output( "%s: %s\n", obj_dir_path( make, header ), source->filename );
+-        output( "\t%s -p %s_ -o %s.tab.c -d %s\n",
++        output( "\t%s -Wno-deprecated -Wno-conflicts-rr -Wno-conflicts-sr -p %s_ -o %s.tab.c -d %s\n",
+                 bison, obj, obj_dir_path( make, obj ), source->filename );
+         output( "%s.tab.c: %s %s\n", obj_dir_path( make, obj ),
+                 source->filename, obj_dir_path( make, header ));
+@@ -2513,7 +2513,7 @@ static void output_source_y( struct make
+     }
+     else output( "%s.tab.c: %s\n", obj, source->filename );
+ 
+-    output( "\t%s -p %s_ -o $@ %s\n", bison, obj, source->filename );
++    output( "\t%s -Wno-deprecated -Wno-conflicts-rr -Wno-conflicts-sr -p %s_ -o $@ %s\n", bison, obj, source->filename );
+ }
+ 
+ 

@@ -9,7 +9,7 @@ Uploaders:
  Jens Reyer <jre.winesim@gmail.com>,
 Vcs-Git: https://salsa.debian.org/wine-team/wine.git
 Vcs-Browser: https://salsa.debian.org/wine-team/wine
-Standards-Version: 4.3.0
+Standards-Version: 4.4.0
 Rules-Requires-Root: no
 Build-Depends:
  debhelper (>= 11~),
@@ -68,6 +68,7 @@ Build-Depends:
  libvkd3d-dev [linux-any],
  libcapi20-dev [linux-any],
  libvulkan-dev [linux-any],
+ libfaudio-dev (>= 19.06.07),
  libopenal-dev,
  libdbus-1-dev,
  freeglut3-dev,
