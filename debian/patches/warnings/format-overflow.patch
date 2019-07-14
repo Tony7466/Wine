@@ -67,3 +67,14 @@ author: Michael Gilbert <mgilbert@debian.org>
      char buf[I10_OUTPUT_MAX_PREC+9]; /* 9 = strlen("0.e+0000") + '\0' */
      char *p;
  
+--- a/programs/winevdm/winevdm.c
++++ b/programs/winevdm/winevdm.c
+@@ -304,7 +304,7 @@ static VOID pif_cmd( char *filename, cha
+ { 
+     HANDLE hFile;
+     char progpath[MAX_PATH];
+-    char buf[128];
++    char buf[310];
+     char progname[64];
+     char title[31];
+     char optparams[65];
