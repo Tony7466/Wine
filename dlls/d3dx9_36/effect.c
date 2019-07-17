@@ -152,13 +152,10 @@ struct d3dx9_base_effect
 {
     struct d3dx_effect *effect;
 
-    UINT parameter_count;
     UINT technique_count;
-    UINT object_count;
 
     struct d3dx_top_level_parameter *parameters;
     struct d3dx_technique *techniques;
-    struct d3dx_object *objects;
 
     struct d3dx_effect_pool *pool;
     DWORD flags;
@@ -176,6 +173,9 @@ struct d3dx_effect
     LONG ref;
 
     struct d3dx9_base_effect base_effect;
+    unsigned int parameter_count;
+    unsigned int object_count;
+    struct d3dx_object *objects;
 
     struct ID3DXEffectStateManager *manager;
     struct IDirect3DDevice9 *device;
@@ -210,9 +210,7 @@ struct ID3DXEffectCompilerImpl
     LONG ref;
 };
 
-static struct d3dx_parameter *get_annotation_by_name(struct d3dx9_base_effect *base,
-        unsigned int count, struct d3dx_parameter *parameters, const char *name);
-static HRESULT d3dx9_parse_state(struct d3dx9_base_effect *base, struct d3dx_state *state,
+static HRESULT d3dx_parse_state(struct d3dx_effect *effect, struct d3dx_state *state,
         const char *data, const char **ptr, struct d3dx_object *objects);
 static void free_parameter(struct d3dx_parameter *param, BOOL element, BOOL child);
 
@@ -455,9 +453,10 @@ static inline D3DXHANDLE get_pass_handle(struct d3dx_pass *pass)
     return (D3DXHANDLE)pass;
 }
 
-static struct d3dx_technique *get_technique_by_name(struct d3dx9_base_effect *base, const char *name)
+static struct d3dx_technique *get_technique_by_name(struct d3dx_effect *effect, const char *name)
 {
-    UINT i;
+    struct d3dx9_base_effect *base = &effect->base_effect;
+    unsigned int i;
 
     if (!name) return NULL;
 
@@ -470,8 +469,9 @@ static struct d3dx_technique *get_technique_by_name(struct d3dx9_base_effect *ba
     return NULL;
 }
 
-static struct d3dx_technique *get_valid_technique(struct d3dx9_base_effect *base, D3DXHANDLE technique)
+static struct d3dx_technique *get_valid_technique(struct d3dx_effect *effect, D3DXHANDLE technique)
 {
+    struct d3dx9_base_effect *base = &effect->base_effect;
     unsigned int i;
 
     for (i = 0; i < base->technique_count; ++i)
@@ -480,7 +480,7 @@ static struct d3dx_technique *get_valid_technique(struct d3dx9_base_effect *base
             return &base->techniques[i];
     }
 
-    return get_technique_by_name(base, technique);
+    return get_technique_by_name(effect, technique);
 }
 
 static struct d3dx_pass *get_valid_pass(struct d3dx9_base_effect *base, D3DXHANDLE pass)
@@ -691,7 +691,7 @@ static void d3dx9_base_effect_cleanup(struct d3dx9_base_effect *base)
 
     if (base->parameters)
     {
-        for (i = 0; i < base->parameter_count; ++i)
+        for (i = 0; i < base->effect->parameter_count; ++i)
             free_top_level_parameter(&base->parameters[i]);
         HeapFree(GetProcessHeap(), 0, base->parameters);
         base->parameters = NULL;
@@ -705,14 +705,14 @@ static void d3dx9_base_effect_cleanup(struct d3dx9_base_effect *base)
         base->techniques = NULL;
     }
 
-    if (base->objects)
+    if (base->effect->objects)
     {
-        for (i = 0; i < base->object_count; ++i)
+        for (i = 0; i < base->effect->object_count; ++i)
         {
-            free_object(&base->objects[i]);
+            free_object(&base->effect->objects[i]);
         }
-        HeapFree(GetProcessHeap(), 0, base->objects);
-        base->objects = NULL;
+        HeapFree(GetProcessHeap(), 0, base->effect->objects);
+        base->effect->objects = NULL;
     }
 }
 
@@ -989,51 +989,6 @@ static inline DWORD d3dx9_effect_version(DWORD major, DWORD minor)
     return (0xfeff0000 | ((major) << 8) | (minor));
 }
 
-static HRESULT d3dx9_base_effect_get_parameter_desc(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, D3DXPARAMETER_DESC *desc)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (!desc || !param)
-    {
-        WARN("Invalid argument specified.\n");
-        return D3DERR_INVALIDCALL;
-    }
-
-    desc->Name = param->name;
-    desc->Semantic = param->semantic;
-    desc->Class = param->class;
-    desc->Type = param->type;
-    desc->Rows = param->rows;
-    desc->Columns = param->columns;
-    desc->Elements = param->element_count;
-    desc->Annotations = is_top_level_parameter(param)
-            ? top_level_parameter_from_parameter(param)->annotation_count : 0;
-    desc->StructMembers = param->member_count;
-    desc->Flags = param->flags;
-    desc->Bytes = param->bytes;
-
-    return D3D_OK;
-}
-
-static HRESULT d3dx9_base_effect_get_technique_desc(struct d3dx9_base_effect *base,
-        D3DXHANDLE technique, D3DXTECHNIQUE_DESC *desc)
-{
-    struct d3dx_technique *tech = technique ? get_valid_technique(base, technique) : &base->techniques[0];
-
-    if (!desc || !tech)
-    {
-        WARN("Invalid argument specified.\n");
-        return D3DERR_INVALIDCALL;
-    }
-
-    desc->Name = tech->name;
-    desc->Passes = tech->pass_count;
-    desc->Annotations = tech->annotation_count;
-
-    return D3D_OK;
-}
-
 static HRESULT d3dx9_get_param_value_ptr(struct d3dx_pass *pass, struct d3dx_state *state,
         void **param_value, struct d3dx_parameter **out_param,
         BOOL update_all, BOOL *param_dirty)
@@ -1128,264 +1083,13 @@ static HRESULT d3dx9_get_param_value_ptr(struct d3dx_pass *pass, struct d3dx_sta
     return E_NOTIMPL;
 }
 
-static HRESULT d3dx9_base_effect_get_pass_desc(struct d3dx9_base_effect *base,
-        D3DXHANDLE pass_handle, D3DXPASS_DESC *desc)
+static unsigned int get_annotation_from_object(struct d3dx_effect *effect, D3DXHANDLE object,
+        struct d3dx_parameter **annotations)
 {
-    struct d3dx_pass *pass = get_valid_pass(base, pass_handle);
-    unsigned int i;
-
-    if (!desc || !pass)
-    {
-        WARN("Invalid argument specified.\n");
-        return D3DERR_INVALIDCALL;
-    }
-
-    desc->Name = pass->name;
-    desc->Annotations = pass->annotation_count;
-
-    desc->pVertexShaderFunction = NULL;
-    desc->pPixelShaderFunction = NULL;
-
-    if (base->flags & D3DXFX_NOT_CLONEABLE)
-        return D3D_OK;
-
-    for (i = 0; i < pass->state_count; ++i)
-    {
-        struct d3dx_state *state = &pass->states[i];
-
-        if (state_table[state->operation].class == SC_VERTEXSHADER
-                || state_table[state->operation].class == SC_PIXELSHADER)
-        {
-            struct d3dx_parameter *param;
-            void *param_value;
-            BOOL param_dirty;
-            HRESULT hr;
-            void *data;
-
-            if (FAILED(hr = d3dx9_get_param_value_ptr(pass, &pass->states[i], &param_value, &param,
-                    FALSE, &param_dirty)))
-                return hr;
-
-            data = param->object_id ? base->objects[param->object_id].data : NULL;
-            if (state_table[state->operation].class == SC_VERTEXSHADER)
-                desc->pVertexShaderFunction = data;
-            else
-                desc->pPixelShaderFunction = data;
-        }
-    }
-
-    return D3D_OK;
-}
-
-static D3DXHANDLE d3dx9_base_effect_get_parameter(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, UINT index)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (!parameter)
-    {
-        if (index < base->parameter_count)
-        {
-            TRACE("Returning parameter %p.\n", &base->parameters[index]);
-            return get_parameter_handle(&base->parameters[index].param);
-        }
-    }
-    else
-    {
-        if (param && !param->element_count && index < param->member_count)
-        {
-            TRACE("Returning parameter %p.\n", &param->members[index]);
-            return get_parameter_handle(&param->members[index]);
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return NULL;
-}
-
-static D3DXHANDLE d3dx9_base_effect_get_parameter_by_name(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, const char *name)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-    D3DXHANDLE handle;
-
-    if (!name)
-    {
-        handle = get_parameter_handle(param);
-        TRACE("Returning parameter %p.\n", handle);
-        return handle;
-    }
-
-    handle = get_parameter_handle(get_parameter_by_name(base, param, name));
-    TRACE("Returning parameter %p.\n", handle);
-
-    return handle;
-}
-
-static D3DXHANDLE d3dx9_base_effect_get_parameter_by_semantic(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, const char *semantic)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-    struct d3dx_parameter *temp_param;
-    UINT i;
-
-    if (!parameter)
-    {
-        for (i = 0; i < base->parameter_count; ++i)
-        {
-            temp_param = &base->parameters[i].param;
-
-            if (!temp_param->semantic)
-            {
-                if (!semantic)
-                {
-                    TRACE("Returning parameter %p\n", temp_param);
-                    return get_parameter_handle(temp_param);
-                }
-                continue;
-            }
-
-            if (!strcasecmp(temp_param->semantic, semantic))
-            {
-                TRACE("Returning parameter %p\n", temp_param);
-                return get_parameter_handle(temp_param);
-            }
-        }
-    }
-    else if (param)
-    {
-        for (i = 0; i < param->member_count; ++i)
-        {
-            temp_param = &param->members[i];
-
-            if (!temp_param->semantic)
-            {
-                if (!semantic)
-                {
-                    TRACE("Returning parameter %p\n", temp_param);
-                    return get_parameter_handle(temp_param);
-                }
-                continue;
-            }
-
-            if (!strcasecmp(temp_param->semantic, semantic))
-            {
-                TRACE("Returning parameter %p\n", temp_param);
-                return get_parameter_handle(temp_param);
-            }
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return NULL;
-}
-
-static D3DXHANDLE d3dx9_base_effect_get_parameter_element(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, UINT index)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (!param)
-    {
-        if (index < base->parameter_count)
-        {
-            TRACE("Returning parameter %p.\n", &base->parameters[index]);
-            return get_parameter_handle(&base->parameters[index].param);
-        }
-    }
-    else
-    {
-        if (index < param->element_count)
-        {
-            TRACE("Returning parameter %p.\n", &param->members[index]);
-            return get_parameter_handle(&param->members[index]);
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return NULL;
-}
-
-static D3DXHANDLE d3dx9_base_effect_get_technique(struct d3dx9_base_effect *base, UINT index)
-{
-    if (index >= base->technique_count)
-    {
-        WARN("Invalid argument specified.\n");
-        return NULL;
-    }
-
-    TRACE("Returning technique %p.\n", &base->techniques[index]);
-
-    return get_technique_handle(&base->techniques[index]);
-}
-
-static D3DXHANDLE d3dx9_base_effect_get_technique_by_name(struct d3dx9_base_effect *base, const char *name)
-{
-    struct d3dx_technique *tech = get_technique_by_name(base, name);
-
-    if (tech)
-    {
-        D3DXHANDLE t = get_technique_handle(tech);
-        TRACE("Returning technique %p\n", t);
-        return t;
-    }
-
-    WARN("Technique not found.\n");
-
-    return NULL;
-}
-
-static D3DXHANDLE d3dx9_base_effect_get_pass(struct d3dx9_base_effect *base,
-        D3DXHANDLE technique, UINT index)
-{
-    struct d3dx_technique *tech = get_valid_technique(base, technique);
-
-    if (tech && index < tech->pass_count)
-    {
-        TRACE("Returning pass %p\n", &tech->passes[index]);
-        return get_pass_handle(&tech->passes[index]);
-    }
-
-    WARN("Pass not found.\n");
-
-    return NULL;
-}
-
-static D3DXHANDLE d3dx9_base_effect_get_pass_by_name(struct d3dx9_base_effect *base,
-        D3DXHANDLE technique, const char *name)
-{
-    struct d3dx_technique *tech = get_valid_technique(base, technique);
-
-    if (tech && name)
-    {
-        unsigned int i;
-
-        for (i = 0; i < tech->pass_count; ++i)
-        {
-            struct d3dx_pass *pass = &tech->passes[i];
-
-            if (!strcmp(pass->name, name))
-            {
-                TRACE("Returning pass %p\n", pass);
-                return get_pass_handle(pass);
-            }
-        }
-    }
-
-    WARN("Pass not found.\n");
-
-    return NULL;
-}
-
-static UINT get_annotation_from_object(struct d3dx9_base_effect *base,
-        D3DXHANDLE object, struct d3dx_parameter **annotations)
-{
+    struct d3dx9_base_effect *base = &effect->base_effect;
     struct d3dx_parameter *param = get_valid_parameter(base, object);
     struct d3dx_pass *pass = get_valid_pass(base, object);
-    struct d3dx_technique *technique = get_valid_technique(base, object);
+    struct d3dx_technique *technique = get_valid_technique(effect, object);
 
     if (pass)
     {
@@ -1418,52 +1122,6 @@ static UINT get_annotation_from_object(struct d3dx9_base_effect *base,
         FIXME("Functions are not handled, yet!\n");
         return 0;
     }
-}
-
-static D3DXHANDLE d3dx9_base_effect_get_annotation(struct d3dx9_base_effect *base,
-        D3DXHANDLE object, UINT index)
-{
-    struct d3dx_parameter *annotations = NULL;
-    UINT annotation_count = 0;
-
-    annotation_count = get_annotation_from_object(base, object, &annotations);
-
-    if (index < annotation_count)
-    {
-        TRACE("Returning parameter %p\n", &annotations[index]);
-        return get_parameter_handle(&annotations[index]);
-    }
-
-    WARN("Annotation not found.\n");
-
-    return NULL;
-}
-
-static D3DXHANDLE d3dx9_base_effect_get_annotation_by_name(struct d3dx9_base_effect *base,
-        D3DXHANDLE object, const char *name)
-{
-    struct d3dx_parameter *annotation = NULL;
-    struct d3dx_parameter *annotations = NULL;
-    UINT annotation_count = 0;
-
-    if (!name)
-    {
-        WARN("Invalid argument specified\n");
-        return NULL;
-    }
-
-    annotation_count = get_annotation_from_object(base, object, &annotations);
-
-    annotation = get_annotation_by_name(base, annotation_count, annotations, name);
-    if (annotation)
-    {
-        TRACE("Returning parameter %p\n", annotation);
-        return get_parameter_handle(annotation);
-    }
-
-    WARN("Annotation not found.\n");
-
-    return NULL;
 }
 
 static BOOL walk_parameter_tree(struct d3dx_parameter *param, walk_parameter_dep_func param_func,
@@ -1517,1198 +1175,6 @@ static HRESULT set_string(char **param_data, const char *string)
     }
     strcpy(*param_data, string);
     return D3D_OK;
-}
-
-static HRESULT d3dx9_base_effect_set_value(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, const void *data, UINT bytes)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-    unsigned int i;
-
-    if (!param)
-    {
-        WARN("Invalid parameter %p specified\n", parameter);
-        return D3DERR_INVALIDCALL;
-    }
-
-    /* samplers don't touch data */
-    if (param->class == D3DXPC_OBJECT && is_param_type_sampler(param->type))
-    {
-        TRACE("Sampler: returning E_FAIL\n");
-        return E_FAIL;
-    }
-
-    if (data && param->bytes <= bytes)
-    {
-        switch (param->type)
-        {
-            case D3DXPT_TEXTURE:
-            case D3DXPT_TEXTURE1D:
-            case D3DXPT_TEXTURE2D:
-            case D3DXPT_TEXTURE3D:
-            case D3DXPT_TEXTURECUBE:
-                for (i = 0; i < (param->element_count ? param->element_count : 1); ++i)
-                {
-                    IUnknown *old_texture = ((IUnknown **)param->data)[i];
-                    IUnknown *new_texture = ((IUnknown **)data)[i];
-
-                    if (new_texture == old_texture)
-                        continue;
-
-                    if (new_texture)
-                        IUnknown_AddRef(new_texture);
-                    if (old_texture)
-                        IUnknown_Release(old_texture);
-                }
-            /* fallthrough */
-            case D3DXPT_VOID:
-            case D3DXPT_BOOL:
-            case D3DXPT_INT:
-            case D3DXPT_FLOAT:
-                TRACE("Copy %u bytes.\n", param->bytes);
-                memcpy(param->data, data, param->bytes);
-                set_dirty(param);
-                break;
-
-            case D3DXPT_STRING:
-            {
-                HRESULT hr;
-
-                set_dirty(param);
-                for (i = 0; i < (param->element_count ? param->element_count : 1); ++i)
-                {
-                    if (FAILED(hr = set_string(&((char **)param->data)[i], ((const char **)data)[i])))
-                        return hr;
-                }
-                break;
-            }
-
-            default:
-                FIXME("Unhandled type %s.\n", debug_d3dxparameter_type(param->type));
-                break;
-        }
-
-        return D3D_OK;
-    }
-
-    WARN("Invalid argument specified\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_value(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, void *data, UINT bytes)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (!param)
-    {
-        WARN("Invalid parameter %p specified\n", parameter);
-        return D3DERR_INVALIDCALL;
-    }
-
-    /* samplers don't touch data */
-    if (param->class == D3DXPC_OBJECT && is_param_type_sampler(param->type))
-    {
-        TRACE("Sampler: returning E_FAIL\n");
-        return E_FAIL;
-    }
-
-    if (data && param->bytes <= bytes)
-    {
-        TRACE("Type %s\n", debug_d3dxparameter_type(param->type));
-
-        switch (param->type)
-        {
-            case D3DXPT_VOID:
-            case D3DXPT_BOOL:
-            case D3DXPT_INT:
-            case D3DXPT_FLOAT:
-            case D3DXPT_STRING:
-                break;
-
-            case D3DXPT_VERTEXSHADER:
-            case D3DXPT_PIXELSHADER:
-            case D3DXPT_TEXTURE:
-            case D3DXPT_TEXTURE1D:
-            case D3DXPT_TEXTURE2D:
-            case D3DXPT_TEXTURE3D:
-            case D3DXPT_TEXTURECUBE:
-            {
-                UINT i;
-
-                for (i = 0; i < (param->element_count ? param->element_count : 1); ++i)
-                {
-                    IUnknown *unk = ((IUnknown **)param->data)[i];
-                    if (unk) IUnknown_AddRef(unk);
-                }
-                break;
-            }
-
-            default:
-                FIXME("Unhandled type %s\n", debug_d3dxparameter_type(param->type));
-                break;
-        }
-
-        TRACE("Copy %u bytes\n", param->bytes);
-        memcpy(data, param->data, param->bytes);
-        return D3D_OK;
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_set_bool(struct d3dx9_base_effect *base, D3DXHANDLE parameter, BOOL b)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (param && !param->element_count && param->rows == 1 && param->columns == 1)
-    {
-        set_number(param->data, param->type, &b, D3DXPT_BOOL);
-        set_dirty(param);
-        return D3D_OK;
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_bool(struct d3dx9_base_effect *base, D3DXHANDLE parameter, BOOL *b)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (b && param && !param->element_count && param->rows == 1 && param->columns == 1)
-    {
-        set_number(b, D3DXPT_BOOL, param->data, param->type);
-        TRACE("Returning %s\n", *b ? "TRUE" : "FALSE");
-        return D3D_OK;
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_set_bool_array(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, const BOOL *b, UINT count)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (param)
-    {
-        UINT i, size = min(count, param->bytes / sizeof(DWORD));
-
-        TRACE("Class %s\n", debug_d3dxparameter_class(param->class));
-
-        switch (param->class)
-        {
-            case D3DXPC_SCALAR:
-            case D3DXPC_VECTOR:
-            case D3DXPC_MATRIX_ROWS:
-                for (i = 0; i < size; ++i)
-                {
-                    /* don't crop the input, use D3DXPT_INT instead of D3DXPT_BOOL */
-                    set_number((DWORD *)param->data + i, param->type, &b[i], D3DXPT_INT);
-                }
-                set_dirty(param);
-                return D3D_OK;
-
-            case D3DXPC_OBJECT:
-            case D3DXPC_STRUCT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_bool_array(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, BOOL *b, UINT count)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (b && param && (param->class == D3DXPC_SCALAR
-            || param->class == D3DXPC_VECTOR
-            || param->class == D3DXPC_MATRIX_ROWS
-            || param->class == D3DXPC_MATRIX_COLUMNS))
-    {
-        UINT i, size = min(count, param->bytes / sizeof(DWORD));
-
-        for (i = 0; i < size; ++i)
-        {
-            set_number(&b[i], D3DXPT_BOOL, (DWORD *)param->data + i, param->type);
-        }
-        return D3D_OK;
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_set_int(struct d3dx9_base_effect *base, D3DXHANDLE parameter, INT n)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (param && !param->element_count)
-    {
-        if (param->rows == 1 && param->columns == 1)
-        {
-            DWORD value;
-
-            set_number(&value, param->type, &n, D3DXPT_INT);
-            if (value != *(DWORD *)param->data)
-                set_dirty(param);
-             *(DWORD *)param->data = value;
-            return D3D_OK;
-        }
-
-        /*
-         * Split the value, if parameter is a vector with dimension 3 or 4.
-         */
-        if (param->type == D3DXPT_FLOAT &&
-            ((param->class == D3DXPC_VECTOR && param->columns != 2) ||
-            (param->class == D3DXPC_MATRIX_ROWS && param->rows != 2 && param->columns == 1)))
-        {
-            TRACE("Vector fixup\n");
-
-            *(FLOAT *)param->data = ((n & 0xff0000) >> 16) * INT_FLOAT_MULTI_INVERSE;
-            ((FLOAT *)param->data)[1] = ((n & 0xff00) >> 8) * INT_FLOAT_MULTI_INVERSE;
-            ((FLOAT *)param->data)[2] = (n & 0xff) * INT_FLOAT_MULTI_INVERSE;
-            if (param->rows * param->columns > 3)
-            {
-                ((FLOAT *)param->data)[3] = ((n & 0xff000000) >> 24) * INT_FLOAT_MULTI_INVERSE;
-            }
-            set_dirty(param);
-            return D3D_OK;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_int(struct d3dx9_base_effect *base, D3DXHANDLE parameter, INT *n)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (n && param && !param->element_count)
-    {
-        if (param->columns == 1 && param->rows == 1)
-        {
-            set_number(n, D3DXPT_INT, param->data, param->type);
-            TRACE("Returning %i\n", *n);
-            return D3D_OK;
-        }
-
-        if (param->type == D3DXPT_FLOAT &&
-                ((param->class == D3DXPC_VECTOR && param->columns != 2)
-                || (param->class == D3DXPC_MATRIX_ROWS && param->rows != 2 && param->columns == 1)))
-        {
-            TRACE("Vector fixup\n");
-
-            /* all components (3,4) are clamped (0,255) and put in the INT */
-            *n = (INT)(min(max(0.0f, *((FLOAT *)param->data + 2)), 1.0f) * INT_FLOAT_MULTI);
-            *n += ((INT)(min(max(0.0f, *((FLOAT *)param->data + 1)), 1.0f) * INT_FLOAT_MULTI)) << 8;
-            *n += ((INT)(min(max(0.0f, *((FLOAT *)param->data + 0)), 1.0f) * INT_FLOAT_MULTI)) << 16;
-            if (param->columns * param->rows > 3)
-            {
-                *n += ((INT)(min(max(0.0f, *((FLOAT *)param->data + 3)), 1.0f) * INT_FLOAT_MULTI)) << 24;
-            }
-
-            TRACE("Returning %i\n", *n);
-            return D3D_OK;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_set_int_array(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, const INT *n, UINT count)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (param)
-    {
-        UINT i, size = min(count, param->bytes / sizeof(DWORD));
-
-        TRACE("Class %s\n", debug_d3dxparameter_class(param->class));
-
-        switch (param->class)
-        {
-            case D3DXPC_SCALAR:
-            case D3DXPC_VECTOR:
-            case D3DXPC_MATRIX_ROWS:
-                for (i = 0; i < size; ++i)
-                {
-                    set_number((DWORD *)param->data + i, param->type, &n[i], D3DXPT_INT);
-                }
-                set_dirty(param);
-                return D3D_OK;
-
-            case D3DXPC_OBJECT:
-            case D3DXPC_STRUCT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_int_array(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, INT *n, UINT count)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (n && param && (param->class == D3DXPC_SCALAR
-            || param->class == D3DXPC_VECTOR
-            || param->class == D3DXPC_MATRIX_ROWS
-            || param->class == D3DXPC_MATRIX_COLUMNS))
-    {
-        UINT i, size = min(count, param->bytes / sizeof(DWORD));
-
-        for (i = 0; i < size; ++i)
-        {
-            set_number(&n[i], D3DXPT_INT, (DWORD *)param->data + i, param->type);
-        }
-        return D3D_OK;
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_set_float(struct d3dx9_base_effect *base, D3DXHANDLE parameter, float f)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (param && !param->element_count && param->rows == 1 && param->columns == 1)
-    {
-        DWORD value;
-
-        set_number(&value, param->type, &f, D3DXPT_FLOAT);
-        if (value != *(DWORD *)param->data)
-            set_dirty(param);
-         *(DWORD *)param->data = value;
-        return D3D_OK;
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_float(struct d3dx9_base_effect *base, D3DXHANDLE parameter, float *f)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (f && param && !param->element_count && param->columns == 1 && param->rows == 1)
-    {
-        set_number(f, D3DXPT_FLOAT, (DWORD *)param->data, param->type);
-        TRACE("Returning %f\n", *f);
-        return D3D_OK;
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_set_float_array(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, const float *f, UINT count)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (param)
-    {
-        UINT i, size = min(count, param->bytes / sizeof(DWORD));
-
-        TRACE("Class %s\n", debug_d3dxparameter_class(param->class));
-
-        switch (param->class)
-        {
-            case D3DXPC_SCALAR:
-            case D3DXPC_VECTOR:
-            case D3DXPC_MATRIX_ROWS:
-                for (i = 0; i < size; ++i)
-                {
-                    set_number((DWORD *)param->data + i, param->type, &f[i], D3DXPT_FLOAT);
-                }
-                set_dirty(param);
-                return D3D_OK;
-
-            case D3DXPC_OBJECT:
-            case D3DXPC_STRUCT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_float_array(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, float *f, UINT count)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (f && param && (param->class == D3DXPC_SCALAR
-            || param->class == D3DXPC_VECTOR
-            || param->class == D3DXPC_MATRIX_ROWS
-            || param->class == D3DXPC_MATRIX_COLUMNS))
-    {
-        UINT i, size = min(count, param->bytes / sizeof(DWORD));
-
-        for (i = 0; i < size; ++i)
-        {
-            set_number(&f[i], D3DXPT_FLOAT, (DWORD *)param->data + i, param->type);
-        }
-        return D3D_OK;
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_set_vector(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, const D3DXVECTOR4 *vector)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (param && !param->element_count)
-    {
-        TRACE("Class %s\n", debug_d3dxparameter_class(param->class));
-
-        switch (param->class)
-        {
-            case D3DXPC_SCALAR:
-            case D3DXPC_VECTOR:
-                set_dirty(param);
-                if (param->type == D3DXPT_INT && param->bytes == 4)
-                {
-                    DWORD tmp;
-
-                    TRACE("INT fixup\n");
-                    tmp = (DWORD)(max(min(vector->z, 1.0f), 0.0f) * INT_FLOAT_MULTI);
-                    tmp += ((DWORD)(max(min(vector->y, 1.0f), 0.0f) * INT_FLOAT_MULTI)) << 8;
-                    tmp += ((DWORD)(max(min(vector->x, 1.0f), 0.0f) * INT_FLOAT_MULTI)) << 16;
-                    tmp += ((DWORD)(max(min(vector->w, 1.0f), 0.0f) * INT_FLOAT_MULTI)) << 24;
-
-                    *(INT *)param->data = tmp;
-                    return D3D_OK;
-                }
-                if (param->type == D3DXPT_FLOAT)
-                {
-                    memcpy(param->data, vector, param->columns * sizeof(float));
-                    return D3D_OK;
-                }
-
-                set_vector(param, vector);
-                return D3D_OK;
-
-            case D3DXPC_MATRIX_ROWS:
-            case D3DXPC_OBJECT:
-            case D3DXPC_STRUCT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_vector(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, D3DXVECTOR4 *vector)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (vector && param && !param->element_count)
-    {
-        TRACE("Class %s\n", debug_d3dxparameter_class(param->class));
-
-        switch (param->class)
-        {
-            case D3DXPC_SCALAR:
-            case D3DXPC_VECTOR:
-                if (param->type == D3DXPT_INT && param->bytes == 4)
-                {
-                    TRACE("INT fixup\n");
-                    vector->x = (((*(INT *)param->data) & 0xff0000) >> 16) * INT_FLOAT_MULTI_INVERSE;
-                    vector->y = (((*(INT *)param->data) & 0xff00) >> 8) * INT_FLOAT_MULTI_INVERSE;
-                    vector->z = ((*(INT *)param->data) & 0xff) * INT_FLOAT_MULTI_INVERSE;
-                    vector->w = (((*(INT *)param->data) & 0xff000000) >> 24) * INT_FLOAT_MULTI_INVERSE;
-                    return D3D_OK;
-                }
-                get_vector(param, vector);
-                return D3D_OK;
-
-            case D3DXPC_MATRIX_ROWS:
-            case D3DXPC_OBJECT:
-            case D3DXPC_STRUCT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_set_vector_array(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, const D3DXVECTOR4 *vector, UINT count)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (param && param->element_count && param->element_count >= count)
-    {
-        UINT i;
-
-        TRACE("Class %s\n", debug_d3dxparameter_class(param->class));
-
-        switch (param->class)
-        {
-            case D3DXPC_VECTOR:
-                set_dirty(param);
-                if (param->type == D3DXPT_FLOAT)
-                {
-                    if (param->columns == 4)
-                        memcpy(param->data, vector, count * 4 * sizeof(float));
-                    else
-                        for (i = 0; i < count; ++i)
-                            memcpy((float *)param->data + param->columns * i, vector + i,
-                                    param->columns * sizeof(float));
-                    return D3D_OK;
-                }
-
-                for (i = 0; i < count; ++i)
-                {
-                    set_vector(&param->members[i], &vector[i]);
-                }
-                return D3D_OK;
-
-            case D3DXPC_SCALAR:
-            case D3DXPC_MATRIX_ROWS:
-            case D3DXPC_OBJECT:
-            case D3DXPC_STRUCT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_vector_array(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, D3DXVECTOR4 *vector, UINT count)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (!count) return D3D_OK;
-
-    if (vector && param && count <= param->element_count)
-    {
-        UINT i;
-
-        TRACE("Class %s\n", debug_d3dxparameter_class(param->class));
-
-        switch (param->class)
-        {
-            case D3DXPC_VECTOR:
-                for (i = 0; i < count; ++i)
-                {
-                    get_vector(&param->members[i], &vector[i]);
-                }
-                return D3D_OK;
-
-            case D3DXPC_SCALAR:
-            case D3DXPC_MATRIX_ROWS:
-            case D3DXPC_OBJECT:
-            case D3DXPC_STRUCT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_set_matrix(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, const D3DXMATRIX *matrix)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (param && !param->element_count)
-    {
-        TRACE("Class %s\n", debug_d3dxparameter_class(param->class));
-
-        switch (param->class)
-        {
-            case D3DXPC_MATRIX_ROWS:
-                set_matrix(param, matrix);
-                set_dirty(param);
-                return D3D_OK;
-
-            case D3DXPC_SCALAR:
-            case D3DXPC_VECTOR:
-            case D3DXPC_OBJECT:
-            case D3DXPC_STRUCT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_matrix(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, D3DXMATRIX *matrix)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (matrix && param && !param->element_count)
-    {
-        TRACE("Class %s\n", debug_d3dxparameter_class(param->class));
-
-        switch (param->class)
-        {
-            case D3DXPC_MATRIX_ROWS:
-                get_matrix(param, matrix, FALSE);
-                return D3D_OK;
-
-            case D3DXPC_SCALAR:
-            case D3DXPC_VECTOR:
-            case D3DXPC_OBJECT:
-            case D3DXPC_STRUCT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_set_matrix_array(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, const D3DXMATRIX *matrix, UINT count)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (param && param->element_count >= count)
-    {
-        UINT i;
-
-        TRACE("Class %s\n", debug_d3dxparameter_class(param->class));
-
-        switch (param->class)
-        {
-            case D3DXPC_MATRIX_ROWS:
-                set_dirty(param);
-                for (i = 0; i < count; ++i)
-                {
-                    set_matrix(&param->members[i], &matrix[i]);
-                }
-                return D3D_OK;
-
-            case D3DXPC_SCALAR:
-            case D3DXPC_VECTOR:
-            case D3DXPC_OBJECT:
-            case D3DXPC_STRUCT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_matrix_array(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, D3DXMATRIX *matrix, UINT count)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (!count) return D3D_OK;
-
-    if (matrix && param && count <= param->element_count)
-    {
-        UINT i;
-
-        TRACE("Class %s\n", debug_d3dxparameter_class(param->class));
-
-        switch (param->class)
-        {
-            case D3DXPC_MATRIX_ROWS:
-                for (i = 0; i < count; ++i)
-                {
-                    get_matrix(&param->members[i], &matrix[i], FALSE);
-                }
-                return D3D_OK;
-
-            case D3DXPC_SCALAR:
-            case D3DXPC_VECTOR:
-            case D3DXPC_OBJECT:
-            case D3DXPC_STRUCT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_set_matrix_pointer_array(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, const D3DXMATRIX **matrix, UINT count)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (param && count <= param->element_count)
-    {
-        UINT i;
-
-        switch (param->class)
-        {
-            case D3DXPC_MATRIX_ROWS:
-                set_dirty(param);
-                for (i = 0; i < count; ++i)
-                {
-                    set_matrix(&param->members[i], matrix[i]);
-                }
-                return D3D_OK;
-
-            case D3DXPC_SCALAR:
-            case D3DXPC_VECTOR:
-            case D3DXPC_OBJECT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_matrix_pointer_array(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, D3DXMATRIX **matrix, UINT count)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (!count) return D3D_OK;
-
-    if (param && matrix && count <= param->element_count)
-    {
-        UINT i;
-
-        TRACE("Class %s\n", debug_d3dxparameter_class(param->class));
-
-        switch (param->class)
-        {
-            case D3DXPC_MATRIX_ROWS:
-                for (i = 0; i < count; ++i)
-                {
-                    get_matrix(&param->members[i], matrix[i], FALSE);
-                }
-                return D3D_OK;
-
-            case D3DXPC_SCALAR:
-            case D3DXPC_VECTOR:
-            case D3DXPC_OBJECT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_set_matrix_transpose(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, const D3DXMATRIX *matrix)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (param && !param->element_count)
-    {
-        TRACE("Class %s\n", debug_d3dxparameter_class(param->class));
-
-        switch (param->class)
-        {
-            case D3DXPC_MATRIX_ROWS:
-                set_dirty(param);
-                set_matrix_transpose(param, matrix);
-                return D3D_OK;
-
-            case D3DXPC_SCALAR:
-            case D3DXPC_VECTOR:
-            case D3DXPC_OBJECT:
-            case D3DXPC_STRUCT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_matrix_transpose(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, D3DXMATRIX *matrix)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (matrix && param && !param->element_count)
-    {
-        TRACE("Class %s\n", debug_d3dxparameter_class(param->class));
-
-        switch (param->class)
-        {
-            case D3DXPC_SCALAR:
-            case D3DXPC_VECTOR:
-                get_matrix(param, matrix, FALSE);
-                return D3D_OK;
-
-            case D3DXPC_MATRIX_ROWS:
-                get_matrix(param, matrix, TRUE);
-                return D3D_OK;
-
-            case D3DXPC_OBJECT:
-            case D3DXPC_STRUCT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_set_matrix_transpose_array(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, const D3DXMATRIX *matrix, UINT count)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (param && param->element_count >= count)
-    {
-        UINT i;
-
-        TRACE("Class %s\n", debug_d3dxparameter_class(param->class));
-
-        switch (param->class)
-        {
-            case D3DXPC_MATRIX_ROWS:
-                set_dirty(param);
-                for (i = 0; i < count; ++i)
-                {
-                    set_matrix_transpose(&param->members[i], &matrix[i]);
-                }
-                return D3D_OK;
-
-            case D3DXPC_SCALAR:
-            case D3DXPC_VECTOR:
-            case D3DXPC_OBJECT:
-            case D3DXPC_STRUCT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_matrix_transpose_array(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, D3DXMATRIX *matrix, UINT count)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (!count) return D3D_OK;
-
-    if (matrix && param && count <= param->element_count)
-    {
-        UINT i;
-
-        TRACE("Class %s\n", debug_d3dxparameter_class(param->class));
-
-        switch (param->class)
-        {
-            case D3DXPC_MATRIX_ROWS:
-                for (i = 0; i < count; ++i)
-                {
-                    get_matrix(&param->members[i], &matrix[i], TRUE);
-                }
-                return D3D_OK;
-
-            case D3DXPC_SCALAR:
-            case D3DXPC_VECTOR:
-            case D3DXPC_OBJECT:
-            case D3DXPC_STRUCT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_set_matrix_transpose_pointer_array(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, const D3DXMATRIX **matrix, UINT count)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (param && count <= param->element_count)
-    {
-        UINT i;
-
-        switch (param->class)
-        {
-            case D3DXPC_MATRIX_ROWS:
-                set_dirty(param);
-                for (i = 0; i < count; ++i)
-                {
-                    set_matrix_transpose(&param->members[i], matrix[i]);
-                }
-                return D3D_OK;
-
-            case D3DXPC_SCALAR:
-            case D3DXPC_VECTOR:
-            case D3DXPC_OBJECT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_matrix_transpose_pointer_array(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, D3DXMATRIX **matrix, UINT count)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (!count) return D3D_OK;
-
-    if (matrix && param && count <= param->element_count)
-    {
-        UINT i;
-
-        TRACE("Class %s\n", debug_d3dxparameter_class(param->class));
-
-        switch (param->class)
-        {
-            case D3DXPC_MATRIX_ROWS:
-                for (i = 0; i < count; ++i)
-                {
-                    get_matrix(&param->members[i], matrix[i], TRUE);
-                }
-                return D3D_OK;
-
-            case D3DXPC_SCALAR:
-            case D3DXPC_VECTOR:
-            case D3DXPC_OBJECT:
-                break;
-
-            default:
-                FIXME("Unhandled class %s\n", debug_d3dxparameter_class(param->class));
-                break;
-        }
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_set_string(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, const char *string)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (param && param->type == D3DXPT_STRING)
-    {
-        set_dirty(param);
-        return set_string(param->data, string);
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_string(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, const char **string)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (string && param && !param->element_count && param->type == D3DXPT_STRING)
-    {
-        *string = *(const char **)param->data;
-        TRACE("Returning %s.\n", debugstr_a(*string));
-        return D3D_OK;
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_set_texture(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, struct IDirect3DBaseTexture9 *texture)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (param && !param->element_count &&
-            (param->type == D3DXPT_TEXTURE || param->type == D3DXPT_TEXTURE1D
-            || param->type == D3DXPT_TEXTURE2D || param->type ==  D3DXPT_TEXTURE3D
-            || param->type == D3DXPT_TEXTURECUBE))
-    {
-        struct IDirect3DBaseTexture9 *oltexture = *(struct IDirect3DBaseTexture9 **)param->data;
-
-        if (texture == oltexture)
-            return D3D_OK;
-
-        if (texture) IDirect3DBaseTexture9_AddRef(texture);
-        if (oltexture) IDirect3DBaseTexture9_Release(oltexture);
-
-        *(struct IDirect3DBaseTexture9 **)param->data = texture;
-        set_dirty(param);
-
-        return D3D_OK;
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_texture(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, struct IDirect3DBaseTexture9 **texture)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (texture && param && !param->element_count &&
-            (param->type == D3DXPT_TEXTURE || param->type == D3DXPT_TEXTURE1D
-            || param->type == D3DXPT_TEXTURE2D || param->type ==  D3DXPT_TEXTURE3D
-            || param->type == D3DXPT_TEXTURECUBE))
-    {
-        *texture = *(struct IDirect3DBaseTexture9 **)param->data;
-        if (*texture) IDirect3DBaseTexture9_AddRef(*texture);
-        TRACE("Returning %p\n", *texture);
-        return D3D_OK;
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
-}
-
-static HRESULT d3dx9_base_effect_get_pixel_shader(struct d3dx9_base_effect *base,
-        D3DXHANDLE parameter, struct IDirect3DPixelShader9 **shader)
-{
-    struct d3dx_parameter *param = get_valid_parameter(base, parameter);
-
-    if (shader && param && !param->element_count && param->type == D3DXPT_PIXELSHADER)
-    {
-        if ((*shader = *(struct IDirect3DPixelShader9 **)param->data))
-            IDirect3DPixelShader9_AddRef(*shader);
-        TRACE("Returning %p.\n", *shader);
-        return D3D_OK;
-    }
-
-    WARN("Parameter not found.\n");
-
-    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT d3dx9_base_effect_get_vertex_shader(struct d3dx9_base_effect *base,
@@ -3409,7 +1875,7 @@ static HRESULT WINAPI d3dx_effect_GetDesc(ID3DXEffect *iface, D3DXEFFECT_DESC *d
     /* TODO: add creator and function count. */
     desc->Creator = NULL;
     desc->Functions = 0;
-    desc->Parameters = effect->base_effect.parameter_count;
+    desc->Parameters = effect->parameter_count;
     desc->Techniques = effect->base_effect.technique_count;
 
     return D3D_OK;
@@ -3419,29 +1885,102 @@ static HRESULT WINAPI d3dx_effect_GetParameterDesc(ID3DXEffect *iface, D3DXHANDL
         D3DXPARAMETER_DESC *desc)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, desc %p.\n", iface, parameter, desc);
 
-    return d3dx9_base_effect_get_parameter_desc(&effect->base_effect, parameter, desc);
+    if (!desc || !param)
+    {
+        WARN("Invalid argument specified.\n");
+        return D3DERR_INVALIDCALL;
+    }
+
+    desc->Name = param->name;
+    desc->Semantic = param->semantic;
+    desc->Class = param->class;
+    desc->Type = param->type;
+    desc->Rows = param->rows;
+    desc->Columns = param->columns;
+    desc->Elements = param->element_count;
+    desc->Annotations = is_top_level_parameter(param)
+            ? top_level_parameter_from_parameter(param)->annotation_count : 0;
+    desc->StructMembers = param->member_count;
+    desc->Flags = param->flags;
+    desc->Bytes = param->bytes;
+
+    return D3D_OK;
 }
 
 static HRESULT WINAPI d3dx_effect_GetTechniqueDesc(ID3DXEffect *iface, D3DXHANDLE technique,
         D3DXTECHNIQUE_DESC *desc)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_technique *tech = technique ? get_valid_technique(effect, technique) : &effect->base_effect.techniques[0];
 
     TRACE("iface %p, technique %p, desc %p.\n", iface, technique, desc);
 
-    return d3dx9_base_effect_get_technique_desc(&effect->base_effect, technique, desc);
+    if (!desc || !tech)
+    {
+        WARN("Invalid argument specified.\n");
+        return D3DERR_INVALIDCALL;
+    }
+
+    desc->Name = tech->name;
+    desc->Passes = tech->pass_count;
+    desc->Annotations = tech->annotation_count;
+
+    return D3D_OK;
 }
 
-static HRESULT WINAPI d3dx_effect_GetPassDesc(ID3DXEffect *iface, D3DXHANDLE pass, D3DXPASS_DESC *desc)
+static HRESULT WINAPI d3dx_effect_GetPassDesc(ID3DXEffect *iface, D3DXHANDLE pass_handle, D3DXPASS_DESC *desc)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_pass *pass = get_valid_pass(&effect->base_effect, pass_handle);
+    unsigned int i;
 
     TRACE("iface %p, pass %p, desc %p.\n", iface, pass, desc);
 
-    return d3dx9_base_effect_get_pass_desc(&effect->base_effect, pass, desc);
+    if (!desc || !pass)
+    {
+        WARN("Invalid argument specified.\n");
+        return D3DERR_INVALIDCALL;
+    }
+
+    desc->Name = pass->name;
+    desc->Annotations = pass->annotation_count;
+
+    desc->pVertexShaderFunction = NULL;
+    desc->pPixelShaderFunction = NULL;
+
+    if (effect->base_effect.flags & D3DXFX_NOT_CLONEABLE)
+        return D3D_OK;
+
+    for (i = 0; i < pass->state_count; ++i)
+    {
+        struct d3dx_state *state = &pass->states[i];
+
+        if (state_table[state->operation].class == SC_VERTEXSHADER
+                || state_table[state->operation].class == SC_PIXELSHADER)
+        {
+            struct d3dx_parameter *param;
+            void *param_value;
+            BOOL param_dirty;
+            HRESULT hr;
+            void *data;
+
+            if (FAILED(hr = d3dx9_get_param_value_ptr(pass, &pass->states[i], &param_value, &param,
+                    FALSE, &param_dirty)))
+                return hr;
+
+            data = param->object_id ? effect->objects[param->object_id].data : NULL;
+            if (state_table[state->operation].class == SC_VERTEXSHADER)
+                desc->pVertexShaderFunction = data;
+            else
+                desc->pPixelShaderFunction = data;
+        }
+    }
+
+    return D3D_OK;
 }
 
 static HRESULT WINAPI d3dx_effect_GetFunctionDesc(ID3DXEffect *iface, D3DXHANDLE shader,
@@ -3455,39 +1994,143 @@ static HRESULT WINAPI d3dx_effect_GetFunctionDesc(ID3DXEffect *iface, D3DXHANDLE
 static D3DXHANDLE WINAPI d3dx_effect_GetParameter(ID3DXEffect *iface, D3DXHANDLE parameter, UINT index)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, index %u.\n", iface, parameter, index);
 
-    return d3dx9_base_effect_get_parameter(&effect->base_effect, parameter, index);
+    if (!parameter)
+    {
+        if (index < effect->parameter_count)
+        {
+            TRACE("Returning parameter %p.\n", &effect->base_effect.parameters[index]);
+            return get_parameter_handle(&effect->base_effect.parameters[index].param);
+        }
+    }
+    else
+    {
+        if (param && !param->element_count && index < param->member_count)
+        {
+            TRACE("Returning parameter %p.\n", &param->members[index]);
+            return get_parameter_handle(&param->members[index]);
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return NULL;
 }
 
 static D3DXHANDLE WINAPI d3dx_effect_GetParameterByName(ID3DXEffect *iface, D3DXHANDLE parameter,
         const char *name)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
+    D3DXHANDLE handle;
 
     TRACE("iface %p, parameter %p, name %s.\n", iface, parameter, debugstr_a(name));
 
-    return d3dx9_base_effect_get_parameter_by_name(&effect->base_effect, parameter, name);
+    if (!name)
+    {
+        handle = get_parameter_handle(param);
+        TRACE("Returning parameter %p.\n", handle);
+        return handle;
+    }
+
+    handle = get_parameter_handle(get_parameter_by_name(&effect->base_effect, param, name));
+    TRACE("Returning parameter %p.\n", handle);
+
+    return handle;
 }
 
 static D3DXHANDLE WINAPI d3dx_effect_GetParameterBySemantic(ID3DXEffect *iface, D3DXHANDLE parameter,
         const char *semantic)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
+    struct d3dx_parameter *temp_param;
+    unsigned int i;
 
     TRACE("iface %p, parameter %p, semantic %s.\n", iface, parameter, debugstr_a(semantic));
 
-    return d3dx9_base_effect_get_parameter_by_semantic(&effect->base_effect, parameter, semantic);
+    if (!parameter)
+    {
+        for (i = 0; i < effect->parameter_count; ++i)
+        {
+            temp_param = &effect->base_effect.parameters[i].param;
+
+            if (!temp_param->semantic)
+            {
+                if (!semantic)
+                {
+                    TRACE("Returning parameter %p\n", temp_param);
+                    return get_parameter_handle(temp_param);
+                }
+                continue;
+            }
+
+            if (!strcasecmp(temp_param->semantic, semantic))
+            {
+                TRACE("Returning parameter %p\n", temp_param);
+                return get_parameter_handle(temp_param);
+            }
+        }
+    }
+    else if (param)
+    {
+        for (i = 0; i < param->member_count; ++i)
+        {
+            temp_param = &param->members[i];
+
+            if (!temp_param->semantic)
+            {
+                if (!semantic)
+                {
+                    TRACE("Returning parameter %p\n", temp_param);
+                    return get_parameter_handle(temp_param);
+                }
+                continue;
+            }
+
+            if (!strcasecmp(temp_param->semantic, semantic))
+            {
+                TRACE("Returning parameter %p\n", temp_param);
+                return get_parameter_handle(temp_param);
+            }
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return NULL;
 }
 
 static D3DXHANDLE WINAPI d3dx_effect_GetParameterElement(ID3DXEffect *iface, D3DXHANDLE parameter, UINT index)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, index %u.\n", iface, parameter, index);
 
-    return d3dx9_base_effect_get_parameter_element(&effect->base_effect, parameter, index);
+    if (!param)
+    {
+        if (index < effect->parameter_count)
+        {
+            TRACE("Returning parameter %p.\n", &effect->base_effect.parameters[index]);
+            return get_parameter_handle(&effect->base_effect.parameters[index].param);
+        }
+    }
+    else
+    {
+        if (index < param->element_count)
+        {
+            TRACE("Returning parameter %p.\n", &param->members[index]);
+            return get_parameter_handle(&param->members[index]);
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return NULL;
 }
 
 static D3DXHANDLE WINAPI d3dx_effect_GetTechnique(ID3DXEffect *iface, UINT index)
@@ -3496,34 +2139,80 @@ static D3DXHANDLE WINAPI d3dx_effect_GetTechnique(ID3DXEffect *iface, UINT index
 
     TRACE("iface %p, index %u.\n", iface, index);
 
-    return d3dx9_base_effect_get_technique(&effect->base_effect, index);
+    if (index >= effect->base_effect.technique_count)
+    {
+        WARN("Invalid argument specified.\n");
+        return NULL;
+    }
+
+    TRACE("Returning technique %p.\n", &effect->base_effect.techniques[index]);
+
+    return get_technique_handle(&effect->base_effect.techniques[index]);
 }
 
 static D3DXHANDLE WINAPI d3dx_effect_GetTechniqueByName(ID3DXEffect *iface, const char *name)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_technique *tech = get_technique_by_name(effect, name);
 
     TRACE("iface %p, name %s.\n", iface, debugstr_a(name));
 
-    return d3dx9_base_effect_get_technique_by_name(&effect->base_effect, name);
+    if (tech)
+    {
+        D3DXHANDLE t = get_technique_handle(tech);
+        TRACE("Returning technique %p\n", t);
+        return t;
+    }
+
+    WARN("Technique not found.\n");
+
+    return NULL;
 }
 
 static D3DXHANDLE WINAPI d3dx_effect_GetPass(ID3DXEffect *iface, D3DXHANDLE technique, UINT index)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_technique *tech = get_valid_technique(effect, technique);
 
     TRACE("iface %p, technique %p, index %u.\n", iface, technique, index);
 
-    return d3dx9_base_effect_get_pass(&effect->base_effect, technique, index);
+    if (tech && index < tech->pass_count)
+    {
+        TRACE("Returning pass %p\n", &tech->passes[index]);
+        return get_pass_handle(&tech->passes[index]);
+    }
+
+    WARN("Pass not found.\n");
+
+    return NULL;
 }
 
 static D3DXHANDLE WINAPI d3dx_effect_GetPassByName(ID3DXEffect *iface, D3DXHANDLE technique, const char *name)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_technique *tech = get_valid_technique(effect, technique);
 
     TRACE("iface %p, technique %p, name %s.\n", iface, technique, debugstr_a(name));
 
-    return d3dx9_base_effect_get_pass_by_name(&effect->base_effect, technique, name);
+    if (tech && name)
+    {
+        unsigned int i;
+
+        for (i = 0; i < tech->pass_count; ++i)
+        {
+            struct d3dx_pass *pass = &tech->passes[i];
+
+            if (!strcmp(pass->name, name))
+            {
+                TRACE("Returning pass %p\n", pass);
+                return get_pass_handle(pass);
+            }
+        }
+    }
+
+    WARN("Pass not found.\n");
+
+    return NULL;
 }
 
 static D3DXHANDLE WINAPI d3dx_effect_GetFunction(ID3DXEffect *iface, UINT index)
@@ -3543,352 +2232,1305 @@ static D3DXHANDLE WINAPI d3dx_effect_GetFunctionByName(ID3DXEffect *iface, const
 static D3DXHANDLE WINAPI d3dx_effect_GetAnnotation(ID3DXEffect *iface, D3DXHANDLE object, UINT index)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *annotations = NULL;
+    unsigned int annotation_count;
 
     TRACE("iface %p, object %p, index %u.\n", iface, object, index);
 
-    return d3dx9_base_effect_get_annotation(&effect->base_effect, object, index);
+    annotation_count = get_annotation_from_object(effect, object, &annotations);
+
+    if (index < annotation_count)
+    {
+        TRACE("Returning parameter %p\n", &annotations[index]);
+        return get_parameter_handle(&annotations[index]);
+    }
+
+    WARN("Annotation not found.\n");
+
+    return NULL;
 }
 
 static D3DXHANDLE WINAPI d3dx_effect_GetAnnotationByName(ID3DXEffect *iface, D3DXHANDLE object,
         const char *name)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *annotation = NULL;
+    struct d3dx_parameter *annotations = NULL;
+    unsigned int annotation_count;
 
     TRACE("iface %p, object %p, name %s.\n", iface, object, debugstr_a(name));
 
-    return d3dx9_base_effect_get_annotation_by_name(&effect->base_effect, object, name);
+    if (!name)
+    {
+        WARN("Invalid argument specified\n");
+        return NULL;
+    }
+
+    annotation_count = get_annotation_from_object(effect, object, &annotations);
+
+    annotation = get_annotation_by_name(&effect->base_effect, annotation_count, annotations, name);
+    if (annotation)
+    {
+        TRACE("Returning parameter %p\n", annotation);
+        return get_parameter_handle(annotation);
+    }
+
+    WARN("Annotation not found.\n");
+
+    return NULL;
 }
 
 static HRESULT WINAPI d3dx_effect_SetValue(ID3DXEffect *iface, D3DXHANDLE parameter,
         const void *data, UINT bytes)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
+    unsigned int i;
 
     TRACE("iface %p, parameter %p, data %p, bytes %u.\n", iface, parameter, data, bytes);
 
-    return d3dx9_base_effect_set_value(&effect->base_effect, parameter, data, bytes);
+    if (!param)
+    {
+        WARN("Invalid parameter %p specified.\n", parameter);
+        return D3DERR_INVALIDCALL;
+    }
+    if (param->class == D3DXPC_OBJECT && is_param_type_sampler(param->type))
+    {
+        WARN("Parameter is a sampler, returning E_FAIL.\n");
+        return E_FAIL;
+    }
+
+    if (data && param->bytes <= bytes)
+    {
+        switch (param->type)
+        {
+            case D3DXPT_TEXTURE:
+            case D3DXPT_TEXTURE1D:
+            case D3DXPT_TEXTURE2D:
+            case D3DXPT_TEXTURE3D:
+            case D3DXPT_TEXTURECUBE:
+                for (i = 0; i < (param->element_count ? param->element_count : 1); ++i)
+                {
+                    IUnknown *old_texture = ((IUnknown **)param->data)[i];
+                    IUnknown *new_texture = ((IUnknown **)data)[i];
+
+                    if (new_texture == old_texture)
+                        continue;
+
+                    if (new_texture)
+                        IUnknown_AddRef(new_texture);
+                    if (old_texture)
+                        IUnknown_Release(old_texture);
+                }
+            /* fallthrough */
+            case D3DXPT_VOID:
+            case D3DXPT_BOOL:
+            case D3DXPT_INT:
+            case D3DXPT_FLOAT:
+                TRACE("Copy %u bytes.\n", param->bytes);
+                memcpy(param->data, data, param->bytes);
+                set_dirty(param);
+                break;
+
+            case D3DXPT_STRING:
+            {
+                HRESULT hr;
+
+                set_dirty(param);
+                for (i = 0; i < (param->element_count ? param->element_count : 1); ++i)
+                    if (FAILED(hr = set_string(&((char **)param->data)[i], ((const char **)data)[i])))
+                        return hr;
+                break;
+            }
+
+            default:
+                FIXME("Unhandled type %s.\n", debug_d3dxparameter_type(param->type));
+                break;
+        }
+
+        return D3D_OK;
+    }
+
+    WARN("Invalid argument specified.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetValue(ID3DXEffect *iface, D3DXHANDLE parameter, void *data, UINT bytes)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, data %p, bytes %u.\n", iface, parameter, data, bytes);
 
-    return d3dx9_base_effect_get_value(&effect->base_effect, parameter, data, bytes);
+    if (!param)
+    {
+        WARN("Invalid parameter %p specified.\n", parameter);
+        return D3DERR_INVALIDCALL;
+    }
+    if (param->class == D3DXPC_OBJECT && is_param_type_sampler(param->type))
+    {
+        WARN("Parameter is a sampler, returning E_FAIL.\n");
+        return E_FAIL;
+    }
+
+    if (data && param->bytes <= bytes)
+    {
+        TRACE("Type %s.\n", debug_d3dxparameter_type(param->type));
+
+        switch (param->type)
+        {
+            case D3DXPT_VOID:
+            case D3DXPT_BOOL:
+            case D3DXPT_INT:
+            case D3DXPT_FLOAT:
+            case D3DXPT_STRING:
+                break;
+
+            case D3DXPT_VERTEXSHADER:
+            case D3DXPT_PIXELSHADER:
+            case D3DXPT_TEXTURE:
+            case D3DXPT_TEXTURE1D:
+            case D3DXPT_TEXTURE2D:
+            case D3DXPT_TEXTURE3D:
+            case D3DXPT_TEXTURECUBE:
+            {
+                unsigned int i;
+
+                for (i = 0; i < (param->element_count ? param->element_count : 1); ++i)
+                {
+                    IUnknown *unk = ((IUnknown **)param->data)[i];
+                    if (unk)
+                        IUnknown_AddRef(unk);
+                }
+                break;
+            }
+
+            default:
+                FIXME("Unhandled type %s.\n", debug_d3dxparameter_type(param->type));
+                break;
+        }
+
+        TRACE("Copy %u bytes.\n", param->bytes);
+        memcpy(data, param->data, param->bytes);
+        return D3D_OK;
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_SetBool(ID3DXEffect *iface, D3DXHANDLE parameter, BOOL b)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, b %#x.\n", iface, parameter, b);
 
-    return d3dx9_base_effect_set_bool(&effect->base_effect, parameter, b);
+    if (param && !param->element_count && param->rows == 1 && param->columns == 1)
+    {
+        set_number(param->data, param->type, &b, D3DXPT_BOOL);
+        set_dirty(param);
+        return D3D_OK;
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetBool(ID3DXEffect *iface, D3DXHANDLE parameter, BOOL *b)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, b %p.\n", iface, parameter, b);
 
-    return d3dx9_base_effect_get_bool(&effect->base_effect, parameter, b);
+    if (b && param && !param->element_count && param->rows == 1 && param->columns == 1)
+    {
+        set_number(b, D3DXPT_BOOL, param->data, param->type);
+        TRACE("Returning %s\n", *b ? "TRUE" : "FALSE");
+        return D3D_OK;
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_SetBoolArray(ID3DXEffect *iface, D3DXHANDLE parameter, const BOOL *b, UINT count)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, b %p, count %u.\n", iface, parameter, b, count);
 
-    return d3dx9_base_effect_set_bool_array(&effect->base_effect, parameter, b, count);
+    if (param)
+    {
+        unsigned int i, size = min(count, param->bytes / sizeof(DWORD));
+
+        TRACE("Class %s.\n", debug_d3dxparameter_class(param->class));
+
+        switch (param->class)
+        {
+            case D3DXPC_SCALAR:
+            case D3DXPC_VECTOR:
+            case D3DXPC_MATRIX_ROWS:
+                for (i = 0; i < size; ++i)
+                {
+                    /* don't crop the input, use D3DXPT_INT instead of D3DXPT_BOOL */
+                    set_number((DWORD *)param->data + i, param->type, &b[i], D3DXPT_INT);
+                }
+                set_dirty(param);
+                return D3D_OK;
+
+            case D3DXPC_OBJECT:
+            case D3DXPC_STRUCT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetBoolArray(ID3DXEffect *iface, D3DXHANDLE parameter, BOOL *b, UINT count)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, b %p, count %u.\n", iface, parameter, b, count);
 
-    return d3dx9_base_effect_get_bool_array(&effect->base_effect, parameter, b, count);
+    if (b && param && (param->class == D3DXPC_SCALAR
+            || param->class == D3DXPC_VECTOR
+            || param->class == D3DXPC_MATRIX_ROWS
+            || param->class == D3DXPC_MATRIX_COLUMNS))
+    {
+        unsigned int i, size = min(count, param->bytes / sizeof(DWORD));
+
+        for (i = 0; i < size; ++i)
+        {
+            set_number(&b[i], D3DXPT_BOOL, (DWORD *)param->data + i, param->type);
+        }
+        return D3D_OK;
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_SetInt(ID3DXEffect *iface, D3DXHANDLE parameter, INT n)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, n %d.\n", iface, parameter, n);
 
-    return d3dx9_base_effect_set_int(&effect->base_effect, parameter, n);
+    if (param && !param->element_count)
+    {
+        if (param->rows == 1 && param->columns == 1)
+        {
+            DWORD value;
+
+            set_number(&value, param->type, &n, D3DXPT_INT);
+            if (value != *(DWORD *)param->data)
+                set_dirty(param);
+            *(DWORD *)param->data = value;
+            return D3D_OK;
+        }
+
+        /* Split the value if parameter is a vector with dimension 3 or 4. */
+        if (param->type == D3DXPT_FLOAT
+                && ((param->class == D3DXPC_VECTOR && param->columns != 2)
+                || (param->class == D3DXPC_MATRIX_ROWS && param->rows != 2 && param->columns == 1)))
+        {
+            TRACE("Vector fixup.\n");
+
+            *(float *)param->data = ((n & 0xff0000) >> 16) * INT_FLOAT_MULTI_INVERSE;
+            ((float *)param->data)[1] = ((n & 0xff00) >> 8) * INT_FLOAT_MULTI_INVERSE;
+            ((float *)param->data)[2] = (n & 0xff) * INT_FLOAT_MULTI_INVERSE;
+            if (param->rows * param->columns > 3)
+                ((float *)param->data)[3] = ((n & 0xff000000) >> 24) * INT_FLOAT_MULTI_INVERSE;
+            set_dirty(param);
+            return D3D_OK;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetInt(ID3DXEffect *iface, D3DXHANDLE parameter, INT *n)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, n %p.\n", iface, parameter, n);
 
-    return d3dx9_base_effect_get_int(&effect->base_effect, parameter, n);
+    if (n && param && !param->element_count)
+    {
+        if (param->columns == 1 && param->rows == 1)
+        {
+            set_number(n, D3DXPT_INT, param->data, param->type);
+            TRACE("Returning %d.\n", *n);
+            return D3D_OK;
+        }
+
+        if (param->type == D3DXPT_FLOAT &&
+                ((param->class == D3DXPC_VECTOR && param->columns != 2)
+                || (param->class == D3DXPC_MATRIX_ROWS && param->rows != 2 && param->columns == 1)))
+        {
+            TRACE("Vector fixup.\n");
+
+            *n = min(max(0.0f, *((float *)param->data + 2)), 1.0f) * INT_FLOAT_MULTI;
+            *n += ((int)(min(max(0.0f, *((float *)param->data + 1)), 1.0f) * INT_FLOAT_MULTI)) << 8;
+            *n += ((int)(min(max(0.0f, *((float *)param->data + 0)), 1.0f) * INT_FLOAT_MULTI)) << 16;
+            if (param->columns * param->rows > 3)
+                *n += ((int)(min(max(0.0f, *((float *)param->data + 3)), 1.0f) * INT_FLOAT_MULTI)) << 24;
+
+            TRACE("Returning %d.\n", *n);
+            return D3D_OK;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_SetIntArray(ID3DXEffect *iface, D3DXHANDLE parameter, const INT *n, UINT count)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, n %p, count %u.\n", iface, parameter, n, count);
 
-    return d3dx9_base_effect_set_int_array(&effect->base_effect, parameter, n, count);
+    if (param)
+    {
+        unsigned int i, size = min(count, param->bytes / sizeof(DWORD));
+
+        TRACE("Class %s.\n", debug_d3dxparameter_class(param->class));
+
+        switch (param->class)
+        {
+            case D3DXPC_SCALAR:
+            case D3DXPC_VECTOR:
+            case D3DXPC_MATRIX_ROWS:
+                for (i = 0; i < size; ++i)
+                    set_number((DWORD *)param->data + i, param->type, &n[i], D3DXPT_INT);
+                set_dirty(param);
+                return D3D_OK;
+
+            case D3DXPC_OBJECT:
+            case D3DXPC_STRUCT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetIntArray(ID3DXEffect *iface, D3DXHANDLE parameter, INT *n, UINT count)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, n %p, count %u.\n", iface, parameter, n, count);
 
-    return d3dx9_base_effect_get_int_array(&effect->base_effect, parameter, n, count);
+    if (n && param && (param->class == D3DXPC_SCALAR
+            || param->class == D3DXPC_VECTOR
+            || param->class == D3DXPC_MATRIX_ROWS
+            || param->class == D3DXPC_MATRIX_COLUMNS))
+    {
+        unsigned int i, size = min(count, param->bytes / sizeof(DWORD));
+
+        for (i = 0; i < size; ++i)
+            set_number(&n[i], D3DXPT_INT, (DWORD *)param->data + i, param->type);
+        return D3D_OK;
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_SetFloat(ID3DXEffect *iface, D3DXHANDLE parameter, float f)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, f %.8e.\n", iface, parameter, f);
 
-    return d3dx9_base_effect_set_float(&effect->base_effect, parameter, f);
+    if (param && !param->element_count && param->rows == 1 && param->columns == 1)
+    {
+        DWORD value;
+
+        set_number(&value, param->type, &f, D3DXPT_FLOAT);
+        if (value != *(DWORD *)param->data)
+            set_dirty(param);
+        *(DWORD *)param->data = value;
+        return D3D_OK;
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetFloat(ID3DXEffect *iface, D3DXHANDLE parameter, float *f)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, f %p.\n", iface, parameter, f);
 
-    return d3dx9_base_effect_get_float(&effect->base_effect, parameter, f);
+    if (f && param && !param->element_count && param->columns == 1 && param->rows == 1)
+    {
+        set_number(f, D3DXPT_FLOAT, (DWORD *)param->data, param->type);
+        TRACE("Returning %f.\n", *f);
+        return D3D_OK;
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_SetFloatArray(ID3DXEffect *iface, D3DXHANDLE parameter,
         const float *f, UINT count)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, f %p, count %u.\n", iface, parameter, f, count);
 
-    return d3dx9_base_effect_set_float_array(&effect->base_effect, parameter, f, count);
+    if (param)
+    {
+        unsigned int i, size = min(count, param->bytes / sizeof(DWORD));
+
+        TRACE("Class %s.\n", debug_d3dxparameter_class(param->class));
+
+        switch (param->class)
+        {
+            case D3DXPC_SCALAR:
+            case D3DXPC_VECTOR:
+            case D3DXPC_MATRIX_ROWS:
+                for (i = 0; i < size; ++i)
+                    set_number((DWORD *)param->data + i, param->type, &f[i], D3DXPT_FLOAT);
+                set_dirty(param);
+                return D3D_OK;
+
+            case D3DXPC_OBJECT:
+            case D3DXPC_STRUCT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetFloatArray(ID3DXEffect *iface, D3DXHANDLE parameter, float *f, UINT count)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, f %p, count %u.\n", iface, parameter, f, count);
 
-    return d3dx9_base_effect_get_float_array(&effect->base_effect, parameter, f, count);
+    if (f && param && (param->class == D3DXPC_SCALAR
+            || param->class == D3DXPC_VECTOR
+            || param->class == D3DXPC_MATRIX_ROWS
+            || param->class == D3DXPC_MATRIX_COLUMNS))
+    {
+        unsigned int i, size = min(count, param->bytes / sizeof(DWORD));
+
+        for (i = 0; i < size; ++i)
+            set_number(&f[i], D3DXPT_FLOAT, (DWORD *)param->data + i, param->type);
+        return D3D_OK;
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_SetVector(ID3DXEffect *iface, D3DXHANDLE parameter, const D3DXVECTOR4 *vector)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, vector %p.\n", iface, parameter, vector);
 
-    return d3dx9_base_effect_set_vector(&effect->base_effect, parameter, vector);
+    if (param && !param->element_count)
+    {
+        TRACE("Class %s.\n", debug_d3dxparameter_class(param->class));
+
+        switch (param->class)
+        {
+            case D3DXPC_SCALAR:
+            case D3DXPC_VECTOR:
+                set_dirty(param);
+                if (param->type == D3DXPT_INT && param->bytes == 4)
+                {
+                    DWORD tmp;
+
+                    TRACE("INT fixup.\n");
+                    tmp = max(min(vector->z, 1.0f), 0.0f) * INT_FLOAT_MULTI;
+                    tmp += ((DWORD)(max(min(vector->y, 1.0f), 0.0f) * INT_FLOAT_MULTI)) << 8;
+                    tmp += ((DWORD)(max(min(vector->x, 1.0f), 0.0f) * INT_FLOAT_MULTI)) << 16;
+                    tmp += ((DWORD)(max(min(vector->w, 1.0f), 0.0f) * INT_FLOAT_MULTI)) << 24;
+
+                    *(int *)param->data = tmp;
+                    return D3D_OK;
+                }
+                if (param->type == D3DXPT_FLOAT)
+                {
+                    memcpy(param->data, vector, param->columns * sizeof(float));
+                    return D3D_OK;
+                }
+
+                set_vector(param, vector);
+                return D3D_OK;
+
+            case D3DXPC_MATRIX_ROWS:
+            case D3DXPC_OBJECT:
+            case D3DXPC_STRUCT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetVector(ID3DXEffect *iface, D3DXHANDLE parameter, D3DXVECTOR4 *vector)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, vector %p.\n", iface, parameter, vector);
 
-    return d3dx9_base_effect_get_vector(&effect->base_effect, parameter, vector);
+    if (vector && param && !param->element_count)
+    {
+        TRACE("Class %s.\n", debug_d3dxparameter_class(param->class));
+
+        switch (param->class)
+        {
+            case D3DXPC_SCALAR:
+            case D3DXPC_VECTOR:
+                if (param->type == D3DXPT_INT && param->bytes == 4)
+                {
+                    TRACE("INT fixup.\n");
+                    vector->x = (((*(int *)param->data) & 0xff0000) >> 16) * INT_FLOAT_MULTI_INVERSE;
+                    vector->y = (((*(int *)param->data) & 0xff00) >> 8) * INT_FLOAT_MULTI_INVERSE;
+                    vector->z = ((*(int *)param->data) & 0xff) * INT_FLOAT_MULTI_INVERSE;
+                    vector->w = (((*(int *)param->data) & 0xff000000) >> 24) * INT_FLOAT_MULTI_INVERSE;
+                    return D3D_OK;
+                }
+                get_vector(param, vector);
+                return D3D_OK;
+
+            case D3DXPC_MATRIX_ROWS:
+            case D3DXPC_OBJECT:
+            case D3DXPC_STRUCT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_SetVectorArray(ID3DXEffect *iface, D3DXHANDLE parameter,
         const D3DXVECTOR4 *vector, UINT count)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, vector %p, count %u.\n", iface, parameter, vector, count);
 
-    return d3dx9_base_effect_set_vector_array(&effect->base_effect, parameter, vector, count);
+    if (param && param->element_count && param->element_count >= count)
+    {
+        unsigned int i;
+
+        TRACE("Class %s.\n", debug_d3dxparameter_class(param->class));
+
+        switch (param->class)
+        {
+            case D3DXPC_VECTOR:
+                set_dirty(param);
+                if (param->type == D3DXPT_FLOAT)
+                {
+                    if (param->columns == 4)
+                        memcpy(param->data, vector, count * 4 * sizeof(float));
+                    else
+                        for (i = 0; i < count; ++i)
+                            memcpy((float *)param->data + param->columns * i, vector + i,
+                                    param->columns * sizeof(float));
+                    return D3D_OK;
+                }
+
+                for (i = 0; i < count; ++i)
+                    set_vector(&param->members[i], &vector[i]);
+                return D3D_OK;
+
+            case D3DXPC_SCALAR:
+            case D3DXPC_MATRIX_ROWS:
+            case D3DXPC_OBJECT:
+            case D3DXPC_STRUCT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetVectorArray(ID3DXEffect *iface, D3DXHANDLE parameter,
         D3DXVECTOR4 *vector, UINT count)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, vector %p, count %u.\n", iface, parameter, vector, count);
 
-    return d3dx9_base_effect_get_vector_array(&effect->base_effect, parameter, vector, count);
+    if (!count)
+        return D3D_OK;
+
+    if (vector && param && count <= param->element_count)
+    {
+        unsigned int i;
+
+        TRACE("Class %s.\n", debug_d3dxparameter_class(param->class));
+
+        switch (param->class)
+        {
+            case D3DXPC_VECTOR:
+                for (i = 0; i < count; ++i)
+                    get_vector(&param->members[i], &vector[i]);
+                return D3D_OK;
+
+            case D3DXPC_SCALAR:
+            case D3DXPC_MATRIX_ROWS:
+            case D3DXPC_OBJECT:
+            case D3DXPC_STRUCT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_SetMatrix(ID3DXEffect *iface, D3DXHANDLE parameter, const D3DXMATRIX *matrix)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, matrix %p.\n", iface, parameter, matrix);
 
-    return d3dx9_base_effect_set_matrix(&effect->base_effect, parameter, matrix);
+    if (param && !param->element_count)
+    {
+        TRACE("Class %s.\n", debug_d3dxparameter_class(param->class));
+
+        switch (param->class)
+        {
+            case D3DXPC_MATRIX_ROWS:
+                set_matrix(param, matrix);
+                set_dirty(param);
+                return D3D_OK;
+
+            case D3DXPC_SCALAR:
+            case D3DXPC_VECTOR:
+            case D3DXPC_OBJECT:
+            case D3DXPC_STRUCT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetMatrix(ID3DXEffect *iface, D3DXHANDLE parameter, D3DXMATRIX *matrix)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, matrix %p.\n", iface, parameter, matrix);
 
-    return d3dx9_base_effect_get_matrix(&effect->base_effect, parameter, matrix);
+    if (matrix && param && !param->element_count)
+    {
+        TRACE("Class %s.\n", debug_d3dxparameter_class(param->class));
+
+        switch (param->class)
+        {
+            case D3DXPC_MATRIX_ROWS:
+                get_matrix(param, matrix, FALSE);
+                return D3D_OK;
+
+            case D3DXPC_SCALAR:
+            case D3DXPC_VECTOR:
+            case D3DXPC_OBJECT:
+            case D3DXPC_STRUCT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_SetMatrixArray(ID3DXEffect *iface, D3DXHANDLE parameter,
         const D3DXMATRIX *matrix, UINT count)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, matrix %p, count %u.\n", iface, parameter, matrix, count);
 
-    return d3dx9_base_effect_set_matrix_array(&effect->base_effect, parameter, matrix, count);
+    if (param && param->element_count >= count)
+    {
+        unsigned int i;
+
+        TRACE("Class %s.\n", debug_d3dxparameter_class(param->class));
+
+        switch (param->class)
+        {
+            case D3DXPC_MATRIX_ROWS:
+                set_dirty(param);
+                for (i = 0; i < count; ++i)
+                    set_matrix(&param->members[i], &matrix[i]);
+                return D3D_OK;
+
+            case D3DXPC_SCALAR:
+            case D3DXPC_VECTOR:
+            case D3DXPC_OBJECT:
+            case D3DXPC_STRUCT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetMatrixArray(ID3DXEffect *iface, D3DXHANDLE parameter,
         D3DXMATRIX *matrix, UINT count)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, matrix %p, count %u.\n", iface, parameter, matrix, count);
 
-    return d3dx9_base_effect_get_matrix_array(&effect->base_effect, parameter, matrix, count);
+    if (!count)
+        return D3D_OK;
+
+    if (matrix && param && count <= param->element_count)
+    {
+        unsigned int i;
+
+        TRACE("Class %s.\n", debug_d3dxparameter_class(param->class));
+
+        switch (param->class)
+        {
+            case D3DXPC_MATRIX_ROWS:
+                for (i = 0; i < count; ++i)
+                    get_matrix(&param->members[i], &matrix[i], FALSE);
+                return D3D_OK;
+
+            case D3DXPC_SCALAR:
+            case D3DXPC_VECTOR:
+            case D3DXPC_OBJECT:
+            case D3DXPC_STRUCT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_SetMatrixPointerArray(ID3DXEffect *iface, D3DXHANDLE parameter,
         const D3DXMATRIX **matrix, UINT count)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, matrix %p, count %u.\n", iface, parameter, matrix, count);
 
-    return d3dx9_base_effect_set_matrix_pointer_array(&effect->base_effect, parameter, matrix, count);
+    if (param && count <= param->element_count)
+    {
+        unsigned int i;
+
+        switch (param->class)
+        {
+            case D3DXPC_MATRIX_ROWS:
+                set_dirty(param);
+                for (i = 0; i < count; ++i)
+                    set_matrix(&param->members[i], matrix[i]);
+                return D3D_OK;
+
+            case D3DXPC_SCALAR:
+            case D3DXPC_VECTOR:
+            case D3DXPC_OBJECT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetMatrixPointerArray(ID3DXEffect *iface, D3DXHANDLE parameter,
         D3DXMATRIX **matrix, UINT count)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, matrix %p, count %u.\n", iface, parameter, matrix, count);
 
-    return d3dx9_base_effect_get_matrix_pointer_array(&effect->base_effect, parameter, matrix, count);
+    if (!count)
+        return D3D_OK;
+
+    if (param && matrix && count <= param->element_count)
+    {
+        unsigned int i;
+
+        TRACE("Class %s.\n", debug_d3dxparameter_class(param->class));
+
+        switch (param->class)
+        {
+            case D3DXPC_MATRIX_ROWS:
+                for (i = 0; i < count; ++i)
+                    get_matrix(&param->members[i], matrix[i], FALSE);
+                return D3D_OK;
+
+            case D3DXPC_SCALAR:
+            case D3DXPC_VECTOR:
+            case D3DXPC_OBJECT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_SetMatrixTranspose(ID3DXEffect *iface, D3DXHANDLE parameter,
         const D3DXMATRIX *matrix)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, matrix %p.\n", iface, parameter, matrix);
 
-    return d3dx9_base_effect_set_matrix_transpose(&effect->base_effect, parameter, matrix);
+    if (param && !param->element_count)
+    {
+        TRACE("Class %s.\n", debug_d3dxparameter_class(param->class));
+
+        switch (param->class)
+        {
+            case D3DXPC_MATRIX_ROWS:
+                set_dirty(param);
+                set_matrix_transpose(param, matrix);
+                return D3D_OK;
+
+            case D3DXPC_SCALAR:
+            case D3DXPC_VECTOR:
+            case D3DXPC_OBJECT:
+            case D3DXPC_STRUCT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetMatrixTranspose(ID3DXEffect *iface, D3DXHANDLE parameter,
         D3DXMATRIX *matrix)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, matrix %p.\n", iface, parameter, matrix);
 
-    return d3dx9_base_effect_get_matrix_transpose(&effect->base_effect, parameter, matrix);
+    if (matrix && param && !param->element_count)
+    {
+        TRACE("Class %s.\n", debug_d3dxparameter_class(param->class));
+
+        switch (param->class)
+        {
+            case D3DXPC_SCALAR:
+            case D3DXPC_VECTOR:
+                get_matrix(param, matrix, FALSE);
+                return D3D_OK;
+
+            case D3DXPC_MATRIX_ROWS:
+                get_matrix(param, matrix, TRUE);
+                return D3D_OK;
+
+            case D3DXPC_OBJECT:
+            case D3DXPC_STRUCT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_SetMatrixTransposeArray(ID3DXEffect *iface, D3DXHANDLE parameter,
         const D3DXMATRIX *matrix, UINT count)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, matrix %p, count %u.\n", iface, parameter, matrix, count);
 
-    return d3dx9_base_effect_set_matrix_transpose_array(&effect->base_effect, parameter, matrix, count);
+    if (param && param->element_count >= count)
+    {
+        unsigned int i;
+
+        TRACE("Class %s.\n", debug_d3dxparameter_class(param->class));
+
+        switch (param->class)
+        {
+            case D3DXPC_MATRIX_ROWS:
+                set_dirty(param);
+                for (i = 0; i < count; ++i)
+                    set_matrix_transpose(&param->members[i], &matrix[i]);
+                return D3D_OK;
+
+            case D3DXPC_SCALAR:
+            case D3DXPC_VECTOR:
+            case D3DXPC_OBJECT:
+            case D3DXPC_STRUCT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetMatrixTransposeArray(ID3DXEffect *iface, D3DXHANDLE parameter,
         D3DXMATRIX *matrix, UINT count)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, matrix %p, count %u.\n", iface, parameter, matrix, count);
 
-    return d3dx9_base_effect_get_matrix_transpose_array(&effect->base_effect, parameter, matrix, count);
+    if (!count)
+        return D3D_OK;
+
+    if (matrix && param && count <= param->element_count)
+    {
+        unsigned int i;
+
+        TRACE("Class %s.\n", debug_d3dxparameter_class(param->class));
+
+        switch (param->class)
+        {
+            case D3DXPC_MATRIX_ROWS:
+                for (i = 0; i < count; ++i)
+                    get_matrix(&param->members[i], &matrix[i], TRUE);
+                return D3D_OK;
+
+            case D3DXPC_SCALAR:
+            case D3DXPC_VECTOR:
+            case D3DXPC_OBJECT:
+            case D3DXPC_STRUCT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_SetMatrixTransposePointerArray(ID3DXEffect *iface, D3DXHANDLE parameter,
         const D3DXMATRIX **matrix, UINT count)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, matrix %p, count %u.\n", iface, parameter, matrix, count);
 
-    return d3dx9_base_effect_set_matrix_transpose_pointer_array(&effect->base_effect, parameter, matrix, count);
+    if (param && count <= param->element_count)
+    {
+        unsigned int i;
+
+        switch (param->class)
+        {
+            case D3DXPC_MATRIX_ROWS:
+                set_dirty(param);
+                for (i = 0; i < count; ++i)
+                    set_matrix_transpose(&param->members[i], matrix[i]);
+                return D3D_OK;
+
+            case D3DXPC_SCALAR:
+            case D3DXPC_VECTOR:
+            case D3DXPC_OBJECT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetMatrixTransposePointerArray(ID3DXEffect *iface, D3DXHANDLE parameter,
         D3DXMATRIX **matrix, UINT count)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, matrix %p, count %u.\n", iface, parameter, matrix, count);
 
-    return d3dx9_base_effect_get_matrix_transpose_pointer_array(&effect->base_effect, parameter, matrix, count);
+    if (!count)
+        return D3D_OK;
+
+    if (matrix && param && count <= param->element_count)
+    {
+        unsigned int i;
+
+        TRACE("Class %s.\n", debug_d3dxparameter_class(param->class));
+
+        switch (param->class)
+        {
+            case D3DXPC_MATRIX_ROWS:
+                for (i = 0; i < count; ++i)
+                    get_matrix(&param->members[i], matrix[i], TRUE);
+                return D3D_OK;
+
+            case D3DXPC_SCALAR:
+            case D3DXPC_VECTOR:
+            case D3DXPC_OBJECT:
+                break;
+
+            default:
+                FIXME("Unhandled class %s.\n", debug_d3dxparameter_class(param->class));
+                break;
+        }
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_SetString(ID3DXEffect *iface, D3DXHANDLE parameter, const char *string)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, string %s.\n", iface, parameter, debugstr_a(string));
 
-    return d3dx9_base_effect_set_string(&effect->base_effect, parameter, string);
+    if (param && param->type == D3DXPT_STRING)
+    {
+        set_dirty(param);
+        return set_string(param->data, string);
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetString(ID3DXEffect *iface, D3DXHANDLE parameter, const char **string)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, string %p.\n", iface, parameter, string);
 
-    return d3dx9_base_effect_get_string(&effect->base_effect, parameter, string);
+    if (string && param && !param->element_count && param->type == D3DXPT_STRING)
+    {
+        *string = *(const char **)param->data;
+        TRACE("Returning %s.\n", debugstr_a(*string));
+        return D3D_OK;
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
-static HRESULT WINAPI d3dx_effect_SetTexture(struct ID3DXEffect *iface, D3DXHANDLE parameter,
-        struct IDirect3DBaseTexture9 *texture)
+static HRESULT WINAPI d3dx_effect_SetTexture(ID3DXEffect *iface, D3DXHANDLE parameter,
+        IDirect3DBaseTexture9 *texture)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, texture %p.\n", iface, parameter, texture);
 
-    return d3dx9_base_effect_set_texture(&effect->base_effect, parameter, texture);
+    if (param && !param->element_count
+            && (param->type == D3DXPT_TEXTURE || param->type == D3DXPT_TEXTURE1D
+            || param->type == D3DXPT_TEXTURE2D || param->type ==  D3DXPT_TEXTURE3D
+            || param->type == D3DXPT_TEXTURECUBE))
+    {
+        IDirect3DBaseTexture9 *old_texture = *(IDirect3DBaseTexture9 **)param->data;
+
+        if (texture == old_texture)
+            return D3D_OK;
+
+        if (texture)
+            IDirect3DBaseTexture9_AddRef(texture);
+        if (old_texture)
+            IDirect3DBaseTexture9_Release(old_texture);
+
+        *(IDirect3DBaseTexture9 **)param->data = texture;
+        set_dirty(param);
+
+        return D3D_OK;
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
-static HRESULT WINAPI d3dx_effect_GetTexture(struct ID3DXEffect *iface, D3DXHANDLE parameter,
-        struct IDirect3DBaseTexture9 **texture)
+static HRESULT WINAPI d3dx_effect_GetTexture(ID3DXEffect *iface, D3DXHANDLE parameter,
+        IDirect3DBaseTexture9 **texture)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, texture %p.\n", iface, parameter, texture);
 
-    return d3dx9_base_effect_get_texture(&effect->base_effect, parameter, texture);
+    if (texture && param && !param->element_count
+            && (param->type == D3DXPT_TEXTURE || param->type == D3DXPT_TEXTURE1D
+            || param->type == D3DXPT_TEXTURE2D || param->type ==  D3DXPT_TEXTURE3D
+            || param->type == D3DXPT_TEXTURECUBE))
+    {
+        *texture = *(IDirect3DBaseTexture9 **)param->data;
+        if (*texture)
+            IDirect3DBaseTexture9_AddRef(*texture);
+        TRACE("Returning %p.\n", *texture);
+        return D3D_OK;
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetPixelShader(ID3DXEffect *iface, D3DXHANDLE parameter,
-        struct IDirect3DPixelShader9 **shader)
+        IDirect3DPixelShader9 **shader)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
 
     TRACE("iface %p, parameter %p, shader %p.\n", iface, parameter, shader);
 
-    return d3dx9_base_effect_get_pixel_shader(&effect->base_effect, parameter, shader);
+    if (shader && param && !param->element_count && param->type == D3DXPT_PIXELSHADER)
+    {
+        if ((*shader = *(IDirect3DPixelShader9 **)param->data))
+            IDirect3DPixelShader9_AddRef(*shader);
+        TRACE("Returning %p.\n", *shader);
+        return D3D_OK;
+    }
+
+    WARN("Parameter not found.\n");
+
+    return D3DERR_INVALIDCALL;
 }
 
 static HRESULT WINAPI d3dx_effect_GetVertexShader(struct ID3DXEffect *iface, D3DXHANDLE parameter,
@@ -3935,15 +3577,14 @@ static HRESULT WINAPI d3dx_effect_GetPool(ID3DXEffect *iface, ID3DXEffectPool **
 
 static HRESULT WINAPI d3dx_effect_SetTechnique(ID3DXEffect *iface, D3DXHANDLE technique)
 {
-    struct d3dx_effect *This = impl_from_ID3DXEffect(iface);
-    struct d3dx9_base_effect *base = &This->base_effect;
-    struct d3dx_technique *tech = get_valid_technique(base, technique);
+    struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
+    struct d3dx_technique *tech = get_valid_technique(effect, technique);
 
-    TRACE("iface %p, technique %p\n", This, technique);
+    TRACE("iface %p, technique %p\n", iface, technique);
 
     if (tech)
     {
-        This->active_technique = tech;
+        effect->active_technique = tech;
         TRACE("Technique %p\n", tech);
         return D3D_OK;
     }
@@ -3965,8 +3606,7 @@ static D3DXHANDLE WINAPI d3dx_effect_GetCurrentTechnique(ID3DXEffect *iface)
 static HRESULT WINAPI d3dx_effect_ValidateTechnique(ID3DXEffect *iface, D3DXHANDLE technique)
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
-    struct d3dx9_base_effect *base = &effect->base_effect;
-    struct d3dx_technique *tech = get_valid_technique(base, technique);
+    struct d3dx_technique *tech = get_valid_technique(effect, technique);
     HRESULT ret = D3D_OK;
     unsigned int i, j;
 
@@ -3997,7 +3637,7 @@ static HRESULT WINAPI d3dx_effect_ValidateTechnique(ID3DXEffect *iface, D3DXHAND
                         FALSE, &param_dirty)))
                     return hr;
 
-                if (param->object_id && base->objects[param->object_id].creation_failed)
+                if (param->object_id && effect->objects[param->object_id].creation_failed)
                 {
                     ret = E_FAIL;
                     goto done;
@@ -4022,7 +3662,7 @@ static HRESULT WINAPI d3dx_effect_FindNextValidTechnique(ID3DXEffect *iface, D3D
 
     if (technique)
     {
-        if (!(prev_tech = get_valid_technique(base, technique)))
+        if (!(prev_tech = get_valid_technique(effect, technique)))
             return D3DERR_INVALIDCALL;
 
         for (i = 0; i < base->technique_count; ++i)
@@ -4165,7 +3805,7 @@ static BOOL WINAPI d3dx_effect_IsParameterUsed(ID3DXEffect *iface, D3DXHANDLE pa
 {
     struct d3dx_effect *effect = impl_from_ID3DXEffect(iface);
     struct d3dx_parameter *param = get_valid_parameter(&effect->base_effect, parameter);
-    struct d3dx_technique *tech = get_valid_technique(&effect->base_effect, technique);
+    struct d3dx_technique *tech = get_valid_technique(effect, technique);
     BOOL ret;
 
     TRACE("iface %p, parameter %p, technique %p.\n", iface, parameter, technique);
@@ -4391,7 +4031,7 @@ static HRESULT WINAPI d3dx_effect_OnLostDevice(ID3DXEffect *iface)
 
     TRACE("iface %p.\n", iface);
 
-    for (i = 0; i < base->parameter_count; ++i)
+    for (i = 0; i < effect->parameter_count; ++i)
         walk_parameter_tree(&base->parameters[i].param, param_on_lost_device, NULL);
 
     return D3D_OK;
@@ -5165,7 +4805,7 @@ static const struct ID3DXEffectCompilerVtbl ID3DXEffectCompiler_Vtbl =
     ID3DXEffectCompilerImpl_CompileShader,
 };
 
-static HRESULT d3dx9_parse_sampler(struct d3dx9_base_effect *base, struct d3dx_sampler *sampler,
+static HRESULT d3dx_parse_sampler(struct d3dx_effect *effect, struct d3dx_sampler *sampler,
         const char *data, const char **ptr, struct d3dx_object *objects)
 {
     HRESULT hr;
@@ -5183,7 +4823,7 @@ static HRESULT d3dx9_parse_sampler(struct d3dx9_base_effect *base, struct d3dx_s
 
     for (i = 0; i < sampler->state_count; ++i)
     {
-        hr = d3dx9_parse_state(base, &sampler->states[i], data, ptr, objects);
+        hr = d3dx_parse_state(effect, &sampler->states[i], data, ptr, objects);
         if (hr != D3D_OK)
         {
             WARN("Failed to parse state %u\n", i);
@@ -5205,7 +4845,7 @@ err_out:
     return hr;
 }
 
-static HRESULT d3dx9_parse_value(struct d3dx9_base_effect *base, struct d3dx_parameter *param,
+static HRESULT d3dx_parse_value(struct d3dx_effect *effect, struct d3dx_parameter *param,
         void *value, const char *data, const char **ptr, struct d3dx_object *objects)
 {
     unsigned int i;
@@ -5220,7 +4860,7 @@ static HRESULT d3dx9_parse_value(struct d3dx9_base_effect *base, struct d3dx_par
         {
             struct d3dx_parameter *member = &param->members[i];
 
-            hr = d3dx9_parse_value(base, member, value ? (char *)value + old_size : NULL, data, ptr, objects);
+            hr = d3dx_parse_value(effect, member, value ? (char *)value + old_size : NULL, data, ptr, objects);
             if (hr != D3D_OK)
             {
                 WARN("Failed to parse value %u\n", i);
@@ -5249,7 +4889,7 @@ static HRESULT d3dx9_parse_value(struct d3dx9_base_effect *base, struct d3dx_par
             {
                 struct d3dx_parameter *member = &param->members[i];
 
-                hr = d3dx9_parse_value(base, member, (char *)value + old_size, data, ptr, objects);
+                hr = d3dx_parse_value(effect, member, (char *)value + old_size, data, ptr, objects);
                 if (hr != D3D_OK)
                 {
                     WARN("Failed to parse value %u\n", i);
@@ -5289,7 +4929,7 @@ static HRESULT d3dx9_parse_value(struct d3dx9_base_effect *base, struct d3dx_par
                     if (!sampler)
                         return E_OUTOFMEMORY;
 
-                    hr = d3dx9_parse_sampler(base, sampler, data, ptr, objects);
+                    hr = d3dx_parse_sampler(effect, sampler, data, ptr, objects);
                     if (hr != D3D_OK)
                     {
                         HeapFree(GetProcessHeap(), 0, sampler);
@@ -5315,7 +4955,7 @@ static HRESULT d3dx9_parse_value(struct d3dx9_base_effect *base, struct d3dx_par
     return D3D_OK;
 }
 
-static HRESULT d3dx9_parse_init_value(struct d3dx9_base_effect *base, struct d3dx_parameter *param,
+static HRESULT d3dx_parse_init_value(struct d3dx_effect *effect, struct d3dx_parameter *param,
         const char *data, const char *ptr, struct d3dx_object *objects)
 {
     UINT size = param->bytes;
@@ -5353,7 +4993,7 @@ static HRESULT d3dx9_parse_init_value(struct d3dx9_base_effect *base, struct d3d
         }
     }
 
-    hr = d3dx9_parse_value(base, param, value, data, &ptr, objects);
+    hr = d3dx_parse_value(effect, param, value, data, &ptr, objects);
     if (hr != D3D_OK)
     {
         WARN("Failed to parse value\n");
@@ -5389,9 +5029,9 @@ static HRESULT d3dx9_parse_name(char **name, const char *ptr)
     return D3D_OK;
 }
 
-static HRESULT d3dx9_copy_data(struct d3dx9_base_effect *base, unsigned int object_id, const char **ptr)
+static HRESULT d3dx9_copy_data(struct d3dx_effect *effect, unsigned int object_id, const char **ptr)
 {
-    struct d3dx_object *object = &base->objects[object_id];
+    struct d3dx_object *object = &effect->objects[object_id];
 
     if (object->size || object->data)
     {
@@ -5507,7 +5147,7 @@ static void add_param_to_tree(struct d3dx9_base_effect *base, struct d3dx_parame
             add_param_to_tree(base, &param->members[i], param, '.', 0);
 }
 
-static HRESULT d3dx9_parse_effect_typedef(struct d3dx9_base_effect *base, struct d3dx_parameter *param,
+static HRESULT d3dx_parse_effect_typedef(struct d3dx_effect *effect, struct d3dx_parameter *param,
 	const char *data, const char **ptr, struct d3dx_parameter *parent, UINT flags)
 {
     DWORD offset;
@@ -5641,7 +5281,7 @@ static HRESULT d3dx9_parse_effect_typedef(struct d3dx9_base_effect *base, struct
             *ptr = save_ptr;
 
             param_set_magic_number(&param->members[i]);
-            hr = d3dx9_parse_effect_typedef(base, &param->members[i], data, ptr, param, flags);
+            hr = d3dx_parse_effect_typedef(effect, &param->members[i], data, ptr, param, flags);
             if (hr != D3D_OK)
             {
                 WARN("Failed to parse member %u\n", i);
@@ -5666,7 +5306,7 @@ static HRESULT d3dx9_parse_effect_typedef(struct d3dx9_base_effect *base, struct
         for (i = 0; i < param->member_count; ++i)
         {
             param_set_magic_number(&param->members[i]);
-            hr = d3dx9_parse_effect_typedef(base, &param->members[i], data, ptr, NULL, flags);
+            hr = d3dx_parse_effect_typedef(effect, &param->members[i], data, ptr, NULL, flags);
             if (hr != D3D_OK)
             {
                 WARN("Failed to parse member %u\n", i);
@@ -5701,7 +5341,7 @@ err_out:
     return hr;
 }
 
-static HRESULT d3dx9_parse_effect_annotation(struct d3dx9_base_effect *base, struct d3dx_parameter *anno,
+static HRESULT d3dx_parse_effect_annotation(struct d3dx_effect *effect, struct d3dx_parameter *anno,
         const char *data, const char **ptr, struct d3dx_object *objects)
 {
     DWORD offset;
@@ -5713,7 +5353,7 @@ static HRESULT d3dx9_parse_effect_annotation(struct d3dx9_base_effect *base, str
     read_dword(ptr, &offset);
     TRACE("Typedef offset: %#x\n", offset);
     ptr2 = data + offset;
-    hr = d3dx9_parse_effect_typedef(base, anno, data, &ptr2, NULL, D3DX_PARAMETER_ANNOTATION);
+    hr = d3dx_parse_effect_typedef(effect, anno, data, &ptr2, NULL, D3DX_PARAMETER_ANNOTATION);
     if (hr != D3D_OK)
     {
         WARN("Failed to parse type definition\n");
@@ -5722,7 +5362,7 @@ static HRESULT d3dx9_parse_effect_annotation(struct d3dx9_base_effect *base, str
 
     read_dword(ptr, &offset);
     TRACE("Value offset: %#x\n", offset);
-    hr = d3dx9_parse_init_value(base, anno, data, data + offset, objects);
+    hr = d3dx_parse_init_value(effect, anno, data, data + offset, objects);
     if (hr != D3D_OK)
     {
         WARN("Failed to parse value\n");
@@ -5732,7 +5372,7 @@ static HRESULT d3dx9_parse_effect_annotation(struct d3dx9_base_effect *base, str
     return D3D_OK;
 }
 
-static HRESULT d3dx9_parse_state(struct d3dx9_base_effect *base, struct d3dx_state *state,
+static HRESULT d3dx_parse_state(struct d3dx_effect *effect, struct d3dx_state *state,
         const char *data, const char **ptr, struct d3dx_object *objects)
 {
     DWORD offset;
@@ -5750,7 +5390,7 @@ static HRESULT d3dx9_parse_state(struct d3dx9_base_effect *base, struct d3dx_sta
     read_dword(ptr, &offset);
     TRACE("Typedef offset: %#x\n", offset);
     ptr2 = data + offset;
-    hr = d3dx9_parse_effect_typedef(base, &state->parameter, data, &ptr2, NULL, 0);
+    hr = d3dx_parse_effect_typedef(effect, &state->parameter, data, &ptr2, NULL, 0);
     if (hr != D3D_OK)
     {
         WARN("Failed to parse type definition\n");
@@ -5759,7 +5399,7 @@ static HRESULT d3dx9_parse_state(struct d3dx9_base_effect *base, struct d3dx_sta
 
     read_dword(ptr, &offset);
     TRACE("Value offset: %#x\n", offset);
-    hr = d3dx9_parse_init_value(base, &state->parameter, data, data + offset, objects);
+    hr = d3dx_parse_init_value(effect, &state->parameter, data, data + offset, objects);
     if (hr != D3D_OK)
     {
         WARN("Failed to parse value\n");
@@ -5775,7 +5415,7 @@ err_out:
     return hr;
 }
 
-static HRESULT d3dx9_parse_effect_parameter(struct d3dx9_base_effect *base, struct d3dx_top_level_parameter *param,
+static HRESULT d3dx_parse_effect_parameter(struct d3dx_effect *effect, struct d3dx_top_level_parameter *param,
         const char *data, const char **ptr, struct d3dx_object *objects)
 {
     DWORD offset;
@@ -5796,14 +5436,14 @@ static HRESULT d3dx9_parse_effect_parameter(struct d3dx9_base_effect *base, stru
     read_dword(ptr, &param->annotation_count);
     TRACE("Annotation count: %u.\n", param->annotation_count);
 
-    hr = d3dx9_parse_effect_typedef(base, &param->param, data, &ptr2, NULL, param->param.flags);
+    hr = d3dx_parse_effect_typedef(effect, &param->param, data, &ptr2, NULL, param->param.flags);
     if (hr != D3D_OK)
     {
         WARN("Failed to parse type definition.\n");
         return hr;
     }
 
-    hr = d3dx9_parse_init_value(base, &param->param, data, data + offset, objects);
+    hr = d3dx_parse_init_value(effect, &param->param, data, data + offset, objects);
     if (hr != D3D_OK)
     {
         WARN("Failed to parse value.\n");
@@ -5824,7 +5464,7 @@ static HRESULT d3dx9_parse_effect_parameter(struct d3dx9_base_effect *base, stru
         for (i = 0; i < param->annotation_count; ++i)
         {
             param_set_magic_number(&param->annotations[i]);
-            hr = d3dx9_parse_effect_annotation(base, &param->annotations[i], data, ptr, objects);
+            hr = d3dx_parse_effect_annotation(effect, &param->annotations[i], data, ptr, objects);
             if (hr != D3D_OK)
             {
                 WARN("Failed to parse annotation.\n");
@@ -5848,7 +5488,7 @@ err_out:
     return hr;
 }
 
-static HRESULT d3dx9_parse_effect_pass(struct d3dx9_base_effect *base, struct d3dx_pass *pass,
+static HRESULT d3dx_parse_effect_pass(struct d3dx_effect *effect, struct d3dx_pass *pass,
         const char *data, const char **ptr, struct d3dx_object *objects)
 {
     DWORD offset;
@@ -5886,7 +5526,7 @@ static HRESULT d3dx9_parse_effect_pass(struct d3dx9_base_effect *base, struct d3
         for (i = 0; i < pass->annotation_count; ++i)
         {
             param_set_magic_number(&pass->annotations[i]);
-            hr = d3dx9_parse_effect_annotation(base, &pass->annotations[i], data, ptr, objects);
+            hr = d3dx_parse_effect_annotation(effect, &pass->annotations[i], data, ptr, objects);
             if (hr != D3D_OK)
             {
                 WARN("Failed to parse annotation %u\n", i);
@@ -5907,7 +5547,7 @@ static HRESULT d3dx9_parse_effect_pass(struct d3dx9_base_effect *base, struct d3
 
         for (i = 0; i < pass->state_count; ++i)
         {
-            hr = d3dx9_parse_state(base, &states[i], data, ptr, objects);
+            hr = d3dx_parse_state(effect, &states[i], data, ptr, objects);
             if (hr != D3D_OK)
             {
                 WARN("Failed to parse annotation %u\n", i);
@@ -5945,7 +5585,7 @@ err_out:
     return hr;
 }
 
-static HRESULT d3dx9_parse_effect_technique(struct d3dx9_base_effect *base, struct d3dx_technique *technique,
+static HRESULT d3dx_parse_effect_technique(struct d3dx_effect *effect, struct d3dx_technique *technique,
         const char *data, const char **ptr, struct d3dx_object *objects)
 {
     DWORD offset;
@@ -5982,7 +5622,7 @@ static HRESULT d3dx9_parse_effect_technique(struct d3dx9_base_effect *base, stru
         for (i = 0; i < technique->annotation_count; ++i)
         {
             param_set_magic_number(&technique->annotations[i]);
-            hr = d3dx9_parse_effect_annotation(base, &technique->annotations[i], data, ptr, objects);
+            hr = d3dx_parse_effect_annotation(effect, &technique->annotations[i], data, ptr, objects);
             if (hr != D3D_OK)
             {
                 WARN("Failed to parse annotation %u\n", i);
@@ -6004,7 +5644,7 @@ static HRESULT d3dx9_parse_effect_technique(struct d3dx9_base_effect *base, stru
 
         for (i = 0; i < technique->pass_count; ++i)
         {
-            hr = d3dx9_parse_effect_pass(base, &technique->passes[i], data, ptr, objects);
+            hr = d3dx_parse_effect_pass(effect, &technique->passes[i], data, ptr, objects);
             if (hr != D3D_OK)
             {
                 WARN("Failed to parse pass %u\n", i);
@@ -6082,12 +5722,13 @@ static HRESULT d3dx9_create_object(struct d3dx9_base_effect *base, struct d3dx_o
     return D3D_OK;
 }
 
-static HRESULT d3dx9_parse_array_selector(struct d3dx9_base_effect *base, struct d3dx_state *state,
+static HRESULT d3dx_parse_array_selector(struct d3dx_effect *effect, struct d3dx_state *state,
         const char **skip_constants, unsigned int skip_constants_count)
 {
+    struct d3dx9_base_effect *base = &effect->base_effect;
     DWORD string_size;
     struct d3dx_parameter *param = &state->parameter;
-    struct d3dx_object *object = &base->objects[param->object_id];
+    struct d3dx_object *object = &effect->objects[param->object_id];
     char *ptr = object->data;
     HRESULT ret;
 
@@ -6128,7 +5769,7 @@ static HRESULT d3dx9_parse_array_selector(struct d3dx9_base_effect *base, struct
             if (!param->members[i].param_eval)
             {
                 TRACE("Creating preshader for object %u.\n", param->members[i].object_id);
-                object = &base->objects[param->members[i].object_id];
+                object = &effect->objects[param->members[i].object_id];
                 if (FAILED(ret = d3dx_create_param_eval(base, object->data, object->size, param->type,
                         &param->members[i].param_eval, get_version_counter_ptr(base),
                         skip_constants, skip_constants_count)))
@@ -6139,9 +5780,10 @@ static HRESULT d3dx9_parse_array_selector(struct d3dx9_base_effect *base, struct
     return ret;
 }
 
-static HRESULT d3dx9_parse_resource(struct d3dx9_base_effect *base, const char *data, const char **ptr,
+static HRESULT d3dx_parse_resource(struct d3dx_effect *effect, const char *data, const char **ptr,
         const char **skip_constants, unsigned int skip_constants_count)
 {
+    struct d3dx9_base_effect *base = &effect->base_effect;
     DWORD technique_index;
     DWORD index, state_index, usage, element_index;
     struct d3dx_state *state;
@@ -6169,9 +5811,9 @@ static HRESULT d3dx9_parse_resource(struct d3dx9_base_effect *base, const char *
         struct d3dx_parameter *parameter;
         struct d3dx_sampler *sampler;
 
-        if (index >= base->parameter_count)
+        if (index >= effect->parameter_count)
         {
-            FIXME("Index out of bounds: index %u >= parameter_count %u\n", index, base->parameter_count);
+            FIXME("Index out of bounds: index %u >= parameter_count %u\n", index, effect->parameter_count);
             return E_FAIL;
         }
 
@@ -6228,7 +5870,7 @@ static HRESULT d3dx9_parse_resource(struct d3dx9_base_effect *base, const char *
     TRACE("State operation %#x (%s).\n", state->operation, state_table[state->operation].name);
     param = &state->parameter;
     TRACE("Using object id %u.\n", param->object_id);
-    object = &base->objects[param->object_id];
+    object = &effect->objects[param->object_id];
 
     TRACE("Usage %u: class %s, type %s.\n", usage, debug_d3dxparameter_class(param->class),
             debug_d3dxparameter_type(param->type));
@@ -6240,7 +5882,7 @@ static HRESULT d3dx9_parse_resource(struct d3dx9_base_effect *base, const char *
                 case D3DXPT_VERTEXSHADER:
                 case D3DXPT_PIXELSHADER:
                     state->type = ST_CONSTANT;
-                    if (FAILED(hr = d3dx9_copy_data(base, param->object_id, ptr)))
+                    if (FAILED(hr = d3dx9_copy_data(effect, param->object_id, ptr)))
                         return hr;
 
                     if (object->data)
@@ -6259,7 +5901,7 @@ static HRESULT d3dx9_parse_resource(struct d3dx9_base_effect *base, const char *
                 case D3DXPT_FLOAT:
                 case D3DXPT_STRING:
                     state->type = ST_FXLC;
-                    if (FAILED(hr = d3dx9_copy_data(base, param->object_id, ptr)))
+                    if (FAILED(hr = d3dx9_copy_data(effect, param->object_id, ptr)))
                         return hr;
                     if (FAILED(hr = d3dx_create_param_eval(base, object->data, object->size, param->type,
                             &param->param_eval, get_version_counter_ptr(base), NULL, 0)))
@@ -6274,7 +5916,7 @@ static HRESULT d3dx9_parse_resource(struct d3dx9_base_effect *base, const char *
 
         case 1:
             state->type = ST_PARAMETER;
-            if (FAILED(hr = d3dx9_copy_data(base, param->object_id, ptr)))
+            if (FAILED(hr = d3dx9_copy_data(effect, param->object_id, ptr)))
                 return hr;
 
             TRACE("Looking for parameter %s.\n", debugstr_a(object->data));
@@ -6286,7 +5928,7 @@ static HRESULT d3dx9_parse_resource(struct d3dx9_base_effect *base, const char *
                 TRACE("Mapping to parameter %p, having object id %u.\n", refpar, refpar->object_id);
                 if (refpar->type == D3DXPT_VERTEXSHADER || refpar->type == D3DXPT_PIXELSHADER)
                 {
-                    struct d3dx_object *refobj = &base->objects[refpar->object_id];
+                    struct d3dx_object *refobj = &effect->objects[refpar->object_id];
 
                     if (!refpar->param_eval)
                     {
@@ -6306,9 +5948,9 @@ static HRESULT d3dx9_parse_resource(struct d3dx9_base_effect *base, const char *
 
         case 2:
             state->type = ST_ARRAY_SELECTOR;
-            if (FAILED(hr = d3dx9_copy_data(base, param->object_id, ptr)))
+            if (FAILED(hr = d3dx9_copy_data(effect, param->object_id, ptr)))
                 return hr;
-            hr = d3dx9_parse_array_selector(base, state, skip_constants, skip_constants_count);
+            hr = d3dx_parse_array_selector(effect, state, skip_constants, skip_constants_count);
             break;
 
         default:
@@ -6325,27 +5967,29 @@ static BOOL param_set_top_level_param(void *top_level_param, struct d3dx_paramet
     return FALSE;
 }
 
-static HRESULT d3dx9_parse_effect(struct d3dx9_base_effect *base, const char *data, UINT data_size,
+static HRESULT d3dx_parse_effect(struct d3dx_effect *effect, const char *data, UINT data_size,
         DWORD start, const char **skip_constants, unsigned int skip_constants_count)
 {
+    struct d3dx9_base_effect *base = &effect->base_effect;
     const char *ptr = data + start;
     UINT stringcount, resourcecount;
     HRESULT hr;
     UINT i;
 
-    read_dword(&ptr, &base->parameter_count);
-    TRACE("Parameter count: %u.\n", base->parameter_count);
+    read_dword(&ptr, &effect->parameter_count);
+    TRACE("Parameter count: %u.\n", effect->parameter_count);
 
     read_dword(&ptr, &base->technique_count);
     TRACE("Technique count: %u.\n", base->technique_count);
 
     skip_dword_unknown(&ptr, 1);
 
-    read_dword(&ptr, &base->object_count);
-    TRACE("Object count: %u.\n", base->object_count);
+    read_dword(&ptr, &effect->object_count);
+    TRACE("Object count: %u.\n", effect->object_count);
 
-    base->objects = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*base->objects) * base->object_count);
-    if (!base->objects)
+    effect->objects = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
+            sizeof(*effect->objects) * effect->object_count);
+    if (!effect->objects)
     {
         ERR("Out of memory.\n");
         hr = E_OUTOFMEMORY;
@@ -6353,10 +5997,10 @@ static HRESULT d3dx9_parse_effect(struct d3dx9_base_effect *base, const char *da
     }
 
     wine_rb_init(&base->param_tree, param_rb_compare);
-    if (base->parameter_count)
+    if (effect->parameter_count)
     {
         base->parameters = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
-                sizeof(*base->parameters) * base->parameter_count);
+                sizeof(*base->parameters) * effect->parameter_count);
         if (!base->parameters)
         {
             ERR("Out of memory.\n");
@@ -6364,10 +6008,10 @@ static HRESULT d3dx9_parse_effect(struct d3dx9_base_effect *base, const char *da
             goto err_out;
         }
 
-        for (i = 0; i < base->parameter_count; ++i)
+        for (i = 0; i < effect->parameter_count; ++i)
         {
             param_set_magic_number(&base->parameters[i].param);
-            hr = d3dx9_parse_effect_parameter(base, &base->parameters[i], data, &ptr, base->objects);
+            hr = d3dx_parse_effect_parameter(effect, &base->parameters[i], data, &ptr, effect->objects);
             if (hr != D3D_OK)
             {
                 WARN("Failed to parse parameter %u.\n", i);
@@ -6393,7 +6037,7 @@ static HRESULT d3dx9_parse_effect(struct d3dx9_base_effect *base, const char *da
         for (i = 0; i < base->technique_count; ++i)
         {
             TRACE("Parsing technique %u.\n", i);
-            hr = d3dx9_parse_effect_technique(base, &base->techniques[i], data, &ptr, base->objects);
+            hr = d3dx_parse_effect_technique(effect, &base->techniques[i], data, &ptr, effect->objects);
             if (hr != D3D_OK)
             {
                 WARN("Failed to parse technique %u.\n", i);
@@ -6415,12 +6059,12 @@ static HRESULT d3dx9_parse_effect(struct d3dx9_base_effect *base, const char *da
         read_dword(&ptr, &id);
         TRACE("id: %u.\n", id);
 
-        if (FAILED(hr = d3dx9_copy_data(base, id, &ptr)))
+        if (FAILED(hr = d3dx9_copy_data(effect, id, &ptr)))
             goto err_out;
 
-        if (base->objects[id].data)
+        if (effect->objects[id].data)
         {
-            if (FAILED(hr = d3dx9_create_object(base, &base->objects[id])))
+            if (FAILED(hr = d3dx9_create_object(base, &effect->objects[id])))
                 goto err_out;
         }
     }
@@ -6429,7 +6073,7 @@ static HRESULT d3dx9_parse_effect(struct d3dx9_base_effect *base, const char *da
     {
         TRACE("parse resource %u.\n", i);
 
-        hr = d3dx9_parse_resource(base, data, &ptr, skip_constants, skip_constants_count);
+        hr = d3dx_parse_resource(effect, data, &ptr, skip_constants, skip_constants_count);
         if (hr != D3D_OK)
         {
             WARN("Failed to parse resource %u.\n", i);
@@ -6437,7 +6081,7 @@ static HRESULT d3dx9_parse_effect(struct d3dx9_base_effect *base, const char *da
         }
     }
 
-    for (i = 0; i < base->parameter_count; ++i)
+    for (i = 0; i < effect->parameter_count; ++i)
     {
         if (FAILED(hr = d3dx_pool_sync_shared_parameter(base->pool, &base->parameters[i])))
             goto err_out;
@@ -6460,7 +6104,7 @@ err_out:
 
     if (base->parameters)
     {
-        for (i = 0; i < base->parameter_count; ++i)
+        for (i = 0; i < effect->parameter_count; ++i)
         {
             free_top_level_parameter(&base->parameters[i]);
         }
@@ -6468,14 +6112,14 @@ err_out:
         base->parameters = NULL;
     }
 
-    if (base->objects)
+    if (effect->objects)
     {
-        for (i = 0; i < base->object_count; ++i)
+        for (i = 0; i < effect->object_count; ++i)
         {
-            free_object(&base->objects[i]);
+            free_object(&effect->objects[i]);
         }
-        HeapFree(GetProcessHeap(), 0, base->objects);
-        base->objects = NULL;
+        HeapFree(GetProcessHeap(), 0, effect->objects);
+        effect->objects = NULL;
     }
 
     return hr;
@@ -6638,7 +6282,7 @@ static HRESULT d3dx9_base_effect_init(struct d3dx9_base_effect *base,
     read_dword(&ptr, &offset);
     TRACE("Offset: %x\n", offset);
 
-    hr = d3dx9_parse_effect(base, ptr, data_size, offset, skip_constants, skip_constants_count);
+    hr = d3dx_parse_effect(effect, ptr, data_size, offset, skip_constants, skip_constants_count);
     if (bytecode)
         ID3D10Blob_Release(bytecode);
     if (hr != D3D_OK)

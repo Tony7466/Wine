@@ -260,19 +260,20 @@ static BOOL skip_spaces(parser_ctx_t *ctx)
     return ctx->ptr != ctx->end;
 }
 
-BOOL unescape(WCHAR *str)
+BOOL unescape(WCHAR *str, size_t *len)
 {
-    WCHAR *pd, *p, c;
+    WCHAR *pd, *p, c, *end = str + *len;
     int i;
 
     pd = p = str;
-    while(*p) {
+    while(p < end) {
         if(*p != '\\') {
             *pd++ = *p++;
             continue;
         }
 
-        p++;
+        if(++p == end)
+            return FALSE;
 
         switch(*p) {
         case '\'':
@@ -296,6 +297,8 @@ BOOL unescape(WCHAR *str)
             c = '\r';
             break;
         case 'x':
+            if(p + 2 >= end)
+                return FALSE;
             i = hex_to_int(*++p);
             if(i == -1)
                 return FALSE;
@@ -307,6 +310,8 @@ BOOL unescape(WCHAR *str)
             c += i;
             break;
         case 'u':
+            if(p + 4 >= end)
+                return FALSE;
             i = hex_to_int(*++p);
             if(i == -1)
                 return FALSE;
@@ -330,9 +335,9 @@ BOOL unescape(WCHAR *str)
         default:
             if(isdigitW(*p)) {
                 c = *p++ - '0';
-                if(isdigitW(*p)) {
+                if(p < end && isdigitW(*p)) {
                     c = c*8 + (*p++ - '0');
-                    if(isdigitW(*p))
+                    if(p < end && isdigitW(*p))
                         c = c*8 + (*p++ - '0');
                 }
                 p--;
@@ -345,7 +350,7 @@ BOOL unescape(WCHAR *str)
         p++;
     }
 
-    *pd = 0;
+    *len = pd - str;
     return TRUE;
 }
 
@@ -368,33 +373,41 @@ static int parse_identifier(parser_ctx_t *ctx, const WCHAR **ret)
     return tIdentifier;
 }
 
-static int parse_string_literal(parser_ctx_t *ctx, const WCHAR **ret, WCHAR endch)
+static int parse_string_literal(parser_ctx_t *ctx, jsstr_t **ret, WCHAR endch)
 {
-    const WCHAR *ptr = ++ctx->ptr;
-    WCHAR *wstr;
-    int len;
+    const WCHAR *ptr = ++ctx->ptr, *ret_str = ptr;
+    BOOL needs_unescape = FALSE;
+    WCHAR *unescape_str;
+    size_t len;
 
     while(ctx->ptr < ctx->end && *ctx->ptr != endch) {
-        if(*ctx->ptr++ == '\\')
+        if(*ctx->ptr++ == '\\') {
             ctx->ptr++;
+            needs_unescape = TRUE;
+        }
     }
 
     if(ctx->ptr == ctx->end)
         return lex_error(ctx, JS_E_UNTERMINATED_STRING);
 
-    len = ctx->ptr-ptr;
-
-    *ret = wstr = parser_alloc(ctx, (len+1)*sizeof(WCHAR));
-    memcpy(wstr, ptr, len*sizeof(WCHAR));
-    wstr[len] = 0;
-
+    len = ctx->ptr - ptr;
     ctx->ptr++;
 
-    if(!unescape(wstr)) {
-        WARN("unescape failed\n");
-        return lex_error(ctx, E_FAIL);
+    if(needs_unescape) {
+        ret_str = unescape_str = parser_alloc(ctx, len * sizeof(WCHAR));
+        if(!unescape_str)
+            return lex_error(ctx, E_OUTOFMEMORY);
+        memcpy(unescape_str, ptr, len * sizeof(WCHAR));
+        if(!unescape(unescape_str, &len)) {
+            WARN("unescape failed\n");
+            return lex_error(ctx, E_FAIL);
+        }
     }
 
+    if(!(*ret = compiler_alloc_string_len(ctx->compiler, ret_str, len)))
+        return lex_error(ctx, E_OUTOFMEMORY);
+
+    /* FIXME: leaking string */
     return tStringLiteral;
 }
 
@@ -1196,8 +1209,7 @@ literal_t *parse_regexp(parser_ctx_t *ctx)
 
     ret = parser_alloc(ctx, sizeof(literal_t));
     ret->type = LT_REGEXP;
-    ret->u.regexp.str = re;
-    ret->u.regexp.str_len = re_len;
+    ret->u.regexp.str = compiler_alloc_string_len(ctx->compiler, re, re_len);
     ret->u.regexp.flags = flags;
     return ret;
 }

@@ -37,7 +37,6 @@
  *  - BN_PAINT
  *  + BN_SETFOCUS: is it OK?
  *  - BN_UNPUSHED/BN_UNHILITE
- *  - NM_CUSTOMDRAW
  *
  *  Structures/Macros/Definitions
  *  - NMBCHOTITEM
@@ -235,6 +234,28 @@ static inline WCHAR *get_button_text( const BUTTON_INFO *infoPtr )
     if (buffer)
         GetWindowTextW( infoPtr->hwnd, buffer, len + 1 );
     return buffer;
+}
+
+static void init_custom_draw(NMCUSTOMDRAW *nmcd, const BUTTON_INFO *infoPtr, HDC hdc, const RECT *rc)
+{
+    nmcd->hdr.hwndFrom = infoPtr->hwnd;
+    nmcd->hdr.idFrom   = GetWindowLongPtrW(infoPtr->hwnd, GWLP_ID);
+    nmcd->hdr.code     = NM_CUSTOMDRAW;
+    nmcd->hdc          = hdc;
+    nmcd->rc           = *rc;
+    nmcd->dwDrawStage  = CDDS_PREERASE;
+    nmcd->dwItemSpec   = 0;
+    nmcd->lItemlParam  = 0;
+    nmcd->uItemState   = IsWindowEnabled(infoPtr->hwnd) ? 0 : CDIS_DISABLED;
+    if (infoPtr->state & BST_PUSHED)  nmcd->uItemState |= CDIS_SELECTED;
+    if (infoPtr->state & BST_FOCUS)   nmcd->uItemState |= CDIS_FOCUS;
+    if (infoPtr->state & BST_HOT)     nmcd->uItemState |= CDIS_HOT;
+    if (infoPtr->state & BST_INDETERMINATE)
+        nmcd->uItemState |= CDIS_INDETERMINATE;
+
+    /* Windows doesn't seem to send CDIS_CHECKED (it fails the tests) */
+    /* CDIS_SHOWKEYBOARDCUES is misleading, as the meaning is reversed */
+    /* FIXME: Handle it properly when we support keyboard cues? */
 }
 
 HRGN set_control_clipping( HDC hdc, const RECT *rect )
@@ -749,7 +770,6 @@ static LRESULT CALLBACK BUTTON_WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, L
     case WM_KILLFOCUS:
         TRACE("WM_KILLFOCUS %p\n",hWnd);
         infoPtr->state &= ~BST_FOCUS;
-        paint_button( infoPtr, btn_type, ODA_FOCUS );
 
         if ((infoPtr->state & BUTTON_BTNPRESSED) && GetCapture() == hWnd)
             ReleaseCapture();
@@ -1476,7 +1496,9 @@ static void PB_Paint( const BUTTON_INFO *infoPtr, HDC hDC, UINT action )
     HBRUSH   hOldBrush;
     INT      oldBkMode;
     COLORREF oldTxtColor;
+    LRESULT  cdrf;
     HFONT hFont;
+    NMCUSTOMDRAW nmcd;
     LONG state = infoPtr->state;
     LONG style = GetWindowLongW( infoPtr->hwnd, GWL_STYLE );
     BOOL pushedState = (state & BST_PUSHED);
@@ -1498,6 +1520,12 @@ static void PB_Paint( const BUTTON_INFO *infoPtr, HDC hDC, UINT action )
     hOldBrush = SelectObject(hDC,GetSysColorBrush(COLOR_BTNFACE));
     oldBkMode = SetBkMode(hDC, TRANSPARENT);
 
+    init_custom_draw(&nmcd, infoPtr, hDC, &rc);
+
+    /* Send erase notifications */
+    cdrf = SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+    if (cdrf & CDRF_SKIPDEFAULT) goto cleanup;
+
     if (get_button_type(style) == BS_DEFPUSHBUTTON)
     {
         if (action != ODA_FOCUS)
@@ -1505,44 +1533,65 @@ static void PB_Paint( const BUTTON_INFO *infoPtr, HDC hDC, UINT action )
 	InflateRect( &rc, -1, -1 );
     }
 
-    /* completely skip the drawing if only focus has changed */
-    if (action == ODA_FOCUS) goto draw_focus;
-
-    uState = DFCS_BUTTONPUSH;
-
-    if (style & BS_FLAT)
-        uState |= DFCS_MONO;
-    else if (pushedState)
+    /* Skip the frame drawing if only focus has changed */
+    if (action != ODA_FOCUS)
     {
-	if (get_button_type(style) == BS_DEFPUSHBUTTON )
-	    uState |= DFCS_FLAT;
-	else
-	    uState |= DFCS_PUSHED;
+        uState = DFCS_BUTTONPUSH;
+
+        if (style & BS_FLAT)
+            uState |= DFCS_MONO;
+        else if (pushedState)
+        {
+            if (get_button_type(style) == BS_DEFPUSHBUTTON )
+                uState |= DFCS_FLAT;
+            else
+                uState |= DFCS_PUSHED;
+        }
+
+        if (state & (BST_CHECKED | BST_INDETERMINATE))
+            uState |= DFCS_CHECKED;
+
+        DrawFrameControl( hDC, &rc, DFC_BUTTON, uState );
     }
 
-    if (state & (BST_CHECKED | BST_INDETERMINATE))
-        uState |= DFCS_CHECKED;
+    if (cdrf & CDRF_NOTIFYPOSTERASE)
+    {
+        nmcd.dwDrawStage = CDDS_POSTERASE;
+        SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+    }
 
-    DrawFrameControl( hDC, &rc, DFC_BUTTON, uState );
+    /* Send paint notifications */
+    nmcd.dwDrawStage = CDDS_PREPAINT;
+    cdrf = SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+    if (cdrf & CDRF_SKIPDEFAULT) goto cleanup;
 
-    /* draw button label */
-    labelRect = rc;
-    /* Shrink label rect at all sides by 2 so that the content won't touch the surrounding frame */
-    InflateRect(&labelRect, -2, -2);
-    dtFlags = BUTTON_CalcLayoutRects(infoPtr, hDC, &labelRect, &imageRect, &textRect);
+    if (!(cdrf & CDRF_DOERASE) && action != ODA_FOCUS)
+    {
+        /* draw button label */
+        labelRect = rc;
+        /* Shrink label rect at all sides by 2 so that the content won't touch the surrounding frame */
+        InflateRect(&labelRect, -2, -2);
+        dtFlags = BUTTON_CalcLayoutRects(infoPtr, hDC, &labelRect, &imageRect, &textRect);
 
-    if (dtFlags == (UINT)-1L)
-       goto cleanup;
+        if (dtFlags != (UINT)-1L)
+        {
+            if (pushedState) OffsetRect(&labelRect, 1, 1);
 
-    if (pushedState) OffsetRect(&labelRect, 1, 1);
+            oldTxtColor = SetTextColor( hDC, GetSysColor(COLOR_BTNTEXT) );
 
-    oldTxtColor = SetTextColor( hDC, GetSysColor(COLOR_BTNTEXT) );
+            BUTTON_DrawLabel(infoPtr, hDC, dtFlags, &imageRect, &textRect);
 
-    BUTTON_DrawLabel(infoPtr, hDC, dtFlags, &imageRect, &textRect);
+            SetTextColor( hDC, oldTxtColor );
+        }
+    }
 
-    SetTextColor( hDC, oldTxtColor );
+    if (cdrf & CDRF_NOTIFYPOSTPAINT)
+    {
+        nmcd.dwDrawStage = CDDS_POSTPAINT;
+        SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+    }
+    if ((cdrf & CDRF_SKIPPOSTPAINT) || dtFlags == (UINT)-1L) goto cleanup;
 
-draw_focus:
     if (action == ODA_FOCUS || (state & BST_FOCUS))
     {
         InflateRect( &rc, -2, -2 );
@@ -1568,7 +1617,9 @@ static void CB_Paint( const BUTTON_INFO *infoPtr, HDC hDC, UINT action )
     HBRUSH hBrush;
     int delta, text_offset, checkBoxWidth, checkBoxHeight;
     UINT dtFlags;
+    LRESULT cdrf;
     HFONT hFont;
+    NMCUSTOMDRAW nmcd;
     LONG state = infoPtr->state;
     LONG style = GetWindowLongW( infoPtr->hwnd, GWL_STYLE );
     LONG ex_style = GetWindowLongW( infoPtr->hwnd, GWL_EXSTYLE );
@@ -1609,9 +1660,20 @@ static void CB_Paint( const BUTTON_INFO *infoPtr, HDC hDC, UINT action )
         rbox.right = checkBoxWidth;
     }
 
+    init_custom_draw(&nmcd, infoPtr, hDC, &client);
+
+    /* Send erase notifications */
+    cdrf = SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+    if (cdrf & CDRF_SKIPDEFAULT) goto cleanup;
+
     /* Since WM_ERASEBKGND does nothing, first prepare background */
     if (action == ODA_SELECT) FillRect( hDC, &rbox, hBrush );
     if (action == ODA_DRAWENTIRE) FillRect( hDC, &client, hBrush );
+    if (cdrf & CDRF_NOTIFYPOSTERASE)
+    {
+        nmcd.dwDrawStage = CDDS_POSTERASE;
+        SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+    }
 
     /* Draw label */
     client = labelRect;
@@ -1624,57 +1686,79 @@ static void CB_Paint( const BUTTON_INFO *infoPtr, HDC hDC, UINT action )
         rbox.bottom = labelRect.bottom;
     }
 
+    /* Send paint notifications */
+    nmcd.dwDrawStage = CDDS_PREPAINT;
+    cdrf = SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+    if (cdrf & CDRF_SKIPDEFAULT) goto cleanup;
+
     /* Draw the check-box bitmap */
-    if (action == ODA_DRAWENTIRE || action == ODA_SELECT)
+    if (!(cdrf & CDRF_DOERASE))
     {
-	UINT flags;
+        if (action == ODA_DRAWENTIRE || action == ODA_SELECT)
+        {
+            UINT flags;
 
-	if ((get_button_type(style) == BS_RADIOBUTTON) ||
-	    (get_button_type(style) == BS_AUTORADIOBUTTON)) flags = DFCS_BUTTONRADIO;
-	else if (state & BST_INDETERMINATE) flags = DFCS_BUTTON3STATE;
-	else flags = DFCS_BUTTONCHECK;
+            if ((get_button_type(style) == BS_RADIOBUTTON) ||
+                (get_button_type(style) == BS_AUTORADIOBUTTON)) flags = DFCS_BUTTONRADIO;
+            else if (state & BST_INDETERMINATE) flags = DFCS_BUTTON3STATE;
+            else flags = DFCS_BUTTONCHECK;
 
-	if (state & (BST_CHECKED | BST_INDETERMINATE)) flags |= DFCS_CHECKED;
-	if (state & BST_PUSHED) flags |= DFCS_PUSHED;
+            if (state & (BST_CHECKED | BST_INDETERMINATE)) flags |= DFCS_CHECKED;
+            if (state & BST_PUSHED)  flags |= DFCS_PUSHED;
+            if (style & WS_DISABLED) flags |= DFCS_INACTIVE;
 
-	if (style & WS_DISABLED) flags |= DFCS_INACTIVE;
+            /* rbox must have the correct height */
+            delta = rbox.bottom - rbox.top - checkBoxHeight;
 
-	/* rbox must have the correct height */
-	delta = rbox.bottom - rbox.top - checkBoxHeight;
+            if ((style & BS_VCENTER) == BS_TOP)
+            {
+                if (delta > 0)
+                    rbox.bottom = rbox.top + checkBoxHeight;
+                else
+                {
+                    rbox.top -= -delta / 2 + 1;
+                    rbox.bottom = rbox.top + checkBoxHeight;
+                }
+            }
+            else if ((style & BS_VCENTER) == BS_BOTTOM)
+            {
+                if (delta > 0)
+                    rbox.top = rbox.bottom - checkBoxHeight;
+                else
+                {
+                    rbox.bottom += -delta / 2 + 1;
+                    rbox.top = rbox.bottom - checkBoxHeight;
+                }
+            }
+            else  /* Default */
+            {
+                if (delta > 0)
+                {
+                    int ofs = delta / 2;
+                    rbox.bottom -= ofs + 1;
+                    rbox.top = rbox.bottom - checkBoxHeight;
+                }
+                else if (delta < 0)
+                {
+                    int ofs = -delta / 2;
+                    rbox.top -= ofs + 1;
+                    rbox.bottom = rbox.top + checkBoxHeight;
+                }
+            }
 
-	if ((style & BS_VCENTER) == BS_TOP) {
-	    if (delta > 0) {
-		rbox.bottom = rbox.top + checkBoxHeight;
-	    } else {
-		rbox.top -= -delta/2 + 1;
-		rbox.bottom = rbox.top + checkBoxHeight;
-	    }
-	} else if ((style & BS_VCENTER) == BS_BOTTOM) {
-	    if (delta > 0) {
-		rbox.top = rbox.bottom - checkBoxHeight;
-	    } else {
-		rbox.bottom += -delta/2 + 1;
-		rbox.top = rbox.bottom - checkBoxHeight;
-	    }
-	} else { /* Default */
-	    if (delta > 0) {
-		int ofs = (delta / 2);
-		rbox.bottom -= ofs + 1;
-		rbox.top = rbox.bottom - checkBoxHeight;
-	    } else if (delta < 0) {
-		int ofs = (-delta / 2);
-		rbox.top -= ofs + 1;
-		rbox.bottom = rbox.top + checkBoxHeight;
-	    }
-	}
+            DrawFrameControl(hDC, &rbox, DFC_BUTTON, flags);
+        }
 
-	DrawFrameControl( hDC, &rbox, DFC_BUTTON, flags );
+        if (dtFlags != (UINT)-1L) /* Something to draw */
+            if (action == ODA_DRAWENTIRE) BUTTON_DrawLabel(infoPtr, hDC, dtFlags, &imageRect, &textRect);
     }
 
-    if (dtFlags == (UINT)-1L) /* Noting to draw */
-	return;
-
-    if (action == ODA_DRAWENTIRE) BUTTON_DrawLabel(infoPtr, hDC, dtFlags, &imageRect, &textRect);
+    if (cdrf & CDRF_NOTIFYPOSTPAINT)
+    {
+        nmcd.dwDrawStage = CDDS_POSTPAINT;
+        SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+    }
+    if ((cdrf & CDRF_SKIPPOSTPAINT) || dtFlags == (UINT)-1L) goto cleanup;
 
     /* ... and focus */
     if (action == ODA_FOCUS || (state & BST_FOCUS))
@@ -1684,6 +1768,8 @@ static void CB_Paint( const BUTTON_INFO *infoPtr, HDC hDC, UINT action )
         IntersectRect(&labelRect, &labelRect, &client);
         DrawFocusRect(hDC, &labelRect);
     }
+
+cleanup:
     SelectClipRgn( hDC, hrgn );
     if (hrgn) DeleteObject( hrgn );
 }
@@ -1776,7 +1862,9 @@ static void UB_Paint( const BUTTON_INFO *infoPtr, HDC hDC, UINT action )
 {
     RECT rc;
     HBRUSH hBrush;
+    LRESULT cdrf;
     HFONT hFont;
+    NMCUSTOMDRAW nmcd;
     LONG state = infoPtr->state;
     HWND parent;
 
@@ -1790,10 +1878,39 @@ static void UB_Paint( const BUTTON_INFO *infoPtr, HDC hDC, UINT action )
     if (!hBrush) /* did the app forget to call defwindowproc ? */
         hBrush = (HBRUSH)DefWindowProcW(parent, WM_CTLCOLORBTN, (WPARAM)hDC, (LPARAM)infoPtr->hwnd);
 
+    if (action == ODA_FOCUS || (state & BST_FOCUS))
+    {
+        init_custom_draw(&nmcd, infoPtr, hDC, &rc);
+
+        /* Send erase notifications */
+        cdrf = SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+        if (cdrf & CDRF_SKIPDEFAULT) goto notify;
+    }
+
     FillRect( hDC, &rc, hBrush );
     if (action == ODA_FOCUS || (state & BST_FOCUS))
-        DrawFocusRect( hDC, &rc );
+    {
+        if (cdrf & CDRF_NOTIFYPOSTERASE)
+        {
+            nmcd.dwDrawStage = CDDS_POSTERASE;
+            SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+        }
 
+        /* Send paint notifications */
+        nmcd.dwDrawStage = CDDS_PREPAINT;
+        cdrf = SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+        if (cdrf & CDRF_SKIPDEFAULT) goto notify;
+        if (cdrf & CDRF_NOTIFYPOSTPAINT)
+        {
+            nmcd.dwDrawStage = CDDS_POSTPAINT;
+            SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+        }
+
+        if (!(cdrf & CDRF_SKIPPOSTPAINT))
+            DrawFocusRect( hDC, &rc );
+    }
+
+notify:
     switch (action)
     {
     case ODA_FOCUS:
@@ -1853,18 +1970,49 @@ static void PB_ThemedPaint(HTHEME theme, const BUTTON_INFO *infoPtr, HDC hDC, in
     HFONT font = infoPtr->font;
     HFONT hPrevFont = font ? SelectObject(hDC, font) : NULL;
     WCHAR *text = get_button_text(infoPtr);
+    NMCUSTOMDRAW nmcd;
+    LRESULT cdrf;
+    HWND parent;
 
     GetClientRect(infoPtr->hwnd, &bgRect);
     GetThemeBackgroundContentRect(theme, hDC, BP_PUSHBUTTON, state, &bgRect, &textRect);
+    init_custom_draw(&nmcd, infoPtr, hDC, &bgRect);
+
+    parent = GetParent(infoPtr->hwnd);
+    if (!parent) parent = infoPtr->hwnd;
+
+    /* Send erase notifications */
+    cdrf = SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+    if (cdrf & CDRF_SKIPDEFAULT) goto cleanup;
 
     if (IsThemeBackgroundPartiallyTransparent(theme, BP_PUSHBUTTON, state))
         DrawThemeParentBackground(infoPtr->hwnd, hDC, NULL);
     DrawThemeBackground(theme, hDC, BP_PUSHBUTTON, state, &bgRect, NULL);
+
+    if (cdrf & CDRF_NOTIFYPOSTERASE)
+    {
+        nmcd.dwDrawStage = CDDS_POSTERASE;
+        SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+    }
+
+    /* Send paint notifications */
+    nmcd.dwDrawStage = CDDS_PREPAINT;
+    cdrf = SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+    if (cdrf & CDRF_SKIPDEFAULT) goto cleanup;
+
     if (text)
     {
-        DrawThemeText(theme, hDC, BP_PUSHBUTTON, state, text, lstrlenW(text), dtFlags, 0, &textRect);
+        if (!(cdrf & CDRF_DOERASE))
+            DrawThemeText(theme, hDC, BP_PUSHBUTTON, state, text, lstrlenW(text), dtFlags, 0, &textRect);
         heap_free(text);
     }
+
+    if (cdrf & CDRF_NOTIFYPOSTPAINT)
+    {
+        nmcd.dwDrawStage = CDDS_POSTPAINT;
+        SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+    }
+    if (cdrf & CDRF_SKIPPOSTPAINT) goto cleanup;
 
     if (focused)
     {
@@ -1881,6 +2029,7 @@ static void PB_ThemedPaint(HTHEME theme, const BUTTON_INFO *infoPtr, HDC hDC, in
         DrawFocusRect( hDC, &focusRect );
     }
 
+cleanup:
     if (hPrevFont) SelectObject(hDC, hPrevFont);
 }
 
@@ -1893,7 +2042,10 @@ static void CB_ThemedPaint(HTHEME theme, const BUTTON_INFO *infoPtr, HDC hDC, in
     UINT btn_type = get_button_type( dwStyle );
     int part = (btn_type == BS_RADIOBUTTON) || (btn_type == BS_AUTORADIOBUTTON) ? BP_RADIOBUTTON : BP_CHECKBOX;
     WCHAR *text = get_button_text(infoPtr);
+    NMCUSTOMDRAW nmcd;
+    LRESULT cdrf;
     LOGFONTW lf;
+    HWND parent;
     BOOL created_font = FALSE;
 
     HRESULT hr = GetThemeFont(theme, hDC, part, state, TMT_FONT, &lf);
@@ -1916,6 +2068,7 @@ static void CB_ThemedPaint(HTHEME theme, const BUTTON_INFO *infoPtr, HDC hDC, in
 
     GetClientRect(infoPtr->hwnd, &bgRect);
     GetThemeBackgroundContentRect(theme, hDC, part, state, &bgRect, &textRect);
+    init_custom_draw(&nmcd, infoPtr, hDC, &bgRect);
 
     if (dtFlags & DT_SINGLELINE) /* Center the checkbox / radio button to the text. */
         bgRect.top = bgRect.top + (textRect.bottom - textRect.top - sz.cy) / 2;
@@ -1925,13 +2078,39 @@ static void CB_ThemedPaint(HTHEME theme, const BUTTON_INFO *infoPtr, HDC hDC, in
     bgRect.right = bgRect.left + sz.cx;
     textRect.left = bgRect.right + 6;
 
-    DrawThemeParentBackground(infoPtr->hwnd, hDC, NULL);
+    parent = GetParent(infoPtr->hwnd);
+    if (!parent) parent = infoPtr->hwnd;
 
+    /* Send erase notifications */
+    cdrf = SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+    if (cdrf & CDRF_SKIPDEFAULT) goto cleanup;
+
+    DrawThemeParentBackground(infoPtr->hwnd, hDC, NULL);
     DrawThemeBackground(theme, hDC, part, state, &bgRect, NULL);
-    if (text)
+
+    if (cdrf & CDRF_NOTIFYPOSTERASE)
     {
+        nmcd.dwDrawStage = CDDS_POSTERASE;
+        SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+    }
+
+    /* Send paint notifications */
+    nmcd.dwDrawStage = CDDS_PREPAINT;
+    cdrf = SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+    if (cdrf & CDRF_SKIPDEFAULT) goto cleanup;
+
+    if (!(cdrf & CDRF_DOERASE) && text)
         DrawThemeText(theme, hDC, part, state, text, lstrlenW(text), dtFlags, 0, &textRect);
 
+    if (cdrf & CDRF_NOTIFYPOSTPAINT)
+    {
+        nmcd.dwDrawStage = CDDS_POSTPAINT;
+        SendMessageW(parent, WM_NOTIFY, nmcd.hdr.idFrom, (LPARAM)&nmcd);
+    }
+    if (cdrf & CDRF_SKIPPOSTPAINT) goto cleanup;
+
+    if (text)
+    {
         if (focused)
         {
             RECT focusRect;
@@ -1949,6 +2128,7 @@ static void CB_ThemedPaint(HTHEME theme, const BUTTON_INFO *infoPtr, HDC hDC, in
         heap_free(text);
     }
 
+cleanup:
     if (created_font) DeleteObject(font);
     if (hPrevFont) SelectObject(hDC, hPrevFont);
 }

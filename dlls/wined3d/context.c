@@ -1953,7 +1953,7 @@ struct wined3d_context *context_create(struct wined3d_swapchain *swapchain,
     context->win_handle = swapchain->win_handle;
     context->gl_info = &device->adapter->gl_info;
     context->d3d_info = &device->adapter->d3d_info;
-    context->state_table = device->StateTable;
+    context->state_table = device->state_table;
 
     /* Mark all states dirty to force a proper initialization of the states on
      * the first use of the context. Compute states do not need initialization. */
@@ -3147,11 +3147,12 @@ BOOL context_apply_clear_state(struct wined3d_context *context, const struct win
     return TRUE;
 }
 
-static DWORD find_draw_buffers_mask(const struct wined3d_context *context, const struct wined3d_state *state)
+static unsigned int find_draw_buffers_mask(const struct wined3d_context *context, const struct wined3d_state *state)
 {
     struct wined3d_rendertarget_view * const *rts = state->fb->render_targets;
     struct wined3d_shader *ps = state->shader[WINED3D_SHADER_TYPE_PIXEL];
-    DWORD rt_mask, mask;
+    const struct wined3d_gl_info *gl_info = context->gl_info;
+    unsigned int rt_mask, mask;
     unsigned int i;
 
     if (wined3d_settings.offscreen_rendering_mode != ORM_FBO)
@@ -3160,7 +3161,7 @@ static DWORD find_draw_buffers_mask(const struct wined3d_context *context, const
         return context_generate_rt_mask_from_resource(rts[0]->resource);
 
     rt_mask = ps ? ps->reg_maps.rt_mask : 1;
-    rt_mask &= context->d3d_info->valid_rt_mask;
+    rt_mask &= (1u << gl_info->limits.buffers) - 1;
 
     mask = rt_mask;
     while (mask)
@@ -3176,7 +3177,7 @@ static DWORD find_draw_buffers_mask(const struct wined3d_context *context, const
 /* Context activation is done by the caller. */
 void context_state_fb(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
 {
-    DWORD rt_mask = find_draw_buffers_mask(context, state);
+    unsigned int rt_mask = find_draw_buffers_mask(context, state);
     const struct wined3d_fb_state *fb = state->fb;
     DWORD color_location = 0;
     DWORD *cur_mask;
@@ -3515,8 +3516,7 @@ static BOOL fixed_get_input(BYTE usage, BYTE usage_idx, unsigned int *regnum)
 
 /* Context activation is done by the caller. */
 void wined3d_stream_info_from_declaration(struct wined3d_stream_info *stream_info,
-        const struct wined3d_state *state, const struct wined3d_gl_info *gl_info,
-        const struct wined3d_d3d_info *d3d_info)
+        const struct wined3d_state *state, const struct wined3d_d3d_info *d3d_info)
 {
     /* We need to deal with frequency data! */
     struct wined3d_vertex_declaration *declaration = state->vertex_declaration;
@@ -3612,8 +3612,7 @@ void wined3d_stream_info_from_declaration(struct wined3d_stream_info *stream_inf
                 stream_info->elements[idx].divisor = 0;
             }
 
-            if (!gl_info->supported[ARB_VERTEX_ARRAY_BGRA]
-                    && element->format->id == WINED3DFMT_B8G8R8A8_UNORM)
+            if (!d3d_info->vertex_bgra && element->format->id == WINED3DFMT_B8G8R8A8_UNORM)
             {
                 stream_info->swizzle_map |= 1u << idx;
             }
@@ -3632,7 +3631,7 @@ static void context_update_stream_info(struct wined3d_context *context, const st
     unsigned int i;
     WORD map;
 
-    wined3d_stream_info_from_declaration(stream_info, state, gl_info, d3d_info);
+    wined3d_stream_info_from_declaration(stream_info, state, d3d_info);
 
     stream_info->all_vbo = 1;
     context->buffer_fence_count = 0;
@@ -3944,7 +3943,7 @@ static void context_load_stream_output_buffers(struct wined3d_context *context,
 static BOOL context_apply_draw_state(struct wined3d_context *context,
         const struct wined3d_device *device, const struct wined3d_state *state)
 {
-    const struct StateEntry *state_table = context->state_table;
+    const struct wined3d_state_entry *state_table = context->state_table;
     const struct wined3d_gl_info *gl_info = context->gl_info;
     const struct wined3d_fb_state *fb = state->fb;
     unsigned int i;
@@ -4058,7 +4057,7 @@ static BOOL context_apply_draw_state(struct wined3d_context *context,
 static void context_apply_compute_state(struct wined3d_context *context,
         const struct wined3d_device *device, const struct wined3d_state *state)
 {
-    const struct StateEntry *state_table = context->state_table;
+    const struct wined3d_state_entry *state_table = context->state_table;
     const struct wined3d_gl_info *gl_info = context->gl_info;
     unsigned int state_id, i;
 

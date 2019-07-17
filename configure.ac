@@ -433,7 +433,6 @@ AC_CHECK_HEADERS(\
 	asm/types.h \
 	asm/user.h \
 	curses.h \
-	direct.h \
 	dirent.h \
 	dlfcn.h \
 	elf.h \
@@ -446,7 +445,6 @@ AC_CHECK_HEADERS(\
 	gsm/gsm.h \
 	ieeefp.h \
 	inet/mib2.h \
-	io.h \
 	kstat.h \
 	libproc.h \
 	link.h \
@@ -481,7 +479,6 @@ AC_CHECK_HEADERS(\
 	pcap/pcap.h \
 	poll.h \
 	port.h \
-	process.h \
 	pthread.h \
 	pwd.h \
 	sched.h \
@@ -710,7 +707,6 @@ AC_SUBST(WINELOADER_LDFLAGS,"")
 AC_SUBST(WINEPRELOADER_LDFLAGS,"")
 LIBEXT="so"
 DLLEXT=".so"
-IMPLIBEXT="def"
 WINE_PATH_SONAME_TOOLS
 WINE_CONFIG_HELPERS
 
@@ -724,7 +720,6 @@ case $host_os in
     AC_CHECK_TOOL(DLLTOOL,dlltool,false)
     LIBEXT="dll"
     DLLEXT=""
-    IMPLIBEXT="a"
     dnl Disable modules that can't be used on Windows
     enable_iphlpapi=${enable_iphlpapi:-no}
     enable_kernel32=${enable_kernel32:-no}
@@ -736,13 +731,6 @@ case $host_os in
     dnl Disable dependencies that are not useful on Windows
     with_x=${with_x:-no}
     with_pthread=${with_pthread:-no}
-
-    dnl Mingw needs explicit msvcrt for linking libwine and winsock for wininet
-    crtlibs=""
-    case $host_os in
-        mingw32*)
-          crtlibs="-lmsvcrt" ;;
-    esac
 
     AC_SUBST(LIBWINE_SHAREDLIB,"libwine.dll")
     AC_SUBST(LIBWINE_IMPORTLIB,"libwine.a")
@@ -1885,10 +1873,10 @@ dnl **** Check for vkd3d ****
 if test "x$with_vkd3d" != "xno"
 then
     WINE_PACKAGE_FLAGS(VKD3D,[libvkd3d],,,,
-        [WINE_CHECK_SONAME(vkd3d,vkd3d_create_device,,,[$VKD3D_LIBS])])
+        [WINE_CHECK_SONAME(vkd3d,vkd3d_get_dxgi_format,,,[$VKD3D_LIBS])])
 fi
 WINE_NOTICE_WITH(vkd3d,[test "x$ac_cv_lib_soname_vkd3d" = "x"],
-                 [vkd3d ${notice_platform}development files not found, Direct3D 12 won't be supported.])
+                 [vkd3d ${notice_platform}development files not found (or too old), Direct3D 12 won't be supported.])
 test "x$ac_cv_lib_soname_vkd3d" != "x" || enable_d3d12=${enable_d3d12:-no}
 
 dnl **** Check for gcc specific options ****
@@ -2058,19 +2046,14 @@ AC_CACHE_CHECK([how to define a function in assembly code], ac_cv_asm_func_def,
       ac_cv_asm_func_def=".type 2",
       ac_cv_asm_func_def="unknown")])]))
 
-AH_TEMPLATE(__ASM_FUNC,[Define to a macro to generate an assembly function directive])
 case "$ac_cv_asm_func_def" in
   ".def")
-     AC_DEFINE([__ASM_FUNC(name)], [".def " __ASM_NAME(name) "; .scl 2; .type 32; .endef"])
      asm_func_header=".def $asm_name_prefix\" #name suffix \"; .scl 2; .type 32; .endef" ;;
   ".type @function")
-     AC_DEFINE([__ASM_FUNC(name)], [".type " __ASM_NAME(name) ",@function"])
      asm_func_header=".type $asm_name_prefix\" #name suffix \",@function" ;;
   ".type 2")
-     AC_DEFINE([__ASM_FUNC(name)], [".type " __ASM_NAME(name) ",2"])
      asm_func_header=".type $asm_name_prefix\" #name suffix \",2" ;;
   *)
-     AC_DEFINE([__ASM_FUNC(name)], [""])
      asm_func_header="" ;;
 esac
 
@@ -2144,20 +2127,8 @@ CFLAGS="$CFLAGS $BUILTINFLAG"
 AC_CHECK_FUNCS(\
         __res_get_state \
         __res_getservers \
-	_finite \
-	_isnan \
-	_pclose \
-	_popen \
-	_snprintf \
 	_spawnvp \
-	_strdup \
-	_stricmp \
-	_strnicmp \
-	_strtoi64 \
-	_strtoui64 \
-	_vsnprintf \
 	asctime_r \
-	chsize \
 	dlopen \
 	epoll_create \
 	ffs \
@@ -2167,7 +2138,6 @@ AC_CHECK_FUNCS(\
 	fpclass \
 	fstatfs \
 	fstatvfs \
-	ftruncate \
 	futimens \
 	futimes \
 	futimesat \
@@ -2176,16 +2146,12 @@ AC_CHECK_FUNCS(\
 	getifaddrs \
 	getopt_long_only \
 	getpwuid \
-	gettimeofday \
 	getuid \
 	kqueue \
 	lstat \
-	memmove \
 	mmap \
-	pclose \
 	pipe2 \
 	poll \
-	popen \
 	port_create \
 	prctl \
 	pread \
@@ -2201,24 +2167,16 @@ AC_CHECK_FUNCS(\
 	settimeofday \
 	sigaltstack \
 	sigprocmask \
-	snprintf \
 	statfs \
 	statvfs \
-	strcasecmp \
-	strdup \
-	strerror \
-	strncasecmp \
 	strnlen \
 	strtold \
-	strtoll \
-	strtoull \
 	symlink \
 	sysinfo \
 	tcdrain \
 	thr_kill2 \
 	timegm \
-	usleep \
-	vsnprintf
+	usleep
 )
 CFLAGS="$ac_save_CFLAGS"
 
@@ -2302,15 +2260,6 @@ fi
 WINE_NOTICE_WITH(ldap,[test "x$LDAP_LIBS" = "x"],
                  [libldap (OpenLDAP) ${notice_platform}development files not found, LDAP won't be supported.])
 
-AC_CACHE_CHECK([whether mkdir takes only one argument],
-   	wine_cv_one_arg_mkdir,
-	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <sys/stat.h>]],[[mkdir("foo");]])],
-                          [wine_cv_one_arg_mkdir=yes],[wine_cv_one_arg_mkdir=no]))
-if test "$wine_cv_one_arg_mkdir" = "yes"
-then
-  AC_DEFINE(HAVE_ONE_ARG_MKDIR, 1, [Define if mkdir takes only one argument])
-fi
-
 AC_CACHE_CHECK([for sched_setaffinity],wine_cv_have_sched_setaffinity,
                 AC_LINK_IFELSE([AC_LANG_PROGRAM(
 [[#define _GNU_SOURCE
@@ -2332,7 +2281,7 @@ fi
 dnl **** Check for types ****
 
 AC_C_INLINE
-AC_CHECK_TYPES([mode_t, off_t, pid_t, size_t, ssize_t, long long, fsblkcnt_t, fsfilcnt_t])
+AC_CHECK_TYPES([fsblkcnt_t, fsfilcnt_t])
 AC_CHECK_TYPES([sigset_t],,,[#include <sys/types.h>
 #include <signal.h>])
 AC_CHECK_TYPES([request_sense],,,[#include <linux/cdrom.h>])
@@ -2869,6 +2818,7 @@ WINE_CONFIG_MAKEFILE(dlls/advapi32)
 WINE_CONFIG_MAKEFILE(dlls/advapi32/tests)
 WINE_CONFIG_MAKEFILE(dlls/advpack)
 WINE_CONFIG_MAKEFILE(dlls/advpack/tests)
+WINE_CONFIG_MAKEFILE(dlls/amsi)
 WINE_CONFIG_MAKEFILE(dlls/amstream)
 WINE_CONFIG_MAKEFILE(dlls/amstream/tests)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-appmodel-identity-l1-1-0)
@@ -3951,6 +3901,7 @@ WINE_CONFIG_MAKEFILE(programs/ipconfig)
 WINE_CONFIG_MAKEFILE(programs/lodctr)
 WINE_CONFIG_MAKEFILE(programs/mofcomp)
 WINE_CONFIG_MAKEFILE(programs/mshta)
+WINE_CONFIG_MAKEFILE(programs/msidb)
 WINE_CONFIG_MAKEFILE(programs/msiexec)
 WINE_CONFIG_MAKEFILE(programs/msinfo32)
 WINE_CONFIG_MAKEFILE(programs/net)
@@ -4119,6 +4070,7 @@ else
 fonts \
 loader/l_intl.nls \
 loader/wine.inf \
+programs/msidb/msidb \
 programs/msiexec/msiexec \
 programs/notepad/notepad \
 programs/regedit/regedit \

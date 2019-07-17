@@ -745,12 +745,12 @@ static HRESULT WINAPI HTMLDocument_get_referrer(IHTMLDocument2 *iface, BSTR *p)
 
 static HRESULT WINAPI HTMLDocument_get_location(IHTMLDocument2 *iface, IHTMLLocation **p)
 {
-    HTMLDocument *This = impl_from_IHTMLDocument2(iface);
+    HTMLDocumentNode *This = impl_from_IHTMLDocument2(iface)->doc_node;
 
     TRACE("(%p)->(%p)\n", This, p);
 
-    if(!This->doc_node->nsdoc) {
-        WARN("NULL nsdoc\n");
+    if(!This->nsdoc || !This->window) {
+        WARN("NULL window\n");
         return E_UNEXPECTED;
     }
 
@@ -2821,7 +2821,7 @@ static HRESULT WINAPI HTMLDocument5_get_implementation(IHTMLDocument5 *iface, IH
     if(!doc_node->dom_implementation) {
         HRESULT hres;
 
-        hres = create_dom_implementation(&doc_node->dom_implementation);
+        hres = create_dom_implementation(doc_node, &doc_node->dom_implementation);
         if(FAILED(hres))
             return hres;
     }
@@ -4885,31 +4885,50 @@ static HRESULT HTMLDocumentNode_QI(HTMLDOMNode *iface, REFIID riid, void **ppv)
     return S_OK;
 }
 
+void detach_document_node(HTMLDocumentNode *doc)
+{
+    unsigned i;
+
+    while(!list_empty(&doc->plugin_hosts))
+        detach_plugin_host(LIST_ENTRY(list_head(&doc->plugin_hosts), PluginHost, entry));
+
+    if(doc->dom_implementation) {
+        detach_dom_implementation(doc->dom_implementation);
+        IHTMLDOMImplementation_Release(doc->dom_implementation);
+        doc->dom_implementation = NULL;
+    }
+
+    detach_events(doc);
+    detach_selection(doc);
+    detach_ranges(doc);
+
+    for(i=0; i < doc->elem_vars_cnt; i++)
+        heap_free(doc->elem_vars[i]);
+    heap_free(doc->elem_vars);
+    doc->elem_vars_cnt = 0;
+
+    if(doc->catmgr) {
+        ICatInformation_Release(doc->catmgr);
+        doc->catmgr = NULL;
+    }
+
+    if(!doc->nsdoc && doc->window) {
+        /* document fragments own reference to inner window */
+        IHTMLWindow2_Release(&doc->window->base.IHTMLWindow2_iface);
+        doc->window = NULL;
+    }
+
+    if(doc->browser) {
+        list_remove(&doc->browser_entry);
+        doc->browser = NULL;
+    }
+}
+
 static void HTMLDocumentNode_destructor(HTMLDOMNode *iface)
 {
     HTMLDocumentNode *This = impl_from_HTMLDOMNode(iface);
-    unsigned i;
 
-    for(i=0; i < This->elem_vars_cnt; i++)
-        heap_free(This->elem_vars[i]);
-    heap_free(This->elem_vars);
-
-    detach_events(This);
-    if(This->catmgr)
-        ICatInformation_Release(This->catmgr);
-
-    detach_selection(This);
-    detach_ranges(This);
-
-    while(!list_empty(&This->plugin_hosts))
-        detach_plugin_host(LIST_ENTRY(list_head(&This->plugin_hosts), PluginHost, entry));
-
-    if(!This->nsdoc && This->window) {
-        /* document fragments own reference to inner window */
-        IHTMLWindow2_Release(&This->window->base.IHTMLWindow2_iface);
-        This->window = NULL;
-    }
-
+    detach_document_node(This);
     heap_free(This->event_vector);
     ConnectionPointContainer_Destroy(&This->basedoc.cp_container);
 }
@@ -5141,7 +5160,7 @@ static HTMLDocumentNode *alloc_doc_node(HTMLDocumentObj *doc_obj, HTMLInnerWindo
     doc->ref = 1;
     doc->basedoc.doc_node = doc;
     doc->basedoc.doc_obj = doc_obj;
-    doc->basedoc.window = window->base.outer_window;
+    doc->basedoc.window = window ? window->base.outer_window : NULL;
     doc->window = window;
 
     init_doc(&doc->basedoc, (IUnknown*)&doc->node.IHTMLDOMNode_iface,
@@ -5155,24 +5174,23 @@ static HTMLDocumentNode *alloc_doc_node(HTMLDocumentObj *doc_obj, HTMLInnerWindo
     return doc;
 }
 
-HRESULT create_doc_from_nsdoc(nsIDOMHTMLDocument *nsdoc, HTMLDocumentObj *doc_obj, HTMLInnerWindow *window, HTMLDocumentNode **ret)
+HRESULT create_document_node(nsIDOMHTMLDocument *nsdoc, GeckoBrowser *browser, HTMLInnerWindow *window,
+                             compat_mode_t parent_mode, HTMLDocumentNode **ret)
 {
+    HTMLDocumentObj *doc_obj = browser->doc;
     HTMLDocumentNode *doc;
 
     doc = alloc_doc_node(doc_obj, window);
     if(!doc)
         return E_OUTOFMEMORY;
 
-    if(window->base.outer_window->parent) {
-        compat_mode_t parent_mode = window->base.outer_window->parent->base.inner_window->doc->document_mode;
-        TRACE("parent mode %u\n", parent_mode);
-        if(parent_mode >= COMPAT_MODE_IE9) {
-            doc->document_mode = parent_mode;
-            lock_document_mode(doc);
-        }
+    if(parent_mode >= COMPAT_MODE_IE9) {
+        TRACE("using parent mode %u\n", parent_mode);
+        doc->document_mode = parent_mode;
+        lock_document_mode(doc);
     }
 
-    if(!doc_obj->basedoc.window || window->base.outer_window == doc_obj->basedoc.window)
+    if(!doc_obj->basedoc.window || (window && is_main_content_window(window->base.outer_window)))
         doc->basedoc.cp_container.forward_container = &doc_obj->basedoc.cp_container;
 
     HTMLDOMNode_Init(doc, &doc->node, (nsIDOMNode*)nsdoc, &HTMLDocumentNode_dispex);
@@ -5184,6 +5202,22 @@ HRESULT create_doc_from_nsdoc(nsIDOMHTMLDocument *nsdoc, HTMLDocumentObj *doc_ob
     doc_init_events(doc);
 
     doc->node.vtbl = &HTMLDocumentNodeImplVtbl;
+
+    list_add_head(&browser->document_nodes, &doc->browser_entry);
+    doc->browser = browser;
+
+    if(browser->usermode == EDITMODE) {
+        nsAString mode_str;
+        nsresult nsres;
+
+        static const PRUnichar onW[] = {'o','n',0};
+
+        nsAString_InitDepend(&mode_str, onW);
+        nsres = nsIDOMHTMLDocument_SetDesignMode(doc->nsdoc, &mode_str);
+        nsAString_Finish(&mode_str);
+        if(NS_FAILED(nsres))
+            ERR("SetDesignMode failed: %08x\n", nsres);
+    }
 
     *ret = doc;
     return S_OK;
@@ -5283,19 +5317,12 @@ static ULONG WINAPI HTMLDocumentObj_Release(IUnknown *iface)
     TRACE("(%p) ref = %u\n", This, ref);
 
     if(!ref) {
-        nsIDOMWindowUtils *window_utils = NULL;
-
-        if(This->basedoc.window && This->basedoc.window->nswindow)
-            get_nsinterface((nsISupports*)This->basedoc.window->nswindow, &IID_nsIDOMWindowUtils, (void**)&window_utils);
-
         if(This->basedoc.doc_node) {
             This->basedoc.doc_node->basedoc.doc_obj = NULL;
             htmldoc_release(&This->basedoc.doc_node->basedoc);
         }
-        if(This->basedoc.window) {
-            This->basedoc.window->doc_obj = NULL;
+        if(This->basedoc.window)
             IHTMLWindow2_Release(&This->basedoc.window->base.IHTMLWindow2_iface);
-        }
         if(This->advise_holder)
             IOleAdviseHolder_Release(This->advise_holder);
 
@@ -5325,14 +5352,8 @@ static ULONG WINAPI HTMLDocumentObj_Release(IUnknown *iface)
         release_dispex(&This->dispex);
 
         if(This->nscontainer)
-            NSContainer_Release(This->nscontainer);
+            detach_gecko_browser(This->nscontainer);
         heap_free(This);
-
-        /* Force cycle collection */
-        if(window_utils) {
-            nsIDOMWindowUtils_CycleCollect(window_utils, NULL, 0);
-            nsIDOMWindowUtils_Release(window_utils);
-        }
     }
 
     return ref;
@@ -5426,16 +5447,17 @@ static dispex_static_data_t HTMLDocumentObj_dispex = {
 
 static HRESULT create_document_object(BOOL is_mhtml, IUnknown *outer, REFIID riid, void **ppv)
 {
-    mozIDOMWindowProxy *mozwindow;
     HTMLDocumentObj *doc;
-    nsIDOMWindow *nswindow = NULL;
-    nsresult nsres;
     HRESULT hres;
 
     if(outer && !IsEqualGUID(&IID_IUnknown, riid)) {
         *ppv = NULL;
         return E_INVALIDARG;
     }
+
+    /* ensure that security manager is initialized */
+    if(!get_security_manager())
+        return E_OUTOFMEMORY;
 
     doc = heap_alloc_zero(sizeof(HTMLDocumentObj));
     if(!doc)
@@ -5451,12 +5473,11 @@ static HRESULT create_document_object(BOOL is_mhtml, IUnknown *outer, REFIID rii
     doc->basedoc.doc_obj = doc;
     doc->is_mhtml = is_mhtml;
 
-    doc->usermode = UNKNOWN_USERMODE;
     doc->task_magic = get_task_target_magic();
 
     HTMLDocument_View_Init(doc);
 
-    hres = create_nscontainer(doc, &doc->nscontainer);
+    hres = create_gecko_browser(doc, &doc->nscontainer);
     if(FAILED(hres)) {
         ERR("Failed to init Gecko, returning CLASS_E_CLASSNOTAVAILABLE\n");
         htmldoc_release(&doc->basedoc);
@@ -5472,21 +5493,8 @@ static HRESULT create_document_object(BOOL is_mhtml, IUnknown *outer, REFIID rii
             return hres;
     }
 
-    nsres = nsIWebBrowser_GetContentDOMWindow(doc->nscontainer->webbrowser, &mozwindow);
-    if(NS_FAILED(nsres))
-        ERR("GetContentDOMWindow failed: %08x\n", nsres);
-
-    nsres = mozIDOMWindowProxy_QueryInterface(mozwindow, &IID_nsIDOMWindow, (void**)&nswindow);
-    mozIDOMWindowProxy_Release(mozwindow);
-    assert(nsres == NS_OK);
-
-    hres = HTMLOuterWindow_Create(doc, nswindow, NULL /* FIXME */, &doc->basedoc.window);
-    if(nswindow)
-        nsIDOMWindow_Release(nswindow);
-    if(FAILED(hres)) {
-        htmldoc_release(&doc->basedoc);
-        return hres;
-    }
+    doc->basedoc.window = doc->nscontainer->content_window;
+    IHTMLWindow2_AddRef(&doc->basedoc.window->base.IHTMLWindow2_iface);
 
     if(!doc->basedoc.doc_node && doc->basedoc.window->base.inner_window->doc) {
         doc->basedoc.doc_node = doc->basedoc.window->base.inner_window->doc;

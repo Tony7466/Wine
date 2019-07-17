@@ -213,6 +213,7 @@ struct options
     const char* section_align;
     const char* lib_suffix;
     const char* subsystem;
+    const char* prelink;
     strarray* prefix;
     strarray* lib_dirs;
     strarray* linker_args;
@@ -378,9 +379,17 @@ static int try_link( const strarray *prefix, const strarray *link_tool, const ch
     return ret;
 }
 
-static const strarray* get_lddllflags( const struct options *opts, const strarray *link_tool )
+static strarray *get_link_args( struct options *opts, const char *output_name )
 {
+    const strarray *link_tool = get_translator( opts );
     strarray *flags = strarray_alloc();
+    unsigned int i;
+
+    strarray_addall( flags, link_tool );
+    for (i = 0; i < opts->linker_args->size; i++) strarray_add( flags, opts->linker_args->base[i] );
+
+    if (verbose > 1) strarray_add( flags, "-v" );
+
     switch (opts->target_platform)
     {
     case PLATFORM_APPLE:
@@ -392,34 +401,94 @@ static const strarray* get_lddllflags( const struct options *opts, const strarra
             strarray_add( flags, "-read_only_relocs" );
             strarray_add( flags, "warning" );
         }
+        if (opts->image_base)
+        {
+            strarray_add( flags, "-image_base" );
+            strarray_add( flags, opts->image_base );
+        }
+        if (opts->strip) strarray_add( flags, "-Wl,-x" );
+        return flags;
+
+    case PLATFORM_SOLARIS:
+        {
+            char *mapfile = get_temp_file( output_name, ".map" );
+            const char *align = opts->section_align ? opts->section_align : "0x1000";
+
+            create_file( mapfile, 0644, "text = A%s;\ndata = A%s;\n", align, align );
+            strarray_add( flags, strmake("-Wl,-M,%s", mapfile) );
+            strarray_add( tmp_files, mapfile );
+        }
         break;
 
     case PLATFORM_ANDROID:
-    case PLATFORM_SOLARIS:
-    case PLATFORM_UNSPECIFIED:
-        strarray_add( flags, "-shared" );
-        strarray_add( flags, "-Wl,-Bsymbolic" );
-
-        /* Try all options first - this is likely to succeed on modern compilers */
-        if (!try_link( opts->prefix, link_tool, "-fPIC -shared -Wl,-Bsymbolic "
-                       "-Wl,-z,defs -Wl,-init,__wine_spec_init,-fini,_wine_spec_fini" ))
-        {
-            strarray_add( flags, "-Wl,-z,defs" );
-            strarray_add( flags, "-Wl,-init,__wine_spec_init,-fini,__wine_spec_fini" );
-        }
-        else /* otherwise figure out which ones are allowed */
-        {
-            if (!try_link( opts->prefix, link_tool, "-fPIC -shared -Wl,-Bsymbolic -Wl,-z,defs" ))
-                strarray_add( flags, "-Wl,-z,defs" );
-            if (!try_link( opts->prefix, link_tool, "-fPIC -shared -Wl,-Bsymbolic "
-                           "-Wl,-init,__wine_spec_init,-fini,_wine_spec_fini" ))
-                strarray_add( flags, "-Wl,-init,__wine_spec_init,-fini,__wine_spec_fini" );
-        }
+        /* the Android loader requires a soname for all libraries */
+        strarray_add( flags, strmake( "-Wl,-soname,%s.so", output_name ));
         break;
 
+    case PLATFORM_WINDOWS:
+    case PLATFORM_CYGWIN:
+        if (opts->shared)
+        {
+            strarray_add( flags, "-shared" );
+            strarray_add( flags, "-Wl,--kill-at" );
+        }
+        else strarray_add( flags, opts->gui_app ? "-mwindows" : "-mconsole" );
+
+        if (opts->unicode_app) strarray_add( flags, "-municode" );
+        if (opts->nodefaultlibs) strarray_add( flags, "-nodefaultlibs" );
+        if (opts->nostartfiles) strarray_add( flags, "-nostartfiles" );
+
+        if (opts->subsystem)
+        {
+            strarray_add( flags, strmake("-Wl,--subsystem,%s", opts->subsystem ));
+            if (!strcmp( opts->subsystem, "native" ))
+            {
+                const char *entry = opts->target_cpu == CPU_x86 ? "_DriverEntry@8" : "DriverEntry";
+                strarray_add( flags, strmake( "-Wl,--entry,%s", entry ));
+            }
+        }
+
+        if (opts->image_base) strarray_add( flags, strmake("-Wl,--image-base,%s", opts->image_base ));
+
+        if (opts->large_address_aware && opts->target_cpu == CPU_x86)
+            strarray_add( flags, "-Wl,--large-address-aware" );
+
+        return flags;
+
     default:
-        assert(0);
+        if (opts->image_base)
+        {
+            if (!try_link( opts->prefix, link_tool, strmake("-Wl,-Ttext-segment=%s", opts->image_base)) )
+                strarray_add( flags, strmake("-Wl,-Ttext-segment=%s", opts->image_base) );
+            else
+                opts->prelink = PRELINK;
+        }
+        if (!try_link( opts->prefix, link_tool, "-Wl,-z,max-page-size=0x1000"))
+            strarray_add( flags, "-Wl,-z,max-page-size=0x1000");
+        break;
     }
+
+    /* generic Unix shared library flags */
+
+    strarray_add( flags, "-shared" );
+    strarray_add( flags, "-Wl,-Bsymbolic" );
+
+    /* Try all options first - this is likely to succeed on modern compilers */
+    if (!try_link( opts->prefix, link_tool, "-fPIC -shared -Wl,-Bsymbolic "
+                   "-Wl,-z,defs -Wl,-init,__wine_spec_init,-fini,_wine_spec_fini" ))
+    {
+        strarray_add( flags, "-Wl,-z,defs" );
+        strarray_add( flags, "-Wl,-init,__wine_spec_init,-fini,__wine_spec_fini" );
+    }
+    else /* otherwise figure out which ones are allowed */
+    {
+        if (!try_link( opts->prefix, link_tool, "-fPIC -shared -Wl,-Bsymbolic -Wl,-z,defs" ))
+            strarray_add( flags, "-Wl,-z,defs" );
+        if (!try_link( opts->prefix, link_tool, "-fPIC -shared -Wl,-Bsymbolic "
+                       "-Wl,-init,__wine_spec_init,-fini,_wine_spec_fini" ))
+            strarray_add( flags, "-Wl,-init,__wine_spec_init,-fini,__wine_spec_fini" );
+    }
+
     return flags;
 }
 
@@ -749,21 +818,6 @@ static strarray *get_winebuild_args(struct options *opts)
     return spec_args;
 }
 
-static const char* compile_resources_to_object(struct options* opts, const strarray *resources,
-                                               const char *res_o_name)
-{
-    strarray *winebuild_args = get_winebuild_args( opts );
-
-    strarray_add( winebuild_args, "--resources" );
-    strarray_add( winebuild_args, "-o" );
-    strarray_add( winebuild_args, res_o_name );
-    strarray_addall( winebuild_args, resources );
-
-    spawn( opts->prefix, winebuild_args, 0 );
-    strarray_free( winebuild_args );
-    return res_o_name;
-}
-
 /* check if there is a static lib associated to a given dll */
 static char *find_static_lib( const char *dll )
 {
@@ -800,37 +854,16 @@ static void add_library( struct options *opts, strarray *lib_dirs, strarray *fil
     free(fullname);
 }
 
-/* hack a main or WinMain function to work around Mingw's lack of Unicode support */
-static const char *mingw_unicode_hack( struct options *opts )
-{
-    char *main_stub = get_temp_file( opts->output_name, ".c" );
-
-    create_file( main_stub, 0644,
-                 "typedef unsigned short wchar_t;\n"
-                 "extern void * __stdcall LoadLibraryA(const char *);\n"
-                 "extern void * __stdcall GetProcAddress(void *,const char *);\n"
-                 "extern int wmain( int argc, wchar_t *argv[] );\n\n"
-                 "int main( int argc, char *argv[] )\n{\n"
-                 "    int wargc;\n"
-                 "    wchar_t **wargv, **wenv;\n"
-                 "    void *msvcrt = LoadLibraryA( \"msvcrt.dll\" );\n"
-                 "    void (*__wgetmainargs)(int *argc, wchar_t** *wargv, wchar_t** *wenvp, int expand_wildcards,\n"
-                 "                           int *new_mode) = GetProcAddress( msvcrt, \"__wgetmainargs\" );\n"
-                 "    __wgetmainargs( &wargc, &wargv, &wenv, 0, 0 );\n"
-                 "    return wmain( wargc, wargv );\n}\n" );
-    return compile_to_object( opts, main_stub, NULL );
-}
-
 static void build(struct options* opts)
 {
     strarray *lib_dirs, *files;
     strarray *spec_args, *link_args;
-    char *output_file;
+    char *output_file, *output_path;
     const char *spec_o_name;
     const char *output_name, *spec_file, *lang;
-    const char *prelink = NULL;
     int generate_app_loader = 1;
     int fake_module = 0;
+    int is_pe = (opts->target_platform == PLATFORM_WINDOWS || opts->target_platform == PLATFORM_CYGWIN);
     unsigned int j;
 
     /* NOTE: for the files array we'll use the following convention:
@@ -853,7 +886,7 @@ static void build(struct options* opts)
     }
 
     /* generate app loader only for .exe */
-    if (opts->shared || strendswith(output_file, ".so"))
+    if (opts->shared || is_pe || strendswith(output_file, ".so"))
 	generate_app_loader = 0;
 
     if (strendswith(output_file, ".fake")) fake_module = 1;
@@ -865,6 +898,7 @@ static void build(struct options* opts)
     else output_name = output_file;
     if (!strchr(output_name, '.'))
         output_file = strmake("%s.%s", output_file, opts->shared ? "dll" : "exe");
+    output_path = is_pe ? output_file : strmake( "%s.so", output_file );
 
     /* get the filename from the path */
     if ((output_name = strrchr(output_file, '/'))) output_name++;
@@ -889,7 +923,6 @@ static void build(struct options* opts)
     /* mark the files with their appropriate type */
     spec_file = lang = 0;
     files = strarray_alloc();
-    link_args = strarray_alloc();
     for ( j = 0; j < opts->files->size; j++ )
     {
 	const char* file = opts->files->base[j];
@@ -934,150 +967,19 @@ static void build(struct options* opts)
 	    lang = file;
     }
 
-    /* building for Windows is completely different */
-
-    if (opts->target_platform == PLATFORM_WINDOWS || opts->target_platform == PLATFORM_CYGWIN)
-    {
-        strarray *resources = strarray_alloc();
-        char *res_o_name = NULL;
-
-        if (opts->win16_app)
-            error( "Building 16-bit code is not supported for Windows\n" );
-
-        strarray_addall(link_args, get_translator(opts));
-
-        if (opts->shared)
-        {
-            /* run winebuild to generate the .def file */
-            char *spec_def_name = get_temp_file(output_name, ".spec.def");
-            spec_args = get_winebuild_args( opts );
-            strarray_add(spec_args, "--def");
-            strarray_add(spec_args, "-o");
-            strarray_add(spec_args, spec_def_name);
-            if (spec_file)
-            {
-                strarray_add(spec_args, "--export");
-                strarray_add(spec_args, spec_file);
-            }
-            spawn(opts->prefix, spec_args, 0);
-            strarray_free(spec_args);
-
-            strarray_add(link_args, "-shared");
-            if (verbose) strarray_add(link_args, "-v");
-            strarray_add(link_args, "-Wl,--kill-at");
-            strarray_add(link_args, spec_def_name);
-        }
-        else
-        {
-            strarray_add(link_args, opts->gui_app ? "-mwindows" : "-mconsole");
-        }
-
-        if (opts->nodefaultlibs) strarray_add(link_args, "-nodefaultlibs");
-        if (opts->nostartfiles) strarray_add(link_args, "-nostartfiles" );
-
-        if (opts->subsystem)
-        {
-            strarray_add(link_args, strmake("-Wl,--subsystem,%s", opts->subsystem));
-            if (!strcmp( opts->subsystem, "native" ))
-            {
-                const char *entry = opts->target_cpu == CPU_x86 ? "_DriverEntry@8" : "DriverEntry";
-                strarray_add(link_args, strmake( "-Wl,--entry,%s", entry ));
-            }
-        }
-
-        for ( j = 0 ; j < opts->linker_args->size ; j++ )
-            strarray_add(link_args, opts->linker_args->base[j]);
-
-        strarray_add(link_args, "-o");
-        strarray_add(link_args, output_file);
-
-        if (opts->image_base)
-            strarray_add(link_args, strmake("-Wl,--image-base,%s", opts->image_base));
-
-        if (opts->large_address_aware && opts->target_cpu == CPU_x86)
-            strarray_add( link_args, "-Wl,--large-address-aware" );
-
-        if (opts->unicode_app && !opts->shared)
-            strarray_add(link_args, mingw_unicode_hack(opts));
-
-        for ( j = 0; j < lib_dirs->size; j++ )
-            strarray_add(link_args, strmake("-L%s", lib_dirs->base[j]));
-
-        if (!opts->nodefaultlibs)
-        {
-            add_library(opts, lib_dirs, files, "winecrt0");
-            add_library(opts, lib_dirs, files, "kernel32");
-            add_library(opts, lib_dirs, files, "ntdll");
-        }
-        if (!opts->shared && opts->use_msvcrt && opts->target_platform == PLATFORM_CYGWIN)
-            add_library(opts, lib_dirs, files, "msvcrt");
-
-        for ( j = 0; j < files->size; j++ )
-        {
-            const char* name = files->base[j] + 2;
-
-            switch(files->base[j][1])
-            {
-            case 'l':
-            case 'd':
-                strarray_add(link_args, strmake("-l%s", name));
-                break;
-            case 's':
-            case 'o':
-                strarray_add(link_args, name);
-                break;
-            case 'a':
-                if (!opts->lib_suffix && strchr(name, '/'))
-                {
-                    /* turn the path back into -Ldir -lfoo options
-                     * this makes sure that we use the specified libs even
-                     * when mingw adds its own import libs to the link */
-                    char *lib = xstrdup( name );
-                    char *p = strrchr( lib, '/' );
-
-                    *p++ = 0;
-                    if (!strncmp( p, "lib", 3 ))
-                    {
-                        char *ext = strrchr( p, '.' );
-
-                        if (ext) *ext = 0;
-                        p += 3;
-                        strarray_add(link_args, strmake("-L%s", lib ));
-                        strarray_add(link_args, strmake("-l%s", p ));
-                        free( lib );
-                        break;
-                    }
-                    free( lib );
-                }
-                strarray_add(link_args, name);
-                break;
-            case 'r':
-                if (!res_o_name)
-                {
-                    res_o_name = get_temp_file( output_name, ".res.o" );
-                    strarray_add( link_args, res_o_name );
-                }
-                strarray_add( resources, name );
-                break;
-            }
-        }
-
-        if (res_o_name) compile_resources_to_object( opts, resources, res_o_name );
-
-        spawn(opts->prefix, link_args, 0);
-        strarray_free (resources);
-        strarray_free (link_args);
-        strarray_free (lib_dirs);
-        strarray_free (files);
-        return;
-    }
+    if (opts->win16_app && is_pe)
+        error( "Building 16-bit code is not supported for Windows\n" );
 
     /* add the default libraries, if needed */
-    if (!opts->nostdlib && opts->use_msvcrt) add_library(opts, lib_dirs, files, "msvcrt");
 
-    if (!opts->wine_objdir && !opts->nodefaultlibs) 
+    if (!opts->nostdlib && opts->use_msvcrt && opts->target_platform != PLATFORM_WINDOWS)
     {
-        if (opts->gui_app) 
+        if (!is_pe || !opts->shared) add_library(opts, lib_dirs, files, "msvcrt");
+    }
+
+    if (!opts->wine_objdir && !opts->nodefaultlibs)
+    {
+        if (opts->gui_app)
 	{
 	    add_library(opts, lib_dirs, files, "shell32");
 	    add_library(opts, lib_dirs, files, "comdlg32");
@@ -1094,7 +996,7 @@ static void build(struct options* opts)
         add_library(opts, lib_dirs, files, "kernel32");
         add_library(opts, lib_dirs, files, "ntdll");
     }
-    if (!opts->nostdlib) add_library(opts, lib_dirs, files, "wine");
+    if (!opts->nostdlib && !is_pe) add_library(opts, lib_dirs, files, "wine");
 
     /* run winebuild to generate the .spec.o file */
     spec_args = get_winebuild_args( opts );
@@ -1174,52 +1076,10 @@ static void build(struct options* opts)
     if (fake_module) return;  /* nothing else to do */
 
     /* link everything together now */
-    strarray_addall(link_args, get_translator(opts));
-    strarray_addall(link_args, get_lddllflags(opts, link_args));
+    link_args = get_link_args( opts, output_name );
 
     strarray_add(link_args, "-o");
-    strarray_add(link_args, strmake("%s.so", output_file));
-
-    for ( j = 0 ; j < opts->linker_args->size ; j++ ) 
-        strarray_add(link_args, opts->linker_args->base[j]);
-
-    switch (opts->target_platform)
-    {
-    case PLATFORM_APPLE:
-        if (opts->image_base)
-        {
-            strarray_add(link_args, "-image_base");
-            strarray_add(link_args, opts->image_base);
-        }
-        if (opts->strip)
-            strarray_add(link_args, "-Wl,-x");
-        break;
-    case PLATFORM_SOLARIS:
-        {
-            char *mapfile = get_temp_file( output_name, ".map" );
-            const char *align = opts->section_align ? opts->section_align : "0x1000";
-
-            create_file( mapfile, 0644, "text = A%s;\ndata = A%s;\n", align, align );
-            strarray_add(link_args, strmake("-Wl,-M,%s", mapfile));
-            strarray_add(tmp_files, mapfile);
-        }
-        break;
-    case PLATFORM_ANDROID:
-        /* the Android loader requires a soname for all libraries */
-        strarray_add( link_args, strmake( "-Wl,-soname,%s.so", output_name ));
-        break;
-    default:
-        if (opts->image_base)
-        {
-            if (!try_link(opts->prefix, link_args, strmake("-Wl,-Ttext-segment=%s", opts->image_base)))
-                strarray_add(link_args, strmake("-Wl,-Ttext-segment=%s", opts->image_base));
-            else
-                prelink = PRELINK;
-        }
-        if (!try_link(opts->prefix, link_args, "-Wl,-z,max-page-size=0x1000"))
-            strarray_add(link_args, "-Wl,-z,max-page-size=0x1000");
-        break;
-    }
+    strarray_add(link_args, output_path);
 
     for ( j = 0; j < lib_dirs->size; j++ )
 	strarray_add(link_args, strmake("-L%s", lib_dirs->base[j]));
@@ -1235,14 +1095,38 @@ static void build(struct options* opts)
 		strarray_add(link_args, strmake("-l%s", name));
 		break;
 	    case 's':
-	    case 'a':
 	    case 'o':
+		strarray_add(link_args, name);
+		break;
+	    case 'a':
+                if (is_pe && !opts->lib_suffix && strchr(name, '/'))
+                {
+                    /* turn the path back into -Ldir -lfoo options
+                     * this makes sure that we use the specified libs even
+                     * when mingw adds its own import libs to the link */
+                    char *lib = xstrdup( name );
+                    char *p = strrchr( lib, '/' );
+
+                    *p++ = 0;
+                    if (!strncmp( p, "lib", 3 ))
+                    {
+                        char *ext = strrchr( p, '.' );
+
+                        if (ext) *ext = 0;
+                        p += 3;
+                        strarray_add(link_args, strmake("-L%s", lib ));
+                        strarray_add(link_args, strmake("-l%s", p ));
+                        free( lib );
+                        break;
+                    }
+                    free( lib );
+                }
 		strarray_add(link_args, name);
 		break;
 	}
     }
 
-    if (!opts->nostdlib) 
+    if (!opts->nostdlib && !is_pe)
     {
 	strarray_add(link_args, "-lm");
 	strarray_add(link_args, "-lc");
@@ -1252,15 +1136,15 @@ static void build(struct options* opts)
     strarray_free (link_args);
 
     /* set the base address with prelink if linker support is not present */
-    if (prelink && !opts->target)
+    if (opts->prelink && !opts->target)
     {
-        if (prelink[0] && strcmp(prelink,"false"))
+        if (opts->prelink[0] && strcmp(opts->prelink,"false"))
         {
             strarray *prelink_args = strarray_alloc();
-            strarray_add(prelink_args, prelink);
+            strarray_add(prelink_args, opts->prelink);
             strarray_add(prelink_args, "--reloc-only");
             strarray_add(prelink_args, opts->image_base);
-            strarray_add(prelink_args, strmake("%s.so", output_file));
+            strarray_add(prelink_args, output_path);
             spawn(opts->prefix, prelink_args, 1);
             strarray_free(prelink_args);
         }

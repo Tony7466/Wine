@@ -402,17 +402,15 @@ NTSTATUS WINAPI NtOpenEvent( HANDLE *handle, ACCESS_MASK access, const OBJECT_AT
  *  NtSetEvent (NTDLL.@)
  *  ZwSetEvent (NTDLL.@)
  */
-NTSTATUS WINAPI NtSetEvent( HANDLE handle, PULONG NumberOfThreadsReleased )
+NTSTATUS WINAPI NtSetEvent( HANDLE handle, LONG *prev_state )
 {
     NTSTATUS ret;
-
-    /* FIXME: set NumberOfThreadsReleased */
-
     SERVER_START_REQ( event_op )
     {
         req->handle = wine_server_obj_handle( handle );
         req->op     = SET_EVENT;
         ret = wine_server_call( req );
+        if (!ret && prev_state) *prev_state = reply->state;
     }
     SERVER_END_REQ;
     return ret;
@@ -421,18 +419,15 @@ NTSTATUS WINAPI NtSetEvent( HANDLE handle, PULONG NumberOfThreadsReleased )
 /******************************************************************************
  *  NtResetEvent (NTDLL.@)
  */
-NTSTATUS WINAPI NtResetEvent( HANDLE handle, PULONG NumberOfThreadsReleased )
+NTSTATUS WINAPI NtResetEvent( HANDLE handle, LONG *prev_state )
 {
     NTSTATUS ret;
-
-    /* resetting an event can't release any thread... */
-    if (NumberOfThreadsReleased) *NumberOfThreadsReleased = 0;
-
     SERVER_START_REQ( event_op )
     {
         req->handle = wine_server_obj_handle( handle );
         req->op     = RESET_EVENT;
         ret = wine_server_call( req );
+        if (!ret && prev_state) *prev_state = reply->state;
     }
     SERVER_END_REQ;
     return ret;
@@ -455,18 +450,16 @@ NTSTATUS WINAPI NtClearEvent ( HANDLE handle )
  * FIXME
  *   PulseCount
  */
-NTSTATUS WINAPI NtPulseEvent( HANDLE handle, PULONG PulseCount )
+NTSTATUS WINAPI NtPulseEvent( HANDLE handle, LONG *prev_state )
 {
     NTSTATUS ret;
-
-    if (PulseCount)
-      FIXME("(%p,%d)\n", handle, *PulseCount);
 
     SERVER_START_REQ( event_op )
     {
         req->handle = wine_server_obj_handle( handle );
         req->op     = PULSE_EVENT;
         ret = wine_server_call( req );
+        if (!ret && prev_state) *prev_state = reply->state;
     }
     SERVER_END_REQ;
     return ret;

@@ -36,7 +36,7 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(quartz);
 
-static const WCHAR wcsOutputPinName[] = {'o','u','t','p','u','t',' ','p','i','n',0};
+static const WCHAR outputW[] = {'o','u','t','p','u','t',0};
 
 typedef struct WAVEParserImpl
 {
@@ -256,7 +256,7 @@ static HRESULT WAVEParser_InputPin_PreConnect(IPin * iface, IPin * pConnectPin, 
 
     piOutput.dir = PINDIR_OUTPUT;
     piOutput.pFilter = &pWAVEParser->Parser.filter.IBaseFilter_iface;
-    lstrcpynW(piOutput.achName, wcsOutputPinName, ARRAY_SIZE(piOutput.achName));
+    lstrcpynW(piOutput.achName, outputW, ARRAY_SIZE(piOutput.achName));
 
     hr = IAsyncReader_SyncRead(This->pReader, pos, sizeof(list), (BYTE *)&list);
     pos += sizeof(list);
@@ -287,29 +287,27 @@ static HRESULT WAVEParser_InputPin_PreConnect(IPin * iface, IPin * pConnectPin, 
 
     amt.majortype = MEDIATYPE_Audio;
     amt.formattype = FORMAT_WaveFormatEx;
-    amt.cbFormat = chunk.cb;
-    amt.pbFormat = CoTaskMemAlloc(amt.cbFormat);
+    amt.bFixedSizeSamples = TRUE;
+    amt.bTemporalCompression = FALSE;
+    amt.lSampleSize = 1;
     amt.pUnk = NULL;
-    IAsyncReader_SyncRead(This->pReader, pos, amt.cbFormat, amt.pbFormat);
+    amt.cbFormat = max(chunk.cb, sizeof(WAVEFORMATEX));
+    amt.pbFormat = CoTaskMemAlloc(amt.cbFormat);
+    memset(amt.pbFormat, 0, amt.cbFormat);
+    IAsyncReader_SyncRead(This->pReader, pos, chunk.cb, amt.pbFormat);
     amt.subtype = MEDIATYPE_Audio;
     amt.subtype.Data1 = ((WAVEFORMATEX*)amt.pbFormat)->wFormatTag;
 
     pos += chunk.cb;
     hr = IAsyncReader_SyncRead(This->pReader, pos, sizeof(chunk), (BYTE *)&chunk);
-    if (chunk.fcc == mmioFOURCC('f','a','c','t'))
+    while (chunk.fcc != mmioFOURCC('d','a','t','a'))
     {
-        FIXME("'fact' chunk not supported yet\n");
-	pos += sizeof(chunk) + chunk.cb;
-	hr = IAsyncReader_SyncRead(This->pReader, pos, sizeof(chunk), (BYTE *)&chunk);
+        FIXME("Ignoring %s chunk.\n", debugstr_fourcc(chunk.fcc));
+        pos += sizeof(chunk) + chunk.cb;
+        hr = IAsyncReader_SyncRead(This->pReader, pos, sizeof(chunk), (BYTE *)&chunk);
+        if (hr != S_OK)
+            return E_FAIL;
     }
-    if (chunk.fcc != mmioFOURCC('d','a','t','a'))
-    {
-        ERR("Expected 'data' chunk, but got %.04s\n", (LPSTR)&chunk.fcc);
-        return E_FAIL;
-    }
-
-    if (hr != S_OK)
-        return E_FAIL;
 
     pWAVEParser->StartOfFile = MEDIATIME_FROM_BYTES(pos + sizeof(RIFFCHUNK));
     pWAVEParser->EndOfFile = MEDIATIME_FROM_BYTES(pos + chunk.cb + sizeof(RIFFCHUNK));

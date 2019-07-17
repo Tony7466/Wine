@@ -83,15 +83,12 @@ C_SRCS = \
 	fold.c \
 	fstatvfs.c \
 	getopt.c \
-	getopt1.c \
 	interlocked.c \
 	isfinite.c \
 	isinf.c \
 	isnan.c \
 	lstat.c \
 	mbtowc.c \
-	memcpy_unaligned.c \
-	memmove.c \
 	mkstemps.c \
 	normalize.c \
 	poll.c \
@@ -101,9 +98,6 @@ C_SRCS = \
 	rint.c \
 	spawn.c \
 	statvfs.c \
-	strcasecmp.c \
-	strerror.c \
-	strncasecmp.c \
 	strnlen.c \
 	symlink.c \
 	usleep.c \

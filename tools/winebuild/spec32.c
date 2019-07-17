@@ -138,6 +138,21 @@ static void get_arg_string( ORDDEF *odp, char str[MAX_ARGUMENTS + 1] )
         strcpy( str + i, "I" );
 }
 
+static void output_data_directories( const char *names[16] )
+{
+    int i;
+
+    for (i = 0; i < 16; i++)
+    {
+        if (names[i])
+        {
+            output_rva( "%s", names[i] );
+            output( "\t.long %s_end - %s\n", names[i], names[i] );
+        }
+        else output( "\t.long 0,0\n" );
+    }
+}
+
 /*******************************************************************
  *         build_args_string
  */
@@ -369,7 +384,7 @@ void output_exports( DLLSPEC *spec )
     if (!nr_exports) return;
 
     output( "\n/* export table */\n\n" );
-    output( "\t.data\n" );
+    output( "\t%s\n", get_asm_export_section() );
     output( "\t.align %d\n", get_alignment(4) );
     output( ".L__wine_spec_exports:\n" );
 
@@ -378,15 +393,15 @@ void output_exports( DLLSPEC *spec )
     output( "\t.long 0\n" );                       /* Characteristics */
     output( "\t.long 0\n" );                       /* TimeDateStamp */
     output( "\t.long 0\n" );                       /* MajorVersion/MinorVersion */
-    output( "\t.long .L__wine_spec_exp_names-.L__wine_spec_rva_base\n" ); /* Name */
+    output_rva( ".L__wine_spec_exp_names" );       /* Name */
     output( "\t.long %u\n", spec->base );          /* Base */
     output( "\t.long %u\n", nr_exports );          /* NumberOfFunctions */
     output( "\t.long %u\n", spec->nb_names );      /* NumberOfNames */
-    output( "\t.long .L__wine_spec_exports_funcs-.L__wine_spec_rva_base\n" ); /* AddressOfFunctions */
+    output_rva( ".L__wine_spec_exports_funcs " );  /* AddressOfFunctions */
     if (spec->nb_names)
     {
-        output( "\t.long .L__wine_spec_exp_name_ptrs-.L__wine_spec_rva_base\n" ); /* AddressOfNames */
-        output( "\t.long .L__wine_spec_exp_ordinals-.L__wine_spec_rva_base\n" );  /* AddressOfNameOrdinals */
+        output_rva( ".L__wine_spec_exp_name_ptrs" ); /* AddressOfNames */
+        output_rva( ".L__wine_spec_exp_ordinals" );  /* AddressOfNameOrdinals */
     }
     else
     {
@@ -419,7 +434,7 @@ void output_exports( DLLSPEC *spec )
             }
             else
             {
-                output( "\t%s %s\n", get_asm_ptr_keyword(), asm_name(odp->link_name) );
+                output( "\t%s %s\n", get_asm_ptr_keyword(), asm_name( get_link_name( odp )));
             }
             break;
         case TYPE_STUB:
@@ -440,7 +455,7 @@ void output_exports( DLLSPEC *spec )
         output( "\n.L__wine_spec_exp_name_ptrs:\n" );
         for (i = 0; i < spec->nb_names; i++)
         {
-            output( "\t.long .L__wine_spec_exp_names+%u-.L__wine_spec_rva_base\n", namepos );
+            output_rva( ".L__wine_spec_exp_names + %u", namepos );
             namepos += strlen(spec->names[i]->name) + 1;
         }
 
@@ -477,6 +492,9 @@ void output_exports( DLLSPEC *spec )
                 output( "\t%s \"%s\"\n", get_asm_string_keyword(), odp->link_name );
         }
     }
+
+    if (target_platform == PLATFORM_WINDOWS) return;
+
     output( "\t.align %d\n", get_alignment(get_ptr_size()) );
     output( ".L__wine_spec_exports_end:\n" );
 
@@ -546,6 +564,7 @@ void output_module( DLLSPEC *spec )
 {
     int machine = 0;
     unsigned int page_size = get_page_size();
+    const char *data_dirs[16] = { NULL };
 
     /* Reserve some space for the PE header */
 
@@ -636,8 +655,7 @@ void output_module( DLLSPEC *spec )
     output( "\t.short %u,%u\n",           /* Major/MinorSubsystemVersion */
              spec->subsystem_major, spec->subsystem_minor );
     output( "\t.long 0\n" );                          /* Win32VersionValue */
-    output( "\t.long %s-.L__wine_spec_rva_base\n",    /* SizeOfImage */
-             asm_name("_end") );
+    output_rva( "%s", asm_name("_end") ); /* SizeOfImage */
     output( "\t.long %u\n", page_size );  /* SizeOfHeaders */
     output( "\t.long 0\n" );              /* CheckSum */
     output( "\t.short 0x%04x\n",          /* Subsystem */
@@ -651,41 +669,17 @@ void output_module( DLLSPEC *spec )
     output( "\t.long 0\n" );              /* LoaderFlags */
     output( "\t.long 16\n" );             /* NumberOfRvaAndSizes */
 
-    if (spec->base <= spec->limit)   /* DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT] */
-        output( "\t.long .L__wine_spec_exports-.L__wine_spec_rva_base,"
-                 ".L__wine_spec_exports_end-.L__wine_spec_exports\n" );
-    else
-        output( "\t.long 0,0\n" );
+    if (spec->base <= spec->limit)
+        data_dirs[0] = ".L__wine_spec_exports";   /* DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT] */
+    if (has_imports())
+        data_dirs[1] = ".L__wine_spec_imports";   /* DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT] */
+    if (spec->nb_resources)
+        data_dirs[2] = ".L__wine_spec_resources"; /* DataDirectory[IMAGE_DIRECTORY_ENTRY_RESOURCE] */
 
-    if (has_imports())   /* DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT] */
-        output( "\t.long .L__wine_spec_imports-.L__wine_spec_rva_base,"
-                 ".L__wine_spec_imports_end-.L__wine_spec_imports\n" );
-    else
-        output( "\t.long 0,0\n" );
-
-    if (spec->nb_resources)   /* DataDirectory[IMAGE_DIRECTORY_ENTRY_RESOURCE] */
-        output( "\t.long .L__wine_spec_resources-.L__wine_spec_rva_base,"
-                 ".L__wine_spec_resources_end-.L__wine_spec_resources\n" );
-    else
-        output( "\t.long 0,0\n" );
-
-    output( "\t.long 0,0\n" );  /* DataDirectory[3] */
-    output( "\t.long 0,0\n" );  /* DataDirectory[4] */
-    output( "\t.long 0,0\n" );  /* DataDirectory[5] */
-    output( "\t.long 0,0\n" );  /* DataDirectory[6] */
-    output( "\t.long 0,0\n" );  /* DataDirectory[7] */
-    output( "\t.long 0,0\n" );  /* DataDirectory[8] */
-    output( "\t.long 0,0\n" );  /* DataDirectory[9] */
-    output( "\t.long 0,0\n" );  /* DataDirectory[10] */
-    output( "\t.long 0,0\n" );  /* DataDirectory[11] */
-    output( "\t.long 0,0\n" );  /* DataDirectory[12] */
-    output( "\t.long 0,0\n" );  /* DataDirectory[13] */
-    output( "\t.long 0,0\n" );  /* DataDirectory[14] */
-    output( "\t.long 0,0\n" );  /* DataDirectory[15] */
+    output_data_directories( data_dirs );
 
     output( "\n\t%s\n", get_asm_string_section() );
     output( "%s\n", asm_globl("__wine_spec_file_name") );
-    output( ".L__wine_spec_file_name:\n" );
     output( "\t%s \"%s\"\n", get_asm_string_keyword(), spec->file_name );
     if (target_platform == PLATFORM_APPLE)
         output( "\t.lcomm %s,4\n", asm_name("_end") );
@@ -695,14 +689,15 @@ void output_module( DLLSPEC *spec )
 
 
 /*******************************************************************
- *         BuildSpec32File
+ *         output_spec32_file
  *
  * Build a Win32 C file from a spec file.
  */
-void BuildSpec32File( DLLSPEC *spec )
+void output_spec32_file( DLLSPEC *spec )
 {
     needs_get_pc_thunk = 0;
     resolve_imports( spec );
+    open_output_file();
     output_standard_file_header();
     output_module( spec );
     output_stubs( spec );
@@ -711,6 +706,25 @@ void BuildSpec32File( DLLSPEC *spec )
     if (needs_get_pc_thunk) output_get_pc_thunk();
     output_resources( spec );
     output_gnu_stack_note();
+    close_output_file();
+}
+
+
+/*******************************************************************
+ *         output_pe_module
+ *
+ * Build a PE from a spec file.
+ */
+void output_pe_module( DLLSPEC *spec )
+{
+    UsePIC = 0;
+    resolve_imports( spec );
+    open_output_file();
+    output_standard_file_header();
+    output_stubs( spec );
+    output_exports( spec );
+    output_resources( spec );
+    close_output_file();
 }
 
 
@@ -976,15 +990,9 @@ void output_def_file( DLLSPEC *spec, int include_private )
             int at_param = get_args_size( odp );
             if (!kill_at && target_cpu == CPU_x86) output( "@%d", at_param );
             if  (odp->flags & FLAG_FORWARD)
-            {
                 output( "=%s", odp->link_name );
-            }
             else if (strcmp(name, odp->link_name)) /* try to reduce output */
-            {
-                output( "=%s", odp->link_name );
-                if (!kill_at && target_cpu == CPU_x86 && !(odp->flags & FLAG_THISCALL))
-                    output( "@%d", at_param );
-            }
+                output( "=%s", get_link_name( odp ));
             break;
         }
         default:

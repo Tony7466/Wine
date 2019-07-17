@@ -3422,7 +3422,7 @@ HRESULT CDECL wined3d_device_process_vertices(struct wined3d_device *device,
 
     vs = state->shader[WINED3D_SHADER_TYPE_VERTEX];
     state->shader[WINED3D_SHADER_TYPE_VERTEX] = NULL;
-    wined3d_stream_info_from_declaration(&stream_info, state, &device->adapter->gl_info, &device->adapter->d3d_info);
+    wined3d_stream_info_from_declaration(&stream_info, state, &device->adapter->d3d_info);
     state->shader[WINED3D_SHADER_TYPE_VERTEX] = vs;
 
     /* We can't convert FROM a VBO, and vertex buffers used to source into
@@ -5357,8 +5357,8 @@ HRESULT device_init(struct wined3d_device *device, struct wined3d *wined3d,
     wine_rb_init(&device->samplers, wined3d_sampler_compare);
 
     if (vertex_pipeline->vp_states && fragment_pipeline->states
-            && FAILED(hr = compile_state_table(device->StateTable, device->multistate_funcs,
-            &adapter->gl_info, &adapter->d3d_info, vertex_pipeline,
+            && FAILED(hr = compile_state_table(device->state_table, device->multistate_funcs,
+            &adapter->d3d_info, adapter->gl_info.supported, vertex_pipeline,
             fragment_pipeline, misc_state_template)))
     {
         ERR("Failed to compile state table, hr %#x.\n", hr);
@@ -5396,11 +5396,9 @@ err:
 
 void device_invalidate_state(const struct wined3d_device *device, DWORD state)
 {
-    DWORD rep = device->StateTable[state].representative;
+    DWORD rep = device->state_table[state].representative;
     struct wined3d_context *context;
-    DWORD idx;
-    BYTE shift;
-    UINT i;
+    unsigned int i, idx, shift;
 
     wined3d_from_cs(device->cs);
 
@@ -5414,7 +5412,7 @@ void device_invalidate_state(const struct wined3d_device *device, DWORD state)
     for (i = 0; i < device->context_count; ++i)
     {
         context = device->contexts[i];
-        if(isStateDirty(context, rep)) continue;
+        if (isStateDirty(context, rep)) continue;
 
         context->dirtyArray[context->numDirtyEntries++] = rep;
         idx = rep / (sizeof(*context->isStateDirty) * CHAR_BIT);

@@ -45,7 +45,7 @@
 @ stub MFCreatePMPHost
 @ stub MFCreatePMPMediaSession
 @ stub MFCreatePMPServer
-@ stub MFCreatePresentationClock
+@ stdcall MFCreatePresentationClock(ptr)
 @ stub MFCreatePresentationDescriptorFromASFProfile
 @ stub MFCreateProxyLocator
 @ stub MFCreateRemoteDesktopPlugin
@@ -78,6 +78,6 @@
 @ stub MFGetTopoNodeCurrentType
 @ stub MFReadSequencerSegmentOffset
 @ stub MFRequireProtectedEnvironment
-@ stub MFShutdownObject
+@ stdcall MFShutdownObject(ptr)
 @ stub MFTranscodeGetAudioOutputAvailableTypes
 @ stub MergePropertyStore
