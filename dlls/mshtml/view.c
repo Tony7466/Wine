@@ -66,7 +66,7 @@ static void paint_document(HTMLDocumentObj *This)
     EndPaint(This->hwnd, &ps);
 }
 
-static void activate_gecko(NSContainer *This)
+static void activate_gecko(GeckoBrowser *This)
 {
     TRACE("(%p) %p\n", This, This->window);
 
@@ -633,7 +633,7 @@ static HRESULT WINAPI OleDocumentView_UIActivate(IOleDocumentView *iface, BOOL f
 
         if(This->hostui) {
             hres = IDocHostUIHandler_ShowUI(This->hostui,
-                    This->usermode == EDITMODE ? DOCHOSTUITYPE_AUTHOR : DOCHOSTUITYPE_BROWSE,
+                    This->nscontainer->usermode == EDITMODE ? DOCHOSTUITYPE_AUTHOR : DOCHOSTUITYPE_BROWSE,
                     &This->basedoc.IOleInPlaceActiveObject_iface, &This->basedoc.IOleCommandTarget_iface,
                     This->frame, This->ip_window);
             if(FAILED(hres))

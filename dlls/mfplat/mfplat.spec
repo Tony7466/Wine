@@ -15,7 +15,7 @@
 @ stub GetAMSubtypeFromD3DFormat
 @ stub GetD3DFormatFromMFSubtype
 @ stub LFGetGlobalPool
-@ stub MFAddPeriodicCallback
+@ stdcall MFAddPeriodicCallback(ptr ptr ptr)
 @ stdcall MFAllocateWorkQueue(ptr)
 @ stdcall MFAllocateWorkQueueEx(long ptr)
 @ stub MFAppendCollection
@@ -37,7 +37,7 @@
 @ stub MFConvertToFP16Array
 @ stdcall MFCopyImage(ptr long ptr long long long)
 @ stub MFCreateAMMediaTypeFromMFMediaType
-@ stub MFCreateAlignedMemoryBuffer
+@ stdcall MFCreateAlignedMemoryBuffer(long long ptr)
 @ stdcall MFCreateAsyncResult(ptr ptr ptr ptr)
 @ stdcall MFCreateAttributes(ptr long)
 @ stub MFCreateAudioMediaType
@@ -55,13 +55,13 @@
 @ stdcall MFCreateMemoryBuffer(long ptr)
 @ stub MFCreateMemoryStream
 @ stub MFCreatePathFromURL
-@ stub MFCreatePresentationDescriptor
+@ stdcall MFCreatePresentationDescriptor(long ptr ptr)
 @ stdcall MFCreateSample(ptr)
 @ stub MFCreateSocket
 @ stub MFCreateSocketListener
 @ stdcall MFCreateSourceResolver(ptr)
 @ stdcall MFCreateStreamDescriptor(long long ptr ptr)
-@ stub MFCreateSystemTimeSource
+@ stdcall MFCreateSystemTimeSource(ptr)
 @ stub MFCreateSystemUnderlyingClock
 @ stub MFCreateTempFile
 @ stub MFCreateTransformActivate
@@ -100,7 +100,7 @@
 @ stub MFGetSockaddrFromNumericName
 @ stub MFGetStrideForBitmapInfoHeader
 @ stdcall MFGetSystemTime()
-@ stub MFGetTimerPeriodicity
+@ stdcall MFGetTimerPeriodicity(ptr)
 @ stub MFGetUncompressedVideoFormat
 @ stub MFGetWorkQueueMMCSSClass
 @ stub MFGetWorkQueueMMCSSTaskId
@@ -123,9 +123,11 @@
 @ stdcall MFLockWorkQueue(long)
 @ stdcall MFPutWaitingWorkItem(long long ptr ptr)
 @ stdcall MFPutWorkItem(long ptr ptr)
+@ stdcall MFPutWorkItem2(long long ptr ptr)
 @ stdcall MFPutWorkItemEx(long ptr)
+@ stdcall MFPutWorkItemEx2(long long ptr)
 @ stub MFRecordError
-@ stub MFRemovePeriodicCallback
+@ stdcall MFRemovePeriodicCallback(long)
 @ stdcall MFScheduleWorkItem(ptr ptr int64 ptr)
 @ stdcall MFScheduleWorkItemEx(ptr int64 ptr)
 @ stub MFSerializeAttributesToStream

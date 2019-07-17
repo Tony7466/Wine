@@ -6896,6 +6896,7 @@ static void test_window(IHTMLDocument2 *doc)
 static void test_dom_implementation(IHTMLDocument2 *doc)
 {
     IHTMLDocument5 *doc5 = get_htmldoc5_iface((IUnknown*)doc);
+    IHTMLDOMImplementation2 *dom_implementation2;
     IHTMLDOMImplementation *dom_implementation;
     VARIANT_BOOL b;
     VARIANT v;
@@ -6916,6 +6917,33 @@ static void test_dom_implementation(IHTMLDocument2 *doc)
     VariantClear(&v);
     ok(hres == S_OK, "hasFeature failed: %08x\n", hres);
     ok(!b, "hasFeature returned %x\n", b);
+
+    hres = IHTMLDOMImplementation_QueryInterface(dom_implementation, &IID_IHTMLDOMImplementation2,
+                                                 (void**)&dom_implementation2);
+    if(SUCCEEDED(hres)) {
+        IHTMLDocument2 *new_document2;
+        IHTMLDocument7 *new_document;
+        IHTMLLocation *location;
+
+        str = a2bstr("test");
+        hres = IHTMLDOMImplementation2_createHTMLDocument(dom_implementation2, str, &new_document);
+        ok(hres == S_OK, "createHTMLDocument failed: %08x\n", hres);
+
+        test_disp((IUnknown*)new_document, &DIID_DispHTMLDocument, &CLSID_HTMLDocument, "[object]");
+        test_ifaces((IUnknown*)new_document, doc_node_iids);
+
+        hres = IHTMLDocument7_QueryInterface(new_document, &IID_IHTMLDocument2, (void**)&new_document2);
+        ok(hres == S_OK, "Could not get IHTMLDocument2 iface: %08x\n", hres);
+
+        hres = IHTMLDocument2_get_location(new_document2, &location);
+        ok(hres == E_UNEXPECTED, "get_location returned: %08x\n", hres);
+
+        IHTMLDocument2_Release(new_document2);
+        IHTMLDocument7_Release(new_document);
+        IHTMLDOMImplementation2_Release(dom_implementation2);
+    }else {
+        win_skip("Missing IHTMLDOMImplementation implementation\n");
+    }
 
     IHTMLDOMImplementation_Release(dom_implementation);
 }

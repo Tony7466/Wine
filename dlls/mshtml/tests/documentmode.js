@@ -190,6 +190,7 @@ function test_javascript() {
     test_exposed("forEach", Array.prototype, v >= 9);
     test_exposed("indexOf", Array.prototype, v >= 9);
     test_exposed("trim", String.prototype, v >= 9);
+    test_exposed("map", Array.prototype, v >= 9);
 
     /* FIXME: IE8 implements weird semi-functional property descriptors. */
     if(v != 8) {
@@ -197,6 +198,8 @@ function test_javascript() {
         test_exposed("defineProperty", Object, v >= 8);
         test_exposed("defineProperties", Object, v >= 8);
     }
+
+    test_exposed("getPrototypeOf", Object, v >= 9);
 
     test_parses("if(false) { o.default; }", v >= 9);
     test_parses("if(false) { o.with; }", v >= 9);

@@ -262,8 +262,8 @@ static void parse_complete(HTMLDocumentObj *doc)
 {
     TRACE("(%p)\n", doc);
 
-    if(doc->usermode == EDITMODE)
-        init_editor(&doc->basedoc);
+    if(doc->nscontainer->usermode == EDITMODE)
+        init_editor(doc->basedoc.doc_node);
 
     call_explorer_69(doc);
     if(doc->view_sink)
@@ -271,7 +271,7 @@ static void parse_complete(HTMLDocumentObj *doc)
     call_property_onchanged(&doc->basedoc.cp_container, 1005);
     call_explorer_69(doc);
 
-    if(doc->webbrowser && doc->usermode != EDITMODE && !(doc->basedoc.window->load_flags & BINDING_REFRESH))
+    if(doc->webbrowser && doc->nscontainer->usermode != EDITMODE && !(doc->basedoc.window->load_flags & BINDING_REFRESH))
         IDocObjectService_FireNavigateComplete2(doc->doc_object_service, &doc->basedoc.window->base.IHTMLWindow2_iface, 0);
 
     /* FIXME: IE7 calls EnableModelless(TRUE), EnableModelless(FALSE) and sets interactive state here */
@@ -818,6 +818,7 @@ static void NSAPI nsDocumentObserver_BindToDocument(nsIDocumentObserver *iface, 
 
     if(This->document_mode == COMPAT_MODE_QUIRKS) {
         nsIDOMDocumentType *nsdoctype;
+
         nsres = nsIContent_QueryInterface(aContent, &IID_nsIDOMDocumentType, (void**)&nsdoctype);
         if(NS_SUCCEEDED(nsres)) {
             compat_mode_t mode = COMPAT_MODE_IE7;
@@ -835,7 +836,7 @@ static void NSAPI nsDocumentObserver_BindToDocument(nsIDocumentObserver *iface, 
                  * X-UA-Compatible version, allow configuration and default to higher version
                  * (once it's well supported).
                  */
-                hres = IInternetSecurityManager_MapUrlToZone(window->secmgr, window->url, &zone, 0);
+                hres = IInternetSecurityManager_MapUrlToZone(get_security_manager(), window->url, &zone, 0);
                 if(SUCCEEDED(hres) && zone == URLZONE_INTERNET)
                     mode = COMPAT_MODE_IE8;
             }

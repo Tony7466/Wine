@@ -1,7 +1,5 @@
 /*
- * Unaligned memcpy wrapper to defeat gcc optimizations.
- *
- * Copyright 1996 Alexandre Julliard
+ * Copyright 2019 Zebediah Figura
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,12 +16,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-#include "wine/port.h"
+#include "winuser.h"
 
-#ifndef __i386__
-void *memcpy_unaligned( void *dst, const void *src, size_t size )
-{
-    return memcpy( dst, src, size );
-}
-#endif
+/* @makedep: msvfw32.manifest */
+1 RT_MANIFEST msvfw32.manifest

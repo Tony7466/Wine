@@ -918,50 +918,137 @@ end:
     return r;
 }
 
-static UINT msi_export_record( HANDLE handle, MSIRECORD *row, UINT start )
+static UINT msi_export_field( HANDLE handle, MSIRECORD *row, UINT field )
 {
-    UINT i, count, len, r = ERROR_SUCCESS;
-    const char *sep;
     char *buffer;
-    DWORD sz;
+    BOOL ret;
+    DWORD sz = 0x100;
+    UINT r;
 
-    len = 0x100;
-    buffer = msi_alloc( len );
-    if ( !buffer )
+    buffer = msi_alloc( sz );
+    if (!buffer)
         return ERROR_OUTOFMEMORY;
 
-    count = MSI_RecordGetFieldCount( row );
-    for ( i=start; i<=count; i++ )
+    r = MSI_RecordGetStringA( row, field, buffer, &sz );
+    if (r == ERROR_MORE_DATA)
     {
-        sz = len;
-        r = MSI_RecordGetStringA( row, i, buffer, &sz );
-        if (r == ERROR_MORE_DATA)
-        {
-            char *p = msi_realloc( buffer, sz + 1 );
-            if (!p)
-                break;
-            len = sz + 1;
-            buffer = p;
-        }
-        sz = len;
-        r = MSI_RecordGetStringA( row, i, buffer, &sz );
-        if (r != ERROR_SUCCESS)
-            break;
+        char *tmp;
 
-        if (!WriteFile( handle, buffer, sz, &sz, NULL ))
+        sz++; /* leave room for NULL terminator */
+        tmp = msi_realloc( buffer, sz );
+        if (!tmp)
         {
-            r = ERROR_FUNCTION_FAILED;
-            break;
+            msi_free( buffer );
+            return ERROR_OUTOFMEMORY;
         }
+        buffer = tmp;
+
+        r = MSI_RecordGetStringA( row, field, buffer, &sz );
+        if (r != ERROR_SUCCESS)
+        {
+            msi_free( buffer );
+            return r;
+        }
+    }
+    else if (r != ERROR_SUCCESS)
+    {
+        msi_free( buffer );
+        return r;
+    }
+
+    ret = WriteFile( handle, buffer, sz, &sz, NULL );
+    msi_free( buffer );
+    return ret ? ERROR_SUCCESS : ERROR_FUNCTION_FAILED;
+}
+
+static UINT msi_export_stream( const WCHAR *folder, const WCHAR *table, MSIRECORD *row, UINT field, UINT start )
+{
+    static const WCHAR fmt[] = {'%','s','\\','%','s',0};
+    WCHAR stream[MAX_STREAM_NAME_LEN + 1], *path;
+    DWORD sz, read_size, write_size;
+    char buffer[1024];
+    HANDLE file;
+    UINT len, r;
+
+    sz = ARRAY_SIZE( stream );
+    r = MSI_RecordGetStringW( row, start, stream, &sz );
+    if (r != ERROR_SUCCESS)
+        return r;
+
+    len = (sz + strlenW( folder ) + strlenW( table ) + ARRAY_SIZE( fmt ) + 1) * sizeof(WCHAR);
+    if (!(path = msi_alloc( len )))
+        return ERROR_OUTOFMEMORY;
+
+    len = sprintfW( path, fmt, folder, table );
+    if (!CreateDirectoryW( path, NULL ) && GetLastError() != ERROR_ALREADY_EXISTS)
+    {
+        msi_free( path );
+        return ERROR_FUNCTION_FAILED;
+    }
+
+    path[len++] = '\\';
+    strcpyW( path + len, stream );
+    file = CreateFileW( path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                        NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
+    msi_free( path );
+    if (file == INVALID_HANDLE_VALUE)
+        return ERROR_FUNCTION_FAILED;
+
+    read_size = sizeof(buffer);
+    while (read_size == sizeof(buffer))
+    {
+        r = MSI_RecordReadStream( row, field, buffer, &read_size );
+        if (r != ERROR_SUCCESS)
+        {
+            CloseHandle( file );
+            return r;
+        }
+        if (!WriteFile( file, buffer, read_size, &write_size, NULL ) || read_size != write_size)
+        {
+            CloseHandle( file );
+            return ERROR_WRITE_FAULT;
+        }
+    }
+    CloseHandle( file );
+    return r;
+}
+
+struct row_export_info
+{
+    HANDLE       handle;
+    const WCHAR *folder;
+    const WCHAR *table;
+};
+
+static UINT msi_export_record( struct row_export_info *row_export_info, MSIRECORD *row, UINT start )
+{
+    HANDLE handle = row_export_info->handle;
+    UINT i, count, r = ERROR_SUCCESS;
+    const char *sep;
+    DWORD sz;
+
+    count = MSI_RecordGetFieldCount( row );
+    for (i = start; i <= count; i++)
+    {
+        r = msi_export_field( handle, row, i );
+        if (r == ERROR_INVALID_PARAMETER)
+        {
+            r = msi_export_stream( row_export_info->folder, row_export_info->table, row, i, start );
+            if (r != ERROR_SUCCESS)
+                return r;
+
+            /* exporting a binary stream, repeat the "Name" field */
+            r = msi_export_field( handle, row, start );
+            if (r != ERROR_SUCCESS)
+                return r;
+        }
+        else if (r != ERROR_SUCCESS)
+            return r;
 
         sep = (i < count) ? "\t" : "\r\n";
         if (!WriteFile( handle, sep, strlen(sep), &sz, NULL ))
-        {
-            r = ERROR_FUNCTION_FAILED;
-            break;
-        }
+            return ERROR_FUNCTION_FAILED;
     }
-    msi_free( buffer );
     return r;
 }
 
@@ -974,24 +1061,35 @@ static UINT msi_export_forcecodepage( HANDLE handle, UINT codepage )
 {
     static const char fmt[] = "\r\n\r\n%u\t_ForceCodepage\r\n";
     char data[sizeof(fmt) + 10];
-    DWORD sz;
+    DWORD sz = sprintf( data, fmt, codepage );
 
-    sprintf( data, fmt, codepage );
-
-    sz = lstrlenA(data) + 1;
     if (!WriteFile(handle, data, sz, &sz, NULL))
         return ERROR_FUNCTION_FAILED;
 
     return ERROR_SUCCESS;
 }
 
-static UINT MSI_DatabaseExport( MSIDATABASE *db, LPCWSTR table,
-               LPCWSTR folder, LPCWSTR file )
+static UINT msi_export_summaryinformation( MSIDATABASE *db, HANDLE handle )
+{
+    static const char header[] = "PropertyId\tValue\r\n"
+                                 "i2\tl255\r\n"
+                                 "_SummaryInformation\tPropertyId\r\n";
+    DWORD sz = ARRAY_SIZE(header) - 1;
+
+    if (!WriteFile(handle, header, sz, &sz, NULL))
+        return ERROR_WRITE_FAULT;
+
+    return msi_export_suminfo( db, handle );
+}
+
+static UINT MSI_DatabaseExport( MSIDATABASE *db, LPCWSTR table, LPCWSTR folder, LPCWSTR file )
 {
     static const WCHAR query[] = {
         's','e','l','e','c','t',' ','*',' ','f','r','o','m',' ','%','s',0 };
     static const WCHAR forcecodepage[] = {
         '_','F','o','r','c','e','C','o','d','e','p','a','g','e',0 };
+    static const WCHAR summaryinformation[] = {
+        '_','S','u','m','m','a','r','y','I','n','f','o','r','m','a','t','i','o','n',0 };
     MSIRECORD *rec = NULL;
     MSIQUERY *view = NULL;
     LPWSTR filename;
@@ -1026,14 +1124,22 @@ static UINT MSI_DatabaseExport( MSIDATABASE *db, LPCWSTR table,
         goto done;
     }
 
+    if (!strcmpW( table, summaryinformation ))
+    {
+        r = msi_export_summaryinformation( db, handle );
+        goto done;
+    }
+
     r = MSI_OpenQuery( db, &view, query, table );
     if (r == ERROR_SUCCESS)
     {
+        struct row_export_info row_export_info = { handle, folder, table };
+
         /* write out row 1, the column names */
         r = MSI_ViewGetColumnInfo(view, MSICOLINFO_NAMES, &rec);
         if (r == ERROR_SUCCESS)
         {
-            msi_export_record( handle, rec, 1 );
+            msi_export_record( &row_export_info, rec, 1 );
             msiobj_release( &rec->hdr );
         }
 
@@ -1041,7 +1147,7 @@ static UINT MSI_DatabaseExport( MSIDATABASE *db, LPCWSTR table,
         r = MSI_ViewGetColumnInfo(view, MSICOLINFO_TYPES, &rec);
         if (r == ERROR_SUCCESS)
         {
-            msi_export_record( handle, rec, 1 );
+            msi_export_record( &row_export_info, rec, 1 );
             msiobj_release( &rec->hdr );
         }
 
@@ -1050,12 +1156,12 @@ static UINT MSI_DatabaseExport( MSIDATABASE *db, LPCWSTR table,
         if (r == ERROR_SUCCESS)
         {
             MSI_RecordSetStringW( rec, 0, table );
-            msi_export_record( handle, rec, 0 );
+            msi_export_record( &row_export_info, rec, 0 );
             msiobj_release( &rec->hdr );
         }
 
         /* write out row 4 onwards, the data */
-        r = MSI_IterateRecords( view, 0, msi_export_row, handle );
+        r = MSI_IterateRecords( view, 0, msi_export_row, &row_export_info );
         msiobj_release( &view->hdr );
     }
 

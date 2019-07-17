@@ -181,7 +181,7 @@
 @ stdcall ExReleaseResourceForThreadLite(ptr long)
 @ extern ExSemaphoreObjectType
 @ stub ExSetResourceOwnerPointer
-@ stub ExSetTimerResolution
+@ stdcall ExSetTimerResolution(long long)
 @ stub ExSystemExceptionFilter
 @ stdcall ExSystemTimeToLocalTime(ptr ptr) RtlSystemTimeToLocalTime
 @ stub ExUnregisterCallback
@@ -672,7 +672,7 @@
 @ stub MmAllocateMappingAddress
 @ stdcall MmAllocateNonCachedMemory(long)
 @ stdcall MmAllocatePagesForMdl(int64 int64 int64 long)
-@ stub MmBuildMdlForNonPagedPool
+@ stdcall MmBuildMdlForNonPagedPool(ptr)
 @ stub MmCanFileBeTruncated
 @ stub MmCommitSessionMappedView
 @ stdcall MmCopyVirtualMemory(ptr ptr ptr ptr long long ptr)

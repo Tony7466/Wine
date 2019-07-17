@@ -168,8 +168,8 @@
 @ stub CM_Remove_SubTree_Ex
 @ stub CM_Remove_Unmarked_Children
 @ stub CM_Remove_Unmarked_Children_Ex
-@ stub CM_Request_Device_EjectA
-@ stub CM_Request_Device_EjectW
+@ stdcall CM_Request_Device_EjectA(ptr ptr ptr long long)
+@ stdcall CM_Request_Device_EjectW(ptr ptr ptr long long)
 @ stub CM_Request_Eject_PC
 @ stub CM_Reset_Children_Marks
 @ stub CM_Reset_Children_Marks_Ex
@@ -367,6 +367,7 @@
 @ stub SetupDiInstallClassExW
 @ stdcall SetupDiInstallClassW(long wstr long ptr)
 @ stub SetupDiInstallDevice
+@ stdcall SetupDiInstallDeviceInterfaces(ptr ptr)
 @ stub SetupDiInstallDriverFiles
 @ stdcall SetupDiLoadClassIcon(ptr ptr ptr)
 @ stub SetupDiMoveDuplicateDevice
@@ -379,6 +380,7 @@
 @ stdcall SetupDiOpenDeviceInterfaceA(ptr str long ptr)
 @ stub SetupDiOpenDeviceInterfaceRegKey
 @ stdcall SetupDiOpenDeviceInterfaceW(ptr wstr long ptr)
+@ stdcall SetupDiRegisterCoDeviceInstallers(ptr ptr)
 @ stdcall SetupDiRegisterDeviceInfo(ptr ptr long ptr ptr ptr)
 @ stdcall SetupDiRemoveDevice(ptr ptr)
 @ stdcall SetupDiRemoveDeviceInterface(ptr ptr)

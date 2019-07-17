@@ -378,13 +378,8 @@ typedef struct HTMLOuterWindow HTMLOuterWindow;
 typedef struct HTMLDocumentNode HTMLDocumentNode;
 typedef struct HTMLDocumentObj HTMLDocumentObj;
 typedef struct HTMLFrameBase HTMLFrameBase;
-typedef struct NSContainer NSContainer;
+typedef struct GeckoBrowser GeckoBrowser;
 typedef struct HTMLAttributeCollection HTMLAttributeCollection;
-
-typedef enum {
-    SCRIPTMODE_GECKO,
-    SCRIPTMODE_ACTIVESCRIPT
-} SCRIPTMODE;
 
 typedef struct ScriptHost ScriptHost;
 
@@ -453,11 +448,6 @@ typedef struct {
     HTMLInnerWindow *window;
 } OmHistory;
 
-typedef struct {
-    HTMLOuterWindow *window;
-    LONG ref;
-}  windowref_t;
-
 typedef struct nsChannelBSC nsChannelBSC;
 
 struct HTMLWindow {
@@ -483,14 +473,15 @@ struct HTMLWindow {
 struct HTMLOuterWindow {
     HTMLWindow base;
 
-    windowref_t *window_ref;
     LONG task_magic;
 
-    HTMLDocumentObj *doc_obj;
     nsIDOMWindow *nswindow;
     mozIDOMWindowProxy *window_proxy;
     HTMLOuterWindow *parent;
     HTMLFrameBase *frame_element;
+
+    GeckoBrowser *browser;
+    struct list browser_entry;
 
     READYSTATE readystate;
     BOOL readystate_locked;
@@ -503,11 +494,6 @@ struct HTMLOuterWindow {
     BSTR url;
     DWORD load_flags;
 
-    SCRIPTMODE scriptmode;
-
-    IInternetSecurityManager *secmgr;
-
-    struct list children;
     struct list sibling_entry;
     struct wine_rb_entry entry;
 };
@@ -518,6 +504,7 @@ struct HTMLInnerWindow {
 
     HTMLDocumentNode *doc;
 
+    struct list children;
     struct list script_hosts;
 
     IHTMLEventObj *event;
@@ -660,7 +647,7 @@ struct HTMLDocumentObj {
 
     LONG ref;
 
-    NSContainer *nscontainer;
+    GeckoBrowser *nscontainer;
 
     IOleClientSite *client;
     IDocHostUIHandler *hostui;
@@ -695,7 +682,6 @@ struct HTMLDocumentObj {
     BOOL has_popup;
     INT download_state;
 
-    USERMODE usermode;
     LPWSTR mime;
 
     DWORD update;
@@ -704,7 +690,13 @@ struct HTMLDocumentObj {
 
 typedef struct nsWeakReference nsWeakReference;
 
-struct NSContainer {
+
+typedef enum {
+    SCRIPTMODE_GECKO,
+    SCRIPTMODE_ACTIVESCRIPT
+} SCRIPTMODE;
+
+struct GeckoBrowser {
     nsIWebBrowserChrome      nsIWebBrowserChrome_iface;
     nsIContextMenuListener   nsIContextMenuListener_iface;
     nsIURIContentListener    nsIURIContentListener_iface;
@@ -718,6 +710,8 @@ struct NSContainer {
     nsIBaseWindow *window;
     nsIWebBrowserFocus *focus;
 
+    HTMLOuterWindow *content_window;
+
     nsIEditor *editor;
     nsIController *editor_controller;
 
@@ -730,6 +724,11 @@ struct NSContainer {
     nsIURIContentListener *content_listener;
 
     HWND hwnd;
+    SCRIPTMODE script_mode;
+    USERMODE usermode;
+
+    struct list document_nodes;
+    struct list outer_windows;
 };
 
 typedef struct {
@@ -838,6 +837,9 @@ struct HTMLDocumentNode {
 
     HTMLInnerWindow *window;
 
+    GeckoBrowser *browser;
+    struct list browser_entry;
+
     compat_mode_t document_mode;
     BOOL document_mode_locked;
 
@@ -868,9 +870,10 @@ struct HTMLDocumentNode {
 HRESULT HTMLDocument_Create(IUnknown*,REFIID,void**) DECLSPEC_HIDDEN;
 HRESULT MHTMLDocument_Create(IUnknown*,REFIID,void**) DECLSPEC_HIDDEN;
 HRESULT HTMLLoadOptions_Create(IUnknown*,REFIID,void**) DECLSPEC_HIDDEN;
-HRESULT create_doc_from_nsdoc(nsIDOMHTMLDocument*,HTMLDocumentObj*,HTMLInnerWindow*,HTMLDocumentNode**) DECLSPEC_HIDDEN;
+HRESULT create_document_node(nsIDOMHTMLDocument*,GeckoBrowser*,HTMLInnerWindow*,
+                             compat_mode_t,HTMLDocumentNode**) DECLSPEC_HIDDEN;
 
-HRESULT HTMLOuterWindow_Create(HTMLDocumentObj*,nsIDOMWindow*,HTMLOuterWindow*,HTMLOuterWindow**) DECLSPEC_HIDDEN;
+HRESULT create_outer_window(GeckoBrowser*,mozIDOMWindowProxy*,HTMLOuterWindow*,HTMLOuterWindow**) DECLSPEC_HIDDEN;
 HRESULT update_window_doc(HTMLInnerWindow*) DECLSPEC_HIDDEN;
 HTMLOuterWindow *mozwindow_to_window(const mozIDOMWindowProxy*) DECLSPEC_HIDDEN;
 void get_top_window(HTMLOuterWindow*,HTMLOuterWindow**) DECLSPEC_HIDDEN;
@@ -882,7 +885,8 @@ IOmNavigator *OmNavigator_Create(void) DECLSPEC_HIDDEN;
 HRESULT HTMLScreen_Create(IHTMLScreen**) DECLSPEC_HIDDEN;
 HRESULT create_performance(IHTMLPerformance**) DECLSPEC_HIDDEN;
 HRESULT create_history(HTMLInnerWindow*,OmHistory**) DECLSPEC_HIDDEN;
-HRESULT create_dom_implementation(IHTMLDOMImplementation**) DECLSPEC_HIDDEN;
+HRESULT create_dom_implementation(HTMLDocumentNode*,IHTMLDOMImplementation**) DECLSPEC_HIDDEN;
+void detach_dom_implementation(IHTMLDOMImplementation*) DECLSPEC_HIDDEN;
 
 HRESULT create_storage(IHTMLStorage**) DECLSPEC_HIDDEN;
 
@@ -901,8 +905,8 @@ HRESULT HTMLCurrentStyle_Create(HTMLElement*,IHTMLCurrentStyle**) DECLSPEC_HIDDE
 void ConnectionPointContainer_Init(ConnectionPointContainer*,IUnknown*,const cpc_entry_t*) DECLSPEC_HIDDEN;
 void ConnectionPointContainer_Destroy(ConnectionPointContainer*) DECLSPEC_HIDDEN;
 
-HRESULT create_nscontainer(HTMLDocumentObj*,NSContainer**) DECLSPEC_HIDDEN;
-void NSContainer_Release(NSContainer*) DECLSPEC_HIDDEN;
+HRESULT create_gecko_browser(HTMLDocumentObj*,GeckoBrowser**) DECLSPEC_HIDDEN;
+void detach_gecko_browser(GeckoBrowser*) DECLSPEC_HIDDEN;
 
 compat_mode_t lock_document_mode(HTMLDocumentNode*) DECLSPEC_HIDDEN;
 
@@ -929,8 +933,8 @@ void register_nsservice(nsIComponentRegistrar*,nsIServiceManager*) DECLSPEC_HIDD
 void init_nsio(nsIComponentManager*) DECLSPEC_HIDDEN;
 void release_nsio(void) DECLSPEC_HIDDEN;
 BOOL is_gecko_path(const char*) DECLSPEC_HIDDEN;
-void set_viewer_zoom(NSContainer*,float) DECLSPEC_HIDDEN;
-float get_viewer_zoom(NSContainer*) DECLSPEC_HIDDEN;
+void set_viewer_zoom(GeckoBrowser*,float) DECLSPEC_HIDDEN;
+float get_viewer_zoom(GeckoBrowser*) DECLSPEC_HIDDEN;
 
 void init_node_cc(void) DECLSPEC_HIDDEN;
 
@@ -959,7 +963,7 @@ HRESULT return_nsform(nsresult,nsIDOMHTMLFormElement*,IHTMLFormElement**) DECLSP
 
 nsICommandParams *create_nscommand_params(void) DECLSPEC_HIDDEN;
 HRESULT nsnode_to_nsstring(nsIDOMNode*,nsAString*) DECLSPEC_HIDDEN;
-void get_editor_controller(NSContainer*) DECLSPEC_HIDDEN;
+void setup_editor_controller(GeckoBrowser*) DECLSPEC_HIDDEN;
 nsresult get_nsinterface(nsISupports*,REFIID,void**) DECLSPEC_HIDDEN;
 nsIWritableVariant *create_nsvariant(void) DECLSPEC_HIDDEN;
 nsIXMLHttpRequest *create_nsxhr(nsIDOMWindow *nswindow) DECLSPEC_HIDDEN;
@@ -981,6 +985,7 @@ HRESULT HTMLTxtRange_Create(HTMLDocumentNode*,nsIDOMRange*,IHTMLTxtRange**) DECL
 IHTMLStyleSheet *HTMLStyleSheet_Create(nsIDOMStyleSheet*) DECLSPEC_HIDDEN;
 IHTMLStyleSheetsCollection *HTMLStyleSheetsCollection_Create(nsIDOMStyleSheetList*) DECLSPEC_HIDDEN;
 
+void detach_document_node(HTMLDocumentNode*) DECLSPEC_HIDDEN;
 void detach_selection(HTMLDocumentNode*) DECLSPEC_HIDDEN;
 void detach_ranges(HTMLDocumentNode*) DECLSPEC_HIDDEN;
 HRESULT get_node_text(HTMLDOMNode*,BSTR*) DECLSPEC_HIDDEN;
@@ -994,6 +999,10 @@ HRESULT HTMLDOMTextNode_Create(HTMLDocumentNode*,nsIDOMNode*,HTMLDOMNode**) DECL
 BOOL variant_to_nscolor(const VARIANT *v, nsAString *nsstr) DECLSPEC_HIDDEN;
 HRESULT nscolor_to_str(LPCWSTR color, BSTR *ret) DECLSPEC_HIDDEN;
 
+static inline BOOL is_main_content_window(HTMLOuterWindow *window)
+{
+    return window->browser && window == window->browser->content_window;
+}
 
 struct HTMLAttributeCollection {
     DispatchEx dispex;
@@ -1107,13 +1116,13 @@ HRESULT elem_unique_id(unsigned id, BSTR *p) DECLSPEC_HIDDEN;
 /* commands */
 typedef struct {
     DWORD id;
-    HRESULT (*query)(HTMLDocument*,OLECMD*);
-    HRESULT (*exec)(HTMLDocument*,DWORD,VARIANT*,VARIANT*);
+    HRESULT (*query)(HTMLDocumentNode*,OLECMD*);
+    HRESULT (*exec)(HTMLDocumentNode*,DWORD,VARIANT*,VARIANT*);
 } cmdtable_t;
 
 extern const cmdtable_t editmode_cmds[] DECLSPEC_HIDDEN;
 
-void do_ns_command(HTMLDocument*,const char*,nsICommandParams*) DECLSPEC_HIDDEN;
+void do_ns_command(HTMLDocumentNode*,const char*,nsICommandParams*) DECLSPEC_HIDDEN;
 
 /* timer */
 #define UPDATE_UI       0x0001
@@ -1127,14 +1136,13 @@ HRESULT do_query_service(IUnknown*,REFGUID,REFIID,void**) DECLSPEC_HIDDEN;
 
 /* editor */
 HRESULT setup_edit_mode(HTMLDocumentObj*) DECLSPEC_HIDDEN;
-void init_editor(HTMLDocument*) DECLSPEC_HIDDEN;
-void handle_edit_event(HTMLDocument*,nsIDOMEvent*) DECLSPEC_HIDDEN;
-HRESULT editor_exec_copy(HTMLDocument*,DWORD,VARIANT*,VARIANT*) DECLSPEC_HIDDEN;
-HRESULT editor_exec_cut(HTMLDocument*,DWORD,VARIANT*,VARIANT*) DECLSPEC_HIDDEN;
-HRESULT editor_exec_paste(HTMLDocument*,DWORD,VARIANT*,VARIANT*) DECLSPEC_HIDDEN;
-void handle_edit_load(HTMLDocument*) DECLSPEC_HIDDEN;
-HRESULT editor_is_dirty(HTMLDocument*) DECLSPEC_HIDDEN;
-void set_dirty(HTMLDocument*,VARIANT_BOOL) DECLSPEC_HIDDEN;
+void init_editor(HTMLDocumentNode*) DECLSPEC_HIDDEN;
+void handle_edit_event(HTMLDocumentNode*,nsIDOMEvent*) DECLSPEC_HIDDEN;
+HRESULT editor_exec_copy(HTMLDocumentNode*,DWORD,VARIANT*,VARIANT*) DECLSPEC_HIDDEN;
+HRESULT editor_exec_cut(HTMLDocumentNode*,DWORD,VARIANT*,VARIANT*) DECLSPEC_HIDDEN;
+HRESULT editor_exec_paste(HTMLDocumentNode*,DWORD,VARIANT*,VARIANT*) DECLSPEC_HIDDEN;
+HRESULT browser_is_dirty(GeckoBrowser*) DECLSPEC_HIDDEN;
+void set_dirty(GeckoBrowser*,VARIANT_BOOL) DECLSPEC_HIDDEN;
 
 extern DWORD mshtml_tls DECLSPEC_HIDDEN;
 
@@ -1321,17 +1329,6 @@ static inline char *heap_strndupWtoU(LPCWSTR str, unsigned len)
     return ret;
 }
 
-static inline void windowref_addref(windowref_t *ref)
-{
-    InterlockedIncrement(&ref->ref);
-}
-
-static inline void windowref_release(windowref_t *ref)
-{
-    if(!InterlockedDecrement(&ref->ref))
-        heap_free(ref);
-}
-
 static inline VARIANT_BOOL variant_bool(BOOL b)
 {
     return b ? VARIANT_TRUE : VARIANT_FALSE;
@@ -1346,5 +1343,6 @@ UINT cp_from_charset_string(BSTR) DECLSPEC_HIDDEN;
 BSTR charset_string_from_cp(UINT) DECLSPEC_HIDDEN;
 HINSTANCE get_shdoclc(void) DECLSPEC_HIDDEN;
 void set_statustext(HTMLDocumentObj*,INT,LPCWSTR) DECLSPEC_HIDDEN;
+IInternetSecurityManager *get_security_manager(void) DECLSPEC_HIDDEN;
 
 extern HINSTANCE hInst DECLSPEC_HIDDEN;
