@@ -1,10 +1,12 @@
-wine-development (4.4-1) UNRELEASED; urgency=medium
+wine-development (4.4-1) unstable; urgency=medium
 
   * New upstream release 4.4, released Mar 15, 2019.
     - New MSIDB tool for manipulating MSI databases.
     - Support for custom draw buttons in common controls.
     - Many more Media Foundation APIs implemented.
     - Various bug fixes.
+  * Support building with pcap 1.9.0.
+  * Do not reset shell folder settings after each upgrade (closes: #851337).
 
  -- Michael Gilbert <mgilbert@debian.org>  Wed, 17 Jul 2019 00:18:13 +0000
 

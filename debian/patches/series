@@ -6,6 +6,7 @@ debianization/winemenubuilder.patch
 debianization/wineserver-persistence.patch
 
 disable/tests.patch
+disable/folder-reset.patch
 disable/line-wrapping.patch
 disable/addons-download.patch
 disable/po-modifications.patch
@@ -20,6 +21,7 @@ binary-indep/manpages.patch
 binary-indep/sfnt2fon.patch
 
 fixes/arm.patch
+fixes/pcap.patch
 fixes/arm64.patch
 fixes/gstbase.patch
 fixes/printer-resolution.patch

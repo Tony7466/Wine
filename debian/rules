@@ -60,6 +60,9 @@ CONFLAGS=--with-gnutls \
          --datarootdir=/$(DATDIR) \
          $(shell dpkg-buildflags --export=cmdline) \
 
+# if CC is unset, build with gcc 9
+export CC?=gcc-9
+
 # flags specific to kfreebsd
 ifeq ($(DEB_BUILD_ARCH_OS), kfreebsd)
 export DEB_LDFLAGS_MAINT_APPEND+=-lfreebsd-glue

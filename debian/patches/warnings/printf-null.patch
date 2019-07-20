@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/libs/wpp/ppl.l
 +++ b/libs/wpp/ppl.l
-@@ -1628,8 +1628,8 @@ void pp_do_include(char *fname, int type
+@@ -1620,8 +1620,8 @@ void pp_do_include(char *fname, int type
  	pp_incl_state.ppp = NULL;
  
  	if(pp_status.debug)

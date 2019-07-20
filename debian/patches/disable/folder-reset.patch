@@ -1,0 +1,88 @@
+description: do not reset shell folder settings on upgrade
+origin: http://bugs.winehq.org/show_bug.cgi?id=22974
+author: i.Dark_Templar
+bug: http://bugs.debian.org/851337
+
+--- a/dlls/shell32/shellpath.c
++++ b/dlls/shell32/shellpath.c
+@@ -59,6 +59,8 @@ WINE_DEFAULT_DEBUG_CHANNEL(shell);
+ 
+ static const BOOL is_win64 = sizeof(void *) > sizeof(int);
+ 
++static void _SHCreateSymbolicLinks(void);
++
+ /*
+ 	########## Combining and Constructing paths ##########
+ */
+@@ -4091,6 +4093,9 @@ HRESULT WINAPI SHGetFolderPathAndSubDirW
+         goto end;
+     }
+ 
++    /* set up symlinks to default directories */
++    _SHCreateSymbolicLinks();
++
+     /* create directory/directories */
+     ret = SHCreateDirectoryExW(hwndOwner, szBuildPath, NULL);
+     if (ret && ret != ERROR_ALREADY_EXISTS)
+@@ -4418,9 +4423,9 @@ static void _SHCreateSymbolicLinks(void)
+     char * xdg_desktop_dir;
+ 
+     /* Create all necessary profile sub-dirs up to 'My Documents' and get the unix path. */
+-    hr = SHGetFolderPathW(NULL, CSIDL_PERSONAL|CSIDL_FLAG_CREATE, NULL,
++    hr = SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL,
+                           SHGFP_TYPE_DEFAULT, wszTempPath);
+-    if (FAILED(hr)) return;
++    if (FAILED(hr) && (hr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))) return;
+     pszPersonal = wine_get_unix_file_name(wszTempPath);
+     if (!pszPersonal) return;
+ 
+@@ -4472,7 +4477,6 @@ static void _SHCreateSymbolicLinks(void)
+         }
+ 
+         /* Replace 'My Documents' directory with a symlink or fail silently if not empty. */
+-        remove(pszPersonal);
+         symlink(szPersonalTarget, pszPersonal);
+     }
+     else
+@@ -4480,6 +4484,7 @@ static void _SHCreateSymbolicLinks(void)
+         /* '$HOME' doesn't exist. Create 'My Pictures', 'My Videos' and 'My Music' subdirs
+          * in '%USERPROFILE%\\My Documents' or fail silently if they already exist. */
+         pszHome = NULL;
++        mkdir(pszPersonal, 0777);
+         strcpy(szPersonalTarget, pszPersonal);
+         for (i = 0; i < ARRAY_SIZE(aidsMyStuff); i++) {
+             strcpy(szMyStuffTarget, szPersonalTarget);
+@@ -4492,9 +4497,9 @@ static void _SHCreateSymbolicLinks(void)
+     for (i=0; i < ARRAY_SIZE(aidsMyStuff); i++)
+     {
+         /* Create the current 'My Whatever' folder and get its unix path. */
+-        hr = SHGetFolderPathW(NULL, acsidlMyStuff[i]|CSIDL_FLAG_CREATE, NULL,
++        hr = SHGetFolderPathW(NULL, acsidlMyStuff[i], NULL,
+                               SHGFP_TYPE_DEFAULT, wszTempPath);
+-        if (FAILED(hr)) continue;
++        if (hr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)) continue;
+ 
+         pszMyStuff = wine_get_unix_file_name(wszTempPath);
+         if (!pszMyStuff) continue;
+@@ -4528,7 +4533,6 @@ static void _SHCreateSymbolicLinks(void)
+             strcpy(szMyStuffTarget, szPersonalTarget);
+             break;
+         }
+-        remove(pszMyStuff);
+         symlink(szMyStuffTarget, pszMyStuff);
+         heap_free(pszMyStuff);
+     }
+@@ -4545,11 +4549,10 @@ static void _SHCreateSymbolicLinks(void)
+         (_SHAppendToUnixPath(szDesktopTarget, DesktopW) &&
+         !stat(szDesktopTarget, &statFolder) && S_ISDIR(statFolder.st_mode)))
+     {
+-        hr = SHGetFolderPathW(NULL, CSIDL_DESKTOPDIRECTORY|CSIDL_FLAG_CREATE, NULL,
++        hr = SHGetFolderPathW(NULL, CSIDL_DESKTOPDIRECTORY, NULL,
+                               SHGFP_TYPE_DEFAULT, wszTempPath);
+-        if (SUCCEEDED(hr) && (pszDesktop = wine_get_unix_file_name(wszTempPath))) 
++        if ((hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)) && (pszDesktop = wine_get_unix_file_name(wszTempPath)))
+         {
+-            remove(pszDesktop);
+             if (xdg_desktop_dir)
+                 symlink(xdg_desktop_dir, pszDesktop);
+             else

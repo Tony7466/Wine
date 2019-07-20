@@ -13,6 +13,7 @@ Files-Excluded:
  libs/wine/casemap.c
  libs/wine/collation.c
  libs/port/compose.c
+ libs/port/combclass.c
  libs/port/digitmap.c
  libs/port/decompose.c
  dlls/dsound/fir.h
