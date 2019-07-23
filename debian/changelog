@@ -1,3 +1,9 @@
+wine-development (4.4-3) unstable; urgency=medium
+
+  * Fix build failure on arm64.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Tue, 23 Jul 2019 04:32:51 +0000
+
 wine-development (4.4-2) unstable; urgency=medium
 
   * Build with gcc defaults.
