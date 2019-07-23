@@ -1,3 +1,15 @@
+wine-development (4.5-1) UNRELEASED; urgency=medium
+
+  * New upstream release 4.5, released Mar 29, 2019.
+    - Support for Vulkan 1.1.
+    - Better support for kernel objects in device drivers.
+    - Still more Media Foundation APIs implemented.
+    - Support for SVG elements in MSHTML.
+    - Fixes for case conversion troubles in Turkish locale.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Tue, 23 Jul 2019 05:13:08 +0000
+
 wine-development (4.4-3) unstable; urgency=medium
 
   * Fix build failure on arm64.
