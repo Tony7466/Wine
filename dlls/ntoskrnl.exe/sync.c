@@ -76,6 +76,12 @@ NTSTATUS WINAPI KeWaitForMultipleObjects(ULONG count, void *pobjs[],
     EnterCriticalSection( &sync_cs );
     for (i = 0; i < count; i++)
     {
+        if (objs[i]->WaitListHead.Blink == INVALID_HANDLE_VALUE)
+        {
+            handles[i] = kernel_object_handle( objs[i], SYNCHRONIZE );
+            continue;
+        }
+
         ++*((ULONG_PTR *)&objs[i]->WaitListHead.Flink);
         if (!objs[i]->WaitListHead.Blink)
         {
@@ -127,7 +133,11 @@ NTSTATUS WINAPI KeWaitForMultipleObjects(ULONG count, void *pobjs[],
             }
         }
 
-        if (!--*((ULONG_PTR *)&objs[i]->WaitListHead.Flink))
+        if (objs[i]->WaitListHead.Blink == INVALID_HANDLE_VALUE)
+        {
+            NtClose( handles[i] );
+        }
+        else if (!--*((ULONG_PTR *)&objs[i]->WaitListHead.Flink))
         {
             switch (objs[i]->Type)
             {
@@ -186,10 +196,24 @@ void WINAPI KeInitializeEvent( PRKEVENT event, EVENT_TYPE type, BOOLEAN state )
     event->Header.WaitListHead.Flink = NULL;
 }
 
+static void *create_event_object( HANDLE handle )
+{
+    EVENT_BASIC_INFORMATION info;
+    KEVENT *event;
+
+    if (!(event = alloc_kernel_object( ExEventObjectType, handle, sizeof(*event), 0 ))) return NULL;
+
+    if (!NtQueryEvent( handle, EventBasicInformation, &info, sizeof(info), NULL ))
+        KeInitializeEvent( event, info.EventType, info.EventState );
+    event->Header.WaitListHead.Blink = INVALID_HANDLE_VALUE; /* mark as kernel object */
+    return event;
+}
+
 static const WCHAR event_type_name[] = {'E','v','e','n','t',0};
 
 static struct _OBJECT_TYPE event_type = {
     event_type_name,
+    create_event_object
 };
 
 POBJECT_TYPE ExEventObjectType = &event_type;
@@ -200,15 +224,27 @@ POBJECT_TYPE ExEventObjectType = &event_type;
 LONG WINAPI KeSetEvent( PRKEVENT event, KPRIORITY increment, BOOLEAN wait )
 {
     HANDLE handle;
-    LONG ret;
+    LONG ret = 0;
 
     TRACE("event %p, increment %d, wait %u.\n", event, increment, wait);
 
-    EnterCriticalSection( &sync_cs );
-    ret = InterlockedExchange( &event->Header.SignalState, TRUE );
-    if ((handle = event->Header.WaitListHead.Blink))
-        SetEvent( handle );
-    LeaveCriticalSection( &sync_cs );
+    if (event->Header.WaitListHead.Blink != INVALID_HANDLE_VALUE)
+    {
+        EnterCriticalSection( &sync_cs );
+        ret = InterlockedExchange( &event->Header.SignalState, TRUE );
+        if ((handle = event->Header.WaitListHead.Blink))
+            SetEvent( handle );
+        LeaveCriticalSection( &sync_cs );
+    }
+    else
+    {
+        if ((handle = kernel_object_handle( event, EVENT_MODIFY_STATE )))
+        {
+            NtSetEvent( handle, &ret );
+            NtClose( handle );
+        }
+        event->Header.SignalState = TRUE;
+    }
 
     return ret;
 }
@@ -219,15 +255,27 @@ LONG WINAPI KeSetEvent( PRKEVENT event, KPRIORITY increment, BOOLEAN wait )
 LONG WINAPI KeResetEvent( PRKEVENT event )
 {
     HANDLE handle;
-    LONG ret;
+    LONG ret = 0;
 
     TRACE("event %p.\n", event);
 
-    EnterCriticalSection( &sync_cs );
-    ret = InterlockedExchange( &event->Header.SignalState, FALSE );
-    if ((handle = event->Header.WaitListHead.Blink))
-        ResetEvent( handle );
-    LeaveCriticalSection( &sync_cs );
+    if (event->Header.WaitListHead.Blink != INVALID_HANDLE_VALUE)
+    {
+        EnterCriticalSection( &sync_cs );
+        ret = InterlockedExchange( &event->Header.SignalState, FALSE );
+        if ((handle = event->Header.WaitListHead.Blink))
+            ResetEvent( handle );
+        LeaveCriticalSection( &sync_cs );
+    }
+    else
+    {
+        if ((handle = kernel_object_handle( event, EVENT_MODIFY_STATE )))
+        {
+            NtResetEvent( handle, &ret );
+            NtClose( handle );
+        }
+        event->Header.SignalState = FALSE;
+    }
 
     return ret;
 }

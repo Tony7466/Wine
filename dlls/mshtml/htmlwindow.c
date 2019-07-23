@@ -38,6 +38,7 @@
 #include "mshtml_private.h"
 #include "htmlevent.h"
 #include "htmlscript.h"
+#include "htmlstyle.h"
 #include "pluginhost.h"
 #include "binding.h"
 #include "resource.h"
@@ -295,6 +296,8 @@ static void release_inner_window(HTMLInnerWindow *This)
 
     if(This->session_storage)
         IHTMLStorage_Release(This->session_storage);
+    if(This->local_storage)
+        IHTMLStorage_Release(This->local_storage);
 
     if(This->mon)
         IMoniker_Release(This->mon);
@@ -2123,7 +2126,7 @@ static HRESULT WINAPI HTMLWindow6_get_sessionStorage(IHTMLWindow6 *iface, IHTMLS
 {
     HTMLWindow *This = impl_from_IHTMLWindow6(iface);
 
-    FIXME("(%p)->(%p)\n", This, p);
+    TRACE("(%p)->(%p)\n", This, p);
 
     if(!This->inner_window->session_storage) {
         HRESULT hres;
@@ -2141,8 +2144,20 @@ static HRESULT WINAPI HTMLWindow6_get_sessionStorage(IHTMLWindow6 *iface, IHTMLS
 static HRESULT WINAPI HTMLWindow6_get_localStorage(IHTMLWindow6 *iface, IHTMLStorage **p)
 {
     HTMLWindow *This = impl_from_IHTMLWindow6(iface);
-    FIXME("(%p)->(%p)\n", This, p);
-    return E_NOTIMPL;
+
+    TRACE("(%p)->(%p)\n", This, p);
+
+    if(!This->inner_window->local_storage) {
+        HRESULT hres;
+
+        hres = create_storage(&This->inner_window->local_storage);
+        if(FAILED(hres))
+            return hres;
+    }
+
+    IHTMLStorage_AddRef(This->inner_window->local_storage);
+    *p = This->inner_window->local_storage;
+    return S_OK;
 }
 
 static HRESULT WINAPI HTMLWindow6_put_onhashchange(IHTMLWindow6 *iface, VARIANT v)
@@ -2308,8 +2323,42 @@ static HRESULT WINAPI HTMLWindow7_getComputedStyle(IHTMLWindow7 *iface, IHTMLDOM
                                                    BSTR pseudo_elt, IHTMLCSSStyleDeclaration **p)
 {
     HTMLWindow *This = impl_from_IHTMLWindow7(iface);
-    FIXME("(%p)->(%p %s %p)\n", This, node, debugstr_w(pseudo_elt), p);
-    return E_NOTIMPL;
+    nsIDOMCSSStyleDeclaration *nsstyle;
+    nsAString pseudo_elt_str;
+    HTMLElement *element;
+    IHTMLElement *elem;
+    nsresult nsres;
+    HRESULT hres;
+
+    TRACE("(%p)->(%p %s %p)\n", This, node, debugstr_w(pseudo_elt), p);
+
+    if(!This->outer_window)
+        return E_UNEXPECTED;
+
+    hres = IHTMLDOMNode_QueryInterface(node, &IID_IHTMLElement, (void**)&elem);
+    if(FAILED(hres))
+        return hres;
+
+    element = unsafe_impl_from_IHTMLElement(elem);
+    if(!element) {
+        WARN("Not our element\n");
+        IHTMLElement_Release(elem);
+        return E_INVALIDARG;
+    }
+
+    nsAString_Init(&pseudo_elt_str, NULL);
+    nsres = nsIDOMWindow_GetComputedStyle(This->outer_window->nswindow, element->dom_element,
+                                          &pseudo_elt_str, &nsstyle);
+    IHTMLElement_Release(elem);
+    nsAString_Finish(&pseudo_elt_str);
+    if(NS_FAILED(nsres)) {
+        FIXME("GetComputedStyle failed: %08x\n", nsres);
+        return E_FAIL;
+    }
+
+    hres = create_computed_style(nsstyle, p);
+    nsIDOMCSSStyleDeclaration_Release(nsstyle);
+    return hres;
 }
 
 static HRESULT WINAPI HTMLWindow7_get_styleMedia(IHTMLWindow7 *iface, IHTMLStyleMedia **p)
@@ -3450,14 +3499,8 @@ static void HTMLWindow_bind_event(DispatchEx *dispex, eventid_t eid)
 
 static void HTMLWindow_init_dispex_info(dispex_data_t *info, compat_mode_t compat_mode)
 {
-    /* FIXME: Expose getComputedStyle once it's implemented.
-     * Stubs break existing web sites. */
-    static const dispex_hook_t window7_hooks[] = {
-        {DISPID_IHTMLWINDOW7_GETCOMPUTEDSTYLE, NULL},
-        {DISPID_UNKNOWN}
-    };
     if(compat_mode >= COMPAT_MODE_IE9)
-        dispex_info_add_interface(info, IHTMLWindow7_tid, window7_hooks);
+        dispex_info_add_interface(info, IHTMLWindow7_tid, NULL);
     dispex_info_add_interface(info, IHTMLWindow5_tid, NULL);
     EventTarget_init_dispex_info(info, compat_mode);
 }

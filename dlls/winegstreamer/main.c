@@ -257,41 +257,55 @@ void dump_AM_MEDIA_TYPE(const AM_MEDIA_TYPE * pmt)
     TRACE("\t%s\n\t%s\n\t...\n\t%s\n", debugstr_guid(&pmt->majortype), debugstr_guid(&pmt->subtype), debugstr_guid(&pmt->formattype));
 }
 
-DWORD Gstreamer_init(void)
+static BOOL CALLBACK init_gstreamer_proc(INIT_ONCE *once, void *param, void **ctx)
 {
-    static int inited;
+    BOOL *status = param;
+    char argv0[] = "wine";
+    char argv1[] = "--gst-disable-registry-fork";
+    char *args[3];
+    char **argv = args;
+    int argc = 2;
+    GError *err = NULL;
 
-    if (!inited) {
-        char argv0[] = "wine";
-        char argv1[] = "--gst-disable-registry-fork";
-        char **argv = HeapAlloc(GetProcessHeap(), 0, sizeof(char *)*3);
-        int argc = 2;
-        GError *err = NULL;
+    TRACE("Initializing...\n");
 
-        TRACE("initializing\n");
+    argv[0] = argv0;
+    argv[1] = argv1;
+    argv[2] = NULL;
+    *status = gst_init_check(&argc, &argv, &err);
+    if (*status)
+    {
+        HINSTANCE handle;
 
-        argv[0] = argv0;
-        argv[1] = argv1;
-        argv[2] = NULL;
-        inited = gst_init_check(&argc, &argv, &err);
-        HeapFree(GetProcessHeap(), 0, argv);
-        if (err) {
-            ERR("Failed to initialize gstreamer: %s\n", err->message);
-            g_error_free(err);
-        }
-        if (inited) {
-            HINSTANCE newhandle;
-            /* Unloading glib is a bad idea.. it installs atexit handlers,
-             * so never unload the dll after loading */
-            GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
-                               (LPCWSTR)hInst, &newhandle);
-            if (!newhandle)
-                ERR("Could not pin module %p\n", hInst);
+        TRACE("Inititialized, version %s. Built with %d.%d.%d.\n", gst_version_string(),
+                GST_VERSION_MAJOR, GST_VERSION_MINOR, GST_VERSION_MICRO);
 
-            start_dispatch_thread();
-        }
+        /* Unloading glib is a bad idea.. it installs atexit handlers,
+         * so never unload the dll after loading */
+        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+                (LPCWSTR)hInst, &handle);
+        if (!handle)
+            ERR("Failed to pin module %p.\n", hInst);
+
+        start_dispatch_thread();
     }
-    return inited;
+    else if (err)
+    {
+        ERR("Failed to initialize gstreamer: %s\n", debugstr_a(err->message));
+        g_error_free(err);
+    }
+
+    return TRUE;
+}
+
+BOOL init_gstreamer(void)
+{
+    static INIT_ONCE once = INIT_ONCE_STATIC_INIT;
+    static BOOL status;
+
+    InitOnceExecuteOnce(&once, init_gstreamer_proc, &status, NULL);
+
+    return status;
 }
 
 #define INF_SET_ID(id)            \

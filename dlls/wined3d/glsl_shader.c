@@ -352,7 +352,7 @@ struct glsl_ffp_fragment_shader
 struct glsl_ffp_destroy_ctx
 {
     struct shader_glsl_priv *priv;
-    const struct wined3d_gl_info *gl_info;
+    const struct wined3d_context *context;
 };
 
 static void shader_glsl_generate_shader_epilogue(const struct wined3d_shader_context *ctx);
@@ -8998,7 +8998,7 @@ static const char *shader_glsl_ffp_mcs(enum wined3d_material_color_source mcs, c
 }
 
 static void shader_glsl_ffp_vertex_lighting_footer(struct wined3d_string_buffer *buffer,
-        const struct wined3d_ffp_vs_settings *settings, unsigned int idx)
+        const struct wined3d_ffp_vs_settings *settings, unsigned int idx, BOOL legacy_lighting)
 {
     shader_addline(buffer, "diffuse += clamp(dot(dir, normal), 0.0, 1.0)"
             " * ffp_light[%u].diffuse.xyz * att;\n", idx);
@@ -9006,8 +9006,9 @@ static void shader_glsl_ffp_vertex_lighting_footer(struct wined3d_string_buffer 
         shader_addline(buffer, "t = dot(normal, normalize(dir - normalize(ec_pos.xyz)));\n");
     else
         shader_addline(buffer, "t = dot(normal, normalize(dir + vec3(0.0, 0.0, -1.0)));\n");
-    shader_addline(buffer, "if (dot(dir, normal) > 0.0 && t > 0.0) specular +="
-            " pow(t, ffp_material.shininess) * ffp_light[%u].specular * att;\n", idx);
+    shader_addline(buffer, "if (dot(dir, normal) > 0.0 && t > 0.0%s) specular +="
+            " pow(t, ffp_material.shininess) * ffp_light[%u].specular * att;\n",
+            legacy_lighting ? " && ffp_material.shininess > 0.0" : "", idx);
 }
 
 static void shader_glsl_ffp_vertex_lighting(struct wined3d_string_buffer *buffer,
@@ -9062,7 +9063,7 @@ static void shader_glsl_ffp_vertex_lighting(struct wined3d_string_buffer *buffer
             continue;
         }
         shader_addline(buffer, "dir = normalize(dir);\n");
-        shader_glsl_ffp_vertex_lighting_footer(buffer, settings, idx);
+        shader_glsl_ffp_vertex_lighting_footer(buffer, settings, idx, legacy_lighting);
         shader_addline(buffer, "}\n");
     }
 
@@ -9103,7 +9104,7 @@ static void shader_glsl_ffp_vertex_lighting(struct wined3d_string_buffer *buffer
             shader_addline(buffer, "}\n");
             continue;
         }
-        shader_glsl_ffp_vertex_lighting_footer(buffer, settings, idx);
+        shader_glsl_ffp_vertex_lighting_footer(buffer, settings, idx, legacy_lighting);
         shader_addline(buffer, "}\n");
     }
 
@@ -9114,7 +9115,7 @@ static void shader_glsl_ffp_vertex_lighting(struct wined3d_string_buffer *buffer
             continue;
         shader_addline(buffer, "att = 1.0;\n");
         shader_addline(buffer, "dir = normalize(ffp_light[%u].direction.xyz);\n", idx);
-        shader_glsl_ffp_vertex_lighting_footer(buffer, settings, idx);
+        shader_glsl_ffp_vertex_lighting_footer(buffer, settings, idx, legacy_lighting);
     }
 
     for (i = 0; i < settings->parallel_point_light_count; ++i, ++idx)
@@ -9124,7 +9125,7 @@ static void shader_glsl_ffp_vertex_lighting(struct wined3d_string_buffer *buffer
             continue;
         shader_addline(buffer, "att = 1.0;\n");
         shader_addline(buffer, "dir = normalize(ffp_light[%u].position.xyz);\n", idx);
-        shader_glsl_ffp_vertex_lighting_footer(buffer, settings, idx);
+        shader_glsl_ffp_vertex_lighting_footer(buffer, settings, idx, legacy_lighting);
     }
 
     shader_addline(buffer, "ffp_varying_diffuse.xyz = %s.xyz * ambient + %s.xyz * diffuse + %s.xyz;\n",
@@ -11188,7 +11189,6 @@ static HRESULT shader_glsl_alloc(struct wined3d_device *device, const struct win
         const struct fragment_pipeline *fragment_pipe)
 {
     SIZE_T stack_size = wined3d_log2i(max(WINED3D_MAX_VS_CONSTS_F, WINED3D_MAX_PS_CONSTS_F)) + 1;
-    const struct wined3d_gl_info *gl_info = &device->adapter->gl_info;
     struct fragment_caps fragment_caps;
     void *vertex_priv, *fragment_priv;
     struct shader_glsl_priv *priv;
@@ -11208,7 +11208,7 @@ static HRESULT shader_glsl_alloc(struct wined3d_device *device, const struct win
     if (!(fragment_priv = fragment_pipe->alloc_private(&glsl_shader_backend, priv)))
     {
         ERR("Failed to initialize fragment pipe.\n");
-        vertex_pipe->vp_free(device);
+        vertex_pipe->vp_free(device, NULL);
         heap_free(priv);
         return E_FAIL;
     }
@@ -11242,7 +11242,7 @@ static HRESULT shader_glsl_alloc(struct wined3d_device *device, const struct win
     priv->next_constant_version = 1;
     priv->vertex_pipe = vertex_pipe;
     priv->fragment_pipe = fragment_pipe;
-    fragment_pipe->get_caps(gl_info, &fragment_caps);
+    fragment_pipe->get_caps(device->adapter, &fragment_caps);
     priv->ffp_proj_control = fragment_caps.wined3d_caps & WINED3D_FRAGMENT_CAP_PROJ_CONTROL;
     priv->legacy_lighting = device->wined3d->flags & WINED3D_LEGACY_FFP_LIGHTING;
 
@@ -11257,14 +11257,14 @@ fail:
     constant_heap_free(&priv->vconst_heap);
     heap_free(priv->stack);
     string_buffer_free(&priv->shader_buffer);
-    fragment_pipe->free_private(device);
-    vertex_pipe->vp_free(device);
+    fragment_pipe->free_private(device, NULL);
+    vertex_pipe->vp_free(device, NULL);
     heap_free(priv);
     return E_OUTOFMEMORY;
 }
 
 /* Context activation is done by the caller. */
-static void shader_glsl_free(struct wined3d_device *device)
+static void shader_glsl_free(struct wined3d_device *device, struct wined3d_context *context)
 {
     struct shader_glsl_priv *priv = device->shader_priv;
 
@@ -11274,8 +11274,8 @@ static void shader_glsl_free(struct wined3d_device *device)
     heap_free(priv->stack);
     string_buffer_list_cleanup(&priv->string_buffers);
     string_buffer_free(&priv->shader_buffer);
-    priv->fragment_pipe->free_private(device);
-    priv->vertex_pipe->vp_free(device);
+    priv->fragment_pipe->free_private(device, context);
+    priv->vertex_pipe->vp_free(device, context);
 
     heap_free(device->shader_priv);
     device->shader_priv = NULL;
@@ -11336,8 +11336,9 @@ static unsigned int shader_glsl_get_shader_model(const struct wined3d_gl_info *g
     return 2;
 }
 
-static void shader_glsl_get_caps(const struct wined3d_gl_info *gl_info, struct shader_caps *caps)
+static void shader_glsl_get_caps(const struct wined3d_adapter *adapter, struct shader_caps *caps)
 {
+    const struct wined3d_gl_info *gl_info = &adapter->gl_info;
     unsigned int shader_model = shader_glsl_get_shader_model(gl_info);
 
     TRACE("Shader model %u.\n", shader_model);
@@ -11675,8 +11676,10 @@ const struct wined3d_shader_backend_ops glsl_shader_backend =
 
 static void glsl_vertex_pipe_vp_enable(const struct wined3d_gl_info *gl_info, BOOL enable) {}
 
-static void glsl_vertex_pipe_vp_get_caps(const struct wined3d_gl_info *gl_info, struct wined3d_vertex_caps *caps)
+static void glsl_vertex_pipe_vp_get_caps(const struct wined3d_adapter *adapter, struct wined3d_vertex_caps *caps)
 {
+    const struct wined3d_gl_info *gl_info = &adapter->gl_info;
+
     caps->xyzrhw = TRUE;
     caps->emulated_flatshading = !needs_legacy_glsl_syntax(gl_info);
     caps->ffp_generic_attributes = TRUE;
@@ -11718,30 +11721,31 @@ static void *glsl_vertex_pipe_vp_alloc(const struct wined3d_shader_backend_ops *
     return NULL;
 }
 
-static void shader_glsl_free_ffp_vertex_shader(struct wine_rb_entry *entry, void *context)
+static void shader_glsl_free_ffp_vertex_shader(struct wine_rb_entry *entry, void *param)
 {
     struct glsl_ffp_vertex_shader *shader = WINE_RB_ENTRY_VALUE(entry,
             struct glsl_ffp_vertex_shader, desc.entry);
     struct glsl_shader_prog_link *program, *program2;
-    struct glsl_ffp_destroy_ctx *ctx = context;
+    struct glsl_ffp_destroy_ctx *ctx = param;
+    const struct wined3d_gl_info *gl_info = ctx->context->gl_info;
 
     LIST_FOR_EACH_ENTRY_SAFE(program, program2, &shader->linked_programs,
             struct glsl_shader_prog_link, vs.shader_entry)
     {
-        delete_glsl_program_entry(ctx->priv, ctx->gl_info, program);
+        delete_glsl_program_entry(ctx->priv, gl_info, program);
     }
-    ctx->gl_info->gl_ops.ext.p_glDeleteShader(shader->id);
+    GL_EXTCALL(glDeleteShader(shader->id));
     heap_free(shader);
 }
 
 /* Context activation is done by the caller. */
-static void glsl_vertex_pipe_vp_free(struct wined3d_device *device)
+static void glsl_vertex_pipe_vp_free(struct wined3d_device *device, struct wined3d_context *context)
 {
     struct shader_glsl_priv *priv = device->vertex_priv;
     struct glsl_ffp_destroy_ctx ctx;
 
     ctx.priv = priv;
-    ctx.gl_info = &device->adapter->gl_info;
+    ctx.context = context;
     wine_rb_destroy(&priv->ffp_vertex_shaders, shader_glsl_free_ffp_vertex_shader, &ctx);
 }
 
@@ -12166,8 +12170,10 @@ static void glsl_fragment_pipe_enable(const struct wined3d_gl_info *gl_info, BOO
     /* Nothing to do. */
 }
 
-static void glsl_fragment_pipe_get_caps(const struct wined3d_gl_info *gl_info, struct fragment_caps *caps)
+static void glsl_fragment_pipe_get_caps(const struct wined3d_adapter *adapter, struct fragment_caps *caps)
 {
+    const struct wined3d_gl_info *gl_info = &adapter->gl_info;
+
     caps->wined3d_caps = WINED3D_FRAGMENT_CAP_PROJ_CONTROL
             | WINED3D_FRAGMENT_CAP_SRGB_WRITE
             | WINED3D_FRAGMENT_CAP_COLOR_KEY;
@@ -12225,30 +12231,31 @@ static void *glsl_fragment_pipe_alloc(const struct wined3d_shader_backend_ops *s
     return NULL;
 }
 
-static void shader_glsl_free_ffp_fragment_shader(struct wine_rb_entry *entry, void *context)
+static void shader_glsl_free_ffp_fragment_shader(struct wine_rb_entry *entry, void *param)
 {
     struct glsl_ffp_fragment_shader *shader = WINE_RB_ENTRY_VALUE(entry,
             struct glsl_ffp_fragment_shader, entry.entry);
     struct glsl_shader_prog_link *program, *program2;
-    struct glsl_ffp_destroy_ctx *ctx = context;
+    struct glsl_ffp_destroy_ctx *ctx = param;
+    const struct wined3d_gl_info *gl_info = ctx->context->gl_info;
 
     LIST_FOR_EACH_ENTRY_SAFE(program, program2, &shader->linked_programs,
             struct glsl_shader_prog_link, ps.shader_entry)
     {
-        delete_glsl_program_entry(ctx->priv, ctx->gl_info, program);
+        delete_glsl_program_entry(ctx->priv, gl_info, program);
     }
-    ctx->gl_info->gl_ops.ext.p_glDeleteShader(shader->id);
+    GL_EXTCALL(glDeleteShader(shader->id));
     heap_free(shader);
 }
 
 /* Context activation is done by the caller. */
-static void glsl_fragment_pipe_free(struct wined3d_device *device)
+static void glsl_fragment_pipe_free(struct wined3d_device *device, struct wined3d_context *context)
 {
     struct shader_glsl_priv *priv = device->fragment_priv;
     struct glsl_ffp_destroy_ctx ctx;
 
     ctx.priv = priv;
-    ctx.gl_info = &device->adapter->gl_info;
+    ctx.context = context;
     wine_rb_destroy(&priv->ffp_fragment_shaders, shader_glsl_free_ffp_fragment_shader, &ctx);
 }
 
@@ -13256,6 +13263,7 @@ static DWORD glsl_blitter_blit(struct wined3d_blitter *blitter, enum wined3d_bli
                 src_texture, src_sub_resource_idx, &upload_box);
 
         src_texture = staging_texture;
+        src_texture_gl = wined3d_texture_gl(src_texture);
         src_sub_resource_idx = 0;
     }
     else if (wined3d_settings.offscreen_rendering_mode != ORM_FBO

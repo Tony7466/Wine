@@ -213,12 +213,12 @@ static HRESULT WINAPI HTMLDocument_Invoke(IHTMLDocument2 *iface, DISPID dispIdMe
 static HRESULT WINAPI HTMLDocument_get_Script(IHTMLDocument2 *iface, IDispatch **p)
 {
     HTMLDocument *This = impl_from_IHTMLDocument2(iface);
+    HRESULT hres;
 
     TRACE("(%p)->(%p)\n", This, p);
 
-    *p = (IDispatch*)&This->window->base.IHTMLWindow2_iface;
-    IDispatch_AddRef(*p);
-    return S_OK;
+    hres = IHTMLDocument7_get_parentWindow(&This->IHTMLDocument7_iface, (IHTMLWindow2**)p);
+    return hres == S_OK && !*p ? E_PENDING : hres;
 }
 
 static HRESULT WINAPI HTMLDocument_get_all(IHTMLDocument2 *iface, IHTMLElementCollection **p)
@@ -1627,10 +1627,12 @@ static HRESULT WINAPI HTMLDocument_elementFromPoint(IHTMLDocument2 *iface, LONG 
 static HRESULT WINAPI HTMLDocument_get_parentWindow(IHTMLDocument2 *iface, IHTMLWindow2 **p)
 {
     HTMLDocument *This = impl_from_IHTMLDocument2(iface);
+    HRESULT hres;
 
     TRACE("(%p)->(%p)\n", This, p);
 
-    return IHTMLDocument7_get_defaultView(&This->IHTMLDocument7_iface, p);
+    hres = IHTMLDocument7_get_defaultView(&This->IHTMLDocument7_iface, p);
+    return hres == S_OK && !*p ? E_FAIL : hres;
 }
 
 static HRESULT WINAPI HTMLDocument_get_styleSheets(IHTMLDocument2 *iface,
@@ -3248,12 +3250,16 @@ static HRESULT WINAPI HTMLDocument7_Invoke(IHTMLDocument7 *iface, DISPID dispIdM
 
 static HRESULT WINAPI HTMLDocument7_get_defaultView(IHTMLDocument7 *iface, IHTMLWindow2 **p)
 {
-    HTMLDocument *This = impl_from_IHTMLDocument7(iface);
+    HTMLDocumentNode *This = impl_from_IHTMLDocument7(iface)->doc_node;
 
     TRACE("(%p)->(%p)\n", This, p);
 
-    *p = &This->window->base.IHTMLWindow2_iface;
-    IHTMLWindow2_AddRef(*p);
+    if(This->window && This->window->base.outer_window) {
+        *p = &This->window->base.outer_window->base.IHTMLWindow2_iface;
+        IHTMLWindow2_AddRef(*p);
+    }else {
+        *p = NULL;
+    }
     return S_OK;
 }
 
@@ -3282,8 +3288,39 @@ static HRESULT WINAPI HTMLDocument7_getElementsByTagNameNS(IHTMLDocument7 *iface
 static HRESULT WINAPI HTMLDocument7_createElementNS(IHTMLDocument7 *iface, VARIANT *pvarNS, BSTR bstrTag, IHTMLElement **newElem)
 {
     HTMLDocument *This = impl_from_IHTMLDocument7(iface);
-    FIXME("(%p)->(%s %s %p)\n", This, debugstr_variant(pvarNS), debugstr_w(bstrTag), newElem);
-    return E_NOTIMPL;
+    nsIDOMElement *dom_element;
+    HTMLElement *element;
+    nsAString ns, tag;
+    nsresult nsres;
+    HRESULT hres;
+
+    TRACE("(%p)->(%s %s %p)\n", This, debugstr_variant(pvarNS), debugstr_w(bstrTag), newElem);
+
+    if(!This->doc_node->nsdoc) {
+        FIXME("NULL nsdoc\n");
+        return E_FAIL;
+    }
+
+    if(pvarNS && V_VT(pvarNS) != VT_NULL && V_VT(pvarNS) != VT_BSTR)
+        FIXME("Unsupported namespace %s\n", debugstr_variant(pvarNS));
+
+    nsAString_InitDepend(&ns, pvarNS && V_VT(pvarNS) == VT_BSTR ? V_BSTR(pvarNS) : NULL);
+    nsAString_InitDepend(&tag, bstrTag);
+    nsres = nsIDOMHTMLDocument_CreateElementNS(This->doc_node->nsdoc, &ns, &tag, &dom_element);
+    nsAString_Finish(&ns);
+    nsAString_Finish(&tag);
+    if(NS_FAILED(nsres)) {
+        WARN("CreateElementNS failed: %08x\n", nsres);
+        return map_nsresult(nsres);
+    }
+
+    hres = HTMLElement_Create(This->doc_node, (nsIDOMNode*)dom_element, FALSE, &element);
+    nsIDOMElement_Release(dom_element);
+    if(FAILED(hres))
+        return hres;
+
+    *newElem = &element->IHTMLElement_iface;
+    return S_OK;
 }
 
 static HRESULT WINAPI HTMLDocument7_createAttributeNS(IHTMLDocument7 *iface, VARIANT *pvarNS,
@@ -4905,7 +4942,8 @@ void detach_document_node(HTMLDocumentNode *doc)
     for(i=0; i < doc->elem_vars_cnt; i++)
         heap_free(doc->elem_vars[i]);
     heap_free(doc->elem_vars);
-    doc->elem_vars_cnt = 0;
+    doc->elem_vars_cnt = doc->elem_vars_size = 0;
+    doc->elem_vars = NULL;
 
     if(doc->catmgr) {
         ICatInformation_Release(doc->catmgr);
@@ -4928,7 +4966,8 @@ static void HTMLDocumentNode_destructor(HTMLDOMNode *iface)
 {
     HTMLDocumentNode *This = impl_from_HTMLDOMNode(iface);
 
-    detach_document_node(This);
+    TRACE("(%p)\n", This);
+
     heap_free(This->event_vector);
     ConnectionPointContainer_Destroy(&This->basedoc.cp_container);
 }
@@ -4956,6 +4995,7 @@ static void HTMLDocumentNode_unlink(HTMLDOMNode *iface)
         nsIDOMHTMLDocument *nsdoc = This->nsdoc;
 
         release_document_mutation(This);
+        detach_document_node(This);
         This->nsdoc = NULL;
         nsIDOMHTMLDocument_Release(nsdoc);
         This->window = NULL;

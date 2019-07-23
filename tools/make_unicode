@@ -844,7 +844,7 @@ sub READ_SORTKEYS_FILE()
 
 ################################################################
 # build the sort keys table
-sub DUMP_SORTKEYS($@)
+sub dump_sortkeys($@)
 {
     my ($filename, @keys) = @_;
 
@@ -868,8 +868,9 @@ sub DUMP_SORTKEYS($@)
     printf OUTPUT "/* Unicode collation element table */\n";
     printf OUTPUT "/* generated from %s */\n", "$REPORTS/$SORTKEYS";
     printf OUTPUT "/* DO NOT EDIT!! */\n\n";
+    print OUTPUT "#include \"wine/unicode.h\"\n\n";
 
-    printf OUTPUT "const unsigned int collation_table[%d] =\n{\n", $ranges*256;
+    printf OUTPUT "const unsigned int DECLSPEC_HIDDEN collation_table[%d] =\n{\n", $ranges*256;
     printf OUTPUT "    /* index */\n";
     printf OUTPUT "%s,\n", DUMP_ARRAY( "0x%08x", 0, @offsets );
 
@@ -1031,8 +1032,7 @@ sub dump_uni2cp_table($$)
 
     # output all the subtables into a single array
 
-    printf OUTPUT "static const unsigned %s uni2cp_low[%d] =\n{\n",
-                  $width == 8 ? "char" : "short", ($index + 1) * 256 - $removed;
+    printf OUTPUT "static const unsigned %s uni2cp_low[] =\n{\n", $width == 8 ? "char" : "short";
 
     my $format = $width == 8 ? "0x%02x" : "0x%04x";
     for (my $i = $index = 0; $i < 257; $i++)
@@ -1599,7 +1599,7 @@ sub dump_mirroring($)
     print OUTPUT "/* generated from $UNIDATA/BidiMirroring.txt */\n";
     print OUTPUT "/* DO NOT EDIT!! */\n\n";
     print OUTPUT "#include \"wine/unicode.h\"\n\n";
-    DUMP_CASE_TABLE( "DECLSPEC_HIDDEN wine_mirror_map", @mirror_table );
+    dump_case_table( "wine_mirror_map", @mirror_table );
     close OUTPUT;
     save_file($filename);
 }
@@ -1757,9 +1757,9 @@ sub dump_digit_folding($)
     print OUTPUT "/* DO NOT EDIT!! */\n\n";
     print OUTPUT "#include \"wine/unicode.h\"\n\n";
 
-    DUMP_CASE_TABLE( "DECLSPEC_HIDDEN wine_digitmap",  @digitmap_table );
+    dump_case_table( "wine_digitmap",  @digitmap_table );
     print OUTPUT "\n";
-    DUMP_CASE_TABLE( "DECLSPEC_HIDDEN wine_compatmap", @compatmap_table );
+    dump_case_table( "wine_compatmap", @compatmap_table );
     close OUTPUT;
     save_file($filename);
 }
@@ -1767,7 +1767,7 @@ sub dump_digit_folding($)
 
 ################################################################
 # dump the case mapping tables
-sub DUMP_CASE_MAPPINGS($)
+sub dump_case_mappings($)
 {
     my $filename = shift;
     open OUTPUT,">$filename.new" or die "Cannot create $filename";
@@ -1777,9 +1777,9 @@ sub DUMP_CASE_MAPPINGS($)
     print OUTPUT "/* DO NOT EDIT!! */\n\n";
     print OUTPUT "#include \"wine/unicode.h\"\n\n";
 
-    DUMP_CASE_TABLE( "wine_casemap_lower", @tolower_table );
+    dump_case_table( "wine_casemap_lower", @tolower_table );
     print OUTPUT "\n";
-    DUMP_CASE_TABLE( "wine_casemap_upper", @toupper_table );
+    dump_case_table( "wine_casemap_upper", @toupper_table );
     close OUTPUT;
     save_file($filename);
 }
@@ -1787,7 +1787,7 @@ sub DUMP_CASE_MAPPINGS($)
 
 ################################################################
 # dump a case mapping table
-sub DUMP_CASE_TABLE($@)
+sub dump_case_table($@)
 {
     my ($name,@table) = @_;
 
@@ -1836,7 +1836,7 @@ sub DUMP_CASE_TABLE($@)
 
     # dump the table
 
-    printf OUTPUT "const WCHAR %s[%d] =\n", $name, $index * 256 + 512 - $removed;
+    printf OUTPUT "const WCHAR DECLSPEC_HIDDEN %s[%d] =\n", $name, $index * 256 + 512 - $removed;
     printf OUTPUT "{\n    /* index */\n";
     printf OUTPUT "%s,\n", DUMP_ARRAY( "0x%04x", 256, @filled );
     printf OUTPUT "    /* defaults */\n";
@@ -1892,7 +1892,7 @@ sub dump_simple_mapping($$@)
     my $def = shift;
     my @array = compress_array( 256, $def, @_[0..65535] );
 
-    printf OUTPUT "const unsigned short %s[%d] =\n{\n", $name, $#array+1;
+    printf OUTPUT "const unsigned short DECLSPEC_HIDDEN %s[%d] =\n{\n", $name, $#array+1;
     printf OUTPUT "    /* offsets */\n%s,\n", DUMP_ARRAY( "0x%04x", 0, @array[0..255] );
     printf OUTPUT "    /* values */\n%s\n};\n", DUMP_ARRAY( "0x%04x", 0, @array[256..$#array] );
 }
@@ -2179,7 +2179,7 @@ sub dump_nameprep($)
 
 ################################################################
 # dump the ctype tables
-sub DUMP_CTYPE_TABLES($)
+sub dump_ctype_tables($)
 {
     my $filename = shift;
     open OUTPUT,">$filename.new" or die "Cannot create $filename";
@@ -2767,11 +2767,11 @@ sub REPLACE_IN_FILE($@)
 
 chdir ".." if -f "./make_unicode";
 READ_DEFAULTS( $DEFAULTS );
-DUMP_CASE_MAPPINGS( "libs/wine/casemap.c" );
-DUMP_SORTKEYS( "libs/wine/collation.c", READ_SORTKEYS_FILE() );
+dump_case_mappings( "libs/port/casemap.c" );
+dump_sortkeys( "libs/port/collation.c", READ_SORTKEYS_FILE() );
 dump_compose_table( "libs/port/compose.c" );
 dump_decompose_table( "libs/port/decompose.c" );
-DUMP_CTYPE_TABLES( "libs/wine/wctype.c" );
+dump_ctype_tables( "libs/port/wctype.c" );
 dump_digit_folding( "libs/port/digitmap.c" );
 dump_combining_class( "libs/port/combclass.c" );
 dump_mirroring( "dlls/usp10/mirror.c" );

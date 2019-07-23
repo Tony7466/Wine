@@ -613,6 +613,7 @@ cpp_quote("#define MFBYTESTREAM_IS_DIRECTORY               0x00000080")
 cpp_quote("#define MFBYTESTREAM_HAS_SLOW_SEEK              0x00000100")
 cpp_quote("#define MFBYTESTREAM_IS_PARTIALLY_DOWNLOADED    0x00000200")
 cpp_quote("#define MFBYTESTREAM_SHARE_WRITE                0x00000400")
+cpp_quote("#define MFBYTESTREAM_DOES_NOT_USE_NETWORK       0x00000800")
 
 cpp_quote("#define MFBYTESTREAM_SEEK_FLAG_CANCEL_PENDING_IO  0x00000001")
 
@@ -642,6 +643,23 @@ typedef enum  {
     MF_FILEFLAGS_NOBUFFERING           = 0x00000001,
     MF_FILEFLAGS_ALLOW_WRITE_SHARING   = 0x00000002
 } MF_FILE_FLAGS;
+
+[
+    object,
+    uuid(8feed468-6f7e-440d-869a-49bdd283ad0d),
+]
+interface IMFSampleOutputStream : IUnknown
+{
+    HRESULT BeginWriteSample(
+            [in] IMFSample *sample,
+            [in] IMFAsyncCallback *callback,
+            [in] IUnknown *state);
+
+    HRESULT EndWriteSample(
+            [in] IMFAsyncResult *result);
+
+    HRESULT Close();
+}
 
 [
     object,

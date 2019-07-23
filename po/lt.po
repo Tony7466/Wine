@@ -5,7 +5,7 @@ msgstr ""
 "Project-Id-Version: Wine\n"
 "Report-Msgid-Bugs-To: https://bugs.winehq.org\n"
 "POT-Creation-Date: N/A\n"
-"PO-Revision-Date: 2019-02-19 08:48+0300\n"
+"PO-Revision-Date: 2019-03-27 10:40+0300\n"
 "Last-Translator: Aurimas Fišeras <aurimas@members.fsf.org>\n"
 "Language-Team: Lithuanian <komp_lt@konf.lt>\n"
 "Language: lt\n"
@@ -4161,7 +4161,7 @@ msgstr "Baigėsi semaforo laikas.\n"
 msgid "Insufficient buffer.\n"
 msgstr "Nepakankamas buferis.\n"
 
-#: winerror.mc:483
+#: winerror.mc:483 mferror.mc:109
 msgid "Invalid name.\n"
 msgstr "Neteisingas vardas.\n"
 
@@ -5735,7 +5735,7 @@ msgstr "Klasė neegzistuoja.\n"
 msgid "Class has open windows.\n"
 msgstr "Klasė turi atvertų langų.\n"
 
-#: winerror.mc:2463
+#: winerror.mc:2463 mferror.mc:130
 msgid "Invalid index.\n"
 msgstr "Neteisingas indeksas.\n"
 
@@ -6814,6 +6814,290 @@ msgstr "Nepavyko išsiųsti laiškų, nes neturite įdiegto MAPI pašto kliento.
 #: mapi32.rc:32
 msgid "Send Mail"
 msgstr "Laiškų siuntimas"
+
+#: mferror.mc:249 mferror.mc:256
+msgid "Begin request has already been made.\n"
+msgstr "Pradžios užklausa jau padaryta.\n"
+
+#: mferror.mc:32
+msgid "Media Foundation platform is not initialized.\n"
+msgstr "Medijos pagrindo platforma neinicijuota.\n"
+
+#: mferror.mc:39
+msgid "Buffer is too small.\n"
+msgstr "Buferis per mažas.\n"
+
+#: mferror.mc:46
+msgid "Invalid request.\n"
+msgstr "Neteisinga užklausa.\n"
+
+#: mferror.mc:53
+msgid "Invalid stream number.\n"
+msgstr "Neteisingas srauto numeris.\n"
+
+#: mferror.mc:60
+msgid "Invalid media type.\n"
+msgstr "Neteisingas medijos tipas.\n"
+
+#: mferror.mc:67
+msgid "No more input is accepted.\n"
+msgstr "Daugiau įvedimo nepriimama.\n"
+
+#: mferror.mc:74
+msgid "Object is not initialized.\n"
+msgstr "Objektas neinicijuotas.\n"
+
+#: mferror.mc:81
+msgid "Representation is not supported.\n"
+msgstr "Reprezentavimas nepalaikomas.\n"
+
+#: mferror.mc:88
+msgid "No more types in the list of suggested media types.\n"
+msgstr "Daugiau nėra tipų siūlomų medijos tipų sąraše.\n"
+
+#: mferror.mc:95
+msgid "Unsupported service.\n"
+msgstr "Nepalaikoma tarnyba.\n"
+
+#: mferror.mc:102
+msgid "Unexpected error.\n"
+msgstr "Netikėta klaida.\n"
+
+#: mferror.mc:116
+msgid "Invalid type.\n"
+msgstr "Neteisingas tipas.\n"
+
+#: mferror.mc:123
+msgid "Invalid file format.\n"
+msgstr "Neteisingas failo formatas.\n"
+
+#: mferror.mc:137
+msgid "Invalid timestamp.\n"
+msgstr "Neteisinga laiko žyma.\n"
+
+#: mferror.mc:144
+msgid "Unsupported scheme.\n"
+msgstr "Nepalaikoma schema.\n"
+
+#: mferror.mc:151
+msgid "Unsupported bytestream type.\n"
+msgstr "Nepalaikomas baitų srauto tipas.\n"
+
+#: mferror.mc:158
+msgid "Unsupported time format.\n"
+msgstr "Nepalaikomas laiko formatas.\n"
+
+#: mferror.mc:165
+msgid "Timestamp is not set for the sample.\n"
+msgstr "Laiko žyma nenustatyta elementui.\n"
+
+#: mferror.mc:172
+msgid "No duration set for the sample.\n"
+msgstr "Trukmė nenustatyta elementui.\n"
+
+#: mferror.mc:179
+msgid "Invalid stream data.\n"
+msgstr "Neteisingi srauto duomenys.\n"
+
+#: mferror.mc:186
+msgid "Realtime support is not available.\n"
+msgstr "Tikralaikis palaikymas neprieinamas.\n"
+
+#: mferror.mc:193
+msgid "Unsupported rate.\n"
+msgstr "Nepalaikomas dažnis.\n"
+
+#: mferror.mc:200
+msgid "Unsupported thinning.\n"
+msgstr "Nepalaikomas retinimas.\n"
+
+#: mferror.mc:207
+msgid "Reversing is not supported.\n"
+msgstr "Apgręžimas nepalaikomas.\n"
+
+#: mferror.mc:214
+msgid "Unsupported rate transition.\n"
+msgstr "Nepalaikoma dažnio moduliacija.\n"
+
+#: mferror.mc:221
+msgid "Rate change was preempted.\n"
+msgstr "Dažnio pakeitimui užkirstas kelias.\n"
+
+#: mferror.mc:228
+msgid "Object or value wasn't found.\n"
+msgstr "Objektas ar reikšmė nerasta.\n"
+
+#: mferror.mc:235
+msgid "Value is not available.\n"
+msgstr "Reikšmė neprieinama.\n"
+
+#: mferror.mc:242
+msgid "Clock is not available.\n"
+msgstr "Laikrodis neprieinamas.\n"
+
+#: mferror.mc:263
+msgid "Multiple subscribers are not supported.\n"
+msgstr "Daugybiniai abonentai nepalaikomi.\n"
+
+#: mferror.mc:270
+msgid "The timer was orphaned.\n"
+msgstr "Laikmatis buvo apleistas.\n"
+
+#: mferror.mc:277
+msgid "State transition is pending.\n"
+msgstr "Būsenos perėjimas laukiamas.\n"
+
+#: mferror.mc:284
+msgid "Unsupported state transition.\n"
+msgstr "Nepalaikomas būsenos perėjimas.\n"
+
+#: mferror.mc:291
+msgid "Unrecoverable error occurred.\n"
+msgstr "Įvyko nepataisoma klaida.\n"
+
+#: mferror.mc:298
+msgid "Sample has too many buffers.\n"
+msgstr "Elementas turi per daug buferių.\n"
+
+#: mferror.mc:305
+msgid "Sample is not writable.\n"
+msgstr "Į elementą negalima rašyti.\n"
+
+#: mferror.mc:312
+msgid "Key is invalid.\n"
+msgstr "Raktas neteisingas.\n"
+
+#: mferror.mc:319
+msgid "Bad startup version.\n"
+msgstr "Bloga paleidimo versija.\n"
+
+#: mferror.mc:326
+msgid "Unsupported caption.\n"
+msgstr "Nepalaikoma antraštė.\n"
+
+#: mferror.mc:333
+msgid "Invalid position.\n"
+msgstr "Neteisinga pozicija.\n"
+
+#: mferror.mc:340
+msgid "Attribute is not found.\n"
+msgstr "Atributas nerastas.\n"
+
+#: mferror.mc:347
+msgid "Property type is not allowed.\n"
+msgstr "Savybės tipas neleidžiamas.\n"
+
+#: mferror.mc:354
+msgid "Property type is not supported.\n"
+msgstr "Savybės tipas nepalaikomas.\n"
+
+#: mferror.mc:361
+msgid "Property is empty.\n"
+msgstr "Savybė tuščia.\n"
+
+#: mferror.mc:368
+msgid "Property is not empty.\n"
+msgstr "Savybė netuščia.\n"
+
+#: mferror.mc:375
+msgid "Vector property is not allowed.\n"
+msgstr "Vektorinė savybė neleidžiama.\n"
+
+#: mferror.mc:382
+msgid "Vector property is required.\n"
+msgstr "Vektorinė savybė būtina.\n"
+
+#: mferror.mc:389
+msgid "Operation was cancelled.\n"
+msgstr "Operacija nutraukta.\n"
+
+#: mferror.mc:396
+msgid "Bytestream is not seekable.\n"
+msgstr "Baitų srautas yra nuoseklus.\n"
+
+#: mferror.mc:403
+msgid "Platform is disabled in safe mode.\n"
+msgstr "Platforma išjungta saugioje veiksenoje.\n"
+
+#: mferror.mc:410
+msgid "Cannot parse bytestream.\n"
+msgstr "Nepavyko išnagrinėti baitų srauto.\n"
+
+#: mferror.mc:417
+msgid "Mutually exclusive flags passed to source resolver.\n"
+msgstr "Nesuderinami žymos bitai perduoti šaltinio nustatymui.\n"
+
+#: mferror.mc:424
+msgid "Unknown bytestream length.\n"
+msgstr "Nežinomas baitų srauto ilgis.\n"
+
+#: mferror.mc:431
+msgid "Invalid work queue index.\n"
+msgstr "Neteisingas darbo eilės indeksas.\n"
+
+#: mferror.mc:438
+msgid "No events available.\n"
+msgstr "Nėra pasiekiamų įvykių.\n"
+
+#: mferror.mc:445
+msgid "Shutdown() was called.\n"
+msgstr "Shutdown() buvo iškviesta.\n"
+
+#: mferror.mc:452
+msgid "Optional node is invalid.\n"
+msgstr "Nebūtinas mazgas neteisingas.\n"
+
+#: mferror.mc:459
+msgid "Cannot find decryptor.\n"
+msgstr "Nepavyko rasti dešifratoriaus.\n"
+
+#: mferror.mc:466
+msgid "Codec was not found.\n"
+msgstr "Kodekas nerastas.\n"
+
+#: mferror.mc:473
+msgid "Cannot connect topology nodes.\n"
+msgstr "Nepavyko sujungti topologijos mazgų.\n"
+
+#: mferror.mc:480
+msgid "Topology request is not supported.\n"
+msgstr "Topologijos užklausa nepalaikoma.\n"
+
+#: mferror.mc:487
+msgid "Invalid topology time attributes.\n"
+msgstr "Neteisingi topologijos laiko atributai.\n"
+
+#: mferror.mc:494
+msgid "Found loops in topology.\n"
+msgstr "Aptikti ciklai topologijoje.\n"
+
+#: mferror.mc:501
+msgid "Presentation descriptor is missing.\n"
+msgstr "Trūksta pateikimo aprašo.\n"
+
+#: mferror.mc:508
+msgid "Stream descriptor is missing.\n"
+msgstr "Trūksta srauto aprašo.\n"
+
+#: mferror.mc:515
+msgid "Stream descriptor is not selected.\n"
+msgstr "Srauto aprašas nepasirinktas.\n"
+
+#: mferror.mc:522
+msgid "Source is missing.\n"
+msgstr "Trūksta šaltinio.\n"
+
+#: mferror.mc:529
+msgid "Topology loader does not support sink activates.\n"
+msgstr "Topologijos įkėlyklė nepalaiko „sink“ aktyvatorių.\n"
+
+#: mferror.mc:536
+msgid "Clock has no time source set.\n"
+msgstr "Laikrodis neturi nustatyto laiko šaltinio.\n"
+
+#: mferror.mc:543
+msgid "Clock state was already set.\n"
+msgstr "Laikrodžio būsena jau nustatyta.\n"
 
 #: mpr.rc:35 wininet.rc:37
 msgid "Enter Network Password"
@@ -10614,8 +10898,8 @@ msgstr ""
 
 #: winmm.rc:128
 msgid ""
-"The specified MIDI port is already in use. Wait until it is free; then try "
-"again."
+"The specified MIDI port is already in use. Wait until it is free, and then "
+"try again."
 msgstr ""
 "Nurodytas MIDI prievadas jau naudojamas. Palaukite, kol jis bus laisvas ir "
 "mėginkite vėl."
@@ -10635,7 +10919,7 @@ msgstr "Įvyko klaida su nurodytu prievadu."
 #: winmm.rc:133
 msgid ""
 "All multimedia timers are being used by other applications. Quit one of "
-"these applications; then, try again."
+"these applications, and then try again."
 msgstr ""
 "Visi įvairialypės terpės laikmačiai yra naudojami kitų programų. Išeikite iš "
 "vienos tokios programos ir mėginkite vėl."
@@ -14954,7 +15238,7 @@ msgstr "Diskų konfigūravimas"
 
 #: winecfg.rc:233
 msgid ""
-"Failed to connect to the mount manager, the drive configuration cannot be "
+"Failed to connect to the mount manager; the drive configuration cannot be "
 "edited."
 msgstr ""
 "Nepavyko prisijungti prie diskų tvarkytuvės, diskų konfigūracija negali būti "
@@ -15248,7 +15532,7 @@ msgid ""
 "Are you sure you want to delete drive C?\n"
 "\n"
 "Most Windows applications expect drive C to exist, and will die messily if "
-"it doesn't. If you proceed remember to recreate it!"
+"it doesn't. If you proceed, remember to recreate it!"
 msgstr ""
 "Ar tikrai norite pašalinti „C“ diską?\n"
 "\n"
@@ -16543,7 +16827,7 @@ msgid ""
 "\tmore files.\n"
 "[/S]  Copy directories and subdirectories.\n"
 "[/E]  Copy directories and subdirectories, including any empty ones.\n"
-"[/Q]  Do not list names during copy, that is be quiet.\n"
+"[/Q]  Do not list names during copy; that is, be quiet.\n"
 "[/F]  Show full source and destination names during copy.\n"
 "[/L]  Simulate operation, showing names which would be copied.\n"
 "[/W]  Prompts before beginning the copy operation.\n"
@@ -16553,13 +16837,13 @@ msgid ""
 "[/P]  Prompts on each source file before copying.\n"
 "[/N]  Copy using short names.\n"
 "[/U]  Copy only files which already exist in destination.\n"
-"[/R]  Overwrite any read only files.\n"
+"[/R]  Overwrite any read-only files.\n"
 "[/H]  Include hidden and system files in the copy.\n"
 "[/C]  Continue even if an error occurs during the copy.\n"
 "[/A]  Only copy files with archive attribute set.\n"
 "[/M]  Only copy files with archive attribute set, removes the\n"
 "\tarchive attribute.\n"
-"[/K]  Copy file attributes, without this attributes are not preserved.\n"
+"[/K]  Copy file attributes; without this, attributes are not preserved.\n"
 "[/D | /D:m-d-y] Copy new files or those modified after the supplied date.\n"
 "\t\tIf no date is supplied, only copy if destination is older\n"
 "\t\tthan source.\n"

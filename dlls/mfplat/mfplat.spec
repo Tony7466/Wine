@@ -26,10 +26,10 @@
 @ stub MFBeginUnregisterWorkQueueWithMMCSS
 @ stub MFBlockThread
 @ stub MFCalculateBitmapImageSize
-@ stub MFCalculateImageSize
+@ stdcall MFCalculateImageSize(ptr long long ptr)
 @ stub MFCancelCreateFile
 @ stdcall MFCancelWorkItem(int64)
-@ stub MFCompareFullToPartialMediaType
+@ stdcall MFCompareFullToPartialMediaType(ptr ptr)
 @ stub MFCompareSockaddrAddresses
 @ stub MFConvertColorInfoFromDXVA
 @ stub MFConvertColorInfoToDXVA
@@ -47,6 +47,7 @@
 @ stub MFCreateLegacyMediaBufferOnMFMediaBuffer
 @ stdcall MFCreateMFByteStreamOnStream(ptr ptr)
 @ stdcall MFCreateMFByteStreamOnStreamEx(ptr ptr)
+@ stdcall MFCreateMFByteStreamWrapper(ptr ptr)
 @ stub MFCreateMFVideoFormatFromMFMediaType
 @ stub MFCreateMediaBufferWrapper
 @ stdcall MFCreateMediaEvent(long ptr long ptr ptr)
@@ -85,8 +86,8 @@
 @ stub MFFrameRateToAverageTimePerFrame
 @ stub MFFreeAdaptersAddresses
 @ stub MFGetAdaptersAddresses
-@ stub MFGetAttributesAsBlob
-@ stub MFGetAttributesAsBlobSize
+@ stdcall MFGetAttributesAsBlob(ptr ptr long)
+@ stdcall MFGetAttributesAsBlobSize(ptr ptr)
 @ stub MFGetConfigurationDWORD
 @ stub MFGetConfigurationPolicy
 @ stub MFGetConfigurationStore
@@ -107,7 +108,7 @@
 @ stdcall MFHeapAlloc(long long str long long)
 @ stdcall MFHeapFree(ptr)
 @ stub MFInitAMMediaTypeFromMFMediaType
-@ stub MFInitAttributesFromBlob
+@ stdcall MFInitAttributesFromBlob(ptr ptr long)
 @ stub MFInitMediaTypeFromAMMediaType
 @ stub MFInitMediaTypeFromMFVideoFormat
 @ stub MFInitMediaTypeFromMPEG1VideoInfo
@@ -152,9 +153,9 @@
 @ stub MFUnblockThread
 @ stdcall MFUnlockPlatform()
 @ stdcall MFUnlockWorkQueue(long)
-@ stub MFUnwrapMediaType
+@ stdcall MFUnwrapMediaType(ptr ptr)
 @ stub MFValidateMediaTypeSize
-@ stub MFWrapMediaType
+@ stdcall MFWrapMediaType(ptr ptr ptr ptr)
 @ stub MFllMulDiv
 @ stub PropVariantFromStream
 @ stub PropVariantToStream

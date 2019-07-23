@@ -932,7 +932,7 @@
 @ stub __get_tlsindex
 @ cdecl __getmainargs(ptr ptr ptr long ptr)
 @ extern __initenv MSVCRT___initenv
-@ cdecl __iob_func() MSVCRT___iob_func
+@ cdecl __iob_func() __p__iob
 @ cdecl __isascii(long) MSVCRT___isascii
 @ cdecl __iscsym(long) MSVCRT___iscsym
 @ cdecl __iscsymf(long) MSVCRT___iscsymf
@@ -975,7 +975,7 @@
 @ cdecl __p__dstbias() MSVCRT___p__dstbias
 @ cdecl __p__environ() MSVCRT___p__environ
 @ cdecl __p__fmode() MSVCRT___p__fmode
-@ cdecl __p__iob() MSVCRT___iob_func
+@ cdecl __p__iob()
 @ stub __p__mbcasemap()
 @ cdecl __p__mbctype()
 @ cdecl __p__pctype() MSVCRT___p__pctype
@@ -2414,7 +2414,7 @@
 @ cdecl tmpnam_s(ptr long) MSVCRT_tmpnam_s
 @ cdecl tolower(long) MSVCRT_tolower
 @ cdecl toupper(long) MSVCRT_toupper
-@ stub towctrans
+@ cdecl towctrans(long long) MSVCR120_towctrans
 @ cdecl towlower(long) MSVCRT_towlower
 @ cdecl towupper(long) MSVCRT_towupper
 @ cdecl trunc(double) MSVCR120_trunc
@@ -2486,7 +2486,7 @@
 @ cdecl wctob(long) MSVCRT_wctob
 @ cdecl wctomb(ptr long) MSVCRT_wctomb
 @ cdecl wctomb_s(ptr ptr long long) MSVCRT_wctomb_s
-@ stub wctrans
+@ cdecl wctrans(str) MSVCR120_wctrans
 @ cdecl wctype(str)
 @ cdecl wmemcpy_s(ptr long ptr long)
 @ cdecl wmemmove_s(ptr long ptr long)

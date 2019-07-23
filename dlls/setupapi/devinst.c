@@ -723,6 +723,7 @@ static void delete_device(struct device *device)
 static struct device *SETUPDI_CreateDeviceInfo(struct DeviceInfoSet *set,
     const GUID *class, const WCHAR *instanceid, BOOL phantom)
 {
+    const DWORD one = 1;
     struct device *device;
     WCHAR guidstr[39];
 
@@ -751,6 +752,9 @@ static struct device *SETUPDI_CreateDeviceInfo(struct DeviceInfoSet *set,
     device->devnode = alloc_devnode(device);
     device->removed = FALSE;
     list_add_tail(&set->devices, &device->entry);
+
+    if (phantom)
+        RegSetValueExW(device->key, Phantom, 0, REG_DWORD, (const BYTE *)&one, sizeof(one));
 
     SETUPDI_GuidToString(class, guidstr);
     SETUPDI_SetDeviceRegistryPropertyW(device, SPDRP_CLASSGUID,
@@ -1506,6 +1510,8 @@ BOOL WINAPI SetupDiCreateDeviceInfoW(HDEVINFO devinfo, const WCHAR *name, const 
 {
     WCHAR id[MAX_DEVICE_ID_LEN];
     struct DeviceInfoSet *set;
+    HKEY enum_hkey;
+    HKEY instance_hkey;
     struct device *device;
 
     TRACE("devinfo %p, name %s, class %s, description %s, hwnd %p, flags %#x, device_data %p.\n",
@@ -1566,6 +1572,18 @@ BOOL WINAPI SetupDiCreateDeviceInfoW(HDEVINFO devinfo, const WCHAR *name, const 
     }
     else
     {
+        /* Check if instance is already in registry */
+        RegCreateKeyExW(HKEY_LOCAL_MACHINE, Enum, 0, NULL, 0, KEY_READ, NULL, &enum_hkey, NULL);
+        if (!RegOpenKeyExW(enum_hkey, name, 0, KEY_READ, &instance_hkey))
+        {
+            RegCloseKey(instance_hkey);
+            RegCloseKey(enum_hkey);
+            SetLastError(ERROR_DEVINST_ALREADY_EXISTS);
+            return FALSE;
+        }
+        RegCloseKey(enum_hkey);
+
+        /* Check if instance is already in set */
         strcpyW(id, name);
         LIST_FOR_EACH_ENTRY(device, &set->devices, struct device, entry)
         {
@@ -3310,6 +3328,112 @@ HKEY WINAPI SetupDiOpenClassRegKeyExW(
         }
     }
     return key;
+}
+
+/***********************************************************************
+ *              SetupDiOpenDeviceInfoA (SETUPAPI.@)
+ */
+BOOL WINAPI SetupDiOpenDeviceInfoA(HDEVINFO devinfo, PCSTR instance_id, HWND hwnd_parent, DWORD flags,
+                                   PSP_DEVINFO_DATA device_data)
+{
+    WCHAR instance_idW[MAX_DEVICE_ID_LEN];
+
+    TRACE("%p %s %p 0x%08x %p\n", devinfo, debugstr_a(instance_id), hwnd_parent, flags, device_data);
+
+    if (!instance_id || strlen(instance_id) >= MAX_DEVICE_ID_LEN)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+
+    MultiByteToWideChar(CP_ACP, 0, instance_id, -1, instance_idW, ARRAY_SIZE(instance_idW));
+    return SetupDiOpenDeviceInfoW(devinfo, instance_idW, hwnd_parent, flags, device_data);
+}
+
+/***********************************************************************
+ *              SetupDiOpenDeviceInfoW (SETUPAPI.@)
+ */
+BOOL WINAPI SetupDiOpenDeviceInfoW(HDEVINFO devinfo, PCWSTR instance_id, HWND hwnd_parent, DWORD flags,
+                                   PSP_DEVINFO_DATA device_data)
+{
+    struct DeviceInfoSet *set;
+    struct device *device = NULL, *enum_device;
+    WCHAR classW[40];
+    GUID guid;
+    HKEY enumKey = NULL;
+    HKEY instanceKey = NULL;
+    DWORD phantom;
+    DWORD size;
+    DWORD error = ERROR_NO_SUCH_DEVINST;
+
+    TRACE("%p %s %p 0x%08x %p\n", devinfo, debugstr_w(instance_id), hwnd_parent, flags, device_data);
+
+    if (!(set = get_device_set(devinfo)))
+        return FALSE;
+
+    if (!instance_id)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+
+    if (hwnd_parent)
+        FIXME("hwnd_parent unsupported\n");
+
+    if (flags)
+        FIXME("flags unsupported: 0x%08x\n", flags);
+
+    RegCreateKeyExW(HKEY_LOCAL_MACHINE, Enum, 0, NULL, 0, KEY_ALL_ACCESS, NULL, &enumKey, NULL);
+    /* Instance needs to be already existent in registry, if not, report ERROR_NO_SUCH_DEVINST */
+    if (RegOpenKeyExW(enumKey, instance_id, 0, KEY_READ, &instanceKey))
+        goto done;
+
+    /* If it's an unregistered instance, aka phantom instance, report ERROR_NO_SUCH_DEVINST */
+    size = sizeof(phantom);
+    if (!RegQueryValueExW(instanceKey, Phantom, NULL, NULL, (BYTE *)&phantom, &size))
+        goto done;
+
+    /* Check class GUID */
+    size = sizeof(classW);
+    if (RegQueryValueExW(instanceKey, ClassGUID, NULL, NULL, (BYTE *)classW, &size))
+        goto done;
+
+    classW[37] = 0;
+    UuidFromStringW(&classW[1], &guid);
+
+    if (!IsEqualGUID(&set->ClassGuid, &GUID_NULL) && !IsEqualGUID(&guid, &set->ClassGuid))
+    {
+        error = ERROR_CLASS_MISMATCH;
+        goto done;
+    }
+
+    /* If current set already contains a same instance, don't create new ones */
+    LIST_FOR_EACH_ENTRY(enum_device, &set->devices, struct device, entry)
+    {
+        if (!strcmpiW(instance_id, enum_device->instanceId))
+        {
+            device = enum_device;
+            break;
+        }
+    }
+
+    if (!device && !(device = SETUPDI_CreateDeviceInfo(set, &guid, instance_id, FALSE)))
+        goto done;
+
+    if (!device_data || device_data->cbSize == sizeof(SP_DEVINFO_DATA))
+    {
+        if (device_data)
+            copy_device_data(device_data, device);
+        error = NO_ERROR;
+    }
+    else
+        error = ERROR_INVALID_USER_BUFFER;
+
+done:
+    RegCloseKey(instanceKey);
+    RegCloseKey(enumKey);
+    SetLastError(error);
+    return !error;
 }
 
 /***********************************************************************

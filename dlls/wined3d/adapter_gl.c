@@ -1302,6 +1302,10 @@ static const struct wined3d_renderer_table
 cards_nvidia_binary[] =
 {
     /* Direct 3D 11 */
+    {"RTX 2080 Ti",                 CARD_NVIDIA_GEFORCE_RTX2080TI}, /* GeForce 2000 - highend */
+    {"RTX 2080",                    CARD_NVIDIA_GEFORCE_RTX2080},   /* GeForce 2000 - highend */
+    {"RTX 2070",                    CARD_NVIDIA_GEFORCE_RTX2070},   /* GeForce 2000 - highend */
+    {"RTX 2060",                    CARD_NVIDIA_GEFORCE_RTX2060},   /* GeForce 2000 - highend */
     {"TITAN V",                     CARD_NVIDIA_TITANV},            /* GeForce 1000 - highend */
     {"TITAN X (Pascal)",            CARD_NVIDIA_TITANX_PASCAL},     /* GeForce 1000 - highend */
     {"GTX 1080 Ti",                 CARD_NVIDIA_GEFORCE_GTX1080TI}, /* GeForce 1000 - highend */
@@ -3222,7 +3226,7 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info, struct 
 
 /* Context activation is done by the caller. */
 static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
-        struct wined3d_caps_gl_ctx *caps_gl_ctx, DWORD wined3d_creation_flags)
+        struct wined3d_caps_gl_ctx *caps_gl_ctx, unsigned int wined3d_creation_flags)
 {
     static const struct
     {
@@ -3707,7 +3711,7 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
     d3d_info->limits.max_rt_count = gl_info->limits.buffers;
     d3d_info->limits.max_clip_distances = gl_info->limits.user_clip_distances;
 
-    adapter->shader_backend->shader_get_caps(gl_info, &shader_caps);
+    adapter->shader_backend->shader_get_caps(adapter, &shader_caps);
     d3d_info->vs_clipping = shader_caps.wined3d_caps & WINED3D_SHADER_CAP_VS_CLIPPING;
     d3d_info->limits.vs_version = shader_caps.vs_version;
     d3d_info->limits.hs_version = shader_caps.hs_version;
@@ -3722,14 +3726,14 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
 
     d3d_info->viewport_array_index_any_shader = !!gl_info->supported[ARB_SHADER_VIEWPORT_LAYER_ARRAY];
 
-    adapter->vertex_pipe->vp_get_caps(gl_info, &vertex_caps);
+    adapter->vertex_pipe->vp_get_caps(adapter, &vertex_caps);
     d3d_info->xyzrhw = vertex_caps.xyzrhw;
     d3d_info->ffp_generic_attributes = vertex_caps.ffp_generic_attributes;
     d3d_info->limits.ffp_vertex_blend_matrices = vertex_caps.max_vertex_blend_matrices;
     d3d_info->limits.active_light_count = vertex_caps.max_active_lights;
     d3d_info->emulated_flatshading = vertex_caps.emulated_flatshading;
 
-    adapter->fragment_pipe->get_caps(gl_info, &fragment_caps);
+    adapter->fragment_pipe->get_caps(adapter, &fragment_caps);
     d3d_info->limits.ffp_blend_stages = fragment_caps.MaxTextureBlendStages;
     d3d_info->limits.ffp_textures = fragment_caps.MaxSimultaneousTextures;
     d3d_info->shader_color_key = !!(fragment_caps.wined3d_caps & WINED3D_FRAGMENT_CAP_COLOR_KEY);
@@ -4119,9 +4123,9 @@ static void wined3d_adapter_init_ffp_attrib_ops(struct wined3d_adapter *adapter)
     }
 }
 
-static void wined3d_adapter_init_fb_cfgs(struct wined3d_adapter *adapter, HDC dc)
+static void wined3d_adapter_init_fb_cfgs(struct wined3d_adapter_gl *adapter_gl, HDC dc)
 {
-    const struct wined3d_gl_info *gl_info = &adapter->gl_info;
+    const struct wined3d_gl_info *gl_info = &adapter_gl->a.gl_info;
     int i;
 
     if (gl_info->supported[WGL_ARB_PIXEL_FORMAT])
@@ -4135,7 +4139,7 @@ static void wined3d_adapter_init_fb_cfgs(struct wined3d_adapter *adapter, HDC dc
         attribute = WGL_NUMBER_PIXEL_FORMATS_ARB;
         GL_EXTCALL(wglGetPixelFormatAttribivARB(dc, 0, 0, 1, &attribute, &cfg_count));
 
-        adapter->cfgs = heap_calloc(cfg_count, sizeof(*adapter->cfgs));
+        adapter_gl->pixel_formats = heap_calloc(cfg_count, sizeof(*adapter_gl->pixel_formats));
         attribs[attrib_count++] = WGL_RED_BITS_ARB;
         attribs[attrib_count++] = WGL_GREEN_BITS_ARB;
         attribs[attrib_count++] = WGL_BLUE_BITS_ARB;
@@ -4148,9 +4152,9 @@ static void wined3d_adapter_init_fb_cfgs(struct wined3d_adapter *adapter, HDC dc
         attribs[attrib_count++] = WGL_DOUBLE_BUFFER_ARB;
         attribs[attrib_count++] = WGL_AUX_BUFFERS_ARB;
 
-        for (i = 0, adapter->cfg_count = 0; i < cfg_count; ++i)
+        for (i = 0, adapter_gl->pixel_format_count = 0; i < cfg_count; ++i)
         {
-            struct wined3d_pixel_format *cfg = &adapter->cfgs[adapter->cfg_count];
+            struct wined3d_pixel_format *cfg = &adapter_gl->pixel_formats[adapter_gl->pixel_format_count];
             int format_id = i + 1;
 
             if (!GL_EXTCALL(wglGetPixelFormatAttribivARB(dc, format_id, 0, attrib_count, attribs, values)))
@@ -4192,7 +4196,7 @@ static void wined3d_adapter_init_fb_cfgs(struct wined3d_adapter *adapter, HDC dc
                     cfg->redSize, cfg->greenSize, cfg->blueSize, cfg->alphaSize,
                     cfg->depthSize, cfg->stencilSize, cfg->numSamples, cfg->windowDrawable);
 
-            ++adapter->cfg_count;
+            ++adapter_gl->pixel_format_count;
         }
     }
     else
@@ -4200,11 +4204,11 @@ static void wined3d_adapter_init_fb_cfgs(struct wined3d_adapter *adapter, HDC dc
         int cfg_count;
 
         cfg_count = DescribePixelFormat(dc, 0, 0, 0);
-        adapter->cfgs = heap_calloc(cfg_count, sizeof(*adapter->cfgs));
+        adapter_gl->pixel_formats = heap_calloc(cfg_count, sizeof(*adapter_gl->pixel_formats));
 
-        for (i = 0, adapter->cfg_count = 0; i < cfg_count; ++i)
+        for (i = 0, adapter_gl->pixel_format_count = 0; i < cfg_count; ++i)
         {
-            struct wined3d_pixel_format *cfg = &adapter->cfgs[adapter->cfg_count];
+            struct wined3d_pixel_format *cfg = &adapter_gl->pixel_formats[adapter_gl->pixel_format_count];
             PIXELFORMATDESCRIPTOR pfd;
             int format_id = i + 1;
 
@@ -4241,17 +4245,288 @@ static void wined3d_adapter_init_fb_cfgs(struct wined3d_adapter *adapter, HDC dc
                     cfg->redSize, cfg->greenSize, cfg->blueSize, cfg->alphaSize,
                     cfg->depthSize, cfg->stencilSize, cfg->windowDrawable);
 
-            ++adapter->cfg_count;
+            ++adapter_gl->pixel_format_count;
         }
     }
 }
 
+static void adapter_gl_get_wined3d_caps(const struct wined3d_adapter *adapter, struct wined3d_caps *caps)
+{
+    const struct wined3d_d3d_info *d3d_info = &adapter->d3d_info;
+    const struct wined3d_gl_info *gl_info = &adapter->gl_info;
+
+    caps->ddraw_caps.dds_caps |= WINEDDSCAPS_3DDEVICE
+            | WINEDDSCAPS_MIPMAP
+            | WINEDDSCAPS_TEXTURE
+            | WINEDDSCAPS_VIDEOMEMORY
+            | WINEDDSCAPS_ZBUFFER;
+    caps->ddraw_caps.caps |= WINEDDCAPS_3D;
+
+    if (gl_info->supported[ARB_FRAMEBUFFER_OBJECT] || gl_info->supported[EXT_FRAMEBUFFER_OBJECT])
+        caps->Caps2 |= WINED3DCAPS2_CANGENMIPMAP;
+
+    if (gl_info->supported[WINED3D_GL_BLEND_EQUATION])
+        caps->PrimitiveMiscCaps |= WINED3DPMISCCAPS_BLENDOP;
+    if (gl_info->supported[EXT_BLEND_EQUATION_SEPARATE] && gl_info->supported[EXT_BLEND_FUNC_SEPARATE])
+        caps->PrimitiveMiscCaps |= WINED3DPMISCCAPS_SEPARATEALPHABLEND;
+    if (gl_info->supported[EXT_DRAW_BUFFERS2])
+        caps->PrimitiveMiscCaps |= WINED3DPMISCCAPS_INDEPENDENTWRITEMASKS;
+    if (gl_info->supported[ARB_FRAMEBUFFER_SRGB])
+        caps->PrimitiveMiscCaps |= WINED3DPMISCCAPS_POSTBLENDSRGBCONVERT;
+
+    if (gl_info->supported[ARB_TEXTURE_FILTER_ANISOTROPIC])
+    {
+        caps->RasterCaps |= WINED3DPRASTERCAPS_ANISOTROPY
+                | WINED3DPRASTERCAPS_ZBIAS
+                | WINED3DPRASTERCAPS_MIPMAPLODBIAS;
+
+        caps->TextureFilterCaps |= WINED3DPTFILTERCAPS_MAGFANISOTROPIC
+                | WINED3DPTFILTERCAPS_MINFANISOTROPIC;
+    }
+
+    if (gl_info->supported[ARB_BLEND_FUNC_EXTENDED])
+        caps->DestBlendCaps |= WINED3DPBLENDCAPS_SRCALPHASAT;
+
+    if (gl_info->supported[EXT_BLEND_COLOR])
+    {
+        caps->SrcBlendCaps |= WINED3DPBLENDCAPS_BLENDFACTOR;
+        caps->DestBlendCaps |= WINED3DPBLENDCAPS_BLENDFACTOR;
+    }
+
+    if (gl_info->supported[EXT_TEXTURE3D])
+    {
+        caps->TextureCaps |= WINED3DPTEXTURECAPS_VOLUMEMAP
+                | WINED3DPTEXTURECAPS_MIPVOLUMEMAP;
+        if (!d3d_info->texture_npot)
+            caps->TextureCaps |= WINED3DPTEXTURECAPS_VOLUMEMAP_POW2;
+
+        caps->VolumeTextureFilterCaps |= WINED3DPTFILTERCAPS_MAGFLINEAR
+                | WINED3DPTFILTERCAPS_MAGFPOINT
+                | WINED3DPTFILTERCAPS_MINFLINEAR
+                | WINED3DPTFILTERCAPS_MINFPOINT
+                | WINED3DPTFILTERCAPS_MIPFLINEAR
+                | WINED3DPTFILTERCAPS_MIPFPOINT
+                | WINED3DPTFILTERCAPS_LINEAR
+                | WINED3DPTFILTERCAPS_LINEARMIPLINEAR
+                | WINED3DPTFILTERCAPS_LINEARMIPNEAREST
+                | WINED3DPTFILTERCAPS_MIPLINEAR
+                | WINED3DPTFILTERCAPS_MIPNEAREST
+                | WINED3DPTFILTERCAPS_NEAREST;
+
+        caps->VolumeTextureAddressCaps |= WINED3DPTADDRESSCAPS_INDEPENDENTUV
+                | WINED3DPTADDRESSCAPS_CLAMP
+                | WINED3DPTADDRESSCAPS_WRAP;
+
+        if (gl_info->supported[ARB_TEXTURE_BORDER_CLAMP])
+        {
+            caps->VolumeTextureAddressCaps |= WINED3DPTADDRESSCAPS_BORDER;
+        }
+        if (gl_info->supported[ARB_TEXTURE_MIRRORED_REPEAT])
+        {
+            caps->VolumeTextureAddressCaps |= WINED3DPTADDRESSCAPS_MIRROR;
+        }
+        if (gl_info->supported[ARB_TEXTURE_MIRROR_CLAMP_TO_EDGE])
+        {
+            caps->VolumeTextureAddressCaps |= WINED3DPTADDRESSCAPS_MIRRORONCE;
+        }
+
+        caps->MaxVolumeExtent = gl_info->limits.texture3d_size;
+    }
+
+    if (gl_info->supported[ARB_TEXTURE_CUBE_MAP])
+    {
+        caps->TextureCaps |= WINED3DPTEXTURECAPS_CUBEMAP
+                | WINED3DPTEXTURECAPS_MIPCUBEMAP;
+        if (!d3d_info->texture_npot)
+            caps->TextureCaps |= WINED3DPTEXTURECAPS_CUBEMAP_POW2;
+
+        caps->CubeTextureFilterCaps |= WINED3DPTFILTERCAPS_MAGFLINEAR
+                | WINED3DPTFILTERCAPS_MAGFPOINT
+                | WINED3DPTFILTERCAPS_MINFLINEAR
+                | WINED3DPTFILTERCAPS_MINFPOINT
+                | WINED3DPTFILTERCAPS_MIPFLINEAR
+                | WINED3DPTFILTERCAPS_MIPFPOINT
+                | WINED3DPTFILTERCAPS_LINEAR
+                | WINED3DPTFILTERCAPS_LINEARMIPLINEAR
+                | WINED3DPTFILTERCAPS_LINEARMIPNEAREST
+                | WINED3DPTFILTERCAPS_MIPLINEAR
+                | WINED3DPTFILTERCAPS_MIPNEAREST
+                | WINED3DPTFILTERCAPS_NEAREST;
+
+        if (gl_info->supported[ARB_TEXTURE_FILTER_ANISOTROPIC])
+        {
+            caps->CubeTextureFilterCaps |= WINED3DPTFILTERCAPS_MAGFANISOTROPIC
+                    | WINED3DPTFILTERCAPS_MINFANISOTROPIC;
+        }
+    }
+
+    if (gl_info->supported[ARB_TEXTURE_BORDER_CLAMP])
+    {
+        caps->TextureAddressCaps |= WINED3DPTADDRESSCAPS_BORDER;
+    }
+    if (gl_info->supported[ARB_TEXTURE_MIRRORED_REPEAT])
+    {
+        caps->TextureAddressCaps |= WINED3DPTADDRESSCAPS_MIRROR;
+    }
+    if (gl_info->supported[ARB_TEXTURE_MIRROR_CLAMP_TO_EDGE])
+    {
+        caps->TextureAddressCaps |= WINED3DPTADDRESSCAPS_MIRRORONCE;
+    }
+
+    if (gl_info->supported[EXT_STENCIL_WRAP])
+    {
+        caps->StencilCaps |= WINED3DSTENCILCAPS_DECR
+                | WINED3DSTENCILCAPS_INCR;
+    }
+
+    if (gl_info->supported[WINED3D_GL_VERSION_2_0]
+            || gl_info->supported[EXT_STENCIL_TWO_SIDE]
+            || gl_info->supported[ATI_SEPARATE_STENCIL])
+    {
+        caps->StencilCaps |= WINED3DSTENCILCAPS_TWOSIDED;
+    }
+
+    caps->MaxAnisotropy = gl_info->limits.anisotropy;
+
+    if (caps->VertexShaderVersion >= 3)
+    {
+        caps->MaxVertexShader30InstructionSlots
+                = max(caps->MaxVertexShader30InstructionSlots, gl_info->limits.arb_vs_instructions);
+    }
+    if (caps->VertexShaderVersion >= 2)
+    {
+        caps->VS20Caps.temp_count = max(caps->VS20Caps.temp_count, gl_info->limits.arb_vs_temps);
+
+        if (gl_info->supported[ARB_HALF_FLOAT_VERTEX])
+            caps->DeclTypes |= WINED3DDTCAPS_FLOAT16_2 | WINED3DDTCAPS_FLOAT16_4;
+    }
+
+    if (caps->PixelShaderVersion >= 3)
+    {
+        caps->MaxPixelShader30InstructionSlots
+                = max(caps->MaxPixelShader30InstructionSlots, gl_info->limits.arb_ps_instructions);
+    }
+    if (caps->PixelShaderVersion >= 2)
+    {
+        caps->PS20Caps.temp_count = max(caps->PS20Caps.temp_count, gl_info->limits.arb_ps_temps);
+    }
+}
+
+static BOOL wined3d_check_pixel_format_color(const struct wined3d_pixel_format *cfg,
+        const struct wined3d_format *format)
+{
+    /* Float formats need FBOs. If FBOs are used this function isn't called */
+    if (format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_FLOAT)
+        return FALSE;
+
+    /* Probably a RGBA_float or color index mode. */
+    if (cfg->iPixelType != WGL_TYPE_RGBA_ARB)
+        return FALSE;
+
+    if (cfg->redSize < format->red_size
+            || cfg->greenSize < format->green_size
+            || cfg->blueSize < format->blue_size
+            || cfg->alphaSize < format->alpha_size)
+        return FALSE;
+
+    return TRUE;
+}
+
+static BOOL wined3d_check_pixel_format_depth(const struct wined3d_pixel_format *cfg,
+        const struct wined3d_format *format)
+{
+    BOOL lockable = FALSE;
+
+    /* Float formats need FBOs. If FBOs are used this function isn't called */
+    if (format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_FLOAT)
+        return FALSE;
+
+    if ((format->id == WINED3DFMT_D16_LOCKABLE) || (format->id == WINED3DFMT_D32_FLOAT))
+        lockable = TRUE;
+
+    /* On some modern cards like the Geforce8/9, GLX doesn't offer some
+     * depth/stencil formats which D3D9 reports. We can safely report
+     * "compatible" formats (e.g. D24 can be used for D16) as long as we
+     * aren't dealing with a lockable format. This also helps D3D <= 7 as they
+     * expect D16 which isn't offered without this on Geforce8 cards. */
+    if (!(cfg->depthSize == format->depth_size || (!lockable && cfg->depthSize > format->depth_size)))
+        return FALSE;
+
+    /* Some cards like Intel i915 ones only offer D24S8 but lots of games also
+     * need a format without stencil. We can allow a mismatch if the format
+     * doesn't have any stencil bits. If it does have stencil bits the size
+     * must match, or stencil wrapping would break. */
+    if (format->stencil_size && cfg->stencilSize != format->stencil_size)
+        return FALSE;
+
+    return TRUE;
+}
+
+static BOOL adapter_gl_check_format(const struct wined3d_adapter *adapter,
+        const struct wined3d_format *adapter_format, const struct wined3d_format *rt_format,
+        const struct wined3d_format *ds_format)
+{
+    const struct wined3d_adapter_gl *adapter_gl = wined3d_adapter_gl_const(adapter);
+    unsigned int i;
+
+    if (wined3d_settings.offscreen_rendering_mode != ORM_BACKBUFFER)
+        return TRUE;
+
+    if (adapter_format && rt_format)
+    {
+        /* In backbuffer mode the front and backbuffer share the same WGL
+         * pixelformat. The format must match in RGB, alpha is allowed to be
+         * different. (Only the backbuffer can have alpha.) */
+        if (adapter_format->red_size != rt_format->red_size
+                || adapter_format->green_size != rt_format->green_size
+                || adapter_format->blue_size != rt_format->blue_size)
+        {
+            TRACE("Render target format %s doesn't match with adapter format %s.\n",
+                    debug_d3dformat(rt_format->id), debug_d3dformat(adapter_format->id));
+            return FALSE;
+        }
+    }
+
+    for (i = 0; i < adapter_gl->pixel_format_count; ++i)
+    {
+        const struct wined3d_pixel_format *cfg = &adapter_gl->pixel_formats[i];
+
+        /* Check if there is a WGL pixel format matching the requirements, the format should also be window
+         * drawable (not offscreen; e.g. Nvidia offers R5G6B5 for pbuffers even when X is running at 24bit) */
+        if (adapter_format && rt_format && !cfg->windowDrawable)
+            continue;
+
+        if ((!adapter_format || wined3d_check_pixel_format_color(cfg, adapter_format))
+                && (!rt_format || wined3d_check_pixel_format_color(cfg, rt_format))
+                && (!ds_format || wined3d_check_pixel_format_depth(cfg, ds_format)))
+        {
+            TRACE("Pixel format %d is compatible.\n", cfg->iPixelFormat);
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
+static void adapter_gl_destroy(struct wined3d_adapter *adapter)
+{
+    struct wined3d_adapter_gl *adapter_gl = wined3d_adapter_gl(adapter);
+
+    heap_free(adapter_gl->pixel_formats);
+    wined3d_adapter_cleanup(adapter);
+    heap_free(adapter_gl);
+}
+
 static const struct wined3d_adapter_ops wined3d_adapter_gl_ops =
 {
+    adapter_gl_destroy,
     wined3d_adapter_gl_create_context,
+    adapter_gl_get_wined3d_caps,
+    adapter_gl_check_format,
 };
 
-BOOL wined3d_adapter_gl_init(struct wined3d_adapter *adapter, DWORD wined3d_creation_flags)
+static BOOL wined3d_adapter_gl_init(struct wined3d_adapter *adapter,
+        unsigned int ordinal, unsigned int wined3d_creation_flags)
 {
     static const DWORD supported_gl_versions[] =
     {
@@ -4261,11 +4536,18 @@ BOOL wined3d_adapter_gl_init(struct wined3d_adapter *adapter, DWORD wined3d_crea
     };
     struct wined3d_gl_info *gl_info = &adapter->gl_info;
     struct wined3d_caps_gl_ctx caps_gl_ctx = {0};
+    struct wined3d_adapter_gl *adapter_gl;
     unsigned int i;
 
-    TRACE("adapter %p, wined3d_creation_flags %#x.\n", adapter, wined3d_creation_flags);
+    TRACE("adapter %p, ordinal %u, wined3d_creation_flags %#x.\n",
+            adapter, ordinal, wined3d_creation_flags);
 
-/* Dynamically load all GL core functions */
+    if (!wined3d_adapter_init(adapter, ordinal))
+        return FALSE;
+
+    adapter_gl = wined3d_adapter_gl(adapter);
+
+    /* Dynamically load all GL core functions */
 #ifdef USE_WIN32_OPENGL
     {
         HMODULE mod_gl = GetModuleHandleA("opengl32.dll");
@@ -4330,14 +4612,14 @@ BOOL wined3d_adapter_gl_init(struct wined3d_adapter *adapter, DWORD wined3d_crea
         ERR_(winediag)("You are using the backbuffer for offscreen rendering. "
                 "This is unsupported, and will be removed in a future version.\n");
 
-    wined3d_adapter_init_fb_cfgs(adapter, caps_gl_ctx.dc);
+    wined3d_adapter_init_fb_cfgs(adapter_gl, caps_gl_ctx.dc);
     /* We haven't found any suitable formats. This should only happen in
      * case of GDI software rendering, which is pretty useless anyway. */
-    if (!adapter->cfg_count)
+    if (!adapter_gl->pixel_format_count)
     {
         WARN("No suitable pixel formats found.\n");
         wined3d_caps_gl_ctx_destroy(&caps_gl_ctx);
-        heap_free(adapter->cfgs);
+        heap_free(adapter_gl->pixel_formats);
         return FALSE;
     }
 
@@ -4345,7 +4627,7 @@ BOOL wined3d_adapter_gl_init(struct wined3d_adapter *adapter, DWORD wined3d_crea
     {
         ERR("Failed to initialize GL format info.\n");
         wined3d_caps_gl_ctx_destroy(&caps_gl_ctx);
-        heap_free(adapter->cfgs);
+        heap_free(adapter_gl->pixel_formats);
         return FALSE;
     }
 
@@ -4355,4 +4637,22 @@ BOOL wined3d_adapter_gl_init(struct wined3d_adapter *adapter, DWORD wined3d_crea
     adapter->adapter_ops = &wined3d_adapter_gl_ops;
 
     return TRUE;
+}
+
+struct wined3d_adapter *wined3d_adapter_gl_create(unsigned int ordinal, unsigned int wined3d_creation_flags)
+{
+    struct wined3d_adapter_gl *adapter;
+
+    if (!(adapter = heap_alloc_zero(sizeof(*adapter))))
+        return NULL;
+
+    if (!wined3d_adapter_gl_init(&adapter->a, ordinal, wined3d_creation_flags))
+    {
+        heap_free(adapter);
+        return NULL;
+    }
+
+    TRACE("Created adapter %p.\n", adapter);
+
+    return &adapter->a;
 }

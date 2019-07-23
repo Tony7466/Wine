@@ -109,6 +109,13 @@ function test_array_forEach() {
     test(new String("abc"), [[0,"a"],[1,"b"],[2,"c"]]);
     test([], []);
 
+    [1,2].forEach(function() {
+        ok(this === window, "this != window");
+    });
+    [1,2].forEach(function() {
+        ok(this === window, "this != window");
+    }, undefined);
+
     next_test();
 }
 
@@ -170,6 +177,13 @@ function test_array_map() {
     });
     ok(calls === "0:1,1:3,2:5,", "calls = " + calls);
     ok(m.join() === "0,2,4", "m = " + m);
+
+    [1,2].map(function() {
+        ok(this === window, "this != window");
+    });
+    [1,2].map(function() {
+        ok(this === window, "this != window");
+    }, undefined);
 
     next_test();
 }
@@ -637,6 +651,9 @@ function test_string_split() {
 }
 
 function test_getPrototypeOf() {
+    ok(Object.create.length === 2, "Object.create.length = " + Object.create.length);
+    ok(Object.getPrototypeOf.length === 1, "Object.getPrototypeOf.length = " + Object.getPrototypeOf.length);
+
     ok(Object.getPrototypeOf(new Object()) === Object.prototype,
        "Object.getPrototypeOf(new Object()) !== Object.prototype");
 
@@ -659,6 +676,15 @@ function test_getPrototypeOf() {
 
     ok(Object.getPrototypeOf(Object.prototype) === null,
        "Object.getPrototypeOf(Object.prototype) !== null");
+
+    obj = Object.create(proto = { test: 1 });
+    ok(Object.getPrototypeOf(obj) === proto,
+       "Object.getPrototypeOf(obj) !== proto");
+    ok(obj.test === 1, "obj.test = " + obj.test);
+
+    obj = Object.create(null);
+    ok(!("toString" in obj), "toString is in obj");
+    ok(Object.getPrototypeOf(obj) === null, "Object.getPrototypeOf(obj) = " + Object.getPrototypeOf(obj));
 
     next_test();
 }

@@ -1002,7 +1002,7 @@ static void wined3d_device_delete_opengl_contexts_cs(void *object)
 
     context = context_acquire(device, NULL, 0);
     device->blitter->ops->blitter_destroy(device->blitter, context);
-    device->shader_backend->shader_free_private(device);
+    device->shader_backend->shader_free_private(device, context);
     destroy_dummy_textures(device, context);
     destroy_default_samplers(device, context);
     context_release(context);
@@ -1040,7 +1040,7 @@ static void wined3d_device_create_primary_opengl_context_cs(void *object)
     if (!(device->blitter = wined3d_cpu_blitter_create()))
     {
         ERR("Failed to create CPU blitter.\n");
-        device->shader_backend->shader_free_private(device);
+        device->shader_backend->shader_free_private(device, NULL);
         return;
     }
     wined3d_ffp_blitter_create(&device->blitter, &device->adapter->gl_info);
@@ -3533,7 +3533,7 @@ DWORD CDECL wined3d_device_get_texture_stage_state(const struct wined3d_device *
     return device->state.texture_states[stage][state];
 }
 
-HRESULT CDECL wined3d_device_set_texture(struct wined3d_device *device,
+void CDECL wined3d_device_set_texture(struct wined3d_device *device,
         UINT stage, struct wined3d_texture *texture)
 {
     struct wined3d_texture *prev;
@@ -3547,7 +3547,7 @@ HRESULT CDECL wined3d_device_set_texture(struct wined3d_device *device,
     if (stage >= ARRAY_SIZE(device->state.textures))
     {
         WARN("Ignoring invalid stage %u.\n", stage);
-        return WINED3D_OK;
+        return;
     }
 
     if (texture)
@@ -3559,7 +3559,7 @@ HRESULT CDECL wined3d_device_set_texture(struct wined3d_device *device,
     if (device->recording)
     {
         device->recording->changed.textures |= 1u << stage;
-        return WINED3D_OK;
+        return;
     }
 
     prev = device->state.textures[stage];
@@ -3568,7 +3568,7 @@ HRESULT CDECL wined3d_device_set_texture(struct wined3d_device *device,
     if (texture == prev)
     {
         TRACE("App is setting the same texture again, nothing to do.\n");
-        return WINED3D_OK;
+        return;
     }
 
     TRACE("Setting new texture to %p.\n", texture);
@@ -3580,7 +3580,7 @@ HRESULT CDECL wined3d_device_set_texture(struct wined3d_device *device,
     if (prev)
         wined3d_texture_decref(prev);
 
-    return WINED3D_OK;
+    return;
 }
 
 struct wined3d_texture * CDECL wined3d_device_get_texture(const struct wined3d_device *device, UINT stage)
@@ -5322,7 +5322,7 @@ HRESULT device_init(struct wined3d_device *device, struct wined3d *wined3d,
         BYTE surface_alignment, const enum wined3d_feature_level *levels, unsigned int level_count,
         struct wined3d_device_parent *device_parent)
 {
-    struct wined3d_adapter *adapter = &wined3d->adapters[adapter_idx];
+    struct wined3d_adapter *adapter = wined3d->adapters[adapter_idx];
     const struct wined3d_vertex_pipe_ops *vertex_pipeline;
     const struct fragment_pipeline *fragment_pipeline;
     unsigned int i;

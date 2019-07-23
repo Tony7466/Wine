@@ -73,6 +73,7 @@
 #define WINED3D_QUIRK_BROKEN_ARB_FOG            0x00000200
 
 struct fragment_pipeline;
+struct wined3d_adapter;
 struct wined3d_context;
 struct wined3d_state;
 struct wined3d_texture_gl;
@@ -195,7 +196,7 @@ struct wined3d_d3d_info
 {
     struct wined3d_d3d_limits limits;
     struct wined3d_ffp_attrib_ops ffp_attrib_ops;
-    DWORD wined3d_creation_flags;
+    unsigned int wined3d_creation_flags;
     unsigned int xyzrhw : 1;
     unsigned int emulated_flatshading : 1;
     unsigned int ffp_generic_attributes : 1;
@@ -1430,11 +1431,11 @@ struct wined3d_shader_backend_ops
     void (*shader_destroy)(struct wined3d_shader *shader);
     HRESULT (*shader_alloc_private)(struct wined3d_device *device, const struct wined3d_vertex_pipe_ops *vertex_pipe,
             const struct fragment_pipeline *fragment_pipe);
-    void (*shader_free_private)(struct wined3d_device *device);
+    void (*shader_free_private)(struct wined3d_device *device, struct wined3d_context *context);
     BOOL (*shader_allocate_context_data)(struct wined3d_context *context);
     void (*shader_free_context_data)(struct wined3d_context *context);
     void (*shader_init_context_state)(struct wined3d_context *context);
-    void (*shader_get_caps)(const struct wined3d_gl_info *gl_info, struct shader_caps *caps);
+    void (*shader_get_caps)(const struct wined3d_adapter *adapter, struct shader_caps *caps);
     BOOL (*shader_color_fixup_supported)(struct color_fixup_desc fixup);
     BOOL (*shader_has_ffp_proj_control)(void *shader_priv);
 };
@@ -2059,10 +2060,10 @@ struct fragment_caps
 struct fragment_pipeline
 {
     void (*enable_extension)(const struct wined3d_gl_info *gl_info, BOOL enable);
-    void (*get_caps)(const struct wined3d_gl_info *gl_info, struct fragment_caps *caps);
+    void (*get_caps)(const struct wined3d_adapter *adapter, struct fragment_caps *caps);
     DWORD (*get_emul_mask)(const struct wined3d_gl_info *gl_info);
     void *(*alloc_private)(const struct wined3d_shader_backend_ops *shader_backend, void *shader_priv);
-    void (*free_private)(struct wined3d_device *device);
+    void (*free_private)(struct wined3d_device *device, struct wined3d_context *context);
     BOOL (*allocate_context_data)(struct wined3d_context *context);
     void (*free_context_data)(struct wined3d_context *context);
     BOOL (*color_fixup_supported)(struct color_fixup_desc fixup);
@@ -2086,10 +2087,10 @@ struct wined3d_vertex_caps
 struct wined3d_vertex_pipe_ops
 {
     void (*vp_enable)(const struct wined3d_gl_info *gl_info, BOOL enable);
-    void (*vp_get_caps)(const struct wined3d_gl_info *gl_info, struct wined3d_vertex_caps *caps);
+    void (*vp_get_caps)(const struct wined3d_adapter *adapter, struct wined3d_vertex_caps *caps);
     DWORD (*vp_get_emul_mask)(const struct wined3d_gl_info *gl_info);
     void *(*vp_alloc)(const struct wined3d_shader_backend_ops *shader_backend, void *shader_priv);
-    void (*vp_free)(struct wined3d_device *device);
+    void (*vp_free)(struct wined3d_device *device, struct wined3d_context *context);
     const struct wined3d_state_entry_template *vp_states;
 };
 
@@ -2447,6 +2448,10 @@ enum wined3d_pci_device
     CARD_NVIDIA_GEFORCE_GTX1080TI   = 0x1b06,
     CARD_NVIDIA_TITANX_PASCAL       = 0x1b00,
     CARD_NVIDIA_TITANV              = 0x1d81,
+    CARD_NVIDIA_GEFORCE_RTX2060     = 0x1f08,
+    CARD_NVIDIA_GEFORCE_RTX2070     = 0x1f07,
+    CARD_NVIDIA_GEFORCE_RTX2080     = 0x1e87,
+    CARD_NVIDIA_GEFORCE_RTX2080TI   = 0x1e07,
 
     CARD_REDHAT_VIRGL               = 0x1010,
 
@@ -2676,12 +2681,14 @@ void wined3d_driver_info_init(struct wined3d_driver_info *driver_info,
 
 struct wined3d_adapter_ops
 {
+    void (*adapter_destroy)(struct wined3d_adapter *adapter);
     BOOL (*adapter_create_context)(struct wined3d_context *context,
             struct wined3d_texture *target, const struct wined3d_format *ds_format);
+    void (*adapter_get_wined3d_caps)(const struct wined3d_adapter *adapter, struct wined3d_caps *caps);
+    BOOL (*adapter_check_format)(const struct wined3d_adapter *adapter,
+            const struct wined3d_format *adapter_format, const struct wined3d_format *rt_format,
+            const struct wined3d_format *ds_format);
 };
-
-BOOL wined3d_adapter_gl_create_context(struct wined3d_context *context,
-        struct wined3d_texture *target, const struct wined3d_format *ds_format) DECLSPEC_HIDDEN;
 
 /* The adapter structure */
 struct wined3d_adapter
@@ -2699,8 +2706,6 @@ struct wined3d_adapter
     LUID luid;
 
     WCHAR device_name[CCHDEVICENAME]; /* for use with e.g. ChangeDisplaySettings() */
-    unsigned int cfg_count;
-    struct wined3d_pixel_format *cfgs;
 
     void *formats;
     size_t format_size;
@@ -2711,7 +2716,30 @@ struct wined3d_adapter
     const struct wined3d_adapter_ops *adapter_ops;
 };
 
-BOOL wined3d_adapter_gl_init(struct wined3d_adapter *adapter, DWORD wined3d_creation_flags) DECLSPEC_HIDDEN;
+BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int ordinal) DECLSPEC_HIDDEN;
+void wined3d_adapter_cleanup(struct wined3d_adapter *adapter) DECLSPEC_HIDDEN;
+
+struct wined3d_adapter_gl
+{
+    struct wined3d_adapter a;
+
+    struct wined3d_pixel_format *pixel_formats;
+    unsigned int pixel_format_count;
+};
+
+static inline struct wined3d_adapter_gl *wined3d_adapter_gl(struct wined3d_adapter *adapter)
+{
+    return CONTAINING_RECORD(adapter, struct wined3d_adapter_gl, a);
+}
+
+static inline const struct wined3d_adapter_gl *wined3d_adapter_gl_const(const struct wined3d_adapter *adapter)
+{
+    return CONTAINING_RECORD(adapter, struct wined3d_adapter_gl, a);
+}
+
+struct wined3d_adapter *wined3d_adapter_gl_create(unsigned int ordinal, unsigned int wined3d_creation_flags) DECLSPEC_HIDDEN;
+BOOL wined3d_adapter_gl_create_context(struct wined3d_context *context,
+        struct wined3d_texture *target, const struct wined3d_format *ds_format) DECLSPEC_HIDDEN;
 
 struct wined3d_caps_gl_ctx
 {
@@ -2857,9 +2885,9 @@ void wined3d_ffp_get_vs_settings(const struct wined3d_context *context,
 struct wined3d
 {
     LONG ref;
-    DWORD flags;
-    UINT adapter_count;
-    struct wined3d_adapter adapters[1];
+    unsigned int flags;
+    unsigned int adapter_count;
+    struct wined3d_adapter *adapters[1];
 };
 
 HRESULT wined3d_init(struct wined3d *wined3d, DWORD flags) DECLSPEC_HIDDEN;
@@ -4011,7 +4039,7 @@ static inline struct wined3d_unordered_access_view_gl *wined3d_unordered_access_
 struct wined3d_swapchain_ops
 {
     void (*swapchain_present)(struct wined3d_swapchain *swapchain,
-            const RECT *src_rect, const RECT *dst_rect, DWORD flags);
+            const RECT *src_rect, const RECT *dst_rect, unsigned int swap_interval, DWORD flags);
     void (*swapchain_frontbuffer_updated)(struct wined3d_swapchain *swapchain);
 };
 
@@ -4049,8 +4077,6 @@ struct wined3d_swapchain
 };
 
 void wined3d_swapchain_activate(struct wined3d_swapchain *swapchain, BOOL activate) DECLSPEC_HIDDEN;
-void wined3d_swapchain_set_swap_interval(struct wined3d_swapchain *swapchain,
-        unsigned int swap_interval) DECLSPEC_HIDDEN;
 struct wined3d_context *swapchain_get_context(struct wined3d_swapchain *swapchain) DECLSPEC_HIDDEN;
 void swapchain_destroy_contexts(struct wined3d_swapchain *swapchain) DECLSPEC_HIDDEN;
 HDC swapchain_get_backup_dc(struct wined3d_swapchain *swapchain) DECLSPEC_HIDDEN;
