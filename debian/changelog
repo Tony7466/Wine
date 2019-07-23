@@ -1,3 +1,9 @@
+wine-development (4.4-2) unstable; urgency=medium
+
+  * Build with gcc defaults.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 20 Jul 2019 23:32:18 +0000
+
 wine-development (4.4-1) unstable; urgency=medium
 
   * New upstream release 4.4, released Mar 15, 2019.
