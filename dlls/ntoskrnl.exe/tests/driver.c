@@ -126,7 +126,7 @@ static void WINAPIV ok_(const char *file, int line, int condition, const char *m
     __ms_va_end(args);
 }
 
-void vskip_(const char *file, int line, const char *msg, __ms_va_list args)
+static void vskip_(const char *file, int line, const char *msg, __ms_va_list args)
 {
     const char *current_file;
 
@@ -141,7 +141,7 @@ void vskip_(const char *file, int line, const char *msg, __ms_va_list args)
     skipped++;
 }
 
-void WINAPIV win_skip_(const char *file, int line, const char *msg, ...)
+static void WINAPIV win_skip_(const char *file, int line, const char *msg, ...)
 {
     __ms_va_list args;
     __ms_va_start(args, msg);
@@ -185,7 +185,7 @@ static unsigned int strlenW( const WCHAR *str )
     return s - str;
 }
 
-void *kmemcpy(void *dest, const void *src, SIZE_T n)
+static void *kmemcpy(void *dest, const void *src, SIZE_T n)
 {
     const char *s = src;
     char *d = dest;
@@ -308,6 +308,14 @@ static NTSTATUS wait_multiple(ULONG count, void *objs[], WAIT_TYPE wait_type, UL
     return KeWaitForMultipleObjects(count, objs, wait_type, Executive, KernelMode, FALSE, &integer, NULL);
 }
 
+static NTSTATUS wait_single_handle(HANDLE handle, ULONGLONG timeout)
+{
+    LARGE_INTEGER integer;
+
+    integer.QuadPart = timeout;
+    return ZwWaitForSingleObject(handle, FALSE, &integer);
+}
+
 static void run_thread(PKSTART_ROUTINE proc, void *arg)
 {
     OBJECT_ATTRIBUTES attr = {0};
@@ -341,11 +349,13 @@ static void WINAPI mutex_thread(void *arg)
 static void test_sync(void)
 {
     KSEMAPHORE semaphore, semaphore2;
-    KEVENT manual_event, auto_event;
+    KEVENT manual_event, auto_event, *event;
     KTIMER timer;
     LARGE_INTEGER timeout;
+    OBJECT_ATTRIBUTES attr;
     void *objs[2];
     NTSTATUS ret;
+    HANDLE handle;
     int i;
 
     KeInitializeEvent(&manual_event, NotificationEvent, FALSE);
@@ -439,6 +449,30 @@ static void test_sync(void)
 
     ret = wait_multiple(2, objs, WaitAny, 0);
     ok(ret == 1, "got %#x\n", ret);
+
+    InitializeObjectAttributes(&attr, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
+    ret = ZwCreateEvent(&handle, SYNCHRONIZE, &attr, NotificationEvent, TRUE);
+    ok(!ret, "ZwCreateEvent failed: %#x\n", ret);
+
+    ret = ObReferenceObjectByHandle(handle, SYNCHRONIZE, *pExEventObjectType, KernelMode, (void **)&event, NULL);
+    ok(!ret, "ObReferenceObjectByHandle failed: %#x\n", ret);
+
+    ret = wait_single(event, 0);
+    ok(ret == 0, "got %#x\n", ret);
+    KeResetEvent(event);
+    ret = wait_single(event, 0);
+    ok(ret == STATUS_TIMEOUT, "got %#x\n", ret);
+    ret = wait_single_handle(handle, 0);
+    ok(ret == STATUS_TIMEOUT, "got %#x\n", ret);
+
+    KeSetEvent(event, 0, FALSE);
+    ret = wait_single(event, 0);
+    ok(ret == 0, "got %#x\n", ret);
+    ret = wait_single_handle(handle, 0);
+    ok(!ret, "got %#x\n", ret);
+
+    ZwClose(handle);
+    ObDereferenceObject(event);
 
     /* test semaphores */
     KeInitializeSemaphore(&semaphore, 0, 5);
@@ -662,10 +696,12 @@ static void WINAPI thread_proc(void *arg)
 
 static void test_ob_reference(const WCHAR *test_path)
 {
+    POBJECT_TYPE (WINAPI *pObGetObjectType)(void*);
     OBJECT_ATTRIBUTES attr = { sizeof(attr) };
     HANDLE event_handle, file_handle, file_handle2, thread_handle;
     FILE_OBJECT *file;
     void *obj1, *obj2;
+    POBJECT_TYPE obj1_type;
     UNICODE_STRING pathU;
     IO_STATUS_BLOCK io;
     WCHAR *tmp_path;
@@ -673,6 +709,10 @@ static void test_ob_reference(const WCHAR *test_path)
     NTSTATUS status;
 
     static const WCHAR tmpW[] = {'.','t','m','p',0};
+
+    pObGetObjectType = get_proc_address("ObGetObjectType");
+    if (!pObGetObjectType)
+        win_skip("ObGetObjectType not found\n");
 
     InitializeObjectAttributes(&attr, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
     status = ZwCreateEvent(&event_handle, SYNCHRONIZE, &attr, NotificationEvent, TRUE);
@@ -708,6 +748,12 @@ static void test_ob_reference(const WCHAR *test_path)
     status = ObReferenceObjectByHandle(event_handle, SYNCHRONIZE, NULL, KernelMode, &obj1, NULL);
     ok(!status, "ObReferenceObjectByHandle failed: %#x\n", status);
 
+    if (pObGetObjectType)
+    {
+        obj1_type = pObGetObjectType(obj1);
+        ok(obj1_type == *pExEventObjectType, "ObGetObjectType returned %p\n", obj1_type);
+    }
+
     if (sizeof(void *) != 4) /* avoid dealing with fastcall */
     {
         ObfReferenceObject(obj1);
@@ -719,14 +765,12 @@ static void test_ob_reference(const WCHAR *test_path)
 
     status = ObReferenceObjectByHandle(event_handle, SYNCHRONIZE, *pExEventObjectType, KernelMode, &obj2, NULL);
     ok(!status, "ObReferenceObjectByHandle failed: %#x\n", status);
-    todo_wine
     ok(obj1 == obj2, "obj1 != obj2\n");
 
     ObDereferenceObject(obj2);
 
     status = ObReferenceObjectByHandle(event_handle, SYNCHRONIZE, NULL, KernelMode, &obj2, NULL);
     ok(!status, "ObReferenceObjectByHandle failed: %#x\n", status);
-    todo_wine
     ok(obj1 == obj2, "obj1 != obj2\n");
 
     ObDereferenceObject(obj2);

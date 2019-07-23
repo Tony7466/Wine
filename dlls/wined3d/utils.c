@@ -3138,8 +3138,8 @@ static BOOL init_format_texture_info(struct wined3d_adapter *adapter, struct win
     unsigned int i, j;
     BOOL srgb_write;
 
-    adapter->fragment_pipe->get_caps(gl_info, &fragment_caps);
-    adapter->shader_backend->shader_get_caps(gl_info, &shader_caps);
+    adapter->fragment_pipe->get_caps(adapter, &fragment_caps);
+    adapter->shader_backend->shader_get_caps(adapter, &shader_caps);
     srgb_write = (fragment_caps.wined3d_caps & WINED3D_FRAGMENT_CAP_SRGB_WRITE)
             && (shader_caps.wined3d_caps & WINED3D_SHADER_CAP_SRGB_WRITE);
 
@@ -3196,6 +3196,9 @@ static BOOL init_format_texture_info(struct wined3d_adapter *adapter, struct win
             format->srgb_internal = format->internal;
             format_clear_flag(&format->f, WINED3DFMT_FLAG_SRGB_READ | WINED3DFMT_FLAG_SRGB_WRITE);
         }
+
+        if (!gl_info->supported[ARB_SHADOW] && (format->f.flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_SHADOW))
+            format_clear_flag(&format->f, WINED3DFMT_FLAG_TEXTURE);
 
         query_internal_format(adapter, format, &format_texture_info[i], gl_info, srgb_write, FALSE);
 

@@ -463,6 +463,14 @@ static const IID * const cstyle_iids[] = {
     NULL
 };
 
+static const IID * const computed_style_iids[] = {
+    &IID_IUnknown,
+    &IID_IDispatch,
+    &IID_IDispatchEx,
+    &IID_IHTMLCSSStyleDeclaration,
+    NULL
+};
+
 static const IID * const img_factory_iids[] = {
     &IID_IUnknown,
     &IID_IDispatch,
@@ -5153,6 +5161,7 @@ static void _test_doc_set_title(unsigned line, IHTMLDocument2 *doc, const char *
 
 static void test_elem_bounding_client_rect(IUnknown *unk)
 {
+    IHTMLRectCollection *rects;
     IHTMLRect *rect, *rect2;
     IHTMLElement2 *elem2;
     LONG l;
@@ -5191,6 +5200,13 @@ static void test_elem_bounding_client_rect(IUnknown *unk)
     ok(l != 0xdeadbeef, "l = 0xdeadbeef\n");
 
     IHTMLRect_Release(rect);
+
+    hres = IHTMLElement2_getClientRects(elem2, &rects);
+    ok(hres == S_OK, "getClientRects failed: %08x\n", hres);
+
+    test_disp((IUnknown*)rects, &IID_IHTMLRectCollection, NULL, "[object]");
+
+    IHTMLRectCollection_Release(rects);
 }
 
 static void test_elem_col_item(IHTMLElementCollection *col, const char *n,
@@ -6750,6 +6766,27 @@ static void test_xmlhttprequest(IHTMLWindow5 *window)
     VariantClear(&var);
 }
 
+static void test_read_only_style(IHTMLCSSStyleDeclaration *style)
+{
+    BSTR none = a2bstr("none"), display = a2bstr("display"), str;
+    VARIANT v;
+    HRESULT hres;
+
+    hres = IHTMLCSSStyleDeclaration_put_display(style, none);
+    ok(hres == 0x80700007, "put_display failed: %08x\n", hres);
+
+    hres = IHTMLCSSStyleDeclaration_removeProperty(style, display, &str);
+    ok(hres == 0x80700007, "removeProperty failed: %08x\n", hres);
+
+    V_VT(&v) = VT_BSTR;
+    V_BSTR(&v) = none;
+    hres = IHTMLCSSStyleDeclaration_setProperty(style, display, &v, NULL);
+    ok(hres == 0x80700007, "setProperty returned: %08x\n", hres);
+
+    SysFreeString(none);
+    SysFreeString(display);
+}
+
 static void test_window(IHTMLDocument2 *doc)
 {
     IHTMLWindow2 *window, *window2, *self, *parent;
@@ -6858,7 +6895,10 @@ static void test_window(IHTMLDocument2 *doc)
 
     hres = IHTMLWindow2_QueryInterface(window, &IID_IHTMLWindow7, (void**)&window7);
     if(SUCCEEDED(hres)) {
+        IHTMLCSSStyleDeclaration *computed_style;
         IHTMLPerformance *performance;
+        IHTMLDOMNode *node;
+        IHTMLElement *elem;
 
         ok(window7 != NULL, "window7 == NULL\n");
 
@@ -6886,6 +6926,25 @@ static void test_window(IHTMLDocument2 *doc)
 
             IHTMLWindow7_Release(window7);
         }
+
+        hres = IHTMLDocument2_get_body(doc, &elem);
+        ok(hres == S_OK, "get_body failed: %08x\n", hres);
+
+        hres = IHTMLElement_QueryInterface(elem, &IID_IHTMLDOMNode, (void**)&node);
+        ok(hres == S_OK, "Could not get IHTMLDOMNode iface: %08x\n", hres);
+
+        hres = IHTMLWindow7_getComputedStyle(window7, node, NULL, &computed_style);
+        ok(hres == S_OK, "getComputedStyle failed: %08x\n", hres);
+
+        test_disp((IUnknown*)computed_style, &DIID_DispHTMLW3CComputedStyle, NULL, "[object]");
+        test_ifaces((IUnknown*)computed_style, computed_style_iids);
+
+        test_read_only_style(computed_style);
+
+        IHTMLCSSStyleDeclaration_Release(computed_style);
+
+        IHTMLDOMNode_Release(node);
+        IHTMLElement_Release(elem);
     }else {
         win_skip("IHTMLWindow7 not supported\n");
     }
@@ -6924,6 +6983,8 @@ static void test_dom_implementation(IHTMLDocument2 *doc)
         IHTMLDocument2 *new_document2;
         IHTMLDocument7 *new_document;
         IHTMLLocation *location;
+        IHTMLWindow2 *window;
+        IDispatch *disp;
 
         str = a2bstr("test");
         hres = IHTMLDOMImplementation2_createHTMLDocument(dom_implementation2, str, &new_document);
@@ -6932,8 +6993,22 @@ static void test_dom_implementation(IHTMLDocument2 *doc)
         test_disp((IUnknown*)new_document, &DIID_DispHTMLDocument, &CLSID_HTMLDocument, "[object]");
         test_ifaces((IUnknown*)new_document, doc_node_iids);
 
+        hres = IHTMLDocument7_get_defaultView(new_document, &window);
+        ok(hres == S_OK, "get_defaultView returned: %08x\n", hres);
+        ok(!window, "window = %p\n", window);
+
+        hres = IHTMLDocument7_get_parentWindow(new_document, &window);
+        ok(hres == S_OK, "get_parentWindow returned: %08x\n", hres);
+        ok(!window, "window = %p\n", window);
+
         hres = IHTMLDocument7_QueryInterface(new_document, &IID_IHTMLDocument2, (void**)&new_document2);
         ok(hres == S_OK, "Could not get IHTMLDocument2 iface: %08x\n", hres);
+
+        hres = IHTMLDocument2_get_parentWindow(new_document2, &window);
+        ok(hres == E_FAIL, "get_parentWindow returned: %08x\n", hres);
+
+        hres = IHTMLDocument2_get_Script(new_document2, &disp);
+        ok(hres == E_PENDING, "get_Script returned: %08x\n", hres);
 
         hres = IHTMLDocument2_get_location(new_document2, &location);
         ok(hres == E_UNEXPECTED, "get_location returned: %08x\n", hres);
@@ -7083,10 +7158,19 @@ static void test_defaults(IHTMLDocument2 *doc)
         test_ifaces((IUnknown*)cstyle, cstyle_iids);
 
         hres = IHTMLCurrentStyle_QueryInterface(cstyle, &IID_IHTMLCurrentStyle4, (void**)&unk);
-        if(SUCCEEDED(hres))
+        if(SUCCEEDED(hres)) {
+            IHTMLCSSStyleDeclaration *css_style;
+
+            hres = IHTMLCurrentStyle_QueryInterface(cstyle, &IID_IHTMLCSSStyleDeclaration, (void**)&css_style);
+            if(SUCCEEDED(hres)) {
+                test_read_only_style(css_style);
+                IHTMLCSSStyleDeclaration_Release(css_style);
+            }else {
+                win_skip("IHTMLCSSStyleDeclaration not supported\n");
+            }
+
             IUnknown_Release(unk);
-        else
-        {
+        }else {
            /*IE6 doesn't have interface */
            win_skip("IID_IHTMLCurrentStyle4 not supported\n");
         }

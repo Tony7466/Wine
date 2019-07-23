@@ -264,18 +264,40 @@ static void free_kernel_object( void *obj )
     HeapFree( GetProcessHeap(), 0, header );
 }
 
-void *alloc_kernel_object( POBJECT_TYPE type, SIZE_T size, LONG ref )
+void *alloc_kernel_object( POBJECT_TYPE type, HANDLE handle, SIZE_T size, LONG ref )
 {
     struct object_header *header;
 
     if (!(header = HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*header) + size)) )
         return NULL;
 
+    if (handle)
+    {
+        NTSTATUS status;
+        SERVER_START_REQ( set_kernel_object_ptr )
+        {
+            req->manager  = wine_server_obj_handle( get_device_manager() );
+            req->handle   = wine_server_obj_handle( handle );
+            req->user_ptr = wine_server_client_ptr( header + 1 );
+            status = wine_server_call( req );
+        }
+        SERVER_END_REQ;
+        if (status) FIXME( "set_object_reference failed: %#x\n", status );
+    }
+
     header->ref = ref;
     header->type = type;
     return header + 1;
 }
 
+static CRITICAL_SECTION obref_cs;
+static CRITICAL_SECTION_DEBUG obref_critsect_debug =
+{
+    0, 0, &obref_cs,
+    { &critsect_debug.ProcessLocksList, &critsect_debug.ProcessLocksList },
+      0, 0, { (DWORD_PTR)(__FILE__ ": obref_cs") }
+};
+static CRITICAL_SECTION obref_cs = { &obref_critsect_debug, -1, 0, 0, 0, 0 };
 
 /***********************************************************************
  *           ObDereferenceObject   (NTOSKRNL.EXE.@)
@@ -291,13 +313,29 @@ void WINAPI ObDereferenceObject( void *obj )
         return;
     }
 
-    ref = InterlockedDecrement( &header->ref );
+    EnterCriticalSection( &obref_cs );
+
+    ref = --header->ref;
     TRACE( "(%p) ref=%u\n", obj, ref );
     if (!ref)
     {
-        if (header->type->release) header->type->release( obj );
-        else FIXME( "no destructor\n" );
+        if (header->type->release)
+        {
+            header->type->release( obj );
+        }
+        else
+        {
+            SERVER_START_REQ( release_kernel_object )
+            {
+                req->manager  = wine_server_obj_handle( get_device_manager() );
+                req->user_ptr = wine_server_client_ptr( obj );
+                if (wine_server_call( req )) FIXME( "failed to release %p\n", obj );
+            }
+            SERVER_END_REQ;
+        }
     }
+
+    LeaveCriticalSection( &obref_cs );
 }
 
 static void ObReferenceObject( void *obj )
@@ -311,8 +349,36 @@ static void ObReferenceObject( void *obj )
         return;
     }
 
-    ref = InterlockedIncrement( &header->ref );
+    EnterCriticalSection( &obref_cs );
+
+    ref = ++header->ref;
     TRACE( "(%p) ref=%u\n", obj, ref );
+    if (ref == 1)
+    {
+        SERVER_START_REQ( grab_kernel_object )
+        {
+            req->manager  = wine_server_obj_handle( get_device_manager() );
+            req->user_ptr = wine_server_client_ptr( obj );
+            if (wine_server_call( req )) FIXME( "failed to grab %p reference\n", obj );
+        }
+        SERVER_END_REQ;
+    }
+
+    LeaveCriticalSection( &obref_cs );
+}
+
+HANDLE kernel_object_handle( void *obj, unsigned int access )
+{
+    HANDLE handle = NULL;
+    SERVER_START_REQ( get_kernel_object_handle )
+    {
+        req->manager  = wine_server_obj_handle( get_device_manager() );
+        req->user_ptr = wine_server_client_ptr( obj );
+        req->access   = access;
+        if (!wine_server_call( req )) handle = wine_server_ptr_handle( reply->handle );
+    }
+    SERVER_END_REQ;
+    return handle;
 }
 
 static const POBJECT_TYPE *known_types[] =
@@ -327,51 +393,91 @@ static const POBJECT_TYPE *known_types[] =
     &SeTokenObjectType
 };
 
+static CRITICAL_SECTION handle_map_cs;
+static CRITICAL_SECTION_DEBUG handle_map_critsect_debug =
+{
+    0, 0, &handle_map_cs,
+    { &critsect_debug.ProcessLocksList, &critsect_debug.ProcessLocksList },
+      0, 0, { (DWORD_PTR)(__FILE__ ": handle_map_cs") }
+};
+static CRITICAL_SECTION handle_map_cs = { &handle_map_critsect_debug, -1, 0, 0, 0, 0 };
+
 static NTSTATUS kernel_object_from_handle( HANDLE handle, POBJECT_TYPE type, void **ret )
 {
-    char buf[256];
-    OBJECT_TYPE_INFORMATION *type_info = (OBJECT_TYPE_INFORMATION *)buf;
-    ULONG size;
+    struct object_header *header;
     void *obj;
     NTSTATUS status;
 
-    status = NtQueryObject(handle, ObjectTypeInformation, buf, sizeof(buf), &size);
-    if (status) return status;
+    EnterCriticalSection( &handle_map_cs );
 
-    if (!type)
+    SERVER_START_REQ( get_kernel_object_ptr )
     {
-        size_t i;
-        for (i = 0; i < ARRAY_SIZE(known_types); i++)
-        {
-            type = *known_types[i];
-            if (!RtlCompareUnicodeStrings( type->name, strlenW(type->name), type_info->TypeName.Buffer,
-                                           type_info->TypeName.Length / sizeof(WCHAR), FALSE ))
-                break;
-        }
-        if (i == ARRAY_SIZE(known_types))
-        {
-            FIXME("Unsupported type %s\n", debugstr_us(&type_info->TypeName));
-            return STATUS_INVALID_HANDLE;
-        }
+        req->manager = wine_server_obj_handle( get_device_manager() );
+        req->handle  = wine_server_obj_handle( handle );
+        status = wine_server_call( req );
+        obj = wine_server_get_ptr( reply->user_ptr );
     }
-    else if (!!RtlCompareUnicodeStrings( type->name, strlenW(type->name), type_info->TypeName.Buffer,
-                                         type_info->TypeName.Length / sizeof(WCHAR), FALSE ))
-        return STATUS_OBJECT_TYPE_MISMATCH;
+    SERVER_END_REQ;
+    if (status)
+    {
+        LeaveCriticalSection( &handle_map_cs );
+        return status;
+    }
 
-    FIXME( "semi-stub: returning new %s object instance\n", debugstr_w(type->name) );
-
-    if (type->constructor)
-        obj = type->constructor( handle );
+    if (obj)
+    {
+        header = (struct object_header *)obj - 1;
+        if (type && header->type != type) status = STATUS_OBJECT_TYPE_MISMATCH;
+    }
     else
     {
-        obj = alloc_kernel_object( type, 0, 0 );
-        FIXME( "No constructor for type %s returning empty %p object\n", debugstr_w(type->name), obj );
-    }
-    if (!obj) return STATUS_NO_MEMORY;
+        char buf[256];
+        OBJECT_TYPE_INFORMATION *type_info = (OBJECT_TYPE_INFORMATION *)buf;
+        ULONG size;
 
-    TRACE( "%p -> %p\n", handle, obj );
-    *ret = obj;
-    return STATUS_SUCCESS;
+        status = NtQueryObject( handle, ObjectTypeInformation, buf, sizeof(buf), &size );
+        if (status)
+        {
+            LeaveCriticalSection( &handle_map_cs );
+            return status;
+        }
+        if (!type)
+        {
+            size_t i;
+            for (i = 0; i < ARRAY_SIZE(known_types); i++)
+            {
+                type = *known_types[i];
+                if (!RtlCompareUnicodeStrings( type->name, strlenW(type->name), type_info->TypeName.Buffer,
+                                               type_info->TypeName.Length / sizeof(WCHAR), FALSE ))
+                    break;
+            }
+            if (i == ARRAY_SIZE(known_types))
+            {
+                FIXME("Unsupported type %s\n", debugstr_us(&type_info->TypeName));
+                LeaveCriticalSection( &handle_map_cs );
+                return STATUS_INVALID_HANDLE;
+            }
+        }
+        else if (RtlCompareUnicodeStrings( type->name, strlenW(type->name), type_info->TypeName.Buffer,
+                                           type_info->TypeName.Length / sizeof(WCHAR), FALSE) )
+        {
+            LeaveCriticalSection( &handle_map_cs );
+            return STATUS_OBJECT_TYPE_MISMATCH;
+        }
+
+        if (type->constructor)
+            obj = type->constructor( handle );
+        else
+        {
+            FIXME( "No constructor for type %s\n", debugstr_w(type->name) );
+            obj = alloc_kernel_object( type, handle, 0, 0 );
+        }
+        if (!obj) status = STATUS_NO_MEMORY;
+    }
+
+    LeaveCriticalSection( &handle_map_cs );
+    if (!status) *ret = obj;
+    return status;
 }
 
 /***********************************************************************
@@ -397,6 +503,15 @@ NTSTATUS WINAPI ObReferenceObjectByHandle( HANDLE handle, ACCESS_MASK access,
     return status;
 }
 
+/***********************************************************************
+ *           ObGetObjectType (NTOSKRNL.EXE.@)
+ */
+POBJECT_TYPE WINAPI ObGetObjectType( void *object )
+{
+    struct object_header *header = (struct object_header *)object - 1;
+    return header->type;
+}
+
 
 static void *create_file_object( HANDLE handle );
 
@@ -413,7 +528,7 @@ POBJECT_TYPE IoFileObjectType = &file_type;
 static void *create_file_object( HANDLE handle )
 {
     FILE_OBJECT *file;
-    if (!(file = alloc_kernel_object( IoFileObjectType, sizeof(*file), 0 ))) return NULL;
+    if (!(file = alloc_kernel_object( IoFileObjectType, handle, sizeof(*file), 0 ))) return NULL;
     file->Type = 5;  /* MSDN */
     file->Size = sizeof(*file);
     return file;
@@ -478,7 +593,7 @@ static NTSTATUS dispatch_create( const irp_params_t *params, void *in_buff, ULON
     FILE_OBJECT *file;
     DEVICE_OBJECT *device = wine_server_get_ptr( params->create.device );
 
-    if (!(file = alloc_kernel_object( IoFileObjectType, sizeof(*file), 1 ))) return STATUS_NO_MEMORY;
+    if (!(file = alloc_kernel_object( IoFileObjectType, NULL, sizeof(*file), 1 ))) return STATUS_NO_MEMORY;
 
     TRACE( "device %p -> file %p\n", device, file );
 
@@ -732,6 +847,18 @@ static NTSTATUS dispatch_ioctl( const irp_params_t *params, void *in_buff, ULONG
     return STATUS_SUCCESS;
 }
 
+/* This is not a real IRP_MJ_CLEANUP dispatcher. We use it to notify client that server
+ * object associated with kernel object is freed so that we may free it on client side
+ * as well. */
+static NTSTATUS dispatch_cleanup( const irp_params_t *params, void *in_buff, ULONG in_size,
+                                  ULONG out_size, HANDLE irp_handle )
+{
+    void *obj = wine_server_get_ptr( params->cleanup.obj );
+    TRACE( "freeing %p object\n", obj );
+    free_kernel_object( obj );
+    return STATUS_SUCCESS;
+}
+
 typedef NTSTATUS (*dispatch_func)( const irp_params_t *params, void *in_buff, ULONG in_size,
                                    ULONG out_size, HANDLE irp_handle );
 
@@ -755,7 +882,7 @@ static const dispatch_func dispatch_funcs[IRP_MJ_MAXIMUM_FUNCTION + 1] =
     NULL,              /* IRP_MJ_INTERNAL_DEVICE_CONTROL */
     NULL,              /* IRP_MJ_SHUTDOWN */
     NULL,              /* IRP_MJ_LOCK_CONTROL */
-    NULL,              /* IRP_MJ_CLEANUP */
+    dispatch_cleanup,  /* IRP_MJ_CLEANUP */
     NULL,              /* IRP_MJ_CREATE_MAILSLOT */
     NULL,              /* IRP_MJ_QUERY_SECURITY */
     NULL,              /* IRP_MJ_SET_SECURITY */
@@ -1289,7 +1416,7 @@ NTSTATUS WINAPI IoCreateDriver( UNICODE_STRING *name, PDRIVER_INITIALIZE init )
 
     TRACE("(%s, %p)\n", debugstr_us(name), init);
 
-    if (!(driver = alloc_kernel_object( IoDriverObjectType, sizeof(*driver), 1 )))
+    if (!(driver = alloc_kernel_object( IoDriverObjectType, NULL, sizeof(*driver), 1 )))
         return STATUS_NO_MEMORY;
 
     if ((status = RtlDuplicateUnicodeString( 1, name, &driver->driver_obj.DriverName )))
@@ -1370,7 +1497,7 @@ NTSTATUS WINAPI IoCreateDevice( DRIVER_OBJECT *driver, ULONG ext_size,
     TRACE( "(%p, %u, %s, %u, %x, %u, %p)\n",
            driver, ext_size, debugstr_us(name), type, characteristics, exclusive, ret_device );
 
-    if (!(device = alloc_kernel_object( IoDeviceObjectType, sizeof(DEVICE_OBJECT) + ext_size, 1 )))
+    if (!(device = alloc_kernel_object( IoDeviceObjectType, NULL, sizeof(DEVICE_OBJECT) + ext_size, 1 )))
         return STATUS_NO_MEMORY;
 
     SERVER_START_REQ( create_device )
@@ -2793,16 +2920,6 @@ USHORT WINAPI ObGetFilterVersion(void)
 }
 
 /***********************************************************************
- *           ObGetObjectType (NTOSKRNL.EXE.@)
- */
-POBJECT_TYPE WINAPI ObGetObjectType(void *object)
-{
-    FIXME("stub: %p\n", object);
-
-    return NULL;
-}
-
-/***********************************************************************
  *           IoGetAttachedDeviceReference   (NTOSKRNL.EXE.@)
  */
 DEVICE_OBJECT* WINAPI IoGetAttachedDeviceReference( DEVICE_OBJECT *device )
@@ -3070,6 +3187,15 @@ NTSTATUS WINAPI IoWMIRegistrationControl(PDEVICE_OBJECT DeviceObject, ULONG Acti
 {
     FIXME("(%p %u) stub\n", DeviceObject, Action);
     return STATUS_SUCCESS;
+}
+
+/*****************************************************
+ *           IoWMIOpenBlock   (NTOSKRNL.EXE.@)
+ */
+NTSTATUS WINAPI IoWMIOpenBlock(LPCGUID guid, ULONG desired_access, PVOID *data_block_obj)
+{
+    FIXME("(%p %u %p) stub\n", guid, desired_access, data_block_obj);
+    return STATUS_NOT_IMPLEMENTED;
 }
 
 /*****************************************************

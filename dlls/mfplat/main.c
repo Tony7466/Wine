@@ -29,6 +29,7 @@
 
 #include "initguid.h"
 #include "ole2.h"
+#include "propsys.h"
 
 #include "wine/debug.h"
 #include "wine/unicode.h"
@@ -37,6 +38,7 @@
 #include "mfplat_private.h"
 #include "mfreadwrite.h"
 #include "propvarutil.h"
+#include "strsafe.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(mfplat);
 
@@ -548,57 +550,133 @@ static int debug_compare_guid(const void *a, const void *b)
     return memcmp(guid, guid_def->guid, sizeof(*guid));
 }
 
-static const char *debugstr_attr(const GUID *guid)
+const char *debugstr_attr(const GUID *guid)
 {
     static const struct guid_def guid_defs[] =
     {
 #define X(g) { &(g), #g }
         X(MF_READWRITE_MMCSS_CLASS),
         X(MF_SINK_WRITER_ENCODER_CONFIG),
+        X(MF_SOURCE_READER_ENABLE_TRANSCODE_ONLY_TRANSFORMS),
+        X(MF_MT_ALPHA_MODE),
         X(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS),
         X(MF_MT_PIXEL_ASPECT_RATIO),
+        X(MF_MT_WRAPPED_TYPE),
         X(MF_MT_AVG_BITRATE),
+        X(MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING),
+        X(MF_MT_AUDIO_BLOCK_ALIGNMENT),
         X(MF_PD_PMPHOST_CONTEXT),
         X(MF_PD_APP_CONTEXT),
         X(MF_PD_TOTAL_FILE_SIZE),
         X(MF_PD_AUDIO_ENCODING_BITRATE),
         X(MF_PD_VIDEO_ENCODING_BITRATE),
+        X(MFSampleExtension_TargetGlobalLuminance),
         X(MF_PD_MIME_TYPE),
         X(MF_PD_LAST_MODIFIED_TIME),
         X(MF_PD_PLAYBACK_ELEMENT_ID),
         X(MF_MT_ALL_SAMPLES_INDEPENDENT),
         X(MF_PD_PREFERRED_LANGUAGE),
         X(MF_PD_PLAYBACK_BOUNDARY_TIME),
+        X(MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING),
         X(MF_MT_FRAME_SIZE),
         X(MF_SINK_WRITER_ASYNC_CALLBACK),
         X(MF_MT_FRAME_RATE_RANGE_MAX),
+        X(MF_MT_AUDIO_FLOAT_SAMPLES_PER_SECOND),
+        X(MFSampleExtension_ForwardedDecodeUnits),
+        X(MF_EVENT_SOURCE_TOPOLOGY_CANCELED),
+        X(MF_MT_VIDEO_ROTATION),
         X(MF_MT_USER_DATA),
+        X(MF_EVENT_STREAM_METADATA_SYSTEMID),
+        X(MF_MT_AUDIO_CHANNEL_MASK),
+        X(MF_SOURCE_READER_DISCONNECT_MEDIASOURCE_ON_SHUTDOWN),
         X(MF_READWRITE_DISABLE_CONVERTERS),
+        X(MFSampleExtension_Token),
+        X(MF_MT_AUDIO_VALID_BITS_PER_SAMPLE),
+        X(MF_MT_VIDEO_NO_FRAME_ORDERING),
+        X(MFSampleExtension_3DVideo_SampleFormat),
+        X(MF_MT_SAMPLE_SIZE),
+        X(MF_MT_AAC_PAYLOAD_TIME),
+        X(MF_SOURCE_READER_D3D11_BIND_FLAGS),
+        X(MF_MT_AUDIO_FOLDDOWN_MATRIX),
+        X(MF_MT_AUDIO_WMADRC_PEAKREF),
+        X(MF_MT_AUDIO_WMADRC_PEAKTARGET),
         X(MF_PD_SAMI_STYLELIST),
+        X(MF_MT_AUDIO_WMADRC_AVGREF),
+        X(MF_MT_AUDIO_BITS_PER_SAMPLE),
         X(MF_SD_LANGUAGE),
+        X(MF_MT_AUDIO_WMADRC_AVGTARGET),
         X(MF_SD_PROTECTED),
         X(MF_READWRITE_MMCSS_PRIORITY_AUDIO),
         X(MF_BYTESTREAM_ORIGIN_NAME),
         X(MF_BYTESTREAM_CONTENT_TYPE),
+        X(MF_MT_DEPTH_MEASUREMENT),
+        X(MF_MT_VIDEO_3D_NUM_VIEWS),
         X(MF_BYTESTREAM_DURATION),
         X(MF_SD_SAMI_LANGUAGE),
+        X(MF_EVENT_OUTPUT_NODE),
         X(MF_BYTESTREAM_LAST_MODIFIED_TIME),
         X(MF_MT_FRAME_RATE_RANGE_MIN),
         X(MF_BYTESTREAM_IFO_FILE_URI),
+        X(MF_EVENT_TOPOLOGY_STATUS),
         X(MF_BYTESTREAM_DLNA_PROFILE_ID),
         X(MF_MT_MAJOR_TYPE),
+        X(MF_EVENT_SOURCE_CHARACTERISTICS),
+        X(MF_EVENT_SOURCE_CHARACTERISTICS_OLD),
+        X(MF_MT_VIDEO_3D_FIRST_IS_LEFT),
         X(MF_PD_ADAPTIVE_STREAMING),
+        X(MFSampleExtension_Timestamp),
         X(MF_MT_SUBTYPE),
         X(MF_SD_MUTUALLY_EXCLUSIVE),
         X(MF_SD_STREAM_NAME),
+        X(MF_EVENT_STREAM_METADATA_CONTENT_KEYIDS),
+        X(MF_MT_VIDEO_3D_FORMAT),
+        X(MF_EVENT_STREAM_METADATA_KEYDATA),
         X(MF_SINK_WRITER_D3D_MANAGER),
+        X(MF_SOURCE_READER_D3D_MANAGER),
+        X(MFSampleExtension_3DVideo),
+        X(MF_EVENT_SOURCE_FAKE_START),
+        X(MF_EVENT_SOURCE_PROJECTSTART),
+        X(MF_EVENT_SOURCE_ACTUAL_START),
+        X(MF_MT_AUDIO_SAMPLES_PER_BLOCK),
+        X(MF_SOURCE_READER_ASYNC_CALLBACK),
+        X(MF_MT_AUDIO_FLAC_MAX_BLOCK_SIZE),
+        X(MF_MT_FIXED_SIZE_SAMPLES),
+        X(MF_EVENT_SCRUBSAMPLE_TIME),
         X(MF_MT_INTERLACE_MODE),
+        X(MF_MT_VIDEO_RENDERER_EXTENSION_PROFILE),
+        X(MF_MT_AUDIO_PREFER_WAVEFORMATEX),
+        X(MFSampleExtension_ForwardedDecodeUnitType),
+        X(MF_MT_AUDIO_AVG_BYTES_PER_SECOND),
+        X(MF_SOURCE_READER_MEDIASOURCE_CHARACTERISTICS),
+        X(MF_EVENT_MFT_INPUT_STREAM_ID),
         X(MF_READWRITE_MMCSS_PRIORITY),
+        X(MF_MT_VIDEO_3D),
+        X(MF_EVENT_START_PRESENTATION_TIME),
+        X(MF_EVENT_SESSIONCAPS),
+        X(MF_EVENT_PRESENTATION_TIME_OFFSET),
+        X(MF_EVENT_SESSIONCAPS_DELTA),
+        X(MF_EVENT_START_PRESENTATION_TIME_AT_OUTPUT),
+        X(MFSampleExtension_DecodeTimestamp),
+        X(MF_MT_VIDEO_H264_NO_FMOASO),
         X(MF_SINK_WRITER_DISABLE_THROTTLING),
         X(MF_READWRITE_D3D_OPTIONAL),
         X(MF_READWRITE_MMCSS_CLASS_AUDIO),
+        X(MF_SOURCE_READER_DISABLE_CAMERA_PLUGINS),
         X(MF_PD_AUDIO_ISVARIABLEBITRATE),
+        X(MF_MT_AAC_AUDIO_PROFILE_LEVEL_INDICATION),
+        X(MF_MT_AUDIO_SAMPLES_PER_SECOND),
         X(MF_MT_FRAME_RATE),
+        X(MF_SOURCE_READER_MEDIASOURCE_CONFIG),
+        X(MF_MT_COMPRESSED),
+        X(MF_EVENT_MFT_CONTEXT),
+        X(MF_MT_FORWARD_CUSTOM_SEI),
+        X(MF_MT_DEPTH_VALUE_UNIT),
+        X(MF_MT_AUDIO_NUM_CHANNELS),
+        X(MF_EVENT_DO_THINNING),
+        X(MF_SOURCE_READER_DISABLE_DXVA),
+        X(MF_MT_FORWARD_CUSTOM_NALU),
+        X(MF_MT_SECURE),
+        X(MF_MT_VIDEO_3D_LEFT_IS_BASE),
 #undef X
     };
     struct guid_def *ret = NULL;
@@ -609,41 +687,166 @@ static const char *debugstr_attr(const GUID *guid)
     return ret ? wine_dbg_sprintf("%s", ret->name) : wine_dbgstr_guid(guid);
 }
 
-static inline mfattributes *impl_from_IMFAttributes(IMFAttributes *iface)
+static const char *debugstr_mf_guid(const GUID *guid)
 {
-    return CONTAINING_RECORD(iface, mfattributes, IMFAttributes_iface);
+    static const struct guid_def guid_defs[] =
+    {
+#define X(g) { &(g), #g }
+        X(MFAudioFormat_ADTS),
+        X(MFAudioFormat_PCM),
+        X(MFAudioFormat_PCM_HDCP),
+        X(MFAudioFormat_Float),
+        X(MFAudioFormat_DTS),
+        X(MFAudioFormat_DRM),
+        X(MFAudioFormat_MSP1),
+        X(MFAudioFormat_Vorbis),
+        X(MFAudioFormat_AAC),
+        X(MFVideoFormat_RGB24),
+        X(MFVideoFormat_ARGB32),
+        X(MFVideoFormat_RGB32),
+        X(MFVideoFormat_RGB565),
+        X(MFVideoFormat_RGB555),
+        X(MFVideoFormat_A2R10G10B10),
+        X(MFMediaType_Script),
+        X(MFMediaType_Image),
+        X(MFMediaType_HTML),
+        X(MFMediaType_Binary),
+        X(MFVideoFormat_MPEG2),
+        X(MFMediaType_FileTransfer),
+        X(MFVideoFormat_RGB8),
+        X(MFAudioFormat_Dolby_AC3),
+        X(MFVideoFormat_L8),
+        X(MFAudioFormat_LPCM),
+        X(MFVideoFormat_420O),
+        X(MFVideoFormat_AI44),
+        X(MFVideoFormat_AV1),
+        X(MFVideoFormat_AYUV),
+        X(MFVideoFormat_H263),
+        X(MFVideoFormat_H264),
+        X(MFVideoFormat_H265),
+        X(MFVideoFormat_HEVC),
+        X(MFVideoFormat_HEVC_ES),
+        X(MFVideoFormat_I420),
+        X(MFVideoFormat_IYUV),
+        X(MFVideoFormat_M4S2),
+        X(MFVideoFormat_MJPG),
+        X(MFVideoFormat_MP43),
+        X(MFVideoFormat_MP4S),
+        X(MFVideoFormat_MP4V),
+        X(MFVideoFormat_MPG1),
+        X(MFVideoFormat_MSS1),
+        X(MFVideoFormat_MSS2),
+        X(MFVideoFormat_NV11),
+        X(MFVideoFormat_NV12),
+        X(MFVideoFormat_ORAW),
+        X(MFAudioFormat_Opus),
+        X(MFVideoFormat_D16),
+        X(MFAudioFormat_MPEG),
+        X(MFVideoFormat_P010),
+        X(MFVideoFormat_P016),
+        X(MFVideoFormat_P210),
+        X(MFVideoFormat_P216),
+        X(MFVideoFormat_L16),
+        X(MFAudioFormat_MP3),
+        X(MFVideoFormat_UYVY),
+        X(MFVideoFormat_VP10),
+        X(MFVideoFormat_VP80),
+        X(MFVideoFormat_VP90),
+        X(MFVideoFormat_WMV1),
+        X(MFVideoFormat_WMV2),
+        X(MFVideoFormat_WMV3),
+        X(MFVideoFormat_WVC1),
+        X(MFVideoFormat_Y210),
+        X(MFVideoFormat_Y216),
+        X(MFVideoFormat_Y410),
+        X(MFVideoFormat_Y416),
+        X(MFVideoFormat_Y41P),
+        X(MFVideoFormat_Y41T),
+        X(MFVideoFormat_Y42T),
+        X(MFVideoFormat_YUY2),
+        X(MFVideoFormat_YV12),
+        X(MFVideoFormat_YVU9),
+        X(MFVideoFormat_YVYU),
+        X(MFAudioFormat_WMAudioV8),
+        X(MFAudioFormat_ALAC),
+        X(MFAudioFormat_AMR_NB),
+        X(MFMediaType_Audio),
+        X(MFAudioFormat_WMAudioV9),
+        X(MFAudioFormat_AMR_WB),
+        X(MFAudioFormat_WMAudio_Lossless),
+        X(MFAudioFormat_AMR_WP),
+        X(MFAudioFormat_WMASPDIF),
+        X(MFVideoFormat_DV25),
+        X(MFVideoFormat_DV50),
+        X(MFVideoFormat_DVC),
+        X(MFVideoFormat_DVH1),
+        X(MFVideoFormat_DVHD),
+        X(MFVideoFormat_DVSD),
+        X(MFVideoFormat_DVSL),
+        X(MFVideoFormat_A16B16G16R16F),
+        X(MFVideoFormat_v210),
+        X(MFVideoFormat_v216),
+        X(MFVideoFormat_v410),
+        X(MFMediaType_Video),
+        X(MFAudioFormat_AAC_HDCP),
+        X(MFAudioFormat_Dolby_AC3_HDCP),
+        X(MFMediaType_Subtitle),
+        X(MFMediaType_Stream),
+        X(MFAudioFormat_Dolby_AC3_SPDIF),
+        X(MFAudioFormat_Float_SpatialObjects),
+        X(MFMediaType_SAMI),
+        X(MFAudioFormat_ADTS_HDCP),
+        X(MFAudioFormat_FLAC),
+        X(MFAudioFormat_Dolby_DDPlus),
+        X(MFMediaType_MultiplexedFrames),
+        X(MFAudioFormat_Base_HDCP),
+        X(MFVideoFormat_Base_HDCP),
+        X(MFVideoFormat_H264_HDCP),
+        X(MFVideoFormat_HEVC_HDCP),
+        X(MFMediaType_Default),
+        X(MFMediaType_Protected),
+        X(MFVideoFormat_H264_ES),
+        X(MFMediaType_Perception),
+#undef X
+    };
+    struct guid_def *ret = NULL;
+
+    if (guid)
+        ret = bsearch(guid, guid_defs, ARRAY_SIZE(guid_defs), sizeof(*guid_defs), debug_compare_guid);
+
+    return ret ? wine_dbg_sprintf("%s", ret->name) : wine_dbgstr_guid(guid);
+}
+
+static inline struct attributes *impl_from_IMFAttributes(IMFAttributes *iface)
+{
+    return CONTAINING_RECORD(iface, struct attributes, IMFAttributes_iface);
 }
 
 static HRESULT WINAPI mfattributes_QueryInterface(IMFAttributes *iface, REFIID riid, void **out)
 {
-    mfattributes *This = impl_from_IMFAttributes(iface);
+    TRACE("%p, %s, %p.\n", iface, debugstr_guid(riid), out);
 
-    TRACE("(%p)->(%s %p)\n", This, debugstr_guid(riid), out);
-
-    if(IsEqualGUID(riid, &IID_IUnknown) ||
-       IsEqualGUID(riid, &IID_IMFAttributes))
+    if (IsEqualIID(riid, &IID_IMFAttributes) ||
+            IsEqualGUID(riid, &IID_IUnknown))
     {
-        *out = &This->IMFAttributes_iface;
-    }
-    else
-    {
-        FIXME("(%s, %p)\n", debugstr_guid(riid), out);
-        *out = NULL;
-        return E_NOINTERFACE;
+        *out = iface;
+        IMFAttributes_AddRef(iface);
+        return S_OK;
     }
 
-    IUnknown_AddRef((IUnknown*)*out);
-    return S_OK;
+    WARN("Unsupported %s.\n", debugstr_guid(riid));
+    *out = NULL;
+    return E_NOINTERFACE;
 }
 
 static ULONG WINAPI mfattributes_AddRef(IMFAttributes *iface)
 {
-    mfattributes *This = impl_from_IMFAttributes(iface);
-    ULONG ref = InterlockedIncrement(&This->ref);
+    struct attributes *attributes = impl_from_IMFAttributes(iface);
+    ULONG refcount = InterlockedIncrement(&attributes->ref);
 
-    TRACE("(%p) ref=%u\n", This, ref);
+    TRACE("%p, refcount %d.\n", iface, refcount);
 
-    return ref;
+    return refcount;
 }
 
 static ULONG WINAPI mfattributes_Release(IMFAttributes *iface)
@@ -724,9 +927,24 @@ static HRESULT WINAPI mfattributes_GetItem(IMFAttributes *iface, REFGUID key, PR
 
 static HRESULT WINAPI mfattributes_GetItemType(IMFAttributes *iface, REFGUID key, MF_ATTRIBUTE_TYPE *type)
 {
-    FIXME("%p, %s, %p.\n", iface, debugstr_attr(key), type);
+    struct attributes *attributes = impl_from_IMFAttributes(iface);
+    struct attribute *attribute;
+    HRESULT hr = S_OK;
 
-    return E_NOTIMPL;
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), type);
+
+    EnterCriticalSection(&attributes->cs);
+
+    if ((attribute = attributes_find_item(attributes, key, NULL)))
+    {
+        *type = attribute->value.vt;
+    }
+    else
+        hr = MF_E_ATTRIBUTENOTFOUND;
+
+    LeaveCriticalSection(&attributes->cs);
+
+    return hr;
 }
 
 static HRESULT WINAPI mfattributes_CompareItem(IMFAttributes *iface, REFGUID key, REFPROPVARIANT value, BOOL *result)
@@ -741,21 +959,96 @@ static HRESULT WINAPI mfattributes_CompareItem(IMFAttributes *iface, REFGUID key
     EnterCriticalSection(&attributes->cs);
 
     if ((attribute = attributes_find_item(attributes, key, NULL)))
-        *result = !PropVariantCompareEx(&attribute->value, value, PVCU_DEFAULT, PVCF_DEFAULT);
+    {
+        *result = attribute->value.vt == value->vt &&
+                !PropVariantCompareEx(&attribute->value, value, PVCU_DEFAULT, PVCF_DEFAULT);
+    }
 
     LeaveCriticalSection(&attributes->cs);
 
     return S_OK;
 }
 
-static HRESULT WINAPI mfattributes_Compare(IMFAttributes *iface, IMFAttributes *theirs, MF_ATTRIBUTES_MATCH_TYPE type,
-                BOOL *result)
+static HRESULT WINAPI mfattributes_Compare(IMFAttributes *iface, IMFAttributes *theirs,
+        MF_ATTRIBUTES_MATCH_TYPE match_type, BOOL *ret)
 {
-    mfattributes *This = impl_from_IMFAttributes(iface);
+    struct attributes *attributes = impl_from_IMFAttributes(iface);
+    IMFAttributes *smaller, *other;
+    MF_ATTRIBUTE_TYPE type;
+    HRESULT hr = S_OK;
+    UINT32 count;
+    BOOL result;
+    size_t i;
 
-    FIXME("%p, %p, %d, %p\n", This, theirs, type, result);
+    TRACE("%p, %p, %d, %p.\n", iface, theirs, match_type, ret);
 
-    return E_NOTIMPL;
+    if (FAILED(hr = IMFAttributes_GetCount(theirs, &count)))
+        return hr;
+
+    EnterCriticalSection(&attributes->cs);
+
+    result = TRUE;
+
+    switch (match_type)
+    {
+        case MF_ATTRIBUTES_MATCH_OUR_ITEMS:
+            for (i = 0; i < attributes->count; ++i)
+            {
+                if (FAILED(hr = IMFAttributes_CompareItem(theirs, &attributes->attributes[i].key,
+                        &attributes->attributes[i].value, &result)))
+                    break;
+                if (!result)
+                    break;
+            }
+            break;
+        case MF_ATTRIBUTES_MATCH_THEIR_ITEMS:
+            hr = IMFAttributes_Compare(theirs, iface, MF_ATTRIBUTES_MATCH_OUR_ITEMS, &result);
+            break;
+        case MF_ATTRIBUTES_MATCH_ALL_ITEMS:
+            if (count != attributes->count)
+            {
+                result = FALSE;
+                break;
+            }
+            for (i = 0; i < count; ++i)
+            {
+                if (FAILED(hr = IMFAttributes_CompareItem(theirs, &attributes->attributes[i].key,
+                        &attributes->attributes[i].value, &result)))
+                    break;
+                if (!result)
+                    break;
+            }
+            break;
+        case MF_ATTRIBUTES_MATCH_INTERSECTION:
+            for (i = 0; i < attributes->count; ++i)
+            {
+                if (FAILED(IMFAttributes_GetItemType(theirs, &attributes->attributes[i].key, &type)))
+                    continue;
+
+                if (FAILED(hr = IMFAttributes_CompareItem(theirs, &attributes->attributes[i].key,
+                        &attributes->attributes[i].value, &result)))
+                    break;
+
+                if (!result)
+                    break;
+            }
+            break;
+        case MF_ATTRIBUTES_MATCH_SMALLER:
+            smaller = attributes->count > count ? theirs : iface;
+            other = attributes->count > count ? iface : theirs;
+            hr = IMFAttributes_Compare(smaller, other, MF_ATTRIBUTES_MATCH_OUR_ITEMS, &result);
+            break;
+        default:
+            WARN("Unknown match type %d.\n", match_type);
+            hr = E_INVALIDARG;
+    }
+
+    LeaveCriticalSection(&attributes->cs);
+
+    if (SUCCEEDED(hr))
+        *ret = result;
+
+    return hr;
 }
 
 static HRESULT WINAPI mfattributes_GetUINT32(IMFAttributes *iface, REFGUID key, UINT32 *value)
@@ -770,7 +1063,8 @@ static HRESULT WINAPI mfattributes_GetUINT32(IMFAttributes *iface, REFGUID key, 
     attrval.vt = VT_UI4;
     hr = attributes_get_item(attributes, key, &attrval);
     if (SUCCEEDED(hr))
-        hr = PropVariantToUInt32(&attrval, value);
+        *value = attrval.u.ulVal;
+
     return hr;
 }
 
@@ -786,7 +1080,8 @@ static HRESULT WINAPI mfattributes_GetUINT64(IMFAttributes *iface, REFGUID key, 
     attrval.vt = VT_UI8;
     hr = attributes_get_item(attributes, key, &attrval);
     if (SUCCEEDED(hr))
-        hr = PropVariantToUInt64(&attrval, value);
+        *value = attrval.u.uhVal.QuadPart;
+
     return hr;
 }
 
@@ -802,7 +1097,8 @@ static HRESULT WINAPI mfattributes_GetDouble(IMFAttributes *iface, REFGUID key, 
     attrval.vt = VT_R8;
     hr = attributes_get_item(attributes, key, &attrval);
     if (SUCCEEDED(hr))
-        hr = PropVariantToDouble(&attrval, value);
+        *value = attrval.u.dblVal;
+
     return hr;
 }
 
@@ -818,7 +1114,7 @@ static HRESULT WINAPI mfattributes_GetGUID(IMFAttributes *iface, REFGUID key, GU
     attrval.vt = VT_CLSID;
     hr = attributes_get_item(attributes, key, &attrval);
     if (SUCCEEDED(hr))
-        hr = PropVariantToGUID(&attrval, value);
+        *value = *attrval.u.puuid;
 
     return hr;
 }
@@ -826,17 +1122,25 @@ static HRESULT WINAPI mfattributes_GetGUID(IMFAttributes *iface, REFGUID key, GU
 static HRESULT WINAPI mfattributes_GetStringLength(IMFAttributes *iface, REFGUID key, UINT32 *length)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
-    PROPVARIANT attrval;
-    HRESULT hr;
+    struct attribute *attribute;
+    HRESULT hr = S_OK;
 
     TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), length);
 
-    PropVariantInit(&attrval);
-    attrval.vt = VT_LPWSTR;
-    hr = attributes_get_item(attributes, key, &attrval);
-    if (SUCCEEDED(hr) && length)
-        *length = lstrlenW(attrval.u.pwszVal);
-    PropVariantClear(&attrval);
+    EnterCriticalSection(&attributes->cs);
+
+    attribute = attributes_find_item(attributes, key, NULL);
+    if (attribute)
+    {
+        if (attribute->value.vt == MF_ATTRIBUTE_STRING)
+            *length = strlenW(attribute->value.u.pwszVal);
+        else
+            hr = MF_E_INVALIDTYPE;
+    }
+    else
+        hr = MF_E_ATTRIBUTENOTFOUND;
+
+    LeaveCriticalSection(&attributes->cs);
 
     return hr;
 }
@@ -845,19 +1149,35 @@ static HRESULT WINAPI mfattributes_GetString(IMFAttributes *iface, REFGUID key, 
         UINT32 size, UINT32 *length)
 {
     struct attributes *attributes = impl_from_IMFAttributes(iface);
-    PROPVARIANT attrval;
-    HRESULT hr;
+    struct attribute *attribute;
+    HRESULT hr = S_OK;
 
     TRACE("%p, %s, %p, %d, %p.\n", iface, debugstr_attr(key), value, size, length);
 
-    PropVariantInit(&attrval);
-    attrval.vt = VT_LPWSTR;
-    hr = attributes_get_item(attributes, key, &attrval);
-    if (SUCCEEDED(hr))
-        hr = PropVariantToString(&attrval, value, size);
-    if (SUCCEEDED(hr) && length)
-        *length = lstrlenW(value);
-    PropVariantClear(&attrval);
+    EnterCriticalSection(&attributes->cs);
+
+    attribute = attributes_find_item(attributes, key, NULL);
+    if (attribute)
+    {
+        if (attribute->value.vt == MF_ATTRIBUTE_STRING)
+        {
+            int len = strlenW(attribute->value.u.pwszVal);
+
+            if (length)
+                *length = len;
+
+            if (size <= len)
+                return STRSAFE_E_INSUFFICIENT_BUFFER;
+
+            memcpy(value, attribute->value.u.pwszVal, (len + 1) * sizeof(WCHAR));
+        }
+        else
+            hr = MF_E_INVALIDTYPE;
+    }
+    else
+        hr = MF_E_ATTRIBUTENOTFOUND;
+
+    LeaveCriticalSection(&attributes->cs);
 
     return hr;
 }
@@ -1122,7 +1442,7 @@ static HRESULT WINAPI mfattributes_SetGUID(IMFAttributes *iface, REFGUID key, RE
     struct attributes *attributes = impl_from_IMFAttributes(iface);
     PROPVARIANT attrval;
 
-    TRACE("%p, %s, %s.\n", iface, debugstr_attr(key), debugstr_guid(value));
+    TRACE("%p, %s, %s.\n", iface, debugstr_attr(key), debugstr_mf_guid(value));
 
     InitPropVariantFromCLSID(value, &attrval);
     return attributes_set_item(attributes, key, &attrval);
@@ -1212,7 +1532,8 @@ static HRESULT WINAPI mfattributes_GetItemByIndex(IMFAttributes *iface, UINT32 i
     if (index < attributes->count)
     {
         *key = attributes->attributes[index].key;
-        PropVariantCopy(value, &attributes->attributes[index].value);
+        if (value)
+            PropVariantCopy(value, &attributes->attributes[index].value);
     }
     else
         hr = E_INVALIDARG;
@@ -1341,10 +1662,320 @@ HRESULT WINAPI MFCreateAttributes(IMFAttributes **attributes, UINT32 size)
     return S_OK;
 }
 
-typedef struct _mfbytestream
+#define ATTRIBUTES_STORE_MAGIC 0x494d4641 /* IMFA */
+
+struct attributes_store_header
 {
-    mfattributes attributes;
+    DWORD magic;
+    UINT32 count;
+};
+
+struct attributes_store_item
+{
+    GUID key;
+    QWORD type;
+    union
+    {
+        double f;
+        UINT32 i32;
+        UINT64 i64;
+        struct
+        {
+            DWORD size;
+            DWORD offset;
+        } subheader;
+    } u;
+};
+
+/***********************************************************************
+ *      MFGetAttributesAsBlobSize (mfplat.@)
+ */
+HRESULT WINAPI MFGetAttributesAsBlobSize(IMFAttributes *attributes, UINT32 *size)
+{
+    unsigned int i, count, length;
+    HRESULT hr;
+    GUID key;
+
+    TRACE("%p, %p.\n", attributes, size);
+
+    IMFAttributes_LockStore(attributes);
+
+    hr = IMFAttributes_GetCount(attributes, &count);
+
+    *size = sizeof(struct attributes_store_header);
+
+    for (i = 0; i < count; ++i)
+    {
+        MF_ATTRIBUTE_TYPE type;
+
+        hr = IMFAttributes_GetItemByIndex(attributes, i, &key, NULL);
+        if (FAILED(hr))
+            break;
+
+        *size += sizeof(struct attributes_store_item);
+
+        IMFAttributes_GetItemType(attributes, &key, &type);
+
+        switch (type)
+        {
+            case MF_ATTRIBUTE_GUID:
+                *size += sizeof(GUID);
+                break;
+            case MF_ATTRIBUTE_STRING:
+                IMFAttributes_GetStringLength(attributes, &key, &length);
+                *size += (length + 1) * sizeof(WCHAR);
+                break;
+            case MF_ATTRIBUTE_BLOB:
+                IMFAttributes_GetBlobSize(attributes, &key, &length);
+                *size += length;
+                break;
+            case MF_ATTRIBUTE_UINT32:
+            case MF_ATTRIBUTE_UINT64:
+            case MF_ATTRIBUTE_DOUBLE:
+            case MF_ATTRIBUTE_IUNKNOWN:
+            default:
+                ;
+        }
+    }
+
+    IMFAttributes_UnlockStore(attributes);
+
+    return hr;
+}
+
+struct attr_serialize_context
+{
+    UINT8 *buffer;
+    UINT8 *ptr;
+    UINT32 size;
+};
+
+static void attributes_serialize_write(struct attr_serialize_context *context, const void *value, unsigned int size)
+{
+    memcpy(context->ptr, value, size);
+    context->ptr += size;
+}
+
+static BOOL attributes_serialize_write_item(struct attr_serialize_context *context, struct attributes_store_item *item,
+        const void *value)
+{
+    switch (item->type)
+    {
+        case MF_ATTRIBUTE_UINT32:
+        case MF_ATTRIBUTE_UINT64:
+        case MF_ATTRIBUTE_DOUBLE:
+            attributes_serialize_write(context, item, sizeof(*item));
+            break;
+        case MF_ATTRIBUTE_GUID:
+        case MF_ATTRIBUTE_STRING:
+        case MF_ATTRIBUTE_BLOB:
+            item->u.subheader.offset = context->size - item->u.subheader.size;
+            attributes_serialize_write(context, item, sizeof(*item));
+            memcpy(context->buffer + item->u.subheader.offset, value, item->u.subheader.size);
+            context->size -= item->u.subheader.size;
+            break;
+        default:
+            return FALSE;
+    }
+
+    return TRUE;
+}
+
+/***********************************************************************
+ *      MFGetAttributesAsBlob (mfplat.@)
+ */
+HRESULT WINAPI MFGetAttributesAsBlob(IMFAttributes *attributes, UINT8 *buffer, UINT size)
+{
+    struct attributes_store_header header;
+    struct attr_serialize_context context;
+    unsigned int required_size, i;
+    PROPVARIANT value;
+    UINT32 count;
+    HRESULT hr;
+
+    TRACE("%p, %p, %u.\n", attributes, buffer, size);
+
+    if (FAILED(hr = MFGetAttributesAsBlobSize(attributes, &required_size)))
+        return hr;
+
+    if (required_size > size)
+        return MF_E_BUFFERTOOSMALL;
+
+    context.buffer = buffer;
+    context.ptr = buffer;
+    context.size = required_size;
+
+    IMFAttributes_LockStore(attributes);
+
+    header.magic = ATTRIBUTES_STORE_MAGIC;
+    header.count = 0; /* Will be updated later */
+    IMFAttributes_GetCount(attributes, &count);
+
+    attributes_serialize_write(&context, &header, sizeof(header));
+
+    for (i = 0; i < count; ++i)
+    {
+        struct attributes_store_item item;
+        const void *data = NULL;
+
+        hr = IMFAttributes_GetItemByIndex(attributes, i, &item.key, &value);
+        if (FAILED(hr))
+            break;
+
+        item.type = value.vt;
+
+        switch (value.vt)
+        {
+            case MF_ATTRIBUTE_UINT32:
+            case MF_ATTRIBUTE_UINT64:
+                item.u.i64 = value.u.uhVal.QuadPart;
+                break;
+            case MF_ATTRIBUTE_DOUBLE:
+                item.u.f = value.u.dblVal;
+                break;
+            case MF_ATTRIBUTE_GUID:
+                item.u.subheader.size = sizeof(*value.u.puuid);
+                data = value.u.puuid;
+                break;
+            case MF_ATTRIBUTE_STRING:
+                item.u.subheader.size = (strlenW(value.u.pwszVal) + 1) * sizeof(WCHAR);
+                data = value.u.pwszVal;
+                break;
+            case MF_ATTRIBUTE_BLOB:
+                item.u.subheader.size = value.u.caub.cElems;
+                data = value.u.caub.pElems;
+                break;
+            case MF_ATTRIBUTE_IUNKNOWN:
+                break;
+            default:
+                WARN("Unknown attribute type %#x.\n", value.vt);
+        }
+
+        if (attributes_serialize_write_item(&context, &item, data))
+            header.count++;
+
+        PropVariantClear(&value);
+    }
+
+    memcpy(context.buffer, &header, sizeof(header));
+
+    IMFAttributes_UnlockStore(attributes);
+
+    return S_OK;
+}
+
+static HRESULT attributes_deserialize_read(struct attr_serialize_context *context, void *value, unsigned int size)
+{
+    if (context->size < (context->ptr - context->buffer) + size)
+        return E_INVALIDARG;
+
+    memcpy(value, context->ptr, size);
+    context->ptr += size;
+
+    return S_OK;
+}
+
+/***********************************************************************
+ *      MFInitAttributesFromBlob (mfplat.@)
+ */
+HRESULT WINAPI MFInitAttributesFromBlob(IMFAttributes *dest, const UINT8 *buffer, UINT size)
+{
+    struct attr_serialize_context context;
+    struct attributes_store_header header;
+    struct attributes_store_item item;
+    IMFAttributes *attributes;
+    unsigned int i;
+    HRESULT hr;
+
+    TRACE("%p, %p, %u.\n", dest, buffer, size);
+
+    context.buffer = (UINT8 *)buffer;
+    context.ptr = (UINT8 *)buffer;
+    context.size = size;
+
+    /* Validate buffer structure. */
+    if (FAILED(hr = attributes_deserialize_read(&context, &header, sizeof(header))))
+        return hr;
+
+    if (header.magic != ATTRIBUTES_STORE_MAGIC)
+        return E_UNEXPECTED;
+
+    if (FAILED(hr = MFCreateAttributes(&attributes, header.count)))
+        return hr;
+
+    for (i = 0; i < header.count; ++i)
+    {
+        if (FAILED(hr = attributes_deserialize_read(&context, &item, sizeof(item))))
+            break;
+
+        hr = E_UNEXPECTED;
+
+        switch (item.type)
+        {
+            case MF_ATTRIBUTE_UINT32:
+                hr = IMFAttributes_SetUINT32(attributes, &item.key, item.u.i32);
+                break;
+            case MF_ATTRIBUTE_UINT64:
+                hr = IMFAttributes_SetUINT64(attributes, &item.key, item.u.i64);
+                break;
+            case MF_ATTRIBUTE_DOUBLE:
+                hr = IMFAttributes_SetDouble(attributes, &item.key, item.u.f);
+                break;
+            case MF_ATTRIBUTE_GUID:
+                if (item.u.subheader.size == sizeof(GUID) &&
+                        item.u.subheader.offset + item.u.subheader.size <= context.size)
+                {
+                    hr = IMFAttributes_SetGUID(attributes, &item.key,
+                            (const GUID *)(context.buffer + item.u.subheader.offset));
+                }
+                break;
+            case MF_ATTRIBUTE_STRING:
+                if (item.u.subheader.size >= sizeof(WCHAR) &&
+                        item.u.subheader.offset + item.u.subheader.size <= context.size)
+                {
+                    hr = IMFAttributes_SetString(attributes, &item.key,
+                            (const WCHAR *)(context.buffer + item.u.subheader.offset));
+                }
+                break;
+            case MF_ATTRIBUTE_BLOB:
+                if (item.u.subheader.size > 0 && item.u.subheader.offset + item.u.subheader.size <= context.size)
+                {
+                    hr = IMFAttributes_SetBlob(attributes, &item.key, context.buffer + item.u.subheader.offset,
+                            item.u.subheader.size);
+                }
+                break;
+            default:
+                ;
+        }
+
+        if (FAILED(hr))
+            break;
+    }
+
+    if (SUCCEEDED(hr))
+    {
+        IMFAttributes_DeleteAllItems(dest);
+        hr = IMFAttributes_CopyAllItems(attributes, dest);
+    }
+
+    IMFAttributes_Release(attributes);
+
+    return hr;
+}
+
+typedef struct bytestream
+{
+    struct attributes attributes;
     IMFByteStream IMFByteStream_iface;
+    IMFGetService IMFGetService_iface;
+    IMFAsyncCallback read_callback;
+    IMFAsyncCallback write_callback;
+    IStream *stream;
+    HANDLE hfile;
+    QWORD position;
+    DWORD capabilities;
+    struct list pending;
+    CRITICAL_SECTION cs;
 } mfbytestream;
 
 static inline mfbytestream *impl_from_IMFByteStream(IMFByteStream *iface)
@@ -1352,24 +1983,224 @@ static inline mfbytestream *impl_from_IMFByteStream(IMFByteStream *iface)
     return CONTAINING_RECORD(iface, mfbytestream, IMFByteStream_iface);
 }
 
-static HRESULT WINAPI mfbytestream_QueryInterface(IMFByteStream *iface, REFIID riid, void **out)
+static struct bytestream *impl_bytestream_from_IMFGetService(IMFGetService *iface)
 {
-    mfbytestream *This = impl_from_IMFByteStream(iface);
+    return CONTAINING_RECORD(iface, struct bytestream, IMFGetService_iface);
+}
 
-    TRACE("(%p)->(%s %p)\n", This, debugstr_guid(riid), out);
+static struct bytestream *impl_from_read_callback_IMFAsyncCallback(IMFAsyncCallback *iface)
+{
+    return CONTAINING_RECORD(iface, struct bytestream, read_callback);
+}
 
-    if(IsEqualGUID(riid, &IID_IUnknown) ||
-       IsEqualGUID(riid, &IID_IMFByteStream))
+static struct bytestream *impl_from_write_callback_IMFAsyncCallback(IMFAsyncCallback *iface)
+{
+    return CONTAINING_RECORD(iface, struct bytestream, write_callback);
+}
+
+enum async_stream_op_type
+{
+    ASYNC_STREAM_OP_READ,
+    ASYNC_STREAM_OP_WRITE,
+};
+
+struct async_stream_op
+{
+    IUnknown IUnknown_iface;
+    LONG refcount;
+    union
     {
-        *out = &This->IMFByteStream_iface;
+        const BYTE *src;
+        BYTE *dest;
+    } u;
+    QWORD position;
+    ULONG requested_length;
+    ULONG actual_length;
+    IMFAsyncResult *caller;
+    struct list entry;
+    enum async_stream_op_type type;
+};
+
+static struct async_stream_op *impl_async_stream_op_from_IUnknown(IUnknown *iface)
+{
+    return CONTAINING_RECORD(iface, struct async_stream_op, IUnknown_iface);
+}
+
+static HRESULT WINAPI async_stream_op_QueryInterface(IUnknown *iface, REFIID riid, void **obj)
+{
+    if (IsEqualIID(riid, &IID_IUnknown))
+    {
+        *obj = iface;
+        IUnknown_AddRef(iface);
+        return S_OK;
     }
-    else if(IsEqualGUID(riid, &IID_IMFAttributes))
+
+    WARN("Unsupported %s.\n", debugstr_guid(riid));
+    *obj = NULL;
+    return E_NOINTERFACE;
+}
+
+static ULONG WINAPI async_stream_op_AddRef(IUnknown *iface)
+{
+    struct async_stream_op *op = impl_async_stream_op_from_IUnknown(iface);
+    ULONG refcount = InterlockedIncrement(&op->refcount);
+
+    TRACE("%p, refcount %d.\n", iface, refcount);
+
+    return refcount;
+}
+
+static ULONG WINAPI async_stream_op_Release(IUnknown *iface)
+{
+    struct async_stream_op *op = impl_async_stream_op_from_IUnknown(iface);
+    ULONG refcount = InterlockedDecrement(&op->refcount);
+
+    TRACE("%p, refcount %d.\n", iface, refcount);
+
+    if (!refcount)
     {
-        *out = &This->attributes.IMFAttributes_iface;
+        if (op->caller)
+            IMFAsyncResult_Release(op->caller);
+        heap_free(op);
+    }
+
+    return refcount;
+}
+
+static const IUnknownVtbl async_stream_op_vtbl =
+{
+    async_stream_op_QueryInterface,
+    async_stream_op_AddRef,
+    async_stream_op_Release,
+};
+
+static HRESULT bytestream_create_io_request(struct bytestream *stream, enum async_stream_op_type type,
+        const BYTE *data, ULONG size, IMFAsyncCallback *callback, IUnknown *state)
+{
+    struct async_stream_op *op;
+    IMFAsyncResult *request;
+    HRESULT hr;
+
+    op = heap_alloc(sizeof(*op));
+    if (!op)
+        return E_OUTOFMEMORY;
+
+    op->IUnknown_iface.lpVtbl = &async_stream_op_vtbl;
+    op->refcount = 1;
+    op->u.src = data;
+    op->position = stream->position;
+    op->requested_length = size;
+    op->type = type;
+    if (FAILED(hr = MFCreateAsyncResult((IUnknown *)&stream->IMFByteStream_iface, callback, state, &op->caller)))
+        goto failed;
+
+    if (FAILED(hr = MFCreateAsyncResult(&op->IUnknown_iface, type == ASYNC_STREAM_OP_READ ? &stream->read_callback :
+            &stream->write_callback, NULL, &request)))
+        goto failed;
+
+    MFPutWorkItemEx(MFASYNC_CALLBACK_QUEUE_STANDARD, request);
+    IMFAsyncResult_Release(request);
+
+failed:
+    IUnknown_Release(&op->IUnknown_iface);
+    return hr;
+}
+
+static HRESULT bytestream_complete_io_request(struct bytestream *stream, enum async_stream_op_type type,
+        IMFAsyncResult *result, ULONG *actual_length)
+{
+    struct async_stream_op *op = NULL, *cur;
+    HRESULT hr;
+
+    EnterCriticalSection(&stream->cs);
+    LIST_FOR_EACH_ENTRY(cur, &stream->pending, struct async_stream_op, entry)
+    {
+        if (cur->caller == result && cur->type == type)
+        {
+            op = cur;
+            list_remove(&cur->entry);
+            break;
+        }
+    }
+    LeaveCriticalSection(&stream->cs);
+
+    if (!op)
+        return E_INVALIDARG;
+
+    if (SUCCEEDED(hr = IMFAsyncResult_GetStatus(result)))
+        *actual_length = op->actual_length;
+
+    IUnknown_Release(&op->IUnknown_iface);
+
+    return hr;
+}
+
+static HRESULT WINAPI bytestream_callback_QueryInterface(IMFAsyncCallback *iface, REFIID riid, void **obj)
+{
+    if (IsEqualIID(riid, &IID_IMFAsyncCallback) ||
+            IsEqualIID(riid, &IID_IUnknown))
+    {
+        *obj = iface;
+        IMFAsyncCallback_AddRef(iface);
+        return S_OK;
+    }
+
+    WARN("Unsupported %s.\n", debugstr_guid(riid));
+    *obj = NULL;
+    return E_NOINTERFACE;
+}
+
+static ULONG WINAPI bytestream_read_callback_AddRef(IMFAsyncCallback *iface)
+{
+    struct bytestream *stream = impl_from_read_callback_IMFAsyncCallback(iface);
+    return IMFByteStream_AddRef(&stream->IMFByteStream_iface);
+}
+
+static ULONG WINAPI bytestream_read_callback_Release(IMFAsyncCallback *iface)
+{
+    struct bytestream *stream = impl_from_read_callback_IMFAsyncCallback(iface);
+    return IMFByteStream_Release(&stream->IMFByteStream_iface);
+}
+
+static HRESULT WINAPI bytestream_callback_GetParameters(IMFAsyncCallback *iface, DWORD *flags, DWORD *queue)
+{
+    return E_NOTIMPL;
+}
+
+static ULONG WINAPI bytestream_write_callback_AddRef(IMFAsyncCallback *iface)
+{
+    struct bytestream *stream = impl_from_write_callback_IMFAsyncCallback(iface);
+    return IMFByteStream_AddRef(&stream->IMFByteStream_iface);
+}
+
+static ULONG WINAPI bytestream_write_callback_Release(IMFAsyncCallback *iface)
+{
+    struct bytestream *stream = impl_from_write_callback_IMFAsyncCallback(iface);
+    return IMFByteStream_Release(&stream->IMFByteStream_iface);
+}
+
+static HRESULT WINAPI bytestream_QueryInterface(IMFByteStream *iface, REFIID riid, void **out)
+{
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_guid(riid), out);
+
+    if (IsEqualIID(riid, &IID_IMFByteStream) ||
+            IsEqualIID(riid, &IID_IUnknown))
+    {
+        *out = &stream->IMFByteStream_iface;
+    }
+    else if (IsEqualIID(riid, &IID_IMFAttributes))
+    {
+        *out = &stream->attributes.IMFAttributes_iface;
+    }
+    else if (stream->IMFGetService_iface.lpVtbl && IsEqualIID(riid, &IID_IMFGetService))
+    {
+        *out = &stream->IMFGetService_iface;
     }
     else
     {
-        FIXME("(%s, %p)\n", debugstr_guid(riid), out);
+        WARN("Unsupported %s.\n", debugstr_guid(riid));
         *out = NULL;
         return E_NOINTERFACE;
     }
@@ -1378,46 +2209,57 @@ static HRESULT WINAPI mfbytestream_QueryInterface(IMFByteStream *iface, REFIID r
     return S_OK;
 }
 
-static ULONG WINAPI mfbytestream_AddRef(IMFByteStream *iface)
+static ULONG WINAPI bytestream_AddRef(IMFByteStream *iface)
 {
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-    ULONG ref = InterlockedIncrement(&This->attributes.ref);
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
+    ULONG refcount = InterlockedIncrement(&stream->attributes.ref);
 
-    TRACE("(%p) ref=%u\n", This, ref);
+    TRACE("%p, refcount %d.\n", iface, refcount);
 
-    return ref;
+    return refcount;
 }
 
-static ULONG WINAPI mfbytestream_Release(IMFByteStream *iface)
+static ULONG WINAPI bytestream_Release(IMFByteStream *iface)
 {
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-    ULONG ref = InterlockedDecrement(&This->attributes.ref);
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
+    ULONG refcount = InterlockedDecrement(&stream->attributes.ref);
+    struct async_stream_op *cur, *cur2;
 
-    TRACE("(%p) ref=%u\n", This, ref);
+    TRACE("%p, refcount %d.\n", iface, refcount);
 
-    if (!ref)
+    if (!refcount)
     {
-        clear_attributes_object(&This->attributes);
-        HeapFree(GetProcessHeap(), 0, This);
+        clear_attributes_object(&stream->attributes);
+        LIST_FOR_EACH_ENTRY_SAFE(cur, cur2, &stream->pending, struct async_stream_op, entry)
+        {
+            list_remove(&cur->entry);
+            IUnknown_Release(&cur->IUnknown_iface);
+        }
+        DeleteCriticalSection(&stream->cs);
+        if (stream->stream)
+            IStream_Release(stream->stream);
+        if (stream->hfile)
+            CloseHandle(stream->hfile);
+        heap_free(stream);
     }
 
-    return ref;
+    return refcount;
 }
 
-static HRESULT WINAPI mfbytestream_GetCapabilities(IMFByteStream *iface, DWORD *capabilities)
+static HRESULT WINAPI bytestream_GetCapabilities(IMFByteStream *iface, DWORD *capabilities)
 {
-    mfbytestream *This = impl_from_IMFByteStream(iface);
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
 
-    FIXME("%p, %p\n", This, capabilities);
+    TRACE("%p, %p.\n", iface, capabilities);
 
-    return E_NOTIMPL;
+    *capabilities = stream->capabilities;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI mfbytestream_GetLength(IMFByteStream *iface, QWORD *length)
 {
-    mfbytestream *This = impl_from_IMFByteStream(iface);
-
-    FIXME("%p, %p\n", This, length);
+    FIXME("%p, %p.\n", iface, length);
 
     return E_NOTIMPL;
 }
@@ -1470,23 +2312,23 @@ static HRESULT WINAPI mfbytestream_Read(IMFByteStream *iface, BYTE *data, ULONG 
     return E_NOTIMPL;
 }
 
-static HRESULT WINAPI mfbytestream_BeginRead(IMFByteStream *iface, BYTE *data, ULONG count,
-                        IMFAsyncCallback *callback, IUnknown *state)
+static HRESULT WINAPI bytestream_BeginRead(IMFByteStream *iface, BYTE *data, ULONG size, IMFAsyncCallback *callback,
+        IUnknown *state)
 {
-    mfbytestream *This = impl_from_IMFByteStream(iface);
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
 
-    FIXME("%p, %p, %u, %p, %p\n", This, data, count, callback, state);
+    TRACE("%p, %p, %u, %p, %p.\n", iface, data, size, callback, state);
 
-    return E_NOTIMPL;
+    return bytestream_create_io_request(stream, ASYNC_STREAM_OP_READ, data, size, callback, state);
 }
 
-static HRESULT WINAPI mfbytestream_EndRead(IMFByteStream *iface, IMFAsyncResult *result, ULONG *byte_read)
+static HRESULT WINAPI bytestream_EndRead(IMFByteStream *iface, IMFAsyncResult *result, ULONG *byte_read)
 {
-    mfbytestream *This = impl_from_IMFByteStream(iface);
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
 
-    FIXME("%p, %p, %p\n", This, result, byte_read);
+    TRACE("%p, %p, %p.\n", iface, result, byte_read);
 
-    return E_NOTIMPL;
+    return bytestream_complete_io_request(stream, ASYNC_STREAM_OP_READ, result, byte_read);
 }
 
 static HRESULT WINAPI mfbytestream_Write(IMFByteStream *iface, const BYTE *data, ULONG count, ULONG *written)
@@ -1498,23 +2340,23 @@ static HRESULT WINAPI mfbytestream_Write(IMFByteStream *iface, const BYTE *data,
     return E_NOTIMPL;
 }
 
-static HRESULT WINAPI mfbytestream_BeginWrite(IMFByteStream *iface, const BYTE *data, ULONG count,
-                        IMFAsyncCallback *callback, IUnknown *state)
+static HRESULT WINAPI bytestream_BeginWrite(IMFByteStream *iface, const BYTE *data, ULONG size,
+        IMFAsyncCallback *callback, IUnknown *state)
 {
-    mfbytestream *This = impl_from_IMFByteStream(iface);
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
 
-    FIXME("%p, %p, %u, %p, %p\n", This, data, count, callback, state);
+    TRACE("%p, %p, %u, %p, %p.\n", iface, data, size, callback, state);
 
-    return E_NOTIMPL;
+    return bytestream_create_io_request(stream, ASYNC_STREAM_OP_WRITE, data, size, callback, state);
 }
 
-static HRESULT WINAPI mfbytestream_EndWrite(IMFByteStream *iface, IMFAsyncResult *result, ULONG *written)
+static HRESULT WINAPI bytestream_EndWrite(IMFByteStream *iface, IMFAsyncResult *result, ULONG *written)
 {
-    mfbytestream *This = impl_from_IMFByteStream(iface);
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
 
-    FIXME("%p, %p, %p\n", This, result, written);
+    TRACE("%p, %p, %p.\n", iface, result, written);
 
-    return E_NOTIMPL;
+    return bytestream_complete_io_request(stream, ASYNC_STREAM_OP_WRITE, result, written);
 }
 
 static HRESULT WINAPI mfbytestream_Seek(IMFByteStream *iface, MFBYTESTREAM_SEEK_ORIGIN seek, LONGLONG offset,
@@ -1547,24 +2389,188 @@ static HRESULT WINAPI mfbytestream_Close(IMFByteStream *iface)
 
 static const IMFByteStreamVtbl mfbytestream_vtbl =
 {
-    mfbytestream_QueryInterface,
-    mfbytestream_AddRef,
-    mfbytestream_Release,
-    mfbytestream_GetCapabilities,
+    bytestream_QueryInterface,
+    bytestream_AddRef,
+    bytestream_Release,
+    bytestream_GetCapabilities,
     mfbytestream_GetLength,
     mfbytestream_SetLength,
     mfbytestream_GetCurrentPosition,
     mfbytestream_SetCurrentPosition,
     mfbytestream_IsEndOfStream,
     mfbytestream_Read,
-    mfbytestream_BeginRead,
-    mfbytestream_EndRead,
+    bytestream_BeginRead,
+    bytestream_EndRead,
     mfbytestream_Write,
-    mfbytestream_BeginWrite,
-    mfbytestream_EndWrite,
+    bytestream_BeginWrite,
+    bytestream_EndWrite,
     mfbytestream_Seek,
     mfbytestream_Flush,
     mfbytestream_Close
+};
+
+static HRESULT WINAPI bytestream_stream_GetLength(IMFByteStream *iface, QWORD *length)
+{
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
+    STATSTG statstg;
+    HRESULT hr;
+
+    TRACE("%p, %p.\n", iface, length);
+
+    if (FAILED(hr = IStream_Stat(stream->stream, &statstg, STATFLAG_NONAME)))
+        return hr;
+
+    *length = statstg.cbSize.QuadPart;
+
+    return S_OK;
+}
+
+static HRESULT WINAPI bytestream_stream_SetLength(IMFByteStream *iface, QWORD length)
+{
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
+    ULARGE_INTEGER size;
+
+    TRACE("%p, %s.\n", iface, wine_dbgstr_longlong(length));
+
+    size.QuadPart = length;
+    return IStream_SetSize(stream->stream, size);
+}
+
+static HRESULT WINAPI bytestream_stream_GetCurrentPosition(IMFByteStream *iface, QWORD *position)
+{
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
+
+    TRACE("%p, %p.\n", iface, position);
+
+    *position = stream->position;
+
+    return S_OK;
+}
+
+static HRESULT WINAPI bytestream_stream_SetCurrentPosition(IMFByteStream *iface, QWORD position)
+{
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
+
+    TRACE("%p, %s.\n", iface, wine_dbgstr_longlong(position));
+
+    stream->position = position;
+
+    return S_OK;
+}
+
+static HRESULT WINAPI bytestream_stream_IsEndOfStream(IMFByteStream *iface, BOOL *ret)
+{
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
+    STATSTG statstg;
+    HRESULT hr;
+
+    TRACE("%p, %p.\n", iface, ret);
+
+    if (FAILED(hr = IStream_Stat(stream->stream, &statstg, STATFLAG_NONAME)))
+        return hr;
+
+    *ret = stream->position >= statstg.cbSize.QuadPart;
+
+    return S_OK;
+}
+
+static HRESULT WINAPI bytestream_stream_Read(IMFByteStream *iface, BYTE *buffer, ULONG size, ULONG *read_len)
+{
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
+    LARGE_INTEGER position;
+    HRESULT hr;
+
+    TRACE("%p, %p, %u, %p.\n", iface, buffer, size, read_len);
+
+    position.QuadPart = stream->position;
+    if (FAILED(hr = IStream_Seek(stream->stream, position, STREAM_SEEK_SET, NULL)))
+        return hr;
+
+    if (SUCCEEDED(hr = IStream_Read(stream->stream, buffer, size, read_len)))
+        stream->position += *read_len;
+
+    return hr;
+}
+
+static HRESULT WINAPI bytestream_stream_Write(IMFByteStream *iface, const BYTE *buffer, ULONG size, ULONG *written)
+{
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
+    LARGE_INTEGER position;
+    HRESULT hr;
+
+    TRACE("%p, %p, %u, %p.\n", iface, buffer, size, written);
+
+    position.QuadPart = stream->position;
+    if (FAILED(hr = IStream_Seek(stream->stream, position, STREAM_SEEK_SET, NULL)))
+        return hr;
+
+    if (SUCCEEDED(hr = IStream_Write(stream->stream, buffer, size, written)))
+        stream->position += *written;
+
+    return hr;
+}
+
+static HRESULT WINAPI bytestream_stream_Seek(IMFByteStream *iface, MFBYTESTREAM_SEEK_ORIGIN origin, LONGLONG offset,
+        DWORD flags, QWORD *current)
+{
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
+
+    TRACE("%p, %u, %s, %#x, %p.\n", iface, origin, wine_dbgstr_longlong(offset), flags, current);
+
+    switch (origin)
+    {
+        case msoBegin:
+            stream->position = offset;
+            break;
+        case msoCurrent:
+            stream->position += offset;
+            break;
+        default:
+            WARN("Unknown origin mode %d.\n", origin);
+            return E_INVALIDARG;
+    }
+
+    *current = stream->position;
+
+    return S_OK;
+}
+
+static HRESULT WINAPI bytestream_stream_Flush(IMFByteStream *iface)
+{
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
+
+    TRACE("%p.\n", iface);
+
+    return IStream_Commit(stream->stream, STGC_DEFAULT);
+}
+
+static HRESULT WINAPI bytestream_stream_Close(IMFByteStream *iface)
+{
+    TRACE("%p.\n", iface);
+
+    return S_OK;
+}
+
+static const IMFByteStreamVtbl bytestream_stream_vtbl =
+{
+    bytestream_QueryInterface,
+    bytestream_AddRef,
+    bytestream_Release,
+    bytestream_GetCapabilities,
+    bytestream_stream_GetLength,
+    bytestream_stream_SetLength,
+    bytestream_stream_GetCurrentPosition,
+    bytestream_stream_SetCurrentPosition,
+    bytestream_stream_IsEndOfStream,
+    bytestream_stream_Read,
+    bytestream_BeginRead,
+    bytestream_EndRead,
+    bytestream_stream_Write,
+    bytestream_BeginWrite,
+    bytestream_EndWrite,
+    bytestream_stream_Seek,
+    bytestream_stream_Flush,
+    bytestream_stream_Close,
 };
 
 static inline mfbytestream *impl_from_IMFByteStream_IMFAttributes(IMFAttributes *iface)
@@ -1628,15 +2634,99 @@ static const IMFAttributesVtbl mfbytestream_attributes_vtbl =
     mfattributes_CopyAllItems
 };
 
-HRESULT WINAPI MFCreateMFByteStreamOnStream(IStream *stream, IMFByteStream **bytestream)
+static HRESULT WINAPI bytestream_stream_read_callback_Invoke(IMFAsyncCallback *iface, IMFAsyncResult *result)
 {
-    mfbytestream *object;
+    struct bytestream *stream = impl_from_read_callback_IMFAsyncCallback(iface);
+    struct async_stream_op *op;
+    LARGE_INTEGER position;
+    IUnknown *object;
     HRESULT hr;
 
-    TRACE("(%p, %p): stub\n", stream, bytestream);
+    if (FAILED(hr = IMFAsyncResult_GetObject(result, &object)))
+        return hr;
 
-    object = heap_alloc( sizeof(*object) );
-    if(!object)
+    op = impl_async_stream_op_from_IUnknown(object);
+
+    position.QuadPart = op->position;
+    if (SUCCEEDED(hr = IStream_Seek(stream->stream, position, STREAM_SEEK_SET, NULL)))
+    {
+        if (SUCCEEDED(hr = IStream_Read(stream->stream, op->u.dest, op->requested_length, &op->actual_length)))
+            stream->position += op->actual_length;
+    }
+
+    IMFAsyncResult_SetStatus(op->caller, hr);
+
+    EnterCriticalSection(&stream->cs);
+    list_add_tail(&stream->pending, &op->entry);
+    LeaveCriticalSection(&stream->cs);
+
+    MFInvokeCallback(op->caller);
+
+    return S_OK;
+}
+
+static HRESULT WINAPI bytestream_stream_write_callback_Invoke(IMFAsyncCallback *iface, IMFAsyncResult *result)
+{
+    struct bytestream *stream = impl_from_read_callback_IMFAsyncCallback(iface);
+    struct async_stream_op *op;
+    LARGE_INTEGER position;
+    IUnknown *object;
+    HRESULT hr;
+
+    if (FAILED(hr = IMFAsyncResult_GetObject(result, &object)))
+        return hr;
+
+    op = impl_async_stream_op_from_IUnknown(object);
+
+    position.QuadPart = op->position;
+    if (SUCCEEDED(hr = IStream_Seek(stream->stream, position, STREAM_SEEK_SET, NULL)))
+    {
+        if (SUCCEEDED(hr = IStream_Write(stream->stream, op->u.src, op->requested_length, &op->actual_length)))
+            stream->position += op->actual_length;
+    }
+
+    IMFAsyncResult_SetStatus(op->caller, hr);
+
+    EnterCriticalSection(&stream->cs);
+    list_add_tail(&stream->pending, &op->entry);
+    LeaveCriticalSection(&stream->cs);
+
+    MFInvokeCallback(op->caller);
+
+    return S_OK;
+}
+
+static const IMFAsyncCallbackVtbl bytestream_stream_read_callback_vtbl =
+{
+    bytestream_callback_QueryInterface,
+    bytestream_read_callback_AddRef,
+    bytestream_read_callback_Release,
+    bytestream_callback_GetParameters,
+    bytestream_stream_read_callback_Invoke,
+};
+
+static const IMFAsyncCallbackVtbl bytestream_stream_write_callback_vtbl =
+{
+    bytestream_callback_QueryInterface,
+    bytestream_write_callback_AddRef,
+    bytestream_write_callback_Release,
+    bytestream_callback_GetParameters,
+    bytestream_stream_write_callback_Invoke,
+};
+
+/***********************************************************************
+ *      MFCreateMFByteStreamOnStream (mfplat.@)
+ */
+HRESULT WINAPI MFCreateMFByteStreamOnStream(IStream *stream, IMFByteStream **bytestream)
+{
+    struct bytestream *object;
+    LARGE_INTEGER position;
+    HRESULT hr;
+
+    TRACE("%p, %p.\n", stream, bytestream);
+
+    object = heap_alloc_zero(sizeof(*object));
+    if (!object)
         return E_OUTOFMEMORY;
 
     if (FAILED(hr = init_attributes_object(&object->attributes, 0)))
@@ -1644,22 +2734,104 @@ HRESULT WINAPI MFCreateMFByteStreamOnStream(IStream *stream, IMFByteStream **byt
         heap_free(object);
         return hr;
     }
-    object->IMFByteStream_iface.lpVtbl = &mfbytestream_vtbl;
+
+    object->IMFByteStream_iface.lpVtbl = &bytestream_stream_vtbl;
     object->attributes.IMFAttributes_iface.lpVtbl = &mfbytestream_attributes_vtbl;
+    object->read_callback.lpVtbl = &bytestream_stream_read_callback_vtbl;
+    object->write_callback.lpVtbl = &bytestream_stream_write_callback_vtbl;
+    InitializeCriticalSection(&object->cs);
+    list_init(&object->pending);
+
+    object->stream = stream;
+    IStream_AddRef(object->stream);
+    position.QuadPart = 0;
+    IStream_Seek(object->stream, position, STREAM_SEEK_SET, NULL);
+    object->capabilities = MFBYTESTREAM_IS_READABLE | MFBYTESTREAM_IS_SEEKABLE;
 
     *bytestream = &object->IMFByteStream_iface;
 
     return S_OK;
 }
 
+static HRESULT WINAPI bytestream_file_read_callback_Invoke(IMFAsyncCallback *iface, IMFAsyncResult *result)
+{
+    FIXME("%p, %p.\n", iface, result);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI bytestream_file_write_callback_Invoke(IMFAsyncCallback *iface, IMFAsyncResult *result)
+{
+    FIXME("%p, %p.\n", iface, result);
+
+    return E_NOTIMPL;
+}
+
+static const IMFAsyncCallbackVtbl bytestream_file_read_callback_vtbl =
+{
+    bytestream_callback_QueryInterface,
+    bytestream_read_callback_AddRef,
+    bytestream_read_callback_Release,
+    bytestream_callback_GetParameters,
+    bytestream_file_read_callback_Invoke,
+};
+
+static const IMFAsyncCallbackVtbl bytestream_file_write_callback_vtbl =
+{
+    bytestream_callback_QueryInterface,
+    bytestream_write_callback_AddRef,
+    bytestream_write_callback_Release,
+    bytestream_callback_GetParameters,
+    bytestream_file_write_callback_Invoke,
+};
+
+static HRESULT WINAPI bytestream_file_getservice_QueryInterface(IMFGetService *iface, REFIID riid, void **obj)
+{
+    struct bytestream *stream = impl_bytestream_from_IMFGetService(iface);
+    return IMFByteStream_QueryInterface(&stream->IMFByteStream_iface, riid, obj);
+}
+
+static ULONG WINAPI bytestream_file_getservice_AddRef(IMFGetService *iface)
+{
+    struct bytestream *stream = impl_bytestream_from_IMFGetService(iface);
+    return IMFByteStream_AddRef(&stream->IMFByteStream_iface);
+}
+
+static ULONG WINAPI bytestream_file_getservice_Release(IMFGetService *iface)
+{
+    struct bytestream *stream = impl_bytestream_from_IMFGetService(iface);
+    return IMFByteStream_Release(&stream->IMFByteStream_iface);
+}
+
+static HRESULT WINAPI bytestream_file_getservice_GetService(IMFGetService *iface, REFGUID service,
+        REFIID riid, void **obj)
+{
+    FIXME("%p, %s, %s, %p.\n", iface, debugstr_guid(service), debugstr_guid(riid), obj);
+
+    return E_NOTIMPL;
+}
+
+static const IMFGetServiceVtbl bytestream_file_getservice_vtbl =
+{
+    bytestream_file_getservice_QueryInterface,
+    bytestream_file_getservice_AddRef,
+    bytestream_file_getservice_Release,
+    bytestream_file_getservice_GetService,
+};
+
+/***********************************************************************
+ *      MFCreateFile (mfplat.@)
+ */
 HRESULT WINAPI MFCreateFile(MF_FILE_ACCESSMODE accessmode, MF_FILE_OPENMODE openmode, MF_FILE_FLAGS flags,
                             LPCWSTR url, IMFByteStream **bytestream)
 {
-    mfbytestream *object;
+    DWORD capabilities = MFBYTESTREAM_IS_SEEKABLE | MFBYTESTREAM_DOES_NOT_USE_NETWORK;
+    struct bytestream *object;
     DWORD fileaccessmode = 0;
     DWORD filesharemode = FILE_SHARE_READ;
     DWORD filecreation_disposition = 0;
     DWORD fileattributes = 0;
+    FILETIME writetime;
     HANDLE file;
     HRESULT hr;
 
@@ -1669,12 +2841,15 @@ HRESULT WINAPI MFCreateFile(MF_FILE_ACCESSMODE accessmode, MF_FILE_OPENMODE open
     {
         case MF_ACCESSMODE_READ:
             fileaccessmode = GENERIC_READ;
+            capabilities |= MFBYTESTREAM_IS_READABLE;
             break;
         case MF_ACCESSMODE_WRITE:
             fileaccessmode = GENERIC_WRITE;
+            capabilities |= MFBYTESTREAM_IS_WRITABLE;
             break;
         case MF_ACCESSMODE_READWRITE:
             fileaccessmode = GENERIC_READ | GENERIC_WRITE;
+            capabilities |= (MFBYTESTREAM_IS_READABLE | MFBYTESTREAM_IS_WRITABLE);
             break;
     }
 
@@ -1708,22 +2883,1090 @@ HRESULT WINAPI MFCreateFile(MF_FILE_ACCESSMODE accessmode, MF_FILE_OPENMODE open
     if(file == INVALID_HANDLE_VALUE)
         return HRESULT_FROM_WIN32(GetLastError());
 
-    /* Close the file again, since we don't do anything with it yet */
-    CloseHandle(file);
-
-    object = heap_alloc( sizeof(*object) );
-    if(!object)
-        return E_OUTOFMEMORY;
-
-    if (FAILED(hr = init_attributes_object(&object->attributes, 0)))
+    object = heap_alloc_zero(sizeof(*object));
+    if (!object)
     {
+        CloseHandle(file);
+        return E_OUTOFMEMORY;
+    }
+
+    if (FAILED(hr = init_attributes_object(&object->attributes, 2)))
+    {
+        CloseHandle(file);
         heap_free(object);
         return hr;
     }
     object->IMFByteStream_iface.lpVtbl = &mfbytestream_vtbl;
     object->attributes.IMFAttributes_iface.lpVtbl = &mfbytestream_attributes_vtbl;
+    object->IMFGetService_iface.lpVtbl = &bytestream_file_getservice_vtbl;
+    object->read_callback.lpVtbl = &bytestream_file_read_callback_vtbl;
+    object->write_callback.lpVtbl = &bytestream_file_write_callback_vtbl;
+    InitializeCriticalSection(&object->cs);
+    list_init(&object->pending);
+    object->capabilities = capabilities;
+    object->hfile = file;
+
+    if (GetFileTime(file, NULL, NULL, &writetime))
+    {
+        IMFAttributes_SetBlob(&object->attributes.IMFAttributes_iface, &MF_BYTESTREAM_LAST_MODIFIED_TIME,
+                (const UINT8 *)&writetime, sizeof(writetime));
+    }
+
+    IMFAttributes_SetString(&object->attributes.IMFAttributes_iface, &MF_BYTESTREAM_ORIGIN_NAME, url);
 
     *bytestream = &object->IMFByteStream_iface;
+
+    return S_OK;
+}
+
+struct bytestream_wrapper
+{
+    IMFByteStreamCacheControl IMFByteStreamCacheControl_iface;
+    IMFByteStreamBuffering IMFByteStreamBuffering_iface;
+    IMFMediaEventGenerator IMFMediaEventGenerator_iface;
+    IMFByteStreamTimeSeek IMFByteStreamTimeSeek_iface;
+    IMFSampleOutputStream IMFSampleOutputStream_iface;
+    IPropertyStore IPropertyStore_iface;
+    IMFByteStream IMFByteStream_iface;
+    IMFAttributes IMFAttributes_iface;
+    LONG refcount;
+
+    IMFByteStreamCacheControl *cache_control;
+    IMFByteStreamBuffering *stream_buffering;
+    IMFMediaEventGenerator *event_generator;
+    IMFByteStreamTimeSeek *time_seek;
+    IMFSampleOutputStream *sample_output;
+    IPropertyStore *propstore;
+    IMFByteStream *stream;
+    IMFAttributes *attributes;
+    BOOL is_closed;
+};
+
+static struct bytestream_wrapper *impl_wrapper_from_IMFByteStream(IMFByteStream *iface)
+{
+    return CONTAINING_RECORD(iface, struct bytestream_wrapper, IMFByteStream_iface);
+}
+
+static struct bytestream_wrapper *impl_wrapper_from_IMFByteStreamCacheControl(IMFByteStreamCacheControl *iface)
+{
+    return CONTAINING_RECORD(iface, struct bytestream_wrapper, IMFByteStreamCacheControl_iface);
+}
+
+static struct bytestream_wrapper *impl_wrapper_from_IMFByteStreamBuffering(IMFByteStreamBuffering *iface)
+{
+    return CONTAINING_RECORD(iface, struct bytestream_wrapper, IMFByteStreamBuffering_iface);
+}
+
+static struct bytestream_wrapper *impl_wrapper_from_IMFMediaEventGenerator(IMFMediaEventGenerator *iface)
+{
+    return CONTAINING_RECORD(iface, struct bytestream_wrapper, IMFMediaEventGenerator_iface);
+}
+
+static struct bytestream_wrapper *impl_wrapper_from_IMFByteStreamTimeSeek(IMFByteStreamTimeSeek *iface)
+{
+    return CONTAINING_RECORD(iface, struct bytestream_wrapper, IMFByteStreamTimeSeek_iface);
+}
+
+static struct bytestream_wrapper *impl_wrapper_from_IMFSampleOutputStream(IMFSampleOutputStream *iface)
+{
+    return CONTAINING_RECORD(iface, struct bytestream_wrapper, IMFSampleOutputStream_iface);
+}
+
+static struct bytestream_wrapper *impl_wrapper_from_IPropertyStore(IPropertyStore *iface)
+{
+    return CONTAINING_RECORD(iface, struct bytestream_wrapper, IPropertyStore_iface);
+}
+
+static struct bytestream_wrapper *impl_wrapper_from_IMFAttributes(IMFAttributes *iface)
+{
+    return CONTAINING_RECORD(iface, struct bytestream_wrapper, IMFAttributes_iface);
+}
+
+static HRESULT WINAPI bytestream_wrapper_QueryInterface(IMFByteStream *iface, REFIID riid, void **out)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_guid(riid), out);
+
+    if (IsEqualIID(riid, &IID_IMFByteStream) ||
+            IsEqualIID(riid, &IID_IUnknown))
+    {
+        *out = &wrapper->IMFByteStream_iface;
+    }
+    else if (wrapper->cache_control && IsEqualIID(riid, &IID_IMFByteStreamCacheControl))
+    {
+        *out = &wrapper->IMFByteStreamCacheControl_iface;
+    }
+    else if (wrapper->stream_buffering && IsEqualIID(riid, &IID_IMFByteStreamBuffering))
+    {
+        *out = &wrapper->IMFByteStreamBuffering_iface;
+    }
+    else if (wrapper->event_generator && IsEqualIID(riid, &IID_IMFMediaEventGenerator))
+    {
+        *out = &wrapper->IMFMediaEventGenerator_iface;
+    }
+    else if (wrapper->time_seek && IsEqualIID(riid, &IID_IMFByteStreamTimeSeek))
+    {
+        *out = &wrapper->IMFByteStreamTimeSeek_iface;
+    }
+    else if (wrapper->sample_output && IsEqualIID(riid, &IID_IMFSampleOutputStream))
+    {
+        *out = &wrapper->IMFSampleOutputStream_iface;
+    }
+    else if (wrapper->propstore && IsEqualIID(riid, &IID_IPropertyStore))
+    {
+        *out = &wrapper->IPropertyStore_iface;
+    }
+    else if (wrapper->attributes && IsEqualIID(riid, &IID_IMFAttributes))
+    {
+        *out = &wrapper->IMFAttributes_iface;
+    }
+    else
+    {
+        WARN("Unsupported %s.\n", debugstr_guid(riid));
+        *out = NULL;
+        return E_NOINTERFACE;
+    }
+
+    IUnknown_AddRef((IUnknown *)*out);
+    return S_OK;
+}
+
+static ULONG WINAPI bytestream_wrapper_AddRef(IMFByteStream *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+    ULONG refcount = InterlockedIncrement(&wrapper->refcount);
+
+    TRACE("%p, refcount %d.\n", iface, refcount);
+
+    return refcount;
+}
+
+static ULONG WINAPI bytestream_wrapper_Release(IMFByteStream *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+    ULONG refcount = InterlockedDecrement(&wrapper->refcount);
+
+    TRACE("%p, refcount %d.\n", iface, refcount);
+
+    if (!refcount)
+    {
+        if (wrapper->cache_control)
+            IMFByteStreamCacheControl_Release(wrapper->cache_control);
+        if (wrapper->stream_buffering)
+            IMFByteStreamBuffering_Release(wrapper->stream_buffering);
+        if (wrapper->event_generator)
+            IMFMediaEventGenerator_Release(wrapper->event_generator);
+        if (wrapper->time_seek)
+            IMFByteStreamTimeSeek_Release(wrapper->time_seek);
+        if (wrapper->sample_output)
+            IMFSampleOutputStream_Release(wrapper->sample_output);
+        if (wrapper->propstore)
+            IPropertyStore_Release(wrapper->propstore);
+        if (wrapper->attributes)
+            IMFAttributes_Release(wrapper->attributes);
+        IMFByteStream_Release(wrapper->stream);
+        heap_free(wrapper);
+    }
+
+    return refcount;
+}
+
+static HRESULT WINAPI bytestream_wrapper_GetCapabilities(IMFByteStream *iface, DWORD *capabilities)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+
+    TRACE("%p, %p.\n", iface, capabilities);
+
+    return wrapper->is_closed ? MF_E_INVALIDREQUEST :
+            IMFByteStream_GetCapabilities(wrapper->stream, capabilities);
+}
+
+static HRESULT WINAPI bytestream_wrapper_GetLength(IMFByteStream *iface, QWORD *length)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+
+    TRACE("%p, %p.\n", iface, length);
+
+    if (wrapper->is_closed)
+        return MF_E_INVALIDREQUEST;
+
+    return wrapper->is_closed ? MF_E_INVALIDREQUEST :
+            IMFByteStream_GetLength(wrapper->stream, length);
+}
+
+static HRESULT WINAPI bytestream_wrapper_SetLength(IMFByteStream *iface, QWORD length)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+
+    TRACE("%p, %s.\n", iface, wine_dbgstr_longlong(length));
+
+    if (wrapper->is_closed)
+        return MF_E_INVALIDREQUEST;
+
+    return wrapper->is_closed ? MF_E_INVALIDREQUEST :
+            IMFByteStream_SetLength(wrapper->stream, length);
+}
+
+static HRESULT WINAPI bytestream_wrapper_GetCurrentPosition(IMFByteStream *iface, QWORD *position)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+
+    TRACE("%p, %p.\n", iface, position);
+
+    if (wrapper->is_closed)
+        return MF_E_INVALIDREQUEST;
+
+    return wrapper->is_closed ? MF_E_INVALIDREQUEST :
+            IMFByteStream_GetCurrentPosition(wrapper->stream, position);
+}
+
+static HRESULT WINAPI bytestream_wrapper_SetCurrentPosition(IMFByteStream *iface, QWORD position)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+
+    TRACE("%p, %s.\n", iface, wine_dbgstr_longlong(position));
+
+    return wrapper->is_closed ? MF_E_INVALIDREQUEST :
+            IMFByteStream_SetCurrentPosition(wrapper->stream, position);
+}
+
+static HRESULT WINAPI bytestream_wrapper_IsEndOfStream(IMFByteStream *iface, BOOL *eos)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+
+    TRACE("%p, %p.\n", iface, eos);
+
+    return wrapper->is_closed ? MF_E_INVALIDREQUEST :
+            IMFByteStream_IsEndOfStream(wrapper->stream, eos);
+}
+
+static HRESULT WINAPI bytestream_wrapper_Read(IMFByteStream *iface, BYTE *data, ULONG count, ULONG *byte_read)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+
+    TRACE("%p, %p, %u, %p.\n", iface, data, count, byte_read);
+
+    return wrapper->is_closed ? MF_E_INVALIDREQUEST :
+            IMFByteStream_Read(wrapper->stream, data, count, byte_read);
+}
+
+static HRESULT WINAPI bytestream_wrapper_BeginRead(IMFByteStream *iface, BYTE *data, ULONG size,
+        IMFAsyncCallback *callback, IUnknown *state)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+
+    TRACE("%p, %p, %u, %p, %p.\n", iface, data, size, callback, state);
+
+    return wrapper->is_closed ? MF_E_INVALIDREQUEST :
+            IMFByteStream_BeginRead(wrapper->stream, data, size, callback, state);
+}
+
+static HRESULT WINAPI bytestream_wrapper_EndRead(IMFByteStream *iface, IMFAsyncResult *result, ULONG *byte_read)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+
+    TRACE("%p, %p, %p.\n", iface, result, byte_read);
+
+    return wrapper->is_closed ? MF_E_INVALIDREQUEST :
+            IMFByteStream_EndRead(wrapper->stream, result, byte_read);
+}
+
+static HRESULT WINAPI bytestream_wrapper_Write(IMFByteStream *iface, const BYTE *data, ULONG count, ULONG *written)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+
+    TRACE("%p, %p, %u, %p.\n", iface, data, count, written);
+
+    return wrapper->is_closed ? MF_E_INVALIDREQUEST :
+            IMFByteStream_Write(wrapper->stream, data, count, written);
+}
+
+static HRESULT WINAPI bytestream_wrapper_BeginWrite(IMFByteStream *iface, const BYTE *data, ULONG size,
+        IMFAsyncCallback *callback, IUnknown *state)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+
+    TRACE("%p, %p, %u, %p, %p.\n", iface, data, size, callback, state);
+
+    return wrapper->is_closed ? MF_E_INVALIDREQUEST :
+            IMFByteStream_BeginWrite(wrapper->stream, data, size, callback, state);
+}
+
+static HRESULT WINAPI bytestream_wrapper_EndWrite(IMFByteStream *iface, IMFAsyncResult *result, ULONG *written)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+
+    TRACE("%p, %p, %p.\n", iface, result, written);
+
+    return wrapper->is_closed ? MF_E_INVALIDREQUEST :
+            IMFByteStream_EndWrite(wrapper->stream, result, written);
+}
+
+static HRESULT WINAPI bytestream_wrapper_Seek(IMFByteStream *iface, MFBYTESTREAM_SEEK_ORIGIN seek, LONGLONG offset,
+        DWORD flags, QWORD *current)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+
+    TRACE("%p, %u, %s, %#x, %p.\n", iface, seek, wine_dbgstr_longlong(offset), flags, current);
+
+    return wrapper->is_closed ? MF_E_INVALIDREQUEST :
+            IMFByteStream_Seek(wrapper->stream, seek, offset, flags, current);
+}
+
+static HRESULT WINAPI bytestream_wrapper_Flush(IMFByteStream *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+
+    TRACE("%p\n", iface);
+
+    return wrapper->is_closed ? MF_E_INVALIDREQUEST : IMFByteStream_Flush(wrapper->stream);
+}
+
+static HRESULT WINAPI bytestream_wrapper_Close(IMFByteStream *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStream(iface);
+
+    TRACE("%p\n", iface);
+
+    wrapper->is_closed = TRUE;
+
+    return S_OK;
+}
+
+static const IMFByteStreamVtbl bytestream_wrapper_vtbl =
+{
+    bytestream_wrapper_QueryInterface,
+    bytestream_wrapper_AddRef,
+    bytestream_wrapper_Release,
+    bytestream_wrapper_GetCapabilities,
+    bytestream_wrapper_GetLength,
+    bytestream_wrapper_SetLength,
+    bytestream_wrapper_GetCurrentPosition,
+    bytestream_wrapper_SetCurrentPosition,
+    bytestream_wrapper_IsEndOfStream,
+    bytestream_wrapper_Read,
+    bytestream_wrapper_BeginRead,
+    bytestream_wrapper_EndRead,
+    bytestream_wrapper_Write,
+    bytestream_wrapper_BeginWrite,
+    bytestream_wrapper_EndWrite,
+    bytestream_wrapper_Seek,
+    bytestream_wrapper_Flush,
+    bytestream_wrapper_Close,
+};
+
+static HRESULT WINAPI bytestream_wrapper_cache_control_QueryInterface(IMFByteStreamCacheControl *iface,
+        REFIID riid, void **obj)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStreamCacheControl(iface);
+    return IMFByteStream_QueryInterface(&wrapper->IMFByteStream_iface, riid, obj);
+}
+
+static ULONG WINAPI bytestream_wrapper_cache_control_AddRef(IMFByteStreamCacheControl *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStreamCacheControl(iface);
+    return IMFByteStream_AddRef(&wrapper->IMFByteStream_iface);
+}
+
+static ULONG WINAPI bytestream_wrapper_cache_control_Release(IMFByteStreamCacheControl *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStreamCacheControl(iface);
+    return IMFByteStream_Release(&wrapper->IMFByteStream_iface);
+}
+
+static HRESULT WINAPI bytestream_wrapper_cache_control_StopBackgroundTransfer(IMFByteStreamCacheControl *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStreamCacheControl(iface);
+
+    TRACE("%p.\n", iface);
+
+    return IMFByteStreamCacheControl_StopBackgroundTransfer(wrapper->cache_control);
+}
+
+static const IMFByteStreamCacheControlVtbl bytestream_wrapper_cache_control_vtbl =
+{
+    bytestream_wrapper_cache_control_QueryInterface,
+    bytestream_wrapper_cache_control_AddRef,
+    bytestream_wrapper_cache_control_Release,
+    bytestream_wrapper_cache_control_StopBackgroundTransfer,
+};
+
+static HRESULT WINAPI bytestream_wrapper_buffering_QueryInterface(IMFByteStreamBuffering *iface,
+        REFIID riid, void **obj)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStreamBuffering(iface);
+    return IMFByteStream_QueryInterface(&wrapper->IMFByteStream_iface, riid, obj);
+}
+
+static ULONG WINAPI bytestream_wrapper_buffering_AddRef(IMFByteStreamBuffering *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStreamBuffering(iface);
+    return IMFByteStream_AddRef(&wrapper->IMFByteStream_iface);
+}
+
+static ULONG WINAPI bytestream_wrapper_buffering_Release(IMFByteStreamBuffering *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStreamBuffering(iface);
+    return IMFByteStream_Release(&wrapper->IMFByteStream_iface);
+}
+
+static HRESULT WINAPI bytestream_wrapper_buffering_SetBufferingParams(IMFByteStreamBuffering *iface,
+        MFBYTESTREAM_BUFFERING_PARAMS *params)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStreamBuffering(iface);
+
+    TRACE("%p, %p.\n", iface, params);
+
+    return IMFByteStreamBuffering_SetBufferingParams(wrapper->stream_buffering, params);
+}
+
+static HRESULT WINAPI bytestream_wrapper_buffering_EnableBuffering(IMFByteStreamBuffering *iface,
+        BOOL enable)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStreamBuffering(iface);
+
+    TRACE("%p, %d.\n", iface, enable);
+
+    return IMFByteStreamBuffering_EnableBuffering(wrapper->stream_buffering, enable);
+}
+
+static HRESULT WINAPI bytestream_wrapper_buffering_StopBuffering(IMFByteStreamBuffering *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStreamBuffering(iface);
+
+    TRACE("%p.\n", iface);
+
+    return IMFByteStreamBuffering_StopBuffering(wrapper->stream_buffering);
+}
+
+static const IMFByteStreamBufferingVtbl bytestream_wrapper_buffering_vtbl =
+{
+    bytestream_wrapper_buffering_QueryInterface,
+    bytestream_wrapper_buffering_AddRef,
+    bytestream_wrapper_buffering_Release,
+    bytestream_wrapper_buffering_SetBufferingParams,
+    bytestream_wrapper_buffering_EnableBuffering,
+    bytestream_wrapper_buffering_StopBuffering,
+};
+
+static HRESULT WINAPI bytestream_wrapper_timeseek_QueryInterface(IMFByteStreamTimeSeek *iface,
+        REFIID riid, void **obj)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStreamTimeSeek(iface);
+    return IMFByteStream_QueryInterface(&wrapper->IMFByteStream_iface, riid, obj);
+}
+
+static ULONG WINAPI bytestream_wrapper_timeseek_AddRef(IMFByteStreamTimeSeek *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStreamTimeSeek(iface);
+    return IMFByteStream_AddRef(&wrapper->IMFByteStream_iface);
+}
+
+static ULONG WINAPI bytestream_wrapper_timeseek_Release(IMFByteStreamTimeSeek *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStreamTimeSeek(iface);
+    return IMFByteStream_Release(&wrapper->IMFByteStream_iface);
+}
+
+static HRESULT WINAPI bytestream_wrapper_timeseek_IsTimeSeekSupported(IMFByteStreamTimeSeek *iface, BOOL *result)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStreamTimeSeek(iface);
+
+    TRACE("%p, %p.\n", iface, result);
+
+    return IMFByteStreamTimeSeek_IsTimeSeekSupported(wrapper->time_seek, result);
+}
+
+static HRESULT WINAPI bytestream_wrapper_timeseek_TimeSeek(IMFByteStreamTimeSeek *iface, QWORD position)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStreamTimeSeek(iface);
+
+    TRACE("%p, %s.\n", iface, wine_dbgstr_longlong(position));
+
+    return IMFByteStreamTimeSeek_TimeSeek(wrapper->time_seek, position);
+}
+
+static HRESULT WINAPI bytestream_wrapper_timeseek_GetTimeSeekResult(IMFByteStreamTimeSeek *iface, QWORD *start_time,
+        QWORD *stop_time, QWORD *duration)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFByteStreamTimeSeek(iface);
+
+    TRACE("%p, %p, %p, %p.\n", iface, start_time, stop_time, duration);
+
+    return IMFByteStreamTimeSeek_GetTimeSeekResult(wrapper->time_seek, start_time, stop_time, duration);
+}
+
+static const IMFByteStreamTimeSeekVtbl bytestream_wrapper_timeseek_vtbl =
+{
+    bytestream_wrapper_timeseek_QueryInterface,
+    bytestream_wrapper_timeseek_AddRef,
+    bytestream_wrapper_timeseek_Release,
+    bytestream_wrapper_timeseek_IsTimeSeekSupported,
+    bytestream_wrapper_timeseek_TimeSeek,
+    bytestream_wrapper_timeseek_GetTimeSeekResult,
+};
+
+static HRESULT WINAPI bytestream_wrapper_events_QueryInterface(IMFMediaEventGenerator *iface, REFIID riid, void **obj)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFMediaEventGenerator(iface);
+    return IMFByteStream_QueryInterface(&wrapper->IMFByteStream_iface, riid, obj);
+}
+
+static ULONG WINAPI bytestream_wrapper_events_AddRef(IMFMediaEventGenerator *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFMediaEventGenerator(iface);
+    return IMFByteStream_AddRef(&wrapper->IMFByteStream_iface);
+}
+
+static ULONG WINAPI bytestream_wrapper_events_Release(IMFMediaEventGenerator *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFMediaEventGenerator(iface);
+    return IMFByteStream_Release(&wrapper->IMFByteStream_iface);
+}
+
+static HRESULT WINAPI bytestream_wrapper_events_GetEvent(IMFMediaEventGenerator *iface, DWORD flags, IMFMediaEvent **event)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFMediaEventGenerator(iface);
+
+    TRACE("%p, %#x, %p.\n", iface, flags, event);
+
+    return IMFMediaEventGenerator_GetEvent(wrapper->event_generator, flags, event);
+}
+
+static HRESULT WINAPI bytestream_wrapper_events_BeginGetEvent(IMFMediaEventGenerator *iface, IMFAsyncCallback *callback, IUnknown *state)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFMediaEventGenerator(iface);
+
+    TRACE("%p, %p, %p.\n", iface, callback, state);
+
+    return IMFMediaEventGenerator_BeginGetEvent(wrapper->event_generator, callback, state);
+}
+
+static HRESULT WINAPI bytestream_wrapper_events_EndGetEvent(IMFMediaEventGenerator *iface, IMFAsyncResult *result, IMFMediaEvent **event)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFMediaEventGenerator(iface);
+
+    TRACE("%p, %p, %p.\n", iface, result, event);
+
+    return IMFMediaEventGenerator_EndGetEvent(wrapper->event_generator, result, event);
+}
+
+static HRESULT WINAPI bytestream_wrapper_events_QueueEvent(IMFMediaEventGenerator *iface, MediaEventType type, REFGUID ext_type, HRESULT hr, const PROPVARIANT *value)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFMediaEventGenerator(iface);
+
+    TRACE("%p, %d, %s, %#x, %p.\n", iface, type, debugstr_guid(ext_type), hr, value);
+
+    return IMFMediaEventGenerator_QueueEvent(wrapper->event_generator, type, ext_type, hr, value);
+}
+
+static const IMFMediaEventGeneratorVtbl bytestream_wrapper_events_vtbl =
+{
+    bytestream_wrapper_events_QueryInterface,
+    bytestream_wrapper_events_AddRef,
+    bytestream_wrapper_events_Release,
+    bytestream_wrapper_events_GetEvent,
+    bytestream_wrapper_events_BeginGetEvent,
+    bytestream_wrapper_events_EndGetEvent,
+    bytestream_wrapper_events_QueueEvent,
+};
+
+static HRESULT WINAPI bytestream_wrapper_sample_output_QueryInterface(IMFSampleOutputStream *iface, REFIID riid, void **obj)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFSampleOutputStream(iface);
+    return IMFByteStream_QueryInterface(&wrapper->IMFByteStream_iface, riid, obj);
+}
+
+static ULONG WINAPI bytestream_wrapper_sample_output_AddRef(IMFSampleOutputStream *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFSampleOutputStream(iface);
+    return IMFByteStream_AddRef(&wrapper->IMFByteStream_iface);
+}
+
+static ULONG WINAPI bytestream_wrapper_sample_output_Release(IMFSampleOutputStream *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFSampleOutputStream(iface);
+    return IMFByteStream_Release(&wrapper->IMFByteStream_iface);
+}
+
+static HRESULT WINAPI bytestream_wrapper_sample_output_BeginWriteSample(IMFSampleOutputStream *iface, IMFSample *sample,
+        IMFAsyncCallback *callback, IUnknown *state)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFSampleOutputStream(iface);
+
+    TRACE("%p, %p, %p, %p.\n", iface, sample, callback, state);
+
+    return IMFSampleOutputStream_BeginWriteSample(wrapper->sample_output, sample, callback, state);
+}
+
+static HRESULT WINAPI bytestream_wrapper_sample_output_EndWriteSample(IMFSampleOutputStream *iface, IMFAsyncResult *result)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFSampleOutputStream(iface);
+
+    TRACE("%p, %p.\n", iface, result);
+
+    return IMFSampleOutputStream_EndWriteSample(wrapper->sample_output, result);
+}
+
+static HRESULT WINAPI bytestream_wrapper_sample_output_Close(IMFSampleOutputStream *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFSampleOutputStream(iface);
+
+    TRACE("%p.\n", iface);
+
+    return IMFSampleOutputStream_Close(wrapper->sample_output);
+}
+
+static const IMFSampleOutputStreamVtbl bytestream_wrapper_sample_output_vtbl =
+{
+    bytestream_wrapper_sample_output_QueryInterface,
+    bytestream_wrapper_sample_output_AddRef,
+    bytestream_wrapper_sample_output_Release,
+    bytestream_wrapper_sample_output_BeginWriteSample,
+    bytestream_wrapper_sample_output_EndWriteSample,
+    bytestream_wrapper_sample_output_Close,
+};
+
+static HRESULT WINAPI bytestream_wrapper_propstore_QueryInterface(IPropertyStore *iface, REFIID riid, void **obj)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IPropertyStore(iface);
+    return IMFByteStream_QueryInterface(&wrapper->IMFByteStream_iface, riid, obj);
+}
+
+static ULONG WINAPI bytestream_wrapper_propstore_AddRef(IPropertyStore *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IPropertyStore(iface);
+    return IMFByteStream_AddRef(&wrapper->IMFByteStream_iface);
+}
+
+static ULONG WINAPI bytestream_wrapper_propstore_Release(IPropertyStore *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IPropertyStore(iface);
+    return IMFByteStream_Release(&wrapper->IMFByteStream_iface);
+}
+
+static HRESULT WINAPI bytestream_wrapper_propstore_GetCount(IPropertyStore *iface, DWORD *count)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IPropertyStore(iface);
+
+    TRACE("%p, %p.\n", iface, count);
+
+    return IPropertyStore_GetCount(wrapper->propstore, count);
+}
+
+static HRESULT WINAPI bytestream_wrapper_propstore_GetAt(IPropertyStore *iface, DWORD prop, PROPERTYKEY *key)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IPropertyStore(iface);
+
+    TRACE("%p, %u, %p.\n", iface, prop, key);
+
+    return IPropertyStore_GetAt(wrapper->propstore, prop, key);
+}
+
+static HRESULT WINAPI bytestream_wrapper_propstore_GetValue(IPropertyStore *iface, REFPROPERTYKEY key, PROPVARIANT *value)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IPropertyStore(iface);
+
+    TRACE("%p, %p, %p.\n", iface, key, value);
+
+    return IPropertyStore_GetValue(wrapper->propstore, key, value);
+}
+
+static HRESULT WINAPI bytestream_wrapper_propstore_SetValue(IPropertyStore *iface, REFPROPERTYKEY key, const PROPVARIANT *value)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IPropertyStore(iface);
+
+    TRACE("%p, %p, %p.\n", iface, key, value);
+
+    return IPropertyStore_SetValue(wrapper->propstore, key, value);
+}
+
+static HRESULT WINAPI bytestream_wrapper_propstore_Commit(IPropertyStore *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IPropertyStore(iface);
+
+    TRACE("%p.\n", iface);
+
+    return IPropertyStore_Commit(wrapper->propstore);
+}
+
+static const IPropertyStoreVtbl bytestream_wrapper_propstore_vtbl =
+{
+    bytestream_wrapper_propstore_QueryInterface,
+    bytestream_wrapper_propstore_AddRef,
+    bytestream_wrapper_propstore_Release,
+    bytestream_wrapper_propstore_GetCount,
+    bytestream_wrapper_propstore_GetAt,
+    bytestream_wrapper_propstore_GetValue,
+    bytestream_wrapper_propstore_SetValue,
+    bytestream_wrapper_propstore_Commit,
+};
+
+static HRESULT WINAPI bytestream_wrapper_attributes_QueryInterface(IMFAttributes *iface, REFIID riid, void **obj)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+    return IMFByteStream_QueryInterface(&wrapper->IMFByteStream_iface, riid, obj);
+}
+
+static ULONG WINAPI bytestream_wrapper_attributes_AddRef(IMFAttributes *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+    return IMFByteStream_AddRef(&wrapper->IMFByteStream_iface);
+}
+
+static ULONG WINAPI bytestream_wrapper_attributes_Release(IMFAttributes *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+    return IMFByteStream_Release(&wrapper->IMFByteStream_iface);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_GetItem(IMFAttributes *iface, REFGUID key, PROPVARIANT *value)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return IMFAttributes_GetItem(wrapper->attributes, key, value);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_GetItemType(IMFAttributes *iface, REFGUID key, MF_ATTRIBUTE_TYPE *type)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), type);
+
+    return IMFAttributes_GetItemType(wrapper->attributes, key, type);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_CompareItem(IMFAttributes *iface, REFGUID key, REFPROPVARIANT value, BOOL *result)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %p, %p.\n", iface, debugstr_attr(key), value, result);
+
+    return IMFAttributes_CompareItem(wrapper->attributes, key, value, result);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_Compare(IMFAttributes *iface, IMFAttributes *theirs,
+        MF_ATTRIBUTES_MATCH_TYPE match_type, BOOL *ret)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %p, %d, %p.\n", iface, theirs, match_type, ret);
+
+    return IMFAttributes_Compare(wrapper->attributes, theirs, match_type, ret);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_GetUINT32(IMFAttributes *iface, REFGUID key, UINT32 *value)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return IMFAttributes_GetUINT32(wrapper->attributes, key, value);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_GetUINT64(IMFAttributes *iface, REFGUID key, UINT64 *value)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return IMFAttributes_GetUINT64(wrapper->attributes, key, value);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_GetDouble(IMFAttributes *iface, REFGUID key, double *value)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return IMFAttributes_GetDouble(wrapper->attributes, key, value);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_GetGUID(IMFAttributes *iface, REFGUID key, GUID *value)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return IMFAttributes_GetGUID(wrapper->attributes, key, value);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_GetStringLength(IMFAttributes *iface, REFGUID key, UINT32 *length)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), length);
+
+    return IMFAttributes_GetStringLength(wrapper->attributes, key, length);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_GetString(IMFAttributes *iface, REFGUID key, WCHAR *value,
+        UINT32 size, UINT32 *length)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %p, %d, %p.\n", iface, debugstr_attr(key), value, size, length);
+
+    return IMFAttributes_GetString(wrapper->attributes, key, value, size, length);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_GetAllocatedString(IMFAttributes *iface, REFGUID key, WCHAR **value, UINT32 *length)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %p, %p.\n", iface, debugstr_attr(key), value, length);
+
+    return IMFAttributes_GetAllocatedString(wrapper->attributes, key, value, length);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_GetBlobSize(IMFAttributes *iface, REFGUID key, UINT32 *size)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), size);
+
+    return IMFAttributes_GetBlobSize(wrapper->attributes, key, size);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_GetBlob(IMFAttributes *iface, REFGUID key, UINT8 *buf,
+                UINT32 bufsize, UINT32 *blobsize)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %p, %d, %p.\n", iface, debugstr_attr(key), buf, bufsize, blobsize);
+
+    return IMFAttributes_GetBlob(wrapper->attributes, key, buf, bufsize, blobsize);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_GetAllocatedBlob(IMFAttributes *iface, REFGUID key, UINT8 **buf, UINT32 *size)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %p, %p.\n", iface, debugstr_attr(key), buf, size);
+
+    return IMFAttributes_GetAllocatedBlob(wrapper->attributes, key, buf, size);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_GetUnknown(IMFAttributes *iface, REFGUID key, REFIID riid, void **obj)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %s, %p.\n", iface, debugstr_attr(key), debugstr_guid(riid), obj);
+
+    return IMFAttributes_GetUnknown(wrapper->attributes, key, riid, obj);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_SetItem(IMFAttributes *iface, REFGUID key, REFPROPVARIANT value)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return IMFAttributes_SetItem(wrapper->attributes, key, value);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_DeleteItem(IMFAttributes *iface, REFGUID key)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s.\n", iface, debugstr_attr(key));
+
+    return IMFAttributes_DeleteItem(wrapper->attributes, key);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_DeleteAllItems(IMFAttributes *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p.\n", iface);
+
+    return IMFAttributes_DeleteAllItems(wrapper->attributes);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_SetUINT32(IMFAttributes *iface, REFGUID key, UINT32 value)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %d.\n", iface, debugstr_attr(key), value);
+
+    return IMFAttributes_SetUINT32(wrapper->attributes, key, value);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_SetUINT64(IMFAttributes *iface, REFGUID key, UINT64 value)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %s.\n", iface, debugstr_attr(key), wine_dbgstr_longlong(value));
+
+    return IMFAttributes_SetUINT64(wrapper->attributes, key, value);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_SetDouble(IMFAttributes *iface, REFGUID key, double value)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %f.\n", iface, debugstr_attr(key), value);
+
+    return IMFAttributes_SetDouble(wrapper->attributes, key, value);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_SetGUID(IMFAttributes *iface, REFGUID key, REFGUID value)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %s.\n", iface, debugstr_attr(key), debugstr_mf_guid(value));
+
+    return IMFAttributes_SetGUID(wrapper->attributes, key, value);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_SetString(IMFAttributes *iface, REFGUID key, const WCHAR *value)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %s.\n", iface, debugstr_attr(key), debugstr_w(value));
+
+    return IMFAttributes_SetString(wrapper->attributes, key, value);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_SetBlob(IMFAttributes *iface, REFGUID key, const UINT8 *buf, UINT32 size)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %p, %u.\n", iface, debugstr_attr(key), buf, size);
+
+    return IMFAttributes_SetBlob(wrapper->attributes, key, buf, size);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_SetUnknown(IMFAttributes *iface, REFGUID key, IUnknown *unknown)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), unknown);
+
+    return IMFAttributes_SetUnknown(wrapper->attributes, key, unknown);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_LockStore(IMFAttributes *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p.\n", iface);
+
+    return IMFAttributes_LockStore(wrapper->attributes);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_UnlockStore(IMFAttributes *iface)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p.\n", iface);
+
+    return IMFAttributes_UnlockStore(wrapper->attributes);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_GetCount(IMFAttributes *iface, UINT32 *count)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %p.\n", iface, count);
+
+    return IMFAttributes_GetCount(wrapper->attributes, count);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_GetItemByIndex(IMFAttributes *iface, UINT32 index, GUID *key, PROPVARIANT *value)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %u, %p, %p.\n", iface, index, key, value);
+
+    return IMFAttributes_GetItemByIndex(wrapper->attributes, index, key, value);
+}
+
+static HRESULT WINAPI bytestream_wrapper_attributes_CopyAllItems(IMFAttributes *iface, IMFAttributes *dest)
+{
+    struct bytestream_wrapper *wrapper = impl_wrapper_from_IMFAttributes(iface);
+
+    TRACE("%p, %p.\n", iface, dest);
+
+    return IMFAttributes_CopyAllItems(wrapper->attributes, dest);
+}
+
+static const IMFAttributesVtbl bytestream_wrapper_attributes_vtbl =
+{
+    bytestream_wrapper_attributes_QueryInterface,
+    bytestream_wrapper_attributes_AddRef,
+    bytestream_wrapper_attributes_Release,
+    bytestream_wrapper_attributes_GetItem,
+    bytestream_wrapper_attributes_GetItemType,
+    bytestream_wrapper_attributes_CompareItem,
+    bytestream_wrapper_attributes_Compare,
+    bytestream_wrapper_attributes_GetUINT32,
+    bytestream_wrapper_attributes_GetUINT64,
+    bytestream_wrapper_attributes_GetDouble,
+    bytestream_wrapper_attributes_GetGUID,
+    bytestream_wrapper_attributes_GetStringLength,
+    bytestream_wrapper_attributes_GetString,
+    bytestream_wrapper_attributes_GetAllocatedString,
+    bytestream_wrapper_attributes_GetBlobSize,
+    bytestream_wrapper_attributes_GetBlob,
+    bytestream_wrapper_attributes_GetAllocatedBlob,
+    bytestream_wrapper_attributes_GetUnknown,
+    bytestream_wrapper_attributes_SetItem,
+    bytestream_wrapper_attributes_DeleteItem,
+    bytestream_wrapper_attributes_DeleteAllItems,
+    bytestream_wrapper_attributes_SetUINT32,
+    bytestream_wrapper_attributes_SetUINT64,
+    bytestream_wrapper_attributes_SetDouble,
+    bytestream_wrapper_attributes_SetGUID,
+    bytestream_wrapper_attributes_SetString,
+    bytestream_wrapper_attributes_SetBlob,
+    bytestream_wrapper_attributes_SetUnknown,
+    bytestream_wrapper_attributes_LockStore,
+    bytestream_wrapper_attributes_UnlockStore,
+    bytestream_wrapper_attributes_GetCount,
+    bytestream_wrapper_attributes_GetItemByIndex,
+    bytestream_wrapper_attributes_CopyAllItems
+};
+
+/***********************************************************************
+ *      MFCreateMFByteStreamWrapper (mfplat.@)
+ */
+HRESULT WINAPI MFCreateMFByteStreamWrapper(IMFByteStream *stream, IMFByteStream **wrapper)
+{
+    struct bytestream_wrapper *object;
+
+    TRACE("%p, %p.\n", stream, wrapper);
+
+    object = heap_alloc_zero(sizeof(*object));
+    if (!object)
+        return E_OUTOFMEMORY;
+
+    object->IMFByteStreamCacheControl_iface.lpVtbl = &bytestream_wrapper_cache_control_vtbl;
+    object->IMFByteStreamBuffering_iface.lpVtbl = &bytestream_wrapper_buffering_vtbl;
+    object->IMFMediaEventGenerator_iface.lpVtbl = &bytestream_wrapper_events_vtbl;
+    object->IMFByteStreamTimeSeek_iface.lpVtbl = &bytestream_wrapper_timeseek_vtbl;
+    object->IMFSampleOutputStream_iface.lpVtbl = &bytestream_wrapper_sample_output_vtbl;
+    object->IMFByteStream_iface.lpVtbl = &bytestream_wrapper_vtbl;
+    object->IPropertyStore_iface.lpVtbl = &bytestream_wrapper_propstore_vtbl;
+    object->IMFAttributes_iface.lpVtbl = &bytestream_wrapper_attributes_vtbl;
+
+    IMFByteStream_QueryInterface(stream, &IID_IMFByteStreamCacheControl, (void **)&object->cache_control);
+    IMFByteStream_QueryInterface(stream, &IID_IMFByteStreamBuffering, (void **)&object->stream_buffering);
+    IMFByteStream_QueryInterface(stream, &IID_IMFMediaEventGenerator, (void **)&object->event_generator);
+    IMFByteStream_QueryInterface(stream, &IID_IMFByteStreamTimeSeek, (void **)&object->time_seek);
+    IMFByteStream_QueryInterface(stream, &IID_IMFSampleOutputStream, (void **)&object->sample_output);
+    IMFByteStream_QueryInterface(stream, &IID_IPropertyStore, (void **)&object->propstore);
+    IMFByteStream_QueryInterface(stream, &IID_IMFAttributes, (void **)&object->attributes);
+
+    object->stream = stream;
+    IMFByteStream_AddRef(object->stream);
+
+    object->refcount = 1;
+
+    *wrapper = &object->IMFByteStream_iface;
 
     return S_OK;
 }
@@ -1821,341 +4064,6 @@ HRESULT WINAPI MFGetPluginControl(IMFPluginControl **ret)
     *ret = &plugin_control;
     return S_OK;
 }
-
-typedef struct _mfpresentationdescriptor
-{
-    mfattributes attributes;
-    IMFPresentationDescriptor IMFPresentationDescriptor_iface;
-} mfpresentationdescriptor;
-
-static inline mfpresentationdescriptor *impl_from_IMFPresentationDescriptor(IMFPresentationDescriptor *iface)
-{
-    return CONTAINING_RECORD(iface, mfpresentationdescriptor, IMFPresentationDescriptor_iface);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_QueryInterface(IMFPresentationDescriptor *iface, REFIID riid, void **out)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-
-    TRACE("(%p)->(%s %p)\n", This, debugstr_guid(riid), out);
-
-    if(IsEqualGUID(riid, &IID_IUnknown) ||
-       IsEqualGUID(riid, &IID_IMFAttributes) ||
-       IsEqualGUID(riid, &IID_IMFPresentationDescriptor))
-    {
-        *out = &This->IMFPresentationDescriptor_iface;
-    }
-    else
-    {
-        FIXME("(%s, %p)\n", debugstr_guid(riid), out);
-        *out = NULL;
-        return E_NOINTERFACE;
-    }
-
-    IUnknown_AddRef((IUnknown*)*out);
-    return S_OK;
-}
-
-static ULONG WINAPI mfpresentationdescriptor_AddRef(IMFPresentationDescriptor *iface)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    ULONG ref = InterlockedIncrement(&This->attributes.ref);
-
-    TRACE("(%p) ref=%u\n", This, ref);
-
-    return ref;
-}
-
-static ULONG WINAPI mfpresentationdescriptor_Release(IMFPresentationDescriptor *iface)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    ULONG ref = InterlockedDecrement(&This->attributes.ref);
-
-    TRACE("(%p) ref=%u\n", This, ref);
-
-    if (!ref)
-    {
-        clear_attributes_object(&This->attributes);
-        HeapFree(GetProcessHeap(), 0, This);
-    }
-
-    return ref;
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_GetItem(IMFPresentationDescriptor *iface, REFGUID key, PROPVARIANT *value)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetItem(&This->attributes.IMFAttributes_iface, key, value);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_GetItemType(IMFPresentationDescriptor *iface, REFGUID key, MF_ATTRIBUTE_TYPE *type)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetItemType(&This->attributes.IMFAttributes_iface, key, type);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_CompareItem(IMFPresentationDescriptor *iface, REFGUID key, REFPROPVARIANT value, BOOL *result)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_CompareItem(&This->attributes.IMFAttributes_iface, key, value, result);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_Compare(IMFPresentationDescriptor *iface, IMFAttributes *attrs, MF_ATTRIBUTES_MATCH_TYPE type,
-                BOOL *result)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_Compare(&This->attributes.IMFAttributes_iface, attrs, type, result);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_GetUINT32(IMFPresentationDescriptor *iface, REFGUID key, UINT32 *value)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetUINT32(&This->attributes.IMFAttributes_iface, key, value);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_GetUINT64(IMFPresentationDescriptor *iface, REFGUID key, UINT64 *value)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetUINT64(&This->attributes.IMFAttributes_iface, key, value);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_GetDouble(IMFPresentationDescriptor *iface, REFGUID key, double *value)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetDouble(&This->attributes.IMFAttributes_iface, key, value);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_GetGUID(IMFPresentationDescriptor *iface, REFGUID key, GUID *value)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetGUID(&This->attributes.IMFAttributes_iface, key, value);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_GetStringLength(IMFPresentationDescriptor *iface, REFGUID key, UINT32 *length)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetStringLength(&This->attributes.IMFAttributes_iface, key, length);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_GetString(IMFPresentationDescriptor *iface, REFGUID key, WCHAR *value,
-                UINT32 size, UINT32 *length)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetString(&This->attributes.IMFAttributes_iface, key, value, size, length);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_GetAllocatedString(IMFPresentationDescriptor *iface, REFGUID key,
-                WCHAR **value, UINT32 *length)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetAllocatedString(&This->attributes.IMFAttributes_iface, key, value, length);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_GetBlobSize(IMFPresentationDescriptor *iface, REFGUID key, UINT32 *size)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetBlobSize(&This->attributes.IMFAttributes_iface, key, size);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_GetBlob(IMFPresentationDescriptor *iface, REFGUID key, UINT8 *buf,
-                UINT32 bufsize, UINT32 *blobsize)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetBlob(&This->attributes.IMFAttributes_iface, key, buf, bufsize, blobsize);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_GetAllocatedBlob(IMFPresentationDescriptor *iface, REFGUID key, UINT8 **buf, UINT32 *size)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetAllocatedBlob(&This->attributes.IMFAttributes_iface, key, buf, size);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_GetUnknown(IMFPresentationDescriptor *iface, REFGUID key, REFIID riid, void **ppv)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetUnknown(&This->attributes.IMFAttributes_iface, key, riid, ppv);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_SetItem(IMFPresentationDescriptor *iface, REFGUID key, REFPROPVARIANT value)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_SetItem(&This->attributes.IMFAttributes_iface, key, value);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_DeleteItem(IMFPresentationDescriptor *iface, REFGUID key)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_DeleteItem(&This->attributes.IMFAttributes_iface, key);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_DeleteAllItems(IMFPresentationDescriptor *iface)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_DeleteAllItems(&This->attributes.IMFAttributes_iface);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_SetUINT32(IMFPresentationDescriptor *iface, REFGUID key, UINT32 value)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_SetUINT32(&This->attributes.IMFAttributes_iface, key, value);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_SetUINT64(IMFPresentationDescriptor *iface, REFGUID key, UINT64 value)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_SetUINT64(&This->attributes.IMFAttributes_iface, key, value);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_SetDouble(IMFPresentationDescriptor *iface, REFGUID key, double value)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_SetDouble(&This->attributes.IMFAttributes_iface, key, value);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_SetGUID(IMFPresentationDescriptor *iface, REFGUID key, REFGUID value)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_SetGUID(&This->attributes.IMFAttributes_iface, key, value);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_SetString(IMFPresentationDescriptor *iface, REFGUID key, const WCHAR *value)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_SetString(&This->attributes.IMFAttributes_iface, key, value);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_SetBlob(IMFPresentationDescriptor *iface, REFGUID key, const UINT8 *buf, UINT32 size)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_SetBlob(&This->attributes.IMFAttributes_iface, key, buf, size);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_SetUnknown(IMFPresentationDescriptor *iface, REFGUID key, IUnknown *unknown)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_SetUnknown(&This->attributes.IMFAttributes_iface, key, unknown);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_LockStore(IMFPresentationDescriptor *iface)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_LockStore(&This->attributes.IMFAttributes_iface);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_UnlockStore(IMFPresentationDescriptor *iface)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_UnlockStore(&This->attributes.IMFAttributes_iface);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_GetCount(IMFPresentationDescriptor *iface, UINT32 *items)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetCount(&This->attributes.IMFAttributes_iface, items);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_GetItemByIndex(IMFPresentationDescriptor *iface, UINT32 index, GUID *key, PROPVARIANT *value)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetItemByIndex(&This->attributes.IMFAttributes_iface, index, key, value);
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_CopyAllItems(IMFPresentationDescriptor *iface, IMFAttributes *dest)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-
-    FIXME("%p, %p\n", This, dest);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_GetStreamDescriptorCount(IMFPresentationDescriptor *iface, DWORD *descriptor_count)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-
-    FIXME("%p, %p\n", This, descriptor_count);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_GetStreamDescriptorByIndex(IMFPresentationDescriptor *iface, DWORD index,
-                                                                          BOOL *selected, IMFStreamDescriptor **descriptor)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-
-    FIXME("%p, %#x, %p, %p\n", This, index, selected, descriptor);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_SelectStream(IMFPresentationDescriptor *iface, DWORD index)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-
-    FIXME("%p, %#x\n", This, index);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_DeselectStream(IMFPresentationDescriptor *iface, DWORD index)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-
-    FIXME("%p, %#x\n", This, index);
-
-    return E_NOTIMPL;
-}
-
-static HRESULT WINAPI mfpresentationdescriptor_Clone(IMFPresentationDescriptor *iface, IMFPresentationDescriptor **descriptor)
-{
-    mfpresentationdescriptor *This = impl_from_IMFPresentationDescriptor(iface);
-
-    FIXME("%p, %p\n", This, descriptor);
-
-    return E_NOTIMPL;
-}
-
-static const IMFPresentationDescriptorVtbl mfpresentationdescriptor_vtbl =
-{
-    mfpresentationdescriptor_QueryInterface,
-    mfpresentationdescriptor_AddRef,
-    mfpresentationdescriptor_Release,
-    mfpresentationdescriptor_GetItem,
-    mfpresentationdescriptor_GetItemType,
-    mfpresentationdescriptor_CompareItem,
-    mfpresentationdescriptor_Compare,
-    mfpresentationdescriptor_GetUINT32,
-    mfpresentationdescriptor_GetUINT64,
-    mfpresentationdescriptor_GetDouble,
-    mfpresentationdescriptor_GetGUID,
-    mfpresentationdescriptor_GetStringLength,
-    mfpresentationdescriptor_GetString,
-    mfpresentationdescriptor_GetAllocatedString,
-    mfpresentationdescriptor_GetBlobSize,
-    mfpresentationdescriptor_GetBlob,
-    mfpresentationdescriptor_GetAllocatedBlob,
-    mfpresentationdescriptor_GetUnknown,
-    mfpresentationdescriptor_SetItem,
-    mfpresentationdescriptor_DeleteItem,
-    mfpresentationdescriptor_DeleteAllItems,
-    mfpresentationdescriptor_SetUINT32,
-    mfpresentationdescriptor_SetUINT64,
-    mfpresentationdescriptor_SetDouble,
-    mfpresentationdescriptor_SetGUID,
-    mfpresentationdescriptor_SetString,
-    mfpresentationdescriptor_SetBlob,
-    mfpresentationdescriptor_SetUnknown,
-    mfpresentationdescriptor_LockStore,
-    mfpresentationdescriptor_UnlockStore,
-    mfpresentationdescriptor_GetCount,
-    mfpresentationdescriptor_GetItemByIndex,
-    mfpresentationdescriptor_CopyAllItems,
-    mfpresentationdescriptor_GetStreamDescriptorCount,
-    mfpresentationdescriptor_GetStreamDescriptorByIndex,
-    mfpresentationdescriptor_SelectStream,
-    mfpresentationdescriptor_DeselectStream,
-    mfpresentationdescriptor_Clone,
-};
 
 typedef struct _mfsource
 {
@@ -2265,20 +4173,24 @@ static HRESULT WINAPI mfsource_GetCharacteristics(IMFMediaSource *iface, DWORD *
 static HRESULT WINAPI mfsource_CreatePresentationDescriptor(IMFMediaSource *iface, IMFPresentationDescriptor **descriptor)
 {
     mfsource *This = impl_from_IMFMediaSource(iface);
-
-    mfpresentationdescriptor *object;
+    IMFStreamDescriptor *sd;
+    IMFMediaType *mediatype;
+    HRESULT hr;
 
     FIXME("(%p)->(%p): stub\n", This, descriptor);
 
-    object = HeapAlloc( GetProcessHeap(), 0, sizeof(*object) );
-    if (!object)
-        return E_OUTOFMEMORY;
+    if (FAILED(hr = MFCreateMediaType(&mediatype)))
+        return hr;
 
-    init_attributes_object(&object->attributes, 0);
-    object->IMFPresentationDescriptor_iface.lpVtbl = &mfpresentationdescriptor_vtbl;
+    hr = MFCreateStreamDescriptor(0, 1, &mediatype, &sd);
+    IMFMediaType_Release(mediatype);
+    if (FAILED(hr))
+        return hr;
 
-    *descriptor = &object->IMFPresentationDescriptor_iface;
-    return S_OK;
+    hr = MFCreatePresentationDescriptor(1, &sd, descriptor);
+    IMFStreamDescriptor_Release(sd);
+
+    return hr;
 }
 
 static HRESULT WINAPI mfsource_Start(IMFMediaSource *iface, IMFPresentationDescriptor *descriptor,
@@ -2347,6 +4259,7 @@ struct resolver_queued_result
     IUnknown *object;
     MF_OBJECT_TYPE obj_type;
     HRESULT hr;
+    IMFAsyncResult *inner_result;
     enum resolved_object_origin origin;
 };
 
@@ -2401,7 +4314,7 @@ static HRESULT resolver_handler_end_create(struct source_resolver *resolver, enu
         IMFSchemeHandler *scheme_handler;
     } handler;
 
-    queued_result = heap_alloc(sizeof(*queued_result));
+    queued_result = heap_alloc_zero(sizeof(*queued_result));
 
     IMFAsyncResult_GetObject(inner_result, &handler.handler);
 
@@ -2424,6 +4337,12 @@ static HRESULT resolver_handler_end_create(struct source_resolver *resolver, enu
     if (SUCCEEDED(queued_result->hr))
     {
         MFASYNCRESULT *data = (MFASYNCRESULT *)inner_result;
+
+        if (data->hEvent)
+        {
+            queued_result->inner_result = inner_result;
+            IMFAsyncResult_AddRef(queued_result->inner_result);
+        }
 
         /* Push resolved object type and created object, so we don't have to guess on End*() call. */
         EnterCriticalSection(&resolver->cs);
@@ -2775,7 +4694,7 @@ static HRESULT resolver_end_create_object(struct source_resolver *resolver, enum
 
     LIST_FOR_EACH_ENTRY(iter, &resolver->pending, struct resolver_queued_result, entry)
     {
-        if (iter->object == object && iter->origin == origin)
+        if (iter->inner_result == result || (iter->object == object && iter->origin == origin))
         {
             list_remove(&iter->entry);
             queued_result = iter;
@@ -2792,6 +4711,8 @@ static HRESULT resolver_end_create_object(struct source_resolver *resolver, enum
         *out = queued_result->object;
         *obj_type = queued_result->obj_type;
         hr = queued_result->hr;
+        if (queued_result->inner_result)
+            IMFAsyncResult_Release(queued_result->inner_result);
         heap_free(queued_result);
     }
     else
@@ -2881,7 +4802,7 @@ static HRESULT WINAPI source_resolver_CreateObjectFromURL(IMFSourceResolver *ifa
     data = (MFASYNCRESULT *)result;
     data->hEvent = CreateEventW(NULL, FALSE, FALSE, NULL);
 
-    hr = IMFSchemeHandler_BeginCreateObject(handler, url, flags, props, NULL, &resolver->stream_callback,
+    hr = IMFSchemeHandler_BeginCreateObject(handler, url, flags, props, NULL, &resolver->url_callback,
             (IUnknown *)result);
     if (FAILED(hr))
     {
@@ -3117,7 +5038,7 @@ HRESULT WINAPI MFCreateSourceResolver(IMFSourceResolver **resolver)
 
 typedef struct media_event
 {
-    mfattributes attributes;
+    struct attributes attributes;
     IMFMediaEvent IMFMediaEvent_iface;
 
     MediaEventType type;

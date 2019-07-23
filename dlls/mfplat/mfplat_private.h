@@ -30,7 +30,7 @@ struct attribute
     PROPVARIANT value;
 };
 
-typedef struct attributes
+struct attributes
 {
     IMFAttributes IMFAttributes_iface;
     LONG ref;
@@ -38,10 +38,11 @@ typedef struct attributes
     struct attribute *attributes;
     size_t capacity;
     size_t count;
-} mfattributes;
+};
 
 extern HRESULT init_attributes_object(struct attributes *object, UINT32 size) DECLSPEC_HIDDEN;
 extern void clear_attributes_object(struct attributes *object) DECLSPEC_HIDDEN;
+extern const char *debugstr_attr(const GUID *guid) DECLSPEC_HIDDEN;
 
 extern void init_system_queues(void) DECLSPEC_HIDDEN;
 extern void shutdown_system_queues(void) DECLSPEC_HIDDEN;

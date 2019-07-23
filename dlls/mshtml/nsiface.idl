@@ -147,7 +147,6 @@ typedef nsISupports nsISupportsArray;
 typedef nsISupports nsIContentFilter;
 typedef nsISupports nsIDOMMediaList;
 typedef nsISupports nsIDOMHTMLTableSectionElement;
-typedef nsISupports nsIDOMClientRectList;
 typedef nsISupports nsINode;
 typedef nsISupports nsIDOMUserDataHandler;
 typedef nsISupports nsISHEntry;
@@ -1015,6 +1014,17 @@ interface nsIDOMClientRect : nsISupports
 
 [
     object,
+    uuid(f474c567-cbcb-458f-abad-ae42363da287),
+    local
+]
+interface nsIDOMClientRectList : nsISupports
+{
+    nsresult GetLength(uint32_t *aLength);
+    nsresult Item(UINT32 index, nsIDOMClientRect **_retval);
+}
+
+[
+    object,
     uuid(6289999b-1008-4269-b42a-413ec5a9d3f4),
     local
 ]
@@ -1140,6 +1150,19 @@ interface nsIDOMHTMLElement : nsIDOMElement
     nsresult GetOffsetLeft(int32_t *aOffsetLeft);
     nsresult GetOffsetWidth(int32_t *aOffsetWidth);
     nsresult GetOffsetHeight(int32_t *aOffsetHeight);
+}
+
+[
+    object,
+    uuid(c63517c5-8bab-4cd1-8694-bccafc32a195),
+    local
+]
+interface nsIDOMSVGElement : nsIDOMElement
+{
+    nsresult GetOwnerSVGElement(nsIDOMSVGElement **aOwnerSVGElement);
+    nsresult GetViewportElement(nsIDOMSVGElement **aViewportElement);
+    nsresult GetSVGClassName(nsISupports **aClassName);
+    nsresult GetStyle(nsIDOMCSSStyleDeclaration **aStyle);
 }
 
 [

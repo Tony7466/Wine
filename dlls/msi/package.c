@@ -1471,18 +1471,8 @@ UINT MSI_OpenPackageW(LPCWSTR szPackage, DWORD dwOptions, MSIPACKAGE **pPackage)
     if( szPackage[0] == '#' )
     {
         handle = atoiW(&szPackage[1]);
-        db = msihandle2msiinfo( handle, MSIHANDLETYPE_DATABASE );
-        if( !db )
-        {
-            MSIHANDLE remote;
-
-            if (!(remote = msi_get_remote(handle)))
-                return ERROR_INVALID_HANDLE;
-
-            WARN("MsiOpenPackage not allowed during a custom action!\n");
-
-            return ERROR_FUNCTION_FAILED;
-        }
+        if (!(db = msihandle2msiinfo(handle, MSIHANDLETYPE_DATABASE)))
+            return ERROR_INVALID_HANDLE;
     }
     else
     {
@@ -1629,6 +1619,13 @@ UINT MSI_OpenPackageW(LPCWSTR szPackage, DWORD dwOptions, MSIPACKAGE **pPackage)
     if (gszLogFile)
         package->log_file = CreateFileW( gszLogFile, GENERIC_WRITE, FILE_SHARE_WRITE, NULL,
                                          OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
+
+    if (!msi_init_assembly_caches( package ))
+    {
+        ERR("can't initialize assembly caches\n");
+        msiobj_release( &package->hdr );
+        return ERROR_FUNCTION_FAILED;
+    }
 
     /* FIXME: when should these messages be sent? */
     data_row = MSI_CreateRecord(3);

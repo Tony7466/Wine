@@ -212,6 +212,7 @@ static void test_device_info(void)
     char id[MAX_DEVICE_ID_LEN + 2];
     HDEVINFO set;
     BOOL ret;
+    INT i = 0;
 
     SetLastError(0xdeadbeef);
     ret = SetupDiCreateDeviceInfoA(NULL, NULL, NULL, NULL, NULL, 0, NULL);
@@ -343,6 +344,31 @@ static void test_device_info(void)
     ret = SetupDiCreateDeviceInfoA(set, id, &guid, NULL, NULL, 0, NULL);
     ok(ret, "Failed to create device, error %#x.\n", GetLastError());
 
+    SetupDiDestroyDeviceInfoList(set);
+
+    set = SetupDiCreateDeviceInfoList(&guid, NULL);
+    ok(set != INVALID_HANDLE_VALUE, "Failed to create device info list, error %#x.\n", GetLastError());
+    ret = SetupDiCreateDeviceInfoA(set, "Root\\LEGACY_BOGUS\\0000", &guid, NULL, NULL, 0, &device);
+    ok(ret, "Failed to create device, error %#x.\n", GetLastError());
+    ret = SetupDiRegisterDeviceInfo(set , &device, 0, NULL, NULL, NULL);
+    ok(ret, "Failed to register device, error %#x.\n", GetLastError());
+    check_device_info(set, 0, &guid, "ROOT\\LEGACY_BOGUS\\0000");
+    check_device_info(set, 1, NULL, NULL);
+    SetupDiDestroyDeviceInfoList(set);
+
+    set = SetupDiCreateDeviceInfoList(&guid, NULL);
+    ret = SetupDiCreateDeviceInfoA(set, "Root\\LEGACY_BOGUS\\0000", &guid, NULL, NULL, 0, &device);
+    ok(!ret, "Expect failure\n");
+    ok(GetLastError() == ERROR_DEVINST_ALREADY_EXISTS, "Got error %#x\n", GetLastError());
+    check_device_info(set, 0, NULL, NULL);
+    SetupDiDestroyDeviceInfoList(set);
+
+    set = SetupDiGetClassDevsA(&guid, NULL, NULL, 0);
+    while (SetupDiEnumDeviceInfo(set, i++, &device))
+    {
+        ret = SetupDiRemoveDevice(set, &device);
+        ok(ret, "Failed to remove device, error %#x.\n", GetLastError());
+    }
     SetupDiDestroyDeviceInfoList(set);
 }
 
@@ -737,11 +763,163 @@ static void test_get_device_instance_id(void)
     SetupDiDestroyDeviceInfoList(set);
 }
 
+static void test_open_device_info(void)
+{
+    SP_DEVINFO_DATA device = {sizeof(device)};
+    CHAR id[MAX_DEVICE_ID_LEN + 2];
+    HDEVINFO set;
+    DWORD i = 0;
+    BOOL ret;
+
+    set = SetupDiCreateDeviceInfoList(&guid, NULL);
+    ok(set != INVALID_HANDLE_VALUE, "Failed to create device info, error %#x.\n", GetLastError());
+
+    /* Open non-existent device */
+    SetLastError(0xdeadbeef);
+    ret = SetupDiOpenDeviceInfoA(set, "Root\\LEGACY_BOGUS\\FFFF", NULL, 0, &device);
+    ok(GetLastError() == ERROR_NO_SUCH_DEVINST, "Got unexpected error %#x.\n", GetLastError());
+    ok(!ret, "Expected failure.\n");
+    check_device_info(set, 0, NULL, NULL);
+
+    /* Open unregistered device */
+    ret = SetupDiCreateDeviceInfoA(set, "Root\\LEGACY_BOGUS\\1000", &guid, NULL, NULL, 0, &device);
+    ok(ret, "Failed to create device, error %#x.\n", GetLastError());
+    SetLastError(0xdeadbeef);
+    ret = SetupDiOpenDeviceInfoA(set, "Root\\LEGACY_BOGUS\\1000", NULL, 0, &device);
+    ok(GetLastError() == ERROR_NO_SUCH_DEVINST, "Got unexpected error %#x.\n", GetLastError());
+    ok(!ret, "Expected failure.\n");
+    check_device_info(set, 0, &guid, "Root\\LEGACY_BOGUS\\1000");
+    check_device_info(set, 1, NULL, NULL);
+
+    /* Open registered device */
+    ret = SetupDiCreateDeviceInfoA(set, "Root\\LEGACY_BOGUS\\1001", &guid, NULL, NULL, 0, &device);
+    ok(ret, "Failed to create device, error %#x.\n", GetLastError());
+    ret = SetupDiRegisterDeviceInfo(set, &device, 0, NULL, NULL, NULL);
+    ok(ret, "Failed to register device, error %#x.\n", GetLastError());
+    check_device_info(set, 0, &guid, "Root\\LEGACY_BOGUS\\1000");
+    check_device_info(set, 1, &guid, "Root\\LEGACY_BOGUS\\1001");
+    check_device_info(set, 2, NULL, NULL);
+
+    SetLastError(0xdeadbeef);
+    ret = SetupDiOpenDeviceInfoA(set, "Root\\LEGACY_BOGUS\\1001", NULL, 0, &device);
+    ok(GetLastError() == NO_ERROR, "Got unexpected error %#x.\n", GetLastError());
+    ok(ret, "Failed to open device info\n");
+    ret = SetupDiGetDeviceInstanceIdA(set, &device, id, sizeof(id), NULL);
+    ok(ret, "Got unexpected error %#x.\n", GetLastError());
+    ok(!strcasecmp(id, "Root\\LEGACY_BOGUS\\1001"), "Got unexpected id %s.\n", id);
+    check_device_info(set, 0, &guid, "Root\\LEGACY_BOGUS\\1000");
+    check_device_info(set, 1, &guid, "Root\\LEGACY_BOGUS\\1001");
+    check_device_info(set, 2, NULL, NULL);
+
+    /* Open registered device in an empty device info set */
+    SetupDiDestroyDeviceInfoList(set);
+    set = SetupDiCreateDeviceInfoList(&guid, NULL);
+    ok(set != INVALID_HANDLE_VALUE, "Failed to create device info list, error %#x.\n", GetLastError());
+
+    SetLastError(0xdeadbeef);
+    ret = SetupDiOpenDeviceInfoA(set, "Root\\LEGACY_BOGUS\\1001", NULL, 0, &device);
+    ok(GetLastError() == NO_ERROR, "Got unexpected error %#x.\n", GetLastError());
+    ok(ret, "Failed to open device info\n");
+    ret = SetupDiGetDeviceInstanceIdA(set, &device, id, sizeof(id), NULL);
+    ok(ret, "Got unexpected error %#x.\n", GetLastError());
+    ok(!strcasecmp(id, "Root\\LEGACY_BOGUS\\1001"), "Got unexpected id %s.\n", id);
+    check_device_info(set, 0, &guid, "Root\\LEGACY_BOGUS\\1001");
+    check_device_info(set, 1, NULL, NULL);
+
+    /* Open registered device again */
+    SetLastError(0xdeadbeef);
+    ret = SetupDiOpenDeviceInfoA(set, "Root\\LEGACY_BOGUS\\1001", NULL, 0, &device);
+    ok(GetLastError() == NO_ERROR, "Got unexpected error %#x.\n", GetLastError());
+    ok(ret, "Failed to open device info\n");
+    ret = SetupDiGetDeviceInstanceIdA(set, &device, id, sizeof(id), NULL);
+    ok(ret, "Got unexpected error %#x.\n", GetLastError());
+    ok(!strcasecmp(id, "Root\\LEGACY_BOGUS\\1001"), "Got unexpected id %s.\n", id);
+    check_device_info(set, 0, &guid, "Root\\LEGACY_BOGUS\\1001");
+    check_device_info(set, 1, NULL, NULL);
+
+    /* Open registered device in a new device info set with wrong GUID */
+    SetupDiDestroyDeviceInfoList(set);
+    set = SetupDiCreateDeviceInfoList(&guid2, NULL);
+    ok(set != INVALID_HANDLE_VALUE, "Failed to create device info list, error %#x.\n", GetLastError());
+
+    SetLastError(0xdeadbeef);
+    ret = SetupDiOpenDeviceInfoA(set, "Root\\LEGACY_BOGUS\\1001", NULL, 0, &device);
+    ok(GetLastError() == ERROR_CLASS_MISMATCH, "Got unexpected error %#x.\n", GetLastError());
+    ok(!ret, "Expected failure.\n");
+    check_device_info(set, 0, NULL, NULL);
+
+    /* Open registered device in a new device info set with NULL GUID */
+    SetupDiDestroyDeviceInfoList(set);
+    set = SetupDiCreateDeviceInfoList(NULL, NULL);
+    ok(set != INVALID_HANDLE_VALUE, "Failed to create device info list, error %#x.\n", GetLastError());
+
+    SetLastError(0xdeadbeef);
+    ret = SetupDiOpenDeviceInfoA(set, "Root\\LEGACY_BOGUS\\1001", NULL, 0, &device);
+    ok(GetLastError() == NO_ERROR, "Got unexpected error %#x.\n", GetLastError());
+    ok(ret, "Failed to open device info\n");
+    check_device_info(set, 0, &guid, "Root\\LEGACY_BOGUS\\1001");
+    check_device_info(set, 1, NULL, NULL);
+
+    SetupDiDestroyDeviceInfoList(set);
+    set = SetupDiCreateDeviceInfoList(&guid, NULL);
+    ok(set != INVALID_HANDLE_VALUE, "Failed to create device info list, error %#x.\n", GetLastError());
+
+    /* NULL set */
+    SetLastError(0xdeadbeef);
+    ret = SetupDiOpenDeviceInfoA(NULL, "Root\\LEGACY_BOGUS\\1001", NULL, 0, &device);
+    ok(GetLastError() == ERROR_INVALID_HANDLE, "Got unexpected error %#x.\n", GetLastError());
+    ok(!ret, "Expected failure.\n");
+
+    /* NULL instance id */
+    SetLastError(0xdeadbeef);
+    ret = SetupDiOpenDeviceInfoA(set, NULL, NULL, 0, &device);
+    ok(GetLastError() == ERROR_INVALID_PARAMETER, "Got unexpected error %#x.\n", GetLastError());
+    ok(!ret, "Expected failure.\n");
+    check_device_info(set, 0, NULL, NULL);
+
+    /* Invalid SP_DEVINFO_DATA cbSize, device will be added despite failure */
+    SetLastError(0xdeadbeef);
+    device.cbSize = 0;
+    ret = SetupDiOpenDeviceInfoA(set, "Root\\LEGACY_BOGUS\\1001", NULL, 0, &device);
+    device.cbSize = sizeof(device);
+    ok(GetLastError() == ERROR_INVALID_USER_BUFFER, "Got unexpected error %#x.\n", GetLastError());
+    ok(!ret, "Expected failure.\n");
+    check_device_info(set, 0, &guid, "Root\\LEGACY_BOGUS\\1001");
+    check_device_info(set, 1, NULL, NULL);
+
+    SetupDiDestroyDeviceInfoList(set);
+    set = SetupDiCreateDeviceInfoList(&guid, NULL);
+    ok(set != INVALID_HANDLE_VALUE, "Failed to create device info list, error %#x.\n", GetLastError());
+
+    /* NULL device */
+    SetLastError(0xdeadbeef);
+    ret = SetupDiOpenDeviceInfoA(set, "Root\\LEGACY_BOGUS\\1001", NULL, 0, NULL);
+    ok(GetLastError() == NO_ERROR, "Got unexpected error %#x.\n", GetLastError());
+    ok(ret, "Failed to open device info\n");
+    check_device_info(set, 0, &guid, "Root\\LEGACY_BOGUS\\1001");
+    check_device_info(set, 1, NULL, NULL);
+
+    /* Clean up */
+    SetupDiDestroyDeviceInfoList(set);
+    set = SetupDiGetClassDevsA(&guid, NULL, NULL, 0);
+    while (SetupDiEnumDeviceInfo(set, i++, &device))
+    {
+        ret = SetupDiRemoveDevice(set, &device);
+        ok(ret, "Failed to remove device, error %#x.\n", GetLastError());
+    }
+    SetupDiDestroyDeviceInfoList(set);
+}
+
 static void test_register_device_info(void)
 {
     SP_DEVINFO_DATA device = {0};
     BOOL ret;
     HDEVINFO set;
+    HKEY hkey;
+    LSTATUS ls;
+    DWORD type = 0;
+    DWORD phantom = 0;
+    DWORD size;
     int i = 0;
 
     SetLastError(0xdeadbeef);
@@ -770,8 +948,19 @@ static void test_register_device_info(void)
 
     ret = SetupDiCreateDeviceInfoA(set, "Root\\LEGACY_BOGUS\\0000", &guid, NULL, NULL, 0, &device);
     ok(ret, "Failed to create device, error %#x.\n", GetLastError());
+    RegOpenKeyA(HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Enum\\ROOT\\LEGACY_BOGUS\\0000", &hkey);
+    size = sizeof(phantom);
+    ls = RegQueryValueExA(hkey, "Phantom", NULL, &type, (BYTE *)&phantom, &size);
+    ok(ls == ERROR_SUCCESS, "Got wrong error code %#x\n", ls);
+    ok(phantom == 1, "Got wrong phantom value %d\n", phantom);
+    ok(type == REG_DWORD, "Got wrong phantom type %#x\n", type);
+    ok(size == sizeof(phantom), "Got wrong phantom size %d\n", size);
     ret = SetupDiRegisterDeviceInfo(set, &device, 0, NULL, NULL, NULL);
     ok(ret, "Failed to register device, error %#x.\n", GetLastError());
+    size = sizeof(phantom);
+    ls = RegQueryValueExA(hkey, "Phantom", NULL, NULL, (BYTE *)&phantom, &size);
+    ok(ls == ERROR_FILE_NOT_FOUND, "Got wrong error code %#x\n", ls);
+    RegCloseKey(hkey);
 
     ret = SetupDiCreateDeviceInfoA(set, "Root\\LEGACY_BOGUS\\0001", &guid, NULL, NULL, 0, &device);
     ok(ret, "Failed to create device, error %#x.\n", GetLastError());
@@ -1709,6 +1898,7 @@ START_TEST(devinst)
     test_device_info();
     test_device_property();
     test_get_device_instance_id();
+    test_open_device_info();
     test_register_device_info();
     test_device_iface();
     test_device_iface_detail();

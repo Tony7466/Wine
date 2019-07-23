@@ -197,7 +197,6 @@
 @ cdecl ___mb_cur_max_func() MSVCRT____mb_cur_max_func
 @ cdecl ___setlc_active_func() MSVCRT____setlc_active_func
 @ cdecl ___unguarded_readlc_active_add_func() MSVCRT____unguarded_readlc_active_add_func
-@ cdecl __acrt_iob_func(long) MSVCRT___acrt_iob_func  # for compatibility with Mingw
 @ extern __argc MSVCRT___argc
 @ extern __argv MSVCRT___argv
 @ extern __badioinfo MSVCRT___badioinfo
@@ -215,7 +214,7 @@
 @ stub __get_app_type
 @ cdecl __getmainargs(ptr ptr ptr long ptr)
 @ extern __initenv MSVCRT___initenv
-@ cdecl __iob_func() MSVCRT___iob_func
+@ cdecl __iob_func() __p__iob
 @ cdecl __isascii(long) MSVCRT___isascii
 @ cdecl __iscsym(long) MSVCRT___iscsym
 @ cdecl __iscsymf(long) MSVCRT___iscsymf
@@ -260,7 +259,7 @@
 @ cdecl __p__environ() MSVCRT___p__environ
 @ stub __p__fileinfo()
 @ cdecl __p__fmode() MSVCRT___p__fmode
-@ cdecl __p__iob() MSVCRT___iob_func
+@ cdecl __p__iob()
 @ stub __p__mbcasemap()
 @ cdecl __p__mbctype()
 @ cdecl __p__osver()
@@ -422,7 +421,6 @@
 @ varargs _execle(str str)
 @ varargs _execlp(str str)
 @ varargs _execlpe(str str)
-@ cdecl _execute_onexit_table(ptr) MSVCRT__execute_onexit_table  # for compatibility with Mingw
 @ cdecl _execv(str ptr)
 @ cdecl _execve(str ptr ptr) MSVCRT__execve
 @ cdecl _execvp(str ptr)
@@ -555,7 +553,6 @@
 @ cdecl _i64toa_s(int64 ptr long long) MSVCRT__i64toa_s
 @ cdecl _i64tow(int64 ptr long) ntdll._i64tow
 @ cdecl _i64tow_s(int64 ptr long long) MSVCRT__i64tow_s
-@ cdecl _initialize_onexit_table(ptr) MSVCRT__initialize_onexit_table  # for compatibility with Mingw
 @ cdecl _initterm(ptr ptr)
 @ cdecl _initterm_e(ptr ptr)
 @ stub -arch=i386 _inp(long)
@@ -869,7 +866,6 @@
 # extern _pwctype
 @ cdecl _read(long ptr long) MSVCRT__read
 # stub _realloc_dbg(ptr long long str long)
-@ cdecl _register_onexit_function(ptr ptr) MSVCRT__register_onexit_function  # for compatibility with Mingw
 @ cdecl _resetstkoflw() MSVCRT__resetstkoflw
 @ cdecl _rmdir(str) MSVCRT__rmdir
 @ cdecl _rmtmp() MSVCRT__rmtmp

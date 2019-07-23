@@ -687,8 +687,10 @@ static void nvts_enable(const struct wined3d_gl_info *gl_info, BOOL enable)
     }
 }
 
-static void nvrc_fragment_get_caps(const struct wined3d_gl_info *gl_info, struct fragment_caps *caps)
+static void nvrc_fragment_get_caps(const struct wined3d_adapter *adapter, struct fragment_caps *caps)
 {
+    const struct wined3d_gl_info *gl_info = &adapter->gl_info;
+
     caps->wined3d_caps = 0;
     caps->PrimitiveMiscCaps = WINED3DPMISCCAPS_TSSARGTEMP;
 
@@ -754,7 +756,7 @@ static void *nvrc_fragment_alloc(const struct wined3d_shader_backend_ops *shader
 }
 
 /* Context activation is done by the caller. */
-static void nvrc_fragment_free(struct wined3d_device *device) {}
+static void nvrc_fragment_free(struct wined3d_device *device, struct wined3d_context *context) {}
 
 /* Two fixed function pipeline implementations using GL_NV_register_combiners and
  * GL_NV_texture_shader. The nvts_fragment_pipeline assumes that both extensions

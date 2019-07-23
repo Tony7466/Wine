@@ -20,6 +20,7 @@
 
 #include "config.h"
 #include "wine/port.h"
+#include "wine/rbtree.h"
 
 #include <assert.h>
 #include <fcntl.h>
@@ -75,6 +76,7 @@ static const struct object_ops irp_call_ops =
     no_link_name,                     /* link_name */
     NULL,                             /* unlink_name */
     no_open_file,                     /* open_file */
+    no_kernel_obj_list,               /* get_kernel_obj_list */
     no_close_handle,                  /* close_handle */
     irp_call_destroy                  /* destroy */
 };
@@ -84,9 +86,10 @@ static const struct object_ops irp_call_ops =
 
 struct device_manager
 {
-    struct object          obj;           /* object header */
-    struct list            devices;       /* list of devices */
-    struct list            requests;      /* list of pending irps across all devices */
+    struct object          obj;            /* object header */
+    struct list            devices;        /* list of devices */
+    struct list            requests;       /* list of pending irps across all devices */
+    struct wine_rb_tree    kernel_objects; /* map of objects that have client side pointer associated */
 };
 
 static void device_manager_dump( struct object *obj, int verbose );
@@ -111,6 +114,7 @@ static const struct object_ops device_manager_ops =
     no_link_name,                     /* link_name */
     NULL,                             /* unlink_name */
     no_open_file,                     /* open_file */
+    no_kernel_obj_list,               /* get_kernel_obj_list */
     no_close_handle,                  /* close_handle */
     device_manager_destroy            /* destroy */
 };
@@ -152,6 +156,7 @@ static const struct object_ops device_ops =
     directory_link_name,              /* link_name */
     default_unlink_name,              /* unlink_name */
     device_open_file,                 /* open_file */
+    no_kernel_obj_list,               /* get_kernel_obj_list */
     no_close_handle,                  /* close_handle */
     device_destroy                    /* destroy */
 };
@@ -197,6 +202,7 @@ static const struct object_ops device_file_ops =
     no_link_name,                     /* link_name */
     NULL,                             /* unlink_name */
     no_open_file,                     /* open_file */
+    no_kernel_obj_list,               /* get_kernel_obj_list */
     device_file_close_handle,         /* close_handle */
     device_file_destroy               /* destroy */
 };
@@ -216,6 +222,86 @@ static const struct fd_ops device_file_fd_ops =
     default_fd_reselect_async         /* reselect_async */
 };
 
+
+struct list *no_kernel_obj_list( struct object *obj )
+{
+    return NULL;
+}
+
+struct kernel_object
+{
+    struct device_manager  *manager;
+    client_ptr_t            user_ptr;
+    struct object          *object;
+    int                     owned;
+    struct list             list_entry;
+    struct wine_rb_entry    rb_entry;
+};
+
+static int compare_kernel_object( const void *k, const struct wine_rb_entry *entry )
+{
+    struct kernel_object *ptr = WINE_RB_ENTRY_VALUE( entry, struct kernel_object, rb_entry );
+    return memcmp( k, &ptr->user_ptr, sizeof(client_ptr_t) );
+}
+
+static struct kernel_object *kernel_object_from_obj( struct device_manager *manager, struct object *obj )
+{
+    struct kernel_object *kernel_object;
+    struct list *list;
+
+    if (!(list = obj->ops->get_kernel_obj_list( obj ))) return NULL;
+    LIST_FOR_EACH_ENTRY( kernel_object, list, struct kernel_object, list_entry )
+    {
+        if (kernel_object->manager != manager) continue;
+        return kernel_object;
+    }
+    return NULL;
+}
+
+static client_ptr_t get_kernel_object_ptr( struct device_manager *manager, struct object *obj )
+{
+    struct kernel_object *kernel_object = kernel_object_from_obj( manager, obj );
+    return kernel_object ? kernel_object->user_ptr : 0;
+}
+
+static struct kernel_object *set_kernel_object( struct device_manager *manager, struct object *obj, client_ptr_t user_ptr )
+{
+    struct kernel_object *kernel_object;
+    struct list *list;
+
+    if (!(list = obj->ops->get_kernel_obj_list( obj ))) return NULL;
+
+    if (!(kernel_object = malloc( sizeof(*kernel_object) ))) return NULL;
+    kernel_object->manager  = manager;
+    kernel_object->user_ptr = user_ptr;
+    kernel_object->object   = obj;
+    kernel_object->owned    = 0;
+
+    if (wine_rb_put( &manager->kernel_objects, &user_ptr, &kernel_object->rb_entry ))
+    {
+        /* kernel_object pointer already set */
+        free( kernel_object );
+        return NULL;
+    }
+
+    list_add_head( list, &kernel_object->list_entry );
+    return kernel_object;
+}
+
+static struct kernel_object *kernel_object_from_ptr( struct device_manager *manager, client_ptr_t client_ptr )
+{
+    struct wine_rb_entry *entry = wine_rb_get( &manager->kernel_objects, &client_ptr );
+    return entry ? WINE_RB_ENTRY_VALUE( entry, struct kernel_object, rb_entry ) : NULL;
+}
+
+static void grab_kernel_object( struct kernel_object *ptr )
+{
+    if (!ptr->owned)
+    {
+        grab_object( ptr->object );
+        ptr->owned = 1;
+    }
+}
 
 static void irp_call_dump( struct object *obj, int verbose )
 {
@@ -248,7 +334,7 @@ static struct irp_call *create_irp( struct device_file *file, const irp_params_t
 {
     struct irp_call *irp;
 
-    if (!file->device->manager)  /* it has been deleted */
+    if (file && !file->device->manager)  /* it has been deleted */
     {
         set_error( STATUS_FILE_DELETED );
         return NULL;
@@ -256,7 +342,7 @@ static struct irp_call *create_irp( struct device_file *file, const irp_params_t
 
     if ((irp = alloc_object( &irp_call_ops )))
     {
-        irp->file     = (struct device_file *)grab_object( file );
+        irp->file     = file ? (struct device_file *)grab_object( file ) : NULL;
         irp->thread   = NULL;
         irp->async    = NULL;
         irp->params   = *params;
@@ -325,15 +411,11 @@ static void device_destroy( struct object *obj )
     if (device->manager) list_remove( &device->entry );
 }
 
-static void add_irp_to_queue( struct device_file *file, struct irp_call *irp, struct thread *thread )
+static void add_irp_to_queue( struct device_manager *manager, struct irp_call *irp, struct thread *thread )
 {
-    struct device_manager *manager = file->device->manager;
-
-    assert( manager );
-
     grab_object( irp );  /* grab reference for queued irp */
     irp->thread = thread ? (struct thread *)grab_object( thread ) : NULL;
-    list_add_tail( &file->requests, &irp->dev_entry );
+    if (irp->file) list_add_tail( &irp->file->requests, &irp->dev_entry );
     list_add_tail( &manager->requests, &irp->mgr_entry );
     if (list_head( &manager->requests ) == &irp->mgr_entry) wake_up( &manager->obj, 0 );  /* first one */
 }
@@ -382,7 +464,7 @@ static struct object *device_open_file( struct object *obj, unsigned int access,
 
         if ((irp = create_irp( file, &params, NULL )))
         {
-            add_irp_to_queue( file, irp, NULL );
+            add_irp_to_queue( device->manager, irp, NULL );
             release_object( irp );
         }
     }
@@ -418,7 +500,7 @@ static int device_file_close_handle( struct object *obj, struct process *process
 
         if ((irp = create_irp( file, &params, NULL )))
         {
-            add_irp_to_queue( file, irp, NULL );
+            add_irp_to_queue( file->device->manager, irp, NULL );
             release_object( irp );
         }
     }
@@ -471,7 +553,7 @@ static int queue_irp( struct device_file *file, const irp_params_t *params, stru
 
     fd_queue_async( file->fd, async, ASYNC_TYPE_WAIT );
     irp->async = (struct async *)grab_object( async );
-    add_irp_to_queue( file, irp, current );
+    add_irp_to_queue( file->device->manager, irp, current );
     release_object( irp );
     set_error( STATUS_PENDING );
     return 1;
@@ -608,12 +690,30 @@ static int device_manager_signaled( struct object *obj, struct wait_queue_entry 
 static void device_manager_destroy( struct object *obj )
 {
     struct device_manager *manager = (struct device_manager *)obj;
+    struct kernel_object *kernel_object;
     struct list *ptr;
+
+    while (manager->kernel_objects.root)
+    {
+        kernel_object = WINE_RB_ENTRY_VALUE( manager->kernel_objects.root, struct kernel_object, rb_entry );
+        wine_rb_remove( &manager->kernel_objects, &kernel_object->rb_entry );
+        list_remove( &kernel_object->list_entry );
+        if (kernel_object->owned) release_object( kernel_object->object );
+        free( kernel_object );
+    }
 
     while ((ptr = list_head( &manager->devices )))
     {
         struct device *device = LIST_ENTRY( ptr, struct device, entry );
         delete_device( device );
+    }
+
+    while ((ptr = list_head( &manager->requests )))
+    {
+        struct irp_call *irp = LIST_ENTRY( ptr, struct irp_call, mgr_entry );
+        list_remove( &irp->mgr_entry );
+        assert( !irp->file && !irp->async );
+        release_object( irp );
     }
 }
 
@@ -625,8 +725,40 @@ static struct device_manager *create_device_manager(void)
     {
         list_init( &manager->devices );
         list_init( &manager->requests );
+        wine_rb_init( &manager->kernel_objects, compare_kernel_object );
     }
     return manager;
+}
+
+void free_kernel_objects( struct object *obj )
+{
+    struct list *ptr, *list;
+
+    if (!(list = obj->ops->get_kernel_obj_list( obj ))) return;
+
+    while ((ptr = list_head( list )))
+    {
+        struct kernel_object *kernel_object = LIST_ENTRY( ptr, struct kernel_object, list_entry );
+        struct irp_call *irp;
+        irp_params_t params;
+
+        assert( !kernel_object->owned );
+
+        /* abuse IRP_MJ_CLEANUP to request client to free no longer valid kernel object */
+        memset( &params, 0, sizeof(params) );
+        params.cleanup.major = IRP_MJ_CLEANUP;
+        params.cleanup.obj   = kernel_object->user_ptr;
+
+        if ((irp = create_irp( NULL, &params, NULL )))
+        {
+            add_irp_to_queue( kernel_object->manager, irp, NULL );
+            release_object( irp );
+        }
+
+        list_remove( &kernel_object->list_entry );
+        wine_rb_remove( &kernel_object->manager->kernel_objects, &kernel_object->rb_entry );
+        free( kernel_object );
+    }
 }
 
 
@@ -724,13 +856,14 @@ DECL_HANDLER(get_next_device_request)
         reply->in_size = iosb->in_size;
         reply->out_size = iosb->out_size;
         if (iosb->in_size > get_reply_max_size()) set_error( STATUS_BUFFER_OVERFLOW );
-        else if ((reply->next = alloc_handle( current->process, irp, 0, 0 )))
+        else if (!irp->file || (reply->next = alloc_handle( current->process, irp, 0, 0 )))
         {
             set_reply_data_ptr( iosb->in_data, iosb->in_size );
             iosb->in_data = NULL;
             iosb->in_size = 0;
             list_remove( &irp->mgr_entry );
             list_init( &irp->mgr_entry );
+            if (!irp->file) release_object( irp ); /* no longer on manager queue */
         }
     }
     else set_error( STATUS_PENDING );
@@ -751,4 +884,107 @@ DECL_HANDLER(set_irp_result)
         close_handle( current->process, req->handle );  /* avoid an extra round-trip for close */
         release_object( irp );
     }
+}
+
+
+/* get kernel pointer from server object */
+DECL_HANDLER(get_kernel_object_ptr)
+{
+    struct device_manager *manager;
+    struct object *object = NULL;
+
+    if (!(manager = (struct device_manager *)get_handle_obj( current->process, req->manager,
+                                                             0, &device_manager_ops )))
+        return;
+
+    if ((object = get_handle_obj( current->process, req->handle, 0, NULL )))
+    {
+        reply->user_ptr = get_kernel_object_ptr( manager, object );
+        release_object( object );
+    }
+
+    release_object( manager );
+}
+
+
+/* associate kernel pointer with server object */
+DECL_HANDLER(set_kernel_object_ptr)
+{
+    struct device_manager *manager;
+    struct object *object = NULL;
+
+    if (!(manager = (struct device_manager *)get_handle_obj( current->process, req->manager,
+                                                             0, &device_manager_ops )))
+        return;
+
+    if (!(object = get_handle_obj( current->process, req->handle, 0, NULL )))
+    {
+        release_object( manager );
+        return;
+    }
+
+    if (!set_kernel_object( manager, object, req->user_ptr ))
+        set_error( STATUS_INVALID_HANDLE );
+
+    release_object( object );
+    release_object( manager );
+}
+
+
+/* grab server object reference from kernel object pointer */
+DECL_HANDLER(grab_kernel_object)
+{
+    struct device_manager *manager;
+    struct kernel_object *ref;
+
+    if (!(manager = (struct device_manager *)get_handle_obj( current->process, req->manager,
+                                                             0, &device_manager_ops )))
+        return;
+
+    if ((ref = kernel_object_from_ptr( manager, req->user_ptr )) && !ref->owned)
+        grab_kernel_object( ref );
+    else
+        set_error( STATUS_INVALID_HANDLE );
+
+    release_object( manager );
+}
+
+
+/* release server object reference from kernel object pointer */
+DECL_HANDLER(release_kernel_object)
+{
+    struct device_manager *manager;
+    struct kernel_object *ref;
+
+    if (!(manager = (struct device_manager *)get_handle_obj( current->process, req->manager,
+                                                             0, &device_manager_ops )))
+        return;
+
+    if ((ref = kernel_object_from_ptr( manager, req->user_ptr )) && ref->owned)
+    {
+        ref->owned = 0;
+        release_object( ref->object );
+    }
+    else set_error( STATUS_INVALID_HANDLE );
+
+    release_object( manager );
+}
+
+
+/* get handle from kernel object pointer */
+DECL_HANDLER(get_kernel_object_handle)
+{
+    struct device_manager *manager;
+    struct kernel_object *ref;
+
+    if (!(manager = (struct device_manager *)get_handle_obj( current->process, req->manager,
+                                                             0, &device_manager_ops )))
+        return;
+
+    if ((ref = kernel_object_from_ptr( manager, req->user_ptr )))
+        reply->handle = alloc_handle( current->process, ref->object, req->access, 0 );
+    else
+        set_error( STATUS_INVALID_HANDLE );
+
+    release_object( manager );
 }

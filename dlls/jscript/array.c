@@ -959,15 +959,20 @@ static HRESULT Array_forEach(script_ctx_t *ctx, vdisp_t *vthis, WORD flags, unsi
 
     TRACE("\n");
 
-    /* FIXME: Check IsCallable */
-    if(argc != 1 || !is_object_instance(argv[0])) {
-        FIXME("Unsupported arguments\n");
-        return E_NOTIMPL;
-    }
-
     hres = get_length(ctx, vthis, &jsthis, &length);
     if(FAILED(hres))
         return hres;
+
+    /* Fixme check IsCallable */
+    if(!argc || !is_object_instance(argv[0]) || !get_object(argv[0])) {
+        FIXME("Invalid arg %s\n", debugstr_jsval(argc ? argv[0] : jsval_undefined()));
+        return E_INVALIDARG;
+    }
+
+    if(argc > 1 && !is_undefined(argv[1])) {
+        FIXME("Unsupported context this %s\n", debugstr_jsval(argv[1]));
+        return E_NOTIMPL;
+    }
 
     for(i = 0; i < length; i++) {
         hres = jsdisp_get_idx(jsthis, i, &value);
@@ -1069,11 +1074,12 @@ static HRESULT Array_map(script_ctx_t *ctx, vdisp_t *vthis, WORD flags, unsigned
     callback = get_object(argv[0]);
 
     if(argc > 1) {
-        if(!is_object_instance(argv[1]) || !get_object(argv[1])) {
+        if(is_object_instance(argv[1]) && get_object(argv[1])) {
+            context_this = get_object(argv[1]);
+        }else if(!is_undefined(argv[1])) {
             FIXME("Unsupported context this %s\n", debugstr_jsval(argv[1]));
             return E_NOTIMPL;
         }
-        context_this = get_object(argv[1]);
     }
 
     hres = create_array(ctx, length, &array);
