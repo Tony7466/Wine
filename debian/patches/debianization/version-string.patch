@@ -4,7 +4,7 @@ Forwarded: not-needed
 
 --- a/libs/wine/Makefile.in
 +++ b/libs/wine/Makefile.in
-@@ -31,7 +31,7 @@ libwine_LDFLAGS = $(LIBWINE_LDFLAGS)
+@@ -26,7 +26,7 @@ libwine_LDFLAGS = $(LIBWINE_LDFLAGS)
  libwine_DEPS = $(LIBWINE_DEPENDS)
  
  version.c: dummy

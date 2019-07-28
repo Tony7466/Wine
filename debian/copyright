@@ -9,11 +9,11 @@ Files-Excluded:
  include/wine/wgl*
  include/wine/server_protocol.h
  loader/l_intl.nls
- libs/wine/wctype.c
- libs/wine/casemap.c
- libs/wine/collation.c
+ libs/port/wctype.c
+ libs/port/casemap.c
  libs/port/compose.c
  libs/port/combclass.c
+ libs/port/collation.c
  libs/port/digitmap.c
  libs/port/decompose.c
  dlls/dsound/fir.h

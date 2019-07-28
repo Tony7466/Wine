@@ -26,4 +26,4 @@ author: Jens Reyer <jre.winesim@gmail.com>
 +        ret = install_from_unix_file(INSTALL_DATADIR "/", addon->subdir_name, addon->file_name);
      if (ret == INSTALL_NEXT && strcmp(INSTALL_DATADIR, "/usr/share"))
          ret = install_from_unix_file("/usr/share/wine/", addon->subdir_name, addon->file_name);
-     return ret;
+     if (ret == INSTALL_NEXT)

@@ -45,7 +45,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      lpwm = MIDI_OutAlloc(&hMidiOut, &dwCallback, &dwInstance, &fdwOpen, 1, &mosm);
 --- a/include/mmsystem.h
 +++ b/include/mmsystem.h
-@@ -751,7 +751,11 @@ typedef struct midiproptimediv_tag {
+@@ -753,7 +753,11 @@ typedef struct midiproptimediv_tag {
  typedef struct midievent_tag {
      DWORD dwDeltaTime;	/* Time, in MIDI ticks, between the previous
  			 * event and the current event. */

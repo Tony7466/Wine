@@ -1,4 +1,4 @@
-wine-development (4.5-1) UNRELEASED; urgency=medium
+wine-development (4.5-1) unstable; urgency=medium
 
   * New upstream release 4.5, released Mar 29, 2019.
     - Support for Vulkan 1.1.
@@ -8,7 +8,7 @@ wine-development (4.5-1) UNRELEASED; urgency=medium
     - Fixes for case conversion troubles in Turkish locale.
     - Various bug fixes.
 
- -- Michael Gilbert <mgilbert@debian.org>  Tue, 23 Jul 2019 05:13:08 +0000
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 28 Jul 2019 00:25:36 +0000
 
 wine-development (4.4-3) unstable; urgency=medium
 

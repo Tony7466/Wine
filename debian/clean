@@ -18,11 +18,11 @@ include/wine/server_protocol.h
 
 # automatically generated unicode files
 loader/l_intl.nls
-libs/wine/wctype.c
-libs/wine/casemap.c
-libs/wine/collation.c
+libs/port/wctype.c
+libs/port/casemap.c
 libs/port/compose.c
 libs/port/combclass.c
+libs/port/collation.c
 libs/port/digitmap.c
 libs/port/decompose.c
 libs/port/cptable.generated
