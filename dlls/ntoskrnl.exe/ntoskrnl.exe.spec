@@ -9,7 +9,7 @@
 @ stdcall -fastcall -arch=i386 ExInterlockedPushEntrySList (ptr ptr ptr) NTOSKRNL_ExInterlockedPushEntrySList
 @ stub ExReInitializeRundownProtection
 @ stdcall -fastcall ExReleaseFastMutexUnsafe(ptr)
-@ stdcall ExReleaseResourceLite(ptr)
+@ stdcall -fastcall ExReleaseResourceLite(ptr)
 @ stub ExReleaseRundownProtection
 @ stub ExReleaseRundownProtectionEx
 @ stub ExRundownCompleted
@@ -121,9 +121,9 @@
 @ stdcall DbgQueryDebugFilterState(long long)
 @ stub DbgSetDebugFilterState
 @ stdcall ExAcquireResourceExclusiveLite(ptr long)
-@ stub ExAcquireResourceSharedLite
-@ stub ExAcquireSharedStarveExclusive
-@ stub ExAcquireSharedWaitForExclusive
+@ stdcall ExAcquireResourceSharedLite(ptr long)
+@ stdcall ExAcquireSharedStarveExclusive(ptr long)
+@ stdcall ExAcquireSharedWaitForExclusive(ptr long)
 @ stub ExAllocateFromPagedLookasideList
 @ stdcall ExAllocatePool(long long)
 @ stdcall ExAllocatePoolWithQuota(long long)
@@ -146,9 +146,9 @@
 @ stub ExFreeToPagedLookasideList
 @ stub ExGetCurrentProcessorCounts
 @ stub ExGetCurrentProcessorCpuUsage
-@ stub ExGetExclusiveWaiterCount
+@ stdcall ExGetExclusiveWaiterCount(ptr)
 @ stub ExGetPreviousMode
-@ stub ExGetSharedWaiterCount
+@ stdcall ExGetSharedWaiterCount(ptr)
 @ stdcall ExInitializeNPagedLookasideList(ptr ptr ptr long long long long)
 @ stdcall ExInitializePagedLookasideList(ptr ptr ptr long long long long)
 @ stdcall ExInitializeResourceLite(ptr)
@@ -165,8 +165,8 @@
 @ stub ExInterlockedPushEntryList
 @ stdcall ExInterlockedRemoveHeadList(ptr ptr)
 @ stub ExIsProcessorFeaturePresent
-@ stub ExIsResourceAcquiredExclusiveLite
-@ stub ExIsResourceAcquiredSharedLite
+@ stdcall ExIsResourceAcquiredExclusiveLite(ptr)
+@ stdcall ExIsResourceAcquiredSharedLite(ptr)
 @ stdcall ExLocalTimeToSystemTime(ptr ptr) RtlLocalTimeToSystemTime
 @ stub ExNotifyCallback
 @ stub ExQueryPoolBlockSize
@@ -1395,7 +1395,7 @@
 @ stdcall -private ZwSetDefaultLocale(long long) NtSetDefaultLocale
 @ stdcall -private ZwSetDefaultUILanguage(long) NtSetDefaultUILanguage
 @ stdcall -private ZwSetEaFile(long ptr ptr long) NtSetEaFile
-@ stdcall -private ZwSetEvent(long ptr) NtSetEvent
+@ stdcall ZwSetEvent(long ptr) NtSetEvent
 @ stdcall -private ZwSetInformationFile(long ptr ptr long long) NtSetInformationFile
 @ stdcall -private ZwSetInformationJobObject(long long ptr long) NtSetInformationJobObject
 @ stdcall -private ZwSetInformationObject(long long ptr long) NtSetInformationObject

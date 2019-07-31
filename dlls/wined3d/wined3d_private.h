@@ -54,6 +54,7 @@
 #include "objbase.h"
 #include "wine/wined3d.h"
 #include "wined3d_gl.h"
+#include "wined3d_vk.h"
 #include "wine/list.h"
 #include "wine/rbtree.h"
 #include "wine/wgl_driver.h"
@@ -379,6 +380,14 @@ static inline void wined3d_pause(void)
 #define PCI_VENDOR_NONE 0xffff /* e.g. 0x8086 for Intel and 0x10de for Nvidia */
 #define PCI_DEVICE_NONE 0xffff /* e.g. 0x14f for a Geforce6200 */
 
+enum wined3d_renderer
+{
+    WINED3D_RENDERER_AUTO,
+    WINED3D_RENDERER_VULKAN,
+    WINED3D_RENDERER_OPENGL,
+    WINED3D_RENDERER_NO3D,
+};
+
 enum wined3d_shader_backend
 {
     WINED3D_SHADER_BACKEND_AUTO,
@@ -409,7 +418,7 @@ struct wined3d_settings
     unsigned int max_sm_gs;
     unsigned int max_sm_ps;
     unsigned int max_sm_cs;
-    BOOL no_3d;
+    enum wined3d_renderer renderer;
     enum wined3d_shader_backend shader_backend;
 };
 
@@ -2741,6 +2750,24 @@ struct wined3d_adapter *wined3d_adapter_gl_create(unsigned int ordinal, unsigned
 BOOL wined3d_adapter_gl_create_context(struct wined3d_context *context,
         struct wined3d_texture *target, const struct wined3d_format *ds_format) DECLSPEC_HIDDEN;
 
+struct wined3d_adapter_vk
+{
+    struct wined3d_adapter a;
+
+    struct wined3d_vk_info vk_info;
+    VkPhysicalDevice physical_device;
+
+    VkPhysicalDeviceLimits device_limits;
+};
+
+static inline struct wined3d_adapter_vk *wined3d_adapter_vk(struct wined3d_adapter *adapter)
+{
+    return CONTAINING_RECORD(adapter, struct wined3d_adapter_vk, a);
+}
+
+struct wined3d_adapter *wined3d_adapter_vk_create(unsigned int ordinal,
+        unsigned int wined3d_creation_flags) DECLSPEC_HIDDEN;
+
 struct wined3d_caps_gl_ctx
 {
     HDC dc;
@@ -2757,6 +2784,8 @@ struct wined3d_caps_gl_ctx
 BOOL wined3d_adapter_gl_init_format_info(struct wined3d_adapter *adapter,
         struct wined3d_caps_gl_ctx *ctx) DECLSPEC_HIDDEN;
 BOOL wined3d_adapter_no3d_init_format_info(struct wined3d_adapter *adapter) DECLSPEC_HIDDEN;
+BOOL wined3d_adapter_vk_init_format_info(struct wined3d_adapter_vk *adapter_vk,
+        const struct wined3d_vk_info *vk_info) DECLSPEC_HIDDEN;
 UINT64 adapter_adjust_memory(struct wined3d_adapter *adapter, INT64 amount) DECLSPEC_HIDDEN;
 
 BOOL wined3d_caps_gl_ctx_test_viewport_subpixel_bits(struct wined3d_caps_gl_ctx *ctx) DECLSPEC_HIDDEN;
@@ -2893,6 +2922,8 @@ struct wined3d
 HRESULT wined3d_init(struct wined3d *wined3d, DWORD flags) DECLSPEC_HIDDEN;
 BOOL wined3d_register_window(HWND window, struct wined3d_device *device) DECLSPEC_HIDDEN;
 void wined3d_unregister_window(HWND window) DECLSPEC_HIDDEN;
+
+BOOL wined3d_get_app_name(char *app_name, unsigned int app_name_size) DECLSPEC_HIDDEN;
 
 struct wined3d_blend_state
 {
@@ -3146,6 +3177,9 @@ LRESULT device_process_message(struct wined3d_device *device, HWND window, BOOL 
 void device_resource_add(struct wined3d_device *device, struct wined3d_resource *resource) DECLSPEC_HIDDEN;
 void device_resource_released(struct wined3d_device *device, struct wined3d_resource *resource) DECLSPEC_HIDDEN;
 void device_invalidate_state(const struct wined3d_device *device, DWORD state) DECLSPEC_HIDDEN;
+HRESULT wined3d_device_set_implicit_swapchain(struct wined3d_device *device,
+        struct wined3d_swapchain *swapchain) DECLSPEC_HIDDEN;
+void wined3d_device_uninit_3d(struct wined3d_device *device) DECLSPEC_HIDDEN;
 
 struct wined3d_device_gl
 {
@@ -3630,7 +3664,8 @@ struct wined3d_saved_states
     DWORD vertexShader : 1;
     DWORD scissorRect : 1;
     DWORD blend_state : 1;
-    DWORD padding : 4;
+    DWORD store_stream_offset : 1;
+    DWORD padding : 3;
 };
 
 struct StageState {
@@ -4600,6 +4635,18 @@ struct wined3d_format_gl
 static inline const struct wined3d_format_gl *wined3d_format_gl(const struct wined3d_format *format)
 {
     return CONTAINING_RECORD(format, struct wined3d_format_gl, f);
+}
+
+struct wined3d_format_vk
+{
+    struct wined3d_format f;
+
+    VkFormat vk_format;
+};
+
+static inline const struct wined3d_format_vk *wined3d_format_vk(const struct wined3d_format *format)
+{
+    return CONTAINING_RECORD(format, struct wined3d_format_vk, f);
 }
 
 BOOL wined3d_array_reserve(void **elements, SIZE_T *capacity, SIZE_T count, SIZE_T size) DECLSPEC_HIDDEN;

@@ -834,7 +834,6 @@ static ULONG WINAPI VMR9Inner_Release(IUnknown * iface)
     {
         TRACE("Destroying\n");
         BaseControlWindow_Destroy(&This->baseControlWindow);
-        FreeLibrary(This->hD3d9);
 
         if (This->allocator)
             IVMRSurfaceAllocatorEx9_Release(This->allocator);
@@ -848,6 +847,7 @@ static ULONG WINAPI VMR9Inner_Release(IUnknown * iface)
             This->allocator_d3d9_dev = NULL;
         }
 
+        FreeLibrary(This->hD3d9);
         CoTaskMemFree(This);
     }
     return refCount;
@@ -1246,10 +1246,11 @@ static HRESULT WINAPI VMR7FilterConfig_GetRenderingPrefs(IVMRFilterConfig *iface
 
 static HRESULT WINAPI VMR7FilterConfig_SetRenderingMode(IVMRFilterConfig *iface, DWORD mode)
 {
-    struct quartz_vmr *This = impl_from_IVMRFilterConfig(iface);
+    struct quartz_vmr *filter = impl_from_IVMRFilterConfig(iface);
 
-    FIXME("(%p/%p)->(%u) stub\n", iface, This, mode);
-    return E_NOTIMPL;
+    TRACE("iface %p, mode %#x.\n", iface, mode);
+
+    return IVMRFilterConfig9_SetRenderingMode(&filter->IVMRFilterConfig9_iface, mode);
 }
 
 static HRESULT WINAPI VMR7FilterConfig_GetRenderingMode(IVMRFilterConfig *iface, DWORD *mode)

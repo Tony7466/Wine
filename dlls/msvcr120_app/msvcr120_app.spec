@@ -1576,7 +1576,7 @@
 @ cdecl _wcsnicoll(wstr wstr long) msvcr120._wcsnicoll
 @ cdecl _wcsnicoll_l(wstr wstr long ptr) msvcr120._wcsnicoll_l
 @ cdecl _wcsnset(wstr long long) msvcr120._wcsnset
-@ stub _wcsnset_s
+@ cdecl _wcsnset_s(wstr long long long) msvcr120._wcsnset_s
 @ cdecl _wcsrev(wstr) msvcr120._wcsrev
 @ cdecl _wcsset(wstr long) msvcr120._wcsset
 @ cdecl _wcsset_s(wstr long long) msvcr120._wcsset_s
@@ -1991,9 +1991,9 @@
 @ cdecl remainderf(float float) msvcr120.remainderf
 @ cdecl remainderl(double double) msvcr120.remainderl
 @ cdecl remove(str) msvcr120.remove
-@ stub remquo
-@ stub remquof
-@ stub remquol
+@ cdecl remquo(double double ptr) msvcr120.remquo
+@ cdecl remquof(float float ptr) msvcr120.remquof
+@ cdecl remquol(double double ptr) msvcr120.remquol
 @ cdecl rename(str str) msvcr120.rename
 @ cdecl rewind(ptr) msvcr120.rewind
 @ cdecl rint(double) msvcr120.rint

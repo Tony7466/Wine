@@ -101,7 +101,9 @@ C_SRCS = \
 	sortkey.c \
 	spawn.c \
 	statvfs.c \
+	string.c \
 	strnlen.c \
+	stubs.c \
 	symlink.c \
 	usleep.c \
 	utf8.c \
