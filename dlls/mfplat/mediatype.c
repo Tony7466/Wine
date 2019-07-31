@@ -20,6 +20,10 @@
 
 #include "mfplat_private.h"
 
+#include "initguid.h"
+#include "ks.h"
+#include "ksmedia.h"
+
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(mfplat);
@@ -129,7 +133,7 @@ static HRESULT WINAPI mediatype_GetItem(IMFMediaType *iface, REFGUID key, PROPVA
 
     TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
 
-    return IMFAttributes_GetItem(&media_type->attributes.IMFAttributes_iface, key, value);
+    return attributes_GetItem(&media_type->attributes, key, value);
 }
 
 static HRESULT WINAPI mediatype_GetItemType(IMFMediaType *iface, REFGUID key, MF_ATTRIBUTE_TYPE *type)
@@ -138,7 +142,7 @@ static HRESULT WINAPI mediatype_GetItemType(IMFMediaType *iface, REFGUID key, MF
 
     TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), type);
 
-    return IMFAttributes_GetItemType(&media_type->attributes.IMFAttributes_iface, key, type);
+    return attributes_GetItemType(&media_type->attributes, key, type);
 }
 
 static HRESULT WINAPI mediatype_CompareItem(IMFMediaType *iface, REFGUID key, REFPROPVARIANT value, BOOL *result)
@@ -147,7 +151,7 @@ static HRESULT WINAPI mediatype_CompareItem(IMFMediaType *iface, REFGUID key, RE
 
     TRACE("%p, %s, %p, %p.\n", iface, debugstr_attr(key), value, result);
 
-    return IMFAttributes_CompareItem(&media_type->attributes.IMFAttributes_iface, key, value, result);
+    return attributes_CompareItem(&media_type->attributes, key, value, result);
 }
 
 static HRESULT WINAPI mediatype_Compare(IMFMediaType *iface, IMFAttributes *attrs, MF_ATTRIBUTES_MATCH_TYPE type,
@@ -157,7 +161,7 @@ static HRESULT WINAPI mediatype_Compare(IMFMediaType *iface, IMFAttributes *attr
 
     TRACE("%p, %p, %d, %p.\n", iface, attrs, type, result);
 
-    return IMFAttributes_Compare(&media_type->attributes.IMFAttributes_iface, attrs, type, result);
+    return attributes_Compare(&media_type->attributes, attrs, type, result);
 }
 
 static HRESULT WINAPI mediatype_GetUINT32(IMFMediaType *iface, REFGUID key, UINT32 *value)
@@ -166,7 +170,7 @@ static HRESULT WINAPI mediatype_GetUINT32(IMFMediaType *iface, REFGUID key, UINT
 
     TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
 
-    return IMFAttributes_GetUINT32(&media_type->attributes.IMFAttributes_iface, key, value);
+    return attributes_GetUINT32(&media_type->attributes, key, value);
 }
 
 static HRESULT WINAPI mediatype_GetUINT64(IMFMediaType *iface, REFGUID key, UINT64 *value)
@@ -175,7 +179,7 @@ static HRESULT WINAPI mediatype_GetUINT64(IMFMediaType *iface, REFGUID key, UINT
 
     TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
 
-    return IMFAttributes_GetUINT64(&media_type->attributes.IMFAttributes_iface, key, value);
+    return attributes_GetUINT64(&media_type->attributes, key, value);
 }
 
 static HRESULT WINAPI mediatype_GetDouble(IMFMediaType *iface, REFGUID key, double *value)
@@ -184,7 +188,7 @@ static HRESULT WINAPI mediatype_GetDouble(IMFMediaType *iface, REFGUID key, doub
 
     TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
 
-    return IMFAttributes_GetDouble(&media_type->attributes.IMFAttributes_iface, key, value);
+    return attributes_GetDouble(&media_type->attributes, key, value);
 }
 
 static HRESULT WINAPI mediatype_GetGUID(IMFMediaType *iface, REFGUID key, GUID *value)
@@ -193,7 +197,7 @@ static HRESULT WINAPI mediatype_GetGUID(IMFMediaType *iface, REFGUID key, GUID *
 
     TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
 
-    return IMFAttributes_GetGUID(&media_type->attributes.IMFAttributes_iface, key, value);
+    return attributes_GetGUID(&media_type->attributes, key, value);
 }
 
 static HRESULT WINAPI mediatype_GetStringLength(IMFMediaType *iface, REFGUID key, UINT32 *length)
@@ -202,7 +206,7 @@ static HRESULT WINAPI mediatype_GetStringLength(IMFMediaType *iface, REFGUID key
 
     TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), length);
 
-    return IMFAttributes_GetStringLength(&media_type->attributes.IMFAttributes_iface, key, length);
+    return attributes_GetStringLength(&media_type->attributes, key, length);
 }
 
 static HRESULT WINAPI mediatype_GetString(IMFMediaType *iface, REFGUID key, WCHAR *value,
@@ -212,7 +216,7 @@ static HRESULT WINAPI mediatype_GetString(IMFMediaType *iface, REFGUID key, WCHA
 
     TRACE("%p, %s, %p, %u, %p.\n", iface, debugstr_attr(key), value, size, length);
 
-    return IMFAttributes_GetString(&media_type->attributes.IMFAttributes_iface, key, value, size, length);
+    return attributes_GetString(&media_type->attributes, key, value, size, length);
 }
 
 static HRESULT WINAPI mediatype_GetAllocatedString(IMFMediaType *iface, REFGUID key,
@@ -222,7 +226,7 @@ static HRESULT WINAPI mediatype_GetAllocatedString(IMFMediaType *iface, REFGUID 
 
     TRACE("%p, %s, %p, %p.\n", iface, debugstr_attr(key), value, length);
 
-    return IMFAttributes_GetAllocatedString(&media_type->attributes.IMFAttributes_iface, key, value, length);
+    return attributes_GetAllocatedString(&media_type->attributes, key, value, length);
 }
 
 static HRESULT WINAPI mediatype_GetBlobSize(IMFMediaType *iface, REFGUID key, UINT32 *size)
@@ -231,7 +235,7 @@ static HRESULT WINAPI mediatype_GetBlobSize(IMFMediaType *iface, REFGUID key, UI
 
     TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), size);
 
-    return IMFAttributes_GetBlobSize(&media_type->attributes.IMFAttributes_iface, key, size);
+    return attributes_GetBlobSize(&media_type->attributes, key, size);
 }
 
 static HRESULT WINAPI mediatype_GetBlob(IMFMediaType *iface, REFGUID key, UINT8 *buf,
@@ -241,7 +245,7 @@ static HRESULT WINAPI mediatype_GetBlob(IMFMediaType *iface, REFGUID key, UINT8 
 
     TRACE("%p, %s, %p, %u, %p.\n", iface, debugstr_attr(key), buf, bufsize, blobsize);
 
-    return IMFAttributes_GetBlob(&media_type->attributes.IMFAttributes_iface, key, buf, bufsize, blobsize);
+    return attributes_GetBlob(&media_type->attributes, key, buf, bufsize, blobsize);
 }
 
 static HRESULT WINAPI mediatype_GetAllocatedBlob(IMFMediaType *iface, REFGUID key, UINT8 **buf, UINT32 *size)
@@ -250,7 +254,7 @@ static HRESULT WINAPI mediatype_GetAllocatedBlob(IMFMediaType *iface, REFGUID ke
 
     TRACE("%p, %s, %p, %p.\n", iface, debugstr_attr(key), buf, size);
 
-    return IMFAttributes_GetAllocatedBlob(&media_type->attributes.IMFAttributes_iface, key, buf, size);
+    return attributes_GetAllocatedBlob(&media_type->attributes, key, buf, size);
 }
 
 static HRESULT WINAPI mediatype_GetUnknown(IMFMediaType *iface, REFGUID key, REFIID riid, void **obj)
@@ -259,7 +263,7 @@ static HRESULT WINAPI mediatype_GetUnknown(IMFMediaType *iface, REFGUID key, REF
 
     TRACE("%p, %s, %s, %p.\n", iface, debugstr_attr(key), debugstr_guid(riid), obj);
 
-    return IMFAttributes_GetUnknown(&media_type->attributes.IMFAttributes_iface, key, riid, obj);
+    return attributes_GetUnknown(&media_type->attributes, key, riid, obj);
 }
 
 static HRESULT WINAPI mediatype_SetItem(IMFMediaType *iface, REFGUID key, REFPROPVARIANT value)
@@ -268,7 +272,7 @@ static HRESULT WINAPI mediatype_SetItem(IMFMediaType *iface, REFGUID key, REFPRO
 
     TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
 
-    return IMFAttributes_SetItem(&media_type->attributes.IMFAttributes_iface, key, value);
+    return attributes_SetItem(&media_type->attributes, key, value);
 }
 
 static HRESULT WINAPI mediatype_DeleteItem(IMFMediaType *iface, REFGUID key)
@@ -277,7 +281,7 @@ static HRESULT WINAPI mediatype_DeleteItem(IMFMediaType *iface, REFGUID key)
 
     TRACE("%p, %s.\n", iface, debugstr_attr(key));
 
-    return IMFAttributes_DeleteItem(&media_type->attributes.IMFAttributes_iface, key);
+    return attributes_DeleteItem(&media_type->attributes, key);
 }
 
 static HRESULT WINAPI mediatype_DeleteAllItems(IMFMediaType *iface)
@@ -286,7 +290,7 @@ static HRESULT WINAPI mediatype_DeleteAllItems(IMFMediaType *iface)
 
     TRACE("%p.\n", iface);
 
-    return IMFAttributes_DeleteAllItems(&media_type->attributes.IMFAttributes_iface);
+    return attributes_DeleteAllItems(&media_type->attributes);
 }
 
 static HRESULT WINAPI mediatype_SetUINT32(IMFMediaType *iface, REFGUID key, UINT32 value)
@@ -295,7 +299,7 @@ static HRESULT WINAPI mediatype_SetUINT32(IMFMediaType *iface, REFGUID key, UINT
 
     TRACE("%p, %s, %u.\n", iface, debugstr_attr(key), value);
 
-    return IMFAttributes_SetUINT32(&media_type->attributes.IMFAttributes_iface, key, value);
+    return attributes_SetUINT32(&media_type->attributes, key, value);
 }
 
 static HRESULT WINAPI mediatype_SetUINT64(IMFMediaType *iface, REFGUID key, UINT64 value)
@@ -304,7 +308,7 @@ static HRESULT WINAPI mediatype_SetUINT64(IMFMediaType *iface, REFGUID key, UINT
 
     TRACE("%p, %s, %s.\n", iface, debugstr_attr(key), wine_dbgstr_longlong(value));
 
-    return IMFAttributes_SetUINT64(&media_type->attributes.IMFAttributes_iface, key, value);
+    return attributes_SetUINT64(&media_type->attributes, key, value);
 }
 
 static HRESULT WINAPI mediatype_SetDouble(IMFMediaType *iface, REFGUID key, double value)
@@ -313,7 +317,7 @@ static HRESULT WINAPI mediatype_SetDouble(IMFMediaType *iface, REFGUID key, doub
 
     TRACE("%p, %s, %f.\n", iface, debugstr_attr(key), value);
 
-    return IMFAttributes_SetDouble(&media_type->attributes.IMFAttributes_iface, key, value);
+    return attributes_SetDouble(&media_type->attributes, key, value);
 }
 
 static HRESULT WINAPI mediatype_SetGUID(IMFMediaType *iface, REFGUID key, REFGUID value)
@@ -322,7 +326,7 @@ static HRESULT WINAPI mediatype_SetGUID(IMFMediaType *iface, REFGUID key, REFGUI
 
     TRACE("%p, %s, %s.\n", iface, debugstr_attr(key), debugstr_guid(value));
 
-    return IMFAttributes_SetGUID(&media_type->attributes.IMFAttributes_iface, key, value);
+    return attributes_SetGUID(&media_type->attributes, key, value);
 }
 
 static HRESULT WINAPI mediatype_SetString(IMFMediaType *iface, REFGUID key, const WCHAR *value)
@@ -331,7 +335,7 @@ static HRESULT WINAPI mediatype_SetString(IMFMediaType *iface, REFGUID key, cons
 
     TRACE("%p, %s, %s.\n", iface, debugstr_attr(key), debugstr_w(value));
 
-    return IMFAttributes_SetString(&media_type->attributes.IMFAttributes_iface, key, value);
+    return attributes_SetString(&media_type->attributes, key, value);
 }
 
 static HRESULT WINAPI mediatype_SetBlob(IMFMediaType *iface, REFGUID key, const UINT8 *buf, UINT32 size)
@@ -340,7 +344,7 @@ static HRESULT WINAPI mediatype_SetBlob(IMFMediaType *iface, REFGUID key, const 
 
     TRACE("%p, %s, %p, %u.\n", iface, debugstr_attr(key), buf, size);
 
-    return IMFAttributes_SetBlob(&media_type->attributes.IMFAttributes_iface, key, buf, size);
+    return attributes_SetBlob(&media_type->attributes, key, buf, size);
 }
 
 static HRESULT WINAPI mediatype_SetUnknown(IMFMediaType *iface, REFGUID key, IUnknown *unknown)
@@ -349,7 +353,7 @@ static HRESULT WINAPI mediatype_SetUnknown(IMFMediaType *iface, REFGUID key, IUn
 
     TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), unknown);
 
-    return IMFAttributes_SetUnknown(&media_type->attributes.IMFAttributes_iface, key, unknown);
+    return attributes_SetUnknown(&media_type->attributes, key, unknown);
 }
 
 static HRESULT WINAPI mediatype_LockStore(IMFMediaType *iface)
@@ -358,7 +362,7 @@ static HRESULT WINAPI mediatype_LockStore(IMFMediaType *iface)
 
     TRACE("%p.\n", iface);
 
-    return IMFAttributes_LockStore(&media_type->attributes.IMFAttributes_iface);
+    return attributes_LockStore(&media_type->attributes);
 }
 
 static HRESULT WINAPI mediatype_UnlockStore(IMFMediaType *iface)
@@ -367,7 +371,7 @@ static HRESULT WINAPI mediatype_UnlockStore(IMFMediaType *iface)
 
     TRACE("%p.\n", iface);
 
-    return IMFAttributes_UnlockStore(&media_type->attributes.IMFAttributes_iface);
+    return attributes_UnlockStore(&media_type->attributes);
 }
 
 static HRESULT WINAPI mediatype_GetCount(IMFMediaType *iface, UINT32 *count)
@@ -376,7 +380,7 @@ static HRESULT WINAPI mediatype_GetCount(IMFMediaType *iface, UINT32 *count)
 
     TRACE("%p, %p.\n", iface, count);
 
-    return IMFAttributes_GetCount(&media_type->attributes.IMFAttributes_iface, count);
+    return attributes_GetCount(&media_type->attributes, count);
 }
 
 static HRESULT WINAPI mediatype_GetItemByIndex(IMFMediaType *iface, UINT32 index, GUID *key, PROPVARIANT *value)
@@ -385,7 +389,7 @@ static HRESULT WINAPI mediatype_GetItemByIndex(IMFMediaType *iface, UINT32 index
 
     TRACE("%p, %u, %p, %p.\n", iface, index, key, value);
 
-    return IMFAttributes_GetItemByIndex(&media_type->attributes.IMFAttributes_iface, index, key, value);
+    return attributes_GetItemByIndex(&media_type->attributes, index, key, value);
 }
 
 static HRESULT WINAPI mediatype_CopyAllItems(IMFMediaType *iface, IMFAttributes *dest)
@@ -394,14 +398,16 @@ static HRESULT WINAPI mediatype_CopyAllItems(IMFMediaType *iface, IMFAttributes 
 
     TRACE("%p, %p.\n", iface, dest);
 
-    return IMFAttributes_CopyAllItems(&media_type->attributes.IMFAttributes_iface, dest);
+    return attributes_CopyAllItems(&media_type->attributes, dest);
 }
 
 static HRESULT WINAPI mediatype_GetMajorType(IMFMediaType *iface, GUID *guid)
 {
     struct media_type *media_type = impl_from_IMFMediaType(iface);
+
     TRACE("%p, %p.\n", iface, guid);
-    return IMFAttributes_GetGUID(&media_type->attributes.IMFAttributes_iface, &MF_MT_MAJOR_TYPE, guid);
+
+    return attributes_GetGUID(&media_type->attributes, &MF_MT_MAJOR_TYPE, guid);
 }
 
 static HRESULT WINAPI mediatype_IsCompressedFormat(IMFMediaType *iface, BOOL *compressed)
@@ -411,8 +417,7 @@ static HRESULT WINAPI mediatype_IsCompressedFormat(IMFMediaType *iface, BOOL *co
 
     TRACE("%p, %p.\n", iface, compressed);
 
-    if (FAILED(IMFAttributes_GetUINT32(&media_type->attributes.IMFAttributes_iface,
-            &MF_MT_ALL_SAMPLES_INDEPENDENT, &value)))
+    if (FAILED(attributes_GetUINT32(&media_type->attributes, &MF_MT_ALL_SAMPLES_INDEPENDENT, &value)))
     {
         value = 0;
     }
@@ -670,187 +675,278 @@ static ULONG WINAPI stream_descriptor_Release(IMFStreamDescriptor *iface)
 static HRESULT WINAPI stream_descriptor_GetItem(IMFStreamDescriptor *iface, REFGUID key, PROPVARIANT *value)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_GetItem(&stream_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return attributes_GetItem(&stream_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI stream_descriptor_GetItemType(IMFStreamDescriptor *iface, REFGUID key, MF_ATTRIBUTE_TYPE *type)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_GetItemType(&stream_desc->attributes.IMFAttributes_iface, key, type);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), type);
+
+    return attributes_GetItemType(&stream_desc->attributes, key, type);
 }
 
 static HRESULT WINAPI stream_descriptor_CompareItem(IMFStreamDescriptor *iface, REFGUID key, REFPROPVARIANT value,
         BOOL *result)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_CompareItem(&stream_desc->attributes.IMFAttributes_iface, key, value, result);
+
+    TRACE("%p, %s, %p, %p.\n", iface, debugstr_attr(key), value, result);
+
+    return attributes_CompareItem(&stream_desc->attributes, key, value, result);
 }
 
 static HRESULT WINAPI stream_descriptor_Compare(IMFStreamDescriptor *iface, IMFAttributes *theirs,
         MF_ATTRIBUTES_MATCH_TYPE type, BOOL *result)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_Compare(&stream_desc->attributes.IMFAttributes_iface, theirs, type, result);
+
+    TRACE("%p, %p, %d, %p.\n", iface, theirs, type, result);
+
+    return attributes_Compare(&stream_desc->attributes, theirs, type, result);
 }
 
 static HRESULT WINAPI stream_descriptor_GetUINT32(IMFStreamDescriptor *iface, REFGUID key, UINT32 *value)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_GetUINT32(&stream_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return attributes_GetUINT32(&stream_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI stream_descriptor_GetUINT64(IMFStreamDescriptor *iface, REFGUID key, UINT64 *value)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_GetUINT64(&stream_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return attributes_GetUINT64(&stream_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI stream_descriptor_GetDouble(IMFStreamDescriptor *iface, REFGUID key, double *value)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_GetDouble(&stream_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return attributes_GetDouble(&stream_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI stream_descriptor_GetGUID(IMFStreamDescriptor *iface, REFGUID key, GUID *value)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_GetGUID(&stream_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return attributes_GetGUID(&stream_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI stream_descriptor_GetStringLength(IMFStreamDescriptor *iface, REFGUID key, UINT32 *length)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_GetStringLength(&stream_desc->attributes.IMFAttributes_iface, key, length);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), length);
+
+    return attributes_GetStringLength(&stream_desc->attributes, key, length);
 }
 
 static HRESULT WINAPI stream_descriptor_GetString(IMFStreamDescriptor *iface, REFGUID key, WCHAR *value,
         UINT32 size, UINT32 *length)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_GetString(&stream_desc->attributes.IMFAttributes_iface, key, value, size, length);
+
+    TRACE("%p, %s, %p, %u, %p.\n", iface, debugstr_attr(key), value, size, length);
+
+    return attributes_GetString(&stream_desc->attributes, key, value, size, length);
 }
 
 static HRESULT WINAPI stream_descriptor_GetAllocatedString(IMFStreamDescriptor *iface, REFGUID key,
         WCHAR **value, UINT32 *length)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_GetAllocatedString(&stream_desc->attributes.IMFAttributes_iface, key, value, length);
+
+    TRACE("%p, %s, %p, %p.\n", iface, debugstr_attr(key), value, length);
+
+    return attributes_GetAllocatedString(&stream_desc->attributes, key, value, length);
 }
 
 static HRESULT WINAPI stream_descriptor_GetBlobSize(IMFStreamDescriptor *iface, REFGUID key, UINT32 *size)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_GetBlobSize(&stream_desc->attributes.IMFAttributes_iface, key, size);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), size);
+
+    return attributes_GetBlobSize(&stream_desc->attributes, key, size);
 }
 
 static HRESULT WINAPI stream_descriptor_GetBlob(IMFStreamDescriptor *iface, REFGUID key, UINT8 *buf,
         UINT32 bufsize, UINT32 *blobsize)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_GetBlob(&stream_desc->attributes.IMFAttributes_iface, key, buf, bufsize, blobsize);
+
+    TRACE("%p, %s, %p, %u, %p.\n", iface, debugstr_attr(key), buf, bufsize, blobsize);
+
+    return attributes_GetBlob(&stream_desc->attributes, key, buf, bufsize, blobsize);
 }
 
 static HRESULT WINAPI stream_descriptor_GetAllocatedBlob(IMFStreamDescriptor *iface, REFGUID key, UINT8 **buf,
         UINT32 *size)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_GetAllocatedBlob(&stream_desc->attributes.IMFAttributes_iface, key, buf, size);
+
+    TRACE("%p, %s, %p, %p.\n", iface, debugstr_attr(key), buf, size);
+
+    return attributes_GetAllocatedBlob(&stream_desc->attributes, key, buf, size);
 }
 
-static HRESULT WINAPI stream_descriptor_GetUnknown(IMFStreamDescriptor *iface, REFGUID key, REFIID riid, void **ppv)
+static HRESULT WINAPI stream_descriptor_GetUnknown(IMFStreamDescriptor *iface, REFGUID key, REFIID riid, void **out)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_GetUnknown(&stream_desc->attributes.IMFAttributes_iface, key, riid, ppv);
+
+    TRACE("%p, %s, %s, %p.\n", iface, debugstr_attr(key), debugstr_guid(riid), out);
+
+    return attributes_GetUnknown(&stream_desc->attributes, key, riid, out);
 }
 
 static HRESULT WINAPI stream_descriptor_SetItem(IMFStreamDescriptor *iface, REFGUID key, REFPROPVARIANT value)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_SetItem(&stream_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return attributes_SetItem(&stream_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI stream_descriptor_DeleteItem(IMFStreamDescriptor *iface, REFGUID key)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_DeleteItem(&stream_desc->attributes.IMFAttributes_iface, key);
+
+    TRACE("%p, %s.\n", iface, debugstr_attr(key));
+
+    return attributes_DeleteItem(&stream_desc->attributes, key);
 }
 
 static HRESULT WINAPI stream_descriptor_DeleteAllItems(IMFStreamDescriptor *iface)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_DeleteAllItems(&stream_desc->attributes.IMFAttributes_iface);
+
+    TRACE("%p.\n", iface);
+
+    return attributes_DeleteAllItems(&stream_desc->attributes);
 }
 
 static HRESULT WINAPI stream_descriptor_SetUINT32(IMFStreamDescriptor *iface, REFGUID key, UINT32 value)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_SetUINT32(&stream_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %u.\n", iface, debugstr_attr(key), value);
+
+    return attributes_SetUINT32(&stream_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI stream_descriptor_SetUINT64(IMFStreamDescriptor *iface, REFGUID key, UINT64 value)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_SetUINT64(&stream_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %s.\n", iface, debugstr_attr(key), wine_dbgstr_longlong(value));
+
+    return attributes_SetUINT64(&stream_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI stream_descriptor_SetDouble(IMFStreamDescriptor *iface, REFGUID key, double value)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_SetDouble(&stream_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %f.\n", iface, debugstr_attr(key), value);
+
+    return attributes_SetDouble(&stream_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI stream_descriptor_SetGUID(IMFStreamDescriptor *iface, REFGUID key, REFGUID value)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_SetGUID(&stream_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %s.\n", iface, debugstr_attr(key), debugstr_guid(value));
+
+    return attributes_SetGUID(&stream_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI stream_descriptor_SetString(IMFStreamDescriptor *iface, REFGUID key, const WCHAR *value)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_SetString(&stream_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %s.\n", iface, debugstr_attr(key), debugstr_w(value));
+
+    return attributes_SetString(&stream_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI stream_descriptor_SetBlob(IMFStreamDescriptor *iface, REFGUID key, const UINT8 *buf, UINT32 size)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_SetBlob(&stream_desc->attributes.IMFAttributes_iface, key, buf, size);
+
+    TRACE("%p, %s, %p, %u.\n", iface, debugstr_attr(key), buf, size);
+
+    return attributes_SetBlob(&stream_desc->attributes, key, buf, size);
 }
 
 static HRESULT WINAPI stream_descriptor_SetUnknown(IMFStreamDescriptor *iface, REFGUID key, IUnknown *unknown)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_SetUnknown(&stream_desc->attributes.IMFAttributes_iface, key, unknown);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), unknown);
+
+    return attributes_SetUnknown(&stream_desc->attributes, key, unknown);
 }
 
 static HRESULT WINAPI stream_descriptor_LockStore(IMFStreamDescriptor *iface)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_LockStore(&stream_desc->attributes.IMFAttributes_iface);
+
+    TRACE("%p.\n", iface);
+
+    return attributes_LockStore(&stream_desc->attributes);
 }
 
 static HRESULT WINAPI stream_descriptor_UnlockStore(IMFStreamDescriptor *iface)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_UnlockStore(&stream_desc->attributes.IMFAttributes_iface);
+
+    TRACE("%p.\n", iface);
+
+    return attributes_UnlockStore(&stream_desc->attributes);
 }
 
-static HRESULT WINAPI stream_descriptor_GetCount(IMFStreamDescriptor *iface, UINT32 *items)
+static HRESULT WINAPI stream_descriptor_GetCount(IMFStreamDescriptor *iface, UINT32 *count)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_GetCount(&stream_desc->attributes.IMFAttributes_iface, items);
+
+    TRACE("%p, %p.\n", iface, count);
+
+    return attributes_GetCount(&stream_desc->attributes, count);
 }
 
-static HRESULT WINAPI stream_descriptor_GetItemByIndex(IMFStreamDescriptor *iface, UINT32 index, GUID *key, PROPVARIANT *value)
+static HRESULT WINAPI stream_descriptor_GetItemByIndex(IMFStreamDescriptor *iface, UINT32 index, GUID *key,
+        PROPVARIANT *value)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_GetItemByIndex(&stream_desc->attributes.IMFAttributes_iface, index, key, value);
+
+    TRACE("%p, %u, %p, %p.\n", iface, index, key, value);
+
+    return attributes_GetItemByIndex(&stream_desc->attributes, index, key, value);
 }
 
 static HRESULT WINAPI stream_descriptor_CopyAllItems(IMFStreamDescriptor *iface, IMFAttributes *dest)
 {
     struct stream_desc *stream_desc = impl_from_IMFStreamDescriptor(iface);
-    return IMFAttributes_CopyAllItems(&stream_desc->attributes.IMFAttributes_iface, dest);
+
+    TRACE("%p, %p.\n", iface, dest);
+
+    return attributes_CopyAllItems(&stream_desc->attributes, dest);
 }
 
 static HRESULT WINAPI stream_descriptor_GetStreamIdentifier(IMFStreamDescriptor *iface, DWORD *identifier)
@@ -1154,195 +1250,285 @@ static HRESULT WINAPI presentation_descriptor_GetItem(IMFPresentationDescriptor 
         PROPVARIANT *value)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetItem(&presentation_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return attributes_GetItem(&presentation_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI presentation_descriptor_GetItemType(IMFPresentationDescriptor *iface, REFGUID key,
         MF_ATTRIBUTE_TYPE *type)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetItemType(&presentation_desc->attributes.IMFAttributes_iface, key, type);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), type);
+
+    return attributes_GetItemType(&presentation_desc->attributes, key, type);
 }
 
 static HRESULT WINAPI presentation_descriptor_CompareItem(IMFPresentationDescriptor *iface, REFGUID key,
         REFPROPVARIANT value, BOOL *result)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_CompareItem(&presentation_desc->attributes.IMFAttributes_iface, key, value, result);
+
+    TRACE("%p, %s, %p, %p.\n", iface, debugstr_attr(key), value, result);
+
+    return attributes_CompareItem(&presentation_desc->attributes, key, value, result);
 }
 
 static HRESULT WINAPI presentation_descriptor_Compare(IMFPresentationDescriptor *iface, IMFAttributes *attrs,
         MF_ATTRIBUTES_MATCH_TYPE type, BOOL *result)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_Compare(&presentation_desc->attributes.IMFAttributes_iface, attrs, type, result);
+
+    TRACE("%p, %p, %d, %p.\n", iface, attrs, type, result);
+
+    return attributes_Compare(&presentation_desc->attributes, attrs, type, result);
 }
 
 static HRESULT WINAPI presentation_descriptor_GetUINT32(IMFPresentationDescriptor *iface, REFGUID key, UINT32 *value)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetUINT32(&presentation_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return attributes_GetUINT32(&presentation_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI presentation_descriptor_GetUINT64(IMFPresentationDescriptor *iface, REFGUID key, UINT64 *value)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetUINT64(&presentation_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return attributes_GetUINT64(&presentation_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI presentation_descriptor_GetDouble(IMFPresentationDescriptor *iface, REFGUID key, double *value)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetDouble(&presentation_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return attributes_GetDouble(&presentation_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI presentation_descriptor_GetGUID(IMFPresentationDescriptor *iface, REFGUID key, GUID *value)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetGUID(&presentation_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return attributes_GetGUID(&presentation_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI presentation_descriptor_GetStringLength(IMFPresentationDescriptor *iface, REFGUID key,
         UINT32 *length)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetStringLength(&presentation_desc->attributes.IMFAttributes_iface, key, length);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), length);
+
+    return attributes_GetStringLength(&presentation_desc->attributes, key, length);
 }
 
 static HRESULT WINAPI presentation_descriptor_GetString(IMFPresentationDescriptor *iface, REFGUID key, WCHAR *value,
         UINT32 size, UINT32 *length)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetString(&presentation_desc->attributes.IMFAttributes_iface, key, value, size, length);
+
+    TRACE("%p, %s, %p, %u, %p.\n", iface, debugstr_attr(key), value, size, length);
+
+    return attributes_GetString(&presentation_desc->attributes, key, value, size, length);
 }
 
 static HRESULT WINAPI presentation_descriptor_GetAllocatedString(IMFPresentationDescriptor *iface, REFGUID key,
         WCHAR **value, UINT32 *length)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetAllocatedString(&presentation_desc->attributes.IMFAttributes_iface, key, value, length);
+
+    TRACE("%p, %s, %p, %p.\n", iface, debugstr_attr(key), value, length);
+
+    return attributes_GetAllocatedString(&presentation_desc->attributes, key, value, length);
 }
 
 static HRESULT WINAPI presentation_descriptor_GetBlobSize(IMFPresentationDescriptor *iface, REFGUID key, UINT32 *size)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetBlobSize(&presentation_desc->attributes.IMFAttributes_iface, key, size);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), size);
+
+    return attributes_GetBlobSize(&presentation_desc->attributes, key, size);
 }
 
 static HRESULT WINAPI presentation_descriptor_GetBlob(IMFPresentationDescriptor *iface, REFGUID key, UINT8 *buf,
         UINT32 bufsize, UINT32 *blobsize)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetBlob(&presentation_desc->attributes.IMFAttributes_iface, key, buf, bufsize, blobsize);
+
+    TRACE("%p, %s, %p, %u, %p.\n", iface, debugstr_attr(key), buf, bufsize, blobsize);
+
+    return attributes_GetBlob(&presentation_desc->attributes, key, buf, bufsize, blobsize);
 }
 
 static HRESULT WINAPI presentation_descriptor_GetAllocatedBlob(IMFPresentationDescriptor *iface, REFGUID key,
         UINT8 **buf, UINT32 *size)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetAllocatedBlob(&presentation_desc->attributes.IMFAttributes_iface, key, buf, size);
+
+    TRACE("%p, %s, %p, %p.\n", iface, debugstr_attr(key), buf, size);
+
+    return attributes_GetAllocatedBlob(&presentation_desc->attributes, key, buf, size);
 }
 
 static HRESULT WINAPI presentation_descriptor_GetUnknown(IMFPresentationDescriptor *iface, REFGUID key,
-        REFIID riid, void **ppv)
+        REFIID riid, void **out)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetUnknown(&presentation_desc->attributes.IMFAttributes_iface, key, riid, ppv);
+
+    TRACE("%p, %s, %s, %p.\n", iface, debugstr_attr(key), debugstr_guid(riid), out);
+
+    return attributes_GetUnknown(&presentation_desc->attributes, key, riid, out);
 }
 
 static HRESULT WINAPI presentation_descriptor_SetItem(IMFPresentationDescriptor *iface, REFGUID key,
         REFPROPVARIANT value)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_SetItem(&presentation_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), value);
+
+    return attributes_SetItem(&presentation_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI presentation_descriptor_DeleteItem(IMFPresentationDescriptor *iface, REFGUID key)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_DeleteItem(&presentation_desc->attributes.IMFAttributes_iface, key);
+
+    TRACE("%p, %s.\n", iface, debugstr_attr(key));
+
+    return attributes_DeleteItem(&presentation_desc->attributes, key);
 }
 
 static HRESULT WINAPI presentation_descriptor_DeleteAllItems(IMFPresentationDescriptor *iface)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_DeleteAllItems(&presentation_desc->attributes.IMFAttributes_iface);
+
+    TRACE("%p.\n", iface);
+
+    return attributes_DeleteAllItems(&presentation_desc->attributes);
 }
 
 static HRESULT WINAPI presentation_descriptor_SetUINT32(IMFPresentationDescriptor *iface, REFGUID key, UINT32 value)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_SetUINT32(&presentation_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %u.\n", iface, debugstr_attr(key), value);
+
+    return attributes_SetUINT32(&presentation_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI presentation_descriptor_SetUINT64(IMFPresentationDescriptor *iface, REFGUID key, UINT64 value)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_SetUINT64(&presentation_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %s.\n", iface, debugstr_attr(key), wine_dbgstr_longlong(value));
+
+    return attributes_SetUINT64(&presentation_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI presentation_descriptor_SetDouble(IMFPresentationDescriptor *iface, REFGUID key, double value)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_SetDouble(&presentation_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %f.\n", iface, debugstr_attr(key), value);
+
+    return attributes_SetDouble(&presentation_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI presentation_descriptor_SetGUID(IMFPresentationDescriptor *iface, REFGUID key, REFGUID value)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_SetGUID(&presentation_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %s.\n", iface, debugstr_attr(key), debugstr_guid(value));
+
+    return attributes_SetGUID(&presentation_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI presentation_descriptor_SetString(IMFPresentationDescriptor *iface, REFGUID key,
         const WCHAR *value)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_SetString(&presentation_desc->attributes.IMFAttributes_iface, key, value);
+
+    TRACE("%p, %s, %s.\n", iface, debugstr_attr(key), debugstr_w(value));
+
+    return attributes_SetString(&presentation_desc->attributes, key, value);
 }
 
 static HRESULT WINAPI presentation_descriptor_SetBlob(IMFPresentationDescriptor *iface, REFGUID key, const UINT8 *buf,
         UINT32 size)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_SetBlob(&presentation_desc->attributes.IMFAttributes_iface, key, buf, size);
+
+    TRACE("%p, %s, %p, %u.\n", iface, debugstr_attr(key), buf, size);
+
+    return attributes_SetBlob(&presentation_desc->attributes, key, buf, size);
 }
 
 static HRESULT WINAPI presentation_descriptor_SetUnknown(IMFPresentationDescriptor *iface, REFGUID key,
         IUnknown *unknown)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_SetUnknown(&presentation_desc->attributes.IMFAttributes_iface, key, unknown);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_attr(key), unknown);
+
+    return attributes_SetUnknown(&presentation_desc->attributes, key, unknown);
 }
 
 static HRESULT WINAPI presentation_descriptor_LockStore(IMFPresentationDescriptor *iface)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_LockStore(&presentation_desc->attributes.IMFAttributes_iface);
+
+    TRACE("%p.\n", iface);
+
+    return attributes_LockStore(&presentation_desc->attributes);
 }
 
 static HRESULT WINAPI presentation_descriptor_UnlockStore(IMFPresentationDescriptor *iface)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_UnlockStore(&presentation_desc->attributes.IMFAttributes_iface);
+
+    TRACE("%p.\n", iface);
+
+    return attributes_UnlockStore(&presentation_desc->attributes);
 }
 
-static HRESULT WINAPI presentation_descriptor_GetCount(IMFPresentationDescriptor *iface, UINT32 *items)
+static HRESULT WINAPI presentation_descriptor_GetCount(IMFPresentationDescriptor *iface, UINT32 *count)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetCount(&presentation_desc->attributes.IMFAttributes_iface, items);
+
+    TRACE("%p, %p.\n", iface, count);
+
+    return attributes_GetCount(&presentation_desc->attributes, count);
 }
 
 static HRESULT WINAPI presentation_descriptor_GetItemByIndex(IMFPresentationDescriptor *iface, UINT32 index, GUID *key,
         PROPVARIANT *value)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_GetItemByIndex(&presentation_desc->attributes.IMFAttributes_iface, index, key, value);
+
+    TRACE("%p, %u, %p, %p.\n", iface, index, key, value);
+
+    return attributes_GetItemByIndex(&presentation_desc->attributes, index, key, value);
 }
 
 static HRESULT WINAPI presentation_descriptor_CopyAllItems(IMFPresentationDescriptor *iface, IMFAttributes *dest)
 {
     struct presentation_desc *presentation_desc = impl_from_IMFPresentationDescriptor(iface);
-    return IMFAttributes_CopyAllItems(&presentation_desc->attributes.IMFAttributes_iface, dest);
+
+    TRACE("%p, %p.\n", iface, dest);
+
+    return attributes_CopyAllItems(&presentation_desc->attributes, dest);
 }
 
 static HRESULT WINAPI presentation_descriptor_GetStreamDescriptorCount(IMFPresentationDescriptor *iface, DWORD *count)
@@ -1573,7 +1759,7 @@ HRESULT WINAPI MFCalculateImageSize(REFGUID subtype, UINT32 width, UINT32 height
     };
     struct uncompressed_video_format *format;
 
-    TRACE("%s, %u, %u, %p.\n", debugstr_guid(subtype), width, height, size);
+    TRACE("%s, %u, %u, %p.\n", debugstr_mf_guid(subtype), width, height, size);
 
     format = bsearch(subtype, video_formats, ARRAY_SIZE(video_formats), sizeof(*video_formats),
             uncompressed_video_format_compare);
@@ -1676,6 +1862,79 @@ HRESULT WINAPI MFUnwrapMediaType(IMFMediaType *wrapper, IMFMediaType **ret)
         return hr;
 
     *ret = mediatype;
+
+    return S_OK;
+}
+
+/***********************************************************************
+ *      MFCreateWaveFormatExFromMFMediaType (mfplat.@)
+ */
+HRESULT WINAPI MFCreateWaveFormatExFromMFMediaType(IMFMediaType *mediatype, WAVEFORMATEX **ret_format,
+        UINT32 *size, UINT32 flags)
+{
+    WAVEFORMATEXTENSIBLE *format_ext = NULL;
+    WAVEFORMATEX *format;
+    GUID major, subtype;
+    UINT32 value;
+    HRESULT hr;
+
+    TRACE("%p, %p, %p, %#x.\n", mediatype, ret_format, size, flags);
+
+    if (FAILED(hr = IMFMediaType_GetGUID(mediatype, &MF_MT_MAJOR_TYPE, &major)))
+        return hr;
+
+    if (FAILED(hr = IMFMediaType_GetGUID(mediatype, &MF_MT_SUBTYPE, &subtype)))
+        return hr;
+
+    if (!IsEqualGUID(&major, &MFMediaType_Audio))
+        return E_INVALIDARG;
+
+    if (!IsEqualGUID(&subtype, &MFAudioFormat_PCM))
+    {
+        FIXME("Unsupported audio format %s.\n", debugstr_guid(&subtype));
+        return E_NOTIMPL;
+    }
+
+    /* FIXME: probably WAVE_FORMAT_MPEG/WAVE_FORMAT_MPEGLAYER3 should be handled separately. */
+    if (flags == MFWaveFormatExConvertFlag_ForceExtensible)
+    {
+        format_ext = CoTaskMemAlloc(sizeof(*format_ext));
+        *size = sizeof(*format_ext);
+        format = (WAVEFORMATEX *)format_ext;
+    }
+    else
+    {
+        format = CoTaskMemAlloc(sizeof(*format));
+        *size = sizeof(*format);
+    }
+
+    if (!format)
+        return E_OUTOFMEMORY;
+
+    memset(format, 0, *size);
+
+    format->wFormatTag = format_ext ? WAVE_FORMAT_EXTENSIBLE : WAVE_FORMAT_PCM;
+
+    if (SUCCEEDED(IMFMediaType_GetUINT32(mediatype, &MF_MT_AUDIO_NUM_CHANNELS, &value)))
+        format->nChannels = value;
+    IMFMediaType_GetUINT32(mediatype, &MF_MT_AUDIO_SAMPLES_PER_SECOND, &format->nSamplesPerSec);
+    IMFMediaType_GetUINT32(mediatype, &MF_MT_AUDIO_AVG_BYTES_PER_SECOND, &format->nAvgBytesPerSec);
+    if (SUCCEEDED(IMFMediaType_GetUINT32(mediatype, &MF_MT_AUDIO_BLOCK_ALIGNMENT, &value)))
+        format->nBlockAlign = value;
+    if (SUCCEEDED(IMFMediaType_GetUINT32(mediatype, &MF_MT_AUDIO_BITS_PER_SAMPLE, &value)))
+        format->wBitsPerSample = value;
+    if (format_ext)
+    {
+        format->cbSize = sizeof(*format_ext) - sizeof(*format);
+
+        if (SUCCEEDED(IMFMediaType_GetUINT32(mediatype, &MF_MT_AUDIO_VALID_BITS_PER_SAMPLE, &value)))
+            format_ext->Samples.wSamplesPerBlock = value;
+
+        IMFMediaType_GetUINT32(mediatype, &MF_MT_AUDIO_CHANNEL_MASK, &format_ext->dwChannelMask);
+        memcpy(&format_ext->SubFormat, &KSDATAFORMAT_SUBTYPE_PCM, sizeof(format_ext->SubFormat));
+    }
+
+    *ret_format = format;
 
     return S_OK;
 }

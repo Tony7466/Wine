@@ -45,6 +45,8 @@ extern HRESULT assembly_get_runtime_version(ASSEMBLY *assembly, LPSTR *version) 
 extern HRESULT assembly_get_vtable_fixups(ASSEMBLY *assembly, VTableFixup **fixups, DWORD *count) DECLSPEC_HIDDEN;
 extern HRESULT assembly_get_native_entrypoint(ASSEMBLY *assembly, NativeEntryPointFunc *func) DECLSPEC_HIDDEN;
 
+#define WINE_MONO_VERSION "4.8.1"
+
 /* Mono embedding */
 typedef struct _MonoDomain MonoDomain;
 typedef struct _MonoAssembly MonoAssembly;
@@ -105,6 +107,8 @@ typedef struct CorDebug
 extern HRESULT get_runtime_info(LPCWSTR exefile, LPCWSTR version, LPCWSTR config_file,
     IStream *config_stream, DWORD startup_flags, DWORD runtimeinfo_flags, BOOL legacy,
     ICLRRuntimeInfo **result) DECLSPEC_HIDDEN;
+
+extern BOOL get_mono_path(LPWSTR path) DECLSPEC_HIDDEN;
 
 extern HRESULT ICLRRuntimeInfo_GetRuntimeHost(ICLRRuntimeInfo *iface, RuntimeHost **result) DECLSPEC_HIDDEN;
 

@@ -486,6 +486,9 @@ ULONG CDECL wined3d_device_decref(struct wined3d_device *device)
     {
         UINT i;
 
+        if (device->swapchain_count)
+            wined3d_device_uninit_3d(device);
+
         wined3d_stateblock_state_cleanup(&device->stateblock_state);
 
         wined3d_cs_destroy(device->cs);
@@ -1067,32 +1070,19 @@ static HRESULT wined3d_device_create_primary_opengl_context(struct wined3d_devic
     return WINED3D_OK;
 }
 
-HRESULT CDECL wined3d_device_init_3d(struct wined3d_device *device,
-        struct wined3d_swapchain_desc *swapchain_desc)
+HRESULT wined3d_device_set_implicit_swapchain(struct wined3d_device *device, struct wined3d_swapchain *swapchain)
 {
     static const struct wined3d_color black = {0.0f, 0.0f, 0.0f, 0.0f};
-    struct wined3d_swapchain *swapchain = NULL;
+    const struct wined3d_swapchain_desc *swapchain_desc;
     DWORD clear_flags = 0;
     HRESULT hr;
 
-    TRACE("device %p, swapchain_desc %p.\n", device, swapchain_desc);
+    TRACE("device %p, swapchain %p.\n", device, swapchain);
 
     if (device->d3d_initialized)
         return WINED3DERR_INVALIDCALL;
-    if (device->wined3d->flags & WINED3D_NO3D)
-        return WINED3DERR_INVALIDCALL;
 
-    memset(device->fb.render_targets, 0, sizeof(device->fb.render_targets));
-
-    /* Setup the implicit swapchain. This also initializes a context. */
-    TRACE("Creating implicit swapchain.\n");
-    if (FAILED(hr = device->device_parent->ops->create_swapchain(device->device_parent,
-            swapchain_desc, &swapchain)))
-    {
-        WARN("Failed to create implicit swapchain.\n");
-        goto err_out;
-    }
-
+    swapchain_desc = &swapchain->desc;
     if (swapchain_desc->backbuffer_count && swapchain_desc->backbuffer_bind_flags & WINED3D_BIND_RENDER_TARGET)
     {
         struct wined3d_resource *back_buffer = &swapchain->back_buffers[0]->resource;
@@ -1108,89 +1098,67 @@ HRESULT CDECL wined3d_device_init_3d(struct wined3d_device *device,
                 NULL, &wined3d_null_parent_ops, &device->back_buffer_view)))
         {
             ERR("Failed to create rendertarget view, hr %#x.\n", hr);
-            goto err_out;
+            return hr;
         }
     }
 
     device->swapchain_count = 1;
     if (!(device->swapchains = heap_calloc(device->swapchain_count, sizeof(*device->swapchains))))
     {
-        ERR("Out of memory!\n");
+        ERR("Failed to allocate swapchain array.\n");
+        hr = E_OUTOFMEMORY;
         goto err_out;
     }
     device->swapchains[0] = swapchain;
 
-    if (FAILED(hr = wined3d_device_create_primary_opengl_context(device)))
-        goto err_out;
-    device_init_swapchain_state(device, swapchain);
+    memset(device->fb.render_targets, 0, sizeof(device->fb.render_targets));
+    if (device->wined3d->flags & WINED3D_NO3D)
+    {
+        if (!(device->blitter = wined3d_cpu_blitter_create()))
+        {
+            ERR("Failed to create CPU blitter.\n");
+            heap_free(device->swapchains);
+            device->swapchain_count = 0;
+            hr = E_FAIL;
+            goto err_out;
+        }
+    }
+    else
+    {
+        if (FAILED(hr = wined3d_device_create_primary_opengl_context(device)))
+            goto err_out;
+        device_init_swapchain_state(device, swapchain);
 
-    device->contexts[0]->last_was_rhw = 0;
+        device->contexts[0]->last_was_rhw = 0;
 
-    TRACE("All defaults now set up.\n");
+        TRACE("All defaults now set up.\n");
 
-    /* Clear the screen */
-    if (device->back_buffer_view)
-        clear_flags |= WINED3DCLEAR_TARGET;
-    if (swapchain_desc->enable_auto_depth_stencil)
-        clear_flags |= WINED3DCLEAR_ZBUFFER | WINED3DCLEAR_STENCIL;
-    if (clear_flags)
-        wined3d_device_clear(device, 0, NULL, clear_flags, &black, 1.0f, 0);
+        /* Clear the screen */
+        if (device->back_buffer_view)
+            clear_flags |= WINED3DCLEAR_TARGET;
+        if (swapchain_desc->enable_auto_depth_stencil)
+            clear_flags |= WINED3DCLEAR_ZBUFFER | WINED3DCLEAR_STENCIL;
+        if (clear_flags)
+            wined3d_device_clear(device, 0, NULL, clear_flags, &black, 1.0f, 0);
 
-    device->d3d_initialized = TRUE;
+        device->d3d_initialized = TRUE;
 
-    if (wined3d_settings.logo)
-        device_load_logo(device, wined3d_settings.logo);
+        if (wined3d_settings.logo)
+            device_load_logo(device, wined3d_settings.logo);
+    }
+
     return WINED3D_OK;
 
 err_out:
     heap_free(device->swapchains);
+    device->swapchains = NULL;
     device->swapchain_count = 0;
     if (device->back_buffer_view)
+    {
         wined3d_rendertarget_view_decref(device->back_buffer_view);
-    if (swapchain)
-        wined3d_swapchain_decref(swapchain);
-
-    return hr;
-}
-
-HRESULT CDECL wined3d_device_init_gdi(struct wined3d_device *device,
-        struct wined3d_swapchain_desc *swapchain_desc)
-{
-    struct wined3d_swapchain *swapchain = NULL;
-    HRESULT hr;
-
-    TRACE("device %p, swapchain_desc %p.\n", device, swapchain_desc);
-
-    /* Setup the implicit swapchain */
-    TRACE("Creating implicit swapchain\n");
-    hr = device->device_parent->ops->create_swapchain(device->device_parent,
-            swapchain_desc, &swapchain);
-    if (FAILED(hr))
-    {
-        WARN("Failed to create implicit swapchain\n");
-        goto err_out;
+        device->back_buffer_view = NULL;
     }
 
-    device->swapchain_count = 1;
-    if (!(device->swapchains = heap_calloc(device->swapchain_count, sizeof(*device->swapchains))))
-    {
-        ERR("Out of memory!\n");
-        goto err_out;
-    }
-    device->swapchains[0] = swapchain;
-
-    if (!(device->blitter = wined3d_cpu_blitter_create()))
-    {
-        ERR("Failed to create CPU blitter.\n");
-        heap_free(device->swapchains);
-        device->swapchain_count = 0;
-        goto err_out;
-    }
-
-    return WINED3D_OK;
-
-err_out:
-    wined3d_swapchain_decref(swapchain);
     return hr;
 }
 
@@ -1201,90 +1169,75 @@ static void device_free_sampler(struct wine_rb_entry *entry, void *context)
     wined3d_sampler_decref(sampler);
 }
 
-HRESULT CDECL wined3d_device_uninit_3d(struct wined3d_device *device)
+void wined3d_device_uninit_3d(struct wined3d_device *device)
 {
+    BOOL no3d = device->wined3d->flags & WINED3D_NO3D;
+    struct wined3d_rendertarget_view *view;
+    struct wined3d_texture *texture;
     unsigned int i;
 
     TRACE("device %p.\n", device);
 
-    if (!device->d3d_initialized)
-        return WINED3DERR_INVALIDCALL;
+    if (!device->d3d_initialized && !no3d)
+    {
+        ERR("Called while 3D support was not initialised.\n");
+        return;
+    }
 
     wined3d_cs_finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
 
-    if (device->logo_texture)
-        wined3d_texture_decref(device->logo_texture);
-    if (device->cursor_texture)
-        wined3d_texture_decref(device->cursor_texture);
+    device->swapchain_count = 0;
+
+    if ((texture = device->logo_texture))
+    {
+        device->logo_texture = NULL;
+        wined3d_texture_decref(texture);
+    }
+
+    if ((texture = device->cursor_texture))
+    {
+        device->cursor_texture = NULL;
+        wined3d_texture_decref(texture);
+    }
 
     state_unbind_resources(&device->state);
+    for (i = 0; i < device->adapter->d3d_info.limits.max_rt_count; ++i)
+    {
+        wined3d_device_set_rendertarget_view(device, i, NULL, FALSE);
+    }
 
     wine_rb_clear(&device->samplers, device_free_sampler, NULL);
 
-    wined3d_device_delete_opengl_contexts(device);
+    if (no3d)
+        device->blitter->ops->blitter_destroy(device->blitter, NULL);
+    else
+        wined3d_device_delete_opengl_contexts(device);
 
-    if (device->fb.depth_stencil)
+    if ((view = device->fb.depth_stencil))
     {
-        struct wined3d_rendertarget_view *view = device->fb.depth_stencil;
-
         TRACE("Releasing depth/stencil view %p.\n", view);
 
         device->fb.depth_stencil = NULL;
         wined3d_rendertarget_view_decref(view);
     }
 
-    if (device->auto_depth_stencil_view)
+    if ((view = device->auto_depth_stencil_view))
     {
-        struct wined3d_rendertarget_view *view = device->auto_depth_stencil_view;
-
         device->auto_depth_stencil_view = NULL;
         if (wined3d_rendertarget_view_decref(view))
             ERR("Something's still holding the auto depth/stencil view (%p).\n", view);
     }
 
-    for (i = 0; i < device->adapter->d3d_info.limits.max_rt_count; ++i)
+    if ((view = device->back_buffer_view))
     {
-        wined3d_device_set_rendertarget_view(device, i, NULL, FALSE);
-    }
-    if (device->back_buffer_view)
-    {
-        wined3d_rendertarget_view_decref(device->back_buffer_view);
         device->back_buffer_view = NULL;
-    }
-
-    for (i = 0; i < device->swapchain_count; ++i)
-    {
-        TRACE("Releasing the implicit swapchain %u.\n", i);
-        if (wined3d_swapchain_decref(device->swapchains[i]))
-            FIXME("Something's still holding the implicit swapchain.\n");
+        wined3d_rendertarget_view_decref(view);
     }
 
     heap_free(device->swapchains);
     device->swapchains = NULL;
-    device->swapchain_count = 0;
 
     device->d3d_initialized = FALSE;
-
-    return WINED3D_OK;
-}
-
-HRESULT CDECL wined3d_device_uninit_gdi(struct wined3d_device *device)
-{
-    unsigned int i;
-
-    device->blitter->ops->blitter_destroy(device->blitter, NULL);
-
-    for (i = 0; i < device->swapchain_count; ++i)
-    {
-        TRACE("Releasing the implicit swapchain %u.\n", i);
-        if (wined3d_swapchain_decref(device->swapchains[i]))
-            FIXME("Something's still holding the implicit swapchain.\n");
-    }
-
-    heap_free(device->swapchains);
-    device->swapchains = NULL;
-    device->swapchain_count = 0;
-    return WINED3D_OK;
 }
 
 /* Enables thread safety in the wined3d device and its resources. Called by DirectDraw
@@ -1388,6 +1341,7 @@ HRESULT CDECL wined3d_device_set_stream_source(struct wined3d_device *device, UI
         wined3d_buffer_decref(device->update_stateblock_state->streams[stream_idx].buffer);
     device->update_stateblock_state->streams[stream_idx].buffer = buffer;
     device->update_stateblock_state->streams[stream_idx].stride = stride;
+    device->update_stateblock_state->streams[stream_idx].offset = offset;
 
     if (device->recording)
     {
@@ -4868,6 +4822,7 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
 {
     const struct wined3d_d3d_info *d3d_info = &device->adapter->d3d_info;
     struct wined3d_resource *resource, *cursor;
+    struct wined3d_rendertarget_view *view;
     struct wined3d_swapchain *swapchain;
     struct wined3d_view_desc view_desc;
     BOOL backbuffer_resized;
@@ -5002,10 +4957,10 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
         }
     }
 
-    if (device->auto_depth_stencil_view)
+    if ((view = device->auto_depth_stencil_view))
     {
-        wined3d_rendertarget_view_decref(device->auto_depth_stencil_view);
         device->auto_depth_stencil_view = NULL;
+        wined3d_rendertarget_view_decref(view);
     }
     if (swapchain->desc.enable_auto_depth_stencil)
     {
@@ -5051,10 +5006,10 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
         wined3d_device_set_depth_stencil_view(device, device->auto_depth_stencil_view);
     }
 
-    if (device->back_buffer_view)
+    if ((view = device->back_buffer_view))
     {
-        wined3d_rendertarget_view_decref(device->back_buffer_view);
         device->back_buffer_view = NULL;
+        wined3d_rendertarget_view_decref(view);
     }
     if (swapchain->desc.backbuffer_count && swapchain->desc.backbuffer_bind_flags & WINED3D_BIND_RENDER_TARGET)
     {
@@ -5100,9 +5055,8 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
         if (wined3d_settings.logo)
             device_load_logo(device, wined3d_settings.logo);
     }
-    else if (device->back_buffer_view)
+    else if ((view = device->back_buffer_view))
     {
-        struct wined3d_rendertarget_view *view = device->back_buffer_view;
         struct wined3d_state *state = &device->state;
 
         wined3d_device_set_rendertarget_view(device, 0, view, FALSE);

@@ -29,6 +29,7 @@
 #include "windef.h"
 #include "winbase.h"
 #include "winreg.h"
+#include "winternl.h"
 #include "ole2.h"
 
 #include "corerror.h"
@@ -127,8 +128,6 @@ MonoThread* (CDECL *mono_thread_attach)(MonoDomain *domain);
 void (CDECL *mono_thread_manage)(void);
 void (CDECL *mono_trace_set_print_handler)(MonoPrintCallback callback);
 void (CDECL *mono_trace_set_printerr_handler)(MonoPrintCallback callback);
-
-static BOOL get_mono_path(LPWSTR path);
 
 static BOOL find_mono_dll(LPCWSTR path, LPWSTR dll_path);
 
@@ -666,7 +665,7 @@ static BOOL find_mono_dll(LPCWSTR path, LPWSTR dll_path)
     return (attributes != INVALID_FILE_ATTRIBUTES);
 }
 
-static BOOL get_mono_path(LPWSTR path)
+static BOOL get_mono_path_local(LPWSTR path)
 {
     static const WCHAR subdir_mono[] = {'\\','m','o','n','o','\\','m','o','n','o','-','2','.','0', 0};
     WCHAR base_path[MAX_PATH], mono_dll_path[MAX_PATH];
@@ -682,6 +681,112 @@ static BOOL get_mono_path(LPWSTR path)
     }
 
     return FALSE;
+}
+
+static BOOL get_mono_path_registry(LPWSTR path)
+{
+    static const WCHAR keyname[] = {'S','o','f','t','w','a','r','e','\\','W','i','n','e','\\','M','o','n','o',0};
+    static const WCHAR valuename[] = {'R','u','n','t','i','m','e','P','a','t','h',0};
+    WCHAR base_path[MAX_PATH], mono_dll_path[MAX_PATH];
+    HKEY hkey;
+    DWORD res, valuesize;
+    BOOL ret=FALSE;
+
+    /* @@ Wine registry key: HKCU\Software\Wine\Mono */
+    res = RegOpenKeyW(HKEY_CURRENT_USER, keyname, &hkey);
+    if (res != ERROR_SUCCESS)
+        return FALSE;
+
+    valuesize = sizeof(base_path);
+    res = RegGetValueW(hkey, NULL, valuename, RRF_RT_REG_SZ, NULL, base_path, &valuesize);
+    if (res == ERROR_SUCCESS && find_mono_dll(base_path, mono_dll_path))
+    {
+        strcpyW(path, base_path);
+        ret = TRUE;
+    }
+
+    RegCloseKey(hkey);
+
+    return ret;
+}
+
+static BOOL get_mono_path_unix(const char *unix_dir, LPWSTR path)
+{
+    static const WCHAR unix_prefix[] = {'\\','\\','?','\\','u','n','i','x','\\'};
+    static WCHAR * (CDECL *p_wine_get_dos_file_name)(const char*);
+    LPWSTR dos_dir;
+    WCHAR mono_dll_path[MAX_PATH];
+    BOOL ret;
+
+    if (!p_wine_get_dos_file_name)
+    {
+        p_wine_get_dos_file_name = (void*)GetProcAddress(GetModuleHandleA("kernel32"), "wine_get_dos_file_name");
+        if (!p_wine_get_dos_file_name)
+            return FALSE;
+    }
+
+    dos_dir = p_wine_get_dos_file_name(unix_dir);
+    if (!dos_dir)
+        return FALSE;
+
+    if (memcmp(dos_dir, unix_prefix, sizeof(unix_prefix)) == 0)
+    {
+        /* No drive letter for this directory */
+        heap_free(dos_dir);
+        return FALSE;
+    }
+
+    ret = find_mono_dll(dos_dir, mono_dll_path);
+    if (ret)
+        strcpyW(path, dos_dir);
+
+    heap_free(dos_dir);
+
+    return ret;
+}
+
+static BOOL get_mono_path_datadir(LPWSTR path)
+{
+    const char *data_dir;
+    char *package_dir;
+    int len;
+    BOOL ret;
+
+    if((data_dir = wine_get_data_dir()))
+    {
+        len = strlen(data_dir);
+        package_dir = heap_alloc(len + sizeof("/mono/wine-mono-" WINE_MONO_VERSION));
+        memcpy(package_dir, data_dir, len);
+        strcpy(package_dir+len, "/mono/wine-mono-" WINE_MONO_VERSION);
+    }
+    else if((data_dir = wine_get_build_dir()))
+    {
+        len = strlen(data_dir);
+        package_dir = heap_alloc(len + sizeof("/../wine-mono-" WINE_MONO_VERSION));
+        memcpy(package_dir, data_dir, len);
+        strcpy(package_dir+len, "/../wine-mono-" WINE_MONO_VERSION);
+    }
+    else
+    {
+        return FALSE;
+    }
+
+    ret = get_mono_path_unix(package_dir, path);
+
+    heap_free(package_dir);
+
+    return ret;
+}
+
+BOOL get_mono_path(LPWSTR path)
+{
+    return get_mono_path_local(path) ||
+        get_mono_path_registry(path) ||
+        get_mono_path_datadir(path) ||
+        get_mono_path_unix(INSTALL_DATADIR "/wine/mono/wine-mono-" WINE_MONO_VERSION, path) ||
+        (strcmp(INSTALL_DATADIR, "/usr/share") &&
+         get_mono_path_unix("/usr/share/wine/mono/wine-mono-" WINE_MONO_VERSION, path)) ||
+        get_mono_path_unix("/opt/wine/mono/wine-mono-" WINE_MONO_VERSION, path);
 }
 
 struct InstalledRuntimeEnum
@@ -1242,7 +1347,7 @@ static void parse_override_entry(override_entry *entry, const char *string, int 
             value = equals + 1;
             switch (key_len) {
             case 3:
-                if (!strncasecmp(string, "gac", 3)) {
+                if (!_strnicmp(string, "gac", 3)) {
                     if (IS_OPTION_TRUE(*value))
                         entry->flags |= ASSEMBLY_SEARCH_GAC;
                     else if (IS_OPTION_FALSE(*value))

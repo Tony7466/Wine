@@ -4262,22 +4262,16 @@ static void dump_create_device_manager_reply( const struct create_device_manager
 
 static void dump_create_device_request( const struct create_device_request *req )
 {
-    fprintf( stderr, " access=%08x", req->access );
-    fprintf( stderr, ", attributes=%08x", req->attributes );
-    fprintf( stderr, ", rootdir=%04x", req->rootdir );
+    fprintf( stderr, " rootdir=%04x", req->rootdir );
     dump_uint64( ", user_ptr=", &req->user_ptr );
     fprintf( stderr, ", manager=%04x", req->manager );
     dump_varargs_unicode_str( ", name=", cur_size );
 }
 
-static void dump_create_device_reply( const struct create_device_reply *req )
-{
-    fprintf( stderr, " handle=%04x", req->handle );
-}
-
 static void dump_delete_device_request( const struct delete_device_request *req )
 {
-    fprintf( stderr, " handle=%04x", req->handle );
+    fprintf( stderr, " manager=%04x", req->manager );
+    dump_uint64( ", device=", &req->device );
 }
 
 static void dump_get_next_device_request_request( const struct get_next_device_request_request *req )
@@ -4291,8 +4285,8 @@ static void dump_get_next_device_request_reply( const struct get_next_device_req
 {
     dump_irp_params( " params=", &req->params );
     fprintf( stderr, ", next=%04x", req->next );
-    fprintf( stderr, ", client_pid=%04x", req->client_pid );
     fprintf( stderr, ", client_tid=%04x", req->client_tid );
+    dump_uint64( ", client_thread=", &req->client_thread );
     fprintf( stderr, ", in_size=%u", req->in_size );
     fprintf( stderr, ", out_size=%u", req->out_size );
     dump_varargs_bytes( ", next_data=", cur_size );
@@ -5149,7 +5143,7 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_token_impersonation_level_reply,
     (dump_func)dump_allocate_locally_unique_id_reply,
     (dump_func)dump_create_device_manager_reply,
-    (dump_func)dump_create_device_reply,
+    NULL,
     NULL,
     (dump_func)dump_get_next_device_request_reply,
     (dump_func)dump_get_kernel_object_ptr_reply,

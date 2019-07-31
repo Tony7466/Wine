@@ -3240,7 +3240,8 @@ cleanup:
 
 static void test_set_stream_source(void)
 {
-    IDirect3DVertexBuffer9 *vb;
+    IDirect3DVertexBuffer9 *vb, *current_vb;
+    unsigned int offset, stride;
     IDirect3DDevice9 *device;
     IDirect3D9 *d3d9;
     ULONG refcount;
@@ -3273,7 +3274,24 @@ static void test_set_stream_source(void)
     hr = IDirect3DDevice9_SetStreamSource(device, 0, vb, 3, 32);
     ok(hr == D3DERR_INVALIDCALL || hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DDevice9_SetStreamSource(device, 0, vb, 4, 32);
-    ok(SUCCEEDED(hr), "Failed to set the stream source, hr %#x.\n", hr);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_SetStreamSource(device, 0, NULL, 0, 0);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice9_GetStreamSource(device, 0, &current_vb, &offset, &stride);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    ok(!current_vb, "Got unexpected vb %p.\n", current_vb);
+    ok(offset == 4, "Got unexpected offset %u.\n", offset);
+    ok(stride == 32, "Got unexpected stride %u.\n", stride);
+
+    hr = IDirect3DDevice9_SetStreamSource(device, 0, vb, 0, 0);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice9_GetStreamSource(device, 0, &current_vb, &offset, &stride);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    ok(current_vb == vb, "Got unexpected vb %p.\n", current_vb);
+    IDirect3DVertexBuffer9_Release(current_vb);
+    ok(!offset, "Got unexpected offset %u.\n", offset);
+    ok(!stride, "Got unexpected stride %u.\n", stride);
 
     /* Try to set the NULL buffer with an offset and stride 0 */
     hr = IDirect3DDevice9_SetStreamSource(device, 0, NULL, 0, 0);
@@ -10548,10 +10566,11 @@ cleanup:
 
 static void test_begin_end_state_block(void)
 {
-    IDirect3DStateBlock9 *stateblock;
+    IDirect3DStateBlock9 *stateblock, *stateblock2;
     IDirect3DDevice9 *device;
     IDirect3D9 *d3d;
     ULONG refcount;
+    DWORD value;
     HWND window;
     HRESULT hr;
 
@@ -10566,31 +10585,59 @@ static void test_begin_end_state_block(void)
         return;
     }
 
-    /* Should succeed. */
     hr = IDirect3DDevice9_BeginStateBlock(device);
-    ok(SUCCEEDED(hr), "Failed to begin stateblock, hr %#x.\n", hr);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
 
-    /* Calling BeginStateBlock() while recording should return
-     * D3DERR_INVALIDCALL. */
-    hr = IDirect3DDevice9_BeginStateBlock(device);
-    ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice9_SetRenderState(device, D3DRS_LIGHTING, FALSE);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
 
-    /* Should succeed. */
     stateblock = (IDirect3DStateBlock9 *)0xdeadbeef;
     hr = IDirect3DDevice9_EndStateBlock(device, &stateblock);
-    ok(SUCCEEDED(hr), "Failed to end stateblock, hr %#x.\n", hr);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     ok(!!stateblock && stateblock != (IDirect3DStateBlock9 *)0xdeadbeef,
             "Got unexpected stateblock %p.\n", stateblock);
-    IDirect3DStateBlock9_Release(stateblock);
 
-    /* Calling EndStateBlock() while not recording should return
-     * D3DERR_INVALIDCALL. stateblock should not be touched. */
-    stateblock = (IDirect3DStateBlock9 *)0xdeadbeef;
-    hr = IDirect3DDevice9_EndStateBlock(device, &stateblock);
+    stateblock2 = (IDirect3DStateBlock9 *)0xdeadbeef;
+    hr = IDirect3DDevice9_EndStateBlock(device, &stateblock2);
     ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x.\n", hr);
-    ok(stateblock == (IDirect3DStateBlock9 *)0xdeadbeef,
-            "Got unexpected stateblock %p.\n", stateblock);
+    ok(stateblock2 == (IDirect3DStateBlock9 *)0xdeadbeef,
+            "Got unexpected stateblock %p.\n", stateblock2);
 
+    hr = IDirect3DDevice9_GetRenderState(device, D3DRS_LIGHTING, &value);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    ok(value == TRUE, "Got unexpected value %#x.\n", value);
+
+    hr = IDirect3DDevice9_BeginStateBlock(device);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_BeginStateBlock(device);
+    ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDirect3DStateBlock9_Apply(stateblock);
+    ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDirect3DStateBlock9_Capture(stateblock);
+    ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_CreateStateBlock(device, D3DSBT_ALL, &stateblock2);
+    ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_GetRenderState(device, D3DRS_LIGHTING, &value);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    ok(value == TRUE, "Got unexpected value %#x.\n", value);
+
+    hr = IDirect3DDevice9_EndStateBlock(device, &stateblock2);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDirect3DStateBlock9_Apply(stateblock2);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_GetRenderState(device, D3DRS_LIGHTING, &value);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    ok(value == TRUE, "Got unexpected value %#x.\n", value);
+
+    IDirect3DStateBlock9_Release(stateblock);
+    IDirect3DStateBlock9_Release(stateblock2);
     refcount = IDirect3DDevice9_Release(device);
     ok(!refcount, "Device has %u references left.\n", refcount);
     IDirect3D9_Release(d3d);
