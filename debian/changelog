@@ -1,3 +1,18 @@
+wine-development (4.6-1) UNRELEASED; urgency=medium
+
+  * New upstream release 4.6, released Apr 12, 2019.
+    - Beginnings of a Vulkan backend for WineD3D.
+    - Support for loading Mono libraries from a shared location.
+    - Libwine.dll no longer needed when using Wine DLLs on Windows.
+    - Regression tests compiled directly to PE format.
+    - Support for the Split Button Common Control.
+    - Complex structs support in the typelib marshaller.
+    - Video capture ported to Video4Linux version 2.
+    - Initial version of the Debug Engine DLL.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Wed, 31 Jul 2019 00:55:56 +0000
+
 wine-development (4.5-1) unstable; urgency=medium
 
   * New upstream release 4.5, released Mar 29, 2019.
