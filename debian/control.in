@@ -247,6 +247,12 @@ Suggests:
  ttf-mscorefonts-installer,
 Pre-Depends:
  ${misc:Pre-Depends},
+Breaks:
+ wine32 (<< 4.0.1-1~),
+ wine64 (<< 4.0.1-1~),
+Replaces:
+ wine32 (<< 4.0.1-1~),
+ wine64 (<< 4.0.1-1~),
 Description: Windows API implementation - library
  Wine is a free MS-Windows API implementation.
  This is still a work in progress and many applications may still not work.
