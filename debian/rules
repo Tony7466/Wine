@@ -173,8 +173,6 @@ override_dh_auto_install-indep: $(INSTALLS)
 	mkdir -p debian/tmp
 	cp ANNOUNCE debian/tmp/NEWS
 	cp programs/winedbg/README debian/tmp/README.winedbg
-	sed "s|BINDIR|$(BINDIR)|g" debian/scripts/wineserver.in > debian/tmp/wineserver
-	chmod 755 debian/tmp/wineserver
 	sed "s|DEBSUFFIX|$(DEBSUFFIX)|g" debian/scripts/wineapploader.in > debian/tmp/wineapploader
 	chmod 755 debian/tmp/wineapploader
 	sed "s|BINDIR|$(BINDIR)|g;s|VERSION|$(VERSION)|g" debian/scripts/wine.in > debian/tmp/wine$(DEBSUFFIX)
@@ -198,6 +196,8 @@ override_dh_auto_install-arch: $(INSTALLS)
 	cp tools/winedump/README debian/tmp/README.winedump
 	cp server/wineserver debian/tmp/wineserver$(DEB_BUILD_ARCH_BITS)
 	sed "s|BINDIR|$(BINDIR)|g" debian/scripts/winegcc.in > debian/tmp/winegcc$(DEBSUFFIX)
+	sed "s|BINDIR|$(BINDIR)|g;s|VERSION|$(VERSION)|g" debian/scripts/wineserver.in > debian/tmp/wineserver
+	chmod 755 debian/tmp/wineserver
 	dh_auto_install
 	for file in $$(find . ! -path "./debian/*" -name \*.man); do \
 	    rename=$$(basename $$file | sed "s/\\./$(DEBSUFFIX)./;s/UTF-8\\.//"); \
