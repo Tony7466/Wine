@@ -1,4 +1,4 @@
-wine-development (4.7-1) UNRELEASED; urgency=medium
+wine-development (4.7-1) unstable; urgency=medium
 
   * New upstream release 4.7, released Apr 26, 2019.
     - Support for builtin libraries in PE format even on Unix.
@@ -7,6 +7,7 @@ wine-development (4.7-1) UNRELEASED; urgency=medium
     - Support for the Command Link standard control.
     - Improved Edit control sizing in CJK locales.
     - Various bug fixes.
+  * Conflict with gcc-mingw, which will be called during build if installed.
 
  -- Michael Gilbert <mgilbert@debian.org>  Sat, 03 Aug 2019 00:17:42 +0000
 

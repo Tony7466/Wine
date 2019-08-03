@@ -3,8 +3,8 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -1528,6 +1528,9 @@ static struct file *open_include_file( c
-     }
+@@ -1537,6 +1537,9 @@ static struct file *open_include_file( c
+ 
      if (pFile->type == INCL_SYSTEM) return NULL;  /* ignore system files we cannot find */
  
 +    /* no reason to check that files exist here, may be built later */
@@ -13,7 +13,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      /* try in src file directory */
      if ((file = open_file_same_dir( pFile->included_by, pFile->name, &pFile->filename ))) return file;
  
-@@ -2787,6 +2790,14 @@ static void output_source_svg( struct ma
+@@ -2832,6 +2835,14 @@ static void output_source_svg( struct ma
  
          if (images[i])
          {
@@ -30,7 +30,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                      top_src_dir_path( make, "tools/buildimage" ), source->filename );
 --- a/programs/regedit/Makefile.in
 +++ b/programs/regedit/Makefile.in
-@@ -19,4 +19,4 @@ RC_SRCS = regedit.rc
+@@ -20,4 +20,4 @@ RC_SRCS = regedit.rc
  
  MANPAGES = regedit.man.in
  
@@ -74,7 +74,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 +	idi_tt_error_sm.svg
 --- a/programs/taskmgr/Makefile.in
 +++ b/programs/taskmgr/Makefile.in
-@@ -25,4 +25,6 @@ C_SRCS = \
+@@ -26,4 +26,6 @@ C_SRCS = \
  RC_SRCS = taskmgr.rc
  
  SVG_SRCS = \
