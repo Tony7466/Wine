@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -28,8 +28,8 @@ datarootdir     = @datarootdir@
+@@ -27,8 +27,8 @@ datarootdir     = @datarootdir@
  datadir         = @datadir@
  mandir          = @mandir@
  includedir      = @includedir@

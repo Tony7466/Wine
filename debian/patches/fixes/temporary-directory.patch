@@ -23,22 +23,19 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  static const char server_dir_prefix[] = "/server-";      /* prefix for server dir */
  
  static char *bindir;
-@@ -242,15 +243,113 @@ static char *get_runtime_argvdir( const
+@@ -242,14 +243,107 @@ static char *get_runtime_argvdir( const
  /* initialize the server directory value */
  static void init_server_dir( dev_t dev, ino_t ino )
  {
 -    char *p, *root;
 +    char *p, *prefix = NULL, *root = NULL;
  
- #ifdef __ANDROID__  /* there's no /tmp dir on Android */
-     root = build_path( config_dir, ".wineserver" );
--#elif defined(HAVE_GETUID)
+-#ifdef __ANDROID__  /* there's no /tmp dir on Android */
+-    root = build_path( config_dir, ".wineserver" );
+-#else
 -    root = xmalloc( sizeof(server_root_prefix) + 12 );
 -    sprintf( root, "%s-%u", server_root_prefix, getuid() );
- #else
--    root = xstrdup( server_root_prefix );
-+
-+#if defined(HAVE_GETUID)
+-#endif
 +    /* use /run/user/$uid as wineserver's tmpdir if possible */
 +    prefix = xmalloc( sizeof(server_root_prefix) + 12 );
 +    sprintf( prefix, "%s/%u", server_root_prefix, getuid() );
@@ -48,7 +45,6 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
 +        sprintf( root, "%s/wine", prefix );
 +    }
 +    free( prefix );
-+#endif
 +
 +    /* otherwise, use a randomly named directory under TMPDIR */
 +    if (!root)
@@ -139,6 +135,6 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
 +        free( tmp_dir );
 +        free( wineserver_file );
 +    }
- #endif
  
      server_dir = xmalloc( strlen(root) + sizeof(server_dir_prefix) + 2*sizeof(dev) + 2*sizeof(ino) + 2 );
+     strcpy( server_dir, root );

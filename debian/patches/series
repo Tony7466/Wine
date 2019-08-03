@@ -32,7 +32,6 @@ warnings/arm-longdouble.patch
 warnings/arm64-dword.patch
 warnings/arm64-array-bounds.patch
 warnings/arm64-excess-precision.patch
-warnings/arm64-uninitialized-variables.patch
 
 warnings/bison.patch
 warnings/printf-null.patch
