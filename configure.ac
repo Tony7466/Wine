@@ -57,6 +57,7 @@ AC_ARG_WITH(gsm,       AS_HELP_STRING([--without-gsm],[do not use libgsm (GSM 06
 AC_ARG_WITH(gssapi,    AS_HELP_STRING([--without-gssapi],[do not use GSSAPI (Kerberos SSP support)]))
 AC_ARG_WITH(gstreamer, AS_HELP_STRING([--without-gstreamer],[do not use GStreamer (codecs support)]))
 AC_ARG_WITH(hal,       AS_HELP_STRING([--without-hal],[do not use HAL (dynamic device support)]))
+AC_ARG_WITH(inotify,   AS_HELP_STRING([--without-inotify],[do not use inotify (filesystem change notifications)]))
 AC_ARG_WITH(jpeg,      AS_HELP_STRING([--without-jpeg],[do not use JPEG]))
 AC_ARG_WITH(krb5,      AS_HELP_STRING([--without-krb5],[do not use krb5 (Kerberos)]))
 AC_ARG_WITH(ldap,      AS_HELP_STRING([--without-ldap],[do not use LDAP]),
@@ -152,10 +153,9 @@ case $host in
     then
       CC="$CC -m32"
       CXX="$CXX -m32"
-      AC_MSG_CHECKING([whether $CC works])
-      AC_LINK_IFELSE([AC_LANG_PROGRAM()],AC_MSG_RESULT([yes]),
-                     [AC_MSG_RESULT([no])
-                      AC_MSG_ERROR([Cannot build a 32-bit program, you need to install 32-bit development libraries.])])
+      AC_CACHE_CHECK([whether $CC works], wine_cv_cc_m32,
+          [AC_LINK_IFELSE([AC_LANG_PROGRAM()],[wine_cv_cc_m32=yes],[wine_cv_cc_m32=no])])
+      test $wine_cv_cc_m32 != no || AC_MSG_ERROR([Cannot build a 32-bit program, you need to install 32-bit development libraries.])
       host_cpu="i386"
       notice_platform="32-bit "
       AC_SUBST(TARGETFLAGS,"-m32")
@@ -165,11 +165,10 @@ case $host in
     else
       if test "x${GCC}" = "xyes"
       then
-        AC_MSG_CHECKING([whether $CC supports __builtin_ms_va_list])
-        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdarg.h>]], [[void func(__builtin_ms_va_list *args);]])],
-                          [AC_MSG_RESULT([yes])],
-                          [AC_MSG_RESULT([no])
-                           AC_MSG_ERROR([You need gcc >= 4.4 or clang >= 3.8 to build Wine as 64-bit.])])
+        AC_CACHE_CHECK([whether $CC supports __builtin_ms_va_list],wine_cv_builtin_ms_va_list,
+            [AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdarg.h>]], [[void func(__builtin_ms_va_list *args);]])],
+                          [wine_cv_builtin_ms_va_list=yes],[wine_cv_builtin_ms_va_list=no])])
+        test $wine_cv_builtin_ms_va_list != no || AC_MSG_ERROR([You need gcc >= 4.4 or clang >= 3.8 to build Wine as 64-bit.])
       fi
       CC="$CC -m64"
       CXX="$CXX -m64"
@@ -179,11 +178,10 @@ case $host in
     fi
     ;;
   arm*)
-    AC_MSG_CHECKING([whether $CC supports Thumb])
-    WINE_TRY_ASM_LINK([".thumb\nblx ac_test\n.arm"],[int ac_test(int i) { return i; }], [if (ac_test(1)) return 1],
-                      [AC_MSG_RESULT([yes])],
-                      [AC_MSG_RESULT([no])
-                       AC_MSG_ERROR([You need a target with Thumb support to build Wine for ARM.])])
+    AC_CACHE_CHECK([whether $CC supports Thumb],wine_cv_thumb,
+        [WINE_TRY_ASM_LINK([".thumb\nblx ac_test\n.arm"],[int ac_test(int i) { return i; }], [if (ac_test(1)) return 1],
+                           [wine_cv_thumb=yes],[wine_cv_thumb=no])])
+    test $wine_cv_thumb != no || AC_MSG_ERROR([You need a target with Thumb support to build Wine for ARM.])
     case $with_float_abi in
       soft|softfp|hard)
         float_abi=$with_float_abi ;;
@@ -195,12 +193,13 @@ case $host in
             float_abi=softfp
             saved_CFLAGS=$CFLAGS
             CFLAGS="$CFLAGS -marm -mfloat-abi=$float_abi"
-            AC_MSG_CHECKING([whether $CC supports -mfloat-abi=$float_abi])
-            WINE_TRY_ASM_LINK(["vmrs r2,fpscr"],,,
-                              [AC_MSG_RESULT([yes])],
-                              [AC_MSG_RESULT([no])
-                               float_abi=soft
-                               WINE_WARNING([Floating point is not supported for this target. The resulting build won't be compatible with Windows ARM binaries.])])
+            AC_CACHE_CHECK([whether $CC supports -mfloat-abi=$float_abi],wine_cv_float_abi,
+                [WINE_TRY_ASM_LINK(["vmrs r2,fpscr"],,,[wine_cv_float_abi=yes],[wine_cv_float_abi=no])])
+            if test $wine_cv_float_abi = no
+            then
+                float_abi=soft
+                WINE_WARNING([Floating point is not supported for this target. The resulting build won't be compatible with Windows ARM binaries.])
+            fi
             CFLAGS=$saved_CFLAGS
         esac
         ;;
@@ -209,11 +208,10 @@ case $host in
     AC_SUBST(TARGETFLAGS,"-marm -mfloat-abi=$float_abi")
     ;;
   aarch64*)
-    AC_MSG_CHECKING([whether $CC supports __builtin_ms_va_list])
-    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdarg.h>]], [[void func(__builtin_ms_va_list *args);]])],
-                      [AC_MSG_RESULT([yes])],
-                      [AC_MSG_RESULT([no])
-                       AC_MSG_ERROR([You need clang >= 5.0 to build Wine for arm64.])])
+    AC_CACHE_CHECK([whether $CC supports __builtin_ms_va_list],wine_cv_builtin_ms_va_list,
+        [AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdarg.h>]], [[void func(__builtin_ms_va_list *args);]])],
+                      [wine_cv_builtin_ms_va_list=yes],[wine_cv_builtin_ms_va_list=no])])
+    test $wine_cv_builtin_ms_va_list != no || AC_MSG_ERROR([You need clang >= 5.0 to build Wine for arm64.])
     ;;
   i[[3456789]]86*)
     enable_win16=${enable_win16:-yes}
@@ -269,20 +267,20 @@ if test "$FLEX" = "none"
 then
   AC_MSG_ERROR([no suitable flex found. Please install the 'flex' package.])
 fi
-AC_MSG_CHECKING([whether flex is recent enough])
-cat >conftest.l <<EOF
+AC_CACHE_CHECK([whether flex is recent enough],wine_cv_recent_flex,
+    [cat >conftest.l <<EOF
 %top{
 #include "prediluvian.h"
 }
 %%
 EOF
-if $FLEX -t conftest.l >/dev/null 2>&AS_MESSAGE_LOG_FD
-then
-  AC_MSG_RESULT([yes])
-else
-  AC_MSG_RESULT([no])
-  AC_MSG_ERROR([Your flex version is too old. Please install flex version 2.5.33 or newer.])
-fi
+    if $FLEX -t conftest.l >/dev/null 2>&AS_MESSAGE_LOG_FD
+    then
+      wine_cv_recent_flex=yes
+    else
+      wine_cv_recent_flex=no
+    fi])
+test $wine_cv_recent_flex != no || AC_MSG_ERROR([Your flex version is too old. Please install flex version 2.5.33 or newer.])
 
 dnl Check for bison
 AC_CHECK_PROGS(BISON,bison,none)
@@ -290,6 +288,19 @@ if test "$BISON" = "none"
 then
   AC_MSG_ERROR([no suitable bison found. Please install the 'bison' package.])
 fi
+AC_CACHE_CHECK([whether bison is recent enough],wine_cv_recent_bison,
+    [cat >conftest.y <<EOF
+%define parse.error verbose
+%%
+empty: ;
+EOF
+    if $BISON conftest.y >/dev/null 2>&AS_MESSAGE_LOG_FD
+    then
+      wine_cv_recent_bison=yes
+    else
+      wine_cv_recent_bison=no
+    fi])
+test $wine_cv_recent_bison != no || AC_MSG_ERROR([Your bison version is too old. Please install bison version 3.0 or newer.])
 
 AC_CHECK_TOOLS(AR,[ar gar],ar)
 AC_CHECK_TOOL(STRIP,strip,strip)
@@ -369,14 +380,13 @@ else
   dnl Maintainer mode requires gettext
   with_gettext=yes
   with_gettextpo=yes
-  AS_UNSET(ac_cv_header_gettext_po_h)
 fi
 
 test "x$with_gettext" != xno || MSGFMT=false
 if test "$MSGFMT" != "false"
 then
-  AC_MSG_CHECKING([whether msgfmt supports contexts])
-  cat >conftest.po <<EOF
+  AC_CACHE_CHECK([whether msgfmt supports contexts],wine_cv_msgfmt_contexts,
+  [cat >conftest.po <<EOF
 # comment
 msgctxt "ctxt"
 msgid "id"
@@ -384,11 +394,11 @@ msgstr "str"
 EOF
   if $MSGFMT -o /dev/null conftest.po 2>&AS_MESSAGE_LOG_FD
   then
-    AC_MSG_RESULT([yes])
+    wine_cv_msgfmt_contexts=yes
   else
-    AC_MSG_RESULT([no])
-    MSGFMT=false
-  fi
+    wine_cv_msgfmt_contexts=no
+  fi])
+  test $wine_cv_msgfmt_contexts != no || MSGFMT=false
 fi
 WINE_WARNING_WITH(gettext,[test "$MSGFMT" = false],
                   [gettext tools not found (or too old), translations won't be built.],
@@ -495,7 +505,6 @@ AC_CHECK_HEADERS(\
 	sys/event.h \
 	sys/exec_elf.h \
 	sys/filio.h \
-	sys/inotify.h \
 	sys/ioctl.h \
 	sys/ipc.h \
 	sys/limits.h \
@@ -1002,25 +1011,26 @@ then
     then
         ac_save_CC="$CC"
         saved_CFLAGS=$CFLAGS
-        AC_SUBST(CROSSCFLAGS,${CROSSCFLAGS:-$CFLAGS})
+        AC_SUBST(CROSSCFLAGS,${CROSSCFLAGS:-"-g -O2"})
         AC_SUBST(EXTRACROSSCFLAGS,"-DWINE_CROSSTEST -Wall")
 
         CC="$CROSSCC"
         CFLAGS=$CROSSCFLAGS
-        AC_MSG_CHECKING([whether $CROSSCC works])
-        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([])],
-                          [AC_MSG_RESULT([yes])
-                           set x $CROSSCC
-                           shift
-                           while test $# -ge 1
-                           do
-                               case "$1" in
-                                 *-gcc) CROSSTARGET=`expr "$1" : '\(.*\)-gcc'` ;;
-                                 *-clang) CROSSTARGET=`expr "$1" : '\(.*\)-clang'` ;;
-                               esac
-                               shift
-                           done],
-                          [AC_MSG_RESULT([no])])
+        AC_CACHE_CHECK([whether $CROSSCC works], wine_cv_crosscc,
+            [AC_COMPILE_IFELSE([AC_LANG_PROGRAM([])],[wine_cv_crosscc=yes],[wine_cv_crosscc=no])])
+        if test $wine_cv_crosscc = yes
+        then
+            set x $CROSSCC
+            shift
+            while test $# -ge 1
+            do
+                case "$1" in
+                    *-gcc) CROSSTARGET=`expr "$1" : '\(.*\)-gcc'` ;;
+                    *-clang) CROSSTARGET=`expr "$1" : '\(.*\)-clang'` ;;
+                esac
+                shift
+            done
+        fi
         WINE_TRY_CROSSCFLAGS([-fno-strict-aliasing])
         dnl clang needs to be told to fail on unknown options
         WINE_TRY_CROSSCFLAGS([-Werror=unknown-warning-option],[CFLAGS="$CFLAGS -Werror=unknown-warning-option"])
@@ -1349,6 +1359,16 @@ then
 fi
 WINE_WARNING_WITH(xslt,[test "x$ac_cv_lib_soname_xslt" = "x"],
                  [libxslt ${notice_platform}development files not found, xslt won't be supported.])
+
+dnl **** Check for inotify ****
+if test "x$with_inotify" != "xno"
+then
+    WINE_PACKAGE_FLAGS(INOTIFY,[libinotify],,,,
+        [AC_CHECK_HEADERS([sys/inotify.h])
+         AC_CHECK_LIB(inotify,inotify_add_watch,[:],[INOTIFY_LIBS=""],[$INOTIFY_LIBS])])
+fi
+WINE_NOTICE_WITH(inotify,[test "$ac_cv_header_sys_inotify_h" != "yes"],
+                 [libinotify ${notice_platform}development files not found (or too old), filesystem change notifications won't be supported.])
 
 dnl **** Check for libdbus ****
 if test "x$with_dbus" != "xno"
@@ -1930,7 +1950,6 @@ then
   fi
 
   dnl Check for some compiler flags
-  WINE_TRY_CFLAGS([-fno-builtin],[AC_SUBST(BUILTINFLAG,"-fno-builtin")])
   WINE_TRY_CFLAGS([-fno-strict-aliasing])
   WINE_TRY_CFLAGS([-fexcess-precision=standard],[AC_SUBST(EXCESS_PRECISION_CFLAGS,"-fexcess-precision=standard")])
   dnl clang needs to be told to fail on unknown options
@@ -1976,6 +1995,12 @@ char*f(const char *h,char n) {return strchr(h,n);}]])],[ac_cv_c_logicalop_noisy=
           WINE_TRY_CFLAGS([-gstrict-dwarf]) ;;
     esac
   done
+
+  dnl Disable gcc builtins except for Mingw
+  case $host_os in
+    cygwin*|mingw32*) ;;
+    *) WINE_TRY_CFLAGS([-fno-builtin],[AC_SUBST(BUILTINFLAG,"-fno-builtin")]) ;;
+  esac
 
   dnl gcc-4.6+ omits frame pointers by default, breaking some copy protections
   case $host_cpu in
@@ -3606,6 +3631,7 @@ WINE_CONFIG_MAKEFILE(dlls/quartz)
 WINE_CONFIG_MAKEFILE(dlls/quartz/tests)
 WINE_CONFIG_MAKEFILE(dlls/query)
 WINE_CONFIG_MAKEFILE(dlls/qwave)
+WINE_CONFIG_MAKEFILE(dlls/qwave/tests)
 WINE_CONFIG_MAKEFILE(dlls/rasapi16.dll16,enable_win16)
 WINE_CONFIG_MAKEFILE(dlls/rasapi32)
 WINE_CONFIG_MAKEFILE(dlls/rasapi32/tests)

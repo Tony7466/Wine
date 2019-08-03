@@ -154,7 +154,8 @@ typedef enum {
     ET_BUTTON,
     ET_AREA,
     ET_SVG,
-    ET_CIRCLE
+    ET_CIRCLE,
+    ET_TSPAN
 } elem_type_t;
 
 static const IID * const none_iids[] = {
@@ -442,6 +443,28 @@ static const IID * const generic_iids[] = {
     NULL
 };
 
+static const IID * const svg_iids[] = {
+    ELEM_IFACES,
+    &IID_ISVGElement,
+    &IID_ISVGSVGElement,
+    NULL
+};
+
+static const IID * const circle_iids[] = {
+    ELEM_IFACES,
+    &IID_ISVGElement,
+    &IID_ISVGCircleElement,
+    NULL
+};
+
+static const IID * const tspan_iids[] = {
+    ELEM_IFACES,
+    &IID_ISVGElement,
+    &IID_ISVGTextContentElement,
+    &IID_ISVGTSpanElement,
+    NULL
+};
+
 static const IID * const style_iids[] = {
     &IID_IUnknown,
     &IID_IDispatch,
@@ -531,8 +554,9 @@ static const elem_type_info_t elem_type_infos[] = {
     {"LABEL",     label_iids,       &DIID_DispHTMLLabelElement,     &CLSID_HTMLLabelElement},
     {"BUTTON",    button_iids,      &DIID_DispHTMLButtonElement,    &CLSID_HTMLButtonElement},
     {"AREA",      area_iids,        &DIID_DispHTMLAreaElement,      &CLSID_HTMLAreaElement},
-    {"svg",       elem_iids,        NULL},
-    {"circle",    elem_iids,        NULL}
+    {"svg",       svg_iids,         NULL},
+    {"circle",    circle_iids,      NULL},
+    {"tspan",     tspan_iids,       NULL}
 };
 
 static int strcmp_wa(LPCWSTR strw, const char *stra)
@@ -2257,7 +2281,7 @@ static IHTMLImgElement *_create_img_elem(unsigned line, IHTMLDocument2 *doc,
     test_disp((IUnknown*)factory, &IID_IHTMLImageElementFactory, NULL, "[object]");
 
     if(wdth >= 0){
-        snprintf(buf, 16, "%d", wdth);
+        sprintf(buf, "%d", wdth);
         V_VT(&width) = VT_BSTR;
         V_BSTR(&width) = a2bstr(buf);
     }else{
@@ -2266,7 +2290,7 @@ static IHTMLImgElement *_create_img_elem(unsigned line, IHTMLDocument2 *doc,
     }
 
     if(hght >= 0){
-        snprintf(buf, 16, "%d", hght);
+        sprintf(buf, "%d", hght);
         V_VT(&height) = VT_BSTR;
         V_BSTR(&height) = a2bstr(buf);
     }else{
@@ -5171,7 +5195,6 @@ static void test_elem_bounding_client_rect(IUnknown *unk)
     hres = IHTMLElement2_getBoundingClientRect(elem2, &rect);
     ok(hres == S_OK, "getBoundingClientRect failed: %08x\n", hres);
     hres = IHTMLElement2_getBoundingClientRect(elem2, &rect2);
-    IHTMLElement2_Release(elem2);
     ok(hres == S_OK, "getBoundingClientRect failed: %08x\n", hres);
     ok(rect != NULL, "rect == NULL\n");
     ok(rect != rect2, "rect == rect2\n");
@@ -5207,6 +5230,7 @@ static void test_elem_bounding_client_rect(IUnknown *unk)
     test_disp((IUnknown*)rects, &IID_IHTMLRectCollection, NULL, "[object]");
 
     IHTMLRectCollection_Release(rects);
+    IHTMLElement2_Release(elem2);
 }
 
 static void test_elem_col_item(IHTMLElementCollection *col, const char *n,
@@ -6985,6 +7009,8 @@ static void test_dom_implementation(IHTMLDocument2 *doc)
         IHTMLLocation *location;
         IHTMLWindow2 *window;
         IDispatch *disp;
+
+        test_disp((IUnknown*)dom_implementation, &DIID_DispHTMLDOMImplementation, NULL, "[object]");
 
         str = a2bstr("test");
         hres = IHTMLDOMImplementation2_createHTMLDocument(dom_implementation2, str, &new_document);
@@ -9579,11 +9605,12 @@ static void test_form_element(IHTMLDocument2 *doc, IHTMLElement *parent)
 
 static void test_svg_element(IHTMLDocument2 *doc, IHTMLElement *parent)
 {
-    IHTMLDOMNode *svg_node, *circle_node;
+    IHTMLDOMNode *svg_node, *circle_node, *tspan_node;
 
     test_elem_set_innerhtml((IUnknown*)parent,
             "<svg width=\"100\" height=\"100\" id=\"svgid\">"
             "<circle cx=\"50\" cy=\"50\" r=\"40\" fill=\"black\" />"
+            "<tspan></tspan>"
             "</svg>");
     svg_node = get_first_child((IUnknown*)parent);
     if(compat_mode < COMPAT_IE9) {
@@ -9602,6 +9629,10 @@ static void test_svg_element(IHTMLDocument2 *doc, IHTMLElement *parent)
         return;
     test_elem_type((IUnknown*)circle_node, ET_CIRCLE);
 
+    tspan_node = node_get_next((IUnknown*)circle_node);
+    test_elem_type((IUnknown*)tspan_node, ET_TSPAN);
+
+    IHTMLDOMNode_Release(tspan_node);
     IHTMLDOMNode_Release(circle_node);
     IHTMLDOMNode_Release(svg_node);
 };

@@ -518,8 +518,7 @@ static const WCHAR file_type_name[] = {'F','i','l','e',0};
 
 static struct _OBJECT_TYPE file_type = {
     file_type_name,
-    create_file_object,
-    free_kernel_object
+    create_file_object
 };
 
 POBJECT_TYPE IoFileObjectType = &file_type;
@@ -2451,11 +2450,23 @@ NTSTATUS WINAPI FsRtlRegisterUncProvider(PHANDLE MupHandle, PUNICODE_STRING Redi
 }
 
 
+static void *create_process_object( HANDLE handle )
+{
+    PEPROCESS process;
+
+    if (!(process = alloc_kernel_object( PsProcessType, handle, sizeof(*process), 0 ))) return NULL;
+
+    process->header.Type = 3;
+    process->header.WaitListHead.Blink = INVALID_HANDLE_VALUE; /* mark as kernel object */
+    return process;
+}
+
 static const WCHAR process_type_name[] = {'P','r','o','c','e','s','s',0};
 
 static struct _OBJECT_TYPE process_type =
 {
-    process_type_name
+    process_type_name,
+    create_process_object
 };
 
 POBJECT_TYPE PsProcessType = &process_type;
@@ -2468,6 +2479,25 @@ PEPROCESS WINAPI IoGetCurrentProcess(void)
 {
     FIXME("() stub\n");
     return NULL;
+}
+
+/***********************************************************************
+ *           PsLookupProcessByProcessId  (NTOSKRNL.EXE.@)
+ */
+NTSTATUS WINAPI PsLookupProcessByProcessId( HANDLE processid, PEPROCESS *process )
+{
+    NTSTATUS status;
+    HANDLE handle;
+
+    TRACE( "(%p %p)\n", processid, process );
+
+    if (!(handle = OpenProcess( PROCESS_ALL_ACCESS, FALSE, HandleToUlong(processid) )))
+        return STATUS_INVALID_PARAMETER;
+
+    status = ObReferenceObjectByHandle( handle, PROCESS_ALL_ACCESS, PsProcessType, KernelMode, (void**)process, NULL );
+
+    NtClose( handle );
+    return status;
 }
 
 
@@ -2521,6 +2551,31 @@ PRKTHREAD WINAPI KeGetCurrentThread(void)
 
     return thread;
 }
+
+/*****************************************************
+ *           PsLookupThreadByThreadId   (NTOSKRNL.EXE.@)
+ */
+NTSTATUS WINAPI PsLookupThreadByThreadId( HANDLE threadid, PETHREAD *thread )
+{
+    OBJECT_ATTRIBUTES attr;
+    CLIENT_ID cid;
+    NTSTATUS status;
+    HANDLE handle;
+
+    TRACE( "(%p %p)\n", threadid, thread );
+
+    cid.UniqueProcess = 0;
+    cid.UniqueThread = threadid;
+    InitializeObjectAttributes( &attr, NULL, 0, NULL, NULL );
+    status = NtOpenThread( &handle, THREAD_QUERY_INFORMATION, &attr, &cid );
+    if (status) return status;
+
+    status = ObReferenceObjectByHandle( handle, THREAD_ALL_ACCESS, PsThreadType, KernelMode, (void**)thread, NULL );
+
+    NtClose( handle );
+    return status;
+}
+
 
 /***********************************************************************
  *           KeInsertQueue   (NTOSKRNL.EXE.@)
@@ -2774,6 +2829,14 @@ PVOID WINAPI  MmMapLockedPagesSpecifyCache(PMDLX MemoryDescriptorList, KPROCESSO
     FIXME("(%p, %u, %u, %p, %u, %u): stub\n", MemoryDescriptorList, AccessMode, CacheType, BaseAddress, BugCheckOnFailure, Priority);
 
     return NULL;
+}
+
+/***********************************************************************
+ *           MmUnmapLockedPages  (NTOSKRNL.EXE.@)
+ */
+void WINAPI MmUnmapLockedPages( void *base, MDL *mdl )
+{
+    FIXME( "(%p %p_\n", base, mdl );
 }
 
 /***********************************************************************
@@ -3221,17 +3284,6 @@ NTSTATUS WINAPI PsSetLoadImageNotifyRoutine(PLOAD_IMAGE_NOTIFY_ROUTINE routine)
     FIXME("(%p) stub\n", routine);
     return STATUS_SUCCESS;
 }
-
-/*****************************************************
- *           PsLookupProcessByProcessId  (NTOSKRNL.EXE.@)
- */
-NTSTATUS WINAPI PsLookupProcessByProcessId(HANDLE processid, PEPROCESS *process)
-{
-    static int once;
-    if (!once++) FIXME("(%p %p) stub\n", processid, process);
-    return STATUS_NOT_IMPLEMENTED;
-}
-
 
 /*****************************************************
  *           IoSetThreadHardErrorMode  (NTOSKRNL.EXE.@)

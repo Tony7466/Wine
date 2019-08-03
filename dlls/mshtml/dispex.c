@@ -49,6 +49,11 @@ static CRITICAL_SECTION cs_dispex_static_data = { &cs_dispex_static_data_dbg, -1
 static const WCHAR objectW[] = {'[','o','b','j','e','c','t',']',0};
 
 typedef struct {
+    IID iid;
+    VARIANT default_value;
+} func_arg_info_t;
+
+typedef struct {
     DISPID id;
     BSTR name;
     tid_t tid;
@@ -58,8 +63,10 @@ typedef struct {
     SHORT get_vtbl_off;
     SHORT func_disp_idx;
     USHORT argc;
+    USHORT default_value_cnt;
     VARTYPE prop_vt;
     VARTYPE *arg_types;
+    func_arg_info_t *arg_info;
 } func_info_t;
 
 struct dispex_data_t {
@@ -165,14 +172,21 @@ static HRESULT get_typeinfo(tid_t tid, ITypeInfo **typeinfo)
 void release_typelib(void)
 {
     dispex_data_t *iter;
-    unsigned i;
+    unsigned i, j;
 
     while(!list_empty(&dispex_data_list)) {
         iter = LIST_ENTRY(list_head(&dispex_data_list), dispex_data_t, entry);
         list_remove(&iter->entry);
 
-        for(i=0; i < iter->func_cnt; i++)
+        for(i = 0; i < iter->func_cnt; i++) {
+            if(iter->funcs[i].default_value_cnt && iter->funcs[i].arg_info) {
+                for(j = 0; j < iter->funcs[i].argc; j++)
+                    VariantClear(&iter->funcs[i].arg_info[j].default_value);
+            }
+            heap_free(iter->funcs[i].arg_types);
+            heap_free(iter->funcs[i].arg_info);
             SysFreeString(iter->funcs[i].name);
+        }
 
         heap_free(iter->funcs);
         heap_free(iter->name_table);
@@ -213,6 +227,7 @@ HRESULT get_class_typeinfo(const CLSID *clsid, ITypeInfo **typeinfo)
     CASE_VT(VT_UI4, UINT32, V_UI4);                     \
     CASE_VT(VT_R4, float, V_R4);                        \
     CASE_VT(VT_BSTR, BSTR, V_BSTR);                     \
+    CASE_VT(VT_DISPATCH, IDispatch*, V_DISPATCH);       \
     CASE_VT(VT_BOOL, VARIANT_BOOL, V_BOOL)
 
 /* List all types used by IDispatchEx-based properties */
@@ -221,7 +236,6 @@ HRESULT get_class_typeinfo(const CLSID *clsid, ITypeInfo **typeinfo)
     CASE_VT(VT_VARIANT, VARIANT, *);                    \
     CASE_VT(VT_PTR, void*, V_BYREF);                    \
     CASE_VT(VT_UNKNOWN, IUnknown*, V_UNKNOWN);          \
-    CASE_VT(VT_DISPATCH, IDispatch*, V_DISPATCH);       \
     CASE_VT(VT_UI8, ULONGLONG, V_UI8)
 
 static BOOL is_arg_type_supported(VARTYPE vt)
@@ -283,13 +297,16 @@ static void add_func_info(dispex_data_t *data, tid_t tid, const FUNCDESC *desc, 
 
         info->arg_types = heap_alloc(sizeof(*info->arg_types) * info->argc);
         if(!info->arg_types)
-            return; /* FIXME: real error instead of fallback */
+            return;
+        info->arg_info = heap_alloc_zero(sizeof(*info->arg_info) * info->argc);
+        if(!info->arg_types)
+            return;
 
         for(i=0; i < info->argc; i++)
             info->arg_types[i] = desc->lprgelemdescParam[i].tdesc.vt;
 
         info->prop_vt = desc->elemdescFunc.tdesc.vt;
-        if(info->prop_vt != VT_VOID && !is_arg_type_supported(info->prop_vt)) {
+        if(info->prop_vt != VT_VOID && info->prop_vt != VT_PTR && !is_arg_type_supported(info->prop_vt)) {
             TRACE("%s: return type %d\n", debugstr_w(info->name), info->prop_vt);
             return; /* Fallback to ITypeInfo::Invoke */
         }
@@ -300,13 +317,44 @@ static void add_func_info(dispex_data_t *data, tid_t tid, const FUNCDESC *desc, 
         }
 
         for(i=0; i < info->argc; i++) {
-            if(!is_arg_type_supported(info->arg_types[i])) {
+            TYPEDESC *tdesc = &desc->lprgelemdescParam[i].tdesc;
+            if(tdesc->vt == VT_PTR && tdesc->u.lptdesc->vt == VT_USERDEFINED) {
+                ITypeInfo *ref_type_info;
+                TYPEATTR *attr;
+
+                hres = ITypeInfo_GetRefTypeInfo(dti, tdesc->u.lptdesc->u.hreftype, &ref_type_info);
+                if(FAILED(hres)) {
+                    ERR("Coulg not get referenced type info: %08x\n", hres);
+                    return;
+                }
+
+                hres = ITypeInfo_GetTypeAttr(ref_type_info, &attr);
+                if(SUCCEEDED(hres)) {
+                    assert(attr->typekind == TKIND_DISPATCH);
+                    info->arg_info[i].iid = attr->guid;
+                    ITypeInfo_ReleaseTypeAttr(ref_type_info, attr);
+                }else {
+                    ERR("GetTypeAttr failed: %08x\n", hres);
+                }
+                ITypeInfo_Release(ref_type_info);
+                if(FAILED(hres))
+                    return;
+                info->arg_types[i] = VT_DISPATCH;
+            }else if(!is_arg_type_supported(info->arg_types[i])) {
+                TRACE("%s: unsupported arg type %s\n", debugstr_w(info->name), debugstr_vt(info->arg_types[i]));
                 return; /* Fallback to ITypeInfo for unsupported arg types */
             }
 
             if(desc->lprgelemdescParam[i].u.paramdesc.wParamFlags & PARAMFLAG_FHASDEFAULT) {
-                TRACE("%s param %d: default value\n", debugstr_w(info->name), i);
-                return; /* Fallback to ITypeInfo::Invoke */
+                hres = VariantCopy(&info->arg_info[i].default_value,
+                                   &desc->lprgelemdescParam[i].u.paramdesc.pparamdescex->varDefaultValue);
+                if(FAILED(hres)) {
+                    ERR("Could not copy default value: %08x\n", hres);
+                    return;
+                }
+                TRACE("%s param %d: default value %s\n", debugstr_w(info->name),
+                      i, debugstr_variant(&info->arg_info[i].default_value));
+                info->default_value_cnt++;
             }
         }
 
@@ -1090,7 +1138,7 @@ static HRESULT invoke_builtin_function(DispatchEx *This, func_info_t *func, DISP
         return E_NOTIMPL;
     }
 
-    if(dp->cArgs != func->argc) {
+    if(dp->cArgs > func->argc || dp->cArgs + func->default_value_cnt < func->argc) {
         FIXME("Invalid argument count (expected %u, got %u)\n", func->argc, dp->cArgs);
         return E_INVALIDARG;
     }
@@ -1100,6 +1148,12 @@ static HRESULT invoke_builtin_function(DispatchEx *This, func_info_t *func, DISP
         return hres;
 
     for(i=0; i < func->argc; i++) {
+        BOOL own_value = FALSE;
+        if(i >= dp->cArgs) {
+            /* use default value */
+            arg_ptrs[i] = &func->arg_info[i].default_value;
+            continue;
+        }
         arg = dp->rgvarg+dp->cArgs-i-1;
         if(func->arg_types[i] == V_VT(arg)) {
             arg_ptrs[i] = arg;
@@ -1108,6 +1162,24 @@ static HRESULT invoke_builtin_function(DispatchEx *This, func_info_t *func, DISP
             if(FAILED(hres))
                 break;
             arg_ptrs[i] = arg_buf + nconv++;
+            own_value = TRUE;
+        }
+
+        if(func->arg_types[i] == VT_DISPATCH && !IsEqualGUID(&func->arg_info[i].iid, &IID_NULL)
+            && V_DISPATCH(arg_ptrs[i])) {
+            IDispatch *iface;
+            if(!own_value) {
+                arg_buf[nconv] = *arg_ptrs[i];
+                arg_ptrs[i] = arg_buf + nconv++;
+            }
+            hres = IDispatch_QueryInterface(V_DISPATCH(arg_ptrs[i]), &func->arg_info[i].iid, (void**)&iface);
+            if(FAILED(hres)) {
+                WARN("Could not get %s iface: %08x\n", debugstr_guid(&func->arg_info[i].iid), hres);
+                break;
+            }
+            if(own_value)
+                IDispatch_Release(V_DISPATCH(arg_ptrs[i]));
+            V_DISPATCH(arg_ptrs[i]) = iface;
         }
     }
 
@@ -1124,8 +1196,13 @@ static HRESULT invoke_builtin_function(DispatchEx *This, func_info_t *func, DISP
             case vt:                                    \
                 V_BYREF(&ret_ref) = &access(&retv);     \
                 break
-            BUILTIN_TYPES_SWITCH;
+            BUILTIN_ARG_TYPES_SWITCH;
 #undef CASE_VT
+            case VT_PTR:
+                V_VT(&retv) = VT_DISPATCH;
+                V_VT(&ret_ref) = VT_BYREF | VT_DISPATCH;
+                V_BYREF(&ret_ref) = &V_DISPATCH(&retv);
+                break;
             default:
                 assert(0);
             }

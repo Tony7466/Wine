@@ -224,19 +224,42 @@ static const IDebugEventCallbacksVtbl event_callbacks_vtbl =
     event_callbacks_ChangeSymbolState,
 };
 
-static const char *event_name = "dbgeng_test_event";
+static BOOL create_target_process(const char *event_name, PROCESS_INFORMATION *info)
+{
+    static const char *event_target_ready_name = "dbgeng_test_target_ready_event";
+    char path_name[MAX_PATH];
+    STARTUPINFOA startup;
+    HANDLE ready_event;
+    char **argv;
+    BOOL ret;
+
+    ready_event = CreateEventA(NULL, FALSE, FALSE, event_target_ready_name);
+    ok(ready_event != NULL, "Failed to create event.\n");
+
+    winetest_get_mainargs(&argv);
+    memset(&startup, 0, sizeof(startup));
+    startup.cb = sizeof(startup);
+    sprintf(path_name, "%s dbgeng target %s %s", argv[0], event_name, event_target_ready_name);
+    ret = CreateProcessA(NULL, path_name, NULL, NULL, FALSE, 0, NULL, NULL, &startup, info);
+    if (ret)
+    {
+        WaitForSingleObject(ready_event, INFINITE);
+    }
+
+    CloseHandle(ready_event);
+
+    return ret;
+}
 
 static void test_attach(void)
 {
+    static const char *event_name = "dbgeng_test_event";
     IDebugEventCallbacks event_callbacks = { &event_callbacks_vtbl };
     PROCESS_INFORMATION info;
-    char path_name[MAX_PATH];
     IDebugControl *control;
     IDebugClient *client;
-    STARTUPINFOA startup;
     BOOL is_debugged;
     HANDLE event;
-    char **argv;
     HRESULT hr;
     BOOL ret;
 
@@ -252,11 +275,7 @@ static void test_attach(void)
     event = CreateEventA(NULL, FALSE, FALSE, event_name);
     ok(event != NULL, "Failed to create event.\n");
 
-    winetest_get_mainargs(&argv);
-    memset(&startup, 0, sizeof(startup));
-    startup.cb = sizeof(startup);
-    sprintf(path_name, "%s dbgeng target", argv[0]);
-    ret = CreateProcessA(NULL, path_name, NULL, NULL, FALSE, 0, NULL, NULL, &startup, &info),
+    ret = create_target_process(event_name, &info);
     ok(ret, "Failed to create target process.\n");
 
     is_debugged = TRUE;
@@ -273,7 +292,6 @@ static void test_attach(void)
     ok(!is_debugged, "Unexpected mode.\n");
 
     hr = control->lpVtbl->WaitForEvent(control, 0, INFINITE);
-todo_wine
     ok(hr == S_OK, "Waiting for event failed, hr %#x.\n", hr);
 
     is_debugged = TRUE;
@@ -282,7 +300,6 @@ todo_wine
     ok(!is_debugged, "Unexpected mode.\n");
 
     hr = client->lpVtbl->DetachProcesses(client);
-todo_wine
     ok(hr == S_OK, "Failed to detach, hr %#x.\n", hr);
 
     hr = client->lpVtbl->EndSession(client, DEBUG_END_ACTIVE_DETACH);
@@ -302,19 +319,191 @@ todo_wine
     control->lpVtbl->Release(control);
 }
 
-static void target_proc(void)
+static void test_module_information(void)
 {
-    HANDLE event = OpenEventA(SYNCHRONIZE, FALSE, event_name);
+    static const char *event_name = "dbgeng_test_event";
+    unsigned int loaded, unloaded, index, length;
+    DEBUG_MODULE_PARAMETERS params[2];
+    IDebugDataSpaces *dataspaces;
+    PROCESS_INFORMATION info;
+    IDebugSymbols2 *symbols;
+    IDebugControl *control;
+    ULONG64 bases[2], base;
+    char buffer[MAX_PATH];
+    IDebugClient *client;
+    HANDLE event;
+    HRESULT hr;
+    BOOL ret;
 
-    ok(event != NULL, "Failed to open event handle.\n");
+    hr = DebugCreate(&IID_IDebugClient, (void **)&client);
+    ok(hr == S_OK, "Failed to create engine object, hr %#x.\n", hr);
+
+    hr = client->lpVtbl->QueryInterface(client, &IID_IDebugControl, (void **)&control);
+    ok(hr == S_OK, "Failed to get interface pointer, hr %#x.\n", hr);
+
+    hr = client->lpVtbl->QueryInterface(client, &IID_IDebugSymbols2, (void **)&symbols);
+    ok(hr == S_OK, "Failed to get interface pointer, hr %#x.\n", hr);
+
+    hr = client->lpVtbl->QueryInterface(client, &IID_IDebugDataSpaces, (void **)&dataspaces);
+    ok(hr == S_OK, "Failed to get interface pointer, hr %#x.\n", hr);
+
+    hr = control->lpVtbl->IsPointer64Bit(control);
+    ok(hr == E_UNEXPECTED, "Unexpected hr %#x.\n", hr);
+
+    event = CreateEventA(NULL, FALSE, FALSE, event_name);
+    ok(event != NULL, "Failed to create event.\n");
+
+    ret = create_target_process(event_name, &info);
+    ok(ret, "Failed to create target process.\n");
+
+    hr = control->lpVtbl->SetEngineOptions(control, DEBUG_ENGOPT_INITIAL_BREAK);
+    ok(hr == S_OK, "Failed to set engine options, hr %#x.\n", hr);
+
+    hr = client->lpVtbl->AttachProcess(client, 0, info.dwProcessId, DEBUG_ATTACH_NONINVASIVE);
+    ok(hr == S_OK, "Failed to attach to process, hr %#x.\n", hr);
+
+    hr = control->lpVtbl->IsPointer64Bit(control);
+    ok(hr == E_UNEXPECTED, "Unexpected hr %#x.\n", hr);
+
+    hr = control->lpVtbl->WaitForEvent(control, 0, INFINITE);
+    ok(hr == S_OK, "Waiting for event failed, hr %#x.\n", hr);
+
+    hr = control->lpVtbl->IsPointer64Bit(control);
+    ok(SUCCEEDED(hr), "Failed to get pointer length, hr %#x.\n", hr);
+
+    /* Number of modules. */
+    hr = symbols->lpVtbl->GetNumberModules(symbols, &loaded, &unloaded);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(loaded > 0, "Unexpected module count %u.\n", loaded);
+
+    /* Module base. */
+    hr = symbols->lpVtbl->GetModuleByIndex(symbols, loaded, &base);
+    ok(FAILED(hr), "Unexpected hr %#x.\n", hr);
+
+    base = 0;
+    hr = symbols->lpVtbl->GetModuleByIndex(symbols, 0, &base);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(!!base, "Unexpected module base.\n");
+
+    hr = symbols->lpVtbl->GetModuleByOffset(symbols, 0, 0, &index, &base);
+    ok(FAILED(hr), "Unexpected hr %#x.\n", hr);
+
+    hr = symbols->lpVtbl->GetModuleByOffset(symbols, base, 0, &index, &base);
+    ok(hr == S_OK, "Failed to get module, hr %#x.\n", hr);
+
+    hr = symbols->lpVtbl->GetModuleByOffset(symbols, base, 0, NULL, NULL);
+    ok(hr == S_OK, "Failed to get module, hr %#x.\n", hr);
+
+    hr = symbols->lpVtbl->GetModuleByOffset(symbols, base + 1, 0, NULL, NULL);
+    ok(hr == S_OK, "Failed to get module, hr %#x.\n", hr);
+
+    hr = symbols->lpVtbl->GetModuleByOffset(symbols, base, loaded, NULL, NULL);
+    ok(FAILED(hr), "Unexpected hr %#x.\n", hr);
+
+    /* Parameters. */
+    base = 0;
+    hr = symbols->lpVtbl->GetModuleByIndex(symbols, 0, &base);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(!!base, "Unexpected module base.\n");
+
+    hr = symbols->lpVtbl->GetModuleParameters(symbols, 1, NULL, 0, params);
+    ok(hr == S_OK, "Failed to get module parameters, hr %#x.\n", hr);
+    ok(params[0].Base == base, "Unexpected module base.\n");
+
+    hr = symbols->lpVtbl->GetModuleParameters(symbols, 1, &base, 100, params);
+    ok(hr == S_OK, "Failed to get module parameters, hr %#x.\n", hr);
+    ok(params[0].Base == base, "Unexpected module base.\n");
+
+    bases[0] = base + 1;
+    bases[1] = base;
+    hr = symbols->lpVtbl->GetModuleParameters(symbols, 2, bases, 0, params);
+    ok(hr == S_OK || broken(hr == E_NOINTERFACE) /* XP */, "Failed to get module parameters, hr %#x.\n", hr);
+    ok(params[0].Base == DEBUG_INVALID_OFFSET, "Unexpected module base.\n");
+    ok(params[0].Size == 0, "Unexpected module size.\n");
+    ok(params[1].Base == base, "Unexpected module base.\n");
+    ok(params[1].Size != 0, "Unexpected module size.\n");
+
+    hr = symbols->lpVtbl->GetModuleParameters(symbols, 1, bases, 0, params);
+    ok(hr == S_OK || broken(hr == E_NOINTERFACE) /* XP */, "Failed to get module parameters, hr %#x.\n", hr);
+
+    hr = symbols->lpVtbl->GetModuleParameters(symbols, 1, bases, loaded, params);
+    ok(hr == S_OK || broken(hr == E_NOINTERFACE) /* XP */, "Failed to get module parameters, hr %#x.\n", hr);
+
+    hr = symbols->lpVtbl->GetModuleParameters(symbols, 1, NULL, loaded, params);
+    ok(FAILED(hr), "Unexpected hr %#x.\n", hr);
+
+    /* Image name. */
+    hr = symbols->lpVtbl->GetModuleNameString(symbols, DEBUG_MODNAME_IMAGE, 0, 0, buffer, sizeof(buffer), &length);
+    ok(hr == S_OK, "Failed to get image name, hr %#x.\n", hr);
+    ok(strlen(buffer) + 1 == length, "Unexpected length.\n");
+
+    hr = symbols->lpVtbl->GetModuleNameString(symbols, DEBUG_MODNAME_IMAGE, 0, 0, NULL, sizeof(buffer), &length);
+    ok(hr == S_OK, "Failed to get image name, hr %#x.\n", hr);
+    ok(length > 0, "Unexpected length.\n");
+
+    hr = symbols->lpVtbl->GetModuleNameString(symbols, DEBUG_MODNAME_IMAGE, DEBUG_ANY_ID, base, buffer, sizeof(buffer),
+            &length);
+    ok(hr == S_OK, "Failed to get image name, hr %#x.\n", hr);
+    ok(strlen(buffer) + 1 == length, "Unexpected length.\n");
+
+    hr = symbols->lpVtbl->GetModuleNameString(symbols, DEBUG_MODNAME_IMAGE, 0, 0, buffer, length - 1, &length);
+    ok(hr == S_FALSE, "Failed to get image name, hr %#x.\n", hr);
+    ok(strlen(buffer) + 2 == length, "Unexpected length %u, %u.\n", length, strlen(buffer));
+
+    hr = symbols->lpVtbl->GetModuleNameString(symbols, DEBUG_MODNAME_IMAGE, 0, 0, NULL, length - 1, NULL);
+    ok(hr == S_FALSE, "Failed to get image name, hr %#x.\n", hr);
+
+    /* Read memory. */
+    base = 0;
+    hr = symbols->lpVtbl->GetModuleByIndex(symbols, 0, &base);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(!!base, "Unexpected module base.\n");
+
+    hr = dataspaces->lpVtbl->ReadVirtual(dataspaces, base, buffer, sizeof(buffer), &length);
+    ok(hr == S_OK, "Failed to read process memory, hr %#x.\n", hr);
+    ok(length == sizeof(buffer), "Unexpected length %u.\n", length);
+    ok(buffer[0] == 'M' && buffer[1] == 'Z', "Unexpected contents.\n");
+
+    memset(buffer, 0, sizeof(buffer));
+    hr = dataspaces->lpVtbl->ReadVirtual(dataspaces, base, buffer, sizeof(buffer), NULL);
+    ok(hr == S_OK, "Failed to read process memory, hr %#x.\n", hr);
+    ok(buffer[0] == 'M' && buffer[1] == 'Z', "Unexpected contents.\n");
+
+    hr = client->lpVtbl->DetachProcesses(client);
+    ok(hr == S_OK, "Failed to detach, hr %#x.\n", hr);
+
+    SetEvent(event);
+    winetest_wait_child_process(info.hProcess);
+
+    CloseHandle(info.hProcess);
+    CloseHandle(info.hThread);
+
+    client->lpVtbl->Release(client);
+    control->lpVtbl->Release(control);
+    symbols->lpVtbl->Release(symbols);
+    dataspaces->lpVtbl->Release(dataspaces);
+}
+
+static void target_proc(const char *event_name, const char *event_ready_name)
+{
+    HANDLE terminate_event, ready_event;
+
+    terminate_event = OpenEventA(SYNCHRONIZE, FALSE, event_name);
+    ok(terminate_event != NULL, "Failed to open event handle.\n");
+
+    ready_event = OpenEventA(EVENT_MODIFY_STATE, FALSE, event_ready_name);
+    ok(ready_event != NULL, "Failed to open event handle.\n");
+
+    SetEvent(ready_event);
 
     for (;;)
     {
-        if (WaitForSingleObject(event, 100) == WAIT_OBJECT_0)
+        if (WaitForSingleObject(terminate_event, 100) == WAIT_OBJECT_0)
             break;
     }
 
-    CloseHandle(event);
+    CloseHandle(terminate_event);
+    CloseHandle(ready_event);
 }
 
 START_TEST(dbgeng)
@@ -324,12 +513,13 @@ START_TEST(dbgeng)
 
     argc = winetest_get_mainargs(&argv);
 
-    if (argc >= 3 && !strcmp(argv[2], "target"))
+    if (argc > 4 && !strcmp(argv[2], "target"))
     {
-        target_proc();
+        target_proc(argv[3], argv[4]);
         return;
     }
 
     test_engine_options();
     test_attach();
+    test_module_information();
 }
