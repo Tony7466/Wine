@@ -843,6 +843,11 @@ UINT32 nsAString_GetData(const nsAString *str, const PRUnichar **data)
     return NS_StringGetData(str, data, NULL);
 }
 
+void nsAString_SetData(nsAString *str, const PRUnichar *data)
+{
+    NS_StringSetData(str, data, PR_UINT32_MAX);
+}
+
 void nsAString_Finish(nsAString *str)
 {
     NS_StringContainerFinish(str);
@@ -924,6 +929,59 @@ HRESULT return_nsstr_variant(nsresult nsres, nsAString *nsstr, VARIANT *p)
     }
 
     nsAString_Finish(nsstr);
+    return S_OK;
+}
+
+/*
+ * Converts VARIANT to string and stores the result in nsAString. To avoid useless
+ * allocations, the function uses an existing string if available, so caller must
+ * ensure that passed VARIANT is unchanged as long as its string representation is used
+ */
+HRESULT variant_to_nsstr(VARIANT *v, BOOL hex_int, nsAString *nsstr)
+{
+    WCHAR buf[32];
+
+    static const WCHAR d_formatW[] = {'%','d',0};
+    static const WCHAR hex_formatW[] = {'#','%','0','6','x',0};
+
+    switch(V_VT(v)) {
+    case VT_NULL:
+        nsAString_InitDepend(nsstr, NULL);
+        return S_OK;
+
+    case VT_BSTR:
+        nsAString_InitDepend(nsstr, V_BSTR(v));
+        break;
+
+    case VT_BSTR|VT_BYREF:
+        nsAString_InitDepend(nsstr, *V_BSTRREF(v));
+        break;
+
+    case VT_I4:
+        wsprintfW(buf, hex_int ? hex_formatW : d_formatW, V_I4(v));
+        nsAString_Init(nsstr, buf);
+        break;
+
+    case VT_R8: {
+        VARIANT strv;
+        HRESULT hres;
+
+        V_VT(&strv) = VT_EMPTY;
+        hres = VariantChangeTypeEx(&strv, v, MAKELCID(MAKELANGID(LANG_ENGLISH,SUBLANG_ENGLISH_US),SORT_DEFAULT),
+                                   0, VT_BSTR);
+        if(FAILED(hres))
+            return hres;
+
+        nsAString_Init(nsstr, V_BSTR(&strv));
+        SysFreeString(V_BSTR(&strv));
+        break;
+    }
+
+    default:
+        FIXME("not implemented for %s\n", debugstr_variant(v));
+        return E_NOTIMPL;
+
+    }
     return S_OK;
 }
 

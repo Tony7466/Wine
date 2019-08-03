@@ -58,6 +58,8 @@ testNoEnumerables("Function");
 testNoEnumerables("Function.prototype");
 testNoEnumerables("testNoEnumerates");
 testNoEnumerables("VBArray");
+testNoEnumerables("new Enumerator([])");
+testNoEnumerables("Enumerator([])");
 
 ok(Object.propertyIsEnumerable("prototype") === false, "Object.prototype is enumerable");
 ok(Math.propertyIsEnumerable("E") === false, "Math.E is enumerable");
@@ -341,6 +343,8 @@ ok(tmp === "[object Object]", "toString.call(this) = " + tmp);
 ok(tmp === "[object Object]", "toString.call(arguments) = " + tmp);
 tmp = Object.prototype.toString.call(new VBArray(createArray()));
 ok(tmp === "[object Object]", "toString.call(new VBArray()) = " + tmp);
+(tmp = new Enumerator([])).f = Object.prototype.toString;
+ok(tmp.f() === "[object Object]", "tmp.f() = " + tmp.f());
 
 function TSTestConstr() {}
 TSTestConstr.prototype = { toString: function() { return "test"; } };
@@ -639,6 +643,43 @@ r = "".split();
 ok(typeof(r) === "object", "typeof(r) = " + typeof(r));
 ok(r.length === 1, "r.length = " + r.length);
 ok(r[0] === "", "r[0] = " + r[0]);
+
+(function() {
+    function test(string, separator, result) {
+        var r = string.split(separator);
+        ok(r == result, "\"" + string + "\".split(" + separator + ") returned " + r + " expected " + result);
+    }
+
+    test("test", /^|\s+/, "test");
+    test("test", /$|\s+/, "test");
+    test("test", /^|./, "t");
+    test("test", /.*/, "");
+    test("test", /x*/, "t,e,s,t");
+    test("test", /$|x*/, "t,e,s,t");
+    test("test", /^|x*/, "t,e,s,t");
+    test("test", /t*/, "e,s");
+    test("xaabaax", /a*|b*/, "x,b,x");
+    test("xaabaax", /a+|b+/, "x,x");
+    test("xaabaax", /a+|b*/, "x,x");
+    test("xaaxbaax", /b+|a+/, "x,x,x");
+    test("test", /^|t/, "tes");
+    test("test", /^|t/, "tes");
+    test("a,,b", /,/, "a,b");
+    test("ab", /a*/, "b");
+    test("aab", "a", ",,b");
+    test("a", "a", ",");
+
+    function test_length(string, separator, len) {
+        var r = string.split(separator);
+        ok(r.length === len, "\"" + string + "\".split(" + separator + ").length = "
+           + r.length + " expected " + len);
+    }
+
+    test_length("", /a*/, 0);
+    test_length("", /a+/, 1);
+    test_length("", "", 0);
+    test_length("", "x", 1);
+})();
 
 tmp = "abcd".indexOf("bc",0);
 ok(tmp === 1, "indexOf = " + tmp);

@@ -77,6 +77,13 @@ function test_textContent() {
     ok(div.textContent === "", "div.textContent = " + div.textContent);
     ok(div.childNodes.length === 0, "div.childNodes.length = " + div.childNodes.length);
 
+    div.textContent = null;
+    ok(div.textContent === "", "div.textContent = " + div.textContent);
+    div.textContent = 11;
+    ok(div.textContent === "11", "div.textContent = " + div.textContent);
+    div.textContent = 10.5;
+    ok(div.textContent === "10.5", "div.textContent = " + div.textContent);
+
     ok(document.textContent === null, "document.textContent = " + document.textContent);
 
     next_test();
@@ -373,6 +380,8 @@ function test_style_properties() {
 
     elem.style.zIndex = 4;
     ok(computed_style.zIndex === 4, "computed_style.zIndex = " + computed_style.zIndex);
+
+    window.getComputedStyle(elem, null);
 
     next_test();
 }

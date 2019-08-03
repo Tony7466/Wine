@@ -360,7 +360,7 @@
 # @ stub FindFirstFileNameW
 @ stdcall FindFirstFileW(wstr ptr) kernel32.FindFirstFileW
 @ stdcall FindFirstFreeAce(ptr ptr) advapi32.FindFirstFreeAce
-# @ stub FindFirstStreamW
+@ stdcall FindFirstStreamW(wstr long ptr long) kernel32.FindFirstStreamW
 @ stdcall FindFirstVolumeW(ptr long) kernel32.FindFirstVolumeW
 @ stub FindNLSString
 @ stdcall FindNLSStringEx(wstr long wstr long wstr long ptr ptr ptr long) kernel32.FindNLSStringEx
@@ -368,7 +368,7 @@
 @ stdcall FindNextFileA(long ptr) kernel32.FindNextFileA
 # @ stub FindNextFileNameW
 @ stdcall FindNextFileW(long ptr) kernel32.FindNextFileW
-# @ stub FindNextStreamW
+@ stdcall FindNextStreamW(long ptr) kernel32.FindNextStreamW
 @ stdcall FindNextVolumeW(long ptr long) kernel32.FindNextVolumeW
 # @ stub FindPackagesByPackageFamily
 @ stdcall FindResourceExW(long wstr wstr long) kernel32.FindResourceExW
@@ -948,7 +948,7 @@
 @ stdcall MakeSelfRelativeSD(ptr ptr ptr) advapi32.MakeSelfRelativeSD
 @ stdcall MapGenericMask(ptr ptr) advapi32.MapGenericMask
 # @ stub MapPredefinedHandleInternal
-# @ stub MapUserPhysicalPages
+@ stdcall MapUserPhysicalPages(ptr long ptr) kernel32.MapUserPhysicalPages
 @ stdcall MapViewOfFile(long long long long long) kernel32.MapViewOfFile
 @ stdcall MapViewOfFileEx(long long long long long ptr) kernel32.MapViewOfFileEx
 @ stub MapViewOfFileExNuma
@@ -1669,7 +1669,7 @@
 # @ stub VerifyScripts
 @ stdcall VirtualAlloc(ptr long long long) kernel32.VirtualAlloc
 @ stdcall VirtualAllocEx(long ptr long long long) kernel32.VirtualAllocEx
-@ stub VirtualAllocExNuma
+@ stdcall VirtualAllocExNuma(long ptr long long long long) kernel32.VirtualAllocExNuma
 # @ stub VirtualAllocFromApp
 @ stdcall VirtualFree(ptr long long) kernel32.VirtualFree
 @ stdcall VirtualFreeEx(long ptr long long) kernel32.VirtualFreeEx

@@ -1549,6 +1549,14 @@ static void test_margins_usefontinfo(UINT charset)
     DeleteObject(hfont);
 }
 
+static BOOL is_cjk_font(HDC dc)
+{
+    const DWORD FS_DBCS_MASK = FS_JISJAPAN|FS_CHINESESIMP|FS_WANSUNG|FS_CHINESETRAD|FS_JOHAB;
+    FONTSIGNATURE fs;
+    return (GetTextCharsetInfo(dc, &fs, 0) != DEFAULT_CHARSET &&
+            (fs.fsCsb[0] & FS_DBCS_MASK));
+}
+
 static INT get_cjk_fontinfo_margin(INT width, INT side_bearing)
 {
     INT margin;
@@ -1559,17 +1567,39 @@ static INT get_cjk_fontinfo_margin(INT width, INT side_bearing)
     return margin;
 }
 
+static DWORD get_cjk_font_margins(HDC hdc, BOOL unicode)
+{
+    ABC abc[256];
+    SHORT left, right;
+    UINT i;
+
+    left = right = 0;
+    if (unicode) {
+        if (!GetCharABCWidthsW(hdc, 0, 255, abc))
+            return 0;
+    }
+    else {
+        if (!GetCharABCWidthsA(hdc, 0, 255, abc))
+            return 0;
+    }
+    for (i = 0; i < ARRAY_SIZE(abc); i++) {
+        if (-abc[i].abcA > right) right = -abc[i].abcA;
+        if (-abc[i].abcC > left)  left  = -abc[i].abcC;
+    }
+    return MAKELONG(left, right);
+}
+
 static void test_margins_default(const char* facename, UINT charset)
 {
     HWND hwnd;
     HDC hdc;
     TEXTMETRICW tm;
     SIZE size;
-    BOOL cjk_charset;
+    BOOL cjk_charset, cjk_font;
     LOGFONTA lf;
     HFONT hfont;
     RECT rect;
-    INT margins, expect;
+    INT margins, expect, font_expect;
     const UINT small_margins = MAKELONG(1, 5);
     const WCHAR EditW[] = {'E','d','i','t',0}, strW[] = {'W',0};
     struct char_width_info {
@@ -1609,15 +1639,22 @@ static void test_margins_default(const char* facename, UINT charset)
         return;
     }
     cjk_charset = is_cjk_charset(hdc);
-    if (cjk_charset && pGetCharWidthInfo && pGetCharWidthInfo(hdc, &info)) {
+    cjk_font = is_cjk_font(hdc);
+    if ((cjk_charset || cjk_font) &&
+        pGetCharWidthInfo && pGetCharWidthInfo(hdc, &info)) {
         short left, right;
 
         left  = get_cjk_fontinfo_margin(size.cx, info.lsb);
         right = get_cjk_fontinfo_margin(size.cx, info.rsb);
         expect = MAKELONG(left, right);
+
+        font_expect = get_cjk_font_margins(hdc, TRUE);
+        if (!font_expect)
+            /* In this case, margins aren't updated */
+            font_expect = small_margins;
     }
     else
-        expect = MAKELONG(size.cx / 2, size.cx / 2);
+        font_expect = expect = MAKELONG(size.cx / 2, size.cx / 2);
 
     hfont = SelectObject(hdc, hfont);
     ReleaseDC(hwnd, hdc);
@@ -1627,12 +1664,10 @@ static void test_margins_default(const char* facename, UINT charset)
     SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, small_margins);
     SendMessageA(hwnd, WM_SETFONT, (WPARAM)hfont, MAKELPARAM(TRUE, 0));
     margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
-    if (!cjk_charset)
-        ok(margins == expect, "%s:%d: got %d, %d\n", facename, charset, HIWORD(margins), LOWORD(margins));
+    ok(margins == font_expect, "%s:%d: expected %d, %d, got %d, %d\n", facename, charset, HIWORD(font_expect), LOWORD(font_expect), HIWORD(margins), LOWORD(margins));
     SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, small_margins);
     SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(EC_USEFONTINFO, EC_USEFONTINFO));
     margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
-
     ok(margins == expect, "%s:%d: expected %d, %d, got %d, %d\n", facename, charset, HIWORD(expect), LOWORD(expect), HIWORD(margins), LOWORD(margins));
     DestroyWindow(hwnd);
 
@@ -1642,17 +1677,29 @@ static void test_margins_default(const char* facename, UINT charset)
     GetClientRect(hwnd, &rect);
     ok(!IsRectEmpty(&rect), "got rect %s\n", wine_dbgstr_rect(&rect));
 
+    if (cjk_charset) {
+        hdc = GetDC(hwnd);
+        hfont = SelectObject(hdc, hfont);
+        font_expect = get_cjk_font_margins(hdc, FALSE);
+        if (!font_expect)
+            /* In this case, margins aren't updated */
+            font_expect = small_margins;
+        hfont = SelectObject(hdc, hfont);
+        ReleaseDC(hwnd, hdc);
+    }
+    else
+        /* we expect EC_USEFONTINFO size */
+        font_expect = expect;
+
     margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
     ok(margins == 0, "got %x\n", margins);
     SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, small_margins);
     SendMessageA(hwnd, WM_SETFONT, (WPARAM)hfont, MAKELPARAM(TRUE, 0));
     margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
-    if (!cjk_charset)
-        ok(margins == expect, "%s:%d: got %d, %d\n", facename, charset, HIWORD(margins), LOWORD(margins));
+    ok(margins == font_expect, "%s:%d: expected %d, %d, got %d, %d\n", facename, charset, HIWORD(font_expect), LOWORD(font_expect), HIWORD(margins), LOWORD(margins));
     SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, small_margins);
     SendMessageA(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(EC_USEFONTINFO, EC_USEFONTINFO));
     margins = SendMessageA(hwnd, EM_GETMARGINS, 0, 0);
-
     ok(margins == expect, "%s:%d: expected %d, %d, got %d, %d\n", facename, charset, HIWORD(expect), LOWORD(expect), HIWORD(margins), LOWORD(margins));
     DestroyWindow(hwnd);
 
@@ -1757,18 +1804,24 @@ static void test_margins(void)
     test_margins_default("Tahoma", HANGUL_CHARSET);
     test_margins_default("Tahoma", CHINESEBIG5_CHARSET);
 
-    if (is_font_installed("MS PGothic"))
+    if (is_font_installed("MS PGothic")) {
         test_margins_default("MS PGothic", SHIFTJIS_CHARSET);
+        test_margins_default("MS PGothic", GREEK_CHARSET);
+    }
     else
         skip("MS PGothic is not available, skipping some margin tests\n");
 
-    if (is_font_installed("Ume P Gothic"))
+    if (is_font_installed("Ume P Gothic")) {
         test_margins_default("Ume P Gothic", SHIFTJIS_CHARSET);
+        test_margins_default("Ume P Gothic", GREEK_CHARSET);
+    }
     else
         skip("Ume P Gothic is not available, skipping some margin tests\n");
 
-    if (is_font_installed("SimSun"))
+    if (is_font_installed("SimSun")) {
         test_margins_default("SimSun", GB2312_CHARSET);
+        test_margins_default("SimSun", ANSI_CHARSET);
+    }
     else
         skip("SimSun is not available, skipping some margin tests\n");
 }
@@ -1793,7 +1846,7 @@ static void test_margins_font_change(void)
     memset(&lf, 0, sizeof(lf));
     strcpy(lf.lfFaceName, "Arial");
     lf.lfHeight = 16;
-    lf.lfCharSet = DEFAULT_CHARSET;
+    lf.lfCharSet = GREEK_CHARSET; /* to avoid associated charset feature */
     hfont = CreateFontIndirectA(&lf);
     lf.lfHeight = 30;
     hfont2 = CreateFontIndirectA(&lf);
@@ -1808,39 +1861,39 @@ static void test_margins_font_change(void)
     SendMessageA(hwEdit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(0,0));
     SendMessageA(hwEdit, WM_SETFONT, (WPARAM)hfont, 0);
     margins = SendMessageA(hwEdit, EM_GETMARGINS, 0, 0);
-    ok(LOWORD(margins) == 0 || broken(LOWORD(margins) == LOWORD(font_margins)), /* win95 */
+    ok(LOWORD(margins) == 0,
        "got %d\n", LOWORD(margins));
-    ok(HIWORD(margins) == 0 || broken(HIWORD(margins) == HIWORD(font_margins)), /* win95 */
+    ok(HIWORD(margins) == 0,
        "got %d\n", HIWORD(margins));
 
     SendMessageA(hwEdit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(1,0));
     SendMessageA(hwEdit, WM_SETFONT, (WPARAM)hfont, 0);
     margins = SendMessageA(hwEdit, EM_GETMARGINS, 0, 0);
-    ok(LOWORD(margins) == 1 || broken(LOWORD(margins) == LOWORD(font_margins)), /* win95 */
+    ok(LOWORD(margins) == 1,
        "got %d\n", LOWORD(margins));
-    ok(HIWORD(margins) == 0 || broken(HIWORD(margins) == HIWORD(font_margins)), /* win95 */
+    ok(HIWORD(margins) == 0,
        "got %d\n", HIWORD(margins));
 
     SendMessageA(hwEdit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(1,1));
     SendMessageA(hwEdit, WM_SETFONT, (WPARAM)hfont, 0);
     margins = SendMessageA(hwEdit, EM_GETMARGINS, 0, 0);
-    ok(LOWORD(margins) == 1 || broken(LOWORD(margins) == LOWORD(font_margins)), /* win95 */
+    ok(LOWORD(margins) == 1,
        "got %d\n", LOWORD(margins));
-    ok(HIWORD(margins) == 1 || broken(HIWORD(margins) == HIWORD(font_margins)), /* win95 */
+    ok(HIWORD(margins) == 1,
        "got %d\n", HIWORD(margins));
 
     SendMessageA(hwEdit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELONG(EC_USEFONTINFO,EC_USEFONTINFO));
     margins = SendMessageA(hwEdit, EM_GETMARGINS, 0, 0);
-    ok(LOWORD(margins) == 1 || broken(LOWORD(margins) == LOWORD(font_margins)), /* win95 */
+    ok(LOWORD(margins) == 1,
        "got %d\n", LOWORD(margins));
-    ok(HIWORD(margins) == 1 || broken(HIWORD(margins) == HIWORD(font_margins)), /* win95 */
+    ok(HIWORD(margins) == 1,
        "got %d\n", HIWORD(margins));
 
     SendMessageA(hwEdit, WM_SETFONT, (WPARAM)hfont2, 0);
     margins = SendMessageA(hwEdit, EM_GETMARGINS, 0, 0);
-    ok(LOWORD(margins) == 1 || broken(LOWORD(margins) != 1 && LOWORD(margins) != LOWORD(font_margins)), /* win95 */
+    ok(LOWORD(margins) == 1,
        "got %d\n", LOWORD(margins));
-    ok(HIWORD(margins) == 1 || broken(HIWORD(margins) != 1 && HIWORD(margins) != HIWORD(font_margins)), /* win95 */
+    ok(HIWORD(margins) == 1,
        "got %d\n", HIWORD(margins));
 
     /* Above a certain size threshold then the margin is updated */
@@ -1864,7 +1917,7 @@ static void test_margins_font_change(void)
     ok(HIWORD(margins) == HIWORD(font_margins), "got %d\n", HIWORD(margins)); 
     SendMessageA(hwEdit, WM_SETFONT, (WPARAM)hfont2, 0);
     margins = SendMessageA(hwEdit, EM_GETMARGINS, 0, 0);
-    ok(LOWORD(margins) != LOWORD(font_margins) || broken(LOWORD(margins) == LOWORD(font_margins)), /* win98 */
+    ok(LOWORD(margins) != LOWORD(font_margins),
        "got %d\n", LOWORD(margins));
     ok(HIWORD(margins) != HIWORD(font_margins), "got %d\n", HIWORD(margins)); 
 

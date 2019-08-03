@@ -95,6 +95,7 @@ typedef struct EventTarget EventTarget;
     XDIID(DispHTMLCurrentStyle) \
     XDIID(DispHTMLDocument) \
     XDIID(DispHTMLDOMAttribute) \
+    XDIID(DispHTMLDOMImplementation) \
     XDIID(DispHTMLDOMTextNode) \
     XDIID(DispHTMLElementCollection) \
     XDIID(DispHTMLEmbed) \
@@ -131,6 +132,9 @@ typedef struct EventTarget EventTarget;
     XDIID(DispHTMLW3CComputedStyle) \
     XDIID(DispHTMLWindow2) \
     XDIID(DispHTMLXMLHttpRequest) \
+    XDIID(DispSVGCircleElement) \
+    XDIID(DispSVGSVGElement) \
+    XDIID(DispSVGTSpanElement) \
     XDIID(HTMLDocumentEvents) \
     XDIID(HTMLElementEvents2) \
     XIID(IDOMCustomEvent) \
@@ -168,6 +172,7 @@ typedef struct EventTarget EventTarget;
     XIID(IHTMLDOMAttribute2) \
     XIID(IHTMLDOMChildrenCollection) \
     XIID(IHTMLDOMImplementation) \
+    XIID(IHTMLDOMImplementation2) \
     XIID(IHTMLDOMNode) \
     XIID(IHTMLDOMNode2) \
     XIID(IHTMLDOMNode3) \
@@ -246,7 +251,12 @@ typedef struct EventTarget EventTarget;
     XIID(IHTMLXMLHttpRequest) \
     XIID(IHTMLXMLHttpRequestFactory) \
     XIID(IOmHistory) \
-    XIID(IOmNavigator)
+    XIID(IOmNavigator) \
+    XIID(ISVGCircleElement) \
+    XIID(ISVGElement) \
+    XIID(ISVGSVGElement) \
+    XIID(ISVGTSpanElement) \
+    XIID(ISVGTextContentElement)
 
 typedef enum {
 #define XIID(iface) iface ## _tid,
@@ -958,12 +968,14 @@ void nsACString_Finish(nsACString*) DECLSPEC_HIDDEN;
 
 BOOL nsAString_Init(nsAString*,const PRUnichar*) DECLSPEC_HIDDEN;
 void nsAString_InitDepend(nsAString*,const PRUnichar*) DECLSPEC_HIDDEN;
+void nsAString_SetData(nsAString*,const PRUnichar*) DECLSPEC_HIDDEN;
 UINT32 nsAString_GetData(const nsAString*,const PRUnichar**) DECLSPEC_HIDDEN;
 void nsAString_Finish(nsAString*) DECLSPEC_HIDDEN;
 
 HRESULT map_nsresult(nsresult) DECLSPEC_HIDDEN;
 HRESULT return_nsstr(nsresult,nsAString*,BSTR*) DECLSPEC_HIDDEN;
 HRESULT return_nsstr_variant(nsresult nsres, nsAString *nsstr, VARIANT *p) DECLSPEC_HIDDEN;
+HRESULT variant_to_nsstr(VARIANT*,BOOL,nsAString*) DECLSPEC_HIDDEN;
 HRESULT return_nsform(nsresult,nsIDOMHTMLFormElement*,IHTMLFormElement**) DECLSPEC_HIDDEN;
 
 nsICommandParams *create_nscommand_params(void) DECLSPEC_HIDDEN;
@@ -1070,6 +1082,8 @@ HRESULT HTMLTableRow_Create(HTMLDocumentNode*,nsIDOMElement*,HTMLElement**) DECL
 HRESULT HTMLTextAreaElement_Create(HTMLDocumentNode*,nsIDOMElement*,HTMLElement**) DECLSPEC_HIDDEN;
 HRESULT HTMLTitleElement_Create(HTMLDocumentNode*,nsIDOMElement*,HTMLElement**) DECLSPEC_HIDDEN;
 HRESULT HTMLGenericElement_Create(HTMLDocumentNode*,nsIDOMElement*,HTMLElement**) DECLSPEC_HIDDEN;
+
+HRESULT create_svg_element(HTMLDocumentNode*,nsIDOMSVGElement*,const WCHAR*,HTMLElement**) DECLSPEC_HIDDEN;
 
 void HTMLDOMNode_Init(HTMLDocumentNode*,HTMLDOMNode*,nsIDOMNode*,dispex_static_data_t*) DECLSPEC_HIDDEN;
 void HTMLElement_Init(HTMLElement*,HTMLDocumentNode*,nsIDOMElement*,dispex_static_data_t*) DECLSPEC_HIDDEN;

@@ -488,7 +488,7 @@
 # @ stub FindFirstFileTransactedW
 @ stdcall FindFirstFileW(wstr ptr)
 # @ stub FindFirstStreamTransactedW
-# @ stub FindFirstStreamW
+@ stdcall FindFirstStreamW(wstr long ptr long)
 @ stdcall FindFirstVolumeA(ptr long)
 @ stdcall FindFirstVolumeMountPointA(str ptr long)
 @ stdcall FindFirstVolumeMountPointW(wstr ptr long)
@@ -497,7 +497,7 @@
 @ stdcall FindNextFileA(long ptr)
 # @ stub FindNextFileNameW
 @ stdcall FindNextFileW(long ptr)
-# @ stub FindNextStreamW
+@ stdcall FindNextStreamW(long ptr)
 @ stdcall FindNextVolumeA(long ptr long)
 @ stub FindNextVolumeMountPointA
 @ stub FindNextVolumeMountPointW
@@ -1076,7 +1076,7 @@
 @ stdcall -i386 -private MapLS(ptr) krnl386.exe16.MapLS
 @ stdcall -i386 -private MapSL(long) krnl386.exe16.MapSL
 @ stdcall -i386 -private MapSLFix(long) krnl386.exe16.MapSLFix
-# @ stub MapUserPhysicalPages
+@ stdcall MapUserPhysicalPages(ptr long ptr)
 # @ stub MapUserPhysicalPagesScatter
 @ stdcall MapViewOfFile(long long long long long)
 @ stdcall MapViewOfFileEx(long long long long long ptr)
@@ -1559,7 +1559,7 @@
 @ stdcall VerifyVersionInfoW(long long int64)
 @ stdcall VirtualAlloc(ptr long long long)
 @ stdcall VirtualAllocEx(long ptr long long long)
-# @ stub VirtualAllocExNuma
+@ stdcall VirtualAllocExNuma(long ptr long long long long)
 @ stub VirtualBufferExceptionHandler
 @ stdcall VirtualFree(ptr long long)
 @ stdcall VirtualFreeEx(long ptr long long)

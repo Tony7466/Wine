@@ -29,6 +29,7 @@
 #include "winternl.h"
 #include "winioctl.h"
 #include "ddk/ntddk.h"
+#include "ddk/ntifs.h"
 #include "ddk/wdm.h"
 
 #include "driver.h"
@@ -169,6 +170,11 @@ static void winetest_end_todo(void)
     todo_level >>= 1;
 }
 
+static int broken(int condition)
+{
+    return !running_under_wine && condition;
+}
+
 #define ok(condition, ...)  ok_(__FILE__, __LINE__, condition, __VA_ARGS__)
 #define todo_if(is_todo) for (winetest_start_todo(is_todo); \
                               winetest_loop_todo(); \
@@ -243,7 +249,7 @@ static void test_mdl_map(void)
 todo_wine
     ok(addr != NULL, "MmMapLockedPagesSpecifyCache failed\n");
 
-    /* MmUnmapLockedPages(addr, mdl); */
+    MmUnmapLockedPages(addr, mdl);
 
     IoFreeMdl(mdl);
 }
@@ -841,7 +847,6 @@ static void test_ob_reference(const WCHAR *test_path)
 
     status = ObReferenceObjectByHandle(file_handle2, SYNCHRONIZE, *pIoFileObjectType, KernelMode, &obj2, NULL);
     ok(!status, "ObReferenceObjectByHandle failed: %#x\n", status);
-    todo_wine
     ok(obj1 == obj2, "obj1 != obj2\n");
 
     file = obj1;
@@ -1167,6 +1172,21 @@ static void test_resource(void)
     ok(status == STATUS_SUCCESS, "got status %#x\n", status);
 }
 
+static void test_lookup_thread(void)
+{
+    NTSTATUS status;
+    PETHREAD thread = NULL;
+
+    status = PsLookupThreadByThreadId(PsGetCurrentThreadId(), &thread);
+    ok(!status, "PsLookupThreadByThreadId failed: %#x\n", status);
+    ok((PKTHREAD)thread == KeGetCurrentThread(), "thread != KeGetCurrentThread\n");
+    if (thread) ObDereferenceObject(thread);
+
+    status = PsLookupThreadByThreadId(NULL, &thread);
+    ok(status == STATUS_INVALID_CID || broken(status == STATUS_INVALID_PARAMETER) /* winxp */,
+       "PsLookupThreadByThreadId returned %#x\n", status);
+}
+
 static NTSTATUS main_test(DEVICE_OBJECT *device, IRP *irp, IO_STACK_LOCATION *stack, ULONG_PTR *info)
 {
     ULONG length = stack->Parameters.DeviceIoControl.OutputBufferLength;
@@ -1210,6 +1230,7 @@ static NTSTATUS main_test(DEVICE_OBJECT *device, IRP *irp, IO_STACK_LOCATION *st
     test_lookaside_list();
     test_ob_reference(test_input->path);
     test_resource();
+    test_lookup_thread();
 
     /* print process report */
     if (winetest_debug)

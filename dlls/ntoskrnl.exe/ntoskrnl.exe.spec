@@ -4,7 +4,7 @@
 @ stub ExInitializeRundownProtection
 @ stub ExInterlockedAddLargeStatistic
 @ stub ExInterlockedCompareExchange64
-@ stub ExInterlockedFlushSList
+@ stdcall -fastcall -arch=i386 ExInterlockedFlushSList(ptr) NTOSKRNL_ExInterlockedFlushSList
 @ stdcall -fastcall -arch=i386 ExInterlockedPopEntrySList(ptr ptr) NTOSKRNL_ExInterlockedPopEntrySList
 @ stdcall -fastcall -arch=i386 ExInterlockedPushEntrySList (ptr ptr ptr) NTOSKRNL_ExInterlockedPushEntrySList
 @ stub ExReInitializeRundownProtection
@@ -27,6 +27,7 @@
 @ stub Exfi386InterlockedDecrementLong
 @ stub Exfi386InterlockedExchangeUlong
 @ stub Exfi386InterlockedIncrementLong
+@ stdcall -arch=win64 ExpInterlockedFlushSList(ptr) RtlInterlockedFlushSList
 @ stdcall -arch=win64 ExpInterlockedPopEntrySList(ptr) RtlInterlockedPopEntrySList
 @ stdcall -arch=win64 ExpInterlockedPushEntrySList(ptr ptr) RtlInterlockedPushEntrySList
 @ stub HalExamineMBR
@@ -732,7 +733,7 @@
 @ stdcall MmUnlockPagableImageSection(ptr)
 @ stdcall MmUnlockPages(ptr)
 @ stdcall MmUnmapIoSpace(ptr long)
-@ stub MmUnmapLockedPages
+@ stdcall MmUnmapLockedPages(ptr ptr)
 @ stub MmUnmapReservedMapping
 @ stub MmUnmapVideoDisplay
 @ stub MmUnmapViewInSessionSpace
@@ -913,7 +914,7 @@
 @ stub PsJobType
 @ stdcall PsLookupProcessByProcessId(ptr ptr)
 @ stub PsLookupProcessThreadByCid
-@ stub PsLookupThreadByThreadId
+@ stdcall PsLookupThreadByThreadId(ptr ptr)
 @ extern PsProcessType
 @ stub PsReferenceImpersonationToken
 @ stub PsReferencePrimaryToken

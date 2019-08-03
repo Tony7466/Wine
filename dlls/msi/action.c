@@ -2922,7 +2922,7 @@ static int is_key_empty(const MSICOMPONENT *comp, HKEY root, const WCHAR *path)
     HKEY key;
     LONG res;
 
-    key = open_key(comp, root, path, FALSE, get_registry_view(comp) | KEY_READ);
+    key = open_key(comp, root, path, FALSE, KEY_READ);
     if (!key) return 0;
 
     res = RegQueryInfoKeyW(key, 0, 0, 0, &subkeys, 0, 0, &values, 0, 0, 0, 0);
@@ -2934,11 +2934,9 @@ static int is_key_empty(const MSICOMPONENT *comp, HKEY root, const WCHAR *path)
 static void delete_key( const MSICOMPONENT *comp, HKEY root, const WCHAR *path )
 {
     LONG res = ERROR_SUCCESS;
-    REGSAM access = 0;
+    REGSAM access = get_registry_view( comp );
     WCHAR *subkey, *p;
     HKEY hkey;
-
-    access |= get_registry_view( comp );
 
     if (!(subkey = strdupW( path ))) return;
     do
@@ -2947,7 +2945,7 @@ static void delete_key( const MSICOMPONENT *comp, HKEY root, const WCHAR *path )
         {
             *p = 0;
             if (!p[1]) continue; /* trailing backslash */
-            hkey = open_key( comp, root, subkey, FALSE, access | READ_CONTROL );
+            hkey = open_key( comp, root, subkey, FALSE, READ_CONTROL );
             if (!hkey) break;
             if (!is_key_empty(comp, hkey, p + 1))
             {
@@ -3319,66 +3317,48 @@ static LPWSTR resolve_keypath( MSIPACKAGE* package, MSICOMPONENT *cmp )
     return NULL;
 }
 
-static HKEY openSharedDLLsKey(void)
+static HKEY open_shared_dlls_key( MSICOMPONENT *comp, BOOL create, REGSAM access )
 {
-    HKEY hkey=0;
     static const WCHAR path[] =
-        {'S','o','f','t','w','a','r','e','\\',
-         'M','i','c','r','o','s','o','f','t','\\',
-         'W','i','n','d','o','w','s','\\',
-         'C','u','r','r','e','n','t','V','e','r','s','i','o','n','\\',
+        {'S','o','f','t','w','a','r','e','\\','M','i','c','r','o','s','o','f','t','\\',
+         'W','i','n','d','o','w','s','\\','C','u','r','r','e','n','t','V','e','r','s','i','o','n','\\',
          'S','h','a','r','e','d','D','L','L','s',0};
-
-    RegCreateKeyW(HKEY_LOCAL_MACHINE,path,&hkey);
-    return hkey;
+    return open_key( comp, HKEY_LOCAL_MACHINE, path, create, access );
 }
 
-static UINT ACTION_GetSharedDLLsCount(LPCWSTR dll)
+static UINT get_shared_dlls_count( MSICOMPONENT *comp )
 {
-    HKEY hkey;
-    DWORD count=0;
-    DWORD type;
-    DWORD sz = sizeof(count);
-    DWORD rc;
-    
-    hkey = openSharedDLLsKey();
-    rc = RegQueryValueExW(hkey, dll, NULL, &type, (LPBYTE)&count, &sz);
-    if (rc != ERROR_SUCCESS)
-        count = 0;
-    RegCloseKey(hkey);
+    DWORD count, type, sz = sizeof(count);
+    HKEY hkey = open_shared_dlls_key( comp, FALSE, KEY_READ );
+    if (RegQueryValueExW( hkey, comp->FullKeypath, NULL, &type, (BYTE *)&count, &sz )) count = 0;
+    RegCloseKey( hkey );
     return count;
 }
 
-static UINT ACTION_WriteSharedDLLsCount(LPCWSTR path, UINT count)
+static void write_shared_dlls_count( MSICOMPONENT *comp, const WCHAR *path, INT count )
 {
-    HKEY hkey;
-
-    hkey = openSharedDLLsKey();
+    HKEY hkey = open_shared_dlls_key( comp, TRUE, KEY_SET_VALUE );
     if (count > 0)
         msi_reg_set_val_dword( hkey, path, count );
     else
-        RegDeleteValueW(hkey,path);
+        RegDeleteValueW( hkey, path );
     RegCloseKey(hkey);
-    return count;
 }
 
-static void ACTION_RefCountComponent( MSIPACKAGE* package, MSICOMPONENT *comp )
+static void refcount_component( MSIPACKAGE *package, MSICOMPONENT *comp )
 {
     MSIFEATURE *feature;
     INT count = 0;
     BOOL write = FALSE;
 
     /* only refcount DLLs */
-    if (comp->KeyPath == NULL || 
-        comp->assembly ||
-        comp->Attributes & msidbComponentAttributesRegistryKeyPath || 
+    if (!comp->KeyPath || comp->assembly || comp->Attributes & msidbComponentAttributesRegistryKeyPath ||
         comp->Attributes & msidbComponentAttributesODBCDataSource)
         write = FALSE;
     else
     {
-        count = ACTION_GetSharedDLLsCount( comp->FullKeypath);
+        count = get_shared_dlls_count( comp );
         write = (count > 0);
-
         if (comp->Attributes & msidbComponentAttributesSharedDllRefCount)
             write = TRUE;
     }
@@ -3421,18 +3401,18 @@ static void ACTION_RefCountComponent( MSIPACKAGE* package, MSICOMPONENT *comp )
         LIST_FOR_EACH_ENTRY( file, &package->files, MSIFILE, entry )
         {
             if (file->Component == comp)
-                ACTION_WriteSharedDLLsCount( file->TargetPath, count );
+                write_shared_dlls_count( comp, file->TargetPath, count );
         }
     }
-    
+
     /* add a count for permanent */
     if (comp->Attributes & msidbComponentAttributesPermanent)
         count ++;
-    
+
     comp->RefCount = count;
 
     if (write)
-        ACTION_WriteSharedDLLsCount( comp->FullKeypath, comp->RefCount );
+        write_shared_dlls_count( comp, comp->FullKeypath, comp->RefCount );
 }
 
 static WCHAR *build_full_keypath( MSIPACKAGE *package, MSICOMPONENT *comp )
@@ -3482,7 +3462,7 @@ static UINT ACTION_ProcessComponents(MSIPACKAGE *package)
         msi_free( comp->FullKeypath );
         comp->FullKeypath = build_full_keypath( package, comp );
 
-        ACTION_RefCountComponent( package, comp );
+        refcount_component( package, comp );
 
         if (package->need_rollback) action = comp->Installed;
         else action = comp->ActionRequest;
@@ -7070,7 +7050,7 @@ static UINT env_parse_flags( LPCWSTR *name, LPCWSTR *value, DWORD *flags )
         else if (*cptr == '!')
             *flags |= ENV_ACT_REMOVEMATCH;
         else if (*cptr == '*')
-            *flags |= ENV_MOD_MACHINE;
+            *flags |= ENV_MOD_MACHINE | ENV_ACT_REMOVE;
         else
             break;
 
