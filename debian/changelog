@@ -1,3 +1,15 @@
+wine-development (4.7-1) UNRELEASED; urgency=medium
+
+  * New upstream release 4.7, released Apr 26, 2019.
+    - Support for builtin libraries in PE format even on Unix.
+    - Updated version of the Mono engine.
+    - More implementation of the Debug Engine DLL.
+    - Support for the Command Link standard control.
+    - Improved Edit control sizing in CJK locales.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 03 Aug 2019 00:17:42 +0000
+
 wine-development (4.6-1) unstable; urgency=medium
 
   * New upstream release 4.6, released Apr 12, 2019.
