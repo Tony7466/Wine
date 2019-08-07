@@ -33,7 +33,6 @@ warnings/arm64-excess-precision.patch
 warnings/arm64-unused-functions.patch
 warnings/arm64-uninitialized-variables.patch
 
-warnings/array-bounds.patch
 warnings/dword64-winmm.patch
 warnings/format-overflow.patch
 warnings/unused-functions.patch
