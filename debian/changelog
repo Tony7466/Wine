@@ -1,3 +1,11 @@
+wine (4.0.1-1) UNRELEASED; urgency=medium
+
+  * New upstream release 4.0.1, released May 15, 2019.
+    - Various bug fixes
+    - Sinhala and Tamil translation updates
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Thu, 08 Aug 2019 14:01:15 +0200
+
 wine (4.0-2) unstable; urgency=medium
 
   * Point to branch buster in the Vcs fields.
