@@ -218,5 +218,5 @@ Zhiyi Zhang (5):
       user32: Fix a memory leak.
 
 --
-Alexandre Julliard
-julliard@winehq.org
+Michael Stefaniuc
+mstefani@winehq.org
