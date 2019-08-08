@@ -1697,8 +1697,8 @@
 @ cdecl -arch=win64 ?__ExceptionPtrCopy@@YAXPEAXPEBX@Z(ptr ptr) msvcr120.?__ExceptionPtrCopy@@YAXPEAXPEBX@Z
 @ cdecl -arch=win32 ?__ExceptionPtrCopyException@@YAXPAXPBX1@Z(ptr ptr ptr) msvcr120.?__ExceptionPtrCopyException@@YAXPAXPBX1@Z
 @ cdecl -arch=win64 ?__ExceptionPtrCopyException@@YAXPEAXPEBX1@Z(ptr ptr ptr) msvcr120.?__ExceptionPtrCopyException@@YAXPEAXPEBX1@Z
-@ cdecl -arch=win32 ?__ExceptionPtrCreate@@YAXPAX@Z(ptr) msvcr120.?__ExceptionPtrCreate@@YAXPAX@Z
-@ cdecl -arch=win64 ?__ExceptionPtrCreate@@YAXPEAX@Z(ptr) msvcr120.?__ExceptionPtrCreate@@YAXPEAX@Z
+@ cdecl -arch=win32 ?__ExceptionPtrCreate@@YAXPAX@Z(ptr) __ExceptionPtrCreate
+@ cdecl -arch=win64 ?__ExceptionPtrCreate@@YAXPEAX@Z(ptr) __ExceptionPtrCreate
 @ cdecl -arch=win32 ?__ExceptionPtrCurrentException@@YAXPAX@Z(ptr) msvcr120.?__ExceptionPtrCurrentException@@YAXPAX@Z
 @ cdecl -arch=win64 ?__ExceptionPtrCurrentException@@YAXPEAX@Z(ptr) msvcr120.?__ExceptionPtrCurrentException@@YAXPEAX@Z
 @ cdecl -arch=win32 ?__ExceptionPtrDestroy@@YAXPAX@Z(ptr) msvcr120.?__ExceptionPtrDestroy@@YAXPAX@Z
@@ -3638,7 +3638,7 @@
 @ cdecl _Current_set(wstr) tr2_sys__Current_set_wchar
 @ extern _Denorm _Denorm
 @ cdecl _Dtest(ptr) _Dtest
-@ stub _Equivalent
+@ cdecl _Equivalent(wstr wstr) tr2_sys__Equivalent_wchar
 @ cdecl _Exp(ptr double long) _Exp
 @ stub _FCosh
 @ extern _FDenorm _FDenorm
