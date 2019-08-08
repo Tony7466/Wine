@@ -1,10 +1,18 @@
 wine (4.0.1-1) UNRELEASED; urgency=medium
 
+  [ Jens Reyer ]
   * New upstream release 4.0.1, released May 15, 2019.
     - Various bug fixes
     - Sinhala and Tamil translation updates
+  * Refresh patches.
+    Drop warnings/array-bounds.patch, fixed upstream.
+  * Move the wineserver script from wine to libwine (closes: #932201).
 
- -- Jens Reyer <jre.winesim@gmail.com>  Thu, 08 Aug 2019 14:01:15 +0200
+  From master branch:
+  [ Michael Gilbert ]
+  * Support building with pcap 1.9.0 (add fixes/pcap.patch).
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Thu, 08 Aug 2019 15:33:00 +0200
 
 wine (4.0-2) unstable; urgency=medium
 
