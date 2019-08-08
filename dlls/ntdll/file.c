@@ -1014,7 +1014,8 @@ err:
     }
 
     if (send_completion) NTDLL_AddCompletion( hFile, cvalue, status, total );
-
+    if (async_read && (options & FILE_NO_INTERMEDIATE_BUFFERING) && status == STATUS_SUCCESS)
+        return STATUS_PENDING;
     return status;
 }
 
@@ -3478,12 +3479,12 @@ NTSTATUS WINAPI NtCreateNamedPipeFile( PHANDLE handle, ULONG access,
     data_size_t len;
     struct object_attributes *objattr;
 
+    if (!attr) return STATUS_INVALID_PARAMETER;
+
     TRACE("(%p %x %s %p %x %d %x %d %d %d %d %d %d %p)\n",
-          handle, access, debugstr_w(attr->ObjectName->Buffer), iosb, sharing, dispo,
+          handle, access, debugstr_us(attr->ObjectName), iosb, sharing, dispo,
           options, pipe_type, read_mode, completion_mode, max_inst, inbound_quota,
           outbound_quota, timeout);
-
-    if (!attr) return STATUS_INVALID_PARAMETER;
 
     /* assume we only get relative timeout */
     if (timeout->QuadPart > 0)

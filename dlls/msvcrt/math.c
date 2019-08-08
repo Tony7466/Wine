@@ -1529,6 +1529,44 @@ float CDECL MSVCRT_nearbyintf(float num)
 #endif
 }
 
+/*********************************************************************
+ *              nexttoward (MSVCR120.@)
+ */
+double CDECL MSVCRT_nexttoward(double num, double next)
+{
+#ifdef HAVE_NEXTTOWARD
+    double ret = nexttoward(num, next);
+    if (!(MSVCRT__fpclass(ret) & (MSVCRT__FPCLASS_PN | MSVCRT__FPCLASS_NN
+            | MSVCRT__FPCLASS_SNAN | MSVCRT__FPCLASS_QNAN)) && !isinf(num))
+    {
+        *MSVCRT__errno() = MSVCRT_ERANGE;
+    }
+    return ret;
+#else
+    FIXME("not implemented\n");
+    return 0;
+#endif
+}
+
+/*********************************************************************
+ *              nexttowardf (MSVCR120.@)
+ */
+float CDECL MSVCRT_nexttowardf(float num, double next)
+{
+#ifdef HAVE_NEXTTOWARDF
+    float ret = nexttowardf(num, next);
+    if (!(MSVCRT__fpclass(ret) & (MSVCRT__FPCLASS_PN | MSVCRT__FPCLASS_NN
+            | MSVCRT__FPCLASS_SNAN | MSVCRT__FPCLASS_QNAN)) && !isinf(num))
+    {
+        *MSVCRT__errno() = MSVCRT_ERANGE;
+    }
+    return ret;
+#else
+    FIXME("not implemented\n");
+    return 0;
+#endif
+}
+
 #endif /* _MSVCR_VER>=120 */
 
 /*********************************************************************
@@ -3393,6 +3431,37 @@ _Dcomplex* CDECL MSVCR120__Cbuild(_Dcomplex *ret, double r, double i)
 double CDECL MSVCR120_creal(_Dcomplex z)
 {
     return z.x;
+}
+
+int CDECL MSVCR120_ilogb(double x)
+{
+    if (!x) return MSVCRT_FP_ILOGB0;
+    if (isnan(x)) return MSVCRT_FP_ILOGBNAN;
+    if (isinf(x)) return MSVCRT_INT_MAX;
+
+#ifdef HAVE_ILOGB
+    return ilogb(x);
+#else
+    return logb(x);
+#endif
+}
+
+int CDECL MSVCR120_ilogbf(float x)
+{
+    if (!x) return MSVCRT_FP_ILOGB0;
+    if (isnan(x)) return MSVCRT_FP_ILOGBNAN;
+    if (isinf(x)) return MSVCRT_INT_MAX;
+
+#ifdef HAVE_ILOGBF
+    return ilogbf(x);
+#else
+    return logbf(x);
+#endif
+}
+
+int CDECL MSVCR120_ilogbl(LDOUBLE x)
+{
+    return MSVCR120_ilogb(x);
 }
 
 #endif /* _MSVCR_VER>=120 */

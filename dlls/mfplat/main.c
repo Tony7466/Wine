@@ -248,6 +248,17 @@ HRESULT WINAPI MFTUnregisterLocal(IClassFactory *factory)
     return S_OK;
 }
 
+MFTIME WINAPI MFGetSystemTime(void)
+{
+    MFTIME mf;
+
+    TRACE("()\n");
+
+    GetSystemTimeAsFileTime( (FILETIME*)&mf );
+
+    return mf;
+}
+
 static BOOL match_type(const WCHAR *clsid_str, const WCHAR *type_str, MFT_REGISTER_TYPE_INFO *type)
 {
     HKEY htransform, hfilter;
@@ -878,8 +889,7 @@ static HRESULT WINAPI mfbytestream_QueryInterface(IMFByteStream *iface, REFIID r
         return E_NOINTERFACE;
     }
 
-    IUnknown_AddRef((IUnknown*)*out);
-    return S_OK;
+    return E_NOTIMPL;
 }
 
 static ULONG WINAPI mfbytestream_AddRef(IMFByteStream *iface)
@@ -887,9 +897,9 @@ static ULONG WINAPI mfbytestream_AddRef(IMFByteStream *iface)
     mfbytestream *This = impl_from_IMFByteStream(iface);
     ULONG ref = InterlockedIncrement(&This->attributes.ref);
 
-    TRACE("(%p) ref=%u\n", This, ref);
+    FIXME("%p\n", This);
 
-    return ref;
+    return E_NOTIMPL;
 }
 
 static ULONG WINAPI mfbytestream_Release(IMFByteStream *iface)
@@ -899,12 +909,9 @@ static ULONG WINAPI mfbytestream_Release(IMFByteStream *iface)
 
     TRACE("(%p) ref=%u\n", This, ref);
 
-    if (!ref)
-    {
-        HeapFree(GetProcessHeap(), 0, This);
-    }
+    FIXME("%p\n", This);
 
-    return ref;
+    return E_NOTIMPL;
 }
 
 static HRESULT WINAPI mfbytestream_GetCapabilities(IMFByteStream *iface, DWORD *capabilities)
@@ -940,7 +947,10 @@ static HRESULT WINAPI mfbytestream_GetCurrentPosition(IMFByteStream *iface, QWOR
 
     FIXME("%p, %p\n", This, position);
 
-    return E_NOTIMPL;
+static void init_attribute_object(mfattributes *object, UINT32 size)
+{
+    object->ref = 1;
+    object->IMFAttributes_iface.lpVtbl = &mfattributes_vtbl;
 }
 
 static HRESULT WINAPI mfbytestream_SetCurrentPosition(IMFByteStream *iface, QWORD position)
@@ -949,7 +959,14 @@ static HRESULT WINAPI mfbytestream_SetCurrentPosition(IMFByteStream *iface, QWOR
 
     FIXME("%p, %s\n", This, wine_dbgstr_longlong(position));
 
-    return E_NOTIMPL;
+    object = HeapAlloc( GetProcessHeap(), 0, sizeof(*object) );
+    if(!object)
+        return E_OUTOFMEMORY;
+
+    init_attribute_object(object, size);
+    *attributes = &object->IMFAttributes_iface;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI mfbytestream_IsEndOfStream(IMFByteStream *iface, BOOL *endstream)
@@ -970,7 +987,7 @@ static HRESULT WINAPI mfbytestream_Read(IMFByteStream *iface, BYTE *data, ULONG 
 
     FIXME("%p, %p, %u, %p\n", This, data, count, byte_read);
 
-    return E_NOTIMPL;
+    return ref;
 }
 
 static HRESULT WINAPI mfbytestream_BeginRead(IMFByteStream *iface, BYTE *data, ULONG count,
@@ -980,7 +997,12 @@ static HRESULT WINAPI mfbytestream_BeginRead(IMFByteStream *iface, BYTE *data, U
 
     FIXME("%p, %p, %u, %p, %p\n", This, data, count, callback, state);
 
-    return E_NOTIMPL;
+    if (!ref)
+    {
+        HeapFree(GetProcessHeap(), 0, This);
+    }
+
+    return ref;
 }
 
 static HRESULT WINAPI mfbytestream_EndRead(IMFByteStream *iface, IMFAsyncResult *result, ULONG *byte_read)
@@ -1036,7 +1058,10 @@ static HRESULT WINAPI mfbytestream_Flush(IMFByteStream *iface)
 
     FIXME("%p\n", This);
 
-    return E_NOTIMPL;
+    if(endstream)
+        *endstream = TRUE;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI mfbytestream_Close(IMFByteStream *iface)

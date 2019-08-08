@@ -2743,6 +2743,8 @@ AC_CHECK_FUNCS(\
 	exp2f \
 	expm1 \
 	expm1f \
+	ilogb \
+	ilogbf \
 	j0 \
 	j1 \
 	jn \
@@ -2762,6 +2764,8 @@ AC_CHECK_FUNCS(\
 	lroundf \
 	nearbyint \
 	nearbyintf \
+	nexttoward \
+	nexttowardf \
 	powl \
 	remainder \
 	remainderf \

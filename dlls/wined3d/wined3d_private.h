@@ -2435,6 +2435,10 @@ enum wined3d_pci_device
     CARD_NVIDIA_GEFORCE_GTX1080TI   = 0x1b06,
     CARD_NVIDIA_TITANX_PASCAL       = 0x1b00,
     CARD_NVIDIA_TITANV              = 0x1d81,
+    CARD_NVIDIA_GEFORCE_RTX2060     = 0x1f08,
+    CARD_NVIDIA_GEFORCE_RTX2070     = 0x1f07,
+    CARD_NVIDIA_GEFORCE_RTX2080     = 0x1e87,
+    CARD_NVIDIA_GEFORCE_RTX2080TI   = 0x1e07,
 
     CARD_REDHAT_VIRGL               = 0x1010,
 
@@ -2510,6 +2514,7 @@ enum wined3d_pci_device
     CARD_INTEL_IP580_2              = 0x193b,
     CARD_INTEL_IPP580_1             = 0x193a,
     CARD_INTEL_IPP580_2             = 0x193d,
+    CARD_INTEL_HD620                = 0x5916,
     CARD_INTEL_HD630                = 0x5912,
 };
 
@@ -3081,6 +3086,11 @@ static inline BOOL isStateDirty(const struct wined3d_context *context, DWORD sta
     DWORD idx = state / (sizeof(*context->isStateDirty) * CHAR_BIT);
     BYTE shift = state & ((sizeof(*context->isStateDirty) * CHAR_BIT) - 1);
     return context->isStateDirty[idx] & (1u << shift);
+}
+
+static inline float wined3d_alpha_ref(const struct wined3d_state *state)
+{
+    return (state->render_states[WINED3D_RS_ALPHAREF] & 0xff) / 255.0f;
 }
 
 const char *wined3d_debug_resource_access(DWORD access) DECLSPEC_HIDDEN;
@@ -4533,6 +4543,18 @@ static inline void context_apply_state(struct wined3d_context *context,
     const struct StateEntry *state_table = context->state_table;
     DWORD rep = state_table[state_id].representative;
     state_table[rep].apply(context, state, rep);
+}
+
+static inline BOOL is_srgb_enabled(const DWORD *sampler_states)
+{
+    /* Only use the LSB of the WINED3D_SAMP_SRGB_TEXTURE value. This matches
+     * the behaviour of the AMD Windows driver.
+     *
+     * Might & Magic: Heroes VI - Shades of Darkness sets
+     * WINED3D_SAMP_SRGB_TEXTURE to a large value that looks like a
+     * pointer—presumably by accident—and expects sRGB decoding to be
+     * disabled. */
+    return sampler_states[WINED3D_SAMP_SRGB_TEXTURE] & 0x1;
 }
 
 static inline BOOL needs_separate_srgb_gl_texture(const struct wined3d_context *context,
