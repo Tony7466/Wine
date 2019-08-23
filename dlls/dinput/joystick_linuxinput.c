@@ -407,7 +407,7 @@ static HRESULT joydev_enum_deviceA(DWORD dwDevType, DWORD dwFlags, LPDIDEVICEINS
   }
 
   if (!((dwDevType == 0) ||
-        ((dwDevType == DIDEVTYPE_JOYSTICK) && (version > 0x0300 && version < 0x0800)) ||
+        ((dwDevType == DIDEVTYPE_JOYSTICK) && (version >= 0x0300 && version < 0x0800)) ||
         (((dwDevType == DI8DEVCLASS_GAMECTRL) || (dwDevType == DI8DEVTYPE_JOYSTICK)) && (version >= 0x0800))))
     return S_FALSE;
 
@@ -432,7 +432,7 @@ static HRESULT joydev_enum_deviceW(DWORD dwDevType, DWORD dwFlags, LPDIDEVICEINS
   }
 
   if (!((dwDevType == 0) ||
-        ((dwDevType == DIDEVTYPE_JOYSTICK) && (version > 0x0300 && version < 0x0800)) ||
+        ((dwDevType == DIDEVTYPE_JOYSTICK) && (version >= 0x0300 && version < 0x0800)) ||
         (((dwDevType == DI8DEVCLASS_GAMECTRL) || (dwDevType == DI8DEVTYPE_JOYSTICK)) && (version >= 0x0800))))
     return S_FALSE;
 
@@ -923,11 +923,6 @@ static HRESULT WINAPI JoystickWImpl_SetProperty(LPDIRECTINPUTDEVICE8W iface, REF
 
   if (IS_DIPROP(rguid)) {
     switch (LOWORD(rguid)) {
-    case (DWORD_PTR)DIPROP_CALIBRATIONMODE: {
-      LPCDIPROPDWORD	pd = (LPCDIPROPDWORD)ph;
-      FIXME("DIPROP_CALIBRATIONMODE(%d)\n", pd->dwData);
-      break;
-    }
     case (DWORD_PTR)DIPROP_AUTOCENTER: {
       LPCDIPROPDWORD pd = (LPCDIPROPDWORD)ph;
 

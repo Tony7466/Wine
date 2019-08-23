@@ -828,8 +828,9 @@ static HRESULT WINAPI testObj_GetDispID(IDispatchEx *iface, BSTR bstrName, DWORD
        { "resume", DISPID_TESTOBJ_KEYWORD, NULL },
        { "goto", DISPID_TESTOBJ_KEYWORD, NULL },
     };
+    int i;
 
-    for (int i = 0; i < ARRAY_SIZE(dispids); i++) {
+    for (i = 0; i < ARRAY_SIZE(dispids); i++) {
         if(!stricmp_wa(bstrName, dispids[i].name)) {
             dispid_t *d = &dispids[i];
             if(d->expect) {
@@ -2476,6 +2477,9 @@ static void run_tests(void)
     SET_EXPECT(global_success_d);
     SET_EXPECT(global_success_i);
     parse_script_a("' comment\r"
+                   "x = _\r3\r"
+                   "x = _\n3\r"
+                   "x = _\r\n3\r"
                    "Sub testsub(arg)\r"
                    "If arg = 1 Then\r\r"
                    "Call reportSuccess()\n\n"
