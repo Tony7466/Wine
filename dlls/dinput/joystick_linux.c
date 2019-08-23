@@ -239,6 +239,14 @@ static INT find_joystick_devices(void)
                         joydev.dev_axes_map[j] = j;
                         found_axes++;
                     }
+                    else if (axes_map[j] <= 10)
+                    {
+                        /* Axes 8 through 10 are Wheel, Gas and Brake,
+                         * remap to 0, 1 and 2
+                         */
+                        joydev.dev_axes_map[j] = axes_map[j] - 8;
+                        found_axes++;
+                    }
                     else if (axes_map[j] == 16 ||
                              axes_map[j] == 17)
                     {
@@ -372,7 +380,7 @@ static HRESULT joydev_enum_deviceA(DWORD dwDevType, DWORD dwFlags, LPDIDEVICEINS
     }
 
     if ((dwDevType == 0) ||
-	((dwDevType == DIDEVTYPE_JOYSTICK) && (version > 0x0300 && version < 0x0800)) ||
+	((dwDevType == DIDEVTYPE_JOYSTICK) && (version >= 0x0300 && version < 0x0800)) ||
 	(((dwDevType == DI8DEVCLASS_GAMECTRL) || (dwDevType == DI8DEVTYPE_JOYSTICK)) && (version >= 0x0800))) {
         /* check whether we have a joystick */
         if ((fd = open(joystick_devices[id].device, O_RDONLY)) == -1)
@@ -401,7 +409,7 @@ static HRESULT joydev_enum_deviceW(DWORD dwDevType, DWORD dwFlags, LPDIDEVICEINS
     }
 
     if ((dwDevType == 0) ||
-	((dwDevType == DIDEVTYPE_JOYSTICK) && (version > 0x0300 && version < 0x0800)) ||
+	((dwDevType == DIDEVTYPE_JOYSTICK) && (version >= 0x0300 && version < 0x0800)) ||
 	(((dwDevType == DI8DEVCLASS_GAMECTRL) || (dwDevType == DI8DEVTYPE_JOYSTICK)) && (version >= 0x0800))) {
         /* check whether we have a joystick */
         if ((fd = open(joystick_devices[id].device, O_RDONLY)) == -1)

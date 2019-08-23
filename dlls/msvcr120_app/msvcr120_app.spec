@@ -1576,7 +1576,7 @@
 @ cdecl _wcsnicoll(wstr wstr long) msvcr120._wcsnicoll
 @ cdecl _wcsnicoll_l(wstr wstr long ptr) msvcr120._wcsnicoll_l
 @ cdecl _wcsnset(wstr long long) msvcr120._wcsnset
-@ stub _wcsnset_s
+@ cdecl _wcsnset_s(wstr long long long) msvcr120._wcsnset_s
 @ cdecl _wcsrev(wstr) msvcr120._wcsrev
 @ cdecl _wcsset(wstr long) msvcr120._wcsset
 @ cdecl _wcsset_s(wstr long long) msvcr120._wcsset_s
@@ -2076,7 +2076,7 @@
 @ cdecl tmpnam_s(ptr long) msvcr120.tmpnam_s
 @ cdecl tolower(long) msvcr120.tolower
 @ cdecl toupper(long) msvcr120.toupper
-@ stub towctrans
+@ cdecl towctrans(long long) msvcr120.towctrans
 @ cdecl towlower(long) msvcr120.towlower
 @ cdecl towupper(long) msvcr120.towupper
 @ cdecl trunc(double) msvcr120.trunc
@@ -2148,7 +2148,7 @@
 @ cdecl wctob(long) msvcr120.wctob
 @ cdecl wctomb(ptr long) msvcr120.wctomb
 @ cdecl wctomb_s(ptr ptr long long) msvcr120.wctomb_s
-@ stub wctrans
+@ cdecl wctrans(str) msvcr120.wctrans
 @ cdecl wctype(str) msvcr120.wctype
 @ cdecl wmemcpy_s(ptr long ptr long) msvcr120.wmemcpy_s
 @ cdecl wmemmove_s(ptr long ptr long) msvcr120.wmemmove_s

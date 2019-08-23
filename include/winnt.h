@@ -412,10 +412,10 @@ extern "C++" { \
 # define EXTERN_C    extern
 #endif
 
-#define STDMETHODCALLTYPE       __stdcall
-#define STDMETHODVCALLTYPE      __cdecl
-#define STDAPICALLTYPE          __stdcall
-#define STDAPIVCALLTYPE         __cdecl
+#define STDMETHODCALLTYPE       WINAPI
+#define STDMETHODVCALLTYPE      WINAPIV
+#define STDAPICALLTYPE          WINAPI
+#define STDAPIVCALLTYPE         WINAPIV
 
 #define STDAPI                  EXTERN_C HRESULT STDAPICALLTYPE
 #define STDAPI_(type)           EXTERN_C type STDAPICALLTYPE
@@ -1741,8 +1741,11 @@ typedef struct _CONTEXT
     ULONG Padding2[2];              /* 198 */
 } CONTEXT;
 
+typedef PRUNTIME_FUNCTION (CALLBACK *PGET_RUNTIME_FUNCTION_CALLBACK)(DWORD,PVOID);
+
 BOOLEAN CDECL            RtlAddFunctionTable(RUNTIME_FUNCTION*,DWORD,DWORD);
 BOOLEAN CDECL            RtlDeleteFunctionTable(RUNTIME_FUNCTION*);
+BOOLEAN CDECL            RtlInstallFunctionTableCallback(DWORD,DWORD,DWORD,PGET_RUNTIME_FUNCTION_CALLBACK,PVOID,PCWSTR);
 PRUNTIME_FUNCTION WINAPI RtlLookupFunctionEntry(ULONG_PTR,DWORD*,UNWIND_HISTORY_TABLE*);
 
 #endif /* __arm__ */
@@ -1874,8 +1877,11 @@ typedef struct _CONTEXT
     DWORD64 Wvr[ARM64_MAX_WATCHPOINTS]; /* 380 */
 } CONTEXT;
 
+typedef PRUNTIME_FUNCTION (CALLBACK *PGET_RUNTIME_FUNCTION_CALLBACK)(DWORD64,PVOID);
+
 BOOLEAN CDECL            RtlAddFunctionTable(RUNTIME_FUNCTION*,DWORD,ULONG_PTR);
 BOOLEAN CDECL            RtlDeleteFunctionTable(RUNTIME_FUNCTION*);
+BOOLEAN CDECL            RtlInstallFunctionTableCallback(ULONG_PTR,ULONG_PTR,DWORD,PGET_RUNTIME_FUNCTION_CALLBACK,PVOID,PCWSTR);
 
 #endif /* __aarch64__ */
 

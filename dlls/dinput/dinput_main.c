@@ -1719,7 +1719,7 @@ static DWORD WINAPI hook_thread_proc(void *param)
 
     /* Force creation of the message queue */
     PeekMessageW( &msg, 0, 0, 0, PM_NOREMOVE );
-    SetEvent(*(LPHANDLE)param);
+    SetEvent(param);
 
     while (GetMessageW( &msg, 0, 0, 0 ))
     {
@@ -1781,10 +1781,11 @@ static DWORD WINAPI hook_thread_proc(void *param)
         DispatchMessageW(&msg);
     }
 
-    return 0;
+    FreeLibraryAndExitThread(DINPUT_instance, 0);
 }
 
 static DWORD hook_thread_id;
+static HANDLE hook_thread_event;
 
 static CRITICAL_SECTION_DEBUG dinput_critsect_debug =
 {
@@ -1797,46 +1798,39 @@ static CRITICAL_SECTION dinput_hook_crit = { &dinput_critsect_debug, -1, 0, 0, 0
 static BOOL check_hook_thread(void)
 {
     static HANDLE hook_thread;
+    HMODULE module;
 
     EnterCriticalSection(&dinput_hook_crit);
 
     TRACE("IDirectInputs left: %d\n", list_count(&direct_input_list));
     if (!list_empty(&direct_input_list) && !hook_thread)
     {
-        HANDLE event;
-
-        event = CreateEventW(NULL, FALSE, FALSE, NULL);
-        hook_thread = CreateThread(NULL, 0, hook_thread_proc, &event, 0, &hook_thread_id);
-        if (event && hook_thread)
-        {
-            HANDLE handles[2];
-            handles[0] = event;
-            handles[1] = hook_thread;
-            WaitForMultipleObjects(2, handles, FALSE, INFINITE);
-        }
-        LeaveCriticalSection(&dinput_hook_crit);
-        CloseHandle(event);
+        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (const WCHAR*)DINPUT_instance, &module);
+        hook_thread_event = CreateEventW(NULL, FALSE, FALSE, NULL);
+        hook_thread = CreateThread(NULL, 0, hook_thread_proc, hook_thread_event, 0, &hook_thread_id);
     }
     else if (list_empty(&direct_input_list) && hook_thread)
     {
         DWORD tid = hook_thread_id;
 
+        if (hook_thread_event) /* if thread is not started yet */
+        {
+            WaitForSingleObject(hook_thread_event, INFINITE);
+            CloseHandle(hook_thread_event);
+            hook_thread_event = NULL;
+        }
+
         hook_thread_id = 0;
         PostThreadMessageW(tid, WM_USER+0x10, 0, 0);
-        LeaveCriticalSection(&dinput_hook_crit);
-
-        /* wait for hook thread to exit */
-        WaitForSingleObject(hook_thread, INFINITE);
         CloseHandle(hook_thread);
         hook_thread = NULL;
     }
-    else
-        LeaveCriticalSection(&dinput_hook_crit);
 
+    LeaveCriticalSection(&dinput_hook_crit);
     return hook_thread_id != 0;
 }
 
-void check_dinput_hooks(LPDIRECTINPUTDEVICE8W iface)
+void check_dinput_hooks(LPDIRECTINPUTDEVICE8W iface, BOOL acquired)
 {
     static HHOOK callwndproc_hook;
     static ULONG foreground_cnt;
@@ -1846,7 +1840,7 @@ void check_dinput_hooks(LPDIRECTINPUTDEVICE8W iface)
 
     if (dev->dwCoopLevel & DISCL_FOREGROUND)
     {
-        if (dev->acquired)
+        if (acquired)
             foreground_cnt++;
         else
             foreground_cnt--;
@@ -1859,6 +1853,13 @@ void check_dinput_hooks(LPDIRECTINPUTDEVICE8W iface)
     {
         UnhookWindowsHookEx( callwndproc_hook );
         callwndproc_hook = NULL;
+    }
+
+    if (hook_thread_event) /* if thread is not started yet */
+    {
+        WaitForSingleObject(hook_thread_event, INFINITE);
+        CloseHandle(hook_thread_event);
+        hook_thread_event = NULL;
     }
 
     PostThreadMessageW( hook_thread_id, WM_USER+0x10, 1, 0 );
