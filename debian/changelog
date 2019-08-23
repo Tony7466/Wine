@@ -1,3 +1,10 @@
+wine (4.0.2-1) UNRELEASED; urgency=medium
+
+  * New upstream release 4.0.2, released Aug 23, 2019.
+    - Various bug fixes
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Fri, 23 Aug 2019 17:17:50 +0200
+
 wine (4.0.1-1) unstable; urgency=medium
 
   [ Jens Reyer ]
