@@ -20,7 +20,6 @@ binary-indep/manpages.patch
 binary-indep/sfnt2fon.patch
 
 fixes/arm.patch
-fixes/pcap.patch
 fixes/arm64.patch
 fixes/gstbase.patch
 fixes/printer-resolution.patch
@@ -28,7 +27,6 @@ fixes/temporary-directory.patch
 
 warnings/arm-messages.patch
 warnings/arm-longdouble.patch
-warnings/arm64-dword.patch
 warnings/arm64-array-bounds.patch
 warnings/arm64-excess-precision.patch
 warnings/arm64-uninitialized-variables.patch

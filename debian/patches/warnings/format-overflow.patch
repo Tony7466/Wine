@@ -34,17 +34,6 @@ author: Michael Gilbert <mgilbert@debian.org>
      const char *type_str;
      int err;
  
---- a/dlls/wined3d/arb_program_shader.c
-+++ b/dlls/wined3d/arb_program_shader.c
-@@ -226,7 +226,7 @@ struct recorded_instruction
- 
- struct shader_arb_ctx_priv
- {
--    char addr_reg[20];
-+    char addr_reg[50];
-     enum
-     {
-         /* plain GL_ARB_vertex_program or GL_ARB_fragment_program */
 --- a/dlls/krnl386.exe16/interrupts.c
 +++ b/dlls/krnl386.exe16/interrupts.c
 @@ -459,7 +459,7 @@ static void WINAPI DOSVM_Int11Handler( C
@@ -58,7 +47,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          sprintf( file, "\\\\.\\COM%d", x+1 );
 --- a/dlls/msvcrt/string.c
 +++ b/dlls/msvcrt/string.c
-@@ -1821,7 +1821,7 @@ int CDECL MSVCRT_I10_OUTPUT(MSVCRT__LDOU
+@@ -1825,7 +1825,7 @@ int CDECL MSVCRT_I10_OUTPUT(MSVCRT__LDOU
       * Assume long double uses 80 bit FP, never seen 128 bit FP. */
      long double ld = 0;
      double d;
