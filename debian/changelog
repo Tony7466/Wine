@@ -1,9 +1,13 @@
-wine (4.0.2-1) UNRELEASED; urgency=medium
+wine (4.0.2-1) unstable; urgency=medium
 
   * New upstream release 4.0.2, released Aug 23, 2019.
     - Various bug fixes
+  * Refresh patches.
+    Drop fixes/pcap.patch, applied upstream.
+    Drop warnings/arm64-dword.patch, fixed upstream by commit 553368ff50.
+  * Ignore all warnings in src:wine for now.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Fri, 23 Aug 2019 17:17:50 +0200
+ -- Jens Reyer <jre.winesim@gmail.com>  Sun, 01 Sep 2019 18:16:14 +0200
 
 wine (4.0.1-1) unstable; urgency=medium
 
