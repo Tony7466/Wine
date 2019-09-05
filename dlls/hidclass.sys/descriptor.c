@@ -707,12 +707,15 @@ static void build_elements(WINE_HID_REPORT *wine_report, struct feature* feature
         WINE_HID_ELEMENT *wine_element = &wine_report->Elements[wine_report->elementCount];
 
         wine_element->valueStartBit = *bitOffset;
-        if (feature->caps.UsagePage == HID_USAGE_PAGE_BUTTON)
+        if (feature->caps.BitSize == 1)
         {
             wine_element->ElementType = ButtonElement;
             wine_element->caps.button.UsagePage = feature->caps.UsagePage;
             wine_element->caps.button.ReportID = feature->caps.ReportID;
             wine_element->caps.button.BitField = feature->BitField;
+            wine_element->caps.button.LinkCollection = feature->collection->index;
+            wine_element->caps.button.LinkUsage = feature->collection->caps.u.NotRange.Usage[0];
+            wine_element->caps.button.LinkUsagePage = feature->collection->caps.UsagePage;
             wine_element->caps.button.IsRange = feature->caps.IsRange;
             wine_element->caps.button.IsStringRange = feature->caps.IsStringRange;
             wine_element->caps.button.IsDesignatorRange = feature->caps.IsDesignatorRange;
@@ -736,9 +739,13 @@ static void build_elements(WINE_HID_REPORT *wine_report, struct feature* feature
                 *bitOffset = *bitOffset + 1;
                 wine_element->bitCount = 1;
                 wine_element->caps.button.u.NotRange.Usage = feature->caps.u.NotRange.Usage[i];
+                wine_element->caps.button.u.NotRange.Reserved1 = feature->caps.u.NotRange.Usage[i];
                 wine_element->caps.button.u.NotRange.StringIndex = feature->caps.u.NotRange.StringIndex;
+                wine_element->caps.button.u.NotRange.Reserved2 = feature->caps.u.NotRange.StringIndex;
                 wine_element->caps.button.u.NotRange.DesignatorIndex = feature->caps.u.NotRange.DesignatorIndex;
+                wine_element->caps.button.u.NotRange.Reserved3 = feature->caps.u.NotRange.DesignatorIndex;
                 wine_element->caps.button.u.NotRange.DataIndex = *data_index;
+                wine_element->caps.button.u.NotRange.Reserved4 = *data_index;
                 *data_index = *data_index + 1;
             }
         }
@@ -748,6 +755,9 @@ static void build_elements(WINE_HID_REPORT *wine_report, struct feature* feature
             wine_element->caps.value.UsagePage = feature->caps.UsagePage;
             wine_element->caps.value.ReportID = feature->caps.ReportID;
             wine_element->caps.value.BitField = feature->BitField;
+            wine_element->caps.value.LinkCollection = feature->collection->index;
+            wine_element->caps.value.LinkUsage = feature->collection->caps.u.NotRange.Usage[0];
+            wine_element->caps.value.LinkUsagePage = feature->collection->caps.UsagePage;
             wine_element->caps.value.IsRange = feature->caps.IsRange;
             wine_element->caps.value.IsStringRange = feature->caps.IsStringRange;
             wine_element->caps.value.IsDesignatorRange = feature->caps.IsDesignatorRange;
@@ -790,9 +800,13 @@ static void build_elements(WINE_HID_REPORT *wine_report, struct feature* feature
             else
             {
                 wine_element->caps.value.u.NotRange.Usage = feature->caps.u.NotRange.Usage[i];
+                wine_element->caps.value.u.NotRange.Reserved1 = feature->caps.u.NotRange.Usage[i];
                 wine_element->caps.value.u.NotRange.StringIndex = feature->caps.u.NotRange.StringIndex;
+                wine_element->caps.value.u.NotRange.Reserved2 = feature->caps.u.NotRange.StringIndex;
                 wine_element->caps.value.u.NotRange.DesignatorIndex = feature->caps.u.NotRange.DesignatorIndex;
+                wine_element->caps.value.u.NotRange.Reserved3 = feature->caps.u.NotRange.DesignatorIndex;
                 wine_element->caps.value.u.NotRange.DataIndex = *data_index;
+                wine_element->caps.value.u.NotRange.Reserved4 = *data_index;
                 *data_index = *data_index + 1;
             }
         }
@@ -803,7 +817,7 @@ static void build_elements(WINE_HID_REPORT *wine_report, struct feature* feature
 
 static void count_elements(struct feature* feature, USHORT *buttons, USHORT *values)
 {
-    if (feature->caps.UsagePage == HID_USAGE_PAGE_BUTTON)
+    if (feature->caps.BitSize == 1)
     {
         if (feature->caps.IsRange)
             *buttons = *buttons + 1;

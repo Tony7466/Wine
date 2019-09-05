@@ -2,10 +2,10 @@
 @ stub ConvertPropVariant
 @ stub CopyPropertyStore
 @ stub CreateNamedPropertyStore
-@ stub DllCanUnloadNow
-@ stub DllGetClassObject
-@ stub DllRegisterServer
-@ stub DllUnregisterServer
+@ stdcall -private DllCanUnloadNow()
+@ stdcall -private DllGetClassObject(ptr ptr ptr)
+@ stdcall -private DllRegisterServer()
+@ stdcall -private DllUnregisterServer()
 @ stub ExtractPropVariant
 @ stub MFCreate3GPMediaSink
 @ stub MFCreateASFByteStreamPlugin
@@ -51,7 +51,7 @@
 @ stub MFCreateRemoteDesktopPlugin
 @ stub MFCreateSAMIByteStreamPlugin
 @ stub MFCreateSampleCopierMFT
-@ stub MFCreateSampleGrabberSinkActivate
+@ stdcall MFCreateSampleGrabberSinkActivate(ptr ptr ptr)
 @ stub MFCreateSecureHttpSchemePlugin
 @ stub MFCreateSequencerSegmentOffset
 @ stdcall MFCreateSequencerSource(ptr ptr)
@@ -70,7 +70,7 @@
 @ stub MFCreateVideoRendererActivate
 @ stub MFCreateWMAEncoderActivate
 @ stub MFCreateWMVEncoderActivate
-@ stub MFEnumDeviceSources
+@ stdcall MFEnumDeviceSources(ptr ptr ptr)
 @ stub MFGetMultipleServiceProviders
 @ stdcall MFGetService(ptr ptr ptr ptr)
 @ stdcall MFGetSupportedMimeTypes(ptr)

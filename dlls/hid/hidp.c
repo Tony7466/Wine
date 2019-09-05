@@ -49,32 +49,27 @@ static NTSTATUS get_report_data(BYTE *report, INT reportLength, INT startBit, IN
         ULONG byte_index = startBit / 8;
         ULONG bit_index = startBit - (byte_index * 8);
         INT mask = (1 << bit_index);
-        *value = (report[byte_index] & mask);
+        *value = !!(report[byte_index] & mask);
     }
     else
     {
+        ULONG remaining_bits = valueSize;
         ULONG byte_index = startBit / 8;
+        ULONG bit_index = startBit % 8;
         ULONG data = 0;
-        ULONG remainingBits = valueSize;
         ULONG shift = 0;
-        ULONG begin_offset = startBit % 8;
-        while (remainingBits)
+        while (remaining_bits)
         {
-            if (remainingBits >= 8)
-            {
-                BYTE mask = 0xff << begin_offset;
-                data |= (report[byte_index] & mask) << shift;
-                byte_index ++;
-                remainingBits -= (8-begin_offset);
-                shift += (8-begin_offset);
-                begin_offset = 0;
-            }
-            else if (remainingBits > 0)
-            {
-                BYTE mask = (0xff >> (8-remainingBits)) << begin_offset;
-                data |= (report[byte_index] & mask) << shift;
-                remainingBits = 0;
-            }
+            ULONG copy_bits = 8 - bit_index;
+            if (remaining_bits < copy_bits)
+                copy_bits = remaining_bits;
+
+            data |= ((report[byte_index] >> bit_index) & ((2 << copy_bits) - 1)) << shift;
+
+            shift += copy_bits;
+            bit_index = 0;
+            byte_index++;
+            remaining_bits -= copy_bits;
         }
         *value = data;
     }
@@ -199,7 +194,7 @@ NTSTATUS WINAPI HidP_GetCaps(PHIDP_PREPARSED_DATA PreparsedData,
 
 static NTSTATUS find_value(HIDP_REPORT_TYPE ReportType, USAGE UsagePage, USHORT LinkCollection,
                            USAGE Usage, PHIDP_PREPARSED_DATA PreparsedData, PCHAR Report,
-                           WINE_HID_ELEMENT **element)
+                           WINE_HID_ELEMENT *element)
 {
     PWINE_HIDP_PREPARSED_DATA data = (PWINE_HIDP_PREPARSED_DATA)PreparsedData;
     WINE_HID_REPORT *report = NULL;
@@ -247,11 +242,23 @@ static NTSTATUS find_value(HIDP_REPORT_TYPE ReportType, USAGE UsagePage, USHORT 
 
     for (i = 0; i < report->elementCount; i++)
     {
-        if (report->Elements[i].ElementType == ValueElement &&
-            report->Elements[i].caps.value.UsagePage == UsagePage &&
-            report->Elements[i].caps.value.u.NotRange.Usage == Usage)
+        HIDP_VALUE_CAPS *value = &report->Elements[i].caps.value;
+
+        if (report->Elements[i].ElementType != ValueElement ||
+            value->UsagePage != UsagePage)
+            continue;
+
+        if (value->IsRange && value->u.Range.UsageMin <= Usage && Usage <= value->u.Range.UsageMax)
         {
-            *element = &report->Elements[i];
+            *element = report->Elements[i];
+            element->valueStartBit += value->BitSize * (Usage - value->u.Range.UsageMin);
+            element->bitCount = value->BitSize;
+            return HIDP_STATUS_SUCCESS;
+        }
+        else if (report->Elements[i].caps.value.u.NotRange.Usage == Usage)
+        {
+            *element = report->Elements[i];
+            element->bitCount = value->BitSize;
             return HIDP_STATUS_SUCCESS;
         }
     }
@@ -289,7 +296,7 @@ NTSTATUS WINAPI HidP_GetScaledUsageValue(HIDP_REPORT_TYPE ReportType, USAGE Usag
                                          PHIDP_PREPARSED_DATA PreparsedData, PCHAR Report, ULONG ReportLength)
 {
     NTSTATUS rc;
-    WINE_HID_ELEMENT *element;
+    WINE_HID_ELEMENT element;
     TRACE("(%i, %x, %i, %i, %p, %p, %p, %i)\n", ReportType, UsagePage, LinkCollection, Usage, UsageValue,
           PreparsedData, Report, ReportLength);
 
@@ -299,10 +306,10 @@ NTSTATUS WINAPI HidP_GetScaledUsageValue(HIDP_REPORT_TYPE ReportType, USAGE Usag
     {
         ULONG rawValue;
         rc = get_report_data((BYTE*)Report, ReportLength,
-                             element->valueStartBit, element->bitCount, &rawValue);
+                             element.valueStartBit, element.bitCount, &rawValue);
         if (rc != HIDP_STATUS_SUCCESS)
             return rc;
-        *UsageValue = logical_to_physical(sign_extend(rawValue, element), element);
+        *UsageValue = logical_to_physical(sign_extend(rawValue, &element), &element);
     }
 
     return rc;
@@ -313,7 +320,7 @@ NTSTATUS WINAPI HidP_GetUsageValue(HIDP_REPORT_TYPE ReportType, USAGE UsagePage,
                                    USAGE Usage, PULONG UsageValue, PHIDP_PREPARSED_DATA PreparsedData,
                                    PCHAR Report, ULONG ReportLength)
 {
-    WINE_HID_ELEMENT *element;
+    WINE_HID_ELEMENT element;
     NTSTATUS rc;
 
     TRACE("(%i, %x, %i, %i, %p, %p, %p, %i)\n", ReportType, UsagePage, LinkCollection, Usage, UsageValue,
@@ -324,7 +331,7 @@ NTSTATUS WINAPI HidP_GetUsageValue(HIDP_REPORT_TYPE ReportType, USAGE UsagePage,
     if (rc == HIDP_STATUS_SUCCESS)
     {
         return get_report_data((BYTE*)Report, ReportLength,
-                               element->valueStartBit, element->bitCount, UsageValue);
+                               element.valueStartBit, element.bitCount, UsageValue);
     }
 
     return rc;
@@ -598,7 +605,7 @@ NTSTATUS WINAPI HidP_SetUsageValue(HIDP_REPORT_TYPE ReportType, USAGE UsagePage,
                                    USAGE Usage, ULONG UsageValue, PHIDP_PREPARSED_DATA PreparsedData,
                                    CHAR *Report, ULONG ReportLength)
 {
-    WINE_HID_ELEMENT *element;
+    WINE_HID_ELEMENT element;
     NTSTATUS rc;
 
     TRACE("(%i, %x, %i, %i, %i, %p, %p, %i)\n", ReportType, UsagePage, LinkCollection, Usage, UsageValue,
@@ -609,10 +616,42 @@ NTSTATUS WINAPI HidP_SetUsageValue(HIDP_REPORT_TYPE ReportType, USAGE UsagePage,
     if (rc == HIDP_STATUS_SUCCESS)
     {
         return set_report_data((BYTE*)Report, ReportLength,
-                               element->valueStartBit, element->bitCount, UsageValue);
+                               element.valueStartBit, element.bitCount, UsageValue);
     }
 
     return rc;
+}
+
+
+NTSTATUS WINAPI HidP_SetUsages(HIDP_REPORT_TYPE ReportType, USAGE UsagePage, USHORT LinkCollection,
+                               PUSAGE UsageList, PULONG UsageLength, PHIDP_PREPARSED_DATA PreparsedData,
+                               PCHAR Report, ULONG ReportLength)
+{
+    WINE_HID_ELEMENT element;
+    NTSTATUS rc;
+    ULONG i;
+
+    TRACE("(%i, %x, %i, %p, %p, %p, %p, %i)\n", ReportType, UsagePage, LinkCollection, UsageList,
+            UsageLength, PreparsedData, Report, ReportLength);
+
+    for (i = 0; i < *UsageLength; i++)
+    {
+        rc = find_value(ReportType, UsagePage, LinkCollection,
+                UsageList[i], PreparsedData, Report, &element);
+        if (rc == HIDP_STATUS_SUCCESS)
+        {
+            rc = set_report_data((BYTE*)Report, ReportLength,
+                    element.valueStartBit, element.bitCount, -1);
+
+            if (rc != HIDP_STATUS_SUCCESS)
+            {
+                *UsageLength = i;
+                return rc;
+            }
+        }
+    }
+
+    return HIDP_STATUS_SUCCESS;
 }
 
 

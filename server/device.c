@@ -89,6 +89,7 @@ struct device_manager
     struct object          obj;            /* object header */
     struct list            devices;        /* list of devices */
     struct list            requests;       /* list of pending irps across all devices */
+    struct irp_call       *current_call;   /* call currently executed on client side */
     struct wine_rb_tree    kernel_objects; /* map of objects that have client side pointer associated */
 };
 
@@ -460,7 +461,7 @@ static struct object *device_open_file( struct object *obj, unsigned int access,
         irp_params_t params;
 
         memset( &params, 0, sizeof(params) );
-        params.create.major   = IRP_MJ_CREATE;
+        params.create.type    = IRP_CALL_CREATE;
         params.create.access  = access;
         params.create.sharing = sharing;
         params.create.options = options;
@@ -512,7 +513,7 @@ static int device_file_close_handle( struct object *obj, struct process *process
 
         file->closed = 1;
         memset( &params, 0, sizeof(params) );
-        params.close.major = IRP_MJ_CLOSE;
+        params.close.type = IRP_CALL_CLOSE;
 
         if ((irp = create_irp( file, &params, NULL )))
         {
@@ -538,26 +539,49 @@ static void device_file_destroy( struct object *obj )
     release_object( file->device );
 }
 
-static void fill_irp_params( struct device_manager *manager, struct irp_call *irp, irp_params_t *params )
+static int fill_irp_params( struct device_manager *manager, struct irp_call *irp, irp_params_t *params )
 {
-    *params = irp->params;
-
-    switch (params->major)
+    switch (irp->params.type)
     {
-    case IRP_MJ_CLOSE:
-        params->close.file = get_kernel_object_ptr( manager, &irp->file->obj );
+    case IRP_CALL_NONE:
+    case IRP_CALL_FREE:
         break;
-    case IRP_MJ_READ:
-        params->read.file  = get_kernel_object_ptr( manager, &irp->file->obj );
+    case IRP_CALL_CREATE:
+        irp->params.create.file    = alloc_handle( current->process, irp->file,
+                                                   irp->params.create.access, 0 );
+        if (!irp->params.create.file) return 0;
         break;
-    case IRP_MJ_WRITE:
-        params->write.file = get_kernel_object_ptr( manager, &irp->file->obj );
+    case IRP_CALL_CLOSE:
+        irp->params.close.file     = get_kernel_object_ptr( manager, &irp->file->obj );
         break;
-    case IRP_MJ_FLUSH_BUFFERS:
-        params->flush.file = get_kernel_object_ptr( manager, &irp->file->obj );
+    case IRP_CALL_READ:
+        irp->params.read.file      = get_kernel_object_ptr( manager, &irp->file->obj );
+        irp->params.read.out_size  = irp->iosb->out_size;
         break;
-    case IRP_MJ_DEVICE_CONTROL:
-        params->ioctl.file = get_kernel_object_ptr( manager, &irp->file->obj );
+    case IRP_CALL_WRITE:
+        irp->params.write.file     = get_kernel_object_ptr( manager, &irp->file->obj );
+        break;
+    case IRP_CALL_FLUSH:
+        irp->params.flush.file     = get_kernel_object_ptr( manager, &irp->file->obj );
+        break;
+    case IRP_CALL_IOCTL:
+        irp->params.ioctl.file     = get_kernel_object_ptr( manager, &irp->file->obj );
+        irp->params.ioctl.out_size = irp->iosb->out_size;
+        break;
+    }
+
+    *params = irp->params;
+    return 1;
+}
+
+static void free_irp_params( struct irp_call *irp )
+{
+    switch (irp->params.type)
+    {
+    case IRP_CALL_CREATE:
+        close_handle( current->process, irp->params.create.file );
+        break;
+    default:
         break;
     }
 }
@@ -587,9 +611,9 @@ static int device_file_read( struct fd *fd, struct async *async, file_pos_t pos 
     irp_params_t params;
 
     memset( &params, 0, sizeof(params) );
-    params.read.major = IRP_MJ_READ;
-    params.read.key   = 0;
-    params.read.pos   = pos;
+    params.read.type = IRP_CALL_READ;
+    params.read.key  = 0;
+    params.read.pos  = pos;
     return queue_irp( file, &params, async );
 }
 
@@ -599,9 +623,9 @@ static int device_file_write( struct fd *fd, struct async *async, file_pos_t pos
     irp_params_t params;
 
     memset( &params, 0, sizeof(params) );
-    params.write.major = IRP_MJ_WRITE;
-    params.write.key   = 0;
-    params.write.pos   = pos;
+    params.write.type = IRP_CALL_WRITE;
+    params.write.key  = 0;
+    params.write.pos  = pos;
     return queue_irp( file, &params, async );
 }
 
@@ -611,7 +635,7 @@ static int device_file_flush( struct fd *fd, struct async *async )
     irp_params_t params;
 
     memset( &params, 0, sizeof(params) );
-    params.flush.major = IRP_MJ_FLUSH_BUFFERS;
+    params.flush.type = IRP_CALL_FLUSH;
     return queue_irp( file, &params, async );
 }
 
@@ -621,8 +645,8 @@ static int device_file_ioctl( struct fd *fd, ioctl_code_t code, struct async *as
     irp_params_t params;
 
     memset( &params, 0, sizeof(params) );
-    params.ioctl.major = IRP_MJ_DEVICE_CONTROL;
-    params.ioctl.code  = code;
+    params.ioctl.type = IRP_CALL_IOCTL;
+    params.ioctl.code = code;
     return queue_irp( file, &params, async );
 }
 
@@ -704,6 +728,12 @@ static void device_manager_destroy( struct object *obj )
     struct kernel_object *kernel_object;
     struct list *ptr;
 
+    if (manager->current_call)
+    {
+        release_object( manager->current_call );
+        manager->current_call = NULL;
+    }
+
     while (manager->kernel_objects.root)
     {
         kernel_object = WINE_RB_ENTRY_VALUE( manager->kernel_objects.root, struct kernel_object, rb_entry );
@@ -734,6 +764,7 @@ static struct device_manager *create_device_manager(void)
 
     if ((manager = alloc_object( &device_manager_ops )))
     {
+        manager->current_call = NULL;
         list_init( &manager->devices );
         list_init( &manager->requests );
         wine_rb_init( &manager->kernel_objects, compare_kernel_object );
@@ -755,9 +786,9 @@ void free_kernel_objects( struct object *obj )
 
         assert( !kernel_object->owned );
 
-        /* abuse IRP_MJ_CLEANUP to request client to free no longer valid kernel object */
         memset( &params, 0, sizeof(params) );
-        params.cleanup.major = IRP_MJ_CLEANUP;
+        params.free.type = IRP_CALL_FREE;
+        params.free.obj  = kernel_object->user_ptr;
 
         if ((irp = create_irp( NULL, &params, NULL )))
         {
@@ -849,8 +880,6 @@ DECL_HANDLER(get_next_device_request)
     struct list *ptr;
     struct iosb *iosb;
 
-    reply->params.major = IRP_MJ_MAXIMUM_FUNCTION + 1;
-
     if (!(manager = (struct device_manager *)get_handle_obj( current->process, req->manager,
                                                              0, &device_manager_ops )))
         return;
@@ -863,8 +892,16 @@ DECL_HANDLER(get_next_device_request)
             close_handle( current->process, req->prev );  /* avoid an extra round-trip for close */
             release_object( irp );
         }
-        clear_error();
     }
+
+    if (manager->current_call)
+    {
+        free_irp_params( manager->current_call );
+        release_object( manager->current_call );
+        manager->current_call = NULL;
+    }
+
+    clear_error();
 
     if ((ptr = list_head( &manager->requests )))
     {
@@ -876,17 +913,21 @@ DECL_HANDLER(get_next_device_request)
         }
         iosb = irp->iosb;
         reply->in_size = iosb->in_size;
-        reply->out_size = iosb->out_size;
         if (iosb->in_size > get_reply_max_size()) set_error( STATUS_BUFFER_OVERFLOW );
         else if (!irp->file || (reply->next = alloc_handle( current->process, irp, 0, 0 )))
         {
-            fill_irp_params( manager, irp, &reply->params );
-            set_reply_data_ptr( iosb->in_data, iosb->in_size );
-            iosb->in_data = NULL;
-            iosb->in_size = 0;
-            list_remove( &irp->mgr_entry );
-            list_init( &irp->mgr_entry );
-            if (!irp->file) release_object( irp ); /* no longer on manager queue */
+            if (fill_irp_params( manager, irp, &reply->params ))
+            {
+                set_reply_data_ptr( iosb->in_data, iosb->in_size );
+                iosb->in_data = NULL;
+                iosb->in_size = 0;
+                list_remove( &irp->mgr_entry );
+                list_init( &irp->mgr_entry );
+                /* we already own the object if it's only on manager queue */
+                if (irp->file) grab_object( irp );
+                manager->current_call = irp;
+            }
+            else close_handle( current->process, reply->next );
         }
     }
     else set_error( STATUS_PENDING );
@@ -902,8 +943,6 @@ DECL_HANDLER(set_irp_result)
 
     if ((irp = (struct irp_call *)get_handle_obj( current->process, req->handle, 0, &irp_call_ops )))
     {
-        if (irp->file && irp->file->device->manager)
-            set_kernel_object( irp->file->device->manager, &irp->file->obj, req->file_ptr );
         set_irp_result( irp, req->status, get_req_data(), get_req_data_size(), req->size );
         close_handle( current->process, req->handle );  /* avoid an extra round-trip for close */
         release_object( irp );
