@@ -21,7 +21,6 @@ binary-indep/manpages.patch
 binary-indep/sfnt2fon.patch
 
 fixes/arm.patch
-fixes/pcap.patch
 fixes/arm64.patch
 fixes/gstbase.patch
 fixes/printer-resolution.patch
