@@ -1,7 +1,5 @@
-wine-development (4.8-1) UNRELEASED; urgency=medium
+wine-development (4.8-1) unstable; urgency=medium
 
-  * Move the wineserver script from wine(-development) to
-    libwine(-development) (cf.: #932201/src:wine).
   * New upstream release 4.8, released May 10, 2019.
     - Support building most programs in PE format.
     - Unicode data updated to Unicode 12.0.
@@ -10,8 +8,13 @@ wine-development (4.8-1) UNRELEASED; urgency=medium
     - Joystick support improvements.
     - Asturian locale.
     - Various bug fixes.
+  * Refresh patches.
+    Drop fixes/pcap.patch, applied upstream.
+  * Ignore all warnings for now.
+  * Move the wineserver script from wine(-development) to
+    libwine(-development) (cf.: #932201/src:wine).
 
- -- Jens Reyer <jre.winesim@gmail.com>  Thu, 05 Sep 2019 18:27:53 +0200
+ -- Jens Reyer <jre.winesim@gmail.com>  Thu, 05 Sep 2019 20:13:19 +0200
 
 wine-development (4.7-1) unstable; urgency=medium
 
