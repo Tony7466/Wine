@@ -921,8 +921,8 @@ static void state_stencil(struct wined3d_context *context, const struct wined3d_
         func = GL_ALWAYS;
     if (!(func_back = wined3d_gl_compare_func(state->render_states[WINED3D_RS_BACK_STENCILFUNC])))
         func_back = GL_ALWAYS;
-    ref = state->render_states[WINED3D_RS_STENCILREF];
     mask = state->render_states[WINED3D_RS_STENCILMASK];
+    ref = state->render_states[WINED3D_RS_STENCILREF] & mask;
     stencilFail = gl_stencil_op(state->render_states[WINED3D_RS_STENCILFAIL]);
     depthFail = gl_stencil_op(state->render_states[WINED3D_RS_STENCILZFAIL]);
     stencilPass = gl_stencil_op(state->render_states[WINED3D_RS_STENCILPASS]);
@@ -1125,7 +1125,7 @@ void state_fog_fragpart(struct wined3d_context *context, const struct wined3d_st
     if (!state->render_states[WINED3D_RS_FOGENABLE])
     {
         /* No fog? Disable it, and we're done :-) */
-        glDisableWINE(GL_FOG);
+        gl_info->p_glDisableWINE(GL_FOG);
         checkGLcall("glDisable GL_FOG");
         return;
     }
@@ -1262,7 +1262,7 @@ void state_fog_fragpart(struct wined3d_context *context, const struct wined3d_st
         }
     }
 
-    glEnableWINE(GL_FOG);
+    gl_info->p_glEnableWINE(GL_FOG);
     checkGLcall("glEnable GL_FOG");
     if (new_source != context->fog_source || fogstart == fogend)
     {
@@ -3315,6 +3315,7 @@ static void transform_texture(struct wined3d_context *context, const struct wine
 static void tex_coordindex(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
 {
     DWORD stage = (state_id - STATE_TEXTURESTAGE(0, 0)) / (WINED3D_HIGHEST_TEXTURE_STATE + 1);
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     static const GLfloat s_plane[] = { 1.0f, 0.0f, 0.0f, 0.0f };
     static const GLfloat t_plane[] = { 0.0f, 1.0f, 0.0f, 0.0f };
     static const GLfloat r_plane[] = { 0.0f, 0.0f, 1.0f, 0.0f };
@@ -3483,7 +3484,7 @@ static void tex_coordindex(struct wined3d_context *context, const struct wined3d
         GLuint curVBO = gl_info->supported[ARB_VERTEX_BUFFER_OBJECT] ? ~0U : 0;
 
         context_unload_tex_coords(context);
-        context_load_tex_coords(context, &context->stream_info, &curVBO, state);
+        wined3d_context_gl_load_tex_coords(context_gl, &context->stream_info, &curVBO, state);
     }
 }
 
@@ -3596,6 +3597,7 @@ static void wined3d_sampler_desc_from_sampler_states(struct wined3d_sampler_desc
  * texture states. */
 static void sampler(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
 {
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     DWORD sampler_idx = state_id - STATE_SAMPLER(0);
     DWORD mapped_stage = context->tex_unit_map[sampler_idx];
     const struct wined3d_gl_info *gl_info = context->gl_info;
@@ -3653,7 +3655,7 @@ static void sampler(struct wined3d_context *context, const struct wined3d_state 
     }
     else
     {
-        context_bind_texture(context, GL_NONE, 0);
+        wined3d_context_gl_bind_texture(context_gl, GL_NONE, 0);
         if (gl_info->supported[ARB_SAMPLER_OBJECTS])
         {
             GL_EXTCALL(glBindSampler(mapped_stage, 0));
