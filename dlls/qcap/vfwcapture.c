@@ -177,7 +177,7 @@ static ULONG WINAPI unknown_inner_Release(IUnknown *iface)
             IPin_Release(conn);
         }
         IPin_Release(This->pOutputPin);
-        BaseFilter_Destroy(&This->filter);
+        strmbase_filter_cleanup(&This->filter);
         CoTaskMemFree(This);
         ObjectRefCount(FALSE);
     }
@@ -192,25 +192,19 @@ static const IUnknownVtbl unknown_inner_vtbl =
     unknown_inner_Release,
 };
 
-static IPin* WINAPI VfwCapture_GetPin(BaseFilter *iface, int pos)
+static IPin *vfw_capture_get_pin(BaseFilter *iface, unsigned int index)
 {
     VfwCapture *This = impl_from_BaseFilter(iface);
 
-    if (pos >= 1 || pos < 0)
+    if (index >= 1)
         return NULL;
 
     IPin_AddRef(This->pOutputPin);
     return This->pOutputPin;
 }
 
-static LONG WINAPI VfwCapture_GetPinCount(BaseFilter *iface)
-{
-    return 1;
-}
-
 static const BaseFilterFuncTable BaseFuncTable = {
-    VfwCapture_GetPin,
-    VfwCapture_GetPinCount
+    .filter_get_pin = vfw_capture_get_pin,
 };
 
 IUnknown * WINAPI QCAP_createVFWCaptureFilter(IUnknown *pUnkOuter, HRESULT *phr)
@@ -707,7 +701,6 @@ static const BaseOutputPinFuncTable output_BaseOutputFuncTable = {
     BaseOutputPinImpl_AttemptConnection,
     VfwPin_DecideBufferSize,
     BaseOutputPinImpl_DecideAllocator,
-    BaseOutputPinImpl_BreakConnect
 };
 
 static HRESULT

@@ -5,7 +5,7 @@ msgstr ""
 "Project-Id-Version: Wine\n"
 "Report-Msgid-Bugs-To: https://bugs.winehq.org\n"
 "POT-Creation-Date: N/A\n"
-"PO-Revision-Date: 2019-04-05 06:56+0300\n"
+"PO-Revision-Date: 2019-05-22 21:25+0300\n"
 "Last-Translator: Aurimas Fišeras <aurimas@members.fsf.org>\n"
 "Language-Team: Lithuanian <komp_lt@konf.lt>\n"
 "Language: lt\n"
@@ -6819,6 +6819,10 @@ msgstr "Laiškų siuntimas"
 msgid "Begin request has already been made.\n"
 msgstr "Pradžios užklausa jau padaryta.\n"
 
+#: mferror.mc:599
+msgid "Sink has not been finalized.\n"
+msgstr "Rinktuvas nebuvo užbaigtas.\n"
+
 #: mferror.mc:32
 msgid "Media Foundation platform is not initialized.\n"
 msgstr "Medijos pagrindo platforma neinicijuota.\n"
@@ -7092,58 +7096,106 @@ msgid "Unsupported media source characteristics.\n"
 msgstr "Nepalaikomos medijos šaltinio charakteristikos.\n"
 
 #: mferror.mc:536
+msgid "Stream sink was removed.\n"
+msgstr "Srauto rinktuvas buvo pašalintas.\n"
+
+#: mferror.mc:543
+msgid "Stream sinks are out of sync.\n"
+msgstr "Srauto rinktuvai nesutampa.\n"
+
+#: mferror.mc:550
+msgid "Media sink stream sinks set is fixed.\n"
+msgstr "Medijos rinktuvo srauto rinktuvai fiksuoti.\n"
+
+#: mferror.mc:557
+msgid "Stream sink already exists.\n"
+msgstr "Srauto rinktuvas jau egzistuoja.\n"
+
+#: mferror.mc:564
+msgid "Sample allocation was canceled.\n"
+msgstr "Elemento paskyrimas nutrauktas.\n"
+
+#: mferror.mc:571
+msgid "Sample allocator is empty.\n"
+msgstr "Elementų skirstytuvas tuščias.\n"
+
+#: mferror.mc:578
+msgid "Sink was already stopped.\n"
+msgstr "Rinktuvas jau sustabdytas.\n"
+
+#: mferror.mc:585
+msgid "Bitrate was unknown for ASF file sink.\n"
+msgstr "Pralaidumas buvo nežinomas ASF failo rinktuvui.\n"
+
+#: mferror.mc:592
+msgid "No streams were selected for the sink.\n"
+msgstr "Nepasirinktas nė vienas srautas rinktuvui.\n"
+
+#: mferror.mc:606
+msgid "Metadata was too long.\n"
+msgstr "Metaduomenys per ilgi.\n"
+
+#: mferror.mc:613
+msgid "No samples were processed by the sink.\n"
+msgstr "Rinktuvas neapdorojo nė vieno elemento.\n"
+
+#: mferror.mc:620
+msgid "Sink was not provided with required headers.\n"
+msgstr "Rinktuvui nebuvo pateiktos reikalingos antraštės.\n"
+
+#: mferror.mc:627
 msgid "Optional node is invalid.\n"
 msgstr "Nebūtinas mazgas neteisingas.\n"
 
-#: mferror.mc:543
+#: mferror.mc:634
 msgid "Cannot find decryptor.\n"
 msgstr "Nepavyko rasti dešifratoriaus.\n"
 
-#: mferror.mc:550
+#: mferror.mc:641
 msgid "Codec was not found.\n"
 msgstr "Kodekas nerastas.\n"
 
-#: mferror.mc:557
+#: mferror.mc:648
 msgid "Cannot connect topology nodes.\n"
 msgstr "Nepavyko sujungti topologijos mazgų.\n"
 
-#: mferror.mc:564
+#: mferror.mc:655
 msgid "Topology request is not supported.\n"
 msgstr "Topologijos užklausa nepalaikoma.\n"
 
-#: mferror.mc:571
+#: mferror.mc:662
 msgid "Invalid topology time attributes.\n"
 msgstr "Neteisingi topologijos laiko atributai.\n"
 
-#: mferror.mc:578
+#: mferror.mc:669
 msgid "Found loops in topology.\n"
 msgstr "Aptikti ciklai topologijoje.\n"
 
-#: mferror.mc:585
+#: mferror.mc:676
 msgid "Presentation descriptor is missing.\n"
 msgstr "Trūksta pateikimo aprašo.\n"
 
-#: mferror.mc:592
+#: mferror.mc:683
 msgid "Stream descriptor is missing.\n"
 msgstr "Trūksta srauto aprašo.\n"
 
-#: mferror.mc:599
+#: mferror.mc:690
 msgid "Stream descriptor is not selected.\n"
 msgstr "Srauto aprašas nepasirinktas.\n"
 
-#: mferror.mc:606
+#: mferror.mc:697
 msgid "Source is missing.\n"
 msgstr "Trūksta šaltinio.\n"
 
-#: mferror.mc:613
+#: mferror.mc:704
 msgid "Topology loader does not support sink activates.\n"
-msgstr "Topologijos įkėlyklė nepalaiko „sink“ aktyvatorių.\n"
+msgstr "Topologijos įkėlyklė nepalaiko rinktuvų aktyvatorių.\n"
 
-#: mferror.mc:620
+#: mferror.mc:711
 msgid "Clock has no time source set.\n"
 msgstr "Laikrodis neturi nustatyto laiko šaltinio.\n"
 
-#: mferror.mc:627
+#: mferror.mc:718
 msgid "Clock state was already set.\n"
 msgstr "Laikrodžio būsena jau nustatyta.\n"
 

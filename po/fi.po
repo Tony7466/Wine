@@ -6808,6 +6808,10 @@ msgstr "Lähetä postia"
 msgid "Begin request has already been made.\n"
 msgstr "Aloituspyyntö on jo tehty.\n"
 
+#: mferror.mc:599
+msgid "Sink has not been finalized.\n"
+msgstr "Ulostuloa ei ole viimeistelty.\n"
+
 #: mferror.mc:32
 msgid "Media Foundation platform is not initialized.\n"
 msgstr "Media Foundation platform -kirjastoa ei ole alustettu.\n"
@@ -7081,58 +7085,106 @@ msgid "Unsupported media source characteristics.\n"
 msgstr "Medialähteen ominaisuuksia ei tueta.\n"
 
 #: mferror.mc:536
+msgid "Stream sink was removed.\n"
+msgstr "Virtaulostulo poistettiin.\n"
+
+#: mferror.mc:543
+msgid "Stream sinks are out of sync.\n"
+msgstr "Virtaulostulojen ajoitus ei täsmää.\n"
+
+#: mferror.mc:550
+msgid "Media sink stream sinks set is fixed.\n"
+msgstr "Mediaulostulon virtaulostuloja ei voi muuttaa.\n"
+
+#: mferror.mc:557
+msgid "Stream sink already exists.\n"
+msgstr "Virtaulostulo on jo olemassa.\n"
+
+#: mferror.mc:564
+msgid "Sample allocation was canceled.\n"
+msgstr "Näytteen varaaminen keskeytettiin.\n"
+
+#: mferror.mc:571
+msgid "Sample allocator is empty.\n"
+msgstr "Näytteenvaraaja on tyhjä.\n"
+
+#: mferror.mc:578
+msgid "Sink was already stopped.\n"
+msgstr "Ulostulo oli jo pysäytetty.\n"
+
+#: mferror.mc:585
+msgid "Bitrate was unknown for ASF file sink.\n"
+msgstr "ASF-tiedoston siirtonopeus (bitrate) oli tuntematon.\n"
+
+#: mferror.mc:592
+msgid "No streams were selected for the sink.\n"
+msgstr "Ulostulolle ei ole valittu mediavirtoja.\n"
+
+#: mferror.mc:606
+msgid "Metadata was too long.\n"
+msgstr "Metatieto on liian pitkä.\n"
+
+#: mferror.mc:613
+msgid "No samples were processed by the sink.\n"
+msgstr "Ulostulo ei käsitellyt näytteitä.\n"
+
+#: mferror.mc:620
+msgid "Sink was not provided with required headers.\n"
+msgstr "Ulostulolle ei annettu tarvittavia otsikoita.\n"
+
+#: mferror.mc:627
 msgid "Optional node is invalid.\n"
 msgstr "Valinnainen solmu ei kelpaa.\n"
 
-#: mferror.mc:543
+#: mferror.mc:634
 msgid "Cannot find decryptor.\n"
 msgstr "Salaukselle ei löydy purkajaa.\n"
 
-#: mferror.mc:550
+#: mferror.mc:641
 msgid "Codec was not found.\n"
 msgstr "Koodekkia ei löydy.\n"
 
-#: mferror.mc:557
+#: mferror.mc:648
 msgid "Cannot connect topology nodes.\n"
 msgstr "Topologian solmuja ei voida yhdistää.\n"
 
-#: mferror.mc:564
+#: mferror.mc:655
 msgid "Topology request is not supported.\n"
 msgstr "Topologiapyyntöä ei tueta.\n"
 
-#: mferror.mc:571
+#: mferror.mc:662
 msgid "Invalid topology time attributes.\n"
 msgstr "Topologian aika-attribuutit eivät kelpaa.\n"
 
-#: mferror.mc:578
+#: mferror.mc:669
 msgid "Found loops in topology.\n"
 msgstr "Topologiassa on silmukoita.\n"
 
-#: mferror.mc:585
+#: mferror.mc:676
 msgid "Presentation descriptor is missing.\n"
 msgstr "Esitystavan kuvaus puuttuu.\n"
 
-#: mferror.mc:592
+#: mferror.mc:683
 msgid "Stream descriptor is missing.\n"
 msgstr "Virran kuvaus puuttuu.\n"
 
-#: mferror.mc:599
+#: mferror.mc:690
 msgid "Stream descriptor is not selected.\n"
 msgstr "Virran kuvausta ei ole valittu.\n"
 
-#: mferror.mc:606
+#: mferror.mc:697
 msgid "Source is missing.\n"
 msgstr "Lähde puuttuu.\n"
 
-#: mferror.mc:613
+#: mferror.mc:704
 msgid "Topology loader does not support sink activates.\n"
 msgstr "Topologianlatain ei tue ulostulojen aktivointeja.\n"
 
-#: mferror.mc:620
+#: mferror.mc:711
 msgid "Clock has no time source set.\n"
 msgstr "Kellolle ei ole asetettu ajan lähdettä.\n"
 
-#: mferror.mc:627
+#: mferror.mc:718
 msgid "Clock state was already set.\n"
 msgstr "Kellon tila oli jo asetettu.\n"
 

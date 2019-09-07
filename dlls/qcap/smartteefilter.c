@@ -104,7 +104,7 @@ static ULONG WINAPI Unknown_AddRef(IUnknown *iface)
 static ULONG WINAPI Unknown_Release(IUnknown *iface)
 {
     SmartTeeFilter *This = impl_from_IUnknown(iface);
-    ULONG ref = BaseFilterImpl_Release(&This->filter.IBaseFilter_iface);
+    ULONG ref = InterlockedDecrement(&This->filter.refCount);
 
     TRACE("(%p)->() ref=%d\n", This, ref);
 
@@ -115,6 +115,7 @@ static ULONG WINAPI Unknown_Release(IUnknown *iface)
             BaseOutputPinImpl_Release(&This->capture->pin.IPin_iface);
         if(This->preview)
             BaseOutputPinImpl_Release(&This->preview->pin.IPin_iface);
+        strmbase_filter_cleanup(&This->filter);
         CoTaskMemFree(This);
     }
     return ref;
@@ -198,39 +199,26 @@ static const IBaseFilterVtbl SmartTeeFilterVtbl = {
     BaseFilterImpl_QueryVendorInfo
 };
 
-static IPin* WINAPI SmartTeeFilter_GetPin(BaseFilter *iface, int pos)
+static IPin *smart_tee_get_pin(BaseFilter *iface, unsigned int index)
 {
     SmartTeeFilter *This = impl_from_BaseFilter(iface);
     IPin *ret;
 
-    TRACE("(%p)->(%d)\n", This, pos);
-
-    switch(pos) {
-    case 0:
+    if (index == 0)
         ret = &This->input->pin.IPin_iface;
-        break;
-    case 1:
+    else if (index == 1)
         ret = &This->capture->pin.IPin_iface;
-        break;
-    case 2:
+    else if (index == 2)
         ret = &This->preview->pin.IPin_iface;
-        break;
-    default:
-        TRACE("No pin %d\n", pos);
+    else
         return NULL;
-    }
 
     IPin_AddRef(ret);
     return ret;
 }
 
-static LONG WINAPI SmartTeeFilter_GetPinCount(BaseFilter *iface)
-{
-    return 3;
-}
 static const BaseFilterFuncTable SmartTeeFilterFuncs = {
-    SmartTeeFilter_GetPin,
-    SmartTeeFilter_GetPinCount
+    .filter_get_pin = smart_tee_get_pin,
 };
 
 static ULONG WINAPI SmartTeeFilterInput_AddRef(IPin *iface)
@@ -498,13 +486,6 @@ static HRESULT WINAPI SmartTeeFilterCapture_DecideAllocator(BaseOutputPin *base,
     return IMemInputPin_NotifyAllocator(pPin, This->input->pAllocator, TRUE);
 }
 
-static HRESULT WINAPI SmartTeeFilterCapture_BreakConnect(BaseOutputPin *base)
-{
-    SmartTeeFilter *This = impl_from_BasePin(&base->pin);
-    FIXME("(%p): stub\n", This);
-    return E_NOTIMPL;
-}
-
 static const BaseOutputPinFuncTable SmartTeeFilterCaptureFuncs = {
     {
         SmartTeeFilterCapture_CheckMediaType,
@@ -513,7 +494,6 @@ static const BaseOutputPinFuncTable SmartTeeFilterCaptureFuncs = {
     BaseOutputPinImpl_AttemptConnection,
     NULL,
     SmartTeeFilterCapture_DecideAllocator,
-    SmartTeeFilterCapture_BreakConnect
 };
 
 static ULONG WINAPI SmartTeeFilterPreview_AddRef(IPin *iface)
@@ -589,13 +569,6 @@ static HRESULT WINAPI SmartTeeFilterPreview_DecideAllocator(BaseOutputPin *base,
     return IMemInputPin_NotifyAllocator(pPin, This->input->pAllocator, TRUE);
 }
 
-static HRESULT WINAPI SmartTeeFilterPreview_BreakConnect(BaseOutputPin *base)
-{
-    SmartTeeFilter *This = impl_from_BasePin(&base->pin);
-    FIXME("(%p): stub\n", This);
-    return E_NOTIMPL;
-}
-
 static const BaseOutputPinFuncTable SmartTeeFilterPreviewFuncs = {
     {
         SmartTeeFilterPreview_CheckMediaType,
@@ -604,7 +577,6 @@ static const BaseOutputPinFuncTable SmartTeeFilterPreviewFuncs = {
     BaseOutputPinImpl_AttemptConnection,
     NULL,
     SmartTeeFilterPreview_DecideAllocator,
-    SmartTeeFilterPreview_BreakConnect
 };
 IUnknown* WINAPI QCAP_createSmartTeeFilter(IUnknown *outer, HRESULT *phr)
 {
@@ -618,8 +590,8 @@ IUnknown* WINAPI QCAP_createSmartTeeFilter(IUnknown *outer, HRESULT *phr)
 
     This = CoTaskMemAlloc(sizeof(*This));
     if (This == NULL) {
-        hr = E_OUTOFMEMORY;
-        goto end;
+        *phr = E_OUTOFMEMORY;
+        return NULL;
     }
     memset(This, 0, sizeof(*This));
     This->IUnknown_iface.lpVtbl = &UnknownVtbl;
@@ -659,8 +631,7 @@ end:
         else
             return (IUnknown*)&This->filter.IBaseFilter_iface;
     } else {
-        if (This)
-            IBaseFilter_Release(&This->filter.IBaseFilter_iface);
+        strmbase_filter_cleanup(&This->filter);
         return NULL;
     }
 }

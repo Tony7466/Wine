@@ -392,34 +392,43 @@ HRESULT GetClassMediaFile(IAsyncReader * pReader, LPCOLESTR pszFileName, GUID * 
     return hr;
 }
 
-static IPin* WINAPI AsyncReader_GetPin(BaseFilter *iface, int pos)
+static IPin *async_reader_get_pin(BaseFilter *iface, unsigned int index)
 {
     AsyncReader *This = impl_from_BaseFilter(iface);
 
-    TRACE("%p->(%d)\n", This, pos);
-
-    if (pos >= 1 || !This->pOutputPin)
+    if (index >= 1 || !This->pOutputPin)
         return NULL;
 
     IPin_AddRef(This->pOutputPin);
     return This->pOutputPin;
 }
 
-static LONG WINAPI AsyncReader_GetPinCount(BaseFilter *iface)
+static void async_reader_destroy(BaseFilter *iface)
 {
-    AsyncReader *This = impl_from_BaseFilter(iface);
+    AsyncReader *filter = impl_from_BaseFilter(iface);
 
-    TRACE("%p->()\n", This);
-
-    if (!This->pOutputPin)
-        return 0;
-    else
-        return 1;
+    if (filter->pOutputPin)
+    {
+        IPin *peer;
+        if (SUCCEEDED(IPin_ConnectedTo(filter->pOutputPin, &peer)))
+        {
+            IPin_Disconnect(peer);
+            IPin_Release(peer);
+        }
+        IPin_Disconnect(filter->pOutputPin);
+        IPin_Release(filter->pOutputPin);
+    }
+    CoTaskMemFree(filter->pszFileName);
+    if (filter->pmt)
+        DeleteMediaType(filter->pmt);
+    strmbase_filter_cleanup(&filter->filter);
+    CoTaskMemFree(filter);
 }
 
-static const BaseFilterFuncTable BaseFuncTable = {
-    AsyncReader_GetPin,
-    AsyncReader_GetPinCount
+static const BaseFilterFuncTable BaseFuncTable =
+{
+    .filter_get_pin = async_reader_get_pin,
+    .filter_destroy = async_reader_destroy,
 };
 
 HRESULT AsyncReader_create(IUnknown * pUnkOuter, LPVOID * ppv)
@@ -483,37 +492,6 @@ static HRESULT WINAPI AsyncReader_QueryInterface(IBaseFilter * iface, REFIID rii
     return E_NOINTERFACE;
 }
 
-static ULONG WINAPI AsyncReader_Release(IBaseFilter * iface)
-{
-    AsyncReader *This = impl_from_IBaseFilter(iface);
-    ULONG refCount = InterlockedDecrement(&This->filter.refCount);
-    
-    TRACE("%p->() Release from %d\n", This, refCount + 1);
-    
-    if (!refCount)
-    {
-        if (This->pOutputPin)
-        {
-            IPin *pConnectedTo;
-            if(SUCCEEDED(IPin_ConnectedTo(This->pOutputPin, &pConnectedTo)))
-            {
-                IPin_Disconnect(pConnectedTo);
-                IPin_Release(pConnectedTo);
-            }
-            IPin_Disconnect(This->pOutputPin);
-            IPin_Release(This->pOutputPin);
-        }
-        CoTaskMemFree(This->pszFileName);
-        if (This->pmt)
-            DeleteMediaType(This->pmt);
-        BaseFilter_Destroy(&This->filter);
-        CoTaskMemFree(This);
-        return 0;
-    }
-    else
-        return refCount;
-}
-
 /** IMediaFilter methods **/
 
 static HRESULT WINAPI AsyncReader_Stop(IBaseFilter * iface)
@@ -553,7 +531,7 @@ static const IBaseFilterVtbl AsyncReader_Vtbl =
 {
     AsyncReader_QueryInterface,
     BaseFilterImpl_AddRef,
-    AsyncReader_Release,
+    BaseFilterImpl_Release,
     BaseFilterImpl_GetClassID,
     AsyncReader_Stop,
     AsyncReader_Pause,
@@ -914,7 +892,6 @@ static const BaseOutputPinFuncTable output_BaseOutputFuncTable = {
     FileAsyncReaderPin_AttemptConnection,
     FileAsyncReaderPin_DecideBufferSize,
     BaseOutputPinImpl_DecideAllocator,
-    BaseOutputPinImpl_BreakConnect
 };
 
 static HRESULT FileAsyncReader_Construct(HANDLE hFile, IBaseFilter * pBaseFilter, LPCRITICAL_SECTION pCritSec, IPin ** ppPin)

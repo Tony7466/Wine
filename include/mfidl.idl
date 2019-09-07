@@ -47,6 +47,12 @@ typedef enum MF_OBJECT_TYPE
     MF_OBJECT_INVALID
 } MF_OBJECT_TYPE;
 
+cpp_quote("#define MFCLOCK_FREQUENCY_HNS       10000000")
+cpp_quote("#define MFCLOCK_TOLERANCE_UNKNOWN      50000")
+cpp_quote("#define MFCLOCK_JITTER_ISR              1000")
+cpp_quote("#define MFCLOCK_JITTER_DPC              4000")
+cpp_quote("#define MFCLOCK_JITTER_PASSIVE         10000")
+
 typedef struct _MFCLOCK_PROPERTIES
 {
     unsigned __int64 qwCorrelationRate;
@@ -64,6 +70,33 @@ typedef enum _MFCLOCK_CHARACTERISTICS_FLAGS
     MFCLOCK_CHARACTERISTICS_FLAG_IS_SYSTEM_CLOCK = 0x00000008,
 } MFCLOCK_CHARACTERISTICS_FLAGS;
 
+typedef enum MFSESSION_SETTOPOLOGY_FLAGS
+{
+    MFSESSION_SETTOPOLOGY_IMMEDIATE     = 0x00000001,
+    MFSESSION_SETTOPOLOGY_NORESOLUTION  = 0x00000002,
+    MFSESSION_SETTOPOLOGY_CLEAR_CURRENT = 0x00000004,
+} MFSESSION_SETTOPOLOGY_FLAGS;
+
+typedef enum MFSESSION_GETFULLTOPOLOGY_FLAGS
+{
+    MFSESSION_GETFULLTOPOLOGY_CURRENT = 0x00000001,
+} MFSESSION_GETFULLTOPOLOGY_FLAGS;
+
+typedef enum _MF_TOPOLOGY_RESOLUTION_STATUS_FLAGS
+{
+    MF_TOPOLOGY_RESOLUTION_SUCCEEDED            = 0x00000000,
+    MF_OPTIONAL_NODE_REJECTED_MEDIA_TYPE        = 0x00000001,
+    MF_OPTIONAL_NODE_REJECTED_PROTECTED_PROCESS = 0x00000002,
+} MF_TOPOLOGY_RESOLUTION_STATUS_FLAGS;
+
+typedef enum _MFSTREAMSINK_MARKER_TYPE
+{
+    MFSTREAMSINK_MARKER_DEFAULT,
+    MFSTREAMSINK_MARKER_ENDOFSEGMENT,
+    MFSTREAMSINK_MARKER_TICK,
+    MFSTREAMSINK_MARKER_EVENT,
+} MFSTREAMSINK_MARKER_TYPE;
+
 [
     object,
     uuid(2eb1e945-18b8-4139-9b1a-d5d584818530),
@@ -75,6 +108,34 @@ interface IMFClock : IUnknown
     HRESULT GetContinuityKey([out] DWORD *key);
     HRESULT GetState([in] DWORD reserved, [out] MFCLOCK_STATE *state);
     HRESULT GetProperties([out] MFCLOCK_PROPERTIES *props);
+}
+
+typedef enum _MFRATE_DIRECTION
+{
+    MFRATE_FORWARD,
+    MFRATE_REVERSE
+} MFRATE_DIRECTION;
+
+[
+    object,
+    uuid(0a9ccdbc-d797-4563-9667-94ec5d79292d),
+]
+interface IMFRateSupport : IUnknown
+{
+    HRESULT GetSlowestRate(
+            [in] MFRATE_DIRECTION direction,
+            [in] BOOL thin,
+            [out] float *rate);
+
+    HRESULT GetFastestRate(
+            [in] MFRATE_DIRECTION direction,
+            [in] BOOL thin,
+            [out] float *rate);
+
+    HRESULT IsRateSupported(
+            [in] BOOL thin,
+            [in] float rate,
+            [in, out, unique] float *nearest_supported_rate);
 }
 
 [
@@ -599,6 +660,13 @@ interface IMFPresentationClock : IMFClock
     HRESULT Pause();
 }
 
+cpp_quote("#define MEDIASINK_FIXED_STREAMS                0x00000001")
+cpp_quote("#define MEDIASINK_CANNOT_MATCH_CLOCK           0x00000002")
+cpp_quote("#define MEDIASINK_RATELESS                     0x00000004")
+cpp_quote("#define MEDIASINK_CLOCK_REQUIRED               0x00000008")
+cpp_quote("#define MEDIASINK_CAN_PREROLL                  0x00000010")
+cpp_quote("#define MEDIASINK_REQUIRE_REFERENCE_MEDIATYPE  0x00000020")
+
 [
     object,
     uuid(6ef2a660-47c0-4666-b13d-cbb717f2fa2c)
@@ -617,6 +685,23 @@ interface IMFMediaSink : IUnknown
     HRESULT SetPresentationClock([in] IMFPresentationClock *clock);
     HRESULT GetPresentationClock([out] IMFPresentationClock **clock);
     HRESULT Shutdown();
+}
+
+[
+    object,
+    uuid(0a97b3cf-8e7c-4a3d-8f8c-0c843dc247fb),
+]
+interface IMFStreamSink : IMFMediaEventGenerator
+{
+    HRESULT GetMediaSink([out] IMFMediaSink **sink);
+    HRESULT GetIdentifier([out] DWORD *identifier);
+    HRESULT GetMediaTypeHandler([out] IMFMediaTypeHandler **handler);
+    HRESULT ProcessSample([in] IMFSample *sample);
+    HRESULT PlaceMarker(
+        [in] MFSTREAMSINK_MARKER_TYPE marker_type,
+        [in] const PROPVARIANT *marker_value,
+        [in] const PROPVARIANT *context_value);
+   HRESULT Flush();
 }
 
 typedef enum _MFSHUTDOWN_STATUS
@@ -733,3 +818,5 @@ cpp_quote("EXTERN_GUID(MF_TOPOLOGY_PROJECTSTOP, 0x7ed3f803, 0x86bb, 0x4b3f, 0xb7
 cpp_quote("EXTERN_GUID(MF_TOPOLOGY_RESOLUTION_STATUS, 0x494bbcde, 0xb031, 0x4e38,  0x97, 0xc4, 0xd5, 0x42, 0x2d, 0xd6, 0x18, 0xdc);")
 cpp_quote("EXTERN_GUID(MF_TOPOLOGY_START_TIME_ON_PRESENTATION_SWITCH, 0xc8cc113f, 0x7951, 0x4548, 0xaa, 0xd6, 0x9e, 0xd6, 0x20, 0x2e, 0x62, 0xb3);")
 cpp_quote("EXTERN_GUID(MF_TOPOLOGY_STATIC_PLAYBACK_OPTIMIZATIONS, 0xb86cac42, 0x41a6, 0x4b79, 0x89, 0x7a, 0x1a, 0xb0, 0xe5, 0x2b, 0x4a, 0x1b);")
+
+cpp_quote("EXTERN_GUID(MF_RATE_CONTROL_SERVICE, 0x866fa297, 0xb802, 0x4bf8, 0x9d, 0xc9, 0x5e, 0x3b, 0x6a, 0x9f, 0x53, 0xc9);")

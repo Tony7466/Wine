@@ -117,12 +117,15 @@ static ULONG WINAPI inner_AddRef(IUnknown *iface)
 static ULONG WINAPI inner_Release(IUnknown *iface)
 {
     evr_filter *This = impl_from_inner_IUnknown(iface);
-    ULONG ref = BaseFilterImpl_Release(&This->filter.IBaseFilter_iface);
+    ULONG ref = InterlockedDecrement(&This->filter.refCount);
 
     TRACE("(%p, %p)->(): new ref %d\n", iface, This, ref);
 
     if (!ref)
+    {
+        strmbase_filter_cleanup(&This->filter);
         CoTaskMemFree(This);
+    }
 
     return ref;
 }
@@ -188,22 +191,15 @@ static const IBaseFilterVtbl basefilter_vtbl =
     BaseFilterImpl_QueryVendorInfo
 };
 
-static IPin* WINAPI filter_GetPin(BaseFilter *iface, int position)
+static IPin *evr_get_pin(BaseFilter *iface, unsigned int index)
 {
-    FIXME("(%p, %d): stub!\n", iface, position);
+    FIXME("iface %p, index %u, stub!\n", iface, index);
     return NULL;
-}
-
-static LONG WINAPI filter_GetPinCount(BaseFilter *iface)
-{
-    FIXME("(%p): stub!\n", iface);
-    return 0;
 }
 
 static const BaseFilterFuncTable basefilter_functable =
 {
-    filter_GetPin,
-    filter_GetPinCount,
+    .filter_get_pin = evr_get_pin,
 };
 
 HRESULT evr_filter_create(IUnknown *outer_unk, void **ppv)

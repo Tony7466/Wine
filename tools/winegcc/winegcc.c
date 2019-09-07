@@ -429,7 +429,7 @@ static strarray *get_link_args( struct options *opts, const char *output_name )
 
     case PLATFORM_WINDOWS:
     case PLATFORM_CYGWIN:
-        if (opts->shared)
+        if (opts->shared || opts->win16_app)
         {
             strarray_add( flags, "-shared" );
             strarray_add( flags, "-Wl,--kill-at" );
@@ -455,6 +455,9 @@ static strarray *get_link_args( struct options *opts, const char *output_name )
         if (opts->large_address_aware && opts->target_cpu == CPU_x86)
             strarray_add( flags, "-Wl,--large-address-aware" );
 
+        /* make sure we don't need a libgcc_s dll on Windows */
+        strarray_add( flags, "-static-libgcc" );
+
         return flags;
 
     default:
@@ -474,6 +477,8 @@ static strarray *get_link_args( struct options *opts, const char *output_name )
 
     strarray_add( flags, "-shared" );
     strarray_add( flags, "-Wl,-Bsymbolic" );
+    if (!opts->noshortwchar && opts->target_cpu == CPU_ARM)
+        strarray_add( flags, "-Wl,--no-wchar-size-warning" );
 
     /* Try all options first - this is likely to succeed on modern compilers */
     if (!try_link( opts->prefix, link_tool, "-fPIC -shared -Wl,-Bsymbolic "
@@ -993,9 +998,6 @@ static void build(struct options* opts)
 	else if (file[1] == 'x')
 	    lang = file;
     }
-
-    if (opts->win16_app && is_pe)
-        error( "Building 16-bit code is not supported for Windows\n" );
 
     /* add the default libraries, if needed */
 
