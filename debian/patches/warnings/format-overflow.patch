@@ -34,17 +34,6 @@ author: Michael Gilbert <mgilbert@debian.org>
      const char *type_str;
      int err;
  
---- a/dlls/wined3d/arb_program_shader.c
-+++ b/dlls/wined3d/arb_program_shader.c
-@@ -226,7 +226,7 @@ struct recorded_instruction
- 
- struct shader_arb_ctx_priv
- {
--    char addr_reg[20];
-+    char addr_reg[50];
-     enum
-     {
-         /* plain GL_ARB_vertex_program or GL_ARB_fragment_program */
 --- a/dlls/krnl386.exe16/interrupts.c
 +++ b/dlls/krnl386.exe16/interrupts.c
 @@ -459,7 +459,7 @@ static void WINAPI DOSVM_Int11Handler( C
@@ -69,7 +58,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/programs/winevdm/winevdm.c
 +++ b/programs/winevdm/winevdm.c
-@@ -304,7 +304,7 @@ static VOID pif_cmd( char *filename, cha
+@@ -305,7 +305,7 @@ static VOID pif_cmd( char *filename, cha
  { 
      HANDLE hFile;
      char progpath[MAX_PATH];

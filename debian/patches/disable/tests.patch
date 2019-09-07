@@ -13,8 +13,8 @@ author: Michael Gilbert <mgilbert@debian.org>
  	rpc_async.c \
 --- a/dlls/gdi32/tests/Makefile.in
 +++ b/dlls/gdi32/tests/Makefile.in
-@@ -9,7 +9,6 @@ C_SRCS = \
- 	dib.c \
+@@ -10,7 +10,6 @@ C_SRCS = \
+ 	driver.c \
  	font.c \
  	gdiobj.c \
 -	generated.c \

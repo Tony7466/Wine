@@ -27,9 +27,9 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (format->type == FORMAT_ARGBF16)
 --- a/dlls/kernel32/locale.c
 +++ b/dlls/kernel32/locale.c
-@@ -5810,7 +5810,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
-     extern const unsigned short nameprep_char_type[];
- 
+@@ -5790,7 +5790,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
+                         LPWSTR lpUnicodeCharStr, INT cchUnicodeChar)
+ {
      INT i, label_start, label_end, out_label, out = 0;
 -    WCHAR ch;
 +    WCHAR ch = '\0';
@@ -38,7 +38,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          lpUnicodeCharStr, cchUnicodeChar);
 --- a/dlls/msvcrt/misc.c
 +++ b/dlls/msvcrt/misc.c
-@@ -271,7 +271,7 @@ static void small_sort(void *base, MSVCR
+@@ -272,7 +272,7 @@ static void small_sort(void *base, MSVCR
          int (CDECL *compar)(void *, const void *, const void *), void *context)
  {
      MSVCRT_size_t e, i;
@@ -106,7 +106,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/dlls/mf/session.c
 +++ b/dlls/mf/session.c
-@@ -756,7 +756,9 @@ static HRESULT clock_change_state(struct
+@@ -1114,7 +1114,9 @@ static HRESULT clock_change_state(struct
              notification = CLOCK_NOTIFY_PAUSE;
              break;
          default:
@@ -152,7 +152,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/dlls/user32/sysparams.c
 +++ b/dlls/user32/sysparams.c
-@@ -1733,7 +1733,7 @@ BOOL WINAPI SystemParametersInfoW( UINT
+@@ -1734,7 +1734,7 @@ BOOL WINAPI SystemParametersInfoW( UINT
      case SPI_GETNONCLIENTMETRICS:
      {
          LPNONCLIENTMETRICSW lpnm = pvParam;
