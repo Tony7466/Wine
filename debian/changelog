@@ -1,3 +1,15 @@
+wine-development (4.9-1) UNRELEASED; urgency=medium
+
+  * New upstream release 4.9, released May 24, 2019.
+    - Initial support for installing Plug and Play drivers.
+    - Support for building 16-bit modules in PE format.
+    - A lot of code moved to the new KernelBase DLL.
+    - Various game controller fixes.
+    - Use higher performance system clocks if available.
+    - Various bug fixes.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Sat, 07 Sep 2019 16:32:04 +0200
+
 wine-development (4.8-1) unstable; urgency=medium
 
   * New upstream release 4.8, released May 10, 2019.
