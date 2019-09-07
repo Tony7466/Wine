@@ -150,7 +150,7 @@ static HRESULT WINAPI AVICompressor_QueryInterface(IBaseFilter *iface, REFIID ri
 static ULONG WINAPI AVICompressor_Release(IBaseFilter *iface)
 {
     AVICompressor *This = impl_from_IBaseFilter(iface);
-    ULONG ref = BaseFilterImpl_Release(&This->filter.IBaseFilter_iface);
+    ULONG ref = InterlockedDecrement(&This->filter.refCount);
 
     TRACE("(%p) ref=%d\n", This, ref);
 
@@ -162,6 +162,7 @@ static ULONG WINAPI AVICompressor_Release(IBaseFilter *iface)
             BaseInputPinImpl_Release(&This->in->pin.IPin_iface);
         if(This->out)
             BaseOutputPinImpl_Release(&This->out->pin.IPin_iface);
+        strmbase_filter_cleanup(&This->filter);
         heap_free(This);
     }
 
@@ -243,37 +244,24 @@ static const IBaseFilterVtbl AVICompressorVtbl = {
     AVICompressor_QueryVendorInfo
 };
 
-static IPin* WINAPI AVICompressor_GetPin(BaseFilter *iface, int pos)
+static IPin *avi_compressor_get_pin(BaseFilter *iface, unsigned int index)
 {
     AVICompressor *This = impl_from_BaseFilter(iface);
     IPin *ret;
 
-    TRACE("(%p)->(%d)\n", This, pos);
-
-    switch(pos) {
-    case 0:
+    if (index == 0)
         ret = &This->in->pin.IPin_iface;
-        break;
-    case 1:
+    else if (index == 1)
         ret = &This->out->pin.IPin_iface;
-        break;
-    default:
-        TRACE("No pin %d\n", pos);
+    else
         return NULL;
-    };
 
     IPin_AddRef(ret);
     return ret;
 }
 
-static LONG WINAPI AVICompressor_GetPinCount(BaseFilter *iface)
-{
-    return 2;
-}
-
 static const BaseFilterFuncTable filter_func_table = {
-    AVICompressor_GetPin,
-    AVICompressor_GetPinCount
+    .filter_get_pin = avi_compressor_get_pin,
 };
 
 static AVICompressor *impl_from_IPersistPropertyBag(IPersistPropertyBag *iface)
@@ -657,12 +645,6 @@ static HRESULT WINAPI AVICompressorOut_DecideAllocator(BaseOutputPin *base,
     return BaseOutputPinImpl_DecideAllocator(base, pPin, pAlloc);
 }
 
-static HRESULT WINAPI AVICompressorOut_BreakConnect(BaseOutputPin *base)
-{
-    FIXME("(%p)\n", base);
-    return E_NOTIMPL;
-}
-
 static const BaseOutputPinFuncTable AVICompressorBaseOutputPinVtbl = {
     {
         NULL,
@@ -671,7 +653,6 @@ static const BaseOutputPinFuncTable AVICompressorBaseOutputPinVtbl = {
     BaseOutputPinImpl_AttemptConnection,
     AVICompressorOut_DecideBufferSize,
     AVICompressorOut_DecideAllocator,
-    AVICompressorOut_BreakConnect
 };
 
 IUnknown* WINAPI QCAP_createAVICompressor(IUnknown *outer, HRESULT *phr)
@@ -698,7 +679,7 @@ IUnknown* WINAPI QCAP_createAVICompressor(IUnknown *outer, HRESULT *phr)
     hres = BaseInputPin_Construct(&AVICompressorInputPinVtbl, sizeof(BaseInputPin), &in_pin_info,
             &AVICompressorBaseInputPinVtbl, &compressor->filter.csFilter, NULL, (IPin**)&compressor->in);
     if(FAILED(hres)) {
-        IBaseFilter_Release(&compressor->filter.IBaseFilter_iface);
+        strmbase_filter_cleanup(&compressor->filter);
         *phr = hres;
         return NULL;
     }
@@ -707,7 +688,7 @@ IUnknown* WINAPI QCAP_createAVICompressor(IUnknown *outer, HRESULT *phr)
     hres = BaseOutputPin_Construct(&AVICompressorOutputPinVtbl, sizeof(BaseOutputPin), &out_pin_info,
             &AVICompressorBaseOutputPinVtbl, &compressor->filter.csFilter, (IPin**)&compressor->out);
     if(FAILED(hres)) {
-        IBaseFilter_Release(&compressor->filter.IBaseFilter_iface);
+        strmbase_filter_cleanup(&compressor->filter);
         *phr = hres;
         return NULL;
     }

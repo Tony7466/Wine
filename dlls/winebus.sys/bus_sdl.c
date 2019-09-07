@@ -548,18 +548,23 @@ static BOOL build_mapped_report_descriptor(struct platform_private *ext)
     BYTE *report_ptr;
     INT i, descript_size;
 
+    static const int BUTTON_BIT_COUNT = CONTROLLER_NUM_BUTTONS + CONTROLLER_NUM_HATSWITCHES * 4;
+
     descript_size = sizeof(REPORT_HEADER) + sizeof(REPORT_TAIL);
     descript_size += sizeof(CONTROLLER_AXIS);
     descript_size += sizeof(CONTROLLER_TRIGGERS);
     descript_size += sizeof(CONTROLLER_BUTTONS);
     descript_size += sizeof(REPORT_HATSWITCH);
+    descript_size += sizeof(REPORT_PADDING);
+    if (BUTTON_BIT_COUNT % 8 != 0)
+        descript_size += sizeof(REPORT_PADDING);
     descript_size += test_haptic(ext);
 
     ext->axis_start = 0;
     ext->button_start = CONTROLLER_NUM_AXES * sizeof(WORD);
     ext->hat_bit_offs = CONTROLLER_NUM_BUTTONS;
 
-    ext->buffer_length = (CONTROLLER_NUM_BUTTONS + CONTROLLER_NUM_HATSWITCHES * 4 + 7) / 8
+    ext->buffer_length = (BUTTON_BIT_COUNT + 7) / 8
         + CONTROLLER_NUM_AXES * sizeof(WORD)
         + 2/* unknown constant*/;
 
@@ -585,6 +590,8 @@ static BOOL build_mapped_report_descriptor(struct platform_private *ext)
     memcpy(report_ptr, CONTROLLER_BUTTONS, sizeof(CONTROLLER_BUTTONS));
     report_ptr += sizeof(CONTROLLER_BUTTONS);
     report_ptr = add_hatswitch(report_ptr, 1);
+    if (BUTTON_BIT_COUNT % 8 != 0)
+        report_ptr = add_padding_block(report_ptr, 8 - (BUTTON_BIT_COUNT % 8));/* unused bits between hatswitch and following constant */
     report_ptr = add_padding_block(report_ptr, 16);/* unknown constant */
     report_ptr += build_haptic(ext, report_ptr);
     memcpy(report_ptr, REPORT_TAIL, sizeof(REPORT_TAIL));
@@ -605,8 +612,8 @@ static BOOL build_mapped_report_descriptor(struct platform_private *ext)
     set_hat_value(ext, 0, compose_dpad_value(ext->sdl_controller));
 
     /* unknown constant */
-    ext->report_buffer[12] = 0x89;
-    ext->report_buffer[13] = 0xc5;
+    ext->report_buffer[14] = 0x89;
+    ext->report_buffer[15] = 0xc5;
 
     return TRUE;
 }
@@ -890,6 +897,7 @@ static void try_add_device(SDL_JoystickID index)
     WCHAR serial[34] = {0};
     char guid_str[34];
     BOOL is_xbox_gamepad;
+    WORD input = -1;
 
     SDL_Joystick* joystick;
     SDL_JoystickID id;
@@ -940,8 +948,12 @@ static void try_add_device(SDL_JoystickID index)
         button_count = pSDL_JoystickNumButtons(joystick);
         is_xbox_gamepad = (axis_count == 6  && button_count >= 14);
     }
+    if (is_xbox_gamepad)
+        input = 0;
 
-    device = bus_create_hid_device(sdl_driver_obj, sdl_busidW, vid, pid, version, id, serial, is_xbox_gamepad, &GUID_DEVCLASS_SDL, &sdl_vtbl, sizeof(struct platform_private));
+    device = bus_create_hid_device(sdl_driver_obj, sdl_busidW, vid, pid,
+            input, version, id, serial, is_xbox_gamepad, &GUID_DEVCLASS_SDL,
+            &sdl_vtbl, sizeof(struct platform_private));
 
     if (device)
     {

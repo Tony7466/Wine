@@ -513,7 +513,7 @@ CONFIGRET WINAPI CM_Reenumerate_DevNode_Ex(DEVINST dnDevInst, ULONG ulFlags, HMA
 /***********************************************************************
  *      CM_Set_Class_Registry_PropertyA (SETUPAPI.@)
  */
-CONFIGRET WINAPI CM_Set_Class_Registry_PropertyA(LPGUID class, ULONG prop, PVOID buf, ULONG len,
+CONFIGRET WINAPI CM_Set_Class_Registry_PropertyA(LPGUID class, ULONG prop, LPCVOID buf, ULONG len,
                                                  ULONG flags, HMACHINE machine)
 {
     FIXME("%p %u %p %u 0x%08x %p: stub\n", class, prop, buf, len, flags, machine);
@@ -523,7 +523,7 @@ CONFIGRET WINAPI CM_Set_Class_Registry_PropertyA(LPGUID class, ULONG prop, PVOID
 /***********************************************************************
  *      CM_Set_Class_Registry_PropertyW (SETUPAPI.@)
  */
-CONFIGRET WINAPI CM_Set_Class_Registry_PropertyW(LPGUID class, ULONG prop, PVOID buf, ULONG len,
+CONFIGRET WINAPI CM_Set_Class_Registry_PropertyW(LPGUID class, ULONG prop, LPCVOID buf, ULONG len,
                                                  ULONG flags, HMACHINE machine)
 {
     FIXME("%p %u %p %u 0x%08x %p: stub\n", class, prop, buf, len, flags, machine);
@@ -576,18 +576,6 @@ BOOL WINAPI SetupLogFileA(
 }
 
 /***********************************************************************
- *              SetupDiBuildDriverInfoList  (SETUPAPI.@)
- */
-
-BOOL WINAPI SetupDiBuildDriverInfoList(HDEVINFO DeviceInfoSet, PSP_DEVINFO_DATA DeviceInfoData, DWORD DriverType)
- {
-    FIXME(": stub %p, %p, %d\n", DeviceInfoSet, DeviceInfoData, DriverType);
-
-    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
-    return FALSE;
- }
-
-/***********************************************************************
  *              SetupDiDestroyDriverInfoList  (SETUPAPI.@)
  */
 
@@ -633,17 +621,6 @@ BOOL WINAPI SetupDiLoadClassIcon(const GUID *ClassGuid, HICON *LargeIcon, PINT M
 }
 
 /***********************************************************************
- *              SetupDiSelectBestCompatDrv (SETUPAPI.@)
- */
-BOOL WINAPI SetupDiSelectBestCompatDrv(HDEVINFO DeviceInfoSet, PSP_DEVINFO_DATA DeviceInfoData)
-{
-    FIXME(": stub %p, %p\n", DeviceInfoSet, DeviceInfoData);
-
-    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
-    return FALSE;
-}
-
-/***********************************************************************
  *              SetupDiSetSelectedDevice  (SETUPAPI.@)
  */
 BOOL WINAPI SetupDiSetSelectedDevice(HDEVINFO SetupDiSetSelectedDevice, PSP_DEVINFO_DATA DeviceInfoData)
@@ -651,28 +628,6 @@ BOOL WINAPI SetupDiSetSelectedDevice(HDEVINFO SetupDiSetSelectedDevice, PSP_DEVI
     FIXME("(%p, %p) stub\n", SetupDiSetSelectedDevice, DeviceInfoData);
 
     return TRUE;
-}
-
-/***********************************************************************
- *              SetupDiEnumDriverInfoA  (SETUPAPI.@)
- */
-BOOL WINAPI SetupDiEnumDriverInfoA(HDEVINFO DeviceInfoSet, PSP_DEVINFO_DATA DeviceInfoData, DWORD DriverType, DWORD MemberIndex, PSP_DRVINFO_DATA_A DriverInfoData)
-{
-    FIXME("(%p, %p, 0x%x, %u, %p stub\n", DeviceInfoSet, DeviceInfoData, DriverType, MemberIndex, DriverInfoData);
-
-    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
-    return FALSE;
-}
-
-/***********************************************************************
- *              SetupDiEnumDriverInfoW  (SETUPAPI.@)
- */
-BOOL WINAPI SetupDiEnumDriverInfoW(HDEVINFO DeviceInfoSet, PSP_DEVINFO_DATA DeviceInfoData, DWORD DriverType, DWORD MemberIndex, PSP_DRVINFO_DATA_W DriverInfoData)
-{
-    FIXME("(%p, %p, 0x%x, %u, %p stub\n", DeviceInfoSet, DeviceInfoData, DriverType, MemberIndex, DriverInfoData);
-
-    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
-    return FALSE;
 }
 
 /***********************************************************************

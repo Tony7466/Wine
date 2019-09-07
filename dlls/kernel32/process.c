@@ -61,6 +61,7 @@
 #include "wine/library.h"
 #include "wine/server.h"
 #include "wine/unicode.h"
+#include "wine/asm.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(process);
@@ -3120,7 +3121,7 @@ __ASM_STDCALL_FUNC( ExitProcess, 4, /* Shrinker depend on this particular ExitPr
                    ".byte 0x6A, 0x00\n\t" /* pushl $0 */
                    ".byte 0x68, 0x00, 0x00, 0x00, 0x00\n\t" /* pushl $0 - 4 bytes immediate */
                    "pushl 8(%ebp)\n\t"
-                   "call " __ASM_NAME("RtlExitUserProcess") __ASM_STDCALL(4) "\n\t"
+                   "call " __ASM_STDCALL("RtlExitUserProcess",4) "\n\t"
                    "leave\n\t"
                    "ret $4" )
 #else
@@ -4459,6 +4460,16 @@ BOOL WINAPI GetNumaAvailableMemoryNode(UCHAR node, PULONGLONG available_bytes)
     return FALSE;
 }
 
+/**********************************************************************
+ *           GetNumaAvailableMemoryNodeEx     (KERNEL32.@)
+ */
+BOOL WINAPI GetNumaAvailableMemoryNodeEx(USHORT node, PULONGLONG available_bytes)
+{
+    FIXME("(%hu %p): stub\n", node, available_bytes);
+    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
+    return FALSE;
+}
+
 /***********************************************************************
  *           GetNumaProcessorNode (KERNEL32.@)
  */
@@ -4477,6 +4488,33 @@ BOOL WINAPI GetNumaProcessorNode(UCHAR processor, PUCHAR node)
 
     *node = 0xFF;
     SetLastError(ERROR_INVALID_PARAMETER);
+    return FALSE;
+}
+
+/***********************************************************************
+ *           GetNumaProcessorNodeEx (KERNEL32.@)
+ */
+BOOL WINAPI GetNumaProcessorNodeEx(PPROCESSOR_NUMBER processor, PUSHORT node_number)
+{
+    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
+    return FALSE;
+}
+
+/***********************************************************************
+ *           GetNumaProximityNode (KERNEL32.@)
+ */
+BOOL WINAPI GetNumaProximityNode(ULONG  proximity_id, PUCHAR node_number)
+{
+    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
+    return FALSE;
+}
+
+/***********************************************************************
+ *           GetNumaProximityNodeEx (KERNEL32.@)
+ */
+BOOL WINAPI GetNumaProximityNodeEx(ULONG  proximity_id, PUSHORT node_number)
+{
+    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
 }
 

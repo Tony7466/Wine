@@ -319,13 +319,14 @@ static ULONG WINAPI SampleGrabber_AddRef(IUnknown *iface)
 static ULONG WINAPI SampleGrabber_Release(IUnknown *iface)
 {
     SG_Impl *This = impl_from_IUnknown(iface);
-    ULONG ref = BaseFilterImpl_Release(&This->filter.IBaseFilter_iface);
+    ULONG ref = InterlockedDecrement(&This->filter.refCount);
 
     TRACE("(%p) ref=%d\n", This, ref);
 
     if (ref == 0)
     {
         SampleGrabber_cleanup(This);
+        strmbase_filter_cleanup(&This->filter);
         CoTaskMemFree(This);
     }
     return ref;
@@ -338,14 +339,14 @@ static const IUnknownVtbl samplegrabber_vtbl =
     SampleGrabber_Release,
 };
 
-static IPin *WINAPI SampleGrabber_GetPin(BaseFilter *iface, int pos)
+static IPin *sample_grabber_get_pin(BaseFilter *iface, unsigned int index)
 {
     SG_Impl *This = impl_from_BaseFilter(iface);
     IPin *pin;
 
-    if (pos == 0)
+    if (index == 0)
         pin = &This->pin_in.IPin_iface;
-    else if (pos == 1)
+    else if (index == 1)
         pin = &This->pin_out.IPin_iface;
     else
         return NULL;
@@ -354,14 +355,8 @@ static IPin *WINAPI SampleGrabber_GetPin(BaseFilter *iface, int pos)
     return pin;
 }
 
-static LONG WINAPI SampleGrabber_GetPinCount(BaseFilter *iface)
-{
-    return 2;
-}
-
 static const BaseFilterFuncTable basefunc_vtbl = {
-    SampleGrabber_GetPin,
-    SampleGrabber_GetPinCount
+    .filter_get_pin = sample_grabber_get_pin,
 };
 
 /* Helper that buffers data and/or calls installed sample callbacks */
@@ -678,31 +673,22 @@ SampleGrabber_ISampleGrabber_SetCallback(ISampleGrabber *iface, ISampleGrabberCB
     return S_OK;
 }
 
-
-/* SampleGrabber implementation of IMemInputPin interface */
-
-/* IUnknown */
-static HRESULT WINAPI
-SampleGrabber_IMemInputPin_QueryInterface(IMemInputPin *iface, REFIID riid, void **ppv)
+static HRESULT WINAPI SampleGrabber_IMemInputPin_QueryInterface(IMemInputPin *iface, REFIID iid, void **out)
 {
-    SG_Impl *This = impl_from_IMemInputPin(iface);
-    return IUnknown_QueryInterface(This->outer_unk, riid, ppv);
+    SG_Impl *filter = impl_from_IMemInputPin(iface);
+    return IPin_QueryInterface(&filter->pin_in.IPin_iface, iid, out);
 }
 
-/* IUnknown */
-static ULONG WINAPI
-SampleGrabber_IMemInputPin_AddRef(IMemInputPin *iface)
+static ULONG WINAPI SampleGrabber_IMemInputPin_AddRef(IMemInputPin *iface)
 {
-    SG_Impl *This = impl_from_IMemInputPin(iface);
-    return IUnknown_AddRef(This->outer_unk);
+    SG_Impl *filter = impl_from_IMemInputPin(iface);
+    return IPin_AddRef(&filter->pin_in.IPin_iface);
 }
 
-/* IUnknown */
-static ULONG WINAPI
-SampleGrabber_IMemInputPin_Release(IMemInputPin *iface)
+static ULONG WINAPI SampleGrabber_IMemInputPin_Release(IMemInputPin *iface)
 {
-    SG_Impl *This = impl_from_IMemInputPin(iface);
-    return IUnknown_Release(This->outer_unk);
+    SG_Impl *filter = impl_from_IMemInputPin(iface);
+    return IPin_Release(&filter->pin_in.IPin_iface);
 }
 
 /* IMemInputPin */

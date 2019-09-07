@@ -742,16 +742,16 @@
 # @ stub GetNLSVersionEx
 # @ stub GetNumaAvailableMemory
 @ stdcall GetNumaAvailableMemoryNode(long ptr)
-# @ stub GetNumaAvailableMemoryNodeEx
+@ stdcall GetNumaAvailableMemoryNodeEx(long ptr)
 @ stdcall GetNumaHighestNodeNumber(ptr)
 # @ stub GetNumaNodeNumberFromHandle
 @ stdcall GetNumaNodeProcessorMask(long ptr)
 @ stdcall GetNumaNodeProcessorMaskEx(long ptr)
 # @ stub GetNumaProcessorMap
 @ stdcall GetNumaProcessorNode(long ptr)
-# @ stub GetNumaProcessorNodeEx
-# @ stub GetNumaProximityNode
-# @ stub GetNumaProximityNodeEx
+@ stdcall GetNumaProcessorNodeEx(ptr ptr)
+@ stdcall GetNumaProximityNode(long ptr)
+@ stdcall GetNumaProximityNodeEx(long ptr)
 @ stdcall GetNumberFormatA(long long str ptr ptr long)
 @ stdcall GetNumberFormatEx(wstr long wstr ptr ptr long)
 @ stdcall GetNumberFormatW(long long wstr ptr ptr long)
@@ -832,7 +832,7 @@
 @ stdcall GetSystemRegistryQuota(ptr ptr)
 @ stdcall GetSystemTime(ptr)
 @ stdcall GetSystemTimeAdjustment(ptr ptr ptr)
-@ stdcall GetSystemTimeAsFileTime(ptr)
+@ stdcall GetSystemTimeAsFileTime(ptr) ntdll.NtQuerySystemTime
 @ stdcall GetSystemTimePreciseAsFileTime(ptr)
 @ stdcall GetSystemTimes(ptr ptr ptr)
 @ stdcall GetSystemWindowsDirectoryA(ptr long)
@@ -858,8 +858,8 @@
 @ stdcall GetThreadPriorityBoost(long ptr)
 @ stdcall GetThreadSelectorEntry(long long ptr)
 @ stdcall GetThreadTimes(long ptr ptr ptr ptr)
-@ stdcall GetTickCount()
-@ stdcall -ret64 GetTickCount64()
+@ stdcall GetTickCount() ntdll.NtGetTickCount
+@ stdcall -ret64 GetTickCount64() ntdll.NtGetTickCount
 @ stdcall GetTimeFormatA(long long ptr str ptr long)
 @ stdcall GetTimeFormatEx(wstr long ptr wstr ptr long)
 @ stdcall GetTimeFormatW(long long ptr wstr ptr long)
@@ -1591,7 +1591,7 @@
 @ stdcall WerSetFlags(long)
 # @ stub WerUnregisterFile
 @ stdcall WerUnregisterMemoryBlock(ptr)
-# @ stub WerUnregisterRuntimeExceptionModule
+@ stdcall WerUnregisterRuntimeExceptionModule(wstr ptr)
 # @ stub WerpCleanupMessageMapping
 # @ stub WerpInitiateRemoteRecovery
 # @ stub WerpNotifyLoadStringResource

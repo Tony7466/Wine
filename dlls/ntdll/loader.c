@@ -1217,6 +1217,8 @@ static void call_tls_callbacks( HMODULE module, UINT reason )
     const PIMAGE_TLS_CALLBACK *callback;
     ULONG dirsize;
 
+    if (reason == DLL_WINE_PREATTACH) return;
+
     dir = RtlImageDirectoryEntryToData( module, TRUE, IMAGE_DIRECTORY_ENTRY_TLS, &dirsize );
     if (!dir || !dir->AddressOfCallBacks) return;
 
@@ -2147,6 +2149,7 @@ static NTSTATUS load_native_dll( LPCWSTR load_path, const UNICODE_STRING *nt_nam
     wm->ino = st->st_ino;
     if (image_info->loader_flags) wm->ldr.Flags |= LDR_COR_IMAGE;
     if (image_info->image_flags & IMAGE_FLAGS_ComPlusILOnly) wm->ldr.Flags |= LDR_COR_ILONLY;
+    if (image_info->image_flags & IMAGE_FLAGS_WineBuiltin) wm->ldr.Flags |= LDR_WINE_INTERNAL;
 
     set_security_cookie( module, image_info->map_size );
 
@@ -2190,7 +2193,14 @@ static NTSTATUS load_native_dll( LPCWSTR load_path, const UNICODE_STRING *nt_nam
     }
     SERVER_END_REQ;
 
-    if ((wm->ldr.Flags & LDR_IMAGE_IS_DLL) && TRACE_ON(snoop)) SNOOP_SetupDLL( module );
+    if (image_info->image_flags & IMAGE_FLAGS_WineBuiltin)
+    {
+        if (TRACE_ON(relay)) RELAY_SetupDLL( module );
+    }
+    else
+    {
+        if ((wm->ldr.Flags & LDR_IMAGE_IS_DLL) && TRACE_ON(snoop)) SNOOP_SetupDLL( module );
+    }
 
     TRACE_(loaddll)( "Loaded %s at %p: %s\n", debugstr_w(wm->ldr.FullDllName.Buffer), module, dll_type );
 
@@ -3264,7 +3274,7 @@ void WINAPI RtlExitUserProcess( DWORD status )
     NtTerminateProcess( 0, status );
     LdrShutdownProcess();
     NtTerminateProcess( GetCurrentProcess(), status );
-    exit( status );
+    exit( get_unix_exit_code( status ));
 }
 
 /******************************************************************
@@ -3340,7 +3350,8 @@ static void free_modref( WINE_MODREF *wm )
 
     free_tls_slot( &wm->ldr );
     RtlReleaseActivationContext( wm->ldr.ActivationContext );
-    if (wm->ldr.Flags & LDR_WINE_INTERNAL) wine_dll_unload( wm->ldr.SectionHandle );
+    if ((wm->ldr.Flags & LDR_WINE_INTERNAL) && wm->ldr.SectionHandle)
+        wine_dll_unload( wm->ldr.SectionHandle );
     NtUnmapViewOfSection( NtCurrentProcess(), wm->ldr.BaseAddress );
     if (cached_modref == wm) cached_modref = NULL;
     RtlFreeUnicodeString( &wm->ldr.FullDllName );

@@ -156,7 +156,7 @@
 @ cdecl __stdio_common_vfwscanf(int64 ptr wstr ptr ptr) MSVCRT__stdio_common_vfwscanf
 @ cdecl __stdio_common_vsnprintf_s(int64 ptr long long str ptr ptr) MSVCRT__stdio_common_vsnprintf_s
 @ cdecl __stdio_common_vsnwprintf_s(int64 ptr long long wstr ptr ptr) MSVCRT__stdio_common_vsnwprintf_s
-@ cdecl __stdio_common_vsprintf(int64 ptr long str ptr ptr) MSVCRT__stdio_common_vsprintf
+@ cdecl __stdio_common_vsprintf(int64 ptr long str ptr ptr)
 @ cdecl __stdio_common_vsprintf_p(int64 ptr long str ptr ptr) MSVCRT__stdio_common_vsprintf_p
 @ cdecl __stdio_common_vsprintf_s(int64 ptr long str ptr ptr) MSVCRT__stdio_common_vsprintf_s
 @ cdecl __stdio_common_vsscanf(int64 ptr long str ptr ptr) MSVCRT__stdio_common_vsscanf
@@ -2305,8 +2305,8 @@
 @ cdecl fgetws(ptr long ptr) MSVCRT_fgetws
 @ cdecl floor(double) MSVCRT_floor
 @ cdecl -arch=arm,x86_64,arm64 floorf(float) MSVCRT_floorf
-@ stub fma
-@ stub fmaf
+@ cdecl fma(double double double) MSVCRT_fma
+@ cdecl -arch=arm,x86_64,arm64 fmaf(float float float) MSVCRT_fmaf
 @ stub fmal
 @ cdecl fmax(double double) MSVCR120_fmax
 @ cdecl fmaxf(float float) MSVCR120_fmaxf

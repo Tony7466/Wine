@@ -202,43 +202,39 @@ static inline QTSplitter *impl_from_IBaseFilter( IBaseFilter *iface )
  * Base Filter
  */
 
-static IPin* WINAPI QT_GetPin(BaseFilter *iface, int pos)
+static IPin *qt_splitter_get_pin(BaseFilter *base, unsigned int index)
 {
-    QTSplitter *This = impl_from_BaseFilter(iface);
-    TRACE("Asking for pos %x\n", pos);
+    QTSplitter *filter = impl_from_BaseFilter(base);
 
-    if (pos > 2 || pos < 0)
-        return NULL;
-    switch (pos)
+    if (index == 0)
     {
-        case 0:
-            IPin_AddRef(&This->pInputPin.pin.IPin_iface);
-            return &This->pInputPin.pin.IPin_iface;
-        case 1:
-            if (This->pVideo_Pin)
-                IPin_AddRef(&This->pVideo_Pin->pin.pin.IPin_iface);
-            return &This->pVideo_Pin->pin.pin.IPin_iface;
-        case 2:
-            if (This->pAudio_Pin)
-                IPin_AddRef(&This->pAudio_Pin->pin.pin.IPin_iface);
-            return &This->pAudio_Pin->pin.pin.IPin_iface;
-        default:
-            return NULL;
+        IPin_AddRef(&filter->pInputPin.pin.IPin_iface);
+        return &filter->pInputPin.pin.IPin_iface;
     }
-}
+    else if (index == 1)
+    {
+        if (filter->pVideo_Pin)
+        {
+            IPin_AddRef(&filter->pVideo_Pin->pin.pin.IPin_iface);
+            return &filter->pVideo_Pin->pin.pin.IPin_iface;
+        }
+        else if (filter->pAudio_Pin)
+        {
+            IPin_AddRef(&filter->pAudio_Pin->pin.pin.IPin_iface);
+            return &filter->pAudio_Pin->pin.pin.IPin_iface;
+        }
+    }
+    else if (index == 2 && filter->pVideo_Pin && filter->pAudio_Pin)
+    {
+        IPin_AddRef(&filter->pAudio_Pin->pin.pin.IPin_iface);
+        return &filter->pAudio_Pin->pin.pin.IPin_iface;
+    }
 
-static LONG WINAPI QT_GetPinCount(BaseFilter *iface)
-{
-    QTSplitter *This = impl_from_BaseFilter(iface);
-    int c = 1;
-    if (This->pAudio_Pin) c++;
-    if (This->pVideo_Pin) c++;
-    return c;
+    return NULL;
 }
 
 static const BaseFilterFuncTable BaseFuncTable = {
-    QT_GetPin,
-    QT_GetPinCount
+    .filter_get_pin = qt_splitter_get_pin,
 };
 
 IUnknown * CALLBACK QTSplitter_create(IUnknown *punkout, HRESULT *phr)
@@ -341,7 +337,7 @@ static void QT_Destroy(QTSplitter *This)
 
     This->csReceive.DebugInfo->Spare[0] = 0;
     DeleteCriticalSection(&This->csReceive);
-    BaseFilter_Destroy(&This->filter);
+    strmbase_filter_cleanup(&This->filter);
 
     CoTaskMemFree(This);
 }
@@ -810,6 +806,25 @@ static const IBaseFilterVtbl QT_Vtbl = {
     BaseFilterImpl_QueryVendorInfo
 };
 
+static HRESULT break_source_connection(BaseOutputPin *pin)
+{
+    HRESULT hr;
+
+    EnterCriticalSection(pin->pin.pCritSec);
+    if (!pin->pin.pConnectedTo || !pin->pMemInputPin)
+        hr = VFW_E_NOT_CONNECTED;
+    else
+    {
+        hr = IMemAllocator_Decommit(pin->pAllocator);
+        if (SUCCEEDED(hr))
+            hr = IPin_Disconnect(pin->pin.pConnectedTo);
+        IPin_Disconnect(&pin->pin.IPin_iface);
+    }
+    LeaveCriticalSection(pin->pin.pCritSec);
+
+    return hr;
+}
+
 /*
  * Input Pin
  */
@@ -821,7 +836,7 @@ static HRESULT QT_RemoveOutputPins(QTSplitter *This)
     if (This->pVideo_Pin)
     {
         OutputQueue_Destroy(This->pVideo_Pin->queue);
-        hr = BaseOutputPinImpl_BreakConnect(&This->pVideo_Pin->pin);
+        hr = break_source_connection(&This->pVideo_Pin->pin);
         TRACE("Disconnect: %08x\n", hr);
         IPin_Release(&This->pVideo_Pin->pin.pin.IPin_iface);
         This->pVideo_Pin = NULL;
@@ -829,7 +844,7 @@ static HRESULT QT_RemoveOutputPins(QTSplitter *This)
     if (This->pAudio_Pin)
     {
         OutputQueue_Destroy(This->pAudio_Pin->queue);
-        hr = BaseOutputPinImpl_BreakConnect(&This->pAudio_Pin->pin);
+        hr = break_source_connection(&This->pAudio_Pin->pin);
         TRACE("Disconnect: %08x\n", hr);
         IPin_Release(&This->pAudio_Pin->pin.pin.IPin_iface);
         This->pAudio_Pin = NULL;
@@ -1426,25 +1441,6 @@ static HRESULT WINAPI QTOutPin_DecideAllocator(BaseOutputPin *iface, IMemInputPi
     return hr;
 }
 
-static HRESULT WINAPI QTOutPin_BreakConnect(BaseOutputPin *This)
-{
-    HRESULT hr;
-
-    TRACE("(%p)->()\n", This);
-
-    EnterCriticalSection(This->pin.pCritSec);
-    if (!This->pin.pConnectedTo || !This->pMemInputPin)
-        hr = VFW_E_NOT_CONNECTED;
-    else
-    {
-        hr = IPin_Disconnect(This->pin.pConnectedTo);
-        IPin_Disconnect(&This->pin.IPin_iface);
-    }
-    LeaveCriticalSection(This->pin.pCritSec);
-
-    return hr;
-}
-
 static const IPinVtbl QT_OutputPin_Vtbl = {
     QTOutPin_QueryInterface,
     BasePinImpl_AddRef,
@@ -1520,7 +1516,6 @@ static const BaseOutputPinFuncTable output_BaseOutputFuncTable = {
     BaseOutputPinImpl_AttemptConnection,
     QTOutPin_DecideBufferSize,
     QTOutPin_DecideAllocator,
-    QTOutPin_BreakConnect
 };
 
 static const OutputQueueFuncTable output_OutputQueueFuncTable = {

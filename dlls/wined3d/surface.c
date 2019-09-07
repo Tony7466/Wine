@@ -62,6 +62,7 @@ static void texture2d_depth_blt_fbo(const struct wined3d_device *device, struct 
         const RECT *src_rect, struct wined3d_texture *dst_texture, unsigned int dst_sub_resource_idx,
         DWORD dst_location, const RECT *dst_rect)
 {
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     const struct wined3d_gl_info *gl_info = context->gl_info;
     DWORD src_mask, dst_mask;
     GLbitfield gl_mask;
@@ -103,14 +104,14 @@ static void texture2d_depth_blt_fbo(const struct wined3d_device *device, struct 
     else
         wined3d_texture_prepare_location(dst_texture, dst_sub_resource_idx, context, dst_location);
 
-    context_apply_fbo_state_blit(context, GL_READ_FRAMEBUFFER, NULL, 0,
+    wined3d_context_gl_apply_fbo_state_blit(context_gl, GL_READ_FRAMEBUFFER, NULL, 0,
             &src_texture->resource, src_sub_resource_idx, src_location);
-    context_check_fbo_status(context, GL_READ_FRAMEBUFFER);
+    wined3d_context_gl_check_fbo_status(context_gl, GL_READ_FRAMEBUFFER);
 
-    context_apply_fbo_state_blit(context, GL_DRAW_FRAMEBUFFER, NULL, 0,
+    wined3d_context_gl_apply_fbo_state_blit(context_gl, GL_DRAW_FRAMEBUFFER, NULL, 0,
             &dst_texture->resource, dst_sub_resource_idx, dst_location);
-    context_set_draw_buffer(context, GL_NONE);
-    context_check_fbo_status(context, GL_DRAW_FRAMEBUFFER);
+    wined3d_context_gl_set_draw_buffer(context_gl, GL_NONE);
+    wined3d_context_gl_check_fbo_status(context_gl, GL_DRAW_FRAMEBUFFER);
     context_invalidate_state(context, STATE_FRAMEBUFFER);
 
     if (gl_mask & GL_DEPTH_BUFFER_BIT)
@@ -157,6 +158,7 @@ static void texture2d_blt_fbo(const struct wined3d_device *device, struct wined3
     struct wined3d_texture *required_texture, *restore_texture;
     unsigned int required_idx, restore_idx;
     const struct wined3d_gl_info *gl_info;
+    struct wined3d_context_gl *context_gl;
     GLenum gl_filter;
     GLenum buffer;
     RECT s, d;
@@ -229,6 +231,7 @@ static void texture2d_blt_fbo(const struct wined3d_device *device, struct wined3
         return;
     }
 
+    context_gl = wined3d_context_gl(context);
     gl_info = context->gl_info;
 
     if (src_location == WINED3D_LOCATION_DRAWABLE)
@@ -245,11 +248,11 @@ static void texture2d_blt_fbo(const struct wined3d_device *device, struct wined3
         buffer = GL_COLOR_ATTACHMENT0;
     }
 
-    context_apply_fbo_state_blit(context, GL_READ_FRAMEBUFFER,
+    wined3d_context_gl_apply_fbo_state_blit(context_gl, GL_READ_FRAMEBUFFER,
             &src_texture->resource, src_sub_resource_idx, NULL, 0, src_location);
     gl_info->gl_ops.gl.p_glReadBuffer(buffer);
     checkGLcall("glReadBuffer()");
-    context_check_fbo_status(context, GL_READ_FRAMEBUFFER);
+    wined3d_context_gl_check_fbo_status(context_gl, GL_READ_FRAMEBUFFER);
 
     if (dst_location == WINED3D_LOCATION_DRAWABLE)
     {
@@ -265,10 +268,10 @@ static void texture2d_blt_fbo(const struct wined3d_device *device, struct wined3
         buffer = GL_COLOR_ATTACHMENT0;
     }
 
-    context_apply_fbo_state_blit(context, GL_DRAW_FRAMEBUFFER,
+    wined3d_context_gl_apply_fbo_state_blit(context_gl, GL_DRAW_FRAMEBUFFER,
             &dst_texture->resource, dst_sub_resource_idx, NULL, 0, dst_location);
-    context_set_draw_buffer(context, buffer);
-    context_check_fbo_status(context, GL_DRAW_FRAMEBUFFER);
+    wined3d_context_gl_set_draw_buffer(context_gl, buffer);
+    wined3d_context_gl_check_fbo_status(context_gl, GL_DRAW_FRAMEBUFFER);
     context_invalidate_state(context, STATE_FRAMEBUFFER);
 
     gl_info->gl_ops.gl.p_glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
@@ -709,6 +712,7 @@ static void texture2d_read_from_framebuffer(struct wined3d_texture *texture, uns
     const struct wined3d_format_gl *format_gl;
     struct wined3d_texture *restore_texture;
     const struct wined3d_gl_info *gl_info;
+    struct wined3d_context_gl *context_gl;
     unsigned int row_pitch, slice_pitch;
     unsigned int width, height, level;
     struct wined3d_bo_address data;
@@ -726,18 +730,19 @@ static void texture2d_read_from_framebuffer(struct wined3d_texture *texture, uns
         context = context_acquire(device, texture, sub_resource_idx);
     else
         restore_texture = NULL;
+    context_gl = wined3d_context_gl(context);
     gl_info = context->gl_info;
 
     if (src_location != resource->draw_binding)
     {
-        context_apply_fbo_state_blit(context, GL_READ_FRAMEBUFFER,
+        wined3d_context_gl_apply_fbo_state_blit(context_gl, GL_READ_FRAMEBUFFER,
                 resource, sub_resource_idx, NULL, 0, src_location);
-        context_check_fbo_status(context, GL_READ_FRAMEBUFFER);
+        wined3d_context_gl_check_fbo_status(context_gl, GL_READ_FRAMEBUFFER);
         context_invalidate_state(context, STATE_FRAMEBUFFER);
     }
     else
     {
-        wined3d_context_gl_apply_blit_state(wined3d_context_gl(context), device);
+        wined3d_context_gl_apply_blit_state(context_gl, device);
     }
 
     /* Select the correct read buffer, and give some debug output.
@@ -749,7 +754,7 @@ static void texture2d_read_from_framebuffer(struct wined3d_texture *texture, uns
         /* Mapping the primary render target which is not on a swapchain.
          * Read from the back buffer. */
         TRACE("Mapping offscreen render target.\n");
-        gl_info->gl_ops.gl.p_glReadBuffer(context_get_offscreen_gl_buffer(context));
+        gl_info->gl_ops.gl.p_glReadBuffer(wined3d_context_gl_get_offscreen_gl_buffer(context_gl));
         src_is_upside_down = TRUE;
     }
     else
@@ -840,6 +845,7 @@ void texture2d_load_fb_texture(struct wined3d_texture_gl *texture_gl,
 {
     struct wined3d_texture *restore_texture;
     const struct wined3d_gl_info *gl_info;
+    struct wined3d_context_gl *context_gl;
     struct wined3d_resource *resource;
     unsigned int restore_idx, level;
     struct wined3d_device *device;
@@ -853,17 +859,18 @@ void texture2d_load_fb_texture(struct wined3d_texture_gl *texture_gl,
         context = context_acquire(device, &texture_gl->t, sub_resource_idx);
     else
         restore_texture = NULL;
+    context_gl = wined3d_context_gl(context);
 
     gl_info = context->gl_info;
     device_invalidate_state(device, STATE_FRAMEBUFFER);
 
     wined3d_texture_prepare_texture(&texture_gl->t, context, srgb);
-    wined3d_texture_gl_bind_and_dirtify(texture_gl, wined3d_context_gl(context), srgb);
+    wined3d_texture_gl_bind_and_dirtify(texture_gl, context_gl, srgb);
 
     TRACE("Reading back offscreen render target %p, %u.\n", texture_gl, sub_resource_idx);
 
     if (wined3d_resource_is_offscreen(resource))
-        gl_info->gl_ops.gl.p_glReadBuffer(context_get_offscreen_gl_buffer(context));
+        gl_info->gl_ops.gl.p_glReadBuffer(wined3d_context_gl_get_offscreen_gl_buffer(context_gl));
     else
         gl_info->gl_ops.gl.p_glReadBuffer(wined3d_texture_get_gl_buffer(&texture_gl->t));
     checkGLcall("glReadBuffer");
@@ -917,7 +924,7 @@ static void fb_copy_to_texture_direct(struct wined3d_texture_gl *dst_texture, un
     {
         TRACE("Reading from an offscreen target\n");
         upsidedown = !upsidedown;
-        gl_info->gl_ops.gl.p_glReadBuffer(context_get_offscreen_gl_buffer(context));
+        gl_info->gl_ops.gl.p_glReadBuffer(wined3d_context_gl_get_offscreen_gl_buffer(context_gl));
     }
     else
     {
@@ -1031,7 +1038,7 @@ static void fb_copy_to_texture_hwstretch(struct wined3d_texture_gl *dst_texture,
     wined3d_context_gl_apply_ffp_blit_state(context_gl, device);
     wined3d_texture_load(&dst_texture->t, context, FALSE);
 
-    offscreen_buffer = context_get_offscreen_gl_buffer(context);
+    offscreen_buffer = wined3d_context_gl_get_offscreen_gl_buffer(context_gl);
     src_level = src_sub_resource_idx % src_texture->t.level_count;
     src_width = wined3d_texture_get_level_width(&src_texture->t, src_level);
     src_height = wined3d_texture_get_level_height(&src_texture->t, src_level);
@@ -1178,7 +1185,7 @@ static void fb_copy_to_texture_hwstretch(struct wined3d_texture_gl *dst_texture,
     gl_info->gl_ops.gl.p_glTexParameteri(texture_target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     gl_info->gl_ops.gl.p_glTexParameteri(texture_target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    context_set_draw_buffer(context, drawBuffer);
+    wined3d_context_gl_set_draw_buffer(context_gl, drawBuffer);
     gl_info->gl_ops.gl.p_glReadBuffer(drawBuffer);
 
     gl_info->gl_ops.gl.p_glBegin(GL_QUADS);
@@ -1541,9 +1548,7 @@ BOOL texture2d_load_texture(struct wined3d_texture *texture, unsigned int sub_re
     }
 
     level = sub_resource_idx % texture->level_count;
-    width = wined3d_texture_get_level_width(texture, level);
-    height = wined3d_texture_get_level_height(texture, level);
-    wined3d_box_set(&src_box, 0, 0, width, height, 0, 1);
+    wined3d_texture_get_level_box(texture, level, &src_box);
 
     if (!depth && sub_resource->locations & (WINED3D_LOCATION_TEXTURE_SRGB | WINED3D_LOCATION_TEXTURE_RGB)
             && (texture->resource.format_flags & WINED3DFMT_FLAG_FBO_ATTACHABLE_SRGB)
@@ -1553,7 +1558,7 @@ BOOL texture2d_load_texture(struct wined3d_texture *texture, unsigned int sub_re
     {
         RECT src_rect;
 
-        SetRect(&src_rect, 0, 0, width, height);
+        SetRect(&src_rect, src_box.left, src_box.top, src_box.right, src_box.bottom);
         if (srgb)
             texture2d_blt_fbo(device, context, WINED3D_TEXF_POINT,
                     texture, sub_resource_idx, WINED3D_LOCATION_TEXTURE_RGB, &src_rect,
@@ -1574,7 +1579,7 @@ BOOL texture2d_load_texture(struct wined3d_texture *texture, unsigned int sub_re
         DWORD dst_location = srgb ? WINED3D_LOCATION_TEXTURE_SRGB : WINED3D_LOCATION_TEXTURE_RGB;
         RECT src_rect;
 
-        SetRect(&src_rect, 0, 0, width, height);
+        SetRect(&src_rect, src_box.left, src_box.top, src_box.right, src_box.bottom);
         if (fbo_blitter_supported(WINED3D_BLIT_OP_COLOR_BLIT, gl_info,
                 &texture->resource, src_location, &texture->resource, dst_location))
             texture2d_blt_fbo(device, context, WINED3D_TEXF_POINT, texture, sub_resource_idx,
@@ -1633,6 +1638,8 @@ BOOL texture2d_load_texture(struct wined3d_texture *texture, unsigned int sub_re
     wined3d_texture_get_memory(texture, sub_resource_idx, &data, sub_resource->locations);
     if (conversion)
     {
+        width = src_box.right - src_box.left;
+        height = src_box.bottom - src_box.top;
         wined3d_format_calculate_pitch(format, device->surface_alignment,
                 width, height, &dst_row_pitch, &dst_slice_pitch);
 
@@ -2156,6 +2163,7 @@ static DWORD ffp_blitter_blit(struct wined3d_blitter *blitter, enum wined3d_blit
         const struct wined3d_color_key *color_key, enum wined3d_texture_filter_type filter)
 {
     struct wined3d_texture_gl *src_texture_gl = wined3d_texture_gl(src_texture);
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     const struct wined3d_gl_info *gl_info = context->gl_info;
     struct wined3d_resource *src_resource, *dst_resource;
     struct wined3d_texture *staging_texture = NULL;
@@ -2228,7 +2236,7 @@ static DWORD ffp_blitter_blit(struct wined3d_blitter *blitter, enum wined3d_blit
         wined3d_texture_load(src_texture, context, FALSE);
     }
 
-    wined3d_context_gl_apply_ffp_blit_state(wined3d_context_gl(context), device);
+    wined3d_context_gl_apply_ffp_blit_state(context_gl, device);
 
     if (dst_location == WINED3D_LOCATION_DRAWABLE)
     {
@@ -2251,10 +2259,10 @@ static DWORD ffp_blitter_blit(struct wined3d_blitter *blitter, enum wined3d_blit
             TRACE("Destination texture %p is offscreen.\n", dst_texture);
             buffer = GL_COLOR_ATTACHMENT0;
         }
-        context_apply_fbo_state_blit(context, GL_DRAW_FRAMEBUFFER,
+        wined3d_context_gl_apply_fbo_state_blit(context_gl, GL_DRAW_FRAMEBUFFER,
                 dst_resource, dst_sub_resource_idx, NULL, 0, dst_location);
-        context_set_draw_buffer(context, buffer);
-        context_check_fbo_status(context, GL_DRAW_FRAMEBUFFER);
+        wined3d_context_gl_set_draw_buffer(context_gl, buffer);
+        wined3d_context_gl_check_fbo_status(context_gl, GL_DRAW_FRAMEBUFFER);
         context_invalidate_state(context, STATE_FRAMEBUFFER);
     }
 

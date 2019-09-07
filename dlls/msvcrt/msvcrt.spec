@@ -902,7 +902,7 @@
 @ cdecl _seterrormode(long)
 @ cdecl -arch=i386,x86_64,arm,arm64 -norelay _setjmp(ptr) MSVCRT__setjmp
 @ cdecl -arch=i386 -norelay _setjmp3(ptr long) MSVCRT__setjmp3
-@ cdecl -arch=x86_64,arm -norelay _setjmpex(ptr ptr) MSVCRT__setjmpex
+@ cdecl -arch=x86_64,arm,arm64 -norelay _setjmpex(ptr ptr) MSVCRT__setjmpex
 @ cdecl _setmaxstdio(long) MSVCRT__setmaxstdio
 @ cdecl _setmbcp(long)
 @ cdecl _setmode(long long) MSVCRT__setmode
@@ -1288,6 +1288,8 @@
 @ cdecl fgetws(ptr long ptr) MSVCRT_fgetws
 @ cdecl floor(double) MSVCRT_floor
 @ cdecl -arch=arm,x86_64,arm64 floorf(float) MSVCRT_floorf
+@ cdecl fma(double double double) MSVCRT_fma
+@ cdecl -arch=arm,x86_64,arm64 fmaf(float float float) MSVCRT_fmaf
 @ cdecl fmod(double double) MSVCRT_fmod
 @ cdecl -arch=arm,x86_64,arm64 fmodf(float float) MSVCRT_fmodf
 @ cdecl fopen(str str) MSVCRT_fopen

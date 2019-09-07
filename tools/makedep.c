@@ -2202,7 +2202,7 @@ static struct strarray get_default_imports( const struct makefile *make )
     struct strarray ret = empty_strarray;
 
     if (strarray_exists( &make->extradllflags, "-nodefaultlibs" )) return ret;
-    if (strarray_exists( &make->extradllflags, "-mno-cygwin" )) strarray_add( &ret, "msvcrt" );
+    if (make->use_msvcrt) strarray_add( &ret, "msvcrt" );
     strarray_add( &ret, "winecrt0" );
     if (make->is_win16) strarray_add( &ret, "kernel" );
     strarray_add( &ret, "kernel32" );
@@ -2406,6 +2406,7 @@ static void output_install_rules( struct makefile *make, enum install_rules rule
         const char *file = files.str[i];
         switch (*files.str[i + 1])
         {
+        case 'c':  /* cross-compiled program */
         case 'd':  /* data file */
         case 'p':  /* program file */
         case 's':  /* script */
@@ -3221,9 +3222,11 @@ static void output_module( struct makefile *make )
         {
             strarray_add( &make->clean_files, strmake( "lib%s.def", make->importlib ));
             output( "%s.def: %s %s\n", importlib_path, tools_path( make, "winebuild" ), spec_file );
-            output( "\t%s -w --def -o $@ --export %s", tools_path( make, "winebuild" ), spec_file );
+            output( "\t%s -w --def -o $@", tools_path( make, "winebuild" ) );
             output_filenames( target_flags );
             if (make->is_win16) output_filename( "-m16" );
+            output_filename( "--export" );
+            output_filename( spec_file );
             output( "\n" );
             add_install_rule( make, make->importlib,
                               strmake( "lib%s.def", make->importlib ),
@@ -3240,8 +3243,11 @@ static void output_module( struct makefile *make )
             output( "%s.a: %s %s", importlib_path, tools_path( make, "winebuild" ), spec_file );
             output_filenames_obj_dir( make, make->implib_objs );
             output( "\n" );
-            output( "\t%s -w --implib -o $@ --export %s", tools_path( make, "winebuild" ), spec_file );
+            output( "\t%s -w --implib -o $@", tools_path( make, "winebuild" ) );
             output_filenames( target_flags );
+            if (make->is_win16) output_filename( "-m16" );
+            output_filename( "--export" );
+            output_filename( spec_file );
             output_filenames_obj_dir( make, make->implib_objs );
             output( "\n" );
             add_install_rule( make, make->importlib,
@@ -3264,8 +3270,10 @@ static void output_module( struct makefile *make )
             output( ": %s %s", tools_path( make, "winebuild" ), spec_file );
             output_filenames_obj_dir( make, cross_files );
             output( "\n" );
-            output( "\t%s -b %s -w --implib -o $@ --export %s",
-                    tools_path( make, "winebuild" ), crosstarget, spec_file );
+            output( "\t%s -b %s -w --implib -o $@", tools_path( make, "winebuild" ), crosstarget );
+            if (make->is_win16) output_filename( "-m16" );
+            output_filename( "--export" );
+            output_filename( spec_file );
             output_filenames_obj_dir( make, cross_files );
             output( "\n" );
         }
@@ -3553,9 +3561,13 @@ static void output_subdirs( struct makefile *make )
                 }
                 else
                 {
-                    strarray_add( &build_deps, strmake( "%s.a", importlib_path ));
-                    if (needs_delay_lib( submake )) output( "%s.delay.a ", importlib_path );
+                    if (needs_delay_lib( submake ))
+                    {
+                        output( "%s.delay.a ", importlib_path );
+                        strarray_add( &build_deps, strmake( "%s.delay.a", importlib_path ));
+                    }
                     output( "%s.a: %s", importlib_path, spec_file );
+                    strarray_add( &build_deps, strmake( "%s.a", importlib_path ));
                 }
                 output_filename( tools_path( make, "winebuild" ));
                 output( "\n" );
@@ -3568,20 +3580,26 @@ static void output_subdirs( struct makefile *make )
                 output( "\n" );
                 if (crosstarget && (needs_cross_lib( submake ) || needs_delay_lib( submake )))
                 {
-                    if (needs_cross_lib( submake )) output_filename( strmake( "%s.cross.a", importlib_path ));
-                    if (needs_delay_lib( submake )) output_filename( strmake( "%s.delay.a", importlib_path ));
+                    if (needs_cross_lib( submake ))
+                    {
+                        output_filename( strmake( "%s.cross.a", importlib_path ));
+                        strarray_add( &build_deps, strmake( "%s.cross.a", importlib_path ));
+                    }
+                    if (needs_delay_lib( submake ))
+                    {
+                        output_filename( strmake( "%s.delay.a", importlib_path ));
+                        strarray_add( &build_deps, strmake( "%s.delay.a", importlib_path ));
+                    }
                     output( ": %s", spec_file );
                     output_filename( tools_path( make, "winebuild" ));
                     output( "\n" );
                     output( "\t%s -b %s -w -o $@", tools_path( make, "winebuild" ), crosstarget );
+                    if (submake->is_win16) output_filename( "-m16" );
                     output_filename( "--implib" );
                     output_filename( "--export" );
                     output_filename( spec_file );
                     output( "\n" );
-                    strarray_add( &build_deps, strmake( "%s.cross.a", importlib_path ));
                 }
-                if (needs_delay_lib( submake ))
-                    strarray_add( &build_deps, strmake( "%s.delay.a", importlib_path ));
             }
             strarray_addall( &symlinks, output_importlib_symlinks( make, submake ));
         }
@@ -4119,10 +4137,6 @@ static void load_sources( struct makefile *make )
     make->is_exe     = strarray_exists( &make->extradllflags, "-mconsole" ) ||
                        strarray_exists( &make->extradllflags, "-mwindows" );
 
-    for (i = 0; i < make->imports.count && !make->use_msvcrt; i++)
-        make->use_msvcrt = !strncmp( make->imports.str[i], "msvcr", 5 ) ||
-                           !strcmp( make->imports.str[i], "ucrtbase" );
-
     if (make->module && !make->install_lib.count && !make->install_dev.count)
     {
         if (make->importlib) strarray_add( &make->install_dev, make->importlib );
@@ -4170,19 +4184,14 @@ static void load_sources( struct makefile *make )
     LIST_FOR_EACH_ENTRY( file, &make->includes, struct incl_file, entry ) parse_file( make, file, 0 );
     LIST_FOR_EACH_ENTRY( file, &make->sources, struct incl_file, entry ) get_dependencies( file, file );
 
-    if (crosstarget && !make->is_win16 && !strarray_exists( &make->imports, "kernel" ))
-    {
-        make->is_cross = (make->testdll ||
-                          strarray_exists( &make->extradllflags, "-mno-cygwin" ) ||
-                          !has_object_file( make ));
-    }
+    if (crosstarget) make->is_cross = (make->testdll || make->use_msvcrt || !has_object_file( make ));
 
     if (make->is_cross)
     {
         for (i = 0; i < make->imports.count; i++)
             strarray_add_uniq( &cross_import_libs, make->imports.str[i] );
-        if (strarray_exists( &make->extradllflags, "-mno-cygwin" ))
-            strarray_add_uniq( &cross_import_libs, "msvcrt" );
+        if (make->use_msvcrt) strarray_add_uniq( &cross_import_libs, "msvcrt" );
+        if (make->is_win16) strarray_add_uniq( &cross_import_libs, "kernel" );
         strarray_add_uniq( &cross_import_libs, "winecrt0" );
         strarray_add_uniq( &cross_import_libs, "kernel32" );
         strarray_add_uniq( &cross_import_libs, "ntdll" );

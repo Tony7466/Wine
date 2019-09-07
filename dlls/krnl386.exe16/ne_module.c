@@ -921,6 +921,7 @@ static HMODULE16 NE_DoLoadBuiltinModule( const IMAGE_DOS_HEADER *mz_header, cons
     }
 
     patch_code_segment( pModule );
+    *(void **)mz_header->e_res2 = &wine_ldt_copy;
 
     return hInstance;
 }
@@ -1234,8 +1235,6 @@ DWORD NE_StartTask(void)
         context.SegCs  = GlobalHandleToSel16(pSegTable[SELECTOROF(pModule->ne_csip) - 1].hSeg);
         context.SegDs  = GlobalHandleToSel16(pTask->hInstance);
         context.SegEs  = pTask->hPDB;
-        context.SegFs  = wine_get_fs();
-        context.SegGs  = wine_get_gs();
         context.Eip    = OFFSETOF(pModule->ne_csip);
         context.Ebx    = pModule->ne_stack;
         context.Ecx    = pModule->ne_heap;
@@ -2051,7 +2050,7 @@ void WINAPI MapHInstSL16( CONTEXT *context )
  */
 __ASM_STDCALL_FUNC( MapHInstLS, 0,
                    "pushl %eax\n\t"
-                   "call " __ASM_NAME("MapHModuleLS") __ASM_STDCALL(4) "\n\t"
+                   "call " __ASM_STDCALL("MapHModuleLS",4) "\n\t"
                    "ret" )
 
 /***************************************************************************
@@ -2059,7 +2058,7 @@ __ASM_STDCALL_FUNC( MapHInstLS, 0,
  */
 __ASM_STDCALL_FUNC( MapHInstSL, 0,
                    "pushl %eax\n\t"
-                   "call " __ASM_NAME("MapHModuleSL") __ASM_STDCALL(4) "\n\t"
+                   "call " __ASM_STDCALL("MapHModuleSL",4) "\n\t"
                    "ret" )
 
 /***************************************************************************
@@ -2069,7 +2068,7 @@ __ASM_STDCALL_FUNC( MapHInstLS_PN, 0,
                    "testl %eax,%eax\n\t"
                    "jz 1f\n\t"
                    "pushl %eax\n\t"
-                   "call " __ASM_NAME("MapHModuleLS") __ASM_STDCALL(4) "\n"
+                   "call " __ASM_STDCALL("MapHModuleLS",4) "\n"
                    "1:\tret" )
 
 /***************************************************************************
@@ -2079,5 +2078,5 @@ __ASM_STDCALL_FUNC( MapHInstSL_PN, 0,
                    "andl $0xffff,%eax\n\t"
                    "jz 1f\n\t"
                    "pushl %eax\n\t"
-                   "call " __ASM_NAME("MapHModuleSL") __ASM_STDCALL(4) "\n"
+                   "call " __ASM_STDCALL("MapHModuleSL",4) "\n"
                    "1:\tret" )
