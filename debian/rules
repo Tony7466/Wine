@@ -47,6 +47,9 @@ export DEB_CFLAGS_MAINT_APPEND+=-Wno-unused-function
 # ignore warning about deprecated CUPS API for now
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-deprecated-declarations
 
+# ignore all compiler warnings for now
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-error
+
 # configure options
 CONFLAGS=--with-gnutls \
          --without-hal \
