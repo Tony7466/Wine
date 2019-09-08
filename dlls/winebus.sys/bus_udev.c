@@ -90,7 +90,6 @@ WINE_DEFAULT_DEBUG_CHANNEL(plugplay);
 WINE_DECLARE_DEBUG_CHANNEL(hid_report);
 
 static struct udev *udev_context = NULL;
-static DRIVER_OBJECT *udev_driver_obj = NULL;
 static DWORD disable_hidraw = 0;
 static DWORD disable_input = 0;
 
@@ -1214,13 +1213,13 @@ static void try_add_device(struct udev_device *dev)
 
     if (strcmp(subsystem, "hidraw") == 0)
     {
-        device = bus_create_hid_device(udev_driver_obj, hidraw_busidW, vid, pid, input, version, 0, serial, is_gamepad,
+        device = bus_create_hid_device(hidraw_busidW, vid, pid, input, version, 0, serial, is_gamepad,
                                        &GUID_DEVCLASS_HIDRAW, &hidraw_vtbl, sizeof(struct platform_private));
     }
 #ifdef HAS_PROPER_INPUT_HEADER
     else if (strcmp(subsystem, "input") == 0)
     {
-        device = bus_create_hid_device(udev_driver_obj, lnxev_busidW, vid, pid, input, version, 0, serial, is_gamepad,
+        device = bus_create_hid_device(lnxev_busidW, vid, pid, input, version, 0, serial, is_gamepad,
                                        &GUID_DEVCLASS_LINUXEVENT, &lnxev_vtbl, sizeof(struct wine_input_private));
     }
 #endif
@@ -1452,7 +1451,7 @@ void udev_driver_unload( void )
     TRACE("Unload Driver\n");
 }
 
-NTSTATUS WINAPI udev_driver_init(DRIVER_OBJECT *driver, UNICODE_STRING *registry_path)
+NTSTATUS udev_driver_init(void)
 {
     HANDLE events[2];
     DWORD result;
@@ -1461,24 +1460,18 @@ NTSTATUS WINAPI udev_driver_init(DRIVER_OBJECT *driver, UNICODE_STRING *registry
     static const WCHAR input_disabledW[] = {'D','i','s','a','b','l','e','I','n','p','u','t',0};
     static const UNICODE_STRING input_disabled = {sizeof(input_disabledW) - sizeof(WCHAR), sizeof(input_disabledW), (WCHAR*)input_disabledW};
 
-    TRACE("(%p, %s)\n", driver, debugstr_w(registry_path->Buffer));
-
     if (!(udev_context = udev_new()))
     {
         ERR("Can't create udev object\n");
         return STATUS_UNSUCCESSFUL;
     }
 
-    udev_driver_obj = driver;
-    driver->MajorFunction[IRP_MJ_PNP] = common_pnp_dispatch;
-    driver->MajorFunction[IRP_MJ_INTERNAL_DEVICE_CONTROL] = hid_internal_dispatch;
-
-    disable_hidraw = check_bus_option(registry_path, &hidraw_disabled, 0);
+    disable_hidraw = check_bus_option(&hidraw_disabled, 0);
     if (disable_hidraw)
         TRACE("UDEV hidraw devices disabled in registry\n");
 
 #ifdef HAS_PROPER_INPUT_HEADER
-    disable_input = check_bus_option(registry_path, &input_disabled, 0);
+    disable_input = check_bus_option(&input_disabled, 0);
     if (disable_input)
         TRACE("UDEV input devices disabled in registry\n");
 #endif
@@ -1504,13 +1497,12 @@ error:
     ERR("Failed to initialize udev device thread\n");
     udev_unref(udev_context);
     udev_context = NULL;
-    udev_driver_obj = NULL;
     return STATUS_UNSUCCESSFUL;
 }
 
 #else
 
-NTSTATUS WINAPI udev_driver_init(DRIVER_OBJECT *driver, UNICODE_STRING *registry_path)
+NTSTATUS udev_driver_init(void)
 {
     WARN("Wine was compiled without UDEV support\n");
     return STATUS_NOT_IMPLEMENTED;

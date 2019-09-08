@@ -18,13 +18,10 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-
 #include <stdarg.h>
 #define NONAMELESSUNION
 #define NONAMELESSSTRUCT
 #include "hid.h"
-#include "wine/unicode.h"
 #include "winreg.h"
 #include "winuser.h"
 #include "setupapi.h"
@@ -50,7 +47,7 @@ NTSTATUS HID_CreateDevice(DEVICE_OBJECT *native_device, HID_MINIDRIVER_REGISTRAT
     NTSTATUS status;
     BASE_DEVICE_EXTENSION *ext;
 
-    sprintfW(dev_name, device_name_fmtW, driver->DriverObject, native_device);
+    swprintf(dev_name, ARRAY_SIZE(dev_name), device_name_fmtW, driver->DriverObject, native_device);
     RtlInitUnicodeString( &nameW, dev_name );
 
     TRACE("Create base hid device %s\n", debugstr_w(dev_name));
@@ -78,6 +75,8 @@ NTSTATUS HID_CreateDevice(DEVICE_OBJECT *native_device, HID_MINIDRIVER_REGISTRAT
 
 NTSTATUS HID_LinkDevice(DEVICE_OBJECT *device)
 {
+    static const WCHAR backslashW[] = {'\\',0};
+    WCHAR device_instance_id[MAX_DEVICE_ID_LEN];
     SP_DEVINFO_DATA Data;
     UNICODE_STRING nameW;
     NTSTATUS status;
@@ -90,6 +89,10 @@ NTSTATUS HID_LinkDevice(DEVICE_OBJECT *device)
 
     RtlInitUnicodeString( &nameW, ext->device_name);
 
+    lstrcpyW(device_instance_id, ext->device_id);
+    lstrcatW(device_instance_id, backslashW);
+    lstrcatW(device_instance_id, ext->instance_id);
+
     devinfo = SetupDiCreateDeviceInfoList(&GUID_DEVCLASS_HIDCLASS, NULL);
     if (devinfo == INVALID_HANDLE_VALUE)
     {
@@ -97,7 +100,7 @@ NTSTATUS HID_LinkDevice(DEVICE_OBJECT *device)
         return STATUS_UNSUCCESSFUL;
     }
     Data.cbSize = sizeof(Data);
-    if (SetupDiCreateDeviceInfoW(devinfo, ext->instance_id, &GUID_DEVCLASS_HIDCLASS, NULL, NULL, DICD_INHERIT_CLASSDRVS, &Data))
+    if (SetupDiCreateDeviceInfoW(devinfo, device_instance_id, &GUID_DEVCLASS_HIDCLASS, NULL, NULL, DICD_INHERIT_CLASSDRVS, &Data))
     {
         if (!SetupDiRegisterDeviceInfo(devinfo, &Data, 0, NULL, NULL, NULL))
         {
@@ -171,8 +174,7 @@ static void WINAPI read_cancel_routine(DEVICE_OBJECT *device, IRP *irp)
     IoCompleteRequest(irp, IO_NO_INCREMENT);
 }
 
-
-void HID_DeleteDevice(HID_MINIDRIVER_REGISTRATION *driver, DEVICE_OBJECT *device)
+void HID_DeleteDevice(DEVICE_OBJECT *device)
 {
     BASE_DEVICE_EXTENSION *ext;
     IRP *irp;

@@ -363,6 +363,11 @@ static void dump_irp_params( const char *prefix, const irp_params_t *data )
         dump_uint64( ",obj=", &data->free.obj );
         fputc( '}', stderr );
         break;
+    case IRP_CALL_CANCEL:
+        fprintf( stderr, "%s{CANCEL", prefix );
+        dump_uint64( ",irp=", &data->cancel.irp );
+        fputc( '}', stderr );
+        break;
     }
 }
 
@@ -4282,6 +4287,7 @@ static void dump_get_next_device_request_request( const struct get_next_device_r
     fprintf( stderr, " manager=%04x", req->manager );
     fprintf( stderr, ", prev=%04x", req->prev );
     fprintf( stderr, ", status=%08x", req->status );
+    dump_uint64( ", user_ptr=", &req->user_ptr );
 }
 
 static void dump_get_next_device_request_reply( const struct get_next_device_request_reply *req )

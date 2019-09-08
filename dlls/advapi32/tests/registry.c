@@ -42,6 +42,7 @@ static const char * sTestpath2 = "%FOO%\\subdir1";
 static const DWORD ptr_size = 8 * sizeof(void*);
 
 static DWORD (WINAPI *pRegGetValueA)(HKEY,LPCSTR,LPCSTR,DWORD,LPDWORD,PVOID,LPDWORD);
+static DWORD (WINAPI *pRegGetValueW)(HKEY,LPCWSTR,LPCWSTR,DWORD,LPDWORD,PVOID,LPDWORD);
 static LONG (WINAPI *pRegCopyTreeA)(HKEY,const char *,HKEY);
 static LONG (WINAPI *pRegDeleteTreeA)(HKEY,const char *);
 static DWORD (WINAPI *pRegDeleteKeyExA)(HKEY,LPCSTR,REGSAM,DWORD);
@@ -53,6 +54,8 @@ static LONG (WINAPI *pRegDeleteKeyValueA)(HKEY,LPCSTR,LPCSTR);
 static LONG (WINAPI *pRegSetKeyValueW)(HKEY,LPCWSTR,LPCWSTR,DWORD,const void*,DWORD);
 static LONG (WINAPI *pRegLoadMUIStringA)(HKEY,LPCSTR,LPSTR,DWORD,LPDWORD,DWORD,LPCSTR);
 static LONG (WINAPI *pRegLoadMUIStringW)(HKEY,LPCWSTR,LPWSTR,DWORD,LPDWORD,DWORD,LPCWSTR);
+static DWORD (WINAPI *pEnumDynamicTimeZoneInformation)(const DWORD,
+                                                       DYNAMIC_TIME_ZONE_INFORMATION*);
 
 static BOOL limited_user;
 
@@ -128,6 +131,18 @@ static const char *wine_debugstr_an( const char *str, int n )
     return res;
 }
 
+static const char *dbgstr_SYSTEMTIME(const SYSTEMTIME *st)
+{
+    static int index;
+    static char buf[2][64];
+
+    index %= ARRAY_SIZE(buf);
+    sprintf(buf[index], "%02d-%02d-%04d %02d:%02d:%02d.%03d",
+            st->wMonth, st->wDay, st->wYear,
+            st->wHour, st->wMinute, st->wSecond, st->wMilliseconds);
+    return buf[index++];
+}
+
 #define ADVAPI32_GET_PROC(func) \
     p ## func = (void*)GetProcAddress(hadvapi32, #func)
 
@@ -139,6 +154,7 @@ static void InitFunctionPtrs(void)
 
     /* This function was introduced with Windows 2003 SP1 */
     ADVAPI32_GET_PROC(RegGetValueA);
+    ADVAPI32_GET_PROC(RegGetValueW);
     ADVAPI32_GET_PROC(RegCopyTreeA);
     ADVAPI32_GET_PROC(RegDeleteTreeA);
     ADVAPI32_GET_PROC(RegDeleteKeyExA);
@@ -146,6 +162,7 @@ static void InitFunctionPtrs(void)
     ADVAPI32_GET_PROC(RegSetKeyValueW);
     ADVAPI32_GET_PROC(RegLoadMUIStringA);
     ADVAPI32_GET_PROC(RegLoadMUIStringW);
+    ADVAPI32_GET_PROC(EnumDynamicTimeZoneInformation);
 
     pIsWow64Process = (void *)GetProcAddress( hkernel32, "IsWow64Process" );
     pRtlFormatCurrentUserKeyPath = (void *)GetProcAddress( hntdll, "RtlFormatCurrentUserKeyPath" );
@@ -3836,17 +3853,41 @@ todo_wine
 
 static void test_RegLoadMUIString(void)
 {
-    HMODULE hUser32, hResDll;
+    HMODULE hUser32, hResDll, hFile;
     int (WINAPI *pLoadStringW)(HMODULE, UINT, WCHAR *, int);
     LONG ret;
     HKEY hkey;
     DWORD type, size, text_size;
     UINT i;
     char buf[64], *p, sysdir[MAX_PATH];
+    char with_env_var[128], filename[MAX_PATH], tmp_path[MAX_PATH];
     WCHAR textW[64], bufW[64];
     WCHAR curdirW[MAX_PATH], sysdirW[MAX_PATH];
     const static char tz_value[] = "MUI_Std";
     const static WCHAR tz_valueW[] = {'M','U','I','_','S','t','d', 0};
+    struct {
+        const char* value;
+        DWORD type;
+        BOOL use_sysdir;
+        DWORD expected;
+        DWORD broken_ret;
+    } test_case[] = {
+        /* 0 */
+        { "",                  REG_SZ,        FALSE, ERROR_INVALID_DATA },
+        { "not a MUI string",  REG_SZ,        FALSE, ERROR_INVALID_DATA },
+        { "@unknown.dll",      REG_SZ,        TRUE,  ERROR_INVALID_DATA },
+        { "@unknown.dll,-10",  REG_SZ,        TRUE,  ERROR_FILE_NOT_FOUND },
+        /*  4 */
+        { with_env_var,        REG_SZ,        FALSE, ERROR_SUCCESS },
+        { with_env_var,        REG_EXPAND_SZ, FALSE, ERROR_SUCCESS },
+        { "%WineMuiTest1%",    REG_EXPAND_SZ, TRUE,  ERROR_INVALID_DATA },
+        { "@%WineMuiTest2%",   REG_EXPAND_SZ, TRUE,  ERROR_SUCCESS },
+        /*  8 */
+        { "@%WineMuiExe%,a",   REG_SZ,        FALSE, ERROR_INVALID_DATA },
+        { "@%WineMuiExe%,-4",  REG_SZ,        FALSE, ERROR_NOT_FOUND, ERROR_FILE_NOT_FOUND },
+        { "@%WineMuiExe%,-39", REG_SZ,        FALSE, ERROR_RESOURCE_NAME_NOT_FOUND },
+        { "@%WineMuiDat%,-16", REG_EXPAND_SZ, FALSE, ERROR_BAD_EXE_FORMAT, ERROR_FILE_NOT_FOUND },
+    };
 
     if (!pRegLoadMUIStringA || !pRegLoadMUIStringW)
     {
@@ -3869,6 +3910,13 @@ static void test_RegLoadMUIString(void)
     ok(ret == ERROR_SUCCESS, "got %d\n", ret);
     ok(buf[0] == '@', "got %s\n", buf);
 
+    /* setup MUI string for tests */
+    strcpy(with_env_var, "@%windir%\\system32\\");
+    strcat(with_env_var, &buf[1]);
+    SetEnvironmentVariableA("WineMuiTest1", buf);
+    SetEnvironmentVariableA("WineMuiTest2", &buf[1]);
+
+    /* load expecting text */
     p = strrchr(buf, ',');
     *p = '\0';
     i = atoi(p + 2); /* skip ',-' */
@@ -3955,7 +4003,187 @@ static void test_RegLoadMUIString(void)
     ok(ret == ERROR_CALL_NOT_IMPLEMENTED, "got %d, expected ERROR_CALL_NOT_IMPLEMENTED\n", ret);
 
     RegCloseKey(hkey);
+
+    GetModuleFileNameA(NULL, filename, ARRAY_SIZE(filename));
+    SetEnvironmentVariableA("WineMuiExe", filename);
+
+    GetTempPathA(ARRAY_SIZE(tmp_path), tmp_path);
+    GetTempFileNameA(tmp_path, "mui", 0, filename);
+    SetEnvironmentVariableA("WineMuiDat", filename);
+
+    /* write dummy data to the file, i.e. it's not a PE file. */
+    hFile = CreateFileA(filename, GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+    ok(hFile != INVALID_HANDLE_VALUE, "can't open %s\n", filename);
+    WriteFile(hFile, filename, strlen(filename), &size, NULL);
+    CloseHandle(hFile);
+
+    for (i = 0; i < ARRAY_SIZE(test_case); i++)
+    {
+        size = test_case[i].value ? strlen(test_case[i].value) + 1 : 0;
+        ret = RegSetValueExA(hkey_main, tz_value, 0, test_case[i].type,
+                             (const BYTE *)test_case[i].value, size);
+        ok(ret == ERROR_SUCCESS, "[%2u] got %d\n", i, ret);
+
+        size = 0xdeadbeef;
+        memset(bufW, 0xff, sizeof(bufW));
+        ret = pRegLoadMUIStringW(hkey_main, tz_valueW, bufW, ARRAY_SIZE(bufW),
+                                 &size, 0,
+                                 test_case[i].use_sysdir ? sysdirW : NULL);
+        ok(ret == test_case[i].expected ||
+           broken(test_case[i].value[0] == '%' && ret == ERROR_SUCCESS /* vista */) ||
+           broken(test_case[i].broken_ret && ret == test_case[i].broken_ret /* vista */),
+           "[%2u] expected %d, got %d\n", i, test_case[i].expected, ret);
+        if (ret == ERROR_SUCCESS && test_case[i].expected == ERROR_SUCCESS)
+        {
+            ok(size == text_size, "[%2u] got %u, expected %u\n", i, size, text_size);
+            ok(!memcmp(bufW, textW, size), "[%2u] got %s, expected %s\n", i,
+               wine_dbgstr_wn(bufW, size/sizeof(WCHAR)),
+               wine_dbgstr_wn(textW, text_size/sizeof(WCHAR)));
+        }
+    }
+
     SetCurrentDirectoryW(curdirW);
+    DeleteFileA(filename);
+    SetEnvironmentVariableA("WineMuiTest1", NULL);
+    SetEnvironmentVariableA("WineMuiTest2", NULL);
+    SetEnvironmentVariableA("WineMuiExe", NULL);
+    SetEnvironmentVariableA("WineMuiDat", NULL);
+}
+
+static void test_EnumDynamicTimeZoneInformation(void)
+{
+    LSTATUS status;
+    HKEY key, subkey;
+    WCHAR name[32];
+    WCHAR keyname[128];
+    WCHAR sysdir[MAX_PATH];
+    DWORD index, ret, gle, size;
+    DYNAMIC_TIME_ZONE_INFORMATION bogus_dtzi, dtzi;
+    static const WCHAR stdW[] = {'S','t','d',0};
+    static const WCHAR dltW[] = {'D','l','t',0};
+    static const WCHAR tziW[] = {'T','Z','I',0};
+    static const WCHAR mui_stdW[] = {'M','U','I','_','S','t','d',0};
+    static const WCHAR mui_dltW[] = {'M','U','I','_','D','l','t',0};
+    struct tz_reg_data
+    {
+        LONG bias;
+        LONG std_bias;
+        LONG dlt_bias;
+        SYSTEMTIME std_date;
+        SYSTEMTIME dlt_date;
+    } tz_data;
+
+    if (!pEnumDynamicTimeZoneInformation)
+    {
+        win_skip("EnumDynamicTimeZoneInformation is not supported.\n");
+        return;
+    }
+
+    if (pRegLoadMUIStringW)
+        GetSystemDirectoryW(sysdir, ARRAY_SIZE(sysdir));
+
+    SetLastError(0xdeadbeef);
+    ret = pEnumDynamicTimeZoneInformation(0, NULL);
+    gle = GetLastError();
+    ok(gle == 0xdeadbeef, "got 0x%x\n", gle);
+    ok(ret == ERROR_INVALID_PARAMETER, "got %d\n", ret);
+
+    memset(&bogus_dtzi, 0xcc, sizeof(bogus_dtzi));
+    memset(&dtzi, 0xcc, sizeof(dtzi));
+    SetLastError(0xdeadbeef);
+    ret = pEnumDynamicTimeZoneInformation(-1, &dtzi);
+    gle = GetLastError();
+    ok(gle == 0xdeadbeef, "got 0x%x\n", gle);
+    ok(ret == ERROR_NO_MORE_ITEMS, "got %d\n", ret);
+    ok(!memcmp(&dtzi, &bogus_dtzi, sizeof(dtzi)), "mismatch\n");
+
+    status = RegOpenKeyExA(HKEY_LOCAL_MACHINE,
+            "Software\\Microsoft\\Windows NT\\CurrentVersion\\Time Zones", 0,
+            KEY_ENUMERATE_SUB_KEYS|KEY_QUERY_VALUE, &key);
+    ok(status == ERROR_SUCCESS, "got %d\n", status);
+    index = 0;
+    while (!(status = RegEnumKeyW(key, index, keyname, ARRAY_SIZE(keyname))))
+    {
+        subkey = NULL;
+        status = RegOpenKeyExW(key, keyname, 0, KEY_QUERY_VALUE, &subkey);
+        ok(status == ERROR_SUCCESS, "got %d\n", status);
+
+        memset(&dtzi, 0xcc, sizeof(dtzi));
+        SetLastError(0xdeadbeef);
+        ret = pEnumDynamicTimeZoneInformation(index, &dtzi);
+        gle = GetLastError();
+        /* recently added time zones may not have MUI strings */
+        ok(gle == ERROR_SUCCESS ||
+           gle == ERROR_RESOURCE_TYPE_NOT_FOUND /* Win10 1809 32-bit */ ||
+           gle == ERROR_MUI_FILE_NOT_FOUND /* Win10 1809 64-bit */,
+            "got 0x%x\n", gle);
+        ok(ret == ERROR_SUCCESS, "got %d\n", ret);
+        ok(!lstrcmpW(dtzi.TimeZoneKeyName, keyname), "expected %s, got %s\n",
+            wine_dbgstr_w(keyname), wine_dbgstr_w(dtzi.TimeZoneKeyName));
+
+        if (gle == ERROR_SUCCESS)
+        {
+            size = sizeof(name);
+            memset(name, 0, sizeof(name));
+            if (pRegLoadMUIStringW)
+                status = pRegLoadMUIStringW(subkey, mui_stdW, name, size, &size, 0, sysdir);
+            else
+                status = pRegGetValueW(subkey, NULL, stdW, RRF_RT_REG_SZ, NULL, name, &size);
+            ok(status == ERROR_SUCCESS, "status %d name %s\n", status, wine_dbgstr_w(name));
+            ok(!memcmp(&dtzi.StandardName, name, size),
+                "expected %s, got %s\n", wine_dbgstr_w(name), wine_dbgstr_w(dtzi.StandardName));
+
+            size = sizeof(name);
+            memset(name, 0, sizeof(name));
+            if (pRegLoadMUIStringW)
+                status = pRegLoadMUIStringW(subkey, mui_dltW, name, size, &size, 0, sysdir);
+            else
+                status = pRegGetValueW(subkey, NULL, dltW, RRF_RT_REG_SZ, NULL, name, &size);
+            ok(status == ERROR_SUCCESS, "status %d name %s\n", status, wine_dbgstr_w(name));
+            ok(!memcmp(&dtzi.DaylightName, name, size),
+                "expected %s, got %s\n", wine_dbgstr_w(name), wine_dbgstr_w(dtzi.DaylightName));
+        }
+        else
+        {
+            ok(!dtzi.StandardName[0], "expected empty StandardName\n");
+            ok(!dtzi.DaylightName[0], "expected empty DaylightName\n");
+        }
+
+        ok(!dtzi.DynamicDaylightTimeDisabled, "got %d\n", dtzi.DynamicDaylightTimeDisabled);
+
+        size = sizeof(tz_data);
+        status = pRegGetValueW(key, keyname, tziW, RRF_RT_REG_BINARY, NULL, &tz_data, &size);
+        ok(status == ERROR_SUCCESS, "got %d\n", status);
+
+        ok(dtzi.Bias == tz_data.bias, "expected %d, got %d\n",
+            tz_data.bias, dtzi.Bias);
+        ok(dtzi.StandardBias == tz_data.std_bias, "expected %d, got %d\n",
+            tz_data.std_bias, dtzi.StandardBias);
+        ok(dtzi.DaylightBias == tz_data.dlt_bias, "expected %d, got %d\n",
+            tz_data.dlt_bias, dtzi.DaylightBias);
+
+        ok(!memcmp(&dtzi.StandardDate, &tz_data.std_date, sizeof(dtzi.StandardDate)),
+            "expected %s, got %s\n",
+            dbgstr_SYSTEMTIME(&tz_data.std_date), dbgstr_SYSTEMTIME(&dtzi.StandardDate));
+
+        ok(!memcmp(&dtzi.DaylightDate, &tz_data.dlt_date, sizeof(dtzi.DaylightDate)),
+            "expected %s, got %s\n",
+            dbgstr_SYSTEMTIME(&tz_data.dlt_date), dbgstr_SYSTEMTIME(&dtzi.DaylightDate));
+
+        RegCloseKey(subkey);
+        index++;
+    }
+    ok(status == ERROR_NO_MORE_ITEMS, "got %d\n", status);
+
+    memset(&dtzi, 0xcc, sizeof(dtzi));
+    SetLastError(0xdeadbeef);
+    ret = pEnumDynamicTimeZoneInformation(index, &dtzi);
+    gle = GetLastError();
+    ok(gle == 0xdeadbeef, "got 0x%x\n", gle);
+    ok(ret == ERROR_NO_MORE_ITEMS, "got %d\n", ret);
+    ok(!memcmp(&dtzi, &bogus_dtzi, sizeof(dtzi)), "mismatch\n");
+
+    RegCloseKey(key);
 }
 
 START_TEST(registry)
@@ -3995,6 +4223,7 @@ START_TEST(registry)
     test_RegNotifyChangeKeyValue();
     test_RegQueryValueExPerformanceData();
     test_RegLoadMUIString();
+    test_EnumDynamicTimeZoneInformation();
 
     /* cleanup */
     delete_key( hkey_main );

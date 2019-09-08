@@ -786,7 +786,7 @@
 @ stdcall GetProcessIdOfThread(long)
 @ stdcall GetProcessIoCounters(long ptr)
 @ stdcall GetProcessMitigationPolicy(long long ptr long)
-# @ stub GetProcessPreferredUILanguages
+@ stdcall GetProcessPreferredUILanguages(long ptr ptr ptr)
 @ stdcall GetProcessPriorityBoost(long ptr)
 @ stdcall GetProcessShutdownParameters(ptr ptr)
 # @ stub GetProcessorSystemCycleTime
@@ -858,8 +858,8 @@
 @ stdcall GetThreadPriorityBoost(long ptr)
 @ stdcall GetThreadSelectorEntry(long long ptr)
 @ stdcall GetThreadTimes(long ptr ptr ptr ptr)
-@ stdcall GetTickCount() ntdll.NtGetTickCount
-@ stdcall -ret64 GetTickCount64() ntdll.NtGetTickCount
+@ stdcall GetTickCount()
+@ stdcall -ret64 GetTickCount64()
 @ stdcall GetTimeFormatA(long long ptr str ptr long)
 @ stdcall GetTimeFormatEx(wstr long ptr wstr ptr long)
 @ stdcall GetTimeFormatW(long long ptr wstr ptr long)
@@ -1429,7 +1429,7 @@
 @ stdcall SetProcessAffinityUpdateMode(long long)
 @ stdcall SetProcessDEPPolicy(long)
 @ stdcall SetProcessMitigationPolicy(long ptr long)
-# @ stub SetProcessPreferredUILanguages
+@ stdcall SetProcessPreferredUILanguages(long ptr ptr)
 @ stdcall SetProcessPriorityBoost(long long)
 @ stdcall SetProcessShutdownParameters(long long)
 # @ stub SetProcessUserModeExceptionPolicy

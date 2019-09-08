@@ -48,6 +48,7 @@
 #include "objbase.h"
 #include "rpcproxy.h"
 #include "initguid.h"
+#include "devguid.h"
 #include "dinput_private.h"
 #include "device_private.h"
 #include "dinputd.h"
@@ -527,7 +528,7 @@ static ULONG WINAPI IDirectInputAImpl_AddRef(LPDIRECTINPUT7A iface)
     IDirectInputImpl *This = impl_from_IDirectInput7A( iface );
     ULONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE( "(%p) incrementing from %d\n", This, ref - 1);
+    TRACE( "(%p) ref %d\n", This, ref );
     return ref;
 }
 
@@ -542,7 +543,7 @@ static ULONG WINAPI IDirectInputAImpl_Release(LPDIRECTINPUT7A iface)
     IDirectInputImpl *This = impl_from_IDirectInput7A( iface );
     ULONG ref = InterlockedDecrement( &This->ref );
 
-    TRACE( "(%p) releasing from %d\n", This, ref + 1 );
+    TRACE( "(%p) ref %d\n", This, ref );
 
     if (ref == 0)
     {

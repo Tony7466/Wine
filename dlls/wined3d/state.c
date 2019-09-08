@@ -827,6 +827,7 @@ static void state_specularenable(struct wined3d_context *context, const struct w
 
 static void state_texfactor(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
 {
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     const struct wined3d_gl_info *gl_info = context->gl_info;
     struct wined3d_color color;
     unsigned int i;
@@ -840,7 +841,7 @@ static void state_texfactor(struct wined3d_context *context, const struct wined3
     {
         /* Note the WINED3D_RS value applies to all textures, but GL has one
          * per texture, so apply it now ready to be used! */
-        context_active_texture(context, gl_info, i);
+        wined3d_context_gl_active_texture(context_gl, gl_info, i);
 
         gl_info->gl_ops.gl.p_glTexEnvfv(GL_TEXTURE_ENV, GL_TEXTURE_ENV_COLOR, &color.r);
         checkGLcall("glTexEnvfv(GL_TEXTURE_ENV, GL_TEXTURE_ENV_COLOR, color);");
@@ -1296,19 +1297,18 @@ void state_fogdensity(struct wined3d_context *context, const struct wined3d_stat
 
 static void state_colormat(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
 {
-    const struct wined3d_gl_info *gl_info = context->gl_info;
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
     GLenum Parm = 0;
 
-    /* Depends on the decoded vertex declaration to read the existence of diffuse data.
-     * The vertex declaration will call this function if the fixed function pipeline is used.
-     */
-
-    if(isStateDirty(context, STATE_VDECL)) {
+    /* Depends on the decoded vertex declaration to read the existence of
+     * diffuse data. The vertex declaration will call this function if the
+     * fixed function pipeline is used. */
+    if (isStateDirty(&context_gl->c, STATE_VDECL))
         return;
-    }
 
-    context->num_untracked_materials = 0;
-    if ((context->stream_info.use_map & (1u << WINED3D_FFP_DIFFUSE))
+    context_gl->untracked_material_count = 0;
+    if ((context_gl->c.stream_info.use_map & (1u << WINED3D_FFP_DIFFUSE))
             && state->render_states[WINED3D_RS_COLORVERTEX])
     {
         TRACE("diff %d, amb %d, emis %d, spec %d\n",
@@ -1324,38 +1324,23 @@ static void state_colormat(struct wined3d_context *context, const struct wined3d
             else
                 Parm = GL_DIFFUSE;
             if (state->render_states[WINED3D_RS_EMISSIVEMATERIALSOURCE] == WINED3D_MCS_COLOR1)
-            {
-                context->untracked_materials[context->num_untracked_materials] = GL_EMISSION;
-                context->num_untracked_materials++;
-            }
+                context_gl->untracked_materials[context_gl->untracked_material_count++] = GL_EMISSION;
             if (state->render_states[WINED3D_RS_SPECULARMATERIALSOURCE] == WINED3D_MCS_COLOR1)
-            {
-                context->untracked_materials[context->num_untracked_materials] = GL_SPECULAR;
-                context->num_untracked_materials++;
-            }
+                context_gl->untracked_materials[context_gl->untracked_material_count++] = GL_SPECULAR;
         }
         else if (state->render_states[WINED3D_RS_AMBIENTMATERIALSOURCE] == WINED3D_MCS_COLOR1)
         {
             Parm = GL_AMBIENT;
             if (state->render_states[WINED3D_RS_EMISSIVEMATERIALSOURCE] == WINED3D_MCS_COLOR1)
-            {
-                context->untracked_materials[context->num_untracked_materials] = GL_EMISSION;
-                context->num_untracked_materials++;
-            }
+                context_gl->untracked_materials[context_gl->untracked_material_count++] = GL_EMISSION;
             if (state->render_states[WINED3D_RS_SPECULARMATERIALSOURCE] == WINED3D_MCS_COLOR1)
-            {
-                context->untracked_materials[context->num_untracked_materials] = GL_SPECULAR;
-                context->num_untracked_materials++;
-            }
+                context_gl->untracked_materials[context_gl->untracked_material_count++] = GL_SPECULAR;
         }
         else if (state->render_states[WINED3D_RS_EMISSIVEMATERIALSOURCE] == WINED3D_MCS_COLOR1)
         {
             Parm = GL_EMISSION;
             if (state->render_states[WINED3D_RS_SPECULARMATERIALSOURCE] == WINED3D_MCS_COLOR1)
-            {
-                context->untracked_materials[context->num_untracked_materials] = GL_SPECULAR;
-                context->num_untracked_materials++;
-            }
+                context_gl->untracked_materials[context_gl->untracked_material_count++] = GL_SPECULAR;
         }
         else if (state->render_states[WINED3D_RS_SPECULARMATERIALSOURCE] == WINED3D_MCS_COLOR1)
         {
@@ -1364,7 +1349,8 @@ static void state_colormat(struct wined3d_context *context, const struct wined3d
     }
 
     /* Nothing changed, return. */
-    if (Parm == context->tracking_parm) return;
+    if (Parm == context_gl->tracking_parm)
+        return;
 
     if (!Parm)
     {
@@ -1381,7 +1367,7 @@ static void state_colormat(struct wined3d_context *context, const struct wined3d
 
     /* Apparently calls to glMaterialfv are ignored for properties we're
      * tracking with glColorMaterial, so apply those here. */
-    switch (context->tracking_parm)
+    switch (context_gl->tracking_parm)
     {
         case GL_AMBIENT_AND_DIFFUSE:
             gl_info->gl_ops.gl.p_glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (float *)&state->material.ambient);
@@ -1420,7 +1406,7 @@ static void state_colormat(struct wined3d_context *context, const struct wined3d
             break;
     }
 
-    context->tracking_parm = Parm;
+    context_gl->tracking_parm = Parm;
 }
 
 static void state_linepattern(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
@@ -3128,8 +3114,9 @@ static void set_tex_op(const struct wined3d_gl_info *gl_info, const struct wined
 static void tex_colorop(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
 {
     unsigned int stage = (state_id - STATE_TEXTURESTAGE(0, 0)) / (WINED3D_HIGHEST_TEXTURE_STATE + 1);
-    unsigned int mapped_stage = wined3d_context_gl(context)->tex_unit_map[stage];
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     BOOL tex_used = context->fixed_function_usage_map & (1u << stage);
+    unsigned int mapped_stage = context_gl->tex_unit_map[stage];
     const struct wined3d_gl_info *gl_info = context->gl_info;
 
     TRACE("Setting color op for stage %d\n", stage);
@@ -3146,7 +3133,7 @@ static void tex_colorop(struct wined3d_context *context, const struct wined3d_st
             FIXME("Attempt to enable unsupported stage!\n");
             return;
         }
-        context_active_texture(context, gl_info, mapped_stage);
+        wined3d_context_gl_active_texture(context_gl, gl_info, mapped_stage);
     }
 
     if (stage >= context->lowest_disabled_stage)
@@ -3189,8 +3176,9 @@ static void tex_colorop(struct wined3d_context *context, const struct wined3d_st
 void tex_alphaop(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
 {
     unsigned int stage = (state_id - STATE_TEXTURESTAGE(0, 0)) / (WINED3D_HIGHEST_TEXTURE_STATE + 1);
-    unsigned int mapped_stage = wined3d_context_gl(context)->tex_unit_map[stage];
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     BOOL tex_used = context->fixed_function_usage_map & (1u << stage);
+    unsigned int mapped_stage = context_gl->tex_unit_map[stage];
     const struct wined3d_gl_info *gl_info = context->gl_info;
     DWORD op, arg1, arg2, arg0;
 
@@ -3203,7 +3191,7 @@ void tex_alphaop(struct wined3d_context *context, const struct wined3d_state *st
             FIXME("Attempt to enable unsupported stage!\n");
             return;
         }
-        context_active_texture(context, gl_info, mapped_stage);
+        wined3d_context_gl_active_texture(context_gl, gl_info, mapped_stage);
     }
 
     op = state->texture_states[stage][WINED3D_TSS_ALPHA_OP];
@@ -3288,7 +3276,8 @@ void tex_alphaop(struct wined3d_context *context, const struct wined3d_state *st
 static void transform_texture(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
 {
     unsigned int tex = (state_id - STATE_TEXTURESTAGE(0, 0)) / (WINED3D_HIGHEST_TEXTURE_STATE + 1);
-    unsigned int mapped_stage = wined3d_context_gl(context)->tex_unit_map[tex];
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
+    unsigned int mapped_stage = context_gl->tex_unit_map[tex];
     const struct wined3d_gl_info *gl_info = context->gl_info;
     struct wined3d_matrix mat;
 
@@ -3302,7 +3291,7 @@ static void transform_texture(struct wined3d_context *context, const struct wine
     if (mapped_stage == WINED3D_UNMAPPED_STAGE) return;
     if (mapped_stage >= gl_info->limits.textures) return;
 
-    context_active_texture(context, gl_info, mapped_stage);
+    wined3d_context_gl_active_texture(context_gl, gl_info, mapped_stage);
     gl_info->gl_ops.gl.p_glMatrixMode(GL_TEXTURE);
     checkGLcall("glMatrixMode(GL_TEXTURE)");
 
@@ -3335,7 +3324,7 @@ static void tex_coordindex(struct wined3d_context *context, const struct wined3d
         WARN("stage %u not mapped to a valid texture unit (%u)\n", stage, mapped_stage);
         return;
     }
-    context_active_texture(context, gl_info, mapped_stage);
+    wined3d_context_gl_active_texture(context_gl, gl_info, mapped_stage);
 
     /* Values 0-7 are indexes into the FVF tex coords - See comments in DrawPrimitive
      *
@@ -3613,7 +3602,7 @@ static void sampler(struct wined3d_context *context, const struct wined3d_state 
 
     if (mapped_stage >= gl_info->limits.graphics_samplers)
         return;
-    context_active_texture(context, gl_info, mapped_stage);
+    wined3d_context_gl_active_texture(context_gl, gl_info, mapped_stage);
 
     if (state->textures[sampler_idx])
     {

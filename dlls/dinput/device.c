@@ -1140,7 +1140,7 @@ ULONG WINAPI IDirectInputDevice2WImpl_Release(LPDIRECTINPUTDEVICE8W iface)
     IDirectInputDeviceImpl *This = impl_from_IDirectInputDevice8W(iface);
     ULONG ref = InterlockedDecrement(&(This->ref));
 
-    TRACE("(%p) releasing from %d\n", This, ref + 1);
+    TRACE("(%p) ref %d\n", This, ref);
 
     if (ref) return ref;
 
@@ -1168,7 +1168,7 @@ ULONG WINAPI IDirectInputDevice2WImpl_Release(LPDIRECTINPUTDEVICE8W iface)
 
     HeapFree(GetProcessHeap(), 0, This);
 
-    return DI_OK;
+    return ref;
 }
 
 ULONG WINAPI IDirectInputDevice2AImpl_Release(LPDIRECTINPUTDEVICE8A iface)
@@ -1215,7 +1215,9 @@ HRESULT WINAPI IDirectInputDevice2AImpl_QueryInterface(LPDIRECTINPUTDEVICE8A ifa
 ULONG WINAPI IDirectInputDevice2WImpl_AddRef(LPDIRECTINPUTDEVICE8W iface)
 {
     IDirectInputDeviceImpl *This = impl_from_IDirectInputDevice8W(iface);
-    return InterlockedIncrement(&This->ref);
+    ULONG ref = InterlockedIncrement(&This->ref);
+    TRACE( "(%p) ref %d\n", This, ref );
+    return ref;
 }
 
 ULONG WINAPI IDirectInputDevice2AImpl_AddRef(LPDIRECTINPUTDEVICE8A iface)

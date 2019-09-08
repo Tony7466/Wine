@@ -4762,6 +4762,351 @@ static const IProvideMultipleClassInfoVtbl ProvideMultipleClassInfoVtbl = {
     ProvideMultipleClassInfo_GetInfoOfIndex
 };
 
+/**********************************************************
+ * IMarkupServices implementation
+ */
+static inline HTMLDocument *impl_from_IMarkupServices(IMarkupServices *iface)
+{
+    return CONTAINING_RECORD(iface, HTMLDocument, IMarkupServices_iface);
+}
+
+static HRESULT WINAPI MarkupServices_QueryInterface(IMarkupServices *iface, REFIID riid, void **ppvObject)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    return htmldoc_query_interface(This, riid, ppvObject);
+}
+
+static ULONG WINAPI MarkupServices_AddRef(IMarkupServices *iface)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    return htmldoc_addref(This);
+}
+
+static ULONG WINAPI MarkupServices_Release(IMarkupServices *iface)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    return htmldoc_release(This);
+}
+
+static HRESULT WINAPI MarkupServices_CreateMarkupPointer(IMarkupServices *iface, IMarkupPointer **ppPointer)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%p)\n", This, ppPointer);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_CreateMarkupContainer(IMarkupServices *iface, IMarkupContainer **ppMarkupContainer)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%p)\n", This, ppMarkupContainer);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_CreateElement(IMarkupServices *iface,
+    ELEMENT_TAG_ID tagID, OLECHAR *pchAttributes, IHTMLElement **ppElement)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%d,%s,%p)\n", This, tagID, debugstr_w(pchAttributes), ppElement);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_CloneElement(IMarkupServices *iface,
+    IHTMLElement *pElemCloneThis, IHTMLElement **ppElementTheClone)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%p,%p)\n", This, pElemCloneThis, ppElementTheClone);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_InsertElement(IMarkupServices *iface,
+    IHTMLElement *pElementInsert, IMarkupPointer *pPointerStart,
+    IMarkupPointer *pPointerFinish)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%p,%p,%p)\n", This, pElementInsert, pPointerStart, pPointerFinish);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_RemoveElement(IMarkupServices *iface, IHTMLElement *pElementRemove)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%p)\n", This, pElementRemove);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_Remove(IMarkupServices *iface,
+    IMarkupPointer *pPointerStart, IMarkupPointer *pPointerFinish)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%p,%p)\n", This, pPointerStart, pPointerFinish);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_Copy(IMarkupServices *iface,
+    IMarkupPointer *pPointerSourceStart, IMarkupPointer *pPointerSourceFinish,
+    IMarkupPointer *pPointerTarget)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%p,%p,%p)\n", This, pPointerSourceStart, pPointerSourceFinish, pPointerTarget);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_Move(IMarkupServices *iface,
+    IMarkupPointer *pPointerSourceStart, IMarkupPointer *pPointerSourceFinish,
+    IMarkupPointer *pPointerTarget)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%p,%p,%p)\n", This, pPointerSourceStart, pPointerSourceFinish, pPointerTarget);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_InsertText(IMarkupServices *iface,
+    OLECHAR *pchText, LONG cch, IMarkupPointer *pPointerTarget)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%s,%x,%p)\n", This, debugstr_w(pchText), cch, pPointerTarget);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_ParseString(IMarkupServices *iface,
+    OLECHAR *pchHTML, DWORD dwFlags, IMarkupContainer **ppContainerResult,
+    IMarkupPointer *pPointerStart, IMarkupPointer *pPointerFinish)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%s,%x,%p,%p,%p)\n", This, debugstr_w(pchHTML), dwFlags, ppContainerResult, pPointerStart, pPointerFinish);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_ParseGlobal(IMarkupServices *iface,
+    HGLOBAL hglobalHTML, DWORD dwFlags, IMarkupContainer **ppContainerResult,
+    IMarkupPointer *pPointerStart, IMarkupPointer *pPointerFinish)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%s,%x,%p,%p,%p)\n", This, debugstr_w(hglobalHTML), dwFlags, ppContainerResult, pPointerStart, pPointerFinish);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_IsScopedElement(IMarkupServices *iface,
+    IHTMLElement *pElement, BOOL *pfScoped)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%p,%p)\n", This, pElement, pfScoped);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_GetElementTagId(IMarkupServices *iface,
+    IHTMLElement *pElement, ELEMENT_TAG_ID *ptagId)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%p,%p)\n", This, pElement, ptagId);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_GetTagIDForName(IMarkupServices *iface,
+    BSTR bstrName, ELEMENT_TAG_ID *ptagId)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%s,%p)\n", This, debugstr_w(bstrName), ptagId);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_GetNameForTagID(IMarkupServices *iface,
+    ELEMENT_TAG_ID tagId, BSTR *pbstrName)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%d,%p)\n", This, tagId, pbstrName);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_MovePointersToRange(IMarkupServices *iface,
+    IHTMLTxtRange *pIRange, IMarkupPointer *pPointerStart, IMarkupPointer *pPointerFinish)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%p,%p,%p)\n", This, pIRange, pPointerStart, pPointerFinish);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_MoveRangeToPointers(IMarkupServices *iface,
+    IMarkupPointer *pPointerStart, IMarkupPointer *pPointerFinish, IHTMLTxtRange *pIRange)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%p,%p,%p)\n", This, pPointerStart, pPointerFinish, pIRange);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_BeginUndoUnit(IMarkupServices *iface, OLECHAR *pchTitle)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)->(%s)\n", This, debugstr_w(pchTitle));
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI MarkupServices_EndUndoUnit(IMarkupServices *iface)
+{
+    HTMLDocument *This = impl_from_IMarkupServices(iface);
+    FIXME("(%p)\n", This);
+    return E_NOTIMPL;
+}
+
+static const IMarkupServicesVtbl MarkupServicesVtbl = {
+    MarkupServices_QueryInterface,
+    MarkupServices_AddRef,
+    MarkupServices_Release,
+    MarkupServices_CreateMarkupPointer,
+    MarkupServices_CreateMarkupContainer,
+    MarkupServices_CreateElement,
+    MarkupServices_CloneElement,
+    MarkupServices_InsertElement,
+    MarkupServices_RemoveElement,
+    MarkupServices_Remove,
+    MarkupServices_Copy,
+    MarkupServices_Move,
+    MarkupServices_InsertText,
+    MarkupServices_ParseString,
+    MarkupServices_ParseGlobal,
+    MarkupServices_IsScopedElement,
+    MarkupServices_GetElementTagId,
+    MarkupServices_GetTagIDForName,
+    MarkupServices_GetNameForTagID,
+    MarkupServices_MovePointersToRange,
+    MarkupServices_MoveRangeToPointers,
+    MarkupServices_BeginUndoUnit,
+    MarkupServices_EndUndoUnit
+};
+
+/**********************************************************
+ * IMarkupContainer implementation
+ */
+static inline HTMLDocument *impl_from_IMarkupContainer(IMarkupContainer *iface)
+{
+    return CONTAINING_RECORD(iface, HTMLDocument, IMarkupContainer_iface);
+}
+
+static HRESULT WINAPI MarkupContainer_QueryInterface(IMarkupContainer *iface, REFIID riid, void **ppvObject)
+{
+    HTMLDocument *This = impl_from_IMarkupContainer(iface);
+    return htmldoc_query_interface(This, riid, ppvObject);
+}
+
+static ULONG WINAPI MarkupContainer_AddRef(IMarkupContainer *iface)
+{
+    HTMLDocument *This = impl_from_IMarkupContainer(iface);
+    return htmldoc_addref(This);
+}
+
+static ULONG WINAPI MarkupContainer_Release(IMarkupContainer *iface)
+{
+    HTMLDocument *This = impl_from_IMarkupContainer(iface);
+    return htmldoc_release(This);
+}
+
+static HRESULT WINAPI MarkupContainer_OwningDoc(IMarkupContainer *iface, IHTMLDocument2 **ppDoc)
+{
+    HTMLDocument *This = impl_from_IMarkupContainer(iface);
+    FIXME("(%p)->(%p)\n", This, ppDoc);
+    return E_NOTIMPL;
+}
+
+static const IMarkupContainerVtbl MarkupContainerVtbl = {
+    MarkupContainer_QueryInterface,
+    MarkupContainer_AddRef,
+    MarkupContainer_Release,
+    MarkupContainer_OwningDoc
+};
+
+/**********************************************************
+ * IDisplayServices implementation
+ */
+static inline HTMLDocument *impl_from_IDisplayServices(IDisplayServices *iface)
+{
+    return CONTAINING_RECORD(iface, HTMLDocument, IDisplayServices_iface);
+}
+
+static HRESULT WINAPI DisplayServices_QueryInterface(IDisplayServices *iface, REFIID riid, void **ppvObject)
+{
+    HTMLDocument *This = impl_from_IDisplayServices(iface);
+    return htmldoc_query_interface(This, riid, ppvObject);
+}
+
+static ULONG WINAPI DisplayServices_AddRef(IDisplayServices *iface)
+{
+    HTMLDocument *This = impl_from_IDisplayServices(iface);
+    return htmldoc_addref(This);
+}
+
+static ULONG WINAPI DisplayServices_Release(IDisplayServices *iface)
+{
+    HTMLDocument *This = impl_from_IDisplayServices(iface);
+    return htmldoc_release(This);
+}
+
+static HRESULT WINAPI DisplayServices_CreateDisplayPointer(IDisplayServices *iface, IDisplayPointer **ppDispPointer)
+{
+    HTMLDocument *This = impl_from_IDisplayServices(iface);
+    FIXME("(%p)->(%p)\n", This, ppDispPointer);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI DisplayServices_TransformRect(IDisplayServices *iface,
+    RECT *pRect, COORD_SYSTEM eSource, COORD_SYSTEM eDestination, IHTMLElement *pIElement)
+{
+    HTMLDocument *This = impl_from_IDisplayServices(iface);
+    FIXME("(%p)->(%s,%d,%d,%p)\n", This, wine_dbgstr_rect(pRect), eSource, eDestination, pIElement);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI DisplayServices_TransformPoint(IDisplayServices *iface,
+    POINT *pPoint, COORD_SYSTEM eSource, COORD_SYSTEM eDestination, IHTMLElement *pIElement)
+{
+    HTMLDocument *This = impl_from_IDisplayServices(iface);
+    FIXME("(%p)->(%s,%d,%d,%p)\n", This, wine_dbgstr_point(pPoint), eSource, eDestination, pIElement);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI DisplayServices_GetCaret(IDisplayServices *iface, IHTMLCaret **ppCaret)
+{
+    HTMLDocument *This = impl_from_IDisplayServices(iface);
+    FIXME("(%p)->(%p)\n", This, ppCaret);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI DisplayServices_GetComputedStyle(IDisplayServices *iface,
+    IMarkupPointer *pPointer, IHTMLComputedStyle **ppComputedStyle)
+{
+    HTMLDocument *This = impl_from_IDisplayServices(iface);
+    FIXME("(%p)->(%p,%p)\n", This, pPointer, ppComputedStyle);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI DisplayServices_ScrollRectIntoView(IDisplayServices *iface,
+    IHTMLElement *pIElement, RECT rect)
+{
+    HTMLDocument *This = impl_from_IDisplayServices(iface);
+    FIXME("(%p)->(%p,%s)\n", This, pIElement, wine_dbgstr_rect(&rect));
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI DisplayServices_HasFlowLayout(IDisplayServices *iface,
+    IHTMLElement *pIElement, BOOL *pfHasFlowLayout)
+{
+    HTMLDocument *This = impl_from_IDisplayServices(iface);
+    FIXME("(%p)->(%p,%p)\n", This, pIElement, pfHasFlowLayout);
+    return E_NOTIMPL;
+}
+
+static const IDisplayServicesVtbl DisplayServicesVtbl = {
+    DisplayServices_QueryInterface,
+    DisplayServices_AddRef,
+    DisplayServices_Release,
+    DisplayServices_CreateDisplayPointer,
+    DisplayServices_TransformRect,
+    DisplayServices_TransformPoint,
+    DisplayServices_GetCaret,
+    DisplayServices_GetComputedStyle,
+    DisplayServices_ScrollRectIntoView,
+    DisplayServices_HasFlowLayout
+};
+
 static BOOL htmldoc_qi(HTMLDocument *This, REFIID riid, void **ppv)
 {
     *ppv = NULL;
@@ -4840,6 +5185,12 @@ static BOOL htmldoc_qi(HTMLDocument *This, REFIID riid, void **ppv)
         *ppv = &This->IProvideMultipleClassInfo_iface;
     else if(IsEqualGUID(&IID_IProvideMultipleClassInfo, riid))
         *ppv = &This->IProvideMultipleClassInfo_iface;
+    else if(IsEqualGUID(&IID_IMarkupServices, riid))
+        *ppv = &This->IMarkupServices_iface;
+    else if(IsEqualGUID(&IID_IMarkupContainer, riid))
+        *ppv = &This->IMarkupContainer_iface;
+    else if(IsEqualGUID(&IID_IDisplayServices, riid))
+        *ppv = &This->IDisplayServices_iface;
     else if(IsEqualGUID(&CLSID_CMarkup, riid)) {
         FIXME("(%p)->(CLSID_CMarkup %p)\n", This, ppv);
         *ppv = NULL;
@@ -4887,6 +5238,9 @@ static void init_doc(HTMLDocument *doc, IUnknown *outer, IDispatchEx *dispex)
     doc->IDocumentEvent_iface.lpVtbl = &DocumentEventVtbl;
     doc->ISupportErrorInfo_iface.lpVtbl = &SupportErrorInfoVtbl;
     doc->IProvideMultipleClassInfo_iface.lpVtbl = &ProvideMultipleClassInfoVtbl;
+    doc->IMarkupServices_iface.lpVtbl = &MarkupServicesVtbl;
+    doc->IMarkupContainer_iface.lpVtbl = &MarkupContainerVtbl;
+    doc->IDisplayServices_iface.lpVtbl = &DisplayServicesVtbl;
 
     doc->outer_unk = outer;
     doc->dispex = dispex;
@@ -5302,7 +5656,7 @@ HRESULT get_document_node(nsIDOMDocument *dom_document, HTMLDocumentNode **ret)
 
 static inline HTMLDocumentObj *impl_from_IUnknown(IUnknown *iface)
 {
-    return CONTAINING_RECORD(iface, HTMLDocumentObj, IUnknown_outer);
+    return CONTAINING_RECORD(iface, HTMLDocumentObj, IUnknown_inner);
 }
 
 static HRESULT WINAPI HTMLDocumentObj_QueryInterface(IUnknown *iface, REFIID riid, void **ppv)
@@ -5312,7 +5666,7 @@ static HRESULT WINAPI HTMLDocumentObj_QueryInterface(IUnknown *iface, REFIID rii
     TRACE("(%p)->(%s %p)\n", This, debugstr_mshtml_guid(riid), ppv);
 
     if(IsEqualGUID(&IID_IUnknown, riid)) {
-        *ppv = &This->IUnknown_outer;
+        *ppv = &This->IUnknown_inner;
     }else if(htmldoc_qi(&This->basedoc, riid, ppv)) {
         return *ppv ? S_OK : E_NOINTERFACE;
     }else if(IsEqualGUID(&IID_ICustomDoc, riid)) {
@@ -5504,11 +5858,11 @@ static HRESULT create_document_object(BOOL is_mhtml, IUnknown *outer, REFIID rii
         return E_OUTOFMEMORY;
 
     doc->ref = 1;
-    doc->IUnknown_outer.lpVtbl = &HTMLDocumentObjVtbl;
+    doc->IUnknown_inner.lpVtbl = &HTMLDocumentObjVtbl;
     doc->ICustomDoc_iface.lpVtbl = &CustomDocVtbl;
 
     init_dispex(&doc->dispex, (IUnknown*)&doc->ICustomDoc_iface, &HTMLDocumentObj_dispex);
-    init_doc(&doc->basedoc, outer ? outer : &doc->IUnknown_outer, &doc->dispex.IDispatchEx_iface);
+    init_doc(&doc->basedoc, outer ? outer : &doc->IUnknown_inner, &doc->dispex.IDispatchEx_iface);
     TargetContainer_Init(doc);
     doc->basedoc.doc_obj = doc;
     doc->is_mhtml = is_mhtml;
@@ -5525,7 +5879,7 @@ static HRESULT create_document_object(BOOL is_mhtml, IUnknown *outer, REFIID rii
     }
 
     if(IsEqualGUID(&IID_IUnknown, riid)) {
-        *ppv = &doc->IUnknown_outer;
+        *ppv = &doc->IUnknown_inner;
     }else {
         hres = htmldoc_query_interface(&doc->basedoc, riid, ppv);
         htmldoc_release(&doc->basedoc);

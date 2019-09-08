@@ -62,8 +62,6 @@ WINE_DEFAULT_DEBUG_CHANNEL(plugplay);
 
 WINE_DECLARE_DEBUG_CHANNEL(hid_report);
 
-static DRIVER_OBJECT *sdl_driver_obj = NULL;
-
 static const WCHAR sdl_busidW[] = {'S','D','L','J','O','Y',0};
 
 static DWORD map_controllers = 0;
@@ -951,7 +949,7 @@ static void try_add_device(SDL_JoystickID index)
     if (is_xbox_gamepad)
         input = 0;
 
-    device = bus_create_hid_device(sdl_driver_obj, sdl_busidW, vid, pid,
+    device = bus_create_hid_device(sdl_busidW, vid, pid,
             input, version, id, serial, is_xbox_gamepad, &GUID_DEVCLASS_SDL,
             &sdl_vtbl, sizeof(struct platform_private));
 
@@ -995,14 +993,9 @@ static void process_device_event(SDL_Event *event)
         set_mapped_report_from_event(event);
 }
 
-typedef struct _thread_args {
-    HANDLE event;
-    UNICODE_STRING *registry_path;
-} thread_arguments;
-
 static DWORD CALLBACK deviceloop_thread(void *args)
 {
-    thread_arguments *thread_args = args;
+    HANDLE init_done = args;
     SDL_Event event;
 
     if (pSDL_Init(SDL_INIT_GAMECONTROLLER|SDL_INIT_HAPTIC) < 0)
@@ -1017,16 +1010,10 @@ static DWORD CALLBACK deviceloop_thread(void *args)
     /* Process mappings */
     if (pSDL_GameControllerAddMapping != NULL)
     {
-        HANDLE key;
-        OBJECT_ATTRIBUTES attr;
-        WCHAR buffer[MAX_PATH];
-        UNICODE_STRING regpath = {0, sizeof(buffer), buffer};
-        static const WCHAR szPath[] = {'\\','m','a','p',0};
+        HKEY key;
+        static const WCHAR szPath[] = {'m','a','p',0};
 
-        RtlCopyUnicodeString(&regpath, thread_args->registry_path);
-        RtlAppendUnicodeToString(&regpath, szPath);
-        InitializeObjectAttributes(&attr, &regpath, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
-        if (NtOpenKey(&key, KEY_ALL_ACCESS, &attr) == STATUS_SUCCESS)
+        if (!RegOpenKeyExW(driver_key, szPath, 0, KEY_ENUMERATE_SUB_KEYS, &key))
         {
             DWORD index = 0;
             CHAR *buffer = NULL;
@@ -1065,7 +1052,7 @@ static DWORD CALLBACK deviceloop_thread(void *args)
         }
     }
 
-    SetEvent(thread_args->event);
+    SetEvent(init_done);
 
     while (1)
         while (pSDL_WaitEvent(&event) != 0)
@@ -1080,22 +1067,19 @@ void sdl_driver_unload( void )
     TRACE("Unload Driver\n");
 }
 
-NTSTATUS WINAPI sdl_driver_init(DRIVER_OBJECT *driver, UNICODE_STRING *registry_path)
+NTSTATUS sdl_driver_init(void)
 {
     static const WCHAR controller_modeW[] = {'M','a','p',' ','C','o','n','t','r','o','l','l','e','r','s',0};
     static const UNICODE_STRING controller_mode = {sizeof(controller_modeW) - sizeof(WCHAR), sizeof(controller_modeW), (WCHAR*)controller_modeW};
 
     HANDLE events[2];
     DWORD result;
-    thread_arguments args;
 
-    TRACE("(%p, %s)\n", driver, debugstr_w(registry_path->Buffer));
     if (sdl_handle == NULL)
     {
         sdl_handle = wine_dlopen(SONAME_LIBSDL2, RTLD_NOW, NULL, 0);
         if (!sdl_handle) {
             WARN("could not load %s\n", SONAME_LIBSDL2);
-            sdl_driver_obj = NULL;
             return STATUS_UNSUCCESSFUL;
         }
 #define LOAD_FUNCPTR(f) if((p##f = wine_dlsym(sdl_handle, #f, NULL, 0)) == NULL){WARN("Can't find symbol %s\n", #f); goto sym_not_found;}
@@ -1139,20 +1123,14 @@ NTSTATUS WINAPI sdl_driver_init(DRIVER_OBJECT *driver, UNICODE_STRING *registry_
         pSDL_JoystickGetVendor = wine_dlsym(sdl_handle, "SDL_JoystickGetVendor", NULL, 0);
     }
 
-    sdl_driver_obj = driver;
-    driver->MajorFunction[IRP_MJ_PNP] = common_pnp_dispatch;
-    driver->MajorFunction[IRP_MJ_INTERNAL_DEVICE_CONTROL] = hid_internal_dispatch;
-
-    map_controllers = check_bus_option(registry_path, &controller_mode, 1);
+    map_controllers = check_bus_option(&controller_mode, 1);
 
     if (!(events[0] = CreateEventW(NULL, TRUE, FALSE, NULL)))
-        goto error;
-    args.event = events[0];
-    args.registry_path = registry_path;
-    if (!(events[1] = CreateThread(NULL, 0, deviceloop_thread, &args, 0, NULL)))
+        return STATUS_UNSUCCESSFUL;
+    if (!(events[1] = CreateThread(NULL, 0, deviceloop_thread, events[0], 0, NULL)))
     {
         CloseHandle(events[0]);
-        goto error;
+        return STATUS_UNSUCCESSFUL;
     }
 
     result = WaitForMultipleObjects(2, events, FALSE, INFINITE);
@@ -1164,9 +1142,6 @@ NTSTATUS WINAPI sdl_driver_init(DRIVER_OBJECT *driver, UNICODE_STRING *registry_
         return STATUS_SUCCESS;
     }
 
-error:
-    sdl_driver_obj = NULL;
-    return STATUS_UNSUCCESSFUL;
 sym_not_found:
     wine_dlclose(sdl_handle, NULL, 0);
     sdl_handle = NULL;
@@ -1175,7 +1150,7 @@ sym_not_found:
 
 #else
 
-NTSTATUS WINAPI sdl_driver_init(DRIVER_OBJECT *driver, UNICODE_STRING *registry_path)
+NTSTATUS sdl_driver_init(void)
 {
     WARN("compiled without SDL support\n");
     return STATUS_NOT_IMPLEMENTED;

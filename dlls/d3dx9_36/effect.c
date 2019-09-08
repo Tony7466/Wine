@@ -17,8 +17,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-#include "wine/port.h"
 
 #include <stdio.h>
 #include <assert.h>
@@ -519,6 +517,7 @@ static void free_sampler(struct d3dx_sampler *sampler)
         free_state(&sampler->states[i]);
     }
     HeapFree(GetProcessHeap(), 0, sampler->states);
+    HeapFree(GetProcessHeap(), 0, sampler);
 }
 
 static void d3dx_pool_release_shared_parameter(struct d3dx_top_level_parameter *param);
@@ -551,7 +550,7 @@ static void free_parameter_data(struct d3dx_parameter *param, BOOL child)
             case D3DXPT_SAMPLER3D:
             case D3DXPT_SAMPLERCUBE:
                 free_sampler((struct d3dx_sampler *)param->data);
-                break;
+                return;
 
             default:
                 FIXME("Unhandled type %s\n", debug_d3dxparameter_type(param->type));
@@ -580,6 +579,9 @@ static void free_parameter(struct d3dx_parameter *param, BOOL element, BOOL chil
             free_parameter(&param->members[i], param->element_count != 0, TRUE);
         HeapFree(GetProcessHeap(), 0, param->members);
     }
+
+    if (param->full_name)
+        heap_free(param->full_name);
 
     free_parameter_data(param, child);
 

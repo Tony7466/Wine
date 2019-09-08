@@ -396,48 +396,55 @@ static HRESULT WAVEParser_disconnect(LPVOID iface)
 
 static const IBaseFilterVtbl WAVEParser_Vtbl =
 {
-    Parser_QueryInterface,
-    Parser_AddRef,
-    Parser_Release,
-    Parser_GetClassID,
+    BaseFilterImpl_QueryInterface,
+    BaseFilterImpl_AddRef,
+    BaseFilterImpl_Release,
+    BaseFilterImpl_GetClassID,
     Parser_Stop,
     Parser_Pause,
     Parser_Run,
     Parser_GetState,
     Parser_SetSyncSource,
-    Parser_GetSyncSource,
-    Parser_EnumPins,
+    BaseFilterImpl_GetSyncSource,
+    BaseFilterImpl_EnumPins,
     BaseFilterImpl_FindPin,
-    Parser_QueryFilterInfo,
-    Parser_JoinFilterGraph,
-    Parser_QueryVendorInfo
+    BaseFilterImpl_QueryFilterInfo,
+    BaseFilterImpl_JoinFilterGraph,
+    BaseFilterImpl_QueryVendorInfo,
 };
 
-HRESULT WAVEParser_create(IUnknown * pUnkOuter, LPVOID * ppv)
+static void wave_parser_destroy(BaseFilter *iface)
+{
+    WAVEParserImpl *filter = impl_from_IBaseFilter(&iface->IBaseFilter_iface);
+    Parser_Destroy(&filter->Parser);
+}
+
+static const BaseFilterFuncTable wave_parser_func_table =
+{
+    .filter_get_pin = parser_get_pin,
+    .filter_destroy = wave_parser_destroy,
+};
+
+HRESULT WAVEParser_create(IUnknown *outer, void **out)
 {
     static const WCHAR sink_name[] = {'i','n','p','u','t',' ','p','i','n',0};
     HRESULT hr;
     WAVEParserImpl * This;
 
-    TRACE("(%p, %p)\n", pUnkOuter, ppv);
-
-    *ppv = NULL;
-
-    if (pUnkOuter)
-        return CLASS_E_NOAGGREGATION;
+    *out = NULL;
 
     /* Note: This memory is managed by the transform filter once created */
     This = CoTaskMemAlloc(sizeof(WAVEParserImpl));
 
-    hr = Parser_Create(&This->Parser, &WAVEParser_Vtbl, &CLSID_WAVEParser,
-            sink_name, WAVEParser_Sample, WAVEParser_QueryAccept,
+    hr = Parser_Create(&This->Parser, &WAVEParser_Vtbl, outer, &CLSID_WAVEParser,
+            &wave_parser_func_table, sink_name, WAVEParser_Sample, WAVEParser_QueryAccept,
             WAVEParser_InputPin_PreConnect, WAVEParser_Cleanup, WAVEParser_disconnect,
             WAVEParser_first_request, NULL, NULL, WAVEParserImpl_seek, NULL);
 
     if (FAILED(hr))
         return hr;
 
-    *ppv = &This->Parser.filter.IBaseFilter_iface;
+    *out = &This->Parser.filter.IUnknown_inner;
 
     return hr;
 }

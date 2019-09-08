@@ -471,6 +471,7 @@ SOURCES = \
 	netfw.idl \
 	netioapi.h \
 	netlistmgr.idl \
+	newdev.h \
 	nldef.h \
 	npapi.h \
 	nserror.h \
@@ -622,6 +623,7 @@ SOURCES = \
 	tcpmib.h \
 	textserv.h \
 	textstor.idl \
+	timezoneapi.h \
 	tlhelp32.h \
 	tlogstg.idl \
 	tmschema.h \

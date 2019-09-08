@@ -194,6 +194,40 @@ static IPin *renderer_get_pin(BaseFilter *iface, unsigned int index)
     return &This->pInputPin->pin.IPin_iface;
 }
 
+static void renderer_destroy(BaseFilter *iface)
+{
+    BaseRenderer *filter = impl_from_BaseFilter(iface);
+    filter->pFuncsTable->renderer_destroy(filter);
+}
+
+static HRESULT renderer_query_interface(BaseFilter *iface, REFIID iid, void **out)
+{
+    BaseRenderer *filter = impl_from_BaseFilter(iface);
+    HRESULT hr;
+
+    if (filter->pFuncsTable->renderer_query_interface
+            && SUCCEEDED(hr = filter->pFuncsTable->renderer_query_interface(filter, iid, out)))
+    {
+        return hr;
+    }
+
+    if (IsEqualIID(iid, &IID_IMediaSeeking) || IsEqualIID(iid, &IID_IMediaPosition))
+        return IUnknown_QueryInterface(filter->pPosition, iid, out);
+    else if (IsEqualIID(iid, &IID_IQualityControl))
+    {
+        *out = &filter->qcimpl->IQualityControl_iface;
+        IUnknown_AddRef((IUnknown *)*out);
+        return S_OK;
+    }
+    return E_NOINTERFACE;
+}
+
+static const BaseFilterFuncTable RendererBaseFilterFuncTable = {
+    .filter_get_pin = renderer_get_pin,
+    .filter_destroy = renderer_destroy,
+    .filter_query_interface = renderer_query_interface,
+};
+
 static HRESULT WINAPI BaseRenderer_Input_CheckMediaType(BasePin *pin, const AM_MEDIA_TYPE * pmt)
 {
     BaseRenderer *This = impl_from_IBaseFilter(pin->pinInfo.pFilter);
@@ -206,10 +240,6 @@ static HRESULT WINAPI BaseRenderer_Receive(BaseInputPin *pin, IMediaSample * pSa
     return BaseRendererImpl_Receive(This, pSample);
 }
 
-static const BaseFilterFuncTable RendererBaseFilterFuncTable = {
-    .filter_get_pin = renderer_get_pin,
-};
-
 static const BaseInputPinFuncTable input_BaseInputFuncTable = {
     {
         BaseRenderer_Input_CheckMediaType,
@@ -219,14 +249,14 @@ static const BaseInputPinFuncTable input_BaseInputFuncTable = {
 };
 
 
-HRESULT WINAPI strmbase_renderer_init(BaseRenderer *This, const IBaseFilterVtbl *Vtbl,
-        IUnknown *pUnkOuter, const CLSID *pClsid, const WCHAR *sink_name, DWORD_PTR DebugInfo,
+HRESULT WINAPI strmbase_renderer_init(BaseRenderer *This, const IBaseFilterVtbl *vtbl,
+        IUnknown *outer, const CLSID *clsid, const WCHAR *sink_name, DWORD_PTR debug_info,
         const BaseRendererFuncTable *pBaseFuncsTable)
 {
     PIN_INFO piInput;
     HRESULT hr;
 
-    BaseFilter_Init(&This->filter, Vtbl, pClsid, DebugInfo, &RendererBaseFilterFuncTable);
+    strmbase_filter_init(&This->filter, vtbl, outer, clsid, debug_info, &RendererBaseFilterFuncTable);
 
     This->pFuncsTable = pBaseFuncsTable;
 
@@ -240,7 +270,7 @@ HRESULT WINAPI strmbase_renderer_init(BaseRenderer *This, const IBaseFilterVtbl 
 
     if (SUCCEEDED(hr))
     {
-        hr = CreatePosPassThru(pUnkOuter ? pUnkOuter: (IUnknown *)&This->filter.IBaseFilter_iface, TRUE,
+        hr = CreatePosPassThru(outer ? outer : (IUnknown *)&This->filter.IBaseFilter_iface, TRUE,
                 &This->pInputPin->pin.IPin_iface, &This->pPosition);
         if (FAILED(hr))
             return hr;
@@ -257,22 +287,6 @@ HRESULT WINAPI strmbase_renderer_init(BaseRenderer *This, const IBaseFilterVtbl 
     }
 
     return hr;
-}
-
-HRESULT WINAPI BaseRendererImpl_QueryInterface(IBaseFilter* iface, REFIID riid, LPVOID * ppv)
-{
-    BaseRenderer *This = impl_from_IBaseFilter(iface);
-
-    if (IsEqualIID(riid, &IID_IMediaSeeking) || IsEqualIID(riid, &IID_IMediaPosition))
-        return IUnknown_QueryInterface(This->pPosition, riid, ppv);
-    else if (IsEqualIID(riid, &IID_IQualityControl))
-    {
-        *ppv = &This->qcimpl->IQualityControl_iface;
-        IUnknown_AddRef((IUnknown *)(*ppv));
-        return S_OK;
-    }
-    else
-        return BaseFilterImpl_QueryInterface(iface, riid, ppv);
 }
 
 void strmbase_renderer_cleanup(BaseRenderer *filter)

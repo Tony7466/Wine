@@ -35,7 +35,8 @@ WINE_DEFAULT_DEBUG_CHANNEL(mfplat);
 
 enum session_command
 {
-    SESSION_CLEAR_TOPOLOGIES,
+    SESSION_CMD_CLEAR_TOPOLOGIES,
+    SESSION_CMD_CLOSE,
 };
 
 struct session_op
@@ -51,6 +52,13 @@ struct queued_topology
     IMFTopology *topology;
 };
 
+enum session_state
+{
+    SESSION_STATE_STOPPED = 0,
+    SESSION_STATE_CLOSED,
+    SESSION_STATE_SHUT_DOWN,
+};
+
 struct media_session
 {
     IMFMediaSession IMFMediaSession_iface;
@@ -62,6 +70,7 @@ struct media_session
     IMFMediaEventQueue *event_queue;
     IMFPresentationClock *clock;
     struct list topologies;
+    enum session_state state;
     CRITICAL_SECTION cs;
 };
 
@@ -76,6 +85,7 @@ enum clock_command
     CLOCK_CMD_START = 0,
     CLOCK_CMD_STOP,
     CLOCK_CMD_PAUSE,
+    CLOCK_CMD_SET_RATE,
     CLOCK_CMD_MAX,
 };
 
@@ -85,6 +95,16 @@ enum clock_notification
     CLOCK_NOTIFY_STOP,
     CLOCK_NOTIFY_PAUSE,
     CLOCK_NOTIFY_RESTART,
+    CLOCK_NOTIFY_SET_RATE,
+};
+
+struct clock_state_change_param
+{
+    union
+    {
+        LONGLONG offset;
+        float rate;
+    } u;
 };
 
 struct sink_notification
@@ -92,7 +112,7 @@ struct sink_notification
     IUnknown IUnknown_iface;
     LONG refcount;
     MFTIME system_time;
-    LONGLONG offset;
+    struct clock_state_change_param param;
     enum clock_notification notification;
     IMFClockStateSink *sink;
 };
@@ -109,6 +129,7 @@ struct presentation_clock
     IMFClockStateSink *time_source_sink;
     MFCLOCK_STATE state;
     struct list sinks;
+    float rate;
     CRITICAL_SECTION cs;
 };
 
@@ -361,7 +382,16 @@ static HRESULT WINAPI mfsession_SetTopology(IMFMediaSession *iface, DWORD flags,
 
 static HRESULT session_submit_command(struct media_session *session, IUnknown *op)
 {
-    return MFPutWorkItem(MFASYNC_CALLBACK_QUEUE_STANDARD, &session->commands_callback, op);
+    HRESULT hr;
+
+    EnterCriticalSection(&session->cs);
+    if (session->state == SESSION_STATE_SHUT_DOWN)
+        hr = MF_E_SHUTDOWN;
+    else
+        hr = MFPutWorkItem(MFASYNC_CALLBACK_QUEUE_STANDARD, &session->commands_callback, op);
+    LeaveCriticalSection(&session->cs);
+
+    return hr;
 }
 
 static HRESULT WINAPI mfsession_ClearTopologies(IMFMediaSession *iface)
@@ -372,7 +402,7 @@ static HRESULT WINAPI mfsession_ClearTopologies(IMFMediaSession *iface)
 
     TRACE("%p.\n", iface);
 
-    if (FAILED(hr = create_session_op(SESSION_CLEAR_TOPOLOGIES, &op)))
+    if (FAILED(hr = create_session_op(SESSION_CMD_CLEAR_TOPOLOGIES, &op)))
         return hr;
 
     hr = session_submit_command(session, op);
@@ -404,20 +434,39 @@ static HRESULT WINAPI mfsession_Stop(IMFMediaSession *iface)
 
 static HRESULT WINAPI mfsession_Close(IMFMediaSession *iface)
 {
-    FIXME("(%p)\n", iface);
+    struct media_session *session = impl_from_IMFMediaSession(iface);
+    IUnknown *op;
+    HRESULT hr;
 
-    return S_OK;
+    TRACE("(%p)\n", iface);
+
+    if (FAILED(hr = create_session_op(SESSION_CMD_CLOSE, &op)))
+        return hr;
+
+    hr = session_submit_command(session, op);
+    IUnknown_Release(op);
+
+    return hr;
 }
 
 static HRESULT WINAPI mfsession_Shutdown(IMFMediaSession *iface)
 {
     struct media_session *session = impl_from_IMFMediaSession(iface);
+    HRESULT hr = S_OK;
 
     FIXME("(%p)\n", iface);
 
-    IMFMediaEventQueue_Shutdown(session->event_queue);
+    EnterCriticalSection(&session->cs);
+    if (session->state == SESSION_STATE_SHUT_DOWN)
+        hr = MF_E_SHUTDOWN;
+    else
+    {
+        session->state = SESSION_STATE_SHUT_DOWN;
+        IMFMediaEventQueue_Shutdown(session->event_queue);
+    }
+    LeaveCriticalSection(&session->cs);
 
-    return E_NOTIMPL;
+    return hr;
 }
 
 static HRESULT WINAPI mfsession_GetClock(IMFMediaSession *iface, IMFClock **clock)
@@ -562,13 +611,23 @@ static HRESULT WINAPI session_commands_callback_Invoke(IMFAsyncCallback *iface, 
 
     switch (op->command)
     {
-        case SESSION_CLEAR_TOPOLOGIES:
+        case SESSION_CMD_CLEAR_TOPOLOGIES:
             EnterCriticalSection(&session->cs);
             session_clear_topologies(session);
             LeaveCriticalSection(&session->cs);
 
             IMFMediaEventQueue_QueueEventParamVar(session->event_queue, MESessionTopologiesCleared, &GUID_NULL,
                     S_OK, NULL);
+            break;
+        case SESSION_CMD_CLOSE:
+            EnterCriticalSection(&session->cs);
+            if (session->state != SESSION_STATE_CLOSED)
+            {
+                /* FIXME: actually do something to presentation objects */
+                session->state = SESSION_STATE_CLOSED;
+                IMFMediaEventQueue_QueueEventParamVar(session->event_queue, MESessionClosed, &GUID_NULL, S_OK, NULL);
+            }
+            LeaveCriticalSection(&session->cs);
             break;
         default:
             ;
@@ -794,17 +853,33 @@ static ULONG WINAPI present_clock_Release(IMFPresentationClock *iface)
 
 static HRESULT WINAPI present_clock_GetClockCharacteristics(IMFPresentationClock *iface, DWORD *flags)
 {
-    FIXME("%p, %p.\n", iface, flags);
+    struct presentation_clock *clock = impl_from_IMFPresentationClock(iface);
+    HRESULT hr = MF_E_CLOCK_NO_TIME_SOURCE;
 
-    return E_NOTIMPL;
+    TRACE("%p, %p.\n", iface, flags);
+
+    EnterCriticalSection(&clock->cs);
+    if (clock->time_source)
+        hr = IMFPresentationTimeSource_GetClockCharacteristics(clock->time_source, flags);
+    LeaveCriticalSection(&clock->cs);
+
+    return hr;
 }
 
 static HRESULT WINAPI present_clock_GetCorrelatedTime(IMFPresentationClock *iface, DWORD reserved,
         LONGLONG *clock_time, MFTIME *system_time)
 {
-    FIXME("%p, %#x, %p, %p.\n", iface, reserved, clock_time, system_time);
+    struct presentation_clock *clock = impl_from_IMFPresentationClock(iface);
+    HRESULT hr = MF_E_CLOCK_NO_TIME_SOURCE;
 
-    return E_NOTIMPL;
+    TRACE("%p, %#x, %p, %p.\n", iface, reserved, clock_time, system_time);
+
+    EnterCriticalSection(&clock->cs);
+    if (clock->time_source)
+        hr = IMFPresentationTimeSource_GetCorrelatedTime(clock->time_source, reserved, clock_time, system_time);
+    LeaveCriticalSection(&clock->cs);
+
+    return hr;
 }
 
 static HRESULT WINAPI present_clock_GetContinuityKey(IMFPresentationClock *iface, DWORD *key)
@@ -832,20 +907,13 @@ static HRESULT WINAPI present_clock_GetState(IMFPresentationClock *iface, DWORD 
 static HRESULT WINAPI present_clock_GetProperties(IMFPresentationClock *iface, MFCLOCK_PROPERTIES *props)
 {
     struct presentation_clock *clock = impl_from_IMFPresentationClock(iface);
-    HRESULT hr;
+    HRESULT hr = MF_E_CLOCK_NO_TIME_SOURCE;
 
     TRACE("%p, %p.\n", iface, props);
 
     EnterCriticalSection(&clock->cs);
-
     if (clock->time_source)
-    {
-        FIXME("%p, %p.\n", iface, props);
-        hr = E_NOTIMPL;
-    }
-    else
-        hr = MF_E_CLOCK_NO_TIME_SOURCE;
-
+        hr = IMFPresentationTimeSource_GetProperties(clock->time_source, props);
     LeaveCriticalSection(&clock->cs);
 
     return hr;
@@ -887,6 +955,9 @@ static HRESULT WINAPI present_clock_GetTimeSource(IMFPresentationClock *iface,
 
     TRACE("%p, %p.\n", iface, time_source);
 
+    if (!time_source)
+        return E_INVALIDARG;
+
     EnterCriticalSection(&clock->cs);
     if (clock->time_source)
     {
@@ -902,9 +973,21 @@ static HRESULT WINAPI present_clock_GetTimeSource(IMFPresentationClock *iface,
 
 static HRESULT WINAPI present_clock_GetTime(IMFPresentationClock *iface, MFTIME *time)
 {
-    FIXME("%p, %p.\n", iface, time);
+    struct presentation_clock *clock = impl_from_IMFPresentationClock(iface);
+    HRESULT hr = MF_E_CLOCK_NO_TIME_SOURCE;
+    MFTIME systime;
 
-    return E_NOTIMPL;
+    TRACE("%p, %p.\n", iface, time);
+
+    if (!time)
+        return E_POINTER;
+
+    EnterCriticalSection(&clock->cs);
+    if (clock->time_source)
+        hr = IMFPresentationTimeSource_GetCorrelatedTime(clock->time_source, 0, time, &systime);
+    LeaveCriticalSection(&clock->cs);
+
+    return hr;
 }
 
 static HRESULT WINAPI present_clock_AddClockStateSink(IMFPresentationClock *iface, IMFClockStateSink *state_sink)
@@ -1021,8 +1104,8 @@ static const IUnknownVtbl sinknotificationvtbl =
     sink_notification_Release,
 };
 
-static HRESULT create_sink_notification(MFTIME system_time, LONGLONG offset, enum clock_notification notification,
-        IMFClockStateSink *sink, IUnknown **out)
+static HRESULT create_sink_notification(MFTIME system_time, struct clock_state_change_param param,
+        enum clock_notification notification, IMFClockStateSink *sink, IUnknown **out)
 {
     struct sink_notification *object;
 
@@ -1033,7 +1116,7 @@ static HRESULT create_sink_notification(MFTIME system_time, LONGLONG offset, enu
     object->IUnknown_iface.lpVtbl = &sinknotificationvtbl;
     object->refcount = 1;
     object->system_time = system_time;
-    object->offset = offset;
+    object->param = param;
     object->notification = notification;
     object->sink = sink;
     IMFClockStateSink_AddRef(object->sink);
@@ -1043,15 +1126,15 @@ static HRESULT create_sink_notification(MFTIME system_time, LONGLONG offset, enu
     return S_OK;
 }
 
-static HRESULT clock_call_state_change(MFTIME system_time, LONGLONG offset, enum clock_notification notification,
-        IMFClockStateSink *sink)
+static HRESULT clock_call_state_change(MFTIME system_time, struct clock_state_change_param param,
+        enum clock_notification notification, IMFClockStateSink *sink)
 {
     HRESULT hr = S_OK;
 
     switch (notification)
     {
         case CLOCK_NOTIFY_START:
-            hr = IMFClockStateSink_OnClockStart(sink, system_time, offset);
+            hr = IMFClockStateSink_OnClockStart(sink, system_time, param.u.offset);
             break;
         case CLOCK_NOTIFY_STOP:
             hr = IMFClockStateSink_OnClockStop(sink, system_time);
@@ -1062,6 +1145,10 @@ static HRESULT clock_call_state_change(MFTIME system_time, LONGLONG offset, enum
         case CLOCK_NOTIFY_RESTART:
             hr = IMFClockStateSink_OnClockRestart(sink, system_time);
             break;
+        case CLOCK_NOTIFY_SET_RATE:
+            /* System time source does not allow 0.0 rate, presentation clock allows it without raising errors. */
+            IMFClockStateSink_OnClockSetRate(sink, system_time, param.u.rate);
+            break;
         default:
             ;
     }
@@ -1069,20 +1156,22 @@ static HRESULT clock_call_state_change(MFTIME system_time, LONGLONG offset, enum
     return hr;
 }
 
-static HRESULT clock_change_state(struct presentation_clock *clock, enum clock_command command, LONGLONG offset)
+static HRESULT clock_change_state(struct presentation_clock *clock, enum clock_command command,
+        struct clock_state_change_param param)
 {
     static const BYTE state_change_is_allowed[MFCLOCK_STATE_PAUSED+1][CLOCK_CMD_MAX] =
-    {   /*              S  S* P  */
-        /* INVALID */ { 1, 1, 1 },
-        /* RUNNING */ { 1, 1, 1 },
-        /* STOPPED */ { 1, 1, 0 },
-        /* PAUSED  */ { 1, 1, 0 },
+    {   /*              S  S* P, R  */
+        /* INVALID */ { 1, 1, 1, 1 },
+        /* RUNNING */ { 1, 1, 1, 1 },
+        /* STOPPED */ { 1, 1, 0, 1 },
+        /* PAUSED  */ { 1, 1, 0, 1 },
     };
     static const MFCLOCK_STATE states[CLOCK_CMD_MAX] =
     {
-        /* CLOCK_CMD_START */ MFCLOCK_STATE_RUNNING,
-        /* CLOCK_CMD_STOP  */ MFCLOCK_STATE_STOPPED,
-        /* CLOCK_CMD_PAUSE */ MFCLOCK_STATE_PAUSED,
+        /* CLOCK_CMD_START    */ MFCLOCK_STATE_RUNNING,
+        /* CLOCK_CMD_STOP     */ MFCLOCK_STATE_STOPPED,
+        /* CLOCK_CMD_PAUSE    */ MFCLOCK_STATE_PAUSED,
+        /* CLOCK_CMD_SET_RATE */ 0, /* Unused */
     };
     enum clock_notification notification;
     struct clock_sink *sink;
@@ -1091,7 +1180,7 @@ static HRESULT clock_change_state(struct presentation_clock *clock, enum clock_c
     MFTIME system_time;
     HRESULT hr;
 
-    if (clock->state == states[command] && clock->state != MFCLOCK_STATE_RUNNING)
+    if (command != CLOCK_CMD_SET_RATE && clock->state == states[command] && clock->state != MFCLOCK_STATE_RUNNING)
         return MF_E_CLOCK_STATE_ALREADY_SET;
 
     if (!state_change_is_allowed[clock->state][command])
@@ -1102,7 +1191,7 @@ static HRESULT clock_change_state(struct presentation_clock *clock, enum clock_c
     switch (command)
     {
         case CLOCK_CMD_START:
-            if (clock->state == MFCLOCK_STATE_PAUSED && offset == PRESENTATION_CURRENT_POSITION)
+            if (clock->state == MFCLOCK_STATE_PAUSED && param.u.offset == PRESENTATION_CURRENT_POSITION)
                 notification = CLOCK_NOTIFY_RESTART;
             else
                 notification = CLOCK_NOTIFY_START;
@@ -1113,18 +1202,21 @@ static HRESULT clock_change_state(struct presentation_clock *clock, enum clock_c
         case CLOCK_CMD_PAUSE:
             notification = CLOCK_NOTIFY_PAUSE;
             break;
+        case CLOCK_CMD_SET_RATE:
+            notification = CLOCK_NOTIFY_SET_RATE;
+            break;
         default:
             ;
     }
 
-    if (FAILED(hr = clock_call_state_change(system_time, offset, notification, clock->time_source_sink)))
+    if (FAILED(hr = clock_call_state_change(system_time, param, notification, clock->time_source_sink)))
         return hr;
 
     clock->state = states[command];
 
     LIST_FOR_EACH_ENTRY(sink, &clock->sinks, struct clock_sink, entry)
     {
-        if (SUCCEEDED(create_sink_notification(system_time, offset, notification, sink->state_sink, &notify_object)))
+        if (SUCCEEDED(create_sink_notification(system_time, param, notification, sink->state_sink, &notify_object)))
         {
             hr = MFCreateAsyncResult(notify_object, &clock->IMFAsyncCallback_iface, NULL, &result);
             IUnknown_Release(notify_object);
@@ -1142,12 +1234,14 @@ static HRESULT clock_change_state(struct presentation_clock *clock, enum clock_c
 static HRESULT WINAPI present_clock_Start(IMFPresentationClock *iface, LONGLONG start_offset)
 {
     struct presentation_clock *clock = impl_from_IMFPresentationClock(iface);
+    struct clock_state_change_param param = {{0}};
     HRESULT hr;
 
     TRACE("%p, %s.\n", iface, wine_dbgstr_longlong(start_offset));
 
     EnterCriticalSection(&clock->cs);
-    hr = clock_change_state(clock, CLOCK_CMD_START, start_offset);
+    param.u.offset = start_offset;
+    hr = clock_change_state(clock, CLOCK_CMD_START, param);
     LeaveCriticalSection(&clock->cs);
 
     return hr;
@@ -1156,12 +1250,13 @@ static HRESULT WINAPI present_clock_Start(IMFPresentationClock *iface, LONGLONG 
 static HRESULT WINAPI present_clock_Stop(IMFPresentationClock *iface)
 {
     struct presentation_clock *clock = impl_from_IMFPresentationClock(iface);
+    struct clock_state_change_param param = {{0}};
     HRESULT hr;
 
     TRACE("%p.\n", iface);
 
     EnterCriticalSection(&clock->cs);
-    hr = clock_change_state(clock, CLOCK_CMD_STOP, 0);
+    hr = clock_change_state(clock, CLOCK_CMD_STOP, param);
     LeaveCriticalSection(&clock->cs);
 
     return hr;
@@ -1170,12 +1265,13 @@ static HRESULT WINAPI present_clock_Stop(IMFPresentationClock *iface)
 static HRESULT WINAPI present_clock_Pause(IMFPresentationClock *iface)
 {
     struct presentation_clock *clock = impl_from_IMFPresentationClock(iface);
+    struct clock_state_change_param param = {{0}};
     HRESULT hr;
 
     TRACE("%p.\n", iface);
 
     EnterCriticalSection(&clock->cs);
-    hr = clock_change_state(clock, CLOCK_CMD_PAUSE, 0);
+    hr = clock_change_state(clock, CLOCK_CMD_PAUSE, param);
     LeaveCriticalSection(&clock->cs);
 
     return hr;
@@ -1221,16 +1317,41 @@ static ULONG WINAPI present_clock_rate_control_Release(IMFRateControl *iface)
 
 static HRESULT WINAPI present_clock_rate_SetRate(IMFRateControl *iface, BOOL thin, float rate)
 {
-    FIXME("%p, %d, %f.\n", iface, thin, rate);
+    struct presentation_clock *clock = impl_from_IMFRateControl(iface);
+    struct clock_state_change_param param;
+    HRESULT hr;
 
-    return E_NOTIMPL;
+    TRACE("%p, %d, %f.\n", iface, thin, rate);
+
+    if (thin)
+        return MF_E_THINNING_UNSUPPORTED;
+
+    EnterCriticalSection(&clock->cs);
+    param.u.rate = rate;
+    if (SUCCEEDED(hr = clock_change_state(clock, CLOCK_CMD_SET_RATE, param)))
+        clock->rate = rate;
+    LeaveCriticalSection(&clock->cs);
+
+    return hr;
 }
 
 static HRESULT WINAPI present_clock_rate_GetRate(IMFRateControl *iface, BOOL *thin, float *rate)
 {
-    FIXME("%p, %p, %p.\n", iface, thin, rate);
+    struct presentation_clock *clock = impl_from_IMFRateControl(iface);
 
-    return E_NOTIMPL;
+    TRACE("%p, %p, %p.\n", iface, thin, rate);
+
+    if (!rate)
+        return E_INVALIDARG;
+
+    if (thin)
+        *thin = FALSE;
+
+    EnterCriticalSection(&clock->cs);
+    *rate = clock->rate;
+    LeaveCriticalSection(&clock->cs);
+
+    return S_OK;
 }
 
 static const IMFRateControlVtbl presentclockratecontrolvtbl =
@@ -1368,7 +1489,7 @@ static HRESULT WINAPI present_clock_sink_callback_Invoke(IMFAsyncCallback *iface
 
     data = impl_from_IUnknown(object);
 
-    clock_call_state_change(data->system_time, data->offset, data->notification, data->sink);
+    clock_call_state_change(data->system_time, data->param, data->notification, data->sink);
 
     IUnknown_Release(object);
 
@@ -1404,6 +1525,7 @@ HRESULT WINAPI MFCreatePresentationClock(IMFPresentationClock **clock)
     object->IMFAsyncCallback_iface.lpVtbl = &presentclocksinkcallbackvtbl;
     object->refcount = 1;
     list_init(&object->sinks);
+    object->rate = 1.0f;
     InitializeCriticalSection(&object->cs);
 
     *clock = &object->IMFPresentationClock_iface;

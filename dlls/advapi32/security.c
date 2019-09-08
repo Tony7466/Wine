@@ -2316,6 +2316,21 @@ LookupAccountSidA(
 }
 
 /******************************************************************************
+ * LookupAccountSidLocalA [ADVAPI32.@]
+ */
+BOOL WINAPI
+LookupAccountSidLocalA(
+	PSID sid,
+	LPSTR account,
+	LPDWORD accountSize,
+	LPSTR domain,
+	LPDWORD domainSize,
+	PSID_NAME_USE name_use )
+{
+    return LookupAccountSidA(NULL, sid, account, accountSize, domain, domainSize, name_use);
+}
+
+/******************************************************************************
  * LookupAccountSidW [ADVAPI32.@]
  *
  * PARAMS
@@ -2489,6 +2504,21 @@ LookupAccountSidW(
     heap_free(computer_name);
     SetLastError(ERROR_NONE_MAPPED);
     return FALSE;
+}
+
+/******************************************************************************
+ * LookupAccountSidLocalW [ADVAPI32.@]
+ */
+BOOL WINAPI
+LookupAccountSidLocalW(
+	PSID sid,
+	LPWSTR account,
+	LPDWORD accountSize,
+	LPWSTR domain,
+	LPDWORD domainSize,
+	PSID_NAME_USE name_use )
+{
+    return LookupAccountSidW(NULL, sid, account, accountSize, domain, domainSize, name_use);
 }
 
 /******************************************************************************
@@ -6172,7 +6202,7 @@ BOOL WINAPI SaferComputeTokenFromLevel(SAFER_LEVEL_HANDLE handle, HANDLE token, 
 {
     FIXME("(%p, %p, %p, %x, %p) stub\n", handle, token, access_token, flags, reserved);
 
-    *access_token = (HANDLE)0xdeadbeef;
+    *access_token = (flags & SAFER_TOKEN_NULL_IF_EQUAL) ? NULL : (HANDLE)0xdeadbeef;
     return TRUE;
 }
 

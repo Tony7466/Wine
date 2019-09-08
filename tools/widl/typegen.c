@@ -1064,9 +1064,16 @@ static unsigned char get_parameter_fc( const var_t *var, int is_return, unsigned
             case TGT_UNION:
             case TGT_USER_TYPE:
             case TGT_RANGE:
+                *flags |= MustFree;
+                if (!is_in && is_out) server_size = type_memsize( ref );
+                break;
             case TGT_ARRAY:
-                *flags |= IsSimpleRef | MustFree;
-                *typestring_offset = ref->typestring_offset;
+                *flags |= MustFree;
+                if (!type_array_is_decl_as_ptr(ref))
+                {
+                    *flags |= IsSimpleRef;
+                    *typestring_offset = ref->typestring_offset;
+                }
                 if (!is_in && is_out) server_size = type_memsize( ref );
                 break;
             case TGT_STRING:
@@ -2125,6 +2132,7 @@ static unsigned int write_nonsimple_pointer(FILE *file, const attr_list_t *attrs
             case TGT_POINTER:
             case TGT_CTXT_HANDLE:
             case TGT_CTXT_HANDLE_POINTER:
+            case TGT_ARRAY:
                 flags |= FC_ALLOCED_ON_STACK;
                 break;
             case TGT_IFACE_POINTER:
@@ -2943,14 +2951,10 @@ static unsigned int write_array_tfs(FILE *file, const attr_list_t *attrs, type_t
     unsigned int size;
     unsigned int start_offset;
     unsigned char fc;
-    int pointer_type = get_attrv(attrs, ATTR_POINTERTYPE);
     unsigned int baseoff
         = !type_array_is_decl_as_ptr(type) && current_structure
         ? type_memsize(current_structure)
         : 0;
-
-    if (!pointer_type)
-        pointer_type = FC_RP;
 
     if (!is_string_type(attrs, type_array_get_element(type)))
         write_embedded_types(file, attrs, type_array_get_element(type), name, FALSE, typestring_offset);
@@ -3603,8 +3607,7 @@ static unsigned int write_type_tfs(FILE *file, int indent,
             context != TYPE_CONTEXT_CONTAINER_NO_POINTERS)
         {
             int ptr_type;
-            ptr_type = get_pointer_fc(type, attrs,
-                                      context == TYPE_CONTEXT_TOPLEVELPARAM);
+            ptr_type = get_pointer_fc_context(type, attrs, context);
             if (ptr_type != FC_RP || type_array_is_decl_as_ptr(type))
             {
                 unsigned int absoff = type->typestring_offset;
@@ -5061,10 +5064,10 @@ void write_exceptions( FILE *file )
     fprintf( file, "    siglongjmp( exc_frame->jmp, 1 );\n");
     fprintf( file, "}\n");
     fprintf( file, "\n");
-    fprintf( file, "static DWORD __widl_exception_handler( EXCEPTION_RECORD *record,\n");
-    fprintf( file, "                                       EXCEPTION_REGISTRATION_RECORD *frame,\n");
-    fprintf( file, "                                       CONTEXT *context,\n");
-    fprintf( file, "                                       EXCEPTION_REGISTRATION_RECORD **pdispatcher )\n");
+    fprintf( file, "static DWORD __cdecl __widl_exception_handler( EXCEPTION_RECORD *record,\n");
+    fprintf( file, "                                               EXCEPTION_REGISTRATION_RECORD *frame,\n");
+    fprintf( file, "                                               CONTEXT *context,\n");
+    fprintf( file, "                                               EXCEPTION_REGISTRATION_RECORD **pdispatcher )\n");
     fprintf( file, "{\n");
     fprintf( file, "    struct __exception_frame *exc_frame = (struct __exception_frame *)frame;\n");
     fprintf( file, "\n");

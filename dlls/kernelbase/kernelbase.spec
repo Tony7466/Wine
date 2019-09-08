@@ -297,7 +297,7 @@
 @ stdcall EnumDateFormatsExW(ptr long long) kernel32.EnumDateFormatsExW
 @ stdcall EnumDateFormatsW(ptr long long) kernel32.EnumDateFormatsW
 # @ stub EnumDeviceDrivers
-# @ stub EnumDynamicTimeZoneInformation
+@ stdcall EnumDynamicTimeZoneInformation(long ptr) advapi32.EnumDynamicTimeZoneInformation
 @ stdcall EnumLanguageGroupLocalesW(ptr long long ptr) kernel32.EnumLanguageGroupLocalesW
 # @ stub EnumPageFilesA
 # @ stub EnumPageFilesW
@@ -633,7 +633,7 @@
 # @ stub GetProcessInformation
 # @ stub GetProcessMemoryInfo
 @ stdcall GetProcessMitigationPolicy(long long ptr long) kernel32.GetProcessMitigationPolicy
-@ stub GetProcessPreferredUILanguages
+@ stdcall GetProcessPreferredUILanguages(long ptr ptr ptr) kernel32.GetProcessPreferredUILanguages
 @ stdcall GetProcessPriorityBoost(long ptr) kernel32.GetProcessPriorityBoost
 @ stdcall GetProcessShutdownParameters(ptr ptr) kernel32.GetProcessShutdownParameters
 @ stdcall GetProcessTimes(long ptr ptr ptr ptr) kernel32.GetProcessTimes
@@ -1367,16 +1367,16 @@
 @ stdcall SHRegEnumUSKeyW(long long wstr ptr long)
 @ stdcall SHRegEnumUSValueA(long long ptr ptr ptr ptr ptr long)
 @ stdcall SHRegEnumUSValueW(long long ptr ptr ptr ptr ptr long)
-@ stdcall SHRegGetBoolUSValueA(str str long long) shlwapi.SHRegGetBoolUSValueA
-@ stdcall SHRegGetBoolUSValueW(wstr wstr long long) shlwapi.SHRegGetBoolUSValueW
-@ stdcall SHRegGetUSValueA( str str ptr ptr ptr long ptr long ) shlwapi.SHRegGetUSValueA
-@ stdcall SHRegGetUSValueW( wstr wstr ptr ptr ptr long ptr long ) shlwapi.SHRegGetUSValueW
-@ stdcall SHRegOpenUSKeyA(str long long long long)
-@ stdcall SHRegOpenUSKeyW(wstr long long long long)
+@ stdcall SHRegGetBoolUSValueA(str str long long)
+@ stdcall SHRegGetBoolUSValueW(wstr wstr long long)
+@ stdcall SHRegGetUSValueA(str str ptr ptr ptr long ptr long)
+@ stdcall SHRegGetUSValueW(wstr wstr ptr ptr ptr long ptr long)
+@ stdcall SHRegOpenUSKeyA(str long long ptr long)
+@ stdcall SHRegOpenUSKeyW(wstr long long ptr long)
 @ stdcall SHRegQueryInfoUSKeyA(long ptr ptr ptr ptr long)
 @ stdcall SHRegQueryInfoUSKeyW(long ptr ptr ptr ptr long)
-@ stdcall SHRegQueryUSValueA( long str ptr ptr ptr long ptr long ) shlwapi.SHRegQueryUSValueA
-@ stdcall SHRegQueryUSValueW( long wstr ptr ptr ptr long ptr long ) shlwapi.SHRegQueryUSValueW
+@ stdcall SHRegQueryUSValueA(long str ptr ptr ptr long ptr long)
+@ stdcall SHRegQueryUSValueW(long wstr ptr ptr ptr long ptr long)
 @ stdcall SHRegSetUSValueA(str str long ptr long long)
 @ stdcall SHRegSetUSValueW(wstr wstr long ptr long long)
 @ stdcall SHRegWriteUSValueA(long str long ptr long long)
@@ -1458,7 +1458,7 @@
 # @ stub SetProcessGroupAffinity
 # @ stub SetProcessInformation
 @ stdcall SetProcessMitigationPolicy(long ptr long) kernel32.SetProcessMitigationPolicy
-# @ stub SetProcessPreferredUILanguages
+@ stdcall SetProcessPreferredUILanguages(long ptr ptr) kernel32.SetProcessPreferredUILanguages
 @ stdcall SetProcessPriorityBoost(long long) kernel32.SetProcessPriorityBoost
 @ stdcall SetProcessShutdownParameters(long long) kernel32.SetProcessShutdownParameters
 # @ stub SetProcessValidCallTargets
@@ -1549,7 +1549,7 @@
 @ stdcall StrCmpNCA(str str long)
 @ stdcall StrCmpNCW(wstr wstr long)
 @ stdcall StrCmpNIA(str str long)
-@ stdcall StrCmpNICA(long long long)
+@ stdcall StrCmpNICA(str str long)
 @ stdcall StrCmpNICW(wstr wstr long)
 @ stdcall StrCmpNIW(wstr wstr long)
 @ stdcall StrCmpNW(wstr wstr long)

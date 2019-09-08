@@ -57,6 +57,7 @@
 #include "winbase.h"
 #include "winerror.h"
 #include "winreg.h"
+#include "devguid.h"
 #include "dinput.h"
 
 #include "dinput_private.h"
@@ -234,10 +235,16 @@ static void find_joydevs(void)
 
         /* A true joystick has at least axis X and Y, and at least 1
          * button. copied from linux/drivers/input/joydev.c */
-        if (!test_bit(joydev.absbits, ABS_X) || !test_bit(joydev.absbits, ABS_Y) ||
+        if (((!test_bit(joydev.absbits, ABS_X) || !test_bit(joydev.absbits, ABS_Y)) &&
+             !test_bit(joydev.absbits, ABS_WHEEL) &&
+             !test_bit(joydev.absbits, ABS_GAS) &&
+             !test_bit(joydev.absbits, ABS_BRAKE)) ||
             !(test_bit(joydev.keybits, BTN_TRIGGER) ||
               test_bit(joydev.keybits, BTN_A) ||
-              test_bit(joydev.keybits, BTN_1)))
+              test_bit(joydev.keybits, BTN_1) ||
+              test_bit(joydev.keybits, BTN_BASE) ||
+              test_bit(joydev.keybits, BTN_GEAR_UP) ||
+              test_bit(joydev.keybits, BTN_GEAR_DOWN)))
         {
             close(fd);
             continue;
@@ -259,6 +266,8 @@ static void find_joydevs(void)
             test_bit(joydev.keybits, BTN_BASE4) ||
             test_bit(joydev.keybits, BTN_BASE5) ||
             test_bit(joydev.keybits, BTN_BASE6) ||
+            test_bit(joydev.keybits, BTN_GEAR_UP) ||
+            test_bit(joydev.keybits, BTN_GEAR_DOWN) ||
             test_bit(joydev.keybits, BTN_DEAD);
 
         if (!(joydev.device = HeapAlloc(GetProcessHeap(), 0, strlen(buf) + 1)))
@@ -494,14 +503,18 @@ static JoystickImpl *alloc_device(REFGUID rguid, IDirectInputImpl *dinput, unsig
     /* Count number of available axes - supported Axis & POVs */
     for (i = 0; i < ABS_MAX; i++)
     {
-        if (i < WINE_JOYSTICK_MAX_AXES &&
+        if (idx < WINE_JOYSTICK_MAX_AXES &&
+            i < ABS_HAT0X &&
             test_bit(newDevice->joydev->absbits, i))
         {
             newDevice->generic.device_axis_count++;
             newDevice->dev_axes_to_di[i] = idx;
             newDevice->generic.props[idx].lDevMin = newDevice->joydev->axes[i].minimum;
             newDevice->generic.props[idx].lDevMax = newDevice->joydev->axes[i].maximum;
-            default_axis_map[idx] = i;
+            if (i >= 8 && i <= 10) /* If it's a wheel axis... */
+                default_axis_map[idx] = i - 8; /* ... remap to X/Y/Z */
+            else
+                default_axis_map[idx] = i;
             idx++;
         }
         else
@@ -1019,6 +1032,29 @@ static HRESULT WINAPI JoystickWImpl_GetProperty(LPDIRECTINPUTDEVICE8W iface, REF
 
         pd->dwData = get_joystick_index(&This->generic.base.guid);
         TRACE("DIPROP_JOYSTICKID(%d)\n", pd->dwData);
+        break;
+    }
+
+    case (DWORD_PTR) DIPROP_GUIDANDPATH:
+    {
+        static const WCHAR formatW[] = {'\\','\\','?','\\','h','i','d','#','v','i','d','_','%','0','4','x','&',
+                                        'p','i','d','_','%','0','4','x','&','%','s','_','%','h','u',0};
+        static const WCHAR miW[] = {'m','i',0};
+        static const WCHAR igW[] = {'i','g',0};
+
+        BOOL is_gamepad;
+        LPDIPROPGUIDANDPATH pd = (LPDIPROPGUIDANDPATH)pdiph;
+        WORD vid = This->joydev->vendor_id;
+        WORD pid = This->joydev->product_id;
+
+        if (!pid || !vid)
+            return DIERR_UNSUPPORTED;
+
+        is_gamepad = is_xinput_device(&This->generic.devcaps, vid, pid);
+        pd->guidClass = GUID_DEVCLASS_HIDCLASS;
+        sprintfW(pd->wszPath, formatW, vid, pid, is_gamepad ? igW : miW, get_joystick_index(&This->generic.base.guid));
+
+        TRACE("DIPROP_GUIDANDPATH(%s, %s): returning fake path\n", debugstr_guid(&pd->guidClass), debugstr_w(pd->wszPath));
         break;
     }
 

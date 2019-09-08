@@ -52,6 +52,8 @@ struct irp_call
     struct async          *async;         /* pending async op */
     irp_params_t           params;        /* irp parameters */
     struct iosb           *iosb;          /* I/O status block */
+    int                    canceled;      /* the call was canceled */
+    client_ptr_t           user_ptr;      /* client side pointer */
 };
 
 static void irp_call_dump( struct object *obj, int verbose );
@@ -187,6 +189,7 @@ static int device_file_read( struct fd *fd, struct async *async, file_pos_t pos 
 static int device_file_write( struct fd *fd, struct async *async, file_pos_t pos );
 static int device_file_flush( struct fd *fd, struct async *async );
 static int device_file_ioctl( struct fd *fd, ioctl_code_t code, struct async *async );
+static void device_file_reselect_async( struct fd *fd, struct async_queue *queue );
 
 static const struct object_ops device_file_ops =
 {
@@ -223,7 +226,7 @@ static const struct fd_ops device_file_fd_ops =
     no_fd_get_volume_info,            /* get_volume_info */
     device_file_ioctl,                /* ioctl */
     default_fd_queue_async,           /* queue_async */
-    default_fd_reselect_async         /* reselect_async */
+    device_file_reselect_async        /* reselect_async */
 };
 
 
@@ -351,6 +354,8 @@ static struct irp_call *create_irp( struct device_file *file, const irp_params_t
         irp->async    = NULL;
         irp->params   = *params;
         irp->iosb     = NULL;
+        irp->canceled = 0;
+        irp->user_ptr = 0;
 
         if (async) irp->iosb = async_get_iosb( async );
         if (!irp->iosb && !(irp->iosb = create_iosb( NULL, 0, 0 )))
@@ -376,6 +381,9 @@ static void set_irp_result( struct irp_call *irp, unsigned int status,
     iosb->out_size = min( iosb->out_size, out_size );
     if (iosb->out_size && !(iosb->out_data = memdup( out_data, iosb->out_size )))
         iosb->out_size = 0;
+
+    /* remove it from the device queue */
+    list_remove( &irp->dev_entry );
     irp->file = NULL;
     if (irp->async)
     {
@@ -386,8 +394,6 @@ static void set_irp_result( struct irp_call *irp, unsigned int status,
     }
     wake_up( &irp->obj, 0 );
 
-    /* remove it from the device queue */
-    list_remove( &irp->dev_entry );
     release_object( irp );  /* no longer on the device queue */
     release_object( file );
 }
@@ -469,7 +475,7 @@ static struct object *device_open_file( struct object *obj, unsigned int access,
 
         if ((irp = create_irp( file, &params, NULL )))
         {
-            add_irp_to_queue( device->manager, irp, NULL );
+            add_irp_to_queue( device->manager, irp, current );
             release_object( irp );
         }
     }
@@ -517,7 +523,7 @@ static int device_file_close_handle( struct object *obj, struct process *process
 
         if ((irp = create_irp( file, &params, NULL )))
         {
-            add_irp_to_queue( file->device->manager, irp, NULL );
+            add_irp_to_queue( file->device->manager, irp, current );
             release_object( irp );
         }
     }
@@ -545,6 +551,7 @@ static int fill_irp_params( struct device_manager *manager, struct irp_call *irp
     {
     case IRP_CALL_NONE:
     case IRP_CALL_FREE:
+    case IRP_CALL_CANCEL:
         break;
     case IRP_CALL_CREATE:
         irp->params.create.file    = alloc_handle( current->process, irp->file,
@@ -648,6 +655,40 @@ static int device_file_ioctl( struct fd *fd, ioctl_code_t code, struct async *as
     params.ioctl.type = IRP_CALL_IOCTL;
     params.ioctl.code = code;
     return queue_irp( file, &params, async );
+}
+
+static void cancel_irp_call( struct irp_call *irp )
+{
+    struct irp_call *cancel_irp;
+    irp_params_t params;
+
+    irp->canceled = 1;
+    if (!irp->user_ptr || !irp->file || !irp->file->device->manager) return;
+
+    memset( &params, 0, sizeof(params) );
+    params.cancel.type = IRP_CALL_CANCEL;
+    params.cancel.irp  = irp->user_ptr;
+
+    if ((cancel_irp = create_irp( NULL, &params, NULL )))
+    {
+        add_irp_to_queue( irp->file->device->manager, cancel_irp, NULL );
+        release_object( cancel_irp );
+    }
+
+    set_irp_result( irp, STATUS_CANCELLED, NULL, 0, 0 );
+}
+
+static void device_file_reselect_async( struct fd *fd, struct async_queue *queue )
+{
+    struct device_file *file = get_fd_user( fd );
+    struct irp_call *irp;
+
+    LIST_FOR_EACH_ENTRY( irp, &file->requests, struct irp_call, dev_entry )
+        if (irp->iosb->status != STATUS_PENDING)
+        {
+            cancel_irp_call( irp );
+            return;
+        }
 }
 
 static struct device *create_device( struct object *root, const struct unicode_str *name,
@@ -884,21 +925,23 @@ DECL_HANDLER(get_next_device_request)
                                                              0, &device_manager_ops )))
         return;
 
-    if (req->prev)
-    {
-        if ((irp = (struct irp_call *)get_handle_obj( current->process, req->prev, 0, &irp_call_ops )))
-        {
-            set_irp_result( irp, req->status, NULL, 0, 0 );
-            close_handle( current->process, req->prev );  /* avoid an extra round-trip for close */
-            release_object( irp );
-        }
-    }
+    if (req->prev) close_handle( current->process, req->prev );  /* avoid an extra round-trip for close */
 
+    /* process result of previous call */
     if (manager->current_call)
     {
         irp = manager->current_call;
-        if (irp->async)
+        irp->user_ptr = req->user_ptr;
+
+        if (req->status)
+            set_irp_result( irp, req->status, NULL, 0, 0 );
+        if (irp->canceled)
+            /* if it was canceled during dispatch, we couldn't queue cancel call without client pointer,
+             * so we need to do it now */
+            cancel_irp_call( irp );
+        else if (irp->async)
             set_async_pending( irp->async, irp->file && is_fd_overlapped( irp->file->fd ) );
+
         free_irp_params( irp );
         release_object( irp );
         manager->current_call = NULL;
@@ -908,12 +951,14 @@ DECL_HANDLER(get_next_device_request)
 
     if ((ptr = list_head( &manager->requests )))
     {
+        struct thread *thread;
+
         irp = LIST_ENTRY( ptr, struct irp_call, mgr_entry );
-        if (irp->thread)
-        {
-            reply->client_thread = get_kernel_object_ptr( manager, &irp->thread->obj );
-            reply->client_tid    = get_thread_id( irp->thread );
-        }
+
+        thread = irp->thread ? irp->thread : current;
+        reply->client_thread = get_kernel_object_ptr( manager, &thread->obj );
+        reply->client_tid    = get_thread_id( thread );
+
         iosb = irp->iosb;
         reply->in_size = iosb->in_size;
         if (iosb->in_size > get_reply_max_size()) set_error( STATUS_BUFFER_OVERFLOW );
@@ -946,7 +991,12 @@ DECL_HANDLER(set_irp_result)
 
     if ((irp = (struct irp_call *)get_handle_obj( current->process, req->handle, 0, &irp_call_ops )))
     {
-        set_irp_result( irp, req->status, get_req_data(), get_req_data_size(), req->size );
+        if (!irp->canceled)
+            set_irp_result( irp, req->status, get_req_data(), get_req_data_size(), req->size );
+        else if(irp->user_ptr) /* cancel already queued */
+            set_error( STATUS_MORE_PROCESSING_REQUIRED );
+        else /* we may be still dispatching the IRP. don't bother queuing cancel if it's already complete */
+            irp->canceled = 0;
         close_handle( current->process, req->handle );  /* avoid an extra round-trip for close */
         release_object( irp );
     }

@@ -62,7 +62,7 @@ static inline ParserImpl *impl_from_BaseFilter( BaseFilter *iface )
     return CONTAINING_RECORD(iface, ParserImpl, filter);
 }
 
-static IPin *parser_get_pin(BaseFilter *iface, unsigned int index)
+IPin *parser_get_pin(BaseFilter *iface, unsigned int index)
 {
     ParserImpl *filter = impl_from_BaseFilter(iface);
 
@@ -73,13 +73,9 @@ static IPin *parser_get_pin(BaseFilter *iface, unsigned int index)
     return filter->ppPins[index];
 }
 
-static const BaseFilterFuncTable BaseFuncTable = {
-    .filter_get_pin = parser_get_pin,
-};
-
-HRESULT Parser_Create(ParserImpl *pParser, const IBaseFilterVtbl *Parser_Vtbl,
-        const CLSID* pClsid, const WCHAR *sink_name, PFN_PROCESS_SAMPLE fnProcessSample,
-        PFN_QUERY_ACCEPT fnQueryAccept, PFN_PRE_CONNECT fnPreConnect,
+HRESULT Parser_Create(ParserImpl *pParser, const IBaseFilterVtbl *vtbl, IUnknown *outer,
+        const CLSID *clsid, const BaseFilterFuncTable *func_table, const WCHAR *sink_name,
+        PFN_PROCESS_SAMPLE fnProcessSample, PFN_QUERY_ACCEPT fnQueryAccept, PFN_PRE_CONNECT fnPreConnect,
         PFN_CLEANUP fnCleanup, PFN_DISCONNECT fnDisconnect, REQUESTPROC fnRequest,
         STOPPROCESSPROC fnDone, SourceSeeking_ChangeStop stop,
         SourceSeeking_ChangeStart start, SourceSeeking_ChangeRate rate)
@@ -87,8 +83,8 @@ HRESULT Parser_Create(ParserImpl *pParser, const IBaseFilterVtbl *Parser_Vtbl,
     HRESULT hr;
     PIN_INFO piInput;
 
-    /* pTransformFilter is already allocated */
-    BaseFilter_Init(&pParser->filter, Parser_Vtbl, pClsid, (DWORD_PTR)(__FILE__ ": ParserImpl.csFilter"), &BaseFuncTable);
+    strmbase_filter_init(&pParser->filter, vtbl, outer, clsid,
+            (DWORD_PTR)(__FILE__ ": ParserImpl.csFilter"), func_table);
 
     pParser->fnDisconnect = fnDisconnect;
 
@@ -164,7 +160,6 @@ void Parser_Destroy(ParserImpl *This)
     ULONG pinref;
     HRESULT hr;
 
-    assert(!This->filter.refCount);
     PullPin_WaitForStateChange(This->pInputPin, INFINITE);
 
     /* Don't need to clean up output pins, freeing input pin will do that */
@@ -193,32 +188,6 @@ void Parser_Destroy(ParserImpl *This)
 
     TRACE("Destroying parser\n");
     CoTaskMemFree(This);
-}
-
-ULONG WINAPI Parser_Release(IBaseFilter * iface)
-{
-    ParserImpl *This = impl_from_IBaseFilter(iface);
-    ULONG refCount = InterlockedDecrement(&This->filter.refCount);
-
-    TRACE("(%p)->() Release from %d\n", This, refCount + 1);
-
-    if (!refCount)
-        Parser_Destroy(This);
-
-    return refCount;
-}
-
-/** IPersist methods **/
-
-HRESULT WINAPI Parser_GetClassID(IBaseFilter * iface, CLSID * pClsid)
-{
-    ParserImpl *This = impl_from_IBaseFilter(iface);
-
-    TRACE("%p->(%p)\n", This, pClsid);
-
-    *pClsid = This->filter.clsid;
-
-    return S_OK;
 }
 
 /** IMediaFilter methods **/
@@ -377,33 +346,6 @@ HRESULT WINAPI Parser_SetSyncSource(IBaseFilter * iface, IReferenceClock *pClock
     LeaveCriticalSection(&pin->thread_lock);
 
     return S_OK;
-}
-
-HRESULT WINAPI Parser_GetSyncSource(IBaseFilter * iface, IReferenceClock **ppClock)
-{
-    return BaseFilterImpl_GetSyncSource(iface, ppClock);
-}
-
-/** IBaseFilter implementation **/
-
-HRESULT WINAPI Parser_EnumPins(IBaseFilter * iface, IEnumPins **ppEnum)
-{
-    return BaseFilterImpl_EnumPins(iface,ppEnum);
-}
-
-HRESULT WINAPI Parser_QueryFilterInfo(IBaseFilter * iface, FILTER_INFO *pInfo)
-{
-    return BaseFilterImpl_QueryFilterInfo(iface, pInfo);
-}
-
-HRESULT WINAPI Parser_JoinFilterGraph(IBaseFilter * iface, IFilterGraph *pGraph, LPCWSTR pName)
-{
-    return BaseFilterImpl_JoinFilterGraph(iface, pGraph, pName);
-}
-
-HRESULT WINAPI Parser_QueryVendorInfo(IBaseFilter * iface, LPWSTR *pVendorInfo)
-{
-    return BaseFilterImpl_QueryVendorInfo(iface, pVendorInfo);
 }
 
 static const BaseOutputPinFuncTable output_BaseOutputFuncTable = {
