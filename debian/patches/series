@@ -38,3 +38,4 @@ warnings/dword64-winmm.patch
 warnings/format-overflow.patch
 warnings/argument-promotion.patch
 warnings/discarded-qualifiers.patch
+warnings/uninitialized-variables.patch

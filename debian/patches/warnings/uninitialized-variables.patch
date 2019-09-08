@@ -1,0 +1,163 @@
+description: fix uninitialized variable compiler warnings
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/dlls/comdlg32/filedlg.c
++++ b/dlls/comdlg32/filedlg.c
+@@ -251,7 +251,7 @@ static BOOL get_config_key_dword(HKEY hk
+ 
+ static BOOL get_config_key_string(HKEY hkey, const WCHAR *name, WCHAR **value)
+ {
+-    DWORD type, size;
++    DWORD type, size = 0;
+     WCHAR *str;
+ 
+     if (hkey && !RegQueryValueExW(hkey, name, 0, &type, NULL, &size))
+--- a/dlls/d3dx9_36/texture.c
++++ b/dlls/d3dx9_36/texture.c
+@@ -1291,6 +1291,10 @@ static inline void fill_texture(const st
+             case 3: /* Blue */
+                 comp_value = value->z;
+                 break;
++            default: /* Unhandled */
++                comp_value = 0.f;
++                ERR("Unhandled component, %#x\n", c);
++                break;
+         }
+ 
+         if (format->type == FORMAT_ARGBF16)
+--- a/dlls/kernel32/locale.c
++++ b/dlls/kernel32/locale.c
+@@ -5790,7 +5790,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
+                         LPWSTR lpUnicodeCharStr, INT cchUnicodeChar)
+ {
+     INT i, label_start, label_end, out_label, out = 0;
+-    WCHAR ch;
++    WCHAR ch = '\0';
+ 
+     TRACE("%x %p %d %p %d\n", dwFlags, lpASCIICharStr, cchASCIIChar,
+         lpUnicodeCharStr, cchUnicodeChar);
+--- a/dlls/msvcrt/misc.c
++++ b/dlls/msvcrt/misc.c
+@@ -272,7 +272,7 @@ static void small_sort(void *base, MSVCR
+         int (CDECL *compar)(void *, const void *, const void *), void *context)
+ {
+     MSVCRT_size_t e, i;
+-    char *max, *p;
++    char *max, *p = NULL;
+ 
+     for(e=nmemb; e>1; e--) {
+         max = base;
+--- a/dlls/msxml3/xdr.c
++++ b/dlls/msxml3/xdr.c
+@@ -603,6 +603,10 @@ static xmlNodePtr XDR_E_ElementType(xmlN
+                         case ORDER_ONE:
+                             xsd_child = xmlNewChild(xsd_base, NULL, xs_all, NULL);
+                             break;
++                        default:
++                            xsd_child = NULL;
++                            ERR("Unhandled order enum %d\n", (int)order);
++                            break;
+                     }
+ 
+                     FOREACH_CHILD(xdr, xdr_child)
+--- a/dlls/ole32/datacache.c
++++ b/dlls/ole32/datacache.c
+@@ -2520,7 +2520,7 @@ static HRESULT WINAPI DataCache_EnumCach
+     DataCacheEntry *cache_entry;
+     int i = 0, count = 0;
+     STATDATA *data;
+-    HRESULT hr;
++    HRESULT hr = E_FAIL;
+ 
+     TRACE( "(%p, %p)\n", This, enum_stat );
+ 
+--- a/dlls/webservices/reader.c
++++ b/dlls/webservices/reader.c
+@@ -2042,7 +2042,7 @@ static inline BOOL is_element_type( unsi
+ 
+ static HRESULT read_attributes_bin( struct reader *reader, WS_XML_ELEMENT_NODE *elem )
+ {
+-    WS_XML_ATTRIBUTE *attr;
++    WS_XML_ATTRIBUTE *attr = NULL;
+     unsigned char type;
+     HRESULT hr;
+ 
+@@ -6434,7 +6434,7 @@ static HRESULT read_type_struct( struct
+                                  WS_HEAP *heap, void *ret, ULONG size, BOOL *found )
+ {
+     ULONG i, offset;
+-    HRESULT hr;
++    HRESULT hr = E_FAIL;
+     char *buf;
+ 
+     if (!desc) return E_INVALIDARG;
+--- a/dlls/wined3d/utils.c
++++ b/dlls/wined3d/utils.c
+@@ -2640,6 +2640,10 @@ static void check_fbo_compat(struct wine
+                     case WINED3D_GL_RES_TYPE_COUNT:
+                         color = 0;
+                         break;
++                    default:
++                        color = 0;
++                        ERR("Unhandled type enum %d\n", (int)type);
++                        break;
+                 }
+                 checkGLcall("Post-pixelshader blending check");
+ 
+--- a/dlls/mf/session.c
++++ b/dlls/mf/session.c
+@@ -1114,7 +1114,9 @@ static HRESULT clock_change_state(struct
+             notification = CLOCK_NOTIFY_PAUSE;
+             break;
+         default:
+-            ;
++            notification = CLOCK_NOTIFY_START;
++            ERR("Unhandled clock_command enum %d\n", (int)command);
++            break;
+     }
+ 
+     if (FAILED(hr = clock_call_state_change(system_time, offset, notification, clock->time_source_sink)))
+--- a/dlls/devenum/createdevenum.c
++++ b/dlls/devenum/createdevenum.c
+@@ -388,7 +388,7 @@ static void write_filter_data(IPropertyB
+     HRESULT hr;
+ 
+     hr = CoCreateInstance(&CLSID_FilterMapper2, NULL, CLSCTX_INPROC, &IID_IAMFilterData, (void **)&fildata);
+-    if (FAILED(hr)) goto cleanup;
++    if (FAILED(hr)) goto cleanup2;
+ 
+     hr = IAMFilterData_CreateFilterData(fildata, rgf, &data, &size);
+     if (FAILED(hr)) goto cleanup;
+@@ -409,8 +409,9 @@ static void write_filter_data(IPropertyB
+     if (FAILED(hr)) goto cleanup;
+ 
+ cleanup:
+-    VariantClear(&var);
+     CoTaskMemFree(data);
++cleanup2:
++    VariantClear(&var);
+     IAMFilterData_Release(fildata);
+ }
+ 
+--- a/dlls/devenum/mediacatenum.c
++++ b/dlls/devenum/mediacatenum.c
+@@ -128,7 +128,7 @@ static HRESULT WINAPI DEVENUM_IPropertyB
+     HRESULT res = S_OK;
+     LONG reswin32 = ERROR_SUCCESS;
+     WCHAR name[80];
+-    HKEY hkey;
++    HKEY hkey = NULL;
+ 
+     TRACE("(%p)->(%s, %p, %p)\n", This, debugstr_w(pszPropName), pVar, pErrorLog);
+ 
+--- a/dlls/user32/sysparams.c
++++ b/dlls/user32/sysparams.c
+@@ -1734,7 +1734,7 @@ BOOL WINAPI SystemParametersInfoW( UINT
+     case SPI_GETNONCLIENTMETRICS:
+     {
+         LPNONCLIENTMETRICSW lpnm = pvParam;
+-        int padded_border;
++        int padded_border = 0;
+ 
+         if (!pvParam) return FALSE;
+ 
