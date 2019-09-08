@@ -1,3 +1,14 @@
+wine-development (4.10-1) UNRELEASED; urgency=medium
+
+  * New upstream release 4.10, released Jun 10, 2019.
+    - Many DLLs are built as PE files by default.
+    - More support for installing Plug and Play drivers.
+    - Clock synchronization in Media Foundation.
+    - Volume adjustment in audio drivers.
+    - Various bug fixes.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Sun, 08 Sep 2019 23:34:52 +0200
+
 wine-development (4.9-2) unstable; urgency=medium
 
   * Restore erroneously removed warnings/uninitialized-variables.patch.
