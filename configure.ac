@@ -109,8 +109,7 @@ AC_ARG_WITH(xshm,      AS_HELP_STRING([--without-xshm],[do not use XShm (shared 
 AC_ARG_WITH(xslt,      AS_HELP_STRING([--without-xslt],[do not use XSLT]))
 AC_ARG_WITH(xxf86vm,   AS_HELP_STRING([--without-xxf86vm],[do not use XFree video mode extension]),
             [if test "x$withval" = "xno"; then ac_cv_header_X11_extensions_xf86vmode_h=no; ac_cv_header_X11_extensions_xf86vmproto_h=no; fi])
-AC_ARG_WITH(zlib,      AS_HELP_STRING([--without-zlib],[do not use Zlib (data compression)]),
-            [if test "x$withval" = "xno"; then ac_cv_header_zlib_h=no; fi])
+AC_ARG_WITH(zlib,      AS_HELP_STRING([--without-zlib],[do not use Zlib (data compression)]))
 
 AC_ARG_WITH(wine-tools,AS_HELP_STRING([--with-wine-tools=DIR],[use Wine tools from directory DIR]))
 AC_ARG_WITH(wine64,    AS_HELP_STRING([--with-wine64=DIR],[use the 64-bit Wine in DIR for a Wow64 build]))
@@ -544,8 +543,7 @@ AC_CHECK_HEADERS(\
 	unistd.h \
 	utime.h \
 	valgrind/memcheck.h \
-	valgrind/valgrind.h \
-	zlib.h
+	valgrind/valgrind.h
 )
 WINE_HEADER_MAJOR()
 AC_HEADER_STAT()
@@ -1570,10 +1568,14 @@ WINE_CHECK_LIB_FUNCS(\
         [$PTHREAD_LIBS])
 
 dnl **** Check for zlib ****
-if test "$ac_cv_header_zlib_h" = "yes"
+if test "x$with_zlib" != "xno"
 then
-    AC_CHECK_LIB(z,inflate,[AC_DEFINE(HAVE_ZLIB,1,[Define to 1 if you have the `z' library (-lz).])
-                            AC_SUBST(Z_LIBS,"-lz")])
+    WINE_PACKAGE_FLAGS(Z,[libz],[-lz],,,
+        [AC_CHECK_HEADERS(zlib.h,
+            [AC_CHECK_LIB(z,inflate,
+                          [AC_DEFINE(HAVE_ZLIB,1,[Define to 1 if you have the `z' library (-lz).])],
+                          [Z_LIBS=""],[$Z_LIBS])],
+            [Z_LIBS=""])])
 fi
 WINE_NOTICE_WITH(zlib,[test "x$Z_LIBS" = "x"],[libz ${notice_platform}development files not found, data compression won't be supported.])
 
@@ -2022,14 +2024,16 @@ char*f(const char *h,char n) {return strchr(h,n);}]])],[ac_cv_c_logicalop_noisy=
        WINE_TRY_CFLAGS([-fshort-wchar],[MSVCRTFLAGS="$MSVCRTFLAGS -fshort-wchar"]) ;;
   esac
 
-  dnl gcc-4.6+ omits frame pointers by default, breaking some copy protections
   case $host_cpu in
+    dnl gcc-4.6+ omits frame pointers by default, breaking some copy protections
     *i[[3456789]]86*) WINE_TRY_CFLAGS([-fno-omit-frame-pointer]) ;;
-  esac
-
-  dnl mingw uses Windows 64-bit types, not Unix ones
-  case $host in
-    x86_64-*mingw32*|x86_64-*cygwin*) WINE_TRY_CFLAGS([-Wno-format]) ;;
+    *x86_64*)
+      case $host_os in
+        dnl Mingw uses Windows 64-bit types, not Unix ones
+        cygwin*|mingw32*) WINE_TRY_CFLAGS([-Wno-format]) ;;
+        dnl Default to ms_abi on 64-bit
+        *) WINE_TRY_CFLAGS([-mabi=ms],[MSVCRTFLAGS="$MSVCRTFLAGS -mabi=ms"]) ;;
+      esac ;;
   esac
 
   dnl Enable -Werror for maintainer mode
@@ -3251,6 +3255,9 @@ WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-rtcore-ntuser-syscolors-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-rtcore-ntuser-sysparams-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-security-credui-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-security-cryptui-l1-1-0)
+WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-shell-comctl32-init-l1-1-0)
+WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-shell-comdlg32-l1-1-0)
+WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-shell-shell32-l1-2-0)
 WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-uxtheme-themes-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/faultrep)
 WINE_CONFIG_MAKEFILE(dlls/faultrep/tests)
@@ -4027,6 +4034,7 @@ else
 fonts \
 loader/l_intl.nls \
 loader/wine.inf \
+loader/winehid.inf \
 programs/msidb/msidb \
 programs/msiexec/msiexec \
 programs/notepad/notepad \

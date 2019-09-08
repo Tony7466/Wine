@@ -233,13 +233,71 @@ static IPin *qt_splitter_get_pin(BaseFilter *base, unsigned int index)
     return NULL;
 }
 
+static void qt_splitter_destroy(BaseFilter *iface)
+{
+    QTSplitter *filter = impl_from_BaseFilter(iface);
+    IPin *peer = NULL;
+    ULONG pinref;
+
+    EnterCriticalSection(&filter->csReceive);
+    /* Don't need to clean up output pins, disconnecting input pin will do that */
+    IPin_ConnectedTo(&filter->pInputPin.pin.IPin_iface, &peer);
+    if (peer)
+    {
+        IPin_Disconnect(peer);
+        IPin_Release(peer);
+    }
+    pinref = IPin_Release(&filter->pInputPin.pin.IPin_iface);
+    if (pinref)
+    {
+        ERR("pinref should be null, is %u, destroying anyway\n", pinref);
+        assert((LONG)pinref > 0);
+
+        while (pinref)
+            pinref = IPin_Release(&filter->pInputPin.pin.IPin_iface);
+    }
+
+    if (filter->pQTMovie)
+    {
+        DisposeMovie(filter->pQTMovie);
+        filter->pQTMovie = NULL;
+    }
+    if (filter->vContext)
+        QTVisualContextRelease(filter->vContext);
+    if (filter->aSession)
+        MovieAudioExtractionEnd(filter->aSession);
+
+    ExitMoviesOnThread();
+    LeaveCriticalSection(&filter->csReceive);
+
+    if (filter->loaderThread)
+    {
+        WaitForSingleObject(filter->loaderThread, INFINITE);
+        CloseHandle(filter->loaderThread);
+    }
+    if (filter->splitterThread)
+    {
+        SetEvent(filter->runEvent);
+        WaitForSingleObject(filter->splitterThread, INFINITE);
+        CloseHandle(filter->splitterThread);
+    }
+
+    CloseHandle(filter->runEvent);
+
+    filter->csReceive.DebugInfo->Spare[0] = 0;
+    DeleteCriticalSection(&filter->csReceive);
+    strmbase_filter_cleanup(&filter->filter);
+
+    CoTaskMemFree(filter);
+}
+
 static const BaseFilterFuncTable BaseFuncTable = {
     .filter_get_pin = qt_splitter_get_pin,
+    .filter_destroy = qt_splitter_destroy,
 };
 
-IUnknown * CALLBACK QTSplitter_create(IUnknown *punkout, HRESULT *phr)
+IUnknown * CALLBACK QTSplitter_create(IUnknown *outer, HRESULT *phr)
 {
-    IUnknown *obj = NULL;
     PIN_INFO *piInput;
     QTSplitter *This;
     static const WCHAR wcsInputPinName[] = {'I','n','p','u','t',' ','P','i','n',0};
@@ -249,7 +307,6 @@ IUnknown * CALLBACK QTSplitter_create(IUnknown *punkout, HRESULT *phr)
     RegisterWineDataHandler();
 
     This = CoTaskMemAlloc(sizeof(*This));
-    obj = (IUnknown*)This;
     if (!This)
     {
         *phr = E_OUTOFMEMORY;
@@ -257,7 +314,8 @@ IUnknown * CALLBACK QTSplitter_create(IUnknown *punkout, HRESULT *phr)
     }
     ZeroMemory(This,sizeof(*This));
 
-    BaseFilter_Init(&This->filter, &QT_Vtbl, &CLSID_QTSplitter, (DWORD_PTR)(__FILE__ ": QTSplitter.csFilter"), &BaseFuncTable);
+    strmbase_filter_init(&This->filter, &QT_Vtbl, outer, &CLSID_QTSplitter,
+            (DWORD_PTR)(__FILE__ ": QTSplitter.csFilter"), &BaseFuncTable);
 
     InitializeCriticalSection(&This->csReceive);
     This->csReceive.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__": QTSplitter.csReceive");
@@ -280,66 +338,7 @@ IUnknown * CALLBACK QTSplitter_create(IUnknown *punkout, HRESULT *phr)
     SourceSeeking_Init(&This->sourceSeeking, &QT_Seeking_Vtbl, QTSplitter_ChangeStop, QTSplitter_ChangeStart, QTSplitter_ChangeRate,  &This->filter.csFilter);
 
     *phr = S_OK;
-    return obj;
-}
-
-static void QT_Destroy(QTSplitter *This)
-{
-    IPin *connected = NULL;
-    ULONG pinref;
-
-    TRACE("Destroying\n");
-
-    EnterCriticalSection(&This->csReceive);
-    /* Don't need to clean up output pins, disconnecting input pin will do that */
-    IPin_ConnectedTo(&This->pInputPin.pin.IPin_iface, &connected);
-    if (connected)
-    {
-        IPin_Disconnect(connected);
-        IPin_Release(connected);
-    }
-    pinref = IPin_Release(&This->pInputPin.pin.IPin_iface);
-    if (pinref)
-    {
-        ERR("pinref should be null, is %u, destroying anyway\n", pinref);
-        assert((LONG)pinref > 0);
-
-        while (pinref)
-            pinref = IPin_Release(&This->pInputPin.pin.IPin_iface);
-    }
-
-    if (This->pQTMovie)
-    {
-        DisposeMovie(This->pQTMovie);
-        This->pQTMovie = NULL;
-    }
-    if (This->vContext)
-        QTVisualContextRelease(This->vContext);
-    if (This->aSession)
-        MovieAudioExtractionEnd(This->aSession);
-
-    ExitMoviesOnThread();
-    LeaveCriticalSection(&This->csReceive);
-
-    if (This->loaderThread)
-    {
-        WaitForSingleObject(This->loaderThread, INFINITE);
-        CloseHandle(This->loaderThread);
-    }
-    if (This->splitterThread)
-    {
-        SetEvent(This->runEvent);
-        WaitForSingleObject(This->splitterThread, INFINITE);
-        CloseHandle(This->splitterThread);
-    }
-
-    CloseHandle(This->runEvent);
-
-    This->csReceive.DebugInfo->Spare[0] = 0;
-    DeleteCriticalSection(&This->csReceive);
-    strmbase_filter_cleanup(&This->filter);
-
-    CoTaskMemFree(This);
+    return &This->filter.IUnknown_inner;
 }
 
 static HRESULT WINAPI QT_QueryInterface(IBaseFilter *iface, REFIID riid, LPVOID *ppv)
@@ -371,19 +370,6 @@ static HRESULT WINAPI QT_QueryInterface(IBaseFilter *iface, REFIID riid, LPVOID 
         FIXME("No interface for %s!\n", debugstr_guid(riid));
 
     return E_NOINTERFACE;
-}
-
-static ULONG WINAPI QT_Release(IBaseFilter *iface)
-{
-    QTSplitter *This = impl_from_IBaseFilter(iface);
-    ULONG refCount = InterlockedDecrement(&This->filter.refCount);
-
-    TRACE("(%p)->() Release from %d\n", This, refCount + 1);
-
-    if (!refCount)
-        QT_Destroy(This);
-
-    return refCount;
 }
 
 static HRESULT WINAPI QT_Stop(IBaseFilter *iface)
@@ -791,7 +777,7 @@ static HRESULT WINAPI QT_GetState(IBaseFilter *iface, DWORD dwMilliSecsTimeout, 
 static const IBaseFilterVtbl QT_Vtbl = {
     QT_QueryInterface,
     BaseFilterImpl_AddRef,
-    QT_Release,
+    BaseFilterImpl_Release,
     BaseFilterImpl_GetClassID,
     QT_Stop,
     QT_Pause,

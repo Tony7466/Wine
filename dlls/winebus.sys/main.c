@@ -31,6 +31,7 @@
 #include "winternl.h"
 #include "winreg.h"
 #include "setupapi.h"
+#include "cfgmgr32.h"
 #include "winioctl.h"
 #include "ddk/wdm.h"
 #include "ddk/hidport.h"
@@ -42,6 +43,8 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(plugplay);
 WINE_DECLARE_DEBUG_CHANNEL(hid_report);
+
+static const WCHAR backslashW[] = {'\\',0};
 
 #define VID_MICROSOFT 0x045e
 
@@ -60,6 +63,10 @@ static const WORD PID_XBOX_CONTROLLERS[] =  {
     0x02fd, /* Xbox One S Controller (Firmware 2017) */
     0x0719, /* Xbox 360 Wireless Adapter */
 };
+
+static DRIVER_OBJECT *driver_obj;
+
+HANDLE driver_key;
 
 struct pnp_device
 {
@@ -136,41 +143,40 @@ static DWORD get_device_index(WORD vid, WORD pid, WORD input)
 
 static WCHAR *get_instance_id(DEVICE_OBJECT *device)
 {
-    static const WCHAR formatW[] =  {'%','s','\\','v','i','d','_','%','0','4','x','&','p','i','d','_','%','0','4','x',
-                                     '\\','%','i','&','%','s','&','%','x','&','%','i',0};
-    static const WCHAR format_inputW[] = {'%','s','\\','v','i','d','_','%','0','4','x','&','p','i','d','_','%','0','4','x','&',
-                                     '%','s','_','%','i','\\','%','i','&','%','s','&','%','x','&','%','i',0};
+    static const WCHAR formatW[] =  {'%','i','&','%','s','&','%','x','&','%','i',0};
     struct device_extension *ext = (struct device_extension *)device->DeviceExtension;
     const WCHAR *serial = ext->serial ? ext->serial : zero_serialW;
-    DWORD len = strlenW(ext->busid) + strlenW(serial) + 64;
+    DWORD len = strlenW(serial) + 33;
     WCHAR *dst;
 
-    if ((dst = HeapAlloc(GetProcessHeap(), 0, len * sizeof(WCHAR))))
-    {
-        if (ext->input == (WORD)-1)
-        {
-            sprintfW(dst, formatW, ext->busid, ext->vid, ext->pid,
-                    ext->version, serial, ext->uid, ext->index);
-        }
-        else
-        {
-            sprintfW(dst, format_inputW, ext->busid, ext->vid, ext->pid, ext->is_gamepad ? igW : miW,
-                    ext->input, ext->version, serial, ext->uid, ext->index);
-        }
-    }
+    if ((dst = ExAllocatePool(PagedPool, len * sizeof(WCHAR))))
+        sprintfW(dst, formatW, ext->version, serial, ext->uid, ext->index);
 
     return dst;
 }
 
 static WCHAR *get_device_id(DEVICE_OBJECT *device)
 {
-    static const WCHAR formatW[] =  {'%','s','\\','V','i','d','_','%','0','4','x','&','P','i','d','_','%','0','4','x',0};
+    static const WCHAR formatW[] = {'%','s','\\','v','i','d','_','%','0','4','x',
+            '&','p','i','d','_','%','0','4','x',0};
+    static const WCHAR format_inputW[] = {'%','s','\\','v','i','d','_','%','0','4','x',
+            '&','p','i','d','_','%','0','4','x','&','%','s','_','%','i',0};
     struct device_extension *ext = (struct device_extension *)device->DeviceExtension;
-    DWORD len = strlenW(ext->busid) + 19;
+    DWORD len = strlenW(ext->busid) + 34;
     WCHAR *dst;
 
-    if ((dst = HeapAlloc(GetProcessHeap(), 0, len * sizeof(WCHAR))))
-        sprintfW(dst, formatW, ext->busid, ext->vid, ext->pid);
+    if ((dst = ExAllocatePool(PagedPool, len * sizeof(WCHAR))))
+    {
+        if (ext->input == (WORD)-1)
+        {
+            sprintfW(dst, formatW, ext->busid, ext->vid, ext->pid);
+        }
+        else
+        {
+            sprintfW(dst, format_inputW, ext->busid, ext->vid, ext->pid,
+                    ext->is_gamepad ? igW : miW, ext->input);
+        }
+    }
 
     return dst;
 }
@@ -178,41 +184,23 @@ static WCHAR *get_device_id(DEVICE_OBJECT *device)
 static WCHAR *get_compatible_ids(DEVICE_OBJECT *device)
 {
     struct device_extension *ext = (struct device_extension *)device->DeviceExtension;
-    WCHAR *iid, *did, *dst, *ptr;
-    DWORD len;
+    WCHAR *dst;
 
-    if (!(iid = get_instance_id(device)))
-        return NULL;
-
-    if (!(did = get_device_id(device)))
+    if ((dst = ExAllocatePool(PagedPool, (strlenW(ext->busid) + 2) * sizeof(WCHAR))))
     {
-        HeapFree(GetProcessHeap(), 0, iid);
-        return NULL;
+        strcpyW(dst, ext->busid);
+        dst[strlenW(dst) + 1] = 0;
     }
 
-    len = strlenW(iid) + strlenW(did) + strlenW(ext->busid) + 4;
-    if ((dst = HeapAlloc(GetProcessHeap(), 0, len * sizeof(WCHAR))))
-    {
-        ptr = dst;
-        strcpyW(ptr, iid);
-        ptr += strlenW(iid) + 1;
-        strcpyW(ptr, did);
-        ptr += strlenW(did) + 1;
-        strcpyW(ptr, ext->busid);
-        ptr += strlenW(ext->busid) + 1;
-        *ptr = 0;
-    }
-
-    HeapFree(GetProcessHeap(), 0, iid);
-    HeapFree(GetProcessHeap(), 0, did);
     return dst;
 }
 
-DEVICE_OBJECT *bus_create_hid_device(DRIVER_OBJECT *driver, const WCHAR *busidW, WORD vid, WORD pid,
+DEVICE_OBJECT *bus_create_hid_device(const WCHAR *busidW, WORD vid, WORD pid,
                                      WORD input, DWORD version, DWORD uid, const WCHAR *serialW, BOOL is_gamepad,
                                      const GUID *class, const platform_vtbl *vtbl, DWORD platform_data_size)
 {
     static const WCHAR device_name_fmtW[] = {'\\','D','e','v','i','c','e','\\','%','s','#','%','p',0};
+    WCHAR *id, instance[MAX_DEVICE_ID_LEN];
     struct device_extension *ext;
     struct pnp_device *pnp_dev;
     DEVICE_OBJECT *device;
@@ -220,11 +208,10 @@ DEVICE_OBJECT *bus_create_hid_device(DRIVER_OBJECT *driver, const WCHAR *busidW,
     WCHAR dev_name[256];
     HDEVINFO devinfo;
     SP_DEVINFO_DATA data = {sizeof(data)};
-    WCHAR *instance = NULL;
     NTSTATUS status;
     DWORD length;
 
-    TRACE("(%p, %s, %04x, %04x, %04x, %u, %u, %s, %u, %s, %p, %u)\n", driver,
+    TRACE("(%s, %04x, %04x, %04x, %u, %u, %s, %u, %s, %p, %u)\n",
             debugstr_w(busidW), vid, pid, input, version, uid, debugstr_w(serialW),
             is_gamepad, debugstr_guid(class), vtbl, platform_data_size);
 
@@ -234,7 +221,7 @@ DEVICE_OBJECT *bus_create_hid_device(DRIVER_OBJECT *driver, const WCHAR *busidW,
     sprintfW(dev_name, device_name_fmtW, busidW, pnp_dev);
     RtlInitUnicodeString(&nameW, dev_name);
     length = FIELD_OFFSET(struct device_extension, platform_private[platform_data_size]);
-    status = IoCreateDevice(driver, length, &nameW, 0, 0, FALSE, &device);
+    status = IoCreateDevice(driver_obj, length, &nameW, 0, 0, FALSE, &device);
     if (status)
     {
         FIXME("failed to create device error %x\n", status);
@@ -281,12 +268,22 @@ DEVICE_OBJECT *bus_create_hid_device(DRIVER_OBJECT *driver, const WCHAR *busidW,
         goto error;
     }
 
-    instance = get_instance_id(device);
-    if (!instance)
+    if (!(id = get_device_id(device)))
     {
         ERR("failed to generate instance id\n");
         goto error;
     }
+    strcpyW(instance, id);
+    ExFreePool(id);
+
+    if (!(id = get_instance_id(device)))
+    {
+        ERR("failed to generate instance id\n");
+        goto error;
+    }
+    strcatW(instance, backslashW);
+    strcatW(instance, id);
+    ExFreePool(id);
 
     if (SetupDiCreateDeviceInfoW(devinfo, instance, class, NULL, NULL, DICD_INHERIT_CLASSDRVS, &data))
     {
@@ -297,7 +294,6 @@ DEVICE_OBJECT *bus_create_hid_device(DRIVER_OBJECT *driver, const WCHAR *busidW,
         ERR("failed to create device info, error %#x\n", GetLastError());
 
 error:
-    HeapFree(GetProcessHeap(), 0, instance);
     SetupDiDestroyDeviceInfoList(devinfo);
     return device;
 }
@@ -389,8 +385,7 @@ static NTSTATUS build_device_relations(DEVICE_RELATIONS **devices)
     struct pnp_device *ptr;
 
     EnterCriticalSection(&device_list_cs);
-    *devices = HeapAlloc(GetProcessHeap(), 0, sizeof(DEVICE_RELATIONS) +
-        list_count(&pnp_devset) * sizeof (void *));
+    *devices = ExAllocatePool(PagedPool, offsetof(DEVICE_RELATIONS, Objects[list_count(&pnp_devset)]));
 
     if (!*devices)
     {
@@ -469,7 +464,7 @@ static NTSTATUS handle_IRP_MN_QUERY_ID(DEVICE_OBJECT *device, IRP *irp)
     return status;
 }
 
-NTSTATUS WINAPI common_pnp_dispatch(DEVICE_OBJECT *device, IRP *irp)
+static NTSTATUS WINAPI common_pnp_dispatch(DEVICE_OBJECT *device, IRP *irp)
 {
     NTSTATUS status = irp->IoStatus.u.Status;
     IO_STACK_LOCATION *irpsp = IoGetCurrentIrpStackLocation(irp);
@@ -514,7 +509,7 @@ static NTSTATUS deliver_last_report(struct device_extension *ext, DWORD buffer_l
     }
 }
 
-NTSTATUS WINAPI hid_internal_dispatch(DEVICE_OBJECT *device, IRP *irp)
+static NTSTATUS WINAPI hid_internal_dispatch(DEVICE_OBJECT *device, IRP *irp)
 {
     NTSTATUS status = irp->IoStatus.u.Status;
     IO_STACK_LOCATION *irpsp = IoGetCurrentIrpStackLocation(irp);
@@ -736,30 +731,19 @@ void process_hid_report(DEVICE_OBJECT *device, BYTE *report, DWORD length)
     LeaveCriticalSection(&ext->report_cs);
 }
 
-DWORD check_bus_option(UNICODE_STRING *registry_path, const UNICODE_STRING *option, DWORD default_value)
+DWORD check_bus_option(const UNICODE_STRING *option, DWORD default_value)
 {
-    OBJECT_ATTRIBUTES attr;
-    HANDLE key;
-    DWORD output = default_value;
+    char buffer[FIELD_OFFSET(KEY_VALUE_PARTIAL_INFORMATION, Data[sizeof(DWORD)])];
+    KEY_VALUE_PARTIAL_INFORMATION *info = (KEY_VALUE_PARTIAL_INFORMATION*)buffer;
+    DWORD size;
 
-    InitializeObjectAttributes(&attr, registry_path, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
-    if (NtOpenKey(&key, KEY_ALL_ACCESS, &attr) == STATUS_SUCCESS)
+    if (NtQueryValueKey(driver_key, option, KeyValuePartialInformation, info, sizeof(buffer), &size) == STATUS_SUCCESS)
     {
-        DWORD size;
-        char buffer[FIELD_OFFSET(KEY_VALUE_PARTIAL_INFORMATION, Data[sizeof(DWORD)])];
-
-        KEY_VALUE_PARTIAL_INFORMATION *info = (KEY_VALUE_PARTIAL_INFORMATION*)buffer;
-
-        if (NtQueryValueKey(key, option, KeyValuePartialInformation, info, sizeof(buffer), &size) == STATUS_SUCCESS)
-        {
-            if (info->Type == REG_DWORD)
-                output = *(DWORD*)info->Data;
-        }
-
-        NtClose(key);
+        if (info->Type == REG_DWORD)
+            return *(DWORD*)info->Data;
     }
 
-    return output;
+    return default_value;
 }
 
 BOOL is_xbox_gamepad(WORD vid, WORD pid)
@@ -780,30 +764,37 @@ static void WINAPI driver_unload(DRIVER_OBJECT *driver)
     udev_driver_unload();
     iohid_driver_unload();
     sdl_driver_unload();
+    NtClose(driver_key);
 }
 
 NTSTATUS WINAPI DriverEntry( DRIVER_OBJECT *driver, UNICODE_STRING *path )
 {
-    static const WCHAR udevW[] = {'\\','D','r','i','v','e','r','\\','U','D','E','V',0};
-    static UNICODE_STRING udev = {sizeof(udevW) - sizeof(WCHAR), sizeof(udevW), (WCHAR *)udevW};
-    static const WCHAR iohidW[] = {'\\','D','r','i','v','e','r','\\','I','O','H','I','D',0};
-    static UNICODE_STRING iohid = {sizeof(iohidW) - sizeof(WCHAR), sizeof(iohidW), (WCHAR *)iohidW};
-    static const WCHAR sdlW[] = {'\\','D','r','i','v','e','r','\\','S','D','L','J','O','Y',0};
-    static UNICODE_STRING sdl = {sizeof(sdlW) - sizeof(WCHAR), sizeof(sdlW), (WCHAR *)sdlW};
     static const WCHAR SDL_enabledW[] = {'E','n','a','b','l','e',' ','S','D','L',0};
     static const UNICODE_STRING SDL_enabled = {sizeof(SDL_enabledW) - sizeof(WCHAR), sizeof(SDL_enabledW), (WCHAR*)SDL_enabledW};
+    OBJECT_ATTRIBUTES attr = {0};
+    NTSTATUS ret;
 
     TRACE( "(%p, %s)\n", driver, debugstr_w(path->Buffer) );
 
-    if (check_bus_option(path, &SDL_enabled, 1))
+    attr.Length = sizeof(attr);
+    attr.ObjectName = path;
+    attr.Attributes = OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE;
+    if ((ret = NtOpenKey(&driver_key, KEY_ALL_ACCESS, &attr)) != STATUS_SUCCESS)
+        ERR("Failed to open driver key, status %#x.\n", ret);
+
+    driver_obj = driver;
+
+    driver->MajorFunction[IRP_MJ_PNP] = common_pnp_dispatch;
+    driver->MajorFunction[IRP_MJ_INTERNAL_DEVICE_CONTROL] = hid_internal_dispatch;
+    driver->DriverUnload = driver_unload;
+
+    if (check_bus_option(&SDL_enabled, 1))
     {
-        if (IoCreateDriver(&sdl, sdl_driver_init) == STATUS_SUCCESS)
+        if (sdl_driver_init() == STATUS_SUCCESS)
             return STATUS_SUCCESS;
     }
-    IoCreateDriver(&udev, udev_driver_init);
-    IoCreateDriver(&iohid, iohid_driver_init);
-
-    driver->DriverUnload = driver_unload;
+    udev_driver_init();
+    iohid_driver_init();
 
     return STATUS_SUCCESS;
 }

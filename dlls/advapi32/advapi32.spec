@@ -272,7 +272,7 @@
 # @ stub EncryptionDisable
 @ stdcall EnumDependentServicesA(long long ptr long ptr ptr)
 @ stdcall EnumDependentServicesW(long long ptr long ptr ptr)
-# @ stub EnumDynamicTimeZoneInformation
+@ stdcall EnumDynamicTimeZoneInformation(long ptr) EnumDynamicTimeZoneInformation
 @ stub EnumServiceGroupA
 @ stub EnumServiceGroupW
 @ stdcall EnumServicesStatusA (long long long ptr long ptr ptr ptr)
@@ -430,6 +430,8 @@
 @ stdcall LookupAccountNameA(str str ptr ptr ptr ptr ptr)
 @ stdcall LookupAccountNameW(wstr wstr ptr ptr ptr ptr ptr)
 @ stdcall LookupAccountSidA(ptr ptr ptr ptr ptr ptr ptr)
+@ stdcall LookupAccountSidLocalA(ptr ptr ptr ptr ptr ptr)
+@ stdcall LookupAccountSidLocalW(ptr ptr ptr ptr ptr ptr)
 @ stdcall LookupAccountSidW(ptr ptr ptr ptr ptr ptr ptr)
 @ stdcall LookupPrivilegeDisplayNameA(str str str ptr ptr)
 @ stdcall LookupPrivilegeDisplayNameW(wstr wstr wstr ptr ptr)

@@ -139,8 +139,38 @@ static IPin *transform_get_pin(BaseFilter *iface, unsigned int index)
     return filter->ppPins[index];
 }
 
+static void transform_destroy(BaseFilter *iface)
+{
+    TransformFilter *filter = impl_from_BaseFilter(iface);
+    ULONG i;
+
+    for (i = 0; i < 2; ++i)
+    {
+        IPin *peer;
+
+        if (SUCCEEDED(IPin_ConnectedTo(filter->ppPins[i], &peer)))
+        {
+            IPin_Disconnect(peer);
+            IPin_Release(peer);
+        }
+        IPin_Disconnect(filter->ppPins[i]);
+        IPin_Release(filter->ppPins[i]);
+    }
+
+    CoTaskMemFree(filter->ppPins);
+
+    filter->csReceive.DebugInfo->Spare[0] = 0;
+    DeleteCriticalSection(&filter->csReceive);
+    FreeMediaType(&filter->pmt);
+    QualityControlImpl_Destroy(filter->qcimpl);
+    IUnknown_Release(filter->seekthru_unk);
+    strmbase_filter_cleanup(&filter->filter);
+    CoTaskMemFree(filter);
+}
+
 static const BaseFilterFuncTable tfBaseFuncTable = {
     .filter_get_pin = transform_get_pin,
+    .filter_destroy = transform_destroy,
 };
 
 static const BaseInputPinFuncTable tf_input_BaseInputFuncTable = {
@@ -160,45 +190,6 @@ static const BaseOutputPinFuncTable tf_output_BaseOutputFuncTable = {
     TransformFilter_Output_DecideBufferSize,
     BaseOutputPinImpl_DecideAllocator,
 };
-
-static ULONG WINAPI TransformFilterImpl_Release(IBaseFilter * iface)
-{
-    TransformFilter *This = impl_from_IBaseFilter(iface);
-    ULONG refCount = InterlockedDecrement(&This->filter.refCount);
-
-    TRACE("(%p/%p)->() Release from %d\n", This, iface, refCount + 1);
-
-    if (!refCount)
-    {
-        ULONG i;
-
-        for (i = 0; i < 2; i++)
-        {
-            IPin *pConnectedTo;
-
-            if (SUCCEEDED(IPin_ConnectedTo(This->ppPins[i], &pConnectedTo)))
-            {
-                IPin_Disconnect(pConnectedTo);
-                IPin_Release(pConnectedTo);
-            }
-            IPin_Disconnect(This->ppPins[i]);
-
-            IPin_Release(This->ppPins[i]);
-        }
-
-        CoTaskMemFree(This->ppPins);
-
-        TRACE("Destroying transform filter\n");
-        This->csReceive.DebugInfo->Spare[0] = 0;
-        DeleteCriticalSection(&This->csReceive);
-        FreeMediaType(&This->pmt);
-        QualityControlImpl_Destroy(This->qcimpl);
-        IUnknown_Release(This->seekthru_unk);
-        strmbase_filter_cleanup(&This->filter);
-        CoTaskMemFree(This);
-    }
-    return refCount;
-}
 
 static HRESULT WINAPI TransformFilterImpl_Stop(IBaseFilter *iface)
 {
@@ -275,7 +266,7 @@ static const IBaseFilterVtbl transform_vtbl =
 {
     BaseFilterImpl_QueryInterface,
     BaseFilterImpl_AddRef,
-    TransformFilterImpl_Release,
+    BaseFilterImpl_Release,
     BaseFilterImpl_GetClassID,
     TransformFilterImpl_Stop,
     TransformFilterImpl_Pause,
@@ -290,14 +281,14 @@ static const IBaseFilterVtbl transform_vtbl =
     BaseFilterImpl_QueryVendorInfo
 };
 
-static HRESULT strmbase_transform_init(const CLSID *clsid,
+static HRESULT strmbase_transform_init(IUnknown *outer, const CLSID *clsid,
         const TransformFilterFuncTable *func_table, TransformFilter *filter)
 {
     HRESULT hr;
     PIN_INFO piInput;
     PIN_INFO piOutput;
 
-    BaseFilter_Init(&filter->filter, &transform_vtbl, clsid,
+    strmbase_filter_init(&filter->filter, &transform_vtbl, outer, clsid,
             (DWORD_PTR)(__FILE__ ": TransformFilter.csFilter"), &tfBaseFuncTable);
 
     InitializeCriticalSection(&filter->csReceive);
@@ -358,7 +349,7 @@ static HRESULT strmbase_transform_init(const CLSID *clsid,
     return hr;
 }
 
-HRESULT strmbase_transform_create(LONG filter_size, const CLSID *pClsid,
+HRESULT strmbase_transform_create(LONG filter_size, IUnknown *outer, const CLSID *pClsid,
         const TransformFilterFuncTable *pFuncsTable, IBaseFilter **ppTransformFilter)
 {
     TransformFilter* pTf;
@@ -374,7 +365,7 @@ HRESULT strmbase_transform_create(LONG filter_size, const CLSID *pClsid,
 
     ZeroMemory(pTf, filter_size);
 
-    if (SUCCEEDED(strmbase_transform_init(pClsid, pFuncsTable, pTf)))
+    if (SUCCEEDED(strmbase_transform_init(outer, pClsid, pFuncsTable, pTf)))
     {
         *ppTransformFilter = &pTf->filter.IBaseFilter_iface;
         return S_OK;

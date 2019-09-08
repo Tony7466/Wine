@@ -834,7 +834,7 @@ void wined3d_shader_resource_view_gl_bind(struct wined3d_shader_resource_view_gl
     const struct wined3d_gl_info *gl_info = context->gl_info;
     struct wined3d_texture_gl *texture_gl;
 
-    context_active_texture(context, gl_info, unit);
+    wined3d_context_gl_active_texture(context_gl, gl_info, unit);
 
     if (view_gl->gl_view.name)
     {
@@ -856,20 +856,18 @@ void wined3d_shader_resource_view_gl_bind(struct wined3d_shader_resource_view_gl
 
 /* Context activation is done by the caller. */
 static void shader_resource_view_gl_bind_and_dirtify(struct wined3d_shader_resource_view_gl *view_gl,
-        struct wined3d_context *context)
+        struct wined3d_context_gl *context_gl)
 {
-    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
-
-    if (context->active_texture < ARRAY_SIZE(context_gl->rev_tex_unit_map))
+    if (context_gl->active_texture < ARRAY_SIZE(context_gl->rev_tex_unit_map))
     {
-        unsigned int active_sampler = context_gl->rev_tex_unit_map[context->active_texture];
+        unsigned int active_sampler = context_gl->rev_tex_unit_map[context_gl->active_texture];
         if (active_sampler != WINED3D_UNMAPPED_STAGE)
-            context_invalidate_state(context, STATE_SAMPLER(active_sampler));
+            context_invalidate_state(&context_gl->c, STATE_SAMPLER(active_sampler));
     }
     /* FIXME: Ideally we'd only do this when touching a binding that's used by
      * a shader. */
-    context_invalidate_compute_state(context, STATE_COMPUTE_SHADER_RESOURCE_BINDING);
-    context_invalidate_state(context, STATE_GRAPHICS_SHADER_RESOURCE_BINDING);
+    context_invalidate_compute_state(&context_gl->c, STATE_COMPUTE_SHADER_RESOURCE_BINDING);
+    context_invalidate_state(&context_gl->c, STATE_GRAPHICS_SHADER_RESOURCE_BINDING);
 
     wined3d_context_gl_bind_texture(context_gl, view_gl->gl_view.target, view_gl->gl_view.name);
 }
@@ -880,6 +878,7 @@ void shader_resource_view_generate_mipmaps(struct wined3d_shader_resource_view *
     unsigned int i, j, layer_count, level_count, base_level, max_level;
     const struct wined3d_gl_info *gl_info;
     struct wined3d_texture_gl *texture_gl;
+    struct wined3d_context_gl *context_gl;
     struct wined3d_context *context;
     struct gl_texture *gl_tex;
     DWORD location;
@@ -888,6 +887,7 @@ void shader_resource_view_generate_mipmaps(struct wined3d_shader_resource_view *
     TRACE("view %p.\n", view);
 
     context = context_acquire(view_gl->v.resource->device, NULL, 0);
+    context_gl = wined3d_context_gl(context);
     gl_info = context->gl_info;
     layer_count = view_gl->v.desc.u.texture.layer_count;
     level_count = view_gl->v.desc.u.texture.level_count;
@@ -902,17 +902,17 @@ void shader_resource_view_generate_mipmaps(struct wined3d_shader_resource_view *
 
     if (view_gl->gl_view.name)
     {
-        shader_resource_view_gl_bind_and_dirtify(view_gl, context);
+        shader_resource_view_gl_bind_and_dirtify(view_gl, context_gl);
     }
     else
     {
-        wined3d_texture_gl_bind_and_dirtify(texture_gl, wined3d_context_gl(context), srgb);
+        wined3d_texture_gl_bind_and_dirtify(texture_gl, context_gl, srgb);
         gl_info->gl_ops.gl.p_glTexParameteri(texture_gl->target, GL_TEXTURE_BASE_LEVEL, base_level);
         gl_info->gl_ops.gl.p_glTexParameteri(texture_gl->target, GL_TEXTURE_MAX_LEVEL, max_level);
     }
 
     if (gl_info->supported[ARB_SAMPLER_OBJECTS])
-        GL_EXTCALL(glBindSampler(context->active_texture, 0));
+        GL_EXTCALL(glBindSampler(context_gl->active_texture, 0));
     gl_tex = wined3d_texture_gl_get_gl_texture(texture_gl, srgb);
     if (context->d3d_info->wined3d_creation_flags & WINED3D_SRGB_READ_WRITE_CONTROL)
     {
@@ -1034,6 +1034,7 @@ void wined3d_unordered_access_view_invalidate_location(struct wined3d_unordered_
 void wined3d_unordered_access_view_clear_uint(struct wined3d_unordered_access_view *view,
         const struct wined3d_uvec4 *clear_value, struct wined3d_context *context)
 {
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     const struct wined3d_gl_info *gl_info = context->gl_info;
     const struct wined3d_format_gl *format;
     struct wined3d_buffer_gl *buffer_gl;
@@ -1067,7 +1068,7 @@ void wined3d_unordered_access_view_clear_uint(struct wined3d_unordered_access_vi
     wined3d_unordered_access_view_invalidate_location(view, ~WINED3D_LOCATION_BUFFER);
 
     get_buffer_view_range(&buffer_gl->b, &view->desc, &format->f, &offset, &size);
-    context_bind_bo(context, buffer_gl->buffer_type_hint, buffer_gl->buffer_object);
+    wined3d_context_gl_bind_bo(context_gl, buffer_gl->buffer_type_hint, buffer_gl->buffer_object);
     GL_EXTCALL(glClearBufferSubData(buffer_gl->buffer_type_hint, format->internal,
             offset, size, format->format, format->type, clear_value));
     checkGLcall("clear unordered access view");
@@ -1095,6 +1096,7 @@ void wined3d_unordered_access_view_copy_counter(struct wined3d_unordered_access_
         struct wined3d_buffer *buffer, unsigned int offset, struct wined3d_context *context)
 {
     struct wined3d_unordered_access_view_gl *view_gl = wined3d_unordered_access_view_gl(view);
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     struct wined3d_bo_address dst, src;
     DWORD dst_location;
 
@@ -1107,7 +1109,7 @@ void wined3d_unordered_access_view_copy_counter(struct wined3d_unordered_access_
     src.buffer_object = view_gl->counter_bo;
     src.addr = NULL;
 
-    context_copy_bo_address(context, &dst, wined3d_buffer_gl(buffer)->buffer_type_hint,
+    wined3d_context_gl_copy_bo_address(context_gl, &dst, wined3d_buffer_gl(buffer)->buffer_type_hint,
             &src, GL_ATOMIC_COUNTER_BUFFER, sizeof(GLuint));
 
     wined3d_buffer_invalidate_location(buffer, ~dst_location);

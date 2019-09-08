@@ -149,7 +149,7 @@ static BOOL is_multisample_location(const struct wined3d_texture_gl *texture_gl,
 
 /* Blit between surface locations. Onscreen on different swapchains is not supported.
  * Depth / stencil is not supported. Context activation is done by the caller. */
-static void texture2d_blt_fbo(const struct wined3d_device *device, struct wined3d_context *context,
+static void texture2d_blt_fbo(struct wined3d_device *device, struct wined3d_context *context,
         enum wined3d_texture_filter_type filter, struct wined3d_texture *src_texture,
         unsigned int src_sub_resource_idx, DWORD src_location, const RECT *src_rect,
         struct wined3d_texture *dst_texture, unsigned int dst_sub_resource_idx, DWORD dst_location,
@@ -224,14 +224,14 @@ static void texture2d_blt_fbo(const struct wined3d_device *device, struct wined3
     else
         restore_texture = NULL;
 
-    if (!context->valid)
+    context_gl = wined3d_context_gl(context);
+    if (!context_gl->valid)
     {
         context_release(context);
         WARN("Invalid context, skipping blit.\n");
         return;
     }
 
-    context_gl = wined3d_context_gl(context);
     gl_info = context->gl_info;
 
     if (src_location == WINED3D_LOCATION_DRAWABLE)
@@ -239,7 +239,7 @@ static void texture2d_blt_fbo(const struct wined3d_device *device, struct wined3
         TRACE("Source texture %p is onscreen.\n", src_texture);
         buffer = wined3d_texture_get_gl_buffer(src_texture);
         s = *src_rect;
-        wined3d_texture_translate_drawable_coords(src_texture, context->win_handle, &s);
+        wined3d_texture_translate_drawable_coords(src_texture, context_gl->window, &s);
         src_rect = &s;
     }
     else
@@ -259,7 +259,7 @@ static void texture2d_blt_fbo(const struct wined3d_device *device, struct wined3
         TRACE("Destination texture %p is onscreen.\n", dst_texture);
         buffer = wined3d_texture_get_gl_buffer(dst_texture);
         d = *dst_rect;
-        wined3d_texture_translate_drawable_coords(dst_texture, context->win_handle, &d);
+        wined3d_texture_translate_drawable_coords(dst_texture, context_gl->window, &d);
         dst_rect = &d;
     }
     else
@@ -1056,12 +1056,12 @@ static void fb_copy_to_texture_hwstretch(struct wined3d_texture_gl *dst_texture,
     /* Try to use an aux buffer for drawing the rectangle. This way it doesn't need restoring.
      * This way we don't have to wait for the 2nd readback to finish to leave this function.
      */
-    if (context->aux_buffers >= 2)
+    if (context_gl->aux_buffers >= 2)
     {
         /* Got more than one aux buffer? Use the 2nd aux buffer */
         drawBuffer = GL_AUX1;
     }
-    else if ((!src_offscreen || offscreen_buffer == GL_BACK) && context->aux_buffers >= 1)
+    else if ((!src_offscreen || offscreen_buffer == GL_BACK) && context_gl->aux_buffers >= 1)
     {
         /* Only one aux buffer, but it isn't used (Onscreen rendering, or non-aux orm)? Use it! */
         drawBuffer = GL_AUX0;
@@ -2241,7 +2241,7 @@ static DWORD ffp_blitter_blit(struct wined3d_blitter *blitter, enum wined3d_blit
     if (dst_location == WINED3D_LOCATION_DRAWABLE)
     {
         r = *dst_rect;
-        wined3d_texture_translate_drawable_coords(dst_texture, context->win_handle, &r);
+        wined3d_texture_translate_drawable_coords(dst_texture, context_gl->window, &r);
         dst_rect = &r;
     }
 

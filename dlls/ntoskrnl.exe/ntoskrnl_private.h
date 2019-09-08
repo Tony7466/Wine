@@ -23,6 +23,12 @@
 
 #include "wine/asm.h"
 
+static inline LPCSTR debugstr_us( const UNICODE_STRING *us )
+{
+    if (!us) return "<null>";
+    return debugstr_wn( us->Buffer, us->Length / sizeof(WCHAR) );
+}
+
 struct _OBJECT_TYPE
 {
     const WCHAR *name;            /* object type name used for type validation */
@@ -41,6 +47,7 @@ struct _KTHREAD
     DISPATCHER_HEADER header;
     PEPROCESS process;
     CLIENT_ID id;
+    unsigned int critical_region;
 };
 
 struct _ETHREAD
@@ -60,4 +67,19 @@ extern POBJECT_TYPE PsProcessType;
 extern POBJECT_TYPE PsThreadType;
 extern POBJECT_TYPE SeTokenObjectType;
 
+#define DECLARE_CRITICAL_SECTION(cs) \
+    static CRITICAL_SECTION cs; \
+    static CRITICAL_SECTION_DEBUG cs##_debug = \
+    { 0, 0, &cs, { &cs##_debug.ProcessLocksList, &cs##_debug.ProcessLocksList }, \
+      0, 0, { (DWORD_PTR)(__FILE__ ": " # cs) }}; \
+    static CRITICAL_SECTION cs = { &cs##_debug, -1, 0, 0, 0, 0 };
+
+void ObReferenceObject( void *obj ) DECLSPEC_HIDDEN;
+
+static const WCHAR servicesW[] = {'\\','R','e','g','i','s','t','r','y',
+                                  '\\','M','a','c','h','i','n','e',
+                                  '\\','S','y','s','t','e','m',
+                                  '\\','C','u','r','r','e','n','t','C','o','n','t','r','o','l','S','e','t',
+                                  '\\','S','e','r','v','i','c','e','s',
+                                  '\\',0};
 #endif

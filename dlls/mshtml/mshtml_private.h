@@ -623,6 +623,9 @@ struct HTMLDocument {
     IOleContainer               IOleContainer_iface;
     IObjectSafety               IObjectSafety_iface;
     IProvideMultipleClassInfo   IProvideMultipleClassInfo_iface;
+    IMarkupServices             IMarkupServices_iface;
+    IMarkupContainer            IMarkupContainer_iface;
+    IDisplayServices            IDisplayServices_iface;
 
     IUnknown *outer_unk;
     IDispatchEx *dispex;
@@ -653,7 +656,7 @@ static inline ULONG htmldoc_release(HTMLDocument *This)
 struct HTMLDocumentObj {
     HTMLDocument basedoc;
     DispatchEx dispex;
-    IUnknown IUnknown_outer;
+    IUnknown IUnknown_inner;
     ICustomDoc ICustomDoc_iface;
     IOleDocumentView IOleDocumentView_iface;
     IViewObjectEx IViewObjectEx_iface;

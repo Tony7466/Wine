@@ -34,10 +34,15 @@
 
 #include "driver.h"
 
-static const WCHAR driver_device[] = {'\\','D','e','v','i','c','e',
-                                      '\\','W','i','n','e','T','e','s','t','D','r','i','v','e','r',0};
+static const WCHAR device_name[] = {'\\','D','e','v','i','c','e',
+                                    '\\','W','i','n','e','T','e','s','t','D','r','i','v','e','r',0};
+static const WCHAR upper_name[] = {'\\','D','e','v','i','c','e',
+                                   '\\','W','i','n','e','T','e','s','t','U','p','p','e','r',0};
 static const WCHAR driver_link[] = {'\\','D','o','s','D','e','v','i','c','e','s',
                                     '\\','W','i','n','e','T','e','s','t','D','r','i','v','e','r',0};
+
+static DRIVER_OBJECT *driver_obj;
+static DEVICE_OBJECT *lower_device, *upper_device;
 
 static HANDLE okfile;
 static LONG successes;
@@ -52,6 +57,7 @@ static int winetest_report_success;
 
 static POBJECT_TYPE *pExEventObjectType, *pIoFileObjectType, *pPsThreadType;
 static PEPROCESS *pPsInitialSystemProcess;
+static void *create_caller_thread;
 
 void WINAPI ObfReferenceObject( void *obj );
 
@@ -231,11 +237,14 @@ static void test_irp_struct(IRP *irp, DEVICE_OBJECT *device)
 {
     IO_STACK_LOCATION *irpsp = IoGetCurrentIrpStackLocation( irp );
 
+    ok(device == upper_device, "Expected device %p, got %p.\n", upper_device, device);
     ok(last_created_file != NULL, "last_created_file = NULL\n");
     ok(irpsp->FileObject == last_created_file, "FileObject != last_created_file\n");
-    ok(irpsp->DeviceObject == device, "unexpected DeviceObject\n");
-    ok(irpsp->FileObject->DeviceObject == device, "unexpected FileObject->DeviceObject\n");
+    ok(irpsp->DeviceObject == upper_device, "unexpected DeviceObject\n");
+    ok(irpsp->FileObject->DeviceObject == lower_device, "unexpected FileObject->DeviceObject\n");
     ok(!irp->UserEvent, "UserEvent = %p\n", irp->UserEvent);
+    ok(irp->Tail.Overlay.Thread == (PETHREAD)KeGetCurrentThread(),
+       "IRP thread is not the current thread\n");
 }
 
 static void test_mdl_map(void)
@@ -354,6 +363,8 @@ static void test_current_thread(BOOL is_system)
 
     ok(PsGetThreadId((PETHREAD)KeGetCurrentThread()) == PsGetCurrentThreadId(), "thread IDs don't match\n");
     ok(PsIsSystemThread((PETHREAD)KeGetCurrentThread()) == is_system, "unexpected system thread\n");
+    if (!is_system)
+        ok(create_caller_thread == KeGetCurrentThread(), "thread is not create caller thread\n");
 
     ret = ObOpenObjectByPointer(current, OBJ_KERNEL_HANDLE, NULL, PROCESS_QUERY_INFORMATION, NULL, KernelMode, &process_handle);
     ok(!ret, "ObOpenObjectByPointer failed: %#x\n", ret);
@@ -366,6 +377,26 @@ static void test_current_thread(BOOL is_system)
 
     ret = ZwClose(process_handle);
     ok(!ret, "ZwClose failed: %#x\n", ret);
+}
+
+static void test_critical_region(BOOL is_dispatcher)
+{
+    BOOLEAN result;
+
+    KeEnterCriticalRegion();
+    KeEnterCriticalRegion();
+
+    result = KeAreApcsDisabled();
+    ok(result == TRUE, "KeAreApcsDisabled returned %x\n", result);
+    KeLeaveCriticalRegion();
+
+    result = KeAreApcsDisabled();
+    ok(result == TRUE, "KeAreApcsDisabled returned %x\n", result);
+    KeLeaveCriticalRegion();
+
+    result = KeAreApcsDisabled();
+    ok(result == is_dispatcher || broken(is_dispatcher && !result),
+       "KeAreApcsDisabled returned %x\n", result);
 }
 
 static void sleep(void)
@@ -726,6 +757,8 @@ static void test_call_driver(DEVICE_OBJECT *device)
     ok(!irp->CancelRoutine, "CancelRoutine = %x\n", irp->CancelRoutine);
     ok(!irp->UserEvent, "UserEvent = %p\n", irp->UserEvent);
     ok(irp->CurrentLocation == 2, "CurrentLocation = %u\n", irp->CurrentLocation);
+    ok(irp->Tail.Overlay.Thread == (PETHREAD)KeGetCurrentThread(),
+       "IRP thread is not the current thread\n");
 
     irpsp = IoGetNextIrpStackLocation(irp);
     ok(irpsp->MajorFunction == IRP_MJ_FLUSH_BUFFERS, "MajorFunction = %u\n", irpsp->MajorFunction);
@@ -748,6 +781,8 @@ static void test_call_driver(DEVICE_OBJECT *device)
     ok(!irp->CancelRoutine, "CancelRoutine = %x\n", irp->CancelRoutine);
     ok(irp->UserEvent == &event, "UserEvent = %p\n", irp->UserEvent);
     ok(irp->CurrentLocation == 2, "CurrentLocation = %u\n", irp->CurrentLocation);
+    ok(irp->Tail.Overlay.Thread == (PETHREAD)KeGetCurrentThread(),
+       "IRP thread is not the current thread\n");
 
     irpsp = IoGetNextIrpStackLocation(irp);
     ok(irpsp->MajorFunction == IRP_MJ_FLUSH_BUFFERS, "MajorFunction = %u\n", irpsp->MajorFunction);
@@ -1424,6 +1459,59 @@ static void test_lookup_thread(void)
        "PsLookupThreadByThreadId returned %#x\n", status);
 }
 
+static void test_IoAttachDeviceToDeviceStack(void)
+{
+    DEVICE_OBJECT *dev1, *dev2, *dev3, *ret;
+    NTSTATUS status;
+
+    status = IoCreateDevice(driver_obj, 0, NULL, FILE_DEVICE_UNKNOWN,
+            FILE_DEVICE_SECURE_OPEN, FALSE, &dev1);
+    ok(status == STATUS_SUCCESS, "IoCreateDevice failed\n");
+    status = IoCreateDevice(driver_obj, 0, NULL, FILE_DEVICE_UNKNOWN,
+            FILE_DEVICE_SECURE_OPEN, FALSE, &dev2);
+    ok(status == STATUS_SUCCESS, "IoCreateDevice failed\n");
+    status = IoCreateDevice(driver_obj, 0, NULL, FILE_DEVICE_UNKNOWN,
+            FILE_DEVICE_SECURE_OPEN, FALSE, &dev3);
+    ok(status == STATUS_SUCCESS, "IoCreateDevice failed\n");
+
+    /* TODO: initialize devices properly */
+    dev1->Flags &= ~DO_DEVICE_INITIALIZING;
+    dev2->Flags &= ~DO_DEVICE_INITIALIZING;
+
+    ret = IoAttachDeviceToDeviceStack(dev2, dev1);
+    ok(ret == dev1, "IoAttachDeviceToDeviceStack returned %p, expected %p\n", ret, dev1);
+    ok(dev1->AttachedDevice == dev2, "dev1->AttachedDevice = %p, expected %p\n",
+            dev1->AttachedDevice, dev2);
+    ok(!dev2->AttachedDevice, "dev2->AttachedDevice = %p\n", dev2->AttachedDevice);
+    ok(dev1->StackSize == 1, "dev1->StackSize = %d\n", dev1->StackSize);
+    ok(dev2->StackSize == 2, "dev2->StackSize = %d\n", dev2->StackSize);
+
+    ret = IoAttachDeviceToDeviceStack(dev3, dev1);
+    ok(ret == dev2, "IoAttachDeviceToDeviceStack returned %p, expected %p\n", ret, dev2);
+    ok(dev1->AttachedDevice == dev2, "dev1->AttachedDevice = %p, expected %p\n",
+            dev1->AttachedDevice, dev2);
+    ok(dev2->AttachedDevice == dev3, "dev2->AttachedDevice = %p, expected %p\n",
+            dev2->AttachedDevice, dev3);
+    ok(!dev3->AttachedDevice, "dev3->AttachedDevice = %p\n", dev3->AttachedDevice);
+    ok(dev1->StackSize == 1, "dev1->StackSize = %d\n", dev1->StackSize);
+    ok(dev2->StackSize == 2, "dev2->StackSize = %d\n", dev2->StackSize);
+    ok(dev3->StackSize == 3, "dev3->StackSize = %d\n", dev3->StackSize);
+
+    IoDetachDevice(dev1);
+    ok(!dev1->AttachedDevice, "dev1->AttachedDevice = %p\n", dev1->AttachedDevice);
+    ok(dev2->AttachedDevice == dev3, "dev2->AttachedDevice = %p\n", dev2->AttachedDevice);
+
+    IoDetachDevice(dev2);
+    ok(!dev2->AttachedDevice, "dev2->AttachedDevice = %p\n", dev2->AttachedDevice);
+    ok(dev1->StackSize == 1, "dev1->StackSize = %d\n", dev1->StackSize);
+    ok(dev2->StackSize == 2, "dev2->StackSize = %d\n", dev2->StackSize);
+    ok(dev3->StackSize == 3, "dev3->StackSize = %d\n", dev3->StackSize);
+
+    IoDeleteDevice(dev1);
+    IoDeleteDevice(dev2);
+    IoDeleteDevice(dev3);
+}
+
 static PIO_WORKITEM main_test_work_item;
 
 static void WINAPI main_test_task(DEVICE_OBJECT *device, void *context)
@@ -1435,6 +1523,7 @@ static void WINAPI main_test_task(DEVICE_OBJECT *device, void *context)
     main_test_work_item = NULL;
 
     test_current_thread(TRUE);
+    test_critical_region(FALSE);
     test_call_driver(device);
     test_cancel_irp(device);
 
@@ -1491,6 +1580,7 @@ static NTSTATUS main_test(DEVICE_OBJECT *device, IRP *irp, IO_STACK_LOCATION *st
 
     test_irp_struct(irp, device);
     test_current_thread(FALSE);
+    test_critical_region(TRUE);
     test_mdl_map();
     test_init_funcs();
     test_load_driver();
@@ -1501,10 +1591,11 @@ static NTSTATUS main_test(DEVICE_OBJECT *device, IRP *irp, IO_STACK_LOCATION *st
     test_ob_reference(test_input->path);
     test_resource();
     test_lookup_thread();
+    test_IoAttachDeviceToDeviceStack();
 
     if (main_test_work_item) return STATUS_UNEXPECTED_IO_ERROR;
 
-    main_test_work_item = IoAllocateWorkItem(device);
+    main_test_work_item = IoAllocateWorkItem(lower_device);
     ok(main_test_work_item != NULL, "main_test_work_item = NULL\n");
 
     IoQueueWorkItem(main_test_work_item, main_test_task, DelayedWorkQueue, irp);
@@ -1566,6 +1657,7 @@ static NTSTATUS WINAPI driver_Create(DEVICE_OBJECT *device, IRP *irp)
     IO_STACK_LOCATION *irpsp = IoGetCurrentIrpStackLocation( irp );
 
     last_created_file = irpsp->FileObject;
+    create_caller_thread = KeGetCurrentThread();
 
     irp->IoStatus.Status = STATUS_SUCCESS;
     IoCompleteRequest(irp, IO_NO_INCREMENT);
@@ -1599,6 +1691,10 @@ static NTSTATUS WINAPI driver_IoControl(DEVICE_OBJECT *device, IRP *irp)
         case IOCTL_WINETEST_GET_CANCEL_COUNT:
             status = get_cancel_count(irp, stack, &irp->IoStatus.Information);
             break;
+        case IOCTL_WINETEST_DETACH:
+            IoDetachDevice(lower_device);
+            status = STATUS_SUCCESS;
+            break;
         default:
             break;
     }
@@ -1615,7 +1711,10 @@ static NTSTATUS WINAPI driver_IoControl(DEVICE_OBJECT *device, IRP *irp)
 static NTSTATUS WINAPI driver_FlushBuffers(DEVICE_OBJECT *device, IRP *irp)
 {
     IO_STACK_LOCATION *irpsp = IoGetCurrentIrpStackLocation(irp);
+    ok(device == lower_device, "Expected device %p, got %p.\n", lower_device, device);
     ok(irpsp->DeviceObject == device, "device != DeviceObject\n");
+    ok(irp->Tail.Overlay.Thread == (PETHREAD)KeGetCurrentThread(),
+       "IRP thread is not the current thread\n");
     IoMarkIrpPending(irp);
     return STATUS_PENDING;
 }
@@ -1636,16 +1735,18 @@ static VOID WINAPI driver_Unload(DRIVER_OBJECT *driver)
     RtlInitUnicodeString(&linkW, driver_link);
     IoDeleteSymbolicLink(&linkW);
 
-    IoDeleteDevice(driver->DeviceObject);
+    IoDeleteDevice(upper_device);
+    IoDeleteDevice(lower_device);
 }
 
 NTSTATUS WINAPI DriverEntry(DRIVER_OBJECT *driver, PUNICODE_STRING registry)
 {
     UNICODE_STRING nameW, linkW;
-    DEVICE_OBJECT *device;
     NTSTATUS status;
 
     DbgPrint("loading driver\n");
+
+    driver_obj = driver;
 
     /* Allow unloading of the driver */
     driver->DriverUnload = driver_Unload;
@@ -1656,12 +1757,29 @@ NTSTATUS WINAPI DriverEntry(DRIVER_OBJECT *driver, PUNICODE_STRING registry)
     driver->MajorFunction[IRP_MJ_FLUSH_BUFFERS]     = driver_FlushBuffers;
     driver->MajorFunction[IRP_MJ_CLOSE]             = driver_Close;
 
-    RtlInitUnicodeString(&nameW, driver_device);
+    RtlInitUnicodeString(&nameW, device_name);
     RtlInitUnicodeString(&linkW, driver_link);
 
     if (!(status = IoCreateDevice(driver, 0, &nameW, FILE_DEVICE_UNKNOWN,
-                                  FILE_DEVICE_SECURE_OPEN, FALSE, &device)))
+                                  FILE_DEVICE_SECURE_OPEN, FALSE, &lower_device)))
+    {
         status = IoCreateSymbolicLink(&linkW, &nameW);
+        lower_device->Flags &= ~DO_DEVICE_INITIALIZING;
+    }
+
+    if (!status)
+    {
+        RtlInitUnicodeString(&nameW, upper_name);
+
+        status = IoCreateDevice(driver, 0, &nameW, FILE_DEVICE_UNKNOWN,
+                                FILE_DEVICE_SECURE_OPEN, FALSE, &upper_device);
+    }
+
+    if (!status)
+    {
+        IoAttachDeviceToDeviceStack(upper_device, lower_device);
+        upper_device->Flags &= ~DO_DEVICE_INITIALIZING;
+    }
 
     return status;
 }

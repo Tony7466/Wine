@@ -45,6 +45,17 @@ WINE_DEFAULT_DEBUG_CHANNEL(mfplat);
 
 static LONG platform_lock;
 
+struct local_handler
+{
+    struct list entry;
+    WCHAR *scheme;
+    IMFActivate *activate;
+};
+
+static CRITICAL_SECTION local_handlers_section = { NULL, -1, 0, 0, 0, 0 };
+
+static struct list local_scheme_handlers = LIST_INIT(local_scheme_handlers);
+
 struct system_clock
 {
     IMFClock IMFClock_iface;
@@ -657,6 +668,7 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_TOPOLOGY_ENUMERATE_SOURCE_TYPES),
         X(MF_MT_VIDEO_NO_FRAME_ORDERING),
         X(MFSampleExtension_3DVideo_SampleFormat),
+        X(MF_SAMPLEGRABBERSINK_SAMPLE_TIME_OFFSET),
         X(MF_MT_SAMPLE_SIZE),
         X(MF_MT_AAC_PAYLOAD_TIME),
         X(MF_TOPOLOGY_PLAYBACK_FRAMERATE),
@@ -701,8 +713,8 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_TOPONODE_DISABLE_PREROLL),
         X(MF_MT_VIDEO_3D_FORMAT),
         X(MF_EVENT_STREAM_METADATA_KEYDATA),
-        X(MF_SOURCE_READER_D3D_MANAGER),
         X(MF_SINK_WRITER_D3D_MANAGER),
+        X(MF_SOURCE_READER_D3D_MANAGER),
         X(MFSampleExtension_3DVideo),
         X(MF_EVENT_SOURCE_FAKE_START),
         X(MF_EVENT_SOURCE_PROJECTSTART),
@@ -717,6 +729,7 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_HW_SOURCE),
         X(MF_MT_AUDIO_PREFER_WAVEFORMATEX),
         X(MF_TOPONODE_WORKQUEUE_ITEM_PRIORITY),
+        X(MF_SAMPLEGRABBERSINK_IGNORE_CLOCK),
         X(MFSampleExtension_ForwardedDecodeUnitType),
         X(MF_MT_AUDIO_AVG_BYTES_PER_SECOND),
         X(MF_SOURCE_READER_MEDIASOURCE_CHARACTERISTICS),
@@ -5980,6 +5993,7 @@ struct event_queue
     CONDITION_VARIABLE update_event;
     struct list events;
     BOOL is_shut_down;
+    BOOL notified;
     IMFAsyncResult *subscriber;
 };
 
@@ -6103,9 +6117,10 @@ static HRESULT WINAPI eventqueue_GetEvent(IMFMediaEventQueue *iface, DWORD flags
 
 static void queue_notify_subscriber(struct event_queue *queue)
 {
-    if (list_empty(&queue->events) || !queue->subscriber)
+    if (list_empty(&queue->events) || !queue->subscriber || queue->notified)
         return;
 
+    queue->notified = TRUE;
     MFPutWorkItemEx(MFASYNC_CALLBACK_QUEUE_STANDARD, queue->subscriber);
 }
 
@@ -6161,6 +6176,7 @@ static HRESULT WINAPI eventqueue_EndGetEvent(IMFMediaEventQueue *iface, IMFAsync
         if (queue->subscriber)
             IMFAsyncResult_Release(queue->subscriber);
         queue->subscriber = NULL;
+        queue->notified = FALSE;
         hr = *event ? S_OK : E_FAIL;
     }
 
@@ -7277,4 +7293,34 @@ HRESULT WINAPI MFCancelCreateFile(IUnknown *cancel_cookie)
         IMFByteStream_Release(stream);
 
     return hr;
+}
+
+/***********************************************************************
+ *      MFRegisterLocalSchemeHandler (mfplat.@)
+ */
+HRESULT WINAPI MFRegisterLocalSchemeHandler(const WCHAR *scheme, IMFActivate *activate)
+{
+    struct local_handler *handler;
+
+    TRACE("%s, %p.\n", debugstr_w(scheme), activate);
+
+    if (!scheme || !activate)
+        return E_INVALIDARG;
+
+    if (!(handler = heap_alloc(sizeof(*handler))))
+        return E_OUTOFMEMORY;
+
+    if (!(handler->scheme = heap_strdupW(scheme)))
+    {
+        heap_free(handler);
+        return E_OUTOFMEMORY;
+    }
+    handler->activate = activate;
+    IMFActivate_AddRef(handler->activate);
+
+    EnterCriticalSection(&local_handlers_section);
+    list_add_head(&local_scheme_handlers, &handler->entry);
+    LeaveCriticalSection(&local_handlers_section);
+
+    return S_OK;
 }

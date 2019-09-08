@@ -748,7 +748,8 @@ static void delete_device(struct device *device)
     heap_free(device);
 }
 
-static struct device *SETUPDI_CreateDeviceInfo(struct DeviceInfoSet *set,
+/* Create a new device, or return a device already in the set. */
+static struct device *create_device(struct DeviceInfoSet *set,
     const GUID *class, const WCHAR *instanceid, BOOL phantom)
 {
     const DWORD one = 1;
@@ -757,6 +758,15 @@ static struct device *SETUPDI_CreateDeviceInfo(struct DeviceInfoSet *set,
 
     TRACE("%p, %s, %s, %d\n", set, debugstr_guid(class),
         debugstr_w(instanceid), phantom);
+
+    LIST_FOR_EACH_ENTRY(device, &set->devices, struct device, entry)
+    {
+        if (!strcmpiW(instanceid, device->instanceId))
+        {
+            TRACE("Found device %p already in set.\n", device);
+            return device;
+        }
+    }
 
     if (!(device = heap_alloc_zero(sizeof(*device))))
     {
@@ -788,6 +798,8 @@ static struct device *SETUPDI_CreateDeviceInfo(struct DeviceInfoSet *set,
     SETUPDI_GuidToString(class, guidstr);
     SETUPDI_SetDeviceRegistryPropertyW(device, SPDRP_CLASSGUID,
         (const BYTE *)guidstr, sizeof(guidstr));
+
+    TRACE("Created new device %p.\n", device);
     return device;
 }
 
@@ -1620,7 +1632,7 @@ BOOL WINAPI SetupDiCreateDeviceInfoW(HDEVINFO devinfo, const WCHAR *name, const 
         }
     }
 
-    if (!(device = SETUPDI_CreateDeviceInfo(set, class, id, TRUE)))
+    if (!(device = create_device(set, class, id, TRUE)))
         return FALSE;
 
     if (description)
@@ -2196,8 +2208,7 @@ static void SETUPDI_EnumerateMatchingInterfaces(HDEVINFO DeviceInfoSet,
                                 deviceClassStr[37] = 0;
                                 UuidFromStringW(&deviceClassStr[1],
                                         &deviceClass);
-                                if ((device = SETUPDI_CreateDeviceInfo(set,
-                                        &deviceClass, deviceInst, FALSE)))
+                                if ((device = create_device(set, &deviceClass, deviceInst, FALSE)))
                                     SETUPDI_AddDeviceInterfaces(device, subKey, guid, flags);
                             }
                             RegCloseKey(deviceKey);
@@ -2318,7 +2329,7 @@ static void SETUPDI_EnumerateMatchingDeviceInstances(struct DeviceInfoSet *set,
                             if (snprintfW(id, ARRAY_SIZE(id), fmt, enumerator,
                                     deviceName, deviceInstance) != -1)
                             {
-                                SETUPDI_CreateDeviceInfo(set, &deviceClass, id, FALSE);
+                                create_device(set, &deviceClass, id, FALSE);
                             }
                         }
                     }
@@ -2448,12 +2459,15 @@ HDEVINFO WINAPI SetupDiGetClassDevsExW(const GUID *class, PCWSTR enumstr, HWND p
         SetLastError(ERROR_INVALID_PARAMETER);
         return INVALID_HANDLE_VALUE;
     }
+    if (flags & DIGCF_ALLCLASSES)
+        class = NULL;
+
     if (flags & unsupportedFlags)
         WARN("unsupported flags %08x\n", flags & unsupportedFlags);
     if (deviceset)
         set = deviceset;
     else
-        set = SetupDiCreateDeviceInfoListExW(class, parent, machine, reserved);
+        set = SetupDiCreateDeviceInfoListExW((flags & DIGCF_DEVICEINTERFACE) ? NULL : class, parent, machine, reserved);
     if (set != INVALID_HANDLE_VALUE)
     {
         if (machine && *machine)
@@ -3395,7 +3409,7 @@ BOOL WINAPI SetupDiOpenDeviceInfoW(HDEVINFO devinfo, PCWSTR instance_id, HWND hw
                                    PSP_DEVINFO_DATA device_data)
 {
     struct DeviceInfoSet *set;
-    struct device *device = NULL, *enum_device;
+    struct device *device;
     WCHAR classW[40];
     GUID guid;
     HKEY enumKey = NULL;
@@ -3445,17 +3459,7 @@ BOOL WINAPI SetupDiOpenDeviceInfoW(HDEVINFO devinfo, PCWSTR instance_id, HWND hw
         goto done;
     }
 
-    /* If current set already contains a same instance, don't create new ones */
-    LIST_FOR_EACH_ENTRY(enum_device, &set->devices, struct device, entry)
-    {
-        if (!strcmpiW(instance_id, enum_device->instanceId))
-        {
-            device = enum_device;
-            break;
-        }
-    }
-
-    if (!device && !(device = SETUPDI_CreateDeviceInfo(set, &guid, instance_id, FALSE)))
+    if (!(device = create_device(set, &guid, instance_id, FALSE)))
         goto done;
 
     if (!device_data || device_data->cbSize == sizeof(SP_DEVINFO_DATA))
@@ -3684,8 +3688,9 @@ BOOL WINAPI SetupDiCallClassInstaller(DI_FUNCTION function, HDEVINFO devinfo, SP
             return SetupDiInstallDriverFiles(devinfo, device_data);
         case DIF_INSTALLINTERFACES:
             return SetupDiInstallDeviceInterfaces(devinfo, device_data);
-        case DIF_FINISHINSTALL_ACTION:
         case DIF_INSTALLDEVICE:
+            return SetupDiInstallDevice(devinfo, device_data);
+        case DIF_FINISHINSTALL_ACTION:
         case DIF_PROPERTYCHANGE:
         case DIF_SELECTDEVICE:
         case DIF_UNREMOVE:
@@ -4675,5 +4680,111 @@ BOOL WINAPI SetupDiInstallDriverFiles(HDEVINFO devinfo, SP_DEVINFO_DATA *device_
     SetupTermDefaultQueueCallback(callback_ctx);
 
     SetupCloseInfFile(hinf);
+    return TRUE;
+}
+
+/***********************************************************************
+ *              SetupDiInstallDevice (SETUPAPI.@)
+ */
+BOOL WINAPI SetupDiInstallDevice(HDEVINFO devinfo, SP_DEVINFO_DATA *device_data)
+{
+    static const WCHAR infpathW[] = {'I','n','f','P','a','t','h',0};
+    static const WCHAR infsectionW[] = {'I','n','f','S','e','c','t','i','o','n',0};
+    static const WCHAR infsectionextW[] = {'I','n','f','S','e','c','t','i','o','n','E','x','t',0};
+    static const WCHAR dothwW[] = {'.','H','W',0};
+    static const WCHAR dotservicesW[] = {'.','S','e','r','v','i','c','e','s',0};
+    static const WCHAR addserviceW[] = {'A','d','d','S','e','r','v','i','c','e',0};
+    WCHAR section[LINE_LEN], section_ext[LINE_LEN], subsection[LINE_LEN], inf_path[MAX_PATH], *extptr, *filepart;
+    UINT install_flags = SPINST_ALL;
+    HKEY driver_key, device_key;
+    struct device *device;
+    struct driver *driver;
+    void *callback_ctx;
+    INFCONTEXT ctx;
+    HINF hinf;
+    LONG l;
+
+    TRACE("devinfo %p, device_data %p.\n", devinfo, device_data);
+
+    if (!(device = get_device(devinfo, device_data)))
+        return FALSE;
+
+    if (!(driver = device->selected_driver))
+    {
+        ERR("No driver selected for device %p.\n", devinfo);
+        SetLastError(ERROR_NO_DRIVER_SELECTED);
+        return FALSE;
+    }
+
+    if ((hinf = SetupOpenInfFileW(driver->inf_path, NULL, INF_STYLE_WIN4, NULL)) == INVALID_HANDLE_VALUE)
+        return FALSE;
+
+    SetupFindFirstLineW(hinf, driver->mfg_key, driver->description, &ctx);
+    SetupGetStringFieldW(&ctx, 1, section, ARRAY_SIZE(section), NULL);
+    SetupDiGetActualSectionToInstallW(hinf, section, section_ext, ARRAY_SIZE(section_ext), NULL, &extptr);
+
+    if ((l = create_driver_key(device, &driver_key)))
+    {
+        SetLastError(l);
+        SetupCloseInfFile(hinf);
+        return FALSE;
+    }
+
+    if ((l = RegCreateKeyExW(device->key, DeviceParameters, 0, NULL, 0,
+            KEY_READ | KEY_WRITE, NULL, &device_key, NULL)))
+    {
+        SetLastError(l);
+        RegCloseKey(driver_key);
+        SetupCloseInfFile(hinf);
+        return FALSE;
+    }
+
+    if (device->params.Flags & DI_NOFILECOPY)
+        install_flags &= ~SPINST_FILES;
+
+    callback_ctx = SetupInitDefaultQueueCallback(NULL);
+
+    SetupInstallFromInfSectionW(NULL, hinf, section_ext, install_flags, driver_key, NULL,
+            SP_COPY_NEWER_ONLY, SetupDefaultQueueCallbackW, callback_ctx, NULL, NULL);
+
+    strcpyW(subsection, section_ext);
+    strcatW(subsection, dothwW);
+
+    SetupInstallFromInfSectionW(NULL, hinf, subsection, install_flags, device_key, NULL,
+            SP_COPY_NEWER_ONLY, SetupDefaultQueueCallbackW, callback_ctx, NULL, NULL);
+
+    strcpyW(subsection, section_ext);
+    strcatW(subsection, dotservicesW);
+    SetupInstallServicesFromInfSectionW(hinf, subsection, 0);
+
+    if (SetupFindFirstLineW(hinf, subsection, addserviceW, &ctx))
+    {
+        do
+        {
+            INT flags;
+
+            if (SetupGetIntField(&ctx, 2, &flags) && (flags & SPSVCINST_ASSOCSERVICE))
+            {
+                WCHAR svc_name[LINE_LEN];
+                if (SetupGetStringFieldW(&ctx, 1, svc_name, ARRAY_SIZE(svc_name), NULL) && svc_name[0])
+                    RegSetValueExW(device->key, Service, 0, REG_SZ, (BYTE *)svc_name, strlenW(svc_name) * sizeof(WCHAR));
+                break;
+            }
+        } while (SetupFindNextMatchLineW(&ctx, addserviceW, &ctx));
+    }
+
+    SetupTermDefaultQueueCallback(callback_ctx);
+    SetupCloseInfFile(hinf);
+
+    SetupCopyOEMInfW(driver->inf_path, NULL, SPOST_NONE, 0, inf_path, ARRAY_SIZE(inf_path), NULL, &filepart);
+    TRACE("Copied INF file %s to %s.\n", debugstr_w(driver->inf_path), debugstr_w(inf_path));
+
+    RegSetValueExW(driver_key, infpathW, 0, REG_SZ, (BYTE *)filepart, strlenW(filepart) * sizeof(WCHAR));
+    RegSetValueExW(driver_key, infsectionW, 0, REG_SZ, (BYTE *)section, strlenW(section) * sizeof(WCHAR));
+    if (extptr)
+        RegSetValueExW(driver_key, infsectionextW, 0, REG_SZ, (BYTE *)extptr, strlenW(extptr) * sizeof(WCHAR));
+
+    RegCloseKey(device_key);
+    RegCloseKey(driver_key);
     return TRUE;
 }

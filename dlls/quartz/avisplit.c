@@ -1266,24 +1266,6 @@ static HRESULT AVISplitter_Disconnect(LPVOID iface)
     return S_OK;
 }
 
-static ULONG WINAPI AVISplitter_Release(IBaseFilter *iface)
-{
-    AVISplitterImpl *This = impl_from_IBaseFilter(iface);
-    ULONG ref;
-
-    ref = InterlockedDecrement(&This->Parser.filter.refCount);
-
-    TRACE("(%p)->() Release from %d\n", This, ref + 1);
-
-    if (!ref)
-    {
-        AVISplitter_Flush(This);
-        Parser_Destroy(&This->Parser);
-    }
-
-    return ref;
-}
-
 static HRESULT WINAPI AVISplitter_seek(IMediaSeeking *iface)
 {
     AVISplitterImpl *This = impl_from_IMediaSeeking(iface);
@@ -1412,35 +1394,43 @@ static HRESULT WINAPI AVISplitter_seek(IMediaSeeking *iface)
 
 static const IBaseFilterVtbl AVISplitterImpl_Vtbl =
 {
-    Parser_QueryInterface,
-    Parser_AddRef,
-    AVISplitter_Release,
-    Parser_GetClassID,
+    BaseFilterImpl_QueryInterface,
+    BaseFilterImpl_AddRef,
+    BaseFilterImpl_Release,
+    BaseFilterImpl_GetClassID,
     Parser_Stop,
     Parser_Pause,
     Parser_Run,
     Parser_GetState,
     Parser_SetSyncSource,
-    Parser_GetSyncSource,
-    Parser_EnumPins,
+    BaseFilterImpl_GetSyncSource,
+    BaseFilterImpl_EnumPins,
     BaseFilterImpl_FindPin,
-    Parser_QueryFilterInfo,
-    Parser_JoinFilterGraph,
-    Parser_QueryVendorInfo
+    BaseFilterImpl_QueryFilterInfo,
+    BaseFilterImpl_JoinFilterGraph,
+    BaseFilterImpl_QueryVendorInfo,
 };
 
-HRESULT AVISplitter_create(IUnknown * pUnkOuter, LPVOID * ppv)
+static void avi_splitter_destroy(BaseFilter *iface)
+{
+    AVISplitterImpl *filter = impl_from_IBaseFilter(&iface->IBaseFilter_iface);
+    AVISplitter_Flush(filter);
+    Parser_Destroy(&filter->Parser);
+}
+
+static const BaseFilterFuncTable avi_splitter_func_table =
+{
+    .filter_get_pin = parser_get_pin,
+    .filter_destroy = avi_splitter_destroy,
+};
+
+HRESULT AVISplitter_create(IUnknown *outer, void **out)
 {
     static const WCHAR sink_name[] = {'i','n','p','u','t',' ','p','i','n',0};
     HRESULT hr;
     AVISplitterImpl * This;
 
-    TRACE("(%p, %p)\n", pUnkOuter, ppv);
-
-    *ppv = NULL;
-
-    if (pUnkOuter)
-        return CLASS_E_NOAGGREGATION;
+    *out = NULL;
 
     /* Note: This memory is managed by the transform filter once created */
     This = CoTaskMemAlloc(sizeof(AVISplitterImpl));
@@ -1448,8 +1438,8 @@ HRESULT AVISplitter_create(IUnknown * pUnkOuter, LPVOID * ppv)
     This->streams = NULL;
     This->oldindex = NULL;
 
-    hr = Parser_Create(&This->Parser, &AVISplitterImpl_Vtbl, &CLSID_AviSplitter,
-            sink_name, AVISplitter_Sample, AVISplitter_QueryAccept,
+    hr = Parser_Create(&This->Parser, &AVISplitterImpl_Vtbl, outer, &CLSID_AviSplitter,
+            &avi_splitter_func_table, sink_name, AVISplitter_Sample, AVISplitter_QueryAccept,
             AVISplitter_InputPin_PreConnect, AVISplitter_Flush,
             AVISplitter_Disconnect, AVISplitter_first_request,
             AVISplitter_done_process, NULL, AVISplitter_seek, NULL);
@@ -1457,7 +1447,7 @@ HRESULT AVISplitter_create(IUnknown * pUnkOuter, LPVOID * ppv)
     if (FAILED(hr))
         return hr;
 
-    *ppv = &This->Parser.filter.IBaseFilter_iface;
+    *out = &This->Parser.filter.IUnknown_inner;
 
     return hr;
 }

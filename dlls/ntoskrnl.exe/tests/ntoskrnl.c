@@ -63,8 +63,6 @@ static void unload_driver(SC_HANDLE service)
 {
     SERVICE_STATUS status;
 
-    CloseHandle(device);
-
     ControlService(service, SERVICE_CONTROL_STOP, &status);
     while (status.dwCurrentState == SERVICE_STOP_PENDING)
     {
@@ -233,7 +231,7 @@ static void test_overlapped(void)
 
     cancel_cnt = 0xdeadbeef;
     res = DeviceIoControl(file, IOCTL_WINETEST_GET_CANCEL_COUNT, NULL, 0, &cancel_cnt, sizeof(cancel_cnt), NULL, &overlapped);
-    todo_wine
+    ok(res, "DeviceIoControl failed: %u\n", GetLastError());
     ok(cancel_cnt == 2, "cancel_cnt = %u\n", cancel_cnt);
 
     /* test cancelling selected overlapped event */
@@ -253,7 +251,6 @@ static void test_overlapped(void)
         cancel_cnt = 0xdeadbeef;
         res = DeviceIoControl(file, IOCTL_WINETEST_GET_CANCEL_COUNT, NULL, 0, &cancel_cnt, sizeof(cancel_cnt), NULL, &overlapped);
         ok(res, "DeviceIoControl failed: %u\n", GetLastError());
-        todo_wine
         ok(cancel_cnt == 1, "cancel_cnt = %u\n", cancel_cnt);
 
         pCancelIoEx(file, &overlapped2);
@@ -261,7 +258,6 @@ static void test_overlapped(void)
         cancel_cnt = 0xdeadbeef;
         res = DeviceIoControl(file, IOCTL_WINETEST_GET_CANCEL_COUNT, NULL, 0, &cancel_cnt, sizeof(cancel_cnt), NULL, &overlapped);
         ok(res, "DeviceIoControl failed: %u\n", GetLastError());
-        todo_wine
         ok(cancel_cnt == 2, "cancel_cnt = %u\n", cancel_cnt);
     }
 
@@ -345,6 +341,8 @@ START_TEST(ntoskrnl)
 {
     char filename[MAX_PATH], filename2[MAX_PATH];
     SC_HANDLE service, service2;
+    DWORD written;
+    BOOL ret;
 
     HMODULE hntdll = GetModuleHandleA("ntdll.dll");
     pRtlDosPathNameToNtPathName_U = (void *)GetProcAddress(hntdll, "RtlDosPathNameToNtPathName_U");
@@ -370,10 +368,19 @@ START_TEST(ntoskrnl)
     test_overlapped();
     test_load_driver(service2);
 
+    /* We need a separate ioctl to call IoDetachDevice(); calling it in the
+     * driver unload routine causes a live-lock. */
+    ret = DeviceIoControl(device, IOCTL_WINETEST_DETACH, NULL, 0, NULL, 0, &written, NULL);
+    ok(ret, "DeviceIoControl failed: %u\n", GetLastError());
+
+    CloseHandle(device);
+
     unload_driver(service2);
     unload_driver(service);
-    ok(DeleteFileA(filename), "DeleteFile failed: %u\n", GetLastError());
-    ok(DeleteFileA(filename2), "DeleteFile failed: %u\n", GetLastError());
+    ret = DeleteFileA(filename);
+    ok(ret, "DeleteFile failed: %u\n", GetLastError());
+    ret = DeleteFileA(filename2);
+    ok(ret, "DeleteFile failed: %u\n", GetLastError());
 
     test_driver3();
 }
