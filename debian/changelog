@@ -1,4 +1,4 @@
-wine-development (4.9-1) UNRELEASED; urgency=medium
+wine-development (4.9-1) unstable; urgency=medium
 
   * New upstream release 4.9, released May 24, 2019.
     - Initial support for installing Plug and Play drivers.
@@ -7,8 +7,12 @@ wine-development (4.9-1) UNRELEASED; urgency=medium
     - Various game controller fixes.
     - Use higher performance system clocks if available.
     - Various bug fixes.
+  * Refresh patches.
+    Partly drop warnings/format-overflow.patch, applied upstream.
+  * Drop warnings/uninitialized-variables.patch, fixed upstream.
+  * Don't ignore all compiler warnings.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Sat, 07 Sep 2019 16:32:04 +0200
+ -- Jens Reyer <jre.winesim@gmail.com>  Sun, 08 Sep 2019 17:55:58 +0200
 
 wine-development (4.8-1) unstable; urgency=medium
 
