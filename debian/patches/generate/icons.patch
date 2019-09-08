@@ -38,7 +38,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 +SVG_SRCS = regedit.svg folderopen.svg folder.svg computer.svg string.svg bin.svg
 --- a/dlls/display.drv16/Makefile.in
 +++ b/dlls/display.drv16/Makefile.in
-@@ -6,3 +6,5 @@ EXTRADLLFLAGS = -m16
+@@ -6,3 +6,5 @@ EXTRADLLFLAGS = -m16 -mno-cygwin
  C_SRCS = display.c
  
  RC_SRCS = display.rc
@@ -46,7 +46,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 +SVG_SRCS = oic_hand.svg
 --- a/dlls/comdlg32/Makefile.in
 +++ b/dlls/comdlg32/Makefile.in
-@@ -20,6 +20,12 @@ SVG_SRCS = \
+@@ -22,6 +22,12 @@ SVG_SRCS = \
  	pd32_collate.svg \
  	pd32_landscape.svg \
  	pd32_nocollate.svg \
@@ -62,7 +62,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  IDL_SRCS = comdlg32_classes.idl
 --- a/dlls/comctl32/Makefile.in
 +++ b/dlls/comctl32/Makefile.in
-@@ -57,4 +57,8 @@ SVG_SRCS = \
+@@ -59,4 +59,8 @@ SVG_SRCS = \
  	idc_copy.svg \
  	idc_divider.svg \
  	idc_divideropen.svg \

@@ -13,7 +13,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          output_uninstall_rules( make );
 --- a/loader/Makefile.in
 +++ b/loader/Makefile.in
-@@ -3,13 +3,15 @@ SOURCES = \
+@@ -3,15 +3,17 @@ SOURCES = \
  	main.c \
  	preloader.c \
  	preloader_mac.c \
@@ -21,14 +21,17 @@ author: Michael Gilbert <mgilbert@debian.org>
  	wine.desktop \
 -	wine.fr.UTF-8.man.in \
  	wine.inf.in \
-+	wine_info.plist.in
-+
+-	wine.man.in \
+-	wine.pl.UTF-8.man.in \
+ 	wine_info.plist.in \
+ 	winehid.inf.in
+ 
 +MANPAGES = \
- 	wine.man.in \
++	wine.man.in \
 +	wine.de.UTF-8.man.in \
 +	wine.fr.UTF-8.man.in \
- 	wine.pl.UTF-8.man.in \
--	wine_info.plist.in
- 
++	wine.pl.UTF-8.man.in
++
  PROGRAMS = $(WINELOADER_PROGRAMS)
  INSTALL_LIB = $(WINELOADER_PROGRAMS)
+ 

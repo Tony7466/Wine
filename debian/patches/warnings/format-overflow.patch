@@ -25,7 +25,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      int         style;
 --- a/dlls/winealsa.drv/mmdevdrv.c
 +++ b/dlls/winealsa.drv/mmdevdrv.c
-@@ -630,7 +630,7 @@ HRESULT WINAPI AUDDRV_GetEndpointIDs(EDa
+@@ -631,7 +631,7 @@ HRESULT WINAPI AUDDRV_GetEndpointIDs(EDa
  static snd_config_t *make_handle_underrun_config(const char *name)
  {
      snd_config_t *lconf, *dev_node, *hu_node, *type_node;

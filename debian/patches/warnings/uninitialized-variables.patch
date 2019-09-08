@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/comdlg32/filedlg.c
 +++ b/dlls/comdlg32/filedlg.c
-@@ -251,7 +251,7 @@ static BOOL get_config_key_dword(HKEY hk
+@@ -247,7 +247,7 @@ static BOOL get_config_key_dword(HKEY hk
  
  static BOOL get_config_key_string(HKEY hkey, const WCHAR *name, WCHAR **value)
  {
@@ -14,7 +14,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (hkey && !RegQueryValueExW(hkey, name, 0, &type, NULL, &size))
 --- a/dlls/d3dx9_36/texture.c
 +++ b/dlls/d3dx9_36/texture.c
-@@ -1291,6 +1291,10 @@ static inline void fill_texture(const st
+@@ -1289,6 +1289,10 @@ static inline void fill_texture(const st
              case 3: /* Blue */
                  comp_value = value->z;
                  break;
@@ -27,7 +27,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (format->type == FORMAT_ARGBF16)
 --- a/dlls/kernel32/locale.c
 +++ b/dlls/kernel32/locale.c
-@@ -5790,7 +5790,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
+@@ -5808,7 +5808,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
                          LPWSTR lpUnicodeCharStr, INT cchUnicodeChar)
  {
      INT i, label_start, label_end, out_label, out = 0;
@@ -104,22 +104,9 @@ author: Michael Gilbert <mgilbert@debian.org>
                  }
                  checkGLcall("Post-pixelshader blending check");
  
---- a/dlls/mf/session.c
-+++ b/dlls/mf/session.c
-@@ -1114,7 +1114,9 @@ static HRESULT clock_change_state(struct
-             notification = CLOCK_NOTIFY_PAUSE;
-             break;
-         default:
--            ;
-+            notification = CLOCK_NOTIFY_START;
-+            ERR("Unhandled clock_command enum %d\n", (int)command);
-+            break;
-     }
- 
-     if (FAILED(hr = clock_call_state_change(system_time, offset, notification, clock->time_source_sink)))
 --- a/dlls/devenum/createdevenum.c
 +++ b/dlls/devenum/createdevenum.c
-@@ -388,7 +388,7 @@ static void write_filter_data(IPropertyB
+@@ -387,7 +387,7 @@ static void write_filter_data(IPropertyB
      HRESULT hr;
  
      hr = CoCreateInstance(&CLSID_FilterMapper2, NULL, CLSCTX_INPROC, &IID_IAMFilterData, (void **)&fildata);
@@ -128,7 +115,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      hr = IAMFilterData_CreateFilterData(fildata, rgf, &data, &size);
      if (FAILED(hr)) goto cleanup;
-@@ -409,8 +409,9 @@ static void write_filter_data(IPropertyB
+@@ -408,8 +408,9 @@ static void write_filter_data(IPropertyB
      if (FAILED(hr)) goto cleanup;
  
  cleanup:
