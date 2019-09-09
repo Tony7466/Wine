@@ -1,4 +1,4 @@
-wine-development (4.10-1) UNRELEASED; urgency=medium
+wine-development (4.10-1) unstable; urgency=medium
 
   * New upstream release 4.10, released Jun 10, 2019.
     - Many DLLs are built as PE files by default.
@@ -6,8 +6,11 @@ wine-development (4.10-1) UNRELEASED; urgency=medium
     - Clock synchronization in Media Foundation.
     - Volume adjustment in audio drivers.
     - Various bug fixes.
+  * Refresh patches.
+    Drop warnings/uninitialized-variables.patch part for
+    dlls/mf/session.c, fixed upstream.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Sun, 08 Sep 2019 23:34:52 +0200
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 09 Sep 2019 21:15:37 +0200
 
 wine-development (4.9-2) unstable; urgency=medium
 
