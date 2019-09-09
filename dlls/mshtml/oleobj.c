@@ -16,8 +16,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-
 #include <stdarg.h>
 #include <stdio.h>
 #include <assert.h>
@@ -924,7 +922,6 @@ static HRESULT WINAPI OleControl_OnAmbientPropertyChange(IOleControl *iface, DIS
         if(V_VT(&res) == VT_BOOL) {
             if(V_BOOL(&res)) {
                 FIXME("silent mode is not supported\n");
-                hres = E_FAIL;
             }
         }else {
             FIXME("silent=%s\n", debugstr_variant(&res));
@@ -937,7 +934,6 @@ static HRESULT WINAPI OleControl_OnAmbientPropertyChange(IOleControl *iface, DIS
             return S_OK;
 
         FIXME("not supported AMBIENT_USERAGENT\n");
-        hres = E_FAIL;
         return S_OK;
     case DISPID_AMBIENT_PALETTE:
         TRACE("(%p)->(DISPID_AMBIENT_PALETTE)\n", This);
@@ -946,7 +942,6 @@ static HRESULT WINAPI OleControl_OnAmbientPropertyChange(IOleControl *iface, DIS
             return S_OK;
 
         FIXME("not supported AMBIENT_PALETTE\n");
-        hres = E_FAIL;
         return S_OK;
     }
 

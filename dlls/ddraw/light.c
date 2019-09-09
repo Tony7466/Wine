@@ -39,7 +39,7 @@ static void light_update(struct d3d_light *light)
     if (!light->active_viewport || !light->active_viewport->active_device) return;
     device = light->active_viewport->active_device;
 
-    IDirect3DDevice7_SetLight(&device->IDirect3DDevice7_iface, light->dwLightIndex, &light->light7);
+    IDirect3DDevice7_SetLight(&device->IDirect3DDevice7_iface, light->active_light_index, &light->light7);
 }
 
 /*****************************************************************************
@@ -59,9 +59,12 @@ void light_activate(struct d3d_light *light)
         return;
     device = light->active_viewport->active_device;
 
-    light_update(light);
     if (light->light.dwFlags & D3DLIGHT_ACTIVE)
-        IDirect3DDevice7_LightEnable(&device->IDirect3DDevice7_iface, light->dwLightIndex, TRUE);
+    {
+        viewport_alloc_active_light_index(light);
+        light_update(light);
+        IDirect3DDevice7_LightEnable(&device->IDirect3DDevice7_iface, light->active_light_index, TRUE);
+    }
 }
 
 /*****************************************************************************
@@ -79,11 +82,17 @@ void light_deactivate(struct d3d_light *light)
 
     if (!light->active_viewport || !light->active_viewport->active_device
             || light->active_viewport->active_device->current_viewport != light->active_viewport)
+    {
+        assert(!light->active_light_index);
         return;
+    }
 
     device = light->active_viewport->active_device;
-    if (light->light.dwFlags & D3DLIGHT_ACTIVE)
-        IDirect3DDevice7_LightEnable(&device->IDirect3DDevice7_iface, light->dwLightIndex, FALSE);
+    if (light->active_light_index)
+    {
+        IDirect3DDevice7_LightEnable(&device->IDirect3DDevice7_iface, light->active_light_index, FALSE);
+        viewport_free_active_light_index(light);
+    }
 }
 
 static inline struct d3d_light *impl_from_IDirect3DLight(IDirect3DLight *iface)

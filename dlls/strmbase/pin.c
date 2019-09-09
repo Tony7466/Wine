@@ -173,14 +173,16 @@ LONG WINAPI BasePinImpl_GetMediaTypeVersion(BasePin *iface)
     return 1;
 }
 
-ULONG WINAPI BasePinImpl_AddRef(IPin * iface)
+ULONG WINAPI BasePinImpl_AddRef(IPin *iface)
 {
-    BasePin *This = impl_from_IPin(iface);
-    ULONG refCount = InterlockedIncrement(&This->refCount);
+    BasePin *pin = impl_from_IPin(iface);
+    return IBaseFilter_AddRef(pin->pinInfo.pFilter);
+}
 
-    TRACE("(%p)->() AddRef from %d\n", iface, refCount - 1);
-
-    return refCount;
+ULONG WINAPI BasePinImpl_Release(IPin *iface)
+{
+    BasePin *pin = impl_from_IPin(iface);
+    return IBaseFilter_Release(pin->pinInfo.pFilter);
 }
 
 HRESULT WINAPI BasePinImpl_Disconnect(IPin * iface)
@@ -377,19 +379,6 @@ HRESULT WINAPI BaseOutputPinImpl_QueryInterface(IPin * iface, REFIID riid, LPVOI
     FIXME("No interface for %s!\n", debugstr_guid(riid));
 
     return E_NOINTERFACE;
-}
-
-ULONG WINAPI BaseOutputPinImpl_Release(IPin * iface)
-{
-    BaseOutputPin *This = impl_BaseOutputPin_from_IPin(iface);
-    ULONG refCount = InterlockedDecrement(&This->pin.refCount);
-
-    TRACE("(%p)->() Release from %d\n", iface, refCount + 1);
-
-    if (!refCount)
-        BaseOutputPin_Destroy(This);
-
-    return refCount;
 }
 
 HRESULT WINAPI BaseOutputPinImpl_Connect(IPin * iface, IPin * pReceivePin, const AM_MEDIA_TYPE * pmt)
@@ -728,28 +717,23 @@ HRESULT WINAPI BaseOutputPinImpl_AttemptConnection(BaseOutputPin *This, IPin *pR
     return hr;
 }
 
-static HRESULT OutputPin_Init(const IPinVtbl *OutputPin_Vtbl, const PIN_INFO * pPinInfo, const BaseOutputPinFuncTable* vtbl,  LPCRITICAL_SECTION pCritSec, BaseOutputPin * pPinImpl)
+static void strmbase_pin_init(BasePin *pin, const IPinVtbl *vtbl,
+        const BasePinFuncTable *func_table, const PIN_INFO *info, CRITICAL_SECTION *cs)
 {
-    TRACE("(%p)\n", pPinImpl);
+    memset(pin, 0, sizeof(*pin));
+    pin->IPin_iface.lpVtbl = vtbl;
+    pin->pCritSec = cs;
+    pin->dRate = 1.0;
+    Copy_PinInfo(&pin->pinInfo, info);
+    pin->pFuncsTable = func_table;
+}
 
-    /* Common attributes */
-    pPinImpl->pin.IPin_iface.lpVtbl = OutputPin_Vtbl;
-    pPinImpl->pin.refCount = 1;
-    pPinImpl->pin.pConnectedTo = NULL;
-    pPinImpl->pin.pCritSec = pCritSec;
-    pPinImpl->pin.tStart = 0;
-    pPinImpl->pin.tStop = 0;
-    pPinImpl->pin.dRate = 1.0;
-    Copy_PinInfo(&pPinImpl->pin.pinInfo, pPinInfo);
-    pPinImpl->pin.pFuncsTable = &vtbl->base;
-    ZeroMemory(&pPinImpl->pin.mtCurrent, sizeof(AM_MEDIA_TYPE));
-
-    /* Output pin attributes */
-    pPinImpl->pMemInputPin = NULL;
-    pPinImpl->pAllocator = NULL;
-    pPinImpl->pFuncsTable = vtbl;
-
-    return S_OK;
+void strmbase_source_init(BaseOutputPin *pin, const IPinVtbl *vtbl,
+        const PIN_INFO *info, const BaseOutputPinFuncTable *func_table, CRITICAL_SECTION *cs)
+{
+    memset(pin, 0, sizeof(*pin));
+    strmbase_pin_init(&pin->pin, vtbl, &func_table->base, info, cs);
+    pin->pFuncsTable = func_table;
 }
 
 HRESULT WINAPI BaseOutputPin_Construct(const IPinVtbl *OutputPin_Vtbl, LONG outputpin_size, const PIN_INFO * pPinInfo, const BaseOutputPinFuncTable* vtbl, LPCRITICAL_SECTION pCritSec, IPin ** ppPin)
@@ -772,22 +756,22 @@ HRESULT WINAPI BaseOutputPin_Construct(const IPinVtbl *OutputPin_Vtbl, LONG outp
     if (!pPinImpl)
         return E_OUTOFMEMORY;
 
-    if (SUCCEEDED(OutputPin_Init(OutputPin_Vtbl, pPinInfo, vtbl, pCritSec, pPinImpl)))
-    {
-        *ppPin = &pPinImpl->pin.IPin_iface;
-        return S_OK;
-    }
+    strmbase_source_init(pPinImpl, OutputPin_Vtbl, pPinInfo, vtbl, pCritSec);
+    *ppPin = &pPinImpl->pin.IPin_iface;
+    return S_OK;
+}
 
-    CoTaskMemFree(pPinImpl);
-    return E_FAIL;
+void strmbase_source_cleanup(BaseOutputPin *pin)
+{
+    FreeMediaType(&pin->pin.mtCurrent);
+    if (pin->pAllocator)
+        IMemAllocator_Release(pin->pAllocator);
+    pin->pAllocator = NULL;
 }
 
 HRESULT WINAPI BaseOutputPin_Destroy(BaseOutputPin *This)
 {
-    FreeMediaType(&This->pin.mtCurrent);
-    if (This->pAllocator)
-        IMemAllocator_Release(This->pAllocator);
-    This->pAllocator = NULL;
+    strmbase_source_cleanup(This);
     CoTaskMemFree(This);
     return S_OK;
 }
@@ -827,19 +811,6 @@ HRESULT WINAPI BaseInputPinImpl_QueryInterface(IPin * iface, REFIID riid, LPVOID
     FIXME("No interface for %s!\n", debugstr_guid(riid));
 
     return E_NOINTERFACE;
-}
-
-ULONG WINAPI BaseInputPinImpl_Release(IPin * iface)
-{
-    BaseInputPin *This = impl_BaseInputPin_from_IPin(iface);
-    ULONG refCount = InterlockedDecrement(&This->pin.refCount);
-
-    TRACE("(%p)->() Release from %d\n", iface, refCount + 1);
-
-    if (!refCount)
-        BaseInputPin_Destroy(This);
-
-    return refCount;
 }
 
 HRESULT WINAPI BaseInputPinImpl_Connect(IPin *iface, IPin *pin, const AM_MEDIA_TYPE *pmt)
@@ -1111,33 +1082,17 @@ static const IMemInputPinVtbl MemInputPin_Vtbl =
     MemInputPin_ReceiveCanBlock
 };
 
-static HRESULT InputPin_Init(const IPinVtbl *InputPin_Vtbl, const PIN_INFO * pPinInfo,
-                             const BaseInputPinFuncTable* vtbl,
-                             LPCRITICAL_SECTION pCritSec, IMemAllocator *allocator, BaseInputPin * pPinImpl)
+void strmbase_sink_init(BaseInputPin *pin, const IPinVtbl *vtbl,
+        const PIN_INFO *info, const BaseInputPinFuncTable *func_table, CRITICAL_SECTION *cs,
+        IMemAllocator *allocator)
 {
-    TRACE("(%p)\n", pPinImpl);
-
-    /* Common attributes */
-    pPinImpl->pin.refCount = 1;
-    pPinImpl->pin.pConnectedTo = NULL;
-    pPinImpl->pin.pCritSec = pCritSec;
-    pPinImpl->pin.tStart = 0;
-    pPinImpl->pin.tStop = 0;
-    pPinImpl->pin.dRate = 1.0;
-    Copy_PinInfo(&pPinImpl->pin.pinInfo, pPinInfo);
-    ZeroMemory(&pPinImpl->pin.mtCurrent, sizeof(AM_MEDIA_TYPE));
-    pPinImpl->pin.pFuncsTable = &vtbl->base;
-
-    /* Input pin attributes */
-    pPinImpl->pFuncsTable = vtbl;
-    pPinImpl->pAllocator = pPinImpl->preferred_allocator = allocator;
-    if (pPinImpl->preferred_allocator)
-        IMemAllocator_AddRef(pPinImpl->preferred_allocator);
-    pPinImpl->pin.IPin_iface.lpVtbl = InputPin_Vtbl;
-    pPinImpl->IMemInputPin_iface.lpVtbl = &MemInputPin_Vtbl;
-    pPinImpl->flushing = pPinImpl->end_of_stream = FALSE;
-
-    return S_OK;
+    memset(pin, 0, sizeof(*pin));
+    strmbase_pin_init(&pin->pin, vtbl, &func_table->base, info, cs);
+    pin->pFuncsTable = func_table;
+    pin->pAllocator = pin->preferred_allocator = allocator;
+    if (pin->preferred_allocator)
+        IMemAllocator_AddRef(pin->preferred_allocator);
+    pin->IMemInputPin_iface.lpVtbl = &MemInputPin_Vtbl;
 }
 
 HRESULT BaseInputPin_Construct(const IPinVtbl *InputPin_Vtbl, LONG inputpin_size, const PIN_INFO * pPinInfo,
@@ -1162,23 +1117,24 @@ HRESULT BaseInputPin_Construct(const IPinVtbl *InputPin_Vtbl, LONG inputpin_size
     if (!pPinImpl)
         return E_OUTOFMEMORY;
 
-    if (SUCCEEDED(InputPin_Init(InputPin_Vtbl, pPinInfo, vtbl, pCritSec, allocator, pPinImpl)))
-    {
-        *ppPin = &pPinImpl->pin.IPin_iface;
-        return S_OK;
-    }
+    strmbase_sink_init(pPinImpl, InputPin_Vtbl, pPinInfo, vtbl, pCritSec, allocator);
 
-    CoTaskMemFree(pPinImpl);
-    return E_FAIL;
+    *ppPin = &pPinImpl->pin.IPin_iface;
+    return S_OK;
+}
+
+void strmbase_sink_cleanup(BaseInputPin *pin)
+{
+    FreeMediaType(&pin->pin.mtCurrent);
+    if (pin->pAllocator)
+        IMemAllocator_Release(pin->pAllocator);
+    pin->pAllocator = NULL;
+    pin->pin.IPin_iface.lpVtbl = NULL;
 }
 
 HRESULT WINAPI BaseInputPin_Destroy(BaseInputPin *This)
 {
-    FreeMediaType(&This->pin.mtCurrent);
-    if (This->pAllocator)
-        IMemAllocator_Release(This->pAllocator);
-    This->pAllocator = NULL;
-    This->pin.IPin_iface.lpVtbl = NULL;
+    strmbase_sink_cleanup(This);
     CoTaskMemFree(This);
     return S_OK;
 }

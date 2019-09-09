@@ -16,8 +16,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-
 #include <stdarg.h>
 #include <stdio.h>
 #include <assert.h>
@@ -583,7 +581,7 @@ static HRESULT WINAPI HTMLDocument_put_designMode(IHTMLDocument2 *iface, BSTR v)
 
     TRACE("(%p)->(%s)\n", This, debugstr_w(v));
 
-    if(strcmpiW(v, onW)) {
+    if(wcsicmp(v, onW)) {
         FIXME("Unsupported arg %s\n", debugstr_w(v));
         return E_NOTIMPL;
     }
@@ -680,15 +678,67 @@ static HRESULT WINAPI HTMLDocument_get_alinkColor(IHTMLDocument2 *iface, VARIANT
 static HRESULT WINAPI HTMLDocument_put_bgColor(IHTMLDocument2 *iface, VARIANT v)
 {
     HTMLDocument *This = impl_from_IHTMLDocument2(iface);
-    FIXME("(%p)->(%s)\n", This, debugstr_variant(&v));
-    return E_NOTIMPL;
+    IHTMLElement *element = NULL;
+    IHTMLBodyElement *body;
+    HRESULT hr;
+
+    TRACE("(%p)->(%s)\n", This, debugstr_variant(&v));
+
+    hr = IHTMLDocument2_get_body(iface, &element);
+    if (FAILED(hr))
+    {
+        ERR("Failed to get body (0x%08x)\n", hr);
+        return hr;
+    }
+
+    if(!element)
+    {
+        FIXME("Empty body element.\n");
+        return hr;
+    }
+
+    hr = IHTMLElement_QueryInterface(element, &IID_IHTMLBodyElement, (void**)&body);
+    if (SUCCEEDED(hr))
+    {
+        hr = IHTMLBodyElement_put_bgColor(body, v);
+        IHTMLBodyElement_Release(body);
+    }
+    IHTMLElement_Release(element);
+
+    return hr;
 }
 
 static HRESULT WINAPI HTMLDocument_get_bgColor(IHTMLDocument2 *iface, VARIANT *p)
 {
     HTMLDocument *This = impl_from_IHTMLDocument2(iface);
-    FIXME("(%p)->(%p)\n", This, p);
-    return E_NOTIMPL;
+    IHTMLElement *element = NULL;
+    IHTMLBodyElement *body;
+    HRESULT hr;
+
+    TRACE("(%p)->(%p)\n", This, p);
+
+    hr = IHTMLDocument2_get_body(iface, &element);
+    if (FAILED(hr))
+    {
+        ERR("Failed to get body (0x%08x)\n", hr);
+        return hr;
+    }
+
+    if(!element)
+    {
+        FIXME("Empty body element.\n");
+        return hr;
+    }
+
+    hr = IHTMLElement_QueryInterface(element, &IID_IHTMLBodyElement, (void**)&body);
+    if (SUCCEEDED(hr))
+    {
+        hr = IHTMLBodyElement_get_bgColor(body, p);
+        IHTMLBodyElement_Release(body);
+    }
+    IHTMLElement_Release(element);
+
+    return hr;
 }
 
 static HRESULT WINAPI HTMLDocument_put_fgColor(IHTMLDocument2 *iface, VARIANT v)
@@ -1094,7 +1144,7 @@ static HRESULT WINAPI HTMLDocument_open(IHTMLDocument2 *iface, BSTR url, VARIANT
         return E_NOTIMPL;
     }
 
-    if(!url || strcmpW(url, text_htmlW) || V_VT(&name) != VT_ERROR
+    if(!url || wcscmp(url, text_htmlW) || V_VT(&name) != VT_ERROR
        || V_VT(&features) != VT_ERROR || V_VT(&replace) != VT_ERROR)
         FIXME("unsupported args\n");
 
@@ -1192,7 +1242,7 @@ static BOOL cmdid_from_string(const WCHAR *str, OLECMDID *cmdid)
     int i;
 
     for(i = 0; i < ARRAY_SIZE(command_names); i++) {
-        if(!strcmpiW(command_names[i].name, str)) {
+        if(!wcsicmp(command_names[i].name, str)) {
             *cmdid = command_names[i].id;
             return TRUE;
         }
@@ -2362,7 +2412,7 @@ static HRESULT WINAPI HTMLDocument3_getElementsByName(IHTMLDocument3 *iface, BST
     selector = heap_alloc(2*SysStringLen(v)*sizeof(WCHAR) + sizeof(formatW));
     if(!selector)
         return E_OUTOFMEMORY;
-    sprintfW(selector, formatW, v, v);
+    swprintf(selector, 2*SysStringLen(v) + ARRAY_SIZE(formatW), formatW, v, v);
 
     /*
      * NOTE: IE getElementsByName implementation differs from Gecko. It searches both name and id attributes.
@@ -2429,7 +2479,7 @@ static HRESULT WINAPI HTMLDocument3_getElementsByTagName(IHTMLDocument3 *iface, 
         if(v) {
             const WCHAR *ptr;
             for(ptr=v; *ptr; ptr++) {
-                if(!isalnumW(*ptr)) {
+                if(!iswalnum(*ptr)) {
                     FIXME("Unsupported invalid tag %s\n", debugstr_w(v));
                     return E_NOTIMPL;
                 }
@@ -3341,8 +3391,10 @@ static HRESULT WINAPI HTMLDocument7_put_onmsthumbnailclick(IHTMLDocument7 *iface
 static HRESULT WINAPI HTMLDocument7_get_onmsthumbnailclick(IHTMLDocument7 *iface, VARIANT *p)
 {
     HTMLDocument *This = impl_from_IHTMLDocument7(iface);
-    FIXME("(%p)->(%p)\n", This, p);
-    return E_NOTIMPL;
+
+    TRACE("(%p)->(%p)\n", This, p);
+
+    return get_doc_event(This, EVENTID_MSTHUMBNAILCLICK, p);
 }
 
 static HRESULT WINAPI HTMLDocument7_get_characterSet(IHTMLDocument7 *iface, BSTR *p)
@@ -4511,7 +4563,7 @@ static HRESULT dispid_from_elem_name(HTMLDocumentNode *This, BSTR name, DISPID *
         return DISP_E_UNKNOWNNAME;
 
     for(i=0; i < This->elem_vars_cnt; i++) {
-        if(!strcmpW(name, This->elem_vars[i])) {
+        if(!wcscmp(name, This->elem_vars[i])) {
             *dispid = MSHTML_DISPID_CUSTOM_MIN+i;
             return S_OK;
         }
@@ -5216,12 +5268,13 @@ static BOOL htmldoc_qi(HTMLDocument *This, REFIID riid, void **ppv)
 }
 
 static cp_static_data_t HTMLDocumentEvents_data = { HTMLDocumentEvents_tid, HTMLDocument_on_advise };
+static cp_static_data_t HTMLDocumentEvents2_data = { HTMLDocumentEvents2_tid, HTMLDocument_on_advise, TRUE };
 
 static const cpc_entry_t HTMLDocument_cpc[] = {
     {&IID_IDispatch, &HTMLDocumentEvents_data},
     {&IID_IPropertyNotifySink},
     {&DIID_HTMLDocumentEvents, &HTMLDocumentEvents_data},
-    {&DIID_HTMLDocumentEvents2},
+    {&DIID_HTMLDocumentEvents2, &HTMLDocumentEvents2_data},
     {NULL}
 };
 

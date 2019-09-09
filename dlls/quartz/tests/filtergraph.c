@@ -1163,6 +1163,8 @@ struct testfilter
     struct testpin *pins;
     unsigned int pin_count, enum_idx;
 
+    HRESULT state_hr;
+
     IAMFilterMiscFlags IAMFilterMiscFlags_iface;
     ULONG misc_flags;
 
@@ -1344,7 +1346,7 @@ static HRESULT WINAPI testfilter_Stop(IBaseFilter *iface)
     check_state_transition(filter, State_Stopped);
 
     filter->state = State_Stopped;
-    return S_OK;
+    return filter->state_hr;
 }
 
 static HRESULT WINAPI testfilter_Pause(IBaseFilter *iface)
@@ -1355,7 +1357,7 @@ static HRESULT WINAPI testfilter_Pause(IBaseFilter *iface)
     check_state_transition(filter, State_Paused);
 
     filter->state = State_Paused;
-    return S_OK;
+    return filter->state_hr;
 }
 
 static HRESULT WINAPI testfilter_Run(IBaseFilter *iface, REFERENCE_TIME start)
@@ -1367,7 +1369,7 @@ static HRESULT WINAPI testfilter_Run(IBaseFilter *iface, REFERENCE_TIME start)
 
     filter->state = State_Running;
     filter->start_time = start;
-    return S_OK;
+    return filter->state_hr;
 }
 
 static HRESULT WINAPI testfilter_GetState(IBaseFilter *iface, DWORD timeout, FILTER_STATE *state)
@@ -1376,7 +1378,7 @@ static HRESULT WINAPI testfilter_GetState(IBaseFilter *iface, DWORD timeout, FIL
     if (winetest_debug > 1) trace("%p->GetState(%u)\n", filter, timeout);
 
     *state = filter->state;
-    return S_OK;
+    return filter->state_hr;
 }
 
 static HRESULT WINAPI testfilter_SetSyncSource(IBaseFilter *iface, IReferenceClock *clock)
@@ -2494,7 +2496,10 @@ static void test_control_delegation(void)
     IBasicAudio *audio, *filter_audio;
     IBaseFilter *renderer;
     IVideoWindow *window;
-    IBasicVideo *video;
+    IBasicVideo2 *video;
+    ITypeInfo *typeinfo;
+    TYPEATTR *typeattr;
+    ULONG count;
     HRESULT hr;
     LONG val;
 
@@ -2502,6 +2507,10 @@ static void test_control_delegation(void)
 
     hr = IFilterGraph2_QueryInterface(graph, &IID_IBasicAudio, (void **)&audio);
     ok(hr == S_OK, "got %#x\n", hr);
+
+    hr = IBasicAudio_GetTypeInfoCount(audio, &count);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(count == 1, "Got count %u.\n", count);
 
     hr = IBasicAudio_put_Volume(audio, -10);
     ok(hr == E_NOTIMPL, "got %#x\n", hr);
@@ -2559,16 +2568,34 @@ static void test_control_delegation(void)
 
     /* IBasicVideo and IVideoWindow */
 
-    hr = IFilterGraph2_QueryInterface(graph, &IID_IBasicVideo, (void **)&video);
+    hr = IFilterGraph2_QueryInterface(graph, &IID_IBasicVideo2, (void **)&video);
     ok(hr == S_OK, "got %#x\n", hr);
     hr = IFilterGraph2_QueryInterface(graph, &IID_IVideoWindow, (void **)&window);
     ok(hr == S_OK, "got %#x\n", hr);
 
     /* Unlike IBasicAudio, these return E_NOINTERFACE. */
-    hr = IBasicVideo_get_BitRate(video, &val);
+    hr = IBasicVideo2_get_BitRate(video, &val);
     ok(hr == E_NOINTERFACE, "got %#x\n", hr);
+
+    hr = IBasicVideo2_GetTypeInfoCount(video, &count);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(count == 1, "Got count %u.\n", count);
+
+    hr = IBasicVideo2_GetTypeInfo(video, 0, 0, &typeinfo);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    hr = ITypeInfo_GetTypeAttr(typeinfo, &typeattr);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(typeattr->typekind == TKIND_DISPATCH, "Got kind %u.\n", typeattr->typekind);
+    ok(IsEqualGUID(&typeattr->guid, &IID_IBasicVideo), "Got IID %s.\n", wine_dbgstr_guid(&typeattr->guid));
+    ITypeInfo_ReleaseTypeAttr(typeinfo, typeattr);
+    ITypeInfo_Release(typeinfo);
+
     hr = IVideoWindow_SetWindowForeground(window, OAFALSE);
     ok(hr == E_NOINTERFACE, "got %#x\n", hr);
+
+    hr = IVideoWindow_GetTypeInfoCount(window, &count);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(count == 1, "Got count %u.\n", count);
 
     hr = CoCreateInstance(&CLSID_VideoRenderer, NULL, CLSCTX_INPROC_SERVER, &IID_IBaseFilter, (void **)&renderer);
     ok(hr == S_OK, "got %#x\n", hr);
@@ -2576,7 +2603,7 @@ static void test_control_delegation(void)
     hr = IFilterGraph2_AddFilter(graph, renderer, NULL);
     ok(hr == S_OK, "got %#x\n", hr);
 
-    hr = IBasicVideo_get_BitRate(video, &val);
+    hr = IBasicVideo2_get_BitRate(video, &val);
     ok(hr == VFW_E_NOT_CONNECTED, "got %#x\n", hr);
     hr = IVideoWindow_SetWindowForeground(window, OAFALSE);
     ok(hr == VFW_E_NOT_CONNECTED, "got %#x\n", hr);
@@ -2584,13 +2611,13 @@ static void test_control_delegation(void)
     hr = IFilterGraph2_RemoveFilter(graph, renderer);
     ok(hr == S_OK, "got %#x\n", hr);
 
-    hr = IBasicVideo_get_BitRate(video, &val);
+    hr = IBasicVideo2_get_BitRate(video, &val);
     ok(hr == E_NOINTERFACE, "got %#x\n", hr);
     hr = IVideoWindow_SetWindowForeground(window, OAFALSE);
     ok(hr == E_NOINTERFACE, "got %#x\n", hr);
 
     IBaseFilter_Release(renderer);
-    IBasicVideo_Release(video);
+    IBasicVideo2_Release(video);
     IVideoWindow_Release(window);
     IFilterGraph2_Release(graph);
 }
@@ -2929,6 +2956,7 @@ static void test_filter_state(void)
     IReferenceClock *clock;
     IMediaControl *control;
     IMediaFilter *filter;
+    OAFilterState state;
     HRESULT hr;
     ULONG ref;
 
@@ -3068,6 +3096,34 @@ todo_wine
     hr = IMediaControl_Stop(control);
     ok(hr == S_OK, "Got hr %#x.\n", hr);
     check_filter_state(graph, State_Stopped);
+
+    sink.state_hr = S_FALSE;
+    hr = IMediaControl_Pause(control);
+    ok(hr == S_FALSE, "Got hr %#x.\n", hr);
+
+    sink.state_hr = VFW_S_STATE_INTERMEDIATE;
+    hr = IMediaControl_GetState(control, 0, &state);
+    todo_wine ok(hr == VFW_S_STATE_INTERMEDIATE, "Got hr %#x.\n", hr);
+    ok(state == State_Paused, "Got state %u.\n", state);
+
+    sink.state_hr = VFW_S_CANT_CUE;
+    hr = IMediaControl_GetState(control, 0, &state);
+    todo_wine ok(hr == VFW_S_CANT_CUE, "Got hr %#x.\n", hr);
+    ok(state == State_Paused, "Got state %u.\n", state);
+
+    sink.state_hr = VFW_S_STATE_INTERMEDIATE;
+    source.state_hr = VFW_S_CANT_CUE;
+    hr = IMediaControl_GetState(control, 0, &state);
+    todo_wine ok(hr == VFW_S_CANT_CUE, "Got hr %#x.\n", hr);
+    ok(state == State_Paused, "Got state %u.\n", state);
+
+    sink.state_hr = VFW_S_CANT_CUE;
+    source.state_hr = VFW_S_STATE_INTERMEDIATE;
+    hr = IMediaControl_GetState(control, 0, &state);
+    todo_wine ok(hr == VFW_S_CANT_CUE, "Got hr %#x.\n", hr);
+    ok(state == State_Paused, "Got state %u.\n", state);
+
+    sink.state_hr = source.state_hr = S_OK;
 
     /* Destroying the graph while it's running stops all filters. */
 

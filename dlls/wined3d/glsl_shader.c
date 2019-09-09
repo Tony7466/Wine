@@ -4109,20 +4109,16 @@ static void shader_glsl_nrm(const struct wined3d_shader_instruction *ins)
     mask_size = shader_glsl_get_write_mask_size(write_mask);
     shader_glsl_add_src_param(ins, &ins->src[0], write_mask, &src_param);
 
-    shader_addline(buffer, "tmp0.x = dot(%s, %s);\n",
-            src_param.param_str, src_param.param_str);
+    if (mask_size > 3)
+        shader_addline(buffer, "tmp0.x = dot(vec3(%s), vec3(%s));\n",
+                src_param.param_str, src_param.param_str);
+    else
+        shader_addline(buffer, "tmp0.x = dot(%s, %s);\n",
+                src_param.param_str, src_param.param_str);
     shader_glsl_append_dst(buffer, ins);
 
-    if (mask_size > 1)
-    {
-        shader_addline(buffer, "tmp0.x == 0.0 ? vec%u(0.0) : (%s * inversesqrt(tmp0.x)));\n",
-                mask_size, src_param.param_str);
-    }
-    else
-    {
-        shader_addline(buffer, "tmp0.x == 0.0 ? 0.0 : (%s * inversesqrt(tmp0.x)));\n",
-                src_param.param_str);
-    }
+    shader_addline(buffer, "tmp0.x == 0.0 ? %s : (%s * inversesqrt(tmp0.x)));\n",
+            src_param.param_str, src_param.param_str);
 }
 
 static void shader_glsl_scalar_op(const struct wined3d_shader_instruction *ins)
@@ -10533,6 +10529,7 @@ static void shader_glsl_precompile(void *shader_priv, struct wined3d_shader *sha
 static void shader_glsl_select(void *shader_priv, struct wined3d_context *context,
         const struct wined3d_state *state)
 {
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     struct glsl_context_data *ctx_data = context->shader_backend_data;
     const struct wined3d_gl_info *gl_info = context->gl_info;
     struct shader_glsl_priv *priv = shader_priv;
@@ -10552,7 +10549,7 @@ static void shader_glsl_select(void *shader_priv, struct wined3d_context *contex
         program_id = glsl_program->id;
         current_vertex_color_clamp = glsl_program->vs.vertex_color_clamp;
         if (glsl_program->shader_controlled_clip_distances)
-            context_enable_clip_distances(context, glsl_program->clip_distance_mask);
+            wined3d_context_gl_enable_clip_distances(context_gl, glsl_program->clip_distance_mask);
     }
     else
     {
@@ -13088,7 +13085,7 @@ static DWORD glsl_blitter_blit(struct wined3d_blitter *blitter, enum wined3d_bli
         location = GL_EXTCALL(glGetUniformLocation(program->id, "colour_key.high"));
         GL_EXTCALL(glUniform4fv(location, 1, &float_key[1].r));
     }
-    context_draw_shaded_quad(context, src_texture_gl, src_sub_resource_idx, src_rect, dst_rect, filter);
+    wined3d_context_gl_draw_shaded_quad(context_gl, src_texture_gl, src_sub_resource_idx, src_rect, dst_rect, filter);
     GL_EXTCALL(glUseProgram(0));
 
     if (dst_texture->swapchain && (dst_texture->swapchain->front_buffer == dst_texture))

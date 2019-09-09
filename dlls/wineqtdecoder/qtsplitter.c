@@ -207,28 +207,16 @@ static IPin *qt_splitter_get_pin(BaseFilter *base, unsigned int index)
     QTSplitter *filter = impl_from_BaseFilter(base);
 
     if (index == 0)
-    {
-        IPin_AddRef(&filter->pInputPin.pin.IPin_iface);
         return &filter->pInputPin.pin.IPin_iface;
-    }
     else if (index == 1)
     {
         if (filter->pVideo_Pin)
-        {
-            IPin_AddRef(&filter->pVideo_Pin->pin.pin.IPin_iface);
             return &filter->pVideo_Pin->pin.pin.IPin_iface;
-        }
         else if (filter->pAudio_Pin)
-        {
-            IPin_AddRef(&filter->pAudio_Pin->pin.pin.IPin_iface);
             return &filter->pAudio_Pin->pin.pin.IPin_iface;
-        }
     }
     else if (index == 2 && filter->pVideo_Pin && filter->pAudio_Pin)
-    {
-        IPin_AddRef(&filter->pAudio_Pin->pin.pin.IPin_iface);
         return &filter->pAudio_Pin->pin.pin.IPin_iface;
-    }
 
     return NULL;
 }
@@ -237,7 +225,6 @@ static void qt_splitter_destroy(BaseFilter *iface)
 {
     QTSplitter *filter = impl_from_BaseFilter(iface);
     IPin *peer = NULL;
-    ULONG pinref;
 
     EnterCriticalSection(&filter->csReceive);
     /* Don't need to clean up output pins, disconnecting input pin will do that */
@@ -247,15 +234,15 @@ static void qt_splitter_destroy(BaseFilter *iface)
         IPin_Disconnect(peer);
         IPin_Release(peer);
     }
-    pinref = IPin_Release(&filter->pInputPin.pin.IPin_iface);
-    if (pinref)
-    {
-        ERR("pinref should be null, is %u, destroying anyway\n", pinref);
-        assert((LONG)pinref > 0);
 
-        while (pinref)
-            pinref = IPin_Release(&filter->pInputPin.pin.IPin_iface);
-    }
+    FreeMediaType(&filter->pInputPin.pin.mtCurrent);
+    if (filter->pInputPin.pAlloc)
+        IMemAllocator_Release(filter->pInputPin.pAlloc);
+    filter->pInputPin.pAlloc = NULL;
+    if (filter->pInputPin.pReader)
+        IAsyncReader_Release(filter->pInputPin.pReader);
+    filter->pInputPin.pReader = NULL;
+    filter->pInputPin.pin.IPin_iface.lpVtbl = NULL;
 
     if (filter->pQTMovie)
     {
@@ -331,7 +318,6 @@ IUnknown * CALLBACK QTSplitter_create(IUnknown *outer, HRESULT *phr)
     piInput->pFilter = &This->filter.IBaseFilter_iface;
     lstrcpynW(piInput->achName, wcsInputPinName, ARRAY_SIZE(piInput->achName));
     This->pInputPin.pin.IPin_iface.lpVtbl = &QT_InputPin_Vtbl;
-    This->pInputPin.pin.refCount = 1;
     This->pInputPin.pin.pConnectedTo = NULL;
     This->pInputPin.pin.pCritSec = &This->filter.csFilter;
 
@@ -792,23 +778,22 @@ static const IBaseFilterVtbl QT_Vtbl = {
     BaseFilterImpl_QueryVendorInfo
 };
 
-static HRESULT break_source_connection(BaseOutputPin *pin)
+static void free_source_pin(QTOutPin *pin)
 {
-    HRESULT hr;
-
-    EnterCriticalSection(pin->pin.pCritSec);
-    if (!pin->pin.pConnectedTo || !pin->pMemInputPin)
-        hr = VFW_E_NOT_CONNECTED;
-    else
+    EnterCriticalSection(pin->pin.pin.pCritSec);
+    if (pin->pin.pin.pConnectedTo)
     {
-        hr = IMemAllocator_Decommit(pin->pAllocator);
-        if (SUCCEEDED(hr))
-            hr = IPin_Disconnect(pin->pin.pConnectedTo);
-        IPin_Disconnect(&pin->pin.IPin_iface);
+        if (SUCCEEDED(IMemAllocator_Decommit(pin->pin.pAllocator)))
+            IPin_Disconnect(pin->pin.pin.pConnectedTo);
+        IPin_Disconnect(&pin->pin.pin.IPin_iface);
     }
-    LeaveCriticalSection(pin->pin.pCritSec);
+    LeaveCriticalSection(pin->pin.pin.pCritSec);
 
-    return hr;
+    DeleteMediaType(pin->pmt);
+    FreeMediaType(&pin->pin.pin.mtCurrent);
+    if (pin->pin.pAllocator)
+        IMemAllocator_Release(pin->pin.pAllocator);
+    CoTaskMemFree(pin);
 }
 
 /*
@@ -816,23 +801,16 @@ static HRESULT break_source_connection(BaseOutputPin *pin)
  */
 static HRESULT QT_RemoveOutputPins(QTSplitter *This)
 {
-    HRESULT hr;
-    TRACE("(%p)\n", This);
-
     if (This->pVideo_Pin)
     {
         OutputQueue_Destroy(This->pVideo_Pin->queue);
-        hr = break_source_connection(&This->pVideo_Pin->pin);
-        TRACE("Disconnect: %08x\n", hr);
-        IPin_Release(&This->pVideo_Pin->pin.pin.IPin_iface);
+        free_source_pin(This->pVideo_Pin);
         This->pVideo_Pin = NULL;
     }
     if (This->pAudio_Pin)
     {
         OutputQueue_Destroy(This->pAudio_Pin->queue);
-        hr = break_source_connection(&This->pAudio_Pin->pin);
-        TRACE("Disconnect: %08x\n", hr);
-        IPin_Release(&This->pAudio_Pin->pin.pin.IPin_iface);
+        free_source_pin(This->pAudio_Pin);
         This->pAudio_Pin = NULL;
     }
 
@@ -843,28 +821,6 @@ static HRESULT QT_RemoveOutputPins(QTSplitter *This)
 static inline QTInPin *impl_from_IPin( IPin *iface )
 {
     return CONTAINING_RECORD(iface, QTInPin, pin.IPin_iface);
-}
-
-static ULONG WINAPI QTInPin_Release(IPin *iface)
-{
-    QTInPin *This = impl_from_IPin(iface);
-    ULONG refCount = InterlockedDecrement(&This->pin.refCount);
-
-    TRACE("(%p)->() Release from %d\n", iface, refCount + 1);
-    if (!refCount)
-    {
-        FreeMediaType(&This->pin.mtCurrent);
-        if (This->pAlloc)
-            IMemAllocator_Release(This->pAlloc);
-        This->pAlloc = NULL;
-        if (This->pReader)
-            IAsyncReader_Release(This->pReader);
-        This->pReader = NULL;
-        This->pin.IPin_iface.lpVtbl = NULL;
-        return 0;
-    }
-    else
-        return refCount;
 }
 
 static HRESULT QT_Process_Video_Track(QTSplitter* filter, Track trk)
@@ -1301,7 +1257,7 @@ static HRESULT WINAPI QTInPin_EnumMediaTypes(IPin *iface, IEnumMediaTypes **ppEn
 static const IPinVtbl QT_InputPin_Vtbl = {
     QTInPin_QueryInterface,
     BasePinImpl_AddRef,
-    QTInPin_Release,
+    BasePinImpl_Release,
     BaseInputPinImpl_Connect,
     QTInPin_ReceiveConnection,
     QTInPin_Disconnect,
@@ -1363,24 +1319,6 @@ static HRESULT WINAPI QTOutPin_QueryInterface(IPin *iface, REFIID riid, void **p
     return E_NOINTERFACE;
 }
 
-static ULONG WINAPI QTOutPin_Release(IPin *iface)
-{
-    QTOutPin *This = impl_QTOutPin_from_IPin(iface);
-    ULONG refCount = InterlockedDecrement(&This->pin.pin.refCount);
-    TRACE("(%p)->() Release from %d\n", iface, refCount + 1);
-
-    if (!refCount)
-    {
-        DeleteMediaType(This->pmt);
-        FreeMediaType(&This->pin.pin.mtCurrent);
-        if (This->pin.pAllocator)
-            IMemAllocator_Release(This->pin.pAllocator);
-        CoTaskMemFree(This);
-        return 0;
-    }
-    return refCount;
-}
-
 static HRESULT WINAPI QTOutPin_CheckMediaType(BasePin *base, const AM_MEDIA_TYPE *amt)
 {
     FIXME("(%p) stub\n", base);
@@ -1430,7 +1368,7 @@ static HRESULT WINAPI QTOutPin_DecideAllocator(BaseOutputPin *iface, IMemInputPi
 static const IPinVtbl QT_OutputPin_Vtbl = {
     QTOutPin_QueryInterface,
     BasePinImpl_AddRef,
-    QTOutPin_Release,
+    BasePinImpl_Release,
     BaseOutputPinImpl_Connect,
     BaseOutputPinImpl_ReceiveConnection,
     BaseOutputPinImpl_Disconnect,

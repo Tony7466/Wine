@@ -693,7 +693,8 @@ void state_alpha_test(struct wined3d_context *context, const struct wined3d_stat
 
 void state_clipping(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
 {
-    unsigned int enable_mask;
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
+    uint32_t enable_mask;
 
     if (use_vs(state) && !context->d3d_info->vs_clipping)
     {
@@ -721,7 +722,7 @@ void state_clipping(struct wined3d_context *context, const struct wined3d_state 
      */
     enable_mask = state->render_states[WINED3D_RS_CLIPPING] ?
             state->render_states[WINED3D_RS_CLIPPLANEENABLE] : 0;
-    context_enable_clip_distances(context, enable_mask);
+    wined3d_context_gl_enable_clip_distances(context_gl, enable_mask);
 }
 
 static void state_specularenable(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
@@ -3473,7 +3474,7 @@ static void tex_coordindex(struct wined3d_context *context, const struct wined3d
          */
         GLuint curVBO = gl_info->supported[ARB_VERTEX_BUFFER_OBJECT] ? ~0U : 0;
 
-        context_unload_tex_coords(context);
+        wined3d_context_gl_unload_tex_coords(context_gl);
         wined3d_context_gl_load_tex_coords(context_gl, &context->stream_info, &curVBO, state);
     }
 }
@@ -3616,7 +3617,7 @@ static void sampler(struct wined3d_context *context, const struct wined3d_state 
 
         wined3d_sampler_desc_from_sampler_states(&desc, context, sampler_states, texture_gl);
 
-        wined3d_texture_gl_bind(texture_gl, context, srgb);
+        wined3d_texture_gl_bind(texture_gl, context_gl, srgb);
 
         if ((entry = wine_rb_get(&device->samplers, &desc)))
         {
@@ -3637,7 +3638,7 @@ static void sampler(struct wined3d_context *context, const struct wined3d_state 
             }
         }
 
-        wined3d_sampler_bind(sampler, mapped_stage, texture_gl, context);
+        wined3d_sampler_bind(sampler, mapped_stage, texture_gl, context_gl);
 
         /* Trigger shader constant reloading (for NP2 texcoord fixup) */
         if (!(texture_gl->t.flags & WINED3D_TEXTURE_POW2_MAT_IDENT))
@@ -3864,6 +3865,7 @@ static void vdecl_miscpart(struct wined3d_context *context, const struct wined3d
 
 static void vertexdeclaration(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
 {
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     const struct wined3d_gl_info *gl_info = context->gl_info;
     BOOL useVertexShaderFunction = use_vs(state);
     BOOL updateFog = FALSE;
@@ -3940,7 +3942,7 @@ static void vertexdeclaration(struct wined3d_context *context, const struct wine
                 /* Disable all clip planes to get defined results on all drivers. See comment in the
                  * state_clipping state handler
                  */
-                context_enable_clip_distances(context, 0);
+                wined3d_context_gl_enable_clip_distances(context_gl, 0);
 
                 if (!warned && state->render_states[WINED3D_RS_CLIPPLANEENABLE])
                 {
@@ -4446,13 +4448,14 @@ static void state_uav_warn(struct wined3d_context *context, const struct wined3d
 
 static void state_so(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
 {
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     const struct wined3d_gl_info *gl_info = context->gl_info;
     struct wined3d_buffer *buffer;
     unsigned int offset, size, i;
 
     TRACE("context %p, state %p, state_id %#x.\n", context, state, state_id);
 
-    context_end_transform_feedback(context);
+    wined3d_context_gl_end_transform_feedback(context_gl);
 
     for (i = 0; i < ARRAY_SIZE(state->stream_output); ++i)
     {

@@ -33,7 +33,6 @@
 #include "propsys.h"
 
 #include "wine/debug.h"
-#include "wine/unicode.h"
 #include "wine/list.h"
 
 #include "mfplat_private.h"
@@ -48,13 +47,22 @@ static LONG platform_lock;
 struct local_handler
 {
     struct list entry;
-    WCHAR *scheme;
+    union
+    {
+        WCHAR *scheme;
+        struct
+        {
+            WCHAR *extension;
+            WCHAR *mime;
+        } bytestream;
+    } u;
     IMFActivate *activate;
 };
 
 static CRITICAL_SECTION local_handlers_section = { NULL, -1, 0, 0, 0, 0 };
 
 static struct list local_scheme_handlers = LIST_INIT(local_scheme_handlers);
+static struct list local_bytestream_handlers = LIST_INIT(local_bytestream_handlers);
 
 struct system_clock
 {
@@ -127,7 +135,7 @@ static const BYTE guid_conv_table[256] =
 
 static WCHAR* GUIDToString(WCHAR *str, REFGUID guid)
 {
-    sprintfW(str, szGUIDFmt, guid->Data1, guid->Data2,
+    swprintf(str, 39, szGUIDFmt, guid->Data1, guid->Data2,
         guid->Data3, guid->Data4[0], guid->Data4[1],
         guid->Data4[2], guid->Data4[3], guid->Data4[4],
         guid->Data4[5], guid->Data4[6], guid->Data4[7]);
@@ -216,14 +224,14 @@ static HRESULT register_transform(const CLSID *clsid, const WCHAR *name, UINT32 
     UINT8 *blob;
 
     GUIDToString(buffer, clsid);
-    sprintfW(str, reg_format, transform_keyW, buffer);
+    swprintf(str, ARRAY_SIZE(str), reg_format, transform_keyW, buffer);
 
     if ((ret = RegCreateKeyW(HKEY_CLASSES_ROOT, str, &hclsid)))
         hr = HRESULT_FROM_WIN32(ret);
 
     if (SUCCEEDED(hr))
     {
-        size = (strlenW(name) + 1) * sizeof(WCHAR);
+        size = (lstrlenW(name) + 1) * sizeof(WCHAR);
         if ((ret = RegSetValueExW(hclsid, NULL, 0, REG_SZ, (BYTE *)name, size)))
             hr = HRESULT_FROM_WIN32(ret);
     }
@@ -280,7 +288,7 @@ static HRESULT register_category(CLSID *clsid, GUID *category)
     GUIDToString(guid1, category);
     GUIDToString(guid2, clsid);
 
-    sprintfW(str, reg_format, categories_keyW, guid1, guid2);
+    swprintf(str, ARRAY_SIZE(str), reg_format, categories_keyW, guid1, guid2);
 
     if (RegCreateKeyW(HKEY_CLASSES_ROOT, str, &htmp1))
         return E_FAIL;
@@ -1342,7 +1350,7 @@ HRESULT attributes_GetStringLength(struct attributes *attributes, REFGUID key, U
     if (attribute)
     {
         if (attribute->value.vt == MF_ATTRIBUTE_STRING)
-            *length = strlenW(attribute->value.u.pwszVal);
+            *length = lstrlenW(attribute->value.u.pwszVal);
         else
             hr = MF_E_INVALIDTYPE;
     }
@@ -1367,7 +1375,7 @@ HRESULT attributes_GetString(struct attributes *attributes, REFGUID key, WCHAR *
     {
         if (attribute->value.vt == MF_ATTRIBUTE_STRING)
         {
-            int len = strlenW(attribute->value.u.pwszVal);
+            int len = lstrlenW(attribute->value.u.pwszVal);
 
             if (length)
                 *length = len;
@@ -2252,7 +2260,7 @@ HRESULT WINAPI MFGetAttributesAsBlob(IMFAttributes *attributes, UINT8 *buffer, U
                 data = value.u.puuid;
                 break;
             case MF_ATTRIBUTE_STRING:
-                item.u.subheader.size = (strlenW(value.u.pwszVal) + 1) * sizeof(WCHAR);
+                item.u.subheader.size = (lstrlenW(value.u.pwszVal) + 1) * sizeof(WCHAR);
                 data = value.u.pwszVal;
                 break;
             case MF_ATTRIBUTE_BLOB:
@@ -5023,9 +5031,9 @@ static HRESULT resolver_get_bytestream_handler(IMFByteStream *stream, const WCHA
     IMFAttributes *attributes;
     const WCHAR *url_ext;
     WCHAR *mimeW = NULL;
+    HRESULT hr = E_FAIL;
     unsigned int i, j;
     UINT32 length;
-    HRESULT hr;
 
     *handler = NULL;
 
@@ -5037,7 +5045,7 @@ static HRESULT resolver_get_bytestream_handler(IMFByteStream *stream, const WCHA
     }
 
     /* Extension */
-    url_ext = url ? strrchrW(url, '.') : NULL;
+    url_ext = url ? wcsrchr(url, '.') : NULL;
 
     if (!url_ext && !mimeW)
     {
@@ -5045,7 +5053,28 @@ static HRESULT resolver_get_bytestream_handler(IMFByteStream *stream, const WCHA
         return MF_E_UNSUPPORTED_BYTESTREAM_TYPE;
     }
 
-    /* FIXME: check local handlers first */
+    if (!(flags & MF_RESOLUTION_DISABLE_LOCAL_PLUGINS))
+    {
+        struct local_handler *local_handler;
+
+        EnterCriticalSection(&local_handlers_section);
+
+        LIST_FOR_EACH_ENTRY(local_handler, &local_bytestream_handlers, struct local_handler, entry)
+        {
+            if ((mimeW && !lstrcmpiW(mimeW, local_handler->u.bytestream.mime))
+                    || (url_ext && !lstrcmpiW(url_ext, local_handler->u.bytestream.extension)))
+            {
+                if (SUCCEEDED(hr = IMFActivate_ActivateObject(local_handler->activate, &IID_IMFByteStreamHandler,
+                        (void **)handler)))
+                    break;
+            }
+        }
+
+        LeaveCriticalSection(&local_handlers_section);
+
+        if (*handler)
+            return hr;
+    }
 
     for (i = 0, hr = E_FAIL; i < ARRAY_SIZE(hkey_roots); ++i)
     {
@@ -5084,12 +5113,34 @@ static HRESULT resolver_create_scheme_handler(const WCHAR *scheme, DWORD flags, 
 {
     static const char schemehandlerspath[] = "Software\\Microsoft\\Windows Media Foundation\\SchemeHandlers";
     static const HKEY hkey_roots[2] = { HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE };
+    HRESULT hr = MF_E_UNSUPPORTED_SCHEME;
     unsigned int i;
-    HRESULT hr;
 
     TRACE("%s, %#x, %p.\n", debugstr_w(scheme), flags, handler);
 
-    /* FIXME: check local handlers first */
+    *handler = NULL;
+
+    if (!(flags & MF_RESOLUTION_DISABLE_LOCAL_PLUGINS))
+    {
+        struct local_handler *local_handler;
+
+        EnterCriticalSection(&local_handlers_section);
+
+        LIST_FOR_EACH_ENTRY(local_handler, &local_scheme_handlers, struct local_handler, entry)
+        {
+            if (!lstrcmpiW(scheme, local_handler->u.scheme))
+            {
+                if (SUCCEEDED(hr = IMFActivate_ActivateObject(local_handler->activate, &IID_IMFSchemeHandler,
+                        (void **)handler)))
+                    break;
+            }
+        }
+
+        LeaveCriticalSection(&local_handlers_section);
+
+        if (*handler)
+            return hr;
+    }
 
     for (i = 0; i < ARRAY_SIZE(hkey_roots); ++i)
     {
@@ -5126,7 +5177,7 @@ static HRESULT resolver_get_scheme_handler(const WCHAR *url, DWORD flags, IMFSch
     /* RFC 3986: scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." ) */
     while (*ptr)
     {
-        WCHAR ch = tolowerW(*ptr);
+        WCHAR ch = towlower(*ptr);
 
         if (*ptr == '*' && ptr == url)
         {
@@ -7154,21 +7205,25 @@ static const IMFAsyncCallbackVtbl async_create_file_callback_vtbl =
     async_create_file_callback_Invoke,
 };
 
-static WCHAR *heap_strdupW(const WCHAR *str)
+static HRESULT heap_strdupW(const WCHAR *str, WCHAR **dest)
 {
-    WCHAR *ret = NULL;
+    HRESULT hr = S_OK;
 
     if (str)
     {
         unsigned int size;
 
-        size = (strlenW(str) + 1) * sizeof(WCHAR);
-        ret = heap_alloc(size);
-        if (ret)
-            memcpy(ret, str, size);
+        size = (lstrlenW(str) + 1) * sizeof(WCHAR);
+        *dest = heap_alloc(size);
+        if (*dest)
+            memcpy(*dest, str, size);
+        else
+            hr = E_OUTOFMEMORY;
     }
+    else
+        *dest = NULL;
 
-    return ret;
+    return hr;
 }
 
 /***********************************************************************
@@ -7202,12 +7257,8 @@ HRESULT WINAPI MFBeginCreateFile(MF_FILE_ACCESSMODE access_mode, MF_FILE_OPENMOD
     async->access_mode = access_mode;
     async->open_mode = open_mode;
     async->flags = flags;
-    async->path = heap_strdupW(path);
-    if (!async->path)
-    {
-        hr = E_OUTOFMEMORY;
+    if (FAILED(hr = heap_strdupW(path, &async->path)))
         goto failed;
-    }
 
     hr = MFCreateAsyncResult(NULL, &async->IMFAsyncCallback_iface, (IUnknown *)caller, &item);
     if (FAILED(hr))
@@ -7301,6 +7352,7 @@ HRESULT WINAPI MFCancelCreateFile(IUnknown *cancel_cookie)
 HRESULT WINAPI MFRegisterLocalSchemeHandler(const WCHAR *scheme, IMFActivate *activate)
 {
     struct local_handler *handler;
+    HRESULT hr;
 
     TRACE("%s, %p.\n", debugstr_w(scheme), activate);
 
@@ -7310,10 +7362,10 @@ HRESULT WINAPI MFRegisterLocalSchemeHandler(const WCHAR *scheme, IMFActivate *ac
     if (!(handler = heap_alloc(sizeof(*handler))))
         return E_OUTOFMEMORY;
 
-    if (!(handler->scheme = heap_strdupW(scheme)))
+    if (FAILED(hr = heap_strdupW(scheme, &handler->u.scheme)))
     {
         heap_free(handler);
-        return E_OUTOFMEMORY;
+        return hr;
     }
     handler->activate = activate;
     IMFActivate_AddRef(handler->activate);
@@ -7323,4 +7375,41 @@ HRESULT WINAPI MFRegisterLocalSchemeHandler(const WCHAR *scheme, IMFActivate *ac
     LeaveCriticalSection(&local_handlers_section);
 
     return S_OK;
+}
+
+/***********************************************************************
+ *      MFRegisterLocalByteStreamHandler (mfplat.@)
+ */
+HRESULT WINAPI MFRegisterLocalByteStreamHandler(const WCHAR *extension, const WCHAR *mime, IMFActivate *activate)
+{
+    struct local_handler *handler;
+    HRESULT hr;
+
+    TRACE("%s, %s, %p.\n", debugstr_w(extension), debugstr_w(mime), activate);
+
+    if ((!extension && !mime) || !activate)
+        return E_INVALIDARG;
+
+    if (!(handler = heap_alloc_zero(sizeof(*handler))))
+        return E_OUTOFMEMORY;
+
+    hr = heap_strdupW(extension, &handler->u.bytestream.extension);
+    if (SUCCEEDED(hr))
+        hr = heap_strdupW(mime, &handler->u.bytestream.mime);
+
+    if (FAILED(hr))
+        goto failed;
+
+    EnterCriticalSection(&local_handlers_section);
+    list_add_head(&local_bytestream_handlers, &handler->entry);
+    LeaveCriticalSection(&local_handlers_section);
+
+    return hr;
+
+failed:
+    heap_free(handler->u.bytestream.extension);
+    heap_free(handler->u.bytestream.mime);
+    heap_free(handler);
+
+    return hr;
 }

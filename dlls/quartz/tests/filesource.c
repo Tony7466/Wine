@@ -539,10 +539,8 @@ todo_wine
     hr = IEnumPins_Next(enum1, 1, pins, NULL);
     ok(hr == S_OK, "Got hr %#x.\n", hr);
     ref = get_refcount(filter);
-todo_wine
     ok(ref == 3, "Got unexpected refcount %d.\n", ref);
     ref = get_refcount(pins[0]);
-todo_wine
     ok(ref == 3, "Got unexpected refcount %d.\n", ref);
     ref = get_refcount(enum1);
     ok(ref == 1, "Got unexpected refcount %d.\n", ref);
@@ -624,7 +622,6 @@ static void test_find_pin(void)
     hr = IBaseFilter_FindPin(filter, source_id, &pin);
     ok(hr == S_OK, "Got hr %#x.\n", hr);
     ref = get_refcount(filter);
-todo_wine
     ok(ref == 2, "Got unexpected refcount %d.\n", ref);
     ref = get_refcount(pin);
     ok(ref == 2, "Got unexpected refcount %d.\n", ref);
@@ -662,7 +659,6 @@ static void test_pin_info(void)
     hr = IBaseFilter_FindPin(filter, source_id, &pin);
     ok(hr == S_OK, "Got hr %#x.\n", hr);
     ref = get_refcount(filter);
-todo_wine
     ok(ref == 2, "Got unexpected refcount %d.\n", ref);
     ref = get_refcount(pin);
     ok(ref == 2, "Got unexpected refcount %d.\n", ref);
@@ -673,10 +669,8 @@ todo_wine
     ok(info.dir == PINDIR_OUTPUT, "Got direction %d.\n", info.dir);
     ok(!lstrcmpW(info.achName, source_id), "Got name %s.\n", wine_dbgstr_w(info.achName));
     ref = get_refcount(filter);
-todo_wine
     ok(ref == 3, "Got unexpected refcount %d.\n", ref);
     ref = get_refcount(pin);
-todo_wine
     ok(ref == 3, "Got unexpected refcount %d.\n", ref);
     IBaseFilter_Release(info.pFilter);
 
@@ -814,12 +808,28 @@ static void test_sync_read_aligned(IAsyncReader *reader, IMemAllocator *allocato
     IMediaSample_Release(sample);
 }
 
+struct request_thread_params
+{
+    IAsyncReader *reader;
+    IMediaSample *sample;
+};
+
+static DWORD CALLBACK request_thread(void *arg)
+{
+    struct request_thread_params *params = arg;
+    HRESULT hr = IAsyncReader_Request(params->reader, params->sample, 123);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    return 0;
+}
+
 static void test_request(IAsyncReader *reader, IMemAllocator *allocator)
 {
     IMediaSample *sample, *sample2, *ret_sample;
+    struct request_thread_params params;
     REFERENCE_TIME start_time, end_time;
     BYTE *data, *data2;
     DWORD_PTR cookie;
+    HANDLE thread;
     HRESULT hr;
     LONG len;
     int i;
@@ -902,6 +912,17 @@ static void test_request(IAsyncReader *reader, IMemAllocator *allocator)
 
     for (i = 0; i < 88; i++)
         ok(data2[i] == (512 + i) % 111, "Got wrong byte %02x at %u.\n", data2[i], i);
+
+    params.reader = reader;
+    params.sample = sample;
+    thread = CreateThread(NULL, 0, request_thread, &params, 0, NULL);
+    ok(!WaitForSingleObject(thread, 1000), "Wait timed out.\n");
+    CloseHandle(thread);
+
+    hr = IAsyncReader_WaitForNext(reader, 1000, &ret_sample, &cookie);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(ret_sample == sample, "Samples didn't match.\n");
+    ok(cookie == 123, "Got cookie %lu.\n", cookie);
 
     IMediaSample_Release(sample);
     IMediaSample_Release(sample2);

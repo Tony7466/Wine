@@ -1198,26 +1198,19 @@ static inline GSTOutPin *impl_from_IMediaSeeking( IMediaSeeking *iface )
 
 static IPin *gstdemux_get_pin(BaseFilter *base, unsigned int index)
 {
-    GSTImpl *This = impl_from_IBaseFilter(&base->IBaseFilter_iface);
-    IPin *pin;
-
-    if (index > This->cStreams)
-        return NULL;
+    GSTImpl *filter = impl_from_IBaseFilter(&base->IBaseFilter_iface);
 
     if (!index)
-        pin = &This->pInputPin.pin.IPin_iface;
-    else
-        pin = &This->ppPins[index - 1]->pin.pin.IPin_iface;
-
-    IPin_AddRef(pin);
-    return pin;
+        return &filter->pInputPin.pin.IPin_iface;
+    else if (index <= filter->cStreams)
+        return &filter->ppPins[index - 1]->pin.pin.IPin_iface;
+    return NULL;
 }
 
 static void gstdemux_destroy(BaseFilter *iface)
 {
     GSTImpl *filter = impl_from_IBaseFilter(&iface->IBaseFilter_iface);
     IPin *connected = NULL;
-    ULONG pinref;
     HRESULT hr;
 
     CloseHandle(filter->no_more_pads_event);
@@ -1233,16 +1226,16 @@ static void gstdemux_destroy(BaseFilter *iface)
         hr = IPin_Disconnect(&filter->pInputPin.pin.IPin_iface);
         assert(hr == S_OK);
     }
-    pinref = IPin_Release(&filter->pInputPin.pin.IPin_iface);
-    if (pinref)
-    {
-        /* Valgrind could find this, if I kill it here */
-        ERR("pinref should be null, is %u, destroying anyway\n", pinref);
-        assert((LONG)pinref > 0);
 
-        while (pinref)
-            pinref = IPin_Release(&filter->pInputPin.pin.IPin_iface);
-    }
+    FreeMediaType(&filter->pInputPin.pin.mtCurrent);
+    if (filter->pInputPin.pAlloc)
+        IMemAllocator_Release(filter->pInputPin.pAlloc);
+    filter->pInputPin.pAlloc = NULL;
+    if (filter->pInputPin.pReader)
+        IAsyncReader_Release(filter->pInputPin.pReader);
+    filter->pInputPin.pReader = NULL;
+    filter->pInputPin.pin.IPin_iface.lpVtbl = NULL;
+
     if (filter->bus)
     {
         gst_bus_set_sync_handler(filter->bus, NULL, NULL, NULL);
@@ -1293,7 +1286,6 @@ IUnknown * CALLBACK Gstreamer_Splitter_create(IUnknown *outer, HRESULT *phr)
     piInput->pFilter = &This->filter.IBaseFilter_iface;
     lstrcpynW(piInput->achName, wcsInputPinName, ARRAY_SIZE(piInput->achName));
     This->pInputPin.pin.IPin_iface.lpVtbl = &GST_InputPin_Vtbl;
-    This->pInputPin.pin.refCount = 1;
     This->pInputPin.pin.pConnectedTo = NULL;
     This->pInputPin.pin.pCritSec = &This->filter.csFilter;
     ZeroMemory(&This->pInputPin.pin.mtCurrent, sizeof(AM_MEDIA_TYPE));
@@ -1695,43 +1687,6 @@ static HRESULT WINAPI GSTOutPin_QueryInterface(IPin *iface, REFIID riid, void **
     return E_NOINTERFACE;
 }
 
-static ULONG WINAPI GSTOutPin_Release(IPin *iface)
-{
-    GSTOutPin *This = impl_source_from_IPin(iface);
-    ULONG refCount = InterlockedDecrement(&This->pin.pin.refCount);
-
-    TRACE("(%p)->() Release from %d\n", This, refCount + 1);
-
-    mark_wine_thread();
-
-    if (!refCount) {
-        if (This->their_src) {
-            if (This->flipfilter) {
-                gst_pad_unlink(This->their_src, This->flip_sink);
-                gst_pad_unlink(This->flip_src, This->my_sink);
-                gst_object_unref(This->flip_src);
-                gst_object_unref(This->flip_sink);
-                This->flipfilter = NULL;
-                This->flip_src = This->flip_sink = NULL;
-            } else
-                gst_pad_unlink(This->their_src, This->my_sink);
-            gst_object_unref(This->their_src);
-        }
-        gst_object_unref(This->my_sink);
-        CloseHandle(This->caps_event);
-        DeleteMediaType(This->pmt);
-        FreeMediaType(&This->pin.pin.mtCurrent);
-        gst_segment_free(This->segment);
-        if(This->gstpool)
-            gst_object_unref(This->gstpool);
-        if (This->pin.pAllocator)
-            IMemAllocator_Release(This->pin.pAllocator);
-        CoTaskMemFree(This);
-        return 0;
-    }
-    return refCount;
-}
-
 static HRESULT WINAPI GSTOutPin_CheckMediaType(BasePin *base, const AM_MEDIA_TYPE *amt)
 {
     FIXME("(%p) stub\n", base);
@@ -1787,31 +1742,48 @@ static HRESULT WINAPI GSTOutPin_DecideAllocator(BaseOutputPin *base, IMemInputPi
     return hr;
 }
 
-static HRESULT break_source_connection(BaseOutputPin *This)
+static void free_source_pin(GSTOutPin *pin)
 {
-    HRESULT hr;
-
-    TRACE("(%p)->()\n", This);
-
-    EnterCriticalSection(This->pin.pCritSec);
-    if (!This->pin.pConnectedTo || !This->pMemInputPin)
-        hr = VFW_E_NOT_CONNECTED;
-    else
+    EnterCriticalSection(pin->pin.pin.pCritSec);
+    if (pin->pin.pin.pConnectedTo)
     {
-        hr = IMemAllocator_Decommit(This->pAllocator);
-        if (SUCCEEDED(hr))
-            hr = IPin_Disconnect(This->pin.pConnectedTo);
-        IPin_Disconnect((IPin *)This);
+        if (SUCCEEDED(IMemAllocator_Decommit(pin->pin.pAllocator)))
+            IPin_Disconnect(pin->pin.pin.pConnectedTo);
+        IPin_Disconnect(&pin->pin.pin.IPin_iface);
     }
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(pin->pin.pin.pCritSec);
 
-    return hr;
+    if (pin->their_src)
+    {
+        if (pin->flipfilter)
+        {
+            gst_pad_unlink(pin->their_src, pin->flip_sink);
+            gst_pad_unlink(pin->flip_src, pin->my_sink);
+            gst_object_unref(pin->flip_src);
+            gst_object_unref(pin->flip_sink);
+            pin->flipfilter = NULL;
+            pin->flip_src = pin->flip_sink = NULL;
+        }
+        else
+            gst_pad_unlink(pin->their_src, pin->my_sink);
+        gst_object_unref(pin->their_src);
+    }
+    gst_object_unref(pin->my_sink);
+    CloseHandle(pin->caps_event);
+    DeleteMediaType(pin->pmt);
+    FreeMediaType(&pin->pin.pin.mtCurrent);
+    gst_segment_free(pin->segment);
+    if (pin->gstpool)
+        gst_object_unref(pin->gstpool);
+    if (pin->pin.pAllocator)
+        IMemAllocator_Release(pin->pin.pAllocator);
+    CoTaskMemFree(pin);
 }
 
 static const IPinVtbl GST_OutputPin_Vtbl = {
     GSTOutPin_QueryInterface,
     BasePinImpl_AddRef,
-    GSTOutPin_Release,
+    BasePinImpl_Release,
     BaseOutputPinImpl_Connect,
     BaseOutputPinImpl_ReceiveConnection,
     BaseOutputPinImpl_Disconnect,
@@ -1864,7 +1836,6 @@ static HRESULT GST_AddPin(GSTImpl *This, const PIN_INFO *piOutput, const AM_MEDI
 
 static HRESULT GST_RemoveOutputPins(GSTImpl *This)
 {
-    HRESULT hr;
     ULONG i;
 
     TRACE("(%p)\n", This);
@@ -1878,11 +1849,9 @@ static HRESULT GST_RemoveOutputPins(GSTImpl *This)
     gst_object_unref(This->their_sink);
     This->my_src = This->their_sink = NULL;
 
-    for (i = 0; i < This->cStreams; i++) {
-        hr = break_source_connection(&This->ppPins[i]->pin);
-        TRACE("Disconnect: %08x\n", hr);
-        IPin_Release(&This->ppPins[i]->pin.pin.IPin_iface);
-    }
+    for (i = 0; i < This->cStreams; ++i)
+        free_source_pin(This->ppPins[i]);
+
     This->cStreams = 0;
     CoTaskMemFree(This->ppPins);
     This->ppPins = NULL;
@@ -1896,26 +1865,6 @@ static HRESULT GST_RemoveOutputPins(GSTImpl *This)
 static inline GSTInPin *impl_sink_from_IPin(IPin *iface)
 {
     return CONTAINING_RECORD(iface, GSTInPin, pin.IPin_iface);
-}
-
-static ULONG WINAPI GSTInPin_Release(IPin *iface)
-{
-    GSTInPin *This = impl_sink_from_IPin(iface);
-    ULONG refCount = InterlockedDecrement(&This->pin.refCount);
-
-    TRACE("(%p)->() Release from %d\n", iface, refCount + 1);
-    if (!refCount) {
-        FreeMediaType(&This->pin.mtCurrent);
-        if (This->pAlloc)
-            IMemAllocator_Release(This->pAlloc);
-        This->pAlloc = NULL;
-        if (This->pReader)
-            IAsyncReader_Release(This->pReader);
-        This->pReader = NULL;
-        This->pin.IPin_iface.lpVtbl = NULL;
-        return 0;
-    } else
-        return refCount;
 }
 
 static HRESULT WINAPI GSTInPin_ReceiveConnection(IPin *iface, IPin *pReceivePin, const AM_MEDIA_TYPE *pmt)
@@ -2101,7 +2050,7 @@ static HRESULT WINAPI GSTInPin_EnumMediaTypes(IPin *iface, IEnumMediaTypes **ppE
 static const IPinVtbl GST_InputPin_Vtbl = {
     GSTInPin_QueryInterface,
     BasePinImpl_AddRef,
-    GSTInPin_Release,
+    BasePinImpl_Release,
     BaseInputPinImpl_Connect,
     GSTInPin_ReceiveConnection,
     GSTInPin_Disconnect,

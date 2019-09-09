@@ -88,6 +88,7 @@ static const WCHAR mouseoutW[] = {'m','o','u','s','e','o','u','t',0};
 static const WCHAR mouseoverW[] = {'m','o','u','s','e','o','v','e','r',0};
 static const WCHAR mouseupW[] = {'m','o','u','s','e','u','p',0};
 static const WCHAR mousewheelW[] = {'m','o','u','s','e','w','h','e','e','l',0};
+static const WCHAR msthumbnailclickW[] = {'m','s','t','h','u','m','b','n','a','i','l','c','l','i','c','k',0};
 static const WCHAR pasteW[] = {'p','a','s','t','e',0};
 static const WCHAR readystatechangeW[] = {'r','e','a','d','y','s','t','a','t','e','c','h','a','n','g','e',0};
 static const WCHAR resizeW[] = {'r','e','s','i','z','e',0};
@@ -208,6 +209,8 @@ static const event_info_t event_info[] = {
         EVENT_DEFAULTLISTENER | EVENT_BUBBLES | EVENT_CANCELABLE},
     {mousewheelW,        EVENT_TYPE_MOUSE,     DISPID_EVMETH_ONMOUSEWHEEL,
         EVENT_FIXME},
+    {msthumbnailclickW,  EVENT_TYPE_MOUSE,     DISPID_EVPROP_ONMSTHUMBNAILCLICK,
+        EVENT_FIXME},
     {pasteW,             EVENT_TYPE_CLIPBOARD, DISPID_EVMETH_ONPASTE,
         EVENT_FIXME | EVENT_BUBBLES | EVENT_CANCELABLE},
     {readystatechangeW,  EVENT_TYPE_EVENT,     DISPID_EVMETH_ONREADYSTATECHANGE,
@@ -231,7 +234,7 @@ static eventid_t str_to_eid(const WCHAR *str)
     int i;
 
     for(i=0; i < ARRAY_SIZE(event_info); i++) {
-        if(!strcmpW(event_info[i].name, str))
+        if(!wcscmp(event_info[i].name, str))
             return i;
     }
 
@@ -246,7 +249,7 @@ static eventid_t attr_to_eid(const WCHAR *str)
         return EVENTID_LAST;
 
     for(i=0; i < ARRAY_SIZE(event_info); i++) {
-        if(!strcmpW(event_info[i].name, str+2) && event_info[i].dispid)
+        if(!wcscmp(event_info[i].name, str+2) && event_info[i].dispid)
             return i;
     }
 
@@ -271,7 +274,7 @@ static listener_container_t *get_listener_container(EventTarget *event_target, c
     if(eid != EVENTID_LAST && (event_info[eid].flags & EVENT_FIXME))
         FIXME("unimplemented event %s\n", debugstr_w(event_info[eid].name));
 
-    type_len = strlenW(type);
+    type_len = lstrlenW(type);
     container = heap_alloc(FIELD_OFFSET(listener_container_t, type[type_len+1]));
     if(!container)
         return NULL;
@@ -2409,6 +2412,8 @@ static HRESULT call_cp_func(IDispatch *disp, DISPID dispid, IHTMLEventObj *event
     ULONG argerr;
     EXCEPINFO ei;
 
+    TRACE("%p,%d,%p,%p\n", disp, dispid, event_obj, retv);
+
     if(event_obj) {
         V_VT(&event_arg) = VT_DISPATCH;
         V_DISPATCH(&event_arg) = (IDispatch*)event_obj;
@@ -2915,7 +2920,7 @@ static HRESULT get_event_dispex_ref(EventTarget *event_target, eventid_t eid, BO
     WCHAR buf[64];
     buf[0] = 'o';
     buf[1] = 'n';
-    strcpyW(buf+2, event_info[eid].name);
+    lstrcpyW(buf+2, event_info[eid].name);
     return dispex_get_dprop_ref(&event_target->dispex, buf, alloc, ret);
 }
 
@@ -3454,7 +3459,7 @@ void EventTarget_init_dispex_info(dispex_data_t *dispex_info, compat_mode_t comp
 
 static int event_id_cmp(const void *key, const struct wine_rb_entry *entry)
 {
-    return strcmpW(key, WINE_RB_ENTRY_VALUE(entry, listener_container_t, entry)->type);
+    return wcscmp(key, WINE_RB_ENTRY_VALUE(entry, listener_container_t, entry)->type);
 }
 
 void EventTarget_Init(EventTarget *event_target, IUnknown *outer, dispex_static_data_t *dispex_data,
