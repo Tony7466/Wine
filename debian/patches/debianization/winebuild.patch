@@ -14,4 +14,4 @@ author: Michael Gilbert <mgilbert@debian.org>
 +.BI \-march= option ,\ \-mcpu= option ,\ \-mfpu= option ,\ \-mfloat-abi= option
  Set code generation options for the assembler.
  .TP
- .BI \-M,\ --main-module= module
+ .B \-munix

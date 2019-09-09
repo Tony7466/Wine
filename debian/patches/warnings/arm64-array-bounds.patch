@@ -8,7 +8,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  IMPORTLIB = kernel32
  IMPORTS   = winecrt0 ntdll
 +CFLAGS   += -Wno-array-bounds
- EXTRALIBS = $(COREFOUNDATION_LIBS) $(POLL_LIBS)
+ EXTRALIBS = $(COREFOUNDATION_LIBS) $(POLL_LIBS) $(RT_LIBS)
  EXTRADLLFLAGS = -nodefaultlibs -Wb,-F,KERNEL32.dll -Wl,--image-base,0x7b400000
  
 --- a/dlls/ntoskrnl.exe/Makefile.in
@@ -20,4 +20,4 @@ author: Michael Gilbert <mgilbert@debian.org>
 +CFLAGS   += -Wno-array-bounds
  DELAYIMPORTS = setupapi user32
  
- C_SRCS = \
+ EXTRADLLFLAGS = -mno-cygwin

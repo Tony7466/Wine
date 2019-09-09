@@ -62,7 +62,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                      FOREACH_CHILD(xdr, xdr_child)
 --- a/dlls/ole32/datacache.c
 +++ b/dlls/ole32/datacache.c
-@@ -2520,7 +2520,7 @@ static HRESULT WINAPI DataCache_EnumCach
+@@ -2519,7 +2519,7 @@ static HRESULT WINAPI DataCache_EnumCach
      DataCacheEntry *cache_entry;
      int i = 0, count = 0;
      STATDATA *data;
