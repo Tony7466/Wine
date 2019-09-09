@@ -1,3 +1,14 @@
+wine-development (4.11-1) UNRELEASED; urgency=medium
+
+  * New upstream release 4.11, released Jun 21, 2019.
+    - Updated version of the Mono engine, including Windows.Forms.
+    - More DLLs are built as PE files by default.
+    - Faster implementation of Slim Reader/Writer locks on Linux.
+    - Initial support for enumerating display devices.
+    - Various bug fixes.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 09 Sep 2019 23:09:16 +0200
+
 wine-development (4.10-1) unstable; urgency=medium
 
   * New upstream release 4.10, released Jun 10, 2019.
