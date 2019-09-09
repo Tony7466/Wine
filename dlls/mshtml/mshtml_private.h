@@ -33,7 +33,6 @@
 #include "wine/heap.h"
 #include "wine/list.h"
 #include "wine/rbtree.h"
-#include "wine/unicode.h"
 
 #ifdef INIT_GUID
 #include "initguid.h"
@@ -137,6 +136,7 @@ typedef struct EventTarget EventTarget;
     XDIID(DispSVGSVGElement) \
     XDIID(DispSVGTSpanElement) \
     XDIID(HTMLDocumentEvents) \
+    XDIID(HTMLDocumentEvents2) \
     XDIID(HTMLElementEvents2) \
     XIID(IDOMCustomEvent) \
     XIID(IDOMEvent) \
@@ -1235,7 +1235,7 @@ static inline LPWSTR heap_strdupW(LPCWSTR str)
     if(str) {
         DWORD size;
 
-        size = (strlenW(str)+1)*sizeof(WCHAR);
+        size = (lstrlenW(str)+1)*sizeof(WCHAR);
         ret = heap_alloc(size);
         if(ret)
             memcpy(ret, str, size);

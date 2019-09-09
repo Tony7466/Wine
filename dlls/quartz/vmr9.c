@@ -95,19 +95,9 @@ static inline struct quartz_vmr *impl_from_BaseWindow(BaseWindow *wnd)
     return CONTAINING_RECORD(wnd, struct quartz_vmr, baseControlWindow.baseWindow);
 }
 
-static inline struct quartz_vmr *impl_from_IVideoWindow(IVideoWindow *iface)
-{
-    return CONTAINING_RECORD(iface, struct quartz_vmr, baseControlWindow.IVideoWindow_iface);
-}
-
 static inline struct quartz_vmr *impl_from_BaseControlVideo(BaseControlVideo *cvid)
 {
     return CONTAINING_RECORD(cvid, struct quartz_vmr, baseControlVideo);
-}
-
-static inline struct quartz_vmr *impl_from_IBasicVideo(IBasicVideo *iface)
-{
-    return CONTAINING_RECORD(iface, struct quartz_vmr, baseControlVideo.IBasicVideo_iface);
 }
 
 static inline struct quartz_vmr *impl_from_IAMCertifiedOutputProtection(IAMCertifiedOutputProtection *iface)
@@ -214,7 +204,7 @@ static DWORD VMR9_SendSampleData(struct quartz_vmr *This, VMR9PresentationInfo *
 
     TRACE("%p %p %d\n", This, data, size);
 
-    amt = &This->renderer.pInputPin->pin.mtCurrent;
+    amt = &This->renderer.sink.pin.mtCurrent;
 
     if (IsEqualIID(&amt->formattype, &FORMAT_VideoInfo))
     {
@@ -391,7 +381,7 @@ static HRESULT VMR9_maybe_init(struct quartz_vmr *This, BOOL force)
     HRESULT hr;
 
     TRACE("my mode: %u, my window: %p, my last window: %p\n", This->mode, This->baseControlWindow.baseWindow.hWnd, This->hWndClippingWindow);
-    if (This->baseControlWindow.baseWindow.hWnd || !This->renderer.pInputPin->pin.pConnectedTo)
+    if (This->baseControlWindow.baseWindow.hWnd || !This->renderer.sink.pin.pConnectedTo)
         return S_OK;
 
     if (This->mode == VMR9Mode_Windowless && !This->hWndClippingWindow)
@@ -496,7 +486,7 @@ static HRESULT WINAPI VMR9_BreakConnect(BaseRenderer *This)
 
     if (!pVMR9->mode)
         return S_FALSE;
-     if (This->pInputPin->pin.pConnectedTo && pVMR9->allocator && pVMR9->presenter)
+     if (This->sink.pin.pConnectedTo && pVMR9->allocator && pVMR9->presenter)
     {
         if (pVMR9->renderer.filter.state != State_Stopped)
         {
@@ -645,9 +635,9 @@ static HRESULT WINAPI VMR9_GetSourceRect(BaseControlVideo* This, RECT *pSourceRe
 static HRESULT WINAPI VMR9_GetStaticImage(BaseControlVideo* This, LONG *pBufferSize, LONG *pDIBImage)
 {
     struct quartz_vmr* pVMR9 = impl_from_BaseControlVideo(This);
+    AM_MEDIA_TYPE *amt = &pVMR9->renderer.sink.pin.mtCurrent;
     BITMAPINFOHEADER *bmiHeader;
     LONG needed_size;
-    AM_MEDIA_TYPE *amt = &pVMR9->renderer.pInputPin->pin.mtCurrent;
     char *ptr;
 
     FIXME("(%p/%p)->(%p, %p): partial stub\n", pVMR9, This, pBufferSize, pDIBImage);
@@ -715,7 +705,7 @@ static VIDEOINFOHEADER* WINAPI VMR9_GetVideoFormat(BaseControlVideo* This)
 
     TRACE("(%p/%p)\n", pVMR9, This);
 
-    pmt = &pVMR9->renderer.pInputPin->pin.mtCurrent;
+    pmt = &pVMR9->renderer.sink.pin.mtCurrent;
     if (IsEqualIID(&pmt->formattype, &FORMAT_VideoInfo)) {
         return (VIDEOINFOHEADER*)pmt->pbFormat;
     } else if (IsEqualIID(&pmt->formattype, &FORMAT_VideoInfo2)) {
@@ -814,39 +804,11 @@ static const IBaseFilterVtbl VMR_Vtbl =
     BaseFilterImpl_QueryVendorInfo
 };
 
-/*** IUnknown methods ***/
-static HRESULT WINAPI Videowindow_QueryInterface(IVideoWindow *iface, REFIID riid, LPVOID*ppvObj)
-{
-    struct quartz_vmr *This = impl_from_IVideoWindow(iface);
-
-    TRACE("(%p/%p)->(%s, %p)\n", This, iface, debugstr_guid(riid), ppvObj);
-
-    return IUnknown_QueryInterface(This->renderer.filter.outer_unk, riid, ppvObj);
-}
-
-static ULONG WINAPI Videowindow_AddRef(IVideoWindow *iface)
-{
-    struct quartz_vmr *This = impl_from_IVideoWindow(iface);
-
-    TRACE("(%p/%p)->()\n", This, iface);
-
-    return IUnknown_AddRef(This->renderer.filter.outer_unk);
-}
-
-static ULONG WINAPI Videowindow_Release(IVideoWindow *iface)
-{
-    struct quartz_vmr *This = impl_from_IVideoWindow(iface);
-
-    TRACE("(%p/%p)->()\n", This, iface);
-
-    return IUnknown_Release(This->renderer.filter.outer_unk);
-}
-
 static const IVideoWindowVtbl IVideoWindow_VTable =
 {
-    Videowindow_QueryInterface,
-    Videowindow_AddRef,
-    Videowindow_Release,
+    BaseControlWindowImpl_QueryInterface,
+    BaseControlWindowImpl_AddRef,
+    BaseControlWindowImpl_Release,
     BaseControlWindowImpl_GetTypeInfoCount,
     BaseControlWindowImpl_GetTypeInfo,
     BaseControlWindowImpl_GetIDsOfNames,
@@ -890,77 +852,6 @@ static const IVideoWindowVtbl IVideoWindow_VTable =
     BaseControlWindowImpl_GetRestorePosition,
     BaseControlWindowImpl_HideCursor,
     BaseControlWindowImpl_IsCursorHidden
-};
-
-/*** IUnknown methods ***/
-static HRESULT WINAPI Basicvideo_QueryInterface(IBasicVideo *iface, REFIID riid, LPVOID * ppvObj)
-{
-    struct quartz_vmr *This = impl_from_IBasicVideo(iface);
-
-    TRACE("(%p/%p)->(%s, %p)\n", This, iface, debugstr_guid(riid), ppvObj);
-
-    return IUnknown_QueryInterface(This->renderer.filter.outer_unk, riid, ppvObj);
-}
-
-static ULONG WINAPI Basicvideo_AddRef(IBasicVideo *iface)
-{
-    struct quartz_vmr *This = impl_from_IBasicVideo(iface);
-
-    TRACE("(%p/%p)->()\n", This, iface);
-
-    return IUnknown_AddRef(This->renderer.filter.outer_unk);
-}
-
-static ULONG WINAPI Basicvideo_Release(IBasicVideo *iface)
-{
-    struct quartz_vmr *This = impl_from_IBasicVideo(iface);
-
-    TRACE("(%p/%p)->()\n", This, iface);
-
-    return IUnknown_Release(This->renderer.filter.outer_unk);
-}
-
-static const IBasicVideoVtbl IBasicVideo_VTable =
-{
-    Basicvideo_QueryInterface,
-    Basicvideo_AddRef,
-    Basicvideo_Release,
-    BaseControlVideoImpl_GetTypeInfoCount,
-    BaseControlVideoImpl_GetTypeInfo,
-    BaseControlVideoImpl_GetIDsOfNames,
-    BaseControlVideoImpl_Invoke,
-    BaseControlVideoImpl_get_AvgTimePerFrame,
-    BaseControlVideoImpl_get_BitRate,
-    BaseControlVideoImpl_get_BitErrorRate,
-    BaseControlVideoImpl_get_VideoWidth,
-    BaseControlVideoImpl_get_VideoHeight,
-    BaseControlVideoImpl_put_SourceLeft,
-    BaseControlVideoImpl_get_SourceLeft,
-    BaseControlVideoImpl_put_SourceWidth,
-    BaseControlVideoImpl_get_SourceWidth,
-    BaseControlVideoImpl_put_SourceTop,
-    BaseControlVideoImpl_get_SourceTop,
-    BaseControlVideoImpl_put_SourceHeight,
-    BaseControlVideoImpl_get_SourceHeight,
-    BaseControlVideoImpl_put_DestinationLeft,
-    BaseControlVideoImpl_get_DestinationLeft,
-    BaseControlVideoImpl_put_DestinationWidth,
-    BaseControlVideoImpl_get_DestinationWidth,
-    BaseControlVideoImpl_put_DestinationTop,
-    BaseControlVideoImpl_get_DestinationTop,
-    BaseControlVideoImpl_put_DestinationHeight,
-    BaseControlVideoImpl_get_DestinationHeight,
-    BaseControlVideoImpl_SetSourcePosition,
-    BaseControlVideoImpl_GetSourcePosition,
-    BaseControlVideoImpl_SetDefaultSourcePosition,
-    BaseControlVideoImpl_SetDestinationPosition,
-    BaseControlVideoImpl_GetDestinationPosition,
-    BaseControlVideoImpl_SetDefaultDestinationPosition,
-    BaseControlVideoImpl_GetVideoSize,
-    BaseControlVideoImpl_GetVideoPaletteEntries,
-    BaseControlVideoImpl_GetCurrentImage,
-    BaseControlVideoImpl_IsUsingDefaultSource,
-    BaseControlVideoImpl_IsUsingDefaultDestination
 };
 
 static HRESULT WINAPI AMCertifiedOutputProtection_QueryInterface(IAMCertifiedOutputProtection *iface,
@@ -2290,15 +2181,15 @@ static HRESULT vmr_create(IUnknown *outer, void **out, const CLSID *clsid)
     if (FAILED(hr))
         goto fail;
 
-    hr = BaseControlWindow_Init(&pVMR->baseControlWindow, &IVideoWindow_VTable, &pVMR->renderer.filter,
-                                &pVMR->renderer.filter.csFilter, &pVMR->renderer.pInputPin->pin,
-                                &renderer_BaseWindowFuncTable);
+    hr = BaseControlWindow_Init(&pVMR->baseControlWindow, &IVideoWindow_VTable,
+            &pVMR->renderer.filter, &pVMR->renderer.filter.csFilter,
+            &pVMR->renderer.sink.pin, &renderer_BaseWindowFuncTable);
     if (FAILED(hr))
         goto fail;
 
-    hr = BaseControlVideo_Init(&pVMR->baseControlVideo, &IBasicVideo_VTable, &pVMR->renderer.filter,
-                               &pVMR->renderer.filter.csFilter, &pVMR->renderer.pInputPin->pin,
-                               &renderer_BaseControlVideoFuncTable);
+    hr = strmbase_video_init(&pVMR->baseControlVideo, &pVMR->renderer.filter,
+            &pVMR->renderer.filter.csFilter, &pVMR->renderer.sink.pin,
+            &renderer_BaseControlVideoFuncTable);
     if (FAILED(hr))
         goto fail;
 

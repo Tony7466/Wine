@@ -540,9 +540,9 @@ static void shader_arb_load_np2fixup_constants(const struct arb_ps_np2fixup_info
 
 /* Context activation is done by the caller. */
 static void shader_arb_ps_local_constants(const struct arb_ps_compiled_shader *gl_shader,
-        const struct wined3d_context *context, const struct wined3d_state *state, UINT rt_height)
+        const struct wined3d_context_gl *context_gl, const struct wined3d_state *state, unsigned int rt_height)
 {
-    const struct wined3d_gl_info *gl_info = context->gl_info;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
     unsigned char i;
 
     for(i = 0; i < gl_shader->numbumpenvmatconsts; i++)
@@ -576,8 +576,8 @@ static void shader_arb_ps_local_constants(const struct arb_ps_compiled_shader *g
         * ycorrection.w: 0.0
         */
         float val[4];
-        val[0] = context->render_offscreen ? 0.0f : (float) rt_height;
-        val[1] = context->render_offscreen ? 1.0f : -1.0f;
+        val[0] = context_gl->c.render_offscreen ? 0.0f : (float)rt_height;
+        val[1] = context_gl->c.render_offscreen ? 1.0f : -1.0f;
         val[2] = 1.0f;
         val[3] = 0.0f;
         GL_EXTCALL(glProgramLocalParameter4fvARB(GL_FRAGMENT_PROGRAM_ARB, gl_shader->ycorrection, val));
@@ -604,14 +604,14 @@ static void shader_arb_ps_local_constants(const struct arb_ps_compiled_shader *g
 
 /* Context activation is done by the caller. */
 static void shader_arb_vs_local_constants(const struct arb_vs_compiled_shader *gl_shader,
-        const struct wined3d_context *context, const struct wined3d_state *state)
+        const struct wined3d_context_gl *context_gl, const struct wined3d_state *state)
 {
-    const struct wined3d_gl_info *gl_info = context->gl_info;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
     float position_fixup[4];
     unsigned char i;
 
     /* Upload the position fixup */
-    shader_get_position_fixup(context, state, 1, position_fixup);
+    shader_get_position_fixup(&context_gl->c, state, 1, position_fixup);
     GL_EXTCALL(glProgramLocalParameter4fvARB(GL_VERTEX_PROGRAM_ARB, gl_shader->pos_fixup, position_fixup));
 
     if (!gl_shader->num_int_consts) return;
@@ -642,12 +642,11 @@ static void shader_arb_select(void *shader_priv, struct wined3d_context *context
  * worry about the Integers or Booleans
  */
 /* Context activation is done by the caller (state handler). */
-static void shader_arb_load_constants_internal(struct shader_arb_priv *priv,
-        struct wined3d_context *context, const struct wined3d_state *state,
-        BOOL usePixelShader, BOOL useVertexShader, BOOL from_shader_select)
+static void shader_arb_load_constants_internal(struct shader_arb_priv *priv, struct wined3d_context_gl *context_gl,
+        const struct wined3d_state *state, BOOL use_ps, BOOL use_vs, BOOL from_shader_select)
 {
-    const struct wined3d_d3d_info *d3d_info = context->d3d_info;
-    const struct wined3d_gl_info *gl_info = context->gl_info;
+    const struct wined3d_d3d_info *d3d_info = context_gl->c.d3d_info;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
 
     if (!from_shader_select)
     {
@@ -660,7 +659,7 @@ static void shader_arb_load_constants_internal(struct shader_arb_priv *priv,
                 && (vshader->reg_maps.integer_constants & ~vshader->reg_maps.local_int_consts))))
         {
             TRACE("bool/integer vertex shader constants potentially modified, forcing shader reselection.\n");
-            shader_arb_select(priv, context, state);
+            shader_arb_select(priv, &context_gl->c, state);
         }
         else if (pshader
                 && (pshader->reg_maps.boolean_constants
@@ -668,11 +667,11 @@ static void shader_arb_load_constants_internal(struct shader_arb_priv *priv,
                 && (pshader->reg_maps.integer_constants & ~pshader->reg_maps.local_int_consts))))
         {
             TRACE("bool/integer pixel shader constants potentially modified, forcing shader reselection.\n");
-            shader_arb_select(priv, context, state);
+            shader_arb_select(priv, &context_gl->c, state);
         }
     }
 
-    if (context != priv->last_context)
+    if (&context_gl->c != priv->last_context)
     {
         memset(priv->vshader_const_dirty, 1,
                 sizeof(*priv->vshader_const_dirty) * d3d_info->limits.vs_uniform_count);
@@ -682,10 +681,10 @@ static void shader_arb_load_constants_internal(struct shader_arb_priv *priv,
                 sizeof(*priv->pshader_const_dirty) * d3d_info->limits.ps_uniform_count);
         priv->highest_dirty_ps_const = d3d_info->limits.ps_uniform_count;
 
-        priv->last_context = context;
+        priv->last_context = &context_gl->c;
     }
 
-    if (useVertexShader)
+    if (use_vs)
     {
         const struct wined3d_shader *vshader = state->shader[WINED3D_SHADER_TYPE_VERTEX];
         const struct arb_vs_compiled_shader *gl_shader = priv->compiled_vprog;
@@ -693,10 +692,10 @@ static void shader_arb_load_constants_internal(struct shader_arb_priv *priv,
         /* Load DirectX 9 float constants for vertex shader */
         priv->highest_dirty_vs_const = shader_arb_load_constants_f(vshader, gl_info, GL_VERTEX_PROGRAM_ARB,
                 priv->highest_dirty_vs_const, state->vs_consts_f, priv->vshader_const_dirty);
-        shader_arb_vs_local_constants(gl_shader, context, state);
+        shader_arb_vs_local_constants(gl_shader, context_gl, state);
     }
 
-    if (usePixelShader)
+    if (use_ps)
     {
         const struct wined3d_shader *pshader = state->shader[WINED3D_SHADER_TYPE_PIXEL];
         const struct arb_ps_compiled_shader *gl_shader = priv->compiled_fprog;
@@ -705,9 +704,9 @@ static void shader_arb_load_constants_internal(struct shader_arb_priv *priv,
         /* Load DirectX 9 float constants for pixel shader */
         priv->highest_dirty_ps_const = shader_arb_load_constants_f(pshader, gl_info, GL_FRAGMENT_PROGRAM_ARB,
                 priv->highest_dirty_ps_const, state->ps_consts_f, priv->pshader_const_dirty);
-        shader_arb_ps_local_constants(gl_shader, context, state, rt_height);
+        shader_arb_ps_local_constants(gl_shader, context_gl, state, rt_height);
 
-        if (context->constant_update_mask & WINED3D_SHADER_CONST_PS_NP2_FIXUP)
+        if (context_gl->c.constant_update_mask & WINED3D_SHADER_CONST_PS_NP2_FIXUP)
             shader_arb_load_np2fixup_constants(&gl_shader->np2fixup_info, gl_info, state);
     }
 }
@@ -715,10 +714,8 @@ static void shader_arb_load_constants_internal(struct shader_arb_priv *priv,
 static void shader_arb_load_constants(void *shader_priv, struct wined3d_context *context,
         const struct wined3d_state *state)
 {
-    BOOL vs = use_vs(state);
-    BOOL ps = use_ps(state);
-
-    shader_arb_load_constants_internal(shader_priv, context, state, ps, vs, FALSE);
+    shader_arb_load_constants_internal(shader_priv, wined3d_context_gl(context),
+            state, use_ps(state), use_vs(state), FALSE);
 }
 
 static void shader_arb_update_float_vertex_constants(struct wined3d_device *device, UINT start, UINT count)
@@ -4230,11 +4227,11 @@ static GLuint shader_arb_generate_vshader(const struct wined3d_shader *shader,
 }
 
 /* Context activation is done by the caller. */
-static struct arb_ps_compiled_shader *find_arb_pshader(struct wined3d_context *context,
+static struct arb_ps_compiled_shader *find_arb_pshader(struct wined3d_context_gl *context_gl,
         struct wined3d_shader *shader, const struct arb_ps_compile_args *args)
 {
-    const struct wined3d_d3d_info *d3d_info = context->d3d_info;
-    const struct wined3d_gl_info *gl_info = context->gl_info;
+    const struct wined3d_d3d_info *d3d_info = context_gl->c.d3d_info;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
     struct wined3d_device *device = shader->device;
     UINT i;
     DWORD new_size;
@@ -4554,8 +4551,9 @@ static void find_arb_vs_compile_args(const struct wined3d_state *state,
 static void shader_arb_select(void *shader_priv, struct wined3d_context *context,
         const struct wined3d_state *state)
 {
-    struct shader_arb_priv *priv = shader_priv;
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     const struct wined3d_gl_info *gl_info = context->gl_info;
+    struct shader_arb_priv *priv = shader_priv;
     int i;
 
     /* Deal with pixel shaders first so the vertex shader arg function has the input signature ready */
@@ -4567,7 +4565,7 @@ static void shader_arb_select(void *shader_priv, struct wined3d_context *context
 
         TRACE("Using pixel shader %p.\n", ps);
         find_arb_ps_compile_args(state, context, ps, &compile_args);
-        compiled = find_arb_pshader(context, ps, &compile_args);
+        compiled = find_arb_pshader(context_gl, ps, &compile_args);
         priv->current_fprogram_id = compiled->prgId;
         priv->compiled_fprog = compiled;
 
@@ -4596,12 +4594,12 @@ static void shader_arb_select(void *shader_priv, struct wined3d_context *context
                 priv->pshader_const_dirty[i] = 1;
             }
             /* Also takes care of loading local constants */
-            shader_arb_load_constants_internal(shader_priv, context, state, TRUE, FALSE, TRUE);
+            shader_arb_load_constants_internal(shader_priv, context_gl, state, TRUE, FALSE, TRUE);
         }
         else
         {
             UINT rt_height = state->fb->render_targets[0]->height;
-            shader_arb_ps_local_constants(compiled, context, state, rt_height);
+            shader_arb_ps_local_constants(compiled, context_gl, state, rt_height);
         }
 
         /* Force constant reloading for the NP2 fixup (see comment in shader_glsl_select for more info) */
@@ -4659,7 +4657,7 @@ static void shader_arb_select(void *shader_priv, struct wined3d_context *context
         gl_info->gl_ops.gl.p_glEnable(GL_VERTEX_PROGRAM_ARB);
         checkGLcall("glEnable(GL_VERTEX_PROGRAM_ARB);");
         TRACE("Bound vertex program %u and enabled GL_VERTEX_PROGRAM_ARB\n", priv->current_vprogram_id);
-        shader_arb_vs_local_constants(compiled, context, state);
+        shader_arb_vs_local_constants(compiled, context_gl, state);
 
         if(priv->last_vs_color_unclamp != compiled->need_color_unclamp) {
             priv->last_vs_color_unclamp = compiled->need_color_unclamp;
@@ -7915,7 +7913,7 @@ static DWORD arbfp_blitter_blit(struct wined3d_blitter *blitter, enum wined3d_bl
     arbfp_blit_set(arbfp_blitter, context_gl, src_texture_gl, src_sub_resource_idx, color_key);
 
     /* Draw a textured quad */
-    context_draw_textured_quad(context, src_texture_gl,
+    wined3d_context_gl_draw_textured_quad(context_gl, src_texture_gl,
             src_sub_resource_idx, src_rect, dst_rect, filter);
 
     /* Leave the opengl state valid for blitting */

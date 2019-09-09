@@ -812,10 +812,11 @@ static void wined3d_device_gl_create_dummy_textures(struct wined3d_device_gl *de
 }
 
 /* Context activation is done by the caller. */
-static void destroy_dummy_textures(struct wined3d_device *device, struct wined3d_context *context)
+static void wined3d_device_gl_destroy_dummy_textures(struct wined3d_device_gl *device_gl,
+        struct wined3d_context_gl *context_gl)
 {
-    struct wined3d_dummy_textures *dummy_textures = &wined3d_device_gl(device)->dummy_textures;
-    const struct wined3d_gl_info *gl_info = context->gl_info;
+    struct wined3d_dummy_textures *dummy_textures = &device_gl->dummy_textures;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
 
     if (gl_info->supported[ARB_TEXTURE_MULTISAMPLE])
     {
@@ -926,12 +927,19 @@ static LONG fullscreen_exstyle(LONG exstyle)
     return exstyle;
 }
 
-void CDECL wined3d_device_setup_fullscreen_window(struct wined3d_device *device, HWND window, UINT w, UINT h)
+HRESULT CDECL wined3d_device_setup_fullscreen_window(struct wined3d_device *device,
+        HWND window, unsigned int w, unsigned int h)
 {
     BOOL filter_messages;
     LONG style, exstyle;
 
     TRACE("Setting up window %p for fullscreen mode.\n", window);
+
+    if (!IsWindow(window))
+    {
+        WARN("%p is not a valid window.\n", window);
+        return WINED3DERR_NOTAVAILABLE;
+    }
 
     if (device->style || device->exStyle)
     {
@@ -956,6 +964,8 @@ void CDECL wined3d_device_setup_fullscreen_window(struct wined3d_device *device,
     SetWindowPos(window, HWND_TOPMOST, 0, 0, w, h, SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOACTIVATE);
 
     device->filter_messages = filter_messages;
+
+    return WINED3D_OK;
 }
 
 void CDECL wined3d_device_restore_fullscreen_window(struct wined3d_device *device, HWND window,
@@ -1015,7 +1025,7 @@ HRESULT CDECL wined3d_device_acquire_focus_window(struct wined3d_device *device,
 {
     TRACE("device %p, window %p.\n", device, window);
 
-    if (!wined3d_register_window(window, device))
+    if (!wined3d_register_window(NULL, window, device, 0))
     {
         ERR("Failed to register window %p.\n", window);
         return E_FAIL;
@@ -1054,8 +1064,12 @@ void wined3d_device_delete_opengl_contexts_cs(void *object)
 {
     struct wined3d_resource *resource, *cursor;
     struct wined3d_device *device = object;
+    struct wined3d_context_gl *context_gl;
+    struct wined3d_device_gl *device_gl;
     struct wined3d_context *context;
     struct wined3d_shader *shader;
+
+    device_gl = wined3d_device_gl(device);
 
     LIST_FOR_EACH_ENTRY_SAFE(resource, cursor, &device->resources, struct wined3d_resource, resource_list_entry)
     {
@@ -1069,9 +1083,10 @@ void wined3d_device_delete_opengl_contexts_cs(void *object)
     }
 
     context = context_acquire(device, NULL, 0);
+    context_gl = wined3d_context_gl(context);
     device->blitter->ops->blitter_destroy(device->blitter, context);
     device->shader_backend->shader_free_private(device, context);
-    destroy_dummy_textures(device, context);
+    wined3d_device_gl_destroy_dummy_textures(device_gl, context_gl);
     destroy_default_samplers(device, context);
     context_release(context);
 
@@ -5405,7 +5420,7 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
     struct wined3d_rendertarget_view *view;
     struct wined3d_swapchain *swapchain;
     struct wined3d_view_desc view_desc;
-    BOOL backbuffer_resized;
+    BOOL backbuffer_resized, windowed;
     HRESULT hr = WINED3D_OK;
     unsigned int i;
 
@@ -5496,13 +5511,30 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
 
     backbuffer_resized = swapchain_desc->backbuffer_width != swapchain->desc.backbuffer_width
             || swapchain_desc->backbuffer_height != swapchain->desc.backbuffer_height;
+    windowed = swapchain->desc.windowed;
 
-    if (!swapchain_desc->windowed != !swapchain->desc.windowed
-            || swapchain->reapply_mode || mode
-            || (!swapchain_desc->windowed && backbuffer_resized))
+    if (!swapchain_desc->windowed != !windowed || swapchain->reapply_mode
+            || mode || (!swapchain_desc->windowed && backbuffer_resized))
     {
+        /* Switch from windowed to fullscreen. */
+        if (windowed && !swapchain_desc->windowed)
+        {
+            HWND focus_window = device->create_parms.focus_window;
+
+            if (!focus_window)
+                focus_window = swapchain->device_window;
+            if (FAILED(hr = wined3d_device_acquire_focus_window(device, focus_window)))
+            {
+                ERR("Failed to acquire focus window, hr %#x.\n", hr);
+                return hr;
+            }
+        }
         if (FAILED(hr = wined3d_swapchain_set_fullscreen(swapchain, swapchain_desc, mode)))
             return hr;
+
+        /* Switch from fullscreen to windowed. */
+        if (!windowed && swapchain_desc->windowed)
+            wined3d_device_release_focus_window(device);
     }
     else if (!swapchain_desc->windowed)
     {

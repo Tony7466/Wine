@@ -31,7 +31,6 @@ void WINAPI DeleteMediaType(AM_MEDIA_TYPE * pMediaType);
 typedef struct BasePin
 {
 	IPin IPin_iface;
-	LONG refCount;
 	LPCRITICAL_SECTION pCritSec;
 	PIN_INFO pinInfo;
 	IPin * pConnectedTo;
@@ -103,7 +102,8 @@ typedef struct BaseInputPinFuncTable {
 /* Base Pin */
 HRESULT WINAPI BasePinImpl_GetMediaType(BasePin *This, int iPosition, AM_MEDIA_TYPE *pmt);
 LONG WINAPI BasePinImpl_GetMediaTypeVersion(BasePin *This);
-ULONG WINAPI BasePinImpl_AddRef(IPin * iface);
+ULONG WINAPI BasePinImpl_AddRef(IPin *iface);
+ULONG WINAPI BasePinImpl_Release(IPin *iface);
 HRESULT WINAPI BasePinImpl_Disconnect(IPin * iface);
 HRESULT WINAPI BasePinImpl_ConnectedTo(IPin * iface, IPin ** ppPin);
 HRESULT WINAPI BasePinImpl_ConnectionMediaType(IPin * iface, AM_MEDIA_TYPE * pmt);
@@ -117,7 +117,6 @@ HRESULT WINAPI BasePinImpl_NewSegment(IPin * iface, REFERENCE_TIME tStart, REFER
 
 /* Base Output Pin */
 HRESULT WINAPI BaseOutputPinImpl_QueryInterface(IPin * iface, REFIID riid, LPVOID * ppv);
-ULONG WINAPI BaseOutputPinImpl_Release(IPin * iface);
 HRESULT WINAPI BaseOutputPinImpl_Connect(IPin * iface, IPin * pReceivePin, const AM_MEDIA_TYPE * pmt);
 HRESULT WINAPI BaseOutputPinImpl_ReceiveConnection(IPin * iface, IPin * pReceivePin, const AM_MEDIA_TYPE * pmt);
 HRESULT WINAPI BaseOutputPinImpl_Disconnect(IPin * iface);
@@ -135,10 +134,12 @@ HRESULT WINAPI BaseOutputPinImpl_AttemptConnection(BaseOutputPin *pin, IPin *pee
 
 HRESULT WINAPI BaseOutputPin_Construct(const IPinVtbl *OutputPin_Vtbl, LONG outputpin_size, const PIN_INFO * pPinInfo, const BaseOutputPinFuncTable* pBaseOutputFuncsTable, LPCRITICAL_SECTION pCritSec, IPin ** ppPin);
 HRESULT WINAPI BaseOutputPin_Destroy(BaseOutputPin *This);
+void strmbase_source_cleanup(BaseOutputPin *pin);
+void strmbase_source_init(BaseOutputPin *pin, const IPinVtbl *vtbl, const PIN_INFO *info,
+        const BaseOutputPinFuncTable *func_table, CRITICAL_SECTION *cs);
 
 /* Base Input Pin */
 HRESULT WINAPI BaseInputPinImpl_QueryInterface(IPin * iface, REFIID riid, LPVOID * ppv);
-ULONG   WINAPI BaseInputPinImpl_Release(IPin * iface);
 HRESULT WINAPI BaseInputPinImpl_Connect(IPin * iface, IPin * pConnector, const AM_MEDIA_TYPE * pmt);
 HRESULT WINAPI BaseInputPinImpl_ReceiveConnection(IPin * iface, IPin * pReceivePin, const AM_MEDIA_TYPE * pmt);
 HRESULT WINAPI BaseInputPinImpl_QueryAccept(IPin * iface, const AM_MEDIA_TYPE * pmt);
@@ -151,6 +152,9 @@ HRESULT BaseInputPin_Construct(const IPinVtbl *InputPin_Vtbl, LONG inputpin_size
         const BaseInputPinFuncTable* pBaseInputFuncsTable,
         LPCRITICAL_SECTION pCritSec, IMemAllocator *, IPin ** ppPin);
 HRESULT WINAPI BaseInputPin_Destroy(BaseInputPin *This);
+void strmbase_sink_init(BaseInputPin *pin, const IPinVtbl *vtbl, const PIN_INFO *info,
+        const BaseInputPinFuncTable *func_table, CRITICAL_SECTION *cs, IMemAllocator *allocator);
+void strmbase_sink_cleanup(BaseInputPin *pin);
 
 typedef struct BaseFilter
 {
@@ -202,16 +206,17 @@ HRESULT WINAPI EnumMediaTypes_Construct(BasePin *iface, BasePin_GetMediaType enu
 /* Transform Filter */
 typedef struct TransformFilter
 {
-	BaseFilter filter;
+    BaseFilter filter;
+    BaseOutputPin source;
+    BaseInputPin sink;
 
-	IPin **ppPins;
-	AM_MEDIA_TYPE pmt;
-	CRITICAL_SECTION csReceive;
+    AM_MEDIA_TYPE pmt;
+    CRITICAL_SECTION csReceive;
 
-	const struct TransformFilterFuncTable * pFuncsTable;
-	struct QualityControlImpl *qcimpl;
-        /* IMediaSeeking and IMediaPosition are implemented by ISeekingPassThru */
-        IUnknown *seekthru_unk;
+    const struct TransformFilterFuncTable * pFuncsTable;
+    struct QualityControlImpl *qcimpl;
+    /* IMediaSeeking and IMediaPosition are implemented by ISeekingPassThru */
+    IUnknown *seekthru_unk;
 } TransformFilter;
 
 typedef HRESULT (WINAPI *TransformFilter_DecideBufferSize) (TransformFilter *iface, IMemAllocator *pAlloc, ALLOCATOR_PROPERTIES *ppropInputRequest);
@@ -430,6 +435,10 @@ HRESULT WINAPI BaseControlWindow_Init(BaseControlWindow *pControlWindow, const I
 HRESULT WINAPI BaseControlWindow_Destroy(BaseControlWindow *pControlWindow);
 
 BOOL WINAPI BaseControlWindowImpl_PossiblyEatMessage(BaseWindow *This, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+HRESULT WINAPI BaseControlWindowImpl_QueryInterface(IVideoWindow *iface, REFIID iid, void **out);
+ULONG WINAPI BaseControlWindowImpl_AddRef(IVideoWindow *iface);
+ULONG WINAPI BaseControlWindowImpl_Release(IVideoWindow *iface);
 HRESULT WINAPI BaseControlWindowImpl_GetTypeInfoCount(IVideoWindow *iface, UINT*pctinfo);
 HRESULT WINAPI BaseControlWindowImpl_GetTypeInfo(IVideoWindow *iface, UINT iTInfo, LCID lcid, ITypeInfo**ppTInfo);
 HRESULT WINAPI BaseControlWindowImpl_GetIDsOfNames(IVideoWindow *iface, REFIID riid, LPOLESTR*rgszNames, UINT cNames, LCID lcid, DISPID*rgDispId);
@@ -514,45 +523,9 @@ typedef struct BaseControlVideoFuncTable {
 	BaseControlVideo_SetTargetRect pfnSetTargetRect;
 } BaseControlVideoFuncTable;
 
-HRESULT WINAPI BaseControlVideo_Init(BaseControlVideo *pControlVideo, const IBasicVideoVtbl *lpVtbl, BaseFilter *owner, CRITICAL_SECTION *lock, BasePin* pPin, const BaseControlVideoFuncTable* pFuncsTable);
+HRESULT WINAPI strmbase_video_init(BaseControlVideo *video, BaseFilter *filter,
+        CRITICAL_SECTION *cs, BasePin *pin, const BaseControlVideoFuncTable *func_table);
 HRESULT WINAPI BaseControlVideo_Destroy(BaseControlVideo *pControlVideo);
-
-HRESULT WINAPI BaseControlVideoImpl_GetTypeInfoCount(IBasicVideo *iface, UINT*pctinfo);
-HRESULT WINAPI BaseControlVideoImpl_GetTypeInfo(IBasicVideo *iface, UINT iTInfo, LCID lcid, ITypeInfo**ppTInfo);
-HRESULT WINAPI BaseControlVideoImpl_GetIDsOfNames(IBasicVideo *iface, REFIID riid, LPOLESTR*rgszNames, UINT cNames, LCID lcid, DISPID*rgDispId);
-HRESULT WINAPI BaseControlVideoImpl_Invoke(IBasicVideo *iface, DISPID dispIdMember, REFIID riid, LCID lcid, WORD wFlags, DISPPARAMS*pDispParams, VARIANT*pVarResult, EXCEPINFO*pExepInfo, UINT*puArgErr);
-HRESULT WINAPI BaseControlVideoImpl_get_AvgTimePerFrame(IBasicVideo *iface, REFTIME *pAvgTimePerFrame);
-HRESULT WINAPI BaseControlVideoImpl_get_BitRate(IBasicVideo *iface, LONG *pBitRate);
-HRESULT WINAPI BaseControlVideoImpl_get_BitErrorRate(IBasicVideo *iface, LONG *pBitErrorRate);
-HRESULT WINAPI BaseControlVideoImpl_get_VideoWidth(IBasicVideo *iface, LONG *pVideoWidth);
-HRESULT WINAPI BaseControlVideoImpl_get_VideoHeight(IBasicVideo *iface, LONG *pVideoHeight);
-HRESULT WINAPI BaseControlVideoImpl_put_SourceLeft(IBasicVideo *iface, LONG SourceLeft);
-HRESULT WINAPI BaseControlVideoImpl_get_SourceLeft(IBasicVideo *iface, LONG *pSourceLeft);
-HRESULT WINAPI BaseControlVideoImpl_put_SourceWidth(IBasicVideo *iface, LONG SourceWidth);
-HRESULT WINAPI BaseControlVideoImpl_get_SourceWidth(IBasicVideo *iface, LONG *pSourceWidth);
-HRESULT WINAPI BaseControlVideoImpl_put_SourceTop(IBasicVideo *iface, LONG SourceTop);
-HRESULT WINAPI BaseControlVideoImpl_get_SourceTop(IBasicVideo *iface, LONG *pSourceTop);
-HRESULT WINAPI BaseControlVideoImpl_put_SourceHeight(IBasicVideo *iface, LONG SourceHeight);
-HRESULT WINAPI BaseControlVideoImpl_get_SourceHeight(IBasicVideo *iface, LONG *pSourceHeight);
-HRESULT WINAPI BaseControlVideoImpl_put_DestinationLeft(IBasicVideo *iface, LONG DestinationLeft);
-HRESULT WINAPI BaseControlVideoImpl_get_DestinationLeft(IBasicVideo *iface, LONG *pDestinationLeft);
-HRESULT WINAPI BaseControlVideoImpl_put_DestinationWidth(IBasicVideo *iface, LONG DestinationWidth);
-HRESULT WINAPI BaseControlVideoImpl_get_DestinationWidth(IBasicVideo *iface, LONG *pDestinationWidth);
-HRESULT WINAPI BaseControlVideoImpl_put_DestinationTop(IBasicVideo *iface, LONG DestinationTop);
-HRESULT WINAPI BaseControlVideoImpl_get_DestinationTop(IBasicVideo *iface, LONG *pDestinationTop);
-HRESULT WINAPI BaseControlVideoImpl_put_DestinationHeight(IBasicVideo *iface, LONG DestinationHeight);
-HRESULT WINAPI BaseControlVideoImpl_get_DestinationHeight(IBasicVideo *iface, LONG *pDestinationHeight);
-HRESULT WINAPI BaseControlVideoImpl_SetSourcePosition(IBasicVideo *iface, LONG Left, LONG Top, LONG Width, LONG Height);
-HRESULT WINAPI BaseControlVideoImpl_GetSourcePosition(IBasicVideo *iface, LONG *pLeft, LONG *pTop, LONG *pWidth, LONG *pHeight);
-HRESULT WINAPI BaseControlVideoImpl_SetDefaultSourcePosition(IBasicVideo *iface);
-HRESULT WINAPI BaseControlVideoImpl_SetDestinationPosition(IBasicVideo *iface, LONG Left, LONG Top, LONG Width, LONG Height);
-HRESULT WINAPI BaseControlVideoImpl_GetDestinationPosition(IBasicVideo *iface, LONG *pLeft, LONG *pTop, LONG *pWidth, LONG *pHeight);
-HRESULT WINAPI BaseControlVideoImpl_SetDefaultDestinationPosition(IBasicVideo *iface);
-HRESULT WINAPI BaseControlVideoImpl_GetVideoSize(IBasicVideo *iface, LONG *pWidth, LONG *pHeight);
-HRESULT WINAPI BaseControlVideoImpl_GetVideoPaletteEntries(IBasicVideo *iface, LONG StartIndex, LONG Entries, LONG *pRetrieved, LONG *pPalette);
-HRESULT WINAPI BaseControlVideoImpl_GetCurrentImage(IBasicVideo *iface, LONG *pBufferSize, LONG *pDIBImage);
-HRESULT WINAPI BaseControlVideoImpl_IsUsingDefaultSource(IBasicVideo *iface);
-HRESULT WINAPI BaseControlVideoImpl_IsUsingDefaultDestination(IBasicVideo *iface);
 #endif
 #endif
 
@@ -561,7 +534,7 @@ typedef struct BaseRendererTag
 {
 	BaseFilter filter;
 
-	BaseInputPin *pInputPin;
+	BaseInputPin sink;
 	IUnknown *pPosition;
 	CRITICAL_SECTION csRenderLock;
 	HANDLE evComplete;

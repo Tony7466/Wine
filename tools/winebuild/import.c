@@ -38,6 +38,93 @@
 #include "wine/list.h"
 #include "build.h"
 
+/* standard C functions that are also exported from ntdll */
+static const char *stdc_names[] =
+{
+    "abs",
+    "atan",
+    "atoi",
+    "atol",
+    "bsearch",
+    "ceil",
+    "cos",
+    "fabs",
+    "floor",
+    "isalnum",
+    "isalpha",
+    "iscntrl",
+    "isdigit",
+    "isgraph",
+    "islower",
+    "isprint",
+    "ispunct",
+    "isspace",
+    "isupper",
+    "iswalpha",
+    "iswctype",
+    "iswdigit",
+    "iswlower",
+    "iswspace",
+    "iswxdigit",
+    "isxdigit",
+    "labs",
+    "log",
+    "mbstowcs",
+    "memchr",
+    "memcmp",
+    "memcpy",
+    "memmove",
+    "memset",
+    "pow",
+    "qsort",
+    "sin",
+    "sprintf",
+    "sqrt",
+    "sscanf",
+    "strcat",
+    "strchr",
+    "strcmp",
+    "strcpy",
+    "strcspn",
+    "strlen",
+    "strncat",
+    "strncmp",
+    "strncpy",
+    "strnlen",
+    "strpbrk",
+    "strrchr",
+    "strspn",
+    "strstr",
+    "strtol",
+    "strtoul",
+    "swprintf",
+    "tan",
+    "tolower",
+    "toupper",
+    "towlower",
+    "towupper",
+    "vsprintf",
+    "wcscat",
+    "wcschr",
+    "wcscmp",
+    "wcscpy",
+    "wcscspn",
+    "wcslen",
+    "wcsncat",
+    "wcsncmp",
+    "wcsncpy",
+    "wcspbrk",
+    "wcsrchr",
+    "wcsspn",
+    "wcsstr",
+    "wcstok",
+    "wcstol",
+    "wcstombs",
+    "wcstoul"
+};
+
+static struct strarray stdc_functions = { stdc_names, ARRAY_SIZE(stdc_names), ARRAY_SIZE(stdc_names) };
+
 struct import_func
 {
     const char *name;
@@ -566,7 +653,8 @@ void read_undef_symbols( DLLSPEC *spec, char **argv )
             add_undef_import( p + strlen( import_func_prefix ), 0 );
         else if (!strncmp( p, import_ord_prefix, strlen(import_ord_prefix) ))
             add_undef_import( p + strlen( import_ord_prefix ), 1 );
-        else strarray_add( &undef_symbols, xstrdup( p ), NULL );
+        else if (!unix_lib || !find_name( p, &stdc_functions ))
+            strarray_add( &undef_symbols, xstrdup( p ), NULL );
     }
     if ((err = pclose( f ))) warning( "%s failed with status %d\n", cmd, err );
     free( cmd );
@@ -750,6 +838,11 @@ static void output_immediate_imports(void)
             for (j = 0; j < import->nb_imports; j++)
             {
                 struct import_func *func = &import->imports[j];
+                if (i)
+                {
+                    if (func->name) output( "__imp_%s:\n", asm_name( func->name ));
+                    else if (func->export_name) output( "__imp_%s:\n", asm_name( func->export_name ));
+                }
                 if (func->name)
                     output( "\t%s .L__wine_spec_import_data_%s_%s-.L__wine_spec_rva_base\n",
                             get_asm_ptr_keyword(), import->c_name, func->name );

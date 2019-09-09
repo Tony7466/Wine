@@ -4556,6 +4556,7 @@ static void test_specular_lighting(void)
         {&point_far, TRUE, 0.0f, expected_zero, ARRAY_SIZE(expected_zero)},
     };
 
+    IDirect3DLight *light, *dummy_lights[64];
     IDirect3DVertexBuffer *src_vb, *dst_vb;
     struct vertex *quad, *src_data;
     D3DVERTEXBUFFERDESC vb_desc;
@@ -4564,7 +4565,7 @@ static void test_specular_lighting(void)
     IDirect3DMaterial3 *material;
     IDirect3DDevice3 *device;
     IDirectDrawSurface4 *rt;
-    IDirect3DLight *light;
+    D3DLIGHT2 light_desc;
     IDirect3D3 *d3d;
     D3DCOLOR color;
     ULONG refcount;
@@ -4634,6 +4635,22 @@ static void test_specular_lighting(void)
     ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DDevice3_SetRenderState(device, D3DRENDERSTATE_FOGENABLE, FALSE);
     ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+
+    memset(&light_desc, 0, sizeof(light_desc));
+    light_desc.dwSize = sizeof(light_desc);
+    light_desc.dltType = D3DLIGHT_DIRECTIONAL;
+    light_desc.dwFlags = D3DLIGHT_ACTIVE;
+    U3(light_desc.dvDirection).z = 1.0f;
+
+    for (i = 0; i < ARRAY_SIZE(dummy_lights); ++i)
+    {
+        hr = IDirect3D3_CreateLight(d3d, &dummy_lights[i], NULL);
+        ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+        hr = IDirect3DViewport3_AddLight(viewport, dummy_lights[i]);
+        ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+        hr = IDirect3DLight_SetLight(dummy_lights[i], (D3DLIGHT *)&light_desc);
+        ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    }
 
     hr = IDirect3D3_CreateLight(d3d, &light, NULL);
     ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
@@ -4720,6 +4737,9 @@ static void test_specular_lighting(void)
 
         destroy_material(material);
     }
+
+    for (i = 0; i < ARRAY_SIZE(dummy_lights); ++i)
+        IDirect3DLight_Release(dummy_lights[i]);
 
     IDirect3DVertexBuffer_Release(dst_vb);
     IDirect3DVertexBuffer_Release(src_vb);
@@ -9480,6 +9500,7 @@ static void test_texturemapblend(void)
     DDSURFACEDESC2 surface_desc;
     IDirect3DTexture2 *texture;
     IDirect3DDevice3 *device;
+    DWORD texturemapblend;
     IDirectDraw4 *ddraw;
     IDirect3D3 *d3d;
     DDCOLORKEY ckey;
@@ -9537,6 +9558,10 @@ static void test_texturemapblend(void)
     hr = IDirect3DDevice3_SetCurrentViewport(device, viewport);
     ok(SUCCEEDED(hr), "Failed to set current viewport, hr %#x.\n", hr);
 
+    hr = IDirect3DDevice3_GetRenderState(device, D3DRENDERSTATE_TEXTUREMAPBLEND, &texturemapblend);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    ok(texturemapblend == D3DTBLEND_MODULATE, "Got unexpected texture map blend %#x.\n", texturemapblend);
+
     /* Test alpha with DDPF_ALPHAPIXELS texture - should be taken from texture
      * alpha channel.
      *
@@ -9571,38 +9596,126 @@ static void test_texturemapblend(void)
     fx.dwSize = sizeof(fx);
     U5(fx).dwFillColor = 0xff0000ff;
     hr = IDirectDrawSurface4_Blt(surface, NULL, NULL, NULL, DDBLT_COLORFILL | DDBLT_WAIT, &fx);
-    ok(SUCCEEDED(hr), "Failed to clear texture, hr %#x.\n", hr);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     U5(fx).dwFillColor = 0x800000ff;
     hr = IDirectDrawSurface4_Blt(surface, &rect, NULL, NULL, DDBLT_COLORFILL | DDBLT_WAIT, &fx);
-    ok(SUCCEEDED(hr), "Failed to clear texture, hr %#x.\n", hr);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
 
     /* Note that the ddraw1 version of this test runs tests 1-3 with
      * D3DRENDERSTATE_COLORKEYENABLE enabled, whereas this version only runs
      * test 4 with color keying on. Because no color key is set on the texture
      * this should not result in different behavior. */
     hr = IDirect3DDevice3_SetRenderState(device, D3DRENDERSTATE_CULLMODE, D3DCULL_NONE);
-    ok(SUCCEEDED(hr), "Failed to set render state, hr %#x.\n", hr);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DDevice3_SetRenderState(device, D3DRENDERSTATE_ZENABLE, D3DZB_FALSE);
-    ok(SUCCEEDED(hr), "Failed to set render state, hr %#x.\n", hr);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DDevice3_SetRenderState(device, D3DRENDERSTATE_SRCBLEND, D3DBLEND_SRCALPHA);
-    ok(SUCCEEDED(hr), "Failed to set render state, hr %#x.\n", hr);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DDevice3_SetRenderState(device, D3DRENDERSTATE_DESTBLEND, D3DBLEND_INVSRCALPHA);
-    ok(SUCCEEDED(hr), "Failed to set render state, hr %#x.\n", hr);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DDevice3_SetRenderState(device, D3DRENDERSTATE_ALPHABLENDENABLE, TRUE);
-    ok(SUCCEEDED(hr), "Failed to set render state, hr %#x.\n", hr);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DDevice3_SetRenderState(device, D3DRENDERSTATE_TEXTUREMAPBLEND, D3DTBLEND_MODULATE);
-    ok(SUCCEEDED(hr), "Failed to set render state, hr %#x.\n", hr);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+
+    /* Texture stage state does not change so legacy texture blending stays enabled. */
+    hr = IDirect3DDevice3_SetTextureStageState(device, 0, D3DTSS_COLOROP, D3DTOP_MODULATE);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
 
     hr = IDirect3DDevice3_BeginScene(device);
-    ok(SUCCEEDED(hr), "Failed to begin scene, hr %#x.\n", hr);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DDevice3_DrawPrimitive(device, D3DPT_TRIANGLESTRIP,
             D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1, &test1_quads[0], 4, 0);
-    ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DDevice3_DrawPrimitive(device, D3DPT_TRIANGLESTRIP,
             D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1, &test1_quads[4], 4, 0);
-    ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DDevice3_EndScene(device);
-    ok(SUCCEEDED(hr), "Failed to end scene, hr %#x.\n", hr);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+
+    color = get_surface_color(rt, 5, 5);
+    ok(compare_color(color, 0x00000080, 2), "Got unexpected color 0x%08x.\n", color);
+    color = get_surface_color(rt, 400, 5);
+    ok(compare_color(color, 0x000000ff, 2), "Got unexpected color 0x%08x.\n", color);
+    color = get_surface_color(rt, 5, 245);
+    ok(compare_color(color, 0x00000080, 2), "Got unexpected color 0x%08x.\n", color);
+    color = get_surface_color(rt, 400, 245);
+    ok(compare_color(color, 0x000000ff, 2), "Got unexpected color 0x%08x.\n", color);
+
+    /* Turn legacy texture blending off. */
+    hr = IDirect3DDevice3_SetTextureStageState(device, 0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG2);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice3_SetTexture(device, 0, texture);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DViewport3_Clear(viewport, 1, &clear_rect, D3DCLEAR_TARGET);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice3_BeginScene(device);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice3_DrawPrimitive(device, D3DPT_TRIANGLESTRIP,
+            D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1, &test1_quads[0], 4, 0);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice3_DrawPrimitive(device, D3DPT_TRIANGLESTRIP,
+            D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1, &test1_quads[4], 4, 0);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice3_EndScene(device);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+
+    color = get_surface_color(rt, 5, 5);
+    ok(compare_color(color, 0x000000ff, 2), "Got unexpected color 0x%08x.\n", color);
+    color = get_surface_color(rt, 400, 5);
+    ok(compare_color(color, 0x000000ff, 2), "Got unexpected color 0x%08x.\n", color);
+    color = get_surface_color(rt, 5, 245);
+    ok(compare_color(color, 0x00000080, 2), "Got unexpected color 0x%08x.\n", color);
+    color = get_surface_color(rt, 400, 245);
+    ok(compare_color(color, 0x00000080, 2), "Got unexpected color 0x%08x.\n", color);
+
+    /* This doesn't turn legacy texture blending on again, as setting the same
+     * _TEXTUREMAPBLEND value. */
+    hr = IDirect3DDevice3_SetRenderState(device, D3DRENDERSTATE_TEXTUREMAPBLEND, D3DTBLEND_MODULATE);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice3_SetTexture(device, 0, texture);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DViewport3_Clear(viewport, 1, &clear_rect, D3DCLEAR_TARGET);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice3_BeginScene(device);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice3_DrawPrimitive(device, D3DPT_TRIANGLESTRIP,
+            D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1, &test1_quads[0], 4, 0);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice3_DrawPrimitive(device, D3DPT_TRIANGLESTRIP,
+            D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1, &test1_quads[4], 4, 0);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice3_EndScene(device);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+
+    color = get_surface_color(rt, 5, 5);
+    ok(compare_color(color, 0x000000ff, 2), "Got unexpected color 0x%08x.\n", color);
+    color = get_surface_color(rt, 400, 5);
+    ok(compare_color(color, 0x000000ff, 2), "Got unexpected color 0x%08x.\n", color);
+    color = get_surface_color(rt, 5, 245);
+    ok(compare_color(color, 0x00000080, 2), "Got unexpected color 0x%08x.\n", color);
+    color = get_surface_color(rt, 400, 245);
+    ok(compare_color(color, 0x00000080, 2), "Got unexpected color 0x%08x.\n", color);
+
+    /* Turn legacy texture blending on again. */
+    hr = IDirect3DDevice3_SetRenderState(device, D3DRENDERSTATE_TEXTUREMAPBLEND, D3DTBLEND_ADD);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice3_SetRenderState(device, D3DRENDERSTATE_TEXTUREMAPBLEND, D3DTBLEND_MODULATE);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice3_SetTexture(device, 0, texture);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DViewport3_Clear(viewport, 1, &clear_rect, D3DCLEAR_TARGET);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice3_BeginScene(device);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice3_DrawPrimitive(device, D3DPT_TRIANGLESTRIP,
+            D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1, &test1_quads[0], 4, 0);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice3_DrawPrimitive(device, D3DPT_TRIANGLESTRIP,
+            D3DFVF_XYZRHW | D3DFVF_DIFFUSE | D3DFVF_TEX1, &test1_quads[4], 4, 0);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice3_EndScene(device);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
 
     color = get_surface_color(rt, 5, 5);
     ok(compare_color(color, 0x00000080, 2), "Got unexpected color 0x%08x.\n", color);
@@ -16170,6 +16283,31 @@ static void test_clipper_refcount(void)
     DestroyWindow(window);
 }
 
+static void test_caps(void)
+{
+    DDCAPS hal_caps, hel_caps;
+    IDirectDraw4 *ddraw;
+    HRESULT hr;
+
+    ddraw = create_ddraw();
+    ok(!!ddraw, "Failed to create a ddraw object.\n");
+
+    memset(&hal_caps, 0, sizeof(hal_caps));
+    memset(&hel_caps, 0, sizeof(hel_caps));
+    hal_caps.dwSize = sizeof(hal_caps);
+    hel_caps.dwSize = sizeof(hel_caps);
+    hr = IDirectDraw4_GetCaps(ddraw, &hal_caps, &hel_caps);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+    ok(hal_caps.ddsOldCaps.dwCaps == hal_caps.ddsCaps.dwCaps,
+            "Got unexpected caps %#x, expected %#x.\n",
+            hal_caps.ddsOldCaps.dwCaps, hal_caps.ddsCaps.dwCaps);
+    ok(hel_caps.ddsOldCaps.dwCaps == hel_caps.ddsCaps.dwCaps,
+            "Got unexpected caps %#x, expected %#x.\n",
+            hel_caps.ddsOldCaps.dwCaps, hel_caps.ddsCaps.dwCaps);
+
+    IDirectDraw4_Release(ddraw);
+}
+
 START_TEST(ddraw4)
 {
     DDDEVICEIDENTIFIER identifier;
@@ -16302,4 +16440,5 @@ START_TEST(ddraw4)
     test_gdi_surface();
     test_alphatest();
     test_clipper_refcount();
+    test_caps();
 }

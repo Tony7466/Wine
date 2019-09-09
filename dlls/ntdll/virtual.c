@@ -409,12 +409,12 @@ static struct file_view *VIRTUAL_FindView( const void *addr, size_t size )
 /***********************************************************************
  *           get_mask
  */
-static inline UINT_PTR get_mask( ULONG zero_bits )
+static inline UINT_PTR get_mask( ULONG alignment )
 {
-    if (!zero_bits) return 0xffff;  /* allocations are aligned to 64K by default */
-    if (zero_bits < page_shift) zero_bits = page_shift;
-    if (zero_bits > 21) return 0;
-    return (1 << zero_bits) - 1;
+    if (!alignment) return 0xffff;  /* allocations are aligned to 64K by default */
+    if (alignment < page_shift) alignment = page_shift;
+    if (alignment > 21) return 0;
+    return (1 << alignment) - 1;
 }
 
 
@@ -1082,11 +1082,12 @@ static NTSTATUS map_fixed_area( void *base, size_t size, unsigned int vprot )
  * Create a view and mmap the corresponding memory area.
  * The csVirtual section must be held by caller.
  */
-static NTSTATUS map_view( struct file_view **view_ret, void *base, size_t size, size_t mask,
-                          int top_down, unsigned int vprot )
+static NTSTATUS map_view( struct file_view **view_ret, void *base, size_t size, size_t alignment,
+                          int top_down, unsigned int vprot, size_t zero_bits )
 {
     void *ptr;
     NTSTATUS status;
+    size_t mask = get_mask( alignment );
 
     if (base)
     {
@@ -1100,6 +1101,9 @@ static NTSTATUS map_view( struct file_view **view_ret, void *base, size_t size, 
     {
         size_t view_size = size + mask + 1;
         struct alloc_area alloc;
+
+        if (zero_bits)
+            FIXME("Unimplemented zero_bits parameter value\n");
 
         alloc.size = size;
         alloc.mask = mask;
@@ -1284,7 +1288,7 @@ static NTSTATUS allocate_dos_memory( struct file_view **view, unsigned int vprot
         if (addr != low_64k)
         {
             if (addr != (void *)-1) munmap( addr, dosmem_size - 0x10000 );
-            return map_view( view, NULL, dosmem_size, 0xffff, 0, vprot );
+            return map_view( view, NULL, dosmem_size, 0, FALSE, vprot, 0 );
         }
     }
 
@@ -1357,7 +1361,7 @@ static NTSTATUS map_pe_header( void *ptr, size_t size, int fd, BOOL *removable )
  *
  * Map an executable (PE format) image into memory.
  */
-static NTSTATUS map_image( HANDLE hmapping, ACCESS_MASK access, int fd, SIZE_T mask,
+static NTSTATUS map_image( HANDLE hmapping, ACCESS_MASK access, int fd, SIZE_T zero_bits,
                            pe_image_info_t *image_info, int shared_fd, BOOL removable, PVOID *addr_ptr )
 {
     IMAGE_DOS_HEADER *dos;
@@ -1387,12 +1391,12 @@ static NTSTATUS map_image( HANDLE hmapping, ACCESS_MASK access, int fd, SIZE_T m
     server_enter_uninterrupted_section( &csVirtual, &sigset );
 
     if (base >= (char *)address_space_start)  /* make sure the DOS area remains free */
-        status = map_view( &view, base, total_size, mask, FALSE, SEC_IMAGE | SEC_FILE |
-                           VPROT_COMMITTED | VPROT_READ | VPROT_EXEC | VPROT_WRITECOPY );
+        status = map_view( &view, base, total_size, 0, FALSE, SEC_IMAGE | SEC_FILE |
+                           VPROT_COMMITTED | VPROT_READ | VPROT_EXEC | VPROT_WRITECOPY, zero_bits );
 
     if (status != STATUS_SUCCESS)
-        status = map_view( &view, NULL, total_size, mask, FALSE, SEC_IMAGE | SEC_FILE |
-                           VPROT_COMMITTED | VPROT_READ | VPROT_EXEC | VPROT_WRITECOPY );
+        status = map_view( &view, NULL, total_size, 0, FALSE, SEC_IMAGE | SEC_FILE |
+                           VPROT_COMMITTED | VPROT_READ | VPROT_EXEC | VPROT_WRITECOPY, zero_bits );
 
     if (status != STATUS_SUCCESS) goto error;
 
@@ -1614,7 +1618,7 @@ NTSTATUS virtual_map_section( HANDLE handle, PVOID *addr_ptr, ULONG zero_bits, S
     NTSTATUS res;
     mem_size_t full_size;
     ACCESS_MASK access;
-    SIZE_T size, mask = get_mask( zero_bits );
+    SIZE_T size;
     int unix_handle = -1, needs_close;
     unsigned int vprot, sec_flags;
     struct file_view *view;
@@ -1669,14 +1673,15 @@ NTSTATUS virtual_map_section( HANDLE handle, PVOID *addr_ptr, ULONG zero_bits, S
 
             if ((res = server_get_unix_fd( shared_file, FILE_READ_DATA|FILE_WRITE_DATA,
                                            &shared_fd, &shared_needs_close, NULL, NULL ))) goto done;
-            res = map_image( handle, access, unix_handle, mask, image_info,
+            res = map_image( handle, access, unix_handle, zero_bits, image_info,
                              shared_fd, needs_close, addr_ptr );
             if (shared_needs_close) close( shared_fd );
             close_handle( shared_file );
         }
         else
         {
-            res = map_image( handle, access, unix_handle, mask, image_info, -1, needs_close, addr_ptr );
+            res = map_image( handle, access, unix_handle, zero_bits, image_info,
+                             -1, needs_close, addr_ptr );
         }
         if (needs_close) close( unix_handle );
         if (res >= 0) *size_ptr = image_info->map_size;
@@ -1713,7 +1718,7 @@ NTSTATUS virtual_map_section( HANDLE handle, PVOID *addr_ptr, ULONG zero_bits, S
     get_vprot_flags( protect, &vprot, sec_flags & SEC_IMAGE );
     vprot |= sec_flags;
     if (!(sec_flags & SEC_RESERVE)) vprot |= VPROT_COMMITTED;
-    res = map_view( &view, *addr_ptr, size, mask, FALSE, vprot );
+    res = map_view( &view, *addr_ptr, size, 0, FALSE, vprot, zero_bits );
     if (res)
     {
         server_leave_uninterrupted_section( &csVirtual, &sigset );
@@ -1924,7 +1929,7 @@ NTSTATUS virtual_create_builtin_view( void *module )
 /***********************************************************************
  *           virtual_alloc_thread_stack
  */
-NTSTATUS virtual_alloc_thread_stack( TEB *teb, SIZE_T reserve_size, SIZE_T commit_size, SIZE_T *pthread_size )
+NTSTATUS virtual_alloc_thread_stack( INITIAL_TEB *stack, SIZE_T reserve_size, SIZE_T commit_size, SIZE_T *pthread_size )
 {
     struct file_view *view;
     NTSTATUS status;
@@ -1945,8 +1950,8 @@ NTSTATUS virtual_alloc_thread_stack( TEB *teb, SIZE_T reserve_size, SIZE_T commi
 
     server_enter_uninterrupted_section( &csVirtual, &sigset );
 
-    if ((status = map_view( &view, NULL, size + extra_size, 0xffff, 0,
-                            VPROT_READ | VPROT_WRITE | VPROT_COMMITTED )) != STATUS_SUCCESS)
+    if ((status = map_view( &view, NULL, size + extra_size, 0, FALSE,
+                            VPROT_READ | VPROT_WRITE | VPROT_COMMITTED, 0 )) != STATUS_SUCCESS)
         goto done;
 
 #ifdef VALGRIND_STACK_REGISTER
@@ -1978,9 +1983,11 @@ NTSTATUS virtual_alloc_thread_stack( TEB *teb, SIZE_T reserve_size, SIZE_T commi
     }
 
     /* note: limit is lower than base since the stack grows down */
-    teb->DeallocationStack = view->base;
-    teb->Tib.StackBase     = (char *)view->base + view->size;
-    teb->Tib.StackLimit    = (char *)view->base + 2 * page_size;
+    stack->OldStackBase = 0;
+    stack->OldStackLimit = 0;
+    stack->DeallocationStack = view->base;
+    stack->StackBase = (char *)view->base + view->size;
+    stack->StackLimit = (char *)view->base + 2 * page_size;
 done:
     server_leave_uninterrupted_section( &csVirtual, &sigset );
     return status;
@@ -2001,6 +2008,42 @@ void virtual_clear_thread_stack( void *stack_end )
     if (force_exec_prot) mprotect( stack, size, PROT_READ | PROT_WRITE | PROT_EXEC );
 }
 
+/**********************************************************************
+ *           RtlCreateUserStack (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlCreateUserStack( SIZE_T commit, SIZE_T reserve, ULONG zero_bits,
+                                    SIZE_T commit_align, SIZE_T reserve_align, INITIAL_TEB *stack )
+{
+    TRACE("commit %#lx, reserve %#lx, zero_bits %u, commit_align %#lx, reserve_align %#lx, stack %p\n",
+            commit, reserve, zero_bits, commit_align, reserve_align, stack);
+
+    if (!commit_align || !reserve_align)
+        return STATUS_INVALID_PARAMETER;
+
+    if (!commit || !reserve)
+    {
+        IMAGE_NT_HEADERS *nt = RtlImageNtHeader( NtCurrentTeb()->Peb->ImageBaseAddress );
+        if (!reserve) reserve = nt->OptionalHeader.SizeOfStackReserve;
+        if (!commit) commit = nt->OptionalHeader.SizeOfStackCommit;
+    }
+
+    reserve = (reserve + reserve_align - 1) & ~(reserve_align - 1);
+    commit = (commit + commit_align - 1) & ~(commit_align - 1);
+
+    return virtual_alloc_thread_stack( stack, reserve, commit, NULL );
+}
+
+/**********************************************************************
+ *           RtlFreeUserStack (NTDLL.@)
+ */
+void WINAPI RtlFreeUserStack( void *stack )
+{
+    SIZE_T size = 0;
+
+    TRACE("stack %p\n", stack);
+
+    NtFreeVirtualMemory( NtCurrentProcess(), &stack, &size, MEM_RELEASE );
+}
 
 /***********************************************************************
  *           virtual_handle_fault
@@ -2461,19 +2504,14 @@ void virtual_set_large_address_space(void)
 NTSTATUS WINAPI NtAllocateVirtualMemory( HANDLE process, PVOID *ret, ULONG zero_bits,
                                          SIZE_T *size_ptr, ULONG type, ULONG protect )
 {
-    void *base;
-    unsigned int vprot;
     SIZE_T size = *size_ptr;
-    SIZE_T mask = get_mask( zero_bits );
     NTSTATUS status = STATUS_SUCCESS;
-    BOOL is_dos_memory = FALSE;
-    struct file_view *view;
-    sigset_t sigset;
 
     TRACE("%p %p %08lx %x %08x\n", process, *ret, size, type, protect );
 
     if (!size) return STATUS_INVALID_PARAMETER;
-    if (!mask) return STATUS_INVALID_PARAMETER_3;
+    if (zero_bits > 21 && zero_bits < 32) return STATUS_INVALID_PARAMETER_3;
+    if (!is_win64 && !is_wow64 && zero_bits >= 32) return STATUS_INVALID_PARAMETER_3;
 
     if (process != NtCurrentProcess())
     {
@@ -2499,6 +2537,26 @@ NTSTATUS WINAPI NtAllocateVirtualMemory( HANDLE process, PVOID *ret, ULONG zero_
         return result.virtual_alloc.status;
     }
 
+    return virtual_alloc_aligned( ret, zero_bits, size_ptr, type, protect, 0 );
+}
+
+
+/***********************************************************************
+ *             virtual_alloc_aligned   (NTDLL.@)
+ *
+ * Same as NtAllocateVirtualMemory but with an alignment parameter
+ */
+NTSTATUS virtual_alloc_aligned( PVOID *ret, ULONG zero_bits, SIZE_T *size_ptr,
+                                ULONG type, ULONG protect, ULONG alignment )
+{
+    void *base;
+    unsigned int vprot;
+    SIZE_T size = *size_ptr;
+    NTSTATUS status = STATUS_SUCCESS;
+    BOOL is_dos_memory = FALSE;
+    struct file_view *view;
+    sigset_t sigset;
+
     /* Round parameters to a page boundary */
 
     if (is_beyond_limit( 0, size, working_set_limit )) return STATUS_WORKING_SET_LIMIT_RANGE;
@@ -2506,7 +2564,7 @@ NTSTATUS WINAPI NtAllocateVirtualMemory( HANDLE process, PVOID *ret, ULONG zero_
     if (*ret)
     {
         if (type & MEM_RESERVE) /* Round down to 64k boundary */
-            base = ROUND_ADDR( *ret, mask );
+            base = ROUND_ADDR( *ret, get_mask( alignment ) );
         else
             base = ROUND_ADDR( *ret, page_mask );
         size = (((UINT_PTR)*ret + size + page_mask) & ~page_mask) - (UINT_PTR)base;
@@ -2550,7 +2608,7 @@ NTSTATUS WINAPI NtAllocateVirtualMemory( HANDLE process, PVOID *ret, ULONG zero_
 
             if (vprot & VPROT_WRITECOPY) status = STATUS_INVALID_PAGE_PROTECTION;
             else if (is_dos_memory) status = allocate_dos_memory( &view, vprot );
-            else status = map_view( &view, base, size, mask, type & MEM_TOP_DOWN, vprot );
+            else status = map_view( &view, base, size, alignment, type & MEM_TOP_DOWN, vprot, zero_bits );
 
             if (status == STATUS_SUCCESS) base = view->base;
         }
@@ -3079,7 +3137,7 @@ NTSTATUS WINAPI NtMapViewOfSection( HANDLE handle, HANDLE process, PVOID *addr_p
                                     SECTION_INHERIT inherit, ULONG alloc_type, ULONG protect )
 {
     NTSTATUS res;
-    SIZE_T mask = get_mask( zero_bits );
+    SIZE_T mask = get_mask( 0 );
     pe_image_info_t image_info;
     LARGE_INTEGER offset;
 
@@ -3089,8 +3147,17 @@ NTSTATUS WINAPI NtMapViewOfSection( HANDLE handle, HANDLE process, PVOID *addr_p
           handle, process, *addr_ptr, offset.u.HighPart, offset.u.LowPart, *size_ptr, protect );
 
     /* Check parameters */
+    if (zero_bits > 21 && zero_bits < 32)
+        return STATUS_INVALID_PARAMETER_4;
+    if (!is_win64 && !is_wow64 && zero_bits >= 32)
+        return STATUS_INVALID_PARAMETER_4;
 
-    if ((*addr_ptr && zero_bits) || !mask)
+    /* If both addr_ptr and zero_bits are passed, they have match */
+    if (*addr_ptr && zero_bits && zero_bits < 32 &&
+        (((UINT_PTR)*addr_ptr) >> (32 - zero_bits)))
+        return STATUS_INVALID_PARAMETER_4;
+    if (*addr_ptr && zero_bits >= 32 &&
+        (((UINT_PTR)*addr_ptr) & ~zero_bits))
         return STATUS_INVALID_PARAMETER_4;
 
 #ifndef _WIN64

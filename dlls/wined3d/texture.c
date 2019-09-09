@@ -30,6 +30,9 @@ WINE_DECLARE_DEBUG_CHANNEL(winediag);
 
 #define WINED3D_TEXTURE_DYNAMIC_MAP_THRESHOLD 50
 
+static const uint32_t wined3d_texture_sysmem_locations = WINED3D_LOCATION_SYSMEM
+        | WINED3D_LOCATION_USER_MEMORY | WINED3D_LOCATION_BUFFER;
+
 struct wined3d_texture_idx
 {
     struct wined3d_texture *texture;
@@ -384,8 +387,6 @@ static BOOL wined3d_texture_copy_sysmem_location(struct wined3d_texture *texture
 BOOL wined3d_texture_load_location(struct wined3d_texture *texture,
         unsigned int sub_resource_idx, struct wined3d_context *context, DWORD location)
 {
-    static const DWORD sysmem_locations = WINED3D_LOCATION_SYSMEM | WINED3D_LOCATION_USER_MEMORY
-            | WINED3D_LOCATION_BUFFER;
     DWORD current = texture->sub_resources[sub_resource_idx].locations;
     BOOL ret;
 
@@ -426,7 +427,7 @@ BOOL wined3d_texture_load_location(struct wined3d_texture *texture,
         return wined3d_texture_load_location(texture, sub_resource_idx, context, location);
     }
 
-    if ((location & sysmem_locations) && (current & sysmem_locations))
+    if ((location & wined3d_texture_sysmem_locations) && (current & wined3d_texture_sysmem_locations))
         ret = wined3d_texture_copy_sysmem_location(texture, sub_resource_idx, context, location);
     else
         ret = texture->texture_ops->texture_load_location(texture, sub_resource_idx, context, location);
@@ -695,6 +696,7 @@ static void wined3d_texture_sub_resources_destroyed(struct wined3d_texture *text
 static void wined3d_texture_create_dc(void *object)
 {
     const struct wined3d_texture_idx *idx = object;
+    struct wined3d_context_gl *context_gl = NULL;
     struct wined3d_context *context = NULL;
     unsigned int sub_resource_idx, level;
     const struct wined3d_format *format;
@@ -732,13 +734,16 @@ static void wined3d_texture_create_dc(void *object)
     }
 
     if (device->d3d_initialized)
+    {
         context = context_acquire(device, NULL, 0);
+        context_gl = wined3d_context_gl(context);
+    }
 
     wined3d_texture_load_location(texture, sub_resource_idx, context, texture->resource.map_binding);
     wined3d_texture_invalidate_location(texture, sub_resource_idx, ~texture->resource.map_binding);
     wined3d_texture_get_pitch(texture, level, &row_pitch, &slice_pitch);
     wined3d_texture_get_memory(texture, sub_resource_idx, &data, texture->resource.map_binding);
-    desc.pMemory = context_map_bo_address(context, &data,
+    desc.pMemory = wined3d_context_gl_map_bo_address(context_gl, &data,
             texture->sub_resources[sub_resource_idx].size,
             GL_PIXEL_UNPACK_BUFFER, WINED3D_MAP_READ | WINED3D_MAP_WRITE);
 
@@ -770,6 +775,7 @@ static void wined3d_texture_create_dc(void *object)
 static void wined3d_texture_destroy_dc(void *object)
 {
     const struct wined3d_texture_idx *idx = object;
+    struct wined3d_context_gl *context_gl = NULL;
     D3DKMT_DESTROYDCFROMMEMORY destroy_desc;
     struct wined3d_context *context = NULL;
     struct wined3d_texture *texture;
@@ -800,10 +806,13 @@ static void wined3d_texture_destroy_dc(void *object)
     dc_info->bitmap = NULL;
 
     if (device->d3d_initialized)
+    {
         context = context_acquire(device, NULL, 0);
+        context_gl = wined3d_context_gl(context);
+    }
 
     wined3d_texture_get_memory(texture, sub_resource_idx, &data, texture->resource.map_binding);
-    context_unmap_bo_address(context, &data, GL_PIXEL_UNPACK_BUFFER);
+    wined3d_context_gl_unmap_bo_address(context_gl, &data, GL_PIXEL_UNPACK_BUFFER);
 
     if (context)
         context_release(context);
@@ -926,18 +935,17 @@ void wined3d_gl_texture_swizzle_from_color_fixup(GLint swizzle[4], struct color_
 
 /* Context activation is done by the caller. */
 void wined3d_texture_gl_bind(struct wined3d_texture_gl *texture_gl,
-        struct wined3d_context *context, BOOL srgb)
+        struct wined3d_context_gl *context_gl, BOOL srgb)
 {
-    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     const struct wined3d_format *format = texture_gl->t.resource.format;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
     const struct color_fixup_desc fixup = format->color_fixup;
-    const struct wined3d_gl_info *gl_info = context->gl_info;
     struct gl_texture *gl_tex;
     GLenum target;
 
-    TRACE("texture_gl %p, context %p, srgb %#x.\n", texture_gl, context, srgb);
+    TRACE("texture_gl %p, context_gl %p, srgb %#x.\n", texture_gl, context_gl, srgb);
 
-    if (!needs_separate_srgb_gl_texture(context, &texture_gl->t))
+    if (!needs_separate_srgb_gl_texture(&context_gl->c, &texture_gl->t))
         srgb = FALSE;
 
     /* sRGB mode cache for preload() calls outside drawprim. */
@@ -980,7 +988,7 @@ void wined3d_texture_gl_bind(struct wined3d_texture_gl *texture_gl,
     gl_tex->sampler_desc.max_anisotropy = 1;
     gl_tex->sampler_desc.compare = FALSE;
     gl_tex->sampler_desc.comparison_func = WINED3D_CMP_LESSEQUAL;
-    if (context->gl_info->supported[EXT_TEXTURE_SRGB_DECODE])
+    if (gl_info->supported[EXT_TEXTURE_SRGB_DECODE])
         gl_tex->sampler_desc.srgb_decode = TRUE;
     else
         gl_tex->sampler_desc.srgb_decode = srgb;
@@ -1038,7 +1046,7 @@ void wined3d_texture_gl_bind(struct wined3d_texture_gl *texture_gl,
         checkGLcall("glTexParameteri(GL_DEPTH_TEXTURE_MODE_ARB, GL_INTENSITY)");
     }
 
-    if (!is_identity_fixup(fixup) && can_use_texture_swizzle(context->d3d_info, format))
+    if (!is_identity_fixup(fixup) && can_use_texture_swizzle(context_gl->c.d3d_info, format))
     {
         GLint swizzle[4];
 
@@ -1072,20 +1080,20 @@ void wined3d_texture_gl_bind_and_dirtify(struct wined3d_texture_gl *texture_gl,
     context_invalidate_compute_state(&context_gl->c, STATE_COMPUTE_SHADER_RESOURCE_BINDING);
     context_invalidate_state(&context_gl->c, STATE_GRAPHICS_SHADER_RESOURCE_BINDING);
 
-    wined3d_texture_gl_bind(texture_gl, &context_gl->c, srgb);
+    wined3d_texture_gl_bind(texture_gl, context_gl, srgb);
 }
 
 /* Context activation is done by the caller (state handler). */
 /* This function relies on the correct texture being bound and loaded. */
 void wined3d_texture_gl_apply_sampler_desc(struct wined3d_texture_gl *texture_gl,
-        const struct wined3d_sampler_desc *sampler_desc, const struct wined3d_context *context)
+        const struct wined3d_sampler_desc *sampler_desc, const struct wined3d_context_gl *context_gl)
 {
-    const struct wined3d_gl_info *gl_info = context->gl_info;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
     GLenum target = texture_gl->target;
     struct gl_texture *gl_tex;
     DWORD state;
 
-    TRACE("texture_gl %p, sampler_desc %p, context %p.\n", texture_gl, sampler_desc, context);
+    TRACE("texture_gl %p, sampler_desc %p, context_gl %p.\n", texture_gl, sampler_desc, context_gl);
 
     gl_tex = wined3d_texture_gl_get_gl_texture(texture_gl, texture_gl->t.flags & WINED3D_TEXTURE_IS_SRGB);
 
@@ -1148,7 +1156,7 @@ void wined3d_texture_gl_apply_sampler_desc(struct wined3d_texture_gl *texture_gl
     }
 
     if (!sampler_desc->srgb_decode != !gl_tex->sampler_desc.srgb_decode
-            && (context->d3d_info->wined3d_creation_flags & WINED3D_SRGB_READ_WRITE_CONTROL)
+            && (context_gl->c.d3d_info->wined3d_creation_flags & WINED3D_SRGB_READ_WRITE_CONTROL)
             && gl_info->supported[EXT_TEXTURE_SRGB_DECODE])
     {
         gl_info->gl_ops.gl.p_glTexParameteri(target, GL_TEXTURE_SRGB_DECODE_EXT,
@@ -1445,9 +1453,9 @@ HRESULT CDECL wined3d_texture_set_color_key(struct wined3d_texture *texture,
 /* TODO: We should synchronize the renderbuffer's content with the texture's content. */
 /* Context activation is done by the caller. */
 void wined3d_texture_gl_set_compatible_renderbuffer(struct wined3d_texture_gl *texture_gl,
-        struct wined3d_context *context, unsigned int level, const struct wined3d_rendertarget_info *rt)
+        struct wined3d_context_gl *context_gl, unsigned int level, const struct wined3d_rendertarget_info *rt)
 {
-    const struct wined3d_gl_info *gl_info = context->gl_info;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
     struct wined3d_renderbuffer_entry *entry;
     unsigned int src_width, src_height;
     unsigned int width, height;
@@ -1707,52 +1715,53 @@ static void wined3d_texture_force_reload(struct wined3d_texture *texture)
 }
 
 /* Context activation is done by the caller. */
-void wined3d_texture_prepare_texture(struct wined3d_texture *texture, struct wined3d_context *context, BOOL srgb)
+void wined3d_texture_gl_prepare_texture(struct wined3d_texture_gl *texture_gl,
+        struct wined3d_context_gl *context_gl, BOOL srgb)
 {
     DWORD alloc_flag = srgb ? WINED3D_TEXTURE_SRGB_ALLOCATED : WINED3D_TEXTURE_RGB_ALLOCATED;
-    const struct wined3d_d3d_info *d3d_info = context->d3d_info;
-    const struct wined3d_gl_info *gl_info = context->gl_info;
-    struct wined3d_resource *resource = &texture->resource;
+    const struct wined3d_d3d_info *d3d_info = context_gl->c.d3d_info;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
+    struct wined3d_resource *resource = &texture_gl->t.resource;
     const struct wined3d_device *device = resource->device;
     const struct wined3d_format *format = resource->format;
     const struct wined3d_color_key_conversion *conversion;
     const struct wined3d_format_gl *format_gl;
     GLenum internal;
 
-    TRACE("texture %p, context %p, format %s.\n", texture, context, debug_d3dformat(format->id));
+    TRACE("texture_gl %p, context_gl %p, format %s.\n", texture_gl, context_gl, debug_d3dformat(format->id));
 
     if (!d3d_info->shader_color_key
-            && !(texture->async.flags & WINED3D_TEXTURE_ASYNC_COLOR_KEY)
-            != !(texture->async.color_key_flags & WINED3D_CKEY_SRC_BLT))
+            && !(texture_gl->t.async.flags & WINED3D_TEXTURE_ASYNC_COLOR_KEY)
+            != !(texture_gl->t.async.color_key_flags & WINED3D_CKEY_SRC_BLT))
     {
-        wined3d_texture_force_reload(texture);
+        wined3d_texture_force_reload(&texture_gl->t);
 
-        if (texture->async.color_key_flags & WINED3D_CKEY_SRC_BLT)
-            texture->async.flags |= WINED3D_TEXTURE_ASYNC_COLOR_KEY;
+        if (texture_gl->t.async.color_key_flags & WINED3D_CKEY_SRC_BLT)
+            texture_gl->t.async.flags |= WINED3D_TEXTURE_ASYNC_COLOR_KEY;
     }
 
-    if (texture->flags & alloc_flag)
+    if (texture_gl->t.flags & alloc_flag)
         return;
 
     if (resource->format_flags & WINED3DFMT_FLAG_DECOMPRESS)
     {
         TRACE("WINED3DFMT_FLAG_DECOMPRESS set.\n");
-        texture->flags |= WINED3D_TEXTURE_CONVERTED;
+        texture_gl->t.flags |= WINED3D_TEXTURE_CONVERTED;
         format = wined3d_resource_get_decompress_format(resource);
     }
     else if (format->conv_byte_count)
     {
-        texture->flags |= WINED3D_TEXTURE_CONVERTED;
+        texture_gl->t.flags |= WINED3D_TEXTURE_CONVERTED;
     }
-    else if ((conversion = wined3d_format_get_color_key_conversion(texture, TRUE)))
+    else if ((conversion = wined3d_format_get_color_key_conversion(&texture_gl->t, TRUE)))
     {
-        texture->flags |= WINED3D_TEXTURE_CONVERTED;
+        texture_gl->t.flags |= WINED3D_TEXTURE_CONVERTED;
         format = wined3d_get_format(device->adapter, conversion->dst_format, resource->bind_flags);
         TRACE("Using format %s for color key conversion.\n", debug_d3dformat(format->id));
     }
     format_gl = wined3d_format_gl(format);
 
-    wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(texture), wined3d_context_gl(context), srgb);
+    wined3d_texture_gl_bind_and_dirtify(texture_gl, context_gl, srgb);
 
     if (srgb)
         internal = format_gl->srgb_internal;
@@ -1766,11 +1775,11 @@ void wined3d_texture_prepare_texture(struct wined3d_texture *texture, struct win
 
     TRACE("internal %#x, format %#x, type %#x.\n", internal, format_gl->format, format_gl->type);
 
-    if (wined3d_texture_use_immutable_storage(texture, gl_info))
-        wined3d_texture_gl_allocate_immutable_storage(wined3d_texture_gl(texture), internal, gl_info);
+    if (wined3d_texture_use_immutable_storage(&texture_gl->t, gl_info))
+        wined3d_texture_gl_allocate_immutable_storage(texture_gl, internal, gl_info);
     else
-        wined3d_texture_gl_allocate_mutable_storage(wined3d_texture_gl(texture), internal, format_gl, gl_info);
-    texture->flags |= alloc_flag;
+        wined3d_texture_gl_allocate_mutable_storage(texture_gl, internal, format_gl, gl_info);
+    texture_gl->t.flags |= alloc_flag;
 }
 
 static void wined3d_texture_gl_prepare_rb(struct wined3d_texture_gl *texture_gl,
@@ -1814,6 +1823,9 @@ static void wined3d_texture_gl_prepare_rb(struct wined3d_texture_gl *texture_gl,
 BOOL wined3d_texture_prepare_location(struct wined3d_texture *texture, unsigned int sub_resource_idx,
         struct wined3d_context *context, DWORD location)
 {
+    struct wined3d_texture_gl *texture_gl = wined3d_texture_gl(texture);
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
+
     switch (location)
     {
         case WINED3D_LOCATION_SYSMEM:
@@ -1834,11 +1846,11 @@ BOOL wined3d_texture_prepare_location(struct wined3d_texture *texture, unsigned 
             return TRUE;
 
         case WINED3D_LOCATION_TEXTURE_RGB:
-            wined3d_texture_prepare_texture(texture, context, FALSE);
+            wined3d_texture_gl_prepare_texture(texture_gl, context_gl, FALSE);
             return TRUE;
 
         case WINED3D_LOCATION_TEXTURE_SRGB:
-            wined3d_texture_prepare_texture(texture, context, TRUE);
+            wined3d_texture_gl_prepare_texture(texture_gl, context_gl, TRUE);
             return TRUE;
 
         case WINED3D_LOCATION_DRAWABLE:
@@ -1847,11 +1859,11 @@ BOOL wined3d_texture_prepare_location(struct wined3d_texture *texture, unsigned 
             return TRUE;
 
         case WINED3D_LOCATION_RB_MULTISAMPLE:
-            wined3d_texture_gl_prepare_rb(wined3d_texture_gl(texture), context->gl_info, TRUE);
+            wined3d_texture_gl_prepare_rb(texture_gl, context->gl_info, TRUE);
             return TRUE;
 
         case WINED3D_LOCATION_RB_RESOLVED:
-            wined3d_texture_gl_prepare_rb(wined3d_texture_gl(texture), context->gl_info, FALSE);
+            wined3d_texture_gl_prepare_rb(texture_gl, context->gl_info, FALSE);
             return TRUE;
 
         default:
@@ -1903,6 +1915,7 @@ void wined3d_texture_upload_data(struct wined3d_texture *texture, unsigned int s
         const struct wined3d_const_bo_address *data, unsigned int src_row_pitch, unsigned int src_slice_pitch,
         unsigned int dst_x, unsigned int dst_y, unsigned int dst_z, BOOL srgb)
 {
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     const struct wined3d_gl_info *gl_info = context->gl_info;
     unsigned int update_w = src_box->right - src_box->left;
     unsigned int update_h = src_box->bottom - src_box->top;
@@ -1995,15 +2008,15 @@ void wined3d_texture_upload_data(struct wined3d_texture *texture, unsigned int s
             return;
         }
 
-        src_mem = context_map_bo_address(context, &bo, src_slice_pitch,
-                GL_PIXEL_UNPACK_BUFFER, WINED3D_MAP_READ);
+        src_mem = wined3d_context_gl_map_bo_address(context_gl, &bo,
+                src_slice_pitch, GL_PIXEL_UNPACK_BUFFER, WINED3D_MAP_READ);
         if (decompress)
             compressed_format->decompress(src_mem, converted_mem, src_row_pitch, src_slice_pitch,
                     dst_row_pitch, dst_slice_pitch, update_w, update_h, update_d);
         else
             format->upload(src_mem, converted_mem, src_row_pitch, src_slice_pitch,
                     dst_row_pitch, dst_slice_pitch, update_w, update_h, update_d);
-        context_unmap_bo_address(context, &bo, GL_PIXEL_UNPACK_BUFFER);
+        wined3d_context_gl_unmap_bo_address(context_gl, &bo, GL_PIXEL_UNPACK_BUFFER);
 
         bo.buffer_object = 0;
         bo.addr = converted_mem;
@@ -2421,19 +2434,221 @@ void wined3d_texture_download_data(struct wined3d_texture *texture, unsigned int
     }
 }
 
-/* Context activation is done by the caller. Context may be NULL in ddraw-only mode. */
-static BOOL texture2d_load_location(struct wined3d_texture *texture, unsigned int sub_resource_idx,
-        struct wined3d_context *context, DWORD location)
+/* Context activation is done by the caller. */
+static BOOL wined3d_texture_gl_load_sysmem(struct wined3d_texture_gl *texture_gl,
+        unsigned int sub_resource_idx, struct wined3d_context_gl *context_gl, DWORD dst_location)
 {
+    struct wined3d_texture_sub_resource *sub_resource;
+
+    sub_resource = &texture_gl->t.sub_resources[sub_resource_idx];
+    wined3d_texture_prepare_location(&texture_gl->t, sub_resource_idx, &context_gl->c, dst_location);
+
+    /* We cannot download data from multisample textures directly. */
+    if (wined3d_texture_gl_is_multisample_location(texture_gl, WINED3D_LOCATION_TEXTURE_RGB))
+    {
+        wined3d_texture_load_location(&texture_gl->t, sub_resource_idx, &context_gl->c, WINED3D_LOCATION_RB_RESOLVED);
+        texture2d_read_from_framebuffer(&texture_gl->t, sub_resource_idx, &context_gl->c,
+                WINED3D_LOCATION_RB_RESOLVED, dst_location);
+        return TRUE;
+    }
+
+    if (sub_resource->locations & (WINED3D_LOCATION_RB_MULTISAMPLE | WINED3D_LOCATION_RB_RESOLVED))
+        wined3d_texture_load_location(&texture_gl->t, sub_resource_idx, &context_gl->c, WINED3D_LOCATION_TEXTURE_RGB);
+
+    /* Download the sub-resource to system memory. */
+    if (sub_resource->locations & (WINED3D_LOCATION_TEXTURE_RGB | WINED3D_LOCATION_TEXTURE_SRGB))
+    {
+        struct wined3d_bo_address data;
+        wined3d_texture_gl_bind_and_dirtify(texture_gl, context_gl,
+                !(sub_resource->locations & WINED3D_LOCATION_TEXTURE_RGB));
+        wined3d_texture_get_memory(&texture_gl->t, sub_resource_idx, &data, dst_location);
+        wined3d_texture_download_data(&texture_gl->t, sub_resource_idx, &context_gl->c, &data);
+        ++texture_gl->t.download_count;
+        return TRUE;
+    }
+
+    if (!(texture_gl->t.resource.bind_flags & WINED3D_BIND_DEPTH_STENCIL)
+            && (sub_resource->locations & WINED3D_LOCATION_DRAWABLE))
+    {
+        texture2d_read_from_framebuffer(&texture_gl->t, sub_resource_idx, &context_gl->c,
+                texture_gl->t.resource.draw_binding, dst_location);
+        return TRUE;
+    }
+
+    FIXME("Can't load texture %p, %u with location flags %s into sysmem.\n",
+            texture_gl, sub_resource_idx, wined3d_debug_location(sub_resource->locations));
+
+    return FALSE;
+}
+
+static BOOL wined3d_texture_gl_load_texture(struct wined3d_texture_gl *texture_gl,
+        unsigned int sub_resource_idx, struct wined3d_context_gl *context_gl, BOOL srgb)
+{
+    unsigned int width, height, level, src_row_pitch, src_slice_pitch, dst_row_pitch, dst_slice_pitch;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
+    struct wined3d_device *device = texture_gl->t.resource.device;
+    const struct wined3d_color_key_conversion *conversion;
+    struct wined3d_texture_sub_resource *sub_resource;
+    const struct wined3d_format *format;
+    struct wined3d_bo_address data;
+    BYTE *src_mem, *dst_mem = NULL;
+    struct wined3d_box src_box;
+    BOOL depth;
+
+    depth = texture_gl->t.resource.bind_flags & WINED3D_BIND_DEPTH_STENCIL;
+    sub_resource = &texture_gl->t.sub_resources[sub_resource_idx];
+
+    if (!depth && wined3d_settings.offscreen_rendering_mode != ORM_FBO
+            && wined3d_resource_is_offscreen(&texture_gl->t.resource)
+            && (sub_resource->locations & WINED3D_LOCATION_DRAWABLE))
+    {
+        texture2d_load_fb_texture(texture_gl, sub_resource_idx, srgb, &context_gl->c);
+
+        return TRUE;
+    }
+
+    level = sub_resource_idx % texture_gl->t.level_count;
+    wined3d_texture_get_level_box(&texture_gl->t, level, &src_box);
+
+    if (!depth && sub_resource->locations & (WINED3D_LOCATION_TEXTURE_SRGB | WINED3D_LOCATION_TEXTURE_RGB)
+            && (texture_gl->t.resource.format_flags & WINED3DFMT_FLAG_FBO_ATTACHABLE_SRGB)
+            && fbo_blitter_supported(WINED3D_BLIT_OP_COLOR_BLIT, gl_info,
+                    &texture_gl->t.resource, WINED3D_LOCATION_TEXTURE_RGB,
+                    &texture_gl->t.resource, WINED3D_LOCATION_TEXTURE_SRGB))
+    {
+        RECT src_rect;
+
+        SetRect(&src_rect, src_box.left, src_box.top, src_box.right, src_box.bottom);
+        if (srgb)
+            texture2d_blt_fbo(device, &context_gl->c, WINED3D_TEXF_POINT,
+                    &texture_gl->t, sub_resource_idx, WINED3D_LOCATION_TEXTURE_RGB, &src_rect,
+                    &texture_gl->t, sub_resource_idx, WINED3D_LOCATION_TEXTURE_SRGB, &src_rect);
+        else
+            texture2d_blt_fbo(device, &context_gl->c, WINED3D_TEXF_POINT,
+                    &texture_gl->t, sub_resource_idx, WINED3D_LOCATION_TEXTURE_SRGB, &src_rect,
+                    &texture_gl->t, sub_resource_idx, WINED3D_LOCATION_TEXTURE_RGB, &src_rect);
+
+        return TRUE;
+    }
+
+    if (!depth && sub_resource->locations & (WINED3D_LOCATION_RB_MULTISAMPLE | WINED3D_LOCATION_RB_RESOLVED)
+            && (!srgb || (texture_gl->t.resource.format_flags & WINED3DFMT_FLAG_FBO_ATTACHABLE_SRGB)))
+    {
+        DWORD src_location = sub_resource->locations & WINED3D_LOCATION_RB_RESOLVED ?
+                WINED3D_LOCATION_RB_RESOLVED : WINED3D_LOCATION_RB_MULTISAMPLE;
+        DWORD dst_location = srgb ? WINED3D_LOCATION_TEXTURE_SRGB : WINED3D_LOCATION_TEXTURE_RGB;
+        RECT src_rect;
+
+        SetRect(&src_rect, src_box.left, src_box.top, src_box.right, src_box.bottom);
+        if (fbo_blitter_supported(WINED3D_BLIT_OP_COLOR_BLIT, gl_info,
+                &texture_gl->t.resource, src_location, &texture_gl->t.resource, dst_location))
+            texture2d_blt_fbo(device, &context_gl->c, WINED3D_TEXF_POINT, &texture_gl->t, sub_resource_idx,
+                    src_location, &src_rect, &texture_gl->t, sub_resource_idx, dst_location, &src_rect);
+
+        return TRUE;
+    }
+
+    /* Upload from system memory */
+
+    if (srgb)
+    {
+        if ((sub_resource->locations & (WINED3D_LOCATION_TEXTURE_RGB | texture_gl->t.resource.map_binding))
+                == WINED3D_LOCATION_TEXTURE_RGB)
+        {
+            FIXME_(d3d_perf)("Downloading RGB texture %p, %u to reload it as sRGB.\n", texture_gl, sub_resource_idx);
+            wined3d_texture_load_location(&texture_gl->t, sub_resource_idx,
+                    &context_gl->c, texture_gl->t.resource.map_binding);
+        }
+    }
+    else
+    {
+        if ((sub_resource->locations & (WINED3D_LOCATION_TEXTURE_SRGB | texture_gl->t.resource.map_binding))
+                == WINED3D_LOCATION_TEXTURE_SRGB)
+        {
+            FIXME_(d3d_perf)("Downloading sRGB texture %p, %u to reload it as RGB.\n", texture_gl, sub_resource_idx);
+            wined3d_texture_load_location(&texture_gl->t, sub_resource_idx,
+                    &context_gl->c, texture_gl->t.resource.map_binding);
+        }
+    }
+
+    if (!(sub_resource->locations & wined3d_texture_sysmem_locations))
+    {
+        WARN("Trying to load a texture from sysmem, but no simple location is valid.\n");
+        /* Lets hope we get it from somewhere... */
+        wined3d_texture_load_location(&texture_gl->t, sub_resource_idx, &context_gl->c, WINED3D_LOCATION_SYSMEM);
+    }
+
+    wined3d_texture_gl_prepare_texture(texture_gl, context_gl, srgb);
+    wined3d_texture_gl_bind_and_dirtify(texture_gl, context_gl, srgb);
+    wined3d_texture_get_pitch(&texture_gl->t, level, &src_row_pitch, &src_slice_pitch);
+
+    format = texture_gl->t.resource.format;
+    if ((conversion = wined3d_format_get_color_key_conversion(&texture_gl->t, TRUE)))
+        format = wined3d_get_format(device->adapter, conversion->dst_format, texture_gl->t.resource.bind_flags);
+
+    /* Don't use PBOs for converted surfaces. During PBO conversion we look at
+     * WINED3D_TEXTURE_CONVERTED but it isn't set (yet) in all cases it is
+     * getting called. */
+    if (conversion && sub_resource->buffer_object)
+    {
+        TRACE("Removing the pbo attached to texture %p, %u.\n", texture_gl, sub_resource_idx);
+
+        wined3d_texture_load_location(&texture_gl->t, sub_resource_idx, &context_gl->c, WINED3D_LOCATION_SYSMEM);
+        wined3d_texture_set_map_binding(&texture_gl->t, WINED3D_LOCATION_SYSMEM);
+    }
+
+    wined3d_texture_get_memory(&texture_gl->t, sub_resource_idx, &data, sub_resource->locations);
+    if (conversion)
+    {
+        width = src_box.right - src_box.left;
+        height = src_box.bottom - src_box.top;
+        wined3d_format_calculate_pitch(format, device->surface_alignment,
+                width, height, &dst_row_pitch, &dst_slice_pitch);
+
+        src_mem = wined3d_context_gl_map_bo_address(context_gl, &data,
+                src_slice_pitch, GL_PIXEL_UNPACK_BUFFER, WINED3D_MAP_READ);
+        if (!(dst_mem = heap_alloc(dst_slice_pitch)))
+        {
+            ERR("Out of memory (%u).\n", dst_slice_pitch);
+            return FALSE;
+        }
+        conversion->convert(src_mem, src_row_pitch, dst_mem, dst_row_pitch,
+                width, height, &texture_gl->t.async.gl_color_key);
+        src_row_pitch = dst_row_pitch;
+        src_slice_pitch = dst_slice_pitch;
+        wined3d_context_gl_unmap_bo_address(context_gl, &data, GL_PIXEL_UNPACK_BUFFER);
+
+        data.buffer_object = 0;
+        data.addr = dst_mem;
+    }
+
+    wined3d_texture_upload_data(&texture_gl->t, sub_resource_idx, &context_gl->c, format, &src_box,
+            wined3d_const_bo_address(&data), src_row_pitch, src_slice_pitch, 0, 0, 0, srgb);
+
+    heap_free(dst_mem);
+
+    return TRUE;
+}
+
+/* Context activation is done by the caller. */
+static BOOL wined3d_texture_gl_load_location(struct wined3d_texture *texture,
+        unsigned int sub_resource_idx, struct wined3d_context *context, DWORD location)
+{
+    struct wined3d_texture_gl *texture_gl = wined3d_texture_gl(texture);
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
+
     TRACE("texture %p, sub_resource_idx %u, context %p, location %s.\n",
             texture, sub_resource_idx, context, wined3d_debug_location(location));
+
+    if (!wined3d_texture_prepare_location(texture, sub_resource_idx, context, location))
+        return FALSE;
 
     switch (location)
     {
         case WINED3D_LOCATION_USER_MEMORY:
         case WINED3D_LOCATION_SYSMEM:
         case WINED3D_LOCATION_BUFFER:
-            return texture2d_load_sysmem(texture, sub_resource_idx, context, location);
+            return wined3d_texture_gl_load_sysmem(texture_gl, sub_resource_idx, context_gl, location);
 
         case WINED3D_LOCATION_DRAWABLE:
             return texture2d_load_drawable(texture, sub_resource_idx, context);
@@ -2444,11 +2659,12 @@ static BOOL texture2d_load_location(struct wined3d_texture *texture, unsigned in
 
         case WINED3D_LOCATION_TEXTURE_RGB:
         case WINED3D_LOCATION_TEXTURE_SRGB:
-            return texture2d_load_texture(texture, sub_resource_idx, context,
-                    location == WINED3D_LOCATION_TEXTURE_SRGB);
+            return wined3d_texture_gl_load_texture(texture_gl, sub_resource_idx,
+                    context_gl, location == WINED3D_LOCATION_TEXTURE_SRGB);
 
         default:
-            ERR("Don't know how to handle location %#x.\n", location);
+            FIXME("Unhandled %s load from %s.\n", wined3d_debug_location(location),
+                    wined3d_debug_location(texture->sub_resources[sub_resource_idx].locations));
             return FALSE;
     }
 }
@@ -2482,10 +2698,74 @@ static void wined3d_texture_gl_upload_data(struct wined3d_context *context,
             src_box, src_bo_addr, src_row_pitch, src_slice_pitch, dst_x, dst_y, dst_z, srgb);
 }
 
-static const struct wined3d_texture_ops texture2d_ops =
+static void wined3d_texture_gl_download_data(struct wined3d_context *context,
+        struct wined3d_texture *src_texture, unsigned int src_sub_resource_idx, unsigned int src_location,
+        const struct wined3d_box *src_box, const struct wined3d_bo_address *dst_bo_addr,
+        const struct wined3d_format *dst_format, unsigned int dst_x, unsigned int dst_y, unsigned int dst_z,
+        unsigned int dst_row_pitch, unsigned int dst_slice_pitch)
 {
-    texture2d_load_location,
+    unsigned int src_level, src_width, src_height, src_depth;
+    unsigned int src_row_pitch, src_slice_pitch;
+    BOOL srgb = FALSE;
+
+    TRACE("context %p, src_texture %p, src_sub_resource_idx %u, src_location %s, src_box %s, dst_bo_addr %s, "
+            "dst_format %s, dst_x %u, dst_y %u, dst_z %u, dst_row_pitch %u, dst_slice_pitch %u.\n",
+            context, src_texture, src_sub_resource_idx, wined3d_debug_location(src_location),
+            debug_box(src_box), debug_bo_address(dst_bo_addr), debug_d3dformat(dst_format->id),
+            dst_x, dst_y, dst_z, dst_row_pitch, dst_slice_pitch);
+
+    if (src_location == WINED3D_LOCATION_TEXTURE_SRGB)
+    {
+        srgb = TRUE;
+    }
+    else if (src_location != WINED3D_LOCATION_TEXTURE_RGB)
+    {
+        FIXME("Unhandled location %s.\n", wined3d_debug_location(src_location));
+        return;
+    }
+
+    src_level = src_sub_resource_idx % src_texture->level_count;
+    src_width = wined3d_texture_get_level_width(src_texture, src_level);
+    src_height = wined3d_texture_get_level_height(src_texture, src_level);
+    src_depth = wined3d_texture_get_level_depth(src_texture, src_level);
+    if (src_box->left || src_box->top || src_box->right != src_width || src_box->bottom != src_height
+            || src_box->front || src_box->back != src_depth)
+    {
+        FIXME("Unhandled source box %s.\n", debug_box(src_box));
+        return;
+    }
+
+    if (dst_x || dst_y || dst_z)
+    {
+        FIXME("Unhandled destination (%u, %u, %u).\n", dst_x, dst_y, dst_z);
+        return;
+    }
+
+    if (dst_format->id != src_texture->resource.format->id)
+    {
+        FIXME("Unhandled format conversion (%s -> %s).\n",
+                debug_d3dformat(src_texture->resource.format->id),
+                debug_d3dformat(dst_format->id));
+        return;
+    }
+
+    wined3d_texture_get_pitch(src_texture, src_level, &src_row_pitch, &src_slice_pitch);
+    if (src_row_pitch != dst_row_pitch || src_slice_pitch != dst_slice_pitch)
+    {
+        FIXME("Unhandled destination pitches %u/%u (source pitches %u/%u).\n",
+                dst_row_pitch, dst_slice_pitch, src_row_pitch, src_slice_pitch);
+        return;
+    }
+
+    wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(src_texture), wined3d_context_gl(context), srgb);
+    wined3d_texture_download_data(src_texture, src_sub_resource_idx, context, dst_bo_addr);
+}
+
+static const struct wined3d_texture_ops texture_gl_ops =
+{
+    wined3d_texture_gl_load_location,
     wined3d_texture_gl_upload_data,
+    wined3d_texture_gl_download_data,
 };
 
 struct wined3d_texture * __cdecl wined3d_texture_from_resource(struct wined3d_resource *resource)
@@ -2577,6 +2857,7 @@ static HRESULT texture_resource_sub_resource_map(struct wined3d_resource *resour
     struct wined3d_texture_sub_resource *sub_resource;
     struct wined3d_device *device = resource->device;
     unsigned int fmt_flags = resource->format_flags;
+    struct wined3d_context_gl *context_gl = NULL;
     struct wined3d_context *context = NULL;
     struct wined3d_texture *texture;
     struct wined3d_bo_address data;
@@ -2613,7 +2894,10 @@ static HRESULT texture_resource_sub_resource_map(struct wined3d_resource *resour
     }
 
     if (device->d3d_initialized)
+    {
         context = context_acquire(device, NULL, 0);
+        context_gl = wined3d_context_gl(context);
+    }
 
     if (flags & WINED3D_MAP_DISCARD)
     {
@@ -2641,7 +2925,8 @@ static HRESULT texture_resource_sub_resource_map(struct wined3d_resource *resour
         wined3d_texture_invalidate_location(texture, sub_resource_idx, ~resource->map_binding);
 
     wined3d_texture_get_memory(texture, sub_resource_idx, &data, resource->map_binding);
-    base_memory = context_map_bo_address(context, &data, sub_resource->size, GL_PIXEL_UNPACK_BUFFER, flags);
+    base_memory = wined3d_context_gl_map_bo_address(context_gl, &data,
+            sub_resource->size, GL_PIXEL_UNPACK_BUFFER, flags);
     TRACE("Base memory pointer %p.\n", base_memory);
 
     if (context)
@@ -2705,6 +2990,7 @@ static HRESULT texture_resource_sub_resource_unmap(struct wined3d_resource *reso
 {
     struct wined3d_texture_sub_resource *sub_resource;
     struct wined3d_device *device = resource->device;
+    struct wined3d_context_gl *context_gl = NULL;
     struct wined3d_context *context = NULL;
     struct wined3d_texture *texture;
     struct wined3d_bo_address data;
@@ -2724,10 +3010,13 @@ static HRESULT texture_resource_sub_resource_unmap(struct wined3d_resource *reso
     }
 
     if (device->d3d_initialized)
+    {
         context = context_acquire(device, NULL, 0);
+        context_gl = wined3d_context_gl(context);
+    }
 
     wined3d_texture_get_memory(texture, sub_resource_idx, &data, texture->resource.map_binding);
-    context_unmap_bo_address(context, &data, GL_PIXEL_UNPACK_BUFFER);
+    wined3d_context_gl_unmap_bo_address(context_gl, &data, GL_PIXEL_UNPACK_BUFFER);
 
     if (context)
         context_release(context);
@@ -2753,113 +3042,6 @@ static const struct wined3d_resource_ops texture_resource_ops =
     wined3d_texture_gl_unload,
     texture_resource_sub_resource_map,
     texture_resource_sub_resource_unmap,
-};
-
-/* Context activation is done by the caller. */
-static BOOL texture1d_load_location(struct wined3d_texture *texture, unsigned int sub_resource_idx,
-        struct wined3d_context *context, DWORD location)
-{
-    struct wined3d_texture_sub_resource *sub_resource = &texture->sub_resources[sub_resource_idx];
-    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
-    unsigned int row_pitch, slice_pitch;
-
-    TRACE("texture %p, sub_resource_idx %u, context %p, location %s.\n",
-            texture, sub_resource_idx, context, wined3d_debug_location(location));
-
-    if (!wined3d_texture_prepare_location(texture, sub_resource_idx, context, location))
-        return FALSE;
-
-    switch (location)
-    {
-        case WINED3D_LOCATION_TEXTURE_RGB:
-        case WINED3D_LOCATION_TEXTURE_SRGB:
-            if (sub_resource->locations & WINED3D_LOCATION_SYSMEM)
-            {
-                struct wined3d_const_bo_address data = {0, texture->resource.heap_memory};
-                struct wined3d_box src_box;
-
-                data.addr += sub_resource->offset;
-                wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(texture),
-                        context_gl, location == WINED3D_LOCATION_TEXTURE_SRGB);
-                wined3d_texture_get_pitch(texture, sub_resource_idx, &row_pitch, &slice_pitch);
-                wined3d_texture_get_level_box(texture, sub_resource_idx % texture->level_count, &src_box);
-                wined3d_texture_upload_data(texture, sub_resource_idx, context, texture->resource.format,
-                        &src_box, &data, row_pitch, slice_pitch, 0, 0, 0, FALSE);
-            }
-            else if (sub_resource->locations & WINED3D_LOCATION_BUFFER)
-            {
-                struct wined3d_const_bo_address data = {sub_resource->buffer_object, NULL};
-                struct wined3d_box src_box;
-
-                wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(texture), context_gl,
-                        location == WINED3D_LOCATION_TEXTURE_SRGB);
-                wined3d_texture_get_pitch(texture, sub_resource_idx, &row_pitch, &slice_pitch);
-                wined3d_texture_get_level_box(texture, sub_resource_idx % texture->level_count, &src_box);
-                wined3d_texture_upload_data(texture, sub_resource_idx, context, texture->resource.format,
-                        &src_box, &data, row_pitch, slice_pitch, 0, 0, 0, FALSE);
-            }
-            else
-            {
-                FIXME("Implement texture loading from %s.\n", wined3d_debug_location(sub_resource->locations));
-                return FALSE;
-            }
-            break;
-
-        case WINED3D_LOCATION_SYSMEM:
-            if (sub_resource->locations & (WINED3D_LOCATION_TEXTURE_RGB | WINED3D_LOCATION_TEXTURE_SRGB))
-            {
-                struct wined3d_bo_address data = {0, texture->resource.heap_memory};
-
-                data.addr += sub_resource->offset;
-                if (sub_resource->locations & WINED3D_LOCATION_TEXTURE_RGB)
-                    wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(texture), context_gl, FALSE);
-                else
-                    wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(texture), context_gl, TRUE);
-
-                wined3d_texture_download_data(texture, sub_resource_idx, context, &data);
-                ++texture->download_count;
-            }
-            else
-            {
-                FIXME("Implement WINED3D_LOCATION_SYSMEM loading from %s.\n",
-                        wined3d_debug_location(sub_resource->locations));
-                return FALSE;
-            }
-            break;
-
-        case WINED3D_LOCATION_BUFFER:
-            if (sub_resource->locations & (WINED3D_LOCATION_TEXTURE_RGB | WINED3D_LOCATION_TEXTURE_SRGB))
-            {
-                struct wined3d_bo_address data = {sub_resource->buffer_object, NULL};
-
-                if (sub_resource->locations & WINED3D_LOCATION_TEXTURE_RGB)
-                    wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(texture), context_gl, FALSE);
-                else
-                    wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(texture), context_gl, TRUE);
-
-                wined3d_texture_download_data(texture, sub_resource_idx, context, &data);
-            }
-            else
-            {
-                FIXME("Implement WINED3D_LOCATION_BUFFER loading from %s.\n",
-                        wined3d_debug_location(sub_resource->locations));
-                return FALSE;
-            }
-            break;
-
-        default:
-            FIXME("Implement %s loading from %s.\n", wined3d_debug_location(location),
-                    wined3d_debug_location(sub_resource->locations));
-            return FALSE;
-    }
-
-    return TRUE;
-}
-
-static const struct wined3d_texture_ops texture1d_ops =
-{
-    texture1d_load_location,
-    wined3d_texture_gl_upload_data,
 };
 
 static HRESULT wined3d_texture_init(struct wined3d_texture *texture, const struct wined3d_resource_desc *desc,
@@ -3134,150 +3316,6 @@ static HRESULT wined3d_texture_init(struct wined3d_texture *texture, const struc
     return WINED3D_OK;
 }
 
-/* Context activation is done by the caller. */
-static void texture3d_srgb_transfer(struct wined3d_texture *texture, unsigned int sub_resource_idx,
-        struct wined3d_context *context, BOOL dest_is_srgb)
-{
-    struct wined3d_texture_sub_resource *sub_resource = &texture->sub_resources[sub_resource_idx];
-    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
-    unsigned int row_pitch, slice_pitch;
-    struct wined3d_bo_address data;
-    struct wined3d_box src_box;
-
-    /* Optimisations are possible, but the effort should be put into either
-     * implementing EXT_SRGB_DECODE in the driver or finding out why we
-     * picked the wrong copy for the original upload and fixing that.
-     *
-     * Also keep in mind that we want to avoid using resource.heap_memory
-     * for DEFAULT pool surfaces. */
-    WARN_(d3d_perf)("Performing slow rgb/srgb volume transfer.\n");
-    data.buffer_object = 0;
-    if (!(data.addr = heap_alloc(sub_resource->size)))
-        return;
-
-    wined3d_texture_get_pitch(texture, sub_resource_idx, &row_pitch, &slice_pitch);
-    wined3d_texture_get_level_box(texture, sub_resource_idx % texture->level_count, &src_box);
-    wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(texture), context_gl, !dest_is_srgb);
-    wined3d_texture_download_data(texture, sub_resource_idx, context, &data);
-    wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(texture), context_gl, dest_is_srgb);
-    wined3d_texture_upload_data(texture, sub_resource_idx, context, texture->resource.format,
-            &src_box, wined3d_const_bo_address(&data), row_pitch, slice_pitch, 0, 0, 0, FALSE);
-
-    heap_free(data.addr);
-}
-
-/* Context activation is done by the caller. */
-static BOOL texture3d_load_location(struct wined3d_texture *texture, unsigned int sub_resource_idx,
-        struct wined3d_context *context, DWORD location)
-{
-    struct wined3d_texture_sub_resource *sub_resource = &texture->sub_resources[sub_resource_idx];
-    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
-    unsigned int row_pitch, slice_pitch;
-
-    if (!wined3d_texture_prepare_location(texture, sub_resource_idx, context, location))
-        return FALSE;
-
-    switch (location)
-    {
-        case WINED3D_LOCATION_TEXTURE_RGB:
-        case WINED3D_LOCATION_TEXTURE_SRGB:
-            if (sub_resource->locations & WINED3D_LOCATION_SYSMEM)
-            {
-                struct wined3d_const_bo_address data = {0, texture->resource.heap_memory};
-                struct wined3d_box src_box;
-
-                data.addr += sub_resource->offset;
-                wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(texture),
-                        context_gl, location == WINED3D_LOCATION_TEXTURE_SRGB);
-                wined3d_texture_get_pitch(texture, sub_resource_idx, &row_pitch, &slice_pitch);
-                wined3d_texture_get_level_box(texture, sub_resource_idx % texture->level_count, &src_box);
-                wined3d_texture_upload_data(texture, sub_resource_idx, context, texture->resource.format,
-                        &src_box, &data, row_pitch, slice_pitch, 0, 0, 0, FALSE);
-            }
-            else if (sub_resource->locations & WINED3D_LOCATION_BUFFER)
-            {
-                struct wined3d_const_bo_address data = {sub_resource->buffer_object, NULL};
-                struct wined3d_box src_box;
-
-                wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(texture),
-                        context_gl, location == WINED3D_LOCATION_TEXTURE_SRGB);
-                wined3d_texture_get_pitch(texture, sub_resource_idx, &row_pitch, &slice_pitch);
-                wined3d_texture_get_level_box(texture, sub_resource_idx % texture->level_count, &src_box);
-                wined3d_texture_upload_data(texture, sub_resource_idx, context, texture->resource.format,
-                        &src_box, &data, row_pitch, slice_pitch, 0, 0, 0, FALSE);
-            }
-            else if (sub_resource->locations & WINED3D_LOCATION_TEXTURE_RGB)
-            {
-                texture3d_srgb_transfer(texture, sub_resource_idx, context, TRUE);
-            }
-            else if (sub_resource->locations & WINED3D_LOCATION_TEXTURE_SRGB)
-            {
-                texture3d_srgb_transfer(texture, sub_resource_idx, context, FALSE);
-            }
-            else
-            {
-                FIXME("Implement texture loading from %s.\n", wined3d_debug_location(sub_resource->locations));
-                return FALSE;
-            }
-            break;
-
-        case WINED3D_LOCATION_SYSMEM:
-            if (sub_resource->locations & (WINED3D_LOCATION_TEXTURE_RGB | WINED3D_LOCATION_TEXTURE_SRGB))
-            {
-                struct wined3d_bo_address data = {0, texture->resource.heap_memory};
-
-                data.addr += sub_resource->offset;
-                if (sub_resource->locations & WINED3D_LOCATION_TEXTURE_RGB)
-                    wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(texture), context_gl, FALSE);
-                else
-                    wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(texture), context_gl, TRUE);
-
-                wined3d_texture_download_data(texture, sub_resource_idx, context, &data);
-                ++texture->download_count;
-            }
-            else
-            {
-                FIXME("Implement WINED3D_LOCATION_SYSMEM loading from %s.\n",
-                        wined3d_debug_location(sub_resource->locations));
-                return FALSE;
-            }
-            break;
-
-        case WINED3D_LOCATION_BUFFER:
-            if (sub_resource->locations & (WINED3D_LOCATION_TEXTURE_RGB | WINED3D_LOCATION_TEXTURE_SRGB))
-            {
-                struct wined3d_bo_address data = {sub_resource->buffer_object, NULL};
-
-                if (sub_resource->locations & WINED3D_LOCATION_TEXTURE_RGB)
-                    wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(texture), context_gl, FALSE);
-                else
-                    wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(texture), context_gl, TRUE);
-
-                wined3d_texture_download_data(texture, sub_resource_idx, context, &data);
-            }
-            else
-            {
-                FIXME("Implement WINED3D_LOCATION_BUFFER loading from %s.\n",
-                        wined3d_debug_location(sub_resource->locations));
-                return FALSE;
-            }
-            break;
-
-        default:
-            FIXME("Implement %s loading from %s.\n", wined3d_debug_location(location),
-                    wined3d_debug_location(sub_resource->locations));
-            return FALSE;
-    }
-
-    return TRUE;
-}
-
-static const struct wined3d_texture_ops texture3d_ops =
-{
-    texture3d_load_location,
-    wined3d_texture_gl_upload_data,
-};
-
 HRESULT CDECL wined3d_texture_blt(struct wined3d_texture *dst_texture, unsigned int dst_sub_resource_idx,
         const RECT *dst_rect, struct wined3d_texture *src_texture, unsigned int src_sub_resource_idx,
         const RECT *src_rect, DWORD flags, const struct wined3d_blt_fx *fx, enum wined3d_texture_filter_type filter)
@@ -3539,7 +3577,6 @@ static HRESULT wined3d_texture_gl_init(struct wined3d_texture_gl *texture_gl, st
         DWORD flags, void *parent, const struct wined3d_parent_ops *parent_ops, void *sub_resources)
 {
     const struct wined3d_gl_info *gl_info = &device->adapter->gl_info;
-    const struct wined3d_texture_ops *texture_ops;
     HRESULT hr;
 
     TRACE("texture_gl %p, device %p, desc %p, layer_count %u, level_count %u, "
@@ -3557,7 +3594,6 @@ static HRESULT wined3d_texture_gl_init(struct wined3d_texture_gl *texture_gl, st
     switch (desc->resource_type)
     {
         case WINED3D_RTYPE_TEXTURE_1D:
-            texture_ops = &texture1d_ops;
             if (layer_count > 1)
                 texture_gl->target = GL_TEXTURE_1D_ARRAY;
             else
@@ -3565,7 +3601,6 @@ static HRESULT wined3d_texture_gl_init(struct wined3d_texture_gl *texture_gl, st
             break;
 
         case WINED3D_RTYPE_TEXTURE_2D:
-            texture_ops = &texture2d_ops;
             if (desc->usage & WINED3DUSAGE_LEGACY_CUBEMAP)
             {
                 texture_gl->target = GL_TEXTURE_CUBE_MAP_ARB;
@@ -3592,7 +3627,6 @@ static HRESULT wined3d_texture_gl_init(struct wined3d_texture_gl *texture_gl, st
                 WARN("OpenGL implementation does not support 3D textures.\n");
                 return WINED3DERR_INVALIDCALL;
             }
-            texture_ops = &texture3d_ops;
             texture_gl->target = GL_TEXTURE_3D;
             break;
 
@@ -3604,7 +3638,7 @@ static HRESULT wined3d_texture_gl_init(struct wined3d_texture_gl *texture_gl, st
     list_init(&texture_gl->renderbuffers);
 
     if (FAILED(hr = wined3d_texture_init(&texture_gl->t, desc, layer_count, level_count,
-            flags, device, parent, parent_ops, sub_resources, texture_ops)))
+            flags, device, parent, parent_ops, sub_resources, &texture_gl_ops)))
         return hr;
 
     if (texture_gl->t.resource.gl_type == WINED3D_GL_RES_TYPE_TEX_RECT)
@@ -3826,18 +3860,18 @@ void wined3d_texture_upload_from_texture(struct wined3d_texture *dst_texture, un
     if (update_w == wined3d_texture_get_level_width(dst_texture, dst_level)
             && update_h == wined3d_texture_get_level_height(dst_texture, dst_level)
             && update_d == wined3d_texture_get_level_depth(dst_texture, dst_level))
-        wined3d_texture_prepare_texture(dst_texture, context, FALSE);
+        wined3d_texture_prepare_location(dst_texture, dst_sub_resource_idx, context, WINED3D_LOCATION_TEXTURE_RGB);
     else
         wined3d_texture_load_location(dst_texture, dst_sub_resource_idx, context, WINED3D_LOCATION_TEXTURE_RGB);
-    wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(dst_texture), wined3d_context_gl(context), FALSE);
 
     src_level = src_sub_resource_idx % src_texture->level_count;
     wined3d_texture_get_memory(src_texture, src_sub_resource_idx, &data,
             src_texture->sub_resources[src_sub_resource_idx].locations);
     wined3d_texture_get_pitch(src_texture, src_level, &src_row_pitch, &src_slice_pitch);
 
-    wined3d_texture_upload_data(dst_texture, dst_sub_resource_idx, context, src_texture->resource.format,
-            src_box, wined3d_const_bo_address(&data), src_row_pitch, src_slice_pitch, dst_x, dst_y, dst_z, FALSE);
+    dst_texture->texture_ops->texture_upload_data(context, wined3d_const_bo_address(&data),
+            src_texture->resource.format, src_box, src_row_pitch, src_slice_pitch, dst_texture,
+            dst_sub_resource_idx, WINED3D_LOCATION_TEXTURE_RGB, dst_x, dst_y, dst_z);
 
     context_release(context);
 
@@ -3849,17 +3883,30 @@ void wined3d_texture_upload_from_texture(struct wined3d_texture *dst_texture, un
 void wined3d_texture_download_from_texture(struct wined3d_texture *dst_texture, unsigned int dst_sub_resource_idx,
         struct wined3d_texture *src_texture, unsigned int src_sub_resource_idx)
 {
+    unsigned int src_level, dst_level, dst_row_pitch, dst_slice_pitch;
+    unsigned int dst_location = dst_texture->resource.map_binding;
     struct wined3d_context *context;
     struct wined3d_bo_address data;
-    DWORD dst_location = dst_texture->resource.map_binding;
+    struct wined3d_box src_box;
+    unsigned int src_location;
 
     context = context_acquire(src_texture->resource.device, NULL, 0);
 
     wined3d_texture_prepare_location(dst_texture, dst_sub_resource_idx, context, dst_location);
     wined3d_texture_get_memory(dst_texture, dst_sub_resource_idx, &data, dst_location);
-    wined3d_texture_gl_bind_and_dirtify(wined3d_texture_gl(src_texture), wined3d_context_gl(context),
-            !(src_texture->sub_resources[src_sub_resource_idx].locations & WINED3D_LOCATION_TEXTURE_RGB));
-    wined3d_texture_download_data(src_texture, src_sub_resource_idx, context, &data);
+
+    if (src_texture->sub_resources[src_sub_resource_idx].locations & WINED3D_LOCATION_TEXTURE_RGB)
+        src_location = WINED3D_LOCATION_TEXTURE_RGB;
+    else
+        src_location = WINED3D_LOCATION_TEXTURE_SRGB;
+    src_level = src_sub_resource_idx % src_texture->level_count;
+    wined3d_texture_get_level_box(src_texture, src_level, &src_box);
+
+    dst_level = dst_sub_resource_idx % dst_texture->level_count;
+    wined3d_texture_get_pitch(dst_texture, dst_level, &dst_row_pitch, &dst_slice_pitch);
+
+    src_texture->texture_ops->texture_download_data(context, src_texture, src_sub_resource_idx, src_location,
+            &src_box, &data, dst_texture->resource.format, 0, 0, 0, dst_row_pitch, dst_slice_pitch);
 
     context_release(context);
 

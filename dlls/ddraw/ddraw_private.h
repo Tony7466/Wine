@@ -66,6 +66,8 @@ struct FvfToDecl
         | WINED3D_LEGACY_UNBOUND_RESOURCE_COLOR | WINED3D_NO_PRIMITIVE_RESTART \
         | WINED3D_LEGACY_CUBEMAP_FILTERING)
 
+#define DDRAW_MAX_ACTIVE_LIGHTS 32
+
 enum ddraw_device_state
 {
     DDRAW_DEVICE_STATE_OK,
@@ -325,6 +327,7 @@ struct d3d_device
 
     /* Required to keep track which of two available texture blending modes in d3ddevice3 is used */
     BOOL legacyTextureBlending;
+    D3DTEXTUREBLEND texture_map_blend;
 
     D3DMATRIX legacy_projection;
     D3DMATRIX legacy_clipspace;
@@ -445,7 +448,7 @@ struct d3d_light
     D3DLIGHT2 light;
     D3DLIGHT7 light7;
 
-    DWORD dwLightIndex;
+    DWORD active_light_index;
 
     struct list entry;
 };
@@ -499,7 +502,7 @@ struct d3d_viewport
     /* If this viewport is active for one device, put the device here */
     struct d3d_device *active_device;
 
-    DWORD                     num_lights;
+    DWORD                     active_lights_count;
     DWORD                     map_lights;
 
     enum ddraw_viewport_version version;
@@ -658,5 +661,8 @@ struct member_info
 #define DD_STRUCT_COPY_BYSIZE(to,from) DD_STRUCT_COPY_BYSIZE_(to,from,(to)->dwSize,(from)->dwSize)
 
 HRESULT hr_ddraw_from_wined3d(HRESULT hr) DECLSPEC_HIDDEN;
+
+void viewport_alloc_active_light_index(struct d3d_light *light) DECLSPEC_HIDDEN;
+void viewport_free_active_light_index(struct d3d_light *light) DECLSPEC_HIDDEN;
 
 #endif

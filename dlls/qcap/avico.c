@@ -37,8 +37,8 @@ typedef struct {
     BaseFilter filter;
     IPersistPropertyBag IPersistPropertyBag_iface;
 
-    BaseInputPin *in;
-    BaseOutputPin *out;
+    BaseInputPin sink;
+    BaseOutputPin source;
 
     DWORD fcc_handler;
     HIC hic;
@@ -148,7 +148,7 @@ static HRESULT WINAPI AVICompressor_Run(IBaseFilter *iface, REFERENCE_TIME tStar
     if(This->filter.state == State_Running)
         return S_OK;
 
-    hres = IMemAllocator_Commit(This->out->pAllocator);
+    hres = IMemAllocator_Commit(This->source.pAllocator);
     if(FAILED(hres)) {
         FIXME("Commit failed: %08x\n", hres);
         return hres;
@@ -180,18 +180,13 @@ static const IBaseFilterVtbl AVICompressorVtbl = {
 
 static IPin *avi_compressor_get_pin(BaseFilter *iface, unsigned int index)
 {
-    AVICompressor *This = impl_from_BaseFilter(iface);
-    IPin *ret;
+    AVICompressor *filter = impl_from_BaseFilter(iface);
 
     if (index == 0)
-        ret = &This->in->pin.IPin_iface;
+        return &filter->sink.pin.IPin_iface;
     else if (index == 1)
-        ret = &This->out->pin.IPin_iface;
-    else
-        return NULL;
-
-    IPin_AddRef(ret);
-    return ret;
+        return &filter->source.pin.IPin_iface;
+    return NULL;
 }
 
 static void avi_compressor_destroy(BaseFilter *iface)
@@ -201,10 +196,8 @@ static void avi_compressor_destroy(BaseFilter *iface)
     if (filter->hic)
         ICClose(filter->hic);
     heap_free(filter->videoinfo);
-    if (filter->in)
-        BaseInputPinImpl_Release(&filter->in->pin.IPin_iface);
-    if (filter->out)
-        BaseOutputPinImpl_Release(&filter->out->pin.IPin_iface);
+    strmbase_sink_cleanup(&filter->sink);
+    strmbase_source_cleanup(&filter->source);
     strmbase_filter_cleanup(&filter->filter);
     heap_free(filter);
 }
@@ -330,18 +323,6 @@ static HRESULT WINAPI AVICompressorIn_QueryInterface(IPin *iface, REFIID riid, v
     return BaseInputPinImpl_QueryInterface(iface, riid, ppv);
 }
 
-static ULONG WINAPI AVICompressorIn_AddRef(IPin *iface)
-{
-    AVICompressor *This = impl_from_IPin(iface);
-    return IBaseFilter_AddRef(&This->filter.IBaseFilter_iface);
-}
-
-static ULONG WINAPI AVICompressorIn_Release(IPin *iface)
-{
-    AVICompressor *This = impl_from_IPin(iface);
-    return IBaseFilter_Release(&This->filter.IBaseFilter_iface);
-}
-
 static HRESULT WINAPI AVICompressorIn_ReceiveConnection(IPin *iface,
         IPin *pConnector, const AM_MEDIA_TYPE *pmt)
 {
@@ -379,8 +360,8 @@ static HRESULT WINAPI AVICompressorIn_Disconnect(IPin *iface)
 
 static const IPinVtbl AVICompressorInputPinVtbl = {
     AVICompressorIn_QueryInterface,
-    AVICompressorIn_AddRef,
-    AVICompressorIn_Release,
+    BasePinImpl_AddRef,
+    BasePinImpl_Release,
     BaseInputPinImpl_Connect,
     AVICompressorIn_ReceiveConnection,
     AVICompressorIn_Disconnect,
@@ -478,7 +459,7 @@ static HRESULT WINAPI AVICompressorIn_Receive(BaseInputPin *base, IMediaSample *
         return hres;
     }
 
-    hres = BaseOutputPinImpl_GetDeliveryBuffer(This->out, &out_sample, &start, &stop, 0);
+    hres = BaseOutputPinImpl_GetDeliveryBuffer(&This->source, &out_sample, &start, &stop, 0);
     if(FAILED(hres))
         return hres;
 
@@ -489,7 +470,7 @@ static HRESULT WINAPI AVICompressorIn_Receive(BaseInputPin *base, IMediaSample *
     if((This->driver_flags & VIDCF_TEMPORAL) && !(This->driver_flags & VIDCF_FASTTEMPORALC))
         FIXME("Unsupported temporal compression\n");
 
-    src_videoinfo = (VIDEOINFOHEADER*)This->in->pin.mtCurrent.pbFormat;
+    src_videoinfo = (VIDEOINFOHEADER *)This->sink.pin.mtCurrent.pbFormat;
     This->videoinfo->bmiHeader.biSizeImage = This->max_frame_size;
     res = ICCompress(This->hic, sync_point ? ICCOMPRESS_KEYFRAME : 0, &This->videoinfo->bmiHeader, buf,
             &src_videoinfo->bmiHeader, ptr, 0, &comp_flags, This->frame_cnt, 0, 0, NULL, NULL);
@@ -509,7 +490,7 @@ static HRESULT WINAPI AVICompressorIn_Receive(BaseInputPin *base, IMediaSample *
     else
         IMediaSample_SetMediaTime(out_sample, NULL, NULL);
 
-    hres = BaseOutputPinImpl_Deliver(This->out, out_sample);
+    hres = BaseOutputPinImpl_Deliver(&This->source, out_sample);
     if(FAILED(hres))
         WARN("Deliver failed: %08x\n", hres);
 
@@ -531,22 +512,10 @@ static HRESULT WINAPI AVICompressorOut_QueryInterface(IPin *iface, REFIID riid, 
     return BaseInputPinImpl_QueryInterface(iface, riid, ppv);
 }
 
-static ULONG WINAPI AVICompressorOut_AddRef(IPin *iface)
-{
-    AVICompressor *This = impl_from_IPin(iface);
-    return IBaseFilter_AddRef(&This->filter.IBaseFilter_iface);
-}
-
-static ULONG WINAPI AVICompressorOut_Release(IPin *iface)
-{
-    AVICompressor *This = impl_from_IPin(iface);
-    return IBaseFilter_Release(&This->filter.IBaseFilter_iface);
-}
-
 static const IPinVtbl AVICompressorOutputPinVtbl = {
     AVICompressorOut_QueryInterface,
-    AVICompressorOut_AddRef,
-    AVICompressorOut_Release,
+    BasePinImpl_AddRef,
+    BasePinImpl_Release,
     BaseOutputPinImpl_Connect,
     BaseOutputPinImpl_ReceiveConnection,
     BaseOutputPinImpl_Disconnect,
@@ -577,7 +546,7 @@ static HRESULT WINAPI AVICompressorOut_GetMediaType(BasePin *base, int iPosition
     amt->subtype = MEDIASUBTYPE_PCM;
     amt->bFixedSizeSamples = FALSE;
     amt->bTemporalCompression = (This->driver_flags & VIDCF_TEMPORAL) != 0;
-    amt->lSampleSize = This->in->pin.mtCurrent.lSampleSize;
+    amt->lSampleSize = This->sink.pin.mtCurrent.lSampleSize;
     amt->formattype = FORMAT_VideoInfo;
     amt->pUnk = NULL;
     amt->cbFormat = This->videoinfo_size;
@@ -624,7 +593,6 @@ IUnknown* WINAPI QCAP_createAVICompressor(IUnknown *outer, HRESULT *phr)
     PIN_INFO in_pin_info  = {NULL, PINDIR_INPUT,  {'I','n',0}};
     PIN_INFO out_pin_info = {NULL, PINDIR_OUTPUT, {'O','u','t',0}};
     AVICompressor *compressor;
-    HRESULT hres;
 
     compressor = heap_alloc_zero(sizeof(*compressor));
     if(!compressor) {
@@ -638,22 +606,12 @@ IUnknown* WINAPI QCAP_createAVICompressor(IUnknown *outer, HRESULT *phr)
     compressor->IPersistPropertyBag_iface.lpVtbl = &PersistPropertyBagVtbl;
 
     in_pin_info.pFilter = &compressor->filter.IBaseFilter_iface;
-    hres = BaseInputPin_Construct(&AVICompressorInputPinVtbl, sizeof(BaseInputPin), &in_pin_info,
-            &AVICompressorBaseInputPinVtbl, &compressor->filter.csFilter, NULL, (IPin**)&compressor->in);
-    if(FAILED(hres)) {
-        strmbase_filter_cleanup(&compressor->filter);
-        *phr = hres;
-        return NULL;
-    }
+    strmbase_sink_init(&compressor->sink, &AVICompressorInputPinVtbl, &in_pin_info,
+            &AVICompressorBaseInputPinVtbl, &compressor->filter.csFilter, NULL);
 
     out_pin_info.pFilter = &compressor->filter.IBaseFilter_iface;
-    hres = BaseOutputPin_Construct(&AVICompressorOutputPinVtbl, sizeof(BaseOutputPin), &out_pin_info,
-            &AVICompressorBaseOutputPinVtbl, &compressor->filter.csFilter, (IPin**)&compressor->out);
-    if(FAILED(hres)) {
-        strmbase_filter_cleanup(&compressor->filter);
-        *phr = hres;
-        return NULL;
-    }
+    strmbase_source_init(&compressor->source, &AVICompressorOutputPinVtbl, &out_pin_info,
+            &AVICompressorBaseOutputPinVtbl, &compressor->filter.csFilter);
 
     *phr = S_OK;
     return &compressor->filter.IUnknown_inner;
