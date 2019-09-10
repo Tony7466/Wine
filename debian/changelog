@@ -1,3 +1,14 @@
+wine-development (4.12-1) UNRELEASED; urgency=medium
+
+  * New upstream release 4.12, released Jul 5, 2019.
+    - Still more DLLs are built as PE files by default.
+    - Support for Plug & Play device drivers.
+    - Better support for the Visual Studio remote debugger.
+    - More support for enumerating display devices.
+    - Various bug fixes.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Tue, 10 Sep 2019 23:24:44 +0200
+
 wine-development (4.11-1) unstable; urgency=medium
 
   * New upstream release 4.11, released Jun 21, 2019.
