@@ -51,7 +51,6 @@ typedef struct VideoRendererImpl
 
     DWORD ThreadID;
     HANDLE hEvent;
-/* hEvent == evComplete? */
     BOOL ThreadResult;
     RECT SourceRect;
     RECT DestRect;
@@ -406,7 +405,7 @@ static HRESULT video_renderer_query_interface(BaseRenderer *iface, REFIID iid, v
     return S_OK;
 }
 
-static VOID WINAPI VideoRenderer_OnStopStreaming(BaseRenderer* iface)
+static void video_renderer_stop_stream(BaseRenderer *iface)
 {
     VideoRendererImpl *This = impl_from_BaseRenderer(iface);
 
@@ -418,7 +417,7 @@ static VOID WINAPI VideoRenderer_OnStopStreaming(BaseRenderer* iface)
         RedrawWindow(This->baseControlWindow.baseWindow.hWnd, NULL, NULL, RDW_INVALIDATE|RDW_ERASE);
 }
 
-static VOID WINAPI VideoRenderer_OnStartStreaming(BaseRenderer* iface)
+static void video_renderer_start_stream(BaseRenderer *iface)
 {
     VideoRendererImpl *This = impl_from_BaseRenderer(iface);
 
@@ -470,28 +469,16 @@ static BOOL WINAPI VideoRenderer_OnSize(BaseWindow *iface, LONG Width, LONG Heig
     return BaseWindowImpl_OnSize(iface, Width, Height);
 }
 
-static const BaseRendererFuncTable BaseFuncTable = {
-    VideoRenderer_CheckMediaType,
-    VideoRenderer_DoRenderSample,
-    /**/
-    NULL,
-    NULL,
-    NULL,
-    VideoRenderer_OnStartStreaming,
-    VideoRenderer_OnStopStreaming,
-    NULL,
-    NULL,
-    NULL,
-    VideoRenderer_ShouldDrawSampleNow,
-    NULL,
-    /**/
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    VideoRenderer_EndFlush,
-    video_renderer_destroy,
-    video_renderer_query_interface,
+static const BaseRendererFuncTable BaseFuncTable =
+{
+    .pfnCheckMediaType = VideoRenderer_CheckMediaType,
+    .pfnDoRenderSample = VideoRenderer_DoRenderSample,
+    .renderer_start_stream = video_renderer_start_stream,
+    .renderer_stop_stream = video_renderer_stop_stream,
+    .pfnShouldDrawSampleNow = VideoRenderer_ShouldDrawSampleNow,
+    .pfnEndFlush = VideoRenderer_EndFlush,
+    .renderer_destroy = video_renderer_destroy,
+    .renderer_query_interface = video_renderer_query_interface,
 };
 
 static const BaseWindowFuncTable renderer_BaseWindowFuncTable = {
@@ -680,7 +667,7 @@ static HRESULT WINAPI VideoRenderer_Pause(IBaseFilter * iface)
             VideoRenderer_AutoShowWindow(This);
         }
 
-        ResetEvent(This->renderer.RenderEvent);
+        ResetEvent(This->renderer.flush_event);
         This->renderer.filter.state = State_Paused;
     }
     LeaveCriticalSection(&This->renderer.csRenderLock);

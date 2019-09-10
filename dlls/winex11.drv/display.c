@@ -41,12 +41,18 @@ WINE_DEFAULT_DEBUG_CHANNEL(x11drv);
 
 /* Wine specific monitor properties */
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_STATEFLAGS, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 2);
+DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_RCMONITOR, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 3);
+DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_RCWORK, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 4);
+DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_ADAPTERNAME, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 5);
 
 static const WCHAR driver_descW[] = {'D','r','i','v','e','r','D','e','s','c',0};
+static const WCHAR displayW[] = {'D','I','S','P','L','A','Y',0};
+static const WCHAR pciW[] = {'P','C','I',0};
 static const WCHAR video_idW[] = {'V','i','d','e','o','I','D',0};
 static const WCHAR symbolic_link_valueW[]= {'S','y','m','b','o','l','i','c','L','i','n','k','V','a','l','u','e',0};
 static const WCHAR gpu_idW[] = {'G','P','U','I','D',0};
 static const WCHAR mointor_id_fmtW[] = {'M','o','n','i','t','o','r','I','D','%','d',0};
+static const WCHAR adapter_name_fmtW[] = {'\\','\\','.','\\','D','I','S','P','L','A','Y','%','d',0};
 static const WCHAR state_flagsW[] = {'S','t','a','t','e','F','l','a','g','s',0};
 static const WCHAR guid_fmtW[] = {
     '{','%','0','8','x','-','%','0','4','x','-','%','0','4','x','-','%','0','2','x','%','0','2','x','-',
@@ -276,6 +282,19 @@ static BOOL X11DRV_InitMonitor(HDEVINFO devinfo, const struct x11drv_monitor *mo
     if (!SetupDiSetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_MONITOR_STATEFLAGS, DEVPROP_TYPE_UINT32,
                                    (const BYTE *)&monitor->state_flags, sizeof(monitor->state_flags), 0))
         goto done;
+    /* RcMonitor */
+    if (!SetupDiSetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_MONITOR_RCMONITOR, DEVPROP_TYPE_BINARY,
+                                   (const BYTE *)&monitor->rc_monitor, sizeof(monitor->rc_monitor), 0))
+        goto done;
+    /* RcWork */
+    if (!SetupDiSetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_MONITOR_RCWORK, DEVPROP_TYPE_BINARY,
+                                   (const BYTE *)&monitor->rc_work, sizeof(monitor->rc_work), 0))
+        goto done;
+    /* Adapter name */
+    sprintfW(bufferW, adapter_name_fmtW, video_index + 1);
+    if (!SetupDiSetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_MONITOR_ADAPTERNAME, DEVPROP_TYPE_STRING,
+                                   (const BYTE *)bufferW, (strlenW(bufferW) + 1) * sizeof(WCHAR), 0))
+        goto done;
 
     ret = TRUE;
 done:
@@ -292,7 +311,7 @@ static void prepare_devices(HKEY video_hkey)
     DWORD i = 0;
 
     /* Remove all monitors */
-    devinfo = SetupDiGetClassDevsW(&GUID_DEVCLASS_MONITOR, NULL, NULL, 0);
+    devinfo = SetupDiGetClassDevsW(&GUID_DEVCLASS_MONITOR, displayW, NULL, 0);
     while (SetupDiEnumDeviceInfo(devinfo, i++, &device_data))
     {
         if (!SetupDiRemoveDevice(devinfo, &device_data))
@@ -309,7 +328,7 @@ static void prepare_devices(HKEY video_hkey)
      * of prefix copying or having devices unplugged. But then we couldn't simply delete GPUs because we need to retain
      * the same GUID for the same GPU. */
     i = 0;
-    devinfo = SetupDiGetClassDevsW(&GUID_DEVCLASS_DISPLAY, NULL, NULL, 0);
+    devinfo = SetupDiGetClassDevsW(&GUID_DEVCLASS_DISPLAY, pciW, NULL, 0);
     while (SetupDiEnumDeviceInfo(devinfo, i++, &device_data))
     {
         if (!SetupDiSetDevicePropertyW(devinfo, &device_data, &DEVPKEY_Device_IsPresent, DEVPROP_TYPE_BOOLEAN,
@@ -327,7 +346,7 @@ static void cleanup_devices(void)
     DWORD i = 0;
     BOOL present;
 
-    devinfo = SetupDiGetClassDevsW(&GUID_DEVCLASS_DISPLAY, NULL, NULL, 0);
+    devinfo = SetupDiGetClassDevsW(&GUID_DEVCLASS_DISPLAY, pciW, NULL, 0);
     while (SetupDiEnumDeviceInfo(devinfo, i++, &device_data))
     {
         present = FALSE;

@@ -36,6 +36,9 @@
 #ifdef HAVE_MACH_MACHINE_H
 # include <mach/machine.h>
 #endif
+#ifdef HAVE_IOKIT_IOKITLIB_H
+# include <IOKit/IOKitLib.h>
+#endif
 
 #include <ctype.h>
 #include <string.h>
@@ -76,10 +79,14 @@ struct smbios_prologue {
     DWORD length;
 };
 
-struct smbios_bios {
+struct smbios_header {
     BYTE type;
     BYTE length;
     WORD handle;
+};
+
+struct smbios_bios {
+    struct smbios_header hdr;
     BYTE vendor;
     BYTE version;
     WORD start;
@@ -89,19 +96,16 @@ struct smbios_bios {
 };
 
 struct smbios_system {
-    BYTE type;
-    BYTE length;
-    WORD handle;
+    struct smbios_header hdr;
     BYTE vendor;
     BYTE product;
     BYTE version;
     BYTE serial;
+    BYTE uuid[16];
 };
 
 struct smbios_board {
-    BYTE type;
-    BYTE length;
-    WORD handle;
+    struct smbios_header hdr;
     BYTE vendor;
     BYTE product;
     BYTE version;
@@ -109,9 +113,7 @@ struct smbios_board {
 };
 
 struct smbios_chassis {
-    BYTE type;
-    BYTE length;
-    WORD handle;
+    struct smbios_header hdr;
     BYTE vendor;
     BYTE shape;
     BYTE version;
@@ -2063,6 +2065,45 @@ static size_t get_smbios_string(const char *path, char *str, size_t size)
     return len;
 }
 
+static void get_system_uuid( GUID *uuid )
+{
+    static const unsigned char hex[] =
+    {
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,        /* 0x00 */
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,        /* 0x10 */
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,        /* 0x20 */
+        0,1,2,3,4,5,6,7,8,9,0,0,0,0,0,0,        /* 0x30 */
+        0,10,11,12,13,14,15,0,0,0,0,0,0,0,0,0,  /* 0x40 */
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,        /* 0x50 */
+        0,10,11,12,13,14,15                     /* 0x60 */
+    };
+    int fd;
+
+    memset( uuid, 0xff, sizeof(*uuid) );
+    if ((fd = open( "/var/lib/dbus/machine-id", O_RDONLY )) != -1)
+    {
+        unsigned char buf[32], *p = buf;
+        if (read( fd, buf, sizeof(buf) ) == sizeof(buf))
+        {
+            uuid->Data1 = hex[p[6]] << 28 | hex[p[7]] << 24 | hex[p[4]] << 20 | hex[p[5]] << 16 |
+                          hex[p[2]] << 12 | hex[p[3]] << 8  | hex[p[0]] << 4  | hex[p[1]];
+
+            uuid->Data2 = hex[p[10]] << 12 | hex[p[11]] << 8 | hex[p[8]]  << 4 | hex[p[9]];
+            uuid->Data3 = hex[p[14]] << 12 | hex[p[15]] << 8 | hex[p[12]] << 4 | hex[p[13]];
+
+            uuid->Data4[0] = hex[p[16]] << 4 | hex[p[17]];
+            uuid->Data4[1] = hex[p[18]] << 4 | hex[p[19]];
+            uuid->Data4[2] = hex[p[20]] << 4 | hex[p[21]];
+            uuid->Data4[3] = hex[p[22]] << 4 | hex[p[23]];
+            uuid->Data4[4] = hex[p[24]] << 4 | hex[p[25]];
+            uuid->Data4[5] = hex[p[26]] << 4 | hex[p[27]];
+            uuid->Data4[6] = hex[p[28]] << 4 | hex[p[29]];
+            uuid->Data4[7] = hex[p[30]] << 4 | hex[p[31]];
+        }
+        close( fd );
+    }
+}
+
 static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG available_len, ULONG *required_len)
 {
     switch (sfti->ProviderSignature)
@@ -2090,7 +2131,7 @@ static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG
             bios_version_len = get_smbios_string("/sys/class/dmi/id/bios_version", S(bios_version));
             bios_date_len = get_smbios_string("/sys/class/dmi/id/bios_date", S(bios_date));
             system_vendor_len = get_smbios_string("/sys/class/dmi/id/sys_vendor", S(system_vendor));
-            system_product_len = get_smbios_string("/sys/class/dmi/id/product", S(system_product));
+            system_product_len = get_smbios_string("/sys/class/dmi/id/product_name", S(system_product));
             system_version_len = get_smbios_string("/sys/class/dmi/id/product_version", S(system_version));
             system_serial_len = get_smbios_string("/sys/class/dmi/id/product_serial", S(system_serial));
             board_vendor_len = get_smbios_string("/sys/class/dmi/id/board_vendor", S(board_vendor));
@@ -2136,9 +2177,9 @@ static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG
 
             string_count = 0;
             bios = (struct smbios_bios*)buffer;
-            bios->type = 0;
-            bios->length = sizeof(struct smbios_bios);
-            bios->handle = 0;
+            bios->hdr.type = 0;
+            bios->hdr.length = sizeof(struct smbios_bios);
+            bios->hdr.handle = 0;
             bios->vendor = bios_vendor_len ? ++string_count : 0;
             bios->version = bios_version_len ? ++string_count : 0;
             bios->start = 0;
@@ -2155,13 +2196,14 @@ static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG
 
             string_count = 0;
             system = (struct smbios_system*)buffer;
-            system->type = 1;
-            system->length = sizeof(struct smbios_system);
-            system->handle = 0;
+            system->hdr.type = 1;
+            system->hdr.length = sizeof(struct smbios_system);
+            system->hdr.handle = 0;
             system->vendor = system_vendor_len ? ++string_count : 0;
             system->product = system_product_len ? ++string_count : 0;
             system->version = system_version_len ? ++string_count : 0;
             system->serial = system_serial_len ? ++string_count : 0;
+            get_system_uuid( (GUID *)system->uuid );
             buffer += sizeof(struct smbios_system);
 
             copy_smbios_string(&buffer, system_vendor, system_vendor_len);
@@ -2173,9 +2215,9 @@ static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG
 
             string_count = 0;
             board = (struct smbios_board*)buffer;
-            board->type = 2;
-            board->length = sizeof(struct smbios_board);
-            board->handle = 0;
+            board->hdr.type = 2;
+            board->hdr.length = sizeof(struct smbios_board);
+            board->hdr.handle = 0;
             board->vendor = board_vendor_len ? ++string_count : 0;
             board->product = board_product_len ? ++string_count : 0;
             board->version = board_version_len ? ++string_count : 0;
@@ -2191,9 +2233,9 @@ static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG
 
             string_count = 0;
             chassis = (struct smbios_chassis*)buffer;
-            chassis->type = 3;
-            chassis->length = sizeof(struct smbios_chassis);
-            chassis->handle = 0;
+            chassis->hdr.type = 3;
+            chassis->hdr.length = sizeof(struct smbios_chassis);
+            chassis->hdr.handle = 0;
             chassis->vendor = chassis_vendor_len ? ++string_count : 0;
             chassis->shape = 0x2; /* unknown */
             chassis->version = chassis_version_len ? ++string_count : 0;
@@ -2218,6 +2260,80 @@ static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG
     }
 }
 
+#elif defined(__APPLE__)
+static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG available_len, ULONG *required_len)
+{
+    switch (sfti->ProviderSignature)
+    {
+    case RSMB:
+    {
+        io_service_t service;
+        CFDataRef data;
+        const UInt8 *ptr;
+        CFIndex len;
+        struct smbios_prologue *prologue;
+        BYTE major_version = 2, minor_version = 0;
+
+        if (!(service = IOServiceGetMatchingService(kIOMasterPortDefault, IOServiceMatching("AppleSMBIOS"))))
+        {
+            WARN("can't find AppleSMBIOS service\n");
+            return STATUS_NO_MEMORY;
+        }
+
+        if (!(data = IORegistryEntryCreateCFProperty(service, CFSTR("SMBIOS-EPS"), kCFAllocatorDefault, 0)))
+        {
+            WARN("can't find SMBIOS entry point\n");
+            IOObjectRelease(service);
+            return STATUS_NO_MEMORY;
+        }
+
+        len = CFDataGetLength(data);
+        ptr = CFDataGetBytePtr(data);
+        if (len >= 8 && !memcmp(ptr, "_SM_", 4))
+        {
+            major_version = ptr[6];
+            minor_version = ptr[7];
+        }
+        CFRelease(data);
+
+        if (!(data = IORegistryEntryCreateCFProperty(service, CFSTR("SMBIOS"), kCFAllocatorDefault, 0)))
+        {
+            WARN("can't find SMBIOS table\n");
+            IOObjectRelease(service);
+            return STATUS_NO_MEMORY;
+        }
+
+        len = CFDataGetLength(data);
+        ptr = CFDataGetBytePtr(data);
+        sfti->TableBufferLength = sizeof(*prologue) + len;
+        *required_len = sfti->TableBufferLength + FIELD_OFFSET(SYSTEM_FIRMWARE_TABLE_INFORMATION, TableBuffer);
+        if (available_len < *required_len)
+        {
+            CFRelease(data);
+            IOObjectRelease(service);
+            return STATUS_BUFFER_TOO_SMALL;
+        }
+
+        prologue = (struct smbios_prologue *)sfti->TableBuffer;
+        prologue->calling_method = 0;
+        prologue->major_version = major_version;
+        prologue->minor_version = minor_version;
+        prologue->revision = 0;
+        prologue->length = sfti->TableBufferLength - sizeof(*prologue);
+
+        memcpy(sfti->TableBuffer + sizeof(*prologue), ptr, len);
+
+        CFRelease(data);
+        IOObjectRelease(service);
+        return STATUS_SUCCESS;
+    }
+    default:
+    {
+        FIXME("info_class SYSTEM_FIRMWARE_TABLE_INFORMATION provider %08x\n", sfti->ProviderSignature);
+        return STATUS_NOT_IMPLEMENTED;
+    }
+    }
+}
 #else
 
 static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG available_len, ULONG *required_len)

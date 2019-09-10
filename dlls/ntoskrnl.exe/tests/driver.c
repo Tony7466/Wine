@@ -950,6 +950,7 @@ static void test_stack_callout(void)
 static void test_lookaside_list(void)
 {
     NPAGED_LOOKASIDE_LIST list;
+    PAGED_LOOKASIDE_LIST paged_list;
     ULONG tag = 0x454e4957; /* WINE */
 
     ExInitializeNPagedLookasideList(&list, NULL, NULL, POOL_NX_ALLOCATION, LOOKASIDE_MINIMUM_BLOCK_SIZE, tag, 0);
@@ -974,6 +975,29 @@ static void test_lookaside_list(void)
     ok(list.L.MaximumDepth == 256, "Expected 256 got %u\n", list.L.MaximumDepth);
     ok(list.L.Type == NonPagedPool, "Expected NonPagedPool got %u\n", list.L.Type);
     ExDeleteNPagedLookasideList(&list);
+
+    ExInitializePagedLookasideList(&paged_list, NULL, NULL, POOL_NX_ALLOCATION, LOOKASIDE_MINIMUM_BLOCK_SIZE, tag, 0);
+    ok(paged_list.L.Depth == 4, "Expected 4 got %u\n", paged_list.L.Depth);
+    ok(paged_list.L.MaximumDepth == 256, "Expected 256 got %u\n", paged_list.L.MaximumDepth);
+    ok(paged_list.L.TotalAllocates == 0, "Expected 0 got %u\n", paged_list.L.TotalAllocates);
+    ok(paged_list.L.AllocateMisses == 0, "Expected 0 got %u\n", paged_list.L.AllocateMisses);
+    ok(paged_list.L.TotalFrees == 0, "Expected 0 got %u\n", paged_list.L.TotalFrees);
+    ok(paged_list.L.FreeMisses == 0, "Expected 0 got %u\n", paged_list.L.FreeMisses);
+    ok(paged_list.L.Type == (PagedPool|POOL_NX_ALLOCATION),
+       "Expected PagedPool|POOL_NX_ALLOCATION got %u\n", paged_list.L.Type);
+    ok(paged_list.L.Tag == tag, "Expected %x got %x\n", tag, paged_list.L.Tag);
+    ok(paged_list.L.Size == LOOKASIDE_MINIMUM_BLOCK_SIZE,
+       "Expected %u got %u\n", LOOKASIDE_MINIMUM_BLOCK_SIZE, paged_list.L.Size);
+    ok(paged_list.L.LastTotalAllocates == 0,"Expected 0 got %u\n", paged_list.L.LastTotalAllocates);
+    ok(paged_list.L.LastAllocateMisses == 0,"Expected 0 got %u\n", paged_list.L.LastAllocateMisses);
+    ExDeletePagedLookasideList(&paged_list);
+
+    paged_list.L.Depth = 0;
+    ExInitializePagedLookasideList(&paged_list, NULL, NULL, 0, LOOKASIDE_MINIMUM_BLOCK_SIZE, tag, 20);
+    ok(paged_list.L.Depth == 4, "Expected 4 got %u\n", paged_list.L.Depth);
+    ok(paged_list.L.MaximumDepth == 256, "Expected 256 got %u\n", paged_list.L.MaximumDepth);
+    ok(paged_list.L.Type == PagedPool, "Expected PagedPool got %u\n", paged_list.L.Type);
+    ExDeletePagedLookasideList(&paged_list);
 }
 
 static void test_version(void)
@@ -1436,6 +1460,16 @@ static void test_lookup_thread(void)
        "PsLookupThreadByThreadId returned %#x\n", status);
 }
 
+static void test_stack_limits(void)
+{
+    ULONG_PTR low = 0, high = 0;
+
+    IoGetStackLimits(&low, &high);
+    ok(low, "low = 0\n");
+    ok(low < high, "low >= high\n");
+    ok(low < (ULONG_PTR)&low && (ULONG_PTR)&low < high, "stack variable is not in stack limits\n");
+}
+
 static void test_IoAttachDeviceToDeviceStack(void)
 {
     DEVICE_OBJECT *dev1, *dev2, *dev3, *ret;
@@ -1503,6 +1537,7 @@ static void WINAPI main_test_task(DEVICE_OBJECT *device, void *context)
     test_critical_region(FALSE);
     test_call_driver(device);
     test_cancel_irp(device);
+    test_stack_limits();
 
     /* print process report */
     if (winetest_debug)

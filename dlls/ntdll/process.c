@@ -62,7 +62,7 @@ static const BOOL is_win64 = (sizeof(void *) > sizeof(int));
 
 static const char * const cpu_names[] = { "x86", "x86_64", "PowerPC", "ARM", "ARM64" };
 
-static inline BOOL is_64bit_arch( cpu_type_t cpu )
+static inline BOOL is_64bit_arch( client_cpu_t cpu )
 {
     return (cpu == CPU_x86_64 || cpu == CPU_ARM64);
 }
@@ -1364,4 +1364,33 @@ done:
     RtlFreeHeap( GetProcessHeap(), 0, winedebug );
     RtlFreeHeap( GetProcessHeap(), 0, unixdir );
     return status;
+}
+
+/***********************************************************************
+ *      DbgUiRemoteBreakin (NTDLL.@)
+ */
+void WINAPI DbgUiRemoteBreakin( void *arg )
+{
+    TRACE( "\n" );
+    if (NtCurrentTeb()->Peb->BeingDebugged) DbgBreakPoint();
+    RtlExitUserThread( STATUS_SUCCESS );
+}
+
+/***********************************************************************
+ *      DbgUiIssueRemoteBreakin (NTDLL.@)
+ */
+NTSTATUS WINAPI DbgUiIssueRemoteBreakin( HANDLE process )
+{
+    apc_call_t call;
+    apc_result_t result;
+    NTSTATUS status;
+
+    TRACE( "(%p)\n", process );
+
+    memset( &call, 0, sizeof(call) );
+
+    call.type = APC_BREAK_PROCESS;
+    status = server_queue_process_apc( process, &call, &result );
+    if (status) return status;
+    return result.break_process.status;
 }

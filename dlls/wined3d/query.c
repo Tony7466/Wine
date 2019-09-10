@@ -37,10 +37,10 @@ static BOOL wined3d_query_buffer_is_valid(struct wined3d_query *query)
     return query->map_ptr[0] == query->map_ptr[1];
 }
 
-static void wined3d_query_create_buffer_object(struct wined3d_context *context, struct wined3d_query *query)
+static void wined3d_query_create_buffer_object(struct wined3d_context_gl *context_gl, struct wined3d_query *query)
 {
-    const struct wined3d_gl_info *gl_info = context->gl_info;
     const GLuint map_flags = GL_MAP_READ_BIT | GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
     GLuint buffer_object;
 
     GL_EXTCALL(glGenBuffers(1, &buffer_object));
@@ -54,9 +54,9 @@ static void wined3d_query_create_buffer_object(struct wined3d_context *context, 
     query->buffer_object = buffer_object;
 }
 
-static void wined3d_query_destroy_buffer_object(struct wined3d_context *context, struct wined3d_query *query)
+static void wined3d_query_destroy_buffer_object(struct wined3d_context_gl *context_gl, struct wined3d_query *query)
 {
-    const struct wined3d_gl_info *gl_info = context->gl_info;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
 
     GL_EXTCALL(glDeleteBuffers(1, &query->buffer_object));
     checkGLcall("query buffer object destruction");
@@ -73,15 +73,16 @@ static void wined3d_query_destroy_buffer_object(struct wined3d_context *context,
  * object allows us to avoid these implicit flushes. An additional benefit is
  * that it allows us to poll the query status from the application-thread
  * instead of from the csmt-thread. */
-static BOOL wined3d_query_buffer_queue_result(struct wined3d_context *context, struct wined3d_query *query, GLuint id)
+static BOOL wined3d_query_buffer_queue_result(struct wined3d_context_gl *context_gl,
+        struct wined3d_query *query, GLuint id)
 {
-    const struct wined3d_gl_info *gl_info = context->gl_info;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
     GLsync tmp_sync;
 
     if (!gl_info->supported[ARB_QUERY_BUFFER_OBJECT] || !gl_info->supported[ARB_BUFFER_STORAGE])
         return FALSE;
     /* Don't use query buffers without CSMT, mainly for simplicity. */
-    if (!context->device->cs->thread)
+    if (!context_gl->c.device->cs->thread)
         return FALSE;
 
     if (query->buffer_object)
@@ -92,11 +93,11 @@ static BOOL wined3d_query_buffer_queue_result(struct wined3d_context *context, s
         if (wined3d_query_buffer_is_valid(query))
             wined3d_query_buffer_invalidate(query);
         else
-            wined3d_query_destroy_buffer_object(context, query);
+            wined3d_query_destroy_buffer_object(context_gl, query);
     }
 
     if (!query->buffer_object)
-        wined3d_query_create_buffer_object(context, query);
+        wined3d_query_create_buffer_object(context_gl, query);
 
     GL_EXTCALL(glBindBuffer(GL_QUERY_BUFFER, query->buffer_object));
     /* Read the same value twice. We know we have the result if map_ptr[0] == map_ptr[1]. */
@@ -433,8 +434,9 @@ static void wined3d_query_destroy_object(void *object)
     if (query->buffer_object)
     {
         struct wined3d_context *context;
+
         context = context_acquire(query->device, NULL, 0);
-        wined3d_query_destroy_buffer_object(context, query);
+        wined3d_query_destroy_buffer_object(wined3d_context_gl(context), query);
         context_release(context);
     }
 
@@ -682,7 +684,7 @@ static BOOL wined3d_occlusion_query_ops_issue(struct wined3d_query *query, DWORD
                 gl_info = context_gl->c.gl_info;
                 GL_EXTCALL(glEndQuery(GL_SAMPLES_PASSED));
                 checkGLcall("glEndQuery()");
-                wined3d_query_buffer_queue_result(&context_gl->c, query, oq->id);
+                wined3d_query_buffer_queue_result(context_gl, query, oq->id);
 
                 context_release(&context_gl->c);
                 poll = TRUE;
@@ -815,9 +817,9 @@ static BOOL wined3d_so_statistics_query_ops_poll(struct wined3d_query *query, DW
 }
 
 static void wined3d_so_statistics_query_end(struct wined3d_so_statistics_query *query,
-        struct wined3d_context *context)
+        struct wined3d_context_gl *context_gl)
 {
-    const struct wined3d_gl_info *gl_info = context->gl_info;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
 
     if (gl_info->supported[ARB_TRANSFORM_FEEDBACK3])
     {
@@ -848,7 +850,7 @@ static BOOL wined3d_so_statistics_query_ops_issue(struct wined3d_query *query, D
         {
             if ((context_gl = wined3d_context_gl_reacquire(pq->context_gl)))
             {
-                wined3d_so_statistics_query_end(pq, &context_gl->c);
+                wined3d_so_statistics_query_end(pq, context_gl);
             }
             else
             {
@@ -892,7 +894,7 @@ static BOOL wined3d_so_statistics_query_ops_issue(struct wined3d_query *query, D
         {
             if ((context_gl = wined3d_context_gl_reacquire(pq->context_gl)))
             {
-                wined3d_so_statistics_query_end(pq, &context_gl->c);
+                wined3d_so_statistics_query_end(pq, context_gl);
 
                 context_release(&context_gl->c);
                 poll = TRUE;
@@ -954,9 +956,9 @@ static BOOL wined3d_pipeline_query_ops_poll(struct wined3d_query *query, DWORD f
 }
 
 static void wined3d_pipeline_statistics_query_end(struct wined3d_pipeline_statistics_query *query,
-        struct wined3d_context *context)
+        struct wined3d_context_gl *context_gl)
 {
-    const struct wined3d_gl_info *gl_info = context->gl_info;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
 
     GL_EXTCALL(glEndQuery(GL_VERTICES_SUBMITTED_ARB));
     GL_EXTCALL(glEndQuery(GL_PRIMITIVES_SUBMITTED_ARB));
@@ -988,7 +990,7 @@ static BOOL wined3d_pipeline_query_ops_issue(struct wined3d_query *query, DWORD 
         {
             if ((context_gl = wined3d_context_gl_reacquire(pq->context_gl)))
             {
-                wined3d_pipeline_statistics_query_end(pq, &context_gl->c);
+                wined3d_pipeline_statistics_query_end(pq, context_gl);
             }
             else
             {
@@ -1029,7 +1031,7 @@ static BOOL wined3d_pipeline_query_ops_issue(struct wined3d_query *query, DWORD 
         {
             if ((context_gl = wined3d_context_gl_reacquire(pq->context_gl)))
             {
-                wined3d_pipeline_statistics_query_end(pq, &context_gl->c);
+                wined3d_pipeline_statistics_query_end(pq, context_gl);
                 context_release(&context_gl->c);
                 poll = TRUE;
             }

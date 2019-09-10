@@ -55,6 +55,8 @@
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
 #include "winternl.h"
+#include "winbase.h"
+#include "wincon.h"
 #include "kernel_private.h"
 #include "psapi.h"
 #include "wine/exception.h"
@@ -172,7 +174,7 @@ static inline unsigned int is_path_prefix( const WCHAR *prefix, const WCHAR *fil
 /***********************************************************************
  *           is_64bit_arch
  */
-static inline BOOL is_64bit_arch( cpu_type_t cpu )
+static inline BOOL is_64bit_arch( client_cpu_t cpu )
 {
     return (cpu == CPU_x86_64 || cpu == CPU_ARM64);
 }
@@ -674,6 +676,23 @@ static WCHAR *get_reg_value( HKEY hkey, const WCHAR *name )
     return ret;
 }
 
+/* set an environment variable for one of the wine path variables */
+static void set_wine_path_variable( const WCHAR *name, const char *unix_path )
+{
+    UNICODE_STRING nt_name, var_name;
+    ANSI_STRING unix_name;
+
+    RtlInitUnicodeString( &var_name, name );
+    if (unix_path)
+    {
+        RtlInitAnsiString( &unix_name, unix_path );
+        if (wine_unix_to_nt_file_name( &unix_name, &nt_name )) return;
+        RtlSetEnvironmentVariable( NULL, &var_name, &nt_name );
+        RtlFreeUnicodeString( &nt_name );
+    }
+    else RtlSetEnvironmentVariable( NULL, &var_name, NULL );
+}
+
 
 /***********************************************************************
  *           set_additional_environment
@@ -695,12 +714,31 @@ static void set_additional_environment(void)
     static const WCHAR allusersW[] = {'A','L','L','U','S','E','R','S','P','R','O','F','I','L','E',0};
     static const WCHAR programdataW[] = {'P','r','o','g','r','a','m','D','a','t','a',0};
     static const WCHAR publicW[] = {'P','U','B','L','I','C',0};
+    static const WCHAR winedlldirW[] = {'W','I','N','E','D','L','L','D','I','R','%','u',0};
+    static const WCHAR winehomedirW[] = {'W','I','N','E','H','O','M','E','D','I','R',0};
+    static const WCHAR winedatadirW[] = {'W','I','N','E','D','A','T','A','D','I','R',0};
+    static const WCHAR winebuilddirW[] = {'W','I','N','E','B','U','I','L','D','D','I','R',0};
+    static const WCHAR wineconfigdirW[] = {'W','I','N','E','C','O','N','F','I','G','D','I','R',0};
     OBJECT_ATTRIBUTES attr;
     UNICODE_STRING nameW;
+    const char *path;
     WCHAR *profile_dir = NULL, *program_data_dir = NULL, *public_dir = NULL;
-    WCHAR buf[MAX_COMPUTERNAME_LENGTH+1];
+    WCHAR buf[32];
     HANDLE hkey;
-    DWORD len;
+    DWORD len, i;
+
+    /* wine paths */
+    set_wine_path_variable( winedatadirW, wine_get_data_dir() );
+    set_wine_path_variable( winehomedirW, getenv("HOME") );
+    set_wine_path_variable( winebuilddirW, wine_get_build_dir() );
+    set_wine_path_variable( wineconfigdirW, wine_get_config_dir() );
+    for (i = 0; (path = wine_dll_enum_load_path( i )); i++)
+    {
+        sprintfW( buf, winedlldirW, i );
+        set_wine_path_variable( buf, path );
+    }
+    sprintfW( buf, winedlldirW, i );
+    set_wine_path_variable( buf, NULL );
 
     /* ComputerName */
     len = ARRAY_SIZE( buf );
@@ -1258,7 +1296,7 @@ void WINAPI start_process( LPTHREAD_START_ROUTINE entry, PEB *peb )
     }
     __EXCEPT(UnhandledExceptionFilter)
     {
-        TerminateThread( GetCurrentThread(), GetExceptionCode() );
+        TerminateProcess( GetCurrentProcess(), GetExceptionCode() );
     }
     __ENDTRY
     abort();  /* should not be reached */
@@ -4258,8 +4296,7 @@ BOOL WINAPI IsWow64Process(HANDLE hProcess, PBOOL Wow64Process)
  * RETURNS
  *  A handle representing the current process.
  */
-#undef GetCurrentProcess
-HANDLE WINAPI GetCurrentProcess(void)
+HANDLE WINAPI KERNEL32_GetCurrentProcess(void)
 {
     return (HANDLE)~(ULONG_PTR)0;
 }

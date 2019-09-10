@@ -850,6 +850,8 @@ NTSTATUS CDECL wine_ntoskrnl_main_loop( HANDLE stop_event )
     PsInitialSystemProcess = IoGetCurrentProcess();
     request_thread = GetCurrentThreadId();
 
+    pnp_manager_start();
+
     handles[0] = stop_event;
     handles[1] = manager;
 
@@ -917,6 +919,9 @@ NTSTATUS CDECL wine_ntoskrnl_main_loop( HANDLE stop_event )
     }
 
 done:
+    /* Native PnP drivers expect that all of their devices will be removed when
+     * their unload routine is called, so we must stop the PnP manager first. */
+    pnp_manager_stop();
     wine_rb_destroy( &wine_drivers, unload_driver, NULL );
     return status;
 }
@@ -1689,6 +1694,18 @@ PCONFIGURATION_INFORMATION WINAPI IoGetConfigurationInformation(void)
     return &configuration_information;
 }
 
+/***********************************************************************
+ *           IoGetStackLimits    (NTOSKRNL.EXE.@)
+ */
+void WINAPI IoGetStackLimits(ULONG_PTR *low, ULONG_PTR *high)
+{
+    TEB *teb = NtCurrentTeb();
+
+    TRACE( "%p %p\n", low, high );
+
+    *low  = (DWORD_PTR)teb->Tib.StackLimit;
+    *high = (DWORD_PTR)teb->Tib.StackBase;
+}
 
 /***********************************************************************
  *           IoIsWdmVersionAvailable     (NTOSKRNL.EXE.@)
@@ -2008,29 +2025,6 @@ NTSTATUS WINAPI ExCreateCallback(PCALLBACK_OBJECT *obj, POBJECT_ATTRIBUTES attr,
 
 
 /***********************************************************************
- *           ExDeleteNPagedLookasideList   (NTOSKRNL.EXE.@)
- */
-void WINAPI ExDeleteNPagedLookasideList( PNPAGED_LOOKASIDE_LIST lookaside )
-{
-    void *entry;
-
-    TRACE("(%p)\n", lookaside);
-
-    while ((entry = RtlInterlockedPopEntrySList(&lookaside->L.u.ListHead)))
-        lookaside->L.u5.FreeEx(entry, (LOOKASIDE_LIST_EX*)lookaside);
-}
-
-
-/***********************************************************************
- *           ExDeletePagedLookasideList  (NTOSKRNL.EXE.@)
- */
-void WINAPI ExDeletePagedLookasideList( PPAGED_LOOKASIDE_LIST lookaside )
-{
-    FIXME("(%p) stub\n", lookaside);
-}
-
-
-/***********************************************************************
  *           ExFreePool   (NTOSKRNL.EXE.@)
  */
 void WINAPI ExFreePool( void *ptr )
@@ -2048,6 +2042,28 @@ void WINAPI ExFreePoolWithTag( void *ptr, ULONG tag )
     HeapFree( GetProcessHeap(), 0, ptr );
 }
 
+static void initialize_lookaside_list( GENERAL_LOOKASIDE *lookaside, PALLOCATE_FUNCTION allocate, PFREE_FUNCTION free,
+                                       ULONG type, SIZE_T size, ULONG tag )
+{
+
+    RtlInitializeSListHead( &lookaside->u.ListHead );
+    lookaside->Depth                 = 4;
+    lookaside->MaximumDepth          = 256;
+    lookaside->TotalAllocates        = 0;
+    lookaside->u2.AllocateMisses     = 0;
+    lookaside->TotalFrees            = 0;
+    lookaside->u3.FreeMisses         = 0;
+    lookaside->Type                  = type;
+    lookaside->Tag                   = tag;
+    lookaside->Size                  = size;
+    lookaside->u4.Allocate           = allocate ? allocate : ExAllocatePoolWithTag;
+    lookaside->u5.Free               = free ? free : ExFreePool;
+    lookaside->LastTotalAllocates    = 0;
+    lookaside->u6.LastAllocateMisses = 0;
+
+    /* FIXME: insert in global list of lookadside lists */
+}
+
 /***********************************************************************
  *           ExInitializeNPagedLookasideList   (NTOSKRNL.EXE.@)
  */
@@ -2060,37 +2076,48 @@ void WINAPI ExInitializeNPagedLookasideList(PNPAGED_LOOKASIDE_LIST lookaside,
                                             USHORT depth)
 {
     TRACE( "%p, %p, %p, %u, %lu, %u, %u\n", lookaside, allocate, free, flags, size, tag, depth );
-
-    RtlInitializeSListHead( &lookaside->L.u.ListHead );
-    lookaside->L.Depth                 = 4;
-    lookaside->L.MaximumDepth          = 256;
-    lookaside->L.TotalAllocates        = 0;
-    lookaside->L.u2.AllocateMisses     = 0;
-    lookaside->L.TotalFrees            = 0;
-    lookaside->L.u3.FreeMisses         = 0;
-    lookaside->L.Type                  = NonPagedPool | flags;
-    lookaside->L.Tag                   = tag;
-    lookaside->L.Size                  = size;
-    lookaside->L.u4.Allocate           = allocate ? allocate : ExAllocatePoolWithTag;
-    lookaside->L.u5.Free               = free ? free : ExFreePool;
-    lookaside->L.LastTotalAllocates    = 0;
-    lookaside->L.u6.LastAllocateMisses = 0;
-
-    /* FIXME: insert in global list of lookadside lists */
+    initialize_lookaside_list( &lookaside->L, allocate, free, NonPagedPool | flags, size, tag );
 }
 
 /***********************************************************************
  *           ExInitializePagedLookasideList   (NTOSKRNL.EXE.@)
  */
-void WINAPI ExInitializePagedLookasideList(PPAGED_LOOKASIDE_LIST Lookaside,
-                                           PALLOCATE_FUNCTION Allocate,
-                                           PFREE_FUNCTION Free,
-                                           ULONG Flags,
-                                           SIZE_T Size,
-                                           ULONG Tag,
-                                           USHORT Depth)
+void WINAPI ExInitializePagedLookasideList(PPAGED_LOOKASIDE_LIST lookaside,
+                                           PALLOCATE_FUNCTION allocate,
+                                           PFREE_FUNCTION free,
+                                           ULONG flags,
+                                           SIZE_T size,
+                                           ULONG tag,
+                                           USHORT depth)
 {
-    FIXME( "stub: %p, %p, %p, %u, %lu, %u, %u\n", Lookaside, Allocate, Free, Flags, Size, Tag, Depth );
+    TRACE( "%p, %p, %p, %u, %lu, %u, %u\n", lookaside, allocate, free, flags, size, tag, depth );
+    initialize_lookaside_list( &lookaside->L, allocate, free, PagedPool | flags, size, tag );
+}
+
+static void delete_lookaside_list( GENERAL_LOOKASIDE *lookaside )
+{
+    void *entry;
+    while ((entry = RtlInterlockedPopEntrySList(&lookaside->u.ListHead)))
+        lookaside->u5.FreeEx(entry, (LOOKASIDE_LIST_EX*)lookaside);
+}
+
+/***********************************************************************
+ *           ExDeleteNPagedLookasideList   (NTOSKRNL.EXE.@)
+ */
+void WINAPI ExDeleteNPagedLookasideList( PNPAGED_LOOKASIDE_LIST lookaside )
+{
+    TRACE( "%p\n", lookaside );
+    delete_lookaside_list( &lookaside->L );
+}
+
+
+/***********************************************************************
+ *           ExDeletePagedLookasideList  (NTOSKRNL.EXE.@)
+ */
+void WINAPI ExDeletePagedLookasideList( PPAGED_LOOKASIDE_LIST lookaside )
+{
+    TRACE( "%p\n", lookaside );
+    delete_lookaside_list( &lookaside->L );
 }
 
 /***********************************************************************
@@ -3160,6 +3187,23 @@ BOOLEAN WINAPI KeAreApcsDisabled(void)
 }
 
 /***********************************************************************
+ *           KeBugCheck    (NTOSKRNL.@)
+ */
+void WINAPI KeBugCheck(ULONG code)
+{
+    KeBugCheckEx(code, 0, 0, 0, 0);
+}
+
+/***********************************************************************
+ *           KeBugCheckEx    (NTOSKRNL.@)
+ */
+void WINAPI KeBugCheckEx(ULONG code, ULONG_PTR param1, ULONG_PTR param2, ULONG_PTR param3, ULONG_PTR param4)
+{
+    ERR( "%x %lx %lx %lx %lx\n", code, param1, param2, param3, param4 );
+    ExitProcess( code );
+}
+
+/***********************************************************************
  *           ProbeForRead   (NTOSKRNL.EXE.@)
  */
 void WINAPI ProbeForRead(void *address, SIZE_T length, ULONG alignment)
@@ -3603,6 +3647,8 @@ NTSTATUS WINAPI ZwLoadDriver( const UNICODE_STRING *service_name )
 
     driver = WINE_RB_ENTRY_VALUE( entry, struct wine_driver, entry );
     driver->service_handle = service_handle;
+
+    pnp_manager_enumerate_root_devices( service_name->Buffer + wcslen( servicesW ) );
 
     set_service_status( service_handle, SERVICE_RUNNING,
                         SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN );

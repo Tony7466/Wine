@@ -129,7 +129,7 @@ static void dump_ioctl_code( const char *prefix, const ioctl_code_t *code )
     }
 }
 
-static void dump_cpu_type( const char *prefix, const cpu_type_t *code )
+static void dump_client_cpu( const char *prefix, const client_cpu_t *code )
 {
     switch (*code)
     {
@@ -218,6 +218,9 @@ static void dump_apc_call( const char *prefix, const apc_call_t *call )
         dump_uint64( ",commit=", &call->create_thread.commit );
         fprintf( stderr, ",suspend=%u", call->create_thread.suspend );
         break;
+    case APC_BREAK_PROCESS:
+        fprintf( stderr, "APC_BREAK_PROCESS" );
+        break;
     default:
         fprintf( stderr, "type=%u", call->type );
         break;
@@ -297,6 +300,9 @@ static void dump_apc_result( const char *prefix, const apc_result_t *result )
         fprintf( stderr, "APC_CREATE_THREAD,status=%s,tid=%04x,handle=%04x",
                  get_status_name( result->create_thread.status ),
                  result->create_thread.tid, result->create_thread.handle );
+        break;
+    case APC_BREAK_PROCESS:
+        fprintf( stderr, "APC_BREAK_PROCESS,status=%s", get_status_name( result->break_process.status ) );
         break;
     default:
         fprintf( stderr, "type=%u", result->type );
@@ -559,7 +565,7 @@ static void dump_varargs_context( const char *prefix, data_size_t size )
     memcpy( &ctx, context, size );
 
     fprintf( stderr,"%s{", prefix );
-    dump_cpu_type( "cpu=", &ctx.cpu );
+    dump_client_cpu( "cpu=", &ctx.cpu );
     switch (ctx.cpu)
     {
     case CPU_x86:
@@ -1190,7 +1196,7 @@ static void dump_varargs_pe_image_info( const char *prefix, data_size_t size )
              info.zerobits, info.subsystem, info.subsystem_low, info.subsystem_high, info.gp,
              info.image_charact, info.dll_charact, info.machine, info.contains_code, info.image_flags,
              info.loader_flags, info.header_size, info.file_size, info.checksum );
-    dump_cpu_type( ",cpu=", &info.cpu );
+    dump_client_cpu( ",cpu=", &info.cpu );
     fputc( '}', stderr );
     remove_data( size );
 }
@@ -1241,7 +1247,7 @@ static void dump_new_process_request( const struct new_process_request *req )
     fprintf( stderr, ", socket_fd=%d", req->socket_fd );
     fprintf( stderr, ", exe_file=%04x", req->exe_file );
     fprintf( stderr, ", access=%08x", req->access );
-    dump_cpu_type( ", cpu=", &req->cpu );
+    dump_client_cpu( ", cpu=", &req->cpu );
     fprintf( stderr, ", info_size=%u", req->info_size );
     dump_varargs_object_attributes( ", objattr=", cur_size );
     dump_varargs_startup_info( ", info=", min(cur_size,req->info_size) );
@@ -1259,7 +1265,7 @@ static void dump_exec_process_request( const struct exec_process_request *req )
 {
     fprintf( stderr, " socket_fd=%d", req->socket_fd );
     fprintf( stderr, ", exe_file=%04x", req->exe_file );
-    dump_cpu_type( ", cpu=", &req->cpu );
+    dump_client_cpu( ", cpu=", &req->cpu );
 }
 
 static void dump_get_new_process_info_request( const struct get_new_process_info_request *req )
@@ -1321,7 +1327,7 @@ static void dump_init_thread_request( const struct init_thread_request *req )
     dump_uint64( ", entry=", &req->entry );
     fprintf( stderr, ", reply_fd=%d", req->reply_fd );
     fprintf( stderr, ", wait_fd=%d", req->wait_fd );
-    dump_cpu_type( ", cpu=", &req->cpu );
+    dump_client_cpu( ", cpu=", &req->cpu );
 }
 
 static void dump_init_thread_reply( const struct init_thread_reply *req )
@@ -1373,7 +1379,7 @@ static void dump_get_process_info_reply( const struct get_process_info_reply *re
     dump_timeout( ", end_time=", &req->end_time );
     fprintf( stderr, ", exit_code=%d", req->exit_code );
     fprintf( stderr, ", priority=%d", req->priority );
-    dump_cpu_type( ", cpu=", &req->cpu );
+    dump_client_cpu( ", cpu=", &req->cpu );
     fprintf( stderr, ", debugger_present=%d", req->debugger_present );
     fprintf( stderr, ", debug_children=%d", req->debug_children );
 }
@@ -2439,16 +2445,6 @@ static void dump_debug_process_request( const struct debug_process_request *req 
 {
     fprintf( stderr, " pid=%04x", req->pid );
     fprintf( stderr, ", attach=%d", req->attach );
-}
-
-static void dump_debug_break_request( const struct debug_break_request *req )
-{
-    fprintf( stderr, " handle=%04x", req->handle );
-}
-
-static void dump_debug_break_reply( const struct debug_break_reply *req )
-{
-    fprintf( stderr, " self=%d", req->self );
 }
 
 static void dump_set_debugger_kill_on_exit_request( const struct set_debugger_kill_on_exit_request *req )
@@ -4702,7 +4698,6 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_exception_status_request,
     (dump_func)dump_continue_debug_event_request,
     (dump_func)dump_debug_process_request,
-    (dump_func)dump_debug_break_request,
     (dump_func)dump_set_debugger_kill_on_exit_request,
     (dump_func)dump_read_process_memory_request,
     (dump_func)dump_write_process_memory_request,
@@ -5003,7 +4998,6 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_exception_status_reply,
     NULL,
     NULL,
-    (dump_func)dump_debug_break_reply,
     NULL,
     (dump_func)dump_read_process_memory_reply,
     NULL,
@@ -5304,7 +5298,6 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "get_exception_status",
     "continue_debug_event",
     "debug_process",
-    "debug_break",
     "set_debugger_kill_on_exit",
     "read_process_memory",
     "write_process_memory",
@@ -5517,7 +5510,6 @@ static const struct
     { "ALIAS_EXISTS",                STATUS_ALIAS_EXISTS },
     { "BAD_DEVICE_TYPE",             STATUS_BAD_DEVICE_TYPE },
     { "BAD_IMPERSONATION_LEVEL",     STATUS_BAD_IMPERSONATION_LEVEL },
-    { "BREAKPOINT",                  STATUS_BREAKPOINT },
     { "BUFFER_OVERFLOW",             STATUS_BUFFER_OVERFLOW },
     { "BUFFER_TOO_SMALL",            STATUS_BUFFER_TOO_SMALL },
     { "CANCELLED",                   STATUS_CANCELLED },

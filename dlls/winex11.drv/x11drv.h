@@ -695,6 +695,10 @@ struct x11drv_monitor
 {
     /* Name */
     WCHAR name[128];
+    /* RcMonitor in MONITORINFO struct */
+    RECT rc_monitor;
+    /* RcWork in MONITORINFO struct */
+    RECT rc_work;
     /* StateFlags in DISPLAY_DEVICE struct */
     DWORD state_flags;
 };

@@ -62,10 +62,6 @@ static const char doc_blank_ie9[] =
     "</html>";
 
 static const char doc_str1[] = "<html><body>test</body></html>";
-static const char range_test_str[] =
-    "<html><body>test \na<font size=\"2\">bc\t123<br /> it's\r\n  \t</font>text<br /></body></html>";
-static const char range_test2_str[] =
-    "<html><body>abc<hr />123<br /><hr />def</body></html>";
 static const char elem_test_str[] =
     "<html><head><title>test</title><style id=\"styleid\">.body { margin-right: 0px; }</style>"
     "<meta id=\"metaid\" name=\"meta name\" http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">"
@@ -171,6 +167,7 @@ static const IID * const doc_node_iids[] = {
     &IID_IHTMLDocument3,
     &IID_IHTMLDocument4,
     &IID_IHTMLDocument5,
+    &IID_IDocumentRange,
     &IID_IDocumentSelector,
     &IID_IDispatchEx,
     &IID_IDisplayServices,
@@ -190,6 +187,7 @@ static const IID * const doc_obj_iids[] = {
     &IID_IHTMLDocument3,
     &IID_IHTMLDocument4,
     &IID_IHTMLDocument5,
+    &IID_IDocumentRange,
     &IID_IDocumentSelector,
     &IID_IDispatchEx,
     &IID_IDisplayServices,
@@ -565,11 +563,16 @@ static const elem_type_info_t elem_type_infos[] = {
     {"tspan",     tspan_iids,       NULL}
 };
 
+static int strncmp_wa(LPCWSTR strw, const char *stra, size_t len)
+{
+    WCHAR buf[512];
+    size_t wlen = MultiByteToWideChar(CP_ACP, 0, stra, len, buf, ARRAY_SIZE(buf));
+    return wlen == len && memcmp(strw, buf, len * sizeof(WCHAR));
+}
+
 static int strcmp_wa(LPCWSTR strw, const char *stra)
 {
-    CHAR buf[512];
-    WideCharToMultiByte(CP_ACP, 0, strw, -1, buf, sizeof(buf), NULL, NULL);
-    return lstrcmpA(stra, buf);
+    return strncmp_wa(strw, stra, strlen(stra));
 }
 
 static BOOL is_prefix_wa(const WCHAR *strw, const char *prefix)
@@ -577,7 +580,7 @@ static BOOL is_prefix_wa(const WCHAR *strw, const char *prefix)
     int len, prefix_len;
     CHAR buf[512];
 
-    len = WideCharToMultiByte(CP_ACP, 0, strw, -1, buf, sizeof(buf), NULL, NULL)-1;
+    len = WideCharToMultiByte(CP_ACP, 0, strw, -1, buf, ARRAY_SIZE(buf), NULL, NULL)-1;
     prefix_len = lstrlenA(prefix);
     if(len < prefix_len)
         return FALSE;
@@ -2031,12 +2034,16 @@ static IHTMLFormElement *_get_textarea_form(unsigned line, IUnknown *unk)
 static void _test_comment_text(unsigned line, IUnknown *unk, const char *extext)
 {
     IHTMLCommentElement *comment = _get_comment_iface(__LINE__,unk);
+    const char *p;
     BSTR text;
     HRESULT hres;
 
     hres = IHTMLCommentElement_get_text(comment, &text);
     ok_(__FILE__,line)(hres == S_OK, "get_text failed: %08x\n", hres);
-    ok_(__FILE__,line)(!strcmp_wa(text, extext), "text = \"%s\", expected \"%s\"\n", wine_dbgstr_w(text), extext);
+    if((p = strstr(extext, "-->")) && SysStringLen(text) == p - extext) /* Some IEs drop comment ending */
+        ok_(__FILE__,line)(!strncmp_wa(text, extext, p - extext), "text = \"%s\", expected \"%s\"\n", wine_dbgstr_w(text), extext);
+    else
+        ok_(__FILE__,line)(!strcmp_wa(text, extext), "text = \"%s\", expected \"%s\"\n", wine_dbgstr_w(text), extext);
 
     IHTMLCommentElement_Release(comment);
     SysFreeString(text);
@@ -3048,12 +3055,17 @@ static void _test_elem_set_outerhtml(unsigned line, IUnknown *unk, const char *o
 static void _test_elem_outerhtml(unsigned line, IUnknown *unk, const char *outer_html)
 {
     IHTMLElement *elem = _get_elem_iface(line, unk);
+    const char *p;
     BSTR html;
     HRESULT hres;
 
     hres = IHTMLElement_get_outerHTML(elem, &html);
     ok_(__FILE__,line)(hres == S_OK, "get_outerHTML failed: %08x\n", hres);
-    ok_(__FILE__,line)(!strcmp_wa(html, outer_html), "outerHTML = '%s', expected '%s'\n", wine_dbgstr_w(html), outer_html);
+    if((p = strstr(outer_html, "-->")) && !p[3] && SysStringLen(html) == p - outer_html) /* Some IEs drop comment ending */
+        ok_(__FILE__,line)(!strncmp_wa(html, outer_html, p - outer_html), "text = \"%s\", expected \"%s\"\n",
+                           wine_dbgstr_w(html), outer_html);
+    else
+        ok_(__FILE__,line)(!strcmp_wa(html, outer_html), "outerHTML = '%s', expected '%s'\n", wine_dbgstr_w(html), outer_html);
 
     IHTMLElement_Release(elem);
     SysFreeString(html);
@@ -5076,6 +5088,14 @@ static IHTMLElement *_doc_get_body(unsigned line, IHTMLDocument2 *doc)
     return elem;
 }
 
+static void set_body_html(IHTMLDocument2 *doc, const char *html)
+{
+    IHTMLElement *body;
+    body = doc_get_body(doc);
+    test_elem_set_innerhtml((IUnknown*)body, html);
+    IHTMLElement_Release(body);
+}
+
 #define test_create_elem(d,t) _test_create_elem(__LINE__,d,t)
 static IHTMLElement *_test_create_elem(unsigned line, IHTMLDocument2 *doc, const char *tag)
 {
@@ -5651,6 +5671,8 @@ static void test_txtrange(IHTMLDocument2 *doc)
     IHTMLElement *body;
     HRESULT hres;
 
+    set_body_html(doc, "test \na<font size=\"2\">bc\t123<br /> it's\r\n  \t</font>text<br />");
+
     body_range = test_create_body_range(doc);
 
     test_disp((IUnknown*)body_range, &IID_IHTMLTxtRange, NULL, "[object]");
@@ -5890,11 +5912,7 @@ static void test_txtrange(IHTMLDocument2 *doc)
     IHTMLTxtRange_Release(body_range);
     IHTMLElement_Release(body);
 
-}
-
-static void test_txtrange2(IHTMLDocument2 *doc)
-{
-    IHTMLTxtRange *range;
+    set_body_html(doc, "<html><body>abc<hr />123<br /><hr />def</body></html>");
 
     range = test_create_body_range(doc);
 
@@ -5918,6 +5936,31 @@ static void test_txtrange2(IHTMLDocument2 *doc)
     test_range_text(range, "2");
 
     IHTMLTxtRange_Release(range);
+}
+
+static void test_range(IHTMLDocument2 *doc)
+{
+    if(is_ie9plus) {
+        IDocumentRange *doc_range;
+        IHTMLDOMRange *range;
+        HRESULT hres;
+
+        hres = IHTMLDocument2_QueryInterface(doc, &IID_IDocumentRange, (void **)&doc_range);
+        ok(hres == S_OK, "Failed to get IDocumentRange: %08x\n", hres);
+        if (FAILED(hres))
+            return;
+
+        hres = IDocumentRange_createRange(doc_range, &range);
+        ok(hres == S_OK, "Failed to create range, %08x\n", hres);
+
+        test_disp((IUnknown *)range, &DIID_DispHTMLDOMRange, NULL, NULL);
+
+        IHTMLDOMRange_Release(range);
+
+        IDocumentRange_Release(doc_range);
+    }
+
+    test_txtrange(doc);
 }
 
 #define test_compatmode(a,b) _test_compatmode(__LINE__,a,b)
@@ -9437,16 +9480,12 @@ static IHTMLElementCollection *_doc_get_elems_by_name(unsigned line, IHTMLDocume
 static void test_elem_names(IHTMLDocument2 *doc)
 {
     IHTMLElementCollection *col;
-    IHTMLElement *body;
     LONG len;
     HRESULT hres;
 
     static const elem_type_t test1_types[] = {ET_INPUT, ET_A, ET_DIV};
 
-    body = doc_get_body(doc);
-
-    test_elem_set_innerhtml((IUnknown*)body,
-            "<input name=\"test\"><a name=\"test\"></a><a name=\"xxx\"></a><div id=\"test\"></div>");
+    set_body_html(doc, "<input name=\"test\"><a name=\"test\"></a><a name=\"xxx\"></a><div id=\"test\"></div>");
     col = doc_get_elems_by_name(doc, "test");
     test_elem_collection((IUnknown*)col, test1_types, ARRAY_SIZE(test1_types));
     IHTMLElementCollection_Release(col);
@@ -9461,8 +9500,6 @@ static void test_elem_names(IHTMLDocument2 *doc)
     ok(hres == S_OK, "get_length failed: %08x\n", hres);
     todo_wine ok(len == 1, "len = %d\n", len);
     IHTMLElementCollection_Release(col);
-
-    IHTMLElement_Release(body);
 }
 
 static void test_elems2(IHTMLDocument2 *doc)
@@ -9698,17 +9735,15 @@ static void test_svg_element(IHTMLDocument2 *doc, IHTMLElement *parent)
 
 static void test_dom_elements(IHTMLDocument2 *doc)
 {
-    IHTMLElement *body, *div;
+    IHTMLElement *div;
 
-    body = doc_get_body(doc);
-    test_elem_set_innerhtml((IUnknown*)body, "<div id=\"parentdiv\"></div>");
+    set_body_html(doc, "<div id=\"parentdiv\"></div>");
     div = get_doc_elem_by_id(doc, "parentdiv");
 
     test_textarea_element(doc, div);
     test_form_element(doc, div);
     test_svg_element(doc, div);
 
-    IHTMLElement_Release(body);
     IHTMLElement_Release(div);
 }
 
@@ -11050,8 +11085,7 @@ START_TEST(dom)
 
     run_domtest(doc_str1, test_doc_elem);
     run_domtest(doc_str1, test_get_set_attr);
-    run_domtest(range_test_str, test_txtrange);
-    run_domtest(range_test2_str, test_txtrange2);
+    run_domtest(doc_blank, test_range);
     if (winetest_interactive || ! is_ie_hardened()) {
         run_domtest(elem_test_str, test_elems);
         run_domtest(elem_test2_str, test_elems2);

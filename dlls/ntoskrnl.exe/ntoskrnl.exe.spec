@@ -408,7 +408,7 @@
 @ stub IoGetRequestorProcess
 @ stub IoGetRequestorProcessId
 @ stub IoGetRequestorSessionId
-@ stub IoGetStackLimits
+@ stdcall IoGetStackLimits(ptr ptr)
 @ stub IoGetTopLevelIrp
 @ stdcall IoInitializeIrp(ptr long long)
 @ stdcall IoInitializeRemoveLockEx(ptr long long long long)
@@ -525,8 +525,8 @@
 @ stub KeAddSystemServiceTable
 @ stdcall KeAreApcsDisabled()
 @ stub KeAttachProcess
-@ stub KeBugCheck
-@ stub KeBugCheckEx
+@ stdcall KeBugCheck(long)
+@ stdcall KeBugCheckEx(long long long long long)
 @ stdcall KeCancelTimer(ptr)
 @ stub KeCapturePersistentThreadState
 @ stdcall KeClearEvent(ptr)
@@ -841,7 +841,7 @@
 @ stub PfxInitialize
 @ stub PfxInsertPrefix
 @ stub PfxRemovePrefix
-@ stub PoCallDriver
+@ stdcall PoCallDriver(ptr ptr)
 @ stub PoCancelDeviceNotify
 @ stub PoQueueShutdownWorkItem
 @ stub PoRegisterDeviceForIdleDetection
@@ -853,7 +853,7 @@
 @ stdcall PoSetPowerState(ptr long long)
 @ stub PoSetSystemState
 @ stub PoShutdownBugCheck
-@ stub PoStartNextPowerIrp
+@ stdcall PoStartNextPowerIrp(ptr)
 @ stub PoUnregisterSystemState
 @ stdcall ProbeForRead(ptr long long)
 @ stdcall ProbeForWrite(ptr long long)

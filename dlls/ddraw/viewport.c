@@ -17,9 +17,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-#include "wine/port.h"
-
 #include "ddraw_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(ddraw);
@@ -152,15 +149,10 @@ void viewport_alloc_active_light_index(struct d3d_light *light)
             }
         }
     }
-    map = vp->map_lights;
-    assert(vp->active_lights_count < DDRAW_MAX_ACTIVE_LIGHTS && map != ~0u);
 
-    i = 0;
-    while (map & 1)
-    {
-        map >>= 1;
-        ++i;
-    }
+    map = ~vp->map_lights;
+    assert(vp->active_lights_count < DDRAW_MAX_ACTIVE_LIGHTS && map);
+    i = wined3d_bit_scan(&map);
     light->active_light_index = i + 1;
     ++vp->active_lights_count;
     vp->map_lights |= 1u << i;
