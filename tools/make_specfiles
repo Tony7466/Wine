@@ -196,7 +196,7 @@ my @dll_groups =
  ],
  [
   "kernel32",
-  "kernelbase",
+#  "kernelbase",
   "api-ms-win-appmodel-identity-l1-1-0",
   "api-ms-win-appmodel-runtime-l1-1-1",
   "api-ms-win-downlevel-normaliz-l1-1-0",
@@ -313,7 +313,6 @@ my @dll_groups =
   "user32",
   "shlwapi",
   "version",
-  "kernelbase",
   "api-ms-win-core-bem-l1-1-0",
  ],
  [

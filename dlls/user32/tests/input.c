@@ -72,11 +72,11 @@ static struct {
     LONG last_hook_up;
     LONG last_hook_syskey_down;
     LONG last_hook_syskey_up;
+    WORD vk;
     BOOL expect_alt;
     BOOL sendinput_broken;
 } key_status;
 
-static UINT (WINAPI *pSendInput) (UINT, INPUT*, size_t);
 static BOOL (WINAPI *pGetCurrentInputMessageSource)( INPUT_MESSAGE_SOURCE *source );
 static BOOL (WINAPI *pGetPointerType)(UINT32, POINTER_INPUT_TYPE*);
 static int (WINAPI *pGetMouseMovePointsEx) (UINT, LPMOUSEMOVEPOINT, LPMOUSEMOVEPOINT, int, DWORD);
@@ -116,15 +116,6 @@ typedef struct
     } u;
 } TEST_INPUT;
 
-#define ADDTOINPUTS(kev) \
-inputs[evtctr].type = INPUT_KEYBOARD; \
-    ((TEST_INPUT*)inputs)[evtctr].u.ki.wVk = GETVKEY[ kev]; \
-    ((TEST_INPUT*)inputs)[evtctr].u.ki.wScan = GETSCAN[ kev]; \
-    ((TEST_INPUT*)inputs)[evtctr].u.ki.dwFlags = GETFLAGS[ kev]; \
-    ((TEST_INPUT*)inputs)[evtctr].u.ki.dwExtraInfo = 0; \
-    ((TEST_INPUT*)inputs)[evtctr].u.ki.time = ++timetag; \
-    if( kev) evtctr++;
-
 typedef struct {
     UINT    message;
     WPARAM  wParam;
@@ -163,7 +154,6 @@ static void init_function_pointers(void)
     if (!(p ## func = (void*)GetProcAddress(hdll, #func))) \
       trace("GetProcAddress(%s) failed\n", #func)
 
-    GET_PROC(SendInput);
     GET_PROC(GetCurrentInputMessageSource);
     GET_PROC(GetMouseMovePointsEx);
     GET_PROC(GetPointerType);
@@ -229,17 +219,25 @@ static int KbdMessage( KEV kev, WPARAM *pwParam, LPARAM *plParam )
  */
 static BOOL do_test( HWND hwnd, int seqnr, const KEV td[] )
 {
-    INPUT inputs[MAXKEYEVENTS];
+    TEST_INPUT inputs[MAXKEYEVENTS];
     KMSG expmsg[MAXKEYEVENTS];
     MSG msg;
     char buf[100];
-    UINT evtctr=0;
+    UINT evtctr=0, ret;
     int kmctr, i;
 
     buf[0]='\0';
     TrackSysKey=0; /* see input.c */
-    for( i = 0; i < MAXKEYEVENTS; i++) {
-        ADDTOINPUTS(td[i])
+    for (i = 0; i < MAXKEYEVENTS; i++)
+    {
+        inputs[evtctr].type = INPUT_KEYBOARD;
+        inputs[evtctr].u.ki.wVk = GETVKEY[td[i]];
+        inputs[evtctr].u.ki.wScan = GETSCAN[td[i]];
+        inputs[evtctr].u.ki.dwFlags = GETFLAGS[td[i]];
+        inputs[evtctr].u.ki.dwExtraInfo = 0;
+        inputs[evtctr].u.ki.time = ++timetag;
+        if (td[i]) evtctr++;
+
         strcat(buf, getdesc[td[i]]);
         if(td[i])
             expmsg[i].message = KbdMessage(td[i], &(expmsg[i].wParam), &(expmsg[i].lParam));
@@ -249,8 +247,8 @@ static BOOL do_test( HWND hwnd, int seqnr, const KEV td[] )
     for( kmctr = 0; kmctr < MAXKEYEVENTS && expmsg[kmctr].message; kmctr++)
         ;
     ok( evtctr <= MAXKEYEVENTS, "evtctr is above MAXKEYEVENTS\n" );
-    if( evtctr != pSendInput(evtctr, &inputs[0], sizeof(INPUT)))
-       ok (FALSE, "SendInput failed to send some events\n");
+    ret = SendInput(evtctr, (INPUT *)inputs, sizeof(INPUT));
+    ok(ret == evtctr, "SendInput failed to send some events\n");
     i = 0;
     if (winetest_debug > 1)
         trace("======== key stroke sequence #%d: %s =============\n",
@@ -954,7 +952,7 @@ static void test_Input_blackbox(void)
         i.u.ki.wScan = ii+1 /* useful for debugging */;
         i.u.ki.dwFlags = sendinput_test[ii].dwFlags;
         i.u.ki.wVk = sendinput_test[ii].wVk;
-        pSendInput(1, (INPUT*)&i, sizeof(TEST_INPUT));
+        SendInput(1, (INPUT*)&i, sizeof(TEST_INPUT));
         empty_message_queue();
         GetKeyboardState(ks2);
         compare_and_check(ii, ks1, ks2, &sendinput_test[ii], foreground);
@@ -965,7 +963,7 @@ static void test_Input_blackbox(void)
     UnhookWindowsHookEx(hook);
 }
 
-static void reset_key_status(void)
+static void reset_key_status(WORD vk)
 {
     key_status.last_key_down = -1;
     key_status.last_key_up = -1;
@@ -977,6 +975,7 @@ static void reset_key_status(void)
     key_status.last_hook_up = -1;
     key_status.last_hook_syskey_down = -1;
     key_status.last_hook_syskey_up = -1;
+    key_status.vk = vk;
     key_status.expect_alt = FALSE;
     key_status.sendinput_broken = FALSE;
 }
@@ -996,8 +995,8 @@ static void test_unicode_keys(HWND hwnd, HHOOK hook)
     inputs[0].u.ki.wScan = 0x3c0;
     inputs[0].u.ki.dwFlags = KEYEVENTF_UNICODE;
 
-    reset_key_status();
-    pSendInput(1, (INPUT*)inputs, sizeof(INPUT));
+    reset_key_status(VK_PACKET);
+    SendInput(1, (INPUT*)inputs, sizeof(INPUT));
     while(PeekMessageW(&msg, hwnd, 0, 0, PM_REMOVE)){
         if(msg.message == WM_KEYDOWN && msg.wParam == VK_PACKET){
             TranslateMessage(&msg);
@@ -1018,8 +1017,8 @@ static void test_unicode_keys(HWND hwnd, HHOOK hook)
     inputs[1].u.ki.wScan = 0x3c0;
     inputs[1].u.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
 
-    reset_key_status();
-    pSendInput(1, (INPUT*)(inputs+1), sizeof(INPUT));
+    reset_key_status(VK_PACKET);
+    SendInput(1, (INPUT*)(inputs+1), sizeof(INPUT));
     while(PeekMessageW(&msg, hwnd, 0, 0, PM_REMOVE)){
         if(msg.message == WM_KEYDOWN && msg.wParam == VK_PACKET){
             TranslateMessage(&msg);
@@ -1043,9 +1042,9 @@ static void test_unicode_keys(HWND hwnd, HHOOK hook)
     inputs[1].u.ki.wScan = 0x3041;
     inputs[1].u.ki.dwFlags = KEYEVENTF_UNICODE;
 
-    reset_key_status();
+    reset_key_status(VK_PACKET);
     key_status.expect_alt = TRUE;
-    pSendInput(2, (INPUT*)inputs, sizeof(INPUT));
+    SendInput(2, (INPUT*)inputs, sizeof(INPUT));
     while(PeekMessageW(&msg, hwnd, 0, 0, PM_REMOVE)){
         if(msg.message == WM_SYSKEYDOWN && msg.wParam == VK_PACKET){
             TranslateMessage(&msg);
@@ -1070,9 +1069,9 @@ static void test_unicode_keys(HWND hwnd, HHOOK hook)
     inputs[0].u.ki.wScan = 0;
     inputs[0].u.ki.dwFlags = KEYEVENTF_KEYUP;
 
-    reset_key_status();
+    reset_key_status(VK_PACKET);
     key_status.expect_alt = TRUE;
-    pSendInput(2, (INPUT*)inputs, sizeof(INPUT));
+    SendInput(2, (INPUT*)inputs, sizeof(INPUT));
     while(PeekMessageW(&msg, hwnd, 0, 0, PM_REMOVE)){
         if(msg.message == WM_SYSKEYDOWN && msg.wParam == VK_PACKET){
             TranslateMessage(&msg);
@@ -1085,6 +1084,32 @@ static void test_unicode_keys(HWND hwnd, HHOOK hook)
         if(hook)
             ok(key_status.last_hook_up == 0x3041,
                 "Last hook up msg should have been 0x3041, was: 0x%x\n", key_status.last_hook_up);
+    }
+
+    /* Press and release, non-zero key code. */
+    inputs[0].u.ki.wVk = 0x51;
+    inputs[0].u.ki.wScan = 0x123;
+    inputs[0].u.ki.dwFlags = KEYEVENTF_UNICODE;
+
+    inputs[1].u.ki.wVk = 0x51;
+    inputs[1].u.ki.wScan = 0x123;
+    inputs[1].u.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+
+    reset_key_status(inputs[0].u.ki.wVk);
+    SendInput(2, (INPUT*)inputs, sizeof(INPUT));
+    while (PeekMessageW(&msg, hwnd, 0, 0, PM_REMOVE))
+    {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+
+    if (!key_status.sendinput_broken)
+    {
+        ok(key_status.last_key_down == 0x51, "Unexpected key down %#x.\n", key_status.last_key_down);
+        ok(key_status.last_key_up == 0x51, "Unexpected key up %#x.\n", key_status.last_key_up);
+        if (hook)
+            todo_wine
+            ok(key_status.last_hook_up == 0x23, "Unexpected hook message %#x.\n", key_status.last_hook_up);
     }
 }
 
@@ -1126,7 +1151,8 @@ static LRESULT CALLBACK llkbd_unicode_hook(int nCode, WPARAM wParam, LPARAM lPar
                 ok(info->vkCode == VK_LMENU, "vkCode should have been VK_LMENU[0x%04x], was: 0x%x\n", VK_LMENU, info->vkCode);
                 key_status.expect_alt = FALSE;
             }else
-                ok(info->vkCode == VK_PACKET, "vkCode should have been VK_PACKET[0x%04x], was: 0x%x\n", VK_PACKET, info->vkCode);
+            todo_wine_if(key_status.vk != VK_PACKET)
+                ok(info->vkCode == key_status.vk, "Unexpected vkCode %#x, expected %#x.\n", info->vkCode, key_status.vk);
         }
         switch(wParam){
         case WM_KEYDOWN:
@@ -1599,6 +1625,7 @@ static void test_GetRawInputDeviceList(void)
         char nameA[128];
         UINT sz, len;
         RID_DEVICE_INFO info;
+        HANDLE file;
 
         /* get required buffer size */
         name[0] = '\0';
@@ -1638,6 +1665,14 @@ static void test_GetRawInputDeviceList(void)
         ok(ret == sizeof(info), "GetRawInputDeviceInfo gave wrong return: %d\n", err);
         ok(sz == sizeof(info), "GetRawInputDeviceInfo set wrong size\n");
         ok(info.dwType == devices[i].dwType, "GetRawInputDeviceInfo set wrong type: 0x%x\n", info.dwType);
+
+        /* setupapi returns an NT device path, but CreateFile() < Vista can't
+         * understand that; so use the \\?\ prefix instead */
+        name[1] = '\\';
+        file = CreateFileW(name, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+        todo_wine_if(info.dwType != RIM_TYPEHID)
+            ok(file != INVALID_HANDLE_VALUE, "Failed to open %s, error %u\n", wine_dbgstr_w(name), GetLastError());
+        CloseHandle(file);
     }
 
     /* check if variable changes from larger to smaller value */
@@ -2758,7 +2793,7 @@ static void test_input_message_source(void)
     SendMessageA( hwnd, WM_KEYDOWN, 0, 0 );
     SendMessageA( hwnd, WM_MOUSEMOVE, 0, 0 );
 
-    pSendInput( 2, (INPUT *)inputs, sizeof(INPUT) );
+    SendInput( 2, (INPUT *)inputs, sizeof(INPUT) );
     while (PeekMessageW( &msg, hwnd, 0, 0, PM_REMOVE ))
     {
         expect_src.deviceType = IMDT_KEYBOARD;
@@ -2834,15 +2869,10 @@ START_TEST(input)
     init_function_pointers();
     GetCursorPos( &pos );
 
-    if (pSendInput)
-    {
-        test_Input_blackbox();
-        test_Input_whitebox();
-        test_Input_unicode();
-        test_Input_mouse();
-    }
-    else win_skip("SendInput is not available\n");
-
+    test_Input_blackbox();
+    test_Input_whitebox();
+    test_Input_unicode();
+    test_Input_mouse();
     test_keynames();
     test_mouse_ll_hook();
     test_key_map();

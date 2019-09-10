@@ -429,7 +429,7 @@ static HRESULT VMR9_maybe_init(struct quartz_vmr *This, BOOL force)
     return hr;
 }
 
-static VOID WINAPI VMR9_OnStartStreaming(BaseRenderer* iface)
+static void vmr_start_stream(BaseRenderer *iface)
 {
     struct quartz_vmr *This = impl_from_IBaseFilter(&iface->filter.IBaseFilter_iface);
 
@@ -447,7 +447,7 @@ static VOID WINAPI VMR9_OnStartStreaming(BaseRenderer* iface)
     GetClientRect(This->baseControlWindow.baseWindow.hWnd, &This->target_rect);
 }
 
-static VOID WINAPI VMR9_OnStopStreaming(BaseRenderer* iface)
+static void vmr_stop_stream(BaseRenderer *iface)
 {
     struct quartz_vmr *This = impl_from_IBaseFilter(&iface->filter.IBaseFilter_iface);
 
@@ -558,28 +558,17 @@ static HRESULT vmr_query_interface(BaseRenderer *iface, REFIID iid, void **out)
     return S_OK;
 }
 
-static const BaseRendererFuncTable BaseFuncTable = {
-    VMR9_CheckMediaType,
-    VMR9_DoRenderSample,
-    /**/
-    NULL,
-    NULL,
-    NULL,
-    VMR9_OnStartStreaming,
-    VMR9_OnStopStreaming,
-    NULL,
-    NULL,
-    NULL,
-    VMR9_ShouldDrawSampleNow,
-    NULL,
-    /**/
-    VMR9_CompleteConnect,
-    VMR9_BreakConnect,
-    NULL,
-    NULL,
-    NULL,
-    vmr_destroy,
-    vmr_query_interface,
+static const BaseRendererFuncTable BaseFuncTable =
+{
+    .pfnCheckMediaType = VMR9_CheckMediaType,
+    .pfnDoRenderSample = VMR9_DoRenderSample,
+    .renderer_start_stream = vmr_start_stream,
+    .renderer_stop_stream = vmr_stop_stream,
+    .pfnShouldDrawSampleNow = VMR9_ShouldDrawSampleNow,
+    .pfnCompleteConnect = VMR9_CompleteConnect,
+    .pfnBreakConnect = VMR9_BreakConnect,
+    .renderer_destroy = vmr_destroy,
+    .renderer_query_interface = vmr_query_interface,
 };
 
 static LPWSTR WINAPI VMR9_GetClassWindowStyles(BaseWindow *This, DWORD *pClassStyles, DWORD *pWindowStyles, DWORD *pWindowStylesEx)
@@ -1354,11 +1343,11 @@ static HRESULT WINAPI VMR9FilterConfig_SetImageCompositor(IVMRFilterConfig9 *ifa
     return E_NOTIMPL;
 }
 
-static HRESULT WINAPI VMR9FilterConfig_SetNumberOfStreams(IVMRFilterConfig9 *iface, DWORD max)
+static HRESULT WINAPI VMR9FilterConfig_SetNumberOfStreams(IVMRFilterConfig9 *iface, DWORD count)
 {
-    struct quartz_vmr *This = impl_from_IVMRFilterConfig9(iface);
-
-    FIXME("(%p/%p)->(%u) stub\n", iface, This, max);
+    FIXME("iface %p, count %u, stub!\n", iface, count);
+    if (count == 1)
+        return S_OK;
     return E_NOTIMPL;
 }
 

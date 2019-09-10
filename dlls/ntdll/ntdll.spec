@@ -3,6 +3,9 @@
 #if you change a Nt.. function DON'T FORGET to change the
 #Zw one too.
 
+@ stdcall A_SHAFinal(ptr ptr)
+@ stdcall A_SHAInit(ptr)
+@ stdcall A_SHAUpdate(ptr ptr long)
 @ stdcall ApiSetQueryApiSetPresence(ptr ptr)
 @ stub CsrAllocateCaptureBuffer
 @ stub CsrAllocateCapturePointer
@@ -36,19 +39,28 @@
 @ stub DbgUiConvertStateChangeStructure
 # @ stub DbgUiDebugActiveProcess
 # @ stub DbgUiGetThreadDebugObject
-# @ stub DbgUiIssueRemoteBreakin
+@ stdcall DbgUiIssueRemoteBreakin(long)
 @ stdcall DbgUiRemoteBreakin(ptr)
 # @ stub DbgUiSetThreadDebugObject
 # @ stub DbgUiStopDebugging
 @ stub DbgUiWaitStateChange
 @ stdcall DbgUserBreakPoint()
+@ stdcall EtwEventActivityIdControl(long ptr)
 @ stdcall EtwEventEnabled(int64 ptr)
+@ stdcall EtwEventProviderEnabled(int64 long int64)
 @ stdcall EtwEventRegister(ptr ptr ptr ptr)
 @ stdcall EtwEventSetInformation(int64 long ptr long)
 @ stdcall EtwEventUnregister(int64)
 @ stdcall EtwEventWrite(int64 ptr long ptr)
+@ stdcall EtwEventWriteTransfer(int64 ptr ptr ptr long ptr)
+@ stdcall EtwGetTraceEnableFlags(int64)
+@ stdcall EtwGetTraceEnableLevel(int64)
+@ stdcall -ret64 EtwGetTraceLoggerHandle(ptr)
+@ stdcall EtwLogTraceEvent(int64 ptr)
 @ stdcall EtwRegisterTraceGuidsA(ptr ptr ptr long ptr str str ptr)
 @ stdcall EtwRegisterTraceGuidsW(ptr ptr ptr long ptr wstr wstr ptr)
+@ varargs EtwTraceMessage(int64 long ptr long)
+@ stdcall EtwTraceMessageVa(int64 long ptr long ptr)
 @ stdcall EtwUnregisterTraceGuids(int64)
 # @ stub KiFastSystemCall
 # @ stub KiFastSystemCallRet
@@ -95,6 +107,12 @@
 @ stdcall LdrUnlockLoaderLock(long long)
 @ stdcall LdrUnregisterDllNotification(ptr)
 @ stub LdrVerifyImageMatchesChecksum
+@ stdcall MD4Final(ptr)
+@ stdcall MD4Init(ptr)
+@ stdcall MD4Update(ptr ptr long)
+@ stdcall MD5Final(ptr)
+@ stdcall MD5Init(ptr)
+@ stdcall MD5Update(ptr ptr long)
 @ extern NlsAnsiCodePage
 @ extern NlsMbCodePageTag
 @ extern NlsMbOemCodePageTag
@@ -1388,6 +1406,7 @@
 @ cdecl _memccpy(ptr ptr long long)
 @ cdecl _memicmp(str str long)
 @ varargs _snprintf(ptr long str) NTDLL__snprintf
+@ varargs _snprintf_s(ptr long long str) _snprintf_s
 @ varargs _snwprintf(ptr long wstr) NTDLL__snwprintf
 @ cdecl _splitpath(str ptr ptr ptr ptr)
 @ cdecl _strcmpi(str str) _stricmp
@@ -1401,7 +1420,8 @@
 @ cdecl _ui64tow(int64 ptr long)
 @ cdecl _ultoa(long ptr long)
 @ cdecl _ultow(long ptr long)
-@ cdecl _vsnprintf(ptr long str ptr) NTDLL__vsnprintf
+@ cdecl -norelay _vsnprintf(ptr long str ptr) NTDLL__vsnprintf
+@ cdecl _vsnprintf_s(ptr long str ptr) _vsnprintf_s
 @ cdecl _vsnwprintf(ptr long wstr ptr) NTDLL__vsnwprintf
 @ cdecl _wcsicmp(wstr wstr) NTDLL__wcsicmp
 @ cdecl _wcslwr(wstr) NTDLL__wcslwr

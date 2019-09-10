@@ -39,6 +39,7 @@ static void swapchain_cleanup(struct wined3d_swapchain *swapchain)
 
     TRACE("Destroying swapchain %p.\n", swapchain);
 
+    wined3d_unhook_swapchain(swapchain);
     wined3d_swapchain_set_gamma_ramp(swapchain, 0, &swapchain->orig_gamma);
 
     /* Release the swapchain's draw buffers. Make sure swapchain->back_buffers[0]
@@ -121,7 +122,6 @@ ULONG CDECL wined3d_swapchain_decref(struct wined3d_swapchain *swapchain)
         device = swapchain->device;
         if (device->swapchain_count && device->swapchains[0] == swapchain)
             wined3d_device_uninit_3d(device);
-        wined3d_unhook_swapchain(swapchain);
         wined3d_cs_finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
 
         swapchain_cleanup(swapchain);
@@ -428,9 +428,9 @@ static void swapchain_gl_present(struct wined3d_swapchain *swapchain,
     struct wined3d_texture *back_buffer = swapchain->back_buffers[0];
     const struct wined3d_fb_state *fb = &swapchain->device->cs->fb;
     struct wined3d_rendertarget_view *dsv = fb->depth_stencil;
+    struct wined3d_texture *logo_texture, *cursor_texture;
     const struct wined3d_gl_info *gl_info;
     struct wined3d_context_gl *context_gl;
-    struct wined3d_texture *logo_texture;
     struct wined3d_context *context;
     BOOL render_to_fbo;
 
@@ -456,8 +456,8 @@ static void swapchain_gl_present(struct wined3d_swapchain *swapchain,
                 WINED3D_BLT_SRC_CKEY, NULL, WINED3D_TEXF_POINT);
     }
 
-    if (swapchain->device->bCursorVisible && swapchain->device->cursor_texture
-            && !swapchain->device->hardwareCursor)
+    if ((cursor_texture = swapchain->device->cursor_texture)
+            && swapchain->device->bCursorVisible && !swapchain->device->hardwareCursor)
     {
         RECT dst_rect =
         {
@@ -468,9 +468,7 @@ static void swapchain_gl_present(struct wined3d_swapchain *swapchain,
         };
         RECT src_rect =
         {
-            0, 0,
-            swapchain->device->cursor_texture->resource.width,
-            swapchain->device->cursor_texture->resource.height
+            0, 0, cursor_texture->resource.width, cursor_texture->resource.height
         };
         const RECT clip_rect = {0, 0, back_buffer->resource.width, back_buffer->resource.height};
 
@@ -479,9 +477,8 @@ static void swapchain_gl_present(struct wined3d_swapchain *swapchain,
         if (swapchain->desc.windowed)
             MapWindowPoints(NULL, swapchain->win_handle, (POINT *)&dst_rect, 2);
         if (wined3d_clip_blit(&clip_rect, &dst_rect, &src_rect))
-            wined3d_texture_blt(back_buffer, 0, &dst_rect,
-                    swapchain->device->cursor_texture, 0, &src_rect,
-                    WINED3D_BLT_ALPHA_TEST, NULL, WINED3D_TEXF_POINT);
+            wined3d_texture_blt(back_buffer, 0, &dst_rect, cursor_texture, 0,
+                    &src_rect, WINED3D_BLT_ALPHA_TEST, NULL, WINED3D_TEXF_POINT);
     }
 
     TRACE("Presenting DC %p.\n", context_gl->dc);
@@ -720,25 +717,6 @@ static void wined3d_swapchain_apply_sample_count_override(const struct wined3d_s
     *quality = 0;
 }
 
-static void wined3d_swapchain_cs_init(void *object)
-{
-    struct wined3d_swapchain *swapchain = object;
-    struct wined3d_context *context;
-
-    if (!(context = context_acquire(swapchain->device, swapchain->front_buffer, 0)))
-    {
-        WARN("Failed to acquire context.\n");
-        return;
-    }
-
-    if (wined3d_settings.offscreen_rendering_mode != ORM_FBO
-            && (!swapchain->desc.enable_auto_depth_stencil
-            || swapchain->desc.auto_depth_stencil_format != swapchain->ds_format->id))
-        FIXME("Add OpenGL context recreation support.\n");
-
-    context_release(context);
-}
-
 void swapchain_set_max_frame_latency(struct wined3d_swapchain *swapchain, const struct wined3d_device *device)
 {
     /* Subtract 1 for the implicit OpenGL latency. */
@@ -893,25 +871,6 @@ static HRESULT swapchain_init(struct wined3d_swapchain *swapchain, struct wined3
         }
     }
 
-    if (!(device->wined3d->flags & WINED3D_NO3D))
-    {
-        if (!(swapchain->context = heap_alloc(sizeof(*swapchain->context))))
-        {
-            ERR("Failed to create the context array.\n");
-            hr = E_OUTOFMEMORY;
-            goto err;
-        }
-
-        wined3d_cs_init_object(device->cs, wined3d_swapchain_cs_init, swapchain);
-        wined3d_cs_finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
-
-        if (!swapchain->num_contexts)
-        {
-            hr = WINED3DERR_NOTAVAILABLE;
-            goto err;
-        }
-    }
-
     if (swapchain->desc.backbuffer_count > 0)
     {
         if (!(swapchain->back_buffers = heap_calloc(swapchain->desc.backbuffer_count,
@@ -941,7 +900,7 @@ static HRESULT swapchain_init(struct wined3d_swapchain *swapchain, struct wined3
     }
 
     /* Swapchains share the depth/stencil buffer, so only create a single depthstencil surface. */
-    if (desc->enable_auto_depth_stencil && !(device->wined3d->flags & WINED3D_NO3D))
+    if (desc->enable_auto_depth_stencil)
     {
         TRACE("Creating depth/stencil buffer.\n");
         if (!device->auto_depth_stencil_view)

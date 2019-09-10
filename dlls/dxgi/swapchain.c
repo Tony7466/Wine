@@ -306,6 +306,9 @@ static HRESULT d3d11_swapchain_present(struct d3d11_swapchain *swapchain,
         return DXGI_ERROR_INVALID_CALL;
     }
 
+    if (IsIconic(d3d11_swapchain_get_hwnd(swapchain)))
+        return DXGI_STATUS_OCCLUDED;
+
     if (flags & ~DXGI_PRESENT_TEST)
         FIXME("Unimplemented flags %#x.\n", flags);
     if (flags & DXGI_PRESENT_TEST)
@@ -2682,6 +2685,12 @@ static HRESULT d3d12_swapchain_init(struct d3d12_swapchain *swapchain, IWineDXGI
     VkFence vk_fence;
     VkResult vr;
     HRESULT hr;
+
+    if (window == GetDesktopWindow())
+    {
+        WARN("D3D12 swapchain cannot be created on desktop window.\n");
+        return E_ACCESSDENIED;
+    }
 
     swapchain->IDXGISwapChain3_iface.lpVtbl = &d3d12_swapchain_vtbl;
     swapchain->refcount = 1;

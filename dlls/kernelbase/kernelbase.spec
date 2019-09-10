@@ -1,37 +1,37 @@
-@ stdcall AccessCheck(ptr long long ptr ptr ptr ptr ptr) advapi32.AccessCheck
-@ stdcall AccessCheckAndAuditAlarmW(wstr ptr wstr wstr ptr long ptr long ptr ptr ptr) advapi32.AccessCheckAndAuditAlarmW
-@ stdcall AccessCheckByType(ptr ptr long long ptr long ptr ptr ptr ptr ptr) advapi32.AccessCheckByType
+@ stdcall AccessCheck(ptr long long ptr ptr ptr ptr ptr)
+@ stdcall AccessCheckAndAuditAlarmW(wstr ptr wstr wstr ptr long ptr long ptr ptr ptr)
+@ stdcall AccessCheckByType(ptr ptr long long ptr long ptr ptr ptr ptr ptr)
 @ stub AccessCheckByTypeAndAuditAlarmW
 @ stub AccessCheckByTypeResultList
 @ stub AccessCheckByTypeResultListAndAuditAlarmByHandleW
 @ stub AccessCheckByTypeResultListAndAuditAlarmW
-@ stdcall AcquireSRWLockExclusive(ptr) kernel32.AcquireSRWLockExclusive
-@ stdcall AcquireSRWLockShared(ptr) kernel32.AcquireSRWLockShared
+@ stdcall AcquireSRWLockExclusive(ptr) ntdll.RtlAcquireSRWLockExclusive
+@ stdcall AcquireSRWLockShared(ptr) ntdll.RtlAcquireSRWLockShared
 # @ stub AcquireStateLock
-@ stdcall ActivateActCtx(ptr ptr) kernel32.ActivateActCtx
-@ stdcall AddAccessAllowedAce(ptr long long ptr) advapi32.AddAccessAllowedAce
-@ stdcall AddAccessAllowedAceEx(ptr long long long ptr) advapi32.AddAccessAllowedAceEx
-@ stdcall AddAccessAllowedObjectAce(ptr long long long ptr ptr ptr) advapi32.AddAccessAllowedObjectAce
-@ stdcall AddAccessDeniedAce(ptr long long ptr) advapi32.AddAccessDeniedAce
-@ stdcall AddAccessDeniedAceEx(ptr long long long ptr) advapi32.AddAccessDeniedAceEx
-@ stdcall AddAccessDeniedObjectAce(ptr long long long ptr ptr ptr) advapi32.AddAccessDeniedObjectAce
-@ stdcall AddAce(ptr long long ptr long) advapi32.AddAce
-@ stdcall AddAuditAccessAce(ptr long long ptr long long) advapi32.AddAuditAccessAce
-@ stdcall AddAuditAccessAceEx(ptr long long long ptr long long) advapi32.AddAuditAccessAceEx
-@ stdcall AddAuditAccessObjectAce(ptr long long long ptr ptr ptr long long) advapi32.AddAuditAccessObjectAce
+@ stdcall ActivateActCtx(ptr ptr)
+@ stdcall AddAccessAllowedAce(ptr long long ptr)
+@ stdcall AddAccessAllowedAceEx(ptr long long long ptr)
+@ stdcall AddAccessAllowedObjectAce(ptr long long long ptr ptr ptr)
+@ stdcall AddAccessDeniedAce(ptr long long ptr)
+@ stdcall AddAccessDeniedAceEx(ptr long long long ptr)
+@ stdcall AddAccessDeniedObjectAce(ptr long long long ptr ptr ptr)
+@ stdcall AddAce(ptr long long ptr long)
+@ stdcall AddAuditAccessAce(ptr long long ptr long long)
+@ stdcall AddAuditAccessAceEx(ptr long long long ptr long long)
+@ stdcall AddAuditAccessObjectAce(ptr long long long ptr ptr ptr long long)
 @ stdcall AddDllDirectory(wstr) kernel32.AddDllDirectory
-@ stdcall AddMandatoryAce(ptr long long long ptr) advapi32.AddMandatoryAce
-@ stdcall AddRefActCtx(ptr) kernel32.AddRefActCtx
+@ stdcall AddMandatoryAce(ptr long long long ptr)
+@ stdcall AddRefActCtx(ptr)
 # @ stub AddResourceAttributeAce
 # @ stub AddSIDToBoundaryDescriptor
 # @ stub AddScopedPolicyIDAce
-@ stdcall AddVectoredContinueHandler(long ptr) kernel32.AddVectoredContinueHandler
-@ stdcall AddVectoredExceptionHandler(long ptr) kernel32.AddVectoredExceptionHandler
-@ stdcall AdjustTokenGroups(long long ptr long ptr ptr) advapi32.AdjustTokenGroups
-@ stdcall AdjustTokenPrivileges(long long ptr long ptr ptr) advapi32.AdjustTokenPrivileges
+@ stdcall AddVectoredContinueHandler(long ptr) ntdll.RtlAddVectoredContinueHandler
+@ stdcall AddVectoredExceptionHandler(long ptr) ntdll.RtlAddVectoredExceptionHandler
+@ stdcall AdjustTokenGroups(long long ptr long ptr ptr)
+@ stdcall AdjustTokenPrivileges(long long ptr long ptr ptr)
 @ stdcall AllocConsole() kernel32.AllocConsole
-@ stdcall AllocateAndInitializeSid(ptr long long long long long long long long long ptr) advapi32.AllocateAndInitializeSid
-@ stdcall AllocateLocallyUniqueId(ptr) advapi32.AllocateLocallyUniqueId
+@ stdcall AllocateAndInitializeSid(ptr long long long long long long long long long ptr)
+@ stdcall AllocateLocallyUniqueId(ptr)
 @ stdcall AllocateUserPhysicalPages(long ptr ptr) kernel32.AllocateUserPhysicalPages
 # @ stub AllocateUserPhysicalPagesNuma
 # @ stub AppContainerDeriveSidFromMoniker
@@ -62,8 +62,8 @@
 # @ stub AppXReleaseAppXContext
 # @ stub AppXUpdatePackageCapabilities
 # @ stub ApplicationUserModelIdFromProductId
-@ stdcall AreAllAccessesGranted(long long) advapi32.AreAllAccessesGranted
-@ stdcall AreAnyAccessesGranted(long long) advapi32.AreAnyAccessesGranted
+@ stdcall AreAllAccessesGranted(long long)
+@ stdcall AreAnyAccessesGranted(long long)
 @ stdcall AreFileApisANSI() kernel32.AreFileApisANSI
 # @ stub AreThereVisibleLogoffScriptsInternal
 # @ stub AreThereVisibleShutdownScriptsInternal
@@ -77,7 +77,7 @@
 @ stdcall BaseFlushAppcompatCache() kernel32.BaseFlushAppcompatCache
 # @ stub BaseFormatObjectAttributes
 # @ stub BaseFreeAppCompatDataForProcess
-# @ stub BaseGetNamedObjectDirectory
+@ stdcall BaseGetNamedObjectDirectory(ptr)
 @ stub BaseGetProcessDllPath
 @ stub BaseGetProcessExePath
 @ stub BaseInitAppcompatCacheSupport
@@ -100,15 +100,15 @@
 @ stub BemFreeContract
 @ stub BemFreeReference
 # @ stub CLOSE_LOCAL_HANDLE_INTERNAL
-@ stdcall CallNamedPipeW(wstr ptr long ptr long ptr long) kernel32.CallNamedPipeW
+@ stdcall CallNamedPipeW(wstr ptr long ptr long ptr long)
 @ stdcall CallbackMayRunLong(ptr) kernel32.CallbackMayRunLong
 @ stdcall CancelIo(long) kernel32.CancelIo
 @ stdcall CancelIoEx(long ptr) kernel32.CancelIoEx
 @ stdcall CancelSynchronousIo(long) kernel32.CancelSynchronousIo
 @ stub CancelThreadpoolIo
-@ stdcall CancelWaitableTimer(long) kernel32.CancelWaitableTimer
+@ stdcall CancelWaitableTimer(long)
 # @ stub CeipIsOptedIn
-@ stdcall ChangeTimerQueueTimer(ptr ptr long long) kernel32.ChangeTimerQueueTimer
+@ stdcall ChangeTimerQueueTimer(ptr ptr long long)
 @ stdcall CharLowerA(str)
 @ stdcall CharLowerBuffA(str long)
 @ stdcall CharLowerBuffW(wstr long)
@@ -128,7 +128,7 @@
 # @ stub CheckIfStateChangeNotificationExists
 @ stdcall CheckRemoteDebuggerPresent(long ptr) kernel32.CheckRemoteDebuggerPresent
 # @ stub CheckTokenCapability
-@ stdcall CheckTokenMembership(long ptr ptr) advapi32.CheckTokenMembership
+@ stdcall CheckTokenMembership(long ptr ptr)
 # @ stub CheckTokenMembershipEx
 @ stdcall ChrCmpIA(long long)
 @ stdcall ChrCmpIW(long long)
@@ -143,13 +143,13 @@
 # @ stub CloseStateChangeNotification
 # @ stub CloseStateContainer
 # @ stub CloseStateLock
-@ stdcall CloseThreadpool(ptr) kernel32.CloseThreadpool
-@ stdcall CloseThreadpoolCleanupGroup(ptr) kernel32.CloseThreadpoolCleanupGroup
-@ stdcall CloseThreadpoolCleanupGroupMembers(ptr long ptr) kernel32.CloseThreadpoolCleanupGroupMembers
+@ stdcall CloseThreadpool(ptr) ntdll.TpReleasePool
+@ stdcall CloseThreadpoolCleanupGroup(ptr) ntdll.TpReleaseCleanupGroup
+@ stdcall CloseThreadpoolCleanupGroupMembers(ptr long ptr) ntdll.TpReleaseCleanupGroupMembers
 @ stub CloseThreadpoolIo
-@ stdcall CloseThreadpoolTimer(ptr) kernel32.CloseThreadpoolTimer
-@ stdcall CloseThreadpoolWait(ptr) kernel32.CloseThreadpoolWait
-@ stdcall CloseThreadpoolWork(ptr) kernel32.CloseThreadpoolWork
+@ stdcall CloseThreadpoolTimer(ptr) ntdll.TpReleaseTimer
+@ stdcall CloseThreadpoolWait(ptr) ntdll.TpReleaseWait
+@ stdcall CloseThreadpoolWork(ptr) ntdll.TpReleaseWork
 # @ stub CommitStateAtom
 @ stdcall CompareFileTime(ptr ptr) kernel32.CompareFileTime
 # @ stub CompareObjectHandles
@@ -157,21 +157,21 @@
 @ stdcall CompareStringEx(wstr long wstr long wstr long ptr ptr long) kernel32.CompareStringEx
 @ stdcall CompareStringOrdinal(wstr long wstr long long) kernel32.CompareStringOrdinal
 @ stdcall CompareStringW(long long wstr long wstr long) kernel32.CompareStringW
-@ stdcall ConnectNamedPipe(long ptr) kernel32.ConnectNamedPipe
+@ stdcall ConnectNamedPipe(long ptr)
 @ stdcall ContinueDebugEvent(long long long) kernel32.ContinueDebugEvent
 @ stdcall ConvertDefaultLocale(long) kernel32.ConvertDefaultLocale
 @ stdcall ConvertFiberToThread() kernel32.ConvertFiberToThread
 @ stdcall ConvertThreadToFiber(ptr) kernel32.ConvertThreadToFiber
 @ stdcall ConvertThreadToFiberEx(ptr long) kernel32.ConvertThreadToFiberEx
-@ stdcall ConvertToAutoInheritPrivateObjectSecurity(ptr ptr ptr ptr long ptr) advapi32.ConvertToAutoInheritPrivateObjectSecurity
+@ stdcall ConvertToAutoInheritPrivateObjectSecurity(ptr ptr ptr ptr long ptr)
 # @ stub CopyContext
 # @ stub CopyFile2
 @ stdcall CopyFileExW(wstr wstr ptr ptr ptr long) kernel32.CopyFileExW
 @ stdcall CopyFileW(wstr wstr long) kernel32.CopyFileW
 # @ stub -arch=x86_64 CopyMemoryNonTemporal
-@ stdcall CopySid(long ptr ptr) advapi32.CopySid
+@ stdcall CopySid(long ptr ptr)
 # @ stub CouldMultiUserAppsBehaviorBePossibleForPackage
-@ stdcall CreateActCtxW(ptr) kernel32.CreateActCtxW
+@ stdcall CreateActCtxW(ptr)
 # @ stub CreateAppContainerToken
 # @ stub CreateBoundaryDescriptorW
 @ stdcall CreateConsoleScreenBuffer(long long ptr long ptr) kernel32.CreateConsoleScreenBuffer
@@ -179,32 +179,32 @@
 @ stdcall CreateDirectoryExW(wstr wstr ptr) kernel32.CreateDirectoryExW
 @ stdcall CreateDirectoryW(wstr ptr) kernel32.CreateDirectoryW
 # @ stub CreateEnclave
-@ stdcall CreateEventA(ptr long long str) kernel32.CreateEventA
-@ stdcall CreateEventExA(ptr str long long) kernel32.CreateEventExA
-@ stdcall CreateEventExW(ptr wstr long long) kernel32.CreateEventExW
-@ stdcall CreateEventW(ptr long long wstr) kernel32.CreateEventW
+@ stdcall CreateEventA(ptr long long str)
+@ stdcall CreateEventExA(ptr str long long)
+@ stdcall CreateEventExW(ptr wstr long long)
+@ stdcall CreateEventW(ptr long long wstr)
 @ stdcall CreateFiber(long ptr ptr) kernel32.CreateFiber
 @ stdcall CreateFiberEx(long long long ptr ptr) kernel32.CreateFiberEx
 @ stdcall CreateFile2(wstr long long long ptr) kernel32.CreateFile2
 @ stdcall CreateFileA(str long long ptr long long long) kernel32.CreateFileA
 # @ stub CreateFileMappingFromApp
 @ stub CreateFileMappingNumaW
-@ stdcall CreateFileMappingW(long ptr long long long wstr) kernel32.CreateFileMappingW
+@ stdcall CreateFileMappingW(long ptr long long long wstr)
 @ stdcall CreateFileW(wstr long long ptr long long long) kernel32.CreateFileW
 @ stdcall CreateHardLinkA(str str ptr) kernel32.CreateHardLinkA
 @ stdcall CreateHardLinkW(wstr wstr ptr) kernel32.CreateHardLinkW
-@ stdcall CreateIoCompletionPort(long long long long) kernel32.CreateIoCompletionPort
+@ stdcall CreateIoCompletionPort(long long long long)
 @ stdcall CreateMemoryResourceNotification(long) kernel32.CreateMemoryResourceNotification
-@ stdcall CreateMutexA(ptr long str) kernel32.CreateMutexA
-@ stdcall CreateMutexExA(ptr str long long) kernel32.CreateMutexExA
-@ stdcall CreateMutexExW(ptr wstr long long) kernel32.CreateMutexExW
-@ stdcall CreateMutexW(ptr long wstr) kernel32.CreateMutexW
-@ stdcall CreateNamedPipeW(wstr long long long long long long ptr) kernel32.CreateNamedPipeW
+@ stdcall CreateMutexA(ptr long str)
+@ stdcall CreateMutexExA(ptr str long long)
+@ stdcall CreateMutexExW(ptr wstr long long)
+@ stdcall CreateMutexW(ptr long wstr)
+@ stdcall CreateNamedPipeW(wstr long long long long long long ptr)
 @ stdcall CreatePipe(ptr ptr ptr long) kernel32.CreatePipe
 # @ stub CreatePrivateNamespaceW
-@ stdcall CreatePrivateObjectSecurity(ptr ptr ptr long long ptr) advapi32.CreatePrivateObjectSecurity
-@ stdcall CreatePrivateObjectSecurityEx(ptr ptr ptr ptr long long long ptr) advapi32.CreatePrivateObjectSecurityEx
-@ stdcall CreatePrivateObjectSecurityWithMultipleInheritance(ptr ptr ptr ptr long long long long ptr) advapi32.CreatePrivateObjectSecurityWithMultipleInheritance
+@ stdcall CreatePrivateObjectSecurity(ptr ptr ptr long long ptr)
+@ stdcall CreatePrivateObjectSecurityEx(ptr ptr ptr ptr long long long ptr)
+@ stdcall CreatePrivateObjectSecurityWithMultipleInheritance(ptr ptr ptr ptr long long long long ptr)
 @ stdcall CreateProcessA(str str ptr ptr long long ptr str ptr ptr) kernel32.CreateProcessA
 @ stdcall CreateProcessAsUserA(long str str ptr ptr long long ptr str ptr ptr) kernel32.CreateProcessAsUserA
 @ stdcall CreateProcessAsUserW(long wstr wstr ptr ptr long long ptr wstr ptr ptr) kernel32.CreateProcessAsUserW
@@ -213,9 +213,9 @@
 @ stdcall CreateProcessW(wstr wstr ptr ptr long long ptr wstr ptr ptr) kernel32.CreateProcessW
 @ stdcall CreateRemoteThread(long ptr long ptr long long ptr) kernel32.CreateRemoteThread
 @ stdcall CreateRemoteThreadEx(long ptr long ptr ptr long ptr ptr) kernel32.CreateRemoteThreadEx
-@ stdcall CreateRestrictedToken(long long long ptr long ptr long ptr ptr) advapi32.CreateRestrictedToken
-@ stdcall CreateSemaphoreExW(ptr long long wstr long long) kernel32.CreateSemaphoreExW
-@ stdcall CreateSemaphoreW(ptr long long wstr) kernel32.CreateSemaphoreW
+@ stdcall CreateRestrictedToken(long long long ptr long ptr long ptr ptr)
+@ stdcall CreateSemaphoreExW(ptr long long wstr long long)
+@ stdcall CreateSemaphoreW(ptr long long wstr)
 # @ stub CreateStateAtom
 # @ stub CreateStateChangeNotification
 # @ stub CreateStateContainer
@@ -229,26 +229,26 @@
 @ stdcall CreateThreadpoolTimer(ptr ptr ptr) kernel32.CreateThreadpoolTimer
 @ stdcall CreateThreadpoolWait(ptr ptr ptr) kernel32.CreateThreadpoolWait
 @ stdcall CreateThreadpoolWork(ptr ptr ptr) kernel32.CreateThreadpoolWork
-@ stdcall CreateTimerQueue() kernel32.CreateTimerQueue
-@ stdcall CreateTimerQueueTimer(ptr long ptr ptr long long long) kernel32.CreateTimerQueueTimer
-@ stdcall CreateWaitableTimerExW(ptr wstr long long) kernel32.CreateWaitableTimerExW
-@ stdcall CreateWaitableTimerW(ptr long wstr) kernel32.CreateWaitableTimerW
-@ stdcall CreateWellKnownSid(long ptr ptr ptr) advapi32.CreateWellKnownSid
+@ stdcall CreateTimerQueue()
+@ stdcall CreateTimerQueueTimer(ptr long ptr ptr long long long)
+@ stdcall CreateWaitableTimerExW(ptr wstr long long)
+@ stdcall CreateWaitableTimerW(ptr long wstr)
+@ stdcall CreateWellKnownSid(long ptr ptr ptr)
 # @ stub CtrlRoutine
 # @ stub CveEventWrite
-@ stdcall DeactivateActCtx(long long) kernel32.DeactivateActCtx
+@ stdcall DeactivateActCtx(long long)
 @ stdcall DebugActiveProcess(long) kernel32.DebugActiveProcess
 @ stdcall DebugActiveProcessStop(long) kernel32.DebugActiveProcessStop
 @ stdcall DebugBreak() kernel32.DebugBreak
-@ stdcall DecodePointer(ptr) kernel32.DecodePointer
+@ stdcall DecodePointer(ptr) ntdll.RtlDecodePointer
 # @ stub DecodeRemotePointer
-@ stdcall DecodeSystemPointer(ptr) kernel32.DecodeSystemPointer
+@ stdcall DecodeSystemPointer(ptr) ntdll.RtlDecodeSystemPointer
 @ stdcall DefineDosDeviceW(long wstr wstr) kernel32.DefineDosDeviceW
 @ stdcall DelayLoadFailureHook(str str) kernel32.DelayLoadFailureHook
 # @ stub DelayLoadFailureHookLookup
-@ stdcall DeleteAce(ptr long) advapi32.DeleteAce
+@ stdcall DeleteAce(ptr long)
 # @ stub DeleteBoundaryDescriptor
-@ stdcall DeleteCriticalSection(ptr) kernel32.DeleteCriticalSection
+@ stdcall DeleteCriticalSection(ptr) ntdll.RtlDeleteCriticalSection
 @ stdcall DeleteFiber(ptr) kernel32.DeleteFiber
 @ stdcall DeleteFileA(str) kernel32.DeleteFileA
 @ stdcall DeleteFileW(wstr) kernel32.DeleteFileW
@@ -257,16 +257,16 @@
 # @ stub DeleteStateContainer
 # @ stub DeleteStateContainerValue
 # @ stub DeleteSynchronizationBarrier
-@ stdcall DeleteTimerQueueEx(long long) kernel32.DeleteTimerQueueEx
-@ stdcall DeleteTimerQueueTimer(long long long) kernel32.DeleteTimerQueueTimer
+@ stdcall DeleteTimerQueueEx(long long)
+@ stdcall DeleteTimerQueueTimer(long long long)
 @ stdcall DeleteVolumeMountPointW(wstr) kernel32.DeleteVolumeMountPointW
-@ stdcall DestroyPrivateObjectSecurity(ptr) advapi32.DestroyPrivateObjectSecurity
+@ stdcall DestroyPrivateObjectSecurity(ptr)
 @ stdcall DeviceIoControl(long long ptr long ptr long ptr ptr) kernel32.DeviceIoControl
-# @ stub DisablePredefinedHandleTableInternal
+@ stdcall DisablePredefinedHandleTableInternal(long)
 @ stdcall DisableThreadLibraryCalls(long) kernel32.DisableThreadLibraryCalls
-@ stdcall DisassociateCurrentThreadFromCallback(ptr) kernel32.DisassociateCurrentThreadFromCallback
+@ stdcall DisassociateCurrentThreadFromCallback(ptr) ntdll.TpDisassociateCallback
 # @ stub DiscardVirtualMemory
-@ stdcall DisconnectNamedPipe(long) kernel32.DisconnectNamedPipe
+@ stdcall DisconnectNamedPipe(long)
 # @ stub DnsHostnameToComputerNameExW
 # @ stub DsBindWithSpnExW
 # @ stub DsCrackNamesW
@@ -281,14 +281,14 @@
 # @ stub DsWriteNgcKeyW
 @ stdcall DuplicateHandle(long long long ptr long long long) kernel32.DuplicateHandle
 # @ stub DuplicateStateContainerHandle
-@ stdcall DuplicateToken(long long ptr) advapi32.DuplicateToken
-@ stdcall DuplicateTokenEx(long long ptr long long ptr) advapi32.DuplicateTokenEx
+@ stdcall DuplicateToken(long long ptr)
+@ stdcall DuplicateTokenEx(long long ptr long long ptr)
 # @ stub EmptyWorkingSet
-@ stdcall EncodePointer(ptr) kernel32.EncodePointer
+@ stdcall EncodePointer(ptr) ntdll.RtlEncodePointer
 # @ stub EncodeRemotePointer
-@ stdcall EncodeSystemPointer(ptr) kernel32.EncodeSystemPointer
+@ stdcall EncodeSystemPointer(ptr) ntdll.RtlEncodeSystemPointer
 # @ stub EnterCriticalPolicySectionInternal
-@ stdcall EnterCriticalSection(ptr) kernel32.EnterCriticalSection
+@ stdcall EnterCriticalSection(ptr) ntdll.RtlEnterCriticalSection
 # @ stub EnterSynchronizationBarrier
 @ stdcall EnumCalendarInfoExEx(ptr wstr long wstr long long) kernel32.EnumCalendarInfoExEx
 @ stdcall EnumCalendarInfoExW(ptr long long long) kernel32.EnumCalendarInfoExW
@@ -297,20 +297,20 @@
 @ stdcall EnumDateFormatsExW(ptr long long) kernel32.EnumDateFormatsExW
 @ stdcall EnumDateFormatsW(ptr long long) kernel32.EnumDateFormatsW
 # @ stub EnumDeviceDrivers
-@ stdcall EnumDynamicTimeZoneInformation(long ptr) advapi32.EnumDynamicTimeZoneInformation
+@ stdcall EnumDynamicTimeZoneInformation(long ptr)
 @ stdcall EnumLanguageGroupLocalesW(ptr long long ptr) kernel32.EnumLanguageGroupLocalesW
 # @ stub EnumPageFilesA
 # @ stub EnumPageFilesW
 # @ stub EnumProcessModules
 # @ stub EnumProcessModulesEx
 # @ stub EnumProcesses
-@ stdcall EnumResourceLanguagesExA(long str str ptr long long long) kernel32.EnumResourceLanguagesExA
-@ stdcall EnumResourceLanguagesExW(long wstr wstr ptr long long long) kernel32.EnumResourceLanguagesExW
-# @ stub EnumResourceNamesExA
-# @ stub EnumResourceNamesExW
-@ stdcall EnumResourceNamesW(long wstr ptr long) kernel32.EnumResourceNamesW
-# @ stub EnumResourceTypesExA
-# @ stub EnumResourceTypesExW
+@ stdcall EnumResourceLanguagesExA(long str str ptr long long long)
+@ stdcall EnumResourceLanguagesExW(long wstr wstr ptr long long long)
+@ stdcall EnumResourceNamesExA(long str ptr long long long)
+@ stdcall EnumResourceNamesExW(long wstr ptr long long long)
+@ stdcall EnumResourceNamesW(long wstr ptr long)
+@ stdcall EnumResourceTypesExA(long ptr long long long)
+@ stdcall EnumResourceTypesExW(long ptr long long long)
 @ stdcall EnumSystemCodePagesW(ptr long) kernel32.EnumSystemCodePagesW
 # @ stub EnumSystemFirmwareTables
 @ stdcall EnumSystemGeoID(long long ptr) kernel32.EnumSystemGeoID
@@ -324,21 +324,21 @@
 # @ stub EnumerateStateAtomValues
 # @ stub EnumerateStateContainerItems
 @ stub EqualDomainSid
-@ stdcall EqualPrefixSid(ptr ptr) advapi32.EqualPrefixSid
-@ stdcall EqualSid(ptr ptr) advapi32.EqualSid
+@ stdcall EqualPrefixSid(ptr ptr)
+@ stdcall EqualSid(ptr ptr)
 @ stdcall EscapeCommFunction(long long) kernel32.EscapeCommFunction
-@ stdcall EventActivityIdControl(long ptr) advapi32.EventActivityIdControl
-@ stdcall EventEnabled(int64 ptr) advapi32.EventEnabled
-@ stdcall EventProviderEnabled(int64 long int64) advapi32.EventProviderEnabled
-@ stdcall EventRegister(ptr ptr ptr ptr) advapi32.EventRegister
-@ stdcall EventSetInformation(int64 long ptr long) advapi32.EventSetInformation
-@ stdcall EventUnregister(int64) advapi32.EventUnregister
-@ stdcall EventWrite(int64 ptr long ptr) advapi32.EventWrite
+@ stdcall EventActivityIdControl(long ptr) ntdll.EtwEventActivityIdControl
+@ stdcall EventEnabled(int64 ptr) ntdll.EtwEventEnabled
+@ stdcall EventProviderEnabled(int64 long int64) ntdll.EtwEventProviderEnabled
+@ stdcall EventRegister(ptr ptr ptr ptr) ntdll.EtwEventRegister
+@ stdcall EventSetInformation(int64 long ptr long) ntdll.EtwEventSetInformation
+@ stdcall EventUnregister(int64) ntdll.EtwEventUnregister
+@ stdcall EventWrite(int64 ptr long ptr) ntdll.EtwEventWrite
 # @ stub EventWriteEx
 # @ stub EventWriteString
-@ stdcall EventWriteTransfer(int64 ptr ptr ptr long ptr) advapi32.EventWriteTransfer
-@ stdcall ExitProcess(long) kernel32.ExitProcess
-@ stdcall ExitThread(long) kernel32.ExitThread
+@ stdcall EventWriteTransfer(int64 ptr ptr ptr long ptr) ntdll.EtwEventWriteTransfer
+@ stdcall ExitProcess(long) ntdll.RtlExitUserProcess
+@ stdcall ExitThread(long) ntdll.RtlExitUserThread
 @ stdcall ExpandEnvironmentStringsA(str ptr long) kernel32.ExpandEnvironmentStringsA
 @ stdcall ExpandEnvironmentStringsW(wstr ptr long) kernel32.ExpandEnvironmentStringsW
 @ stdcall FatalAppExitA(long str) kernel32.FatalAppExitA
@@ -348,8 +348,8 @@
 @ stdcall FillConsoleOutputAttribute(long long long long ptr) kernel32.FillConsoleOutputAttribute
 @ stdcall FillConsoleOutputCharacterA(long long long long ptr) kernel32.FillConsoleOutputCharacterA
 @ stdcall FillConsoleOutputCharacterW(long long long long ptr) kernel32.FillConsoleOutputCharacterW
-@ stdcall FindActCtxSectionGuid(long ptr long ptr ptr) kernel32.FindActCtxSectionGuid
-@ stdcall FindActCtxSectionStringW(long ptr long wstr ptr) kernel32.FindActCtxSectionStringW
+@ stdcall FindActCtxSectionGuid(long ptr long ptr ptr)
+@ stdcall FindActCtxSectionStringW(long ptr long wstr ptr)
 @ stdcall FindClose(long) kernel32.FindClose
 @ stdcall FindCloseChangeNotification(long) kernel32.FindCloseChangeNotification
 @ stdcall FindFirstChangeNotificationA(str long long) kernel32.FindFirstChangeNotificationA
@@ -359,7 +359,7 @@
 @ stdcall FindFirstFileExW(wstr long ptr long ptr long) kernel32.FindFirstFileExW
 # @ stub FindFirstFileNameW
 @ stdcall FindFirstFileW(wstr ptr) kernel32.FindFirstFileW
-@ stdcall FindFirstFreeAce(ptr ptr) advapi32.FindFirstFreeAce
+@ stdcall FindFirstFreeAce(ptr ptr)
 @ stdcall FindFirstStreamW(wstr long ptr long) kernel32.FindFirstStreamW
 @ stdcall FindFirstVolumeW(ptr long) kernel32.FindFirstVolumeW
 @ stub FindNLSString
@@ -371,8 +371,8 @@
 @ stdcall FindNextStreamW(long ptr) kernel32.FindNextStreamW
 @ stdcall FindNextVolumeW(long ptr long) kernel32.FindNextVolumeW
 # @ stub FindPackagesByPackageFamily
-@ stdcall FindResourceExW(long wstr wstr long) kernel32.FindResourceExW
-@ stdcall FindResourceW(long wstr wstr) kernel32.FindResourceW
+@ stdcall FindResourceExW(long wstr wstr long)
+@ stdcall FindResourceW(long wstr wstr)
 @ stdcall FindStringOrdinal(long wstr long wstr long long) kernel32.FindStringOrdinal
 @ stdcall FindVolumeClose(ptr) kernel32.FindVolumeClose
 @ stdcall FlsAlloc(ptr) kernel32.FlsAlloc
@@ -396,17 +396,17 @@
 # @ stub FreeGPOListInternalW
 @ stdcall FreeLibrary(long) kernel32.FreeLibrary
 @ stdcall FreeLibraryAndExitThread(long long) kernel32.FreeLibraryAndExitThread
-@ stdcall FreeLibraryWhenCallbackReturns(ptr ptr) kernel32.FreeLibraryWhenCallbackReturns
-@ stdcall FreeResource(long) kernel32.FreeResource
-@ stdcall FreeSid(ptr) advapi32.FreeSid
+@ stdcall FreeLibraryWhenCallbackReturns(ptr ptr) ntdll.TpCallbackUnloadDllOnCompletion
+@ stdcall FreeResource(long)
+@ stdcall FreeSid(ptr)
 @ stdcall FreeUserPhysicalPages(long ptr ptr) kernel32.FreeUserPhysicalPages
 @ stdcall GenerateConsoleCtrlEvent(long long) kernel32.GenerateConsoleCtrlEvent
 # @ stub GenerateGPNotificationInternal
 @ stdcall GetACP() kernel32.GetACP
 @ stdcall GetAcceptLanguagesA(ptr ptr)
 @ stdcall GetAcceptLanguagesW(ptr ptr)
-@ stdcall GetAce(ptr long ptr) advapi32.GetAce
-@ stdcall GetAclInformation(ptr ptr long long) advapi32.GetAclInformation
+@ stdcall GetAce(ptr long ptr)
+@ stdcall GetAclInformation(ptr ptr long long)
 # @ stub GetAdjustObjectAttributesForPrivateNamespaceRoutine
 # @ stub GetAlternatePackageRoots
 # @ stub GetAppContainerAce
@@ -450,7 +450,7 @@
 @ stdcall GetConsoleTitleW(ptr long) kernel32.GetConsoleTitleW
 @ stdcall GetCurrencyFormatEx(wstr long wstr ptr ptr long) kernel32.GetCurrencyFormatEx
 @ stdcall GetCurrencyFormatW(long long wstr ptr ptr long) kernel32.GetCurrencyFormatW
-@ stdcall GetCurrentActCtx(ptr) kernel32.GetCurrentActCtx
+@ stdcall GetCurrentActCtx(ptr)
 # @ stub GetCurrentApplicationUserModelId
 @ stdcall GetCurrentDirectoryA(long ptr) kernel32.GetCurrentDirectoryA
 @ stdcall GetCurrentDirectoryW(long ptr) kernel32.GetCurrentDirectoryW
@@ -466,8 +466,8 @@
 # @ stub GetCurrentPackageSecurityContext
 @ stdcall -norelay GetCurrentProcess() kernel32.GetCurrentProcess
 @ stdcall -norelay GetCurrentProcessId() kernel32.GetCurrentProcessId
-@ stdcall GetCurrentProcessorNumber() kernel32.GetCurrentProcessorNumber
-@ stdcall GetCurrentProcessorNumberEx(ptr) kernel32.GetCurrentProcessorNumberEx
+@ stdcall GetCurrentProcessorNumber() ntdll.NtGetCurrentProcessorNumber
+@ stdcall GetCurrentProcessorNumberEx(ptr) ntdll.RtlGetCurrentProcessorNumberEx
 # @ stub GetCurrentTargetPlatformContext
 @ stdcall -norelay GetCurrentThread() kernel32.GetCurrentThread
 @ stdcall -norelay GetCurrentThreadId() kernel32.GetCurrentThreadId
@@ -510,7 +510,7 @@
 @ stdcall GetFileInformationByHandleEx(long long ptr long) kernel32.GetFileInformationByHandleEx
 @ stdcall GetFileMUIInfo(long wstr ptr ptr) kernel32.GetFileMUIInfo
 @ stdcall GetFileMUIPath(long wstr wstr ptr ptr ptr ptr) kernel32.GetFileMUIPath
-@ stdcall GetFileSecurityW(wstr long ptr long ptr) advapi32.GetFileSecurityW
+@ stdcall GetFileSecurityW(wstr long ptr long ptr)
 @ stdcall GetFileSize(long ptr) kernel32.GetFileSize
 @ stdcall GetFileSizeEx(long ptr) kernel32.GetFileSizeEx
 @ stdcall GetFileTime(long ptr ptr ptr) kernel32.GetFileTime
@@ -535,11 +535,11 @@
 # @ stub GetHivePath
 # @ stub GetIntegratedDisplaySize
 # @ stub GetIsEdpEnabled
-@ stdcall GetKernelObjectSecurity(long long ptr long ptr) advapi32.GetKernelObjectSecurity
+@ stdcall GetKernelObjectSecurity(long long ptr long ptr)
 @ stdcall GetLargePageMinimum() kernel32.GetLargePageMinimum
 @ stdcall GetLargestConsoleWindowSize(long) kernel32.GetLargestConsoleWindowSize
 @ stdcall GetLastError() kernel32.GetLastError
-@ stdcall GetLengthSid(ptr) advapi32.GetLengthSid
+@ stdcall GetLengthSid(ptr)
 @ stdcall GetLocalTime(ptr) kernel32.GetLocalTime
 @ stdcall GetLocaleInfoA(long long ptr long) kernel32.GetLocaleInfoA
 @ stdcall GetLocaleInfoEx(wstr long ptr long) kernel32.GetLocaleInfoEx
@@ -571,7 +571,7 @@
 @ stub GetNamedPipeAttribute
 @ stub GetNamedPipeClientComputerNameW
 @ stdcall GetNamedPipeHandleStateW(long ptr ptr ptr ptr wstr long) kernel32.GetNamedPipeHandleStateW
-@ stdcall GetNamedPipeInfo(long ptr ptr ptr ptr) kernel32.GetNamedPipeInfo
+@ stdcall GetNamedPipeInfo(long ptr ptr ptr ptr)
 @ stdcall GetNativeSystemInfo(ptr) kernel32.GetNativeSystemInfo
 # @ stub GetNextFgPolicyRefreshInfoInternal
 @ stdcall GetNumaHighestNodeNumber(ptr) kernel32.GetNumaHighestNodeNumber
@@ -618,7 +618,7 @@
 @ stdcall GetPhysicallyInstalledSystemMemory(ptr) kernel32.GetPhysicallyInstalledSystemMemory
 # @ stub GetPreviousFgPolicyRefreshInfoInternal
 @ stdcall GetPriorityClass(long) kernel32.GetPriorityClass
-@ stdcall GetPrivateObjectSecurity(ptr long ptr long ptr) advapi32.GetPrivateObjectSecurity
+@ stdcall GetPrivateObjectSecurity(ptr long ptr long ptr)
 @ stdcall GetProcAddress(long str) kernel32.GetProcAddress
 # @ stub GetProcAddressForCaller
 # @ stub GetProcessDefaultCpuSets
@@ -645,24 +645,24 @@
 @ stub GetPtrCalDataArray
 # @ stub GetPublisherCacheFolder
 # @ stub GetPublisherRootFolder
-@ stdcall GetQueuedCompletionStatus(long ptr ptr ptr long) kernel32.GetQueuedCompletionStatus
-@ stdcall GetQueuedCompletionStatusEx(ptr ptr long ptr long long) kernel32.GetQueuedCompletionStatusEx
+@ stdcall GetQueuedCompletionStatus(long ptr ptr ptr long)
+@ stdcall GetQueuedCompletionStatusEx(ptr ptr long ptr long long)
 # @ stub GetRegistryExtensionFlags
 # @ stub GetRoamingLastObservedChangeTime
-@ stdcall GetSecurityDescriptorControl(ptr ptr ptr) advapi32.GetSecurityDescriptorControl
-@ stdcall GetSecurityDescriptorDacl(ptr ptr ptr ptr) advapi32.GetSecurityDescriptorDacl
-@ stdcall GetSecurityDescriptorGroup(ptr ptr ptr) advapi32.GetSecurityDescriptorGroup
-@ stdcall GetSecurityDescriptorLength(ptr) advapi32.GetSecurityDescriptorLength
-@ stdcall GetSecurityDescriptorOwner(ptr ptr ptr) advapi32.GetSecurityDescriptorOwner
+@ stdcall GetSecurityDescriptorControl(ptr ptr ptr)
+@ stdcall GetSecurityDescriptorDacl(ptr ptr ptr ptr)
+@ stdcall GetSecurityDescriptorGroup(ptr ptr ptr)
+@ stdcall GetSecurityDescriptorLength(ptr)
+@ stdcall GetSecurityDescriptorOwner(ptr ptr ptr)
 @ stub GetSecurityDescriptorRMControl
-@ stdcall GetSecurityDescriptorSacl(ptr ptr ptr ptr) advapi32.GetSecurityDescriptorSacl
+@ stdcall GetSecurityDescriptorSacl(ptr ptr ptr ptr)
 # @ stub GetSerializedAtomBytes
 # @ stub GetSharedLocalFolder
 @ stdcall GetShortPathNameW(wstr ptr long) kernel32.GetShortPathNameW
-@ stdcall GetSidIdentifierAuthority(ptr) advapi32.GetSidIdentifierAuthority
-@ stdcall GetSidLengthRequired(long) advapi32.GetSidLengthRequired
-@ stdcall GetSidSubAuthority(ptr long) advapi32.GetSidSubAuthority
-@ stdcall GetSidSubAuthorityCount(ptr) advapi32.GetSidSubAuthorityCount
+@ stdcall GetSidIdentifierAuthority(ptr)
+@ stdcall GetSidLengthRequired(long)
+@ stdcall GetSidSubAuthority(ptr long)
+@ stdcall GetSidSubAuthorityCount(ptr)
 # @ stub GetStagedPackageOrigin
 # @ stub GetStagedPackagePathByFullName
 @ stdcall GetStartupInfoW(ptr) kernel32.GetStartupInfoW
@@ -733,10 +733,10 @@
 @ stdcall GetTimeFormatW(long long ptr wstr ptr long) kernel32.GetTimeFormatW
 @ stdcall GetTimeZoneInformation(ptr) kernel32.GetTimeZoneInformation
 @ stdcall GetTimeZoneInformationForYear(long ptr ptr) kernel32.GetTimeZoneInformationForYear
-@ stdcall GetTokenInformation(long long ptr long ptr) advapi32.GetTokenInformation
-@ stdcall GetTraceEnableFlags(int64) advapi32.GetTraceEnableFlags
-@ stdcall GetTraceEnableLevel(int64) advapi32.GetTraceEnableLevel
-@ stdcall -ret64 GetTraceLoggerHandle(ptr) advapi32.GetTraceLoggerHandle
+@ stdcall GetTokenInformation(long long ptr long ptr)
+@ stdcall GetTraceEnableFlags(int64) ntdll.EtwGetTraceEnableFlags
+@ stdcall GetTraceEnableLevel(int64) ntdll.EtwGetTraceEnableLevel
+@ stdcall -ret64 GetTraceLoggerHandle(ptr) ntdll.EtwGetTraceLoggerHandle
 @ stub GetUILanguageInfo
 # @ stub GetUnicodeStringToEightBitSizeRoutine
 # @ stub GetUnicodeStringToEightBitStringRoutine
@@ -759,7 +759,7 @@
 @ stdcall GetVolumeNameForVolumeMountPointW(wstr ptr long) kernel32.GetVolumeNameForVolumeMountPointW
 @ stdcall GetVolumePathNameW(wstr ptr long) kernel32.GetVolumePathNameW
 @ stdcall GetVolumePathNamesForVolumeNameW(wstr ptr long ptr) kernel32.GetVolumePathNamesForVolumeNameW
-@ stdcall GetWindowsAccountDomainSid(ptr ptr ptr) advapi32.GetWindowsAccountDomainSid
+@ stdcall GetWindowsAccountDomainSid(ptr ptr ptr)
 @ stdcall GetWindowsDirectoryA(ptr long) kernel32.GetWindowsDirectoryA
 @ stdcall GetWindowsDirectoryW(ptr long) kernel32.GetWindowsDirectoryW
 @ stdcall GetWriteWatch(long ptr long ptr ptr ptr) kernel32.GetWriteWatch
@@ -772,16 +772,16 @@
 # @ stub GuardCheckLongJumpTarget
 # @ stub HasPolicyForegroundProcessingCompletedInternal
 @ stdcall HashData(ptr long ptr long)
-@ stdcall HeapAlloc(long long long) kernel32.HeapAlloc
+@ stdcall HeapAlloc(long long long) ntdll.RtlAllocateHeap
 @ stdcall HeapCompact(long long) kernel32.HeapCompact
 @ stdcall HeapCreate(long long long) kernel32.HeapCreate
 @ stdcall HeapDestroy(long) kernel32.HeapDestroy
-@ stdcall HeapFree(long long ptr) kernel32.HeapFree
+@ stdcall HeapFree(long long ptr) ntdll.RtlFreeHeap
 @ stdcall HeapLock(long) kernel32.HeapLock
 @ stdcall HeapQueryInformation(long long ptr long ptr) kernel32.HeapQueryInformation
-@ stdcall HeapReAlloc(long long ptr long) kernel32.HeapReAlloc
+@ stdcall HeapReAlloc(long long ptr long) ntdll.RtlReAllocateHeap
 @ stdcall HeapSetInformation(ptr long ptr long) kernel32.HeapSetInformation
-@ stdcall HeapSize(long long ptr) kernel32.HeapSize
+@ stdcall HeapSize(long long ptr) ntdll.RtlSizeHeap
 @ stub HeapSummary
 @ stdcall HeapUnlock(long) kernel32.HeapUnlock
 @ stdcall HeapValidate(long long ptr) kernel32.HeapValidate
@@ -789,41 +789,41 @@
 @ stdcall IdnToAscii(long wstr long ptr long) kernel32.IdnToAscii
 @ stdcall IdnToNameprepUnicode(long wstr long ptr long) kernel32.IdnToNameprepUnicode
 @ stdcall IdnToUnicode(long wstr long ptr long) kernel32.IdnToUnicode
-@ stdcall ImpersonateAnonymousToken(long) advapi32.ImpersonateAnonymousToken
-@ stdcall ImpersonateLoggedOnUser(long) advapi32.ImpersonateLoggedOnUser
-@ stdcall ImpersonateNamedPipeClient(long) advapi32.ImpersonateNamedPipeClient
-@ stdcall ImpersonateSelf(long) advapi32.ImpersonateSelf
+@ stdcall ImpersonateAnonymousToken(long)
+@ stdcall ImpersonateLoggedOnUser(long)
+@ stdcall ImpersonateNamedPipeClient(long)
+@ stdcall ImpersonateSelf(long)
 # @ stub IncrementPackageStatusVersion
 @ stdcall InitOnceBeginInitialize(ptr long ptr ptr) kernel32.InitOnceBeginInitialize
 @ stdcall InitOnceComplete(ptr long ptr) kernel32.InitOnceComplete
 @ stdcall InitOnceExecuteOnce(ptr ptr ptr ptr) kernel32.InitOnceExecuteOnce
-@ stdcall InitOnceInitialize(ptr) kernel32.InitOnceInitialize
-@ stdcall InitializeAcl(ptr long long) advapi32.InitializeAcl
-@ stdcall InitializeConditionVariable(ptr) kernel32.InitializeConditionVariable
+@ stdcall InitOnceInitialize(ptr) ntdll.RtlRunOnceInitialize
+@ stdcall InitializeAcl(ptr long long)
+@ stdcall InitializeConditionVariable(ptr) ntdll.RtlInitializeConditionVariable
 # @ stub InitializeContext
-@ stdcall InitializeCriticalSection(ptr) kernel32.InitializeCriticalSection
-@ stdcall InitializeCriticalSectionAndSpinCount(ptr long) kernel32.InitializeCriticalSectionAndSpinCount
-@ stdcall InitializeCriticalSectionEx(ptr long long) kernel32.InitializeCriticalSectionEx
+@ stdcall InitializeCriticalSection(ptr) ntdll.RtlInitializeCriticalSection
+@ stdcall InitializeCriticalSectionAndSpinCount(ptr long)
+@ stdcall InitializeCriticalSectionEx(ptr long long)
 # @ stub InitializeEnclave
 @ stdcall InitializeProcThreadAttributeList(ptr long long ptr) kernel32.InitializeProcThreadAttributeList
 # @ stub InitializeProcessForWsWatch
-@ stdcall InitializeSListHead(ptr) kernel32.InitializeSListHead
-@ stdcall InitializeSRWLock(ptr) kernel32.InitializeSRWLock
-@ stdcall InitializeSecurityDescriptor(ptr long) advapi32.InitializeSecurityDescriptor
-@ stdcall InitializeSid(ptr ptr long) advapi32.InitializeSid
+@ stdcall InitializeSListHead(ptr) ntdll.RtlInitializeSListHead
+@ stdcall InitializeSRWLock(ptr) ntdll.RtlInitializeSRWLock
+@ stdcall InitializeSecurityDescriptor(ptr long)
+@ stdcall InitializeSid(ptr ptr long)
 # @ stub InitializeSynchronizationBarrier
 # @ stub InstallELAMCertificateInfo
 @ stdcall -arch=i386 InterlockedCompareExchange(ptr long long) kernel32.InterlockedCompareExchange
-@ stdcall -arch=i386 -ret64 InterlockedCompareExchange64(ptr int64 int64) kernel32.InterlockedCompareExchange64
+@ stdcall -arch=i386 -ret64 InterlockedCompareExchange64(ptr int64 int64) ntdll.RtlInterlockedCompareExchange64
 @ stdcall -arch=i386 InterlockedDecrement(ptr) kernel32.InterlockedDecrement
 @ stdcall -arch=i386 InterlockedExchange(ptr long) kernel32.InterlockedExchange
 @ stdcall -arch=i386 InterlockedExchangeAdd(ptr long ) kernel32.InterlockedExchangeAdd
-@ stdcall InterlockedFlushSList(ptr) kernel32.InterlockedFlushSList
+@ stdcall InterlockedFlushSList(ptr) ntdll.RtlInterlockedFlushSList
 @ stdcall -arch=i386 InterlockedIncrement(ptr) kernel32.InterlockedIncrement
-@ stdcall InterlockedPopEntrySList(ptr) kernel32.InterlockedPopEntrySList
-@ stdcall InterlockedPushEntrySList(ptr ptr) kernel32.InterlockedPushEntrySList
-@ stdcall -fastcall InterlockedPushListSList(ptr ptr ptr long) kernel32.InterlockedPushListSList
-@ stdcall InterlockedPushListSListEx(ptr ptr ptr long) kernel32.InterlockedPushListSListEx
+@ stdcall InterlockedPopEntrySList(ptr) ntdll.RtlInterlockedPopEntrySList
+@ stdcall InterlockedPushEntrySList(ptr ptr) ntdll.RtlInterlockedPushEntrySList
+@ stdcall -fastcall InterlockedPushListSList(ptr ptr ptr long) ntdll.RtlInterlockedPushListSList
+@ stdcall InterlockedPushListSListEx(ptr ptr ptr long) ntdll.RtlInterlockedPushListSListEx
 @ stub InternalLcidToName
 @ stub Internal_EnumCalendarInfo
 @ stub Internal_EnumDateFormats
@@ -871,19 +871,19 @@
 # @ stub IsSideloadingPolicyApplied
 # @ stub IsSyncForegroundPolicyRefresh
 @ stdcall IsThreadAFiber() kernel32.IsThreadAFiber
-@ stdcall IsThreadpoolTimerSet(ptr) kernel32.IsThreadpoolTimerSet
+@ stdcall IsThreadpoolTimerSet(ptr) ntdll.TpIsTimerSet
 # @ stub IsTimeZoneRedirectionEnabled
-@ stdcall IsTokenRestricted(long) advapi32.IsTokenRestricted
-@ stdcall IsValidAcl(ptr) advapi32.IsValidAcl
+@ stdcall IsTokenRestricted(long)
+@ stdcall IsValidAcl(ptr)
 @ stdcall IsValidCodePage(long) kernel32.IsValidCodePage
 @ stdcall IsValidLanguageGroup(long long) kernel32.IsValidLanguageGroup
 @ stdcall IsValidLocale(long long) kernel32.IsValidLocale
 @ stdcall IsValidLocaleName(wstr) kernel32.IsValidLocaleName
 # @ stub IsValidNLSVersion
 @ stub IsValidRelativeSecurityDescriptor
-@ stdcall IsValidSecurityDescriptor(ptr) advapi32.IsValidSecurityDescriptor
-@ stdcall IsValidSid(ptr) advapi32.IsValidSid
-@ stdcall IsWellKnownSid(ptr long) advapi32.IsWellKnownSid
+@ stdcall IsValidSecurityDescriptor(ptr)
+@ stdcall IsValidSid(ptr)
+@ stdcall IsWellKnownSid(ptr long)
 @ stdcall IsWow64Process(ptr ptr) kernel32.IsWow64Process
 # @ stub IsWow64Process2
 @ stdcall K32EmptyWorkingSet(long) kernel32.K32EmptyWorkingSet
@@ -919,8 +919,8 @@
 @ stdcall LCMapStringEx(wstr long wstr long ptr long ptr ptr long) kernel32.LCMapStringEx
 @ stdcall LCMapStringW(long long wstr long ptr long) kernel32.LCMapStringW
 # @ stub LeaveCriticalPolicySectionInternal
-@ stdcall LeaveCriticalSection(ptr) kernel32.LeaveCriticalSection
-@ stdcall LeaveCriticalSectionWhenCallbackReturns(ptr ptr) kernel32.LeaveCriticalSectionWhenCallbackReturns
+@ stdcall LeaveCriticalSection(ptr) ntdll.RtlLeaveCriticalSection
+@ stdcall LeaveCriticalSectionWhenCallbackReturns(ptr ptr) ntdll.TpCallbackLeaveCriticalSectionOnCompletion
 # @ stub LoadAppInitDlls
 # @ stub LoadEnclaveData
 @ stdcall LoadLibraryA(str) kernel32.LoadLibraryA
@@ -928,7 +928,7 @@
 @ stdcall LoadLibraryExW(wstr long long) kernel32.LoadLibraryExW
 @ stdcall LoadLibraryW(wstr) kernel32.LoadLibraryW
 # @ stub LoadPackagedLibrary
-@ stdcall LoadResource(long long) kernel32.LoadResource
+@ stdcall LoadResource(long long)
 @ stdcall LoadStringA(long long ptr long)
 @ stub LoadStringBaseExW
 @ stub LoadStringByReference
@@ -943,11 +943,11 @@
 # @ stub LocateXStateFeature
 @ stdcall LockFile(long long long long long) kernel32.LockFile
 @ stdcall LockFileEx(long long long long long ptr) kernel32.LockFileEx
-@ stdcall LockResource(long) kernel32.LockResource
-@ stdcall MakeAbsoluteSD(ptr ptr ptr ptr ptr ptr ptr ptr ptr ptr ptr) advapi32.MakeAbsoluteSD
+@ stdcall LockResource(long)
+@ stdcall MakeAbsoluteSD(ptr ptr ptr ptr ptr ptr ptr ptr ptr ptr ptr)
 @ stub MakeAbsoluteSD2
-@ stdcall MakeSelfRelativeSD(ptr ptr ptr) advapi32.MakeSelfRelativeSD
-@ stdcall MapGenericMask(ptr ptr) advapi32.MapGenericMask
+@ stdcall MakeSelfRelativeSD(ptr ptr ptr)
+@ stdcall MapGenericMask(ptr ptr)
 # @ stub MapPredefinedHandleInternal
 @ stdcall MapUserPhysicalPages(ptr long ptr) kernel32.MapUserPhysicalPages
 @ stdcall MapViewOfFile(long long long long long) kernel32.MapViewOfFile
@@ -976,33 +976,33 @@
 @ stdcall NormalizeString(long wstr long ptr long) kernel32.NormalizeString
 @ stub NotifyMountMgr
 @ stub NotifyRedirectedStringChange
-@ stdcall ObjectCloseAuditAlarmW(wstr ptr long) advapi32.ObjectCloseAuditAlarmW
-@ stdcall ObjectDeleteAuditAlarmW(wstr ptr long) advapi32.ObjectDeleteAuditAlarmW
-@ stdcall ObjectOpenAuditAlarmW(wstr ptr wstr wstr ptr long long long ptr long long ptr) advapi32.ObjectOpenAuditAlarmW
-@ stdcall ObjectPrivilegeAuditAlarmW(wstr ptr long long ptr long) advapi32.ObjectPrivilegeAuditAlarmW
+@ stdcall ObjectCloseAuditAlarmW(wstr ptr long)
+@ stdcall ObjectDeleteAuditAlarmW(wstr ptr long)
+@ stdcall ObjectOpenAuditAlarmW(wstr ptr wstr wstr ptr long long long ptr long long ptr)
+@ stdcall ObjectPrivilegeAuditAlarmW(wstr ptr long long ptr long)
 # @ stub OfferVirtualMemory
-@ stdcall OpenEventA(long long str) kernel32.OpenEventA
-@ stdcall OpenEventW(long long wstr) kernel32.OpenEventW
+@ stdcall OpenEventA(long long str)
+@ stdcall OpenEventW(long long wstr)
 @ stdcall OpenFileById(long ptr long long ptr long) kernel32.OpenFileById
 # @ stub OpenFileMappingFromApp
-@ stdcall OpenFileMappingW(long long wstr) kernel32.OpenFileMappingW
+@ stdcall OpenFileMappingW(long long wstr)
 # @ stub OpenGlobalizationUserSettingsKey
-@ stdcall OpenMutexW(long long wstr) kernel32.OpenMutexW
+@ stdcall OpenMutexW(long long wstr)
 # @ stub OpenPackageInfoByFullName
 # @ stub OpenPackageInfoByFullNameForUser
 # @ stub OpenPrivateNamespaceW
 @ stdcall OpenProcess(long long long) kernel32.OpenProcess
-@ stdcall OpenProcessToken(long long ptr) advapi32.OpenProcessToken
+@ stdcall OpenProcessToken(long long ptr)
 @ stub OpenRegKey
-@ stdcall OpenSemaphoreW(long long wstr) kernel32.OpenSemaphoreW
+@ stdcall OpenSemaphoreW(long long wstr)
 # @ stub OpenState
 # @ stub OpenStateAtom
 # @ stub OpenStateExplicit
 # @ stub OpenStateExplicitForUserSid
 # @ stub OpenStateExplicitForUserSidString
 @ stdcall OpenThread(long long long) kernel32.OpenThread
-@ stdcall OpenThreadToken(long long long ptr) advapi32.OpenThreadToken
-@ stdcall OpenWaitableTimerW(long long wstr) kernel32.OpenWaitableTimerW
+@ stdcall OpenThreadToken(long long long ptr)
+@ stdcall OpenWaitableTimerW(long long wstr)
 @ stdcall OutputDebugStringA(str) kernel32.OutputDebugStringA
 @ stdcall OutputDebugStringW(wstr) kernel32.OutputDebugStringW
 # @ stub OverrideRoamingDataModificationTimesInRange
@@ -1144,27 +1144,27 @@
 # @ stub PcwSetQueryItemUserData
 @ stdcall PeekConsoleInputA(ptr ptr long ptr) kernel32.PeekConsoleInputA
 @ stdcall PeekConsoleInputW(ptr ptr long ptr) kernel32.PeekConsoleInputW
-@ stdcall PeekNamedPipe(long ptr long ptr ptr ptr) kernel32.PeekNamedPipe
-@ stdcall PerfCreateInstance(long ptr wstr long) advapi32.PerfCreateInstance
+@ stdcall PeekNamedPipe(long ptr long ptr ptr ptr)
+@ stdcall PerfCreateInstance(long ptr wstr long)
 # @ stub PerfDecrementULongCounterValue
 # @ stub PerfDecrementULongLongCounterValue
-@ stdcall PerfDeleteInstance(long ptr) advapi32.PerfDeleteInstance
+@ stdcall PerfDeleteInstance(long ptr)
 # @ stub PerfIncrementULongCounterValue
 # @ stub PerfIncrementULongLongCounterValue
 # @ stub PerfQueryInstance
-@ stdcall PerfSetCounterRefValue(long ptr long ptr) advapi32.PerfSetCounterRefValue
-@ stdcall PerfSetCounterSetInfo(long ptr long) advapi32.PerfSetCounterSetInfo
+@ stdcall PerfSetCounterRefValue(long ptr long ptr)
+@ stdcall PerfSetCounterSetInfo(long ptr long)
 # @ stub PerfSetULongCounterValue
 # @ stub PerfSetULongLongCounterValue
-@ stdcall PerfStartProvider(ptr ptr ptr) advapi32.PerfStartProvider
-@ stdcall PerfStartProviderEx(ptr ptr ptr) advapi32.PerfStartProviderEx
-@ stdcall PerfStopProvider(long) advapi32.PerfStopProvider
+@ stdcall PerfStartProvider(ptr ptr ptr)
+@ stdcall PerfStartProviderEx(ptr ptr ptr)
+@ stdcall PerfStopProvider(long)
 # @ stub PoolPerAppKeyStateInternal
-@ stdcall PostQueuedCompletionStatus(long long ptr ptr) kernel32.PostQueuedCompletionStatus
+@ stdcall PostQueuedCompletionStatus(long long ptr ptr)
 # @ stub PrefetchVirtualMemory
 @ stub PrivCopyFileExW
-@ stdcall PrivilegeCheck(ptr ptr ptr) advapi32.PrivilegeCheck
-@ stdcall PrivilegedServiceAuditAlarmW(wstr wstr long ptr long) advapi32.PrivilegedServiceAuditAlarmW
+@ stdcall PrivilegeCheck(ptr ptr ptr)
+@ stdcall PrivilegedServiceAuditAlarmW(wstr wstr long ptr long)
 @ stdcall ProcessIdToSessionId(long ptr) kernel32.ProcessIdToSessionId
 # @ stub ProductIdFromPackageFamilyName
 # @ stub PsmCreateKey
@@ -1189,12 +1189,12 @@
 # @ stub PssWalkMarkerSetPosition
 # @ stub PssWalkSnapshot
 # @ stub PublishStateChangeNotification
-@ stdcall PulseEvent(long) kernel32.PulseEvent
+@ stdcall PulseEvent(long)
 @ stdcall PurgeComm(long long) kernel32.PurgeComm
 @ stdcall QISearch(ptr ptr ptr ptr)
-@ stdcall QueryActCtxSettingsW(long ptr wstr wstr ptr long ptr) kernel32.QueryActCtxSettingsW
-@ stdcall QueryActCtxW(long ptr ptr long ptr long ptr) kernel32.QueryActCtxW
-@ stdcall QueryDepthSList(ptr) kernel32.QueryDepthSList
+@ stdcall QueryActCtxSettingsW(long ptr wstr wstr ptr long ptr)
+@ stdcall QueryActCtxW(long ptr ptr long ptr long ptr)
+@ stdcall QueryDepthSList(ptr) ntdll.RtlQueryDepthSList
 @ stdcall QueryDosDeviceW(wstr ptr long) kernel32.QueryDosDeviceW
 @ stdcall QueryFullProcessImageNameA(ptr long ptr ptr) kernel32.QueryFullProcessImageNameA
 @ stdcall QueryFullProcessImageNameW(ptr long ptr ptr) kernel32.QueryFullProcessImageNameW
@@ -1256,31 +1256,31 @@
 # @ stub ReclaimVirtualMemory
 # @ stub RefreshPolicyExInternal
 # @ stub RefreshPolicyInternal
-@ stdcall -private RegCloseKey(long) kernel32.RegCloseKey
-@ stdcall RegCopyTreeW(long wstr long) advapi32.RegCopyTreeW
-@ stdcall -private RegCreateKeyExA(long str long ptr long long ptr ptr ptr) kernel32.RegCreateKeyExA
+@ stdcall RegCloseKey(long)
+@ stdcall RegCopyTreeW(long wstr long)
+@ stdcall RegCreateKeyExA(long str long ptr long long ptr ptr ptr)
 # @ stub RegCreateKeyExInternalA
 # @ stub RegCreateKeyExInternalW
-@ stdcall -private RegCreateKeyExW(long wstr long ptr long long ptr ptr ptr) kernel32.RegCreateKeyExW
-@ stdcall -private RegDeleteKeyExA(long str long long) kernel32.RegDeleteKeyExA
+@ stdcall RegCreateKeyExW(long wstr long ptr long long ptr ptr ptr)
+@ stdcall RegDeleteKeyExA(long str long long)
 # @ stub RegDeleteKeyExInternalA
 # @ stub RegDeleteKeyExInternalW
-@ stdcall -private RegDeleteKeyExW(long wstr long long) kernel32.RegDeleteKeyExW
-@ stdcall RegDeleteKeyValueA(long str str) advapi32.RegDeleteKeyValueA
-@ stdcall RegDeleteKeyValueW(long wstr wstr) advapi32.RegDeleteKeyValueW
-@ stdcall -private RegDeleteTreeA(long str) kernel32.RegDeleteTreeA
-@ stdcall -private RegDeleteTreeW(long wstr) kernel32.RegDeleteTreeW
-@ stdcall -private RegDeleteValueA(long str) kernel32.RegDeleteValueA
-@ stdcall -private RegDeleteValueW(long wstr) kernel32.RegDeleteValueW
+@ stdcall RegDeleteKeyExW(long wstr long long)
+@ stdcall RegDeleteKeyValueA(long str str)
+@ stdcall RegDeleteKeyValueW(long wstr wstr)
+@ stdcall RegDeleteTreeA(long str)
+@ stdcall RegDeleteTreeW(long wstr)
+@ stdcall RegDeleteValueA(long str)
+@ stdcall RegDeleteValueW(long wstr)
 # @ stub RegDisablePredefinedCacheEx
-@ stdcall -private RegEnumKeyExA(long long ptr ptr ptr ptr ptr ptr) kernel32.RegEnumKeyExA
-@ stdcall -private RegEnumKeyExW(long long ptr ptr ptr ptr ptr ptr) kernel32.RegEnumKeyExW
-@ stdcall -private RegEnumValueA(long long ptr ptr ptr ptr ptr ptr) kernel32.RegEnumValueA
-@ stdcall -private RegEnumValueW(long long ptr ptr ptr ptr ptr ptr) kernel32.RegEnumValueW
-@ stdcall -private RegFlushKey(long) kernel32.RegFlushKey
-@ stdcall -private RegGetKeySecurity(long long ptr ptr) kernel32.RegGetKeySecurity
-@ stdcall -private RegGetValueA(long str str long ptr ptr ptr) kernel32.RegGetValueA
-@ stdcall -private RegGetValueW(long wstr wstr long ptr ptr ptr) kernel32.RegGetValueW
+@ stdcall RegEnumKeyExA(long long ptr ptr ptr ptr ptr ptr)
+@ stdcall RegEnumKeyExW(long long ptr ptr ptr ptr ptr ptr)
+@ stdcall RegEnumValueA(long long ptr ptr ptr ptr ptr ptr)
+@ stdcall RegEnumValueW(long long ptr ptr ptr ptr ptr ptr)
+@ stdcall RegFlushKey(long)
+@ stdcall RegGetKeySecurity(long long ptr ptr)
+@ stdcall RegGetValueA(long str str long ptr ptr ptr)
+@ stdcall RegGetValueW(long wstr wstr long ptr ptr ptr)
 # @ stub RegKrnGetAppKeyEventAddressInternal
 # @ stub RegKrnGetAppKeyLoaded
 # @ stub RegKrnGetClassesEnumTableAddressInternal
@@ -1289,67 +1289,67 @@
 # @ stub RegKrnResetAppKeyLoaded
 # @ stub RegKrnSetDllHasThreadStateGlobal
 # @ stub RegKrnSetTermsrvRegistryExtensionFlags
-@ stdcall RegLoadAppKeyA(str ptr long long long) advapi32.RegLoadAppKeyA
-@ stdcall RegLoadAppKeyW(wstr ptr long long long) advapi32.RegLoadAppKeyW
-@ stdcall -private RegLoadKeyA(long str str) kernel32.RegLoadKeyA
-@ stdcall -private RegLoadKeyW(long wstr wstr) kernel32.RegLoadKeyW
-@ stdcall -private RegLoadMUIStringA(long str str long ptr long str) kernel32.RegLoadMUIStringA
-@ stdcall -private RegLoadMUIStringW(long wstr wstr long ptr long wstr) kernel32.RegLoadMUIStringW
-@ stdcall -private RegNotifyChangeKeyValue(long long long long long) kernel32.RegNotifyChangeKeyValue
-@ stdcall -private RegOpenCurrentUser(long ptr) kernel32.RegOpenCurrentUser
-@ stdcall -private RegOpenKeyExA(long str long long ptr) kernel32.RegOpenKeyExA
+@ stdcall RegLoadAppKeyA(str ptr long long long)
+@ stdcall RegLoadAppKeyW(wstr ptr long long long)
+@ stdcall RegLoadKeyA(long str str)
+@ stdcall RegLoadKeyW(long wstr wstr)
+@ stdcall RegLoadMUIStringA(long str str long ptr long str)
+@ stdcall RegLoadMUIStringW(long wstr wstr long ptr long wstr)
+@ stdcall RegNotifyChangeKeyValue(long long long long long)
+@ stdcall RegOpenCurrentUser(long ptr)
+@ stdcall RegOpenKeyExA(long str long long ptr)
 # @ stub RegOpenKeyExInternalA
 # @ stub RegOpenKeyExInternalW
-@ stdcall -private RegOpenKeyExW(long wstr long long ptr) kernel32.RegOpenKeyExW
-@ stdcall -private RegOpenUserClassesRoot(ptr long long ptr) kernel32.RegOpenUserClassesRoot
-@ stdcall -private RegQueryInfoKeyA(long ptr ptr ptr ptr ptr ptr ptr ptr ptr ptr ptr) kernel32.RegQueryInfoKeyA
-@ stdcall -private RegQueryInfoKeyW(long ptr ptr ptr ptr ptr ptr ptr ptr ptr ptr ptr) kernel32.RegQueryInfoKeyW
-@ stdcall -private RegQueryValueExA(long str ptr ptr ptr ptr) kernel32.RegQueryValueExA
-@ stdcall -private RegQueryValueExW(long wstr ptr ptr ptr ptr) kernel32.RegQueryValueExW
-@ stdcall -private RegRestoreKeyA(long str long) kernel32.RegRestoreKeyA
-@ stdcall -private RegRestoreKeyW(long wstr long) kernel32.RegRestoreKeyW
-@ stdcall RegSaveKeyExA(long str ptr long) advapi32.RegSaveKeyExA
-@ stdcall RegSaveKeyExW(long wstr ptr long) advapi32.RegSaveKeyExW
-@ stdcall -private RegSetKeySecurity(long long ptr) kernel32.RegSetKeySecurity
-@ stdcall RegSetKeyValueA(long str str long ptr long) advapi32.RegSetKeyValueA
-@ stdcall RegSetKeyValueW(long wstr wstr long ptr long) advapi32.RegSetKeyValueW
-@ stdcall -private RegSetValueExA(long str long long ptr long) kernel32.RegSetValueExA
-@ stdcall -private RegSetValueExW(long wstr long long ptr long) kernel32.RegSetValueExW
-@ stdcall -private RegUnLoadKeyA(long str) kernel32.RegUnLoadKeyA
-@ stdcall -private RegUnLoadKeyW(long wstr) kernel32.RegUnLoadKeyW
+@ stdcall RegOpenKeyExW(long wstr long long ptr)
+@ stdcall RegOpenUserClassesRoot(ptr long long ptr)
+@ stdcall RegQueryInfoKeyA(long ptr ptr ptr ptr ptr ptr ptr ptr ptr ptr ptr)
+@ stdcall RegQueryInfoKeyW(long ptr ptr ptr ptr ptr ptr ptr ptr ptr ptr ptr)
+@ stdcall RegQueryValueExA(long str ptr ptr ptr ptr)
+@ stdcall RegQueryValueExW(long wstr ptr ptr ptr ptr)
+@ stdcall RegRestoreKeyA(long str long)
+@ stdcall RegRestoreKeyW(long wstr long)
+@ stdcall RegSaveKeyExA(long str ptr long)
+@ stdcall RegSaveKeyExW(long wstr ptr long)
+@ stdcall RegSetKeySecurity(long long ptr)
+@ stdcall RegSetKeyValueA(long str str long ptr long)
+@ stdcall RegSetKeyValueW(long wstr wstr long ptr long)
+@ stdcall RegSetValueExA(long str long long ptr long)
+@ stdcall RegSetValueExW(long wstr long long ptr long)
+@ stdcall RegUnLoadKeyA(long str)
+@ stdcall RegUnLoadKeyW(long wstr)
 # @ stub RegisterBadMemoryNotification
 # @ stub RegisterGPNotificationInternal
 # @ stub RegisterStateChangeNotification
 # @ stub RegisterStateLock
-@ stdcall RegisterTraceGuidsW(ptr ptr ptr long ptr wstr wstr ptr) advapi32.RegisterTraceGuidsW
-@ stdcall RegisterWaitForSingleObjectEx(long ptr ptr long long) kernel32.RegisterWaitForSingleObjectEx
-@ stdcall ReleaseActCtx(ptr) kernel32.ReleaseActCtx
-@ stdcall ReleaseMutex(long) kernel32.ReleaseMutex
-@ stdcall ReleaseMutexWhenCallbackReturns(ptr long) kernel32.ReleaseMutexWhenCallbackReturns
-@ stdcall ReleaseSRWLockExclusive(ptr) kernel32.ReleaseSRWLockExclusive
-@ stdcall ReleaseSRWLockShared(ptr) kernel32.ReleaseSRWLockShared
-@ stdcall ReleaseSemaphore(long long ptr) kernel32.ReleaseSemaphore
-@ stdcall ReleaseSemaphoreWhenCallbackReturns(ptr long long) kernel32.ReleaseSemaphoreWhenCallbackReturns
+@ stdcall RegisterTraceGuidsW(ptr ptr ptr long ptr wstr wstr ptr) ntdll.EtwRegisterTraceGuidsW
+@ stdcall RegisterWaitForSingleObjectEx(long ptr ptr long long)
+@ stdcall ReleaseActCtx(ptr)
+@ stdcall ReleaseMutex(long)
+@ stdcall ReleaseMutexWhenCallbackReturns(ptr long) ntdll.TpCallbackReleaseMutexOnCompletion
+@ stdcall ReleaseSRWLockExclusive(ptr) ntdll.RtlReleaseSRWLockExclusive
+@ stdcall ReleaseSRWLockShared(ptr) ntdll.RtlReleaseSRWLockShared
+@ stdcall ReleaseSemaphore(long long ptr)
+@ stdcall ReleaseSemaphoreWhenCallbackReturns(ptr long long) ntdll.TpCallbackReleaseSemaphoreOnCompletion
 # @ stub ReleaseStateLock
-# @ stub RemapPredefinedHandleInternal
+@ stdcall RemapPredefinedHandleInternal(long long)
 @ stdcall RemoveDirectoryA(str) kernel32.RemoveDirectoryA
 @ stdcall RemoveDirectoryW(wstr) kernel32.RemoveDirectoryW
 @ stdcall RemoveDllDirectory(ptr) kernel32.RemoveDllDirectory
 # @ stub RemovePackageStatus
 # @ stub RemovePackageStatusForUser
-@ stdcall RemoveVectoredContinueHandler(ptr) kernel32.RemoveVectoredContinueHandler
-@ stdcall RemoveVectoredExceptionHandler(ptr) kernel32.RemoveVectoredExceptionHandler
+@ stdcall RemoveVectoredContinueHandler(ptr) ntdll.RtlRemoveVectoredContinueHandler
+@ stdcall RemoveVectoredExceptionHandler(ptr) ntdll.RtlRemoveVectoredExceptionHandler
 # @ stub ReplaceFileExInternal
 @ stdcall ReplaceFileW(wstr wstr wstr long ptr ptr) kernel32.ReplaceFileW
-@ stdcall ResetEvent(long) kernel32.ResetEvent
+@ stdcall ResetEvent(long)
 # @ stub ResetState
 @ stdcall ResetWriteWatch(ptr long) kernel32.ResetWriteWatch
 @ stdcall ResolveDelayLoadedAPI(ptr ptr ptr ptr ptr long) kernel32.ResolveDelayLoadedAPI
 # @ stub ResolveDelayLoadsFromDll
 @ stdcall ResolveLocaleName(wstr ptr long) kernel32.ResolveLocaleName
-@ stdcall RestoreLastError(long) kernel32.RestoreLastError
+@ stdcall RestoreLastError(long) ntdll.RtlRestoreLastWin32Error
 @ stdcall ResumeThread(long) kernel32.ResumeThread
-@ stdcall RevertToSelf() advapi32.RevertToSelf
+@ stdcall RevertToSelf()
 # @ stub RsopLoggingEnabledInternal
 # @ stub SHCoCreateInstance
 @ stdcall SHExpandEnvironmentStringsA(str ptr long) kernel32.ExpandEnvironmentStringsA
@@ -1388,7 +1388,7 @@
 @ stdcall ScrollConsoleScreenBufferW(long ptr ptr ptr ptr) kernel32.ScrollConsoleScreenBufferW
 @ stdcall SearchPathA(str str str long ptr ptr) kernel32.SearchPathA
 @ stdcall SearchPathW(wstr wstr wstr long ptr ptr) kernel32.SearchPathW
-@ stdcall SetAclInformation(ptr ptr long long) advapi32.SetAclInformation
+@ stdcall SetAclInformation(ptr ptr long long)
 # @ stub SetCachedSigningLevel
 @ stdcall SetCalendarInfoW(long long long wstr) kernel32.SetCalendarInfoW
 # @ stub SetClientDynamicTimeZoneInformation
@@ -1417,7 +1417,7 @@
 @ stdcall SetConsoleTextAttribute(long long) kernel32.SetConsoleTextAttribute
 @ stdcall SetConsoleTitleW(wstr) kernel32.SetConsoleTitleW
 @ stdcall SetConsoleWindowInfo(long long ptr) kernel32.SetConsoleWindowInfo
-@ stdcall SetCriticalSectionSpinCount(ptr long) kernel32.SetCriticalSectionSpinCount
+@ stdcall SetCriticalSectionSpinCount(ptr long) ntdll.RtlSetCriticalSectionSpinCount
 @ stdcall SetCurrentDirectoryA(str) kernel32.SetCurrentDirectoryA
 @ stdcall SetCurrentDirectoryW(wstr) kernel32.SetCurrentDirectoryW
 @ stdcall SetDefaultDllDirectories(long) kernel32.SetDefaultDllDirectories
@@ -1427,8 +1427,8 @@
 @ stdcall SetEnvironmentVariableA(str str) kernel32.SetEnvironmentVariableA
 @ stdcall SetEnvironmentVariableW(wstr wstr) kernel32.SetEnvironmentVariableW
 @ stdcall SetErrorMode(long) kernel32.SetErrorMode
-@ stdcall SetEvent(long) kernel32.SetEvent
-@ stdcall SetEventWhenCallbackReturns(ptr long) kernel32.SetEventWhenCallbackReturns
+@ stdcall SetEvent(long)
+@ stdcall SetEventWhenCallbackReturns(ptr long) ntdll.TpCallbackSetEventOnCompletion
 @ stdcall SetFileApisToANSI() kernel32.SetFileApisToANSI
 @ stdcall SetFileApisToOEM() kernel32.SetFileApisToOEM
 @ stdcall SetFileAttributesA(str long) kernel32.SetFileAttributesA
@@ -1437,21 +1437,21 @@
 # @ stub SetFileIoOverlappedRange
 @ stdcall SetFilePointer(long long ptr long) kernel32.SetFilePointer
 @ stdcall SetFilePointerEx(long int64 ptr long) kernel32.SetFilePointerEx
-@ stdcall SetFileSecurityW(wstr long ptr) advapi32.SetFileSecurityW
+@ stdcall SetFileSecurityW(wstr long ptr)
 @ stdcall SetFileTime(long ptr ptr ptr) kernel32.SetFileTime
 @ stdcall SetFileValidData(ptr int64) kernel32.SetFileValidData
 @ stdcall SetHandleCount(long) kernel32.SetHandleCount
 @ stdcall SetHandleInformation(long long long) kernel32.SetHandleInformation
 # @ stub SetIsDeveloperModeEnabled
 # @ stub SetIsSideloadingEnabled
-@ stdcall SetKernelObjectSecurity(long long ptr) advapi32.SetKernelObjectSecurity
+@ stdcall SetKernelObjectSecurity(long long ptr)
 @ stub SetLastConsoleEventActive
-@ stdcall SetLastError(long) kernel32.SetLastError
+@ stdcall SetLastError(long) ntdll.RtlSetLastWin32Error
 @ stdcall SetLocalTime(ptr) kernel32.SetLocalTime
 @ stdcall SetLocaleInfoW(long long wstr) kernel32.SetLocaleInfoW
-@ stdcall SetNamedPipeHandleState(long ptr ptr ptr) kernel32.SetNamedPipeHandleState
+@ stdcall SetNamedPipeHandleState(long ptr ptr ptr)
 @ stdcall SetPriorityClass(long long) kernel32.SetPriorityClass
-@ stdcall SetPrivateObjectSecurity(long ptr ptr ptr long) advapi32.SetPrivateObjectSecurity
+@ stdcall SetPrivateObjectSecurity(long ptr ptr ptr long)
 @ stub SetPrivateObjectSecurityEx
 @ stdcall SetProcessAffinityUpdateMode(long long) kernel32.SetProcessAffinityUpdateMode
 # @ stub SetProcessDefaultCpuSets
@@ -1466,12 +1466,12 @@
 # @ stub SetProtectedPolicy
 # @ stub SetRoamingLastObservedChangeTime
 @ stub SetSecurityAccessMask
-@ stdcall SetSecurityDescriptorControl(ptr long long) advapi32.SetSecurityDescriptorControl
-@ stdcall SetSecurityDescriptorDacl(ptr long ptr long) advapi32.SetSecurityDescriptorDacl
-@ stdcall SetSecurityDescriptorGroup(ptr ptr long) advapi32.SetSecurityDescriptorGroup
-@ stdcall SetSecurityDescriptorOwner(ptr ptr long) advapi32.SetSecurityDescriptorOwner
+@ stdcall SetSecurityDescriptorControl(ptr long long)
+@ stdcall SetSecurityDescriptorDacl(ptr long ptr long)
+@ stdcall SetSecurityDescriptorGroup(ptr ptr long)
+@ stdcall SetSecurityDescriptorOwner(ptr ptr long)
 @ stub SetSecurityDescriptorRMControl
-@ stdcall SetSecurityDescriptorSacl(ptr long ptr long) advapi32.SetSecurityDescriptorSacl
+@ stdcall SetSecurityDescriptorSacl(ptr long ptr long)
 # @ stub SetStateVersion
 @ stdcall SetStdHandle(long long) kernel32.SetStdHandle
 @ stub SetStdHandleEx
@@ -1491,30 +1491,30 @@
 @ stdcall SetThreadPriorityBoost(long long) kernel32.SetThreadPriorityBoost
 # @ stub SetThreadSelectedCpuSets
 @ stdcall SetThreadStackGuarantee(ptr) kernel32.SetThreadStackGuarantee
-@ stdcall SetThreadToken(ptr ptr) advapi32.SetThreadToken
+@ stdcall SetThreadToken(ptr ptr)
 @ stdcall SetThreadUILanguage(long) kernel32.SetThreadUILanguage
 @ stub SetThreadpoolStackInformation
-@ stdcall SetThreadpoolThreadMaximum(ptr long) kernel32.SetThreadpoolThreadMaximum
-@ stdcall SetThreadpoolThreadMinimum(ptr long) kernel32.SetThreadpoolThreadMinimum
-@ stdcall SetThreadpoolTimer(ptr ptr long long) kernel32.SetThreadpoolTimer
+@ stdcall SetThreadpoolThreadMaximum(ptr long) ntdll.TpSetPoolMaxThreads
+@ stdcall SetThreadpoolThreadMinimum(ptr long) ntdll.TpSetPoolMinThreads
+@ stdcall SetThreadpoolTimer(ptr ptr long long) ntdll.TpSetTimer
 # @ stub SetThreadpoolTimerEx
-@ stdcall SetThreadpoolWait(ptr long ptr) kernel32.SetThreadpoolWait
+@ stdcall SetThreadpoolWait(ptr long ptr) ntdll.TpSetWait
 # @ stub SetThreadpoolWaitEx
 @ stdcall SetTimeZoneInformation(ptr) kernel32.SetTimeZoneInformation
-@ stdcall SetTokenInformation(long long ptr long) advapi32.SetTokenInformation
+@ stdcall SetTokenInformation(long long ptr long)
 @ stdcall SetUnhandledExceptionFilter(ptr) kernel32.SetUnhandledExceptionFilter
 @ stdcall SetUserGeoID(long) kernel32.SetUserGeoID
-@ stdcall SetWaitableTimer(long ptr long ptr ptr long) kernel32.SetWaitableTimer
-@ stdcall SetWaitableTimerEx(long ptr long ptr ptr ptr long) kernel32.SetWaitableTimerEx
+@ stdcall SetWaitableTimer(long ptr long ptr ptr long)
+@ stdcall SetWaitableTimerEx(long ptr long ptr ptr ptr long)
 # @ stub SetXStateFeaturesMask
 @ stdcall SetupComm(long long long) kernel32.SetupComm
 # @ stub SharedLocalIsEnabled
-@ stdcall SignalObjectAndWait(long long long long) kernel32.SignalObjectAndWait
-@ stdcall SizeofResource(long long) kernel32.SizeofResource
-@ stdcall Sleep(long) kernel32.Sleep
-@ stdcall SleepConditionVariableCS(ptr ptr long) kernel32.SleepConditionVariableCS
-@ stdcall SleepConditionVariableSRW(ptr ptr long long) kernel32.SleepConditionVariableSRW
-@ stdcall SleepEx(long long) kernel32.SleepEx
+@ stdcall SignalObjectAndWait(long long long long)
+@ stdcall SizeofResource(long long)
+@ stdcall Sleep(long)
+@ stdcall SleepConditionVariableCS(ptr ptr long)
+@ stdcall SleepConditionVariableSRW(ptr ptr long long)
+@ stdcall SleepEx(long long)
 @ stub SpecialMBToWC
 @ stub StartThreadpoolIo
 # @ stub StmAlignSize
@@ -1585,7 +1585,7 @@
 @ stdcall StrToIntW(wstr)
 @ stdcall StrTrimA(str str)
 @ stdcall StrTrimW(wstr wstr)
-@ stdcall SubmitThreadpoolWork(ptr) kernel32.SubmitThreadpoolWork
+@ stdcall SubmitThreadpoolWork(ptr) ntdll.TpPostWork
 # @ stub SubscribeEdpEnabledStateChange
 # @ stub SubscribeStateChangeNotification
 @ stdcall SuspendThread(long) kernel32.SuspendThread
@@ -1601,14 +1601,14 @@
 @ stdcall TlsFree(long) kernel32.TlsFree
 @ stdcall TlsGetValue(long) kernel32.TlsGetValue
 @ stdcall TlsSetValue(long ptr) kernel32.TlsSetValue
-@ stdcall TraceEvent(int64 ptr) advapi32.TraceEvent
-@ varargs TraceMessage(int64 long ptr long) advapi32.TraceMessage
-@ stdcall TraceMessageVa(int64 long ptr long ptr) advapi32.TraceMessageVa
-@ stdcall TransactNamedPipe(long ptr long ptr long ptr ptr) kernel32.TransactNamedPipe
+@ stdcall TraceEvent(int64 ptr) ntdll.EtwLogTraceEvent
+@ varargs TraceMessage(int64 long ptr long) ntdll.EtwTraceMessage
+@ stdcall TraceMessageVa(int64 long ptr long ptr) ntdll.EtwTraceMessageVa
+@ stdcall TransactNamedPipe(long ptr long ptr long ptr ptr)
 @ stdcall TransmitCommChar(long long) kernel32.TransmitCommChar
-@ stdcall TryAcquireSRWLockExclusive(ptr) kernel32.TryAcquireSRWLockExclusive
-@ stdcall TryAcquireSRWLockShared(ptr) kernel32.TryAcquireSRWLockShared
-@ stdcall TryEnterCriticalSection(ptr) kernel32.TryEnterCriticalSection
+@ stdcall TryAcquireSRWLockExclusive(ptr) ntdll.RtlTryAcquireSRWLockExclusive
+@ stdcall TryAcquireSRWLockShared(ptr) ntdll.RtlTryAcquireSRWLockShared
+@ stdcall TryEnterCriticalSection(ptr) ntdll.RtlTryEnterCriticalSection
 @ stdcall TrySubmitThreadpoolCallback(ptr ptr ptr) kernel32.TrySubmitThreadpoolCallback
 @ stdcall TzSpecificLocalTimeToSystemTime(ptr ptr ptr) kernel32.TzSpecificLocalTimeToSystemTime
 @ stub TzSpecificLocalTimeToSystemTimeEx
@@ -1621,8 +1621,8 @@
 # @ stub UnregisterGPNotificationInternal
 # @ stub UnregisterStateChangeNotification
 # @ stub UnregisterStateLock
-@ stdcall UnregisterTraceGuids(int64) advapi32.UnregisterTraceGuids
-@ stdcall UnregisterWaitEx(long long) kernel32.UnregisterWaitEx
+@ stdcall UnregisterTraceGuids(int64) ntdll.EtwUnregisterTraceGuids
+@ stdcall UnregisterWaitEx(long long)
 # @ stub UnsubscribeEdpEnabledStateChange
 # @ stub UnsubscribeStateChangeNotification
 # @ stub UpdatePackageStatus
@@ -1661,7 +1661,7 @@
 @ stdcall VerLanguageNameW(long wstr long) kernel32.VerLanguageNameW
 @ stdcall VerQueryValueA(ptr str ptr ptr)
 @ stdcall VerQueryValueW(ptr wstr ptr ptr)
-@ stdcall -ret64 VerSetConditionMask(long long long long) kernel32.VerSetConditionMask
+@ stdcall -ret64 VerSetConditionMask(long long long long) ntdll.VerSetConditionMask
 # @ stub VerifyApplicationUserModelId
 # @ stub VerifyPackageFamilyName
 # @ stub VerifyPackageFullName
@@ -1687,21 +1687,21 @@
 @ stdcall WaitForDebugEvent(ptr long) kernel32.WaitForDebugEvent
 # @ stub WaitForDebugEventEx
 # @ stub WaitForMachinePolicyForegroundProcessingInternal
-@ stdcall WaitForMultipleObjects(long ptr long long) kernel32.WaitForMultipleObjects
-@ stdcall WaitForMultipleObjectsEx(long ptr long long long) kernel32.WaitForMultipleObjectsEx
-@ stdcall WaitForSingleObject(long long) kernel32.WaitForSingleObject
-@ stdcall WaitForSingleObjectEx(long long long) kernel32.WaitForSingleObjectEx
+@ stdcall WaitForMultipleObjects(long ptr long long)
+@ stdcall WaitForMultipleObjectsEx(long ptr long long long)
+@ stdcall WaitForSingleObject(long long)
+@ stdcall WaitForSingleObjectEx(long long long)
 @ stub WaitForThreadpoolIoCallbacks
-@ stdcall WaitForThreadpoolTimerCallbacks(ptr long) kernel32.WaitForThreadpoolTimerCallbacks
-@ stdcall WaitForThreadpoolWaitCallbacks(ptr long) kernel32.WaitForThreadpoolWaitCallbacks
-@ stdcall WaitForThreadpoolWorkCallbacks(ptr long) kernel32.WaitForThreadpoolWorkCallbacks
+@ stdcall WaitForThreadpoolTimerCallbacks(ptr long) ntdll.TpWaitForTimer
+@ stdcall WaitForThreadpoolWaitCallbacks(ptr long) ntdll.TpWaitForWait
+@ stdcall WaitForThreadpoolWorkCallbacks(ptr long) ntdll.TpWaitForWork
 # @ stub WaitForUserPolicyForegroundProcessingInternal
-@ stdcall WaitNamedPipeW(wstr long) kernel32.WaitNamedPipeW
+@ stdcall WaitNamedPipeW(wstr long)
 @ stdcall WaitOnAddress(ptr ptr long long)
-@ stdcall WakeAllConditionVariable(ptr) kernel32.WakeAllConditionVariable
+@ stdcall WakeAllConditionVariable(ptr) ntdll.RtlWakeAllConditionVariable
 @ stdcall WakeByAddressAll(ptr) ntdll.RtlWakeAddressAll
 @ stdcall WakeByAddressSingle(ptr) ntdll.RtlWakeAddressSingle
-@ stdcall WakeConditionVariable(ptr) kernel32.WakeConditionVariable
+@ stdcall WakeConditionVariable(ptr) ntdll.RtlWakeConditionVariable
 # @ stub WerGetFlags
 @ stdcall WerRegisterFile(wstr long long) kernel32.WerRegisterFile
 @ stdcall WerRegisterMemoryBlock(ptr long) kernel32.WerRegisterMemoryBlock
@@ -1732,7 +1732,7 @@
 @ stdcall WriteProcessMemory(long ptr ptr long ptr) kernel32.WriteProcessMemory
 # @ stub WriteStateAtomValue
 # @ stub WriteStateContainerValue
-@ stdcall ZombifyActCtx(ptr) kernel32.ZombifyActCtx
+@ stdcall ZombifyActCtx(ptr)
 # @ stub _AddMUIStringToCache
 # @ stub _GetMUIStringFromCache
 # @ stub _OpenMuiStringCache
@@ -1756,17 +1756,17 @@
 # @ stub exit
 # @ stub hgets
 # @ stub hwprintf
-@ stdcall lstrcmp(str str) kernel32.lstrcmp
-@ stdcall lstrcmpA(str str) kernel32.lstrcmpA
-@ stdcall lstrcmpW(wstr wstr) kernel32.lstrcmpW
-@ stdcall lstrcmpi(str str) kernel32.lstrcmpi
-@ stdcall lstrcmpiA(str str) kernel32.lstrcmpiA
-@ stdcall lstrcmpiW(wstr wstr) kernel32.lstrcmpiW
-@ stdcall lstrcpyn(ptr str long) kernel32.lstrcpyn
-@ stdcall lstrcpynA(ptr str long) kernel32.lstrcpynA
-@ stdcall lstrcpynW(ptr wstr long) kernel32.lstrcpynW
-@ stdcall lstrlen(str) kernel32.lstrlen
-@ stdcall lstrlenA(str) kernel32.lstrlenA
-@ stdcall lstrlenW(wstr) kernel32.lstrlenW
+@ stdcall lstrcmp(str str) lstrcmpA
+@ stdcall lstrcmpA(str str)
+@ stdcall lstrcmpW(wstr wstr)
+@ stdcall lstrcmpi(str str) lstrcmpiA
+@ stdcall lstrcmpiA(str str)
+@ stdcall lstrcmpiW(wstr wstr)
+@ stdcall lstrcpyn(ptr str long) KERNELBASE_lstrcpynA
+@ stdcall lstrcpynA(ptr str long) KERNELBASE_lstrcpynA
+@ stdcall lstrcpynW(ptr wstr long) KERNELBASE_lstrcpynW
+@ stdcall lstrlen(str) KERNELBASE_lstrlenA
+@ stdcall lstrlenA(str) KERNELBASE_lstrlenA
+@ stdcall lstrlenW(wstr) KERNELBASE_lstrlenW
 # @ stub time
 # @ stub wprintf

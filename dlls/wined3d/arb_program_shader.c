@@ -1407,18 +1407,28 @@ static const char *shader_arb_get_modifier(const struct wined3d_shader_instructi
 static void shader_hw_sample(const struct wined3d_shader_instruction *ins, DWORD sampler_idx,
         const char *dst_str, const char *coord_reg, WORD flags, const char *dsx, const char *dsy)
 {
-    enum wined3d_shader_resource_type resource_type = ins->ctx->reg_maps->resource_info[sampler_idx].type;
-    struct wined3d_string_buffer *buffer = ins->ctx->buffer;
-    const char *tex_type;
-    BOOL np2_fixup = FALSE;
-    struct shader_arb_ctx_priv *priv = ins->ctx->backend_data;
-    const char *mod;
     BOOL pshader = shader_is_pshader_version(ins->ctx->reg_maps->shader_version.type);
-    const char *tex_dst = dst_str;
+    struct shader_arb_ctx_priv *priv = ins->ctx->backend_data;
+    struct wined3d_string_buffer *buffer = ins->ctx->buffer;
+    enum wined3d_shader_resource_type resource_type;
     struct color_fixup_masks masks;
+    const char *tex_dst = dst_str;
+    BOOL np2_fixup = FALSE;
+    const char *tex_type;
+    const char *mod;
 
-    /* D3D vertex shader sampler IDs are vertex samplers(0-3), not global d3d samplers */
-    if(!pshader) sampler_idx += WINED3D_MAX_FRAGMENT_SAMPLERS;
+    if (pshader)
+    {
+        resource_type = pixelshader_get_resource_type(ins->ctx->reg_maps, sampler_idx,
+                priv->cur_ps_args->super.tex_types);
+    }
+    else
+    {
+        resource_type = ins->ctx->reg_maps->resource_info[sampler_idx].type;
+
+        /* D3D vertex shader sampler IDs are vertex samplers(0-3), not global d3d samplers */
+        sampler_idx += WINED3D_MAX_FRAGMENT_SAMPLERS;
+    }
 
     switch (resource_type)
     {
@@ -1432,7 +1442,8 @@ static void shader_hw_sample(const struct wined3d_shader_instruction *ins, DWORD
                 tex_type = "RECT";
             else
                 tex_type = "2D";
-            if (shader_is_pshader_version(ins->ctx->reg_maps->shader_version.type))
+
+            if (pshader)
             {
                 if (priv->cur_np2fixup_info->super.active & (1u << sampler_idx))
                 {
@@ -4297,8 +4308,6 @@ static struct arb_ps_compiled_shader *find_arb_pshader(struct wined3d_context_gl
 
     shader_data->gl_shaders[shader_data->num_gl_shaders].args = *args;
 
-    pixelshader_update_resource_types(shader, args->super.tex_types);
-
     if (!string_buffer_init(&buffer))
     {
         ERR("Failed to initialize shader buffer.\n");
@@ -4414,15 +4423,15 @@ static struct arb_vs_compiled_shader *find_arb_vshader(struct wined3d_shader *sh
 }
 
 static void find_arb_ps_compile_args(const struct wined3d_state *state,
-        const struct wined3d_context *context, const struct wined3d_shader *shader,
+        const struct wined3d_context_gl *context_gl, const struct wined3d_shader *shader,
         struct arb_ps_compile_args *args)
 {
-    const struct wined3d_gl_info *gl_info = context->gl_info;
-    const struct wined3d_d3d_info *d3d_info = context->d3d_info;
+    const struct wined3d_d3d_info *d3d_info = context_gl->c.d3d_info;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
     int i;
     WORD int_skip;
 
-    find_ps_compile_args(state, shader, context->stream_info.position_transformed, &args->super, context);
+    find_ps_compile_args(state, shader, context_gl->c.stream_info.position_transformed, &args->super, &context_gl->c);
 
     /* This forces all local boolean constants to 1 to make them stateblock independent */
     args->bools = shader->reg_maps.local_bool_consts;
@@ -4470,18 +4479,17 @@ static void find_arb_ps_compile_args(const struct wined3d_state *state,
 }
 
 static void find_arb_vs_compile_args(const struct wined3d_state *state,
-        const struct wined3d_context *context, const struct wined3d_shader *shader,
+        const struct wined3d_context_gl *context_gl, const struct wined3d_shader *shader,
         struct arb_vs_compile_args *args)
 {
-    const struct wined3d_context_gl *context_gl = wined3d_context_gl_const(context);
+    const struct wined3d_d3d_info *d3d_info = context_gl->c.d3d_info;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
     const struct wined3d_device *device = shader->device;
     const struct wined3d_adapter *adapter = device->adapter;
-    const struct wined3d_gl_info *gl_info = context->gl_info;
-    const struct wined3d_d3d_info *d3d_info = context->d3d_info;
     int i;
     WORD int_skip;
 
-    find_vs_compile_args(state, shader, context->stream_info.swizzle_map, &args->super, context);
+    find_vs_compile_args(state, shader, context_gl->c.stream_info.swizzle_map, &args->super, &context_gl->c);
 
     args->clip.boolclip_compare = 0;
     if (use_ps(state))
@@ -4496,7 +4504,7 @@ static void find_arb_vs_compile_args(const struct wined3d_state *state,
     {
         args->ps_signature = ~0;
         if (!d3d_info->vs_clipping && adapter->fragment_pipe == &arbfp_fragment_pipeline)
-            args->clip.boolclip.clip_texcoord = ffp_clip_emul(context) ? d3d_info->limits.ffp_blend_stages : 0;
+            args->clip.boolclip.clip_texcoord = ffp_clip_emul(&context_gl->c) ? d3d_info->limits.ffp_blend_stages : 0;
         /* Otherwise: Setting boolclip_compare set clip_texcoord to 0 */
     }
 
@@ -4564,7 +4572,7 @@ static void shader_arb_select(void *shader_priv, struct wined3d_context *context
         struct arb_ps_compiled_shader *compiled;
 
         TRACE("Using pixel shader %p.\n", ps);
-        find_arb_ps_compile_args(state, context, ps, &compile_args);
+        find_arb_ps_compile_args(state, context_gl, ps, &compile_args);
         compiled = find_arb_pshader(context_gl, ps, &compile_args);
         priv->current_fprogram_id = compiled->prgId;
         priv->compiled_fprog = compiled;
@@ -4632,7 +4640,7 @@ static void shader_arb_select(void *shader_priv, struct wined3d_context *context
         const struct wined3d_shader_signature *ps_input_sig;
 
         TRACE("Using vertex shader %p\n", vs);
-        find_arb_vs_compile_args(state, context, vs, &compile_args);
+        find_arb_vs_compile_args(state, context_gl, vs, &compile_args);
 
         /* Instead of searching for the signature in the signature list, read the one from the
          * current pixel shader. It's maybe not the shader where the signature came from, but it
