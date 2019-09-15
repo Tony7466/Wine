@@ -16,7 +16,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/dlls/twain_32/dsm_ctrl.c
 +++ b/dlls/twain_32/dsm_ctrl.c
-@@ -284,7 +284,6 @@ TW_UINT16 TWAIN_OpenDS (pTW_IDENTITY pOr
+@@ -282,7 +282,6 @@ TW_UINT16 TWAIN_OpenDS (pTW_IDENTITY pOr
  	TW_UINT16 i = 0;
  	pTW_IDENTITY pIdentity = (pTW_IDENTITY) pData;
  	activeDS *newSource;
@@ -24,7 +24,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  	HMODULE hmod;
  
  	TRACE("DG_CONTROL/DAT_IDENTITY/MSG_OPENDS\n");
-@@ -319,7 +318,7 @@ TW_UINT16 TWAIN_OpenDS (pTW_IDENTITY pOr
+@@ -317,7 +316,7 @@ TW_UINT16 TWAIN_OpenDS (pTW_IDENTITY pOr
  	}
  	hmod = LoadLibraryA(devices[i].modname);
  	if (!hmod) {
