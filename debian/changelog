@@ -1,5 +1,7 @@
-wine-development (4.12-1) UNRELEASED; urgency=medium
+wine-development (4.12.1-1) unstable; urgency=medium
 
+  * New upstream release 4.12.1, released Jul 7, 2019.
+    - Fixes for broken 64-bit prefix initialization.
   * New upstream release 4.12, released Jul 5, 2019.
     - Still more DLLs are built as PE files by default.
     - Support for Plug & Play device drivers.
@@ -12,7 +14,7 @@ wine-development (4.12-1) UNRELEASED; urgency=medium
   * Build-depend on libsane-dev.
   * Configure without-mingw, but drop the build-conflicts on mingw-w64.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Mon, 16 Sep 2019 21:39:46 +0200
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 16 Sep 2019 22:29:23 +0200
 
 wine-development (4.11-1) unstable; urgency=medium
 
