@@ -54,6 +54,7 @@ export DEB_CFLAGS_MAINT_APPEND+=-Wno-error
 CONFLAGS=--with-gnutls \
          --without-hal \
          --without-netapi \
+         --without-mingw \
          --disable-tests \
          --enable-maintainer-mode \
          --libdir=/$(LIBDIR) \
