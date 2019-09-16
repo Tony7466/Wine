@@ -1806,9 +1806,9 @@
 @ cdecl fabs(double) msvcr120.fabs
 @ cdecl -arch=arm,x86_64,arm64 fabsf(float) msvcr120.fabsf
 @ cdecl fclose(ptr) msvcr120.fclose
-@ stub fdim
-@ stub fdimf
-@ stub fdiml
+@ cdecl fdim(double double) msvcr120.fdim
+@ cdecl fdimf(float float) msvcr120.fdimf
+@ cdecl fdiml(double double) msvcr120.fdiml
 @ stub feclearexcept
 @ cdecl fegetenv(ptr) msvcr120.fegetenv
 @ stub fegetexceptflag
@@ -1831,8 +1831,8 @@
 @ cdecl floor(double) msvcr120.floor
 @ cdecl -arch=arm,x86_64,arm64 floorf(float) msvcr120.floorf
 @ cdecl fma(double double double) msvcr120.fma
-@ cdecl -arch=arm,x86_64,arm64 fmaf(float float float) msvcr120.fmaf
-@ stub fmal
+@ cdecl fmaf(float float float) msvcr120.fmaf
+@ cdecl fmal(double double double) msvcr120.fmal
 @ cdecl fmax(double double) msvcr120.fmax
 @ cdecl fmaxf(float float) msvcr120.fmaxf
 @ cdecl fmaxl(double double) msvcr120.fmaxl
@@ -2067,9 +2067,9 @@
 @ cdecl -arch=arm,x86_64,arm64 tanf(float) msvcr120.tanf
 @ cdecl tanh(double) msvcr120.tanh
 @ cdecl -arch=arm,x86_64,arm64 tanhf(float) msvcr120.tanhf
-@ stub tgamma
-@ stub tgammaf
-@ stub tgammal
+@ cdecl tgamma(double) msvcr120.tgamma
+@ cdecl tgammaf(float) msvcr120.tgammaf
+@ cdecl tgammal(double) msvcr120.tgammal
 @ cdecl tmpfile() msvcr120.tmpfile
 @ cdecl tmpfile_s(ptr) msvcr120.tmpfile_s
 @ cdecl tmpnam(ptr) msvcr120.tmpnam

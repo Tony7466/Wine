@@ -236,14 +236,14 @@
 @ cdecl expm1l(double) ucrtbase.expm1l
 @ cdecl fabs(double) ucrtbase.fabs
 @ cdecl -arch=arm,arm64 fabsf(float) ucrtbase.fabsf
-@ stub fdim
-@ stub fdimf
-@ stub fdiml
+@ cdecl fdim(double double) ucrtbase.fdim
+@ cdecl fdimf(float float) ucrtbase.fdimf
+@ cdecl fdiml(double double) ucrtbase.fdiml
 @ cdecl floor(double) ucrtbase.floor
 @ cdecl -arch=arm,x86_64,arm64 floorf(float) ucrtbase.floorf
 @ cdecl fma(double double double) ucrtbase.fma
-@ cdecl -arch=arm,x86_64,arm64 fmaf(float float float) ucrtbase.fmaf
-@ stub fmal
+@ cdecl fmaf(float float float) ucrtbase.fmaf
+@ cdecl fmal(double double double) ucrtbase.fmal
 @ cdecl fmax(double double) ucrtbase.fmax
 @ cdecl fmaxf(float float) ucrtbase.fmaxf
 @ cdecl fmaxl(double double) ucrtbase.fmaxl
@@ -333,9 +333,9 @@
 @ cdecl -arch=arm,x86_64,arm64 tanf(float) ucrtbase.tanf
 @ cdecl tanh(double) ucrtbase.tanh
 @ cdecl -arch=arm,x86_64,arm64 tanhf(float) ucrtbase.tanhf
-@ stub tgamma
-@ stub tgammaf
-@ stub tgammal
+@ cdecl tgamma(double) ucrtbase.tgamma
+@ cdecl tgammaf(float) ucrtbase.tgammaf
+@ cdecl tgammal(double) ucrtbase.tgammal
 @ cdecl trunc(double) ucrtbase.trunc
 @ cdecl truncf(float) ucrtbase.truncf
 @ cdecl truncl(double) ucrtbase.truncl

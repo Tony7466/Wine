@@ -388,22 +388,6 @@ float CDECL MSVCRT_floorf( float x )
 }
 
 /*********************************************************************
- *      fmaf (MSVCRT.@)
- */
-float CDECL MSVCRT_fmaf( float x, float y, float z )
-{
-#ifdef HAVE_FMAF
-  float w = fmaf(x, y, z);
-#else
-  float w = x * y + z;
-#endif
-  if ((isinf(x) && y == 0) || (x == 0 && isinf(y))) *MSVCRT__errno() = MSVCRT_EDOM;
-  else if (isinf(x) && isinf(z) && x != z) *MSVCRT__errno() = MSVCRT_EDOM;
-  else if (isinf(y) && isinf(z) && y != z) *MSVCRT__errno() = MSVCRT_EDOM;
-  return w;
-}
-
-/*********************************************************************
  *      frexpf (MSVCRT.@)
  */
 float CDECL MSVCRT_frexpf( float x, int *exp )
@@ -888,6 +872,22 @@ double CDECL MSVCRT_fma( double x, double y, double z )
   double w = fma(x, y, z);
 #else
   double w = x * y + z;
+#endif
+  if ((isinf(x) && y == 0) || (x == 0 && isinf(y))) *MSVCRT__errno() = MSVCRT_EDOM;
+  else if (isinf(x) && isinf(z) && x != z) *MSVCRT__errno() = MSVCRT_EDOM;
+  else if (isinf(y) && isinf(z) && y != z) *MSVCRT__errno() = MSVCRT_EDOM;
+  return w;
+}
+
+/*********************************************************************
+ *      fmaf (MSVCRT.@)
+ */
+float CDECL MSVCRT_fmaf( float x, float y, float z )
+{
+#ifdef HAVE_FMAF
+  float w = fmaf(x, y, z);
+#else
+  float w = x * y + z;
 #endif
   if ((isinf(x) && y == 0) || (x == 0 && isinf(y))) *MSVCRT__errno() = MSVCRT_EDOM;
   else if (isinf(x) && isinf(z) && x != z) *MSVCRT__errno() = MSVCRT_EDOM;
@@ -3024,6 +3024,30 @@ double CDECL MSVCR120_fmax(double x, double y)
 }
 
 /*********************************************************************
+ *      fdimf (MSVCR120.@)
+ */
+float CDECL MSVCR120_fdimf(float x, float y)
+{
+    if(isnan(x))
+        return x;
+    if(isnan(y))
+        return y;
+    return x>y ? x-y : 0;
+}
+
+/*********************************************************************
+ *      fdim (MSVCR120.@)
+ */
+double CDECL MSVCR120_fdim(double x, double y)
+{
+    if(isnan(x))
+        return x;
+    if(isnan(y))
+        return y;
+    return x>y ? x-y : 0;
+}
+
+/*********************************************************************
  *      _fdsign (MSVCR120.@)
  */
 int CDECL MSVCR120__fdsign(float x)
@@ -3378,6 +3402,44 @@ float CDECL MSVCR120_lgammaf(float x)
 LDOUBLE CDECL MSVCR120_lgammal(LDOUBLE x)
 {
     return MSVCR120_lgamma(x);
+}
+
+/*********************************************************************
+ *      tgamma (MSVCR120.@)
+ */
+double CDECL MSVCR120_tgamma(double x)
+{
+#ifdef HAVE_TGAMMA
+    if(x==0.0) *MSVCRT__errno() = MSVCRT_ERANGE;
+    if(x<0.0f) {
+      double integral;
+      if (modf(x, &integral) == 0)
+        *MSVCRT__errno() = MSVCRT_EDOM;
+    }
+    return tgamma(x);
+#else
+    FIXME( "not implemented\n" );
+    return 0.0;
+#endif
+}
+
+/*********************************************************************
+ *      tgammaf (MSVCR120.@)
+ */
+float CDECL MSVCR120_tgammaf(float x)
+{
+#ifdef HAVE_TGAMMAF
+    if(x==0.0f) *MSVCRT__errno() = MSVCRT_ERANGE;
+    if(x<0.0f) {
+      float integral;
+      if (modff(x, &integral) == 0)
+        *MSVCRT__errno() = MSVCRT_EDOM;
+    }
+    return tgammaf(x);
+#else
+    FIXME( "not implemented\n" );
+    return 0.0f;
+#endif
 }
 
 /*********************************************************************

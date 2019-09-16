@@ -1668,9 +1668,8 @@ todo_wine
            "SO_PROTOCOL_INFO[A/W] comparison failed\n");
 
         /* Remove IF when WSAEnumProtocols support IPV6 data */
-        todo_wine_if (prottest[i].family == AF_INET6)
-            ok(infoA.iAddressFamily == prottest[i].family, "socket family invalid, expected %d received %d\n",
-               prottest[i].family, infoA.iAddressFamily);
+        ok(infoA.iAddressFamily == prottest[i].family, "socket family invalid, expected %d received %d\n",
+           prottest[i].family, infoA.iAddressFamily);
         ok(infoA.iSocketType == prottest[i].type, "socket type invalid, expected %d received %d\n",
            prottest[i].type, infoA.iSocketType);
         ok(infoA.iProtocol == prottest[i].proto, "socket protocol invalid, expected %d received %d\n",
@@ -2108,8 +2107,6 @@ static void test_ip_pktinfo(void)
         /* Setup the server side socket */
         rc=bind(s1, (struct sockaddr*)&s1addr, sizeof(s1addr));
         ok(rc != SOCKET_ERROR, "bind() failed error: %d\n", WSAGetLastError());
-        rc=setsockopt(s1, IPPROTO_IP, IP_PKTINFO, (const char*)&yes, sizeof(yes));
-        ok(rc == 0, "failed to set IPPROTO_IP flag IP_PKTINFO!\n");
 
         /* Build "client" side socket */
         addrlen = sizeof(s2addr);
@@ -2132,6 +2129,21 @@ static void test_ip_pktinfo(void)
         rc=pWSARecvMsg(s1, NULL, NULL, NULL, NULL);
         err=WSAGetLastError();
         ok(rc == SOCKET_ERROR && err == WSAEFAULT, "WSARecvMsg() failed error: %d (ret = %d)\n", err, rc);
+
+        /* Test that when no control data arrives, a 0-length NULL-valued control buffer should succeed */
+        SetLastError(0xdeadbeef);
+        rc=sendto(s2, msg, sizeof(msg), 0, (struct sockaddr*)&s2addr, sizeof(s2addr));
+        ok(rc == sizeof(msg), "sendto() failed error: %d\n", WSAGetLastError());
+        ok(GetLastError() == ERROR_SUCCESS, "Expected 0, got %d\n", GetLastError());
+        hdr.Control.buf = NULL;
+        hdr.Control.len = 0;
+        rc=pWSARecvMsg(s1, &hdr, &dwSize, NULL, NULL);
+        ok(rc == 0, "WSARecvMsg() failed error: %d\n", WSAGetLastError());
+        hdr.Control.buf = pktbuf;
+
+        /* Now start IP_PKTINFO for future tests */
+        rc=setsockopt(s1, IPPROTO_IP, IP_PKTINFO, (const char*)&yes, sizeof(yes));
+        ok(rc == 0, "failed to set IPPROTO_IP flag IP_PKTINFO!\n");
 
         /*
          * Send a packet from the client to the server and test for specifying

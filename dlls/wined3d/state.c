@@ -3527,7 +3527,7 @@ static enum wined3d_texture_address wined3d_texture_gl_address_mode(const struct
 }
 
 static void wined3d_sampler_desc_from_sampler_states(struct wined3d_sampler_desc *desc,
-        const struct wined3d_context *context, const DWORD *sampler_states,
+        const struct wined3d_context_gl *context_gl, const DWORD *sampler_states,
         const struct wined3d_texture_gl *texture_gl)
 {
     union
@@ -3578,7 +3578,7 @@ static void wined3d_sampler_desc_from_sampler_states(struct wined3d_sampler_desc
     if (texture_gl->t.flags & WINED3D_TEXTURE_COND_NP2)
     {
         desc->mip_filter = WINED3D_TEXF_NONE;
-        if (context->gl_info->supported[WINED3D_GL_NORMALIZED_TEXRECT])
+        if (context_gl->c.gl_info->supported[WINED3D_GL_NORMALIZED_TEXRECT])
             desc->min_filter = WINED3D_TEXF_POINT;
     }
 }
@@ -3615,7 +3615,7 @@ static void sampler(struct wined3d_context *context, const struct wined3d_state 
         struct wined3d_sampler *sampler;
         struct wine_rb_entry *entry;
 
-        wined3d_sampler_desc_from_sampler_states(&desc, context, sampler_states, texture_gl);
+        wined3d_sampler_desc_from_sampler_states(&desc, context_gl, sampler_states, texture_gl);
 
         wined3d_texture_gl_bind(texture_gl, context_gl, srgb);
 
@@ -5186,7 +5186,7 @@ static const struct wined3d_state_entry_template ffp_fragmentstate_template[] = 
 };
 
 /* Context activation is done by the caller. */
-static void ffp_enable(const struct wined3d_gl_info *gl_info, BOOL enable) {}
+static void ffp_pipe_enable(const struct wined3d_context *context, BOOL enable) {}
 
 static void *ffp_alloc(const struct wined3d_shader_backend_ops *shader_backend, void *shader_priv)
 {
@@ -5225,7 +5225,7 @@ static DWORD vp_ffp_get_emul_mask(const struct wined3d_gl_info *gl_info)
 
 const struct wined3d_vertex_pipe_ops ffp_vertex_pipe =
 {
-    ffp_enable,
+    ffp_pipe_enable,
     vp_ffp_get_caps,
     vp_ffp_get_emul_mask,
     ffp_alloc,
@@ -5296,8 +5296,9 @@ static void ffp_none_context_free(struct wined3d_context *context)
 {
 }
 
-const struct fragment_pipeline ffp_fragment_pipeline = {
-    ffp_enable,
+const struct wined3d_fragment_pipe_ops ffp_fragment_pipeline =
+{
+    ffp_pipe_enable,
     ffp_fragment_get_caps,
     ffp_fragment_get_emul_mask,
     ffp_alloc,
@@ -5308,7 +5309,7 @@ const struct fragment_pipeline ffp_fragment_pipeline = {
     ffp_fragmentstate_template,
 };
 
-static void none_enable(const struct wined3d_gl_info *gl_info, BOOL enable) {}
+static void none_pipe_enable(const struct wined3d_context *context, BOOL enable) {}
 
 static void *none_alloc(const struct wined3d_shader_backend_ops *shader_backend, void *shader_priv)
 {
@@ -5329,7 +5330,7 @@ static DWORD vp_none_get_emul_mask(const struct wined3d_gl_info *gl_info)
 
 const struct wined3d_vertex_pipe_ops none_vertex_pipe =
 {
-    none_enable,
+    none_pipe_enable,
     vp_none_get_caps,
     vp_none_get_emul_mask,
     none_alloc,
@@ -5352,9 +5353,9 @@ static BOOL fp_none_color_fixup_supported(struct color_fixup_desc fixup)
     return is_identity_fixup(fixup);
 }
 
-const struct fragment_pipeline none_fragment_pipe =
+const struct wined3d_fragment_pipe_ops none_fragment_pipe =
 {
-    none_enable,
+    none_pipe_enable,
     fp_none_get_caps,
     fp_none_get_emul_mask,
     none_alloc,
@@ -5520,7 +5521,7 @@ static void validate_state_table(struct wined3d_state_entry *state_table)
 
 HRESULT compile_state_table(struct wined3d_state_entry *state_table, APPLYSTATEFUNC **dev_multistate_funcs,
         const struct wined3d_d3d_info *d3d_info, const BOOL *supported_extensions,
-        const struct wined3d_vertex_pipe_ops *vertex, const struct fragment_pipeline *fragment,
+        const struct wined3d_vertex_pipe_ops *vertex, const struct wined3d_fragment_pipe_ops *fragment,
         const struct wined3d_state_entry_template *misc)
 {
     APPLYSTATEFUNC multistate_funcs[STATE_HIGHEST + 1][3];

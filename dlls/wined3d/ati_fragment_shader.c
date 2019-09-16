@@ -1250,8 +1250,10 @@ static const struct wined3d_state_entry_template atifs_fragmentstate_template[] 
 };
 
 /* Context activation is done by the caller. */
-static void atifs_enable(const struct wined3d_gl_info *gl_info, BOOL enable)
+static void atifs_enable(const struct wined3d_context *context, BOOL enable)
 {
+    const struct wined3d_gl_info *gl_info = context->gl_info;
+
     if (enable)
     {
         gl_info->gl_ops.gl.p_glEnable(GL_FRAGMENT_SHADER_ATI);
@@ -1333,10 +1335,10 @@ static void *atifs_alloc(const struct wined3d_shader_backend_ops *shader_backend
 static void atifs_free_ffpshader(struct wine_rb_entry *entry, void *param)
 {
     struct atifs_ffp_desc *entry_ati = WINE_RB_ENTRY_VALUE(entry, struct atifs_ffp_desc, parent.entry);
-    struct wined3d_context *context = param;
+    struct wined3d_context_gl *context_gl = param;
     const struct wined3d_gl_info *gl_info;
 
-    gl_info = context->gl_info;
+    gl_info = context_gl->c.gl_info;
     GL_EXTCALL(glDeleteFragmentShaderATI(entry_ati->shader));
     checkGLcall("glDeleteFragmentShaderATI(entry->shader)");
     heap_free(entry_ati);
@@ -1345,9 +1347,10 @@ static void atifs_free_ffpshader(struct wine_rb_entry *entry, void *param)
 /* Context activation is done by the caller. */
 static void atifs_free(struct wined3d_device *device, struct wined3d_context *context)
 {
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     struct atifs_private_data *priv = device->fragment_priv;
 
-    wine_rb_destroy(&priv->fragment_shaders, atifs_free_ffpshader, context);
+    wine_rb_destroy(&priv->fragment_shaders, atifs_free_ffpshader, context_gl);
 
     heap_free(priv);
     device->fragment_priv = NULL;
@@ -1375,7 +1378,8 @@ static void atifs_free_context_data(struct wined3d_context *context)
     heap_free(context->fragment_pipe_data);
 }
 
-const struct fragment_pipeline atifs_fragment_pipeline = {
+const struct wined3d_fragment_pipe_ops atifs_fragment_pipeline =
+{
     atifs_enable,
     atifs_get_caps,
     atifs_get_emul_mask,
