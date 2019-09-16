@@ -1,11 +1,12 @@
-wine-development (4.13-1) UNRELEASED; urgency=medium
+wine-development (4.13-1) unstable; urgency=medium
 
   * New upstream release 4.13, released Aug 2, 2019.
     - Support for Passport HTTP redirects.
     - A bunch of header updates.
     - Various bug fixes.
+  * Refresh patches.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Mon, 16 Sep 2019 23:49:45 +0200
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 16 Sep 2019 23:50:29 +0200
 
 wine-development (4.12.1-1) unstable; urgency=medium
 
