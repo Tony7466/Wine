@@ -966,13 +966,6 @@ typedef struct _SYSTEM_POWER_STATUS
   DWORD   BatteryFullLifeTime;
 } SYSTEM_POWER_STATUS, *LPSYSTEM_POWER_STATUS;
 
-typedef enum _POWER_REQUEST_TYPE
-{
-    PowerRequestDisplayRequired,
-    PowerRequestSystemRequired,
-    PowerRequestAwayModeRequired
-} POWER_REQUEST_TYPE, *PPOWER_REQUEST_TYPE;
-
 typedef struct _SYSTEM_INFO
 {
     union {
@@ -1052,6 +1045,16 @@ typedef DWORD (CALLBACK *LPPROGRESS_ROUTINE)(LARGE_INTEGER, LARGE_INTEGER, LARGE
                                            HANDLE, LPVOID);
 
 typedef DWORD (WINAPI *APPLICATION_RECOVERY_CALLBACK)(PVOID);
+
+#define RECOVERY_DEFAULT_PING_INTERVAL  5000
+#define RECOVERY_MAX_PING_INTERVAL      (5*60*1000)
+
+#define RESTART_MAX_CMD_LINE    1024
+
+#define RESTART_NO_CRASH        1
+#define RESTART_NO_HANG         2
+#define RESTART_NO_PATCH        4
+#define RESTART_NO_REBOOT       8
 
 typedef enum _COPYFILE2_MESSAGE_TYPE
 {

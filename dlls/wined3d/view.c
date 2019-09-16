@@ -446,13 +446,13 @@ void wined3d_rendertarget_view_get_drawable_size(const struct wined3d_rendertarg
     }
     else if (wined3d_settings.offscreen_rendering_mode == ORM_BACKBUFFER)
     {
-        const struct wined3d_swapchain *swapchain = context->swapchain;
+        const struct wined3d_swapchain_desc *desc = &context->swapchain->state.desc;
 
         /* The drawable size of a backbuffer / aux buffer offscreen target is
          * the size of the current context's drawable, which is the size of
          * the back buffer of the swapchain the active context belongs to. */
-        *width = swapchain->desc.backbuffer_width;
-        *height = swapchain->desc.backbuffer_height;
+        *width = desc->backbuffer_width;
+        *height = desc->backbuffer_height;
     }
     else
     {
@@ -562,7 +562,7 @@ static void wined3d_render_target_view_gl_cs_init(void *object)
                         debug_d3dformat(resource->format->id), debug_d3dformat(view_gl->v.format->id));
                 return;
             }
-            if (texture_gl->t.swapchain && texture_gl->t.swapchain->desc.backbuffer_count > 1)
+            if (texture_gl->t.swapchain && texture_gl->t.swapchain->state.desc.backbuffer_count > 1)
             {
                 FIXME("Swapchain views not supported.\n");
                 return;
@@ -761,7 +761,7 @@ static void wined3d_shader_resource_view_gl_cs_init(void *object)
         {
             TRACE("Creating identity shader resource view.\n");
         }
-        else if (texture_gl->t.swapchain && texture_gl->t.swapchain->desc.backbuffer_count > 1)
+        else if (texture_gl->t.swapchain && texture_gl->t.swapchain->state.desc.backbuffer_count > 1)
         {
             FIXME("Swapchain shader resource views not supported.\n");
         }
@@ -828,10 +828,9 @@ HRESULT CDECL wined3d_shader_resource_view_create(const struct wined3d_view_desc
 }
 
 void wined3d_shader_resource_view_gl_bind(struct wined3d_shader_resource_view_gl *view_gl,
-        unsigned int unit, struct wined3d_sampler *sampler, struct wined3d_context *context)
+        unsigned int unit, struct wined3d_sampler *sampler, struct wined3d_context_gl *context_gl)
 {
-    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
-    const struct wined3d_gl_info *gl_info = context->gl_info;
+    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
     struct wined3d_texture_gl *texture_gl;
 
     wined3d_context_gl_active_texture(context_gl, gl_info, unit);

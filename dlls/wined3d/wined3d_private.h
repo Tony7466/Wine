@@ -74,7 +74,7 @@
 #define WINED3D_QUIRK_BROKEN_ARB_FOG            0x00000200
 #define WINED3D_QUIRK_NO_INDEPENDENT_BIT_DEPTHS 0x00000400
 
-struct fragment_pipeline;
+struct wined3d_fragment_pipe_ops;
 struct wined3d_adapter;
 struct wined3d_context;
 struct wined3d_state;
@@ -1444,7 +1444,7 @@ struct wined3d_shader_backend_ops
             const struct wined3d_state *state);
     void (*shader_destroy)(struct wined3d_shader *shader);
     HRESULT (*shader_alloc_private)(struct wined3d_device *device, const struct wined3d_vertex_pipe_ops *vertex_pipe,
-            const struct fragment_pipeline *fragment_pipe);
+            const struct wined3d_fragment_pipe_ops *fragment_pipe);
     void (*shader_free_private)(struct wined3d_device *device, struct wined3d_context *context);
     BOOL (*shader_allocate_context_data)(struct wined3d_context *context);
     void (*shader_free_context_data)(struct wined3d_context *context);
@@ -2159,9 +2159,9 @@ struct fragment_caps
 #define GL_EXT_EMUL_ARB_MULTITEXTURE 0x00000001
 #define GL_EXT_EMUL_EXT_FOG_COORD    0x00000002
 
-struct fragment_pipeline
+struct wined3d_fragment_pipe_ops
 {
-    void (*enable_extension)(const struct wined3d_gl_info *gl_info, BOOL enable);
+    void (*fp_enable)(const struct wined3d_context *context, BOOL enable);
     void (*get_caps)(const struct wined3d_adapter *adapter, struct fragment_caps *caps);
     DWORD (*get_emul_mask)(const struct wined3d_gl_info *gl_info);
     void *(*alloc_private)(const struct wined3d_shader_backend_ops *shader_backend, void *shader_priv);
@@ -2188,7 +2188,7 @@ struct wined3d_vertex_caps
 
 struct wined3d_vertex_pipe_ops
 {
-    void (*vp_enable)(const struct wined3d_gl_info *gl_info, BOOL enable);
+    void (*vp_enable)(const struct wined3d_context *context, BOOL enable);
     void (*vp_get_caps)(const struct wined3d_adapter *adapter, struct wined3d_vertex_caps *caps);
     DWORD (*vp_get_emul_mask)(const struct wined3d_gl_info *gl_info);
     void *(*vp_alloc)(const struct wined3d_shader_backend_ops *shader_backend, void *shader_priv);
@@ -2197,13 +2197,13 @@ struct wined3d_vertex_pipe_ops
 };
 
 extern const struct wined3d_state_entry_template misc_state_template[] DECLSPEC_HIDDEN;
-extern const struct fragment_pipeline none_fragment_pipe DECLSPEC_HIDDEN;
-extern const struct fragment_pipeline ffp_fragment_pipeline DECLSPEC_HIDDEN;
-extern const struct fragment_pipeline atifs_fragment_pipeline DECLSPEC_HIDDEN;
-extern const struct fragment_pipeline arbfp_fragment_pipeline DECLSPEC_HIDDEN;
-extern const struct fragment_pipeline nvts_fragment_pipeline DECLSPEC_HIDDEN;
-extern const struct fragment_pipeline nvrc_fragment_pipeline DECLSPEC_HIDDEN;
-extern const struct fragment_pipeline glsl_fragment_pipe DECLSPEC_HIDDEN;
+extern const struct wined3d_fragment_pipe_ops none_fragment_pipe DECLSPEC_HIDDEN;
+extern const struct wined3d_fragment_pipe_ops ffp_fragment_pipeline DECLSPEC_HIDDEN;
+extern const struct wined3d_fragment_pipe_ops atifs_fragment_pipeline DECLSPEC_HIDDEN;
+extern const struct wined3d_fragment_pipe_ops arbfp_fragment_pipeline DECLSPEC_HIDDEN;
+extern const struct wined3d_fragment_pipe_ops nvts_fragment_pipeline DECLSPEC_HIDDEN;
+extern const struct wined3d_fragment_pipe_ops nvrc_fragment_pipeline DECLSPEC_HIDDEN;
+extern const struct wined3d_fragment_pipe_ops glsl_fragment_pipe DECLSPEC_HIDDEN;
 
 extern const struct wined3d_vertex_pipe_ops none_vertex_pipe DECLSPEC_HIDDEN;
 extern const struct wined3d_vertex_pipe_ops ffp_vertex_pipe DECLSPEC_HIDDEN;
@@ -2212,7 +2212,7 @@ extern const struct wined3d_vertex_pipe_ops glsl_vertex_pipe DECLSPEC_HIDDEN;
 /* "Base" state table */
 HRESULT compile_state_table(struct wined3d_state_entry *state_table, APPLYSTATEFUNC **dev_multistate_funcs,
         const struct wined3d_d3d_info *d3d_info, const BOOL *supported_extensions,
-        const struct wined3d_vertex_pipe_ops *vertex, const struct fragment_pipeline *fragment,
+        const struct wined3d_vertex_pipe_ops *vertex, const struct wined3d_fragment_pipe_ops *fragment,
         const struct wined3d_state_entry_template *misc) DECLSPEC_HIDDEN;
 
 enum wined3d_blit_op
@@ -2350,6 +2350,7 @@ enum wined3d_pci_device
     CARD_AMD_RADEON_HD5900          = 0x689c,
     CARD_AMD_RADEON_HD6300          = 0x9803,
     CARD_AMD_RADEON_HD6400          = 0x6770,
+    CARD_AMD_RADEON_HD6490M         = 0x6760,
     CARD_AMD_RADEON_HD6410D         = 0x9644,
     CARD_AMD_RADEON_HD6480G         = 0x9648,
     CARD_AMD_RADEON_HD6550D         = 0x9640,
@@ -2361,6 +2362,7 @@ enum wined3d_pci_device
     CARD_AMD_RADEON_HD7660D         = 0x9901,
     CARD_AMD_RADEON_HD7700          = 0x683d,
     CARD_AMD_RADEON_HD7800          = 0x6819,
+    CARD_AMD_RADEON_HD7870          = 0x6818,
     CARD_AMD_RADEON_HD7900          = 0x679a,
     CARD_AMD_RADEON_HD8600M         = 0x6660,
     CARD_AMD_RADEON_HD8670          = 0x6610,
@@ -2369,7 +2371,11 @@ enum wined3d_pci_device
     CARD_AMD_RADEON_R7              = 0x130f,
     CARD_AMD_RADEON_R9_285          = 0x6939,
     CARD_AMD_RADEON_R9_290          = 0x67b1,
+    CARD_AMD_RADEON_R9_290X         = 0x67b0,
     CARD_AMD_RADEON_R9_FURY         = 0x7300,
+    CARD_AMD_RADEON_R9_M370X        = 0x6821,
+    CARD_AMD_RADEON_R9_M380         = 0x6647,
+    CARD_AMD_RADEON_R9_M395X        = 0x6920,
     CARD_AMD_RADEON_RX_460          = 0x67ef,
     CARD_AMD_RADEON_RX_480          = 0x67df,
     CARD_AMD_RADEON_RX_VEGA         = 0x687f,
@@ -2446,6 +2452,7 @@ enum wined3d_pci_device
     CARD_NVIDIA_GEFORCE_GT610       = 0x104a,
     CARD_NVIDIA_GEFORCE_GT630       = 0x0f00,
     CARD_NVIDIA_GEFORCE_GT630M      = 0x0de9,
+    CARD_NVIDIA_GEFORCE_GT640       = 0x0fc1,
     CARD_NVIDIA_GEFORCE_GT640M      = 0x0fd2,
     CARD_NVIDIA_GEFORCE_GT650M      = 0x0fd1,
     CARD_NVIDIA_GEFORCE_GTX650      = 0x0fc6,
@@ -2455,7 +2462,8 @@ enum wined3d_pci_device
     CARD_NVIDIA_GEFORCE_GTX660TI    = 0x1183,
     CARD_NVIDIA_GEFORCE_GTX670      = 0x1189,
     CARD_NVIDIA_GEFORCE_GTX670MX    = 0x11a1,
-    CARD_NVIDIA_GEFORCE_GTX675MX    = 0x11a7,
+    CARD_NVIDIA_GEFORCE_GTX675MX_1  = 0x11a7,
+    CARD_NVIDIA_GEFORCE_GTX675MX_2  = 0x11a2,
     CARD_NVIDIA_GEFORCE_GTX680      = 0x1180,
     CARD_NVIDIA_GEFORCE_GTX690      = 0x1188,
     CARD_NVIDIA_GEFORCE_GT720       = 0x128b,
@@ -2463,6 +2471,7 @@ enum wined3d_pci_device
     CARD_NVIDIA_GEFORCE_GT730M      = 0x0fe1,
     CARD_NVIDIA_GEFORCE_GT740M      = 0x1292,
     CARD_NVIDIA_GEFORCE_GT750M      = 0x0fe9,
+    CARD_NVIDIA_GEFORCE_GT755M      = 0x0fcd,
     CARD_NVIDIA_GEFORCE_GTX750      = 0x1381,
     CARD_NVIDIA_GEFORCE_GTX750TI    = 0x1380,
     CARD_NVIDIA_GEFORCE_GTX760      = 0x1187,
@@ -2470,7 +2479,9 @@ enum wined3d_pci_device
     CARD_NVIDIA_GEFORCE_GTX765M     = 0x11e2,
     CARD_NVIDIA_GEFORCE_GTX770M     = 0x11e0,
     CARD_NVIDIA_GEFORCE_GTX770      = 0x1184,
+    CARD_NVIDIA_GEFORCE_GTX775M     = 0x119d,
     CARD_NVIDIA_GEFORCE_GTX780      = 0x1004,
+    CARD_NVIDIA_GEFORCE_GTX780M     = 0x119e,
     CARD_NVIDIA_GEFORCE_GTX780TI    = 0x100a,
     CARD_NVIDIA_GEFORCE_GTXTITAN    = 0x1005,
     CARD_NVIDIA_GEFORCE_GTXTITANB   = 0x100c,
@@ -2546,7 +2557,8 @@ enum wined3d_pci_device
     CARD_INTEL_IVBS                 = 0x015a,
     CARD_INTEL_HWD                  = 0x0412,
     CARD_INTEL_HWM                  = 0x0416,
-    CARD_INTEL_HD5000               = 0x0a26,
+    CARD_INTEL_HD5000_1             = 0x0a26,
+    CARD_INTEL_HD5000_2             = 0x0422,
     CARD_INTEL_I5100_1              = 0x0a22,
     CARD_INTEL_I5100_2              = 0x0a2a,
     CARD_INTEL_I5100_3              = 0x0a2b,
@@ -2556,6 +2568,7 @@ enum wined3d_pci_device
     CARD_INTEL_IP5200_3             = 0x0d2a,
     CARD_INTEL_IP5200_4             = 0x0d2b,
     CARD_INTEL_IP5200_5             = 0x0d2e,
+    CARD_INTEL_IP5200_6             = 0x0c22,
     CARD_INTEL_HD5300               = 0x161e,
     CARD_INTEL_HD5500               = 0x1616,
     CARD_INTEL_HD5600               = 0x1612,
@@ -2781,7 +2794,7 @@ struct wined3d_adapter
     size_t format_size;
 
     const struct wined3d_vertex_pipe_ops *vertex_pipe;
-    const struct fragment_pipeline *fragment_pipe;
+    const struct wined3d_fragment_pipe_ops *fragment_pipe;
     const struct wined3d_shader_backend_ops *shader_backend;
     const struct wined3d_adapter_ops *adapter_ops;
 };
@@ -2980,6 +2993,7 @@ struct wined3d
     struct wined3d_adapter *adapters[1];
 };
 
+BOOL wined3d_filter_messages(HWND window, BOOL filter) DECLSPEC_HIDDEN;
 void wined3d_hook_swapchain(struct wined3d_swapchain *swapchain) DECLSPEC_HIDDEN;
 HRESULT wined3d_init(struct wined3d *wined3d, DWORD flags) DECLSPEC_HIDDEN;
 void wined3d_unhook_swapchain(struct wined3d_swapchain *swapchain) DECLSPEC_HIDDEN;
@@ -3153,10 +3167,6 @@ struct wined3d_device
     struct wined3d *wined3d;
     struct wined3d_adapter *adapter;
 
-    /* Window styles to restore when switching fullscreen mode */
-    LONG                    style;
-    LONG                    exStyle;
-
     const struct wined3d_shader_backend_ops *shader_backend;
     void *shader_priv;
     void *fragment_priv;
@@ -3170,8 +3180,7 @@ struct wined3d_device
     BYTE d3d_initialized : 1;
     BYTE inScene : 1;                   /* A flag to check for proper BeginScene / EndScene call pairs */
     BYTE softwareVertexProcessing : 1;  /* process vertex shaders using software or hardware */
-    BYTE filter_messages : 1;
-    BYTE padding : 3;
+    BYTE padding : 4;
 
     unsigned char           surface_alignment; /* Line Alignment of surfaces                      */
 
@@ -4128,7 +4137,7 @@ static inline struct wined3d_shader_resource_view_gl *wined3d_shader_resource_vi
 }
 
 void wined3d_shader_resource_view_gl_bind(struct wined3d_shader_resource_view_gl *view_gl, unsigned int unit,
-        struct wined3d_sampler *sampler, struct wined3d_context *context) DECLSPEC_HIDDEN;
+        struct wined3d_sampler *sampler, struct wined3d_context_gl *context_gl) DECLSPEC_HIDDEN;
 
 struct wined3d_unordered_access_view
 {
@@ -4165,6 +4174,24 @@ static inline struct wined3d_unordered_access_view_gl *wined3d_unordered_access_
     return CONTAINING_RECORD(view, struct wined3d_unordered_access_view_gl, v);
 }
 
+struct wined3d_swapchain_state
+{
+    struct wined3d_swapchain_desc desc;
+
+    struct wined3d_display_mode original_mode, d3d_mode;
+    RECT original_window_rect;
+
+    /* Window styles to restore when switching fullscreen mode. */
+    LONG style;
+    LONG exstyle;
+    HWND device_window;
+};
+
+void wined3d_swapchain_state_restore_from_fullscreen(struct wined3d_swapchain_state *state,
+        HWND window, const RECT *window_rect) DECLSPEC_HIDDEN;
+HRESULT wined3d_swapchain_state_setup_fullscreen(struct wined3d_swapchain_state *state,
+        HWND window, unsigned int w, unsigned int h) DECLSPEC_HIDDEN;
+
 struct wined3d_swapchain_ops
 {
     void (*swapchain_present)(struct wined3d_swapchain *swapchain,
@@ -4182,9 +4209,6 @@ struct wined3d_swapchain
 
     struct wined3d_texture **back_buffers;
     struct wined3d_texture *front_buffer;
-    struct wined3d_swapchain_desc desc;
-    struct wined3d_display_mode original_mode, d3d_mode;
-    RECT original_window_rect;
     struct wined3d_gamma_ramp orig_gamma;
     BOOL render_to_fbo, reapply_mode;
     const struct wined3d_format *ds_format;
@@ -4198,8 +4222,8 @@ struct wined3d_swapchain
     struct wined3d_context **context;
     unsigned int num_contexts;
 
+    struct wined3d_swapchain_state state;
     HWND win_handle;
-    HWND device_window;
 
     HDC backup_dc;
     HWND backup_wnd;

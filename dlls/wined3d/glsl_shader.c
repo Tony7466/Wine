@@ -139,7 +139,7 @@ struct shader_glsl_priv
     UINT next_constant_version;
 
     const struct wined3d_vertex_pipe_ops *vertex_pipe;
-    const struct fragment_pipeline *fragment_pipe;
+    const struct wined3d_fragment_pipe_ops *fragment_pipe;
     struct wine_rb_tree ffp_vertex_shaders;
     struct wine_rb_tree ffp_fragment_shaders;
     BOOL ffp_proj_control;
@@ -352,7 +352,7 @@ struct glsl_ffp_fragment_shader
 struct glsl_ffp_destroy_ctx
 {
     struct shader_glsl_priv *priv;
-    const struct wined3d_context *context;
+    const struct wined3d_context_gl *context_gl;
 };
 
 static void shader_glsl_generate_shader_epilogue(const struct wined3d_shader_context *ctx);
@@ -6007,7 +6007,7 @@ static void shader_glsl_sample(const struct wined3d_shader_instruction *ins)
  * comparison for array textures and cube textures. We use textureGrad*()
  * to implement sample_c_lz.
  */
-static void shader_glsl_gen_sample_c_lz(const struct wined3d_shader_instruction *ins,
+static void shader_glsl_gen_sample_c_lz_emulation(const struct wined3d_shader_instruction *ins,
         unsigned int sampler_bind_idx, const struct glsl_sample_function *sample_function,
         unsigned int coord_size, const char *coord_param, const char *ref_param)
 {
@@ -6036,6 +6036,7 @@ static void shader_glsl_gen_sample_c_lz(const struct wined3d_shader_instruction 
 
 static void shader_glsl_sample_c(const struct wined3d_shader_instruction *ins)
 {
+    const struct wined3d_gl_info *gl_info = ins->ctx->gl_info;
     unsigned int resource_idx, sampler_idx, sampler_bind_idx;
     const struct wined3d_shader_resource_info *resource_info;
     struct glsl_src_param coord_param, compare_param;
@@ -6064,10 +6065,11 @@ static void shader_glsl_sample_c(const struct wined3d_shader_instruction *ins)
     shader_glsl_add_src_param(ins, &ins->src[3], WINED3DSP_WRITEMASK_0, &compare_param);
     sampler_bind_idx = shader_glsl_find_sampler(&ins->ctx->reg_maps->sampler_map, resource_idx, sampler_idx);
     if (ins->handler_idx == WINED3DSIH_SAMPLE_C_LZ
+            && !gl_info->supported[EXT_TEXTURE_SHADOW_LOD]
             && (resource_info->type == WINED3D_SHADER_RESOURCE_TEXTURE_2DARRAY
             || resource_info->type == WINED3D_SHADER_RESOURCE_TEXTURE_CUBE))
     {
-        shader_glsl_gen_sample_c_lz(ins, sampler_bind_idx, &sample_function,
+        shader_glsl_gen_sample_c_lz_emulation(ins, sampler_bind_idx, &sample_function,
                 coord_size, coord_param.param_str, compare_param.param_str);
     }
     else
@@ -7453,6 +7455,8 @@ static void shader_glsl_enable_extensions(struct wined3d_string_buffer *buffer,
         shader_addline(buffer, "#extension GL_EXT_gpu_shader4 : enable\n");
     if (gl_info->supported[EXT_TEXTURE_ARRAY])
         shader_addline(buffer, "#extension GL_EXT_texture_array : enable\n");
+    if (gl_info->supported[EXT_TEXTURE_SHADOW_LOD])
+        shader_addline(buffer, "#extension GL_EXT_texture_shadow_lod : enable\n");
 }
 
 static void shader_glsl_generate_color_output(struct wined3d_string_buffer *buffer,
@@ -10553,8 +10557,8 @@ static void shader_glsl_select(void *shader_priv, struct wined3d_context *contex
     GLenum current_vertex_color_clamp;
     GLuint program_id, prev_id;
 
-    priv->vertex_pipe->vp_enable(gl_info, !use_vs(state));
-    priv->fragment_pipe->enable_extension(gl_info, !use_ps(state));
+    priv->vertex_pipe->vp_enable(context, !use_vs(state));
+    priv->fragment_pipe->fp_enable(context, !use_ps(state));
 
     prev_id = ctx_data->glsl_program ? ctx_data->glsl_program->id : 0;
     set_glsl_shader_program(context_gl, state, priv, ctx_data);
@@ -10655,8 +10659,8 @@ static void shader_glsl_disable(void *shader_priv, struct wined3d_context *conte
     GL_EXTCALL(glUseProgram(0));
     checkGLcall("glUseProgram");
 
-    priv->vertex_pipe->vp_enable(gl_info, FALSE);
-    priv->fragment_pipe->enable_extension(gl_info, FALSE);
+    priv->vertex_pipe->vp_enable(context, FALSE);
+    priv->fragment_pipe->fp_enable(context, FALSE);
 
     if (needs_legacy_glsl_syntax(gl_info) && gl_info->supported[ARB_COLOR_BUFFER_FLOAT])
     {
@@ -10911,7 +10915,7 @@ static void constant_heap_free(struct constant_heap *heap)
 }
 
 static HRESULT shader_glsl_alloc(struct wined3d_device *device, const struct wined3d_vertex_pipe_ops *vertex_pipe,
-        const struct fragment_pipeline *fragment_pipe)
+        const struct wined3d_fragment_pipe_ops *fragment_pipe)
 {
     SIZE_T stack_size = wined3d_log2i(max(WINED3D_MAX_VS_CONSTS_F, WINED3D_MAX_PS_CONSTS_F)) + 1;
     struct fragment_caps fragment_caps;
@@ -11399,7 +11403,7 @@ const struct wined3d_shader_backend_ops glsl_shader_backend =
     shader_glsl_has_ffp_proj_control,
 };
 
-static void glsl_vertex_pipe_vp_enable(const struct wined3d_gl_info *gl_info, BOOL enable) {}
+static void glsl_vertex_pipe_vp_enable(const struct wined3d_context *context, BOOL enable) {}
 
 static void glsl_vertex_pipe_vp_get_caps(const struct wined3d_adapter *adapter, struct wined3d_vertex_caps *caps)
 {
@@ -11452,8 +11456,9 @@ static void shader_glsl_free_ffp_vertex_shader(struct wine_rb_entry *entry, void
             struct glsl_ffp_vertex_shader, desc.entry);
     struct glsl_shader_prog_link *program, *program2;
     struct glsl_ffp_destroy_ctx *ctx = param;
-    const struct wined3d_gl_info *gl_info = ctx->context->gl_info;
+    const struct wined3d_gl_info *gl_info;
 
+    gl_info = ctx->context_gl->c.gl_info;
     LIST_FOR_EACH_ENTRY_SAFE(program, program2, &shader->linked_programs,
             struct glsl_shader_prog_link, vs.shader_entry)
     {
@@ -11466,11 +11471,12 @@ static void shader_glsl_free_ffp_vertex_shader(struct wine_rb_entry *entry, void
 /* Context activation is done by the caller. */
 static void glsl_vertex_pipe_vp_free(struct wined3d_device *device, struct wined3d_context *context)
 {
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     struct shader_glsl_priv *priv = device->vertex_priv;
     struct glsl_ffp_destroy_ctx ctx;
 
     ctx.priv = priv;
-    ctx.context = context;
+    ctx.context_gl = context_gl;
     wine_rb_destroy(&priv->ffp_vertex_shaders, shader_glsl_free_ffp_vertex_shader, &ctx);
 }
 
@@ -11890,7 +11896,7 @@ const struct wined3d_vertex_pipe_ops glsl_vertex_pipe =
     glsl_vertex_pipe_vp_states,
 };
 
-static void glsl_fragment_pipe_enable(const struct wined3d_gl_info *gl_info, BOOL enable)
+static void glsl_fragment_pipe_enable(const struct wined3d_context *context, BOOL enable)
 {
     /* Nothing to do. */
 }
@@ -11962,8 +11968,9 @@ static void shader_glsl_free_ffp_fragment_shader(struct wine_rb_entry *entry, vo
             struct glsl_ffp_fragment_shader, entry.entry);
     struct glsl_shader_prog_link *program, *program2;
     struct glsl_ffp_destroy_ctx *ctx = param;
-    const struct wined3d_gl_info *gl_info = ctx->context->gl_info;
+    const struct wined3d_gl_info *gl_info;
 
+    gl_info = ctx->context_gl->c.gl_info;
     LIST_FOR_EACH_ENTRY_SAFE(program, program2, &shader->linked_programs,
             struct glsl_shader_prog_link, ps.shader_entry)
     {
@@ -11976,11 +11983,12 @@ static void shader_glsl_free_ffp_fragment_shader(struct wine_rb_entry *entry, vo
 /* Context activation is done by the caller. */
 static void glsl_fragment_pipe_free(struct wined3d_device *device, struct wined3d_context *context)
 {
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     struct shader_glsl_priv *priv = device->fragment_priv;
     struct glsl_ffp_destroy_ctx ctx;
 
     ctx.priv = priv;
-    ctx.context = context;
+    ctx.context_gl = context_gl;
     wine_rb_destroy(&priv->ffp_fragment_shaders, shader_glsl_free_ffp_fragment_shader, &ctx);
 }
 
@@ -12247,7 +12255,7 @@ static void glsl_fragment_pipe_free_context_data(struct wined3d_context *context
 {
 }
 
-const struct fragment_pipeline glsl_fragment_pipe =
+const struct wined3d_fragment_pipe_ops glsl_fragment_pipe =
 {
     glsl_fragment_pipe_enable,
     glsl_fragment_pipe_get_caps,
@@ -12294,9 +12302,10 @@ static int glsl_blitter_args_compare(const void *key, const struct wine_rb_entry
 static void glsl_free_blitter_program(struct wine_rb_entry *entry, void *ctx)
 {
     struct glsl_blitter_program *program = WINE_RB_ENTRY_VALUE(entry, struct glsl_blitter_program, entry);
-    struct wined3d_context *context = ctx;
-    const struct wined3d_gl_info *gl_info = context->gl_info;
+    struct wined3d_context_gl *context_gl = ctx;
+    const struct wined3d_gl_info *gl_info;
 
+    gl_info = context_gl->c.gl_info;
     GL_EXTCALL(glDeleteProgram(program->id));
     checkGLcall("glDeleteProgram()");
     heap_free(program);
@@ -12305,6 +12314,7 @@ static void glsl_free_blitter_program(struct wine_rb_entry *entry, void *ctx)
 /* Context activation is done by the caller. */
 static void glsl_blitter_destroy(struct wined3d_blitter *blitter, struct wined3d_context *context)
 {
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     const struct wined3d_gl_info *gl_info = context->gl_info;
     struct wined3d_glsl_blitter *glsl_blitter;
     struct wined3d_blitter *next;
@@ -12317,7 +12327,7 @@ static void glsl_blitter_destroy(struct wined3d_blitter *blitter, struct wined3d
     if (glsl_blitter->palette_texture)
         gl_info->gl_ops.gl.p_glDeleteTextures(1, &glsl_blitter->palette_texture);
 
-    wine_rb_destroy(&glsl_blitter->programs, glsl_free_blitter_program, context);
+    wine_rb_destroy(&glsl_blitter->programs, glsl_free_blitter_program, context_gl);
     string_buffer_list_cleanup(&glsl_blitter->string_buffers);
 
     heap_free(glsl_blitter);

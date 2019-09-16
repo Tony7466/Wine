@@ -81,7 +81,7 @@ static BOOL proxy_active(void)
     return active;
 }
 
-static void test_QueryOption(void)
+static void test_WinHttpQueryOption(void)
 {
     BOOL ret;
     HINTERNET session, request, connection;
@@ -267,7 +267,7 @@ done:
     ok(ret, "WinHttpCloseHandle failed on closing session: %u\n", GetLastError());
 }
 
-static void test_OpenRequest (void)
+static void test_WinHttpOpenRequest (void)
 {
     BOOL ret;
     HINTERNET session, request, connection;
@@ -362,20 +362,21 @@ static void test_empty_headers_param(void)
     WinHttpCloseHandle(ses);
 }
 
-static void test_SendRequest (void)
+static void test_WinHttpSendRequest (void)
 {
     static const WCHAR content_type[] =
         {'C','o','n','t','e','n','t','-','T','y','p','e',':',' ','a','p','p','l','i','c','a','t','i','o','n',
          '/','x','-','w','w','w','-','f','o','r','m','-','u','r','l','e','n','c','o','d','e','d',0};
     static const WCHAR test_file[] = {'t','e','s','t','s','/','p','o','s','t','.','p','h','p',0};
-    static const WCHAR test_verb[] = {'P','O','S','T',0};
+    static const WCHAR postW[] = {'P','O','S','T',0};
     static CHAR post_data[] = "mode=Test";
     static const char test_post[] = "mode => Test\0\n";
     HINTERNET session, request, connection;
-    DWORD header_len, optional_len, total_len, bytes_rw, size, err, disable;
+    DWORD header_len, optional_len, total_len, bytes_rw, size, err, disable, len;
     DWORD_PTR context;
     BOOL ret;
     CHAR buffer[256];
+    WCHAR method[8];
     int i;
 
     header_len = -1L;
@@ -389,7 +390,7 @@ static void test_SendRequest (void)
     connection = WinHttpConnect (session, test_winehq, INTERNET_DEFAULT_HTTP_PORT, 0);
     ok(connection != NULL, "WinHttpConnect failed to open a connection, error: %u.\n", GetLastError());
 
-    request = WinHttpOpenRequest(connection, test_verb, test_file, NULL, WINHTTP_NO_REFERER,
+    request = WinHttpOpenRequest(connection, postW, test_file, NULL, WINHTTP_NO_REFERER,
         WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_BYPASS_PROXY_CACHE);
     if (request == NULL && GetLastError() == ERROR_WINHTTP_NAME_NOT_RESOLVED)
     {
@@ -398,6 +399,13 @@ static void test_SendRequest (void)
     }
     ok(request != NULL, "WinHttpOpenrequest failed to open a request, error: %u.\n", GetLastError());
     if (!request) goto done;
+
+    method[0] = 0;
+    len = sizeof(method);
+    ret = WinHttpQueryHeaders(request, WINHTTP_QUERY_REQUEST_METHOD, NULL, method, &len, NULL);
+    ok(ret, "got %u\n", GetLastError());
+    ok(len == lstrlenW(postW) * sizeof(WCHAR), "got %u\n", len);
+    ok(!lstrcmpW(method, postW), "got %s\n", wine_dbgstr_w(method));
 
     context = 0xdeadbeef;
     ret = WinHttpSetOption(request, WINHTTP_OPTION_CONTEXT_VALUE, &context, sizeof(context));
@@ -447,6 +455,14 @@ static void test_SendRequest (void)
     ok(GetLastError() == ERROR_SUCCESS || broken(GetLastError() == ERROR_NO_TOKEN) /* < win7 */,
        "Expected ERROR_SUCCESS got %u.\n", GetLastError());
     ok(ret == TRUE, "WinHttpReceiveResponse failed: %u.\n", GetLastError());
+
+    SetLastError(0xdeadbeef);
+    ret = WinHttpQueryHeaders(request, WINHTTP_QUERY_ORIG_URI, NULL, NULL, &len, NULL);
+    ok(!ret && GetLastError() == ERROR_WINHTTP_HEADER_NOT_FOUND, "got %u\n", GetLastError());
+
+    SetLastError(0xdeadbeef);
+    ret = WinHttpQueryHeaders(request, WINHTTP_QUERY_MAX + 1, NULL, NULL, &len, NULL);
+    ok(!ret && GetLastError() == ERROR_INVALID_PARAMETER, "got %u\n", GetLastError());
 
     bytes_rw = -1;
     ret = WinHttpReadData(request, buffer, sizeof(buffer) - 1, &bytes_rw);
@@ -2228,6 +2244,13 @@ static const char largeauth[] =
 "Content-Type: text/plain\r\n"
 "\r\n";
 
+static const char passportauth[] =
+"HTTP/1.1 302 Found\r\n"
+"Content-Length: 0\r\n"
+"Location: /\r\n"
+"WWW-Authenticate: Passport1.4\r\n"
+"\r\n";
+
 static const char unauthorized[] = "Unauthorized";
 static const char hello_world[] = "Hello World";
 static const char auth_unseen[] = "Auth Unseen";
@@ -2406,6 +2429,10 @@ static DWORD CALLBACK server_thread(LPVOID param)
                 send(c, okmsg, sizeof(okmsg) - 1, 0);
             }
             else send(c, notokmsg, sizeof(notokmsg) - 1, 0);
+        }
+        else if (strstr(buffer, "GET /passport"))
+        {
+            send(c, passportauth, sizeof(passportauth) - 1, 0);
         }
         if (strstr(buffer, "GET /quit"))
         {
@@ -3504,6 +3531,71 @@ static void test_connection_info( int port )
     ret = WinHttpQueryOption( req, WINHTTP_OPTION_CONNECTION_INFO, &info, &size );
     ok( ret, "failed to retrieve connection info %u\n", GetLastError() );
     ok( info.cbSize == sizeof(info) || info.cbSize == sizeof(info) - sizeof(info.cbSize) /* Win7 */, "wrong size %u\n", info.cbSize );
+
+    WinHttpCloseHandle( req );
+    WinHttpCloseHandle( con );
+    WinHttpCloseHandle( ses );
+}
+
+static void test_passport_auth( int port )
+{
+    static const WCHAR passportW[] =
+        {'/','p','a','s','s','p','o','r','t',0};
+    static const WCHAR foundW[] =
+        {'F','o','u','n','d',0};
+    static const WCHAR unauthorizedW[] =
+        {'U','n','a','u','t','h','o','r','i','z','e','d',0};
+    static const WCHAR headersW[] =
+        {'H','T','T','P','/','1','.','1',' ','4','0','1',' ','F','o','u','n','d','\r','\n',
+         'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','0','\r','\n',
+         'L','o','c','a','t','i','o','n',':',' ','/','\r','\n',
+         'W','W','W','-','A','u','t','h','e','n','t','i','c','a','t','e',':',' ',
+         'P','a','s','s','p','o','r','t','1','.','4','\r','\n','\r','\n',0};
+    HINTERNET ses, con, req;
+    DWORD status, size, option;
+    WCHAR buf[128];
+    BOOL ret;
+
+    ses = WinHttpOpen( test_useragent, 0, NULL, NULL, 0 );
+    ok( ses != NULL, "got %u\n", GetLastError() );
+
+    option = WINHTTP_ENABLE_PASSPORT_AUTH;
+    ret = WinHttpSetOption( ses, WINHTTP_OPTION_CONFIGURE_PASSPORT_AUTH, &option, sizeof(option) );
+    ok( ret, "got %u\n", GetLastError() );
+
+    con = WinHttpConnect( ses, localhostW, port, 0 );
+    ok( con != NULL, "got %u\n", GetLastError() );
+
+    req = WinHttpOpenRequest( con, NULL, passportW, NULL, NULL, NULL, 0 );
+    ok( req != NULL, "got %u\n", GetLastError() );
+
+    ret = WinHttpSendRequest( req, NULL, 0, NULL, 0, 0, 0 );
+    ok( ret, "got %u\n", GetLastError() );
+
+    ret = WinHttpReceiveResponse( req, NULL );
+    ok( ret, "got %u\n", GetLastError() );
+
+    status = 0xdeadbeef;
+    size = sizeof(status);
+    ret = WinHttpQueryHeaders( req, WINHTTP_QUERY_STATUS_CODE|WINHTTP_QUERY_FLAG_NUMBER, NULL, &status, &size, NULL );
+    ok( ret, "got %u\n", GetLastError() );
+    ok( status == HTTP_STATUS_DENIED, "got %u\n", status );
+
+    buf[0] = 0;
+    size = sizeof(buf);
+    ret = WinHttpQueryHeaders( req, WINHTTP_QUERY_STATUS_TEXT, NULL, buf, &size, NULL );
+    ok( ret, "got %u\n", GetLastError() );
+    ok( !lstrcmpW(foundW, buf) || broken(!lstrcmpW(unauthorizedW, buf)) /* < win7 */, "got %s\n", wine_dbgstr_w(buf) );
+
+    buf[0] = 0;
+    size = sizeof(buf);
+    ret = WinHttpQueryHeaders( req, WINHTTP_QUERY_RAW_HEADERS_CRLF, NULL, buf, &size, NULL );
+    ok( ret || broken(!ret && GetLastError() == ERROR_INSUFFICIENT_BUFFER) /* < win7 */, "got %u\n", GetLastError() );
+    if (ret)
+    {
+        ok( size == lstrlenW(headersW) * sizeof(WCHAR), "got %u\n", size );
+        ok( !lstrcmpW(headersW, buf), "got %s\n", wine_dbgstr_w(buf) );
+    }
 
     WinHttpCloseHandle( req );
     WinHttpCloseHandle( con );
@@ -4728,14 +4820,14 @@ START_TEST (winhttp)
     HANDLE thread;
     DWORD ret;
 
-    test_OpenRequest();
-    test_SendRequest();
+    test_WinHttpOpenRequest();
+    test_WinHttpSendRequest();
     test_WinHttpTimeFromSystemTime();
     test_WinHttpTimeToSystemTime();
     test_WinHttpAddHeaders();
     test_secure_connection();
     test_request_parameter_defaults();
-    test_QueryOption();
+    test_WinHttpQueryOption();
     test_set_default_proxy_config();
     test_empty_headers_param();
     test_timeouts();
@@ -4775,6 +4867,7 @@ START_TEST (winhttp)
     test_multiple_reads(si.port);
     test_cookies(si.port);
     test_request_path_escapes(si.port);
+    test_passport_auth(si.port);
 
     /* send the basic request again to shutdown the server thread */
     test_basic_request(si.port, NULL, quitW);

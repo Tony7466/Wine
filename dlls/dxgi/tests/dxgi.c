@@ -380,7 +380,7 @@ static void check_swapchain_fullscreen_state_(unsigned int line, IDXGISwapChain 
     HRESULT hr;
 
     hr = IDXGISwapChain_GetDesc(swapchain, &swapchain_desc);
-    ok_(__FILE__, line)(SUCCEEDED(hr), "GetDesc failed, hr %#x.\n", hr);
+    ok_(__FILE__, line)(hr == S_OK, "Failed to get swapchain desc, hr %#x.\n", hr);
     check_window_fullscreen_state_(line, swapchain_desc.OutputWindow, &expected_state->fullscreen_state);
 
     ok_(__FILE__, line)(swapchain_desc.Windowed == !expected_state->fullscreen,
@@ -388,23 +388,19 @@ static void check_swapchain_fullscreen_state_(unsigned int line, IDXGISwapChain 
             swapchain_desc.Windowed, !expected_state->fullscreen);
 
     hr = IDXGISwapChain_GetFullscreenState(swapchain, &fullscreen, &target);
-    ok_(__FILE__, line)(SUCCEEDED(hr), "GetFullscreenState failed, hr %#x.\n", hr);
+    ok_(__FILE__, line)(hr == S_OK, "Failed to get fullscreen state, hr %#x.\n", hr);
     ok_(__FILE__, line)(fullscreen == expected_state->fullscreen, "Got fullscreen %#x, expected %#x.\n",
             fullscreen, expected_state->fullscreen);
 
     if (!swapchain_desc.Windowed && expected_state->fullscreen)
     {
         IDXGIAdapter *adapter;
-        IDXGIDevice *device;
-
-        hr = IDXGISwapChain_GetDevice(swapchain, &IID_IDXGIDevice, (void **)&device);
-        ok_(__FILE__, line)(SUCCEEDED(hr), "GetDevice failed, hr %#x.\n", hr);
-        hr = IDXGIDevice_GetAdapter(device, &adapter);
-        ok_(__FILE__, line)(SUCCEEDED(hr), "GetAdapter failed, hr %#x.\n", hr);
-        IDXGIDevice_Release(device);
 
         hr = IDXGISwapChain_GetContainingOutput(swapchain, &containing_output);
-        ok_(__FILE__, line)(SUCCEEDED(hr), "GetContainingOutput failed, hr %#x.\n", hr);
+        ok_(__FILE__, line)(hr == S_OK, "Failed to get containing output, hr %#x.\n", hr);
+
+        hr = IDXGIOutput_GetParent(containing_output, &IID_IDXGIAdapter, (void **)&adapter);
+        ok_(__FILE__, line)(hr == S_OK, "Failed to get parent, hr %#x.\n", hr);
 
         check_output_equal_(line, target, expected_state->target);
         ok_(__FILE__, line)(target == containing_output, "Got target %p, expected %p.\n",
@@ -2299,28 +2295,18 @@ static void test_swapchain_fullscreen_state(IDXGISwapChain *swapchain,
     heap_free(output_monitor_info);
 }
 
-static void test_set_fullscreen(void)
+static void test_set_fullscreen(IUnknown *device, BOOL is_d3d12)
 {
     struct swapchain_fullscreen_state initial_state;
     DXGI_SWAP_CHAIN_DESC swapchain_desc;
+    IDXGIAdapter *adapter = NULL;
     IDXGISwapChain *swapchain;
     IDXGIFactory *factory;
-    IDXGIAdapter *adapter;
-    IDXGIDevice *device;
+    IDXGIOutput *output;
     ULONG refcount;
     HRESULT hr;
 
-    if (!(device = create_device(0)))
-    {
-        skip("Failed to create device.\n");
-        return;
-    }
-
-    hr = IDXGIDevice_GetAdapter(device, &adapter);
-    ok(SUCCEEDED(hr), "GetAdapter failed, hr %#x.\n", hr);
-
-    hr = IDXGIAdapter_GetParent(adapter, &IID_IDXGIFactory, (void **)&factory);
-    ok(SUCCEEDED(hr), "GetParent failed, hr %#x.\n", hr);
+    get_factory(device, is_d3d12, &factory);
 
     swapchain_desc.BufferDesc.Width = 800;
     swapchain_desc.BufferDesc.Height = 600;
@@ -2332,16 +2318,28 @@ static void test_set_fullscreen(void)
     swapchain_desc.SampleDesc.Count = 1;
     swapchain_desc.SampleDesc.Quality = 0;
     swapchain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swapchain_desc.BufferCount = 1;
+    swapchain_desc.BufferCount = is_d3d12 ? 2 : 1;
     swapchain_desc.OutputWindow = CreateWindowA("static", "dxgi_test", 0, 0, 0, 400, 200, 0, 0, 0, 0);
     swapchain_desc.Windowed = TRUE;
-    swapchain_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    swapchain_desc.SwapEffect = is_d3d12 ? DXGI_SWAP_EFFECT_FLIP_DISCARD : DXGI_SWAP_EFFECT_DISCARD;
     swapchain_desc.Flags = 0;
 
     memset(&initial_state, 0, sizeof(initial_state));
     capture_fullscreen_state(&initial_state.fullscreen_state, swapchain_desc.OutputWindow);
     hr = IDXGIFactory_CreateSwapChain(factory, (IUnknown *)device, &swapchain_desc, &swapchain);
     ok(SUCCEEDED(hr), "CreateSwapChain failed, hr %#x.\n", hr);
+    hr = IDXGISwapChain_GetContainingOutput(swapchain, &output);
+    ok(SUCCEEDED(hr) || broken(hr == DXGI_ERROR_UNSUPPORTED), /* Win 7 testbot */
+            "Failed to get containing output, hr %#x.\n", hr);
+    if (FAILED(hr))
+    {
+        skip("Could not get output.\n");
+        goto done;
+    }
+    hr = IDXGIOutput_GetParent(output, &IID_IDXGIAdapter, (void **)&adapter);
+    ok(hr == S_OK, "Failed to get parent, hr %#x.\n", hr);
+    IDXGIOutput_Release(output);
+
     check_swapchain_fullscreen_state(swapchain, &initial_state);
     hr = IDXGISwapChain_SetFullscreenState(swapchain, TRUE, NULL);
     ok(SUCCEEDED(hr) || hr == DXGI_ERROR_NOT_CURRENTLY_AVAILABLE
@@ -2411,16 +2409,15 @@ static void test_set_fullscreen(void)
     test_swapchain_fullscreen_state(swapchain, adapter, &initial_state);
 
 done:
+    if (adapter)
+        IDXGIAdapter_Release(adapter);
     refcount = IDXGISwapChain_Release(swapchain);
     ok(!refcount, "IDXGISwapChain has %u references left.\n", refcount);
     check_window_fullscreen_state(swapchain_desc.OutputWindow, &initial_state.fullscreen_state);
     DestroyWindow(swapchain_desc.OutputWindow);
 
-    IDXGIAdapter_Release(adapter);
-    refcount = IDXGIDevice_Release(device);
-    ok(!refcount, "Device has %u references left.\n", refcount);
     refcount = IDXGIFactory_Release(factory);
-    ok(!refcount, "Factory has %u references left.\n", refcount);
+    ok(refcount == !is_d3d12, "Got unexpected refcount %u.\n", refcount);
 }
 
 static void test_default_fullscreen_target_output(void)
@@ -2688,14 +2685,12 @@ static void test_fullscreen_resize_target(IDXGISwapChain *swapchain,
     IDXGIOutput_Release(target);
 }
 
-static void test_resize_target(void)
+static void test_resize_target(IUnknown *device, BOOL is_d3d12)
 {
     struct swapchain_fullscreen_state initial_state, expected_state;
     DXGI_SWAP_CHAIN_DESC swapchain_desc;
     IDXGISwapChain *swapchain;
     IDXGIFactory *factory;
-    IDXGIAdapter *adapter;
-    IDXGIDevice *device;
     unsigned int i;
     ULONG refcount;
     HRESULT hr;
@@ -2723,17 +2718,7 @@ static void test_resize_target(void)
         {{10, 10}, FALSE, TRUE,  DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH},
     };
 
-    if (!(device = create_device(0)))
-    {
-        skip("Failed to create device.\n");
-        return;
-    }
-
-    hr = IDXGIDevice_GetAdapter(device, &adapter);
-    ok(SUCCEEDED(hr), "GetAdapter failed, hr %#x.\n", hr);
-
-    hr = IDXGIAdapter_GetParent(adapter, &IID_IDXGIFactory, (void **)&factory);
-    ok(SUCCEEDED(hr), "GetParent failed, hr %#x.\n", hr);
+    get_factory(device, is_d3d12, &factory);
 
     swapchain_desc.BufferDesc.Width = 800;
     swapchain_desc.BufferDesc.Height = 600;
@@ -2745,9 +2730,9 @@ static void test_resize_target(void)
     swapchain_desc.SampleDesc.Count = 1;
     swapchain_desc.SampleDesc.Quality = 0;
     swapchain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swapchain_desc.BufferCount = 1;
+    swapchain_desc.BufferCount = is_d3d12 ? 2 : 1;
     swapchain_desc.Windowed = TRUE;
-    swapchain_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    swapchain_desc.SwapEffect = is_d3d12 ? DXGI_SWAP_EFFECT_FLIP_DISCARD : DXGI_SWAP_EFFECT_DISCARD;
     swapchain_desc.Flags = 0;
 
     for (i = 0; i < ARRAY_SIZE(tests); ++i)
@@ -2829,11 +2814,8 @@ static void test_resize_target(void)
         DestroyWindow(swapchain_desc.OutputWindow);
     }
 
-    IDXGIAdapter_Release(adapter);
-    refcount = IDXGIDevice_Release(device);
-    ok(!refcount, "Device has %u references left.\n", refcount);
     refcount = IDXGIFactory_Release(factory);
-    ok(!refcount, "Factory has %u references left.\n", refcount);
+    ok(refcount == !is_d3d12, "Got unexpected refcount %u.\n", refcount);
 }
 
 static LRESULT CALLBACK resize_target_wndproc(HWND hwnd, unsigned int message, WPARAM wparam, LPARAM lparam)
@@ -4155,7 +4137,7 @@ static void test_swapchain_present(IUnknown *device, BOOL is_d3d12)
             skip("Test %u: Could not change fullscreen state.\n", i);
             continue;
         }
-        todo_wine_if(is_d3d12) ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
         hr = IDXGISwapChain_ResizeBuffers(swapchain, 0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
         todo_wine_if(!is_d3d12) ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
         hr = IDXGISwapChain_Present(swapchain, 0, flags[i]);
@@ -4163,23 +4145,23 @@ static void test_swapchain_present(IUnknown *device, BOOL is_d3d12)
         output = NULL;
         fullscreen = FALSE;
         hr = IDXGISwapChain_GetFullscreenState(swapchain, &fullscreen, &output);
-        todo_wine_if(is_d3d12) ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
-        todo_wine_if(is_d3d12) ok(fullscreen, "Test %u: Got unexpected fullscreen status.\n", i);
-        todo_wine_if(is_d3d12) ok(!!output, "Test %u: Got unexpected output.\n", i);
+        ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(fullscreen, "Test %u: Got unexpected fullscreen status.\n", i);
+        ok(!!output, "Test %u: Got unexpected output.\n", i);
 
         if (output)
             IDXGIOutput_ReleaseOwnership(output);
         /* Still fullscreen. */
         fullscreen = FALSE;
         hr = IDXGISwapChain_GetFullscreenState(swapchain, &fullscreen, NULL);
-        todo_wine_if(is_d3d12) ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
-        todo_wine_if(is_d3d12) ok(fullscreen, "Test %u: Got unexpected fullscreen status.\n", i);
+        ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(fullscreen, "Test %u: Got unexpected fullscreen status.\n", i);
         /* Calling IDXGISwapChain_Present() will exit fullscreen. */
         hr = IDXGISwapChain_Present(swapchain, 0, flags[i]);
         ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
         fullscreen = TRUE;
         hr = IDXGISwapChain_GetFullscreenState(swapchain, &fullscreen, NULL);
-        todo_wine_if(is_d3d12) ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
         /* Now fullscreen mode is exited. */
         if (!flags[i] && !is_d3d12)
             /* Still fullscreen on vista and 2008. */
@@ -4198,11 +4180,11 @@ static void test_swapchain_present(IUnknown *device, BOOL is_d3d12)
          * compositing. D3d12 fullscreen mode acts just like borderless
          * fullscreen window mode. */
         hr = IDXGISwapChain_SetFullscreenState(swapchain, TRUE, NULL);
-        todo_wine_if(is_d3d12) ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
         fullscreen = FALSE;
         hr = IDXGISwapChain_GetFullscreenState(swapchain, &fullscreen, NULL);
-        todo_wine_if(is_d3d12) ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
-        todo_wine_if(is_d3d12) ok(fullscreen, "Test %u: Got unexpected fullscreen status.\n", i);
+        ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(fullscreen, "Test %u: Got unexpected fullscreen status.\n", i);
         hr = IDXGISwapChain_ResizeBuffers(swapchain, 0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
         todo_wine_if(!is_d3d12) ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
         hr = IDXGISwapChain_Present(swapchain, 0, flags[i]);
@@ -4217,8 +4199,8 @@ static void test_swapchain_present(IUnknown *device, BOOL is_d3d12)
         ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
         fullscreen = FALSE;
         hr = IDXGISwapChain_GetFullscreenState(swapchain, &fullscreen, NULL);
-        todo_wine_if(is_d3d12) ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
-        todo_wine_if(is_d3d12) ok(fullscreen, "Test %u: Got unexpected fullscreen status.\n", i);
+        ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(fullscreen, "Test %u: Got unexpected fullscreen status.\n", i);
         /* A visible, but with bottom z-order window still causes the
          * swapchain to exit fullscreen mode. */
         SetWindowPos(occluding_window, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
@@ -4231,7 +4213,7 @@ static void test_swapchain_present(IUnknown *device, BOOL is_d3d12)
          * for d3d12. */
         fullscreen = TRUE;
         hr = IDXGISwapChain_GetFullscreenState(swapchain, &fullscreen, NULL);
-        todo_wine_if(is_d3d12) ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
         todo_wine_if(!is_d3d12) ok(is_d3d12 ? fullscreen : !fullscreen,
                 "Test %u: Got unexpected fullscreen status.\n", i);
 
@@ -4243,7 +4225,7 @@ static void test_swapchain_present(IUnknown *device, BOOL is_d3d12)
 
         fullscreen = TRUE;
         hr = IDXGISwapChain_GetFullscreenState(swapchain, &fullscreen, NULL);
-        todo_wine_if(is_d3d12) ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
         if (flags[i] == DXGI_PRESENT_TEST)
             todo_wine_if(!is_d3d12) ok(is_d3d12 ? fullscreen : !fullscreen,
                     "Test %u: Got unexpected fullscreen status.\n", i);
@@ -4267,7 +4249,7 @@ static void test_swapchain_present(IUnknown *device, BOOL is_d3d12)
          * IDXGISwapChain_GetFullscreenState() before IDXGISwapChain_Present(). */
         ShowWindow(occluding_window, SW_HIDE);
         hr = IDXGISwapChain_SetFullscreenState(swapchain, TRUE, NULL);
-        todo_wine_if(is_d3d12) ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
         ShowWindow(occluding_window, SW_SHOW);
 
         hr = IDXGISwapChain_ResizeBuffers(swapchain, 0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
@@ -4302,7 +4284,7 @@ static void test_swapchain_present(IUnknown *device, BOOL is_d3d12)
         }
         fullscreen = TRUE;
         hr = IDXGISwapChain_GetFullscreenState(swapchain, &fullscreen, NULL);
-        todo_wine_if(is_d3d12) ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
         todo_wine ok(!fullscreen, "Test %u: Got unexpected fullscreen status.\n", i);
 
         DestroyWindow(occluding_window);
@@ -4312,7 +4294,7 @@ static void test_swapchain_present(IUnknown *device, BOOL is_d3d12)
         ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
 
         hr = IDXGISwapChain_SetFullscreenState(swapchain, FALSE, NULL);
-        todo_wine_if(is_d3d12) ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
         hr = IDXGISwapChain_ResizeBuffers(swapchain, 0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
         ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
     }
@@ -5306,6 +5288,7 @@ static void test_window_association(void)
     LONG_PTR original_wndproc, wndproc;
     IDXGIFactory *factory, *factory2;
     IDXGISwapChain *swapchain;
+    IDXGIOutput *output;
     IDXGIAdapter *adapter;
     IDXGIDevice *device;
     HWND hwnd, hwnd2;
@@ -5449,14 +5432,18 @@ static void test_window_association(void)
             PostMessageA(swapchain_desc.OutputWindow, WM_SYSKEYDOWN, VK_RETURN,
                     (MapVirtualKeyA(VK_RETURN, MAPVK_VK_TO_VSC) << 16) | 0x20000001);
             flush_events();
-            hr = IDXGISwapChain_GetFullscreenState(swapchain, &fullscreen, NULL);
+            output = NULL;
+            hr = IDXGISwapChain_GetFullscreenState(swapchain, &fullscreen, &output);
             ok(hr == S_OK, "Test %u: Got unexpected hr %#x.\n", i, hr);
             ok(fullscreen == tests[i].expect_fullscreen
                     || broken(tests[i].broken_d3d10 && fullscreen),
                     "Test %u: Got unexpected fullscreen %#x.\n", i, fullscreen);
+            ok(fullscreen ? !!output : !output, "Test %u: Got wrong output.\n", i);
+            if (output)
+                IDXGIOutput_Release(output);
 
             wndproc = GetWindowLongPtrW(swapchain_desc.OutputWindow, GWLP_WNDPROC);
-            ok(wndproc == original_wndproc, "Text %u: Got unexpected wndproc %#lx, expected %#lx.\n",
+            ok(wndproc == original_wndproc, "Test %u: Got unexpected wndproc %#lx, expected %#lx.\n",
                     i, wndproc, original_wndproc);
         }
     }
@@ -5553,11 +5540,11 @@ static void test_output_ownership(IUnknown *device, BOOL is_d3d12)
         skip("Failed to change fullscreen state.\n");
         goto done;
     }
-    todo_wine_if(is_d3d12) ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
     fullscreen = FALSE;
     hr = IDXGISwapChain_GetFullscreenState(swapchain, &fullscreen, NULL);
-    todo_wine_if(is_d3d12) ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
-    todo_wine_if(is_d3d12) ok(fullscreen, "Got unexpected fullscreen state.\n");
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    ok(fullscreen, "Got unexpected fullscreen state.\n");
     if (is_d3d12)
         wait_vidpn_exclusive_ownership(&check_ownership_desc, STATUS_SUCCESS, FALSE);
     else
@@ -5716,15 +5703,15 @@ START_TEST(dxgi)
 
     /* These tests use full-screen swapchains, so shouldn't run in parallel. */
     test_create_swapchain();
-    test_set_fullscreen();
     test_default_fullscreen_target_output();
-    test_resize_target();
     test_inexact_modes();
     test_gamma_control();
     test_swapchain_parameters();
     test_swapchain_window_messages();
     test_swapchain_window_styles();
     test_window_association();
+    run_on_d3d10(test_set_fullscreen);
+    run_on_d3d10(test_resize_target);
     run_on_d3d10(test_swapchain_resize);
     run_on_d3d10(test_swapchain_present);
     run_on_d3d10(test_swapchain_backbuffer_index);
@@ -5746,6 +5733,8 @@ START_TEST(dxgi)
         ID3D12Debug_Release(debug);
     }
 
+    run_on_d3d12(test_set_fullscreen);
+    run_on_d3d12(test_resize_target);
     run_on_d3d12(test_swapchain_resize);
     run_on_d3d12(test_swapchain_present);
     run_on_d3d12(test_swapchain_backbuffer_index);
