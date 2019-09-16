@@ -6,8 +6,13 @@ wine-development (4.12-1) UNRELEASED; urgency=medium
     - Better support for the Visual Studio remote debugger.
     - More support for enumerating display devices.
     - Various bug fixes.
+  * Refresh patches.
+    Update debianization/addons.patch.
+  * README.debian: mention additional addon search path /opt/wine/gecko/.
+  * Build-depend on libsane-dev.
+  * Configure without-mingw, but drop the build-conflicts on mingw-w64.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Tue, 10 Sep 2019 23:24:44 +0200
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 16 Sep 2019 21:39:46 +0200
 
 wine-development (4.11-1) unstable; urgency=medium
 
