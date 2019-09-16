@@ -57,6 +57,7 @@ Build-Depends:
  libgsm1-dev,
  libjpeg-dev,
  libkrb5-dev,
+ libsane-dev,
  libtiff-dev,
  libudev-dev [linux-any],
  libpulse-dev [!kfreebsd-any],
