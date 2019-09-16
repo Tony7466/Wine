@@ -150,6 +150,7 @@ home their checksums get verified, in /usr/share not):
 - /usr/share/wine-gecko/
 - /usr/share/wine-development/gecko/ (only if you are using wine-development)
 - /usr/share/wine/gecko/
+- /opt/wine/gecko/
 - $XDG_CACHE_HOME/wine/
 - $HOME/.cache/wine/ (if XDG_CACHE_HOME is not set)
 Or preferably, please provide help building the new Debian libwine-gecko-*
@@ -232,3 +233,5 @@ $ rm -f ~/.local/share/applications/wine-extension-*
 $ update-desktop-database ~/.local/share/applications/
 
 The Wine FAQ has further information on this topic.
+
+ -- Jens Reyer <jre.winesim@gmail.com>, Sun, 15 Sep 2019 14:28:09 +0200
