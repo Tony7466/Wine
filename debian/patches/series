@@ -28,7 +28,6 @@ fixes/temporary-directory.patch
 
 warnings/arm-messages.patch
 warnings/arm-longdouble.patch
-warnings/arm64-dword.patch
 warnings/arm64-array-bounds.patch
 warnings/arm64-excess-precision.patch
 
