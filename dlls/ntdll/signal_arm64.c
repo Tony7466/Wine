@@ -81,8 +81,28 @@ static pthread_key_t teb_key;
 # define FP_sig(context)            REGn_sig(29, context)    /* Frame pointer */
 # define LR_sig(context)            REGn_sig(30, context)    /* Link Register */
 
-/* Exceptions */
-# define FAULT_sig(context)         REG_sig(fault_address, context)
+static struct _aarch64_ctx *get_extended_sigcontext( ucontext_t *sigcontext, unsigned int magic )
+{
+    struct _aarch64_ctx *ctx = (struct _aarch64_ctx *)sigcontext->uc_mcontext.__reserved;
+    while ((char *)ctx < (char *)(&sigcontext->uc_mcontext + 1) && ctx->magic && ctx->size)
+    {
+        if (ctx->magic == magic) return ctx;
+        ctx = (struct _aarch64_ctx *)((char *)ctx + ctx->size);
+    }
+    return NULL;
+}
+
+static struct fpsimd_context *get_fpsimd_context( ucontext_t *sigcontext )
+{
+    return (struct fpsimd_context *)get_extended_sigcontext( sigcontext, FPSIMD_MAGIC );
+}
+
+static DWORD64 get_fault_esr( ucontext_t *sigcontext )
+{
+    struct esr_context *esr = (struct esr_context *)get_extended_sigcontext( sigcontext, ESR_MAGIC );
+    if (esr) return esr->esr;
+    return 0;
+}
 
 #endif /* linux */
 
@@ -93,6 +113,20 @@ typedef void (WINAPI *raise_func)( EXCEPTION_RECORD *rec, CONTEXT *context );
 typedef int (*wine_signal_handler)(unsigned int sig);
 
 static wine_signal_handler handlers[256];
+
+struct arm64_thread_data
+{
+    void     *exit_frame;    /* exit frame pointer */
+    CONTEXT  *context;       /* context to set with SIGUSR2 */
+};
+
+C_ASSERT( sizeof(struct arm64_thread_data) <= sizeof(((TEB *)0)->SystemReserved2) );
+C_ASSERT( offsetof( TEB, SystemReserved2 ) + offsetof( struct arm64_thread_data, exit_frame ) == 0x300 );
+
+static inline struct arm64_thread_data *arm64_thread_data(void)
+{
+    return (struct arm64_thread_data *)NtCurrentTeb()->SystemReserved2;
+}
 
 /***********************************************************************
  *           dispatch_signal
@@ -155,9 +189,15 @@ static void restore_context( const CONTEXT *context, ucontext_t *sigcontext )
  *
  * Set the FPU context from a sigcontext.
  */
-static inline void save_fpu( CONTEXT *context, const ucontext_t *sigcontext )
+static void save_fpu( CONTEXT *context, ucontext_t *sigcontext )
 {
-    FIXME( "Not implemented on ARM64\n" );
+    struct fpsimd_context *fp = get_fpsimd_context( sigcontext );
+
+    if (!fp) return;
+    context->ContextFlags |= CONTEXT_FLOATING_POINT;
+    context->Fpcr = fp->fpcr;
+    context->Fpsr = fp->fpsr;
+    memcpy( context->V, fp->vregs, sizeof(context->V) );
 }
 
 
@@ -166,60 +206,44 @@ static inline void save_fpu( CONTEXT *context, const ucontext_t *sigcontext )
  *
  * Restore the FPU context to a sigcontext.
  */
-static inline void restore_fpu( CONTEXT *context, const ucontext_t *sigcontext )
+static void restore_fpu( CONTEXT *context, ucontext_t *sigcontext )
 {
-    FIXME( "Not implemented on ARM64\n" );
+    struct fpsimd_context *fp = get_fpsimd_context( sigcontext );
+
+    if (!fp) return;
+    fp->fpcr = context->Fpcr;
+    fp->fpsr = context->Fpsr;
+    memcpy( fp->vregs, context->V, sizeof(fp->vregs) );
 }
 
 /***********************************************************************
  *		RtlCaptureContext (NTDLL.@)
  */
-/* FIXME: Use the Stack instead of the actual register values? */
 __ASM_STDCALL_FUNC( RtlCaptureContext, 8,
-                    "stp x0, x1, [sp, #-32]!\n\t"
-                    "mov w1, #0x400000\n\t"         /* CONTEXT_ARM64 */
-                    "add w1, w1, #0x3\n\t"          /* CONTEXT_FULL */
-                    "str w1, [x0]\n\t"              /* context->ContextFlags */ /* 32-bit, look at cpsr */
+                    "stp x1, x2, [x0, #0x10]\n\t"    /* context->X1,X2 */
+                    "stp x3, x4, [x0, #0x20]\n\t"    /* context->X3,X4 */
+                    "stp x5, x6, [x0, #0x30]\n\t"    /* context->X5,X6 */
+                    "stp x7, x8, [x0, #0x40]\n\t"    /* context->X7,X8 */
+                    "stp x9, x10, [x0, #0x50]\n\t"   /* context->X9,X10 */
+                    "stp x11, x12, [x0, #0x60]\n\t"  /* context->X11,X12 */
+                    "stp x13, x14, [x0, #0x70]\n\t"  /* context->X13,X14 */
+                    "stp x15, x16, [x0, #0x80]\n\t"  /* context->X15,X16 */
+                    "stp x17, x18, [x0, #0x90]\n\t"  /* context->X17,X18 */
+                    "stp x19, x20, [x0, #0xa0]\n\t"  /* context->X19,X20 */
+                    "stp x21, x22, [x0, #0xb0]\n\t"  /* context->X21,X22 */
+                    "stp x23, x24, [x0, #0xc0]\n\t"  /* context->X23,X24 */
+                    "stp x25, x26, [x0, #0xd0]\n\t"  /* context->X25,X26 */
+                    "stp x27, x28, [x0, #0xe0]\n\t"  /* context->X27,X28 */
+                    "ldp x1, x2, [x29]\n\t"
+                    "stp x1, x2, [x0, #0xf0]\n\t"    /* context->Fp,Lr */
+                    "add x1, x29, #0x10\n\t"
+                    "stp x1, x30, [x0, #0x100]\n\t"  /* context->Sp,Pc */
+                    "mov w1, #0x400000\n\t"          /* CONTEXT_ARM64 */
+                    "add w1, w1, #0x3\n\t"           /* CONTEXT_FULL */
+                    "str w1, [x0]\n\t"               /* context->ContextFlags */
                     "mrs x1, NZCV\n\t"
-                    "str w1, [x0, #0x4]\n\t"        /* context->Cpsr */
-                    "ldp x0, x1, [sp], #32\n\t"
-                    "str x0, [x0, #0x8]\n\t"        /* context->X0 */
-                    "str x1, [x0, #0x10]\n\t"       /* context->X1 */
-                    "str x2, [x0, #0x18]\n\t"       /* context->X2 */
-                    "str x3, [x0, #0x20]\n\t"       /* context->X3 */
-                    "str x4, [x0, #0x28]\n\t"       /* context->X4 */
-                    "str x5, [x0, #0x30]\n\t"       /* context->X5 */
-                    "str x6, [x0, #0x38]\n\t"       /* context->X6 */
-                    "str x7, [x0, #0x40]\n\t"       /* context->X7 */
-                    "str x8, [x0, #0x48]\n\t"       /* context->X8 */
-                    "str x9, [x0, #0x50]\n\t"       /* context->X9 */
-                    "str x10, [x0, #0x58]\n\t"      /* context->X10 */
-                    "str x11, [x0, #0x60]\n\t"      /* context->X11 */
-                    "str x12, [x0, #0x68]\n\t"      /* context->X12 */
-                    "str x13, [x0, #0x70]\n\t"      /* context->X13 */
-                    "str x14, [x0, #0x78]\n\t"      /* context->X14 */
-                    "str x15, [x0, #0x80]\n\t"      /* context->X15 */
-                    "str x16, [x0, #0x88]\n\t"      /* context->X16 */
-                    "str x17, [x0, #0x90]\n\t"      /* context->X17 */
-                    "str x18, [x0, #0x98]\n\t"      /* context->X18 */
-                    "str x19, [x0, #0xa0]\n\t"      /* context->X19 */
-                    "str x20, [x0, #0xa8]\n\t"      /* context->X20 */
-                    "str x21, [x0, #0xb0]\n\t"      /* context->X21 */
-                    "str x22, [x0, #0xb8]\n\t"      /* context->X22 */
-                    "str x23, [x0, #0xc0]\n\t"      /* context->X23 */
-                    "str x24, [x0, #0xc8]\n\t"      /* context->X24 */
-                    "str x25, [x0, #0xd0]\n\t"      /* context->X25 */
-                    "str x26, [x0, #0xd8]\n\t"      /* context->X26 */
-                    "str x27, [x0, #0xe0]\n\t"      /* context->X27 */
-                    "str x28, [x0, #0xe8]\n\t"      /* context->X28 */
-                    "str x29, [x0, #0xf0]\n\t"      /* context->Fp */
-                    "str x30, [x0, #0xf8]\n\t"      /* context->Lr */
-                    "mov x1, sp\n\t"
-                    "str x1, [x0, #0x100]\n\t"      /* context->Sp */
-                    "adr x1, 1f\n\t"
-                    "1: str x1, [x0, #0x108]\n\t"   /* context->Pc */
-                    "ret"
-                    )
+                    "str w1, [x0, #0x4]\n\t"         /* context->Cpsr */
+                    "ret" )
 
 /***********************************************************************
  *           set_cpu_context
@@ -228,7 +252,8 @@ __ASM_STDCALL_FUNC( RtlCaptureContext, 8,
  */
 static void set_cpu_context( const CONTEXT *context )
 {
-    FIXME( "Not implemented on ARM64\n" );
+    interlocked_xchg_ptr( (void **)&arm64_thread_data()->context, (void *)context );
+    raise( SIGUSR2 );
 }
 
 /***********************************************************************
@@ -431,6 +456,7 @@ static EXCEPTION_RECORD *setup_exception( ucontext_t *sigcontext, raise_func fun
     {
         CONTEXT           context;
         EXCEPTION_RECORD  rec;
+        void             *redzone[2];
     } *stack;
     DWORD exception_code = 0;
 
@@ -444,6 +470,7 @@ static EXCEPTION_RECORD *setup_exception( ucontext_t *sigcontext, raise_func fun
     stack->rec.NumberParameters = 0;
 
     save_context( &stack->context, sigcontext );
+    save_fpu( &stack->context, sigcontext );
 
     /* now modify the sigcontext to return to the raise function */
     SP_sig(sigcontext) = (ULONG_PTR)stack;
@@ -473,9 +500,29 @@ static void WINAPI raise_segv_exception( EXCEPTION_RECORD *rec, CONTEXT *context
         break;
     }
     status = NtRaiseException( rec, context, TRUE );
-    if (status) raise_status( status, rec );
+    raise_status( status, rec );
 done:
     set_cpu_context( context );
+}
+
+/**********************************************************************
+ *		raise_trap_exception
+ */
+static void WINAPI raise_trap_exception( EXCEPTION_RECORD *rec, CONTEXT *context )
+{
+    NTSTATUS status;
+    if (rec->ExceptionCode == EXCEPTION_BREAKPOINT) context->Pc += 4;
+    status = NtRaiseException( rec, context, TRUE );
+    raise_status( status, rec );
+}
+
+/**********************************************************************
+ *		raise_generic_exception
+ */
+static void WINAPI raise_generic_exception( EXCEPTION_RECORD *rec, CONTEXT *context )
+{
+    NTSTATUS status = NtRaiseException( rec, context, TRUE );
+    raise_status( status, rec );
 }
 
 /**********************************************************************
@@ -563,11 +610,11 @@ static NTSTATUS raise_exception( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL f
         }
         else
         {
-            TRACE(" x0=%016lx x1=%016lx x2=%016lx x3=%016lx\n",
+            TRACE("  x0=%016lx  x1=%016lx  x2=%016lx  x3=%016lx\n",
                   context->u.s.X0, context->u.s.X1, context->u.s.X2, context->u.s.X3 );
-            TRACE(" x4=%016lx x5=%016lx x6=%016lx x7=%016lx\n",
+            TRACE("  x4=%016lx  x5=%016lx  x6=%016lx  x7=%016lx\n",
                   context->u.s.X4, context->u.s.X5, context->u.s.X6, context->u.s.X7 );
-            TRACE(" x8=%016lx x9=%016lx x10=%016lx x11=%016lx\n",
+            TRACE("  x8=%016lx  x9=%016lx x10=%016lx x11=%016lx\n",
                   context->u.s.X8, context->u.s.X9, context->u.s.X10, context->u.s.X11 );
             TRACE(" x12=%016lx x13=%016lx x14=%016lx x15=%016lx\n",
                   context->u.s.X12, context->u.s.X13, context->u.s.X14, context->u.s.X15 );
@@ -577,9 +624,9 @@ static NTSTATUS raise_exception( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL f
                   context->u.s.X20, context->u.s.X21, context->u.s.X22, context->u.s.X23 );
             TRACE(" x24=%016lx x25=%016lx x26=%016lx x27=%016lx\n",
                   context->u.s.X24, context->u.s.X25, context->u.s.X26, context->u.s.X27 );
-            TRACE(" x28=%016lx fp=%016lx lr=%016lx sp=%016lx\n",
+            TRACE(" x28=%016lx  fp=%016lx  lr=%016lx  sp=%016lx\n",
                   context->u.s.X28, context->u.s.Fp, context->u.s.Lr, context->Sp );
-            TRACE(" pc=%016lx\n",
+            TRACE("  pc=%016lx\n",
                   context->Pc );
         }
 
@@ -611,23 +658,6 @@ static NTSTATUS raise_exception( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL f
     return STATUS_SUCCESS;
 }
 
-static inline DWORD is_write_fault( DWORD *pc )
-{
-    DWORD inst = *pc;
-    if ((inst & 0xbfff0000) == 0x0c000000   /* C3.3.1 */ ||
-        (inst & 0xbfe00000) == 0x0c800000   /* C3.3.2 */ ||
-        (inst & 0xbfdf0000) == 0x0d000000   /* C3.3.3 */ ||
-        (inst & 0xbfc00000) == 0x0d800000   /* C3.3.4 */ ||
-        (inst & 0x3f400000) == 0x08000000   /* C3.3.6 */ ||
-        (inst & 0x3bc00000) == 0x38000000   /* C3.3.8-12 */ ||
-        (inst & 0x3fe00000) == 0x3c800000   /* C3.3.8-12 128bit */ ||
-        (inst & 0x3bc00000) == 0x39000000   /* C3.3.13 */ ||
-        (inst & 0x3fc00000) == 0x3d800000   /* C3.3.13 128bit */ ||
-        (inst & 0x3a400000) == 0x28000000)  /* C3.3.7,14-16 */
-        return EXCEPTION_WRITE_FAULT;
-    return EXCEPTION_READ_FAULT;
-}
-
 /**********************************************************************
  *		segv_handler
  *
@@ -637,7 +667,6 @@ static void segv_handler( int signal, siginfo_t *info, void *ucontext )
 {
     EXCEPTION_RECORD *rec;
     ucontext_t *context = ucontext;
-    DWORD *orig_pc = (DWORD *)PC_sig(context);
 
     /* check for page fault inside the thread stack */
     if (signal == SIGSEGV &&
@@ -665,7 +694,7 @@ static void segv_handler( int signal, siginfo_t *info, void *ucontext )
     case SIGSEGV:  /* Segmentation fault */
         rec->ExceptionCode = EXCEPTION_ACCESS_VIOLATION;
         rec->NumberParameters = 2;
-        rec->ExceptionInformation[0] = is_write_fault(orig_pc);
+        rec->ExceptionInformation[0] = (get_fault_esr( context ) & 0x40) != 0;
         rec->ExceptionInformation[1] = (ULONG_PTR)info->si_addr;
         break;
     case SIGBUS:  /* Alignment check exception */
@@ -685,29 +714,19 @@ static void segv_handler( int signal, siginfo_t *info, void *ucontext )
  */
 static void trap_handler( int signal, siginfo_t *info, void *ucontext )
 {
-    EXCEPTION_RECORD rec;
-    CONTEXT context;
-    NTSTATUS status;
+    ucontext_t *context = ucontext;
+    EXCEPTION_RECORD *rec = setup_exception( context, raise_trap_exception );
 
-    switch ( info->si_code )
+    switch (info->si_code)
     {
     case TRAP_TRACE:
-        rec.ExceptionCode = EXCEPTION_SINGLE_STEP;
+        rec->ExceptionCode = EXCEPTION_SINGLE_STEP;
         break;
     case TRAP_BRKPT:
     default:
-        rec.ExceptionCode = EXCEPTION_BREAKPOINT;
+        rec->ExceptionCode = EXCEPTION_BREAKPOINT;
         break;
     }
-
-    save_context( &context, ucontext );
-    rec.ExceptionFlags   = EXCEPTION_CONTINUABLE;
-    rec.ExceptionRecord  = NULL;
-    rec.ExceptionAddress = (LPVOID)context.Pc;
-    rec.NumberParameters = 0;
-    status = raise_exception( &rec, &context, TRUE );
-    if (status) raise_status( status, &rec );
-    restore_context( &context, ucontext );
 }
 
 /**********************************************************************
@@ -717,66 +736,52 @@ static void trap_handler( int signal, siginfo_t *info, void *ucontext )
  */
 static void fpe_handler( int signal, siginfo_t *siginfo, void *sigcontext )
 {
-    EXCEPTION_RECORD rec;
-    CONTEXT context;
-    NTSTATUS status;
-
-    save_fpu( &context, sigcontext );
-    save_context( &context, sigcontext );
+    EXCEPTION_RECORD *rec = setup_exception( sigcontext, raise_generic_exception );
 
     switch (siginfo->si_code & 0xffff )
     {
 #ifdef FPE_FLTSUB
     case FPE_FLTSUB:
-        rec.ExceptionCode = EXCEPTION_ARRAY_BOUNDS_EXCEEDED;
+        rec->ExceptionCode = EXCEPTION_ARRAY_BOUNDS_EXCEEDED;
         break;
 #endif
 #ifdef FPE_INTDIV
     case FPE_INTDIV:
-        rec.ExceptionCode = EXCEPTION_INT_DIVIDE_BY_ZERO;
+        rec->ExceptionCode = EXCEPTION_INT_DIVIDE_BY_ZERO;
         break;
 #endif
 #ifdef FPE_INTOVF
     case FPE_INTOVF:
-        rec.ExceptionCode = EXCEPTION_INT_OVERFLOW;
+        rec->ExceptionCode = EXCEPTION_INT_OVERFLOW;
         break;
 #endif
 #ifdef FPE_FLTDIV
     case FPE_FLTDIV:
-        rec.ExceptionCode = EXCEPTION_FLT_DIVIDE_BY_ZERO;
+        rec->ExceptionCode = EXCEPTION_FLT_DIVIDE_BY_ZERO;
         break;
 #endif
 #ifdef FPE_FLTOVF
     case FPE_FLTOVF:
-        rec.ExceptionCode = EXCEPTION_FLT_OVERFLOW;
+        rec->ExceptionCode = EXCEPTION_FLT_OVERFLOW;
         break;
 #endif
 #ifdef FPE_FLTUND
     case FPE_FLTUND:
-        rec.ExceptionCode = EXCEPTION_FLT_UNDERFLOW;
+        rec->ExceptionCode = EXCEPTION_FLT_UNDERFLOW;
         break;
 #endif
 #ifdef FPE_FLTRES
     case FPE_FLTRES:
-        rec.ExceptionCode = EXCEPTION_FLT_INEXACT_RESULT;
+        rec->ExceptionCode = EXCEPTION_FLT_INEXACT_RESULT;
         break;
 #endif
 #ifdef FPE_FLTINV
     case FPE_FLTINV:
 #endif
     default:
-        rec.ExceptionCode = EXCEPTION_FLT_INVALID_OPERATION;
+        rec->ExceptionCode = EXCEPTION_FLT_INVALID_OPERATION;
         break;
     }
-    rec.ExceptionFlags   = EXCEPTION_CONTINUABLE;
-    rec.ExceptionRecord  = NULL;
-    rec.ExceptionAddress = (LPVOID)context.Pc;
-    rec.NumberParameters = 0;
-    status = raise_exception( &rec, &context, TRUE );
-    if (status) raise_status( status, &rec );
-
-    restore_context( &context, sigcontext );
-    restore_fpu( &context, sigcontext );
 }
 
 /**********************************************************************
@@ -788,19 +793,9 @@ static void int_handler( int signal, siginfo_t *siginfo, void *sigcontext )
 {
     if (!dispatch_signal(SIGINT))
     {
-        EXCEPTION_RECORD rec;
-        CONTEXT context;
-        NTSTATUS status;
+        EXCEPTION_RECORD *rec = setup_exception( sigcontext, raise_generic_exception );
 
-        save_context( &context, sigcontext );
-        rec.ExceptionCode    = CONTROL_C_EXIT;
-        rec.ExceptionFlags   = EXCEPTION_CONTINUABLE;
-        rec.ExceptionRecord  = NULL;
-        rec.ExceptionAddress = (LPVOID)context.Pc;
-        rec.NumberParameters = 0;
-        status = raise_exception( &rec, &context, TRUE );
-        if (status) raise_status( status, &rec );
-        restore_context( &context, sigcontext );
+        rec->ExceptionCode = CONTROL_C_EXIT;
     }
 }
 
@@ -812,19 +807,10 @@ static void int_handler( int signal, siginfo_t *siginfo, void *sigcontext )
  */
 static void abrt_handler( int signal, siginfo_t *siginfo, void *sigcontext )
 {
-    EXCEPTION_RECORD rec;
-    CONTEXT context;
-    NTSTATUS status;
+    EXCEPTION_RECORD *rec = setup_exception( sigcontext, raise_generic_exception );
 
-    save_context( &context, sigcontext );
-    rec.ExceptionCode    = EXCEPTION_WINE_ASSERTION;
-    rec.ExceptionFlags   = EH_NONCONTINUABLE;
-    rec.ExceptionRecord  = NULL;
-    rec.ExceptionAddress = (LPVOID)context.Pc;
-    rec.NumberParameters = 0;
-    status = raise_exception( &rec, &context, TRUE );
-    if (status) raise_status( status, &rec );
-    restore_context( &context, sigcontext );
+    rec->ExceptionCode  = EXCEPTION_WINE_ASSERTION;
+    rec->ExceptionFlags = EH_NONCONTINUABLE;
 }
 
 
@@ -851,6 +837,21 @@ static void usr1_handler( int signal, siginfo_t *siginfo, void *sigcontext )
     save_context( &context, sigcontext );
     wait_suspend( &context );
     restore_context( &context, sigcontext );
+}
+
+
+/**********************************************************************
+ *		usr2_handler
+ *
+ * Handler for SIGUSR2, used to set a thread context.
+ */
+static void usr2_handler( int signal, siginfo_t *siginfo, void *sigcontext )
+{
+    CONTEXT *context = interlocked_xchg_ptr( (void **)&arm64_thread_data()->context, NULL );
+    if (!context) return;
+    if ((context->ContextFlags & ~CONTEXT_ARM64) & CONTEXT_FLOATING_POINT)
+        restore_fpu( context, sigcontext );
+    restore_context( context, sigcontext );
 }
 
 
@@ -948,6 +949,8 @@ void signal_init_process(void)
     if (sigaction( SIGQUIT, &sig_act, NULL ) == -1) goto error;
     sig_act.sa_sigaction = usr1_handler;
     if (sigaction( SIGUSR1, &sig_act, NULL ) == -1) goto error;
+    sig_act.sa_sigaction = usr2_handler;
+    if (sigaction( SIGUSR2, &sig_act, NULL ) == -1) goto error;
 
     sig_act.sa_sigaction = segv_handler;
     if (sigaction( SIGSEGV, &sig_act, NULL ) == -1) goto error;
@@ -1084,35 +1087,91 @@ static void WINAPI call_thread_entry_point( LPTHREAD_START_ROUTINE entry, void *
     abort();  /* should not be reached */
 }
 
-typedef void (WINAPI *thread_start_func)(LPTHREAD_START_ROUTINE,void *);
+extern void DECLSPEC_NORETURN start_thread( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend,
+                                            void *relay, TEB *teb );
+__ASM_GLOBAL_FUNC( start_thread,
+                   "stp x29, x30, [sp,#-16]!\n\t"
+                   "mov x18, x4\n\t"             /* teb */
+                   /* store exit frame */
+                   "mov x29, sp\n\t"
+                   "str x29, [x4, #0x300]\n\t"  /* arm64_thread_data()->exit_frame */
+                   /* switch to thread stack */
+                   "ldr x5, [x4, #8]\n\t"       /* teb->Tib.StackBase */
+                   "sub sp, x5, #0x1000\n\t"
+                   /* attach dlls */
+                   "bl " __ASM_NAME("attach_thread") "\n\t"
+                   "mov sp, x0\n\t"
+                   /* clear the stack */
+                   "and x0, x0, #~0xfff\n\t"  /* round down to page size */
+                   "bl " __ASM_NAME("virtual_clear_thread_stack") "\n\t"
+                   /* switch to the initial context */
+                   "mov x0, sp\n\t"
+                   "ldp x1, x2, [x0, #0x10]\n\t"       /* context->X1,2 */
+                   "ldp x3, x4, [x0, #0x20]\n\t"       /* context->X3,4 */
+                   "ldp x5, x6, [x0, #0x30]\n\t"       /* context->X5,6 */
+                   "ldp x7, x8, [x0, #0x40]\n\t"       /* context->X7,8 */
+                   "ldp x9, x10, [x0, #0x50]\n\t"      /* context->X9,10 */
+                   "ldp x11, x12, [x0, #0x60]\n\t"     /* context->X11,12 */
+                   "ldp x13, x14, [x0, #0x70]\n\t"     /* context->X13,14 */
+                   "ldp x15, x16, [x0, #0x80]\n\t"     /* context->X15,16 */
+                   "ldp x17, x18, [x0, #0x90]\n\t"     /* context->X17,18 */
+                   "ldp x19, x20, [x0, #0xa0]\n\t"     /* context->X19,20 */
+                   "ldp x21, x22, [x0, #0xb0]\n\t"     /* context->X21,22 */
+                   "ldp x23, x24, [x0, #0xc0]\n\t"     /* context->X23,24 */
+                   "ldp x25, x26, [x0, #0xd0]\n\t"     /* context->X25,26 */
+                   "ldp x27, x28, [x0, #0xe0]\n\t"     /* context->X27,28 */
+                   "ldp x29, x30, [x0, #0xf0]\n\t"     /* context->Fp,Lr */
+                   "ldr x17, [x0, #0x100]\n\t"         /* context->Sp */
+                   "mov sp, x17\n\t"
+                   "ldr x17, [x0, #0x108]\n\t"         /* context->Pc */
+                   "ldr x0, [x0, #0x8]\n\t"            /* context->X0 */
+                   "br x17" )
 
-struct startup_info
-{
-    thread_start_func      start;
-    LPTHREAD_START_ROUTINE entry;
-    void                  *arg;
-    BOOL                   suspend;
-};
+extern void DECLSPEC_NORETURN call_thread_exit_func( int status, void (*func)(int), TEB *teb );
+__ASM_GLOBAL_FUNC( call_thread_exit_func,
+                   "ldr x3, [x2, #0x300]\n\t"  /* arm64_thread_data()->exit_frame */
+                   "str xzr, [x2, #0x300]\n\t"
+                   "cbz x3, 1f\n\t"
+                   "mov sp, x3\n"
+                   "1:\tblr x1" )
 
 /***********************************************************************
- *           thread_startup
+ *           init_thread_context
  */
-static void thread_startup( void *param )
+static void init_thread_context( CONTEXT *context, LPTHREAD_START_ROUTINE entry, void *arg, void *relay )
 {
-    CONTEXT context = { 0 };
-    struct startup_info *info = param;
+    context->u.s.X0  = (DWORD64)entry;
+    context->u.s.X1  = (DWORD64)arg;
+    context->u.s.X18 = (DWORD64)NtCurrentTeb();
+    context->Sp      = (DWORD64)NtCurrentTeb()->Tib.StackBase;
+    context->Pc      = (DWORD64)relay;
+}
 
-    /* build the initial context */
-    context.ContextFlags = CONTEXT_FULL;
-    context.u.s.X0 = (DWORD_PTR)info->entry;
-    context.u.s.X1 = (DWORD_PTR)info->arg;
-    context.Sp = (DWORD_PTR)NtCurrentTeb()->Tib.StackBase;
-    context.Pc = (DWORD_PTR)info->start;
+/***********************************************************************
+ *           attach_thread
+ */
+PCONTEXT DECLSPEC_HIDDEN attach_thread( LPTHREAD_START_ROUTINE entry, void *arg,
+                                        BOOL suspend, void *relay )
+{
+    CONTEXT *ctx;
 
-    if (info->suspend) wait_suspend( &context );
-    LdrInitializeThunk( &context, (void **)&context.u.s.X0, 0, 0 );
+    if (suspend)
+    {
+        CONTEXT context = { CONTEXT_ALL };
 
-    ((thread_start_func)context.Pc)( (LPTHREAD_START_ROUTINE)context.u.s.X0, (void *)context.u.s.X1 );
+        init_thread_context( &context, entry, arg, relay );
+        wait_suspend( &context );
+        ctx = (CONTEXT *)((ULONG_PTR)context.Sp & ~15) - 1;
+        *ctx = context;
+    }
+    else
+    {
+        ctx = (CONTEXT *)NtCurrentTeb()->Tib.StackBase - 1;
+        init_thread_context( ctx, entry, arg, relay );
+    }
+    ctx->ContextFlags = CONTEXT_FULL;
+    LdrInitializeThunk( ctx, (void **)&ctx->u.s.X0, 0, 0 );
+    return ctx;
 }
 
 /***********************************************************************
@@ -1120,13 +1179,12 @@ static void thread_startup( void *param )
  *
  * Thread startup sequence:
  * signal_start_thread()
- *   -> thread_startup()
- *     -> call_thread_entry_point()
+ *   -> start_thread()
+ *     -> call_thread_func()
  */
 void signal_start_thread( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend )
 {
-    struct startup_info info = { call_thread_entry_point, entry, arg, suspend };
-    wine_switch_to_stack( thread_startup, &info, NtCurrentTeb()->Tib.StackBase );
+    start_thread( entry, arg, suspend, call_thread_entry_point, NtCurrentTeb() );
 }
 
 /**********************************************************************
@@ -1134,13 +1192,12 @@ void signal_start_thread( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend 
  *
  * Process startup sequence:
  * signal_start_process()
- *   -> thread_startup()
+ *   -> start_thread()
  *     -> kernel32_start_process()
  */
 void signal_start_process( LPTHREAD_START_ROUTINE entry, BOOL suspend )
 {
-    struct startup_info info = { kernel32_start_process, entry, NtCurrentTeb()->Peb, suspend };
-    wine_switch_to_stack( thread_startup, &info, NtCurrentTeb()->Tib.StackBase );
+    start_thread( entry, NtCurrentTeb()->Peb, suspend, kernel32_start_process, NtCurrentTeb() );
 }
 
 /***********************************************************************
@@ -1148,7 +1205,7 @@ void signal_start_process( LPTHREAD_START_ROUTINE entry, BOOL suspend )
  */
 void signal_exit_thread( int status )
 {
-    exit_thread( status );
+    call_thread_exit_func( status, exit_thread, NtCurrentTeb() );
 }
 
 /***********************************************************************
@@ -1156,24 +1213,18 @@ void signal_exit_thread( int status )
  */
 void signal_exit_process( int status )
 {
-    exit( status );
+    call_thread_exit_func( status, exit, NtCurrentTeb() );
 }
 
 /**********************************************************************
  *              DbgBreakPoint   (NTDLL.@)
  */
-void WINAPI DbgBreakPoint(void)
-{
-     kill(getpid(), SIGTRAP);
-}
+__ASM_STDCALL_FUNC( DbgBreakPoint, 0, "brk #0; ret")
 
 /**********************************************************************
  *              DbgUserBreakPoint   (NTDLL.@)
  */
-void WINAPI DbgUserBreakPoint(void)
-{
-     kill(getpid(), SIGTRAP);
-}
+__ASM_STDCALL_FUNC( DbgUserBreakPoint, 0, "brk #0; ret")
 
 /**********************************************************************
  *           NtCurrentTeb   (NTDLL.@)

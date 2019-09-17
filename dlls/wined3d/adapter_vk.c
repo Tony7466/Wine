@@ -24,23 +24,6 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(d3d);
 
-struct wined3d_device_vk
-{
-    struct wined3d_device d;
-
-    struct wined3d_context context_vk;
-
-    VkDevice vk_device;
-    VkQueue vk_queue;
-
-    struct wined3d_vk_info vk_info;
-};
-
-static inline struct wined3d_device_vk *wined3d_device_vk(struct wined3d_device *device)
-{
-    return CONTAINING_RECORD(device, struct wined3d_device_vk, d);
-}
-
 static inline const struct wined3d_adapter_vk *wined3d_adapter_vk_const(const struct wined3d_adapter *adapter)
 {
     return CONTAINING_RECORD(adapter, struct wined3d_adapter_vk, a);
@@ -300,7 +283,7 @@ struct wined3d_context *adapter_vk_acquire_context(struct wined3d_device *device
     if (!device->context_count)
         return NULL;
 
-    return &wined3d_device_vk(device)->context_vk;
+    return &wined3d_device_vk(device)->context_vk.c;
 }
 
 void adapter_vk_release_context(struct wined3d_context *context)
@@ -314,11 +297,14 @@ static void adapter_vk_get_wined3d_caps(const struct wined3d_adapter *adapter, s
     const VkPhysicalDeviceLimits *limits = &adapter_vk->device_limits;
     BOOL sampler_anisotropy = limits->maxSamplerAnisotropy > 1.0f;
 
-    caps->ddraw_caps.dds_caps |= WINEDDSCAPS_3DDEVICE
-            | WINEDDSCAPS_MIPMAP
-            | WINEDDSCAPS_TEXTURE
+    caps->ddraw_caps.dds_caps |= WINEDDSCAPS_BACKBUFFER
+            | WINEDDSCAPS_COMPLEX
+            | WINEDDSCAPS_FRONTBUFFER
+            | WINEDDSCAPS_3DDEVICE
             | WINEDDSCAPS_VIDEOMEMORY
-            | WINEDDSCAPS_ZBUFFER;
+            | WINEDDSCAPS_OWNDC
+            | WINEDDSCAPS_LOCALVIDMEM
+            | WINEDDSCAPS_NONLOCALVIDMEM;
     caps->ddraw_caps.caps |= WINEDDCAPS_3D;
 
     caps->Caps2 |= WINED3DCAPS2_CANGENMIPMAP;
@@ -416,8 +402,8 @@ static BOOL adapter_vk_check_format(const struct wined3d_adapter *adapter,
 
 static HRESULT adapter_vk_init_3d(struct wined3d_device *device)
 {
+    struct wined3d_context_vk *context_vk;
     struct wined3d_device_vk *device_vk;
-    struct wined3d_context *context_vk;
     HRESULT hr;
 
     TRACE("device %p.\n", device);
@@ -430,10 +416,19 @@ static HRESULT adapter_vk_init_3d(struct wined3d_device *device)
         return hr;
     }
 
-    if (!device_context_add(device, context_vk))
+    if (FAILED(hr = device->shader_backend->shader_alloc_private(device,
+            device->adapter->vertex_pipe, device->adapter->fragment_pipe)))
+    {
+        ERR("Failed to allocate shader private data, hr %#x.\n", hr);
+        wined3d_context_vk_cleanup(context_vk);
+        return hr;
+    }
+
+    if (!device_context_add(device, &context_vk->c))
     {
         ERR("Failed to add the newly created context to the context list.\n");
-        wined3d_context_cleanup(context_vk);
+        device->shader_backend->shader_free_private(device, NULL);
+        wined3d_context_vk_cleanup(context_vk);
         return E_FAIL;
     }
 
@@ -442,8 +437,9 @@ static HRESULT adapter_vk_init_3d(struct wined3d_device *device)
     if (!(device_vk->d.blitter = wined3d_cpu_blitter_create()))
     {
         ERR("Failed to create CPU blitter.\n");
-        device_context_remove(device, context_vk);
-        wined3d_context_cleanup(context_vk);
+        device_context_remove(device, &context_vk->c);
+        device->shader_backend->shader_free_private(device, NULL);
+        wined3d_context_vk_cleanup(context_vk);
         return E_FAIL;
     }
 
@@ -452,15 +448,353 @@ static HRESULT adapter_vk_init_3d(struct wined3d_device *device)
 
 static void adapter_vk_uninit_3d(struct wined3d_device *device)
 {
-    struct wined3d_context *context_vk;
+    struct wined3d_context_vk *context_vk;
+    struct wined3d_shader *shader;
 
     TRACE("device %p.\n", device);
+
+    LIST_FOR_EACH_ENTRY(shader, &device->shaders, struct wined3d_shader, shader_list_entry)
+    {
+        device->shader_backend->shader_destroy(shader);
+    }
 
     device->blitter->ops->blitter_destroy(device->blitter, NULL);
 
     context_vk = &wined3d_device_vk(device)->context_vk;
-    device_context_remove(device, context_vk);
-    wined3d_context_cleanup(context_vk);
+    device_context_remove(device, &context_vk->c);
+    device->shader_backend->shader_free_private(device, NULL);
+    wined3d_context_vk_cleanup(context_vk);
+}
+
+static void *adapter_vk_map_bo_address(struct wined3d_context *context,
+        const struct wined3d_bo_address *data, size_t size, GLenum binding, uint32_t flags)
+{
+    if (data->buffer_object)
+    {
+        ERR("Unsupported buffer object %#lx.\n", data->buffer_object);
+        return NULL;
+    }
+
+    return data->addr;
+}
+
+static void adapter_vk_unmap_bo_address(struct wined3d_context *context,
+        const struct wined3d_bo_address *data, GLenum binding)
+{
+    if (data->buffer_object)
+        ERR("Unsupported buffer object %#lx.\n", data->buffer_object);
+}
+
+static HRESULT adapter_vk_create_swapchain(struct wined3d_device *device, struct wined3d_swapchain_desc *desc,
+        void *parent, const struct wined3d_parent_ops *parent_ops, struct wined3d_swapchain **swapchain)
+{
+    struct wined3d_swapchain *swapchain_vk;
+    HRESULT hr;
+
+    TRACE("device %p, desc %p, parent %p, parent_ops %p, swapchain %p.\n",
+            device, desc, parent, parent_ops, swapchain);
+
+    if (!(swapchain_vk = heap_alloc_zero(sizeof(*swapchain_vk))))
+        return E_OUTOFMEMORY;
+
+    if (FAILED(hr = wined3d_swapchain_vk_init(swapchain_vk, device, desc, parent, parent_ops)))
+    {
+        WARN("Failed to initialise swapchain, hr %#x.\n", hr);
+        heap_free(swapchain_vk);
+        return hr;
+    }
+
+    TRACE("Created swapchain %p.\n", swapchain_vk);
+    *swapchain = swapchain_vk;
+
+    return hr;
+}
+
+static void adapter_vk_destroy_swapchain(struct wined3d_swapchain *swapchain)
+{
+    wined3d_swapchain_cleanup(swapchain);
+    heap_free(swapchain);
+}
+
+static HRESULT adapter_vk_create_buffer(struct wined3d_device *device,
+        const struct wined3d_buffer_desc *desc, const struct wined3d_sub_resource_data *data,
+        void *parent, const struct wined3d_parent_ops *parent_ops, struct wined3d_buffer **buffer)
+{
+    struct wined3d_buffer_vk *buffer_vk;
+    HRESULT hr;
+
+    TRACE("device %p, desc %p, data %p, parent %p, parent_ops %p, buffer %p.\n",
+            device, desc, data, parent, parent_ops, buffer);
+
+    if (!(buffer_vk = heap_alloc_zero(sizeof(*buffer_vk))))
+        return E_OUTOFMEMORY;
+
+    if (FAILED(hr = wined3d_buffer_vk_init(buffer_vk, device, desc, data, parent, parent_ops)))
+    {
+        WARN("Failed to initialise buffer, hr %#x.\n", hr);
+        heap_free(buffer_vk);
+        return hr;
+    }
+
+    TRACE("Created buffer %p.\n", buffer_vk);
+    *buffer = &buffer_vk->b;
+
+    return hr;
+}
+
+static void adapter_vk_destroy_buffer(struct wined3d_buffer *buffer)
+{
+    struct wined3d_buffer_vk *buffer_vk = wined3d_buffer_vk(buffer);
+    struct wined3d_device *device = buffer_vk->b.resource.device;
+    unsigned int swapchain_count = device->swapchain_count;
+
+    TRACE("buffer_vk %p.\n", buffer_vk);
+
+    /* Take a reference to the device, in case releasing the buffer would
+     * cause the device to be destroyed. However, swapchain resources don't
+     * take a reference to the device, and we wouldn't want to increment the
+     * refcount on a device that's in the process of being destroyed. */
+    if (swapchain_count)
+        wined3d_device_incref(device);
+    wined3d_buffer_cleanup(&buffer_vk->b);
+    wined3d_cs_destroy_object(device->cs, heap_free, buffer_vk);
+    if (swapchain_count)
+        wined3d_device_decref(device);
+}
+
+static HRESULT adapter_vk_create_texture(struct wined3d_device *device,
+        const struct wined3d_resource_desc *desc, unsigned int layer_count, unsigned int level_count,
+        uint32_t flags, void *parent, const struct wined3d_parent_ops *parent_ops, struct wined3d_texture **texture)
+{
+    struct wined3d_texture_vk *texture_vk;
+    HRESULT hr;
+
+    TRACE("device %p, desc %p, layer_count %u, level_count %u, flags %#x, parent %p, parent_ops %p, texture %p.\n",
+            device, desc, layer_count, level_count, flags, parent, parent_ops, texture);
+
+    if (!(texture_vk = wined3d_texture_allocate_object_memory(sizeof(*texture_vk), level_count, layer_count)))
+        return E_OUTOFMEMORY;
+
+    if (FAILED(hr = wined3d_texture_vk_init(texture_vk, device, desc,
+            layer_count, level_count, flags, parent, parent_ops)))
+    {
+        WARN("Failed to initialise texture, hr %#x.\n", hr);
+        heap_free(texture_vk);
+        return hr;
+    }
+
+    TRACE("Created texture %p.\n", texture_vk);
+    *texture = &texture_vk->t;
+
+    return hr;
+}
+
+static void adapter_vk_destroy_texture(struct wined3d_texture *texture)
+{
+    struct wined3d_texture_vk *texture_vk = wined3d_texture_vk(texture);
+    struct wined3d_device *device = texture_vk->t.resource.device;
+    unsigned int swapchain_count = device->swapchain_count;
+
+    TRACE("texture_vk %p.\n", texture_vk);
+
+    /* Take a reference to the device, in case releasing the texture would
+     * cause the device to be destroyed. However, swapchain resources don't
+     * take a reference to the device, and we wouldn't want to increment the
+     * refcount on a device that's in the process of being destroyed. */
+    if (swapchain_count)
+        wined3d_device_incref(device);
+
+    wined3d_texture_sub_resources_destroyed(texture);
+    texture->resource.parent_ops->wined3d_object_destroyed(texture->resource.parent);
+
+    wined3d_texture_cleanup(&texture_vk->t);
+    wined3d_cs_destroy_object(device->cs, heap_free, texture_vk);
+
+    if (swapchain_count)
+        wined3d_device_decref(device);
+}
+
+static HRESULT adapter_vk_create_rendertarget_view(const struct wined3d_view_desc *desc,
+        struct wined3d_resource *resource, void *parent, const struct wined3d_parent_ops *parent_ops,
+        struct wined3d_rendertarget_view **view)
+{
+    struct wined3d_rendertarget_view_vk *view_vk;
+    HRESULT hr;
+
+    TRACE("desc %s, resource %p, parent %p, parent_ops %p, view %p.\n",
+            wined3d_debug_view_desc(desc, resource), resource, parent, parent_ops, view);
+
+    if (!(view_vk = heap_alloc_zero(sizeof(*view_vk))))
+        return E_OUTOFMEMORY;
+
+    if (FAILED(hr = wined3d_rendertarget_view_vk_init(view_vk, desc, resource, parent, parent_ops)))
+    {
+        WARN("Failed to initialise view, hr %#x.\n", hr);
+        heap_free(view_vk);
+        return hr;
+    }
+
+    TRACE("Created render target view %p.\n", view_vk);
+    *view = &view_vk->v;
+
+    return hr;
+}
+
+static void adapter_vk_destroy_rendertarget_view(struct wined3d_rendertarget_view *view)
+{
+    struct wined3d_rendertarget_view_vk *view_vk = wined3d_rendertarget_view_vk(view);
+    struct wined3d_device *device = view_vk->v.resource->device;
+    unsigned int swapchain_count = device->swapchain_count;
+
+    TRACE("view_vk %p.\n", view_vk);
+
+    /* Take a reference to the device, in case releasing the view's resource
+     * would cause the device to be destroyed. However, swapchain resources
+     * don't take a reference to the device, and we wouldn't want to increment
+     * the refcount on a device that's in the process of being destroyed. */
+    if (swapchain_count)
+        wined3d_device_incref(device);
+    wined3d_rendertarget_view_cleanup(&view_vk->v);
+    wined3d_cs_destroy_object(device->cs, heap_free, view_vk);
+    if (swapchain_count)
+        wined3d_device_decref(device);
+}
+
+static HRESULT adapter_vk_create_shader_resource_view(const struct wined3d_view_desc *desc,
+        struct wined3d_resource *resource, void *parent, const struct wined3d_parent_ops *parent_ops,
+        struct wined3d_shader_resource_view **view)
+{
+    struct wined3d_shader_resource_view_vk *view_vk;
+    HRESULT hr;
+
+    TRACE("desc %s, resource %p, parent %p, parent_ops %p, view %p.\n",
+            wined3d_debug_view_desc(desc, resource), resource, parent, parent_ops, view);
+
+    if (!(view_vk = heap_alloc_zero(sizeof(*view_vk))))
+        return E_OUTOFMEMORY;
+
+    if (FAILED(hr = wined3d_shader_resource_view_vk_init(view_vk, desc, resource, parent, parent_ops)))
+    {
+        WARN("Failed to initialise view, hr %#x.\n", hr);
+        heap_free(view_vk);
+        return hr;
+    }
+
+    TRACE("Created shader resource view %p.\n", view_vk);
+    *view = &view_vk->v;
+
+    return hr;
+}
+
+static void adapter_vk_destroy_shader_resource_view(struct wined3d_shader_resource_view *view)
+{
+    struct wined3d_shader_resource_view_vk *view_vk = wined3d_shader_resource_view_vk(view);
+    struct wined3d_device *device = view_vk->v.resource->device;
+    unsigned int swapchain_count = device->swapchain_count;
+
+    TRACE("view_vk %p.\n", view_vk);
+
+    /* Take a reference to the device, in case releasing the view's resource
+     * would cause the device to be destroyed. However, swapchain resources
+     * don't take a reference to the device, and we wouldn't want to increment
+     * the refcount on a device that's in the process of being destroyed. */
+    if (swapchain_count)
+        wined3d_device_incref(device);
+    wined3d_shader_resource_view_cleanup(&view_vk->v);
+    wined3d_cs_destroy_object(device->cs, heap_free, view_vk);
+    if (swapchain_count)
+        wined3d_device_decref(device);
+}
+
+static HRESULT adapter_vk_create_unordered_access_view(const struct wined3d_view_desc *desc,
+        struct wined3d_resource *resource, void *parent, const struct wined3d_parent_ops *parent_ops,
+        struct wined3d_unordered_access_view **view)
+{
+    struct wined3d_unordered_access_view_vk *view_vk;
+    HRESULT hr;
+
+    TRACE("desc %s, resource %p, parent %p, parent_ops %p, view %p.\n",
+            wined3d_debug_view_desc(desc, resource), resource, parent, parent_ops, view);
+
+    if (!(view_vk = heap_alloc_zero(sizeof(*view_vk))))
+        return E_OUTOFMEMORY;
+
+    if (FAILED(hr = wined3d_unordered_access_view_vk_init(view_vk, desc, resource, parent, parent_ops)))
+    {
+        WARN("Failed to initialise view, hr %#x.\n", hr);
+        heap_free(view_vk);
+        return hr;
+    }
+
+    TRACE("Created unordered access view %p.\n", view_vk);
+    *view = &view_vk->v;
+
+    return hr;
+}
+
+static void adapter_vk_destroy_unordered_access_view(struct wined3d_unordered_access_view *view)
+{
+    struct wined3d_unordered_access_view_vk *view_vk = wined3d_unordered_access_view_vk(view);
+    struct wined3d_device *device = view_vk->v.resource->device;
+    unsigned int swapchain_count = device->swapchain_count;
+
+    TRACE("view_vk %p.\n", view_vk);
+
+    /* Take a reference to the device, in case releasing the view's resource
+     * would cause the device to be destroyed. However, swapchain resources
+     * don't take a reference to the device, and we wouldn't want to increment
+     * the refcount on a device that's in the process of being destroyed. */
+    if (swapchain_count)
+        wined3d_device_incref(device);
+    wined3d_unordered_access_view_cleanup(&view_vk->v);
+    wined3d_cs_destroy_object(device->cs, heap_free, view_vk);
+    if (swapchain_count)
+        wined3d_device_decref(device);
+}
+
+static HRESULT adapter_vk_create_sampler(struct wined3d_device *device, const struct wined3d_sampler_desc *desc,
+        void *parent, const struct wined3d_parent_ops *parent_ops, struct wined3d_sampler **sampler)
+{
+    struct wined3d_sampler *sampler_vk;
+
+    TRACE("device %p, desc %p, parent %p, parent_ops %p, sampler %p.\n",
+            device, desc, parent, parent_ops, sampler);
+
+    if (!(sampler_vk = heap_alloc_zero(sizeof(*sampler_vk))))
+        return E_OUTOFMEMORY;
+
+    wined3d_sampler_vk_init(sampler_vk, device, desc, parent, parent_ops);
+
+    TRACE("Created sampler %p.\n", sampler_vk);
+    *sampler = sampler_vk;
+
+    return WINED3D_OK;
+}
+
+static void adapter_vk_destroy_sampler(struct wined3d_sampler *sampler)
+{
+    TRACE("sampler %p.\n", sampler);
+
+    wined3d_cs_destroy_object(sampler->device->cs, heap_free, sampler);
+}
+
+static HRESULT adapter_vk_create_query(struct wined3d_device *device, enum wined3d_query_type type,
+        void *parent, const struct wined3d_parent_ops *parent_ops, struct wined3d_query **query)
+{
+    TRACE("device %p, type %#x, parent %p, parent_ops %p, query %p.\n",
+            device, type, parent, parent_ops, query);
+
+    return WINED3DERR_NOTAVAILABLE;
+}
+
+static void adapter_vk_destroy_query(struct wined3d_query *query)
+{
+    TRACE("query %p.\n", query);
+}
+
+static void adapter_vk_flush_context(struct wined3d_context *context)
+{
+    TRACE("context %p.\n", context);
 }
 
 static const struct wined3d_adapter_ops wined3d_adapter_vk_ops =
@@ -474,6 +808,25 @@ static const struct wined3d_adapter_ops wined3d_adapter_vk_ops =
     adapter_vk_check_format,
     adapter_vk_init_3d,
     adapter_vk_uninit_3d,
+    adapter_vk_map_bo_address,
+    adapter_vk_unmap_bo_address,
+    adapter_vk_create_swapchain,
+    adapter_vk_destroy_swapchain,
+    adapter_vk_create_buffer,
+    adapter_vk_destroy_buffer,
+    adapter_vk_create_texture,
+    adapter_vk_destroy_texture,
+    adapter_vk_create_rendertarget_view,
+    adapter_vk_destroy_rendertarget_view,
+    adapter_vk_create_shader_resource_view,
+    adapter_vk_destroy_shader_resource_view,
+    adapter_vk_create_unordered_access_view,
+    adapter_vk_destroy_unordered_access_view,
+    adapter_vk_create_sampler,
+    adapter_vk_destroy_sampler,
+    adapter_vk_create_query,
+    adapter_vk_destroy_query,
+    adapter_vk_flush_context,
 };
 
 static unsigned int wined3d_get_wine_vk_version(void)

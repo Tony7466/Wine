@@ -31,9 +31,9 @@ enum name_type {
 
 type_t *type_new_function(var_list_t *args);
 type_t *type_new_pointer(unsigned char pointer_default, type_t *ref, attr_list_t *attrs);
-type_t *type_new_alias(type_t *t, const char *name);
+type_t *type_new_alias(const decl_spec_t *t, const char *name);
 type_t *type_new_module(char *name);
-type_t *type_new_array(const char *name, type_t *element, int declptr,
+type_t *type_new_array(const char *name, const decl_spec_t *element, int declptr,
                        unsigned int dim, expr_t *size_is, expr_t *length_is,
                        unsigned char ptr_default_fc);
 type_t *type_new_basic(enum type_basic_type basic_type);
@@ -59,8 +59,8 @@ type_t *duptype(type_t *t, int dupname);
 /* un-alias the type until finding the non-alias type */
 static inline type_t *type_get_real_type(const type_t *type)
 {
-    if (type->is_alias)
-        return type_get_real_type(type->orig);
+    if (type->type_type == TYPE_ALIAS)
+        return type_get_real_type(type->details.alias.aliasee.type);
     else
         return (type_t *)type;
 }
@@ -105,9 +105,14 @@ static inline var_t *type_function_get_retval(const type_t *type)
     return type->details.function->retval;
 }
 
+static inline const decl_spec_t *type_function_get_ret(const type_t *type)
+{
+    return &type_function_get_retval(type)->declspec;
+}
+
 static inline type_t *type_function_get_rettype(const type_t *type)
 {
-    return type_function_get_retval(type)->type;
+    return type_function_get_retval(type)->declspec.type;
 }
 
 static inline var_list_t *type_enum_get_values(const type_t *type)
@@ -142,7 +147,7 @@ static inline var_list_t *type_union_get_cases(const type_t *type)
     if (type_type == TYPE_ENCAPSULATED_UNION)
     {
         const var_t *uv = LIST_ENTRY(list_tail(type->details.structure->fields), const var_t, entry);
-        return uv->type->details.structure->fields;
+        return uv->declspec.type->details.structure->fields;
     }
     else
         return type->details.structure->fields;
@@ -160,6 +165,13 @@ static inline type_t *type_iface_get_inherit(const type_t *type)
     type = type_get_real_type(type);
     assert(type_get_type(type) == TYPE_INTERFACE);
     return type->details.iface->inherit;
+}
+
+static inline type_t *type_iface_get_async_iface(const type_t *type)
+{
+    type = type_get_real_type(type);
+    assert(type_get_type(type) == TYPE_INTERFACE);
+    return type->details.iface->async_iface;
 }
 
 static inline var_list_t *type_dispiface_get_props(const type_t *type)
@@ -250,11 +262,30 @@ static inline expr_t *type_array_get_variance(const type_t *type)
     return type->details.array.length_is;
 }
 
-static inline type_t *type_array_get_element(const type_t *type)
+static inline unsigned short type_array_get_ptr_tfsoff(const type_t *type)
 {
     type = type_get_real_type(type);
     assert(type_get_type(type) == TYPE_ARRAY);
-    return type->details.array.elem;
+    return type->details.array.ptr_tfsoff;
+}
+
+static inline void type_array_set_ptr_tfsoff(type_t *type, unsigned short ptr_tfsoff)
+{
+    type = type_get_real_type(type);
+    assert(type_get_type(type) == TYPE_ARRAY);
+    type->details.array.ptr_tfsoff = ptr_tfsoff;
+}
+
+static inline const decl_spec_t *type_array_get_element(const type_t *type)
+{
+    type = type_get_real_type(type);
+    assert(type_get_type(type) == TYPE_ARRAY);
+    return &type->details.array.elem;
+}
+
+static inline type_t *type_array_get_element_type(const type_t *type)
+{
+    return type_array_get_element(type)->type;
 }
 
 static inline int type_array_is_decl_as_ptr(const type_t *type)
@@ -273,13 +304,19 @@ static inline unsigned char type_array_get_ptr_default_fc(const type_t *type)
 
 static inline int type_is_alias(const type_t *type)
 {
-    return type->is_alias;
+    return type->type_type == TYPE_ALIAS;
 }
 
-static inline type_t *type_alias_get_aliasee(const type_t *type)
+static inline const decl_spec_t *type_alias_get_aliasee(const type_t *type)
 {
     assert(type_is_alias(type));
-    return type->orig;
+    return &type->details.alias.aliasee;
+}
+
+static inline type_t *type_alias_get_aliasee_type(const type_t *type)
+{
+    assert(type_is_alias(type));
+    return type->details.alias.aliasee.type;
 }
 
 static inline ifref_list_t *type_coclass_get_ifaces(const type_t *type)
@@ -289,11 +326,16 @@ static inline ifref_list_t *type_coclass_get_ifaces(const type_t *type)
     return type->details.coclass.ifaces;
 }
 
-static inline type_t *type_pointer_get_ref(const type_t *type)
+static inline const decl_spec_t *type_pointer_get_ref(const type_t *type)
 {
     type = type_get_real_type(type);
     assert(type_get_type(type) == TYPE_POINTER);
-    return type->details.pointer.ref;
+    return &type->details.pointer.ref;
+}
+
+static inline type_t *type_pointer_get_ref_type(const type_t *type)
+{
+    return type_pointer_get_ref(type)->type;
 }
 
 static inline unsigned char type_pointer_get_default_fc(const type_t *type)

@@ -317,7 +317,7 @@ void device_clear_render_targets(struct wined3d_device *device, UINT rt_count, c
         WARN("Invalid context, skipping clear.\n");
         return;
     }
-    gl_info = context->gl_info;
+    gl_info = context_gl->gl_info;
 
     /* When we're clearing parts of the drawable, make sure that the target surface is well up to date in the
      * drawable. After the clear we'll mark the drawable up to date, so we have to make sure that this is true
@@ -682,7 +682,7 @@ static void wined3d_device_gl_create_dummy_textures(struct wined3d_device_gl *de
 {
     struct wined3d_dummy_textures *textures = &device_gl->dummy_textures;
     const struct wined3d_d3d_info *d3d_info = context_gl->c.d3d_info;
-    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
+    const struct wined3d_gl_info *gl_info = context_gl->gl_info;
     unsigned int i;
     DWORD color;
 
@@ -816,7 +816,7 @@ static void wined3d_device_gl_destroy_dummy_textures(struct wined3d_device_gl *d
         struct wined3d_context_gl *context_gl)
 {
     struct wined3d_dummy_textures *dummy_textures = &device_gl->dummy_textures;
-    const struct wined3d_gl_info *gl_info = context_gl->c.gl_info;
+    const struct wined3d_gl_info *gl_info = context_gl->gl_info;
 
     if (gl_info->supported[ARB_TEXTURE_MULTISAMPLE])
     {
@@ -912,6 +912,8 @@ static void destroy_default_samplers(struct wined3d_device *device, struct wined
 
 HRESULT CDECL wined3d_device_acquire_focus_window(struct wined3d_device *device, HWND window)
 {
+    unsigned int screensaver_active;
+
     TRACE("device %p, window %p.\n", device, window);
 
     if (!wined3d_register_window(NULL, window, device, 0))
@@ -922,6 +924,9 @@ HRESULT CDECL wined3d_device_acquire_focus_window(struct wined3d_device *device,
 
     InterlockedExchangePointer((void **)&device->focus_window, window);
     SetWindowPos(window, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+    SystemParametersInfoW(SPI_GETSCREENSAVEACTIVE, 0, &screensaver_active, 0);
+    if ((device->restore_screensaver = !!screensaver_active))
+        SystemParametersInfoW(SPI_SETSCREENSAVEACTIVE, FALSE, NULL, 0);
 
     return WINED3D_OK;
 }
@@ -932,6 +937,11 @@ void CDECL wined3d_device_release_focus_window(struct wined3d_device *device)
 
     if (device->focus_window) wined3d_unregister_window(device->focus_window);
     InterlockedExchangePointer((void **)&device->focus_window, NULL);
+    if (device->restore_screensaver)
+    {
+        SystemParametersInfoW(SPI_SETSCREENSAVEACTIVE, TRUE, NULL, 0);
+        device->restore_screensaver = FALSE;
+    }
 }
 
 static void device_init_swapchain_state(struct wined3d_device *device, struct wined3d_swapchain *swapchain)
@@ -952,6 +962,7 @@ static void device_init_swapchain_state(struct wined3d_device *device, struct wi
 void wined3d_device_delete_opengl_contexts_cs(void *object)
 {
     struct wined3d_resource *resource, *cursor;
+    struct wined3d_swapchain_gl *swapchain_gl;
     struct wined3d_device *device = object;
     struct wined3d_context_gl *context_gl;
     struct wined3d_device_gl *device_gl;
@@ -981,8 +992,8 @@ void wined3d_device_delete_opengl_contexts_cs(void *object)
 
     while (device->context_count)
     {
-        if (device->contexts[0]->swapchain)
-            swapchain_destroy_contexts(device->contexts[0]->swapchain);
+        if ((swapchain_gl = wined3d_swapchain_gl(device->contexts[0]->swapchain)))
+            wined3d_swapchain_gl_destroy_contexts(swapchain_gl);
         else
             wined3d_context_gl_destroy(wined3d_context_gl(device->contexts[0]));
     }
@@ -5856,30 +5867,26 @@ err:
     return hr;
 }
 
-void device_invalidate_state(const struct wined3d_device *device, DWORD state)
+void device_invalidate_state(const struct wined3d_device *device, unsigned int state_id)
 {
-    DWORD rep = device->state_table[state].representative;
+    unsigned int representative, i, idx, shift;
     struct wined3d_context *context;
-    unsigned int i, idx, shift;
 
     wined3d_from_cs(device->cs);
 
-    if (STATE_IS_COMPUTE(state))
+    if (STATE_IS_COMPUTE(state_id))
     {
         for (i = 0; i < device->context_count; ++i)
-            context_invalidate_compute_state(device->contexts[i], state);
+            context_invalidate_compute_state(device->contexts[i], state_id);
         return;
     }
 
+    representative = device->state_table[state_id].representative;
+    idx = representative / (sizeof(*context->dirty_graphics_states) * CHAR_BIT);
+    shift = representative & ((sizeof(*context->dirty_graphics_states) * CHAR_BIT) - 1);
     for (i = 0; i < device->context_count; ++i)
     {
-        context = device->contexts[i];
-        if (isStateDirty(context, rep)) continue;
-
-        context->dirtyArray[context->numDirtyEntries++] = rep;
-        idx = rep / (sizeof(*context->isStateDirty) * CHAR_BIT);
-        shift = rep & ((sizeof(*context->isStateDirty) * CHAR_BIT) - 1);
-        context->isStateDirty[idx] |= (1u << shift);
+        device->contexts[i]->dirty_graphics_states[idx] |= (1u << shift);
     }
 }
 

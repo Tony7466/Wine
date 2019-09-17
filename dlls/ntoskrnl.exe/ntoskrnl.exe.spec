@@ -699,7 +699,7 @@
 @ stub MmIsDriverVerifying
 @ stub MmIsNonPagedSystemAddressValid
 @ stub MmIsRecursiveIoFault
-@ stub MmIsThisAnNtAsSystem
+@ stdcall MmIsThisAnNtAsSystem()
 @ stub MmIsVerifierEnabled
 @ stub MmLockPagableDataSection
 @ stub MmLockPagableImageSection
@@ -1257,11 +1257,12 @@
 @ stub SeFreePrivileges
 @ stub SeImpersonateClient
 @ stub SeImpersonateClientEx
+@ stdcall SeLocateProcessImageName(ptr ptr)
 @ stub SeLockSubjectContext
 @ stub SeMarkLogonSessionForTerminationNotification
 @ stub SeOpenObjectAuditAlarm
 @ stub SeOpenObjectForDeleteAuditAlarm
-@ stub SePrivilegeCheck
+@ stdcall SePrivilegeCheck(ptr ptr long)
 @ stub SePrivilegeObjectAuditAlarm
 @ stub SePublicDefaultDacl
 @ stub SeQueryAuthenticationIdToken

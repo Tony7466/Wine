@@ -18,7 +18,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
 #include <stdarg.h>
 
 #define COBJMACROS
@@ -38,7 +37,6 @@
 #include "evcode.h"
 #include "wine/heap.h"
 #include "wine/list.h"
-#include "wine/unicode.h"
 
 
 WINE_DEFAULT_DEBUG_CHANNEL(quartz);
@@ -535,7 +533,7 @@ static IBaseFilter *find_filter_by_name(IFilterGraphImpl *graph, const WCHAR *na
 
     LIST_FOR_EACH_ENTRY(filter, &graph->filters, struct filter, entry)
     {
-        if (!strcmpW(filter->name, name))
+        if (!wcscmp(filter->name, name))
             return filter->filter;
     }
 
@@ -558,7 +556,7 @@ static HRESULT WINAPI FilterGraph2_AddFilter(IFilterGraph2 *iface, IBaseFilter *
     if (!pFilter)
         return E_POINTER;
 
-    wszFilterName = CoTaskMemAlloc( (pName ? strlenW(pName) + 6 : 5) * sizeof(WCHAR) );
+    wszFilterName = CoTaskMemAlloc( (pName ? lstrlenW(pName) + 6 : 5) * sizeof(WCHAR) );
 
     if (pName && find_filter_by_name(This, pName))
         duplicate_name = TRUE;
@@ -573,9 +571,9 @@ static HRESULT WINAPI FilterGraph2_AddFilter(IFilterGraph2 *iface, IBaseFilter *
 	{
 	    /* Create name */
 	    if (pName)
-		sprintfW(wszFilterName, wszFmt1, pName, This->nameIndex);
+		swprintf(wszFilterName, pName ? lstrlenW(pName) + 6 : 5, wszFmt1, pName, This->nameIndex);
 	    else
-		sprintfW(wszFilterName, wszFmt2, This->nameIndex);
+		swprintf(wszFilterName, pName ? lstrlenW(pName) + 6 : 5, wszFmt2, This->nameIndex);
 	    TRACE("Generated name %s\n", debugstr_w(wszFilterName));
 
 	    if (This->nameIndex++ == 10000)
@@ -592,7 +590,7 @@ static HRESULT WINAPI FilterGraph2_AddFilter(IFilterGraph2 *iface, IBaseFilter *
 	}
     }
     else
-	memcpy(wszFilterName, pName, (strlenW(pName) + 1) * sizeof(WCHAR));
+	memcpy(wszFilterName, pName, (lstrlenW(pName) + 1) * sizeof(WCHAR));
 
     hr = IBaseFilter_JoinFilterGraph(pFilter, (IFilterGraph *)&This->IFilterGraph2_iface, wszFilterName);
     if (FAILED(hr))
@@ -1657,158 +1655,53 @@ static HRESULT WINAPI FilterGraph2_RenderFile(IFilterGraph2 *iface, LPCWSTR lpcw
     return hr;
 }
 
-static HRESULT CreateFilterInstanceAndLoadFile(GUID* clsid, LPCOLESTR pszFileName, IBaseFilter **filter)
+static HRESULT WINAPI FilterGraph2_AddSourceFilter(IFilterGraph2 *iface,
+        const WCHAR *filename, const WCHAR *filter_name, IBaseFilter **ret_filter)
 {
-    IFileSourceFilter *source = NULL;
-    HRESULT hr = CoCreateInstance(clsid, NULL, CLSCTX_INPROC_SERVER, &IID_IBaseFilter, (LPVOID*)filter);
-    TRACE("CLSID: %s\n", debugstr_guid(clsid));
-    if (FAILED(hr))
-        return hr;
-
-    hr = IBaseFilter_QueryInterface(*filter, &IID_IFileSourceFilter, (LPVOID*)&source);
-    if (FAILED(hr))
-    {
-        IBaseFilter_Release(*filter);
-        return hr;
-    }
-
-    /* Load the file in the file source filter */
-    hr = IFileSourceFilter_Load(source, pszFileName, NULL);
-    IFileSourceFilter_Release(source);
-    if (FAILED(hr)) {
-        WARN("Load (%x)\n", hr);
-        IBaseFilter_Release(*filter);
-        return hr;
-    }
-
-    return hr;
-}
-
-/* Some filters implement their own asynchronous reader (Theoretically they all should, try to load it first */
-static HRESULT GetFileSourceFilter(LPCOLESTR pszFileName, IBaseFilter **filter)
-{
+    IFilterGraphImpl *graph = impl_from_IFilterGraph2(iface);
+    IFileSourceFilter *filesource;
+    IBaseFilter *filter;
     HRESULT hr;
     GUID clsid;
-    IAsyncReader * pReader = NULL;
-    IFileSourceFilter* pSource = NULL;
-    IPin * pOutputPin = NULL;
-    static const WCHAR wszOutputPinName[] = { 'O','u','t','p','u','t',0 };
 
-    /* Try to find a match without reading the file first */
-    hr = GetClassMediaFile(NULL, pszFileName, NULL, NULL, &clsid);
+    TRACE("graph %p, filename %s, filter_name %s, ret_filter %p.\n",
+            graph, debugstr_w(filename), debugstr_w(filter_name), ret_filter);
 
-    if (hr == S_OK)
-        return CreateFilterInstanceAndLoadFile(&clsid, pszFileName, filter);
+    if (!get_media_type(filename, NULL, NULL, &clsid))
+        clsid = CLSID_AsyncReader;
+    TRACE("Using source filter %s.\n", debugstr_guid(&clsid));
 
-    /* Now create a AyncReader instance, to check for signature bytes in the file */
-    hr = CoCreateInstance(&CLSID_AsyncReader, NULL, CLSCTX_INPROC_SERVER, &IID_IBaseFilter, (LPVOID*)filter);
-    if (FAILED(hr))
-        return hr;
-
-    hr = IBaseFilter_QueryInterface(*filter, &IID_IFileSourceFilter, (LPVOID *)&pSource);
-    if (FAILED(hr))
+    if (FAILED(hr = CoCreateInstance(&clsid, NULL, CLSCTX_INPROC_SERVER,
+            &IID_IBaseFilter, (void **)&filter)))
     {
-        IBaseFilter_Release(*filter);
+        WARN("Failed to create filter, hr %#x.\n", hr);
         return hr;
     }
 
-    hr = IFileSourceFilter_Load(pSource, pszFileName, NULL);
-    IFileSourceFilter_Release(pSource);
-    if (FAILED(hr))
+    if (FAILED(hr = IBaseFilter_QueryInterface(filter, &IID_IFileSourceFilter, (void **)&filesource)))
     {
-        IBaseFilter_Release(*filter);
+        WARN("Failed to get IFileSourceFilter, hr %#x.\n", hr);
+        IBaseFilter_Release(filter);
         return hr;
     }
 
-    hr = IBaseFilter_FindPin(*filter, wszOutputPinName, &pOutputPin);
+    hr = IFileSourceFilter_Load(filesource, filename, NULL);
+    IFileSourceFilter_Release(filesource);
     if (FAILED(hr))
     {
-        IBaseFilter_Release(*filter);
+        WARN("Failed to load file, hr %#x.\n", hr);
         return hr;
     }
 
-    hr = IPin_QueryInterface(pOutputPin, &IID_IAsyncReader, (LPVOID *)&pReader);
-    IPin_Release(pOutputPin);
-    if (FAILED(hr))
+    if (FAILED(hr = IFilterGraph2_AddFilter(iface, filter, filter_name)))
     {
-        IBaseFilter_Release(*filter);
+        IBaseFilter_Release(filter);
         return hr;
     }
 
-    /* Try again find a match */
-    hr = GetClassMediaFile(pReader, pszFileName, NULL, NULL, &clsid);
-    IAsyncReader_Release(pReader);
-
-    if (hr == S_OK)
-    {
-        /* Release the AsyncReader filter and create the matching one */
-        IBaseFilter_Release(*filter);
-        return CreateFilterInstanceAndLoadFile(&clsid, pszFileName, filter);
-    }
-
-    /* Return the AsyncReader filter */
+    if (ret_filter)
+        *ret_filter = filter;
     return S_OK;
-}
-
-static HRESULT WINAPI FilterGraph2_AddSourceFilter(IFilterGraph2 *iface, LPCWSTR lpcwstrFileName,
-        LPCWSTR lpcwstrFilterName, IBaseFilter **ppFilter)
-{
-    IFilterGraphImpl *This = impl_from_IFilterGraph2(iface);
-    HRESULT hr;
-    IBaseFilter* preader;
-    IFileSourceFilter* pfile = NULL;
-    AM_MEDIA_TYPE mt;
-    WCHAR* filename;
-
-    TRACE("(%p/%p)->(%s, %s, %p)\n", This, iface, debugstr_w(lpcwstrFileName), debugstr_w(lpcwstrFilterName), ppFilter);
-
-    /* Try from file name first, then fall back to default asynchronous reader */
-    hr = GetFileSourceFilter(lpcwstrFileName, &preader);
-    if (FAILED(hr)) {
-        WARN("Unable to create file source filter (%x)\n", hr);
-        return hr;
-    }
-
-    hr = IFilterGraph2_AddFilter(iface, preader, lpcwstrFilterName);
-    if (FAILED(hr)) {
-        WARN("Unable add filter (%x)\n", hr);
-        IBaseFilter_Release(preader);
-        return hr;
-    }
-
-    hr = IBaseFilter_QueryInterface(preader, &IID_IFileSourceFilter, (LPVOID*)&pfile);
-    if (FAILED(hr)) {
-        WARN("Unable to get IFileSourceInterface (%x)\n", hr);
-        goto error;
-    }
-
-    /* The file has been already loaded */
-    hr = IFileSourceFilter_GetCurFile(pfile, &filename, &mt);
-    if (FAILED(hr)) {
-        WARN("GetCurFile (%x)\n", hr);
-        goto error;
-    }
-
-    TRACE("File %s\n", debugstr_w(filename));
-    TRACE("MajorType %s\n", debugstr_guid(&mt.majortype));
-    TRACE("SubType %s\n", debugstr_guid(&mt.subtype));
-
-    CoTaskMemFree(filename);
-    FreeMediaType(&mt);
-
-    if (ppFilter)
-        *ppFilter = preader;
-    IFileSourceFilter_Release(pfile);
-
-    return S_OK;
-
-error:
-    if (pfile)
-        IFileSourceFilter_Release(pfile);
-    IFilterGraph2_RemoveFilter(iface, preader);
-    IBaseFilter_Release(preader);
-
-    return hr;
 }
 
 static HRESULT WINAPI FilterGraph2_SetLogFile(IFilterGraph2 *iface, DWORD_PTR hFile)

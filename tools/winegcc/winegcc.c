@@ -383,6 +383,7 @@ static int try_link( const strarray *prefix, const strarray *link_tool, const ch
 
 static strarray *get_link_args( struct options *opts, const char *output_name )
 {
+    int use_wine_crt = opts->wine_builtin && opts->shared;
     const strarray *link_tool = get_translator( opts );
     strarray *flags = strarray_alloc();
     unsigned int i;
@@ -437,8 +438,8 @@ static strarray *get_link_args( struct options *opts, const char *output_name )
         else strarray_add( flags, opts->gui_app ? "-mwindows" : "-mconsole" );
 
         if (opts->unicode_app) strarray_add( flags, "-municode" );
-        if (opts->nodefaultlibs) strarray_add( flags, "-nodefaultlibs" );
-        if (opts->nostartfiles) strarray_add( flags, "-nostartfiles" );
+        if (opts->nodefaultlibs || use_wine_crt) strarray_add( flags, "-nodefaultlibs" );
+        if (opts->nostartfiles || use_wine_crt) strarray_add( flags, "-nostartfiles" );
 
         if (opts->subsystem)
         {
@@ -897,6 +898,7 @@ static void build(struct options* opts)
     const char *spec_o_name;
     const char *output_name, *spec_file, *lang;
     int generate_app_loader = 1;
+    const char* crt_lib = NULL;
     int fake_module = 0;
     int is_pe = (opts->target_platform == PLATFORM_WINDOWS || opts->target_platform == PLATFORM_CYGWIN);
     unsigned int j;
@@ -982,8 +984,15 @@ static void build(struct options* opts)
 		    strarray_add(files, strmake("-o%s", file));
 		    break;
 		case file_arh:
-		    strarray_add(files, strmake("-a%s", file));
-		    break;
+                    if (opts->use_msvcrt)
+                    {
+                        const char *p = strrchr(file, '/');
+                        if (p) p++;
+                        else p = file;
+                        if (!strncmp(p, "libmsvcr", 8) || !strncmp(p, "libucrt", 7)) crt_lib = file;
+                    }
+                    strarray_add(files, strmake("-a%s", file));
+                    break;
 		case file_so:
 		    strarray_add(files, strmake("-s%s", file));
 		    break;
@@ -1018,8 +1027,12 @@ static void build(struct options* opts)
 
     if (!opts->nodefaultlibs)
     {
-        if (opts->use_msvcrt) add_library(opts, lib_dirs, files, "msvcrt");
         add_library(opts, lib_dirs, files, "winecrt0");
+        if (opts->use_msvcrt)
+        {
+            if (!crt_lib) add_library(opts, lib_dirs, files, "msvcrt");
+            else strarray_add(files, strmake("-a%s", crt_lib));
+        }
         if (opts->win16_app) add_library(opts, lib_dirs, files, "kernel");
         add_library(opts, lib_dirs, files, "kernel32");
         add_library(opts, lib_dirs, files, "ntdll");
@@ -1160,7 +1173,7 @@ static void build(struct options* opts)
 	strarray_add(link_args, "-lc");
     }
 
-    if (opts->nodefaultlibs && is_pe) strarray_add( link_args, "-lgcc" );
+    if ((opts->nodefaultlibs || opts->shared) && is_pe) strarray_add( link_args, "-lgcc" );
 
     spawn(opts->prefix, link_args, 0);
     strarray_free (link_args);
