@@ -1,12 +1,15 @@
-wine-development (4.14-1) UNRELEASED; urgency=medium
+wine-development (4.14-1) unstable; urgency=medium
 
   * New upstream release 4.14, released Aug 16, 2019.
     - New version of the Mono engine with upstream updates.
     - PE dlls no longer rely on the MinGW runtime.
     - Exception handling fixes on ARM64.
     - Various bug fixes.
+  * Refresh patches.
+    Drop warnings/arm64-dword.patch, fixed upstream.
+  * Recommend or suggest gstreamer plugins (LP: #1817244).
 
- -- Jens Reyer <jre.winesim@gmail.com>  Wed, 18 Sep 2019 00:41:17 +0200
+ -- Jens Reyer <jre.winesim@gmail.com>  Wed, 18 Sep 2019 01:06:46 +0200
 
 wine-development (4.13-1) unstable; urgency=medium
 
