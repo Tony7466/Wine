@@ -49,7 +49,6 @@ type_t *make_type(enum type_type type)
     t->type_type = type;
     t->attrs = NULL;
     t->c_name = NULL;
-    t->orig = NULL;
     memset(&t->details, 0, sizeof(t->details));
     t->typestring_offset = 0;
     t->ptrdesc = 0;
@@ -59,7 +58,6 @@ type_t *make_type(enum type_type type)
     t->user_types_registered = FALSE;
     t->tfswrite = FALSE;
     t->checked = FALSE;
-    t->is_alias = FALSE;
     t->typelib_idx = -1;
     init_loc_info(&t->loc_info);
     return t;
@@ -137,7 +135,7 @@ type_t *type_new_function(var_list_t *args)
     if (args)
     {
         arg = LIST_ENTRY(list_head(args), var_t, entry);
-        if (list_count(args) == 1 && !arg->name && arg->type && type_get_type(arg->type) == TYPE_VOID)
+        if (list_count(args) == 1 && !arg->name && arg->declspec.type && type_get_type(arg->declspec.type) == TYPE_VOID)
         {
             list_remove(&arg->entry);
             free(arg);
@@ -147,7 +145,7 @@ type_t *type_new_function(var_list_t *args)
     }
     if (args) LIST_FOR_EACH_ENTRY(arg, args, var_t, entry)
     {
-        if (arg->type && type_get_type(arg->type) == TYPE_VOID)
+        if (arg->declspec.type && type_get_type(arg->declspec.type) == TYPE_VOID)
             error_loc("argument '%s' has void type\n", arg->name);
         if (!arg->name)
         {
@@ -174,7 +172,6 @@ type_t *type_new_function(var_list_t *args)
     t = make_type(TYPE_FUNCTION);
     t->details.function = xmalloc(sizeof(*t->details.function));
     t->details.function->args = args;
-    t->details.function->idx = -1;
     return t;
 }
 
@@ -182,21 +179,18 @@ type_t *type_new_pointer(unsigned char pointer_default, type_t *ref, attr_list_t
 {
     type_t *t = make_type(TYPE_POINTER);
     t->details.pointer.def_fc = pointer_default;
-    t->details.pointer.ref = ref;
+    t->details.pointer.ref.type = ref;
     t->attrs = attrs;
     return t;
 }
 
-type_t *type_new_alias(type_t *t, const char *name)
+type_t *type_new_alias(const decl_spec_t *t, const char *name)
 {
-    type_t *a = duptype(t, 0);
+    type_t *a = make_type(TYPE_ALIAS);
 
     a->name = xstrdup(name);
     a->attrs = NULL;
-    a->orig = t;
-    a->is_alias = TRUE;
-    /* for pointer types */
-    a->details = t->details;
+    a->details.alias.aliasee = *t;
     init_loc_info(&a->loc_info);
 
     return a;
@@ -223,7 +217,7 @@ type_t *type_new_coclass(char *name)
 }
 
 
-type_t *type_new_array(const char *name, type_t *element, int declptr,
+type_t *type_new_array(const char *name, const decl_spec_t *element, int declptr,
                        unsigned int dim, expr_t *size_is, expr_t *length_is,
                        unsigned char ptr_default_fc)
 {
@@ -235,7 +229,8 @@ type_t *type_new_array(const char *name, type_t *element, int declptr,
         t->details.array.size_is = size_is;
     else
         t->details.array.dim = dim;
-    t->details.array.elem = element;
+    if (element)
+        t->details.array.elem = *element;
     t->details.array.ptr_def_fc = ptr_default_fc;
     return t;
 }
@@ -354,7 +349,7 @@ type_t *type_new_encapsulated_union(char *name, var_t *switch_field, var_t *unio
 {
     type_t *t = get_type(TYPE_ENCAPSULATED_UNION, name, NULL, tsUNION);
     if (!union_field) union_field = make_var( xstrdup("tagged_union") );
-    union_field->type = type_new_nonencapsulated_union(NULL, TRUE, cases);
+    union_field->declspec.type = type_new_nonencapsulated_union(NULL, TRUE, cases);
     t->details.structure = xmalloc(sizeof(*t->details.structure));
     t->details.structure->fields = append_var( NULL, switch_field );
     t->details.structure->fields = append_var( t->details.structure->fields, union_field );
@@ -413,9 +408,9 @@ type_t *type_new_bitfield(type_t *field, const expr_t *bits)
     return t;
 }
 
-static int compute_method_indexes(type_t *iface)
+static unsigned int compute_method_indexes(type_t *iface)
 {
-    int idx;
+    unsigned int idx;
     statement_t *stmt;
 
     if (!iface->details.iface)
@@ -430,7 +425,7 @@ static int compute_method_indexes(type_t *iface)
     {
         var_t *func = stmt->u.var;
         if (!is_callas(func->attrs))
-            func->type->details.function->idx = idx++;
+            func->func_idx = idx++;
     }
 
     return idx;

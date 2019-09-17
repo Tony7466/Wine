@@ -29,6 +29,7 @@
 #include "config.h"
 #include "wine/port.h"
 
+#define __iob_func mingw___iob_func
 #include <stdarg.h>
 #include <stdio.h>
 #ifdef HAVE_UNISTD_H
@@ -780,9 +781,10 @@ static int msvcrt_int_to_base32_w(int num, MSVCRT_wchar_t *str)
 }
 
 /*********************************************************************
- *		__p__iob  (MSVCRT.@)
+ *		__iob_func  (MSVCRT.@)
  */
-MSVCRT_FILE * CDECL __p__iob(void)
+#undef __iob_func
+MSVCRT_FILE * CDECL __iob_func(void)
 {
  return &MSVCRT__iob[0];
 }

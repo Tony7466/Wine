@@ -1564,7 +1564,7 @@ fi
 
 dnl **** Check for pthread functions ****
 WINE_CHECK_LIB_FUNCS(\
-        pthread_getthreadid_np \
+        pthread_getthreadid_np,
         [$PTHREAD_LIBS])
 
 dnl **** Check for zlib ****
@@ -3673,6 +3673,7 @@ WINE_CONFIG_MAKEFILE(dlls/userenv)
 WINE_CONFIG_MAKEFILE(dlls/userenv/tests)
 WINE_CONFIG_MAKEFILE(dlls/usp10)
 WINE_CONFIG_MAKEFILE(dlls/usp10/tests)
+WINE_CONFIG_MAKEFILE(dlls/utildll)
 WINE_CONFIG_MAKEFILE(dlls/uuid)
 WINE_CONFIG_MAKEFILE(dlls/uxtheme)
 WINE_CONFIG_MAKEFILE(dlls/uxtheme/tests)
@@ -3765,6 +3766,7 @@ WINE_CONFIG_MAKEFILE(dlls/wintrust/tests)
 WINE_CONFIG_MAKEFILE(dlls/winusb)
 WINE_CONFIG_MAKEFILE(dlls/wlanapi)
 WINE_CONFIG_MAKEFILE(dlls/wlanapi/tests)
+WINE_CONFIG_MAKEFILE(dlls/wlanui)
 WINE_CONFIG_MAKEFILE(dlls/wldap32)
 WINE_CONFIG_MAKEFILE(dlls/wldap32/tests)
 WINE_CONFIG_MAKEFILE(dlls/wmasf)

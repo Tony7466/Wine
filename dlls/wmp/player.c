@@ -286,11 +286,18 @@ static HRESULT WINAPI WMPPlayer4_get_network(IWMPPlayer4 *iface, IWMPNetwork **p
     return S_OK;
 }
 
-static HRESULT WINAPI WMPPlayer4_get_currentPlaylist(IWMPPlayer4 *iface, IWMPPlaylist **ppPL)
+static HRESULT WINAPI WMPPlayer4_get_currentPlaylist(IWMPPlayer4 *iface, IWMPPlaylist **playlist)
 {
     WindowsMediaPlayer *This = impl_from_IWMPPlayer4(iface);
-    FIXME("(%p)->(%p)\n", This, ppPL);
-    return E_NOTIMPL;
+
+    TRACE("(%p)->(%p)\n", This, playlist);
+
+    *playlist = NULL;
+
+    if (This->playlist == NULL)
+        return S_FALSE;
+
+    return create_playlist(This->playlist->name, This->playlist->url, This->playlist->count, playlist);
 }
 
 static HRESULT WINAPI WMPPlayer4_put_currentPlaylist(IWMPPlayer4 *iface, IWMPPlaylist *pPL)
@@ -348,7 +355,8 @@ static HRESULT WINAPI WMPPlayer4_newPlaylist(IWMPPlayer4 *iface, BSTR name, BSTR
 
     TRACE("(%p)->(%s %s %p)\n", This, debugstr_w(name), debugstr_w(url), playlist);
 
-    return create_playlist(name, url, playlist);
+    /* FIXME: count should be the number of items in the playlist */
+    return create_playlist(name, url, 0, playlist);
 }
 
 static HRESULT WINAPI WMPPlayer4_newMedia(IWMPPlayer4 *iface, BSTR url, IWMPMedia **media)
@@ -1811,6 +1819,7 @@ static HRESULT WINAPI WMPMedia_put_name(IWMPMedia *iface, BSTR name)
 
     if (!name) return E_POINTER;
 
+    heap_free(This->name);
     This->name = heap_strdupW(name);
     return S_OK;
 }
@@ -2029,22 +2038,35 @@ static HRESULT WINAPI WMPPlaylist_Invoke(IWMPPlaylist *iface, DISPID dispIdMembe
 static HRESULT WINAPI WMPPlaylist_get_count(IWMPPlaylist *iface, LONG *count)
 {
     WMPPlaylist *This = impl_from_IWMPPlaylist(iface);
-    FIXME("(%p)->(%p)\n", This, count);
-    return E_NOTIMPL;
+
+    TRACE("(%p)->(%p)\n", This, count);
+
+    if (!count) return E_POINTER;
+    *count = This->count;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI WMPPlaylist_get_name(IWMPPlaylist *iface, BSTR *name)
 {
     WMPPlaylist *This = impl_from_IWMPPlaylist(iface);
-    FIXME("(%p)->(%p)\n", This, name);
-    return E_NOTIMPL;
+
+    TRACE("(%p)->(%p)\n", This, name);
+
+    return return_bstr(This->name, name);
 }
 
 static HRESULT WINAPI WMPPlaylist_put_name(IWMPPlaylist *iface, BSTR name)
 {
     WMPPlaylist *This = impl_from_IWMPPlaylist(iface);
-    FIXME("(%p)->(%s)\n", This, debugstr_w(name));
-    return E_NOTIMPL;
+
+    TRACE("(%p)->(%s)\n", This, debugstr_w(name));
+
+    if (!name) return E_POINTER;
+
+    heap_free(This->name);
+    This->name = heap_strdupW(name);
+    return S_OK;
 }
 
 static HRESULT WINAPI WMPPlaylist_get_attributeCount(IWMPPlaylist *iface, LONG *count)
@@ -2107,7 +2129,7 @@ static HRESULT WINAPI WMPPlaylist_appendItem(IWMPPlaylist *iface, IWMPMedia *med
 {
     WMPPlaylist *This = impl_from_IWMPPlaylist(iface);
     FIXME("(%p)->(%p)\n", This, media);
-    return E_NOTIMPL;
+    return S_OK;
 }
 
 static HRESULT WINAPI WMPPlaylist_removeItem(IWMPPlaylist *iface, IWMPMedia *media)
@@ -2197,6 +2219,8 @@ void unregister_player_msg_class(void) {
 BOOL init_player(WindowsMediaPlayer *wmp)
 {
     IWMPPlaylist *playlist;
+    BSTR name;
+    static const WCHAR nameW[] = {'P','l','a','y','l','i','s','t','1',0};
 
     InitOnceExecuteOnce(&class_init_once, register_player_msg_class, NULL, NULL);
     wmp->msg_window = CreateWindowW( MAKEINTRESOURCEW(player_msg_class), NULL, 0, 0,
@@ -2216,10 +2240,12 @@ BOOL init_player(WindowsMediaPlayer *wmp)
     wmp->IWMPControls_iface.lpVtbl = &WMPControlsVtbl;
     wmp->IWMPNetwork_iface.lpVtbl = &WMPNetworkVtbl;
 
-    if (SUCCEEDED(create_playlist(NULL, NULL, &playlist)))
+    name = SysAllocString(nameW);
+    if (SUCCEEDED(create_playlist(name, NULL, 0, &playlist)))
         wmp->playlist = unsafe_impl_from_IWMPPlaylist(playlist);
     else
         wmp->playlist = NULL;
+    SysFreeString(name);
 
     wmp->invoke_urls = VARIANT_TRUE;
     wmp->auto_start = VARIANT_TRUE;
@@ -2314,7 +2340,7 @@ HRESULT create_media_from_url(BSTR url, double duration, IWMPMedia **ppMedia)
     return E_OUTOFMEMORY;
 }
 
-HRESULT create_playlist(BSTR name, BSTR url, IWMPPlaylist **ppPlaylist)
+HRESULT create_playlist(BSTR name, BSTR url, LONG count, IWMPPlaylist **ppPlaylist)
 {
     WMPPlaylist *playlist;
 
@@ -2326,6 +2352,7 @@ HRESULT create_playlist(BSTR name, BSTR url, IWMPPlaylist **ppPlaylist)
     playlist->url = url ? heap_strdupW(url) : heap_strdupW(emptyW);
     playlist->name = name ? heap_strdupW(name) : heap_strdupW(emptyW);
     playlist->ref = 1;
+    playlist->count = count;
 
     if (playlist->url)
     {

@@ -90,6 +90,9 @@ DEFINE_EXPECT(global_success_i);
 DEFINE_EXPECT(global_notexists_d);
 DEFINE_EXPECT(global_propargput_d);
 DEFINE_EXPECT(global_propargput_i);
+DEFINE_EXPECT(global_propargputop_d);
+DEFINE_EXPECT(global_propargputop_get_i);
+DEFINE_EXPECT(global_propargputop_put_i);
 DEFINE_EXPECT(global_testargtypes_i);
 DEFINE_EXPECT(global_calleval_i);
 DEFINE_EXPECT(puredisp_prop_d);
@@ -151,6 +154,7 @@ DEFINE_EXPECT(BindHandler);
 #define DISPID_GLOBAL_BINDEVENTHANDLER 0x101d
 #define DISPID_GLOBAL_TESTENUMOBJ   0x101e
 #define DISPID_GLOBAL_CALLEVAL      0x101f
+#define DISPID_GLOBAL_PROPARGPUTOP  0x1020
 
 #define DISPID_GLOBAL_TESTPROPDELETE      0x2000
 #define DISPID_GLOBAL_TESTNOPROPDELETE    0x2001
@@ -928,6 +932,13 @@ static HRESULT WINAPI Global_GetDispID(IDispatchEx *iface, BSTR bstrName, DWORD 
         return S_OK;
     }
 
+    if(!strcmp_wa(bstrName, "propArgPutOp")) {
+        CHECK_EXPECT(global_propargputop_d);
+        test_grfdex(grfdex, fdexNameCaseSensitive);
+        *pid = DISPID_GLOBAL_PROPARGPUTOP;
+        return S_OK;
+    }
+
     if(!strcmp_wa(bstrName, "propArgPutO")) {
         CHECK_EXPECT(global_propargput_d);
         test_grfdex(grfdex, fdexNameEnsure|fdexNameCaseSensitive);
@@ -1386,6 +1397,55 @@ static HRESULT WINAPI Global_InvokeEx(IDispatchEx *iface, DISPID id, LCID lcid, 
         ok(V_I4(pdp->rgvarg+2) == 0, "V_I4(pdp->rgvarg+2) = %d\n", V_I4(pdp->rgvarg+2));
         return S_OK;
 
+    case DISPID_GLOBAL_PROPARGPUTOP:
+        ok(pdp != NULL, "pdp == NULL\n");
+        ok(pdp->rgvarg != NULL, "rgvarg != NULL\n");
+        ok(pei != NULL, "pei == NULL\n");
+
+        switch(wFlags) {
+        case INVOKE_PROPERTYGET | INVOKE_FUNC:
+            CHECK_EXPECT(global_propargputop_get_i);
+
+            ok(pdp->cNamedArgs == 0, "cNamedArgs = %d\n", pdp->cNamedArgs);
+            ok(!pdp->rgdispidNamedArgs, "rgdispidNamedArgs != NULL\n");
+            ok(pdp->cArgs == 2, "cArgs = %d\n", pdp->cArgs);
+            ok(pdp->cNamedArgs == 0, "cNamedArgs = %d\n", pdp->cNamedArgs);
+            ok(pvarRes != NULL, "pvarRes = NULL\n");
+
+            ok(V_VT(pdp->rgvarg) == VT_I4, "V_VT(pdp->rgvarg) = %d\n", V_VT(pdp->rgvarg));
+            ok(V_I4(pdp->rgvarg) == 1, "V_I4(pdp->rgvarg) = %d\n", V_I4(pdp->rgvarg));
+
+            ok(V_VT(pdp->rgvarg+1) == VT_I4, "V_VT(pdp->rgvarg+1) = %d\n", V_VT(pdp->rgvarg+1));
+            ok(V_I4(pdp->rgvarg+1) == 0, "V_I4(pdp->rgvarg+1) = %d\n", V_I4(pdp->rgvarg+1));
+
+            V_VT(pvarRes) = VT_I4;
+            V_I4(pvarRes) = 6;
+            break;
+        case INVOKE_PROPERTYPUT:
+            CHECK_EXPECT(global_propargputop_put_i);
+
+            ok(pdp->cNamedArgs == 1, "cNamedArgs = %d\n", pdp->cNamedArgs);
+            ok(pdp->rgdispidNamedArgs[0] == DISPID_PROPERTYPUT, "pdp->rgdispidNamedArgs[0] = %d\n", pdp->rgdispidNamedArgs[0]);
+            ok(pdp->rgdispidNamedArgs != NULL, "rgdispidNamedArgs == NULL\n");
+            ok(pdp->cArgs == 3, "cArgs = %d\n", pdp->cArgs);
+            ok(pdp->cNamedArgs == 1, "cNamedArgs = %d\n", pdp->cNamedArgs);
+            ok(!pvarRes, "pvarRes != NULL\n");
+
+            ok(V_VT(pdp->rgvarg) == VT_I4, "V_VT(pdp->rgvarg) = %d\n", V_VT(pdp->rgvarg));
+            ok(V_I4(pdp->rgvarg) == 8, "V_I4(pdp->rgvarg) = %d\n", V_I4(pdp->rgvarg));
+
+            ok(V_VT(pdp->rgvarg+1) == VT_I4, "V_VT(pdp->rgvarg+1) = %d\n", V_VT(pdp->rgvarg+1));
+            ok(V_I4(pdp->rgvarg+1) == 1, "V_I4(pdp->rgvarg+1) = %d\n", V_I4(pdp->rgvarg+1));
+
+            ok(V_VT(pdp->rgvarg+2) == VT_I4, "V_VT(pdp->rgvarg+2) = %d\n", V_VT(pdp->rgvarg+2));
+            ok(V_I4(pdp->rgvarg+2) == 0, "V_I4(pdp->rgvarg+2) = %d\n", V_I4(pdp->rgvarg+2));
+            break;
+        default:
+            ok(0, "wFlags = %x\n", wFlags);
+        }
+
+        return S_OK;
+
     case DISPID_GLOBAL_OBJECT_FLAG: {
         IDispatchEx *dispex;
         BSTR str;
@@ -1448,7 +1508,7 @@ static HRESULT WINAPI Global_InvokeEx(IDispatchEx *iface, DISPID id, LCID lcid, 
         return S_OK;
 
     case DISPID_GLOBAL_TESTARGTYPES: {
-        VARIANT args[8], v;
+        VARIANT args[10], v;
         DISPPARAMS dp = {args, NULL, ARRAY_SIZE(args), 0};
         HRESULT hres;
 
@@ -1491,7 +1551,11 @@ static HRESULT WINAPI Global_InvokeEx(IDispatchEx *iface, DISPID id, LCID lcid, 
         V_VT(args+6) = VT_R4;
         V_R4(args+6) = 0.5;
         V_VT(args+7) = VT_UI2;
-        V_R4(args+7) = 3;
+        V_UI2(args+7) = 3;
+        V_VT(args+8) = VT_UI1;
+        V_UI1(args+8) = 4;
+        V_VT(args+9) = VT_I1;
+        V_I1(args+9) = 5;
         V_VT(&v) = VT_I4;
         V_I4(&v) = 2;
         hres = IDispatch_Invoke(V_DISPATCH(pdp->rgvarg), DISPID_VALUE, &IID_NULL, 0, DISPATCH_METHOD, &dp, NULL, NULL, NULL);
@@ -2573,7 +2637,7 @@ static void test_eval(void)
     ok(script_disp != NULL, "script_disp == NULL\n");
 
     hres = IDispatch_QueryInterface(script_disp, &IID_IDispatchEx, (void**)&script_dispex);
-    ok(hres == S_OK, "Coult not get IDispatchEx iface: %08x\n", hres);
+    ok(hres == S_OK, "Could not get IDispatchEx iface: %08x\n", hres);
     IDispatch_Release(script_disp);
 
     str = a2bstr("eval");
@@ -2922,9 +2986,25 @@ static BOOL run_tests(void)
     CHECK_CALLED(global_propargput_d);
     CHECK_CALLED(global_propargput_i);
 
+    SET_EXPECT(global_propargputop_d);
+    SET_EXPECT(global_propargputop_get_i);
+    SET_EXPECT(global_propargputop_put_i);
+    parse_script_a("var t=0; propArgPutOp(t++, t++) += t++;");
+    CHECK_CALLED(global_propargputop_d);
+    CHECK_CALLED(global_propargputop_get_i);
+    CHECK_CALLED(global_propargputop_put_i);
+
+    SET_EXPECT(global_propargputop_d);
+    SET_EXPECT(global_propargputop_get_i);
+    SET_EXPECT(global_propargputop_put_i);
+    parse_script_a("var t=0; propArgPutOp(t++, t++) ^= 14;");
+    CHECK_CALLED(global_propargputop_d);
+    CHECK_CALLED(global_propargputop_get_i);
+    CHECK_CALLED(global_propargputop_put_i);
+
     SET_EXPECT(global_testargtypes_i);
     parse_script_a("testArgTypes(dispUnk, intProp(), intProp, getShort(), shortProp,"
-                   "function(ui2,r4,i4ref,ui4,nullunk,d,i,s) {"
+                   "function(i1,ui1,ui2,r4,i4ref,ui4,nullunk,d,i,s) {"
                    "    ok(getVT(i) === 'VT_I4', 'getVT(i) = ' + getVT(i));"
                    "    ok(getVT(s) === 'VT_I4', 'getVT(s) = ' + getVT(s));"
                    "    ok(getVT(d) === 'VT_DISPATCH', 'getVT(d) = ' + getVT(d));"
@@ -2937,6 +3017,10 @@ static BOOL run_tests(void)
                    "    ok(r4 === 0.5, 'r4 = ' + r4);"
                    "    ok(getVT(r4) === 'VT_R8', 'getVT(r4) = ' + getVT(r4));"
                    "    ok(getVT(ui2) === 'VT_I4', 'getVT(ui2) = ' + getVT(ui2));"
+                   "    ok(getVT(ui1) === 'VT_I4', 'getVT(ui1) = ' + getVT(ui1));"
+                   "    ok(ui1 === 4, 'ui1 = ' + ui1);"
+                   "    ok(getVT(i1) === 'VT_I4', 'getVT(i1) = ' + getVT(i1));"
+                   "    ok(i1 === 5, 'i1 = ' + i1);"
                    "});");
     CHECK_CALLED(global_testargtypes_i);
 

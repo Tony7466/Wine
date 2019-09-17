@@ -438,9 +438,9 @@ static NTSTATUS WINAPI dispatch_irp_completion( DEVICE_OBJECT *device, IRP *irp,
     {
         req->handle   = wine_server_obj_handle( irp_handle );
         req->status   = irp->IoStatus.u.Status;
-        if (irp->IoStatus.u.Status >= 0)
+        req->size     = irp->IoStatus.Information;
+        if (!NT_ERROR(irp->IoStatus.u.Status))
         {
-            req->size = irp->IoStatus.Information;
             if (out_buff) wine_server_add_data( req, out_buff, irp->IoStatus.Information );
         }
         status = wine_server_call( req );
@@ -2971,6 +2971,14 @@ PVOID WINAPI MmGetSystemRoutineAddress(PUNICODE_STRING SystemRoutineName)
     return pFunc;
 }
 
+/***********************************************************************
+ *           MmIsThisAnNtAsSystem   (NTOSKRNL.EXE.@)
+ */
+BOOLEAN WINAPI MmIsThisAnNtAsSystem(void)
+{
+    TRACE("\n");
+    return FALSE;
+}
 
 /***********************************************************************
  *           MmQuerySystemSize   (NTOSKRNL.EXE.@)
@@ -3781,6 +3789,25 @@ BOOLEAN WINAPI SeSinglePrivilegeCheck(LUID privilege, KPROCESSOR_MODE mode)
 {
     FIXME("stub: %08x%08x %u\n", privilege.HighPart, privilege.LowPart, mode);
     return TRUE;
+}
+
+/*********************************************************************
+ *           SePrivilegeCheck    (NTOSKRNL.@)
+ */
+BOOLEAN WINAPI SePrivilegeCheck(PRIVILEGE_SET *privileges, SECURITY_SUBJECT_CONTEXT *context, KPROCESSOR_MODE mode)
+{
+    FIXME("stub: %p %p %u\n", privileges, context, mode);
+    return TRUE;
+}
+
+/*********************************************************************
+ *           SeLocateProcessImageName    (NTOSKRNL.@)
+ */
+NTSTATUS WINAPI SeLocateProcessImageName(PEPROCESS process, UNICODE_STRING **image_name)
+{
+    FIXME("stub: %p %p\n", process, image_name);
+    if (image_name) *image_name = NULL;
+    return STATUS_NOT_IMPLEMENTED;
 }
 
 /*********************************************************************

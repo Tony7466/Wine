@@ -84,8 +84,6 @@ typedef struct
     DWORD dwReserved;
 } LOADPARMS32;
 
-static DWORD shutdown_flags = 0;
-static DWORD shutdown_priority = 0x280;
 static BOOL is_wow64;
 static const BOOL is_win64 = (sizeof(void *) > sizeof(int));
 
@@ -117,8 +115,6 @@ static WCHAR winevdm[] = {'C',':','\\','w','i','n','d','o','w','s',
 static const char * const cpu_names[] = { "x86", "x86_64", "PowerPC", "ARM", "ARM64" };
 
 static void exec_process( LPCWSTR name );
-
-extern void SHELL_LoadRegistry(void);
 
 /* return values for get_binary_info */
 enum binary_type
@@ -3115,34 +3111,6 @@ DWORD WINAPI LoadModule( LPCSTR name, LPVOID paramBlock )
 }
 
 
-/******************************************************************************
- *           TerminateProcess   (KERNEL32.@)
- *
- * Terminates a process.
- *
- * PARAMS
- *  handle    [I] Process to terminate.
- *  exit_code [I] Exit code.
- *
- * RETURNS
- *  Success: TRUE.
- *  Failure: FALSE, check GetLastError().
- */
-BOOL WINAPI TerminateProcess( HANDLE handle, DWORD exit_code )
-{
-    NTSTATUS status;
-
-    if (!handle)
-    {
-        SetLastError( ERROR_INVALID_HANDLE );
-        return FALSE;
-    }
-
-    status = NtTerminateProcess( handle, exit_code );
-    if (status) SetLastError( RtlNtStatusToDosError(status) );
-    return !status;
-}
-
 /***********************************************************************
  *           ExitProcess   (KERNEL32.@)
  *
@@ -3204,185 +3172,6 @@ BOOL WINAPI GetExitCodeProcess( HANDLE hProcess, LPDWORD lpExitCode )
 
 
 /***********************************************************************
- *           SetErrorMode   (KERNEL32.@)
- */
-UINT WINAPI SetErrorMode( UINT mode )
-{
-    UINT old;
-
-    NtQueryInformationProcess( GetCurrentProcess(), ProcessDefaultHardErrorMode,
-                               &old, sizeof(old), NULL );
-    NtSetInformationProcess( GetCurrentProcess(), ProcessDefaultHardErrorMode,
-                             &mode, sizeof(mode) );
-    return old;
-}
-
-/***********************************************************************
- *           GetErrorMode   (KERNEL32.@)
- */
-UINT WINAPI GetErrorMode( void )
-{
-    UINT mode;
-
-    NtQueryInformationProcess( GetCurrentProcess(), ProcessDefaultHardErrorMode,
-                               &mode, sizeof(mode), NULL );
-    return mode;
-}
-
-/**********************************************************************
- * TlsAlloc             [KERNEL32.@]
- *
- * Allocates a thread local storage index.
- *
- * RETURNS
- *    Success: TLS index.
- *    Failure: 0xFFFFFFFF
- */
-DWORD WINAPI TlsAlloc( void )
-{
-    DWORD index;
-    PEB * const peb = NtCurrentTeb()->Peb;
-
-    RtlAcquirePebLock();
-    index = RtlFindClearBitsAndSet( peb->TlsBitmap, 1, 1 );
-    if (index != ~0U) NtCurrentTeb()->TlsSlots[index] = 0; /* clear the value */
-    else
-    {
-        index = RtlFindClearBitsAndSet( peb->TlsExpansionBitmap, 1, 0 );
-        if (index != ~0U)
-        {
-            if (!NtCurrentTeb()->TlsExpansionSlots &&
-                !(NtCurrentTeb()->TlsExpansionSlots = HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY,
-                                         8 * sizeof(peb->TlsExpansionBitmapBits) * sizeof(void*) )))
-            {
-                RtlClearBits( peb->TlsExpansionBitmap, index, 1 );
-                index = ~0U;
-                SetLastError( ERROR_NOT_ENOUGH_MEMORY );
-            }
-            else
-            {
-                NtCurrentTeb()->TlsExpansionSlots[index] = 0; /* clear the value */
-                index += TLS_MINIMUM_AVAILABLE;
-            }
-        }
-        else SetLastError( ERROR_NO_MORE_ITEMS );
-    }
-    RtlReleasePebLock();
-    return index;
-}
-
-
-/**********************************************************************
- * TlsFree              [KERNEL32.@]
- *
- * Releases a thread local storage index, making it available for reuse.
- *
- * PARAMS
- *    index [in] TLS index to free.
- *
- * RETURNS
- *    Success: TRUE
- *    Failure: FALSE
- */
-BOOL WINAPI TlsFree( DWORD index )
-{
-    BOOL ret;
-
-    RtlAcquirePebLock();
-    if (index >= TLS_MINIMUM_AVAILABLE)
-    {
-        ret = RtlAreBitsSet( NtCurrentTeb()->Peb->TlsExpansionBitmap, index - TLS_MINIMUM_AVAILABLE, 1 );
-        if (ret) RtlClearBits( NtCurrentTeb()->Peb->TlsExpansionBitmap, index - TLS_MINIMUM_AVAILABLE, 1 );
-    }
-    else
-    {
-        ret = RtlAreBitsSet( NtCurrentTeb()->Peb->TlsBitmap, index, 1 );
-        if (ret) RtlClearBits( NtCurrentTeb()->Peb->TlsBitmap, index, 1 );
-    }
-    if (ret) NtSetInformationThread( GetCurrentThread(), ThreadZeroTlsCell, &index, sizeof(index) );
-    else SetLastError( ERROR_INVALID_PARAMETER );
-    RtlReleasePebLock();
-    return ret;
-}
-
-
-/**********************************************************************
- * TlsGetValue          [KERNEL32.@]
- *
- * Gets value in a thread's TLS slot.
- *
- * PARAMS
- *    index [in] TLS index to retrieve value for.
- *
- * RETURNS
- *    Success: Value stored in calling thread's TLS slot for index.
- *    Failure: 0 and GetLastError() returns NO_ERROR.
- */
-LPVOID WINAPI TlsGetValue( DWORD index )
-{
-    LPVOID ret;
-
-    if (index < TLS_MINIMUM_AVAILABLE)
-    {
-        ret = NtCurrentTeb()->TlsSlots[index];
-    }
-    else
-    {
-        index -= TLS_MINIMUM_AVAILABLE;
-        if (index >= 8 * sizeof(NtCurrentTeb()->Peb->TlsExpansionBitmapBits))
-        {
-            SetLastError( ERROR_INVALID_PARAMETER );
-            return NULL;
-        }
-        if (!NtCurrentTeb()->TlsExpansionSlots) ret = NULL;
-        else ret = NtCurrentTeb()->TlsExpansionSlots[index];
-    }
-    SetLastError( ERROR_SUCCESS );
-    return ret;
-}
-
-
-/**********************************************************************
- * TlsSetValue          [KERNEL32.@]
- *
- * Stores a value in the thread's TLS slot.
- *
- * PARAMS
- *    index [in] TLS index to set value for.
- *    value [in] Value to be stored.
- *
- * RETURNS
- *    Success: TRUE
- *    Failure: FALSE
- */
-BOOL WINAPI TlsSetValue( DWORD index, LPVOID value )
-{
-    if (index < TLS_MINIMUM_AVAILABLE)
-    {
-        NtCurrentTeb()->TlsSlots[index] = value;
-    }
-    else
-    {
-        index -= TLS_MINIMUM_AVAILABLE;
-        if (index >= 8 * sizeof(NtCurrentTeb()->Peb->TlsExpansionBitmapBits))
-        {
-            SetLastError( ERROR_INVALID_PARAMETER );
-            return FALSE;
-        }
-        if (!NtCurrentTeb()->TlsExpansionSlots &&
-            !(NtCurrentTeb()->TlsExpansionSlots = HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY,
-                         8 * sizeof(NtCurrentTeb()->Peb->TlsExpansionBitmapBits) * sizeof(void*) )))
-        {
-            SetLastError( ERROR_NOT_ENOUGH_MEMORY );
-            return FALSE;
-        }
-        NtCurrentTeb()->TlsExpansionSlots[index] = value;
-    }
-    return TRUE;
-}
-
-
-/***********************************************************************
  *           GetProcessFlags    (KERNEL32.@)
  */
 DWORD WINAPI GetProcessFlags( DWORD processid )
@@ -3400,79 +3189,6 @@ DWORD WINAPI GetProcessFlags( DWORD processid )
     if (!AreFileApisANSI()) flags |= PDB32_FILE_APIS_OEM;
     if (IsDebuggerPresent()) flags |= PDB32_DEBUGGED;
     return flags;
-}
-
-
-/*********************************************************************
- *           OpenProcess   (KERNEL32.@)
- *
- * Opens a handle to a process.
- *
- * PARAMS
- *  access  [I] Desired access rights assigned to the returned handle.
- *  inherit [I] Determines whether or not child processes will inherit the handle.
- *  id      [I] Process identifier of the process to get a handle to.
- *
- * RETURNS
- *  Success: Valid handle to the specified process.
- *  Failure: NULL, check GetLastError().
- */
-HANDLE WINAPI OpenProcess( DWORD access, BOOL inherit, DWORD id )
-{
-    NTSTATUS            status;
-    HANDLE              handle;
-    OBJECT_ATTRIBUTES   attr;
-    CLIENT_ID           cid;
-
-    cid.UniqueProcess = ULongToHandle(id);
-    cid.UniqueThread = 0; /* FIXME ? */
-
-    attr.Length = sizeof(OBJECT_ATTRIBUTES);
-    attr.RootDirectory = NULL;
-    attr.Attributes = inherit ? OBJ_INHERIT : 0;
-    attr.SecurityDescriptor = NULL;
-    attr.SecurityQualityOfService = NULL;
-    attr.ObjectName = NULL;
-
-    if (GetVersion() & 0x80000000) access = PROCESS_ALL_ACCESS;
-
-    status = NtOpenProcess(&handle, access, &attr, &cid);
-    if (status != STATUS_SUCCESS)
-    {
-        SetLastError( RtlNtStatusToDosError(status) );
-        return NULL;
-    }
-    return handle;
-}
-
-
-/*********************************************************************
- *           GetProcessId       (KERNEL32.@)
- *
- * Gets the a unique identifier of a process.
- *
- * PARAMS
- *  hProcess [I] Handle to the process.
- *
- * RETURNS
- *  Success: TRUE.
- *  Failure: FALSE, check GetLastError().
- *
- * NOTES
- *
- * The identifier is unique only on the machine and only until the process
- * exits (including system shutdown).
- */
-DWORD WINAPI GetProcessId( HANDLE hProcess )
-{
-    NTSTATUS status;
-    PROCESS_BASIC_INFORMATION pbi;
-
-    status = NtQueryInformationProcess(hProcess, ProcessBasicInformation, &pbi,
-                                       sizeof(pbi), NULL);
-    if (status == STATUS_SUCCESS) return pbi.UniqueProcessId;
-    SetLastError( RtlNtStatusToDosError(status) );
-    return 0;
 }
 
 
@@ -3634,75 +3350,6 @@ HANDLE WINAPI CreateSocketHandle(void)
 
 
 /***********************************************************************
- *           SetPriorityClass   (KERNEL32.@)
- */
-BOOL WINAPI SetPriorityClass( HANDLE hprocess, DWORD priorityclass )
-{
-    NTSTATUS                    status;
-    PROCESS_PRIORITY_CLASS      ppc;
-
-    ppc.Foreground = FALSE;
-    switch (priorityclass)
-    {
-    case IDLE_PRIORITY_CLASS:
-        ppc.PriorityClass = PROCESS_PRIOCLASS_IDLE; break;
-    case BELOW_NORMAL_PRIORITY_CLASS:
-        ppc.PriorityClass = PROCESS_PRIOCLASS_BELOW_NORMAL; break;
-    case NORMAL_PRIORITY_CLASS:
-        ppc.PriorityClass = PROCESS_PRIOCLASS_NORMAL; break;
-    case ABOVE_NORMAL_PRIORITY_CLASS:
-        ppc.PriorityClass = PROCESS_PRIOCLASS_ABOVE_NORMAL; break;
-    case HIGH_PRIORITY_CLASS:
-        ppc.PriorityClass = PROCESS_PRIOCLASS_HIGH; break;
-    case REALTIME_PRIORITY_CLASS:
-        ppc.PriorityClass = PROCESS_PRIOCLASS_REALTIME; break;
-    default:
-        SetLastError(ERROR_INVALID_PARAMETER);
-        return FALSE;
-    }
-
-    status = NtSetInformationProcess(hprocess, ProcessPriorityClass,
-                                     &ppc, sizeof(ppc));
-
-    if (status != STATUS_SUCCESS)
-    {
-        SetLastError( RtlNtStatusToDosError(status) );
-        return FALSE;
-    }
-    return TRUE;
-}
-
-
-/***********************************************************************
- *           GetPriorityClass   (KERNEL32.@)
- */
-DWORD WINAPI GetPriorityClass(HANDLE hProcess)
-{
-    NTSTATUS status;
-    PROCESS_BASIC_INFORMATION pbi;
-
-    status = NtQueryInformationProcess(hProcess, ProcessBasicInformation, &pbi,
-                                       sizeof(pbi), NULL);
-    if (status != STATUS_SUCCESS)
-    {
-        SetLastError( RtlNtStatusToDosError(status) );
-        return 0;
-    }
-    switch (pbi.BasePriority)
-    {
-    case PROCESS_PRIOCLASS_IDLE: return IDLE_PRIORITY_CLASS;
-    case PROCESS_PRIOCLASS_BELOW_NORMAL: return BELOW_NORMAL_PRIORITY_CLASS;
-    case PROCESS_PRIOCLASS_NORMAL: return NORMAL_PRIORITY_CLASS;
-    case PROCESS_PRIOCLASS_ABOVE_NORMAL: return ABOVE_NORMAL_PRIORITY_CLASS;
-    case PROCESS_PRIOCLASS_HIGH: return HIGH_PRIORITY_CLASS;
-    case PROCESS_PRIOCLASS_REALTIME: return REALTIME_PRIORITY_CLASS;
-    }
-    SetLastError( ERROR_INVALID_PARAMETER );
-    return 0;
-}
-
-
-/***********************************************************************
  *          SetProcessAffinityMask   (KERNEL32.@)
  */
 BOOL WINAPI SetProcessAffinityMask( HANDLE hProcess, DWORD_PTR affmask )
@@ -3743,17 +3390,6 @@ BOOL WINAPI GetProcessAffinityMask( HANDLE hProcess, PDWORD_PTR process_mask, PD
             *system_mask = info.ActiveProcessorsAffinityMask;
     }
     return !status;
-}
-
-
-/***********************************************************************
- *           SetProcessAffinityUpdateMode (KERNEL32.@)
- */
-BOOL WINAPI SetProcessAffinityUpdateMode( HANDLE process, DWORD flags )
-{
-    FIXME("(%p,0x%08x): stub\n", process, flags);
-    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
-    return FALSE;
 }
 
 
@@ -3813,30 +3449,6 @@ err:
 
 
 /***********************************************************************
- *		SetProcessWorkingSetSizeEx	[KERNEL32.@]
- * Sets the min/max working set sizes for a specified process.
- *
- * PARAMS
- *    process  [I] Handle to the process of interest
- *    minset   [I] Specifies minimum working set size
- *    maxset   [I] Specifies maximum working set size
- *    flags    [I] Flags to enforce working set sizes
- *
- * RETURNS
- *  Success: TRUE
- *  Failure: FALSE
- */
-BOOL WINAPI SetProcessWorkingSetSizeEx(HANDLE process, SIZE_T minset, SIZE_T maxset, DWORD flags)
-{
-    WARN("(%p,%ld,%ld,%x): stub - harmless\n", process, minset, maxset, flags);
-    if(( minset == (SIZE_T)-1) && (maxset == (SIZE_T)-1)) {
-        /* Trim the working set to zero */
-        /* Swap the process out of physical RAM */
-    }
-    return TRUE;
-}
-
-/***********************************************************************
  *		SetProcessWorkingSetSize	[KERNEL32.@]
  * Sets the min/max working set sizes for a specified process.
  *
@@ -3864,75 +3476,11 @@ BOOL WINAPI K32EmptyWorkingSet(HANDLE hProcess)
 
 
 /***********************************************************************
- *           GetProcessWorkingSetSizeEx    (KERNEL32.@)
- */
-BOOL WINAPI GetProcessWorkingSetSizeEx(HANDLE process, SIZE_T *minset,
-                                       SIZE_T *maxset, DWORD *flags)
-{
-    FIXME("(%p,%p,%p,%p): stub\n", process, minset, maxset, flags);
-    /* 32 MB working set size */
-    if (minset) *minset = 32*1024*1024;
-    if (maxset) *maxset = 32*1024*1024;
-    if (flags) *flags = QUOTA_LIMITS_HARDWS_MIN_DISABLE |
-                        QUOTA_LIMITS_HARDWS_MAX_DISABLE;
-    return TRUE;
-}
-
-
-/***********************************************************************
  *           GetProcessWorkingSetSize    (KERNEL32.@)
  */
 BOOL WINAPI GetProcessWorkingSetSize(HANDLE process, SIZE_T *minset, SIZE_T *maxset)
 {
     return GetProcessWorkingSetSizeEx(process, minset, maxset, NULL);
-}
-
-
-/***********************************************************************
- *           SetProcessShutdownParameters    (KERNEL32.@)
- */
-BOOL WINAPI SetProcessShutdownParameters(DWORD level, DWORD flags)
-{
-    FIXME("(%08x, %08x): partial stub.\n", level, flags);
-    shutdown_flags = flags;
-    shutdown_priority = level;
-    return TRUE;
-}
-
-
-/***********************************************************************
- * GetProcessShutdownParameters                 (KERNEL32.@)
- *
- */
-BOOL WINAPI GetProcessShutdownParameters( LPDWORD lpdwLevel, LPDWORD lpdwFlags )
-{
-    *lpdwLevel = shutdown_priority;
-    *lpdwFlags = shutdown_flags;
-    return TRUE;
-}
-
-
-/***********************************************************************
- *           GetProcessPriorityBoost    (KERNEL32.@)
- */
-BOOL WINAPI GetProcessPriorityBoost(HANDLE hprocess,PBOOL pDisablePriorityBoost)
-{
-    FIXME("(%p,%p): semi-stub\n", hprocess, pDisablePriorityBoost);
-    
-    /* Report that no boost is present.. */
-    *pDisablePriorityBoost = FALSE;
-    
-    return TRUE;
-}
-
-/***********************************************************************
- *           SetProcessPriorityBoost    (KERNEL32.@)
- */
-BOOL WINAPI SetProcessPriorityBoost(HANDLE hprocess,BOOL disableboost)
-{
-    FIXME("(%p,%d): stub\n",hprocess,disableboost);
-    /* Say we can do it. I doubt the program will notice that we don't. */
-    return TRUE;
 }
 
 
@@ -3960,18 +3508,6 @@ BOOL WINAPI WriteProcessMemory( HANDLE process, LPVOID addr, LPCVOID buffer, SIZ
 }
 
 
-/****************************************************************************
- *		FlushInstructionCache (KERNEL32.@)
- */
-BOOL WINAPI FlushInstructionCache(HANDLE hProcess, LPCVOID lpBaseAddress, SIZE_T dwSize)
-{
-    NTSTATUS status;
-    status = NtFlushInstructionCache( hProcess, lpBaseAddress, dwSize );
-    if (status) SetLastError( RtlNtStatusToDosError(status) );
-    return !status;
-}
-
-
 /******************************************************************
  *		GetProcessIoCounters (KERNEL32.@)
  */
@@ -3981,19 +3517,6 @@ BOOL WINAPI GetProcessIoCounters(HANDLE hProcess, PIO_COUNTERS ioc)
 
     status = NtQueryInformationProcess(hProcess, ProcessIoCounters, 
                                        ioc, sizeof(*ioc), NULL);
-    if (status) SetLastError( RtlNtStatusToDosError(status) );
-    return !status;
-}
-
-/******************************************************************
- *		GetProcessHandleCount (KERNEL32.@)
- */
-BOOL WINAPI GetProcessHandleCount(HANDLE hProcess, DWORD *cnt)
-{
-    NTSTATUS status;
-
-    status = NtQueryInformationProcess(hProcess, ProcessHandleCount,
-                                       cnt, sizeof(*cnt), NULL);
     if (status) SetLastError( RtlNtStatusToDosError(status) );
     return !status;
 }
@@ -4264,26 +3787,6 @@ DWORD WINAPI RegisterServiceProcess(DWORD dwProcessId, DWORD dwType)
 {
     /* I don't think that Wine needs to do anything in this function */
     return 1; /* success */
-}
-
-
-/**********************************************************************
- *           IsWow64Process         (KERNEL32.@)
- */
-BOOL WINAPI IsWow64Process(HANDLE hProcess, PBOOL Wow64Process)
-{
-    ULONG_PTR pbi;
-    NTSTATUS status;
-
-    status = NtQueryInformationProcess( hProcess, ProcessWow64Information, &pbi, sizeof(pbi), NULL );
-
-    if (status != STATUS_SUCCESS)
-    {
-        SetLastError( RtlNtStatusToDosError( status ) );
-        return FALSE;
-    }
-    *Wow64Process = (pbi != 0);
-    return TRUE;
 }
 
 
@@ -4610,135 +4113,6 @@ HRESULT WINAPI UnregisterApplicationRestart(void)
     return S_OK;
 }
 
-struct proc_thread_attr
-{
-    DWORD_PTR attr;
-    SIZE_T size;
-    void *value;
-};
-
-struct _PROC_THREAD_ATTRIBUTE_LIST
-{
-    DWORD mask;  /* bitmask of items in list */
-    DWORD size;  /* max number of items in list */
-    DWORD count; /* number of items in list */
-    DWORD pad;
-    DWORD_PTR unk;
-    struct proc_thread_attr attrs[1];
-};
-
-/***********************************************************************
- *           InitializeProcThreadAttributeList       (KERNEL32.@)
- */
-BOOL WINAPI InitializeProcThreadAttributeList(struct _PROC_THREAD_ATTRIBUTE_LIST *list,
-                                              DWORD count, DWORD flags, SIZE_T *size)
-{
-    SIZE_T needed;
-    BOOL ret = FALSE;
-
-    TRACE("(%p %d %x %p)\n", list, count, flags, size);
-
-    needed = FIELD_OFFSET(struct _PROC_THREAD_ATTRIBUTE_LIST, attrs[count]);
-    if (list && *size >= needed)
-    {
-        list->mask = 0;
-        list->size = count;
-        list->count = 0;
-        list->unk = 0;
-        ret = TRUE;
-    }
-    else
-        SetLastError(ERROR_INSUFFICIENT_BUFFER);
-
-    *size = needed;
-    return ret;
-}
-
-/***********************************************************************
- *           UpdateProcThreadAttribute       (KERNEL32.@)
- */
-BOOL WINAPI UpdateProcThreadAttribute(struct _PROC_THREAD_ATTRIBUTE_LIST *list,
-                                      DWORD flags, DWORD_PTR attr, void *value, SIZE_T size,
-                                      void *prev_ret, SIZE_T *size_ret)
-{
-    DWORD mask;
-    struct proc_thread_attr *entry;
-
-    TRACE("(%p %x %08lx %p %ld %p %p)\n", list, flags, attr, value, size, prev_ret, size_ret);
-
-    if (list->count >= list->size)
-    {
-        SetLastError(ERROR_GEN_FAILURE);
-        return FALSE;
-    }
-
-    switch (attr)
-    {
-    case PROC_THREAD_ATTRIBUTE_PARENT_PROCESS:
-        if (size != sizeof(HANDLE))
-        {
-            SetLastError(ERROR_BAD_LENGTH);
-            return FALSE;
-        }
-        break;
-
-    case PROC_THREAD_ATTRIBUTE_HANDLE_LIST:
-        if ((size / sizeof(HANDLE)) * sizeof(HANDLE) != size)
-        {
-            SetLastError(ERROR_BAD_LENGTH);
-            return FALSE;
-        }
-        break;
-
-    case PROC_THREAD_ATTRIBUTE_IDEAL_PROCESSOR:
-        if (size != sizeof(PROCESSOR_NUMBER))
-        {
-            SetLastError(ERROR_BAD_LENGTH);
-            return FALSE;
-        }
-        break;
-
-    case PROC_THREAD_ATTRIBUTE_CHILD_PROCESS_POLICY:
-       if (size != sizeof(DWORD) && size != sizeof(DWORD64))
-       {
-           SetLastError(ERROR_BAD_LENGTH);
-           return FALSE;
-       }
-       break;
-
-    case PROC_THREAD_ATTRIBUTE_MITIGATION_POLICY:
-        if (size != sizeof(DWORD) && size != sizeof(DWORD64) && size != sizeof(DWORD64) * 2)
-        {
-            SetLastError(ERROR_BAD_LENGTH);
-            return FALSE;
-        }
-        break;
-
-    default:
-        SetLastError(ERROR_NOT_SUPPORTED);
-        FIXME("Unhandled attribute number %lu\n", attr & PROC_THREAD_ATTRIBUTE_NUMBER);
-        return FALSE;
-    }
-
-    mask = 1 << (attr & PROC_THREAD_ATTRIBUTE_NUMBER);
-
-    if (list->mask & mask)
-    {
-        SetLastError(ERROR_OBJECT_NAME_EXISTS);
-        return FALSE;
-    }
-
-    list->mask |= mask;
-
-    entry = list->attrs + list->count;
-    entry->attr = attr;
-    entry->size = size;
-    entry->value = value;
-    list->count++;
-
-    return TRUE;
-}
-
 /***********************************************************************
  *           CreateUmsCompletionList   (KERNEL32.@)
  */
@@ -4757,14 +4131,6 @@ BOOL WINAPI CreateUmsThreadContext(PUMS_CONTEXT *ctx)
     FIXME( "%p: stub\n", ctx );
     SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
     return FALSE;
-}
-
-/***********************************************************************
- *           DeleteProcThreadAttributeList       (KERNEL32.@)
- */
-void WINAPI DeleteProcThreadAttributeList(struct _PROC_THREAD_ATTRIBUTE_LIST *list)
-{
-    return;
 }
 
 /***********************************************************************
@@ -4887,24 +4253,4 @@ BOOL WINAPI BaseFlushAppcompatCache(void)
     FIXME(": stub\n");
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
-}
-
-/**********************************************************************
- *           SetProcessMitigationPolicy     (KERNEL32.@)
- */
-BOOL WINAPI SetProcessMitigationPolicy(PROCESS_MITIGATION_POLICY policy, void *buffer, SIZE_T length)
-{
-    FIXME("(%d, %p, %lu): stub\n", policy, buffer, length);
-
-    return TRUE;
-}
-
-/**********************************************************************
- *           GetProcessMitigationPolicy     (KERNEL32.@)
- */
-BOOL WINAPI GetProcessMitigationPolicy(HANDLE hProcess, PROCESS_MITIGATION_POLICY policy, void *buffer, SIZE_T length)
-{
-    FIXME("(%p, %u, %p, %lu): stub\n", hProcess, policy, buffer, length);
-
-    return TRUE;
 }

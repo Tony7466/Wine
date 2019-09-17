@@ -2135,7 +2135,7 @@ static NTSTATUS open_dll_file( UNICODE_STRING *nt_name, WINE_MODREF **pwm,
             *module = NULL;
         }
         status = virtual_map_section( mapping, module, 0, 0, NULL, &len,
-                                      PAGE_EXECUTE_READ, image_info );
+                                      0, PAGE_EXECUTE_READ, image_info );
         if (status == STATUS_IMAGE_NOT_AT_BASE) status = STATUS_SUCCESS;
         NtClose( mapping );
     }
@@ -3227,7 +3227,7 @@ void* WINAPI LdrResolveDelayLoadedAPI( void* base, const IMAGE_DELAYLOAD_DESCRIP
     FARPROC fp;
     DWORD id;
 
-    FIXME("(%p, %p, %p, %p, %p, 0x%08x), partial stub\n", base, desc, dllhook, syshook, addr, flags);
+    TRACE( "(%p, %p, %p, %p, %p, 0x%08x)\n", base, desc, dllhook, syshook, addr, flags );
 
     phmod = get_rva(base, desc->ModuleHandleRVA);
     pIAT = get_rva(base, desc->ImportAddressTableRVA);

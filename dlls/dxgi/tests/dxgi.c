@@ -517,6 +517,16 @@ static void wait_vidpn_exclusive_ownership_(unsigned int line,
             "Got unexpected status %#x, expected %#x.\n", status, expected);
 }
 
+static HWND create_window(void)
+{
+    RECT r = {0, 0, 640, 480};
+
+    AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW | WS_VISIBLE, FALSE);
+
+    return CreateWindowA("static", "dxgi_test", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            0, 0, r.right - r.left, r.bottom - r.top, NULL, NULL, NULL, NULL);
+}
+
 static IDXGIAdapter *create_adapter(void)
 {
     IDXGIFactory4 *factory4;
@@ -2326,7 +2336,7 @@ static void test_set_fullscreen(IUnknown *device, BOOL is_d3d12)
 
     memset(&initial_state, 0, sizeof(initial_state));
     capture_fullscreen_state(&initial_state.fullscreen_state, swapchain_desc.OutputWindow);
-    hr = IDXGIFactory_CreateSwapChain(factory, (IUnknown *)device, &swapchain_desc, &swapchain);
+    hr = IDXGIFactory_CreateSwapChain(factory, device, &swapchain_desc, &swapchain);
     ok(SUCCEEDED(hr), "CreateSwapChain failed, hr %#x.\n", hr);
     hr = IDXGISwapChain_GetContainingOutput(swapchain, &output);
     ok(SUCCEEDED(hr) || broken(hr == DXGI_ERROR_UNSUPPORTED), /* Win 7 testbot */
@@ -2358,7 +2368,7 @@ static void test_set_fullscreen(IUnknown *device, BOOL is_d3d12)
     DestroyWindow(swapchain_desc.OutputWindow);
     swapchain_desc.OutputWindow = CreateWindowA("static", "dxgi_test", 0, 0, 0, 400, 200, 0, 0, 0, 0);
     check_window_fullscreen_state(swapchain_desc.OutputWindow, &initial_state.fullscreen_state);
-    hr = IDXGIFactory_CreateSwapChain(factory, (IUnknown *)device, &swapchain_desc, &swapchain);
+    hr = IDXGIFactory_CreateSwapChain(factory, device, &swapchain_desc, &swapchain);
     ok(SUCCEEDED(hr), "CreateSwapChain failed, hr %#x.\n", hr);
     check_swapchain_fullscreen_state(swapchain, &initial_state);
     test_swapchain_fullscreen_state(swapchain, adapter, &initial_state);
@@ -2368,7 +2378,7 @@ static void test_set_fullscreen(IUnknown *device, BOOL is_d3d12)
     DestroyWindow(swapchain_desc.OutputWindow);
     swapchain_desc.OutputWindow = CreateWindowA("static", "dxgi_test", 0, 0, 0, 400, 200, 0, 0, 0, 0);
     check_window_fullscreen_state(swapchain_desc.OutputWindow, &initial_state.fullscreen_state);
-    hr = IDXGIFactory_CreateSwapChain(factory, (IUnknown *)device, &swapchain_desc, &swapchain);
+    hr = IDXGIFactory_CreateSwapChain(factory, device, &swapchain_desc, &swapchain);
     ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDXGISwapChain_SetFullscreenState(swapchain, FALSE, NULL);
     ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
@@ -2384,7 +2394,7 @@ static void test_set_fullscreen(IUnknown *device, BOOL is_d3d12)
 
     swapchain_desc.OutputWindow = CreateWindowA("static", "dxgi_test", 0, 0, 0, 400, 200, 0, 0, 0, 0);
     check_window_fullscreen_state(swapchain_desc.OutputWindow, &initial_state.fullscreen_state);
-    hr = IDXGIFactory_CreateSwapChain(factory, (IUnknown *)device, &swapchain_desc, &swapchain);
+    hr = IDXGIFactory_CreateSwapChain(factory, device, &swapchain_desc, &swapchain);
     ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDXGISwapChain_SetFullscreenState(swapchain, TRUE, NULL);
     ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
@@ -2403,7 +2413,7 @@ static void test_set_fullscreen(IUnknown *device, BOOL is_d3d12)
     swapchain_desc.OutputWindow = CreateWindowA("static", "dxgi_test", 0, 0, 0, 400, 200, 0, 0, 0, 0);
     check_window_fullscreen_state(swapchain_desc.OutputWindow, &initial_state.fullscreen_state);
     swapchain_desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-    hr = IDXGIFactory_CreateSwapChain(factory, (IUnknown *)device, &swapchain_desc, &swapchain);
+    hr = IDXGIFactory_CreateSwapChain(factory, device, &swapchain_desc, &swapchain);
     ok(SUCCEEDED(hr), "CreateSwapChain failed, hr %#x.\n", hr);
     check_swapchain_fullscreen_state(swapchain, &initial_state);
     test_swapchain_fullscreen_state(swapchain, adapter, &initial_state);
@@ -2446,8 +2456,8 @@ static void test_default_fullscreen_target_output(void)
     hr = IDXGIAdapter_GetParent(adapter, &IID_IDXGIFactory, (void **)&factory);
     ok(SUCCEEDED(hr), "GetParent failed, hr %#x.\n", hr);
 
-    swapchain_desc.BufferDesc.Width = 100;
-    swapchain_desc.BufferDesc.Height = 100;
+    swapchain_desc.BufferDesc.Width = 640;
+    swapchain_desc.BufferDesc.Height = 480;
     swapchain_desc.BufferDesc.RefreshRate.Numerator = 60;
     swapchain_desc.BufferDesc.RefreshRate.Denominator = 60;
     swapchain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -2457,8 +2467,7 @@ static void test_default_fullscreen_target_output(void)
     swapchain_desc.SampleDesc.Quality = 0;
     swapchain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapchain_desc.BufferCount = 1;
-    swapchain_desc.OutputWindow = CreateWindowA("static", "dxgi_test",
-            WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, 100, 100, 0, 0, 0, 0);
+    swapchain_desc.OutputWindow = create_window();
     swapchain_desc.Windowed = TRUE;
     swapchain_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
     swapchain_desc.Flags = 0;
@@ -2751,7 +2760,7 @@ static void test_resize_target(IUnknown *device, BOOL is_d3d12)
         memset(&initial_state, 0, sizeof(initial_state));
         capture_fullscreen_state(&initial_state.fullscreen_state, swapchain_desc.OutputWindow);
 
-        hr = IDXGIFactory_CreateSwapChain(factory, (IUnknown *)device, &swapchain_desc, &swapchain);
+        hr = IDXGIFactory_CreateSwapChain(factory, device, &swapchain_desc, &swapchain);
         ok(SUCCEEDED(hr), "CreateSwapChain failed, hr %#x.\n", hr);
         check_swapchain_fullscreen_state(swapchain, &initial_state);
 
@@ -3488,8 +3497,7 @@ static void test_swapchain_resize(IUnknown *device, BOOL is_d3d12)
 
     get_factory(device, is_d3d12, &factory);
 
-    window = CreateWindowA("static", "dxgi_test", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-            0, 0, 640, 480, NULL, NULL, NULL, NULL);
+    window = create_window();
     ret = GetClientRect(window, &client_rect);
     ok(ret, "Failed to get client rect.\n");
 
@@ -3861,8 +3869,7 @@ static void test_swapchain_parameters(void)
         skip("Failed to create device.\n");
         return;
     }
-    window = CreateWindowA("static", "dxgi_test", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-            0, 0, 640, 480, 0, 0, 0, 0);
+    window = create_window();
 
     hr = IDXGIDevice_QueryInterface(device, &IID_IUnknown, (void **)&obj);
     ok(hr == S_OK, "IDXGIDevice does not implement IUnknown.\n");
@@ -4339,7 +4346,7 @@ static void test_swapchain_backbuffer_index(IUnknown *device, BOOL is_d3d12)
     swapchain_desc.SampleDesc.Quality = 0;
     swapchain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapchain_desc.BufferCount = 4;
-    swapchain_desc.OutputWindow = CreateWindowA("static", "dxgi_test", 0, 0, 0, 400, 200, 0, 0, 0, 0);
+    swapchain_desc.OutputWindow = create_window();
     swapchain_desc.Windowed = TRUE;
     swapchain_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
     swapchain_desc.Flags = 0;
@@ -4449,7 +4456,7 @@ static void test_swapchain_formats(IUnknown *device, BOOL is_d3d12)
     swapchain_desc.SampleDesc.Quality = 0;
     swapchain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapchain_desc.BufferCount = 4;
-    swapchain_desc.OutputWindow = CreateWindowA("static", "dxgi_test", 0, 0, 0, 400, 200, 0, 0, 0, 0);
+    swapchain_desc.OutputWindow = create_window();
     swapchain_desc.Windowed = TRUE;
     swapchain_desc.Flags = 0;
 
@@ -5208,8 +5215,8 @@ static void test_gamma_control(void)
     ok(hr == DXGI_ERROR_INVALID_CALL, "Got unexpected hr %#x.\n", hr);
     IDXGIOutput_Release(output);
 
-    swapchain_desc.BufferDesc.Width = 800;
-    swapchain_desc.BufferDesc.Height = 600;
+    swapchain_desc.BufferDesc.Width = 640;
+    swapchain_desc.BufferDesc.Height = 480;
     swapchain_desc.BufferDesc.RefreshRate.Numerator = 60;
     swapchain_desc.BufferDesc.RefreshRate.Denominator = 60;
     swapchain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -5219,7 +5226,7 @@ static void test_gamma_control(void)
     swapchain_desc.SampleDesc.Quality = 0;
     swapchain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapchain_desc.BufferCount = 1;
-    swapchain_desc.OutputWindow = CreateWindowA("static", "dxgi_test", 0, 0, 0, 400, 200, 0, 0, 0, 0);
+    swapchain_desc.OutputWindow = create_window();
     swapchain_desc.Windowed = TRUE;
     swapchain_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
     swapchain_desc.Flags = 0;

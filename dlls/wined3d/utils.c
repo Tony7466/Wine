@@ -5392,8 +5392,8 @@ void get_modelview_matrix(const struct wined3d_context *context, const struct wi
 void get_projection_matrix(const struct wined3d_context *context, const struct wined3d_state *state,
         struct wined3d_matrix *mat)
 {
-    BOOL clip_control = context->gl_info->supported[ARB_CLIP_CONTROL];
-    BOOL flip = !clip_control && context->render_offscreen;
+    const struct wined3d_d3d_info *d3d_info = context->d3d_info;
+    BOOL clip_control, flip;
     float center_offset;
 
     /* There are a couple of additional things we have to take into account
@@ -5411,7 +5411,9 @@ void get_projection_matrix(const struct wined3d_context *context, const struct w
      * driver, but small enough to prevent it from interfering with any
      * anti-aliasing. */
 
-    if (!clip_control && context->d3d_info->wined3d_creation_flags & WINED3D_PIXEL_CENTER_INTEGER)
+    clip_control = d3d_info->clip_control;
+    flip = !clip_control && context->render_offscreen;
+    if (!clip_control && d3d_info->wined3d_creation_flags & WINED3D_PIXEL_CENTER_INTEGER)
         center_offset = 63.0f / 64.0f;
     else
         center_offset = -1.0f / 64.0f;
@@ -5909,13 +5911,6 @@ void multiply_matrix(struct wined3d_matrix *dst, const struct wined3d_matrix *sr
     *dst = tmp;
 }
 
-unsigned int wined3d_max_compat_varyings(const struct wined3d_gl_info *gl_info)
-{
-    /* On core profile we have to also count diffuse and specular colors and the
-     * fog coordinate. */
-    return gl_info->supported[WINED3D_GL_LEGACY_CONTEXT] ? WINED3D_MAX_TEXTURES * 4 : (WINED3D_MAX_TEXTURES + 2) * 4 + 1;
-}
-
 void gen_ffp_frag_op(const struct wined3d_context *context, const struct wined3d_state *state,
         struct ffp_frag_settings *settings, BOOL ignore_textype)
 {
@@ -5955,7 +5950,6 @@ void gen_ffp_frag_op(const struct wined3d_context *context, const struct wined3d
     unsigned int i;
     DWORD ttff;
     DWORD cop, aop, carg0, carg1, carg2, aarg0, aarg1, aarg2;
-    const struct wined3d_gl_info *gl_info = context->gl_info;
     const struct wined3d_d3d_info *d3d_info = context->d3d_info;
 
     settings->padding = 0;
@@ -6167,7 +6161,7 @@ void gen_ffp_frag_op(const struct wined3d_context *context, const struct wined3d
                 break;
         }
     }
-    settings->sRGB_write = !gl_info->supported[ARB_FRAMEBUFFER_SRGB] && needs_srgb_write(context, state, state->fb);
+    settings->sRGB_write = !d3d_info->srgb_write_control && needs_srgb_write(context, state, state->fb);
     if (d3d_info->vs_clipping || !use_vs(state) || !state->render_states[WINED3D_RS_CLIPPING]
             || !state->render_states[WINED3D_RS_CLIPPLANEENABLE])
     {
@@ -6194,8 +6188,7 @@ void gen_ffp_frag_op(const struct wined3d_context *context, const struct wined3d
      * Reading uninitialized varyings on core profile contexts results in an
      * error while with builtin varyings on legacy contexts you get undefined
      * behavior. */
-    if (d3d_info->limits.varying_count
-            && d3d_info->limits.varying_count < wined3d_max_compat_varyings(gl_info))
+    if (d3d_info->limits.varying_count && !d3d_info->full_ffp_varyings)
     {
         settings->texcoords_initialized = 0;
         for (i = 0; i < WINED3D_MAX_TEXTURES; ++i)
@@ -6224,7 +6217,7 @@ void gen_ffp_frag_op(const struct wined3d_context *context, const struct wined3d
     settings->pointsprite = state->render_states[WINED3D_RS_POINTSPRITEENABLE]
             && state->gl_primitive_type == GL_POINTS;
 
-    if (gl_info->supported[WINED3D_GL_LEGACY_CONTEXT])
+    if (d3d_info->ffp_alpha_test)
         settings->alpha_test_func = WINED3D_CMP_ALWAYS - 1;
     else
         settings->alpha_test_func = (state->render_states[WINED3D_RS_ALPHATESTENABLE]
@@ -6347,20 +6340,22 @@ void texture_activate_dimensions(struct wined3d_texture *texture, const struct w
 /* Context activation is done by the caller (state handler). */
 void sampler_texdim(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
 {
+    struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     unsigned int sampler = state_id - STATE_SAMPLER(0);
-    unsigned int mapped_stage = wined3d_context_gl(context)->tex_unit_map[sampler];
+    unsigned int mapped_stage;
 
     /* No need to enable / disable anything here for unused samplers. The
      * tex_colorop handler takes care. Also no action is needed with pixel
      * shaders, or if tex_colorop will take care of this business. */
-    if (mapped_stage == WINED3D_UNMAPPED_STAGE || mapped_stage >= context->gl_info->limits.textures)
+    mapped_stage = context_gl->tex_unit_map[sampler];
+    if (mapped_stage == WINED3D_UNMAPPED_STAGE || mapped_stage >= context_gl->gl_info->limits.textures)
         return;
     if (sampler >= context->lowest_disabled_stage)
         return;
     if (isStateDirty(context, STATE_TEXTURESTAGE(sampler, WINED3D_TSS_COLOR_OP)))
         return;
 
-    texture_activate_dimensions(state->textures[sampler], context->gl_info);
+    texture_activate_dimensions(state->textures[sampler], context_gl->gl_info);
 }
 
 int wined3d_ffp_frag_program_key_compare(const void *key, const struct wine_rb_entry *entry)
@@ -6376,7 +6371,6 @@ void wined3d_ffp_get_vs_settings(const struct wined3d_context *context,
 {
     enum wined3d_material_color_source diffuse_source, emissive_source, ambient_source, specular_source;
     const struct wined3d_stream_info *si = &context->stream_info;
-    const struct wined3d_gl_info *gl_info = context->gl_info;
     const struct wined3d_d3d_info *d3d_info = context->d3d_info;
     unsigned int coord_idx, i;
 
@@ -6401,7 +6395,7 @@ void wined3d_ffp_get_vs_settings(const struct wined3d_context *context,
                 settings->texcoords |= 1u << i;
             settings->texgen[i] = state->texture_states[i][WINED3D_TSS_TEXCOORD_INDEX];
         }
-        if (d3d_info->limits.varying_count >= wined3d_max_compat_varyings(gl_info))
+        if (d3d_info->full_ffp_varyings)
             settings->texcoords = (1u << WINED3D_MAX_TEXTURES) - 1;
 
         if (d3d_info->emulated_flatshading)
@@ -6450,7 +6444,7 @@ void wined3d_ffp_get_vs_settings(const struct wined3d_context *context,
             settings->texcoords |= 1u << i;
         settings->texgen[i] = state->texture_states[i][WINED3D_TSS_TEXCOORD_INDEX];
     }
-    if (d3d_info->limits.varying_count >= wined3d_max_compat_varyings(gl_info))
+    if (d3d_info->full_ffp_varyings)
         settings->texcoords = (1u << WINED3D_MAX_TEXTURES) - 1;
 
     for (i = 0; i < WINED3D_MAX_ACTIVE_LIGHTS; ++i)
