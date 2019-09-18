@@ -1,3 +1,14 @@
+wine-development (4.15-1) UNRELEASED; urgency=medium
+
+  * New upstream release 4.15, released Aug 30, 2019.
+    - Initial implementation of the HTTP service.
+    - Stack unwinding support on ARM64.
+    - Better multi-monitor support on macOS.
+    - RichEdit control optimizations.
+    - Various bug fixes.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Wed, 18 Sep 2019 19:47:59 +0200
+
 wine-development (4.14-1) unstable; urgency=medium
 
   * New upstream release 4.14, released Aug 16, 2019.
