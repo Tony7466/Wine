@@ -144,7 +144,7 @@ typedef struct QTInPin {
 } QTInPin;
 
 typedef struct QTSplitter {
-    BaseFilter filter;
+    struct strmbase_filter filter;
 
     QTInPin pInputPin;
     QTOutPin *pVideo_Pin;
@@ -188,7 +188,7 @@ static inline QTSplitter *impl_from_IMediaSeeking( IMediaSeeking *iface )
     return CONTAINING_RECORD(iface, QTSplitter, sourceSeeking.IMediaSeeking_iface);
 }
 
-static inline QTSplitter *impl_from_BaseFilter( BaseFilter *iface )
+static inline QTSplitter *impl_from_strmbase_filter(struct strmbase_filter *iface)
 {
     return CONTAINING_RECORD(iface, QTSplitter, filter);
 }
@@ -202,9 +202,9 @@ static inline QTSplitter *impl_from_IBaseFilter( IBaseFilter *iface )
  * Base Filter
  */
 
-static IPin *qt_splitter_get_pin(BaseFilter *base, unsigned int index)
+static IPin *qt_splitter_get_pin(struct strmbase_filter *base, unsigned int index)
 {
-    QTSplitter *filter = impl_from_BaseFilter(base);
+    QTSplitter *filter = impl_from_strmbase_filter(base);
 
     if (index == 0)
         return &filter->pInputPin.pin.IPin_iface;
@@ -221,9 +221,9 @@ static IPin *qt_splitter_get_pin(BaseFilter *base, unsigned int index)
     return NULL;
 }
 
-static void qt_splitter_destroy(BaseFilter *iface)
+static void qt_splitter_destroy(struct strmbase_filter *iface)
 {
-    QTSplitter *filter = impl_from_BaseFilter(iface);
+    QTSplitter *filter = impl_from_strmbase_filter(iface);
     IPin *peer = NULL;
 
     EnterCriticalSection(&filter->csReceive);
@@ -278,7 +278,8 @@ static void qt_splitter_destroy(BaseFilter *iface)
     CoTaskMemFree(filter);
 }
 
-static const BaseFilterFuncTable BaseFuncTable = {
+static const struct strmbase_filter_ops filter_ops =
+{
     .filter_get_pin = qt_splitter_get_pin,
     .filter_destroy = qt_splitter_destroy,
 };
@@ -301,8 +302,7 @@ IUnknown * CALLBACK QTSplitter_create(IUnknown *outer, HRESULT *phr)
     }
     ZeroMemory(This,sizeof(*This));
 
-    strmbase_filter_init(&This->filter, &QT_Vtbl, outer, &CLSID_QTSplitter,
-            (DWORD_PTR)(__FILE__ ": QTSplitter.csFilter"), &BaseFuncTable);
+    strmbase_filter_init(&This->filter, &QT_Vtbl, outer, &CLSID_QTSplitter, &filter_ops);
 
     InitializeCriticalSection(&This->csReceive);
     This->csReceive.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__": QTSplitter.csReceive");

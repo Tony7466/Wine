@@ -470,8 +470,19 @@ BOOL WINAPI DECLSPEC_HOTPATCH SetThreadPriorityBoost( HANDLE thread, BOOL disabl
  */
 BOOL WINAPI DECLSPEC_HOTPATCH SetThreadStackGuarantee( ULONG *size )
 {
-    static int once;
-    if (once++ == 0) FIXME("(%p): stub\n", size);
+    ULONG prev_size = NtCurrentTeb()->GuaranteedStackBytes;
+    ULONG new_size = (*size + 4095) & ~4095;
+
+    /* at least 2 pages on 64-bit */
+    if (sizeof(void *) > sizeof(int)) new_size = max( new_size, 8192 );
+
+    *size = prev_size;
+    if (new_size >= (char *)NtCurrentTeb()->Tib.StackBase - (char *)NtCurrentTeb()->DeallocationStack)
+    {
+        SetLastError( ERROR_INVALID_PARAMETER );
+        return FALSE;
+    }
+    if (new_size > prev_size) NtCurrentTeb()->GuaranteedStackBytes = (new_size + 4095) & ~4095;
     return TRUE;
 }
 
@@ -1073,7 +1084,7 @@ PTP_CLEANUP_GROUP WINAPI DECLSPEC_HOTPATCH CreateThreadpoolCleanupGroup(void)
 /***********************************************************************
  *           CreateThreadpoolIo   (kernelbase.@)
  */
-PTP_IO WINAPI DECLSPEC_HOTPATCH CreateThreadpoolIo( HANDLE handle, PTP_WIN32_IO_CALLBACK callback,
+PTP_IO WINAPI /* DECLSPEC_HOTPATCH */ CreateThreadpoolIo( HANDLE handle, PTP_WIN32_IO_CALLBACK callback,
                                                     PVOID userdata, TP_CALLBACK_ENVIRON *environment )
 {
     FIXME( "(%p, %p, %p, %p): stub\n", handle, callback, userdata, environment );

@@ -528,6 +528,9 @@ static HRESULT Global_CStr(vbdisp_t *This, VARIANT *arg, unsigned args_cnt, VARI
 
     TRACE("%s\n", debugstr_variant(arg));
 
+    if(V_VT(arg) == VT_NULL)
+        return MAKE_VBSERROR(VBSE_ILLEGAL_NULL_USE);
+
     hres = to_string(arg, &str);
     if(FAILED(hres))
         return hres;
@@ -624,16 +627,19 @@ static HRESULT Global_Oct(vbdisp_t *This, VARIANT *arg, unsigned args_cnt, VARIA
 
 static HRESULT Global_VarType(vbdisp_t *This, VARIANT *arg, unsigned args_cnt, VARIANT *res)
 {
+    VARTYPE vt;
+
     TRACE("(%s)\n", debugstr_variant(arg));
 
     assert(args_cnt == 1);
 
-    if(V_VT(arg) & ~VT_TYPEMASK) {
+    vt = V_VT(arg) & ~VT_BYREF;
+    if(vt & ~(VT_TYPEMASK | VT_ARRAY)) {
         FIXME("not supported %s\n", debugstr_variant(arg));
         return E_NOTIMPL;
     }
 
-    return return_short(res, V_VT(arg));
+    return return_short(res, vt);
 }
 
 static HRESULT Global_IsDate(vbdisp_t *This, VARIANT *arg, unsigned args_cnt, VARIANT *res)
@@ -1371,8 +1377,32 @@ static HRESULT Global_ChrB(vbdisp_t *This, VARIANT *arg, unsigned args_cnt, VARI
 
 static HRESULT Global_Asc(vbdisp_t *This, VARIANT *arg, unsigned args_cnt, VARIANT *res)
 {
-    FIXME("\n");
-    return E_NOTIMPL;
+    BSTR conv_str = NULL, str;
+    HRESULT hres = S_OK;
+
+    TRACE("(%s)\n", debugstr_variant(arg));
+
+    switch(V_VT(arg)) {
+    case VT_NULL:
+        return MAKE_VBSERROR(VBSE_ILLEGAL_NULL_USE);
+    case VT_EMPTY:
+        return MAKE_VBSERROR(VBSE_ILLEGAL_FUNC_CALL);
+    case VT_BSTR:
+        str = V_BSTR(arg);
+        break;
+    default:
+        hres = to_string(arg, &conv_str);
+        if(FAILED(hres))
+            return hres;
+        str = conv_str;
+    }
+
+    if(!SysStringLen(str) || *str >= 0x100)
+        hres = MAKE_VBSERROR(VBSE_ILLEGAL_FUNC_CALL);
+    else if(res)
+        hres = return_short(res, *str);
+    SysFreeString(conv_str);
+    return hres;
 }
 
 /* The function supports only single-byte and double-byte character sets. It

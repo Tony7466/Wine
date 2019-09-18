@@ -82,6 +82,7 @@ AC_ARG_WITH(sane,      AS_HELP_STRING([--without-sane],[do not use SANE (scanner
 AC_ARG_WITH(sdl,       AS_HELP_STRING([--without-sdl],[do not use SDL]))
 AC_ARG_WITH(tiff,      AS_HELP_STRING([--without-tiff],[do not use TIFF]))
 AC_ARG_WITH(udev,      AS_HELP_STRING([--without-udev],[do not use udev (plug and play support)]))
+AC_ARG_WITH(unwind,    AS_HELP_STRING([--without-unwind],[do not use the libunwind library (exception handling)]))
 AC_ARG_WITH(v4l2,      AS_HELP_STRING([--without-v4l2],[do not use v4l2 (video capture)]))
 AC_ARG_WITH(vkd3d,     AS_HELP_STRING([--without-vkd3d],[do not use vkd3d (Direct3D 12 support)]))
 AC_ARG_WITH(vulkan,    AS_HELP_STRING([--without-vulkan],[do not use Vulkan]))
@@ -161,6 +162,7 @@ case $host in
       PKG_CONFIG_PATH=${PKG_CONFIG_PATH:-/usr/lib/i386-linux-gnu/pkgconfig:/usr/lib/pkgconfig}
       export PKG_CONFIG_PATH
       enable_win16=${enable_win16:-yes}
+      with_unwind=${with_unwind:-no}
     else
       if test "x${GCC}" = "xyes"
       then
@@ -214,6 +216,7 @@ case $host in
     ;;
   i[[3456789]]86*)
     enable_win16=${enable_win16:-yes}
+    with_unwind=${with_unwind:-no}
     ;;
 esac
 
@@ -407,8 +410,6 @@ dnl **** Check for some libraries ****
 
 dnl Check for -li386 for NetBSD and OpenBSD
 AC_CHECK_LIB(i386,i386_set_ldt)
-dnl Check for -lossaudio for NetBSD
-AC_CHECK_LIB(ossaudio,_oss_ioctl)
 
 AC_SUBST(OPENGL_LIBS,"")
 
@@ -743,7 +744,6 @@ case $host_os in
     ;;
 
   darwin*|macosx*)
-    AC_CHECK_HEADERS(libunwind.h)
     AC_LANG_PUSH([Objective C])
         AC_CHECK_HEADERS(Metal/Metal.h)
     AC_LANG_POP([Objective C])
@@ -1655,8 +1655,10 @@ then
     CPPFLAGS="$CPPFLAGS $ac_oss_incl"
     AC_CHECK_HEADER([sys/soundcard.h],
         [AC_CHECK_MEMBERS([oss_sysinfo.numaudioengines],
-                          [AC_SUBST(OSS4_CFLAGS,"$ac_oss_incl")],,
-                          [#include <sys/soundcard.h>])])
+            [AC_SUBST(OSS4_CFLAGS,"$ac_oss_incl")
+             AC_CHECK_LIB(ossaudio,_oss_ioctl,
+                 [AC_SUBST(OSS4_LIBS,"-lossaudio")])],,
+            [#include <sys/soundcard.h>])])
     CPPFLAGS="$ac_save_CPPFLAGS"
 fi
 WINE_NOTICE_WITH(oss,[test "x$ac_cv_member_oss_sysinfo_numaudioengines" != xyes],
@@ -1675,6 +1677,39 @@ then
 fi
 WINE_NOTICE_WITH(udev,[test "x$UDEV_LIBS" = "x"],
                  [libudev ${notice_platform}development files not found, plug and play won't be supported.])
+
+dnl **** Check for libuwind ****
+if test "x$with_unwind" != xno
+then
+    WINE_PACKAGE_FLAGS(UNWIND,[libunwind],[-lunwind],,,
+       [AC_CACHE_CHECK([for unw_getcontext],wine_cv_have_unw_getcontext,
+           [AC_LINK_IFELSE([AC_LANG_PROGRAM([[#define UNW_LOCAL_ONLY
+#include <libunwind.h>]],
+                [[unw_context_t context; unw_getcontext( &context );]])],
+                [wine_cv_have_unw_getcontext="yes"],[wine_cv_have_unw_getcontext="no"])])
+        if test "$wine_cv_have_unw_getcontext" = no -a -n "$UNWIND_LIBS"
+        then
+            save_libs=$LIBS
+            LIBS="$UNWIND_LIBS $LIBS"
+            AC_CACHE_CHECK([for unw_getcontext in libunwind],wine_cv_have_libunwind_unw_getcontext,
+               [AC_LINK_IFELSE([AC_LANG_PROGRAM([[#define UNW_LOCAL_ONLY
+#include <libunwind.h>]],
+                    [[unw_context_t context; unw_getcontext( &context );]])],
+                    [wine_cv_have_libunwind_unw_getcontext="yes"],
+                    [wine_cv_have_libunwind_unw_getcontext="no"])])
+            test "$wine_cv_have_libunwind_unw_getcontext" = yes || UNWIND_LIBS=""
+            LIBS=$save_libs
+        fi
+        if test "x$wine_cv_have_unw_getcontext$wine_cv_have_libunwind_unw_getcontext" != xnono
+        then
+            AC_DEFINE(HAVE_LIBUNWIND,1,[Define to 1 if you have the `unwind' library (-lunwind).])
+        fi])
+fi
+case $host in
+  aarch64*|*-darwin*)
+    WINE_NOTICE_WITH(unwind,[test "x$wine_cv_have_unw_getcontext$wine_cv_have_libunwind_unw_getcontext" != xnono],
+                     [libunwind ${notice_platform}development files not found, stack unwinding won't work.]) ;;
+esac
 
 dnl **** Check for libSDL2 ****
 if test "x$with_sdl" != "xno"
@@ -3290,6 +3325,7 @@ WINE_CONFIG_MAKEFILE(dlls/hlink)
 WINE_CONFIG_MAKEFILE(dlls/hlink/tests)
 WINE_CONFIG_MAKEFILE(dlls/hnetcfg)
 WINE_CONFIG_MAKEFILE(dlls/hnetcfg/tests)
+WINE_CONFIG_MAKEFILE(dlls/http.sys)
 WINE_CONFIG_MAKEFILE(dlls/httpapi)
 WINE_CONFIG_MAKEFILE(dlls/httpapi/tests)
 WINE_CONFIG_MAKEFILE(dlls/iccvid)
@@ -3357,6 +3393,8 @@ WINE_CONFIG_MAKEFILE(dlls/mf)
 WINE_CONFIG_MAKEFILE(dlls/mf/tests)
 WINE_CONFIG_MAKEFILE(dlls/mf3216)
 WINE_CONFIG_MAKEFILE(dlls/mferror)
+WINE_CONFIG_MAKEFILE(dlls/mfmediaengine)
+WINE_CONFIG_MAKEFILE(dlls/mfmediaengine/tests)
 WINE_CONFIG_MAKEFILE(dlls/mfplat)
 WINE_CONFIG_MAKEFILE(dlls/mfplat/tests)
 WINE_CONFIG_MAKEFILE(dlls/mfplay)
@@ -3859,6 +3897,7 @@ WINE_CONFIG_MAKEFILE(programs/explorer)
 WINE_CONFIG_MAKEFILE(programs/extrac32)
 WINE_CONFIG_MAKEFILE(programs/fc)
 WINE_CONFIG_MAKEFILE(programs/find)
+WINE_CONFIG_MAKEFILE(programs/find/tests)
 WINE_CONFIG_MAKEFILE(programs/findstr)
 WINE_CONFIG_MAKEFILE(programs/fsutil)
 WINE_CONFIG_MAKEFILE(programs/hh)
@@ -3889,6 +3928,7 @@ WINE_CONFIG_MAKEFILE(programs/reg/tests)
 WINE_CONFIG_MAKEFILE(programs/regasm)
 WINE_CONFIG_MAKEFILE(programs/regedit)
 WINE_CONFIG_MAKEFILE(programs/regedit/tests)
+WINE_CONFIG_MAKEFILE(programs/regini)
 WINE_CONFIG_MAKEFILE(programs/regsvcs)
 WINE_CONFIG_MAKEFILE(programs/regsvr32)
 WINE_CONFIG_MAKEFILE(programs/rpcss)
@@ -3940,6 +3980,7 @@ WINE_CONFIG_MAKEFILE(programs/wordpad)
 WINE_CONFIG_MAKEFILE(programs/write)
 WINE_CONFIG_MAKEFILE(programs/wscript)
 WINE_CONFIG_MAKEFILE(programs/wscript/tests)
+WINE_CONFIG_MAKEFILE(programs/wuauserv)
 WINE_CONFIG_MAKEFILE(programs/wusa)
 WINE_CONFIG_MAKEFILE(programs/xcopy)
 WINE_CONFIG_MAKEFILE(programs/xcopy/tests)

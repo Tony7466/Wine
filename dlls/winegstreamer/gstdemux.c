@@ -55,7 +55,7 @@ typedef struct GSTInPin {
 } GSTInPin;
 
 typedef struct GSTImpl {
-    BaseFilter filter;
+    struct strmbase_filter filter;
 
     GSTInPin pInputPin;
     GSTOutPin **ppPins;
@@ -1196,7 +1196,7 @@ static inline GSTOutPin *impl_from_IMediaSeeking( IMediaSeeking *iface )
     return CONTAINING_RECORD(iface, GSTOutPin, seek.IMediaSeeking_iface);
 }
 
-static IPin *gstdemux_get_pin(BaseFilter *base, unsigned int index)
+static IPin *gstdemux_get_pin(struct strmbase_filter *base, unsigned int index)
 {
     GSTImpl *filter = impl_from_IBaseFilter(&base->IBaseFilter_iface);
 
@@ -1207,7 +1207,7 @@ static IPin *gstdemux_get_pin(BaseFilter *base, unsigned int index)
     return NULL;
 }
 
-static void gstdemux_destroy(BaseFilter *iface)
+static void gstdemux_destroy(struct strmbase_filter *iface)
 {
     GSTImpl *filter = impl_from_IBaseFilter(&iface->IBaseFilter_iface);
     IPin *connected = NULL;
@@ -1245,7 +1245,8 @@ static void gstdemux_destroy(BaseFilter *iface)
     CoTaskMemFree(filter);
 }
 
-static const BaseFilterFuncTable BaseFuncTable = {
+static const struct strmbase_filter_ops filter_ops =
+{
     .filter_get_pin = gstdemux_get_pin,
     .filter_destroy = gstdemux_destroy,
 };
@@ -1271,8 +1272,7 @@ IUnknown * CALLBACK Gstreamer_Splitter_create(IUnknown *outer, HRESULT *phr)
     }
     memset(This, 0, sizeof(*This));
 
-    strmbase_filter_init(&This->filter, &GST_Vtbl, outer, &CLSID_Gstreamer_Splitter,
-            (DWORD_PTR)(__FILE__ ": GSTImpl.csFilter"), &BaseFuncTable);
+    strmbase_filter_init(&This->filter, &GST_Vtbl, outer, &CLSID_Gstreamer_Splitter, &filter_ops);
 
     This->cStreams = 0;
     This->ppPins = NULL;

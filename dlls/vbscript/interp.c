@@ -1315,27 +1315,20 @@ static HRESULT interp_string(exec_ctx_t *ctx)
     return stack_push(ctx, &v);
 }
 
-static HRESULT interp_long(exec_ctx_t *ctx)
+static HRESULT interp_int(exec_ctx_t *ctx)
 {
     const LONG arg = ctx->instr->arg1.lng;
     VARIANT v;
 
     TRACE("%d\n", arg);
 
-    V_VT(&v) = VT_I4;
-    V_I4(&v) = arg;
-    return stack_push(ctx, &v);
-}
-
-static HRESULT interp_short(exec_ctx_t *ctx)
-{
-    const LONG arg = ctx->instr->arg1.lng;
-    VARIANT v;
-
-    TRACE("%d\n", arg);
-
-    V_VT(&v) = VT_I2;
-    V_I2(&v) = arg;
+    if(arg == (INT16)arg) {
+        V_VT(&v) = VT_I2;
+        V_I2(&v) = arg;
+    }else {
+        V_VT(&v) = VT_I4;
+        V_I4(&v) = arg;
+    }
     return stack_push(ctx, &v);
 }
 

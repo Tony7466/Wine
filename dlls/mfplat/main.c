@@ -31,6 +31,7 @@
 #include "initguid.h"
 #include "ole2.h"
 #include "propsys.h"
+#include "dxgi.h"
 
 #include "wine/debug.h"
 #include "wine/list.h"
@@ -606,7 +607,7 @@ struct guid_def
     const char *name;
 };
 
-static int debug_compare_guid(const void *a, const void *b)
+static int __cdecl debug_compare_guid(const void *a, const void *b)
 {
     const GUID *guid = a;
     const struct guid_def *guid_def = b;
@@ -680,7 +681,7 @@ const char *debugstr_attr(const GUID *guid)
         X(MFSampleExtension_3DVideo_SampleFormat),
         X(MF_SAMPLEGRABBERSINK_SAMPLE_TIME_OFFSET),
         X(MF_MT_SAMPLE_SIZE),
-        X(MF_MT_AAC_PAYLOAD_TIME),
+        X(MF_MT_AAC_PAYLOAD_TYPE),
         X(MF_TOPOLOGY_PLAYBACK_FRAMERATE),
         X(MF_SOURCE_READER_D3D11_BIND_FLAGS),
         X(MF_MT_AUDIO_FOLDDOWN_MATRIX),
@@ -946,7 +947,7 @@ struct event_id
     const char *name;
 };
 
-static int debug_event_id(const void *a, const void *b)
+static int __cdecl debug_event_id(const void *a, const void *b)
 {
     const DWORD *id = a;
     const struct event_id *event_id = b;
@@ -7614,6 +7615,171 @@ HRESULT WINAPI CreatePropertyStore(IPropertyStore **store)
 
     TRACE("Created store %p.\n", object);
     *store = &object->IPropertyStore_iface;
+
+    return S_OK;
+}
+
+struct dxgi_device_manager
+{
+    IMFDXGIDeviceManager IMFDXGIDeviceManager_iface;
+    LONG refcount;
+    UINT token;
+    IDXGIDevice *device;
+};
+
+static struct dxgi_device_manager *impl_from_IMFDXGIDeviceManager(IMFDXGIDeviceManager *iface)
+{
+    return CONTAINING_RECORD(iface, struct dxgi_device_manager, IMFDXGIDeviceManager_iface);
+}
+
+static HRESULT WINAPI dxgi_device_manager_QueryInterface(IMFDXGIDeviceManager *iface, REFIID riid, void **obj)
+{
+    TRACE("(%p, %s, %p).\n", iface, debugstr_guid(riid), obj);
+
+    if (IsEqualIID(riid, &IID_IMFDXGIDeviceManager) ||
+        IsEqualGUID(riid, &IID_IUnknown))
+    {
+        *obj = iface;
+        IMFDXGIDeviceManager_AddRef(iface);
+        return S_OK;
+    }
+
+    WARN("Unsupported %s.\n", debugstr_guid(riid));
+    *obj = NULL;
+    return E_NOINTERFACE;
+}
+
+static ULONG WINAPI dxgi_device_manager_AddRef(IMFDXGIDeviceManager *iface)
+{
+    struct dxgi_device_manager *manager = impl_from_IMFDXGIDeviceManager(iface);
+    ULONG refcount = InterlockedIncrement(&manager->refcount);
+
+    TRACE("(%p) ref=%u.\n", iface, refcount);
+
+    return refcount;
+}
+
+static ULONG WINAPI dxgi_device_manager_Release(IMFDXGIDeviceManager *iface)
+{
+    struct dxgi_device_manager *manager = impl_from_IMFDXGIDeviceManager(iface);
+    ULONG refcount = InterlockedDecrement(&manager->refcount);
+
+    TRACE("(%p) ref=%u.\n", iface, refcount);
+
+    if (!refcount)
+    {
+        if (manager->device)
+            IDXGIDevice_Release(manager->device);
+        heap_free(manager);
+    }
+
+    return refcount;
+}
+
+static HRESULT WINAPI dxgi_device_manager_CloseDeviceHandle(IMFDXGIDeviceManager *iface, HANDLE device)
+{
+    FIXME("(%p, %p): stub.\n", iface, device);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI dxgi_device_manager_GetVideoService(IMFDXGIDeviceManager *iface, HANDLE device,
+                                                          REFIID riid, void **service)
+{
+    FIXME("(%p, %p, %s, %p): stub.\n", iface, device, debugstr_guid(riid), service);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI dxgi_device_manager_LockDevice(IMFDXGIDeviceManager *iface, HANDLE device,
+                                                     REFIID riid, void **ppv, BOOL block)
+{
+    FIXME("(%p, %p, %s, %p, %d): stub.\n", iface, device, wine_dbgstr_guid(riid), ppv, block);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI dxgi_device_manager_OpenDeviceHandle(IMFDXGIDeviceManager *iface, HANDLE *device)
+{
+    FIXME("(%p, %p): stub.\n", iface, device);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI dxgi_device_manager_ResetDevice(IMFDXGIDeviceManager *iface, IUnknown *device, UINT token)
+{
+    struct dxgi_device_manager *manager = impl_from_IMFDXGIDeviceManager(iface);
+    IDXGIDevice *dxgi_device;
+    HRESULT hr;
+
+    TRACE("(%p, %p, %u).\n", iface, device, token);
+
+    if (!device || token != manager->token)
+        return E_INVALIDARG;
+
+    hr = IUnknown_QueryInterface(device, &IID_IDXGIDevice, (void **)&dxgi_device);
+    if (SUCCEEDED(hr))
+    {
+        if (manager->device)
+            IDXGIDevice_Release(manager->device);
+        manager->device = dxgi_device;
+    }
+    else
+        hr = E_INVALIDARG;
+
+    return hr;
+}
+
+static HRESULT WINAPI dxgi_device_manager_TestDevice(IMFDXGIDeviceManager *iface, HANDLE device)
+{
+    FIXME("(%p, %p): stub.\n", iface, device);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI dxgi_device_manager_UnlockDevice(IMFDXGIDeviceManager *iface, HANDLE device, BOOL state)
+{
+    FIXME("(%p, %p, %d): stub.\n", iface, device, state);
+
+    return E_NOTIMPL;
+}
+
+static const IMFDXGIDeviceManagerVtbl dxgi_device_manager_vtbl =
+{
+    dxgi_device_manager_QueryInterface,
+    dxgi_device_manager_AddRef,
+    dxgi_device_manager_Release,
+    dxgi_device_manager_CloseDeviceHandle,
+    dxgi_device_manager_GetVideoService,
+    dxgi_device_manager_LockDevice,
+    dxgi_device_manager_OpenDeviceHandle,
+    dxgi_device_manager_ResetDevice,
+    dxgi_device_manager_TestDevice,
+    dxgi_device_manager_UnlockDevice,
+};
+
+HRESULT WINAPI MFCreateDXGIDeviceManager(UINT *token, IMFDXGIDeviceManager **manager)
+{
+    struct dxgi_device_manager *object;
+
+    TRACE("(%p, %p).\n", token, manager);
+
+    if (!token || !manager)
+        return E_POINTER;
+
+    object = heap_alloc(sizeof(*object));
+    if (!object)
+        return E_OUTOFMEMORY;
+
+    object->IMFDXGIDeviceManager_iface.lpVtbl = &dxgi_device_manager_vtbl;
+    object->refcount = 1;
+    object->token = GetTickCount();
+    object->device = NULL;
+
+    TRACE("Created device manager: %p, token: %u.\n", object, object->token);
+
+    *token = object->token;
+    *manager = &object->IMFDXGIDeviceManager_iface;
 
     return S_OK;
 }

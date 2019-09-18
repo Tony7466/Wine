@@ -276,10 +276,11 @@ unsigned char get_pointer_fc(const type_t *type, const attr_list_t *attrs, int t
 
     if (toplevel_param)
         return FC_RP;
-    else if (is_ptr(type))
-        return type_pointer_get_default_fc(type);
-    else
-        return type_array_get_ptr_default_fc(type);
+
+    if ((pointer_type = get_attrv(current_iface->attrs, ATTR_POINTERDEFAULT)))
+        return pointer_type;
+
+    return FC_UP;
 }
 
 static unsigned char get_pointer_fc_context( const type_t *type, const attr_list_t *attrs,
@@ -4805,7 +4806,7 @@ void write_func_param_struct( FILE *file, const type_t *iface, const type_t *fun
     if (args) LIST_FOR_EACH_ENTRY( arg, args, const var_t, entry )
     {
         print_file(file, 2, "%s", "");
-        write_type_left( file, &arg->declspec, NAME_DEFAULT, TRUE );
+        write_type_left( file, &arg->declspec, NAME_DEFAULT, TRUE, TRUE );
         if (needs_space_after( arg->declspec.type )) fputc( ' ', file );
         if (is_array( arg->declspec.type ) && !type_array_is_decl_as_ptr( arg->declspec.type )) fputc( '*', file );
 
@@ -4871,9 +4872,9 @@ int write_expr_eval_routines(FILE *file, const char *iface)
         {
             decl_spec_t ds = {.type = (type_t *)eval->cont_type};
             print_file(file, 1, "%s", "");
-            write_type_left(file, &ds, NAME_DEFAULT, TRUE);
+            write_type_left(file, &ds, NAME_DEFAULT, TRUE, TRUE);
             fprintf(file, " *%s = (", var_name);
-            write_type_left(file, &ds, NAME_DEFAULT, TRUE);
+            write_type_left(file, &ds, NAME_DEFAULT, TRUE, TRUE);
             fprintf(file, " *)(pStubMsg->StackTop - %u);\n", eval->baseoff);
         }
         print_file(file, 1, "pStubMsg->Offset = 0;\n"); /* FIXME */

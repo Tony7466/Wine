@@ -172,15 +172,14 @@ type_t *type_new_function(var_list_t *args)
     t = make_type(TYPE_FUNCTION);
     t->details.function = xmalloc(sizeof(*t->details.function));
     t->details.function->args = args;
+    t->details.function->retval = make_var(xstrdup("_RetVal"));
     return t;
 }
 
-type_t *type_new_pointer(unsigned char pointer_default, type_t *ref, attr_list_t *attrs)
+type_t *type_new_pointer(type_t *ref)
 {
     type_t *t = make_type(TYPE_POINTER);
-    t->details.pointer.def_fc = pointer_default;
     t->details.pointer.ref.type = ref;
-    t->attrs = attrs;
     return t;
 }
 
@@ -218,8 +217,7 @@ type_t *type_new_coclass(char *name)
 
 
 type_t *type_new_array(const char *name, const decl_spec_t *element, int declptr,
-                       unsigned int dim, expr_t *size_is, expr_t *length_is,
-                       unsigned char ptr_default_fc)
+                       unsigned int dim, expr_t *size_is, expr_t *length_is)
 {
     type_t *t = make_type(TYPE_ARRAY);
     if (name) t->name = xstrdup(name);
@@ -231,7 +229,6 @@ type_t *type_new_array(const char *name, const decl_spec_t *element, int declptr
         t->details.array.dim = dim;
     if (element)
         t->details.array.elem = *element;
-    t->details.array.ptr_def_fc = ptr_default_fc;
     return t;
 }
 
@@ -268,92 +265,117 @@ type_t *type_new_void(void)
 
 type_t *type_new_enum(const char *name, struct namespace *namespace, int defined, var_list_t *enums)
 {
-    type_t *tag_type = name ? find_type(name, namespace, tsENUM) : NULL;
-    type_t *t = make_type(TYPE_ENUM);
-    t->name = name;
-    t->namespace = namespace;
+    type_t *t = NULL;
 
-    if (tag_type && tag_type->details.enumeration)
-        t->details.enumeration = tag_type->details.enumeration;
-    else if (defined)
+    if (name)
+        t = find_type(name, namespace,tsENUM);
+
+    if (!t)
+    {
+        t = make_type(TYPE_ENUM);
+        t->name = name;
+        t->namespace = namespace;
+        if (name)
+            reg_type(t, name, namespace, tsENUM);
+    }
+
+    if (!t->defined && defined)
     {
         t->details.enumeration = xmalloc(sizeof(*t->details.enumeration));
         t->details.enumeration->enums = enums;
         t->defined = TRUE;
     }
+    else if (defined)
+        error_loc("redefinition of enum %s\n", name);
 
-    if (name)
-    {
-        if (defined)
-            reg_type(t, name, namespace, tsENUM);
-        else
-            add_incomplete(t);
-    }
     return t;
 }
 
 type_t *type_new_struct(char *name, struct namespace *namespace, int defined, var_list_t *fields)
 {
-    type_t *tag_type = name ? find_type(name, namespace, tsSTRUCT) : NULL;
-    type_t *t;
+    type_t *t = NULL;
 
-    /* avoid creating duplicate typelib type entries */
-    if (tag_type && do_typelib) return tag_type;
+    if (name)
+        t = find_type(name, namespace, tsSTRUCT);
 
-    t = make_type(TYPE_STRUCT);
-    t->name = name;
-    t->namespace = namespace;
+    if (!t)
+    {
+        t = make_type(TYPE_STRUCT);
+        t->name = name;
+        t->namespace = namespace;
+        if (name)
+            reg_type(t, name, namespace, tsSTRUCT);
+    }
 
-    if (tag_type && tag_type->details.structure)
-        t->details.structure = tag_type->details.structure;
-    else if (defined)
+    if (!t->defined && defined)
     {
         t->details.structure = xmalloc(sizeof(*t->details.structure));
         t->details.structure->fields = fields;
         t->defined = TRUE;
     }
-    if (name)
-    {
-        if (defined)
-            reg_type(t, name, namespace, tsSTRUCT);
-        else
-            add_incomplete(t);
-    }
+    else if (defined)
+        error_loc("redefinition of struct %s\n", name);
+
     return t;
 }
 
 type_t *type_new_nonencapsulated_union(const char *name, int defined, var_list_t *fields)
 {
-    type_t *tag_type = name ? find_type(name, NULL, tsUNION) : NULL;
-    type_t *t = make_type(TYPE_UNION);
-    t->name = name;
-    if (tag_type && tag_type->details.structure)
-        t->details.structure = tag_type->details.structure;
-    else if (defined)
+    type_t *t = NULL;
+
+    if (name)
+        t = find_type(name, NULL, tsUNION);
+
+    if (!t)
+    {
+        t = make_type(TYPE_UNION);
+        t->name = name;
+        if (name)
+            reg_type(t, name, NULL, tsUNION);
+    }
+
+    if (!t->defined && defined)
     {
         t->details.structure = xmalloc(sizeof(*t->details.structure));
         t->details.structure->fields = fields;
         t->defined = TRUE;
     }
-    if (name)
-    {
-        if (defined)
-            reg_type(t, name, NULL, tsUNION);
-        else
-            add_incomplete(t);
-    }
+    else if (defined)
+        error_loc("redefinition of union %s\n", name);
+
     return t;
 }
 
 type_t *type_new_encapsulated_union(char *name, var_t *switch_field, var_t *union_field, var_list_t *cases)
 {
-    type_t *t = get_type(TYPE_ENCAPSULATED_UNION, name, NULL, tsUNION);
-    if (!union_field) union_field = make_var( xstrdup("tagged_union") );
-    union_field->declspec.type = type_new_nonencapsulated_union(NULL, TRUE, cases);
-    t->details.structure = xmalloc(sizeof(*t->details.structure));
-    t->details.structure->fields = append_var( NULL, switch_field );
-    t->details.structure->fields = append_var( t->details.structure->fields, union_field );
-    t->defined = TRUE;
+    type_t *t = NULL;
+
+    if (name)
+        t = find_type(name, NULL, tsUNION);
+
+    if (!t)
+    {
+        t = make_type(TYPE_ENCAPSULATED_UNION);
+        t->name = name;
+        if (name)
+            reg_type(t, name, NULL, tsUNION);
+    }
+    t->type_type = TYPE_ENCAPSULATED_UNION;
+
+    if (!t->defined)
+    {
+        if (!union_field)
+            union_field = make_var(xstrdup("tagged_union"));
+        union_field->declspec.type = type_new_nonencapsulated_union(gen_name(), TRUE, cases);
+
+        t->details.structure = xmalloc(sizeof(*t->details.structure));
+        t->details.structure->fields = append_var(NULL, switch_field);
+        t->details.structure->fields = append_var(t->details.structure->fields, union_field);
+        t->defined = TRUE;
+    }
+    else
+        error_loc("redefinition of union %s\n", name);
+
     return t;
 }
 

@@ -46,7 +46,7 @@ WINE_DEFAULT_DEBUG_CHANNEL(qcap);
 
 typedef struct VfwCapture
 {
-    BaseFilter filter;
+    struct strmbase_filter filter;
     IAMStreamConfig IAMStreamConfig_iface;
     IAMVideoProcAmp IAMVideoProcAmp_iface;
     IPersistPropertyBag IPersistPropertyBag_iface;
@@ -57,7 +57,7 @@ typedef struct VfwCapture
     IKsPropertySet IKsPropertySet_iface;
 } VfwCapture;
 
-static inline VfwCapture *impl_from_BaseFilter(BaseFilter *iface)
+static inline VfwCapture *impl_from_strmbase_filter(struct strmbase_filter *iface)
 {
     return CONTAINING_RECORD(iface, VfwCapture, filter);
 }
@@ -87,9 +87,9 @@ static inline VfwCapture *impl_from_IPin(IPin *iface)
     return CONTAINING_RECORD(iface, VfwCapture, source.pin.IPin_iface);
 }
 
-static IPin *vfw_capture_get_pin(BaseFilter *iface, unsigned int index)
+static IPin *vfw_capture_get_pin(struct strmbase_filter *iface, unsigned int index)
 {
-    VfwCapture *This = impl_from_BaseFilter(iface);
+    VfwCapture *This = impl_from_strmbase_filter(iface);
 
     if (index >= 1)
         return NULL;
@@ -97,9 +97,9 @@ static IPin *vfw_capture_get_pin(BaseFilter *iface, unsigned int index)
     return &This->source.pin.IPin_iface;
 }
 
-static void vfw_capture_destroy(BaseFilter *iface)
+static void vfw_capture_destroy(struct strmbase_filter *iface)
 {
-    VfwCapture *filter = impl_from_BaseFilter(iface);
+    VfwCapture *filter = impl_from_strmbase_filter(iface);
 
     if (filter->init)
     {
@@ -119,9 +119,9 @@ static void vfw_capture_destroy(BaseFilter *iface)
     ObjectRefCount(FALSE);
 }
 
-static HRESULT vfw_capture_query_interface(BaseFilter *iface, REFIID iid, void **out)
+static HRESULT vfw_capture_query_interface(struct strmbase_filter *iface, REFIID iid, void **out)
 {
-    VfwCapture *filter = impl_from_BaseFilter(iface);
+    VfwCapture *filter = impl_from_strmbase_filter(iface);
 
     if (IsEqualGUID(iid, &IID_IPersistPropertyBag))
         *out = &filter->IPersistPropertyBag_iface;
@@ -134,7 +134,8 @@ static HRESULT vfw_capture_query_interface(BaseFilter *iface, REFIID iid, void *
     return S_OK;
 }
 
-static const BaseFilterFuncTable BaseFuncTable = {
+static const struct strmbase_filter_ops filter_ops =
+{
     .filter_get_pin = vfw_capture_get_pin,
     .filter_destroy = vfw_capture_destroy,
     .filter_query_interface = vfw_capture_query_interface,
@@ -642,8 +643,7 @@ IUnknown * WINAPI QCAP_createVFWCaptureFilter(IUnknown *outer, HRESULT *phr)
         return NULL;
     }
 
-    strmbase_filter_init(&object->filter, &VfwCapture_Vtbl, outer, &CLSID_VfwCapture,
-            (DWORD_PTR)(__FILE__ ": VfwCapture.csFilter"), &BaseFuncTable);
+    strmbase_filter_init(&object->filter, &VfwCapture_Vtbl, outer, &CLSID_VfwCapture, &filter_ops);
 
     object->IAMStreamConfig_iface.lpVtbl = &IAMStreamConfig_VTable;
     object->IAMVideoProcAmp_iface.lpVtbl = &IAMVideoProcAmp_VTable;

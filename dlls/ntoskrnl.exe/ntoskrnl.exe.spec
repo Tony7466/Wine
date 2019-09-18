@@ -33,6 +33,7 @@
 @ stdcall -arch=win64 ExpInterlockedPopEntrySList(ptr) RtlInterlockedPopEntrySList
 @ stdcall -arch=win64 ExpInterlockedPushEntrySList(ptr ptr) RtlInterlockedPushEntrySList
 @ stub HalExamineMBR
+@ stdcall -arch=arm,arm64,x86_64 InitializeSListHead(ptr) RtlInitializeSListHead
 @ stdcall -fastcall InterlockedCompareExchange(ptr long long) NTOSKRNL_InterlockedCompareExchange
 @ stdcall -fastcall InterlockedDecrement(ptr) NTOSKRNL_InterlockedDecrement
 @ stdcall -fastcall InterlockedExchange(ptr long) NTOSKRNL_InterlockedExchange
@@ -405,7 +406,7 @@
 @ stub IoGetInitialStack
 @ stub IoGetLowerDeviceObject
 @ stdcall IoGetRelatedDeviceObject(ptr)
-@ stub IoGetRequestorProcess
+@ stdcall IoGetRequestorProcess(ptr)
 @ stub IoGetRequestorProcessId
 @ stub IoGetRequestorSessionId
 @ stdcall IoGetStackLimits(ptr ptr)
@@ -437,7 +438,7 @@
 @ stub IoReadOperationCount
 @ stub IoReadPartitionTableEx
 @ stub IoReadTransferCount
-@ stub IoRegisterBootDriverReinitialization
+@ stdcall IoRegisterBootDriverReinitialization(ptr ptr ptr)
 @ stdcall IoRegisterDeviceInterface(ptr ptr ptr ptr)
 @ stdcall IoRegisterDriverReinitialization(ptr ptr ptr)
 @ stdcall IoRegisterFileSystem(ptr)
@@ -447,7 +448,7 @@
 @ stdcall IoRegisterShutdownNotification(ptr)
 @ stdcall IoReleaseCancelSpinLock(long)
 @ stdcall IoReleaseRemoveLockAndWaitEx(ptr ptr long)
-@ stub IoReleaseRemoveLockEx
+@ stdcall IoReleaseRemoveLockEx(ptr ptr long)
 @ stub IoReleaseVpbSpinLock
 @ stub IoRemoveShareAccess
 @ stub IoReportDetectedDevice
@@ -1209,7 +1210,7 @@
 @ stdcall RtlUnicodeToOemN(ptr long ptr ptr long)
 @ stub RtlUnlockBootStatusData
 @ stdcall -norelay RtlUnwind(ptr ptr ptr ptr)
-@ stdcall -arch=x86_64 RtlUnwindEx(ptr ptr ptr ptr ptr ptr)
+@ stdcall -arch=arm64,x86_64 RtlUnwindEx(ptr ptr ptr ptr ptr ptr)
 @ stdcall RtlUpcaseUnicodeChar(long)
 @ stdcall RtlUpcaseUnicodeString(ptr ptr long)
 @ stdcall RtlUpcaseUnicodeStringToAnsiString(ptr ptr long)

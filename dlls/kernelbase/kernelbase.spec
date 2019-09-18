@@ -312,7 +312,7 @@
 @ stdcall EnumResourceTypesExA(long ptr long long long)
 @ stdcall EnumResourceTypesExW(long ptr long long long)
 @ stdcall EnumSystemCodePagesW(ptr long) kernel32.EnumSystemCodePagesW
-# @ stub EnumSystemFirmwareTables
+@ stdcall EnumSystemFirmwareTables(long ptr long) kernel32.EnumSystemFirmwareTables
 @ stdcall EnumSystemGeoID(long long ptr) kernel32.EnumSystemGeoID
 @ stdcall EnumSystemLanguageGroupsW(ptr long ptr) kernel32.EnumSystemLanguageGroupsW
 @ stdcall EnumSystemLocalesA(ptr long) kernel32.EnumSystemLocalesA
@@ -335,7 +335,7 @@
 @ stdcall EventUnregister(int64) ntdll.EtwEventUnregister
 @ stdcall EventWrite(int64 ptr long ptr) ntdll.EtwEventWrite
 # @ stub EventWriteEx
-# @ stub EventWriteString
+@ stdcall EventWriteString(int64 long int64 ptr) ntdll.EtwEventWriteString
 @ stdcall EventWriteTransfer(int64 ptr ptr ptr long ptr) ntdll.EtwEventWriteTransfer
 @ stdcall ExitProcess(long) ntdll.RtlExitUserProcess
 @ stdcall ExitThread(long) ntdll.RtlExitUserThread

@@ -35,20 +35,20 @@
 WINE_DEFAULT_DEBUG_CHANNEL(qcap);
 
 typedef struct {
-    BaseFilter filter;
+    struct strmbase_filter filter;
     IPersistPropertyBag IPersistPropertyBag_iface;
     BaseOutputPin *output;
 } AudioRecord;
 
-static inline AudioRecord *impl_from_BaseFilter(BaseFilter *filter)
+static inline AudioRecord *impl_from_strmbase_filter(struct strmbase_filter *filter)
 {
     return CONTAINING_RECORD(filter, AudioRecord, filter);
 }
 
 static inline AudioRecord *impl_from_IBaseFilter(IBaseFilter *iface)
 {
-    BaseFilter *filter = CONTAINING_RECORD(iface, BaseFilter, IBaseFilter_iface);
-    return impl_from_BaseFilter(filter);
+    struct strmbase_filter *filter = CONTAINING_RECORD(iface, struct strmbase_filter, IBaseFilter_iface);
+    return impl_from_strmbase_filter(filter);
 }
 
 static inline AudioRecord *impl_from_IPersistPropertyBag(IPersistPropertyBag *iface)
@@ -95,23 +95,23 @@ static const IBaseFilterVtbl AudioRecordVtbl = {
     BaseFilterImpl_QueryVendorInfo
 };
 
-static IPin *audio_record_get_pin(BaseFilter *iface, unsigned int index)
+static IPin *audio_record_get_pin(struct strmbase_filter *iface, unsigned int index)
 {
     FIXME("iface %p, index %u, stub!\n", iface, index);
     return NULL;
 }
 
-static void audio_record_destroy(BaseFilter *iface)
+static void audio_record_destroy(struct strmbase_filter *iface)
 {
-    AudioRecord *filter = impl_from_BaseFilter(iface);
+    AudioRecord *filter = impl_from_strmbase_filter(iface);
 
     strmbase_filter_cleanup(&filter->filter);
     CoTaskMemFree(filter);
 }
 
-static HRESULT audio_record_query_interface(BaseFilter *iface, REFIID iid, void **out)
+static HRESULT audio_record_query_interface(struct strmbase_filter *iface, REFIID iid, void **out)
 {
-    AudioRecord *filter = impl_from_BaseFilter(iface);
+    AudioRecord *filter = impl_from_strmbase_filter(iface);
 
     if (IsEqualGUID(iid, &IID_IPersistPropertyBag))
         *out = &filter->IPersistPropertyBag_iface;
@@ -122,7 +122,8 @@ static HRESULT audio_record_query_interface(BaseFilter *iface, REFIID iid, void 
     return S_OK;
 }
 
-static const BaseFilterFuncTable AudioRecordFuncs = {
+static const struct strmbase_filter_ops filter_ops =
+{
     .filter_get_pin = audio_record_get_pin,
     .filter_destroy = audio_record_destroy,
     .filter_query_interface = audio_record_query_interface,
@@ -213,8 +214,7 @@ IUnknown* WINAPI QCAP_createAudioCaptureFilter(IUnknown *outer, HRESULT *phr)
     memset(This, 0, sizeof(*This));
     This->IPersistPropertyBag_iface.lpVtbl = &PersistPropertyBagVtbl;
 
-    strmbase_filter_init(&This->filter, &AudioRecordVtbl, outer, &CLSID_AudioRecord,
-            (DWORD_PTR)(__FILE__ ": AudioRecord.csFilter"), &AudioRecordFuncs);
+    strmbase_filter_init(&This->filter, &AudioRecordVtbl, outer, &CLSID_AudioRecord, &filter_ops);
 
     *phr = S_OK;
     return &This->filter.IUnknown_inner;
