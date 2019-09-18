@@ -1972,13 +1972,21 @@ UINT MSI_SetFeatureStates(MSIPACKAGE *package)
             component->ActionRequest = INSTALLSTATE_UNKNOWN;
         }
 
-        TRACE("component %s (installed %d request %d action %d)\n",
-              debugstr_w(component->Component), component->Installed, component->ActionRequest, component->Action);
-
         if (component->Action == INSTALLSTATE_LOCAL || component->Action == INSTALLSTATE_SOURCE)
             component->num_clients++;
         else if (component->Action == INSTALLSTATE_ABSENT)
+        {
             component->num_clients--;
+
+            if (component->num_clients > 0)
+            {
+                TRACE("multiple clients uses %s - disallowing uninstallation\n", debugstr_w(component->Component));
+                component->Action = INSTALLSTATE_UNKNOWN;
+            }
+        }
+
+        TRACE("component %s (installed %d request %d action %d)\n",
+              debugstr_w(component->Component), component->Installed, component->ActionRequest, component->Action);
     }
 
     return ERROR_SUCCESS;
@@ -6775,10 +6783,7 @@ static UINT ITERATE_InstallODBCDataSource( MSIRECORD *rec, LPVOID param )
     attrs[len + 1] = 0;
 
     if (!SQLConfigDataSourceW(NULL, request, driver, attrs))
-    {
-        ERR("Failed to install SQL data source!\n");
-        r = ERROR_FUNCTION_FAILED;
-    }
+        WARN("Failed to install SQL data source!\n");
 
     uirow = MSI_CreateRecord( 5 );
     MSI_RecordSetStringW( uirow, 1, desc );

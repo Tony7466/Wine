@@ -56,14 +56,14 @@ static inline ParserImpl *impl_from_IBaseFilter( IBaseFilter *iface )
     return CONTAINING_RECORD(iface, ParserImpl, filter.IBaseFilter_iface);
 }
 
-static inline ParserImpl *impl_from_BaseFilter( BaseFilter *iface )
+static inline ParserImpl *impl_from_strmbase_filter(struct strmbase_filter *iface)
 {
     return CONTAINING_RECORD(iface, ParserImpl, filter);
 }
 
-IPin *parser_get_pin(BaseFilter *iface, unsigned int index)
+IPin *parser_get_pin(struct strmbase_filter *iface, unsigned int index)
 {
-    ParserImpl *filter = impl_from_BaseFilter(iface);
+    ParserImpl *filter = impl_from_strmbase_filter(iface);
 
     if (!index)
         return &filter->pInputPin->pin.IPin_iface;
@@ -73,7 +73,7 @@ IPin *parser_get_pin(BaseFilter *iface, unsigned int index)
 }
 
 HRESULT Parser_Create(ParserImpl *pParser, const IBaseFilterVtbl *vtbl, IUnknown *outer,
-        const CLSID *clsid, const BaseFilterFuncTable *func_table, const WCHAR *sink_name,
+        const CLSID *clsid, const struct strmbase_filter_ops *func_table, const WCHAR *sink_name,
         PFN_PROCESS_SAMPLE fnProcessSample, PFN_QUERY_ACCEPT fnQueryAccept, PFN_PRE_CONNECT fnPreConnect,
         PFN_CLEANUP fnCleanup, PFN_DISCONNECT fnDisconnect, REQUESTPROC fnRequest,
         STOPPROCESSPROC fnDone, SourceSeeking_ChangeStop stop,
@@ -82,8 +82,7 @@ HRESULT Parser_Create(ParserImpl *pParser, const IBaseFilterVtbl *vtbl, IUnknown
     HRESULT hr;
     PIN_INFO piInput;
 
-    strmbase_filter_init(&pParser->filter, vtbl, outer, clsid,
-            (DWORD_PTR)(__FILE__ ": ParserImpl.csFilter"), func_table);
+    strmbase_filter_init(&pParser->filter, vtbl, outer, clsid, func_table);
 
     pParser->fnDisconnect = fnDisconnect;
 

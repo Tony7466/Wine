@@ -60,6 +60,10 @@ extern NTSTATUS set_thread_context( HANDLE handle, const context_t *context, BOO
 extern NTSTATUS get_thread_context( HANDLE handle, context_t *context, unsigned int flags, BOOL *self ) DECLSPEC_HIDDEN;
 extern LONG WINAPI call_unhandled_exception_filter( PEXCEPTION_POINTERS eptr ) DECLSPEC_HIDDEN;
 
+#if defined(__x86_64__) || defined(__arm__) || defined(__aarch64__)
+extern RUNTIME_FUNCTION *lookup_function_info( ULONG_PTR pc, ULONG_PTR *base, LDR_MODULE **module ) DECLSPEC_HIDDEN;
+#endif
+
 /* debug helpers */
 extern LPCSTR debugstr_us( const UNICODE_STRING *str ) DECLSPEC_HIDDEN;
 extern LPCSTR debugstr_ObjectAttributes(const OBJECT_ATTRIBUTES *oa) DECLSPEC_HIDDEN;
@@ -173,7 +177,7 @@ extern NTSTATUS virtual_create_builtin_view( void *base ) DECLSPEC_HIDDEN;
 extern NTSTATUS virtual_alloc_thread_stack( INITIAL_TEB *stack, SIZE_T reserve_size,
                                             SIZE_T commit_size, SIZE_T *pthread_size ) DECLSPEC_HIDDEN;
 extern void virtual_clear_thread_stack( void *stack_end ) DECLSPEC_HIDDEN;
-extern BOOL virtual_handle_stack_fault( void *addr ) DECLSPEC_HIDDEN;
+extern int virtual_handle_stack_fault( void *addr ) DECLSPEC_HIDDEN;
 extern BOOL virtual_is_valid_code_address( const void *addr, SIZE_T size ) DECLSPEC_HIDDEN;
 extern NTSTATUS virtual_handle_fault( LPCVOID addr, DWORD err, BOOL on_signal_stack ) DECLSPEC_HIDDEN;
 extern unsigned int virtual_locked_server_call( void *req_ptr ) DECLSPEC_HIDDEN;

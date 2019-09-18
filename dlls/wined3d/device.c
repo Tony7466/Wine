@@ -291,7 +291,7 @@ void device_clear_render_targets(struct wined3d_device *device, UINT rt_count, c
     struct wined3d_context_gl *context_gl;
     struct wined3d_texture *target = NULL;
     UINT drawable_width, drawable_height;
-    struct wined3d_color corrected_color;
+    struct wined3d_color colour_srgb;
     struct wined3d_context *context;
     GLbitfield clear_mask = 0;
     BOOL render_offscreen;
@@ -430,25 +430,11 @@ void device_clear_render_targets(struct wined3d_device *device, UINT rt_count, c
         if (!gl_info->supported[ARB_FRAMEBUFFER_SRGB] && needs_srgb_write(context, state, fb))
         {
             if (rt_count > 1)
-                WARN("Clearing multiple sRGB render targets with no GL_ARB_framebuffer_sRGB "
+                WARN("Clearing multiple sRGB render targets without GL_ARB_framebuffer_sRGB "
                         "support, this might cause graphical issues.\n");
 
-            corrected_color.r = color->r < wined3d_srgb_const1[0]
-                    ? color->r * wined3d_srgb_const0[3]
-                    : pow(color->r, wined3d_srgb_const0[0]) * wined3d_srgb_const0[1]
-                    - wined3d_srgb_const0[2];
-            corrected_color.r = min(max(corrected_color.r, 0.0f), 1.0f);
-            corrected_color.g = color->g < wined3d_srgb_const1[0]
-                    ? color->g * wined3d_srgb_const0[3]
-                    : pow(color->g, wined3d_srgb_const0[0]) * wined3d_srgb_const0[1]
-                    - wined3d_srgb_const0[2];
-            corrected_color.g = min(max(corrected_color.g, 0.0f), 1.0f);
-            corrected_color.b = color->b < wined3d_srgb_const1[0]
-                    ? color->b * wined3d_srgb_const0[3]
-                    : pow(color->b, wined3d_srgb_const0[0]) * wined3d_srgb_const0[1]
-                    - wined3d_srgb_const0[2];
-            corrected_color.b = min(max(corrected_color.b, 0.0f), 1.0f);
-            color = &corrected_color;
+            wined3d_colour_srgb_from_linear(&colour_srgb, color);
+            color = &colour_srgb;
         }
 
         gl_info->gl_ops.gl.p_glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
@@ -854,7 +840,7 @@ static void wined3d_device_gl_destroy_dummy_textures(struct wined3d_device_gl *d
 }
 
 /* Context activation is done by the caller. */
-static void create_default_samplers(struct wined3d_device *device, struct wined3d_context *context)
+void wined3d_device_create_default_samplers(struct wined3d_device *device, struct wined3d_context *context)
 {
     struct wined3d_sampler_desc desc;
     HRESULT hr;
@@ -902,7 +888,7 @@ static void create_default_samplers(struct wined3d_device *device, struct wined3
 }
 
 /* Context activation is done by the caller. */
-static void destroy_default_samplers(struct wined3d_device *device, struct wined3d_context *context)
+void wined3d_device_destroy_default_samplers(struct wined3d_device *device, struct wined3d_context *context)
 {
     wined3d_sampler_decref(device->default_sampler);
     device->default_sampler = NULL;
@@ -987,7 +973,7 @@ void wined3d_device_delete_opengl_contexts_cs(void *object)
     device->blitter->ops->blitter_destroy(device->blitter, context);
     device->shader_backend->shader_free_private(device, context);
     wined3d_device_gl_destroy_dummy_textures(device_gl, context_gl);
-    destroy_default_samplers(device, context);
+    wined3d_device_destroy_default_samplers(device, context);
     context_release(context);
 
     while (device->context_count)
@@ -1039,7 +1025,7 @@ void wined3d_device_create_primary_opengl_context_cs(void *object)
 
     context_gl = wined3d_context_gl(context);
     wined3d_device_gl_create_dummy_textures(wined3d_device_gl(device), context_gl);
-    create_default_samplers(device, context);
+    wined3d_device_create_default_samplers(device, context);
     context_release(context);
 }
 

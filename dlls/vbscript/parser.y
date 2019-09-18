@@ -97,7 +97,7 @@ static statement_t *link_statements(statement_t*,statement_t*);
     const_decl_t *const_decl;
     case_clausule_t *case_clausule;
     unsigned uint;
-    LONG lng;
+    LONG integer;
     BOOL boolean;
     double dbl;
 }
@@ -119,7 +119,7 @@ static statement_t *link_statements(statement_t*,statement_t*);
 %token <string> tNEXT tON tRESUME tGOTO
 %token <string> tIdentifier tString
 %token <string> tDEFAULT tERROR tEXPLICIT tPROPERTY tSTEP
-%token <lng> tLong tShort
+%token <integer> tInt
 %token <dbl> tDouble
 
 %type <statement> Statement SimpleStatement StatementNl StatementsNl StatementsNl_opt IfStatement Else_opt
@@ -366,6 +366,7 @@ UnaryExpression
     | CallExpression                { $$ = $1; }
     | tNEW Identifier               { $$ = new_new_expression(ctx, $2); CHECK_ERROR; }
     | '-' UnaryExpression           { $$ = new_unary_expression(ctx, EXPR_NEG, $2); CHECK_ERROR; }
+    | '+' UnaryExpression           { $$ = $2; }
 
 CallExpression
     : PrimaryExpression                 { $$ = $1; }
@@ -381,15 +382,13 @@ LiteralExpression
     | tNOTHING                      { $$ = new_expression(ctx, EXPR_NOTHING, 0); CHECK_ERROR; }
 
 NumericLiteralExpression
-    : tShort                        { $$ = new_long_expression(ctx, EXPR_USHORT, $1); CHECK_ERROR; }
-    | '0'                           { $$ = new_long_expression(ctx, EXPR_USHORT, 0); CHECK_ERROR; }
-    | tLong                         { $$ = new_long_expression(ctx, EXPR_ULONG, $1); CHECK_ERROR; }
+    : '0'                           { $$ = new_long_expression(ctx, EXPR_INT, 0); CHECK_ERROR; }
+    | tInt                          { $$ = new_long_expression(ctx, EXPR_INT, $1); CHECK_ERROR; }
     | tDouble                       { $$ = new_double_expression(ctx, $1); CHECK_ERROR; }
 
 IntegerValue
-    : tShort                        { $$ = $1; }
-    | '0'                           { $$ = 0; }
-    | tLong                         { $$ = $1; }
+    : '0'                           { $$ = 0; }
+    | tInt                          { $$ = $1; }
 
 PrimaryExpression
     : '(' Expression ')'            { $$ = new_unary_expression(ctx, EXPR_BRACKETS, $2); }

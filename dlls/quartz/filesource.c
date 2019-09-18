@@ -58,7 +58,7 @@ typedef struct DATAREQUEST
 
 typedef struct AsyncReader
 {
-    BaseFilter filter;
+    struct strmbase_filter filter;
     IFileSourceFilter IFileSourceFilter_iface;
 
     BaseOutputPin source;
@@ -81,7 +81,7 @@ typedef struct AsyncReader
 static const IPinVtbl FileAsyncReaderPin_Vtbl;
 static const BaseOutputPinFuncTable output_BaseOutputFuncTable;
 
-static inline AsyncReader *impl_from_BaseFilter(BaseFilter *iface)
+static inline AsyncReader *impl_from_strmbase_filter(struct strmbase_filter *iface)
 {
     return CONTAINING_RECORD(iface, AsyncReader, filter);
 }
@@ -338,18 +338,18 @@ BOOL get_media_type(const WCHAR *filename, GUID *majortype, GUID *subtype, GUID 
     return FALSE;
 }
 
-static IPin *async_reader_get_pin(BaseFilter *iface, unsigned int index)
+static IPin *async_reader_get_pin(struct strmbase_filter *iface, unsigned int index)
 {
-    AsyncReader *filter = impl_from_BaseFilter(iface);
+    AsyncReader *filter = impl_from_strmbase_filter(iface);
 
     if (!index && filter->pszFileName)
         return &filter->source.pin.IPin_iface;
     return NULL;
 }
 
-static void async_reader_destroy(BaseFilter *iface)
+static void async_reader_destroy(struct strmbase_filter *iface)
 {
-    AsyncReader *filter = impl_from_BaseFilter(iface);
+    AsyncReader *filter = impl_from_strmbase_filter(iface);
 
     if (filter->pszFileName)
     {
@@ -379,9 +379,9 @@ static void async_reader_destroy(BaseFilter *iface)
     CoTaskMemFree(filter);
 }
 
-static HRESULT async_reader_query_interface(BaseFilter *iface, REFIID iid, void **out)
+static HRESULT async_reader_query_interface(struct strmbase_filter *iface, REFIID iid, void **out)
 {
-    AsyncReader *filter = impl_from_BaseFilter(iface);
+    AsyncReader *filter = impl_from_strmbase_filter(iface);
 
     if (IsEqualGUID(iid, &IID_IFileSourceFilter))
     {
@@ -393,7 +393,7 @@ static HRESULT async_reader_query_interface(BaseFilter *iface, REFIID iid, void 
     return E_NOINTERFACE;
 }
 
-static const BaseFilterFuncTable BaseFuncTable =
+static const struct strmbase_filter_ops filter_ops =
 {
     .filter_get_pin = async_reader_get_pin,
     .filter_destroy = async_reader_destroy,
@@ -409,8 +409,7 @@ HRESULT AsyncReader_create(IUnknown *outer, void **out)
     if (!pAsyncRead)
         return E_OUTOFMEMORY;
 
-    strmbase_filter_init(&pAsyncRead->filter, &AsyncReader_Vtbl, outer, &CLSID_AsyncReader,
-            (DWORD_PTR)(__FILE__ ": AsyncReader.csFilter"), &BaseFuncTable);
+    strmbase_filter_init(&pAsyncRead->filter, &AsyncReader_Vtbl, outer, &CLSID_AsyncReader, &filter_ops);
 
     pAsyncRead->IFileSourceFilter_iface.lpVtbl = &FileSource_Vtbl;
 

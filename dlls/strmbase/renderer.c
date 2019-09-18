@@ -27,7 +27,7 @@ static inline BaseRenderer *impl_from_IBaseFilter(IBaseFilter *iface)
     return CONTAINING_RECORD(iface, BaseRenderer, filter.IBaseFilter_iface);
 }
 
-static inline BaseRenderer *impl_from_BaseFilter(BaseFilter *iface)
+static inline BaseRenderer *impl_from_strmbase_filter(struct strmbase_filter *iface)
 {
     return CONTAINING_RECORD(iface, BaseRenderer, filter);
 }
@@ -167,24 +167,24 @@ static const IPinVtbl BaseRenderer_InputPin_Vtbl =
     BaseInputPinImpl_NewSegment
 };
 
-static IPin *renderer_get_pin(BaseFilter *iface, unsigned int index)
+static IPin *renderer_get_pin(struct strmbase_filter *iface, unsigned int index)
 {
-    BaseRenderer *filter = impl_from_BaseFilter(iface);
+    BaseRenderer *filter = impl_from_strmbase_filter(iface);
 
     if (index == 0)
         return &filter->sink.pin.IPin_iface;
     return NULL;
 }
 
-static void renderer_destroy(BaseFilter *iface)
+static void renderer_destroy(struct strmbase_filter *iface)
 {
-    BaseRenderer *filter = impl_from_BaseFilter(iface);
+    BaseRenderer *filter = impl_from_strmbase_filter(iface);
     filter->pFuncsTable->renderer_destroy(filter);
 }
 
-static HRESULT renderer_query_interface(BaseFilter *iface, REFIID iid, void **out)
+static HRESULT renderer_query_interface(struct strmbase_filter *iface, REFIID iid, void **out)
 {
-    BaseRenderer *filter = impl_from_BaseFilter(iface);
+    BaseRenderer *filter = impl_from_strmbase_filter(iface);
     HRESULT hr;
 
     if (filter->pFuncsTable->renderer_query_interface
@@ -204,7 +204,8 @@ static HRESULT renderer_query_interface(BaseFilter *iface, REFIID iid, void **ou
     return E_NOINTERFACE;
 }
 
-static const BaseFilterFuncTable RendererBaseFilterFuncTable = {
+static const struct strmbase_filter_ops filter_ops =
+{
     .filter_get_pin = renderer_get_pin,
     .filter_destroy = renderer_destroy,
     .filter_query_interface = renderer_query_interface,
@@ -232,13 +233,14 @@ static const BaseInputPinFuncTable input_BaseInputFuncTable = {
 
 
 HRESULT WINAPI strmbase_renderer_init(BaseRenderer *filter, const IBaseFilterVtbl *vtbl,
-        IUnknown *outer, const CLSID *clsid, const WCHAR *sink_name, DWORD_PTR debug_info,
+        IUnknown *outer, const CLSID *clsid, const WCHAR *sink_name,
         const BaseRendererFuncTable *pBaseFuncsTable)
 {
     PIN_INFO piInput;
     HRESULT hr;
 
-    strmbase_filter_init(&filter->filter, vtbl, outer, clsid, debug_info, &RendererBaseFilterFuncTable);
+    memset(filter, 0, sizeof(*filter));
+    strmbase_filter_init(&filter->filter, vtbl, outer, clsid, &filter_ops);
 
     filter->pFuncsTable = pBaseFuncsTable;
 
@@ -264,7 +266,6 @@ HRESULT WINAPI strmbase_renderer_init(BaseRenderer *filter, const IBaseFilterVtb
     filter->state_event = CreateEventW(NULL, TRUE, TRUE, NULL);
     filter->advise_event = CreateEventW(NULL, FALSE, FALSE, NULL);
     filter->flush_event = CreateEventW(NULL, TRUE, TRUE, NULL);
-    filter->pMediaSample = NULL;
 
     QualityControlImpl_Create(&filter->sink.pin.IPin_iface, &filter->filter.IBaseFilter_iface, &filter->qcimpl);
     filter->qcimpl->IQualityControl_iface.lpVtbl = &Renderer_QualityControl_Vtbl;

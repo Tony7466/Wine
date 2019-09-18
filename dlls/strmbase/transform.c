@@ -35,7 +35,7 @@ static inline TransformFilter *impl_from_IBaseFilter( IBaseFilter *iface )
     return CONTAINING_RECORD(iface, TransformFilter, filter.IBaseFilter_iface);
 }
 
-static inline TransformFilter *impl_from_BaseFilter( BaseFilter *iface )
+static inline TransformFilter *impl_from_strmbase_filter(struct strmbase_filter *iface)
 {
     return CONTAINING_RECORD(iface, TransformFilter, filter);
 }
@@ -121,9 +121,9 @@ static HRESULT WINAPI TransformFilter_Output_GetMediaType(BasePin *This, int iPo
     return S_OK;
 }
 
-static IPin *transform_get_pin(BaseFilter *iface, unsigned int index)
+static IPin *transform_get_pin(struct strmbase_filter *iface, unsigned int index)
 {
-    TransformFilter *filter = impl_from_BaseFilter(iface);
+    TransformFilter *filter = impl_from_strmbase_filter(iface);
 
     if (index == 0)
         return &filter->sink.pin.IPin_iface;
@@ -132,9 +132,9 @@ static IPin *transform_get_pin(BaseFilter *iface, unsigned int index)
     return NULL;
 }
 
-static void transform_destroy(BaseFilter *iface)
+static void transform_destroy(struct strmbase_filter *iface)
 {
-    TransformFilter *filter = impl_from_BaseFilter(iface);
+    TransformFilter *filter = impl_from_strmbase_filter(iface);
 
     if (filter->sink.pin.pConnectedTo)
         IPin_Disconnect(filter->sink.pin.pConnectedTo);
@@ -156,7 +156,8 @@ static void transform_destroy(BaseFilter *iface)
     CoTaskMemFree(filter);
 }
 
-static const BaseFilterFuncTable tfBaseFuncTable = {
+static const struct strmbase_filter_ops filter_ops =
+{
     .filter_get_pin = transform_get_pin,
     .filter_destroy = transform_destroy,
 };
@@ -277,8 +278,7 @@ static HRESULT strmbase_transform_init(IUnknown *outer, const CLSID *clsid,
     PIN_INFO piInput;
     PIN_INFO piOutput;
 
-    strmbase_filter_init(&filter->filter, &transform_vtbl, outer, clsid,
-            (DWORD_PTR)(__FILE__ ": TransformFilter.csFilter"), &tfBaseFuncTable);
+    strmbase_filter_init(&filter->filter, &transform_vtbl, outer, clsid, &filter_ops);
 
     InitializeCriticalSection(&filter->csReceive);
     filter->csReceive.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__": TransformFilter.csReceive");

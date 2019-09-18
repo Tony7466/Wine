@@ -763,6 +763,7 @@ static void add_enum_typeinfo(msft_typelib_t *typelib, type_t *enumeration);
 static void add_union_typeinfo(msft_typelib_t *typelib, type_t *tunion);
 static void add_coclass_typeinfo(msft_typelib_t *typelib, type_t *cls);
 static void add_dispinterface_typeinfo(msft_typelib_t *typelib, type_t *dispinterface);
+static void add_typedef_typeinfo(msft_typelib_t *typelib, type_t *dispinterface);
 
 
 /****************************************************************************
@@ -966,16 +967,30 @@ static int encode_type(
         }
         else
         {
-            /* typedef'd types without public attribute aren't included in the typelib */
-            while (type_is_alias(type) && !is_attr(type->attrs, ATTR_PUBLIC))
-                type = type_alias_get_aliasee_type(type);
+            /* Typedefs without the [public] attribute aren't included in the
+             * typelib, unless the aliasee is an anonymous UDT or the typedef
+             * is wire-marshalled. In the latter case the wire-marshal type,
+             * which may be a non-public alias, is used instead. */
+            while (type_is_alias(type))
+            {
+                if (is_attr(type->attrs, ATTR_WIREMARSHAL))
+                {
+                    type = get_attrp(type->attrs, ATTR_WIREMARSHAL);
+                    break;
+                }
+                else if (!is_attr(type->attrs, ATTR_PUBLIC))
+                    type = type_alias_get_aliasee_type(type);
+                else
+                    break;
+            }
 
             chat("encode_type: VT_USERDEFINED - adding new type %s, real type %d\n",
                  type->name, type_get_type(type));
 
-            switch (type_get_type(type))
+            switch (type_get_type_detect_alias(type))
             {
             case TYPE_STRUCT:
+            case TYPE_ENCAPSULATED_UNION:
                 add_structure_typeinfo(typelib, type);
                 break;
             case TYPE_INTERFACE:
@@ -989,6 +1004,9 @@ static int encode_type(
                 break;
             case TYPE_COCLASS:
                 add_coclass_typeinfo(typelib, type);
+                break;
+            case TYPE_ALIAS:
+                add_typedef_typeinfo(typelib, type);
                 break;
             default:
                 error("encode_type: VT_USERDEFINED - unhandled type %d\n",
@@ -2119,6 +2137,7 @@ static void add_interface_typeinfo(msft_typelib_t *typelib, type_t *interface)
 
 static void add_structure_typeinfo(msft_typelib_t *typelib, type_t *structure)
 {
+    var_list_t *fields;
     int idx = 0;
     var_t *cur;
     msft_typeinfo_t *msft_typeinfo;
@@ -2130,9 +2149,16 @@ static void add_structure_typeinfo(msft_typelib_t *typelib, type_t *structure)
     msft_typeinfo = create_msft_typeinfo(typelib, TKIND_RECORD, structure->name, structure->attrs);
     msft_typeinfo->typeinfo->size = 0;
 
-    if (type_struct_get_fields(structure))
-        LIST_FOR_EACH_ENTRY( cur, type_struct_get_fields(structure), var_t, entry )
+    if (type_get_type(structure) == TYPE_STRUCT)
+        fields = type_struct_get_fields(structure);
+    else
+        fields = type_encapsulated_union_get_fields(structure);
+
+    if (fields)
+    {
+        LIST_FOR_EACH_ENTRY( cur, fields, var_t, entry )
             add_var_desc(msft_typeinfo, idx++, cur);
+    }
 }
 
 static void add_enum_typeinfo(msft_typelib_t *typelib, type_t *enumeration)
@@ -2320,6 +2346,7 @@ static void add_type_typeinfo(msft_typelib_t *typelib, type_t *type)
         add_interface_typeinfo(typelib, type);
         break;
     case TYPE_STRUCT:
+    case TYPE_ENCAPSULATED_UNION:
         add_structure_typeinfo(typelib, type);
         break;
     case TYPE_ENUM:

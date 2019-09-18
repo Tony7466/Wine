@@ -78,6 +78,8 @@ static DWORD request_thread;
 /* tid of the client thread */
 static DWORD client_tid;
 
+static HANDLE ntoskrnl_heap;
+
 struct wine_driver
 {
     DRIVER_OBJECT driver_obj;
@@ -371,7 +373,7 @@ NTSTATUS WINAPI ObOpenObjectByPointer( void *obj, ULONG attr, ACCESS_STATE *acce
         return STATUS_NOT_IMPLEMENTED;
     }
 
-    if (attr & ~OBJ_KERNEL_HANDLE) FIXME( "access %x not supported\n", access );
+    if (attr & ~OBJ_KERNEL_HANDLE) FIXME( "attr %#x not supported\n", attr );
     if (access_state) FIXME( "access_state not implemented\n" );
 
     if (type && ObGetObjectType( obj ) != type) return STATUS_OBJECT_TYPE_MISMATCH;
@@ -526,6 +528,7 @@ static NTSTATUS dispatch_create( struct dispatch_context *context )
     irpsp->Parameters.Create.EaLength = 0;
 
     irp->Tail.Overlay.OriginalFileObject = file;
+    irp->Tail.Overlay.Thread = (PETHREAD)KeGetCurrentThread();
     irp->RequestorMode = UserMode;
     irp->AssociatedIrp.SystemBuffer = NULL;
     irp->UserBuffer = NULL;
@@ -563,6 +566,7 @@ static NTSTATUS dispatch_close( struct dispatch_context *context )
     irpsp->FileObject = file;
 
     irp->Tail.Overlay.OriginalFileObject = file;
+    irp->Tail.Overlay.Thread = (PETHREAD)KeGetCurrentThread();
     irp->RequestorMode = UserMode;
     irp->AssociatedIrp.SystemBuffer = NULL;
     irp->UserBuffer = NULL;
@@ -1413,10 +1417,15 @@ NTSTATUS WINAPI IoCreateDriver( UNICODE_STRING *name, PDRIVER_INITIALIZE init )
     for (i = 0; i <= IRP_MJ_MAXIMUM_FUNCTION; i++)
         driver->driver_obj.MajorFunction[i] = unhandled_irp;
 
+    EnterCriticalSection( &drivers_cs );
+    if (wine_rb_put( &wine_drivers, &driver->driver_obj.DriverName, &driver->entry ))
+        ERR( "failed to insert driver %s in tree\n", debugstr_us(name) );
+    LeaveCriticalSection( &drivers_cs );
+
     status = driver->driver_obj.DriverInit( &driver->driver_obj, &driver->driver_extension.ServiceKeyName );
     if (status)
     {
-        ObDereferenceObject( driver );
+        IoDeleteDriver( &driver->driver_obj );
         return status;
     }
 
@@ -1426,10 +1435,6 @@ NTSTATUS WINAPI IoCreateDriver( UNICODE_STRING *name, PDRIVER_INITIALIZE init )
         driver->driver_obj.MajorFunction[i] = unhandled_irp;
     }
 
-    EnterCriticalSection( &drivers_cs );
-    if (wine_rb_put( &wine_drivers, &driver->driver_obj.DriverName, &driver->entry ))
-        ERR( "failed to insert driver %s in tree\n", debugstr_us(name) );
-    LeaveCriticalSection( &drivers_cs );
     return STATUS_SUCCESS;
 }
 
@@ -1791,6 +1796,13 @@ void WINAPI IoRegisterDriverReinitialization( PDRIVER_OBJECT obj, PDRIVER_REINIT
     FIXME( "stub: %p %p %p\n", obj, reinit, context );
 }
 
+/***********************************************************************
+ *           IoRegisterBootDriverReinitialization   (NTOSKRNL.EXE.@)
+ */
+void WINAPI IoRegisterBootDriverReinitialization(DRIVER_OBJECT *driver, PDRIVER_REINITIALIZE proc, void *ctx)
+{
+    FIXME("driver %p, proc %p, ctx %p, stub!\n", driver, proc, ctx);
+}
 
 /***********************************************************************
  *           IoRegisterShutdownNotification    (NTOSKRNL.EXE.@)
@@ -1997,7 +2009,7 @@ PVOID WINAPI ExAllocatePoolWithQuota( POOL_TYPE type, SIZE_T size )
 PVOID WINAPI ExAllocatePoolWithTag( POOL_TYPE type, SIZE_T size, ULONG tag )
 {
     /* FIXME: handle page alignment constraints */
-    void *ret = HeapAlloc( GetProcessHeap(), 0, size );
+    void *ret = HeapAlloc( ntoskrnl_heap, 0, size );
     TRACE( "%lu pool %u -> %p\n", size, type, ret );
     return ret;
 }
@@ -2039,7 +2051,7 @@ void WINAPI ExFreePool( void *ptr )
 void WINAPI ExFreePoolWithTag( void *ptr, ULONG tag )
 {
     TRACE( "%p\n", ptr );
-    HeapFree( GetProcessHeap(), 0, ptr );
+    HeapFree( ntoskrnl_heap, 0, ptr );
 }
 
 static void initialize_lookaside_list( GENERAL_LOOKASIDE *lookaside, PALLOCATE_FUNCTION allocate, PFREE_FUNCTION free,
@@ -3049,30 +3061,6 @@ BOOLEAN WINAPI IoSetThreadHardErrorMode(BOOLEAN EnableHardErrors)
     return FALSE;
 }
 
-
-/*****************************************************
- *           IoInitializeRemoveLockEx  (NTOSKRNL.EXE.@)
- */
-VOID WINAPI IoInitializeRemoveLockEx(PIO_REMOVE_LOCK lock, ULONG tag,
-                                     ULONG maxmin, ULONG high, ULONG size)
-{
-    FIXME("(%p %u %u %u %u) stub\n", lock, tag, maxmin, high, size);
-}
-
-
-/*****************************************************
- *           IoAcquireRemoveLockEx  (NTOSKRNL.EXE.@)
- */
-
-NTSTATUS WINAPI IoAcquireRemoveLockEx(PIO_REMOVE_LOCK lock, PVOID tag,
-                                      LPCSTR file, ULONG line, ULONG lock_size)
-{
-    FIXME("(%p, %p, %s, %u, %u): stub\n", lock, tag, debugstr_a(file), line, lock_size);
-
-    return STATUS_NOT_IMPLEMENTED;
-}
-
-
 /*****************************************************
  *           DllMain
  */
@@ -3090,9 +3078,11 @@ BOOL WINAPI DllMain( HINSTANCE inst, DWORD reason, LPVOID reserved )
 #endif
         KeQueryTickCount( &count );  /* initialize the global KeTickCount */
         NtBuildNumber = NtCurrentTeb()->Peb->OSBuildNumber;
+        ntoskrnl_heap = HeapCreate( HEAP_CREATE_ENABLE_EXECUTE, 0, 0 );
         break;
     case DLL_PROCESS_DETACH:
         if (reserved) break;
+        HeapDestroy( ntoskrnl_heap );
         RtlRemoveVectoredExceptionHandler( handler );
         break;
     }
@@ -3128,10 +3118,19 @@ VOID WINAPI IoStartNextPacket(PDEVICE_OBJECT deviceobject, BOOLEAN cancelable)
 /*****************************************************
  *           ObQueryNameString  (NTOSKRNL.EXE.@)
  */
-NTSTATUS WINAPI ObQueryNameString(PVOID object, POBJECT_NAME_INFORMATION name, ULONG maxlength, PULONG returnlength)
+NTSTATUS WINAPI ObQueryNameString( void *object, OBJECT_NAME_INFORMATION *name, ULONG size, ULONG *ret_size )
 {
-    FIXME("(%p %p %u %p) stub\n", object, name, maxlength, returnlength);
-    return STATUS_NOT_IMPLEMENTED;
+    HANDLE handle;
+    NTSTATUS ret;
+
+    TRACE("object %p, name %p, size %u, ret_size %p.\n", object, name, size, ret_size);
+
+    if ((ret = ObOpenObjectByPointer( object, 0, NULL, 0, NULL, KernelMode, &handle )))
+        return ret;
+    ret = NtQueryObject( handle, ObjectNameInformation, name, size, ret_size );
+
+    NtClose( handle );
+    return ret;
 }
 
 /*****************************************************
@@ -3819,14 +3818,6 @@ void WINAPI KeFlushQueuedDpcs(void)
 }
 
 /*********************************************************************
- *           IoReleaseRemoveLockAndWaitEx    (NTOSKRNL.@)
- */
-void WINAPI IoReleaseRemoveLockAndWaitEx(PIO_REMOVE_LOCK lock, PVOID tag, ULONG size)
-{
-    FIXME("stub: %p %p %u\n", lock, tag, size);
-}
-
-/*********************************************************************
  *           DbgQueryDebugFilterState    (NTOSKRNL.@)
  */
 NTSTATUS WINAPI DbgQueryDebugFilterState(ULONG component, ULONG level)
@@ -3919,4 +3910,13 @@ ULONG WINAPI ExSetTimerResolution(ULONG time, BOOLEAN set_resolution)
 {
     FIXME("stub: %u %d\n", time, set_resolution);
     return KeQueryTimeIncrement();
+}
+
+/***********************************************************************
+ *           IoGetRequestorProcess   (NTOSKRNL.EXE.@)
+ */
+PEPROCESS WINAPI IoGetRequestorProcess(IRP *irp)
+{
+    TRACE("irp %p.\n", irp);
+    return irp->Tail.Overlay.Thread->kthread.process;
 }

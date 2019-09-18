@@ -1482,6 +1482,28 @@ static inline void wined3d_color_from_d3dcolor(struct wined3d_color *wined3d_col
     wined3d_color->a = D3DCOLOR_B_A(d3d_color) / 255.0f;
 }
 
+extern const struct wined3d_vec4 wined3d_srgb_const[] DECLSPEC_HIDDEN;
+
+static inline float wined3d_srgb_from_linear(float colour)
+{
+    if (colour < 0.0f)
+        return 0.0f;
+    if (colour < wined3d_srgb_const[1].x)
+        return colour * wined3d_srgb_const[0].w;
+    if (colour < 1.0f)
+        return wined3d_srgb_const[0].y * powf(colour, wined3d_srgb_const[0].x) - wined3d_srgb_const[0].z;
+    return 1.0f;
+}
+
+static inline void wined3d_colour_srgb_from_linear(struct wined3d_color *colour_srgb,
+        const struct wined3d_color *colour)
+{
+    colour_srgb->r = wined3d_srgb_from_linear(colour->r);
+    colour_srgb->g = wined3d_srgb_from_linear(colour->g);
+    colour_srgb->b = wined3d_srgb_from_linear(colour->b);
+    colour_srgb->a = colour->a;
+}
+
 #define WINED3D_HIGHEST_TRANSFORM_STATE WINED3D_TS_WORLD_MATRIX(255) /* Highest value in wined3d_transform_state. */
 
 void wined3d_check_gl_call(const struct wined3d_gl_info *gl_info,
@@ -2660,6 +2682,7 @@ struct wined3d_gl_limits
     unsigned int combined_samplers;
     UINT general_combiners;
     UINT user_clip_distances;
+    unsigned int texture_size;
     UINT texture3d_size;
     UINT anisotropy;
     float shininess;
@@ -2978,9 +3001,6 @@ const struct ffp_frag_desc *find_ffp_frag_shader(const struct wine_rb_tree *frag
 void add_ffp_frag_shader(struct wine_rb_tree *shaders, struct ffp_frag_desc *desc) DECLSPEC_HIDDEN;
 void wined3d_ftoa(float value, char *s) DECLSPEC_HIDDEN;
 
-extern const float wined3d_srgb_const0[] DECLSPEC_HIDDEN;
-extern const float wined3d_srgb_const1[] DECLSPEC_HIDDEN;
-
 enum wined3d_ffp_vs_fog_mode
 {
     WINED3D_FFP_VS_FOG_OFF      = 0,
@@ -3290,8 +3310,12 @@ void device_clear_render_targets(struct wined3d_device *device, UINT rt_count, c
         const struct wined3d_color *color, float depth, DWORD stencil) DECLSPEC_HIDDEN;
 BOOL device_context_add(struct wined3d_device *device, struct wined3d_context *context) DECLSPEC_HIDDEN;
 void device_context_remove(struct wined3d_device *device, struct wined3d_context *context) DECLSPEC_HIDDEN;
+void wined3d_device_create_default_samplers(struct wined3d_device *device,
+        struct wined3d_context *context) DECLSPEC_HIDDEN;
 void wined3d_device_create_primary_opengl_context_cs(void *object) DECLSPEC_HIDDEN;
 void wined3d_device_delete_opengl_contexts_cs(void *object) DECLSPEC_HIDDEN;
+void wined3d_device_destroy_default_samplers(struct wined3d_device *device,
+        struct wined3d_context *context) DECLSPEC_HIDDEN;
 HRESULT wined3d_device_init(struct wined3d_device *device, struct wined3d *wined3d,
         unsigned int adapter_idx, enum wined3d_device_type device_type, HWND focus_window, unsigned int flags,
         BYTE surface_alignment, const enum wined3d_feature_level *levels, unsigned int level_count,
@@ -3506,6 +3530,7 @@ struct wined3d_texture_ops
 #define WINED3D_TEXTURE_DISCARD             0x00002000
 #define WINED3D_TEXTURE_GET_DC              0x00004000
 #define WINED3D_TEXTURE_GENERATE_MIPMAPS    0x00008000
+#define WINED3D_TEXTURE_DOWNLOADABLE        0x00010000
 
 #define WINED3D_TEXTURE_ASYNC_COLOR_KEY     0x00000001
 

@@ -51,7 +51,7 @@
 #ifdef HAVE_SYS_UCONTEXT_H
 # include <sys/ucontext.h>
 #endif
-#ifdef HAVE_LIBUNWIND_H
+#ifdef HAVE_LIBUNWIND
 # define UNW_LOCAL_ONLY
 # include <libunwind.h>
 #endif
@@ -74,29 +74,6 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(seh);
 WINE_DECLARE_DEBUG_CHANNEL(relay);
-
-struct _DISPATCHER_CONTEXT;
-
-typedef LONG (WINAPI *PC_LANGUAGE_EXCEPTION_HANDLER)( EXCEPTION_POINTERS *ptrs, ULONG64 frame );
-typedef EXCEPTION_DISPOSITION (WINAPI *PEXCEPTION_ROUTINE)( EXCEPTION_RECORD *rec,
-                                                            ULONG64 frame,
-                                                            CONTEXT *context,
-                                                            struct _DISPATCHER_CONTEXT *dispatch );
-typedef void (WINAPI *TERMINATION_HANDLER)( ULONG flags, ULONG64 frame );
-
-typedef struct _DISPATCHER_CONTEXT
-{
-    ULONG64               ControlPc;
-    ULONG64               ImageBase;
-    PRUNTIME_FUNCTION     FunctionEntry;
-    ULONG64               EstablisherFrame;
-    ULONG64               TargetIp;
-    PCONTEXT              ContextRecord;
-    PEXCEPTION_ROUTINE    LanguageHandler;
-    PVOID                 HandlerData;
-    PUNWIND_HISTORY_TABLE HistoryTable;
-    ULONG                 ScopeIndex;
-} DISPATCHER_CONTEXT, *PDISPATCHER_CONTEXT;
 
 typedef struct _SCOPE_TABLE
 {
@@ -329,39 +306,6 @@ static inline struct amd64_thread_data *amd64_thread_data(void)
 }
 
 /***********************************************************************
- * Dynamic unwind table
- */
-
-struct dynamic_unwind_entry
-{
-    struct list entry;
-
-    /* memory region which matches this entry */
-    DWORD64 base;
-    DWORD64 end;
-
-    /* lookup table */
-    RUNTIME_FUNCTION *table;
-    DWORD count;
-    DWORD max_count;
-
-    /* user defined callback */
-    PGET_RUNTIME_FUNCTION_CALLBACK callback;
-    PVOID context;
-};
-
-static struct list dynamic_unwind_list = LIST_INIT(dynamic_unwind_list);
-
-static RTL_CRITICAL_SECTION dynamic_unwind_section;
-static RTL_CRITICAL_SECTION_DEBUG dynamic_unwind_debug =
-{
-    0, 0, &dynamic_unwind_section,
-    { &dynamic_unwind_debug.ProcessLocksList, &dynamic_unwind_debug.ProcessLocksList },
-      0, 0, { (DWORD_PTR)(__FILE__ ": dynamic_unwind_section") }
-};
-static RTL_CRITICAL_SECTION dynamic_unwind_section = { &dynamic_unwind_debug, -1, 0, 0, 0, 0 };
-
-/***********************************************************************
  * Definitions for Win32 unwind tables
  */
 
@@ -396,6 +340,7 @@ struct UNWIND_INFO
 #define UWOP_SET_FPREG       3
 #define UWOP_SAVE_NONVOL     4
 #define UWOP_SAVE_NONVOL_FAR 5
+#define UWOP_EPILOG          6
 #define UWOP_SAVE_XMM128     8
 #define UWOP_SAVE_XMM128_FAR 9
 #define UWOP_PUSH_MACHFRAME  10
@@ -484,6 +429,19 @@ static void dump_unwind_info( ULONG64 base, RUNTIME_FUNCTION *function )
             case UWOP_PUSH_MACHFRAME:
                 TRACE( "PUSH_MACHFRAME %u\n", info->opcodes[i].info );
                 break;
+            case UWOP_EPILOG:
+                if (info->version == 2)
+                {
+                    unsigned int offset;
+                    if (info->opcodes[i].info)
+                        offset = info->opcodes[i].offset;
+                    else
+                        offset = (info->opcodes[i+1].info << 8) + info->opcodes[i+1].offset;
+                    TRACE("epilog %p-%p\n", (char *)base + function->EndAddress - offset,
+                            (char *)base + function->EndAddress - offset + info->opcodes[i].offset );
+                    i += 1;
+                    break;
+                }
             default:
                 FIXME( "unknown code %u\n", info->opcodes[i].code );
                 break;
@@ -1451,7 +1409,7 @@ static NTSTATUS dwarf_virtual_unwind( ULONG64 ip, ULONG64 *frame,CONTEXT *contex
 }
 
 
-#ifdef HAVE_LIBUNWIND_H
+#ifdef HAVE_LIBUNWIND
 /***********************************************************************
  *           libunwind_set_cursor_from_context
  */
@@ -1632,6 +1590,73 @@ static NTSTATUS libunwind_virtual_unwind( ULONG64 ip, BOOL* got_info, ULONG64 *f
 }
 #endif
 
+
+/***********************************************************************
+ *           virtual_unwind
+ */
+static NTSTATUS virtual_unwind( ULONG type, DISPATCHER_CONTEXT *dispatch, CONTEXT *context )
+{
+    LDR_MODULE *module;
+    NTSTATUS status;
+
+    dispatch->ImageBase = 0;
+    dispatch->ScopeIndex = 0;
+    dispatch->ControlPc = context->Rip;
+
+    /* first look for PE exception information */
+
+    if ((dispatch->FunctionEntry = lookup_function_info( context->Rip, &dispatch->ImageBase, &module )))
+    {
+        dispatch->LanguageHandler = RtlVirtualUnwind( type, dispatch->ImageBase, context->Rip,
+                                                      dispatch->FunctionEntry, context,
+                                                      &dispatch->HandlerData, &dispatch->EstablisherFrame,
+                                                      NULL );
+        return STATUS_SUCCESS;
+    }
+
+    /* then look for host system exception information */
+
+    if (!module || (module->Flags & LDR_WINE_INTERNAL))
+    {
+        BOOL got_info = FALSE;
+        struct dwarf_eh_bases bases;
+        const struct dwarf_fde *fde = _Unwind_Find_FDE( (void *)(context->Rip - 1), &bases );
+
+        if (fde)
+        {
+            status = dwarf_virtual_unwind( context->Rip, &dispatch->EstablisherFrame, context, fde,
+                                           &bases, &dispatch->LanguageHandler, &dispatch->HandlerData );
+            if (status != STATUS_SUCCESS) return status;
+            got_info = TRUE;
+        }
+#ifdef HAVE_LIBUNWIND
+        else
+        {
+            status = libunwind_virtual_unwind( context->Rip, &got_info, &dispatch->EstablisherFrame,
+                                               context, &dispatch->LanguageHandler, &dispatch->HandlerData );
+            if (status != STATUS_SUCCESS) return status;
+        }
+#endif
+        if (got_info)
+        {
+            if (dispatch->LanguageHandler && !module)
+            {
+                FIXME( "calling personality routine in system library not supported yet\n" );
+                dispatch->LanguageHandler = NULL;
+            }
+            return STATUS_SUCCESS;
+        }
+    }
+    else WARN( "exception data not found in %s\n", debugstr_w(module->BaseDllName.Buffer) );
+
+    /* no exception information, treat as a leaf function */
+
+    dispatch->EstablisherFrame = context->Rsp;
+    dispatch->LanguageHandler = NULL;
+    context->Rip = *(ULONG64 *)context->Rsp;
+    context->Rsp = context->Rsp + sizeof(ULONG64);
+    return STATUS_SUCCESS;
+}
 
 /***********************************************************************
  *           dispatch_signal
@@ -1839,6 +1864,8 @@ __ASM_GLOBAL_FUNC( RtlCaptureContext,
 extern void set_full_cpu_context( const CONTEXT *context );
 __ASM_GLOBAL_FUNC( set_full_cpu_context,
                    "subq $40,%rsp\n\t"
+                   __ASM_SEH(".seh_stackalloc 0x40\n\t")
+                   __ASM_SEH(".seh_endprologue\n\t")
                    __ASM_CFI(".cfi_adjust_cfa_offset 40\n\t")
                    "ldmxcsr 0x34(%rdi)\n\t"         /* context->MxCsr */
                    "movw 0x38(%rdi),%ax\n\t"        /* context->SegCs */
@@ -2453,8 +2480,9 @@ static EXCEPTION_RECORD *setup_exception( ucontext_t *sigcontext, raise_func fun
     else if ((char *)(stack - 1) < (char *)NtCurrentTeb()->Tib.StackLimit)
     {
         /* stack access below stack limit, may be recoverable */
-        if (virtual_handle_stack_fault( stack - 1 )) exception_code = EXCEPTION_STACK_OVERFLOW;
-        else
+        switch (virtual_handle_stack_fault( stack - 1 ))
+        {
+        case 0:  /* not handled */
         {
             UINT diff = (char *)NtCurrentTeb()->Tib.StackLimit - (char *)(stack - 1);
             ERR( "stack overflow %u bytes in thread %04x eip %016lx esp %016lx stack %p-%p-%p\n",
@@ -2462,6 +2490,10 @@ static EXCEPTION_RECORD *setup_exception( ucontext_t *sigcontext, raise_func fun
                  (ULONG_PTR)RSP_sig(sigcontext), NtCurrentTeb()->DeallocationStack,
                  NtCurrentTeb()->Tib.StackLimit, NtCurrentTeb()->Tib.StackBase );
             abort_thread(1);
+        }
+        case -1:  /* overflow */
+            exception_code = EXCEPTION_STACK_OVERFLOW;
+            break;
         }
     }
 
@@ -2510,76 +2542,6 @@ static inline CONTEXT *get_exception_context( EXCEPTION_RECORD *rec )
 }
 
 
-/**********************************************************************
- *           find_function_info
- */
-static RUNTIME_FUNCTION *find_function_info( ULONG64 pc, HMODULE module,
-                                             RUNTIME_FUNCTION *func, ULONG size )
-{
-    int min = 0;
-    int max = size - 1;
-
-    while (min <= max)
-    {
-        int pos = (min + max) / 2;
-        if ((char *)pc < (char *)module + func[pos].BeginAddress) max = pos - 1;
-        else if ((char *)pc >= (char *)module + func[pos].EndAddress) min = pos + 1;
-        else
-        {
-            func += pos;
-            while (func->UnwindData & 1)  /* follow chained entry */
-                func = (RUNTIME_FUNCTION *)((char *)module + (func->UnwindData & ~1));
-            return func;
-        }
-    }
-    return NULL;
-}
-
-/**********************************************************************
- *           lookup_function_info
- */
-static RUNTIME_FUNCTION *lookup_function_info( ULONG64 pc, ULONG64 *base, LDR_MODULE **module )
-{
-    RUNTIME_FUNCTION *func = NULL;
-    struct dynamic_unwind_entry *entry;
-    ULONG size;
-
-    /* PE module or wine module */
-    if (!LdrFindEntryForAddress( (void *)pc, module ))
-    {
-        *base = (ULONG64)(*module)->BaseAddress;
-        if ((func = RtlImageDirectoryEntryToData( (*module)->BaseAddress, TRUE,
-                                                  IMAGE_DIRECTORY_ENTRY_EXCEPTION, &size )))
-        {
-            /* lookup in function table */
-            func = find_function_info( pc, (*module)->BaseAddress, func, size/sizeof(*func) );
-        }
-    }
-    else
-    {
-        *module = NULL;
-
-        RtlEnterCriticalSection( &dynamic_unwind_section );
-        LIST_FOR_EACH_ENTRY( entry, &dynamic_unwind_list, struct dynamic_unwind_entry, entry )
-        {
-            if (pc >= entry->base && pc < entry->end)
-            {
-                *base = entry->base;
-
-                /* use callback or lookup in function table */
-                if (entry->callback)
-                    func = entry->callback( pc, entry->context );
-                else
-                    func = find_function_info( pc, (HMODULE)entry->base, entry->table, entry->count );
-                break;
-            }
-        }
-        RtlLeaveCriticalSection( &dynamic_unwind_section );
-    }
-
-    return func;
-}
-
 static DWORD __cdecl nested_exception_handler( EXCEPTION_RECORD *rec, EXCEPTION_REGISTRATION_RECORD *frame,
                                                CONTEXT *context, EXCEPTION_REGISTRATION_RECORD **dispatcher )
 {
@@ -2605,7 +2567,7 @@ static DWORD call_handler( EXCEPTION_RECORD *rec, CONTEXT *context, DISPATCHER_C
 
     TRACE( "calling handler %p (rec=%p, frame=0x%lx context=%p, dispatch=%p)\n",
            dispatch->LanguageHandler, rec, dispatch->EstablisherFrame, dispatch->ContextRecord, dispatch );
-    res = dispatch->LanguageHandler( rec, dispatch->EstablisherFrame, context, dispatch );
+    res = dispatch->LanguageHandler( rec, (void *)dispatch->EstablisherFrame, context, dispatch );
     TRACE( "handler at %p returned %u\n", dispatch->LanguageHandler, res );
 
     __wine_pop_frame( &frame );
@@ -2643,7 +2605,6 @@ static NTSTATUS call_stack_handlers( EXCEPTION_RECORD *rec, CONTEXT *orig_contex
     UNWIND_HISTORY_TABLE table;
     DISPATCHER_CONTEXT dispatch;
     CONTEXT context;
-    LDR_MODULE *module;
     NTSTATUS status;
 
     context = *orig_context;
@@ -2652,64 +2613,8 @@ static NTSTATUS call_stack_handlers( EXCEPTION_RECORD *rec, CONTEXT *orig_contex
     dispatch.HistoryTable  = &table;
     for (;;)
     {
-        /* FIXME: should use the history table to make things faster */
-
-        dispatch.ImageBase = 0;
-        dispatch.ControlPc = context.Rip;
-        dispatch.ScopeIndex = 0;
-
-        /* first look for PE exception information */
-
-        if ((dispatch.FunctionEntry = lookup_function_info( dispatch.ControlPc, &dispatch.ImageBase, &module )))
-        {
-            dispatch.LanguageHandler = RtlVirtualUnwind( UNW_FLAG_EHANDLER, dispatch.ImageBase,
-                                                         dispatch.ControlPc, dispatch.FunctionEntry,
-                                                         &context, &dispatch.HandlerData,
-                                                         &dispatch.EstablisherFrame, NULL );
-            goto unwind_done;
-        }
-
-        /* then look for host system exception information */
-
-        if (!module || (module->Flags & LDR_WINE_INTERNAL))
-        {
-            BOOL got_info = FALSE;
-            struct dwarf_eh_bases bases;
-            const struct dwarf_fde *fde = _Unwind_Find_FDE( (void *)(dispatch.ControlPc - 1), &bases );
-
-            if (fde)
-            {
-                status = dwarf_virtual_unwind( dispatch.ControlPc, &dispatch.EstablisherFrame, &context,
-                                               fde, &bases, &dispatch.LanguageHandler, &dispatch.HandlerData );
-                if (status != STATUS_SUCCESS) return status;
-                got_info = TRUE;
-            }
-#ifdef HAVE_LIBUNWIND_H
-            else
-            {
-                status = libunwind_virtual_unwind( dispatch.ControlPc, &got_info, &dispatch.EstablisherFrame, &context,
-                                                   &dispatch.LanguageHandler, &dispatch.HandlerData );
-                if (status != STATUS_SUCCESS) return status;
-            }
-#endif
-
-            if (got_info)
-            {
-                dispatch.FunctionEntry = NULL;
-                if (dispatch.LanguageHandler && !module)
-                {
-                    FIXME( "calling personality routine in system library not supported yet\n" );
-                    dispatch.LanguageHandler = NULL;
-                }
-                goto unwind_done;
-            }
-        }
-        else WARN( "exception data not found in %s\n", debugstr_w(module->BaseDllName.Buffer) );
-
-        context.Rip = *(ULONG64 *)context.Rsp;
-        context.Rsp = context.Rsp + sizeof(ULONG64);
-        dispatch.EstablisherFrame = context.Rsp;
-        dispatch.LanguageHandler = NULL;
+        status = virtual_unwind( UNW_FLAG_EHANDLER, &dispatch, &context );
+        if (status != STATUS_SUCCESS) return status;
 
     unwind_done:
         if (!dispatch.EstablisherFrame) break;
@@ -3050,18 +2955,17 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
     ucontext_t *ucontext = sigcontext;
 
     /* check for page fault inside the thread stack */
-    if (TRAP_sig(ucontext) == TRAP_x86_PAGEFLT &&
-        (char *)siginfo->si_addr >= (char *)NtCurrentTeb()->DeallocationStack &&
-        (char *)siginfo->si_addr < (char *)NtCurrentTeb()->Tib.StackBase &&
-        virtual_handle_stack_fault( siginfo->si_addr ))
+    if (TRAP_sig(ucontext) == TRAP_x86_PAGEFLT)
     {
-        /* check if this was the last guard page */
-        if ((char *)siginfo->si_addr < (char *)NtCurrentTeb()->DeallocationStack + 2*4096)
+        switch (virtual_handle_stack_fault( siginfo->si_addr ))
         {
+        case 1:  /* handled */
+            return;
+        case -1:  /* overflow */
             rec = setup_exception( sigcontext, raise_segv_exception );
             rec->ExceptionCode = EXCEPTION_STACK_OVERFLOW;
+            return;
         }
-        return;
     }
 
     rec = setup_exception( sigcontext, raise_segv_exception );
@@ -3445,205 +3349,6 @@ void signal_init_process(void)
 }
 
 
-/**********************************************************************
- *              RtlAddFunctionTable   (NTDLL.@)
- */
-BOOLEAN CDECL RtlAddFunctionTable( RUNTIME_FUNCTION *table, DWORD count, DWORD64 addr )
-{
-    struct dynamic_unwind_entry *entry;
-
-    TRACE( "%p %u %lx\n", table, count, addr );
-
-    /* NOTE: Windows doesn't check if table is aligned or a NULL pointer */
-
-    entry = RtlAllocateHeap( GetProcessHeap(), 0, sizeof(*entry) );
-    if (!entry)
-        return FALSE;
-
-    entry->base      = addr;
-    entry->end       = addr + (count ? table[count - 1].EndAddress : 0);
-    entry->table     = table;
-    entry->count     = count;
-    entry->max_count = 0;
-    entry->callback  = NULL;
-    entry->context   = NULL;
-
-    RtlEnterCriticalSection( &dynamic_unwind_section );
-    list_add_tail( &dynamic_unwind_list, &entry->entry );
-    RtlLeaveCriticalSection( &dynamic_unwind_section );
-
-    return TRUE;
-}
-
-
-/**********************************************************************
- *              RtlInstallFunctionTableCallback   (NTDLL.@)
- */
-BOOLEAN CDECL RtlInstallFunctionTableCallback( DWORD64 table, DWORD64 base, DWORD length,
-                                               PGET_RUNTIME_FUNCTION_CALLBACK callback, PVOID context, PCWSTR dll )
-{
-    struct dynamic_unwind_entry *entry;
-
-    TRACE( "%lx %lx %d %p %p %s\n", table, base, length, callback, context, wine_dbgstr_w(dll) );
-
-    /* NOTE: Windows doesn't check if the provided callback is a NULL pointer */
-
-    /* both low-order bits must be set */
-    if ((table & 0x3) != 0x3)
-        return FALSE;
-
-    entry = RtlAllocateHeap( GetProcessHeap(), 0, sizeof(*entry) );
-    if (!entry)
-        return FALSE;
-
-    entry->base      = base;
-    entry->end       = base + length;
-    entry->table     = (RUNTIME_FUNCTION *)table;
-    entry->count     = 0;
-    entry->max_count = 0;
-    entry->callback  = callback;
-    entry->context   = context;
-
-    RtlEnterCriticalSection( &dynamic_unwind_section );
-    list_add_tail( &dynamic_unwind_list, &entry->entry );
-    RtlLeaveCriticalSection( &dynamic_unwind_section );
-
-    return TRUE;
-}
-
-
-/*************************************************************************
- *              RtlAddGrowableFunctionTable   (NTDLL.@)
- */
-DWORD WINAPI RtlAddGrowableFunctionTable( void **table, RUNTIME_FUNCTION *functions, DWORD count, DWORD max_count,
-                                          ULONG_PTR base, ULONG_PTR end )
-{
-    struct dynamic_unwind_entry *entry;
-
-    TRACE( "%p, %p, %u, %u, %lx, %lx\n", table, functions, count, max_count, base, end );
-
-    entry = RtlAllocateHeap( GetProcessHeap(), 0, sizeof(*entry) );
-    if (!entry)
-        return STATUS_NO_MEMORY;
-
-    entry->base      = base;
-    entry->end       = end;
-    entry->table     = functions;
-    entry->count     = count;
-    entry->max_count = max_count;
-    entry->callback  = NULL;
-    entry->context   = NULL;
-
-    RtlEnterCriticalSection( &dynamic_unwind_section );
-    list_add_tail( &dynamic_unwind_list, &entry->entry );
-    RtlLeaveCriticalSection( &dynamic_unwind_section );
-
-    *table = entry;
-
-    return STATUS_SUCCESS;
-}
-
-
-/*************************************************************************
- *              RtlGrowFunctionTable   (NTDLL.@)
- */
-void WINAPI RtlGrowFunctionTable( void *table, DWORD count )
-{
-    struct dynamic_unwind_entry *entry;
-
-    TRACE( "%p, %u\n", table, count );
-
-    RtlEnterCriticalSection( &dynamic_unwind_section );
-    LIST_FOR_EACH_ENTRY( entry, &dynamic_unwind_list, struct dynamic_unwind_entry, entry )
-    {
-        if (entry == table)
-        {
-            if (count > entry->count && count <= entry->max_count)
-                entry->count = count;
-            break;
-        }
-    }
-    RtlLeaveCriticalSection( &dynamic_unwind_section );
-}
-
-
-/*************************************************************************
- *              RtlDeleteGrowableFunctionTable   (NTDLL.@)
- */
-void WINAPI RtlDeleteGrowableFunctionTable( void *table )
-{
-    struct dynamic_unwind_entry *entry, *to_free = NULL;
-
-    TRACE( "%p\n", table );
-
-    RtlEnterCriticalSection( &dynamic_unwind_section );
-    LIST_FOR_EACH_ENTRY( entry, &dynamic_unwind_list, struct dynamic_unwind_entry, entry )
-    {
-        if (entry == table)
-        {
-            to_free = entry;
-            list_remove( &entry->entry );
-            break;
-        }
-    }
-    RtlLeaveCriticalSection( &dynamic_unwind_section );
-
-    RtlFreeHeap( GetProcessHeap(), 0, to_free );
-}
-
-
-/**********************************************************************
- *              RtlDeleteFunctionTable   (NTDLL.@)
- */
-BOOLEAN CDECL RtlDeleteFunctionTable( RUNTIME_FUNCTION *table )
-{
-    struct dynamic_unwind_entry *entry, *to_free = NULL;
-
-    TRACE( "%p\n", table );
-
-    RtlEnterCriticalSection( &dynamic_unwind_section );
-    LIST_FOR_EACH_ENTRY( entry, &dynamic_unwind_list, struct dynamic_unwind_entry, entry )
-    {
-        if (entry->table == table)
-        {
-            to_free = entry;
-            list_remove( &entry->entry );
-            break;
-        }
-    }
-    RtlLeaveCriticalSection( &dynamic_unwind_section );
-
-    if (!to_free)
-        return FALSE;
-
-    RtlFreeHeap( GetProcessHeap(), 0, to_free );
-    return TRUE;
-}
-
-
-/**********************************************************************
- *              RtlLookupFunctionEntry   (NTDLL.@)
- */
-PRUNTIME_FUNCTION WINAPI RtlLookupFunctionEntry( ULONG64 pc, ULONG64 *base, UNWIND_HISTORY_TABLE *table )
-{
-    LDR_MODULE *module;
-    RUNTIME_FUNCTION *func;
-
-    /* FIXME: should use the history table to make things faster */
-
-    func = lookup_function_info( pc, base, &module );
-    if (!func)
-    {
-        *base = 0;
-        if (module)
-            WARN( "no exception table found in module %p pc %lx\n", module->BaseAddress, pc );
-        else
-            WARN( "module not found for %lx\n", pc );
-    }
-
-    return func;
-}
-
 static ULONG64 get_int_reg( CONTEXT *context, int reg )
 {
     return *(&context->Rax + reg);
@@ -3669,6 +3374,7 @@ static int get_opcode_size( struct opcode op )
         return 2 + (op.info != 0);
     case UWOP_SAVE_NONVOL:
     case UWOP_SAVE_XMM128:
+    case UWOP_EPILOG:
         return 2;
     case UWOP_SAVE_NONVOL_FAR:
     case UWOP_SAVE_XMM128_FAR:
@@ -3840,7 +3546,7 @@ PVOID WINAPI RtlVirtualUnwind( ULONG type, ULONG64 base, ULONG64 pc,
         info = (struct UNWIND_INFO *)((char *)base + function->UnwindData);
         handler_data = (union handler_data *)&info->opcodes[(info->count + 1) & ~1];
 
-        if (info->version != 1)
+        if (info->version != 1 && info->version != 2)
         {
             FIXME( "unknown unwind info version %u at %p\n", info->version, info );
             return NULL;
@@ -3904,6 +3610,9 @@ PVOID WINAPI RtlVirtualUnwind( ULONG type, ULONG64 base, ULONG64 pc,
             case UWOP_PUSH_MACHFRAME:
                 FIXME( "PUSH_MACHFRAME %u\n", info->opcodes[i].info );
                 break;
+            case UWOP_EPILOG:
+                if (info->version == 2)
+                    break; /* nothing to do */
             default:
                 FIXME( "unknown code %u\n", info->opcodes[i].code );
                 break;
@@ -3972,7 +3681,7 @@ static DWORD call_unwind_handler( EXCEPTION_RECORD *rec, DISPATCHER_CONTEXT *dis
 
     TRACE( "calling handler %p (rec=%p, frame=0x%lx context=%p, dispatch=%p)\n",
          dispatch->LanguageHandler, rec, dispatch->EstablisherFrame, dispatch->ContextRecord, dispatch );
-    res = dispatch->LanguageHandler( rec, dispatch->EstablisherFrame, dispatch->ContextRecord, dispatch );
+    res = dispatch->LanguageHandler( rec, (void *)dispatch->EstablisherFrame, dispatch->ContextRecord, dispatch );
     TRACE( "handler %p returned %x\n", dispatch->LanguageHandler, res );
 
     __wine_pop_frame( &frame.frame );
@@ -4040,11 +3749,15 @@ extern void * WINAPI call_consolidate_callback( CONTEXT *context,
                                                 EXCEPTION_RECORD *rec );
 __ASM_GLOBAL_FUNC( call_consolidate_callback,
                    "pushq %rbp\n\t"
+                   __ASM_SEH(".seh_pushreg %rbp\n\t")
                    __ASM_CFI(".cfi_adjust_cfa_offset 8\n\t")
                    __ASM_CFI(".cfi_rel_offset %rbp,0\n\t")
                    "movq %rsp,%rbp\n\t"
+                   __ASM_SEH(".seh_setframe %rbp,0\n\t")
                    __ASM_CFI(".cfi_def_cfa_register %rbp\n\t")
                    "subq $0x20,%rsp\n\t"
+                   __ASM_SEH(".seh_stackalloc 0x20\n\t")
+                   __ASM_SEH(".seh_endprologue\n\t")
                    "movq %rcx,0x10(%rbp)\n\t"
                    __ASM_CFI(".cfi_remember_state\n\t")
                    __ASM_CFI(".cfi_escape 0x0f,0x07,0x76,0x10,0x06,0x23,0x98,0x01,0x06\n\t") /* CFA    */
@@ -4070,7 +3783,7 @@ __ASM_GLOBAL_FUNC( call_consolidate_callback,
                    "movq %r8,%rcx\n\t"
                    "callq *%rdx\n\t"
                    __ASM_CFI(".cfi_restore_state\n\t")
-                   "movq %rbp,%rsp\n\t"
+                   "leaq 0(%rbp),%rsp\n\t"
                    __ASM_CFI(".cfi_def_cfa_register %rsp\n\t")
                    "popq %rbp\n\t"
                    __ASM_CFI(".cfi_adjust_cfa_offset -8\n\t")
@@ -4137,7 +3850,6 @@ void WINAPI RtlUnwindEx( PVOID end_frame, PVOID target_ip, EXCEPTION_RECORD *rec
     EXCEPTION_RECORD record;
     DISPATCHER_CONTEXT dispatch;
     CONTEXT new_context;
-    LDR_MODULE *module;
     NTSTATUS status;
     DWORD i;
 
@@ -4177,66 +3889,8 @@ void WINAPI RtlUnwindEx( PVOID end_frame, PVOID target_ip, EXCEPTION_RECORD *rec
 
     for (;;)
     {
-        /* FIXME: should use the history table to make things faster */
-
-        dispatch.ImageBase = 0;
-        dispatch.ScopeIndex = 0;
-        dispatch.ControlPc = context->Rip;
-
-        /* first look for PE exception information */
-
-        if ((dispatch.FunctionEntry = lookup_function_info( context->Rip, &dispatch.ImageBase, &module )))
-        {
-            dispatch.LanguageHandler = RtlVirtualUnwind( UNW_FLAG_UHANDLER, dispatch.ImageBase,
-                                                         context->Rip, dispatch.FunctionEntry,
-                                                         &new_context, &dispatch.HandlerData,
-                                                         &dispatch.EstablisherFrame, NULL );
-            goto unwind_done;
-        }
-
-        /* then look for host system exception information */
-
-        if (!module || (module->Flags & LDR_WINE_INTERNAL))
-        {
-            BOOL got_info = FALSE;
-            struct dwarf_eh_bases bases;
-            const struct dwarf_fde *fde = _Unwind_Find_FDE( (void *)(context->Rip - 1), &bases );
-
-            if (fde)
-            {
-                status = dwarf_virtual_unwind( context->Rip, &dispatch.EstablisherFrame, &new_context, fde,
-                                               &bases, &dispatch.LanguageHandler, &dispatch.HandlerData );
-                if (status != STATUS_SUCCESS) raise_status( status, rec );
-                got_info = TRUE;
-            }
-#ifdef HAVE_LIBUNWIND_H
-            else
-            {
-                status = libunwind_virtual_unwind( context->Rip, &got_info, &dispatch.EstablisherFrame, &new_context,
-                                                   &dispatch.LanguageHandler, &dispatch.HandlerData );
-                if (status != STATUS_SUCCESS) raise_status( status, rec );
-            }
-#endif
-
-            if (got_info)
-            {
-                dispatch.FunctionEntry = NULL;
-                if (dispatch.LanguageHandler && !module)
-                {
-                    FIXME( "calling personality routine in system library not supported yet\n" );
-                    dispatch.LanguageHandler = NULL;
-                }
-                goto unwind_done;
-            }
-        }
-        else WARN( "exception data not found in %s\n", debugstr_w(module->BaseDllName.Buffer) );
-
-        /* no exception information, treat as a leaf function */
-
-        new_context.Rip = *(ULONG64 *)context->Rsp;
-        new_context.Rsp = context->Rsp + sizeof(ULONG64);
-        dispatch.EstablisherFrame = context->Rsp;
-        dispatch.LanguageHandler = NULL;
+        status = virtual_unwind( UNW_FLAG_UHANDLER, &dispatch, &new_context );
+        if (status != STATUS_SUCCESS) raise_status( status, rec );
 
     unwind_done:
         if (!dispatch.EstablisherFrame) break;
@@ -4341,14 +3995,14 @@ void WINAPI _local_unwind( void *frame, void *target_ip )
  *		__C_specific_handler (NTDLL.@)
  */
 EXCEPTION_DISPOSITION WINAPI __C_specific_handler( EXCEPTION_RECORD *rec,
-                                                   ULONG64 frame,
+                                                   void *frame,
                                                    CONTEXT *context,
                                                    struct _DISPATCHER_CONTEXT *dispatch )
 {
     SCOPE_TABLE *table = dispatch->HandlerData;
     ULONG i;
 
-    TRACE( "%p %lx %p %p\n", rec, frame, context, dispatch );
+    TRACE( "%p %p %p %p\n", rec, frame, context, dispatch );
     if (TRACE_ON(seh)) dump_scope_table( dispatch->ImageBase, table );
 
     if (rec->ExceptionFlags & (EH_UNWINDING | EH_EXIT_UNWIND))
@@ -4358,7 +4012,7 @@ EXCEPTION_DISPOSITION WINAPI __C_specific_handler( EXCEPTION_RECORD *rec,
             if (dispatch->ControlPc >= dispatch->ImageBase + table->ScopeRecord[i].BeginAddress &&
                 dispatch->ControlPc < dispatch->ImageBase + table->ScopeRecord[i].EndAddress)
             {
-                TERMINATION_HANDLER handler;
+                PTERMINATION_HANDLER handler;
 
                 if (table->ScopeRecord[i].JumpTarget) continue;
 
@@ -4369,11 +4023,11 @@ EXCEPTION_DISPOSITION WINAPI __C_specific_handler( EXCEPTION_RECORD *rec,
                     break;
                 }
 
-                handler = (TERMINATION_HANDLER)(dispatch->ImageBase + table->ScopeRecord[i].HandlerAddress);
+                handler = (PTERMINATION_HANDLER)(dispatch->ImageBase + table->ScopeRecord[i].HandlerAddress);
                 dispatch->ScopeIndex = i+1;
 
-                TRACE( "calling __finally %p frame %lx\n", handler, frame );
-                handler( 1, frame );
+                TRACE( "calling __finally %p frame %p\n", handler, frame );
+                handler( TRUE, frame );
             }
         }
         return ExceptionContinueSearch;
@@ -4388,12 +4042,12 @@ EXCEPTION_DISPOSITION WINAPI __C_specific_handler( EXCEPTION_RECORD *rec,
             if (table->ScopeRecord[i].HandlerAddress != EXCEPTION_EXECUTE_HANDLER)
             {
                 EXCEPTION_POINTERS ptrs;
-                PC_LANGUAGE_EXCEPTION_HANDLER filter;
+                PEXCEPTION_FILTER filter;
 
-                filter = (PC_LANGUAGE_EXCEPTION_HANDLER)(dispatch->ImageBase + table->ScopeRecord[i].HandlerAddress);
+                filter = (PEXCEPTION_FILTER)(dispatch->ImageBase + table->ScopeRecord[i].HandlerAddress);
                 ptrs.ExceptionRecord = rec;
                 ptrs.ContextRecord = context;
-                TRACE( "calling filter %p ptrs %p frame %lx\n", filter, &ptrs, frame );
+                TRACE( "calling filter %p ptrs %p frame %p\n", filter, &ptrs, frame );
                 switch (filter( &ptrs, frame ))
                 {
                 case EXCEPTION_EXECUTE_HANDLER:
@@ -4405,7 +4059,7 @@ EXCEPTION_DISPOSITION WINAPI __C_specific_handler( EXCEPTION_RECORD *rec,
                 }
             }
             TRACE( "unwinding to target %lx\n", dispatch->ImageBase + table->ScopeRecord[i].JumpTarget );
-            RtlUnwindEx( (void *)frame, (char *)dispatch->ImageBase + table->ScopeRecord[i].JumpTarget,
+            RtlUnwindEx( frame, (char *)dispatch->ImageBase + table->ScopeRecord[i].JumpTarget,
                          rec, 0, dispatch->ContextRecord, dispatch->HistoryTable );
         }
     }
@@ -4417,9 +4071,11 @@ EXCEPTION_DISPOSITION WINAPI __C_specific_handler( EXCEPTION_RECORD *rec,
  *		RtlRaiseException (NTDLL.@)
  */
 __ASM_GLOBAL_FUNC( RtlRaiseException,
-                   "movq %rcx,8(%rsp)\n\t"
                    "sub $0x4f8,%rsp\n\t"
+                   __ASM_SEH(".seh_stackalloc 0x4f8\n\t")
+                   __ASM_SEH(".seh_endprologue\n\t")
                    __ASM_CFI(".cfi_adjust_cfa_offset 0x4f8\n\t")
+                   "movq %rcx,0x500(%rsp)\n\t"
                    "leaq 0x20(%rsp),%rcx\n\t"
                    "call " __ASM_NAME("RtlCaptureContext") "\n\t"
                    "leaq 0x20(%rsp),%rdx\n\t"   /* context pointer */
@@ -4465,7 +4121,6 @@ USHORT WINAPI RtlCaptureStackBackTrace( ULONG skip, ULONG count, PVOID *buffer, 
     UNWIND_HISTORY_TABLE table;
     DISPATCHER_CONTEXT dispatch;
     CONTEXT context;
-    LDR_MODULE *module;
     NTSTATUS status;
     ULONG i;
     USHORT num_entries = 0;
@@ -4479,59 +4134,9 @@ USHORT WINAPI RtlCaptureStackBackTrace( ULONG skip, ULONG count, PVOID *buffer, 
     if (hash) *hash = 0;
     for (i = 0; i < skip + count; i++)
     {
-        /* FIXME: should use the history table to make things faster */
+        status = virtual_unwind( UNW_FLAG_NHANDLER, &dispatch, &context );
+        if (status != STATUS_SUCCESS) return i;
 
-        dispatch.ImageBase = 0;
-        dispatch.ControlPc = context.Rip;
-        dispatch.ScopeIndex = 0;
-
-        /* first look for PE exception information */
-
-        if ((dispatch.FunctionEntry = lookup_function_info( dispatch.ControlPc, &dispatch.ImageBase, &module )))
-        {
-            RtlVirtualUnwind( UNW_FLAG_NHANDLER, dispatch.ImageBase, dispatch.ControlPc,
-                              dispatch.FunctionEntry, &context, &dispatch.HandlerData,
-                              &dispatch.EstablisherFrame, NULL );
-            goto unwind_done;
-        }
-
-        /* then look for host system exception information */
-
-        if (!module || (module->Flags & LDR_WINE_INTERNAL))
-        {
-            BOOL got_info = FALSE;
-            struct dwarf_eh_bases bases;
-            const struct dwarf_fde *fde = _Unwind_Find_FDE( (void *)(dispatch.ControlPc - 1), &bases );
-
-            if (fde)
-            {
-                status = dwarf_virtual_unwind( dispatch.ControlPc, &dispatch.EstablisherFrame, &context,
-                                               fde, &bases, &dispatch.LanguageHandler, &dispatch.HandlerData );
-                if (status != STATUS_SUCCESS) return status;
-                got_info = TRUE;
-            }
-#ifdef HAVE_LIBUNWIND_H
-            else
-            {
-                status = libunwind_virtual_unwind( dispatch.ControlPc, &got_info, &dispatch.EstablisherFrame, &context,
-                                                   &dispatch.LanguageHandler, &dispatch.HandlerData );
-                if (status != STATUS_SUCCESS) return i;
-            }
-#endif
-
-            if (got_info)
-            {
-                dispatch.FunctionEntry = NULL;
-                goto unwind_done;
-            }
-        }
-        else WARN( "exception data not found in %s\n", debugstr_w(module->BaseDllName.Buffer) );
-
-        context.Rip = *(ULONG64 *)context.Rsp;
-        context.Rsp = context.Rsp + sizeof(ULONG64);
-        dispatch.EstablisherFrame = context.Rsp;
-
-    unwind_done:
         if (!dispatch.EstablisherFrame) break;
 
         if ((dispatch.EstablisherFrame & 7) ||
@@ -4576,6 +4181,8 @@ extern void DECLSPEC_NORETURN start_thread( LPTHREAD_START_ROUTINE entry, void *
                                             void *relay );
 __ASM_GLOBAL_FUNC( start_thread,
                    "subq $56,%rsp\n\t"
+                   __ASM_SEH(".seh_stackalloc 56\n\t")
+                   __ASM_SEH(".seh_endprologue\n\t")
                    __ASM_CFI(".cfi_adjust_cfa_offset 56\n\t")
                    "movq %rbp,48(%rsp)\n\t"
                    __ASM_CFI(".cfi_rel_offset %rbp,48\n\t")

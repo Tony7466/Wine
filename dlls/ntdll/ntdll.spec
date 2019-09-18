@@ -805,7 +805,7 @@
 @ stdcall RtlLookupAtomInAtomTable(ptr wstr ptr)
 @ stub RtlLookupElementGenericTable
 # @ stub RtlLookupElementGenericTableAvl
-@ stdcall -arch=arm,x86_64 RtlLookupFunctionEntry(long ptr ptr)
+@ stdcall -arch=arm,arm64,x86_64 RtlLookupFunctionEntry(long ptr ptr)
 @ stdcall RtlMakeSelfRelativeSD(ptr ptr ptr)
 @ stdcall RtlMapGenericMask(ptr ptr)
 # @ stub RtlMapSecurityErrorToNtStatus
@@ -983,7 +983,7 @@
 @ stdcall RtlUnlockHeap(long)
 # @ stub RtlUnlockMemoryStreamRegion
 @ stdcall -norelay RtlUnwind(ptr ptr ptr ptr)
-@ stdcall -arch=x86_64 RtlUnwindEx(ptr ptr ptr ptr ptr ptr)
+@ stdcall -arch=arm64,x86_64 RtlUnwindEx(ptr ptr ptr ptr ptr ptr)
 @ stdcall RtlUpcaseUnicodeChar(long)
 @ stdcall RtlUpcaseUnicodeString(ptr ptr long)
 @ stdcall RtlUpcaseUnicodeStringToAnsiString(ptr ptr long)
@@ -1005,7 +1005,7 @@
 @ stub RtlValidateProcessHeaps
 # @ stub RtlValidateUnicodeString
 @ stdcall RtlVerifyVersionInfo(ptr long int64)
-@ stdcall -arch=x86_64 RtlVirtualUnwind(long long long ptr ptr ptr ptr ptr)
+@ stdcall -arch=arm64,x86_64 RtlVirtualUnwind(long long long ptr ptr ptr ptr ptr)
 @ stdcall RtlWaitOnAddress(ptr ptr long ptr)
 @ stdcall RtlWakeAddressAll(ptr)
 @ stdcall RtlWakeAddressSingle(ptr)

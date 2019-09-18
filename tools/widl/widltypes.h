@@ -81,7 +81,6 @@ enum attr_type
     ATTR_CASE,
     ATTR_CODE,
     ATTR_COMMSTATUS,
-    ATTR_CONST, /* const pseudo-attribute */
     ATTR_CONTEXTHANDLE,
     ATTR_CONTROL,
     ATTR_DECODE,
@@ -116,7 +115,6 @@ enum attr_type
     ATTR_IMMEDIATEBIND,
     ATTR_IMPLICIT_HANDLE,
     ATTR_IN,
-    ATTR_INLINE,
     ATTR_INPUTSYNC,
     ATTR_LENGTHIS,
     ATTR_LIBLCID,
@@ -235,6 +233,16 @@ enum storage_class
     STG_REGISTER,
 };
 
+enum type_qualifier
+{
+    TYPE_QUALIFIER_CONST = 1,
+};
+
+enum function_specifier
+{
+    FUNCTION_SPECIFIER_INLINE = 1,
+};
+
 enum statement_type
 {
     STMT_LIBRARY,
@@ -297,8 +305,9 @@ struct str_list_entry_t
 struct _decl_spec_t
 {
   type_t *type;
-  attr_list_t *attrs;
   enum storage_class stgclass;
+  enum type_qualifier qualifier;
+  enum function_specifier func_specifier;
 };
 
 struct _attr_t {
@@ -365,7 +374,6 @@ struct array_details
   expr_t *length_is;
   struct _decl_spec_t elem;
   unsigned int dim;
-  unsigned char ptr_def_fc;
   unsigned char declptr; /* if declared as a pointer */
   unsigned short ptr_tfsoff;  /* offset of pointer definition for declptr */
 };
@@ -384,7 +392,6 @@ struct basic_details
 struct pointer_details
 {
   struct _decl_spec_t ref;
-  unsigned char def_fc;
 };
 
 struct bitfield_details
@@ -471,6 +478,8 @@ struct _var_t {
 
   struct _loc_info_t loc_info;
 
+  unsigned int declonly : 1;
+
   /* parser-internal */
   struct list entry;
 };
@@ -478,7 +487,7 @@ struct _var_t {
 struct _declarator_t {
   var_t *var;
   type_t *type;
-  type_t *func_type;
+  enum type_qualifier qualifier;
   expr_t *bits;
 
   /* parser-internal */
@@ -553,6 +562,7 @@ struct _statement_t {
         typelib_t *lib;
         type_list_t *type_list;
     } u;
+    unsigned int declonly : 1; /* for STMT_TYPE and STMT_TYPEDEF */
 };
 
 struct _warning_t {
@@ -586,7 +596,6 @@ type_t *find_type(const char *name, struct namespace *namespace, int t);
 type_t *make_type(enum type_type type);
 type_t *get_type(enum type_type type, char *name, struct namespace *namespace, int t);
 type_t *reg_type(type_t *type, const char *name, struct namespace *namespace, int t);
-void add_incomplete(type_t *t);
 
 var_t *make_var(char *name);
 var_list_t *append_var(var_list_t *list, var_t *var);
@@ -625,8 +634,9 @@ static inline int is_global_namespace(const struct namespace *namespace)
 static inline decl_spec_t *init_declspec(decl_spec_t *declspec, type_t *type)
 {
   declspec->type = type;
-  declspec->attrs = NULL;
   declspec->stgclass = STG_NONE;
+  declspec->qualifier = 0;
+  declspec->func_specifier = 0;
 
   return declspec;
 }

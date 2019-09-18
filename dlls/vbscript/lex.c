@@ -302,9 +302,12 @@ static int parse_numeric_literal(parser_ctx_t *ctx, void **ret)
     if(*ctx->ptr == 'e' || *ctx->ptr == 'E') {
         int e = 0, sign = 1;
 
-        if(*++ctx->ptr == '-') {
+        ctx->ptr++;
+        if(*ctx->ptr == '-') {
             ctx->ptr++;
             sign = -1;
+        }else if(*ctx->ptr == '+') {
+            ctx->ptr++;
         }
 
         if(!iswdigit(*ctx->ptr)) {
@@ -334,9 +337,8 @@ static int parse_numeric_literal(parser_ctx_t *ctx, void **ret)
     }
 
     if(use_int && (LONG)d == d) {
-        LONG l = d;
-        *(LONG*)ret = l;
-        return (short)l == l ? tShort : tLong;
+        *(LONG*)ret = d;
+        return tInt;
     }
 
     r = exp>=0 ? d*pow(10, exp) : d/pow(10, -exp);
@@ -377,7 +379,7 @@ static int parse_hex_literal(parser_ctx_t *ctx, LONG *ret)
         ctx->ptr++;
 
     *ret = l;
-    return (short)l == l ? tShort : tLong;
+    return tInt;
 }
 
 static void skip_spaces(parser_ctx_t *ctx)
