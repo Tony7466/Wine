@@ -1,4 +1,4 @@
-wine-development (4.15-1) UNRELEASED; urgency=medium
+wine-development (4.15-1) unstable; urgency=medium
 
   * New upstream release 4.15, released Aug 30, 2019.
     - Initial implementation of the HTTP service.
@@ -6,8 +6,11 @@ wine-development (4.15-1) UNRELEASED; urgency=medium
     - Better multi-monitor support on macOS.
     - RichEdit control optimizations.
     - Various bug fixes.
+  * Refresh patches.
+    Drop warnings/printf-null.patch part for dlls/twain_32/dsm_ctrl.c,
+    fixed upstream.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Wed, 18 Sep 2019 19:47:59 +0200
+ -- Jens Reyer <jre.winesim@gmail.com>  Wed, 18 Sep 2019 21:14:34 +0200
 
 wine-development (4.14-1) unstable; urgency=medium
 
