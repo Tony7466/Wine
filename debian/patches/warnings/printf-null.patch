@@ -14,22 +14,3 @@ author: Michael Gilbert <mgilbert@debian.org>
  	pp_status.file = fp;
  	ppy__switch_to_buffer(ppy__create_buffer(NULL, YY_BUF_SIZE));
  
---- a/dlls/twain_32/dsm_ctrl.c
-+++ b/dlls/twain_32/dsm_ctrl.c
-@@ -282,7 +282,6 @@ TW_UINT16 TWAIN_OpenDS (pTW_IDENTITY pOr
- 	TW_UINT16 i = 0;
- 	pTW_IDENTITY pIdentity = (pTW_IDENTITY) pData;
- 	activeDS *newSource;
--	const char *modname = NULL;
- 	HMODULE hmod;
- 
- 	TRACE("DG_CONTROL/DAT_IDENTITY/MSG_OPENDS\n");
-@@ -317,7 +316,7 @@ TW_UINT16 TWAIN_OpenDS (pTW_IDENTITY pOr
- 	}
- 	hmod = LoadLibraryA(devices[i].modname);
- 	if (!hmod) {
--		ERR("Failed to load TWAIN Source %s\n", modname);
-+		ERR("Failed to load TWAIN Source %s\n", devices[i].modname);
- 		DSM_twCC = TWCC_OPERATIONERROR;
-                 HeapFree(GetProcessHeap(), 0, newSource);
- 		return TWRC_FAILURE;
