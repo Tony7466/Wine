@@ -1102,8 +1102,8 @@
 @ stdcall RtlIpv4AddressToStringExA(ptr long ptr ptr)
 @ stdcall RtlIpv4AddressToStringExW(ptr long ptr ptr)
 @ stdcall RtlIpv4AddressToStringW(ptr ptr)
-@ stub RtlIpv4StringToAddressA
-@ stub RtlIpv4StringToAddressExA
+@ stdcall RtlIpv4StringToAddressA(str long ptr ptr) ntdll.RtlIpv4StringToAddressA
+@ stdcall RtlIpv4StringToAddressExA(str long ptr ptr) ntdll.RtlIpv4StringToAddressExA
 @ stdcall RtlIpv4StringToAddressExW(wstr long ptr ptr)
 @ stdcall RtlIpv4StringToAddressW(wstr long ptr ptr)
 @ stub RtlIpv6AddressToStringA
@@ -1457,7 +1457,7 @@
 @ cdecl _strrev(str)
 @ cdecl _strset(str long)
 @ cdecl _strupr(str)
-@ cdecl _vsnprintf(ptr long str ptr)
+@ cdecl -norelay _vsnprintf(ptr long str ptr)
 @ cdecl _vsnwprintf(ptr long wstr ptr)
 @ cdecl _wcsicmp(wstr wstr)
 @ cdecl _wcslwr(wstr)

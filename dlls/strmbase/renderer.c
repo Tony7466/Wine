@@ -52,14 +52,14 @@ static HRESULT WINAPI BaseRenderer_InputPin_ReceiveConnection(IPin *iface, IPin 
 
     TRACE("iface %p, peer %p, mt %p.\n", iface, peer, mt);
 
-    EnterCriticalSection(filter->sink.pin.pCritSec);
+    EnterCriticalSection(&filter->filter.csFilter);
     hr = BaseInputPinImpl_ReceiveConnection(iface, peer, mt);
     if (SUCCEEDED(hr))
     {
         if (filter->pFuncsTable->pfnCompleteConnect)
             hr = filter->pFuncsTable->pfnCompleteConnect(filter, peer);
     }
-    LeaveCriticalSection(filter->sink.pin.pCritSec);
+    LeaveCriticalSection(&filter->filter.csFilter);
 
     return hr;
 }
@@ -71,7 +71,7 @@ static HRESULT WINAPI BaseRenderer_InputPin_Disconnect(IPin * iface)
 
     TRACE("iface %p.\n", iface);
 
-    EnterCriticalSection(filter->sink.pin.pCritSec);
+    EnterCriticalSection(&filter->filter.csFilter);
     hr = BasePinImpl_Disconnect(iface);
     if (SUCCEEDED(hr))
     {
@@ -79,7 +79,7 @@ static HRESULT WINAPI BaseRenderer_InputPin_Disconnect(IPin * iface)
             hr = filter->pFuncsTable->pfnBreakConnect(filter);
     }
     BaseRendererImpl_ClearPendingSample(filter);
-    LeaveCriticalSection(filter->sink.pin.pCritSec);
+    LeaveCriticalSection(&filter->filter.csFilter);
 
     return hr;
 }
@@ -236,7 +236,6 @@ HRESULT WINAPI strmbase_renderer_init(BaseRenderer *filter, const IBaseFilterVtb
         IUnknown *outer, const CLSID *clsid, const WCHAR *sink_name,
         const BaseRendererFuncTable *pBaseFuncsTable)
 {
-    PIN_INFO piInput;
     HRESULT hr;
 
     memset(filter, 0, sizeof(*filter));
@@ -244,13 +243,8 @@ HRESULT WINAPI strmbase_renderer_init(BaseRenderer *filter, const IBaseFilterVtb
 
     filter->pFuncsTable = pBaseFuncsTable;
 
-    /* construct input pin */
-    piInput.dir = PINDIR_INPUT;
-    piInput.pFilter = &filter->filter.IBaseFilter_iface;
-    lstrcpynW(piInput.achName, sink_name, ARRAY_SIZE(piInput.achName));
-
-    strmbase_sink_init(&filter->sink, &BaseRenderer_InputPin_Vtbl, &piInput,
-            &input_BaseInputFuncTable, &filter->filter.csFilter, NULL);
+    strmbase_sink_init(&filter->sink, &BaseRenderer_InputPin_Vtbl, &filter->filter,
+            sink_name, &input_BaseInputFuncTable, NULL);
 
     hr = CreatePosPassThru(outer ? outer : (IUnknown *)&filter->filter.IBaseFilter_iface, TRUE,
             &filter->sink.pin.IPin_iface, &filter->pPosition);

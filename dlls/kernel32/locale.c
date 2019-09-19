@@ -2726,9 +2726,14 @@ INT WINAPI WideCharToMultiByte( UINT page, DWORD flags, LPCWSTR src, INT srclen,
         {
             ret = wine_cp_wcstombs( unix_cptable, flags, src, srclen, dst, dstlen,
                                     defchar, used ? &used_tmp : NULL );
-            break;
+            if (used) *used = used_tmp;
         }
-        /* fall through */
+        else
+        {
+            ret = wine_utf8_wcstombs( flags, src, srclen, dst, dstlen );
+            if (used) *used = FALSE;
+        }
+        break;
     case CP_UTF8:
         if (defchar || used)
         {

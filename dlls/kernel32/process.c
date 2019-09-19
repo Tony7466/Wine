@@ -472,12 +472,7 @@ static BOOL build_initial_environment(void)
     }
     size *= sizeof(WCHAR);
 
-    /* Now allocate the environment */
-    ptr = NULL;
-    if (NtAllocateVirtualMemory(NtCurrentProcess(), &ptr, 0, &size,
-                                MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE) != STATUS_SUCCESS)
-        return FALSE;
-
+    if (!(ptr = RtlAllocateHeap( GetProcessHeap(), 0, size ))) return FALSE;
     NtCurrentTeb()->Peb->ProcessParameters->Environment = p = ptr;
     endptr = p + size / sizeof(WCHAR);
 
@@ -3171,6 +3166,16 @@ BOOL WINAPI GetExitCodeProcess( HANDLE hProcess, LPDWORD lpExitCode )
 }
 
 
+/**************************************************************************
+ *           FatalExit   (KERNEL32.@)
+ */
+void WINAPI FatalExit( int code )
+{
+    WARN( "FatalExit\n" );
+    ExitProcess( code );
+}
+
+
 /***********************************************************************
  *           GetProcessFlags    (KERNEL32.@)
  */
@@ -3481,30 +3486,6 @@ BOOL WINAPI K32EmptyWorkingSet(HANDLE hProcess)
 BOOL WINAPI GetProcessWorkingSetSize(HANDLE process, SIZE_T *minset, SIZE_T *maxset)
 {
     return GetProcessWorkingSetSizeEx(process, minset, maxset, NULL);
-}
-
-
-/***********************************************************************
- *		ReadProcessMemory (KERNEL32.@)
- */
-BOOL WINAPI ReadProcessMemory( HANDLE process, LPCVOID addr, LPVOID buffer, SIZE_T size,
-                               SIZE_T *bytes_read )
-{
-    NTSTATUS status = NtReadVirtualMemory( process, addr, buffer, size, bytes_read );
-    if (status) SetLastError( RtlNtStatusToDosError(status) );
-    return !status;
-}
-
-
-/***********************************************************************
- *           WriteProcessMemory    		(KERNEL32.@)
- */
-BOOL WINAPI WriteProcessMemory( HANDLE process, LPVOID addr, LPCVOID buffer, SIZE_T size,
-                                SIZE_T *bytes_written )
-{
-    NTSTATUS status = NtWriteVirtualMemory( process, addr, buffer, size, bytes_written );
-    if (status) SetLastError( RtlNtStatusToDosError(status) );
-    return !status;
 }
 
 

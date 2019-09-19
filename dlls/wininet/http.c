@@ -42,6 +42,8 @@
 #include <stdio.h>
 #include <time.h>
 #include <assert.h>
+#include <errno.h>
+#include <limits.h>
 
 #include "windef.h"
 #include "winbase.h"
@@ -50,7 +52,6 @@
 #include "winternl.h"
 #define NO_SHLWAPI_STREAM
 #define NO_SHLWAPI_REG
-#define NO_SHLWAPI_STRFCNS
 #define NO_SHLWAPI_GDI
 #include "shlwapi.h"
 #include "sspi.h"
@@ -2440,7 +2441,7 @@ static void create_cache_entry(http_request_t *req)
         return;
     }
 
-    b = CreateUrlCacheEntryW(url, req->contentLength == ~0u ? 0 : req->contentLength, NULL, file_name, 0);
+    b = CreateUrlCacheEntryW(url, req->contentLength == ~0 ? 0 : req->contentLength, NULL, file_name, 0);
     if(!b) {
         WARN("Could not create cache entry: %08x\n", GetLastError());
         return;
@@ -2644,7 +2645,7 @@ static DWORD netconn_drain_content(data_stream_t *stream, http_request_t *req, B
     int len, res;
     size_t size;
 
-    if(netconn_stream->content_length == ~0u)
+    if(netconn_stream->content_length == ~0)
         return WSAEISCONN;
 
     while(netconn_stream->content_read < netconn_stream->content_length) {
@@ -2750,7 +2751,7 @@ static DWORD chunked_read(data_stream_t *stream, http_request_t *req, BYTE *buf,
                 TRACE("reading %u byte chunk\n", chunked_stream->chunk_size);
                 chunked_stream->buf_size++;
                 chunked_stream->buf_pos--;
-                if(req->contentLength == ~0u) req->contentLength = chunked_stream->chunk_size;
+                if(req->contentLength == ~0) req->contentLength = chunked_stream->chunk_size;
                 else req->contentLength += chunked_stream->chunk_size;
                 chunked_stream->state = CHUNKED_STREAM_STATE_DISCARD_EOL_AFTER_SIZE;
             }
@@ -2872,6 +2873,7 @@ static DWORD set_content_length(http_request_t *request)
 {
     static const WCHAR szChunked[] = {'c','h','u','n','k','e','d',0};
     static const WCHAR headW[] = {'H','E','A','D',0};
+    WCHAR contentLength[32];
     WCHAR encoding[20];
     DWORD size;
 
@@ -2880,10 +2882,13 @@ static DWORD set_content_length(http_request_t *request)
         return ERROR_SUCCESS;
     }
 
-    size = sizeof(request->contentLength);
-    if (HTTP_HttpQueryInfoW(request, HTTP_QUERY_FLAG_NUMBER|HTTP_QUERY_CONTENT_LENGTH,
-                            &request->contentLength, &size, NULL) != ERROR_SUCCESS)
-        request->contentLength = ~0u;
+    size = sizeof(contentLength);
+    if (HTTP_HttpQueryInfoW(request, HTTP_QUERY_CONTENT_LENGTH,
+                            contentLength, &size, NULL) != ERROR_SUCCESS ||
+        !StrToInt64ExW(contentLength, STIF_DEFAULT, (LONGLONG*)&request->contentLength)) {
+        request->contentLength = ~0;
+    }
+
     request->netconn_stream.content_length = request->contentLength;
     request->netconn_stream.content_read = request->read_size;
 
@@ -2909,7 +2914,7 @@ static DWORD set_content_length(http_request_t *request)
         }
 
         request->data_stream = &chunked_stream->data_stream;
-        request->contentLength = ~0u;
+        request->contentLength = ~0;
     }
 
     if(request->hdr.decoding) {
@@ -3299,7 +3304,7 @@ static DWORD HTTP_HttpOpenRequestW(http_session_t *session,
     request->hdr.dwFlags = dwFlags;
     request->hdr.dwContext = dwContext;
     request->hdr.decoding = session->hdr.decoding;
-    request->contentLength = ~0u;
+    request->contentLength = ~0;
 
     request->netconn_stream.data_stream.vtbl = &netconn_stream_vtbl;
     request->data_stream = &request->netconn_stream.data_stream;
@@ -3724,9 +3729,25 @@ static DWORD HTTP_HttpQueryInfoW(http_request_t *request, DWORD dwInfoLevel,
     /* coalesce value to requested type */
     if (dwInfoLevel & HTTP_QUERY_FLAG_NUMBER && lpBuffer)
     {
-        *(int *)lpBuffer = atoiW(lphttpHdr->lpszValue);
-        TRACE(" returning number: %d\n", *(int *)lpBuffer);
-     }
+        unsigned long value;
+
+        if (*lpdwBufferLength != sizeof(DWORD))
+        {
+            LeaveCriticalSection( &request->headers_section );
+            return ERROR_HTTP_INVALID_HEADER;
+        }
+
+        errno = 0;
+        value = strtoulW( lphttpHdr->lpszValue, NULL, 10 );
+        if (value > UINT_MAX || (value == ULONG_MAX && errno == ERANGE))
+        {
+            LeaveCriticalSection( &request->headers_section );
+            return ERROR_HTTP_INVALID_HEADER;
+        }
+
+        *(DWORD *)lpBuffer = value;
+        TRACE(" returning number: %u\n", *(DWORD *)lpBuffer);
+    }
     else if (dwInfoLevel & HTTP_QUERY_FLAG_SYSTEMTIME && lpBuffer)
     {
         time_t tmpTime;
@@ -4907,7 +4928,7 @@ static DWORD HTTP_HttpSendRequestW(http_request_t *request, LPCWSTR lpszHeaders,
         loop_next = FALSE;
 
         if(redirected) {
-            request->contentLength = ~0u;
+            request->contentLength = ~0;
             request->bytesToWrite = 0;
         }
 

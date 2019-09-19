@@ -166,19 +166,17 @@ static HRESULT deliver_newsegment(IPin *pin, LPVOID data)
 
 /*** PullPin implementation ***/
 
-static HRESULT PullPin_Init(const IPinVtbl *PullPin_Vtbl, const PIN_INFO *info,
-    SAMPLEPROC_PULL pSampleProc, void *pUserData, QUERYACCEPTPROC pQueryAccept,
-    CLEANUPPROC pCleanUp, REQUESTPROC pCustomRequest, STOPPROCESSPROC pDone,
-    LPCRITICAL_SECTION pCritSec, PullPin *pPinImpl)
+static HRESULT PullPin_Init(const IPinVtbl *PullPin_Vtbl, struct strmbase_filter *filter,
+    const WCHAR *name, SAMPLEPROC_PULL pSampleProc, void *pUserData,
+    QUERYACCEPTPROC pQueryAccept, CLEANUPPROC pCleanUp, REQUESTPROC pCustomRequest,
+    STOPPROCESSPROC pDone, PullPin *pPinImpl)
 {
     /* Common attributes */
     pPinImpl->pin.IPin_iface.lpVtbl = PullPin_Vtbl;
     pPinImpl->pin.pConnectedTo = NULL;
-    pPinImpl->pin.pCritSec = pCritSec;
-    /* avoid copying uninitialized data */
-    wcscpy(pPinImpl->pin.pinInfo.achName, info->achName);
-    pPinImpl->pin.pinInfo.dir = info->dir;
-    pPinImpl->pin.pinInfo.pFilter = info->pFilter;
+    wcscpy(pPinImpl->pin.name, name);
+    pPinImpl->pin.dir = PINDIR_INPUT;
+    pPinImpl->pin.filter = filter;
     ZeroMemory(&pPinImpl->pin.mtCurrent, sizeof(AM_MEDIA_TYPE));
 
     /* Input pin attributes */
@@ -209,27 +207,22 @@ static HRESULT PullPin_Init(const IPinVtbl *PullPin_Vtbl, const PIN_INFO *info,
     return S_OK;
 }
 
-HRESULT PullPin_Construct(const IPinVtbl *PullPin_Vtbl, const PIN_INFO * pPinInfo,
+HRESULT PullPin_Construct(const IPinVtbl *PullPin_Vtbl, struct strmbase_filter *filter, const WCHAR *name,
                           SAMPLEPROC_PULL pSampleProc, LPVOID pUserData, QUERYACCEPTPROC pQueryAccept,
                           CLEANUPPROC pCleanUp, REQUESTPROC pCustomRequest, STOPPROCESSPROC pDone,
-                          LPCRITICAL_SECTION pCritSec, IPin ** ppPin)
+                          IPin ** ppPin)
 {
     PullPin * pPinImpl;
 
     *ppPin = NULL;
-
-    if (pPinInfo->dir != PINDIR_INPUT)
-    {
-        ERR("Pin direction(%x) != PINDIR_INPUT\n", pPinInfo->dir);
-        return E_INVALIDARG;
-    }
 
     pPinImpl = CoTaskMemAlloc(sizeof(*pPinImpl));
 
     if (!pPinImpl)
         return E_OUTOFMEMORY;
 
-    if (SUCCEEDED(PullPin_Init(PullPin_Vtbl, pPinInfo, pSampleProc, pUserData, pQueryAccept, pCleanUp, pCustomRequest, pDone, pCritSec, pPinImpl)))
+    if (SUCCEEDED(PullPin_Init(PullPin_Vtbl, filter, name, pSampleProc, pUserData,
+            pQueryAccept, pCleanUp, pCustomRequest, pDone, pPinImpl)))
     {
         *ppPin = &pPinImpl->pin.IPin_iface;
         return S_OK;
@@ -250,7 +243,7 @@ HRESULT WINAPI PullPin_ReceiveConnection(IPin * iface, IPin * pReceivePin, const
     TRACE("(%p/%p)->(%p, %p)\n", This, iface, pReceivePin, pmt);
     dump_AM_MEDIA_TYPE(pmt);
 
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     if (!This->pin.pConnectedTo)
     {
         ALLOCATOR_PROPERTIES props;
@@ -329,7 +322,7 @@ HRESULT WINAPI PullPin_ReceiveConnection(IPin * iface, IPin * pReceivePin, const
     }
     else
         hr = VFW_E_ALREADY_CONNECTED;
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
     return hr;
 }
 
@@ -348,7 +341,7 @@ HRESULT WINAPI PullPin_QueryInterface(IPin * iface, REFIID riid, LPVOID * ppv)
     else if (IsEqualIID(riid, &IID_IMediaSeeking) ||
              IsEqualIID(riid, &IID_IQualityControl))
     {
-        return IBaseFilter_QueryInterface(This->pin.pinInfo.pFilter, riid, ppv);
+        return IBaseFilter_QueryInterface(&This->pin.filter->IBaseFilter_iface, riid, ppv);
     }
 
     if (*ppv)
@@ -388,7 +381,7 @@ static void PullPin_Flush(PullPin *This)
     if (This->pReader)
     {
         /* Do not allow state to change while flushing */
-        EnterCriticalSection(This->pin.pCritSec);
+        EnterCriticalSection(&This->pin.filter->csFilter);
 
         /* Flush outstanding samples */
         IAsyncReader_BeginFlush(This->pReader);
@@ -410,7 +403,7 @@ static void PullPin_Flush(PullPin *This)
 
         IAsyncReader_EndFlush(This->pReader);
 
-        LeaveCriticalSection(This->pin.pCritSec);
+        LeaveCriticalSection(&This->pin.filter->csFilter);
     }
 }
 
@@ -441,9 +434,9 @@ static void PullPin_Thread_Process(PullPin *This)
     if (FAILED(hr))
         ERR("Request error: %x\n", hr);
 
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     SetEvent(This->hEventStateChanged);
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
 
     if (SUCCEEDED(hr))
     do
@@ -511,21 +504,21 @@ static void PullPin_Thread_Pause(PullPin *This)
 {
     PullPin_Flush(This);
 
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     This->state = Req_Sleepy;
     SetEvent(This->hEventStateChanged);
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
 }
 
 static void  PullPin_Thread_Stop(PullPin *This)
 {
     TRACE("(%p)->()\n", This);
 
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     SetEvent(This->hEventStateChanged);
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
 
-    IBaseFilter_Release(This->pin.pinInfo.pFilter);
+    IPin_Release(&This->pin.IPin_iface);
 
     CoUninitialize();
     ExitThread(0);
@@ -568,7 +561,7 @@ static HRESULT PullPin_InitProcessing(PullPin * This)
         DWORD dwThreadId;
 
         WaitForSingleObject(This->hEventStateChanged, INFINITE);
-        EnterCriticalSection(This->pin.pCritSec);
+        EnterCriticalSection(&This->pin.filter->csFilter);
 
         assert(!This->hThread);
         assert(This->state == Req_Die);
@@ -576,16 +569,13 @@ static HRESULT PullPin_InitProcessing(PullPin * This)
         assert(WaitForSingleObject(This->thread_sleepy, 0) == WAIT_TIMEOUT);
         This->state = Req_Sleepy;
 
-        /* AddRef the filter to make sure it and its pins will be around
-         * as long as the thread */
-        IBaseFilter_AddRef(This->pin.pinInfo.pFilter);
-
+        IPin_AddRef(&This->pin.IPin_iface);
 
         This->hThread = CreateThread(NULL, 0, PullPin_Thread_Main, This, 0, &dwThreadId);
         if (!This->hThread)
         {
             hr = HRESULT_FROM_WIN32(GetLastError());
-            IBaseFilter_Release(This->pin.pinInfo.pFilter);
+            IPin_Release(&This->pin.IPin_iface);
         }
 
         if (SUCCEEDED(hr))
@@ -593,7 +583,7 @@ static HRESULT PullPin_InitProcessing(PullPin * This)
             SetEvent(This->hEventStateChanged);
             /* If assert fails, that means a command was not processed before the thread previously terminated */
         }
-        LeaveCriticalSection(This->pin.pCritSec);
+        LeaveCriticalSection(&This->pin.filter->csFilter);
     }
 
     TRACE(" -- %x\n", hr);
@@ -634,7 +624,7 @@ HRESULT PullPin_PauseProcessing(PullPin * This)
 
         PullPin_WaitForStateChange(This, INFINITE);
 
-        EnterCriticalSection(This->pin.pCritSec);
+        EnterCriticalSection(&This->pin.filter->csFilter);
 
         assert(!This->stop_playback);
         assert(This->state == Req_Run|| This->state == Req_Sleepy);
@@ -661,7 +651,7 @@ HRESULT PullPin_PauseProcessing(PullPin * This)
             } while(pSample);
         }
 
-        LeaveCriticalSection(This->pin.pCritSec);
+        LeaveCriticalSection(&This->pin.filter->csFilter);
     }
 
     return S_OK;
@@ -709,10 +699,10 @@ HRESULT WINAPI PullPin_EndOfStream(IPin * iface)
 
     TRACE("(%p)->()\n", iface);
 
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     hr = SendFurther( iface, deliver_endofstream, NULL, NULL );
     SetEvent(This->hEventStateChanged);
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
 
     return hr;
 }
@@ -722,11 +712,11 @@ HRESULT WINAPI PullPin_BeginFlush(IPin * iface)
     PullPin *This = impl_PullPin_from_IPin(iface);
     TRACE("(%p)->()\n", This);
 
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     {
         SendFurther( iface, deliver_beginflush, NULL, NULL );
     }
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
 
     EnterCriticalSection(&This->thread_lock);
     {
@@ -742,11 +732,11 @@ HRESULT WINAPI PullPin_BeginFlush(IPin * iface)
     }
     LeaveCriticalSection(&This->thread_lock);
 
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     {
         This->fnCleanProc(This->pUserData);
     }
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
 
     return S_OK;
 }
@@ -758,9 +748,9 @@ HRESULT WINAPI PullPin_EndFlush(IPin * iface)
     TRACE("(%p)->()\n", iface);
 
     /* Send further first: Else a race condition might terminate processing early */
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     SendFurther( iface, deliver_endflush, NULL, NULL );
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
 
     EnterCriticalSection(&This->thread_lock);
     {
@@ -769,7 +759,7 @@ HRESULT WINAPI PullPin_EndFlush(IPin * iface)
         if (This->pReader)
             IAsyncReader_EndFlush(This->pReader);
 
-        IBaseFilter_GetState(This->pin.pinInfo.pFilter, INFINITE, &state);
+        IBaseFilter_GetState(&This->pin.filter->IBaseFilter_iface, INFINITE, &state);
 
         if (state != State_Stopped)
             PullPin_StartProcessing(This);
@@ -788,7 +778,7 @@ HRESULT WINAPI PullPin_Disconnect(IPin *iface)
 
     TRACE("()\n");
 
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     {
         if (FAILED(hr = IMemAllocator_Decommit(This->pAlloc)))
             ERR("Allocator decommit failed with error %x. Possible memory leak\n", hr);
@@ -806,7 +796,7 @@ HRESULT WINAPI PullPin_Disconnect(IPin *iface)
         else
             hr = S_FALSE;
     }
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
 
     WaitForSingleObject(This->hThread, INFINITE);
     CloseHandle(This->hThread);

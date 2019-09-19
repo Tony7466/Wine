@@ -398,9 +398,6 @@
 /* Define to 1 if you have the `gettextpo' library (-lgettextpo). */
 #undef HAVE_LIBGETTEXTPO
 
-/* Define to 1 if you have the `i386' library (-li386). */
-#undef HAVE_LIBI386
-
 /* Define to 1 if you have the `kstat' library (-lkstat). */
 #undef HAVE_LIBKSTAT
 
@@ -586,6 +583,9 @@
 
 /* Define to 1 if you have the <mpg123.h> header file. */
 #undef HAVE_MPG123_H
+
+/* Define if MTLDevice protocol has registryID property. */
+#undef HAVE_MTLDEVICE_REGISTRYID
 
 /* Define to 1 if you have the <ncurses.h> header file. */
 #undef HAVE_NCURSES_H

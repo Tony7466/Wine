@@ -26,6 +26,7 @@
 #define NONAMELESSUNION
 #include "windef.h"
 #include "winbase.h"
+#include "winnls.h"
 #include "winternl.h"
 
 #include "kernelbase.h"
@@ -342,6 +343,351 @@ BOOL WINAPI DECLSPEC_HOTPATCH TerminateProcess( HANDLE handle, DWORD exit_code )
         return FALSE;
     }
     return set_ntstatus( NtTerminateProcess( handle, exit_code ));
+}
+
+
+/***********************************************************************
+ * Process startup information
+ ***********************************************************************/
+
+
+static STARTUPINFOW startup_infoW;
+static char *command_lineA;
+static WCHAR *command_lineW;
+
+/******************************************************************
+ *		init_startup_info
+ */
+void init_startup_info( RTL_USER_PROCESS_PARAMETERS *params )
+{
+    ANSI_STRING ansi;
+
+    startup_infoW.cb              = sizeof(startup_infoW);
+    startup_infoW.lpReserved      = NULL;
+    startup_infoW.lpDesktop       = params->Desktop.Buffer;
+    startup_infoW.lpTitle         = params->WindowTitle.Buffer;
+    startup_infoW.dwX             = params->dwX;
+    startup_infoW.dwY             = params->dwY;
+    startup_infoW.dwXSize         = params->dwXSize;
+    startup_infoW.dwYSize         = params->dwYSize;
+    startup_infoW.dwXCountChars   = params->dwXCountChars;
+    startup_infoW.dwYCountChars   = params->dwYCountChars;
+    startup_infoW.dwFillAttribute = params->dwFillAttribute;
+    startup_infoW.dwFlags         = params->dwFlags;
+    startup_infoW.wShowWindow     = params->wShowWindow;
+    startup_infoW.cbReserved2     = params->RuntimeInfo.MaximumLength;
+    startup_infoW.lpReserved2     = params->RuntimeInfo.MaximumLength ? (void *)params->RuntimeInfo.Buffer : NULL;
+    startup_infoW.hStdInput       = params->hStdInput ? params->hStdInput : INVALID_HANDLE_VALUE;
+    startup_infoW.hStdOutput      = params->hStdOutput ? params->hStdOutput : INVALID_HANDLE_VALUE;
+    startup_infoW.hStdError       = params->hStdError ? params->hStdError : INVALID_HANDLE_VALUE;
+
+    command_lineW = params->CommandLine.Buffer;
+    if (!RtlUnicodeStringToAnsiString( &ansi, &params->CommandLine, TRUE )) command_lineA = ansi.Buffer;
+}
+
+
+/***********************************************************************
+ *           GetCommandLineA   (kernelbase.@)
+ */
+LPSTR WINAPI DECLSPEC_HOTPATCH GetCommandLineA(void)
+{
+    return command_lineA;
+}
+
+
+/***********************************************************************
+ *           GetCommandLineW   (kernelbase.@)
+ */
+LPWSTR WINAPI DECLSPEC_HOTPATCH GetCommandLineW(void)
+{
+    return NtCurrentTeb()->Peb->ProcessParameters->CommandLine.Buffer;
+}
+
+
+/***********************************************************************
+ *           GetStartupInfoW    (kernelbase.@)
+ */
+void WINAPI DECLSPEC_HOTPATCH GetStartupInfoW( STARTUPINFOW *info )
+{
+    *info = startup_infoW;
+}
+
+
+/***********************************************************************
+ *           GetStdHandle    (kernelbase.@)
+ */
+HANDLE WINAPI DECLSPEC_HOTPATCH GetStdHandle( DWORD std_handle )
+{
+    switch (std_handle)
+    {
+    case STD_INPUT_HANDLE:  return NtCurrentTeb()->Peb->ProcessParameters->hStdInput;
+    case STD_OUTPUT_HANDLE: return NtCurrentTeb()->Peb->ProcessParameters->hStdOutput;
+    case STD_ERROR_HANDLE:  return NtCurrentTeb()->Peb->ProcessParameters->hStdError;
+    }
+    SetLastError( ERROR_INVALID_HANDLE );
+    return INVALID_HANDLE_VALUE;
+}
+
+
+/***********************************************************************
+ *           SetStdHandle    (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH SetStdHandle( DWORD std_handle, HANDLE handle )
+{
+    switch (std_handle)
+    {
+    case STD_INPUT_HANDLE:  NtCurrentTeb()->Peb->ProcessParameters->hStdInput = handle;  return TRUE;
+    case STD_OUTPUT_HANDLE: NtCurrentTeb()->Peb->ProcessParameters->hStdOutput = handle; return TRUE;
+    case STD_ERROR_HANDLE:  NtCurrentTeb()->Peb->ProcessParameters->hStdError = handle;  return TRUE;
+    }
+    SetLastError( ERROR_INVALID_HANDLE );
+    return FALSE;
+}
+
+
+/***********************************************************************
+ *           SetStdHandleEx    (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH SetStdHandleEx( DWORD std_handle, HANDLE handle, HANDLE *prev )
+{
+    HANDLE *ptr;
+
+    switch (std_handle)
+    {
+    case STD_INPUT_HANDLE:  ptr = &NtCurrentTeb()->Peb->ProcessParameters->hStdInput;  break;
+    case STD_OUTPUT_HANDLE: ptr = &NtCurrentTeb()->Peb->ProcessParameters->hStdOutput; break;
+    case STD_ERROR_HANDLE:  ptr = &NtCurrentTeb()->Peb->ProcessParameters->hStdError;  break;
+    default:
+        SetLastError( ERROR_INVALID_HANDLE );
+        return FALSE;
+    }
+    if (prev) *prev = *ptr;
+    *ptr = handle;
+    return TRUE;
+}
+
+
+/***********************************************************************
+ * Process environment
+ ***********************************************************************/
+
+
+static inline SIZE_T get_env_length( const WCHAR *env )
+{
+    const WCHAR *end = env;
+    while (*end) end += lstrlenW(end) + 1;
+    return end + 1 - env;
+}
+
+/***********************************************************************
+ *           ExpandEnvironmentStringsA   (kernelbase.@)
+ */
+DWORD WINAPI DECLSPEC_HOTPATCH ExpandEnvironmentStringsA( LPCSTR src, LPSTR dst, DWORD count )
+{
+    UNICODE_STRING us_src;
+    PWSTR dstW = NULL;
+    DWORD ret;
+
+    RtlCreateUnicodeStringFromAsciiz( &us_src, src );
+    if (count)
+    {
+        if (!(dstW = HeapAlloc(GetProcessHeap(), 0, count * sizeof(WCHAR)))) return 0;
+        ret = ExpandEnvironmentStringsW( us_src.Buffer, dstW, count);
+        if (ret) WideCharToMultiByte( CP_ACP, 0, dstW, ret, dst, count, NULL, NULL );
+    }
+    else ret = ExpandEnvironmentStringsW( us_src.Buffer, NULL, 0 );
+
+    RtlFreeUnicodeString( &us_src );
+    HeapFree( GetProcessHeap(), 0, dstW );
+    return ret;
+}
+
+
+/***********************************************************************
+ *           ExpandEnvironmentStringsW   (kernelbase.@)
+ */
+DWORD WINAPI DECLSPEC_HOTPATCH ExpandEnvironmentStringsW( LPCWSTR src, LPWSTR dst, DWORD len )
+{
+    UNICODE_STRING us_src, us_dst;
+    NTSTATUS status;
+    DWORD res;
+
+    TRACE( "(%s %p %u)\n", debugstr_w(src), dst, len );
+
+    RtlInitUnicodeString( &us_src, src );
+
+    /* make sure we don't overflow the maximum UNICODE_STRING size */
+    len = min( len, UNICODE_STRING_MAX_CHARS );
+
+    us_dst.Length = 0;
+    us_dst.MaximumLength = len * sizeof(WCHAR);
+    us_dst.Buffer = dst;
+
+    res = 0;
+    status = RtlExpandEnvironmentStrings_U( NULL, &us_src, &us_dst, &res );
+    res /= sizeof(WCHAR);
+    if (!set_ntstatus( status ))
+    {
+        if (status != STATUS_BUFFER_TOO_SMALL) return 0;
+        if (len && dst) dst[len - 1] = 0;
+    }
+    return res;
+}
+
+
+/***********************************************************************
+ *           GetEnvironmentStrings    (kernelbase.@)
+ *           GetEnvironmentStringsA   (kernelbase.@)
+ */
+LPSTR WINAPI DECLSPEC_HOTPATCH GetEnvironmentStringsA(void)
+{
+    LPWSTR env;
+    LPSTR ret;
+    SIZE_T lenA, lenW;
+
+    RtlAcquirePebLock();
+    env = NtCurrentTeb()->Peb->ProcessParameters->Environment;
+    lenW = get_env_length( env );
+    lenA = WideCharToMultiByte( CP_ACP, 0, env, lenW, NULL, 0, NULL, NULL );
+    if ((ret = HeapAlloc( GetProcessHeap(), 0, lenA )))
+        WideCharToMultiByte( CP_ACP, 0, env, lenW, ret, lenA, NULL, NULL );
+    RtlReleasePebLock();
+    return ret;
+}
+
+
+/***********************************************************************
+ *           GetEnvironmentStringsW   (kernelbase.@)
+ */
+LPWSTR WINAPI DECLSPEC_HOTPATCH GetEnvironmentStringsW(void)
+{
+    LPWSTR ret;
+    SIZE_T len;
+
+    RtlAcquirePebLock();
+    len = get_env_length( NtCurrentTeb()->Peb->ProcessParameters->Environment ) * sizeof(WCHAR);
+    if ((ret = HeapAlloc( GetProcessHeap(), 0, len )))
+        memcpy( ret, NtCurrentTeb()->Peb->ProcessParameters->Environment, len );
+    RtlReleasePebLock();
+    return ret;
+}
+
+
+/***********************************************************************
+ *           GetEnvironmentVariableA   (kernelbase.@)
+ */
+DWORD WINAPI DECLSPEC_HOTPATCH GetEnvironmentVariableA( LPCSTR name, LPSTR value, DWORD size )
+{
+    UNICODE_STRING us_name;
+    PWSTR valueW;
+    DWORD ret;
+
+    /* limit the size to sane values */
+    size = min( size, 32767 );
+    if (!(valueW = HeapAlloc( GetProcessHeap(), 0, size * sizeof(WCHAR) ))) return 0;
+
+    RtlCreateUnicodeStringFromAsciiz( &us_name, name );
+    SetLastError( 0 );
+    ret = GetEnvironmentVariableW( us_name.Buffer, valueW, size);
+    if (ret && ret < size) WideCharToMultiByte( CP_ACP, 0, valueW, ret + 1, value, size, NULL, NULL );
+
+    /* this is needed to tell, with 0 as a return value, the difference between:
+     * - an error (GetLastError() != 0)
+     * - returning an empty string (in this case, we need to update the buffer)
+     */
+    if (ret == 0 && size && GetLastError() == 0) value[0] = 0;
+    RtlFreeUnicodeString( &us_name );
+    HeapFree( GetProcessHeap(), 0, valueW );
+    return ret;
+}
+
+
+/***********************************************************************
+ *           GetEnvironmentVariableW   (kernelbase.@)
+ */
+DWORD WINAPI DECLSPEC_HOTPATCH GetEnvironmentVariableW( LPCWSTR name, LPWSTR val, DWORD size )
+{
+    UNICODE_STRING us_name, us_value;
+    NTSTATUS status;
+    DWORD len;
+
+    TRACE( "(%s %p %u)\n", debugstr_w(name), val, size );
+
+    RtlInitUnicodeString( &us_name, name );
+    us_value.Length = 0;
+    us_value.MaximumLength = (size ? size - 1 : 0) * sizeof(WCHAR);
+    us_value.Buffer = val;
+
+    status = RtlQueryEnvironmentVariable_U( NULL, &us_name, &us_value );
+    len = us_value.Length / sizeof(WCHAR);
+    if (!set_ntstatus( status )) return (status == STATUS_BUFFER_TOO_SMALL) ? len + 1 : 0;
+    if (size) val[len] = 0;
+    return len;
+}
+
+
+/***********************************************************************
+ *           FreeEnvironmentStringsA   (kernelbase.@)
+ *           FreeEnvironmentStringsW   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH FreeEnvironmentStringsW( LPWSTR ptr )
+{
+    return HeapFree( GetProcessHeap(), 0, ptr );
+}
+
+
+/***********************************************************************
+ *           SetEnvironmentVariableA   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH SetEnvironmentVariableA( LPCSTR name, LPCSTR value )
+{
+    UNICODE_STRING us_name, us_value;
+    BOOL ret;
+
+    if (!name)
+    {
+        SetLastError( ERROR_ENVVAR_NOT_FOUND );
+        return FALSE;
+    }
+
+    RtlCreateUnicodeStringFromAsciiz( &us_name, name );
+    if (value)
+    {
+        RtlCreateUnicodeStringFromAsciiz( &us_value, value );
+        ret = SetEnvironmentVariableW( us_name.Buffer, us_value.Buffer );
+        RtlFreeUnicodeString( &us_value );
+    }
+    else ret = SetEnvironmentVariableW( us_name.Buffer, NULL );
+    RtlFreeUnicodeString( &us_name );
+    return ret;
+}
+
+
+/***********************************************************************
+ *           SetEnvironmentVariableW   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH SetEnvironmentVariableW( LPCWSTR name, LPCWSTR value )
+{
+    UNICODE_STRING us_name, us_value;
+    NTSTATUS status;
+
+    TRACE( "(%s %s)\n", debugstr_w(name), debugstr_w(value) );
+
+    if (!name)
+    {
+        SetLastError( ERROR_ENVVAR_NOT_FOUND );
+        return FALSE;
+    }
+
+    RtlInitUnicodeString( &us_name, name );
+    if (value)
+    {
+        RtlInitUnicodeString( &us_value, value );
+        status = RtlSetEnvironmentVariable( NULL, &us_name, &us_value );
+    }
+    else status = RtlSetEnvironmentVariable( NULL, &us_name, NULL );
+
+    return set_ntstatus( status );
 }
 
 

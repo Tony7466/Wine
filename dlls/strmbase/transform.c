@@ -103,7 +103,8 @@ static HRESULT WINAPI TransformFilter_Output_CheckMediaType(BasePin *This, const
     return S_FALSE;
 }
 
-static HRESULT WINAPI TransformFilter_Output_DecideBufferSize(BaseOutputPin *This, IMemAllocator *pAlloc, ALLOCATOR_PROPERTIES *ppropInputRequest)
+static HRESULT WINAPI TransformFilter_Output_DecideBufferSize(struct strmbase_source *This,
+        IMemAllocator *pAlloc, ALLOCATOR_PROPERTIES *ppropInputRequest)
 {
     TransformFilter *pTransformFilter = impl_from_source_IPin(&This->pin.IPin_iface);
     return pTransformFilter->pFuncsTable->pfnDecideBufferSize(pTransformFilter, pAlloc, ppropInputRequest);
@@ -170,7 +171,8 @@ static const BaseInputPinFuncTable tf_input_BaseInputFuncTable = {
     TransformFilter_Input_Receive
 };
 
-static const BaseOutputPinFuncTable tf_output_BaseOutputFuncTable = {
+static const struct strmbase_source_ops source_ops =
+{
     {
         TransformFilter_Output_CheckMediaType,
         TransformFilter_Output_GetMediaType
@@ -275,8 +277,6 @@ static HRESULT strmbase_transform_init(IUnknown *outer, const CLSID *clsid,
 {
     ISeekingPassThru *passthru;
     HRESULT hr;
-    PIN_INFO piInput;
-    PIN_INFO piOutput;
 
     strmbase_filter_init(&filter->filter, &transform_vtbl, outer, clsid, &filter_ops);
 
@@ -287,19 +287,11 @@ static HRESULT strmbase_transform_init(IUnknown *outer, const CLSID *clsid,
     filter->pFuncsTable = func_table;
     ZeroMemory(&filter->pmt, sizeof(filter->pmt));
 
-    /* construct input pin */
-    piInput.dir = PINDIR_INPUT;
-    piInput.pFilter = &filter->filter.IBaseFilter_iface;
-    lstrcpynW(piInput.achName, wcsInputPinName, ARRAY_SIZE(piInput.achName));
-    piOutput.dir = PINDIR_OUTPUT;
-    piOutput.pFilter = &filter->filter.IBaseFilter_iface;
-    lstrcpynW(piOutput.achName, wcsOutputPinName, ARRAY_SIZE(piOutput.achName));
+    strmbase_sink_init(&filter->sink, &TransformFilter_InputPin_Vtbl, &filter->filter,
+            wcsInputPinName, &tf_input_BaseInputFuncTable, NULL);
 
-    strmbase_sink_init(&filter->sink, &TransformFilter_InputPin_Vtbl, &piInput,
-            &tf_input_BaseInputFuncTable, &filter->filter.csFilter, NULL);
-
-    strmbase_source_init(&filter->source, &TransformFilter_OutputPin_Vtbl,
-            &piOutput, &tf_output_BaseOutputFuncTable, &filter->filter.csFilter);
+    strmbase_source_init(&filter->source, &TransformFilter_OutputPin_Vtbl, &filter->filter,
+            wcsOutputPinName, &source_ops);
 
     QualityControlImpl_Create(&filter->sink.pin.IPin_iface,
             &filter->filter.IBaseFilter_iface, &filter->qcimpl);
@@ -351,9 +343,9 @@ HRESULT strmbase_transform_create(LONG filter_size, IUnknown *outer, const CLSID
     return E_FAIL;
 }
 
-HRESULT WINAPI TransformFilterImpl_Notify(TransformFilter *iface, IBaseFilter *sender, Quality qm)
+HRESULT WINAPI TransformFilterImpl_Notify(TransformFilter *filter, IBaseFilter *sender, Quality qm)
 {
-    return QualityControlImpl_Notify((IQualityControl*)iface->qcimpl, sender, qm);
+    return QualityControlImpl_Notify(&filter->qcimpl->IQualityControl_iface, sender, qm);
 }
 
 static HRESULT WINAPI TransformFilter_InputPin_EndOfStream(IPin * iface)

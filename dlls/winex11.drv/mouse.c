@@ -125,6 +125,9 @@ XContext cursor_context = 0;
 static HWND cursor_window;
 static HCURSOR last_cursor;
 static DWORD last_cursor_change;
+static RECT last_clip_rect;
+static HWND last_clip_foreground_window;
+static BOOL last_clip_refused;
 static RECT clip_rect;
 static Cursor create_cursor( HANDLE handle );
 
@@ -392,6 +395,19 @@ static BOOL grab_clipping_window( const RECT *clip )
                                     GetModuleHandleW(0), NULL )))
         return TRUE;
 
+    if (keyboard_grabbed)
+    {
+        WARN( "refusing to clip to %s\n", wine_dbgstr_rect(clip) );
+        last_clip_refused = TRUE;
+        last_clip_foreground_window = GetForegroundWindow();
+        last_clip_rect = *clip;
+        return FALSE;
+    }
+    else
+    {
+        last_clip_refused = FALSE;
+    }
+
     /* enable XInput2 unless we are already clipping */
     if (!data->clip_hwnd) enable_xinput2();
 
@@ -449,6 +465,7 @@ void ungrab_clipping_window(void)
 
     TRACE( "no longer clipping\n" );
     XUnmapWindow( display, clip_window );
+    if (clipping_cursor) XUngrabPointer( display, CurrentTime );
     clipping_cursor = FALSE;
     SendMessageW( GetDesktopWindow(), WM_X11DRV_CLIP_CURSOR, 0, 0 );
 }
@@ -462,6 +479,20 @@ void reset_clipping_window(void)
 {
     ungrab_clipping_window();
     ClipCursor( NULL );  /* make sure the clip rectangle is reset too */
+}
+
+/***********************************************************************
+ *      retry_grab_clipping_window
+ *
+ * Restore the current clip rectangle or retry the last one if it has
+ * been refused because of an active keyboard grab.
+ */
+void retry_grab_clipping_window(void)
+{
+    if (clipping_cursor)
+        ClipCursor( &clip_rect );
+    else if (last_clip_refused && GetForegroundWindow() == last_clip_foreground_window)
+        ClipCursor( &last_clip_rect );
 }
 
 BOOL CDECL X11DRV_ClipCursor( const RECT *clip );
@@ -1430,8 +1461,27 @@ BOOL CDECL X11DRV_SetCursorPos( INT x, INT y )
     struct x11drv_thread_data *data = x11drv_init_thread_data();
     POINT pos = virtual_screen_to_root( x, y );
 
+    if (keyboard_grabbed)
+    {
+        WARN( "refusing to warp to %u, %u\n", pos.x, pos.y );
+        return FALSE;
+    }
+
+    if (!clipping_cursor &&
+        XGrabPointer( data->display, root_window, False,
+                      PointerMotionMask | ButtonPressMask | ButtonReleaseMask,
+                      GrabModeAsync, GrabModeAsync, root_window, None, CurrentTime ) != GrabSuccess)
+    {
+        WARN( "refusing to warp pointer to %u, %u without exclusive grab\n", pos.x, pos.y );
+        return FALSE;
+    }
+
     XWarpPointer( data->display, root_window, root_window, 0, 0, 0, 0, pos.x, pos.y );
     data->warp_serial = NextRequest( data->display );
+
+    if (!clipping_cursor)
+        XUngrabPointer( data->display, CurrentTime );
+
     XNoOp( data->display );
     XFlush( data->display ); /* avoids bad mouse lag in games that do their own mouse warping */
     TRACE( "warped to %d,%d serial %lu\n", x, y, data->warp_serial );
