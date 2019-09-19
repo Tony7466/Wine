@@ -1,3 +1,13 @@
+wine-development (4.16-1) UNRELEASED; urgency=medium
+
+  * New upstream release 4.16, released Sep 13, 2019.
+    - More reliable mouse grabbing in games.
+    - Better cross-compilation support in WineGCC.
+    - Improved compatibility with Windows debuggers.
+    - Various bug fixes.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Thu, 19 Sep 2019 22:53:38 +0200
+
 wine-development (4.15-1) unstable; urgency=medium
 
   * New upstream release 4.15, released Aug 30, 2019.
