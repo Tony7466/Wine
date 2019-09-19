@@ -135,14 +135,6 @@ out:
     return hr;
 }
 
-static void Copy_PinInfo(PIN_INFO * pDest, const PIN_INFO * pSrc)
-{
-    /* avoid copying uninitialized data */
-    lstrcpyW(pDest->achName, pSrc->achName);
-    pDest->dir = pSrc->dir;
-    pDest->pFilter = pSrc->pFilter;
-}
-
 static void dump_AM_MEDIA_TYPE(const AM_MEDIA_TYPE * pmt)
 {
     if (!pmt)
@@ -176,13 +168,13 @@ LONG WINAPI BasePinImpl_GetMediaTypeVersion(BasePin *iface)
 ULONG WINAPI BasePinImpl_AddRef(IPin *iface)
 {
     BasePin *pin = impl_from_IPin(iface);
-    return IBaseFilter_AddRef(pin->pinInfo.pFilter);
+    return IBaseFilter_AddRef(&pin->filter->IBaseFilter_iface);
 }
 
 ULONG WINAPI BasePinImpl_Release(IPin *iface)
 {
     BasePin *pin = impl_from_IPin(iface);
-    return IBaseFilter_Release(pin->pinInfo.pFilter);
+    return IBaseFilter_Release(&pin->filter->IBaseFilter_iface);
 }
 
 HRESULT WINAPI BasePinImpl_Disconnect(IPin * iface)
@@ -192,7 +184,7 @@ HRESULT WINAPI BasePinImpl_Disconnect(IPin * iface)
 
     TRACE("(%p)->()\n", This);
 
-    EnterCriticalSection(This->pCritSec);
+    EnterCriticalSection(&This->filter->csFilter);
     {
         if (This->pConnectedTo)
         {
@@ -205,7 +197,7 @@ HRESULT WINAPI BasePinImpl_Disconnect(IPin * iface)
         else
             hr = S_FALSE;
     }
-    LeaveCriticalSection(This->pCritSec);
+    LeaveCriticalSection(&This->filter->csFilter);
 
     return hr;
 }
@@ -217,7 +209,7 @@ HRESULT WINAPI BasePinImpl_ConnectedTo(IPin * iface, IPin ** ppPin)
 
     TRACE("(%p)->(%p)\n", This, ppPin);
 
-    EnterCriticalSection(This->pCritSec);
+    EnterCriticalSection(&This->filter->csFilter);
     {
         if (This->pConnectedTo)
         {
@@ -231,7 +223,7 @@ HRESULT WINAPI BasePinImpl_ConnectedTo(IPin * iface, IPin ** ppPin)
             *ppPin = NULL;
         }
     }
-    LeaveCriticalSection(This->pCritSec);
+    LeaveCriticalSection(&This->filter->csFilter);
 
     return hr;
 }
@@ -243,7 +235,7 @@ HRESULT WINAPI BasePinImpl_ConnectionMediaType(IPin * iface, AM_MEDIA_TYPE * pmt
 
     TRACE("(%p)->(%p)\n", This, pmt);
 
-    EnterCriticalSection(This->pCritSec);
+    EnterCriticalSection(&This->filter->csFilter);
     {
         if (This->pConnectedTo)
         {
@@ -256,45 +248,45 @@ HRESULT WINAPI BasePinImpl_ConnectionMediaType(IPin * iface, AM_MEDIA_TYPE * pmt
             hr = VFW_E_NOT_CONNECTED;
         }
     }
-    LeaveCriticalSection(This->pCritSec);
+    LeaveCriticalSection(&This->filter->csFilter);
 
     return hr;
 }
 
-HRESULT WINAPI BasePinImpl_QueryPinInfo(IPin * iface, PIN_INFO * pInfo)
+HRESULT WINAPI BasePinImpl_QueryPinInfo(IPin *iface, PIN_INFO *info)
 {
-    BasePin *This = impl_from_IPin(iface);
+    BasePin *pin = impl_from_IPin(iface);
 
-    TRACE("(%p)->(%p)\n", This, pInfo);
+    TRACE("pin %p, info %p.\n", pin, info);
 
-    Copy_PinInfo(pInfo, &This->pinInfo);
-    IBaseFilter_AddRef(pInfo->pFilter);
+    info->dir = pin->dir;
+    IBaseFilter_AddRef(info->pFilter = &pin->filter->IBaseFilter_iface);
+    lstrcpyW(info->achName, pin->name);
 
     return S_OK;
 }
 
-HRESULT WINAPI BasePinImpl_QueryDirection(IPin * iface, PIN_DIRECTION * pPinDir)
+HRESULT WINAPI BasePinImpl_QueryDirection(IPin *iface, PIN_DIRECTION *dir)
 {
-    BasePin *This = impl_from_IPin(iface);
+    BasePin *pin = impl_from_IPin(iface);
 
-    TRACE("(%p)->(%p)\n", This, pPinDir);
+    TRACE("pin %p, dir %p.\n", pin, dir);
 
-    *pPinDir = This->pinInfo.dir;
+    *dir = pin->dir;
 
     return S_OK;
 }
 
-HRESULT WINAPI BasePinImpl_QueryId(IPin * iface, LPWSTR * Id)
+HRESULT WINAPI BasePinImpl_QueryId(IPin *iface, WCHAR **id)
 {
-    BasePin *This = impl_from_IPin(iface);
+    BasePin *pin = impl_from_IPin(iface);
 
-    TRACE("(%p)->(%p)\n", This, Id);
+    TRACE("pin %p, id %p.\n", pin, id);
 
-    *Id = CoTaskMemAlloc((lstrlenW(This->pinInfo.achName) + 1) * sizeof(WCHAR));
-    if (!*Id)
+    if (!(*id = CoTaskMemAlloc((lstrlenW(pin->name) + 1) * sizeof(WCHAR))))
         return E_OUTOFMEMORY;
 
-    lstrcpyW(*Id, This->pinInfo.achName);
+    lstrcpyW(*id, pin->name);
 
     return S_OK;
 }
@@ -342,14 +334,14 @@ HRESULT WINAPI BasePinImpl_NewSegment(IPin * iface, REFERENCE_TIME tStart, REFER
 
 /*** OutputPin implementation ***/
 
-static inline BaseOutputPin *impl_BaseOutputPin_from_IPin( IPin *iface )
+static inline struct strmbase_source *impl_source_from_IPin( IPin *iface )
 {
-    return CONTAINING_RECORD(iface, BaseOutputPin, pin.IPin_iface);
+    return CONTAINING_RECORD(iface, struct strmbase_source, pin.IPin_iface);
 }
 
 HRESULT WINAPI BaseOutputPinImpl_QueryInterface(IPin * iface, REFIID riid, LPVOID * ppv)
 {
-    BaseOutputPin *This = impl_BaseOutputPin_from_IPin(iface);
+    struct strmbase_source *This = impl_source_from_IPin(iface);
 
     TRACE("(%p)->(%s, %p)\n", This, debugstr_guid(riid), ppv);
 
@@ -362,7 +354,7 @@ HRESULT WINAPI BaseOutputPinImpl_QueryInterface(IPin * iface, REFIID riid, LPVOI
     else if (IsEqualIID(riid, &IID_IMediaSeeking) ||
              IsEqualIID(riid, &IID_IQualityControl))
     {
-        return IBaseFilter_QueryInterface(This->pin.pinInfo.pFilter, riid, ppv);
+        return IBaseFilter_QueryInterface(&This->pin.filter->IBaseFilter_iface, riid, ppv);
     }
 
     if (*ppv)
@@ -379,7 +371,7 @@ HRESULT WINAPI BaseOutputPinImpl_QueryInterface(IPin * iface, REFIID riid, LPVOI
 HRESULT WINAPI BaseOutputPinImpl_Connect(IPin * iface, IPin * pReceivePin, const AM_MEDIA_TYPE * pmt)
 {
     HRESULT hr;
-    BaseOutputPin *This = impl_BaseOutputPin_from_IPin(iface);
+    struct strmbase_source *This = impl_source_from_IPin(iface);
 
     TRACE("(%p)->(%p, %p)\n", This, pReceivePin, pmt);
     dump_AM_MEDIA_TYPE(pmt);
@@ -392,7 +384,7 @@ HRESULT WINAPI BaseOutputPinImpl_Connect(IPin * iface, IPin * pReceivePin, const
      * catches the obvious case */
     assert(pReceivePin != iface);
 
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     {
         /* if we have been a specific type to connect with, then we can either connect
          * with that or fail. We cannot choose different AM_MEDIA_TYPE */
@@ -455,7 +447,7 @@ HRESULT WINAPI BaseOutputPinImpl_Connect(IPin * iface, IPin * pReceivePin, const
             } /* if not found */
         } /* if negotiate media type */
     } /* if succeeded */
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
 
     TRACE(" -- %x\n", hr);
     return hr;
@@ -470,11 +462,11 @@ HRESULT WINAPI BaseOutputPinImpl_ReceiveConnection(IPin *iface, IPin *pin, const
 HRESULT WINAPI BaseOutputPinImpl_Disconnect(IPin * iface)
 {
     HRESULT hr;
-    BaseOutputPin *This = impl_BaseOutputPin_from_IPin(iface);
+    struct strmbase_source *This = impl_source_from_IPin(iface);
 
     TRACE("(%p)->()\n", This);
 
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     {
         if (This->pMemInputPin)
         {
@@ -492,7 +484,7 @@ HRESULT WINAPI BaseOutputPinImpl_Disconnect(IPin * iface)
         else
             hr = S_FALSE;
     }
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
 
     return hr;
 }
@@ -524,7 +516,8 @@ HRESULT WINAPI BaseOutputPinImpl_EndFlush(IPin * iface)
     return E_UNEXPECTED;
 }
 
-HRESULT WINAPI BaseOutputPinImpl_GetDeliveryBuffer(BaseOutputPin *This, IMediaSample ** ppSample, REFERENCE_TIME * tStart, REFERENCE_TIME * tStop, DWORD dwFlags)
+HRESULT WINAPI BaseOutputPinImpl_GetDeliveryBuffer(struct strmbase_source *This,
+        IMediaSample **ppSample, REFERENCE_TIME *tStart, REFERENCE_TIME *tStop, DWORD dwFlags)
 {
     HRESULT hr;
 
@@ -544,13 +537,13 @@ HRESULT WINAPI BaseOutputPinImpl_GetDeliveryBuffer(BaseOutputPin *This, IMediaSa
 }
 
 /* replaces OutputPin_SendSample */
-HRESULT WINAPI BaseOutputPinImpl_Deliver(BaseOutputPin *This, IMediaSample * pSample)
+HRESULT WINAPI BaseOutputPinImpl_Deliver(struct strmbase_source *This, IMediaSample *pSample)
 {
     IMemInputPin * pMemConnected = NULL;
     PIN_INFO pinInfo;
     HRESULT hr;
 
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     {
         if (!This->pin.pConnectedTo || !This->pMemInputPin)
             hr = VFW_E_NOT_CONNECTED;
@@ -564,7 +557,7 @@ HRESULT WINAPI BaseOutputPinImpl_Deliver(BaseOutputPin *This, IMediaSample * pSa
             hr = IPin_QueryPinInfo(This->pin.pConnectedTo, &pinInfo);
         }
     }
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
 
     if (SUCCEEDED(hr))
     {
@@ -584,51 +577,52 @@ HRESULT WINAPI BaseOutputPinImpl_Deliver(BaseOutputPin *This, IMediaSample * pSa
 }
 
 /* replaces OutputPin_CommitAllocator */
-HRESULT WINAPI BaseOutputPinImpl_Active(BaseOutputPin *This)
+HRESULT WINAPI BaseOutputPinImpl_Active(struct strmbase_source *This)
 {
     HRESULT hr;
 
     TRACE("(%p)->()\n", This);
 
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     {
         if (!This->pin.pConnectedTo || !This->pMemInputPin)
             hr = VFW_E_NOT_CONNECTED;
         else
             hr = IMemAllocator_Commit(This->pAllocator);
     }
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
 
     TRACE("--> %08x\n", hr);
     return hr;
 }
 
 /* replaces OutputPin_DecommitAllocator */
-HRESULT WINAPI BaseOutputPinImpl_Inactive(BaseOutputPin *This)
+HRESULT WINAPI BaseOutputPinImpl_Inactive(struct strmbase_source *This)
 {
     HRESULT hr;
 
     TRACE("(%p)->()\n", This);
 
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     {
         if (!This->pin.pConnectedTo || !This->pMemInputPin)
             hr = VFW_E_NOT_CONNECTED;
         else
             hr = IMemAllocator_Decommit(This->pAllocator);
     }
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
 
     TRACE("--> %08x\n", hr);
     return hr;
 }
 
-HRESULT WINAPI BaseOutputPinImpl_InitAllocator(BaseOutputPin *This, IMemAllocator **pMemAlloc)
+HRESULT WINAPI BaseOutputPinImpl_InitAllocator(struct strmbase_source *This, IMemAllocator **pMemAlloc)
 {
     return CoCreateInstance(&CLSID_MemoryAllocator, NULL, CLSCTX_INPROC_SERVER, &IID_IMemAllocator, (LPVOID*)pMemAlloc);
 }
 
-HRESULT WINAPI BaseOutputPinImpl_DecideAllocator(BaseOutputPin *This, IMemInputPin *pPin, IMemAllocator **pAlloc)
+HRESULT WINAPI BaseOutputPinImpl_DecideAllocator(struct strmbase_source *This,
+        IMemInputPin *pPin, IMemAllocator **pAlloc)
 {
     HRESULT hr;
 
@@ -657,7 +651,8 @@ HRESULT WINAPI BaseOutputPinImpl_DecideAllocator(BaseOutputPin *This, IMemInputP
 
 /* Function called as a helper to IPin_Connect */
 /* specific AM_MEDIA_TYPE - it cannot be NULL */
-HRESULT WINAPI BaseOutputPinImpl_AttemptConnection(BaseOutputPin *This, IPin *pReceivePin, const AM_MEDIA_TYPE *pmt)
+HRESULT WINAPI BaseOutputPinImpl_AttemptConnection(struct strmbase_source *This,
+        IPin *pReceivePin, const AM_MEDIA_TYPE *pmt)
 {
     HRESULT hr;
     IMemAllocator * pMemAlloc = NULL;
@@ -712,63 +707,25 @@ HRESULT WINAPI BaseOutputPinImpl_AttemptConnection(BaseOutputPin *This, IPin *pR
     return hr;
 }
 
-static void strmbase_pin_init(BasePin *pin, const IPinVtbl *vtbl,
-        const BasePinFuncTable *func_table, const PIN_INFO *info, CRITICAL_SECTION *cs)
+void strmbase_source_init(struct strmbase_source *pin, const IPinVtbl *vtbl, struct strmbase_filter *filter,
+        const WCHAR *name, const struct strmbase_source_ops *func_table)
 {
     memset(pin, 0, sizeof(*pin));
-    pin->IPin_iface.lpVtbl = vtbl;
-    pin->pCritSec = cs;
-    pin->dRate = 1.0;
-    Copy_PinInfo(&pin->pinInfo, info);
+    pin->pin.IPin_iface.lpVtbl = vtbl;
+    pin->pin.dRate = 1.0;
+    pin->pin.filter = filter;
+    pin->pin.dir = PINDIR_OUTPUT;
+    lstrcpyW(pin->pin.name, name);
+    pin->pin.pFuncsTable = &func_table->base;
     pin->pFuncsTable = func_table;
 }
 
-void strmbase_source_init(BaseOutputPin *pin, const IPinVtbl *vtbl,
-        const PIN_INFO *info, const BaseOutputPinFuncTable *func_table, CRITICAL_SECTION *cs)
-{
-    memset(pin, 0, sizeof(*pin));
-    strmbase_pin_init(&pin->pin, vtbl, &func_table->base, info, cs);
-    pin->pFuncsTable = func_table;
-}
-
-HRESULT WINAPI BaseOutputPin_Construct(const IPinVtbl *OutputPin_Vtbl, LONG outputpin_size, const PIN_INFO * pPinInfo, const BaseOutputPinFuncTable* vtbl, LPCRITICAL_SECTION pCritSec, IPin ** ppPin)
-{
-    BaseOutputPin * pPinImpl;
-
-    *ppPin = NULL;
-
-    if (pPinInfo->dir != PINDIR_OUTPUT)
-    {
-        ERR("Pin direction(%x) != PINDIR_OUTPUT\n", pPinInfo->dir);
-        return E_INVALIDARG;
-    }
-
-    assert(outputpin_size >= sizeof(BaseOutputPin));
-    assert(vtbl->pfnAttemptConnection);
-
-    pPinImpl = CoTaskMemAlloc(outputpin_size);
-
-    if (!pPinImpl)
-        return E_OUTOFMEMORY;
-
-    strmbase_source_init(pPinImpl, OutputPin_Vtbl, pPinInfo, vtbl, pCritSec);
-    *ppPin = &pPinImpl->pin.IPin_iface;
-    return S_OK;
-}
-
-void strmbase_source_cleanup(BaseOutputPin *pin)
+void strmbase_source_cleanup(struct strmbase_source *pin)
 {
     FreeMediaType(&pin->pin.mtCurrent);
     if (pin->pAllocator)
         IMemAllocator_Release(pin->pAllocator);
     pin->pAllocator = NULL;
-}
-
-HRESULT WINAPI BaseOutputPin_Destroy(BaseOutputPin *This)
-{
-    strmbase_source_cleanup(This);
-    CoTaskMemFree(This);
-    return S_OK;
 }
 
 /*** Input Pin implementation ***/
@@ -794,7 +751,7 @@ HRESULT WINAPI BaseInputPinImpl_QueryInterface(IPin * iface, REFIID riid, LPVOID
         *ppv = &This->IMemInputPin_iface;
     else if (IsEqualIID(riid, &IID_IMediaSeeking))
     {
-        return IBaseFilter_QueryInterface(This->pin.pinInfo.pFilter, &IID_IMediaSeeking, ppv);
+        return IBaseFilter_QueryInterface(&This->pin.filter->IBaseFilter_iface, &IID_IMediaSeeking, ppv);
     }
 
     if (*ppv)
@@ -824,7 +781,7 @@ HRESULT WINAPI BaseInputPinImpl_ReceiveConnection(IPin * iface, IPin * pReceiveP
     TRACE("(%p)->(%p, %p)\n", This, pReceivePin, pmt);
     dump_AM_MEDIA_TYPE(pmt);
 
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     {
         if (This->pin.pConnectedTo)
             hr = VFW_E_ALREADY_CONNECTED;
@@ -851,7 +808,7 @@ HRESULT WINAPI BaseInputPinImpl_ReceiveConnection(IPin * iface, IPin * pReceiveP
             IPin_AddRef(pReceivePin);
         }
     }
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
 
     return hr;
 }
@@ -868,12 +825,12 @@ HRESULT WINAPI BaseInputPinImpl_EndOfStream(IPin * iface)
 
     TRACE("(%p)->()\n", This);
 
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     if (This->flushing)
         hr = S_FALSE;
     else
         This->end_of_stream = TRUE;
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
 
     if (hr == S_OK)
         hr = SendFurther( iface, deliver_endofstream, NULL, NULL );
@@ -891,11 +848,11 @@ HRESULT WINAPI BaseInputPinImpl_BeginFlush(IPin * iface)
     HRESULT hr;
     TRACE("(%p) semi-stub\n", This);
 
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     This->flushing = TRUE;
 
     hr = SendFurther( iface, deliver_beginflush, NULL, NULL );
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
 
     return hr;
 }
@@ -911,11 +868,11 @@ HRESULT WINAPI BaseInputPinImpl_EndFlush(IPin * iface)
     HRESULT hr;
     TRACE("(%p)->()\n", This);
 
-    EnterCriticalSection(This->pin.pCritSec);
+    EnterCriticalSection(&This->pin.filter->csFilter);
     This->flushing = This->end_of_stream = FALSE;
 
     hr = SendFurther( iface, deliver_endflush, NULL, NULL );
-    LeaveCriticalSection(This->pin.pCritSec);
+    LeaveCriticalSection(&This->pin.filter->csFilter);
 
     return hr;
 }
@@ -1077,45 +1034,21 @@ static const IMemInputPinVtbl MemInputPin_Vtbl =
     MemInputPin_ReceiveCanBlock
 };
 
-void strmbase_sink_init(BaseInputPin *pin, const IPinVtbl *vtbl,
-        const PIN_INFO *info, const BaseInputPinFuncTable *func_table, CRITICAL_SECTION *cs,
-        IMemAllocator *allocator)
+void strmbase_sink_init(BaseInputPin *pin, const IPinVtbl *vtbl, struct strmbase_filter *filter,
+        const WCHAR *name, const BaseInputPinFuncTable *func_table, IMemAllocator *allocator)
 {
     memset(pin, 0, sizeof(*pin));
-    strmbase_pin_init(&pin->pin, vtbl, &func_table->base, info, cs);
+    pin->pin.IPin_iface.lpVtbl = vtbl;
+    pin->pin.dRate = 1.0;
+    pin->pin.filter = filter;
+    pin->pin.dir = PINDIR_INPUT;
+    lstrcpyW(pin->pin.name, name);
+    pin->pin.pFuncsTable = &func_table->base;
     pin->pFuncsTable = func_table;
     pin->pAllocator = pin->preferred_allocator = allocator;
     if (pin->preferred_allocator)
         IMemAllocator_AddRef(pin->preferred_allocator);
     pin->IMemInputPin_iface.lpVtbl = &MemInputPin_Vtbl;
-}
-
-HRESULT BaseInputPin_Construct(const IPinVtbl *InputPin_Vtbl, LONG inputpin_size, const PIN_INFO * pPinInfo,
-                               const BaseInputPinFuncTable* vtbl,
-                               LPCRITICAL_SECTION pCritSec, IMemAllocator *allocator, IPin ** ppPin)
-{
-    BaseInputPin * pPinImpl;
-
-    *ppPin = NULL;
-
-    assert(inputpin_size >= sizeof(BaseInputPin));
-    assert(vtbl->base.pfnCheckMediaType);
-
-    if (pPinInfo->dir != PINDIR_INPUT)
-    {
-        ERR("Pin direction(%x) != PINDIR_INPUT\n", pPinInfo->dir);
-        return E_INVALIDARG;
-    }
-
-    pPinImpl = CoTaskMemAlloc(inputpin_size);
-
-    if (!pPinImpl)
-        return E_OUTOFMEMORY;
-
-    strmbase_sink_init(pPinImpl, InputPin_Vtbl, pPinInfo, vtbl, pCritSec, allocator);
-
-    *ppPin = &pPinImpl->pin.IPin_iface;
-    return S_OK;
 }
 
 void strmbase_sink_cleanup(BaseInputPin *pin)
@@ -1125,11 +1058,4 @@ void strmbase_sink_cleanup(BaseInputPin *pin)
         IMemAllocator_Release(pin->pAllocator);
     pin->pAllocator = NULL;
     pin->pin.IPin_iface.lpVtbl = NULL;
-}
-
-HRESULT WINAPI BaseInputPin_Destroy(BaseInputPin *This)
-{
-    strmbase_sink_cleanup(This);
-    CoTaskMemFree(This);
-    return S_OK;
 }

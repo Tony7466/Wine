@@ -409,7 +409,7 @@ WINE_WARNING_WITH(gettext,[test "$MSGFMT" = false],
 dnl **** Check for some libraries ****
 
 dnl Check for -li386 for NetBSD and OpenBSD
-AC_CHECK_LIB(i386,i386_set_ldt)
+AC_CHECK_LIB(i386,i386_set_ldt,[AC_SUBST(I386_LIBS, "-li386")])
 
 AC_SUBST(OPENGL_LIBS,"")
 
@@ -857,6 +857,18 @@ case $host_os in
     if test "$ac_cv_header_Metal_Metal_h" = "yes"
     then
         AC_SUBST(METAL_LIBS,"-framework Metal -framework QuartzCore")
+    fi
+
+    dnl Check for MTLDevice registryID property
+    if test "$ac_cv_header_Metal_Metal_h" = "yes"
+    then
+        AC_MSG_CHECKING([whether MTLDevice protocol supports registryID property])
+        AC_LANG_PUSH([Objective C])
+        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <Metal/Metal.h>]], [[id<MTLDevice> device; device.registryID;]])],
+                              [AC_MSG_RESULT(yes)
+                               AC_DEFINE(HAVE_MTLDEVICE_REGISTRYID, 1, [Define if MTLDevice protocol has registryID property.])],
+                              [AC_MSG_RESULT(no)])
+        AC_LANG_POP([Objective C])
     fi
 
     dnl Enable Mac driver on Mac OS X 10.6 or later
@@ -1682,32 +1694,32 @@ dnl **** Check for libuwind ****
 if test "x$with_unwind" != xno
 then
     WINE_PACKAGE_FLAGS(UNWIND,[libunwind],[-lunwind],,,
-       [AC_CACHE_CHECK([for unw_getcontext],wine_cv_have_unw_getcontext,
+       [AC_CACHE_CHECK([for unw_step],wine_cv_have_unw_step,
            [AC_LINK_IFELSE([AC_LANG_PROGRAM([[#define UNW_LOCAL_ONLY
 #include <libunwind.h>]],
-                [[unw_context_t context; unw_getcontext( &context );]])],
-                [wine_cv_have_unw_getcontext="yes"],[wine_cv_have_unw_getcontext="no"])])
-        if test "$wine_cv_have_unw_getcontext" = no -a -n "$UNWIND_LIBS"
+                [[unw_cursor_t cursor; unw_step( &cursor );]])],
+                [wine_cv_have_unw_step="yes"],[wine_cv_have_unw_step="no"])])
+        if test "$wine_cv_have_unw_step" = no -a -n "$UNWIND_LIBS"
         then
             save_libs=$LIBS
             LIBS="$UNWIND_LIBS $LIBS"
-            AC_CACHE_CHECK([for unw_getcontext in libunwind],wine_cv_have_libunwind_unw_getcontext,
+            AC_CACHE_CHECK([for unw_step in libunwind],wine_cv_have_libunwind_unw_step,
                [AC_LINK_IFELSE([AC_LANG_PROGRAM([[#define UNW_LOCAL_ONLY
 #include <libunwind.h>]],
-                    [[unw_context_t context; unw_getcontext( &context );]])],
-                    [wine_cv_have_libunwind_unw_getcontext="yes"],
-                    [wine_cv_have_libunwind_unw_getcontext="no"])])
-            test "$wine_cv_have_libunwind_unw_getcontext" = yes || UNWIND_LIBS=""
+                    [[unw_cursor_t cursor; unw_step( &cursor );]])],
+                    [wine_cv_have_libunwind_unw_step="yes"],
+                    [wine_cv_have_libunwind_unw_step="no"])])
             LIBS=$save_libs
         fi
-        if test "x$wine_cv_have_unw_getcontext$wine_cv_have_libunwind_unw_getcontext" != xnono
+        test "$wine_cv_have_libunwind_unw_step" = yes || UNWIND_LIBS=""
+        if test "x$wine_cv_have_unw_step$wine_cv_have_libunwind_unw_step" != xnono
         then
             AC_DEFINE(HAVE_LIBUNWIND,1,[Define to 1 if you have the `unwind' library (-lunwind).])
         fi])
 fi
 case $host in
   aarch64*|*-darwin*)
-    WINE_NOTICE_WITH(unwind,[test "x$wine_cv_have_unw_getcontext$wine_cv_have_libunwind_unw_getcontext" != xnono],
+    WINE_NOTICE_WITH(unwind,[test "x$wine_cv_have_unw_step$wine_cv_have_libunwind_unw_step" = xnono],
                      [libunwind ${notice_platform}development files not found, stack unwinding won't work.]) ;;
 esac
 

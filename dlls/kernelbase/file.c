@@ -35,6 +35,7 @@
 #include "wincon.h"
 #include "fileapi.h"
 #include "ddk/ntddk.h"
+#include "ddk/ntddser.h"
 
 #include "kernelbase.h"
 #include "wine/exception.h"
@@ -476,6 +477,89 @@ BOOL WINAPI DECLSPEC_HOTPATCH DeleteFileW( LPCWSTR path )
     if (status == STATUS_SUCCESS) status = NtClose(hFile);
 
     RtlFreeUnicodeString( &nameW );
+    return set_ntstatus( status );
+}
+
+
+/****************************************************************************
+ *	FindCloseChangeNotification   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH FindCloseChangeNotification( HANDLE handle )
+{
+    return CloseHandle( handle );
+}
+
+
+/****************************************************************************
+ *	FindFirstChangeNotificationA   (kernelbase.@)
+ */
+HANDLE WINAPI DECLSPEC_HOTPATCH FindFirstChangeNotificationA( LPCSTR path, BOOL subtree, DWORD filter )
+{
+    WCHAR *pathW;
+
+    if (!(pathW = file_name_AtoW( path, FALSE ))) return INVALID_HANDLE_VALUE;
+    return FindFirstChangeNotificationW( pathW, subtree, filter );
+}
+
+
+/*
+ * NtNotifyChangeDirectoryFile may write back to the IO_STATUS_BLOCK
+ * asynchronously.  We don't care about the contents, but it can't
+ * be placed on the stack since it will go out of scope when we return.
+ */
+static IO_STATUS_BLOCK dummy_iosb;
+
+/****************************************************************************
+ *	FindFirstChangeNotificationW   (kernelbase.@)
+ */
+HANDLE WINAPI DECLSPEC_HOTPATCH FindFirstChangeNotificationW( LPCWSTR path, BOOL subtree, DWORD filter )
+{
+    UNICODE_STRING nt_name;
+    OBJECT_ATTRIBUTES attr;
+    NTSTATUS status;
+    HANDLE handle = INVALID_HANDLE_VALUE;
+
+    TRACE( "%s %d %x\n", debugstr_w(path), subtree, filter );
+
+    if (!RtlDosPathNameToNtPathName_U( path, &nt_name, NULL, NULL ))
+    {
+        SetLastError( ERROR_PATH_NOT_FOUND );
+        return handle;
+    }
+
+    attr.Length = sizeof(attr);
+    attr.RootDirectory = 0;
+    attr.Attributes = OBJ_CASE_INSENSITIVE;
+    attr.ObjectName = &nt_name;
+    attr.SecurityDescriptor = NULL;
+    attr.SecurityQualityOfService = NULL;
+
+    status = NtOpenFile( &handle, FILE_LIST_DIRECTORY | SYNCHRONIZE, &attr, &dummy_iosb,
+                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                         FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT );
+    RtlFreeUnicodeString( &nt_name );
+
+    if (!set_ntstatus( status )) return INVALID_HANDLE_VALUE;
+
+    status = NtNotifyChangeDirectoryFile( handle, NULL, NULL, NULL, &dummy_iosb, NULL, 0, filter, subtree );
+    if (status != STATUS_PENDING)
+    {
+        NtClose( handle );
+        SetLastError( RtlNtStatusToDosError(status) );
+        return INVALID_HANDLE_VALUE;
+    }
+    return handle;
+}
+
+
+/****************************************************************************
+ *	FindNextChangeNotification   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH FindNextChangeNotification( HANDLE handle )
+{
+    NTSTATUS status = NtNotifyChangeDirectoryFile( handle, NULL, NULL, NULL, &dummy_iosb,
+                                                   NULL, 0, FILE_NOTIFY_CHANGE_SIZE, 0 );
+    if (status == STATUS_PENDING) return TRUE;
     return set_ntstatus( status );
 }
 
@@ -1179,6 +1263,59 @@ HANDLE WINAPI /* DECLSPEC_HOTPATCH */ ReOpenFile( HANDLE handle, DWORD access, D
 }
 
 
+static void WINAPI invoke_completion( void *context, IO_STATUS_BLOCK *io, ULONG res )
+{
+    LPOVERLAPPED_COMPLETION_ROUTINE completion = context;
+    completion( io->u.Status, io->Information, (LPOVERLAPPED)io );
+}
+
+/****************************************************************************
+ *	ReadDirectoryChangesW   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH ReadDirectoryChangesW( HANDLE handle, LPVOID buffer, DWORD len,
+                                                     BOOL subtree, DWORD filter, LPDWORD returned,
+                                                     LPOVERLAPPED overlapped,
+                                                     LPOVERLAPPED_COMPLETION_ROUTINE completion )
+{
+    OVERLAPPED ov, *pov;
+    IO_STATUS_BLOCK *ios;
+    NTSTATUS status;
+    LPVOID cvalue = NULL;
+
+    TRACE( "%p %p %08x %d %08x %p %p %p\n",
+           handle, buffer, len, subtree, filter, returned, overlapped, completion );
+
+    if (!overlapped)
+    {
+        memset( &ov, 0, sizeof ov );
+        ov.hEvent = CreateEventW( NULL, 0, 0, NULL );
+        pov = &ov;
+    }
+    else
+    {
+        pov = overlapped;
+        if (completion) cvalue = completion;
+        else if (((ULONG_PTR)overlapped->hEvent & 1) == 0) cvalue = overlapped;
+    }
+
+    ios = (PIO_STATUS_BLOCK)pov;
+    ios->u.Status = STATUS_PENDING;
+
+    status = NtNotifyChangeDirectoryFile( handle, completion && overlapped ? NULL : pov->hEvent,
+                                          completion && overlapped ? invoke_completion : NULL,
+                                          cvalue, ios, buffer, len, filter, subtree );
+    if (status == STATUS_PENDING)
+    {
+        if (overlapped) return TRUE;
+        WaitForSingleObjectEx( ov.hEvent, INFINITE, TRUE );
+        if (returned) *returned = ios->Information;
+        status = ios->u.Status;
+    }
+    if (!overlapped) CloseHandle( ov.hEvent );
+    return set_ntstatus( status );
+}
+
+
 /***********************************************************************
  *	ReadFile   (kernelbase.@)
  */
@@ -1629,4 +1766,419 @@ BOOL WINAPI DECLSPEC_HOTPATCH WriteFileGather( HANDLE file, FILE_SEGMENT_ELEMENT
 
     return set_ntstatus( NtWriteFileGather( file, overlapped->hEvent, NULL, cvalue,
                                             io, segments, count, &offset, NULL ));
+}
+
+
+/***********************************************************************
+ * I/O controls
+ ***********************************************************************/
+
+
+static void dump_dcb( const DCB *dcb )
+{
+    TRACE( "size=%d rate=%d fParity=%d Parity=%d stopbits=%d %sIXON %sIXOFF CTS=%d RTS=%d DSR=%d DTR=%d %sCRTSCTS\n",
+           dcb->ByteSize, dcb->BaudRate, dcb->fParity, dcb->Parity,
+           (dcb->StopBits == ONESTOPBIT) ? 1 : (dcb->StopBits == TWOSTOPBITS) ? 2 : 0,
+           dcb->fOutX ? "" : "~", dcb->fInX ? "" : "~",
+           dcb->fOutxCtsFlow, dcb->fRtsControl, dcb->fOutxDsrFlow, dcb->fDtrControl,
+           (dcb->fOutxCtsFlow || dcb->fRtsControl == RTS_CONTROL_HANDSHAKE) ? "" : "~" );
+}
+
+/*****************************************************************************
+ *	ClearCommBreak   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH ClearCommBreak( HANDLE handle )
+{
+    return EscapeCommFunction( handle, CLRBREAK );
+}
+
+
+/*****************************************************************************
+ *	ClearCommError   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH ClearCommError( HANDLE handle, DWORD *errors, COMSTAT *stat )
+{
+    SERIAL_STATUS ss;
+
+    if (!DeviceIoControl( handle, IOCTL_SERIAL_GET_COMMSTATUS, NULL, 0, &ss, sizeof(ss), NULL, NULL ))
+        return FALSE;
+
+    TRACE( "status %#x,%#x, in %u, out %u, eof %d, wait %d\n", ss.Errors, ss.HoldReasons,
+           ss.AmountInInQueue, ss.AmountInOutQueue, ss.EofReceived, ss.WaitForImmediate );
+
+    if (errors)
+    {
+        *errors = 0;
+        if (ss.Errors & SERIAL_ERROR_BREAK)        *errors |= CE_BREAK;
+        if (ss.Errors & SERIAL_ERROR_FRAMING)      *errors |= CE_FRAME;
+        if (ss.Errors & SERIAL_ERROR_OVERRUN)      *errors |= CE_OVERRUN;
+        if (ss.Errors & SERIAL_ERROR_QUEUEOVERRUN) *errors |= CE_RXOVER;
+        if (ss.Errors & SERIAL_ERROR_PARITY)       *errors |= CE_RXPARITY;
+    }
+    if (stat)
+    {
+        stat->fCtsHold  = !!(ss.HoldReasons & SERIAL_TX_WAITING_FOR_CTS);
+        stat->fDsrHold  = !!(ss.HoldReasons & SERIAL_TX_WAITING_FOR_DSR);
+        stat->fRlsdHold = !!(ss.HoldReasons & SERIAL_TX_WAITING_FOR_DCD);
+        stat->fXoffHold = !!(ss.HoldReasons & SERIAL_TX_WAITING_FOR_XON);
+        stat->fXoffSent = !!(ss.HoldReasons & SERIAL_TX_WAITING_XOFF_SENT);
+        stat->fEof      = !!ss.EofReceived;
+        stat->fTxim     = !!ss.WaitForImmediate;
+        stat->cbInQue   = ss.AmountInInQueue;
+        stat->cbOutQue  = ss.AmountInOutQueue;
+    }
+    return TRUE;
+}
+
+
+/****************************************************************************
+ *	DeviceIoControl   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH DeviceIoControl( HANDLE handle, DWORD code, void *in_buff, DWORD in_count,
+                                               void *out_buff, DWORD out_count, DWORD *returned,
+                                               OVERLAPPED *overlapped )
+{
+    IO_STATUS_BLOCK iosb, *piosb = &iosb;
+    void *cvalue = NULL;
+    HANDLE event = 0;
+    NTSTATUS status;
+
+    TRACE( "(%p,%x,%p,%d,%p,%d,%p,%p)\n",
+           handle, code, in_buff, in_count, out_buff, out_count, returned, overlapped );
+
+    if (overlapped)
+    {
+        piosb = (IO_STATUS_BLOCK *)overlapped;
+        if (!((ULONG_PTR)overlapped->hEvent & 1)) cvalue = overlapped;
+        event = overlapped->hEvent;
+        overlapped->Internal = STATUS_PENDING;
+        overlapped->InternalHigh = 0;
+    }
+
+    if (HIWORD(code) == FILE_DEVICE_FILE_SYSTEM)
+        status = NtFsControlFile( handle, event, NULL, cvalue, piosb, code,
+                                  in_buff, in_count, out_buff, out_count );
+    else
+        status = NtDeviceIoControlFile( handle, event, NULL, cvalue, piosb, code,
+                                        in_buff, in_count, out_buff, out_count );
+
+    if (returned) *returned = piosb->Information;
+    return set_ntstatus( status );
+}
+
+
+/*****************************************************************************
+ *	EscapeCommFunction   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH EscapeCommFunction( HANDLE handle, DWORD func )
+{
+    static const DWORD ioctls[] =
+    {
+        0,
+        IOCTL_SERIAL_SET_XOFF,      /* SETXOFF */
+        IOCTL_SERIAL_SET_XON,       /* SETXON */
+        IOCTL_SERIAL_SET_RTS,       /* SETRTS */
+        IOCTL_SERIAL_CLR_RTS,       /* CLRRTS */
+        IOCTL_SERIAL_SET_DTR,       /* SETDTR */
+        IOCTL_SERIAL_CLR_DTR,       /* CLRDTR */
+        IOCTL_SERIAL_RESET_DEVICE,  /* RESETDEV */
+        IOCTL_SERIAL_SET_BREAK_ON,  /* SETBREAK */
+        IOCTL_SERIAL_SET_BREAK_OFF  /* CLRBREAK */
+    };
+
+    if (func >= ARRAY_SIZE(ioctls) || !ioctls[func])
+    {
+        SetLastError( ERROR_INVALID_PARAMETER );
+        return FALSE;
+    }
+    return DeviceIoControl( handle, ioctls[func], NULL, 0, NULL, 0, NULL, NULL );
+}
+
+
+/***********************************************************************
+ *	GetCommConfig   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH GetCommConfig( HANDLE handle, COMMCONFIG *config, DWORD *size )
+{
+    if (!config) return FALSE;
+
+    TRACE( "(%p, %p, %p %u)\n", handle, config, size, *size );
+
+    if (*size < sizeof(COMMCONFIG))
+    {
+        *size = sizeof(COMMCONFIG);
+        return FALSE;
+    }
+    *size = sizeof(COMMCONFIG);
+    config->dwSize = sizeof(COMMCONFIG);
+    config->wVersion = 1;
+    config->wReserved = 0;
+    config->dwProviderSubType = PST_RS232;
+    config->dwProviderOffset = 0;
+    config->dwProviderSize = 0;
+    return GetCommState( handle, &config->dcb );
+}
+
+
+/*****************************************************************************
+ *	GetCommMask   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH GetCommMask( HANDLE handle, DWORD *mask )
+{
+    return DeviceIoControl( handle, IOCTL_SERIAL_GET_WAIT_MASK, NULL, 0, mask, sizeof(*mask),
+                            NULL, NULL );
+}
+
+
+/***********************************************************************
+ *	GetCommModemStatus   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH GetCommModemStatus( HANDLE handle, DWORD *status )
+{
+    return DeviceIoControl( handle, IOCTL_SERIAL_GET_MODEMSTATUS, NULL, 0, status, sizeof(*status),
+                            NULL, NULL );
+}
+
+
+/***********************************************************************
+ *	GetCommProperties   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH GetCommProperties( HANDLE handle, COMMPROP *prop )
+{
+    return DeviceIoControl( handle, IOCTL_SERIAL_GET_PROPERTIES, NULL, 0, prop, sizeof(*prop), NULL, NULL );
+}
+
+
+/*****************************************************************************
+ *	GetCommState   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH GetCommState( HANDLE handle, DCB *dcb )
+{
+    SERIAL_BAUD_RATE sbr;
+    SERIAL_LINE_CONTROL slc;
+    SERIAL_HANDFLOW shf;
+    SERIAL_CHARS sc;
+
+    if (!dcb)
+    {
+        SetLastError( ERROR_INVALID_PARAMETER );
+        return FALSE;
+    }
+    if (!DeviceIoControl(handle, IOCTL_SERIAL_GET_BAUD_RATE, NULL, 0, &sbr, sizeof(sbr), NULL, NULL) ||
+        !DeviceIoControl(handle, IOCTL_SERIAL_GET_LINE_CONTROL, NULL, 0, &slc, sizeof(slc), NULL, NULL) ||
+        !DeviceIoControl(handle, IOCTL_SERIAL_GET_HANDFLOW, NULL, 0, &shf, sizeof(shf), NULL, NULL) ||
+        !DeviceIoControl(handle, IOCTL_SERIAL_GET_CHARS, NULL, 0, &sc, sizeof(sc), NULL, NULL))
+        return FALSE;
+
+    dcb->DCBlength         = sizeof(*dcb);
+    dcb->BaudRate          = sbr.BaudRate;
+    /* yes, they seem no never be (re)set on NT */
+    dcb->fBinary           = 1;
+    dcb->fParity           = 0;
+    dcb->fOutxCtsFlow      = !!(shf.ControlHandShake & SERIAL_CTS_HANDSHAKE);
+    dcb->fOutxDsrFlow      = !!(shf.ControlHandShake & SERIAL_DSR_HANDSHAKE);
+    dcb->fDsrSensitivity   = !!(shf.ControlHandShake & SERIAL_DSR_SENSITIVITY);
+    dcb->fTXContinueOnXoff = !!(shf.FlowReplace & SERIAL_XOFF_CONTINUE);
+    dcb->fOutX             = !!(shf.FlowReplace & SERIAL_AUTO_TRANSMIT);
+    dcb->fInX              = !!(shf.FlowReplace & SERIAL_AUTO_RECEIVE);
+    dcb->fErrorChar        = !!(shf.FlowReplace & SERIAL_ERROR_CHAR);
+    dcb->fNull             = !!(shf.FlowReplace & SERIAL_NULL_STRIPPING);
+    dcb->fAbortOnError     = !!(shf.ControlHandShake & SERIAL_ERROR_ABORT);
+    dcb->XonLim            = shf.XonLimit;
+    dcb->XoffLim           = shf.XoffLimit;
+    dcb->ByteSize          = slc.WordLength;
+    dcb->Parity            = slc.Parity;
+    dcb->StopBits          = slc.StopBits;
+    dcb->XonChar           = sc.XonChar;
+    dcb->XoffChar          = sc.XoffChar;
+    dcb->ErrorChar         = sc.ErrorChar;
+    dcb->EofChar           = sc.EofChar;
+    dcb->EvtChar           = sc.EventChar;
+
+    switch (shf.ControlHandShake & (SERIAL_DTR_CONTROL | SERIAL_DTR_HANDSHAKE))
+    {
+    case SERIAL_DTR_CONTROL:    dcb->fDtrControl = DTR_CONTROL_ENABLE; break;
+    case SERIAL_DTR_HANDSHAKE:  dcb->fDtrControl = DTR_CONTROL_HANDSHAKE; break;
+    default:                    dcb->fDtrControl = DTR_CONTROL_DISABLE; break;
+    }
+    switch (shf.FlowReplace & (SERIAL_RTS_CONTROL | SERIAL_RTS_HANDSHAKE))
+    {
+    case SERIAL_RTS_CONTROL:    dcb->fRtsControl = RTS_CONTROL_ENABLE; break;
+    case SERIAL_RTS_HANDSHAKE:  dcb->fRtsControl = RTS_CONTROL_HANDSHAKE; break;
+    case SERIAL_RTS_CONTROL | SERIAL_RTS_HANDSHAKE:
+                                dcb->fRtsControl = RTS_CONTROL_TOGGLE; break;
+    default:                    dcb->fRtsControl = RTS_CONTROL_DISABLE; break;
+    }
+    dump_dcb( dcb );
+    return TRUE;
+}
+
+
+/*****************************************************************************
+ *	GetCommTimeouts   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH GetCommTimeouts( HANDLE handle, COMMTIMEOUTS *timeouts )
+{
+    if (!timeouts)
+    {
+        SetLastError( ERROR_INVALID_PARAMETER );
+        return FALSE;
+    }
+    return DeviceIoControl( handle, IOCTL_SERIAL_GET_TIMEOUTS, NULL, 0, timeouts, sizeof(*timeouts),
+                            NULL, NULL );
+}
+
+/********************************************************************
+ *	PurgeComm   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH PurgeComm(HANDLE handle, DWORD flags)
+{
+    return DeviceIoControl( handle, IOCTL_SERIAL_PURGE, &flags, sizeof(flags),
+                            NULL, 0, NULL, NULL );
+}
+
+
+/*****************************************************************************
+ *	SetCommBreak   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH SetCommBreak( HANDLE handle )
+{
+    return EscapeCommFunction( handle, SETBREAK );
+}
+
+
+/***********************************************************************
+ *	SetCommConfig   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH SetCommConfig( HANDLE handle, COMMCONFIG *config, DWORD size )
+{
+    TRACE( "(%p, %p, %u)\n", handle, config, size );
+    return SetCommState( handle, &config->dcb );
+}
+
+
+/*****************************************************************************
+ *	SetCommMask   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH SetCommMask( HANDLE handle, DWORD mask )
+{
+    return DeviceIoControl( handle, IOCTL_SERIAL_SET_WAIT_MASK, &mask, sizeof(mask),
+                            NULL, 0, NULL, NULL );
+}
+
+
+/*****************************************************************************
+ *	SetCommState   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH SetCommState( HANDLE handle, DCB *dcb )
+{
+    SERIAL_BAUD_RATE sbr;
+    SERIAL_LINE_CONTROL slc;
+    SERIAL_HANDFLOW shf;
+    SERIAL_CHARS sc;
+
+    if (!dcb)
+    {
+        SetLastError( ERROR_INVALID_PARAMETER );
+        return FALSE;
+    }
+    dump_dcb( dcb );
+
+    sbr.BaudRate   = dcb->BaudRate;
+    slc.StopBits   = dcb->StopBits;
+    slc.Parity     = dcb->Parity;
+    slc.WordLength = dcb->ByteSize;
+    shf.ControlHandShake = 0;
+    shf.FlowReplace = 0;
+    if (dcb->fOutxCtsFlow) shf.ControlHandShake |= SERIAL_CTS_HANDSHAKE;
+    if (dcb->fOutxDsrFlow) shf.ControlHandShake |= SERIAL_DSR_HANDSHAKE;
+    switch (dcb->fDtrControl)
+    {
+    case DTR_CONTROL_DISABLE:   break;
+    case DTR_CONTROL_ENABLE:    shf.ControlHandShake |= SERIAL_DTR_CONTROL; break;
+    case DTR_CONTROL_HANDSHAKE: shf.ControlHandShake |= SERIAL_DTR_HANDSHAKE; break;
+    default:
+        SetLastError( ERROR_INVALID_PARAMETER );
+        return FALSE;
+    }
+    switch (dcb->fRtsControl)
+    {
+    case RTS_CONTROL_DISABLE:   break;
+    case RTS_CONTROL_ENABLE:    shf.FlowReplace |= SERIAL_RTS_CONTROL; break;
+    case RTS_CONTROL_HANDSHAKE: shf.FlowReplace |= SERIAL_RTS_HANDSHAKE; break;
+    case RTS_CONTROL_TOGGLE:    shf.FlowReplace |= SERIAL_RTS_CONTROL | SERIAL_RTS_HANDSHAKE; break;
+    default:
+        SetLastError( ERROR_INVALID_PARAMETER );
+        return FALSE;
+    }
+    if (dcb->fDsrSensitivity)   shf.ControlHandShake |= SERIAL_DSR_SENSITIVITY;
+    if (dcb->fAbortOnError)     shf.ControlHandShake |= SERIAL_ERROR_ABORT;
+    if (dcb->fErrorChar)        shf.FlowReplace |= SERIAL_ERROR_CHAR;
+    if (dcb->fNull)             shf.FlowReplace |= SERIAL_NULL_STRIPPING;
+    if (dcb->fTXContinueOnXoff) shf.FlowReplace |= SERIAL_XOFF_CONTINUE;
+    if (dcb->fOutX)             shf.FlowReplace |= SERIAL_AUTO_TRANSMIT;
+    if (dcb->fInX)              shf.FlowReplace |= SERIAL_AUTO_RECEIVE;
+    shf.XonLimit  = dcb->XonLim;
+    shf.XoffLimit = dcb->XoffLim;
+    sc.EofChar    = dcb->EofChar;
+    sc.ErrorChar  = dcb->ErrorChar;
+    sc.BreakChar  = 0;
+    sc.EventChar  = dcb->EvtChar;
+    sc.XonChar    = dcb->XonChar;
+    sc.XoffChar   = dcb->XoffChar;
+
+    /* note: change DTR/RTS lines after setting the comm attributes,
+     * so flow control does not interfere.
+     */
+    return (DeviceIoControl( handle, IOCTL_SERIAL_SET_BAUD_RATE, &sbr, sizeof(sbr), NULL, 0, NULL, NULL ) &&
+            DeviceIoControl( handle, IOCTL_SERIAL_SET_LINE_CONTROL, &slc, sizeof(slc), NULL, 0, NULL, NULL ) &&
+            DeviceIoControl( handle, IOCTL_SERIAL_SET_HANDFLOW, &shf, sizeof(shf), NULL, 0, NULL, NULL ) &&
+            DeviceIoControl( handle, IOCTL_SERIAL_SET_CHARS, &sc, sizeof(sc), NULL, 0, NULL, NULL ));
+}
+
+
+/*****************************************************************************
+ *	SetCommTimeouts   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH SetCommTimeouts( HANDLE handle, COMMTIMEOUTS *timeouts )
+{
+    if (!timeouts)
+    {
+        SetLastError( ERROR_INVALID_PARAMETER );
+        return FALSE;
+    }
+    return DeviceIoControl( handle, IOCTL_SERIAL_SET_TIMEOUTS, timeouts, sizeof(*timeouts),
+                            NULL, 0, NULL, NULL );
+}
+
+
+/*****************************************************************************
+ *      SetupComm   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH SetupComm( HANDLE handle, DWORD in_size, DWORD out_size )
+{
+    SERIAL_QUEUE_SIZE sqs;
+
+    sqs.InSize = in_size;
+    sqs.OutSize = out_size;
+    return DeviceIoControl( handle, IOCTL_SERIAL_SET_QUEUE_SIZE, &sqs, sizeof(sqs), NULL, 0, NULL, NULL );
+}
+
+
+/*****************************************************************************
+ *	TransmitCommChar   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH TransmitCommChar( HANDLE handle, CHAR ch )
+{
+    return DeviceIoControl( handle, IOCTL_SERIAL_IMMEDIATE_CHAR, &ch, sizeof(ch), NULL, 0, NULL, NULL );
+}
+
+
+/***********************************************************************
+ *	WaitCommEvent   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH WaitCommEvent( HANDLE handle, DWORD *events, OVERLAPPED *overlapped )
+{
+    return DeviceIoControl( handle, IOCTL_SERIAL_WAIT_ON_MASK, NULL, 0, events, sizeof(*events),
+                            NULL, overlapped );
 }

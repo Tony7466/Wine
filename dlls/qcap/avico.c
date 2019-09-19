@@ -38,7 +38,7 @@ typedef struct {
     IPersistPropertyBag IPersistPropertyBag_iface;
 
     BaseInputPin sink;
-    BaseOutputPin source;
+    struct strmbase_source source;
 
     DWORD fcc_handler;
     HIC hic;
@@ -64,7 +64,7 @@ static inline AVICompressor *impl_from_IBaseFilter(IBaseFilter *iface)
 
 static inline AVICompressor *impl_from_BasePin(BasePin *pin)
 {
-    return impl_from_IBaseFilter(pin->pinInfo.pFilter);
+    return impl_from_strmbase_filter(pin->filter);
 }
 
 static HRESULT ensure_driver(AVICompressor *This)
@@ -315,8 +315,7 @@ static const IPersistPropertyBagVtbl PersistPropertyBagVtbl = {
 
 static inline AVICompressor *impl_from_IPin(IPin *iface)
 {
-    BasePin *bp = CONTAINING_RECORD(iface, BasePin, IPin_iface);
-    return impl_from_IBaseFilter(bp->pinInfo.pFilter);
+    return impl_from_strmbase_filter(CONTAINING_RECORD(iface, BasePin, IPin_iface)->filter);
 }
 
 static HRESULT WINAPI AVICompressorIn_QueryInterface(IPin *iface, REFIID riid, void **ppv)
@@ -536,7 +535,7 @@ static const IPinVtbl AVICompressorOutputPinVtbl = {
 
 static HRESULT WINAPI AVICompressorOut_GetMediaType(BasePin *base, int iPosition, AM_MEDIA_TYPE *amt)
 {
-    AVICompressor *This = impl_from_IBaseFilter(base->pinInfo.pFilter);
+    AVICompressor *This = impl_from_strmbase_filter(base->filter);
 
     TRACE("(%p)->(%d %p)\n", base, iPosition, amt);
 
@@ -555,7 +554,8 @@ static HRESULT WINAPI AVICompressorOut_GetMediaType(BasePin *base, int iPosition
     return S_OK;
 }
 
-static HRESULT WINAPI AVICompressorOut_DecideBufferSize(BaseOutputPin *base, IMemAllocator *alloc, ALLOCATOR_PROPERTIES *ppropInputRequest)
+static HRESULT WINAPI AVICompressorOut_DecideBufferSize(struct strmbase_source *base,
+        IMemAllocator *alloc, ALLOCATOR_PROPERTIES *ppropInputRequest)
 {
     AVICompressor *This = impl_from_BasePin(&base->pin);
     ALLOCATOR_PROPERTIES actual;
@@ -572,14 +572,15 @@ static HRESULT WINAPI AVICompressorOut_DecideBufferSize(BaseOutputPin *base, IMe
     return IMemAllocator_SetProperties(alloc, ppropInputRequest, &actual);
 }
 
-static HRESULT WINAPI AVICompressorOut_DecideAllocator(BaseOutputPin *base,
+static HRESULT WINAPI AVICompressorOut_DecideAllocator(struct strmbase_source *base,
         IMemInputPin *pPin, IMemAllocator **pAlloc)
 {
     TRACE("(%p)->(%p %p)\n", base, pPin, pAlloc);
     return BaseOutputPinImpl_DecideAllocator(base, pPin, pAlloc);
 }
 
-static const BaseOutputPinFuncTable AVICompressorBaseOutputPinVtbl = {
+static const struct strmbase_source_ops source_ops =
+{
     {
         NULL,
         AVICompressorOut_GetMediaType
@@ -591,8 +592,8 @@ static const BaseOutputPinFuncTable AVICompressorBaseOutputPinVtbl = {
 
 IUnknown* WINAPI QCAP_createAVICompressor(IUnknown *outer, HRESULT *phr)
 {
-    PIN_INFO in_pin_info  = {NULL, PINDIR_INPUT,  {'I','n',0}};
-    PIN_INFO out_pin_info = {NULL, PINDIR_OUTPUT, {'O','u','t',0}};
+    static const WCHAR source_name[] = {'O','u','t',0};
+    static const WCHAR sink_name[] = {'I','n',0};
     AVICompressor *compressor;
 
     compressor = heap_alloc_zero(sizeof(*compressor));
@@ -605,13 +606,10 @@ IUnknown* WINAPI QCAP_createAVICompressor(IUnknown *outer, HRESULT *phr)
 
     compressor->IPersistPropertyBag_iface.lpVtbl = &PersistPropertyBagVtbl;
 
-    in_pin_info.pFilter = &compressor->filter.IBaseFilter_iface;
-    strmbase_sink_init(&compressor->sink, &AVICompressorInputPinVtbl, &in_pin_info,
-            &AVICompressorBaseInputPinVtbl, &compressor->filter.csFilter, NULL);
-
-    out_pin_info.pFilter = &compressor->filter.IBaseFilter_iface;
-    strmbase_source_init(&compressor->source, &AVICompressorOutputPinVtbl, &out_pin_info,
-            &AVICompressorBaseOutputPinVtbl, &compressor->filter.csFilter);
+    strmbase_sink_init(&compressor->sink, &AVICompressorInputPinVtbl,
+            &compressor->filter, sink_name, &AVICompressorBaseInputPinVtbl, NULL);
+    strmbase_source_init(&compressor->source, &AVICompressorOutputPinVtbl,
+            &compressor->filter, source_name, &source_ops);
 
     *phr = S_OK;
     return &compressor->filter.IUnknown_inner;

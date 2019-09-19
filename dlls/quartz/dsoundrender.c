@@ -394,7 +394,7 @@ static HRESULT WINAPI DSoundRender_DoRenderSample(BaseRenderer *iface, IMediaSam
         q.Proportion = 1000;
         q.Late = jitter;
         q.TimeStamp = tStart;
-        IQualityControl_Notify((IQualityControl *)This->renderer.qcimpl, (IBaseFilter*)This, q);
+        IQualityControl_Notify((IQualityControl *)This->renderer.qcimpl, &This->renderer.filter.IBaseFilter_iface, q);
     }
     return hr;
 }
@@ -505,9 +505,9 @@ static HRESULT WINAPI DSoundRender_BreakConnect(BaseRenderer* iface)
 
     if (This->threadid) {
         PostThreadMessageW(This->threadid, WM_APP, 0, 0);
-        LeaveCriticalSection(This->renderer.sink.pin.pCritSec);
+        LeaveCriticalSection(&This->renderer.filter.csFilter);
         WaitForSingleObject(This->advisethread, INFINITE);
-        EnterCriticalSection(This->renderer.sink.pin.pCritSec);
+        EnterCriticalSection(&This->renderer.filter.csFilter);
         CloseHandle(This->advisethread);
     }
     if (This->dsbuffer)

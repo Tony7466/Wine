@@ -23,6 +23,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 
 #include "windef.h"
 #include "winbase.h"
@@ -2061,6 +2062,12 @@ static const char okmsg2[] =
 "Set-Cookie: two\r\n"
 "\r\n";
 
+static DWORD64 content_length;
+static const char largemsg[] =
+"HTTP/1.1 200 OK\r\n"
+"Content-Length: %I64u\r\n"
+"\r\n";
+
 static const char notokmsg[] =
 "HTTP/1.1 400 Bad Request\r\n"
 "Server: winetest\r\n"
@@ -2454,6 +2461,12 @@ static DWORD CALLBACK server_thread(LPVOID param)
         if (strstr(buffer, "GET /test_remove_dot_segments"))
         {
             send(c, okmsg, sizeof(okmsg)-1, 0);
+        }
+        if (strstr(buffer, "HEAD /test_large_content"))
+        {
+            char msg[sizeof(largemsg) + 16];
+            sprintf(msg, largemsg, content_length);
+            send(c, msg, strlen(msg), 0);
         }
         shutdown(c, 2);
         closesocket(c);
@@ -4412,6 +4425,7 @@ static void test_basic_auth_credentials_reuse(int port)
     HINTERNET ses, con, req;
     DWORD status, size;
     BOOL ret;
+    char buffer[0x40];
 
     ses = InternetOpenA( "winetest", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0 );
     ok( ses != NULL, "InternetOpenA failed\n" );
@@ -4425,6 +4439,20 @@ static void test_basic_auth_credentials_reuse(int port)
 
     ret = HttpSendRequestA( req, NULL, 0, NULL, 0 );
     ok( ret, "HttpSendRequestA failed %u\n", GetLastError() );
+
+    size = sizeof(buffer);
+    SetLastError(0xdeadbeef);
+    ret = InternetQueryOptionA(req, INTERNET_OPTION_USERNAME, buffer, &size);
+    ok(ret, "unexpected failure %u\n", GetLastError());
+    ok(!strcmp(buffer, "user"), "got %s\n", buffer);
+    ok(size == 4, "got %u\n", size);
+
+    size = sizeof(buffer);
+    SetLastError(0xdeadbeef);
+    ret = InternetQueryOptionA(req, INTERNET_OPTION_PASSWORD, buffer, &size);
+    ok(ret, "unexpected failure %u\n", GetLastError());
+    ok(!strcmp(buffer, "pwd"), "got %s\n", buffer);
+    ok(size == 3, "got %u\n", size);
 
     status = 0xdeadbeef;
     size = sizeof(status);
@@ -4448,6 +4476,20 @@ static void test_basic_auth_credentials_reuse(int port)
 
     ret = HttpSendRequestA( req, NULL, 0, NULL, 0 );
     ok( ret, "HttpSendRequestA failed %u\n", GetLastError() );
+
+    size = sizeof(buffer);
+    SetLastError(0xdeadbeef);
+    ret = InternetQueryOptionA(req, INTERNET_OPTION_USERNAME, buffer, &size);
+    ok(ret, "unexpected failure %u\n", GetLastError());
+    todo_wine ok(!strcmp(buffer, "user"), "got %s\n", buffer);
+    todo_wine ok(size == 4, "got %u\n", size);
+
+    size = sizeof(buffer);
+    SetLastError(0xdeadbeef);
+    ret = InternetQueryOptionA(req, INTERNET_OPTION_PASSWORD, buffer, &size);
+    ok(ret, "unexpected failure %u\n", GetLastError());
+    todo_wine ok(!strcmp(buffer, "pwd"), "got %s\n", buffer);
+    todo_wine ok(size == 3, "got %u\n", size);
 
     status = 0xdeadbeef;
     size = sizeof(status);
@@ -5515,6 +5557,94 @@ static void test_remove_dot_segments(int port)
     close_request(&req);
 }
 
+struct large_test
+{
+    DWORD64 content_length;
+    BOOL ret;
+};
+
+static void test_large_content(int port)
+{
+    struct large_test tests[] = {
+        { 0,                   TRUE },
+        { UINT_MAX-1,          TRUE },
+        { UINT_MAX,            TRUE },
+        { (DWORD64)UINT_MAX+1, FALSE },
+        { ~0,                  FALSE },
+    };
+    test_request_t req;
+    DWORD sizelen, len;
+    DWORD read_size;
+    DWORD64 len64;
+    char buf[16];
+    BOOL ret;
+    size_t i;
+
+    open_simple_request(&req, "localhost", port, "HEAD", "/test_large_content");
+
+    for (i = 0; i < ARRAY_SIZE(tests); i++)
+    {
+        content_length = tests[i].content_length;
+        ret = HttpSendRequestA(req.request, NULL, 0, NULL, 0);
+        ok(ret, "HttpSendRequest failed: %u\n", GetLastError());
+
+        len = ~0;
+        sizelen = sizeof(len);
+        SetLastError(0xdeadbeef);
+        ret = HttpQueryInfoA(req.request, HTTP_QUERY_FLAG_NUMBER|HTTP_QUERY_CONTENT_LENGTH,
+                             &len, &sizelen, 0);
+        if (tests[i].ret)
+        {
+            ok(ret, "HttpQueryInfo should have succeeded\n");
+            ok(GetLastError() == ERROR_SUCCESS ||
+                broken(GetLastError() == 0xdeadbeef), /* xp, 2k8, vista */
+                "expected ERROR_SUCCESS, got %x\n", GetLastError());
+            ok(len == (DWORD)tests[i].content_length, "expected %u, got %u\n",
+                (DWORD)tests[i].content_length, len);
+        }
+        else
+        {
+            ok(!ret, "HttpQueryInfo should have failed\n");
+            ok(GetLastError() == ERROR_HTTP_INVALID_HEADER,
+                "expected ERROR_HTTP_INVALID_HEADER, got %x\n", GetLastError());
+            ok(len == ~0, "expected ~0, got %u\n", len);
+        }
+        ok(sizelen == sizeof(DWORD), "sizelen %u\n", sizelen);
+    }
+
+    /* test argument size */
+    len64 = ~0;
+    sizelen = sizeof(len64);
+    SetLastError(0xdeadbeef);
+    ret = HttpQueryInfoA(req.request, HTTP_QUERY_FLAG_NUMBER|HTTP_QUERY_CONTENT_LENGTH,
+                         &len64, &len, 0);
+    ok(!ret, "HttpQueryInfo should have failed\n");
+    ok(GetLastError() == ERROR_HTTP_INVALID_HEADER,
+        "expected ERROR_HTTP_INVALID_HEADER, got %x\n", GetLastError());
+    ok(sizelen == sizeof(DWORD64), "sizelen %u\n", sizelen);
+    ok(len64 == ~0, "len64 %x%08x\n", (DWORD)(len64 >> 32), (DWORD)len64);
+
+    close_request(&req);
+
+    /* test internal use of HttpQueryInfo on large size */
+    open_read_test_request(port, &req,
+                           "HTTP/1.1 200 OK\r\n"
+                           "Server: winetest\r\n"
+                           "Content-Length: 4294967296\r\n"
+                           "\r\n"
+                           "xx");
+    read_expect_async(req.request, buf, 4, &read_size, "xx");
+    send_response_and_wait("yy1234567890", FALSE, buf, &read_size, "xxyy", 4, 0, 2);
+    read_expect_sync_data(req.request, buf, 10, "1234567890");
+
+    SET_EXPECT(INTERNET_STATUS_CLOSING_CONNECTION);
+    SET_EXPECT(INTERNET_STATUS_CONNECTION_CLOSED);
+    close_async_handle(req.session, 2);
+    CHECK_NOTIFIED(INTERNET_STATUS_CLOSING_CONNECTION);
+    CHECK_NOTIFIED(INTERNET_STATUS_CONNECTION_CLOSED);
+    close_connection();
+}
+
 static void test_http_connection(void)
 {
     struct server_info si;
@@ -5524,7 +5654,7 @@ static void test_http_connection(void)
     si.hEvent = CreateEventW(NULL, 0, 0, NULL);
     si.port = 7531;
 
-    hThread = CreateThread(NULL, 0, server_thread, (LPVOID) &si, 0, &id);
+    hThread = CreateThread(NULL, 0, server_thread, &si, 0, &id);
     ok( hThread != NULL, "create thread failed\n");
 
     r = WaitForSingleObject(si.hEvent, 10000);
@@ -5573,6 +5703,7 @@ static void test_http_connection(void)
     test_redirect(si.port);
     test_persistent_connection(si.port);
     test_remove_dot_segments(si.port);
+    test_large_content(si.port);
 
     /* send the basic request again to shutdown the server thread */
     test_basic_request(si.port, "GET", "/quit");

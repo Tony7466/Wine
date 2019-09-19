@@ -67,7 +67,7 @@
 @ stdcall AreFileApisANSI()
 # @ stub AreThereVisibleLogoffScriptsInternal
 # @ stub AreThereVisibleShutdownScriptsInternal
-@ stdcall AttachConsole(long) kernel32.AttachConsole
+@ stdcall AttachConsole(long)
 @ stub BaseCheckAppcompatCache
 # @ stub BaseCheckAppcompatCacheEx
 @ stub BaseCleanupAppcompatCacheSupport
@@ -126,14 +126,14 @@
 # @ stub CheckAllowDecryptedRemoteDestinationPolicy
 @ stub CheckGroupPolicyEnabled
 # @ stub CheckIfStateChangeNotificationExists
-@ stdcall CheckRemoteDebuggerPresent(long ptr) kernel32.CheckRemoteDebuggerPresent
+@ stdcall CheckRemoteDebuggerPresent(long ptr)
 # @ stub CheckTokenCapability
 @ stdcall CheckTokenMembership(long ptr ptr)
 # @ stub CheckTokenMembershipEx
 @ stdcall ChrCmpIA(long long)
 @ stdcall ChrCmpIW(long long)
-@ stdcall ClearCommBreak(long) kernel32.ClearCommBreak
-@ stdcall ClearCommError(long ptr ptr) kernel32.ClearCommError
+@ stdcall ClearCommBreak(long)
+@ stdcall ClearCommError(long ptr ptr)
 # @ stub CloseGlobalizationUserSettingsKey
 @ stdcall CloseHandle(long) kernel32.CloseHandle
 # @ stub ClosePackageInfo
@@ -158,7 +158,7 @@
 @ stdcall CompareStringOrdinal(wstr long wstr long long) kernel32.CompareStringOrdinal
 @ stdcall CompareStringW(long long wstr long wstr long) kernel32.CompareStringW
 @ stdcall ConnectNamedPipe(long ptr)
-@ stdcall ContinueDebugEvent(long long long) kernel32.ContinueDebugEvent
+@ stdcall ContinueDebugEvent(long long long)
 @ stdcall ConvertDefaultLocale(long) kernel32.ConvertDefaultLocale
 @ stdcall ConvertFiberToThread()
 @ stdcall ConvertThreadToFiber(ptr)
@@ -174,7 +174,7 @@
 @ stdcall CreateActCtxW(ptr)
 # @ stub CreateAppContainerToken
 # @ stub CreateBoundaryDescriptorW
-@ stdcall CreateConsoleScreenBuffer(long long ptr long ptr) kernel32.CreateConsoleScreenBuffer
+@ stdcall CreateConsoleScreenBuffer(long long ptr long ptr)
 @ stdcall CreateDirectoryA(str ptr)
 @ stdcall CreateDirectoryExW(wstr wstr ptr)
 @ stdcall CreateDirectoryW(wstr ptr)
@@ -194,7 +194,7 @@
 @ stdcall CreateHardLinkA(str str ptr) kernel32.CreateHardLinkA
 @ stdcall CreateHardLinkW(wstr wstr ptr) kernel32.CreateHardLinkW
 @ stdcall CreateIoCompletionPort(long long long long)
-@ stdcall CreateMemoryResourceNotification(long) kernel32.CreateMemoryResourceNotification
+@ stdcall CreateMemoryResourceNotification(long)
 @ stdcall CreateMutexA(ptr long str)
 @ stdcall CreateMutexExA(ptr str long long)
 @ stdcall CreateMutexExW(ptr wstr long long)
@@ -237,9 +237,9 @@
 # @ stub CtrlRoutine
 # @ stub CveEventWrite
 @ stdcall DeactivateActCtx(long long)
-@ stdcall DebugActiveProcess(long) kernel32.DebugActiveProcess
-@ stdcall DebugActiveProcessStop(long) kernel32.DebugActiveProcessStop
-@ stdcall DebugBreak() kernel32.DebugBreak
+@ stdcall DebugActiveProcess(long)
+@ stdcall DebugActiveProcessStop(long)
+@ stdcall DebugBreak()
 @ stdcall DecodePointer(ptr) ntdll.RtlDecodePointer
 # @ stub DecodeRemotePointer
 @ stdcall DecodeSystemPointer(ptr) ntdll.RtlDecodeSystemPointer
@@ -261,7 +261,7 @@
 @ stdcall DeleteTimerQueueTimer(long long long)
 @ stdcall DeleteVolumeMountPointW(wstr) kernel32.DeleteVolumeMountPointW
 @ stdcall DestroyPrivateObjectSecurity(ptr)
-@ stdcall DeviceIoControl(long long ptr long ptr long ptr ptr) kernel32.DeviceIoControl
+@ stdcall DeviceIoControl(long long ptr long ptr long ptr ptr)
 @ stdcall DisablePredefinedHandleTableInternal(long)
 @ stdcall DisableThreadLibraryCalls(long)
 @ stdcall DisassociateCurrentThreadFromCallback(ptr) ntdll.TpDisassociateCallback
@@ -326,7 +326,7 @@
 @ stub EqualDomainSid
 @ stdcall EqualPrefixSid(ptr ptr)
 @ stdcall EqualSid(ptr ptr)
-@ stdcall EscapeCommFunction(long long) kernel32.EscapeCommFunction
+@ stdcall EscapeCommFunction(long long)
 @ stdcall EventActivityIdControl(long ptr) ntdll.EtwEventActivityIdControl
 @ stdcall EventEnabled(int64 ptr) ntdll.EtwEventEnabled
 @ stdcall EventProviderEnabled(int64 long int64) ntdll.EtwEventProviderEnabled
@@ -339,21 +339,21 @@
 @ stdcall EventWriteTransfer(int64 ptr ptr ptr long ptr) ntdll.EtwEventWriteTransfer
 @ stdcall ExitProcess(long) ntdll.RtlExitUserProcess
 @ stdcall ExitThread(long) ntdll.RtlExitUserThread
-@ stdcall ExpandEnvironmentStringsA(str ptr long) kernel32.ExpandEnvironmentStringsA
-@ stdcall ExpandEnvironmentStringsW(wstr ptr long) kernel32.ExpandEnvironmentStringsW
-@ stdcall FatalAppExitA(long str) kernel32.FatalAppExitA
-@ stdcall FatalAppExitW(long wstr) kernel32.FatalAppExitW
+@ stdcall ExpandEnvironmentStringsA(str ptr long)
+@ stdcall ExpandEnvironmentStringsW(wstr ptr long)
+@ stdcall FatalAppExitA(long str)
+@ stdcall FatalAppExitW(long wstr)
 @ stdcall FileTimeToLocalFileTime(ptr ptr) kernel32.FileTimeToLocalFileTime
 @ stdcall FileTimeToSystemTime(ptr ptr) kernel32.FileTimeToSystemTime
-@ stdcall FillConsoleOutputAttribute(long long long long ptr) kernel32.FillConsoleOutputAttribute
-@ stdcall FillConsoleOutputCharacterA(long long long long ptr) kernel32.FillConsoleOutputCharacterA
-@ stdcall FillConsoleOutputCharacterW(long long long long ptr) kernel32.FillConsoleOutputCharacterW
+@ stdcall FillConsoleOutputAttribute(long long long long ptr)
+@ stdcall FillConsoleOutputCharacterA(long long long long ptr)
+@ stdcall FillConsoleOutputCharacterW(long long long long ptr)
 @ stdcall FindActCtxSectionGuid(long ptr long ptr ptr)
 @ stdcall FindActCtxSectionStringW(long ptr long wstr ptr)
 @ stdcall FindClose(long) kernel32.FindClose
-@ stdcall FindCloseChangeNotification(long) kernel32.FindCloseChangeNotification
-@ stdcall FindFirstChangeNotificationA(str long long) kernel32.FindFirstChangeNotificationA
-@ stdcall FindFirstChangeNotificationW(wstr long long) kernel32.FindFirstChangeNotificationW
+@ stdcall FindCloseChangeNotification(long)
+@ stdcall FindFirstChangeNotificationA(str long long)
+@ stdcall FindFirstChangeNotificationW(wstr long long)
 @ stdcall FindFirstFileA(str ptr) kernel32.FindFirstFileA
 @ stdcall FindFirstFileExA(str long ptr long ptr long) kernel32.FindFirstFileExA
 @ stdcall FindFirstFileExW(wstr long ptr long ptr long) kernel32.FindFirstFileExW
@@ -364,7 +364,7 @@
 @ stdcall FindFirstVolumeW(ptr long) kernel32.FindFirstVolumeW
 @ stub FindNLSString
 @ stdcall FindNLSStringEx(wstr long wstr long wstr long ptr ptr ptr long) kernel32.FindNLSStringEx
-@ stdcall FindNextChangeNotification(long) kernel32.FindNextChangeNotification
+@ stdcall FindNextChangeNotification(long)
 @ stdcall FindNextFileA(long ptr) kernel32.FindNextFileA
 # @ stub FindNextFileNameW
 @ stdcall FindNextFileW(long ptr) kernel32.FindNextFileW
@@ -383,15 +383,15 @@
 @ stdcall FlushFileBuffers(long)
 @ stdcall FlushInstructionCache(long long long)
 @ stdcall FlushProcessWriteBuffers() kernel32.FlushProcessWriteBuffers
-@ stdcall FlushViewOfFile(ptr long) kernel32.FlushViewOfFile
+@ stdcall FlushViewOfFile(ptr long)
 @ stdcall FoldStringW(long wstr long ptr long) kernel32.FoldStringW
 # @ stub ForceSyncFgPolicyInternal
 # @ stub FormatApplicationUserModelId
 @ stdcall FormatMessageA(long ptr long long ptr long ptr) kernel32.FormatMessageA
 @ stdcall FormatMessageW(long ptr long long ptr long ptr) kernel32.FormatMessageW
-@ stdcall FreeConsole() kernel32.FreeConsole
-@ stdcall FreeEnvironmentStringsA(ptr) kernel32.FreeEnvironmentStringsA
-@ stdcall FreeEnvironmentStringsW(ptr) kernel32.FreeEnvironmentStringsW
+@ stdcall FreeConsole()
+@ stdcall FreeEnvironmentStringsA(ptr) FreeEnvironmentStringsW
+@ stdcall FreeEnvironmentStringsW(ptr)
 # @ stub FreeGPOListInternalA
 # @ stub FreeGPOListInternalW
 @ stdcall FreeLibrary(long) kernel32.FreeLibrary
@@ -400,7 +400,7 @@
 @ stdcall FreeResource(long)
 @ stdcall FreeSid(ptr)
 @ stdcall FreeUserPhysicalPages(long ptr ptr) kernel32.FreeUserPhysicalPages
-@ stdcall GenerateConsoleCtrlEvent(long long) kernel32.GenerateConsoleCtrlEvent
+@ stdcall GenerateConsoleCtrlEvent(long long)
 # @ stub GenerateGPNotificationInternal
 @ stdcall GetACP() kernel32.GetACP
 @ stdcall GetAcceptLanguagesA(ptr ptr)
@@ -427,27 +427,27 @@
 @ stub GetCalendar
 @ stdcall GetCalendarInfoEx(wstr long ptr long ptr long ptr) kernel32.GetCalendarInfoEx
 @ stdcall GetCalendarInfoW(long long long ptr long ptr) kernel32.GetCalendarInfoW
-@ stdcall GetCommConfig(long ptr ptr) kernel32.GetCommConfig
-@ stdcall GetCommMask(long ptr) kernel32.GetCommMask
-@ stdcall GetCommModemStatus(long ptr) kernel32.GetCommModemStatus
-@ stdcall GetCommProperties(long ptr) kernel32.GetCommProperties
-@ stdcall GetCommState(long ptr) kernel32.GetCommState
-@ stdcall GetCommTimeouts(long ptr) kernel32.GetCommTimeouts
-@ stdcall GetCommandLineA() kernel32.GetCommandLineA
-@ stdcall GetCommandLineW() kernel32.GetCommandLineW
+@ stdcall GetCommConfig(long ptr ptr)
+@ stdcall GetCommMask(long ptr)
+@ stdcall GetCommModemStatus(long ptr)
+@ stdcall GetCommProperties(long ptr)
+@ stdcall GetCommState(long ptr)
+@ stdcall GetCommTimeouts(long ptr)
+@ stdcall GetCommandLineA()
+@ stdcall GetCommandLineW()
 @ stdcall GetCompressedFileSizeA(long ptr)
 @ stdcall GetCompressedFileSizeW(long ptr)
 @ stdcall GetComputerNameExA(long ptr ptr) kernel32.GetComputerNameExA
 @ stdcall GetComputerNameExW(long ptr ptr) kernel32.GetComputerNameExW
-@ stdcall GetConsoleCP() kernel32.GetConsoleCP
-@ stdcall GetConsoleCursorInfo(long ptr) kernel32.GetConsoleCursorInfo
-@ stdcall GetConsoleInputExeNameA(long ptr) kernel32.GetConsoleInputExeNameA
-@ stdcall GetConsoleInputExeNameW(long ptr) kernel32.GetConsoleInputExeNameW
-@ stdcall GetConsoleMode(long ptr) kernel32.GetConsoleMode
-@ stdcall GetConsoleOutputCP() kernel32.GetConsoleOutputCP
-@ stdcall GetConsoleScreenBufferInfo(long ptr) kernel32.GetConsoleScreenBufferInfo
-@ stdcall GetConsoleScreenBufferInfoEx(long ptr) kernel32.GetConsoleScreenBufferInfoEx
-@ stdcall GetConsoleTitleW(ptr long) kernel32.GetConsoleTitleW
+@ stdcall GetConsoleCP()
+@ stdcall GetConsoleCursorInfo(long ptr)
+@ stdcall GetConsoleInputExeNameA(long ptr)
+@ stdcall GetConsoleInputExeNameW(long ptr)
+@ stdcall GetConsoleMode(long ptr)
+@ stdcall GetConsoleOutputCP()
+@ stdcall GetConsoleScreenBufferInfo(long ptr)
+@ stdcall GetConsoleScreenBufferInfoEx(long ptr)
+@ stdcall GetConsoleTitleW(ptr long)
 @ stdcall GetCurrencyFormatEx(wstr long wstr ptr ptr long) kernel32.GetCurrencyFormatEx
 @ stdcall GetCurrencyFormatW(long long wstr ptr ptr long) kernel32.GetCurrencyFormatW
 @ stdcall GetCurrentActCtx(ptr)
@@ -492,11 +492,11 @@
 # @ stub GetEightBitStringToUnicodeSizeRoutine
 # @ stub GetEightBitStringToUnicodeStringRoutine
 @ stdcall -ret64 -arch=i386,x86_64 GetEnabledXStateFeatures() kernel32.GetEnabledXStateFeatures
-@ stdcall GetEnvironmentStrings() kernel32.GetEnvironmentStrings
-@ stdcall GetEnvironmentStringsA() kernel32.GetEnvironmentStringsA
-@ stdcall GetEnvironmentStringsW() kernel32.GetEnvironmentStringsW
-@ stdcall GetEnvironmentVariableA(str ptr long) kernel32.GetEnvironmentVariableA
-@ stdcall GetEnvironmentVariableW(wstr ptr long) kernel32.GetEnvironmentVariableW
+@ stdcall GetEnvironmentStrings() GetEnvironmentStringsA
+@ stdcall GetEnvironmentStringsA()
+@ stdcall GetEnvironmentStringsW()
+@ stdcall GetEnvironmentVariableA(str ptr long)
+@ stdcall GetEnvironmentVariableW(wstr ptr long)
 @ stub GetEraNameCountedString
 @ stdcall GetErrorMode()
 @ stdcall GetExitCodeProcess(long ptr)
@@ -537,7 +537,7 @@
 # @ stub GetIsEdpEnabled
 @ stdcall GetKernelObjectSecurity(long long ptr long ptr)
 @ stdcall GetLargePageMinimum() kernel32.GetLargePageMinimum
-@ stdcall GetLargestConsoleWindowSize(long) kernel32.GetLargestConsoleWindowSize
+@ stdcall GetLargestConsoleWindowSize(long)
 @ stdcall GetLastError() kernelbase_GetLastError
 @ stdcall GetLengthSid(ptr)
 @ stdcall GetLocalTime(ptr) kernel32.GetLocalTime
@@ -580,7 +580,7 @@
 @ stdcall GetNumaProximityNodeEx(long ptr) kernel32.GetNumaProximityNodeEx
 @ stdcall GetNumberFormatEx(wstr long wstr ptr ptr long) kernel32.GetNumberFormatEx
 @ stdcall GetNumberFormatW(long long wstr ptr ptr long) kernel32.GetNumberFormatW
-@ stdcall GetNumberOfConsoleInputEvents(long ptr) kernel32.GetNumberOfConsoleInputEvents
+@ stdcall GetNumberOfConsoleInputEvents(long ptr)
 @ stdcall GetOEMCP() kernel32.GetOEMCP
 # @ stub GetOsManufacturingMode
 # @ stub GetOsSafeBootMode
@@ -665,14 +665,14 @@
 @ stdcall GetSidSubAuthorityCount(ptr)
 # @ stub GetStagedPackageOrigin
 # @ stub GetStagedPackagePathByFullName
-@ stdcall GetStartupInfoW(ptr) kernel32.GetStartupInfoW
+@ stdcall GetStartupInfoW(ptr)
 # @ stub GetStateContainerDepth
 # @ stub GetStateFolder
 # @ stub GetStateRootFolder
 # @ stub GetStateRootFolderBase
 # @ stub GetStateSettingsFolder
 # @ stub GetStateVersion
-@ stdcall GetStdHandle(long) kernel32.GetStdHandle
+@ stdcall GetStdHandle(long)
 # @ stub GetStringScripts
 @ stub GetStringTableEntry
 @ stdcall GetStringTypeA(long long str long ptr) kernel32.GetStringTypeA
@@ -750,9 +750,9 @@
 # @ stub GetUserOverrideString
 # @ stub GetUserOverrideWord
 @ stdcall GetUserPreferredUILanguages(long ptr ptr ptr) kernel32.GetUserPreferredUILanguages
-@ stdcall GetVersion() kernel32.GetVersion
-@ stdcall GetVersionExA(ptr) kernel32.GetVersionExA
-@ stdcall GetVersionExW(ptr) kernel32.GetVersionExW
+@ stdcall GetVersion()
+@ stdcall GetVersionExA(ptr)
+@ stdcall GetVersionExW(ptr)
 @ stdcall GetVolumeInformationA(str ptr long ptr ptr ptr ptr long) kernel32.GetVolumeInformationA
 @ stdcall GetVolumeInformationByHandleW(ptr ptr long ptr ptr ptr ptr long) kernel32.GetVolumeInformationByHandleW
 @ stdcall GetVolumeInformationW(wstr ptr long ptr ptr ptr ptr long) kernel32.GetVolumeInformationW
@@ -762,30 +762,30 @@
 @ stdcall GetWindowsAccountDomainSid(ptr ptr ptr)
 @ stdcall GetWindowsDirectoryA(ptr long)
 @ stdcall GetWindowsDirectoryW(ptr long)
-@ stdcall GetWriteWatch(long ptr long ptr ptr ptr) kernel32.GetWriteWatch
+@ stdcall GetWriteWatch(long ptr long ptr ptr ptr)
 # @ stub GetWsChanges
 # @ stub GetWsChangesEx
 # @ stub GetXStateFeaturesMask
-@ stdcall GlobalAlloc(long long) kernel32.GlobalAlloc
-@ stdcall GlobalFree(long) kernel32.GlobalFree
+@ stdcall GlobalAlloc(long long)
+@ stdcall GlobalFree(long)
 @ stdcall GlobalMemoryStatusEx(ptr) kernel32.GlobalMemoryStatusEx
 # @ stub GuardCheckLongJumpTarget
 # @ stub HasPolicyForegroundProcessingCompletedInternal
 @ stdcall HashData(ptr long ptr long)
 @ stdcall HeapAlloc(long long long) ntdll.RtlAllocateHeap
-@ stdcall HeapCompact(long long) kernel32.HeapCompact
-@ stdcall HeapCreate(long long long) kernel32.HeapCreate
-@ stdcall HeapDestroy(long) kernel32.HeapDestroy
-@ stdcall HeapFree(long long ptr) ntdll.RtlFreeHeap
-@ stdcall HeapLock(long) kernel32.HeapLock
-@ stdcall HeapQueryInformation(long long ptr long ptr) kernel32.HeapQueryInformation
+@ stdcall HeapCompact(long long)
+@ stdcall HeapCreate(long long long)
+@ stdcall HeapDestroy(long)
+@ stdcall HeapFree(long long ptr)
+@ stdcall HeapLock(long)
+@ stdcall HeapQueryInformation(long long ptr long ptr)
 @ stdcall HeapReAlloc(long long ptr long) ntdll.RtlReAllocateHeap
-@ stdcall HeapSetInformation(ptr long ptr long) kernel32.HeapSetInformation
+@ stdcall HeapSetInformation(ptr long ptr long)
 @ stdcall HeapSize(long long ptr) ntdll.RtlSizeHeap
 @ stub HeapSummary
-@ stdcall HeapUnlock(long) kernel32.HeapUnlock
-@ stdcall HeapValidate(long long ptr) kernel32.HeapValidate
-@ stdcall HeapWalk(long ptr) kernel32.HeapWalk
+@ stdcall HeapUnlock(long)
+@ stdcall HeapValidate(long long ptr)
+@ stdcall HeapWalk(long ptr)
 @ stdcall IdnToAscii(long wstr long ptr long) kernel32.IdnToAscii
 @ stdcall IdnToNameprepUnicode(long wstr long ptr long) kernel32.IdnToNameprepUnicode
 @ stdcall IdnToUnicode(long wstr long ptr long) kernel32.IdnToUnicode
@@ -794,9 +794,9 @@
 @ stdcall ImpersonateNamedPipeClient(long)
 @ stdcall ImpersonateSelf(long)
 # @ stub IncrementPackageStatusVersion
-@ stdcall InitOnceBeginInitialize(ptr long ptr ptr) kernel32.InitOnceBeginInitialize
-@ stdcall InitOnceComplete(ptr long ptr) kernel32.InitOnceComplete
-@ stdcall InitOnceExecuteOnce(ptr ptr ptr ptr) kernel32.InitOnceExecuteOnce
+@ stdcall InitOnceBeginInitialize(ptr long ptr ptr)
+@ stdcall InitOnceComplete(ptr long ptr)
+@ stdcall InitOnceExecuteOnce(ptr ptr ptr ptr)
 @ stdcall InitOnceInitialize(ptr) ntdll.RtlRunOnceInitialize
 @ stdcall InitializeAcl(ptr long long)
 @ stdcall InitializeConditionVariable(ptr) ntdll.RtlInitializeConditionVariable
@@ -813,13 +813,13 @@
 @ stdcall InitializeSid(ptr ptr long)
 # @ stub InitializeSynchronizationBarrier
 # @ stub InstallELAMCertificateInfo
-@ stdcall -arch=i386 InterlockedCompareExchange(ptr long long) kernel32.InterlockedCompareExchange
+@ stdcall -arch=i386 InterlockedCompareExchange(ptr long long)
 @ stdcall -arch=i386 -ret64 InterlockedCompareExchange64(ptr int64 int64) ntdll.RtlInterlockedCompareExchange64
-@ stdcall -arch=i386 InterlockedDecrement(ptr) kernel32.InterlockedDecrement
-@ stdcall -arch=i386 InterlockedExchange(ptr long) kernel32.InterlockedExchange
-@ stdcall -arch=i386 InterlockedExchangeAdd(ptr long ) kernel32.InterlockedExchangeAdd
+@ stdcall -arch=i386 InterlockedDecrement(ptr)
+@ stdcall -arch=i386 InterlockedExchange(ptr long)
+@ stdcall -arch=i386 InterlockedExchangeAdd(ptr long )
 @ stdcall InterlockedFlushSList(ptr) ntdll.RtlInterlockedFlushSList
-@ stdcall -arch=i386 InterlockedIncrement(ptr) kernel32.InterlockedIncrement
+@ stdcall -arch=i386 InterlockedIncrement(ptr)
 @ stdcall InterlockedPopEntrySList(ptr) ntdll.RtlInterlockedPopEntrySList
 @ stdcall InterlockedPushEntrySList(ptr ptr) ntdll.RtlInterlockedPushEntrySList
 @ stdcall -fastcall InterlockedPushListSList(ptr ptr ptr long) ntdll.RtlInterlockedPushListSList
@@ -856,7 +856,7 @@
 @ stdcall IsCharXDigitW(long)
 @ stdcall IsDBCSLeadByte(long) kernel32.IsDBCSLeadByte
 @ stdcall IsDBCSLeadByteEx(long long) kernel32.IsDBCSLeadByteEx
-@ stdcall IsDebuggerPresent() kernel32.IsDebuggerPresent
+@ stdcall IsDebuggerPresent()
 # @ stub IsDeveloperModeEnabled
 # @ stub IsDeveloperModePolicyApplied
 # @ stub IsEnclaveTypeSupported
@@ -933,12 +933,12 @@
 @ stub LoadStringBaseExW
 @ stub LoadStringByReference
 @ stdcall LoadStringW(long long ptr long)
-@ stdcall LocalAlloc(long long) kernel32.LocalAlloc
+@ stdcall LocalAlloc(long long)
 @ stdcall LocalFileTimeToFileTime(ptr ptr) kernel32.LocalFileTimeToFileTime
-@ stdcall LocalFree(long) kernel32.LocalFree
-@ stdcall LocalLock(long) kernel32.LocalLock
-@ stdcall LocalReAlloc(long long long) kernel32.LocalReAlloc
-@ stdcall LocalUnlock(long) kernel32.LocalUnlock
+@ stdcall LocalFree(long)
+@ stdcall LocalLock(long)
+@ stdcall LocalReAlloc(long long long)
+@ stdcall LocalUnlock(long)
 @ stdcall LocaleNameToLCID(wstr long) kernel32.LocaleNameToLCID
 # @ stub LocateXStateFeature
 @ stdcall LockFile(long long long long long)
@@ -950,9 +950,9 @@
 @ stdcall MapGenericMask(ptr ptr)
 # @ stub MapPredefinedHandleInternal
 @ stdcall MapUserPhysicalPages(ptr long ptr) kernel32.MapUserPhysicalPages
-@ stdcall MapViewOfFile(long long long long long) kernel32.MapViewOfFile
-@ stdcall MapViewOfFileEx(long long long long long ptr) kernel32.MapViewOfFileEx
-@ stub MapViewOfFileExNuma
+@ stdcall MapViewOfFile(long long long long long)
+@ stdcall MapViewOfFileEx(long long long long long ptr)
+@ stdcall MapViewOfFileExNuma(long long long long long ptr long)
 # @ stub MapViewOfFileFromApp
 @ stdcall MoveFileExW(wstr wstr long) kernel32.MoveFileExW
 # @ stub MoveFileWithProgressTransactedW
@@ -1003,8 +1003,8 @@
 @ stdcall OpenThread(long long long)
 @ stdcall OpenThreadToken(long long long ptr)
 @ stdcall OpenWaitableTimerW(long long wstr)
-@ stdcall OutputDebugStringA(str) kernel32.OutputDebugStringA
-@ stdcall OutputDebugStringW(wstr) kernel32.OutputDebugStringW
+@ stdcall OutputDebugStringA(str)
+@ stdcall OutputDebugStringW(wstr)
 # @ stub OverrideRoamingDataModificationTimesInRange
 # @ stub PackageFamilyNameFromFullName
 # @ stub PackageFamilyNameFromId
@@ -1142,8 +1142,8 @@
 # @ stub PcwSendStatelessNotification
 # @ stub PcwSetCounterSetSecurity
 # @ stub PcwSetQueryItemUserData
-@ stdcall PeekConsoleInputA(ptr ptr long ptr) kernel32.PeekConsoleInputA
-@ stdcall PeekConsoleInputW(ptr ptr long ptr) kernel32.PeekConsoleInputW
+@ stdcall PeekConsoleInputA(ptr ptr long ptr)
+@ stdcall PeekConsoleInputW(ptr ptr long ptr)
 @ stdcall PeekNamedPipe(long ptr long ptr ptr ptr)
 @ stdcall PerfCreateInstance(long ptr wstr long)
 # @ stub PerfDecrementULongCounterValue
@@ -1190,7 +1190,7 @@
 # @ stub PssWalkSnapshot
 # @ stub PublishStateChangeNotification
 @ stdcall PulseEvent(long)
-@ stdcall PurgeComm(long long) kernel32.PurgeComm
+@ stdcall PurgeComm(long long)
 @ stdcall QISearch(ptr ptr ptr ptr)
 @ stdcall QueryActCtxSettingsW(long ptr wstr wstr ptr long ptr)
 @ stdcall QueryActCtxW(long ptr ptr long ptr long ptr)
@@ -1202,10 +1202,10 @@
 # @ stub QueryIdleProcessorCycleTimeEx
 # @ stub QueryInterruptTime
 # @ stub QueryInterruptTimePrecise
-@ stdcall QueryMemoryResourceNotification(ptr ptr) kernel32.QueryMemoryResourceNotification
+@ stdcall QueryMemoryResourceNotification(ptr ptr)
 # @ stub QueryOptionalDelayLoadedAPI
-@ stdcall QueryPerformanceCounter(ptr) kernel32.QueryPerformanceCounter
-@ stdcall QueryPerformanceFrequency(ptr) kernel32.QueryPerformanceFrequency
+@ stdcall QueryPerformanceCounter(ptr) ntdll.RtlQueryPerformanceCounter
+@ stdcall QueryPerformanceFrequency(ptr) ntdll.RtlQueryPerformanceFrequency
 @ stub QueryProcessAffinityUpdateMode
 @ stdcall QueryProcessCycleTime(long ptr) kernel32.QueryProcessCycleTime
 # @ stub QueryProtectedPolicy
@@ -1232,25 +1232,25 @@
 # @ stub QuirkIsEnabledForPackage3
 # @ stub QuirkIsEnabledForPackage4
 # @ stub QuirkIsEnabledForProcess
-@ stdcall RaiseException(long long long ptr) kernel32.RaiseException
+@ stdcall RaiseException(long long long ptr)
 # @ stub RaiseFailFastException
 @ stdcall ReOpenFile(ptr long long long)
-@ stdcall ReadConsoleA(long ptr long ptr ptr) kernel32.ReadConsoleA
-@ stdcall ReadConsoleInputA(long ptr long ptr) kernel32.ReadConsoleInputA
+@ stdcall ReadConsoleA(long ptr long ptr ptr)
+@ stdcall ReadConsoleInputA(long ptr long ptr)
 @ stub ReadConsoleInputExA
 @ stub ReadConsoleInputExW
 @ stdcall ReadConsoleInputW(long ptr long ptr) kernel32.ReadConsoleInputW
-@ stdcall ReadConsoleOutputA(long ptr long long ptr) kernel32.ReadConsoleOutputA
-@ stdcall ReadConsoleOutputAttribute(long ptr long long ptr) kernel32.ReadConsoleOutputAttribute
-@ stdcall ReadConsoleOutputCharacterA(long ptr long long ptr) kernel32.ReadConsoleOutputCharacterA
-@ stdcall ReadConsoleOutputCharacterW(long ptr long long ptr) kernel32.ReadConsoleOutputCharacterW
-@ stdcall ReadConsoleOutputW(long ptr long long ptr) kernel32.ReadConsoleOutputW
+@ stdcall ReadConsoleOutputA(long ptr long long ptr)
+@ stdcall ReadConsoleOutputAttribute(long ptr long long ptr)
+@ stdcall ReadConsoleOutputCharacterA(long ptr long long ptr)
+@ stdcall ReadConsoleOutputCharacterW(long ptr long long ptr)
+@ stdcall ReadConsoleOutputW(long ptr long long ptr)
 @ stdcall ReadConsoleW(long ptr long ptr ptr) kernel32.ReadConsoleW
-@ stdcall ReadDirectoryChangesW(long ptr long long long ptr ptr ptr) kernel32.ReadDirectoryChangesW
+@ stdcall ReadDirectoryChangesW(long ptr long long long ptr ptr ptr)
 @ stdcall ReadFile(long ptr long ptr ptr)
 @ stdcall ReadFileEx(long ptr long ptr ptr)
 @ stdcall ReadFileScatter(long ptr long ptr ptr)
-@ stdcall ReadProcessMemory(long ptr ptr long ptr) kernel32.ReadProcessMemory
+@ stdcall ReadProcessMemory(long ptr ptr long ptr)
 # @ stub ReadStateAtomValue
 # @ stub ReadStateContainerValue
 # @ stub ReclaimVirtualMemory
@@ -1343,7 +1343,7 @@
 @ stdcall ReplaceFileW(wstr wstr wstr long ptr ptr) kernel32.ReplaceFileW
 @ stdcall ResetEvent(long)
 # @ stub ResetState
-@ stdcall ResetWriteWatch(ptr long) kernel32.ResetWriteWatch
+@ stdcall ResetWriteWatch(ptr long)
 @ stdcall ResolveDelayLoadedAPI(ptr ptr ptr ptr ptr long) kernel32.ResolveDelayLoadedAPI
 # @ stub ResolveDelayLoadsFromDll
 @ stdcall ResolveLocaleName(wstr ptr long) kernel32.ResolveLocaleName
@@ -1352,8 +1352,8 @@
 @ stdcall RevertToSelf()
 # @ stub RsopLoggingEnabledInternal
 # @ stub SHCoCreateInstance
-@ stdcall SHExpandEnvironmentStringsA(str ptr long) kernel32.ExpandEnvironmentStringsA
-@ stdcall SHExpandEnvironmentStringsW(wstr ptr long) kernel32.ExpandEnvironmentStringsW
+@ stdcall SHExpandEnvironmentStringsA(str ptr long) ExpandEnvironmentStringsA
+@ stdcall SHExpandEnvironmentStringsW(wstr ptr long) ExpandEnvironmentStringsW
 @ stdcall SHLoadIndirectString(wstr ptr long ptr)
 # @ stub SHLoadIndirectStringInternal
 @ stdcall SHRegCloseUSKey(ptr)
@@ -1384,8 +1384,8 @@
 @ stdcall SHTruncateString(str long)
 # @ stub SaveAlternatePackageRootPath
 # @ stub SaveStateRootFolderPath
-@ stdcall ScrollConsoleScreenBufferA(long ptr ptr ptr ptr) kernel32.ScrollConsoleScreenBufferA
-@ stdcall ScrollConsoleScreenBufferW(long ptr ptr ptr ptr) kernel32.ScrollConsoleScreenBufferW
+@ stdcall ScrollConsoleScreenBufferA(long ptr ptr ptr ptr)
+@ stdcall ScrollConsoleScreenBufferW(long ptr ptr ptr ptr)
 @ stdcall SearchPathA(str str str long ptr ptr) kernel32.SearchPathA
 @ stdcall SearchPathW(wstr wstr wstr long ptr ptr) kernel32.SearchPathW
 @ stdcall SetAclInformation(ptr ptr long long)
@@ -1393,30 +1393,30 @@
 @ stdcall SetCalendarInfoW(long long long wstr) kernel32.SetCalendarInfoW
 # @ stub SetClientDynamicTimeZoneInformation
 # @ stub SetClientTimeZoneInformation
-@ stdcall SetCommBreak(long) kernel32.SetCommBreak
-@ stdcall SetCommConfig(long ptr long) kernel32.SetCommConfig
-@ stdcall SetCommMask(long long) kernel32.SetCommMask
-@ stdcall SetCommState(long ptr) kernel32.SetCommState
-@ stdcall SetCommTimeouts(long ptr) kernel32.SetCommTimeouts
+@ stdcall SetCommBreak(long)
+@ stdcall SetCommConfig(long ptr long)
+@ stdcall SetCommMask(long long)
+@ stdcall SetCommState(long ptr)
+@ stdcall SetCommTimeouts(long ptr)
 @ stdcall SetComputerNameA(str) kernel32.SetComputerNameA
 # @ stub SetComputerNameEx2W
 @ stdcall SetComputerNameExA(long str) kernel32.SetComputerNameExA
 @ stdcall SetComputerNameExW(long wstr) kernel32.SetComputerNameExW
 @ stdcall SetComputerNameW(wstr) kernel32.SetComputerNameW
-@ stdcall SetConsoleActiveScreenBuffer(long) kernel32.SetConsoleActiveScreenBuffer
-@ stdcall SetConsoleCP(long) kernel32.SetConsoleCP
+@ stdcall SetConsoleActiveScreenBuffer(long)
+@ stdcall SetConsoleCP(long)
 @ stdcall SetConsoleCtrlHandler(ptr long) kernel32.SetConsoleCtrlHandler
-@ stdcall SetConsoleCursorInfo(long ptr) kernel32.SetConsoleCursorInfo
-@ stdcall SetConsoleCursorPosition(long long) kernel32.SetConsoleCursorPosition
-@ stdcall SetConsoleInputExeNameA(str) kernel32.SetConsoleInputExeNameA
-@ stdcall SetConsoleInputExeNameW(wstr) kernel32.SetConsoleInputExeNameW
-@ stdcall SetConsoleMode(long long) kernel32.SetConsoleMode
-@ stdcall SetConsoleOutputCP(long) kernel32.SetConsoleOutputCP
-@ stdcall SetConsoleScreenBufferInfoEx(long ptr) kernel32.SetConsoleScreenBufferInfoEx
-@ stdcall SetConsoleScreenBufferSize(long long) kernel32.SetConsoleScreenBufferSize
-@ stdcall SetConsoleTextAttribute(long long) kernel32.SetConsoleTextAttribute
-@ stdcall SetConsoleTitleW(wstr) kernel32.SetConsoleTitleW
-@ stdcall SetConsoleWindowInfo(long long ptr) kernel32.SetConsoleWindowInfo
+@ stdcall SetConsoleCursorInfo(long ptr)
+@ stdcall SetConsoleCursorPosition(long long)
+@ stdcall SetConsoleInputExeNameA(str)
+@ stdcall SetConsoleInputExeNameW(wstr)
+@ stdcall SetConsoleMode(long long)
+@ stdcall SetConsoleOutputCP(long)
+@ stdcall SetConsoleScreenBufferInfoEx(long ptr)
+@ stdcall SetConsoleScreenBufferSize(long long)
+@ stdcall SetConsoleTextAttribute(long long)
+@ stdcall SetConsoleTitleW(wstr)
+@ stdcall SetConsoleWindowInfo(long long ptr)
 @ stdcall SetCriticalSectionSpinCount(ptr long) ntdll.RtlSetCriticalSectionSpinCount
 @ stdcall SetCurrentDirectoryA(str) kernel32.SetCurrentDirectoryA
 @ stdcall SetCurrentDirectoryW(wstr) kernel32.SetCurrentDirectoryW
@@ -1424,8 +1424,8 @@
 # @ stub SetDynamicTimeZoneInformation
 @ stdcall SetEndOfFile(long)
 @ stub SetEnvironmentStringsW
-@ stdcall SetEnvironmentVariableA(str str) kernel32.SetEnvironmentVariableA
-@ stdcall SetEnvironmentVariableW(wstr wstr) kernel32.SetEnvironmentVariableW
+@ stdcall SetEnvironmentVariableA(str str)
+@ stdcall SetEnvironmentVariableW(wstr wstr)
 @ stdcall SetErrorMode(long)
 @ stdcall SetEvent(long)
 @ stdcall SetEventWhenCallbackReturns(ptr long) ntdll.TpCallbackSetEventOnCompletion
@@ -1473,8 +1473,8 @@
 @ stub SetSecurityDescriptorRMControl
 @ stdcall SetSecurityDescriptorSacl(ptr long ptr long)
 # @ stub SetStateVersion
-@ stdcall SetStdHandle(long long) kernel32.SetStdHandle
-@ stub SetStdHandleEx
+@ stdcall SetStdHandle(long long)
+@ stdcall SetStdHandleEx(long long ptr)
 @ stdcall SetSystemFileCacheSize(long long long) kernel32.SetSystemFileCacheSize
 @ stdcall SetSystemTime(ptr) kernel32.SetSystemTime
 @ stdcall SetSystemTimeAdjustment(long long) kernel32.SetSystemTimeAdjustment
@@ -1502,12 +1502,12 @@
 # @ stub SetThreadpoolWaitEx
 @ stdcall SetTimeZoneInformation(ptr) kernel32.SetTimeZoneInformation
 @ stdcall SetTokenInformation(long long ptr long)
-@ stdcall SetUnhandledExceptionFilter(ptr) kernel32.SetUnhandledExceptionFilter
+@ stdcall SetUnhandledExceptionFilter(ptr)
 @ stdcall SetUserGeoID(long) kernel32.SetUserGeoID
 @ stdcall SetWaitableTimer(long ptr long ptr ptr long)
 @ stdcall SetWaitableTimerEx(long ptr long ptr ptr ptr long)
 # @ stub SetXStateFeaturesMask
-@ stdcall SetupComm(long long long) kernel32.SetupComm
+@ stdcall SetupComm(long long long)
 # @ stub SharedLocalIsEnabled
 @ stdcall SignalObjectAndWait(long long long long)
 @ stdcall SizeofResource(long long)
@@ -1605,17 +1605,17 @@
 @ varargs TraceMessage(int64 long ptr long) ntdll.EtwTraceMessage
 @ stdcall TraceMessageVa(int64 long ptr long ptr) ntdll.EtwTraceMessageVa
 @ stdcall TransactNamedPipe(long ptr long ptr long ptr ptr)
-@ stdcall TransmitCommChar(long long) kernel32.TransmitCommChar
+@ stdcall TransmitCommChar(long long)
 @ stdcall TryAcquireSRWLockExclusive(ptr) ntdll.RtlTryAcquireSRWLockExclusive
 @ stdcall TryAcquireSRWLockShared(ptr) ntdll.RtlTryAcquireSRWLockShared
 @ stdcall TryEnterCriticalSection(ptr) ntdll.RtlTryEnterCriticalSection
 @ stdcall TrySubmitThreadpoolCallback(ptr ptr ptr)
 @ stdcall TzSpecificLocalTimeToSystemTime(ptr ptr ptr) kernel32.TzSpecificLocalTimeToSystemTime
 @ stub TzSpecificLocalTimeToSystemTimeEx
-@ stdcall UnhandledExceptionFilter(ptr) kernel32.UnhandledExceptionFilter
+@ stdcall UnhandledExceptionFilter(ptr)
 @ stdcall UnlockFile(long long long long long)
 @ stdcall UnlockFileEx(long long long long ptr)
-@ stdcall UnmapViewOfFile(ptr) kernel32.UnmapViewOfFile
+@ stdcall UnmapViewOfFile(ptr)
 # @ stub UnmapViewOfFileEx
 # @ stub UnregisterBadMemoryNotification
 # @ stub UnregisterGPNotificationInternal
@@ -1668,23 +1668,23 @@
 # @ stub VerifyPackageId
 # @ stub VerifyPackageRelativeApplicationId
 # @ stub VerifyScripts
-@ stdcall VirtualAlloc(ptr long long long) kernel32.VirtualAlloc
-@ stdcall VirtualAllocEx(long ptr long long long) kernel32.VirtualAllocEx
-@ stdcall VirtualAllocExNuma(long ptr long long long long) kernel32.VirtualAllocExNuma
+@ stdcall VirtualAlloc(ptr long long long)
+@ stdcall VirtualAllocEx(long ptr long long long)
+@ stdcall VirtualAllocExNuma(long ptr long long long long)
 # @ stub VirtualAllocFromApp
-@ stdcall VirtualFree(ptr long long) kernel32.VirtualFree
-@ stdcall VirtualFreeEx(long ptr long long) kernel32.VirtualFreeEx
-@ stdcall VirtualLock(ptr long) kernel32.VirtualLock
-@ stdcall VirtualProtect(ptr long long ptr) kernel32.VirtualProtect
-@ stdcall VirtualProtectEx(long ptr long long ptr) kernel32.VirtualProtectEx
+@ stdcall VirtualFree(ptr long long)
+@ stdcall VirtualFreeEx(long ptr long long)
+@ stdcall VirtualLock(ptr long)
+@ stdcall VirtualProtect(ptr long long ptr)
+@ stdcall VirtualProtectEx(long ptr long long ptr)
 # @ stub VirtualProtectFromApp
-@ stdcall VirtualQuery(ptr ptr long) kernel32.VirtualQuery
-@ stdcall VirtualQueryEx(long ptr ptr long) kernel32.VirtualQueryEx
-@ stdcall VirtualUnlock(ptr long) kernel32.VirtualUnlock
+@ stdcall VirtualQuery(ptr ptr long)
+@ stdcall VirtualQueryEx(long ptr ptr long)
+@ stdcall VirtualUnlock(ptr long)
 # @ stub WTSGetServiceSessionId
 # @ stub WTSIsServerContainer
-@ stdcall WaitCommEvent(long ptr ptr) kernel32.WaitCommEvent
-@ stdcall WaitForDebugEvent(ptr long) kernel32.WaitForDebugEvent
+@ stdcall WaitCommEvent(long ptr ptr)
+@ stdcall WaitForDebugEvent(ptr long)
 # @ stub WaitForDebugEventEx
 # @ stub WaitForMachinePolicyForegroundProcessingInternal
 @ stdcall WaitForMultipleObjects(long ptr long long)
@@ -1717,27 +1717,27 @@
 @ stdcall Wow64RevertWow64FsRedirection(ptr)
 # @ stub Wow64SetThreadDefaultGuestMachine
 # @ stub -arch=i386 Wow64Transition
-@ stdcall WriteConsoleA(long ptr long ptr ptr) kernel32.WriteConsoleA
-@ stdcall WriteConsoleInputA(long ptr long ptr) kernel32.WriteConsoleInputA
-@ stdcall WriteConsoleInputW(long ptr long ptr) kernel32.WriteConsoleInputW
-@ stdcall WriteConsoleOutputA(long ptr long long ptr) kernel32.WriteConsoleOutputA
-@ stdcall WriteConsoleOutputAttribute(long ptr long long ptr) kernel32.WriteConsoleOutputAttribute
-@ stdcall WriteConsoleOutputCharacterA(long ptr long long ptr) kernel32.WriteConsoleOutputCharacterA
-@ stdcall WriteConsoleOutputCharacterW(long ptr long long ptr) kernel32.WriteConsoleOutputCharacterW
-@ stdcall WriteConsoleOutputW(long ptr long long ptr) kernel32.WriteConsoleOutputW
+@ stdcall WriteConsoleA(long ptr long ptr ptr)
+@ stdcall WriteConsoleInputA(long ptr long ptr)
+@ stdcall WriteConsoleInputW(long ptr long ptr)
+@ stdcall WriteConsoleOutputA(long ptr long long ptr)
+@ stdcall WriteConsoleOutputAttribute(long ptr long long ptr)
+@ stdcall WriteConsoleOutputCharacterA(long ptr long long ptr)
+@ stdcall WriteConsoleOutputCharacterW(long ptr long long ptr)
+@ stdcall WriteConsoleOutputW(long ptr long long ptr)
 @ stdcall WriteConsoleW(long ptr long ptr ptr) kernel32.WriteConsoleW
 @ stdcall WriteFile(long ptr long ptr ptr)
 @ stdcall WriteFileEx(long ptr long ptr ptr)
 @ stdcall WriteFileGather(long ptr long ptr ptr)
-@ stdcall WriteProcessMemory(long ptr ptr long ptr) kernel32.WriteProcessMemory
+@ stdcall WriteProcessMemory(long ptr ptr long ptr)
 # @ stub WriteStateAtomValue
 # @ stub WriteStateContainerValue
 @ stdcall ZombifyActCtx(ptr)
 # @ stub _AddMUIStringToCache
 # @ stub _GetMUIStringFromCache
 # @ stub _OpenMuiStringCache
-@ stdcall -arch=x86_64 -private __C_specific_handler(ptr long ptr ptr) kernel32.__C_specific_handler
-@ stdcall -arch=arm,x86_64 -private -norelay __chkstk() kernel32.__chkstk
+@ stdcall -arch=x86_64 -private __C_specific_handler(ptr long ptr ptr) ntdll.__C_specific_handler
+@ stdcall -arch=arm,x86_64 -private -norelay __chkstk() ntdll.__chkstk
 # @ stub __dllonexit3
 @ stub __misaligned_access
 # @ stub __wgetmainargs
@@ -1748,7 +1748,7 @@
 # @ stub _initterm
 # @ stub _initterm_e
 # @ stub _invalid_parameter
-@ stdcall -arch=x86_64 -private _local_unwind(ptr ptr) kernel32._local_unwind
+@ stdcall -arch=x86_64 -private _local_unwind(ptr ptr) ntdll._local_unwind
 # @ stub _onexit
 # @ stub _purecall
 # @ stub _time64

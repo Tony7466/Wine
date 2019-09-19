@@ -155,6 +155,9 @@ static const char * event_names[MAX_EVENT_HANDLERS] =
     "SelectionNotify", "ColormapNotify", "ClientMessage", "MappingNotify", "GenericEvent"
 };
 
+/* is someone else grabbing the keyboard, for example the WM, when manipulating the window */
+BOOL keyboard_grabbed = FALSE;
+
 int xinput2_opcode = 0;
 
 /* return the name of an X event */
@@ -772,6 +775,23 @@ static BOOL X11DRV_FocusIn( HWND hwnd, XEvent *xev )
     if (event->detail == NotifyPointer) return FALSE;
     if (hwnd == GetDesktopWindow()) return FALSE;
 
+    switch (event->mode)
+    {
+    case NotifyGrab:
+        WARN( "unexpected FocusIn event with NotifyGrab mode\n" );
+        break;
+    case NotifyWhileGrabbed:
+        keyboard_grabbed = TRUE;
+        break;
+    case NotifyNormal:
+        keyboard_grabbed = FALSE;
+        break;
+    case NotifyUngrab:
+        keyboard_grabbed = FALSE;
+        retry_grab_clipping_window();
+        return TRUE; /* ignore wm specific NotifyUngrab / NotifyGrab events w.r.t focus */
+    }
+
     if ((xic = X11DRV_get_ic( hwnd ))) XSetICFocus( xic );
     if (use_take_focus)
     {
@@ -855,6 +875,30 @@ static BOOL X11DRV_FocusOut( HWND hwnd, XEvent *xev )
         return TRUE;
     }
     if (!hwnd) return FALSE;
+
+    switch (event->mode)
+    {
+    case NotifyUngrab:
+        WARN( "unexpected FocusOut event with NotifyUngrab mode\n" );
+        break;
+    case NotifyNormal:
+        keyboard_grabbed = FALSE;
+        break;
+    case NotifyWhileGrabbed:
+        keyboard_grabbed = TRUE;
+        break;
+    case NotifyGrab:
+        keyboard_grabbed = TRUE;
+
+        /* This will do nothing due to keyboard_grabbed == TRUE, but it
+         * will save the current clipping rect so we can restore it on
+         * FocusIn with NotifyUngrab mode.
+         */
+        retry_grab_clipping_window();
+
+        return TRUE; /* ignore wm specific NotifyUngrab / NotifyGrab events w.r.t focus */
+    }
+
     focus_out( event->display, hwnd );
     return TRUE;
 }
@@ -940,11 +984,8 @@ static BOOL X11DRV_MapNotify( HWND hwnd, XEvent *event )
 {
     struct x11drv_win_data *data;
 
-    if (event->xany.window == x11drv_thread_data()->clip_window)
-    {
-        clipping_cursor = TRUE;
-        return TRUE;
-    }
+    if (event->xany.window == x11drv_thread_data()->clip_window) return TRUE;
+
     if (!(data = get_win_data( hwnd ))) return FALSE;
 
     if (!data->managed && !data->embedded && data->mapped)
@@ -963,8 +1004,6 @@ static BOOL X11DRV_MapNotify( HWND hwnd, XEvent *event )
  */
 static BOOL X11DRV_UnmapNotify( HWND hwnd, XEvent *event )
 {
-    if (event->xany.window == x11drv_thread_data()->clip_window)
-        clipping_cursor = FALSE;
     return TRUE;
 }
 

@@ -30,16 +30,16 @@ void WINAPI DeleteMediaType(AM_MEDIA_TYPE * pMediaType);
 
 typedef struct BasePin
 {
-	IPin IPin_iface;
-	LPCRITICAL_SECTION pCritSec;
-	PIN_INFO pinInfo;
-	IPin * pConnectedTo;
-	AM_MEDIA_TYPE mtCurrent;
-	REFERENCE_TIME tStart;
-	REFERENCE_TIME tStop;
-	double dRate;
+    IPin IPin_iface;
+    struct strmbase_filter *filter;
+    PIN_DIRECTION dir;
+    WCHAR name[128];
+    IPin *pConnectedTo;
+    AM_MEDIA_TYPE mtCurrent;
+    REFERENCE_TIME tStart, tStop;
+    double dRate;
 
-	const struct BasePinFuncTable* pFuncsTable;
+    const struct BasePinFuncTable* pFuncsTable;
 } BasePin;
 
 typedef HRESULT (WINAPI *BasePin_CheckMediaType)(BasePin *This, const AM_MEDIA_TYPE *pmt);
@@ -53,21 +53,22 @@ typedef struct BasePinFuncTable {
 	BasePin_GetMediaType pfnGetMediaType;
 } BasePinFuncTable;
 
-typedef struct BaseOutputPin
+struct strmbase_source
 {
 	/* inheritance C style! */
 	BasePin pin;
 	IMemInputPin * pMemInputPin;
 	IMemAllocator * pAllocator;
 
-	const struct BaseOutputPinFuncTable* pFuncsTable;
-} BaseOutputPin;
+	const struct strmbase_source_ops *pFuncsTable;
+};
 
-typedef HRESULT (WINAPI *BaseOutputPin_AttemptConnection)(BaseOutputPin *pin, IPin *peer, const AM_MEDIA_TYPE *mt);
-typedef HRESULT (WINAPI *BaseOutputPin_DecideBufferSize)(BaseOutputPin *This, IMemAllocator *pAlloc, ALLOCATOR_PROPERTIES *ppropInputRequest);
-typedef HRESULT (WINAPI *BaseOutputPin_DecideAllocator)(BaseOutputPin *This, IMemInputPin *pPin, IMemAllocator **pAlloc);
+typedef HRESULT (WINAPI *BaseOutputPin_AttemptConnection)(struct strmbase_source *pin, IPin *peer, const AM_MEDIA_TYPE *mt);
+typedef HRESULT (WINAPI *BaseOutputPin_DecideBufferSize)(struct strmbase_source *pin, IMemAllocator *allocator, ALLOCATOR_PROPERTIES *props);
+typedef HRESULT (WINAPI *BaseOutputPin_DecideAllocator)(struct strmbase_source *pin, IMemInputPin *peer, IMemAllocator **allocator);
 
-typedef struct BaseOutputPinFuncTable {
+struct strmbase_source_ops
+{
 	BasePinFuncTable base;
 
         /* Required for Connect(). */
@@ -76,7 +77,7 @@ typedef struct BaseOutputPinFuncTable {
 	BaseOutputPin_DecideBufferSize pfnDecideBufferSize;
 	/* Required for BaseOutputPinImpl_AttemptConnection */
 	BaseOutputPin_DecideAllocator pfnDecideAllocator;
-} BaseOutputPinFuncTable;
+};
 
 typedef struct BaseInputPin
 {
@@ -124,19 +125,18 @@ HRESULT WINAPI BaseOutputPinImpl_EndOfStream(IPin * iface);
 HRESULT WINAPI BaseOutputPinImpl_BeginFlush(IPin * iface);
 HRESULT WINAPI BaseOutputPinImpl_EndFlush(IPin * iface);
 
-HRESULT WINAPI BaseOutputPinImpl_GetDeliveryBuffer(BaseOutputPin * This, IMediaSample ** ppSample, REFERENCE_TIME * tStart, REFERENCE_TIME * tStop, DWORD dwFlags);
-HRESULT WINAPI BaseOutputPinImpl_Deliver(BaseOutputPin * This, IMediaSample * pSample);
-HRESULT WINAPI BaseOutputPinImpl_Active(BaseOutputPin * This);
-HRESULT WINAPI BaseOutputPinImpl_Inactive(BaseOutputPin * This);
-HRESULT WINAPI BaseOutputPinImpl_InitAllocator(BaseOutputPin *This, IMemAllocator **pMemAlloc);
-HRESULT WINAPI BaseOutputPinImpl_DecideAllocator(BaseOutputPin *This, IMemInputPin *pPin, IMemAllocator **pAlloc);
-HRESULT WINAPI BaseOutputPinImpl_AttemptConnection(BaseOutputPin *pin, IPin *peer, const AM_MEDIA_TYPE *mt);
+HRESULT WINAPI BaseOutputPinImpl_GetDeliveryBuffer(struct strmbase_source *pin,
+        IMediaSample **sample, REFERENCE_TIME *start, REFERENCE_TIME *stop, DWORD flags);
+HRESULT WINAPI BaseOutputPinImpl_Deliver(struct strmbase_source *pin, IMediaSample *sample);
+HRESULT WINAPI BaseOutputPinImpl_Active(struct strmbase_source *pin);
+HRESULT WINAPI BaseOutputPinImpl_Inactive(struct strmbase_source *pin);
+HRESULT WINAPI BaseOutputPinImpl_InitAllocator(struct strmbase_source *pin, IMemAllocator **allocator);
+HRESULT WINAPI BaseOutputPinImpl_DecideAllocator(struct strmbase_source *pin, IMemInputPin *peer, IMemAllocator **allocator);
+HRESULT WINAPI BaseOutputPinImpl_AttemptConnection(struct strmbase_source *pin, IPin *peer, const AM_MEDIA_TYPE *mt);
 
-HRESULT WINAPI BaseOutputPin_Construct(const IPinVtbl *OutputPin_Vtbl, LONG outputpin_size, const PIN_INFO * pPinInfo, const BaseOutputPinFuncTable* pBaseOutputFuncsTable, LPCRITICAL_SECTION pCritSec, IPin ** ppPin);
-HRESULT WINAPI BaseOutputPin_Destroy(BaseOutputPin *This);
-void strmbase_source_cleanup(BaseOutputPin *pin);
-void strmbase_source_init(BaseOutputPin *pin, const IPinVtbl *vtbl, const PIN_INFO *info,
-        const BaseOutputPinFuncTable *func_table, CRITICAL_SECTION *cs);
+void strmbase_source_cleanup(struct strmbase_source *pin);
+void strmbase_source_init(struct strmbase_source *pin, const IPinVtbl *vtbl, struct strmbase_filter *filter,
+        const WCHAR *name, const struct strmbase_source_ops *func_table);
 
 /* Base Input Pin */
 HRESULT WINAPI BaseInputPinImpl_QueryInterface(IPin * iface, REFIID riid, LPVOID * ppv);
@@ -148,12 +148,8 @@ HRESULT WINAPI BaseInputPinImpl_BeginFlush(IPin * iface);
 HRESULT WINAPI BaseInputPinImpl_EndFlush(IPin * iface);
 HRESULT WINAPI BaseInputPinImpl_NewSegment(IPin * iface, REFERENCE_TIME tStart, REFERENCE_TIME tStop, double dRate);
 
-HRESULT BaseInputPin_Construct(const IPinVtbl *InputPin_Vtbl, LONG inputpin_size, const PIN_INFO * pPinInfo,
-        const BaseInputPinFuncTable* pBaseInputFuncsTable,
-        LPCRITICAL_SECTION pCritSec, IMemAllocator *, IPin ** ppPin);
-HRESULT WINAPI BaseInputPin_Destroy(BaseInputPin *This);
-void strmbase_sink_init(BaseInputPin *pin, const IPinVtbl *vtbl, const PIN_INFO *info,
-        const BaseInputPinFuncTable *func_table, CRITICAL_SECTION *cs, IMemAllocator *allocator);
+void strmbase_sink_init(BaseInputPin *pin, const IPinVtbl *vtbl, struct strmbase_filter *filter,
+        const WCHAR *name, const BaseInputPinFuncTable *func_table, IMemAllocator *allocator);
 void strmbase_sink_cleanup(BaseInputPin *pin);
 
 struct strmbase_filter
@@ -210,7 +206,7 @@ HRESULT WINAPI EnumMediaTypes_Construct(BasePin *iface, BasePin_GetMediaType enu
 typedef struct TransformFilter
 {
     struct strmbase_filter filter;
-    BaseOutputPin source;
+    struct strmbase_source source;
     BaseInputPin sink;
 
     AM_MEDIA_TYPE pmt;
@@ -334,7 +330,7 @@ HRESULT WINAPI AMovieSetupRegisterFilter2(const AMOVIESETUP_FILTER *pFilter, IFi
 typedef struct tagOutputQueue {
     CRITICAL_SECTION csQueue;
 
-    BaseOutputPin * pInputPin;
+    struct strmbase_source *pInputPin;
 
     HANDLE hThread;
     HANDLE hProcessQueue;
@@ -356,7 +352,7 @@ typedef struct OutputQueueFuncTable
     OutputQueue_ThreadProc pfnThreadProc;
 } OutputQueueFuncTable;
 
-HRESULT WINAPI OutputQueue_Construct( BaseOutputPin *pInputPin, BOOL bAuto,
+HRESULT WINAPI OutputQueue_Construct( struct strmbase_source *pin, BOOL bAuto,
     BOOL bQueue, LONG lBatchSize, BOOL bBatchExact, DWORD dwPriority,
     const OutputQueueFuncTable* pFuncsTable, OutputQueue **ppOutputQueue );
 HRESULT WINAPI OutputQueue_Destroy(OutputQueue *pOutputQueue);

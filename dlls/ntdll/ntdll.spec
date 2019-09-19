@@ -760,8 +760,8 @@
 @ stdcall RtlIpv4AddressToStringExA(ptr long ptr ptr)
 @ stdcall RtlIpv4AddressToStringExW(ptr long ptr ptr)
 @ stdcall RtlIpv4AddressToStringW(ptr ptr)
-# @ stub RtlIpv4StringToAddressA
-# @ stub RtlIpv4StringToAddressExA
+@ stdcall RtlIpv4StringToAddressA(str long ptr ptr)
+@ stdcall RtlIpv4StringToAddressExA(str long ptr ptr)
 @ stdcall RtlIpv4StringToAddressExW(wstr long ptr ptr)
 @ stdcall RtlIpv4StringToAddressW(wstr long ptr ptr)
 # @ stub RtlIpv6AddressToStringA
@@ -850,6 +850,8 @@
 @ stub RtlQueryInformationActiveActivationContext
 @ stub RtlQueryInterfaceMemoryStream
 @ stdcall RtlQueryPackageIdentity(long ptr ptr ptr ptr ptr)
+@ stdcall RtlQueryPerformanceCounter(ptr)
+@ stdcall RtlQueryPerformanceFrequency(ptr)
 @ stub RtlQueryProcessBackTraceInformation
 @ stdcall RtlQueryProcessDebugInformation(long long ptr)
 @ stub RtlQueryProcessHeapInformation
@@ -978,6 +980,7 @@
 @ stdcall RtlUnicodeToMultiByteN(ptr long ptr ptr long)
 @ stdcall RtlUnicodeToMultiByteSize(ptr ptr long)
 @ stdcall RtlUnicodeToOemN(ptr long ptr ptr long)
+@ stdcall RtlUnicodeToUTF8N(ptr long ptr ptr long)
 @ stdcall RtlUniform(ptr)
 # @ stub RtlUnlockBootStatusData
 @ stdcall RtlUnlockHeap(long)
