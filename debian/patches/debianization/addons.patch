@@ -9,38 +9,13 @@ author: Jens Reyer <jre.winesim@gmail.com>
      lstrcpyW( path, dir );
      if (!wcsncmp( path, ntprefixW, wcslen(ntprefixW) ))  path[1] = '\\';  /* change \??\ into \\?\ */
 -    if (len && path[len-1] != '/' && path[len-1] != '\\') path[len++] = '\\';
-+    /* don't append "\\" to "/usr/lib/wine-", we append the subdir_name directly */
++    /* don't append "\\" to "\\usr\\share\\wine-", we directly append the subdir_name for packaged installers*/
 +    if (len && path[len-1] != '/' && path[len-1] != '\\' && path[len-1] != '-') path[len++] = '\\';
  
      if (*subdir)
      {
-@@ -298,28 +299,17 @@ static enum install_res install_from_reg
- 
- static enum install_res install_from_default_dir(void)
- {
--    static const WCHAR dotdotW[] = {'\\','.','.','\\',0};
-     const WCHAR *package_dir;
--    WCHAR *dir_buf = NULL;
-     enum install_res ret = INSTALL_NEXT;
- 
--    if ((package_dir = _wgetenv( winebuilddirW )))
--    {
--        dir_buf = heap_alloc( lstrlenW(package_dir) * sizeof(WCHAR) + sizeof(dotdotW));
--        lstrcpyW( dir_buf, package_dir );
--        lstrcatW( dir_buf, dotdotW );
--        package_dir = dir_buf;
--    }
--    else package_dir = _wgetenv( winedatadirW );
--
--    if (package_dir)
--    {
--        ret = install_from_dos_file(package_dir, addon->subdir_name, addon->file_name);
--        heap_free(dir_buf);
--    }
-+    /* gecko/mono debian packages should use /usr/share/wine-{gecko,mono}
-+       TODO: update to use install_from_dos_file */
-+    package_dir = "/usr/share/wine-";
-+    ret = install_from_unix_file(package_dir, addon->subdir_name, addon->file_name);
+@@ -319,10 +320,14 @@ static enum install_res install_from_def
+     }
  
      if (ret == INSTALL_NEXT)
 -        ret = install_from_unix_file(INSTALL_DATADIR "/wine/", addon->subdir_name, addon->file_name);
@@ -49,3 +24,9 @@ author: Jens Reyer <jre.winesim@gmail.com>
      if (ret == INSTALL_NEXT && strcmp(INSTALL_DATADIR, "/usr/share"))
          ret = install_from_unix_file("/usr/share/wine/", addon->subdir_name, addon->file_name);
      if (ret == INSTALL_NEXT)
++        /* packaged addon installers */
++        ret = install_from_unix_file("/usr/share/wine-", addon->subdir_name, addon->file_name);
++    if (ret == INSTALL_NEXT)
+         ret = install_from_unix_file("/opt/wine/", addon->subdir_name, addon->file_name);
+     return ret;
+ }
