@@ -53,8 +53,8 @@ export DEB_CFLAGS_MAINT_APPEND+=-Wno-error
 # configure options
 CONFLAGS=--with-gnutls \
          --without-hal \
-         --without-netapi \
          --without-mingw \
+         --without-netapi \
          --disable-tests \
          --enable-maintainer-mode \
          --libdir=/$(LIBDIR) \
