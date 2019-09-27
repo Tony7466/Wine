@@ -14,7 +14,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (hkey && !RegQueryValueExW(hkey, name, 0, &type, NULL, &size))
 --- a/dlls/d3dx9_36/texture.c
 +++ b/dlls/d3dx9_36/texture.c
-@@ -1289,6 +1289,10 @@ static inline void fill_texture(const st
+@@ -1288,6 +1288,10 @@ static inline void fill_texture(const st
              case 3: /* Blue */
                  comp_value = value->z;
                  break;
@@ -27,7 +27,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (format->type == FORMAT_ARGBF16)
 --- a/dlls/kernel32/locale.c
 +++ b/dlls/kernel32/locale.c
-@@ -5717,7 +5717,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
+@@ -5449,7 +5449,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
                          LPWSTR lpUnicodeCharStr, INT cchUnicodeChar)
  {
      INT i, label_start, label_end, out_label, out = 0;
@@ -93,7 +93,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!desc) return E_INVALIDARG;
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -2635,6 +2635,10 @@ static void check_fbo_compat(struct wine
+@@ -2653,6 +2653,10 @@ static void check_fbo_compat(struct wine
                      case WINED3D_GL_RES_TYPE_COUNT:
                          color = 0;
                          break;
