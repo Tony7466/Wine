@@ -1,7 +1,5 @@
-wine-development (4.17-1) UNRELEASED; urgency=medium
+wine-development (4.17-1) unstable; urgency=medium
 
-  * Add dxvk to bug-control.
-  * Fix debianization/addons.patch.
   * New upstream release 4.17, released Sep 27, 2019.
     - New version of the Mono engine with upstream fixes.
     - Support for DXTn compressed textures.
@@ -10,8 +8,11 @@ wine-development (4.17-1) UNRELEASED; urgency=medium
     - Support for generating RSA keys.
     - Stubless proxies support on ARM64.
     - Various bug fixes.
+  * Refresh patches.
+  * Add dxvk to bug-control.
+  * Fix debianization/addons.patch.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Sat, 28 Sep 2019 01:18:23 +0200
+ -- Jens Reyer <jre.winesim@gmail.com>  Sat, 28 Sep 2019 01:25:23 +0200
 
 wine-development (4.16-1) unstable; urgency=medium
 
