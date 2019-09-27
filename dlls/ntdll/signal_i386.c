@@ -724,18 +724,14 @@ static NTSTATUS raise_exception( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL f
                   context->Ebp, context->Esp, context->SegCs, context->SegDs,
                   context->SegEs, context->SegFs, context->SegGs, context->EFlags );
         }
-        status = send_debug_event( rec, TRUE, context );
-        if (status == DBG_CONTINUE || status == DBG_EXCEPTION_HANDLED)
-            return STATUS_SUCCESS;
 
         /* fix up instruction pointer in context for EXCEPTION_BREAKPOINT */
         if (rec->ExceptionCode == EXCEPTION_BREAKPOINT) context->Eip--;
 
-        if (call_vectored_handlers( rec, context ) == EXCEPTION_CONTINUE_EXECUTION)
-            return STATUS_SUCCESS;
+        if (call_vectored_handlers( rec, context ) == EXCEPTION_CONTINUE_EXECUTION) goto done;
 
-        if ((status = call_stack_handlers( rec, context )) != STATUS_UNHANDLED_EXCEPTION)
-            return status;
+        if ((status = call_stack_handlers( rec, context )) == STATUS_SUCCESS) goto done;
+        if (status != STATUS_UNHANDLED_EXCEPTION) return status;
     }
 
     /* last chance exception */
@@ -752,7 +748,8 @@ static NTSTATUS raise_exception( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL f
                      rec->ExceptionCode, rec->ExceptionFlags, rec->ExceptionAddress );
         NtTerminateProcess( NtCurrentProcess(), rec->ExceptionCode );
     }
-    return STATUS_SUCCESS;
+done:
+    return NtSetContextThread( GetCurrentThread(), context );
 }
 
 
@@ -1595,17 +1592,16 @@ static inline DWORD is_privileged_instr( CONTEXT *context )
  */
 static inline BOOL check_invalid_gs( ucontext_t *sigcontext, CONTEXT *context )
 {
-    BYTE instr[14];
-    unsigned int i, len;
+    unsigned int prefix_count = 0;
+    const BYTE *instr = (BYTE *)context->Eip;
     WORD system_gs = x86_thread_data()->gs;
 
     if (context->SegGs == system_gs) return FALSE;
     if (!wine_ldt_is_system( context->SegCs )) return FALSE;
     /* only handle faults in system libraries */
-    if (virtual_is_valid_code_address( (BYTE *)context->Eip, 1 )) return FALSE;
+    if (virtual_is_valid_code_address( instr, 1 )) return FALSE;
 
-    len = virtual_uninterrupted_read_memory( (BYTE *)context->Eip, instr, sizeof(instr) );
-    for (i = 0; i < len; i++) switch (instr[i])
+    for (;;) switch(*instr)
     {
     /* instruction prefixes */
     case 0x2e:  /* %cs: */
@@ -1618,6 +1614,8 @@ static inline BOOL check_invalid_gs( ucontext_t *sigcontext, CONTEXT *context )
     case 0xf0:  /* lock */
     case 0xf2:  /* repne */
     case 0xf3:  /* repe */
+        if (++prefix_count >= 15) return FALSE;
+        instr++;
         continue;
     case 0x65:  /* %gs: */
         TRACE( "%04x/%04x at %p, fixing up\n", context->SegGs, system_gs, instr );
@@ -1628,7 +1626,6 @@ static inline BOOL check_invalid_gs( ucontext_t *sigcontext, CONTEXT *context )
     default:
         return FALSE;
     }
-    return FALSE;
 }
 
 
@@ -1860,7 +1857,7 @@ static void WINAPI raise_generic_exception( EXCEPTION_RECORD *rec, CONTEXT *cont
 {
     NTSTATUS status;
 
-    status = NtRaiseException( rec, context, TRUE );
+    status = raise_exception( rec, context, TRUE );
     raise_status( status, rec );
 }
 
@@ -1872,6 +1869,13 @@ static void WINAPI raise_generic_exception( EXCEPTION_RECORD *rec, CONTEXT *cont
  */
 static void setup_raise_exception( ucontext_t *sigcontext, struct stack_layout *stack )
 {
+    NTSTATUS status = send_debug_event( &stack->rec, TRUE, &stack->context );
+
+    if (status == DBG_CONTINUE || status == DBG_EXCEPTION_HANDLED)
+    {
+        restore_context( &stack->context, sigcontext );
+        return;
+    }
     ESP_sig(sigcontext) = (DWORD)stack;
     EIP_sig(sigcontext) = (DWORD)raise_generic_exception;
     /* clear single-step, direction, and align check flag */
@@ -2499,9 +2503,13 @@ __ASM_STDCALL_FUNC( RtlUnwind, 16,
  */
 NTSTATUS WINAPI NtRaiseException( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL first_chance )
 {
-    NTSTATUS status = raise_exception( rec, context, first_chance );
-    if (status == STATUS_SUCCESS) NtSetContextThread( GetCurrentThread(), context );
-    return status;
+    if (first_chance)
+    {
+        NTSTATUS status = send_debug_event( rec, TRUE, context );
+        if (status == DBG_CONTINUE || status == DBG_EXCEPTION_HANDLED)
+            NtSetContextThread( GetCurrentThread(), context );
+    }
+    return raise_exception( rec, context, first_chance );
 }
 
 
@@ -2510,7 +2518,7 @@ NTSTATUS WINAPI NtRaiseException( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL 
  *
  * Raise an exception with the full CPU context.
  */
-void raise_exception_full_context( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL first_chance )
+void raise_exception_full_context( EXCEPTION_RECORD *rec, CONTEXT *context )
 {
     save_fpu( context );
     save_fpux( context );
@@ -2523,7 +2531,7 @@ void raise_exception_full_context( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL
     context->Dr7 = x86_thread_data()->dr7;
     context->ContextFlags |= CONTEXT_DEBUG_REGISTERS;
 
-    RtlRaiseStatus( NtRaiseException( rec, context, first_chance ));
+    RtlRaiseStatus( NtRaiseException( rec, context, TRUE ));
 }
 
 
@@ -2545,7 +2553,6 @@ __ASM_STDCALL_FUNC( RtlRaiseException, 4,
                     "leal 12(%ebp),%eax\n\t"
                     "movl %eax,0xc4(%esp)\n\t"    /* context->Esp */
                     "movl %esp,%eax\n\t"
-                    "pushl $1\n\t"
                     "pushl %eax\n\t"
                     "pushl %ecx\n\t"
                     "call " __ASM_NAME("raise_exception_full_context") "\n\t"

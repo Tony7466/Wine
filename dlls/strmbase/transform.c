@@ -45,7 +45,7 @@ static inline TransformFilter *impl_from_sink_IPin(IPin *iface)
     return CONTAINING_RECORD(iface, TransformFilter, sink.pin.IPin_iface);
 }
 
-static HRESULT WINAPI TransformFilter_Input_CheckMediaType(BasePin *iface, const AM_MEDIA_TYPE * pmt)
+static HRESULT sink_query_accept(struct strmbase_pin *iface, const AM_MEDIA_TYPE *pmt)
 {
     TransformFilter *pTransform = impl_from_sink_IPin(&iface->IPin_iface);
 
@@ -92,7 +92,7 @@ static inline TransformFilter *impl_from_source_IPin(IPin *iface)
     return CONTAINING_RECORD(iface, TransformFilter, source.pin.IPin_iface);
 }
 
-static HRESULT WINAPI TransformFilter_Output_CheckMediaType(BasePin *This, const AM_MEDIA_TYPE *pmt)
+static HRESULT source_query_accept(struct strmbase_pin *This, const AM_MEDIA_TYPE *pmt)
 {
     TransformFilter *pTransformFilter = impl_from_source_IPin(&This->IPin_iface);
     AM_MEDIA_TYPE* outpmt = &pTransformFilter->pmt;
@@ -110,12 +110,10 @@ static HRESULT WINAPI TransformFilter_Output_DecideBufferSize(struct strmbase_so
     return pTransformFilter->pFuncsTable->pfnDecideBufferSize(pTransformFilter, pAlloc, ppropInputRequest);
 }
 
-static HRESULT WINAPI TransformFilter_Output_GetMediaType(BasePin *This, int iPosition, AM_MEDIA_TYPE *pmt)
+static HRESULT source_get_media_type(struct strmbase_pin *This, unsigned int iPosition, AM_MEDIA_TYPE *pmt)
 {
     TransformFilter *pTransform = impl_from_source_IPin(&This->IPin_iface);
 
-    if (iPosition < 0)
-        return E_INVALIDARG;
     if (iPosition > 0)
         return VFW_S_NO_MORE_ITEMS;
     CopyMediaType(pmt, &pTransform->pmt);
@@ -137,12 +135,12 @@ static void transform_destroy(struct strmbase_filter *iface)
 {
     TransformFilter *filter = impl_from_strmbase_filter(iface);
 
-    if (filter->sink.pin.pConnectedTo)
-        IPin_Disconnect(filter->sink.pin.pConnectedTo);
+    if (filter->sink.pin.peer)
+        IPin_Disconnect(filter->sink.pin.peer);
     IPin_Disconnect(&filter->sink.pin.IPin_iface);
 
-    if (filter->source.pin.pConnectedTo)
-        IPin_Disconnect(filter->source.pin.pConnectedTo);
+    if (filter->source.pin.peer)
+        IPin_Disconnect(filter->source.pin.peer);
     IPin_Disconnect(&filter->source.pin.IPin_iface);
 
     strmbase_sink_cleanup(&filter->sink);
@@ -163,23 +161,50 @@ static const struct strmbase_filter_ops filter_ops =
     .filter_destroy = transform_destroy,
 };
 
-static const BaseInputPinFuncTable tf_input_BaseInputFuncTable = {
-    {
-        TransformFilter_Input_CheckMediaType,
-        BasePinImpl_GetMediaType
-    },
-    TransformFilter_Input_Receive
+static HRESULT sink_query_interface(struct strmbase_pin *iface, REFIID iid, void **out)
+{
+    TransformFilter *filter = impl_from_sink_IPin(&iface->IPin_iface);
+
+    if (IsEqualGUID(iid, &IID_IMemInputPin))
+        *out = &filter->sink.IMemInputPin_iface;
+    else
+        return E_NOINTERFACE;
+
+    IUnknown_AddRef((IUnknown *)*out);
+    return S_OK;
+}
+
+static const BaseInputPinFuncTable tf_input_BaseInputFuncTable =
+{
+    .base.pin_query_accept = sink_query_accept,
+    .base.pin_get_media_type = strmbase_pin_get_media_type,
+    .base.pin_query_interface = sink_query_interface,
+    .pfnReceive = TransformFilter_Input_Receive,
 };
+
+static HRESULT source_query_interface(struct strmbase_pin *iface, REFIID iid, void **out)
+{
+    TransformFilter *filter = impl_from_source_IPin(&iface->IPin_iface);
+
+    if (IsEqualGUID(iid, &IID_IQualityControl))
+        *out = &filter->qcimpl->IQualityControl_iface;
+    else if (IsEqualGUID(iid, &IID_IMediaSeeking))
+        return IUnknown_QueryInterface(filter->seekthru_unk, iid, out);
+    else
+        return E_NOINTERFACE;
+
+    IUnknown_AddRef((IUnknown *)*out);
+    return S_OK;
+}
 
 static const struct strmbase_source_ops source_ops =
 {
-    {
-        TransformFilter_Output_CheckMediaType,
-        TransformFilter_Output_GetMediaType
-    },
-    BaseOutputPinImpl_AttemptConnection,
-    TransformFilter_Output_DecideBufferSize,
-    BaseOutputPinImpl_DecideAllocator,
+    .base.pin_query_accept = source_query_accept,
+    .base.pin_get_media_type = source_get_media_type,
+    .base.pin_query_interface = source_query_interface,
+    .pfnAttemptConnection = BaseOutputPinImpl_AttemptConnection,
+    .pfnDecideBufferSize = TransformFilter_Output_DecideBufferSize,
+    .pfnDecideAllocator = BaseOutputPinImpl_DecideAllocator,
 };
 
 static HRESULT WINAPI TransformFilterImpl_Stop(IBaseFilter *iface)
@@ -354,8 +379,8 @@ static HRESULT WINAPI TransformFilter_InputPin_EndOfStream(IPin * iface)
 
     TRACE("iface %p.\n", iface);
 
-    if (filter->source.pin.pConnectedTo)
-        return IPin_EndOfStream(filter->source.pin.pConnectedTo);
+    if (filter->source.pin.peer)
+        return IPin_EndOfStream(filter->source.pin.peer);
     return VFW_E_NOT_CONNECTED;
 }
 
@@ -444,7 +469,7 @@ static HRESULT WINAPI TransformFilter_InputPin_NewSegment(IPin * iface, REFERENC
 
 static const IPinVtbl TransformFilter_InputPin_Vtbl =
 {
-    BaseInputPinImpl_QueryInterface,
+    BasePinImpl_QueryInterface,
     BasePinImpl_AddRef,
     BasePinImpl_Release,
     BaseInputPinImpl_Connect,
@@ -464,30 +489,9 @@ static const IPinVtbl TransformFilter_InputPin_Vtbl =
     TransformFilter_InputPin_NewSegment
 };
 
-static HRESULT WINAPI transform_source_QueryInterface(IPin *iface, REFIID iid, void **out)
-{
-    TransformFilter *filter = impl_from_source_IPin(iface);
-
-    if (IsEqualGUID(iid, &IID_IUnknown) || IsEqualGUID(iid, &IID_IPin))
-        *out = iface;
-    else if (IsEqualGUID(iid, &IID_IQualityControl))
-        *out = &filter->qcimpl->IQualityControl_iface;
-    else if (IsEqualGUID(iid, &IID_IMediaSeeking))
-        return IUnknown_QueryInterface(filter->seekthru_unk, iid, out);
-    else
-    {
-        WARN("%s not implemented, returning E_NOINTERFACE.\n", debugstr_guid(iid));
-        *out = NULL;
-        return E_NOINTERFACE;
-    }
-
-    IUnknown_AddRef((IUnknown *)*out);
-    return S_OK;
-}
-
 static const IPinVtbl TransformFilter_OutputPin_Vtbl =
 {
-    transform_source_QueryInterface,
+    BasePinImpl_QueryInterface,
     BasePinImpl_AddRef,
     BasePinImpl_Release,
     BaseOutputPinImpl_Connect,

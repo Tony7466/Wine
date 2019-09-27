@@ -454,6 +454,7 @@ SOURCES = \
 	msvcrt/sys/unistd.h \
 	msvcrt/sys/utime.h \
 	msvcrt/time.h \
+	msvcrt/uchar.h \
 	msvcrt/unistd.h \
 	msvcrt/wchar.h \
 	msvcrt/wctype.h \
@@ -629,6 +630,7 @@ SOURCES = \
 	tcpmib.h \
 	textserv.h \
 	textstor.idl \
+	threadpoolapiset.h \
 	thumbcache.idl \
 	timezoneapi.h \
 	tlhelp32.h \

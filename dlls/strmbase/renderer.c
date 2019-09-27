@@ -147,7 +147,7 @@ static HRESULT WINAPI BaseRenderer_InputPin_EndFlush(IPin * iface)
 
 static const IPinVtbl BaseRenderer_InputPin_Vtbl =
 {
-    BaseInputPinImpl_QueryInterface,
+    BasePinImpl_QueryInterface,
     BasePinImpl_AddRef,
     BasePinImpl_Release,
     BaseInputPinImpl_Connect,
@@ -211,10 +211,23 @@ static const struct strmbase_filter_ops filter_ops =
     .filter_query_interface = renderer_query_interface,
 };
 
-static HRESULT WINAPI BaseRenderer_Input_CheckMediaType(BasePin *pin, const AM_MEDIA_TYPE *mt)
+static HRESULT sink_query_accept(struct strmbase_pin *pin, const AM_MEDIA_TYPE *mt)
 {
     BaseRenderer *filter = impl_from_IPin(&pin->IPin_iface);
     return filter->pFuncsTable->pfnCheckMediaType(filter, mt);
+}
+
+static HRESULT sink_query_interface(struct strmbase_pin *iface, REFIID iid, void **out)
+{
+    BaseRenderer *filter = impl_from_IPin(&iface->IPin_iface);
+
+    if (IsEqualGUID(iid, &IID_IMemInputPin))
+        *out = &filter->sink.IMemInputPin_iface;
+    else
+        return E_NOINTERFACE;
+
+    IUnknown_AddRef((IUnknown *)*out);
+    return S_OK;
 }
 
 static HRESULT WINAPI BaseRenderer_Receive(BaseInputPin *pin, IMediaSample *sample)
@@ -223,12 +236,12 @@ static HRESULT WINAPI BaseRenderer_Receive(BaseInputPin *pin, IMediaSample *samp
     return BaseRendererImpl_Receive(filter, sample);
 }
 
-static const BaseInputPinFuncTable input_BaseInputFuncTable = {
-    {
-        BaseRenderer_Input_CheckMediaType,
-        BasePinImpl_GetMediaType
-    },
-    BaseRenderer_Receive
+static const BaseInputPinFuncTable input_BaseInputFuncTable =
+{
+    .base.pin_query_accept = sink_query_accept,
+    .base.pin_query_interface = sink_query_interface,
+    .base.pin_get_media_type = strmbase_pin_get_media_type,
+    .pfnReceive = BaseRenderer_Receive,
 };
 
 
@@ -269,8 +282,8 @@ HRESULT WINAPI strmbase_renderer_init(BaseRenderer *filter, const IBaseFilterVtb
 
 void strmbase_renderer_cleanup(BaseRenderer *filter)
 {
-    if (filter->sink.pin.pConnectedTo)
-        IPin_Disconnect(filter->sink.pin.pConnectedTo);
+    if (filter->sink.pin.peer)
+        IPin_Disconnect(filter->sink.pin.peer);
     IPin_Disconnect(&filter->sink.pin.IPin_iface);
     strmbase_sink_cleanup(&filter->sink);
 
@@ -394,7 +407,7 @@ HRESULT WINAPI BaseRendererImpl_Stop(IBaseFilter * iface)
     EnterCriticalSection(&This->csRenderLock);
     {
         RendererPosPassThru_ResetMediaTime(This->pPosition);
-        if (This->pFuncsTable->renderer_stop_stream)
+        if (This->sink.pin.peer && This->pFuncsTable->renderer_stop_stream)
             This->pFuncsTable->renderer_stop_stream(This);
         This->filter.state = State_Stopped;
         SetEvent(This->state_event);
@@ -418,7 +431,7 @@ HRESULT WINAPI BaseRendererImpl_Run(IBaseFilter * iface, REFERENCE_TIME tStart)
 
     SetEvent(This->state_event);
 
-    if (This->sink.pin.pConnectedTo)
+    if (This->sink.pin.peer)
     {
         This->sink.end_of_stream = FALSE;
     }
@@ -436,7 +449,7 @@ HRESULT WINAPI BaseRendererImpl_Run(IBaseFilter * iface, REFERENCE_TIME tStart)
     if (SUCCEEDED(hr))
     {
         QualityControlRender_Start(This->qcimpl, This->filter.rtStreamStart);
-        if (This->pFuncsTable->renderer_start_stream)
+        if (This->sink.pin.peer && This->pFuncsTable->renderer_start_stream)
             This->pFuncsTable->renderer_start_stream(This);
         if (This->filter.state == State_Stopped)
             BaseRendererImpl_ClearPendingSample(This);
@@ -460,11 +473,11 @@ HRESULT WINAPI BaseRendererImpl_Pause(IBaseFilter * iface)
         {
             if (This->filter.state == State_Stopped)
             {
-                if (This->sink.pin.pConnectedTo)
+                if (This->sink.pin.peer)
                     ResetEvent(This->state_event);
                 This->sink.end_of_stream = FALSE;
             }
-            else if (This->pFuncsTable->renderer_stop_stream)
+            else if (This->sink.pin.peer && This->pFuncsTable->renderer_stop_stream)
                 This->pFuncsTable->renderer_stop_stream(This);
 
             if (This->filter.state == State_Stopped)

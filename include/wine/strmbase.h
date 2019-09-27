@@ -28,39 +28,35 @@ void WINAPI DeleteMediaType(AM_MEDIA_TYPE * pMediaType);
 
 /* Pin functions */
 
-typedef struct BasePin
+struct strmbase_pin
 {
     IPin IPin_iface;
     struct strmbase_filter *filter;
     PIN_DIRECTION dir;
     WCHAR name[128];
-    IPin *pConnectedTo;
+    IPin *peer;
     AM_MEDIA_TYPE mtCurrent;
     REFERENCE_TIME tStart, tStop;
     double dRate;
 
     const struct BasePinFuncTable* pFuncsTable;
-} BasePin;
-
-typedef HRESULT (WINAPI *BasePin_CheckMediaType)(BasePin *This, const AM_MEDIA_TYPE *pmt);
-typedef LONG (WINAPI *BasePin_GetMediaTypeVersion)(BasePin *This);
-typedef HRESULT (WINAPI *BasePin_GetMediaType)(BasePin *This, int iPosition, AM_MEDIA_TYPE *amt);
+};
 
 typedef struct BasePinFuncTable {
-	/* Required for QueryAccept(), Connect(), ReceiveConnection(). */
-	BasePin_CheckMediaType pfnCheckMediaType;
-	/* Required for BasePinImpl_EnumMediaTypes */
-	BasePin_GetMediaType pfnGetMediaType;
+    /* Required for QueryAccept(), Connect(), ReceiveConnection(). */
+    HRESULT (*pin_query_accept)(struct strmbase_pin *pin, const AM_MEDIA_TYPE *mt);
+    /* Required for EnumMediaTypes(). */
+    HRESULT (*pin_get_media_type)(struct strmbase_pin *pin, unsigned int index, AM_MEDIA_TYPE *mt);
+    HRESULT (*pin_query_interface)(struct strmbase_pin *pin, REFIID iid, void **out);
 } BasePinFuncTable;
 
 struct strmbase_source
 {
-	/* inheritance C style! */
-	BasePin pin;
-	IMemInputPin * pMemInputPin;
-	IMemAllocator * pAllocator;
+    struct strmbase_pin pin;
+    IMemInputPin *pMemInputPin;
+    IMemAllocator *pAllocator;
 
-	const struct strmbase_source_ops *pFuncsTable;
+    const struct strmbase_source_ops *pFuncsTable;
 };
 
 typedef HRESULT (WINAPI *BaseOutputPin_AttemptConnection)(struct strmbase_source *pin, IPin *peer, const AM_MEDIA_TYPE *mt);
@@ -81,15 +77,14 @@ struct strmbase_source_ops
 
 typedef struct BaseInputPin
 {
-	/* inheritance C style! */
-	BasePin pin;
+    struct strmbase_pin pin;
 
-	IMemInputPin IMemInputPin_iface;
-	IMemAllocator * pAllocator;
-	BOOL flushing, end_of_stream;
-	IMemAllocator *preferred_allocator;
+    IMemInputPin IMemInputPin_iface;
+    IMemAllocator *pAllocator;
+    BOOL flushing, end_of_stream;
+    IMemAllocator *preferred_allocator;
 
-	const struct BaseInputPinFuncTable* pFuncsTable;
+    const struct BaseInputPinFuncTable *pFuncsTable;
 } BaseInputPin;
 
 typedef HRESULT (WINAPI *BaseInputPin_Receive)(BaseInputPin *This, IMediaSample *pSample);
@@ -101,8 +96,9 @@ typedef struct BaseInputPinFuncTable {
 } BaseInputPinFuncTable;
 
 /* Base Pin */
-HRESULT WINAPI BasePinImpl_GetMediaType(BasePin *This, int iPosition, AM_MEDIA_TYPE *pmt);
-LONG WINAPI BasePinImpl_GetMediaTypeVersion(BasePin *This);
+HRESULT strmbase_pin_get_media_type(struct strmbase_pin *pin, unsigned int index, AM_MEDIA_TYPE *mt);
+LONG WINAPI BasePinImpl_GetMediaTypeVersion(struct strmbase_pin *pin);
+HRESULT WINAPI BasePinImpl_QueryInterface(IPin *iface, REFIID iid, void **out);
 ULONG WINAPI BasePinImpl_AddRef(IPin *iface);
 ULONG WINAPI BasePinImpl_Release(IPin *iface);
 HRESULT WINAPI BasePinImpl_Disconnect(IPin * iface);
@@ -117,7 +113,6 @@ HRESULT WINAPI BasePinImpl_QueryInternalConnections(IPin * iface, IPin ** apPin,
 HRESULT WINAPI BasePinImpl_NewSegment(IPin * iface, REFERENCE_TIME tStart, REFERENCE_TIME tStop, double dRate);
 
 /* Base Output Pin */
-HRESULT WINAPI BaseOutputPinImpl_QueryInterface(IPin * iface, REFIID riid, LPVOID * ppv);
 HRESULT WINAPI BaseOutputPinImpl_Connect(IPin * iface, IPin * pReceivePin, const AM_MEDIA_TYPE * pmt);
 HRESULT WINAPI BaseOutputPinImpl_ReceiveConnection(IPin * iface, IPin * pReceivePin, const AM_MEDIA_TYPE * pmt);
 HRESULT WINAPI BaseOutputPinImpl_Disconnect(IPin * iface);
@@ -139,7 +134,6 @@ void strmbase_source_init(struct strmbase_source *pin, const IPinVtbl *vtbl, str
         const WCHAR *name, const struct strmbase_source_ops *func_table);
 
 /* Base Input Pin */
-HRESULT WINAPI BaseInputPinImpl_QueryInterface(IPin * iface, REFIID riid, LPVOID * ppv);
 HRESULT WINAPI BaseInputPinImpl_Connect(IPin * iface, IPin * pConnector, const AM_MEDIA_TYPE * pmt);
 HRESULT WINAPI BaseInputPinImpl_ReceiveConnection(IPin * iface, IPin * pReceivePin, const AM_MEDIA_TYPE * pmt);
 HRESULT WINAPI BaseInputPinImpl_QueryAccept(IPin * iface, const AM_MEDIA_TYPE * pmt);
@@ -198,9 +192,6 @@ VOID WINAPI BaseFilterImpl_IncrementPinVersion(struct strmbase_filter *filter);
 void strmbase_filter_init(struct strmbase_filter *filter, const IBaseFilterVtbl *vtbl, IUnknown *outer,
         const CLSID *clsid, const struct strmbase_filter_ops *func_table);
 void strmbase_filter_cleanup(struct strmbase_filter *filter);
-
-/* Enums */
-HRESULT WINAPI EnumMediaTypes_Construct(BasePin *iface, BasePin_GetMediaType enumFunc, BasePin_GetMediaTypeVersion versionFunc, IEnumMediaTypes ** ppEnum);
 
 /* Transform Filter */
 typedef struct TransformFilter
@@ -427,11 +418,11 @@ typedef struct tagBaseControlWindow
 	HWND hwndOwner;
 	struct strmbase_filter *pFilter;
 	CRITICAL_SECTION* pInterfaceLock;
-	BasePin*  pPin;
+	struct strmbase_pin *pPin;
 } BaseControlWindow;
 
 HRESULT WINAPI BaseControlWindow_Init(BaseControlWindow *window, const IVideoWindowVtbl *vtbl,
-        struct strmbase_filter *filter, CRITICAL_SECTION *lock, BasePin *pin, const BaseWindowFuncTable *ops);
+        struct strmbase_filter *filter, CRITICAL_SECTION *lock, struct strmbase_pin *pin, const BaseWindowFuncTable *ops);
 HRESULT WINAPI BaseControlWindow_Destroy(BaseControlWindow *pControlWindow);
 
 BOOL WINAPI BaseControlWindowImpl_PossiblyEatMessage(BaseWindow *This, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -493,7 +484,7 @@ typedef struct tagBaseControlVideo
 
 	struct strmbase_filter *pFilter;
 	CRITICAL_SECTION* pInterfaceLock;
-	BasePin*  pPin;
+	struct strmbase_pin *pPin;
 
 	const struct BaseControlVideoFuncTable* pFuncsTable;
 } BaseControlVideo;
@@ -524,7 +515,7 @@ typedef struct BaseControlVideoFuncTable {
 } BaseControlVideoFuncTable;
 
 HRESULT WINAPI strmbase_video_init(BaseControlVideo *video, struct strmbase_filter *filter,
-        CRITICAL_SECTION *cs, BasePin *pin, const BaseControlVideoFuncTable *func_table);
+        CRITICAL_SECTION *cs, struct strmbase_pin *pin, const BaseControlVideoFuncTable *func_table);
 HRESULT WINAPI BaseControlVideo_Destroy(BaseControlVideo *pControlVideo);
 #endif
 #endif

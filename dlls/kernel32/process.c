@@ -3197,115 +3197,6 @@ DWORD WINAPI GetProcessFlags( DWORD processid )
 }
 
 
-/*********************************************************************
- *           CloseHandle    (KERNEL32.@)
- *
- * Closes a handle.
- *
- * PARAMS
- *  handle [I] Handle to close.
- *
- * RETURNS
- *  Success: TRUE.
- *  Failure: FALSE, check GetLastError().
- */
-BOOL WINAPI CloseHandle( HANDLE handle )
-{
-    NTSTATUS status;
-
-    /* stdio handles need special treatment */
-    if (handle == (HANDLE)STD_INPUT_HANDLE)
-        handle = InterlockedExchangePointer( &NtCurrentTeb()->Peb->ProcessParameters->hStdInput, 0 );
-    else if (handle == (HANDLE)STD_OUTPUT_HANDLE)
-        handle = InterlockedExchangePointer( &NtCurrentTeb()->Peb->ProcessParameters->hStdOutput, 0 );
-    else if (handle == (HANDLE)STD_ERROR_HANDLE)
-        handle = InterlockedExchangePointer( &NtCurrentTeb()->Peb->ProcessParameters->hStdError, 0 );
-
-    if (is_console_handle(handle))
-        return CloseConsoleHandle(handle);
-
-    status = NtClose( handle );
-    if (status) SetLastError( RtlNtStatusToDosError(status) );
-    return !status;
-}
-
-
-/*********************************************************************
- *           GetHandleInformation   (KERNEL32.@)
- */
-BOOL WINAPI GetHandleInformation( HANDLE handle, LPDWORD flags )
-{
-    OBJECT_DATA_INFORMATION info;
-    NTSTATUS status = NtQueryObject( handle, ObjectDataInformation, &info, sizeof(info), NULL );
-
-    if (status) SetLastError( RtlNtStatusToDosError(status) );
-    else if (flags)
-    {
-        *flags = 0;
-        if (info.InheritHandle) *flags |= HANDLE_FLAG_INHERIT;
-        if (info.ProtectFromClose) *flags |= HANDLE_FLAG_PROTECT_FROM_CLOSE;
-    }
-    return !status;
-}
-
-
-/*********************************************************************
- *           SetHandleInformation   (KERNEL32.@)
- */
-BOOL WINAPI SetHandleInformation( HANDLE handle, DWORD mask, DWORD flags )
-{
-    OBJECT_DATA_INFORMATION info;
-    NTSTATUS status;
-
-    /* if not setting both fields, retrieve current value first */
-    if ((mask & (HANDLE_FLAG_INHERIT | HANDLE_FLAG_PROTECT_FROM_CLOSE)) !=
-        (HANDLE_FLAG_INHERIT | HANDLE_FLAG_PROTECT_FROM_CLOSE))
-    {
-        if ((status = NtQueryObject( handle, ObjectDataInformation, &info, sizeof(info), NULL )))
-        {
-            SetLastError( RtlNtStatusToDosError(status) );
-            return FALSE;
-        }
-    }
-    if (mask & HANDLE_FLAG_INHERIT)
-        info.InheritHandle = (flags & HANDLE_FLAG_INHERIT) != 0;
-    if (mask & HANDLE_FLAG_PROTECT_FROM_CLOSE)
-        info.ProtectFromClose = (flags & HANDLE_FLAG_PROTECT_FROM_CLOSE) != 0;
-
-    status = NtSetInformationObject( handle, ObjectDataInformation, &info, sizeof(info) );
-    if (status) SetLastError( RtlNtStatusToDosError(status) );
-    return !status;
-}
-
-
-/*********************************************************************
- *           DuplicateHandle   (KERNEL32.@)
- */
-BOOL WINAPI DuplicateHandle( HANDLE source_process, HANDLE source,
-                             HANDLE dest_process, HANDLE *dest,
-                             DWORD access, BOOL inherit, DWORD options )
-{
-    NTSTATUS status;
-
-    if (is_console_handle(source))
-    {
-        /* FIXME: this test is not sufficient, we need to test process ids, not handles */
-        if (source_process != dest_process ||
-            source_process != GetCurrentProcess())
-        {
-            SetLastError(ERROR_INVALID_PARAMETER);
-            return FALSE;
-        }
-        *dest = DuplicateConsoleHandle( source, access, inherit, options );
-        return (*dest != INVALID_HANDLE_VALUE);
-    }
-    status = NtDuplicateObject( source_process, source, dest_process, dest,
-                                access, inherit ? OBJ_INHERIT : 0, options );
-    if (status) SetLastError( RtlNtStatusToDosError(status) );
-    return !status;
-}
-
-
 /***********************************************************************
  *           ConvertToGlobalHandle  (KERNEL32.@)
  */
@@ -3788,66 +3679,6 @@ HANDLE WINAPI KERNEL32_GetCurrentProcess(void)
 }
 
 /***********************************************************************
- *           GetLogicalProcessorInformation     (KERNEL32.@)
- */
-BOOL WINAPI GetLogicalProcessorInformation(PSYSTEM_LOGICAL_PROCESSOR_INFORMATION buffer, PDWORD pBufLen)
-{
-    NTSTATUS status;
-
-    TRACE("(%p,%p)\n", buffer, pBufLen);
-
-    if(!pBufLen)
-    {
-        SetLastError(ERROR_INVALID_PARAMETER);
-        return FALSE;
-    }
-
-    status = NtQuerySystemInformation( SystemLogicalProcessorInformation, buffer, *pBufLen, pBufLen);
-
-    if (status == STATUS_INFO_LENGTH_MISMATCH)
-    {
-        SetLastError( ERROR_INSUFFICIENT_BUFFER );
-        return FALSE;
-    }
-    if (status != STATUS_SUCCESS)
-    {
-        SetLastError( RtlNtStatusToDosError( status ) );
-        return FALSE;
-    }
-    return TRUE;
-}
-
-/***********************************************************************
- *           GetLogicalProcessorInformationEx   (KERNEL32.@)
- */
-BOOL WINAPI GetLogicalProcessorInformationEx(LOGICAL_PROCESSOR_RELATIONSHIP relationship, SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *buffer, DWORD *len)
-{
-    NTSTATUS status;
-
-    TRACE("(%u,%p,%p)\n", relationship, buffer, len);
-
-    if (!len)
-    {
-        SetLastError( ERROR_INVALID_PARAMETER );
-        return FALSE;
-    }
-
-    status = NtQuerySystemInformationEx( SystemLogicalProcessorInformationEx, &relationship, sizeof(relationship),
-        buffer, *len, len );
-    if (status == STATUS_INFO_LENGTH_MISMATCH)
-    {
-        SetLastError( ERROR_INSUFFICIENT_BUFFER );
-        return FALSE;
-    }
-    if (status != STATUS_SUCCESS)
-    {
-        SetLastError( RtlNtStatusToDosError( status ) );
-        return FALSE;
-    }
-    return TRUE;
-}
-
-/***********************************************************************
  *           CmdBatNotification   (KERNEL32.@)
  *
  * Notifies the system that a batch file has started or finished.
@@ -3944,31 +3775,11 @@ HRESULT WINAPI GetApplicationRestartSettings(HANDLE process, WCHAR *cmdline, DWO
 }
 
 /**********************************************************************
- *           GetNumaHighestNodeNumber     (KERNEL32.@)
- */
-BOOL WINAPI GetNumaHighestNodeNumber(PULONG highestnode)
-{
-    *highestnode = 0;
-    FIXME("(%p): semi-stub\n", highestnode);
-    return TRUE;
-}
-
-/**********************************************************************
  *           GetNumaNodeProcessorMask     (KERNEL32.@)
  */
 BOOL WINAPI GetNumaNodeProcessorMask(UCHAR node, PULONGLONG mask)
 {
     FIXME("(%c %p): stub\n", node, mask);
-    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
-    return FALSE;
-}
-
-/**********************************************************************
- *           GetNumaNodeProcessorMaskEx     (KERNEL32.@)
- */
-BOOL WINAPI GetNumaNodeProcessorMaskEx(USHORT node, PGROUP_AFFINITY mask)
-{
-    FIXME("(%hu %p): stub\n", node, mask);
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
 }
@@ -4027,15 +3838,6 @@ BOOL WINAPI GetNumaProcessorNodeEx(PPROCESSOR_NUMBER processor, PUSHORT node_num
  *           GetNumaProximityNode (KERNEL32.@)
  */
 BOOL WINAPI GetNumaProximityNode(ULONG  proximity_id, PUCHAR node_number)
-{
-    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
-    return FALSE;
-}
-
-/***********************************************************************
- *           GetNumaProximityNodeEx (KERNEL32.@)
- */
-BOOL WINAPI GetNumaProximityNodeEx(ULONG  proximity_id, PUSHORT node_number)
 {
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
