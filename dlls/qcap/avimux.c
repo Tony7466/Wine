@@ -470,7 +470,7 @@ static HRESULT WINAPI AviMux_Stop(IBaseFilter *iface)
             return hr;
 
         for(i=0; i<This->input_pin_no; i++) {
-            if(!This->in[i]->pin.pin.pConnectedTo)
+            if(!This->in[i]->pin.pin.peer)
                 continue;
 
             hr = out_seek(This, This->in[i]->ix_off);
@@ -515,7 +515,7 @@ static HRESULT WINAPI AviMux_Stop(IBaseFilter *iface)
             return hr;
 
         for(i=0; i<This->input_pin_no; i++) {
-            if(!This->in[i]->pin.pin.pConnectedTo)
+            if(!This->in[i]->pin.pin.peer)
                 continue;
 
             rl.cb = sizeof(FOURCC) + sizeof(AVISTREAMHEADER) + sizeof(RIFFCHUNK) +
@@ -593,10 +593,10 @@ static HRESULT WINAPI AviMux_Run(IBaseFilter *iface, REFERENCE_TIME tStart)
         IMediaSeeking *ms;
         LONGLONG cur, stop;
 
-        if(!This->in[i]->pin.pin.pConnectedTo)
+        if(!This->in[i]->pin.pin.peer)
             continue;
 
-        hr = IPin_QueryInterface(This->in[i]->pin.pin.pConnectedTo,
+        hr = IPin_QueryInterface(This->in[i]->pin.pin.peer,
                 &IID_IMediaSeeking, (void**)&ms);
         if(FAILED(hr))
             continue;
@@ -632,7 +632,7 @@ static HRESULT WINAPI AviMux_Run(IBaseFilter *iface, REFERENCE_TIME tStart)
     This->stop = -1;
     memset(&This->avih, 0, sizeof(This->avih));
     for(i=0; i<This->input_pin_no; i++) {
-        if(!This->in[i]->pin.pin.pConnectedTo)
+        if(!This->in[i]->pin.pin.peer)
             continue;
 
         This->avih.dwStreams++;
@@ -660,7 +660,7 @@ static HRESULT WINAPI AviMux_Run(IBaseFilter *iface, REFERENCE_TIME tStart)
 
     stream_id = 0;
     for(i=0; i<This->input_pin_no; i++) {
-        if(!This->in[i]->pin.pin.pConnectedTo)
+        if(!This->in[i]->pin.pin.peer)
             continue;
 
         This->in[i]->ix_off = This->size;
@@ -815,7 +815,7 @@ static HRESULT WINAPI ConfigInterleaving_put_Mode(
         return E_INVALIDARG;
 
     if(This->mode != mode) {
-        if(This->source.pin.pConnectedTo) {
+        if(This->source.pin.peer) {
             HRESULT hr = IFilterGraph_Reconnect(This->filter.filterInfo.pGraph,
                     &This->source.pin.IPin_iface);
             if(FAILED(hr))
@@ -1152,7 +1152,7 @@ static const ISpecifyPropertyPagesVtbl SpecifyPropertyPagesVtbl = {
     SpecifyPropertyPages_GetPages
 };
 
-static HRESULT WINAPI AviMuxOut_CheckMediaType(BasePin *base, const AM_MEDIA_TYPE *amt)
+static HRESULT source_query_accept(struct strmbase_pin *base, const AM_MEDIA_TYPE *amt)
 {
     FIXME("(%p) stub\n", base);
     return S_OK;
@@ -1174,12 +1174,10 @@ static HRESULT WINAPI AviMuxOut_AttemptConnection(struct strmbase_source *base,
     return BaseOutputPinImpl_AttemptConnection(base, pReceivePin, pmt);
 }
 
-static HRESULT WINAPI AviMuxOut_GetMediaType(BasePin *base, int iPosition, AM_MEDIA_TYPE *amt)
+static HRESULT source_get_media_type(struct strmbase_pin *base, unsigned int iPosition, AM_MEDIA_TYPE *amt)
 {
     TRACE("(%p)->(%d %p)\n", base, iPosition, amt);
 
-    if(iPosition < 0)
-        return E_INVALIDARG;
     if(iPosition > 0)
         return VFW_S_NO_MORE_ITEMS;
 
@@ -1223,13 +1221,10 @@ static HRESULT WINAPI AviMuxOut_DecideAllocator(struct strmbase_source *base,
 
 static const struct strmbase_source_ops source_ops =
 {
-    {
-        AviMuxOut_CheckMediaType,
-        AviMuxOut_GetMediaType
-    },
-    AviMuxOut_AttemptConnection,
-    NULL,
-    AviMuxOut_DecideAllocator,
+    .base.pin_query_accept = source_query_accept,
+    .base.pin_get_media_type = source_get_media_type,
+    .pfnAttemptConnection = AviMuxOut_AttemptConnection,
+    .pfnDecideAllocator = AviMuxOut_DecideAllocator,
 };
 
 static inline AviMux *impl_from_out_IPin(IPin *iface)
@@ -1272,7 +1267,7 @@ static HRESULT WINAPI AviMuxOut_Connect(IPin *iface,
         return hr;
 
     for(i=0; i<This->input_pin_no; i++) {
-        if(!This->in[i]->pin.pin.pConnectedTo)
+        if(!This->in[i]->pin.pin.peer)
             continue;
 
         hr = IFilterGraph_Reconnect(This->filter.filterInfo.pGraph, &This->in[i]->pin.pin.IPin_iface);
@@ -1372,7 +1367,7 @@ static const IQualityControlVtbl AviMuxOut_QualityControlVtbl = {
     AviMuxOut_QualityControl_SetSink
 };
 
-static HRESULT WINAPI AviMuxIn_CheckMediaType(BasePin *base, const AM_MEDIA_TYPE *pmt)
+static HRESULT sink_query_accept(struct strmbase_pin *base, const AM_MEDIA_TYPE *pmt)
 {
     if(IsEqualIID(&pmt->majortype, &MEDIATYPE_Audio) &&
             IsEqualIID(&pmt->formattype, &FORMAT_WaveFormatEx))
@@ -1384,11 +1379,6 @@ static HRESULT WINAPI AviMuxIn_CheckMediaType(BasePin *base, const AM_MEDIA_TYPE
             (IsEqualIID(&pmt->formattype, &FORMAT_VideoInfo) ||
              IsEqualIID(&pmt->formattype, &FORMAT_DvInfo)))
         return S_OK;
-    return S_FALSE;
-}
-
-static HRESULT WINAPI AviMuxIn_GetMediaType(BasePin *base, int iPosition, AM_MEDIA_TYPE *amt)
-{
     return S_FALSE;
 }
 
@@ -1495,25 +1485,22 @@ static HRESULT WINAPI AviMuxIn_Receive(BaseInputPin *base, IMediaSample *pSample
     return hr;
 }
 
-static const BaseInputPinFuncTable AviMuxIn_BaseInputFuncTable = {
-    {
-        AviMuxIn_CheckMediaType,
-        AviMuxIn_GetMediaType
-    },
-    AviMuxIn_Receive
+static const BaseInputPinFuncTable AviMuxIn_BaseInputFuncTable =
+{
+    .base.pin_query_accept = sink_query_accept,
+    .base.pin_get_media_type = strmbase_pin_get_media_type,
+    .pfnReceive = AviMuxIn_Receive,
 };
 
 static inline AviMux* impl_from_in_IPin(IPin *iface)
 {
-    BasePin *pin = CONTAINING_RECORD(iface, BasePin, IPin_iface);
+    struct strmbase_pin *pin = CONTAINING_RECORD(iface, struct strmbase_pin, IPin_iface);
     return impl_from_strmbase_filter(pin->filter);
 }
 
 static inline AviMuxIn* AviMuxIn_from_IPin(IPin *iface)
 {
-    BasePin *bp = CONTAINING_RECORD(iface, BasePin, IPin_iface);
-    BaseInputPin *bip = CONTAINING_RECORD(bp, BaseInputPin, pin);
-    return CONTAINING_RECORD(bip, AviMuxIn, pin);
+    return CONTAINING_RECORD(iface, AviMuxIn, pin.pin.IPin_iface);
 }
 
 static HRESULT WINAPI AviMuxIn_QueryInterface(IPin *iface, REFIID riid, void **ppv)
