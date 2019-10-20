@@ -8,6 +8,7 @@ wine-development (4.18-1) UNRELEASED; urgency=medium
   * Drop no longer supported add-log-mailing-address setting from
     debian/changelog.
   * Add missing colon in closes line.
+  * Set fields Upstream-Name in debian/copyright.
 
  -- Jens Reyer <jre.winesim@gmail.com>  Mon, 21 Oct 2019 00:03:13 +0200
 
