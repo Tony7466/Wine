@@ -56,6 +56,8 @@ struct quartz_vmr
     IVMRWindowlessControl IVMRWindowlessControl_iface;
     IVMRWindowlessControl9 IVMRWindowlessControl9_iface;
 
+    IOverlay IOverlay_iface;
+
     IVMRSurfaceAllocatorEx9 *allocator;
     IVMRImagePresenter9 *presenter;
     BOOL allocator_is_ex;
@@ -153,10 +155,6 @@ typedef struct
 
     LONG refCount;
 
-    HANDLE ack;
-    DWORD tid;
-    HANDLE hWndThread;
-
     IDirect3DDevice9 *d3d9_dev;
     IDirect3D9 *d3d9_ptr;
     IDirect3DSurface9 **d3d9_surfaces;
@@ -215,14 +213,6 @@ static DWORD VMR9_SendSampleData(struct quartz_vmr *This, VMR9PresentationInfo *
         FIXME("Unknown type %s\n", debugstr_guid(&amt->subtype));
         return VFW_E_RUNTIME_ERROR;
     }
-
-    TRACE("biSize = %d\n", bmiHeader->biSize);
-    TRACE("biWidth = %d\n", bmiHeader->biWidth);
-    TRACE("biHeight = %d\n", bmiHeader->biHeight);
-    TRACE("biPlanes = %d\n", bmiHeader->biPlanes);
-    TRACE("biBitCount = %d\n", bmiHeader->biBitCount);
-    TRACE("biCompression = %s\n", debugstr_an((LPSTR)&(bmiHeader->biCompression), 4));
-    TRACE("biSizeImage = %d\n", bmiHeader->biSizeImage);
 
     width = bmiHeader->biWidth;
     height = bmiHeader->biHeight;
@@ -344,7 +334,6 @@ static HRESULT WINAPI VMR9_CheckMediaType(BaseRenderer *iface, const AM_MEDIA_TY
         VIDEOINFOHEADER *format = (VIDEOINFOHEADER *)pmt->pbFormat;
 
         This->bmiheader = format->bmiHeader;
-        TRACE("Resolution: %dx%d\n", format->bmiHeader.biWidth, format->bmiHeader.biHeight);
         This->VideoWidth = format->bmiHeader.biWidth;
         This->VideoHeight = format->bmiHeader.biHeight;
         SetRect(&This->source_rect, 0, 0, This->VideoWidth, This->VideoHeight);
@@ -354,8 +343,6 @@ static HRESULT WINAPI VMR9_CheckMediaType(BaseRenderer *iface, const AM_MEDIA_TY
         VIDEOINFOHEADER2 *format = (VIDEOINFOHEADER2 *)pmt->pbFormat;
 
         This->bmiheader = format->bmiHeader;
-
-        TRACE("Resolution: %dx%d\n", format->bmiHeader.biWidth, format->bmiHeader.biHeight);
         This->VideoWidth = format->bmiHeader.biWidth;
         This->VideoHeight = format->bmiHeader.biHeight;
         SetRect(&This->source_rect, 0, 0, This->VideoWidth, This->VideoHeight);
@@ -554,6 +541,19 @@ static HRESULT vmr_query_interface(BaseRenderer *iface, REFIID iid, void **out)
     return S_OK;
 }
 
+static HRESULT vmr_pin_query_interface(BaseRenderer *iface, REFIID iid, void **out)
+{
+    struct quartz_vmr *filter = impl_from_IBaseFilter(&iface->filter.IBaseFilter_iface);
+
+    if (IsEqualGUID(iid, &IID_IOverlay))
+        *out = &filter->IOverlay_iface;
+    else
+        return E_NOINTERFACE;
+
+    IUnknown_AddRef((IUnknown *)*out);
+    return S_OK;
+}
+
 static const BaseRendererFuncTable BaseFuncTable =
 {
     .pfnCheckMediaType = VMR9_CheckMediaType,
@@ -565,18 +565,8 @@ static const BaseRendererFuncTable BaseFuncTable =
     .pfnBreakConnect = VMR9_BreakConnect,
     .renderer_destroy = vmr_destroy,
     .renderer_query_interface = vmr_query_interface,
+    .renderer_pin_query_interface = vmr_pin_query_interface,
 };
-
-static LPWSTR WINAPI VMR9_GetClassWindowStyles(BaseWindow *This, DWORD *pClassStyles, DWORD *pWindowStyles, DWORD *pWindowStylesEx)
-{
-    static WCHAR classnameW[] = { 'I','V','M','R','9',' ','C','l','a','s','s', 0 };
-
-    *pClassStyles = 0;
-    *pWindowStyles = WS_SIZEBOX;
-    *pWindowStylesEx = 0;
-
-    return classnameW;
-}
 
 static RECT WINAPI VMR9_GetDefaultRect(BaseWindow *This)
 {
@@ -599,14 +589,12 @@ static BOOL WINAPI VMR9_OnSize(BaseWindow *This, LONG Width, LONG Height)
         pVMR9->target_rect.top,
         pVMR9->target_rect.right - pVMR9->target_rect.left,
         pVMR9->target_rect.bottom - pVMR9->target_rect.top);
-    return BaseWindowImpl_OnSize(This, Width, Height);
+
+    return TRUE;
 }
 
 static const BaseWindowFuncTable renderer_BaseWindowFuncTable = {
-    VMR9_GetClassWindowStyles,
     VMR9_GetDefaultRect,
-    NULL,
-    BaseControlWindowImpl_PossiblyEatMessage,
     VMR9_OnSize,
 };
 
@@ -2116,6 +2104,110 @@ static const IVMRSurfaceAllocatorNotify9Vtbl VMR9_SurfaceAllocatorNotify_Vtbl =
     VMR9SurfaceAllocatorNotify_NotifyEvent
 };
 
+static inline struct quartz_vmr *impl_from_IOverlay(IOverlay *iface)
+{
+    return CONTAINING_RECORD(iface, struct quartz_vmr, IOverlay_iface);
+}
+
+static HRESULT WINAPI overlay_QueryInterface(IOverlay *iface, REFIID iid, void **out)
+{
+    struct quartz_vmr *filter = impl_from_IOverlay(iface);
+    return IPin_QueryInterface(&filter->renderer.sink.pin.IPin_iface, iid, out);
+}
+
+static ULONG WINAPI overlay_AddRef(IOverlay *iface)
+{
+    struct quartz_vmr *filter = impl_from_IOverlay(iface);
+    return IPin_AddRef(&filter->renderer.sink.pin.IPin_iface);
+}
+
+static ULONG WINAPI overlay_Release(IOverlay *iface)
+{
+    struct quartz_vmr *filter = impl_from_IOverlay(iface);
+    return IPin_Release(&filter->renderer.sink.pin.IPin_iface);
+}
+
+static HRESULT WINAPI overlay_GetPalette(IOverlay *iface, DWORD *count, PALETTEENTRY **palette)
+{
+    FIXME("iface %p, count %p, palette %p, stub!\n", iface, count, palette);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI overlay_SetPalette(IOverlay *iface, DWORD count, PALETTEENTRY *palette)
+{
+    FIXME("iface %p, count %u, palette %p, stub!\n", iface, count, palette);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI overlay_GetDefaultColorKey(IOverlay *iface, COLORKEY *key)
+{
+    FIXME("iface %p, key %p, stub!\n", iface, key);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI overlay_GetColorKey(IOverlay *iface, COLORKEY *key)
+{
+    FIXME("iface %p, key %p, stub!\n", iface, key);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI overlay_SetColorKey(IOverlay *iface, COLORKEY *key)
+{
+    FIXME("iface %p, key %p, stub!\n", iface, key);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI overlay_GetWindowHandle(IOverlay *iface, HWND *window)
+{
+    struct quartz_vmr *filter = impl_from_IOverlay(iface);
+
+    TRACE("filter %p, window %p.\n", filter, window);
+
+    *window = filter->baseControlWindow.baseWindow.hWnd;
+    return S_OK;
+}
+
+static HRESULT WINAPI overlay_GetClipList(IOverlay *iface, RECT *source, RECT *dest, RGNDATA **region)
+{
+    FIXME("iface %p, source %p, dest %p, region %p, stub!\n", iface, source, dest, region);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI overlay_GetVideoPosition(IOverlay *iface, RECT *source, RECT *dest)
+{
+    FIXME("iface %p, source %p, dest %p, stub!\n", iface, source, dest);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI overlay_Advise(IOverlay *iface, IOverlayNotify *sink, DWORD flags)
+{
+    FIXME("iface %p, sink %p, flags %#x, stub!\n", iface, sink, flags);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI overlay_Unadvise(IOverlay *iface)
+{
+    FIXME("iface %p, stub!\n", iface);
+    return E_NOTIMPL;
+}
+
+static const IOverlayVtbl overlay_vtbl =
+{
+    overlay_QueryInterface,
+    overlay_AddRef,
+    overlay_Release,
+    overlay_GetPalette,
+    overlay_SetPalette,
+    overlay_GetDefaultColorKey,
+    overlay_GetColorKey,
+    overlay_SetColorKey,
+    overlay_GetWindowHandle,
+    overlay_GetClipList,
+    overlay_GetVideoPosition,
+    overlay_Advise,
+    overlay_Unadvise,
+};
+
 static HRESULT vmr_create(IUnknown *outer, void **out, const CLSID *clsid)
 {
     static const WCHAR sink_name[] = {'V','M','R',' ','I','n','p','u','t','0',0};
@@ -2153,14 +2245,14 @@ static HRESULT vmr_create(IUnknown *outer, void **out, const CLSID *clsid)
     pVMR->IVMRSurfaceAllocatorNotify9_iface.lpVtbl = &VMR9_SurfaceAllocatorNotify_Vtbl;
     pVMR->IVMRWindowlessControl_iface.lpVtbl = &VMR7_WindowlessControl_Vtbl;
     pVMR->IVMRWindowlessControl9_iface.lpVtbl = &VMR9_WindowlessControl_Vtbl;
+    pVMR->IOverlay_iface.lpVtbl = &overlay_vtbl;
 
     hr = strmbase_renderer_init(&pVMR->renderer, &VMR_Vtbl, outer, clsid, sink_name, &BaseFuncTable);
     if (FAILED(hr))
         goto fail;
 
-    hr = BaseControlWindow_Init(&pVMR->baseControlWindow, &IVideoWindow_VTable,
-            &pVMR->renderer.filter, &pVMR->renderer.filter.csFilter,
-            &pVMR->renderer.sink.pin, &renderer_BaseWindowFuncTable);
+    hr = strmbase_window_init(&pVMR->baseControlWindow, &IVideoWindow_VTable,
+            &pVMR->renderer.filter, &pVMR->renderer.sink.pin, &renderer_BaseWindowFuncTable);
     if (FAILED(hr))
         goto fail;
 
@@ -2238,7 +2330,6 @@ static ULONG WINAPI VMR9_ImagePresenter_Release(IVMRImagePresenter9 *iface)
     {
         DWORD i;
         TRACE("Destroying\n");
-        CloseHandle(This->ack);
         IDirect3D9_Release(This->d3d9_ptr);
 
         TRACE("Number of surfaces: %u\n", This->num_surfaces);
@@ -2476,32 +2567,6 @@ static HRESULT VMR9_SurfaceAllocator_SetAllocationSettings(VMR9DefaultAllocatorP
     return hr;
 }
 
-static DWORD WINAPI MessageLoop(LPVOID lpParameter)
-{
-    MSG msg;
-    BOOL fGotMessage;
-    VMR9DefaultAllocatorPresenterImpl *This = lpParameter;
-
-    TRACE("Starting message loop\n");
-
-    if (FAILED(BaseWindowImpl_PrepareWindow(&This->pVMR9->baseControlWindow.baseWindow)))
-    {
-        FIXME("Failed to prepare window\n");
-        return FALSE;
-    }
-
-    SetEvent(This->ack);
-    while ((fGotMessage = GetMessageW(&msg, NULL, 0, 0)) != 0 && fGotMessage != -1)
-    {
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
-    }
-
-    TRACE("End of message loop\n");
-
-    return 0;
-}
-
 static UINT d3d9_adapter_from_hwnd(IDirect3D9 *d3d9, HWND hwnd, HMONITOR *mon_out)
 {
     UINT d3d9_adapter;
@@ -2533,13 +2598,8 @@ static BOOL CreateRenderingWindow(VMR9DefaultAllocatorPresenterImpl *This, VMR9A
 
     TRACE("(%p)->()\n", This);
 
-    This->hWndThread = CreateThread(NULL, 0, MessageLoop, This, 0, &This->tid);
-    if (!This->hWndThread)
+    if (FAILED(BaseWindowImpl_PrepareWindow(&This->pVMR9->baseControlWindow.baseWindow)))
         return FALSE;
-
-    WaitForSingleObject(This->ack, INFINITE);
-
-    if (!This->pVMR9->baseControlWindow.baseWindow.hWnd) return FALSE;
 
     /* Obtain a monitor and d3d9 device */
     d3d9_adapter = d3d9_adapter_from_hwnd(This->d3d9_ptr, This->pVMR9->baseControlWindow.baseWindow.hWnd, &This->hMon);
@@ -2617,10 +2677,6 @@ static HRESULT WINAPI VMR9_SurfaceAllocator_TerminateDevice(IVMRSurfaceAllocator
         return S_OK;
     }
 
-    SendMessageW(This->pVMR9->baseControlWindow.baseWindow.hWnd, WM_CLOSE, 0, 0);
-    PostThreadMessageW(This->tid, WM_QUIT, 0, 0);
-    WaitForSingleObject(This->hWndThread, INFINITE);
-    This->hWndThread = NULL;
     BaseWindowImpl_DoneWithWindow(&This->pVMR9->baseControlWindow.baseWindow);
 
     return S_OK;
@@ -2839,8 +2895,6 @@ static HRESULT VMR9DefaultAllocatorPresenterImpl_create(struct quartz_vmr *paren
     This->hMon = 0;
     This->d3d9_vertex = NULL;
     This->num_surfaces = 0;
-    This->hWndThread = NULL;
-    This->ack = CreateEventW(NULL, 0, 0, NULL);
     This->SurfaceAllocatorNotify = NULL;
     This->reset = FALSE;
 

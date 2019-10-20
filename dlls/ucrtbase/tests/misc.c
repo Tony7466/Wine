@@ -107,6 +107,7 @@ typedef struct MSVCRT__exception {
 typedef int (CDECL *MSVCRT_matherr_func)(struct MSVCRT__exception *);
 
 static HMODULE module;
+static LONGLONG crt_init_start, crt_init_end;
 
 static int (CDECL *p_initialize_onexit_table)(MSVCRT__onexit_table_t *table);
 static int (CDECL *p_register_onexit_function)(MSVCRT__onexit_table_t *table, MSVCRT__onexit_t func);
@@ -146,6 +147,7 @@ static int (__cdecl *p__close)(int);
 static void* (__cdecl *p__o_malloc)(size_t);
 static size_t (__cdecl *p__msize)(void*);
 static void (__cdecl *p_free)(void*);
+static clock_t (__cdecl *p_clock)(void);
 
 static void test__initialize_onexit_table(void)
 {
@@ -361,11 +363,11 @@ static void test___fpe_flt_rounds(void)
 
     ok((p__controlfp(_RC_UP, _RC_CHOP) & _RC_CHOP) == _RC_UP, "_controlfp(_RC_UP, _RC_CHOP) failed\n");
     ret = p___fpe_flt_rounds();
-    ok(ret == 2 + (sizeof(void*)>sizeof(int)), "__fpe_flt_rounds returned %d\n", ret);
+    ok(ret == 2 || broken(ret == 3) /* w1064v1507 */, "__fpe_flt_rounds returned %d\n", ret);
 
     ok((p__controlfp(_RC_DOWN, _RC_CHOP) & _RC_CHOP) == _RC_DOWN, "_controlfp(_RC_DOWN, _RC_CHOP) failed\n");
     ret = p___fpe_flt_rounds();
-    ok(ret == 3 - (sizeof(void*)>sizeof(int)), "__fpe_flt_rounds returned %d\n", ret);
+    ok(ret == 3 || broken(ret == 2) /* w1064v1507 */, "__fpe_flt_rounds returned %d\n", ret);
 
     ok((p__controlfp(_RC_CHOP, _RC_CHOP) & _RC_CHOP) == _RC_CHOP, "_controlfp(_RC_CHOP, _RC_CHOP) failed\n");
     ret = p___fpe_flt_rounds();
@@ -465,7 +467,13 @@ static void test__get_narrow_winmain_command_line(char *path)
 
 static BOOL init(void)
 {
+    FILETIME cur;
+
+    GetSystemTimeAsFileTime(&cur);
+    crt_init_start = ((LONGLONG)cur.dwHighDateTime << 32) + cur.dwLowDateTime;
     module = LoadLibraryA("ucrtbase.dll");
+    GetSystemTimeAsFileTime(&cur);
+    crt_init_end = ((LONGLONG)cur.dwHighDateTime << 32) + cur.dwLowDateTime;
 
     if(!module) {
         win_skip("ucrtbase.dll not available\n");
@@ -510,6 +518,7 @@ static BOOL init(void)
     p__o_malloc = (void*)GetProcAddress(module, "_o_malloc");
     p__msize = (void*)GetProcAddress(module, "_msize");
     p_free = (void*)GetProcAddress(module, "free");
+    p_clock = (void*)GetProcAddress(module, "clock");
 
     return TRUE;
 }
@@ -892,8 +901,45 @@ static void test_asctime(void)
 static void test_strftime(void)
 {
     const struct tm epoch = { 0, 0, 0, 1, 0, 70, 4, 0, 0 };
+    const struct tm tm1 = { 0, 0, 0, 1, 0, 117, 0, 0, 0 };
     char bufA[256];
     size_t retA;
+
+    retA = p_strftime(bufA, sizeof(bufA), "%C", &epoch);
+    ok(retA == 2, "expected 2, got %d\n", (int)retA);
+    ok(!strcmp(bufA, "19"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%D", &epoch);
+    ok(retA == 8, "expected 8, got %d\n", (int)retA);
+    ok(!strcmp(bufA, "01/01/70"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%#D", &epoch);
+    ok(retA == 6, "expected 6, got %d\n", (int)retA);
+    ok(!strcmp(bufA, "1/1/70"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%e", &epoch);
+    ok(retA == 2, "expected 2, got %d\n", (int)retA);
+    ok(!strcmp(bufA, " 1"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%#e", &epoch);
+    ok(retA == 1, "expected 1, got %d\n", (int)retA);
+    ok(!strcmp(bufA, "1"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%F", &epoch);
+    ok(retA == 10, "expected 10, got %d\n", (int)retA);
+    ok(!strcmp(bufA, "1970-01-01"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%#F", &epoch);
+    ok(retA == 8, "expected 8, got %d\n", (int)retA);
+    ok(!strcmp(bufA, "1970-1-1"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%R", &epoch);
+    ok(retA == 5, "expected 5, got %d\n", (int)retA);
+    ok(!strcmp(bufA, "00:00"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%#R", &epoch);
+    ok(retA == 3, "expected 3, got %d\n", (int)retA);
+    ok(!strcmp(bufA, "0:0"), "got %s\n", bufA);
 
     retA = p_strftime(bufA, sizeof(bufA), "%T", &epoch);
     ok(retA == 8, "expected 8, got %d\n", (int)retA);
@@ -902,6 +948,22 @@ static void test_strftime(void)
     retA = p_strftime(bufA, sizeof(bufA), "%#T", &epoch);
     ok(retA == 5, "expected 5, got %d\n", (int)retA);
     ok(!strcmp(bufA, "0:0:0"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%u", &tm1);
+    ok(retA == 1, "expected 1, got %d\n", (int)retA);
+    ok(!strcmp(bufA, "7"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%h", &epoch);
+    ok(retA == 3, "expected 3, got %d\n", (int)retA);
+    ok(!strcmp(bufA, "Jan"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%n", &epoch);
+    ok(retA == 1, "expected 1, got %d\n", (int)retA);
+    ok(!strcmp(bufA, "\n"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%t", &epoch);
+    ok(retA == 1, "expected 1, got %d\n", (int)retA);
+    ok(!strcmp(bufA, "\t"), "got %s\n", bufA);
 }
 
 static LONG* get_failures_counter(HANDLE *map)
@@ -1118,6 +1180,21 @@ static void test__o_malloc(void)
     p_free(m);
 }
 
+static void test_clock(void)
+{
+    static const int thresh = 100;
+    int c, expect_min, expect_max;
+    FILETIME cur;
+
+    GetSystemTimeAsFileTime(&cur);
+    c = p_clock();
+
+    expect_min = (((LONGLONG)cur.dwHighDateTime << 32) + cur.dwLowDateTime - crt_init_end) / 10000;
+    expect_max = (((LONGLONG)cur.dwHighDateTime << 32) + cur.dwLowDateTime - crt_init_start) / 10000;
+    ok(c > expect_min-thresh && c < expect_max+thresh, "clock() = %d, expected range [%d, %d]\n",
+            c, expect_min, expect_max);
+}
+
 START_TEST(misc)
 {
     int arg_c;
@@ -1154,4 +1231,5 @@ START_TEST(misc)
     test_quick_exit(arg_v[0]);
     test__stat32();
     test__o_malloc();
+    test_clock();
 }

@@ -38,6 +38,16 @@ WINE_DEFAULT_DEBUG_CHANNEL(msvcrt);
 
 BOOL WINAPI GetDaylightFlag(void);
 
+static LONGLONG init_time;
+
+void msvcrt_init_clock(void)
+{
+    LARGE_INTEGER systime;
+
+    NtQuerySystemTime(&systime);
+    init_time = systime.QuadPart;
+}
+
 static const int MonthLengths[2][12] =
 {
     { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 },
@@ -712,23 +722,10 @@ int CDECL _wstrtime_s(MSVCRT_wchar_t* time, MSVCRT_size_t size)
  */
 MSVCRT_clock_t CDECL MSVCRT_clock(void)
 {
-    static LONGLONG start_time;
     LARGE_INTEGER systime;
 
-    if(!start_time) {
-        KERNEL_USER_TIMES pti;
-
-        /* while Linux's clock returns user time, Windows' clock
-         * returns wall-clock time from process start.  cache the
-         * process start time since it won't change and to avoid
-         * wineserver round-trip overhead */
-        if(NtQueryInformationProcess(GetCurrentProcess(), ProcessTimes, &pti, sizeof(pti), NULL))
-            return -1;
-        start_time = pti.CreateTime.QuadPart;
-    }
-
     NtQuerySystemTime(&systime);
-    return (systime.QuadPart - start_time) * MSVCRT_CLOCKS_PER_SEC / TICKSPERSEC;
+    return (systime.QuadPart - init_time) / (TICKSPERSEC / MSVCRT_CLOCKS_PER_SEC);
 }
 
 /*********************************************************************
@@ -1142,6 +1139,9 @@ static MSVCRT_size_t strftime_helper(char *str, MSVCRT_size_t max, const char *f
                 return 0;
             break;
         case 'b':
+#if _MSVCR_VER>=140
+        case 'h':
+#endif
             if(mstm->tm_mon<0 || mstm->tm_mon>11)
                 goto einval_error;
             if(!strftime_str(str, &ret, max, time_data->str.names.short_mon[mstm->tm_mon]))
@@ -1153,10 +1153,50 @@ static MSVCRT_size_t strftime_helper(char *str, MSVCRT_size_t max, const char *f
             if(!strftime_str(str, &ret, max, time_data->str.names.mon[mstm->tm_mon]))
                 return 0;
             break;
+#if _MSVCR_VER>=140
+        case 'C':
+            tmp = (1900+mstm->tm_year)/100;
+            if(!strftime_int(str, &ret, max, tmp, alternate ? 0 : 2, 0, 99))
+                return 0;
+            break;
+#endif
         case 'd':
             if(!strftime_int(str, &ret, max, mstm->tm_mday, alternate ? 0 : 2, 0, 31))
                 return 0;
             break;
+#if _MSVCR_VER>=140
+        case 'D':
+            if(!strftime_int(str, &ret, max, mstm->tm_mon+1, alternate ? 0 : 2, 1, 12))
+                return 0;
+            if(ret < max)
+                str[ret++] = '/';
+            if(!strftime_int(str, &ret, max, mstm->tm_mday, alternate ? 0 : 2, 0, 31))
+                return 0;
+            if(ret < max)
+                str[ret++] = '/';
+            if(!strftime_int(str, &ret, max, mstm->tm_year%100, alternate ? 0 : 2, 0, 99))
+                return 0;
+            break;
+        case 'e':
+            if(!strftime_int(str, &ret, max, mstm->tm_mday, alternate ? 0 : 2, 0, 31))
+                return 0;
+            if(!alternate && str[ret-2] == '0')
+                str[ret-2] = ' ';
+            break;
+        case 'F':
+            tmp = 1900+mstm->tm_year;
+            if(!strftime_int(str, &ret, max, tmp, alternate ? 0 : 4, 0, 9999))
+                return 0;
+            if(ret < max)
+                str[ret++] = '-';
+            if(!strftime_int(str, &ret, max, mstm->tm_mon+1, alternate ? 0 : 2, 1, 12))
+                return 0;
+            if(ret < max)
+                str[ret++] = '-';
+            if(!strftime_int(str, &ret, max, mstm->tm_mday, alternate ? 0 : 2, 0, 31))
+                return 0;
+            break;
+#endif
         case 'H':
             if(!strftime_int(str, &ret, max, mstm->tm_hour, alternate ? 0 : 2, 0, 23))
                 return 0;
@@ -1182,6 +1222,11 @@ static MSVCRT_size_t strftime_helper(char *str, MSVCRT_size_t max, const char *f
             if(!strftime_int(str, &ret, max, mstm->tm_min, alternate ? 0 : 2, 0, 59))
                 return 0;
             break;
+#if _MSVCR_VER>=140
+        case 'n':
+            str[ret++] = '\n';
+            break;
+#endif
         case 'p':
             if(mstm->tm_hour<0 || mstm->tm_hour>23)
                 goto einval_error;
@@ -1189,19 +1234,39 @@ static MSVCRT_size_t strftime_helper(char *str, MSVCRT_size_t max, const char *f
                         time_data->str.names.am : time_data->str.names.pm))
                 return 0;
             break;
+#if _MSVCR_VER>=140
+        case 'R':
+            if(!strftime_int(str, &ret, max, mstm->tm_hour, alternate ? 0 : 2, 0, 23))
+                return 0;
+            if(ret < max)
+                str[ret++] = ':';
+            if(!strftime_int(str, &ret, max, mstm->tm_min, alternate ? 0 : 2, 0, 59))
+                return 0;
+            break;
+#endif
         case 'S':
             if(!strftime_int(str, &ret, max, mstm->tm_sec, alternate ? 0 : 2, 0, 59))
                 return 0;
             break;
 #if _MSVCR_VER>=140
+        case 't':
+            str[ret++] = '\t';
+            break;
         case 'T':
             if(!strftime_int(str, &ret, max, mstm->tm_hour, alternate ? 0 : 2, 0, 23))
                 return 0;
-            str[ret++] = ':';
+            if(ret < max)
+                str[ret++] = ':';
             if(!strftime_int(str, &ret, max, mstm->tm_min, alternate ? 0 : 2, 0, 59))
                 return 0;
-            str[ret++] = ':';
+            if(ret < max)
+                str[ret++] = ':';
             if(!strftime_int(str, &ret, max, mstm->tm_sec, alternate ? 0 : 2, 0, 59))
+                return 0;
+            break;
+        case 'u':
+            tmp = mstm->tm_wday ? mstm->tm_wday : 7;
+            if(!strftime_int(str, &ret, max, tmp, 0, 1, 7))
                 return 0;
             break;
 #endif

@@ -109,6 +109,7 @@ my @allfiles =
     [ 28598, "ISO8859/8859-8.TXT",                0, "ISO 8859-8 Hebrew", 0xf79c ],
     [ 28599, "ISO8859/8859-9.TXT",                0, "ISO 8859-9 Latin 5 (Turkish)" ],
     [ 28600, "ISO8859/8859-10.TXT",               0, "ISO 8859-10 Latin 6 (Nordic)" ],
+    [ 28601, "ISO8859/8859-11.TXT",               0, "ISO 8859-11 Latin (Thai)" ],
     [ 28603, "ISO8859/8859-13.TXT",               0, "ISO 8859-13 Latin 7 (Baltic)" ],
     [ 28604, "ISO8859/8859-14.TXT",               0, "ISO 8859-14 Latin 8 (Celtic)" ],
     [ 28605, "ISO8859/8859-15.TXT",               0, "ISO 8859-15 Latin 9 (Euro)" ],
@@ -629,6 +630,7 @@ sub READ_DEFAULTS($)
 sub add_lead_byte($)
 {
     my $ch = shift;
+    return if defined $cp2uni[$ch];
     push @lead_bytes, $ch;
     $cp2uni[$ch] = 0;
 }
@@ -640,10 +642,7 @@ sub add_mapping($$)
     my ($cp, $uni) = @_;
     $cp2uni[$cp] = $uni unless defined($cp2uni[$cp]);
     $uni2cp[$uni] = $cp unless defined($uni2cp[$uni]);
-    if ($cp > 0xff && !defined($cp2uni[$cp >> 8]))
-    {
-        add_lead_byte( $cp >> 8 );
-    }
+    if ($cp > 0xff) { add_lead_byte( $cp >> 8 ); }
 }
 
 ################################################################

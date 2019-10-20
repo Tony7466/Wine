@@ -750,7 +750,7 @@ static void test_StdRegProv( IWbemServices *services )
         {'S','o','f','t','w','a','r','e','\\','S','t','d','R','e','g','P','r','o','v','T','e','s','t',0};
     BSTR class = SysAllocString( stdregprovW ), method, name;
     IWbemClassObject *reg, *sig_in, *sig_out, *in, *out;
-    VARIANT defkey, subkey, retval, names, types, value, valuename;
+    VARIANT defkey, subkey, retval, valuename;
     CIMTYPE type;
     HRESULT hr;
     LONG res;
@@ -854,7 +854,6 @@ static void test_StdRegProv( IWbemServices *services )
 
     check_property( out, namesW, VT_BSTR|VT_ARRAY, CIM_STRING|CIM_FLAG_ARRAY );
 
-    VariantClear( &names );
     VariantClear( &subkey );
     IWbemClassObject_Release( in );
     IWbemClassObject_Release( out );
@@ -893,8 +892,6 @@ static void test_StdRegProv( IWbemServices *services )
     check_property( out, namesW, VT_BSTR|VT_ARRAY, CIM_STRING|CIM_FLAG_ARRAY );
     check_property( out, typesW, VT_I4|VT_ARRAY, CIM_SINT32|CIM_FLAG_ARRAY );
 
-    VariantClear( &types );
-    VariantClear( &names );
     VariantClear( &subkey );
     IWbemClassObject_Release( in );
     IWbemClassObject_Release( out );
@@ -937,7 +934,6 @@ static void test_StdRegProv( IWbemServices *services )
 
     check_property( out, valueW, VT_BSTR, CIM_STRING );
 
-    VariantClear( &value );
     VariantClear( &valuename );
     VariantClear( &subkey );
     IWbemClassObject_Release( in );
@@ -1654,6 +1650,7 @@ static void test_Win32_PnPEntity( IWbemServices *services )
                 VariantClear( &val );
             }
         }
+        IWbemClassObject_Release( obj );
     }
 
     SysFreeString( bstr );
@@ -1756,6 +1753,49 @@ static void test_Win32_DisplayControllerConfiguration( IWbemServices *services )
     SysFreeString( wql );
 }
 
+static void test_Win32_QuickFixEngineering( IWbemServices *services )
+{
+    static const WCHAR captionW[] =
+        {'C','a','p','t','i','o','n',0};
+    static const WCHAR hotfixidW[] =
+        {'H','o','t','F','i','x','I','D',0};
+    static const WCHAR queryW[] =
+        {'S','E','L','E','C','T',' ','*',' ','F','R','O','M',' ','W','i','n','3','2','_',
+         'Q','u','i','c','k','F','i','x','E','n','g','i','n','e','e','r','i','n','g',0};
+    BSTR wql = SysAllocString( wqlW ), query = SysAllocString( queryW );
+    IEnumWbemClassObject *result;
+    IWbemClassObject *obj;
+    HRESULT hr;
+    DWORD count, total = 0;
+    VARIANT caption;
+    CIMTYPE type;
+
+    hr = IWbemServices_ExecQuery( services, wql, query, 0, NULL, &result );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    for (;;)
+    {
+        hr = IEnumWbemClassObject_Next( result, 10000, 1, &obj, &count );
+        if (hr != S_OK) break;
+
+        type = 0xdeadbeef;
+        VariantInit( &caption );
+        hr = IWbemClassObject_Get( obj, captionW, 0, &caption, &type, NULL );
+        ok( hr == S_OK, "failed to get caption %08x\n", hr );
+        ok( V_VT( &caption ) == VT_BSTR || V_VT( &caption ) == VT_NULL /* winxp */,
+            "unexpected variant type 0x%x\n", V_VT( &caption ) );
+        ok( type == CIM_STRING, "unexpected type 0x%x\n", type );
+
+        check_property( obj, hotfixidW, VT_BSTR, CIM_STRING );
+        IWbemClassObject_Release( obj );
+        if (total++ >= 10) break;
+    }
+
+    IEnumWbemClassObject_Release( result );
+    SysFreeString( query );
+    SysFreeString( wql );
+}
+
 START_TEST(query)
 {
     static const WCHAR cimv2W[] = {'R','O','O','T','\\','C','I','M','V','2',0};
@@ -1804,6 +1844,7 @@ START_TEST(query)
     test_Win32_Process( services, FALSE );
     test_Win32_Process( services, TRUE );
     test_Win32_Processor( services );
+    test_Win32_QuickFixEngineering( services );
     test_Win32_Service( services );
     test_Win32_SystemEnclosure( services );
     test_Win32_VideoController( services );

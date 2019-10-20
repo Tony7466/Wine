@@ -43,8 +43,6 @@ WINE_DEFAULT_DEBUG_CHANNEL(file);
 
 #define MAX_PATHNAME_LEN        1024
 
-static int path_safe_mode = -1;  /* path mode set by SetSearchPathMode */
-
 /* check if a file name is for an executable file (.exe or .com) */
 static inline BOOL is_executable( const WCHAR *name )
 {
@@ -256,354 +254,6 @@ DWORD WINAPI GetShortPathNameA( LPCSTR longpath, LPSTR shortpath, DWORD shortlen
     return copy_filename_WtoA( shortpathW, shortpath, shortlen );
 }
 
-/***********************************************************************
- *           get_path_safe_mode
- */
-static BOOL get_path_safe_mode(void)
-{
-    static const WCHAR keyW[] = {'\\','R','e','g','i','s','t','r','y','\\',
-                                 'M','a','c','h','i','n','e','\\',
-                                 'S','y','s','t','e','m','\\',
-                                 'C','u','r','r','e','n','t','C','o','n','t','r','o','l','S','e','t','\\',
-                                 'C','o','n','t','r','o','l','\\',
-                                 'S','e','s','s','i','o','n',' ','M','a','n','a','g','e','r',0};
-    static const WCHAR valueW[] = {'S','a','f','e','P','r','o','c','e','s','s','S','e','a','r','c','h','M','o','d','e',0};
-
-    if (path_safe_mode == -1)
-    {
-        char buffer[offsetof(KEY_VALUE_PARTIAL_INFORMATION, Data[sizeof(DWORD)])];
-        KEY_VALUE_PARTIAL_INFORMATION *info = (KEY_VALUE_PARTIAL_INFORMATION *)buffer;
-        OBJECT_ATTRIBUTES attr;
-        UNICODE_STRING nameW;
-        HANDLE hkey;
-        DWORD size = sizeof(buffer);
-        BOOL mode = FALSE;
-
-        attr.Length = sizeof(attr);
-        attr.RootDirectory = 0;
-        attr.ObjectName = &nameW;
-        attr.Attributes = 0;
-        attr.SecurityDescriptor = NULL;
-        attr.SecurityQualityOfService = NULL;
-
-        RtlInitUnicodeString( &nameW, keyW );
-        if (!NtOpenKey( &hkey, KEY_READ, &attr ))
-        {
-            RtlInitUnicodeString( &nameW, valueW );
-            if (!NtQueryValueKey( hkey, &nameW, KeyValuePartialInformation, buffer, size, &size ) &&
-                info->Type == REG_DWORD && info->DataLength == sizeof(DWORD))
-                mode = !!*(DWORD *)info->Data;
-            NtClose( hkey );
-        }
-        InterlockedCompareExchange( &path_safe_mode, mode, -1 );
-    }
-    return path_safe_mode != 0;
-}
-
-
-/***********************************************************************
- *           contains_pathW
- *
- * Check if the file name contains a path; helper for SearchPathW.
- * A relative path is not considered a path unless it starts with ./ or ../
- */
-static inline BOOL contains_pathW (LPCWSTR name)
-{
-    if (RtlDetermineDosPathNameType_U( name ) != RELATIVE_PATH) return TRUE;
-    if (name[0] != '.') return FALSE;
-    if (name[1] == '/' || name[1] == '\\') return TRUE;
-    return (name[1] == '.' && (name[2] == '/' || name[2] == '\\'));
-}
-
-/***********************************************************************
- *	find_actctx_dllpath
- *
- * Find the path (if any) of the dll from the activation context.
- * Returned path doesn't include a name.
- */
-static NTSTATUS find_actctx_dllpath(const WCHAR *libname, WCHAR **path)
-{
-    static const WCHAR winsxsW[] = {'\\','w','i','n','s','x','s','\\'};
-    static const WCHAR dotManifestW[] = {'.','m','a','n','i','f','e','s','t',0};
-
-    ACTIVATION_CONTEXT_ASSEMBLY_DETAILED_INFORMATION *info;
-    ACTCTX_SECTION_KEYED_DATA data;
-    UNICODE_STRING nameW;
-    NTSTATUS status;
-    SIZE_T needed, size = 1024;
-    WCHAR *p;
-
-    RtlInitUnicodeString( &nameW, libname );
-    data.cbSize = sizeof(data);
-    status = RtlFindActivationContextSectionString( FIND_ACTCTX_SECTION_KEY_RETURN_HACTCTX, NULL,
-                                                    ACTIVATION_CONTEXT_SECTION_DLL_REDIRECTION,
-                                                    &nameW, &data );
-    if (status != STATUS_SUCCESS) return status;
-
-    for (;;)
-    {
-        if (!(info = HeapAlloc( GetProcessHeap(), 0, size )))
-        {
-            status = STATUS_NO_MEMORY;
-            goto done;
-        }
-        status = RtlQueryInformationActivationContext( 0, data.hActCtx, &data.ulAssemblyRosterIndex,
-                                                       AssemblyDetailedInformationInActivationContext,
-                                                       info, size, &needed );
-        if (status == STATUS_SUCCESS) break;
-        if (status != STATUS_BUFFER_TOO_SMALL) goto done;
-        HeapFree( GetProcessHeap(), 0, info );
-        size = needed;
-        /* restart with larger buffer */
-    }
-
-    if (!info->lpAssemblyManifestPath || !info->lpAssemblyDirectoryName)
-    {
-        status = STATUS_SXS_KEY_NOT_FOUND;
-        goto done;
-    }
-
-    if ((p = strrchrW( info->lpAssemblyManifestPath, '\\' )))
-    {
-        DWORD dirlen = info->ulAssemblyDirectoryNameLength / sizeof(WCHAR);
-
-        p++;
-        if (strncmpiW( p, info->lpAssemblyDirectoryName, dirlen ) || strcmpiW( p + dirlen, dotManifestW ))
-        {
-            /* manifest name does not match directory name, so it's not a global
-             * windows/winsxs manifest; use the manifest directory name instead */
-            dirlen = p - info->lpAssemblyManifestPath;
-            needed = (dirlen + 1) * sizeof(WCHAR);
-            if (!(*path = p = HeapAlloc( GetProcessHeap(), 0, needed )))
-            {
-                status = STATUS_NO_MEMORY;
-                goto done;
-            }
-            memcpy( p, info->lpAssemblyManifestPath, dirlen * sizeof(WCHAR) );
-            *(p + dirlen) = 0;
-            goto done;
-        }
-    }
-
-    needed = (strlenW( DIR_Windows ) * sizeof(WCHAR) +
-              sizeof(winsxsW) + info->ulAssemblyDirectoryNameLength + 2*sizeof(WCHAR));
-
-    if (!(*path = p = HeapAlloc( GetProcessHeap(), 0, needed )))
-    {
-        status = STATUS_NO_MEMORY;
-        goto done;
-    }
-    strcpyW( p, DIR_Windows );
-    p += strlenW(p);
-    memcpy( p, winsxsW, sizeof(winsxsW) );
-    p += ARRAY_SIZE( winsxsW );
-    memcpy( p, info->lpAssemblyDirectoryName, info->ulAssemblyDirectoryNameLength );
-    p += info->ulAssemblyDirectoryNameLength / sizeof(WCHAR);
-    *p++ = '\\';
-    *p = 0;
-done:
-    HeapFree( GetProcessHeap(), 0, info );
-    RtlReleaseActivationContext( data.hActCtx );
-    return status;
-}
-
-/***********************************************************************
- * SearchPathW [KERNEL32.@]
- *
- * Searches for a specified file in the search path.
- *
- * PARAMS
- *    path	[I] Path to search (NULL means default)
- *    name	[I] Filename to search for.
- *    ext	[I] File extension to append to file name. The first
- *		    character must be a period. This parameter is
- *                  specified only if the filename given does not
- *                  contain an extension.
- *    buflen	[I] size of buffer, in characters
- *    buffer	[O] buffer for found filename
- *    lastpart  [O] address of pointer to last used character in
- *                  buffer (the final '\')
- *
- * RETURNS
- *    Success: length of string copied into buffer, not including
- *             terminating null character. If the filename found is
- *             longer than the length of the buffer, the length of the
- *             filename is returned.
- *    Failure: Zero
- *
- * NOTES
- *    If the file is not found, calls SetLastError(ERROR_FILE_NOT_FOUND)
- *    (tested on NT 4.0)
- */
-DWORD WINAPI SearchPathW( LPCWSTR path, LPCWSTR name, LPCWSTR ext, DWORD buflen,
-                          LPWSTR buffer, LPWSTR *lastpart )
-{
-    DWORD ret = 0;
-
-    if (!name || !name[0])
-    {
-        SetLastError(ERROR_INVALID_PARAMETER);
-        return 0;
-    }
-
-    /* If the name contains an explicit path, ignore the path */
-
-    if (contains_pathW(name))
-    {
-        /* try first without extension */
-        if (RtlDoesFileExists_U( name ))
-            return GetFullPathNameW( name, buflen, buffer, lastpart );
-
-        if (ext)
-        {
-            LPCWSTR p = strrchrW( name, '.' );
-            if (p && !strchrW( p, '/' ) && !strchrW( p, '\\' ))
-                ext = NULL;  /* Ignore the specified extension */
-        }
-
-        /* Allocate a buffer for the file name and extension */
-        if (ext)
-        {
-            LPWSTR tmp;
-            DWORD len = strlenW(name) + strlenW(ext);
-
-            if (!(tmp = HeapAlloc( GetProcessHeap(), 0, (len + 1) * sizeof(WCHAR) )))
-            {
-                SetLastError( ERROR_OUTOFMEMORY );
-                return 0;
-            }
-            strcpyW( tmp, name );
-            strcatW( tmp, ext );
-            if (RtlDoesFileExists_U( tmp ))
-                ret = GetFullPathNameW( tmp, buflen, buffer, lastpart );
-            HeapFree( GetProcessHeap(), 0, tmp );
-        }
-    }
-    else if (path && path[0])  /* search in the specified path */
-    {
-        ret = RtlDosSearchPath_U( path, name, ext, buflen * sizeof(WCHAR),
-                                  buffer, lastpart ) / sizeof(WCHAR);
-    }
-    else  /* search in active context and default path */
-    {
-        WCHAR *dll_path = NULL, *search = NULL;
-        DWORD req_len, name_len;
-
-        req_len = name_len = strlenW(name);
-
-        if (strchrW( name, '.' )) ext = NULL;
-        if (ext)
-        {
-            DWORD ext_len = strlenW(ext);
-
-            req_len += ext_len;
-            name_len += ext_len;
-
-            search = HeapAlloc( GetProcessHeap(), 0, (name_len + ext_len + 1) * sizeof(WCHAR) );
-            if (!search)
-            {
-                SetLastError( ERROR_OUTOFMEMORY );
-                return 0;
-            }
-            strcpyW( search, name );
-            strcatW( search, ext );
-            name = search;
-
-            /* now that we have combined name we don't need extension any more */
-        }
-
-        /* When file is found with activation context no attempt is made
-          to check if it's really exist, path is returned only basing on context info. */
-        if (find_actctx_dllpath( name, &dll_path ) == STATUS_SUCCESS)
-        {
-            DWORD path_len;
-
-            path_len = strlenW(dll_path);
-            req_len += path_len;
-
-            if (lastpart) *lastpart = NULL;
-
-            /* count null termination char too */
-            if (req_len + 1 <= buflen)
-            {
-                memcpy( buffer, dll_path, path_len * sizeof(WCHAR) );
-                memcpy( &buffer[path_len], name, name_len * sizeof(WCHAR) );
-                buffer[req_len] = 0;
-                if (lastpart) *lastpart = buffer + path_len;
-                ret = req_len;
-            }
-            else
-                ret = req_len + 1;
-
-            HeapFree( GetProcessHeap(), 0, dll_path );
-            HeapFree( GetProcessHeap(), 0, search );
-        }
-        else
-        {
-            if ((dll_path = MODULE_get_dll_load_path( NULL, get_path_safe_mode() )))
-            {
-                ret = RtlDosSearchPath_U( dll_path, name, NULL, buflen * sizeof(WCHAR),
-                                          buffer, lastpart ) / sizeof(WCHAR);
-                HeapFree( GetProcessHeap(), 0, dll_path );
-                HeapFree( GetProcessHeap(), 0, search );
-            }
-            else
-            {
-                SetLastError( ERROR_OUTOFMEMORY );
-                return 0;
-            }
-        }
-    }
-
-    if (!ret) SetLastError( ERROR_FILE_NOT_FOUND );
-    else TRACE( "found %s\n", debugstr_w(buffer) );
-    return ret;
-}
-
-
-/***********************************************************************
- *           SearchPathA   (KERNEL32.@)
- *
- * See SearchPathW.
- */
-DWORD WINAPI SearchPathA( LPCSTR path, LPCSTR name, LPCSTR ext,
-                          DWORD buflen, LPSTR buffer, LPSTR *lastpart )
-{
-    WCHAR *pathW = NULL, *nameW, *extW = NULL;
-    WCHAR bufferW[MAX_PATH];
-    DWORD ret;
-
-    if (!name)
-    {
-        SetLastError(ERROR_INVALID_PARAMETER);
-        return 0;
-    }
-
-    if (!(nameW = FILE_name_AtoW( name, FALSE ))) return 0;
-    if (path && !(pathW = FILE_name_AtoW( path, TRUE ))) return 0;
-    
-    if (ext && !(extW = FILE_name_AtoW( ext, TRUE )))
-    {
-        HeapFree( GetProcessHeap(), 0, pathW );
-        return 0;
-    }
-
-    ret = SearchPathW(pathW, nameW, extW, MAX_PATH, bufferW, NULL);
-
-    HeapFree( GetProcessHeap(), 0, pathW );
-    HeapFree( GetProcessHeap(), 0, extW );
-
-    if (!ret) return 0;
-    if (ret > MAX_PATH)
-    {
-        SetLastError(ERROR_FILENAME_EXCED_RANGE);
-        return 0;
-    }
-    ret = copy_filename_WtoA( bufferW, buffer, buflen );
-    if (buflen > ret && lastpart)
-        *lastpart = strrchr(buffer, '\\') + 1;
-    return ret;
-}
 
 static BOOL is_same_file(HANDLE h1, HANDLE h2)
 {
@@ -1136,21 +786,18 @@ BOOL WINAPI RemoveDirectoryW( LPCWSTR path )
     attr.SecurityDescriptor = NULL;
     attr.SecurityQualityOfService = NULL;
 
-    status = NtOpenFile( &handle, DELETE | SYNCHRONIZE, &attr, &io,
-                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                         FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT );
-    if (status != STATUS_SUCCESS)
+    if (!set_ntstatus( NtOpenFile( &handle, DELETE | SYNCHRONIZE, &attr, &io,
+                                   FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                   FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT )))
     {
-        SetLastError( RtlNtStatusToDosError(status) );
         RtlFreeUnicodeString( &nt_name );
         return FALSE;
     }
 
     status = wine_nt_to_unix_file_name( &nt_name, &unix_name, FILE_OPEN, FALSE );
     RtlFreeUnicodeString( &nt_name );
-    if (status != STATUS_SUCCESS)
+    if (!set_ntstatus( status ))
     {
-        SetLastError( RtlNtStatusToDosError(status) );
         NtClose( handle );
         return FALSE;
     }
@@ -1249,9 +896,7 @@ UINT WINAPI GetSystemWow64DirectoryA( LPSTR path, UINT count )
  */
 BOOLEAN WINAPI Wow64EnableWow64FsRedirection( BOOLEAN enable )
 {
-    NTSTATUS status = RtlWow64EnableFsRedirection( enable );
-    if (status) SetLastError( RtlNtStatusToDosError(status) );
-    return !status;
+    return set_ntstatus( RtlWow64EnableFsRedirection( enable ));
 }
 
 
@@ -1289,16 +934,10 @@ WCHAR * CDECL wine_get_dos_file_name( LPCSTR str )
 {
     UNICODE_STRING nt_name;
     ANSI_STRING unix_name;
-    NTSTATUS status;
     DWORD len;
 
     RtlInitAnsiString( &unix_name, str );
-    status = wine_unix_to_nt_file_name( &unix_name, &nt_name );
-    if (status)
-    {
-        SetLastError( RtlNtStatusToDosError( status ) );
-        return NULL;
-    }
+    if (!set_ntstatus( wine_unix_to_nt_file_name( &unix_name, &nt_name ))) return NULL;
     if (nt_name.Buffer[5] == ':')
     {
         /* get rid of the \??\ prefix */
@@ -1404,30 +1043,5 @@ BOOL WINAPI CheckNameLegalDOS8Dot3W(const WCHAR *name, char *oemname, DWORD oemn
  */
 BOOL WINAPI SetSearchPathMode( DWORD flags )
 {
-    int val;
-
-    switch (flags)
-    {
-    case BASE_SEARCH_PATH_ENABLE_SAFE_SEARCHMODE:
-        val = 1;
-        break;
-    case BASE_SEARCH_PATH_DISABLE_SAFE_SEARCHMODE:
-        val = 0;
-        break;
-    case BASE_SEARCH_PATH_ENABLE_SAFE_SEARCHMODE | BASE_SEARCH_PATH_PERMANENT:
-        InterlockedExchange( &path_safe_mode, 2 );
-        return TRUE;
-    default:
-        SetLastError( ERROR_INVALID_PARAMETER );
-        return FALSE;
-    }
-
-    for (;;)
-    {
-        int prev = path_safe_mode;
-        if (prev == 2) break;  /* permanently set */
-        if (InterlockedCompareExchange( &path_safe_mode, val, prev ) == prev) return TRUE;
-    }
-    SetLastError( ERROR_ACCESS_DENIED );
-    return FALSE;
+    return set_ntstatus( RtlSetSearchPathMode( flags ));
 }

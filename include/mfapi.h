@@ -380,6 +380,14 @@ typedef enum
     MF_TOPOSTATUS_ENDED = 400,
 } MF_TOPOSTATUS;
 
+/* Media Session capabilities. */
+#define MFSESSIONCAP_START                 0x00000001
+#define MFSESSIONCAP_SEEK                  0x00000002
+#define MFSESSIONCAP_PAUSE                 0x00000004
+#define MFSESSIONCAP_RATE_FORWARD          0x00000010
+#define MFSESSIONCAP_RATE_REVERSE          0x00000020
+#define MFSESSIONCAP_DOES_NOT_USE_NETWORK  0x00000040
+
 HRESULT WINAPI MFAddPeriodicCallback(MFPERIODICCALLBACK callback, IUnknown *context, DWORD *key);
 HRESULT WINAPI MFAllocateWorkQueue(DWORD *queue);
 HRESULT WINAPI MFAllocateWorkQueueEx(MFASYNC_WORKQUEUE_TYPE queue_type, DWORD *queue);
@@ -433,6 +441,9 @@ HRESULT WINAPI MFTRegister(CLSID clsid, GUID category, LPWSTR name, UINT32 flags
 HRESULT WINAPI MFTRegisterLocal(IClassFactory *factory, REFGUID category, LPCWSTR name,
                            UINT32 flags, UINT32 cinput, const MFT_REGISTER_TYPE_INFO *input_types,
                            UINT32 coutput, const MFT_REGISTER_TYPE_INFO* output_types);
+HRESULT WINAPI MFTRegisterLocalByCLSID(REFCLSID clsid, REFGUID category, LPCWSTR name, UINT32 flags,
+        UINT32 input_count, const MFT_REGISTER_TYPE_INFO *input_types, UINT32 output_count,
+        const MFT_REGISTER_TYPE_INFO *output_types);
 HRESULT WINAPI MFRemovePeriodicCallback(DWORD key);
 HRESULT WINAPI MFShutdown(void);
 HRESULT WINAPI MFStartup(ULONG version, DWORD flags);

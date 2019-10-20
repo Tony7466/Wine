@@ -330,6 +330,17 @@ HRESULT WINAPI MFTRegisterLocal(IClassFactory *factory, REFGUID category, LPCWST
     return S_OK;
 }
 
+HRESULT WINAPI MFTRegisterLocalByCLSID(REFCLSID clsid, REFGUID category, LPCWSTR name, UINT32 flags,
+        UINT32 input_count, const MFT_REGISTER_TYPE_INFO *input_types, UINT32 output_count,
+        const MFT_REGISTER_TYPE_INFO *output_types)
+{
+
+    FIXME("%s, %s, %s, %#x, %u, %p, %u, %p.\n", debugstr_guid(clsid), debugstr_guid(category), debugstr_w(name), flags,
+            input_count, input_types, output_count, output_types);
+
+    return E_NOTIMPL;
+}
+
 HRESULT WINAPI MFTUnregisterLocal(IClassFactory *factory)
 {
     FIXME("(%p)\n", factory);
@@ -4763,7 +4774,7 @@ struct resolver_cancel_object
     enum resolved_object_origin origin;
 };
 
-typedef struct source_resolver
+struct source_resolver
 {
     IMFSourceResolver IMFSourceResolver_iface;
     LONG refcount;
@@ -4771,7 +4782,7 @@ typedef struct source_resolver
     IMFAsyncCallback url_callback;
     CRITICAL_SECTION cs;
     struct list pending;
-} mfsourceresolver;
+};
 
 static struct source_resolver *impl_from_IMFSourceResolver(IMFSourceResolver *iface)
 {
@@ -5272,14 +5283,14 @@ static HRESULT resolver_end_create_object(struct source_resolver *resolver, enum
 
 static HRESULT WINAPI source_resolver_QueryInterface(IMFSourceResolver *iface, REFIID riid, void **obj)
 {
-    mfsourceresolver *This = impl_from_IMFSourceResolver(iface);
+    struct source_resolver *resolver = impl_from_IMFSourceResolver(iface);
 
-    TRACE("(%p->(%s, %p)\n", This, debugstr_guid(riid), obj);
+    TRACE("%p, %s, %p.\n", iface, debugstr_guid(riid), obj);
 
     if (IsEqualIID(riid, &IID_IMFSourceResolver) ||
             IsEqualIID(riid, &IID_IUnknown))
     {
-        *obj = &This->IMFSourceResolver_iface;
+        *obj = &resolver->IMFSourceResolver_iface;
     }
     else
     {
@@ -5335,7 +5346,7 @@ static HRESULT WINAPI source_resolver_CreateObjectFromURL(IMFSourceResolver *ifa
     MFASYNCRESULT *data;
     HRESULT hr;
 
-    TRACE("%p, %s, %#x, %p, %p, %p\n", iface, debugstr_w(url), flags, props, obj_type, object);
+    TRACE("%p, %s, %#x, %p, %p, %p.\n", iface, debugstr_w(url), flags, props, obj_type, object);
 
     if (!url || !obj_type || !object)
         return E_POINTER;
@@ -5585,7 +5596,7 @@ HRESULT WINAPI MFCreateSourceResolver(IMFSourceResolver **resolver)
     return S_OK;
 }
 
-typedef struct media_event
+struct media_event
 {
     struct attributes attributes;
     IMFMediaEvent IMFMediaEvent_iface;
@@ -5594,28 +5605,28 @@ typedef struct media_event
     GUID extended_type;
     HRESULT status;
     PROPVARIANT value;
-} mfmediaevent;
+};
 
-static inline mfmediaevent *impl_from_IMFMediaEvent(IMFMediaEvent *iface)
+static inline struct media_event *impl_from_IMFMediaEvent(IMFMediaEvent *iface)
 {
-    return CONTAINING_RECORD(iface, mfmediaevent, IMFMediaEvent_iface);
+    return CONTAINING_RECORD(iface, struct media_event, IMFMediaEvent_iface);
 }
 
 static HRESULT WINAPI mfmediaevent_QueryInterface(IMFMediaEvent *iface, REFIID riid, void **out)
 {
-    mfmediaevent *This = impl_from_IMFMediaEvent(iface);
+    struct media_event *event = impl_from_IMFMediaEvent(iface);
 
-    TRACE("(%p)->(%s %p)\n", This, debugstr_guid(riid), out);
+    TRACE("%p, %s, %p.\n", iface, debugstr_guid(riid), out);
 
     if(IsEqualGUID(riid, &IID_IUnknown) ||
        IsEqualGUID(riid, &IID_IMFAttributes) ||
        IsEqualGUID(riid, &IID_IMFMediaEvent))
     {
-        *out = &This->IMFMediaEvent_iface;
+        *out = &event->IMFMediaEvent_iface;
     }
     else
     {
-        FIXME("(%s, %p)\n", debugstr_guid(riid), out);
+        FIXME("%s, %p.\n", debugstr_guid(riid), out);
         *out = NULL;
         return E_NOINTERFACE;
     }
@@ -5626,29 +5637,29 @@ static HRESULT WINAPI mfmediaevent_QueryInterface(IMFMediaEvent *iface, REFIID r
 
 static ULONG WINAPI mfmediaevent_AddRef(IMFMediaEvent *iface)
 {
-    mfmediaevent *This = impl_from_IMFMediaEvent(iface);
-    ULONG ref = InterlockedIncrement(&This->attributes.ref);
+    struct media_event *event = impl_from_IMFMediaEvent(iface);
+    ULONG refcount = InterlockedIncrement(&event->attributes.ref);
 
-    TRACE("(%p) ref=%u\n", This, ref);
+    TRACE("%p, refcount %u.\n", iface, refcount);
 
-    return ref;
+    return refcount;
 }
 
 static ULONG WINAPI mfmediaevent_Release(IMFMediaEvent *iface)
 {
     struct media_event *event = impl_from_IMFMediaEvent(iface);
-    ULONG ref = InterlockedDecrement(&event->attributes.ref);
+    ULONG refcount = InterlockedDecrement(&event->attributes.ref);
 
-    TRACE("(%p) ref=%u\n", iface, ref);
+    TRACE("%p, refcount %u.\n", iface, refcount);
 
-    if (!ref)
+    if (!refcount)
     {
         clear_attributes_object(&event->attributes);
         PropVariantClear(&event->value);
         heap_free(event);
     }
 
-    return ref;
+    return refcount;
 }
 
 static HRESULT WINAPI mfmediaevent_GetItem(IMFMediaEvent *iface, REFGUID key, PROPVARIANT *value)
@@ -5927,42 +5938,44 @@ static HRESULT WINAPI mfmediaevent_CopyAllItems(IMFMediaEvent *iface, IMFAttribu
 
 static HRESULT WINAPI mfmediaevent_GetType(IMFMediaEvent *iface, MediaEventType *type)
 {
-    mfmediaevent *This = impl_from_IMFMediaEvent(iface);
+    struct media_event *event = impl_from_IMFMediaEvent(iface);
 
-    TRACE("%p, %p\n", This, type);
+    TRACE("%p, %p.\n", iface, type);
 
-    *type = This->type;
+    *type = event->type;
 
     return S_OK;
 }
 
 static HRESULT WINAPI mfmediaevent_GetExtendedType(IMFMediaEvent *iface, GUID *extended_type)
 {
-    mfmediaevent *This = impl_from_IMFMediaEvent(iface);
+    struct media_event *event = impl_from_IMFMediaEvent(iface);
 
-    TRACE("%p, %p\n", This, extended_type);
+    TRACE("%p, %p.\n", iface, extended_type);
 
-    *extended_type = This->extended_type;
+    *extended_type = event->extended_type;
 
     return S_OK;
 }
 
 static HRESULT WINAPI mfmediaevent_GetStatus(IMFMediaEvent *iface, HRESULT *status)
 {
-    mfmediaevent *This = impl_from_IMFMediaEvent(iface);
+    struct media_event *event = impl_from_IMFMediaEvent(iface);
 
-    TRACE("%p, %p\n", This, status);
+    TRACE("%p, %p.\n", iface, status);
 
-    *status = This->status;
+    *status = event->status;
 
     return S_OK;
 }
 
 static HRESULT WINAPI mfmediaevent_GetValue(IMFMediaEvent *iface, PROPVARIANT *value)
 {
-    mfmediaevent *This = impl_from_IMFMediaEvent(iface);
+    struct media_event *event = impl_from_IMFMediaEvent(iface);
 
-    PropVariantCopy(value, &This->value);
+    TRACE("%p, %p.\n", iface, value);
+
+    PropVariantCopy(value, &event->value);
 
     return S_OK;
 }
@@ -6014,14 +6027,14 @@ static const IMFMediaEventVtbl mfmediaevent_vtbl =
 HRESULT WINAPI MFCreateMediaEvent(MediaEventType type, REFGUID extended_type, HRESULT status, const PROPVARIANT *value,
         IMFMediaEvent **event)
 {
-    mfmediaevent *object;
+    struct media_event *object;
     HRESULT hr;
 
-    TRACE("%s, %s, %08x, %s, %p\n", debugstr_eventid(type), debugstr_guid(extended_type), status,
+    TRACE("%s, %s, %#x, %s, %p.\n", debugstr_eventid(type), debugstr_guid(extended_type), status,
             debugstr_propvar(value), event);
 
-    object = HeapAlloc( GetProcessHeap(), 0, sizeof(*object) );
-    if(!object)
+    object = heap_alloc(sizeof(*object));
+    if (!object)
         return E_OUTOFMEMORY;
 
     if (FAILED(hr = init_attributes_object(&object->attributes, 0)))

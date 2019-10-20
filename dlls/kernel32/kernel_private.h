@@ -44,6 +44,12 @@ static inline obj_handle_t console_handle_unmap(HANDLE h)
     return wine_server_obj_handle( h != INVALID_HANDLE_VALUE ? (HANDLE)((UINT_PTR)h ^ 3) : INVALID_HANDLE_VALUE );
 }
 
+static inline BOOL set_ntstatus( NTSTATUS status )
+{
+    if (status) SetLastError( RtlNtStatusToDosError( status ));
+    return !status;
+}
+
 /* Some Wine specific values for Console inheritance (params->ConsoleHandle) */
 #define KERNEL32_CONSOLE_ALLOC          ((HANDLE)1)
 #define KERNEL32_CONSOLE_SHELL          ((HANDLE)2)
@@ -58,9 +64,6 @@ extern const WCHAR *DIR_SysWow64 DECLSPEC_HIDDEN;
 extern void FILE_SetDosError(void) DECLSPEC_HIDDEN;
 extern WCHAR *FILE_name_AtoW( LPCSTR name, BOOL alloc ) DECLSPEC_HIDDEN;
 extern DWORD FILE_name_WtoA( LPCWSTR src, INT srclen, LPSTR dest, INT destlen ) DECLSPEC_HIDDEN;
-
-/* module.c */
-extern WCHAR *MODULE_get_dll_load_path( LPCWSTR module, int safe_mode ) DECLSPEC_HIDDEN;
 
 extern BOOL NLS_IsUnicodeOnlyLcid(LCID) DECLSPEC_HIDDEN;
 

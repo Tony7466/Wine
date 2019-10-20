@@ -19,7 +19,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-
+#include <assert.h>
 #include "d3dx9_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(d3dx);
@@ -337,13 +337,12 @@ HRESULT WINAPI D3DXCheckTextureRequirements(struct IDirect3DDevice9 *device, UIN
     else if (h == D3DX_DEFAULT)
         h = (width ? w : 256);
 
-    if (fmt->block_width != 1 || fmt->block_height != 1)
-    {
-        if (w < fmt->block_width)
-            w = fmt->block_width;
-        if (h < fmt->block_height)
-            h = fmt->block_height;
-    }
+    assert(!(fmt->block_width & (fmt->block_width - 1)));
+    assert(!(fmt->block_height & (fmt->block_height - 1)));
+    if (w & (fmt->block_width - 1))
+        w = (w + fmt->block_width) & ~(fmt->block_width - 1);
+    if (h & (fmt->block_height - 1))
+        h = (h + fmt->block_height) & ~(fmt->block_height - 1);
 
     if ((caps.TextureCaps & D3DPTEXTURECAPS_POW2) && (!is_pow2(w)))
         w = make_pow2(w);
@@ -773,7 +772,10 @@ HRESULT WINAPI D3DXCreateTextureFromFileExW(struct IDirect3DDevice9 *device, con
 
     hr = map_view_of_file(srcfile, &buffer, &size);
     if (FAILED(hr))
+    {
+        WARN("Failed to open file.\n");
         return D3DXERR_INVALIDDATA;
+    }
 
     hr = D3DXCreateTextureFromFileInMemoryEx(device, buffer, size, width, height, miplevels, usage, format, pool,
         filter, mipfilter, colorkey, srcinfo, palette, texture);
