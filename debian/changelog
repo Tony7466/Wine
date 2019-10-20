@@ -5,6 +5,8 @@ wine-development (4.18-1) UNRELEASED; urgency=medium
     - A number of cleanups and improvements in Quartz.
     - Fixes for several test failures.
     - Various bug fixes.
+  * Drop no longer supported add-log-mailing-address setting from
+    debian/changelog.
 
  -- Jens Reyer <jre.winesim@gmail.com>  Mon, 21 Oct 2019 00:03:13 +0200
 
@@ -7651,8 +7653,3 @@ wine (951124-1) experimental; urgency=LOW
   * first Debianized packages
 
  -- Brian White <bcwhite@verisim.com>  Sun, 26 Nov 1996 23:02:47 -0400
-
-
-Local variables:
-mode: debian-changelog
-End:
