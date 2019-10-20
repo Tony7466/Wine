@@ -140,7 +140,7 @@
 @ stdcall AddAtomW(wstr)
 @ stdcall AddConsoleAliasA(str str str)
 @ stdcall AddConsoleAliasW(wstr wstr wstr)
-@ stdcall AddDllDirectory(wstr)
+@ stdcall -import AddDllDirectory(wstr)
 # @ stub AddIntegrityLabelToBoundaryDescriptor
 # @ stub AddLocalAlternateComputerNameA
 # @ stub AddLocalAlternateComputerNameW
@@ -403,7 +403,7 @@
 @ stdcall EnumDateFormatsExW(ptr long long)
 @ stdcall EnumDateFormatsW(ptr long long)
 @ stdcall EnumLanguageGroupLocalesA(ptr long long ptr)
-@ stdcall EnumLanguageGroupLocalesW(ptr long long ptr)
+@ stdcall -import EnumLanguageGroupLocalesW(ptr long long ptr)
 @ stdcall EnumResourceLanguagesA(long str str ptr long)
 @ stdcall -import EnumResourceLanguagesExA(long str str ptr long long long)
 @ stdcall -import EnumResourceLanguagesExW(long wstr wstr ptr long long long)
@@ -417,19 +417,19 @@
 @ stdcall -import EnumResourceTypesExW(long ptr long long long)
 @ stdcall EnumResourceTypesW(long ptr long)
 @ stdcall EnumSystemCodePagesA(ptr long)
-@ stdcall EnumSystemCodePagesW(ptr long)
+@ stdcall -import EnumSystemCodePagesW(ptr long)
 @ stdcall EnumSystemFirmwareTables(long ptr long)
 @ stdcall EnumSystemGeoID(long long ptr)
 @ stdcall EnumSystemLanguageGroupsA(ptr long ptr)
-@ stdcall EnumSystemLanguageGroupsW(ptr long ptr)
-@ stdcall EnumSystemLocalesA(ptr long)
-@ stdcall EnumSystemLocalesEx(ptr long long ptr)
-@ stdcall EnumSystemLocalesW(ptr long)
+@ stdcall -import EnumSystemLanguageGroupsW(ptr long ptr)
+@ stdcall -import EnumSystemLocalesA(ptr long)
+@ stdcall -import EnumSystemLocalesEx(ptr long long ptr)
+@ stdcall -import EnumSystemLocalesW(ptr long)
 @ stdcall EnumTimeFormatsA(ptr long long)
 @ stdcall EnumTimeFormatsEx(ptr wstr long long)
 @ stdcall EnumTimeFormatsW(ptr long long)
 @ stdcall EnumUILanguagesA(ptr long long)
-@ stdcall EnumUILanguagesW(ptr long long)
+@ stdcall -import EnumUILanguagesW(ptr long long)
 # @ stub EnumerateLocalComputerNamesA
 # @ stub EnumerateLocalComputerNamesW
 @ stdcall -arch=x86_64 EnterUmsSchedulingMode(ptr)
@@ -528,7 +528,7 @@
 @ stdcall -import FreeEnvironmentStringsA(ptr)
 @ stdcall -import FreeEnvironmentStringsW(ptr)
 @ stub -i386 FreeLSCallback
-@ stdcall FreeLibrary(long)
+@ stdcall -import FreeLibrary(long)
 @ stdcall FreeLibraryAndExitThread(long long)
 @ stdcall FreeLibraryWhenCallbackReturns(ptr ptr) ntdll.TpCallbackUnloadDllOnCompletion
 @ stdcall -import FreeResource(long)
@@ -990,7 +990,7 @@
 # @ stub IsTimeZoneRedirectionEnabled
 # @ stub IsValidCalDateTime
 @ stdcall IsValidCodePage(long)
-@ stdcall IsValidLanguageGroup(long long)
+@ stdcall -import IsValidLanguageGroup(long long)
 @ stdcall IsValidLocale(long long)
 @ stdcall IsValidLocaleName(wstr)
 # @ stub IsValidUILanguage
@@ -1042,10 +1042,10 @@
 @ stdcall LeaveCriticalSection(ptr) ntdll.RtlLeaveCriticalSection
 @ stdcall LeaveCriticalSectionWhenCallbackReturns(ptr ptr) ntdll.TpCallbackLeaveCriticalSectionOnCompletion
 # @ stub LoadAppInitDlls
-@ stdcall LoadLibraryA(str)
-@ stdcall LoadLibraryExA( str long long)
-@ stdcall LoadLibraryExW(wstr long long)
-@ stdcall LoadLibraryW(wstr)
+@ stdcall -import LoadLibraryA(str)
+@ stdcall -import LoadLibraryExA( str long long)
+@ stdcall -import LoadLibraryExW(wstr long long)
+@ stdcall -import LoadLibraryW(wstr)
 @ stdcall LoadModule(str ptr)
 @ stdcall -import LoadResource(long long)
 # @ stub LoadStringBaseExW
@@ -1274,7 +1274,7 @@
 @ stdcall ReplaceFileW(wstr wstr wstr long ptr ptr)
 # @ stub RemoveDirectoryTransactedA
 # @ stub RemoveDirectoryTransactedW
-@ stdcall RemoveDllDirectory(ptr)
+@ stdcall -import RemoveDllDirectory(ptr)
 # @ stub RemoveSecureMemoryCacheCallback
 # @ stub ReplacePartitionUnit
 @ stdcall RequestDeviceWakeup(long)
@@ -1324,8 +1324,8 @@
 @ stdcall -i386 -private -norelay SUnMapLS_IP_EBP_8() krnl386.exe16.SUnMapLS_IP_EBP_8
 @ stdcall -import ScrollConsoleScreenBufferA(long ptr ptr ptr ptr)
 @ stdcall -import ScrollConsoleScreenBufferW(long ptr ptr ptr ptr)
-@ stdcall SearchPathA(str str str long ptr ptr)
-@ stdcall SearchPathW(wstr wstr wstr long ptr ptr)
+@ stdcall -import SearchPathA(str str str long ptr ptr)
+@ stdcall -import SearchPathW(wstr wstr wstr long ptr ptr)
 @ stdcall SetCPGlobal(long)
 @ stdcall SetCalendarInfoA(long long long str)
 @ stdcall SetCalendarInfoW(long long long wstr)
@@ -1379,7 +1379,7 @@
 @ stub SetDaylightFlag
 @ stdcall SetDefaultCommConfigA(str ptr long)
 @ stdcall SetDefaultCommConfigW(wstr ptr long)
-@ stdcall SetDefaultDllDirectories(long)
+@ stdcall -import SetDefaultDllDirectories(long)
 @ stdcall SetDllDirectoryA(str)
 @ stdcall SetDllDirectoryW(wstr)
 # @ stub SetDynamicTimeZoneInformation

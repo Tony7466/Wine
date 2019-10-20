@@ -1845,6 +1845,124 @@ HRESULT CDECL wined3d_texture_add_dirty_region(struct wined3d_texture *texture,
     return WINED3D_OK;
 }
 
+static void wined3d_texture_gl_upload_bo(const struct wined3d_format *src_format, GLenum target,
+        unsigned int level, unsigned int src_row_pitch, unsigned int dst_x, unsigned int dst_y,
+        unsigned int dst_z, unsigned int update_w, unsigned int update_h, unsigned int update_d,
+        const BYTE *addr, BOOL srgb, struct wined3d_texture *dst_texture,
+        const struct wined3d_gl_info *gl_info)
+{
+    const struct wined3d_format_gl *format_gl = wined3d_format_gl(src_format);
+
+    if (src_format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_COMPRESSED)
+    {
+        unsigned int dst_row_pitch, dst_slice_pitch;
+        GLenum internal;
+
+        if (srgb)
+            internal = format_gl->srgb_internal;
+        else if (dst_texture->resource.bind_flags & WINED3D_BIND_RENDER_TARGET
+                && wined3d_resource_is_offscreen(&dst_texture->resource))
+            internal = format_gl->rt_internal;
+        else
+            internal = format_gl->internal;
+
+        wined3d_format_calculate_pitch(src_format, 1, update_w, update_h, &dst_row_pitch, &dst_slice_pitch);
+
+        TRACE("Uploading compressed data, target %#x, level %u, x %u, y %u, z %u, "
+                "w %u, h %u, d %u, format %#x, image_size %#x, addr %p.\n",
+                target, level, dst_x, dst_y, dst_z, update_w, update_h,
+                update_d, internal, dst_slice_pitch, addr);
+
+        if (target == GL_TEXTURE_1D)
+        {
+            GL_EXTCALL(glCompressedTexSubImage1D(target, level, dst_x,
+                    update_w, internal, dst_row_pitch, addr));
+        }
+        else if (dst_row_pitch == src_row_pitch)
+        {
+            if (target == GL_TEXTURE_2D_ARRAY || target == GL_TEXTURE_3D)
+            {
+                GL_EXTCALL(glCompressedTexSubImage3D(target, level, dst_x, dst_y, dst_z,
+                        update_w, update_h, update_d, internal, dst_slice_pitch * update_d, addr));
+            }
+            else
+            {
+                GL_EXTCALL(glCompressedTexSubImage2D(target, level, dst_x, dst_y,
+                        update_w, update_h, internal, dst_slice_pitch, addr));
+            }
+        }
+        else
+        {
+            unsigned int row_count = (update_h + src_format->block_height - 1) / src_format->block_height;
+            unsigned int row, y, z;
+
+            /* glCompressedTexSubImage2D() ignores pixel store state, so we
+             * can't use the unpack row length like for glTexSubImage2D. */
+            for (z = dst_z; z < dst_z + update_d; ++z)
+            {
+                for (row = 0, y = dst_y; row < row_count; ++row)
+                {
+                    if (target == GL_TEXTURE_2D_ARRAY || target == GL_TEXTURE_3D)
+                    {
+                        GL_EXTCALL(glCompressedTexSubImage3D(target, level, dst_x, y, z,
+                                update_w, src_format->block_height, 1, internal, dst_row_pitch, addr));
+                    }
+                    else
+                    {
+                        GL_EXTCALL(glCompressedTexSubImage2D(target, level, dst_x, y,
+                                update_w, src_format->block_height, internal, dst_row_pitch, addr));
+                    }
+
+                    y += src_format->block_height;
+                    addr += src_row_pitch;
+                }
+            }
+        }
+        checkGLcall("Upload compressed texture data");
+    }
+    else
+    {
+        unsigned int y, y_count;
+
+        TRACE("Uploading data, target %#x, level %u, x %u, y %u, z %u, "
+                "w %u, h %u, d %u, format %#x, type %#x, addr %p.\n",
+                target, level, dst_x, dst_y, dst_z, update_w, update_h,
+                update_d, format_gl->format, format_gl->type, addr);
+
+        if (src_row_pitch)
+        {
+            gl_info->gl_ops.gl.p_glPixelStorei(GL_UNPACK_ROW_LENGTH, src_row_pitch / src_format->byte_count);
+            y_count = 1;
+        }
+        else
+        {
+            y_count = update_h;
+            update_h = 1;
+        }
+
+        for (y = 0; y < y_count; ++y)
+        {
+            if (target == GL_TEXTURE_2D_ARRAY || target == GL_TEXTURE_3D)
+            {
+                GL_EXTCALL(glTexSubImage3D(target, level, dst_x, dst_y + y, dst_z,
+                        update_w, update_h, update_d, format_gl->format, format_gl->type, addr));
+            }
+            else if (target == GL_TEXTURE_1D)
+            {
+                gl_info->gl_ops.gl.p_glTexSubImage1D(target, level, dst_x,
+                        update_w, format_gl->format, format_gl->type, addr);
+            }
+            else
+            {
+                gl_info->gl_ops.gl.p_glTexSubImage2D(target, level, dst_x, dst_y + y,
+                        update_w, update_h, format_gl->format, format_gl->type, addr);
+            }
+        }
+        gl_info->gl_ops.gl.p_glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        checkGLcall("Upload texture data");
+    }
+}
+
 static void wined3d_texture_gl_upload_data(struct wined3d_context *context,
         const struct wined3d_const_bo_address *src_bo_addr, const struct wined3d_format *src_format,
         const struct wined3d_box *src_box, unsigned int src_row_pitch, unsigned int src_slice_pitch,
@@ -1856,10 +1974,7 @@ static void wined3d_texture_gl_upload_data(struct wined3d_context *context,
     unsigned int update_w = src_box->right - src_box->left;
     unsigned int update_h = src_box->bottom - src_box->top;
     unsigned int update_d = src_box->back - src_box->front;
-    const struct wined3d_format_gl *format_gl;
     struct wined3d_bo_address bo;
-    void *converted_mem = NULL;
-    struct wined3d_format_gl f;
     unsigned int level;
     BOOL decompress;
     GLenum target;
@@ -1933,7 +2048,10 @@ static void wined3d_texture_gl_upload_data(struct wined3d_context *context,
     {
         const struct wined3d_format *compressed_format = src_format;
         unsigned int dst_row_pitch, dst_slice_pitch;
-        void *src_mem;
+        struct wined3d_format_gl f;
+        void *converted_mem;
+        unsigned int z;
+        BYTE *src_mem;
 
         if (decompress)
         {
@@ -1951,138 +2069,48 @@ static void wined3d_texture_gl_upload_data(struct wined3d_context *context,
 
         wined3d_format_calculate_pitch(src_format, 1, update_w, update_h, &dst_row_pitch, &dst_slice_pitch);
 
-        /* Note that uploading 3D textures may require quite some address
-         * space; it may make sense to upload them per-slice instead. */
-        if (!(converted_mem = heap_calloc(update_d, dst_slice_pitch)))
+        if (!(converted_mem = heap_alloc(dst_slice_pitch)))
         {
             ERR("Failed to allocate upload buffer.\n");
             return;
         }
 
         src_mem = wined3d_context_gl_map_bo_address(context_gl, &bo,
-                src_slice_pitch, GL_PIXEL_UNPACK_BUFFER, WINED3D_MAP_READ);
-        if (decompress)
-            compressed_format->decompress(src_mem, converted_mem, src_row_pitch, src_slice_pitch,
-                    dst_row_pitch, dst_slice_pitch, update_w, update_h, update_d);
-        else
-            src_format->upload(src_mem, converted_mem, src_row_pitch, src_slice_pitch,
-                    dst_row_pitch, dst_slice_pitch, update_w, update_h, update_d);
-        wined3d_context_gl_unmap_bo_address(context_gl, &bo, GL_PIXEL_UNPACK_BUFFER, 0, NULL);
+                src_slice_pitch * update_d, GL_PIXEL_UNPACK_BUFFER, WINED3D_MAP_READ);
 
-        bo.buffer_object = 0;
-        bo.addr = converted_mem;
-        src_row_pitch = dst_row_pitch;
-        src_slice_pitch = dst_slice_pitch;
-    }
-
-    if (bo.buffer_object)
-    {
-        GL_EXTCALL(glBindBuffer(GL_PIXEL_UNPACK_BUFFER, bo.buffer_object));
-        checkGLcall("glBindBuffer");
-    }
-
-    format_gl = wined3d_format_gl(src_format);
-    if (src_format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_COMPRESSED)
-    {
-        unsigned int dst_row_pitch, dst_slice_pitch;
-        const BYTE *addr = bo.addr;
-        GLenum internal;
-
-        if (srgb)
-            internal = format_gl->srgb_internal;
-        else if (dst_texture->resource.bind_flags & WINED3D_BIND_RENDER_TARGET
-                && wined3d_resource_is_offscreen(&dst_texture->resource))
-            internal = format_gl->rt_internal;
-        else
-            internal = format_gl->internal;
-
-        wined3d_format_calculate_pitch(src_format, 1, update_w, update_h, &dst_row_pitch, &dst_slice_pitch);
-
-        TRACE("Uploading compressed data, target %#x, level %u, x %u, y %u, z %u, "
-                "w %u, h %u, d %u, format %#x, image_size %#x, addr %p.\n",
-                target, level, dst_x, dst_y, dst_z, update_w, update_h,
-                update_d, internal, dst_slice_pitch, addr);
-
-        if (target == GL_TEXTURE_1D)
+        for (z = 0; z < update_d; ++z, src_mem += src_slice_pitch)
         {
-            GL_EXTCALL(glCompressedTexSubImage1D(target, level, dst_x,
-                    update_w, internal, dst_row_pitch, addr));
-        }
-        else if (dst_row_pitch == src_row_pitch)
-        {
-            if (target == GL_TEXTURE_2D_ARRAY || target == GL_TEXTURE_3D)
-            {
-                GL_EXTCALL(glCompressedTexSubImage3D(target, level, dst_x, dst_y, dst_z,
-                        update_w, update_h, update_d, internal, dst_slice_pitch * update_d, addr));
-            }
+            if (decompress)
+                compressed_format->decompress(src_mem, converted_mem, src_row_pitch, src_slice_pitch,
+                        dst_row_pitch, dst_slice_pitch, update_w, update_h, 1);
             else
-            {
-                GL_EXTCALL(glCompressedTexSubImage2D(target, level, dst_x, dst_y,
-                        update_w, update_h, internal, dst_slice_pitch, addr));
-            }
-        }
-        else
-        {
-            unsigned int row_count = (update_h + src_format->block_height - 1) / src_format->block_height;
-            unsigned int row, y, z;
+                src_format->upload(src_mem, converted_mem, src_row_pitch, src_slice_pitch,
+                        dst_row_pitch, dst_slice_pitch, update_w, update_h, 1);
 
-            /* glCompressedTexSubImage2D() ignores pixel store state, so we
-             * can't use the unpack row length like for glTexSubImage2D. */
-            for (z = dst_z; z < dst_z + update_d; ++z)
-            {
-                for (row = 0, y = dst_y; row < row_count; ++row)
-                {
-                    if (target == GL_TEXTURE_2D_ARRAY || target == GL_TEXTURE_3D)
-                    {
-                        GL_EXTCALL(glCompressedTexSubImage3D(target, level, dst_x, y, z,
-                                update_w, src_format->block_height, 1, internal, dst_row_pitch, addr));
-                    }
-                    else
-                    {
-                        GL_EXTCALL(glCompressedTexSubImage2D(target, level, dst_x, y,
-                                update_w, src_format->block_height, internal, dst_row_pitch, addr));
-                    }
-
-                    y += src_format->block_height;
-                    addr += src_row_pitch;
-                }
-            }
+            wined3d_texture_gl_upload_bo(src_format, target, level, dst_row_pitch, dst_x, dst_y,
+                    dst_z + z, update_w, update_h, 1, converted_mem, srgb, dst_texture, gl_info);
         }
-        checkGLcall("Upload compressed texture data");
+
+        wined3d_context_gl_unmap_bo_address(context_gl, &bo, GL_PIXEL_UNPACK_BUFFER, 0, NULL);
+        heap_free(converted_mem);
     }
     else
     {
-        TRACE("Uploading data, target %#x, level %u, x %u, y %u, z %u, "
-                "w %u, h %u, d %u, format %#x, type %#x, addr %p.\n",
-                target, level, dst_x, dst_y, dst_z, update_w, update_h,
-                update_d, format_gl->format, format_gl->type, bo.addr);
+        if (bo.buffer_object)
+        {
+            GL_EXTCALL(glBindBuffer(GL_PIXEL_UNPACK_BUFFER, bo.buffer_object));
+            checkGLcall("glBindBuffer");
+        }
 
-        gl_info->gl_ops.gl.p_glPixelStorei(GL_UNPACK_ROW_LENGTH, src_row_pitch / src_format->byte_count);
-        if (target == GL_TEXTURE_2D_ARRAY || target == GL_TEXTURE_3D)
-        {
-            GL_EXTCALL(glTexSubImage3D(target, level, dst_x, dst_y, dst_z,
-                    update_w, update_h, update_d, format_gl->format, format_gl->type, bo.addr));
-        }
-        else if (target == GL_TEXTURE_1D)
-        {
-            gl_info->gl_ops.gl.p_glTexSubImage1D(target, level, dst_x,
-                    update_w, format_gl->format, format_gl->type, bo.addr);
-        }
-        else
-        {
-            gl_info->gl_ops.gl.p_glTexSubImage2D(target, level, dst_x, dst_y,
-                    update_w, update_h, format_gl->format, format_gl->type, bo.addr);
-        }
-        gl_info->gl_ops.gl.p_glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-        checkGLcall("Upload texture data");
-    }
+        wined3d_texture_gl_upload_bo(src_format, target, level, src_row_pitch, dst_x, dst_y,
+                dst_z, update_w, update_h, update_d, bo.addr, srgb, dst_texture, gl_info);
 
-    if (bo.buffer_object)
-    {
-        GL_EXTCALL(glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0));
-        checkGLcall("glBindBuffer");
+        if (bo.buffer_object)
+        {
+            GL_EXTCALL(glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0));
+            checkGLcall("glBindBuffer");
+        }
     }
-    heap_free(converted_mem);
 
     if (gl_info->quirks & WINED3D_QUIRK_FBO_TEX_UPDATE)
     {

@@ -1702,14 +1702,6 @@ static const struct drawcall_entry draw_ltr_reordered_run_seq[] = {
     { DRAW_LAST_KIND }
 };
 
-static const struct drawcall_entry draw_rtl_reordered_run_seq[] = {
-    { DRAW_GLYPHRUN, {'1','2','3','-','5','2',0}, {'r','u',0}, 6, 2 },
-    { DRAW_GLYPHRUN, {0x64a,0x64f,0x633,0x627,0x648,0x650,0x64a,0}, {'r','u',0}, 7, 1 },
-    { DRAW_GLYPHRUN, {'7','1',0}, {'r','u',0}, 2, 2 },
-    { DRAW_GLYPHRUN, {'.',0}, {'r','u',0}, 1, 1 },
-    { DRAW_LAST_KIND }
-};
-
 static void test_Draw(void)
 {
     static const WCHAR str3W[] = {'1','2','3','-','5','2',0x64a,0x64f,0x633,0x627,0x648,0x650,
@@ -1915,14 +1907,6 @@ todo_wine
     hr = IDWriteTextLayout_Draw(layout, &ctxt, &testrenderer, 0.0f, 0.0f);
     ok(hr == S_OK, "got 0x%08x\n", hr);
     ok_sequence(sequences, RENDERER_ID, draw_ltr_reordered_run_seq, "draw test 11", FALSE);
-
-    hr = IDWriteTextLayout_SetReadingDirection(layout, DWRITE_READING_DIRECTION_RIGHT_TO_LEFT);
-    ok(hr == S_OK, "Failed to set reading direction, hr %#x.\n", hr);
-
-    flush_sequence(sequences, RENDERER_ID);
-    hr = IDWriteTextLayout_Draw(layout, &ctxt, &testrenderer, 0.0f, 0.0f);
-    ok(hr == S_OK, "got 0x%08x\n", hr);
-    ok_sequence(sequences, RENDERER_ID, draw_rtl_reordered_run_seq, "draw test 12", FALSE);
 
     IDWriteTextLayout_Release(layout);
 
@@ -4720,6 +4704,7 @@ static void test_FontFallbackBuilder(void)
     static const WCHAR strW[] = {'A',0};
     IDWriteFontFallback *fallback, *fallback2;
     IDWriteFontFallbackBuilder *builder;
+    IDWriteFontFallback1 *fallback1;
     DWRITE_UNICODE_RANGE range;
     IDWriteFactory2 *factory2;
     IDWriteFactory *factory;
@@ -4907,6 +4892,13 @@ todo_wine {
     if (font)
         IDWriteFont_Release(font);
 
+    if (SUCCEEDED(IDWriteFontFallback_QueryInterface(fallback, &IID_IDWriteFontFallback1, (void **)&fallback1)))
+    {
+        IDWriteFontFallback1_Release(fallback1);
+    }
+    else
+        win_skip("IDWriteFontFallback1 is not supported.\n");
+
     IDWriteFontFallback_Release(fallback);
 
     IDWriteFontFallbackBuilder_Release(builder);
@@ -4918,6 +4910,7 @@ static void test_fallback(void)
 {
     static const WCHAR strW[] = {'a','b','c','d',0};
     IDWriteFontFallback *fallback, *fallback2;
+    IDWriteFontFallback1 *fallback1;
     DWRITE_CLUSTER_METRICS clusters[4];
     DWRITE_TEXT_METRICS metrics;
     IDWriteTextLayout2 *layout2;
@@ -5017,6 +5010,13 @@ todo_wine {
     hr = IDWriteTextFormat1_GetFontFallback(format1, &fallback2);
     ok(hr == S_OK, "got 0x%08x\n", hr);
     ok(fallback2 == NULL, "got %p\n", fallback2);
+
+    if (SUCCEEDED(IDWriteFontFallback_QueryInterface(fallback, &IID_IDWriteFontFallback1, (void **)&fallback1)))
+    {
+        IDWriteFontFallback1_Release(fallback1);
+    }
+    else
+        win_skip("IDWriteFontFallback1 is not supported.\n");
 
     IDWriteFontFallback_Release(fallback);
     IDWriteTextFormat1_Release(format1);

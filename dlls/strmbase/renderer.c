@@ -51,6 +51,7 @@ static HRESULT WINAPI BaseRenderer_InputPin_ReceiveConnection(IPin *iface, IPin 
     HRESULT hr;
 
     TRACE("iface %p, peer %p, mt %p.\n", iface, peer, mt);
+    strmbase_dump_media_type(mt);
 
     EnterCriticalSection(&filter->filter.csFilter);
     hr = BaseInputPinImpl_ReceiveConnection(iface, peer, mt);
@@ -220,6 +221,11 @@ static HRESULT sink_query_accept(struct strmbase_pin *pin, const AM_MEDIA_TYPE *
 static HRESULT sink_query_interface(struct strmbase_pin *iface, REFIID iid, void **out)
 {
     BaseRenderer *filter = impl_from_IPin(&iface->IPin_iface);
+    HRESULT hr;
+
+    if (filter->pFuncsTable->renderer_pin_query_interface
+            && SUCCEEDED(hr = filter->pFuncsTable->renderer_pin_query_interface(filter, iid, out)))
+        return hr;
 
     if (IsEqualGUID(iid, &IID_IMemInputPin))
         *out = &filter->sink.IMemInputPin_iface;
@@ -317,6 +323,9 @@ HRESULT WINAPI BaseRendererImpl_Receive(BaseRenderer *This, IMediaSample * pSamp
 
     if (IMediaSample_GetMediaType(pSample, &pmt) == S_OK)
     {
+        TRACE("Format change.\n");
+        strmbase_dump_media_type(pmt);
+
         if (FAILED(This->pFuncsTable->pfnCheckMediaType(This, pmt)))
         {
             return VFW_E_TYPE_NOT_ACCEPTED;
@@ -358,11 +367,11 @@ HRESULT WINAPI BaseRendererImpl_Receive(BaseRenderer *This, IMediaSample * pSamp
 
             IReferenceClock_GetTime(This->filter.pClock, &now);
 
-            if (now - This->filter.rtStreamStart - start <= -10000)
+            if (now - This->stream_start - start <= -10000)
             {
                 HANDLE handles[2] = {This->advise_event, This->flush_event};
 
-                IReferenceClock_AdviseTime(This->filter.pClock, This->filter.rtStreamStart,
+                IReferenceClock_AdviseTime(This->filter.pClock, This->stream_start,
                         start, (HEVENT)This->advise_event, &cookie);
 
                 LeaveCriticalSection(&This->csRenderLock);
@@ -420,12 +429,12 @@ HRESULT WINAPI BaseRendererImpl_Stop(IBaseFilter * iface)
 
 HRESULT WINAPI BaseRendererImpl_Run(IBaseFilter * iface, REFERENCE_TIME tStart)
 {
-    HRESULT hr = S_OK;
     BaseRenderer *This = impl_from_IBaseFilter(iface);
-    TRACE("(%p)->(%s)\n", This, wine_dbgstr_longlong(tStart));
+
+    TRACE("iface %p, start %s.\n", iface, debugstr_time(tStart));
 
     EnterCriticalSection(&This->csRenderLock);
-    This->filter.rtStreamStart = tStart;
+    This->stream_start = tStart;
     if (This->filter.state == State_Running)
         goto out;
 
@@ -435,30 +444,18 @@ HRESULT WINAPI BaseRendererImpl_Run(IBaseFilter * iface, REFERENCE_TIME tStart)
     {
         This->sink.end_of_stream = FALSE;
     }
-    else if (This->filter.filterInfo.pGraph)
-    {
-        IMediaEventSink *pEventSink;
-        hr = IFilterGraph_QueryInterface(This->filter.filterInfo.pGraph, &IID_IMediaEventSink, (LPVOID*)&pEventSink);
-        if (SUCCEEDED(hr))
-        {
-            hr = IMediaEventSink_Notify(pEventSink, EC_COMPLETE, S_OK, (LONG_PTR)This);
-            IMediaEventSink_Release(pEventSink);
-        }
-        hr = S_OK;
-    }
-    if (SUCCEEDED(hr))
-    {
-        QualityControlRender_Start(This->qcimpl, This->filter.rtStreamStart);
-        if (This->sink.pin.peer && This->pFuncsTable->renderer_start_stream)
-            This->pFuncsTable->renderer_start_stream(This);
-        if (This->filter.state == State_Stopped)
-            BaseRendererImpl_ClearPendingSample(This);
-        This->filter.state = State_Running;
-    }
+
+    QualityControlRender_Start(This->qcimpl, This->stream_start);
+    if (This->sink.pin.peer && This->pFuncsTable->renderer_start_stream)
+        This->pFuncsTable->renderer_start_stream(This);
+    if (This->filter.state == State_Stopped)
+        BaseRendererImpl_ClearPendingSample(This);
+    This->filter.state = State_Running;
+
 out:
     LeaveCriticalSection(&This->csRenderLock);
 
-    return hr;
+    return S_OK;
 }
 
 HRESULT WINAPI BaseRendererImpl_Pause(IBaseFilter * iface)
@@ -555,7 +552,7 @@ HRESULT WINAPI BaseRendererImpl_BeginFlush(BaseRenderer* iface)
 HRESULT WINAPI BaseRendererImpl_EndFlush(BaseRenderer* iface)
 {
     TRACE("(%p)\n", iface);
-    QualityControlRender_Start(iface->qcimpl, iface->filter.rtStreamStart);
+    QualityControlRender_Start(iface->qcimpl, iface->stream_start);
     RendererPosPassThru_ResetMediaTime(iface->pPosition);
     ResetEvent(iface->flush_event);
     return S_OK;

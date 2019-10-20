@@ -1601,6 +1601,7 @@ if (0) /* crashes on native */
     if (hr == S_OK) {
         IDWriteFontFaceReference *ref, *ref1;
         IDWriteFontList1 *fontlist1;
+        IDWriteFontList2 *fontlist2;
         IDWriteFontList *fontlist;
         IDWriteFont3 *font3;
         IDWriteFont1 *font1;
@@ -1629,6 +1630,15 @@ if (0) /* crashes on native */
             ok(fontlist == (IDWriteFontList *)fontlist1, "Unexpected interface pointer.\n");
             ok(fontlist != (IDWriteFontList *)family1, "Unexpected interface pointer.\n");
             ok(fontlist != (IDWriteFontList *)family, "Unexpected interface pointer.\n");
+
+            if (SUCCEEDED(IDWriteFontFamily1_QueryInterface(family1, &IID_IDWriteFontList2, (void **)&fontlist2)))
+            {
+                ok(fontlist == (IDWriteFontList *)fontlist2, "Unexpected interface pointer.\n");
+                IDWriteFontList2_Release(fontlist2);
+            }
+            else
+                win_skip("IDWriteFontList2 is not supported.\n");
+
             IDWriteFontList1_Release(fontlist1);
             IDWriteFontList_Release(fontlist);
         }
@@ -2365,6 +2375,7 @@ static void test_system_fontcollection(void)
     IDWriteFontCollection *collection, *coll2;
     IDWriteLocalFontFileLoader *localloader;
     IDWriteFontCollection1 *collection1;
+    IDWriteFontCollection3 *collection3;
     IDWriteFactory *factory, *factory2;
     IDWriteFontFileLoader *loader;
     IDWriteFontFamily *family;
@@ -2539,6 +2550,20 @@ static void test_system_fontcollection(void)
     }
     else
         win_skip("IDWriteFontCollection1 is not supported.\n");
+
+    hr = IDWriteFontCollection_QueryInterface(collection, &IID_IDWriteFontCollection3, (void **)&collection3);
+    if (SUCCEEDED(hr))
+    {
+        HANDLE event;
+
+        event = IDWriteFontCollection3_GetExpirationEvent(collection3);
+todo_wine
+        ok(!!event, "Expected event handle.\n");
+
+        IDWriteFontCollection3_Release(collection3);
+    }
+    else
+        win_skip("IDWriteFontCollection3 is not supported.\n");
 
     ref = IDWriteFontCollection_Release(collection);
     ok(ref == 0, "collection not released, %u\n", ref);
@@ -3882,6 +3907,7 @@ static void test_GetMatchingFonts(void)
     IDWriteFactory *factory;
     IDWriteFontList *fontlist, *fontlist2;
     IDWriteFontList1 *fontlist1;
+    IDWriteFontList2 *fontlist3;
     HRESULT hr;
     ULONG ref;
 
@@ -3955,6 +3981,13 @@ static void test_GetMatchingFonts(void)
     }
     else
         win_skip("IDWriteFontList1 is not supported.\n");
+
+    if (SUCCEEDED(IDWriteFontList_QueryInterface(fontlist, &IID_IDWriteFontList2, (void **)&fontlist3)))
+    {
+        IDWriteFontList2_Release(fontlist3);
+    }
+    else
+        win_skip("IDWriteFontList2 is not supported.\n");
 
     IDWriteFontList_Release(fontlist);
     IDWriteFontFamily_Release(family);

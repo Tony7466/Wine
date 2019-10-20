@@ -128,7 +128,7 @@ int CDECL MSVCRT__set_FMA3_enable(int flag)
 }
 #endif
 
-#if defined(__x86_64__) || defined(__arm__) || defined(__aarch64__) || _MSVCR_VER>=120
+#if !defined(__i386__) || _MSVCR_VER>=120
 
 /*********************************************************************
  *      _chgsignf (MSVCRT.@)
@@ -170,7 +170,8 @@ float CDECL MSVCRT__logbf( float num )
 }
 
 #endif
-#if defined(__x86_64__) || defined(__arm__) || defined(__aarch64__)
+
+#ifndef __i386__
 
 /*********************************************************************
  *      _finitef (MSVCRT.@)
@@ -1274,13 +1275,8 @@ int CDECL __fpe_flt_rounds(void)
     switch(fpc) {
         case MSVCRT__RC_CHOP: return 0;
         case MSVCRT__RC_NEAR: return 1;
-#ifdef _WIN64
-        case MSVCRT__RC_UP: return 3;
-        default: return 2;
-#else
         case MSVCRT__RC_UP: return 2;
         default: return 3;
-#endif
     }
 }
 #endif

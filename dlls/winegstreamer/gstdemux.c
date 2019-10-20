@@ -1406,10 +1406,6 @@ static HRESULT WINAPI GST_Run(IBaseFilter *iface, REFERENCE_TIME tStart)
     if (!This->container)
         return VFW_E_NOT_CONNECTED;
 
-    EnterCriticalSection(&This->filter.csFilter);
-    This->filter.rtStreamStart = tStart;
-    LeaveCriticalSection(&This->filter.csFilter);
-
     gst_element_get_state(This->container, &now, NULL, -1);
     if (now == GST_STATE_PLAYING)
         return S_OK;
@@ -1423,7 +1419,6 @@ static HRESULT WINAPI GST_Run(IBaseFilter *iface, REFERENCE_TIME tStart)
 
     EnterCriticalSection(&This->filter.csFilter);
     gst_element_set_state(This->container, GST_STATE_PLAYING);
-    This->filter.rtStreamStart = tStart;
 
     for (i = 0; i < This->cStreams; i++) {
         hr = BaseOutputPinImpl_Active(&This->ppPins[i]->pin);
@@ -1981,7 +1976,7 @@ static HRESULT WINAPI GSTInPin_ReceiveConnection(IPin *iface, IPin *pReceivePin,
     HRESULT hr = S_OK;
 
     TRACE("filter %p, peer %p, mt %p.\n", filter, pReceivePin, pmt);
-    dump_AM_MEDIA_TYPE(pmt);
+    strmbase_dump_media_type(pmt);
 
     mark_wine_thread();
 
@@ -2273,6 +2268,8 @@ static DWORD WINAPI dispatch_thread(void *user)
 {
     struct cb_data *cbdata;
 
+    CoInitializeEx(NULL, COINIT_MULTITHREADED);
+
     pthread_mutex_lock(&cb_list_lock);
 
     while(1){
@@ -2287,6 +2284,8 @@ static DWORD WINAPI dispatch_thread(void *user)
     }
 
     pthread_mutex_unlock(&cb_list_lock);
+
+    CoUninitialize();
 
     return 0;
 }

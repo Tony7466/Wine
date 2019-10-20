@@ -375,6 +375,18 @@ static inline BOOL emit_catch(compile_ctx_t *ctx, unsigned off)
     return emit_catch_jmp(ctx, off, ctx->instr_cnt);
 }
 
+static HRESULT compile_error(script_ctx_t *ctx, HRESULT error)
+{
+    if(error == SCRIPT_E_REPORTED)
+        return error;
+
+    clear_ei(&ctx->ei);
+    ctx->ei.scode = error = map_hres(error);
+    ctx->ei.bstrSource = get_vbscript_string(VBS_COMPILE_ERROR);
+    ctx->ei.bstrDescription = get_vbscript_error_string(error);
+    return report_script_error(ctx);
+}
+
 static expression_t *lookup_const_decls(compile_ctx_t *ctx, const WCHAR *name, BOOL lookup_global)
 {
     const_decl_t *decl;
@@ -1826,11 +1838,11 @@ HRESULT compile_script(script_ctx_t *script, const WCHAR *src, const WCHAR *deli
 
     hres = parse_script(&ctx.parser, src, delimiter, flags);
     if(FAILED(hres))
-        return hres;
+        return compile_error(script, hres);
 
     code = ctx.code = alloc_vbscode(&ctx, src);
     if(!ctx.code)
-        return E_OUTOFMEMORY;
+        return compile_error(script, E_OUTOFMEMORY);
 
     ctx.funcs = NULL;
     ctx.func_decls = NULL;
@@ -1844,7 +1856,7 @@ HRESULT compile_script(script_ctx_t *script, const WCHAR *src, const WCHAR *deli
     hres = compile_func(&ctx, ctx.parser.stats, &ctx.code->main_code);
     if(FAILED(hres)) {
         release_compiler(&ctx);
-        return hres;
+        return compile_error(script, hres);
     }
 
     ctx.global_consts = ctx.const_decls;
@@ -1853,7 +1865,7 @@ HRESULT compile_script(script_ctx_t *script, const WCHAR *src, const WCHAR *deli
         hres = create_function(&ctx, func_decl, &new_func);
         if(FAILED(hres)) {
             release_compiler(&ctx);
-            return hres;
+            return compile_error(script, hres);
         }
 
         new_func->next = ctx.funcs;
@@ -1864,14 +1876,14 @@ HRESULT compile_script(script_ctx_t *script, const WCHAR *src, const WCHAR *deli
         hres = compile_class(&ctx, class_decl);
         if(FAILED(hres)) {
             release_compiler(&ctx);
-            return hres;
+            return compile_error(script, hres);
         }
     }
 
     hres = check_script_collisions(&ctx, script);
     if(FAILED(hres)) {
         release_compiler(&ctx);
-        return hres;
+        return compile_error(script, hres);
     }
 
     if(ctx.global_vars) {
@@ -1912,5 +1924,31 @@ HRESULT compile_script(script_ctx_t *script, const WCHAR *src, const WCHAR *deli
 
     list_add_tail(&script->code_list, &code->entry);
     *ret = code;
+    return S_OK;
+}
+
+HRESULT compile_procedure(script_ctx_t *script, const WCHAR *src, const WCHAR *delimiter, DWORD flags, class_desc_t **ret)
+{
+    class_desc_t *desc;
+    vbscode_t *code;
+    HRESULT hres;
+
+    hres = compile_script(script, src, delimiter, flags, &code);
+    if(FAILED(hres))
+        return hres;
+
+    if(!(desc = compiler_alloc_zero(code, sizeof(*desc))))
+        return E_OUTOFMEMORY;
+    if(!(desc->funcs = compiler_alloc_zero(code, sizeof(*desc->funcs))))
+        return E_OUTOFMEMORY;
+
+    desc->ctx = script;
+    desc->func_cnt = 1;
+    desc->funcs->entries[VBDISP_CALLGET] = &code->main_code;
+
+    desc->next = script->procs;
+    script->procs = desc;
+
+    *ret = desc;
     return S_OK;
 }

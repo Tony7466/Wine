@@ -26,6 +26,8 @@ void WINAPI FreeMediaType(AM_MEDIA_TYPE * pMediaType);
 AM_MEDIA_TYPE * WINAPI CreateMediaType(AM_MEDIA_TYPE const * pSrc);
 void WINAPI DeleteMediaType(AM_MEDIA_TYPE * pMediaType);
 
+void strmbase_dump_media_type(const AM_MEDIA_TYPE *mt);
+
 /* Pin functions */
 
 struct strmbase_pin
@@ -155,7 +157,6 @@ struct strmbase_filter
     CRITICAL_SECTION csFilter;
 
     FILTER_STATE state;
-    REFERENCE_TIME rtStreamStart;
     IReferenceClock * pClock;
     FILTER_INFO filterInfo;
     CLSID clsid;
@@ -358,30 +359,18 @@ typedef struct tagBaseWindow
 	HWND hWnd;
 	LONG Width;
 	LONG Height;
-	HINSTANCE hInstance;
-	LPWSTR pClassName;
-	DWORD ClassStyles;
-	DWORD WindowStyles;
-	DWORD WindowStylesEx;
-	HDC hDC;
 
 	const struct BaseWindowFuncTable* pFuncsTable;
 } BaseWindow;
 
-typedef LPWSTR (WINAPI *BaseWindow_GetClassWindowStyles)(BaseWindow *This, DWORD *pClassStyles, DWORD *pWindowStyles, DWORD *pWindowStylesEx);
 typedef RECT (WINAPI *BaseWindow_GetDefaultRect)(BaseWindow *This);
-typedef BOOL (WINAPI *BaseWindow_PossiblyEatMessage)(BaseWindow *This, UINT uMsg, WPARAM wParam, LPARAM lParam);
-typedef LRESULT (WINAPI *BaseWindow_OnReceiveMessage)(BaseWindow *This, HWND hwnd, INT uMsg, WPARAM wParam, LPARAM lParam);
 typedef BOOL (WINAPI *BaseWindow_OnSize)(BaseWindow *This, LONG Height, LONG Width);
 
 typedef struct BaseWindowFuncTable
 {
 	/* Required */
-	BaseWindow_GetClassWindowStyles pfnGetClassWindowStyles;
 	BaseWindow_GetDefaultRect pfnGetDefaultRect;
 	/* Optional, WinProc Related */
-	BaseWindow_OnReceiveMessage pfnOnReceiveMessage;
-	BaseWindow_PossiblyEatMessage pfnPossiblyEatMessage;
 	BaseWindow_OnSize pfnOnSize;
 } BaseWindowFuncTable;
 
@@ -390,9 +379,6 @@ HRESULT WINAPI BaseWindow_Destroy(BaseWindow *pBaseWindow);
 
 HRESULT WINAPI BaseWindowImpl_PrepareWindow(BaseWindow *This);
 HRESULT WINAPI BaseWindowImpl_DoneWithWindow(BaseWindow *This);
-RECT WINAPI BaseWindowImpl_GetDefaultRect(BaseWindow *This);
-LRESULT WINAPI BaseWindowImpl_OnReceiveMessage(BaseWindow *This, HWND hwnd, INT uMsg, WPARAM wParam, LPARAM lParam);
-BOOL WINAPI BaseWindowImpl_OnSize(BaseWindow *This, LONG Height, LONG Width);
 
 enum strmbase_type_id
 {
@@ -417,12 +403,11 @@ typedef struct tagBaseControlWindow
 	HWND hwndDrain;
 	HWND hwndOwner;
 	struct strmbase_filter *pFilter;
-	CRITICAL_SECTION* pInterfaceLock;
 	struct strmbase_pin *pPin;
 } BaseControlWindow;
 
-HRESULT WINAPI BaseControlWindow_Init(BaseControlWindow *window, const IVideoWindowVtbl *vtbl,
-        struct strmbase_filter *filter, CRITICAL_SECTION *lock, struct strmbase_pin *pin, const BaseWindowFuncTable *ops);
+HRESULT WINAPI strmbase_window_init(BaseControlWindow *window, const IVideoWindowVtbl *vtbl,
+        struct strmbase_filter *filter, struct strmbase_pin *pin, const BaseWindowFuncTable *func_table);
 HRESULT WINAPI BaseControlWindow_Destroy(BaseControlWindow *pControlWindow);
 
 BOOL WINAPI BaseControlWindowImpl_PossiblyEatMessage(BaseWindow *This, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -538,6 +523,7 @@ typedef struct BaseRendererTag
      * to immediately unblock the streaming thread. */
     HANDLE flush_event;
     IMediaSample *pMediaSample;
+    REFERENCE_TIME stream_start;
 
     IQualityControl *pQSink;
     struct QualityControlImpl *qcimpl;
@@ -574,6 +560,7 @@ typedef struct BaseRendererFuncTable {
     BaseRenderer_EndFlush pfnEndFlush;
     void (*renderer_destroy)(BaseRenderer *iface);
     HRESULT (*renderer_query_interface)(BaseRenderer *iface, REFIID iid, void **out);
+    HRESULT (*renderer_pin_query_interface)(BaseRenderer *iface, REFIID iid, void **out);
 } BaseRendererFuncTable;
 
 HRESULT WINAPI BaseRendererImpl_Receive(BaseRenderer *This, IMediaSample * pSample);

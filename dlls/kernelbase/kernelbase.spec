@@ -19,7 +19,7 @@
 @ stdcall AddAuditAccessAce(ptr long long ptr long long)
 @ stdcall AddAuditAccessAceEx(ptr long long long ptr long long)
 @ stdcall AddAuditAccessObjectAce(ptr long long long ptr ptr ptr long long)
-@ stdcall AddDllDirectory(wstr) kernel32.AddDllDirectory
+@ stdcall AddDllDirectory(wstr)
 @ stdcall AddMandatoryAce(ptr long long long ptr)
 @ stdcall AddRefActCtx(ptr)
 # @ stub AddResourceAttributeAce
@@ -298,7 +298,7 @@
 @ stdcall EnumDateFormatsW(ptr long long) kernel32.EnumDateFormatsW
 # @ stub EnumDeviceDrivers
 @ stdcall EnumDynamicTimeZoneInformation(long ptr)
-@ stdcall EnumLanguageGroupLocalesW(ptr long long ptr) kernel32.EnumLanguageGroupLocalesW
+@ stdcall EnumLanguageGroupLocalesW(ptr long long ptr)
 # @ stub EnumPageFilesA
 # @ stub EnumPageFilesW
 # @ stub EnumProcessModules
@@ -311,16 +311,16 @@
 @ stdcall EnumResourceNamesW(long wstr ptr long)
 @ stdcall EnumResourceTypesExA(long ptr long long long)
 @ stdcall EnumResourceTypesExW(long ptr long long long)
-@ stdcall EnumSystemCodePagesW(ptr long) kernel32.EnumSystemCodePagesW
+@ stdcall EnumSystemCodePagesW(ptr long)
 @ stdcall EnumSystemFirmwareTables(long ptr long) kernel32.EnumSystemFirmwareTables
 @ stdcall EnumSystemGeoID(long long ptr) kernel32.EnumSystemGeoID
-@ stdcall EnumSystemLanguageGroupsW(ptr long ptr) kernel32.EnumSystemLanguageGroupsW
-@ stdcall EnumSystemLocalesA(ptr long) kernel32.EnumSystemLocalesA
-@ stdcall EnumSystemLocalesEx(ptr long long ptr) kernel32.EnumSystemLocalesEx
-@ stdcall EnumSystemLocalesW(ptr long) kernel32.EnumSystemLocalesW
+@ stdcall EnumSystemLanguageGroupsW(ptr long ptr)
+@ stdcall EnumSystemLocalesA(ptr long)
+@ stdcall EnumSystemLocalesEx(ptr long long ptr)
+@ stdcall EnumSystemLocalesW(ptr long)
 @ stdcall EnumTimeFormatsEx(ptr wstr long long) kernel32.EnumTimeFormatsEx
 @ stdcall EnumTimeFormatsW(ptr long long) kernel32.EnumTimeFormatsW
-@ stdcall EnumUILanguagesW(ptr long long) kernel32.EnumUILanguagesW
+@ stdcall EnumUILanguagesW(ptr long long)
 # @ stub EnumerateStateAtomValues
 # @ stub EnumerateStateContainerItems
 @ stub EqualDomainSid
@@ -394,7 +394,7 @@
 @ stdcall FreeEnvironmentStringsW(ptr)
 # @ stub FreeGPOListInternalA
 # @ stub FreeGPOListInternalW
-@ stdcall FreeLibrary(long) kernel32.FreeLibrary
+@ stdcall FreeLibrary(long)
 @ stdcall FreeLibraryAndExitThread(long long)
 @ stdcall FreeLibraryWhenCallbackReturns(ptr ptr) ntdll.TpCallbackUnloadDllOnCompletion
 @ stdcall FreeResource(long)
@@ -618,7 +618,7 @@
 # @ stub GetPreviousFgPolicyRefreshInfoInternal
 @ stdcall GetPriorityClass(long)
 @ stdcall GetPrivateObjectSecurity(ptr long ptr long ptr)
-@ stdcall GetProcAddress(long str) kernel32.GetProcAddress
+@ stdcall GetProcAddress(long str)
 # @ stub GetProcAddressForCaller
 # @ stub GetProcessDefaultCpuSets
 # @ stub GetProcessGroupAffinity
@@ -826,12 +826,12 @@
 @ stub InternalLcidToName
 @ stub Internal_EnumCalendarInfo
 @ stub Internal_EnumDateFormats
-@ stub Internal_EnumLanguageGroupLocales
-@ stub Internal_EnumSystemCodePages
-@ stub Internal_EnumSystemLanguageGroups
+@ stdcall Internal_EnumLanguageGroupLocales(ptr long long ptr long)
+@ stdcall Internal_EnumSystemCodePages(ptr long long)
+@ stdcall Internal_EnumSystemLanguageGroups(ptr long ptr long)
 @ stub Internal_EnumSystemLocales
 @ stub Internal_EnumTimeFormats
-@ stub Internal_EnumUILanguages
+@ stdcall Internal_EnumUILanguages(ptr long long long)
 # @ stub InternetTimeFromSystemTimeA
 # @ stub InternetTimeFromSystemTimeW
 # @ stub InternetTimeToSystemTimeA
@@ -875,7 +875,7 @@
 @ stdcall IsTokenRestricted(long)
 @ stdcall IsValidAcl(ptr)
 @ stdcall IsValidCodePage(long) kernel32.IsValidCodePage
-@ stdcall IsValidLanguageGroup(long long) kernel32.IsValidLanguageGroup
+@ stdcall IsValidLanguageGroup(long long)
 @ stdcall IsValidLocale(long long) kernel32.IsValidLocale
 @ stdcall IsValidLocaleName(wstr) kernel32.IsValidLocaleName
 # @ stub IsValidNLSVersion
@@ -922,10 +922,10 @@
 @ stdcall LeaveCriticalSectionWhenCallbackReturns(ptr ptr) ntdll.TpCallbackLeaveCriticalSectionOnCompletion
 # @ stub LoadAppInitDlls
 # @ stub LoadEnclaveData
-@ stdcall LoadLibraryA(str) kernel32.LoadLibraryA
-@ stdcall LoadLibraryExA( str long long) kernel32.LoadLibraryExA
-@ stdcall LoadLibraryExW(wstr long long) kernel32.LoadLibraryExW
-@ stdcall LoadLibraryW(wstr) kernel32.LoadLibraryW
+@ stdcall LoadLibraryA(str)
+@ stdcall LoadLibraryExA( str long long)
+@ stdcall LoadLibraryExW(wstr long long)
+@ stdcall LoadLibraryW(wstr)
 # @ stub LoadPackagedLibrary
 @ stdcall LoadResource(long long)
 @ stdcall LoadStringA(long long ptr long)
@@ -1333,7 +1333,7 @@
 @ stdcall RemapPredefinedHandleInternal(long long)
 @ stdcall RemoveDirectoryA(str) kernel32.RemoveDirectoryA
 @ stdcall RemoveDirectoryW(wstr) kernel32.RemoveDirectoryW
-@ stdcall RemoveDllDirectory(ptr) kernel32.RemoveDllDirectory
+@ stdcall RemoveDllDirectory(ptr)
 # @ stub RemovePackageStatus
 # @ stub RemovePackageStatusForUser
 @ stdcall RemoveVectoredContinueHandler(ptr) ntdll.RtlRemoveVectoredContinueHandler
@@ -1385,8 +1385,8 @@
 # @ stub SaveStateRootFolderPath
 @ stdcall ScrollConsoleScreenBufferA(long ptr ptr ptr ptr)
 @ stdcall ScrollConsoleScreenBufferW(long ptr ptr ptr ptr)
-@ stdcall SearchPathA(str str str long ptr ptr) kernel32.SearchPathA
-@ stdcall SearchPathW(wstr wstr wstr long ptr ptr) kernel32.SearchPathW
+@ stdcall SearchPathA(str str str long ptr ptr)
+@ stdcall SearchPathW(wstr wstr wstr long ptr ptr)
 @ stdcall SetAclInformation(ptr ptr long long)
 # @ stub SetCachedSigningLevel
 @ stdcall SetCalendarInfoW(long long long wstr) kernel32.SetCalendarInfoW
@@ -1419,7 +1419,7 @@
 @ stdcall SetCriticalSectionSpinCount(ptr long) ntdll.RtlSetCriticalSectionSpinCount
 @ stdcall SetCurrentDirectoryA(str)
 @ stdcall SetCurrentDirectoryW(wstr)
-@ stdcall SetDefaultDllDirectories(long) kernel32.SetDefaultDllDirectories
+@ stdcall SetDefaultDllDirectories(long)
 # @ stub SetDynamicTimeZoneInformation
 @ stdcall SetEndOfFile(long)
 @ stub SetEnvironmentStringsW
@@ -1451,7 +1451,7 @@
 @ stdcall SetNamedPipeHandleState(long ptr ptr ptr)
 @ stdcall SetPriorityClass(long long)
 @ stdcall SetPrivateObjectSecurity(long ptr ptr ptr long)
-@ stub SetPrivateObjectSecurityEx
+@ stdcall SetPrivateObjectSecurityEx(long ptr ptr long ptr long)
 @ stdcall SetProcessAffinityUpdateMode(long long)
 # @ stub SetProcessDefaultCpuSets
 # @ stub SetProcessGroupAffinity

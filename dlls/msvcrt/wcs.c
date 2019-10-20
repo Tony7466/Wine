@@ -781,13 +781,13 @@ static int puts_clbk_str_c99_a(void *ctx, int len, const char *str)
         return len;
 
     if(out->len < len) {
-        memcpy(out->buf, str, out->len);
+        memmove(out->buf, str, out->len);
         out->buf += out->len;
         out->len = 0;
         return len;
     }
 
-    memcpy(out->buf, str, len);
+    memmove(out->buf, str, len);
     out->buf += len;
     out->len -= len;
     return len;
@@ -1819,6 +1819,20 @@ INT CDECL MSVCRT_wctob( MSVCRT_wint_t wchar )
     } else if(WideCharToMultiByte( codepage, 0, &wchar, 1, &out, 1, NULL, &error ) && !error)
         return (INT)out;
     return MSVCRT_EOF;
+}
+
+/*********************************************************************
+ *              wcrtomb_s (MSVCRT.@)
+ */
+INT CDECL MSVCRT_wcrtomb_s(MSVCRT_size_t *len, char *mbchar,
+        MSVCRT_size_t size, MSVCRT_wchar_t wch, MSVCRT_mbstate_t *s)
+{
+    int ilen, ret;
+
+    if (s) *s = 0;
+    ret = MSVCRT_wctomb_s(&ilen, mbchar, size, wch);
+    if (len) *len = ilen;
+    return ret;
 }
 
 /*********************************************************************

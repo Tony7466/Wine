@@ -104,8 +104,6 @@ static HRESULT lookup_identifier(exec_ctx_t *ctx, BSTR name, vbdisp_invoke_type_
     DISPID id;
     HRESULT hres;
 
-    static const WCHAR errW[] = {'e','r','r',0};
-
     if(invoke_type == VBDISP_LET
             && (ctx->func->type == FUNC_FUNCTION || ctx->func->type == FUNC_PROPGET || ctx->func->type == FUNC_DEFGET)
             && !wcsicmp(name, ctx->func->name)) {
@@ -175,16 +173,10 @@ static HRESULT lookup_identifier(exec_ctx_t *ctx, BSTR name, vbdisp_invoke_type_
         }
     }
 
-    if(!wcsicmp(name, errW)) {
-        ref->type = REF_OBJ;
-        ref->u.obj = (IDispatch*)&ctx->script->err_obj->IDispatchEx_iface;
-        return S_OK;
-    }
-
-    hres = vbdisp_get_id(ctx->script->global_obj, name, invoke_type, TRUE, &id);
+    hres = get_builtin_id(ctx->script->global_obj, name, &id);
     if(SUCCEEDED(hres)) {
         ref->type = REF_DISP;
-        ref->u.d.disp = (IDispatch*)&ctx->script->global_obj->IDispatchEx_iface;
+        ref->u.d.disp = &ctx->script->global_obj->IDispatch_iface;
         ref->u.d.id = id;
         return S_OK;
     }
@@ -245,6 +237,14 @@ static HRESULT add_dynamic_var(exec_ctx_t *ctx, const WCHAR *name,
 
     *out_var = &new_var->v;
     return S_OK;
+}
+
+void clear_ei(EXCEPINFO *ei)
+{
+    SysFreeString(ei->bstrSource);
+    SysFreeString(ei->bstrDescription);
+    SysFreeString(ei->bstrHelpFile);
+    memset(ei, 0, sizeof(*ei));
 }
 
 static inline VARIANT *stack_pop(exec_ctx_t *ctx)
@@ -319,7 +319,7 @@ static HRESULT stack_pop_val(exec_ctx_t *ctx, variant_val_t *r)
         HRESULT hres;
 
         hres = get_disp_value(ctx->script, V_DISPATCH(r->v), &r->store);
-        if(r->owned)
+        if(r->owned && V_DISPATCH(r->v))
             IDispatch_Release(V_DISPATCH(r->v));
         if(FAILED(hres))
             return hres;
@@ -350,7 +350,8 @@ static HRESULT stack_assume_val(exec_ctx_t *ctx, unsigned n)
 
         disp = V_DISPATCH(v);
         hres = get_disp_value(ctx->script, disp, v);
-        IDispatch_Release(disp);
+        if(disp)
+            IDispatch_Release(disp);
         if(FAILED(hres))
             return hres;
     }
@@ -580,7 +581,7 @@ static HRESULT do_icall(exec_ctx_t *ctx, VARIANT *res)
         break;
     case REF_FUNC:
         vbstack_to_dp(ctx, arg_cnt, FALSE, &dp);
-        hres = exec_script(ctx->script, ref.u.f, NULL, &dp, res);
+        hres = exec_script(ctx->script, FALSE, ref.u.f, NULL, &dp, res);
         if(FAILED(hres))
             return hres;
         break;
@@ -688,23 +689,27 @@ static HRESULT interp_mcallv(exec_ctx_t *ctx)
 
 static HRESULT assign_value(exec_ctx_t *ctx, VARIANT *dst, VARIANT *src, WORD flags)
 {
+    VARIANT value;
     HRESULT hres;
 
-    hres = VariantCopyInd(dst, src);
+    V_VT(&value) = VT_EMPTY;
+    hres = VariantCopyInd(&value, src);
     if(FAILED(hres))
         return hres;
 
-    if(V_VT(dst) == VT_DISPATCH && !(flags & DISPATCH_PROPERTYPUTREF)) {
-        VARIANT value;
+    if(V_VT(&value) == VT_DISPATCH && !(flags & DISPATCH_PROPERTYPUTREF)) {
+        IDispatch *disp = V_DISPATCH(&value);
 
-        hres = get_disp_value(ctx->script, V_DISPATCH(dst), &value);
-        IDispatch_Release(V_DISPATCH(dst));
+        V_VT(&value) = VT_EMPTY;
+        hres = get_disp_value(ctx->script, disp, &value);
+        if(disp)
+            IDispatch_Release(disp);
         if(FAILED(hres))
             return hres;
-
-        *dst = value;
     }
 
+    VariantClear(dst);
+    *dst = value;
     return S_OK;
 }
 
@@ -1321,7 +1326,7 @@ static HRESULT interp_errmode(exec_ctx_t *ctx)
     TRACE("%d\n", err_mode);
 
     ctx->resume_next = err_mode;
-    ctx->script->err_number = S_OK;
+    clear_ei(&ctx->script->ei);
     return S_OK;
 }
 
@@ -2078,7 +2083,7 @@ static void release_exec(exec_ctx_t *ctx)
     heap_free(ctx->stack);
 }
 
-HRESULT exec_script(script_ctx_t *ctx, function_t *func, vbdisp_t *vbthis, DISPPARAMS *dp, VARIANT *res)
+HRESULT exec_script(script_ctx_t *ctx, BOOL extern_caller, function_t *func, vbdisp_t *vbthis, DISPPARAMS *dp, VARIANT *res)
 {
     exec_ctx_t exec = {func->code_ctx};
     vbsop_t op;
@@ -2140,6 +2145,9 @@ HRESULT exec_script(script_ctx_t *ctx, function_t *func, vbdisp_t *vbthis, DISPP
         return E_OUTOFMEMORY;
     }
 
+    if(extern_caller)
+        IActiveScriptSite_OnEnterScript(ctx->site);
+
     if(vbthis) {
         exec.this_obj = (IDispatch*)&vbthis->IDispatchEx_iface;
         exec.vbthis = vbthis;
@@ -2158,7 +2166,15 @@ HRESULT exec_script(script_ctx_t *ctx, function_t *func, vbdisp_t *vbthis, DISPP
         op = exec.instr->op;
         hres = op_funcs[op](&exec);
         if(FAILED(hres)) {
-            ctx->err_number = hres = map_hres(hres);
+            if(hres != SCRIPT_E_RECORDED) {
+                clear_ei(&ctx->ei);
+
+                ctx->ei.scode = hres = map_hres(hres);
+                ctx->ei.bstrSource = get_vbscript_string(VBS_RUNTIME_ERROR);
+                ctx->ei.bstrDescription = get_vbscript_error_string(hres);
+            }else {
+                hres = ctx->ei.scode;
+            }
 
             if(exec.resume_next) {
                 unsigned stack_off;
@@ -2203,6 +2219,15 @@ HRESULT exec_script(script_ctx_t *ctx, function_t *func, vbdisp_t *vbthis, DISPP
     }
 
     assert(!exec.top);
+
+    if(extern_caller) {
+        IActiveScriptSite_OnLeaveScript(ctx->site);
+        if(FAILED(hres)) {
+            if(!ctx->ei.scode)
+                ctx->ei.scode = hres;
+            hres = report_script_error(ctx);
+        }
+    }
 
     if(SUCCEEDED(hres) && res) {
         *res = exec.ret_val;

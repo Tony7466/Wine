@@ -57,7 +57,11 @@ HRESULT create_view( enum view_type type, const WCHAR *path, const struct keywor
         struct table *table = grab_table( class );
         HRESULT hr;
 
-        if (table && (hr = append_table( view, table )) != S_OK) return hr;
+        if (table && (hr = append_table( view, table )) != S_OK)
+        {
+            heap_free( view );
+            return hr;
+        }
         view->proplist = proplist;
         view->cond     = cond;
         break;
@@ -632,6 +636,7 @@ done:
     if (query) release_query( query );
     free_path( path );
     SysFreeString( antecedent );
+    heap_free( str );
     return hr;
 }
 
