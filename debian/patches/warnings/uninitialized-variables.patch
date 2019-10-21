@@ -14,7 +14,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (hkey && !RegQueryValueExW(hkey, name, 0, &type, NULL, &size))
 --- a/dlls/d3dx9_36/texture.c
 +++ b/dlls/d3dx9_36/texture.c
-@@ -1288,6 +1288,10 @@ static inline void fill_texture(const st
+@@ -1290,6 +1290,10 @@ static inline void fill_texture(const st
              case 3: /* Blue */
                  comp_value = value->z;
                  break;
@@ -27,7 +27,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (format->type == FORMAT_ARGBF16)
 --- a/dlls/kernel32/locale.c
 +++ b/dlls/kernel32/locale.c
-@@ -5449,7 +5449,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
+@@ -4791,7 +4791,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
                          LPWSTR lpUnicodeCharStr, INT cchUnicodeChar)
  {
      INT i, label_start, label_end, out_label, out = 0;

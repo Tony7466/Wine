@@ -19,7 +19,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  # Sort keys file
  my $SORTKEYS = "tr10/allkeys.txt";
-@@ -432,15 +432,8 @@ my %joining_forms =
+@@ -433,15 +433,8 @@ my %joining_forms =
  sub open_data_file($$)
  {
      my ($base, $name) = @_;
@@ -36,7 +36,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      return *FILE;
  }
  
-@@ -2908,9 +2901,10 @@ dump_vertical( "dlls/gdi32/vertical.c" )
+@@ -2907,9 +2900,10 @@ dump_vertical( "dlls/gdi32/vertical.c" )
  dump_vertical( "dlls/wineps.drv/vertical.c" );
  dump_nameprep( "dlls/kernel32/nameprep.c" );
  
@@ -63,7 +63,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  extern union cptable cptable_037;
  extern union cptable cptable_424;
  extern union cptable cptable_437;
-@@ -172,8 +173,7 @@ static const union cptable * const cptab
+@@ -174,8 +175,7 @@ static const union cptable * const cptab
      &cptable_28605,
      &cptable_28606,
  };
