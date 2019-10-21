@@ -9,6 +9,7 @@ wine-development (4.18-1) UNRELEASED; urgency=medium
     debian/changelog.
   * Add missing colon in closes line.
   * Set fields Upstream-Name in debian/copyright.
+  * Set debhelper compatibility level to 12 (closes: #910932).
 
  -- Jens Reyer <jre.winesim@gmail.com>  Mon, 21 Oct 2019 00:03:13 +0200
 
