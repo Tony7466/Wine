@@ -1,19 +1,16 @@
-wine-development (4.18-1) UNRELEASED; urgency=medium
+wine-development (4.18-1) unstable; urgency=medium
 
   * New upstream release 4.18, released Oct 18, 2019.
     - Many new VBScript functions.
     - A number of cleanups and improvements in Quartz.
     - Fixes for several test failures.
     - Various bug fixes.
-  * Drop no longer supported add-log-mailing-address setting from
-    debian/changelog.
-  * Add missing colon in closes line.
   * Set fields Upstream-Name in debian/copyright.
   * Set debhelper compatibility level to 12 (closes: #910932).
   * Update standards version to 4.4.1 (no changes required).
-  * Fix day-of-week for ancient changelog entries.
+  * Automatic cleanup of ancient changelog entries.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Mon, 21 Oct 2019 00:03:13 +0200
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 21 Oct 2019 19:48:44 +0200
 
 wine-development (4.17-1) unstable; urgency=medium
 
