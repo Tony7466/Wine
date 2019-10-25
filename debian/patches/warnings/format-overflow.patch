@@ -67,3 +67,14 @@ author: Michael Gilbert <mgilbert@debian.org>
      char progname[64];
      char title[31];
      char optparams[65];
+--- a/dlls/dnsapi/query.c
++++ b/dlls/dnsapi/query.c
+@@ -71,7 +71,7 @@ static const char *dns_section_to_str( n
+     case ns_s_ar:   return "Additional";
+     default:
+     {
+-        static char tmp[5];
++        static char tmp[11];
+         FIXME( "unknown section: 0x%02x\n", section );
+         sprintf( tmp, "0x%02x", section );
+         return tmp;
