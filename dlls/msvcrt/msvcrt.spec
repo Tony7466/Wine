@@ -724,7 +724,7 @@
 @ cdecl _mbscpy_s(ptr long str)
 @ cdecl _mbscpy_s_l(ptr long str ptr)
 @ cdecl _mbscspn(str str)
-# stub _mbscspn_l(str str ptr)
+@ cdecl _mbscspn_l(str str ptr)
 @ cdecl _mbsdec(ptr ptr)
 # stub _mbsdec_l(ptr ptr ptr)
 @ cdecl _mbsdup(str) MSVCRT__strdup
@@ -802,7 +802,7 @@
 # stub _mbsset_s(ptr long long)
 # stub _mbsset_s_l(ptr long long ptr)
 @ cdecl _mbsspn(str str)
-# stub _mbsspn_l(str str ptr)
+@ cdecl _mbsspn_l(str str ptr)
 @ cdecl _mbsspnp(str str)
 # stub _mbsspnp_l(str str ptr)
 @ cdecl _mbsstr(str str)

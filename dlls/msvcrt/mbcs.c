@@ -118,7 +118,7 @@ static inline unsigned char* u_strncat( unsigned char* dst, const unsigned char*
 
 static inline int u_strcmp( const unsigned char *s1, const unsigned char *s2 )
 {
-  return strcmp( (const char*)s1, (const char*)s2 );
+  return MSVCRT_strcmp( (const char*)s1, (const char*)s2 );
 }
 
 static inline int u_strcasecmp( const unsigned char *s1, const unsigned char *s2 )
@@ -128,7 +128,7 @@ static inline int u_strcasecmp( const unsigned char *s1, const unsigned char *s2
 
 static inline int u_strncmp( const unsigned char *s1, const unsigned char *s2, MSVCRT_size_t len )
 {
-  return strncmp( (const char*)s1, (const char*)s2, len );
+  return MSVCRT_strncmp( (const char*)s1, (const char*)s2, len );
 }
 
 static inline int u_strncasecmp( const unsigned char *s1, const unsigned char *s2, MSVCRT_size_t len )
@@ -154,11 +154,6 @@ static inline unsigned char *u__strset( unsigned char *s, unsigned char c )
 static inline unsigned char *u__strnset( unsigned char *s, unsigned char c, MSVCRT_size_t len )
 {
   return (unsigned char*) MSVCRT__strnset( (char*)s, c, len );
-}
-
-static inline MSVCRT_size_t u_strcspn( const unsigned char *s, const unsigned char *rej )
-{
-  return strcspn( (const char *)s, (const char*)rej );
 }
 
 /*********************************************************************
@@ -1216,7 +1211,7 @@ unsigned char* CDECL _mbscpy( unsigned char *dst, const unsigned char *src )
  */
 unsigned char * CDECL _mbsstr(const unsigned char *haystack, const unsigned char *needle)
 {
-    return (unsigned char *)strstr( (const char *)haystack, (const char *)needle );
+    return (unsigned char *)MSVCRT_strstr( (const char *)haystack, (const char *)needle );
 }
 
 /*********************************************************************
@@ -2021,11 +2016,11 @@ int CDECL _mbsupr_s(unsigned char* s, MSVCRT_size_t len)
   return 0;
 }
 
-
 /*********************************************************************
- *              _mbsspn (MSVCRT.@)
+ *              _mbsspn_l (MSVCRT.@)
  */
-MSVCRT_size_t CDECL _mbsspn(const unsigned char* string, const unsigned char* set)
+MSVCRT_size_t CDECL _mbsspn_l(const unsigned char* string,
+        const unsigned char* set, MSVCRT__locale_t locale)
 {
     const unsigned char *p, *q;
 
@@ -2033,7 +2028,7 @@ MSVCRT_size_t CDECL _mbsspn(const unsigned char* string, const unsigned char* se
     {
         for (q = set; *q; q++)
         {
-            if (_ismbblead(*q))
+            if (_ismbblead_l(*q, locale))
             {
                 /* duplicate a bug in native implementation */
                 if (!q[1]) break;
@@ -2056,6 +2051,14 @@ MSVCRT_size_t CDECL _mbsspn(const unsigned char* string, const unsigned char* se
 }
 
 /*********************************************************************
+ *              _mbsspn (MSVCRT.@)
+ */
+MSVCRT_size_t CDECL _mbsspn(const unsigned char* string, const unsigned char* set)
+{
+    return _mbsspn_l(string, set, NULL);
+}
+
+/*********************************************************************
  *              _mbsspnp (MSVCRT.@)
  */
 unsigned char* CDECL _mbsspnp(const unsigned char* string, const unsigned char* set)
@@ -2065,13 +2068,39 @@ unsigned char* CDECL _mbsspnp(const unsigned char* string, const unsigned char* 
 }
 
 /*********************************************************************
- *		_mbscspn(MSVCRT.@)
+ *		_mbscspn_l (MSVCRT.@)
+ */
+MSVCRT_size_t CDECL _mbscspn_l(const unsigned char* str,
+        const unsigned char* cmp, MSVCRT__locale_t locale)
+{
+    const unsigned char *p, *q;
+
+    for (p = str; *p; p++)
+    {
+        for (q = cmp; *q; q++)
+        {
+            if (_ismbblead_l(*q, locale))
+            {
+                /* duplicate a bug in native implementation */
+                if (!q[1]) return 0;
+
+                if (p[0] == q[0] && p[1] == q[1])
+                    return p - str;
+                q++;
+            }
+            else if (p[0] == q[0])
+                return p - str;
+        }
+    }
+    return p - str;
+}
+
+/*********************************************************************
+ *		_mbscspn (MSVCRT.@)
  */
 MSVCRT_size_t CDECL _mbscspn(const unsigned char* str, const unsigned char* cmp)
 {
-  if (get_mbcinfo()->ismbcodepage)
-    FIXME("don't handle double character case\n");
-  return u_strcspn(str, cmp);
+    return _mbscspn_l(str, cmp, NULL);
 }
 
 /*********************************************************************

@@ -284,6 +284,13 @@ static BOOL TestASet( HWND hWnd, int nrkev, const KEV kevdwn[], const KEV kevup[
     int i,j,k,l,m,n;
     static int count=0;
     KEV kbuf[MAXKEYEVENTS];
+    BOOL us_kbd = (GetKeyboardLayout(0) == (HKL)(ULONG_PTR)0x04090409);
+    if (!us_kbd)
+    {
+        win_skip( "skipping test with inconsistent results on non-us keyboard\n" );
+        return TRUE;
+    }
+
     assert( nrkev==2 || nrkev==3);
     for(i=0;i<MAXKEYEVENTS;i++) kbuf[i]=0;
     /* two keys involved gives 4 test cases */
@@ -1184,6 +1191,12 @@ static void test_Input_unicode(void)
     HHOOK hook;
     HMODULE hModuleImm32;
     BOOL (WINAPI *pImmDisableIME)(DWORD);
+    BOOL us_kbd = (GetKeyboardLayout(0) == (HKL)(ULONG_PTR)0x04090409);
+    if (!us_kbd)
+    {
+        win_skip( "skipping test with inconsistent results on non-us keyboard\n" );
+        return;
+    }
 
     wclass.lpszClassName = classNameW;
     wclass.style         = CS_HREDRAW | CS_VREDRAW;
@@ -1409,7 +1422,9 @@ static void test_mouse_ll_hook(void)
     ok(pt_old.x == 149 && pt_old.y == 149, "Wrong new pos: (%d,%d)\n", pt_old.x, pt_old.y);
     mouse_event(MOUSEEVENTF_MOVE, 0, 0, 0, 0);
     GetCursorPos(&pt_old);
-    ok(pt_old.x == 150 && pt_old.y == 150, "Wrong new pos: (%d,%d)\n", pt_old.x, pt_old.y);
+    ok((pt_old.x == 150 && pt_old.y == 150) ||
+       broken(pt_old.x == 149 && pt_old.y == 149) /* w1064v1809 */,
+       "Wrong new pos: (%d,%d)\n", pt_old.x, pt_old.y);
     mouse_event(MOUSEEVENTF_MOVE, 0, 0, 0, 0);
     GetCursorPos(&pt_old);
     todo_wine
@@ -1761,15 +1776,16 @@ static const struct tounicode_tests
     WCHAR expect_buf[4];
 } utests[] =
 {
-    { 'A', 0, 0, 1, {'a',0}},
-    { 'A', ctrl, 0, 1, {1, 0}},
-    { 'A', shift|ctrl, 0, 1, {1, 0}},
+    { 0, 0, 'a', 1, {'a',0}},
+    { 0, shift, 'a', 1, {'A',0}},
+    { 0, ctrl, 'a', 1, {1, 0}},
+    { 0, shift|ctrl, 'a', 1, {1, 0}},
     { VK_TAB, ctrl, 0, 0, {}},
     { VK_TAB, shift|ctrl, 0, 0, {}},
     { VK_RETURN, ctrl, 0, 1, {'\n', 0}},
     { VK_RETURN, shift|ctrl, 0, 0, {}},
-    { '4', ctrl, 0, 0, {}},
-    { '4', shift|ctrl, 0, 0, {}},
+    { 0, ctrl, '4', 0, {}},
+    { 0, shift|ctrl, '4', 0, {}},
     { 0, ctrl, '!', 0, {}},
     { 0, ctrl, '\"', 0, {}},
     { 0, ctrl, '#', 0, {}},
@@ -1882,6 +1898,7 @@ static void test_ToAscii(void)
     const BYTE SC_RETURN = 0x1c, SC_A = 0x1e;
     const BYTE HIGHEST_BIT = 0x80;
     int ret;
+    BOOL us_kbd = (GetKeyboardLayout(0) == (HKL)(ULONG_PTR)0x04090409);
 
     memset(state, 0, sizeof(state));
 
@@ -1893,7 +1910,7 @@ static void test_ToAscii(void)
     character = 0;
     ret = ToAscii('A', SC_A, state, &character, 0);
     ok(ret == 1, "ToAscii for character 'A' didn't return 1 (was %i)\n", ret);
-    ok(character == 'a', "ToAscii for character 'A' was %i (expected %i)\n", character, 'a');
+    if (us_kbd) ok(character == 'a', "ToAscii for character 'A' was %i (expected %i)\n", character, 'a');
 
     state[VK_CONTROL] |= HIGHEST_BIT;
     state[VK_LCONTROL] |= HIGHEST_BIT;

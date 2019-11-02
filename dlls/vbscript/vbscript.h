@@ -220,10 +220,11 @@ typedef enum {
     X(assign_ident,   1, ARG_BSTR,    ARG_UINT)   \
     X(assign_member,  1, ARG_BSTR,    ARG_UINT)   \
     X(bool,           1, ARG_INT,     0)          \
-    X(catch,          1, ARG_ADDR,    ARG_UINT)    \
+    X(catch,          1, ARG_ADDR,    ARG_UINT)   \
     X(case,           0, ARG_ADDR,    0)          \
     X(concat,         1, 0,           0)          \
     X(const,          1, ARG_BSTR,    0)          \
+    X(deref,          1, 0,           0)          \
     X(dim,            1, ARG_BSTR,    ARG_UINT)   \
     X(div,            1, 0,           0)          \
     X(double,         1, ARG_DOUBLE,  0)          \
@@ -262,15 +263,19 @@ typedef enum {
     X(null,           1, 0,           0)          \
     X(or,             1, 0,           0)          \
     X(pop,            1, ARG_UINT,    0)          \
+    X(redim,          1, ARG_BSTR,    ARG_UINT)   \
     X(ret,            0, 0,           0)          \
     X(retval,         1, 0,           0)          \
     X(set_ident,      1, ARG_BSTR,    ARG_UINT)   \
     X(set_member,     1, ARG_BSTR,    ARG_UINT)   \
+    X(stack,          1, ARG_UINT,    0)          \
     X(step,           0, ARG_ADDR,    ARG_BSTR)   \
     X(stop,           1, 0,           0)          \
     X(string,         1, ARG_STR,     0)          \
     X(sub,            1, 0,           0)          \
     X(val,            1, 0,           0)          \
+    X(vcall,          1, ARG_UINT,    0)          \
+    X(vcallv,         1, ARG_UINT,    0)          \
     X(xor,            1, 0,           0)
 
 typedef enum {

@@ -67,6 +67,8 @@ typedef void  (CALLBACK *LDRENUMPROC)(LDR_MODULE *, void *, BOOLEAN *);
 /* system directory with trailing backslash */
 const WCHAR system_dir[] = {'C',':','\\','w','i','n','d','o','w','s','\\',
                             's','y','s','t','e','m','3','2','\\',0};
+const WCHAR syswow64_dir[] = {'C',':','\\','w','i','n','d','o','w','s','\\',
+                              's','y','s','w','o','w','6','4','\\',0};
 
 /* system search path */
 static const WCHAR system_path[] =
@@ -2879,6 +2881,7 @@ static NTSTATUS find_dll_file( const WCHAR *load_path, const WCHAR *libname,
 {
     WCHAR *ext, *dllname;
     NTSTATUS status;
+    ULONG wow64_old_value = 0;
 
     /* first append .dll if needed */
 
@@ -2894,6 +2897,9 @@ static NTSTATUS find_dll_file( const WCHAR *load_path, const WCHAR *libname,
         strcatW( dllname, dllW );
         libname = dllname;
     }
+
+    /* Win 7/2008R2 and up seem to re-enable WoW64 FS redirection when loading libraries */
+    if (is_wow64) RtlWow64EnableFsRedirectionEx( 0, &wow64_old_value );
 
     nt_name->Buffer = NULL;
 
@@ -2928,6 +2934,7 @@ static NTSTATUS find_dll_file( const WCHAR *load_path, const WCHAR *libname,
 
 done:
     RtlFreeHeap( GetProcessHeap(), 0, dllname );
+    if (wow64_old_value) RtlWow64EnableFsRedirectionEx( 1, &wow64_old_value );
     return status;
 }
 
@@ -3259,14 +3266,14 @@ NTSTATUS WINAPI LdrQueryProcessModuleInformation(PSYSTEM_MODULE_INFORMATION smi,
         size += sizeof(*sm);
         if (size <= buf_size)
         {
-            sm->Reserved1 = 0; /* FIXME */
-            sm->Reserved2 = 0; /* FIXME */
+            sm->Section = 0; /* FIXME */
+            sm->MappedBaseAddress = mod->BaseAddress;
             sm->ImageBaseAddress = mod->BaseAddress;
             sm->ImageSize = mod->SizeOfImage;
             sm->Flags = mod->Flags;
-            sm->Id = id++;
-            sm->Rank = 0; /* FIXME */
-            sm->Unknown = 0; /* FIXME */
+            sm->LoadOrderIndex = id++;
+            sm->InitOrderIndex = 0; /* FIXME */
+            sm->LoadCount = mod->LoadCount;
             str.Length = 0;
             str.MaximumLength = MAXIMUM_FILENAME_LENGTH;
             str.Buffer = (char*)sm->Name;

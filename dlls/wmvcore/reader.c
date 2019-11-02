@@ -176,7 +176,12 @@ static HRESULT WINAPI WMReader_GetOutputCount(IWMReader *iface, DWORD *outputs)
 {
     WMReader *This = impl_from_IWMReader(iface);
     FIXME("(%p)->(%p)\n", This, outputs);
-    return E_NOTIMPL;
+
+    if(!outputs)
+        return E_INVALIDARG;
+
+    *outputs = 0;
+    return S_OK;
 }
 
 static HRESULT WINAPI WMReader_GetOutputProps(IWMReader *iface, DWORD output_num, IWMOutputMediaProps **output)
@@ -1751,7 +1756,12 @@ static HRESULT WINAPI profile3_GetStreamCount(IWMProfile3 *iface, DWORD *count)
 {
     WMReader *This = impl_from_IWMProfile3(iface);
     FIXME("%p, %p\n", This, count);
-    return E_NOTIMPL;
+
+    if (!count)
+        return E_INVALIDARG;
+
+    *count = 0;
+    return S_OK;
 }
 
 static HRESULT WINAPI profile3_GetStream(IWMProfile3 *iface, DWORD index, IWMStreamConfig **config)

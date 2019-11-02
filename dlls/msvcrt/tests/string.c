@@ -159,6 +159,29 @@ static void test_swab( void ) {
     ok(memcmp(to,expected3,testsize) == 0, "Testing small size %d returned '%*.*s'\n", testsize, testsize, testsize, to);
 }
 
+static void test_strcspn(void)
+{
+    static const struct {
+        const char *str;
+        const char *rej;
+        int ret;
+    } tests[] = {
+        { "test", "a", 4 },
+        { "test", "e", 1 },
+        { "test", "", 4 },
+        { "", "a", 0 },
+        { "a\xf1", "\xf1", 1 }
+    };
+    int r, i;
+
+    for (i = 0; i < ARRAY_SIZE(tests); i++)
+    {
+        r = strcspn(tests[i].str, tests[i].rej);
+        ok(r == tests[i].ret, "strcspn(\"%s\", \"%s\") = %d, expected %d\n",
+                tests[i].str, tests[i].rej, r, tests[i].ret);
+    }
+}
+
 #if 0      /* use this to generate more tests */
 
 static void test_codepage(int cp)
@@ -530,6 +553,13 @@ static void test_mbsspn( void)
     ret=_mbsspn( str1, empty);
     ok( ret==0, "_mbsspn returns %d should be 0\n", ret);
 
+    ret=_mbscspn( str1, set);
+    ok( ret==0, "_mbscspn returns %d should be 0\n", ret);
+    ret=_mbscspn( str2, set);
+    ok( ret==4, "_mbscspn returns %d should be 4\n", ret);
+    ret=_mbscspn( str1, empty);
+    ok( ret==8, "_mbscspn returns %d should be 8\n", ret);
+
     _setmbcp( 932);
     ret=_mbsspn( mbstr, mbset1);
     ok( ret==8, "_mbsspn returns %d should be 8\n", ret);
@@ -541,6 +571,17 @@ static void test_mbsspn( void)
     ok( ret==2, "_mbsspn returns %d should be 2\n", ret);
     ret=_mbsspn( mbstr, mbset3);
     ok( ret==14, "_mbsspn returns %d should be 14\n", ret);
+
+    ret=_mbscspn( mbstr, mbset1);
+    ok( ret==0, "_mbscspn returns %d should be 0\n", ret);
+    ret=_mbscspn( mbstr, mbset2);
+    ok( ret==0, "_mbscspn returns %d should be 0\n", ret);
+    ret=_mbscspn( mbstr+8, mbset1);
+    ok( ret==2, "_mbscspn returns %d should be 2\n", ret);
+    ret=_mbscspn( mbstr+8, mbset2);
+    ok( ret==0, "_mbscspn returns %d should be 0\n", ret);
+    ret=_mbscspn( mbstr, mbset3);
+    ok( ret==0, "_mbscspn returns %d should be 0\n", ret);
 
     _setmbcp( cp);
 }
@@ -2769,13 +2810,13 @@ static void test_wctob(void)
     ok(ret == EOF, "ret = %x\n", ret);
 
     ret = p_wctob(0x81);
-    ok(ret == (int)(char)0x81, "ret = %x\n", ret);
+    ok(ret == (signed char)0x81, "ret = %x\n", ret);
 
     ret = p_wctob(0x9f);
-    ok(ret == (int)(char)0x9f, "ret = %x\n", ret);
+    ok(ret == (signed char)0x9f, "ret = %x\n", ret);
 
     ret = p_wctob(0xe0);
-    ok(ret == (int)(char)0xe0, "ret = %x\n", ret);
+    ok(ret == (signed char)0xe0, "ret = %x\n", ret);
 
     _setmbcp(cp);
 }
@@ -2895,7 +2936,7 @@ static void test_tolower(void)
 
     ch = 0xF4;
     errno = 0xdeadbeef;
-    ret = p_tolower(ch);
+    ret = p_tolower((signed char)ch);
     if(!MultiByteToWideChar(CP_ACP, MB_ERR_INVALID_CHARS, &ch, 1, &chw, 1) ||
             LCMapStringW(CP_ACP, LCMAP_LOWERCASE, &chw, 1, &lower, 1) != 1 ||
             (len = WideCharToMultiByte(CP_ACP, 0, &lower, 1, &lch, 1, NULL, NULL)) != 1)
@@ -2909,7 +2950,7 @@ static void test_tolower(void)
 
     ch = 0xD0;
     errno = 0xdeadbeef;
-    ret = p_tolower(ch);
+    ret = p_tolower((signed char)ch);
     if(!MultiByteToWideChar(CP_ACP, MB_ERR_INVALID_CHARS, &ch, 1, &chw, 1) ||
             LCMapStringW(CP_ACP, LCMAP_LOWERCASE, &chw, 1, &lower, 1) != 1 ||
             (len = WideCharToMultiByte(CP_ACP, 0, &lower, 1, &lch, 1, NULL, NULL)) != 1)
@@ -2921,15 +2962,15 @@ static void test_tolower(void)
     if(!len || ret==(unsigned char)lch)
         ok(errno == EILSEQ, "errno = %d\n", errno);
 
-    ret = p_tolower(0xD0);
+    ret = p_tolower((unsigned char)0xD0);
     ok(ret == 0xD0, "ret = %x\n", ret);
 
     ok(setlocale(LC_ALL, "us") != NULL, "setlocale failed\n");
 
-    ret = p_tolower((char)0xD0);
+    ret = p_tolower((signed char)0xD0);
     ok(ret == 0xF0, "ret = %x\n", ret);
 
-    ret = p_tolower(0xD0);
+    ret = p_tolower((unsigned char)0xD0);
     ok(ret == 0xF0, "ret = %x\n", ret);
 
     setlocale(LC_ALL, "C");
@@ -3856,6 +3897,39 @@ static void test_C_locale(void)
     }
 }
 
+static void test_strstr(void)
+{
+    static char long_str[1024];
+    const struct {
+        const char *haystack;
+        const char *needle;
+        int off;
+    } tests[] = {
+        { "", "", 0 },
+        { "", "a", -1 },
+        { "a", "", 0 },
+        { "aabc", "abc", 1 },
+        { "aaaa", "aaaa", 0 },
+        { "simple", "simple", 0 },
+        { "aaaaxaaaaxaaaa", "aaaaa", -1 },
+        { "aaaaxaaaaxaaaaa", "aaaaa", 10 },
+        { "abcabcdababcdabcdabde", "abcdabd", 13 },
+        { "abababababcabababcababbba", "abababcaba", 4 },
+        { long_str, long_str+1, 0 }
+    };
+    const char *r, *exp;
+    int i;
+
+    memset(long_str, 'a', sizeof(long_str)-1);
+
+    for (i=0; i<ARRAY_SIZE(tests); i++)
+    {
+        r = strstr(tests[i].haystack, tests[i].needle);
+        exp = tests[i].off == -1 ? NULL : tests[i].haystack + tests[i].off;
+        ok(r == exp, "%d) strstr returned %p, expected %p\n", i, r, exp);
+    }
+}
+
 START_TEST(string)
 {
     char mem[100];
@@ -3935,6 +4009,7 @@ START_TEST(string)
     /* run tolower tests first */
     test_tolower();
     test_swab();
+    test_strcspn();
     test_mbcp();
     test_mbsspn();
     test_mbsspnp();
@@ -3994,4 +4069,5 @@ START_TEST(string)
     test__tcsnicoll();
     test___strncnt();
     test_C_locale();
+    test_strstr();
 }

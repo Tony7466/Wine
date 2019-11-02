@@ -53,12 +53,10 @@ static inline const char *debugstr_time(REFERENCE_TIME time)
 /* Quality Control */
 typedef struct QualityControlImpl {
     IQualityControl IQualityControl_iface;
-    IPin *input;
-    IBaseFilter *self;
+    struct strmbase_pin *pin;
     IQualityControl *tonotify;
 
     /* Render stuff */
-    IReferenceClock *clock;
     REFERENCE_TIME last_in_time, last_left, avg_duration, avg_pt, avg_render, start, stop;
     REFERENCE_TIME current_jitter, current_rstart, current_rstop, clockstart;
     double avg_rate;
@@ -66,7 +64,7 @@ typedef struct QualityControlImpl {
     BOOL qos_handled, is_dropped;
 } QualityControlImpl;
 
-HRESULT QualityControlImpl_Create(IPin *input, IBaseFilter *self, QualityControlImpl **ppv);
+HRESULT QualityControlImpl_Create(struct strmbase_pin *pin, QualityControlImpl **out);
 void QualityControlImpl_Destroy(QualityControlImpl *This);
 HRESULT WINAPI QualityControlImpl_QueryInterface(IQualityControl *iface, REFIID riid, void **ppv);
 ULONG WINAPI QualityControlImpl_AddRef(IQualityControl *iface);
@@ -75,7 +73,6 @@ HRESULT WINAPI QualityControlImpl_Notify(IQualityControl *iface, IBaseFilter *se
 HRESULT WINAPI QualityControlImpl_SetSink(IQualityControl *iface, IQualityControl *tonotify);
 
 void QualityControlRender_Start(QualityControlImpl *This, REFERENCE_TIME tStart);
-void QualityControlRender_SetClock(QualityControlImpl *This, IReferenceClock *clock);
 void QualityControlRender_DoQOS(QualityControlImpl *priv);
 void QualityControlRender_BeginRender(QualityControlImpl *This, REFERENCE_TIME start, REFERENCE_TIME stop);
 void QualityControlRender_EndRender(QualityControlImpl *This);

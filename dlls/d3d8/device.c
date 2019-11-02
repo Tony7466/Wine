@@ -909,13 +909,15 @@ static HRESULT WINAPI d3d8_device_Reset(IDirect3DDevice8 *iface,
         device->index_buffer_size = 0;
     }
 
+    if (device->recording)
+        wined3d_stateblock_decref(device->recording);
+    device->recording = NULL;
+    device->update_state = device->state;
+    wined3d_stateblock_reset(device->state);
+
     if (SUCCEEDED(hr = wined3d_device_reset(device->wined3d_device, &swapchain_desc,
             NULL, reset_enum_callback, TRUE)))
     {
-        if (device->recording)
-            wined3d_stateblock_decref(device->recording);
-        device->recording = NULL;
-        device->update_state = device->state;
         present_parameters->BackBufferCount = swapchain_desc.backbuffer_count;
         implicit_swapchain = wined3d_swapchain_get_parent(device->implicit_swapchain);
         implicit_swapchain->swap_interval
@@ -1608,7 +1610,9 @@ static HRESULT WINAPI d3d8_device_SetTransform(IDirect3DDevice8 *iface,
 
     /* Note: D3DMATRIX is compatible with struct wined3d_matrix. */
     wined3d_mutex_lock();
-    wined3d_device_set_transform(device->wined3d_device, state, (const struct wined3d_matrix *)matrix);
+    wined3d_stateblock_set_transform(device->update_state, state, (const struct wined3d_matrix *)matrix);
+    if (!device->recording)
+        wined3d_device_set_transform(device->wined3d_device, state, (const struct wined3d_matrix *)matrix);
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -1713,7 +1717,9 @@ static HRESULT WINAPI d3d8_device_SetMaterial(IDirect3DDevice8 *iface, const D3D
 
     /* Note: D3DMATERIAL8 is compatible with struct wined3d_material. */
     wined3d_mutex_lock();
-    wined3d_device_set_material(device->wined3d_device, (const struct wined3d_material *)material);
+    wined3d_stateblock_set_material(device->update_state, (const struct wined3d_material *)material);
+    if (!device->recording)
+        wined3d_device_set_material(device->wined3d_device, (const struct wined3d_material *)material);
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -1799,7 +1805,9 @@ static HRESULT WINAPI d3d8_device_SetClipPlane(IDirect3DDevice8 *iface, DWORD in
     TRACE("iface %p, index %u, plane %p.\n", iface, index, plane);
 
     wined3d_mutex_lock();
-    hr = wined3d_device_set_clip_plane(device->wined3d_device, index, (const struct wined3d_vec4 *)plane);
+    hr = wined3d_stateblock_set_clip_plane(device->update_state, index, (const struct wined3d_vec4 *)plane);
+    if (SUCCEEDED(hr) && !device->recording)
+        hr = wined3d_device_set_clip_plane(device->wined3d_device, index, (const struct wined3d_vec4 *)plane);
     wined3d_mutex_unlock();
 
     return hr;
@@ -2133,8 +2141,11 @@ static HRESULT WINAPI d3d8_device_SetTexture(IDirect3DDevice8 *iface, DWORD stag
     texture_impl = unsafe_impl_from_IDirect3DBaseTexture8(texture);
 
     wined3d_mutex_lock();
-    wined3d_device_set_texture(device->wined3d_device, stage,
+    wined3d_stateblock_set_texture(device->update_state, stage,
             texture_impl ? texture_impl->wined3d_texture : NULL);
+    if (!device->recording)
+        wined3d_device_set_texture(device->wined3d_device, stage,
+                texture_impl ? texture_impl->wined3d_texture : NULL);
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -2226,9 +2237,17 @@ static HRESULT WINAPI d3d8_device_SetTextureStageState(IDirect3DDevice8 *iface,
 
     wined3d_mutex_lock();
     if (l->sampler_state)
-        wined3d_device_set_sampler_state(device->wined3d_device, stage, l->u.sampler_state, value);
+    {
+        wined3d_stateblock_set_sampler_state(device->update_state, stage, l->u.sampler_state, value);
+        if (!device->recording)
+            wined3d_device_set_sampler_state(device->wined3d_device, stage, l->u.sampler_state, value);
+    }
     else
-        wined3d_device_set_texture_stage_state(device->wined3d_device, stage, l->u.texture_state, value);
+    {
+        wined3d_stateblock_set_texture_stage_state(device->update_state, stage, l->u.texture_state, value);
+        if (!device->recording)
+            wined3d_device_set_texture_stage_state(device->wined3d_device, stage, l->u.texture_state, value);
+    }
     wined3d_mutex_unlock();
 
     return D3D_OK;

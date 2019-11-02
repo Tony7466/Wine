@@ -1582,6 +1582,27 @@ NTSTATUS WINAPI IoCreateSymbolicLink( UNICODE_STRING *name, UNICODE_STRING *targ
 
 
 /***********************************************************************
+ *           IoCreateUnprotectedSymbolicLink   (NTOSKRNL.EXE.@)
+ */
+NTSTATUS WINAPI IoCreateUnprotectedSymbolicLink( UNICODE_STRING *name, UNICODE_STRING *target )
+{
+    HANDLE handle;
+    OBJECT_ATTRIBUTES attr;
+
+    attr.Length                   = sizeof(attr);
+    attr.RootDirectory            = 0;
+    attr.ObjectName               = name;
+    attr.Attributes               = OBJ_CASE_INSENSITIVE | OBJ_OPENIF;
+    attr.SecurityDescriptor       = NULL;
+    attr.SecurityQualityOfService = NULL;
+
+    TRACE( "%s -> %s\n", debugstr_us(name), debugstr_us(target) );
+    /* FIXME: store handle somewhere */
+    return NtCreateSymbolicLinkObject( &handle, SYMBOLIC_LINK_ALL_ACCESS, &attr, target );
+}
+
+
+/***********************************************************************
  *           IoDeleteSymbolicLink   (NTOSKRNL.EXE.@)
  */
 NTSTATUS WINAPI IoDeleteSymbolicLink( UNICODE_STRING *name )
@@ -3786,7 +3807,8 @@ NTSTATUS WINAPI FsRtlRegisterFileSystemFilterCallbacks( DRIVER_OBJECT *object, P
  */
 BOOLEAN WINAPI SeSinglePrivilegeCheck(LUID privilege, KPROCESSOR_MODE mode)
 {
-    FIXME("stub: %08x%08x %u\n", privilege.HighPart, privilege.LowPart, mode);
+    static int once;
+    if (!once++) FIXME("stub: %08x%08x %u\n", privilege.HighPart, privilege.LowPart, mode);
     return TRUE;
 }
 

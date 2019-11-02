@@ -32,6 +32,7 @@ typedef struct _statement_ctx_t {
 
     unsigned while_end_label;
     unsigned for_end_label;
+    unsigned with_stack_offset;
 
     struct _statement_ctx_t *next;
 } statement_ctx_t;
@@ -417,6 +418,9 @@ static HRESULT compile_args(compile_ctx_t *ctx, expression_t *args, unsigned *re
         if(FAILED(hres))
             return hres;
 
+        if(args->type == EXPR_BRACKETS && !push_instr(ctx, OP_deref))
+            return E_OUTOFMEMORY;
+
         arg_cnt++;
         args = args->next;
     }
@@ -425,22 +429,17 @@ static HRESULT compile_args(compile_ctx_t *ctx, expression_t *args, unsigned *re
     return S_OK;
 }
 
-static HRESULT compile_member_expression(compile_ctx_t *ctx, member_expression_t *expr, BOOL ret_val)
+static HRESULT compile_member_expression(compile_ctx_t *ctx, member_expression_t *expr, unsigned arg_cnt, BOOL ret_val)
 {
-    unsigned arg_cnt = 0;
     HRESULT hres;
 
-    if(ret_val && !expr->args) {
+    if(ret_val && !arg_cnt) {
         expression_t *const_expr;
 
         const_expr = lookup_const_decls(ctx, expr->identifier, TRUE);
         if(const_expr)
             return compile_expression(ctx, const_expr);
     }
-
-    hres = compile_args(ctx, expr->args, &arg_cnt);
-    if(FAILED(hres))
-        return hres;
 
     if(expr->obj_expr) {
         hres = compile_expression(ctx, expr->obj_expr);
@@ -453,6 +452,43 @@ static HRESULT compile_member_expression(compile_ctx_t *ctx, member_expression_t
     }
 
     return hres;
+}
+
+static HRESULT compile_call_expression(compile_ctx_t *ctx, call_expression_t *expr, BOOL ret_val)
+{
+    unsigned arg_cnt = 0;
+    expression_t *call;
+    HRESULT hres;
+
+    hres = compile_args(ctx, expr->args, &arg_cnt);
+    if(FAILED(hres))
+        return hres;
+
+    for(call = expr->call_expr; call->type == EXPR_BRACKETS; call = ((unary_expression_t*)call)->subexpr);
+
+    if(call->type == EXPR_MEMBER)
+        return compile_member_expression(ctx, (member_expression_t*)call, arg_cnt, ret_val);
+
+    hres = compile_expression(ctx, call);
+    if(FAILED(hres))
+        return hres;
+
+    return push_instr_uint(ctx, ret_val ? OP_vcall : OP_vcallv, arg_cnt);
+}
+
+static HRESULT compile_dot_expression(compile_ctx_t *ctx)
+{
+    statement_ctx_t *stat_ctx;
+
+    for(stat_ctx = ctx->stat_ctx; stat_ctx; stat_ctx = stat_ctx->next) {
+        if(!stat_ctx->with_stack_offset)
+            continue;
+
+        return push_instr_uint(ctx, OP_stack, stat_ctx->with_stack_offset - 1);
+    }
+
+    WARN("dot expression outside with statement\n");
+    return push_instr_uint(ctx, OP_stack, ~0);
 }
 
 static HRESULT compile_unary_expression(compile_ctx_t *ctx, unary_expression_t *expr, vbsop_t op)
@@ -492,10 +528,14 @@ static HRESULT compile_expression(compile_ctx_t *ctx, expression_t *expr)
         return push_instr_int(ctx, OP_bool, ((bool_expression_t*)expr)->value);
     case EXPR_BRACKETS:
         return compile_expression(ctx, ((unary_expression_t*)expr)->subexpr);
+    case EXPR_CALL:
+        return compile_call_expression(ctx, (call_expression_t*)expr, TRUE);
     case EXPR_CONCAT:
         return compile_binary_expression(ctx, (binary_expression_t*)expr, OP_concat);
     case EXPR_DIV:
         return compile_binary_expression(ctx, (binary_expression_t*)expr, OP_div);
+    case EXPR_DOT:
+        return compile_dot_expression(ctx);
     case EXPR_DOUBLE:
         return push_instr_double(ctx, OP_double, ((double_expression_t*)expr)->value);
     case EXPR_EMPTY:
@@ -523,7 +563,7 @@ static HRESULT compile_expression(compile_ctx_t *ctx, expression_t *expr)
     case EXPR_ME:
         return push_instr(ctx, OP_me) ? S_OK : E_OUTOFMEMORY;
     case EXPR_MEMBER:
-        return compile_member_expression(ctx, (member_expression_t*)expr, TRUE);
+        return compile_member_expression(ctx, (member_expression_t*)expr, 0, TRUE);
     case EXPR_MOD:
         return compile_binary_expression(ctx, (binary_expression_t*)expr, OP_mod);
     case EXPR_MUL:
@@ -836,6 +876,26 @@ static HRESULT compile_forto_statement(compile_ctx_t *ctx, forto_statement_t *st
     return S_OK;
 }
 
+static HRESULT compile_with_statement(compile_ctx_t *ctx, with_statement_t *stat)
+{
+    statement_ctx_t with_ctx = { 1 };
+    HRESULT hres;
+
+    hres = compile_expression(ctx, stat->expr);
+    if(FAILED(hres))
+        return hres;
+
+    if(!emit_catch(ctx, 1))
+        return E_OUTOFMEMORY;
+
+    with_ctx.with_stack_offset = stack_offset(ctx) + 1;
+    hres = compile_statement(ctx, &with_ctx, stat->body);
+    if(FAILED(hres))
+        return hres;
+
+    return push_instr_uint(ctx, OP_pop, 1);
+}
+
 static HRESULT compile_select_statement(compile_ctx_t *ctx, select_statement_t *stat)
 {
     unsigned end_label, case_cnt = 0, *case_labels = NULL, i;
@@ -931,11 +991,15 @@ static HRESULT compile_select_statement(compile_ctx_t *ctx, select_statement_t *
     return S_OK;
 }
 
-static HRESULT compile_assignment(compile_ctx_t *ctx, member_expression_t *member_expr, expression_t *value_expr, BOOL is_set)
+static HRESULT compile_assignment(compile_ctx_t *ctx, call_expression_t *left, expression_t *value_expr, BOOL is_set)
 {
+    member_expression_t *member_expr;
     unsigned args_cnt;
     vbsop_t op;
     HRESULT hres;
+
+    assert(left->call_expr->type == EXPR_MEMBER);
+    member_expr = (member_expression_t*)left->call_expr;
 
     if(member_expr->obj_expr) {
         hres = compile_expression(ctx, member_expr->obj_expr);
@@ -951,7 +1015,7 @@ static HRESULT compile_assignment(compile_ctx_t *ctx, member_expression_t *membe
     if(FAILED(hres))
         return hres;
 
-    hres = compile_args(ctx, member_expr->args, &args_cnt);
+    hres = compile_args(ctx, left->args, &args_cnt);
     if(FAILED(hres))
         return hres;
 
@@ -967,7 +1031,7 @@ static HRESULT compile_assignment(compile_ctx_t *ctx, member_expression_t *membe
 
 static HRESULT compile_assign_statement(compile_ctx_t *ctx, assign_statement_t *stat, BOOL is_set)
 {
-    return compile_assignment(ctx, stat->member_expr, stat->value_expr, is_set);
+    return compile_assignment(ctx, stat->left_expr, stat->value_expr, is_set);
 }
 
 static HRESULT compile_call_statement(compile_ctx_t *ctx, call_statement_t *stat)
@@ -980,16 +1044,16 @@ static HRESULT compile_call_statement(compile_ctx_t *ctx, call_statement_t *stat
         binary_expression_t *eqexpr = (binary_expression_t*)stat->expr->args;
 
         if(eqexpr->left->type == EXPR_BRACKETS) {
-            member_expression_t new_member = *stat->expr;
+            call_expression_t new_call = *stat->expr;
 
             WARN("converting call expr to assign expr\n");
 
-            new_member.args = ((unary_expression_t*)eqexpr->left)->subexpr;
-            return compile_assignment(ctx, &new_member, eqexpr->right, FALSE);
+            new_call.args = ((unary_expression_t*)eqexpr->left)->subexpr;
+            return compile_assignment(ctx, &new_call, eqexpr->right, FALSE);
         }
     }
 
-    hres = compile_member_expression(ctx, stat->expr, FALSE);
+    hres = compile_call_expression(ctx, stat->expr, FALSE);
     if(FAILED(hres))
         return hres;
 
@@ -1056,6 +1120,23 @@ static HRESULT compile_dim_statement(compile_ctx_t *ctx, dim_statement_t *stat)
         ctx->dim_decls = stat->dim_decls;
     ctx->dim_decls_tail = dim_decl;
     return S_OK;
+}
+
+static HRESULT compile_redim_statement(compile_ctx_t *ctx, redim_statement_t *stat)
+{
+    unsigned arg_cnt;
+    HRESULT hres;
+
+    if(stat->preserve) {
+        FIXME("Preserving redim not supported\n");
+        return E_NOTIMPL;
+    }
+
+    hres = compile_args(ctx, stat->dims, &arg_cnt);
+    if(FAILED(hres))
+        return hres;
+
+    return push_instr_bstr_uint(ctx, OP_redim, stat->identifier, arg_cnt);
 }
 
 static HRESULT compile_const_statement(compile_ctx_t *ctx, const_statement_t *stat)
@@ -1280,6 +1361,9 @@ static HRESULT compile_statement(compile_ctx_t *ctx, statement_ctx_t *stat_ctx, 
         case STAT_ONERROR:
             hres = compile_onerror_statement(ctx, (onerror_statement_t*)stat);
             break;
+        case STAT_REDIM:
+            hres = compile_redim_statement(ctx, (redim_statement_t*)stat);
+            break;
         case STAT_SELECT:
             hres = compile_select_statement(ctx, (select_statement_t*)stat);
             break;
@@ -1293,6 +1377,9 @@ static HRESULT compile_statement(compile_ctx_t *ctx, statement_ctx_t *stat_ctx, 
         case STAT_WHILE:
         case STAT_WHILELOOP:
             hres = compile_while_statement(ctx, (while_statement_t*)stat);
+            break;
+        case STAT_WITH:
+            hres = compile_with_statement(ctx, (with_statement_t*)stat);
             break;
         case STAT_RETVAL:
             hres = compile_retval_statement(ctx, (retval_statement_t*)stat);

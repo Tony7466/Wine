@@ -616,7 +616,7 @@ int CDECL MSVCRT_strcoll_l( const char* str1, const char* str2, MSVCRT__locale_t
         locinfo = locale->locinfo;
 
     if(!locinfo->lc_handle[MSVCRT_LC_COLLATE])
-        return strcmp(str1, str2);
+        return MSVCRT_strcmp(str1, str2);
     return CompareStringA(locinfo->lc_handle[MSVCRT_LC_COLLATE], 0, str1, -1, str2, -1)-CSTR_EQUAL;
 }
 
@@ -667,7 +667,7 @@ int CDECL MSVCRT__strncoll_l( const char* str1, const char* str2, MSVCRT_size_t 
         locinfo = locale->locinfo;
 
     if(!locinfo->lc_handle[MSVCRT_LC_COLLATE])
-        return strncmp(str1, str2, count);
+        return MSVCRT_strncmp(str1, str2, count);
     return CompareStringA(locinfo->lc_handle[MSVCRT_LC_COLLATE], 0,
               str1, MSVCRT_strnlen(str1, count),
               str2, MSVCRT_strnlen(str2, count))-CSTR_EQUAL;
@@ -1943,7 +1943,10 @@ void* __cdecl MSVCRT_memchr(const void *ptr, int c, MSVCRT_size_t n)
  */
 int __cdecl MSVCRT_strcmp(const char *str1, const char *str2)
 {
-    return strcmp(str1, str2);
+    while (*str1 && *str1 == *str2) { str1++; str2++; }
+    if (*str1 > *str2) return 1;
+    if (*str1 < *str2) return -1;
+    return 0;
 }
 
 /*********************************************************************
@@ -1951,7 +1954,11 @@ int __cdecl MSVCRT_strcmp(const char *str1, const char *str2)
  */
 int __cdecl MSVCRT_strncmp(const char *str1, const char *str2, MSVCRT_size_t len)
 {
-    return strncmp(str1, str2, len);
+    if (!len) return 0;
+    while (--len && *str1 && *str1 == *str2) { str1++; str2++; }
+    if (*str1 > *str2) return 1;
+    if (*str1 < *str2) return -1;
+    return 0;
 }
 
 /*********************************************************************
@@ -2005,7 +2012,42 @@ int __cdecl MSVCRT__stricmp(const char *s1, const char *s2)
  */
 char* __cdecl MSVCRT_strstr(const char *haystack, const char *needle)
 {
-    return strstr(haystack, needle);
+    MSVCRT_size_t i, j, len, needle_len, lps_len;
+    BYTE lps[256];
+
+    needle_len = MSVCRT_strlen(needle);
+    if (!needle_len) return (char*)haystack;
+    lps_len = needle_len > ARRAY_SIZE(lps) ? ARRAY_SIZE(lps) : needle_len;
+
+    lps[0] = 0;
+    len = 0;
+    i = 1;
+    while (i < lps_len)
+    {
+        if (needle[i] == needle[len]) lps[i++] = ++len;
+        else if (len) len = lps[len-1];
+        else lps[i++] = 0;
+    }
+
+    i = j = 0;
+    while (haystack[i])
+    {
+        while (j < lps_len && haystack[i] && haystack[i] == needle[j])
+        {
+            i++;
+            j++;
+        }
+
+        if (j == needle_len) return (char*)haystack + i - j;
+        else if (j)
+        {
+            if (j == ARRAY_SIZE(lps) && !MSVCRT_strncmp(haystack + i, needle + j, needle_len - j))
+                return (char*)haystack + i - j;
+            j = lps[j-1];
+        }
+        else if (haystack[i]) i++;
+    }
+    return NULL;
 }
 
 /*********************************************************************
@@ -2047,7 +2089,21 @@ int __cdecl MSVCRT__memicmp(const char *s1, const char *s2, MSVCRT_size_t len)
  */
 MSVCRT_size_t __cdecl MSVCRT_strcspn(const char *str, const char *reject)
 {
-    return strcspn( str, reject );
+    BOOL rejects[256];
+    const char *p;
+
+    memset(rejects, 0, sizeof(rejects));
+
+    p = reject;
+    while(*p)
+    {
+        rejects[(unsigned char)*p] = TRUE;
+        p++;
+    }
+
+    p = str;
+    while(*p && !rejects[(unsigned char)*p]) p++;
+    return p - str;
 }
 
 /*********************************************************************

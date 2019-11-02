@@ -3240,18 +3240,17 @@ static void test_cue_banner(void)
     static WCHAR getcuetestW[5] = {'T',0};
     static const WCHAR testcmp1W[] = {'T','e','s','t',0};
     static const WCHAR testcmp2W[] = {'T','e','s',0};
-    static const WCHAR emptyW[] = {0};
 
     hwnd_edit = create_editcontrolW(ES_AUTOHSCROLL | ES_AUTOVSCROLL, 0);
 
     ret = SendMessageW(hwnd_edit, EM_GETCUEBANNER, (WPARAM)getcuetestW, 5);
-    if (lstrcmpW(getcuetestW, emptyW) != 0)
+    if (getcuetestW[0])
     {
         win_skip("skipping for Win XP and 2003 Server.\n");
         DestroyWindow(hwnd_edit);
         return;
     }
-    ok(lstrcmpW(getcuetestW, emptyW) == 0, "First char is %c\n", getcuetestW[0]);
+    ok(!getcuetestW[0], "First char is %c\n", getcuetestW[0]);
     ok(ret == FALSE, "EM_GETCUEBANNER should have returned FALSE.\n");
 
     lstrcpyW(getcuetestW, testcmp1W);
@@ -3279,12 +3278,12 @@ static void test_cue_banner(void)
     ok(ret == TRUE, "EM_GETCUEBANNER should have returned TRUE.\n");
     ok(lstrcmpW(getcuetestW, testcmp1W) == 0, "EM_GETCUEBANNER returned string %s.\n", wine_dbgstr_w(getcuetestW));
 
-    ret = SendMessageW(hwnd_edit, EM_SETCUEBANNER, 0, (LPARAM)emptyW);
+    ret = SendMessageW(hwnd_edit, EM_SETCUEBANNER, 0, (LPARAM)L"");
     ok(ret == TRUE, "EM_SETCUEBANNER should have returned TRUE.\n");
 
     ret = SendMessageW(hwnd_edit, EM_GETCUEBANNER, (WPARAM)getcuetestW, 5);
     ok(ret == TRUE, "EM_GETCUEBANNER should have returned TRUE.\n");
-    ok(lstrcmpW(getcuetestW, emptyW) == 0, "EM_GETCUEBANNER returned string %s.\n", wine_dbgstr_w(getcuetestW));
+    ok(!getcuetestW[0], "EM_GETCUEBANNER returned string %s.\n", wine_dbgstr_w(getcuetestW));
 
     /* EM_GETCUEBANNER's buffer size includes null char */
     ret = SendMessageW(hwnd_edit, EM_SETCUEBANNER, 0, (LPARAM)testcmp1W);

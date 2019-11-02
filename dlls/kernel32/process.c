@@ -37,9 +37,6 @@
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
 #endif
-#ifdef HAVE_SYS_PRCTL_H
-# include <sys/prctl.h>
-#endif
 #include <sys/types.h>
 #ifdef HAVE_SYS_WAIT_H
 # include <sys/wait.h>
@@ -68,13 +65,6 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(process);
 WINE_DECLARE_DEBUG_CHANNEL(relay);
-
-#ifdef __APPLE__
-extern char **__wine_get_main_environment(void);
-#else
-extern char **__wine_main_environ;
-static char **__wine_get_main_environment(void) { return __wine_main_environ; }
-#endif
 
 typedef struct
 {
@@ -459,52 +449,6 @@ static BOOL find_exe_file( const WCHAR *name, WCHAR *buffer, int buflen, HANDLE 
 
 
 /***********************************************************************
- *           build_initial_environment
- *
- * Build the Win32 environment from the Unix environment
- */
-static BOOL build_initial_environment(void)
-{
-    SIZE_T size = 1;
-    char **e;
-    WCHAR *p, *endptr;
-    void *ptr;
-    char **env = __wine_get_main_environment();
-
-    /* Compute the total size of the Unix environment */
-    for (e = env; *e; e++)
-    {
-        if (is_special_env_var( *e )) continue;
-        size += MultiByteToWideChar( CP_UNIXCP, 0, *e, -1, NULL, 0 );
-    }
-    size *= sizeof(WCHAR);
-
-    if (!(ptr = RtlAllocateHeap( GetProcessHeap(), 0, size ))) return FALSE;
-    NtCurrentTeb()->Peb->ProcessParameters->Environment = p = ptr;
-    endptr = p + size / sizeof(WCHAR);
-
-    /* And fill it with the Unix environment */
-    for (e = env; *e; e++)
-    {
-        char *str = *e;
-
-        /* skip Unix special variables and use the Wine variants instead */
-        if (!strncmp( str, "WINE", 4 ))
-        {
-            if (is_special_env_var( str + 4 )) str += 4;
-            else if (!strncmp( str, "WINEPRELOADRESERVE=", 19 )) continue;  /* skip it */
-        }
-        else if (is_special_env_var( str )) continue;  /* skip it */
-
-        MultiByteToWideChar( CP_UNIXCP, 0, str, -1, p, endptr - p );
-        p += strlenW(p) + 1;
-    }
-    *p = 0;
-    return TRUE;
-}
-
-
-/***********************************************************************
  *           set_registry_variables
  *
  * Set environment variables by enumerating the values of a key;
@@ -564,6 +508,31 @@ static void set_registry_variables( HANDLE hkey, ULONG type )
 
 
 /***********************************************************************
+ *           has_registry_environment
+ */
+static BOOL has_registry_environment(void)
+{
+    static const WCHAR env_keyW[] = {'\\','R','e','g','i','s','t','r','y','\\',
+                                     'M','a','c','h','i','n','e','\\',
+                                     'S','y','s','t','e','m','\\',
+                                     'C','u','r','r','e','n','t','C','o','n','t','r','o','l','S','e','t','\\',
+                                     'C','o','n','t','r','o','l','\\',
+                                     'S','e','s','s','i','o','n',' ','M','a','n','a','g','e','r','\\',
+                                     'E','n','v','i','r','o','n','m','e','n','t',0};
+    OBJECT_ATTRIBUTES attr;
+    UNICODE_STRING nameW;
+    HANDLE hkey;
+    BOOL ret;
+
+    InitializeObjectAttributes( &attr, &nameW, 0, 0, NULL );
+    RtlInitUnicodeString( &nameW, env_keyW );
+    ret = !NtOpenKey( &hkey, KEY_READ, &attr );
+    if (ret) NtClose( hkey );
+    return ret;
+}
+
+
+/***********************************************************************
  *           set_registry_environment
  *
  * Set the environment variables specified in the registry.
@@ -575,7 +544,7 @@ static void set_registry_variables( HANDLE hkey, ULONG type )
  * %SystemRoot% which are predefined. But Wine defines these in the
  * registry, so we need two passes.
  */
-static BOOL set_registry_environment( BOOL volatile_only )
+static void set_registry_environment( BOOL volatile_only )
 {
     static const WCHAR env_keyW[] = {'\\','R','e','g','i','s','t','r','y','\\',
                                      'M','a','c','h','i','n','e','\\',
@@ -590,7 +559,6 @@ static BOOL set_registry_environment( BOOL volatile_only )
     OBJECT_ATTRIBUTES attr;
     UNICODE_STRING nameW;
     HANDLE hkey;
-    BOOL ret = FALSE;
 
     attr.Length = sizeof(attr);
     attr.RootDirectory = 0;
@@ -606,11 +574,10 @@ static BOOL set_registry_environment( BOOL volatile_only )
         set_registry_variables( hkey, REG_SZ );
         set_registry_variables( hkey, REG_EXPAND_SZ );
         NtClose( hkey );
-        ret = TRUE;
     }
 
     /* then the ones for the current user */
-    if (RtlOpenCurrentUser( KEY_READ, &attr.RootDirectory ) != STATUS_SUCCESS) return ret;
+    if (RtlOpenCurrentUser( KEY_READ, &attr.RootDirectory ) != STATUS_SUCCESS) return;
     RtlInitUnicodeString( &nameW, envW );
     if (!volatile_only && NtOpenKey( &hkey, KEY_READ, &attr ) == STATUS_SUCCESS)
     {
@@ -628,7 +595,6 @@ static BOOL set_registry_environment( BOOL volatile_only )
     }
 
     NtClose( attr.RootDirectory );
-    return ret;
 }
 
 
@@ -869,32 +835,15 @@ static void set_wow64_environment(void)
 }
 
 /***********************************************************************
- *              set_library_wargv
+ *              set_library_argv
  *
- * Set the Wine library Unicode argv global variables.
+ * Set the Wine library argv global variables.
  */
-static void set_library_wargv( char **argv )
+static void set_library_argv( WCHAR **wargv )
 {
     int argc;
-    char *q;
-    WCHAR *p;
-    WCHAR **wargv;
+    char *p, **argv;
     DWORD total = 0;
-
-    for (argc = 0; argv[argc]; argc++)
-        total += MultiByteToWideChar( CP_UNIXCP, 0, argv[argc], -1, NULL, 0 );
-
-    wargv = RtlAllocateHeap( GetProcessHeap(), 0,
-                             total * sizeof(WCHAR) + (argc + 1) * sizeof(*wargv) );
-    p = (WCHAR *)(wargv + argc + 1);
-    for (argc = 0; argv[argc]; argc++)
-    {
-        DWORD reslen = MultiByteToWideChar( CP_UNIXCP, 0, argv[argc], -1, p, total );
-        wargv[argc] = p;
-        p += reslen;
-        total -= reslen;
-    }
-    wargv[argc] = NULL;
 
     /* convert argv back from Unicode since it has to be in the Ansi codepage not the Unix one */
 
@@ -902,12 +851,12 @@ static void set_library_wargv( char **argv )
         total += WideCharToMultiByte( CP_ACP, 0, wargv[argc], -1, NULL, 0, NULL, NULL );
 
     argv = RtlAllocateHeap( GetProcessHeap(), 0, total + (argc + 1) * sizeof(*argv) );
-    q = (char *)(argv + argc + 1);
+    p = (char *)(argv + argc + 1);
     for (argc = 0; wargv[argc]; argc++)
     {
-        DWORD reslen = WideCharToMultiByte( CP_ACP, 0, wargv[argc], -1, q, total, NULL, NULL );
-        argv[argc] = q;
-        q += reslen;
+        DWORD reslen = WideCharToMultiByte( CP_ACP, 0, wargv[argc], -1, p, total, NULL, NULL );
+        argv[argc] = p;
+        p += reslen;
         total -= reslen;
     }
     argv[argc] = NULL;
@@ -915,245 +864,6 @@ static void set_library_wargv( char **argv )
     __wine_main_argc = argc;
     __wine_main_argv = argv;
     __wine_main_wargv = wargv;
-}
-
-
-/***********************************************************************
- *              update_library_argv0
- *
- * Update the argv[0] global variable with the binary we have found.
- */
-static void update_library_argv0( const WCHAR *argv0 )
-{
-    DWORD len = strlenW( argv0 );
-
-    if (len > strlenW( __wine_main_wargv[0] ))
-    {
-        __wine_main_wargv[0] = RtlAllocateHeap( GetProcessHeap(), 0, (len + 1) * sizeof(WCHAR) );
-    }
-    strcpyW( __wine_main_wargv[0], argv0 );
-
-    len = WideCharToMultiByte( CP_ACP, 0, argv0, -1, NULL, 0, NULL, NULL );
-    if (len > strlen( __wine_main_argv[0] ) + 1)
-    {
-        __wine_main_argv[0] = RtlAllocateHeap( GetProcessHeap(), 0, len );
-    }
-    WideCharToMultiByte( CP_ACP, 0, argv0, -1, __wine_main_argv[0], len, NULL, NULL );
-}
-
-
-/***********************************************************************
- *           build_command_line
- *
- * Build the command line of a process from the argv array.
- *
- * Note that it does NOT necessarily include the file name.
- * Sometimes we don't even have any command line options at all.
- *
- * We must quote and escape characters so that the argv array can be rebuilt
- * from the command line:
- * - spaces and tabs must be quoted
- *   'a b'   -> '"a b"'
- * - quotes must be escaped
- *   '"'     -> '\"'
- * - if '\'s are followed by a '"', they must be doubled and followed by '\"',
- *   resulting in an odd number of '\' followed by a '"'
- *   '\"'    -> '\\\"'
- *   '\\"'   -> '\\\\\"'
- * - '\'s are followed by the closing '"' must be doubled,
- *   resulting in an even number of '\' followed by a '"'
- *   ' \'    -> '" \\"'
- *   ' \\'    -> '" \\\\"'
- * - '\'s that are not followed by a '"' can be left as is
- *   'a\b'   == 'a\b'
- *   'a\\b'  == 'a\\b'
- */
-static BOOL build_command_line( WCHAR **argv )
-{
-    int len;
-    WCHAR **arg;
-    LPWSTR p;
-    RTL_USER_PROCESS_PARAMETERS* rupp = NtCurrentTeb()->Peb->ProcessParameters;
-
-    if (rupp->CommandLine.Buffer) return TRUE; /* already got it from the server */
-
-    len = 0;
-    for (arg = argv; *arg; arg++)
-    {
-        BOOL has_space;
-        int bcount;
-        WCHAR* a;
-
-        has_space=FALSE;
-        bcount=0;
-        a=*arg;
-        if( !*a ) has_space=TRUE;
-        while (*a!='\0') {
-            if (*a=='\\') {
-                bcount++;
-            } else {
-                if (*a==' ' || *a=='\t') {
-                    has_space=TRUE;
-                } else if (*a=='"') {
-                    /* doubling of '\' preceding a '"',
-                     * plus escaping of said '"'
-                     */
-                    len+=2*bcount+1;
-                }
-                bcount=0;
-            }
-            a++;
-        }
-        len+=(a-*arg)+1 /* for the separating space */;
-        if (has_space)
-            len+=2+bcount; /* for the quotes and doubling of '\' preceding the closing quote */
-    }
-
-    if (!(rupp->CommandLine.Buffer = RtlAllocateHeap( GetProcessHeap(), 0, len * sizeof(WCHAR))))
-        return FALSE;
-
-    p = rupp->CommandLine.Buffer;
-    rupp->CommandLine.Length = (len - 1) * sizeof(WCHAR);
-    rupp->CommandLine.MaximumLength = len * sizeof(WCHAR);
-    for (arg = argv; *arg; arg++)
-    {
-        BOOL has_space,has_quote;
-        WCHAR* a;
-        int bcount;
-
-        /* Check for quotes and spaces in this argument */
-        has_space=has_quote=FALSE;
-        a=*arg;
-        if( !*a ) has_space=TRUE;
-        while (*a!='\0') {
-            if (*a==' ' || *a=='\t') {
-                has_space=TRUE;
-                if (has_quote)
-                    break;
-            } else if (*a=='"') {
-                has_quote=TRUE;
-                if (has_space)
-                    break;
-            }
-            a++;
-        }
-
-        /* Now transfer it to the command line */
-        if (has_space)
-            *p++='"';
-        if (has_quote || has_space) {
-            bcount=0;
-            a=*arg;
-            while (*a!='\0') {
-                if (*a=='\\') {
-                    *p++=*a;
-                    bcount++;
-                } else {
-                    if (*a=='"') {
-                        int i;
-
-                        /* Double all the '\\' preceding this '"', plus one */
-                        for (i=0;i<=bcount;i++)
-                            *p++='\\';
-                        *p++='"';
-                    } else {
-                        *p++=*a;
-                    }
-                    bcount=0;
-                }
-                a++;
-            }
-        } else {
-            WCHAR* x = *arg;
-            while ((*p=*x++)) p++;
-        }
-        if (has_space) {
-            int i;
-
-            /* Double all the '\' preceding the closing quote */
-            for (i=0;i<bcount;i++)
-                *p++='\\';
-            *p++='"';
-        }
-        *p++=' ';
-    }
-    if (p > rupp->CommandLine.Buffer)
-        p--;  /* remove last space */
-    *p = '\0';
-
-    return TRUE;
-}
-
-
-/***********************************************************************
- *           init_current_directory
- *
- * Initialize the current directory from the Unix cwd or the parent info.
- */
-static void init_current_directory( CURDIR *cur_dir )
-{
-    UNICODE_STRING dir_str;
-    const char *pwd;
-    char *cwd;
-    int size;
-
-    /* if we received a cur dir from the parent, try this first */
-
-    if (cur_dir->DosPath.Length)
-    {
-        if (RtlSetCurrentDirectory_U( &cur_dir->DosPath ) == STATUS_SUCCESS) goto done;
-    }
-
-    /* now try to get it from the Unix cwd */
-
-    for (size = 256; ; size *= 2)
-    {
-        if (!(cwd = HeapAlloc( GetProcessHeap(), 0, size ))) break;
-        if (getcwd( cwd, size )) break;
-        HeapFree( GetProcessHeap(), 0, cwd );
-        if (errno == ERANGE) continue;
-        cwd = NULL;
-        break;
-    }
-
-    /* try to use PWD if it is valid, so that we don't resolve symlinks */
-
-    pwd = getenv( "PWD" );
-    if (cwd)
-    {
-        struct stat st1, st2;
-
-        if (!pwd || stat( pwd, &st1 ) == -1 ||
-            (!stat( cwd, &st2 ) && (st1.st_dev != st2.st_dev || st1.st_ino != st2.st_ino)))
-            pwd = cwd;
-    }
-
-    if (pwd)
-    {
-        ANSI_STRING unix_name;
-        UNICODE_STRING nt_name;
-        RtlInitAnsiString( &unix_name, pwd );
-        if (!wine_unix_to_nt_file_name( &unix_name, &nt_name ))
-        {
-            UNICODE_STRING dos_path;
-            /* skip the \??\ prefix, nt_name is 0 terminated */
-            RtlInitUnicodeString( &dos_path, nt_name.Buffer + 4 );
-            RtlSetCurrentDirectory_U( &dos_path );
-            RtlFreeUnicodeString( &nt_name );
-        }
-    }
-
-    if (!cur_dir->DosPath.Length)  /* still not initialized */
-    {
-        MESSAGE("Warning: could not find DOS drive for current working directory '%s', "
-                "starting in the Windows directory.\n", cwd ? cwd : "" );
-        RtlInitUnicodeString( &dir_str, DIR_Windows );
-        RtlSetCurrentDirectory_U( &dir_str );
-    }
-    HeapFree( GetProcessHeap(), 0, cwd );
-
-done:
-    TRACE( "starting in %s %p\n", debugstr_w( cur_dir->DosPath.Buffer ), cur_dir->Handle );
 }
 
 
@@ -1304,68 +1014,6 @@ void WINAPI start_process( LPTHREAD_START_ROUTINE entry, PEB *peb )
 
 
 /***********************************************************************
- *           set_process_name
- *
- * Change the process name in the ps output.
- */
-static void set_process_name( int argc, char *argv[] )
-{
-    BOOL shift_strings;
-    char *p, *name;
-    int i;
-
-#ifdef HAVE_SETPROCTITLE
-    setproctitle("-%s", argv[1]);
-    shift_strings = FALSE;
-#else
-    p = argv[0];
-
-    shift_strings = (argc >= 2);
-    for (i = 1; i < argc; i++)
-    {
-        p += strlen(p) + 1;
-        if (p != argv[i])
-        {
-            shift_strings = FALSE;
-            break;
-        }
-    }
-#endif
-
-    if (shift_strings)
-    {
-        int offset = argv[1] - argv[0];
-        char *end = argv[argc-1] + strlen(argv[argc-1]) + 1;
-        memmove( argv[0], argv[1], end - argv[1] );
-        memset( end - offset, 0, offset );
-        for (i = 1; i < argc; i++)
-            argv[i-1] = argv[i] - offset;
-        argv[i-1] = NULL;
-    }
-    else
-    {
-        /* remove argv[0] */
-        memmove( argv, argv + 1, argc * sizeof(argv[0]) );
-    }
-
-    name = argv[0];
-    if ((p = strrchr( name, '\\' ))) name = p + 1;
-    if ((p = strrchr( name, '/' ))) name = p + 1;
-
-#if defined(HAVE_SETPROGNAME)
-    setprogname( name );
-#endif
-
-#ifdef HAVE_PRCTL
-#ifndef PR_SET_NAME
-# define PR_SET_NAME 15
-#endif
-    prctl( PR_SET_NAME, name );
-#endif  /* HAVE_PRCTL */
-}
-
-
-/***********************************************************************
  *           __wine_kernel_init
  *
  * Wine initialisation: load and start the main exe file.
@@ -1380,7 +1028,6 @@ void * CDECL __wine_kernel_init(void)
     RTL_USER_PROCESS_PARAMETERS *params = peb->ProcessParameters;
     HANDLE boot_events[2];
     BOOL got_environment = TRUE;
-    WCHAR *load_path, *dummy;
 
     /* Initialize everything */
 
@@ -1391,56 +1038,24 @@ void * CDECL __wine_kernel_init(void)
     RtlSetUnhandledExceptionFilter( UnhandledExceptionFilter );
 
     LOCALE_Init();
-
-    if (!params->Environment)
-    {
-        /* Copy the parent environment */
-        if (!build_initial_environment()) exit(1);
-
-        /* convert old configuration to new format */
-        convert_old_config();
-
-        got_environment = set_registry_environment( FALSE );
-        set_additional_environment();
-    }
-
     init_windows_dirs();
-    init_current_directory( &params->CurrentDirectory );
-
-    set_process_name( __wine_main_argc, __wine_main_argv );
-    set_library_wargv( __wine_main_argv );
     boot_events[0] = boot_events[1] = 0;
 
-    if (peb->ProcessParameters->ImagePathName.Buffer)
+    if (!peb->ProcessParameters->WindowTitle.Buffer)
     {
-        strcpyW( main_exe_name, peb->ProcessParameters->ImagePathName.Buffer );
-    }
-    else
-    {
-        BOOL is_64bit;
-
-        RtlGetExePath( __wine_main_wargv[0], &load_path );
-        if (!SearchPathW( load_path, __wine_main_wargv[0], exeW, MAX_PATH, main_exe_name, NULL ) &&
-            !get_builtin_path( __wine_main_wargv[0], exeW, main_exe_name, MAX_PATH, &is_64bit ))
-        {
-            MESSAGE( "wine: cannot find '%s'\n", __wine_main_argv[0] );
-            ExitProcess( GetLastError() );
-        }
-        RtlReleasePath( load_path );
-        update_library_argv0( main_exe_name );
-        if (!build_command_line( __wine_main_wargv )) goto error;
+        /* convert old configuration to new format */
+        convert_old_config();
+        got_environment = has_registry_environment();
         start_wineboot( boot_events );
     }
 
     /* if there's no extension, append a dot to prevent LoadLibrary from appending .dll */
+    strcpyW( main_exe_name, peb->ProcessParameters->ImagePathName.Buffer );
     p = strrchrW( main_exe_name, '.' );
     if (!p || strchrW( p, '/' ) || strchrW( p, '\\' )) strcatW( main_exe_name, dotW );
 
     TRACE( "starting process name=%s argv[0]=%s\n",
            debugstr_w(main_exe_name), debugstr_w(__wine_main_wargv[0]) );
-
-    LdrGetDllPath( main_exe_name, 0, &load_path, &dummy );
-    RtlInitUnicodeString( &NtCurrentTeb()->Peb->ProcessParameters->DllPath, load_path );
 
     if (boot_events[0])
     {
@@ -1457,6 +1072,7 @@ void * CDECL __wine_kernel_init(void)
         set_additional_environment();
     }
     set_wow64_environment();
+    set_library_argv( __wine_main_wargv );
 
     if (!(peb->ImageBaseAddress = LoadLibraryExW( main_exe_name, 0, DONT_RESOLVE_DLL_REFERENCES )))
     {
@@ -1496,9 +1112,6 @@ void * CDECL __wine_kernel_init(void)
     if (!params->CurrentDirectory.Handle) chdir("/"); /* avoid locking removable devices */
 
     return start_process_wrapper;
-
- error:
-    ExitProcess( GetLastError() );
 }
 
 
@@ -1885,9 +1498,9 @@ static RTL_USER_PROCESS_PARAMETERS *create_process_params( LPCWSTR filename, LPC
                                                            const STARTUPINFOW *startup )
 {
     RTL_USER_PROCESS_PARAMETERS *params;
-    UNICODE_STRING imageW, curdirW, cmdlineW, titleW, desktopW, runtimeW, newdirW;
+    UNICODE_STRING imageW, dllpathW, curdirW, cmdlineW, titleW, desktopW, runtimeW, newdirW;
     WCHAR imagepath[MAX_PATH];
-    WCHAR *envW = env;
+    WCHAR *load_path, *dummy, *envW = env;
 
     if(!GetLongPathNameW( filename, imagepath, MAX_PATH ))
         lstrcpynW( imagepath, filename, MAX_PATH );
@@ -1914,20 +1527,24 @@ static RTL_USER_PROCESS_PARAMETERS *create_process_params( LPCWSTR filename, LPC
         else
             cur_dir = NULL;
     }
+    LdrGetDllPath( imagepath, LOAD_WITH_ALTERED_SEARCH_PATH, &load_path, &dummy );
     RtlInitUnicodeString( &imageW, imagepath );
+    RtlInitUnicodeString( &dllpathW, load_path );
     RtlInitUnicodeString( &curdirW, cur_dir );
     RtlInitUnicodeString( &cmdlineW, cmdline );
     RtlInitUnicodeString( &titleW, startup->lpTitle ? startup->lpTitle : imagepath );
     RtlInitUnicodeString( &desktopW, startup->lpDesktop );
     runtimeW.Buffer = (WCHAR *)startup->lpReserved2;
     runtimeW.Length = runtimeW.MaximumLength = startup->cbReserved2;
-    if (RtlCreateProcessParametersEx( &params, &imageW, NULL, cur_dir ? &curdirW : NULL,
+    if (RtlCreateProcessParametersEx( &params, &imageW, &dllpathW, cur_dir ? &curdirW : NULL,
                                       &cmdlineW, envW, &titleW, &desktopW,
                                       NULL, &runtimeW, PROCESS_PARAMS_FLAG_NORMALIZED ))
     {
+        RtlReleasePath( load_path );
         if (envW != env) HeapFree( GetProcessHeap(), 0, envW );
         return NULL;
     }
+    RtlReleasePath( load_path );
 
     if (flags & CREATE_NEW_PROCESS_GROUP) params->ConsoleFlags = 1;
     if (flags & CREATE_NEW_CONSOLE) params->ConsoleHandle = KERNEL32_CONSOLE_ALLOC;

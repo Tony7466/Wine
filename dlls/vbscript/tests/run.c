@@ -104,6 +104,8 @@ DEFINE_EXPECT(global_propargput_d);
 DEFINE_EXPECT(global_propargput_i);
 DEFINE_EXPECT(global_propargput1_d);
 DEFINE_EXPECT(global_propargput1_i);
+DEFINE_EXPECT(global_propargset_d);
+DEFINE_EXPECT(global_propargset_i);
 DEFINE_EXPECT(global_testoptionalarg_i);
 DEFINE_EXPECT(global_testerrorobject_i);
 DEFINE_EXPECT(collectionobj_newenum_i);
@@ -139,6 +141,8 @@ DEFINE_EXPECT(OnLeaveScript);
 #define DISPID_GLOBAL_WEEKSTARTDAY  1021
 #define DISPID_GLOBAL_GLOBALCALLBACK  1022
 #define DISPID_GLOBAL_TESTERROROBJECT 1023
+#define DISPID_GLOBAL_THROWWITHDESC   1024
+#define DISPID_GLOBAL_PROPARGSET      1025
 
 #define DISPID_TESTOBJ_PROPGET      2000
 #define DISPID_TESTOBJ_PROPPUT      2001
@@ -178,13 +182,6 @@ static int strcmp_wa(LPCWSTR strw, const char *stra)
     CHAR buf[512];
     WideCharToMultiByte(CP_ACP, 0, strw, -1, buf, sizeof(buf), 0, 0);
     return lstrcmpA(buf, stra);
-}
-
-static int stricmp_wa(LPCWSTR strw, const char *stra)
-{
-    CHAR buf[512];
-    WideCharToMultiByte(CP_ACP, 0, strw, -1, buf, sizeof(buf), 0, 0);
-    return lstrcmpiA(buf, stra);
 }
 
 static const char *vt2a(VARIANT *v)
@@ -673,6 +670,33 @@ static const IEnumVARIANTVtbl EnumVARIANTVtbl = {
 
 static IEnumVARIANT enumObj = { &EnumVARIANTVtbl };
 
+typedef struct {
+    const WCHAR *name;
+    DISPID pid;
+    BOOL *expect;
+    BOOL *called;
+} dispid_t;
+
+static BOOL get_dispid(BSTR name, const dispid_t *dispids, SIZE_T dispids_cnt, DISPID *id)
+{
+    int i;
+
+    for(i = 0; i < dispids_cnt; i++) {
+        if(!wcsicmp(name, dispids[i].name)) {
+            const dispid_t *d = &dispids[i];
+            if(d->expect) {
+                ok(*d->expect, "unexpected call %s\n", wine_dbgstr_w(d->name));
+                *d->called = TRUE;
+                *d->expect = FALSE;
+            }
+            *id = d->pid;
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
 static HRESULT WINAPI DispatchEx_QueryInterface(IDispatchEx *iface, REFIID riid, void **ppv)
 {
     *ppv = NULL;
@@ -779,83 +803,67 @@ static HRESULT WINAPI DispatchEx_InvokeEx(IDispatchEx *iface, DISPID id, LCID lc
 
 static HRESULT WINAPI testObj_GetDispID(IDispatchEx *iface, BSTR bstrName, DWORD grfdex, DISPID *pid)
 {
-    typedef struct {
-          const char * const name;
-          DISPID pid;
-          BOOL *expect;
-          BOOL *called;
-    } dispid_t;
-
-    dispid_t dispids[] = {
-       { "propget", DISPID_TESTOBJ_PROPGET, REF_EXPECT(testobj_propget_d) },
-       { "propput", DISPID_TESTOBJ_PROPPUT, REF_EXPECT(testobj_propput_d) },
-       { "rem", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "true", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "false", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "not", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "and", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "or", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "xor", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "eqv", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "imp", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "is", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "mod", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "call", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "dim", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "sub", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "function", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "get", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "let", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "const", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "if", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "else", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "elseif", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "end", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "then", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "exit", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "while", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "wend", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "do", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "loop", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "until", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "for", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "to", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "each", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "in", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "select", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "case", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "byref", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "byval", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "option", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "nothing", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "empty", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "null", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "class", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "set", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "new", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "public", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "private", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "next", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "on", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "resume", DISPID_TESTOBJ_KEYWORD, NULL },
-       { "goto", DISPID_TESTOBJ_KEYWORD, NULL },
+    static const dispid_t dispids[] = {
+       { L"propget",  DISPID_TESTOBJ_PROPGET, REF_EXPECT(testobj_propget_d) },
+       { L"propput",  DISPID_TESTOBJ_PROPPUT, REF_EXPECT(testobj_propput_d) },
+       { L"rem",      DISPID_TESTOBJ_KEYWORD },
+       { L"true",     DISPID_TESTOBJ_KEYWORD },
+       { L"false",    DISPID_TESTOBJ_KEYWORD },
+       { L"not",      DISPID_TESTOBJ_KEYWORD },
+       { L"and",      DISPID_TESTOBJ_KEYWORD },
+       { L"or",       DISPID_TESTOBJ_KEYWORD },
+       { L"xor",      DISPID_TESTOBJ_KEYWORD },
+       { L"eqv",      DISPID_TESTOBJ_KEYWORD },
+       { L"imp",      DISPID_TESTOBJ_KEYWORD },
+       { L"is",       DISPID_TESTOBJ_KEYWORD },
+       { L"mod",      DISPID_TESTOBJ_KEYWORD },
+       { L"call",     DISPID_TESTOBJ_KEYWORD },
+       { L"dim",      DISPID_TESTOBJ_KEYWORD },
+       { L"sub",      DISPID_TESTOBJ_KEYWORD },
+       { L"function", DISPID_TESTOBJ_KEYWORD },
+       { L"get",      DISPID_TESTOBJ_KEYWORD },
+       { L"let",      DISPID_TESTOBJ_KEYWORD },
+       { L"const",    DISPID_TESTOBJ_KEYWORD },
+       { L"if",       DISPID_TESTOBJ_KEYWORD },
+       { L"else",     DISPID_TESTOBJ_KEYWORD },
+       { L"elseif",   DISPID_TESTOBJ_KEYWORD },
+       { L"end",      DISPID_TESTOBJ_KEYWORD },
+       { L"then",     DISPID_TESTOBJ_KEYWORD },
+       { L"exit",     DISPID_TESTOBJ_KEYWORD },
+       { L"while",    DISPID_TESTOBJ_KEYWORD },
+       { L"wend",     DISPID_TESTOBJ_KEYWORD },
+       { L"do",       DISPID_TESTOBJ_KEYWORD },
+       { L"loop",     DISPID_TESTOBJ_KEYWORD },
+       { L"until",    DISPID_TESTOBJ_KEYWORD },
+       { L"for",      DISPID_TESTOBJ_KEYWORD },
+       { L"to",       DISPID_TESTOBJ_KEYWORD },
+       { L"each",     DISPID_TESTOBJ_KEYWORD },
+       { L"in",       DISPID_TESTOBJ_KEYWORD },
+       { L"select",   DISPID_TESTOBJ_KEYWORD },
+       { L"case",     DISPID_TESTOBJ_KEYWORD },
+       { L"byref",    DISPID_TESTOBJ_KEYWORD },
+       { L"byval",    DISPID_TESTOBJ_KEYWORD },
+       { L"option",   DISPID_TESTOBJ_KEYWORD },
+       { L"nothing",  DISPID_TESTOBJ_KEYWORD },
+       { L"empty",    DISPID_TESTOBJ_KEYWORD },
+       { L"null",     DISPID_TESTOBJ_KEYWORD },
+       { L"class",    DISPID_TESTOBJ_KEYWORD },
+       { L"set",      DISPID_TESTOBJ_KEYWORD },
+       { L"new",      DISPID_TESTOBJ_KEYWORD },
+       { L"public",   DISPID_TESTOBJ_KEYWORD },
+       { L"private",  DISPID_TESTOBJ_KEYWORD },
+       { L"next",     DISPID_TESTOBJ_KEYWORD },
+       { L"on",       DISPID_TESTOBJ_KEYWORD },
+       { L"resume",   DISPID_TESTOBJ_KEYWORD },
+       { L"goto",     DISPID_TESTOBJ_KEYWORD },
+       { L"redim",    DISPID_TESTOBJ_KEYWORD },
+       { L"preserve", DISPID_TESTOBJ_KEYWORD },
+       { L"with",     DISPID_TESTOBJ_KEYWORD }
     };
-    int i;
 
-    for (i = 0; i < ARRAY_SIZE(dispids); i++) {
-        if(!stricmp_wa(bstrName, dispids[i].name)) {
-            dispid_t *d = &dispids[i];
-            if(d->expect) {
-               ok(*d->expect, "unexpected call %s\n", d->name);
-               *d->called = TRUE;
-               *d->expect = FALSE;
-            }
-            test_grfdex(grfdex, fdexNameCaseInsensitive);
-            *pid = d->pid;
-            return S_OK;
-        }
-    }
-
+    test_grfdex(grfdex, fdexNameCaseInsensitive);
+    if(get_dispid(bstrName, dispids, ARRAY_SIZE(dispids), pid))
+        return S_OK;
     ok(0, "unexpected call %s\n", wine_dbgstr_w(bstrName));
     return DISP_E_UNKNOWNNAME;
 }
@@ -1080,132 +1088,39 @@ static ULONG WINAPI Global_Release(IDispatchEx *iface)
 
 static HRESULT WINAPI Global_GetDispID(IDispatchEx *iface, BSTR bstrName, DWORD grfdex, DISPID *pid)
 {
-    if(!strcmp_wa(bstrName, "ok")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_OK;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "todo_wine_ok")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_TODO_WINE_OK;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "trace")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_TRACE;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "reportSuccess")) {
-        CHECK_EXPECT(global_success_d);
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_REPORTSUCCESS;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "getVT")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_GETVT;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "isEnglishLang")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_ISENGLANG;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "firstDayOfWeek")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_WEEKSTARTDAY;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "globalCallback")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_GLOBALCALLBACK;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "testObj")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_TESTOBJ;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "collectionObj")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_COLLOBJ;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "vbvar")) {
-        CHECK_EXPECT(global_vbvar_d);
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_VBVAR;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "letobj")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_LETOBJ;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "setobj")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_SETOBJ;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "isNullDisp")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_ISNULLDISP;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "testDisp")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_TESTDISP;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "RefObj")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_REFOBJ;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "propargput")) {
-        CHECK_EXPECT(global_propargput_d);
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_PROPARGPUT;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "propargput1")) {
-        CHECK_EXPECT(global_propargput1_d);
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_PROPARGPUT1;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "counter")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_COUNTER;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "doubleAsString")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_DOUBLEASSTRING;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "testArray")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_TESTARRAY;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "throwInt")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_THROWINT;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "testOptionalArg")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_TESTOPTIONALARG;
-        return S_OK;
-    }
-    if(!strcmp_wa(bstrName, "testErrorObject")) {
-        test_grfdex(grfdex, fdexNameCaseInsensitive);
-        *pid = DISPID_GLOBAL_TESTERROROBJECT;
-        return S_OK;
-    }
+    static const dispid_t dispids[] = {
+        { L"ok",              DISPID_GLOBAL_OK },
+        { L"todo_wine_ok",    DISPID_GLOBAL_TODO_WINE_OK },
+        { L"trace",           DISPID_GLOBAL_TRACE },
+        { L"reportSuccess",   DISPID_GLOBAL_REPORTSUCCESS, REF_EXPECT(global_success_d) },
+        { L"getVT",           DISPID_GLOBAL_GETVT },
+        { L"isEnglishLang",   DISPID_GLOBAL_ISENGLANG },
+        { L"firstDayOfWeek",  DISPID_GLOBAL_WEEKSTARTDAY },
+        { L"globalCallback",  DISPID_GLOBAL_GLOBALCALLBACK },
+        { L"testObj",         DISPID_GLOBAL_TESTOBJ },
+        { L"collectionObj" ,  DISPID_GLOBAL_COLLOBJ },
+        { L"vbvar",           DISPID_GLOBAL_VBVAR, REF_EXPECT(global_vbvar_d) },
+        { L"letobj",          DISPID_GLOBAL_LETOBJ },
+        { L"setobj",          DISPID_GLOBAL_SETOBJ },
+        { L"isNullDisp",      DISPID_GLOBAL_ISNULLDISP },
+        { L"testDisp",        DISPID_GLOBAL_TESTDISP },
+        { L"RefObj",          DISPID_GLOBAL_REFOBJ },
+        { L"propargput",      DISPID_GLOBAL_PROPARGPUT, REF_EXPECT(global_propargput_d) },
+        { L"propargput1",     DISPID_GLOBAL_PROPARGPUT1, REF_EXPECT(global_propargput1_d) },
+        { L"propargset",      DISPID_GLOBAL_PROPARGSET, REF_EXPECT(global_propargset_d) },
+        { L"counter",         DISPID_GLOBAL_COUNTER },
+        { L"doubleAsString",  DISPID_GLOBAL_DOUBLEASSTRING },
+        { L"testArray",       DISPID_GLOBAL_TESTARRAY },
+        { L"throwInt",        DISPID_GLOBAL_THROWINT },
+        { L"testOptionalArg", DISPID_GLOBAL_TESTOPTIONALARG },
+        { L"testErrorObject", DISPID_GLOBAL_TESTERROROBJECT },
+        { L"throwWithDesc",   DISPID_GLOBAL_THROWWITHDESC }
+    };
 
-    if(strict_dispid_check && strcmp_wa(bstrName, "x"))
+    test_grfdex(grfdex, fdexNameCaseInsensitive);
+    if(get_dispid(bstrName, dispids, ARRAY_SIZE(dispids), pid))
+        return S_OK;
+    if(strict_dispid_check && wcscmp(bstrName, L"x"))
         ok(0, "unexpected call %s %x\n", wine_dbgstr_w(bstrName), grfdex);
     return DISP_E_UNKNOWNNAME;
 }
@@ -1481,6 +1396,27 @@ static HRESULT WINAPI Global_InvokeEx(IDispatchEx *iface, DISPID id, LCID lcid, 
 
         return S_OK;
 
+    case DISPID_GLOBAL_PROPARGSET:
+        CHECK_EXPECT(global_propargset_i);
+
+        ok(wFlags == DISPATCH_PROPERTYPUTREF, "wFlags = %x\n", wFlags);
+        ok(pdp != NULL, "pdp == NULL\n");
+        ok(pdp->rgvarg != NULL, "rgvarg == NULL\n");
+        ok(pdp->rgdispidNamedArgs != NULL, "rgdispidNamedArgs == NULL\n");
+        ok(pdp->cArgs == 2, "cArgs = %d\n", pdp->cArgs);
+        ok(pdp->cNamedArgs == 1, "cNamedArgs = %d\n", pdp->cNamedArgs);
+        ok(pdp->rgdispidNamedArgs[0] == DISPID_PROPERTYPUT, "pdp->rgdispidNamedArgs[0] = %d\n", pdp->rgdispidNamedArgs[0]);
+        ok(!pvarRes, "pvarRes != NULL\n");
+        ok(pei != NULL, "pei == NULL\n");
+
+        ok(V_VT(pdp->rgvarg) == VT_DISPATCH, "V_VT(psp->rgvargs) = %d\n", V_VT(pdp->rgvarg));
+        ok(V_DISPATCH(pdp->rgvarg) == (IDispatch*)&testObj, "V_DISPATCH(psp->rgvargs) = %p\n", V_DISPATCH(pdp->rgvarg));
+
+        ok(V_VT(pdp->rgvarg+1) == VT_I2, "V_VT(psp->rgvargs+1) = %d\n", V_VT(pdp->rgvarg+1));
+        ok(V_I2(pdp->rgvarg+1) == 0, "V_I2(psp->rgvargs+1) = %d\n", V_I2(pdp->rgvarg+1));
+
+        return S_OK;
+
     case DISPID_GLOBAL_COUNTER:
         ok(pdp != NULL, "pdp == NULL\n");
         todo_wine ok(pdp->rgvarg != NULL, "rgvarg == NULL\n");
@@ -1557,6 +1493,13 @@ static HRESULT WINAPI Global_InvokeEx(IDispatchEx *iface, DISPID id, LCID lcid, 
         }
 
         return hres;
+
+    case DISPID_GLOBAL_THROWWITHDESC:
+        pei->scode = 0xdeadbeef;
+        pei->bstrDescription = SysAllocString(L"test");
+        pei->bstrHelpFile = SysAllocString(L"test.chm");
+        pei->dwHelpContext = 10;
+        return DISP_E_EXCEPTION;
     }
 
     case DISPID_GLOBAL_TESTOPTIONALARG: {
@@ -2467,7 +2410,10 @@ static void test_parse_errors(void)
         "Call ok(x, \"wrong case\")\n",
 
         /* Class...End Class  (empty) */
-        "Class C End Class"
+        "Class C End Class",
+
+        /* invalid use of parentheses for call statement */
+        "strcomp(\"x\", \"y\")"
     };
     HRESULT hres;
     UINT i;
@@ -2916,6 +2862,24 @@ static void run_tests(void)
     parse_script_a("test.propargput1(counter()) = counter()");
     CHECK_CALLED(global_propargput1_d);
     CHECK_CALLED(global_propargput1_i);
+
+    SET_EXPECT(global_propargset_d);
+    SET_EXPECT(global_propargset_i);
+    parse_script_a("set propargset (counter()) = testObj");
+    CHECK_CALLED(global_propargset_d);
+    CHECK_CALLED(global_propargset_i);
+
+    SET_EXPECT(testobj_propget_d);
+    SET_EXPECT(testobj_propget_i);
+    parse_script_a("dim x\nwith testObj\nx=1+.propget\nend with");
+    CHECK_CALLED(testobj_propget_d);
+    CHECK_CALLED(testobj_propget_i);
+
+    SET_EXPECT(testobj_propput_d);
+    SET_EXPECT(testobj_propput_i);
+    parse_script_a("with testObj\n.propput = 1\nend with");
+    CHECK_CALLED(testobj_propput_d);
+    CHECK_CALLED(testobj_propput_i);
 
     parse_htmlscript_a("<!--");
     parse_htmlscript_a(" -->");
