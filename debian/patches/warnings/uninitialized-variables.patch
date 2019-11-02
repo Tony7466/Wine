@@ -14,7 +14,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (hkey && !RegQueryValueExW(hkey, name, 0, &type, NULL, &size))
 --- a/dlls/d3dx9_36/texture.c
 +++ b/dlls/d3dx9_36/texture.c
-@@ -1290,6 +1290,10 @@ static inline void fill_texture(const st
+@@ -1301,6 +1301,10 @@ static inline void fill_texture(const st
              case 3: /* Blue */
                  comp_value = value->z;
                  break;
@@ -27,7 +27,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (format->type == FORMAT_ARGBF16)
 --- a/dlls/kernel32/locale.c
 +++ b/dlls/kernel32/locale.c
-@@ -4791,7 +4791,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
+@@ -4665,7 +4665,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
                          LPWSTR lpUnicodeCharStr, INT cchUnicodeChar)
  {
      INT i, label_start, label_end, out_label, out = 0;
@@ -73,7 +73,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/dlls/webservices/reader.c
 +++ b/dlls/webservices/reader.c
-@@ -2038,7 +2038,7 @@ static inline BOOL is_element_type( unsi
+@@ -2039,7 +2039,7 @@ static inline BOOL is_element_type( unsi
  
  static HRESULT read_attributes_bin( struct reader *reader, WS_XML_ELEMENT_NODE *elem )
  {
@@ -82,7 +82,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      unsigned char type;
      HRESULT hr;
  
-@@ -6430,7 +6430,7 @@ static HRESULT read_type_struct( struct
+@@ -6406,7 +6406,7 @@ static HRESULT read_type_struct( struct
                                   WS_HEAP *heap, void *ret, ULONG size, BOOL *found )
  {
      ULONG i, offset;
