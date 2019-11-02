@@ -1,16 +1,18 @@
-wine-development (4.19-1) UNRELEASED; urgency=medium
-
-  [ Michael Gilbert ]
-  * Fix format-overflow warning in dnsapi.
+wine-development (4.19-1) unstable; urgency=medium
 
   [ Jens Reyer ]
   * New upstream release 4.19, released Nov 1, 2019.
     - A number of additional VBScript features.
     - More stateblock support in WineD3D.
     - Some fixes for ARM64 support.
+    - Add the new image path to the dll path (closes: #943894).
     - Various bug fixes.
+  * Refresh patches.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Sat, 02 Nov 2019 01:20:44 +0100
+  [ Michael Gilbert ]
+  * Fix format-overflow warning in dnsapi.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Sat, 02 Nov 2019 01:33:38 +0100
 
 wine-development (4.18-1) unstable; urgency=medium
 
