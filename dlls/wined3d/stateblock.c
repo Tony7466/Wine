@@ -503,6 +503,7 @@ void state_unbind_resources(struct wined3d_state *state)
             if ((srv = state->shader_resource_view[i][j]))
             {
                 state->shader_resource_view[i][j] = NULL;
+                --srv->resource->srv_bind_count_device;
                 wined3d_shader_resource_view_decref(srv);
             }
         }
@@ -1443,6 +1444,108 @@ void CDECL wined3d_stateblock_set_blend_factor(struct wined3d_stateblock *stateb
     stateblock->changed.blend_state = TRUE;
 }
 
+void CDECL wined3d_stateblock_set_sampler_state(struct wined3d_stateblock *stateblock,
+        UINT sampler_idx, enum wined3d_sampler_state state, DWORD value)
+{
+    TRACE("stateblock %p, sampler_idx %u, state %s, value %#x.\n",
+            stateblock, sampler_idx, debug_d3dsamplerstate(state), value);
+
+    if (sampler_idx >= WINED3DVERTEXTEXTURESAMPLER0 && sampler_idx <= WINED3DVERTEXTEXTURESAMPLER3)
+        sampler_idx -= (WINED3DVERTEXTEXTURESAMPLER0 - WINED3D_MAX_FRAGMENT_SAMPLERS);
+
+    if (sampler_idx >= ARRAY_SIZE(stateblock->stateblock_state.sampler_states))
+    {
+        WARN("Invalid sampler %u.\n", sampler_idx);
+        return;
+    }
+
+    stateblock->stateblock_state.sampler_states[sampler_idx][state] = value;
+    stateblock->changed.samplerState[sampler_idx] |= 1u << state;
+}
+
+void CDECL wined3d_stateblock_set_texture_stage_state(struct wined3d_stateblock *stateblock,
+        UINT stage, enum wined3d_texture_stage_state state, DWORD value)
+{
+    TRACE("stateblock %p, stage %u, state %s, value %#x.\n",
+            stateblock, stage, debug_d3dtexturestate(state), value);
+
+    if (state > WINED3D_HIGHEST_TEXTURE_STATE)
+    {
+        WARN("Invalid state %#x passed.\n", state);
+        return;
+    }
+
+    if (stage > WINED3D_MAX_TEXTURES)
+    {
+        WARN("Attempting to set stage %u which is higher than the max stage %u, ignoring.\n",
+                stage, WINED3D_MAX_TEXTURES);
+        return;
+    }
+
+    stateblock->stateblock_state.texture_states[stage][state] = value;
+    stateblock->changed.textureState[stage] |= 1u << state;
+}
+
+void CDECL wined3d_stateblock_set_texture(struct wined3d_stateblock *stateblock,
+        UINT stage, struct wined3d_texture *texture)
+{
+    TRACE("stateblock %p, stage %u, texture %p.\n", stateblock, stage, texture);
+
+    if (stage >= WINED3DVERTEXTEXTURESAMPLER0 && stage <= WINED3DVERTEXTEXTURESAMPLER3)
+        stage -= (WINED3DVERTEXTEXTURESAMPLER0 - WINED3D_MAX_FRAGMENT_SAMPLERS);
+
+    if (stage >= ARRAY_SIZE(stateblock->stateblock_state.textures))
+    {
+        WARN("Ignoring invalid stage %u.\n", stage);
+        return;
+    }
+
+    if (texture)
+        wined3d_texture_incref(texture);
+    if (stateblock->stateblock_state.textures[stage])
+        wined3d_texture_decref(stateblock->stateblock_state.textures[stage]);
+    stateblock->stateblock_state.textures[stage] = texture;
+    stateblock->changed.textures |= 1u << stage;
+}
+
+void CDECL wined3d_stateblock_set_transform(struct wined3d_stateblock *stateblock,
+        enum wined3d_transform_state d3dts, const struct wined3d_matrix *matrix)
+{
+    TRACE("stateblock %p, state %s, matrix %p.\n", stateblock, debug_d3dtstype(d3dts), matrix);
+    TRACE("%.8e %.8e %.8e %.8e\n", matrix->_11, matrix->_12, matrix->_13, matrix->_14);
+    TRACE("%.8e %.8e %.8e %.8e\n", matrix->_21, matrix->_22, matrix->_23, matrix->_24);
+    TRACE("%.8e %.8e %.8e %.8e\n", matrix->_31, matrix->_32, matrix->_33, matrix->_34);
+    TRACE("%.8e %.8e %.8e %.8e\n", matrix->_41, matrix->_42, matrix->_43, matrix->_44);
+
+    stateblock->stateblock_state.transforms[d3dts] = *matrix;
+    stateblock->changed.transform[d3dts >> 5] |= 1u << (d3dts & 0x1f);
+}
+
+HRESULT CDECL wined3d_stateblock_set_clip_plane(struct wined3d_stateblock *stateblock,
+        UINT plane_idx, const struct wined3d_vec4 *plane)
+{
+    TRACE("stateblock %p, plane_idx %u, plane %p.\n", stateblock, plane_idx, plane);
+
+    if (plane_idx >= stateblock->device->adapter->d3d_info.limits.max_clip_distances)
+    {
+        TRACE("Application has requested clipplane this device doesn't support.\n");
+        return WINED3DERR_INVALIDCALL;
+    }
+
+    stateblock->stateblock_state.clip_planes[plane_idx] = *plane;
+    stateblock->changed.clipplane |= 1u << plane_idx;
+    return S_OK;
+}
+
+void CDECL wined3d_stateblock_set_material(struct wined3d_stateblock *stateblock,
+        const struct wined3d_material *material)
+{
+    TRACE("stateblock %p, material %p.\n", stateblock, material);
+
+    stateblock->stateblock_state.material = *material;
+    stateblock->changed.material = TRUE;
+}
+
 static void init_default_render_states(DWORD rs[WINEHIGHEST_RENDER_STATE + 1], const struct wined3d_d3d_info *d3d_info)
 {
     union
@@ -1814,4 +1917,13 @@ HRESULT CDECL wined3d_stateblock_create(struct wined3d_device *device,
     *stateblock = object;
 
     return WINED3D_OK;
+}
+
+void CDECL wined3d_stateblock_reset(struct wined3d_stateblock *stateblock)
+{
+    TRACE("stateblock %p.\n", stateblock);
+
+    wined3d_stateblock_state_cleanup(&stateblock->stateblock_state);
+    memset(&stateblock->stateblock_state, 0, sizeof(stateblock->stateblock_state));
+    wined3d_stateblock_state_init(&stateblock->stateblock_state, stateblock->device, WINED3D_STATE_INIT_DEFAULT);
 }

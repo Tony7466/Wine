@@ -52,6 +52,7 @@
 @ stdcall EtwEventSetInformation(int64 long ptr long)
 @ stdcall EtwEventUnregister(int64)
 @ stdcall EtwEventWrite(int64 ptr long ptr)
+@ stdcall EtwEventWriteString(int64 long int64 ptr)
 @ stdcall EtwEventWriteTransfer(int64 ptr ptr ptr long ptr)
 @ stdcall EtwGetTraceEnableFlags(int64)
 @ stdcall EtwGetTraceEnableLevel(int64)
@@ -1561,7 +1562,8 @@
 @ cdecl wine_get_host_version(ptr ptr) NTDLL_wine_get_host_version
 
 # Codepages
-@ cdecl __wine_init_codepages(ptr ptr ptr)
+@ cdecl __wine_init_codepages(ptr ptr)
+@ cdecl __wine_get_unix_codepage()
 
 # signal handling
 @ cdecl __wine_set_signal_handler(long ptr)

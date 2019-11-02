@@ -138,6 +138,7 @@ static void (CDECL *p___setusermatherr)(MSVCRT_matherr_func);
 static int* (CDECL *p_errno)(void);
 static char* (CDECL *p_asctime)(const struct tm *);
 static size_t (__cdecl *p_strftime)(char *, size_t, const char *, const struct tm *);
+static struct tm*  (__cdecl *p__gmtime32)(const __time32_t*);
 static void (CDECL *p_exit)(int);
 static int (CDECL *p__crt_atexit)(void (CDECL*)(void));
 static int (__cdecl *p_crt_at_quick_exit)(void (__cdecl *func)(void));
@@ -509,6 +510,7 @@ static BOOL init(void)
     p_errno = (void*)GetProcAddress(module, "_errno");
     p_asctime = (void*)GetProcAddress(module, "asctime");
     p_strftime = (void*)GetProcAddress(module, "strftime");
+    p__gmtime32 = (void*)GetProcAddress(module, "_gmtime32");
     p__crt_atexit = (void*)GetProcAddress(module, "_crt_atexit");
     p_exit = (void*)GetProcAddress(module, "exit");
     p_crt_at_quick_exit = (void*)GetProcAddress(module, "_crt_at_quick_exit");
@@ -902,8 +904,10 @@ static void test_strftime(void)
 {
     const struct tm epoch = { 0, 0, 0, 1, 0, 70, 4, 0, 0 };
     const struct tm tm1 = { 0, 0, 0, 1, 0, 117, 0, 0, 0 };
+    const struct tm tm2 = { 0, 0, 14, 1, 0, 121, 6, 0, 0 };
     char bufA[256];
     size_t retA;
+    int i;
 
     retA = p_strftime(bufA, sizeof(bufA), "%C", &epoch);
     ok(retA == 2, "expected 2, got %d\n", (int)retA);
@@ -961,9 +965,65 @@ static void test_strftime(void)
     ok(retA == 1, "expected 1, got %d\n", (int)retA);
     ok(!strcmp(bufA, "\n"), "got %s\n", bufA);
 
+    retA = p_strftime(bufA, sizeof(bufA), "%r", &epoch);
+    todo_wine ok(retA == 11, "expected 11, got %d\n", (int)retA);
+    todo_wine ok(!strcmp(bufA, "12:00:00 AM"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%r", &tm2);
+    todo_wine ok(retA == 11, "expected 11, got %d\n", (int)retA);
+    todo_wine ok(!strcmp(bufA, "02:00:00 PM"), "got %s\n", bufA);
+
     retA = p_strftime(bufA, sizeof(bufA), "%t", &epoch);
     ok(retA == 1, "expected 1, got %d\n", (int)retA);
     ok(!strcmp(bufA, "\t"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%g", &epoch);
+    ok(retA == 2, "expected 2, got %d\n", (int)retA);
+    ok(!strcmp(bufA, "70"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%g", &tm1);
+    ok(retA == 2, "expected 2, got %d\n", (int)retA);
+    ok(!strcmp(bufA, "16"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%G", &epoch);
+    ok(retA == 4, "expected 4, got %d\n", (int)retA);
+    ok(!strcmp(bufA, "1970"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%G", &tm1);
+    ok(retA == 4, "expected 4, got %d\n", (int)retA);
+    ok(!strcmp(bufA, "2016"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%V", &epoch);
+    todo_wine ok(retA == 2, "expected 2, got %d\n", (int)retA);
+    todo_wine ok(!strcmp(bufA, "01"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%V", &tm1);
+    todo_wine ok(retA == 2, "expected 2, got %d\n", (int)retA);
+    todo_wine ok(!strcmp(bufA, "52"), "got %s\n", bufA);
+
+    retA = p_strftime(bufA, sizeof(bufA), "%V", &tm2);
+    todo_wine ok(retA == 2, "expected 2, got %d\n", (int)retA);
+    todo_wine ok(!strcmp(bufA, "53"), "got %s\n", bufA);
+
+    for(i=0; i<14; i++)
+    {
+        __time32_t t = (365*2 + i - 7) * 24 * 60 * 60;
+        struct tm tm = *p__gmtime32(&t);
+
+        retA = p_strftime(bufA, sizeof(bufA), "%g", &tm);
+        ok(retA == 2, "%d) retA = %d\n", i, (int)retA);
+        if (i <= 8)
+            ok(!strcmp(bufA, "71"), "%d) got %s, expected 71\n", i, bufA);
+        else
+            ok(!strcmp(bufA, "72"), "%d) got %s, expected 72\n", i, bufA);
+
+        retA = p_strftime(bufA, sizeof(bufA), "%G", &tm);
+        ok(retA == 4, "%d) retA = %d\n", i, (int)retA);
+        if (i <= 8)
+            ok(!strcmp(bufA, "1971"), "%d) got %s, expected 1971\n", i, bufA);
+        else
+            ok(!strcmp(bufA, "1972"), "%d) got %s, expected 1972\n", i, bufA);
+    }
 }
 
 static LONG* get_failures_counter(HANDLE *map)

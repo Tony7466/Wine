@@ -82,9 +82,7 @@ static LONG (WINAPI * pRegOverridePredefKey)(HKEY key, HKEY override);
 
 static BOOL   (WINAPI *pActivateActCtx)(HANDLE,ULONG_PTR*);
 static HANDLE (WINAPI *pCreateActCtxW)(PCACTCTXW);
-static BOOL   (WINAPI *pDeactivateActCtx)(DWORD,ULONG_PTR);
 static BOOL   (WINAPI *pIsWow64Process)(HANDLE, LPBOOL);
-static void   (WINAPI *pReleaseActCtx)(HANDLE);
 
 #define ok_ole_success(hr, func) ok(hr == S_OK, func " failed with error 0x%08x\n", hr)
 #define ok_more_than_one_lock() ok(cLocks > 0, "Number of locks should be > 0, but actually is %d\n", cLocks)
@@ -98,6 +96,8 @@ static const GUID IID_Testiface3 = { 0x42222222, 0x1234, 0x1234, { 0x12, 0x34, 0
 static const GUID IID_Testiface4 = { 0x52222222, 0x1234, 0x1234, { 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0 } };
 static const GUID IID_Testiface5 = { 0x62222222, 0x1234, 0x1234, { 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0 } };
 static const GUID IID_Testiface6 = { 0x72222222, 0x1234, 0x1234, { 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0 } };
+static const GUID IID_Testiface7 = { 0x82222222, 0x1234, 0x1234, { 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0 } };
+static const GUID IID_Testiface8 = { 0x92222222, 0x1234, 0x1234, { 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0 } };
 static const GUID IID_TestPS = { 0x66666666, 0x8888, 0x7777, { 0x66, 0x66, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55 } };
 
 DEFINE_GUID(CLSID_testclsid, 0xacd014c7,0x9535,0x4fac,0x8b,0x53,0xa4,0x8c,0xa7,0xf4,0xd7,0x26);
@@ -214,6 +214,26 @@ static BOOL create_manifest_file(const char *filename, const char *manifest)
     return TRUE;
 }
 
+static void extract_resource(const char *name, const char *type, const char *path)
+{
+    DWORD written;
+    HANDLE file;
+    HRSRC res;
+    void *ptr;
+
+    file = CreateFileA(path, GENERIC_READ|GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, 0);
+    ok(file != INVALID_HANDLE_VALUE, "Failed to create a file at %s, error %d.\n", path, GetLastError());
+
+    res = FindResourceA(NULL, name, type);
+    ok(res != 0, "Failed to find resource.\n");
+    ptr = LockResource(LoadResource(GetModuleHandleA(NULL), res));
+    WriteFile(file, ptr, SizeofResource(GetModuleHandleA(NULL), res), &written, NULL);
+    ok(written == SizeofResource(GetModuleHandleA(NULL), res), "Failed to write file.\n" );
+    CloseHandle(file);
+}
+
+static char testlib[MAX_PATH];
+
 static HANDLE activate_context(const char *manifest, ULONG_PTR *cookie)
 {
     WCHAR path[MAX_PATH];
@@ -235,7 +255,7 @@ static HANDLE activate_context(const char *manifest, ULONG_PTR *cookie)
         "handle == INVALID_HANDLE_VALUE, error %u\n", GetLastError());
     if (handle == INVALID_HANDLE_VALUE)
     {
-        win_skip("activation context generation failed, some tests will be skipped\n");
+        win_skip("activation context generation failed, some tests will be skipped. Error %d\n", GetLastError());
         handle = NULL;
     }
 
@@ -258,6 +278,15 @@ static HANDLE activate_context(const char *manifest, ULONG_PTR *cookie)
     }
 
     return handle;
+}
+
+static void deactivate_context(HANDLE handle, ULONG_PTR cookie)
+{
+    BOOL ret;
+
+    ret = DeactivateActCtx(0, cookie);
+    ok(ret, "Failed to deactivate context, error %d.\n", GetLastError());
+    ReleaseActCtx(handle);
 }
 
 static const char actctx_manifest[] =
@@ -293,6 +322,10 @@ static const char actctx_manifest[] =
 "        name=\"Iifaceps\""
 "        iid=\"{22222222-1234-1234-1234-56789abcdef0}\""
 "        proxyStubClsid32=\"{66666666-8888-7777-6666-555555555555}\""
+"    />"
+"    <comInterfaceProxyStub "
+"        name=\"Iifaceps5\""
+"        iid=\"{82222222-1234-1234-1234-56789abcdef0}\""
 "    />"
 "</file>"
 "    <comInterfaceExternalProxyStub "
@@ -367,8 +400,7 @@ static void test_ProgIDFromCLSID(void)
         hr = ProgIDFromCLSID(&IID_Testiface6, &progid);
         ok(hr == REGDB_E_CLASSNOTREG && progid == NULL, "got 0x%08x, progid %p\n", hr, progid);
 
-        pDeactivateActCtx(0, cookie);
-        pReleaseActCtx(handle);
+        deactivate_context(handle, cookie);
     }
 }
 
@@ -434,8 +466,7 @@ static void test_CLSIDFromProgID(void)
         ok(!IsEqualCLSID(&clsid, &CLSID_StdFont) && !IsEqualCLSID(&clsid, &CLSID_NULL) && !IsEqualCLSID(&clsid, &clsid1),
             "got %s\n", wine_dbgstr_guid(&clsid));
 
-        pDeactivateActCtx(0, cookie);
-        pReleaseActCtx(handle);
+        deactivate_context(handle, cookie);
     }
 }
 
@@ -725,8 +756,13 @@ static void test_CoGetClassObject(void)
         ok(hr == S_OK, "got 0x%08x\n", hr);
         IUnknown_Release(pUnk);
 
-        pDeactivateActCtx(0, cookie);
-        pReleaseActCtx(handle);
+        hr = CoGetClassObject(&IID_Testiface7, CLSCTX_INPROC_SERVER, NULL, &IID_IUnknown, (void **)&pUnk);
+        ok(hr == 0x80001235 || broken(hr == HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND)) /* winxp */, "Unexpected hr %#x.\n", hr);
+
+        hr = CoGetClassObject(&IID_Testiface8, CLSCTX_INPROC_SERVER, NULL, &IID_IUnknown, (void **)&pUnk);
+        ok(hr == REGDB_E_CLASSNOTREG, "Unexpected hr %#x.\n", hr);
+
+        deactivate_context(handle, cookie);
     }
 
     CoUninitialize();
@@ -1267,6 +1303,11 @@ static void test_CoGetPSClsid(void)
         ok(hr == S_OK, "got 0x%08x\n", hr);
         ok(IsEqualGUID(&clsid, &GUID_NULL), "got clsid %s\n", wine_dbgstr_guid(&clsid));
 
+        memset(&clsid, 0xaa, sizeof(clsid));
+        hr = CoGetPSClsid(&IID_Testiface7, &clsid);
+        ok(hr == S_OK, "Failed to get PS CLSID, hr %#x.\n", hr);
+        ok(IsEqualGUID(&clsid, &IID_Testiface7), "Unexpected CLSID %s.\n", wine_dbgstr_guid(&clsid));
+
         /* register same interface and try to get CLSID back */
         hr = CoRegisterPSClsid(&IID_Testiface, &IID_Testiface4);
         ok(hr == S_OK, "got 0x%08x\n", hr);
@@ -1275,8 +1316,7 @@ static void test_CoGetPSClsid(void)
         ok(hr == S_OK, "got 0x%08x\n", hr);
         ok(IsEqualGUID(&clsid, &IID_Testiface4), "got clsid %s\n", wine_dbgstr_guid(&clsid));
 
-        pDeactivateActCtx(0, cookie);
-        pReleaseActCtx(handle);
+        deactivate_context(handle, cookie);
     }
 
     if (pRegDeleteKeyExA &&
@@ -1533,11 +1573,9 @@ static void test_CoRegisterClassObject(void)
     if ((handle = activate_context(actctx_manifest, &ctxcookie)))
     {
         hr = CoGetClassObject(&CLSID_WineOOPTest, CLSCTX_INPROC_SERVER, NULL, &IID_IClassFactory, (void**)&pcf);
-todo_wine
-        ok(hr == HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND), "got 0x%08x\n", hr);
+        ok(hr == 0x80001234 || broken(hr == HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND)) /* winxp */, "Unexpected hr %#x.\n", hr);
 
-        pDeactivateActCtx(0, ctxcookie);
-        pReleaseActCtx(handle);
+        deactivate_context(handle, ctxcookie);
     }
 
     hr = CoGetClassObject(&CLSID_WineOOPTest, CLSCTX_INPROC_SERVER, NULL, &IID_IClassFactory, (void**)&pcf);
@@ -2264,8 +2302,7 @@ static void test_OleRegGetMiscStatus(void)
         ok(hr == S_OK, "got 0x%08x\n", hr);
         ok(status == 0, "got 0x%08x\n", status);
 
-        pDeactivateActCtx(0, cookie);
-        pReleaseActCtx(handle);
+        deactivate_context(handle, cookie);
     }
 }
 
@@ -2332,8 +2369,7 @@ static void test_OleRegGetUserType(void)
             CoTaskMemFree(str);
         }
 
-        pDeactivateActCtx(0, cookie);
-        pReleaseActCtx(handle);
+        deactivate_context(handle, cookie);
     }
 
     /* test using registered CLSID */
@@ -2450,7 +2486,6 @@ static DWORD CALLBACK release_semaphore_thread( LPVOID arg )
 static DWORD CALLBACK send_message_thread(LPVOID arg)
 {
     HWND hWnd = arg;
-    Sleep(50);
     SendMessageA(hWnd, WM_DDE_FIRST, 0, 0);
     return 0;
 }
@@ -2467,7 +2502,6 @@ static DWORD CALLBACK send_and_post_user_message_thread(void *arg)
 static DWORD CALLBACK post_message_thread(LPVOID arg)
 {
     HWND hWnd = arg;
-    Sleep(50);
     PostMessageA(hWnd, WM_DDE_FIRST, 0, 0);
     return 0;
 }
@@ -2931,7 +2965,7 @@ static void test_CoWaitForMultipleHandles(void)
     PostMessageA(hWnd, WM_QUIT, 42, 0);
     thread = CreateThread(NULL, 0, send_message_thread, hWnd, 0, &tid);
     ok(thread != NULL, "CreateThread failed, error %u\n", GetLastError());
-    hr = CoWaitForMultipleHandles(0, 100, 2, handles, &index);
+    hr = CoWaitForMultipleHandles(0, 500, 2, handles, &index);
     ok(hr == RPC_S_CALLPENDING, "expected RPC_S_CALLPENDING, got 0x%08x\n", hr);
     ok(index == 0 || broken(index == 0xdeadbeef) /* Win 8 */, "expected index 0, got %u\n", index);
     success = PeekMessageA(&msg, hWnd, WM_DDE_FIRST, WM_DDE_FIRST, PM_REMOVE);
@@ -2997,7 +3031,7 @@ static void test_CoWaitForMultipleHandles(void)
 
     /* test message pumping when CoWaitForMultipleHandles is called from non main apartment thread */
     thread = CreateThread(NULL, 0, test_CoWaitForMultipleHandles_thread, handles, 0, &tid);
-    index = WaitForSingleObject(thread, 500);
+    index = WaitForSingleObject(thread, 5000);
     ok(index == WAIT_OBJECT_0, "WaitForSingleObject failed\n");
     CloseHandle(thread);
 
@@ -3791,9 +3825,7 @@ static void init_funcs(void)
 
     pActivateActCtx = (void*)GetProcAddress(hkernel32, "ActivateActCtx");
     pCreateActCtxW = (void*)GetProcAddress(hkernel32, "CreateActCtxW");
-    pDeactivateActCtx = (void*)GetProcAddress(hkernel32, "DeactivateActCtx");
     pIsWow64Process = (void*)GetProcAddress(hkernel32, "IsWow64Process");
-    pReleaseActCtx = (void*)GetProcAddress(hkernel32, "ReleaseActCtx");
 }
 
 static DWORD CALLBACK implicit_mta_proc(void *param)
@@ -3871,6 +3903,11 @@ START_TEST(compobj)
         return;
     }
 
+    GetTempPathA(ARRAY_SIZE(testlib), testlib);
+    SetCurrentDirectoryA(testlib);
+    lstrcatA(testlib, "\\testlib.dll");
+    extract_resource("testlib.dll", "TESTDLL", testlib);
+
     if (!pCreateActCtxW)
         win_skip("Activation contexts are not supported, some tests will be skipped.\n");
 
@@ -3912,4 +3949,5 @@ START_TEST(compobj)
     test_CoGetInstanceFromFile();
     test_GlobalOptions();
     test_implicit_mta();
+    DeleteFileA( testlib );
 }

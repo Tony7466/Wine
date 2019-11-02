@@ -199,14 +199,13 @@ static void test_create_delete_svc(void)
     CHAR username[UNLEN + 1], domain[MAX_PATH];
     DWORD user_size = UNLEN + 1;
     CHAR account[UNLEN + 3];
-    static const CHAR servicename         [] = "Winetest";
+    static const CHAR servicename         [] = "winetest_create_delete";
     static const CHAR pathname            [] = "we_dont_care.exe";
     static const CHAR empty               [] = "";
     static const CHAR password            [] = "secret";
-    BOOL spooler_exists = FALSE;
+    char buffer[200];
+    DWORD size;
     BOOL ret;
-    CHAR display[4096];
-    DWORD display_size = sizeof(display);
 
     /* Get the username and turn it into an account to be used in some tests */
     GetUserNameA(username, &user_size);
@@ -356,42 +355,45 @@ static void test_create_delete_svc(void)
     ok(!svc_handle1, "Expected failure\n");
     ok(GetLastError() == ERROR_INVALID_PARAMETER, "Expected ERROR_INVALID_PARAMETER, got %d\n", GetLastError());
 
-    /* The service already exists (check first, just in case) */
-    svc_handle1 = OpenServiceA(scm_handle, spooler, GENERIC_READ);
-    if (svc_handle1)
+    /* Test duplicate service names */
+    svc_handle1 = CreateServiceA(scm_handle, "winetest_dupname", "winetest_display", DELETE,
+            SERVICE_WIN32_OWN_PROCESS, SERVICE_AUTO_START, 0, pathname, NULL, NULL, NULL, NULL, NULL);
+    ok(!!svc_handle1, "Failed to create service, error %u\n", GetLastError());
+
+    svc_handle2 = CreateServiceA(scm_handle, "winetest_dupname", NULL, 0,
+            SERVICE_WIN32_OWN_PROCESS, SERVICE_AUTO_START, 0, pathname, NULL, NULL, NULL, NULL, NULL);
+    ok(!svc_handle2, "Expected failure\n");
+    ok(GetLastError() == ERROR_SERVICE_EXISTS, "Got wrong error %u\n", GetLastError());
+
+    svc_handle2 = CreateServiceA(scm_handle, "winetest_dupname2", "winetest_dupname", DELETE,
+            SERVICE_WIN32_OWN_PROCESS, SERVICE_AUTO_START, 0, pathname, NULL, NULL, NULL, NULL, NULL);
+    todo_wine ok(!svc_handle2, "Expected failure\n");
+    todo_wine ok(GetLastError() == ERROR_DUPLICATE_SERVICE_NAME, "Got wrong error %u\n", GetLastError());
+    if (svc_handle2)
     {
-        spooler_exists = TRUE;
-        CloseServiceHandle(svc_handle1);
-        SetLastError(0xdeadbeef);
-        svc_handle1 = CreateServiceA(scm_handle, spooler, NULL, 0, SERVICE_WIN32_OWN_PROCESS,
-                                     SERVICE_DISABLED, 0, pathname, NULL, NULL, NULL, NULL, NULL);
-        ok(!svc_handle1, "Expected failure\n");
-        ok(GetLastError() == ERROR_SERVICE_EXISTS, "Expected ERROR_SERVICE_EXISTS, got %d\n", GetLastError());
+        DeleteService(svc_handle2);
+        CloseServiceHandle(svc_handle2);
+    }
+
+    svc_handle2 = CreateServiceA(scm_handle, "winetest_dupname2", "winetest_display", DELETE,
+            SERVICE_WIN32_OWN_PROCESS, SERVICE_AUTO_START, 0, pathname, NULL, NULL, NULL, NULL, NULL);
+    if (svc_handle2) /* Win10 1709+ */
+    {
+        size = sizeof(buffer);
+        ret = GetServiceKeyNameA(scm_handle, "winetest_display", buffer, &size);
+        ok(ret, "Failed to get key name, error %u\n", GetLastError());
+        ok(!strcmp(buffer, "winetest_dupname"), "Got wrong name \"%s\"\n", buffer);
+
+        ret = DeleteService(svc_handle2);
+        ok(ret, "Failed to delete service, error %u\n", GetLastError());
+        CloseServiceHandle(svc_handle2);
     }
     else
-        skip("Spooler service doesn't exist\n");
+        ok(GetLastError() == ERROR_DUPLICATE_SERVICE_NAME, "Got wrong error %u\n", GetLastError());
 
-    /* To find an existing displayname we check the 'Spooler' service. Although the registry
-     * doesn't show DisplayName on NT4, this call will return a displayname which is equal
-     * to the servicename and can't be used as well for a new displayname.
-     */
-    if (spooler_exists)
-    {
-        ret = GetServiceDisplayNameA(scm_handle, spooler, display, &display_size);
-
-        if (!ret)
-            skip("Could not retrieve a displayname for the Spooler service\n");
-        else
-        {
-            svc_handle1 = CreateServiceA(scm_handle, servicename, display, 0, SERVICE_WIN32_OWN_PROCESS,
-                                         SERVICE_DISABLED, 0, pathname, NULL, NULL, NULL, NULL, NULL);
-            ok(!svc_handle1, "Expected failure for display name '%s'\n", display);
-            ok(GetLastError() == ERROR_DUPLICATE_SERVICE_NAME,
-               "Expected ERROR_DUPLICATE_SERVICE_NAME, got %d\n", GetLastError());
-        }
-    }
-    else
-        skip("Could not retrieve a displayname (Spooler service doesn't exist)\n");
+    ret = DeleteService(svc_handle1);
+    ok(ret, "Failed to delete service, error %u\n", GetLastError());
+    CloseServiceHandle(svc_handle1);
 
     /* Windows doesn't care about the access rights for creation (which makes
      * sense as there is no service yet) as long as there are sufficient
@@ -428,12 +430,6 @@ static void test_create_delete_svc(void)
     CloseServiceHandle(svc_handle1);
     CloseServiceHandle(scm_handle);
 
-    /* Wait a while. One of the following tests also does a CreateService for the
-     * same servicename and this would result in an ERROR_SERVICE_MARKED_FOR_DELETE
-     * error if we do this too quickly. Vista seems more picky than the others.
-     */
-    Sleep(1000);
-
     /* And a final NULL check */
     SetLastError(0xdeadbeef);
     ret = DeleteService(NULL);
@@ -453,7 +449,7 @@ static void test_get_displayname(void)
     static const WCHAR spoolerW[] = {'S','p','o','o','l','e','r',0};
     static const WCHAR deadbeefW[] = {'D','e','a','d','b','e','e','f',0};
     static const WCHAR abcW[] = {'A','B','C',0};
-    static const CHAR servicename[] = "Winetest";
+    static const CHAR servicename[] = "winetest_displayname";
     static const CHAR pathname[] = "we_dont_care.exe";
 
     /* Having NULL for the size of the buffer will crash on W2K3 */
@@ -725,9 +721,6 @@ static void test_get_displayname(void)
 
     CloseServiceHandle(svc_handle);
     CloseServiceHandle(scm_handle);
-
-    /* Wait a while. Just in case one of the following tests does a CreateService again */
-    Sleep(1000);
 }
 
 static void test_get_servicekeyname(void)
@@ -1861,7 +1854,7 @@ static void test_sequence(void)
     BOOL ret, is_nt4;
     QUERY_SERVICE_CONFIGA *config;
     DWORD given, needed;
-    static const CHAR servicename [] = "Winetest";
+    static const CHAR servicename [] = "winetest_sequence";
     static const CHAR displayname [] = "Winetest dummy service";
     static const CHAR displayname2[] = "Winetest dummy service (2)";
     static const CHAR pathname    [] = "we_dont_care.exe";
@@ -2029,10 +2022,6 @@ static void test_sequence(void)
     ret = DeleteService(svc_handle);
     ok(ret, "Expected success, got error %u\n", GetLastError());
     CloseServiceHandle(svc_handle);
-
-    /* Wait a while. The following test does a CreateService again */
-    Sleep(1000);
-
     CloseServiceHandle(scm_handle);
     HeapFree(GetProcessHeap(), 0, config);
 }
@@ -2046,7 +2035,7 @@ static void test_queryconfig2(void)
     LPSERVICE_DESCRIPTIONA pConfig = (LPSERVICE_DESCRIPTIONA)buffer;
     LPSERVICE_DESCRIPTIONW pConfigW = (LPSERVICE_DESCRIPTIONW)buffer;
     SERVICE_PRESHUTDOWN_INFO preshutdown_info;
-    static const CHAR servicename [] = "Winetest";
+    static const CHAR servicename [] = "winetest_query_config2";
     static const CHAR displayname [] = "Winetest dummy service";
     static const CHAR pathname    [] = "we_dont_care.exe";
     static const CHAR dependencies[] = "Master1\0Master2\0+MasterGroup1\0";
@@ -2286,8 +2275,9 @@ static void test_queryconfig2(void)
     }
     ok(ret, "expected QueryServiceConfig2W to succeed (%d)\n", GetLastError());
     ok(needed == sizeof(preshutdown_info), "needed = %d\n", needed);
-    ok(preshutdown_info.dwPreshutdownTimeout == 180000, "Default PreshutdownTimeout = %d\n",
-            preshutdown_info.dwPreshutdownTimeout);
+    ok(preshutdown_info.dwPreshutdownTimeout == 180000
+            || preshutdown_info.dwPreshutdownTimeout == 10000 /* Win10 1709+ */,
+            "Default PreshutdownTimeout = %d\n", preshutdown_info.dwPreshutdownTimeout);
 
     SetLastError(0xdeadbeef);
     preshutdown_info.dwPreshutdownTimeout = -1;
@@ -2304,12 +2294,7 @@ static void test_queryconfig2(void)
 
 cleanup:
     DeleteService(svc_handle);
-
     CloseServiceHandle(svc_handle);
-
-    /* Wait a while. The following test does a CreateService again */
-    Sleep(1000);
-
     CloseServiceHandle(scm_handle);
 }
 
@@ -2449,16 +2434,23 @@ static void test_servicenotify(SC_HANDLE scm_handle, const char *servicename)
     data2.notify.dwVersion = SERVICE_NOTIFY_STATUS_CHANGE;
     data2.notify.pfnNotifyCallback = &notify_cb;
     data2.notify.pContext = &data2;
+    data2.phase = PHASE_RUNNING;
+    data2.was_called = FALSE;
 
     dr = pNotifyServiceStatusChangeW(svc, SERVICE_NOTIFY_STOPPED | SERVICE_NOTIFY_RUNNING, &data2.notify);
-    ok(dr == ERROR_SUCCESS || /* win8+ */
-            dr == ERROR_ALREADY_REGISTERED, "NotifyServiceStatusChangeW gave wrong result: %u\n", dr);
-
-    /* should receive no notification because status has not changed.
-     * on win8+, SleepEx quits early but the callback is still not invoked. */
-    dr2 = SleepEx(100, TRUE);
-    ok((dr == ERROR_SUCCESS && dr2 == WAIT_IO_COMPLETION) || /* win8+ */
-            (dr == ERROR_ALREADY_REGISTERED && dr2 == 0), "Got wrong SleepEx result: %u\n", dr);
+    ok(dr == ERROR_ALREADY_REGISTERED || !dr /* Win8+ */, "wrong error %u\n", dr);
+    if (!dr)
+    {
+        dr = SleepEx(100, TRUE);
+        ok(dr == WAIT_IO_COMPLETION, "got %u\n", dr);
+        ok(data2.was_called, "APC was not called\n");
+    }
+    else
+    {
+        dr = SleepEx(100, TRUE);
+        ok(!dr, "got %u\n", dr);
+        ok(!data2.was_called, "APC should not have been called\n");
+    }
     ok(data.was_called == FALSE, "APC should not have been called\n");
 
     memset(&data2.notify, 0, sizeof(data2.notify));
@@ -2512,7 +2504,7 @@ static void test_start_stop(void)
     BOOL ret;
     SC_HANDLE scm_handle, svc_handle;
     DWORD le, is_nt4;
-    static const char servicename[] = "Winetest";
+    static const char servicename[] = "winetest_start_stop";
     char cmd[MAX_PATH+20];
     const char* displayname;
 
@@ -2592,17 +2584,13 @@ cleanup:
         DeleteService(svc_handle);
         CloseServiceHandle(svc_handle);
     }
-
-    /* Wait a while. The following test does a CreateService again */
-    Sleep(1000);
-
     CloseServiceHandle(scm_handle);
 }
 
 static void test_refcount(void)
 {
     SC_HANDLE scm_handle, svc_handle1, svc_handle2, svc_handle3, svc_handle4, svc_handle5;
-    static const CHAR servicename         [] = "Winetest";
+    static const CHAR servicename         [] = "winetest_refcount";
     static const CHAR pathname            [] = "we_dont_care.exe";
     BOOL ret;
 
@@ -2681,10 +2669,6 @@ static void test_refcount(void)
     /* Delete the service */
     ret = DeleteService(svc_handle5);
     ok(ret, "Expected success (err=%d)\n", GetLastError());
-
-    /* Wait a while. Just in case one of the following tests does a CreateService again */
-    Sleep(1000);
-
     CloseServiceHandle(svc_handle5);
     CloseServiceHandle(scm_handle);
 }

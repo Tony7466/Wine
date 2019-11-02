@@ -61,7 +61,6 @@ static BOOL test_ShouldActivate = FALSE;
 static BOOL test_ShouldDeactivate = FALSE;
 
 static DWORD tmSinkCookie;
-static DWORD tmSinkRefCount;
 static DWORD dmSinkCookie;
 static DWORD documentStatus;
 static DWORD key_trace_sink_cookie, ui_element_sink_cookie, profile_activation_sink_cookie;
@@ -77,7 +76,6 @@ static INT  test_OnPopContext = SINK_UNEXPECTED;
 static INT  test_KEV_OnSetFocus = SINK_UNEXPECTED;
 static INT  test_ACP_AdviseSink = SINK_UNEXPECTED;
 static INT  test_ACP_UnadviseSink = SINK_UNEXPECTED;
-static INT  test_ACP_GetStatus = SINK_UNEXPECTED;
 static INT  test_ACP_RequestLock = SINK_UNEXPECTED;
 static INT  test_ACP_GetEndACP = SINK_UNEXPECTED;
 static INT  test_ACP_GetSelection = SINK_UNEXPECTED;
@@ -115,7 +113,6 @@ static inline void _sink_fire_ok(INT *sink, const CHAR* name)
             }
             break;
         case SINK_IGNORE:
-            winetest_trace("Ignoring %s\n",name);
             return;
         case SINK_SAVE:
             count = expected_count(sink) + 1;
@@ -233,6 +230,9 @@ static HRESULT WINAPI TextStoreACP_AdviseSink(ITextStoreACP *iface,
     ITextStoreACPServices *services;
     HRESULT hr;
 
+    if (winetest_debug > 1) trace("ITextStoreACP::AdviseSink(iid %s, mask %#x)\n",
+            wine_dbgstr_guid(riid), dwMask);
+
     sink_fire_ok(&test_ACP_AdviseSink,"TextStoreACP_AdviseSink");
 
     if(ACPSink)
@@ -251,34 +251,36 @@ static HRESULT WINAPI TextStoreACP_AdviseSink(ITextStoreACP *iface,
 static HRESULT WINAPI TextStoreACP_UnadviseSink(ITextStoreACP *iface,
     IUnknown *punk)
 {
+    if (winetest_debug > 1) trace("ITextStoreACP::UnadviseSink()\n");
     sink_fire_ok(&test_ACP_UnadviseSink,"TextStoreACP_UnadviseSink");
     return S_OK;
 }
 
 static HRESULT WINAPI TextStoreACP_RequestLock(ITextStoreACP *iface,
-    DWORD dwLockFlags, HRESULT *phrSession)
+        DWORD flags, HRESULT *session_hr)
 {
+    if (winetest_debug > 1) trace("ITextStoreACP::RequestLock(flags %#x)\n", flags);
     sink_fire_ok(&test_ACP_RequestLock,"TextStoreACP_RequestLock");
-    *phrSession = ITextStoreACPSink_OnLockGranted(ACPSink, dwLockFlags);
+    *session_hr = ITextStoreACPSink_OnLockGranted(ACPSink, flags);
     return S_OK;
 }
 static HRESULT WINAPI TextStoreACP_GetStatus(ITextStoreACP *iface,
     TS_STATUS *pdcs)
 {
-    sink_fire_ok(&test_ACP_GetStatus,"TextStoreACP_GetStatus");
+    if (winetest_debug > 1) trace("ITextStoreACP::GetStatus()\n");
     pdcs->dwDynamicFlags = documentStatus;
     return S_OK;
 }
-static HRESULT WINAPI TextStoreACP_QueryInsert(ITextStoreACP *iface,
-    LONG acpTestStart, LONG acpTestEnd, ULONG cch, LONG *pacpResultStart,
-    LONG *pacpResultEnd)
+static HRESULT WINAPI TextStoreACP_QueryInsert(ITextStoreACP *iface, LONG start,
+        LONG end, ULONG len, LONG *ret_start, LONG *ret_end)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::QueryInsert(start %d, end %d, len %d)\n", start, end, len);
     return S_OK;
 }
 static HRESULT WINAPI TextStoreACP_GetSelection(ITextStoreACP *iface,
-    ULONG ulIndex, ULONG ulCount, TS_SELECTION_ACP *pSelection, ULONG *pcFetched)
+        ULONG index, ULONG count, TS_SELECTION_ACP *pSelection, ULONG *pcFetched)
 {
+    if (winetest_debug > 1) trace("ITextStoreACP::GetSelection(index %d)\n", index);
     sink_fire_ok(&test_ACP_GetSelection,"TextStoreACP_GetSelection");
 
     pSelection->acpStart = 10;
@@ -292,132 +294,129 @@ static HRESULT WINAPI TextStoreACP_GetSelection(ITextStoreACP *iface,
 static HRESULT WINAPI TextStoreACP_SetSelection(ITextStoreACP *iface,
     ULONG ulCount, const TS_SELECTION_ACP *pSelection)
 {
+    if (winetest_debug > 1) trace("ITextStoreACP::SetSelection()\n");
     sink_fire_ok(&test_ACP_SetSelection,"TextStoreACP_SetSelection");
     return S_OK;
 }
-static HRESULT WINAPI TextStoreACP_GetText(ITextStoreACP *iface,
-    LONG acpStart, LONG acpEnd, WCHAR *pchPlain, ULONG cchPlainReq,
-    ULONG *pcchPlainRet, TS_RUNINFO *prgRunInfo, ULONG cRunInfoReq,
-    ULONG *pcRunInfoRet, LONG *pacpNext)
+static HRESULT WINAPI TextStoreACP_GetText(ITextStoreACP *iface, LONG start, LONG end,
+        WCHAR *plain, ULONG plain_len, ULONG *plain_ret_len, TS_RUNINFO *runinfo,
+        ULONG runinfo_count, ULONG *runinfo_ret_count, LONG *next)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::GetText(start %d, end %d)\n", start, end);
     return S_OK;
 }
-static HRESULT WINAPI TextStoreACP_SetText(ITextStoreACP *iface,
-    DWORD dwFlags, LONG acpStart, LONG acpEnd, const WCHAR *pchText,
-    ULONG cch, TS_TEXTCHANGE *pChange)
+static HRESULT WINAPI TextStoreACP_SetText(ITextStoreACP *iface, DWORD flags,
+        LONG start, LONG end, const WCHAR *text, ULONG len, TS_TEXTCHANGE *textchange)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::SetText(flags %#x, start %d, end %d, text %s)\n",
+            flags, start, end, wine_dbgstr_wn(text, len));
     return S_OK;
 }
 static HRESULT WINAPI TextStoreACP_GetFormattedText(ITextStoreACP *iface,
-    LONG acpStart, LONG acpEnd, IDataObject **ppDataObject)
+        LONG start, LONG end, IDataObject **out)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::GetFormattedText(start %d, end %d)\n", start, end);
     return S_OK;
 }
-static HRESULT WINAPI TextStoreACP_GetEmbedded(ITextStoreACP *iface,
-    LONG acpPos, REFGUID rguidService, REFIID riid, IUnknown **ppunk)
+static HRESULT WINAPI TextStoreACP_GetEmbedded(ITextStoreACP *iface, LONG pos,
+        REFGUID format, REFIID iid, IUnknown **out)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::GetEmbedded(pos %d, format %s, iid %s)\n",
+            pos, wine_dbgstr_guid(format), wine_dbgstr_guid(iid));
     return S_OK;
 }
 static HRESULT WINAPI TextStoreACP_QueryInsertEmbedded(ITextStoreACP *iface,
-    const GUID *pguidService, const FORMATETC *pFormatEtc, BOOL *pfInsertable)
+        const GUID *type, const FORMATETC *formatetc, BOOL *insertable)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::QueryInsertEmbedded(type %s)\n", wine_dbgstr_guid(type));
     return S_OK;
 }
-static HRESULT WINAPI TextStoreACP_InsertEmbedded(ITextStoreACP *iface,
-    DWORD dwFlags, LONG acpStart, LONG acpEnd, IDataObject *pDataObject,
-    TS_TEXTCHANGE *pChange)
+static HRESULT WINAPI TextStoreACP_InsertEmbedded(ITextStoreACP *iface, DWORD flags,
+        LONG start, LONG end, IDataObject *object, TS_TEXTCHANGE *textchange)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::InsertEmbedded(flags %#x, start %d, end %d)\n", flags, start, end);
     return S_OK;
 }
-static HRESULT WINAPI TextStoreACP_InsertTextAtSelection(ITextStoreACP *iface,
-    DWORD dwFlags, const WCHAR *pchText, ULONG cch, LONG *pacpStart,
-    LONG *pacpEnd, TS_TEXTCHANGE *pChange)
+static HRESULT WINAPI TextStoreACP_InsertTextAtSelection(ITextStoreACP *iface, DWORD flags,
+        const WCHAR *text, ULONG len, LONG *start, LONG *end, TS_TEXTCHANGE *textchange)
 {
+    if (winetest_debug > 1) trace("ITextStoreACP::InsertTextAtSelection(flags %#x, text %s)\n",
+            flags, wine_dbgstr_wn(text, len));
     sink_fire_ok(&test_ACP_InsertTextAtSelection,"TextStoreACP_InsertTextAtSelection");
     return S_OK;
 }
 static HRESULT WINAPI TextStoreACP_InsertEmbeddedAtSelection(ITextStoreACP *iface,
-    DWORD dwFlags, IDataObject *pDataObject, LONG *pacpStart, LONG *pacpEnd,
-    TS_TEXTCHANGE *pChange)
+        DWORD flags, IDataObject *object, LONG *start, LONG *end, TS_TEXTCHANGE *textchange)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::InsertEmbeddedAtSelection(flags %#x)\n", flags);
     return S_OK;
 }
 static HRESULT WINAPI TextStoreACP_RequestSupportedAttrs(ITextStoreACP *iface,
-    DWORD dwFlags, ULONG cFilterAttrs, const TS_ATTRID *paFilterAttrs)
+        DWORD flags, ULONG count, const TS_ATTRID *attrs)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::RequestSupportedAttrs(flags %#x)\n", flags);
     return S_OK;
 }
 static HRESULT WINAPI TextStoreACP_RequestAttrsAtPosition(ITextStoreACP *iface,
-    LONG acpPos, ULONG cFilterAttrs, const TS_ATTRID *paFilterAttrs,
-    DWORD dwFlags)
+        LONG pos, ULONG count, const TS_ATTRID *attrs, DWORD flags)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::RequestAttrsAtPosition(pos %d, flags %#x)\n", pos, flags);
     return S_OK;
 }
 static HRESULT WINAPI TextStoreACP_RequestAttrsTransitioningAtPosition(ITextStoreACP *iface,
-    LONG acpPos, ULONG cFilterAttrs, const TS_ATTRID *paFilterAttrs,
-    DWORD dwFlags)
+        LONG pos, ULONG count, const TS_ATTRID *attrs, DWORD flags)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::RequestAttrsTransitioningAtPosition(pos %d, flags %#x)\n", pos, flags);
     return S_OK;
 }
 static HRESULT WINAPI TextStoreACP_FindNextAttrTransition(ITextStoreACP *iface,
-    LONG acpStart, LONG acpHalt, ULONG cFilterAttrs, const TS_ATTRID *paFilterAttrs,
-    DWORD dwFlags, LONG *pacpNext, BOOL *pfFound, LONG *plFoundOffset)
+        LONG start, LONG end, ULONG count, const TS_ATTRID *attrs, DWORD flags,
+        LONG *next, BOOL *found, LONG *offset)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::FindNextAttrTransition(start %d, end %d, flags %#x)\n",
+            start, end, flags);
     return S_OK;
 }
 static HRESULT WINAPI TextStoreACP_RetrieveRequestedAttrs(ITextStoreACP *iface,
-    ULONG ulCount, TS_ATTRVAL *paAttrVals, ULONG *pcFetched)
+        ULONG count, TS_ATTRVAL *values, ULONG *ret_count)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::RetrieveRequestedAttrs(count %d)\n", count);
     return S_OK;
 }
 static HRESULT WINAPI TextStoreACP_GetEndACP(ITextStoreACP *iface,
     LONG *pacp)
 {
+    if (winetest_debug > 1) trace("ITextStoreACP::GetEndACP()\n");
     sink_fire_ok(&test_ACP_GetEndACP,"TextStoreACP_GetEndACP");
     return S_OK;
 }
-static HRESULT WINAPI TextStoreACP_GetActiveView(ITextStoreACP *iface,
-    TsViewCookie *pvcView)
+static HRESULT WINAPI TextStoreACP_GetActiveView(ITextStoreACP *iface, TsViewCookie *view)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::GetActiveView()\n");
     return S_OK;
 }
 static HRESULT WINAPI TextStoreACP_GetACPFromPoint(ITextStoreACP *iface,
-    TsViewCookie vcView, const POINT *ptScreen, DWORD dwFlags,
-    LONG *pacp)
+        TsViewCookie view, const POINT *pt, DWORD flags, LONG *pos)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::GetACPFromPoint(view %#x, pt (%d,%d), flags %#x)\n",
+            view, pt->x, pt->y, flags);
     return S_OK;
 }
 static HRESULT WINAPI TextStoreACP_GetTextExt(ITextStoreACP *iface,
-    TsViewCookie vcView, LONG acpStart, LONG acpEnd, RECT *prc,
-    BOOL *pfClipped)
+        TsViewCookie view, LONG start, LONG end, RECT *rect, BOOL *clipped)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::GetTextExt(view %#x, start %d, end %d)\n", view, start, end);
     return S_OK;
 }
 static HRESULT WINAPI TextStoreACP_GetScreenExt(ITextStoreACP *iface,
-    TsViewCookie vcView, RECT *prc)
+        TsViewCookie view, RECT *rect)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::GetScreenExt(view %#x)\n", view);
     return S_OK;
 }
-static HRESULT WINAPI TextStoreACP_GetWnd(ITextStoreACP *iface,
-    TsViewCookie vcView, HWND *phwnd)
+static HRESULT WINAPI TextStoreACP_GetWnd(ITextStoreACP *iface, TsViewCookie view, HWND *window)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITextStoreACP::GetWnd(view %#x)\n", view);
     return S_OK;
 }
 
@@ -484,11 +483,6 @@ static inline ThreadMgrEventSink *impl_from_ITfThreadMgrEventSink(ITfThreadMgrEv
     return CONTAINING_RECORD(iface, ThreadMgrEventSink, ITfThreadMgrEventSink_iface);
 }
 
-static void ThreadMgrEventSink_Destructor(ThreadMgrEventSink *This)
-{
-    HeapFree(GetProcessHeap(),0,This);
-}
-
 static HRESULT WINAPI ThreadMgrEventSink_QueryInterface(ITfThreadMgrEventSink *iface, REFIID iid, LPVOID *ppvOut)
 {
     *ppvOut = NULL;
@@ -510,39 +504,36 @@ static HRESULT WINAPI ThreadMgrEventSink_QueryInterface(ITfThreadMgrEventSink *i
 static ULONG WINAPI ThreadMgrEventSink_AddRef(ITfThreadMgrEventSink *iface)
 {
     ThreadMgrEventSink *This = impl_from_ITfThreadMgrEventSink(iface);
-    ok (tmSinkRefCount == This->refCount,"ThreadMgrEventSink refcount off %i vs %i\n",This->refCount,tmSinkRefCount);
     return InterlockedIncrement(&This->refCount);
 }
 
 static ULONG WINAPI ThreadMgrEventSink_Release(ITfThreadMgrEventSink *iface)
 {
     ThreadMgrEventSink *This = impl_from_ITfThreadMgrEventSink(iface);
-    ULONG ret;
-
-    ok (tmSinkRefCount == This->refCount,"ThreadMgrEventSink refcount off %i vs %i\n",This->refCount,tmSinkRefCount);
-    ret = InterlockedDecrement(&This->refCount);
-    if (ret == 0)
-        ThreadMgrEventSink_Destructor(This);
-    return ret;
+    return InterlockedDecrement(&This->refCount);
 }
 
 static HRESULT WINAPI ThreadMgrEventSink_OnInitDocumentMgr(ITfThreadMgrEventSink *iface,
-ITfDocumentMgr *pdim)
+        ITfDocumentMgr *mgr)
 {
+    if (winetest_debug > 1) trace("ITfThreadMgrEventSink::OnInitDocumentMgr(%p)\n", mgr);
     sink_fire_ok(&test_OnInitDocumentMgr,"ThreadMgrEventSink_OnInitDocumentMgr");
     return S_OK;
 }
 
 static HRESULT WINAPI ThreadMgrEventSink_OnUninitDocumentMgr(ITfThreadMgrEventSink *iface,
-ITfDocumentMgr *pdim)
+        ITfDocumentMgr *mgr)
 {
-    trace("\n");
+    if (winetest_debug > 1) trace("ITfThreadMgrEventSink::OnUninitDocumentMgr(%p)\n", mgr);
     return S_OK;
 }
 
 static HRESULT WINAPI ThreadMgrEventSink_OnSetFocus(ITfThreadMgrEventSink *iface,
 ITfDocumentMgr *pdimFocus, ITfDocumentMgr *pdimPrevFocus)
 {
+    if (winetest_debug > 1) trace("ITfThreadMgrEventSink::OnSetFocus(focus %p, prev %p)\n",
+            pdimFocus, pdimPrevFocus);
+
     sink_fire_ok(&test_OnSetFocus,"ThreadMgrEventSink_OnSetFocus");
     if (test_CurrentFocus == FOCUS_SAVE)
         test_LastCurrentFocus = pdimFocus;
@@ -565,6 +556,8 @@ ITfContext *pic)
     ITfDocumentMgr *docmgr;
     ITfContext *test;
 
+    if (winetest_debug > 1) trace("ITfThreadMgrEventSink::OnPushContext(%p)\n", pic);
+
     hr = ITfContext_GetDocumentMgr(pic,&docmgr);
     ok(SUCCEEDED(hr),"GetDocumentMgr failed\n");
     test = (ITfContext*)0xdeadbeef;
@@ -585,6 +578,8 @@ ITfContext *pic)
     HRESULT hr;
     ITfDocumentMgr *docmgr;
     ITfContext *test;
+
+    if (winetest_debug > 1) trace("ITfThreadMgrEventSink::OnPopContext(%p)\n", pic);
 
     hr = ITfContext_GetDocumentMgr(pic,&docmgr);
     ok(SUCCEEDED(hr),"GetDocumentMgr failed\n");
@@ -613,20 +608,7 @@ static const ITfThreadMgrEventSinkVtbl ThreadMgrEventSink_ThreadMgrEventSinkVtbl
     ThreadMgrEventSink_OnPopContext
 };
 
-static HRESULT ThreadMgrEventSink_Constructor(IUnknown **ppOut)
-{
-    ThreadMgrEventSink *This;
-
-    This = HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,sizeof(ThreadMgrEventSink));
-    if (This == NULL)
-        return E_OUTOFMEMORY;
-
-    This->ITfThreadMgrEventSink_iface.lpVtbl = &ThreadMgrEventSink_ThreadMgrEventSinkVtbl;
-    This->refCount = 1;
-
-    *ppOut = (IUnknown*)&This->ITfThreadMgrEventSink_iface;
-    return S_OK;
-}
+static ThreadMgrEventSink thread_mgr_event_sink = {{&ThreadMgrEventSink_ThreadMgrEventSinkVtbl}, 1};
 
 static HRESULT WINAPI TfKeyTraceEventSink_QueryInterface(ITfKeyTraceEventSink *iface, REFIID riid, void **ppv)
 {
@@ -1224,27 +1206,18 @@ static void test_ThreadMgrAdviseSinks(void)
 {
     ITfSource *source = NULL;
     HRESULT hr;
-    IUnknown *sink;
 
     hr = ITfThreadMgr_QueryInterface(g_tm, &IID_ITfSource, (LPVOID*)&source);
     ok(SUCCEEDED(hr),"Failed to get IID_ITfSource for ThreadMgr\n");
     if (!source)
         return;
 
-    hr = ThreadMgrEventSink_Constructor(&sink);
-    ok(hr == S_OK, "got %08x\n", hr);
-    if(FAILED(hr)) return;
-
-    tmSinkRefCount = 1;
     tmSinkCookie = 0;
-    hr = ITfSource_AdviseSink(source,&IID_ITfThreadMgrEventSink, sink, &tmSinkCookie);
+    hr = ITfSource_AdviseSink(source,&IID_ITfThreadMgrEventSink,
+            (IUnknown *)&thread_mgr_event_sink.ITfThreadMgrEventSink_iface, &tmSinkCookie);
     ok(hr == S_OK, "Failed to Advise ITfThreadMgrEventSink\n");
     ok(tmSinkCookie!=0,"Failed to get sink cookie\n");
-
-    /* Advising the sink adds a ref, Releasing here lets the object be deleted
-       when unadvised */
-    tmSinkRefCount = 2;
-    IUnknown_Release(sink);
+    ok(thread_mgr_event_sink.refCount == 2, "Got %d references.\n", thread_mgr_event_sink.refCount);
 
     hr = ITfSource_AdviseSink(source, &IID_ITfKeyTraceEventSink, (IUnknown*)&TfKeyTraceEventSink,
                               &key_trace_sink_cookie);
@@ -1271,9 +1244,10 @@ static void test_ThreadMgrUnadviseSinks(void)
     if (!source)
         return;
 
-    tmSinkRefCount = 1;
+    ok(thread_mgr_event_sink.refCount == 2, "Got %d references.\n", thread_mgr_event_sink.refCount);
     hr = ITfSource_UnadviseSink(source, tmSinkCookie);
     ok(hr == S_OK, "Failed to unadvise ITfThreadMgrEventSink\n");
+    ok(thread_mgr_event_sink.refCount == 1, "Got %d references.\n", thread_mgr_event_sink.refCount);
 
     hr = ITfSource_UnadviseSink(source, key_trace_sink_cookie);
     ok(hr == S_OK, "Failed to unadvise ITfKeyTraceEventSink\n");
@@ -2176,11 +2150,9 @@ static void test_TStoApplicationText(void)
 
     documentStatus = TS_SD_READONLY;
     hrSession = 0xfeedface;
-    test_ACP_GetStatus = SINK_EXPECTED;
     hr = ITfContext_RequestEditSession(cxt, tid, es, TF_ES_SYNC|TF_ES_READWRITE, &hrSession);
     ok(SUCCEEDED(hr),"ITfContext_RequestEditSession failed\n");
     ok(hrSession == TS_E_READONLY,"Unexpected hrSession (%x)\n",hrSession);
-    sink_check_ok(&test_ACP_GetStatus,"GetStatus");
 
     /* signal a change to allow readwrite sessions */
     documentStatus = 0;
@@ -2188,7 +2160,6 @@ static void test_TStoApplicationText(void)
     ITextStoreACPSink_OnStatusChange(ACPSink,documentStatus);
     sink_check_ok(&test_ACP_RequestLock,"RequestLock");
 
-    test_ACP_GetStatus = SINK_EXPECTED;
     test_ACP_RequestLock = SINK_EXPECTED;
     test_DoEditSession = SINK_EXPECTED;
     hrSession = 0xfeedface;
@@ -2197,7 +2168,6 @@ static void test_TStoApplicationText(void)
     ok(SUCCEEDED(hr),"ITfContext_RequestEditSession failed\n");
     sink_check_ok(&test_OnEndEdit,"OnEndEdit");
     sink_check_ok(&test_DoEditSession,"DoEditSession");
-    sink_check_ok(&test_ACP_GetStatus,"GetStatus");
     ok(hrSession == 0xdeadcafe,"Unexpected hrSession (%x)\n",hrSession);
 
     if (source)
@@ -2322,11 +2292,9 @@ static void test_AssociateFocus(void)
     test_CurrentFocus = NULL;
     test_PrevFocus = dmorig;
     test_OnSetFocus  = SINK_OPTIONAL; /* Doesn't always fire on Win7 */
-    test_ACP_GetStatus = SINK_OPTIONAL;
     hr = ITfThreadMgr_SetFocus(g_tm,NULL);
     ok(SUCCEEDED(hr),"ITfThreadMgr_SetFocus failed\n");
     sink_check_ok(&test_OnSetFocus,"OnSetFocus");
-    test_ACP_GetStatus = SINK_UNEXPECTED;
     ITfDocumentMgr_Release(dmorig);
 
     hr = ITfThreadMgr_CreateDocumentMgr(g_tm,&dm1);
@@ -2434,7 +2402,6 @@ static void test_AssociateFocus(void)
     test_CurrentFocus = dmorig;
     test_PrevFocus = dm1;
     test_OnSetFocus  = SINK_OPTIONAL; /* Doesn't always fire on Win7+ */
-    test_ACP_GetStatus = SINK_IGNORE;
     ITfThreadMgr_SetFocus(g_tm,dmorig);
     sink_check_ok(&test_OnSetFocus,"OnSetFocus");
 
@@ -2469,7 +2436,6 @@ static void test_AssociateFocus(void)
     test_CurrentFocus = dmorig;
     test_PrevFocus = FOCUS_IGNORE;
     test_OnSetFocus  = SINK_OPTIONAL;
-    test_ACP_GetStatus = SINK_IGNORE;
     ITfThreadMgr_SetFocus(g_tm,dmorig);
     sink_check_ok(&test_OnSetFocus,"OnSetFocus");
 

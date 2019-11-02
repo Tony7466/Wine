@@ -780,7 +780,7 @@
 @ cdecl _mbscpy_s(ptr long str)
 @ cdecl _mbscpy_s_l(ptr long str ptr)
 @ cdecl _mbscspn(str str)
-@ stub _mbscspn_l
+@ cdecl _mbscspn_l(str str ptr)
 @ cdecl _mbsdec(ptr ptr)
 @ stub _mbsdec_l
 @ cdecl _mbsicmp(str str)
@@ -856,7 +856,7 @@
 @ stub _mbsset_s
 @ stub _mbsset_s_l
 @ cdecl _mbsspn(str str)
-@ stub _mbsspn_l
+@ cdecl _mbsspn_l(str str ptr)
 @ cdecl _mbsspnp(str str)
 @ stub _mbsspnp_l
 @ cdecl _mbsstr(str str)

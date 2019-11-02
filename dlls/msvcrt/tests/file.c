@@ -2548,7 +2548,7 @@ static void test__creat(void)
         pos = _tell(fd);
         ok(pos == 6, "expected pos 6 (text mode), got %d\n", pos);
     }
-    ok(_lseek(fd, SEEK_SET, 0) == 0, "_lseek failed\n");
+    ok(_lseek(fd, 0, SEEK_SET) == 0, "_lseek failed\n");
     count = _read(fd, buf, 6);
     ok(count == 4, "_read returned %d, expected 4\n", count);
     count = count > 0 ? count > 4 ? 4 : count : 0;
@@ -2568,7 +2568,7 @@ static void test__creat(void)
         pos = _tell(fd);
         ok(pos == 4, "expected pos 4 (binary mode), got %d\n", pos);
     }
-    ok(_lseek(fd, SEEK_SET, 0) == 0, "_lseek failed\n");
+    ok(_lseek(fd, 0, SEEK_SET) == 0, "_lseek failed\n");
     count = _read(fd, buf, 6);
     ok(count == 4, "_read returned %d, expected 4\n", count);
     count = count > 0 ? count > 4 ? 4 : count : 0;
@@ -2581,6 +2581,31 @@ static void test__creat(void)
 
     if (have_fmode)
         p__set_fmode(old_fmode);
+}
+
+static void test_lseek(void)
+{
+    int fd;
+    char testdata[4] = {'a', '\n', 'b', '\n'};
+
+    errno = 0xdeadbeef;
+    ok(_lseek(-42, 0, SEEK_SET) == -1, "expected failure\n");
+    ok(errno == EBADF, "errno = %d\n", errno);
+
+    fd = _creat("_creat.tst", _S_IWRITE);
+    ok(fd > 0, "_creat failed\n");
+    _write(fd, testdata, 4);
+
+    errno = 0xdeadbeef;
+    ok(_lseek(fd, 0, 42) == -1, "expected failure\n");
+    ok(errno == EINVAL, "errno = %d\n", errno);
+
+    errno = 0xdeadbeef;
+    ok(_lseek(fd, -42, SEEK_SET) == -1, "expected failure\n");
+    ok(errno == EINVAL, "errno = %d\n", errno);
+
+    _close(fd);
+    DeleteFileA("_creat.tst");
 }
 
 START_TEST(file)
@@ -2654,6 +2679,7 @@ START_TEST(file)
     test_write_flush();
     test_close();
     test__creat();
+    test_lseek();
 
     /* Wait for the (_P_NOWAIT) spawned processes to finish to make sure the report
      * file contains lines in the correct order

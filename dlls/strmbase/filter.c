@@ -36,8 +36,8 @@ static HRESULT WINAPI filter_inner_QueryInterface(IUnknown *iface, REFIID iid, v
 
     *out = NULL;
 
-    if (filter->pFuncsTable->filter_query_interface
-            && SUCCEEDED(hr = filter->pFuncsTable->filter_query_interface(filter, iid, out)))
+    if (filter->ops->filter_query_interface
+            && SUCCEEDED(hr = filter->ops->filter_query_interface(filter, iid, out)))
     {
         return hr;
     }
@@ -78,7 +78,7 @@ static ULONG WINAPI filter_inner_Release(IUnknown *iface)
     TRACE("%p decreasing refcount to %u.\n", filter, refcount);
 
     if (!refcount)
-        filter->pFuncsTable->filter_destroy(filter);
+        filter->ops->filter_destroy(filter);
 
     return refcount;
 }
@@ -126,54 +126,82 @@ HRESULT WINAPI BaseFilterImpl_GetClassID(IBaseFilter * iface, CLSID * pClsid)
 HRESULT WINAPI BaseFilterImpl_Stop(IBaseFilter *iface)
 {
     struct strmbase_filter *filter = impl_from_IBaseFilter(iface);
+    HRESULT hr = S_OK;
 
-    TRACE("iface %p.\n", iface);
+    TRACE("filter %p.\n", filter);
 
     EnterCriticalSection(&filter->csFilter);
-    filter->state = State_Stopped;
+
+    if (filter->state == State_Running && filter->ops->filter_stop_stream)
+        hr = filter->ops->filter_stop_stream(filter);
+    if (SUCCEEDED(hr) && filter->ops->filter_cleanup_stream)
+        hr = filter->ops->filter_cleanup_stream(filter);
+    if (SUCCEEDED(hr))
+        filter->state = State_Stopped;
+
     LeaveCriticalSection(&filter->csFilter);
 
-    return S_OK;
+    return hr;
 }
 
 HRESULT WINAPI BaseFilterImpl_Pause(IBaseFilter *iface)
 {
     struct strmbase_filter *filter = impl_from_IBaseFilter(iface);
+    HRESULT hr = S_OK;
 
-    TRACE("iface %p.\n", iface);
+    TRACE("filter %p.\n", filter);
 
     EnterCriticalSection(&filter->csFilter);
-    filter->state = State_Paused;
+
+    if (filter->state == State_Stopped && filter->ops->filter_init_stream)
+        hr = filter->ops->filter_init_stream(filter);
+    else if (filter->state == State_Running && filter->ops->filter_stop_stream)
+        hr = filter->ops->filter_stop_stream(filter);
+    if (SUCCEEDED(hr))
+        filter->state = State_Paused;
+
     LeaveCriticalSection(&filter->csFilter);
 
-    return S_OK;
+    return hr;
 }
 
 HRESULT WINAPI BaseFilterImpl_Run(IBaseFilter *iface, REFERENCE_TIME start)
 {
     struct strmbase_filter *filter = impl_from_IBaseFilter(iface);
+    HRESULT hr = S_OK;
 
-    TRACE("iface %p, start %s.\n", iface, debugstr_time(start));
+    TRACE("filter %p, start %s.\n", filter, debugstr_time(start));
 
     EnterCriticalSection(&filter->csFilter);
-    filter->state = State_Running;
+
+    if (filter->state == State_Stopped && filter->ops->filter_init_stream)
+        hr = filter->ops->filter_init_stream(filter);
+    if (SUCCEEDED(hr) && filter->ops->filter_start_stream)
+        hr = filter->ops->filter_start_stream(filter, start);
+    if (SUCCEEDED(hr))
+        filter->state = State_Running;
+
     LeaveCriticalSection(&filter->csFilter);
 
-    return S_OK;
+    return hr;
 }
 
-HRESULT WINAPI BaseFilterImpl_GetState(IBaseFilter * iface, DWORD dwMilliSecsTimeout, FILTER_STATE *pState )
+HRESULT WINAPI BaseFilterImpl_GetState(IBaseFilter *iface, DWORD timeout, FILTER_STATE *state)
 {
-    struct strmbase_filter *This = impl_from_IBaseFilter(iface);
-    TRACE("(%p)->(%d, %p)\n", This, dwMilliSecsTimeout, pState);
+    struct strmbase_filter *filter = impl_from_IBaseFilter(iface);
+    HRESULT hr = S_OK;
 
-    EnterCriticalSection(&This->csFilter);
-    {
-        *pState = This->state;
-    }
-    LeaveCriticalSection(&This->csFilter);
+    TRACE("filter %p, timeout %u, state %p.\n", filter, timeout, state);
 
-    return S_OK;
+    EnterCriticalSection(&filter->csFilter);
+
+    if (filter->ops->filter_wait_state)
+        hr = filter->ops->filter_wait_state(filter, timeout);
+    *state = filter->state;
+
+    LeaveCriticalSection(&filter->csFilter);
+
+    return hr;
 }
 
 HRESULT WINAPI BaseFilterImpl_SetSyncSource(IBaseFilter * iface, IReferenceClock *pClock)
@@ -229,7 +257,7 @@ HRESULT WINAPI BaseFilterImpl_FindPin(IBaseFilter *iface, const WCHAR *id, IPin 
 
     TRACE("(%p)->(%s, %p)\n", This, debugstr_w(id), ret);
 
-    for (i = 0; (pin = This->pFuncsTable->filter_get_pin(This, i)); ++i)
+    for (i = 0; (pin = This->ops->filter_get_pin(This, i)); ++i)
     {
         hr = IPin_QueryPinInfo(pin, &info);
         if (FAILED(hr))
@@ -292,7 +320,7 @@ VOID WINAPI BaseFilterImpl_IncrementPinVersion(struct strmbase_filter *filter)
 }
 
 void strmbase_filter_init(struct strmbase_filter *filter, const IBaseFilterVtbl *vtbl, IUnknown *outer,
-        const CLSID *clsid, const struct strmbase_filter_ops *func_table)
+        const CLSID *clsid, const struct strmbase_filter_ops *ops)
 {
     memset(filter, 0, sizeof(*filter));
 
@@ -306,7 +334,7 @@ void strmbase_filter_init(struct strmbase_filter *filter, const IBaseFilterVtbl 
         filter->csFilter.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": strmbase_filter.csFilter");
     filter->clsid = *clsid;
     filter->pin_version = 1;
-    filter->pFuncsTable = func_table;
+    filter->ops = ops;
 }
 
 void strmbase_filter_cleanup(struct strmbase_filter *This)

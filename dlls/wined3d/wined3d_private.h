@@ -1961,6 +1961,7 @@ struct wined3d_context
 
     DWORD use_immediate_mode_draw : 1;
     DWORD uses_uavs : 1;
+    DWORD uses_fbo_attached_resources : 1;
     DWORD transform_feedback_active : 1;
     DWORD transform_feedback_paused : 1;
     DWORD fog_coord : 1;
@@ -1969,7 +1970,7 @@ struct wined3d_context
     DWORD destroyed : 1;
     DWORD destroy_delayed : 1;
     DWORD clip_distance_mask : 8; /* WINED3D_MAX_CLIP_DISTANCES, 8 */
-    DWORD padding : 15;
+    DWORD padding : 14;
 
     DWORD constant_update_mask;
     DWORD numbered_array_mask;
@@ -2859,6 +2860,13 @@ struct wined3d_adapter_ops
             struct wined3d_unordered_access_view *view, const struct wined3d_uvec4 *clear_value);
 };
 
+struct wined3d_output
+{
+    D3DKMT_HANDLE kmt_adapter;
+    D3DKMT_HANDLE kmt_device;
+    D3DDDI_VIDEO_PRESENT_SOURCE_ID vidpn_source_id;
+};
+
 /* The adapter structure */
 struct wined3d_adapter
 {
@@ -2869,6 +2877,7 @@ struct wined3d_adapter
     struct wined3d_gl_info  gl_info;
     struct wined3d_d3d_info d3d_info;
     struct wined3d_driver_info driver_info;
+    struct wined3d_output output;
     UINT64 vram_bytes_used;
     GUID driver_uuid;
     GUID device_uuid;
@@ -3422,6 +3431,7 @@ struct wined3d_resource
 {
     LONG ref;
     LONG bind_count;
+    LONG srv_bind_count_device;
     LONG map_count;
     LONG access_count;
     struct wined3d_device *device;
@@ -5277,6 +5287,35 @@ static inline void wined3d_context_copy_bo_address(struct wined3d_context *conte
 {
     context->device->adapter->adapter_ops->adapter_copy_bo_address(context,
             dst, dst_bind_flags, src, src_bind_flags, size);
+}
+
+static inline BOOL wined3d_dsv_srv_conflict(const struct wined3d_rendertarget_view *dsv,
+        const struct wined3d_format *srv_format)
+{
+    return !srv_format || (srv_format->depth_size && !(dsv->desc.flags & WINED3D_VIEW_READ_ONLY_DEPTH))
+            || (srv_format->stencil_size && !(dsv->desc.flags & WINED3D_VIEW_READ_ONLY_STENCIL));
+}
+
+static inline BOOL wined3d_resource_check_fbo_attached(const struct wined3d_state *state,
+        const struct wined3d_resource *resource, const struct wined3d_format *srv_format)
+{
+    struct wined3d_rendertarget_view * const *rts = &state->fb->render_targets[0];
+    const struct wined3d_rendertarget_view *dsv;
+    unsigned int i;
+
+    if ((resource->bind_flags & WINED3D_BIND_DEPTH_STENCIL)
+            && (dsv = state->fb->depth_stencil) && dsv->resource == resource
+            && wined3d_dsv_srv_conflict(dsv, srv_format))
+        return TRUE;
+
+    if (!(resource->bind_flags & WINED3D_BIND_RENDER_TARGET))
+        return FALSE;
+
+    for (i = 0; i < MAX_RENDER_TARGET_VIEWS; ++i)
+        if (rts[i] && rts[i]->resource == resource)
+            return TRUE;
+
+    return FALSE;
 }
 
 /* The WNDCLASS-Name for the fake window which we use to retrieve the GL capabilities */

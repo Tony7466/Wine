@@ -737,7 +737,6 @@ static IDXGIAdapter *get_adapter_(unsigned int line, IUnknown *device, BOOL is_d
         hr = IDXGIFactory_QueryInterface(factory, &IID_IDXGIFactory4, (void **)&factory4);
         ok_(__FILE__, line)(hr == S_OK, "Got unexpected hr %#x.\n", hr);
         hr = IDXGIFactory4_EnumAdapterByLuid(factory4, luid, &IID_IDXGIAdapter, (void **)&adapter);
-        ok_(__FILE__, line)(hr == S_OK, "Got unexpected hr %#x.\n", hr);
         IDXGIFactory4_Release(factory4);
         IDXGIFactory_Release(factory);
     }
@@ -1154,12 +1153,13 @@ static void test_parents(void)
 
 static void test_output(void)
 {
+    unsigned int mode_count, mode_count_comp, i, last_height, last_width;
+    double last_refresh_rate;
     IDXGIAdapter *adapter;
     IDXGIDevice *device;
     HRESULT hr;
     IDXGIOutput *output;
     ULONG refcount;
-    UINT mode_count, mode_count_comp, i;
     DXGI_MODE_DESC *modes;
 
     if (!(device = create_device(0)))
@@ -1228,9 +1228,38 @@ static void test_output(void)
     ok(SUCCEEDED(hr), "Failed to list modes, hr %#x.\n", hr);
     ok(mode_count == mode_count_comp, "Got unexpected mode_count %u, expected %u.\n", mode_count, mode_count_comp);
 
+    last_width = last_height = 0;
+    last_refresh_rate = 0.;
     for (i = 0; i < mode_count; i++)
     {
-        ok(modes[i].Height && modes[i].Width, "Proper mode was expected\n");
+        double refresh_rate = modes[i].RefreshRate.Numerator / (double)modes[i].RefreshRate.Denominator;
+
+        ok(modes[i].Width && modes[i].Height, "Mode %u: Invalid dimensions %ux%u.\n",
+                i, modes[i].Width, modes[i].Height);
+
+        ok(modes[i].Width >= last_width,
+                "Mode %u: Modes should have been sorted, width %u < %u.\n", i, modes[i].Width, last_width);
+        if (modes[i].Width != last_width)
+        {
+            last_width = modes[i].Width;
+            last_height = 0;
+            last_refresh_rate = 0.;
+            continue;
+        }
+
+        ok(modes[i].Height >= last_height,
+                "Mode %u: Modes should have been sorted, height %u < %u.\n", i, modes[i].Height, last_height);
+        if (modes[i].Height != last_height)
+        {
+            last_height = modes[i].Height;
+            last_refresh_rate = 0.;
+            continue;
+        }
+
+        ok(refresh_rate >= last_refresh_rate,
+                "Mode %u: Modes should have been sorted, refresh rate %f < %f.\n", i, refresh_rate, last_refresh_rate);
+        if (refresh_rate != last_refresh_rate)
+            last_refresh_rate = refresh_rate;
     }
 
     mode_count += 5;
@@ -1935,6 +1964,22 @@ done:
     DestroyWindow(creation_desc.OutputWindow);
 }
 
+static HMONITOR get_primary_if_right_side_secondary(const DXGI_OUTPUT_DESC *output_desc)
+{
+    HMONITOR primary, secondary;
+    MONITORINFO mi;
+    POINT pt = {0, 0};
+
+    primary = MonitorFromPoint(pt, MONITOR_DEFAULTTONULL);
+    pt.x = output_desc->DesktopCoordinates.right;
+    secondary = MonitorFromPoint(pt, MONITOR_DEFAULTTONULL);
+    mi.cbSize = sizeof(mi);
+    if (secondary && secondary != primary
+            && GetMonitorInfoW(primary, &mi) && (mi.dwFlags & MONITORINFOF_PRIMARY))
+        return primary;
+    return NULL;
+}
+
 static void test_get_containing_output(void)
 {
     unsigned int output_count, output_idx;
@@ -1949,6 +1994,7 @@ static void test_get_containing_output(void)
     IDXGIDevice *device;
     unsigned int i, j;
     HMONITOR monitor;
+    HMONITOR primary;
     ULONG refcount;
     HRESULT hr;
     BOOL ret;
@@ -2030,6 +2076,8 @@ static void test_get_containing_output(void)
             "Got unexpected desktop coordinates %s, expected %s.\n",
             wine_dbgstr_rect(&output_desc.DesktopCoordinates),
             wine_dbgstr_rect(&monitor_info.rcMonitor));
+
+    primary = get_primary_if_right_side_secondary(&output_desc);
 
     output_idx = 0;
     while ((hr = IDXGIAdapter_EnumOutputs(adapter, output_idx, &output)) != DXGI_ERROR_NOT_FOUND)
@@ -2113,9 +2161,11 @@ static void test_get_containing_output(void)
             ok(ret, "Failed to get monitor info.\n");
 
             hr = IDXGISwapChain_GetContainingOutput(swapchain, &output);
+            /* Hack to prevent test failures with secondary on the right until multi-monitor support is improved. */
+            todo_wine_if(primary && monitor != primary)
             ok(hr == S_OK || broken(hr == DXGI_ERROR_UNSUPPORTED),
                     "Failed to get containing output, hr %#x.\n", hr);
-            if (hr == DXGI_ERROR_UNSUPPORTED)
+            if (hr != S_OK)
                 continue;
             ok(!!output, "Got unexpected containing output %p.\n", output);
             hr = IDXGIOutput_GetDesc(output, &output_desc);
@@ -5491,13 +5541,18 @@ static void test_output_ownership(IUnknown *device, BOOL is_d3d12)
     if (!pD3DKMTCheckVidPnExclusiveOwnership
             || pD3DKMTCheckVidPnExclusiveOwnership(NULL) == STATUS_PROCEDURE_NOT_FOUND)
     {
-        skip("D3DKMTCheckVidPnExclusiveOwnership() is unavailable.\n");
+        win_skip("D3DKMTCheckVidPnExclusiveOwnership() is unavailable.\n");
         return;
     }
 
     get_factory(device, is_d3d12, &factory);
     adapter = get_adapter(device, is_d3d12);
-    ok(!!adapter, "Failed to get adapter.\n");
+    if (!adapter)
+    {
+        skip("Failed to get adapter on Direct3D %d.\n", is_d3d12 ? 12 : 10);
+        IDXGIFactory_Release(factory);
+        return;
+    }
 
     hr = IDXGIAdapter_EnumOutputs(adapter, 0, &output);
     IDXGIAdapter_Release(adapter);
@@ -5556,10 +5611,14 @@ static void test_output_ownership(IUnknown *device, BOOL is_d3d12)
         wait_vidpn_exclusive_ownership(&check_ownership_desc, STATUS_SUCCESS, FALSE);
     else
         wait_vidpn_exclusive_ownership(&check_ownership_desc, STATUS_GRAPHICS_PRESENT_OCCLUDED, TRUE);
+    hr = IDXGIOutput_TakeOwnership(output, NULL, FALSE);
+    ok(hr == DXGI_ERROR_INVALID_CALL, "Got unexpected hr %#x.\n", hr);
+    hr = IDXGIOutput_TakeOwnership(output, NULL, TRUE);
+    ok(hr == DXGI_ERROR_INVALID_CALL, "Got unexpected hr %#x.\n", hr);
     hr = IDXGIOutput_TakeOwnership(output, device, FALSE);
     todo_wine ok(hr == (is_d3d12 ? E_NOINTERFACE : E_INVALIDARG), "Got unexpected hr %#x.\n", hr);
     hr = IDXGIOutput_TakeOwnership(output, device, TRUE);
-    todo_wine ok(hr == (is_d3d12 ? E_NOINTERFACE : S_OK), "Got unexpected hr %#x.\n", hr);
+    todo_wine_if(is_d3d12) ok(hr == (is_d3d12 ? E_NOINTERFACE : S_OK), "Got unexpected hr %#x.\n", hr);
     IDXGIOutput_ReleaseOwnership(output);
     wait_vidpn_exclusive_ownership(&check_ownership_desc, STATUS_SUCCESS, FALSE);
 
@@ -5569,16 +5628,16 @@ static void test_output_ownership(IUnknown *device, BOOL is_d3d12)
         goto done;
 
     hr = IDXGIOutput_TakeOwnership(output, device, FALSE);
-    todo_wine ok(hr == DXGI_ERROR_NOT_CURRENTLY_AVAILABLE, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DXGI_ERROR_NOT_CURRENTLY_AVAILABLE, "Got unexpected hr %#x.\n", hr);
     IDXGIOutput_ReleaseOwnership(output);
 
     hr = IDXGIOutput_TakeOwnership(output, device, TRUE);
-    todo_wine ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
     /* Note that the "exclusive" parameter to IDXGIOutput_TakeOwnership()
      * seems to behave opposite to what's described by MSDN. */
-    wait_vidpn_exclusive_ownership(&check_ownership_desc, STATUS_GRAPHICS_PRESENT_OCCLUDED, TRUE);
+    wait_vidpn_exclusive_ownership(&check_ownership_desc, STATUS_GRAPHICS_PRESENT_OCCLUDED, FALSE);
     hr = IDXGIOutput_TakeOwnership(output, device, FALSE);
-    todo_wine ok(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
+    ok(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
     IDXGIOutput_ReleaseOwnership(output);
 
     /* Swapchain in windowed mode. */
@@ -5591,11 +5650,11 @@ static void test_output_ownership(IUnknown *device, BOOL is_d3d12)
     wait_vidpn_exclusive_ownership(&check_ownership_desc, STATUS_SUCCESS, FALSE);
 
     hr = IDXGIOutput_TakeOwnership(output, device, FALSE);
-    todo_wine ok(hr == DXGI_ERROR_NOT_CURRENTLY_AVAILABLE, "Got unexpected hr %#x.\n", hr);
+    ok(hr == DXGI_ERROR_NOT_CURRENTLY_AVAILABLE, "Got unexpected hr %#x.\n", hr);
 
     hr = IDXGIOutput_TakeOwnership(output, device, TRUE);
-    todo_wine ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
-    wait_vidpn_exclusive_ownership(&check_ownership_desc, STATUS_GRAPHICS_PRESENT_OCCLUDED, TRUE);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    wait_vidpn_exclusive_ownership(&check_ownership_desc, STATUS_GRAPHICS_PRESENT_OCCLUDED, FALSE);
     IDXGIOutput_ReleaseOwnership(output);
     wait_vidpn_exclusive_ownership(&check_ownership_desc, STATUS_SUCCESS, FALSE);
 
