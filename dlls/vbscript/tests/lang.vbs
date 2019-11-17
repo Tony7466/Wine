@@ -886,6 +886,21 @@ Public Function TestSepFunc(ByVal a) : :
 End Function
 Call ok(TestSepFunc(1) = 1, "Function did not return 1")
 
+ok duplicatedfunc() = 2, "duplicatedfunc = " & duplicatedfunc()
+
+function duplicatedfunc
+    ok false, "duplicatedfunc called"
+end function
+
+sub duplicatedfunc
+    ok false, "duplicatedfunc called"
+end sub
+
+function duplicatedfunc
+    duplicatedfunc = 2
+end function
+
+ok duplicatedfunc() = 2, "duplicatedfunc = " & duplicatedfunc()
 
 ' Stop has an effect only in debugging mode
 Stop
@@ -1499,7 +1514,7 @@ call test_identifiers()
 
 sub test_dotIdentifiers
     ' test keywords that can also be an identifier after a dot
-    ' Call ok(testObj.rem = 10, "testObj.rem = " & testObj.rem & " expected 10")
+    Call ok(testObj.rem = 10, "testObj.rem = " & testObj.rem & " expected 10")
     Call ok(testObj.true = 10, "testObj.true = " & testObj.true & " expected 10")
     Call ok(testObj.false = 10, "testObj.false = " & testObj.false & " expected 10")
     Call ok(testObj.not = 10, "testObj.not = " & testObj.not & " expected 10")
@@ -1552,6 +1567,9 @@ sub test_dotIdentifiers
     Call ok(testObj.with = 10, "testObj.with = " & testObj.with & " expected 10")
     Call ok(testObj.redim = 10, "testObj.redim = " & testObj.redim & " expected 10")
     Call ok(testObj.preserve = 10, "testObj.preserve = " & testObj.preserve & " expected 10")
+    Call ok(testObj.property = 10, "testObj.property = " & testObj.property & " expected 10")
+    Call ok(testObj.me = 10, "testObj.me = " & testObj.me & " expected 10")
+    Call ok(testObj.stop = 10, "testObj.stop = " & testObj.stop & " expected 10")
 end sub
 call test_dotIdentifiers
 
@@ -1629,5 +1647,24 @@ end function
 
 set x = testsetresult(1, 2)
 ok x.prop = 1, "x.prop = " & x.prop
+
+set arr(0) = new TestPropSyntax
+arr(0).prop = 1
+ok arr(0).prop = 1, "arr(0) = " & arr(0).prop
+
+function f2(x,y)
+end function
+
+f2 1 = 1, 2
+
+function f1(x)
+    ok x = true, "x = " & x
+end function
+
+f1 1 = 1
+f1 1 = (1)
+f1 not 1 = 0
+
+arr (0) = 2 xor -2
 
 reportSuccess()

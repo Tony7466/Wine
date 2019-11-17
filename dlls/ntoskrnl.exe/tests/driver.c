@@ -62,8 +62,6 @@ static void *create_caller_thread;
 
 static PETHREAD create_irp_thread;
 
-void WINAPI ObfReferenceObject( void *obj );
-
 NTSTATUS WINAPI ZwQueryInformationProcess(HANDLE,PROCESSINFOCLASS,void*,ULONG,ULONG*);
 
 static void kvprintf(const char *format, __ms_va_list ap)
@@ -1777,17 +1775,14 @@ static NTSTATUS main_test(DEVICE_OBJECT *device, IRP *irp, IO_STACK_LOCATION *st
 
 static NTSTATUS test_basic_ioctl(IRP *irp, IO_STACK_LOCATION *stack, ULONG_PTR *info)
 {
-    ULONG length = stack->Parameters.DeviceIoControl.OutputBufferLength;
+    ULONG length = min(stack->Parameters.DeviceIoControl.OutputBufferLength, sizeof(teststr));
     char *buffer = irp->AssociatedIrp.SystemBuffer;
 
     if (!buffer)
         return STATUS_ACCESS_VIOLATION;
 
-    if (length < sizeof(teststr))
-        return STATUS_BUFFER_TOO_SMALL;
-
-    memcpy(buffer, teststr, sizeof(teststr));
-    *info = sizeof(teststr);
+    memcpy(buffer, teststr, length);
+    *info = length;
 
     return STATUS_SUCCESS;
 }

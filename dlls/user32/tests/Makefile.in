@@ -1,5 +1,5 @@
 TESTDLL   = user32.dll
-IMPORTS   = user32 gdi32 advapi32
+IMPORTS   = user32 gdi32 advapi32 hid
 
 C_SRCS = \
 	broadcast.c \
@@ -17,7 +17,6 @@ C_SRCS = \
 	menu.c \
 	monitor.c \
 	msg.c \
-	rawinput.c \
 	resource.c \
 	scroll.c \
 	static.c \

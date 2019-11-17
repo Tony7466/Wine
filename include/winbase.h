@@ -2002,6 +2002,7 @@ WINBASEAPI BOOL        WINAPI EnumResourceTypesW(HMODULE,ENUMRESTYPEPROCW,LONG_P
 WINBASEAPI BOOL        WINAPI EnumResourceTypesExA(HMODULE,ENUMRESTYPEPROCA,LONG_PTR,DWORD,LANGID);
 WINBASEAPI BOOL        WINAPI EnumResourceTypesExW(HMODULE,ENUMRESTYPEPROCW,LONG_PTR,DWORD,LANGID);
 #define                       EnumResourceTypesEx WINELIB_NAME_AW(EnumResourceTypesEx)
+WINADVAPI  BOOL        WINAPI EqualDomainSid(PSID,PSID,BOOL*);
 WINADVAPI  BOOL        WINAPI EqualSid(PSID, PSID);
 WINADVAPI  BOOL        WINAPI EqualPrefixSid(PSID,PSID);
 WINBASEAPI DWORD       WINAPI EraseTape(HANDLE,DWORD,BOOL);
@@ -2288,6 +2289,9 @@ WINBASEAPI VOID        WINAPI GetSystemTimePreciseAsFileTime(LPFILETIME);
 WINBASEAPI UINT        WINAPI GetSystemWindowsDirectoryA(LPSTR,UINT);
 WINBASEAPI UINT        WINAPI GetSystemWindowsDirectoryW(LPWSTR,UINT);
 #define                       GetSystemWindowsDirectory WINELIB_NAME_AW(GetSystemWindowsDirectory)
+WINBASEAPI UINT        WINAPI GetSystemWow64Directory2A(LPSTR,UINT,WORD);
+WINBASEAPI UINT        WINAPI GetSystemWow64Directory2W(LPWSTR,UINT,WORD);
+#define                       GetSystemWow64Directory2 WINELIB_NAME_AW(GetSystemWow64Directory2)
 WINBASEAPI UINT        WINAPI GetSystemWow64DirectoryA(LPSTR,UINT);
 WINBASEAPI UINT        WINAPI GetSystemWow64DirectoryW(LPWSTR,UINT);
 #define                       GetSystemWow64Directory WINELIB_NAME_AW(GetSystemWow64Directory)

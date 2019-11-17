@@ -411,9 +411,9 @@ static NTSTATUS complete_irp(struct connection *conn, IRP *irp)
     const struct http_receive_request_params params
             = *(struct http_receive_request_params *)irp->AssociatedIrp.SystemBuffer;
     DWORD irp_size = (params.bits == 32) ? sizeof(struct http_request_32) : sizeof(struct http_request_64);
+    ULONG cooked_len, host_len, abs_path_len, query_len, chunk_len = 0, offset, processed;
     IO_STACK_LOCATION *stack = IoGetCurrentIrpStackLocation(irp);
     const DWORD output_len = stack->Parameters.DeviceIoControl.OutputBufferLength;
-    ULONG cooked_len, host_len, abs_path_len, query_len, chunk_len = 0, offset;
     const char *p, *name, *value, *host, *abs_path, *query;
     USHORT unk_headers_count = 0, unk_header_idx;
     int name_len, value_len, len;
@@ -758,8 +758,10 @@ static NTSTATUS complete_irp(struct connection *conn, IRP *irp)
     assert(offset == irp->IoStatus.Information);
 
     conn->available = FALSE;
-    memmove(conn->buffer, conn->buffer + conn->req_len, conn->len - conn->req_len);
-    conn->len -= conn->req_len;
+    processed = conn->req_len - (conn->content_len - chunk_len);
+    memmove(conn->buffer, conn->buffer + processed, conn->len - processed);
+    conn->content_len -= chunk_len;
+    conn->len -= processed;
 
     return STATUS_SUCCESS;
 }
@@ -1159,6 +1161,18 @@ static NTSTATUS http_remove_url(struct request_queue *queue, IRP *irp)
     return STATUS_SUCCESS;
 }
 
+static struct connection *get_connection(HTTP_REQUEST_ID req_id)
+{
+    struct connection *conn;
+
+    LIST_FOR_EACH_ENTRY(conn, &connections, struct connection, entry)
+    {
+        if (conn->req_id == req_id)
+            return conn;
+    }
+    return NULL;
+}
+
 static NTSTATUS http_receive_request(struct request_queue *queue, IRP *irp)
 {
     const struct http_receive_request_params *params = irp->AssociatedIrp.SystemBuffer;
@@ -1170,14 +1184,11 @@ static NTSTATUS http_receive_request(struct request_queue *queue, IRP *irp)
 
     EnterCriticalSection(&http_cs);
 
-    LIST_FOR_EACH_ENTRY(conn, &connections, struct connection, entry)
+    if ((conn = get_connection(params->id)) && conn->available && conn->queue == queue)
     {
-        if (conn->available && conn->queue == queue && params->id == conn->req_id)
-        {
-            ret = complete_irp(conn, irp);
-            LeaveCriticalSection(&http_cs);
-            return ret;
-        }
+        ret = complete_irp(conn, irp);
+        LeaveCriticalSection(&http_cs);
+        return ret;
     }
 
     if (params->id == HTTP_NULL_ID)
@@ -1203,37 +1214,79 @@ static NTSTATUS http_send_response(struct request_queue *queue, IRP *irp)
 
     EnterCriticalSection(&http_cs);
 
-    LIST_FOR_EACH_ENTRY(conn, &connections, struct connection, entry)
+    if ((conn = get_connection(response->id)))
     {
-        if (conn->req_id == response->id)
+        if (send(conn->socket, response->buffer, response->len, 0) >= 0)
         {
-            if (send(conn->socket, response->buffer, response->len, 0) >= 0)
+            if (conn->content_len)
             {
-                conn->queue = NULL;
-                conn->req_id = HTTP_NULL_ID;
-                WSAEventSelect(conn->socket, request_event, FD_READ | FD_CLOSE);
-                irp->IoStatus.Information = response->len;
-                /* We might have another request already in the buffer. */
-                if (parse_request(conn) < 0)
-                {
-                    WARN("Failed to parse request; shutting down connection.\n");
-                    send_400(conn);
-                    close_connection(conn);
-                }
-            }
-            else
-            {
-                ERR("Got error %u; shutting down connection.\n", WSAGetLastError());
-                close_connection(conn);
+                /* Discard whatever entity body is left. */
+                memmove(conn->buffer, conn->buffer + conn->content_len, conn->len - conn->content_len);
+                conn->len -= conn->content_len;
             }
 
-            LeaveCriticalSection(&http_cs);
-            return STATUS_SUCCESS;
+            conn->queue = NULL;
+            conn->req_id = HTTP_NULL_ID;
+            WSAEventSelect(conn->socket, request_event, FD_READ | FD_CLOSE);
+            irp->IoStatus.Information = response->len;
+            /* We might have another request already in the buffer. */
+            if (parse_request(conn) < 0)
+            {
+                WARN("Failed to parse request; shutting down connection.\n");
+                send_400(conn);
+                close_connection(conn);
+            }
         }
+        else
+        {
+            ERR("Got error %u; shutting down connection.\n", WSAGetLastError());
+            close_connection(conn);
+        }
+
+        LeaveCriticalSection(&http_cs);
+        return STATUS_SUCCESS;
     }
 
     LeaveCriticalSection(&http_cs);
     return STATUS_CONNECTION_INVALID;
+}
+
+static NTSTATUS http_receive_body(struct request_queue *queue, IRP *irp)
+{
+    const struct http_receive_body_params *params = irp->AssociatedIrp.SystemBuffer;
+    IO_STACK_LOCATION *stack = IoGetCurrentIrpStackLocation(irp);
+    const DWORD output_len = stack->Parameters.DeviceIoControl.OutputBufferLength;
+    struct connection *conn;
+    NTSTATUS ret;
+
+    TRACE("id %s, bits %u.\n", wine_dbgstr_longlong(params->id), params->bits);
+
+    EnterCriticalSection(&http_cs);
+
+    if ((conn = get_connection(params->id)))
+    {
+        TRACE("%u bits remaining.\n", conn->content_len);
+
+        if (conn->content_len)
+        {
+            ULONG len = min(conn->content_len, output_len);
+            memcpy(irp->AssociatedIrp.SystemBuffer, conn->buffer, len);
+            memmove(conn->buffer, conn->buffer + len, conn->len - len);
+            conn->content_len -= len;
+            conn->len -= len;
+
+            irp->IoStatus.Information = len;
+            ret = STATUS_SUCCESS;
+        }
+        else
+            ret = STATUS_END_OF_FILE;
+    }
+    else
+        ret = STATUS_CONNECTION_INVALID;
+
+    LeaveCriticalSection(&http_cs);
+
+    return ret;
 }
 
 static NTSTATUS WINAPI dispatch_ioctl(DEVICE_OBJECT *device, IRP *irp)
@@ -1255,6 +1308,9 @@ static NTSTATUS WINAPI dispatch_ioctl(DEVICE_OBJECT *device, IRP *irp)
         break;
     case IOCTL_HTTP_SEND_RESPONSE:
         ret = http_send_response(queue, irp);
+        break;
+    case IOCTL_HTTP_RECEIVE_BODY:
+        ret = http_receive_body(queue, irp);
         break;
     default:
         FIXME("Unhandled ioctl %#x.\n", stack->Parameters.DeviceIoControl.IoControlCode);

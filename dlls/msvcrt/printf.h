@@ -509,21 +509,23 @@ int FUNC_NAME(pf_printf)(FUNC_NAME(puts_clbk) pf_puts, void *puts_ctx, const API
                     p += 3;
                 } else if(*(p+1)=='3' && *(p+2)=='2')
                     p += 3;
-                else if(isdigit(*(p+1)) || !*(p+1))
-                    break;
-                else
+                else if(p[1] && strchr("diouxX", p[1]))
                     flags.IntegerNative = *p++;
+                else
+                    break;
             } else if(*p == 'w')
                 flags.WideString = *p++;
-#if _MSVCR_VER >= 140
-            else if(*p == 'z' || *p == 't')
+#if _MSVCR_VER == 0 || _MSVCR_VER >= 140
+            else if((*p == 'z' || *p == 't') && p[1] && strchr("diouxX", p[1]))
                 flags.IntegerNative = *p++;
-            else if(*p == 'T')
-                flags.NaturalString = *p++;
             else if(*p == 'j') {
                 flags.IntegerDouble++;
                 p++;
             }
+#endif
+#if _MSVCR_VER >= 140
+            else if(*p == 'T')
+                flags.NaturalString = *p++;
 #endif
             else if((*p == 'F' || *p == 'N') && legacy_msvcrt_compat)
                 p++; /* ignore */

@@ -120,15 +120,9 @@ struct _vbdisp_t {
     VARIANT props[1];
 };
 
-typedef struct _ident_map_t ident_map_t;
-
 typedef struct {
     IDispatchEx IDispatchEx_iface;
     LONG ref;
-
-    ident_map_t *ident_map;
-    unsigned ident_map_cnt;
-    unsigned ident_map_size;
 
     script_ctx_t *ctx;
 } ScriptDisp;
@@ -169,6 +163,7 @@ typedef struct _dynamic_var_t {
     VARIANT v;
     const WCHAR *name;
     BOOL is_const;
+    SAFEARRAY *array;
 } dynamic_var_t;
 
 struct _script_ctx_t {
@@ -187,8 +182,14 @@ struct _script_ctx_t {
 
     EXCEPINFO ei;
 
-    dynamic_var_t *global_vars;
-    function_t *global_funcs;
+    dynamic_var_t **global_vars;
+    size_t global_vars_cnt;
+    size_t global_vars_size;
+
+    function_t **global_funcs;
+    size_t global_funcs_cnt;
+    size_t global_funcs_size;
+
     class_desc_t *classes;
     class_desc_t *procs;
 
@@ -340,6 +341,7 @@ struct _vbscode_t {
     BOOL option_explicit;
 
     BOOL pending_exec;
+    BOOL is_persistent;
     function_t main_code;
     IDispatch *context;
 
@@ -348,6 +350,10 @@ struct _vbscode_t {
     unsigned bstr_cnt;
     heap_pool_t heap;
 
+    function_t *funcs;
+    class_desc_t *classes;
+    class_desc_t *last_class;
+
     struct list entry;
 };
 
@@ -355,7 +361,7 @@ void release_vbscode(vbscode_t*) DECLSPEC_HIDDEN;
 HRESULT compile_script(script_ctx_t*,const WCHAR*,const WCHAR*,DWORD,vbscode_t**) DECLSPEC_HIDDEN;
 HRESULT compile_procedure(script_ctx_t*,const WCHAR*,const WCHAR*,DWORD,class_desc_t**) DECLSPEC_HIDDEN;
 HRESULT exec_script(script_ctx_t*,BOOL,function_t*,vbdisp_t*,DISPPARAMS*,VARIANT*) DECLSPEC_HIDDEN;
-void release_dynamic_vars(dynamic_var_t*) DECLSPEC_HIDDEN;
+void release_dynamic_var(dynamic_var_t*) DECLSPEC_HIDDEN;
 IDispatch *lookup_named_item(script_ctx_t*,const WCHAR*,unsigned) DECLSPEC_HIDDEN;
 void clear_ei(EXCEPINFO*) DECLSPEC_HIDDEN;
 HRESULT report_script_error(script_ctx_t*) DECLSPEC_HIDDEN;
@@ -369,7 +375,13 @@ static inline BOOL is_int32(double d)
     return INT32_MIN <= d && d <= INT32_MAX && (double)(int)d == d;
 }
 
+static inline BOOL is_digit(WCHAR c)
+{
+    return '0' <= c && c <= '9';
+}
+
 HRESULT create_regexp(IDispatch**) DECLSPEC_HIDDEN;
+BSTR string_replace(BSTR,BSTR,BSTR,int,int) DECLSPEC_HIDDEN;
 
 HRESULT map_hres(HRESULT) DECLSPEC_HIDDEN;
 

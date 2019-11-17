@@ -169,6 +169,7 @@ local_ref_t *lookup_local(const function_code_t*,const WCHAR*) DECLSPEC_HIDDEN;
 
 typedef struct _bytecode_t {
     LONG ref;
+    BOOL is_persistent;
 
     instr_t *instrs;
     heap_pool_t heap;
@@ -185,7 +186,7 @@ typedef struct _bytecode_t {
     unsigned str_pool_size;
     unsigned str_cnt;
 
-    struct _bytecode_t *next;
+    struct list entry;
 } bytecode_t;
 
 HRESULT compile_script(script_ctx_t*,const WCHAR*,const WCHAR*,const WCHAR*,BOOL,BOOL,bytecode_t**) DECLSPEC_HIDDEN;

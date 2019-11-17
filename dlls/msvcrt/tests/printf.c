@@ -159,10 +159,14 @@ static void test_sprintf( void )
             " 00000000000000000000000000000000000000000000000000000000000000000000000000000001",
             0, INT_ARG, 1 },
         { "%I", "I", 0, INT_ARG, 1 },
+        { "%Iq", "Iq", 0, INT_ARG, 1 },
+        { "%Ihd", "Ihd", 0, INT_ARG, 1 },
         { "%I0d", "I0d", 0, INT_ARG, 1 },
         { "%I64D", "D", 0, ULONGLONG_ARG, 0, -1 },
-        { "%zx", "1", "zx", TODO_FLAG | INT_ARG, 1 },
-        { "%z", "1", "z", TODO_FLAG | INT_ARG, 1 },
+        { "%zx", "1", "zx", INT_ARG, 1 },
+        { "%z", "z", 0, INT_ARG, 1 },
+        { "%tx", "1", "tx", INT_ARG, 1 },
+        { "%t", "t", 0, INT_ARG, 1 },
         { "% d", " 1", 0, INT_ARG, 1 },
         { "%+ d", "+1", 0, INT_ARG, 1 },
         { "%S", "wide", 0, PTR_ARG, 0, 0, 0, L"wide" },
@@ -214,9 +218,8 @@ static void test_sprintf( void )
         { "%u", "4294967295", 0, INT_ARG, -1 },
         { "%w", "", 0, INT_ARG, -1 },
         { "%h", "", 0, INT_ARG, -1 },
-        { "%z", "z", 0, INT_ARG, -1 },
-        { "%j", "", "j", TODO_FLAG | ULONGLONG_ARG, 0, -1 },
-        { "%jd", "-1", "jd", TODO_FLAG | ULONGLONG_ARG, 0, -1 },
+        { "%j", "", "j", ULONGLONG_ARG, 0, -1 },
+        { "%jd", "-1", "jd", ULONGLONG_ARG, 0, -1 },
         { "%F", "", 0, INT_ARG, -1 },
         { "%N", "", 0, INT_ARG, -1 },
         { "%H", "H", 0, INT_ARG, -1 },
@@ -256,6 +259,7 @@ static void test_sprintf( void )
     int i, x, r;
 
     for (i=0; i<ARRAY_SIZE(tests); i++) {
+        memset(buffer, 'x', sizeof(buffer));
         switch(tests[i].type & 0xff) {
         case NO_ARG:
             r = p_sprintf(buffer, tests[i].format);

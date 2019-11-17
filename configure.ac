@@ -1085,6 +1085,8 @@ then
           esac
         done
 
+        WINE_TRY_CFLAGS([-Wl,-delayload,autoconftest.dll], [AC_SUBST(DELAYLOADFLAG,["-Wl,-delayload,"])])
+
         if test "x$enable_maintainer_mode" = xyes
         then
             WINE_TRY_CROSSCFLAGS([-Werror])
@@ -2738,15 +2740,6 @@ AC_CHECK_FUNCS(\
 )
 LIBS="$ac_save_LIBS"
 
-dnl Check for __builtin_clz
-AC_CACHE_CHECK([for __builtin_clz], ac_cv_have___builtin_clz,
-               AC_LINK_IFELSE([AC_LANG_PROGRAM(,[[return __builtin_clz(1)]])],
-               [ac_cv_have___builtin_clz="yes"], [ac_cv_have___builtin_clz="no"]))
-if test "$ac_cv_have___builtin_clz" = "yes"
-then
-    AC_DEFINE(HAVE___BUILTIN_CLZ, 1, [Define to 1 if you have the `__builtin_clz' built-in function.])
-fi
-
 dnl Check for __builtin_popcount
 AC_CACHE_CHECK([for __builtin_popcount], ac_cv_have___builtin_popcount,
                AC_LINK_IFELSE([AC_LANG_PROGRAM(,[[return __builtin_popcount(1)]])],
@@ -3140,6 +3133,7 @@ WINE_CONFIG_MAKEFILE(dlls/d3dcompiler_43)
 WINE_CONFIG_MAKEFILE(dlls/d3dcompiler_43/tests)
 WINE_CONFIG_MAKEFILE(dlls/d3dcompiler_46)
 WINE_CONFIG_MAKEFILE(dlls/d3dcompiler_47)
+WINE_CONFIG_MAKEFILE(dlls/d3dcompiler_47/tests)
 WINE_CONFIG_MAKEFILE(dlls/d3dim)
 WINE_CONFIG_MAKEFILE(dlls/d3drm)
 WINE_CONFIG_MAKEFILE(dlls/d3drm/tests)
@@ -3237,6 +3231,7 @@ WINE_CONFIG_MAKEFILE(dlls/dpvoice)
 WINE_CONFIG_MAKEFILE(dlls/dpvoice/tests)
 WINE_CONFIG_MAKEFILE(dlls/dpwsockx)
 WINE_CONFIG_MAKEFILE(dlls/drmclien)
+WINE_CONFIG_MAKEFILE(dlls/dsdmo)
 WINE_CONFIG_MAKEFILE(dlls/dsound)
 WINE_CONFIG_MAKEFILE(dlls/dsound/tests)
 WINE_CONFIG_MAKEFILE(dlls/dsquery)
@@ -4099,6 +4094,7 @@ else
 fonts \
 loader/l_intl.nls \
 loader/wine.inf \
+loader/winebus.inf \
 loader/winehid.inf \
 programs/msidb/msidb \
 programs/msiexec/msiexec \
