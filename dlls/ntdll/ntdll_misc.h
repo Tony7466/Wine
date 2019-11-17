@@ -77,16 +77,17 @@ extern void signal_start_thread( LPTHREAD_START_ROUTINE entry, void *arg, BOOL s
 extern void signal_start_process( LPTHREAD_START_ROUTINE entry, BOOL suspend ) DECLSPEC_HIDDEN;
 extern void DECLSPEC_NORETURN signal_exit_thread( int status ) DECLSPEC_HIDDEN;
 extern void DECLSPEC_NORETURN signal_exit_process( int status ) DECLSPEC_HIDDEN;
-extern void version_init( const WCHAR *appname ) DECLSPEC_HIDDEN;
+extern void version_init(void) DECLSPEC_HIDDEN;
 extern void debug_init(void) DECLSPEC_HIDDEN;
-extern void thread_init(void) DECLSPEC_HIDDEN;
+extern TEB *thread_init(void) DECLSPEC_HIDDEN;
 extern void actctx_init(void) DECLSPEC_HIDDEN;
 extern void virtual_init(void) DECLSPEC_HIDDEN;
 extern void virtual_init_threading(void) DECLSPEC_HIDDEN;
 extern void fill_cpu_info(void) DECLSPEC_HIDDEN;
 extern void heap_set_debug_flags( HANDLE handle ) DECLSPEC_HIDDEN;
 extern void init_user_process_params( SIZE_T data_size ) DECLSPEC_HIDDEN;
-extern void update_user_process_params( const UNICODE_STRING *image ) DECLSPEC_HIDDEN;
+extern char **build_envp( const WCHAR *envW ) DECLSPEC_HIDDEN;
+extern NTSTATUS restart_process( RTL_USER_PROCESS_PARAMETERS *params, NTSTATUS status ) DECLSPEC_HIDDEN;
 
 /* server support */
 extern timeout_t server_start_time DECLSPEC_HIDDEN;

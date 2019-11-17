@@ -161,7 +161,6 @@ AddService=FontCache3.0.0.0,0,WPFFontCacheService
 AddService=LanmanServer,0,LanmanServerService
 AddService=FontCache,0,FontCacheService
 AddService=Schedule,0,TaskSchedulerService
-AddService=WineBus,0,WineBusService
 AddService=Winmgmt,0,WinmgmtService
 AddService=wuauserv,0,wuauService
 
@@ -179,7 +178,6 @@ AddService=FontCache3.0.0.0,0,WPFFontCacheService
 AddService=LanmanServer,0,LanmanServerService
 AddService=FontCache,0,FontCacheService
 AddService=Schedule,0,TaskSchedulerService
-AddService=WineBus,0,WineBusService
 AddService=Winmgmt,0,WinmgmtService
 AddService=wuauserv,0,wuauService
 
@@ -197,7 +195,6 @@ AddService=FontCache3.0.0.0,0,WPFFontCacheService
 AddService=LanmanServer,0,LanmanServerService
 AddService=FontCache,0,FontCacheService
 AddService=Schedule,0,TaskSchedulerService
-AddService=WineBus,0,WineBusService
 AddService=Winmgmt,0,WinmgmtService
 AddService=wuauserv,0,wuauService
 
@@ -3620,15 +3617,6 @@ ServiceType=32
 StartType=3
 ErrorControl=1
 
-[WineBusService]
-Description="Wine Platform Bus Kernel"
-DisplayName="Platform Bus Kernel"
-ServiceBinary="%12%\winebus.sys"
-LoadOrderGroup="WinePlugPlay"
-ServiceType=1
-StartType=2
-ErrorControl=1
-
 [SpoolerService]
 AddReg=SpoolerServiceKeys
 Description="Loads files to memory for later printing"
@@ -3756,6 +3744,13 @@ HKLM,%CurrentVersionNT%,"CSDVersion",2,"Service Pack 1"
 HKLM,%CurrentVersionNT%,"CurrentBuild",2,"7601"
 HKLM,%CurrentVersionNT%,"CurrentBuildNumber",2,"7601"
 HKLM,%CurrentVersionNT%,"CurrentType",2,"Uniprocessor Free"
+HKLM,%CurrentVersionNT%,"DigitalProductId",1,00,00,00,00,00,00,00,00,00,00,00,\
+00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
+00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
+00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
+00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
+00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
+00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
 HKLM,%CurrentVersionNT%,"ProductName",2,"Microsoft Windows 7"
 HKLM,%Control%\ProductOptions,"ProductType",2,"WinNT"
 HKLM,%Control%\Windows,"CSDVersion",0x10003,0x100
@@ -3767,6 +3762,13 @@ HKLM,%CurrentVersionNT%,"CSDVersion",2,"Service Pack 1"
 HKLM,%CurrentVersionNT%,"CurrentBuild",2,"7601"
 HKLM,%CurrentVersionNT%,"CurrentBuildNumber",2,"7601"
 HKLM,%CurrentVersionNT%,"CurrentType",2,"Uniprocessor Free"
+HKLM,%CurrentVersionNT%,"DigitalProductId",1,00,00,00,00,00,00,00,00,00,00,00,\
+00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
+00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
+00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
+00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
+00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
+00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
 HKLM,%CurrentVersionNT%,"ProductName",2,"Microsoft Windows 7"
 HKLM,%Control%\ProductOptions,"ProductType",2,"WinNT"
 HKLM,%Control%\Windows,"CSDVersion",0x10003,0x100
@@ -3856,4 +3858,5 @@ inf_section = 17
 l_intl.nls
 
 [inf_section]
+winebus.inf
 winehid.inf

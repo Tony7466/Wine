@@ -4545,6 +4545,20 @@ BOOL WINAPI SetupDiBuildDriverInfoList(HDEVINFO devinfo, SP_DEVINFO_DATA *device
         }
     }
 
+    if (device->driver_count)
+    {
+        WCHAR classname[MAX_CLASS_NAME_LEN], guidstr[39];
+        GUID class;
+
+        if (SetupDiGetINFClassW(device->drivers[0].inf_path, &class, classname, ARRAY_SIZE(classname), NULL))
+        {
+            device_data->ClassGuid = device->class = class;
+            SETUPDI_GuidToString(&class, guidstr);
+            RegSetValueExW(device->key, L"ClassGUID", 0, REG_SZ, (BYTE *)guidstr, sizeof(guidstr));
+            RegSetValueExW(device->key, L"Class", 0, REG_SZ, (BYTE *)classname, wcslen(classname) * sizeof(WCHAR));
+        }
+    }
+
     return TRUE;
 }
 
@@ -4706,7 +4720,7 @@ BOOL WINAPI SetupDiInstallDevice(HDEVINFO devinfo, SP_DEVINFO_DATA *device_data)
     static const WCHAR addserviceW[] = {'A','d','d','S','e','r','v','i','c','e',0};
     static const WCHAR rootW[] = {'r','o','o','t','\\',0};
     WCHAR section[LINE_LEN], section_ext[LINE_LEN], subsection[LINE_LEN], inf_path[MAX_PATH], *extptr, *filepart;
-    WCHAR svc_name[LINE_LEN];
+    WCHAR svc_name[LINE_LEN], field[LINE_LEN];
     UINT install_flags = SPINST_ALL;
     HKEY driver_key, device_key;
     SC_HANDLE manager, service;
@@ -4733,6 +4747,10 @@ BOOL WINAPI SetupDiInstallDevice(HDEVINFO devinfo, SP_DEVINFO_DATA *device_data)
         return FALSE;
 
     SetupFindFirstLineW(hinf, driver->mfg_key, driver->description, &ctx);
+
+    SetupGetStringFieldW(&ctx, 0, field, ARRAY_SIZE(field), NULL);
+    RegSetValueExW(device->key, L"DeviceDesc", 0, REG_SZ, (BYTE *)field, wcslen(field) * sizeof(WCHAR));
+
     SetupGetStringFieldW(&ctx, 1, section, ARRAY_SIZE(section), NULL);
     SetupDiGetActualSectionToInstallW(hinf, section, section_ext, ARRAY_SIZE(section_ext), NULL, &extptr);
 

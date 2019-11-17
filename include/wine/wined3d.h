@@ -2668,10 +2668,16 @@ HRESULT __cdecl wined3d_stateblock_create(struct wined3d_device *device,
 ULONG __cdecl wined3d_stateblock_decref(struct wined3d_stateblock *stateblock);
 ULONG __cdecl wined3d_stateblock_incref(struct wined3d_stateblock *stateblock);
 void __cdecl wined3d_stateblock_reset(struct wined3d_stateblock *stateblock);
+void __cdecl wined3d_stateblock_set_base_vertex_index(struct wined3d_stateblock *stateblock, INT base_index);
 void __cdecl wined3d_stateblock_set_blend_factor(struct wined3d_stateblock *stateblock,
         const struct wined3d_color *blend_factor);
 HRESULT __cdecl wined3d_stateblock_set_clip_plane(struct wined3d_stateblock *stateblock,
         UINT plane_idx, const struct wined3d_vec4 *plane);
+void __cdecl wined3d_stateblock_set_index_buffer(struct wined3d_stateblock *stateblock,
+        struct wined3d_buffer *index_buffer, enum wined3d_format_id format_id);
+HRESULT __cdecl wined3d_stateblock_set_light(struct wined3d_stateblock *stateblock,
+        UINT light_idx, const struct wined3d_light *light);
+HRESULT __cdecl wined3d_stateblock_set_light_enable(struct wined3d_stateblock *stateblock, UINT light_idx, BOOL enable);
 void __cdecl wined3d_stateblock_set_material(struct wined3d_stateblock *stateblock, const struct wined3d_material *material);
 void __cdecl wined3d_stateblock_set_pixel_shader(struct wined3d_stateblock *stateblock, struct wined3d_shader *shader);
 HRESULT __cdecl wined3d_stateblock_set_ps_consts_b(struct wined3d_stateblock *stateblock,
@@ -2684,6 +2690,10 @@ void __cdecl wined3d_stateblock_set_render_state(struct wined3d_stateblock *stat
         enum wined3d_render_state state, DWORD value);
 void __cdecl wined3d_stateblock_set_sampler_state(struct wined3d_stateblock *stateblock,
         UINT sampler_idx, enum wined3d_sampler_state state, DWORD value);
+void __cdecl wined3d_stateblock_set_scissor_rect(struct wined3d_stateblock *stateblock, const RECT *rect);
+HRESULT __cdecl wined3d_stateblock_set_stream_source(struct wined3d_stateblock *stateblock,
+        UINT stream_idx, struct wined3d_buffer *buffer, UINT offset, UINT stride);
+HRESULT __cdecl wined3d_stateblock_set_stream_source_freq(struct wined3d_stateblock *stateblock, UINT stream_idx, UINT divider);
 void __cdecl wined3d_stateblock_set_texture(struct wined3d_stateblock *stateblock, UINT stage, struct wined3d_texture *texture);
 void __cdecl wined3d_stateblock_set_texture_stage_state(struct wined3d_stateblock *stateblock,
         UINT stage, enum wined3d_texture_stage_state state, DWORD value);
@@ -2692,6 +2702,7 @@ void __cdecl wined3d_stateblock_set_transform(struct wined3d_stateblock *statebl
 void __cdecl wined3d_stateblock_set_vertex_declaration(struct wined3d_stateblock *stateblock,
         struct wined3d_vertex_declaration *declaration);
 void __cdecl wined3d_stateblock_set_vertex_shader(struct wined3d_stateblock *stateblock, struct wined3d_shader *shader);
+void __cdecl wined3d_stateblock_set_viewport(struct wined3d_stateblock *stateblock, const struct wined3d_viewport *viewport);
 HRESULT __cdecl wined3d_stateblock_set_vs_consts_b(struct wined3d_stateblock *stateblock,
         unsigned int start_idx, unsigned int count, const BOOL *constants);
 HRESULT __cdecl wined3d_stateblock_set_vs_consts_f(struct wined3d_stateblock *stateblock,

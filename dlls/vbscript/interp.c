@@ -31,7 +31,6 @@ typedef struct {
     instr_t *instr;
     script_ctx_t *script;
     function_t *func;
-    IDispatch *this_obj;
     vbdisp_t *vbthis;
 
     VARIANT *args;
@@ -95,10 +94,25 @@ static BOOL lookup_dynamic_vars(dynamic_var_t *var, const WCHAR *name, ref_t *re
     return FALSE;
 }
 
+static BOOL lookup_global_vars(script_ctx_t *script, const WCHAR *name, ref_t *ref)
+{
+    dynamic_var_t **vars = script->global_vars;
+    size_t i, cnt = script->global_vars_cnt;
+
+    for(i = 0; i < cnt; i++) {
+        if(!wcsicmp(vars[i]->name, name)) {
+            ref->type = vars[i]->is_const ? REF_CONST : REF_VAR;
+            ref->u.v = &vars[i]->v;
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
 static HRESULT lookup_identifier(exec_ctx_t *ctx, BSTR name, vbdisp_invoke_type_t invoke_type, ref_t *ref)
 {
     named_item_t *item;
-    function_t *func;
     IDispatch *disp;
     unsigned i;
     DISPID id;
@@ -111,26 +125,26 @@ static HRESULT lookup_identifier(exec_ctx_t *ctx, BSTR name, vbdisp_invoke_type_
         return S_OK;
     }
 
-    for(i=0; i < ctx->func->var_cnt; i++) {
-        if(!wcsicmp(ctx->func->vars[i].name, name)) {
-            ref->type = REF_VAR;
-            ref->u.v = ctx->vars+i;
-            return TRUE;
-        }
-    }
-
-    for(i=0; i < ctx->func->arg_cnt; i++) {
-        if(!wcsicmp(ctx->func->args[i].name, name)) {
-            ref->type = REF_VAR;
-            ref->u.v = ctx->args+i;
-            return S_OK;
-        }
-    }
-
-    if(lookup_dynamic_vars(ctx->func->type == FUNC_GLOBAL ? ctx->script->global_vars : ctx->dynamic_vars, name, ref))
-        return S_OK;
-
     if(ctx->func->type != FUNC_GLOBAL) {
+        for(i=0; i < ctx->func->var_cnt; i++) {
+            if(!wcsicmp(ctx->func->vars[i].name, name)) {
+                ref->type = REF_VAR;
+                ref->u.v = ctx->vars+i;
+                return TRUE;
+            }
+        }
+
+        for(i=0; i < ctx->func->arg_cnt; i++) {
+            if(!wcsicmp(ctx->func->args[i].name, name)) {
+                ref->type = REF_VAR;
+                ref->u.v = ctx->args+i;
+                return S_OK;
+            }
+        }
+
+        if(lookup_dynamic_vars(ctx->dynamic_vars, name, ref))
+            return S_OK;
+
         if(ctx->vbthis) {
             /* FIXME: Bind such identifier while generating bytecode. */
             for(i=0; i < ctx->vbthis->desc->prop_cnt; i++) {
@@ -140,14 +154,14 @@ static HRESULT lookup_identifier(exec_ctx_t *ctx, BSTR name, vbdisp_invoke_type_
                     return S_OK;
                 }
             }
-        }
 
-        hres = disp_get_id(ctx->this_obj, name, invoke_type, TRUE, &id);
-        if(SUCCEEDED(hres)) {
-            ref->type = REF_DISP;
-            ref->u.d.disp = ctx->this_obj;
-            ref->u.d.id = id;
-            return S_OK;
+            hres = vbdisp_get_id(ctx->vbthis, name, invoke_type, TRUE, &id);
+            if(SUCCEEDED(hres)) {
+                ref->type = REF_DISP;
+                ref->u.d.disp = (IDispatch*)&ctx->vbthis->IDispatchEx_iface;
+                ref->u.d.id = id;
+                return S_OK;
+            }
         }
     }
 
@@ -161,10 +175,11 @@ static HRESULT lookup_identifier(exec_ctx_t *ctx, BSTR name, vbdisp_invoke_type_
         }
     }
 
-    if(ctx->func->type != FUNC_GLOBAL && lookup_dynamic_vars(ctx->script->global_vars, name, ref))
+    if(lookup_global_vars(ctx->script, name, ref))
         return S_OK;
 
-    for(func = ctx->script->global_funcs; func; func = func->next) {
+    for(i = 0; i < ctx->script->global_funcs_cnt; i++) {
+        function_t *func = ctx->script->global_funcs[i];
         if(!wcsicmp(func->name, name)) {
             ref->type = REF_FUNC;
             ref->u.f = func;
@@ -224,11 +239,23 @@ static HRESULT add_dynamic_var(exec_ctx_t *ctx, const WCHAR *name,
     memcpy(str, name, size);
     new_var->name = str;
     new_var->is_const = is_const;
+    new_var->array = NULL;
     V_VT(&new_var->v) = VT_EMPTY;
 
     if(ctx->func->type == FUNC_GLOBAL) {
-        new_var->next = ctx->script->global_vars;
-        ctx->script->global_vars = new_var;
+        size_t cnt = ctx->script->global_vars_cnt + 1;
+        if(cnt > ctx->script->global_vars_size) {
+            dynamic_var_t **new_vars;
+            if(ctx->script->global_vars)
+                new_vars = heap_realloc(ctx->script->global_vars, cnt * 2 * sizeof(*new_vars));
+            else
+                new_vars = heap_alloc(cnt * 2 * sizeof(*new_vars));
+            if(!new_vars)
+                return E_OUTOFMEMORY;
+            ctx->script->global_vars = new_vars;
+            ctx->script->global_vars_size = cnt * 2;
+        }
+        ctx->script->global_vars[ctx->script->global_vars_cnt++] = new_var;
     }else {
         new_var->next = ctx->dynamic_vars;
         ctx->dynamic_vars = new_var;
@@ -779,6 +806,11 @@ static HRESULT assign_ident(exec_ctx_t *ctx, BSTR name, WORD flags, DISPPARAMS *
         if(arg_cnt(dp)) {
             SAFEARRAY *array;
 
+            if(V_VT(v) == VT_DISPATCH) {
+                hres = disp_propput(ctx->script, V_DISPATCH(v), DISPID_VALUE, flags, dp);
+                break;
+            }
+
             if(!(V_VT(v) & VT_ARRAY)) {
                 FIXME("array assign on type %d\n", V_VT(v));
                 return E_FAIL;
@@ -1104,43 +1136,61 @@ static HRESULT interp_dim(exec_ctx_t *ctx)
     const BSTR ident = ctx->instr->arg1.bstr;
     const unsigned array_id = ctx->instr->arg2.uint;
     const array_desc_t *array_desc;
-    ref_t ref;
+    SAFEARRAY **array_ref;
+    VARIANT *v;
     HRESULT hres;
 
     TRACE("%s\n", debugstr_w(ident));
 
     assert(array_id < ctx->func->array_cnt);
-    if(!ctx->arrays) {
-        ctx->arrays = heap_alloc_zero(ctx->func->array_cnt * sizeof(SAFEARRAY*));
-        if(!ctx->arrays)
-            return E_OUTOFMEMORY;
+
+    if(ctx->func->type == FUNC_GLOBAL) {
+        unsigned i;
+        for(i = 0; i < ctx->script->global_vars_cnt; i++) {
+            if(!wcsicmp(ctx->script->global_vars[i]->name, ident))
+                break;
+        }
+        assert(i < ctx->script->global_vars_cnt);
+        v = &ctx->script->global_vars[i]->v;
+        array_ref = &ctx->script->global_vars[i]->array;
+    }else {
+        ref_t ref;
+
+        if(!ctx->arrays) {
+            ctx->arrays = heap_alloc_zero(ctx->func->array_cnt * sizeof(SAFEARRAY*));
+            if(!ctx->arrays)
+                return E_OUTOFMEMORY;
+        }
+
+        hres = lookup_identifier(ctx, ident, VBDISP_LET, &ref);
+        if(FAILED(hres)) {
+            FIXME("lookup %s failed: %08x\n", debugstr_w(ident), hres);
+            return hres;
+        }
+
+        if(ref.type != REF_VAR) {
+            FIXME("got ref.type = %d\n", ref.type);
+            return E_FAIL;
+        }
+
+        v = ref.u.v;
+        array_ref = ctx->arrays + array_id;
     }
 
-    hres = lookup_identifier(ctx, ident, VBDISP_LET, &ref);
-    if(FAILED(hres)) {
-        FIXME("lookup %s failed: %08x\n", debugstr_w(ident), hres);
-        return hres;
-    }
-
-    if(ref.type != REF_VAR) {
-        FIXME("got ref.type = %d\n", ref.type);
-        return E_FAIL;
-    }
-
-    if(ctx->arrays[array_id]) {
+    if(*array_ref) {
         FIXME("Array already initialized\n");
         return E_FAIL;
     }
 
     array_desc = ctx->func->array_descs + array_id;
     if(array_desc->dim_cnt) {
-        ctx->arrays[array_id] = SafeArrayCreate(VT_VARIANT, array_desc->dim_cnt, array_desc->bounds);
-        if(!ctx->arrays[array_id])
+        *array_ref = SafeArrayCreate(VT_VARIANT, array_desc->dim_cnt, array_desc->bounds);
+        if(!*array_ref)
             return E_OUTOFMEMORY;
     }
 
-    V_VT(ref.u.v) = VT_ARRAY|VT_BYREF|VT_VARIANT;
-    V_ARRAYREF(ref.u.v) = ctx->arrays+array_id;
+    V_VT(v) = VT_ARRAY|VT_BYREF|VT_VARIANT;
+    V_ARRAYREF(v) = array_ref;
     return S_OK;
 }
 
@@ -1441,13 +1491,21 @@ static HRESULT interp_stop(exec_ctx_t *ctx)
 
 static HRESULT interp_me(exec_ctx_t *ctx)
 {
+    IDispatch *disp;
     VARIANT v;
 
     TRACE("\n");
 
-    IDispatch_AddRef(ctx->this_obj);
+    if(ctx->vbthis)
+        disp = (IDispatch*)&ctx->vbthis->IDispatchEx_iface;
+    else if(ctx->script->host_global)
+        disp = ctx->script->host_global;
+    else
+        disp = (IDispatch*)&ctx->script->script_obj->IDispatchEx_iface;
+
+    IDispatch_AddRef(disp);
     V_VT(&v) = VT_DISPATCH;
-    V_DISPATCH(&v) = ctx->this_obj;
+    V_DISPATCH(&v) = disp;
     return stack_push(ctx, &v);
 }
 
@@ -2185,23 +2243,25 @@ OP_LIST
 #undef X
 };
 
-void release_dynamic_vars(dynamic_var_t *var)
+void release_dynamic_var(dynamic_var_t *var)
 {
-    while(var) {
-        VariantClear(&var->v);
-        var = var->next;
-    }
+    VariantClear(&var->v);
+    if(var->array)
+        SafeArrayDestroy(var->array);
 }
 
 static void release_exec(exec_ctx_t *ctx)
 {
+    dynamic_var_t *var;
     unsigned i;
 
     VariantClear(&ctx->ret_val);
-    release_dynamic_vars(ctx->dynamic_vars);
 
-    if(ctx->this_obj)
-        IDispatch_Release(ctx->this_obj);
+    for(var = ctx->dynamic_vars; var; var = var->next)
+        release_dynamic_var(var);
+
+    if(ctx->vbthis)
+        IDispatchEx_Release(&ctx->vbthis->IDispatchEx_iface);
 
     if(ctx->args) {
         for(i=0; i < ctx->func->arg_cnt; i++)
@@ -2214,7 +2274,7 @@ static void release_exec(exec_ctx_t *ctx)
     }
 
     if(ctx->arrays) {
-        for(i=0; i < ctx->func->var_cnt; i++) {
+        for(i=0; i < ctx->func->array_cnt; i++) {
             if(ctx->arrays[i])
                 SafeArrayDestroy(ctx->arrays[i]);
         }
@@ -2296,14 +2356,9 @@ HRESULT exec_script(script_ctx_t *ctx, BOOL extern_caller, function_t *func, vbd
         IActiveScriptSite_OnEnterScript(ctx->site);
 
     if(vbthis) {
-        exec.this_obj = (IDispatch*)&vbthis->IDispatchEx_iface;
+        IDispatchEx_AddRef(&vbthis->IDispatchEx_iface);
         exec.vbthis = vbthis;
-    }else if (ctx->host_global) {
-        exec.this_obj = ctx->host_global;
-    }else {
-        exec.this_obj = (IDispatch*)&ctx->script_obj->IDispatchEx_iface;
     }
-    IDispatch_AddRef(exec.this_obj);
 
     exec.instr = exec.code->instrs + func->code_off;
     exec.script = ctx;

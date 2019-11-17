@@ -708,11 +708,8 @@ static void test_ROT(void)
         ROTFLAGS_REGISTRATIONKEEPSALIVE|ROTFLAGS_ALLOWANYCLIENT,
         (IUnknown*)&Test_ClassFactory, pMoniker, &dwCookie);
     todo_wine {
-    ok(hr == CO_E_WRONG_SERVER_IDENTITY ||
-       broken(hr == S_OK) /* Win9x */,
-       "IRunningObjectTable_Register should have returned CO_E_WRONG_SERVER_IDENTITY instead of 0x%08x\n", hr);
+    ok(hr == CO_E_WRONG_SERVER_IDENTITY, "Unexpected hr %#x.\n", hr);
     }
-    if (hr == S_OK) IRunningObjectTable_Revoke(pROT, dwCookie);
 
     hr = IRunningObjectTable_Register(pROT, 0xdeadbeef,
         (IUnknown*)&Test_ClassFactory, pMoniker, &dwCookie);
@@ -919,8 +916,8 @@ static void test_MkParseDisplayName(void)
     eaten = 0xdeadbeef;
     pmk = (IMoniker *)0xdeadbeef;
     hr = MkParseDisplayName(pbc, wszNonExistentProgId, &eaten, &pmk);
-    ok(hr == MK_E_SYNTAX || hr == MK_E_CANTOPENFILE /* Win9x */,
-        "MkParseDisplayName should have failed with MK_E_SYNTAX or MK_E_CANTOPENFILE instead of 0x%08x\n", hr);
+todo_wine
+    ok(hr == MK_E_SYNTAX, "Unexpected hr %#x.\n", hr);
     ok(eaten == 0, "Processed character count should have been 0 instead of %u\n", eaten);
     ok(pmk == NULL, "Output moniker pointer should have been NULL instead of %p\n", pmk);
 
@@ -929,8 +926,8 @@ static void test_MkParseDisplayName(void)
     eaten = 0xdeadbeef;
     pmk = (IMoniker *)0xdeadbeef;
     hr = MkParseDisplayName(pbc, wszDisplayNameClsid, &eaten, &pmk);
-    ok(hr == MK_E_SYNTAX || hr == MK_E_CANTOPENFILE /* Win9x */,
-        "MkParseDisplayName should have failed with MK_E_SYNTAX or MK_E_CANTOPENFILE instead of 0x%08x\n", hr);
+todo_wine
+    ok(hr == MK_E_SYNTAX, "Unexpected hr %#x.\n", hr);
     ok(eaten == 0, "Processed character count should have been 0 instead of %u\n", eaten);
     ok(pmk == NULL, "Output moniker pointer should have been NULL instead of %p\n", pmk);
 
@@ -1009,8 +1006,8 @@ static void test_MkParseDisplayName(void)
     eaten = 0xdeadbeef;
     pmk = (IMoniker *)0xdeadbeef;
     hr = MkParseDisplayName(pbc, wszDisplayNameProgIdFail, &eaten, &pmk);
-    ok(hr == MK_E_SYNTAX || hr == MK_E_CANTOPENFILE /* Win9x */,
-        "MkParseDisplayName with ProgId without marker should fail with MK_E_SYNTAX or MK_E_CANTOPENFILE instead of 0x%08x\n", hr);
+todo_wine
+    ok(hr == MK_E_SYNTAX, "Unexpected hr %#x.\n", hr);
     ok(eaten == 0, "Processed character count should have been 0 instead of %u\n", eaten);
     ok(pmk == NULL, "Output moniker pointer should have been NULL instead of %p\n", pmk);
 
@@ -1888,7 +1885,7 @@ static void test_bind_context(void)
     HRESULT hr;
     IBindCtx *pBindCtx;
     IEnumString *pEnumString;
-    BIND_OPTS2 bind_opts;
+    BIND_OPTS3 bind_opts;
     HeapUnknown *unknown;
     HeapUnknown *unknown2;
     IUnknown *param_obj;
@@ -1908,19 +1905,20 @@ static void test_bind_context(void)
     bind_opts.cbStruct = -1;
     hr = IBindCtx_GetBindOptions(pBindCtx, (BIND_OPTS *)&bind_opts);
     ok_ole_success(hr, "IBindCtx_GetBindOptions");
-    ok(bind_opts.cbStruct == sizeof(bind_opts) ||
-       bind_opts.cbStruct == sizeof(bind_opts) + sizeof(void*), /* Vista */
-       "bind_opts.cbStruct was %d\n", bind_opts.cbStruct);
+    ok(bind_opts.cbStruct == sizeof(BIND_OPTS3) || broken(bind_opts.cbStruct == sizeof(BIND_OPTS2)) /* XP */,
+        "Unexpected bind_opts.cbStruct %d.\n", bind_opts.cbStruct);
 
     bind_opts.cbStruct = sizeof(BIND_OPTS);
     hr = IBindCtx_GetBindOptions(pBindCtx, (BIND_OPTS *)&bind_opts);
     ok_ole_success(hr, "IBindCtx_GetBindOptions");
     ok(bind_opts.cbStruct == sizeof(BIND_OPTS), "bind_opts.cbStruct was %d\n", bind_opts.cbStruct);
 
+    memset(&bind_opts, 0xfe, sizeof(bind_opts));
     bind_opts.cbStruct = sizeof(bind_opts);
     hr = IBindCtx_GetBindOptions(pBindCtx, (BIND_OPTS *)&bind_opts);
     ok_ole_success(hr, "IBindCtx_GetBindOptions");
-    ok(bind_opts.cbStruct == sizeof(bind_opts), "bind_opts.cbStruct was %d\n", bind_opts.cbStruct);
+    ok(bind_opts.cbStruct == sizeof(bind_opts) || bind_opts.cbStruct == sizeof(BIND_OPTS2) /* XP */,
+        "Unexpected bind_opts.cbStruct %d.\n", bind_opts.cbStruct);
     ok(bind_opts.grfFlags == 0, "bind_opts.grfFlags was 0x%x instead of 0\n", bind_opts.grfFlags);
     ok(bind_opts.grfMode == STGM_READWRITE, "bind_opts.grfMode was 0x%x instead of STGM_READWRITE\n", bind_opts.grfMode);
     ok(bind_opts.dwTickCountDeadline == 0, "bind_opts.dwTickCountDeadline was %d instead of 0\n", bind_opts.dwTickCountDeadline);
@@ -1929,6 +1927,8 @@ static void test_bind_context(void)
         "bind_opts.dwClassContext should have been 0x15 instead of 0x%x\n", bind_opts.dwClassContext);
     ok(bind_opts.locale == GetThreadLocale(), "bind_opts.locale should have been 0x%x instead of 0x%x\n", GetThreadLocale(), bind_opts.locale);
     ok(bind_opts.pServerInfo == NULL, "bind_opts.pServerInfo should have been NULL instead of %p\n", bind_opts.pServerInfo);
+    if (bind_opts.cbStruct >= sizeof(BIND_OPTS3))
+        ok(bind_opts.hwnd == NULL, "Unexpected bind_opts.hwnd %p.\n", bind_opts.hwnd);
 
     bind_opts.cbStruct = -1;
     hr = IBindCtx_SetBindOptions(pBindCtx, (BIND_OPTS *)&bind_opts);
@@ -2051,11 +2051,6 @@ static void test_save_load_filemoniker(void)
 
 START_TEST(moniker)
 {
-    if (!GetProcAddress(GetModuleHandleA("ole32.dll"), "CoRegisterSurrogateEx")) {
-        win_skip("skipping test on win9x\n");
-        return;
-    }
-
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 
     test_ROT();

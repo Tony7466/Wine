@@ -1546,6 +1546,157 @@ void CDECL wined3d_stateblock_set_material(struct wined3d_stateblock *stateblock
     stateblock->changed.material = TRUE;
 }
 
+void CDECL wined3d_stateblock_set_viewport(struct wined3d_stateblock *stateblock,
+        const struct wined3d_viewport *viewport)
+{
+    TRACE("stateblock %p, viewport %p.\n", stateblock, viewport);
+
+    stateblock->stateblock_state.viewport = *viewport;
+    stateblock->changed.viewport = TRUE;
+}
+
+void CDECL wined3d_stateblock_set_scissor_rect(struct wined3d_stateblock *stateblock, const RECT *rect)
+{
+    TRACE("stateblock %p, rect %s.\n", stateblock, wine_dbgstr_rect(rect));
+
+    stateblock->stateblock_state.scissor_rect = *rect;
+    stateblock->changed.scissorRect = TRUE;
+}
+
+void CDECL wined3d_stateblock_set_index_buffer(struct wined3d_stateblock *stateblock,
+        struct wined3d_buffer *buffer, enum wined3d_format_id format_id)
+{
+    TRACE("stateblock %p, buffer %p, format %s.\n", stateblock, buffer, debug_d3dformat(format_id));
+
+    if (buffer)
+        wined3d_buffer_incref(buffer);
+    if (stateblock->stateblock_state.index_buffer)
+        wined3d_buffer_decref(stateblock->stateblock_state.index_buffer);
+    stateblock->stateblock_state.index_buffer = buffer;
+    stateblock->stateblock_state.index_format = format_id;
+    stateblock->changed.indices = TRUE;
+}
+
+void CDECL wined3d_stateblock_set_base_vertex_index(struct wined3d_stateblock *stateblock, INT base_index)
+{
+    TRACE("stateblock %p, base_index %d.\n", stateblock, base_index);
+
+    stateblock->stateblock_state.base_vertex_index = base_index;
+}
+
+HRESULT CDECL wined3d_stateblock_set_stream_source(struct wined3d_stateblock *stateblock,
+        UINT stream_idx, struct wined3d_buffer *buffer, UINT offset, UINT stride)
+{
+    struct wined3d_stream_state *stream;
+
+    TRACE("stateblock %p, stream_idx %u, buffer %p, stride %u.\n",
+            stateblock, stream_idx, buffer, stride);
+
+    if (stream_idx >= WINED3D_MAX_STREAMS)
+    {
+        WARN("Stream index %u out of range.\n", stream_idx);
+        return WINED3DERR_INVALIDCALL;
+    }
+
+    stream = &stateblock->stateblock_state.streams[stream_idx];
+
+    if (buffer)
+        wined3d_buffer_incref(buffer);
+    if (stream->buffer)
+        wined3d_buffer_decref(stream->buffer);
+    stream->buffer = buffer;
+    stream->stride = stride;
+    stream->offset = offset;
+    stateblock->changed.streamSource |= 1u << stream_idx;
+    return WINED3D_OK;
+}
+
+HRESULT CDECL wined3d_stateblock_set_stream_source_freq(struct wined3d_stateblock *stateblock,
+        UINT stream_idx, UINT divider)
+{
+    struct wined3d_stream_state *stream;
+
+    TRACE("stateblock %p, stream_idx %u, divider %#x.\n", stateblock, stream_idx, divider);
+
+    if ((divider & WINED3DSTREAMSOURCE_INSTANCEDATA) && (divider & WINED3DSTREAMSOURCE_INDEXEDDATA))
+    {
+        WARN("INSTANCEDATA and INDEXEDDATA were set, returning D3DERR_INVALIDCALL.\n");
+        return WINED3DERR_INVALIDCALL;
+    }
+    if ((divider & WINED3DSTREAMSOURCE_INSTANCEDATA) && !stream_idx)
+    {
+        WARN("INSTANCEDATA used on stream 0, returning D3DERR_INVALIDCALL.\n");
+        return WINED3DERR_INVALIDCALL;
+    }
+    if (!divider)
+    {
+        WARN("Divider is 0, returning D3DERR_INVALIDCALL.\n");
+        return WINED3DERR_INVALIDCALL;
+    }
+
+    stream = &stateblock->stateblock_state.streams[stream_idx];
+    stream->flags = divider & (WINED3DSTREAMSOURCE_INSTANCEDATA | WINED3DSTREAMSOURCE_INDEXEDDATA);
+    stream->frequency = divider & 0x7fffff;
+    stateblock->changed.streamFreq |= 1u << stream_idx;
+    return WINED3D_OK;
+}
+HRESULT CDECL wined3d_stateblock_set_light(struct wined3d_stateblock *stateblock,
+        UINT light_idx, const struct wined3d_light *light)
+{
+    struct wined3d_light_info *object = NULL;
+
+    TRACE("stateblock %p, light_idx %u, light %p.\n", stateblock, light_idx, light);
+
+    /* Check the parameter range. Need for speed most wanted sets junk lights
+     * which confuse the GL driver. */
+    if (!light)
+        return WINED3DERR_INVALIDCALL;
+
+    switch (light->type)
+    {
+        case WINED3D_LIGHT_POINT:
+        case WINED3D_LIGHT_SPOT:
+        case WINED3D_LIGHT_GLSPOT:
+            /* Incorrect attenuation values can cause the gl driver to crash.
+             * Happens with Need for speed most wanted. */
+            if (light->attenuation0 < 0.0f || light->attenuation1 < 0.0f || light->attenuation2 < 0.0f)
+            {
+                WARN("Attenuation is negative, returning WINED3DERR_INVALIDCALL.\n");
+                return WINED3DERR_INVALIDCALL;
+            }
+            break;
+
+        case WINED3D_LIGHT_DIRECTIONAL:
+        case WINED3D_LIGHT_PARALLELPOINT:
+            /* Ignores attenuation */
+            break;
+
+        default:
+            WARN("Light type out of range, returning WINED3DERR_INVALIDCALL.\n");
+            return WINED3DERR_INVALIDCALL;
+    }
+
+    return wined3d_light_state_set_light(&stateblock->stateblock_state.light_state, light_idx, light, &object);
+}
+
+HRESULT CDECL wined3d_stateblock_set_light_enable(struct wined3d_stateblock *stateblock, UINT light_idx, BOOL enable)
+{
+    struct wined3d_light_info *light_info;
+    HRESULT hr;
+
+    TRACE("stateblock %p, light_idx %u, enable %#x.\n", stateblock, light_idx, enable);
+
+    if (!(light_info = wined3d_light_state_get_light(&stateblock->stateblock_state.light_state, light_idx)))
+    {
+        if (FAILED(hr = wined3d_light_state_set_light(&stateblock->stateblock_state.light_state, light_idx,
+                &WINED3D_default_light, &light_info)))
+            return hr;
+    }
+    wined3d_light_state_enable_light(&stateblock->stateblock_state.light_state,
+            &stateblock->device->adapter->d3d_info, light_info, enable);
+    return S_OK;
+}
+
 static void init_default_render_states(DWORD rs[WINEHIGHEST_RENDER_STATE + 1], const struct wined3d_d3d_info *d3d_info)
 {
     union

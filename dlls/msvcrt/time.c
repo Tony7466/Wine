@@ -1033,6 +1033,30 @@ static inline BOOL strftime_time(char *str, MSVCRT_size_t *pos, MSVCRT_size_t ma
     return TRUE;
 }
 
+static inline BOOL strftime_tzdiff(char *str, MSVCRT_size_t *pos, MSVCRT_size_t max, BOOL is_dst)
+{
+    MSVCRT_long tz = MSVCRT___timezone + (is_dst ? MSVCRT__dstbias : 0);
+    MSVCRT_size_t len;
+    char sign;
+
+    if(tz < 0) {
+        sign = '+';
+        tz = -tz;
+    }else {
+        sign = '-';
+    }
+
+    len = MSVCRT__snprintf(str+*pos, max-*pos, "%c%02u%02u", sign, tz/60/60, tz/60%60);
+    if(len == -1) {
+        *str = 0;
+        *MSVCRT__errno() = MSVCRT_ERANGE;
+        return FALSE;
+    }
+
+    *pos += len;
+    return TRUE;
+}
+
 static inline BOOL strftime_str(char *str, MSVCRT_size_t *pos, MSVCRT_size_t max, char *src)
 {
     MSVCRT_size_t len = strlen(src);
@@ -1092,7 +1116,8 @@ static MSVCRT_size_t strftime_helper(char *str, MSVCRT_size_t max, const char *f
             if(MSVCRT__isleadbyte_l((unsigned char)*format, loc)) {
                 str[ret++] = *(format++);
                 if(ret == max) continue;
-                if(!str[ret]) goto einval_error;
+                if(!MSVCRT_CHECK_PMT(str[ret]))
+                    goto einval_error;
             }
             str[ret++] = *format;
             continue;
@@ -1106,7 +1131,7 @@ static MSVCRT_size_t strftime_helper(char *str, MSVCRT_size_t max, const char *f
             alternate = FALSE;
         }
 
-        if(!mstm)
+        if(!MSVCRT_CHECK_PMT(mstm))
             goto einval_error;
 
         switch(*format) {
@@ -1127,13 +1152,13 @@ static MSVCRT_size_t strftime_helper(char *str, MSVCRT_size_t max, const char *f
                 return 0;
             break;
         case 'a':
-            if(mstm->tm_wday<0 || mstm->tm_wday>6)
+            if(!MSVCRT_CHECK_PMT(mstm->tm_wday>=0 && mstm->tm_wday<=6))
                 goto einval_error;
             if(!strftime_str(str, &ret, max, time_data->str.names.short_wday[mstm->tm_wday]))
                 return 0;
             break;
         case 'A':
-            if(mstm->tm_wday<0 || mstm->tm_wday>6)
+            if(!MSVCRT_CHECK_PMT(mstm->tm_wday>=0 && mstm->tm_wday<=6))
                 goto einval_error;
             if(!strftime_str(str, &ret, max, time_data->str.names.wday[mstm->tm_wday]))
                 return 0;
@@ -1142,13 +1167,13 @@ static MSVCRT_size_t strftime_helper(char *str, MSVCRT_size_t max, const char *f
 #if _MSVCR_VER>=140
         case 'h':
 #endif
-            if(mstm->tm_mon<0 || mstm->tm_mon>11)
+            if(!MSVCRT_CHECK_PMT(mstm->tm_mon>=0 && mstm->tm_mon<=11))
                 goto einval_error;
             if(!strftime_str(str, &ret, max, time_data->str.names.short_mon[mstm->tm_mon]))
                 return 0;
             break;
         case 'B':
-            if(mstm->tm_mon<0 || mstm->tm_mon>11)
+            if(!MSVCRT_CHECK_PMT(mstm->tm_mon>=0 && mstm->tm_mon<=11))
                 goto einval_error;
             if(!strftime_str(str, &ret, max, time_data->str.names.mon[mstm->tm_mon]))
                 return 0;
@@ -1244,7 +1269,7 @@ static MSVCRT_size_t strftime_helper(char *str, MSVCRT_size_t max, const char *f
             break;
 #endif
         case 'p':
-            if(mstm->tm_hour<0 || mstm->tm_hour>23)
+            if(!MSVCRT_CHECK_PMT(mstm->tm_hour>=0 && mstm->tm_hour<=23))
                 goto einval_error;
             if(!strftime_str(str, &ret, max, mstm->tm_hour<12 ?
                         time_data->str.names.am : time_data->str.names.pm))
@@ -1291,7 +1316,14 @@ static MSVCRT_size_t strftime_helper(char *str, MSVCRT_size_t max, const char *f
                 return 0;
             break;
         case 'y':
-            if(!strftime_int(str, &ret, max, mstm->tm_year%100, alternate ? 0 : 2, 0, 99))
+#if _MSVCR_VER>=140
+            if(!MSVCRT_CHECK_PMT(mstm->tm_year>=-1900 && mstm->tm_year<=8099))
+                goto einval_error;
+            tmp = (mstm->tm_year+1900)%100;
+#else
+            tmp = mstm->tm_year%100;
+#endif
+            if(!strftime_int(str, &ret, max, tmp, alternate ? 0 : 2, 0, 99))
                 return 0;
             break;
         case 'Y':
@@ -1300,6 +1332,12 @@ static MSVCRT_size_t strftime_helper(char *str, MSVCRT_size_t max, const char *f
                 return 0;
             break;
         case 'z':
+#if _MSVCR_VER>=140
+            MSVCRT__tzset();
+            if(!strftime_tzdiff(str, &ret, max, mstm->tm_isdst))
+                return 0;
+            break;
+#endif
         case 'Z':
             MSVCRT__tzset();
             if(MSVCRT__get_tzname(&tmp, str+ret, max-ret, mstm->tm_isdst ? 1 : 0))
@@ -1308,7 +1346,9 @@ static MSVCRT_size_t strftime_helper(char *str, MSVCRT_size_t max, const char *f
             break;
         case 'U':
         case 'W':
-            if(mstm->tm_wday<0 || mstm->tm_wday>6 || mstm->tm_yday<0 || mstm->tm_yday>365)
+            if(!MSVCRT_CHECK_PMT(mstm->tm_wday>=0 && mstm->tm_wday<=6))
+                goto einval_error;
+            if(!MSVCRT_CHECK_PMT(mstm->tm_yday>=0 && mstm->tm_yday<=365))
                 goto einval_error;
             if(*format == 'U')
                 tmp = mstm->tm_wday;
@@ -1326,6 +1366,7 @@ static MSVCRT_size_t strftime_helper(char *str, MSVCRT_size_t max, const char *f
             break;
         default:
             WARN("unknown format %c\n", *format);
+            MSVCRT_INVALID_PMT("unknown format", MSVCRT_EINVAL);
             goto einval_error;
         }
     }
@@ -1342,7 +1383,6 @@ static MSVCRT_size_t strftime_helper(char *str, MSVCRT_size_t max, const char *f
 
 einval_error:
     *str = 0;
-    *MSVCRT__errno() = MSVCRT_EINVAL;
     return 0;
 }
 

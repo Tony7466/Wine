@@ -243,6 +243,11 @@ Call ok(UBound(x) = 2, "UBound(x) = " & UBound(x))
 Call ok(getVT(UBound(x, 1)) = "VT_I4", "getVT(UBound(x, 1)) = " & getVT(UBound(x, 1)))
 Call ok(UBound(x, 1) = 2, "UBound(x) = " & UBound(x, 1))
 
+x = Array(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33)
+ok x(1) = 2, "x(1) = " & x(1)
+ok x(32) = 33, "x(32) = " & x(32)
+ok ubound(x) = 32, "ubound(x) = " & ubound(x)
+
 Dim arr2(2, 4)
 Call ok(UBound(arr2) = 2, "UBound(x) = " & UBound(x))
 Call ok(UBound(arr2, 1) = 2, "UBound(x) = " & UBound(x))
@@ -635,11 +640,6 @@ TestLTrim "", ""
 TestLTrim 123, "123"
 if isEnglishLang then TestLTrim true, "True"
 
-Sub TestRound(val, exval, vt)
-    Call ok(Round(val) = exval, "Round(" & val & ") = " & Round(val))
-    Call ok(getVT(Round(val)) = vt, "getVT(Round(" & val & ")) = " & getVT(Round(val)))
-End Sub
-
 Sub TestRTrim(str, exstr)
     Call ok(RTrim(str) = exstr, "RTrim(" & str & ") = " & RTrim(str))
 End Sub
@@ -651,6 +651,69 @@ TestRTrim "test", "test"
 TestRTrim "", ""
 TestRTrim 123, "123"
 if isEnglishLang then TestRTrim true, "True"
+
+sub test_replace(str, find, rep, exp)
+    dim r
+    r = Replace(str, find, rep)
+    ok r = exp, "Replace(""" & str & """, """ & find & """, """ & rep & """) = """ & _
+       r & """ expected """ & exp & """"
+end sub
+
+sub test_replace_from(str, find, rep, from, exp)
+    dim r
+    r = Replace(str, find, rep, from)
+    ok r = exp, "Replace(""" & str & """, """ & find & """, """ & rep & """, " & from & ") = """ & _
+       r & """ expected """ & exp & """"
+end sub
+
+sub test_replace_cnt(str, find, rep, from, cnt, exp)
+    dim r
+    r = Replace(str, find, rep, from, cnt)
+    ok r = exp, "Replace(""" & str & """, """ & find & """, """ & rep & """, " & from & ", " & cnt & ") = """ & _
+       r & """ expected """ & exp & """"
+end sub
+
+test_replace "xx testxx(xx)", "xx", "!", "! test!(!)"
+test_replace "xxx", "", "y", "xxx"
+test_replace "xxxxx", "xx", "y", "yyx"
+test_replace 123, 2, 6, "163"
+test_replace "xyz" & Chr(0) & "xyz", "y", "Y", "xYz" & Chr(0) & "xYz"
+test_replace "xyz" & Chr(0) & "xyz", Chr(0) & "x", "Y" & Chr(0) & Chr(0), "xyzY" & Chr(0) & Chr(0) & "yz"
+
+test_replace_from "xx testxx(xx)", "xx", "!", 1, "! test!(!)"
+test_replace_from "xx testxx(xx)", "xx", "!", 1, "! test!(!)"
+test_replace_from "xx testxx(xx)", "xx", "!", 2, "x test!(!)"
+test_replace_from "xx testxx(xx)", "xx", "!", 2000, ""
+test_replace_from "xxx", "", "y", 2, "xx"
+
+test_replace_cnt "xx testxx(xx)", "xx", "!", 1, 2, "! test!(xx)"
+test_replace_cnt "xx testxx(xx)", "xx", "!", 1, 1, "! testxx(xx)"
+test_replace_cnt "xx testxx(xx)", "xx", "!", 2, 1, "x test!(xx)"
+test_replace_cnt "xx testxx(xx)", "xx", "!", 1, -1, "! test!(!)"
+test_replace_cnt "xx testxx(xx)", "xx", "!", 1, 0, "xx testxx(xx)"
+
+on error resume next
+Replace "xx", "x", "y", -1
+x = err.number
+on error goto 0
+ok x = 5, "err = " & x
+
+on error resume next
+Replace "xx", "x", "y", 0
+x = err.number
+on error goto 0
+ok x = 5, "err = " & x
+
+on error resume next
+Replace "xx", "x", "y", 1, -2
+x = err.number
+on error goto 0
+ok x = 5, "err = " & x
+
+Sub TestRound(val, exval, vt)
+    Call ok(Round(val) = exval, "Round(" & val & ") = " & Round(val))
+    Call ok(getVT(Round(val)) = vt, "getVT(Round(" & val & ")) = " & getVT(Round(val)))
+End Sub
 
 TestRound 3, 3, "VT_I2"
 TestRound 3.3, 3, "VT_R8"

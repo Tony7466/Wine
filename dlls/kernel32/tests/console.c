@@ -2847,7 +2847,7 @@ static void test_GetConsoleFontInfo(HANDLE std_output)
     pGetNumberOfConsoleFonts = (void *)GetProcAddress(hmod, "GetNumberOfConsoleFonts");
     if (!pGetNumberOfConsoleFonts)
     {
-        win_skip("GetNumberOfConsoleFonts is not available\n");
+        skip("GetNumberOfConsoleFonts is not available\n");
         return;
     }
 
@@ -2865,17 +2865,25 @@ static void test_GetConsoleFontInfo(HANDLE std_output)
     SetLastError(0xdeadbeef);
     ret = pGetConsoleFontInfo(NULL, FALSE, 0, cfi);
     ok(!ret, "got %d, expected zero\n", ret);
-    todo_wine ok(GetLastError() == ERROR_INVALID_HANDLE, "got %u, expected 6\n", GetLastError());
+    if (GetLastError() == LOWORD(E_NOTIMPL) /* win10 1709+ */ ||
+        broken(GetLastError() == ERROR_GEN_FAILURE) /* win10 1607 */)
+    {
+        skip("GetConsoleFontInfo is not implemented\n");
+        SetConsoleScreenBufferSize(std_output, orig_sb_size);
+        HeapFree(GetProcessHeap(), 0, cfi);
+        return;
+    }
+    ok(GetLastError() == ERROR_INVALID_HANDLE, "got %u, expected 6\n", GetLastError());
 
     SetLastError(0xdeadbeef);
     ret = pGetConsoleFontInfo(GetStdHandle(STD_INPUT_HANDLE), FALSE, 0, cfi);
     ok(!ret, "got %d, expected zero\n", ret);
-    todo_wine ok(GetLastError() == ERROR_INVALID_HANDLE, "got %u, expected 6\n", GetLastError());
+    ok(GetLastError() == ERROR_INVALID_HANDLE, "got %u, expected 6\n", GetLastError());
 
     SetLastError(0xdeadbeef);
     ret = pGetConsoleFontInfo(std_output, FALSE, 0, cfi);
     ok(!ret, "got %d, expected zero\n", ret);
-    todo_wine ok(GetLastError() == 0xdeadbeef, "got %u, expected 0xdeadbeef\n", GetLastError());
+    ok(GetLastError() == 0xdeadbeef, "got %u, expected 0xdeadbeef\n", GetLastError());
 
     GetConsoleScreenBufferInfo(std_output, &csbi);
     win_width = csbi.srWindow.Right - csbi.srWindow.Left + 1;
@@ -2887,14 +2895,11 @@ static void test_GetConsoleFontInfo(HANDLE std_output)
 
     memset(cfi, 0, memsize);
     ret = pGetConsoleFontInfo(std_output, FALSE, num_fonts, cfi);
-    todo_wine ok(ret || broken(!ret) /* win10 1809 */, "got %d, expected non-zero\n", ret);
-    if (ret)
-    {
-        todo_wine ok(cfi[index].dwFontSize.X == win_width, "got %d, expected %d\n",
-                     cfi[index].dwFontSize.X, win_width);
-        todo_wine ok(cfi[index].dwFontSize.Y == win_height, "got %d, expected %d\n",
-                     cfi[index].dwFontSize.Y, win_height);
-    }
+    ok(ret, "got %d, expected non-zero\n", ret);
+    ok(cfi[index].dwFontSize.X == win_width, "got %d, expected %d\n",
+       cfi[index].dwFontSize.X, win_width);
+    ok(cfi[index].dwFontSize.Y == win_height, "got %d, expected %d\n",
+       cfi[index].dwFontSize.Y, win_height);
 
     for (i = 0; i < num_fonts; i++)
     {
@@ -2902,35 +2907,32 @@ static void test_GetConsoleFontInfo(HANDLE std_output)
         tmp_font = GetConsoleFontSize(std_output, cfi[i].nFont);
         tmp_w = (double)orig_font.X / tmp_font.X * win_width;
         tmp_h = (double)orig_font.Y / tmp_font.Y * win_height;
-        todo_wine ok(cfi[i].dwFontSize.X == tmp_w, "got %d, expected %d\n", cfi[i].dwFontSize.X, tmp_w);
-        todo_wine ok(cfi[i].dwFontSize.Y == tmp_h, "got %d, expected %d\n", cfi[i].dwFontSize.Y, tmp_h);
+        ok(cfi[i].dwFontSize.X == tmp_w, "got %d, expected %d\n", cfi[i].dwFontSize.X, tmp_w);
+        ok(cfi[i].dwFontSize.Y == tmp_h, "got %d, expected %d\n", cfi[i].dwFontSize.Y, tmp_h);
     }
 
     SetLastError(0xdeadbeef);
     ret = pGetConsoleFontInfo(NULL, TRUE, 0, cfi);
     ok(!ret, "got %d, expected zero\n", ret);
-    todo_wine ok(GetLastError() == ERROR_INVALID_HANDLE, "got %u, expected 6\n", GetLastError());
+    ok(GetLastError() == ERROR_INVALID_HANDLE, "got %u, expected 6\n", GetLastError());
 
     SetLastError(0xdeadbeef);
     ret = pGetConsoleFontInfo(GetStdHandle(STD_INPUT_HANDLE), TRUE, 0, cfi);
     ok(!ret, "got %d, expected zero\n", ret);
-    todo_wine ok(GetLastError() == ERROR_INVALID_HANDLE, "got %u, expected 6\n", GetLastError());
+    ok(GetLastError() == ERROR_INVALID_HANDLE, "got %u, expected 6\n", GetLastError());
 
     SetLastError(0xdeadbeef);
     ret = pGetConsoleFontInfo(std_output, TRUE, 0, cfi);
     ok(!ret, "got %d, expected zero\n", ret);
-    todo_wine ok(GetLastError() == 0xdeadbeef, "got %u, expected 0xdeadbeef\n", GetLastError());
+    ok(GetLastError() == 0xdeadbeef, "got %u, expected 0xdeadbeef\n", GetLastError());
 
     memset(cfi, 0, memsize);
     ret = pGetConsoleFontInfo(std_output, TRUE, num_fonts, cfi);
-    todo_wine ok(ret || broken(!ret) /* win10 1809 */, "got %d, expected non-zero\n", ret);
-    if (ret)
-    {
-        todo_wine ok(cfi[index].dwFontSize.X == csbi.dwMaximumWindowSize.X, "got %d, expected %d\n",
-                     cfi[index].dwFontSize.X, csbi.dwMaximumWindowSize.X);
-        todo_wine ok(cfi[index].dwFontSize.Y == csbi.dwMaximumWindowSize.Y, "got %d, expected %d\n",
-                     cfi[index].dwFontSize.Y, csbi.dwMaximumWindowSize.Y);
-    }
+    ok(ret, "got %d, expected non-zero\n", ret);
+    ok(cfi[index].dwFontSize.X == csbi.dwMaximumWindowSize.X, "got %d, expected %d\n",
+       cfi[index].dwFontSize.X, csbi.dwMaximumWindowSize.X);
+    ok(cfi[index].dwFontSize.Y == csbi.dwMaximumWindowSize.Y, "got %d, expected %d\n",
+       cfi[index].dwFontSize.Y, csbi.dwMaximumWindowSize.Y);
 
     for (i = 0; i < num_fonts; i++)
     {
@@ -2938,8 +2940,8 @@ static void test_GetConsoleFontInfo(HANDLE std_output)
         tmp_font = GetConsoleFontSize(std_output, cfi[i].nFont);
         tmp_w = (double)orig_font.X / tmp_font.X * csbi.dwMaximumWindowSize.X;
         tmp_h = (double)orig_font.Y / tmp_font.Y * csbi.dwMaximumWindowSize.Y;
-        todo_wine ok(cfi[i].dwFontSize.X == tmp_w, "got %d, expected %d\n", cfi[i].dwFontSize.X, tmp_w);
-        todo_wine ok(cfi[i].dwFontSize.Y == tmp_h, "got %d, expected %d\n", cfi[i].dwFontSize.Y, tmp_h);
+        ok(cfi[i].dwFontSize.X == tmp_w, "got %d, expected %d\n", cfi[i].dwFontSize.X, tmp_w);
+        ok(cfi[i].dwFontSize.Y == tmp_h, "got %d, expected %d\n", cfi[i].dwFontSize.Y, tmp_h);
      }
 
     HeapFree(GetProcessHeap(), 0, cfi);
@@ -2965,12 +2967,18 @@ static void test_SetConsoleFont(HANDLE std_output)
     SetLastError(0xdeadbeef);
     ret = pSetConsoleFont(NULL, 0);
     ok(!ret, "got %d, expected zero\n", ret);
-    todo_wine ok(GetLastError() == ERROR_INVALID_HANDLE, "got %u, expected 6\n", GetLastError());
+    if (GetLastError() == LOWORD(E_NOTIMPL) /* win10 1709+ */ ||
+        broken(GetLastError() == ERROR_GEN_FAILURE) /* win10 1607 */)
+    {
+        skip("SetConsoleFont is not implemented\n");
+        return;
+    }
+    ok(GetLastError() == ERROR_INVALID_HANDLE, "got %u, expected 6\n", GetLastError());
 
     SetLastError(0xdeadbeef);
     ret = pSetConsoleFont(GetStdHandle(STD_INPUT_HANDLE), 0);
     ok(!ret, "got %d, expected zero\n", ret);
-    todo_wine ok(GetLastError() == ERROR_INVALID_HANDLE, "got %u, expected 6\n", GetLastError());
+    ok(GetLastError() == ERROR_INVALID_HANDLE, "got %u, expected 6\n", GetLastError());
 
     pGetNumberOfConsoleFonts = (void *)GetProcAddress(hmod, "GetNumberOfConsoleFonts");
     if (!pGetNumberOfConsoleFonts)

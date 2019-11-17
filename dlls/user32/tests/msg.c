@@ -780,7 +780,7 @@ static const struct message WmCreateInvisibleMaxPopupSeq[] = {
 static const struct message WmShowMaxPopupResizedSeq[] = {
     { HCBT_MINMAX, hook|lparam, 0, SW_MAXIMIZE },
     { WM_GETMINMAXINFO, sent },
-    { WM_WINDOWPOSCHANGING, sent|wparam, SWP_SHOWWINDOW|SWP_FRAMECHANGED },
+    { WM_WINDOWPOSCHANGING, sent|wparam, SWP_SHOWWINDOW|SWP_FRAMECHANGED, 0, SWP_STATECHANGED /* w1064v1809 */ },
     { WM_NCCALCSIZE, sent|wparam, TRUE },
     { EVENT_OBJECT_SHOW, winevent_hook|wparam|lparam, 0, 0 },
     { HCBT_ACTIVATE, hook },
@@ -812,7 +812,7 @@ static const struct message WmShowMaxPopupResizedSeq[] = {
 static const struct message WmShowMaxPopupSeq[] = {
     { HCBT_MINMAX, hook|lparam, 0, SW_MAXIMIZE },
     { WM_GETMINMAXINFO, sent },
-    { WM_WINDOWPOSCHANGING, sent|wparam, SWP_SHOWWINDOW|SWP_FRAMECHANGED },
+    { WM_WINDOWPOSCHANGING, sent|wparam, SWP_SHOWWINDOW|SWP_FRAMECHANGED, 0, SWP_STATECHANGED /* w1064v1809 */ },
     { WM_NCCALCSIZE, sent|wparam, TRUE },
     { EVENT_OBJECT_SHOW, winevent_hook|wparam|lparam, 0, 0 },
     { HCBT_ACTIVATE, hook },
@@ -836,7 +836,7 @@ static const struct message WmShowMaxPopupSeq[] = {
     { WM_ERASEBKGND, sent|optional },
     { WM_NCPAINT, sent|wparam|defwinproc|optional, 1 },
     { WM_ERASEBKGND, sent|defwinproc|optional },
-    { WM_WINDOWPOSCHANGED, sent|wparam, SWP_NOCLIENTSIZE|SWP_NOCLIENTMOVE|SWP_SHOWWINDOW|SWP_FRAMECHANGED|SWP_NOMOVE|SWP_NOSIZE },
+    { WM_WINDOWPOSCHANGED, sent|wparam, SWP_NOCLIENTSIZE|SWP_NOCLIENTMOVE|SWP_SHOWWINDOW|SWP_FRAMECHANGED|SWP_NOMOVE|SWP_NOSIZE, 0, SWP_STATECHANGED /* w1064v1809 */ },
     { EVENT_OBJECT_LOCATIONCHANGE, winevent_hook|wparam|lparam, 0, 0 },
     { WM_SIZE, sent|defwinproc|optional },
     { 0 }
@@ -962,6 +962,12 @@ static const struct message WmShowPopupExtremeLocationSeq[] = {
     { HCBT_ACTIVATE, hook },
     { WM_WINDOWPOSCHANGING, sent|optional },
     { WM_QUERYNEWPALETTE, sent|optional },
+
+    /* occasionally received on test machines */
+    { WM_NCPAINT, sent|optional },
+    { WM_ERASEBKGND, sent|optional },
+    { WM_WINDOWPOSCHANGED, sent|optional },
+
     { WM_ACTIVATEAPP, sent },
     { WM_NCACTIVATE, sent },
     { WM_ACTIVATE, sent },
@@ -2085,7 +2091,8 @@ static BOOL ignore_message( UINT message )
             message == WM_TIMECHANGE ||
             message == WM_DISPLAYCHANGE ||
             message == WM_DEVICECHANGE ||
-            message == WM_DWMNCRENDERINGCHANGED);
+            message == WM_DWMNCRENDERINGCHANGED ||
+            message == WM_WININICHANGE);
 }
 
 static unsigned hash_Ly_W(const WCHAR *str)
@@ -3476,7 +3483,7 @@ static const struct message WmMaximizeMDIchildInvisibleSeq[] = {
 static const struct message WmMaximizeMDIchildInvisibleSeq2[] = {
     { HCBT_MINMAX, hook|lparam, 0, SW_MAXIMIZE },
     { WM_GETMINMAXINFO, sent },
-    { WM_WINDOWPOSCHANGING, sent|wparam, SWP_SHOWWINDOW|SWP_FRAMECHANGED },
+    { WM_WINDOWPOSCHANGING, sent|wparam, SWP_SHOWWINDOW|SWP_FRAMECHANGED, 0, SWP_STATECHANGED /* w1064v1809 */ },
     { WM_GETMINMAXINFO, sent|defwinproc },
     { WM_NCCALCSIZE, sent|wparam, 1 },
     { EVENT_OBJECT_SHOW, winevent_hook|wparam|lparam, 0, 0 },
@@ -3495,7 +3502,7 @@ static const struct message WmMaximizeMDIchildInvisibleSeq2[] = {
     { EVENT_OBJECT_FOCUS, winevent_hook|wparam|lparam, OBJID_CLIENT, 0 },
     { WM_SETFOCUS, sent|defwinproc|optional },
     { WM_MDIACTIVATE, sent|defwinproc|optional },
-    { WM_WINDOWPOSCHANGED, sent|wparam, SWP_SHOWWINDOW|SWP_FRAMECHANGED|SWP_NOSIZE|SWP_NOMOVE|SWP_NOCLIENTSIZE|SWP_NOCLIENTMOVE },
+    { WM_WINDOWPOSCHANGED, sent|wparam, SWP_SHOWWINDOW|SWP_FRAMECHANGED|SWP_NOSIZE|SWP_NOMOVE|SWP_NOCLIENTSIZE|SWP_NOCLIENTMOVE, 0, SWP_STATECHANGED /* w1064v1809 */ },
     { EVENT_OBJECT_LOCATIONCHANGE, winevent_hook|wparam|lparam, 0, 0 }, /* MDI child */
     { WM_SIZE, sent|defwinproc|optional },
     { 0 }
@@ -7878,6 +7885,7 @@ static const struct message WmParentPaintNc[] = {
     { WM_NCPAINT, sent|beginpaint },
     { WM_GETTEXT, sent|beginpaint|defwinproc|optional },
     { WM_ERASEBKGND, sent|beginpaint|optional },
+    { WM_GETMINMAXINFO, sent|optional },
     { 0 }
 };
 
@@ -9054,11 +9062,13 @@ static const struct message WmShiftMouseButton[] = {
     { WM_MOUSEMOVE, sent|wparam|optional, 0, 0 },
     { WM_LBUTTONDOWN, wparam, MK_LBUTTON|MK_SHIFT, 0 },
     { WM_LBUTTONDOWN, sent|wparam, MK_LBUTTON|MK_SHIFT, 0 },
-    { WM_LBUTTONUP, wparam, MK_SHIFT, 0 },
-    { WM_LBUTTONUP, sent|wparam, MK_SHIFT, 0 },
+    { WM_LBUTTONUP, wparam|optional, MK_SHIFT, 0 }, /* < w1064v1809 */
+    { WM_LBUTTONUP, sent|wparam|optional, MK_SHIFT, 0 }, /* < w1064v1809 */
     { HCBT_KEYSKIPPED, hook|wparam|lparam|optional, VK_SHIFT, 0xc0000001 }, /* XP */
     { WM_KEYUP, wparam|lparam, VK_SHIFT, 0xc0000001 },
     { WM_KEYUP, sent|wparam|lparam, VK_SHIFT, 0xc0000001 },
+    { WM_LBUTTONUP, optional, 0, 0 }, /* >= w1064v1809 */
+    { WM_LBUTTONUP, sent|optional, 0, 0 }, /* >= w1064v1809 */
     { 0 }
 };
 static const struct message WmF1Seq[] = {
@@ -9179,6 +9189,7 @@ static void test_accelerators(void)
     HACCEL hAccel;
     HWND hwnd = CreateWindowExA(0, "TestWindowClass", NULL, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
                                 100, 100, 200, 200, 0, 0, 0, NULL);
+    BOOL us_kbd = (GetKeyboardLayout(0) == (HKL)(ULONG_PTR)0x04090409);
     BOOL ret;
 
     assert(hwnd != 0);
@@ -9200,6 +9211,12 @@ static void test_accelerators(void)
     flush_events();
     pump_msg_loop(hwnd, 0);
     flush_sequence();
+
+    if (!us_kbd)
+    {
+        skip("skipping ascii VK events on non-us keyboard\n");
+        goto done;
+    }
 
     trace("testing VK_N press/release\n");
     flush_sequence();
@@ -10266,8 +10283,8 @@ static void test_timers(void)
     while (GetTickCount()-start < 1001 && GetMessageA(&msg, info.hWnd, 0, 0))
         DispatchMessageA(&msg);
     ok(abs(count-TIMER_COUNT_EXPECTED) < TIMER_COUNT_TOLERANCE /* xp */
-       || broken(abs(count-64) < TIMER_COUNT_TOLERANCE) /* most common */
-       || broken(abs(count-43) < TIMER_COUNT_TOLERANCE) /* w2k3, win8 */,
+       || broken(abs(count-64) <= TIMER_COUNT_TOLERANCE) /* most common */
+       || broken(abs(count-43) <= TIMER_COUNT_TOLERANCE) /* w2k3, win8 */,
        "did not get expected count for minimum timeout (%d != ~%d).\n",
        count, TIMER_COUNT_EXPECTED);
     ok(KillTimer(info.hWnd, id), "KillTimer failed\n");
@@ -10336,7 +10353,8 @@ static void test_timers_no_wnd(void)
     while (GetTickCount()-start < 1001 && GetMessageA(&msg, NULL, 0, 0))
         DispatchMessageA(&msg);
     ok(abs(count-TIMER_COUNT_EXPECTED) < TIMER_COUNT_TOLERANCE /* xp */
-       || broken(abs(count-64) < TIMER_COUNT_TOLERANCE) /* most common */,
+       || broken(abs(count-64) <= TIMER_COUNT_TOLERANCE) /* most common */
+       || broken(abs(count-43) <= TIMER_COUNT_TOLERANCE) /* w1064v1809 */,
        "did not get expected count for minimum timeout (%d != ~%d).\n",
        count, TIMER_COUNT_EXPECTED);
     KillTimer(NULL, id);
@@ -11345,12 +11363,14 @@ struct sendmsg_info
     HWND  hwnd;
     DWORD timeout;
     DWORD ret;
+    HANDLE ready;
 };
 
 static DWORD CALLBACK send_msg_thread( LPVOID arg )
 {
     struct sendmsg_info *info = arg;
     SetLastError( 0xdeadbeef );
+    SetEvent( info->ready );
     info->ret = SendMessageTimeoutA( info->hwnd, WM_USER, 0, 0, 0, info->timeout, NULL );
     if (!info->ret) ok( GetLastError() == ERROR_TIMEOUT ||
                         broken(GetLastError() == 0),  /* win9x */
@@ -11380,6 +11400,7 @@ static void test_SendMessageTimeout(void)
     DWORD tid;
     BOOL is_win9x;
 
+    info.ready = CreateEventA( NULL, 0, 0, NULL );
     info.hwnd = CreateWindowA( "TestWindowClass", NULL, WS_OVERLAPPEDWINDOW,
                                100, 100, 200, 200, 0, 0, 0, NULL);
     flush_events();
@@ -11387,7 +11408,9 @@ static void test_SendMessageTimeout(void)
 
     info.timeout = 1000;
     info.ret = 0xdeadbeef;
+    ResetEvent( info.ready );
     thread = CreateThread( NULL, 0, send_msg_thread, &info, 0, &tid );
+    WaitForSingleObject( info.ready, INFINITE );
     wait_for_thread( thread );
     CloseHandle( thread );
     ok( info.ret == 1, "SendMessageTimeout failed\n" );
@@ -11395,7 +11418,9 @@ static void test_SendMessageTimeout(void)
 
     info.timeout = 1;
     info.ret = 0xdeadbeef;
+    ResetEvent( info.ready );
     thread = CreateThread( NULL, 0, send_msg_thread, &info, 0, &tid );
+    WaitForSingleObject( info.ready, INFINITE );
     Sleep(100);  /* SendMessageTimeout should time out here */
     wait_for_thread( thread );
     CloseHandle( thread );
@@ -11405,7 +11430,9 @@ static void test_SendMessageTimeout(void)
     /* 0 means infinite timeout (but not on win9x) */
     info.timeout = 0;
     info.ret = 0xdeadbeef;
+    ResetEvent( info.ready );
     thread = CreateThread( NULL, 0, send_msg_thread, &info, 0, &tid );
+    WaitForSingleObject( info.ready, INFINITE );
     Sleep(100);
     wait_for_thread( thread );
     CloseHandle( thread );
@@ -11416,7 +11443,9 @@ static void test_SendMessageTimeout(void)
     /* timeout is treated as signed despite the prototype (but not on win9x) */
     info.timeout = 0x7fffffff;
     info.ret = 0xdeadbeef;
+    ResetEvent( info.ready );
     thread = CreateThread( NULL, 0, send_msg_thread, &info, 0, &tid );
+    WaitForSingleObject( info.ready, INFINITE );
     Sleep(100);
     wait_for_thread( thread );
     CloseHandle( thread );
@@ -11425,7 +11454,9 @@ static void test_SendMessageTimeout(void)
 
     info.timeout = 0x80000000;
     info.ret = 0xdeadbeef;
+    ResetEvent( info.ready );
     thread = CreateThread( NULL, 0, send_msg_thread, &info, 0, &tid );
+    WaitForSingleObject( info.ready, INFINITE );
     Sleep(100);
     wait_for_thread( thread );
     CloseHandle( thread );
@@ -11444,7 +11475,9 @@ static void test_SendMessageTimeout(void)
     SetWindowLongPtrA( info.hwnd, GWLP_WNDPROC, (LONG_PTR)send_msg_delay_proc );
     info.timeout = 100;
     info.ret = 0xdeadbeef;
+    ResetEvent( info.ready );
     thread = CreateThread( NULL, 0, send_msg_thread, &info, 0, &tid );
+    WaitForSingleObject( info.ready, INFINITE );
     wait_for_thread( thread );
     CloseHandle( thread );
     /* we should time out but still get the message */
@@ -11452,6 +11485,7 @@ static void test_SendMessageTimeout(void)
     ok_sequence( WmUser, "WmUser", FALSE );
 
     DestroyWindow( info.hwnd );
+    CloseHandle( info.ready );
 }
 
 
@@ -12273,15 +12307,15 @@ done:
 static void wait_move_event(HWND hwnd, int x, int y)
 {
     MSG msg;
-    DWORD time;
+    DWORD timeout = GetTickCount() + 500, delay;
     BOOL ret;
 
-    time = GetTickCount();
-    while (GetTickCount() - time < 200) {
-	ret = PeekMessageA(&msg, hwnd, WM_MOUSEMOVE, WM_MOUSEMOVE, PM_NOREMOVE);
+    while ((delay = timeout - GetTickCount()) > 0)
+    {
+        ret = PeekMessageA(&msg, hwnd, WM_MOUSEMOVE, WM_MOUSEMOVE, PM_NOREMOVE);
         if (ret && msg.pt.x > x && msg.pt.y > y) break;
-        if (!ret) MsgWaitForMultipleObjects( 0, NULL, FALSE, GetTickCount() - time, QS_ALLINPUT );
-        else Sleep( GetTickCount() - time );
+        if (!ret) MsgWaitForMultipleObjects( 0, NULL, FALSE, delay, QS_ALLINPUT );
+        else Sleep( delay );
     }
 }
 
@@ -12393,7 +12427,7 @@ static void test_PeekMessage3(void)
     /* GetMessage() and PeekMessage(..., PM_REMOVE) should prefer messages which
      * were already seen. */
 
-    SetTimer(hwnd, 1, 0, NULL);
+    SetTimer(hwnd, 1, 100, NULL);
     while (!PeekMessageA(&msg, NULL, 0, 0, PM_NOREMOVE));
     ok(msg.message == WM_TIMER, "msg.message = %u instead of WM_TIMER\n", msg.message);
     PostMessageA(hwnd, WM_USER, 0, 0);
@@ -12409,7 +12443,7 @@ static void test_PeekMessage3(void)
     ret = PeekMessageA(&msg, NULL, 0, 0, 0);
     ok(!ret, "expected PeekMessage to return FALSE, got %u\n", ret);
 
-    SetTimer(hwnd, 1, 0, NULL);
+    SetTimer(hwnd, 1, 100, NULL);
     while (!PeekMessageA(&msg, NULL, 0, 0, PM_NOREMOVE));
     ok(msg.message == WM_TIMER, "msg.message = %u instead of WM_TIMER\n", msg.message);
     PostMessageA(hwnd, WM_USER, 0, 0);
@@ -12424,7 +12458,7 @@ static void test_PeekMessage3(void)
 
     /* It doesn't matter if a message range is specified or not. */
 
-    SetTimer(hwnd, 1, 0, NULL);
+    SetTimer(hwnd, 1, 100, NULL);
     while (!PeekMessageA(&msg, NULL, WM_TIMER, WM_TIMER, PM_NOREMOVE));
     ok(msg.message == WM_TIMER, "msg.message = %u instead of WM_TIMER\n", msg.message);
     PostMessageA(hwnd, WM_USER, 0, 0);
@@ -12440,7 +12474,7 @@ static void test_PeekMessage3(void)
     /* But not if the post messages were added before the PeekMessage() call. */
 
     PostMessageA(hwnd, WM_USER, 0, 0);
-    SetTimer(hwnd, 1, 0, NULL);
+    SetTimer(hwnd, 1, 100, NULL);
     while (!PeekMessageA(&msg, NULL, WM_TIMER, WM_TIMER, PM_NOREMOVE));
     ok(msg.message == WM_TIMER, "msg.message = %u instead of WM_TIMER\n", msg.message);
     ret = GetMessageA(&msg, NULL, 0, 0);
@@ -12453,7 +12487,7 @@ static void test_PeekMessage3(void)
     /* More complicated test with multiple messages. */
 
     PostMessageA(hwnd, WM_USER, 0, 0);
-    SetTimer(hwnd, 1, 0, NULL);
+    SetTimer(hwnd, 1, 100, NULL);
     while (!PeekMessageA(&msg, NULL, WM_TIMER, WM_TIMER, PM_NOREMOVE));
     ok(msg.message == WM_TIMER, "msg.message = %u instead of WM_TIMER\n", msg.message);
     PostMessageA(hwnd, WM_USER + 1, 0, 0);
@@ -12704,6 +12738,7 @@ static void test_notify_message(void)
 }
 
 static const struct message WmMouseHoverSeq[] = {
+    { WM_GETMINMAXINFO, sent|optional }, /* sometimes seen on w1064v1809 */
     { WM_MOUSEACTIVATE, sent|optional },  /* we can get those when moving the mouse in focus-follow-mouse mode under X11 */
     { WM_MOUSEACTIVATE, sent|optional },
     { WM_TIMER, sent|optional }, /* XP sends it */
@@ -13735,6 +13770,7 @@ static const struct message WmCreateDialogParamSeq_4[] = {
     { WM_QUERYNEWPALETTE, sent|parent|optional }, /* TODO: this message should not be sent */
     { WM_WINDOWPOSCHANGING, sent|parent|wparam|optional, SWP_NOSIZE|SWP_NOMOVE },
     { WM_WINDOWPOSCHANGING, sent|parent|wparam|optional, SWP_NOSIZE|SWP_NOMOVE },
+    { WM_WINDOWPOSCHANGED, sent|parent|wparam|optional, SWP_NOREDRAW|SWP_NOSIZE|SWP_NOMOVE|SWP_NOCLIENTSIZE|SWP_NOCLIENTMOVE },
     { WM_ACTIVATEAPP, sent|parent|wparam, 1 },
     { WM_NCACTIVATE, sent|parent },
     { WM_ACTIVATE, sent|parent|wparam, 1 },
@@ -14218,8 +14254,8 @@ static void test_SetActiveWindow(void)
 
     trace("SetActiveWindow(0)\n");
     ret = SetActiveWindow(0);
-    ok( ret == popup, "Failed to SetActiveWindow(0)\n");
-    ok_sequence(SetActiveWindowSeq0, "SetActiveWindow(0)", FALSE);
+    ok( ret == popup || broken(ret == 0) /* w1064v1809 */, "Failed to SetActiveWindow(0), ret:%p\n", ret);
+    if (ret == popup) ok_sequence(SetActiveWindowSeq0, "SetActiveWindow(0)", FALSE);
     flush_sequence();
 
     trace("SetActiveWindow(hwnd), hwnd visible\n");
@@ -14366,6 +14402,7 @@ static void test_dbcs_wm_char(void)
                            WS_OVERLAPPEDWINDOW, 100, 100, 200, 200, 0, 0, 0, NULL);
     ok (hwnd != 0, "Failed to create overlapped window\n");
     ok (hwnd2 != 0, "Failed to create overlapped window\n");
+    flush_events();
     flush_sequence();
 
     memset( wmCharSeq, 0, sizeof(wmCharSeq) );
@@ -15247,6 +15284,7 @@ static void test_menu_messages(void)
     HMENU hmenu, hmenu_popup;
     HWND hwnd;
     DWORD style;
+    BOOL us_kbd = (GetKeyboardLayout(0) == (HKL)(ULONG_PTR)0x04090409);
 
     if (!pGetMenuInfo || !pSetMenuInfo)
     {
@@ -15292,6 +15330,12 @@ static void test_menu_messages(void)
     ok(hmenu_popup != 0, "GetSubMenu returned 0 for submenu 0\n");
     style = get_menu_style(hmenu_popup);
     ok(style == 0, "expected 0, got %u\n", style);
+
+    if (!us_kbd)
+    {
+        skip("skipping ascii VK events on non-us keyboard\n");
+        goto done;
+    }
 
     /* Alt+E, Enter */
     trace("testing a popup menu command\n");
@@ -16281,6 +16325,7 @@ static void test_WaitForInputIdle( char *argv0 )
             CloseHandle( pi.hThread );
         }
     }
+    CloseHandle( end_event );
     CloseHandle( start_event );
     PostThreadMessageA( id, WM_QUIT, 0, 0 );
     WaitForSingleObject( thread, 10000 );
@@ -17430,6 +17475,7 @@ static DWORD WINAPI SendMessage_thread_1(void *param)
 
     trace("thread: call SendMessage\n");
     SendMessageA(wnd_event->hwnd, WM_USER+2, 0, 0);
+    SetEvent(wnd_event->stop_event);
 
     trace("thread: call SendMessage\n");
     SendMessageA(wnd_event->hwnd, WM_USER+3, 0, 0);
@@ -17456,6 +17502,7 @@ static DWORD WINAPI SendMessage_thread_2(void *param)
 
     trace("thread: call SendMessage\n");
     SendMessageA(wnd_event->hwnd, WM_USER+2, 0, 0);
+    SetEvent(wnd_event->stop_event);
 
     trace("thread: call SendMessage\n");
     SendMessageA(wnd_event->hwnd, WM_USER+3, 0, 0);
@@ -17472,6 +17519,7 @@ static void test_SendMessage_other_thread(int thread_n)
     MSG msg;
 
     wnd_event.start_event = CreateEventA(NULL, 0, 0, NULL);
+    wnd_event.stop_event = CreateEventA(NULL, 0, 0, NULL);
 
     wnd_event.hwnd = CreateWindowExA(0, "TestWindowClass", NULL, WS_OVERLAPPEDWINDOW,
                                      100, 100, 200, 200, 0, 0, 0, NULL);
@@ -17505,6 +17553,10 @@ static void test_SendMessage_other_thread(int thread_n)
     ok(msg.message == WM_USER, "expected WM_USER, got %04x\n", msg.message);
     DispatchMessageA(&msg);
     ok_sequence(send_message_1, "SendMessage from other thread 1", thread_n == 2);
+
+    ret = WaitForSingleObject(wnd_event.stop_event, 100);
+    todo_wine_if (thread_n == 2)
+    ok(ret == WAIT_OBJECT_0, "WaitForSingleObject failed, ret:%x\n", ret);
 
     /* intentionally yield */
     MsgWaitForMultipleObjects(0, NULL, FALSE, 100, qs_all_input);
@@ -17542,6 +17594,9 @@ todo_wine_if (thread_n == 2)
 
     flush_events();
     flush_sequence();
+
+    CloseHandle(wnd_event.start_event);
+    CloseHandle(wnd_event.stop_event);
 }
 
 static LRESULT CALLBACK insendmessage_wnd_proc( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp )
@@ -17699,6 +17754,10 @@ static const struct message WmRestoreMinimizedSeq[] =
     { WM_ACTIVATE, sent|wparam|defwinproc, 1 },
     { WM_PAINT, sent| optional },
     { WM_SETFOCUS, sent|defwinproc|optional },
+    { HCBT_KEYSKIPPED, hook|optional },
+    { WM_KEYUP, sent|optional },
+    { HCBT_KEYSKIPPED, hook|optional },
+    { WM_SYSKEYUP, sent|optional },
     { HCBT_KEYSKIPPED, hook|optional },
     { WM_KEYUP, sent|optional },
     { HCBT_KEYSKIPPED, hook|optional },

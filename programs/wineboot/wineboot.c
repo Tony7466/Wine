@@ -69,6 +69,8 @@
 #include <shobjidl.h>
 #include <shlwapi.h>
 #include <shellapi.h>
+#include <setupapi.h>
+#include <newdev.h>
 #include "resource.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(wineboot);
@@ -1121,6 +1123,57 @@ static HANDLE start_rundll32( const WCHAR *inf_path, BOOL wow64 )
     return pi.hProcess;
 }
 
+static void install_root_pnp_devices(void)
+{
+    static const struct
+    {
+        const char *name;
+        const char *hardware_id;
+        const char *infpath;
+    }
+    root_devices[] =
+    {
+        {"root\\wine\\winebus", "root\\winebus\0", "C:\\windows\\inf\\winebus.inf"},
+    };
+    SP_DEVINFO_DATA device = {sizeof(device)};
+    unsigned int i;
+    HDEVINFO set;
+
+    if ((set = SetupDiCreateDeviceInfoList( NULL, NULL )) == INVALID_HANDLE_VALUE)
+    {
+        WINE_ERR("Failed to create device info list, error %#x.\n", GetLastError());
+        return;
+    }
+
+    for (i = 0; i < ARRAY_SIZE(root_devices); ++i)
+    {
+        if (!SetupDiCreateDeviceInfoA( set, root_devices[i].name, &GUID_NULL, NULL, NULL, 0, &device))
+        {
+            if (GetLastError() != ERROR_DEVINST_ALREADY_EXISTS)
+                WINE_ERR("Failed to create device %s, error %#x.\n", debugstr_a(root_devices[i].name), GetLastError());
+            continue;
+        }
+
+        if (!SetupDiSetDeviceRegistryPropertyA(set, &device, SPDRP_HARDWAREID,
+                (const BYTE *)root_devices[i].hardware_id, (strlen(root_devices[i].hardware_id) + 2) * sizeof(WCHAR)))
+        {
+            WINE_ERR("Failed to set hardware id for %s, error %#x.\n", debugstr_a(root_devices[i].name), GetLastError());
+            continue;
+        }
+
+        if (!SetupDiCallClassInstaller(DIF_REGISTERDEVICE, set, &device))
+        {
+            WINE_ERR("Failed to register device %s, error %#x.\n", debugstr_a(root_devices[i].name), GetLastError());
+            continue;
+        }
+
+        if (!UpdateDriverForPlugAndPlayDevicesA(NULL, root_devices[i].hardware_id, root_devices[i].infpath, 0, NULL))
+            WINE_ERR("Failed to install drivers for %s, error %#x.\n", debugstr_a(root_devices[i].name), GetLastError());
+    }
+
+    SetupDiDestroyDeviceInfoList(set);
+}
+
 /* execute rundll32 on the wine.inf file if necessary */
 static void update_wineprefix( BOOL force )
 {
@@ -1164,6 +1217,8 @@ static void update_wineprefix( BOOL force )
             }
             DestroyWindow( hwnd );
         }
+        install_root_pnp_devices();
+
         WINE_MESSAGE( "wine: configuration in '%s' has been updated.\n", prettyprint_configdir() );
     }
 
@@ -1278,13 +1333,15 @@ int __cdecl main( int argc, char *argv[] )
     static const WCHAR RunOnceW[] = {'R','u','n','O','n','c','e',0};
     static const WCHAR RunServicesW[] = {'R','u','n','S','e','r','v','i','c','e','s',0};
     static const WCHAR RunServicesOnceW[] = {'R','u','n','S','e','r','v','i','c','e','s','O','n','c','e',0};
-    static const WCHAR wineboot_eventW[] = {'_','_','w','i','n','e','b','o','o','t','_','e','v','e','n','t',0};
+    static const WCHAR wineboot_eventW[] = {'\\','K','e','r','n','e','l','O','b','j','e','c','t','s',
+                                            '\\','_','_','w','i','n','e','b','o','o','t','_','e','v','e','n','t',0};
 
     /* First, set the current directory to SystemRoot */
     int i, j;
     BOOL end_session, force, init, kill, restart, shutdown, update;
     HANDLE event;
-    SECURITY_ATTRIBUTES sa;
+    OBJECT_ATTRIBUTES attr;
+    UNICODE_STRING nameW;
     BOOL is_wow64;
 
     end_session = force = init = kill = restart = shutdown = update = FALSE;
@@ -1362,10 +1419,10 @@ int __cdecl main( int argc, char *argv[] )
 
     if (shutdown) return 0;
 
-    sa.nLength = sizeof(sa);
-    sa.lpSecurityDescriptor = NULL;
-    sa.bInheritHandle = TRUE;  /* so that services.exe inherits it */
-    event = CreateEventW( &sa, TRUE, FALSE, wineboot_eventW );
+    /* create event to be inherited by services.exe */
+    InitializeObjectAttributes( &attr, &nameW, OBJ_OPENIF | OBJ_INHERIT, 0, NULL );
+    RtlInitUnicodeString( &nameW, wineboot_eventW );
+    NtCreateEvent( &event, EVENT_ALL_ACCESS, &attr, NotificationEvent, 0 );
 
     ResetEvent( event );  /* in case this is a restart */
 

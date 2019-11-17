@@ -45,7 +45,7 @@ extern HRESULT assembly_get_runtime_version(ASSEMBLY *assembly, LPSTR *version) 
 extern HRESULT assembly_get_vtable_fixups(ASSEMBLY *assembly, VTableFixup **fixups, DWORD *count) DECLSPEC_HIDDEN;
 extern HRESULT assembly_get_native_entrypoint(ASSEMBLY *assembly, NativeEntryPointFunc *func) DECLSPEC_HIDDEN;
 
-#define WINE_MONO_VERSION "4.9.3"
+#define WINE_MONO_VERSION "4.9.4"
 
 /* Mono embedding */
 typedef struct _MonoDomain MonoDomain;
@@ -177,7 +177,6 @@ extern void (CDECL *mono_runtime_quit)(void) DECLSPEC_HIDDEN;
 extern MonoString* (CDECL *mono_string_new)(MonoDomain *domain, const char *str) DECLSPEC_HIDDEN;
 extern MonoThread* (CDECL *mono_thread_attach)(MonoDomain *domain) DECLSPEC_HIDDEN;
 extern void (CDECL *mono_thread_manage)(void) DECLSPEC_HIDDEN;
-extern void (CDECL *mono_threads_enter_gc_unsafe_region)(void *stackdata) DECLSPEC_HIDDEN;
 extern void (CDECL *mono_trace_set_print_handler)(MonoPrintCallback callback) DECLSPEC_HIDDEN;
 extern void (CDECL *mono_trace_set_printerr_handler)(MonoPrintCallback callback) DECLSPEC_HIDDEN;
 
