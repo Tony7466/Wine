@@ -33,7 +33,6 @@ warnings/arm64-excess-precision.patch
 
 warnings/bison.patch
 warnings/printf-null.patch
-warnings/dword64-winmm.patch
 warnings/format-overflow.patch
 warnings/argument-promotion.patch
 warnings/discarded-qualifiers.patch
