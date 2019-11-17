@@ -1,13 +1,15 @@
-wine-development (4.20-1) UNRELEASED; urgency=medium
+wine-development (4.20-1) unstable; urgency=medium
 
   * New upstream release 4.20, released Nov 15, 2019.
     - New version of the Mono engine with an FNA update.
     - Code persistence in VBScript and JScript.
     - Vulkan spec updates.
     - Improved support for LLVM MinGW.
+    - Fix msi regression, not installing dotnet35sp1 (closes: 940192).
     - Various bug fixes.
+  * Refresh patches, several compiler warnings fixed upstream.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Sun, 17 Nov 2019 21:34:44 +0100
+ -- Jens Reyer <jre.winesim@gmail.com>  Sun, 17 Nov 2019 22:43:00 +0100
 
 wine-development (4.19-1) unstable; urgency=medium
 
