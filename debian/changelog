@@ -5,7 +5,7 @@ wine-development (4.20-1) unstable; urgency=medium
     - Code persistence in VBScript and JScript.
     - Vulkan spec updates.
     - Improved support for LLVM MinGW.
-    - Fix msi regression, not installing dotnet35sp1 (closes: 940192).
+    - Fix msi regression, not installing dotnet35sp1 (closes: #940192).
     - Various bug fixes.
   * Refresh patches, several compiler warnings fixed upstream.
 
