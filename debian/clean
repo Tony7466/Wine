@@ -38,7 +38,9 @@ dlls/usp10/indicsyllable.c
 dlls/usp10/linebreak.c
 dlls/usp10/mirror.c
 dlls/usp10/shaping.c
+dlls/kernel32/wctype.c
 dlls/kernel32/nameprep.c
+dlls/kernelbase/digitmap.c
 
 # automatically generated opengl spec files
 include/wine/wgl*
