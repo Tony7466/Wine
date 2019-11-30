@@ -1,3 +1,13 @@
+wine-development (4.21-1) UNRELEASED; urgency=medium
+
+  * New upstream release 4.21, released Nov 29, 2019.
+    - HTTP proxy configuration through DHCP.
+    - Parameter block support in D3DX9.
+    - A few more dlls converted to PE.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 30 Nov 2019 00:17:37 +0000
+
 wine-development (4.20-1) unstable; urgency=medium
 
   * New upstream release 4.20, released Nov 15, 2019.
