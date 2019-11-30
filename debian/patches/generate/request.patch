@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/make_requests
 +++ b/tools/make_requests
-@@ -266,16 +266,11 @@ sub PARSE_REQUESTS()
+@@ -272,16 +272,11 @@ sub PARSE_REQUESTS()
  }
  
  ### Retrieve the server protocol version from the existing server_protocol.h file
@@ -22,7 +22,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      return $protocol;
  }
  
-@@ -440,7 +435,7 @@ foreach my $err (sort keys %errors)
+@@ -446,7 +441,7 @@ foreach my $err (sort keys %errors)
  push @trace_lines, "    { NULL, 0 }\n";
  push @trace_lines, "};\n";
  
@@ -31,7 +31,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                   "### make_requests begin ###",
                   "### make_requests end ###",
                   @trace_lines );
-@@ -467,7 +462,7 @@ foreach my $type (sort keys %formats)
+@@ -473,7 +468,7 @@ foreach my $type (sort keys %formats)
  push @request_lines, @asserts;
  push @request_lines, "\n#endif  /* WANT_REQUEST_HANDLERS */\n";
  
@@ -54,7 +54,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  DECL_HANDLER(new_process);
  DECL_HANDLER(exec_process);
-@@ -2437,9 +2437,8 @@ C_ASSERT( sizeof(struct suspend_process_
+@@ -2442,9 +2442,8 @@ C_ASSERT( sizeof(struct suspend_process_
  C_ASSERT( FIELD_OFFSET(struct resume_process_request, handle) == 12 );
  C_ASSERT( sizeof(struct resume_process_request) == 16 );
  
@@ -80,7 +80,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  static void dump_new_process_request( const struct new_process_request *req )
  {
-@@ -5668,8 +5669,7 @@ static const struct
+@@ -5677,8 +5678,7 @@ static const struct
      { NULL, 0 }
  };
  
