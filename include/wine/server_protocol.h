@@ -1006,7 +1006,8 @@ struct get_thread_info_reply
     int          exit_code;
     int          priority;
     int          last;
-    char __pad_52[4];
+    data_size_t  desc_len;
+    /* VARARG(desc,unicode_str); */
 };
 
 
@@ -1034,16 +1035,18 @@ struct set_thread_info_request
     affinity_t   affinity;
     client_ptr_t entry_point;
     obj_handle_t token;
+    /* VARARG(desc,unicode_str); */
     char __pad_44[4];
 };
 struct set_thread_info_reply
 {
     struct reply_header __header;
 };
-#define SET_THREAD_INFO_PRIORITY   0x01
-#define SET_THREAD_INFO_AFFINITY   0x02
-#define SET_THREAD_INFO_TOKEN      0x04
-#define SET_THREAD_INFO_ENTRYPOINT 0x08
+#define SET_THREAD_INFO_PRIORITY    0x01
+#define SET_THREAD_INFO_AFFINITY    0x02
+#define SET_THREAD_INFO_TOKEN       0x04
+#define SET_THREAD_INFO_ENTRYPOINT  0x08
+#define SET_THREAD_INFO_DESCRIPTION 0x10
 
 
 
@@ -2074,8 +2077,10 @@ struct set_console_output_info_request
     short int    max_height;
     short int    font_width;
     short int    font_height;
-    /* VARARG(colors,uints); */
-    char __pad_52[4];
+    short int    font_weight;
+    short int    font_pitch_family;
+    /* VARARG(colors,uints,64); */
+    /* VARARG(face_name,unicode_str); */
 };
 struct set_console_output_info_reply
 {
@@ -2117,7 +2122,11 @@ struct get_console_output_info_reply
     short int    max_height;
     short int    font_width;
     short int    font_height;
-    /* VARARG(colors,uints); */
+    short int    font_weight;
+    short int    font_pitch_family;
+    /* VARARG(colors,uints,64); */
+    /* VARARG(face_name,unicode_str); */
+    char __pad_44[4];
 };
 
 
@@ -6691,6 +6700,6 @@ union generic_reply
     struct resume_process_reply resume_process_reply;
 };
 
-#define SERVER_PROTOCOL_VERSION 589
+#define SERVER_PROTOCOL_VERSION 592
 
 #endif /* __WINE_WINE_SERVER_PROTOCOL_H */

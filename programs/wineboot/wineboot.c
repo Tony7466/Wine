@@ -61,6 +61,7 @@
 #include <unistd.h>
 #include <windows.h>
 #include <winternl.h>
+#include <sddl.h>
 #include <wine/svcctl.h>
 #include <wine/asm.h>
 #include <wine/debug.h>
@@ -159,21 +160,21 @@ done:
 }
 
 /* print the config directory in a more Unix-ish way */
-static const char *prettyprint_configdir(void)
+static const WCHAR *prettyprint_configdir(void)
 {
-    static char buffer[MAX_PATH];
-    WCHAR *path = _wgetenv( wineconfigdirW );
-    char *p;
+    static WCHAR buffer[MAX_PATH];
+    WCHAR *p, *path = _wgetenv( wineconfigdirW );
 
-    if (!WideCharToMultiByte( CP_UNIXCP, 0, path, -1, buffer, ARRAY_SIZE(buffer), NULL, NULL ))
-        strcpy( buffer + ARRAY_SIZE(buffer) - 4, "..." );
+    lstrcpynW( buffer, path, ARRAY_SIZE(buffer) );
+    if (lstrlenW( wineconfigdirW ) >= ARRAY_SIZE(buffer) )
+        lstrcpyW( buffer + ARRAY_SIZE(buffer) - 4, L"..." );
 
-    if (!strncmp( buffer, "\\??\\unix\\", 9 ))
+    if (!wcsncmp( buffer, L"\\??\\unix\\", 9 ))
     {
         for (p = buffer + 9; *p; p++) if (*p == '\\') *p = '/';
         return buffer + 9;
     }
-    else if (!strncmp( buffer, "\\??\\Z:\\", 7 ))
+    else if (!wcsncmp( buffer, L"\\??\\Z:\\", 7 ))
     {
         for (p = buffer + 6; *p; p++) if (*p == '\\') *p = '/';
         return buffer + 6;
@@ -1063,18 +1064,9 @@ static INT_PTR CALLBACK wait_dlgproc( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp 
 
 static HWND show_wait_window(void)
 {
-    const char *config_dir = prettyprint_configdir();
-    WCHAR *name;
-    HWND hwnd;
-    DWORD len;
-
-    len = MultiByteToWideChar( CP_UNIXCP, 0, config_dir, -1, NULL, 0 );
-    name = HeapAlloc( GetProcessHeap(), 0, len * sizeof(WCHAR) );
-    MultiByteToWideChar( CP_UNIXCP, 0, config_dir, -1, name, len );
-    hwnd = CreateDialogParamW( GetModuleHandleW(0), MAKEINTRESOURCEW(IDD_WAITDLG), 0,
-                               wait_dlgproc, (LPARAM)name );
+    HWND hwnd = CreateDialogParamW( GetModuleHandleW(0), MAKEINTRESOURCEW(IDD_WAITDLG), 0,
+                                    wait_dlgproc, (LPARAM)prettyprint_configdir() );
     ShowWindow( hwnd, SW_SHOWNORMAL );
-    HeapFree( GetProcessHeap(), 0, name );
     return hwnd;
 }
 
@@ -1174,6 +1166,48 @@ static void install_root_pnp_devices(void)
     SetupDiDestroyDeviceInfoList(set);
 }
 
+static void update_user_profile(void)
+{
+    static const WCHAR profile_list[] = {'S','o','f','t','w','a','r','e','\\',
+                                         'M','i','c','r','o','s','o','f','t','\\',
+                                         'W','i','n','d','o','w','s',' ','N','T','\\',
+                                         'C','u','r','r','e','n','t','V','e','r','s','i','o','n','\\',
+                                         'P','r','o','f','i','l','e','L','i','s','t',0};
+    static const WCHAR profile_image_path[] = {'P','r','o','f','i','l','e','I','m','a','g','e','P','a','t','h',0};
+    char token_buf[sizeof(TOKEN_USER) + sizeof(SID) + sizeof(DWORD) * SID_MAX_SUB_AUTHORITIES];
+    HANDLE token;
+    WCHAR profile[MAX_PATH], *sid;
+    DWORD size;
+    HKEY hkey, profile_hkey;
+
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_READ, &token))
+        return;
+
+    size = sizeof(token_buf);
+    GetTokenInformation(token, TokenUser, token_buf, size, &size);
+    CloseHandle(token);
+
+    ConvertSidToStringSidW(((TOKEN_USER *)token_buf)->User.Sid, &sid);
+
+    if (!RegCreateKeyExW(HKEY_LOCAL_MACHINE, profile_list, 0, NULL, 0,
+                         KEY_ALL_ACCESS, NULL, &hkey, NULL))
+    {
+        if (!RegCreateKeyExW(hkey, sid, 0, NULL, 0,
+                             KEY_ALL_ACCESS, NULL, &profile_hkey, NULL))
+        {
+            DWORD flags = 0;
+            if (SHGetSpecialFolderPathW(NULL, profile, CSIDL_PROFILE, TRUE))
+                set_reg_value(profile_hkey, profile_image_path, profile);
+            RegSetValueExW( profile_hkey, L"Flags", 0, REG_DWORD, (const BYTE *)&flags, sizeof(flags) );
+            RegCloseKey(profile_hkey);
+        }
+
+        RegCloseKey(hkey);
+    }
+
+    LocalFree(sid);
+}
+
 /* execute rundll32 on the wine.inf file if necessary */
 static void update_wineprefix( BOOL force )
 {
@@ -1184,13 +1218,13 @@ static void update_wineprefix( BOOL force )
 
     if (!inf_path)
     {
-        WINE_MESSAGE( "wine: failed to update %s, wine.inf not found\n", prettyprint_configdir() );
+        WINE_MESSAGE( "wine: failed to update %s, wine.inf not found\n", debugstr_w( config_dir ));
         return;
     }
     if ((fd = _wopen( inf_path, O_RDONLY )) == -1)
     {
         WINE_MESSAGE( "wine: failed to update %s with %s: %s\n",
-                      prettyprint_configdir(), debugstr_w(inf_path), strerror(errno) );
+                      debugstr_w(config_dir), debugstr_w(inf_path), strerror(errno) );
         goto done;
     }
     fstat( fd, &st );
@@ -1218,8 +1252,9 @@ static void update_wineprefix( BOOL force )
             DestroyWindow( hwnd );
         }
         install_root_pnp_devices();
+        update_user_profile();
 
-        WINE_MESSAGE( "wine: configuration in '%s' has been updated.\n", prettyprint_configdir() );
+        WINE_MESSAGE( "wine: configuration in %s has been updated.\n", debugstr_w(prettyprint_configdir()) );
     }
 
 done:

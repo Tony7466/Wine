@@ -4251,6 +4251,7 @@ void __wine_process_init(void)
     peb->ProcessHeap = RtlCreateHeap( HEAP_GROWABLE, NULL, 0, 0, NULL, NULL );
     peb->LoaderLock = &loader_section;
 
+    init_unix_codepage();
     init_directories();
     init_user_process_params( info_size );
 
@@ -4279,6 +4280,8 @@ void __wine_process_init(void)
         MESSAGE( "wine: could not find __wine_kernel_init in kernel32.dll, status %x\n", status );
         exit(1);
     }
+
+    init_locale( wm->ldr.BaseAddress );
 
     params = peb->ProcessParameters;
     if (!(status = load_dll( params->DllPath.Buffer, params->ImagePathName.Buffer, NULL,

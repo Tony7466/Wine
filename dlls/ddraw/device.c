@@ -3555,6 +3555,7 @@ static void setup_lighting(const struct d3d_device *device, DWORD fvf, DWORD fla
     if (!device->material || !(fvf & D3DFVF_NORMAL) || (flags & D3DDP_DONOTLIGHT))
         enable = FALSE;
 
+    wined3d_stateblock_set_render_state(device->state, WINED3D_RS_LIGHTING, enable);
     wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_LIGHTING, enable);
 }
 
@@ -5642,7 +5643,7 @@ static HRESULT d3d_device7_BeginStateBlock(IDirect3DDevice7 *iface)
         WARN("Trying to begin a stateblock while recording, returning D3DERR_INBEGINSTATEBLOCK.\n");
         return D3DERR_INBEGINSTATEBLOCK;
     }
-    if (SUCCEEDED(hr = wined3d_device_begin_stateblock(device->wined3d_device, &stateblock)))
+    if (SUCCEEDED(hr = wined3d_stateblock_create(device->wined3d_device, NULL, WINED3D_SBT_RECORDED, &stateblock)))
         device->update_state = device->recording = stateblock;
     wined3d_mutex_unlock();
 
@@ -5686,7 +5687,6 @@ static HRESULT d3d_device7_EndStateBlock(IDirect3DDevice7 *iface, DWORD *statebl
 {
     struct d3d_device *device = impl_from_IDirect3DDevice7(iface);
     struct wined3d_stateblock *wined3d_sb;
-    HRESULT hr;
     DWORD h;
 
     TRACE("iface %p, stateblock %p.\n", iface, stateblock);
@@ -5701,15 +5701,8 @@ static HRESULT d3d_device7_EndStateBlock(IDirect3DDevice7 *iface, DWORD *statebl
         WARN("Trying to end a stateblock, but no stateblock is being recorded.\n");
         return D3DERR_NOTINBEGINSTATEBLOCK;
     }
-    hr = wined3d_device_end_stateblock(device->wined3d_device);
-    if (FAILED(hr))
-    {
-        WARN("Failed to end stateblock, hr %#x.\n", hr);
-        wined3d_mutex_unlock();
-        *stateblock = 0;
-        return hr_ddraw_from_wined3d(hr);
-    }
     wined3d_sb = device->recording;
+    wined3d_stateblock_init_contained_states(wined3d_sb);
     device->recording = NULL;
     device->update_state = device->state;
 
@@ -5726,7 +5719,7 @@ static HRESULT d3d_device7_EndStateBlock(IDirect3DDevice7 *iface, DWORD *statebl
     wined3d_mutex_unlock();
     *stateblock = h + 1;
 
-    return hr_ddraw_from_wined3d(hr);
+    return D3D_OK;
 }
 
 static HRESULT WINAPI d3d_device7_EndStateBlock_FPUSetup(IDirect3DDevice7 *iface, DWORD *stateblock)
@@ -5830,7 +5823,7 @@ static HRESULT d3d_device7_ApplyStateBlock(IDirect3DDevice7 *iface, DWORD stateb
         return D3DERR_INVALIDSTATEBLOCK;
     }
 
-    wined3d_stateblock_apply(wined3d_sb);
+    wined3d_stateblock_apply(wined3d_sb, device->state);
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -5890,7 +5883,7 @@ static HRESULT d3d_device7_CaptureStateBlock(IDirect3DDevice7 *iface, DWORD stat
         return D3DERR_INVALIDSTATEBLOCK;
     }
 
-    wined3d_stateblock_capture(wined3d_sb);
+    wined3d_stateblock_capture(wined3d_sb, device->state);
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -6020,7 +6013,7 @@ static HRESULT d3d_device7_CreateStateBlock(IDirect3DDevice7 *iface,
     }
 
     /* The D3DSTATEBLOCKTYPE enum is fine here. */
-    hr = wined3d_stateblock_create(device->wined3d_device, type, &wined3d_sb);
+    hr = wined3d_stateblock_create(device->wined3d_device, device->state, type, &wined3d_sb);
     if (FAILED(hr))
     {
         WARN("Failed to create stateblock, hr %#x.\n", hr);
@@ -6961,6 +6954,17 @@ enum wined3d_depth_buffer_type d3d_device_update_depth_stencil(struct d3d_device
     return WINED3D_ZB_TRUE;
 }
 
+static void ddraw_reset_viewport_state(struct ddraw *ddraw)
+{
+    struct wined3d_viewport vp;
+    RECT rect;
+
+    wined3d_device_get_viewports(ddraw->wined3d_device, NULL, &vp);
+    wined3d_stateblock_set_viewport(ddraw->state, &vp);
+    wined3d_device_get_scissor_rects(ddraw->wined3d_device, NULL, &rect);
+    wined3d_stateblock_set_scissor_rect(ddraw->state, &rect);
+}
+
 static HRESULT d3d_device_init(struct d3d_device *device, struct ddraw *ddraw,
         struct ddraw_surface *target, IUnknown *rt_iface, UINT version, IUnknown *outer_unknown)
 {
@@ -7025,18 +7029,28 @@ static HRESULT d3d_device_init(struct d3d_device *device, struct ddraw *ddraw,
 
     ddraw->d3ddevice = device;
 
+    wined3d_stateblock_set_render_state(ddraw->state, WINED3D_RS_ZENABLE,
+            d3d_device_update_depth_stencil(device));
     wined3d_device_set_render_state(ddraw->wined3d_device, WINED3D_RS_ZENABLE,
             d3d_device_update_depth_stencil(device));
     if (version == 1) /* Color keying is initially enabled for version 1 devices. */
+    {
+        wined3d_stateblock_set_render_state(ddraw->state, WINED3D_RS_COLORKEYENABLE, TRUE);
         wined3d_device_set_render_state(ddraw->wined3d_device, WINED3D_RS_COLORKEYENABLE, TRUE);
+    }
     else if (version == 2)
+    {
+        wined3d_stateblock_set_render_state(ddraw->state, WINED3D_RS_SPECULARENABLE, TRUE);
         wined3d_device_set_render_state(ddraw->wined3d_device, WINED3D_RS_SPECULARENABLE, TRUE);
+    }
     if (version < 7)
     {
+        wined3d_stateblock_set_render_state(ddraw->state, WINED3D_RS_NORMALIZENORMALS, TRUE);
         wined3d_device_set_render_state(ddraw->wined3d_device, WINED3D_RS_NORMALIZENORMALS, TRUE);
         IDirect3DDevice3_SetRenderState(&device->IDirect3DDevice3_iface,
                 D3DRENDERSTATE_TEXTUREMAPBLEND, D3DTBLEND_MODULATE);
     }
+    ddraw_reset_viewport_state(ddraw);
     return D3D_OK;
 }
 
