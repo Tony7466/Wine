@@ -5,6 +5,7 @@ wine (4.0.3-1) UNRELEASED; urgency=medium
     - Updates to the National Language Support files
   * Drop no longer supported add-log-mailing-address setting from
     debian/changelog.
+  * Add missing colon in closes line.
 
  -- Jens Reyer <jre.winesim@gmail.com>  Sun, 01 Dec 2019 20:03:46 +0100
 
@@ -5894,7 +5895,7 @@ wine (0.0.20031212-1) unstable; urgency=low
     - Lots of bug fixes.
   * It seems regapi is no more, have to remove it from the
     packages. (A man page for it is not needed anymore then,
-    which closes #83261)
+    which closes: #83261)
   * The tool regedit supersedes it, so I'm using that now to
     build the skeleton configuration in /usr/share/wine. I
     patched regedit to accept input from stdin if a filename
@@ -6809,7 +6810,7 @@ wine (0.0.20000109-2) frozen; urgency=low
 wine (0.0.20000109-1) unstable; urgency=low
 
   * Assorted upstream Bug fixs as always :).
-  * Compiled with Xpm again.  Closes #54910
+  * Compiled with Xpm again.  Closes: #54910
 
  -- Andrew D. Lenharth <andrewl@debian.org>  Wed, 14 Dec 1999 18:01:17 -0800
 
