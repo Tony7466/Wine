@@ -8,6 +8,7 @@ wine (4.0.3-1) UNRELEASED; urgency=medium
   * Add missing colon in closes line.
   * Set debhelper compatibility level to 12.
     Drop now unnecessary dh arguments "--parallel --with autoreconf".
+  * Recommend or suggest gstreamer plugins (LP: #1817244).
 
  -- Jens Reyer <jre.winesim@gmail.com>  Sun, 01 Dec 2019 20:03:46 +0100
 

@@ -242,8 +242,12 @@ Recommends:
  libasound2-plugins,
  fonts-liberation,
  fonts-wine (>= 1.8.2-1~),
+ gstreamer1.0-plugins-good,
 Suggests:
  cups-bsd,
+ gstreamer1.0-libav,
+ gstreamer1.0-plugins-bad,
+ gstreamer1.0-plugins-ugly,
  ttf-mscorefonts-installer,
 Pre-Depends:
  ${misc:Pre-Depends},
