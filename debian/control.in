@@ -12,7 +12,7 @@ Vcs-Browser: https://salsa.debian.org/wine-team/wine/tree/bullseye
 Standards-Version: 4.4.0
 Rules-Requires-Root: no
 Build-Depends:
- debhelper (>= 11~),
+ debhelper-compat (= 12),
  clang [arm64],
  oss4-dev [kfreebsd-any],
  freebsd-glue [kfreebsd-any],
