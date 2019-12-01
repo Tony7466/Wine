@@ -3,6 +3,8 @@ wine (4.0.3-1) UNRELEASED; urgency=medium
   * New upstream release 4.0.3, released Nov 25, 2019.
     - Various bug fixes
     - Updates to the National Language Support files
+  * Drop no longer supported add-log-mailing-address setting from
+    debian/changelog.
 
  -- Jens Reyer <jre.winesim@gmail.com>  Sun, 01 Dec 2019 20:03:46 +0100
 
@@ -7415,8 +7417,3 @@ wine (951124-1) experimental; urgency=LOW
   * first Debianized packages
 
  -- Brian White <bcwhite@verisim.com>  Sun, 26 Nov 1996 23:02:47 -0400
-
-
-Local variables:
-mode: debian-changelog
-End:
