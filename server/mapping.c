@@ -401,7 +401,7 @@ static void add_committed_range( struct memory_view *view, file_pos_t start, fil
         struct range *new_ptr = realloc( committed->ranges, new_size * sizeof(*new_ptr) );
         if (!new_ptr) return;
         committed->max = new_size;
-        committed->ranges = new_ptr;
+        ranges = committed->ranges = new_ptr;
     }
     memmove( &ranges[i + 1], &ranges[i], (committed->count - i) * sizeof(*ranges) );
     ranges[i].start = start;
@@ -581,7 +581,7 @@ static unsigned int get_image_params( struct mapping *mapping, file_pos_t file_s
     pos = dos.e_lfanew;
 
     size = pread( unix_fd, &nt, sizeof(nt), pos );
-    if (size < sizeof(nt.Signature) + sizeof(nt.FileHeader)) return STATUS_INVALID_IMAGE_FORMAT;
+    if (size < sizeof(nt.Signature) + sizeof(nt.FileHeader)) return STATUS_INVALID_IMAGE_PROTECT;
     /* zero out Optional header in the case it's not present or partial */
     size = min( size, sizeof(nt.Signature) + sizeof(nt.FileHeader) + nt.FileHeader.SizeOfOptionalHeader );
     if (size < sizeof(nt)) memset( (char *)&nt + size, 0, sizeof(nt) - size );
