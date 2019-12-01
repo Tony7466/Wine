@@ -1059,9 +1059,17 @@ static unsigned char get_parameter_fc( const var_t *var, int is_return, unsigned
             case TGT_UNION:
             case TGT_USER_TYPE:
             case TGT_RANGE:
-            case TGT_ARRAY:
-                *flags |= IsSimpleRef | MustFree;
+                *flags |= MustFree | IsSimpleRef;
                 *typestring_offset = ref->typestring_offset;
+                if (!is_in && is_out) server_size = type_memsize( ref );
+                break;
+            case TGT_ARRAY:
+                *flags |= MustFree;
+                if (!type_array_is_decl_as_ptr(ref))
+                {
+                    *flags |= IsSimpleRef;
+                    *typestring_offset = ref->typestring_offset;
+                }
                 if (!is_in && is_out) server_size = type_memsize( ref );
                 break;
             case TGT_STRING:
@@ -2120,6 +2128,7 @@ static unsigned int write_nonsimple_pointer(FILE *file, const attr_list_t *attrs
             case TGT_POINTER:
             case TGT_CTXT_HANDLE:
             case TGT_CTXT_HANDLE_POINTER:
+            case TGT_ARRAY:
                 flags |= FC_ALLOCED_ON_STACK;
                 break;
             case TGT_IFACE_POINTER:

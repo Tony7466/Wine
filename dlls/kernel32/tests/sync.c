@@ -2636,6 +2636,38 @@ static void test_apc_deadlock(void)
     CloseHandle(pi.hProcess);
 }
 
+static void test_crit_section(void)
+{
+    CRITICAL_SECTION cs;
+    BOOL ret;
+
+    /* Win8+ does not initialize debug info, one has to use RTL_CRITICAL_SECTION_FLAG_FORCE_DEBUG_INFO
+       to override that. */
+    memset(&cs, 0, sizeof(cs));
+    InitializeCriticalSection(&cs);
+    ok(cs.DebugInfo != NULL, "Unexpected debug info pointer %p.\n", cs.DebugInfo);
+    DeleteCriticalSection(&cs);
+    ok(cs.DebugInfo == NULL, "Unexpected debug info pointer %p.\n", cs.DebugInfo);
+
+    memset(&cs, 0, sizeof(cs));
+    ret = InitializeCriticalSectionEx(&cs, 0, CRITICAL_SECTION_NO_DEBUG_INFO);
+    ok(ret, "Failed to initialize critical section.\n");
+    ok(cs.DebugInfo == (void *)(ULONG_PTR)-1, "Unexpected debug info pointer %p.\n", cs.DebugInfo);
+
+    ret = TryEnterCriticalSection(&cs);
+    ok(ret, "Failed to enter critical section.\n");
+    LeaveCriticalSection(&cs);
+
+    cs.DebugInfo = NULL;
+
+    ret = TryEnterCriticalSection(&cs);
+    ok(ret, "Failed to enter critical section.\n");
+    LeaveCriticalSection(&cs);
+
+    DeleteCriticalSection(&cs);
+    ok(cs.DebugInfo == NULL, "Unexpected debug info pointer %p.\n", cs.DebugInfo);
+}
+
 START_TEST(sync)
 {
     char **argv;
@@ -2694,4 +2726,5 @@ START_TEST(sync)
     test_srwlock_example();
     test_alertable_wait();
     test_apc_deadlock();
+    test_crit_section();
 }
