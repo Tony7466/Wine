@@ -1,4 +1,4 @@
-wine (4.0.3-1) UNRELEASED; urgency=medium
+wine (4.0.3-1) unstable; urgency=medium
 
   * New upstream release 4.0.3, released Nov 25, 2019.
     - Various bug fixes
@@ -9,8 +9,9 @@ wine (4.0.3-1) UNRELEASED; urgency=medium
   * Set debhelper compatibility level to 12.
     Drop now unnecessary dh arguments "--parallel --with autoreconf".
   * Recommend or suggest gstreamer plugins (LP: #1817244).
+  * Update standards version to 4.4.1.
 
- -- Jens Reyer <jre.winesim@gmail.com>  Sun, 01 Dec 2019 20:03:46 +0100
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 02 Dec 2019 01:28:55 +0100
 
 wine (4.0.2-1) unstable; urgency=medium
 
