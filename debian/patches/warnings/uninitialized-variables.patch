@@ -148,3 +148,25 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          if (!pvParam) return FALSE;
  
+--- a/dlls/mf/session.c
++++ b/dlls/mf/session.c
+@@ -425,7 +425,7 @@ static void session_clear_topologies(str
+ static void session_set_topo_status(struct media_session *session, struct queued_topology *topology, HRESULT status,
+         MF_TOPOSTATUS topo_status)
+ {
+-    IMFMediaEvent *event;
++    IMFMediaEvent *event = NULL;
+     PROPVARIANT param;
+ 
+     if (topo_status == MF_TOPOSTATUS_INVALID)
+@@ -2012,7 +2012,9 @@ static HRESULT clock_change_state(struct
+             notification = CLOCK_NOTIFY_SET_RATE;
+             break;
+         default:
+-            ;
++            notification = CLOCK_NOTIFY_START;
++            ERR("Unhandled clock_command enum %d\n", (int)command);
++            break;
+     }
+ 
+     if (FAILED(hr = clock_call_state_change(system_time, param, notification, clock->time_source_sink)))

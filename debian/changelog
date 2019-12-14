@@ -1,3 +1,9 @@
+wine-development (4.21-2) unstable; urgency=medium
+
+  * Fix compiler warnings on arm64.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 14 Dec 2019 18:58:33 +0000
+
 wine-development (4.21-1) unstable; urgency=medium
 
   * New upstream release 4.21, released Nov 29, 2019.
