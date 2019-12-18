@@ -1745,14 +1745,16 @@ static unsigned int get_thread_fpu_cw( unsigned long *fpu_cw )
 
 static void test_thread_fpu_cw(void)
 {
-    static const struct { unsigned int cw; unsigned long fpu_cw; } expected_cw[6] =
+    static const struct {
+        unsigned int cw; unsigned long fpu_cw; unsigned long fpu_cw_broken;
+    } expected_cw[6] =
     {
 #ifdef __i386__
         { _MCW_EM | _PC_53, MAKELONG( 0x27f, 0x1f80 ) },
         { _MCW_EM | _PC_53, MAKELONG( 0x27f, 0x1f80 ) },
-        { _EM_INEXACT | _RC_CHOP | _PC_24, MAKELONG( 0xc60, 0x7000 ) },
+        { _EM_INEXACT | _RC_CHOP | _PC_24, MAKELONG( 0xc60, 0x7000 ), MAKELONG( 0xc60, 0x1f80 ) },
         { _MCW_EM | _PC_53, MAKELONG( 0x27f, 0x1f80 ) },
-        { _EM_INEXACT | _RC_CHOP | _PC_24, MAKELONG( 0xc60, 0x7000 ) },
+        { _EM_INEXACT | _RC_CHOP | _PC_24, MAKELONG( 0xc60, 0x7000 ), MAKELONG( 0xc60, 0x1f80 ) },
         { _MCW_EM | _PC_53, MAKELONG( 0x27f, 0x1f80 ) }
 #elif defined(__x86_64__)
         { _MCW_EM | _PC_64, MAKELONG( 0x27f, 0x1f80 ) },
@@ -1788,7 +1790,9 @@ static void test_thread_fpu_cw(void)
     cw = _control87( 0, 0 );
     fpu_cw = get_fpu_cw();
     ok(cw == expected_cw[2].cw, "expected %#x got %#x\n", expected_cw[2].cw, cw);
-    ok(fpu_cw == expected_cw[2].fpu_cw, "expected %#lx got %#lx\n", expected_cw[2].fpu_cw, fpu_cw);
+    ok(fpu_cw == expected_cw[2].fpu_cw ||
+            broken(expected_cw[2].fpu_cw_broken && fpu_cw == expected_cw[2].fpu_cw_broken),
+        "expected %#lx got %#lx\n", expected_cw[2].fpu_cw, fpu_cw);
 
     cw = get_thread_fpu_cw( &fpu_cw );
     ok(cw == expected_cw[3].cw, "expected %#x got %#x\n", expected_cw[3].cw, cw);
@@ -1797,7 +1801,9 @@ static void test_thread_fpu_cw(void)
     cw = _control87( 0, 0 );
     fpu_cw = get_fpu_cw();
     ok(cw == expected_cw[4].cw, "expected %#x got %#x\n", expected_cw[4].cw, cw);
-    ok(fpu_cw == expected_cw[4].fpu_cw, "expected %#lx got %#lx\n", expected_cw[4].fpu_cw, fpu_cw);
+    ok(fpu_cw == expected_cw[4].fpu_cw ||
+            broken(expected_cw[4].fpu_cw_broken && fpu_cw == expected_cw[4].fpu_cw_broken),
+        "expected %#lx got %#lx\n", expected_cw[4].fpu_cw, fpu_cw);
 
     _control87( initial_cw, _MCW_EM | _MCW_RC | _MCW_PC );
     cw = _control87( 0, 0 );
@@ -2145,14 +2151,15 @@ static void test_thread_description(void)
     ok(len == sizeof(*thread_desc), "Unexpected structure length %u.\n", len);
 
     len2 = 0;
-    thread_desc->Length = 1;
-    thread_desc->Description = (WCHAR *)thread_desc;
+    thread_desc->Description.Length = 1;
+    thread_desc->Description.MaximumLength = 0;
+    thread_desc->Description.Buffer = (WCHAR *)thread_desc;
     status = pNtQueryInformationThread(GetCurrentThread(), ThreadDescription, thread_desc, len, &len2);
     ok(!status, "Failed to get thread info, status %#x.\n", status);
     ok(len2 == sizeof(*thread_desc), "Unexpected structure length %u.\n", len);
-    ok(!thread_desc->Length, "Unexpected description length %#x.\n", thread_desc->Length);
-    ok(thread_desc->Description == (WCHAR *)(thread_desc + 1), "Unexpected description string pointer %p, %p.\n",
-            thread_desc->Description, thread_desc);
+    ok(!thread_desc->Description.Length, "Unexpected description length %#x.\n", thread_desc->Description.Length);
+    ok(thread_desc->Description.Buffer == (WCHAR *)(thread_desc + 1),
+            "Unexpected description string pointer %p, %p.\n", thread_desc->Description.Buffer, thread_desc);
 
     hr = pSetThreadDescription(GetCurrentThread(), NULL);
     ok(hr == HRESULT_FROM_NT(STATUS_SUCCESS), "Failed to set thread description, hr %#x.\n", hr);
@@ -2176,11 +2183,11 @@ static void test_thread_description(void)
     ok(!status, "Failed to get thread info.\n");
     ok(len == sizeof(*thread_desc) + desc_len, "Unexpected structure length %u.\n", len);
 
-    ok(thread_desc->Length == (desc_len << 16 | desc_len), "Unexpected description length %#x.\n",
-            thread_desc->Length);
-    ok(thread_desc->Description == (WCHAR *)(thread_desc + 1), "Unexpected description string pointer %p, %p.\n",
-            thread_desc->Description, thread_desc);
-    ok(!memcmp(thread_desc->Description, desc, desc_len), "Unexpected description string.\n");
+    ok(thread_desc->Description.Length == desc_len && thread_desc->Description.MaximumLength == desc_len,
+            "Unexpected description length %u.\n", thread_desc->Description.Length);
+    ok(thread_desc->Description.Buffer == (WCHAR *)(thread_desc + 1),
+            "Unexpected description string pointer %p, %p.\n", thread_desc->Description.Buffer, thread_desc);
+    ok(!memcmp(thread_desc->Description.Buffer, desc, desc_len), "Unexpected description string.\n");
 
     /* Partial results. */
     len = 0;
@@ -2193,7 +2200,7 @@ static void test_thread_description(void)
     ok(len == sizeof(*thread_desc) + desc_len, "Unexpected structure length %u.\n", len);
 
     /* Change description. */
-    thread_desc->Length = 8 << 16 | 8;
+    thread_desc->Description.Length = thread_desc->Description.MaximumLength = 8;
     lstrcpyW((WCHAR *)(thread_desc + 1), L"desc");
 
     status = pNtSetInformationThread(GetCurrentThread(), ThreadDescription, thread_desc, sizeof(*thread_desc));
@@ -2211,7 +2218,7 @@ static void test_thread_description(void)
     status = NtSetInformationThread(GetCurrentThread(), ThreadDescription, NULL, sizeof(*thread_desc));
     ok(status == STATUS_ACCESS_VIOLATION, "Unexpected status %#x.\n", status);
 
-    thread_desc->Description = NULL;
+    thread_desc->Description.Buffer = NULL;
     status = pNtSetInformationThread(GetCurrentThread(), ThreadDescription, thread_desc, sizeof(*thread_desc));
     ok(status == STATUS_ACCESS_VIOLATION, "Unexpected status %#x.\n", status);
 
@@ -2228,8 +2235,7 @@ static void test_thread_description(void)
     hr = pSetThreadDescription(GetCurrentThread(), L"123");
     ok(hr == HRESULT_FROM_NT(STATUS_SUCCESS), "Failed to set thread description, hr %#x.\n", hr);
 
-    thread_desc->Length = 0;
-    thread_desc->Description = NULL;
+    memset(thread_desc, 0, sizeof(*thread_desc));
     status = pNtSetInformationThread(GetCurrentThread(), ThreadDescription, thread_desc, sizeof(*thread_desc));
     ok(!status, "Failed to set thread description, status %#x.\n", status);
 

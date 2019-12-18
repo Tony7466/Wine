@@ -495,25 +495,6 @@ struct testfilter
     struct strmbase_source source;
 };
 
-static const IBaseFilterVtbl testfilter_vtbl =
-{
-    BaseFilterImpl_QueryInterface,
-    BaseFilterImpl_AddRef,
-    BaseFilterImpl_Release,
-    BaseFilterImpl_GetClassID,
-    BaseFilterImpl_Stop,
-    BaseFilterImpl_Pause,
-    BaseFilterImpl_Run,
-    BaseFilterImpl_GetState,
-    BaseFilterImpl_SetSyncSource,
-    BaseFilterImpl_GetSyncSource,
-    BaseFilterImpl_EnumPins,
-    BaseFilterImpl_FindPin,
-    BaseFilterImpl_QueryFilterInfo,
-    BaseFilterImpl_JoinFilterGraph,
-    BaseFilterImpl_QueryVendorInfo,
-};
-
 static inline struct testfilter *impl_from_BaseFilter(struct strmbase_filter *iface)
 {
     return CONTAINING_RECORD(iface, struct testfilter, filter);
@@ -538,28 +519,6 @@ static const struct strmbase_filter_ops testfilter_ops =
 {
     .filter_get_pin = testfilter_get_pin,
     .filter_destroy = testfilter_destroy,
-};
-
-static const IPinVtbl testsource_vtbl =
-{
-    BasePinImpl_QueryInterface,
-    BasePinImpl_AddRef,
-    BasePinImpl_Release,
-    BaseOutputPinImpl_Connect,
-    BaseOutputPinImpl_ReceiveConnection,
-    BasePinImpl_Disconnect,
-    BasePinImpl_ConnectedTo,
-    BasePinImpl_ConnectionMediaType,
-    BasePinImpl_QueryPinInfo,
-    BasePinImpl_QueryDirection,
-    BasePinImpl_QueryId,
-    BasePinImpl_QueryAccept,
-    BasePinImpl_EnumMediaTypes,
-    BasePinImpl_QueryInternalConnections,
-    BaseOutputPinImpl_EndOfStream,
-    BaseOutputPinImpl_BeginFlush,
-    BaseOutputPinImpl_EndFlush,
-    BasePinImpl_NewSegment,
 };
 
 static HRESULT testsource_query_accept(struct strmbase_pin *iface, const AM_MEDIA_TYPE *mt)
@@ -597,8 +556,8 @@ static const struct strmbase_source_ops testsource_ops =
 static void testfilter_init(struct testfilter *filter)
 {
     static const GUID clsid = {0xabacab};
-    strmbase_filter_init(&filter->filter, &testfilter_vtbl, NULL, &clsid, &testfilter_ops);
-    strmbase_source_init(&filter->source, &testsource_vtbl, &filter->filter, L"", &testsource_ops);
+    strmbase_filter_init(&filter->filter, NULL, &clsid, &testfilter_ops);
+    strmbase_source_init(&filter->source, &filter->filter, L"", &testsource_ops);
 }
 
 static void test_allocator(IMemInputPin *input)
@@ -1410,11 +1369,11 @@ static void test_video_window_style(IVideoWindow *window, HWND hwnd, HWND our_hw
 
     hr = IVideoWindow_get_WindowStyle(window, &style);
     ok(hr == S_OK, "Got hr %#x.\n", hr);
-    todo_wine ok(style == (WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_OVERLAPPEDWINDOW),
+    ok(style == (WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_OVERLAPPEDWINDOW),
             "Got style %#x.\n", style);
 
     style = GetWindowLongA(hwnd, GWL_STYLE);
-    todo_wine ok(style == (WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_OVERLAPPEDWINDOW),
+    ok(style == (WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_OVERLAPPEDWINDOW),
             "Got style %#x.\n", style);
 
     hr = IVideoWindow_put_WindowStyle(window, style | WS_DISABLED);
@@ -1433,10 +1392,10 @@ static void test_video_window_style(IVideoWindow *window, HWND hwnd, HWND our_hw
 
     hr = IVideoWindow_get_WindowStyle(window, &style);
     ok(hr == S_OK, "Got hr %#x.\n", hr);
-    todo_wine ok(style == (WS_CLIPSIBLINGS | WS_OVERLAPPEDWINDOW), "Got style %#x.\n", style);
+    ok(style == (WS_CLIPSIBLINGS | WS_OVERLAPPEDWINDOW), "Got style %#x.\n", style);
 
     style = GetWindowLongA(hwnd, GWL_STYLE);
-    todo_wine ok(style == (WS_CLIPSIBLINGS | WS_OVERLAPPEDWINDOW), "Got style %#x.\n", style);
+    ok(style == (WS_CLIPSIBLINGS | WS_OVERLAPPEDWINDOW), "Got style %#x.\n", style);
 
     ok(GetActiveWindow() == our_hwnd, "Got active window %p.\n", GetActiveWindow());
 
@@ -1831,10 +1790,27 @@ static void test_video_window_owner(IVideoWindow *window, HWND hwnd, HWND our_hw
     ok(state == OATRUE, "Got state %d.\n", state);
 }
 
+struct notify_message_params
+{
+    IVideoWindow *window;
+    HWND hwnd;
+    UINT message;
+};
+
+static DWORD CALLBACK notify_message_proc(void *arg)
+{
+    const struct notify_message_params *params = arg;
+    HRESULT hr = IVideoWindow_NotifyOwnerMessage(params->window, (OAHWND)params->hwnd, params->message, 0, 0);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    return 0;
+}
+
 static void test_video_window_messages(IVideoWindow *window, HWND hwnd, HWND our_hwnd)
 {
+    struct notify_message_params params;
     unsigned int i;
     OAHWND oahwnd;
+    HANDLE thread;
     HRESULT hr;
     BOOL ret;
     MSG msg;
@@ -1905,14 +1881,33 @@ static void test_video_window_messages(IVideoWindow *window, HWND hwnd, HWND our
     ok(hr == S_OK, "Got hr %#x.\n", hr);
 
     ret = GetQueueStatus(QS_SENDMESSAGE | QS_POSTMESSAGE);
-    todo_wine ok(!ret, "Got unexpected status %#x.\n", ret);
+    ok(!ret, "Got unexpected status %#x.\n", ret);
 
     hr = IVideoWindow_NotifyOwnerMessage(window, (OAHWND)our_hwnd, WM_SETCURSOR,
             (WPARAM)hwnd, MAKELONG(HTCLIENT, WM_MOUSEMOVE));
     ok(hr == S_OK, "Got hr %#x.\n", hr);
 
     ret = GetQueueStatus(QS_SENDMESSAGE | QS_POSTMESSAGE);
-    todo_wine ok(!ret, "Got unexpected status %#x.\n", ret);
+    ok(!ret, "Got unexpected status %#x.\n", ret);
+
+    params.window = window;
+    params.hwnd = our_hwnd;
+    params.message = WM_SYSCOLORCHANGE;
+    thread = CreateThread(NULL, 0, notify_message_proc, &params, 0, NULL);
+    ok(WaitForSingleObject(thread, 100) == WAIT_TIMEOUT, "Thread should block.\n");
+    ret = GetQueueStatus(QS_SENDMESSAGE | QS_POSTMESSAGE);
+    ok(ret == ((QS_SENDMESSAGE << 16) | QS_SENDMESSAGE), "Got unexpected status %#x.\n", ret);
+
+    while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE)) DispatchMessageA(&msg);
+    ok(!WaitForSingleObject(thread, 1000), "Wait timed out.\n");
+    CloseHandle(thread);
+
+    params.message = WM_SETCURSOR;
+    thread = CreateThread(NULL, 0, notify_message_proc, &params, 0, NULL);
+    ok(!WaitForSingleObject(thread, 1000), "Thread should not block.\n");
+    CloseHandle(thread);
+    ret = GetQueueStatus(QS_SENDMESSAGE | QS_POSTMESSAGE);
+    ok(!ret, "Got unexpected status %#x.\n", ret);
 
     hr = IVideoWindow_put_Owner(window, 0);
     ok(hr == S_OK, "Got hr %#x.\n", hr);

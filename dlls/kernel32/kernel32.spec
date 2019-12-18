@@ -239,10 +239,10 @@
 @ stdcall CommConfigDialogW(wstr long ptr)
 # @ stub CompareCalendarDates
 @ stdcall -import CompareFileTime(ptr ptr)
-@ stdcall CompareStringA(long long str long str long)
-@ stdcall CompareStringW(long long wstr long wstr long)
-@ stdcall CompareStringEx(wstr long wstr long wstr long ptr ptr long)
+@ stdcall -import CompareStringA(long long str long str long)
+@ stdcall -import CompareStringEx(wstr long wstr long wstr long ptr ptr long)
 @ stdcall -import CompareStringOrdinal(wstr long wstr long long)
+@ stdcall -import CompareStringW(long long wstr long wstr long)
 @ stdcall -import ConnectNamedPipe(long ptr)
 @ stub ConsoleMenuControl
 @ stub ConsoleSubst
@@ -419,7 +419,7 @@
 @ stdcall EnumSystemCodePagesA(ptr long)
 @ stdcall -import EnumSystemCodePagesW(ptr long)
 @ stdcall -import EnumSystemFirmwareTables(long ptr long)
-@ stdcall EnumSystemGeoID(long long ptr)
+@ stdcall -import EnumSystemGeoID(long long ptr)
 @ stdcall EnumSystemLanguageGroupsA(ptr long ptr)
 @ stdcall -import EnumSystemLanguageGroupsW(ptr long ptr)
 @ stdcall -import EnumSystemLocalesA(ptr long)
@@ -475,18 +475,18 @@
 @ stdcall -import FindActCtxSectionStringW(long ptr long wstr ptr)
 @ stdcall FindAtomA(str)
 @ stdcall FindAtomW(wstr)
-@ stdcall FindClose(long)
+@ stdcall -import FindClose(long)
 @ stdcall -import FindCloseChangeNotification(long)
 @ stdcall -import FindFirstChangeNotificationA(str long long)
 @ stdcall -import FindFirstChangeNotificationW(wstr long long)
-@ stdcall FindFirstFileA(str ptr)
-@ stdcall FindFirstFileExA(str long ptr long ptr long)
-@ stdcall FindFirstFileExW(wstr long ptr long ptr long)
+@ stdcall -import FindFirstFileA(str ptr)
+@ stdcall -import FindFirstFileExA(str long ptr long ptr long)
+@ stdcall -import FindFirstFileExW(wstr long ptr long ptr long)
 # @ stub FindFirstFileNameTransactedW
 # @ stub FindFirstFileNameW
 # @ stub FindFirstFileTransactedA
 # @ stub FindFirstFileTransactedW
-@ stdcall FindFirstFileW(wstr ptr)
+@ stdcall -import FindFirstFileW(wstr ptr)
 # @ stub FindFirstStreamTransactedW
 @ stdcall FindFirstStreamW(wstr long ptr long)
 @ stdcall FindFirstVolumeA(ptr long)
@@ -494,16 +494,16 @@
 @ stdcall FindFirstVolumeMountPointW(wstr ptr long)
 @ stdcall FindFirstVolumeW(ptr long)
 @ stdcall -import FindNextChangeNotification(long)
-@ stdcall FindNextFileA(long ptr)
+@ stdcall -import FindNextFileA(long ptr)
 # @ stub FindNextFileNameW
-@ stdcall FindNextFileW(long ptr)
+@ stdcall -import FindNextFileW(long ptr)
 @ stdcall FindNextStreamW(long ptr)
 @ stdcall FindNextVolumeA(long ptr long)
 @ stub FindNextVolumeMountPointA
 @ stub FindNextVolumeMountPointW
 @ stdcall FindNextVolumeW(long ptr long)
-# @ stub FindNLSString
-@ stdcall FindNLSStringEx(wstr long wstr long wstr long ptr ptr ptr long)
+@ stdcall -import FindNLSString(long long wstr long wstr long ptr)
+@ stdcall -import FindNLSStringEx(wstr long wstr long wstr long ptr ptr ptr long)
 @ stdcall FindResourceA(long str str)
 @ stdcall FindResourceExA(long str str long)
 @ stdcall -import FindResourceExW(long wstr wstr long)
@@ -576,7 +576,7 @@
 @ stdcall -import GetCompressedFileSizeW(long ptr)
 @ stdcall GetComputerNameA(ptr ptr)
 @ stdcall GetComputerNameExA(long ptr ptr)
-@ stdcall GetComputerNameExW(long ptr ptr)
+@ stdcall -import GetComputerNameExW(long ptr ptr)
 @ stdcall GetComputerNameW(ptr ptr)
 @ stub GetConsoleAliasA
 @ stub GetConsoleAliasExesA
@@ -655,8 +655,8 @@
 @ stdcall GetDriveTypeW(wstr)
 # @ stub GetDurationFormat
 # @ stub GetDurationFormatEx
-@ stdcall GetDynamicTimeZoneInformation(ptr)
-@ stdcall GetDynamicTimeZoneInformationEffectiveYears(ptr ptr ptr)
+@ stdcall -import GetDynamicTimeZoneInformation(ptr)
+@ stdcall -import GetDynamicTimeZoneInformationEffectiveYears(ptr ptr ptr)
 @ stdcall -ret64 -arch=i386,x86_64 GetEnabledXStateFeatures()
 @ stdcall -import GetEnvironmentStrings()
 @ stdcall -import GetEnvironmentStringsA()
@@ -693,7 +693,7 @@
 # @ stub GetFullPathNameTransactedW
 @ stdcall -import GetFullPathNameW(wstr long ptr ptr)
 @ stdcall GetGeoInfoA(long long ptr long long)
-@ stdcall GetGeoInfoW(long long ptr long long)
+@ stdcall -import GetGeoInfoW(long long ptr long long)
 @ stdcall GetHandleContext(long)
 @ stdcall -import GetHandleInformation(long ptr)
 @ stub -i386 GetLSCallbackTarget
@@ -704,7 +704,7 @@
 @ stub GetLinguistLangSize
 @ stdcall -import GetLocalTime(ptr)
 @ stdcall -import GetLocaleInfoA(long long ptr long)
-@ stdcall GetLocaleInfoW(long long ptr long)
+@ stdcall -import GetLocaleInfoW(long long ptr long)
 @ stdcall -import GetLocaleInfoEx(wstr long ptr long)
 @ stdcall GetLogicalDriveStringsA(long ptr)
 @ stdcall GetLogicalDriveStringsW(long ptr)
@@ -814,10 +814,10 @@
 @ stdcall -import GetStartupInfoW(ptr)
 @ stdcall -import GetStdHandle(long)
 # @ stub GetStringScripts
-@ stdcall GetStringTypeA(long long str long ptr)
+@ stdcall -import GetStringTypeA(long long str long ptr)
 @ stdcall GetStringTypeExA(long long str long ptr)
-@ stdcall GetStringTypeExW(long long wstr long ptr)
-@ stdcall GetStringTypeW(long wstr long ptr)
+@ stdcall -import GetStringTypeExW(long long wstr long ptr)
+@ stdcall -import GetStringTypeW(long wstr long ptr)
 @ stdcall -import GetSystemFileCacheSize(ptr ptr ptr)
 @ stdcall -import GetSystemDefaultLCID()
 @ stdcall -import GetSystemDefaultLangID()
@@ -866,8 +866,8 @@
 @ stdcall GetTimeFormatA(long long ptr str ptr long)
 @ stdcall GetTimeFormatEx(wstr long ptr wstr ptr long)
 @ stdcall GetTimeFormatW(long long ptr wstr ptr long)
-@ stdcall GetTimeZoneInformation(ptr)
-@ stdcall GetTimeZoneInformationForYear(long ptr ptr)
+@ stdcall -import GetTimeZoneInformation(ptr)
+@ stdcall -import GetTimeZoneInformationForYear(long ptr ptr)
 # @ stub GetUILanguageInfo
 @ stdcall -arch=x86_64 GetUmsCompletionListEvent(ptr ptr)
 # @ stub -arch=x86_64 GetUmsSystemThreadInformation
@@ -875,7 +875,7 @@
 @ stdcall -import GetUserDefaultLangID()
 @ stdcall -import GetUserDefaultLocaleName(ptr long)
 @ stdcall -import GetUserDefaultUILanguage()
-@ stdcall GetUserGeoID(long)
+@ stdcall -import GetUserGeoID(long)
 @ stub GetVDMCurrentDirectories
 @ stdcall -import GetVersion()
 @ stdcall -import GetVersionExA(ptr)
@@ -1027,9 +1027,9 @@
 @ stdcall -i386 -private -norelay K32Thk1632Epilog() krnl386.exe16.K32Thk1632Epilog
 @ stdcall -i386 -private -norelay K32Thk1632Prolog() krnl386.exe16.K32Thk1632Prolog
 @ stdcall -import LCIDToLocaleName(long ptr long long)
-@ stdcall LCMapStringA(long long str long ptr long)
-@ stdcall LCMapStringEx(wstr long wstr long ptr long ptr ptr long)
-@ stdcall LCMapStringW(long long wstr long ptr long)
+@ stdcall -import LCMapStringA(long long str long ptr long)
+@ stdcall -import LCMapStringEx(wstr long wstr long ptr long ptr ptr long)
+@ stdcall -import LCMapStringW(long long wstr long ptr long)
 @ stdcall LZClose(long)
 # @ stub LZCloseFile
 @ stdcall LZCopy(long long)
@@ -1096,7 +1096,7 @@
 @ stdcall MoveFileWithProgressA(str str ptr ptr long)
 @ stdcall MoveFileWithProgressW(wstr wstr ptr ptr long)
 @ stdcall MulDiv(long long long)
-@ stdcall MultiByteToWideChar(long long str long ptr long)
+@ stdcall -import MultiByteToWideChar(long long str long ptr long)
 @ stdcall -import NeedCurrentDirectoryForExePathA(str)
 @ stdcall -import NeedCurrentDirectoryForExePathW(wstr)
 # @ stub NlsCheckPolicy
@@ -1185,8 +1185,8 @@
 @ stdcall -import QueueUserWorkItem(ptr ptr long)
 @ stdcall -import RaiseException(long long long ptr)
 # @ stub RaiseFailFastException
-@ stdcall -import ReadConsoleA(long ptr long ptr ptr)
-@ stdcall -import ReadConsoleInputA(long ptr long ptr)
+@ stdcall ReadConsoleA(long ptr long ptr ptr)
+@ stdcall ReadConsoleInputA(long ptr long ptr)
 @ stub ReadConsoleInputExA
 @ stub ReadConsoleInputExW
 @ stdcall ReadConsoleInputW(long ptr long ptr)
@@ -1197,7 +1197,7 @@
 @ stdcall -import ReadConsoleOutputW(long ptr long long ptr)
 @ stdcall ReadConsoleW(long ptr long ptr ptr)
 @ stdcall -import ReadDirectoryChangesW(long ptr long long long ptr ptr ptr)
-@ stdcall -import ReadFile(long ptr long ptr ptr)
+@ stdcall ReadFile(long ptr long ptr ptr) KERNEL32_ReadFile
 @ stdcall -import ReadFileEx(long ptr long ptr ptr)
 @ stdcall -import ReadFileScatter(long ptr long ptr ptr)
 @ stdcall -import ReadProcessMemory(long ptr ptr long ptr)
@@ -1338,10 +1338,10 @@
 @ stdcall -import SetCommMask(long long)
 @ stdcall -import SetCommState(long ptr)
 @ stdcall -import SetCommTimeouts(long ptr)
-@ stdcall SetComputerNameA(str)
-@ stdcall SetComputerNameExA(long str)
-@ stdcall SetComputerNameExW(long wstr)
-@ stdcall SetComputerNameW(wstr)
+@ stdcall -import SetComputerNameA(str)
+@ stdcall -import SetComputerNameExA(long str)
+@ stdcall -import SetComputerNameExW(long wstr)
+@ stdcall -import SetComputerNameW(wstr)
 @ stdcall -import SetConsoleActiveScreenBuffer(long)
 @ stdcall -import SetConsoleCP(long)
 # @ stub SetConsoleHistoryInfo
@@ -1421,7 +1421,7 @@
 # @ stub SetLocalPrimaryComputerNameW
 @ stdcall -import SetLocalTime(ptr)
 @ stdcall SetLocaleInfoA(long long str)
-@ stdcall SetLocaleInfoW(long long wstr)
+@ stdcall -import SetLocaleInfoW(long long wstr)
 @ stdcall SetMailslotInfo(long long)
 @ stub SetMessageWaitingIndicator
 # @ stub SetNamedPipeAttribute
@@ -1467,11 +1467,11 @@
 @ stdcall SetThreadpoolThreadMinimum(ptr long) ntdll.TpSetPoolMinThreads
 @ stdcall SetThreadpoolTimer(ptr ptr long long) ntdll.TpSetTimer
 @ stdcall SetThreadpoolWait(ptr long ptr) ntdll.TpSetWait
-@ stdcall SetTimeZoneInformation(ptr)
+@ stdcall -import SetTimeZoneInformation(ptr)
 @ stub SetTimerQueueTimer
 @ stdcall -arch=x86_64 SetUmsThreadInformation(ptr long ptr long)
 @ stdcall -import SetUnhandledExceptionFilter(ptr)
-@ stdcall SetUserGeoID(long)
+@ stdcall -import SetUserGeoID(long)
 @ stub SetVDMCurrentDirectories
 @ stdcall SetVolumeLabelA(str str)
 @ stdcall SetVolumeLabelW(wstr wstr)
@@ -1496,7 +1496,7 @@
 @ stdcall -import SwitchToFiber(ptr)
 @ stdcall -import SwitchToThread()
 @ stdcall -import SystemTimeToFileTime(ptr ptr)
-@ stdcall SystemTimeToTzSpecificLocalTime (ptr ptr ptr)
+@ stdcall -import SystemTimeToTzSpecificLocalTime (ptr ptr ptr)
 # @ stub SystemTimeToTzSpecificLocalTimeEx
 @ stdcall TerminateJobObject(long long)
 @ stdcall -import TerminateProcess(long long)
@@ -1519,7 +1519,7 @@
 @ stdcall TryAcquireSRWLockShared(ptr) ntdll.RtlTryAcquireSRWLockShared
 @ stdcall TryEnterCriticalSection(ptr) ntdll.RtlTryEnterCriticalSection
 @ stdcall -import TrySubmitThreadpoolCallback(ptr ptr ptr)
-@ stdcall TzSpecificLocalTimeToSystemTime(ptr ptr ptr)
+@ stdcall -import TzSpecificLocalTimeToSystemTime(ptr ptr ptr)
 # @ stub TzSpecificLocalTimeToSystemTimeEx
 # @ stub -arch=x86_64 uaw_lstrcmpW
 # @ stub -arch=x86_64 uaw_lstrcmpiW
@@ -1601,16 +1601,16 @@
 # @ stub WerpNotifyLoadStringResourceEx
 # @ stub WerpNotifyUseStringResource
 # @ stub WerpStringLookup
-@ stdcall WideCharToMultiByte(long long wstr long ptr long ptr ptr)
+@ stdcall -import WideCharToMultiByte(long long wstr long ptr long ptr ptr)
 @ stdcall WinExec(str long)
-@ stdcall Wow64EnableWow64FsRedirection(long)
+@ stdcall Wow64EnableWow64FsRedirection(long) KERNEL32_Wow64EnableWow64FsRedirection
 @ stdcall -import Wow64DisableWow64FsRedirection(ptr)
 @ stdcall Wow64GetThreadContext(long ptr)
 # @ stub Wow64GetThreadSelectorEntry
 @ stdcall -import Wow64RevertWow64FsRedirection(ptr)
 @ stdcall Wow64SetThreadContext(long ptr)
 # @ stub Wow64SuspendThread
-@ stdcall -import WriteConsoleA(long ptr long ptr ptr)
+@ stdcall WriteConsoleA(long ptr long ptr ptr)
 @ stdcall -import WriteConsoleInputA(long ptr long ptr)
 @ stub WriteConsoleInputVDMA
 @ stub WriteConsoleInputVDMW
@@ -1621,7 +1621,7 @@
 @ stdcall -import WriteConsoleOutputCharacterW(long ptr long long ptr)
 @ stdcall -import WriteConsoleOutputW(long ptr long long ptr)
 @ stdcall WriteConsoleW(long ptr long ptr ptr)
-@ stdcall -import WriteFile(long ptr long ptr ptr)
+@ stdcall WriteFile(long ptr long ptr ptr) KERNEL32_WriteFile
 @ stdcall -import WriteFileEx(long ptr long ptr ptr)
 @ stdcall -import WriteFileGather(long ptr long ptr ptr)
 @ stdcall WritePrivateProfileSectionA(str str str)
@@ -1686,4 +1686,4 @@
 @ cdecl wine_get_dos_file_name(str)
 
 # Init code
-@ cdecl __wine_kernel_init()
+@ cdecl -norelay -private __wine_start_process()

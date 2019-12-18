@@ -130,7 +130,7 @@ static void PropertyStorage_DestroyDictionaries(PropertyStorage_impl *);
  * string using PropertyStorage_StringCopy.
  */
 static HRESULT PropertyStorage_PropVariantCopy(PROPVARIANT *prop,
- const PROPVARIANT *propvar, LCID targetCP, LCID srcCP);
+ const PROPVARIANT *propvar, UINT targetCP, UINT srcCP);
 
 /* Copies the string src, which is encoded using code page srcCP, and returns
  * it in *dst, in the code page specified by targetCP.  The returned string is
@@ -139,8 +139,8 @@ static HRESULT PropertyStorage_PropVariantCopy(PROPVARIANT *prop,
  * is CP_UNICODE, the returned string is in fact an LPWSTR.
  * Returns S_OK on success, something else on failure.
  */
-static HRESULT PropertyStorage_StringCopy(LPCSTR src, LCID srcCP, LPSTR *dst,
- LCID targetCP);
+static HRESULT PropertyStorage_StringCopy(LPCSTR src, UINT srcCP, LPSTR *dst,
+ UINT targetCP);
 
 static const IPropertyStorageVtbl IPropertyStorage_Vtbl;
 
@@ -533,8 +533,7 @@ static HRESULT WINAPI IPropertyStorage_fnReadMultiple(
     return hr;
 }
 
-static HRESULT PropertyStorage_StringCopy(LPCSTR src, LCID srcCP, LPSTR *dst,
- LCID dstCP)
+static HRESULT PropertyStorage_StringCopy(LPCSTR src, UINT srcCP, LPSTR *dst, UINT dstCP)
 {
     HRESULT hr = S_OK;
     int len;
@@ -617,8 +616,8 @@ static HRESULT PropertyStorage_StringCopy(LPCSTR src, LCID srcCP, LPSTR *dst,
     return hr;
 }
 
-static HRESULT PropertyStorage_PropVariantCopy(PROPVARIANT *prop,
- const PROPVARIANT *propvar, LCID targetCP, LCID srcCP)
+static HRESULT PropertyStorage_PropVariantCopy(PROPVARIANT *prop, const PROPVARIANT *propvar,
+        UINT targetCP, UINT srcCP)
 {
     HRESULT hr = S_OK;
 
@@ -644,7 +643,7 @@ static HRESULT PropertyStorage_PropVariantCopy(PROPVARIANT *prop,
  * a version 1-only property.
  */
 static HRESULT PropertyStorage_StorePropWithId(PropertyStorage_impl *This,
- PROPID propid, const PROPVARIANT *propvar, LCID lcid)
+ PROPID propid, const PROPVARIANT *propvar, UINT cp)
 {
     HRESULT hr = S_OK;
     PROPVARIANT *prop = PropertyStorage_FindProperty(This, propid);
@@ -665,8 +664,7 @@ static HRESULT PropertyStorage_StorePropWithId(PropertyStorage_impl *This,
     if (prop)
     {
         PropVariantClear(prop);
-        hr = PropertyStorage_PropVariantCopy(prop, propvar, This->codePage,
-         lcid);
+        hr = PropertyStorage_PropVariantCopy(prop, propvar, This->codePage, cp);
     }
     else
     {
@@ -674,8 +672,7 @@ static HRESULT PropertyStorage_StorePropWithId(PropertyStorage_impl *This,
          sizeof(PROPVARIANT));
         if (prop)
         {
-            hr = PropertyStorage_PropVariantCopy(prop, propvar, This->codePage,
-             lcid);
+            hr = PropertyStorage_PropVariantCopy(prop, propvar, This->codePage, cp);
             if (SUCCEEDED(hr))
             {
                 dictionary_insert(This->propid_to_prop, UlongToPtr(propid), prop);
@@ -699,7 +696,7 @@ static HRESULT PropertyStorage_StorePropWithId(PropertyStorage_impl *This,
  * Doesn't validate id.
  */
 static HRESULT PropertyStorage_StoreNameWithId(PropertyStorage_impl *This,
- LPCSTR srcName, LCID cp, PROPID id)
+ LPCSTR srcName, UINT cp, PROPID id)
 {
     LPSTR name;
     HRESULT hr;
@@ -1195,20 +1192,25 @@ static HRESULT PropertyStorage_ReadDictionary(PropertyStorage_impl *This,
         ptr += sizeof(PROPID);
         StorageUtl_ReadDWord(ptr, 0, &cbEntry);
         ptr += sizeof(DWORD);
-        TRACE("Reading entry with ID 0x%08x, %d bytes\n", propid, cbEntry);
         /* Make sure the source string is NULL-terminated */
         if (This->codePage != CP_UNICODE)
             ptr[cbEntry - 1] = '\0';
         else
-            *((LPWSTR)ptr + cbEntry / sizeof(WCHAR)) = '\0';
+            ((WCHAR *)ptr)[cbEntry - 1] = '\0';
+
+        TRACE("Reading entry with ID %#x, %d chars, name %s.\n", propid, cbEntry, This->codePage == CP_UNICODE ?
+                debugstr_wn((WCHAR *)ptr, cbEntry) : debugstr_an((char *)ptr, cbEntry));
+
         hr = PropertyStorage_StoreNameWithId(This, (char*)ptr, This->codePage, propid);
         if (This->codePage == CP_UNICODE)
         {
+            cbEntry *= sizeof(WCHAR);
+
             /* Unicode entries are padded to DWORD boundaries */
             if (cbEntry % sizeof(DWORD))
                 ptr += sizeof(DWORD) - (cbEntry % sizeof(DWORD));
         }
-        ptr += sizeof(DWORD) + cbEntry;
+        ptr += cbEntry;
     }
     return hr;
 }
@@ -1703,20 +1705,19 @@ static void PropertyStorage_MakeHeader(PropertyStorage_impl *This,
  PROPERTYSETHEADER *hdr)
 {
     assert(hdr);
-    StorageUtl_WriteWord((BYTE *)&hdr->wByteOrder, 0,
-     PROPSETHDR_BYTEORDER_MAGIC);
-    StorageUtl_WriteWord((BYTE *)&hdr->wFormat, 0, This->format);
-    StorageUtl_WriteDWord((BYTE *)&hdr->dwOSVer, 0, This->originatorOS);
-    StorageUtl_WriteGUID((BYTE *)&hdr->clsid, 0, &This->clsid);
-    StorageUtl_WriteDWord((BYTE *)&hdr->reserved, 0, 1);
+    StorageUtl_WriteWord(&hdr->wByteOrder, 0, PROPSETHDR_BYTEORDER_MAGIC);
+    StorageUtl_WriteWord(&hdr->wFormat, 0, This->format);
+    StorageUtl_WriteDWord(&hdr->dwOSVer, 0, This->originatorOS);
+    StorageUtl_WriteGUID(&hdr->clsid, 0, &This->clsid);
+    StorageUtl_WriteDWord(&hdr->reserved, 0, 1);
 }
 
 static void PropertyStorage_MakeFmtIdOffset(PropertyStorage_impl *This,
  FORMATIDOFFSET *fmtOffset)
 {
     assert(fmtOffset);
-    StorageUtl_WriteGUID((BYTE *)fmtOffset, 0, &This->fmtid);
-    StorageUtl_WriteDWord((BYTE *)fmtOffset, offsetof(FORMATIDOFFSET, dwOffset),
+    StorageUtl_WriteGUID(fmtOffset, 0, &This->fmtid);
+    StorageUtl_WriteDWord(fmtOffset, offsetof(FORMATIDOFFSET, dwOffset),
      sizeof(PROPERTYSETHEADER) + sizeof(FORMATIDOFFSET));
 }
 
@@ -1724,18 +1725,16 @@ static void PropertyStorage_MakeSectionHdr(DWORD cbSection, DWORD numProps,
  PROPERTYSECTIONHEADER *hdr)
 {
     assert(hdr);
-    StorageUtl_WriteDWord((BYTE *)hdr, 0, cbSection);
-    StorageUtl_WriteDWord((BYTE *)hdr,
-     offsetof(PROPERTYSECTIONHEADER, cProperties), numProps);
+    StorageUtl_WriteDWord(hdr, 0, cbSection);
+    StorageUtl_WriteDWord(hdr, offsetof(PROPERTYSECTIONHEADER, cProperties), numProps);
 }
 
 static void PropertyStorage_MakePropertyIdOffset(DWORD propid, DWORD dwOffset,
  PROPERTYIDOFFSET *propIdOffset)
 {
     assert(propIdOffset);
-    StorageUtl_WriteDWord((BYTE *)propIdOffset, 0, propid);
-    StorageUtl_WriteDWord((BYTE *)propIdOffset,
-     offsetof(PROPERTYIDOFFSET, dwOffset), dwOffset);
+    StorageUtl_WriteDWord(propIdOffset, 0, propid);
+    StorageUtl_WriteDWord(propIdOffset, offsetof(PROPERTYIDOFFSET, dwOffset), dwOffset);
 }
 
 static inline HRESULT PropertyStorage_WriteWStringToStream(IStream *stm,
@@ -1753,7 +1752,7 @@ static inline HRESULT PropertyStorage_WriteWStringToStream(IStream *stm,
     HeapFree(GetProcessHeap(), 0, leStr);
     return hr;
 #else
-    return IStream_Write(stm, str, len, written);
+    return IStream_Write(stm, str, len * sizeof(WCHAR), written);
 #endif
 }
 
@@ -1768,22 +1767,21 @@ static BOOL PropertyStorage_DictionaryWriter(const void *key,
 {
     PropertyStorage_impl *This = extra;
     struct DictionaryClosure *c = closure;
-    DWORD propid;
+    DWORD propid, keyLen;
     ULONG count;
 
     assert(key);
     assert(closure);
-    StorageUtl_WriteDWord((LPBYTE)&propid, 0, PtrToUlong(value));
+    StorageUtl_WriteDWord(&propid, 0, PtrToUlong(value));
     c->hr = IStream_Write(This->stm, &propid, sizeof(propid), &count);
     if (FAILED(c->hr))
         goto end;
     c->bytesWritten += sizeof(DWORD);
     if (This->codePage == CP_UNICODE)
     {
-        DWORD keyLen, pad = 0;
+        DWORD pad = 0, pad_len;
 
-        StorageUtl_WriteDWord((LPBYTE)&keyLen, 0,
-         (lstrlenW((LPCWSTR)key) + 1) * sizeof(WCHAR));
+        StorageUtl_WriteDWord(&keyLen, 0, lstrlenW((LPCWSTR)key) + 1);
         c->hr = IStream_Write(This->stm, &keyLen, sizeof(keyLen), &count);
         if (FAILED(c->hr))
             goto end;
@@ -1792,21 +1790,22 @@ static BOOL PropertyStorage_DictionaryWriter(const void *key,
          &count);
         if (FAILED(c->hr))
             goto end;
-        c->bytesWritten += keyLen * sizeof(WCHAR);
-        if (keyLen % sizeof(DWORD))
+        keyLen *= sizeof(WCHAR);
+        c->bytesWritten += keyLen;
+
+        /* Align to 4 bytes. */
+        pad_len = sizeof(DWORD) - keyLen % sizeof(DWORD);
+        if (pad_len)
         {
-            c->hr = IStream_Write(This->stm, &pad,
-             sizeof(DWORD) - keyLen % sizeof(DWORD), &count);
+            c->hr = IStream_Write(This->stm, &pad, pad_len, &count);
             if (FAILED(c->hr))
                 goto end;
-            c->bytesWritten += sizeof(DWORD) - keyLen % sizeof(DWORD);
+            c->bytesWritten += pad_len;
         }
     }
     else
     {
-        DWORD keyLen;
-
-        StorageUtl_WriteDWord((LPBYTE)&keyLen, 0, strlen((LPCSTR)key) + 1);
+        StorageUtl_WriteDWord(&keyLen, 0, strlen((LPCSTR)key) + 1);
         c->hr = IStream_Write(This->stm, &keyLen, sizeof(keyLen), &count);
         if (FAILED(c->hr))
             goto end;
@@ -1854,8 +1853,7 @@ static HRESULT PropertyStorage_WriteDictionaryToStream(
     hr = IStream_Seek(This->stm, seek, STREAM_SEEK_SET, NULL);
     if (FAILED(hr))
         goto end;
-    StorageUtl_WriteDWord((LPBYTE)&dwTemp, 0,
-     dictionary_num_entries(This->name_to_propid));
+    StorageUtl_WriteDWord(&dwTemp, 0, dictionary_num_entries(This->name_to_propid));
     hr = IStream_Write(This->stm, &dwTemp, sizeof(dwTemp), &count);
     if (FAILED(hr))
         goto end;
@@ -1909,7 +1907,7 @@ static HRESULT PropertyStorage_WritePropertyToStream(PropertyStorage_impl *This,
     hr = IStream_Seek(This->stm, seek, STREAM_SEEK_SET, NULL);
     if (FAILED(hr))
         goto end;
-    StorageUtl_WriteDWord((LPBYTE)&dwType, 0, var->vt);
+    StorageUtl_WriteDWord(&dwType, 0, var->vt);
     hr = IStream_Write(This->stm, &dwType, sizeof(dwType), &count);
     if (FAILED(hr))
         goto end;
@@ -1932,7 +1930,7 @@ static HRESULT PropertyStorage_WritePropertyToStream(PropertyStorage_impl *This,
     {
         WORD wTemp;
 
-        StorageUtl_WriteWord((LPBYTE)&wTemp, 0, var->u.iVal);
+        StorageUtl_WriteWord(&wTemp, 0, var->u.iVal);
         hr = IStream_Write(This->stm, &wTemp, sizeof(wTemp), &count);
         bytesWritten = count;
         break;
@@ -1942,7 +1940,7 @@ static HRESULT PropertyStorage_WritePropertyToStream(PropertyStorage_impl *This,
     {
         DWORD dwTemp;
 
-        StorageUtl_WriteDWord((LPBYTE)&dwTemp, 0, var->u.lVal);
+        StorageUtl_WriteDWord(&dwTemp, 0, var->u.lVal);
         hr = IStream_Write(This->stm, &dwTemp, sizeof(dwTemp), &count);
         bytesWritten = count;
         break;
@@ -1955,7 +1953,7 @@ static HRESULT PropertyStorage_WritePropertyToStream(PropertyStorage_impl *This,
             len = (lstrlenW(var->u.pwszVal) + 1) * sizeof(WCHAR);
         else
             len = lstrlenA(var->u.pszVal) + 1;
-        StorageUtl_WriteDWord((LPBYTE)&dwTemp, 0, len);
+        StorageUtl_WriteDWord(&dwTemp, 0, len);
         hr = IStream_Write(This->stm, &dwTemp, sizeof(dwTemp), &count);
         if (FAILED(hr))
             goto end;
@@ -1967,7 +1965,7 @@ static HRESULT PropertyStorage_WritePropertyToStream(PropertyStorage_impl *This,
     {
         DWORD len = lstrlenW(var->u.pwszVal) + 1, dwTemp;
 
-        StorageUtl_WriteDWord((LPBYTE)&dwTemp, 0, len);
+        StorageUtl_WriteDWord(&dwTemp, 0, len);
         hr = IStream_Write(This->stm, &dwTemp, sizeof(dwTemp), &count);
         if (FAILED(hr))
             goto end;
@@ -1980,9 +1978,8 @@ static HRESULT PropertyStorage_WritePropertyToStream(PropertyStorage_impl *This,
     {
         FILETIME temp;
 
-        StorageUtl_WriteULargeInteger((BYTE *)&temp, 0,
-         (const ULARGE_INTEGER *)&var->u.filetime);
-        hr = IStream_Write(This->stm, &temp, sizeof(FILETIME), &count);
+        StorageUtl_WriteULargeInteger(&temp, 0, (const ULARGE_INTEGER *)&var->u.filetime);
+        hr = IStream_Write(This->stm, &temp, sizeof(temp), &count);
         bytesWritten = count;
         break;
     }
@@ -1991,8 +1988,8 @@ static HRESULT PropertyStorage_WritePropertyToStream(PropertyStorage_impl *This,
         DWORD cf_hdr[2], len;
 
         len = var->u.pclipdata->cbSize;
-        StorageUtl_WriteDWord((LPBYTE)&cf_hdr[0], 0, len + 8);
-        StorageUtl_WriteDWord((LPBYTE)&cf_hdr[1], 0, var->u.pclipdata->ulClipFmt);
+        StorageUtl_WriteDWord(&cf_hdr[0], 0, len + 8);
+        StorageUtl_WriteDWord(&cf_hdr[1], 0, var->u.pclipdata->ulClipFmt);
         hr = IStream_Write(This->stm, cf_hdr, sizeof(cf_hdr), &count);
         if (FAILED(hr))
             goto end;
@@ -2007,7 +2004,7 @@ static HRESULT PropertyStorage_WritePropertyToStream(PropertyStorage_impl *This,
     {
         CLSID temp;
 
-        StorageUtl_WriteGUID((BYTE *)&temp, 0, var->u.puuid);
+        StorageUtl_WriteGUID(&temp, 0, var->u.puuid);
         hr = IStream_Write(This->stm, &temp, sizeof(temp), &count);
         bytesWritten = count;
         break;
@@ -2187,7 +2184,7 @@ static HRESULT PropertyStorage_WriteToStream(PropertyStorage_impl *This)
     hr = IStream_Seek(This->stm, seek, STREAM_SEEK_SET, NULL);
     if (FAILED(hr))
         goto end;
-    StorageUtl_WriteDWord((LPBYTE)&dwTemp, 0, sectionOffset);
+    StorageUtl_WriteDWord(&dwTemp, 0, sectionOffset);
     hr = IStream_Write(This->stm, &dwTemp, sizeof(dwTemp), &count);
 
 end:

@@ -1243,7 +1243,8 @@ typedef void (*dump_func)( const void *req );
 
 static void dump_new_process_request( const struct new_process_request *req )
 {
-    fprintf( stderr, " inherit_all=%d", req->inherit_all );
+    fprintf( stderr, " parent_process=%04x", req->parent_process );
+    fprintf( stderr, ", inherit_all=%d", req->inherit_all );
     fprintf( stderr, ", create_flags=%08x", req->create_flags );
     fprintf( stderr, ", socket_fd=%d", req->socket_fd );
     fprintf( stderr, ", exe_file=%04x", req->exe_file );
@@ -1423,6 +1424,7 @@ static void dump_get_thread_info_reply( const struct get_thread_info_reply *req 
     fprintf( stderr, ", exit_code=%d", req->exit_code );
     fprintf( stderr, ", priority=%d", req->priority );
     fprintf( stderr, ", last=%d", req->last );
+    fprintf( stderr, ", suspend_count=%d", req->suspend_count );
     fprintf( stderr, ", desc_len=%u", req->desc_len );
     dump_varargs_unicode_str( ", desc=", cur_size );
 }
@@ -2030,11 +2032,12 @@ static void dump_attach_console_reply( const struct attach_console_reply *req )
 
 static void dump_get_console_wait_event_request( const struct get_console_wait_event_request *req )
 {
+    fprintf( stderr, " handle=%04x", req->handle );
 }
 
 static void dump_get_console_wait_event_reply( const struct get_console_wait_event_reply *req )
 {
-    fprintf( stderr, " handle=%04x", req->handle );
+    fprintf( stderr, " event=%04x", req->event );
 }
 
 static void dump_get_console_mode_request( const struct get_console_mode_request *req )
@@ -5618,6 +5621,7 @@ static const struct
     { "PROCESS_IN_JOB",              STATUS_PROCESS_IN_JOB },
     { "PROCESS_IS_TERMINATING",      STATUS_PROCESS_IS_TERMINATING },
     { "PROCESS_NOT_IN_JOB",          STATUS_PROCESS_NOT_IN_JOB },
+    { "REPARSE_POINT_NOT_RESOLVED",  STATUS_REPARSE_POINT_NOT_RESOLVED },
     { "SECTION_TOO_BIG",             STATUS_SECTION_TOO_BIG },
     { "SEMAPHORE_LIMIT_EXCEEDED",    STATUS_SEMAPHORE_LIMIT_EXCEEDED },
     { "SHARING_VIOLATION",           STATUS_SHARING_VIOLATION },

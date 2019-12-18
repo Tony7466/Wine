@@ -35,6 +35,8 @@ extern const WCHAR system_dir[] DECLSPEC_HIDDEN;
 static const BOOL is_win64 = (sizeof(void *) > sizeof(int));
 extern BOOL is_wow64 DECLSPEC_HIDDEN;
 
+extern HANDLE open_console( BOOL output, DWORD access, SECURITY_ATTRIBUTES *sa, DWORD creation ) DECLSPEC_HIDDEN;
+
 static inline BOOL is_console_handle(HANDLE h)
 {
     return h != INVALID_HANDLE_VALUE && ((UINT_PTR)h & 3) == 3;
@@ -51,5 +53,10 @@ static inline BOOL set_ntstatus( NTSTATUS status )
     if (status) SetLastError( RtlNtStatusToDosError( status ));
     return !status;
 }
+
+/* make the kernel32 names available */
+#define HeapAlloc(heap, flags, size) RtlAllocateHeap(heap, flags, size)
+#define HeapReAlloc(heap, flags, ptr, size) RtlReAllocateHeap(heap, flags, ptr, size)
+#define HeapFree(heap, flags, ptr) RtlFreeHeap(heap, flags, ptr)
 
 #endif /* __WINE_KERNELBASE_H */

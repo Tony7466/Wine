@@ -557,7 +557,7 @@
 @ stub RtlCreateUserSecurityObject
 @ stdcall RtlCreateUserStack(long long long long long ptr)
 @ stdcall RtlCreateUserThread(long ptr long ptr long long ptr ptr ptr ptr)
-@ stub RtlCustomCPToUnicodeN
+@ stdcall RtlCustomCPToUnicodeN(ptr ptr long ptr str long)
 @ stub RtlCutoverTimeToSystemTime
 @ stdcall RtlDeNormalizeProcessParams(ptr)
 @ stdcall RtlDeactivateActivationContext(long long)
@@ -981,6 +981,7 @@
 @ stdcall RtlTryAcquireSRWLockExclusive(ptr)
 @ stdcall RtlTryAcquireSRWLockShared(ptr)
 @ stdcall RtlTryEnterCriticalSection(ptr)
+@ stdcall RtlUTF8ToUnicodeN(ptr long ptr ptr long)
 @ cdecl -i386 -norelay RtlUlongByteSwap() NTDLL_RtlUlongByteSwap
 @ cdecl -ret64 RtlUlonglongByteSwap(int64)
 # @ stub RtlUnhandledExceptionFilter2
@@ -991,7 +992,7 @@
 @ stdcall RtlUnicodeStringToInteger(ptr long ptr)
 @ stdcall RtlUnicodeStringToOemSize(ptr)
 @ stdcall RtlUnicodeStringToOemString(ptr ptr long)
-@ stub RtlUnicodeToCustomCPN
+@ stdcall RtlUnicodeToCustomCPN(ptr ptr long ptr wstr long)
 @ stdcall RtlUnicodeToMultiByteN(ptr long ptr ptr long)
 @ stdcall RtlUnicodeToMultiByteSize(ptr ptr long)
 @ stdcall RtlUnicodeToOemN(ptr long ptr ptr long)
@@ -1007,7 +1008,7 @@
 @ stdcall RtlUpcaseUnicodeStringToAnsiString(ptr ptr long)
 @ stdcall RtlUpcaseUnicodeStringToCountedOemString(ptr ptr long)
 @ stdcall RtlUpcaseUnicodeStringToOemString(ptr ptr long)
-@ stub RtlUpcaseUnicodeToCustomCPN
+@ stdcall RtlUpcaseUnicodeToCustomCPN(ptr ptr long ptr wstr long)
 @ stdcall RtlUpcaseUnicodeToMultiByteN(ptr long ptr ptr long)
 @ stdcall RtlUpcaseUnicodeToOemN(ptr long ptr ptr long)
 @ stdcall RtlUpdateTimer(ptr ptr long long)
@@ -1567,7 +1568,6 @@
 @ cdecl wine_get_host_version(ptr ptr) NTDLL_wine_get_host_version
 
 # Codepages
-@ cdecl __wine_init_codepages(ptr ptr)
 @ cdecl __wine_get_unix_codepage()
 
 # signal handling

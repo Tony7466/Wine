@@ -372,6 +372,9 @@ static GpStatus alpha_blend_bmp_pixels(GpGraphics *graphics, INT dst_x, INT dst_
 {
     GpBitmap *dst_bitmap = (GpBitmap*)graphics->image;
     INT x, y;
+    CompositingMode comp_mode;
+
+    GdipGetCompositingMode(graphics, &comp_mode);
 
     for (y=0; y<src_height; y++)
     {
@@ -380,14 +383,19 @@ static GpStatus alpha_blend_bmp_pixels(GpGraphics *graphics, INT dst_x, INT dst_
             ARGB dst_color, src_color;
             src_color = ((ARGB*)(src + src_stride * y))[x];
 
-            if (!(src_color & 0xff000000))
-                continue;
-
-            GdipBitmapGetPixel(dst_bitmap, x+dst_x, y+dst_y, &dst_color);
-            if (fmt & PixelFormatPAlpha)
-                GdipBitmapSetPixel(dst_bitmap, x+dst_x, y+dst_y, color_over_fgpremult(dst_color, src_color));
+            if (comp_mode == CompositingModeSourceCopy)
+                GdipBitmapSetPixel(dst_bitmap, x+dst_x, y+dst_y, src_color);
             else
-                GdipBitmapSetPixel(dst_bitmap, x+dst_x, y+dst_y, color_over(dst_color, src_color));
+            {
+                if (!(src_color & 0xff000000))
+                    continue;
+
+                GdipBitmapGetPixel(dst_bitmap, x+dst_x, y+dst_y, &dst_color);
+                if (fmt & PixelFormatPAlpha)
+                    GdipBitmapSetPixel(dst_bitmap, x+dst_x, y+dst_y, color_over_fgpremult(dst_color, src_color));
+                else
+                    GdipBitmapSetPixel(dst_bitmap, x+dst_x, y+dst_y, color_over(dst_color, src_color));
+            }
         }
     }
 
@@ -4941,6 +4949,7 @@ GpStatus WINGDIPAPI GdipGraphicsClear(GpGraphics *graphics, ARGB color)
     GpSolidFill *brush;
     GpStatus stat;
     GpRectF wnd_rect;
+    CompositingMode prev_comp_mode;
 
     TRACE("(%p, %x)\n", graphics, color);
 
@@ -4961,8 +4970,11 @@ GpStatus WINGDIPAPI GdipGraphicsClear(GpGraphics *graphics, ARGB color)
         return stat;
     }
 
+    GdipGetCompositingMode(graphics, &prev_comp_mode);
+    GdipSetCompositingMode(graphics, CompositingModeSourceCopy);
     GdipFillRectangle(graphics, (GpBrush*)brush, wnd_rect.X, wnd_rect.Y,
                                                  wnd_rect.Width, wnd_rect.Height);
+    GdipSetCompositingMode(graphics, prev_comp_mode);
 
     GdipDeleteBrush((GpBrush*)brush);
 

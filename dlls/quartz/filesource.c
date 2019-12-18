@@ -77,7 +77,6 @@ typedef struct AsyncReader
     HANDLE *handle_list;
 } AsyncReader;
 
-static const IPinVtbl FileAsyncReaderPin_Vtbl;
 static const struct strmbase_source_ops source_ops;
 
 static inline AsyncReader *impl_from_strmbase_filter(struct strmbase_filter *iface)
@@ -90,7 +89,6 @@ static inline AsyncReader *impl_from_IFileSourceFilter(IFileSourceFilter *iface)
     return CONTAINING_RECORD(iface, AsyncReader, IFileSourceFilter_iface);
 }
 
-static const IBaseFilterVtbl AsyncReader_Vtbl;
 static const IFileSourceFilterVtbl FileSource_Vtbl;
 static const IAsyncReaderVtbl FileAsyncReader_Vtbl;
 
@@ -412,7 +410,7 @@ HRESULT AsyncReader_create(IUnknown *outer, void **out)
     if (!pAsyncRead)
         return E_OUTOFMEMORY;
 
-    strmbase_filter_init(&pAsyncRead->filter, &AsyncReader_Vtbl, outer, &CLSID_AsyncReader, &filter_ops);
+    strmbase_filter_init(&pAsyncRead->filter, outer, &CLSID_AsyncReader, &filter_ops);
 
     pAsyncRead->IFileSourceFilter_iface.lpVtbl = &FileSource_Vtbl;
 
@@ -427,25 +425,6 @@ HRESULT AsyncReader_create(IUnknown *outer, void **out)
 
     return S_OK;
 }
-
-static const IBaseFilterVtbl AsyncReader_Vtbl =
-{
-    BaseFilterImpl_QueryInterface,
-    BaseFilterImpl_AddRef,
-    BaseFilterImpl_Release,
-    BaseFilterImpl_GetClassID,
-    BaseFilterImpl_Stop,
-    BaseFilterImpl_Pause,
-    BaseFilterImpl_Run,
-    BaseFilterImpl_GetState,
-    BaseFilterImpl_SetSyncSource,
-    BaseFilterImpl_GetSyncSource,
-    BaseFilterImpl_EnumPins,
-    BaseFilterImpl_FindPin,
-    BaseFilterImpl_QueryFilterInfo,
-    BaseFilterImpl_JoinFilterGraph,
-    BaseFilterImpl_QueryVendorInfo
-};
 
 static HRESULT WINAPI FileSource_QueryInterface(IFileSourceFilter * iface, REFIID riid, LPVOID * ppv)
 {
@@ -488,8 +467,7 @@ static HRESULT WINAPI FileSource_Load(IFileSourceFilter * iface, LPCOLESTR pszFi
         return HRESULT_FROM_WIN32(GetLastError());
     }
 
-    strmbase_source_init(&This->source, &FileAsyncReaderPin_Vtbl, &This->filter,
-            wszOutputPinName, &source_ops);
+    strmbase_source_init(&This->source, &This->filter, wszOutputPinName, &source_ops);
     BaseFilterImpl_IncrementPinVersion(&This->filter);
 
     This->file = hFile;
@@ -613,28 +591,6 @@ static HRESULT source_query_interface(struct strmbase_pin *iface, REFIID iid, vo
     IUnknown_AddRef((IUnknown *)*out);
     return S_OK;
 }
-
-static const IPinVtbl FileAsyncReaderPin_Vtbl = 
-{
-    BasePinImpl_QueryInterface,
-    BasePinImpl_AddRef,
-    BasePinImpl_Release,
-    BaseOutputPinImpl_Connect,
-    BaseOutputPinImpl_ReceiveConnection,
-    BasePinImpl_Disconnect,
-    BasePinImpl_ConnectedTo,
-    BasePinImpl_ConnectionMediaType,
-    BasePinImpl_QueryPinInfo,
-    BasePinImpl_QueryDirection,
-    BasePinImpl_QueryId,
-    BasePinImpl_QueryAccept,
-    BasePinImpl_EnumMediaTypes,
-    BasePinImpl_QueryInternalConnections,
-    BaseOutputPinImpl_EndOfStream,
-    BaseOutputPinImpl_BeginFlush,
-    BaseOutputPinImpl_EndFlush,
-    BasePinImpl_NewSegment
-};
 
 /* Function called as a helper to IPin_Connect */
 /* specific AM_MEDIA_TYPE - it cannot be NULL */

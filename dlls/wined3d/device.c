@@ -939,7 +939,6 @@ static void device_init_swapchain_state(struct wined3d_device *device, struct wi
 
 void wined3d_device_delete_opengl_contexts_cs(void *object)
 {
-    struct wined3d_resource *resource, *cursor;
     struct wined3d_swapchain_gl *swapchain_gl;
     struct wined3d_device *device = object;
     struct wined3d_context_gl *context_gl;
@@ -948,12 +947,6 @@ void wined3d_device_delete_opengl_contexts_cs(void *object)
     struct wined3d_shader *shader;
 
     device_gl = wined3d_device_gl(device);
-
-    LIST_FOR_EACH_ENTRY_SAFE(resource, cursor, &device->resources, struct wined3d_resource, resource_list_entry)
-    {
-        TRACE("Unloading resource %p.\n", resource);
-        wined3d_cs_emit_unload_resource(device->cs, resource);
-    }
 
     LIST_FOR_EACH_ENTRY(shader, &device->shaders, struct wined3d_shader, shader_list_entry)
     {
@@ -1106,6 +1099,7 @@ static void device_free_sampler(struct wine_rb_entry *entry, void *context)
 void wined3d_device_uninit_3d(struct wined3d_device *device)
 {
     BOOL no3d = device->wined3d->flags & WINED3D_NO3D;
+    struct wined3d_resource *resource, *cursor;
     struct wined3d_rendertarget_view *view;
     struct wined3d_texture *texture;
     unsigned int i;
@@ -1145,7 +1139,14 @@ void wined3d_device_uninit_3d(struct wined3d_device *device)
 
     wine_rb_clear(&device->samplers, device_free_sampler, NULL);
 
+    LIST_FOR_EACH_ENTRY_SAFE(resource, cursor, &device->resources, struct wined3d_resource, resource_list_entry)
+    {
+        TRACE("Unloading resource %p.\n", resource);
+        wined3d_cs_emit_unload_resource(device->cs, resource);
+    }
+
     device->adapter->adapter_ops->adapter_uninit_3d(device);
+    device->d3d_initialized = FALSE;
 
     if ((view = device->fb.depth_stencil))
     {
@@ -1170,8 +1171,6 @@ void wined3d_device_uninit_3d(struct wined3d_device *device)
 
     heap_free(device->swapchains);
     device->swapchains = NULL;
-
-    device->d3d_initialized = FALSE;
 }
 
 /* Enables thread safety in the wined3d device and its resources. Called by DirectDraw
@@ -4060,8 +4059,10 @@ HRESULT CDECL wined3d_device_update_texture(struct wined3d_device *device,
 {
     unsigned int src_size, dst_size, src_skip_levels = 0;
     unsigned int src_level_count, dst_level_count;
+    const struct wined3d_dirty_regions *regions;
     unsigned int layer_count, level_count, i, j;
     enum wined3d_resource_type type;
+    BOOL entire_texture = TRUE;
     struct wined3d_box box;
 
     TRACE("device %p, src_texture %p, dst_texture %p.\n", device, src_texture, dst_texture);
@@ -4128,18 +4129,82 @@ HRESULT CDECL wined3d_device_update_texture(struct wined3d_device *device,
         return WINED3DERR_INVALIDCALL;
     }
 
-    /* Update every surface level of the texture. */
-    for (i = 0; i < level_count; ++i)
+    if ((regions = src_texture->dirty_regions))
     {
-        wined3d_texture_get_level_box(dst_texture, i, &box);
-        for (j = 0; j < layer_count; ++j)
+        for (i = 0; i < layer_count && entire_texture; ++i)
         {
-            wined3d_cs_emit_blt_sub_resource(device->cs,
-                    &dst_texture->resource, j * dst_level_count + i, &box,
-                    &src_texture->resource, j * src_level_count + i + src_skip_levels, &box,
-                    0, NULL, WINED3D_TEXF_POINT);
+            if (regions[i].box_count >= WINED3D_MAX_DIRTY_REGION_COUNT)
+                continue;
+
+            entire_texture = FALSE;
+            break;
         }
     }
+
+    /* Update every surface level of the texture. */
+    if (entire_texture)
+    {
+        for (i = 0; i < level_count; ++i)
+        {
+            wined3d_texture_get_level_box(dst_texture, i, &box);
+            for (j = 0; j < layer_count; ++j)
+            {
+                wined3d_cs_emit_blt_sub_resource(device->cs,
+                        &dst_texture->resource, j * dst_level_count + i, &box,
+                        &src_texture->resource, j * src_level_count + i + src_skip_levels, &box,
+                        0, NULL, WINED3D_TEXF_POINT);
+            }
+        }
+    }
+    else
+    {
+        unsigned int src_level, box_count, k;
+        const struct wined3d_box *boxes;
+        struct wined3d_box b;
+
+        for (i = 0; i < layer_count; ++i)
+        {
+            boxes = regions[i].boxes;
+            box_count = regions[i].box_count;
+            if (regions[i].box_count >= WINED3D_MAX_DIRTY_REGION_COUNT)
+            {
+                boxes = &b;
+                box_count = 1;
+                wined3d_texture_get_level_box(dst_texture, i, &b);
+            }
+
+            for (j = 0; j < level_count; ++j)
+            {
+                src_level = j + src_skip_levels;
+
+                /* TODO: We could pass an array of boxes here to avoid
+                 * multiple context acquisitions for the same resource. */
+                for (k = 0; k < box_count; ++k)
+                {
+                    box = boxes[k];
+                    if (src_level)
+                    {
+                        box.left >>= src_level;
+                        box.top >>= src_level;
+                        box.right = min((box.right + (1u << src_level) - 1) >> src_level,
+                                wined3d_texture_get_level_width(src_texture, src_level));
+                        box.bottom = min((box.bottom + (1u << src_level) - 1) >> src_level,
+                                wined3d_texture_get_level_height(src_texture, src_level));
+                        box.front >>= src_level;
+                        box.back = min((box.back + (1u << src_level) - 1) >> src_level,
+                                wined3d_texture_get_level_depth(src_texture, src_level));
+                    }
+
+                    wined3d_cs_emit_blt_sub_resource(device->cs,
+                            &dst_texture->resource, i * dst_level_count + j, &box,
+                            &src_texture->resource, i * src_level_count + src_level, &box,
+                            0, NULL, WINED3D_TEXF_POINT);
+                }
+            }
+        }
+    }
+
+    wined3d_texture_clear_dirty_regions(src_texture);
 
     return WINED3D_OK;
 }
@@ -5298,6 +5363,12 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
         TRACE("Resetting state.\n");
         wined3d_cs_emit_reset_state(device->cs);
         state_cleanup(&device->state);
+
+        LIST_FOR_EACH_ENTRY_SAFE(resource, cursor, &device->resources, struct wined3d_resource, resource_list_entry)
+        {
+            TRACE("Unloading resource %p.\n", resource);
+            wined3d_cs_emit_unload_resource(device->cs, resource);
+        }
 
         if (device->d3d_initialized)
             device->adapter->adapter_ops->adapter_uninit_3d(device);

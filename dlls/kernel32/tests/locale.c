@@ -89,6 +89,7 @@ static NTSTATUS (WINAPI *pRtlNormalizeString)(ULONG, LPCWSTR, INT, LPWSTR, INT*)
 static NTSTATUS (WINAPI *pRtlIsNormalizedString)(ULONG, LPCWSTR, INT, BOOLEAN*);
 static NTSTATUS (WINAPI *pNtGetNlsSectionPtr)(ULONG,ULONG,void*,void**,SIZE_T*);
 static void (WINAPI *pRtlInitCodePageTable)(USHORT*,CPTABLEINFO*);
+static NTSTATUS (WINAPI *pRtlCustomCPToUnicodeN)(CPTABLEINFO*,WCHAR*,DWORD,DWORD*,const char*,DWORD);
 
 static void InitFunctionPointers(void)
 {
@@ -134,6 +135,7 @@ static void InitFunctionPointers(void)
   X(RtlIsNormalizedString);
   X(NtGetNlsSectionPtr);
   X(RtlInitCodePageTable);
+  X(RtlCustomCPToUnicodeN);
 #undef X
 }
 
@@ -3437,7 +3439,7 @@ static void test_FoldStringW(void)
   };
   static const WCHAR foldczone_broken_dst[] =
   {
-    'W','i','n','e',0x0348,0x0551,0x1323,0x280d,'W','i','n','e',0x3cb,0x1f0,0xa0,0xaa,0
+    'W','i','n','e',0x0348,0x0551,0x1323,0x280d,'W','i','n','e',0x03c5,0x0308,'j',0x030c,0x00a0,0x00aa,0
   };
   static const WCHAR ligatures_src[] =
   {
@@ -3580,10 +3582,12 @@ static void test_FoldStringW(void)
   /* MAP_FOLDCZONE */
   SetLastError(0);
   ret = pFoldStringW(MAP_FOLDCZONE, foldczone_src, -1, dst, 256);
-  ok(ret == ARRAY_SIZE(foldczone_dst), "Got %d, error %d\n", ret, GetLastError());
+  ok(ret == ARRAY_SIZE(foldczone_dst)
+     || broken(ret == ARRAY_SIZE(foldczone_broken_dst)), /* winxp, win2003 */
+     "Got %d, error %d.\n", ret, GetLastError());
   ok(!memcmp(dst, foldczone_dst, sizeof(foldczone_dst))
-     || broken(!memcmp(dst, foldczone_broken_dst, sizeof(foldczone_broken_dst))),
-     "MAP_FOLDCZONE: Expanded incorrectly\n");
+     || broken(!memcmp(dst, foldczone_broken_dst, sizeof(foldczone_broken_dst))), /* winxp, win2003 */
+     "Got unexpected string %s.\n", wine_dbgstr_w(dst));
 
   /* MAP_EXPAND_LIGATURES */
   SetLastError(0);
@@ -3592,7 +3596,7 @@ static void test_FoldStringW(void)
   if (!(ret == 0 && GetLastError() == ERROR_INVALID_FLAGS)) {
     ok(ret == ARRAY_SIZE(ligatures_dst), "Got %d, error %d\n", ret, GetLastError());
     ok(!memcmp(dst, ligatures_dst, sizeof(ligatures_dst)),
-       "MAP_EXPAND_LIGATURES: Expanded incorrectly\n");
+       "Got unexpected string %s.\n", wine_dbgstr_w(dst));
   }
 
   /* FIXME: MAP_PRECOMPOSED : MAP_COMPOSITE */
@@ -4196,17 +4200,40 @@ static void test_GetCPInfo(void)
         ret = UnmapViewOfFile( ptr );
         todo_wine ok( ret, "UnmapViewOfFile failed err %u\n", GetLastError() );
 
-        status = pNtGetNlsSectionPtr( 11, 932, NULL, &ptr, &size );
+        status = pNtGetNlsSectionPtr( 11, 936, NULL, &ptr, &size );
         ok( !status, "failed %x\n", status );
-        ok( size > 0x20000 && size <= 0x30000, "wrong size %lx\n", size );
+        ok( size > 0x30000 && size <= 0x40000, "wrong size %lx\n", size );
         memset( &table, 0xcc, sizeof(table) );
         if (pRtlInitCodePageTable)
         {
             pRtlInitCodePageTable( ptr, &table );
-            ok( table.CodePage == 932, "wrong codepage %u\n", table.CodePage );
+            ok( table.CodePage == 936, "wrong codepage %u\n", table.CodePage );
             ok( table.MaximumCharacterSize == 2, "wrong char size %u\n", table.MaximumCharacterSize );
             ok( table.DefaultChar == '?', "wrong default char %x\n", table.DefaultChar );
             ok( table.DBCSCodePage == TRUE, "wrong dbcs %u\n", table.DBCSCodePage );
+
+            if (pRtlCustomCPToUnicodeN)
+            {
+                static const unsigned char buf[] = { 0xbf, 0xb4, 0xc7, 0, 0x78 };
+                static const WCHAR expect[][4] = { { 0xcccc, 0xcccc, 0xcccc, 0xcccc },
+                                                   { 0x0000, 0xcccc, 0xcccc, 0xcccc },
+                                                   { 0x770b, 0xcccc, 0xcccc, 0xcccc },
+                                                   { 0x770b, 0x0000, 0xcccc, 0xcccc },
+                                                   { 0x770b, 0x003f, 0xcccc, 0xcccc },
+                                                   { 0x770b, 0x003f, 0x0078, 0xcccc } };
+                WCHAR wbuf[5];
+                DWORD i, j, reslen;
+
+                for (i = 0; i <= sizeof(buf); i++)
+                {
+                    memset( wbuf, 0xcc, sizeof(wbuf) );
+                    RtlCustomCPToUnicodeN( &table, wbuf, sizeof(wbuf), &reslen, (char *)buf, i );
+                    for (j = 0; j < 4; j++) if (expect[i][j] == 0xcccc) break;
+                    ok( reslen == j * sizeof(WCHAR), "%u: wrong len %u\n", i, reslen );
+                    for (j = 0; j < 4; j++)
+                        ok( wbuf[j] == expect[i][j], "%u: char %u got %04x\n", i, j, wbuf[j] );
+                }
+            }
         }
         ret = UnmapViewOfFile( ptr );
         todo_wine ok( ret, "UnmapViewOfFile failed err %u\n", GetLastError() );
@@ -4984,11 +5011,43 @@ static void test_GetGeoInfo(void)
     ok(!strcmp(buffA, "RU"), "got %s\n", buffA);
     ok(GetLastError() == ERROR_INSUFFICIENT_BUFFER, "got %d\n", GetLastError());
 
-    /* GEO_NATION returns GEOID in a string form */
+    /* GEO_NATION returns GEOID in a string form, but only for GEOCLASS_NATION-type IDs */
+    ret = pGetGeoInfoA(203, GEO_NATION, buffA, 20, 0); /* GEOCLASS_NATION */
+    ok(ret == 4, "GEO_NATION of nation: expected 4, got %d\n", ret);
+    ok(!strcmp(buffA, "203"), "GEO_NATION of nation: expected 203, got %s\n", buffA);
+
     buffA[0] = 0;
-    ret = pGetGeoInfoA(203, GEO_NATION, buffA, 20, 0);
-    ok(ret == 4, "got %d\n", ret);
-    ok(!strcmp(buffA, "203"), "got %s\n", buffA);
+    ret = pGetGeoInfoA(39070, GEO_NATION, buffA, 20, 0); /* GEOCLASS_REGION */
+    ok(ret == 0, "GEO_NATION of region: expected 0, got %d\n", ret);
+    ok(*buffA == 0, "GEO_NATION of region: expected empty string, got %s\n", buffA);
+
+    buffA[0] = 0;
+    ret = pGetGeoInfoA(333, GEO_NATION, buffA, 20, 0); /* LOCATION_BOTH internal Wine type */
+    ok(ret == 0 ||
+       broken(ret == 4) /* Win7 and older */,
+       "GEO_NATION of LOCATION_BOTH: expected 0, got %d\n", ret);
+    ok(*buffA == 0 ||
+       broken(!strcmp(buffA, "333")) /* Win7 and older */,
+       "GEO_NATION of LOCATION_BOTH: expected empty string, got %s\n", buffA);
+
+    /* GEO_ID is like GEO_NATION but works for any ID */
+    buffA[0] = 0;
+    ret = pGetGeoInfoA(203, GEO_ID, buffA, 20, 0); /* GEOCLASS_NATION */
+    if (ret == 0)
+        win_skip("GEO_ID not supported.\n");
+    else
+    {
+        ok(ret == 4, "GEO_ID: expected 4, got %d\n", ret);
+        ok(!strcmp(buffA, "203"), "GEO_ID: expected 203, got %s\n", buffA);
+
+        ret = pGetGeoInfoA(47610, GEO_ID, buffA, 20, 0); /* GEOCLASS_REGION */
+        ok(ret == 6, "got %d\n", ret);
+        ok(!strcmp(buffA, "47610"), "got %s\n", buffA);
+
+        ret = pGetGeoInfoA(333, GEO_ID, buffA, 20, 0); /* LOCATION_BOTH internal Wine type */
+        ok(ret == 4, "got %d\n", ret);
+        ok(!strcmp(buffA, "333"), "got %s\n", buffA);
+    }
 
     /* GEO_PARENT */
     buffA[0] = 0;

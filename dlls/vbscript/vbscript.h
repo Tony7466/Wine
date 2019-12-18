@@ -120,11 +120,30 @@ struct _vbdisp_t {
     VARIANT props[1];
 };
 
+typedef struct _dynamic_var_t {
+    struct _dynamic_var_t *next;
+    VARIANT v;
+    const WCHAR *name;
+    BOOL is_const;
+    SAFEARRAY *array;
+} dynamic_var_t;
+
 typedef struct {
     IDispatchEx IDispatchEx_iface;
     LONG ref;
 
+    dynamic_var_t **global_vars;
+    size_t global_vars_cnt;
+    size_t global_vars_size;
+
+    function_t **global_funcs;
+    size_t global_funcs_cnt;
+    size_t global_funcs_size;
+
+    class_desc_t *classes;
+
     script_ctx_t *ctx;
+    heap_pool_t heap;
 } ScriptDisp;
 
 typedef struct _builtin_prop_t builtin_prop_t;
@@ -158,14 +177,6 @@ static inline VARIANT *get_arg(DISPPARAMS *dp, DWORD i)
     return dp->rgvarg + dp->cArgs-i-1;
 }
 
-typedef struct _dynamic_var_t {
-    struct _dynamic_var_t *next;
-    VARIANT v;
-    const WCHAR *name;
-    BOOL is_const;
-    SAFEARRAY *array;
-} dynamic_var_t;
-
 struct _script_ctx_t {
     IActiveScriptSite *site;
     LCID lcid;
@@ -181,19 +192,6 @@ struct _script_ctx_t {
     BuiltinDisp *err_obj;
 
     EXCEPINFO ei;
-
-    dynamic_var_t **global_vars;
-    size_t global_vars_cnt;
-    size_t global_vars_size;
-
-    function_t **global_funcs;
-    size_t global_funcs_cnt;
-    size_t global_funcs_size;
-
-    class_desc_t *classes;
-    class_desc_t *procs;
-
-    heap_pool_t heap;
 
     struct list objects;
     struct list code_list;
@@ -337,6 +335,7 @@ struct _function_t {
 struct _vbscode_t {
     instr_t *instrs;
     WCHAR *source;
+    unsigned ref;
 
     BOOL option_explicit;
 
@@ -357,6 +356,11 @@ struct _vbscode_t {
     struct list entry;
 };
 
+static inline void grab_vbscode(vbscode_t *code)
+{
+    code->ref++;
+}
+
 void release_vbscode(vbscode_t*) DECLSPEC_HIDDEN;
 HRESULT compile_script(script_ctx_t*,const WCHAR*,const WCHAR*,DWORD,vbscode_t**) DECLSPEC_HIDDEN;
 HRESULT compile_procedure(script_ctx_t*,const WCHAR*,const WCHAR*,DWORD,class_desc_t**) DECLSPEC_HIDDEN;
@@ -369,6 +373,7 @@ void detach_global_objects(script_ctx_t*) DECLSPEC_HIDDEN;
 HRESULT get_builtin_id(BuiltinDisp*,const WCHAR*,DISPID*) DECLSPEC_HIDDEN;
 
 void release_regexp_typelib(void) DECLSPEC_HIDDEN;
+HRESULT get_dispatch_typeinfo(ITypeInfo**) DECLSPEC_HIDDEN;
 
 static inline BOOL is_int32(double d)
 {

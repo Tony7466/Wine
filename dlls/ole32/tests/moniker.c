@@ -1147,14 +1147,62 @@ static const BYTE expected_item_moniker_comparison_data[] =
 {
      0x04,0x03,0x00,0x00,0x00,0x00,0x00,0x00,
      0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x46,
-     0x21,0x00,0x54,0x00,0x45,0x00,0x53,0x00,
-     0x54,0x00,0x00,0x00,
+      '!',0x00, 'T',0x00, 'E',0x00, 'S',0x00,
+      'T',0x00,0x00,0x00,
+};
+
+static const BYTE expected_item_moniker_comparison_data2[] =
+{
+     0x04,0x03,0x00,0x00,0x00,0x00,0x00,0x00,
+     0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x46,
+      'T',0x00, 'E',0x00, 'S',0x00, 'T',0x00,
+     0x00,0x00,
+};
+
+static const BYTE expected_item_moniker_comparison_data4[] =
+{
+     0x04,0x03,0x00,0x00,0x00,0x00,0x00,0x00,
+     0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x46,
+      '&',0x00, '&',0x00, 'T',0x00, 'E',0x00,
+      'S',0x00, 'T',0x00,0x00,0x00,
+};
+
+static const BYTE expected_item_moniker_comparison_data5[] =
+{
+     0x04,0x03,0x00,0x00,0x00,0x00,0x00,0x00,
+     0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x46,
+      'A',0x00, 'B',0x00, 'T',0x00, 'E',0x00,
+      'S',0x00, 'T',0x00,0x00,0x00,
 };
 
 static const BYTE expected_item_moniker_saved_data[] =
 {
-     0x02,0x00,0x00,0x00,0x21,0x00,0x05,0x00,
-     0x00,0x00,0x54,0x65,0x73,0x74,0x00,
+     0x02,0x00,0x00,0x00, '!',0x00,0x05,0x00,
+     0x00,0x00, 'T', 'e', 's', 't',0x00,
+};
+
+static const BYTE expected_item_moniker_saved_data2[] =
+{
+     0x00,0x00,0x00,0x00,0x05,0x00,0x00,0x00,
+      'T', 'e', 's', 't',0x00,
+};
+
+static const BYTE expected_item_moniker_saved_data3[] =
+{
+     0x01,0x00,0x00,0x00,0x00,0x05,0x00,0x00,
+     0x00,'T', 'e', 's', 't',0x00,
+};
+
+static const BYTE expected_item_moniker_saved_data4[] =
+{
+     0x03,0x00,0x00,0x00, '&', '&',0x00,0x05,
+     0x00,0x00,0x00, 'T', 'e', 's', 't',0x00,
+};
+
+static const BYTE expected_item_moniker_saved_data5[] =
+{
+     0x03,0x00,0x00,0x00, 'a', 'b',0x00,0x05,
+     0x00,0x00,0x00, 'T', 'e', 's', 't',0x00,
 };
 
 static const BYTE expected_item_moniker_marshal_data[] =
@@ -1165,8 +1213,56 @@ static const BYTE expected_item_moniker_marshal_data[] =
      0x04,0x03,0x00,0x00,0x00,0x00,0x00,0x00,
      0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x46,
      0x00,0x00,0x00,0x00,0x36,0x00,0x00,0x00,
-     0x02,0x00,0x00,0x00,0x21,0x00,0x05,0x00,
-     0x00,0x00,0x54,0x65,0x73,0x74,0x00,
+     0x02,0x00,0x00,0x00, '!',0x00,0x05,0x00,
+     0x00,0x00, 'T', 'e', 's', 't',0x00,
+};
+
+static const BYTE expected_item_moniker_marshal_data2[] =
+{
+     0x4d,0x45,0x4f,0x57,0x04,0x00,0x00,0x00,
+     0x0f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+     0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x46,
+     0x04,0x03,0x00,0x00,0x00,0x00,0x00,0x00,
+     0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x46,
+     0x00,0x00,0x00,0x00,0x2e,0x00,0x00,0x00,
+     0x00,0x00,0x00,0x00,0x05,0x00,0x00,0x00,
+      'T', 'e', 's', 't',0x00,
+};
+
+static const BYTE expected_item_moniker_marshal_data3[] =
+{
+     0x4d,0x45,0x4f,0x57,0x04,0x00,0x00,0x00,
+     0x0f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+     0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x46,
+     0x04,0x03,0x00,0x00,0x00,0x00,0x00,0x00,
+     0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x46,
+     0x00,0x00,0x00,0x00,0x32,0x00,0x00,0x00,
+     0x01,0x00,0x00,0x00,0x00,0x05,0x00,0x00,
+     0x00, 'T', 'e', 's', 't',0x00,
+};
+
+static const BYTE expected_item_moniker_marshal_data4[] =
+{
+     0x4d,0x45,0x4f,0x57,0x04,0x00,0x00,0x00,
+     0x0f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+     0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x46,
+     0x04,0x03,0x00,0x00,0x00,0x00,0x00,0x00,
+     0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x46,
+     0x00,0x00,0x00,0x00,0x3a,0x00,0x00,0x00,
+     0x03,0x00,0x00,0x00, '&', '&',0x00,0x05,
+     0x00,0x00,0x00, 'T', 'e', 's', 't',0x00,
+};
+
+static const BYTE expected_item_moniker_marshal_data5[] =
+{
+     0x4d,0x45,0x4f,0x57,0x04,0x00,0x00,0x00,
+     0x0f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+     0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x46,
+     0x04,0x03,0x00,0x00,0x00,0x00,0x00,0x00,
+     0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x46,
+     0x00,0x00,0x00,0x00,0x3a,0x00,0x00,0x00,
+     0x03,0x00,0x00,0x00, 'a', 'b',0x00,0x05,
+     0x00,0x00,0x00, 'T', 'e', 's', 't',0x00,
 };
 
 static const BYTE expected_anti_moniker_marshal_data[] =
@@ -1237,11 +1333,11 @@ static const BYTE expected_gc_moniker_comparison_data[] =
     0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x46,
     0x04,0x03,0x00,0x00,0x00,0x00,0x00,0x00,
     0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x46,
-    0x21,0x00,0x54,0x00,0x45,0x00,0x53,0x00,
-    0x54,0x00,0x00,0x00,0x04,0x03,0x00,0x00,
+     '!',0x00, 'T',0x00, 'E',0x00, 'S',0x00,
+     'T',0x00,0x00,0x00,0x04,0x03,0x00,0x00,
     0x00,0x00,0x00,0x00,0xc0,0x00,0x00,0x00,
-    0x00,0x00,0x00,0x46,0x23,0x00,0x57,0x00,
-    0x49,0x00,0x4e,0x00,0x45,0x00,0x00,0x00,
+    0x00,0x00,0x00,0x46, '#',0x00, 'W',0x00,
+     'I',0x00, 'N',0x00, 'E',0x00,0x00,0x00,
 };
 
 static void test_moniker(
@@ -1249,15 +1345,16 @@ static void test_moniker(
     const BYTE *expected_moniker_marshal_data, unsigned int sizeof_expected_moniker_marshal_data,
     const BYTE *expected_moniker_saved_data, unsigned int sizeof_expected_moniker_saved_data,
     const BYTE *expected_moniker_comparison_data, unsigned int sizeof_expected_moniker_comparison_data,
-    LPCWSTR expected_display_name)
+    int expected_max_size, LPCWSTR expected_display_name)
 {
+    ULARGE_INTEGER max_size;
     IStream * stream;
     IROTData * rotdata;
     HRESULT hr;
     HGLOBAL hglobal;
     LPBYTE moniker_data;
     DWORD moniker_size;
-    DWORD i;
+    DWORD i, moniker_type;
     BOOL same;
     BYTE buffer[128];
     IMoniker * moniker_proxy;
@@ -1274,7 +1371,8 @@ static void test_moniker(
 
     hr = IMoniker_GetDisplayName(moniker, bindctx, NULL, &display_name);
     ok_ole_success(hr, IMoniker_GetDisplayName);
-    ok(!lstrcmpW(display_name, expected_display_name), "%s: display name wasn't what was expected\n", testname);
+    ok(!lstrcmpW(display_name, expected_display_name), "%s: unexpected display name %s, %s.\n", testname,
+            wine_dbgstr_w(display_name), wine_dbgstr_w(expected_display_name));
 
     CoTaskMemFree(display_name);
     IBindCtx_Release(bindctx);
@@ -1326,6 +1424,13 @@ static void test_moniker(
     ok_ole_success(hr, CreateStreamOnHGlobal);
   
     /* Saving */
+    moniker_type = 0;
+    IMoniker_IsSystemMoniker(moniker, &moniker_type);
+
+    hr = IMoniker_GetSizeMax(moniker, &max_size);
+    ok(hr == S_OK, "Failed to get max size, hr %#x.\n", hr);
+todo_wine_if(moniker_type == MKSYS_GENERICCOMPOSITE)
+    ok(expected_max_size == max_size.u.LowPart, "%s: unexpected max size %u.\n", testname, max_size.u.LowPart);
 
     hr = IMoniker_Save(moniker, stream, TRUE);
     ok_ole_success(hr, IMoniker_Save);
@@ -1444,7 +1549,7 @@ static void test_class_moniker(void)
         expected_class_moniker_marshal_data, sizeof(expected_class_moniker_marshal_data),
         expected_class_moniker_saved_data, sizeof(expected_class_moniker_saved_data),
         expected_class_moniker_comparison_data, sizeof(expected_class_moniker_comparison_data),
-        expected_class_moniker_display_name);
+        sizeof(expected_class_moniker_saved_data), expected_class_moniker_display_name);
 
     /* Hashing */
 
@@ -1569,9 +1674,37 @@ static void test_file_monikers(void)
 
 static void test_item_moniker(void)
 {
+    static const char item_moniker_unicode_delim_stream[] =
+    {
+        0x05, 0x00, 0x00, 0x00, 0xff, 0xff, 0x00, '!',
+        0x00, 0x02, 0x00, 0x00, 0x00,  'A', 0x00,
+    };
+    static const char item_moniker_unicode_item_stream[] =
+    {
+        0x02, 0x00, 0x00, 0x00,  '!', 0x00, 0x05, 0x00,
+        0x00, 0x00, 0xff, 0xff, 0x00,  'B', 0x00,
+    };
+    static const char item_moniker_unicode_delim_item_stream[] =
+    {
+        0x05, 0x00, 0x00, 0x00, 0xff, 0xff, 0x00,  '!',
+        0x00, 0x06, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff,
+        0x00,  'C', 0x00,
+    };
+    static struct
+    {
+        const char *data;
+        int data_len;
+        const WCHAR *display_name;
+    }
+    item_moniker_data[] =
+    {
+        { item_moniker_unicode_delim_stream, sizeof(item_moniker_unicode_delim_stream), L"!A" },
+        { item_moniker_unicode_item_stream, sizeof(item_moniker_unicode_item_stream), L"!B" },
+        { item_moniker_unicode_delim_item_stream, sizeof(item_moniker_unicode_delim_item_stream), L"!C" },
+    };
+    IMoniker *moniker, *moniker2;
     HRESULT hr;
-    IMoniker *moniker;
-    DWORD moniker_type;
+    DWORD moniker_type, i;
     DWORD hash;
     IBindCtx *bindctx;
     IMoniker *inverse;
@@ -1579,15 +1712,99 @@ static void test_item_moniker(void)
     static const WCHAR wszDelimiter[] = {'!',0};
     static const WCHAR wszObjectName[] = {'T','e','s','t',0};
     static const WCHAR expected_display_name[] = { '!','T','e','s','t',0 };
+    WCHAR *display_name;
+    LARGE_INTEGER pos;
+    IStream *stream;
+
+    hr = CreateItemMoniker(NULL, wszObjectName, &moniker);
+    ok(hr == S_OK, "Failed to create item moniker, hr %#x.\n", hr);
+
+    test_moniker("item moniker 2", moniker,
+        expected_item_moniker_marshal_data2, sizeof(expected_item_moniker_marshal_data2),
+        expected_item_moniker_saved_data2, sizeof(expected_item_moniker_saved_data2),
+        expected_item_moniker_comparison_data2, sizeof(expected_item_moniker_comparison_data2),
+        46, L"Test");
+
+    IMoniker_Release(moniker);
+
+    hr = CreateItemMoniker(L"", wszObjectName, &moniker);
+    ok(hr == S_OK, "Failed to create item moniker, hr %#x.\n", hr);
+
+    test_moniker("item moniker 3", moniker,
+        expected_item_moniker_marshal_data3, sizeof(expected_item_moniker_marshal_data3),
+        expected_item_moniker_saved_data3, sizeof(expected_item_moniker_saved_data3),
+        expected_item_moniker_comparison_data2, sizeof(expected_item_moniker_comparison_data2),
+        50, L"Test");
+
+    IMoniker_Release(moniker);
+
+    hr = CreateItemMoniker(L"&&", wszObjectName, &moniker);
+    ok(hr == S_OK, "Failed to create item moniker, hr %#x.\n", hr);
+
+    test_moniker("item moniker 4", moniker,
+        expected_item_moniker_marshal_data4, sizeof(expected_item_moniker_marshal_data4),
+        expected_item_moniker_saved_data4, sizeof(expected_item_moniker_saved_data4),
+        expected_item_moniker_comparison_data4, sizeof(expected_item_moniker_comparison_data4),
+        58, L"&&Test");
+
+    IMoniker_Release(moniker);
+
+    hr = CreateItemMoniker(L"ab", wszObjectName, &moniker);
+    ok(hr == S_OK, "Failed to create item moniker, hr %#x.\n", hr);
+
+    test_moniker("item moniker 5", moniker,
+        expected_item_moniker_marshal_data5, sizeof(expected_item_moniker_marshal_data5),
+        expected_item_moniker_saved_data5, sizeof(expected_item_moniker_saved_data5),
+        expected_item_moniker_comparison_data5, sizeof(expected_item_moniker_comparison_data5),
+        58, L"abTest");
+
+    /* Serialize and load back. */
+    hr = CreateItemMoniker(NULL, L"object", &moniker2);
+    ok(hr == S_OK, "Failed to create item moniker, hr %#x.\n", hr);
+
+    hr = CreateStreamOnHGlobal(NULL, TRUE, &stream);
+    ok(hr == S_OK, "Failed to create a stream, hr %#x.\n", hr);
+
+    hr = CreateBindCtx(0, &bindctx);
+    ok(hr == S_OK, "Failed to create bind context, hr %#x.\n", hr);
+
+    for (i = 0; i < ARRAY_SIZE(item_moniker_data); ++i)
+    {
+        pos.QuadPart = 0;
+        hr = IStream_Seek(stream, pos, STREAM_SEEK_SET, NULL);
+        ok(hr == S_OK, "Failed to seek stream, hr %#x.\n", hr);
+
+        hr = IStream_Write(stream, item_moniker_data[i].data, item_moniker_data[i].data_len, NULL);
+        ok(hr == S_OK, "Failed to write stream contents, hr %#x.\n", hr);
+
+        pos.QuadPart = 0;
+        hr = IStream_Seek(stream, pos, STREAM_SEEK_SET, NULL);
+        ok(hr == S_OK, "Failed to seek stream, hr %#x.\n", hr);
+
+        hr = IMoniker_Load(moniker2, stream);
+        ok(hr == S_OK, "Failed to load moniker, hr %#x.\n", hr);
+
+        hr = IMoniker_GetDisplayName(moniker2, bindctx, NULL, &display_name);
+        ok(hr == S_OK, "Failed to get display name, hr %#x.\n", hr);
+        ok(!lstrcmpW(display_name, item_moniker_data[i].display_name), "%d: unexpected display name %s.\n",
+                i, wine_dbgstr_w(display_name));
+
+        CoTaskMemFree(display_name);
+    }
+
+    IStream_Release(stream);
+
+    IMoniker_Release(moniker2);
+    IMoniker_Release(moniker);
 
     hr = CreateItemMoniker(wszDelimiter, wszObjectName, &moniker);
     ok_ole_success(hr, CreateItemMoniker);
 
-    test_moniker("item moniker", moniker, 
+    test_moniker("item moniker 1", moniker,
         expected_item_moniker_marshal_data, sizeof(expected_item_moniker_marshal_data),
         expected_item_moniker_saved_data, sizeof(expected_item_moniker_saved_data),
         expected_item_moniker_comparison_data, sizeof(expected_item_moniker_comparison_data),
-        expected_display_name);
+        54, expected_display_name);
 
     /* Hashing */
 
@@ -1606,9 +1823,6 @@ static void test_item_moniker(void)
     ok(moniker_type == MKSYS_ITEMMONIKER,
         "dwMkSys != MKSYS_ITEMMONIKER, instead was 0x%08x\n",
         moniker_type);
-
-    hr = CreateBindCtx(0, &bindctx);
-    ok_ole_success(hr, CreateBindCtx);
 
     /* IsRunning test */
     hr = IMoniker_IsRunning(moniker, NULL, NULL, NULL);
@@ -1652,7 +1866,7 @@ static void test_anti_moniker(void)
         expected_anti_moniker_marshal_data, sizeof(expected_anti_moniker_marshal_data),
         expected_anti_moniker_saved_data, sizeof(expected_anti_moniker_saved_data),
         expected_anti_moniker_comparison_data, sizeof(expected_anti_moniker_comparison_data),
-        expected_display_name);
+        20, expected_display_name);
 
     /* Hashing */
     hr = IMoniker_Hash(moniker, &hash);
@@ -1722,7 +1936,7 @@ static void test_generic_composite_moniker(void)
         expected_gc_moniker_marshal_data, sizeof(expected_gc_moniker_marshal_data),
         expected_gc_moniker_saved_data, sizeof(expected_gc_moniker_saved_data),
         expected_gc_moniker_comparison_data, sizeof(expected_gc_moniker_comparison_data),
-        expected_display_name);
+        160, expected_display_name);
 
     /* Hashing */
 

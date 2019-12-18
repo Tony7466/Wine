@@ -153,10 +153,10 @@
 # @ stub CommitStateAtom
 @ stdcall CompareFileTime(ptr ptr)
 # @ stub CompareObjectHandles
-@ stdcall CompareStringA(long long str long str long) kernel32.CompareStringA
-@ stdcall CompareStringEx(wstr long wstr long wstr long ptr ptr long) kernel32.CompareStringEx
+@ stdcall CompareStringA(long long str long str long)
+@ stdcall CompareStringEx(wstr long wstr long wstr long ptr ptr long)
 @ stdcall CompareStringOrdinal(wstr long wstr long long)
-@ stdcall CompareStringW(long long wstr long wstr long) kernel32.CompareStringW
+@ stdcall CompareStringW(long long wstr long wstr long)
 @ stdcall ConnectNamedPipe(long ptr)
 @ stdcall ContinueDebugEvent(long long long)
 @ stdcall ConvertDefaultLocale(long)
@@ -267,7 +267,7 @@
 @ stdcall DisassociateCurrentThreadFromCallback(ptr) ntdll.TpDisassociateCallback
 # @ stub DiscardVirtualMemory
 @ stdcall DisconnectNamedPipe(long)
-# @ stub DnsHostnameToComputerNameExW
+@ stdcall DnsHostnameToComputerNameExW(wstr ptr ptr)
 # @ stub DsBindWithSpnExW
 # @ stub DsCrackNamesW
 # @ stub DsFreeDomainControllerInfoW
@@ -313,7 +313,7 @@
 @ stdcall EnumResourceTypesExW(long ptr long long long)
 @ stdcall EnumSystemCodePagesW(ptr long)
 @ stdcall EnumSystemFirmwareTables(long ptr long)
-@ stdcall EnumSystemGeoID(long long ptr) kernel32.EnumSystemGeoID
+@ stdcall EnumSystemGeoID(long long ptr)
 @ stdcall EnumSystemLanguageGroupsW(ptr long ptr)
 @ stdcall EnumSystemLocalesA(ptr long)
 @ stdcall EnumSystemLocalesEx(ptr long long ptr)
@@ -350,24 +350,24 @@
 @ stdcall FillConsoleOutputCharacterW(long long long long ptr)
 @ stdcall FindActCtxSectionGuid(long ptr long ptr ptr)
 @ stdcall FindActCtxSectionStringW(long ptr long wstr ptr)
-@ stdcall FindClose(long) kernel32.FindClose
+@ stdcall FindClose(long)
 @ stdcall FindCloseChangeNotification(long)
 @ stdcall FindFirstChangeNotificationA(str long long)
 @ stdcall FindFirstChangeNotificationW(wstr long long)
-@ stdcall FindFirstFileA(str ptr) kernel32.FindFirstFileA
-@ stdcall FindFirstFileExA(str long ptr long ptr long) kernel32.FindFirstFileExA
-@ stdcall FindFirstFileExW(wstr long ptr long ptr long) kernel32.FindFirstFileExW
+@ stdcall FindFirstFileA(str ptr)
+@ stdcall FindFirstFileExA(str long ptr long ptr long)
+@ stdcall FindFirstFileExW(wstr long ptr long ptr long)
 # @ stub FindFirstFileNameW
-@ stdcall FindFirstFileW(wstr ptr) kernel32.FindFirstFileW
+@ stdcall FindFirstFileW(wstr ptr)
 @ stdcall FindFirstFreeAce(ptr ptr)
 @ stdcall FindFirstStreamW(wstr long ptr long) kernel32.FindFirstStreamW
 @ stdcall FindFirstVolumeW(ptr long) kernel32.FindFirstVolumeW
-@ stub FindNLSString
-@ stdcall FindNLSStringEx(wstr long wstr long wstr long ptr ptr ptr long) kernel32.FindNLSStringEx
+@ stdcall FindNLSString(long long wstr long wstr long ptr)
+@ stdcall FindNLSStringEx(wstr long wstr long wstr long ptr ptr ptr long)
 @ stdcall FindNextChangeNotification(long)
-@ stdcall FindNextFileA(long ptr) kernel32.FindNextFileA
+@ stdcall FindNextFileA(long ptr)
 # @ stub FindNextFileNameW
-@ stdcall FindNextFileW(long ptr) kernel32.FindNextFileW
+@ stdcall FindNextFileW(long ptr)
 @ stdcall FindNextStreamW(long ptr) kernel32.FindNextStreamW
 @ stdcall FindNextVolumeW(long ptr long) kernel32.FindNextVolumeW
 # @ stub FindPackagesByPackageFamily
@@ -437,8 +437,8 @@
 @ stdcall GetCommandLineW()
 @ stdcall GetCompressedFileSizeA(long ptr)
 @ stdcall GetCompressedFileSizeW(long ptr)
-@ stdcall GetComputerNameExA(long ptr ptr) kernel32.GetComputerNameExA
-@ stdcall GetComputerNameExW(long ptr ptr) kernel32.GetComputerNameExW
+@ stdcall GetComputerNameExA(long ptr ptr)
+@ stdcall GetComputerNameExW(long ptr ptr)
 @ stdcall GetConsoleCP()
 @ stdcall GetConsoleCursorInfo(long ptr)
 @ stdcall GetConsoleInputExeNameA(long ptr)
@@ -486,8 +486,8 @@
 @ stdcall GetDriveTypeA(str) kernel32.GetDriveTypeA
 @ stdcall GetDriveTypeW(wstr) kernel32.GetDriveTypeW
 # @ stub GetDurationFormatEx
-@ stdcall GetDynamicTimeZoneInformation(ptr) kernel32.GetDynamicTimeZoneInformation
-@ stdcall GetDynamicTimeZoneInformationEffectiveYears(ptr ptr ptr) kernel32.GetDynamicTimeZoneInformationEffectiveYears
+@ stdcall GetDynamicTimeZoneInformation(ptr)
+@ stdcall GetDynamicTimeZoneInformationEffectiveYears(ptr ptr ptr)
 # @ stub GetEffectivePackageStatusForUser
 # @ stub GetEightBitStringToUnicodeSizeRoutine
 # @ stub GetEightBitStringToUnicodeStringRoutine
@@ -530,7 +530,7 @@
 @ stdcall GetFullPathNameW(wstr long ptr ptr)
 # @ stub GetGPOListInternalA
 # @ stub GetGPOListInternalW
-@ stdcall GetGeoInfoW(long long ptr long long) kernel32.GetGeoInfoW
+@ stdcall GetGeoInfoW(long long ptr long long)
 @ stdcall GetHandleInformation(long ptr)
 # @ stub GetHivePath
 # @ stub GetIntegratedDisplaySize
@@ -544,7 +544,7 @@
 @ stdcall GetLocaleInfoA(long long ptr long)
 @ stdcall GetLocaleInfoEx(wstr long ptr long)
 @ stub GetLocaleInfoHelper
-@ stdcall GetLocaleInfoW(long long ptr long) kernel32.GetLocaleInfoW
+@ stdcall GetLocaleInfoW(long long ptr long)
 @ stdcall GetLogicalDriveStringsW(long ptr) kernel32.GetLogicalDriveStringsW
 @ stdcall GetLogicalDrives() kernel32.GetLogicalDrives
 @ stdcall GetLogicalProcessorInformation(ptr ptr)
@@ -674,9 +674,9 @@
 @ stdcall GetStdHandle(long)
 # @ stub GetStringScripts
 @ stub GetStringTableEntry
-@ stdcall GetStringTypeA(long long str long ptr) kernel32.GetStringTypeA
-@ stdcall GetStringTypeExW(long long wstr long ptr) kernel32.GetStringTypeExW
-@ stdcall GetStringTypeW(long wstr long ptr) kernel32.GetStringTypeW
+@ stdcall GetStringTypeA(long long str long ptr)
+@ stdcall GetStringTypeExW(long long wstr long ptr)
+@ stdcall GetStringTypeW(long wstr long ptr)
 # @ stub GetSystemAppDataFolder
 # @ stub GetSystemAppDataKey
 # @ stub GetSystemCpuSetInformation
@@ -730,8 +730,8 @@
 @ stdcall GetTimeFormatA(long long ptr str ptr long) kernel32.GetTimeFormatA
 @ stdcall GetTimeFormatEx(wstr long ptr wstr ptr long) kernel32.GetTimeFormatEx
 @ stdcall GetTimeFormatW(long long ptr wstr ptr long) kernel32.GetTimeFormatW
-@ stdcall GetTimeZoneInformation(ptr) kernel32.GetTimeZoneInformation
-@ stdcall GetTimeZoneInformationForYear(long ptr ptr) kernel32.GetTimeZoneInformationForYear
+@ stdcall GetTimeZoneInformation(ptr)
+@ stdcall GetTimeZoneInformationForYear(long ptr ptr)
 @ stdcall GetTokenInformation(long long ptr long ptr)
 @ stdcall GetTraceEnableFlags(int64) ntdll.EtwGetTraceEnableFlags
 @ stdcall GetTraceEnableLevel(int64) ntdll.EtwGetTraceEnableLevel
@@ -743,7 +743,7 @@
 @ stdcall GetUserDefaultLangID()
 @ stdcall GetUserDefaultLocaleName(ptr long)
 @ stdcall GetUserDefaultUILanguage()
-@ stdcall GetUserGeoID(long) kernel32.GetUserGeoID
+@ stdcall GetUserGeoID(long)
 @ stub GetUserInfo
 @ stub GetUserInfoWord
 # @ stub GetUserOverrideString
@@ -775,7 +775,7 @@
 @ stdcall HeapCompact(long long)
 @ stdcall HeapCreate(long long long)
 @ stdcall HeapDestroy(long)
-@ stdcall HeapFree(long long ptr)
+@ stdcall HeapFree(long long ptr) ntdll.RtlFreeHeap
 @ stdcall HeapLock(long)
 @ stdcall HeapQueryInformation(long long ptr long ptr)
 @ stdcall HeapReAlloc(long long ptr long) ntdll.RtlReAllocateHeap
@@ -914,9 +914,9 @@
 @ stdcall K32QueryWorkingSetEx(long ptr long) kernel32.K32QueryWorkingSetEx
 @ stub KernelBaseGetGlobalData
 @ stdcall LCIDToLocaleName(long ptr long long)
-@ stdcall LCMapStringA(long long str long ptr long) kernel32.LCMapStringA
-@ stdcall LCMapStringEx(wstr long wstr long ptr long ptr ptr long) kernel32.LCMapStringEx
-@ stdcall LCMapStringW(long long wstr long ptr long) kernel32.LCMapStringW
+@ stdcall LCMapStringA(long long str long ptr long)
+@ stdcall LCMapStringEx(wstr long wstr long ptr long ptr ptr long)
+@ stdcall LCMapStringW(long long wstr long ptr long)
 # @ stub LeaveCriticalPolicySectionInternal
 @ stdcall LeaveCriticalSection(ptr) ntdll.RtlLeaveCriticalSection
 @ stdcall LeaveCriticalSectionWhenCallbackReturns(ptr ptr) ntdll.TpCallbackLeaveCriticalSectionOnCompletion
@@ -957,7 +957,7 @@
 # @ stub MoveFileWithProgressTransactedW
 @ stdcall MoveFileWithProgressW(wstr wstr ptr ptr long) kernel32.MoveFileWithProgressW
 @ stdcall MulDiv(long long long) kernel32.MulDiv
-@ stdcall MultiByteToWideChar(long long str long ptr long) kernel32.MultiByteToWideChar
+@ stdcall MultiByteToWideChar(long long str long ptr long)
 # @ stub NamedPipeEventEnum
 # @ stub NamedPipeEventSelect
 @ stdcall NeedCurrentDirectoryForExePathA(str)
@@ -1234,8 +1234,8 @@
 @ stdcall RaiseException(long long long ptr)
 # @ stub RaiseFailFastException
 @ stdcall ReOpenFile(ptr long long long)
-@ stdcall ReadConsoleA(long ptr long ptr ptr)
-@ stdcall ReadConsoleInputA(long ptr long ptr)
+@ stdcall ReadConsoleA(long ptr long ptr ptr) kernel32.ReadConsoleA
+@ stdcall ReadConsoleInputA(long ptr long ptr) kernel32.ReadConsoleInputA
 @ stub ReadConsoleInputExA
 @ stub ReadConsoleInputExW
 @ stdcall ReadConsoleInputW(long ptr long ptr) kernel32.ReadConsoleInputW
@@ -1397,11 +1397,11 @@
 @ stdcall SetCommMask(long long)
 @ stdcall SetCommState(long ptr)
 @ stdcall SetCommTimeouts(long ptr)
-@ stdcall SetComputerNameA(str) kernel32.SetComputerNameA
+@ stdcall SetComputerNameA(str)
 # @ stub SetComputerNameEx2W
-@ stdcall SetComputerNameExA(long str) kernel32.SetComputerNameExA
-@ stdcall SetComputerNameExW(long wstr) kernel32.SetComputerNameExW
-@ stdcall SetComputerNameW(wstr) kernel32.SetComputerNameW
+@ stdcall SetComputerNameExA(long str)
+@ stdcall SetComputerNameExW(long wstr)
+@ stdcall SetComputerNameW(wstr)
 @ stdcall SetConsoleActiveScreenBuffer(long)
 @ stdcall SetConsoleCP(long)
 @ stdcall SetConsoleCtrlHandler(ptr long) kernel32.SetConsoleCtrlHandler
@@ -1447,7 +1447,7 @@
 @ stub SetLastConsoleEventActive
 @ stdcall SetLastError(long) ntdll.RtlSetLastWin32Error
 @ stdcall SetLocalTime(ptr)
-@ stdcall SetLocaleInfoW(long long wstr) kernel32.SetLocaleInfoW
+@ stdcall SetLocaleInfoW(long long wstr)
 @ stdcall SetNamedPipeHandleState(long ptr ptr ptr)
 @ stdcall SetPriorityClass(long long)
 @ stdcall SetPrivateObjectSecurity(long ptr ptr ptr long)
@@ -1499,10 +1499,10 @@
 # @ stub SetThreadpoolTimerEx
 @ stdcall SetThreadpoolWait(ptr long ptr) ntdll.TpSetWait
 # @ stub SetThreadpoolWaitEx
-@ stdcall SetTimeZoneInformation(ptr) kernel32.SetTimeZoneInformation
+@ stdcall SetTimeZoneInformation(ptr)
 @ stdcall SetTokenInformation(long long ptr long)
 @ stdcall SetUnhandledExceptionFilter(ptr)
-@ stdcall SetUserGeoID(long) kernel32.SetUserGeoID
+@ stdcall SetUserGeoID(long)
 @ stdcall SetWaitableTimer(long ptr long ptr ptr long)
 @ stdcall SetWaitableTimerEx(long ptr long ptr ptr ptr long)
 # @ stub SetXStateFeaturesMask
@@ -1591,7 +1591,7 @@
 @ stdcall SwitchToFiber(ptr)
 @ stdcall SwitchToThread()
 @ stdcall SystemTimeToFileTime(ptr ptr)
-@ stdcall SystemTimeToTzSpecificLocalTime(ptr ptr ptr) kernel32.SystemTimeToTzSpecificLocalTime
+@ stdcall SystemTimeToTzSpecificLocalTime(ptr ptr ptr)
 @ stub SystemTimeToTzSpecificLocalTimeEx
 @ stdcall TerminateProcess(long long)
 # @ stub TerminateProcessOnMemoryExhaustion
@@ -1609,7 +1609,7 @@
 @ stdcall TryAcquireSRWLockShared(ptr) ntdll.RtlTryAcquireSRWLockShared
 @ stdcall TryEnterCriticalSection(ptr) ntdll.RtlTryEnterCriticalSection
 @ stdcall TrySubmitThreadpoolCallback(ptr ptr ptr)
-@ stdcall TzSpecificLocalTimeToSystemTime(ptr ptr ptr) kernel32.TzSpecificLocalTimeToSystemTime
+@ stdcall TzSpecificLocalTimeToSystemTime(ptr ptr ptr)
 @ stub TzSpecificLocalTimeToSystemTimeEx
 @ stdcall UnhandledExceptionFilter(ptr)
 @ stdcall UnlockFile(long long long long long)
@@ -1711,12 +1711,12 @@
 @ stdcall WerUnregisterRuntimeExceptionModule(wstr ptr) kernel32.WerUnregisterRuntimeExceptionModule
 # @ stub WerpNotifyLoadStringResource
 # @ stub WerpNotifyUseStringResource
-@ stdcall WideCharToMultiByte(long long wstr long ptr long ptr ptr) kernel32.WideCharToMultiByte
+@ stdcall WideCharToMultiByte(long long wstr long ptr long ptr ptr)
 @ stdcall Wow64DisableWow64FsRedirection(ptr)
 @ stdcall Wow64RevertWow64FsRedirection(ptr)
 # @ stub Wow64SetThreadDefaultGuestMachine
 # @ stub -arch=i386 Wow64Transition
-@ stdcall WriteConsoleA(long ptr long ptr ptr)
+@ stdcall WriteConsoleA(long ptr long ptr ptr) kernel32.WriteConsoleA
 @ stdcall WriteConsoleInputA(long ptr long ptr)
 @ stdcall WriteConsoleInputW(long ptr long ptr)
 @ stdcall WriteConsoleOutputA(long ptr long long ptr)

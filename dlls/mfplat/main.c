@@ -2700,6 +2700,24 @@ static ULONG WINAPI bytestream_Release(IMFByteStream *iface)
     return refcount;
 }
 
+static HRESULT WINAPI bytestream_stream_GetCapabilities(IMFByteStream *iface, DWORD *capabilities)
+{
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
+    STATSTG stat;
+    HRESULT hr;
+
+    TRACE("%p, %p.\n", iface, capabilities);
+
+    if (FAILED(hr = IStream_Stat(stream->stream, &stat, STATFLAG_NONAME)))
+        return hr;
+
+    *capabilities = MFBYTESTREAM_IS_READABLE | MFBYTESTREAM_IS_SEEKABLE;
+    if (stat.grfMode & (STGM_WRITE | STGM_READWRITE))
+        *capabilities |= MFBYTESTREAM_IS_WRITABLE;
+
+    return S_OK;
+}
+
 static HRESULT WINAPI bytestream_GetCapabilities(IMFByteStream *iface, DWORD *capabilities)
 {
     struct bytestream *stream = impl_from_IMFByteStream(iface);
@@ -3060,7 +3078,7 @@ static const IMFByteStreamVtbl bytestream_stream_vtbl =
     bytestream_QueryInterface,
     bytestream_AddRef,
     bytestream_Release,
-    bytestream_GetCapabilities,
+    bytestream_stream_GetCapabilities,
     bytestream_stream_GetLength,
     bytestream_stream_SetLength,
     bytestream_stream_GetCurrentPosition,
@@ -3227,6 +3245,7 @@ HRESULT WINAPI MFCreateMFByteStreamOnStream(IStream *stream, IMFByteStream **byt
 {
     struct bytestream *object;
     LARGE_INTEGER position;
+    STATSTG stat;
     HRESULT hr;
 
     TRACE("%p, %p.\n", stream, bytestream);
@@ -3252,7 +3271,16 @@ HRESULT WINAPI MFCreateMFByteStreamOnStream(IStream *stream, IMFByteStream **byt
     IStream_AddRef(object->stream);
     position.QuadPart = 0;
     IStream_Seek(object->stream, position, STREAM_SEEK_SET, NULL);
-    object->capabilities = MFBYTESTREAM_IS_READABLE | MFBYTESTREAM_IS_SEEKABLE;
+
+    if (SUCCEEDED(IStream_Stat(object->stream, &stat, 0)))
+    {
+        if (stat.pwcsName)
+        {
+            IMFAttributes_SetString(&object->attributes.IMFAttributes_iface, &MF_BYTESTREAM_ORIGIN_NAME,
+                    stat.pwcsName);
+            CoTaskMemFree(stat.pwcsName);
+        }
+    }
 
     *bytestream = &object->IMFByteStream_iface;
 

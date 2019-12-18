@@ -40,139 +40,6 @@ static inline struct strmbase_renderer *impl_from_IPin(IPin *iface)
     return CONTAINING_RECORD(iface, struct strmbase_renderer, sink.pin.IPin_iface);
 }
 
-static HRESULT WINAPI BaseRenderer_InputPin_ReceiveConnection(IPin *iface, IPin *peer, const AM_MEDIA_TYPE *mt)
-{
-    struct strmbase_renderer *filter = impl_from_IPin(iface);
-    HRESULT hr;
-
-    TRACE("iface %p, peer %p, mt %p.\n", iface, peer, mt);
-    strmbase_dump_media_type(mt);
-
-    EnterCriticalSection(&filter->filter.csFilter);
-    hr = BaseInputPinImpl_ReceiveConnection(iface, peer, mt);
-    if (SUCCEEDED(hr))
-    {
-        if (filter->pFuncsTable->pfnCompleteConnect)
-            hr = filter->pFuncsTable->pfnCompleteConnect(filter, peer);
-    }
-    LeaveCriticalSection(&filter->filter.csFilter);
-
-    return hr;
-}
-
-static HRESULT WINAPI BaseRenderer_InputPin_Disconnect(IPin * iface)
-{
-    struct strmbase_renderer *filter = impl_from_IPin(iface);
-    HRESULT hr;
-
-    TRACE("iface %p.\n", iface);
-
-    EnterCriticalSection(&filter->filter.csFilter);
-    hr = BasePinImpl_Disconnect(iface);
-    if (SUCCEEDED(hr))
-    {
-        if (filter->pFuncsTable->pfnBreakConnect)
-            hr = filter->pFuncsTable->pfnBreakConnect(filter);
-    }
-    BaseRendererImpl_ClearPendingSample(filter);
-    LeaveCriticalSection(&filter->filter.csFilter);
-
-    return hr;
-}
-
-static HRESULT WINAPI BaseRenderer_InputPin_EndOfStream(IPin * iface)
-{
-    struct strmbase_renderer *filter = impl_from_IPin(iface);
-    IFilterGraph *graph = filter->filter.filterInfo.pGraph;
-    IMediaEventSink *event_sink;
-    HRESULT hr = S_OK;
-
-    TRACE("iface %p.\n", iface);
-
-    EnterCriticalSection(&filter->csRenderLock);
-    filter->eos = TRUE;
-
-    if (graph && SUCCEEDED(IFilterGraph_QueryInterface(graph,
-            &IID_IMediaEventSink, (void **)&event_sink)))
-    {
-        IMediaEventSink_Notify(event_sink, EC_COMPLETE, S_OK,
-                (LONG_PTR)&filter->filter.IBaseFilter_iface);
-        IMediaEventSink_Release(event_sink);
-    }
-    RendererPosPassThru_EOS(filter->pPosition);
-    SetEvent(filter->state_event);
-
-    if (filter->pFuncsTable->pfnEndOfStream)
-        hr = filter->pFuncsTable->pfnEndOfStream(filter);
-    LeaveCriticalSection(&filter->csRenderLock);
-    return hr;
-}
-
-static HRESULT WINAPI BaseRenderer_InputPin_BeginFlush(IPin * iface)
-{
-    struct strmbase_renderer *pFilter = impl_from_IPin(iface);
-    HRESULT hr;
-
-    TRACE("iface %p.\n", iface);
-
-    EnterCriticalSection(&pFilter->filter.csFilter);
-    hr = BaseInputPinImpl_BeginFlush(iface);
-    if (SUCCEEDED(hr))
-    {
-        BaseRendererImpl_ClearPendingSample(pFilter);
-        SetEvent(pFilter->flush_event);
-    }
-    LeaveCriticalSection(&pFilter->filter.csFilter);
-    return hr;
-}
-
-static HRESULT WINAPI BaseRenderer_InputPin_EndFlush(IPin * iface)
-{
-    struct strmbase_renderer *pFilter = impl_from_IPin(iface);
-    HRESULT hr;
-
-    TRACE("iface %p.\n", iface);
-
-    EnterCriticalSection(&pFilter->filter.csFilter);
-    EnterCriticalSection(&pFilter->csRenderLock);
-    pFilter->eos = FALSE;
-    hr = BaseInputPinImpl_EndFlush(iface);
-    if (SUCCEEDED(hr))
-    {
-        QualityControlRender_Start(pFilter->qcimpl, pFilter->stream_start);
-        RendererPosPassThru_ResetMediaTime(pFilter->pPosition);
-        ResetEvent(pFilter->flush_event);
-
-        if (pFilter->pFuncsTable->pfnEndFlush)
-            hr = pFilter->pFuncsTable->pfnEndFlush(pFilter);
-    }
-    LeaveCriticalSection(&pFilter->csRenderLock);
-    LeaveCriticalSection(&pFilter->filter.csFilter);
-    return hr;
-}
-
-static const IPinVtbl BaseRenderer_InputPin_Vtbl =
-{
-    BasePinImpl_QueryInterface,
-    BasePinImpl_AddRef,
-    BasePinImpl_Release,
-    BaseInputPinImpl_Connect,
-    BaseRenderer_InputPin_ReceiveConnection,
-    BaseRenderer_InputPin_Disconnect,
-    BasePinImpl_ConnectedTo,
-    BasePinImpl_ConnectionMediaType,
-    BasePinImpl_QueryPinInfo,
-    BasePinImpl_QueryDirection,
-    BasePinImpl_QueryId,
-    BasePinImpl_QueryAccept,
-    BasePinImpl_EnumMediaTypes,
-    BasePinImpl_QueryInternalConnections,
-    BaseRenderer_InputPin_EndOfStream,
-    BaseRenderer_InputPin_BeginFlush,
-    BaseRenderer_InputPin_EndFlush,
-    BaseInputPinImpl_NewSegment
-};
-
 static struct strmbase_pin *renderer_get_pin(struct strmbase_filter *iface, unsigned int index)
 {
     struct strmbase_renderer *filter = impl_from_strmbase_filter(iface);
@@ -312,12 +179,91 @@ static HRESULT WINAPI BaseRenderer_Receive(struct strmbase_sink *pin, IMediaSamp
     return BaseRendererImpl_Receive(filter, sample);
 }
 
+static HRESULT sink_connect(struct strmbase_sink *iface, IPin *peer, const AM_MEDIA_TYPE *mt)
+{
+    struct strmbase_renderer *filter = impl_from_IPin(&iface->pin.IPin_iface);
+
+    if (filter->pFuncsTable->renderer_connect)
+        return filter->pFuncsTable->renderer_connect(filter, mt);
+    return S_OK;
+}
+
+static void sink_disconnect(struct strmbase_sink *iface)
+{
+    struct strmbase_renderer *filter = impl_from_IPin(&iface->pin.IPin_iface);
+
+    if (filter->pFuncsTable->pfnBreakConnect)
+        filter->pFuncsTable->pfnBreakConnect(filter);
+}
+
+static HRESULT sink_eos(struct strmbase_sink *iface)
+{
+    struct strmbase_renderer *filter = impl_from_IPin(&iface->pin.IPin_iface);
+    IFilterGraph *graph = filter->filter.filterInfo.pGraph;
+    IMediaEventSink *event_sink;
+    HRESULT hr = S_OK;
+
+    EnterCriticalSection(&filter->csRenderLock);
+
+    filter->eos = TRUE;
+
+    if (graph && SUCCEEDED(IFilterGraph_QueryInterface(graph,
+            &IID_IMediaEventSink, (void **)&event_sink)))
+    {
+        IMediaEventSink_Notify(event_sink, EC_COMPLETE, S_OK,
+                (LONG_PTR)&filter->filter.IBaseFilter_iface);
+        IMediaEventSink_Release(event_sink);
+    }
+    RendererPosPassThru_EOS(filter->pPosition);
+    SetEvent(filter->state_event);
+
+    if (filter->pFuncsTable->pfnEndOfStream)
+        hr = filter->pFuncsTable->pfnEndOfStream(filter);
+
+    LeaveCriticalSection(&filter->csRenderLock);
+    return hr;
+}
+
+static HRESULT sink_begin_flush(struct strmbase_sink *iface)
+{
+    struct strmbase_renderer *filter = impl_from_IPin(&iface->pin.IPin_iface);
+
+    BaseRendererImpl_ClearPendingSample(filter);
+    SetEvent(filter->flush_event);
+
+    return S_OK;
+}
+
+static HRESULT sink_end_flush(struct strmbase_sink *iface)
+{
+    struct strmbase_renderer *filter = impl_from_IPin(&iface->pin.IPin_iface);
+    HRESULT hr = S_OK;
+
+    EnterCriticalSection(&filter->csRenderLock);
+
+    filter->eos = FALSE;
+    QualityControlRender_Start(filter->qcimpl, filter->stream_start);
+    RendererPosPassThru_ResetMediaTime(filter->pPosition);
+    ResetEvent(filter->flush_event);
+
+    if (filter->pFuncsTable->pfnEndFlush)
+        hr = filter->pFuncsTable->pfnEndFlush(filter);
+
+    LeaveCriticalSection(&filter->csRenderLock);
+    return hr;
+}
+
 static const struct strmbase_sink_ops sink_ops =
 {
     .base.pin_query_accept = sink_query_accept,
     .base.pin_query_interface = sink_query_interface,
     .base.pin_get_media_type = strmbase_pin_get_media_type,
     .pfnReceive = BaseRenderer_Receive,
+    .sink_connect = sink_connect,
+    .sink_disconnect = sink_disconnect,
+    .sink_eos = sink_eos,
+    .sink_begin_flush = sink_begin_flush,
+    .sink_end_flush = sink_end_flush,
 };
 
 void strmbase_renderer_cleanup(struct strmbase_renderer *filter)
@@ -448,25 +394,6 @@ HRESULT WINAPI BaseRendererImpl_Receive(struct strmbase_renderer *This, IMediaSa
     return hr;
 }
 
-static const IBaseFilterVtbl strmbase_renderer_vtbl =
-{
-    BaseFilterImpl_QueryInterface,
-    BaseFilterImpl_AddRef,
-    BaseFilterImpl_Release,
-    BaseFilterImpl_GetClassID,
-    BaseFilterImpl_Stop,
-    BaseFilterImpl_Pause,
-    BaseFilterImpl_Run,
-    BaseFilterImpl_GetState,
-    BaseFilterImpl_SetSyncSource,
-    BaseFilterImpl_GetSyncSource,
-    BaseFilterImpl_EnumPins,
-    BaseFilterImpl_FindPin,
-    BaseFilterImpl_QueryFilterInfo,
-    BaseFilterImpl_JoinFilterGraph,
-    BaseFilterImpl_QueryVendorInfo
-};
-
 HRESULT WINAPI BaseRendererImpl_ClearPendingSample(struct strmbase_renderer *iface)
 {
     if (iface->pMediaSample)
@@ -483,12 +410,11 @@ HRESULT WINAPI strmbase_renderer_init(struct strmbase_renderer *filter, IUnknown
     HRESULT hr;
 
     memset(filter, 0, sizeof(*filter));
-    strmbase_filter_init(&filter->filter, &strmbase_renderer_vtbl, outer, clsid, &filter_ops);
+    strmbase_filter_init(&filter->filter, outer, clsid, &filter_ops);
 
     filter->pFuncsTable = ops;
 
-    strmbase_sink_init(&filter->sink, &BaseRenderer_InputPin_Vtbl, &filter->filter,
-            sink_name, &sink_ops, NULL);
+    strmbase_sink_init(&filter->sink, &filter->filter, sink_name, &sink_ops, NULL);
 
     hr = CreatePosPassThru(outer ? outer : (IUnknown *)&filter->filter.IBaseFilter_iface,
             TRUE, &filter->sink.pin.IPin_iface, &filter->pPosition);

@@ -412,7 +412,7 @@ static void test_WinHttpSendRequest (void)
     ok(ret, "WinHttpSetOption failed: %u\n", GetLastError());
 
     /* writing more data than promised by the content-length header causes an error when the connection
-       is resued, so disable keep-alive */
+       is reused, so disable keep-alive */
     disable = WINHTTP_DISABLE_KEEP_ALIVE;
     ret = WinHttpSetOption(request, WINHTTP_OPTION_DISABLE_FEATURE, &disable, sizeof(disable));
     ok(ret, "WinHttpSetOption failed: %u\n", GetLastError());
@@ -692,7 +692,7 @@ static void test_WinHttpAddHeaders(void)
         test_header_name, NULL, &len, &index);
     ok(ret == FALSE, "WinHttpQueryHeaders unexpectedly succeeded.\n");
     ok(GetLastError() == ERROR_INSUFFICIENT_BUFFER,
-        "WinHttpQueryHeaders set incorrect error: expected ERROR_INSUFFICENT_BUFFER, got %u\n", GetLastError());
+        "WinHttpQueryHeaders set incorrect error: expected ERROR_INSUFFICIENT_BUFFER, got %u\n", GetLastError());
     ok(len > 40, "WinHttpQueryHeaders returned invalid length: expected greater than 40, got %d\n", len);
     ok(index == 0, "WinHttpQueryHeaders incorrectly incremented header index.\n");
 
@@ -1069,6 +1069,13 @@ static void test_secure_connection(void)
 
     con = WinHttpConnect(ses, test_winehq, 443, 0);
     ok(con != NULL, "failed to open a connection %u\n", GetLastError());
+
+    SetLastError( 0xdeadbeef );
+    protocols = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2;
+    ret = WinHttpSetOption(con, WINHTTP_OPTION_SECURE_PROTOCOLS, &protocols, sizeof(protocols));
+    err = GetLastError();
+    ok(!ret, "unexpected success\n");
+    ok(err == ERROR_WINHTTP_INCORRECT_HANDLE_TYPE, "got %u\n", err);
 
     /* try without setting WINHTTP_FLAG_SECURE */
     req = WinHttpOpenRequest(con, NULL, NULL, NULL, NULL, NULL, 0);
@@ -2144,7 +2151,7 @@ static void test_resolve_timeout(void)
         WinHttpCloseHandle(ses);
     }
     else
-       skip("Skipping host resolution tests, host resolution preformed by proxy\n");
+       skip("Skipping host resolution tests, host resolution performed by proxy\n");
 
     ses = WinHttpOpen(test_useragent, 0, NULL, NULL, 0);
     ok(ses != NULL, "failed to open session %u\n", GetLastError());

@@ -495,6 +495,7 @@ NTSTATUS FILE_GetNtStatus(void)
     case ECONNRESET:return STATUS_PIPE_DISCONNECTED;
     case EFAULT:    return STATUS_ACCESS_VIOLATION;
     case ESPIPE:    return STATUS_ILLEGAL_FUNCTION;
+    case ELOOP:     return STATUS_REPARSE_POINT_NOT_RESOLVED;
 #ifdef ETIME /* Missing on FreeBSD */
     case ETIME:     return STATUS_IO_TIMEOUT;
 #endif
@@ -3280,7 +3281,7 @@ NTSTATUS WINAPI NtQueryVolumeInformationFile( HANDLE handle, PIO_STATUS_BLOCK io
  *  restart       [I] restart EA scan
  *
  * RETURNS
- *  Success: 0. Atrributes read into buffer
+ *  Success: 0. Attributes read into buffer
  *  Failure: An NTSTATUS error code describing the error.
  */
 NTSTATUS WINAPI NtQueryEaFile( HANDLE hFile, PIO_STATUS_BLOCK iosb, PVOID buffer, ULONG length,
