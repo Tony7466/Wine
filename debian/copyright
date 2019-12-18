@@ -35,6 +35,10 @@ Files-Excluded:
  dlls/opengl32/opengl_ext.c
  dlls/opengl32/opengl_norm.c
  dlls/opengl32/opengl32.spec
+ dlls/kernelbase/compose.c
+ dlls/kernelbase/collation.c
+ dlls/kernelbase/digitmap.c
+ dlls/kernelbase/decompose.c
 Upstream-Name: Wine
 
 Files: *

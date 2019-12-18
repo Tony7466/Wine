@@ -1,15 +1,13 @@
-wine (5.0~rc1-1) UNRELEASED; urgency=medium
+wine (5.0~rc1-1) unstable; urgency=medium
 
-  * Switch to the stable branch.
   * New upstream release 5.0-rc1, released Dec 13, 2019.
-    - Gecko update, with support for running from a global location.
-    - Unicode data updated to Unicode version 12.1.
     - Initial version of the MSADO (ActiveX Data Objects) library.
     - Update installation support in the WUSA (Windows Update
-    Standalone) tool.
+      Standalone) tool.
     - More progress on the kernel32/kernelbase restructuring.
     - Support for signing with ECDSA keys.
     - Various bug fixes.
+  * Switch to the stable branch.
 
  -- Michael Gilbert <mgilbert@debian.org>  Wed, 18 Dec 2019 04:29:59 +0000
 

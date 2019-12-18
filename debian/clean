@@ -40,7 +40,10 @@ dlls/usp10/mirror.c
 dlls/usp10/shaping.c
 dlls/kernel32/wctype.c
 dlls/kernel32/nameprep.c
+dlls/kernelbase/compose.c
+dlls/kernelbase/collation.c
 dlls/kernelbase/digitmap.c
+dlls/kernelbase/decompose.c
 
 # automatically generated opengl spec files
 include/wine/wgl*

@@ -14,7 +14,7 @@ bug: http://bugs.debian.org/851337
  /*
  	########## Combining and Constructing paths ##########
  */
-@@ -4103,6 +4105,9 @@ HRESULT WINAPI SHGetFolderPathAndSubDirW
+@@ -4154,6 +4156,9 @@ HRESULT WINAPI SHGetFolderPathAndSubDirW
          goto end;
      }
  
@@ -24,8 +24,8 @@ bug: http://bugs.debian.org/851337
      /* create directory/directories */
      ret = SHCreateDirectoryExW(hwndOwner, szBuildPath, NULL);
      if (ret && ret != ERROR_ALREADY_EXISTS)
-@@ -4430,9 +4435,9 @@ static void _SHCreateSymbolicLinks(void)
-     char * xdg_desktop_dir;
+@@ -4496,9 +4501,9 @@ static void _SHCreateSymbolicLinks(void)
+     UINT i;
  
      /* Create all necessary profile sub-dirs up to 'My Documents' and get the unix path. */
 -    hr = SHGetFolderPathW(NULL, CSIDL_PERSONAL|CSIDL_FLAG_CREATE, NULL,
@@ -36,7 +36,7 @@ bug: http://bugs.debian.org/851337
      pszPersonal = wine_get_unix_file_name(wszTempPath);
      if (!pszPersonal) return;
  
-@@ -4484,7 +4489,6 @@ static void _SHCreateSymbolicLinks(void)
+@@ -4550,7 +4555,6 @@ static void _SHCreateSymbolicLinks(void)
          }
  
          /* Replace 'My Documents' directory with a symlink or fail silently if not empty. */
@@ -44,15 +44,15 @@ bug: http://bugs.debian.org/851337
          symlink(szPersonalTarget, pszPersonal);
      }
      else
-@@ -4492,6 +4496,7 @@ static void _SHCreateSymbolicLinks(void)
-         /* '$HOME' doesn't exist. Create 'My Pictures', 'My Videos' and 'My Music' subdirs
-          * in '%USERPROFILE%\\My Documents' or fail silently if they already exist. */
+@@ -4559,6 +4563,7 @@ static void _SHCreateSymbolicLinks(void)
+          * 'My Music' etc. in '%USERPROFILE%\My Documents' or fail silently if
+          * they already exist. */
          pszHome = NULL;
 +        mkdir(pszPersonal, 0777);
          strcpy(szPersonalTarget, pszPersonal);
          for (i = 0; i < ARRAY_SIZE(aidsMyStuff); i++) {
              strcpy(szMyStuffTarget, szPersonalTarget);
-@@ -4504,9 +4509,9 @@ static void _SHCreateSymbolicLinks(void)
+@@ -4571,9 +4576,9 @@ static void _SHCreateSymbolicLinks(void)
      for (i=0; i < ARRAY_SIZE(aidsMyStuff); i++)
      {
          /* Create the current 'My Whatever' folder and get its unix path. */
@@ -64,7 +64,7 @@ bug: http://bugs.debian.org/851337
  
          pszMyStuff = wine_get_unix_file_name(wszTempPath);
          if (!pszMyStuff) continue;
-@@ -4540,7 +4545,6 @@ static void _SHCreateSymbolicLinks(void)
+@@ -4607,7 +4612,6 @@ static void _SHCreateSymbolicLinks(void)
              strcpy(szMyStuffTarget, szPersonalTarget);
              break;
          }
@@ -72,7 +72,7 @@ bug: http://bugs.debian.org/851337
          symlink(szMyStuffTarget, pszMyStuff);
          heap_free(pszMyStuff);
      }
-@@ -4557,11 +4561,10 @@ static void _SHCreateSymbolicLinks(void)
+@@ -4624,11 +4628,10 @@ static void _SHCreateSymbolicLinks(void)
          (_SHAppendToUnixPath(szDesktopTarget, DesktopW) &&
          !stat(szDesktopTarget, &statFolder) && S_ISDIR(statFolder.st_mode)))
      {

@@ -27,7 +27,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (format->type == FORMAT_ARGBF16)
 --- a/dlls/kernel32/locale.c
 +++ b/dlls/kernel32/locale.c
-@@ -3445,7 +3445,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
+@@ -923,7 +923,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
                          LPWSTR lpUnicodeCharStr, INT cchUnicodeChar)
  {
      INT i, label_start, label_end, out_label, out = 0;
@@ -93,7 +93,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!desc) return E_INVALIDARG;
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -2653,6 +2653,10 @@ static void check_fbo_compat(struct wine
+@@ -2659,6 +2659,10 @@ static void check_fbo_compat(struct wine
                      case WINED3D_GL_RES_TYPE_COUNT:
                          color = 0;
                          break;

@@ -10,7 +10,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 -# base URLs for www.unicode.org files
 +# Locations of unicode files
  my $MAPPINGS = "http://www.unicode.org/Public/MAPPINGS";
--my $UNIDATA = "http://www.unicode.org/Public/12.0.0/ucd";
+-my $UNIDATA = "http://www.unicode.org/Public/12.1.0/ucd";
 -my $REPORTS = "http://www.unicode.org/reports";
 -my $RFCS = "http://www.rfc-editor.org/rfc";
 +my $UNIDATA = "/usr/share/unicode";
@@ -36,7 +36,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      return *FILE;
  }
  
-@@ -2911,9 +2904,10 @@ dump_vertical( "dlls/gdi32/vertical.c" )
+@@ -2939,9 +2932,10 @@ dump_vertical( "dlls/gdi32/vertical.c" )
  dump_vertical( "dlls/wineps.drv/vertical.c" );
  dump_nameprep( "dlls/kernel32/nameprep.c" );
  

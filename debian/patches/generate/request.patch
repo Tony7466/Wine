@@ -42,7 +42,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                   @request_lines );
 --- a/server/request.h
 +++ b/server/request.h
-@@ -108,9 +108,9 @@ static inline void set_reply_data_ptr( v
+@@ -109,9 +109,9 @@ static inline void set_reply_data_ptr( v
      current->reply_data = data;
  }
  
@@ -54,7 +54,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  DECL_HANDLER(new_process);
  DECL_HANDLER(exec_process);
-@@ -2442,9 +2442,8 @@ C_ASSERT( sizeof(struct suspend_process_
+@@ -2446,9 +2446,8 @@ C_ASSERT( sizeof(struct suspend_process_
  C_ASSERT( FIELD_OFFSET(struct resume_process_request, handle) == 12 );
  C_ASSERT( sizeof(struct resume_process_request) == 16 );
  
@@ -80,7 +80,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  static void dump_new_process_request( const struct new_process_request *req )
  {
-@@ -5677,8 +5678,7 @@ static const struct
+@@ -5681,8 +5682,7 @@ static const struct
      { NULL, 0 }
  };
  
