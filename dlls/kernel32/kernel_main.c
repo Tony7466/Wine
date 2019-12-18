@@ -29,6 +29,7 @@
 
 #include "windef.h"
 #include "winbase.h"
+#include "winnls.h"
 #include "wincon.h"
 #include "winternl.h"
 
@@ -83,10 +84,10 @@ static BOOL process_attach( HMODULE module )
 {
     RTL_USER_PROCESS_PARAMETERS *params = NtCurrentTeb()->Peb->ProcessParameters;
 
-    NtQuerySystemInformation( SystemBasicInformation, &system_info, sizeof(system_info), NULL );
+    kernel32_handle = module;
+    RtlSetUnhandledExceptionFilter( UnhandledExceptionFilter );
 
-    /* Setup registry timezone information */
-    TIMEZONE_InitRegistry();
+    NtQuerySystemInformation( SystemBasicInformation, &system_info, sizeof(system_info), NULL );
 
     /* Setup computer name */
     COMPUTERNAME_Init();

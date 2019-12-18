@@ -543,14 +543,17 @@ static void _add_track(IDirectMusicSegment8 *seg, REFCLSID class, const char *na
 #define add_track(seg, class, group) _add_track(seg, &CLSID_DirectMusic ## class, #class, group)
 
 static void _expect_track(IDirectMusicSegment8 *seg, REFCLSID expect, const char *name, DWORD group,
-        DWORD index)
+        DWORD index, BOOL ignore_guid)
 {
     IDirectMusicTrack *track;
     IPersistStream *ps;
     CLSID class;
     HRESULT hr;
 
-    hr = IDirectMusicSegment8_GetTrack(seg, &GUID_NULL, group, index, &track);
+    if (ignore_guid)
+        hr = IDirectMusicSegment8_GetTrack(seg, &GUID_NULL, group, index, &track);
+    else
+        hr = IDirectMusicSegment8_GetTrack(seg, expect, group, index, &track);
     if (!expect) {
         ok(hr == DMUS_E_NOT_FOUND, "GetTrack failed: %08x, expected DMUS_E_NOT_FOUND\n", hr);
         return;
@@ -568,9 +571,12 @@ static void _expect_track(IDirectMusicSegment8 *seg, REFCLSID expect, const char
     IDirectMusicTrack_Release(track);
 }
 
-#define expect_track(seg, class, group, index) _expect_track(seg, &CLSID_DirectMusic ## class, #class, group, index)
+#define expect_track(seg, class, group, index) \
+    _expect_track(seg, &CLSID_DirectMusic ## class, #class, group, index, TRUE)
+#define expect_guid_track(seg, class, group, index) \
+    _expect_track(seg, &CLSID_DirectMusic ## class, #class, group, index, FALSE)
 
-static void test_track_identify(void)
+static void test_gettrack(void)
 {
     IDirectMusicSegment8 *seg;
     IDirectMusicTrack *track;
@@ -586,7 +592,9 @@ static void test_track_identify(void)
     add_track(seg, SegmentTriggerTrack, 0x2); /* idx 1 group 2 */
     add_track(seg, SeqTrack, 0x1);            /* idx 2 group 1 */
     add_track(seg, TempoTrack, 0x7);          /* idx 3 group 1, idx 2 group 2, idx 0 group 3 */
+    add_track(seg, WaveTrack, 0xffffffff);    /* idx 4 group 1, idx 3 group 2, idx 1 group 3 */
 
+    /* Ignore GUID in GetTrack */
     hr = IDirectMusicSegment8_GetTrack(seg, &GUID_NULL, 0, 0, &track);
     ok(hr == DMUS_E_NOT_FOUND, "GetTrack failed: %08x, expected DMUS_E_NOT_FOUND\n", hr);
 
@@ -594,14 +602,93 @@ static void test_track_identify(void)
     expect_track(seg, ParamControlTrack, 0x1, 1);
     expect_track(seg, SeqTrack, 0x1, 2);
     expect_track(seg, TempoTrack, 0x1, 3);
-    _expect_track(seg, NULL, "", 0x1, 4);
+    expect_track(seg, WaveTrack, 0x1, 4);
+    _expect_track(seg, NULL, "", 0x1, 5, TRUE);
+    _expect_track(seg, NULL, "", 0x1, DMUS_SEG_ANYTRACK, TRUE);
     expect_track(seg, ParamControlTrack, 0x2, 0);
+    expect_track(seg, WaveTrack, 0x80000000, 0);
     expect_track(seg, SegmentTriggerTrack, 0x3, 2);  /* groups 1+2 combined index */
     expect_track(seg, SeqTrack, 0x3, 3);             /* groups 1+2 combined index */
     expect_track(seg, TempoTrack, 0x7, 4);           /* groups 1+2+3 combined index */
     expect_track(seg, TempoTrack, 0xffffffff, 4);    /* all groups combined index */
+    _expect_track(seg, NULL, "", 0xffffffff, DMUS_SEG_ANYTRACK, TRUE);
+
+    /* Use the GUID in GetTrack */
+    hr = IDirectMusicSegment8_GetTrack(seg, &CLSID_DirectMusicLyricsTrack, 0, 0, &track);
+    ok(hr == DMUS_E_NOT_FOUND, "GetTrack failed: %08x, expected DMUS_E_NOT_FOUND\n", hr);
+
+    expect_guid_track(seg, LyricsTrack, 0x1, 0);
+    expect_guid_track(seg, ParamControlTrack, 0x1, 0);
+    expect_guid_track(seg, SeqTrack, 0x1, 0);
+    expect_guid_track(seg, TempoTrack, 0x1, 0);
+    expect_guid_track(seg, ParamControlTrack, 0x2, 0);
+    expect_guid_track(seg, SegmentTriggerTrack, 0x3, 0);
+    expect_guid_track(seg, SeqTrack, 0x3, 0);
+    expect_guid_track(seg, TempoTrack, 0x7, 0);
+    expect_guid_track(seg, TempoTrack, 0xffffffff, 0);
 
     IDirectMusicSegment8_Release(seg);
+}
+
+static void test_segment_param(void)
+{
+    IDirectMusicSegment8 *seg;
+    char buf[64];
+    HRESULT hr;
+
+    hr = CoCreateInstance(&CLSID_DirectMusicSegment, NULL, CLSCTX_INPROC_SERVER,
+            &IID_IDirectMusicSegment8, (void **)&seg);
+    ok(hr == S_OK, "DirectMusicSegment create failed: %08x, expected S_OK\n", hr);
+
+    add_track(seg, LyricsTrack, 0x1);         /* no params */
+    add_track(seg, SegmentTriggerTrack, 0x1); /* all params "supported" */
+
+    hr = IDirectMusicSegment8_GetParam(seg, NULL, 0x1, 0, 0, NULL, buf);
+    ok(hr == E_POINTER, "GetParam failed: %08x, expected E_POINTER\n", hr);
+    hr = IDirectMusicSegment8_SetParam(seg, NULL, 0x1, 0, 0, buf);
+    todo_wine ok(hr == E_POINTER, "SetParam failed: %08x, expected E_POINTER\n", hr);
+
+    hr = IDirectMusicSegment8_GetParam(seg, &GUID_Valid_Start_Time, 0x1, 0, 0, NULL, buf);
+    ok(hr == DMUS_E_GET_UNSUPPORTED,
+            "GetParam failed: %08x, expected DMUS_E_GET_UNSUPPORTED\n", hr);
+    hr = IDirectMusicSegment8_GetParam(seg, &GUID_Valid_Start_Time, 0x1, 1, 0, NULL, buf);
+    ok(hr == DMUS_E_TRACK_NOT_FOUND,
+            "GetParam failed: %08x, expected DMUS_E_TRACK_NOT_FOUND\n", hr);
+    hr = IDirectMusicSegment8_GetParam(seg, &GUID_Valid_Start_Time, 0x1, DMUS_SEG_ANYTRACK, 0,
+            NULL, buf);
+    ok(hr == DMUS_E_GET_UNSUPPORTED,
+            "GetParam failed: %08x, expected DMUS_E_GET_UNSUPPORTED\n", hr);
+
+    hr = IDirectMusicSegment8_SetParam(seg, &GUID_Valid_Start_Time, 0x1, 0, 0, buf);
+    ok(hr == S_OK, "SetParam failed: %08x, expected S_OK\n", hr);
+    hr = IDirectMusicSegment8_SetParam(seg, &GUID_Valid_Start_Time, 0x1, 1, 0, buf);
+    todo_wine ok(hr == DMUS_E_TRACK_NOT_FOUND,
+            "SetParam failed: %08x, expected DMUS_E_TRACK_NOT_FOUND\n", hr);
+    hr = IDirectMusicSegment8_SetParam(seg, &GUID_Valid_Start_Time, 0x1, DMUS_SEG_ALLTRACKS,
+            0, buf);
+    ok(hr == S_OK, "SetParam failed: %08x, expected S_OK\n", hr);
+
+    IDirectMusicSegment8_Release(seg);
+}
+
+static void expect_getparam(IDirectMusicTrack *track, REFGUID type, const char *name,
+        HRESULT expect)
+{
+    HRESULT hr;
+    char buf[64] = { 0 };
+
+    hr = IDirectMusicTrack8_GetParam(track, type, 0, NULL, buf);
+    ok(hr == expect, "GetParam(%s) failed: %08x, expected %08x\n", name, hr, expect);
+}
+
+static void expect_setparam(IDirectMusicTrack *track, REFGUID type, const char *name,
+        HRESULT expect)
+{
+    HRESULT hr;
+    char buf[64] = { 0 };
+
+    hr = IDirectMusicTrack8_SetParam(track, type, 0, buf);
+    ok(hr == expect, "SetParam(%s) failed: %08x, expected %08x\n", name, hr, expect);
 }
 
 static void test_track(void)
@@ -679,13 +766,47 @@ static void test_track(void)
         if (class[i].has_params != ~0) {
             for (j = 0; j < ARRAY_SIZE(param_types); j++) {
                 hr = IDirectMusicTrack8_IsParamSupported(dmt, param_types[j].type);
-                if (class[i].has_params & (1 << j))
+                if (class[i].has_params & (1 << j)) {
                     ok(hr == S_OK, "IsParamSupported(%s) failed: %08x, expected S_OK\n",
                             param_types[j].name, hr);
-                else
+                    if (class[i].clsid == &CLSID_DirectMusicSegmentTriggerTrack) {
+                        expect_getparam(dmt, param_types[j].type, param_types[j].name,
+                                DMUS_E_GET_UNSUPPORTED);
+                        expect_setparam(dmt, param_types[j].type, param_types[j].name, S_OK);
+                    } else if (class[i].clsid == &CLSID_DirectMusicMarkerTrack)
+                        expect_setparam(dmt, param_types[j].type, param_types[j].name,
+                                DMUS_E_SET_UNSUPPORTED);
+                    else if (class[i].clsid == &CLSID_DirectMusicWaveTrack)
+                        expect_getparam(dmt, param_types[j].type, param_types[j].name,
+                                DMUS_E_GET_UNSUPPORTED);
+                } else {
                     ok(hr == DMUS_E_TYPE_UNSUPPORTED,
                             "IsParamSupported(%s) failed: %08x, expected DMUS_E_TYPE_UNSUPPORTED\n",
                             param_types[j].name, hr);
+                    expect_getparam(dmt, param_types[j].type, param_types[j].name,
+                            DMUS_E_GET_UNSUPPORTED);
+                    if (class[i].clsid == &CLSID_DirectMusicWaveTrack)
+                        expect_setparam(dmt, param_types[j].type, param_types[j].name,
+                                DMUS_E_TYPE_UNSUPPORTED);
+                    else
+                        expect_setparam(dmt, param_types[j].type, param_types[j].name,
+                                DMUS_E_SET_UNSUPPORTED);
+                }
+
+                /* GetParam / SetParam for IsParamSupported supported types */
+                if (class[i].clsid == &CLSID_DirectMusicTimeSigTrack) {
+                    expect_getparam(dmt, &GUID_DisableTimeSig, "GUID_DisableTimeSig",
+                                DMUS_E_GET_UNSUPPORTED);
+                    expect_getparam(dmt, &GUID_EnableTimeSig, "GUID_EnableTimeSig",
+                                DMUS_E_GET_UNSUPPORTED);
+                    expect_setparam(dmt, &GUID_TimeSignature, "GUID_TimeSignature",
+                                DMUS_E_SET_UNSUPPORTED);
+                } else if (class[i].clsid == &CLSID_DirectMusicTempoTrack) {
+                    expect_getparam(dmt, &GUID_DisableTempo, "GUID_DisableTempo",
+                                DMUS_E_GET_UNSUPPORTED);
+                    expect_getparam(dmt, &GUID_EnableTempo, "GUID_EnableTempo",
+                                DMUS_E_GET_UNSUPPORTED);
+                }
             }
         } else {
             hr = IDirectMusicTrack_GetParam(dmt, NULL, 0, NULL, NULL);
@@ -1036,7 +1157,8 @@ START_TEST(dmime)
     test_audiopathconfig();
     test_graph();
     test_segment();
-    test_track_identify();
+    test_gettrack();
+    test_segment_param();
     test_track();
     test_parsedescriptor();
 

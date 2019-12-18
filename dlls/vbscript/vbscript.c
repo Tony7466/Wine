@@ -63,6 +63,14 @@ typedef struct {
     EXCEPINFO ei;
 } VBScriptError;
 
+static inline WCHAR *heap_pool_strdup(heap_pool_t *heap, const WCHAR *str)
+{
+    size_t size = (lstrlenW(str) + 1) * sizeof(WCHAR);
+    WCHAR *ret = heap_pool_alloc(heap, size);
+    if (ret) memcpy(ret, str, size);
+    return ret;
+}
+
 static void change_state(VBScript *This, SCRIPTSTATE state)
 {
     if(This->state == state)
@@ -82,66 +90,69 @@ static inline BOOL is_started(VBScript *This)
 
 static HRESULT exec_global_code(script_ctx_t *ctx, vbscode_t *code, VARIANT *res)
 {
+    ScriptDisp *obj = ctx->script_obj;
     function_t *func_iter, **new_funcs;
     dynamic_var_t *var, **new_vars;
     size_t cnt, i;
 
-    cnt = ctx->global_vars_cnt + code->main_code.var_cnt;
-    if (cnt > ctx->global_vars_size)
+    cnt = obj->global_vars_cnt + code->main_code.var_cnt;
+    if (cnt > obj->global_vars_size)
     {
-        if (ctx->global_vars)
-            new_vars = heap_realloc(ctx->global_vars, cnt * sizeof(*new_vars));
+        if (obj->global_vars)
+            new_vars = heap_realloc(obj->global_vars, cnt * sizeof(*new_vars));
         else
             new_vars = heap_alloc(cnt * sizeof(*new_vars));
         if (!new_vars)
             return E_OUTOFMEMORY;
-        ctx->global_vars = new_vars;
-        ctx->global_vars_size = cnt;
+        obj->global_vars = new_vars;
+        obj->global_vars_size = cnt;
     }
 
-    cnt = ctx->global_funcs_cnt;
+    cnt = obj->global_funcs_cnt;
     for (func_iter = code->funcs; func_iter; func_iter = func_iter->next)
         cnt++;
-    if (cnt > ctx->global_funcs_size)
+    if (cnt > obj->global_funcs_size)
     {
-        if (ctx->global_funcs)
-            new_funcs = heap_realloc(ctx->global_funcs, cnt * sizeof(*new_funcs));
+        if (obj->global_funcs)
+            new_funcs = heap_realloc(obj->global_funcs, cnt * sizeof(*new_funcs));
         else
             new_funcs = heap_alloc(cnt * sizeof(*new_funcs));
         if (!new_funcs)
             return E_OUTOFMEMORY;
-        ctx->global_funcs = new_funcs;
-        ctx->global_funcs_size = cnt;
+        obj->global_funcs = new_funcs;
+        obj->global_funcs_size = cnt;
     }
 
     for (i = 0; i < code->main_code.var_cnt; i++)
     {
-        if (!(var = heap_pool_alloc(&ctx->heap, sizeof(*var))))
+        if (!(var = heap_pool_alloc(&obj->heap, sizeof(*var))))
             return E_OUTOFMEMORY;
 
-        var->name = code->main_code.vars[i].name;
+        var->name = heap_pool_strdup(&obj->heap, code->main_code.vars[i].name);
+        if (!var->name)
+            return E_OUTOFMEMORY;
         V_VT(&var->v) = VT_EMPTY;
         var->is_const = FALSE;
         var->array = NULL;
 
-        ctx->global_vars[ctx->global_vars_cnt + i] = var;
+        obj->global_vars[obj->global_vars_cnt + i] = var;
     }
 
-    ctx->global_vars_cnt += code->main_code.var_cnt;
+    obj->global_vars_cnt += code->main_code.var_cnt;
 
     for (func_iter = code->funcs; func_iter; func_iter = func_iter->next)
     {
-        for (i = 0; i < ctx->global_funcs_cnt; i++)
+        for (i = 0; i < obj->global_funcs_cnt; i++)
         {
-            if (!wcsicmp(ctx->global_funcs[i]->name, func_iter->name))
+            if (!wcsicmp(obj->global_funcs[i]->name, func_iter->name))
             {
                 /* global function already exists, replace it */
-                ctx->global_funcs[i] = func_iter;
+                obj->global_funcs[i] = func_iter;
                 break;
             }
         }
-        if (i == ctx->global_funcs_cnt)
-            ctx->global_funcs[ctx->global_funcs_cnt++] = func_iter;
+        if (i == obj->global_funcs_cnt)
+            obj->global_funcs[obj->global_funcs_cnt++] = func_iter;
     }
 
     if (code->classes)
@@ -156,8 +167,8 @@ static HRESULT exec_global_code(script_ctx_t *ctx, vbscode_t *code, VARIANT *res
             class = class->next;
         }
 
-        class->next = ctx->classes;
-        ctx->classes = code->classes;
+        class->next = obj->classes;
+        obj->classes = code->classes;
         code->last_class = class;
     }
 
@@ -210,23 +221,9 @@ IDispatch *lookup_named_item(script_ctx_t *ctx, const WCHAR *name, unsigned flag
 static void release_script(script_ctx_t *ctx)
 {
     vbscode_t *code, *code_next;
-    class_desc_t *class_desc;
-    unsigned i;
 
     collect_objects(ctx);
     clear_ei(&ctx->ei);
-
-    for(i = 0; i < ctx->global_vars_cnt; i++)
-        release_dynamic_var(ctx->global_vars[i]);
-
-    heap_free(ctx->global_vars);
-    heap_free(ctx->global_funcs);
-    ctx->global_vars = NULL;
-    ctx->global_vars_cnt = 0;
-    ctx->global_vars_size = 0;
-    ctx->global_funcs = NULL;
-    ctx->global_funcs_cnt = 0;
-    ctx->global_funcs_size = 0;
 
     LIST_FOR_EACH_ENTRY_SAFE(code, code_next, &ctx->code_list, vbscode_t, entry)
     {
@@ -236,7 +233,10 @@ static void release_script(script_ctx_t *ctx)
             if(code->last_class) code->last_class->next = NULL;
         }
         else
+        {
+            list_remove(&code->entry);
             release_vbscode(code);
+        }
     }
 
     while(!list_empty(&ctx->named_items)) {
@@ -247,13 +247,6 @@ static void release_script(script_ctx_t *ctx)
             IDispatch_Release(iter->disp);
         heap_free(iter->name);
         heap_free(iter);
-    }
-
-    while(ctx->procs) {
-        class_desc = ctx->procs;
-        ctx->procs = class_desc->next;
-
-        heap_free(class_desc);
     }
 
     if(ctx->host_global) {
@@ -278,15 +271,16 @@ static void release_script(script_ctx_t *ctx)
         script_obj->ctx = NULL;
         IDispatchEx_Release(&script_obj->IDispatchEx_iface);
     }
-
-    heap_pool_free(&ctx->heap);
-    heap_pool_init(&ctx->heap);
 }
 
 static void release_code_list(script_ctx_t *ctx)
 {
-    while(!list_empty(&ctx->code_list))
-        release_vbscode(LIST_ENTRY(list_head(&ctx->code_list), vbscode_t, entry));
+    while(!list_empty(&ctx->code_list)) {
+        vbscode_t *iter = LIST_ENTRY(list_head(&ctx->code_list), vbscode_t, entry);
+
+        list_remove(&iter->entry);
+        release_vbscode(iter);
+    }
 }
 
 static void decrease_state(VBScript *This, SCRIPTSTATE state)
@@ -1054,7 +1048,6 @@ HRESULT WINAPI VBScriptFactory_CreateInstance(IClassFactory *iface, IUnknown *pU
     }
 
     ctx->safeopt = INTERFACE_USES_DISPEX;
-    heap_pool_init(&ctx->heap);
     list_init(&ctx->objects);
     list_init(&ctx->code_list);
     list_init(&ctx->named_items);

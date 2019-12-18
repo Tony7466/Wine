@@ -91,35 +91,18 @@ typedef HRESULT (WINAPI *BaseInputPin_Receive)(struct strmbase_sink *This, IMedi
 
 struct strmbase_sink_ops
 {
-	BasePinFuncTable base;
-	/* Optional */
-	BaseInputPin_Receive pfnReceive;
+    BasePinFuncTable base;
+    BaseInputPin_Receive pfnReceive;
+    HRESULT (*sink_connect)(struct strmbase_sink *pin, IPin *peer, const AM_MEDIA_TYPE *mt);
+    void (*sink_disconnect)(struct strmbase_sink *pin);
+    HRESULT (*sink_eos)(struct strmbase_sink *pin);
+    HRESULT (*sink_begin_flush)(struct strmbase_sink *pin);
+    HRESULT (*sink_end_flush)(struct strmbase_sink *pin);
+    HRESULT (*sink_new_segment)(struct strmbase_sink *pin, REFERENCE_TIME start, REFERENCE_TIME stop, double rate);
 };
 
 /* Base Pin */
 HRESULT strmbase_pin_get_media_type(struct strmbase_pin *pin, unsigned int index, AM_MEDIA_TYPE *mt);
-LONG WINAPI BasePinImpl_GetMediaTypeVersion(struct strmbase_pin *pin);
-HRESULT WINAPI BasePinImpl_QueryInterface(IPin *iface, REFIID iid, void **out);
-ULONG WINAPI BasePinImpl_AddRef(IPin *iface);
-ULONG WINAPI BasePinImpl_Release(IPin *iface);
-HRESULT WINAPI BasePinImpl_Disconnect(IPin * iface);
-HRESULT WINAPI BasePinImpl_ConnectedTo(IPin * iface, IPin ** ppPin);
-HRESULT WINAPI BasePinImpl_ConnectionMediaType(IPin * iface, AM_MEDIA_TYPE * pmt);
-HRESULT WINAPI BasePinImpl_QueryPinInfo(IPin * iface, PIN_INFO * pInfo);
-HRESULT WINAPI BasePinImpl_QueryDirection(IPin * iface, PIN_DIRECTION * pPinDir);
-HRESULT WINAPI BasePinImpl_QueryId(IPin * iface, LPWSTR * Id);
-HRESULT WINAPI BasePinImpl_QueryAccept(IPin * iface, const AM_MEDIA_TYPE * pmt);
-HRESULT WINAPI BasePinImpl_EnumMediaTypes(IPin * iface, IEnumMediaTypes ** ppEnum);
-HRESULT WINAPI BasePinImpl_QueryInternalConnections(IPin * iface, IPin ** apPin, ULONG * cPin);
-HRESULT WINAPI BasePinImpl_NewSegment(IPin * iface, REFERENCE_TIME tStart, REFERENCE_TIME tStop, double dRate);
-
-/* Base Output Pin */
-HRESULT WINAPI BaseOutputPinImpl_Connect(IPin * iface, IPin * pReceivePin, const AM_MEDIA_TYPE * pmt);
-HRESULT WINAPI BaseOutputPinImpl_ReceiveConnection(IPin * iface, IPin * pReceivePin, const AM_MEDIA_TYPE * pmt);
-HRESULT WINAPI BaseOutputPinImpl_Disconnect(IPin * iface);
-HRESULT WINAPI BaseOutputPinImpl_EndOfStream(IPin * iface);
-HRESULT WINAPI BaseOutputPinImpl_BeginFlush(IPin * iface);
-HRESULT WINAPI BaseOutputPinImpl_EndFlush(IPin * iface);
 
 HRESULT WINAPI BaseOutputPinImpl_GetDeliveryBuffer(struct strmbase_source *pin,
         IMediaSample **sample, REFERENCE_TIME *start, REFERENCE_TIME *stop, DWORD flags);
@@ -130,19 +113,10 @@ HRESULT WINAPI BaseOutputPinImpl_DecideAllocator(struct strmbase_source *pin, IM
 HRESULT WINAPI BaseOutputPinImpl_AttemptConnection(struct strmbase_source *pin, IPin *peer, const AM_MEDIA_TYPE *mt);
 
 void strmbase_source_cleanup(struct strmbase_source *pin);
-void strmbase_source_init(struct strmbase_source *pin, const IPinVtbl *vtbl, struct strmbase_filter *filter,
+void strmbase_source_init(struct strmbase_source *pin, struct strmbase_filter *filter,
         const WCHAR *name, const struct strmbase_source_ops *func_table);
 
-/* Base Input Pin */
-HRESULT WINAPI BaseInputPinImpl_Connect(IPin * iface, IPin * pConnector, const AM_MEDIA_TYPE * pmt);
-HRESULT WINAPI BaseInputPinImpl_ReceiveConnection(IPin * iface, IPin * pReceivePin, const AM_MEDIA_TYPE * pmt);
-HRESULT WINAPI BaseInputPinImpl_QueryAccept(IPin * iface, const AM_MEDIA_TYPE * pmt);
-HRESULT WINAPI BaseInputPinImpl_EndOfStream(IPin * iface);
-HRESULT WINAPI BaseInputPinImpl_BeginFlush(IPin * iface);
-HRESULT WINAPI BaseInputPinImpl_EndFlush(IPin * iface);
-HRESULT WINAPI BaseInputPinImpl_NewSegment(IPin * iface, REFERENCE_TIME tStart, REFERENCE_TIME tStop, double dRate);
-
-void strmbase_sink_init(struct strmbase_sink *pin, const IPinVtbl *vtbl, struct strmbase_filter *filter,
+void strmbase_sink_init(struct strmbase_sink *pin, struct strmbase_filter *filter,
         const WCHAR *name, const struct strmbase_sink_ops *ops, IMemAllocator *allocator);
 void strmbase_sink_cleanup(struct strmbase_sink *pin);
 
@@ -176,25 +150,9 @@ struct strmbase_filter_ops
     HRESULT (*filter_wait_state)(struct strmbase_filter *iface, DWORD timeout);
 };
 
-HRESULT WINAPI BaseFilterImpl_QueryInterface(IBaseFilter * iface, REFIID riid, LPVOID * ppv);
-ULONG WINAPI BaseFilterImpl_AddRef(IBaseFilter * iface);
-ULONG WINAPI BaseFilterImpl_Release(IBaseFilter * iface);
-HRESULT WINAPI BaseFilterImpl_Stop(IBaseFilter *iface);
-HRESULT WINAPI BaseFilterImpl_Pause(IBaseFilter *iface);
-HRESULT WINAPI BaseFilterImpl_Run(IBaseFilter *iface, REFERENCE_TIME start);
-HRESULT WINAPI BaseFilterImpl_GetClassID(IBaseFilter * iface, CLSID * pClsid);
-HRESULT WINAPI BaseFilterImpl_GetState(IBaseFilter * iface, DWORD dwMilliSecsTimeout, FILTER_STATE *pState );
-HRESULT WINAPI BaseFilterImpl_SetSyncSource(IBaseFilter * iface, IReferenceClock *pClock);
-HRESULT WINAPI BaseFilterImpl_GetSyncSource(IBaseFilter * iface, IReferenceClock **ppClock);
-HRESULT WINAPI BaseFilterImpl_EnumPins(IBaseFilter * iface, IEnumPins **ppEnum);
-HRESULT WINAPI BaseFilterImpl_FindPin(IBaseFilter *iface, const WCHAR *id, IPin **pin);
-HRESULT WINAPI BaseFilterImpl_QueryFilterInfo(IBaseFilter * iface, FILTER_INFO *pInfo);
-HRESULT WINAPI BaseFilterImpl_JoinFilterGraph(IBaseFilter * iface, IFilterGraph *pGraph, LPCWSTR pName );
-HRESULT WINAPI BaseFilterImpl_QueryVendorInfo(IBaseFilter * iface, LPWSTR *pVendorInfo);
-
 VOID WINAPI BaseFilterImpl_IncrementPinVersion(struct strmbase_filter *filter);
 
-void strmbase_filter_init(struct strmbase_filter *filter, const IBaseFilterVtbl *vtbl, IUnknown *outer,
+void strmbase_filter_init(struct strmbase_filter *filter, IUnknown *outer,
         const CLSID *clsid, const struct strmbase_filter_ops *func_table);
 void strmbase_filter_cleanup(struct strmbase_filter *filter);
 
@@ -221,9 +179,7 @@ typedef HRESULT (WINAPI *TransformFilter_DecideBufferSize) (TransformFilter *ifa
 typedef HRESULT (WINAPI *TransformFilter_StartStreaming) (TransformFilter *iface);
 typedef HRESULT (WINAPI *TransformFilter_StopStreaming) (TransformFilter *iface);
 typedef HRESULT (WINAPI *TransformFilter_Receive) (TransformFilter* iface, IMediaSample* pIn);
-typedef HRESULT (WINAPI *TransformFilter_CompleteConnect) (TransformFilter *iface, PIN_DIRECTION dir, IPin *pPin);
 typedef HRESULT (WINAPI *TransformFilter_BreakConnect) (TransformFilter *iface, PIN_DIRECTION dir);
-typedef HRESULT (WINAPI *TransformFilter_SetMediaType) (TransformFilter *iface, PIN_DIRECTION dir, const AM_MEDIA_TYPE *pMediaType);
 typedef HRESULT (WINAPI *TransformFilter_CheckInputType) (TransformFilter *iface, const AM_MEDIA_TYPE *pMediaType);
 typedef HRESULT (WINAPI *TransformFilter_EndOfStream) (TransformFilter *iface);
 typedef HRESULT (WINAPI *TransformFilter_BeginFlush) (TransformFilter *iface);
@@ -240,8 +196,7 @@ typedef struct TransformFilterFuncTable {
 	TransformFilter_Receive pfnReceive;
 	TransformFilter_StopStreaming pfnStopStreaming;
 	TransformFilter_CheckInputType pfnCheckInputType;
-	TransformFilter_SetMediaType pfnSetMediaType;
-	TransformFilter_CompleteConnect pfnCompleteConnect;
+        HRESULT (*transform_connect_sink)(TransformFilter *filter, const AM_MEDIA_TYPE *mt);
 	TransformFilter_BreakConnect pfnBreakConnect;
 	TransformFilter_EndOfStream pfnEndOfStream;
 	TransformFilter_BeginFlush pfnBeginFlush;
@@ -272,10 +227,13 @@ typedef struct SourceSeeking
 	double dRate;
 	LONGLONG llCurrent, llStop, llDuration;
 	GUID timeformat;
-	PCRITICAL_SECTION crst;
+	CRITICAL_SECTION cs;
 } SourceSeeking;
 
-HRESULT SourceSeeking_Init(SourceSeeking *pSeeking, const IMediaSeekingVtbl *Vtbl, SourceSeeking_ChangeStop fnChangeStop, SourceSeeking_ChangeStart fnChangeStart, SourceSeeking_ChangeRate fnChangeRate, PCRITICAL_SECTION crit_sect);
+HRESULT strmbase_seeking_init(SourceSeeking *seeking, const IMediaSeekingVtbl *vtbl,
+        SourceSeeking_ChangeStop fnChangeStop, SourceSeeking_ChangeStart fnChangeStart,
+        SourceSeeking_ChangeRate fnChangeRate);
+void strmbase_seeking_cleanup(SourceSeeking *seeking);
 
 HRESULT WINAPI SourceSeekingImpl_GetCapabilities(IMediaSeeking * iface, DWORD * pCapabilities);
 HRESULT WINAPI SourceSeekingImpl_CheckCapabilities(IMediaSeeking * iface, DWORD * pCapabilities);
@@ -547,7 +505,6 @@ typedef HRESULT (WINAPI *BaseRenderer_EndOfStream)(struct strmbase_renderer *ifa
 typedef HRESULT (WINAPI *BaseRenderer_BeginFlush) (struct strmbase_renderer *iface);
 typedef HRESULT (WINAPI *BaseRenderer_EndFlush) (struct strmbase_renderer *iface);
 typedef HRESULT (WINAPI *BaseRenderer_BreakConnect) (struct strmbase_renderer *iface);
-typedef HRESULT (WINAPI *BaseRenderer_CompleteConnect) (struct strmbase_renderer *iface, IPin *peer);
 
 struct strmbase_renderer_ops
 {
@@ -558,7 +515,7 @@ struct strmbase_renderer_ops
     void (*renderer_stop_stream)(struct strmbase_renderer *iface);
     BaseRenderer_ShouldDrawSampleNow  pfnShouldDrawSampleNow;
     BaseRenderer_PrepareReceive pfnPrepareReceive;
-    BaseRenderer_CompleteConnect pfnCompleteConnect;
+    HRESULT (*renderer_connect)(struct strmbase_renderer *iface, const AM_MEDIA_TYPE *mt);
     BaseRenderer_BreakConnect pfnBreakConnect;
     BaseRenderer_EndOfStream pfnEndOfStream;
     BaseRenderer_EndFlush pfnEndFlush;

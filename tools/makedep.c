@@ -3093,6 +3093,7 @@ static void output_source_default( struct makefile *make, struct incl_file *sour
         output( "\t$(CROSSCC) -c -o $@ %s", source->filename );
         output_filenames( defines );
         output_filenames( extra_cross_cflags );
+        if (source->file->flags & FLAG_C_IMPLIB) output_filename( "-fno-builtin" );
         output_filenames( cpp_flags );
         output_filename( "$(CROSSCFLAGS)" );
         output( "\n" );
@@ -3363,7 +3364,7 @@ static void output_module( struct makefile *make )
 
     if (spec_file)
         output_man_pages( make );
-    else if (*dll_ext && !make->is_win16)
+    else if (*dll_ext && !make->is_win16 && strendswith( make->module, ".exe" ))
     {
         char *binary = replace_extension( make->module, ".exe", "" );
         add_install_rule( make, binary, "wineapploader", strmake( "t$(bindir)/%s", binary ));

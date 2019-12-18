@@ -52,7 +52,7 @@ struct gstdemux
     struct strmbase_filter filter;
     IAMStreamSelect IAMStreamSelect_iface;
 
-    struct strmbase_pin sink;
+    struct strmbase_sink sink;
     IAsyncReader *reader;
     IMemAllocator *alloc;
     struct gstdemux_source **ppPins;
@@ -88,11 +88,6 @@ struct gstdemux_source
     SourceSeeking seek;
 };
 
-static inline struct gstdemux *impl_from_IBaseFilter(IBaseFilter *iface)
-{
-    return CONTAINING_RECORD(iface, struct gstdemux, filter.IBaseFilter_iface);
-}
-
 static inline struct gstdemux *impl_from_strmbase_filter(struct strmbase_filter *iface)
 {
     return CONTAINING_RECORD(iface, struct gstdemux, filter);
@@ -102,9 +97,6 @@ const char* media_quark_string = "media-sample";
 
 static const WCHAR wcsInputPinName[] = {'i','n','p','u','t',' ','p','i','n',0};
 static const IMediaSeekingVtbl GST_Seeking_Vtbl;
-static const IPinVtbl GST_OutputPin_Vtbl;
-static const IPinVtbl GST_InputPin_Vtbl;
-static const IBaseFilterVtbl GST_Vtbl;
 static const IQualityControlVtbl GSTOutPin_QualityControl_Vtbl;
 
 static struct gstdemux_source *create_pin(struct gstdemux *filter, const WCHAR *name);
@@ -814,13 +806,17 @@ static void removed_decoded_pad(GstElement *bin, GstPad *pad, gpointer user)
 
     TRACE("%p %p %p\n", This, bin, pad);
 
-    EnterCriticalSection(&This->filter.csFilter);
     for (x = 0; x < This->cStreams; ++x) {
         if (This->ppPins[x]->their_src == pad)
             break;
     }
     if (x == This->cStreams)
-        goto out;
+    {
+        char *name = gst_pad_get_name(pad);
+        WARN("No pin matching pad %s found.\n", debugstr_a(name));
+        g_free(name);
+        return;
+    }
 
     pin = This->ppPins[x];
 
@@ -831,9 +827,6 @@ static void removed_decoded_pad(GstElement *bin, GstPad *pad, gpointer user)
 
     gst_object_unref(pin->their_src);
     pin->their_src = NULL;
-out:
-    TRACE("Removed %i/%i\n", x, This->cStreams);
-    LeaveCriticalSection(&This->filter.csFilter);
 }
 
 static void init_new_decoded_pad(GstElement *bin, GstPad *pad, struct gstdemux *This)
@@ -971,7 +964,6 @@ static void existing_new_pad(GstElement *bin, GstPad *pad, gpointer user)
         return;
     }
 
-    EnterCriticalSection(&This->filter.csFilter);
     for (x = 0; x < This->cStreams; ++x) {
         struct gstdemux_source *pin = This->ppPins[x];
         if (!pin->their_src) {
@@ -986,13 +978,11 @@ static void existing_new_pad(GstElement *bin, GstPad *pad, gpointer user)
                 pin->their_src = pad;
                 gst_object_ref(pin->their_src);
                 TRACE("Relinked\n");
-                LeaveCriticalSection(&This->filter.csFilter);
                 return;
             }
         }
     }
     init_new_decoded_pad(bin, pad, This);
-    LeaveCriticalSection(&This->filter.csFilter);
 }
 
 static gboolean query_function(GstPad *pad, GstObject *parent, GstQuery *query)
@@ -1193,7 +1183,7 @@ static struct strmbase_pin *gstdemux_get_pin(struct strmbase_filter *base, unsig
     struct gstdemux *filter = impl_from_strmbase_filter(base);
 
     if (!index)
-        return &filter->sink;
+        return &filter->sink.pin;
     else if (index <= filter->cStreams)
         return &filter->ppPins[index - 1]->pin.pin;
     return NULL;
@@ -1208,37 +1198,154 @@ static void gstdemux_destroy(struct strmbase_filter *iface)
     CloseHandle(filter->duration_event);
 
     /* Don't need to clean up output pins, disconnecting input pin will do that */
-    if (filter->sink.peer)
+    if (filter->sink.pin.peer)
     {
-        hr = IPin_Disconnect(filter->sink.peer);
+        hr = IPin_Disconnect(filter->sink.pin.peer);
         assert(hr == S_OK);
-        hr = IPin_Disconnect(&filter->sink.IPin_iface);
+        hr = IPin_Disconnect(&filter->sink.pin.IPin_iface);
         assert(hr == S_OK);
     }
 
-    FreeMediaType(&filter->sink.mt);
     if (filter->alloc)
         IMemAllocator_Release(filter->alloc);
     filter->alloc = NULL;
     if (filter->reader)
         IAsyncReader_Release(filter->reader);
     filter->reader = NULL;
-    filter->sink.IPin_iface.lpVtbl = NULL;
 
     if (filter->bus)
     {
         gst_bus_set_sync_handler(filter->bus, NULL, NULL, NULL);
         gst_object_unref(filter->bus);
     }
+    strmbase_sink_cleanup(&filter->sink);
     strmbase_filter_cleanup(&filter->filter);
     heap_free(filter);
+}
+
+static HRESULT gstdemux_init_stream(struct strmbase_filter *iface)
+{
+    struct gstdemux *filter = impl_from_strmbase_filter(iface);
+    HRESULT hr = VFW_E_NOT_CONNECTED, pin_hr;
+    GstStateChangeReturn ret;
+    unsigned int i;
+
+    if (!filter->container)
+        return VFW_E_NOT_CONNECTED;
+
+    if (filter->no_more_pads_event)
+        ResetEvent(filter->no_more_pads_event);
+
+    if ((ret = gst_element_set_state(filter->container, GST_STATE_PAUSED)) == GST_STATE_CHANGE_FAILURE)
+    {
+        ERR("Failed to pause stream.\n");
+        return E_FAIL;
+    }
+
+    /* Make sure that all of our pads are connected before returning, lest we
+     * e.g. try to seek and fail. */
+    if (filter->no_more_pads_event)
+        WaitForSingleObject(filter->no_more_pads_event, INFINITE);
+
+    for (i = 0; i < filter->cStreams; ++i)
+    {
+        if (SUCCEEDED(pin_hr = BaseOutputPinImpl_Active(&filter->ppPins[i]->pin)))
+            hr = pin_hr;
+    }
+    return hr;
+}
+
+static HRESULT gstdemux_start_stream(struct strmbase_filter *iface, REFERENCE_TIME time)
+{
+    struct gstdemux *filter = impl_from_strmbase_filter(iface);
+    GstStateChangeReturn ret;
+
+    if (!filter->container)
+        return VFW_E_NOT_CONNECTED;
+
+    if ((ret = gst_element_set_state(filter->container, GST_STATE_PLAYING)) == GST_STATE_CHANGE_FAILURE)
+    {
+        ERR("Failed to play stream.\n");
+        return E_FAIL;
+    }
+    else if (ret == GST_STATE_CHANGE_ASYNC)
+        return S_FALSE;
+    return S_OK;
+}
+
+static HRESULT gstdemux_stop_stream(struct strmbase_filter *iface)
+{
+    struct gstdemux *filter = impl_from_strmbase_filter(iface);
+    GstStateChangeReturn ret;
+
+    if (!filter->container)
+        return VFW_E_NOT_CONNECTED;
+
+    if ((ret = gst_element_set_state(filter->container, GST_STATE_PAUSED)) == GST_STATE_CHANGE_FAILURE)
+    {
+        ERR("Failed to pause stream.\n");
+        return E_FAIL;
+    }
+    else if (ret == GST_STATE_CHANGE_ASYNC)
+        return S_FALSE;
+    return S_OK;
+}
+
+static HRESULT gstdemux_cleanup_stream(struct strmbase_filter *iface)
+{
+    struct gstdemux *filter = impl_from_strmbase_filter(iface);
+    GstStateChangeReturn ret;
+
+    if (!filter->container)
+        return S_OK;
+
+    filter->ignore_flush = TRUE;
+    if ((ret = gst_element_set_state(filter->container, GST_STATE_READY)) == GST_STATE_CHANGE_FAILURE)
+    {
+        ERR("Failed to pause stream.\n");
+        return E_FAIL;
+    }
+    gst_element_get_state(filter->container, NULL, NULL, GST_CLOCK_TIME_NONE);
+    filter->ignore_flush = FALSE;
+
+    return S_OK;
+}
+
+static HRESULT gstdemux_wait_state(struct strmbase_filter *iface, DWORD timeout)
+{
+    struct gstdemux *filter = impl_from_strmbase_filter(iface);
+    GstStateChangeReturn ret;
+
+    if (!filter->container)
+        return S_OK;
+
+    ret = gst_element_get_state(filter->container, NULL, NULL,
+            timeout == INFINITE ? GST_CLOCK_TIME_NONE : timeout * 1000000);
+    if (ret == GST_STATE_CHANGE_FAILURE)
+    {
+        ERR("Failed to get state.\n");
+        return E_FAIL;
+    }
+    else if (ret == GST_STATE_CHANGE_ASYNC)
+        return VFW_S_STATE_INTERMEDIATE;
+    return S_OK;
 }
 
 static const struct strmbase_filter_ops filter_ops =
 {
     .filter_get_pin = gstdemux_get_pin,
     .filter_destroy = gstdemux_destroy,
+    .filter_init_stream = gstdemux_init_stream,
+    .filter_start_stream = gstdemux_start_stream,
+    .filter_stop_stream = gstdemux_stop_stream,
+    .filter_cleanup_stream = gstdemux_cleanup_stream,
+    .filter_wait_state = gstdemux_wait_state,
 };
+
+static inline struct gstdemux *impl_from_strmbase_sink(struct strmbase_sink *iface)
+{
+    return CONTAINING_RECORD(iface, struct gstdemux, sink);
+}
 
 static HRESULT sink_query_accept(struct strmbase_pin *iface, const AM_MEDIA_TYPE *mt)
 {
@@ -1247,10 +1354,71 @@ static HRESULT sink_query_accept(struct strmbase_pin *iface, const AM_MEDIA_TYPE
     return S_FALSE;
 }
 
-static const BasePinFuncTable sink_ops =
+static HRESULT gstdemux_sink_connect(struct strmbase_sink *iface, IPin *peer, const AM_MEDIA_TYPE *pmt)
 {
-    .pin_query_accept = sink_query_accept,
-    .pin_get_media_type = strmbase_pin_get_media_type,
+    struct gstdemux *filter = impl_from_strmbase_sink(iface);
+    IMemAllocator *allocator = NULL;
+    ALLOCATOR_PROPERTIES props;
+    HRESULT hr = S_OK;
+
+    mark_wine_thread();
+
+    props.cBuffers = 8;
+    props.cbBuffer = 16384;
+    props.cbAlign = 1;
+    props.cbPrefix = 0;
+
+    filter->reader = NULL;
+    filter->alloc = NULL;
+    if (FAILED(hr = IPin_QueryInterface(peer, &IID_IAsyncReader, (void **)&filter->reader)))
+        return hr;
+
+    if (FAILED(hr = GST_Connect(filter, peer, &props)))
+        goto err;
+
+    /* Some applications depend on IAsyncReader::RequestAllocator() passing a
+     * non-NULL preferred allocator. */
+    hr = CoCreateInstance(&CLSID_MemoryAllocator, NULL, CLSCTX_INPROC,
+            &IID_IMemAllocator, (void **)&allocator);
+    if (FAILED(hr))
+        goto err;
+    hr = IAsyncReader_RequestAllocator(filter->reader, allocator, &props, &filter->alloc);
+    IMemAllocator_Release(allocator);
+    if (FAILED(hr))
+    {
+        WARN("Failed to get allocator, hr %#x.\n", hr);
+        goto err;
+    }
+
+    if (FAILED(hr = IMemAllocator_Commit(filter->alloc)))
+    {
+        WARN("Failed to commit allocator, hr %#x.\n", hr);
+        goto err;
+    }
+
+    return S_OK;
+err:
+    GST_RemoveOutputPins(filter);
+    IAsyncReader_Release(filter->reader);
+    return hr;
+}
+
+static void gstdemux_sink_disconnect(struct strmbase_sink *iface)
+{
+    struct gstdemux *filter = impl_from_strmbase_sink(iface);
+
+    mark_wine_thread();
+
+    IMemAllocator_Decommit(filter->alloc);
+    GST_RemoveOutputPins(filter);
+}
+
+static const struct strmbase_sink_ops sink_ops =
+{
+    .base.pin_query_accept = sink_query_accept,
+    .base.pin_get_media_type = strmbase_pin_get_media_type,
+    .sink_connect = gstdemux_sink_connect,
+    .sink_disconnect = gstdemux_sink_disconnect,
 };
 
 static BOOL gstdecoder_init_gst(struct gstdemux *filter)
@@ -1332,153 +1500,16 @@ IUnknown * CALLBACK Gstreamer_Splitter_create(IUnknown *outer, HRESULT *phr)
         return NULL;
     }
 
-    strmbase_filter_init(&object->filter, &GST_Vtbl, outer, &CLSID_Gstreamer_Splitter, &filter_ops);
+    strmbase_filter_init(&object->filter, outer, &CLSID_Gstreamer_Splitter, &filter_ops);
+    strmbase_sink_init(&object->sink, &object->filter, wcsInputPinName, &sink_ops, NULL);
 
     object->no_more_pads_event = CreateEventW(NULL, FALSE, FALSE, NULL);
-    object->sink.dir = PINDIR_INPUT;
-    object->sink.filter = &object->filter;
-    lstrcpynW(object->sink.name, wcsInputPinName, ARRAY_SIZE(object->sink.name));
-    object->sink.IPin_iface.lpVtbl = &GST_InputPin_Vtbl;
-    object->sink.pFuncsTable = &sink_ops;
     object->init_gst = gstdecoder_init_gst;
     *phr = S_OK;
 
     TRACE("Created GStreamer demuxer %p.\n", object);
     return &object->filter.IUnknown_inner;
 }
-
-static HRESULT WINAPI GST_Stop(IBaseFilter *iface)
-{
-    struct gstdemux *This = impl_from_IBaseFilter(iface);
-
-    TRACE("(%p)\n", This);
-
-    mark_wine_thread();
-
-    if (This->container) {
-        This->ignore_flush = TRUE;
-        gst_element_set_state(This->container, GST_STATE_READY);
-        gst_element_get_state(This->container, NULL, NULL, -1);
-        This->ignore_flush = FALSE;
-    }
-    return S_OK;
-}
-
-static HRESULT WINAPI GST_Pause(IBaseFilter *iface)
-{
-    struct gstdemux *This = impl_from_IBaseFilter(iface);
-    HRESULT hr = S_OK;
-    GstState now;
-    GstStateChangeReturn ret;
-
-    TRACE("(%p)\n", This);
-
-    if (!This->container)
-        return VFW_E_NOT_CONNECTED;
-
-    mark_wine_thread();
-
-    gst_element_get_state(This->container, &now, NULL, -1);
-    if (now == GST_STATE_PAUSED)
-        return S_OK;
-    if (now != GST_STATE_PLAYING)
-        hr = IBaseFilter_Run(iface, -1);
-    if (FAILED(hr))
-        return hr;
-    ret = gst_element_set_state(This->container, GST_STATE_PAUSED);
-    if (ret == GST_STATE_CHANGE_ASYNC)
-        hr = S_FALSE;
-    return hr;
-}
-
-static HRESULT WINAPI GST_Run(IBaseFilter *iface, REFERENCE_TIME tStart)
-{
-    struct gstdemux *This = impl_from_IBaseFilter(iface);
-    HRESULT hr = S_OK;
-    ULONG i;
-    GstState now;
-    HRESULT hr_any = VFW_E_NOT_CONNECTED;
-
-    TRACE("(%p)->(%s)\n", This, wine_dbgstr_longlong(tStart));
-
-    mark_wine_thread();
-
-    if (!This->container)
-        return VFW_E_NOT_CONNECTED;
-
-    gst_element_get_state(This->container, &now, NULL, -1);
-    if (now == GST_STATE_PLAYING)
-        return S_OK;
-    if (now == GST_STATE_PAUSED) {
-        GstStateChangeReturn ret;
-        ret = gst_element_set_state(This->container, GST_STATE_PLAYING);
-        if (ret == GST_STATE_CHANGE_ASYNC)
-            return S_FALSE;
-        return S_OK;
-    }
-
-    EnterCriticalSection(&This->filter.csFilter);
-    gst_element_set_state(This->container, GST_STATE_PLAYING);
-
-    for (i = 0; i < This->cStreams; i++) {
-        hr = BaseOutputPinImpl_Active(&This->ppPins[i]->pin);
-        if (SUCCEEDED(hr)) {
-            hr_any = hr;
-        }
-    }
-    hr = hr_any;
-    LeaveCriticalSection(&This->filter.csFilter);
-
-    return hr;
-}
-
-static HRESULT WINAPI GST_GetState(IBaseFilter *iface, DWORD dwMilliSecsTimeout, FILTER_STATE *pState)
-{
-    struct gstdemux *This = impl_from_IBaseFilter(iface);
-    HRESULT hr = S_OK;
-    GstState now, pending;
-    GstStateChangeReturn ret;
-
-    TRACE("(%p)->(%d, %p)\n", This, dwMilliSecsTimeout, pState);
-
-    mark_wine_thread();
-
-    if (!This->container) {
-        *pState = State_Stopped;
-        return S_OK;
-    }
-
-    ret = gst_element_get_state(This->container, &now, &pending, dwMilliSecsTimeout == INFINITE ? -1 : dwMilliSecsTimeout * 1000);
-
-    if (ret == GST_STATE_CHANGE_ASYNC)
-        hr = VFW_S_STATE_INTERMEDIATE;
-    else
-        pending = now;
-
-    switch (pending) {
-        case GST_STATE_PAUSED: *pState = State_Paused; return hr;
-        case GST_STATE_PLAYING: *pState = State_Running; return hr;
-        default: *pState = State_Stopped; return hr;
-    }
-}
-
-static const IBaseFilterVtbl GST_Vtbl = {
-    BaseFilterImpl_QueryInterface,
-    BaseFilterImpl_AddRef,
-    BaseFilterImpl_Release,
-    BaseFilterImpl_GetClassID,
-    GST_Stop,
-    GST_Pause,
-    GST_Run,
-    GST_GetState,
-    BaseFilterImpl_SetSyncSource,
-    BaseFilterImpl_GetSyncSource,
-    BaseFilterImpl_EnumPins,
-    BaseFilterImpl_FindPin,
-    BaseFilterImpl_QueryFilterInfo,
-    BaseFilterImpl_JoinFilterGraph,
-    BaseFilterImpl_QueryVendorInfo
-};
 
 static struct gstdemux *impl_from_IAMStreamSelect(IAMStreamSelect *iface)
 {
@@ -1763,29 +1794,19 @@ static inline struct gstdemux_source *impl_source_from_IPin(IPin *iface)
     return CONTAINING_RECORD(iface, struct gstdemux_source, pin.pin.IPin_iface);
 }
 
-static HRESULT WINAPI GSTOutPin_QueryInterface(IPin *iface, REFIID riid, void **ppv)
+static HRESULT source_query_interface(struct strmbase_pin *iface, REFIID iid, void **out)
 {
-    struct gstdemux_source *This = impl_source_from_IPin(iface);
+    struct gstdemux_source *pin = impl_source_from_IPin(&iface->IPin_iface);
 
-    TRACE("(%p)->(%s, %p)\n", This, debugstr_guid(riid), ppv);
+    if (IsEqualGUID(iid, &IID_IMediaSeeking))
+        *out = &pin->seek.IMediaSeeking_iface;
+    else if (IsEqualGUID(iid, &IID_IQualityControl))
+        *out = &pin->IQualityControl_iface;
+    else
+        return E_NOINTERFACE;
 
-    *ppv = NULL;
-
-    if (IsEqualIID(riid, &IID_IUnknown))
-        *ppv = iface;
-    else if (IsEqualIID(riid, &IID_IPin))
-        *ppv = iface;
-    else if (IsEqualIID(riid, &IID_IMediaSeeking))
-        *ppv = &This->seek;
-    else if (IsEqualIID(riid, &IID_IQualityControl))
-        *ppv = &This->IQualityControl_iface;
-
-    if (*ppv) {
-        IUnknown_AddRef((IUnknown *)(*ppv));
-        return S_OK;
-    }
-    FIXME("No interface for %s!\n", debugstr_guid(riid));
-    return E_NOINTERFACE;
+    IUnknown_AddRef((IUnknown *)*out);
+    return S_OK;
 }
 
 static HRESULT source_query_accept(struct strmbase_pin *base, const AM_MEDIA_TYPE *amt)
@@ -1869,33 +1890,14 @@ static void free_source_pin(struct gstdemux_source *pin)
     FreeMediaType(&pin->mt);
     gst_segment_free(pin->segment);
 
+    strmbase_seeking_cleanup(&pin->seek);
     strmbase_source_cleanup(&pin->pin);
     heap_free(pin);
 }
 
-static const IPinVtbl GST_OutputPin_Vtbl = {
-    GSTOutPin_QueryInterface,
-    BasePinImpl_AddRef,
-    BasePinImpl_Release,
-    BaseOutputPinImpl_Connect,
-    BaseOutputPinImpl_ReceiveConnection,
-    BaseOutputPinImpl_Disconnect,
-    BasePinImpl_ConnectedTo,
-    BasePinImpl_ConnectionMediaType,
-    BasePinImpl_QueryPinInfo,
-    BasePinImpl_QueryDirection,
-    BasePinImpl_QueryId,
-    BasePinImpl_QueryAccept,
-    BasePinImpl_EnumMediaTypes,
-    BasePinImpl_QueryInternalConnections,
-    BaseOutputPinImpl_EndOfStream,
-    BaseOutputPinImpl_BeginFlush,
-    BaseOutputPinImpl_EndFlush,
-    BasePinImpl_NewSegment
-};
-
 static const struct strmbase_source_ops source_ops =
 {
+    .base.pin_query_interface = source_query_interface,
     .base.pin_query_accept = source_query_accept,
     .base.pin_get_media_type = source_get_media_type,
     .pfnAttemptConnection = BaseOutputPinImpl_AttemptConnection,
@@ -1915,14 +1917,13 @@ static struct gstdemux_source *create_pin(struct gstdemux *filter, const WCHAR *
     if (!(pin = heap_alloc_zero(sizeof(*pin))))
         return NULL;
 
-    strmbase_source_init(&pin->pin, &GST_OutputPin_Vtbl, &filter->filter, name,
-            &source_ops);
+    strmbase_source_init(&pin->pin, &filter->filter, name, &source_ops);
     pin->caps_event = CreateEventW(NULL, FALSE, FALSE, NULL);
     pin->segment = gst_segment_new();
     gst_segment_init(pin->segment, GST_FORMAT_TIME);
     pin->IQualityControl_iface.lpVtbl = &GSTOutPin_QualityControl_Vtbl;
-    SourceSeeking_Init(&pin->seek, &GST_Seeking_Vtbl, GST_ChangeStop,
-            GST_ChangeCurrent, GST_ChangeRate, &filter->filter.csFilter);
+    strmbase_seeking_init(&pin->seek, &GST_Seeking_Vtbl, GST_ChangeStop,
+            GST_ChangeCurrent, GST_ChangeRate);
     BaseFilterImpl_IncrementPinVersion(&filter->filter);
 
     sprintf(pad_name, "qz_sink_%u", filter->cStreams);
@@ -1963,189 +1964,6 @@ static HRESULT GST_RemoveOutputPins(struct gstdemux *This)
     BaseFilterImpl_IncrementPinVersion(&This->filter);
     return S_OK;
 }
-
-static inline struct gstdemux *impl_from_sink_IPin(IPin *iface)
-{
-    return CONTAINING_RECORD(iface, struct gstdemux, sink.IPin_iface);
-}
-
-static HRESULT WINAPI GSTInPin_ReceiveConnection(IPin *iface, IPin *pReceivePin, const AM_MEDIA_TYPE *pmt)
-{
-    struct gstdemux *filter = impl_from_sink_IPin(iface);
-    PIN_DIRECTION pindirReceive;
-    HRESULT hr = S_OK;
-
-    TRACE("filter %p, peer %p, mt %p.\n", filter, pReceivePin, pmt);
-    strmbase_dump_media_type(pmt);
-
-    mark_wine_thread();
-
-    EnterCriticalSection(&filter->filter.csFilter);
-    if (!filter->sink.peer)
-    {
-        ALLOCATOR_PROPERTIES props;
-        IMemAllocator *pAlloc = NULL;
-
-        props.cBuffers = 8;
-        props.cbBuffer = 16384;
-        props.cbAlign = 1;
-        props.cbPrefix = 0;
-
-        if (IPin_QueryAccept(iface, pmt) != S_OK)
-            hr = VFW_E_TYPE_NOT_ACCEPTED;
-
-        if (SUCCEEDED(hr)) {
-            IPin_QueryDirection(pReceivePin, &pindirReceive);
-            if (pindirReceive != PINDIR_OUTPUT) {
-                ERR("Can't connect from non-output pin\n");
-                hr = VFW_E_INVALID_DIRECTION;
-            }
-        }
-
-        filter->reader = NULL;
-        filter->alloc = NULL;
-        if (SUCCEEDED(hr))
-            hr = IPin_QueryInterface(pReceivePin, &IID_IAsyncReader, (LPVOID *)&filter->reader);
-        if (SUCCEEDED(hr))
-            hr = GST_Connect(filter, pReceivePin, &props);
-
-        /* A certain IAsyncReader::RequestAllocator expects to be passed
-           non-NULL preferred allocator */
-        if (SUCCEEDED(hr))
-            hr = CoCreateInstance(&CLSID_MemoryAllocator, NULL, CLSCTX_INPROC,
-                                  &IID_IMemAllocator, (LPVOID *)&pAlloc);
-        if (SUCCEEDED(hr)) {
-            hr = IAsyncReader_RequestAllocator(filter->reader, pAlloc, &props, &filter->alloc);
-            if (FAILED(hr))
-                WARN("Can't get an allocator, got %08x\n", hr);
-        }
-        if (pAlloc)
-            IMemAllocator_Release(pAlloc);
-        if (SUCCEEDED(hr)) {
-            CopyMediaType(&filter->sink.mt, pmt);
-            filter->sink.peer = pReceivePin;
-            IPin_AddRef(pReceivePin);
-            hr = IMemAllocator_Commit(filter->alloc);
-        } else {
-            GST_RemoveOutputPins(filter);
-            if (filter->reader)
-                IAsyncReader_Release(filter->reader);
-            filter->reader = NULL;
-            if (filter->alloc)
-                IMemAllocator_Release(filter->alloc);
-            filter->alloc = NULL;
-        }
-        TRACE("Size: %i\n", props.cbBuffer);
-    } else
-        hr = VFW_E_ALREADY_CONNECTED;
-    LeaveCriticalSection(&filter->filter.csFilter);
-    return hr;
-}
-
-static HRESULT WINAPI GSTInPin_Disconnect(IPin *iface)
-{
-    struct gstdemux *filter = impl_from_sink_IPin(iface);
-    HRESULT hr;
-    FILTER_STATE state;
-
-    TRACE("filter %p.\n", filter);
-
-    mark_wine_thread();
-
-    hr = IBaseFilter_GetState(&filter->filter.IBaseFilter_iface, INFINITE, &state);
-    EnterCriticalSection(&filter->filter.csFilter);
-    if (filter->sink.peer)
-    {
-        if (SUCCEEDED(hr) && state == State_Stopped) {
-            IMemAllocator_Decommit(filter->alloc);
-            IPin_Disconnect(filter->sink.peer);
-            IPin_Release(filter->sink.peer);
-            filter->sink.peer = NULL;
-            hr = GST_RemoveOutputPins(filter);
-        } else
-            hr = VFW_E_NOT_STOPPED;
-    } else
-        hr = S_FALSE;
-    LeaveCriticalSection(&filter->filter.csFilter);
-    return hr;
-}
-
-static HRESULT WINAPI GSTInPin_EndOfStream(IPin *iface)
-{
-    FIXME("iface %p, stub!\n", iface);
-    return S_OK;
-}
-
-static HRESULT WINAPI GSTInPin_BeginFlush(IPin *iface)
-{
-    FIXME("iface %p, stub!\n", iface);
-    return S_OK;
-}
-
-static HRESULT WINAPI GSTInPin_EndFlush(IPin *iface)
-{
-    FIXME("iface %p, stub!\n", iface);
-    return S_OK;
-}
-
-static HRESULT WINAPI GSTInPin_NewSegment(IPin *iface, REFERENCE_TIME start,
-        REFERENCE_TIME stop, double rate)
-{
-    FIXME("iface %p, start %s, stop %s, rate %.16e, stub!\n",
-            iface, wine_dbgstr_longlong(start), wine_dbgstr_longlong(stop), rate);
-
-    BasePinImpl_NewSegment(iface, start, stop, rate);
-    return S_OK;
-}
-
-static HRESULT WINAPI GSTInPin_QueryInterface(IPin * iface, REFIID riid, LPVOID * ppv)
-{
-    struct gstdemux *filter = impl_from_sink_IPin(iface);
-
-    TRACE("filter %p, riid %s, ppv %p.\n", filter, debugstr_guid(riid), ppv);
-
-    *ppv = NULL;
-
-    if (IsEqualIID(riid, &IID_IUnknown))
-        *ppv = iface;
-    else if (IsEqualIID(riid, &IID_IPin))
-        *ppv = iface;
-    else if (IsEqualIID(riid, &IID_IMediaSeeking))
-    {
-        return IBaseFilter_QueryInterface(&filter->filter.IBaseFilter_iface, &IID_IMediaSeeking, ppv);
-    }
-
-    if (*ppv)
-    {
-        IUnknown_AddRef((IUnknown *)(*ppv));
-        return S_OK;
-    }
-
-    FIXME("No interface for %s!\n", debugstr_guid(riid));
-
-    return E_NOINTERFACE;
-}
-
-static const IPinVtbl GST_InputPin_Vtbl = {
-    GSTInPin_QueryInterface,
-    BasePinImpl_AddRef,
-    BasePinImpl_Release,
-    BaseInputPinImpl_Connect,
-    GSTInPin_ReceiveConnection,
-    GSTInPin_Disconnect,
-    BasePinImpl_ConnectedTo,
-    BasePinImpl_ConnectionMediaType,
-    BasePinImpl_QueryPinInfo,
-    BasePinImpl_QueryDirection,
-    BasePinImpl_QueryId,
-    BasePinImpl_QueryAccept,
-    BasePinImpl_EnumMediaTypes,
-    BasePinImpl_QueryInternalConnections,
-    GSTInPin_EndOfStream,
-    GSTInPin_BeginFlush,
-    GSTInPin_EndFlush,
-    GSTInPin_NewSegment
-};
 
 pthread_mutex_t cb_list_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cb_list_cond = PTHREAD_COND_INITIALIZER;
@@ -2307,10 +2125,12 @@ static HRESULT wave_parser_sink_query_accept(struct strmbase_pin *iface, const A
     return S_FALSE;
 }
 
-static const BasePinFuncTable wave_parser_sink_ops =
+static const struct strmbase_sink_ops wave_parser_sink_ops =
 {
-    .pin_query_accept = wave_parser_sink_query_accept,
-    .pin_get_media_type = strmbase_pin_get_media_type,
+    .base.pin_query_accept = wave_parser_sink_query_accept,
+    .base.pin_get_media_type = strmbase_pin_get_media_type,
+    .sink_connect = gstdemux_sink_connect,
+    .sink_disconnect = gstdemux_sink_disconnect,
 };
 
 static BOOL wave_parser_init_gst(struct gstdemux *filter)
@@ -2391,13 +2211,8 @@ IUnknown * CALLBACK wave_parser_create(IUnknown *outer, HRESULT *phr)
         return NULL;
     }
 
-    strmbase_filter_init(&object->filter, &GST_Vtbl, outer, &CLSID_WAVEParser, &filter_ops);
-
-    object->sink.dir = PINDIR_INPUT;
-    object->sink.filter = &object->filter;
-    lstrcpynW(object->sink.name, sink_name, ARRAY_SIZE(object->sink.name));
-    object->sink.IPin_iface.lpVtbl = &GST_InputPin_Vtbl;
-    object->sink.pFuncsTable = &wave_parser_sink_ops;
+    strmbase_filter_init(&object->filter, outer, &CLSID_WAVEParser, &filter_ops);
+    strmbase_sink_init(&object->sink, &object->filter, sink_name, &wave_parser_sink_ops, NULL);
     object->init_gst = wave_parser_init_gst;
     *phr = S_OK;
 
@@ -2413,10 +2228,12 @@ static HRESULT avi_splitter_sink_query_accept(struct strmbase_pin *iface, const 
     return S_FALSE;
 }
 
-static const BasePinFuncTable avi_splitter_sink_ops =
+static const struct strmbase_sink_ops avi_splitter_sink_ops =
 {
-    .pin_query_accept = avi_splitter_sink_query_accept,
-    .pin_get_media_type = strmbase_pin_get_media_type,
+    .base.pin_query_accept = avi_splitter_sink_query_accept,
+    .base.pin_get_media_type = strmbase_pin_get_media_type,
+    .sink_connect = gstdemux_sink_connect,
+    .sink_disconnect = gstdemux_sink_disconnect,
 };
 
 static BOOL avi_splitter_init_gst(struct gstdemux *filter)
@@ -2497,14 +2314,9 @@ IUnknown * CALLBACK avi_splitter_create(IUnknown *outer, HRESULT *phr)
         return NULL;
     }
 
-    strmbase_filter_init(&object->filter, &GST_Vtbl, outer, &CLSID_AviSplitter, &filter_ops);
-
+    strmbase_filter_init(&object->filter, outer, &CLSID_AviSplitter, &filter_ops);
+    strmbase_sink_init(&object->sink, &object->filter, sink_name, &avi_splitter_sink_ops, NULL);
     object->no_more_pads_event = CreateEventW(NULL, FALSE, FALSE, NULL);
-    object->sink.dir = PINDIR_INPUT;
-    object->sink.filter = &object->filter;
-    lstrcpynW(object->sink.name, sink_name, ARRAY_SIZE(object->sink.name));
-    object->sink.IPin_iface.lpVtbl = &GST_InputPin_Vtbl;
-    object->sink.pFuncsTable = &avi_splitter_sink_ops;
     object->init_gst = avi_splitter_init_gst;
     *phr = S_OK;
 
@@ -2525,10 +2337,12 @@ static HRESULT mpeg_splitter_sink_query_accept(struct strmbase_pin *iface, const
     return S_FALSE;
 }
 
-static const BasePinFuncTable mpeg_splitter_sink_ops =
+static const struct strmbase_sink_ops mpeg_splitter_sink_ops =
 {
-    .pin_query_accept = mpeg_splitter_sink_query_accept,
-    .pin_get_media_type = strmbase_pin_get_media_type,
+    .base.pin_query_accept = mpeg_splitter_sink_query_accept,
+    .base.pin_get_media_type = strmbase_pin_get_media_type,
+    .sink_connect = gstdemux_sink_connect,
+    .sink_disconnect = gstdemux_sink_disconnect,
 };
 
 static BOOL mpeg_splitter_init_gst(struct gstdemux *filter)
@@ -2609,6 +2423,11 @@ static const struct strmbase_filter_ops mpeg_splitter_ops =
     .filter_query_interface = mpeg_splitter_query_interface,
     .filter_get_pin = gstdemux_get_pin,
     .filter_destroy = gstdemux_destroy,
+    .filter_init_stream = gstdemux_init_stream,
+    .filter_start_stream = gstdemux_start_stream,
+    .filter_stop_stream = gstdemux_stop_stream,
+    .filter_cleanup_stream = gstdemux_cleanup_stream,
+    .filter_wait_state = gstdemux_wait_state,
 };
 
 IUnknown * CALLBACK mpeg_splitter_create(IUnknown *outer, HRESULT *phr)
@@ -2630,15 +2449,11 @@ IUnknown * CALLBACK mpeg_splitter_create(IUnknown *outer, HRESULT *phr)
         return NULL;
     }
 
-    strmbase_filter_init(&object->filter, &GST_Vtbl, outer, &CLSID_MPEG1Splitter, &mpeg_splitter_ops);
+    strmbase_filter_init(&object->filter, outer, &CLSID_MPEG1Splitter, &mpeg_splitter_ops);
+    strmbase_sink_init(&object->sink, &object->filter, sink_name, &mpeg_splitter_sink_ops, NULL);
     object->IAMStreamSelect_iface.lpVtbl = &stream_select_vtbl;
 
     object->duration_event = CreateEventW(NULL, FALSE, FALSE, NULL);
-    object->sink.dir = PINDIR_INPUT;
-    object->sink.filter = &object->filter;
-    lstrcpynW(object->sink.name, sink_name, ARRAY_SIZE(object->sink.name));
-    object->sink.IPin_iface.lpVtbl = &GST_InputPin_Vtbl;
-    object->sink.pFuncsTable = &mpeg_splitter_sink_ops;
     object->init_gst = mpeg_splitter_init_gst;
     *phr = S_OK;
 

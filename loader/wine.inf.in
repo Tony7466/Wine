@@ -624,7 +624,7 @@ HKLM,%Control%\Session Manager,HeapDeCommitTotalFreeThreshold,0x00040002,0
 HKLM,%Control%\Session Manager,HeapSegmentCommit,0x00040002,0
 HKLM,%Control%\Session Manager,HeapSegmentReserve,0x00040002,0
 HKLM,%Control%\Session Manager\Environment,"ComSpec",0x00020000,"%11%\cmd.exe"
-HKLM,%Control%\Session Manager\Environment,"PATH",0x00020002,"%11%;%10%;%11%\wbem"
+HKLM,%Control%\Session Manager\Environment,"PATH",0x00020002,"%11%;%10%;%11%\wbem;%11%\WindowsPowershell\v1.0"
 HKLM,%Control%\Session Manager\Environment,"PATHEXT",,".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH"
 HKLM,%Control%\Session Manager\Environment,"SystemDrive",2,"c:"
 HKLM,%Control%\Session Manager\Environment,"SYSTEMROOT",,"%10%"
@@ -2675,6 +2675,7 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 11,gecko\plugin,npmshtml.dll
 11,Speech\Common,sapi.dll
 11,wbem,mofcomp.exe
+11,WindowsPowerShell\v1.0,powershell.exe
 10,syswow64,stdole2.tlb
 11,,iexplore.exe
 11,,winetest.exe,-
@@ -2706,6 +2707,7 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 16422,Windows NT\Accessories,wordpad.exe
 16427,System\OLE DB,oledb32.dll
 16427,System\OLE DB,msdaps.dll
+16427,System\ADO,msado15.dll
 11,,*
 
 [FakeDlls]
@@ -2758,6 +2760,7 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 11,wbem,wbemprox.dll
 11,wbem,wmic.exe
 11,wbem,wmiutils.dll
+11,WindowsPowerShell\v1.0,powershell.exe
 ; empty folders to make sure the parent dirs are not removed
 16410,Microsoft,
 16412,Microsoft,
@@ -2767,6 +2770,7 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 16427,Microsoft Shared\TextConv,
 16427,System\OLE DB,oledb32.dll
 16427,System\OLE DB,msdaps.dll
+16427,System\ADO,msado15.dll
 11,,*
 
 [SystemIni]

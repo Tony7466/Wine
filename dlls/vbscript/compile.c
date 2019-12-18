@@ -1758,21 +1758,22 @@ static HRESULT compile_class(compile_ctx_t *ctx, class_decl_t *class_decl)
 
 static BOOL lookup_script_identifier(script_ctx_t *script, const WCHAR *identifier)
 {
+    ScriptDisp *obj = script->script_obj;
     class_desc_t *class;
     vbscode_t *code;
     unsigned i;
 
-    for(i = 0; i < script->global_vars_cnt; i++) {
-        if(!wcsicmp(script->global_vars[i]->name, identifier))
+    for(i = 0; i < obj->global_vars_cnt; i++) {
+        if(!wcsicmp(obj->global_vars[i]->name, identifier))
             return TRUE;
     }
 
-    for(i = 0; i < script->global_funcs_cnt; i++) {
-        if(!wcsicmp(script->global_funcs[i]->name, identifier))
+    for(i = 0; i < obj->global_funcs_cnt; i++) {
+        if(!wcsicmp(obj->global_funcs[i]->name, identifier))
             return TRUE;
     }
 
-    for(class = script->classes; class; class = class->next) {
+    for(class = obj->classes; class; class = class->next) {
         if(!wcsicmp(class->name, identifier))
             return TRUE;
     }
@@ -1831,7 +1832,8 @@ void release_vbscode(vbscode_t *code)
 {
     unsigned i;
 
-    list_remove(&code->entry);
+    if(--code->ref)
+        return;
 
     for(i=0; i < code->bstr_cnt; i++)
         SysFreeString(code->bstr_pool[i]);
@@ -1874,6 +1876,7 @@ static vbscode_t *alloc_vbscode(compile_ctx_t *ctx, const WCHAR *source)
 
     ret->main_code.type = FUNC_GLOBAL;
     ret->main_code.code_ctx = ret;
+    ret->ref = 1;
 
     list_init(&ret->entry);
     return ret;
@@ -1976,9 +1979,6 @@ HRESULT compile_procedure(script_ctx_t *script, const WCHAR *src, const WCHAR *d
     desc->ctx = script;
     desc->func_cnt = 1;
     desc->funcs->entries[VBDISP_CALLGET] = &code->main_code;
-
-    desc->next = script->procs;
-    script->procs = desc;
 
     *ret = desc;
     return S_OK;

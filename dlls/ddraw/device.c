@@ -2289,6 +2289,7 @@ static HRESULT d3d_device7_GetRenderState(IDirect3DDevice7 *iface,
         D3DRENDERSTATETYPE state, DWORD *value)
 {
     struct d3d_device *device = impl_from_IDirect3DDevice7(iface);
+    const struct wined3d_stateblock_state *device_state;
     HRESULT hr = D3D_OK;
 
     TRACE("iface %p, state %#x, value %p.\n", iface, state, value);
@@ -2297,6 +2298,7 @@ static HRESULT d3d_device7_GetRenderState(IDirect3DDevice7 *iface,
         return DDERR_INVALIDPARAMS;
 
     wined3d_mutex_lock();
+    device_state = wined3d_stateblock_get_state(device->state);
     switch (state)
     {
         case D3DRENDERSTATE_TEXTUREMAG:
@@ -2392,7 +2394,7 @@ static HRESULT d3d_device7_GetRenderState(IDirect3DDevice7 *iface,
             break;
 
         case D3DRENDERSTATE_ZBIAS:
-            *value = wined3d_device_get_render_state(device->wined3d_device, WINED3D_RS_DEPTHBIAS);
+            *value = device_state->rs[WINED3D_RS_DEPTHBIAS];
             break;
 
         default:
@@ -2403,7 +2405,7 @@ static HRESULT d3d_device7_GetRenderState(IDirect3DDevice7 *iface,
                 hr = E_NOTIMPL;
                 break;
             }
-            *value = wined3d_device_get_render_state(device->wined3d_device, state);
+            *value = device_state->rs[state];
     }
     wined3d_mutex_unlock();
 
@@ -3347,6 +3349,8 @@ static HRESULT d3d_device7_MultiplyTransform(IDirect3DDevice7 *iface,
 
     /* Note: D3DMATRIX is compatible with struct wined3d_matrix. */
     wined3d_mutex_lock();
+    wined3d_stateblock_multiply_transform(device->state,
+            wined3d_state, (struct wined3d_matrix *)matrix);
     wined3d_device_multiply_transform(device->wined3d_device,
             wined3d_state, (struct wined3d_matrix *)matrix);
     wined3d_mutex_unlock();

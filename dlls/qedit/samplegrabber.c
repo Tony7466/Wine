@@ -66,11 +66,6 @@ static inline SG_Impl *impl_from_strmbase_filter(struct strmbase_filter *iface)
     return CONTAINING_RECORD(iface, SG_Impl, filter);
 }
 
-static inline SG_Impl *impl_from_IBaseFilter(IBaseFilter *iface)
-{
-    return CONTAINING_RECORD(iface, SG_Impl, filter.IBaseFilter_iface);
-}
-
 static inline SG_Impl *impl_from_ISampleGrabber(ISampleGrabber *iface)
 {
     return CONTAINING_RECORD(iface, SG_Impl, ISampleGrabber_iface);
@@ -197,22 +192,6 @@ static void SampleGrabber_callback(SG_Impl *This, IMediaSample *sample)
             This->grabberMethod = -1;
     }
 }
-
-/* IBaseFilter */
-static HRESULT WINAPI
-SampleGrabber_IBaseFilter_JoinFilterGraph(IBaseFilter *iface, IFilterGraph *graph, LPCWSTR name)
-{
-    SG_Impl *This = impl_from_IBaseFilter(iface);
-
-    TRACE("(%p)->(%p, %s)\n", This, graph, debugstr_w(name));
-
-    BaseFilterImpl_JoinFilterGraph(iface, graph, name);
-    This->oneShot = OneShot_None;
-
-    return S_OK;
-}
-
-/* SampleGrabber implementation of ISampleGrabber interface */
 
 /* IUnknown */
 static HRESULT WINAPI
@@ -467,68 +446,6 @@ SampleGrabber_IMemInputPin_ReceiveCanBlock(IMemInputPin *iface)
     return This->memOutput ? IMemInputPin_ReceiveCanBlock(This->memOutput) : S_OK;
 }
 
-/* IPin - input pin */
-static HRESULT WINAPI
-SampleGrabber_In_IPin_ReceiveConnection(IPin *iface, IPin *connector, const AM_MEDIA_TYPE *type)
-{
-    SG_Impl *filter = CONTAINING_RECORD(iface, SG_Impl, sink.pin.IPin_iface);
-
-    TRACE("filter %p, connector %p, type %p.\n", filter, connector, type);
-
-    if (!connector)
-        return E_POINTER;
-    if (filter->sink.pin.peer)
-        return VFW_E_ALREADY_CONNECTED;
-    if (filter->filter.state != State_Stopped)
-        return VFW_E_NOT_STOPPED;
-    if (type) {
-	TRACE("Media type: %s/%s ssize: %u format: %s (%u bytes)\n",
-	    debugstr_guid(&type->majortype), debugstr_guid(&type->subtype),
-	    type->lSampleSize,
-	    debugstr_guid(&type->formattype), type->cbFormat);
-	if (!IsEqualGUID(&type->formattype, &FORMAT_None) &&
-	    !IsEqualGUID(&type->formattype, &GUID_NULL) &&
-	    !type->pbFormat)
-	    return VFW_E_INVALIDMEDIATYPE;
-	if (!IsEqualGUID(&filter->mtype.majortype,&GUID_NULL) &&
-	    !IsEqualGUID(&filter->mtype.majortype,&type->majortype))
-	    return VFW_E_TYPE_NOT_ACCEPTED;
-	if (!IsEqualGUID(&filter->mtype.subtype,&MEDIASUBTYPE_None) &&
-	    !IsEqualGUID(&filter->mtype.subtype,&type->subtype))
-	    return VFW_E_TYPE_NOT_ACCEPTED;
-	if (!IsEqualGUID(&filter->mtype.formattype,&GUID_NULL) &&
-	    !IsEqualGUID(&filter->mtype.formattype,&FORMAT_None) &&
-	    !IsEqualGUID(&filter->mtype.formattype,&type->formattype))
-	    return VFW_E_TYPE_NOT_ACCEPTED;
-
-        FreeMediaType(&filter->mtype);
-        CopyMediaType(&filter->mtype, type);
-        CopyMediaType(&filter->sink.pin.mt, type);
-    }
-    IPin_AddRef(filter->sink.pin.peer = connector);
-
-    return S_OK;
-}
-
-static const IBaseFilterVtbl IBaseFilter_VTable =
-{
-    BaseFilterImpl_QueryInterface,
-    BaseFilterImpl_AddRef,
-    BaseFilterImpl_Release,
-    BaseFilterImpl_GetClassID,
-    BaseFilterImpl_Stop,
-    BaseFilterImpl_Pause,
-    BaseFilterImpl_Run,
-    BaseFilterImpl_GetState,
-    BaseFilterImpl_SetSyncSource,
-    BaseFilterImpl_GetSyncSource,
-    BaseFilterImpl_EnumPins,
-    BaseFilterImpl_FindPin,
-    BaseFilterImpl_QueryFilterInfo,
-    SampleGrabber_IBaseFilter_JoinFilterGraph,
-    BaseFilterImpl_QueryVendorInfo,
-};
-
 static const ISampleGrabberVtbl ISampleGrabber_VTable =
 {
     SampleGrabber_ISampleGrabber_QueryInterface,
@@ -554,28 +471,6 @@ static const IMemInputPinVtbl IMemInputPin_VTable =
     SampleGrabber_IMemInputPin_Receive,
     SampleGrabber_IMemInputPin_ReceiveMultiple,
     SampleGrabber_IMemInputPin_ReceiveCanBlock,
-};
-
-static const IPinVtbl sink_vtbl =
-{
-    BasePinImpl_QueryInterface,
-    BasePinImpl_AddRef,
-    BasePinImpl_Release,
-    BaseInputPinImpl_Connect,
-    SampleGrabber_In_IPin_ReceiveConnection,
-    BasePinImpl_Disconnect,
-    BasePinImpl_ConnectedTo,
-    BasePinImpl_ConnectionMediaType,
-    BasePinImpl_QueryPinInfo,
-    BasePinImpl_QueryDirection,
-    BasePinImpl_QueryId,
-    BasePinImpl_QueryAccept,
-    BasePinImpl_EnumMediaTypes,
-    BasePinImpl_QueryInternalConnections,
-    BaseInputPinImpl_EndOfStream,
-    BaseInputPinImpl_BeginFlush,
-    BaseInputPinImpl_EndFlush,
-    BaseInputPinImpl_NewSegment
 };
 
 static inline SG_Impl *impl_from_sink_pin(struct strmbase_pin *iface)
@@ -614,11 +509,40 @@ static HRESULT sample_grabber_sink_get_media_type(struct strmbase_pin *iface,
     return VFW_S_NO_MORE_ITEMS;
 }
 
+static HRESULT sample_grabber_sink_connect(struct strmbase_sink *iface,
+        IPin *peer, const AM_MEDIA_TYPE *mt)
+{
+    SG_Impl *filter = impl_from_sink_pin(&iface->pin);
+
+    if (!IsEqualGUID(&mt->formattype, &FORMAT_None)
+            && !IsEqualGUID(&mt->formattype, &GUID_NULL) && !mt->pbFormat)
+        return VFW_E_INVALIDMEDIATYPE;
+
+    if (!IsEqualGUID(&filter->mtype.majortype, &GUID_NULL)
+            && !IsEqualGUID(&filter->mtype.majortype, &mt->majortype))
+        return VFW_E_TYPE_NOT_ACCEPTED;
+
+    if (!IsEqualGUID(&filter->mtype.subtype,&MEDIASUBTYPE_None)
+            && !IsEqualGUID(&filter->mtype.subtype, &mt->subtype))
+        return VFW_E_TYPE_NOT_ACCEPTED;
+
+    if (!IsEqualGUID(&filter->mtype.formattype, &GUID_NULL)
+            && !IsEqualGUID(&filter->mtype.formattype, &FORMAT_None)
+            && !IsEqualGUID(&filter->mtype.formattype, &mt->formattype))
+        return VFW_E_TYPE_NOT_ACCEPTED;
+
+    FreeMediaType(&filter->mtype);
+    CopyMediaType(&filter->mtype, mt);
+
+    return S_OK;
+}
+
 static const struct strmbase_sink_ops sink_ops =
 {
     .base.pin_query_interface = sample_grabber_sink_query_interface,
     .base.pin_query_accept = sample_grabber_sink_query_accept,
     .base.pin_get_media_type = sample_grabber_sink_get_media_type,
+    .sink_connect = sample_grabber_sink_connect,
 };
 
 static inline SG_Impl *impl_from_source_pin(struct strmbase_pin *iface)
@@ -700,28 +624,6 @@ static const struct strmbase_source_ops source_ops =
     .pfnAttemptConnection = sample_grabber_source_AttemptConnection,
 };
 
-static const IPinVtbl source_vtbl =
-{
-    BasePinImpl_QueryInterface,
-    BasePinImpl_AddRef,
-    BasePinImpl_Release,
-    BaseOutputPinImpl_Connect,
-    BaseOutputPinImpl_ReceiveConnection,
-    BaseOutputPinImpl_Disconnect,
-    BasePinImpl_ConnectedTo,
-    BasePinImpl_ConnectionMediaType,
-    BasePinImpl_QueryPinInfo,
-    BasePinImpl_QueryDirection,
-    BasePinImpl_QueryId,
-    BasePinImpl_QueryAccept,
-    BasePinImpl_EnumMediaTypes,
-    BasePinImpl_QueryInternalConnections,
-    BaseOutputPinImpl_EndOfStream,
-    BaseOutputPinImpl_BeginFlush,
-    BaseOutputPinImpl_EndFlush,
-    BasePinImpl_NewSegment,
-};
-
 HRESULT SampleGrabber_create(IUnknown *outer, void **out)
 {
     SG_Impl* obj = NULL;
@@ -735,12 +637,12 @@ HRESULT SampleGrabber_create(IUnknown *outer, void **out)
     }
     ZeroMemory(obj, sizeof(SG_Impl));
 
-    strmbase_filter_init(&obj->filter, &IBaseFilter_VTable, outer, &CLSID_SampleGrabber, &filter_ops);
+    strmbase_filter_init(&obj->filter, outer, &CLSID_SampleGrabber, &filter_ops);
     obj->ISampleGrabber_iface.lpVtbl = &ISampleGrabber_VTable;
     obj->IMemInputPin_iface.lpVtbl = &IMemInputPin_VTable;
 
-    strmbase_sink_init(&obj->sink, &sink_vtbl, &obj->filter, L"In", &sink_ops, NULL);
-    strmbase_source_init(&obj->source, &source_vtbl, &obj->filter, L"Out", &source_ops);
+    strmbase_sink_init(&obj->sink, &obj->filter, L"In", &sink_ops, NULL);
+    strmbase_source_init(&obj->source, &obj->filter, L"Out", &source_ops);
 
     obj->mtype.majortype = GUID_NULL;
     obj->mtype.subtype = MEDIASUBTYPE_None;

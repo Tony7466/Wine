@@ -956,6 +956,37 @@ static void test_images(void)
     ok(EqualRect(&r1, &r2), "rectangle should be the same\n");
 
     DestroyWindow(hwnd);
+
+    /* I_IMAGECALLBACK set for item, try to get image with invalid subitem. */
+    hwnd = create_listview_control(LVS_REPORT);
+    ok(hwnd != NULL, "Failed to create listview.\n");
+
+    memset(&item, 0, sizeof(item));
+    item.mask = LVIF_IMAGE;
+    item.iImage = I_IMAGECALLBACK;
+    r = SendMessageA(hwnd, LVM_INSERTITEMA, 0, (LPARAM)&item);
+    ok(!r, "Failed to insert item.\n");
+
+    flush_sequences(sequences, NUM_MSG_SEQUENCES);
+
+    memset(&item, 0, sizeof(item));
+    item.mask = LVIF_IMAGE;
+    r = SendMessageA(hwnd, LVM_GETITEMA, 0, (LPARAM)&item);
+    ok(r, "Failed to get item.\n");
+
+    ok_sequence(sequences, PARENT_SEQ_INDEX, single_getdispinfo_parent_seq, "get image dispinfo 1", FALSE);
+
+    flush_sequences(sequences, NUM_MSG_SEQUENCES);
+
+    memset(&item, 0, sizeof(item));
+    item.mask = LVIF_IMAGE;
+    item.iSubItem = 1;
+    r = SendMessageA(hwnd, LVM_GETITEMA, 0, (LPARAM)&item);
+    ok(r, "Failed to get item.\n");
+
+    ok_sequence(sequences, PARENT_SEQ_INDEX, empty_seq, "get image dispinfo 2", FALSE);
+
+    DestroyWindow(hwnd);
 }
 
 static void test_checkboxes(void)
@@ -1544,6 +1575,19 @@ static void test_columns(void)
 
     ok_sequence(sequences, PARENT_SEQ_INDEX, single_getdispinfo_parent_seq,
         "get subitem text after column added", FALSE);
+
+    DestroyWindow(hwnd);
+
+    /* Columns are not created right away. */
+    hwnd = create_listview_control(LVS_REPORT);
+    ok(hwnd != NULL, "Failed to create a listview window.\n");
+
+    insert_item(hwnd, 0);
+
+    header = (HWND)SendMessageA(hwnd, LVM_GETHEADER, 0, 0);
+    ok(IsWindow(header), "Expected header handle.\n");
+    rc = SendMessageA(header, HDM_GETITEMCOUNT, 0, 0);
+    ok(!rc, "Unexpected column count.\n");
 
     DestroyWindow(hwnd);
 }
@@ -3939,25 +3983,6 @@ static void test_getitemposition(void)
     DestroyWindow(hwnd);
 }
 
-static void test_columnscreation(void)
-{
-    HWND hwnd, header;
-    DWORD r;
-
-    hwnd = create_listview_control(LVS_REPORT);
-    ok(hwnd != NULL, "failed to create a listview window\n");
-
-    insert_item(hwnd, 0);
-
-    /* headers columns aren't created automatically */
-    header = (HWND)SendMessageA(hwnd, LVM_GETHEADER, 0, 0);
-    ok(IsWindow(header), "Expected header handle\n");
-    r = SendMessageA(header, HDM_GETITEMCOUNT, 0, 0);
-    expect(0, r);
-
-    DestroyWindow(hwnd);
-}
-
 static void test_getitemrect(void)
 {
     HWND hwnd;
@@ -4556,6 +4581,17 @@ static void test_indentation(void)
 
     ok_sequence(sequences, PARENT_SEQ_INDEX, single_getdispinfo_parent_seq,
                 "get indent dispinfo", FALSE);
+
+    /* Ask for iIndent with invalid subitem. */
+    flush_sequences(sequences, NUM_MSG_SEQUENCES);
+
+    memset(&item, 0, sizeof(item));
+    item.mask = LVIF_INDENT;
+    item.iSubItem = 1;
+    r = SendMessageA(hwnd, LVM_GETITEMA, 0, (LPARAM)&item);
+    ok(r, "Failed to get item.\n");
+
+    ok_sequence(sequences, PARENT_SEQ_INDEX, empty_seq, "get indent dispinfo 2", FALSE);
 
     DestroyWindow(hwnd);
 }
@@ -6064,6 +6100,44 @@ static void test_callback_mask(void)
     mask = SendMessageA(hwnd, LVM_GETCALLBACKMASK, 0, 0);
     ok(mask == ~0u, "got 0x%08x\n", mask);
 
+    /* Ask for state, invalid subitem. */
+    insert_item(hwnd, 0);
+
+    ret = SendMessageA(hwnd, LVM_SETCALLBACKMASK, LVIS_FOCUSED, 0);
+    ok(ret, "Failed to set callback mask.\n");
+
+    flush_sequences(sequences, NUM_MSG_SEQUENCES);
+
+    memset(&item, 0, sizeof(item));
+    item.iSubItem = 1;
+    item.mask = LVIF_STATE;
+    item.stateMask = LVIS_SELECTED;
+    ret = SendMessageA(hwnd, LVM_GETITEMA, 0, (LPARAM)&item);
+    ok(ret, "Failed to get item data.\n");
+
+    memset(&item, 0, sizeof(item));
+    item.mask = LVIF_STATE;
+    item.stateMask = LVIS_SELECTED;
+    ret = SendMessageA(hwnd, LVM_GETITEMA, 0, (LPARAM)&item);
+    ok(ret, "Failed to get item data.\n");
+
+    ok_sequence(sequences, PARENT_SEQ_INDEX, empty_seq, "parent seq, callback mask/invalid subitem 1", TRUE);
+
+    flush_sequences(sequences, NUM_MSG_SEQUENCES);
+
+    memset(&item, 0, sizeof(item));
+    memset(&g_itema, 0, sizeof(g_itema));
+    item.iSubItem = 1;
+    item.mask = LVIF_STATE;
+    item.stateMask = LVIS_FOCUSED | LVIS_SELECTED;
+    ret = SendMessageA(hwnd, LVM_GETITEMA, 0, (LPARAM)&item);
+    ok(ret, "Failed to get item data.\n");
+    ok(g_itema.iSubItem == 1, "Unexpected LVN_DISPINFO subitem %d.\n", g_itema.iSubItem);
+    ok(g_itema.stateMask == LVIS_FOCUSED, "Unexpected state mask %#x.\n", g_itema.stateMask);
+
+    ok_sequence(sequences, PARENT_SEQ_INDEX, single_getdispinfo_parent_seq,
+            "parent seq, callback mask/invalid subitem 2", FALSE);
+
     DestroyWindow(hwnd);
 
     /* LVS_OWNERDATA, mask LVIS_FOCUSED */
@@ -6277,7 +6351,6 @@ static void test_state_image(void)
         item.iSubItem = 2;
         r = SendMessageA(hwnd, LVM_GETITEMA, 0, (LPARAM)&item);
         ok(r, "Failed to get subitem state.\n");
-    todo_wine
         ok(item.state == 0, "Unexpected state %#x.\n", item.state);
 
         item.mask = LVIF_TEXT;
@@ -6577,7 +6650,6 @@ START_TEST(listview)
     test_hittest();
     test_getviewrect();
     test_getitemposition();
-    test_columnscreation();
     test_editbox();
     test_notifyformat();
     test_indentation();
@@ -6632,7 +6704,6 @@ START_TEST(listview)
     test_ownerdata();
     test_norecompute();
     test_nosortheader();
-    test_columnscreation();
     test_indentation();
     test_finditem();
     test_hover();

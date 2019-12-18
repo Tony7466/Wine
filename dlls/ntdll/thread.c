@@ -1115,6 +1115,27 @@ NTSTATUS WINAPI NtQueryInformationThread( HANDLE handle, THREADINFOCLASS class,
         *(BOOL*)data = FALSE;
         if (ret_len) *ret_len = sizeof(BOOL);
         return STATUS_SUCCESS;
+    case ThreadSuspendCount:
+        {
+            ULONG count = 0;
+
+            if (length != sizeof(ULONG)) return STATUS_INFO_LENGTH_MISMATCH;
+            if (!data) return STATUS_ACCESS_VIOLATION;
+
+            SERVER_START_REQ( get_thread_info )
+            {
+                req->handle = wine_server_obj_handle( handle );
+                req->tid_in = 0;
+                if (!(status = wine_server_call( req )))
+                    count = reply->suspend_count;
+            }
+            SERVER_END_REQ;
+
+            if (!status)
+                *(ULONG *)data = count;
+
+            return status;
+        }
     case ThreadDescription:
         {
             THREAD_DESCRIPTION_INFORMATION *info = data;
@@ -1137,8 +1158,8 @@ NTSTATUS WINAPI NtQueryInformationThread( HANDLE handle, THREADINFOCLASS class,
                 status = STATUS_BUFFER_TOO_SMALL;
             else if (status == STATUS_SUCCESS)
             {
-                info->Length = desc_len << 16 | desc_len;
-                info->Description = ptr;
+                info->Description.Length = info->Description.MaximumLength = desc_len;
+                info->Description.Buffer = ptr;
             }
 
             if (ret_len && (status == STATUS_SUCCESS || status == STATUS_BUFFER_TOO_SMALL))
@@ -1303,20 +1324,18 @@ NTSTATUS WINAPI NtSetInformationThread( HANDLE handle, THREADINFOCLASS class,
     case ThreadDescription:
         {
             const THREAD_DESCRIPTION_INFORMATION *info = data;
-            data_size_t desc_len;
 
             if (length != sizeof(*info)) return STATUS_INFO_LENGTH_MISMATCH;
             if (!info) return STATUS_ACCESS_VIOLATION;
 
-            desc_len = info->Length & 0xffff;
-            if (info->Length >> 16 != desc_len) return STATUS_INVALID_PARAMETER;
-            if (info->Length && !info->Description) return STATUS_ACCESS_VIOLATION;
+            if (info->Description.Length != info->Description.MaximumLength) return STATUS_INVALID_PARAMETER;
+            if (info->Description.Length && !info->Description.Buffer) return STATUS_ACCESS_VIOLATION;
 
             SERVER_START_REQ( set_thread_info )
             {
                 req->handle = wine_server_obj_handle( handle );
                 req->mask   = SET_THREAD_INFO_DESCRIPTION;
-                wine_server_add_data( req, info->Description, desc_len );
+                wine_server_add_data( req, info->Description.Buffer, info->Description.Length );
                 status = wine_server_call( req );
             }
             SERVER_END_REQ;

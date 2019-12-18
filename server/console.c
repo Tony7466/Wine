@@ -504,37 +504,37 @@ int free_console( struct process *process )
  *	2/ parent is a renderer which launches process, and process should attach to the console
  *	   rendered by parent
  */
-void inherit_console(struct thread *parent_thread, struct process *process, obj_handle_t hconin)
+void inherit_console( struct thread *parent_thread, struct process *parent, struct process *process,
+                      obj_handle_t hconin )
 {
     int done = 0;
-    struct process* parent = parent_thread->process;
 
     /* if parent is a renderer, then attach current process to its console
      * a bit hacky....
      */
-    if (hconin)
+    if (hconin && parent_thread)
     {
-	struct console_input* console;
+        struct console_input *console;
 
         /* FIXME: should we check some access rights ? */
-        if ((console = (struct console_input*)get_handle_obj( parent, hconin,
-                                                              0, &console_input_ops )))
-	{
+        if ((console = (struct console_input *)get_handle_obj( parent, hconin,
+                                                               0, &console_input_ops )))
+        {
             if (console->renderer == parent_thread)
-	    {
-		process->console = (struct console_input*)grab_object( console );
-		process->console->num_proc++;
-		done = 1;
-	    }
-	    release_object( console );
-	}
+            {
+                process->console = (struct console_input *)grab_object( console );
+                process->console->num_proc++;
+                done = 1;
+            }
+            release_object( console );
+        }
         else clear_error();  /* ignore error */
     }
     /* otherwise, if parent has a console, attach child to this console */
     if (!done && parent->console)
     {
-	process->console = (struct console_input*)grab_object( parent->console );
-	process->console->num_proc++;
+        process->console = (struct console_input *)grab_object( parent->console );
+        process->console->num_proc++;
     }
 }
 
@@ -1905,14 +1905,26 @@ static int cgwe_enum( struct process* process, void* user)
 DECL_HANDLER(get_console_wait_event)
 {
     struct console_input* console = NULL;
+    struct object *obj;
 
-    if (current->process->console)
-        console = (struct console_input*)grab_object( (struct object*)current->process->console );
+    if (req->handle)
+    {
+        if (!(obj = get_handle_obj( current->process, req->handle, FILE_READ_PROPERTIES, NULL ))) return;
+        if (obj->ops == &console_input_ops)
+            console = (struct console_input *)grab_object( obj );
+        else if (obj->ops == &screen_buffer_ops)
+            console = (struct console_input *)grab_object( ((struct screen_buffer *)obj)->input );
+        else
+            set_error( STATUS_OBJECT_TYPE_MISMATCH );
+        release_object( obj );
+    }
+    else if (current->process->console)
+        console = (struct console_input *)grab_object( current->process->console );
     else enum_processes(cgwe_enum, &console);
 
     if (console)
     {
-        reply->handle = alloc_handle( current->process, console->event, EVENT_ALL_ACCESS, 0 );
+        reply->event = alloc_handle( current->process, console->event, EVENT_ALL_ACCESS, 0 );
         release_object( console );
     }
     else set_error( STATUS_INVALID_PARAMETER );

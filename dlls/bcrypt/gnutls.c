@@ -86,6 +86,9 @@ static int (*pgnutls_privkey_export_rsa_raw)(gnutls_privkey_t, gnutls_datum_t *,
                                              gnutls_datum_t *);
 static int (*pgnutls_privkey_generate)(gnutls_privkey_t, gnutls_pk_algorithm_t, unsigned int, unsigned int);
 
+/* Not present in gnutls version < 3.6.0 */
+static int (*pgnutls_decode_rs_value)(const gnutls_datum_t *, gnutls_datum_t *, gnutls_datum_t *);
+
 static void *libgnutls_handle;
 #define MAKE_FUNCPTR(f) static typeof(f) * p##f
 MAKE_FUNCPTR(gnutls_cipher_decrypt2);
@@ -161,6 +164,11 @@ static int compat_gnutls_privkey_generate(gnutls_privkey_t key, gnutls_pk_algori
                                           unsigned int flags)
 {
     return GNUTLS_E_UNKNOWN_PK_ALGORITHM;
+}
+
+static int compat_gnutls_decode_rs_value(const gnutls_datum_t * sig_value, gnutls_datum_t * r, gnutls_datum_t * s)
+{
+    return GNUTLS_E_INTERNAL_ERROR;
 }
 
 static void gnutls_log( int level, const char *msg )
@@ -256,6 +264,11 @@ BOOL gnutls_initialize(void)
     {
         WARN("gnutls_privkey_generate not found\n");
         pgnutls_privkey_generate = compat_gnutls_privkey_generate;
+    }
+    if (!(pgnutls_decode_rs_value = wine_dlsym( libgnutls_handle, "gnutls_decode_rs_value", NULL, 0 )))
+    {
+        WARN("gnutls_decode_rs_value not found\n");
+        pgnutls_decode_rs_value = compat_gnutls_decode_rs_value;
     }
 
     if (TRACE_ON( bcrypt ))
@@ -711,6 +724,7 @@ NTSTATUS key_asymmetric_generate( struct key *key )
         break;
 
     case ALG_ID_ECDH_P256:
+    case ALG_ID_ECDSA_P256:
         pk_alg = GNUTLS_PK_ECC; /* compatible with ECDSA and ECDH */
         bitlen = GNUTLS_CURVE_TO_BITS( GNUTLS_ECC_CURVE_SECP256R1 );
         break;
@@ -1029,6 +1043,17 @@ static NTSTATUS prepare_gnutls_signature( struct key *key, UCHAR *signature, ULO
     }
 }
 
+static gnutls_digest_algorithm_t get_digest_from_id( const WCHAR *alg_id )
+{
+    if (!strcmpW( alg_id, BCRYPT_SHA1_ALGORITHM ))   return GNUTLS_DIG_SHA1;
+    if (!strcmpW( alg_id, BCRYPT_SHA256_ALGORITHM )) return GNUTLS_DIG_SHA256;
+    if (!strcmpW( alg_id, BCRYPT_SHA384_ALGORITHM )) return GNUTLS_DIG_SHA384;
+    if (!strcmpW( alg_id, BCRYPT_SHA512_ALGORITHM )) return GNUTLS_DIG_SHA512;
+    if (!strcmpW( alg_id, BCRYPT_MD2_ALGORITHM ))    return GNUTLS_DIG_MD2;
+    if (!strcmpW( alg_id, BCRYPT_MD5_ALGORITHM ))    return GNUTLS_DIG_MD5;
+    return -1;
+}
+
 NTSTATUS key_asymmetric_verify( struct key *key, void *padding, UCHAR *hash, ULONG hash_len, UCHAR *signature,
                                 ULONG signature_len, DWORD flags )
 {
@@ -1050,6 +1075,7 @@ NTSTATUS key_asymmetric_verify( struct key *key, void *padding, UCHAR *hash, ULO
         /* only the hash size must match, not the actual hash function */
         switch (hash_len)
         {
+        case 20: hash_alg = GNUTLS_DIG_SHA1; break;
         case 32: hash_alg = GNUTLS_DIG_SHA256; break;
         case 48: hash_alg = GNUTLS_DIG_SHA384; break;
 
@@ -1068,11 +1094,7 @@ NTSTATUS key_asymmetric_verify( struct key *key, void *padding, UCHAR *hash, ULO
         if (!(flags & BCRYPT_PAD_PKCS1) || !info) return STATUS_INVALID_PARAMETER;
         if (!info->pszAlgId) return STATUS_INVALID_SIGNATURE;
 
-        if (!strcmpW( info->pszAlgId, BCRYPT_SHA1_ALGORITHM )) hash_alg = GNUTLS_DIG_SHA1;
-        else if (!strcmpW( info->pszAlgId, BCRYPT_SHA256_ALGORITHM )) hash_alg = GNUTLS_DIG_SHA256;
-        else if (!strcmpW( info->pszAlgId, BCRYPT_SHA384_ALGORITHM )) hash_alg = GNUTLS_DIG_SHA384;
-        else if (!strcmpW( info->pszAlgId, BCRYPT_SHA512_ALGORITHM )) hash_alg = GNUTLS_DIG_SHA512;
-        else
+        if ((hash_alg = get_digest_from_id(info->pszAlgId)) == -1)
         {
             FIXME( "hash algorithm %s not supported\n", debugstr_w(info->pszAlgId) );
             return STATUS_NOT_SUPPORTED;
@@ -1107,26 +1129,130 @@ NTSTATUS key_asymmetric_verify( struct key *key, void *padding, UCHAR *hash, ULO
     return (ret < 0) ? STATUS_INVALID_SIGNATURE : STATUS_SUCCESS;
 }
 
+static unsigned int get_signature_length( enum alg_id id )
+{
+    switch (id)
+    {
+    case ALG_ID_ECDSA_P256: return 64;
+    case ALG_ID_ECDSA_P384: return 96;
+    default:
+        FIXME( "unhandled algorithm %u\n", id );
+        return 0;
+    }
+}
+
+NTSTATUS format_gnutls_signature( enum alg_id type, gnutls_datum_t signature, UCHAR *output,
+                                  ULONG output_len, ULONG *ret_len )
+{
+    switch (type)
+    {
+    case ALG_ID_RSA:
+    case ALG_ID_RSA_SIGN:
+    {
+        if (output_len < signature.size) return STATUS_BUFFER_TOO_SMALL;
+        memcpy( output, signature.data, signature.size );
+        *ret_len = signature.size;
+        return STATUS_SUCCESS;
+    }
+    case ALG_ID_ECDSA_P256:
+    case ALG_ID_ECDSA_P384:
+    {
+        int err;
+        unsigned int pad_size, sig_len = get_signature_length( type );
+        gnutls_datum_t r, s; /* format as r||s */
+
+        if ((err = pgnutls_decode_rs_value( &signature, &r, &s )))
+        {
+            pgnutls_perror( err );
+            return STATUS_INTERNAL_ERROR;
+        }
+
+        if (output_len < sig_len) return STATUS_BUFFER_TOO_SMALL;
+
+        /* remove prepended zero byte */
+        if (r.size % 2)
+        {
+            r.size--;
+            r.data += 1;
+        }
+        if (s.size % 2)
+        {
+            s.size--;
+            s.data += 1;
+        }
+
+        if (r.size != s.size || r.size + s.size > sig_len)
+        {
+            ERR( "we didn't get a correct signature\n" );
+            return STATUS_INTERNAL_ERROR;
+        }
+
+        pad_size = (sig_len / 2) - s.size;
+        memset( output, 0, sig_len );
+
+        memcpy( output + pad_size, r.data, r.size );
+        memcpy( output + (sig_len / 2) + pad_size, s.data, s.size );
+
+        *ret_len = sig_len;
+        return STATUS_SUCCESS;
+    }
+    default:
+        return STATUS_INTERNAL_ERROR;
+    }
+}
+
 NTSTATUS key_asymmetric_sign( struct key *key, void *padding, UCHAR *input, ULONG input_len, UCHAR *output,
                               ULONG output_len, ULONG *ret_len, ULONG flags )
 {
     BCRYPT_PKCS1_PADDING_INFO *pad = padding;
     gnutls_datum_t hash, signature;
+    gnutls_digest_algorithm_t hash_alg;
+    NTSTATUS status;
     int ret;
 
-    if (key->alg_id != ALG_ID_RSA && key->alg_id != ALG_ID_RSA_SIGN)
+    if (key->alg_id == ALG_ID_ECDSA_P256 || key->alg_id == ALG_ID_ECDSA_P384)
     {
-        FIXME( "algorithm %u not supported\n", key->alg_id );
-        return STATUS_NOT_IMPLEMENTED;
+        /* With ECDSA, we find the digest algorithm from the hash length, and verify it */
+        switch (input_len)
+        {
+        case 20: hash_alg = GNUTLS_DIG_SHA1; break;
+        case 32: hash_alg = GNUTLS_DIG_SHA256; break;
+        case 48: hash_alg = GNUTLS_DIG_SHA384; break;
+        case 64: hash_alg = GNUTLS_DIG_SHA512; break;
+
+        default:
+            FIXME( "hash size %u not yet supported\n", input_len );
+            return STATUS_INVALID_PARAMETER;
+        }
+
+        if (flags == BCRYPT_PAD_PKCS1 && pad && pad->pszAlgId && get_digest_from_id( pad->pszAlgId ) != hash_alg)
+        {
+            WARN( "incorrect hashing algorithm %s, expected %u\n", debugstr_w(pad->pszAlgId), hash_alg );
+            return STATUS_INVALID_PARAMETER;
+        }
     }
-    if (flags != BCRYPT_PAD_PKCS1)
+    else if (flags == BCRYPT_PAD_PKCS1)
+    {
+        if (!pad || !pad->pszAlgId)
+        {
+            WARN( "padding info not found\n" );
+            return STATUS_INVALID_PARAMETER;
+        }
+
+        if ((hash_alg = get_digest_from_id( pad->pszAlgId )) == -1)
+        {
+            FIXME( "hash algorithm %s not recognized\n", debugstr_w(pad->pszAlgId) );
+            return STATUS_NOT_SUPPORTED;
+        }
+    }
+    else if (!flags)
+    {
+         WARN( "invalid flags %08x\n", flags );
+         return STATUS_INVALID_PARAMETER;
+    }
+    else
     {
         FIXME( "flags %08x not implemented\n", flags );
-        return STATUS_NOT_IMPLEMENTED;
-    }
-    if (!pad || !pad->pszAlgId || lstrcmpiW(pad->pszAlgId, BCRYPT_SHA1_ALGORITHM))
-    {
-        FIXME( "%s padding not implemented\n", debugstr_w(pad ? pad->pszAlgId : NULL) );
         return STATUS_NOT_IMPLEMENTED;
     }
 
@@ -1143,17 +1269,16 @@ NTSTATUS key_asymmetric_sign( struct key *key, void *padding, UCHAR *input, ULON
     signature.data = NULL;
     signature.size = 0;
 
-    if ((ret = pgnutls_privkey_sign_hash( key->u.a.handle, GNUTLS_DIG_SHA1, 0, &hash, &signature )))
+    if ((ret = pgnutls_privkey_sign_hash( key->u.a.handle, hash_alg, 0, &hash, &signature )))
     {
         pgnutls_perror( ret );
         return STATUS_INTERNAL_ERROR;
     }
 
-    if (output_len >= signature.size) memcpy( output, signature.data, signature.size );
-    *ret_len = signature.size;
+    status = format_gnutls_signature( key->alg_id, signature, output, output_len, ret_len );
 
     free( signature.data );
-    return STATUS_SUCCESS;
+    return status;
 }
 
 NTSTATUS key_destroy( struct key *key )

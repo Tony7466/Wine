@@ -390,6 +390,42 @@ BOOL WINAPI DECLSPEC_HOTPATCH WriteProcessMemory( HANDLE process, void *addr, co
 }
 
 
+/* IsBadStringPtrA replacement for kernelbase, to catch exception in debug traces. */
+BOOL WINAPI IsBadStringPtrA( LPCSTR str, UINT_PTR max )
+{
+    if (!str) return TRUE;
+    __TRY
+    {
+        volatile const char *p = str;
+        while (p != str + max) if (!*p++) break;
+    }
+    __EXCEPT_PAGE_FAULT
+    {
+        return TRUE;
+    }
+    __ENDTRY
+    return FALSE;
+}
+
+
+/* IsBadStringPtrW replacement for kernelbase, to catch exception in debug traces. */
+BOOL WINAPI IsBadStringPtrW( LPCWSTR str, UINT_PTR max )
+{
+    if (!str) return TRUE;
+    __TRY
+    {
+        volatile const WCHAR *p = str;
+        while (p != str + max) if (!*p++) break;
+    }
+    __EXCEPT_PAGE_FAULT
+    {
+        return TRUE;
+    }
+    __ENDTRY
+    return FALSE;
+}
+
+
 /***********************************************************************
  * Heap functions
  ***********************************************************************/
@@ -652,7 +688,20 @@ LPVOID WINAPI DECLSPEC_HOTPATCH LocalLock( HLOCAL hmem )
 {
     void *ret = NULL;
 
-    if (is_pointer( hmem )) return IsBadReadPtr( hmem, 1 ) ? NULL : hmem;
+    if (is_pointer( hmem ))
+    {
+        __TRY
+        {
+            volatile char *p = hmem;
+            *p |= 0;
+        }
+        __EXCEPT_PAGE_FAULT
+        {
+            return NULL;
+        }
+        __ENDTRY
+        return hmem;
+    }
 
     RtlLockHeap( GetProcessHeap() );
     __TRY
@@ -967,7 +1016,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH GlobalMemoryStatusEx( MEMORYSTATUSEX *status )
     status->ullTotalPhys     = perf_info.TotalCommitLimit;
     status->ullAvailPhys     = perf_info.AvailablePages;
     status->ullTotalPageFile = perf_info.TotalCommitLimit + 1; /* Titan Quest refuses to run if TotalPageFile <= TotalPhys */
-    status->ullAvailPageFile = status->ullTotalPageFile - perf_info.TotalCommittedPages - perf_info.AvailablePages;
+    status->ullAvailPageFile = status->ullTotalPageFile - perf_info.TotalCommittedPages;
     status->ullTotalVirtual  = (ULONG_PTR)basic_info.HighestUserAddress - (ULONG_PTR)basic_info.LowestUserAddress;
     status->ullAvailVirtual  = status->ullTotalVirtual - 64 * 1024;  /* FIXME */
     status->ullAvailExtendedVirtual = 0;

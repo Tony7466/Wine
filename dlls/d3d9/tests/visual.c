@@ -19249,6 +19249,15 @@ static void add_dirty_rect_test(void)
     HWND window;
     D3DLOCKED_RECT locked_rect;
     static const RECT part_rect = {96, 96, 160, 160};
+    static const RECT oob_rect[] =
+    {
+        {  0,   0, 200, 300},
+        {  0,   0, 300, 200},
+        {100, 100,  10,  10},
+        {200, 300,  10,  10},
+        {300, 200, 310, 210},
+        {  0,   0,   0,   0},
+    };
     DWORD color;
 
     window = create_window();
@@ -19331,7 +19340,7 @@ static void add_dirty_rect_test(void)
     ok(SUCCEEDED(hr), "Failed to set texture, hr %#x.\n", hr);
     add_dirty_rect_test_draw(device);
     color = getPixelColor(device, 320, 240);
-    todo_wine ok(color_match(color, 0x00ff0000, 1),
+    ok(color_match(color, 0x00ff0000, 1),
             "Expected color 0x00ff0000, got 0x%08x.\n", color);
     hr = IDirect3DDevice9_Present(device, NULL, NULL, NULL, NULL);
     ok(SUCCEEDED(hr), "Failed to present, hr %#x.\n", hr);
@@ -19344,7 +19353,7 @@ static void add_dirty_rect_test(void)
     ok(SUCCEEDED(hr), "Failed to update texture, hr %#x.\n", hr);
     add_dirty_rect_test_draw(device);
     color = getPixelColor(device, 320, 240);
-    todo_wine ok(color_match(color, 0x00ff0000, 1),
+    ok(color_match(color, 0x00ff0000, 1),
             "Expected color 0x00ff0000, got 0x%08x.\n", color);
     hr = IDirect3DDevice9_Present(device, NULL, NULL, NULL, NULL);
     ok(SUCCEEDED(hr), "Failed to present, hr %#x.\n", hr);
@@ -19356,7 +19365,7 @@ static void add_dirty_rect_test(void)
     ok(SUCCEEDED(hr), "Failed to update texture, hr %#x.\n", hr);
     add_dirty_rect_test_draw(device);
     color = getPixelColor(device, 320, 240);
-    todo_wine ok(color_match(color, 0x00ff0000, 1),
+    ok(color_match(color, 0x00ff0000, 1),
             "Expected color 0x00ff0000, got 0x%08x.\n", color);
     hr = IDirect3DDevice9_Present(device, NULL, NULL, NULL, NULL);
     ok(SUCCEEDED(hr), "Failed to present, hr %#x.\n", hr);
@@ -19373,7 +19382,7 @@ static void add_dirty_rect_test(void)
     ok(color_match(color, 0x0000ff00, 1),
             "Expected color 0x0000ff00, got 0x%08x.\n", color);
     color = getPixelColor(device, 1, 1);
-    todo_wine ok(color_match(color, 0x00ff0000, 1),
+    ok(color_match(color, 0x00ff0000, 1),
             "Expected color 0x00ff0000, got 0x%08x.\n", color);
     hr = IDirect3DDevice9_Present(device, NULL, NULL, NULL, NULL);
     ok(SUCCEEDED(hr), "Failed to present, hr %#x.\n", hr);
@@ -19395,7 +19404,7 @@ static void add_dirty_rect_test(void)
     ok(SUCCEEDED(hr), "Failed to update texture, hr %#x.\n", hr);
     add_dirty_rect_test_draw(device);
     color = getPixelColor(device, 320, 240);
-    todo_wine ok(color_match(color, 0x0000ff00, 1),
+    ok(color_match(color, 0x0000ff00, 1),
             "Expected color 0x0000ff00, got 0x%08x.\n", color);
     hr = IDirect3DDevice9_Present(device, NULL, NULL, NULL, NULL);
     ok(SUCCEEDED(hr), "Failed to present, hr %#x.\n", hr);
@@ -19407,7 +19416,7 @@ static void add_dirty_rect_test(void)
     ok(SUCCEEDED(hr), "Failed to update texture, hr %#x.\n", hr);
     add_dirty_rect_test_draw(device);
     color = getPixelColor(device, 320, 240);
-    todo_wine ok(color_match(color, 0x0000ff00, 1),
+    ok(color_match(color, 0x0000ff00, 1),
             "Expected color 0x0000ff00, got 0x%08x.\n", color);
     hr = IDirect3DDevice9_Present(device, NULL, NULL, NULL, NULL);
     ok(SUCCEEDED(hr), "Failed to present, hr %#x.\n", hr);
@@ -19594,6 +19603,17 @@ static void add_dirty_rect_test(void)
     ok(SUCCEEDED(hr), "Failed to add dirty rect, hr %#x.\n", hr);
     hr = IDirect3DTexture9_AddDirtyRect(tex_managed, NULL);
     ok(SUCCEEDED(hr), "Failed to add dirty rect, hr %#x.\n", hr);
+
+    /* Test out-of-bounds regions. */
+    for (i = 0; i < ARRAY_SIZE(oob_rect); ++i)
+    {
+        hr = IDirect3DTexture9_AddDirtyRect(tex_src_red, &oob_rect[i]);
+        ok(hr == D3DERR_INVALIDCALL, "[%u] Got unexpected hr %#x.\n", i, hr);
+        hr = IDirect3DTexture9_LockRect(tex_src_red, 0, &locked_rect, &oob_rect[i], 0);
+        ok(SUCCEEDED(hr), "[%u] Got unexpected hr %#x.\n", i, hr);
+        hr = IDirect3DTexture9_UnlockRect(tex_src_red, 0);
+        ok(SUCCEEDED(hr), "[%u] Got unexpected hr %#x.\n", i, hr);
+    }
 
     hr = IDirect3DDevice9_SetTextureStageState(device, 0, D3DTSS_COLOROP, D3DTOP_DISABLE);
     ok(SUCCEEDED(hr), "Failed to set color op, hr %#x.\n", hr);

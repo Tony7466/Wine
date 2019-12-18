@@ -51,6 +51,7 @@
 #endif
 
 DEFINE_GUID(GUID_NULL,0,0,0,0,0,0,0,0,0,0,0);
+DEFINE_GUID(IID_IScriptTypeInfo, 0xc59c6b12, 0xf6c1, 0x11cf, 0x88,0x35, 0x00,0xa0,0xc9,0x11,0xe8,0xb2);
 
 #define DEFINE_EXPECT(func) \
     static int expect_ ## func = 0, called_ ## func = 0
@@ -860,6 +861,454 @@ static void test_code_persistence(void)
     CHECK_CALLED(OnStateChange_CLOSED);
 }
 
+static void test_script_typeinfo(void)
+{
+    static struct
+    {
+        const WCHAR *name;
+        VARTYPE ret_type;
+        UINT num_args;
+    } func[] =
+    {
+        { L"foobar",   VT_VARIANT, 0 },
+        { L"test",     VT_VOID,    0 },
+        { L"subtract", VT_VARIANT, 2 },
+        { L"emptyfn",  VT_VARIANT, 0 }
+    };
+    static struct
+    {
+        const WCHAR *name;
+    } var[] =
+    {
+        { L"global_var" },
+        { L"obj"        },
+        { L"const_var"  },
+        { L"implicit"   }
+    };
+    ITypeInfo *typeinfo, *typeinfo2;
+    ITypeComp *typecomp, *typecomp2;
+    IActiveScriptParse *parser;
+    IDispatchEx *script_disp;
+    IActiveScript *vbscript;
+    FUNCDESC *funcdesc;
+    VARDESC  *vardesc;
+    DESCKIND desckind;
+    INT implTypeFlags;
+    UINT count, index;
+    HREFTYPE reftype;
+    BINDPTR bindptr;
+    MEMBERID memid;
+    TYPEATTR *attr;
+    HRESULT hr;
+    WCHAR str[64], *names = str;
+    BSTR bstr, bstrs[5];
+    void *obj;
+    int i;
+
+    vbscript = create_vbscript();
+
+    hr = IActiveScript_QueryInterface(vbscript, &IID_IActiveScriptParse, (void**)&parser);
+    ok(hr == S_OK, "Could not get IActiveScriptParse iface: %08x\n", hr);
+
+    SET_EXPECT(GetLCID);
+    hr = IActiveScript_SetScriptSite(vbscript, &ActiveScriptSite);
+    ok(hr == S_OK, "SetScriptSite failed: %08x\n", hr);
+    CHECK_CALLED(GetLCID);
+
+    SET_EXPECT(OnStateChange_INITIALIZED);
+    hr = IActiveScriptParse_InitNew(parser);
+    ok(hr == S_OK, "InitNew failed: %08x\n", hr);
+    CHECK_CALLED(OnStateChange_INITIALIZED);
+
+    SET_EXPECT(OnStateChange_CONNECTED);
+    hr = IActiveScript_SetScriptState(vbscript, SCRIPTSTATE_CONNECTED);
+    ok(hr == S_OK, "SetScriptState(SCRIPTSTATE_CONNECTED) failed: %08x\n", hr);
+    CHECK_CALLED(OnStateChange_CONNECTED);
+
+    parse_script(parser,
+        "dim global_var\n"
+        "const const_var = 1337\n"
+
+        "function foobar\n"
+        "    foobar = \"foobar\"\n"
+        "end function\n"
+
+        "sub test\nend sub\n"
+        "private sub private_sub\nend sub\n"
+
+        "function subtract(byref x, byval y)\n"
+        "    subtract = x - y\n"
+        "end function\n"
+
+        "function emptyfn\nend function\n"
+
+        "class C\n"
+        "    dim x\n"
+        "    public sub method\nend sub\n"
+        "    private function strret\n"
+        "        strret = \"ret\"\n"
+        "    end function\n"
+        "end class\n"
+
+        "implicit = 10\n"
+        "dim obj\nset obj = new C\n");
+
+    script_disp = get_script_dispatch(vbscript);
+    hr = IDispatchEx_QueryInterface(script_disp, &IID_ITypeInfo, (void**)&typeinfo);
+    ok(hr == E_NOINTERFACE, "QueryInterface(IID_ITypeInfo) returned: %08x\n", hr);
+    hr = IDispatchEx_GetTypeInfo(script_disp, 1, LOCALE_USER_DEFAULT, &typeinfo);
+    ok(hr == DISP_E_BADINDEX, "GetTypeInfo returned: %08x\n", hr);
+    hr = IDispatchEx_GetTypeInfo(script_disp, 0, LOCALE_USER_DEFAULT, &typeinfo);
+    ok(hr == S_OK, "GetTypeInfo failed: %08x\n", hr);
+    hr = IDispatchEx_GetTypeInfo(script_disp, 0, LOCALE_USER_DEFAULT, &typeinfo2);
+    ok(hr == S_OK, "GetTypeInfo failed: %08x\n", hr);
+    ok(typeinfo != typeinfo2, "TypeInfo was not supposed to be shared.\n");
+    ITypeInfo_Release(typeinfo2);
+
+    obj = (void*)0xdeadbeef;
+    hr = ITypeInfo_CreateInstance(typeinfo, NULL, NULL, NULL);
+    ok(hr == E_INVALIDARG, "CreateInstance returned: %08x\n", hr);
+    hr = ITypeInfo_CreateInstance(typeinfo, NULL, NULL, &obj);
+    ok(hr == TYPE_E_BADMODULEKIND, "CreateInstance returned: %08x\n", hr);
+    hr = ITypeInfo_CreateInstance(typeinfo, NULL, &IID_IDispatch, &obj);
+    ok(hr == TYPE_E_BADMODULEKIND, "CreateInstance returned: %08x\n", hr);
+    ok(!obj, "Unexpected non-null obj %p.\n", obj);
+
+    hr = ITypeInfo_GetDocumentation(typeinfo, MEMBERID_NIL, &bstr, NULL, NULL, NULL);
+    ok(hr == S_OK, "GetDocumentation(MEMBERID_NIL) failed: %08x\n", hr);
+    ok(!lstrcmpW(bstr, L"VBScriptTypeInfo"), "Unexpected TypeInfo name %s\n", wine_dbgstr_w(bstr));
+    SysFreeString(bstr);
+
+    hr = ITypeInfo_GetTypeAttr(typeinfo, &attr);
+    ok(hr == S_OK, "GetTypeAttr failed: %08x\n", hr);
+    ok(IsEqualGUID(&attr->guid, &IID_IScriptTypeInfo), "Unexpected GUID %s\n", wine_dbgstr_guid(&attr->guid));
+    ok(attr->lcid == LOCALE_USER_DEFAULT, "Unexpected LCID %u\n", attr->lcid);
+    ok(attr->memidConstructor == MEMBERID_NIL, "Unexpected constructor memid %u\n", attr->memidConstructor);
+    ok(attr->memidDestructor == MEMBERID_NIL, "Unexpected destructor memid %u\n", attr->memidDestructor);
+    ok(attr->cbSizeInstance == 4, "Unexpected cbSizeInstance %u\n", attr->cbSizeInstance);
+    ok(attr->typekind == TKIND_DISPATCH, "Unexpected typekind %u\n", attr->typekind);
+    ok(attr->cFuncs == ARRAY_SIZE(func), "Unexpected cFuncs %u\n", attr->cFuncs);
+    ok(attr->cVars == ARRAY_SIZE(var), "Unexpected cVars %u\n", attr->cVars);
+    ok(attr->cImplTypes == 1, "Unexpected cImplTypes %u\n", attr->cImplTypes);
+    ok(attr->cbSizeVft == sizeof(IDispatchVtbl), "Unexpected cbSizeVft %u\n", attr->cbSizeVft);
+    ok(attr->cbAlignment == 4, "Unexpected cbAlignment %u\n", attr->cbAlignment);
+    ok(attr->wTypeFlags == TYPEFLAG_FDISPATCHABLE, "Unexpected wTypeFlags 0x%x\n", attr->wTypeFlags);
+    ok(attr->tdescAlias.vt == VT_EMPTY, "Unexpected tdescAlias.vt %d\n", attr->tdescAlias.vt);
+    ok(attr->idldescType.wIDLFlags == IDLFLAG_NONE, "Unexpected idldescType.wIDLFlags 0x%x\n", attr->idldescType.wIDLFlags);
+    ITypeInfo_ReleaseTypeAttr(typeinfo, attr);
+
+    /* The type inherits from IDispatch */
+    hr = ITypeInfo_GetImplTypeFlags(typeinfo, 0, NULL);
+    ok(hr == E_INVALIDARG, "GetImplTypeFlags returned: %08x\n", hr);
+    hr = ITypeInfo_GetImplTypeFlags(typeinfo, 1, &implTypeFlags);
+    ok(hr == TYPE_E_ELEMENTNOTFOUND, "GetImplTypeFlags returned: %08x\n", hr);
+    hr = ITypeInfo_GetImplTypeFlags(typeinfo, -1, &implTypeFlags);
+    ok(hr == TYPE_E_ELEMENTNOTFOUND, "GetImplTypeFlags returned: %08x\n", hr);
+    hr = ITypeInfo_GetImplTypeFlags(typeinfo, 0, &implTypeFlags);
+    ok(hr == S_OK, "GetImplTypeFlags failed: %08x\n", hr);
+    ok(implTypeFlags == 0, "Unexpected implTypeFlags 0x%x\n", implTypeFlags);
+
+    hr = ITypeInfo_GetRefTypeOfImplType(typeinfo, 0, NULL);
+    ok(hr == E_INVALIDARG, "GetRefTypeOfImplType returned: %08x\n", hr);
+    hr = ITypeInfo_GetRefTypeOfImplType(typeinfo, 1, &reftype);
+    ok(hr == TYPE_E_ELEMENTNOTFOUND, "GetRefTypeOfImplType returned: %08x\n", hr);
+    hr = ITypeInfo_GetRefTypeOfImplType(typeinfo, -1, &reftype);
+    ok(hr == TYPE_E_ELEMENTNOTFOUND, "GetRefTypeOfImplType failed: %08x\n", hr);
+    hr = ITypeInfo_GetRefTypeOfImplType(typeinfo, 0, &reftype);
+    ok(hr == S_OK, "GetRefTypeOfImplType failed: %08x\n", hr);
+    ok(reftype == 1, "Unexpected reftype %d\n", reftype);
+
+    hr = ITypeInfo_GetRefTypeInfo(typeinfo, reftype, NULL);
+    ok(hr == E_INVALIDARG, "GetRefTypeInfo returned: %08x\n", hr);
+    hr = ITypeInfo_GetRefTypeInfo(typeinfo, -1, &typeinfo2);
+    ok(hr == E_INVALIDARG, "GetRefTypeInfo returned: %08x\n", hr);
+    hr = ITypeInfo_GetRefTypeInfo(typeinfo, 4, &typeinfo2);
+    ok(hr == E_FAIL, "GetRefTypeInfo returned: %08x\n", hr);
+    hr = ITypeInfo_GetRefTypeInfo(typeinfo, 0, &typeinfo2);
+    ok(hr == S_OK, "GetRefTypeInfo failed: %08x\n", hr);
+    ok(typeinfo == typeinfo2, "Unexpected TypeInfo %p (expected %p)\n", typeinfo2, typeinfo);
+    ITypeInfo_Release(typeinfo2);
+    hr = ITypeInfo_GetRefTypeInfo(typeinfo, reftype, &typeinfo2);
+    ok(hr == S_OK, "GetRefTypeInfo failed: %08x\n", hr);
+    hr = ITypeInfo_GetDocumentation(typeinfo2, MEMBERID_NIL, &bstr, NULL, NULL, NULL);
+    ok(hr == S_OK, "GetDocumentation(MEMBERID_NIL) failed: %08x\n", hr);
+    ok(!lstrcmpW(bstr, L"IDispatch"), "Unexpected TypeInfo name %s\n", wine_dbgstr_w(bstr));
+    ITypeInfo_Release(typeinfo2);
+    SysFreeString(bstr);
+
+    /* GetIDsOfNames looks into the inherited types as well */
+    wcscpy(str, L"queryinterface");
+    hr = ITypeInfo_GetIDsOfNames(typeinfo, NULL, 1, &memid);
+    ok(hr == E_INVALIDARG, "GetIDsOfNames returned: %08x\n", hr);
+    hr = ITypeInfo_GetIDsOfNames(typeinfo, &names, 1, NULL);
+    ok(hr == E_INVALIDARG, "GetIDsOfNames returned: %08x\n", hr);
+    hr = ITypeInfo_GetIDsOfNames(typeinfo, &names, 0, &memid);
+    ok(hr == E_INVALIDARG, "GetIDsOfNames returned: %08x\n", hr);
+    hr = ITypeInfo_GetIDsOfNames(typeinfo, &names, 1, &memid);
+    ok(hr == S_OK, "GetIDsOfNames failed: %08x\n", hr);
+    ok(!lstrcmpW(str, L"queryinterface"), "Unexpected string %s\n", wine_dbgstr_w(str));
+    wcscpy(str, L"C");
+    hr = ITypeInfo_GetIDsOfNames(typeinfo, &names, 1, &memid);
+    ok(hr == DISP_E_UNKNOWNNAME, "GetIDsOfNames returned: %08x\n", hr);
+    wcscpy(str, L"SUBtract");
+    hr = ITypeInfo_GetIDsOfNames(typeinfo, &names, 1, &memid);
+    ok(hr == S_OK, "GetIDsOfNames failed: %08x\n", hr);
+    ok(!lstrcmpW(str, L"SUBtract"), "Unexpected string %s\n", wine_dbgstr_w(str));
+
+    hr = ITypeInfo_GetNames(typeinfo, memid, NULL, 1, &count);
+    ok(hr == E_INVALIDARG, "GetNames returned: %08x\n", hr);
+    hr = ITypeInfo_GetNames(typeinfo, memid, bstrs, 1, NULL);
+    ok(hr == E_INVALIDARG, "GetNames returned: %08x\n", hr);
+    hr = ITypeInfo_GetNames(typeinfo, memid, bstrs, 0, &count);
+    ok(hr == S_OK, "GetNames failed: %08x\n", hr);
+    ok(count == 0, "Unexpected count %u\n", count);
+    hr = ITypeInfo_GetNames(typeinfo, memid, bstrs, ARRAY_SIZE(bstrs), &count);
+    ok(hr == S_OK, "GetNames failed: %08x\n", hr);
+    ok(count == 3, "Unexpected count %u\n", count);
+    ok(!lstrcmpW(bstrs[0], L"subtract"), "Unexpected function name %s\n", wine_dbgstr_w(bstrs[0]));
+    ok(!lstrcmpW(bstrs[1], L"x"), "Unexpected function first param name %s\n", wine_dbgstr_w(bstrs[1]));
+    ok(!lstrcmpW(bstrs[2], L"y"), "Unexpected function second param name %s\n", wine_dbgstr_w(bstrs[2]));
+    for (i = 0; i < count; i++) SysFreeString(bstrs[i]);
+
+    hr = ITypeInfo_GetMops(typeinfo, memid, NULL);
+    ok(hr == E_INVALIDARG, "GetMops returned: %08x\n", hr);
+    hr = ITypeInfo_GetMops(typeinfo, memid, &bstr);
+    ok(hr == S_OK, "GetMops failed: %08x\n", hr);
+    ok(!bstr, "Unexpected non-null string %s\n", wine_dbgstr_w(bstr));
+    hr = ITypeInfo_GetMops(typeinfo, MEMBERID_NIL, &bstr);
+    ok(hr == S_OK, "GetMops failed: %08x\n", hr);
+    ok(!bstr, "Unexpected non-null string %s\n", wine_dbgstr_w(bstr));
+
+    /* These always fail */
+    obj = (void*)0xdeadbeef;
+    hr = ITypeInfo_AddressOfMember(typeinfo, memid, INVOKE_FUNC, NULL);
+    ok(hr == E_INVALIDARG, "AddressOfMember returned: %08x\n", hr);
+    hr = ITypeInfo_AddressOfMember(typeinfo, memid, INVOKE_FUNC, &obj);
+    ok(hr == TYPE_E_BADMODULEKIND, "AddressOfMember returned: %08x\n", hr);
+    ok(!obj, "Unexpected non-null obj %p.\n", obj);
+    bstr = (BSTR)0xdeadbeef;
+    hr = ITypeInfo_GetDllEntry(typeinfo, memid, INVOKE_FUNC, &bstr, NULL, NULL);
+    ok(hr == TYPE_E_BADMODULEKIND, "GetDllEntry returned: %08x\n", hr);
+    ok(!bstr, "Unexpected non-null str %p.\n", bstr);
+    wcscpy(str, L"Invoke");
+    hr = ITypeInfo_GetIDsOfNames(typeinfo, &names, 1, &memid);
+    ok(hr == S_OK, "GetIDsOfNames failed: %08x\n", hr);
+    obj = (void*)0xdeadbeef;
+    hr = ITypeInfo_AddressOfMember(typeinfo, memid, INVOKE_FUNC, &obj);
+    ok(hr == TYPE_E_BADMODULEKIND, "AddressOfMember returned: %08x\n", hr);
+    ok(!obj, "Unexpected non-null obj %p.\n", obj);
+    bstr = (BSTR)0xdeadbeef;
+    hr = ITypeInfo_GetDllEntry(typeinfo, memid, INVOKE_FUNC, &bstr, NULL, NULL);
+    ok(hr == TYPE_E_BADMODULEKIND, "GetDllEntry returned: %08x\n", hr);
+    ok(!bstr, "Unexpected non-null str %p.\n", bstr);
+
+    /* Check variable descriptions */
+    hr = ITypeInfo_GetVarDesc(typeinfo, 0, NULL);
+    ok(hr == E_INVALIDARG, "GetVarDesc returned: %08x\n", hr);
+    hr = ITypeInfo_GetVarDesc(typeinfo, 1337, &vardesc);
+    ok(hr == TYPE_E_ELEMENTNOTFOUND, "GetVarDesc returned: %08x\n", hr);
+    for (i = 0; i < ARRAY_SIZE(var); i++)
+    {
+        hr = ITypeInfo_GetVarDesc(typeinfo, i, &vardesc);
+        ok(hr == S_OK, "GetVarDesc(%u) failed: %08x\n", i, hr);
+        hr = ITypeInfo_GetDocumentation(typeinfo, vardesc->memid, &bstr, &bstrs[0], NULL, NULL);
+        ok(hr == S_OK, "[%u] GetDocumentation failed: %08x\n", i, hr);
+        ok(!lstrcmpW(bstr, var[i].name), "[%u] Unexpected variable name %s (expected %s)\n",
+            i, wine_dbgstr_w(bstr), wine_dbgstr_w(var[i].name));
+        ok(!bstrs[0], "[%u] Unexpected doc string %s\n", i, wine_dbgstr_w(bstrs[0]));
+        SysFreeString(bstr);
+        ok(vardesc->lpstrSchema == NULL, "[%u] Unexpected lpstrSchema %p\n", i, vardesc->lpstrSchema);
+        ok(vardesc->oInst == 0, "[%u] Unexpected oInst %u\n", i, vardesc->oInst);
+        ok(vardesc->varkind == VAR_DISPATCH, "[%u] Unexpected varkind %d\n", i, vardesc->varkind);
+        ok(vardesc->wVarFlags == 0, "[%u] Unexpected wVarFlags 0x%x\n", i, vardesc->wVarFlags);
+        ok(vardesc->elemdescVar.tdesc.vt == VT_VARIANT,
+            "[%u] Unexpected variable type vt %d (expected %d)\n", i, vardesc->elemdescVar.tdesc.vt, 0);
+        ok(vardesc->elemdescVar.paramdesc.pparamdescex == NULL,
+            "[%u] Unexpected variable type pparamdescex %p\n", i, vardesc->elemdescVar.paramdesc.pparamdescex);
+        ok(vardesc->elemdescVar.paramdesc.wParamFlags == PARAMFLAG_NONE,
+            "[%u] Unexpected variable type wParamFlags 0x%x\n", i, vardesc->elemdescVar.paramdesc.wParamFlags);
+        ITypeInfo_ReleaseVarDesc(typeinfo, vardesc);
+    }
+
+    /* Check function descriptions */
+    hr = ITypeInfo_GetFuncDesc(typeinfo, 0, NULL);
+    ok(hr == E_INVALIDARG, "GetFuncDesc returned: %08x\n", hr);
+    hr = ITypeInfo_GetFuncDesc(typeinfo, 1337, &funcdesc);
+    ok(hr == TYPE_E_ELEMENTNOTFOUND, "GetFuncDesc returned: %08x\n", hr);
+    for (i = 0; i < ARRAY_SIZE(func); i++)
+    {
+        hr = ITypeInfo_GetFuncDesc(typeinfo, i, &funcdesc);
+        ok(hr == S_OK, "GetFuncDesc(%u) failed: %08x\n", i, hr);
+        hr = ITypeInfo_GetDocumentation(typeinfo, funcdesc->memid, &bstr, &bstrs[0], NULL, NULL);
+        ok(hr == S_OK, "[%u] GetDocumentation failed: %08x\n", i, hr);
+        ok(!lstrcmpW(bstr, func[i].name), "[%u] Unexpected function name %s (expected %s)\n",
+            i, wine_dbgstr_w(bstr), wine_dbgstr_w(func[i].name));
+        ok(!bstrs[0], "[%u] Unexpected doc string %s\n", i, wine_dbgstr_w(bstrs[0]));
+        SysFreeString(bstr);
+        ok(funcdesc->lprgscode == NULL, "[%u] Unexpected lprgscode %p\n", i, funcdesc->lprgscode);
+        ok(func[i].num_args ? (funcdesc->lprgelemdescParam != NULL) : (funcdesc->lprgelemdescParam == NULL),
+            "[%u] Unexpected lprgelemdescParam %p\n", i, funcdesc->lprgelemdescParam);
+        ok(funcdesc->funckind == FUNC_DISPATCH, "[%u] Unexpected funckind %u\n", i, funcdesc->funckind);
+        ok(funcdesc->invkind == INVOKE_FUNC, "[%u] Unexpected invkind %u\n", i, funcdesc->invkind);
+        ok(funcdesc->callconv == CC_STDCALL, "[%u] Unexpected callconv %u\n", i, funcdesc->callconv);
+        ok(funcdesc->cParams == func[i].num_args, "[%u] Unexpected cParams %d (expected %d)\n",
+            i, funcdesc->cParams, func[i].num_args);
+        ok(funcdesc->cParamsOpt == 0, "[%u] Unexpected cParamsOpt %d\n", i, funcdesc->cParamsOpt);
+        ok(funcdesc->cScodes == 0, "[%u] Unexpected cScodes %d\n", i, funcdesc->cScodes);
+        ok(funcdesc->wFuncFlags == 0, "[%u] Unexpected wFuncFlags 0x%x\n", i, funcdesc->wFuncFlags);
+        ok(funcdesc->elemdescFunc.tdesc.vt == func[i].ret_type,
+            "[%u] Unexpected return type vt %d (expected %d)\n", i, funcdesc->elemdescFunc.tdesc.vt, func[i].ret_type);
+        ok(funcdesc->elemdescFunc.paramdesc.pparamdescex == NULL,
+            "[%u] Unexpected return type pparamdescex %p\n", i, funcdesc->elemdescFunc.paramdesc.pparamdescex);
+        ok(funcdesc->elemdescFunc.paramdesc.wParamFlags == PARAMFLAG_NONE,
+            "[%u] Unexpected return type wParamFlags 0x%x\n", i, funcdesc->elemdescFunc.paramdesc.wParamFlags);
+        if (funcdesc->lprgelemdescParam)
+            for (index = 0; index < funcdesc->cParams; index++)
+            {
+                ok(funcdesc->lprgelemdescParam[index].tdesc.vt == VT_VARIANT,
+                    "[%u] Unexpected parameter %u vt %d\n", i, index, funcdesc->lprgelemdescParam[index].tdesc.vt);
+                ok(funcdesc->lprgelemdescParam[index].paramdesc.pparamdescex == NULL,
+                    "[%u] Unexpected parameter %u pparamdescex %p\n", i, index, funcdesc->lprgelemdescParam[index].paramdesc.pparamdescex);
+                ok(funcdesc->lprgelemdescParam[index].paramdesc.wParamFlags == PARAMFLAG_NONE,
+                    "[%u] Unexpected parameter %u wParamFlags 0x%x\n", i, index, funcdesc->lprgelemdescParam[index].paramdesc.wParamFlags);
+            }
+        ITypeInfo_ReleaseFuncDesc(typeinfo, funcdesc);
+    }
+
+    /* Test TypeComp Binds */
+    hr = ITypeInfo_QueryInterface(typeinfo, &IID_ITypeComp, (void**)&typecomp);
+    ok(hr == S_OK, "QueryInterface(IID_ITypeComp) failed: %08x\n", hr);
+    hr = ITypeInfo_GetTypeComp(typeinfo, NULL);
+    ok(hr == E_INVALIDARG, "GetTypeComp returned: %08x\n", hr);
+    hr = ITypeInfo_GetTypeComp(typeinfo, &typecomp2);
+    ok(hr == S_OK, "GetTypeComp failed: %08x\n", hr);
+    ok(typecomp == typecomp2, "QueryInterface(IID_ITypeComp) and GetTypeComp returned different TypeComps\n");
+    ITypeComp_Release(typecomp2);
+    wcscpy(str, L"not_found");
+    hr = ITypeComp_Bind(typecomp, NULL, 0, 0, &typeinfo2, &desckind, &bindptr);
+    ok(hr == E_INVALIDARG, "Bind returned: %08x\n", hr);
+    hr = ITypeComp_Bind(typecomp, str, 0, 0, NULL, &desckind, &bindptr);
+    ok(hr == E_INVALIDARG, "Bind returned: %08x\n", hr);
+    hr = ITypeComp_Bind(typecomp, str, 0, 0, &typeinfo2, NULL, &bindptr);
+    ok(hr == E_INVALIDARG, "Bind returned: %08x\n", hr);
+    hr = ITypeComp_Bind(typecomp, str, 0, 0, &typeinfo2, &desckind, NULL);
+    ok(hr == E_INVALIDARG, "Bind returned: %08x\n", hr);
+
+    hr = ITypeComp_Bind(typecomp, str, 0, 0, &typeinfo2, &desckind, &bindptr);
+    ok(hr == S_OK, "Bind failed: %08x\n", hr);
+    ok(desckind == DESCKIND_NONE, "Unexpected desckind %u\n", desckind);
+    wcscpy(str, L"GLOBAL_VAR");
+    hr = ITypeComp_Bind(typecomp, str, 0, INVOKE_FUNC, &typeinfo2, &desckind, &bindptr);
+    ok(hr == TYPE_E_TYPEMISMATCH, "Bind returned: %08x\n", hr);
+    ok(!lstrcmpW(str, L"GLOBAL_VAR"), "Unexpected string %s\n", wine_dbgstr_w(str));
+    wcscpy(str, L"C");
+    hr = ITypeComp_Bind(typecomp, str, 0, 0, &typeinfo2, &desckind, &bindptr);
+    ok(hr == S_OK, "Bind failed: %08x\n", hr);
+    ok(desckind == DESCKIND_NONE, "Unexpected desckind %u\n", desckind);
+    wcscpy(str, L"addRef");
+    hr = ITypeComp_Bind(typecomp, str, 0, 0, &typeinfo2, &desckind, &bindptr);
+    ok(hr == S_OK, "Bind failed: %08x\n", hr);
+    ok(desckind == DESCKIND_FUNCDESC, "Unexpected desckind %u\n", desckind);
+    ok(!lstrcmpW(str, L"addRef"), "Unexpected string %s\n", wine_dbgstr_w(str));
+    ITypeInfo_ReleaseFuncDesc(typeinfo2, bindptr.lpfuncdesc);
+    ITypeInfo_Release(typeinfo2);
+    for (i = 0; i < ARRAY_SIZE(var); i++)
+    {
+        wcscpy(str, var[i].name);
+        hr = ITypeComp_Bind(typecomp, str, 0, INVOKE_PROPERTYGET, &typeinfo2, &desckind, &bindptr);
+        ok(hr == S_OK, "Bind failed: %08x\n", hr);
+        ok(desckind == DESCKIND_VARDESC, "Unexpected desckind %u\n", desckind);
+        ITypeInfo_ReleaseVarDesc(typeinfo2, bindptr.lpvardesc);
+        ITypeInfo_Release(typeinfo2);
+    }
+    for (i = 0; i < ARRAY_SIZE(func); i++)
+    {
+        wcscpy(str, func[i].name);
+        hr = ITypeComp_Bind(typecomp, str, 0, INVOKE_FUNC, &typeinfo2, &desckind, &bindptr);
+        ok(hr == S_OK, "Bind failed: %08x\n", hr);
+        ok(desckind == DESCKIND_FUNCDESC, "Unexpected desckind %u\n", desckind);
+        ITypeInfo_ReleaseFuncDesc(typeinfo2, bindptr.lpfuncdesc);
+        ITypeInfo_Release(typeinfo2);
+    }
+    wcscpy(str, L"VBScriptTypeInfo");
+    hr = ITypeComp_BindType(typecomp, NULL, 0, &typeinfo2, &typecomp2);
+    ok(hr == E_INVALIDARG, "BindType returned: %08x\n", hr);
+    hr = ITypeComp_BindType(typecomp, str, 0, NULL, &typecomp2);
+    ok(hr == E_INVALIDARG, "BindType returned: %08x\n", hr);
+    hr = ITypeComp_BindType(typecomp, str, 0, &typeinfo2, NULL);
+    ok(hr == E_INVALIDARG, "BindType returned: %08x\n", hr);
+    hr = ITypeComp_BindType(typecomp, str, 0, &typeinfo2, &typecomp2);
+    ok(hr == S_OK, "BindType failed: %08x\n", hr);
+    ok(!typeinfo2, "Unexpected TypeInfo %p (expected null)\n", typeinfo2);
+    ok(!typecomp2, "Unexpected TypeComp %p (expected null)\n", typecomp2);
+    wcscpy(str, L"C");
+    hr = ITypeComp_BindType(typecomp, str, 0, &typeinfo2, &typecomp2);
+    ok(hr == S_OK, "BindType failed: %08x\n", hr);
+    ok(!typeinfo2, "Unexpected TypeInfo %p (expected null)\n", typeinfo2);
+    ok(!typecomp2, "Unexpected TypeComp %p (expected null)\n", typecomp2);
+    wcscpy(str, L"IDispatch");
+    hr = ITypeComp_BindType(typecomp, str, 0, &typeinfo2, &typecomp2);
+    ok(hr == S_OK, "BindType failed: %08x\n", hr);
+    ok(!typeinfo2, "Unexpected TypeInfo %p (expected null)\n", typeinfo2);
+    ok(!typecomp2, "Unexpected TypeComp %p (expected null)\n", typecomp2);
+
+    ITypeComp_Release(typecomp);
+
+    /* Updating the script won't update the typeinfo obtained before,
+       but it will be reflected in any typeinfo obtained afterwards. */
+    parse_script(parser,
+        "dim new_var\nnew_var = 10\n"
+        "sub new_sub\nend sub\n"
+
+        /* Replace the function foobar with more args */
+        "function foobar(x, y, z)\nend function\n");
+
+    hr = IDispatchEx_GetTypeInfo(script_disp, 0, LOCALE_USER_DEFAULT, &typeinfo2);
+    ok(hr == S_OK, "GetTypeInfo failed: %08x\n", hr);
+    hr = ITypeInfo_GetTypeAttr(typeinfo, &attr);
+    ok(hr == S_OK, "GetTypeAttr failed: %08x\n", hr);
+    ok(attr->cFuncs == ARRAY_SIZE(func), "Unexpected cFuncs %u\n", attr->cFuncs);
+    ok(attr->cVars == ARRAY_SIZE(var), "Unexpected cVars %u\n", attr->cVars);
+    ITypeInfo_ReleaseTypeAttr(typeinfo, attr);
+    hr = ITypeInfo_GetTypeAttr(typeinfo2, &attr);
+    ok(hr == S_OK, "GetTypeAttr failed: %08x\n", hr);
+    ok(attr->cFuncs == ARRAY_SIZE(func) + 1, "Unexpected cFuncs %u\n", attr->cFuncs);
+    ok(attr->cVars == ARRAY_SIZE(var) + 1, "Unexpected cVars %u\n", attr->cVars);
+    ITypeInfo_ReleaseTypeAttr(typeinfo2, attr);
+    hr = ITypeInfo_GetVarDesc(typeinfo2, ARRAY_SIZE(var), &vardesc);
+    ok(hr == S_OK, "GetVarDesc failed: %08x\n", hr);
+    hr = ITypeInfo_GetDocumentation(typeinfo2, vardesc->memid, &bstr, &bstrs[0], NULL, NULL);
+    ok(hr == S_OK, "GetDocumentation failed: %08x\n", hr);
+    ok(!lstrcmpW(bstr, L"new_var"), "Unexpected variable name %s\n", wine_dbgstr_w(bstr));
+    ok(!bstrs[0], "Unexpected doc string %s\n", wine_dbgstr_w(bstrs[0]));
+    ITypeInfo_ReleaseVarDesc(typeinfo2, vardesc);
+    SysFreeString(bstr);
+    hr = ITypeInfo_GetFuncDesc(typeinfo, 0, &funcdesc);
+    ok(hr == S_OK, "GetFuncDesc failed: %08x\n", hr);
+    ok(funcdesc->cParams == 0, "Unexpected cParams %d\n", funcdesc->cParams);
+    ITypeInfo_ReleaseFuncDesc(typeinfo, funcdesc);
+    hr = ITypeInfo_GetFuncDesc(typeinfo2, 0, &funcdesc);
+    ok(hr == S_OK, "GetFuncDesc failed: %08x\n", hr);
+    ok(funcdesc->cParams == 3, "Unexpected cParams %d\n", funcdesc->cParams);
+    ITypeInfo_ReleaseFuncDesc(typeinfo2, funcdesc);
+    ITypeInfo_Release(typeinfo2);
+
+    ITypeInfo_Release(typeinfo);
+    IDispatchEx_Release(script_disp);
+    IActiveScriptParse_Release(parser);
+
+    SET_EXPECT(OnStateChange_DISCONNECTED);
+    SET_EXPECT(OnStateChange_INITIALIZED);
+    SET_EXPECT(OnStateChange_CLOSED);
+    hr = IActiveScript_Close(vbscript);
+    ok(hr == S_OK, "Close failed: %08x\n", hr);
+    CHECK_CALLED(OnStateChange_DISCONNECTED);
+    CHECK_CALLED(OnStateChange_INITIALIZED);
+    CHECK_CALLED(OnStateChange_CLOSED);
+
+    IActiveScript_Release(vbscript);
+}
+
 static void test_vbscript(void)
 {
     IActiveScriptParseProcedure2 *parse_proc;
@@ -1486,6 +1935,7 @@ START_TEST(vbscript)
         test_named_items();
         test_scriptdisp();
         test_code_persistence();
+        test_script_typeinfo();
         test_RegExp();
         test_RegExp_Replace();
     }else {

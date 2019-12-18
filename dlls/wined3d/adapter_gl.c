@@ -4699,21 +4699,6 @@ static HRESULT adapter_gl_create_buffer(struct wined3d_device *device,
     return hr;
 }
 
-static void wined3d_buffer_gl_destroy_object(void *object)
-{
-    struct wined3d_buffer_gl *buffer_gl = object;
-    struct wined3d_context *context;
-
-    if (buffer_gl->b.buffer_object)
-    {
-        context = context_acquire(buffer_gl->b.resource.device, NULL, 0);
-        wined3d_buffer_gl_destroy_buffer_object(buffer_gl, wined3d_context_gl(context));
-        context_release(context);
-    }
-
-    heap_free(buffer_gl);
-}
-
 static void adapter_gl_destroy_buffer(struct wined3d_buffer *buffer)
 {
     struct wined3d_buffer_gl *buffer_gl = wined3d_buffer_gl(buffer);
@@ -4729,7 +4714,7 @@ static void adapter_gl_destroy_buffer(struct wined3d_buffer *buffer)
     if (swapchain_count)
         wined3d_device_incref(device);
     wined3d_buffer_cleanup(&buffer_gl->b);
-    wined3d_cs_destroy_object(device->cs, wined3d_buffer_gl_destroy_object, buffer_gl);
+    wined3d_cs_destroy_object(device->cs, heap_free, buffer_gl);
     if (swapchain_count)
         wined3d_device_decref(device);
 }
@@ -4761,38 +4746,6 @@ static HRESULT adapter_gl_create_texture(struct wined3d_device *device,
     return hr;
 }
 
-static void wined3d_texture_gl_destroy_object(void *object)
-{
-    struct wined3d_renderbuffer_entry *entry, *entry2;
-    struct wined3d_texture_gl *texture_gl = object;
-    const struct wined3d_gl_info *gl_info;
-    struct wined3d_context *context;
-    struct wined3d_device *device;
-
-    TRACE("texture_gl %p.\n", texture_gl);
-
-    if (!list_empty(&texture_gl->renderbuffers))
-    {
-        device = texture_gl->t.resource.device;
-        context = context_acquire(device, NULL, 0);
-        gl_info = wined3d_context_gl(context)->gl_info;
-
-        LIST_FOR_EACH_ENTRY_SAFE(entry, entry2, &texture_gl->renderbuffers, struct wined3d_renderbuffer_entry, entry)
-        {
-            TRACE("Deleting renderbuffer %u.\n", entry->id);
-            context_gl_resource_released(device, entry->id, TRUE);
-            gl_info->fbo_ops.glDeleteRenderbuffers(1, &entry->id);
-            heap_free(entry);
-        }
-
-        context_release(context);
-    }
-
-    wined3d_texture_gl_unload_texture(texture_gl);
-
-    heap_free(texture_gl);
-}
-
 static void adapter_gl_destroy_texture(struct wined3d_texture *texture)
 {
     struct wined3d_texture_gl *texture_gl = wined3d_texture_gl(texture);
@@ -4812,7 +4765,7 @@ static void adapter_gl_destroy_texture(struct wined3d_texture *texture)
     texture->resource.parent_ops->wined3d_object_destroyed(texture->resource.parent);
 
     wined3d_texture_cleanup(&texture_gl->t);
-    wined3d_cs_destroy_object(device->cs, wined3d_texture_gl_destroy_object, texture_gl);
+    wined3d_cs_destroy_object(device->cs, heap_free, texture_gl);
 
     if (swapchain_count)
         wined3d_device_decref(device);
@@ -4848,7 +4801,7 @@ struct wined3d_view_gl_destroy_ctx
 {
     struct wined3d_device *device;
     const struct wined3d_gl_view *gl_view;
-    GLuint counter_bo;
+    GLuint *counter_bo;
     void *object;
     struct wined3d_view_gl_destroy_ctx *free;
 };
@@ -4872,7 +4825,7 @@ static void wined3d_view_gl_destroy_object(void *object)
             gl_info->gl_ops.gl.p_glDeleteTextures(1, &ctx->gl_view->name);
         }
         if (ctx->counter_bo)
-            GL_EXTCALL(glDeleteBuffers(1, &ctx->counter_bo));
+            GL_EXTCALL(glDeleteBuffers(1, ctx->counter_bo));
         checkGLcall("delete resources");
         context_release(context);
     }
@@ -4882,7 +4835,7 @@ static void wined3d_view_gl_destroy_object(void *object)
 }
 
 static void wined3d_view_gl_destroy(struct wined3d_device *device,
-        const struct wined3d_gl_view *gl_view, GLuint counter_bo, void *object)
+        const struct wined3d_gl_view *gl_view, GLuint *counter_bo, void *object)
 {
     struct wined3d_view_gl_destroy_ctx *ctx, c;
 
@@ -4914,7 +4867,7 @@ static void adapter_gl_destroy_rendertarget_view(struct wined3d_rendertarget_vie
     if (swapchain_count)
         wined3d_device_incref(device);
     wined3d_rendertarget_view_cleanup(&view_gl->v);
-    wined3d_view_gl_destroy(device, &view_gl->gl_view, 0, view_gl);
+    wined3d_view_gl_destroy(device, &view_gl->gl_view, NULL, view_gl);
     if (swapchain_count)
         wined3d_device_decref(device);
 }
@@ -4960,7 +4913,7 @@ static void adapter_gl_destroy_shader_resource_view(struct wined3d_shader_resour
     if (swapchain_count)
         wined3d_device_incref(device);
     wined3d_shader_resource_view_cleanup(&view_gl->v);
-    wined3d_view_gl_destroy(device, &view_gl->gl_view, 0, view_gl);
+    wined3d_view_gl_destroy(device, &view_gl->gl_view, NULL, view_gl);
     if (swapchain_count)
         wined3d_device_decref(device);
 }
@@ -5006,7 +4959,7 @@ static void adapter_gl_destroy_unordered_access_view(struct wined3d_unordered_ac
     if (swapchain_count)
         wined3d_device_incref(device);
     wined3d_unordered_access_view_cleanup(&view_gl->v);
-    wined3d_view_gl_destroy(device, &view_gl->gl_view, view_gl->counter_bo, view_gl);
+    wined3d_view_gl_destroy(device, &view_gl->gl_view, &view_gl->counter_bo, view_gl);
     if (swapchain_count)
         wined3d_device_decref(device);
 }

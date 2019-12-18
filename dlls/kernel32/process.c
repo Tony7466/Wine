@@ -86,39 +86,6 @@ const WCHAR DIR_System[] = {'C',':','\\','w','i','n','d','o','w','s',
 #define PDB32_WIN32S_PROC   0x8000  /* Win32s process */
 
 
-/***********************************************************************
- *              set_library_argv
- *
- * Set the Wine library argv global variables.
- */
-static void set_library_argv( WCHAR **wargv )
-{
-    int argc;
-    char *p, **argv;
-    DWORD total = 0;
-
-    /* convert argv back from Unicode since it has to be in the Ansi codepage not the Unix one */
-
-    for (argc = 0; wargv[argc]; argc++)
-        total += WideCharToMultiByte( CP_ACP, 0, wargv[argc], -1, NULL, 0, NULL, NULL );
-
-    argv = RtlAllocateHeap( GetProcessHeap(), 0, total + (argc + 1) * sizeof(*argv) );
-    p = (char *)(argv + argc + 1);
-    for (argc = 0; wargv[argc]; argc++)
-    {
-        DWORD reslen = WideCharToMultiByte( CP_ACP, 0, wargv[argc], -1, p, total, NULL, NULL );
-        argv[argc] = p;
-        p += reslen;
-        total -= reslen;
-    }
-    argv[argc] = NULL;
-
-    __wine_main_argc = argc;
-    __wine_main_argv = argv;
-    __wine_main_wargv = wargv;
-}
-
-
 #ifdef __i386__
 extern DWORD call_process_entry( PEB *peb, LPTHREAD_START_ROUTINE entry );
 __ASM_GLOBAL_FUNC( call_process_entry,
@@ -137,9 +104,7 @@ __ASM_GLOBAL_FUNC( call_process_entry,
                     __ASM_CFI(".cfi_same_value %ebp\n\t")
                     "ret" )
 
-extern void WINAPI start_process( LPTHREAD_START_ROUTINE entry, PEB *peb ) DECLSPEC_HIDDEN;
-extern void WINAPI start_process_wrapper(void) DECLSPEC_HIDDEN;
-__ASM_GLOBAL_FUNC( start_process_wrapper,
+__ASM_GLOBAL_FUNC( __wine_start_process,
                    "pushl %ebp\n\t"
                    __ASM_CFI(".cfi_adjust_cfa_offset 4\n\t")
                    __ASM_CFI(".cfi_rel_offset %ebp,0\n\t")
@@ -153,16 +118,18 @@ static inline DWORD call_process_entry( PEB *peb, LPTHREAD_START_ROUTINE entry )
 {
     return entry( peb );
 }
-static void WINAPI start_process( LPTHREAD_START_ROUTINE entry, PEB *peb );
-#define start_process_wrapper start_process
 #endif
 
 /***********************************************************************
- *           start_process
+ *           __wine_start_process
  *
  * Startup routine of a new process. Runs on the new process stack.
  */
-void WINAPI start_process( LPTHREAD_START_ROUTINE entry, PEB *peb )
+#ifdef __i386__
+void CDECL start_process( LPTHREAD_START_ROUTINE entry, PEB *peb )
+#else
+void CDECL __wine_start_process( LPTHREAD_START_ROUTINE entry, PEB *peb )
+#endif
 {
     BOOL being_debugged;
 
@@ -191,34 +158,6 @@ void WINAPI start_process( LPTHREAD_START_ROUTINE entry, PEB *peb )
     }
     __ENDTRY
     abort();  /* should not be reached */
-}
-
-
-/***********************************************************************
- *           __wine_kernel_init
- *
- * Wine initialisation: load and start the main exe file.
- */
-void * CDECL __wine_kernel_init(void)
-{
-    static const WCHAR kernel32W[] = {'k','e','r','n','e','l','3','2',0};
-
-    PEB *peb = NtCurrentTeb()->Peb;
-    RTL_USER_PROCESS_PARAMETERS *params = peb->ProcessParameters;
-
-    /* Initialize everything */
-
-    setbuf(stdout,NULL);
-    setbuf(stderr,NULL);
-    kernel32_handle = GetModuleHandleW(kernel32W);
-    RtlSetUnhandledExceptionFilter( UnhandledExceptionFilter );
-
-    LOCALE_Init();
-    set_library_argv( __wine_main_wargv );
-
-    if (!params->CurrentDirectory.Handle) chdir("/"); /* avoid locking removable devices */
-
-    return start_process_wrapper;
 }
 
 
@@ -945,9 +884,8 @@ HRESULT WINAPI ApplicationRecoveryInProgress(PBOOL canceled)
  */
 HRESULT WINAPI RegisterApplicationRecoveryCallback(APPLICATION_RECOVERY_CALLBACK callback, PVOID param, DWORD pingint, DWORD flags)
 {
-    FIXME("%p, %p, %d, %d: stub\n", callback, param, pingint, flags);
-    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
-    return E_FAIL;
+    FIXME("%p, %p, %d, %d: stub, faking success\n", callback, param, pingint, flags);
+    return S_OK;
 }
 
 /***********************************************************************

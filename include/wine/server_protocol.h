@@ -769,6 +769,7 @@ struct rawinput_device
 struct new_process_request
 {
     struct request_header __header;
+    obj_handle_t parent_process;
     int          inherit_all;
     unsigned int create_flags;
     int          socket_fd;
@@ -779,6 +780,7 @@ struct new_process_request
     /* VARARG(objattr,object_attributes); */
     /* VARARG(info,startup_info,info_size); */
     /* VARARG(env,unicode_str); */
+    char __pad_44[4];
 };
 struct new_process_reply
 {
@@ -1006,8 +1008,10 @@ struct get_thread_info_reply
     int          exit_code;
     int          priority;
     int          last;
+    int          suspend_count;
     data_size_t  desc_len;
     /* VARARG(desc,unicode_str); */
+    char __pad_60[4];
 };
 
 
@@ -1920,12 +1924,12 @@ struct attach_console_reply
 struct get_console_wait_event_request
 {
     struct request_header __header;
-    char __pad_12[4];
+    obj_handle_t handle;
 };
 struct get_console_wait_event_reply
 {
     struct reply_header __header;
-    obj_handle_t handle;
+    obj_handle_t event;
     char __pad_12[4];
 };
 
@@ -6700,6 +6704,6 @@ union generic_reply
     struct resume_process_reply resume_process_reply;
 };
 
-#define SERVER_PROTOCOL_VERSION 592
+#define SERVER_PROTOCOL_VERSION 595
 
 #endif /* __WINE_WINE_SERVER_PROTOCOL_H */

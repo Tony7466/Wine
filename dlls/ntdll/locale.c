@@ -103,6 +103,52 @@ static NTSTATUS load_string( ULONG id, LANGID lang, WCHAR *buffer, ULONG len )
 }
 
 
+static DWORD mbtowc_size( const CPTABLEINFO *info, LPCSTR str, UINT len )
+{
+    DWORD res;
+
+    if (!info->DBCSCodePage) return len;
+
+    for (res = 0; len; len--, str++, res++)
+    {
+        if (info->DBCSOffsets[(unsigned char)*str] && len > 1)
+        {
+            str++;
+            len--;
+        }
+    }
+    return res;
+}
+
+
+static DWORD wctomb_size( const CPTABLEINFO *info, LPCWSTR str, UINT len )
+{
+    if (info->DBCSCodePage)
+    {
+        WCHAR *uni2cp = info->WideCharTable;
+        DWORD res;
+
+        for (res = 0; len; len--, str++, res++)
+            if (uni2cp[*str] & 0xff00) res++;
+        return res;
+    }
+    else return len;
+}
+
+
+static WCHAR casemap( USHORT *table, WCHAR ch )
+{
+    return ch + table[table[table[ch >> 8] + ((ch >> 4) & 0x0f)] + (ch & 0x0f)];
+}
+
+
+static WCHAR casemap_ascii( WCHAR ch )
+{
+    if (ch >= 'a' && ch <= 'z') ch -= 'a' - 'A';
+    return ch;
+}
+
+
 static NTSTATUS open_nls_data_file( ULONG type, ULONG id, HANDLE *file )
 {
     static const WCHAR pathfmtW[] = {'\\','?','?','\\','%','s','%','s',0};
@@ -304,7 +350,7 @@ static USHORT *build_cptable( const union cptable *src, SIZE_T *size )
         if (src->sbcs.cp2uni_glyphs != src->sbcs.cp2uni)
         {
             *ptr++ = 256;
-            memcpy( ptr + 1, src->sbcs.cp2uni_glyphs, 256 );
+            memcpy( ptr, src->sbcs.cp2uni_glyphs, 256 * sizeof(USHORT) );
             ptr += 256;
         }
         else *ptr++ = 0;
@@ -590,13 +636,19 @@ void init_locale( HMODULE module )
  */
 int ntdll_umbstowcs( DWORD flags, const char *src, int srclen, WCHAR *dst, int dstlen )
 {
-#ifdef __APPLE__
-    /* work around broken Mac OS X filesystem that enforces decomposed Unicode */
-    flags |= MB_COMPOSITE;
+    DWORD reslen;
+    NTSTATUS status;
+
+    if (unix_table) return wine_cp_mbstowcs( unix_table, flags, src, srclen, dst, dstlen );
+
+    if (!dstlen) dst = NULL;
+    status = RtlUTF8ToUnicodeN( dst, dstlen * sizeof(WCHAR), &reslen, src, srclen );
+    if (status && status != STATUS_SOME_NOT_MAPPED) return 0;
+    reslen /= sizeof(WCHAR);
+#ifdef __APPLE__  /* work around broken Mac OS X filesystem that enforces decomposed Unicode */
+    if (reslen && dst) RtlNormalizeString( NormalizationC, dst, reslen, dst, (int *)&reslen );
 #endif
-    return unix_table ?
-        wine_cp_mbstowcs( unix_table, flags, src, srclen, dst, dstlen ) :
-        wine_utf8_mbstowcs( flags, src, srclen, dst, dstlen );
+    return reslen;
 }
 
 
@@ -606,10 +658,16 @@ int ntdll_umbstowcs( DWORD flags, const char *src, int srclen, WCHAR *dst, int d
 int ntdll_wcstoumbs( DWORD flags, const WCHAR *src, int srclen, char *dst, int dstlen,
                      const char *defchar, int *used )
 {
-    if (unix_table)
-        return wine_cp_wcstombs( unix_table, flags, src, srclen, dst, dstlen, defchar, used );
+    DWORD reslen;
+    NTSTATUS status;
+
+    if (unix_table) return wine_cp_wcstombs( unix_table, flags, src, srclen, dst, dstlen, defchar, used );
+
     if (used) *used = 0;  /* all chars are valid for UTF-8 */
-    return wine_utf8_wcstombs( flags, src, srclen, dst, dstlen );
+    if (!dstlen) dst = NULL;
+    status = RtlUnicodeToUTF8N( dst, dstlen, &reslen, src, srclen * sizeof(WCHAR) );
+    if (status && status != STATUS_SOME_NOT_MAPPED) return 0;
+    return reslen;
 }
 
 
@@ -775,6 +833,379 @@ void WINAPI RtlResetRtlTranslations( const NLSTABLEINFO *info )
 }
 
 
+/**************************************************************************
+ *      RtlAnsiCharToUnicodeChar   (NTDLL.@)
+ */
+WCHAR WINAPI RtlAnsiCharToUnicodeChar( char **ansi )
+{
+    if (nls_info.AnsiTableInfo.DBCSOffsets)
+    {
+        USHORT off = nls_info.AnsiTableInfo.DBCSOffsets[(unsigned char)**ansi];
+        if (off)
+        {
+            (*ansi)++;
+            return nls_info.AnsiTableInfo.DBCSOffsets[off + (unsigned char)*(*ansi)++];
+        }
+    }
+    return nls_info.AnsiTableInfo.MultiByteTable[(unsigned char)*(*ansi)++];
+}
+
+
+/******************************************************************************
+ *	RtlCompareUnicodeStrings   (NTDLL.@)
+ */
+LONG WINAPI RtlCompareUnicodeStrings( const WCHAR *s1, SIZE_T len1, const WCHAR *s2, SIZE_T len2,
+                                      BOOLEAN case_insensitive )
+{
+    LONG ret = 0;
+    SIZE_T len = min( len1, len2 );
+
+    if (case_insensitive)
+    {
+        if (nls_info.UpperCaseTable)
+        {
+            while (!ret && len--) ret = casemap( nls_info.UpperCaseTable, *s1++ ) -
+                                        casemap( nls_info.UpperCaseTable, *s2++ );
+        }
+        else  /* locale not setup yet */
+        {
+            while (!ret && len--) ret = casemap_ascii( *s1++ ) - casemap_ascii( *s2++ );
+        }
+    }
+    else
+    {
+        while (!ret && len--) ret = *s1++ - *s2++;
+    }
+    if (!ret) ret = len1 - len2;
+    return ret;
+}
+
+
+/**************************************************************************
+ *	RtlPrefixUnicodeString   (NTDLL.@)
+ */
+BOOLEAN WINAPI RtlPrefixUnicodeString( const UNICODE_STRING *s1, const UNICODE_STRING *s2,
+                                       BOOLEAN ignore_case )
+{
+    unsigned int i;
+
+    if (s1->Length > s2->Length) return FALSE;
+    if (ignore_case)
+    {
+        for (i = 0; i < s1->Length / sizeof(WCHAR); i++)
+            if (casemap( nls_info.UpperCaseTable, s1->Buffer[i] ) !=
+                casemap( nls_info.UpperCaseTable, s2->Buffer[i] )) return FALSE;
+    }
+    else
+    {
+        for (i = 0; i < s1->Length / sizeof(WCHAR); i++)
+            if (s1->Buffer[i] != s2->Buffer[i]) return FALSE;
+    }
+    return TRUE;
+}
+
+
+/**************************************************************************
+ *	RtlCustomCPToUnicodeN   (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlCustomCPToUnicodeN( CPTABLEINFO *info, WCHAR *dst, DWORD dstlen, DWORD *reslen,
+                                       const char *src, DWORD srclen )
+{
+    DWORD i, ret;
+
+    dstlen /= sizeof(WCHAR);
+    if (info->DBCSOffsets)
+    {
+        for (i = dstlen; srclen && i; i--, srclen--, src++, dst++)
+        {
+            USHORT off = info->DBCSOffsets[(unsigned char)*src];
+            if (off && srclen > 1)
+            {
+                src++;
+                srclen--;
+                *dst = info->DBCSOffsets[off + (unsigned char)*src];
+            }
+            else *dst = info->MultiByteTable[(unsigned char)*src];
+        }
+        ret = dstlen - i;
+    }
+    else
+    {
+        ret = min( srclen, dstlen );
+        for (i = 0; i < ret; i++) dst[i] = info->MultiByteTable[(unsigned char)src[i]];
+    }
+    if (reslen) *reslen = ret * sizeof(WCHAR);
+    return STATUS_SUCCESS;
+}
+
+
+/**************************************************************************
+ *	RtlUnicodeToCustomCPN   (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlUnicodeToCustomCPN( CPTABLEINFO *info, char *dst, DWORD dstlen, DWORD *reslen,
+                                       const WCHAR *src, DWORD srclen )
+{
+    DWORD i, ret;
+
+    srclen /= sizeof(WCHAR);
+    if (info->DBCSCodePage)
+    {
+        WCHAR *uni2cp = info->WideCharTable;
+
+        for (i = dstlen; srclen && i; i--, srclen--, src++)
+        {
+            if (uni2cp[*src] & 0xff00)
+            {
+                if (i == 1) break;  /* do not output a partial char */
+                i--;
+                *dst++ = uni2cp[*src] >> 8;
+            }
+            *dst++ = (char)uni2cp[*src];
+        }
+        ret = dstlen - i;
+    }
+    else
+    {
+        char *uni2cp = info->WideCharTable;
+        ret = min( srclen, dstlen );
+        for (i = 0; i < ret; i++) dst[i] = uni2cp[src[i]];
+    }
+    if (reslen) *reslen = ret;
+    return STATUS_SUCCESS;
+}
+
+
+/**************************************************************************
+ *	RtlMultiByteToUnicodeN   (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlMultiByteToUnicodeN( WCHAR *dst, DWORD dstlen, DWORD *reslen,
+                                        const char *src, DWORD srclen )
+{
+    if (nls_info.AnsiTableInfo.WideCharTable)
+        return RtlCustomCPToUnicodeN( &nls_info.AnsiTableInfo, dst, dstlen, reslen, src, srclen );
+
+    /* locale not setup yet */
+    dstlen = min( srclen, dstlen / sizeof(WCHAR) );
+    if (reslen) *reslen = dstlen * sizeof(WCHAR);
+    while (dstlen--) *dst++ = *src++ & 0x7f;
+    return STATUS_SUCCESS;
+}
+
+
+/**************************************************************************
+ *      RtlMultiByteToUnicodeSize   (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlMultiByteToUnicodeSize( DWORD *size, const char *str, DWORD len )
+{
+    *size = mbtowc_size( &nls_info.AnsiTableInfo, str, len ) * sizeof(WCHAR);
+    return STATUS_SUCCESS;
+}
+
+
+/**************************************************************************
+ *	RtlOemToUnicodeN   (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlOemToUnicodeN( WCHAR *dst, DWORD dstlen, DWORD *reslen,
+                                  const char *src, DWORD srclen )
+{
+    return RtlCustomCPToUnicodeN( &nls_info.OemTableInfo, dst, dstlen, reslen, src, srclen );
+}
+
+
+/**************************************************************************
+ *      RtlOemStringToUnicodeSize   (NTDLL.@)
+ *      RtlxOemStringToUnicodeSize  (NTDLL.@)
+ */
+DWORD WINAPI RtlOemStringToUnicodeSize( const STRING *str )
+{
+    return (mbtowc_size( &nls_info.OemTableInfo, str->Buffer, str->Length ) + 1) * sizeof(WCHAR);
+}
+
+
+/**************************************************************************
+ *      RtlUnicodeStringToOemSize   (NTDLL.@)
+ *      RtlxUnicodeStringToOemSize  (NTDLL.@)
+ */
+DWORD WINAPI RtlUnicodeStringToOemSize( const UNICODE_STRING *str )
+{
+    return wctomb_size( &nls_info.OemTableInfo, str->Buffer, str->Length / sizeof(WCHAR) ) + 1;
+}
+
+
+/**************************************************************************
+ *	RtlUnicodeToMultiByteN   (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlUnicodeToMultiByteN( char *dst, DWORD dstlen, DWORD *reslen,
+                                        const WCHAR *src, DWORD srclen )
+{
+    if (nls_info.AnsiTableInfo.WideCharTable)
+        return RtlUnicodeToCustomCPN( &nls_info.AnsiTableInfo, dst, dstlen, reslen, src, srclen );
+
+    /* locale not setup yet */
+    dstlen = min( srclen / sizeof(WCHAR), dstlen );
+    if (reslen) *reslen = dstlen;
+    while (dstlen--)
+    {
+        WCHAR ch = *src++;
+        if (ch > 0x7f) ch = '?';
+        *dst++ = ch;
+    }
+    return STATUS_SUCCESS;
+}
+
+
+/**************************************************************************
+ *      RtlUnicodeToMultiByteSize   (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlUnicodeToMultiByteSize( DWORD *size, const WCHAR *str, DWORD len )
+{
+    *size = wctomb_size( &nls_info.AnsiTableInfo, str, len / sizeof(WCHAR) );
+    return STATUS_SUCCESS;
+}
+
+
+/**************************************************************************
+ *	RtlUnicodeToOemN   (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlUnicodeToOemN( char *dst, DWORD dstlen, DWORD *reslen,
+                                  const WCHAR *src, DWORD srclen )
+{
+    return RtlUnicodeToCustomCPN( &nls_info.OemTableInfo, dst, dstlen, reslen, src, srclen );
+}
+
+
+/**************************************************************************
+ *	RtlDowncaseUnicodeChar   (NTDLL.@)
+ */
+WCHAR WINAPI RtlDowncaseUnicodeChar( WCHAR wch )
+{
+    return casemap( nls_info.LowerCaseTable, wch );
+}
+
+
+/**************************************************************************
+ *	RtlDowncaseUnicodeString   (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlDowncaseUnicodeString( UNICODE_STRING *dest, const UNICODE_STRING *src,
+                                          BOOLEAN alloc )
+{
+    DWORD i, len = src->Length;
+
+    if (alloc)
+    {
+        dest->MaximumLength = len;
+        if (!(dest->Buffer = RtlAllocateHeap( GetProcessHeap(), 0, len ))) return STATUS_NO_MEMORY;
+    }
+    else if (len > dest->MaximumLength) return STATUS_BUFFER_OVERFLOW;
+
+    for (i = 0; i < len / sizeof(WCHAR); i++)
+        dest->Buffer[i] = casemap( nls_info.LowerCaseTable, src->Buffer[i] );
+    dest->Length = len;
+    return STATUS_SUCCESS;
+}
+
+
+/**************************************************************************
+ *	RtlUpcaseUnicodeChar   (NTDLL.@)
+ */
+WCHAR WINAPI RtlUpcaseUnicodeChar( WCHAR wch )
+{
+    return casemap( nls_info.UpperCaseTable, wch );
+}
+
+
+/**************************************************************************
+ *	RtlUpcaseUnicodeString   (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlUpcaseUnicodeString( UNICODE_STRING *dest, const UNICODE_STRING *src,
+                                        BOOLEAN alloc )
+{
+    DWORD i, len = src->Length;
+
+    if (alloc)
+    {
+        dest->MaximumLength = len;
+        if (!(dest->Buffer = RtlAllocateHeap( GetProcessHeap(), 0, len ))) return STATUS_NO_MEMORY;
+    }
+    else if (len > dest->MaximumLength) return STATUS_BUFFER_OVERFLOW;
+
+    for (i = 0; i < len / sizeof(WCHAR); i++)
+        dest->Buffer[i] = casemap( nls_info.UpperCaseTable, src->Buffer[i] );
+    dest->Length = len;
+    return STATUS_SUCCESS;
+}
+
+
+/**************************************************************************
+ *	RtlUpcaseUnicodeToCustomCPN   (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlUpcaseUnicodeToCustomCPN( CPTABLEINFO *info, char *dst, DWORD dstlen, DWORD *reslen,
+                                             const WCHAR *src, DWORD srclen )
+{
+    DWORD i, ret;
+
+    srclen /= sizeof(WCHAR);
+    if (info->DBCSCodePage)
+    {
+        WCHAR *uni2cp = info->WideCharTable;
+
+        for (i = dstlen; srclen && i; i--, srclen--, src++)
+        {
+            WCHAR ch = casemap( nls_info.UpperCaseTable, *src );
+            if (uni2cp[ch] & 0xff00)
+            {
+                if (i == 1) break;  /* do not output a partial char */
+                i--;
+                *dst++ = uni2cp[ch] >> 8;
+            }
+            *dst++ = (char)uni2cp[ch];
+        }
+        ret = dstlen - i;
+    }
+    else
+    {
+        char *uni2cp = info->WideCharTable;
+        ret = min( srclen, dstlen );
+        for (i = 0; i < ret; i++) dst[i] = uni2cp[casemap( nls_info.UpperCaseTable, src[i] )];
+    }
+    if (reslen) *reslen = ret;
+    return STATUS_SUCCESS;
+}
+
+
+/**************************************************************************
+ *	RtlUpcaseUnicodeToMultiByteN   (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlUpcaseUnicodeToMultiByteN( char *dst, DWORD dstlen, DWORD *reslen,
+                                              const WCHAR *src, DWORD srclen )
+{
+    return RtlUpcaseUnicodeToCustomCPN( &nls_info.AnsiTableInfo, dst, dstlen, reslen, src, srclen );
+}
+
+
+/**************************************************************************
+ *	RtlUpcaseUnicodeToOemN   (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlUpcaseUnicodeToOemN( char *dst, DWORD dstlen, DWORD *reslen,
+                                        const WCHAR *src, DWORD srclen )
+{
+    if (nls_info.OemTableInfo.WideCharTable)
+        return RtlUpcaseUnicodeToCustomCPN( &nls_info.OemTableInfo, dst, dstlen, reslen, src, srclen );
+
+    /* locale not setup yet */
+    dstlen = min( srclen / sizeof(WCHAR), dstlen );
+    if (reslen) *reslen = dstlen;
+    while (dstlen--)
+    {
+        WCHAR ch = *src++;
+        if (ch > 0x7f) ch = '?';
+        else ch = casemap_ascii( ch );
+        *dst++ = ch;
+    }
+    return STATUS_SUCCESS;
+}
+
+
 /******************************************************************
  *      RtlLocaleNameToLcid   (NTDLL.@)
  */
@@ -885,6 +1316,231 @@ NTSTATUS WINAPI RtlLocaleNameToLcid( const WCHAR *name, LCID *lcid, ULONG flags 
 found:
     TRACE( "%s -> %04x\n", debugstr_w(name), *lcid );
     return STATUS_SUCCESS;
+}
+
+
+/* helper for the various utf8 mbstowcs functions */
+static unsigned int decode_utf8_char( unsigned char ch, const char **str, const char *strend )
+{
+    /* number of following bytes in sequence based on first byte value (for bytes above 0x7f) */
+    static const char utf8_length[128] =
+    {
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, /* 0x80-0x8f */
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, /* 0x90-0x9f */
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, /* 0xa0-0xaf */
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, /* 0xb0-0xbf */
+        0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1, /* 0xc0-0xcf */
+        1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, /* 0xd0-0xdf */
+        2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, /* 0xe0-0xef */
+        3,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0  /* 0xf0-0xff */
+    };
+
+    /* first byte mask depending on UTF-8 sequence length */
+    static const unsigned char utf8_mask[4] = { 0x7f, 0x1f, 0x0f, 0x07 };
+
+    unsigned int len = utf8_length[ch - 0x80];
+    unsigned int res = ch & utf8_mask[len];
+    const char *end = *str + len;
+
+    if (end > strend)
+    {
+        *str = end;
+        return ~0;
+    }
+    switch (len)
+    {
+    case 3:
+        if ((ch = end[-3] ^ 0x80) >= 0x40) break;
+        res = (res << 6) | ch;
+        (*str)++;
+        if (res < 0x10) break;
+    case 2:
+        if ((ch = end[-2] ^ 0x80) >= 0x40) break;
+        res = (res << 6) | ch;
+        if (res >= 0x110000 >> 6) break;
+        (*str)++;
+        if (res < 0x20) break;
+        if (res >= 0xd800 >> 6 && res <= 0xdfff >> 6) break;
+    case 1:
+        if ((ch = end[-1] ^ 0x80) >= 0x40) break;
+        res = (res << 6) | ch;
+        (*str)++;
+        if (res < 0x80) break;
+        return res;
+    }
+    return ~0;
+}
+
+
+/**************************************************************************
+ *	RtlUTF8ToUnicodeN   (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlUTF8ToUnicodeN( WCHAR *dst, DWORD dstlen, DWORD *reslen, const char *src, DWORD srclen )
+{
+    unsigned int res, len;
+    NTSTATUS status = STATUS_SUCCESS;
+    const char *srcend = src + srclen;
+    WCHAR *dstend;
+
+    if (!src) return STATUS_INVALID_PARAMETER_4;
+    if (!reslen) return STATUS_INVALID_PARAMETER;
+
+    dstlen /= sizeof(WCHAR);
+    dstend = dst + dstlen;
+    if (!dst)
+    {
+        for (len = 0; src < srcend; len++)
+        {
+            unsigned char ch = *src++;
+            if (ch < 0x80) continue;
+            if ((res = decode_utf8_char( ch, &src, srcend )) > 0x10ffff)
+                status = STATUS_SOME_NOT_MAPPED;
+            else
+                if (res > 0xffff) len++;
+        }
+        *reslen = len * sizeof(WCHAR);
+        return status;
+    }
+
+    while ((dst < dstend) && (src < srcend))
+    {
+        unsigned char ch = *src++;
+        if (ch < 0x80)  /* special fast case for 7-bit ASCII */
+        {
+            *dst++ = ch;
+            continue;
+        }
+        if ((res = decode_utf8_char( ch, &src, srcend )) <= 0xffff)
+        {
+            *dst++ = res;
+        }
+        else if (res <= 0x10ffff)  /* we need surrogates */
+        {
+            res -= 0x10000;
+            *dst++ = 0xd800 | (res >> 10);
+            if (dst == dstend) break;
+            *dst++ = 0xdc00 | (res & 0x3ff);
+        }
+        else
+        {
+            *dst++ = 0xfffd;
+            status = STATUS_SOME_NOT_MAPPED;
+        }
+    }
+    if (src < srcend) status = STATUS_BUFFER_TOO_SMALL;  /* overflow */
+    *reslen = (dstlen - (dstend - dst)) * sizeof(WCHAR);
+    return status;
+}
+
+
+/* get the next char value taking surrogates into account */
+static inline unsigned int get_surrogate_value( const WCHAR *src, unsigned int srclen )
+{
+    if (src[0] >= 0xd800 && src[0] <= 0xdfff)  /* surrogate pair */
+    {
+        if (src[0] > 0xdbff || /* invalid high surrogate */
+            srclen <= 1 ||     /* missing low surrogate */
+            src[1] < 0xdc00 || src[1] > 0xdfff) /* invalid low surrogate */
+            return 0;
+        return 0x10000 + ((src[0] & 0x3ff) << 10) + (src[1] & 0x3ff);
+    }
+    return src[0];
+}
+
+
+/**************************************************************************
+ *	RtlUnicodeToUTF8N   (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlUnicodeToUTF8N( char *dst, DWORD dstlen, DWORD *reslen, const WCHAR *src, DWORD srclen )
+{
+    char *end;
+    unsigned int val, len;
+    NTSTATUS status = STATUS_SUCCESS;
+
+    if (!src) return STATUS_INVALID_PARAMETER_4;
+    if (!reslen) return STATUS_INVALID_PARAMETER;
+    if (dst && (srclen & 1)) return STATUS_INVALID_PARAMETER_5;
+
+    srclen /= sizeof(WCHAR);
+
+    if (!dst)
+    {
+        for (len = 0; srclen; srclen--, src++)
+        {
+            if (*src < 0x80) len++;  /* 0x00-0x7f: 1 byte */
+            else if (*src < 0x800) len += 2;  /* 0x80-0x7ff: 2 bytes */
+            else
+            {
+                if (!(val = get_surrogate_value( src, srclen )))
+                {
+                    val = 0xfffd;
+                    status = STATUS_SOME_NOT_MAPPED;
+                }
+                if (val < 0x10000) len += 3; /* 0x800-0xffff: 3 bytes */
+                else   /* 0x10000-0x10ffff: 4 bytes */
+                {
+                    len += 4;
+                    src++;
+                    srclen--;
+                }
+            }
+        }
+        *reslen = len;
+        return status;
+    }
+
+    for (end = dst + dstlen; srclen; srclen--, src++)
+    {
+        WCHAR ch = *src;
+
+        if (ch < 0x80)  /* 0x00-0x7f: 1 byte */
+        {
+            if (dst > end - 1) break;
+            *dst++ = ch;
+            continue;
+        }
+        if (ch < 0x800)  /* 0x80-0x7ff: 2 bytes */
+        {
+            if (dst > end - 2) break;
+            dst[1] = 0x80 | (ch & 0x3f);
+            ch >>= 6;
+            dst[0] = 0xc0 | ch;
+            dst += 2;
+            continue;
+        }
+        if (!(val = get_surrogate_value( src, srclen )))
+        {
+            val = 0xfffd;
+            status = STATUS_SOME_NOT_MAPPED;
+        }
+        if (val < 0x10000)  /* 0x800-0xffff: 3 bytes */
+        {
+            if (dst > end - 3) break;
+            dst[2] = 0x80 | (val & 0x3f);
+            val >>= 6;
+            dst[1] = 0x80 | (val & 0x3f);
+            val >>= 6;
+            dst[0] = 0xe0 | val;
+            dst += 3;
+        }
+        else   /* 0x10000-0x10ffff: 4 bytes */
+        {
+            if (dst > end - 4) break;
+            dst[3] = 0x80 | (val & 0x3f);
+            val >>= 6;
+            dst[2] = 0x80 | (val & 0x3f);
+            val >>= 6;
+            dst[1] = 0x80 | (val & 0x3f);
+            val >>= 6;
+            dst[0] = 0xf0 | val;
+            dst += 4;
+            src++;
+            srclen--;
+        }
+    }
+    if (srclen) status = STATUS_BUFFER_TOO_SMALL;
+    *reslen = dstlen - (end - dst);
+    return status;
 }
 
 

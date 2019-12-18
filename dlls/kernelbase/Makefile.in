@@ -1,11 +1,14 @@
 MODULE    = kernelbase.dll
 IMPORTLIB = kernelbase
-IMPORTS   = uuid ntdll winecrt0 kernel32
+IMPORTS   = uuid ntdll winecrt0
 EXTRADLLFLAGS = -nodefaultlibs -nostartfiles -mno-cygwin
 
 C_SRCS = \
+	collation.c \
+	compose.c \
 	console.c \
 	debug.c \
+	decompose.c \
 	digitmap.c \
 	file.c \
 	loader.c \
@@ -19,4 +22,5 @@ C_SRCS = \
 	string.c \
 	sync.c \
 	thread.c \
-	version.c
+	version.c \
+	wctype.c

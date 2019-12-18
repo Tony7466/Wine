@@ -36,6 +36,8 @@
 
 #include "kernelbase.h"
 #include "wine/asm.h"
+#include "wine/exception.h"
+#include "wine/server.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(sync);
@@ -127,6 +129,8 @@ static BOOL get_open_object_attributes( OBJECT_ATTRIBUTES *attr, UNICODE_STRING 
 
 static HANDLE normalize_handle_if_console( HANDLE handle )
 {
+    static HANDLE wait_event;
+
     if ((handle == (HANDLE)STD_INPUT_HANDLE) ||
         (handle == (HANDLE)STD_OUTPUT_HANDLE) ||
         (handle == (HANDLE)STD_ERROR_HANDLE))
@@ -135,9 +139,22 @@ static HANDLE normalize_handle_if_console( HANDLE handle )
     /* even screen buffer console handles are waitable, and are
      * handled as a handle to the console itself
      */
-    if (is_console_handle( handle ) && VerifyConsoleIoHandle( handle ))
-        handle = GetConsoleInputWaitHandle();
+    if (is_console_handle( handle ))
+    {
+        HANDLE event = 0;
 
+        SERVER_START_REQ( get_console_wait_event )
+        {
+            req->handle = wine_server_obj_handle( console_handle_map( handle ));
+            if (!wine_server_call( req )) event = wine_server_ptr_handle( reply->event );
+        }
+        SERVER_END_REQ;
+        if (event)
+        {
+            if (InterlockedCompareExchangePointer( &wait_event, event, 0 )) NtClose( event );
+            handle = wait_event;
+        }
+    }
     return handle;
 }
 
@@ -336,14 +353,16 @@ HANDLE WINAPI DECLSPEC_HOTPATCH CreateEventExW( SECURITY_ATTRIBUTES *sa, LPCWSTR
     /* one buggy program needs this
      * ("Van Dale Groot woordenboek der Nederlandse taal")
      */
-    if (sa && IsBadReadPtr(sa,sizeof(SECURITY_ATTRIBUTES)))
+    __TRY
     {
-        ERR("Bad security attributes pointer %p\n",sa);
+        get_create_object_attributes( &attr, &nameW, sa, name );
+    }
+    __EXCEPT_PAGE_FAULT
+    {
         SetLastError( ERROR_INVALID_PARAMETER);
         return 0;
     }
-
-    get_create_object_attributes( &attr, &nameW, sa, name );
+    __ENDTRY
 
     status = NtCreateEvent( &ret, access, &attr,
                             (flags & CREATE_EVENT_MANUAL_RESET) ? NotificationEvent : SynchronizationEvent,

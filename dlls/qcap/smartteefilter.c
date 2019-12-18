@@ -51,24 +51,6 @@ static inline SmartTeeFilter *impl_from_strmbase_pin(struct strmbase_pin *pin)
     return impl_from_strmbase_filter(pin->filter);
 }
 
-static const IBaseFilterVtbl SmartTeeFilterVtbl = {
-    BaseFilterImpl_QueryInterface,
-    BaseFilterImpl_AddRef,
-    BaseFilterImpl_Release,
-    BaseFilterImpl_GetClassID,
-    BaseFilterImpl_Stop,
-    BaseFilterImpl_Pause,
-    BaseFilterImpl_Run,
-    BaseFilterImpl_GetState,
-    BaseFilterImpl_SetSyncSource,
-    BaseFilterImpl_GetSyncSource,
-    BaseFilterImpl_EnumPins,
-    BaseFilterImpl_FindPin,
-    BaseFilterImpl_QueryFilterInfo,
-    BaseFilterImpl_JoinFilterGraph,
-    BaseFilterImpl_QueryVendorInfo
-};
-
 static struct strmbase_pin *smart_tee_get_pin(struct strmbase_filter *iface, unsigned int index)
 {
     SmartTeeFilter *filter = impl_from_strmbase_filter(iface);
@@ -97,27 +79,6 @@ static const struct strmbase_filter_ops filter_ops =
 {
     .filter_get_pin = smart_tee_get_pin,
     .filter_destroy = smart_tee_destroy,
-};
-
-static const IPinVtbl SmartTeeFilterInputVtbl = {
-    BasePinImpl_QueryInterface,
-    BasePinImpl_AddRef,
-    BasePinImpl_Release,
-    BaseInputPinImpl_Connect,
-    BaseInputPinImpl_ReceiveConnection,
-    BasePinImpl_Disconnect,
-    BasePinImpl_ConnectedTo,
-    BasePinImpl_ConnectionMediaType,
-    BasePinImpl_QueryPinInfo,
-    BasePinImpl_QueryDirection,
-    BasePinImpl_QueryId,
-    BasePinImpl_QueryAccept,
-    BasePinImpl_EnumMediaTypes,
-    BasePinImpl_QueryInternalConnections,
-    BaseInputPinImpl_EndOfStream,
-    BaseInputPinImpl_BeginFlush,
-    BaseInputPinImpl_EndFlush,
-    BaseInputPinImpl_NewSegment
 };
 
 static HRESULT sink_query_accept(struct strmbase_pin *base, const AM_MEDIA_TYPE *pmt)
@@ -293,27 +254,6 @@ static const struct strmbase_sink_ops sink_ops =
     .pfnReceive = SmartTeeFilterInput_Receive,
 };
 
-static const IPinVtbl SmartTeeFilterCaptureVtbl = {
-    BasePinImpl_QueryInterface,
-    BasePinImpl_AddRef,
-    BasePinImpl_Release,
-    BaseOutputPinImpl_Connect,
-    BaseOutputPinImpl_ReceiveConnection,
-    BaseOutputPinImpl_Disconnect,
-    BasePinImpl_ConnectedTo,
-    BasePinImpl_ConnectionMediaType,
-    BasePinImpl_QueryPinInfo,
-    BasePinImpl_QueryDirection,
-    BasePinImpl_QueryId,
-    BasePinImpl_QueryAccept,
-    BasePinImpl_EnumMediaTypes,
-    BasePinImpl_QueryInternalConnections,
-    BaseOutputPinImpl_EndOfStream,
-    BaseOutputPinImpl_BeginFlush,
-    BaseOutputPinImpl_EndFlush,
-    BasePinImpl_NewSegment
-};
-
 static HRESULT capture_query_accept(struct strmbase_pin *base, const AM_MEDIA_TYPE *amt)
 {
     FIXME("(%p) stub\n", base);
@@ -357,27 +297,6 @@ static const struct strmbase_source_ops capture_ops =
     .pfnDecideAllocator = SmartTeeFilterCapture_DecideAllocator,
 };
 
-static const IPinVtbl SmartTeeFilterPreviewVtbl = {
-    BasePinImpl_QueryInterface,
-    BasePinImpl_AddRef,
-    BasePinImpl_Release,
-    BaseOutputPinImpl_Connect,
-    BaseOutputPinImpl_ReceiveConnection,
-    BaseOutputPinImpl_Disconnect,
-    BasePinImpl_ConnectedTo,
-    BasePinImpl_ConnectionMediaType,
-    BasePinImpl_QueryPinInfo,
-    BasePinImpl_QueryDirection,
-    BasePinImpl_QueryId,
-    BasePinImpl_QueryAccept,
-    BasePinImpl_EnumMediaTypes,
-    BasePinImpl_QueryInternalConnections,
-    BaseOutputPinImpl_EndOfStream,
-    BaseOutputPinImpl_BeginFlush,
-    BaseOutputPinImpl_EndFlush,
-    BasePinImpl_NewSegment
-};
-
 static HRESULT preview_query_accept(struct strmbase_pin *base, const AM_MEDIA_TYPE *amt)
 {
     FIXME("(%p) stub\n", base);
@@ -417,8 +336,8 @@ IUnknown* WINAPI QCAP_createSmartTeeFilter(IUnknown *outer, HRESULT *phr)
     }
     memset(object, 0, sizeof(*object));
 
-    strmbase_filter_init(&object->filter, &SmartTeeFilterVtbl, outer, &CLSID_SmartTee, &filter_ops);
-    strmbase_sink_init(&object->sink, &SmartTeeFilterInputVtbl, &object->filter, inputW, &sink_ops, NULL);
+    strmbase_filter_init(&object->filter, outer, &CLSID_SmartTee, &filter_ops);
+    strmbase_sink_init(&object->sink, &object->filter, inputW, &sink_ops, NULL);
     hr = CoCreateInstance(&CLSID_MemoryAllocator, NULL, CLSCTX_INPROC_SERVER,
             &IID_IMemAllocator, (void **)&object->sink.pAllocator);
     if (FAILED(hr))
@@ -428,10 +347,8 @@ IUnknown* WINAPI QCAP_createSmartTeeFilter(IUnknown *outer, HRESULT *phr)
         return NULL;
     }
 
-    strmbase_source_init(&object->capture, &SmartTeeFilterCaptureVtbl,
-            &object->filter, captureW, &capture_ops);
-    strmbase_source_init(&object->preview, &SmartTeeFilterPreviewVtbl,
-            &object->filter, previewW, &preview_ops);
+    strmbase_source_init(&object->capture, &object->filter, captureW, &capture_ops);
+    strmbase_source_init(&object->preview, &object->filter, previewW, &preview_ops);
 
     *phr = S_OK;
     return &object->filter.IUnknown_inner;

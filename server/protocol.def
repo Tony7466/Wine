@@ -783,6 +783,7 @@ struct rawinput_device
 
 /* Create a new process from the context of the parent */
 @REQ(new_process)
+    obj_handle_t parent_process; /* parent process */
     int          inherit_all;    /* inherit all handles from parent */
     unsigned int create_flags;   /* creation flags */
     int          socket_fd;      /* file descriptor for process socket */
@@ -944,6 +945,7 @@ struct rawinput_device
     int          exit_code;     /* thread exit code */
     int          priority;      /* thread priority level */
     int          last;          /* last thread in process */
+    int          suspend_count; /* thread suspend count */
     data_size_t  desc_len;      /* description length in bytes */
     VARARG(desc,unicode_str);   /* description string */
 @END
@@ -1531,8 +1533,9 @@ struct console_renderer_event
 
 /* Get the input queue wait event */
 @REQ(get_console_wait_event)
+    obj_handle_t handle;        /* handle to the console */
 @REPLY
-    obj_handle_t handle;
+    obj_handle_t event;
 @END
 
 /* Get a console mode (input or output) */

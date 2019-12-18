@@ -648,14 +648,6 @@ AC_CHECK_HEADERS([linux/ipx.h linux/irda.h linux/rtnetlink.h],,,
      # include <linux/types.h>
      #endif])
 
-AC_CHECK_HEADERS([mach-o/dyld_images.h],,,
-    [#ifdef HAVE_STDBOOL_H
-     # include <stdbool.h>
-     #endif
-     #ifdef HAVE_STDINT_H
-     # include <stdint.h>
-     #endif])
-
 AC_CHECK_HEADERS([resolv.h],,,
     [#include <sys/types.h>
      #ifdef HAVE_SYS_SOCKET_H
@@ -1074,6 +1066,8 @@ then
         WINE_TRY_CROSSCFLAGS([-Wwrite-strings])
         WINE_TRY_CROSSCFLAGS([-Wpointer-arith])
         WINE_TRY_CROSSCFLAGS([-Wlogical-op])
+        WINE_TRY_CROSSCFLAGS([-Wincompatible-library-redeclaration],
+                             [EXTRACROSSCFLAGS="$EXTRACROSSCFLAGS -Wno-incompatible-library-redeclaration"])
 
         case $host_cpu in
           *i[[3456789]]86*) WINE_TRY_CROSSCFLAGS([-fno-omit-frame-pointer]) ;;
@@ -2009,23 +2003,9 @@ if test "x${GCC}" = "xyes"
 then
   EXTRACFLAGS="-Wall -pipe"
 
-  dnl Check for strength-reduce bug
-  AC_CACHE_CHECK( [for gcc strength-reduce bug], ac_cv_c_gcc_strength_bug,
-                  AC_RUN_IFELSE([AC_LANG_PROGRAM([[int L[[4]] = {0,1,2,3};]],
-[[static int Array[[3]];
-  unsigned int B = 3;
-  int i;
-  for(i=0; i<B; i++) Array[[i]] = i - 3;
-  for(i=0; i<4 - 1; i++) L[[i]] = L[[i + 1]];
-  L[[i]] = 4;
-  return (Array[[1]] != -2 || L[[2]] != 3)]])],
-    [ac_cv_c_gcc_strength_bug="no"],[ac_cv_c_gcc_strength_bug="yes"],[ac_cv_c_gcc_strength_bug="no"]) )
-  if test "$ac_cv_c_gcc_strength_bug" = "yes"
-  then
-    EXTRACFLAGS="$EXTRACFLAGS -fno-strength-reduce"
-  fi
-
   dnl Check for some compiler flags
+  WINE_TRY_CFLAGS([-fcf-protection=none])
+  WINE_TRY_CFLAGS([-fno-stack-protector])
   WINE_TRY_CFLAGS([-fno-strict-aliasing])
   WINE_TRY_CFLAGS([-fexcess-precision=standard],[AC_SUBST(EXCESS_PRECISION_CFLAGS,"-fexcess-precision=standard")])
   dnl clang needs to be told to fail on unknown options
@@ -3438,6 +3418,8 @@ WINE_CONFIG_MAKEFILE(dlls/msacm.dll16,enable_win16)
 WINE_CONFIG_MAKEFILE(dlls/msacm32.drv)
 WINE_CONFIG_MAKEFILE(dlls/msacm32)
 WINE_CONFIG_MAKEFILE(dlls/msacm32/tests)
+WINE_CONFIG_MAKEFILE(dlls/msado15)
+WINE_CONFIG_MAKEFILE(dlls/msado15/tests)
 WINE_CONFIG_MAKEFILE(dlls/msadp32.acm)
 WINE_CONFIG_MAKEFILE(dlls/msasn1)
 WINE_CONFIG_MAKEFILE(dlls/mscat32)
@@ -3557,6 +3539,7 @@ WINE_CONFIG_MAKEFILE(dlls/ntprint)
 WINE_CONFIG_MAKEFILE(dlls/ntprint/tests)
 WINE_CONFIG_MAKEFILE(dlls/objsel)
 WINE_CONFIG_MAKEFILE(dlls/odbc32)
+WINE_CONFIG_MAKEFILE(dlls/odbcbcp)
 WINE_CONFIG_MAKEFILE(dlls/odbccp32)
 WINE_CONFIG_MAKEFILE(dlls/odbccp32/tests)
 WINE_CONFIG_MAKEFILE(dlls/odbccu32)
@@ -3900,6 +3883,7 @@ WINE_CONFIG_MAKEFILE(programs/aspnet_regiis)
 WINE_CONFIG_MAKEFILE(programs/attrib)
 WINE_CONFIG_MAKEFILE(programs/cabarc)
 WINE_CONFIG_MAKEFILE(programs/cacls)
+WINE_CONFIG_MAKEFILE(programs/chcp.com)
 WINE_CONFIG_MAKEFILE(programs/clock)
 WINE_CONFIG_MAKEFILE(programs/cmd)
 WINE_CONFIG_MAKEFILE(programs/cmd/tests)
