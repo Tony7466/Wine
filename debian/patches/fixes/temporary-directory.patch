@@ -28,7 +28,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  static void init_server_dir( dev_t dev, ino_t ino )
  {
 -    char *p, *root;
-+    char *p, *prefix = NULL, *root = NULL;
++    char *p, *root = NULL, *run_dir = NULL;
  
 -#ifdef __ANDROID__  /* there's no /tmp dir on Android */
 -    root = build_path( config_dir, ".wineserver" );
@@ -37,14 +37,14 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
 -    sprintf( root, "%s-%u", server_root_prefix, getuid() );
 -#endif
 +    /* use /run/user/$uid as wineserver's tmpdir if possible */
-+    prefix = xmalloc( sizeof(server_root_prefix) + 12 );
-+    sprintf( prefix, "%s/%u", server_root_prefix, getuid() );
-+    if (opendir( prefix ))
++    run_dir = xmalloc( sizeof(server_root_prefix) + 12 );
++    sprintf( run_dir, "%s/%u", server_root_prefix, getuid() );
++    if (opendir( run_dir ))
 +    {
 +        root = xmalloc( sizeof(server_root_prefix) + 17 );
-+        sprintf( root, "%s/wine", prefix );
++        sprintf( root, "%s/wine", run_dir );
 +    }
-+    free( prefix );
++    free( run_dir );
 +
 +    /* otherwise, use a randomly named directory under TMPDIR */
 +    if (!root)
@@ -138,3 +138,159 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  
      server_dir = xmalloc( strlen(root) + sizeof(server_dir_prefix) + 2*sizeof(dev) + 2*sizeof(ino) + 2 );
      strcpy( server_dir, root );
+--- a/server/request.c
++++ b/server/request.c
+@@ -21,6 +21,7 @@
+ #include "config.h"
+ #include "wine/port.h"
+ 
++#include <dirent.h>
+ #include <assert.h>
+ #include <errno.h>
+ #include <fcntl.h>
+@@ -614,11 +615,23 @@ static void create_dir( const char *name
+     if (st->st_mode & 077) fatal_error( "%s must not be accessible by other users\n", name );
+ }
+ 
++char *server_build_path( const char *dir, const char *name )
++{
++    size_t len = strlen(dir);
++    char *ret = malloc( len + strlen(name) + 2 );
++
++    memcpy( ret, dir, len );
++    if (len && ret[len-1] != '/') ret[len++] = '/';
++    strcpy( ret + len, name );
++    return ret;
++}
++
+ /* create the server directory and chdir to it */
+ static char *create_server_dir( int force )
+ {
++    const char *server_root_prefix = "/run/user";
+     const char *prefix = getenv( "WINEPREFIX" );
+-    char *p, *config_dir;
++    char *p, *config_dir, *run_dir;
+     struct stat st, st2;
+     size_t len = sizeof("/server-") + 2 * sizeof(st.st_dev) + 2 * sizeof(st.st_ino) + 2;
+ 
+@@ -668,9 +681,117 @@ static char *create_server_dir( int forc
+     strcpy( server_dir, config_dir );
+     strcat( server_dir, "/.wineserver" );
+ #else
+-    len += sizeof("/tmp/.wine-") + 12;
+-    if (!(server_dir = malloc( len ))) fatal_error( "out of memory\n" );
+-    sprintf( server_dir, "/tmp/.wine-%u", getuid() );
++    /* use /run/user/$uid as wineserver's tmpdir by default */
++    if (!(run_dir = malloc( sizeof(server_root_prefix) + 12 )))
++        fatal_error( "out of memory\n" );
++    sprintf( run_dir, "%s/%u", server_root_prefix, getuid() );
++
++    if (opendir( run_dir )) /* use /run as the temporary directory */
++    {
++        len += sizeof(server_root_prefix) + 17;
++        if (!(server_dir = malloc( len )))
++            fatal_error( "out of memory\n" );
++        sprintf( server_dir, "%s/wine", run_dir );
++    }
++    else /* use a randomly named directory in TMPDIR */
++    {
++        int error;
++        FILE *stream;
++        char *wineserver_file, *tmp_dir, *tmp_env, *tmp_root;
++        mode_t mode = S_IRUSR;
++
++        /* determine the temporary directory */
++        tmp_env = secure_getenv("TMPDIR");
++        if (tmp_env)
++        {
++            if (!(tmp_dir = malloc( strlen(tmp_env) + 1 )))
++                fatal_error( "out of memory\n" );
++            strcpy( tmp_dir, tmp_env );
++        }
++        else
++        {
++            const char *tmp_default = "/tmp";
++            if (!(tmp_dir = malloc( sizeof(tmp_default) )))
++                fatal_error( "out of memory\n" );
++            strcpy( tmp_dir, tmp_default );
++        }
++
++        /* remove existing wineserver tmpdir file if permissions are wrong */
++        wineserver_file = server_build_path( config_dir, "wineserver" );
++        if ( access( wineserver_file, F_OK ) != -1 )
++        {
++            struct stat statbuf;
++            mode_t mode_mask = S_IRWXU | S_IRWXG | S_IRWXO;
++            error = stat( wineserver_file, &statbuf );
++            if (error != 0)
++                fatal_error("error reading wineserver tmpdir file permissions\n");
++            if ((statbuf.st_mode & mode_mask) != mode)
++            {
++                error = remove( wineserver_file );
++                if (error != 0)
++                    fatal_error("error removing wineserver tmpdir file\n");
++            }
++        }
++
++        /* create or read the name of the directory */
++        stream = fopen( wineserver_file, "r" );
++        if (!stream)
++        {
++            int n, fd;
++
++            /* create a new randomized name for the directory */
++            tmp_root = mkdtemp( server_build_path( tmp_dir, "wine-XXXXXX" ) );
++            if (!tmp_root)
++                fatal_error("unable to create wineserver tmpdir\n");
++
++            /* save location of the chosen temporary directory */
++            fd = creat( wineserver_file, mode );
++            if (fd < 0)
++                fatal_error("error opening file descriptor for wineserver tmpdir file\n");
++            stream = fdopen( fd, "w" );
++            if (!stream)
++                fatal_error("error opening wineserver tmpdir file\n");
++            n = fputs( tmp_root + strlen(tmp_dir) + 1, stream );
++            if (n < 0)
++                fatal_error("error writing to wineserver tmpdir file\n");
++            error = fclose( stream );
++            if (error != 0)
++                fatal_error("error closing wineserver tmpdir file\n");
++        }
++        else
++        {
++            char *tmp_wineserver;
++            size_t length = 0;
++            ssize_t nread;
++
++            /* try to read a previously generated wineserver tmpdir */
++            nread = getline( &tmp_wineserver, &length, stream );
++            error = fclose( stream );
++            if (error != 0)
++                fatal_error("error closing wineserver tmpdir file\n");
++/* if something went wrong, remove the broken file */
++            if (nread < 0)
++            {
++                remove( wineserver_file );
++                fatal_error("fixed a temporary directory error, please try running the same command again\n");
++            }
++
++            /* build the full path to the temporary directory */
++            tmp_root = server_build_path( tmp_dir, tmp_wineserver );
++        }
++
++        /* copy the path into its final destination */
++        len += strlen(tmp_root) + 1;
++        if (!(server_dir = malloc( len )))
++            fatal_error( "out of memory\n" );
++        strcpy( server_dir, tmp_root );
++
++        /* free temporaries */
++        free( tmp_dir );
++        free( tmp_root );
++        free( wineserver_file );
++    }
++    free( run_dir );
+ #endif
+     create_dir( server_dir, &st2 );
+ 

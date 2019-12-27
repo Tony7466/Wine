@@ -12,7 +12,7 @@ Vcs-Browser: https://salsa.debian.org/wine-team/wine
 Standards-Version: 4.4.1
 Rules-Requires-Root: no
 Build-Depends:
- debhelper-compat (= 12),
+ debhelper (>= 9~),
  clang [arm64],
  oss4-dev [kfreebsd-any],
  freebsd-glue [kfreebsd-any],
@@ -282,39 +282,39 @@ Description: Windows API implementation - development files
  .
  This package provides Wine's C header files and development libraries.
 
-# Package: wine-binfmt
-# Architecture: all
-# Multi-Arch: foreign
-# Depends:
-#  ${misc:Depends},
-#  wine,
-#  binfmt-support,
-# Description: Register Wine as the interpreter for Windows executables
-#  Wine is a free MS-Windows API implementation.
-#  This is still a work in progress and many applications may still not work.
-#  .
-#  This package registers Wine as an interpreter for Windows executables, using
-#  the kernel binfmt_misc module.  This causes Wine to be invoked automatically
-#  whenever a Windows PE (Portable Executable) file is to be launched.
-#  .
-#  WARNING:  This increases the risk of inadvertently launching Windows
-#  malware, so please make sure that you understand the security risks before
-#  blindly installing this package.
-#  .
-#  This feature is probably most interesting for automatic software testing.
-#  Desktop users usually don't need it, so don't install wine-binfmt unless you
-#  know that you need it.  Refer to Wine's README.debian for more information.
-#
-# Package: fonts-wine
-# Section: fonts
-# Architecture: all
-# Multi-Arch: foreign
-# Built-Using:
-#  ${built:Using}
-# Depends:
-#  ${misc:Depends},
-# Description: Windows API implementation - fonts
-#  Wine is a free MS-Windows API implementation.
-#  This is still a work in progress and many applications may still not work.
-#  .
-#  This package provides the fonts used by Wine.
+Package: wine-binfmt
+Architecture: all
+Multi-Arch: foreign
+Depends:
+ ${misc:Depends},
+ wine,
+ binfmt-support,
+Description: Register Wine as the interpreter for Windows executables
+ Wine is a free MS-Windows API implementation.
+ This is still a work in progress and many applications may still not work.
+ .
+ This package registers Wine as an interpreter for Windows executables, using
+ the kernel binfmt_misc module.  This causes Wine to be invoked automatically
+ whenever a Windows PE (Portable Executable) file is to be launched.
+ .
+ WARNING:  This increases the risk of inadvertently launching Windows
+ malware, so please make sure that you understand the security risks before
+ blindly installing this package.
+ .
+ This feature is probably most interesting for automatic software testing.
+ Desktop users usually don't need it, so don't install wine-binfmt unless you
+ know that you need it.  Refer to Wine's README.debian for more information.
+
+Package: fonts-wine
+Section: fonts
+Architecture: all
+Multi-Arch: foreign
+Built-Using:
+ ${built:Using}
+Depends:
+ ${misc:Depends},
+Description: Windows API implementation - fonts
+ Wine is a free MS-Windows API implementation.
+ This is still a work in progress and many applications may still not work.
+ .
+ This package provides the fonts used by Wine.

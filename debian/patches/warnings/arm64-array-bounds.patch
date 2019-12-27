@@ -21,3 +21,13 @@ author: Michael Gilbert <mgilbert@debian.org>
  DELAYIMPORTS = setupapi user32
  
  EXTRADLLFLAGS = -mno-cygwin
+--- a/dlls/kernelbase/Makefile.in
++++ b/dlls/kernelbase/Makefile.in
+@@ -1,6 +1,7 @@
+ MODULE    = kernelbase.dll
+ IMPORTLIB = kernelbase
+ IMPORTS   = uuid ntdll winecrt0
++CFLAGS   += -Wno-array-bounds
+ EXTRADLLFLAGS = -nodefaultlibs -nostartfiles -mno-cygwin
+ 
+ C_SRCS = \

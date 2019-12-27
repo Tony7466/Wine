@@ -7,6 +7,14 @@ configure.tmp
 tools/config.*
 include/config.h.in
 
+# zlib
+dlls/wininet/zlib.h
+dlls/wininet/inflate.c
+dlls/cabinet/zlib.h
+dlls/cabinet/deflate.c
+dlls/opcservices/zlib.h
+dlls/opcservices/deflate.c
+
 # automatically generated files
 dlls/dsound/fir.h
 dlls/*/tests/generated.c

@@ -1,3 +1,13 @@
+wine (5.0~rc1-2) unstable; urgency=medium
+
+  * Build using system zlib.
+  * Handle upstream temporary directory refactoring (closes: #946951).
+  * Restore wine-binfmt and fonts-wine binary packages (closes: #946939).
+  * Use debhelper compat 9 to avoid automatically rerunning autoreconf every
+    time debian/rules binary is executed.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Mon, 06 Jan 2020 03:32:52 +0000
+
 wine (5.0~rc1-1) unstable; urgency=medium
 
   * New upstream release 5.0-rc1, released Dec 13, 2019.
