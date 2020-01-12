@@ -1,3 +1,10 @@
+wine (5.0~rc2-1) UNRELEASED; urgency=medium
+
+  * New upstream release 5.0-rc2, released Dec 20, 2019.
+    - Bug fixes only, we are in code freeze.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 12 Jan 2020 21:08:44 +0000
+
 wine (5.0~rc1-2) unstable; urgency=medium
 
   * Build using system zlib.
