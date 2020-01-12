@@ -1001,22 +1001,26 @@ static void test_utf7_decoding(void)
 static void test_undefined_byte_char(void)
 {
     static const struct tag_testset {
-        INT codepage;
+        UINT codepage;
         LPCSTR str;
         BOOL is_error;
     } testset[] = {
+        {   37, "\x6f", FALSE },
         {  874, "\xdd", TRUE },
         {  932, "\xfe", TRUE },
         {  932, "\x80", FALSE },
+        {  932, "\x81\x45", FALSE },
         {  936, "\xff", TRUE },
         {  949, "\xff", TRUE },
         {  950, "\xff", TRUE },
+        { 1252, "?", FALSE },
         { 1252, "\x90", FALSE },
         { 1253, "\xaa", TRUE },
         { 1255, "\xff", TRUE },
         { 1257, "\xa5", TRUE },
     };
     INT i, ret;
+    DWORD err;
 
     for (i = 0; i < ARRAY_SIZE(testset); i++) {
         if (! IsValidCodePage(testset[i].codepage))
@@ -1028,23 +1032,22 @@ static void test_undefined_byte_char(void)
         SetLastError(0xdeadbeef);
         ret = MultiByteToWideChar(testset[i].codepage, MB_ERR_INVALID_CHARS,
                                   testset[i].str, -1, NULL, 0);
+        err = GetLastError();
         if (testset[i].is_error) {
-            ok(ret == 0 && GetLastError() == ERROR_NO_UNICODE_TRANSLATION,
-               "ret is %d, GetLastError is %u (cp %d)\n",
-               ret, GetLastError(), testset[i].codepage);
+            ok(err == ERROR_NO_UNICODE_TRANSLATION, "Test %u: err is %u\n", i, err);
+            ok(ret == 0, "Test %u: ret is %d\n", i, ret);
         }
         else {
-            ok(ret == strlen(testset[i].str)+1 && GetLastError() == 0xdeadbeef,
-               "ret is %d, GetLastError is %u (cp %d)\n",
-               ret, GetLastError(), testset[i].codepage);
+            ok(err == 0xdeadbeef, "Test %u: err is %u\n", i, err);
+            ok(ret == 2, "Test %u: ret is %d\n", i, ret);
         }
 
         SetLastError(0xdeadbeef);
         ret = MultiByteToWideChar(testset[i].codepage, 0,
                                   testset[i].str, -1, NULL, 0);
-        ok(ret == strlen(testset[i].str)+1 && GetLastError() == 0xdeadbeef,
-           "ret is %d, GetLastError is %u (cp %d)\n",
-           ret, GetLastError(), testset[i].codepage);
+        err = GetLastError();
+        ok(err == 0xdeadbeef, "Test %u: err is %u\n", i, err);
+        ok(ret == 2, "Test %u: ret is %d\n", i, ret);
     }
 }
 

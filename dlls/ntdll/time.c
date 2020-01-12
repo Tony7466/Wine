@@ -854,6 +854,8 @@ static void find_reg_tz_info(RTL_DYNAMIC_TIME_ZONE_INFORMATION *tzi, const char*
 
     NtClose(hkey);
 
+    if (idx == 1) return;  /* registry info not initialized yet */
+
     FIXME("Can't find matching timezone information in the registry for "
           "%s, bias %d, std (d/m/y): %u/%02u/%04u, dlt (d/m/y): %u/%02u/%04u\n",
           tz_name, tzi->Bias,
@@ -1121,8 +1123,13 @@ NTSTATUS WINAPI NtSetSystemTime(const LARGE_INTEGER *NewTime, LARGE_INTEGER *Old
 /***********************************************************************
  *        RtlQueryUnbiasedInterruptTime [NTDLL.@]
  */
-NTSTATUS WINAPI RtlQueryUnbiasedInterruptTime(ULONGLONG *time)
+BOOL WINAPI RtlQueryUnbiasedInterruptTime(ULONGLONG *time)
 {
+    if (!time)
+    {
+        RtlSetLastWin32ErrorAndNtStatusFromNtStatus( STATUS_INVALID_PARAMETER );
+        return FALSE;
+    }
     *time = monotonic_counter();
-    return STATUS_SUCCESS;
+    return TRUE;
 }
