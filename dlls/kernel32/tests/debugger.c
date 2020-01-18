@@ -38,9 +38,6 @@ static int    myARGC;
 static char** myARGV;
 
 static BOOL (WINAPI *pCheckRemoteDebuggerPresent)(HANDLE,PBOOL);
-static BOOL (WINAPI *pDebugActiveProcessStop)(DWORD);
-static BOOL (WINAPI *pDebugSetProcessKillOnExit)(BOOL);
-static BOOL (WINAPI *pIsDebuggerPresent)(void);
 
 static void (WINAPI *pDbgBreakPoint)(void);
 
@@ -174,12 +171,7 @@ static void run_background_thread(void)
     CloseHandle(thread);
 }
 
-typedef struct
-{
-    DWORD pid;
-} crash_blackbox_t;
-
-static void doCrash(int argc,  char** argv)
+static void doCrash(void)
 {
     volatile char* p;
 
@@ -188,13 +180,6 @@ static void doCrash(int argc,  char** argv)
     SetUnhandledExceptionFilter( NULL );
 
     run_background_thread();
-
-    if (argc >= 4)
-    {
-        crash_blackbox_t blackbox;
-        blackbox.pid=GetCurrentProcessId();
-        save_blackbox(argv[3], &blackbox, sizeof(blackbox), NULL);
-    }
 
     /* Just crash */
     trace("child: crashing...\n");
@@ -390,13 +375,13 @@ static void next_event_(unsigned line, struct debugger_context *ctx, unsigned ti
 #define wait_for_breakpoint(a) wait_for_breakpoint_(__LINE__,a)
 static void wait_for_breakpoint_(unsigned line, struct debugger_context *ctx)
 {
-    do next_event_(line, ctx, 2000);
+    do next_event_(line, ctx, WAIT_EVENT_TIMEOUT);
     while (ctx->ev.dwDebugEventCode == LOAD_DLL_DEBUG_EVENT || ctx->ev.dwDebugEventCode == UNLOAD_DLL_DEBUG_EVENT
            || ctx->ev.dwDebugEventCode == CREATE_THREAD_DEBUG_EVENT);
 
-    ok(ctx->ev.dwDebugEventCode == EXCEPTION_DEBUG_EVENT, "dwDebugEventCode = %d\n", ctx->ev.dwDebugEventCode);
-    ok(ctx->ev.u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_BREAKPOINT, "ExceptionCode = %x\n",
-       ctx->ev.u.Exception.ExceptionRecord.ExceptionCode);
+    ok_(__FILE__,line)(ctx->ev.dwDebugEventCode == EXCEPTION_DEBUG_EVENT, "dwDebugEventCode = %d\n", ctx->ev.dwDebugEventCode);
+    ok_(__FILE__,line)(ctx->ev.u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_BREAKPOINT, "ExceptionCode = %x\n",
+                       ctx->ev.u.Exception.ExceptionRecord.ExceptionCode);
 }
 
 static void process_attach_events(struct debugger_context *ctx, BOOL pass_exception)
@@ -521,7 +506,7 @@ static void doDebugger(int argc, char** argv)
     blackbox.nokill_err=0;
     if (strstr(myARGV[2], "nokill"))
     {
-        blackbox.nokill_rc=pDebugSetProcessKillOnExit(FALSE);
+        blackbox.nokill_rc = DebugSetProcessKillOnExit(FALSE);
         if (!blackbox.nokill_rc)
             blackbox.nokill_err=GetLastError();
     }
@@ -531,7 +516,7 @@ static void doDebugger(int argc, char** argv)
     blackbox.detach_err=0;
     if (strstr(myARGV[2], "detach"))
     {
-        blackbox.detach_rc=pDebugActiveProcessStop(blackbox.pid);
+        blackbox.detach_rc = DebugActiveProcessStop(blackbox.pid);
         if (!blackbox.detach_rc)
             blackbox.detach_err=GetLastError();
     }
@@ -567,11 +552,9 @@ static void crash_and_debug(HKEY hkey, const char* argv0, const char* dbgtasks)
     HANDLE start_event, done_event;
     char* cmd;
     char dbglog[MAX_PATH];
-    char childlog[MAX_PATH];
     PROCESS_INFORMATION	info;
     STARTUPINFOA startup;
     DWORD exit_code;
-    crash_blackbox_t crash_blackbox;
     debugger_blackbox_t dbg_blackbox;
     DWORD wait_code;
 
@@ -599,9 +582,8 @@ static void crash_and_debug(HKEY hkey, const char* argv0, const char* dbgtasks)
     ok(ret == ERROR_SUCCESS, "unable to set AeDebug/debugger: ret=%d\n", ret);
     HeapFree(GetProcessHeap(), 0, cmd);
 
-    get_file_name(childlog);
-    cmd=HeapAlloc(GetProcessHeap(), 0, strlen(argv0)+16+strlen(dbglog)+2+1);
-    sprintf(cmd, "%s debugger crash \"%s\"", argv0, childlog);
+    cmd = HeapAlloc(GetProcessHeap(), 0, strlen(argv0) + 16);
+    sprintf(cmd, "%s debugger crash", argv0);
 
     trace("running %s...\n", dbgtasks);
     memset(&startup, 0, sizeof(startup));
@@ -625,7 +607,6 @@ static void crash_and_debug(HKEY hkey, const char* argv0, const char* dbgtasks)
         WaitForSingleObject(info.hProcess, 5000);
         CloseHandle(info.hProcess);
         DeleteFileA(dbglog);
-        DeleteFileA(childlog);
         win_skip("Giving up on child process\n");
         return;
     }
@@ -661,18 +642,16 @@ static void crash_and_debug(HKEY hkey, const char* argv0, const char* dbgtasks)
     if (skip_crash_and_debug)
     {
         DeleteFileA(dbglog);
-        DeleteFileA(childlog);
         win_skip("Giving up on debugger\n");
         return;
     }
 #endif
     ok(wait_code == WAIT_OBJECT_0, "Timed out waiting for the debugger\n");
 
-    ok(load_blackbox(childlog, &crash_blackbox, sizeof(crash_blackbox)), "failed to open: %s\n", childlog);
     ok(load_blackbox(dbglog, &dbg_blackbox, sizeof(dbg_blackbox)), "failed to open: %s\n", dbglog);
 
     ok(dbg_blackbox.argc == 6, "wrong debugger argument count: %d\n", dbg_blackbox.argc);
-    ok(dbg_blackbox.pid == crash_blackbox.pid, "the child and debugged pids don't match: %d != %d\n", crash_blackbox.pid, dbg_blackbox.pid);
+    ok(dbg_blackbox.pid == info.dwProcessId, "the child and debugged pids don't match: %d != %d\n", info.dwProcessId, dbg_blackbox.pid);
     ok(dbg_blackbox.debug_rc, "debugger: SetEvent(debug_event) failed err=%d\n", dbg_blackbox.debug_err);
     ok(dbg_blackbox.attach_rc, "DebugActiveProcess(%d) failed err=%d\n", dbg_blackbox.pid, dbg_blackbox.attach_err);
     ok(dbg_blackbox.nokill_rc, "DebugSetProcessKillOnExit(FALSE) failed err=%d\n", dbg_blackbox.nokill_err);
@@ -680,7 +659,6 @@ static void crash_and_debug(HKEY hkey, const char* argv0, const char* dbgtasks)
     ok(!dbg_blackbox.failures, "debugger reported %u failures\n", dbg_blackbox.failures);
 
     DeleteFileA(dbglog);
-    DeleteFileA(childlog);
 }
 
 static void crash_and_winedbg(HKEY hkey, const char* argv0)
@@ -783,17 +761,9 @@ static void test_ExitCode(void)
     ok(disposition == REG_OPENED_EXISTING_KEY, "expected REG_OPENED_EXISTING_KEY, got %d\n", disposition);
     crash_and_debug(hkey, test_exe, "dbg,event,order");
     crash_and_debug(hkey, test_exe, "dbg,attach,event,code2");
-    if (pDebugSetProcessKillOnExit)
-        crash_and_debug(hkey, test_exe, "dbg,attach,event,nokill");
-    else
-        win_skip("DebugSetProcessKillOnExit is not available\n");
-    if (pDebugActiveProcessStop)
-    {
-        crash_and_debug(hkey, test_exe, "dbg,attach,event,detach");
-        crash_and_debug(hkey, test_exe, "dbg,attach,detach,late");
-    }
-    else
-        win_skip("DebugActiveProcessStop is not available\n");
+    crash_and_debug(hkey, test_exe, "dbg,attach,event,nokill");
+    crash_and_debug(hkey, test_exe, "dbg,attach,event,detach");
+    crash_and_debug(hkey, test_exe, "dbg,attach,detach,late");
     crash_and_debug(hkey, test_exe, "dbg,attach,process,event,detach");
 
     if (disposition == REG_CREATED_NEW_KEY)
@@ -870,7 +840,7 @@ static void doChild(int argc, char **argv)
     child_ok(ret, "CheckRemoteDebuggerPresent failed, last error %#x.\n", GetLastError());
     child_ok(debug, "Expected debug != 0, got %#x.\n", debug);
 
-    ret = pDebugActiveProcessStop(ppid);
+    ret = DebugActiveProcessStop(ppid);
     child_ok(ret, "DebugActiveProcessStop failed, last error %#x.\n", GetLastError());
 
     ret = pCheckRemoteDebuggerPresent(parent, &debug);
@@ -880,7 +850,7 @@ static void doChild(int argc, char **argv)
     ret = CloseHandle(parent);
     child_ok(ret, "CloseHandle failed, last error %#x.\n", GetLastError());
 
-    ret = pIsDebuggerPresent();
+    ret = IsDebuggerPresent();
     child_ok(ret, "Expected ret != 0, got %#x.\n", ret);
     ret = pCheckRemoteDebuggerPresent(GetCurrentProcess(), &debug);
     child_ok(ret, "CheckRemoteDebuggerPresent failed, last error %#x.\n", GetLastError());
@@ -888,7 +858,7 @@ static void doChild(int argc, char **argv)
 
     NtCurrentTeb()->Peb->BeingDebugged = FALSE;
 
-    ret = pIsDebuggerPresent();
+    ret = IsDebuggerPresent();
     child_ok(!ret, "Expected ret != 0, got %#x.\n", ret);
     ret = pCheckRemoteDebuggerPresent(GetCurrentProcess(), &debug);
     child_ok(ret, "CheckRemoteDebuggerPresent failed, last error %#x.\n", GetLastError());
@@ -912,9 +882,9 @@ static void test_debug_loop(int argc, char **argv)
     char *cmd;
     BOOL ret;
 
-    if (!pDebugActiveProcessStop || !pCheckRemoteDebuggerPresent)
+    if (!pCheckRemoteDebuggerPresent)
     {
-        win_skip("DebugActiveProcessStop or CheckRemoteDebuggerPresent not available, skipping test.\n");
+        win_skip("CheckRemoteDebuggerPresent not available, skipping test.\n");
         return;
     }
 
@@ -1043,9 +1013,9 @@ static void test_debug_children(const char *name, DWORD flag, BOOL debug_child, 
     BOOL debug, ret;
     struct debugger_context ctx = { 0 };
 
-    if (!pDebugActiveProcessStop || !pCheckRemoteDebuggerPresent)
+    if (!pCheckRemoteDebuggerPresent)
     {
-        win_skip("DebugActiveProcessStop or CheckRemoteDebuggerPresent not available, skipping test.\n");
+        win_skip("CheckRemoteDebuggerPresent not available, skipping test.\n");
         return;
     }
 
@@ -1466,9 +1436,6 @@ START_TEST(debugger)
 
     hdll=GetModuleHandleA("kernel32.dll");
     pCheckRemoteDebuggerPresent=(void*)GetProcAddress(hdll, "CheckRemoteDebuggerPresent");
-    pDebugActiveProcessStop=(void*)GetProcAddress(hdll, "DebugActiveProcessStop");
-    pDebugSetProcessKillOnExit=(void*)GetProcAddress(hdll, "DebugSetProcessKillOnExit");
-    pIsDebuggerPresent=(void*)GetProcAddress(hdll, "IsDebuggerPresent");
 
     ntdll = GetModuleHandleA("ntdll.dll");
     pDbgBreakPoint = (void*)GetProcAddress(ntdll, "DbgBreakPoint");
@@ -1476,7 +1443,7 @@ START_TEST(debugger)
     myARGC=winetest_get_mainargs(&myARGV);
     if (myARGC >= 3 && strcmp(myARGV[2], "crash") == 0)
     {
-        doCrash(myARGC, myARGV);
+        doCrash();
     }
     else if (myARGC >= 3 && strncmp(myARGV[2], "dbg,", 4) == 0)
     {
