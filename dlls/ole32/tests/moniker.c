@@ -34,6 +34,7 @@
 #include "initguid.h"
 
 #include "wine/test.h"
+#include "wine/heap.h"
 
 #define ok_more_than_one_lock() ok(cLocks > 0, "Number of locks should be > 0, but actually is %d\n", cLocks)
 #define ok_no_locks() ok(cLocks == 0, "Number of locks should be 0, but actually is %d\n", cLocks)
@@ -246,9 +247,165 @@ static const IUnknownVtbl HeapUnknown_Vtbl =
     HeapUnknown_Release
 };
 
-static HRESULT WINAPI
-MonikerNoROTData_QueryInterface(IMoniker* iface,REFIID riid,void** ppvObject)
+struct test_moniker
 {
+    IMoniker IMoniker_iface;
+    IROTData IROTData_iface;
+    IOleItemContainer IOleItemContainer_iface;
+    IParseDisplayName IParseDisplayName_iface;
+    LONG refcount;
+
+    BOOL no_IROTData;
+};
+
+static struct test_moniker *impl_from_IMoniker(IMoniker *iface)
+{
+    return CONTAINING_RECORD(iface, struct test_moniker, IMoniker_iface);
+}
+
+static struct test_moniker *impl_from_IROTData(IROTData *iface)
+{
+    return CONTAINING_RECORD(iface, struct test_moniker, IROTData_iface);
+}
+
+static struct test_moniker *impl_from_IOleItemContainer(IOleItemContainer *iface)
+{
+    return CONTAINING_RECORD(iface, struct test_moniker, IOleItemContainer_iface);
+}
+
+static struct test_moniker *impl_from_IParseDisplayName(IParseDisplayName *iface)
+{
+    return CONTAINING_RECORD(iface, struct test_moniker, IParseDisplayName_iface);
+}
+
+static HRESULT WINAPI test_moniker_parse_QueryInterface(IParseDisplayName *iface, REFIID riid, void **obj)
+{
+    if (IsEqualIID(riid, &IID_IUnknown) ||
+            IsEqualIID(riid, &IID_IParseDisplayName))
+    {
+        *obj = iface;
+        IParseDisplayName_AddRef(iface);
+        return S_OK;
+    }
+
+    *obj = NULL;
+    return E_NOINTERFACE;
+}
+
+static ULONG WINAPI test_moniker_parse_AddRef(IParseDisplayName *iface)
+{
+    struct test_moniker *moniker = impl_from_IParseDisplayName(iface);
+    return IMoniker_AddRef(&moniker->IMoniker_iface);
+}
+
+static ULONG WINAPI test_moniker_parse_Release(IParseDisplayName *iface)
+{
+    struct test_moniker *moniker = impl_from_IParseDisplayName(iface);
+    return IMoniker_Release(&moniker->IMoniker_iface);
+}
+
+static HRESULT WINAPI test_moniker_parse_ParseDisplayName(IParseDisplayName *iface,
+        IBindCtx *pbc, LPOLESTR displayname, ULONG *eaten, IMoniker **out)
+{
+    return E_NOTIMPL;
+}
+
+static const IParseDisplayNameVtbl test_moniker_parse_vtbl =
+{
+    test_moniker_parse_QueryInterface,
+    test_moniker_parse_AddRef,
+    test_moniker_parse_Release,
+    test_moniker_parse_ParseDisplayName,
+};
+
+static HRESULT WINAPI test_item_container_QueryInterface(IOleItemContainer *iface, REFIID riid, void **obj)
+{
+    if (IsEqualIID(riid, &IID_IOleItemContainer) ||
+            IsEqualIID(riid, &IID_IOleContainer) ||
+            IsEqualIID(riid, &IID_IParseDisplayName) ||
+            IsEqualIID(riid, &IID_IUnknown))
+    {
+        *obj = iface;
+        IOleItemContainer_AddRef(iface);
+        return S_OK;
+    }
+
+    *obj = NULL;
+    return E_NOINTERFACE;
+}
+
+static ULONG WINAPI test_item_container_AddRef(IOleItemContainer *iface)
+{
+    struct test_moniker *moniker = impl_from_IOleItemContainer(iface);
+    return IMoniker_AddRef(&moniker->IMoniker_iface);
+}
+
+static ULONG WINAPI test_item_container_Release(IOleItemContainer *iface)
+{
+    struct test_moniker *moniker = impl_from_IOleItemContainer(iface);
+    return IMoniker_Release(&moniker->IMoniker_iface);
+}
+
+static HRESULT WINAPI test_item_container_ParseDisplayName(IOleItemContainer *iface,
+        IBindCtx *pbc, LPOLESTR displayname, ULONG *eaten, IMoniker **out)
+{
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI test_item_container_EnumObjects(IOleItemContainer *iface, DWORD flags,
+        IEnumUnknown **ppenum)
+{
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI test_item_container_LockContainer(IOleItemContainer *iface, BOOL lock)
+{
+    return S_OK;
+}
+
+static HRESULT WINAPI test_item_container_GetObject(IOleItemContainer *iface, LPOLESTR item,
+        DWORD bind_speed, IBindCtx *pbc, REFIID riid, void **obj)
+{
+    struct test_moniker *moniker = impl_from_IOleItemContainer(iface);
+
+    if (IsEqualIID(riid, &IID_IParseDisplayName))
+    {
+        *obj = &moniker->IParseDisplayName_iface;
+        IOleItemContainer_AddRef(iface);
+    }
+
+    return 0x8bee0000 | bind_speed;
+}
+
+static HRESULT WINAPI test_item_container_GetObjectStorage(IOleItemContainer *iface, LPOLESTR item,
+        IBindCtx *pbc, REFIID riid, void **obj)
+{
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI test_item_container_IsRunning(IOleItemContainer *iface, LPOLESTR item)
+{
+    return E_NOTIMPL;
+}
+
+static const IOleItemContainerVtbl test_item_container_vtbl =
+{
+    test_item_container_QueryInterface,
+    test_item_container_AddRef,
+    test_item_container_Release,
+    test_item_container_ParseDisplayName,
+    test_item_container_EnumObjects,
+    test_item_container_LockContainer,
+    test_item_container_GetObject,
+    test_item_container_GetObjectStorage,
+    test_item_container_IsRunning,
+};
+
+static HRESULT WINAPI
+Moniker_QueryInterface(IMoniker* iface,REFIID riid,void** ppvObject)
+{
+    struct test_moniker *moniker = impl_from_IMoniker(iface);
+
     if (!ppvObject)
         return E_INVALIDARG;
 
@@ -260,7 +417,11 @@ MonikerNoROTData_QueryInterface(IMoniker* iface,REFIID riid,void** ppvObject)
         IsEqualIID(&IID_IMoniker, riid))
         *ppvObject = iface;
     if (IsEqualIID(&IID_IROTData, riid))
+    {
         CHECK_EXPECTED_METHOD("Moniker_QueryInterface(IID_IROTData)");
+        if (!moniker->no_IROTData)
+            *ppvObject = &moniker->IROTData_iface;
+    }
 
     if ((*ppvObject)==0)
         return E_NOINTERFACE;
@@ -273,13 +434,20 @@ MonikerNoROTData_QueryInterface(IMoniker* iface,REFIID riid,void** ppvObject)
 static ULONG WINAPI
 Moniker_AddRef(IMoniker* iface)
 {
-    return 2;
+    struct test_moniker *moniker = impl_from_IMoniker(iface);
+    return InterlockedIncrement(&moniker->refcount);
 }
 
 static ULONG WINAPI
 Moniker_Release(IMoniker* iface)
 {
-    return 1;
+    struct test_moniker *moniker = impl_from_IMoniker(iface);
+    ULONG refcount = InterlockedDecrement(&moniker->refcount);
+
+    if (!refcount)
+        heap_free(moniker);
+
+    return refcount;
 }
 
 static HRESULT WINAPI
@@ -321,10 +489,18 @@ Moniker_GetSizeMax(IMoniker* iface, ULARGE_INTEGER* pcbSize)
     return E_NOTIMPL;
 }
 
-static HRESULT WINAPI
-Moniker_BindToObject(IMoniker* iface, IBindCtx* pbc, IMoniker* pmkToLeft,
-                             REFIID riid, VOID** ppvResult)
+static HRESULT WINAPI Moniker_BindToObject(IMoniker *iface, IBindCtx *pbc, IMoniker *pmkToLeft, REFIID riid,
+        void **obj)
 {
+    struct test_moniker *moniker = impl_from_IMoniker(iface);
+
+    if (IsEqualIID(riid, &IID_IOleItemContainer))
+    {
+        *obj = &moniker->IOleItemContainer_iface;
+        IMoniker_AddRef(iface);
+        return S_OK;
+    }
+
     CHECK_EXPECTED_METHOD("Moniker_BindToObject");
     return E_NOTIMPL;
 }
@@ -457,53 +633,25 @@ Moniker_IsSystemMoniker(IMoniker* iface,DWORD* pwdMksys)
     return S_FALSE;
 }
 
-static const IMonikerVtbl MonikerNoROTDataVtbl =
-{
-    MonikerNoROTData_QueryInterface,
-    Moniker_AddRef,
-    Moniker_Release,
-    Moniker_GetClassID,
-    Moniker_IsDirty,
-    Moniker_Load,
-    Moniker_Save,
-    Moniker_GetSizeMax,
-    Moniker_BindToObject,
-    Moniker_BindToStorage,
-    Moniker_Reduce,
-    Moniker_ComposeWith,
-    Moniker_Enum,
-    Moniker_IsEqual,
-    Moniker_Hash,
-    Moniker_IsRunning,
-    Moniker_GetTimeOfLastChange,
-    Moniker_Inverse,
-    Moniker_CommonPrefixWith,
-    Moniker_RelativePathTo,
-    Moniker_GetDisplayName,
-    Moniker_ParseDisplayName,
-    Moniker_IsSystemMoniker
-};
-
-static IMoniker MonikerNoROTData = { &MonikerNoROTDataVtbl };
-
-static IMoniker Moniker;
-
 static HRESULT WINAPI
 ROTData_QueryInterface(IROTData *iface,REFIID riid,VOID** ppvObject)
 {
-    return IMoniker_QueryInterface(&Moniker, riid, ppvObject);
+    struct test_moniker *moniker = impl_from_IROTData(iface);
+    return IMoniker_QueryInterface(&moniker->IMoniker_iface, riid, ppvObject);
 }
 
 static ULONG WINAPI
 ROTData_AddRef(IROTData *iface)
 {
-    return 2;
+    struct test_moniker *moniker = impl_from_IROTData(iface);
+    return IMoniker_AddRef(&moniker->IMoniker_iface);
 }
 
 static ULONG WINAPI
 ROTData_Release(IROTData* iface)
 {
-    return 1;
+    struct test_moniker *moniker = impl_from_IROTData(iface);
+    return IMoniker_Release(&moniker->IMoniker_iface);
 }
 
 static HRESULT WINAPI
@@ -528,35 +676,6 @@ static IROTDataVtbl ROTDataVtbl =
     ROTData_Release,
     ROTData_GetComparisonData
 };
-
-static IROTData ROTData = { &ROTDataVtbl };
-
-static HRESULT WINAPI
-Moniker_QueryInterface(IMoniker* iface,REFIID riid,void** ppvObject)
-{
-    if (!ppvObject)
-        return E_INVALIDARG;
-
-    *ppvObject = 0;
-
-    if (IsEqualIID(&IID_IUnknown, riid)      ||
-        IsEqualIID(&IID_IPersist, riid)      ||
-        IsEqualIID(&IID_IPersistStream,riid) ||
-        IsEqualIID(&IID_IMoniker, riid))
-        *ppvObject = iface;
-    if (IsEqualIID(&IID_IROTData, riid))
-    {
-        CHECK_EXPECTED_METHOD("Moniker_QueryInterface(IID_IROTData)");
-        *ppvObject = &ROTData;
-    }
-
-    if ((*ppvObject)==0)
-        return E_NOINTERFACE;
-
-    IMoniker_AddRef(iface);
-
-    return S_OK;
-}
 
 static const IMonikerVtbl MonikerVtbl =
 {
@@ -585,7 +704,19 @@ static const IMonikerVtbl MonikerVtbl =
     Moniker_IsSystemMoniker
 };
 
-static IMoniker Moniker = { &MonikerVtbl };
+static struct test_moniker *create_test_moniker(void)
+{
+    struct test_moniker *obj;
+
+    obj = heap_alloc_zero(sizeof(*obj));
+    obj->IMoniker_iface.lpVtbl = &MonikerVtbl;
+    obj->IROTData_iface.lpVtbl = &ROTDataVtbl;
+    obj->IOleItemContainer_iface.lpVtbl = &test_item_container_vtbl;
+    obj->IParseDisplayName_iface.lpVtbl = &test_moniker_parse_vtbl;
+    obj->refcount = 1;
+
+    return obj;
+}
 
 static void test_ROT(void)
 {
@@ -594,6 +725,7 @@ static void test_ROT(void)
         '2','0','4','6','E','5','8','6','C','9','2','5',0};
     HRESULT hr;
     IMoniker *pMoniker = NULL;
+    struct test_moniker *test_moniker;
     IRunningObjectTable *pROT = NULL;
     DWORD dwCookie;
     static const char *methods_register_no_ROTData[] =
@@ -634,19 +766,22 @@ static void test_ROT(void)
     hr = GetRunningObjectTable(0, &pROT);
     ok_ole_success(hr, GetRunningObjectTable);
 
+    test_moniker = create_test_moniker();
+    test_moniker->no_IROTData = TRUE;
+
     expected_method_list = methods_register_no_ROTData;
     external_connections = 0;
     /* try with our own moniker that doesn't support IROTData */
-    hr = IRunningObjectTable_Register(pROT, ROTFLAGS_REGISTRATIONKEEPSALIVE,
-        (IUnknown*)&Test_ClassFactory, &MonikerNoROTData, &dwCookie);
-    ok_ole_success(hr, IRunningObjectTable_Register);
+    hr = IRunningObjectTable_Register(pROT, ROTFLAGS_REGISTRATIONKEEPSALIVE, (IUnknown *)&Test_ClassFactory,
+            &test_moniker->IMoniker_iface, &dwCookie);
+    ok(hr == S_OK, "Failed to register interface, hr %#x.\n", hr);
     ok(!*expected_method_list, "Method sequence starting from %s not called\n", *expected_method_list);
     ok(external_connections == 1, "external_connections = %d\n", external_connections);
 
     ok_more_than_one_lock();
 
     expected_method_list = methods_isrunning_no_ROTData;
-    hr = IRunningObjectTable_IsRunning(pROT, &MonikerNoROTData);
+    hr = IRunningObjectTable_IsRunning(pROT, &test_moniker->IMoniker_iface);
     ok_ole_success(hr, IRunningObjectTable_IsRunning);
     ok(!*expected_method_list, "Method sequence starting from %s not called\n", *expected_method_list);
 
@@ -658,15 +793,16 @@ static void test_ROT(void)
 
     expected_method_list = methods_register;
     /* try with our own moniker */
+    test_moniker->no_IROTData = FALSE;
     hr = IRunningObjectTable_Register(pROT, ROTFLAGS_REGISTRATIONKEEPSALIVE,
-        (IUnknown*)&Test_ClassFactory, &Moniker, &dwCookie);
+        (IUnknown *)&Test_ClassFactory, &test_moniker->IMoniker_iface, &dwCookie);
     ok_ole_success(hr, IRunningObjectTable_Register);
     ok(!*expected_method_list, "Method sequence starting from %s not called\n", *expected_method_list);
 
     ok_more_than_one_lock();
 
     expected_method_list = methods_isrunning;
-    hr = IRunningObjectTable_IsRunning(pROT, &Moniker);
+    hr = IRunningObjectTable_IsRunning(pROT, &test_moniker->IMoniker_iface);
     ok_ole_success(hr, IRunningObjectTable_IsRunning);
     ok(!*expected_method_list, "Method sequence starting from %s not called\n", *expected_method_list);
 
@@ -719,6 +855,7 @@ static void test_ROT(void)
     ok(hr == E_INVALIDARG, "IRunningObjectTable_Register should have returned E_INVALIDARG instead of 0x%08x\n", hr);
 
     IMoniker_Release(pMoniker);
+    IMoniker_Release(&test_moniker->IMoniker_iface);
 
     IRunningObjectTable_Release(pROT);
 }
@@ -1817,15 +1954,18 @@ static void test_item_moniker(void)
     IMoniker *moniker, *moniker2, *reduced;
     HRESULT hr;
     DWORD moniker_type, i;
-    DWORD hash;
+    DWORD hash, eaten;
     IBindCtx *bindctx;
     IMoniker *inverse;
     IUnknown *unknown;
     static const WCHAR wszDelimiter[] = {'!',0};
     static const WCHAR wszObjectName[] = {'T','e','s','t',0};
     static const WCHAR expected_display_name[] = { '!','T','e','s','t',0 };
+    struct test_moniker *container_moniker;
+    WCHAR displayname[16] = L"display name";
     IEnumMoniker *enummoniker;
     WCHAR *display_name;
+    BIND_OPTS bind_opts;
     LARGE_INTEGER pos;
     IStream *stream;
 
@@ -1958,11 +2098,77 @@ todo_wine
     hr = IMoniker_IsRunning(moniker, bindctx, NULL, NULL);
     ok(hr == S_FALSE, "IMoniker_IsRunning should return S_FALSE, not 0x%08x\n", hr);
 
+    /* BindToObject() */
     hr = IMoniker_BindToObject(moniker, bindctx, NULL, &IID_IUnknown, (void **)&unknown);
     ok(hr == E_INVALIDARG, "IMoniker_BindToStorage should return E_INVALIDARG, not 0x%08x\n", hr);
 
+    container_moniker = create_test_moniker();
+
+    hr = IMoniker_BindToObject(moniker, bindctx, &container_moniker->IMoniker_iface, &IID_IUnknown, (void **)&unknown);
+todo_wine
+    ok(hr == (0x8bee0000 | BINDSPEED_INDEFINITE), "Unexpected hr %#x.\n", hr);
+
+    bind_opts.cbStruct = sizeof(bind_opts);
+    hr = IBindCtx_GetBindOptions(bindctx, &bind_opts);
+    ok(hr == S_OK, "Failed to get bind options, hr %#x.\n", hr);
+
+    bind_opts.dwTickCountDeadline = 1;
+    hr = IBindCtx_SetBindOptions(bindctx, &bind_opts);
+    ok(hr == S_OK, "Failed to set bind options, hr %#x.\n", hr);
+    hr = IMoniker_BindToObject(moniker, bindctx, &container_moniker->IMoniker_iface, &IID_IUnknown, (void **)&unknown);
+todo_wine
+    ok(hr == (0x8bee0000 | BINDSPEED_IMMEDIATE), "Unexpected hr %#x.\n", hr);
+
+    bind_opts.dwTickCountDeadline = 2499;
+    hr = IBindCtx_SetBindOptions(bindctx, &bind_opts);
+    ok(hr == S_OK, "Failed to set bind options, hr %#x.\n", hr);
+    hr = IMoniker_BindToObject(moniker, bindctx, &container_moniker->IMoniker_iface, &IID_IUnknown, (void **)&unknown);
+todo_wine
+    ok(hr == (0x8bee0000 | BINDSPEED_IMMEDIATE), "Unexpected hr %#x.\n", hr);
+
+    bind_opts.dwTickCountDeadline = 2500;
+    hr = IBindCtx_SetBindOptions(bindctx, &bind_opts);
+    ok(hr == S_OK, "Failed to set bind options, hr %#x.\n", hr);
+    hr = IMoniker_BindToObject(moniker, bindctx, &container_moniker->IMoniker_iface, &IID_IUnknown, (void **)&unknown);
+    ok(hr == (0x8bee0000 | BINDSPEED_MODERATE), "Unexpected hr %#x.\n", hr);
+
+    /* BindToStorage() */
     hr = IMoniker_BindToStorage(moniker, bindctx, NULL, &IID_IUnknown, (void **)&unknown);
-    ok(hr == E_INVALIDARG, "IMoniker_BindToObject should return E_INVALIDARG, not 0x%08x\n", hr);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    /* ParseDisplayName() */
+    hr = IMoniker_ParseDisplayName(moniker, bindctx, NULL, displayname, &eaten, &moniker2);
+    ok(hr == MK_E_SYNTAX, "Unexpected hr %#x.\n", hr);
+
+    bind_opts.dwTickCountDeadline = 0;
+    hr = IBindCtx_SetBindOptions(bindctx, &bind_opts);
+    ok(hr == S_OK, "Failed to set bind options, hr %#x.\n", hr);
+    hr = IMoniker_ParseDisplayName(moniker, bindctx, &container_moniker->IMoniker_iface, displayname, &eaten, &moniker2);
+todo_wine
+    ok(hr == (0x8bee0000 | BINDSPEED_INDEFINITE), "Unexpected hr %#x.\n", hr);
+
+    bind_opts.dwTickCountDeadline = 1;
+    hr = IBindCtx_SetBindOptions(bindctx, &bind_opts);
+    ok(hr == S_OK, "Failed to set bind options, hr %#x.\n", hr);
+    hr = IMoniker_ParseDisplayName(moniker, bindctx, &container_moniker->IMoniker_iface, displayname, &eaten, &moniker2);
+todo_wine
+    ok(hr == (0x8bee0000 | BINDSPEED_IMMEDIATE), "Unexpected hr %#x.\n", hr);
+
+    bind_opts.dwTickCountDeadline = 2499;
+    hr = IBindCtx_SetBindOptions(bindctx, &bind_opts);
+    ok(hr == S_OK, "Failed to set bind options, hr %#x.\n", hr);
+    hr = IMoniker_ParseDisplayName(moniker, bindctx, &container_moniker->IMoniker_iface, displayname, &eaten, &moniker2);
+todo_wine
+    ok(hr == (0x8bee0000 | BINDSPEED_IMMEDIATE), "Unexpected hr %#x.\n", hr);
+
+    bind_opts.dwTickCountDeadline = 2500;
+    hr = IBindCtx_SetBindOptions(bindctx, &bind_opts);
+    ok(hr == S_OK, "Failed to set bind options, hr %#x.\n", hr);
+    hr = IMoniker_ParseDisplayName(moniker, bindctx, &container_moniker->IMoniker_iface, displayname, &eaten, &moniker2);
+todo_wine
+    ok(hr == (0x8bee0000 | BINDSPEED_MODERATE), "Unexpected hr %#x.\n", hr);
+
+    IMoniker_Release(&container_moniker->IMoniker_iface);
 
     IBindCtx_Release(bindctx);
 
