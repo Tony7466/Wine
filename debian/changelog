@@ -1,7 +1,6 @@
-wine (5.0~rc3-1) UNRELEASED; urgency=medium
+wine (5.0~rc3-1) unstable; urgency=medium
 
   * New upstream release 5.0-rc3, released Dec 27, 2019.
-    - Bug fixes only, we are in code freeze.
 
  -- Michael Gilbert <mgilbert@debian.org>  Sat, 18 Jan 2020 18:46:51 +0000
 
