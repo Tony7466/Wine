@@ -39,6 +39,12 @@ Files-Excluded:
  dlls/kernelbase/collation.c
  dlls/kernelbase/digitmap.c
  dlls/kernelbase/decompose.c
+ dlls/cabinet/zlib.h
+ dlls/cabinet/deflate.c
+ dlls/wininet/zlib.h
+ dlls/wininet/inflate.c
+ dlls/opcservices/zlib.h
+ dlls/opcservices/deflate.c
 Upstream-Name: Wine
 
 Files: *

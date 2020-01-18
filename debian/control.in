@@ -74,6 +74,7 @@ Build-Depends:
  libdbus-1-dev,
  freeglut3-dev,
  libmpg123-dev,
+ libunwind-dev,
  libasound2-dev,
  libgphoto2-dev,
  libosmesa6-dev,

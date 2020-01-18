@@ -1,7 +1,7 @@
-wine (5.0~rc2-1) UNRELEASED; urgency=medium
+wine (5.0~rc2-1) unstable; urgency=medium
 
   * New upstream release 5.0-rc2, released Dec 20, 2019.
-    - Bug fixes only, we are in code freeze.
+  * Build with support for libunwind.
 
  -- Michael Gilbert <mgilbert@debian.org>  Sun, 12 Jan 2020 21:08:44 +0000
 

@@ -43,4 +43,5 @@ warnings/printf-null.patch
 warnings/format-overflow.patch
 warnings/argument-promotion.patch
 warnings/discarded-qualifiers.patch
+warnings/incompatible-pointers.patch
 warnings/uninitialized-variables.patch
