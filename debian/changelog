@@ -1,9 +1,10 @@
-wine (5.0~rc4-1) UNRELEASED; urgency=medium
+wine (5.0~rc4-1) unstable; urgency=medium
 
   * New upstream release 5.0-rc4, released Jan 3, 2020.
-    - Bug fixes only, we are in code freeze.
+  * Include more detail in README.debian about wine-binfmt.
+  * Update standards version to 4.5.0 (no changes required).
 
- -- Michael Gilbert <mgilbert@debian.org>  Sat, 18 Jan 2020 19:32:18 +0000
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 25 Jan 2020 14:12:35 +0000
 
 wine (5.0~rc3-1) unstable; urgency=medium
 

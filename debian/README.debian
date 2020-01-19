@@ -175,16 +175,19 @@ System and desktop integration
 You can configure your system to automatically launch Windows executables.  But
 this increases the risk of inadvertently launching Windows malware, so please
 make sure that you understand the security risks before blindly setting this
-up.
+up.  See this discussion for some details:
+https://bugs.launchpad.net/ubuntu/+source/wine/+bug/256880
 
 
 System integration (binfmt)
 ---------------------------
-If you install the package wine-binfmt Wine gets registered as interpreter for
-Windows executables.  For this to work, the executable has to be on PATH (or
-its path must be specified), and the executable mode bit must be set.
+If you install the wine-binfmt package, Wine will be registered as interpreter
+for Windows executables.  Note that each executable has to be in a directory
+that is in your system PATH (or its path must be fully specified) and the
+executable mode bit (+x) must be set on the file.
 
-Instead of executing "wine foo.exe" you may just use "./foo.exe" then.  Windows
+Once that is done, "./foo.exe" can be used instead of "wine foo.exe" to launch
+Windows PE files.  Please take note that once this is enabled, Windows
 executables (including malware) might get auto-started this way, even as root.
 
 This feature is probably most interesting for automatic software testing.
