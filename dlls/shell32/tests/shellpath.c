@@ -86,13 +86,10 @@ struct shellExpectedValues {
 
 static HRESULT (WINAPI *pDllGetVersion)(DLLVERSIONINFO *);
 static HRESULT (WINAPI *pSHGetFolderPathA)(HWND, int, HANDLE, DWORD, LPSTR);
-static HRESULT (WINAPI *pSHGetFolderLocation)(HWND, int, HANDLE, DWORD,
- LPITEMIDLIST *);
 static BOOL    (WINAPI *pSHGetSpecialFolderPathA)(HWND, LPSTR, int, BOOL);
 static HRESULT (WINAPI *pSHGetSpecialFolderLocation)(HWND, int, LPITEMIDLIST *);
 static LPITEMIDLIST (WINAPI *pILFindLastID)(LPCITEMIDLIST);
 static int (WINAPI *pSHFileOperationA)(LPSHFILEOPSTRUCTA);
-static HRESULT (WINAPI *pSHGetMalloc)(LPMALLOC *);
 static UINT (WINAPI *pGetSystemWow64DirectoryA)(LPSTR,UINT);
 static HRESULT (WINAPI *pSHGetKnownFolderPath)(REFKNOWNFOLDERID, DWORD, HANDLE, PWSTR *);
 static HRESULT (WINAPI *pSHSetKnownFolderPath)(REFKNOWNFOLDERID, DWORD, HANDLE, PWSTR);
@@ -102,7 +99,6 @@ static HRESULT (WINAPI *pSHGetKnownFolderIDList)(REFKNOWNFOLDERID, DWORD, HANDLE
 static BOOL (WINAPI *pPathResolve)(PWSTR, PZPCWSTR, UINT);
 
 static DLLVERSIONINFO shellVersion = { 0 };
-static LPMALLOC pMalloc;
 static const BYTE guidType[] = { PT_GUID };
 static const BYTE controlPanelType[] = { PT_SHELLEXT, PT_GUID, PT_CPL };
 static const BYTE folderType[] = { PT_FOLDER, PT_FOLDERW };
@@ -196,7 +192,6 @@ static void loadShell32(void)
     GET_PROC(DllGetVersion)
     GET_PROC(SHGetFolderPathA)
     GET_PROC(SHGetFolderPathEx)
-    GET_PROC(SHGetFolderLocation)
     GET_PROC(SHGetKnownFolderPath)
     GET_PROC(SHSetKnownFolderPath)
     GET_PROC(SHGetSpecialFolderPathA)
@@ -205,19 +200,9 @@ static void loadShell32(void)
     if (!pILFindLastID)
         pILFindLastID = (void *)GetProcAddress(hShell32, (LPCSTR)16);
     GET_PROC(SHFileOperationA)
-    GET_PROC(SHGetMalloc)
     GET_PROC(PathYetAnotherMakeUniqueName)
     GET_PROC(SHGetKnownFolderIDList)
     GET_PROC(PathResolve);
-
-    ok(pSHGetMalloc != NULL, "shell32 is missing SHGetMalloc\n");
-    if (pSHGetMalloc)
-    {
-        HRESULT hr = pSHGetMalloc(&pMalloc);
-
-        ok(hr == S_OK, "SHGetMalloc failed: 0x%08x\n", hr);
-        ok(pMalloc != NULL, "SHGetMalloc returned a NULL IMalloc\n");
-    }
 
     if (pDllGetVersion)
     {
@@ -1318,22 +1303,17 @@ static void test_parameters(void)
     char path[MAX_PATH];
     HRESULT hr;
 
-    if (pSHGetFolderLocation)
-    {
-        /* check a bogus CSIDL: */
-        pidl = NULL;
-        hr = pSHGetFolderLocation(NULL, 0xeeee, NULL, 0, &pidl);
-        ok(hr == E_INVALIDARG, "got 0x%08x, expected E_INVALIDARG\n", hr);
-        if (hr == S_OK) IMalloc_Free(pMalloc, pidl);
+    /* check a bogus CSIDL: */
+    pidl = NULL;
+    hr = SHGetFolderLocation(NULL, 0xeeee, NULL, 0, &pidl);
+    ok(hr == E_INVALIDARG, "got 0x%08x, expected E_INVALIDARG\n", hr);
 
-        /* check a bogus user token: */
-        pidl = NULL;
-        hr = pSHGetFolderLocation(NULL, CSIDL_FAVORITES, (HANDLE)2, 0, &pidl);
-        ok(hr == E_FAIL || hr == E_HANDLE, "got 0x%08x, expected E_FAIL or E_HANDLE\n", hr);
-        if (hr == S_OK) IMalloc_Free(pMalloc, pidl);
+    /* check a bogus user token: */
+    pidl = NULL;
+    hr = SHGetFolderLocation(NULL, CSIDL_FAVORITES, (HANDLE)2, 0, &pidl);
+    ok(hr == E_FAIL || hr == E_HANDLE, "got 0x%08x, expected E_FAIL or E_HANDLE\n", hr);
 
-        /* a NULL pidl pointer crashes, so don't test it */
-    }
+    /* a NULL pidl pointer crashes, so don't test it */
 
     if (pSHGetSpecialFolderLocation)
     {
@@ -1381,11 +1361,8 @@ static BYTE testSHGetFolderLocation(int folder)
     HRESULT hr;
     BYTE ret = 0xff;
 
-    /* treat absence of function as success */
-    if (!pSHGetFolderLocation) return TRUE;
-
     pidl = NULL;
-    hr = pSHGetFolderLocation(NULL, folder, NULL, 0, &pidl);
+    hr = SHGetFolderLocation(NULL, folder, NULL, 0, &pidl);
     if (hr == S_OK)
     {
         if (pidl)
@@ -1396,9 +1373,10 @@ static BYTE testSHGetFolderLocation(int folder)
              getFolderName(folder));
             if (pidlLast)
                 ret = pidlLast->mkid.abID[0];
-            IMalloc_Free(pMalloc, pidl);
+            ILFree(pidl);
         }
     }
+
     return ret;
 }
 
@@ -1424,7 +1402,7 @@ static BYTE testSHGetSpecialFolderLocation(int folder)
                 "%s: ILFindLastID failed\n", getFolderName(folder));
             if (pidlLast)
                 ret = pidlLast->mkid.abID[0];
-            IMalloc_Free(pMalloc, pidl);
+            ILFree(pidl);
         }
     }
     return ret;
@@ -1468,16 +1446,14 @@ static void test_ShellValues(const struct shellExpectedValues testEntries[],
         int j;
         BOOL foundTypeMatch = FALSE;
 
-        if (pSHGetFolderLocation)
-        {
-            type = testSHGetFolderLocation(testEntries[i].folder);
-            for (j = 0; !foundTypeMatch && j < testEntries[i].numTypes; j++)
-                if (testEntries[i].types[j] == type)
-                    foundTypeMatch = TRUE;
-            ok(foundTypeMatch || optional || broken(type == 0xff) /* Win9x */,
-             "%s has unexpected type %d (0x%02x)\n",
-             getFolderName(testEntries[i].folder), type, type);
-        }
+        type = testSHGetFolderLocation(testEntries[i].folder);
+        for (j = 0; !foundTypeMatch && j < testEntries[i].numTypes; j++)
+            if (testEntries[i].types[j] == type)
+                foundTypeMatch = TRUE;
+        ok(foundTypeMatch || optional || broken(type == 0xff) /* Win9x */,
+         "%s has unexpected type %d (0x%02x)\n",
+         getFolderName(testEntries[i].folder), type, type);
+
         type = testSHGetSpecialFolderLocation(testEntries[i].folder);
         for (j = 0, foundTypeMatch = FALSE; !foundTypeMatch &&
          j < testEntries[i].numTypes; j++)
@@ -1533,11 +1509,10 @@ static void matchGUID(int folder, const GUID *guid, const GUID *guid_alt)
     LPITEMIDLIST pidl;
     HRESULT hr;
 
-    if (!pSHGetFolderLocation) return;
     if (!guid) return;
 
     pidl = NULL;
-    hr = pSHGetFolderLocation(NULL, folder, NULL, 0, &pidl);
+    hr = SHGetFolderLocation(NULL, folder, NULL, 0, &pidl);
     if (hr == S_OK)
     {
         LPITEMIDLIST pidlLast = pILFindLastID(pidl);
@@ -1557,7 +1532,7 @@ static void matchGUID(int folder, const GUID *guid, const GUID *guid_alt)
               "%s: got GUID %s, expected %s or %s\n", getFolderName(folder),
               wine_dbgstr_guid(shellGuid), wine_dbgstr_guid(guid), wine_dbgstr_guid(guid_alt));
         }
-        IMalloc_Free(pMalloc, pidl);
+        ILFree(pidl);
     }
 }
 
@@ -1710,10 +1685,9 @@ static void doChild(const char *arg)
             "SHGetFolderPath returned 0x%08x, expected 0x80070002\n", hr);
 
         pidl = NULL;
-        hr = pSHGetFolderLocation(NULL, CSIDL_FAVORITES, NULL, 0, &pidl);
+        hr = SHGetFolderLocation(NULL, CSIDL_FAVORITES, NULL, 0, &pidl);
         ok(hr == E_FAIL || hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND),
             "SHGetFolderLocation returned 0x%08x\n", hr);
-        if (hr == S_OK && pidl) IMalloc_Free(pMalloc, pidl);
 
         ok(!pSHGetSpecialFolderPathA(NULL, path, CSIDL_FAVORITES, FALSE),
             "SHGetSpecialFolderPath succeeded, expected failure\n");
@@ -1722,8 +1696,6 @@ static void doChild(const char *arg)
         hr = pSHGetSpecialFolderLocation(NULL, CSIDL_FAVORITES, &pidl);
         ok(hr == E_FAIL || hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND),
             "SHGetFolderLocation returned 0x%08x\n", hr);
-
-        if (hr == S_OK && pidl) IMalloc_Free(pMalloc, pidl);
 
         /* now test success: */
         hr = pSHGetFolderPathA(NULL, CSIDL_FAVORITES | CSIDL_FLAG_CREATE, NULL,
@@ -1780,7 +1752,6 @@ static void test_NonExistentPath(void)
     HKEY key;
 
     if (!pSHGetFolderPathA) return;
-    if (!pSHGetFolderLocation) return;
     if (!pSHGetSpecialFolderPathA) return;
     if (!pSHGetSpecialFolderLocation) return;
     if (!pSHFileOperationA) return;
@@ -2993,10 +2964,6 @@ START_TEST(shellpath)
         doChild(myARGV[2]);
     else
     {
-        /* Report missing functions once */
-        if (!pSHGetFolderLocation)
-            win_skip("SHGetFolderLocation is not available\n");
-
         /* first test various combinations of parameters: */
         test_parameters();
 
