@@ -1621,8 +1621,8 @@
 @ stub _o_fma
 @ stub _o_fmaf
 @ stub _o_fmal
-@ stub _o_fmod
-@ stub _o_fmodf
+@ cdecl _o_fmod(double double) MSVCRT_fmod
+@ cdecl -arch=!i386 _o_fmodf(float float) MSVCRT_fmodf
 @ stub _o_fopen
 @ stub _o_fopen_s
 @ stub _o_fputc
@@ -1806,8 +1806,8 @@
 @ stub _o_tgammal
 @ stub _o_tmpfile_s
 @ stub _o_tmpnam_s
-@ cdecl _o_tolower(long) MSVCRT__tolower
-@ cdecl _o_toupper(long) MSVCRT__toupper
+@ cdecl _o_tolower(long) MSVCRT_tolower
+@ cdecl _o_toupper(long) MSVCRT_toupper
 @ stub _o_towlower
 @ stub _o_towupper
 @ stub _o_ungetc
