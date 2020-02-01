@@ -1503,7 +1503,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
              else
                  *(WCHAR *)buffer = 0;
              /* If the buffer is copied, the returned length doesn't include
-@@ -1616,7 +1619,7 @@ static INTERNET_SCHEME GetInternetScheme
+@@ -1619,7 +1622,7 @@ static INTERNET_SCHEME GetInternetScheme
          return INTERNET_SCHEME_UNKNOWN;
  
      for (i = 0; i < ARRAY_SIZE(url_schemes); i++)
@@ -1512,7 +1512,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
              return INTERNET_SCHEME_FIRST + i;
  
      return INTERNET_SCHEME_UNKNOWN;
-@@ -1644,7 +1647,7 @@ BOOL WINAPI InternetCrackUrlW(const WCHA
+@@ -1647,7 +1650,7 @@ BOOL WINAPI InternetCrackUrlW(const WCHA
      LPCWSTR lpszcp = NULL, lpszNetLoc;
  
      TRACE("(%s %u %x %p)\n",
@@ -1521,7 +1521,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
            dwUrlLength, dwFlags, lpUC);
  
      if (!lpszUrl || !*lpszUrl || !lpUC)
-@@ -1652,7 +1655,7 @@ BOOL WINAPI InternetCrackUrlW(const WCHA
+@@ -1655,7 +1658,7 @@ BOOL WINAPI InternetCrackUrlW(const WCHA
          SetLastError(ERROR_INVALID_PARAMETER);
          return FALSE;
      }
@@ -1530,7 +1530,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
  
      if (dwFlags & ICU_DECODE)
      {
-@@ -1691,7 +1694,7 @@ BOOL WINAPI InternetCrackUrlW(const WCHA
+@@ -1694,7 +1697,7 @@ BOOL WINAPI InternetCrackUrlW(const WCHA
      /* Determine if the URI is absolute. */
      while (lpszap - lpszUrl < dwUrlLength)
      {
@@ -1539,7 +1539,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
          {
              lpszap++;
              continue;
-@@ -1718,9 +1721,9 @@ BOOL WINAPI InternetCrackUrlW(const WCHA
+@@ -1721,9 +1724,9 @@ BOOL WINAPI InternetCrackUrlW(const WCHA
      lpUC->nPort = INTERNET_INVALID_PORT_NUMBER;
  
      /* Parse <params> */
@@ -1551,7 +1551,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
  
      if(!set_url_component(&lpUC->lpszExtraInfo, &lpUC->dwExtraInfoLength,
                            lpszParam, lpszParam ? dwUrlLength-(lpszParam-lpszUrl) : 0))
-@@ -1740,7 +1743,7 @@ BOOL WINAPI InternetCrackUrlW(const WCHA
+@@ -1743,7 +1746,7 @@ BOOL WINAPI InternetCrackUrlW(const WCHA
      {
          lpszcp += 2;
  
@@ -1560,7 +1560,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
          if (lpszParam)
          {
              if (lpszNetLoc)
-@@ -1760,7 +1763,7 @@ BOOL WINAPI InternetCrackUrlW(const WCHA
+@@ -1763,7 +1766,7 @@ BOOL WINAPI InternetCrackUrlW(const WCHA
              /* [<user>[<:password>]@]<host>[:<port>] */
              /* First find the user and password if they exist */
  
@@ -1569,7 +1569,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
              if (lpszHost == NULL || lpszHost > lpszNetLoc)
              {
                  /* username and password not specified. */
-@@ -1826,7 +1829,7 @@ BOOL WINAPI InternetCrackUrlW(const WCHA
+@@ -1829,7 +1832,7 @@ BOOL WINAPI InternetCrackUrlW(const WCHA
                      if(!set_url_component(&lpUC->lpszHostName, &lpUC->dwHostNameLength, lpszHost, lpszPort - lpszHost))
                          return FALSE;
                      if (lpszPort != lpszNetLoc)

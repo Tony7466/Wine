@@ -28,6 +28,6 @@ author: Michael Gilbert <mgilbert@debian.org>
  IMPORTLIB = kernelbase
  IMPORTS   = uuid ntdll winecrt0
 +CFLAGS   += -Wno-array-bounds
- EXTRADLLFLAGS = -nodefaultlibs -nostartfiles -mno-cygwin
+ EXTRADLLFLAGS = -nodefaultlibs -nostartfiles -mno-cygwin -Wl,--image-base,0x7b000000
  
  C_SRCS = \
