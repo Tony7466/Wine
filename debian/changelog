@@ -1,3 +1,10 @@
+wine (5.0~rc6-1) UNRELEASED; urgency=medium
+
+  * New upstream release 5.0-rc6, released Jan 17, 2020.
+    - Bug fixes only, we are in code freeze.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Mon, 10 Feb 2020 02:10:42 +0000
+
 wine (5.0~rc5-1) unstable; urgency=medium
 
   * New upstream release 5.0-rc5, released Jan 11, 2020.
