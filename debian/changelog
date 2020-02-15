@@ -1,34 +1,6 @@
-wine (5.0-1) UNRELEASED; urgency=medium
+wine (5.0-1) unstable; urgency=medium
 
   * New upstream release 5.0, released Jan 21, 2020.
-    - Builtin modules in PE format.
-    - Multi-monitor support.
-    - XAudio2 reimplementation.
-    - Vulkan 1.1 support.
-    - Switching between fullscreen and windowed.
-    - Changing display modes.
-    - Scaled presents.
-    - Swap intervals.
-    - Out of range reference values for the alpha and stencil tests.
-    - Sampling 2D resources with 3D samplers and vice versa.
-    - Drawing with mapped textures and buffers.
-    - Usage of invalid DirectDraw clipper objects.
-    - Creating Direct3D devices on invalid Windows, like the desktop
-    - Viewports with a minimum Z larger than or equal to the maximum Z.
-    - Resources bound through both shader-resource views and
-    - Blits between formats with and without alpha components.
-    - "shader_backend" (REG_SZ)
-    - "strict_shader_math" (REG_DWORD)
-    - "UseGLSL"
-    - Support for builtin and user async work queues.
-    - Ability to submit periodic callbacks, waiting, scheduled, and
-    - Support for media event queues.
-    - Various core API to handle media type objects, stream and
-    - Initial Source Resolver implementation.
-    - Initial implementation of Source Reader API.
-    - Implementation for Sample Grabber object.
-    - Core support for building topology objects.
-    - Builtin presentation clock implementation, started implementing
 
  -- Michael Gilbert <mgilbert@debian.org>  Mon, 10 Feb 2020 03:06:58 +0000
 
