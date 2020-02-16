@@ -29,18 +29,20 @@ zlib/compile-link.patch
 fixes/arm.patch
 fixes/arm64.patch
 fixes/gstbase.patch
+fixes/glibc2.30.patch
 fixes/printer-resolution.patch
 fixes/temporary-directory.patch
 
 warnings/arm-messages.patch
 warnings/arm-longdouble.patch
 warnings/arm64-varargs.patch
-warnings/arm64-array-bounds.patch
 warnings/arm64-excess-precision.patch
 
 warnings/bison.patch
 warnings/printf-null.patch
+warnings/array-bounds.patch
 warnings/format-overflow.patch
+warnings/incorrect-bounds.patch
 warnings/argument-promotion.patch
 warnings/discarded-qualifiers.patch
 warnings/incompatible-pointers.patch

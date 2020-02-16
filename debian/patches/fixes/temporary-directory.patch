@@ -63,8 +63,8 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
 +        }
 +        else
 +        {
-+            const char tmp_default[] = "/tmp";
-+            tmp_dir = xmalloc( sizeof(tmp_default) );
++            const char *tmp_default = "/tmp";
++            tmp_dir = xmalloc( sizeof(tmp_default) + 1 );
 +            strcpy( tmp_dir, tmp_default );
 +        }
 +
@@ -210,7 +210,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
 +        else
 +        {
 +            const char *tmp_default = "/tmp";
-+            if (!(tmp_dir = malloc( sizeof(tmp_default) )))
++            if (!(tmp_dir = malloc( sizeof(tmp_default) + 1 )))
 +                fatal_error( "out of memory\n" );
 +            strcpy( tmp_dir, tmp_default );
 +        }

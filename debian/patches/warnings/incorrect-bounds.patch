@@ -1,0 +1,26 @@
+description: correct negative array index error
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/programs/winemenubuilder/winemenubuilder.c
++++ b/programs/winemenubuilder/winemenubuilder.c
+@@ -2915,8 +2915,10 @@ static BOOL InvokeShellLinker( IShellLin
+             strchrW( p, '\\' ) || strchrW( p, '/' ) ||
+             lstrcmpiW( p, exeW ))
+         {
++            DWORD len = lstrlenW(szPath) + 2;
++
+             /* Not .exe - use 'start.exe' to launch this file */
+-            p = szArgs + lstrlenW(szPath) + 2;
++            p = szArgs + len;
+             if (szArgs[0])
+             {
+                 p[0] = ' ';
+@@ -2928,7 +2930,7 @@ static BOOL InvokeShellLinker( IShellLin
+ 
+             szArgs[0] = '"';
+             lstrcpyW(szArgs + 1, szPath);
+-            p[-1] = '"';
++            szArgs[len-1] = '"';
+ 
+             GetWindowsDirectoryW(szPath, MAX_PATH);
+             lstrcatW(szPath, startW);

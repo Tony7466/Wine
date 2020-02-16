@@ -1,0 +1,15 @@
+Description: Do not look for sys/sysctl.h, it is deprecated by glibc 2.30
+Author: Gianfranco Costamagna <locutusofborg@debian.org>
+Last-Update: 2019-12-31
+
+--- a/configure.ac
++++ b/configure.ac
+@@ -553,7 +553,7 @@ AC_HEADER_STAT()
+ 
+ dnl **** Checks for headers that depend on other ones ****
+ 
+-AC_CHECK_HEADERS([sys/mount.h sys/statfs.h sys/sysctl.h sys/user.h sys/vfs.h],,,
++AC_CHECK_HEADERS([sys/mount.h sys/statfs.h sys/user.h sys/vfs.h],,,
+     [#include <sys/types.h>
+      #ifdef HAVE_SYS_PARAM_H
+      # include <sys/param.h>

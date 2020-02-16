@@ -31,3 +31,13 @@ author: Michael Gilbert <mgilbert@debian.org>
  EXTRADLLFLAGS = -nodefaultlibs -nostartfiles -mno-cygwin -Wl,--image-base,0x7b000000
  
  C_SRCS = \
+--- a/dlls/ntdll/Makefile.in
++++ b/dlls/ntdll/Makefile.in
+@@ -2,6 +2,7 @@ EXTRADEFS = -D_NTSYSTEM_
+ MODULE    = ntdll.dll
+ IMPORTLIB = ntdll
+ IMPORTS   = winecrt0
++CFLAGS    = -Wno-array-bounds
+ EXTRAINCL = $(UNWIND_CFLAGS)
+ EXTRALIBS = $(IOKIT_LIBS) $(RT_LIBS) $(PTHREAD_LIBS) $(UNWIND_LIBS)
+ EXTRADLLFLAGS = -nodefaultlibs -Wl,--image-base,0x7bc00000

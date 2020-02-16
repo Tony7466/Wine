@@ -38,6 +38,9 @@ export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify
 # linker options
 export DEB_LDFLAGS_MAINT_APPEND+=-Wl,-rpath,/$(LIBDIR)
 
+# gcc 10 defaults to -fno-common but wine assumes -fcommon, so set it manually
+export DEB_CFLAGS_MAINT_APPEND+=-fcommon
+
 # ignore shift overflow warnings (currently only an issue on arm)
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-shift-overflow
 

@@ -170,3 +170,106 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
  
      if (FAILED(hr = clock_call_state_change(system_time, param, notification, clock->time_source_sink)))
+--- a/tools/winedump/msc.c
++++ b/tools/winedump/msc.c
+@@ -281,7 +281,7 @@ static void do_field(const unsigned char
+     const unsigned char*        ptr = start;
+     const char*                 cstr;
+     const struct p_string*      pstr;
+-    int leaf_len, value;
++    int leaf_len, value = 0;
+ 
+     while (ptr < end)
+     {
+@@ -573,7 +573,7 @@ static void do_field(const unsigned char
+ static void codeview_dump_one_type(unsigned curr_type, const union codeview_type* type)
+ {
+     const union codeview_reftype* reftype = (const union codeview_reftype*)type;
+-    int                 i, leaf_len, value;
++    int                 i, leaf_len, value = 0;
+     unsigned int        j;
+     const char*         str;
+ 
+--- a/tools/winebuild/import.c
++++ b/tools/winebuild/import.c
+@@ -182,8 +182,11 @@ static int func_cmp( const void *func1,
+ {
+     const ORDDEF *odp1 = *(const ORDDEF * const *)func1;
+     const ORDDEF *odp2 = *(const ORDDEF * const *)func2;
+-    return strcmp( odp1->name ? odp1->name : odp1->export_name,
+-                   odp2->name ? odp2->name : odp2->export_name );
++    const char *name1 = odp1->name ? odp1->name : odp1->export_name;
++    const char *name2 = odp2->name ? odp2->name : odp2->export_name;
++    if ( !name1 || !name2 )
++      fatal_error("Unable to compare function names\n");
++    return strcmp( name1, name2 );
+ }
+ 
+ /* remove a name from a name table */
+--- a/dlls/mciseq/mcimidi.c
++++ b/dlls/mciseq/mcimidi.c
+@@ -246,9 +246,9 @@ static DWORD	MIDI_mciReadNextEvent(WINE_
+ {
+     BYTE	b1, b2 = 0, b3;
+     WORD	hw = 0;
+-    DWORD	evtPulse;
++    DWORD	evtPulse = 0;
+     DWORD	evtLength;
+-    DWORD	tmp;
++    DWORD	tmp = 0;
+ 
+     if (mmioSeek(wmm->hFile, mmt->dwIndex, SEEK_SET) != mmt->dwIndex) {
+ 	WARN("Can't seek at %08X\n", mmt->dwIndex);
+--- a/dlls/riched20/editor.c
++++ b/dlls/riched20/editor.c
+@@ -1142,6 +1142,9 @@ static HRESULT insert_static_object(ME_T
+       stgm.tymed = TYMED_GDI;
+       stgm.u.hBitmap = hbmp;
+       fm.cfFormat = CF_BITMAP;
++  } else {
++      stgm.tymed = TYMED_NULL;
++      ERR("using TYMED_NULL for fm\n");
+   }
+   stgm.pUnkForRelease = NULL;
+ 
+--- a/dlls/sxs/name.c
++++ b/dlls/sxs/name.c
+@@ -135,7 +135,6 @@ static HRESULT WINAPI name_GetDisplayNam
+ {
+     static const WCHAR fmtW[] = {',','%','s','=','\"','%','s','\"',0};
+     struct name *name = impl_from_IAssemblyName( iface );
+-    WCHAR version[30];
+     unsigned int len;
+ 
+     TRACE("%p, %p, %p, 0x%08x\n", iface, buffer, buflen, flags);
+@@ -146,7 +145,7 @@ static HRESULT WINAPI name_GetDisplayNam
+     if (name->arch)    len += lstrlenW( archW ) + lstrlenW( name->arch ) + 4;
+     if (name->token)   len += lstrlenW( tokenW ) + lstrlenW( name->token ) + 4;
+     if (name->type)    len += lstrlenW( typeW ) + lstrlenW( name->type ) + 4;
+-    if (name->version) len += lstrlenW( versionW ) + lstrlenW( version ) + 4;
++    if (name->version) len += lstrlenW( versionW ) + lstrlenW( name->version ) + 4;
+     if (len > *buflen)
+     {
+         *buflen = len;
+--- a/dlls/msi/automation.c
++++ b/dlls/msi/automation.c
+@@ -1837,7 +1837,7 @@ static HRESULT InstallerImpl_SummaryInfo
+     UINT ret;
+     HRESULT hr;
+     MSIHANDLE hsuminfo;
+-    IDispatch *dispatch;
++    IDispatch *dispatch = NULL;
+     VARIANTARG varg0, varg1;
+ 
+     if (!(wFlags & DISPATCH_PROPERTYGET))
+--- a/dlls/msvcrt/time.c
++++ b/dlls/msvcrt/time.c
+@@ -1998,6 +1998,8 @@ int CDECL _timespec32_get(struct _timesp
+ {
+     struct _timespec64 ts64;
+ 
++    if(base == 0)
++        return 0;
+     if(_timespec64_get(&ts64, base) != base)
+         return 0;
+     if(ts64.tv_sec != (MSVCRT___time32_t)ts64.tv_sec)
