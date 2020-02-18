@@ -1,3 +1,10 @@
+wine (5.0-3) unstable; urgency=medium
+
+  * Support building with clang 9 on arm64 (closes: #951507).
+    - Thanks to Gianfranco Costamagna.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Tue, 18 Feb 2020 02:12:43 +0000
+
 wine (5.0-2) unstable; urgency=medium
 
   * Support building with gcc 10.

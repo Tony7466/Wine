@@ -35,8 +35,8 @@ fixes/temporary-directory.patch
 
 warnings/arm-messages.patch
 warnings/arm-longdouble.patch
-warnings/arm64-varargs.patch
 warnings/arm64-excess-precision.patch
+warnings/arm64-tautological-compare.patch
 
 warnings/bison.patch
 warnings/printf-null.patch

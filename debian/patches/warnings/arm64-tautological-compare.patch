@@ -1,0 +1,30 @@
+Description: fix tautological enum compare warnings when built with clang 9
+Author: Gianfranco Costamagna <locutusofborg@debian.org>
+
+Forwarded: pending
+Last-Update: 2019-12-31
+
+--- a/dlls/d3dx9_36/effect.c
++++ b/dlls/d3dx9_36/effect.c
+@@ -1469,7 +1469,7 @@ static HRESULT d3dx_set_shader_const_sta
+     D3DXVECTOR4 value;
+     HRESULT ret;
+ 
+-    if (op < 0 || op > SCT_PSINT)
++    if (op > SCT_PSINT)
+     {
+         FIXME("Unknown op %u.\n", op);
+         return D3DERR_INVALIDCALL;
+--- a/dlls/gdiplus/graphics.c
++++ b/dlls/gdiplus/graphics.c
+@@ -6836,8 +6836,8 @@ GpStatus WINGDIPAPI GdipTransformPoints(
+                                         GpCoordinateSpace src_space, GpPointF *points, INT count)
+ {
+     if(!graphics || !points || count <= 0 ||
+-       dst_space < 0 || dst_space > CoordinateSpaceDevice ||
+-       src_space < 0 || src_space > CoordinateSpaceDevice)
++       dst_space > CoordinateSpaceDevice ||
++       src_space > CoordinateSpaceDevice)
+         return InvalidParameter;
+ 
+     if(graphics->busy)

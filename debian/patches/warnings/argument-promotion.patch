@@ -12,3 +12,14 @@ author: Michael Gilbert <mgilbert@debian.org>
  ULONG WINAPI TraceMessageVa(TRACEHANDLE,ULONG,LPGUID,USHORT,__ms_va_list);
  ULONG WINAPI UnregisterTraceGuids(TRACEHANDLE);
  
+--- a/dlls/ntdll/misc.c
++++ b/dlls/ntdll/misc.c
+@@ -585,7 +585,7 @@ ULONG WINAPI EtwTraceMessageVa( TRACEHAN
+ /******************************************************************************
+  *                  EtwTraceMessage (NTDLL.@)
+  */
+-ULONG WINAPIV EtwTraceMessage( TRACEHANDLE handle, ULONG flags, LPGUID guid, USHORT number, ... )
++ULONG WINAPIV EtwTraceMessage( TRACEHANDLE handle, ULONG flags, LPGUID guid, UINT number, ... )
+ {
+     __ms_va_list valist;
+     ULONG ret;
