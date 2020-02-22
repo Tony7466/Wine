@@ -1,3 +1,9 @@
+wine-development (5.1-1) UNRELEASED; urgency=medium
+
+  * Switch to the development branch.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 22 Feb 2020 04:19:07 +0000
+
 wine (5.0-3) unstable; urgency=medium
 
   * Support building with clang 9 on arm64 (closes: #951507).
