@@ -4,7 +4,7 @@ Last-Update: 2019-12-31
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -553,7 +553,7 @@ AC_HEADER_STAT()
+@@ -544,7 +544,7 @@ AC_HEADER_STAT()
  
  dnl **** Checks for headers that depend on other ones ****
  
