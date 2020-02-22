@@ -66,7 +66,7 @@
 @ stdcall MFCreateSystemTimeSource(ptr)
 @ stub MFCreateSystemUnderlyingClock
 @ stub MFCreateTempFile
-@ stub MFCreateTransformActivate
+@ stdcall MFCreateTransformActivate(ptr)
 @ stub MFCreateURLFromPath
 @ stub MFCreateUdpSockets
 @ stub MFCreateVideoMediaType
@@ -150,7 +150,7 @@
 @ stdcall MFTRegisterLocalByCLSID(ptr ptr wstr long long ptr long ptr)
 @ stdcall MFTUnregister(int128)
 @ stdcall MFTUnregisterLocal(ptr)
-@ stub MFTUnregisterLocalByCLSID
+@ stdcall MFTUnregisterLocalByCLSID(int128)
 @ stub MFTraceError
 @ stub MFTraceFuncEnter
 @ stub MFUnblockThread

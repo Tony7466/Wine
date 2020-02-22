@@ -275,6 +275,14 @@ void clear_ei(EXCEPINFO *ei)
     memset(ei, 0, sizeof(*ei));
 }
 
+static void clear_error_loc(script_ctx_t *ctx)
+{
+    if(ctx->error_loc_code) {
+        release_vbscode(ctx->error_loc_code);
+        ctx->error_loc_code = NULL;
+    }
+}
+
 static inline VARIANT *stack_pop(exec_ctx_t *ctx)
 {
     assert(ctx->top);
@@ -450,22 +458,22 @@ static HRESULT stack_assume_disp(exec_ctx_t *ctx, unsigned n, IDispatch **disp)
 {
     VARIANT *v = stack_top(ctx, n), *ref;
 
-    if(V_VT(v) != VT_DISPATCH) {
+    if(V_VT(v) != VT_DISPATCH && (disp || V_VT(v) != VT_UNKNOWN)) {
         if(V_VT(v) != (VT_VARIANT|VT_BYREF)) {
             FIXME("not supported type: %s\n", debugstr_variant(v));
             return E_FAIL;
         }
 
         ref = V_VARIANTREF(v);
-        if(V_VT(ref) != VT_DISPATCH) {
+        if(V_VT(ref) != VT_DISPATCH && (disp || V_VT(ref) != VT_UNKNOWN)) {
             FIXME("not disp %s\n", debugstr_variant(ref));
             return E_FAIL;
         }
 
-        V_VT(v) = VT_DISPATCH;
-        V_DISPATCH(v) = V_DISPATCH(ref);
-        if(V_DISPATCH(v))
-            IDispatch_AddRef(V_DISPATCH(v));
+        V_VT(v) = V_VT(ref);
+        V_UNKNOWN(v) = V_UNKNOWN(ref);
+        if(V_UNKNOWN(v))
+            IUnknown_AddRef(V_UNKNOWN(v));
     }
 
     if(disp)
@@ -1920,75 +1928,57 @@ static HRESULT interp_case(exec_ctx_t *ctx)
     return S_OK;
 }
 
-static HRESULT disp_cmp(IDispatch *disp1, IDispatch *disp2, VARIANT_BOOL *ret)
-{
-    IObjectIdentity *identity;
-    IUnknown *unk1, *unk2;
-    HRESULT hres;
-
-    if(disp1 == disp2) {
-        *ret = VARIANT_TRUE;
-        return S_OK;
-    }
-
-    if(!disp1 || !disp2) {
-        *ret = VARIANT_FALSE;
-        return S_OK;
-    }
-
-    hres = IDispatch_QueryInterface(disp1, &IID_IUnknown, (void**)&unk1);
-    if(FAILED(hres))
-        return hres;
-
-    hres = IDispatch_QueryInterface(disp2, &IID_IUnknown, (void**)&unk2);
-    if(FAILED(hres)) {
-        IUnknown_Release(unk1);
-        return hres;
-    }
-
-    if(unk1 == unk2) {
-        *ret = VARIANT_TRUE;
-    }else {
-        hres = IUnknown_QueryInterface(unk1, &IID_IObjectIdentity, (void**)&identity);
-        if(SUCCEEDED(hres)) {
-            hres = IObjectIdentity_IsEqualObject(identity, unk2);
-            IObjectIdentity_Release(identity);
-            *ret = hres == S_OK ? VARIANT_TRUE : VARIANT_FALSE;
-        }else {
-            *ret = VARIANT_FALSE;
-        }
-    }
-
-    IUnknown_Release(unk1);
-    IUnknown_Release(unk2);
-    return S_OK;
-}
-
 static HRESULT interp_is(exec_ctx_t *ctx)
 {
-    IDispatch *l, *r;
-    VARIANT v;
-    HRESULT hres;
+    IUnknown *l = NULL, *r = NULL;
+    variant_val_t v;
+    HRESULT hres = S_OK;
 
     TRACE("\n");
 
-    hres = stack_pop_disp(ctx, &r);
+    stack_pop_deref(ctx, &v);
+    if(V_VT(v.v) != VT_DISPATCH && V_VT(v.v) != VT_UNKNOWN) {
+        FIXME("Unhandled type %s\n", debugstr_variant(v.v));
+        hres = E_NOTIMPL;
+    }else if(V_UNKNOWN(v.v)) {
+        hres = IUnknown_QueryInterface(V_UNKNOWN(v.v), &IID_IUnknown, (void**)&r);
+    }
+    if(v.owned) VariantClear(v.v);
     if(FAILED(hres))
         return hres;
 
-    hres = stack_pop_disp(ctx, &l);
+    stack_pop_deref(ctx, &v);
+    if(V_VT(v.v) != VT_DISPATCH && V_VT(v.v) != VT_UNKNOWN) {
+        FIXME("Unhandled type %s\n", debugstr_variant(v.v));
+        hres = E_NOTIMPL;
+    }else if(V_UNKNOWN(v.v)) {
+        hres = IUnknown_QueryInterface(V_UNKNOWN(v.v), &IID_IUnknown, (void**)&l);
+    }
+    if(v.owned) VariantClear(v.v);
+
     if(SUCCEEDED(hres)) {
-        V_VT(&v) = VT_BOOL;
-        hres = disp_cmp(l, r, &V_BOOL(&v));
-        if(l)
-            IDispatch_Release(l);
+        VARIANT res;
+        V_VT(&res) = VT_BOOL;
+        if(r == l)
+            V_BOOL(&res) = VARIANT_TRUE;
+        else if(!r || !l)
+            V_BOOL(&res) = VARIANT_FALSE;
+        else {
+            IObjectIdentity *identity;
+            hres = IUnknown_QueryInterface(l, &IID_IObjectIdentity, (void**)&identity);
+            if(SUCCEEDED(hres)) {
+                hres = IObjectIdentity_IsEqualObject(identity, r);
+                IObjectIdentity_Release(identity);
+            }
+            V_BOOL(&res) = hres == S_OK ? VARIANT_TRUE : VARIANT_FALSE;
+        }
+        hres = stack_push(ctx, &res);
     }
     if(r)
-        IDispatch_Release(r);
-    if(FAILED(hres))
-        return hres;
-
-    return stack_push(ctx, &v);
+        IUnknown_Release(r);
+    if(l)
+        IUnknown_Release(l);
+    return hres;
 }
 
 static HRESULT interp_concat(exec_ctx_t *ctx)
@@ -2396,6 +2386,7 @@ HRESULT exec_script(script_ctx_t *ctx, BOOL extern_caller, function_t *func, vbd
 
                 TRACE("unwind jmp %d stack_off %d\n", exec.instr->arg1.uint, exec.instr->arg2.uint);
 
+                clear_error_loc(ctx);
                 stack_off = exec.instr->arg2.uint;
                 instr_jmp(&exec, exec.instr->arg1.uint);
 
@@ -2414,7 +2405,11 @@ HRESULT exec_script(script_ctx_t *ctx, BOOL extern_caller, function_t *func, vbd
 
                 continue;
             }else {
-                WARN("Failed %08x\n", hres);
+                if(!ctx->error_loc_code) {
+                    grab_vbscode(exec.code);
+                    ctx->error_loc_code = exec.code;
+                    ctx->error_loc_offset = exec.instr->loc;
+                }
                 stack_popn(&exec, exec.top);
                 break;
             }
@@ -2426,12 +2421,13 @@ HRESULT exec_script(script_ctx_t *ctx, BOOL extern_caller, function_t *func, vbd
     assert(!exec.top);
 
     if(extern_caller) {
-        IActiveScriptSite_OnLeaveScript(ctx->site);
         if(FAILED(hres)) {
             if(!ctx->ei.scode)
                 ctx->ei.scode = hres;
-            hres = report_script_error(ctx);
+            hres = report_script_error(ctx, ctx->error_loc_code, ctx->error_loc_offset);
+            clear_error_loc(ctx);
         }
+        IActiveScriptSite_OnLeaveScript(ctx->site);
     }
 
     if(SUCCEEDED(hres) && res) {

@@ -1171,7 +1171,6 @@ static void test_coop_level_d3d_state(void)
     ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
     hr = IDirectDraw4_RestoreAllSurfaces(ddraw);
     ok(SUCCEEDED(hr), "Failed to restore surfaces, hr %#x.\n", hr);
-    IDirectDraw4_Release(ddraw);
 
     hr = IDirect3DDevice3_GetRenderTarget(device, &surface);
     ok(SUCCEEDED(hr), "Failed to get render target, hr %#x.\n", hr);
@@ -1197,12 +1196,15 @@ static void test_coop_level_d3d_state(void)
     hr = IDirect3DDevice3_EndScene(device);
     ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     color = get_surface_color(rt, 320, 240);
-    ok(compare_color(color, 0x0000ff80, 1), "Got unexpected color 0x%08x.\n", color);
+    ok(compare_color(color, 0x0000ff80, 1)
+            || broken(ddraw_is_warp(ddraw) && compare_color(color, 0x0000ff00, 0)),
+            "Got unexpected color 0x%08x.\n", color);
 
     destroy_viewport(device, viewport);
     IDirectDrawSurface4_Release(surface);
     IDirectDrawSurface4_Release(rt);
     IDirect3DDevice3_Release(device);
+    IDirectDraw4_Release(ddraw);
     DestroyWindow(window);
 }
 
@@ -7992,7 +7994,7 @@ static void test_pixel_format(void)
     IDirectDraw4 *ddraw = NULL;
     IDirectDrawClipper *clipper = NULL;
     DDSURFACEDESC2 ddsd;
-    IDirectDrawSurface4 *primary = NULL;
+    IDirectDrawSurface4 *primary = NULL, *offscreen;
     DDBLTFX fx;
     HRESULT hr;
 
@@ -8111,10 +8113,24 @@ static void test_pixel_format(void)
         ok(test_format == format, "second window has pixel format %d, expected %d\n", test_format, format);
     }
 
+    memset(&ddsd, 0, sizeof(ddsd));
+    ddsd.dwSize = sizeof(ddsd);
+    ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
+    ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
+    ddsd.dwWidth = ddsd.dwHeight = 64;
+    hr = IDirectDraw4_CreateSurface(ddraw, &ddsd, &offscreen, NULL);
+    ok(SUCCEEDED(hr), "Failed to create surface, hr %#x.\n",hr);
+
     memset(&fx, 0, sizeof(fx));
     fx.dwSize = sizeof(fx);
-    hr = IDirectDrawSurface4_Blt(primary, NULL, NULL, NULL, DDBLT_COLORFILL | DDBLT_WAIT, &fx);
+    hr = IDirectDrawSurface4_Blt(offscreen, NULL, NULL, NULL, DDBLT_WAIT | DDBLT_COLORFILL, &fx);
     ok(SUCCEEDED(hr), "Failed to clear source surface, hr %#x.\n", hr);
+
+    test_format = GetPixelFormat(hdc);
+    ok(test_format == format, "window has pixel format %d, expected %d\n", test_format, format);
+
+    hr = IDirectDrawSurface4_Blt(primary, NULL, offscreen, NULL, DDBLT_WAIT, NULL);
+    ok(SUCCEEDED(hr), "Failed to blit to primary surface, hr %#x.\n", hr);
 
     test_format = GetPixelFormat(hdc);
     ok(test_format == format, "window has pixel format %d, expected %d\n", test_format, format);
@@ -8124,6 +8140,8 @@ static void test_pixel_format(void)
         test_format = GetPixelFormat(hdc2);
         ok(test_format == format, "second window has pixel format %d, expected %d\n", test_format, format);
     }
+
+    IDirectDrawSurface4_Release(offscreen);
 
 cleanup:
     if (primary) IDirectDrawSurface4_Release(primary);
@@ -10583,7 +10601,7 @@ static void test_color_fill(void)
                 float f, g;
 
                 expected = tests[i].result & U3(z_fmt).dwZBitMask;
-                f = ceilf(log2f(expected + 1.0f));
+                f = ceilf(logf(expected + 1.0f) / logf(2.0f));
                 g = (f + 1.0f) / 2.0f;
                 g -= (int)g;
                 expected_broken = (expected / exp2f(f) - g) * 256;
@@ -12056,10 +12074,11 @@ static void test_overlay_rect(void)
     ok(!pos_x, "Got unexpected pos_x %d.\n", pos_x);
     ok(!pos_y, "Got unexpected pos_y %d.\n", pos_y);
 
-    IDirectDrawSurface4_Release(overlay);
 done:
     if (primary)
         IDirectDrawSurface4_Release(primary);
+    if (overlay)
+        IDirectDrawSurface4_Release(overlay);
     IDirectDraw4_Release(ddraw);
     DestroyWindow(window);
 }
@@ -12485,7 +12504,7 @@ static void test_getdc(void)
     IDirectDrawSurface4 *surface, *surface2, *tmp;
     DDSURFACEDESC2 surface_desc, map_desc;
     IDirectDraw4 *ddraw;
-    unsigned int i;
+    unsigned int i, screen_bpp;
     HWND window;
     HDC dc, dc2;
     HRESULT hr;
@@ -12549,6 +12568,11 @@ static void test_getdc(void)
     hr = IDirectDraw4_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
     ok(SUCCEEDED(hr), "Failed to set cooperative level, hr %#x.\n", hr);
 
+    surface_desc.dwSize = sizeof(surface_desc);
+    hr = IDirectDraw4_GetDisplayMode(ddraw, &surface_desc);
+    ok(SUCCEEDED(hr), "Failed to get display mode, hr %#x.\n", hr);
+    screen_bpp = U1(U4(surface_desc).ddpfPixelFormat).dwRGBBitCount;
+
     for (i = 0; i < ARRAY_SIZE(test_data); ++i)
     {
         memset(&surface_desc, 0, sizeof(surface_desc));
@@ -12608,8 +12632,11 @@ static void test_getdc(void)
             ok(dib.dsBm.bmBitsPixel == U1(test_data[i].format).dwRGBBitCount,
                     "Got unexpected bit count %d for format %s.\n",
                     dib.dsBm.bmBitsPixel, test_data[i].name);
-            ok(!!dib.dsBm.bmBits, "Got unexpected bits %p for format %s.\n",
-                    dib.dsBm.bmBits, test_data[i].name);
+            /* Windows XP sets bmBits == NULL for formats that match the screen at least on my r200 GPU. I
+             * suspect this applies to all HW accelerated pre-WDDM drivers because they can handle gdi access
+             * to ddraw surfaces themselves instead of going through a sysmem DIB section. */
+            ok(!!dib.dsBm.bmBits || broken(!pDwmIsCompositionEnabled && dib.dsBm.bmBitsPixel == screen_bpp),
+                    "Got unexpected bits %p for format %s.\n", dib.dsBm.bmBits, test_data[i].name);
 
             ok(dib.dsBmih.biSize == sizeof(dib.dsBmih), "Got unexpected size %u for format %s.\n",
                     dib.dsBmih.biSize, test_data[i].name);
@@ -16386,9 +16413,19 @@ static void test_clipper_refcount(void)
     IDirectDrawClipper_Release(clipper);
     IDirectDrawClipper_Release(clipper);
 
-    hr = IDirectDrawSurface4_GetClipper(surface, &clipper2);
-    ok(SUCCEEDED(hr), "Failed to get clipper, hr %#x.\n", hr);
-    ok(clipper == clipper2, "Got clipper %p, expected %p.\n", clipper2, clipper);
+    if (!ddraw_is_nvidia(ddraw))
+    {
+        /* Disabled because it causes heap corruption (HeapValidate fails and random
+         * hangs in a later HeapFree) on Windows on one of my Machines: MacbookPro 10,1
+         * running Windows 10 18363.535 and Nvidia driver 425.31. Driver version 441.66
+         * is affected too.
+         *
+         * The same Windows and driver versions run the test without heap corruption on
+         * a Geforce 1060 GTX card. I have not seen the problem on AMD GPUs either. */
+        hr = IDirectDrawSurface4_GetClipper(surface, &clipper2);
+        ok(SUCCEEDED(hr), "Failed to get clipper, hr %#x.\n", hr);
+        ok(clipper == clipper2, "Got clipper %p, expected %p.\n", clipper2, clipper);
+    }
 
     /* Show that invoking the Release method does not crash, but don't get the
      * vtable through the clipper pointer because it is no longer pointing to
@@ -16478,7 +16515,6 @@ static void test_caps(void)
             | DDSCAPS_FRONTBUFFER
             | DDSCAPS_3DDEVICE
             | DDSCAPS_VIDEOMEMORY
-            | DDSCAPS_OWNDC
             | DDSCAPS_LOCALVIDMEM
             | DDSCAPS_NONLOCALVIDMEM;
 
@@ -16683,7 +16719,7 @@ static void test_surface_format_conversion_alpha(void)
         const char *name;
         unsigned int block_size, x_blocks, y_blocks;
         DWORD support_flag;
-        BOOL broken_software_blit;
+        BOOL broken_software_blit, broken_hardware_blit;
     }
     formats[] =
     {
@@ -16723,7 +16759,7 @@ static void test_surface_format_conversion_alpha(void)
                 sizeof(DDPIXELFORMAT), DDPF_RGB | DDPF_ALPHAPIXELS, 0,
                 {16}, {0x00007c00}, {0x000003e0}, {0x0000001f}, {0x00008000}
             },
-            "R5G5B5A1", 2, 4, 4,
+            "R5G5B5A1", 2, 4, 4, 0, FALSE, TRUE,
         },
         {
             {
@@ -16851,6 +16887,9 @@ static void test_surface_format_conversion_alpha(void)
         {
             if (!is_wine && ((test_caps[j].src_caps | test_caps[j].dst_caps) & DDSCAPS_SYSTEMMEMORY)
                     && (src_format->broken_software_blit || dst_format->broken_software_blit))
+                continue;
+            if (!is_wine && (test_caps[j].dst_caps & DDSCAPS_VIDEOMEMORY)
+                    && dst_format->broken_hardware_blit)
                 continue;
 
             U4(surface_desc).ddpfPixelFormat = src_format->fmt;

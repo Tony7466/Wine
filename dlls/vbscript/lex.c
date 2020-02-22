@@ -310,7 +310,7 @@ static int hex_to_int(WCHAR c)
 static int parse_hex_literal(parser_ctx_t *ctx, LONG *ret)
 {
     const WCHAR *begin = ctx->ptr;
-    LONG l = 0, d;
+    unsigned l = 0, d;
 
     while((d = hex_to_int(*++ctx->ptr)) != -1)
         l = l*16 + d;
@@ -323,7 +323,7 @@ static int parse_hex_literal(parser_ctx_t *ctx, LONG *ret)
     if(*ctx->ptr == '&')
         ctx->ptr++;
 
-    *ret = l;
+    *ret = l == (UINT16)l ? (INT16)l : l;
     return tInt;
 }
 
@@ -344,13 +344,14 @@ static int comment_line(parser_ctx_t *ctx)
     return tNL;
 }
 
-static int parse_next_token(void *lval, parser_ctx_t *ctx)
+static int parse_next_token(void *lval, unsigned *loc, parser_ctx_t *ctx)
 {
     WCHAR c;
 
     skip_spaces(ctx);
+    *loc = ctx->ptr - ctx->code;
     if(ctx->ptr == ctx->end)
-        return ctx->last_token == tNL ? tEOF : tNL;
+        return ctx->last_token == tNL ? 0 : tNL;
 
     c = *ctx->ptr;
 
@@ -450,7 +451,7 @@ static int parse_next_token(void *lval, parser_ctx_t *ctx)
     return 0;
 }
 
-int parser_lex(void *lval, parser_ctx_t *ctx)
+int parser_lex(void *lval, unsigned *loc, parser_ctx_t *ctx)
 {
     int ret;
 
@@ -461,7 +462,7 @@ int parser_lex(void *lval, parser_ctx_t *ctx)
     }
 
     while(1) {
-        ret = parse_next_token(lval, ctx);
+        ret = parse_next_token(lval, loc, ctx);
         if(ret == '_') {
             skip_spaces(ctx);
             if(*ctx->ptr != '\n' && *ctx->ptr != '\r') {

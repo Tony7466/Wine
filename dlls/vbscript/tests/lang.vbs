@@ -53,6 +53,8 @@ Call ok(true = -1, "! true = -1")
 Call ok(false = 0, "false <> 0")
 Call ok(&hff = 255, "&hff <> 255")
 Call ok(&Hff = 255, "&Hff <> 255")
+Call ok(&hffff = -1, "&hffff <> -1")
+Call ok(&hfffe = -2, "&hfffe <> -2")
 
 W = 5
 Call ok(W = 5, "W = " & W & " expected " & 5)
@@ -88,6 +90,7 @@ Call ok(getVT(&h10&) = "VT_I2", "getVT(&h10&) is not VT_I2")
 Call ok(getVT(&h10000&) = "VT_I4", "getVT(&h10000&) is not VT_I4")
 Call ok(getVT(&H10000&) = "VT_I4", "getVT(&H10000&) is not VT_I4")
 Call ok(getVT(&hffFFffFF&) = "VT_I2", "getVT(&hffFFffFF&) is not VT_I2")
+Call ok(getVT(&hffFFffFE&) = "VT_I2", "getVT(&hffFFffFE   &) is not VT_I2")
 Call ok(getVT(1e2) = "VT_R8", "getVT(1e2) is not VT_R8")
 Call ok(getVT(1e0) = "VT_R8", "getVT(1e0) is not VT_R8")
 Call ok(getVT(0.1e2) = "VT_R8", "getVT(0.1e2) is not VT_R8")
@@ -1194,6 +1197,13 @@ Call ok(obj.Test1 = 6, "obj.Test1 is not 6")
 obj.AddToTest1(5)
 Call ok(obj.Test1 = 11, "obj.Test1 is not 11")
 
+set obj = unkObj
+set x = obj
+call ok(getVT(obj) = "VT_UNKNOWN*", "getVT(obj) = " & getVT(obj))
+call ok(getVT(x) = "VT_UNKNOWN*", "getVT(x) = " & getVT(x))
+call ok(getVT(unkObj) = "VT_UNKNOWN", "getVT(unkObj) = " & getVT(unkObj))
+call ok(obj is unkObj, "obj is not unkObj")
+
 ' Array tests
 
 Call ok(getVT(arr) = "VT_EMPTY*", "getVT(arr) = " & getVT(arr))
@@ -1620,6 +1630,10 @@ x.prop.prop.prop = 2
 call ok(x.getProp().getProp.prop = 2, "x.getProp().getProp.prop = " & x.getProp().getProp.prop)
 x.getprop.getprop().prop = 3
 call ok(x.getProp.prop.prop = 3, "x.getProp.prop.prop = " & x.getProp.prop.prop)
+set x.getprop.getprop().prop = new emptyclass
+set obj = new emptyclass
+set x.getprop.getprop().prop = obj
+call ok(x.getprop.getprop().prop is obj, "x.getprop.getprop().prop is not obj (emptyclass)")
 
 ok getVT(x) = "VT_DISPATCH*", "getVT(x) = " & getVT(x)
 todo_wine_ok getVT(x()) = "VT_BSTR", "getVT(x()) = " & getVT(x())

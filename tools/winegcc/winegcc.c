@@ -145,6 +145,10 @@ static strarray* tmp_files;
 static sigset_t signal_mask;
 #endif
 
+static const char *bindir;
+static const char *libdir;
+static const char *includedir;
+
 enum processor { proc_cc, proc_cxx, proc_cpp, proc_as };
 
 static const struct
@@ -219,6 +223,7 @@ struct options
     const char* isysroot;
     const char* lib_suffix;
     const char* subsystem;
+    const char* entry_point;
     const char* prelink;
     strarray* prefix;
     strarray* lib_dirs;
@@ -383,7 +388,6 @@ static int try_link( const strarray *prefix, const strarray *link_tool, const ch
 
 static strarray *get_link_args( struct options *opts, const char *output_name )
 {
-    int use_wine_crt = opts->wine_builtin && opts->shared;
     strarray *link_args = get_translator( opts );
     strarray *flags = strarray_alloc();
 
@@ -437,18 +441,9 @@ static strarray *get_link_args( struct options *opts, const char *output_name )
         else strarray_add( flags, opts->gui_app ? "-mwindows" : "-mconsole" );
 
         if (opts->unicode_app) strarray_add( flags, "-municode" );
-        if (opts->nodefaultlibs || use_wine_crt) strarray_add( flags, "-nodefaultlibs" );
-        if (opts->nostartfiles || use_wine_crt) strarray_add( flags, "-nostartfiles" );
-
-        if (opts->subsystem)
-        {
-            strarray_add( flags, strmake("-Wl,--subsystem,%s", opts->subsystem ));
-            if (!strcmp( opts->subsystem, "native" ))
-            {
-                const char *entry = opts->target_cpu == CPU_x86 ? "_DriverEntry@8" : "DriverEntry";
-                strarray_add( flags, strmake( "-Wl,--entry,%s", entry ));
-            }
-        }
+        if (opts->nodefaultlibs || opts->use_msvcrt) strarray_add( flags, "-nodefaultlibs" );
+        if (opts->nostartfiles || opts->use_msvcrt) strarray_add( flags, "-nostartfiles" );
+        if (opts->subsystem) strarray_add( flags, strmake("-Wl,--subsystem,%s", opts->subsystem ));
 
         strarray_add( flags, "-Wl,--nxcompat" );
 
@@ -541,7 +536,7 @@ static const char *get_multiarch_dir( enum target_cpu cpu )
 
 static char *get_lib_dir( struct options *opts )
 {
-    static const char *stdlibpath[] = { LIBDIR, "/usr/lib", "/usr/local/lib", "/lib" };
+    const char *stdlibpath[] = { libdir, LIBDIR, "/usr/lib", "/usr/local/lib", "/lib" };
     static const char libwine[] = "/libwine.so";
     const char *bit_suffix, *other_bit_suffix, *build_multiarch, *target_multiarch;
     const char *root = opts->sysroot ? opts->sysroot : "";
@@ -557,8 +552,12 @@ static char *get_lib_dir( struct options *opts )
 
     for (i = 0; i < ARRAY_SIZE(stdlibpath); i++)
     {
-        char *p, *buffer = xmalloc( strlen(root) + strlen(stdlibpath[i]) +
-                                    strlen("/arm-linux-gnueabi") + strlen(libwine) + 1 );
+        const char *root = (i && opts->sysroot) ? opts->sysroot : "";
+        char *p, *buffer;
+
+        if (!stdlibpath[i]) continue;
+        buffer = xmalloc( strlen(root) + strlen(stdlibpath[i]) +
+                          strlen("/arm-linux-gnueabi") + strlen(libwine) + 1 );
         strcpy( buffer, root );
         strcat( buffer, stdlibpath[i] );
         p = buffer + strlen(buffer);
@@ -628,6 +627,28 @@ static char *get_lib_dir( struct options *opts )
         return buffer;
     }
     return strmake( "%s%s", root, LIBDIR );
+}
+
+static void init_argv0_dir( const char *argv0 )
+{
+#ifndef _WIN32
+    char *p, *dir;
+
+#if defined(__linux__) || defined(__FreeBSD_kernel__) || defined(__NetBSD__)
+    dir = realpath( "/proc/self/exe", NULL );
+#elif defined (__FreeBSD__) || defined(__DragonFly__)
+    dir = realpath( "/proc/curproc/file", NULL );
+#else
+    dir = realpath( argv0, NULL );
+#endif
+    if (!dir) return;
+    if (!(p = strrchr( dir, '/' ))) return;
+    if (p == dir) p++;
+    *p = 0;
+    bindir = dir;
+    includedir = strmake( "%s/%s", dir, BIN_TO_INCLUDEDIR );
+    libdir = strmake( "%s/%s", dir, BIN_TO_LIBDIR );
+#endif
 }
 
 static void compile(struct options* opts, const char* lang)
@@ -781,23 +802,28 @@ no_compat_defines:
     {
         const char *incl_dirs[] = { INCLUDEDIR, "/usr/include", "/usr/local/include" };
         const char *root = opts->isysroot ? opts->isysroot : opts->sysroot ? opts->sysroot : "";
+        const char *isystem = gcc_defs ? "-isystem" : "-I";
 
         if (opts->use_msvcrt)
         {
+            if (includedir) strarray_add( comp_args, strmake( "%s%s/wine/msvcrt", isystem, includedir ));
             for (j = 0; j < ARRAY_SIZE(incl_dirs); j++)
             {
                 if (j && !strcmp( incl_dirs[0], incl_dirs[j] )) continue;
-                strarray_add(comp_args, strmake( "%s%s%s/wine/msvcrt",
-                                                 gcc_defs ? "-isystem" : "-I", root, incl_dirs[j] ));
+                strarray_add(comp_args, strmake( "%s%s%s/wine/msvcrt", isystem, root, incl_dirs[j] ));
             }
             strarray_add(comp_args, "-D__MSVCRT__");
+        }
+        if (includedir)
+        {
+            strarray_add( comp_args, strmake( "-I%s", includedir ));
+            strarray_add( comp_args, strmake( "%s%s/wine/windows", isystem, includedir ));
         }
         for (j = 0; j < ARRAY_SIZE(incl_dirs); j++)
         {
             if (j && !strcmp( incl_dirs[0], incl_dirs[j] )) continue;
             strarray_add(comp_args, strmake( "-I%s%s", root, incl_dirs[j] ));
-            strarray_add(comp_args, strmake( "%s%s%s/wine/windows",
-                                             gcc_defs ? "-isystem" : "-I", root, incl_dirs[j] ));
+            strarray_add(comp_args, strmake( "%s%s%s/wine/windows", isystem, root, incl_dirs[j] ));
         }
     }
     else if (opts->wine_objdir)
@@ -839,6 +865,8 @@ static strarray *get_winebuild_args(struct options *opts)
         binary = opts->winebuild;
     else if (opts->wine_objdir)
         binary = strmake( "%s/tools/winebuild/winebuild%s", opts->wine_objdir, EXEEXT );
+    else if (bindir)
+        binary = strmake( "%s/winebuild%s", bindir, EXEEXT );
     else
         binary = find_binary( opts->prefix, winebuild ? winebuild : "winebuild" );
     strarray_add( spec_args, binary );
@@ -957,7 +985,7 @@ static void build(struct options* opts)
     const char *spec_o_name, *libgcc = NULL;
     const char *output_name, *spec_file, *lang;
     int generate_app_loader = 1;
-    const char* crt_lib = NULL;
+    const char *crt_lib = NULL, *entry_point = NULL;
     int fake_module = 0;
     int is_pe = (opts->target_platform == PLATFORM_WINDOWS || opts->target_platform == PLATFORM_CYGWIN);
     unsigned int j;
@@ -1098,6 +1126,26 @@ static void build(struct options* opts)
     }
     if (!opts->nostdlib && !is_pe) add_library(opts, lib_dirs, files, "wine");
 
+    /* set default entry point, if needed */
+    if (!opts->entry_point)
+    {
+        if (is_pe)
+        {
+            if (opts->subsystem && !strcmp( opts->subsystem, "native" ))
+                entry_point = opts->target_cpu == CPU_x86 ? "_DriverEntry@8" : "DriverEntry";
+            else if(opts->use_msvcrt && !opts->shared && !opts->win16_app)
+            {
+                if (opts->unicode_app)
+                    entry_point = opts->target_cpu == CPU_x86 ? "_wmainCRTStartup" : "wmainCRTStartup";
+                else
+                    entry_point = opts->target_cpu == CPU_x86 ? "_mainCRTStartup" : "mainCRTStartup";
+            }
+        }
+        else if (!opts->shared && opts->unicode_app)
+            entry_point = "__wine_spec_exe_wentry";
+    }
+    else entry_point = opts->entry_point;
+
     /* run winebuild to generate the .spec.o file */
     spec_args = get_winebuild_args( opts );
     strarray_add( spec_args, strmake( "--cc-cmd=%s", build_tool_name( opts, "gcc", CC )));
@@ -1133,12 +1181,13 @@ static void build(struct options* opts)
         strarray_add(spec_args, output_name);
         strarray_add(spec_args, "--subsystem");
         strarray_add(spec_args, opts->gui_app ? "windows" : "console");
-        if (opts->unicode_app)
-        {
-            strarray_add(spec_args, "--entry");
-            strarray_add(spec_args, "__wine_spec_exe_wentry");
-        }
         if (opts->large_address_aware) strarray_add( spec_args, "--large-address-aware" );
+    }
+
+    if (entry_point)
+    {
+        strarray_add(spec_args, "--entry");
+        strarray_add(spec_args, entry_point);
     }
 
     if (opts->subsystem)
@@ -1184,7 +1233,7 @@ static void build(struct options* opts)
     /* link everything together now */
     link_args = get_link_args( opts, output_name );
 
-    if ((opts->nodefaultlibs || opts->shared) && is_pe)
+    if ((opts->nodefaultlibs || opts->use_msvcrt) && is_pe)
     {
         libgcc = find_libgcc(opts->prefix, link_args);
         if (!libgcc) libgcc = "-lgcc";
@@ -1195,6 +1244,8 @@ static void build(struct options* opts)
 
     for ( j = 0; j < lib_dirs->size; j++ )
 	strarray_add(link_args, strmake("-L%s", lib_dirs->base[j]));
+
+    if (is_pe && entry_point) strarray_add(link_args, strmake("-Wl,--entry,%s", entry_point));
 
     strarray_add(link_args, spec_o_name);
 
@@ -1413,11 +1464,12 @@ int main(int argc, char **argv)
     sigaddset( &signal_mask, SIGTERM );
     sigaddset( &signal_mask, SIGINT );
 #endif
+    init_argv0_dir( argv[0] );
 
     /* setup tmp file removal at exit */
     tmp_files = strarray_alloc();
     atexit(clean_temp_files);
-    
+
     /* initialize options */
     memset(&opts, 0, sizeof(opts));
     opts.target_cpu = build_cpu;
@@ -1675,6 +1727,11 @@ int main(int argc, char **argv)
                             if (!strcmp(Wl->base[j], "--subsystem") && j < Wl->size - 1)
                             {
                                 opts.subsystem = strdup( Wl->base[++j] );
+                                continue;
+                            }
+                            if (!strcmp(Wl->base[j], "--entry") && j < Wl->size - 1)
+                            {
+                                opts.entry_point = strdup( Wl->base[++j] );
                                 continue;
                             }
                             if (!strcmp(Wl->base[j], "-delayload") && j < Wl->size - 1)

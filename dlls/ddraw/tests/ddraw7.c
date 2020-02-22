@@ -148,6 +148,11 @@ static BOOL ddraw_is_vmware(IDirectDraw7 *ddraw)
     return ddraw_is_vendor(ddraw, 0x15ad);
 }
 
+static BOOL ddraw_is_amd(IDirectDraw7 *ddraw)
+{
+    return ddraw_is_vendor(ddraw, 0x1002);
+}
+
 static IDirectDrawSurface7 *create_overlay(IDirectDraw7 *ddraw,
         unsigned int width, unsigned int height, DWORD format)
 {
@@ -7836,7 +7841,7 @@ static void test_pixel_format(void)
     IDirectDraw7 *ddraw = NULL;
     IDirectDrawClipper *clipper = NULL;
     DDSURFACEDESC2 ddsd;
-    IDirectDrawSurface7 *primary = NULL;
+    IDirectDrawSurface7 *primary = NULL, *offscreen;
     DDBLTFX fx;
     HRESULT hr;
 
@@ -7955,10 +7960,24 @@ static void test_pixel_format(void)
         ok(test_format == format, "second window has pixel format %d, expected %d\n", test_format, format);
     }
 
+    memset(&ddsd, 0, sizeof(ddsd));
+    ddsd.dwSize = sizeof(ddsd);
+    ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
+    ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
+    ddsd.dwWidth = ddsd.dwHeight = 64;
+    hr = IDirectDraw7_CreateSurface(ddraw, &ddsd, &offscreen, NULL);
+    ok(SUCCEEDED(hr), "Failed to create surface, hr %#x.\n",hr);
+
     memset(&fx, 0, sizeof(fx));
     fx.dwSize = sizeof(fx);
-    hr = IDirectDrawSurface7_Blt(primary, NULL, NULL, NULL, DDBLT_COLORFILL | DDBLT_WAIT, &fx);
+    hr = IDirectDrawSurface7_Blt(offscreen, NULL, NULL, NULL, DDBLT_WAIT | DDBLT_COLORFILL, &fx);
     ok(SUCCEEDED(hr), "Failed to clear source surface, hr %#x.\n", hr);
+
+    test_format = GetPixelFormat(hdc);
+    ok(test_format == format, "window has pixel format %d, expected %d\n", test_format, format);
+
+    hr = IDirectDrawSurface7_Blt(primary, NULL, offscreen, NULL, DDBLT_WAIT, NULL);
+    ok(SUCCEEDED(hr), "Failed to blit to primary surface, hr %#x.\n", hr);
 
     test_format = GetPixelFormat(hdc);
     ok(test_format == format, "window has pixel format %d, expected %d\n", test_format, format);
@@ -7968,6 +7987,8 @@ static void test_pixel_format(void)
         test_format = GetPixelFormat(hdc2);
         ok(test_format == format, "second window has pixel format %d, expected %d\n", test_format, format);
     }
+
+    IDirectDrawSurface7_Release(offscreen);
 
 cleanup:
     if (primary) IDirectDrawSurface7_Release(primary);
@@ -10559,7 +10580,7 @@ static void test_color_fill(void)
                 float f, g;
 
                 expected = tests[i].result & U3(z_fmt).dwZBitMask;
-                f = ceilf(log2f(expected + 1.0f));
+                f = ceilf(logf(expected + 1.0f) / logf(2.0f));
                 g = (f + 1.0f) / 2.0f;
                 g -= (int)g;
                 expected_broken = (expected / exp2f(f) - g) * 256;
@@ -12049,10 +12070,11 @@ static void test_overlay_rect(void)
     ok(!pos_x, "Got unexpected pos_x %d.\n", pos_x);
     ok(!pos_y, "Got unexpected pos_y %d.\n", pos_y);
 
-    IDirectDrawSurface7_Release(overlay);
 done:
     if (primary)
         IDirectDrawSurface7_Release(primary);
+    if (overlay)
+        IDirectDrawSurface7_Release(overlay);
     IDirectDraw7_Release(ddraw);
     DestroyWindow(window);
 }
@@ -12475,7 +12497,7 @@ static void test_getdc(void)
     IDirectDrawSurface7 *surface, *surface2, *tmp;
     DDSURFACEDESC2 surface_desc, map_desc;
     IDirectDraw7 *ddraw;
-    unsigned int i;
+    unsigned int i, screen_bpp;
     HWND window;
     HDC dc, dc2;
     HRESULT hr;
@@ -12539,6 +12561,11 @@ static void test_getdc(void)
     hr = IDirectDraw7_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
     ok(SUCCEEDED(hr), "Failed to set cooperative level, hr %#x.\n", hr);
 
+    surface_desc.dwSize = sizeof(surface_desc);
+    hr = IDirectDraw7_GetDisplayMode(ddraw, &surface_desc);
+    ok(SUCCEEDED(hr), "Failed to get display mode, hr %#x.\n", hr);
+    screen_bpp = U1(U4(surface_desc).ddpfPixelFormat).dwRGBBitCount;
+
     for (i = 0; i < ARRAY_SIZE(test_data); ++i)
     {
         memset(&surface_desc, 0, sizeof(surface_desc));
@@ -12598,8 +12625,11 @@ static void test_getdc(void)
             ok(dib.dsBm.bmBitsPixel == U1(test_data[i].format).dwRGBBitCount,
                     "Got unexpected bit count %d for format %s.\n",
                     dib.dsBm.bmBitsPixel, test_data[i].name);
-            ok(!!dib.dsBm.bmBits, "Got unexpected bits %p for format %s.\n",
-                    dib.dsBm.bmBits, test_data[i].name);
+            /* Windows XP sets bmBits == NULL for formats that match the screen at least on my r200 GPU. I
+             * suspect this applies to all HW accelerated pre-WDDM drivers because they can handle gdi access
+             * to ddraw surfaces themselves instead of going through a sysmem DIB section. */
+            ok(!!dib.dsBm.bmBits || broken(!pDwmIsCompositionEnabled && dib.dsBm.bmBitsPixel == screen_bpp),
+                    "Got unexpected bits %p for format %s.\n", dib.dsBm.bmBits, test_data[i].name);
 
             ok(dib.dsBmih.biSize == sizeof(dib.dsBmih), "Got unexpected size %u for format %s.\n",
                     dib.dsBmih.biSize, test_data[i].name);
@@ -12829,6 +12859,7 @@ static void test_draw_primitive(void)
     IDirect3DVertexBuffer7 *vb;
     IDirect3DDevice7 *device;
     IDirect3D7 *d3d;
+    IDirectDraw7 *ddraw;
     ULONG refcount;
     HWND window;
     HRESULT hr;
@@ -12844,6 +12875,8 @@ static void test_draw_primitive(void)
 
     hr = IDirect3DDevice7_GetDirect3D(device, &d3d);
     ok(SUCCEEDED(hr), "Failed to get D3D interface, hr %#x.\n", hr);
+    hr = IDirect3D7_QueryInterface(d3d, &IID_IDirectDraw7, (void **)&ddraw);
+    ok(SUCCEEDED(hr), "Failed to get DirectDraw7 interface, hr %#x.\n", hr);
 
     memset(&vb_desc, 0, sizeof(vb_desc));
     vb_desc.dwSize = sizeof(vb_desc);
@@ -12866,19 +12899,21 @@ static void test_draw_primitive(void)
     hr = IDirect3DDevice7_DrawIndexedPrimitiveVB(device, D3DPT_TRIANGLESTRIP, vb, 0, 0, NULL, 0, 0);
     ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
     hr = IDirect3DDevice7_DrawPrimitive(device, D3DPT_TRIANGLESTRIP, D3DFVF_XYZ, NULL, 0, 0);
-    ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
+    /* r200 rejects 0 vertices */
+    ok(SUCCEEDED(hr) || broken(ddraw_is_amd(ddraw) && hr == E_FAIL), "Failed to draw, hr %#x.\n", hr);
     hr = IDirect3DDevice7_DrawPrimitiveStrided(device, D3DPT_TRIANGLESTRIP, D3DFVF_XYZ, &strided, 0, 0);
     ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
     hr = IDirect3DDevice7_DrawPrimitiveVB(device, D3DPT_TRIANGLESTRIP, vb, 0, 0, 0);
-    ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
+    ok(SUCCEEDED(hr) || broken(ddraw_is_amd(ddraw) && hr == E_FAIL), "Failed to draw, hr %#x.\n", hr);
 
     hr = IDirect3DDevice7_DrawIndexedPrimitive(device, D3DPT_TRIANGLESTRIP, D3DFVF_XYZ, NULL, 0, indices, 4, 0);
     ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
     hr = IDirect3DDevice7_DrawIndexedPrimitiveStrided(device,
             D3DPT_TRIANGLESTRIP, D3DFVF_XYZ, &strided, 0, indices, 4, 0);
     ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
+    /* Interestingly r200 rejects this, but not the call with a NULL index buffer and 0 indices. */
     hr = IDirect3DDevice7_DrawIndexedPrimitiveVB(device, D3DPT_TRIANGLESTRIP, vb, 0, 0, indices, 4, 0);
-    ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
+    ok(SUCCEEDED(hr) || broken(ddraw_is_amd(ddraw) && hr == E_FAIL), "Failed to draw, hr %#x.\n", hr);
 
     strided.position.lpvData = quad;
     strided.position.dwStride = sizeof(*quad);
@@ -12892,11 +12927,14 @@ static void test_draw_primitive(void)
     ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
     hr = IDirect3DDevice7_DrawIndexedPrimitiveStrided(device,
             D3DPT_TRIANGLESTRIP, D3DFVF_XYZ, &strided, 4, NULL, 0, 0);
-    ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
+    /* r200 again fails this, this time with E_OUTOFMEMORY. */
+    ok(SUCCEEDED(hr) || broken(ddraw_is_amd(ddraw) && hr == E_OUTOFMEMORY), "Failed to draw, hr %#x.\n", hr);
     hr = IDirect3DDevice7_DrawIndexedPrimitiveVB(device, D3DPT_TRIANGLESTRIP, vb, 0, 4, NULL, 0, 0);
     ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
+    /* Now this draw should work, but r200 rejects it too - presumably earlier tests broke
+     * driver internal state. */
     hr = IDirect3DDevice7_DrawPrimitive(device, D3DPT_TRIANGLESTRIP, D3DFVF_XYZ, quad, 4, 0);
-    ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
+    ok(SUCCEEDED(hr) || broken(ddraw_is_amd(ddraw) && hr == E_FAIL), "Failed to draw, hr %#x.\n", hr);
     hr = IDirect3DDevice7_DrawPrimitiveStrided(device, D3DPT_TRIANGLESTRIP, D3DFVF_XYZ, &strided, 4, 0);
     ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
     hr = IDirect3DDevice7_DrawPrimitiveVB(device, D3DPT_TRIANGLESTRIP, vb, 0, 4, 0);
@@ -12911,6 +12949,7 @@ static void test_draw_primitive(void)
     ok(SUCCEEDED(hr), "Failed to draw, hr %#x.\n", hr);
 
     IDirect3DVertexBuffer7_Release(vb);
+    IDirectDraw7_Release(ddraw);
     refcount = IDirect3DDevice7_Release(device);
     ok(!refcount, "Device has %u references left.\n", refcount);
     DestroyWindow(window);
@@ -14941,9 +14980,10 @@ static void test_viewport(void)
     tests[] =
     {
         {{  0,   0,  640,  480}, 0.001f, {  0, 120, 479, 359}, "Viewport (0, 0) - (640, 480)"},
+        {{  0,   0,  320,  240}, 0.001f, {  0,  60, 239, 179}, "Viewport (0, 0) - (320, 240)"},
+        /* Don't run this right after the other 640x480 test, it breaks r500. */
         {{  0,   0,  640,  480, 0.5f, 0.0f}, 0.501f,
                 {0, 120, 479, 359}, "Viewport (0, 0, 0.5) - (640, 480, 0.0)"},
-        {{  0,   0,  320,  240}, 0.001f, {  0,  60, 239, 179}, "Viewport (0, 0) - (320, 240)"},
         {{  0,   0, 1280,  960}, 0.001f, {  0, 240, 639, 479}, "Viewport (0, 0) - (1280, 960)"},
         {{  0,   0, 2000, 1600}, 0.001f, {-10, -10, -10, -10}, "Viewport (0, 0) - (2000, 1600)"},
         {{100, 100,  640,  480}, 0.001f, {100, 220, 579, 459}, "Viewport (100, 100) - (640, 480)"},
@@ -14988,6 +15028,16 @@ static void test_viewport(void)
     IDirect3D7_Release(d3d);
 
     hr = IDirect3DDevice7_SetRenderState(device, D3DRENDERSTATE_LIGHTING, FALSE);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+
+    /* Well, by default the vertices without color info should be white, and without any texture
+     * ops this should just show up in the output, but the r200 driver begs to differ and draws a
+     * random color. */
+    hr = IDirect3DDevice7_SetTextureStageState(device, 0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice7_SetTextureStageState(device, 0, D3DTSS_COLORARG1, D3DTA_TFACTOR);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice7_SetRenderState(device, D3DRENDERSTATE_TEXTUREFACTOR, 0x00ffffff);
     ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
 
     hr = IDirect3DDevice7_SetViewport(device, NULL);
@@ -16290,9 +16340,19 @@ static void test_clipper_refcount(void)
     IDirectDrawClipper_Release(clipper);
     IDirectDrawClipper_Release(clipper);
 
-    hr = IDirectDrawSurface7_GetClipper(surface, &clipper2);
-    ok(SUCCEEDED(hr), "Failed to get clipper, hr %#x.\n", hr);
-    ok(clipper == clipper2, "Got clipper %p, expected %p.\n", clipper2, clipper);
+    if (!ddraw_is_nvidia(ddraw))
+    {
+        /* Disabled because it causes heap corruption (HeapValidate fails and random
+         * hangs in a later HeapFree) on Windows on one of my Machines: MacbookPro 10,1
+         * running Windows 10 18363.535 and Nvidia driver 425.31. Driver version 441.66
+         * is affected too.
+         *
+         * The same Windows and driver versions run the test without heap corruption on
+         * a Geforce 1060 GTX card. I have not seen the problem on AMD GPUs either. */
+        hr = IDirectDrawSurface7_GetClipper(surface, &clipper2);
+        ok(SUCCEEDED(hr), "Failed to get clipper, hr %#x.\n", hr);
+        ok(clipper == clipper2, "Got clipper %p, expected %p.\n", clipper2, clipper);
+    }
 
     /* Show that invoking the Release method does not crash, but don't get the
      * vtable through the clipper pointer because it is no longer pointing to
@@ -16452,7 +16512,6 @@ static void test_caps(void)
             | DDSCAPS_FRONTBUFFER
             | DDSCAPS_3DDEVICE
             | DDSCAPS_VIDEOMEMORY
-            | DDSCAPS_OWNDC
             | DDSCAPS_LOCALVIDMEM
             | DDSCAPS_NONLOCALVIDMEM;
 
@@ -16651,7 +16710,7 @@ static void test_surface_format_conversion_alpha(void)
         const char *name;
         unsigned int block_size, x_blocks, y_blocks;
         DWORD support_flag;
-        BOOL broken_software_blit;
+        BOOL broken_software_blit, broken_hardware_blit;
     }
     formats[] =
     {
@@ -16691,7 +16750,7 @@ static void test_surface_format_conversion_alpha(void)
                 sizeof(DDPIXELFORMAT), DDPF_RGB | DDPF_ALPHAPIXELS, 0,
                 {16}, {0x00007c00}, {0x000003e0}, {0x0000001f}, {0x00008000}
             },
-            "R5G5B5A1", 2, 4, 4,
+            "R5G5B5A1", 2, 4, 4, 0, FALSE, TRUE,
         },
         {
             {
@@ -16819,6 +16878,9 @@ static void test_surface_format_conversion_alpha(void)
         {
             if (!is_wine && ((test_caps[j].src_caps | test_caps[j].dst_caps) & DDSCAPS_SYSTEMMEMORY)
                     && (src_format->broken_software_blit || dst_format->broken_software_blit))
+                continue;
+            if (!is_wine && (test_caps[j].dst_caps & DDSCAPS_VIDEOMEMORY)
+                    && dst_format->broken_hardware_blit)
                 continue;
 
             U4(surface_desc).ddpfPixelFormat = src_format->fmt;
@@ -17017,6 +17079,9 @@ static void test_compressed_surface_stretch(void)
 
     memset(&fx, 0, sizeof(fx));
     fx.dwSize = sizeof(fx);
+
+    memset(&lock, 0, sizeof(lock));
+    lock.dwSize = sizeof(lock);
 
     for (i = 0; i < ARRAY_SIZE(test_caps); ++i)
     {

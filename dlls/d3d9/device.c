@@ -1020,8 +1020,6 @@ static HRESULT d3d9_device_reset(struct d3d9_device *device,
             device->auto_mipmaps = 0;
             wined3d_stateblock_set_render_state(device->state, WINED3D_RS_ZENABLE,
                     !!swapchain_desc.enable_auto_depth_stencil);
-            wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_ZENABLE,
-                    !!swapchain_desc.enable_auto_depth_stencil);
             device_reset_viewport_state(device);
         }
 
@@ -1821,6 +1819,7 @@ static HRESULT WINAPI d3d9_device_ColorFill(IDirect3DDevice9Ex *iface,
         return D3DERR_INVALIDCALL;
     }
 
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     rtv = d3d9_surface_acquire_rendertarget_view(surface_impl);
     hr = wined3d_device_clear_rendertarget_view(device->wined3d_device,
             rtv, rect, WINED3DCLEAR_TARGET, &c, 0.0f, 0);
@@ -2071,6 +2070,7 @@ static HRESULT WINAPI d3d9_device_Clear(IDirect3DDevice9Ex *iface, DWORD rect_co
 
     wined3d_color_from_d3dcolor(&c, color);
     wined3d_mutex_lock();
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     hr = wined3d_device_clear(device->wined3d_device, rect_count, (const RECT *)rects, flags, &c, z, stencil);
     if (SUCCEEDED(hr))
         d3d9_rts_flag_auto_gen_mipmap(device);
@@ -2297,26 +2297,45 @@ static HRESULT WINAPI d3d9_device_GetClipPlane(IDirect3DDevice9Ex *iface, DWORD 
     return hr;
 }
 
+static void resolve_depth_buffer(struct d3d9_device *device)
+{
+    const struct wined3d_stateblock_state *state = wined3d_stateblock_get_state(device->state);
+    struct wined3d_rendertarget_view *wined3d_dsv;
+    struct wined3d_resource *dst_resource;
+    struct wined3d_texture *dst_texture;
+    struct wined3d_resource_desc desc;
+    struct d3d9_surface *d3d9_dsv;
+
+    if (!(dst_texture = state->textures[0]))
+        return;
+    dst_resource = wined3d_texture_get_resource(dst_texture);
+    wined3d_resource_get_desc(dst_resource, &desc);
+    if (desc.format != WINED3DFMT_D24_UNORM_S8_UINT
+            && desc.format != WINED3DFMT_X8D24_UNORM
+            && desc.format != WINED3DFMT_DF16
+            && desc.format != WINED3DFMT_DF24
+            && desc.format != WINED3DFMT_INTZ)
+        return;
+
+    if (!(wined3d_dsv = wined3d_device_get_depth_stencil_view(device->wined3d_device)))
+        return;
+    d3d9_dsv = wined3d_rendertarget_view_get_sub_resource_parent(wined3d_dsv);
+
+    wined3d_device_resolve_sub_resource(device->wined3d_device, dst_resource, 0,
+            wined3d_rendertarget_view_get_resource(wined3d_dsv), d3d9_dsv->sub_resource_idx, desc.format);
+}
+
 static HRESULT WINAPI DECLSPEC_HOTPATCH d3d9_device_SetRenderState(IDirect3DDevice9Ex *iface,
         D3DRENDERSTATETYPE state, DWORD value)
 {
     struct d3d9_device *device = impl_from_IDirect3DDevice9Ex(iface);
-    struct wined3d_color factor;
 
     TRACE("iface %p, state %#x, value %#x.\n", iface, state, value);
 
     wined3d_mutex_lock();
     wined3d_stateblock_set_render_state(device->update_state, state, value);
-    if (!device->recording)
-    {
-        if (state == D3DRS_BLENDFACTOR)
-        {
-            wined3d_color_from_d3dcolor(&factor, value);
-            wined3d_device_set_blend_state(device->wined3d_device, NULL, &factor);
-        }
-        else
-            wined3d_device_set_render_state(device->wined3d_device, state, value);
-    }
+    if (state == D3DRS_POINTSIZE && value == D3D9_RESZ_CODE)
+        resolve_depth_buffer(device);
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -2654,6 +2673,7 @@ static HRESULT WINAPI d3d9_device_ValidateDevice(IDirect3DDevice9Ex *iface, DWOR
     TRACE("iface %p, pass_count %p.\n", iface, pass_count);
 
     wined3d_mutex_lock();
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     hr = wined3d_device_validate_device(device->wined3d_device, pass_count);
     wined3d_mutex_unlock();
 
@@ -2885,6 +2905,7 @@ static HRESULT WINAPI d3d9_device_DrawPrimitive(IDirect3DDevice9Ex *iface,
         WARN("Called without a valid vertex declaration set.\n");
         return D3DERR_INVALIDCALL;
     }
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     vertex_count = vertex_count_from_primitive_count(primitive_type, primitive_count);
     d3d9_device_upload_sysmem_vertex_buffers(device, 0, start_vertex, vertex_count);
     d3d9_generate_auto_mipmaps(device);
@@ -2917,6 +2938,7 @@ static HRESULT WINAPI d3d9_device_DrawIndexedPrimitive(IDirect3DDevice9Ex *iface
         WARN("Called without a valid vertex declaration set.\n");
         return D3DERR_INVALIDCALL;
     }
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     index_count = vertex_count_from_primitive_count(primitive_type, primitive_count);
     d3d9_device_upload_sysmem_vertex_buffers(device, base_vertex_idx, min_vertex_idx, vertex_count);
     d3d9_device_upload_sysmem_index_buffer(device, start_idx, index_count);
@@ -3003,6 +3025,7 @@ static HRESULT WINAPI d3d9_device_DrawPrimitiveUP(IDirect3DDevice9Ex *iface,
         return D3DERR_INVALIDCALL;
     }
 
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     hr = d3d9_device_prepare_vertex_buffer(device, size);
     if (FAILED(hr))
         goto done;
@@ -3119,6 +3142,7 @@ static HRESULT WINAPI d3d9_device_DrawIndexedPrimitiveUP(IDirect3DDevice9Ex *ifa
         return D3DERR_INVALIDCALL;
     }
 
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     hr = d3d9_device_prepare_vertex_buffer(device, vtx_size);
     if (FAILED(hr))
         goto done;
@@ -3202,6 +3226,8 @@ static HRESULT WINAPI d3d9_device_ProcessVertices(IDirect3DDevice9Ex *iface,
             iface, src_start_idx, dst_idx, vertex_count, dst_buffer, declaration, flags);
 
     wined3d_mutex_lock();
+
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
 
     /* Note that an alternative approach would be to simply create these
      * buffers with WINED3D_RESOURCE_ACCESS_MAP_R and update them here like we
@@ -4645,8 +4671,6 @@ HRESULT device_init(struct d3d9_device *device, struct d3d9 *parent, struct wine
 
     wined3d_stateblock_set_render_state(device->state, WINED3D_RS_ZENABLE,
             !!swapchain_desc->enable_auto_depth_stencil);
-    wined3d_device_set_render_state(device->wined3d_device,
-            WINED3D_RS_ZENABLE, !!swapchain_desc->enable_auto_depth_stencil);
     device_reset_viewport_state(device);
 
     if (FAILED(hr = d3d9_device_get_swapchains(device)))

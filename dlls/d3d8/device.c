@@ -927,9 +927,6 @@ static HRESULT WINAPI d3d8_device_Reset(IDirect3DDevice8 *iface,
         wined3d_stateblock_set_render_state(device->state, WINED3D_RS_POINTSIZE_MIN, 0);
         wined3d_stateblock_set_render_state(device->state, WINED3D_RS_ZENABLE,
                 !!swapchain_desc.enable_auto_depth_stencil);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_POINTSIZE_MIN, 0);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_ZENABLE,
-                !!swapchain_desc.enable_auto_depth_stencil);
         device_reset_viewport_state(device);
         device->device_state = D3D8_DEVICE_STATE_OK;
     }
@@ -1606,6 +1603,7 @@ static HRESULT WINAPI d3d8_device_Clear(IDirect3DDevice8 *iface, DWORD rect_coun
     }
 
     wined3d_mutex_lock();
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     hr = wined3d_device_clear(device->wined3d_device, rect_count, (const RECT *)rects, flags, &c, z, stencil);
     wined3d_mutex_unlock();
 
@@ -1845,6 +1843,34 @@ static HRESULT WINAPI d3d8_device_GetClipPlane(IDirect3DDevice8 *iface, DWORD in
     return hr;
 }
 
+static void resolve_depth_buffer(struct d3d8_device *device)
+{
+    const struct wined3d_stateblock_state *state = wined3d_stateblock_get_state(device->state);
+    struct wined3d_rendertarget_view *wined3d_dsv;
+    struct wined3d_resource *dst_resource;
+    struct wined3d_texture *dst_texture;
+    struct wined3d_resource_desc desc;
+    struct d3d8_surface *d3d8_dsv;
+
+    if (!(dst_texture = state->textures[0]))
+        return;
+    dst_resource = wined3d_texture_get_resource(dst_texture);
+    wined3d_resource_get_desc(dst_resource, &desc);
+    if (desc.format != WINED3DFMT_D24_UNORM_S8_UINT
+            && desc.format != WINED3DFMT_X8D24_UNORM
+            && desc.format != WINED3DFMT_DF16
+            && desc.format != WINED3DFMT_DF24
+            && desc.format != WINED3DFMT_INTZ)
+        return;
+
+    if (!(wined3d_dsv = wined3d_device_get_depth_stencil_view(device->wined3d_device)))
+        return;
+    d3d8_dsv = wined3d_rendertarget_view_get_sub_resource_parent(wined3d_dsv);
+
+    wined3d_device_resolve_sub_resource(device->wined3d_device, dst_resource, 0,
+            wined3d_rendertarget_view_get_resource(wined3d_dsv), d3d8_dsv->sub_resource_idx, desc.format);
+}
+
 static HRESULT WINAPI d3d8_device_SetRenderState(IDirect3DDevice8 *iface,
         D3DRENDERSTATETYPE state, DWORD value)
 {
@@ -1856,8 +1882,8 @@ static HRESULT WINAPI d3d8_device_SetRenderState(IDirect3DDevice8 *iface,
     if (state == D3DRS_ZBIAS)
         state = WINED3D_RS_DEPTHBIAS;
     wined3d_stateblock_set_render_state(device->update_state, state, value);
-    if (!device->recording)
-        wined3d_device_set_render_state(device->wined3d_device, state, value);
+    if (state == D3DRS_POINTSIZE && value == D3D8_RESZ_CODE)
+        resolve_depth_buffer(device);
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -2287,6 +2313,7 @@ static HRESULT WINAPI d3d8_device_ValidateDevice(IDirect3DDevice8 *iface, DWORD 
     TRACE("iface %p, pass_count %p.\n", iface, pass_count);
 
     wined3d_mutex_lock();
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     hr = wined3d_device_validate_device(device->wined3d_device, pass_count);
     wined3d_mutex_unlock();
 
@@ -2417,6 +2444,7 @@ static HRESULT WINAPI d3d8_device_DrawPrimitive(IDirect3DDevice8 *iface,
 
     vertex_count = vertex_count_from_primitive_count(primitive_type, primitive_count);
     wined3d_mutex_lock();
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     d3d8_device_upload_sysmem_vertex_buffers(device, start_vertex, vertex_count);
     wined3d_device_set_primitive_type(device->wined3d_device, primitive_type, 0);
     hr = wined3d_device_draw_primitive(device->wined3d_device, start_vertex, vertex_count);
@@ -2439,6 +2467,7 @@ static HRESULT WINAPI d3d8_device_DrawIndexedPrimitive(IDirect3DDevice8 *iface,
 
     index_count = vertex_count_from_primitive_count(primitive_type, primitive_count);
     wined3d_mutex_lock();
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     base_vertex_index = wined3d_device_get_base_vertex_index(device->wined3d_device);
     d3d8_device_upload_sysmem_vertex_buffers(device, base_vertex_index + min_vertex_idx, vertex_count);
     d3d8_device_upload_sysmem_index_buffer(device, start_idx, index_count);
@@ -2509,6 +2538,7 @@ static HRESULT WINAPI d3d8_device_DrawPrimitiveUP(IDirect3DDevice8 *iface,
     }
 
     wined3d_mutex_lock();
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     hr = d3d8_device_prepare_vertex_buffer(device, size);
     if (FAILED(hr))
         goto done;
@@ -2610,6 +2640,7 @@ static HRESULT WINAPI d3d8_device_DrawIndexedPrimitiveUP(IDirect3DDevice8 *iface
 
     wined3d_mutex_lock();
 
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     hr = d3d8_device_prepare_vertex_buffer(device, vtx_size);
     if (FAILED(hr))
         goto done;
@@ -2688,6 +2719,8 @@ static HRESULT WINAPI d3d8_device_ProcessVertices(IDirect3DDevice8 *iface, UINT 
             iface, src_start_idx, dst_idx, vertex_count, dst_buffer, flags);
 
     wined3d_mutex_lock();
+
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
 
     /* Note that an alternative approach would be to simply create these
      * buffers with WINED3D_RESOURCE_ACCESS_MAP_R and update them here like we
@@ -3733,9 +3766,6 @@ HRESULT device_init(struct d3d8_device *device, struct d3d8 *parent, struct wine
     wined3d_stateblock_set_render_state(device->state, WINED3D_RS_ZENABLE,
             !!swapchain_desc.enable_auto_depth_stencil);
     wined3d_stateblock_set_render_state(device->state, WINED3D_RS_POINTSIZE_MIN, 0);
-    wined3d_device_set_render_state(device->wined3d_device,
-            WINED3D_RS_ZENABLE, !!swapchain_desc.enable_auto_depth_stencil);
-    wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_POINTSIZE_MIN, 0);
     device_reset_viewport_state(device);
     wined3d_mutex_unlock();
 

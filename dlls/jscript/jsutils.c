@@ -355,21 +355,9 @@ HRESULT jsval_to_variant(jsval_t val, VARIANT *retv)
             IDispatch_AddRef(get_object(val));
         V_DISPATCH(retv) = get_object(val);
         return S_OK;
-    case JSV_STRING: {
-        jsstr_t *str = get_string(val);
-
+    case JSV_STRING:
         V_VT(retv) = VT_BSTR;
-        if(is_null_bstr(str)) {
-            V_BSTR(retv) = NULL;
-        }else {
-            V_BSTR(retv) = SysAllocStringLen(NULL, jsstr_length(str));
-            if(V_BSTR(retv))
-                jsstr_flush(str, V_BSTR(retv));
-            else
-                return E_OUTOFMEMORY;
-        }
-        return S_OK;
-    }
+        return jsstr_to_bstr(get_string(val), &V_BSTR(retv));
     case JSV_NUMBER: {
         double n = get_number(val);
 
@@ -457,7 +445,7 @@ HRESULT to_primitive(script_ctx_t *ctx, jsval_t val, jsval_t *ret, hint_t hint)
         jsdisp_release(jsdisp);
 
         WARN("failed\n");
-        return throw_type_error(ctx, JS_E_TO_PRIMITIVE, NULL);
+        return JS_E_TO_PRIMITIVE;
     }
 
     return jsval_copy(val, ret);
@@ -862,7 +850,7 @@ HRESULT to_object(script_ctx_t *ctx, jsval_t val, IDispatch **disp)
     case JSV_UNDEFINED:
     case JSV_NULL:
         WARN("object expected\n");
-        return throw_type_error(ctx, JS_E_OBJECT_EXPECTED, NULL);
+        return JS_E_OBJECT_EXPECTED;
     case JSV_VARIANT:
         switch(V_VT(get_variant(val))) {
         case VT_ARRAY|VT_VARIANT:
@@ -885,13 +873,15 @@ HRESULT to_object(script_ctx_t *ctx, jsval_t val, IDispatch **disp)
 
 HRESULT variant_change_type(script_ctx_t *ctx, VARIANT *dst, VARIANT *src, VARTYPE vt)
 {
+    jsexcept_t ei;
     jsval_t val;
     HRESULT hres;
 
-    clear_ei(ctx);
     hres = variant_to_jsval(src, &val);
     if(FAILED(hres))
         return hres;
+
+    enter_script(ctx, &ei);
 
     switch(vt) {
     case VT_I2:
@@ -945,16 +935,7 @@ HRESULT variant_change_type(script_ctx_t *ctx, VARIANT *dst, VARIANT *src, VARTY
         if(FAILED(hres))
             break;
 
-        if(is_null_bstr(str)) {
-            V_BSTR(dst) = NULL;
-            break;
-        }
-
-        V_BSTR(dst) = SysAllocStringLen(NULL, jsstr_length(str));
-        if(V_BSTR(dst))
-            jsstr_flush(str, V_BSTR(dst));
-        else
-            hres = E_OUTOFMEMORY;
+        hres = jsstr_to_bstr(str, &V_BSTR(dst));
         break;
     }
     case VT_EMPTY:
@@ -969,6 +950,7 @@ HRESULT variant_change_type(script_ctx_t *ctx, VARIANT *dst, VARIANT *src, VARTY
     }
 
     jsval_release(val);
+    leave_script(ctx, hres);
     if(FAILED(hres))
         return hres;
 

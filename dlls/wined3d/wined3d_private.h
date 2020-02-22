@@ -79,6 +79,7 @@
 struct wined3d_fragment_pipe_ops;
 struct wined3d_adapter;
 struct wined3d_context;
+struct wined3d_gl_info;
 struct wined3d_state;
 struct wined3d_swapchain_gl;
 struct wined3d_texture_gl;
@@ -293,6 +294,7 @@ extern const struct min_lookup minMipLookup[WINED3D_TEXF_LINEAR + 1] DECLSPEC_HI
 extern const GLenum magLookup[WINED3D_TEXF_LINEAR + 1] DECLSPEC_HIDDEN;
 
 GLenum wined3d_gl_compare_func(enum wined3d_cmp_func f) DECLSPEC_HIDDEN;
+VkAccessFlags vk_access_mask_from_bind_flags(uint32_t bind_flags) DECLSPEC_HIDDEN;
 
 static inline enum wined3d_cmp_func wined3d_sanitize_cmp_func(enum wined3d_cmp_func func)
 {
@@ -1084,7 +1086,6 @@ struct wined3d_shader_parser_state
 struct wined3d_shader_context
 {
     const struct wined3d_shader *shader;
-    const struct wined3d_gl_info *gl_info;
     const struct wined3d_shader_reg_maps *reg_maps;
     struct wined3d_string_buffer *buffer;
     struct wined3d_shader_tex_mx *tex_mx;
@@ -1511,6 +1512,12 @@ do {                                                                \
 #else
 #define checkGLcall(A) do {} while(0)
 #endif
+
+struct wined3d_bo_vk
+{
+    VkBuffer vk_buffer;
+    VkDeviceMemory vk_memory;
+};
 
 struct wined3d_bo_address
 {
@@ -2152,14 +2159,46 @@ void wined3d_context_gl_unmap_bo_address(struct wined3d_context_gl *context_gl, 
 void wined3d_context_gl_update_stream_sources(struct wined3d_context_gl *context_gl,
         const struct wined3d_state *state) DECLSPEC_HIDDEN;
 
+struct wined3d_command_buffer_vk
+{
+    uint64_t id;
+    VkCommandBuffer vk_command_buffer;
+    VkFence vk_fence;
+};
+
 struct wined3d_context_vk
 {
     struct wined3d_context c;
+
+    const struct wined3d_vk_info *vk_info;
+
+    VkCommandPool vk_command_pool;
+    struct wined3d_command_buffer_vk current_command_buffer;
+    uint64_t completed_command_buffer_id;
+
+    struct
+    {
+        struct wined3d_command_buffer_vk *buffers;
+        SIZE_T buffers_size;
+        SIZE_T buffer_count;
+    } submitted;
 };
 
+static inline struct wined3d_context_vk *wined3d_context_vk(struct wined3d_context *context)
+{
+    return CONTAINING_RECORD(context, struct wined3d_context_vk, c);
+}
+
 void wined3d_context_vk_cleanup(struct wined3d_context_vk *context_vk) DECLSPEC_HIDDEN;
+BOOL wined3d_context_vk_create_bo(struct wined3d_context_vk *context_vk, VkDeviceSize size,
+        VkBufferUsageFlags usage, VkMemoryPropertyFlags memory_type, struct wined3d_bo_vk *bo) DECLSPEC_HIDDEN;
+void wined3d_context_vk_destroy_bo(struct wined3d_context_vk *context_vk,
+        const struct wined3d_bo_vk *bo) DECLSPEC_HIDDEN;
+VkCommandBuffer wined3d_context_vk_get_command_buffer(struct wined3d_context_vk *context_vk) DECLSPEC_HIDDEN;
 HRESULT wined3d_context_vk_init(struct wined3d_context_vk *context_vk,
         struct wined3d_swapchain *swapchain) DECLSPEC_HIDDEN;
+void wined3d_context_vk_submit_command_buffer(struct wined3d_context_vk *context_vk) DECLSPEC_HIDDEN;
+void wined3d_context_vk_wait_command_buffer(struct wined3d_context_vk *context_vk, uint64_t id) DECLSPEC_HIDDEN;
 
 typedef void (*APPLYSTATEFUNC)(struct wined3d_context *ctx, const struct wined3d_state *state, DWORD state_id);
 
@@ -2929,6 +2968,8 @@ static inline struct wined3d_adapter_vk *wined3d_adapter_vk(struct wined3d_adapt
 
 struct wined3d_adapter *wined3d_adapter_vk_create(unsigned int ordinal,
         unsigned int wined3d_creation_flags) DECLSPEC_HIDDEN;
+unsigned int wined3d_adapter_vk_get_memory_type_index(const struct wined3d_adapter_vk *adapter_vk,
+        uint32_t memory_type_mask, VkMemoryPropertyFlags flags) DECLSPEC_HIDDEN;
 
 struct wined3d_caps_gl_ctx
 {
@@ -3331,6 +3372,7 @@ struct wined3d_device_vk
 
     VkDevice vk_device;
     VkQueue vk_queue;
+    uint32_t vk_queue_family_index;
 
     struct wined3d_vk_info vk_info;
 };
@@ -4208,6 +4250,8 @@ HRESULT wined3d_buffer_gl_init(struct wined3d_buffer_gl *buffer_gl, struct wined
 struct wined3d_buffer_vk
 {
     struct wined3d_buffer b;
+
+    struct wined3d_bo_vk bo;
 };
 
 static inline struct wined3d_buffer_vk *wined3d_buffer_vk(struct wined3d_buffer *buffer)
