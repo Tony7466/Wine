@@ -129,8 +129,9 @@ struct strmbase_filter
     CRITICAL_SECTION csFilter;
 
     FILTER_STATE state;
-    IReferenceClock * pClock;
-    FILTER_INFO filterInfo;
+    IReferenceClock *clock;
+    WCHAR name[128];
+    IFilterGraph *graph;
     CLSID clsid;
     LONG pin_version;
 
@@ -195,13 +196,9 @@ typedef struct TransformFilterFuncTable {
 	TransformFilter_StartStreaming pfnStartStreaming;
 	TransformFilter_Receive pfnReceive;
 	TransformFilter_StopStreaming pfnStopStreaming;
-	TransformFilter_CheckInputType pfnCheckInputType;
         HRESULT (*transform_connect_sink)(TransformFilter *filter, const AM_MEDIA_TYPE *mt);
 	TransformFilter_BreakConnect pfnBreakConnect;
-	TransformFilter_EndOfStream pfnEndOfStream;
-	TransformFilter_BeginFlush pfnBeginFlush;
 	TransformFilter_EndFlush pfnEndFlush;
-	TransformFilter_NewSegment pfnNewSegment;
 	TransformFilter_Notify pfnNotify;
 } TransformFilterFuncTable;
 

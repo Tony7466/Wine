@@ -117,15 +117,6 @@ AC_ARG_WITH(wine64,    AS_HELP_STRING([--with-wine64=DIR],[use the 64-bit Wine i
 
 AC_CANONICAL_HOST
 
-dnl check for out of tree build with unclean source tree
-case "$srcdir" in
- .) ;;
- *) if test -f "$srcdir/Makefile" -o -f "$srcdir/include/config.h"; then
-      AC_MSG_ERROR([you are building out of the source tree, but the source tree contains object files.
-You need to run 'make distclean' in the source tree first.])
-    fi ;;
-esac
-
 dnl **** Check for some programs ****
 
 AC_PROG_MAKE_SET
@@ -3726,6 +3717,7 @@ WINE_CONFIG_MAKEFILE(dlls/vcomp120)
 WINE_CONFIG_MAKEFILE(dlls/vcomp140)
 WINE_CONFIG_MAKEFILE(dlls/vcomp90)
 WINE_CONFIG_MAKEFILE(dlls/vcruntime140)
+WINE_CONFIG_MAKEFILE(dlls/vcruntime140_1)
 WINE_CONFIG_MAKEFILE(dlls/vdhcp.vxd,enable_win16)
 WINE_CONFIG_MAKEFILE(dlls/vdmdbg)
 WINE_CONFIG_MAKEFILE(dlls/ver.dll16,enable_win16)

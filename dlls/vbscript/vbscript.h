@@ -192,6 +192,8 @@ struct _script_ctx_t {
     BuiltinDisp *err_obj;
 
     EXCEPINFO ei;
+    vbscode_t *error_loc_code;
+    unsigned error_loc_offset;
 
     struct list objects;
     struct list code_list;
@@ -294,6 +296,7 @@ typedef union {
 
 typedef struct {
     vbsop_t op;
+    unsigned loc;
     instr_arg_t arg1;
     instr_arg_t arg2;
 } instr_t;
@@ -334,8 +337,11 @@ struct _function_t {
 
 struct _vbscode_t {
     instr_t *instrs;
-    WCHAR *source;
     unsigned ref;
+
+    WCHAR *source;
+    DWORD_PTR cookie;
+    unsigned start_line;
 
     BOOL option_explicit;
 
@@ -362,13 +368,13 @@ static inline void grab_vbscode(vbscode_t *code)
 }
 
 void release_vbscode(vbscode_t*) DECLSPEC_HIDDEN;
-HRESULT compile_script(script_ctx_t*,const WCHAR*,const WCHAR*,DWORD,vbscode_t**) DECLSPEC_HIDDEN;
-HRESULT compile_procedure(script_ctx_t*,const WCHAR*,const WCHAR*,DWORD,class_desc_t**) DECLSPEC_HIDDEN;
+HRESULT compile_script(script_ctx_t*,const WCHAR*,const WCHAR*,DWORD_PTR,unsigned,DWORD,vbscode_t**) DECLSPEC_HIDDEN;
+HRESULT compile_procedure(script_ctx_t*,const WCHAR*,const WCHAR*,DWORD_PTR,unsigned,DWORD,class_desc_t**) DECLSPEC_HIDDEN;
 HRESULT exec_script(script_ctx_t*,BOOL,function_t*,vbdisp_t*,DISPPARAMS*,VARIANT*) DECLSPEC_HIDDEN;
 void release_dynamic_var(dynamic_var_t*) DECLSPEC_HIDDEN;
 IDispatch *lookup_named_item(script_ctx_t*,const WCHAR*,unsigned) DECLSPEC_HIDDEN;
 void clear_ei(EXCEPINFO*) DECLSPEC_HIDDEN;
-HRESULT report_script_error(script_ctx_t*) DECLSPEC_HIDDEN;
+HRESULT report_script_error(script_ctx_t*,const vbscode_t*,unsigned) DECLSPEC_HIDDEN;
 void detach_global_objects(script_ctx_t*) DECLSPEC_HIDDEN;
 HRESULT get_builtin_id(BuiltinDisp*,const WCHAR*,DISPID*) DECLSPEC_HIDDEN;
 

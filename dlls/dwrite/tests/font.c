@@ -406,7 +406,7 @@ struct cmap_encoding_record
 struct cmap_header
 {
     WORD version;
-    WORD numTables;
+    WORD num_tables;
     struct cmap_encoding_record tables[1];
 };
 
@@ -1677,9 +1677,11 @@ if (0) /* crashes on native */
 
 static void test_GetFamilyNames(void)
 {
-    IDWriteFontFamily *family;
     IDWriteLocalizedStrings *names, *names2;
+    IDWriteFontFace3 *fontface3;
     IDWriteGdiInterop *interop;
+    IDWriteFontFamily *family;
+    IDWriteFontFace *fontface;
     IDWriteFactory *factory;
     IDWriteFont *font;
     LOGFONTW logfont;
@@ -1761,10 +1763,32 @@ static void test_GetFamilyNames(void)
 
     buffer[0] = 0;
     hr = IDWriteLocalizedStrings_GetString(names, 0, buffer, len+1);
-    ok(hr == S_OK, "got 0x%08x\n", hr);
-    ok(buffer[0] != 0, "got %x\n", buffer[0]);
+    ok(hr == S_OK, "Failed to get a string, hr %#x.\n", hr);
+    ok(!lstrcmpW(buffer, L"Tahoma"), "Unexpected family name %s.\n", wine_dbgstr_w(buffer));
 
     IDWriteLocalizedStrings_Release(names);
+
+    /* GetFamilyNames() on font face */
+    hr = IDWriteFont_CreateFontFace(font, &fontface);
+    ok(hr == S_OK, "Failed to create fontface, hr %#x.\n", hr);
+
+    if (SUCCEEDED(IDWriteFontFace_QueryInterface(fontface, &IID_IDWriteFontFace3, (void **)&fontface3)))
+    {
+        hr = IDWriteFontFace3_GetFamilyNames(fontface3, &names);
+        ok(hr == S_OK, "Failed to get family names, hr %#x.\n", hr);
+
+        buffer[0] = 0;
+        hr = IDWriteLocalizedStrings_GetString(names, 0, buffer, len+1);
+        ok(hr == S_OK, "Failed to get a string, hr %#x.\n", hr);
+        ok(!lstrcmpW(buffer, L"Tahoma"), "Unexpected family name %s.\n", wine_dbgstr_w(buffer));
+
+        IDWriteLocalizedStrings_Release(names);
+        IDWriteFontFace3_Release(fontface3);
+    }
+    else
+        win_skip("IDWriteFontFace3::GetFamilyNames() is not supported.\n");
+
+    IDWriteFontFace_Release(fontface);
 
     IDWriteFontFamily_Release(family);
     IDWriteFont_Release(font);
@@ -2376,11 +2400,14 @@ static void test_system_fontcollection(void)
     IDWriteFontCollection *collection, *coll2;
     IDWriteLocalFontFileLoader *localloader;
     IDWriteFontCollection1 *collection1;
+    IDWriteFontCollection2 *collection2;
     IDWriteFontCollection3 *collection3;
     IDWriteFactory *factory, *factory2;
+    DWRITE_FONT_FAMILY_MODEL model;
     IDWriteFontFileLoader *loader;
     IDWriteFontFamily *family;
     IDWriteFontFace *fontface;
+    IDWriteFactory6 *factory6;
     IDWriteFontFile *file;
     IDWriteFont *font;
     HRESULT hr;
@@ -2561,15 +2588,48 @@ static void test_system_fontcollection(void)
 todo_wine
         ok(!!event, "Expected event handle.\n");
 
+        model = IDWriteFontCollection3_GetFontFamilyModel(collection3);
+        ok(model == DWRITE_FONT_FAMILY_MODEL_WEIGHT_STRETCH_STYLE, "Unexpected model.\n");
+
         IDWriteFontCollection3_Release(collection3);
     }
     else
         win_skip("IDWriteFontCollection3 is not supported.\n");
 
+    /* With specified family model. */
+    hr = IDWriteFactory_QueryInterface(factory, &IID_IDWriteFactory6, (void **)&factory6);
+    if (SUCCEEDED(hr))
+    {
+        IDWriteFontCollection2 *c2;
+
+        hr = IDWriteFactory6_GetSystemFontCollection(factory6, FALSE, DWRITE_FONT_FAMILY_MODEL_TYPOGRAPHIC,
+                &collection2);
+    todo_wine
+        ok(hr == S_OK, "Failed to get collection, hr %#x.\n", hr);
+    if (SUCCEEDED(hr))
+    {
+        hr = IDWriteFactory6_GetSystemFontCollection(factory6, FALSE, DWRITE_FONT_FAMILY_MODEL_TYPOGRAPHIC, &c2);
+        ok(hr == S_OK, "Failed to get collection, hr %#x.\n", hr);
+        ok(c2 == collection2 && collection != (IDWriteFontCollection *)c2, "Unexpected collection instance.\n");
+        IDWriteFontCollection2_Release(c2);
+        IDWriteFontCollection2_Release(collection2);
+
+        hr = IDWriteFactory6_GetSystemFontCollection(factory6, FALSE, DWRITE_FONT_FAMILY_MODEL_WEIGHT_STRETCH_STYLE,
+                &collection2);
+        ok(hr == S_OK, "Failed to get collection, hr %#x.\n", hr);
+        ok(collection == (IDWriteFontCollection *)collection2, "Unexpected instance.\n");
+        IDWriteFontCollection2_Release(collection2);
+    }
+
+        IDWriteFactory6_Release(factory6);
+    }
+    else
+        win_skip("IDWriteFactory6 is not supported.\n");
+
     ref = IDWriteFontCollection_Release(collection);
-    ok(ref == 0, "collection not released, %u\n", ref);
+    ok(!ref, "Collection wasn't released, %u.\n", ref);
     ref = IDWriteFactory_Release(factory);
-    ok(ref == 0, "factory not released, %u\n", ref);
+    ok(!ref, "Factory wasn't released, %u.\n", ref);
 }
 
 static void get_logfont_from_font(IDWriteFont *font, LOGFONTW *logfont)
@@ -3544,7 +3604,7 @@ static UINT32 opentype_cmap_get_unicode_ranges(const struct dwrite_fonttable *ta
 
     *ranges = NULL;
 
-    num_tables = table_read_be_word(table, 0, FIELD_OFFSET(struct cmap_header, numTables));
+    num_tables = table_read_be_word(table, 0, FIELD_OFFSET(struct cmap_header, num_tables));
     tables = table->data + FIELD_OFFSET(struct cmap_header, tables);
 
     for (i = 0; i < num_tables; ++i)
@@ -4002,6 +4062,8 @@ static void test_GetInformationalStrings(void)
 {
     IDWriteLocalizedStrings *strings, *strings2;
     IDWriteFontCollection *collection;
+    IDWriteFontFace3 *fontface3;
+    IDWriteFontFace *fontface;
     IDWriteFontFamily *family;
     IDWriteFactory *factory;
     IDWriteFont *font;
@@ -4048,6 +4110,24 @@ static void test_GetInformationalStrings(void)
 
     IDWriteLocalizedStrings_Release(strings);
     IDWriteLocalizedStrings_Release(strings2);
+
+    hr = IDWriteFont_CreateFontFace(font, &fontface);
+    ok(hr == S_OK, "Failed to create fontface, hr %#x.\n", hr);
+
+    if (SUCCEEDED(hr = IDWriteFontFace_QueryInterface(fontface, &IID_IDWriteFontFace3, (void **)&fontface3)))
+    {
+        hr = IDWriteFontFace3_GetInformationalStrings(fontface3, DWRITE_INFORMATIONAL_STRING_WIN32_FAMILY_NAMES,
+                &strings, &exists);
+        ok(hr == S_OK, "Failed to get info strings, hr %#x.\n", hr);
+        IDWriteLocalizedStrings_Release(strings);
+
+        IDWriteFontFace3_Release(fontface3);
+    }
+    else
+        win_skip("IDWriteFontFace3::GetInformationalStrings() is not supported.\n");
+
+    IDWriteFontFace_Release(fontface);
+
     IDWriteFont_Release(font);
     IDWriteFontFamily_Release(family);
     IDWriteFontCollection_Release(collection);
@@ -4410,8 +4490,10 @@ static void test_GetFaceNames(void)
     static const WCHAR obliqueW[] = {'O','b','l','i','q','u','e',0};
     static const WCHAR enus2W[] = {'e','n','-','U','s',0};
     static const WCHAR enusW[] = {'e','n','-','u','s',0};
-    IDWriteLocalizedStrings *strings, *strings2;
+    IDWriteLocalizedStrings *strings, *strings2, *strings3;
+    IDWriteFontFace3 *fontface3;
     IDWriteGdiInterop *interop;
+    IDWriteFontFace *fontface;
     IDWriteFactory *factory;
     UINT32 count, index;
     IDWriteFont *font;
@@ -4469,6 +4551,32 @@ static void test_GetFaceNames(void)
     ok(hr == S_OK, "got 0x%08x\n", hr);
     ok(!lstrcmpW(buffW, obliqueW), "got %s\n", wine_dbgstr_w(buffW));
     IDWriteLocalizedStrings_Release(strings);
+
+    hr = IDWriteFont_CreateFontFace(font, &fontface);
+    ok(hr == S_OK, "Failed to create a font face, hr %#x.\n", hr);
+
+    if (SUCCEEDED(IDWriteFontFace_QueryInterface(fontface, &IID_IDWriteFontFace3, (void **)&fontface3)))
+    {
+        hr = IDWriteFontFace3_GetFaceNames(fontface3, &strings2);
+        ok(hr == S_OK, "Failed to get face names, hr %#x.\n", hr);
+
+        hr = IDWriteFontFace3_GetFaceNames(fontface3, &strings3);
+        ok(hr == S_OK, "Failed to get face names, hr %#x.\n", hr);
+        ok(strings2 != strings3, "Unexpected instance.\n");
+        IDWriteLocalizedStrings_Release(strings3);
+
+        buffW[0] = 0;
+        hr = IDWriteLocalizedStrings_GetString(strings2, 0, buffW, ARRAY_SIZE(buffW));
+        ok(hr == S_OK, "Failed to get a string, hr %#x.\n", hr);
+        ok(!lstrcmpW(buffW, obliqueW), "Unexpected name %s.\n", wine_dbgstr_w(buffW));
+        IDWriteLocalizedStrings_Release(strings2);
+
+        IDWriteFontFace3_Release(fontface3);
+    }
+    else
+        win_skip("GetFaceNames() is not supported.\n");
+
+    IDWriteFontFace_Release(fontface);
 
     IDWriteFont_Release(font);
     IDWriteGdiInterop_Release(interop);
@@ -4990,9 +5098,7 @@ static void test_IsMonospacedFont(void)
 
             IDWriteFont1_GetPanose(font1, &panose);
 
-            /* FIXME: failures disabled on Wine for now */
             is_monospaced_expected = get_expected_is_monospaced(fontface1, &panose);
-        todo_wine_if(is_monospaced_expected != is_monospaced_face)
             ok(is_monospaced_expected == is_monospaced_face, "Unexpected is_monospaced flag %d for %s, font %d.\n",
                     is_monospaced_face, wine_dbgstr_w(nameW), j);
 
@@ -7260,10 +7366,7 @@ static BOOL get_expected_is_symbol(IDWriteFontFace *fontface)
 
     if (tt_os2)
     {
-        if (tt_os2->version)
-            is_symbol = !!(GET_BE_DWORD(tt_os2->ulCodePageRange1) & FS_SYMBOL);
-        if (!is_symbol)
-            is_symbol = tt_os2->panose.bFamilyType == PAN_FAMILY_PICTORIAL;
+        is_symbol = tt_os2->panose.bFamilyType == PAN_FAMILY_PICTORIAL;
         IDWriteFontFace_ReleaseFontTable(fontface, os2_context);
     }
 
@@ -7275,7 +7378,7 @@ static BOOL get_expected_is_symbol(IDWriteFontFace *fontface)
     if (FAILED(hr) || !exists)
         return is_symbol;
 
-    num_tables = table_read_be_word(&cmap, 0, FIELD_OFFSET(struct cmap_header, numTables));
+    num_tables = table_read_be_word(&cmap, 0, FIELD_OFFSET(struct cmap_header, num_tables));
     tables = cmap.data + FIELD_OFFSET(struct cmap_header, tables);
 
     for (i = 0; i < num_tables; ++i)
@@ -7345,9 +7448,7 @@ static void test_IsSymbolFont(void)
             is_symbol_face = IDWriteFontFace_IsSymbolFont(fontface);
             ok(is_symbol_font == is_symbol_face, "Unexpected symbol flag.\n");
 
-            /* FIXME: failures disabled on Wine for now */
             is_symbol_expected = get_expected_is_symbol(fontface);
-        todo_wine_if(is_symbol_expected != is_symbol_face)
             ok(is_symbol_expected == is_symbol_face, "Unexpected is_symbol flag %d for %s, font %d.\n",
                     is_symbol_face, wine_dbgstr_w(nameW), j);
 

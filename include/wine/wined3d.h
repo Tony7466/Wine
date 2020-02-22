@@ -267,6 +267,8 @@ enum wined3d_format_id
     WINED3DFMT_R16                          = WINEMAKEFOURCC(' ','R','1','6'),
     WINED3DFMT_AL16                         = WINEMAKEFOURCC('A','L','1','6'),
     WINED3DFMT_NV12                         = WINEMAKEFOURCC('N','V','1','2'),
+    WINED3DFMT_DF16                         = WINEMAKEFOURCC('D','F','1','6'),
+    WINED3DFMT_DF24                         = WINEMAKEFOURCC('D','F','2','4'),
 
     WINED3DFMT_FORCE_DWORD = 0xffffffff
 };
@@ -2289,6 +2291,7 @@ struct wined3d_resource * __cdecl wined3d_buffer_get_resource(struct wined3d_buf
 ULONG __cdecl wined3d_buffer_incref(struct wined3d_buffer *buffer);
 
 HRESULT __cdecl wined3d_device_acquire_focus_window(struct wined3d_device *device, HWND window);
+void __cdecl wined3d_device_apply_stateblock(struct wined3d_device *device, struct wined3d_stateblock *stateblock);
 HRESULT __cdecl wined3d_device_begin_scene(struct wined3d_device *device);
 HRESULT __cdecl wined3d_device_clear(struct wined3d_device *device, DWORD rect_count, const RECT *rects, DWORD flags,
         const struct wined3d_color *color, float z, DWORD stencil);

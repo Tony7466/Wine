@@ -184,7 +184,9 @@ typedef struct _IFilterGraphImpl {
     LONG ref;
     IUnknown *punkFilterMapper2;
     struct list filters;
-    LONG nameIndex;
+
+    unsigned int name_index;
+
     IReferenceClock *refClock;
     IBaseFilter *refClockProvider;
     EventsQueue evqueue;
@@ -554,74 +556,68 @@ static IBaseFilter *find_filter_by_name(IFilterGraphImpl *graph, const WCHAR *na
 }
 
 /*** IFilterGraph methods ***/
-static HRESULT WINAPI FilterGraph2_AddFilter(IFilterGraph2 *iface, IBaseFilter *pFilter,
-        LPCWSTR pName)
+static HRESULT WINAPI FilterGraph2_AddFilter(IFilterGraph2 *iface,
+        IBaseFilter *filter, const WCHAR *name)
 {
-    IFilterGraphImpl *This = impl_from_IFilterGraph2(iface);
-    struct filter *entry;
-    HRESULT hr;
-    int j;
-    WCHAR* wszFilterName = NULL;
+    IFilterGraphImpl *graph = impl_from_IFilterGraph2(iface);
     BOOL duplicate_name = FALSE;
+    struct filter *entry;
+    unsigned int i;
+    HRESULT hr;
 
-    TRACE("(%p/%p)->(%p, %s (%p))\n", This, iface, pFilter, debugstr_w(pName), pName);
+    TRACE("graph %p, filter %p, name %s.\n", graph, filter, debugstr_w(name));
 
-    if (!pFilter)
+    if (!filter)
         return E_POINTER;
 
-    wszFilterName = CoTaskMemAlloc( (pName ? lstrlenW(pName) + 6 : 5) * sizeof(WCHAR) );
-
-    if (pName && find_filter_by_name(This, pName))
-        duplicate_name = TRUE;
-
-    /* If no name given or name already existing, generate one */
-    if (!pName || duplicate_name)
-    {
-	static const WCHAR wszFmt1[] = {'%','s',' ','%','0','4','d',0};
-	static const WCHAR wszFmt2[] = {'%','0','4','d',0};
-
-	for (j = 0; j < 10000 ; j++)
-	{
-	    /* Create name */
-	    if (pName)
-		swprintf(wszFilterName, pName ? lstrlenW(pName) + 6 : 5, wszFmt1, pName, This->nameIndex);
-	    else
-		swprintf(wszFilterName, pName ? lstrlenW(pName) + 6 : 5, wszFmt2, This->nameIndex);
-	    TRACE("Generated name %s\n", debugstr_w(wszFilterName));
-
-	    if (This->nameIndex++ == 10000)
-		This->nameIndex = 1;
-
-            if (!find_filter_by_name(This, wszFilterName))
-                break;
-	}
-	/* Unable to find a suitable name */
-	if (j == 10000)
-	{
-	    CoTaskMemFree(wszFilterName);
-	    return VFW_E_DUPLICATE_NAME;
-	}
-    }
-    else
-	memcpy(wszFilterName, pName, (lstrlenW(pName) + 1) * sizeof(WCHAR));
-
-    hr = IBaseFilter_JoinFilterGraph(pFilter, (IFilterGraph *)&This->IFilterGraph2_iface, wszFilterName);
-    if (FAILED(hr))
-    {
-        CoTaskMemFree(wszFilterName);
-        return hr;
-    }
-
     if (!(entry = heap_alloc(sizeof(*entry))))
+        return E_OUTOFMEMORY;
+
+    if (!(entry->name = CoTaskMemAlloc((name ? wcslen(name) + 6 : 5) * sizeof(WCHAR))))
     {
-        CoTaskMemFree(wszFilterName);
+        heap_free(entry);
         return E_OUTOFMEMORY;
     }
 
-    IBaseFilter_AddRef(entry->filter = pFilter);
-    entry->name = wszFilterName;
-    list_add_head(&This->filters, &entry->entry);
-    This->version++;
+    if (name && find_filter_by_name(graph, name))
+        duplicate_name = TRUE;
+
+    if (!name || duplicate_name)
+    {
+        for (i = 0; i < 10000 ; ++i)
+        {
+            if (name)
+                swprintf(entry->name, name ? wcslen(name) + 6 : 5, L"%s %04u", name, graph->name_index);
+            else
+                swprintf(entry->name, name ? wcslen(name) + 6 : 5, L"%04u", graph->name_index);
+
+            graph->name_index = (graph->name_index + 1) % 10000;
+
+            if (!find_filter_by_name(graph, entry->name))
+                break;
+        }
+
+        if (i == 10000)
+        {
+            CoTaskMemFree(entry->name);
+            heap_free(entry);
+            return VFW_E_DUPLICATE_NAME;
+        }
+    }
+    else
+        wcscpy(entry->name, name);
+
+    if (FAILED(hr = IBaseFilter_JoinFilterGraph(filter,
+            (IFilterGraph *)&graph->IFilterGraph2_iface, entry->name)))
+    {
+        CoTaskMemFree(entry->name);
+        heap_free(entry);
+        return hr;
+    }
+
+    IBaseFilter_AddRef(entry->filter = filter);
+    list_add_head(&graph->filters, &entry->entry);
+    ++graph->version;
 
     return duplicate_name ? VFW_S_DUPLICATE_NAME : hr;
 }
@@ -958,7 +954,6 @@ static HRESULT WINAPI FilterGraph2_SetDefaultSyncSource(IFilterGraph2 *iface)
 
 static HRESULT GetFilterInfo(IMoniker* pMoniker, VARIANT* pvar)
 {
-    static const WCHAR wszFriendlyName[] = {'F','r','i','e','n','d','l','y','N','a','m','e',0};
     IPropertyBag * pPropBagCat = NULL;
     HRESULT hr;
 
@@ -967,7 +962,7 @@ static HRESULT GetFilterInfo(IMoniker* pMoniker, VARIANT* pvar)
     hr = IMoniker_BindToStorage(pMoniker, NULL, NULL, &IID_IPropertyBag, (LPVOID*)&pPropBagCat);
 
     if (SUCCEEDED(hr))
-        hr = IPropertyBag_Read(pPropBagCat, wszFriendlyName, pvar, NULL);
+        hr = IPropertyBag_Read(pPropBagCat, L"FriendlyName", pvar, NULL);
 
     if (SUCCEEDED(hr))
         TRACE("Moniker = %s\n", debugstr_w(V_BSTR(pvar)));
@@ -1674,7 +1669,6 @@ static HRESULT WINAPI FilterGraph2_RenderFile(IFilterGraph2 *iface, LPCWSTR lpcw
         LPCWSTR lpcwstrPlayList)
 {
     IFilterGraphImpl *This = impl_from_IFilterGraph2(iface);
-    static const WCHAR string[] = {'R','e','a','d','e','r',0};
     IBaseFilter* preader = NULL;
     IPin* ppinreader = NULL;
     IEnumPins* penumpins = NULL;
@@ -1688,7 +1682,7 @@ static HRESULT WINAPI FilterGraph2_RenderFile(IFilterGraph2 *iface, LPCWSTR lpcw
     if (lpcwstrPlayList != NULL)
         return E_INVALIDARG;
 
-    hr = IFilterGraph2_AddSourceFilter(iface, lpcwstrFile, string, &preader);
+    hr = IFilterGraph2_AddSourceFilter(iface, lpcwstrFile, L"Reader", &preader);
     if (FAILED(hr))
         return hr;
 
@@ -2506,6 +2500,8 @@ static HRESULT WINAPI MediaSeeking_GetStopPosition(IMediaSeeking *iface, LONGLON
     }
 
     LeaveCriticalSection(&graph->cs);
+
+    TRACE("Returning %s (%s seconds).\n", wine_dbgstr_longlong(*stop), debugstr_time(*stop));
     return hr;
 }
 
@@ -2531,7 +2527,7 @@ static HRESULT WINAPI MediaSeeking_GetCurrentPosition(IMediaSeeking *iface, LONG
 
     LeaveCriticalSection(&graph->cs);
 
-    TRACE("Returning %s.\n", wine_dbgstr_longlong(ret));
+    TRACE("Returning %s (%s seconds).\n", wine_dbgstr_longlong(ret), debugstr_time(ret));
     *current = ret;
 
     return S_OK;
@@ -2571,6 +2567,12 @@ static HRESULT WINAPI MediaSeeking_SetPositions(IMediaSeeking *iface, LONGLONG *
     TRACE("graph %p, current %s, current_flags %#x, stop %s, stop_flags %#x.\n", graph,
             current_ptr ? wine_dbgstr_longlong(*current_ptr) : "<null>", current_flags,
             stop_ptr ? wine_dbgstr_longlong(*stop_ptr): "<null>", stop_flags);
+    if (current_ptr)
+        TRACE("Setting current position to %s (%s seconds).\n",
+                wine_dbgstr_longlong(*current_ptr), debugstr_time(*current_ptr));
+    if (stop_ptr)
+        TRACE("Setting stop position to %s (%s seconds).\n",
+                wine_dbgstr_longlong(*stop_ptr), debugstr_time(*stop_ptr));
 
     if ((current_flags & 0x7) != AM_SEEKING_AbsolutePositioning
             && (current_flags & 0x7) != AM_SEEKING_NoPositioning)
@@ -5255,7 +5257,7 @@ static HRESULT WINAPI MediaFilter_Run(IMediaFilter *iface, REFERENCE_TIME start)
     IFilterGraphImpl *graph = impl_from_IMediaFilter(iface);
     REFERENCE_TIME stream_start = start;
 
-    TRACE("graph %p, start %s.\n", graph, wine_dbgstr_longlong(start));
+    TRACE("graph %p, start %s.\n", graph, debugstr_time(start));
 
     EnterCriticalSection(&graph->cs);
 
@@ -5706,7 +5708,7 @@ static HRESULT filter_graph_common_create(IUnknown *outer, void **out, BOOL thre
     fimpl->IGraphVersion_iface.lpVtbl = &IGraphVersion_VTable;
     fimpl->ref = 1;
     list_init(&fimpl->filters);
-    fimpl->nameIndex = 1;
+    fimpl->name_index = 1;
     fimpl->refClock = NULL;
     fimpl->hEventCompletion = CreateEventW(0, TRUE, FALSE, 0);
     fimpl->HandleEcComplete = TRUE;

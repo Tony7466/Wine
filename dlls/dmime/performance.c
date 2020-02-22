@@ -27,7 +27,11 @@ WINE_DEFAULT_DEBUG_CHANNEL(dmime);
 
 struct pchannel_block {
     DWORD block_num;   /* Block 0 is PChannels 0-15, Block 1 is PChannels 16-31, etc */
-    DMUSIC_PRIVATE_PCHANNEL pchannel[16];
+    struct {
+       DWORD channel;  /* MIDI channel */
+       DWORD group;    /* MIDI group */
+       IDirectMusicPort *port;
+    } pchannel[16];
     struct wine_rb_entry entry;
 };
 
@@ -531,7 +535,9 @@ static HRESULT WINAPI IDirectMusicPerformance8Impl_FreePMsg(IDirectMusicPerforma
   DMUS_ItemRemoveFromQueue( This, pItem );
   LeaveCriticalSection(&This->safe);
 
-  /** TODO: see if we should Release the pItem->pMsg->punkUser and others Interfaces */
+  if (pPMSG->punkUser)
+    IUnknown_Release(pPMSG->punkUser);
+
   HeapFree(GetProcessHeap(), 0, pItem);  
   return S_OK;
 }

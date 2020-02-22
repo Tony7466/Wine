@@ -233,6 +233,7 @@ static HRESULT adapter_vk_create_device(struct wined3d *wined3d, const struct wi
 
     device_vk->vk_device = vk_device;
     VK_CALL(vkGetDeviceQueue(vk_device, queue_family_index, 0, &device_vk->vk_queue));
+    device_vk->vk_queue_family_index = queue_family_index;
 
     device_vk->vk_info = *vk_info;
 #define LOAD_DEVICE_PFN(name) \
@@ -490,20 +491,65 @@ static void adapter_vk_uninit_3d(struct wined3d_device *device)
 static void *adapter_vk_map_bo_address(struct wined3d_context *context,
         const struct wined3d_bo_address *data, size_t size, uint32_t bind_flags, uint32_t map_flags)
 {
-    if (data->buffer_object)
+    struct wined3d_context_vk *context_vk = wined3d_context_vk(context);
+    const struct wined3d_vk_info *vk_info;
+    struct wined3d_device_vk *device_vk;
+    VkCommandBuffer vk_command_buffer;
+    VkBufferMemoryBarrier vk_barrier;
+    struct wined3d_bo_vk *bo;
+    void *map_ptr;
+    VkResult vr;
+
+    if (!(bo = (struct wined3d_bo_vk *)data->buffer_object))
+        return data->addr;
+
+    vk_info = context_vk->vk_info;
+    device_vk = wined3d_device_vk(context->device);
+
+    if (!(vk_command_buffer = wined3d_context_vk_get_command_buffer(context_vk)))
     {
-        ERR("Unsupported buffer object %#lx.\n", data->buffer_object);
+        ERR("Failed to get command buffer.\n");
         return NULL;
     }
 
-    return data->addr;
+    vk_barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    vk_barrier.pNext = NULL;
+    vk_barrier.srcAccessMask = vk_access_mask_from_bind_flags(bind_flags);
+    vk_barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+    vk_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    vk_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    vk_barrier.buffer = bo->vk_buffer;
+    vk_barrier.offset = (uintptr_t)data->addr;
+    vk_barrier.size = size;
+    VK_CALL(vkCmdPipelineBarrier(vk_command_buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_HOST_BIT, 0, 0, NULL, 1, &vk_barrier, 0, NULL));
+
+    wined3d_context_vk_submit_command_buffer(context_vk);
+    wined3d_context_vk_wait_command_buffer(context_vk, context_vk->current_command_buffer.id - 1);
+
+    if ((vr = VK_CALL(vkMapMemory(device_vk->vk_device, bo->vk_memory,
+            (uintptr_t)data->addr, size, 0, &map_ptr))) < 0)
+    {
+        ERR("Failed to map buffer, vr %s.\n", wined3d_debug_vkresult(vr));
+        return NULL;
+    }
+
+    return map_ptr;
 }
 
 static void adapter_vk_unmap_bo_address(struct wined3d_context *context, const struct wined3d_bo_address *data,
         uint32_t bind_flags, unsigned int range_count, const struct wined3d_map_range *ranges)
 {
-    if (data->buffer_object)
-        ERR("Unsupported buffer object %#lx.\n", data->buffer_object);
+    const struct wined3d_vk_info *vk_info;
+    struct wined3d_device_vk *device_vk;
+    struct wined3d_bo_vk *bo;
+
+    if (!(bo = (struct wined3d_bo_vk *)data->buffer_object))
+        return;
+
+    vk_info = wined3d_context_vk(context)->vk_info;
+    device_vk = wined3d_device_vk(context->device);
+    VK_CALL(vkUnmapMemory(device_vk->vk_device, bo->vk_memory));
 }
 
 static void adapter_vk_copy_bo_address(struct wined3d_context *context,
@@ -553,6 +599,23 @@ static void adapter_vk_destroy_swapchain(struct wined3d_swapchain *swapchain)
 {
     wined3d_swapchain_cleanup(swapchain);
     heap_free(swapchain);
+}
+
+unsigned int wined3d_adapter_vk_get_memory_type_index(const struct wined3d_adapter_vk *adapter_vk,
+        uint32_t memory_type_mask, VkMemoryPropertyFlags flags)
+{
+    const VkPhysicalDeviceMemoryProperties *memory_info = &adapter_vk->memory_properties;
+    unsigned int i;
+
+    for (i = 0; i < memory_info->memoryTypeCount; ++i)
+    {
+        if (!(memory_type_mask & (1u << i)))
+            continue;
+        if ((memory_info->memoryTypes[i].propertyFlags & flags) == flags)
+            return i;
+    }
+
+    return ~0u;
 }
 
 static HRESULT adapter_vk_create_buffer(struct wined3d_device *device,

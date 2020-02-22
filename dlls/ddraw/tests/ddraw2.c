@@ -1010,9 +1010,12 @@ static void test_coop_level_d3d_state(void)
     hr = IDirect3DDevice2_DrawPrimitive(device, D3DPT_TRIANGLESTRIP, D3DVT_LVERTEX, quad, ARRAY_SIZE(quad), 0);
     ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DDevice2_EndScene(device);
-    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
-    color = get_surface_color(rt, 320, 240);
-    ok(compare_color(color, 0x0000ff80, 1), "Got unexpected color 0x%08x.\n", color);
+    ok(hr == DD_OK || broken(ddraw_is_warp(ddraw) && hr == DDERR_SURFACELOST), "Got unexpected hr %#x.\n", hr);
+    if (hr == DD_OK)
+    {
+        color = get_surface_color(rt, 320, 240);
+        ok(compare_color(color, 0x0000ff80, 1), "Got unexpected color 0x%08x.\n", color);
+    }
 
     destroy_viewport(device, viewport);
     destroy_material(background);
@@ -6175,7 +6178,7 @@ static void test_pixel_format(void)
     IDirectDraw2 *ddraw = NULL;
     IDirectDrawClipper *clipper = NULL;
     DDSURFACEDESC ddsd;
-    IDirectDrawSurface *primary = NULL;
+    IDirectDrawSurface *primary = NULL, *offscreen;
     DDBLTFX fx;
     HRESULT hr;
 
@@ -6284,7 +6287,7 @@ static void test_pixel_format(void)
 
     if (clipper)
     {
-        hr = IDirectDrawSurface2_SetClipper(primary, clipper);
+        hr = IDirectDrawSurface_SetClipper(primary, clipper);
         ok(SUCCEEDED(hr), "Failed to set clipper, hr %#x.\n", hr);
 
         test_format = GetPixelFormat(hdc);
@@ -6294,10 +6297,24 @@ static void test_pixel_format(void)
         ok(test_format == format, "second window has pixel format %d, expected %d\n", test_format, format);
     }
 
+    memset(&ddsd, 0, sizeof(ddsd));
+    ddsd.dwSize = sizeof(ddsd);
+    ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT;
+    ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
+    ddsd.dwWidth = ddsd.dwHeight = 64;
+    hr = IDirectDraw2_CreateSurface(ddraw, &ddsd, &offscreen, NULL);
+    ok(SUCCEEDED(hr), "Failed to create surface, hr %#x.\n",hr);
+
     memset(&fx, 0, sizeof(fx));
     fx.dwSize = sizeof(fx);
-    hr = IDirectDrawSurface2_Blt(primary, NULL, NULL, NULL, DDBLT_COLORFILL | DDBLT_WAIT, &fx);
+    hr = IDirectDrawSurface_Blt(offscreen, NULL, NULL, NULL, DDBLT_WAIT | DDBLT_COLORFILL, &fx);
     ok(SUCCEEDED(hr), "Failed to clear source surface, hr %#x.\n", hr);
+
+    test_format = GetPixelFormat(hdc);
+    ok(test_format == format, "window has pixel format %d, expected %d\n", test_format, format);
+
+    hr = IDirectDrawSurface_Blt(primary, NULL, offscreen, NULL, DDBLT_WAIT, NULL);
+    ok(SUCCEEDED(hr), "Failed to blit to primary surface, hr %#x.\n", hr);
 
     test_format = GetPixelFormat(hdc);
     ok(test_format == format, "window has pixel format %d, expected %d\n", test_format, format);
@@ -6308,8 +6325,10 @@ static void test_pixel_format(void)
         ok(test_format == format, "second window has pixel format %d, expected %d\n", test_format, format);
     }
 
+    IDirectDrawSurface_Release(offscreen);
+
 cleanup:
-    if (primary) IDirectDrawSurface2_Release(primary);
+    if (primary) IDirectDrawSurface_Release(primary);
     if (clipper) IDirectDrawClipper_Release(clipper);
     if (ddraw) IDirectDraw2_Release(ddraw);
     if (gl) FreeLibrary(gl);
@@ -8934,7 +8953,7 @@ static void test_color_fill(void)
                 float f, g;
 
                 expected = tests[i].result & mask;
-                f = ceilf(log2f(expected + 1.0f));
+                f = ceilf(logf(expected + 1.0f) / logf(2.0f));
                 g = (f + 1.0f) / 2.0f;
                 g -= (int)g;
                 expected_broken = (expected / exp2f(f) - g) * 256;
@@ -10177,10 +10196,11 @@ static void test_overlay_rect(void)
     ok(!pos_x, "Got unexpected pos_x %d.\n", pos_x);
     ok(!pos_y, "Got unexpected pos_y %d.\n", pos_y);
 
-    IDirectDrawSurface_Release(overlay);
 done:
     if (primary)
         IDirectDrawSurface_Release(primary);
+    if (overlay)
+        IDirectDrawSurface_Release(overlay);
     IDirectDraw2_Release(ddraw);
     DestroyWindow(window);
 }
@@ -10503,7 +10523,7 @@ static void test_getdc(void)
     DDSURFACEDESC surface_desc, map_desc;
     DDSCAPS caps = {DDSCAPS_COMPLEX};
     IDirectDraw2 *ddraw;
-    unsigned int i;
+    unsigned int i, screen_bpp;
     HWND window;
     HDC dc, dc2;
     HRESULT hr;
@@ -10567,6 +10587,11 @@ static void test_getdc(void)
     hr = IDirectDraw2_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
     ok(SUCCEEDED(hr), "Failed to set cooperative level, hr %#x.\n", hr);
 
+    surface_desc.dwSize = sizeof(surface_desc);
+    hr = IDirectDraw2_GetDisplayMode(ddraw, &surface_desc);
+    ok(SUCCEEDED(hr), "Failed to get display mode, hr %#x.\n", hr);
+    screen_bpp = U1(surface_desc.ddpfPixelFormat).dwRGBBitCount;
+
     for (i = 0; i < ARRAY_SIZE(test_data); ++i)
     {
         memset(&surface_desc, 0, sizeof(surface_desc));
@@ -10625,8 +10650,11 @@ static void test_getdc(void)
             ok(dib.dsBm.bmBitsPixel == U1(test_data[i].format).dwRGBBitCount,
                     "Got unexpected bit count %d for format %s.\n",
                     dib.dsBm.bmBitsPixel, test_data[i].name);
-            ok(!!dib.dsBm.bmBits, "Got unexpected bits %p for format %s.\n",
-                    dib.dsBm.bmBits, test_data[i].name);
+            /* Windows XP sets bmBits == NULL for formats that match the screen at least on my r200 GPU. I
+             * suspect this applies to all HW accelerated pre-WDDM drivers because they can handle gdi access
+             * to ddraw surfaces themselves instead of going through a sysmem DIB section. */
+            ok(!!dib.dsBm.bmBits || broken(!pDwmIsCompositionEnabled && dib.dsBm.bmBitsPixel == screen_bpp),
+                    "Got unexpected bits %p for format %s.\n", dib.dsBm.bmBits, test_data[i].name);
 
             ok(dib.dsBmih.biSize == sizeof(dib.dsBmih), "Got unexpected size %u for format %s.\n",
                     dib.dsBmih.biSize, test_data[i].name);
@@ -10742,8 +10770,12 @@ static void test_getdc(void)
         ok(SUCCEEDED(hr), "Failed to get DC for format %s, hr %#x.\n", test_data[i].name, hr);
         hr = IDirectDrawSurface_ReleaseDC(surface, dc);
         ok(SUCCEEDED(hr), "Failed to release DC for format %s, hr %#x.\n", test_data[i].name, hr);
+        /* Geforce 9600, Windows 7 returns E_FAIL. The unlock still seems to work as intended, after-
+         * wards the surface can be locked again. ReleaseDC() does not unlock the surface, trying to
+         * Lock it after ReleaseDC returns DDERR_SURFACEBUSY. ddraw4 and 7 are unaffected. */
         hr = IDirectDrawSurface_Unlock(surface, NULL);
-        ok(SUCCEEDED(hr), "Failed to unmap surface for format %s, hr %#x.\n", test_data[i].name, hr);
+        ok(SUCCEEDED(hr) || broken(ddraw_is_nvidia(ddraw) && hr == E_FAIL),
+                "Failed to unmap surface for format %s, hr %#x.\n", test_data[i].name, hr);
 
         hr = IDirectDrawSurface_GetDC(surface, &dc);
         ok(SUCCEEDED(hr), "Failed to get DC for format %s, hr %#x.\n", test_data[i].name, hr);
@@ -10779,7 +10811,8 @@ static void test_getdc(void)
         hr = IDirectDrawSurface_ReleaseDC(surface, dc);
         ok(SUCCEEDED(hr), "Failed to release DC for format %s, hr %#x.\n", test_data[i].name, hr);
         hr = IDirectDrawSurface_Unlock(surface, NULL);
-        ok(SUCCEEDED(hr), "Failed to unmap surface for format %s, hr %#x.\n", test_data[i].name, hr);
+        ok(SUCCEEDED(hr) || broken(ddraw_is_nvidia(ddraw) && hr == E_FAIL),
+                "Failed to unmap surface for format %s, hr %#x.\n", test_data[i].name, hr);
 
         hr = IDirectDrawSurface_Lock(surface2, NULL, &map_desc, DDLOCK_READONLY | DDLOCK_WAIT, NULL);
         ok(SUCCEEDED(hr), "Failed to map surface for format %s, hr %#x.\n", test_data[i].name, hr);
@@ -13734,9 +13767,19 @@ static void test_clipper_refcount(void)
     IDirectDrawClipper_Release(clipper);
     IDirectDrawClipper_Release(clipper);
 
-    hr = IDirectDrawSurface_GetClipper(surface, &clipper2);
-    ok(SUCCEEDED(hr), "Failed to get clipper, hr %#x.\n", hr);
-    ok(clipper == clipper2, "Got clipper %p, expected %p.\n", clipper2, clipper);
+    if (!ddraw_is_nvidia(ddraw))
+    {
+        /* Disabled because it causes heap corruption (HeapValidate fails and random
+         * hangs in a later HeapFree) on Windows on one of my Machines: MacbookPro 10,1
+         * running Windows 10 18363.535 and Nvidia driver 425.31. Driver version 441.66
+         * is affected too.
+         *
+         * The same Windows and driver versions run the test without heap corruption on
+         * a Geforce 1060 GTX card. I have not seen the problem on AMD GPUs either. */
+        hr = IDirectDrawSurface_GetClipper(surface, &clipper2);
+        ok(SUCCEEDED(hr), "Failed to get clipper, hr %#x.\n", hr);
+        ok(clipper == clipper2, "Got clipper %p, expected %p.\n", clipper2, clipper);
+    }
 
     /* Show that invoking the Release method does not crash, but don't get the
      * vtable through the clipper pointer because it is no longer pointing to
@@ -13826,7 +13869,6 @@ static void test_caps(void)
             | DDSCAPS_FRONTBUFFER
             | DDSCAPS_3DDEVICE
             | DDSCAPS_VIDEOMEMORY
-            | DDSCAPS_OWNDC
             | DDSCAPS_LOCALVIDMEM
             | DDSCAPS_NONLOCALVIDMEM;
 

@@ -503,7 +503,7 @@
 @ cdecl _isnan(double) MSVCRT__isnan
 @ cdecl -arch=x86_64 _isnanf(float) MSVCRT__isnanf
 @ cdecl _isprint_l(long ptr) MSVCRT__isprint_l
-@ stub _ispunct_l
+@ cdecl _ispunct_l(long ptr) MSVCRT__ispunct_l
 @ cdecl _isspace_l(long ptr) MSVCRT__isspace_l
 @ cdecl _isupper_l(long ptr) MSVCRT__isupper_l
 @ cdecl _iswalnum_l(long ptr) MSVCRT__iswalnum_l
@@ -1856,8 +1856,8 @@
 @ cdecl _putwch_nolock(long)
 @ cdecl _putws(wstr) MSVCRT__putws
 @ stub _query_app_type
-@ stub _query_new_handler
-@ stub _query_new_mode
+@ cdecl _query_new_handler() MSVCRT__query_new_handler
+@ cdecl _query_new_mode() MSVCRT__query_new_mode
 @ cdecl _read(long ptr long) MSVCRT__read
 @ cdecl _realloc_base(ptr long)
 @ cdecl _recalloc(ptr long long)
@@ -2579,7 +2579,7 @@
 @ cdecl wcstod(wstr ptr) MSVCRT_wcstod
 @ cdecl wcstof(ptr ptr) MSVCRT_wcstof
 @ stub wcstoimax
-@ cdecl wcstok(wstr wstr) MSVCRT_wcstok
+@ cdecl wcstok(wstr wstr ptr) MSVCRT_wcstok
 @ cdecl wcstok_s(ptr wstr ptr) MSVCRT_wcstok_s
 @ cdecl wcstol(wstr ptr long) MSVCRT_wcstol
 @ stub wcstold
