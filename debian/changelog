@@ -1,8 +1,15 @@
 wine-development (5.1-1) UNRELEASED; urgency=medium
 
   * Switch to the development branch.
+  * New upstream release 5.1, released Feb 2, 2020.
+    - Support for using LLVM-MinGW as PE cross-compiler.
+    - Better reporting of error location in JScript and VBScript.
+    - Support for relocatable installation of the Winelib tools.
+    - Ellipse drawing in Direct2D.
+    - OLE monikers improvements.
+    - Various bug fixes.
 
- -- Michael Gilbert <mgilbert@debian.org>  Sat, 22 Feb 2020 04:19:07 +0000
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 22 Feb 2020 04:21:29 +0000
 
 wine (5.0-3) unstable; urgency=medium
 
