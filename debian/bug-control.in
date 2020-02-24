@@ -1,1 +1,2 @@
-package-status: wineVERSION wine32VERSION wine64VERSION fonts-wine dxvk dxvk-wine32-development dxvk-wine64-development
+report-with: wineVERSION libwineVERSION wine32VERSION wine64VERSION wine32VERSION-tools wine64VERSION-tools
+package-status: fonts-wine dxvk dxvk-wine32-development dxvk-wine64-development

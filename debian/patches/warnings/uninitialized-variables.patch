@@ -251,3 +251,14 @@ author: Michael Gilbert <mgilbert@debian.org>
      if(_timespec64_get(&ts64, base) != base)
          return 0;
      if(ts64.tv_sec != (MSVCRT___time32_t)ts64.tv_sec)
+--- a/dlls/mf/session.c
++++ b/dlls/mf/session.c
+@@ -425,7 +425,7 @@ static void session_clear_topologies(str
+ static void session_set_topo_status(struct media_session *session, struct queued_topology *topology, HRESULT status,
+         MF_TOPOSTATUS topo_status)
+ {
+-    IMFMediaEvent *event;
++    IMFMediaEvent *event = NULL;
+     PROPVARIANT param;
+ 
+     if (topo_status == MF_TOPOSTATUS_INVALID)
