@@ -4775,13 +4775,21 @@ GpStatus WINGDIPAPI GdipGetInterpolationMode(GpGraphics *graphics,
 /* FIXME: Need to handle color depths less than 24bpp */
 GpStatus WINGDIPAPI GdipGetNearestColor(GpGraphics *graphics, ARGB* argb)
 {
-    FIXME("(%p, %p): Passing color unmodified\n", graphics, argb);
+    TRACE("(%p, %p)\n", graphics, argb);
 
     if(!graphics || !argb)
         return InvalidParameter;
 
     if(graphics->busy)
         return ObjectBusy;
+
+    if (graphics->image->type == ImageTypeBitmap)
+    {
+        static int once;
+        GpBitmap *bitmap = (GpBitmap *)graphics->image;
+        if (IsIndexedPixelFormat(bitmap->format) && !once++)
+            FIXME("(%p, %p): Passing color unmodified\n", graphics, argb);
+    }
 
     return Ok;
 }

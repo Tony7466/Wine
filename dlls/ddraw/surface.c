@@ -1472,6 +1472,7 @@ static HRESULT ddraw_surface_blt(struct ddraw_surface *dst_surface, const RECT *
                 dst_surface->palette, fill_colour, &colour))
             return DDERR_INVALIDPARAMS;
 
+        wined3d_device_apply_stateblock(wined3d_device, dst_surface->ddraw->state);
         return wined3d_device_clear_rendertarget_view(wined3d_device,
                 ddraw_surface_get_rendertarget_view(dst_surface),
                 dst_rect, wined3d_flags, &colour, 0.0f, 0);
@@ -1487,6 +1488,7 @@ static HRESULT ddraw_surface_blt(struct ddraw_surface *dst_surface, const RECT *
                 dst_surface->palette, fill_colour, &colour))
             return DDERR_INVALIDPARAMS;
 
+        wined3d_device_apply_stateblock(wined3d_device, dst_surface->ddraw->state);
         return wined3d_device_clear_rendertarget_view(wined3d_device,
                 ddraw_surface_get_rendertarget_view(dst_surface),
                 dst_rect, wined3d_flags, NULL, colour.r, 0);
@@ -6086,8 +6088,6 @@ HRESULT ddraw_surface_create(struct ddraw *ddraw, const DDSURFACEDESC2 *surface_
             }
 
             wined3d_stateblock_set_render_state(ddraw->state, WINED3D_RS_ZENABLE,
-                    !!swapchain_desc.enable_auto_depth_stencil);
-            wined3d_device_set_render_state(ddraw->wined3d_device, WINED3D_RS_ZENABLE,
                     !!swapchain_desc.enable_auto_depth_stencil);
         }
     }

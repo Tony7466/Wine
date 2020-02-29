@@ -2508,7 +2508,7 @@ HRESULT compile_script(script_ctx_t *ctx, const WCHAR *code, UINT64 source_conte
         }
     }
 
-    hres = script_parse(ctx, &compiler, compiler.code->source, delimiter, from_eval, &compiler.parser);
+    hres = script_parse(ctx, &compiler, compiler.code, delimiter, from_eval, &compiler.parser);
     if(FAILED(hres)) {
         release_bytecode(compiler.code);
         return hres;
@@ -2519,8 +2519,11 @@ HRESULT compile_script(script_ctx_t *ctx, const WCHAR *code, UINT64 source_conte
     heap_pool_free(&compiler.heap);
     parser_release(compiler.parser);
     if(FAILED(hres)) {
+        if(hres != DISP_E_EXCEPTION)
+            throw_error(ctx, hres, NULL);
+        set_error_location(ctx->ei, compiler.code, compiler.loc, IDS_COMPILATION_ERROR, NULL);
         release_bytecode(compiler.code);
-        return hres;
+        return DISP_E_EXCEPTION;
     }
 
     *ret = compiler.code;

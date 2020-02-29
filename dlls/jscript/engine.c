@@ -867,6 +867,7 @@ static void set_error_value(script_ctx_t *ctx, jsval_t value)
 
     if(is_object_instance(value) && get_object(value) && (obj = to_jsdisp(get_object(value)))) {
         UINT32 number;
+        jsstr_t *str;
         jsval_t v;
         HRESULT hres;
 
@@ -879,8 +880,15 @@ static void set_error_value(script_ctx_t *ctx, jsval_t value)
                 ei->error = FAILED(number) ? number : E_FAIL;
             jsval_release(v);
         }
-    }
 
+        hres = jsdisp_propget_name(obj, L"description", &v);
+        if(SUCCEEDED(hres)) {
+            hres = to_string(ctx, v, &str);
+            if(SUCCEEDED(hres))
+                ei->message = str;
+            jsval_release(v);
+        }
+    }
 }
 
 /* ECMA-262 3rd Edition    12.13 */
@@ -910,7 +918,7 @@ static HRESULT interp_throw_type(script_ctx_t *ctx)
     TRACE("%08x %s\n", hres, debugstr_jsstr(str));
 
     ptr = jsstr_flatten(str);
-    return ptr ? throw_type_error(ctx, hres, ptr) : E_OUTOFMEMORY;
+    return ptr ? throw_error(ctx, hres, ptr) : E_OUTOFMEMORY;
 }
 
 /* ECMA-262 3rd Edition    12.14 */
@@ -1279,7 +1287,7 @@ static HRESULT identifier_value(script_ctx_t *ctx, BSTR identifier)
         return hres;
 
     if(exprval.type == EXPRVAL_INVALID)
-        return throw_type_error(ctx, exprval.u.hres, identifier);
+        return throw_error(ctx, exprval.u.hres, identifier);
 
     hres = exprval_to_value(ctx, &exprval, &v);
     if(FAILED(hres))
@@ -2768,10 +2776,12 @@ static HRESULT unwind_exception(script_ctx_t *ctx, HRESULT exception_hres)
         print_backtrace(ctx);
     }
 
+    frame = ctx->call_ctx;
     if(exception_hres != DISP_E_EXCEPTION)
-        ei->error = exception_hres;
+        throw_error(ctx, exception_hres, NULL);
+    set_error_location(ei, frame->bytecode, frame->bytecode->instrs[frame->ip].loc, IDS_RUNTIME_ERROR, NULL);
 
-    for(frame = ctx->call_ctx; !frame->except_frame; frame = ctx->call_ctx) {
+    while(!frame->except_frame) {
         DWORD flags;
 
         while(frame->scope != frame->base_scope)
@@ -2783,6 +2793,7 @@ static HRESULT unwind_exception(script_ctx_t *ctx, HRESULT exception_hres)
         pop_call_frame(ctx);
         if(!(flags & EXEC_RETURN_TO_INTERP))
             return DISP_E_EXCEPTION;
+        frame = ctx->call_ctx;
     }
 
     except_frame = frame->except_frame;

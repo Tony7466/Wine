@@ -40,6 +40,7 @@
 #include "mfreadwrite.h"
 #include "propvarutil.h"
 #include "strsafe.h"
+#include "rtworkq.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(mfplat);
 
@@ -63,8 +64,6 @@ static HRESULT heap_strdupW(const WCHAR *str, WCHAR **dest)
 
     return hr;
 }
-
-static LONG platform_lock;
 
 struct local_handler
 {
@@ -1128,10 +1127,7 @@ HRESULT WINAPI MFStartup(ULONG version, DWORD flags)
     if (version != MF_VERSION_XP && version != MF_VERSION_WIN7)
         return MF_E_BAD_STARTUP_VERSION;
 
-    if (InterlockedIncrement(&platform_lock) == 1)
-    {
-        init_system_queues();
-    }
+    RtwqStartup();
 
     return S_OK;
 }
@@ -1143,43 +1139,9 @@ HRESULT WINAPI MFShutdown(void)
 {
     TRACE("\n");
 
-    if (platform_lock <= 0)
-        return S_OK;
-
-    if (InterlockedExchangeAdd(&platform_lock, -1) == 1)
-    {
-        shutdown_system_queues();
-    }
+    RtwqShutdown();
 
     return S_OK;
-}
-
-/***********************************************************************
- *      MFLockPlatform (mfplat.@)
- */
-HRESULT WINAPI MFLockPlatform(void)
-{
-    InterlockedIncrement(&platform_lock);
-
-    return S_OK;
-}
-
-/***********************************************************************
- *      MFUnlockPlatform (mfplat.@)
- */
-HRESULT WINAPI MFUnlockPlatform(void)
-{
-    if (InterlockedDecrement(&platform_lock) == 0)
-    {
-        shutdown_system_queues();
-    }
-
-    return S_OK;
-}
-
-BOOL is_platform_locked(void)
-{
-    return platform_lock > 0;
 }
 
 /***********************************************************************
@@ -3316,13 +3278,6 @@ static HRESULT WINAPI bytestream_GetCapabilities(IMFByteStream *iface, DWORD *ca
     return S_OK;
 }
 
-static HRESULT WINAPI mfbytestream_GetLength(IMFByteStream *iface, QWORD *length)
-{
-    FIXME("%p, %p.\n", iface, length);
-
-    return E_NOTIMPL;
-}
-
 static HRESULT WINAPI mfbytestream_SetLength(IMFByteStream *iface, QWORD length)
 {
     mfbytestream *This = impl_from_IMFByteStream(iface);
@@ -3332,22 +3287,36 @@ static HRESULT WINAPI mfbytestream_SetLength(IMFByteStream *iface, QWORD length)
     return E_NOTIMPL;
 }
 
-static HRESULT WINAPI mfbytestream_GetCurrentPosition(IMFByteStream *iface, QWORD *position)
+static HRESULT WINAPI bytestream_file_GetCurrentPosition(IMFByteStream *iface, QWORD *position)
 {
-    mfbytestream *This = impl_from_IMFByteStream(iface);
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
 
-    FIXME("%p, %p\n", This, position);
+    TRACE("%p, %p.\n", iface, position);
 
-    return E_NOTIMPL;
+    if (!position)
+        return E_INVALIDARG;
+
+    *position = stream->position;
+
+    return S_OK;
 }
 
-static HRESULT WINAPI mfbytestream_SetCurrentPosition(IMFByteStream *iface, QWORD position)
+static HRESULT WINAPI bytestream_file_GetLength(IMFByteStream *iface, QWORD *length)
 {
-    mfbytestream *This = impl_from_IMFByteStream(iface);
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
+    LARGE_INTEGER li;
 
-    FIXME("%p, %s\n", This, wine_dbgstr_longlong(position));
+    TRACE("%p, %p.\n", iface, length);
 
-    return E_NOTIMPL;
+    if (!length)
+        return E_INVALIDARG;
+
+    if (GetFileSizeEx(stream->hfile, &li))
+        *length = li.QuadPart;
+    else
+        return HRESULT_FROM_WIN32(GetLastError());
+
+    return S_OK;
 }
 
 static HRESULT WINAPI bytestream_file_IsEndOfStream(IMFByteStream *iface, BOOL *ret)
@@ -3472,16 +3441,29 @@ static HRESULT WINAPI mfbytestream_Close(IMFByteStream *iface)
     return E_NOTIMPL;
 }
 
+static HRESULT WINAPI bytestream_SetCurrentPosition(IMFByteStream *iface, QWORD position)
+{
+    struct bytestream *stream = impl_from_IMFByteStream(iface);
+
+    TRACE("%p, %s.\n", iface, wine_dbgstr_longlong(position));
+
+    EnterCriticalSection(&stream->cs);
+    stream->position = position;
+    LeaveCriticalSection(&stream->cs);
+
+    return S_OK;
+}
+
 static const IMFByteStreamVtbl bytestream_file_vtbl =
 {
     bytestream_QueryInterface,
     bytestream_AddRef,
     bytestream_Release,
     bytestream_GetCapabilities,
-    mfbytestream_GetLength,
+    bytestream_file_GetLength,
     mfbytestream_SetLength,
-    mfbytestream_GetCurrentPosition,
-    mfbytestream_SetCurrentPosition,
+    bytestream_file_GetCurrentPosition,
+    bytestream_SetCurrentPosition,
     bytestream_file_IsEndOfStream,
     bytestream_file_Read,
     bytestream_BeginRead,
@@ -3535,19 +3517,6 @@ static HRESULT WINAPI bytestream_stream_GetCurrentPosition(IMFByteStream *iface,
     TRACE("%p, %p.\n", iface, position);
 
     *position = stream->position;
-
-    return S_OK;
-}
-
-static HRESULT WINAPI bytestream_stream_SetCurrentPosition(IMFByteStream *iface, QWORD position)
-{
-    struct bytestream *stream = impl_from_IMFByteStream(iface);
-
-    TRACE("%p, %s.\n", iface, wine_dbgstr_longlong(position));
-
-    EnterCriticalSection(&stream->cs);
-    stream->position = position;
-    LeaveCriticalSection(&stream->cs);
 
     return S_OK;
 }
@@ -3669,7 +3638,7 @@ static const IMFByteStreamVtbl bytestream_stream_vtbl =
     bytestream_stream_GetLength,
     bytestream_stream_SetLength,
     bytestream_stream_GetCurrentPosition,
-    bytestream_stream_SetCurrentPosition,
+    bytestream_SetCurrentPosition,
     bytestream_stream_IsEndOfStream,
     bytestream_stream_Read,
     bytestream_BeginRead,

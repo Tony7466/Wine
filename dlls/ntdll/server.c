@@ -384,11 +384,11 @@ int wait_select_reply( void *cookie )
 /***********************************************************************
  *              invoke_apc
  *
- * Invoke a single APC. Return TRUE if a user APC has been run.
+ * Invoke a single APC.
+ *
  */
-BOOL invoke_apc( const apc_call_t *call, apc_result_t *result )
+void invoke_apc( const apc_call_t *call, apc_result_t *result )
 {
-    BOOL user_apc = FALSE;
     SIZE_T size;
     void *addr;
     pe_image_info_t image_info;
@@ -403,7 +403,6 @@ BOOL invoke_apc( const apc_call_t *call, apc_result_t *result )
     {
         void (WINAPI *func)(ULONG_PTR,ULONG_PTR,ULONG_PTR) = wine_server_get_ptr( call->user.func );
         func( call->user.args[0], call->user.args[1], call->user.args[2] );
-        user_apc = TRUE;
         break;
     }
     case APC_TIMER:
@@ -411,7 +410,6 @@ BOOL invoke_apc( const apc_call_t *call, apc_result_t *result )
         void (WINAPI *func)(void*, unsigned int, unsigned int) = wine_server_get_ptr( call->timer.func );
         func( wine_server_get_ptr( call->timer.arg ),
               (DWORD)call->timer.time, (DWORD)(call->timer.time >> 32) );
-        user_apc = TRUE;
         break;
     }
     case APC_ASYNC_IO:
@@ -587,7 +585,6 @@ BOOL invoke_apc( const apc_call_t *call, apc_result_t *result )
         server_protocol_error( "get_apc_request: bad type %d\n", call->type );
         break;
     }
-    return user_apc;
 }
 
 
@@ -604,29 +601,42 @@ unsigned int server_select( const select_op_t *select_op, data_size_t size, UINT
     apc_call_t call;
     apc_result_t result;
     timeout_t abs_timeout = timeout ? timeout->QuadPart : TIMEOUT_INFINITE;
+    sigset_t old_set;
 
     memset( &result, 0, sizeof(result) );
 
-    for (;;)
+    do
     {
-        SERVER_START_REQ( select )
+        pthread_sigmask( SIG_BLOCK, &server_block_set, &old_set );
+        for (;;)
         {
-            req->flags    = flags;
-            req->cookie   = wine_server_client_ptr( &cookie );
-            req->prev_apc = apc_handle;
-            req->timeout  = abs_timeout;
-            wine_server_add_data( req, &result, sizeof(result) );
-            wine_server_add_data( req, select_op, size );
-            ret = wine_server_call( req );
-            abs_timeout = reply->timeout;
-            apc_handle  = reply->apc_handle;
-            call        = reply->call;
+            SERVER_START_REQ( select )
+            {
+                req->flags    = flags;
+                req->cookie   = wine_server_client_ptr( &cookie );
+                req->prev_apc = apc_handle;
+                req->timeout  = abs_timeout;
+                wine_server_add_data( req, &result, sizeof(result) );
+                wine_server_add_data( req, select_op, size );
+                ret = server_call_unlocked( req );
+                abs_timeout = reply->timeout;
+                apc_handle  = reply->apc_handle;
+                call        = reply->call;
+            }
+            SERVER_END_REQ;
+
+            /* don't signal multiple times */
+            if (size >= sizeof(select_op->signal_and_wait) && select_op->op == SELECT_SIGNAL_AND_WAIT)
+                size = offsetof( select_op_t, signal_and_wait.signal );
+
+            if (ret != STATUS_KERNEL_APC) break;
+            invoke_apc( &call, &result );
         }
-        SERVER_END_REQ;
-        if (ret == STATUS_PENDING) ret = wait_select_reply( &cookie );
-        if (ret != STATUS_USER_APC) break;
-        if (invoke_apc( &call, &result ))
+        pthread_sigmask( SIG_SETMASK, &old_set, NULL );
+
+        if (ret == STATUS_USER_APC)
         {
+            invoke_apc( &call, &result );
             /* if we ran a user apc we have to check once more if additional apcs are queued,
              * but we don't want to wait */
             abs_timeout = 0;
@@ -634,10 +644,9 @@ unsigned int server_select( const select_op_t *select_op, data_size_t size, UINT
             size = 0;
         }
 
-        /* don't signal multiple times */
-        if (size >= sizeof(select_op->signal_and_wait) && select_op->op == SELECT_SIGNAL_AND_WAIT)
-            size = offsetof( select_op_t, signal_and_wait.signal );
+        if (ret == STATUS_PENDING) ret = wait_select_reply( &cookie );
     }
+    while (ret == STATUS_USER_APC || ret == STATUS_KERNEL_APC);
 
     if (ret == STATUS_TIMEOUT && user_apc) ret = STATUS_USER_APC;
 

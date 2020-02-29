@@ -1974,7 +1974,12 @@ static HRESULT disp_invoke(script_ctx_t *ctx, IDispatch *disp, DISPID id, WORD f
 
     if(hres == DISP_E_EXCEPTION) {
         TRACE("DISP_E_EXCEPTION: %08x %s %s\n", ei.scode, debugstr_w(ei.bstrSource), debugstr_w(ei.bstrDescription));
-        hres = SUCCEEDED(ei.scode) ? E_FAIL : ei.scode;
+        reset_ei(ctx->ei);
+        ctx->ei->error = (SUCCEEDED(ei.scode) || ei.scode == DISP_E_EXCEPTION) ? E_FAIL : ei.scode;
+        if(ei.bstrSource)
+            ctx->ei->source = jsstr_alloc_len(ei.bstrSource, SysStringLen(ei.bstrSource));
+        if(ei.bstrDescription)
+            ctx->ei->message = jsstr_alloc_len(ei.bstrDescription, SysStringLen(ei.bstrDescription));
         SysFreeString(ei.bstrSource);
         SysFreeString(ei.bstrDescription);
         SysFreeString(ei.bstrHelpFile);
@@ -2478,13 +2483,13 @@ HRESULT jsdisp_define_property(jsdisp_t *obj, const WCHAR *name, property_desc_t
         if(((desc->mask & PROPF_CONFIGURABLE) && (desc->flags & PROPF_CONFIGURABLE))
            || ((desc->mask & PROPF_ENUMERABLE)
                && ((desc->flags & PROPF_ENUMERABLE) != (prop->flags & PROPF_ENUMERABLE))))
-            return throw_type_error(obj->ctx, JS_E_NONCONFIGURABLE_REDEFINED, name);
+            return throw_error(obj->ctx, JS_E_NONCONFIGURABLE_REDEFINED, name);
     }
 
     if(desc->explicit_value || (desc->mask & PROPF_WRITABLE)) {
         if(prop->type == PROP_ACCESSOR) {
             if(!(prop->flags & PROPF_CONFIGURABLE))
-                return throw_type_error(obj->ctx, JS_E_NONCONFIGURABLE_REDEFINED, name);
+                return throw_error(obj->ctx, JS_E_NONCONFIGURABLE_REDEFINED, name);
             if(prop->u.accessor.getter)
                 jsdisp_release(prop->u.accessor.getter);
             if(prop->u.accessor.setter)
@@ -2499,7 +2504,7 @@ HRESULT jsdisp_define_property(jsdisp_t *obj, const WCHAR *name, property_desc_t
         }else {
             if(!(prop->flags & PROPF_CONFIGURABLE) && !(prop->flags & PROPF_WRITABLE)) {
                 if((desc->mask & PROPF_WRITABLE) && (desc->flags & PROPF_WRITABLE))
-                    return throw_type_error(obj->ctx, JS_E_NONWRITABLE_MODIFIED, name);
+                    return throw_error(obj->ctx, JS_E_NONWRITABLE_MODIFIED, name);
                 if(desc->explicit_value) {
                     if(prop->type == PROP_JSVAL) {
                         BOOL eq;
@@ -2507,7 +2512,7 @@ HRESULT jsdisp_define_property(jsdisp_t *obj, const WCHAR *name, property_desc_t
                         if(FAILED(hres))
                             return hres;
                         if(!eq)
-                            return throw_type_error(obj->ctx, JS_E_NONWRITABLE_MODIFIED, name);
+                            return throw_error(obj->ctx, JS_E_NONWRITABLE_MODIFIED, name);
                     }else {
                         FIXME("redefinition of property type %d\n", prop->type);
                     }
@@ -2528,7 +2533,7 @@ HRESULT jsdisp_define_property(jsdisp_t *obj, const WCHAR *name, property_desc_t
     }else if(desc->explicit_getter || desc->explicit_setter) {
         if(prop->type != PROP_ACCESSOR) {
             if(!(prop->flags & PROPF_CONFIGURABLE))
-                return throw_type_error(obj->ctx, JS_E_NONCONFIGURABLE_REDEFINED, name);
+                return throw_error(obj->ctx, JS_E_NONCONFIGURABLE_REDEFINED, name);
             if(prop->type == PROP_JSVAL)
                 jsval_release(prop->u.val);
             prop->type = PROP_ACCESSOR;
@@ -2536,7 +2541,7 @@ HRESULT jsdisp_define_property(jsdisp_t *obj, const WCHAR *name, property_desc_t
         }else if(!(prop->flags & PROPF_CONFIGURABLE)) {
             if((desc->explicit_getter && desc->getter != prop->u.accessor.getter)
                || (desc->explicit_setter && desc->setter != prop->u.accessor.setter))
-                return throw_type_error(obj->ctx, JS_E_NONCONFIGURABLE_REDEFINED, name);
+                return throw_error(obj->ctx, JS_E_NONCONFIGURABLE_REDEFINED, name);
         }
 
         if(desc->explicit_getter) {

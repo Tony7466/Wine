@@ -876,32 +876,18 @@ static HRESULT testsource_query_accept(struct strmbase_pin *iface, const AM_MEDI
     return S_OK;
 }
 
-static HRESULT WINAPI testsource_AttemptConnection(struct strmbase_source *iface,
-        IPin *peer, const AM_MEDIA_TYPE *mt)
+static HRESULT WINAPI testsource_DecideAllocator(struct strmbase_source *iface,
+        IMemInputPin *peer, IMemAllocator **allocator)
 {
-    HRESULT hr;
-
-    iface->pin.peer = peer;
-    IPin_AddRef(peer);
-    CopyMediaType(&iface->pin.mt, mt);
-
-    if (FAILED(hr = IPin_ReceiveConnection(peer, &iface->pin.IPin_iface, mt)))
-    {
-        todo_wine_if (((VIDEOINFOHEADER *)mt->pbFormat)->bmiHeader.biBitCount == 24)
-            ok(hr == VFW_E_TYPE_NOT_ACCEPTED || hr == E_FAIL, "Got hr %#x.\n", hr);
-        IPin_Release(peer);
-        iface->pin.peer = NULL;
-        FreeMediaType(&iface->pin.mt);
-    }
-
-    return hr;
+    return S_OK;
 }
 
 static const struct strmbase_source_ops testsource_ops =
 {
     .base.pin_query_accept = testsource_query_accept,
     .base.pin_get_media_type = strmbase_pin_get_media_type,
-    .pfnAttemptConnection = testsource_AttemptConnection,
+    .pfnAttemptConnection = BaseOutputPinImpl_AttemptConnection,
+    .pfnDecideAllocator = testsource_DecideAllocator,
 };
 
 static void testfilter_init(struct testfilter *filter)
@@ -1241,6 +1227,106 @@ static void test_flushing(IPin *pin, IMemInputPin *input, IFilterGraph2 *graph)
     IMediaControl_Release(control);
 }
 
+static void test_current_image(IBaseFilter *filter, IMemInputPin *input,
+        IFilterGraph2 *graph, const BITMAPINFOHEADER *req_bih)
+{
+    LONG buffer[(sizeof(BITMAPINFOHEADER) + 32 * 16 * 4) / 4];
+    const BITMAPINFOHEADER *bih = (BITMAPINFOHEADER *)buffer;
+    const DWORD *data = (DWORD *)((char *)buffer + sizeof(BITMAPINFOHEADER));
+    BITMAPINFOHEADER expect_bih = *req_bih;
+    IMemAllocator *allocator;
+    IMediaControl *control;
+    OAFilterState state;
+    IBasicVideo *video;
+    unsigned int i;
+    HANDLE thread;
+    HRESULT hr;
+    LONG size;
+
+    expect_bih.biSizeImage = 32 * 16 * 4;
+
+    IFilterGraph2_QueryInterface(graph, &IID_IMediaControl, (void **)&control);
+    IBaseFilter_QueryInterface(filter, &IID_IBasicVideo, (void **)&video);
+
+    hr = IBasicVideo_GetCurrentImage(video, NULL, NULL);
+    ok(hr == E_POINTER, "Got hr %#x.\n", hr);
+
+    hr = IBasicVideo_GetCurrentImage(video, NULL, buffer);
+    ok(hr == E_POINTER, "Got hr %#x.\n", hr);
+
+    size = 0xdeadbeef;
+    hr = IBasicVideo_GetCurrentImage(video, &size, NULL);
+    todo_wine ok(hr == S_OK, "Got hr %#x.\n", hr);
+    todo_wine ok(size == sizeof(BITMAPINFOHEADER) + 32 * 16 * 4, "Got size %d.\n", size);
+
+    size = sizeof(buffer);
+    hr = IBasicVideo_GetCurrentImage(video, &size, buffer);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(size == sizeof(buffer), "Got size %d.\n", size);
+    ok(!memcmp(bih, &expect_bih, sizeof(BITMAPINFOHEADER)), "Bitmap headers didn't match.\n");
+    /* The contents seem to reflect the last frame rendered. */
+
+    hr = IMemInputPin_GetAllocator(input, &allocator);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    hr = IMemAllocator_Commit(allocator);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    IMemAllocator_Release(allocator);
+
+    hr = IMediaControl_Pause(control);
+    ok(hr == S_FALSE, "Got hr %#x.\n", hr);
+
+    size = sizeof(buffer);
+    hr = IBasicVideo_GetCurrentImage(video, &size, buffer);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(size == sizeof(buffer), "Got size %d.\n", size);
+    ok(!memcmp(bih, &expect_bih, sizeof(BITMAPINFOHEADER)), "Bitmap headers didn't match.\n");
+    /* The contents seem to reflect the last frame rendered. */
+
+    thread = send_frame(input);
+    hr = IMediaControl_GetState(control, 1000, &state);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+
+    size = 1;
+    memset(buffer, 0xcc, sizeof(buffer));
+    hr = IBasicVideo_GetCurrentImage(video, &size, buffer);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(size == 1, "Got size %d.\n", size);
+
+    size = sizeof(buffer);
+    memset(buffer, 0xcc, sizeof(buffer));
+    hr = IBasicVideo_GetCurrentImage(video, &size, buffer);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(size == sizeof(buffer), "Got size %d.\n", size);
+    ok(!memcmp(bih, &expect_bih, sizeof(BITMAPINFOHEADER)), "Bitmap headers didn't match.\n");
+    if (0) /* FIXME: Rendering is currently broken on Wine. */
+    {
+        for (i = 0; i < 32 * 16; ++i)
+            ok((data[i] & 0xffffff) == 0x555555, "Got unexpected color %08x at %u.\n", data[i], i);
+    }
+
+    hr = IMediaControl_Run(control);
+    todo_wine ok(hr == S_OK, "Got hr %#x.\n", hr);
+    join_thread(thread);
+
+    size = sizeof(buffer);
+    memset(buffer, 0xcc, sizeof(buffer));
+    hr = IBasicVideo_GetCurrentImage(video, &size, buffer);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(size == sizeof(buffer), "Got size %d.\n", size);
+    ok(!memcmp(bih, &expect_bih, sizeof(BITMAPINFOHEADER)), "Bitmap headers didn't match.\n");
+    if (0) /* FIXME: Rendering is currently broken on Wine. */
+    {
+        for (i = 0; i < 32 * 16; ++i)
+            ok((data[i] & 0xffffff) == 0x555555, "Got unexpected color %08x at %u.\n", data[i], i);
+    }
+
+    hr = IMediaControl_Stop(control);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+
+    IBasicVideo_Release(video);
+    IMediaControl_Release(control);
+}
+
 static void test_connect_pin(void)
 {
     VIDEOINFOHEADER vih =
@@ -1378,6 +1464,7 @@ static void test_connect_pin(void)
 
     test_filter_state(input, graph);
     test_flushing(pin, input, graph);
+    test_current_image(filter, input, graph, &vih.bmiHeader);
 
     hr = IFilterGraph2_Disconnect(graph, pin);
     ok(hr == S_OK, "Got hr %#x.\n", hr);

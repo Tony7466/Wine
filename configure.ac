@@ -1063,7 +1063,9 @@ then
 
         case $host_cpu in
           *i[[3456789]]86*) WINE_TRY_CROSSCFLAGS([-fno-omit-frame-pointer]) ;;
-          x86_64) WINE_TRY_CROSSCFLAGS([-Wno-format]) ;;
+          x86_64) WINE_TRY_CROSSCFLAGS([-Wno-format])
+                  WINE_TRY_CROSSCFLAGS([-Wformat-overflow])
+                  WINE_TRY_CROSSCFLAGS([-Wnonnull]) ;;
         esac
 
         dnl Default to dwarf-2 debug info
@@ -1686,7 +1688,7 @@ fi
 WINE_NOTICE_WITH(udev,[test "x$UDEV_LIBS" = "x"],
                  [libudev ${notice_platform}development files not found, plug and play won't be supported.])
 
-dnl **** Check for libuwind ****
+dnl **** Check for libunwind ****
 if test "x$with_unwind" != xno
 then
     WINE_PACKAGE_FLAGS(UNWIND,[libunwind],[-lunwind],,,
@@ -3606,6 +3608,8 @@ WINE_CONFIG_MAKEFILE(dlls/rsaenh)
 WINE_CONFIG_MAKEFILE(dlls/rsaenh/tests)
 WINE_CONFIG_MAKEFILE(dlls/rstrtmgr)
 WINE_CONFIG_MAKEFILE(dlls/rtutils)
+WINE_CONFIG_MAKEFILE(dlls/rtworkq)
+WINE_CONFIG_MAKEFILE(dlls/rtworkq/tests)
 WINE_CONFIG_MAKEFILE(dlls/samlib)
 WINE_CONFIG_MAKEFILE(dlls/sane.ds)
 WINE_CONFIG_MAKEFILE(dlls/sapi)
@@ -3723,6 +3727,7 @@ WINE_CONFIG_MAKEFILE(dlls/vdmdbg)
 WINE_CONFIG_MAKEFILE(dlls/ver.dll16,enable_win16)
 WINE_CONFIG_MAKEFILE(dlls/version)
 WINE_CONFIG_MAKEFILE(dlls/version/tests)
+WINE_CONFIG_MAKEFILE(dlls/vga)
 WINE_CONFIG_MAKEFILE(dlls/virtdisk)
 WINE_CONFIG_MAKEFILE(dlls/virtdisk/tests)
 WINE_CONFIG_MAKEFILE(dlls/vmm.vxd,enable_win16)
@@ -3739,6 +3744,7 @@ WINE_CONFIG_MAKEFILE(dlls/wbemdisp)
 WINE_CONFIG_MAKEFILE(dlls/wbemdisp/tests)
 WINE_CONFIG_MAKEFILE(dlls/wbemprox)
 WINE_CONFIG_MAKEFILE(dlls/wbemprox/tests)
+WINE_CONFIG_MAKEFILE(dlls/wbemuuid)
 WINE_CONFIG_MAKEFILE(dlls/wdscore)
 WINE_CONFIG_MAKEFILE(dlls/webservices)
 WINE_CONFIG_MAKEFILE(dlls/webservices/tests)
@@ -3869,6 +3875,7 @@ WINE_CONFIG_MAKEFILE(libs/port)
 WINE_CONFIG_MAKEFILE(libs/wine)
 WINE_CONFIG_MAKEFILE(libs/wpp)
 WINE_CONFIG_MAKEFILE(loader)
+WINE_CONFIG_MAKEFILE(nls)
 WINE_CONFIG_MAKEFILE(po)
 WINE_CONFIG_MAKEFILE(programs/arp)
 WINE_CONFIG_MAKEFILE(programs/aspnet_regiis)
@@ -4072,10 +4079,10 @@ else
     TOP_INSTALL_DEV="$TOP_INSTALL_DEV include"
     TOP_INSTALL_LIB="$TOP_INSTALL_LIB \
 fonts \
-loader/l_intl.nls \
 loader/wine.inf \
 loader/winebus.inf \
 loader/winehid.inf \
+nls \
 programs/msidb/msidb \
 programs/msiexec/msiexec \
 programs/notepad/notepad \

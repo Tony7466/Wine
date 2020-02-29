@@ -87,37 +87,19 @@ static inline AsyncReader *impl_from_IFileSourceFilter(IFileSourceFilter *iface)
 static const IFileSourceFilterVtbl FileSource_Vtbl;
 static const IAsyncReaderVtbl FileAsyncReader_Vtbl;
 
-static unsigned char byte_from_hex_char(WCHAR wHex)
+static int byte_from_hex_char(WCHAR c)
 {
-    switch (towlower(wHex))
-    {
-    case '0':
-    case '1':
-    case '2':
-    case '3':
-    case '4':
-    case '5':
-    case '6':
-    case '7':
-    case '8':
-    case '9':
-        return (wHex - '0') & 0xf;
-    case 'a':
-    case 'b':
-    case 'c':
-    case 'd':
-    case 'e':
-    case 'f':
-        return (wHex - 'a' + 10) & 0xf;
-    default:
-        return 0;
-    }
+    if ('0' <= c && c <= '9') return c - '0';
+    if ('a' <= c && c <= 'f') return c - 'a' + 10;
+    if ('A' <= c && c <= 'F') return c - 'A' + 10;
+    return -1;
 }
 
 static BOOL process_pattern_string(const WCHAR *pattern, HANDLE file)
 {
     ULONG size, offset, i, ret_size;
     BYTE *mask, *expect, *actual;
+    int d;
     BOOL ret = TRUE;
 
     /* format: "offset, size, mask, value" */
@@ -140,15 +122,15 @@ static BOOL process_pattern_string(const WCHAR *pattern, HANDLE file)
         return FALSE;
     }
     pattern++;
-    while (!iswxdigit(*pattern) && (*pattern != ','))
+    while (byte_from_hex_char(*pattern) == -1 && (*pattern != ','))
         pattern++;
 
-    for (i = 0; iswxdigit(*pattern) && (i/2 < size); pattern++, i++)
+    for (i = 0; (d = byte_from_hex_char(*pattern)) != -1 && (i/2 < size); pattern++, i++)
     {
         if (i % 2)
-            mask[i / 2] |= byte_from_hex_char(*pattern);
+            mask[i / 2] |= d;
         else
-            mask[i / 2] = byte_from_hex_char(*pattern) << 4;
+            mask[i / 2] = d << 4;
     }
 
     if (!(pattern = wcschr(pattern, ',')))
@@ -158,15 +140,15 @@ static BOOL process_pattern_string(const WCHAR *pattern, HANDLE file)
         return FALSE;
     }
     pattern++;
-    while (!iswxdigit(*pattern) && (*pattern != ','))
+    while (byte_from_hex_char(*pattern) == -1 && (*pattern != ','))
         pattern++;
 
-    for (i = 0; iswxdigit(*pattern) && (i/2 < size); pattern++, i++)
+    for (i = 0; (d = byte_from_hex_char(*pattern)) != -1 && (i/2 < size); pattern++, i++)
     {
         if (i % 2)
-            expect[i / 2] |= byte_from_hex_char(*pattern);
+            expect[i / 2] |= d;
         else
-            expect[i / 2] = byte_from_hex_char(*pattern) << 4;
+            expect[i / 2] = d << 4;
     }
 
     actual = heap_alloc(size);
@@ -370,7 +352,7 @@ static void async_reader_destroy(struct strmbase_filter *iface)
     CloseHandle(filter->port);
 
     strmbase_filter_cleanup(&filter->filter);
-    CoTaskMemFree(filter);
+    free(filter);
 }
 
 static HRESULT async_reader_query_interface(struct strmbase_filter *iface, REFIID iid, void **out)
@@ -432,31 +414,24 @@ static DWORD CALLBACK io_thread(void *arg)
 
 HRESULT AsyncReader_create(IUnknown *outer, void **out)
 {
-    AsyncReader *pAsyncRead;
-    
-    pAsyncRead = CoTaskMemAlloc(sizeof(AsyncReader));
+    AsyncReader *object;
 
-    if (!pAsyncRead)
+    if (!(object = calloc(1, sizeof(*object))))
         return E_OUTOFMEMORY;
 
-    strmbase_filter_init(&pAsyncRead->filter, outer, &CLSID_AsyncReader, &filter_ops);
+    strmbase_filter_init(&object->filter, outer, &CLSID_AsyncReader, &filter_ops);
 
-    pAsyncRead->IFileSourceFilter_iface.lpVtbl = &FileSource_Vtbl;
+    object->IFileSourceFilter_iface.lpVtbl = &FileSource_Vtbl;
+    object->IAsyncReader_iface.lpVtbl = &FileAsyncReader_Vtbl;
 
-    pAsyncRead->IAsyncReader_iface.lpVtbl = &FileAsyncReader_Vtbl;
+    InitializeCriticalSection(&object->sample_cs);
+    object->sample_cs.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": FileAsyncReader.sample_cs");
+    InitializeConditionVariable(&object->sample_cv);
+    object->port = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+    object->io_thread = CreateThread(NULL, 0, io_thread, object, 0, NULL);
 
-    pAsyncRead->pszFileName = NULL;
-
-    InitializeCriticalSection(&pAsyncRead->sample_cs);
-    pAsyncRead->sample_cs.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": FileAsyncReader.sample_cs");
-    InitializeConditionVariable(&pAsyncRead->sample_cv);
-    pAsyncRead->port = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
-    pAsyncRead->io_thread = CreateThread(NULL, 0, io_thread, pAsyncRead, 0, NULL);
-
-    *out = &pAsyncRead->filter.IUnknown_inner;
-
-    TRACE("-- created at %p\n", pAsyncRead);
-
+    TRACE("Created file source %p.\n", object);
+    *out = &object->filter.IUnknown_inner;
     return S_OK;
 }
 
@@ -591,7 +566,8 @@ static HRESULT source_query_accept(struct strmbase_pin *iface, const AM_MEDIA_TY
     AsyncReader *filter = impl_from_strmbase_pin(iface);
 
     if (IsEqualGUID(&mt->majortype, &filter->mt.majortype)
-            && IsEqualGUID(&mt->subtype, &filter->mt.subtype))
+            && (!IsEqualGUID(&mt->subtype, &GUID_NULL)
+            || IsEqualGUID(&filter->mt.subtype, &GUID_NULL)))
         return S_OK;
 
     return S_FALSE;

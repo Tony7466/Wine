@@ -42,11 +42,11 @@ WINE_DEFAULT_DEBUG_CHANNEL(nls);
 #define CALINFO_MAX_YEAR 2029
 
 extern UINT CDECL __wine_get_unix_codepage(void);
-extern unsigned int wine_decompose( int flags, WCHAR ch, WCHAR *dst, unsigned int dstlen ) DECLSPEC_HIDDEN;
 extern WCHAR wine_compose( const WCHAR *str ) DECLSPEC_HIDDEN;
 
 extern const unsigned short wctype_table[] DECLSPEC_HIDDEN;
 extern const unsigned int collation_table[] DECLSPEC_HIDDEN;
+extern const unsigned short nfd_table[] DECLSPEC_HIDDEN;
 
 static HANDLE kernel32_handle;
 
@@ -675,6 +675,18 @@ static inline WCHAR casemap( const USHORT *table, WCHAR ch )
 }
 
 
+static const WCHAR *get_decomposition( WCHAR ch, unsigned int *len )
+{
+    unsigned short offset = nfd_table[nfd_table[ch >> 8] + ((ch >> 4) & 0xf)] + (ch & 0xf);
+    unsigned short start = nfd_table[offset];
+    unsigned short end = nfd_table[offset + 1];
+
+    if ((*len = end - start)) return nfd_table + start;
+    *len = 1;
+    return NULL;
+}
+
+
 static UINT get_lcid_codepage( LCID lcid, ULONG flags )
 {
     UINT ret = GetACP();
@@ -836,9 +848,10 @@ static const WCHAR *get_ligature( WCHAR wc )
 }
 
 
-static int expand_ligatures( const WCHAR *src, int srclen, WCHAR *dst, int dstlen )
+static NTSTATUS expand_ligatures( const WCHAR *src, int srclen, WCHAR *dst, int *dstlen )
 {
     int i, len, pos = 0;
+    NTSTATUS ret = STATUS_SUCCESS;
     const WCHAR *expand;
 
     for (i = 0; i < srclen; i++)
@@ -850,30 +863,93 @@ static int expand_ligatures( const WCHAR *src, int srclen, WCHAR *dst, int dstle
         }
         else len = lstrlenW( expand );
 
-        if (dstlen)
+        if (*dstlen && ret == STATUS_SUCCESS)
         {
-            if (pos + len > dstlen) break;
-            memcpy( dst + pos, expand, len * sizeof(WCHAR) );
+            if (pos + len <= *dstlen) memcpy( dst + pos, expand, len * sizeof(WCHAR) );
+            else ret = STATUS_BUFFER_TOO_SMALL;
         }
         pos += len;
     }
-    return pos;
+    *dstlen = pos;
+    return ret;
 }
 
 
-static int fold_digits( const WCHAR *src, int srclen, WCHAR *dst, int dstlen )
+static NTSTATUS fold_digits( const WCHAR *src, int srclen, WCHAR *dst, int *dstlen )
 {
     extern const WCHAR wine_digitmap[] DECLSPEC_HIDDEN;
-    int i;
+    int i, len = *dstlen;
 
-    if (!dstlen) return srclen;
-    if (srclen > dstlen) return 0;
+    *dstlen = srclen;
+    if (!len) return STATUS_SUCCESS;
+    if (srclen > len) return STATUS_BUFFER_TOO_SMALL;
     for (i = 0; i < srclen; i++)
     {
         WCHAR digit = get_table_entry( wine_digitmap, src[i] );
         dst[i] = digit ? digit : src[i];
     }
-    return srclen;
+    return STATUS_SUCCESS;
+}
+
+
+static NTSTATUS fold_string( DWORD flags, const WCHAR *src, int srclen, WCHAR *dst, int *dstlen )
+{
+    NTSTATUS ret;
+    WCHAR *tmp;
+
+    switch (flags)
+    {
+    case MAP_PRECOMPOSED:
+        return RtlNormalizeString( NormalizationC, src, srclen, dst, dstlen );
+    case MAP_FOLDCZONE:
+    case MAP_PRECOMPOSED | MAP_FOLDCZONE:
+        return RtlNormalizeString( NormalizationKC, src, srclen, dst, dstlen );
+    case MAP_COMPOSITE:
+        return RtlNormalizeString( NormalizationD, src, srclen, dst, dstlen );
+    case MAP_COMPOSITE | MAP_FOLDCZONE:
+        return RtlNormalizeString( NormalizationKD, src, srclen, dst, dstlen );
+    case MAP_FOLDDIGITS:
+        return fold_digits( src, srclen, dst, dstlen );
+    case MAP_EXPAND_LIGATURES:
+    case MAP_EXPAND_LIGATURES | MAP_FOLDCZONE:
+        return expand_ligatures( src, srclen, dst, dstlen );
+    case MAP_FOLDDIGITS | MAP_PRECOMPOSED:
+        if (!(tmp = RtlAllocateHeap( GetProcessHeap(), 0, srclen * sizeof(WCHAR) )))
+            return STATUS_NO_MEMORY;
+        fold_digits( src, srclen, tmp, &srclen );
+        ret = RtlNormalizeString( NormalizationC, tmp, srclen, dst, dstlen );
+        break;
+    case MAP_FOLDDIGITS | MAP_FOLDCZONE:
+    case MAP_FOLDDIGITS | MAP_PRECOMPOSED | MAP_FOLDCZONE:
+        if (!(tmp = RtlAllocateHeap( GetProcessHeap(), 0, srclen * sizeof(WCHAR) )))
+            return STATUS_NO_MEMORY;
+        fold_digits( src, srclen, tmp, &srclen );
+        ret = RtlNormalizeString( NormalizationKC, tmp, srclen, dst, dstlen );
+        break;
+    case MAP_FOLDDIGITS | MAP_COMPOSITE:
+        if (!(tmp = RtlAllocateHeap( GetProcessHeap(), 0, srclen * sizeof(WCHAR) )))
+            return STATUS_NO_MEMORY;
+        fold_digits( src, srclen, tmp, &srclen );
+        ret = RtlNormalizeString( NormalizationD, tmp, srclen, dst, dstlen );
+        break;
+    case MAP_FOLDDIGITS | MAP_COMPOSITE | MAP_FOLDCZONE:
+        if (!(tmp = RtlAllocateHeap( GetProcessHeap(), 0, srclen * sizeof(WCHAR) )))
+            return STATUS_NO_MEMORY;
+        fold_digits( src, srclen, tmp, &srclen );
+        ret = RtlNormalizeString( NormalizationKD, tmp, srclen, dst, dstlen );
+        break;
+    case MAP_EXPAND_LIGATURES | MAP_FOLDDIGITS:
+    case MAP_EXPAND_LIGATURES | MAP_FOLDDIGITS | MAP_FOLDCZONE:
+        if (!(tmp = RtlAllocateHeap( GetProcessHeap(), 0, srclen * sizeof(WCHAR) )))
+            return STATUS_NO_MEMORY;
+        fold_digits( src, srclen, tmp, &srclen );
+        ret = expand_ligatures( tmp, srclen, dst, dstlen );
+        break;
+    default:
+        return STATUS_INVALID_PARAMETER_1;
+    }
+    RtlFreeHeap( GetProcessHeap(), 0, tmp );
+    return ret;
 }
 
 
@@ -1074,15 +1150,17 @@ static int check_invalid_chars( const CPTABLEINFO *info, const unsigned char *sr
 static int mbstowcs_decompose( const CPTABLEINFO *info, const unsigned char *src, int srclen,
                                WCHAR *dst, int dstlen )
 {
-    WCHAR ch, dummy[4]; /* no decomposition is larger than 4 chars */
+    WCHAR ch;
     USHORT off;
-    int len, res;
+    int len;
+    const WCHAR *decomp;
+    unsigned int decomp_len;
 
     if (info->DBCSOffsets)
     {
         if (!dstlen)  /* compute length */
         {
-            for (len = 0; srclen; srclen--, src++)
+            for (len = 0; srclen; srclen--, src++, len += decomp_len)
             {
                 if ((off = info->DBCSOffsets[*src]))
                 {
@@ -1095,12 +1173,12 @@ static int mbstowcs_decompose( const CPTABLEINFO *info, const unsigned char *src
                     else ch = info->UniDefaultChar;
                 }
                 else ch = info->MultiByteTable[*src];
-                len += wine_decompose( 0, ch, dummy, 4 );
+                get_decomposition( ch, &decomp_len );
             }
             return len;
         }
 
-        for (len = dstlen; srclen && len; srclen--, src++)
+        for (len = dstlen; srclen && len; srclen--, src++, dst += decomp_len, len -= decomp_len)
         {
             if ((off = info->DBCSOffsets[*src]))
             {
@@ -1113,25 +1191,33 @@ static int mbstowcs_decompose( const CPTABLEINFO *info, const unsigned char *src
                 else ch = info->UniDefaultChar;
             }
             else ch = info->MultiByteTable[*src];
-            if (!(res = wine_decompose( 0, ch, dst, len ))) break;
-            dst += res;
-            len -= res;
+
+            if ((decomp = get_decomposition( ch, &decomp_len )))
+            {
+                if (len < decomp_len) break;
+                memcpy( dst, decomp, decomp_len * sizeof(WCHAR) );
+            }
+            else *dst = ch;
         }
     }
     else
     {
         if (!dstlen)  /* compute length */
         {
-            for (len = 0; srclen; srclen--, src++)
-                len += wine_decompose( 0, info->MultiByteTable[*src], dummy, 4 );
+            for (len = 0; srclen; srclen--, src++, len += decomp_len)
+                get_decomposition( info->MultiByteTable[*src], &decomp_len );
             return len;
         }
 
-        for (len = dstlen; srclen && len; srclen--, src++)
+        for (len = dstlen; srclen && len; srclen--, src++, dst += decomp_len, len -= decomp_len)
         {
-            if (!(res = wine_decompose( 0, info->MultiByteTable[*src], dst, len ))) break;
-            len -= res;
-            dst += res;
+            ch = info->MultiByteTable[*src];
+            if ((decomp = get_decomposition( ch, &decomp_len )))
+            {
+                if (len < decomp_len) break;
+                memcpy( dst, decomp, decomp_len * sizeof(WCHAR) );
+            }
+            else *dst = ch;
         }
     }
 
@@ -2163,7 +2249,7 @@ static unsigned int get_weight( WCHAR ch, enum weight type )
 }
 
 
-static void inc_str_pos( const WCHAR **str, int *len, int *dpos, int *dlen )
+static void inc_str_pos( const WCHAR **str, int *len, unsigned int *dpos, unsigned int *dlen )
 {
     (*dpos)++;
     if (*dpos == *dlen)
@@ -2178,14 +2264,13 @@ static void inc_str_pos( const WCHAR **str, int *len, int *dpos, int *dlen )
 static int compare_weights(int flags, const WCHAR *str1, int len1,
                            const WCHAR *str2, int len2, enum weight type )
 {
-    int dpos1 = 0, dpos2 = 0, dlen1 = 0, dlen2 = 0;
-    WCHAR dstr1[4], dstr2[4];
-    unsigned int ce1, ce2;
+    unsigned int ce1, ce2, dpos1 = 0, dpos2 = 0, dlen1 = 0, dlen2 = 0;
+    const WCHAR *dstr1 = NULL, *dstr2 = NULL;
 
     while (len1 > 0 && len2 > 0)
     {
-        if (!dlen1) dlen1 = wine_decompose( 0, *str1, dstr1, 4 );
-        if (!dlen2) dlen2 = wine_decompose( 0, *str2, dstr2, 4 );
+        if (!dlen1 && !(dstr1 = get_decomposition( *str1, &dlen1 ))) dstr1 = str1;
+        if (!dlen2 && !(dstr2 = get_decomposition( *str2, &dlen2 ))) dstr2 = str2;
 
         if (flags & NORM_IGNORESYMBOLS)
         {
@@ -2244,14 +2329,14 @@ static int compare_weights(int flags, const WCHAR *str1, int len1,
     }
     while (len1)
     {
-        if (!dlen1) dlen1 = wine_decompose( 0, *str1, dstr1, 4 );
+        if (!dlen1 && !(dstr1 = get_decomposition( *str1, &dlen1 ))) dstr1 = str1;
         ce1 = get_weight( dstr1[dpos1], type );
         if (ce1) break;
         inc_str_pos( &str1, &len1, &dpos1, &dlen1 );
     }
     while (len2)
     {
-        if (!dlen2) dlen2 = wine_decompose( 0, *str2, dstr2, 4 );
+        if (!dlen2 && !(dstr2 = get_decomposition( *str2, &dlen2 ))) dstr2 = str2;
         ce2 = get_weight( dstr2[dpos2], type );
         if (ce2) break;
         inc_str_pos( &str2, &len2, &dpos2, &dlen2 );
@@ -3280,8 +3365,9 @@ INT WINAPI DECLSPEC_HOTPATCH FindStringOrdinal( DWORD flag, const WCHAR *src, IN
  */
 INT WINAPI DECLSPEC_HOTPATCH FoldStringW( DWORD flags, LPCWSTR src, INT srclen, LPWSTR dst, INT dstlen )
 {
-    WCHAR *tmp;
-    int ret;
+    NTSTATUS status;
+    WCHAR *buf = dst;
+    int len = dstlen;
 
     if (!src || !srclen || dstlen < 0 || (dstlen && !dst) || src == dst)
     {
@@ -3290,60 +3376,36 @@ INT WINAPI DECLSPEC_HOTPATCH FoldStringW( DWORD flags, LPCWSTR src, INT srclen, 
     }
     if (srclen == -1) srclen = lstrlenW(src) + 1;
 
-    switch (flags)
+    if (!dstlen && (flags & (MAP_PRECOMPOSED | MAP_FOLDCZONE | MAP_COMPOSITE)))
     {
-    case MAP_PRECOMPOSED:
-        return NormalizeString( NormalizationC, src, srclen, dst, dstlen );
-    case MAP_FOLDCZONE:
-    case MAP_PRECOMPOSED | MAP_FOLDCZONE:
-        return NormalizeString( NormalizationKC, src, srclen, dst, dstlen );
-    case MAP_COMPOSITE:
-        return NormalizeString( NormalizationD, src, srclen, dst, dstlen );
-    case MAP_COMPOSITE | MAP_FOLDCZONE:
-        return NormalizeString( NormalizationKD, src, srclen, dst, dstlen );
-    case MAP_FOLDDIGITS:
-        return fold_digits( src, srclen, dst, dstlen );
-    case MAP_EXPAND_LIGATURES:
-    case MAP_EXPAND_LIGATURES | MAP_FOLDCZONE:
-        return expand_ligatures( src, srclen, dst, dstlen );
-    case MAP_FOLDDIGITS | MAP_PRECOMPOSED:
-        if (!(tmp = RtlAllocateHeap( GetProcessHeap(), 0, srclen * sizeof(WCHAR) ))) break;
-        if (!(ret = fold_digits( src, srclen, tmp, srclen ))) break;
-        ret = NormalizeString( NormalizationC, tmp, srclen, dst, dstlen );
-        break;
-    case MAP_FOLDDIGITS | MAP_FOLDCZONE:
-    case MAP_FOLDDIGITS | MAP_PRECOMPOSED | MAP_FOLDCZONE:
-        if (!(tmp = RtlAllocateHeap( GetProcessHeap(), 0, srclen * sizeof(WCHAR) ))) break;
-        if (!(ret = fold_digits( src, srclen, tmp, srclen ))) break;
-        ret = NormalizeString( NormalizationKC, tmp, srclen, dst, dstlen );
-        break;
-    case MAP_FOLDDIGITS | MAP_COMPOSITE:
-        if (!(tmp = RtlAllocateHeap( GetProcessHeap(), 0, srclen * sizeof(WCHAR) ))) break;
-        if (!(ret = fold_digits( src, srclen, tmp, srclen ))) break;
-        ret = NormalizeString( NormalizationD, tmp, srclen, dst, dstlen );
-        break;
-    case MAP_FOLDDIGITS | MAP_COMPOSITE | MAP_FOLDCZONE:
-        if (!(tmp = RtlAllocateHeap( GetProcessHeap(), 0, srclen * sizeof(WCHAR) ))) break;
-        if (!(ret = fold_digits( src, srclen, tmp, srclen ))) break;
-        ret = NormalizeString( NormalizationKD, tmp, srclen, dst, dstlen );
-        break;
-    case MAP_EXPAND_LIGATURES | MAP_FOLDDIGITS:
-    case MAP_EXPAND_LIGATURES | MAP_FOLDDIGITS | MAP_FOLDCZONE:
-        if (!(tmp = RtlAllocateHeap( GetProcessHeap(), 0, srclen * sizeof(WCHAR) ))) break;
-        if (!(ret = fold_digits( src, srclen, tmp, srclen ))) break;
-        ret = expand_ligatures( tmp, srclen, dst, dstlen );
-        break;
-    default:
+        len = srclen * 4;
+        if (!(buf = RtlAllocateHeap( GetProcessHeap(), 0, len * sizeof(WCHAR) )))
+        {
+            SetLastError( ERROR_OUTOFMEMORY );
+            return 0;
+        }
+    }
+
+    for (;;)
+    {
+        status = fold_string( flags, src, srclen, buf, &len );
+        if (buf != dst) RtlFreeHeap( GetProcessHeap(), 0, buf );
+        if (status != STATUS_BUFFER_TOO_SMALL) break;
+        if (!(buf = RtlAllocateHeap( GetProcessHeap(), 0, len * sizeof(WCHAR) )))
+        {
+            SetLastError( ERROR_OUTOFMEMORY );
+            return 0;
+        }
+    }
+    if (status == STATUS_INVALID_PARAMETER_1)
+    {
         SetLastError( ERROR_INVALID_FLAGS );
         return 0;
     }
-    if (!tmp)
-    {
-        SetLastError( ERROR_OUTOFMEMORY );
-        return 0;
-    }
-    RtlFreeHeap( GetProcessHeap(), 0, tmp );
-    return ret;
+    if (!set_ntstatus( status )) return 0;
+
+    if (dstlen && dstlen < len) SetLastError( ERROR_INSUFFICIENT_BUFFER );
+    return len;
 }
 
 
@@ -4882,7 +4944,19 @@ INT WINAPI DECLSPEC_HOTPATCH MultiByteToWideChar( UINT codepage, DWORD flags, co
 INT WINAPI DECLSPEC_HOTPATCH NormalizeString(NORM_FORM form, const WCHAR *src, INT src_len,
                                              WCHAR *dst, INT dst_len)
 {
-    set_ntstatus( RtlNormalizeString( form, src, src_len, dst, &dst_len ));
+    NTSTATUS status = RtlNormalizeString( form, src, src_len, dst, &dst_len );
+
+    switch (status)
+    {
+    case STATUS_OBJECT_NAME_NOT_FOUND:
+        status = STATUS_INVALID_PARAMETER;
+        break;
+    case STATUS_BUFFER_TOO_SMALL:
+    case STATUS_NO_UNICODE_TRANSLATION:
+        dst_len = -dst_len;
+        break;
+    }
+    SetLastError( RtlNtStatusToDosError( status ));
     return dst_len;
 }
 

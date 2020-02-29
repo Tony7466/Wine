@@ -7,6 +7,7 @@ SOURCES = \
 	activaut.idl \
 	activdbg.idl \
 	activscp.idl \
+	adserr.h \
 	adshlp.h \
 	advpub.h \
 	af_irda.h \
@@ -51,6 +52,7 @@ SOURCES = \
 	bluetoothapis.h \
 	bthsdpdef.h \
 	cderr.h \
+	cdosys.idl \
 	cfgmgr32.h \
 	cguid.h \
 	chprst.idl \
@@ -421,6 +423,8 @@ SOURCES = \
 	msvcrt/assert.h \
 	msvcrt/conio.h \
 	msvcrt/corecrt.h \
+	msvcrt/corecrt_stdio_config.h \
+	msvcrt/corecrt_wstdio.h \
 	msvcrt/crtdbg.h \
 	msvcrt/crtdefs.h \
 	msvcrt/ctype.h \
@@ -578,6 +582,7 @@ SOURCES = \
 	rstloc.idl \
 	rstnot.idl \
 	rtutils.h \
+	rtworkq.idl \
 	sal.h \
 	sapi.idl \
 	sapiaut.idl \

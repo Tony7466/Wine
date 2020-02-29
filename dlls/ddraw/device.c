@@ -2501,14 +2501,6 @@ static HRESULT WINAPI d3d_device2_GetRenderState(IDirect3DDevice2 *iface,
     return IDirect3DDevice3_GetRenderState(&device->IDirect3DDevice3_iface, state, value);
 }
 
-static void d3d_device_set_render_state(struct d3d_device *device,
-        enum wined3d_render_state state, DWORD value)
-{
-    wined3d_stateblock_set_render_state(device->update_state, state, value);
-    if (!device->recording)
-        wined3d_device_set_render_state(device->wined3d_device, state, value);
-}
-
 static void d3d_device_set_sampler_state(struct d3d_device *device,
         UINT sampler_idx, enum wined3d_sampler_state state, DWORD value)
 {
@@ -2649,7 +2641,7 @@ static HRESULT d3d_device7_SetRenderState(IDirect3DDevice7 *iface,
             break;
 
         case D3DRENDERSTATE_ZBIAS:
-            d3d_device_set_render_state(device, WINED3D_RS_DEPTHBIAS, value);
+            wined3d_stateblock_set_render_state(device->update_state, WINED3D_RS_DEPTHBIAS, value);
             break;
 
         default:
@@ -2661,7 +2653,7 @@ static HRESULT d3d_device7_SetRenderState(IDirect3DDevice7 *iface,
                 break;
             }
 
-            d3d_device_set_render_state(device, state, value);
+            wined3d_stateblock_set_render_state(device->update_state, state, value);
             break;
     }
     wined3d_mutex_unlock();
@@ -3520,6 +3512,7 @@ static HRESULT d3d_device7_DrawPrimitive(IDirect3DDevice7 *iface,
     size = vertex_count * stride;
 
     wined3d_mutex_lock();
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     hr = d3d_device_prepare_vertex_buffer(device, size);
     if (FAILED(hr))
         goto done;
@@ -3585,7 +3578,6 @@ static void setup_lighting(const struct d3d_device *device, DWORD fvf, DWORD fla
         enable = FALSE;
 
     wined3d_stateblock_set_render_state(device->state, WINED3D_RS_LIGHTING, enable);
-    wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_LIGHTING, enable);
 }
 
 
@@ -3713,6 +3705,7 @@ static HRESULT d3d_device7_DrawIndexedPrimitive(IDirect3DDevice7 *iface,
     /* Set the D3DDevice's FVF */
     wined3d_mutex_lock();
 
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     hr = d3d_device_prepare_vertex_buffer(device, vtx_size);
     if (FAILED(hr))
         goto done;
@@ -4057,6 +4050,7 @@ static HRESULT d3d_device7_DrawPrimitiveStrided(IDirect3DDevice7 *iface, D3DPRIM
     }
 
     wined3d_mutex_lock();
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     hr = d3d_device_prepare_vertex_buffer(device, dst_size);
     if (FAILED(hr))
         goto done;
@@ -4173,6 +4167,7 @@ static HRESULT d3d_device7_DrawIndexedPrimitiveStrided(IDirect3DDevice7 *iface,
 
     wined3d_mutex_lock();
 
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     hr = d3d_device_prepare_vertex_buffer(device, vtx_dst_size);
     if (FAILED(hr))
         goto done;
@@ -4330,6 +4325,7 @@ static HRESULT d3d_device7_DrawPrimitiveVB(IDirect3DDevice7 *iface, D3DPRIMITIVE
     }
 
     wined3d_mutex_lock();
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     wined3d_device_set_vertex_declaration(device->wined3d_device, vb_impl->wined3d_declaration);
     if (FAILED(hr = wined3d_device_set_stream_source(device->wined3d_device,
             0, vb_impl->wined3d_buffer, 0, stride)))
@@ -4452,6 +4448,7 @@ static HRESULT d3d_device7_DrawIndexedPrimitiveVB(IDirect3DDevice7 *iface,
 
     wined3d_mutex_lock();
 
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     wined3d_device_set_vertex_declaration(device->wined3d_device, vb_impl->wined3d_declaration);
 
     hr = d3d_device_prepare_index_buffer(device, index_count * sizeof(WORD));
@@ -5251,6 +5248,7 @@ static HRESULT d3d_device7_ValidateDevice(IDirect3DDevice7 *iface, DWORD *pass_c
     TRACE("iface %p, pass_count %p.\n", iface, pass_count);
 
     wined3d_mutex_lock();
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
     hr = wined3d_device_validate_device(device->wined3d_device, pass_count);
     wined3d_mutex_unlock();
 
@@ -5313,7 +5311,7 @@ static HRESULT d3d_device7_Clear(IDirect3DDevice7 *iface, DWORD count,
         (color & 0xff) / 255.0f,
         ((color >> 24) & 0xff) / 255.0f,
     };
-    struct d3d_device *This = impl_from_IDirect3DDevice7(iface);
+    struct d3d_device *device = impl_from_IDirect3DDevice7(iface);
     HRESULT hr;
 
     TRACE("iface %p, count %u, rects %p, flags %#x, color 0x%08x, z %.8e, stencil %#x.\n",
@@ -5326,7 +5324,8 @@ static HRESULT d3d_device7_Clear(IDirect3DDevice7 *iface, DWORD count,
     }
 
     wined3d_mutex_lock();
-    hr = wined3d_device_clear(This->wined3d_device, count, (RECT *)rects, flags, &c, z, stencil);
+    wined3d_device_apply_stateblock(device->wined3d_device, device->state);
+    hr = wined3d_device_clear(device->wined3d_device, count, (RECT *)rects, flags, &c, z, stencil);
     wined3d_mutex_unlock();
 
     return hr;
@@ -7060,22 +7059,13 @@ static HRESULT d3d_device_init(struct d3d_device *device, struct ddraw *ddraw,
 
     wined3d_stateblock_set_render_state(ddraw->state, WINED3D_RS_ZENABLE,
             d3d_device_update_depth_stencil(device));
-    wined3d_device_set_render_state(ddraw->wined3d_device, WINED3D_RS_ZENABLE,
-            d3d_device_update_depth_stencil(device));
     if (version == 1) /* Color keying is initially enabled for version 1 devices. */
-    {
         wined3d_stateblock_set_render_state(ddraw->state, WINED3D_RS_COLORKEYENABLE, TRUE);
-        wined3d_device_set_render_state(ddraw->wined3d_device, WINED3D_RS_COLORKEYENABLE, TRUE);
-    }
     else if (version == 2)
-    {
         wined3d_stateblock_set_render_state(ddraw->state, WINED3D_RS_SPECULARENABLE, TRUE);
-        wined3d_device_set_render_state(ddraw->wined3d_device, WINED3D_RS_SPECULARENABLE, TRUE);
-    }
     if (version < 7)
     {
         wined3d_stateblock_set_render_state(ddraw->state, WINED3D_RS_NORMALIZENORMALS, TRUE);
-        wined3d_device_set_render_state(ddraw->wined3d_device, WINED3D_RS_NORMALIZENORMALS, TRUE);
         IDirect3DDevice3_SetRenderState(&device->IDirect3DDevice3_iface,
                 D3DRENDERSTATE_TEXTUREMAPBLEND, D3DTBLEND_MODULATE);
     }

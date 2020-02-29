@@ -1314,8 +1314,8 @@ static void test_coop_level_threaded(void)
     hr = IDirectDraw4_SetCooperativeLevel(ddraw, p.window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
     ok(SUCCEEDED(hr), "Failed to set cooperative level, hr %#x.\n", hr);
 
-    IDirectDraw4_Release(ddraw);
     destroy_window_thread(&p);
+    IDirectDraw4_Release(ddraw);
 }
 
 static void test_depth_blit(void)
@@ -16413,12 +16413,13 @@ static void test_clipper_refcount(void)
     IDirectDrawClipper_Release(clipper);
     IDirectDrawClipper_Release(clipper);
 
-    if (!ddraw_is_nvidia(ddraw))
+    if (0)
     {
         /* Disabled because it causes heap corruption (HeapValidate fails and random
          * hangs in a later HeapFree) on Windows on one of my Machines: MacbookPro 10,1
          * running Windows 10 18363.535 and Nvidia driver 425.31. Driver version 441.66
-         * is affected too.
+         * is affected too. Some testbot machines have crashes directly in GetClipper
+         * or proceed with a corrupted heap too.
          *
          * The same Windows and driver versions run the test without heap corruption on
          * a Geforce 1060 GTX card. I have not seen the problem on AMD GPUs either. */

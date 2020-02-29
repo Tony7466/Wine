@@ -927,3 +927,31 @@ NTSTATUS WINAPI HidP_GetData(HIDP_REPORT_TYPE ReportType, HIDP_DATA *DataList, U
 
     return rc;
 }
+
+NTSTATUS WINAPI HidP_GetLinkCollectionNodes(HIDP_LINK_COLLECTION_NODE *LinkCollectionNode,
+    ULONG *LinkCollectionNodeLength, PHIDP_PREPARSED_DATA PreparsedData)
+{
+    WINE_HIDP_PREPARSED_DATA *data = (WINE_HIDP_PREPARSED_DATA*)PreparsedData;
+    WINE_HID_LINK_COLLECTION_NODE *nodes = HID_NODES(data);
+    ULONG i;
+
+    TRACE("(%p, %p, %p)\n", LinkCollectionNode, LinkCollectionNodeLength, PreparsedData);
+
+    if (*LinkCollectionNodeLength < data->caps.NumberLinkCollectionNodes)
+        return HIDP_STATUS_BUFFER_TOO_SMALL;
+
+    for (i = 0; i < data->caps.NumberLinkCollectionNodes; ++i)
+    {
+        LinkCollectionNode[i].LinkUsage = nodes[i].LinkUsage;
+        LinkCollectionNode[i].LinkUsagePage = nodes[i].LinkUsagePage;
+        LinkCollectionNode[i].Parent = nodes[i].Parent;
+        LinkCollectionNode[i].NumberOfChildren = nodes[i].NumberOfChildren;
+        LinkCollectionNode[i].NextSibling = nodes[i].NextSibling;
+        LinkCollectionNode[i].FirstChild = nodes[i].FirstChild;
+        LinkCollectionNode[i].CollectionType = nodes[i].CollectionType;
+        LinkCollectionNode[i].IsAlias = nodes[i].IsAlias;
+    }
+    *LinkCollectionNodeLength = data->caps.NumberLinkCollectionNodes;
+
+    return HIDP_STATUS_SUCCESS;
+}

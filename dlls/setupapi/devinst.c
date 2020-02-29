@@ -37,6 +37,7 @@
 #include "winioctl.h"
 #include "rpc.h"
 #include "rpcdce.h"
+#include "cguid.h"
 
 #include "setupapi_private.h"
 
@@ -3522,6 +3523,31 @@ BOOL WINAPI SetupDiOpenDeviceInterfaceA(
     FIXME("%p %s %08x %p\n", DeviceInfoSet,
         debugstr_a(DevicePath), OpenFlags, DeviceInterfaceData);
     return FALSE;
+}
+
+/***********************************************************************
+ *              SetupDiOpenDeviceInterfaceRegKey (SETUPAPI.@)
+ */
+HKEY WINAPI SetupDiOpenDeviceInterfaceRegKey(HDEVINFO devinfo, PSP_DEVICE_INTERFACE_DATA iface_data,
+        DWORD reserved, REGSAM access)
+{
+    struct device_iface *iface;
+    LSTATUS lr;
+    HKEY key;
+
+    TRACE("devinfo %p, iface_data %p, reserved %d, access %#x.\n", devinfo, iface_data, reserved, access);
+
+    if (!(iface = get_device_iface(devinfo, iface_data)))
+        return INVALID_HANDLE_VALUE;
+
+    lr = RegOpenKeyExW(iface->refstr_key, DeviceParameters, 0, access, &key);
+    if (lr)
+    {
+        SetLastError(lr);
+        return INVALID_HANDLE_VALUE;
+    }
+
+    return key;
 }
 
 /***********************************************************************
