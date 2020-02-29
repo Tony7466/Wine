@@ -83,13 +83,6 @@ static WCHAR *make_wstr(const char *str)
     return ret;
 }
 
-static int strcmp_wa(LPCWSTR strw, const char *stra)
-{
-    CHAR buf[512];
-    WideCharToMultiByte(CP_ACP, 0, strw, -1, buf, sizeof(buf), NULL, NULL);
-    return lstrcmpA(stra, buf);
-}
-
 static void init_function_pointers(void)
 {
     HMODULE hmod;
@@ -1789,7 +1782,7 @@ static void test_SHGetFolderPathAndSubDirA(void)
     static const char wine[] = "wine";
     static const char winetemp[] = "wine\\temp";
     static char appdata[MAX_PATH];
-    static char testpath[MAX_PATH];
+    static char testpath[2 * MAX_PATH];
     static char toolongpath[MAX_PATH+1];
 
     if(FAILED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, SHGFP_TYPE_CURRENT, appdata)))
@@ -4503,10 +4496,13 @@ static void r_verify_pidl(unsigned l, LPCITEMIDLIST pidl, const WCHAR *path)
                     "didn't get expected path (%s), instead: %s\n",
                      wine_dbgstr_w(path), wine_dbgstr_w(U(filename).pOleStr));
             SHFree(U(filename).pOleStr);
-        }else if(filename.uType == STRRET_CSTR){
-            ok_(__FILE__,l)(strcmp_wa(path, U(filename).cStr) == 0,
-                    "didn't get expected path (%s), instead: %s\n",
+        }
+        else if(filename.uType == STRRET_CSTR)
+        {
+            WCHAR *strW = make_wstr(U(filename).cStr);
+            ok_(__FILE__,l)(!lstrcmpW(path, strW), "didn't get expected path (%s), instead: %s\n",
                      wine_dbgstr_w(path), U(filename).cStr);
+            heap_free(strW);
         }
 
         IShellFolder_Release(parent);

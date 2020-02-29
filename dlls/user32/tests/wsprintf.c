@@ -52,7 +52,26 @@ static const struct
 
 static void wsprintfATest(void)
 {
-    char buf[25];
+    char buf[25], star[4], partial[4];
+    static const WCHAR starW[] = {0x2606, 0};
+    static const WCHAR fffeW[] = {0xfffe, 0};
+    static const WCHAR wineW[] = {0xd83c, 0xdf77, 0}; /* U+1F377: wine glass */
+    const struct {
+        const void *input;
+        const char *fmt;
+        const char *str;
+        int rc;
+    }
+    testcase[] = {
+        { starW, "%.1S", partial, 1 },
+        { starW, "%.2S", star,    2 },
+        { starW, "%.3S", star,    2 },
+        { fffeW, "%.1S", "?",     1 },
+        { fffeW, "%.2S", "?",     1 },
+        { wineW, "%.2S", "??",    2 },
+        { star,  "%.1s", partial, 1 },
+    };
+    CPINFO cpinfo;
     unsigned int i;
     int rc;
 
@@ -72,6 +91,31 @@ static void wsprintfATest(void)
         ok(rc == strlen(i64_formats[i].res), "%u: wsprintfA length failure: rc=%d\n", i, rc);
         ok(!strcmp(buf, i64_formats[i].res), "%u: wrong result [%s]\n", i, buf);
     }
+
+    if (!GetCPInfo(CP_ACP, &cpinfo) || cpinfo.MaxCharSize <= 1)
+    {
+        skip("Multi-byte wsprintfA test isn't available for the current codepage\n");
+        return;
+    }
+
+    rc = WideCharToMultiByte(CP_ACP, 0, starW, -1, star, sizeof(star), NULL, NULL);
+    ok(rc == 3, "unexpected rc, got %d\n", rc);
+    partial[0] = star[0];
+    partial[1] = '\0';
+
+    for (i = 0; i < ARRAY_SIZE(testcase); i++)
+    {
+        memset(buf, 0x11, sizeof(buf));
+        rc = wsprintfA(buf, testcase[i].fmt, testcase[i].input);
+
+        ok(rc == testcase[i].rc,
+           "%u: expected %d, got %d\n",
+           i, testcase[i].rc, rc);
+
+        ok(!strcmp(buf, testcase[i].str),
+           "%u: expected %s, got %s\n",
+           i, wine_dbgstr_a(testcase[i].str), wine_dbgstr_an(buf, rc));
+    }
 }
 
 static void wsprintfWTest(void)
@@ -79,7 +123,25 @@ static void wsprintfWTest(void)
     static const WCHAR fmt_010ld[] = {'%','0','1','0','l','d','\0'};
     static const WCHAR res_010ld[] = {'-','0','0','0','0','0','0','0','0','1', '\0'};
     static const WCHAR fmt_I64x[] = {'%','I','6','4','x',0};
+    static const WCHAR fmt_dot3S[] = {'%','.','3','S',0};
+    static const WCHAR fmt__4S[] = {'%','-','4','S',0};
+    static const WCHAR stars[] = {'*', 0x2606, 0x2605, 0};
+    static const WCHAR nul_spc[] = {'*', 0, ' ', ' ', 0};
+    WCHAR def_spc[] = {'*','?', 0x2605, ' ', 0};
     WCHAR buf[25], fmt[25], res[25];
+    char stars_mb[8], partial00[8], partialFF[8];
+    const struct {
+        const char *input;
+        const WCHAR *fmt;
+        const WCHAR *str;
+        int rc;
+    }
+    testcase[] = {
+        { stars_mb, fmt_dot3S, stars, 3 },
+        { partial00, fmt__4S, nul_spc, 4 },
+        { partialFF, fmt__4S, def_spc, 4 },
+    };
+    CPINFOEXW cpinfoex;
     unsigned int i;
     int rc;
 
@@ -105,6 +167,35 @@ static void wsprintfWTest(void)
         rc = wsprintfW(buf, fmt, i64_formats[i].value);
         ok(rc == lstrlenW(res), "%u: wsprintfW length failure: rc=%d\n", i, rc);
         ok(!lstrcmpW(buf, res), "%u: wrong result [%s]\n", i, wine_dbgstr_w(buf));
+    }
+
+    if (!GetCPInfoExW(CP_ACP, 0, &cpinfoex) || cpinfoex.MaxCharSize <= 1)
+    {
+        skip("Multi-byte wsprintfW test isn't available for the current codepage\n");
+        return;
+    }
+    def_spc[1] = cpinfoex.UnicodeDefaultChar;
+
+    rc = WideCharToMultiByte(CP_ACP, 0, stars, -1, stars_mb, sizeof(stars_mb), NULL, NULL);
+    ok(rc == 6, "expected 6, got %d\n", rc);
+    strcpy(partial00, stars_mb);
+    partial00[2] = '\0';
+    strcpy(partialFF, stars_mb);
+    partialFF[2] = 0xff;
+
+    for (i = 0; i < ARRAY_SIZE(testcase); i++)
+    {
+        memset(buf, 0x11, sizeof(buf));
+        rc = wsprintfW(buf, testcase[i].fmt, testcase[i].input);
+
+        ok(rc == testcase[i].rc,
+           "%u: expected %d, got %d\n",
+           i, testcase[i].rc, rc);
+
+        ok(!memcmp(buf, testcase[i].str, (testcase[i].rc + 1) * sizeof(WCHAR)),
+           "%u: expected %s, got %s\n", i,
+           wine_dbgstr_wn(testcase[i].str, testcase[i].rc + 1),
+           wine_dbgstr_wn(buf, rc + 1));
     }
 }
 

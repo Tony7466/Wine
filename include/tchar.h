@@ -23,10 +23,6 @@
 #error Wine should not include tchar.h internally
 #endif
 
-#if !defined(__MSVCRT__) && (defined(_UNICODE) || defined(_MBCS))
-#error You must use msvcrt when building in Unicode/MBCS mode [-mno-cygwin]
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -108,7 +104,7 @@ extern "C" {
 #define _tchmod       WINE_tchar_routine(chmod,           _chmod,      _wchmod)
 #define _tcreat       WINE_tchar_routine(creat,           _creat,      _wcreat)
 #define _tcscat       WINE_tchar_routine(strcat,          _mbscat,     wcscat)
-#define _tcscat_s     WINE_tchar_routine(strncat_s,       _mbsncat_s,  wcsncat_s)
+#define _tcscat_s     WINE_tchar_routine(strcat_s,        _mbscat_s,   wcscat_s)
 #define _tcschr       WINE_tchar_routine(strchr,          _mbschr,     wcschr)
 #define _tcsclen      WINE_tchar_routine(strlen,          _mbslen,     wcslen)
 #define _tcscmp       WINE_tchar_routine(strcmp,          _mbscmp,     wcscmp)
@@ -127,17 +123,15 @@ extern "C" {
 #define _tcslwr_s     WINE_tchar_routine(_strlwr_s,       _mbslwr_s,   _wcslwr_s)
 #define _tcsnbcnt     WINE_tchar_routine(_strncnt,        _mbsnbcnt,   _wcnscnt)
 #define _tcsncat      WINE_tchar_routine(strncat,         _mbsnbcat,   wcsncat)
-#define _tcscat_s     WINE_tchar_routine(strcat_s,        _mbsnbcat_s, wcscat_s)
+#define _tcsncat_s    WINE_tchar_routine(strncat_s,       _mbsncat_s,  wcsncat_s)
 #define _tcsnccat     WINE_tchar_routine(strncat,         _mbsncat,    wcsncat)
 #define _tcsncmp      WINE_tchar_routine(strncmp,         _mbsnbcmp,   wcsncmp)
-#define _tcsncpy      WINE_tchar_routine(strncpy,         _mbsncpy,    wcsncpy)
-#define _tcsncpy_s    WINE_tchar_routine(strncpy_s,       _mbsncpy_s,  wcsncpy_s)
 #define _tcsnccmp     WINE_tchar_routine(strncmp,         _mbsncmp,    wcsncmp)
 #define _tcsnccnt     WINE_tchar_routine(_strncnt,        _mbsnccnt,   _wcsncnt)
 #define _tcsnccpy     WINE_tchar_routine(strncpy,         _mbsncpy,    wcsncpy)
 #define _tcsncicmp    WINE_tchar_routine(_strnicmp,       _mbsnicmp,   _wcsnicmp)
 #define _tcsncpy      WINE_tchar_routine(strncpy,         _mbsnbcpy,   wcsncpy)
-#define _tcsncpy      WINE_tchar_routine(strncpy_s,       _mbsnbcpy_s, wcsncpy_s)
+#define _tcsncpy_s    WINE_tchar_routine(strncpy_s,       _mbsnbcpy_s, wcsncpy_s)
 #define _tcsncset     WINE_tchar_routine(_strnset,        _mbsnset,    _wcsnset)
 #define _tcsnextc     WINE_tchar_routine(_strnextc,       _mbsnextc,   _wcsnextc)
 #define _tcsnicmp     WINE_tchar_routine(_strnicmp,       _mbsnicmp,   _wcsnicmp)
@@ -244,8 +238,10 @@ typedef unsigned short wctype_t;
 #endif
 
 #ifndef __TCHAR_DEFINED
-#ifdef WINE_UNICODE_NATIVE
+#if defined(WINE_UNICODE_NATIVE)
 typedef wchar_t       _TCHAR;
+#elif defined(WINE_UNICODE_CHAR16)
+typedef char16_t      _TCHAR;
 #else
 typedef unsigned short _TCHAR;
 #endif

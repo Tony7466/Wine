@@ -542,25 +542,25 @@ enum bwritershader_param_srcmod_type
 #define BWRITERVS_SWIZZLE_SHIFT      16
 #define BWRITERVS_SWIZZLE_MASK       (0xFF << BWRITERVS_SWIZZLE_SHIFT)
 
-#define BWRITERVS_X_X       (0 << BWRITERVS_SWIZZLE_SHIFT)
-#define BWRITERVS_X_Y       (1 << BWRITERVS_SWIZZLE_SHIFT)
-#define BWRITERVS_X_Z       (2 << BWRITERVS_SWIZZLE_SHIFT)
-#define BWRITERVS_X_W       (3 << BWRITERVS_SWIZZLE_SHIFT)
+#define BWRITERVS_X_X       (0)
+#define BWRITERVS_X_Y       (1)
+#define BWRITERVS_X_Z       (2)
+#define BWRITERVS_X_W       (3)
 
-#define BWRITERVS_Y_X       (0 << (BWRITERVS_SWIZZLE_SHIFT + 2))
-#define BWRITERVS_Y_Y       (1 << (BWRITERVS_SWIZZLE_SHIFT + 2))
-#define BWRITERVS_Y_Z       (2 << (BWRITERVS_SWIZZLE_SHIFT + 2))
-#define BWRITERVS_Y_W       (3 << (BWRITERVS_SWIZZLE_SHIFT + 2))
+#define BWRITERVS_Y_X       (0 << 2)
+#define BWRITERVS_Y_Y       (1 << 2)
+#define BWRITERVS_Y_Z       (2 << 2)
+#define BWRITERVS_Y_W       (3 << 2)
 
-#define BWRITERVS_Z_X       (0 << (BWRITERVS_SWIZZLE_SHIFT + 4))
-#define BWRITERVS_Z_Y       (1 << (BWRITERVS_SWIZZLE_SHIFT + 4))
-#define BWRITERVS_Z_Z       (2 << (BWRITERVS_SWIZZLE_SHIFT + 4))
-#define BWRITERVS_Z_W       (3 << (BWRITERVS_SWIZZLE_SHIFT + 4))
+#define BWRITERVS_Z_X       (0 << 4)
+#define BWRITERVS_Z_Y       (1 << 4)
+#define BWRITERVS_Z_Z       (2 << 4)
+#define BWRITERVS_Z_W       (3 << 4)
 
-#define BWRITERVS_W_X       (0 << (BWRITERVS_SWIZZLE_SHIFT + 6))
-#define BWRITERVS_W_Y       (1 << (BWRITERVS_SWIZZLE_SHIFT + 6))
-#define BWRITERVS_W_Z       (2 << (BWRITERVS_SWIZZLE_SHIFT + 6))
-#define BWRITERVS_W_W       (3 << (BWRITERVS_SWIZZLE_SHIFT + 6))
+#define BWRITERVS_W_X       (0 << 6)
+#define BWRITERVS_W_Y       (1 << 6)
+#define BWRITERVS_W_Z       (2 << 6)
+#define BWRITERVS_W_W       (3 << 6)
 
 #define BWRITERVS_NOSWIZZLE (BWRITERVS_X_X | BWRITERVS_Y_Y | BWRITERVS_Z_Z | BWRITERVS_W_W)
 
@@ -879,7 +879,6 @@ struct hlsl_ir_expr
     struct hlsl_ir_node node;
     enum hlsl_ir_expr_op op;
     struct hlsl_ir_node *operands[3];
-    struct list *subexpressions;
 };
 
 enum hlsl_ir_jump_type
@@ -984,6 +983,7 @@ struct parse_initializer
 {
     struct hlsl_ir_node **args;
     unsigned int args_count;
+    struct list *instrs;
 };
 
 struct parse_variable_def
@@ -1118,6 +1118,11 @@ static inline struct hlsl_ir_loop *loop_from_node(const struct hlsl_ir_node *nod
 {
     assert(node->type == HLSL_IR_LOOP);
     return CONTAINING_RECORD(node, struct hlsl_ir_loop, node);
+}
+
+static inline struct hlsl_ir_node *node_from_list(struct list *list)
+{
+    return LIST_ENTRY(list_tail(list), struct hlsl_ir_node, entry);
 }
 
 BOOL add_declaration(struct hlsl_scope *scope, struct hlsl_ir_var *decl, BOOL local_var) DECLSPEC_HIDDEN;

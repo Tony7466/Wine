@@ -76,6 +76,8 @@ static HRESULT (WINAPI * pCoGetTreatAsClass)(REFCLSID clsidOld, LPCLSID pClsidNe
 static HRESULT (WINAPI * pCoTreatAsClass)(REFCLSID clsidOld, REFCLSID pClsidNew);
 static HRESULT (WINAPI * pCoGetContextToken)(ULONG_PTR *token);
 static HRESULT (WINAPI * pCoGetApartmentType)(APTTYPE *type, APTTYPEQUALIFIER *qualifier);
+static HRESULT (WINAPI * pCoIncrementMTAUsage)(CO_MTA_USAGE_COOKIE *cookie);
+static HRESULT (WINAPI * pCoDecrementMTAUsage)(CO_MTA_USAGE_COOKIE cookie);
 static LONG (WINAPI * pRegDeleteKeyExA)(HKEY, LPCSTR, REGSAM, DWORD);
 static LONG (WINAPI * pRegOverridePredefKey)(HKEY key, HKEY override);
 
@@ -646,7 +648,8 @@ static void _test_apt_type(APTTYPE expected_type, APTTYPEQUALIFIER expected_qual
         return;
 
     hr = pCoGetApartmentType(&type, &qualifier);
-    ok_(__FILE__, line)(hr == S_OK || hr == CO_E_NOTINITIALIZED, "Unexpected return code: 0x%08x\n", hr);
+    ok_(__FILE__, line)(hr == S_OK || (type == APTTYPE_CURRENT && hr == CO_E_NOTINITIALIZED),
+            "Unexpected hr %#x.\n", hr);
     ok_(__FILE__, line)(type == expected_type, "Wrong apartment type %d, expected %d\n", type, expected_type);
     ok_(__FILE__, line)(qualifier == expected_qualifier, "Wrong apartment qualifier %d, expected %d\n", qualifier,
         expected_qualifier);
@@ -3818,6 +3821,8 @@ static void init_funcs(void)
     pCoTreatAsClass = (void*)GetProcAddress(hOle32,"CoTreatAsClass");
     pCoGetContextToken = (void*)GetProcAddress(hOle32, "CoGetContextToken");
     pCoGetApartmentType = (void*)GetProcAddress(hOle32, "CoGetApartmentType");
+    pCoIncrementMTAUsage = (void*)GetProcAddress(hOle32, "CoIncrementMTAUsage");
+    pCoDecrementMTAUsage = (void*)GetProcAddress(hOle32, "CoDecrementMTAUsage");
     pRegDeleteKeyExA = (void*)GetProcAddress(hAdvapi32, "RegDeleteKeyExA");
     pRegOverridePredefKey = (void*)GetProcAddress(hAdvapi32, "RegOverridePredefKey");
 
@@ -3916,6 +3921,42 @@ static void test_CoGetCurrentProcess(void)
     ok(id2 && id2 != id, "Unexpected id from another thread.\n");
 }
 
+static void test_mta_usage(void)
+{
+    CO_MTA_USAGE_COOKIE cookie, cookie2;
+    HRESULT hr;
+
+    if (!pCoIncrementMTAUsage)
+    {
+        win_skip("CoIncrementMTAUsage() is not available.\n");
+        return;
+    }
+
+    test_apt_type(APTTYPE_CURRENT, APTTYPEQUALIFIER_NONE);
+
+    cookie = 0;
+    hr = pCoIncrementMTAUsage(&cookie);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(cookie != NULL, "Unexpected cookie %p.\n", cookie);
+
+    cookie2 = 0;
+    hr = pCoIncrementMTAUsage(&cookie2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(cookie2 != NULL && cookie2 != cookie, "Unexpected cookie %p.\n", cookie2);
+
+    test_apt_type(APTTYPE_MTA, APTTYPEQUALIFIER_IMPLICIT_MTA);
+
+    hr = pCoDecrementMTAUsage(cookie);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    test_apt_type(APTTYPE_MTA, APTTYPEQUALIFIER_IMPLICIT_MTA);
+
+    hr = pCoDecrementMTAUsage(cookie2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    test_apt_type(APTTYPE_CURRENT, APTTYPEQUALIFIER_NONE);
+}
+
 START_TEST(compobj)
 {
     init_funcs();
@@ -3967,6 +4008,7 @@ START_TEST(compobj)
     test_GlobalOptions();
     test_implicit_mta();
     test_CoGetCurrentProcess();
+    test_mta_usage();
 
     DeleteFileA( testlib );
 }

@@ -31,6 +31,7 @@
 #include "devpkey.h"
 #include "setupapi.h"
 #include "cfgmgr32.h"
+#include "cguid.h"
 
 #include "wine/heap.h"
 #include "wine/test.h"
@@ -2010,6 +2011,7 @@ static void test_device_interface_key(void)
     ok(!ret, "key should exist: %u\n", ret);
 
     ret = RegSetValueA(key, NULL, REG_SZ, "test", 5);
+    ok(!ret, "RegSetValue failed: %u\n", ret);
     sz = sizeof(buffer);
     ret = RegQueryValueA(dikey, NULL, buffer, &sz);
     ok(!ret, "RegQueryValue failed: %u\n", ret);
@@ -2028,6 +2030,64 @@ static void test_device_interface_key(void)
     SetupDiRemoveDeviceInterface(set, &iface);
     SetupDiRemoveDevice(set, &devinfo);
     SetupDiDestroyDeviceInfoList(set);
+}
+
+static void test_open_device_interface_key(void)
+{
+    SP_DEVICE_INTERFACE_DATA iface;
+    SP_DEVINFO_DATA device;
+    CHAR buffer[5];
+    HDEVINFO set;
+    LSTATUS lr;
+    LONG size;
+    HKEY key;
+    BOOL ret;
+
+    set = SetupDiCreateDeviceInfoList(&guid, NULL);
+    ok(set != INVALID_HANDLE_VALUE, "Failed to create device list, error %#x\n", GetLastError());
+
+    device.cbSize = sizeof(device);
+    ret = SetupDiCreateDeviceInfoA(set, "ROOT\\LEGACY_BOGUS\\0000", &guid, NULL, NULL, 0, &device);
+    ok(ret, "Failed to create device, error %#x.\n", GetLastError());
+
+    iface.cbSize = sizeof(iface);
+    ret = SetupDiCreateDeviceInterfaceA(set, &device, &guid, NULL, 0, &iface);
+    ok(ret, "Failed to create interface, error %#x.\n", GetLastError());
+
+    /* Test open before creation */
+    key = SetupDiOpenDeviceInterfaceRegKey(set, &iface, 0, KEY_ALL_ACCESS);
+    ok(key == INVALID_HANDLE_VALUE, "Expect open interface registry key failure\n");
+
+    /* Test opened key is from SetupDiCreateDeviceInterfaceRegKey */
+    key = SetupDiCreateDeviceInterfaceRegKeyW(set, &iface, 0, KEY_ALL_ACCESS, NULL, NULL);
+    ok(key != INVALID_HANDLE_VALUE, "Failed to create interface registry key, error %#x\n", GetLastError());
+
+    lr = RegSetValueA(key, NULL, REG_SZ, "test", 5);
+    ok(!lr, "RegSetValue failed, error %#x\n", lr);
+
+    RegCloseKey(key);
+
+    key = SetupDiOpenDeviceInterfaceRegKey(set, &iface, 0, KEY_ALL_ACCESS);
+    ok(key != INVALID_HANDLE_VALUE, "Failed to open interface registry key, error %#x\n", GetLastError());
+
+    size = sizeof(buffer);
+    lr = RegQueryValueA(key, NULL, buffer, &size);
+    ok(!lr, "RegQueryValue failed, error %#x\n", lr);
+    ok(!strcmp(buffer, "test"), "got wrong data %s\n", buffer);
+
+    RegCloseKey(key);
+
+    /* Test open after removal */
+    ret = SetupDiRemoveDeviceInterface(set, &iface);
+    ok(ret, "Failed to remove device interface, error %#x.\n", GetLastError());
+
+    key = SetupDiOpenDeviceInterfaceRegKey(set, &iface, 0, KEY_ALL_ACCESS);
+    ok(key == INVALID_HANDLE_VALUE, "Expect open interface registry key failure\n");
+
+    ret = SetupDiRemoveDevice(set, &device);
+    ok(ret, "Failed to remove device, error %#x.\n", GetLastError());
+    ret = SetupDiDestroyDeviceInfoList(set);
+    ok(ret, "Failed to destroy device list, error %#x.\n", GetLastError());
 }
 
 static void test_device_install_params(void)
@@ -2255,7 +2315,7 @@ static void test_get_actual_section(void)
 
 static void test_driver_list(void)
 {
-    char inf_dir[MAX_PATH], inf_path[MAX_PATH], inf_path2[MAX_PATH];
+    char inf_dir[MAX_PATH], inf_path[MAX_PATH + 10], inf_path2[MAX_PATH + 10];
     static const char hardware_id[] = "bogus_hardware_id\0";
     static const char compat_id[] = "bogus_compat_id\0";
     SP_DEVINSTALL_PARAMS_A params = {sizeof(params)};
@@ -3141,6 +3201,7 @@ START_TEST(devinst)
     test_get_inf_class();
     test_devnode();
     test_device_interface_key();
+    test_open_device_interface_key();
     test_device_install_params();
     test_driver_list();
     test_call_class_installer();

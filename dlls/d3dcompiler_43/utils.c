@@ -291,10 +291,10 @@ static const char *debug_print_swizzle(DWORD arg)
             return ".w";
     }
 
-    swizzle[0] = (arg >> (BWRITERVS_SWIZZLE_SHIFT + 0)) & 0x03;
-    swizzle[1] = (arg >> (BWRITERVS_SWIZZLE_SHIFT + 2)) & 0x03;
-    swizzle[2] = (arg >> (BWRITERVS_SWIZZLE_SHIFT + 4)) & 0x03;
-    swizzle[3] = (arg >> (BWRITERVS_SWIZZLE_SHIFT + 6)) & 0x03;
+    swizzle[0] = arg & 3;
+    swizzle[1] = (arg >> 2) & 3;
+    swizzle[2] = (arg >> 4) & 3;
+    swizzle[3] = (arg >> 6) & 3;
 
     ret[0] = '.';
     for (i = 0; i < 4; ++i)
@@ -1278,10 +1278,14 @@ static struct hlsl_type *expr_common_type(struct hlsl_type *t1, struct hlsl_type
 static struct hlsl_ir_node *implicit_conversion(struct hlsl_ir_node *node, struct hlsl_type *type,
         struct source_location *loc)
 {
+    struct hlsl_ir_expr *cast;
+
     if (compare_hlsl_types(node->data_type, type))
         return node;
     TRACE("Implicit conversion of expression to %s\n", debug_hlsl_type(type));
-    return &new_cast(node, type, loc)->node;
+    if ((cast = new_cast(node, type, loc)))
+        list_add_after(&node->entry, &cast->node.entry);
+    return &cast->node;
 }
 
 struct hlsl_ir_expr *new_expr(enum hlsl_ir_expr_op op, struct hlsl_ir_node **operands,
@@ -1468,8 +1472,6 @@ struct hlsl_ir_node *make_assignment(struct hlsl_ir_node *left, enum parse_assig
             hlsl_report_message(rhs->loc.file, rhs->loc.line, rhs->loc.col, HLSL_LEVEL_ERROR,
                     "can't implicitly convert %s to %s",
                     debug_hlsl_type(rhs->data_type), debug_hlsl_type(type));
-            free_instr(lhs);
-            free_instr(rhs);
             d3dcompiler_free(assign);
             return NULL;
         }
@@ -1481,8 +1483,6 @@ struct hlsl_ir_node *make_assignment(struct hlsl_ir_node *left, enum parse_assig
         if (!converted_rhs)
         {
             ERR("Couldn't implicitly convert expression to %s.\n", debug_hlsl_type(type));
-            free_instr(lhs);
-            free_instr(rhs);
             d3dcompiler_free(assign);
             return NULL;
         }
@@ -1502,11 +1502,9 @@ struct hlsl_ir_node *make_assignment(struct hlsl_ir_node *left, enum parse_assig
         }
         else
         {
-            struct hlsl_ir_deref *lhs_deref = deref_from_node(lhs), *new_deref;
-
             TRACE("Adding an expression for the compound assignment.\n");
-            new_deref = new_var_deref(lhs_deref->v.var);
-            expr = new_binary_expr(op, &new_deref->node, rhs, left->loc);
+            expr = new_binary_expr(op, lhs, rhs, lhs->loc);
+            list_add_after(&rhs->entry, &expr->entry);
             assign->rhs = expr;
         }
     }
@@ -1767,6 +1765,7 @@ static const char *debug_node_type(enum hlsl_ir_node_type type)
         "HLSL_IR_DEREF",
         "HLSL_IR_EXPR",
         "HLSL_IR_IF",
+        "HLSL_IR_LOOP",
         "HLSL_IR_JUMP",
         "HLSL_IR_SWIZZLE",
     };
@@ -1785,17 +1784,22 @@ static void debug_dump_instr_list(const struct list *list)
     LIST_FOR_EACH_ENTRY(instr, list, struct hlsl_ir_node, entry)
     {
         debug_dump_instr(instr);
-        TRACE("\n");
+        wine_dbg_printf("\n");
     }
+}
+
+static void debug_dump_src(const struct hlsl_ir_node *node)
+{
+    wine_dbg_printf("%p", node);
 }
 
 static void debug_dump_ir_var(const struct hlsl_ir_var *var)
 {
     if (var->modifiers)
-        TRACE("%s ", debug_modifiers(var->modifiers));
-    TRACE("%s %s", debug_hlsl_type(var->data_type), var->name);
+        wine_dbg_printf("%s ", debug_modifiers(var->modifiers));
+    wine_dbg_printf("%s %s", debug_hlsl_type(var->data_type), var->name);
     if (var->semantic)
-        TRACE(" : %s", debugstr_a(var->semantic));
+        wine_dbg_printf(" : %s", debugstr_a(var->semantic));
 }
 
 static void debug_dump_ir_deref(const struct hlsl_ir_deref *deref)
@@ -1803,19 +1807,19 @@ static void debug_dump_ir_deref(const struct hlsl_ir_deref *deref)
     switch (deref->type)
     {
         case HLSL_IR_DEREF_VAR:
-            TRACE("deref(");
+            wine_dbg_printf("deref(");
             debug_dump_ir_var(deref->v.var);
-            TRACE(")");
+            wine_dbg_printf(")");
             break;
         case HLSL_IR_DEREF_ARRAY:
-            debug_dump_instr(deref->v.array.array);
-            TRACE("[");
-            debug_dump_instr(deref->v.array.index);
-            TRACE("]");
+            debug_dump_src(deref->v.array.array);
+            wine_dbg_printf("[");
+            debug_dump_src(deref->v.array.index);
+            wine_dbg_printf("]");
             break;
         case HLSL_IR_DEREF_RECORD:
-            debug_dump_instr(deref->v.record.record);
-            TRACE(".%s", debugstr_a(deref->v.record.field->name));
+            debug_dump_src(deref->v.record.record);
+            wine_dbg_printf(".%s", debugstr_a(deref->v.record.field->name));
             break;
     }
 }
@@ -1826,39 +1830,39 @@ static void debug_dump_ir_constant(const struct hlsl_ir_constant *constant)
     unsigned int x, y;
 
     if (type->dimy != 1)
-        TRACE("{");
+        wine_dbg_printf("{");
     for (y = 0; y < type->dimy; ++y)
     {
         if (type->dimx != 1)
-            TRACE("{");
+            wine_dbg_printf("{");
         for (x = 0; x < type->dimx; ++x)
         {
             switch (type->base_type)
             {
                 case HLSL_TYPE_FLOAT:
-                    TRACE("%g ", (double)constant->v.value.f[y * type->dimx + x]);
+                    wine_dbg_printf("%g ", (double)constant->v.value.f[y * type->dimx + x]);
                     break;
                 case HLSL_TYPE_DOUBLE:
-                    TRACE("%g ", constant->v.value.d[y * type->dimx + x]);
+                    wine_dbg_printf("%g ", constant->v.value.d[y * type->dimx + x]);
                     break;
                 case HLSL_TYPE_INT:
-                    TRACE("%d ", constant->v.value.i[y * type->dimx + x]);
+                    wine_dbg_printf("%d ", constant->v.value.i[y * type->dimx + x]);
                     break;
                 case HLSL_TYPE_UINT:
-                    TRACE("%u ", constant->v.value.u[y * type->dimx + x]);
+                    wine_dbg_printf("%u ", constant->v.value.u[y * type->dimx + x]);
                     break;
                 case HLSL_TYPE_BOOL:
-                    TRACE("%s ", constant->v.value.b[y * type->dimx + x] == FALSE ? "false" : "true");
+                    wine_dbg_printf("%s ", constant->v.value.b[y * type->dimx + x] == FALSE ? "false" : "true");
                     break;
                 default:
-                    TRACE("Constants of type %s not supported\n", debug_base_type(type));
+                    wine_dbg_printf("Constants of type %s not supported\n", debug_base_type(type));
             }
         }
         if (type->dimx != 1)
-            TRACE("}");
+            wine_dbg_printf("}");
     }
     if (type->dimy != 1)
-        TRACE("}");
+        wine_dbg_printf("}");
 }
 
 static const char *debug_expr_op(const struct hlsl_ir_expr *expr)
@@ -1942,26 +1946,26 @@ static void debug_dump_ir_expr(const struct hlsl_ir_expr *expr)
 {
     unsigned int i;
 
-    TRACE("%s (", debug_expr_op(expr));
+    wine_dbg_printf("%s (", debug_expr_op(expr));
     for (i = 0; i < 3 && expr->operands[i]; ++i)
     {
-        debug_dump_instr(expr->operands[i]);
-        TRACE(" ");
+        debug_dump_src(expr->operands[i]);
+        wine_dbg_printf(" ");
     }
-    TRACE(")");
+    wine_dbg_printf(")");
 }
 
 static void debug_dump_ir_constructor(const struct hlsl_ir_constructor *constructor)
 {
     unsigned int i;
 
-    TRACE("%s (", debug_hlsl_type(constructor->node.data_type));
+    wine_dbg_printf("%s (", debug_hlsl_type(constructor->node.data_type));
     for (i = 0; i < constructor->args_count; ++i)
     {
-        debug_dump_instr(constructor->args[i]);
-        TRACE(" ");
+        debug_dump_src(constructor->args[i]);
+        wine_dbg_printf(" ");
     }
-    TRACE(")");
+    wine_dbg_printf(")");
 }
 
 static const char *debug_writemask(DWORD writemask)
@@ -1985,32 +1989,32 @@ static const char *debug_writemask(DWORD writemask)
 
 static void debug_dump_ir_assignment(const struct hlsl_ir_assignment *assign)
 {
-    TRACE("= (");
-    debug_dump_instr(assign->lhs);
+    wine_dbg_printf("= (");
+    debug_dump_src(assign->lhs);
     if (assign->writemask != BWRITERSP_WRITEMASK_ALL)
-        TRACE("%s", debug_writemask(assign->writemask));
-    TRACE(" ");
-    debug_dump_instr(assign->rhs);
-    TRACE(")");
+        wine_dbg_printf("%s", debug_writemask(assign->writemask));
+    wine_dbg_printf(" ");
+    debug_dump_src(assign->rhs);
+    wine_dbg_printf(")");
 }
 
 static void debug_dump_ir_swizzle(const struct hlsl_ir_swizzle *swizzle)
 {
     unsigned int i;
 
-    debug_dump_instr(swizzle->val);
-    TRACE(".");
+    debug_dump_src(swizzle->val);
+    wine_dbg_printf(".");
     if (swizzle->val->data_type->dimy > 1)
     {
         for (i = 0; i < swizzle->node.data_type->dimx; ++i)
-            TRACE("_m%u%u", (swizzle->swizzle >> i * 8) & 0xf, (swizzle->swizzle >> (i * 8 + 4)) & 0xf);
+            wine_dbg_printf("_m%u%u", (swizzle->swizzle >> i * 8) & 0xf, (swizzle->swizzle >> (i * 8 + 4)) & 0xf);
     }
     else
     {
         static const char c[] = {'x', 'y', 'z', 'w'};
 
         for (i = 0; i < swizzle->node.data_type->dimx; ++i)
-            TRACE("%c", c[(swizzle->swizzle >> i * 2) & 0x3]);
+            wine_dbg_printf("%c", c[(swizzle->swizzle >> i * 2) & 0x3]);
     }
 }
 
@@ -2019,40 +2023,48 @@ static void debug_dump_ir_jump(const struct hlsl_ir_jump *jump)
     switch (jump->type)
     {
         case HLSL_IR_JUMP_BREAK:
-            TRACE("break");
+            wine_dbg_printf("break");
             break;
         case HLSL_IR_JUMP_CONTINUE:
-            TRACE("continue");
+            wine_dbg_printf("continue");
             break;
         case HLSL_IR_JUMP_DISCARD:
-            TRACE("discard");
+            wine_dbg_printf("discard");
             break;
         case HLSL_IR_JUMP_RETURN:
-            TRACE("return ");
+            wine_dbg_printf("return ");
             if (jump->return_value)
-                debug_dump_instr(jump->return_value);
-            TRACE(";");
+                debug_dump_src(jump->return_value);
+            wine_dbg_printf(";");
             break;
     }
 }
 
 static void debug_dump_ir_if(const struct hlsl_ir_if *if_node)
 {
-    TRACE("if (");
-    debug_dump_instr(if_node->condition);
-    TRACE(")\n{\n");
+    wine_dbg_printf("if (");
+    debug_dump_src(if_node->condition);
+    wine_dbg_printf(")\n{\n");
     debug_dump_instr_list(if_node->then_instrs);
-    TRACE("}\n");
+    wine_dbg_printf("}\n");
     if (if_node->else_instrs)
     {
-        TRACE("else\n{\n");
+        wine_dbg_printf("else\n{\n");
         debug_dump_instr_list(if_node->else_instrs);
-        TRACE("}\n");
+        wine_dbg_printf("}\n");
     }
+}
+
+static void debug_dump_ir_loop(const struct hlsl_ir_loop *loop)
+{
+    wine_dbg_printf("for (;;)\n{\n");
+    debug_dump_instr_list(loop->body);
+    wine_dbg_printf("}\n");
 }
 
 static void debug_dump_instr(const struct hlsl_ir_node *instr)
 {
+    wine_dbg_printf("%p: ", instr);
     switch (instr->type)
     {
         case HLSL_IR_EXPR:
@@ -2079,8 +2091,11 @@ static void debug_dump_instr(const struct hlsl_ir_node *instr)
         case HLSL_IR_IF:
             debug_dump_ir_if(if_from_node(instr));
             break;
+        case HLSL_IR_LOOP:
+            debug_dump_ir_loop(loop_from_node(instr));
+            break;
         default:
-            TRACE("<No dump function for %s>", debug_node_type(instr->type));
+            wine_dbg_printf("<No dump function for %s>", debug_node_type(instr->type));
     }
 }
 
@@ -2093,7 +2108,7 @@ void debug_dump_ir_function_decl(const struct hlsl_ir_function_decl *func)
     LIST_FOR_EACH_ENTRY(param, func->parameters, struct hlsl_ir_var, param_entry)
     {
         debug_dump_ir_var(param);
-        TRACE("\n");
+        wine_dbg_printf("\n");
     }
     if (func->semantic)
         TRACE("Function semantic: %s\n", debugstr_a(func->semantic));
@@ -2156,69 +2171,44 @@ static void free_ir_constant(struct hlsl_ir_constant *constant)
 
 static void free_ir_deref(struct hlsl_ir_deref *deref)
 {
-    switch (deref->type)
-    {
-        case HLSL_IR_DEREF_VAR:
-            /* Variables are shared among nodes in the tree. */
-            break;
-        case HLSL_IR_DEREF_ARRAY:
-            free_instr(deref->v.array.array);
-            free_instr(deref->v.array.index);
-            break;
-        case HLSL_IR_DEREF_RECORD:
-            free_instr(deref->v.record.record);
-            break;
-    }
     d3dcompiler_free(deref);
 }
 
 static void free_ir_swizzle(struct hlsl_ir_swizzle *swizzle)
 {
-    free_instr(swizzle->val);
     d3dcompiler_free(swizzle);
 }
 
 static void free_ir_constructor(struct hlsl_ir_constructor *constructor)
 {
-    unsigned int i;
-    for (i = 0; i < constructor->args_count; ++i)
-        free_instr(constructor->args[i]);
     d3dcompiler_free(constructor);
 }
 
 static void free_ir_expr(struct hlsl_ir_expr *expr)
 {
-    unsigned int i;
-
-    for (i = 0; i < 3; ++i)
-    {
-        if (!expr->operands[i])
-            break;
-        free_instr(expr->operands[i]);
-    }
-    free_instr_list(expr->subexpressions);
     d3dcompiler_free(expr);
 }
 
 static void free_ir_assignment(struct hlsl_ir_assignment *assignment)
 {
-    free_instr(assignment->lhs);
-    free_instr(assignment->rhs);
     d3dcompiler_free(assignment);
 }
 
 static void free_ir_if(struct hlsl_ir_if *if_node)
 {
-    free_instr(if_node->condition);
     free_instr_list(if_node->then_instrs);
     free_instr_list(if_node->else_instrs);
     d3dcompiler_free(if_node);
 }
 
+static void free_ir_loop(struct hlsl_ir_loop *loop)
+{
+    free_instr_list(loop->body);
+    d3dcompiler_free(loop);
+}
+
 static void free_ir_jump(struct hlsl_ir_jump *jump)
 {
-    if (jump->type == HLSL_IR_JUMP_RETURN)
-        free_instr(jump->return_value);
     d3dcompiler_free(jump);
 }
 
@@ -2246,6 +2236,9 @@ void free_instr(struct hlsl_ir_node *node)
             break;
         case HLSL_IR_IF:
             free_ir_if(if_from_node(node));
+            break;
+        case HLSL_IR_LOOP:
+            free_ir_loop(loop_from_node(node));
             break;
         case HLSL_IR_JUMP:
             free_ir_jump(jump_from_node(node));

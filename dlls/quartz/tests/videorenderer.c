@@ -522,31 +522,18 @@ static HRESULT testsource_query_accept(struct strmbase_pin *iface, const AM_MEDI
     return S_OK;
 }
 
-static HRESULT WINAPI testsource_AttemptConnection(struct strmbase_source *iface,
-        IPin *peer, const AM_MEDIA_TYPE *mt)
+static HRESULT WINAPI testsource_DecideAllocator(struct strmbase_source *iface,
+        IMemInputPin *peer, IMemAllocator **allocator)
 {
-    HRESULT hr;
-
-    iface->pin.peer = peer;
-    IPin_AddRef(peer);
-    CopyMediaType(&iface->pin.mt, mt);
-
-    if (FAILED(hr = IPin_ReceiveConnection(peer, &iface->pin.IPin_iface, mt)))
-    {
-        ok(hr == VFW_E_TYPE_NOT_ACCEPTED, "Got hr %#x.\n", hr);
-        IPin_Release(peer);
-        iface->pin.peer = NULL;
-        FreeMediaType(&iface->pin.mt);
-    }
-
-    return hr;
+    return S_OK;
 }
 
 static const struct strmbase_source_ops testsource_ops =
 {
     .base.pin_query_accept = testsource_query_accept,
     .base.pin_get_media_type = strmbase_pin_get_media_type,
-    .pfnAttemptConnection = testsource_AttemptConnection,
+    .pfnAttemptConnection = BaseOutputPinImpl_AttemptConnection,
+    .pfnDecideAllocator = testsource_DecideAllocator,
 };
 
 static void testfilter_init(struct testfilter *filter)
@@ -1084,6 +1071,81 @@ static void test_eos(IPin *pin, IMemInputPin *input, IFilterGraph2 *graph)
     IMediaControl_Release(control);
 }
 
+static void test_current_image(IBaseFilter *filter, IMemInputPin *input,
+        IFilterGraph2 *graph, const BITMAPINFOHEADER *expect_bih)
+{
+    LONG buffer[(sizeof(BITMAPINFOHEADER) + 32 * 16 * 2) / 4];
+    const BITMAPINFOHEADER *bih = (BITMAPINFOHEADER *)buffer;
+    IMediaControl *control;
+    OAFilterState state;
+    IBasicVideo *video;
+    unsigned int i;
+    HANDLE thread;
+    HRESULT hr;
+    LONG size;
+
+    IFilterGraph2_QueryInterface(graph, &IID_IMediaControl, (void **)&control);
+    IBaseFilter_QueryInterface(filter, &IID_IBasicVideo, (void **)&video);
+
+    hr = IBasicVideo_GetCurrentImage(video, NULL, NULL);
+    ok(hr == E_POINTER, "Got hr %#x.\n", hr);
+
+    hr = IBasicVideo_GetCurrentImage(video, NULL, buffer);
+    ok(hr == E_POINTER, "Got hr %#x.\n", hr);
+
+    size = 0xdeadbeef;
+    hr = IBasicVideo_GetCurrentImage(video, &size, NULL);
+    todo_wine ok(hr == S_OK, "Got hr %#x.\n", hr);
+    todo_wine ok(size == sizeof(BITMAPINFOHEADER) + 32 * 16 * 2, "Got size %d.\n", size);
+
+    size = 0xdeadbeef;
+    hr = IBasicVideo_GetCurrentImage(video, &size, buffer);
+    ok(hr == VFW_E_NOT_PAUSED, "Got hr %#x.\n", hr);
+    ok(size == 0xdeadbeef, "Got size %d.\n", size);
+
+    hr = IMediaControl_Pause(control);
+    ok(hr == S_FALSE, "Got hr %#x.\n", hr);
+
+    size = 0xdeadbeef;
+    hr = IBasicVideo_GetCurrentImage(video, &size, buffer);
+    ok(hr == E_UNEXPECTED, "Got hr %#x.\n", hr);
+    ok(size == 0xdeadbeef, "Got size %d.\n", size);
+
+    thread = send_frame(input);
+    hr = IMediaControl_GetState(control, 1000, &state);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+
+    size = sizeof(BITMAPINFOHEADER) + 32 * 16 * 2 - 1;
+    hr = IBasicVideo_GetCurrentImage(video, &size, buffer);
+    ok(hr == E_OUTOFMEMORY, "Got hr %#x.\n", hr);
+    ok(size == sizeof(BITMAPINFOHEADER) + 32 * 16 * 2 - 1, "Got size %d.\n", size);
+
+    size = sizeof(BITMAPINFOHEADER) + 32 * 16 * 2;
+    memset(buffer, 0xcc, sizeof(buffer));
+    hr = IBasicVideo_GetCurrentImage(video, &size, buffer);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+    ok(size == sizeof(BITMAPINFOHEADER) + 32 * 16 * 2, "Got size %d.\n", size);
+    ok(!memcmp(bih, expect_bih, sizeof(BITMAPINFOHEADER)), "Bitmap headers didn't match.\n");
+    for (i = 0; i < 32 * 16 * 2; ++i)
+    {
+        const unsigned char *data = (unsigned char *)buffer + sizeof(BITMAPINFOHEADER);
+        ok(data[i] == 0x55, "Got unexpected byte %02x at %u.\n", data[i], i);
+    }
+
+    hr = IMediaControl_Run(control);
+    todo_wine ok(hr == S_OK, "Got hr %#x.\n", hr);
+    join_thread(thread);
+
+    hr = IBasicVideo_GetCurrentImage(video, &size, buffer);
+    ok(hr == VFW_E_NOT_PAUSED, "Got hr %#x.\n", hr);
+
+    hr = IMediaControl_Stop(control);
+    ok(hr == S_OK, "Got hr %#x.\n", hr);
+
+    IBasicVideo_Release(video);
+    IMediaControl_Release(control);
+}
+
 static void test_connect_pin(void)
 {
     VIDEOINFOHEADER vih =
@@ -1191,6 +1253,7 @@ static void test_connect_pin(void)
     test_flushing(pin, input, graph);
     test_sample_time(pin, input, graph);
     test_eos(pin, input, graph);
+    test_current_image(filter, input, graph, &vih.bmiHeader);
 
     hr = IFilterGraph2_Disconnect(graph, pin);
     ok(hr == S_OK, "Got hr %#x.\n", hr);

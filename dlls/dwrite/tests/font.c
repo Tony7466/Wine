@@ -1,7 +1,7 @@
 /*
  *    Font related tests
  *
- * Copyright 2012, 2014-2019 Nikolay Sivov for CodeWeavers
+ * Copyright 2012, 2014-2020 Nikolay Sivov for CodeWeavers
  * Copyright 2014 Aric Stewart for CodeWeavers
  *
  * This library is free software; you can redistribute it and/or
@@ -125,12 +125,6 @@ static void _expect_ref_broken(IUnknown* obj, ULONG ref, ULONG brokenref, int li
 static BOOL (WINAPI *pGetFontRealizationInfo)(HDC hdc, void *);
 
 static const WCHAR test_fontfile[] = {'w','i','n','e','_','t','e','s','t','_','f','o','n','t','.','t','t','f',0};
-static const WCHAR tahomaW[] = {'T','a','h','o','m','a',0};
-static const WCHAR arialW[] = {'A','r','i','a','l',0};
-static const WCHAR tahomaUppercaseW[] = {'T','A','H','O','M','A',0};
-static const WCHAR tahomaStrangecaseW[] = {'t','A','h','O','m','A',0};
-static const WCHAR blahW[]  = {'B','l','a','h','!',0};
-static const WCHAR emojiW[] = {'S','e','g','o','e',' ','U','I',' ','E','m','o','j','i',0};
 
 /* PANOSE is 10 bytes in size, need to pack the structure properly */
 #include "pshpack2.h"
@@ -475,7 +469,6 @@ static IDWriteFactory *create_factory(void)
 
 static IDWriteFontFace *create_fontface(IDWriteFactory *factory)
 {
-    static const WCHAR tahomaW[] = {'T','a','h','o','m','a',0};
     IDWriteGdiInterop *interop;
     IDWriteFontFace *fontface;
     IDWriteFont *font;
@@ -490,7 +483,7 @@ static IDWriteFontFace *create_fontface(IDWriteFactory *factory)
     logfont.lfWidth  = 12;
     logfont.lfWeight = FW_NORMAL;
     logfont.lfItalic = 1;
-    lstrcpyW(logfont.lfFaceName, tahomaW);
+    lstrcpyW(logfont.lfFaceName, L"Tahoma");
 
     hr = IDWriteGdiInterop_CreateFontFromLOGFONT(interop, &logfont, &font);
     ok(hr == S_OK, "got 0x%08x\n", hr);
@@ -537,7 +530,7 @@ not_found:
 
 static IDWriteFont *get_tahoma_instance(IDWriteFactory *factory, DWRITE_FONT_STYLE style)
 {
-    IDWriteFont *font = get_font(factory, tahomaW, style);
+    IDWriteFont *font = get_font(factory, L"Tahoma", style);
     ok(font != NULL, "failed to get Tahoma\n");
     return font;
 }
@@ -576,9 +569,8 @@ static void _delete_testfontfile(const WCHAR *filename, int line)
 
 static void get_combined_font_name(const WCHAR *familyW, const WCHAR *faceW, WCHAR *nameW)
 {
-    static const WCHAR spaceW[] = {' ', 0};
     lstrcpyW(nameW, familyW);
-    lstrcatW(nameW, spaceW);
+    lstrcatW(nameW, L" ");
     lstrcatW(nameW, faceW);
 }
 
@@ -1014,7 +1006,6 @@ static ID2D1SimplifiedGeometrySink test_geomsink2 = { &test_geometrysink2_vtbl }
 
 static void test_CreateFontFromLOGFONT(void)
 {
-    static const WCHAR tahomaspW[] = {'T','a','h','o','m','a',' ',0};
     IDWriteGdiInterop1 *interop1;
     IDWriteGdiInterop *interop;
     DWRITE_FONT_WEIGHT weight;
@@ -1066,7 +1057,7 @@ static void test_CreateFontFromLOGFONT(void)
     logfont.lfWidth  = 12;
     logfont.lfWeight = FW_NORMAL;
     logfont.lfItalic = 1;
-    lstrcpyW(logfont.lfFaceName, tahomaW);
+    lstrcpyW(logfont.lfFaceName, L"Tahoma");
 
     hr = IDWriteGdiInterop_CreateFontFromLOGFONT(interop, &logfont, &font);
     EXPECT_HR(hr, S_OK);
@@ -1111,7 +1102,7 @@ static void test_CreateFontFromLOGFONT(void)
         logfont.lfHeight = 12;
         logfont.lfWidth  = 12;
         logfont.lfWeight = weights[i][0];
-        lstrcpyW(logfont.lfFaceName, tahomaW);
+        lstrcpyW(logfont.lfFaceName, L"Tahoma");
 
         hr = IDWriteGdiInterop_CreateFontFromLOGFONT(interop, &logfont, &font);
         EXPECT_HR(hr, S_OK);
@@ -1128,7 +1119,7 @@ static void test_CreateFontFromLOGFONT(void)
     logfont.lfHeight = 12;
     logfont.lfWidth  = 12;
     logfont.lfWeight = 550;
-    lstrcpyW(logfont.lfFaceName, tahomaW);
+    lstrcpyW(logfont.lfFaceName, L"Tahoma");
 
     font = NULL;
     hr = IDWriteGdiInterop_CreateFontFromLOGFONT(interop, &logfont, &font);
@@ -1145,7 +1136,7 @@ static void test_CreateFontFromLOGFONT(void)
     logfont.lfHeight = 12;
     logfont.lfWidth  = 12;
     logfont.lfWeight = FW_NORMAL;
-    lstrcpyW(logfont.lfFaceName, blahW);
+    lstrcpyW(logfont.lfFaceName, L"Blah!");
 
     font = (void*)0xdeadbeef;
     hr = IDWriteGdiInterop_CreateFontFromLOGFONT(interop, &logfont, &font);
@@ -1157,7 +1148,7 @@ static void test_CreateFontFromLOGFONT(void)
     logfont.lfHeight = 12;
     logfont.lfWidth  = 12;
     logfont.lfWeight = FW_NORMAL;
-    lstrcpyW(logfont.lfFaceName, tahomaspW);
+    lstrcpyW(logfont.lfFaceName, L"Tahoma ");
 
     font = (void*)0xdeadbeef;
     hr = IDWriteGdiInterop_CreateFontFromLOGFONT(interop, &logfont, &font);
@@ -1183,7 +1174,7 @@ static void test_CreateFontFromLOGFONT(void)
         logfont.lfWidth  = 12;
         logfont.lfWeight = FW_NORMAL;
         logfont.lfItalic = 1;
-        lstrcpyW(logfont.lfFaceName, tahomaW);
+        lstrcpyW(logfont.lfFaceName, L"Tahoma");
 
         hr = IDWriteGdiInterop1_CreateFontFromLOGFONT(interop1, &logfont, NULL, &font);
         ok(hr == S_OK, "got 0x%08x\n", hr);
@@ -1552,7 +1543,7 @@ static void test_GetFontFamily(void)
     logfont.lfWidth  = 12;
     logfont.lfWeight = FW_NORMAL;
     logfont.lfItalic = 1;
-    lstrcpyW(logfont.lfFaceName, tahomaW);
+    lstrcpyW(logfont.lfFaceName, L"Tahoma");
 
     hr = IDWriteGdiInterop_CreateFontFromLOGFONT(interop, &logfont, &font);
     ok(hr == S_OK, "got 0x%08x\n", hr);
@@ -1700,7 +1691,7 @@ static void test_GetFamilyNames(void)
     logfont.lfWidth  = 12;
     logfont.lfWeight = FW_NORMAL;
     logfont.lfItalic = 1;
-    lstrcpyW(logfont.lfFaceName, tahomaW);
+    lstrcpyW(logfont.lfFaceName, L"Tahoma");
 
     hr = IDWriteGdiInterop_CreateFontFromLOGFONT(interop, &logfont, &font);
     EXPECT_HR(hr, S_OK);
@@ -1825,7 +1816,7 @@ static void test_CreateFontFace(void)
     logfont.lfWidth  = 12;
     logfont.lfWeight = FW_NORMAL;
     logfont.lfItalic = 1;
-    lstrcpyW(logfont.lfFaceName, tahomaW);
+    lstrcpyW(logfont.lfFaceName, L"Tahoma");
 
     font = NULL;
     hr = IDWriteGdiInterop_CreateFontFromLOGFONT(interop, &logfont, &font);
@@ -2137,13 +2128,12 @@ static void check_font_metrics(const WCHAR *nameW, IDWriteFontFace *fontface, co
 
 static void get_enus_string(IDWriteLocalizedStrings *strings, WCHAR *buff, UINT32 size)
 {
-    static const WCHAR enusW[] = {'e','n','-','u','s',0};
     BOOL exists = FALSE;
     UINT32 index;
     HRESULT hr;
 
-    hr = IDWriteLocalizedStrings_FindLocaleName(strings, enusW, &index, &exists);
-    ok(hr == S_OK, "got 0x%08x\n", hr);
+    hr = IDWriteLocalizedStrings_FindLocaleName(strings, L"en-us", &index, &exists);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
     ok(exists, "got %d\n", exists);
 
     hr = IDWriteLocalizedStrings_GetString(strings, index, buff, size);
@@ -2179,7 +2169,7 @@ static void test_GetMetrics(void)
     logfont.lfWidth  = 12;
     logfont.lfWeight = FW_NORMAL;
     logfont.lfItalic = 1;
-    lstrcpyW(logfont.lfFaceName, tahomaW);
+    lstrcpyW(logfont.lfFaceName, L"Tahoma");
 
     hr = IDWriteGdiInterop_CreateFontFromLOGFONT(interop, &logfont, &font);
     ok(hr == S_OK, "got 0x%08x\n", hr);
@@ -2448,22 +2438,22 @@ static void test_system_fontcollection(void)
 
     ret = FALSE;
     i = (UINT32)-1;
-    hr = IDWriteFontCollection_FindFamilyName(collection, tahomaW, &i, &ret);
+    hr = IDWriteFontCollection_FindFamilyName(collection, L"Tahoma", &i, &ret);
     ok(hr == S_OK, "got 0x%08x\n", hr);
     ok(ret, "got %d\n", ret);
     ok(i != (UINT32)-1, "got %u\n", i);
 
     ret = FALSE;
     i = (UINT32)-1;
-    hr = IDWriteFontCollection_FindFamilyName(collection, tahomaUppercaseW, &i, &ret);
-    ok(hr == S_OK, "got 0x%08x\n", hr);
+    hr = IDWriteFontCollection_FindFamilyName(collection, L"TAHOMA", &i, &ret);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
     ok(ret, "got %d\n", ret);
     ok(i != (UINT32)-1, "got %u\n", i);
 
     ret = FALSE;
     i = (UINT32)-1;
-    hr = IDWriteFontCollection_FindFamilyName(collection, tahomaStrangecaseW, &i, &ret);
-    ok(hr == S_OK, "got 0x%08x\n", hr);
+    hr = IDWriteFontCollection_FindFamilyName(collection, L"tAhOmA", &i, &ret);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
     ok(ret, "got %d\n", ret);
     ok(i != (UINT32)-1, "got %u\n", i);
 
@@ -2517,8 +2507,8 @@ static void test_system_fontcollection(void)
 
     ret = TRUE;
     i = 0;
-    hr = IDWriteFontCollection_FindFamilyName(collection, blahW, &i, &ret);
-    ok(hr == S_OK, "got 0x%08x\n", hr);
+    hr = IDWriteFontCollection_FindFamilyName(collection, L"Blah!", &i, &ret);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
     ok(!ret, "got %d\n", ret);
     ok(i == (UINT32)-1, "got %u\n", i);
 
@@ -2712,9 +2702,10 @@ static void get_logfont_from_font(IDWriteFont *font, LOGFONTW *logfont)
     exists = FALSE;
     logfont->lfFaceName[0] = 0;
     hr = IDWriteFont_GetInformationalStrings(font, DWRITE_INFORMATIONAL_STRING_WIN32_FAMILY_NAMES, &names, &exists);
-    if (SUCCEEDED(hr)) {
-        if (exists) {
-            static const WCHAR enusW[] = {'e','n','-','u','s',0};
+    if (SUCCEEDED(hr))
+    {
+        if (exists)
+        {
             WCHAR localeW[LOCALE_NAME_MAX_LENGTH];
             WCHAR nameW[256];
             UINT32 index;
@@ -2725,7 +2716,7 @@ static void get_logfont_from_font(IDWriteFont *font, LOGFONTW *logfont)
                 IDWriteLocalizedStrings_FindLocaleName(names, localeW, &index, &exists);
 
             if (!exists)
-                IDWriteLocalizedStrings_FindLocaleName(names, enusW, &index, &exists);
+                IDWriteLocalizedStrings_FindLocaleName(names, L"en-us", &index, &exists);
 
             if (exists) {
                 nameW[0] = 0;
@@ -2968,7 +2959,6 @@ static IDWriteFontCollectionLoader *create_collection_loader(void)
 
 static void test_CustomFontCollection(void)
 {
-    static const WCHAR fontnameW[] = {'w','i','n','e','_','t','e','s','t',0};
     IDWriteFontCollectionLoader *loader, *loader2, *loader3;
     IDWriteFontCollection *font_collection = NULL;
     static IDWriteFontFileLoader rloader = { &resourcefontfileloadervtbl };
@@ -3048,7 +3038,7 @@ todo_wine
 
     index = 1;
     exists = FALSE;
-    hr = IDWriteFontCollection_FindFamilyName(font_collection, fontnameW, &index, &exists);
+    hr = IDWriteFontCollection_FindFamilyName(font_collection, L"wine_test", &index, &exists);
     ok(hr == S_OK, "got 0x%08x\n", hr);
     ok(index == 0, "got index %i\n", index);
     ok(exists, "got exists %i\n", exists);
@@ -4173,7 +4163,7 @@ static void test_GetGdiInterop(void)
     logfont.lfWidth  = 12;
     logfont.lfWeight = FW_NORMAL;
     logfont.lfItalic = 1;
-    lstrcpyW(logfont.lfFaceName, tahomaW);
+    lstrcpyW(logfont.lfFaceName, L"Tahoma");
 
     hr = IDWriteGdiInterop_CreateFontFromLOGFONT(interop2, &logfont, &font);
     ok(hr == S_OK, "got 0x%08x\n", hr);
@@ -4269,7 +4259,7 @@ static void test_CreateFontFaceFromHdc(void)
     logfont.lfWidth  = 12;
     logfont.lfWeight = FW_NORMAL;
     logfont.lfItalic = 1;
-    lstrcpyW(logfont.lfFaceName, tahomaW);
+    lstrcpyW(logfont.lfFaceName, L"Tahoma");
 
     hfont = CreateFontIndirectW(&logfont);
     hdc = CreateCompatibleDC(0);
@@ -4447,7 +4437,7 @@ static void test_GetSimulations(void)
     logfont.lfWidth  = 12;
     logfont.lfWeight = FW_NORMAL;
     logfont.lfItalic = 1;
-    lstrcpyW(logfont.lfFaceName, tahomaW);
+    lstrcpyW(logfont.lfFaceName, L"Tahoma");
 
     hr = IDWriteGdiInterop_CreateFontFromLOGFONT(interop, &logfont, &font);
     ok(hr == S_OK, "got 0x%08x\n", hr);
@@ -4466,7 +4456,7 @@ static void test_GetSimulations(void)
     logfont.lfWidth  = 12;
     logfont.lfWeight = FW_NORMAL;
     logfont.lfItalic = 0;
-    lstrcpyW(logfont.lfFaceName, tahomaW);
+    lstrcpyW(logfont.lfFaceName, L"Tahoma");
 
     hr = IDWriteGdiInterop_CreateFontFromLOGFONT(interop, &logfont, &font);
     ok(hr == S_OK, "got 0x%08x\n", hr);
@@ -4487,9 +4477,6 @@ static void test_GetSimulations(void)
 
 static void test_GetFaceNames(void)
 {
-    static const WCHAR obliqueW[] = {'O','b','l','i','q','u','e',0};
-    static const WCHAR enus2W[] = {'e','n','-','U','s',0};
-    static const WCHAR enusW[] = {'e','n','-','u','s',0};
     IDWriteLocalizedStrings *strings, *strings2, *strings3;
     IDWriteFontFace3 *fontface3;
     IDWriteGdiInterop *interop;
@@ -4513,7 +4500,7 @@ static void test_GetFaceNames(void)
     logfont.lfWidth  = 12;
     logfont.lfWeight = FW_NORMAL;
     logfont.lfItalic = 1;
-    lstrcpyW(logfont.lfFaceName, tahomaW);
+    lstrcpyW(logfont.lfFaceName, L"Tahoma");
 
     hr = IDWriteGdiInterop_CreateFontFromLOGFONT(interop, &logfont, &font);
     ok(hr == S_OK, "got 0x%08x\n", hr);
@@ -4531,8 +4518,8 @@ static void test_GetFaceNames(void)
 
     index = 1;
     exists = FALSE;
-    hr = IDWriteLocalizedStrings_FindLocaleName(strings, enus2W, &index, &exists);
-    ok(hr == S_OK, "got 0x%08x\n", hr);
+    hr = IDWriteLocalizedStrings_FindLocaleName(strings, L"en-Us", &index, &exists);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
     ok(index == 0 && exists, "got %d, %d\n", index, exists);
 
     count = 0;
@@ -4544,12 +4531,12 @@ static void test_GetFaceNames(void)
     buffW[0] = 0;
     hr = IDWriteLocalizedStrings_GetLocaleName(strings, 0, buffW, ARRAY_SIZE(buffW));
     ok(hr == S_OK, "got 0x%08x\n", hr);
-    ok(!lstrcmpW(buffW, enusW), "got %s\n", wine_dbgstr_w(buffW));
+    ok(!lstrcmpW(buffW, L"en-us"), "Unexpected locale name %s.\n", wine_dbgstr_w(buffW));
 
     buffW[0] = 0;
     hr = IDWriteLocalizedStrings_GetString(strings, 0, buffW, ARRAY_SIZE(buffW));
     ok(hr == S_OK, "got 0x%08x\n", hr);
-    ok(!lstrcmpW(buffW, obliqueW), "got %s\n", wine_dbgstr_w(buffW));
+    ok(!lstrcmpW(buffW, L"Oblique"), "got %s\n", wine_dbgstr_w(buffW));
     IDWriteLocalizedStrings_Release(strings);
 
     hr = IDWriteFont_CreateFontFace(font, &fontface);
@@ -4568,7 +4555,7 @@ static void test_GetFaceNames(void)
         buffW[0] = 0;
         hr = IDWriteLocalizedStrings_GetString(strings2, 0, buffW, ARRAY_SIZE(buffW));
         ok(hr == S_OK, "Failed to get a string, hr %#x.\n", hr);
-        ok(!lstrcmpW(buffW, obliqueW), "Unexpected name %s.\n", wine_dbgstr_w(buffW));
+        ok(!lstrcmpW(buffW, L"Oblique"), "Unexpected name %s.\n", wine_dbgstr_w(buffW));
         IDWriteLocalizedStrings_Release(strings2);
 
         IDWriteFontFace3_Release(fontface3);
@@ -4741,8 +4728,8 @@ if (0) { /* crashes on native */
 
         font_count = IDWriteFontFamily_GetFontCount(family);
 
-        for (j = 0; j < font_count; j++) {
-            static const WCHAR spaceW[] = {' ', 0};
+        for (j = 0; j < font_count; ++j)
+        {
             IDWriteFontFace *fontface;
             BOOL has_variations;
 
@@ -4756,7 +4743,7 @@ if (0) { /* crashes on native */
             IDWriteLocalizedStrings_Release(names);
 
             lstrcpyW(nameW, familynameW);
-            lstrcatW(nameW, spaceW);
+            lstrcatW(nameW, L" ");
             lstrcatW(nameW, facenameW);
 
             hr = IDWriteFont_CreateFontFace(font, &fontface);
@@ -6388,14 +6375,14 @@ static void test_GetGdiCompatibleMetrics(void)
 
     factory = create_factory();
 
-    font = get_font(factory, tahomaW, DWRITE_FONT_STYLE_NORMAL);
+    font = get_font(factory, L"Tahoma", DWRITE_FONT_STYLE_NORMAL);
     hr = IDWriteFont_CreateFontFace(font, &fontface);
     ok(hr == S_OK, "got 0x%08x\n", hr);
     IDWriteFont_Release(font);
     test_gdicompat_metrics(fontface);
     IDWriteFontFace_Release(fontface);
 
-    font = get_font(factory, arialW, DWRITE_FONT_STYLE_NORMAL);
+    font = get_font(factory, L"Arial", DWRITE_FONT_STYLE_NORMAL);
     if (!font)
         skip("Skipping tests with Arial\n");
     else
@@ -6546,7 +6533,7 @@ static INT32 get_gdi_font_advance(HDC hdc, FLOAT emsize)
     logfont.lfHeight = (LONG)-emsize;
     logfont.lfWeight = FW_NORMAL;
     logfont.lfQuality = CLEARTYPE_QUALITY;
-    lstrcpyW(logfont.lfFaceName, tahomaW);
+    lstrcpyW(logfont.lfFaceName, L"Tahoma");
 
     hfont = CreateFontIndirectW(&logfont);
     SelectObject(hdc, hfont);
@@ -7507,7 +7494,7 @@ static void test_GetPaletteEntries(void)
     IDWriteFontFace2_Release(fontface2);
 
     /* Segoe UI Emoji, with color support */
-    font = get_font(factory, emojiW, DWRITE_FONT_STYLE_NORMAL);
+    font = get_font(factory, L"Segoe UI Emoji", DWRITE_FONT_STYLE_NORMAL);
     if (!font) {
         ref = IDWriteFactory_Release(factory);
         ok(ref == 0, "factory not released, %u\n", ref);
@@ -7615,7 +7602,7 @@ static void test_TranslateColorGlyphRun(void)
     IDWriteFontFace_Release(fontface);
 
     /* Segoe UI Emoji, with color support */
-    font = get_font((IDWriteFactory *)factory, emojiW, DWRITE_FONT_STYLE_NORMAL);
+    font = get_font((IDWriteFactory *)factory, L"Segoe UI Emoji", DWRITE_FONT_STYLE_NORMAL);
     if (!font) {
         IDWriteFactory2_Release(factory);
         skip("Segoe UI Emoji font not found.\n");
@@ -7775,9 +7762,8 @@ static void test_HasCharacter(void)
 
 static void test_CreateFontFaceReference(void)
 {
-    static const WCHAR dummyW[] = {'d','u','m','m','y',0};
+    IDWriteFontFaceReference *ref, *ref1, *ref3;
     IDWriteFontFace3 *fontface, *fontface1;
-    IDWriteFontFaceReference *ref, *ref1;
     IDWriteFontCollection1 *collection;
     IDWriteFontFile *file, *file1;
     IDWriteFactory3 *factory;
@@ -7821,7 +7807,7 @@ todo_wine
     IDWriteFontFaceReference_Release(ref);
 
     /* path however has to be valid */
-    hr = IDWriteFactory3_CreateFontFaceReference(factory, dummyW, NULL, 0, DWRITE_FONT_SIMULATIONS_NONE, &ref);
+    hr = IDWriteFactory3_CreateFontFaceReference(factory, L"dummy", NULL, 0, DWRITE_FONT_SIMULATIONS_NONE, &ref);
 todo_wine
     ok(hr == DWRITE_E_FILENOTFOUND, "got 0x%08x\n", hr);
     if (hr == S_OK)
@@ -7930,7 +7916,6 @@ todo_wine
                     (void **)&ref2)))
             {
                 UINT32 axis_count = IDWriteFontFaceReference1_GetFontAxisValueCount(ref2);
-            todo_wine
                 ok(axis_count > 0, "Unexpected axis value count.\n");
                 IDWriteFontFaceReference1_Release(ref2);
             }
@@ -7939,34 +7924,31 @@ todo_wine
             IDWriteFontFaceReference_Release(ref1);
 
             hr = IDWriteFontFace3_GetFontFaceReference(fontface, &ref);
-        todo_wine
             ok(hr == S_OK, "Failed to get a reference, hr %#x.\n", hr);
+            EXPECT_REF(fontface, 2);
 
             hr = IDWriteFontFace3_GetFontFaceReference(fontface, &ref1);
-        todo_wine
             ok(hr == S_OK, "Failed to get a reference, hr %#x.\n", hr);
-        if (hr == S_OK)
             ok(ref == ref1, "Unexpected reference %p, %p.\n", ref1, ref);
+            EXPECT_REF(fontface, 3);
 
-        if (hr == S_OK) {
+            hr = IDWriteFontFace3_QueryInterface(fontface, &IID_IDWriteFontFaceReference, (void **)&ref3);
+            ok(hr == S_OK || broken(FAILED(hr)), "Failed to get interface, hr %#x.\n", hr);
+            if (SUCCEEDED(hr))
+            {
+                ok(ref == ref3, "Unexpected reference %p.\n", ref3);
+                IDWriteFontFaceReference_Release(ref3);
+            }
+
             hr = IDWriteFontFaceReference_CreateFontFace(ref, &fontface1);
             ok(hr == S_OK, "Failed to create fontface, hr %#x.\n", hr);
             ok(fontface1 == fontface, "Unexpected fontface %p, %p.\n", fontface1, fontface);
             IDWriteFontFace3_Release(fontface1);
 
-            if (SUCCEEDED(hr = IDWriteFontFaceReference_QueryInterface(ref, &IID_IDWriteFontFaceReference1,
-                    (void **)&ref2)))
-            {
-                UINT32 axis_count = IDWriteFontFaceReference1_GetFontAxisValueCount(ref2);
-                ok(!axis_count, "Unexpected axis value count.\n");
-                IDWriteFontFaceReference1_Release(ref2);
-            }
-
             IDWriteFontFaceReference_Release(ref);
             IDWriteFontFaceReference_Release(ref1);
-        }
-            IDWriteFontFace3_Release(fontface);
 
+            IDWriteFontFace3_Release(fontface);
             IDWriteFont3_Release(font3);
         }
 
@@ -9422,8 +9404,8 @@ todo_wine
             ok(ref2 != ref, "Unexpected reference.\n");
             IDWriteFontFaceReference_Release(ref2);
 
-            for (id = DWRITE_FONT_PROPERTY_ID_FAMILY_NAME; id < DWRITE_FONT_PROPERTY_ID_TOTAL; id++) {
-                static const WCHAR fmtW[] = {'%','u',0};
+            for (id = DWRITE_FONT_PROPERTY_ID_FAMILY_NAME; id < DWRITE_FONT_PROPERTY_ID_TOTAL; ++id)
+            {
                 IDWriteLocalizedStrings *values;
                 WCHAR buffW[255], buff2W[255];
                 UINT32 c, ivalue = 0;
@@ -9467,7 +9449,7 @@ todo_wine
                     hr = IDWriteLocalizedStrings_GetString(values, 0, buff2W, ARRAY_SIZE(buff2W));
                     ok(hr == S_OK, "Failed to get property string, hr %#x.\n", hr);
 
-                    wsprintfW(buffW, fmtW, ivalue);
+                    wsprintfW(buffW, L"%u", ivalue);
                     ok(!lstrcmpW(buffW, buff2W), "Unexpected property value %s, expected %s.\n", wine_dbgstr_w(buff2W),
                         wine_dbgstr_w(buffW));
                     break;
@@ -9637,6 +9619,10 @@ static void test_font_resource(void)
     hr = IDWriteFontFaceReference1_GetFontAxisValues(reference, axis_values, 2);
     ok(hr == S_OK, "Failed to get axis values, hr %#x.\n", hr);
     ok(axis_values[0].axisTag == DWRITE_FONT_AXIS_TAG_WEIGHT, "Unexpected axis tag.\n");
+
+    hr = IDWriteFontFaceReference1_CreateFontFace(reference, &fontface5);
+    ok(hr == S_OK, "Failed to create a font face, hr %#x.\n", hr);
+    IDWriteFontFace5_Release(fontface5);
 
     IDWriteFontFaceReference1_Release(reference);
 

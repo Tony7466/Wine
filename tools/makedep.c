@@ -1628,6 +1628,7 @@ static void parse_file( struct makefile *make, struct incl_file *source, int src
     source->files_size = file->deps_count;
     source->files = xmalloc( source->files_size * sizeof(*source->files) );
     if (file->flags & FLAG_C_UNIX) source->use_msvcrt = 0;
+    else if (file->flags & FLAG_C_IMPLIB) source->use_msvcrt = 1;
 
     if (source->sourcename)
     {
@@ -2705,49 +2706,36 @@ static void output_source_h( struct makefile *make, struct incl_file *source, co
 static void output_source_rc( struct makefile *make, struct incl_file *source, const char *obj )
 {
     struct strarray defines = get_source_defines( make, source, obj );
+    char *po_dir = NULL;
     unsigned int i;
 
     if (source->file->flags & FLAG_GENERATED) strarray_add( &make->clean_files, source->name );
+    if (linguas.count && (source->file->flags & FLAG_RC_PO)) po_dir = top_obj_dir_path( make, "po" );
     strarray_add( &make->res_files, strmake( "%s.res", obj ));
-    output( "%s.res: %s\n", obj_dir_path( make, obj ), source->filename );
-    output( "\t%s -o $@", tools_path( make, "wrc" ) );
+    if (source->file->flags & FLAG_RC_PO && !(source->file->flags & FLAG_PARENTDIR))
+    {
+        strarray_add( &make->clean_files, strmake( "%s.pot", obj ));
+        output( "%s.pot ", obj_dir_path( make, obj ) );
+    }
+    output( "%s.res: %s", obj_dir_path( make, obj ), source->filename );
+    output_filename( tools_path( make, "wrc" ));
+    output_filenames( source->dependencies );
+    output( "\n" );
+    output( "\t%s -u -o $@", tools_path( make, "wrc" ) );
     if (make->is_win16) output_filename( "-m16" );
     else output_filenames( target_flags );
     output_filename( "--nostdinc" );
+    if (po_dir) output_filename( strmake( "--po-dir=%s", po_dir ));
     output_filenames( defines );
-    if (linguas.count && (source->file->flags & FLAG_RC_PO))
+    output_filename( source->filename );
+    output( "\n" );
+    if (po_dir)
     {
-        char *po_dir = top_obj_dir_path( make, "po" );
-        output_filename( strmake( "--po-dir=%s", po_dir ));
-        output_filename( source->filename );
-        output( "\n" );
         output( "%s.res:", obj_dir_path( make, obj ));
         for (i = 0; i < linguas.count; i++)
             output_filename( strmake( "%s/%s.mo", po_dir, linguas.str[i] ));
         output( "\n" );
     }
-    else
-    {
-        output_filename( source->filename );
-        output( "\n" );
-    }
-    if (source->file->flags & FLAG_RC_PO && !(source->file->flags & FLAG_PARENTDIR))
-    {
-        strarray_add( &make->clean_files, strmake( "%s.pot", obj ));
-        output( "%s.pot: %s\n", obj_dir_path( make, obj ), source->filename );
-        output( "\t%s -O pot -o $@", tools_path( make, "wrc" ) );
-        if (make->is_win16) output_filename( "-m16" );
-        else output_filenames( target_flags );
-        output_filename( "--nostdinc" );
-        output_filenames( defines );
-        output_filename( source->filename );
-        output( "\n" );
-        output( "%s.pot ", obj_dir_path( make, obj ));
-    }
-    output( "%s.res:", obj_dir_path( make, obj ));
-    output_filename( tools_path( make, "wrc" ));
-    output_filenames( source->dependencies );
-    output( "\n" );
 }
 
 
@@ -2757,11 +2745,15 @@ static void output_source_rc( struct makefile *make, struct incl_file *source, c
 static void output_source_mc( struct makefile *make, struct incl_file *source, const char *obj )
 {
     unsigned int i;
+    char *obj_path = obj_dir_path( make, obj );
 
     strarray_add( &make->res_files, strmake( "%s.res", obj ));
     strarray_add( &make->clean_files, strmake( "%s.pot", obj ));
-    output( "%s.res: %s\n", obj_dir_path( make, obj ), source->filename );
-    output( "\t%s -U -O res -o $@ %s", tools_path( make, "wmc" ), source->filename );
+    output( "%s.pot %s.res: %s", obj_path, obj_path, source->filename );
+    output_filename( tools_path( make, "wmc" ));
+    output_filenames( source->dependencies );
+    output( "\n" );
+    output( "\t%s -u -o $@ %s", tools_path( make, "wmc" ), source->filename );
     if (linguas.count)
     {
         char *po_dir = top_obj_dir_path( make, "po" );
@@ -2771,13 +2763,6 @@ static void output_source_mc( struct makefile *make, struct incl_file *source, c
         for (i = 0; i < linguas.count; i++)
             output_filename( strmake( "%s/%s.mo", po_dir, linguas.str[i] ));
     }
-    output( "\n" );
-    output( "%s.pot: %s\n", obj_dir_path( make, obj ), source->filename );
-    output( "\t%s -O pot -o $@ %s", tools_path( make, "wmc" ), source->filename );
-    output( "\n" );
-    output( "%s.pot %s.res:", obj_dir_path( make, obj ), obj_dir_path( make, obj ));
-    output_filename( tools_path( make, "wmc" ));
-    output_filenames( source->dependencies );
     output( "\n" );
 }
 
@@ -2937,7 +2922,7 @@ static void output_source_svg( struct makefile *make, struct incl_file *source, 
 static void output_source_nls( struct makefile *make, struct incl_file *source, const char *obj )
 {
     add_install_rule( make, source->name, source->name,
-                      strmake( "D$(datadir)/wine/%s", source->name ));
+                      strmake( "D$(nlsdir)/%s", source->name ));
     output_srcdir_symlink( make, strmake( "%s.nls", obj ));
 }
 
@@ -3022,7 +3007,7 @@ static void output_source_spec( struct makefile *make, struct incl_file *source,
     strarray_add( &make->clean_files, dll_name );
     strarray_add( &make->res_files, strmake( "%s.res", obj ));
     output( "%s.res: %s\n", obj_dir_path( make, obj ), obj_dir_path( make, dll_name ));
-    output( "\techo \"%s.dll TESTDLL \\\"%s\\\"\" | %s -o $@\n", obj,
+    output( "\techo \"%s.dll TESTDLL \\\"%s\\\"\" | %s -u -o $@\n", obj,
             obj_dir_path( make, dll_name ), tools_path( make, "wrc" ));
 
     output( "%s:", obj_dir_path( make, dll_name ));
@@ -3495,7 +3480,7 @@ static void output_test_module( struct makefile *make )
         output( "all: %s/%s\n", top_obj_dir_path( make, "programs/winetest" ), testres );
     output( "%s/%s: %s%s\n", top_obj_dir_path( make, "programs/winetest" ), testres,
             obj_dir_path( make, stripped ), ext );
-    output( "\techo \"%s TESTRES \\\"%s%s\\\"\" | %s -o $@\n",
+    output( "\techo \"%s TESTRES \\\"%s%s\\\"\" | %s -u -o $@\n",
             testmodule, obj_dir_path( make, stripped ), ext, tools_path( make, "wrc" ));
 
     output_filenames_obj_dir( make, make->ok_files );
@@ -4269,10 +4254,16 @@ static void load_sources( struct makefile *make )
 
     add_generated_sources( make );
 
+    if (!make->use_msvcrt && !has_object_file( make ))
+    {
+        strarray_add( &make->extradllflags, "-mno-cygwin" );
+        make->use_msvcrt = 1;
+    }
+
     LIST_FOR_EACH_ENTRY( file, &make->includes, struct incl_file, entry ) parse_file( make, file, 0 );
     LIST_FOR_EACH_ENTRY( file, &make->sources, struct incl_file, entry ) get_dependencies( file, file );
 
-    if (crosstarget) make->is_cross = (make->testdll || make->use_msvcrt || !has_object_file( make ));
+    make->is_cross = crosstarget && make->use_msvcrt;
 
     if (make->is_cross)
     {

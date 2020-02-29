@@ -722,17 +722,26 @@ HRESULT WINAPI RegisterTypeLib(ITypeLib *ptlib, const WCHAR *szFullPath, const W
             KEY_WRITE, NULL, &subKey, &disposition) == ERROR_SUCCESS)
         {
             BSTR freeHelpDir = NULL;
-            OLECHAR* pIndexStr;
+            WCHAR *file_name;
 
             /* if we created a new key, and helpDir was null, set the helpdir
                to the directory which contains the typelib. However,
                if we just opened an existing key, we leave the helpdir alone */
             if ((disposition == REG_CREATED_NEW_KEY) && (szHelpDir == NULL)) {
                 szHelpDir = freeHelpDir = SysAllocString(szFullPath);
-                pIndexStr = wcsrchr(szHelpDir, '\\');
-                if (pIndexStr) {
-                    *pIndexStr = 0;
+                file_name = wcsrchr(szHelpDir, '\\');
+                if (file_name && file_name[0]) {
+                    /* possible remove a numeric \index (resource-id) */
+                    WCHAR *end_ptr = file_name + 1;
+                    while ('0' <= *end_ptr && *end_ptr <= '9') end_ptr++;
+                    if (!*end_ptr)
+                    {
+                        *file_name = 0;
+                        file_name = wcsrchr(szHelpDir, '\\');
+                    }
                 }
+                if (file_name)
+                    *file_name = 0;
             }
 
             /* if we have an szHelpDir, set it! */
@@ -1718,7 +1727,7 @@ static inline TLBVarDesc *TLB_get_vardesc_by_name(ITypeInfoImpl *typeinfo, const
     return NULL;
 }
 
-static inline TLBCustData *TLB_get_custdata_by_guid(struct list *custdata_list, REFGUID guid)
+static inline TLBCustData *TLB_get_custdata_by_guid(const struct list *custdata_list, REFGUID guid)
 {
     TLBCustData *cust_data;
     LIST_FOR_EACH_ENTRY(cust_data, custdata_list, TLBCustData, entry)
@@ -3335,27 +3344,7 @@ static HRESULT TLB_ReadTypeLib(LPCWSTR pszFileName, LPWSTR pszPath, UINT cchPath
 
     h = CreateFileW(pszPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if(h != INVALID_HANDLE_VALUE){
-        FILE_NAME_INFORMATION size_info;
-        BOOL br;
-
-        /* GetFileInformationByHandleEx returns the path of the file without
-         * WOW64 redirection */
-        br = GetFileInformationByHandleEx(h, FileNameInfo, &size_info, sizeof(size_info));
-        if(br || GetLastError() == ERROR_MORE_DATA){
-            FILE_NAME_INFORMATION *info;
-            DWORD size = sizeof(*info) + size_info.FileNameLength + sizeof(WCHAR);
-
-            info = HeapAlloc(GetProcessHeap(), 0, size);
-
-            br = GetFileInformationByHandleEx(h, FileNameInfo, info, size);
-            if(br){
-                info->FileName[info->FileNameLength / sizeof(WCHAR)] = 0;
-                lstrcpynW(pszPath + 2, info->FileName, cchPath - 2);
-            }
-
-            HeapFree(GetProcessHeap(), 0, info);
-        }
-
+        GetFinalPathNameByHandleW(h, pszPath, cchPath, FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
         CloseHandle(h);
     }
 
@@ -5275,7 +5264,7 @@ static HRESULT WINAPI ITypeLib2_fnGetDocumentation2(
     return result;
 }
 
-static HRESULT TLB_copy_all_custdata(struct list *custdata_list, CUSTDATA *pCustData)
+static HRESULT TLB_copy_all_custdata(const struct list *custdata_list, CUSTDATA *pCustData)
 {
     TLBCustData *pCData;
     unsigned int ct;
@@ -5891,21 +5880,10 @@ static void TLB_FreeVarDesc(VARDESC *var_desc)
     SysFreeString((BSTR)var_desc);
 }
 
-HRESULT ITypeInfoImpl_GetInternalFuncDesc( ITypeInfo *iface, UINT index, const FUNCDESC **ppFuncDesc )
-{
-    ITypeInfoImpl *This = impl_from_ITypeInfo(iface);
-
-    if (index >= This->typeattr.cFuncs)
-        return TYPE_E_ELEMENTNOTFOUND;
-
-    *ppFuncDesc = &This->funcdescs[index].funcdesc;
-    return S_OK;
-}
-
 /* internal function to make the inherited interfaces' methods appear
  * part of the interface */
 static HRESULT ITypeInfoImpl_GetInternalDispatchFuncDesc( ITypeInfo *iface,
-    UINT index, const FUNCDESC **ppFuncDesc, UINT *funcs, UINT *hrefoffset)
+    UINT index, const TLBFuncDesc **ppFuncDesc, UINT *funcs, UINT *hrefoffset)
 {
     ITypeInfoImpl *This = impl_from_ITypeInfo(iface);
     HRESULT hr;
@@ -5943,8 +5921,27 @@ static HRESULT ITypeInfoImpl_GetInternalDispatchFuncDesc( ITypeInfo *iface,
     
     if (index < implemented_funcs)
         return E_INVALIDARG;
-    return ITypeInfoImpl_GetInternalFuncDesc(iface, index - implemented_funcs,
-                                             ppFuncDesc);
+    index -= implemented_funcs;
+
+    if (index >= This->typeattr.cFuncs)
+        return TYPE_E_ELEMENTNOTFOUND;
+
+    *ppFuncDesc = &This->funcdescs[index];
+    return S_OK;
+}
+
+static HRESULT ITypeInfoImpl_GetInternalFuncDesc( ITypeInfo *iface, UINT index, const TLBFuncDesc **func_desc, UINT *hrefoffset )
+{
+    ITypeInfoImpl *This = impl_from_ITypeInfo(iface);
+
+    if (This->typeattr.typekind == TKIND_DISPATCH)
+        return ITypeInfoImpl_GetInternalDispatchFuncDesc(iface, index, func_desc, NULL, hrefoffset);
+
+    if (index >= This->typeattr.cFuncs)
+        return TYPE_E_ELEMENTNOTFOUND;
+
+    *func_desc = &This->funcdescs[index];
+    return S_OK;
 }
 
 static inline void ITypeInfoImpl_ElemDescAddHrefOffset( LPELEMDESC pElemDesc, UINT hrefoffset)
@@ -5988,7 +5985,7 @@ static HRESULT WINAPI ITypeInfo_fnGetFuncDesc( ITypeInfo2 *iface, UINT index,
         LPFUNCDESC  *ppFuncDesc)
 {
     ITypeInfoImpl *This = impl_from_ITypeInfo2(iface);
-    const FUNCDESC *internal_funcdesc;
+    const TLBFuncDesc *internal_funcdesc;
     HRESULT hr;
     UINT hrefoffset = 0;
 
@@ -6000,13 +5997,8 @@ static HRESULT WINAPI ITypeInfo_fnGetFuncDesc( ITypeInfo2 *iface, UINT index,
     if (This->needs_layout)
         ICreateTypeInfo2_LayOut(&This->ICreateTypeInfo2_iface);
 
-    if (This->typeattr.typekind == TKIND_DISPATCH)
-        hr = ITypeInfoImpl_GetInternalDispatchFuncDesc((ITypeInfo *)iface, index,
-                                                       &internal_funcdesc, NULL,
-                                                       &hrefoffset);
-    else
-        hr = ITypeInfoImpl_GetInternalFuncDesc((ITypeInfo *)iface, index,
-                                               &internal_funcdesc);
+    hr = ITypeInfoImpl_GetInternalFuncDesc((ITypeInfo *)iface, index,
+                                           &internal_funcdesc, &hrefoffset);
     if (FAILED(hr))
     {
         WARN("description for function %d not found\n", index);
@@ -6014,7 +6006,7 @@ static HRESULT WINAPI ITypeInfo_fnGetFuncDesc( ITypeInfo2 *iface, UINT index,
     }
 
     hr = TLB_AllocAndInitFuncDesc(
-        internal_funcdesc,
+        &internal_funcdesc->funcdesc,
         ppFuncDesc,
         This->typeattr.typekind == TKIND_DISPATCH);
 
@@ -8001,21 +7993,49 @@ static HRESULT WINAPI ITypeInfo_fnGetRefTypeInfo(
                 ITypeLib_AddRef(pTLib);
                 result = S_OK;
             } else {
-                static const WCHAR TYPELIBW[] = {'T','Y','P','E','L','I','B',0};
-                struct search_res_tlb_params params;
-                BSTR libnam;
+                /* Search in cached typelibs */
+                ITypeLibImpl *entry;
 
-                TRACE("typeinfo in imported typelib that isn't already loaded\n");
-
-                /* Search in resource table */
-                params.guid  = TLB_get_guid_null(ref_type->pImpTLInfo->guid);
-                params.pTLib = NULL;
-                EnumResourceNamesW(NULL, TYPELIBW, search_res_tlb, (LONG_PTR)&params);
-                pTLib  = params.pTLib;
-                result = S_OK;
+                EnterCriticalSection(&cache_section);
+                LIST_FOR_EACH_ENTRY(entry, &tlb_cache, ITypeLibImpl, entry)
+                {
+                    if (entry->guid
+                        && IsEqualIID(&entry->guid->guid, TLB_get_guid_null(ref_type->pImpTLInfo->guid))
+                        && entry->ver_major == ref_type->pImpTLInfo->wVersionMajor
+                        && entry->ver_minor == ref_type->pImpTLInfo->wVersionMinor
+                        && entry->set_lcid == ref_type->pImpTLInfo->lcid)
+                    {
+                        TRACE("got cached %p\n", entry);
+                        pTLib = (ITypeLib*)&entry->ITypeLib2_iface;
+                        ITypeLib_AddRef(pTLib);
+                        result = S_OK;
+                        break;
+                    }
+                }
+                LeaveCriticalSection(&cache_section);
 
                 if (!pTLib)
                 {
+                    static const WCHAR TYPELIBW[] = {'T','Y','P','E','L','I','B',0};
+                    struct search_res_tlb_params params;
+
+                    TRACE("typeinfo in imported typelib that isn't already loaded\n");
+
+                    /* Search in resource table */
+                    params.guid  = TLB_get_guid_null(ref_type->pImpTLInfo->guid);
+                    params.pTLib = NULL;
+                    EnumResourceNamesW(NULL, TYPELIBW, search_res_tlb, (LONG_PTR)&params);
+                    if(params.pTLib)
+                    {
+                        pTLib  = params.pTLib;
+                        result = S_OK;
+                    }
+                }
+
+                if (!pTLib)
+                {
+                    BSTR libnam;
+
                     /* Search on disk */
                     result = query_typelib_path(TLB_get_guid_null(ref_type->pImpTLInfo->guid),
                             ref_type->pImpTLInfo->wVersionMajor,
@@ -8367,22 +8387,23 @@ static HRESULT WINAPI ITypeInfo2_fnGetFuncCustData(
 	VARIANT *pVarVal)
 {
     ITypeInfoImpl *This = impl_from_ITypeInfo2(iface);
-    TLBCustData *pCData;
-    TLBFuncDesc *pFDesc = &This->funcdescs[index];
+    const TLBFuncDesc *desc;
+    TLBCustData *data;
+    UINT hrefoffset;
+    HRESULT hr;
 
     TRACE("%p %u %s %p\n", This, index, debugstr_guid(guid), pVarVal);
 
-    if(index >= This->typeattr.cFuncs)
-        return TYPE_E_ELEMENTNOTFOUND;
-
-    pCData = TLB_get_custdata_by_guid(&pFDesc->custdata_list, guid);
-    if(!pCData)
-        return TYPE_E_ELEMENTNOTFOUND;
+    hr = ITypeInfoImpl_GetInternalFuncDesc((ITypeInfo *)iface, index, &desc, &hrefoffset);
+    if (FAILED(hr))
+    {
+        WARN("description for function %d not found\n", index);
+        return hr;
+    }
 
     VariantInit(pVarVal);
-    VariantCopy(pVarVal, &pCData->data);
-
-    return S_OK;
+    data = TLB_get_custdata_by_guid(&desc->custdata_list, guid);
+    return data ? VariantCopy(pVarVal, &data->data) : S_OK;
 }
 
 /* ITypeInfo2::GetParamCustData
@@ -8397,14 +8418,17 @@ static HRESULT WINAPI ITypeInfo2_fnGetParamCustData(
 	VARIANT *pVarVal)
 {
     ITypeInfoImpl *This = impl_from_ITypeInfo2(iface);
+    const TLBFuncDesc *pFDesc;
     TLBCustData *pCData;
-    TLBFuncDesc *pFDesc = &This->funcdescs[indexFunc];
+    UINT hrefoffset;
+    HRESULT hr;
 
     TRACE("%p %u %u %s %p\n", This, indexFunc, indexParam,
             debugstr_guid(guid), pVarVal);
 
-    if(indexFunc >= This->typeattr.cFuncs)
-        return TYPE_E_ELEMENTNOTFOUND;
+    hr = ITypeInfoImpl_GetInternalFuncDesc((ITypeInfo *)iface, indexFunc, &pFDesc, &hrefoffset);
+    if (FAILED(hr))
+        return hr;
 
     if(indexParam >= pFDesc->funcdesc.cParams)
         return TYPE_E_ELEMENTNOTFOUND;
@@ -8566,12 +8590,15 @@ static HRESULT WINAPI ITypeInfo2_fnGetAllFuncCustData(
 	CUSTDATA *pCustData)
 {
     ITypeInfoImpl *This = impl_from_ITypeInfo2(iface);
-    TLBFuncDesc *pFDesc = &This->funcdescs[index];
+    const TLBFuncDesc *pFDesc;
+    UINT hrefoffset;
+    HRESULT hr;
 
     TRACE("%p %u %p\n", This, index, pCustData);
 
-    if(index >= This->typeattr.cFuncs)
-        return TYPE_E_ELEMENTNOTFOUND;
+    hr = ITypeInfoImpl_GetInternalFuncDesc((ITypeInfo *)iface, index, &pFDesc, &hrefoffset);
+    if (FAILED(hr))
+        return hr;
 
     return TLB_copy_all_custdata(&pFDesc->custdata_list, pCustData);
 }
@@ -8585,12 +8612,15 @@ static HRESULT WINAPI ITypeInfo2_fnGetAllParamCustData( ITypeInfo2 * iface,
     UINT indexFunc, UINT indexParam, CUSTDATA *pCustData)
 {
     ITypeInfoImpl *This = impl_from_ITypeInfo2(iface);
-    TLBFuncDesc *pFDesc = &This->funcdescs[indexFunc];
+    const TLBFuncDesc *pFDesc;
+    UINT hrefoffset;
+    HRESULT hr;
 
     TRACE("%p %u %u %p\n", This, indexFunc, indexParam, pCustData);
 
-    if(indexFunc >= This->typeattr.cFuncs)
-        return TYPE_E_ELEMENTNOTFOUND;
+    hr = ITypeInfoImpl_GetInternalFuncDesc((ITypeInfo *)iface, indexFunc, &pFDesc, &hrefoffset);
+    if (FAILED(hr))
+        return hr;
 
     if(indexParam >= pFDesc->funcdesc.cParams)
         return TYPE_E_ELEMENTNOTFOUND;

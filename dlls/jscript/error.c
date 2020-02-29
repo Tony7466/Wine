@@ -409,40 +409,37 @@ static jsstr_t *format_error_message(HRESULT error, const WCHAR *arg)
     return r;
 }
 
-static HRESULT throw_error(script_ctx_t *ctx, HRESULT error, const WCHAR *str, jsdisp_t *constr)
+HRESULT throw_error(script_ctx_t *ctx, HRESULT error, const WCHAR *str)
 {
-    jsdisp_t *err;
-    jsstr_t *msg;
-    HRESULT hres;
-
-    if(!is_jscript_error(error))
-        return error;
-
-    msg = format_error_message(error, str);
-    if(!msg)
-        return E_OUTOFMEMORY;
-
-    WARN("%s\n", debugstr_jsstr(msg));
-
-    hres = create_error(ctx, constr, error, msg, &err);
-    jsstr_release(msg);
-    if(FAILED(hres))
-        return hres;
-
-    reset_ei(ctx->ei);
-    ctx->ei->valid_value = TRUE;
-    ctx->ei->value = jsval_obj(err);
-    return error;
+    jsexcept_t *ei = ctx->ei;
+    TRACE("%08x\n", error);
+    reset_ei(ei);
+    ei->error = error;
+    if(str)
+        ei->message = format_error_message(error, str);
+    return DISP_E_EXCEPTION;
 }
 
-HRESULT throw_syntax_error(script_ctx_t *ctx, HRESULT error, const WCHAR *str)
+void set_error_location(jsexcept_t *ei, bytecode_t *code, unsigned loc, unsigned source_id, jsstr_t *line)
 {
-    return throw_error(ctx, error, str, ctx->syntax_error_constr);
-}
+    if(is_jscript_error(ei->error)) {
+        if(!ei->source) {
+            const WCHAR *res;
+            size_t len;
 
-HRESULT throw_type_error(script_ctx_t *ctx, HRESULT error, const WCHAR *str)
-{
-    return throw_error(ctx, error, str, ctx->type_error_constr);
+            len = LoadStringW(jscript_hinstance, source_id, (WCHAR*)&res, 0);
+            ei->source = jsstr_alloc_len(res, len);
+        }
+        if(!ei->message)
+            ei->message = format_error_message(ei->error, NULL);
+    }
+
+    TRACE("source %s in %s\n", debugstr_w(code->source + loc), debugstr_w(code->source));
+
+    ei->code = bytecode_addref(code);
+    ei->loc = loc;
+    if(line)
+        ei->line = jsstr_addref(line);
 }
 
 jsdisp_t *create_builtin_error(script_ctx_t *ctx)
@@ -520,6 +517,6 @@ jsdisp_t *create_builtin_error(script_ctx_t *ctx)
         }
     }
 
-    hres = create_error(ctx, constr, ei->error, jsstr_empty(), &r);
+    hres = create_error(ctx, constr, ei->error, ei->message ? ei->message : jsstr_empty(), &r);
     return SUCCEEDED(hres) ? r : NULL;
 }

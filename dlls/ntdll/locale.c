@@ -35,6 +35,7 @@
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
 #include "ntdll_misc.h"
+#include "wine/library.h"
 #include "wine/unicode.h"
 #include "wine/debug.h"
 
@@ -80,7 +81,12 @@ LCID user_lcid = 0, system_lcid = 0;
 static LANGID user_ui_language, system_ui_language;
 static NLSTABLEINFO nls_info;
 static HMODULE kernel32_handle;
-static const union cptable *unix_table; /* NULL if UTF8 */
+static CPTABLEINFO unix_table;
+
+extern WCHAR wine_compose( const WCHAR *str ) DECLSPEC_HIDDEN;
+extern const unsigned short combining_class_table[] DECLSPEC_HIDDEN;
+extern const unsigned short nfd_table[] DECLSPEC_HIDDEN;
+extern const unsigned short nfkd_table[] DECLSPEC_HIDDEN;
 
 static NTSTATUS load_string( ULONG id, LANGID lang, WCHAR *buffer, ULONG len )
 {
@@ -149,6 +155,153 @@ static WCHAR casemap_ascii( WCHAR ch )
 }
 
 
+static const WCHAR *get_decomposition( const unsigned short *table, WCHAR ch, unsigned int *len )
+{
+    unsigned short offset = table[table[ch >> 8] + ((ch >> 4) & 0xf)] + (ch & 0xf);
+    unsigned short start = table[offset];
+    unsigned short end = table[offset + 1];
+
+    if ((*len = end - start)) return table + start;
+    *len = 1;
+    return NULL;
+}
+
+
+static BYTE get_combining_class( WCHAR c )
+{
+    return combining_class_table[combining_class_table[combining_class_table[c >> 8] + ((c >> 4) & 0xf)] + (c & 0xf)];
+}
+
+
+static BOOL is_starter( WCHAR c )
+{
+    return !get_combining_class( c );
+}
+
+
+static BOOL reorderable_pair( WCHAR c1, WCHAR c2 )
+{
+    BYTE ccc1, ccc2;
+
+    /* reorderable if ccc1 > ccc2 > 0 */
+    ccc1 = get_combining_class( c1 );
+    if (ccc1 < 2) return FALSE;
+    ccc2 = get_combining_class( c2 );
+    return ccc2 && (ccc1 > ccc2);
+}
+
+
+static void canonical_order_substring( WCHAR *str, unsigned int len )
+{
+    unsigned int i;
+    BOOL swapped;
+
+    do
+    {
+        swapped = FALSE;
+        for (i = 0; i < len - 1; i++)
+        {
+            if (reorderable_pair( str[i], str[i + 1] ))
+            {
+                WCHAR tmp = str[i];
+                str[i] = str[i + 1];
+                str[i + 1] = tmp;
+                swapped = TRUE;
+            }
+        }
+    } while (swapped);
+}
+
+
+/****************************************************************************
+ *             canonical_order_string
+ *
+ * Reorder the string into canonical order - D108/D109.
+ *
+ * Starters (chars with combining class == 0) don't move, so look for continuous
+ * substrings of non-starters and only reorder those.
+ */
+static void canonical_order_string( WCHAR *str, unsigned int len )
+{
+    unsigned int i, next = 0;
+
+    for (i = 1; i <= len; i++)
+    {
+        if (i == len || is_starter( str[i] ))
+        {
+            if (i > next + 1) /* at least two successive non-starters */
+                canonical_order_substring( str + next, i - next );
+            next = i + 1;
+        }
+    }
+}
+
+
+static NTSTATUS decompose_string( int compat, const WCHAR *src, int src_len, WCHAR *dst, int *dst_len )
+{
+    const unsigned short *table = compat ? nfkd_table : nfd_table;
+    int src_pos, dst_pos = 0;
+    unsigned int decomp_len;
+    const WCHAR *decomp;
+
+    for (src_pos = 0; src_pos < src_len; src_pos++)
+    {
+        if (dst_pos == *dst_len) break;
+        if ((decomp = get_decomposition( table, src[src_pos], &decomp_len )))
+        {
+            if (dst_pos + decomp_len > *dst_len) break;
+            memcpy( dst + dst_pos, decomp, decomp_len * sizeof(WCHAR) );
+        }
+        else dst[dst_pos] = src[src_pos];
+        dst_pos += decomp_len;
+    }
+    if (src_pos < src_len)
+    {
+        *dst_len += (src_len - src_pos) * (compat ? 18 : 3);
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+    canonical_order_string( dst, dst_pos );
+    *dst_len = dst_pos;
+    return STATUS_SUCCESS;
+}
+
+
+static BOOL is_blocked( WCHAR *starter, WCHAR *ptr )
+{
+    if (ptr == starter + 1) return FALSE;
+    /* Because the string is already canonically ordered, the chars are blocked
+       only if the previous char's combining class is equal to the test char. */
+    if (get_combining_class( *(ptr - 1) ) == get_combining_class( *ptr )) return TRUE;
+    return FALSE;
+}
+
+
+static unsigned int compose_string( WCHAR *str, unsigned int len )
+{
+    unsigned int i, last_starter = len;
+    WCHAR pair[2], comp;
+
+    for (i = 0; i < len; i++)
+    {
+        pair[1] = str[i];
+        if (last_starter == len || is_blocked( str + last_starter, str + i ) || !(comp = wine_compose( pair )))
+        {
+            if (is_starter( str[i] ))
+            {
+                last_starter = i;
+                pair[0] = str[i];
+            }
+            continue;
+        }
+        str[last_starter] = pair[0] = comp;
+        len--;
+        memmove( str + i, str + i + 1, (len - i) * sizeof(WCHAR) );
+        i = last_starter;
+    }
+    return len;
+}
+
+
 static NTSTATUS open_nls_data_file( ULONG type, ULONG id, HANDLE *file )
 {
     static const WCHAR pathfmtW[] = {'\\','?','?','\\','%','s','%','s',0};
@@ -164,8 +317,7 @@ static NTSTATUS open_nls_data_file( ULONG type, ULONG id, HANDLE *file )
     static const WCHAR langfmtW[] = {'%','0','4','x',0};
     static const WCHAR winedatadirW[] = {'W','I','N','E','D','A','T','A','D','I','R',0};
     static const WCHAR winebuilddirW[] = {'W','I','N','E','B','U','I','L','D','D','I','R',0};
-    static const WCHAR dataprefixW[] = {'\\',0};
-    static const WCHAR buildprefixW[] = {'\\','l','o','a','d','e','r','\\',0};
+    static const WCHAR dataprefixW[] = {'\\','n','l','s','\\',0};
     static const WCHAR cpdefaultW[] = {'c','_','%','0','3','d','.','n','l','s',0};
     static const WCHAR intlW[] = {'l','_','i','n','t','l','.','n','l','s',0};
     static const WCHAR normnfcW[] = {'n','o','r','m','n','f','c','.','n','l','s',0};
@@ -180,7 +332,7 @@ static NTSTATUS open_nls_data_file( ULONG type, ULONG id, HANDLE *file )
     OBJECT_ATTRIBUTES attr;
     UNICODE_STRING nameW, valueW;
     WCHAR buffer[MAX_PATH], value[10];
-    const WCHAR *name = NULL, *prefix = buildprefixW;
+    const WCHAR *name = NULL;
     KEY_VALUE_PARTIAL_INFORMATION *info;
 
     /* get filename from registry */
@@ -261,16 +413,15 @@ static NTSTATUS open_nls_data_file( ULONG type, ULONG id, HANDLE *file )
     if (RtlQueryEnvironmentVariable_U( NULL, &nameW, &valueW ) != STATUS_BUFFER_TOO_SMALL)
     {
         RtlInitUnicodeString( &nameW, winedatadirW );
-        prefix = dataprefixW;
         if (RtlQueryEnvironmentVariable_U( NULL, &nameW, &valueW ) != STATUS_BUFFER_TOO_SMALL)
             return status;
     }
-    valueW.MaximumLength = valueW.Length + sizeof(buildprefixW) + strlenW(name) * sizeof(WCHAR);
+    valueW.MaximumLength = valueW.Length + sizeof(dataprefixW) + strlenW(name) * sizeof(WCHAR);
     if (!(valueW.Buffer = RtlAllocateHeap( GetProcessHeap(), 0, valueW.MaximumLength )))
         return STATUS_NO_MEMORY;
     if (!RtlQueryEnvironmentVariable_U( NULL, &nameW, &valueW ))
     {
-        strcatW( valueW.Buffer, prefix );
+        strcatW( valueW.Buffer, dataprefixW );
         strcatW( valueW.Buffer, name );
         valueW.Length = strlenW(valueW.Buffer) * sizeof(WCHAR);
         InitializeObjectAttributes( &attr, &valueW, 0, 0, NULL );
@@ -279,88 +430,6 @@ static NTSTATUS open_nls_data_file( ULONG type, ULONG id, HANDLE *file )
     }
     RtlFreeUnicodeString( &valueW );
     return status;
-}
-
-
-static USHORT *build_cptable( const union cptable *src, SIZE_T *size )
-{
-    unsigned int i, leadbytes = 0;
-    USHORT *data, *ptr;
-
-    *size = 13 + 1 + 256 + 1 + 1 + 1;
-    if (src->info.char_size == 2)
-    {
-        for (i = leadbytes = 0; i < 256; i++) if (src->dbcs.cp2uni_leadbytes[i]) leadbytes++;
-        *size += 256 + 256 * leadbytes;
-        *size += 65536;
-        *size *= sizeof(USHORT);
-    }
-    else
-    {
-        if (src->sbcs.cp2uni_glyphs != src->sbcs.cp2uni) *size += 256;
-        *size *= sizeof(USHORT);
-        *size += 65536;
-    }
-    if (!(data = RtlAllocateHeap( GetProcessHeap(), 0, *size ))) return NULL;
-    ptr = data;
-    ptr[0] = 0x0d;
-    ptr[1] = src->info.codepage;
-    ptr[2] = src->info.char_size;
-    ptr[3] = (src->info.def_char & 0xff00 ?
-              RtlUshortByteSwap( src->info.def_char ) : src->info.def_char);
-    ptr[4] = src->info.def_unicode_char;
-
-    if (src->info.char_size == 2)
-    {
-        USHORT off = src->dbcs.cp2uni_leadbytes[src->info.def_char >> 8] * 256;
-        ptr[5] = src->dbcs.cp2uni[off + (src->info.def_char & 0xff)];
-
-        ptr[6] = src->dbcs.uni2cp_low[src->dbcs.uni2cp_high[src->info.def_unicode_char >> 8]
-                                      + (src->info.def_unicode_char & 0xff)];
-
-        ptr += 7;
-        memcpy( ptr, src->dbcs.lead_bytes, 12 );
-        ptr += 6;
-        *ptr++ = 256 + 3 + (leadbytes + 1) * 256;
-        for (i = 0; i < 256; i++) *ptr++ = (src->dbcs.cp2uni_leadbytes[i] ? 0 : src->dbcs.cp2uni[i]);
-        *ptr++ = 0;
-        for (i = 0; i < 12; i++) if (!src->dbcs.lead_bytes[i]) break;
-        *ptr++ = i / 2;
-        for (i = 0; i < 256; i++) *ptr++ = 256 * src->dbcs.cp2uni_leadbytes[i];
-        for (i = 0; i < leadbytes; i++, ptr += 256)
-            memcpy( ptr, src->dbcs.cp2uni + 256 * (i + 1), 256 * sizeof(USHORT) );
-        *ptr++ = 4;
-        for (i = 0; i < 65536; i++)
-            ptr[i] = src->dbcs.uni2cp_low[src->dbcs.uni2cp_high[i >> 8] + (i & 0xff)];
-    }
-    else
-    {
-        char *uni2cp;
-
-        ptr[5] = src->sbcs.cp2uni[src->info.def_char];
-        ptr[6] = src->sbcs.uni2cp_low[src->sbcs.uni2cp_high[src->info.def_unicode_char >> 8]
-                                      + (src->info.def_unicode_char & 0xff)];
-
-        ptr += 7;
-        memset( ptr, 0, 12 );
-        ptr += 6;
-        *ptr++ = 256 + 3 + (src->sbcs.cp2uni_glyphs != src->sbcs.cp2uni ? 256 : 0);
-        memcpy( ptr, src->sbcs.cp2uni, 256 * sizeof(USHORT) );
-        ptr += 256;
-        if (src->sbcs.cp2uni_glyphs != src->sbcs.cp2uni)
-        {
-            *ptr++ = 256;
-            memcpy( ptr, src->sbcs.cp2uni_glyphs, 256 * sizeof(USHORT) );
-            ptr += 256;
-        }
-        else *ptr++ = 0;
-        *ptr++ = 0;
-        *ptr++ = 0;
-        uni2cp = (char *)ptr;
-        for (i = 0; i < 65536; i++)
-            uni2cp[i] = src->sbcs.uni2cp_low[src->sbcs.uni2cp_high[i >> 8] + (i & 0xff)];
-    }
-    return data;
 }
 
 
@@ -392,7 +461,7 @@ static const struct { const char *name; UINT cp; } charset_names[] =
     { "GBK", 936 },
     { "IBM037", 37 },
     { "IBM1026", 1026 },
-    { "IBM424", 424 },
+    { "IBM424", 20424 },
     { "IBM437", 437 },
     { "IBM500", 500 },
     { "IBM850", 850 },
@@ -410,12 +479,8 @@ static const struct { const char *name; UINT cp; } charset_names[] =
     { "IBM874", 874 },
     { "IBM875", 875 },
     { "ISO88591", 28591 },
-    { "ISO885910", 28600 },
-    { "ISO885911", 28601 },
     { "ISO885913", 28603 },
-    { "ISO885914", 28604 },
     { "ISO885915", 28605 },
-    { "ISO885916", 28606 },
     { "ISO88592", 28592 },
     { "ISO88593", 28593 },
     { "ISO88594", 28594 },
@@ -429,6 +494,37 @@ static const struct { const char *name; UINT cp; } charset_names[] =
     { "TIS620", 28601 },
     { "UTF8", CP_UTF8 }
 };
+
+static void load_unix_cptable( unsigned int cp )
+{
+    const char *build_dir = wine_get_build_dir();
+    const char *data_dir = wine_get_data_dir();
+    const char *dir = build_dir ? build_dir : data_dir;
+    struct stat st;
+    char *name;
+    USHORT *data;
+    int fd;
+
+    if (!(name = RtlAllocateHeap( GetProcessHeap(), 0, strlen(dir) + 22 ))) return;
+    sprintf( name, "%s/nls/c_%03u.nls", dir, cp );
+    if ((fd = open( name, O_RDONLY )) != -1)
+    {
+        fstat( fd, &st );
+        if ((data = RtlAllocateHeap( GetProcessHeap(), 0, st.st_size )) &&
+            st.st_size > 0x10000 &&
+            read( fd, data, st.st_size ) == st.st_size)
+        {
+            RtlInitCodePageTable( data, &unix_table );
+        }
+        else
+        {
+            RtlFreeHeap( GetProcessHeap(), 0, data );
+        }
+        close( fd );
+    }
+    else ERR( "failed to load %s\n", debugstr_a(name) );
+    RtlFreeHeap( GetProcessHeap(), 0, name );
+}
 
 void init_unix_codepage(void)
 {
@@ -451,8 +547,7 @@ void init_unix_codepage(void)
         int res = _strnicmp( charset_names[pos].name, charset_name, -1 );
         if (!res)
         {
-            if (charset_names[pos].cp == CP_UTF8) return;
-            unix_table = wine_cp_get_table( charset_names[pos].cp );
+            if (charset_names[pos].cp != CP_UTF8) load_unix_cptable( charset_names[pos].cp );
             return;
         }
         if (res > 0) max = pos - 1;
@@ -479,6 +574,7 @@ static LCID unix_locale_to_lcid( const char *unix_name )
     static const WCHAR latnW[] = {'-','L','a','t','n',0};
     WCHAR buffer[LOCALE_NAME_MAX_LENGTH], win_name[LOCALE_NAME_MAX_LENGTH];
     WCHAR *p, *country = NULL, *modifier = NULL;
+    DWORD len;
     LCID lcid;
 
     if (!unix_name || !unix_name[0] || !strcmp( unix_name, "C" ))
@@ -487,7 +583,9 @@ static LCID unix_locale_to_lcid( const char *unix_name )
         if (!unix_name || !unix_name[0]) return 0;
     }
 
-    if (ntdll_umbstowcs( 0, unix_name, strlen(unix_name) + 1, buffer, ARRAY_SIZE(buffer) ) < 0) return 0;
+    len = ntdll_umbstowcs( unix_name, strlen(unix_name), buffer, ARRAY_SIZE(buffer) );
+    if (len == ARRAY_SIZE(buffer)) return 0;
+    buffer[len] = 0;
 
     if (!(p = strpbrkW( buffer, sepW )))
     {
@@ -634,19 +732,18 @@ void init_locale( HMODULE module )
 /******************************************************************
  *      ntdll_umbstowcs
  */
-int ntdll_umbstowcs( DWORD flags, const char *src, int srclen, WCHAR *dst, int dstlen )
+DWORD ntdll_umbstowcs( const char *src, DWORD srclen, WCHAR *dst, DWORD dstlen )
 {
     DWORD reslen;
-    NTSTATUS status;
 
-    if (unix_table) return wine_cp_mbstowcs( unix_table, flags, src, srclen, dst, dstlen );
+    if (unix_table.CodePage)
+        RtlCustomCPToUnicodeN( &unix_table, dst, dstlen * sizeof(WCHAR), &reslen, src, srclen );
+    else
+        RtlUTF8ToUnicodeN( dst, dstlen * sizeof(WCHAR), &reslen, src, srclen );
 
-    if (!dstlen) dst = NULL;
-    status = RtlUTF8ToUnicodeN( dst, dstlen * sizeof(WCHAR), &reslen, src, srclen );
-    if (status && status != STATUS_SOME_NOT_MAPPED) return -1;
     reslen /= sizeof(WCHAR);
 #ifdef __APPLE__  /* work around broken Mac OS X filesystem that enforces decomposed Unicode */
-    if (reslen && dst) RtlNormalizeString( NormalizationC, dst, reslen, dst, (int *)&reslen );
+    if (reslen && dst) reslen = compose_string( dst, reslen );
 #endif
     return reslen;
 }
@@ -655,18 +752,50 @@ int ntdll_umbstowcs( DWORD flags, const char *src, int srclen, WCHAR *dst, int d
 /******************************************************************
  *      ntdll_wcstoumbs
  */
-int ntdll_wcstoumbs( DWORD flags, const WCHAR *src, int srclen, char *dst, int dstlen,
-                     const char *defchar, int *used )
+int ntdll_wcstoumbs( const WCHAR *src, DWORD srclen, char *dst, DWORD dstlen, BOOL strict )
 {
-    DWORD reslen;
-    NTSTATUS status;
+    DWORD i, reslen;
 
-    if (unix_table) return wine_cp_wcstombs( unix_table, flags, src, srclen, dst, dstlen, defchar, used );
-
-    if (used) *used = 0;  /* all chars are valid for UTF-8 */
-    if (!dstlen) dst = NULL;
-    status = RtlUnicodeToUTF8N( dst, dstlen, &reslen, src, srclen * sizeof(WCHAR) );
-    if (status && status != STATUS_SOME_NOT_MAPPED) return -1;
+    if (!unix_table.CodePage)
+        RtlUnicodeToUTF8N( dst, dstlen, &reslen, src, srclen * sizeof(WCHAR) );
+    else if (!strict)
+        RtlUnicodeToCustomCPN( &unix_table, dst, dstlen, &reslen, src, srclen * sizeof(WCHAR) );
+    else  /* do it by hand to make sure every character roundtrips correctly */
+    {
+        if (unix_table.DBCSOffsets)
+        {
+            const unsigned short *uni2cp = unix_table.WideCharTable;
+            for (i = dstlen; srclen && i; i--, srclen--, src++)
+            {
+                unsigned short ch = uni2cp[*src];
+                if (ch >> 8)
+                {
+                    if (unix_table.DBCSOffsets[unix_table.DBCSOffsets[ch >> 8] + (ch & 0xff)] != *src)
+                        return -1;
+                    if (i == 1) break;  /* do not output a partial char */
+                    i--;
+                    *dst++ = ch >> 8;
+                }
+                else
+                {
+                    if (unix_table.MultiByteTable[ch] != *src) return -1;
+                    *dst++ = (char)ch;
+                }
+            }
+            reslen = dstlen - i;
+        }
+        else
+        {
+            const unsigned char *uni2cp = unix_table.WideCharTable;
+            reslen = min( srclen, dstlen );
+            for (i = 0; i < reslen; i++)
+            {
+                unsigned char ch = uni2cp[src[i]];
+                if (unix_table.MultiByteTable[ch] != src[i]) return -1;
+                dst[i] = ch;
+            }
+        }
+    }
     return reslen;
 }
 
@@ -676,8 +805,8 @@ int ntdll_wcstoumbs( DWORD flags, const WCHAR *src, int srclen, char *dst, int d
  */
 UINT CDECL __wine_get_unix_codepage(void)
 {
-    if (!unix_table) return CP_UTF8;
-    return unix_table->info.codepage;
+    if (!unix_table.CodePage) return CP_UTF8;
+    return unix_table.CodePage;
 }
 
 
@@ -746,16 +875,7 @@ NTSTATUS WINAPI NtGetNlsSectionPtr( ULONG type, ULONG id, void *unknown, void **
     HANDLE file;
     NTSTATUS status;
 
-    if ((status = open_nls_data_file( type, id, &file )))
-    {
-        /* FIXME: special case for codepage table, generate it from the libwine data */
-        if (type == NLS_SECTION_CODEPAGE)
-        {
-            const union cptable *table = wine_cp_get_table( id );
-            if (table && (*ptr = build_cptable( table, size ))) return STATUS_SUCCESS;
-        }
-        return status;
-    }
+    if ((status = open_nls_data_file( type, id, &file ))) return status;
 
     if ((status = NtQueryInformationFile( file, &io, &info, sizeof(info), FileEndOfFileInformation )))
         goto done;
@@ -1559,51 +1679,54 @@ NTSTATUS WINAPI RtlIsNormalizedString( ULONG form, const WCHAR *str, INT len, BO
  */
 NTSTATUS WINAPI RtlNormalizeString( ULONG form, const WCHAR *src, INT src_len, WCHAR *dst, INT *dst_len )
 {
-    int flags = 0, compose = 0;
-    unsigned int res, buf_len;
+    int compose, compat, buf_len;
     WCHAR *buf = NULL;
     NTSTATUS status = STATUS_SUCCESS;
 
     TRACE( "%x %s %d %p %d\n", form, debugstr_wn(src, src_len), src_len, dst, *dst_len );
 
+    switch (form)
+    {
+    case NormalizationC:  compose = 1; compat = 0; break;
+    case NormalizationD:  compose = 0; compat = 0; break;
+    case NormalizationKC: compose = 1; compat = 1; break;
+    case NormalizationKD: compose = 0; compat = 1; break;
+    case 0: return STATUS_INVALID_PARAMETER;
+    default: return STATUS_OBJECT_NAME_NOT_FOUND;
+    }
+
     if (src_len == -1) src_len = strlenW(src) + 1;
 
-    if (form == NormalizationKC || form == NormalizationKD) flags |= WINE_DECOMPOSE_COMPAT;
-    if (form == NormalizationC || form == NormalizationKC) compose = 1;
-    if (compose || *dst_len) flags |= WINE_DECOMPOSE_REORDER;
-
-    if (!compose && *dst_len)
+    if (!*dst_len)
     {
-        res = wine_decompose_string( flags, src, src_len, dst, *dst_len );
-        if (!res)
-        {
-            status = STATUS_BUFFER_TOO_SMALL;
-            goto done;
-        }
-        buf = dst;
+        *dst_len = compat ? src_len * 18 : src_len * 3;
+        if (*dst_len > 64) *dst_len = max( 64, src_len + src_len / 8 );
+        return STATUS_SUCCESS;
     }
-    else
+    if (!src_len)
     {
-        buf_len = src_len * 4;
-        for (;;)
-        {
-            buf = RtlAllocateHeap( GetProcessHeap(), 0, buf_len * sizeof(WCHAR) );
-            if (!buf) return STATUS_NO_MEMORY;
-            res = wine_decompose_string( flags, src, src_len, buf, buf_len );
-            if (res) break;
-            buf_len *= 2;
-            RtlFreeHeap( GetProcessHeap(), 0, buf );
-        }
+        *dst_len = 0;
+        return STATUS_SUCCESS;
     }
 
-    if (compose)
-    {
-        res = wine_compose_string( buf, res );
-        if (*dst_len >= res) memcpy( dst, buf, res * sizeof(WCHAR) );
-    }
+    if (!compose) return decompose_string( compat, src, src_len, dst, dst_len );
 
-done:
-    if (buf != dst) RtlFreeHeap( GetProcessHeap(), 0, buf );
-    *dst_len = res;
+    buf_len = src_len * 4;
+    for (;;)
+    {
+        buf = RtlAllocateHeap( GetProcessHeap(), 0, buf_len * sizeof(WCHAR) );
+        if (!buf) return STATUS_NO_MEMORY;
+        status = decompose_string( compat, src, src_len, buf, &buf_len );
+        if (status != STATUS_BUFFER_TOO_SMALL) break;
+        RtlFreeHeap( GetProcessHeap(), 0, buf );
+    }
+    if (!status)
+    {
+        buf_len = compose_string( buf, buf_len );
+        if (*dst_len >= buf_len) memcpy( dst, buf, buf_len * sizeof(WCHAR) );
+        else status = STATUS_BUFFER_TOO_SMALL;
+    }
+    RtlFreeHeap( GetProcessHeap(), 0, buf );
+    *dst_len = buf_len;
     return status;
 }

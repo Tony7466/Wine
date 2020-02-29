@@ -57,7 +57,6 @@ struct gstdemux
 
     struct strmbase_sink sink;
     IAsyncReader *reader;
-    IMemAllocator *alloc;
 
     struct gstdemux_source **sources;
     unsigned int source_count;
@@ -70,7 +69,6 @@ struct gstdemux
     GstPad *my_src, *their_sink;
     GstBus *bus;
     guint64 start, nextofs, nextpullofs, stop;
-    ALLOCATOR_PROPERTIES props;
     HANDLE no_more_pads_event, duration_event, error_event;
 
     HANDLE push_thread;
@@ -96,8 +94,6 @@ static inline struct gstdemux *impl_from_strmbase_filter(struct strmbase_filter 
 {
     return CONTAINING_RECORD(iface, struct gstdemux, filter);
 }
-
-static const char *media_quark_string = "media-sample";
 
 static const WCHAR wcsInputPinName[] = {'i','n','p','u','t',' ','p','i','n',0};
 static const IMediaSeekingVtbl GST_Seeking_Vtbl;
@@ -488,11 +484,6 @@ static gboolean setcaps_sink(GstPad *pad, GstCaps *caps)
     if (!amt_from_gst_caps(caps, &pin->mt))
         return FALSE;
 
-    if (IsEqualGUID(&pin->mt.formattype, &FORMAT_VideoInfo))
-    {
-        VIDEOINFOHEADER *vih = (VIDEOINFOHEADER *)pin->mt.pbFormat;
-        filter->props.cbBuffer = max(filter->props.cbBuffer, vih->bmiHeader.biSizeImage);
-    }
     SetEvent(pin->caps_event);
     return TRUE;
 }
@@ -744,20 +735,19 @@ static gboolean event_sink(GstPad *pad, GstObject *parent, GstEvent *event)
     }
 }
 
-static void release_sample(void *data)
-{
-    ULONG ret;
-    ret = IMediaSample_Release((IMediaSample *)data);
-    TRACE("Releasing %p returns %u\n", data, ret);
-}
-
 static DWORD CALLBACK push_data(LPVOID iface)
 {
     LONGLONG maxlen, curlen;
     struct gstdemux *This = iface;
-    IMediaSample *buf;
-    DWORD_PTR user;
+    GstMapInfo mapping;
+    GstBuffer *buffer;
     HRESULT hr;
+
+    if (!(buffer = gst_buffer_new_allocate(NULL, 16384, NULL)))
+    {
+        ERR("Failed to allocate memory.\n");
+        return 0;
+    }
 
     IBaseFilter_AddRef(&This->filter.IBaseFilter_iface);
 
@@ -768,51 +758,30 @@ static DWORD CALLBACK push_data(LPVOID iface)
 
     TRACE("Starting..\n");
     for (;;) {
-        REFERENCE_TIME tStart, tStop;
         ULONG len;
-        GstBuffer *gstbuf;
-        gsize bufsize;
-        BYTE *data;
         int ret;
-
-        hr = IMemAllocator_GetBuffer(This->alloc, &buf, NULL, NULL, 0);
-        if (FAILED(hr))
-            break;
 
         if (This->nextofs >= maxlen)
             break;
-        len = IMediaSample_GetSize(buf);
-        if (This->nextofs + len > maxlen)
-            len = maxlen - This->nextofs;
+        len = min(16384, maxlen - This->nextofs);
 
-        tStart = MEDIATIME_FROM_BYTES(This->nextofs);
-        tStop = tStart + MEDIATIME_FROM_BYTES(len);
-        IMediaSample_SetTime(buf, &tStart, &tStop);
-
-        hr = IAsyncReader_Request(This->reader, buf, 0);
-        if (FAILED(hr)) {
-            IMediaSample_Release(buf);
+        if (!gst_buffer_map_range(buffer, -1, len, &mapping, GST_MAP_WRITE))
+        {
+            ERR("Failed to map buffer.\n");
             break;
         }
+        hr = IAsyncReader_SyncRead(This->reader, This->nextofs, len, mapping.data);
+        gst_buffer_unmap(buffer, &mapping);
+        if (hr != S_OK)
+        {
+            ERR("Failed to read data, hr %#x.\n", hr);
+            break;
+        }
+
         This->nextofs += len;
-        hr = IAsyncReader_WaitForNext(This->reader, -1, &buf, &user);
-        if (FAILED(hr) || !buf) {
-            if (buf)
-                IMediaSample_Release(buf);
-            break;
-        }
 
-        IMediaSample_GetPointer(buf, &data);
-        bufsize = IMediaSample_GetActualDataLength(buf);
-        gstbuf = gst_buffer_new_wrapped_full(0, data, bufsize, 0, bufsize, buf, release_sample_wrapper);
-        IMediaSample_AddRef(buf);
-        gst_mini_object_set_qdata(GST_MINI_OBJECT(gstbuf), g_quark_from_static_string(media_quark_string), buf, release_sample_wrapper);
-        if (!gstbuf) {
-            IMediaSample_Release(buf);
-            break;
-        }
-        gstbuf->duration = gstbuf->pts = -1;
-        ret = gst_pad_push(This->my_src, gstbuf);
+        buffer->duration = buffer->pts = -1;
+        ret = gst_pad_push(This->my_src, buffer);
         if (ret >= 0)
             hr = S_OK;
         else
@@ -825,14 +794,9 @@ static DWORD CALLBACK push_data(LPVOID iface)
             break;
     }
 
-    gst_pad_push_event(This->my_src, gst_event_new_eos());
+    gst_buffer_unref(buffer);
 
-    TRACE("Almost stopping.. %08x\n", hr);
-    do {
-        IAsyncReader_WaitForNext(This->reader, 0, &buf, &user);
-        if (buf)
-            IMediaSample_Release(buf);
-    } while (buf);
+    gst_pad_push_event(This->my_src, gst_event_new_eos());
 
     TRACE("Stopping.. %08x\n", hr);
 
@@ -1324,7 +1288,7 @@ static void unknown_type(GstElement *bin, GstPad *pad, GstCaps *caps, gpointer u
     g_free(strcaps);
 }
 
-static HRESULT GST_Connect(struct gstdemux *This, IPin *pConnectPin, ALLOCATOR_PROPERTIES *props)
+static HRESULT GST_Connect(struct gstdemux *This, IPin *pConnectPin)
 {
     LONGLONG avail;
     GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE(
@@ -1333,7 +1297,6 @@ static HRESULT GST_Connect(struct gstdemux *This, IPin *pConnectPin, ALLOCATOR_P
         GST_PAD_ALWAYS,
         GST_STATIC_CAPS_ANY);
 
-    This->props = *props;
     IAsyncReader_Length(This->reader, &This->filesize, &avail);
 
     if (!This->bus) {
@@ -1358,7 +1321,6 @@ static HRESULT GST_Connect(struct gstdemux *This, IPin *pConnectPin, ALLOCATOR_P
         return E_FAIL;
     This->initial = FALSE;
 
-    *props = This->props;
     This->nextofs = This->nextpullofs = 0;
     return S_OK;
 }
@@ -1407,9 +1369,6 @@ static void gstdemux_destroy(struct strmbase_filter *iface)
         assert(hr == S_OK);
     }
 
-    if (filter->alloc)
-        IMemAllocator_Release(filter->alloc);
-    filter->alloc = NULL;
     if (filter->reader)
         IAsyncReader_Release(filter->reader);
     filter->reader = NULL;
@@ -1558,46 +1517,16 @@ static HRESULT sink_query_accept(struct strmbase_pin *iface, const AM_MEDIA_TYPE
 static HRESULT gstdemux_sink_connect(struct strmbase_sink *iface, IPin *peer, const AM_MEDIA_TYPE *pmt)
 {
     struct gstdemux *filter = impl_from_strmbase_sink(iface);
-    IMemAllocator *allocator = NULL;
-    ALLOCATOR_PROPERTIES props;
     HRESULT hr = S_OK;
 
     mark_wine_thread();
 
-    props.cBuffers = 8;
-    props.cbBuffer = 16384;
-    props.cbAlign = 1;
-    props.cbPrefix = 0;
-
     filter->reader = NULL;
-    filter->alloc = NULL;
     if (FAILED(hr = IPin_QueryInterface(peer, &IID_IAsyncReader, (void **)&filter->reader)))
         return hr;
 
-    if (FAILED(hr = GST_Connect(filter, peer, &props)))
+    if (FAILED(hr = GST_Connect(filter, peer)))
         goto err;
-
-    /* Some applications depend on IAsyncReader::RequestAllocator() passing a
-     * non-NULL preferred allocator. */
-    hr = CoCreateInstance(&CLSID_MemoryAllocator, NULL, CLSCTX_INPROC,
-            &IID_IMemAllocator, (void **)&allocator);
-    if (FAILED(hr))
-        goto err;
-    hr = IAsyncReader_RequestAllocator(filter->reader, allocator, &props, &filter->alloc);
-    IMemAllocator_Release(allocator);
-    if (FAILED(hr))
-    {
-        WARN("Failed to get allocator, hr %#x.\n", hr);
-        goto err;
-    }
-
-    if (FAILED(hr = IMemAllocator_Commit(filter->alloc)))
-    {
-        WARN("Failed to commit allocator, hr %#x.\n", hr);
-        IMemAllocator_Release(filter->alloc);
-        filter->alloc = NULL;
-        goto err;
-    }
 
     return S_OK;
 err:
@@ -1613,7 +1542,6 @@ static void gstdemux_sink_disconnect(struct strmbase_sink *iface)
 
     mark_wine_thread();
 
-    IMemAllocator_Decommit(filter->alloc);
     GST_RemoveOutputPins(filter);
 }
 
@@ -2112,37 +2040,27 @@ static HRESULT source_get_media_type(struct strmbase_pin *iface, unsigned int in
 }
 
 static HRESULT WINAPI GSTOutPin_DecideBufferSize(struct strmbase_source *iface,
-        IMemAllocator *pAlloc, ALLOCATOR_PROPERTIES *ppropInputRequest)
+        IMemAllocator *allocator, ALLOCATOR_PROPERTIES *props)
 {
-    struct gstdemux_source *This = impl_source_from_IPin(&iface->pin.IPin_iface);
-    TRACE("(%p)->(%p, %p)\n", This, pAlloc, ppropInputRequest);
-    /* Unused */
-    return S_OK;
-}
+    struct gstdemux_source *pin = impl_source_from_IPin(&iface->pin.IPin_iface);
+    unsigned int buffer_size = 16384;
+    ALLOCATOR_PROPERTIES ret_props;
 
-static HRESULT WINAPI GSTOutPin_DecideAllocator(struct strmbase_source *base,
-        IMemInputPin *pPin, IMemAllocator **pAlloc)
-{
-    struct gstdemux_source *pin = impl_source_from_IPin(&base->pin.IPin_iface);
-    struct gstdemux *filter = impl_from_strmbase_filter(pin->pin.pin.filter);
-    HRESULT hr;
-
-    TRACE("pin %p, peer %p, allocator %p.\n", pin, pPin, pAlloc);
-
-    *pAlloc = NULL;
-    if (filter->alloc)
+    if (IsEqualGUID(&pin->pin.pin.mt.formattype, &FORMAT_VideoInfo))
     {
-        hr = IMemInputPin_NotifyAllocator(pPin, filter->alloc, FALSE);
-        if (SUCCEEDED(hr))
-        {
-            *pAlloc = filter->alloc;
-            IMemAllocator_AddRef(*pAlloc);
-        }
+        VIDEOINFOHEADER *format = (VIDEOINFOHEADER *)pin->pin.pin.mt.pbFormat;
+        buffer_size = format->bmiHeader.biSizeImage;
     }
-    else
-        hr = VFW_E_NO_ALLOCATOR;
+    else if (IsEqualGUID(&pin->pin.pin.mt.formattype, &FORMAT_WaveFormatEx))
+    {
+        WAVEFORMATEX *format = (WAVEFORMATEX *)pin->pin.pin.mt.pbFormat;
+        buffer_size = format->nAvgBytesPerSec;
+    }
 
-    return hr;
+    props->cBuffers = max(props->cBuffers, 1);
+    props->cbBuffer = max(props->cbBuffer, buffer_size);
+    props->cbAlign = max(props->cbAlign, 1);
+    return IMemAllocator_SetProperties(allocator, props, &ret_props);
 }
 
 static void free_source_pin(struct gstdemux_source *pin)
@@ -2184,8 +2102,8 @@ static const struct strmbase_source_ops source_ops =
     .base.pin_query_accept = source_query_accept,
     .base.pin_get_media_type = source_get_media_type,
     .pfnAttemptConnection = BaseOutputPinImpl_AttemptConnection,
+    .pfnDecideAllocator = BaseOutputPinImpl_DecideAllocator,
     .pfnDecideBufferSize = GSTOutPin_DecideBufferSize,
-    .pfnDecideAllocator = GSTOutPin_DecideAllocator,
 };
 
 static struct gstdemux_source *create_pin(struct gstdemux *filter, const WCHAR *name)
@@ -2330,12 +2248,6 @@ void CALLBACK perform_cb(TP_CALLBACK_INSTANCE *instance, void *user)
         {
             struct unknown_type_data *data = &cbdata->u.unknown_type_data;
             unknown_type(data->bin, data->pad, data->caps, data->user);
-            break;
-        }
-    case RELEASE_SAMPLE:
-        {
-            struct release_sample_data *data = &cbdata->u.release_sample_data;
-            release_sample(data->data);
             break;
         }
     case QUERY_SINK:

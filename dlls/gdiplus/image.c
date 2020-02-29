@@ -239,12 +239,17 @@ static inline void getpixel_32bppPARGB(BYTE *r, BYTE *g, BYTE *b, BYTE *a,
 {
     *a = row[x*4+3];
     if (*a == 0)
-        *r = *g = *b = 0;
+    {
+        *r = row[x*4+2];
+        *g = row[x*4+1];
+        *b = row[x*4];
+    }
     else
     {
-        *r = row[x*4+2] * 255 / *a;
-        *g = row[x*4+1] * 255 / *a;
-        *b = row[x*4] * 255 / *a;
+        DWORD scaled_q = (255 << 15) / *a;
+        *r = (row[x*4+2] > *a) ? 0xff : (row[x*4+2] * scaled_q) >> 15;
+        *g = (row[x*4+1] > *a) ? 0xff : (row[x*4+1] * scaled_q) >> 15;
+        *b = (row[x*4] > *a) ? 0xff : (row[x*4] * scaled_q) >> 15;
     }
 }
 
@@ -454,9 +459,9 @@ static inline void setpixel_32bppARGB(BYTE r, BYTE g, BYTE b, BYTE a,
 static inline void setpixel_32bppPARGB(BYTE r, BYTE g, BYTE b, BYTE a,
     BYTE *row, UINT x)
 {
-    r = r * a / 255;
-    g = g * a / 255;
-    b = b * a / 255;
+    r = (r * a + 127) / 255;
+    g = (g * a + 127) / 255;
+    b = (b * a + 127) / 255;
     *((DWORD*)(row)+x) = (a<<24)|(r<<16)|(g<<8)|b;
 }
 

@@ -2232,6 +2232,13 @@ static void test_error_reports(void)
             NULL,
             ERROR_TODO_SCODE | ERROR_TODO_DESCRIPTION
         },
+        {
+            L"f(1\n,\n2,\n ,,3\n);\n",
+            JS_E_SYNTAX, 3, 1,
+            L"Microsoft JScript compilation error",
+            L"Syntax error",
+            L" ,,3"
+        },
     };
 
     if (!is_lang_english())
@@ -2285,19 +2292,16 @@ static void test_error_reports(void)
             source_context = 0xdeadbeef;
             hres = IActiveScriptError_GetSourcePosition(script_error, &source_context, NULL, NULL);
             ok(hres == S_OK, "GetSourcePosition failed0x%08x\n", hres);
-            todo_wine
             ok(source_context == 10, "source_context = %x\n", source_context);
 
             line_number = 0xdeadbeef;
             hres = IActiveScriptError_GetSourcePosition(script_error, NULL, &line_number, NULL);
             ok(hres == S_OK, "GetSourcePosition failed%08x\n", hres);
-            todo_wine_if(tests[i].line)
             ok(line_number == tests[i].line, "[%u] line = %u expected %u\n", i, line_number, tests[i].line);
 
             character = 0xdeadbeef;
             hres = IActiveScriptError_GetSourcePosition(script_error, NULL, NULL, &character);
             ok(hres == S_OK, "GetSourcePosition failed: %08x\n", hres);
-            todo_wine_if(tests[i].character)
             ok(character == tests[i].character, "[%u] character = %u expected %u\n", i, character, tests[i].character);
 
             hres = IActiveScriptError_GetSourceLineText(script_error, NULL);
@@ -2307,9 +2311,7 @@ static void test_error_reports(void)
             hres = IActiveScriptError_GetSourceLineText(script_error, &line_text);
             if (tests[i].line_text)
             {
-                todo_wine
                 ok(hres == S_OK, "GetSourceLineText failed: %08x\n", hres);
-                todo_wine
                 ok(line_text != NULL && !lstrcmpW(line_text, tests[i].line_text), "[%u] GetSourceLineText returned %s expected %s\n",
                    i, wine_dbgstr_w(line_text), wine_dbgstr_w(tests[i].line_text));
             }
@@ -2345,13 +2347,12 @@ static void test_error_reports(void)
             if (is_lang_english())
             {
                 if(tests[i].error_source)
-                    todo_wine
                     ok(ei.bstrSource && !lstrcmpW(ei.bstrSource, tests[i].error_source), "[%u] bstrSource = %s expected %s\n",
                        i, wine_dbgstr_w(ei.bstrSource), wine_dbgstr_w(tests[i].error_source));
                 else
                     ok(!ei.bstrSource, "[%u] bstrSource = %s expected NULL\n", i, wine_dbgstr_w(ei.bstrSource));
                 if(tests[i].description)
-                    todo_wine
+                    todo_wine_if(tests[i].todo_flags & ERROR_TODO_DESCRIPTION)
                     ok(ei.bstrDescription && !lstrcmpW(ei.bstrDescription, tests[i].description),
                        "[%u] bstrDescription = %s expected %s\n", i, wine_dbgstr_w(ei.bstrDescription), wine_dbgstr_w(tests[i].description));
                 else

@@ -63,6 +63,8 @@ static HRESULT (WINAPI *pD3D11CreateDevice)(IDXGIAdapter *adapter, D3D_DRIVER_TY
         const D3D_FEATURE_LEVEL *feature_levels, UINT levels, UINT sdk_version, ID3D11Device **device_out,
         D3D_FEATURE_LEVEL *obtained_feature_level, ID3D11DeviceContext **immediate_context);
 
+static HRESULT (WINAPI *pCoGetApartmentType)(APTTYPE *type, APTTYPEQUALIFIER *qualifier);
+
 static HRESULT (WINAPI *pMFCopyImage)(BYTE *dest, LONG deststride, const BYTE *src, LONG srcstride,
         DWORD width, DWORD lines);
 static HRESULT (WINAPI *pMFCreateDXGIDeviceManager)(UINT *token, IMFDXGIDeviceManager **manager);
@@ -86,6 +88,7 @@ static HRESULT (WINAPI *pMFTRegisterLocalByCLSID)(REFCLSID clsid, REFGUID catego
         const MFT_REGISTER_TYPE_INFO *output_types);
 static HRESULT (WINAPI *pMFTUnregisterLocal)(IClassFactory *factory);
 static HRESULT (WINAPI *pMFTUnregisterLocalByCLSID)(CLSID clsid);
+static HRESULT (WINAPI *pMFAllocateWorkQueueEx)(MFASYNC_WORKQUEUE_TYPE queue_type, DWORD *queue);
 
 static const WCHAR mp4file[] = {'t','e','s','t','.','m','p','4',0};
 static const WCHAR fileschemeW[] = {'f','i','l','e',':','/','/',0};
@@ -122,6 +125,7 @@ struct test_callback
 {
     IMFAsyncCallback IMFAsyncCallback_iface;
     HANDLE event;
+    DWORD param;
 };
 
 static struct test_callback *impl_from_IMFAsyncCallback(IMFAsyncCallback *iface)
@@ -350,25 +354,62 @@ static const IMFAsyncCallbackVtbl test_create_from_file_handler_callback_vtbl =
     test_create_from_file_handler_callback_Invoke,
 };
 
+static BOOL get_event(IMFMediaEventGenerator *generator, MediaEventType expected_event_type, PROPVARIANT *value)
+{
+    MediaEventType event_type;
+    HRESULT hr, event_status;
+    IMFMediaEvent *event;
+
+    hr = IMFMediaEventGenerator_GetEvent(generator, 0, &event);
+    ok(hr == S_OK, "Failed to get event, hr %#x.\n", hr);
+
+    hr = IMFMediaEvent_GetStatus(event, &event_status);
+    ok(hr == S_OK, "Failed to get status code, hr %#x.\n", hr);
+    ok(event_status == S_OK, "Unexpected event status code %#x.\n", event_status);
+
+    hr = IMFMediaEvent_GetType(event, &event_type);
+    ok(hr == S_OK, "Failed to event type, hr %#x.\n", hr);
+    ok(event_type == expected_event_type, "Unexpected event type %u, expected %u.\n", event_type, expected_event_type);
+
+    if (event_type != expected_event_type)
+    {
+        IMFMediaEvent_Release(event);
+        return FALSE;
+    }
+
+    if (value)
+    {
+        hr = IMFMediaEvent_GetValue(event, value);
+        ok(hr == S_OK, "Failed to get value of event, hr %#x.\n", hr);
+    }
+
+    IMFMediaEvent_Release(event);
+
+    return TRUE;
+}
+
 static void test_source_resolver(void)
 {
-    static const WCHAR file_type[] = {'v','i','d','e','o','/','m','p','4',0};
     struct test_callback callback = { { &test_create_from_url_callback_vtbl } };
     struct test_callback callback2 = { { &test_create_from_file_handler_callback_vtbl } };
     IMFSourceResolver *resolver, *resolver2;
+    IMFPresentationDescriptor *descriptor;
     IMFSchemeHandler *scheme_handler;
+    IMFMediaStream *video_stream;
     IMFAttributes *attributes;
     IMFMediaSource *mediasource;
-    IMFPresentationDescriptor *descriptor;
     IMFMediaTypeHandler *handler;
+    IMFMediaType *media_type;
     BOOL selected, do_uninit;
     MF_OBJECT_TYPE obj_type;
     IMFStreamDescriptor *sd;
     IUnknown *cancel_cookie;
     IMFByteStream *stream;
     WCHAR pathW[MAX_PATH];
-    HRESULT hr;
+    int i, sample_count;
     WCHAR *filename;
+    PROPVARIANT var;
+    HRESULT hr;
     GUID guid;
 
     if (!pMFCreateSourceResolver)
@@ -428,7 +469,7 @@ static void test_source_resolver(void)
 
     hr = IMFByteStream_QueryInterface(stream, &IID_IMFAttributes, (void **)&attributes);
     ok(hr == S_OK, "got 0x%08x\n", hr);
-    hr = IMFAttributes_SetString(attributes, &MF_BYTESTREAM_CONTENT_TYPE, file_type);
+    hr = IMFAttributes_SetString(attributes, &MF_BYTESTREAM_CONTENT_TYPE, L"video/mp4");
     ok(hr == S_OK, "Failed to set string value, hr %#x.\n", hr);
     IMFAttributes_Release(attributes);
 
@@ -447,13 +488,101 @@ static void test_source_resolver(void)
 
     hr = IMFStreamDescriptor_GetMediaTypeHandler(sd, &handler);
     ok(hr == S_OK, "Failed to get type handler, hr %#x.\n", hr);
+    IMFStreamDescriptor_Release(sd);
 
     hr = IMFMediaTypeHandler_GetMajorType(handler, &guid);
 todo_wine
     ok(hr == S_OK, "Failed to get stream major type, hr %#x.\n", hr);
+    if (FAILED(hr))
+        goto skip_source_tests;
+
+    /* Check major/minor type for the test media. */
+    ok(IsEqualGUID(&guid, &MFMediaType_Video), "Unexpected major type %s.\n", debugstr_guid(&guid));
+
+    hr = IMFMediaTypeHandler_GetCurrentMediaType(handler, &media_type);
+    ok(hr == S_OK, "Failed to get current media type, hr %#x.\n", hr);
+    hr = IMFMediaType_GetGUID(media_type, &MF_MT_SUBTYPE, &guid);
+    ok(hr == S_OK, "Failed to get media sub type, hr %#x.\n", hr);
+    ok(IsEqualGUID(&guid, &MFVideoFormat_M4S2), "Unexpected sub type %s.\n", debugstr_guid(&guid));
+    IMFMediaType_Release(media_type);
+
+    hr = IMFPresentationDescriptor_SelectStream(descriptor, 0);
+    ok(hr == S_OK, "Failed to select video stream, hr %#x.\n", hr);
+
+    var.vt = VT_EMPTY;
+    hr = IMFMediaSource_Start(mediasource, descriptor, &GUID_NULL, &var);
+    ok(hr == S_OK, "Failed to start media source, hr %#x.\n", hr);
+
+    get_event((IMFMediaEventGenerator *)mediasource, MENewStream, &var);
+    ok(var.vt == VT_UNKNOWN, "Unexpected value type %u from MENewStream event.\n", var.vt);
+    video_stream = (IMFMediaStream *)var.punkVal;
+
+    get_event((IMFMediaEventGenerator *)mediasource, MESourceStarted, NULL);
+
+    /* Request samples, our file is 10 frames at 25fps */
+    get_event((IMFMediaEventGenerator *)video_stream, MEStreamStarted, NULL);
+    sample_count = 10;
+
+    /* Request one beyond EOS, otherwise EndOfStream isn't queued. */
+    for (i = 0; i <= sample_count; ++i)
+    {
+        hr = IMFMediaStream_RequestSample(video_stream, NULL);
+        if (i == sample_count)
+            break;
+        ok(hr == S_OK, "Failed to request sample %u, hr %#x.\n", i + 1, hr);
+        if (hr != S_OK)
+            break;
+    }
+
+    for (i = 0; i < sample_count; ++i)
+    {
+        static const LONGLONG MILLI_TO_100_NANO = 10000;
+        LONGLONG duration, time;
+        DWORD buffer_count;
+        IMFSample *sample;
+        BOOL ret;
+
+        ret = get_event((IMFMediaEventGenerator *)video_stream, MEMediaSample, &var);
+        ok(ret, "Sample %u not received.\n", i + 1);
+        if (!ret)
+            break;
+
+        ok(var.vt == VT_UNKNOWN, "Unexpected value type %u from MEMediaSample event.\n", var.vt);
+        sample = (IMFSample *)var.punkVal;
+
+        hr = IMFSample_GetBufferCount(sample, &buffer_count);
+        ok(hr == S_OK, "Failed to get buffer count, hr %#x.\n", hr);
+        ok(buffer_count == 1, "Unexpected buffer count %u.\n", buffer_count);
+
+        hr = IMFSample_GetSampleDuration(sample, &duration);
+        ok(hr == S_OK, "Failed to get sample duration, hr %#x.\n", hr);
+        ok(duration == 40 * MILLI_TO_100_NANO, "Unexpected duration %s.\n", wine_dbgstr_longlong(duration));
+
+        hr = IMFSample_GetSampleTime(sample, &time);
+        ok(hr == S_OK, "Failed to get sample time, hr %#x.\n", hr);
+        ok(time == i * 40 * MILLI_TO_100_NANO, "Unexpected time %s.\n", wine_dbgstr_longlong(time));
+
+        IMFSample_Release(sample);
+    }
+
+    if (i == sample_count)
+        get_event((IMFMediaEventGenerator *)video_stream, MEEndOfStream, NULL);
+
+    hr = IMFMediaStream_RequestSample(video_stream, NULL);
+    ok(hr == MF_E_END_OF_STREAM, "Unexpected hr %#x.\n", hr);
+    IMFMediaStream_Release(video_stream);
+
+    get_event((IMFMediaEventGenerator *)mediasource, MEEndOfPresentation, NULL);
 
     IMFMediaTypeHandler_Release(handler);
-    IMFStreamDescriptor_Release(sd);
+
+    hr = IMFMediaSource_Shutdown(mediasource);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    hr = IMFMediaSource_CreatePresentationDescriptor(mediasource, NULL);
+    ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#x.\n", hr);
+
+skip_source_tests:
 
     IMFPresentationDescriptor_Release(descriptor);
     IMFMediaSource_Release(mediasource);
@@ -526,6 +655,7 @@ static void init_functions(void)
 #define X(f) p##f = (void*)GetProcAddress(mod, #f)
     X(MFAddPeriodicCallback);
     X(MFAllocateSerialWorkQueue);
+    X(MFAllocateWorkQueueEx);
     X(MFCopyImage);
     X(MFCreateDXGIDeviceManager);
     X(MFCreateSourceResolver);
@@ -541,12 +671,16 @@ static void init_functions(void)
     X(MFTRegisterLocalByCLSID);
     X(MFTUnregisterLocal);
     X(MFTUnregisterLocalByCLSID);
-#undef X
 
     if ((mod = LoadLibraryA("d3d11.dll")))
     {
-        pD3D11CreateDevice = (void *)GetProcAddress(mod, "D3D11CreateDevice");
+        X(D3D11CreateDevice);
     }
+
+    mod = GetModuleHandleA("ole32.dll");
+
+    X(CoGetApartmentType);
+#undef X
 
     is_win8_plus = pMFPutWaitingWorkItem != NULL;
 }
@@ -1340,6 +1474,7 @@ static void test_MFCreateMFByteStreamOnStream(void)
 static void test_file_stream(void)
 {
     IMFByteStream *bytestream, *bytestream2;
+    QWORD bytestream_length, position;
     IMFAttributes *attributes = NULL;
     MF_ATTRIBUTE_TYPE item_type;
     WCHAR pathW[MAX_PATH];
@@ -1348,6 +1483,7 @@ static void test_file_stream(void)
     IUnknown *unk;
     HRESULT hr;
     WCHAR *str;
+    BOOL eos;
 
     static const WCHAR newfilename[] = {'n','e','w','.','m','p','4',0};
 
@@ -1404,6 +1540,32 @@ static void test_file_stream(void)
     ok(item_type == MF_ATTRIBUTE_BLOB, "Unexpected item type.\n");
 
     IMFAttributes_Release(attributes);
+
+    /* Length. */
+    hr = IMFByteStream_GetLength(bytestream, NULL);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    bytestream_length = 0;
+    hr = IMFByteStream_GetLength(bytestream, &bytestream_length);
+    ok(hr == S_OK, "Failed to get bytestream length, hr %#x.\n", hr);
+    ok(bytestream_length > 0, "Unexpected bytestream length %s.\n", wine_dbgstr_longlong(bytestream_length));
+
+    hr = IMFByteStream_SetCurrentPosition(bytestream, bytestream_length);
+    ok(hr == S_OK, "Failed to set bytestream position, hr %#x.\n", hr);
+
+    hr = IMFByteStream_IsEndOfStream(bytestream, &eos);
+    ok(hr == S_OK, "Failed query end of stream, hr %#x.\n", hr);
+    ok(eos == TRUE, "Unexpected IsEndOfStream result, %u.\n", eos);
+
+    hr = IMFByteStream_SetCurrentPosition(bytestream, 2 * bytestream_length);
+    ok(hr == S_OK, "Failed to set bytestream position, hr %#x.\n", hr);
+
+    hr = IMFByteStream_GetCurrentPosition(bytestream, NULL);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    hr = IMFByteStream_GetCurrentPosition(bytestream, &position);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(position == 2 * bytestream_length, "Unexpected position.\n");
 
     hr = MFCreateFile(MF_ACCESSMODE_READ, MF_OPENMODE_FAIL_IF_NOT_EXIST,
                       MF_FILEFLAGS_NONE, filename, &bytestream2);
@@ -2251,7 +2413,7 @@ static void test_serial_queue(void)
 
     if (!pMFAllocateSerialWorkQueue)
     {
-        skip("Serial queues are not supported.\n");
+        win_skip("Serial queues are not supported.\n");
         return;
     }
 
@@ -3926,11 +4088,153 @@ static void test_MFTRegisterLocal(void)
     ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
 }
 
+static void test_queue_com(void)
+{
+    static int system_queues[] =
+    {
+        MFASYNC_CALLBACK_QUEUE_STANDARD,
+        MFASYNC_CALLBACK_QUEUE_RT,
+        MFASYNC_CALLBACK_QUEUE_IO,
+        MFASYNC_CALLBACK_QUEUE_TIMER,
+        MFASYNC_CALLBACK_QUEUE_MULTITHREADED,
+        MFASYNC_CALLBACK_QUEUE_LONG_FUNCTION,
+    };
+
+    static int user_queues[] =
+    {
+        MF_STANDARD_WORKQUEUE,
+        MF_WINDOW_WORKQUEUE,
+        MF_MULTITHREADED_WORKQUEUE,
+    };
+
+    char path_name[MAX_PATH];
+    PROCESS_INFORMATION info;
+    STARTUPINFOA startup;
+    char **argv;
+    int i;
+
+    if (!pCoGetApartmentType)
+    {
+        win_skip("CoGetApartmentType() is not available.\n");
+        return;
+    }
+
+    winetest_get_mainargs(&argv);
+
+    for (i = 0; i < ARRAY_SIZE(system_queues); ++i)
+    {
+        memset(&startup, 0, sizeof(startup));
+        startup.cb = sizeof(startup);
+        sprintf(path_name, "%s mfplat s%d", argv[0], system_queues[i]);
+        ok(CreateProcessA( NULL, path_name, NULL, NULL, FALSE, 0, NULL, NULL, &startup, &info),
+                "CreateProcess failed.\n" );
+        winetest_wait_child_process(info.hProcess);
+        CloseHandle(info.hProcess);
+        CloseHandle(info.hThread);
+    }
+
+    for (i = 0; i < ARRAY_SIZE(user_queues); ++i)
+    {
+        memset(&startup, 0, sizeof(startup));
+        startup.cb = sizeof(startup);
+        sprintf(path_name, "%s mfplat u%d", argv[0], user_queues[i]);
+        ok(CreateProcessA( NULL, path_name, NULL, NULL, FALSE, 0, NULL, NULL, &startup, &info),
+                "CreateProcess failed.\n" );
+        winetest_wait_child_process(info.hProcess);
+        CloseHandle(info.hProcess);
+        CloseHandle(info.hThread);
+    }
+}
+
+static HRESULT WINAPI test_queue_com_state_callback_Invoke(IMFAsyncCallback *iface, IMFAsyncResult *result)
+{
+    struct test_callback *callback = impl_from_IMFAsyncCallback(iface);
+    APTTYPEQUALIFIER qualifier;
+    APTTYPE com_type;
+    HRESULT hr;
+
+    hr = pCoGetApartmentType(&com_type, &qualifier);
+    ok(SUCCEEDED(hr), "Failed to get apartment type, hr %#x.\n", hr);
+    if (SUCCEEDED(hr))
+    {
+    todo_wine {
+        if (callback->param == MFASYNC_CALLBACK_QUEUE_LONG_FUNCTION)
+            ok(com_type == APTTYPE_MAINSTA && qualifier == APTTYPEQUALIFIER_NONE,
+                "%#x: unexpected type %u, qualifier %u.\n", callback->param, com_type, qualifier);
+        else
+            ok(com_type == APTTYPE_MTA && qualifier == APTTYPEQUALIFIER_NONE,
+                "%#x: unexpected type %u, qualifier %u.\n", callback->param, com_type, qualifier);
+    }
+    }
+
+    SetEvent(callback->event);
+    return S_OK;
+}
+
+static const IMFAsyncCallbackVtbl test_queue_com_state_callback_vtbl =
+{
+    testcallback_QueryInterface,
+    testcallback_AddRef,
+    testcallback_Release,
+    testcallback_GetParameters,
+    test_queue_com_state_callback_Invoke,
+};
+
+static void test_queue_com_state(const char *name)
+{
+    struct test_callback callback = { { &test_queue_com_state_callback_vtbl } };
+    DWORD queue, queue_type;
+    HRESULT hr;
+
+    callback.event = CreateEventA(NULL, FALSE, FALSE, NULL);
+
+    hr = MFStartup(MF_VERSION, MFSTARTUP_FULL);
+    ok(hr == S_OK, "Failed to start up, hr %#x.\n", hr);
+
+    if (name[0] == 's')
+    {
+        callback.param = name[1] - '0';
+        hr = MFPutWorkItem(callback.param, &callback.IMFAsyncCallback_iface, NULL);
+        ok(SUCCEEDED(hr), "Failed to queue work item, hr %#x.\n", hr);
+        WaitForSingleObject(callback.event, INFINITE);
+    }
+    else if (name[0] == 'u')
+    {
+        queue_type = name[1] - '0';
+
+        hr = pMFAllocateWorkQueueEx(queue_type, &queue);
+        ok(hr == S_OK, "Failed to allocate a queue, hr %#x.\n", hr);
+
+        callback.param = queue;
+        hr = MFPutWorkItem(queue, &callback.IMFAsyncCallback_iface, NULL);
+        ok(SUCCEEDED(hr), "Failed to queue work item, hr %#x.\n", hr);
+        WaitForSingleObject(callback.event, INFINITE);
+
+        hr = MFUnlockWorkQueue(queue);
+        ok(hr == S_OK, "Failed to unlock the queue, hr %#x.\n", hr);
+    }
+
+    CloseHandle(callback.event);
+
+    hr = MFShutdown();
+    ok(hr == S_OK, "Failed to shut down, hr %#x.\n", hr);
+}
+
 START_TEST(mfplat)
 {
-    CoInitialize(NULL);
+    char **argv;
+    int argc;
 
     init_functions();
+
+    argc = winetest_get_mainargs(&argv);
+    if (argc >= 3)
+    {
+        test_queue_com_state(argv[2]);
+        return;
+    }
+
+    CoInitialize(NULL);
 
     test_startup();
     test_register();
@@ -3966,6 +4270,7 @@ START_TEST(mfplat)
     test_dxgi_device_manager();
     test_MFCreateTransformActivate();
     test_MFTRegisterLocal();
+    test_queue_com();
 
     CoUninitialize();
 }

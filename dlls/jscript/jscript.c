@@ -168,21 +168,42 @@ static HRESULT WINAPI JScriptError_GetExceptionInfo(IActiveScriptError *iface, E
 
     memset(excepinfo, 0, sizeof(*excepinfo));
     excepinfo->scode = This->ei.error;
+    if(This->ei.source)
+        jsstr_to_bstr(This->ei.source, &excepinfo->bstrSource);
+    if(This->ei.message)
+        jsstr_to_bstr(This->ei.message, &excepinfo->bstrDescription);
     return S_OK;
 }
 
 static HRESULT WINAPI JScriptError_GetSourcePosition(IActiveScriptError *iface, DWORD *source_context, ULONG *line, LONG *character)
 {
     JScriptError *This = impl_from_IActiveScriptError(iface);
+    bytecode_t *code = This->ei.code;
+    const WCHAR *nl, *p;
+    unsigned l;
 
-    FIXME("(%p)->(%p %p %p)\n", This, source_context, line, character);
+    TRACE("(%p)->(%p %p %p)\n", This, source_context, line, character);
+
+    if(!This->ei.code) {
+        FIXME("unknown position\n");
+        return E_FAIL;
+    }
 
     if(source_context)
-        *source_context = 0;
+        *source_context = This->ei.code->source_context;
+    if(!line && !character)
+        return S_OK;
+
+    l = code->start_line;
+    for(nl = p = code->source; p < code->source + This->ei.loc; p++) {
+        if(*p != '\n') continue;
+        l++;
+        nl = p + 1;
+    }
     if(line)
-        *line = 0;
+        *line = l;
     if(character)
-        *character = 0;
+        *character = code->source + This->ei.loc - nl;
     return S_OK;
 }
 
@@ -190,12 +211,17 @@ static HRESULT WINAPI JScriptError_GetSourceLineText(IActiveScriptError *iface, 
 {
     JScriptError *This = impl_from_IActiveScriptError(iface);
 
-    FIXME("(%p)->(%p)\n", This, source);
+    TRACE("(%p)->(%p)\n", This, source);
 
     if(!source)
         return E_POINTER;
-    *source = NULL;
-    return E_FAIL;
+
+    if(!This->ei.line) {
+        *source = NULL;
+        return E_FAIL;
+    }
+
+    return jsstr_to_bstr(This->ei.line, source);
 }
 
 static const IActiveScriptErrorVtbl JScriptErrorVtbl = {
@@ -213,6 +239,23 @@ void reset_ei(jsexcept_t *ei)
     if(ei->valid_value) {
         jsval_release(ei->value);
         ei->valid_value = FALSE;
+    }
+    if(ei->code) {
+        release_bytecode(ei->code);
+        ei->code = NULL;
+        ei->loc = 0;
+    }
+    if(ei->source) {
+        jsstr_release(ei->source);
+        ei->source = NULL;
+    }
+    if(ei->message) {
+        jsstr_release(ei->message);
+        ei->message = NULL;
+    }
+    if(ei->line) {
+        jsstr_release(ei->line);
+        ei->line = NULL;
     }
 }
 

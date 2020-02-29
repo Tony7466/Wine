@@ -926,7 +926,7 @@
 @ stdcall LoadLibraryExA( str long long)
 @ stdcall LoadLibraryExW(wstr long long)
 @ stdcall LoadLibraryW(wstr)
-# @ stub LoadPackagedLibrary
+@ stdcall LoadPackagedLibrary(wstr long)
 @ stdcall LoadResource(long long)
 @ stdcall LoadStringA(long long ptr long)
 @ stub LoadStringBaseExW
@@ -1213,7 +1213,7 @@
 # @ stub QueryStateContainerCreatedNew
 # @ stub QueryStateContainerItemInfo
 @ stdcall QueryThreadCycleTime(long ptr) kernel32.QueryThreadCycleTime
-@ stub QueryThreadpoolStackInformation
+@ stdcall QueryThreadpoolStackInformation(ptr ptr)
 @ stdcall QueryUnbiasedInterruptTime(ptr) ntdll.RtlQueryUnbiasedInterruptTime
 # @ stub QueryUnbiasedInterruptTimePrecise
 # @ stub QueryVirtualMemoryInformation
@@ -1492,7 +1492,7 @@
 @ stdcall SetThreadStackGuarantee(ptr)
 @ stdcall SetThreadToken(ptr ptr)
 @ stdcall SetThreadUILanguage(long)
-@ stub SetThreadpoolStackInformation
+@ stdcall SetThreadpoolStackInformation(ptr ptr)
 @ stdcall SetThreadpoolThreadMaximum(ptr long) ntdll.TpSetPoolMaxThreads
 @ stdcall SetThreadpoolThreadMinimum(ptr long) ntdll.TpSetPoolMinThreads
 @ stdcall SetThreadpoolTimer(ptr ptr long long) ntdll.TpSetTimer
@@ -1515,7 +1515,7 @@
 @ stdcall SleepConditionVariableSRW(ptr ptr long long)
 @ stdcall SleepEx(long long)
 @ stub SpecialMBToWC
-@ stub StartThreadpoolIo
+@ stdcall StartThreadpoolIo(ptr) ntdll.TpStartAsyncIoOperation
 # @ stub StmAlignSize
 # @ stub StmAllocateFlat
 # @ stub StmCoalesceChunks

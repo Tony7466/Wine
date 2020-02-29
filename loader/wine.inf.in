@@ -30,7 +30,7 @@ signature="$CHICAGO$"
 RegisterDlls=RegisterDllsSection
 WineFakeDlls=FakeDllsWin32,FakeDlls
 UpdateInis=SystemIni
-CopyFiles=l_intl_section, inf_section
+CopyFiles=InfFiles,NlsFiles
 AddReg=\
     Classes,\
     ContentIndex,\
@@ -54,7 +54,7 @@ AddReg=\
 RegisterDlls=RegisterDllsSection
 WineFakeDlls=FakeDllsWin32,FakeDlls
 UpdateInis=SystemIni
-CopyFiles=l_intl_section, inf_section
+CopyFiles=InfFiles,NlsFiles
 AddReg=\
     Classes,\
     ContentIndex,\
@@ -80,7 +80,7 @@ RegisterDlls=RegisterDllsSection
 WineFakeDlls=FakeDllsWin64,FakeDlls
 WinePreInstall=Wow64
 UpdateInis=SystemIni
-CopyFiles=l_intl_section, inf_section
+CopyFiles=InfFiles,NlsFiles
 AddReg=\
     Classes,\
     ContentIndex,\
@@ -107,7 +107,7 @@ RegisterDlls=RegisterDllsSection
 WineFakeDlls=FakeDllsWin64,FakeDlls
 WinePreInstall=Wow64
 UpdateInis=SystemIni
-CopyFiles=l_intl_section, inf_section
+CopyFiles=InfFiles,NlsFiles
 AddReg=\
     Classes,\
     ContentIndex,\
@@ -132,7 +132,7 @@ AddReg=\
 [Wow64Install]
 RegisterDlls=RegisterDllsSection
 WineFakeDlls=FakeDllsWin32,FakeDllsWow64
-CopyFiles=l_intl_section
+CopyFiles=NlsFiles
 AddReg=\
     CurrentVersion,\
     CurrentVersionWow64,\
@@ -765,7 +765,6 @@ HKLM,SOFTWARE\Microsoft\Active Setup\Installed Components\{6BF52A52-394A-11d3-B1
 
 [Nls]
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"37",,"c_037.nls"
-HKLM,System\CurrentControlSet\Control\Nls\Codepage,"424",,"c_424.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"437",,"c_437.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"500",,"c_500.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"737",,"c_737.nls"
@@ -773,7 +772,6 @@ HKLM,System\CurrentControlSet\Control\Nls\Codepage,"775",,"c_775.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"850",,"c_850.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"852",,"c_852.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"855",,"c_855.nls"
-HKLM,System\CurrentControlSet\Control\Nls\Codepage,"856",,"c_856.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"857",,"c_857.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"860",,"c_860.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"861",,"c_861.nls"
@@ -785,12 +783,10 @@ HKLM,System\CurrentControlSet\Control\Nls\Codepage,"866",,"c_866.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"869",,"c_869.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"874",,"c_874.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"875",,"c_875.nls"
-HKLM,System\CurrentControlSet\Control\Nls\Codepage,"878",,"c_878.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"932",,"c_932.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"936",,"c_936.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"949",,"c_949.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"950",,"c_950.nls"
-HKLM,System\CurrentControlSet\Control\Nls\Codepage,"1006",,"c_1006.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"1026",,"c_1026.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"1250",,"c_1250.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"1251",,"c_1251.nls"
@@ -831,12 +827,8 @@ HKLM,System\CurrentControlSet\Control\Nls\Codepage,"28596",,"c_28596.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"28597",,"c_28597.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"28598",,"c_28598.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"28599",,"c_28599.nls"
-HKLM,System\CurrentControlSet\Control\Nls\Codepage,"28600",,"c_28600.nls"
-HKLM,System\CurrentControlSet\Control\Nls\Codepage,"28601",,"c_28601.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"28603",,"c_28603.nls"
-HKLM,System\CurrentControlSet\Control\Nls\Codepage,"28604",,"c_28604.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Codepage,"28605",,"c_28605.nls"
-HKLM,System\CurrentControlSet\Control\Nls\Codepage,"28606",,"c_28606.nls"
 
 HKLM,System\CurrentControlSet\Control\Nls\Language,"0401",,"l_intl.nls"
 HKLM,System\CurrentControlSet\Control\Nls\Language,"0402",,"l_intl.nls"
@@ -3139,6 +3131,28 @@ HKLM,%CurrentVersionNT%\Time Zones\GTB Standard Time,"MUI_Dlt",,"@tzres.dll,-241
 HKLM,%CurrentVersionNT%\Time Zones\GTB Standard Time,"MUI_Std",,"@tzres.dll,-24192"
 HKLM,%CurrentVersionNT%\Time Zones\GTB Standard Time,"Std",,"GTB Standard Time"
 HKLM,%CurrentVersionNT%\Time Zones\GTB Standard Time,"TZI",1,88,ff,ff,ff,00,00,00,00,c4,ff,ff,ff,00,00,0a,00,00,00,05,00,04,00,00,00,00,00,00,00,00,00,03,00,00,00,05,00,03,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time,"Display",,"America/Port-au-Prince"
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time,"Dlt",,"Haiti Daylight Time"
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time,"MUI_Dlt",,"@tzres.dll,-2897"
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time,"MUI_Std",,"@tzres.dll,-2896"
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time,"Std",,"Haiti Standard Time"
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time,"TZI",1,2c,01,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0b,00,00,00,01,00,02,00,00,00,00,00,00,00,00,00,03,00,00,00,02,00,02,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2004",1,2c,01,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2005",1,2c,01,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0a,00,00,00,05,00,00,00,00,00,00,00,00,00,00,00,04,00,00,00,01,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2006",1,2c,01,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0a,00,00,00,05,00,00,00,00,00,00,00,00,00,00,00,04,00,00,00,01,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2007",1,2c,01,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2008",1,2c,01,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2009",1,2c,01,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2010",1,2c,01,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2011",1,2c,01,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2012",1,2c,01,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0b,00,00,00,01,00,02,00,00,00,00,00,00,00,00,00,03,00,00,00,02,00,02,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2013",1,2c,01,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0b,00,00,00,01,00,02,00,00,00,00,00,00,00,00,00,03,00,00,00,02,00,02,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2014",1,2c,01,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0b,00,00,00,01,00,02,00,00,00,00,00,00,00,00,00,03,00,00,00,02,00,02,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2015",1,2c,01,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0b,00,00,00,01,00,02,00,00,00,00,00,00,00,00,00,03,00,00,00,02,00,02,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2016",1,2c,01,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2017",1,2c,01,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0b,00,00,00,01,00,02,00,00,00,00,00,00,00,00,00,03,00,00,00,02,00,02,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"FirstEntry",0x10001,"2004"
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"LastEntry",0x10001,"2017"
 HKLM,%CurrentVersionNT%\Time Zones\Hawaiian Standard Time,"Display",,"Pacific/Honolulu"
 HKLM,%CurrentVersionNT%\Time Zones\Hawaiian Standard Time,"Dlt",,"Hawaiian Daylight Time"
 HKLM,%CurrentVersionNT%\Time Zones\Hawaiian Standard Time,"MUI_Dlt",,"@tzres.dll,-53377"
@@ -3857,13 +3871,81 @@ HKLM,Software\Wine\LicenseInformation,"Shell-InBoxGames-Solitaire-EnableGame",0x
 HKLM,Software\Wine\LicenseInformation,"Shell-InBoxGames-SpiderSolitaire-EnableGame",0x10001,0x00000001
 HKLM,Software\Wine\LicenseInformation,"Shell-PremiumInBoxGames-Chess-EnableGame",0x10001,0x00000001
 
-[DestinationDirs]
-l_intl_section = 11
-inf_section = 17
-
-[l_intl_section]
-l_intl.nls
-
-[inf_section]
+[InfFiles]
 winebus.inf
 winehid.inf
+
+[NlsFiles]
+c_037.nls
+c_10000.nls
+c_10001.nls
+c_10002.nls
+c_10003.nls
+c_10004.nls
+c_10005.nls
+c_10006.nls
+c_10007.nls
+c_10008.nls
+c_10010.nls
+c_10017.nls
+c_10021.nls
+c_10029.nls
+c_10079.nls
+c_10081.nls
+c_10082.nls
+c_1026.nls
+c_1250.nls
+c_1251.nls
+c_1252.nls
+c_1253.nls
+c_1254.nls
+c_1255.nls
+c_1256.nls
+c_1257.nls
+c_1258.nls
+c_1361.nls
+c_20127.nls
+c_20866.nls
+c_20932.nls
+c_21866.nls
+c_28591.nls
+c_28592.nls
+c_28593.nls
+c_28594.nls
+c_28595.nls
+c_28596.nls
+c_28597.nls
+c_28598.nls
+c_28599.nls
+c_28603.nls
+c_28605.nls
+c_437.nls
+c_500.nls
+c_737.nls
+c_775.nls
+c_850.nls
+c_852.nls
+c_855.nls
+c_857.nls
+c_860.nls
+c_861.nls
+c_862.nls
+c_863.nls
+c_864.nls
+c_865.nls
+c_866.nls
+c_869.nls
+c_874.nls
+c_875.nls
+c_932.nls
+c_936.nls
+c_949.nls
+c_950.nls
+l_intl.nls
+
+[WineSourceDirs]
+NlsFiles=nls
+
+[DestinationDirs]
+InfFiles = 17
+NlsFiles = 11
