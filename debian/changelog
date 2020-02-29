@@ -1,3 +1,14 @@
+wine-development (5.2-1) UNRELEASED; urgency=medium
+
+  * New upstream release 5.2, released Feb 16, 2020.
+    - More compatible codepage mapping tables.
+    - Support for using the null display driver as a real driver.
+    - Better UTF-8 support in the Resource and Message Compilers.
+    - Fixes for using ucrtbase as C runtime.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 29 Feb 2020 22:06:42 +0000
+
 wine-development (5.1-2) unstable; urgency=medium
 
   * Fix build failure on arm64.
