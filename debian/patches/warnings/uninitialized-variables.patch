@@ -139,7 +139,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/dlls/user32/sysparams.c
 +++ b/dlls/user32/sysparams.c
-@@ -1835,7 +1835,7 @@ BOOL WINAPI SystemParametersInfoW( UINT
+@@ -1853,7 +1853,7 @@ BOOL WINAPI SystemParametersInfoW( UINT
      case SPI_GETNONCLIENTMETRICS:
      {
          LPNONCLIENTMETRICSW lpnm = pvParam;

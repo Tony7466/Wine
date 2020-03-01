@@ -1,10 +1,15 @@
 debian/control
+debian/unicode/CodpageFiles
 
+wine
 config.*
 con*.file
 configure
 configure.tmp
+tools/makedep
 tools/config.*
+include/stamp-h
+include/config.h
 include/config.h.in
 
 # zlib
@@ -25,15 +30,13 @@ server/request.generated
 include/wine/server_protocol.h
 
 # automatically generated unicode files
-loader/l_intl.nls
+nls/*.nls
 libs/port/wctype.c
 libs/port/casemap.c
 libs/port/compose.c
-libs/port/combclass.c
-libs/port/collation.c
-libs/port/digitmap.c
 libs/port/decompose.c
-libs/port/cptable.generated
+libs/wine/digitmap.c
+libs/wine/collation.c
 dlls/gdi32/vertical.c
 dlls/wineps.drv/vertical.c
 dlls/dwrite/bracket.c
@@ -46,6 +49,7 @@ dlls/usp10/indicsyllable.c
 dlls/usp10/linebreak.c
 dlls/usp10/mirror.c
 dlls/usp10/shaping.c
+dlls/ntdll/combclass.c
 dlls/kernel32/wctype.c
 dlls/kernel32/nameprep.c
 dlls/kernelbase/compose.c

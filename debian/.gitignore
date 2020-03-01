@@ -9,3 +9,5 @@ wine-development*
 wine32-development*
 wine64-development*
 libwine-development*
+
+unicode/CodpageFiles

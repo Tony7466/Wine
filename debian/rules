@@ -135,7 +135,6 @@ override_dh_auto_configure:
 	# output compiler information
 	$(CC) --version
 	# automatically generated files
-	./debian/scripts/generate libs/port/cptable.generated cpmap
 	./debian/scripts/generate server/trace.generated make_requests
 	./debian/scripts/generate server/request.generated make_requests
 	./tools/make_fir
@@ -237,4 +236,5 @@ override_dh_auto_clean:
 	git clean -Xdf || true
 	make -f debian/rules debian/control
 	QUILT_PATCHES=debian/patches quilt push -af || true
+	rm -f Makefile
 	dh_auto_clean

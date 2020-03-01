@@ -3,73 +3,64 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/make_unicode
 +++ b/tools/make_unicode
-@@ -21,11 +21,11 @@
+@@ -21,12 +21,12 @@
  
  use strict;
  
 -# base URLs for www.unicode.org files
-+# Locations of unicode files
- my $MAPPINGS = "http://www.unicode.org/Public/MAPPINGS";
--my $UNIDATA = "http://www.unicode.org/Public/12.1.0/ucd";
+-my $MAPPINGS = "http://www.unicode.org/Public/MAPPINGS";
+-my $UNIDATA = "http://www.unicode.org/Public/12.1.0/ucd/UCD.zip";
 -my $REPORTS = "http://www.unicode.org/reports";
 -my $RFCS = "http://www.rfc-editor.org/rfc";
+-my $MSDATA = "https://download.microsoft.com/download/C/F/7/CF713A5E-9FBC-4FD6-9246-275F65C0E498";
++# Locations of unicode files
++my $MAPPINGS = "debian/unicode/mappings";
 +my $UNIDATA = "/usr/share/unicode";
 +my $REPORTS = "debian/unicode";
-+my $RFCS = "debian";
++my $RFCS = "debian/unicode";
++my $MSDATA = "debian/unicode";
+ my $MSCODEPAGES = "$MSDATA/Windows Supported Code Page Data Files.zip";
  
  # Sort keys file
- my $SORTKEYS = "tr10/allkeys.txt";
-@@ -433,15 +433,8 @@ my %joining_forms =
+@@ -429,28 +429,17 @@ sub get_utf16($)
  sub open_data_file($$)
  {
      my ($base, $name) = @_;
 -    (my $dir = "data/$name") =~ s/\/[^\/]+$//;
++    (my $dir = "$base") =~ s/\/[^\/]+$//;
      local *FILE;
 -    unless (-f "data/$name")
--    {
--        print "Fetching $base/$name...\n";
++    unless (-f "$base/$name")
+     {
 -        system "mkdir", "-p", $dir;
--        !system "wget", "-q", "-O", "data/$name", "$base/$name" or die "cannot fetch $base/$name";
--    }
+         if ($base =~ /.*\/([^\/]+\.zip)$/)
+         {
+-            my $zip = $1;
+-            unless (-f "data/$zip")
+-            {
+-                print "Fetching $base...\n";
+-                !system "wget", "-q", "-O", "data/$zip", "$base" or die "cannot fetch $base";
+-            }
+-            !system "unzip", "-q", "-d", "data", "data/$zip", $name or die "cannot extract $name from $zip";
+-        }
+-        else
+-        {
+-            print "Fetching $base/$name...\n";
+-            !system "wget", "-q", "-O", "data/$name", "$base/$name" or die "cannot fetch $base/$name";
++            !system "unzip", "-q", "-o", "-d", "$dir", "$base", $name or die "cannot extract $name from $base";
++            $base = $dir;
+         }
+     }
 -    open FILE, "<data/$name" or die "cannot open data/$name";
 +    open FILE, "<$base/$name" or die "cannot open $base/$name";
      return *FILE;
  }
  
-@@ -2879,9 +2872,10 @@ dump_vertical( "dlls/gdi32/vertical.c" )
- dump_vertical( "dlls/wineps.drv/vertical.c" );
- dump_nameprep( "dlls/kernel32/nameprep.c" );
- 
--foreach my $file (@allfiles) { HANDLE_FILE( @{$file} ); }
-+# Skipping: unicode-data currently has no MAPPING files
-+# foreach my $file (@allfiles) { HANDLE_FILE( @{$file} ); }
- 
--output_cptable("libs/port/cptable.c");
-+output_cptable("libs/port/cptable.generated");
- 
- exit 0;
- 
---- a/libs/port/cptable.c
-+++ b/libs/port/cptable.c
-@@ -22,8 +22,9 @@
- 
- #include "wine/unicode.h"
- 
--/* Everything below this line is generated automatically by make_unicode */
--/* ### cpmap begin ### */
-+#include "cptable.generated"
-+
-+/*
- extern union cptable cptable_037;
- extern union cptable cptable_424;
- extern union cptable cptable_437;
-@@ -174,8 +175,7 @@ static const union cptable * const cptab
-     &cptable_28605,
-     &cptable_28606,
- };
--/* ### cpmap end ### */
--/* Everything above this line is generated automatically by make_unicode */
-+*/
- 
- 
- static int cmp_codepage( const void *codepage, const void *entry )
+@@ -2354,6 +2343,7 @@ sub REPLACE_IN_FILE($@)
+ chdir ".." if -f "./make_unicode";
+ load_data();
+ dump_case_mappings( "libs/port/casemap.c" );
++dump_sortkeys( "libs/wine/collation.c" );
+ dump_sortkeys( "dlls/kernelbase/collation.c" );
+ dump_compose_table( "libs/port/compose.c" );
+ dump_compose_table( "dlls/kernelbase/compose.c" );
