@@ -1,3 +1,9 @@
+wine-development (5.2-2) unstable; urgency=medium
+
+  * Add unzip to the build dependencies.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 01 Mar 2020 20:55:00 +0000
+
 wine-development (5.2-1) unstable; urgency=medium
 
   * New upstream release 5.2, released Feb 16, 2020.
