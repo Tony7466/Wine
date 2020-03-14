@@ -212,6 +212,7 @@ SOURCES = \
 	dmerror.h \
 	dmksctrl.h \
 	dmo.h \
+	dmodshow.idl \
 	dmoreg.h \
 	dmort.h \
 	dmplugin.h \
@@ -423,8 +424,14 @@ SOURCES = \
 	msvcrt/assert.h \
 	msvcrt/conio.h \
 	msvcrt/corecrt.h \
+	msvcrt/corecrt_startup.h \
 	msvcrt/corecrt_stdio_config.h \
+	msvcrt/corecrt_wctype.h \
+	msvcrt/corecrt_wio.h \
 	msvcrt/corecrt_wstdio.h \
+	msvcrt/corecrt_wstdlib.h \
+	msvcrt/corecrt_wstring.h \
+	msvcrt/corecrt_wtime.h \
 	msvcrt/crtdbg.h \
 	msvcrt/crtdefs.h \
 	msvcrt/ctype.h \

@@ -254,12 +254,18 @@ static const WCHAR prop_driverversionW[] =
     {'D','r','i','v','e','r','V','e','r','s','i','o','n',0};
 static const WCHAR prop_drivetypeW[] =
     {'D','r','i','v','e','T','y','p','e',0};
+static const WCHAR prop_embeddedcontrollermajorversionW[] =
+    {'E','m','b','e','d','d','e','d','C','o','n','t','r','o','l','l','e','r','M','a','j','o','r','V','e','r','s','i','o','n',0};
+static const WCHAR prop_embeddedcontrollerminorversionW[] =
+    {'E','m','b','e','d','d','e','d','C','o','n','t','r','o','l','l','e','r','M','i','n','o','r','V','e','r','s','i','o','n',0};
 static const WCHAR prop_familyW[] =
     {'F','a','m','i','l','y',0};
 static const WCHAR prop_filesystemW[] =
     {'F','i','l','e','S','y','s','t','e','m',0};
 static const WCHAR prop_flavorW[] =
     {'F','l','a','v','o','r',0};
+static const WCHAR prop_formfactorW[] =
+    {'F','o','r','m','F','a','c','t','o','r',0};
 static const WCHAR prop_freespaceW[] =
     {'F','r','e','e','S','p','a','c','e',0};
 static const WCHAR prop_freephysicalmemoryW[] =
@@ -424,6 +430,10 @@ static const WCHAR prop_strvalueW[] =
     {'S','t','r','i','n','g','V','a','l','u','e',0};
 static const WCHAR prop_suitemaskW[] =
     {'S','u','i','t','e','M','a','s','k',0};
+static const WCHAR prop_systembiosmajorversionW[] =
+    {'S','y','s','t','e','m','B','i','o','s','M','a','j','o','r','V','e','r','s','i','o','n',0};
+static const WCHAR prop_systembiosminorversionW[] =
+    {'S','y','s','t','e','m','B','i','o','s','M','i','n','o','r','V','e','r','s','i','o','n',0};
 static const WCHAR prop_systemdirectoryW[] =
     {'S','y','s','t','e','m','D','i','r','e','c','t','o','r','y',0};
 static const WCHAR prop_systemdriveW[] =
@@ -496,6 +506,8 @@ static const struct column col_bios[] =
 {
     { prop_currentlanguageW,    CIM_STRING },
     { prop_descriptionW,        CIM_STRING },
+    { prop_embeddedcontrollermajorversionW, CIM_UINT8 },
+    { prop_embeddedcontrollerminorversionW, CIM_UINT8 },
     { prop_identificationcodeW, CIM_STRING },
     { prop_manufacturerW,       CIM_STRING|COL_FLAG_DYNAMIC },
     { prop_nameW,               CIM_STRING },
@@ -504,6 +516,8 @@ static const struct column col_bios[] =
     { prop_smbiosbiosversionW,  CIM_STRING|COL_FLAG_DYNAMIC },
     { prop_smbiosmajorversionW, CIM_UINT16 },
     { prop_smbiosminorversionW, CIM_UINT16 },
+    { prop_systembiosmajorversionW, CIM_UINT8 },
+    { prop_systembiosminorversionW, CIM_UINT8 },
     { prop_versionW,            CIM_STRING|COL_FLAG_KEY }
 };
 static const struct column col_cdromdrive[] =
@@ -543,6 +557,7 @@ static const struct column col_datafile[] =
 };
 static const struct column col_desktopmonitor[] =
 {
+    { prop_nameW,                  CIM_STRING },
     { prop_pixelsperxlogicalinchW, CIM_UINT32 }
 };
 static const struct column col_directory[] =
@@ -691,6 +706,7 @@ static const struct column col_physicalmemory[] =
     { prop_capacityW,             CIM_UINT64 },
     { prop_configuredclockspeedW, CIM_UINT32 },
     { prop_devicelocatorW,        CIM_STRING },
+    { prop_formfactorW,           CIM_UINT16 },
     { prop_memorytypeW,           CIM_UINT16 },
     { prop_partnumberW,           CIM_STRING }
 };
@@ -975,6 +991,8 @@ struct record_bios
 {
     const WCHAR *currentlanguage;
     const WCHAR *description;
+    UINT8        ecmajorversion;
+    UINT8        ecminorversion;
     const WCHAR *identificationcode;
     const WCHAR *manufacturer;
     const WCHAR *name;
@@ -983,6 +1001,8 @@ struct record_bios
     const WCHAR *smbiosbiosversion;
     UINT16       smbiosmajorversion;
     UINT16       smbiosminorversion;
+    UINT8        systembiosmajorversion;
+    UINT8        systembiosminorversion;
     const WCHAR *version;
 };
 struct record_cdromdrive
@@ -1022,6 +1042,7 @@ struct record_datafile
 };
 struct record_desktopmonitor
 {
+    const WCHAR *name;
     UINT32       pixelsperxlogicalinch;
 };
 struct record_directory
@@ -1170,6 +1191,7 @@ struct record_physicalmemory
     UINT64       capacity;
     UINT32       configuredclockspeed;
     const WCHAR *devicelocator;
+    UINT16       formfactor;
     UINT16       memorytype;
     const WCHAR *partnumber;
 };
@@ -1495,6 +1517,11 @@ struct smbios_bios
     BYTE                 date;
     BYTE                 size;
     UINT64               characteristics;
+    BYTE                 characteristics_ext[2];
+    BYTE                 system_bios_major_release;
+    BYTE                 system_bios_minor_release;
+    BYTE                 ec_firmware_major_release;
+    BYTE                 ec_firmware_minor_release;
 };
 
 struct smbios_chassis
@@ -1729,6 +1756,54 @@ static WCHAR *get_bios_smbiosbiosversion( const char *buf, UINT len )
     return ret;
 }
 
+static BYTE get_bios_ec_firmware_major_release( const char *buf, UINT len )
+{
+    const struct smbios_header *hdr;
+    const struct smbios_bios *bios;
+
+    if (!(hdr = find_smbios_entry( SMBIOS_TYPE_BIOS, buf, len ))) return 0xFF;
+
+    bios = (const struct smbios_bios *)hdr;
+    if (bios->hdr.length >= 0x18) return bios->ec_firmware_major_release;
+    else return 0xFF;
+}
+
+static BYTE get_bios_ec_firmware_minor_release( const char *buf, UINT len )
+{
+    const struct smbios_header *hdr;
+    const struct smbios_bios *bios;
+
+    if (!(hdr = find_smbios_entry( SMBIOS_TYPE_BIOS, buf, len ))) return 0xFF;
+
+    bios = (const struct smbios_bios *)hdr;
+    if (bios->hdr.length >= 0x18) return bios->ec_firmware_minor_release;
+    else return 0xFF;
+}
+
+static BYTE get_bios_system_bios_major_release( const char *buf, UINT len )
+{
+    const struct smbios_header *hdr;
+    const struct smbios_bios *bios;
+
+    if (!(hdr = find_smbios_entry( SMBIOS_TYPE_BIOS, buf, len ))) return 0xFF;
+
+    bios = (const struct smbios_bios *)hdr;
+    if (bios->hdr.length >= 0x18) return bios->system_bios_major_release;
+    else return 0xFF;
+}
+
+static BYTE get_bios_system_bios_minor_release( const char *buf, UINT len )
+{
+    const struct smbios_header *hdr;
+    const struct smbios_bios *bios;
+
+    if (!(hdr = find_smbios_entry( SMBIOS_TYPE_BIOS, buf, len ))) return 0xFF;
+
+    bios = (const struct smbios_bios *)hdr;
+    if (bios->hdr.length >= 0x18) return bios->system_bios_minor_release;
+    else return 0xFF;
+}
+
 static enum fill_status fill_bios( struct table *table, const struct expr *cond )
 {
     struct record_bios *rec;
@@ -1745,6 +1820,8 @@ static enum fill_status fill_bios( struct table *table, const struct expr *cond 
     rec = (struct record_bios *)table->data;
     rec->currentlanguage    = NULL;
     rec->description        = bios_descriptionW;
+    rec->ecmajorversion     = get_bios_ec_firmware_major_release( buf, len );
+    rec->ecminorversion     = get_bios_ec_firmware_minor_release( buf, len );
     rec->identificationcode = NULL;
     rec->manufacturer       = get_bios_manufacturer( buf, len );
     rec->name               = bios_descriptionW;
@@ -1753,6 +1830,8 @@ static enum fill_status fill_bios( struct table *table, const struct expr *cond 
     rec->smbiosbiosversion  = get_bios_smbiosbiosversion( buf, len );
     rec->smbiosmajorversion = get_bios_smbiosmajorversion( buf, len );
     rec->smbiosminorversion = get_bios_smbiosminorversion( buf, len );
+    rec->systembiosmajorversion = get_bios_system_bios_major_release( buf, len );
+    rec->systembiosminorversion = get_bios_system_bios_minor_release( buf, len );
     rec->version            = bios_versionW;
     if (!match_row( table, row, cond, &status )) free_row_values( table, row );
     else row++;
@@ -2413,6 +2492,7 @@ static enum fill_status fill_desktopmonitor( struct table *table, const struct e
     if (!resize_table( table, 1, sizeof(*rec) )) return FILL_STATUS_FAILED;
 
     rec = (struct record_desktopmonitor *)table->data;
+    rec->name                  = L"Generic Non-PnP Monitor";
     rec->pixelsperxlogicalinch = get_pixelsperxlogicalinch();
 
     if (match_row( table, row, cond, &status )) row++;
@@ -3365,6 +3445,7 @@ static enum fill_status fill_physicalmemory( struct table *table, const struct e
     rec->capacity             = get_total_physical_memory();
     rec->configuredclockspeed = 0;
     rec->devicelocator        = dimm0W;
+    rec->formfactor           = 8; /* DIMM */
     rec->memorytype           = 9; /* RAM */
     rec->partnumber           = NULL;
     if (!match_row( table, row, cond, &status )) free_row_values( table, row );

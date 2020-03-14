@@ -139,6 +139,7 @@ static const char* app_loader_template =
     "exec \"$WINELOADER\" \"$apppath\" \"$@\"\n"
 ;
 
+static const char *output_file_name;
 static int keep_generated = 0;
 static strarray* tmp_files;
 #ifdef HAVE_SIGSET_T
@@ -261,6 +262,11 @@ static enum target_platform build_platform = PLATFORM_WINDOWS;
 #else
 static enum target_platform build_platform = PLATFORM_UNSPECIFIED;
 #endif
+
+static void cleanup_output_files(void)
+{
+    if (output_file_name) unlink( output_file_name );
+}
 
 static void clean_temp_files(void)
 {
@@ -1151,7 +1157,7 @@ static void build(struct options* opts)
     /* run winebuild to generate the .spec.o file */
     spec_args = get_winebuild_args( opts );
     strarray_add( spec_args, strmake( "--cc-cmd=%s", build_tool_name( opts, "gcc", CC )));
-    strarray_add( spec_args, strmake( "--ld-cmd=%s", build_tool_name( opts, "ld", LD )));
+    if (!is_pe) strarray_add( spec_args, strmake( "--ld-cmd=%s", build_tool_name( opts, "ld", LD )));
 
     spec_o_name = get_temp_file(output_name, ".spec.o");
     if (opts->force_pointer_size)
@@ -1254,7 +1260,7 @@ static void build(struct options* opts)
     if (is_pe)
     {
         for (j = 0; j < opts->delayimports->size; j++)
-            strarray_add(spec_args, strmake("-Wl,-delayload,%s", opts->delayimports->base[j]));
+            strarray_add(link_args, strmake("-Wl,-delayload,%s", opts->delayimports->base[j]));
     }
 
     for ( j = 0; j < files->size; j++ )
@@ -1304,6 +1310,9 @@ static void build(struct options* opts)
     }
 
     if (libgcc) strarray_add(link_args, libgcc);
+
+    output_file_name = output_path;
+    atexit( cleanup_output_files );
 
     spawn(opts->prefix, link_args, 0);
     strarray_free (link_args);
@@ -1373,6 +1382,9 @@ static int is_linker_arg(const char* arg)
 	case 'f':
 	    if (strncmp("-fuse-ld=", arg, 9) == 0) return 1;
 	    break;
+        case 'r':
+            if (strncmp("-rtlib=", arg, 7) == 0) return 1;
+            break;
     }
 
     for (j = 0; j < ARRAY_SIZE(link_switches); j++)
@@ -1383,7 +1395,7 @@ static int is_linker_arg(const char* arg)
 
 static void parse_target_option( struct options *opts, const char *target )
 {
-    char *p, *platform, *spec = xstrdup( target );
+    char *p, *spec = xstrdup( target );
     unsigned int i;
 
     /* target specification is in the form CPU-MANUFACTURER-OS or CPU-MANUFACTURER-KERNEL-OS */
@@ -1403,13 +1415,11 @@ static void parse_target_option( struct options *opts, const char *target )
         }
         if (i == ARRAY_SIZE(cpu_names))
             error( "Unrecognized CPU '%s'\n", spec );
-        platform = p;
-        if ((p = strrchr( p, '-' ))) platform = p + 1;
     }
     else if (!strcmp( spec, "mingw32" ))
     {
         opts->target_cpu = CPU_x86;
-        platform = spec;
+        p = spec;
     }
     else
         error( "Invalid target specification '%s'\n", target );
@@ -1417,13 +1427,18 @@ static void parse_target_option( struct options *opts, const char *target )
     /* get the OS part */
 
     opts->target_platform = PLATFORM_UNSPECIFIED;  /* default value */
-    for (i = 0; i < ARRAY_SIZE(platform_names); i++)
+    for (;;)
     {
-        if (!strncmp( platform_names[i].name, platform, strlen(platform_names[i].name) ))
+        for (i = 0; i < ARRAY_SIZE(platform_names); i++)
         {
-            opts->target_platform = platform_names[i].platform;
-            break;
+            if (!strncmp( platform_names[i].name, p, strlen(platform_names[i].name) ))
+            {
+                opts->target_platform = platform_names[i].platform;
+                break;
+            }
         }
+        if (opts->target_platform != PLATFORM_UNSPECIFIED || !(p = strchr( p, '-' ))) break;
+        p++;
     }
 
     free( spec );
@@ -1530,6 +1545,9 @@ int main(int argc, char **argv)
 		    if (strcmp("-framework", argv[i]) == 0)
 			next_is_arg = 1;
 		    break;
+                case 't':
+                    next_is_arg = strcmp("-target", argv[i]) == 0;
+                    break;
 		case '-':
 		    next_is_arg = (strcmp("--param", argv[i]) == 0 ||
                                    strcmp("--sysroot", argv[i]) == 0 ||
@@ -1696,6 +1714,13 @@ int main(int argc, char **argv)
                         raw_linker_arg = 0;
                     }
                     break;
+                case 't':
+                    if (is_option( argv, i, "-target", &option_arg ))
+                    {
+                        parse_target_option( &opts, option_arg );
+                        raw_compiler_arg = raw_linker_arg = 0;
+                    }
+                    break;
                 case 'v':
                     if (argv[i][2] == 0) verbose++;
                     break;
@@ -1823,5 +1848,6 @@ int main(int argc, char **argv)
     else if (linking) build(&opts);
     else compile(&opts, lang);
 
+    output_file_name = NULL;
     return 0;
 }

@@ -2107,8 +2107,6 @@ static HRESULT WINAPI d3d9_device_SetTransform(IDirect3DDevice9Ex *iface,
     /* Note: D3DMATRIX is compatible with struct wined3d_matrix. */
     wined3d_mutex_lock();
     wined3d_stateblock_set_transform(device->update_state, state, (const struct wined3d_matrix *)matrix);
-    if (!device->recording)
-        wined3d_device_set_transform(device->wined3d_device, state, (const struct wined3d_matrix *)matrix);
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -2123,7 +2121,7 @@ static HRESULT WINAPI d3d9_device_GetTransform(IDirect3DDevice9Ex *iface,
 
     /* Note: D3DMATRIX is compatible with struct wined3d_matrix. */
     wined3d_mutex_lock();
-    wined3d_device_get_transform(device->wined3d_device, state, (struct wined3d_matrix *)matrix);
+    memcpy(matrix, &wined3d_stateblock_get_state(device->state)->transforms[state], sizeof(*matrix));
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -2139,7 +2137,6 @@ static HRESULT WINAPI d3d9_device_MultiplyTransform(IDirect3DDevice9Ex *iface,
     /* Note: D3DMATRIX is compatible with struct wined3d_matrix. */
     wined3d_mutex_lock();
     wined3d_stateblock_multiply_transform(device->state, state, (const struct wined3d_matrix *)matrix);
-    wined3d_device_multiply_transform(device->wined3d_device, state, (const struct wined3d_matrix *)matrix);
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -2196,8 +2193,6 @@ static HRESULT WINAPI d3d9_device_SetMaterial(IDirect3DDevice9Ex *iface, const D
     /* Note: D3DMATERIAL9 is compatible with struct wined3d_material. */
     wined3d_mutex_lock();
     wined3d_stateblock_set_material(device->update_state, (const struct wined3d_material *)material);
-    if (!device->recording)
-        wined3d_device_set_material(device->wined3d_device, (const struct wined3d_material *)material);
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -2211,7 +2206,7 @@ static HRESULT WINAPI d3d9_device_GetMaterial(IDirect3DDevice9Ex *iface, D3DMATE
 
     /* Note: D3DMATERIAL9 is compatible with struct wined3d_material. */
     wined3d_mutex_lock();
-    wined3d_device_get_material(device->wined3d_device, (struct wined3d_material *)material);
+    memcpy(material, &wined3d_stateblock_get_state(device->state)->material, sizeof(*material));
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -2227,8 +2222,6 @@ static HRESULT WINAPI d3d9_device_SetLight(IDirect3DDevice9Ex *iface, DWORD inde
     /* Note: D3DLIGHT9 is compatible with struct wined3d_light. */
     wined3d_mutex_lock();
     hr = wined3d_stateblock_set_light(device->update_state, index, (const struct wined3d_light *)light);
-    if (SUCCEEDED(hr) && !device->recording)
-        hr = wined3d_device_set_light(device->wined3d_device, index, (const struct wined3d_light *)light);
     wined3d_mutex_unlock();
 
     return hr;
@@ -2237,13 +2230,14 @@ static HRESULT WINAPI d3d9_device_SetLight(IDirect3DDevice9Ex *iface, DWORD inde
 static HRESULT WINAPI d3d9_device_GetLight(IDirect3DDevice9Ex *iface, DWORD index, D3DLIGHT9 *light)
 {
     struct d3d9_device *device = impl_from_IDirect3DDevice9Ex(iface);
+    BOOL enabled;
     HRESULT hr;
 
     TRACE("iface %p, index %u, light %p.\n", iface, index, light);
 
     /* Note: D3DLIGHT9 is compatible with struct wined3d_light. */
     wined3d_mutex_lock();
-    hr = wined3d_device_get_light(device->wined3d_device, index, (struct wined3d_light *)light);
+    hr = wined3d_stateblock_get_light(device->state, index, (struct wined3d_light *)light, &enabled);
     wined3d_mutex_unlock();
 
     return hr;
@@ -2258,22 +2252,21 @@ static HRESULT WINAPI d3d9_device_LightEnable(IDirect3DDevice9Ex *iface, DWORD i
 
     wined3d_mutex_lock();
     hr = wined3d_stateblock_set_light_enable(device->update_state, index, enable);
-    if (SUCCEEDED(hr) && !device->recording)
-        hr = wined3d_device_set_light_enable(device->wined3d_device, index, enable);
     wined3d_mutex_unlock();
 
     return hr;
 }
 
-static HRESULT WINAPI d3d9_device_GetLightEnable(IDirect3DDevice9Ex *iface, DWORD index, BOOL *enable)
+static HRESULT WINAPI d3d9_device_GetLightEnable(IDirect3DDevice9Ex *iface, DWORD index, BOOL *enabled)
 {
     struct d3d9_device *device = impl_from_IDirect3DDevice9Ex(iface);
+    struct wined3d_light light;
     HRESULT hr;
 
-    TRACE("iface %p, index %u, enable %p.\n", iface, index, enable);
+    TRACE("iface %p, index %u, enabled %p.\n", iface, index, enabled);
 
     wined3d_mutex_lock();
-    hr = wined3d_device_get_light_enable(device->wined3d_device, index, enable);
+    hr = wined3d_stateblock_get_light(device->state, index, &light, enabled);
     wined3d_mutex_unlock();
 
     return hr;
@@ -2290,8 +2283,6 @@ static HRESULT WINAPI d3d9_device_SetClipPlane(IDirect3DDevice9Ex *iface, DWORD 
 
     wined3d_mutex_lock();
     hr = wined3d_stateblock_set_clip_plane(device->update_state, index, (const struct wined3d_vec4 *)plane);
-    if (SUCCEEDED(hr) && !device->recording)
-        hr = wined3d_device_set_clip_plane(device->wined3d_device, index, (const struct wined3d_vec4 *)plane);
     wined3d_mutex_unlock();
 
     return hr;
@@ -2300,17 +2291,16 @@ static HRESULT WINAPI d3d9_device_SetClipPlane(IDirect3DDevice9Ex *iface, DWORD 
 static HRESULT WINAPI d3d9_device_GetClipPlane(IDirect3DDevice9Ex *iface, DWORD index, float *plane)
 {
     struct d3d9_device *device = impl_from_IDirect3DDevice9Ex(iface);
-    HRESULT hr;
 
     TRACE("iface %p, index %u, plane %p.\n", iface, index, plane);
 
     index = min(index, device->max_user_clip_planes - 1);
 
     wined3d_mutex_lock();
-    hr = wined3d_device_get_clip_plane(device->wined3d_device, index, (struct wined3d_vec4 *)plane);
+    memcpy(plane, &wined3d_stateblock_get_state(device->state)->clip_planes[index], sizeof(struct wined3d_vec4));
     wined3d_mutex_unlock();
 
-    return hr;
+    return D3D_OK;
 }
 
 static void resolve_depth_buffer(struct d3d9_device *device)
@@ -3679,16 +3669,25 @@ static HRESULT WINAPI d3d9_device_SetStreamSource(IDirect3DDevice9Ex *iface,
 {
     struct d3d9_device *device = impl_from_IDirect3DDevice9Ex(iface);
     struct d3d9_vertexbuffer *buffer_impl = unsafe_impl_from_IDirect3DVertexBuffer9(buffer);
+    const struct wined3d_stateblock_state *state;
     struct wined3d_buffer *wined3d_buffer;
     HRESULT hr;
 
     TRACE("iface %p, stream_idx %u, buffer %p, offset %u, stride %u.\n",
             iface, stream_idx, buffer, offset, stride);
 
+    if (stream_idx >= ARRAY_SIZE(state->streams))
+    {
+        WARN("Stream index %u out of range.\n", stream_idx);
+        return WINED3DERR_INVALIDCALL;
+    }
+
     wined3d_mutex_lock();
     if (!buffer_impl)
     {
-        const struct wined3d_stream_state *stream = &wined3d_stateblock_get_state(device->state)->streams[stream_idx];
+        const struct wined3d_stream_state *stream;
+        state = wined3d_stateblock_get_state(device->state);
+        stream = &state->streams[stream_idx];
         wined3d_buffer = stream->buffer;
         offset = stream->offset;
         stride = stream->stride;
@@ -3719,6 +3718,7 @@ static HRESULT WINAPI d3d9_device_GetStreamSource(IDirect3DDevice9Ex *iface,
         UINT stream_idx, IDirect3DVertexBuffer9 **buffer, UINT *offset, UINT *stride)
 {
     struct d3d9_device *device = impl_from_IDirect3DDevice9Ex(iface);
+    const struct wined3d_stateblock_state *state;
     const struct wined3d_stream_state *stream;
     struct d3d9_vertexbuffer *buffer_impl;
 
@@ -3728,14 +3728,15 @@ static HRESULT WINAPI d3d9_device_GetStreamSource(IDirect3DDevice9Ex *iface,
     if (!buffer)
         return D3DERR_INVALIDCALL;
 
-    if (stream_idx > WINED3D_MAX_STREAMS)
+    if (stream_idx >= ARRAY_SIZE(state->streams))
     {
         WARN("Stream index %u out of range.\n", stream_idx);
         return WINED3DERR_INVALIDCALL;
     }
 
     wined3d_mutex_lock();
-    stream = &wined3d_stateblock_get_state(device->state)->streams[stream_idx];
+    state = wined3d_stateblock_get_state(device->state);
+    stream = &state->streams[stream_idx];
     if (stream->buffer)
     {
         buffer_impl = wined3d_buffer_get_parent(stream->buffer);

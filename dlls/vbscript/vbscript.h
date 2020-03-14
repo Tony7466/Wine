@@ -55,14 +55,6 @@ typedef struct _vbscode_t vbscode_t;
 typedef struct _script_ctx_t script_ctx_t;
 typedef struct _vbdisp_t vbdisp_t;
 
-typedef struct named_item_t {
-    IDispatch *disp;
-    DWORD flags;
-    LPWSTR name;
-
-    struct list entry;
-} named_item_t;
-
 typedef enum {
     VBDISP_CALLGET,
     VBDISP_LET,
@@ -156,6 +148,16 @@ typedef struct {
     script_ctx_t *ctx;
 } BuiltinDisp;
 
+typedef struct named_item_t {
+    ScriptDisp *script_obj;
+    IDispatch *disp;
+    unsigned ref;
+    DWORD flags;
+    LPWSTR name;
+
+    struct list entry;
+} named_item_t;
+
 HRESULT create_vbdisp(const class_desc_t*,vbdisp_t**) DECLSPEC_HIDDEN;
 HRESULT disp_get_id(IDispatch*,BSTR,vbdisp_invoke_type_t,BOOL,DISPID*) DECLSPEC_HIDDEN;
 HRESULT vbdisp_get_id(vbdisp_t*,BSTR,vbdisp_invoke_type_t,BOOL,DISPID*) DECLSPEC_HIDDEN;
@@ -183,8 +185,6 @@ struct _script_ctx_t {
 
     IInternetHostSecurityManager *secmgr;
     DWORD safeopt;
-
-    IDispatch *host_global;
 
     ScriptDisp *script_obj;
 
@@ -349,6 +349,7 @@ struct _vbscode_t {
     BOOL is_persistent;
     function_t main_code;
     IDispatch *context;
+    named_item_t *named_item;
 
     BSTR *bstr_pool;
     unsigned bstr_pool_size;
@@ -373,6 +374,7 @@ HRESULT compile_procedure(script_ctx_t*,const WCHAR*,const WCHAR*,const WCHAR*,D
 HRESULT exec_script(script_ctx_t*,BOOL,function_t*,vbdisp_t*,DISPPARAMS*,VARIANT*) DECLSPEC_HIDDEN;
 void release_dynamic_var(dynamic_var_t*) DECLSPEC_HIDDEN;
 named_item_t *lookup_named_item(script_ctx_t*,const WCHAR*,unsigned) DECLSPEC_HIDDEN;
+void release_named_item(named_item_t*) DECLSPEC_HIDDEN;
 void clear_ei(EXCEPINFO*) DECLSPEC_HIDDEN;
 HRESULT report_script_error(script_ctx_t*,const vbscode_t*,unsigned) DECLSPEC_HIDDEN;
 void detach_global_objects(script_ctx_t*) DECLSPEC_HIDDEN;

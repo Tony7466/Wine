@@ -269,6 +269,7 @@ enum wined3d_format_id
     WINED3DFMT_NV12                         = WINEMAKEFOURCC('N','V','1','2'),
     WINED3DFMT_DF16                         = WINEMAKEFOURCC('D','F','1','6'),
     WINED3DFMT_DF24                         = WINEMAKEFOURCC('D','F','2','4'),
+    WINED3DFMT_ATOC                         = WINEMAKEFOURCC('A','T','O','C'),
 
     WINED3DFMT_FORCE_DWORD = 0xffffffff
 };
@@ -2140,7 +2141,7 @@ struct wined3d_stream_state
 struct wined3d_stateblock_state
 {
     struct wined3d_vertex_declaration *vertex_declaration;
-    struct wined3d_stream_state streams[WINED3D_MAX_STREAMS + 1];
+    struct wined3d_stream_state streams[WINED3D_MAX_STREAMS];
     struct wined3d_buffer *index_buffer;
     enum wined3d_format_id index_format;
     int base_vertex_index;
@@ -2168,6 +2169,7 @@ struct wined3d_stateblock_state
     RECT scissor_rect;
 
     struct wined3d_light_state *light_state;
+    struct wined3d_blend_state *blend_state;
 };
 
 struct wined3d_parent_ops
@@ -2726,6 +2728,8 @@ void __cdecl wined3d_stateblock_capture(struct wined3d_stateblock *stateblock,
 HRESULT __cdecl wined3d_stateblock_create(struct wined3d_device *device, const struct wined3d_stateblock *device_state,
         enum wined3d_stateblock_type type, struct wined3d_stateblock **stateblock);
 ULONG __cdecl wined3d_stateblock_decref(struct wined3d_stateblock *stateblock);
+HRESULT __cdecl wined3d_stateblock_get_light(const struct wined3d_stateblock *stateblock,
+        UINT light_idx, struct wined3d_light *light, BOOL *enabled);
 const struct wined3d_stateblock_state * __cdecl wined3d_stateblock_get_state(const struct wined3d_stateblock *stateblock);
 ULONG __cdecl wined3d_stateblock_incref(struct wined3d_stateblock *stateblock);
 void __cdecl wined3d_stateblock_init_contained_states(struct wined3d_stateblock *stateblock);
