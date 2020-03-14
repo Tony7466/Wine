@@ -191,6 +191,13 @@ static HRESULT lookup_identifier(exec_ctx_t *ctx, BSTR name, vbdisp_invoke_type_
         }
     }
 
+    if(ctx->code->named_item) {
+        if(lookup_global_vars(ctx->code->named_item->script_obj, name, ref))
+            return S_OK;
+        if(lookup_global_funcs(ctx->code->named_item->script_obj, name, ref))
+            return S_OK;
+    }
+
     if(lookup_global_vars(script_obj, name, ref))
         return S_OK;
     if(lookup_global_funcs(script_obj, name, ref))
@@ -230,7 +237,7 @@ static HRESULT lookup_identifier(exec_ctx_t *ctx, BSTR name, vbdisp_invoke_type_
 static HRESULT add_dynamic_var(exec_ctx_t *ctx, const WCHAR *name,
         BOOL is_const, VARIANT **out_var)
 {
-    ScriptDisp *script_obj = ctx->script->script_obj;
+    ScriptDisp *script_obj = ctx->code->named_item ? ctx->code->named_item->script_obj : ctx->script->script_obj;
     dynamic_var_t *new_var;
     heap_pool_t *heap;
     WCHAR *str;
@@ -1113,7 +1120,7 @@ static HRESULT interp_deref(exec_ctx_t *ctx)
 static HRESULT interp_new(exec_ctx_t *ctx)
 {
     const WCHAR *arg = ctx->instr->arg1.bstr;
-    class_desc_t *class_desc;
+    class_desc_t *class_desc = NULL;
     vbdisp_t *obj;
     VARIANT v;
     HRESULT hres;
@@ -1131,10 +1138,14 @@ static HRESULT interp_new(exec_ctx_t *ctx)
         return stack_push(ctx, &v);
     }
 
-    for(class_desc = ctx->script->script_obj->classes; class_desc; class_desc = class_desc->next) {
-        if(!wcsicmp(class_desc->name, arg))
-            break;
-    }
+    if(ctx->code->named_item)
+        for(class_desc = ctx->code->named_item->script_obj->classes; class_desc; class_desc = class_desc->next)
+            if(!wcsicmp(class_desc->name, arg))
+                break;
+    if(!class_desc)
+        for(class_desc = ctx->script->script_obj->classes; class_desc; class_desc = class_desc->next)
+            if(!wcsicmp(class_desc->name, arg))
+                break;
     if(!class_desc) {
         FIXME("Class %s not found\n", debugstr_w(arg));
         return E_FAIL;
@@ -1151,7 +1162,7 @@ static HRESULT interp_new(exec_ctx_t *ctx)
 
 static HRESULT interp_dim(exec_ctx_t *ctx)
 {
-    ScriptDisp *script_obj = ctx->script->script_obj;
+    ScriptDisp *script_obj = ctx->code->named_item ? ctx->code->named_item->script_obj : ctx->script->script_obj;
     const BSTR ident = ctx->instr->arg1.bstr;
     const unsigned array_id = ctx->instr->arg2.uint;
     const array_desc_t *array_desc;
@@ -1483,9 +1494,7 @@ static HRESULT interp_retval(exec_ctx_t *ctx)
 
     TRACE("\n");
 
-    hres = stack_pop_val(ctx, &val);
-    if(FAILED(hres))
-        return hres;
+    stack_pop_deref(ctx, &val);
 
     if(val.owned) {
         VariantClear(&ctx->ret_val);
@@ -1515,12 +1524,23 @@ static HRESULT interp_me(exec_ctx_t *ctx)
 
     TRACE("\n");
 
-    if(ctx->vbthis)
+    if(ctx->vbthis) {
         disp = (IDispatch*)&ctx->vbthis->IDispatchEx_iface;
-    else if(ctx->script->host_global)
-        disp = ctx->script->host_global;
-    else
-        disp = (IDispatch*)&ctx->script->script_obj->IDispatchEx_iface;
+    }else if(ctx->code->named_item) {
+        disp = (ctx->code->named_item->flags & SCRIPTITEM_CODEONLY)
+               ? (IDispatch*)&ctx->code->named_item->script_obj->IDispatchEx_iface
+               : ctx->code->named_item->disp;
+    }else {
+        named_item_t *item;
+        disp = NULL;
+        LIST_FOR_EACH_ENTRY(item, &ctx->script->named_items, named_item_t, entry) {
+            if(!(item->flags & SCRIPTITEM_GLOBALMEMBERS)) continue;
+            disp = item->disp;
+            break;
+        }
+        if(!disp)
+            disp = (IDispatch*)&ctx->script->script_obj->IDispatchEx_iface;
+    }
 
     IDispatch_AddRef(disp);
     V_VT(&v) = VT_DISPATCH;

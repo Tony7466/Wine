@@ -27,7 +27,6 @@
 #include "config.h"
 #include "wine/port.h"
 
-#include <stdio.h>
 #ifdef HAVE_FLOAT_H
 # include <float.h>
 #endif
@@ -528,6 +527,8 @@ void wined3d_device_cleanup(struct wined3d_device *device)
 
     if (device->swapchain_count)
         wined3d_device_uninit_3d(device);
+
+    wined3d_blend_state_decref(device->blend_state_atoc_enabled);
 
     wined3d_cs_destroy(device->cs);
 
@@ -3834,100 +3835,74 @@ struct wined3d_texture * CDECL wined3d_device_get_texture(const struct wined3d_d
 void CDECL wined3d_device_apply_stateblock(struct wined3d_device *device,
         struct wined3d_stateblock *stateblock)
 {
-    const struct wined3d_d3d_info *d3d_info = &stateblock->device->adapter->d3d_info;
     const struct wined3d_stateblock_state *state = &stateblock->stateblock_state;
-    unsigned int i, j, count;
+    const struct wined3d_saved_states *changed = &stateblock->changed;
+    const unsigned int word_bit_count = sizeof(DWORD) * CHAR_BIT;
+    struct wined3d_blend_state *blend_state;
+    unsigned int i, j, start, idx;
+    struct wined3d_color colour;
+    struct wined3d_range range;
+    BOOL set_blend_state;
+    DWORD map, stage;
 
     TRACE("device %p, stateblock %p.\n", device, stateblock);
 
-    if (stateblock->changed.vertexShader)
+    if (changed->vertexShader)
         wined3d_device_set_vertex_shader(device, state->vs);
-    if (stateblock->changed.pixelShader)
+    if (changed->pixelShader)
         wined3d_device_set_pixel_shader(device, state->ps);
 
-    count = 0;
-    for (i = 0; i < d3d_info->limits.vs_uniform_count; ++i)
+    for (start = 0; ; start = range.offset + range.size)
     {
-        if (stateblock->changed.vs_consts_f[i])
-            ++count;
-        else if (count)
-        {
-            wined3d_device_set_vs_consts_f(device, i - count, count, state->vs_consts_f + i - count);
-            count = 0;
-        }
-    }
-    if (count)
-        wined3d_device_set_vs_consts_f(device, i - count, count, state->vs_consts_f + i - count);
+        if (!wined3d_bitmap_get_range(changed->vs_consts_f, WINED3D_MAX_VS_CONSTS_F, start, &range))
+            break;
 
-    count = 0;
-    for (i = 0; i < WINED3D_MAX_CONSTS_B; ++i)
-    {
-        if (stateblock->changed.vertexShaderConstantsB & (1u << i))
-            ++count;
-        else if (count)
-        {
-            wined3d_device_set_vs_consts_b(device, i - count, count, state->vs_consts_b + i - count);
-            count = 0;
-        }
+        wined3d_device_set_vs_consts_f(device, range.offset, range.size, &state->vs_consts_f[range.offset]);
     }
-    if (count)
-        wined3d_device_set_vs_consts_b(device, i - count, count, state->vs_consts_b + i - count);
 
-    count = 0;
-    for (i = 0; i < WINED3D_MAX_CONSTS_I; ++i)
+    map = changed->vertexShaderConstantsI;
+    for (start = 0; ; start = range.offset + range.size)
     {
-        if (stateblock->changed.vertexShaderConstantsI & (1u << i))
-            ++count;
-        else if (count)
-        {
-            wined3d_device_set_vs_consts_i(device, i - count, count, state->vs_consts_i + i - count);
-            count = 0;
-        }
-    }
-    if (count)
-        wined3d_device_set_vs_consts_i(device, i - count, count, state->vs_consts_i + i - count);
+        if (!wined3d_bitmap_get_range(&map, WINED3D_MAX_CONSTS_I, start, &range))
+            break;
 
-    count = 0;
-    for (i = 0; i < d3d_info->limits.ps_uniform_count; ++i)
-    {
-        if (stateblock->changed.ps_consts_f[i])
-            ++count;
-        else if (count)
-        {
-            wined3d_device_set_ps_consts_f(device, i - count, count, state->ps_consts_f + i - count);
-            count = 0;
-        }
+        wined3d_device_set_vs_consts_i(device, range.offset, range.size, &state->vs_consts_i[range.offset]);
     }
-    if (count)
-        wined3d_device_set_ps_consts_f(device, i - count, count, state->ps_consts_f + i - count);
 
-    count = 0;
-    for (i = 0; i < WINED3D_MAX_CONSTS_B; ++i)
+    map = changed->vertexShaderConstantsB;
+    for (start = 0; ; start = range.offset + range.size)
     {
-        if (stateblock->changed.pixelShaderConstantsB & (1u << i))
-            ++count;
-        else if (count)
-        {
-            wined3d_device_set_ps_consts_b(device, i - count, count, state->ps_consts_b + i - count);
-            count = 0;
-        }
-    }
-    if (count)
-        wined3d_device_set_ps_consts_b(device, i - count, count, state->ps_consts_b + i - count);
+        if (!wined3d_bitmap_get_range(&map, WINED3D_MAX_CONSTS_B, start, &range))
+            break;
 
-    count = 0;
-    for (i = 0; i < WINED3D_MAX_CONSTS_I; ++i)
-    {
-        if (stateblock->changed.pixelShaderConstantsI & (1u << i))
-            ++count;
-        else if (count)
-        {
-            wined3d_device_set_ps_consts_i(device, i - count, count, state->ps_consts_i + i - count);
-            count = 0;
-        }
+        wined3d_device_set_vs_consts_b(device, range.offset, range.size, &state->vs_consts_b[range.offset]);
     }
-    if (count)
-        wined3d_device_set_ps_consts_i(device, i - count, count, state->ps_consts_i + i - count);
+
+    for (start = 0; ; start = range.offset + range.size)
+    {
+        if (!wined3d_bitmap_get_range(changed->ps_consts_f, WINED3D_MAX_PS_CONSTS_F, start, &range))
+            break;
+
+        wined3d_device_set_ps_consts_f(device, range.offset, range.size, &state->ps_consts_f[range.offset]);
+    }
+
+    map = changed->pixelShaderConstantsI;
+    for (start = 0; ; start = range.offset + range.size)
+    {
+        if (!wined3d_bitmap_get_range(&map, WINED3D_MAX_CONSTS_I, start, &range))
+            break;
+
+        wined3d_device_set_ps_consts_i(device, range.offset, range.size, &state->ps_consts_i[range.offset]);
+    }
+
+    map = changed->pixelShaderConstantsB;
+    for (start = 0; ; start = range.offset + range.size)
+    {
+        if (!wined3d_bitmap_get_range(&map, WINED3D_MAX_CONSTS_B, start, &range))
+            break;
+
+        wined3d_device_set_ps_consts_b(device, range.offset, range.size, &state->ps_consts_b[range.offset]);
+    }
 
     for (i = 0; i < ARRAY_SIZE(state->light_state->light_map); ++i)
     {
@@ -3940,83 +3915,118 @@ void CDECL wined3d_device_apply_stateblock(struct wined3d_device *device,
         }
     }
 
-    for (i = 0; i < ARRAY_SIZE(state->rs); ++i)
+    if ((set_blend_state = changed->blend_state
+            || wined3d_bitmap_is_set(changed->renderState, WINED3D_RS_ADAPTIVETESS_Y)))
     {
-        if (stateblock->changed.renderState[i >> 5] & (1u << (i & 0x1f)))
+        blend_state = state->rs[WINED3D_RS_ADAPTIVETESS_Y] == WINED3DFMT_ATOC
+                ? device->blend_state_atoc_enabled : state->blend_state;
+
+        if (wined3d_bitmap_is_set(changed->renderState, WINED3D_RS_BLENDFACTOR))
+            wined3d_color_from_d3dcolor(&colour, stateblock->stateblock_state.rs[WINED3D_RS_BLENDFACTOR]);
+        else
+            wined3d_device_get_blend_state(device, &colour);
+
+        wined3d_device_set_blend_state(device, blend_state, &colour);
+    }
+
+    for (i = 0; i < ARRAY_SIZE(changed->renderState); ++i)
+    {
+        map = changed->renderState[i];
+        while (map)
         {
-            if (i == WINED3D_RS_BLENDFACTOR)
+            j = wined3d_bit_scan(&map);
+            idx = i * word_bit_count + j;
+            if (idx != WINED3D_RS_BLENDFACTOR)
             {
-                struct wined3d_color color;
-                wined3d_color_from_d3dcolor(&color, state->rs[i]);
-                wined3d_device_set_blend_state(device, NULL, &color);
+                wined3d_device_set_render_state(device, idx, state->rs[idx]);
+                continue;
             }
-            else
-                wined3d_device_set_render_state(device, i, state->rs[i]);
+
+            if (!set_blend_state)
+            {
+                blend_state = wined3d_device_get_blend_state(device, &colour);
+                wined3d_color_from_d3dcolor(&colour, state->rs[idx]);
+                wined3d_device_set_blend_state(device, blend_state, &colour);
+            }
         }
     }
 
-    for (i = 0; i < ARRAY_SIZE(state->texture_states); ++i)
+    for (i = 0; i < ARRAY_SIZE(changed->textureState); ++i)
     {
-        for (j = 0; j < ARRAY_SIZE(state->texture_states[i]); ++j)
+        map = changed->textureState[i];
+        while (map)
         {
-            if (stateblock->changed.textureState[i] & (1u << j))
-                wined3d_device_set_texture_stage_state(device, i, j, state->texture_states[i][j]);
+            j = wined3d_bit_scan(&map);
+            wined3d_device_set_texture_stage_state(device, i, j, state->texture_states[i][j]);
         }
     }
 
-    for (i = 0; i < ARRAY_SIZE(state->sampler_states); ++i)
+    for (i = 0; i < ARRAY_SIZE(changed->samplerState); ++i)
     {
-        DWORD stage = i;
+        stage = i;
         if (stage >= WINED3D_MAX_FRAGMENT_SAMPLERS)
             stage += WINED3DVERTEXTEXTURESAMPLER0 - WINED3D_MAX_FRAGMENT_SAMPLERS;
-        for (j = 0; j < ARRAY_SIZE(state->sampler_states[j]); ++j)
+        map = changed->samplerState[i];
+        while (map)
         {
-            if (stateblock->changed.samplerState[i] & (1 << j))
-                wined3d_device_set_sampler_state(device, stage, j, state->sampler_states[i][j]);
+            j = wined3d_bit_scan(&map);
+            wined3d_device_set_sampler_state(device, stage, j, state->sampler_states[i][j]);
         }
     }
 
-    for (i = 0; i < ARRAY_SIZE(state->transforms); ++i)
+    for (i = 0; i < ARRAY_SIZE(changed->transform); ++i)
     {
-        if (stateblock->changed.transform[i >> 5] & (1u << (i & 0x1f)))
-            wined3d_device_set_transform(device, i, &state->transforms[i]);
+        map = changed->transform[i];
+        while (map)
+        {
+            j = wined3d_bit_scan(&map);
+            idx = i * word_bit_count + j;
+            wined3d_device_set_transform(device, idx, &state->transforms[idx]);
+        }
     }
 
-    if (stateblock->changed.indices)
+    if (changed->indices)
         wined3d_device_set_index_buffer(device, state->index_buffer, state->index_format, 0);
     wined3d_device_set_base_vertex_index(device, state->base_vertex_index);
-    if (stateblock->changed.vertexDecl)
+    if (changed->vertexDecl)
         wined3d_device_set_vertex_declaration(device, state->vertex_declaration);
-    if (stateblock->changed.material)
+    if (changed->material)
         wined3d_device_set_material(device, &state->material);
-    if (stateblock->changed.viewport)
+    if (changed->viewport)
         wined3d_device_set_viewports(device, 1, &state->viewport);
-    if (stateblock->changed.scissorRect)
+    if (changed->scissorRect)
         wined3d_device_set_scissor_rects(device, 1, &state->scissor_rect);
 
-    for (i = 0; i < ARRAY_SIZE(state->streams); ++i)
+    map = changed->streamSource;
+    while (map)
     {
-        if (stateblock->changed.streamSource & (1u << i))
-            wined3d_device_set_stream_source(device, i, state->streams[i].buffer,
-                    state->streams[i].offset, state->streams[i].stride);
-        if (stateblock->changed.streamFreq & (1u << i))
-            wined3d_device_set_stream_source_freq(device, i,
-                    state->streams[i].frequency | state->streams[i].flags);
+        i = wined3d_bit_scan(&map);
+        wined3d_device_set_stream_source(device, i, state->streams[i].buffer,
+                state->streams[i].offset, state->streams[i].stride);
+    }
+    map = changed->streamFreq;
+    while (map)
+    {
+        i = wined3d_bit_scan(&map);
+        wined3d_device_set_stream_source_freq(device, i,
+                state->streams[i].frequency | state->streams[i].flags);
     }
 
-    for (i = 0; i < ARRAY_SIZE(state->textures); ++i)
+    map = changed->textures;
+    while (map)
     {
-        DWORD stage = i;
+        i = wined3d_bit_scan(&map);
+        stage = i;
         if (stage >= WINED3D_MAX_FRAGMENT_SAMPLERS)
             stage += WINED3DVERTEXTEXTURESAMPLER0 - WINED3D_MAX_FRAGMENT_SAMPLERS;
-        if (stateblock->changed.textures & (1u << i))
-            wined3d_device_set_texture(device, stage, state->textures[i]);
+        wined3d_device_set_texture(device, stage, state->textures[i]);
     }
 
-    for (i = 0; i < ARRAY_SIZE(state->clip_planes); ++i)
+    map = changed->clipplane;
+    while (map)
     {
-        if (stateblock->changed.clipplane & (1u << i))
-            wined3d_device_set_clip_plane(device, i, &state->clip_planes[i]);
+        i = wined3d_bit_scan(&map);
+        wined3d_device_set_clip_plane(device, i, &state->clip_planes[i]);
     }
 
     memset(&stateblock->changed, 0, sizeof(stateblock->changed));
@@ -5759,6 +5769,7 @@ HRESULT wined3d_device_init(struct wined3d_device *device, struct wined3d *wined
     struct wined3d_adapter *adapter = wined3d->adapters[adapter_idx];
     const struct wined3d_fragment_pipe_ops *fragment_pipeline;
     const struct wined3d_vertex_pipe_ops *vertex_pipeline;
+    struct wined3d_blend_state_desc blend_state_desc;
     unsigned int i;
     HRESULT hr;
 
@@ -5810,6 +5821,18 @@ HRESULT wined3d_device_init(struct wined3d_device *device, struct wined3d *wined
         WARN("Failed to create command stream.\n");
         state_cleanup(&device->state);
         hr = E_FAIL;
+        goto err;
+    }
+
+    memset(&blend_state_desc, 0, sizeof(blend_state_desc));
+    blend_state_desc.alpha_to_coverage = TRUE;
+
+    if (FAILED(hr = wined3d_blend_state_create(device, &blend_state_desc,
+            NULL, &wined3d_null_parent_ops, &device->blend_state_atoc_enabled)))
+    {
+        ERR("Failed to create blend state object, hr %#x.\n", hr);
+        wined3d_cs_destroy(device->cs);
+        state_cleanup(&device->state);
         goto err;
     }
 

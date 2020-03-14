@@ -8509,6 +8509,11 @@ static void test_p8_blit(void)
     hr = IDirectDrawSurface7_Unlock(dst_p8, NULL);
     ok(SUCCEEDED(hr), "Failed to unlock destination surface, hr %#x.\n", hr);
 
+    fx.dwSize = sizeof(fx);
+    fx.dwFillColor = 0xdeadbeef;
+    hr = IDirectDrawSurface7_Blt(dst, NULL, NULL, NULL, DDBLT_WAIT | DDBLT_COLORFILL, &fx);
+    ok(SUCCEEDED(hr), "Failed to color fill %#x.\n", hr);
+
     hr = IDirectDrawSurface7_SetPalette(src, palette);
     ok(SUCCEEDED(hr), "Failed to set palette, hr %#x.\n", hr);
     hr = IDirectDrawSurface7_Blt(dst, NULL, src, NULL, DDBLT_WAIT, NULL);
@@ -8522,14 +8527,15 @@ static void test_p8_blit(void)
         for (x = 0; x < ARRAY_SIZE(expected); ++x)
         {
             color = get_surface_color(dst, x, 0);
-            todo_wine ok(compare_color(color, expected[x], 0),
+            /* WARP on 1709 and newer write zeroes on non-colorkeyed P8 -> RGB blits. For ckey
+             * blits see below. */
+            todo_wine ok(compare_color(color, expected[x], 0)
+                    || broken(is_warp && compare_color(color, 0x00000000, 0)),
                     "Pixel %u: Got color %#x, expected %#x.\n",
                     x, color, expected[x]);
         }
     }
 
-    memset(&fx, 0, sizeof(fx));
-    fx.dwSize = sizeof(fx);
     fx.ddckSrcColorkey.dwColorSpaceHighValue = 0x2;
     fx.ddckSrcColorkey.dwColorSpaceLowValue = 0x2;
     hr = IDirectDrawSurface7_Blt(dst_p8, NULL, src, NULL, DDBLT_WAIT | DDBLT_KEYSRCOVERRIDE, &fx);
@@ -8538,7 +8544,7 @@ static void test_p8_blit(void)
     hr = IDirectDrawSurface7_Lock(dst_p8, NULL, &surface_desc, DDLOCK_READONLY | DDLOCK_WAIT, NULL);
     ok(SUCCEEDED(hr), "Failed to lock destination surface, hr %#x.\n", hr);
     /* A color keyed P8 blit doesn't do anything on WARP - it just leaves the data in the destination
-     * surface untouched. P8 blits without color keys work. Error checking (DDBLT_KEYSRC without a key
+     * surface untouched. Error checking (DDBLT_KEYSRC without a key
      * for example) also works as expected.
      *
      * Using DDBLT_KEYSRC instead of DDBLT_KEYSRCOVERRIDE doesn't change this. Doing this blit with
@@ -17140,6 +17146,23 @@ static void test_compressed_surface_stretch(void)
 
                     hr = IDirectDraw7_CreateSurface(ddraw, &dst_surface_desc, &dst_surf, NULL);
                     ok(hr == DD_OK, "Test (%u, %u, %u, %u), got unexpected hr %#x.\n", i, j, k, l, hr);
+
+                    memset(&lock, 0, sizeof(lock));
+                    lock.dwSize = sizeof(lock);
+
+                    /* r200 does not init vidmem DXT3 surfaces to 0 correctly. Do it manually.
+                     * We can't use DDBLT_COLORFILL on compressed surfaces, so we need memset.
+                     *
+                     * Locking alone is not enough, so this isn't an accidental workaround that
+                     * forces a different codepath because the destination is currently in sysmem. */
+                    if (test_formats[l].fmt.dwFourCC == MAKEFOURCC('D', 'X', 'T', '3'))
+                    {
+                        hr = IDirectDrawSurface7_Lock(dst_surf, NULL, &lock, 0, NULL);
+                        ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+                        memset(lock.lpSurface, 0, U1(lock).dwLinearSize);
+                        hr = IDirectDrawSurface7_Unlock(dst_surf, NULL);
+                        ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+                    }
 
                     hr = IDirectDrawSurface7_Blt(dst_surf, &dst_rect, src_surf, &src_rect, DDBLT_WAIT, NULL);
                     todo_wine_if(test_formats[l].fmt.dwFlags == DDPF_FOURCC && test_sizes[j].todo_dst)

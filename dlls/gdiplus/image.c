@@ -1827,6 +1827,7 @@ GpStatus WINGDIPAPI GdipCreateBitmapFromScan0(INT width, INT height, INT stride,
     (*bitmap)->height = height;
     (*bitmap)->format = format;
     (*bitmap)->image.decoder = NULL;
+    (*bitmap)->image.encoder = NULL;
     (*bitmap)->hbitmap = hbitmap;
     (*bitmap)->hdc = NULL;
     (*bitmap)->bits = bits;
@@ -2046,6 +2047,8 @@ static void move_bitmap(GpBitmap *dst, GpBitmap *src, BOOL clobber_palette)
     if (dst->image.decoder)
         IWICBitmapDecoder_Release(dst->image.decoder);
     dst->image.decoder = src->image.decoder;
+    terminate_encoder_wic(&dst->image); /* terminate active encoder before overwriting with src */
+    dst->image.encoder = src->image.encoder;
     dst->image.frame_count = src->image.frame_count;
     dst->image.current_frame = src->image.current_frame;
     dst->image.format = src->image.format;
@@ -2078,6 +2081,7 @@ static GpStatus free_image_data(GpImage *image)
     }
     if (image->decoder)
         IWICBitmapDecoder_Release(image->decoder);
+    terminate_encoder_wic(image);
     heap_free(image->palette);
 
     return Ok;
@@ -3744,6 +3748,8 @@ static GpStatus select_frame_wic(GpImage *image, UINT active_frame)
 
     new_image->busy = image->busy;
     memcpy(&new_image->format, &image->format, sizeof(GUID));
+    new_image->encoder = image->encoder;
+    image->encoder = NULL;
     free_image_data(image);
     if (image->type == ImageTypeBitmap)
         *(GpBitmap *)image = *(GpBitmap *)new_image;
@@ -4420,6 +4426,9 @@ GpStatus WINGDIPAPI GdipSaveImageToFile(GpImage *image, GDIPCONST WCHAR* filenam
     if (!image || !filename|| !clsidEncoder)
         return InvalidParameter;
 
+    /* this might release an old file stream held by the encoder so we can re-create it below */
+    terminate_encoder_wic(image);
+
     stat = GdipCreateStreamOnFile(filename, GENERIC_WRITE, &stream);
     if (stat != Ok)
         return GenericError;
@@ -4435,13 +4444,52 @@ GpStatus WINGDIPAPI GdipSaveImageToFile(GpImage *image, GDIPCONST WCHAR* filenam
  *   These functions encode an image in different image file formats.
  */
 
-static GpStatus encode_image_wic(GpImage *image, IStream* stream,
-    REFGUID container, GDIPCONST EncoderParameters* params)
+static GpStatus initialize_encoder_wic(IStream *stream, REFGUID container, GpImage *image)
+{
+    IWICImagingFactory *factory;
+    HRESULT hr;
+
+    TRACE("%p,%s\n", stream, wine_dbgstr_guid(container));
+
+    terminate_encoder_wic(image); /* terminate previous encoder if it exists */
+
+    hr = WICCreateImagingFactory_Proxy(WINCODEC_SDK_VERSION, &factory);
+    if (FAILED(hr)) return hresult_to_status(hr);
+    hr = IWICImagingFactory_CreateEncoder(factory, container, NULL, &image->encoder);
+    IWICImagingFactory_Release(factory);
+    if (FAILED(hr))
+    {
+        image->encoder = NULL;
+        return hresult_to_status(hr);
+    }
+
+    hr = IWICBitmapEncoder_Initialize(image->encoder, stream, WICBitmapEncoderNoCache);
+    if (FAILED(hr))
+    {
+        IWICBitmapEncoder_Release(image->encoder);
+        image->encoder = NULL;
+        return hresult_to_status(hr);
+    }
+    return Ok;
+}
+
+GpStatus terminate_encoder_wic(GpImage *image)
+{
+    if (!image->encoder)
+        return Ok;
+    else
+    {
+        HRESULT hr = IWICBitmapEncoder_Commit(image->encoder);
+        IWICBitmapEncoder_Release(image->encoder);
+        image->encoder = NULL;
+        return hresult_to_status(hr);
+    }
+}
+
+static GpStatus encode_frame_wic(IWICBitmapEncoder *encoder, GpImage *image)
 {
     GpStatus stat;
     GpBitmap *bitmap;
-    IWICImagingFactory *factory;
-    IWICBitmapEncoder *encoder;
     IWICBitmapFrameEncode *frameencode;
     IPropertyBag2 *encoderoptions;
     HRESULT hr;
@@ -4466,20 +4514,7 @@ static GpStatus encode_image_wic(GpImage *image, IStream* stream,
     rc.Width = width;
     rc.Height = height;
 
-    hr = WICCreateImagingFactory_Proxy(WINCODEC_SDK_VERSION, &factory);
-    if (FAILED(hr))
-        return hresult_to_status(hr);
-    hr = IWICImagingFactory_CreateEncoder(factory, container, NULL, &encoder);
-    IWICImagingFactory_Release(factory);
-    if (FAILED(hr))
-        return hresult_to_status(hr);
-
-    hr = IWICBitmapEncoder_Initialize(encoder, stream, WICBitmapEncoderNoCache);
-
-    if (SUCCEEDED(hr))
-    {
-        hr = IWICBitmapEncoder_CreateNewFrame(encoder, &frameencode, &encoderoptions);
-    }
+    hr = IWICBitmapEncoder_CreateNewFrame(encoder, &frameencode, &encoderoptions);
 
     if (SUCCEEDED(hr)) /* created frame */
     {
@@ -4563,11 +4598,54 @@ static GpStatus encode_image_wic(GpImage *image, IStream* stream,
         IPropertyBag2_Release(encoderoptions);
     }
 
-    if (SUCCEEDED(hr))
-        hr = IWICBitmapEncoder_Commit(encoder);
-
-    IWICBitmapEncoder_Release(encoder);
     return hresult_to_status(hr);
+}
+
+static BOOL has_encoder_param_long(GDIPCONST EncoderParameters *params, GUID param_guid, ULONG val)
+{
+    int param_idx, value_idx;
+
+    if (!params)
+        return FALSE;
+
+    for (param_idx = 0; param_idx < params->Count; param_idx++)
+    {
+        EncoderParameter param = params->Parameter[param_idx];
+        if (param.Type == EncoderParameterValueTypeLong && IsEqualCLSID(&param.Guid, &param_guid))
+        {
+            ULONG *value_array = (ULONG*) param.Value;
+            for (value_idx = 0; value_idx < param.NumberOfValues; value_idx++)
+            {
+                if (value_array[value_idx] == val)
+                    return TRUE;
+            }
+        }
+    }
+    return FALSE;
+}
+
+static GpStatus encode_image_wic(GpImage *image, IStream *stream,
+    REFGUID container, GDIPCONST EncoderParameters *params)
+{
+    GpStatus status, terminate_status;
+
+    if (image->type != ImageTypeBitmap)
+        return GenericError;
+
+    status = initialize_encoder_wic(stream, container, image);
+
+    if (status == Ok)
+        status = encode_frame_wic(image->encoder, image);
+
+    if (!has_encoder_param_long(params, EncoderSaveFlag, EncoderValueMultiFrame))
+    {
+        /* always try to terminate, but if something already failed earlier, keep the old status. */
+        terminate_status = terminate_encoder_wic(image);
+        if (status == Ok)
+            status = terminate_status;
+    }
+
+    return status;
 }
 
 static GpStatus encode_image_BMP(GpImage *image, IStream* stream,
@@ -4632,11 +4710,42 @@ GpStatus WINGDIPAPI GdipSaveImageToStream(GpImage *image, IStream* stream,
 
 /*****************************************************************************
  * GdipSaveAdd [GDIPLUS.@]
+ *
+ * Like GdipSaveAddImage(), but encode the currently active frame of the given image into the file
+ * or stream that is currently being encoded.
  */
 GpStatus WINGDIPAPI GdipSaveAdd(GpImage *image, GDIPCONST EncoderParameters *params)
 {
-    FIXME("(%p,%p): stub\n", image, params);
-    return Ok;
+    return GdipSaveAddImage(image, image, params);
+}
+
+/*****************************************************************************
+ * GdipSaveAddImage [GDIPLUS.@]
+ *
+ * Encode the currently active frame of additional_image into the file or stream that is currently
+ * being encoded by the image given in the image parameter. The first frame of a multi-frame image
+ * must be encoded using the normal GdipSaveImageToStream() or GdipSaveImageToFile() functions,
+ * but with the "MultiFrame" encoding parameter set. The multi-frame encoding process must be
+ * finished after adding the last frame by calling GdipSaveAdd() with the "Flush" encoding parameter
+ * set.
+ */
+GpStatus WINGDIPAPI GdipSaveAddImage(GpImage *image, GpImage *additional_image,
+    GDIPCONST EncoderParameters *params)
+{
+    TRACE("%p, %p, %p\n", image, additional_image, params);
+
+    if (!image || !additional_image || !params)
+        return InvalidParameter;
+
+    if (!image->encoder)
+        return Win32Error;
+
+    if (has_encoder_param_long(params, EncoderSaveFlag, EncoderValueFlush))
+        return terminate_encoder_wic(image);
+    else if (has_encoder_param_long(params, EncoderSaveFlag, EncoderValueFrameDimensionPage))
+        return encode_frame_wic(image->encoder, additional_image);
+    else
+        return InvalidParameter;
 }
 
 /*****************************************************************************

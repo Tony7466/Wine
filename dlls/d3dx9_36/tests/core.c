@@ -543,20 +543,19 @@ static void test_ID3DXFont(IDirect3DDevice9 *device)
     hdc = ID3DXFont_GetDC(font);
     ok(!!hdc, "Got unexpected hdc %p.\n", hdc);
 
-    todo_wine {
     hr = ID3DXFont_GetGlyphData(font, 0, NULL, &blackbox, &cellinc);
     ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     hr = ID3DXFont_GetGlyphData(font, 0, &texture, NULL, &cellinc);
-    if(SUCCEEDED(hr)) check_release((IUnknown *)texture, 1);
+    check_release((IUnknown *)texture, 1);
     ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     hr = ID3DXFont_GetGlyphData(font, 0, &texture, &blackbox, NULL);
-    if(SUCCEEDED(hr)) check_release((IUnknown *)texture, 1);
+    check_release((IUnknown *)texture, 1);
     ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
-    }
+
     hr = ID3DXFont_PreloadCharacters(font, 'b', 'a');
     ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     hr = ID3DXFont_PreloadGlyphs(font, 1, 0);
-    todo_wine ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
 
     hr = ID3DXFont_PreloadCharacters(font, 'a', 'a');
     ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
@@ -567,12 +566,10 @@ static void test_ID3DXFont(IDirect3DDevice9 *device)
         ok(count != GDI_ERROR, "Got unexpected count %u.\n", count);
 
         hr = ID3DXFont_GetGlyphData(font, glyph, &texture, &blackbox, &cellinc);
-        todo_wine ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
-        if (FAILED(hr))
-            continue;
+        ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
 
         levels = IDirect3DTexture9_GetLevelCount(texture);
-        ok(levels == 5, "Character %c: got unexpected levels %u.\n", c, levels);
+        todo_wine ok(levels == 5, "Character %c: got unexpected levels %u.\n", c, levels);
         hr = IDirect3DTexture9_GetLevelDesc(texture, 0, &surf_desc);
         ok(hr == D3D_OK, "Character %c: got unexpected hr %#x.\n", c, hr);
         ok(surf_desc.Format == D3DFMT_A8R8G8B8, "Character %c: got unexpected format %#x.\n", c, surf_desc.Format);
@@ -586,9 +583,10 @@ static void test_ID3DXFont(IDirect3DDevice9 *device)
 
         ret = ID3DXFont_GetTextMetricsW(font, &tm);
         ok(ret, "Got unexpected ret %#x.\n", ret);
-        ok(blackbox.right - blackbox.left == glyph_metrics.gmBlackBoxX + 2, "Character %c: got %d, expected %d.\n",
+
+        todo_wine ok(blackbox.right - blackbox.left == glyph_metrics.gmBlackBoxX + 2, "Character %c: got %d, expected %d.\n",
                 c, blackbox.right - blackbox.left, glyph_metrics.gmBlackBoxX + 2);
-        ok(blackbox.bottom - blackbox.top == glyph_metrics.gmBlackBoxY + 2, "Character %c: got %d, expected %d.\n",
+        todo_wine ok(blackbox.bottom - blackbox.top == glyph_metrics.gmBlackBoxY + 2, "Character %c: got %d, expected %d.\n",
                 c, blackbox.bottom - blackbox.top, glyph_metrics.gmBlackBoxY + 2);
         ok(cellinc.x == glyph_metrics.gmptGlyphOrigin.x - 1, "Character %c: got %d, expected %d.\n",
                 c, cellinc.x, glyph_metrics.gmptGlyphOrigin.x - 1);
@@ -603,15 +601,15 @@ static void test_ID3DXFont(IDirect3DDevice9 *device)
 
     /* Test multiple textures */
     hr = ID3DXFont_PreloadGlyphs(font, 0, 1000);
-    todo_wine ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
 
     /* Test glyphs that are not rendered */
     for (glyph = 1; glyph < 4; ++glyph)
     {
         texture = (IDirect3DTexture9 *)0xdeadbeef;
         hr = ID3DXFont_GetGlyphData(font, glyph, &texture, &blackbox, &cellinc);
-        todo_wine ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
-        todo_wine ok(!texture, "Got unexpected texture %p.\n", texture);
+        ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+        ok(!texture, "Got unexpected texture %p.\n", texture);
     }
 
     check_release((IUnknown *)font, 0);
@@ -630,23 +628,21 @@ static void test_ID3DXFont(IDirect3DDevice9 *device)
         ok(count != GDI_ERROR, "Test %u: got unexpected count %u.\n", i, count);
 
         hr = ID3DXFont_GetGlyphData(font, glyph, &texture, NULL, NULL);
-        todo_wine ok(hr == D3D_OK, "Test %u: got unexpected hr %#x.\n", i, hr);
-        if(SUCCEEDED(hr)) {
-            DWORD levels;
-            D3DSURFACE_DESC desc;
+        ok(hr == D3D_OK, "Test %u: got unexpected hr %#x.\n", i, hr);
 
-            levels = IDirect3DTexture9_GetLevelCount(texture);
-            ok(levels == tests[i].expected_levels, "Test %u: got unexpected levels %u.\n", i, levels);
-            hr = IDirect3DTexture9_GetLevelDesc(texture, 0, &desc);
-            ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
-            ok(desc.Format == D3DFMT_A8R8G8B8, "Test %u: got unexpected format %#x.\n", i, desc.Format);
-            ok(desc.Usage == 0, "Test %u: got unexpected usage %#x.\n", i, desc.Usage);
-            ok(desc.Width == tests[i].expected_size, "Test %u: got unexpected width %u.\n", i, desc.Width);
-            ok(desc.Height == tests[i].expected_size, "Test %u: got unexpected height %u.\n", i, desc.Height);
-            ok(desc.Pool == D3DPOOL_MANAGED, "Test %u: got unexpected pool %u.\n", i, desc.Pool);
+        levels = IDirect3DTexture9_GetLevelCount(texture);
+        todo_wine_if(tests[i].expected_levels < 9)
+        ok(levels == tests[i].expected_levels, "Test %u: got unexpected levels %u.\n", i, levels);
 
-            IDirect3DTexture9_Release(texture);
-        }
+        hr = IDirect3DTexture9_GetLevelDesc(texture, 0, &surf_desc);
+        ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+        ok(surf_desc.Format == D3DFMT_A8R8G8B8, "Test %u: got unexpected format %#x.\n", i, surf_desc.Format);
+        ok(surf_desc.Usage == 0, "Test %u: got unexpected usage %#x.\n", i, surf_desc.Usage);
+        ok(surf_desc.Width == tests[i].expected_size, "Test %u: got unexpected width %u.\n", i, surf_desc.Width);
+        ok(surf_desc.Height == tests[i].expected_size, "Test %u: got unexpected height %u.\n", i, surf_desc.Height);
+        ok(surf_desc.Pool == D3DPOOL_MANAGED, "Test %u: got unexpected pool %u.\n", i, surf_desc.Pool);
+
+        IDirect3DTexture9_Release(texture);
 
         /* ID3DXFontImpl_DrawText */
         D3DXCreateSprite(device, &sprite);
@@ -770,6 +766,84 @@ static void test_ID3DXFont(IDirect3DDevice9 *device)
 
     height = ID3DXFont_DrawTextW(font, NULL, long_textW, -1, &rect, DT_WORDBREAK | DT_NOCLIP, 0xff00ff);
     ok(height == 96, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"a\na", -1, &rect, 0, 0xff00ff);
+    ok(height == 24, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"a\r\na", -1, &rect, 0, 0xff00ff);
+    ok(height == 24, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"a\ra", -1, &rect, 0, 0xff00ff);
+    ok(height == 12, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"a\na", -1, &rect, DT_SINGLELINE, 0xff00ff);
+    ok(height == 12, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"a\naaaaa aaaa", -1, &rect, 0, 0xff00ff);
+    ok(height == 24, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"a\naaaaa aaaa", -1, &rect, DT_WORDBREAK, 0xff00ff);
+    ok(height == 36, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"1\n2\n3\n4\n5\n6", -1, &rect, 0, 0xff00ff);
+    ok(height == 48, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"1\n2\n3\n4\n5\n6", -1, &rect, DT_NOCLIP, 0xff00ff);
+    ok(height == 72, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"\t\t\t\t\t\t\t\t\t\t", -1, &rect, DT_WORDBREAK, 0xff00ff);
+    ok(height == 0, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"\t\t\t\t\t\t\t\t\t\ta", -1, &rect, DT_WORDBREAK, 0xff00ff);
+    ok(height == 12, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"\taaaaaaaaaa", -1, &rect, DT_WORDBREAK, 0xff00ff);
+    ok(height == 24, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"\taaaaaaaaaa", -1, &rect, DT_EXPANDTABS | DT_WORDBREAK, 0xff00ff);
+    ok(height == 36, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"\taaa\taaa\taaa", -1, &rect, DT_WORDBREAK, 0xff00ff);
+    ok(height == 24, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"\taaa\taaa\taaa", -1, &rect, DT_EXPANDTABS | DT_WORDBREAK, 0xff00ff);
+    ok(height == 48, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"\t\t\t\t\t\t\t\t\t\t", -1, &rect, DT_EXPANDTABS | DT_WORDBREAK, 0xff00ff);
+    ok(height == 60, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"a\ta", -1, &rect, DT_EXPANDTABS | DT_WORDBREAK, 0xff00ff);
+    ok(height == 12, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"a\ta\ta", -1, &rect, DT_EXPANDTABS | DT_WORDBREAK, 0xff00ff);
+    ok(height == 24, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"aaaaaaaaaaaaaaaaaaaa", -1, &rect, DT_WORDBREAK, 0xff00ff);
+    ok(height == 36, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"a                        a", -1, &rect, DT_WORDBREAK, 0xff00ff);
+    ok(height == 36, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"aaaa              aaaa", -1, &rect, DT_WORDBREAK, 0xff00ff);
+    ok(height == 36, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"aaaa              aaaa", -1, &rect, DT_WORDBREAK | DT_RIGHT, 0xff00ff);
+    ok(height == 36, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"aaaa              aaaa", -1, &rect, DT_WORDBREAK | DT_RIGHT, 0xff00ff);
+    ok(height == 36, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"aaaa\naaaa", -1, &rect, DT_BOTTOM, 0xff00ff);
+    ok(height == 40, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"aaaa\naaaa", -1, &rect, DT_VCENTER, 0xff00ff);
+    ok(height == 32, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"aaaa\naaaa", -1, &rect, DT_RIGHT, 0xff00ff);
+    ok(height == 24, "Got unexpected height %d.\n", height);
+
+    height = ID3DXFont_DrawTextW(font, NULL, L"aaaa\naaaa", -1, &rect, DT_CENTER, 0xff00ff);
+    ok(height == 24, "Got unexpected height %d.\n", height);
     }
 
     ID3DXFont_Release(font);

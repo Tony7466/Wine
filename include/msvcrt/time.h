@@ -20,7 +20,7 @@
 #ifndef __WINE_TIME_H
 #define __WINE_TIME_H
 
-#include <corecrt.h>
+#include <corecrt_wtime.h>
 
 #include <pshpack8.h>
 
@@ -32,21 +32,6 @@ typedef __msvcrt_long clock_t;
 #ifndef CLOCKS_PER_SEC
 #define CLOCKS_PER_SEC 1000
 #endif
-
-#ifndef _TM_DEFINED
-#define _TM_DEFINED
-struct tm {
-    int tm_sec;
-    int tm_min;
-    int tm_hour;
-    int tm_mday;
-    int tm_mon;
-    int tm_year;
-    int tm_wday;
-    int tm_yday;
-    int tm_isdst;
-};
-#endif /* _TM_DEFINED */
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,7 +54,7 @@ extern __msvcrt_long _timezone;
 extern char *_tzname;
 #endif
 
-#ifdef _USE_32BIT_TIME_T
+#if !defined(_UCRT) && defined(_USE_32BIT_TIME_T)
 #define _ctime32     ctime
 #define _difftime32  difftime
 #define _gmtime32    gmtime
@@ -111,29 +96,14 @@ static inline struct tm* gmtime(const time_t *t) { return _gmtime64(t); }
 static inline struct tm* localtime(const time_t *t) { return _localtime64(t); }
 static inline time_t mktime(struct tm *tm) { return _mktime64(tm); }
 static inline time_t time(time_t *t) { return _time64(t); }
+#elif defined(_UCRT)
+static inline char* ctime(const time_t *t) { return _ctime32(t); }
+static inline double difftime(time_t t1, time_t t2) { return _difftime32(t1, t2); }
+static inline struct tm* gmtime(const time_t *t) { return _gmtime32(t); }
+static inline struct tm* localtime(const time_t *t) { return _localtime32(t); }
+static inline time_t mktime(struct tm *tm) { return _mktime32(tm); }
+static inline time_t time(time_t *t) { return _time32(t); }
 #endif
-
-#ifndef _WTIME_DEFINED
-#define _WTIME_DEFINED
-
-#ifdef _USE_32BIT_TIME_T
-#define _wctime32 _wctime
-#endif
-
-wchar_t* __cdecl _wasctime(const struct tm*);
-size_t   __cdecl wcsftime(wchar_t*,size_t,const wchar_t*,const struct tm*);
-wchar_t* __cdecl _wctime32(const __time32_t*);
-wchar_t* __cdecl _wctime64(const __time64_t*);
-wchar_t* __cdecl _wstrdate(wchar_t*);
-errno_t  __cdecl _wstrdate_s(wchar_t*,size_t);
-wchar_t* __cdecl _wstrtime(wchar_t*);
-errno_t  __cdecl _wstrtime_s(wchar_t*,size_t);
-
-#ifndef _USE_32BIT_TIME_T
-static inline wchar_t* _wctime(const time_t *t) { return _wctime64(t); }
-#endif
-
-#endif /* _WTIME_DEFINED */
 
 #ifdef __cplusplus
 }

@@ -76,6 +76,9 @@
 
 #define WINED3D_MAX_DIRTY_REGION_COUNT 7
 
+#define WINED3D_ALPHA_TO_COVERAGE_ENABLE MAKEFOURCC('A','2','M','1')
+#define WINED3D_ALPHA_TO_COVERAGE_DISABLE MAKEFOURCC('A','2','M','0')
+
 struct wined3d_fragment_pipe_ops;
 struct wined3d_adapter;
 struct wined3d_context;
@@ -1896,7 +1899,7 @@ struct wined3d_gl_view
     GLuint name;
 };
 
-struct wined3d_map_range
+struct wined3d_range
 {
     unsigned int offset;
     unsigned int size;
@@ -2155,7 +2158,7 @@ void wined3d_context_gl_texture_update(struct wined3d_context_gl *context_gl,
         const struct wined3d_texture_gl *texture_gl) DECLSPEC_HIDDEN;
 void wined3d_context_gl_unload_tex_coords(const struct wined3d_context_gl *context_gl) DECLSPEC_HIDDEN;
 void wined3d_context_gl_unmap_bo_address(struct wined3d_context_gl *context_gl, const struct wined3d_bo_address *data,
-        GLenum binding, unsigned int range_count, const struct wined3d_map_range *ranges) DECLSPEC_HIDDEN;
+        GLenum binding, unsigned int range_count, const struct wined3d_range *ranges) DECLSPEC_HIDDEN;
 void wined3d_context_gl_update_stream_sources(struct wined3d_context_gl *context_gl,
         const struct wined3d_state *state) DECLSPEC_HIDDEN;
 
@@ -2855,7 +2858,7 @@ struct wined3d_adapter_ops
     void *(*adapter_map_bo_address)(struct wined3d_context *context,
             const struct wined3d_bo_address *data, size_t size, uint32_t bind_flags, uint32_t map_flags);
     void (*adapter_unmap_bo_address)(struct wined3d_context *context, const struct wined3d_bo_address *data,
-            uint32_t bind_flags, unsigned int range_count, const struct wined3d_map_range *ranges);
+            uint32_t bind_flags, unsigned int range_count, const struct wined3d_range *ranges);
     void (*adapter_copy_bo_address)(struct wined3d_context *context,
             const struct wined3d_bo_address *dst, uint32_t dst_bind_flags,
             const struct wined3d_bo_address *src, uint32_t src_bind_flags, size_t size);
@@ -3176,7 +3179,7 @@ struct wined3d_state
 
     struct wined3d_vertex_declaration *vertex_declaration;
     struct wined3d_stream_output stream_output[WINED3D_MAX_STREAM_OUTPUT_BUFFERS];
-    struct wined3d_stream_state streams[WINED3D_MAX_STREAMS + 1 /* tessellated pseudo-stream */];
+    struct wined3d_stream_state streams[WINED3D_MAX_STREAMS];
     struct wined3d_buffer *index_buffer;
     enum wined3d_format_id index_format;
     unsigned int index_offset;
@@ -3193,13 +3196,13 @@ struct wined3d_state
     struct wined3d_shader_resource_view *shader_resource_view[WINED3D_SHADER_TYPE_COUNT][MAX_SHADER_RESOURCE_VIEWS];
     struct wined3d_unordered_access_view *unordered_access_view[WINED3D_PIPELINE_COUNT][MAX_UNORDERED_ACCESS_VIEWS];
 
-    BOOL vs_consts_b[WINED3D_MAX_CONSTS_B];
-    struct wined3d_ivec4 vs_consts_i[WINED3D_MAX_CONSTS_I];
     struct wined3d_vec4 vs_consts_f[WINED3D_MAX_VS_CONSTS_F];
+    struct wined3d_ivec4 vs_consts_i[WINED3D_MAX_CONSTS_I];
+    BOOL vs_consts_b[WINED3D_MAX_CONSTS_B];
 
-    BOOL ps_consts_b[WINED3D_MAX_CONSTS_B];
-    struct wined3d_ivec4 ps_consts_i[WINED3D_MAX_CONSTS_I];
     struct wined3d_vec4 ps_consts_f[WINED3D_MAX_PS_CONSTS_F];
+    struct wined3d_ivec4 ps_consts_i[WINED3D_MAX_CONSTS_I];
+    BOOL ps_consts_b[WINED3D_MAX_CONSTS_B];
 
     struct wined3d_texture *textures[WINED3D_MAX_COMBINED_SAMPLERS];
     DWORD sampler_states[WINED3D_MAX_COMBINED_SAMPLERS][WINED3D_HIGHEST_SAMPLER_STATE + 1];
@@ -3314,6 +3317,7 @@ struct wined3d_device
     /* Context management */
     struct wined3d_context **contexts;
     UINT context_count;
+    struct wined3d_blend_state *blend_state_atoc_enabled;
 };
 
 void wined3d_device_cleanup(struct wined3d_device *device) DECLSPEC_HIDDEN;
@@ -3910,19 +3914,19 @@ struct wined3d_vertex_declaration
 
 struct wined3d_saved_states
 {
+    DWORD vs_consts_f[WINED3D_MAX_VS_CONSTS_F >> 5];
+    WORD vertexShaderConstantsI;                /* WINED3D_MAX_CONSTS_I, 16 */
+    WORD vertexShaderConstantsB;                /* WINED3D_MAX_CONSTS_B, 16 */
+    DWORD ps_consts_f[WINED3D_MAX_PS_CONSTS_F >> 5];
+    WORD pixelShaderConstantsI;                 /* WINED3D_MAX_CONSTS_I, 16 */
+    WORD pixelShaderConstantsB;                 /* WINED3D_MAX_CONSTS_B, 16 */
     DWORD transform[(WINED3D_HIGHEST_TRANSFORM_STATE >> 5) + 1];
     WORD streamSource;                          /* WINED3D_MAX_STREAMS, 16 */
     WORD streamFreq;                            /* WINED3D_MAX_STREAMS, 16 */
     DWORD renderState[(WINEHIGHEST_RENDER_STATE >> 5) + 1];
     DWORD textureState[WINED3D_MAX_TEXTURES];   /* WINED3D_HIGHEST_TEXTURE_STATE + 1, 18 */
     WORD samplerState[WINED3D_MAX_COMBINED_SAMPLERS];   /* WINED3D_HIGHEST_SAMPLER_STATE + 1, 14 */
-    DWORD clipplane;                            /* WINED3D_MAX_USER_CLIP_PLANES, 32 */
-    WORD pixelShaderConstantsB;                 /* WINED3D_MAX_CONSTS_B, 16 */
-    WORD pixelShaderConstantsI;                 /* WINED3D_MAX_CONSTS_I, 16 */
-    BOOL ps_consts_f[WINED3D_MAX_PS_CONSTS_F];
-    WORD vertexShaderConstantsB;                /* WINED3D_MAX_CONSTS_B, 16 */
-    WORD vertexShaderConstantsI;                /* WINED3D_MAX_CONSTS_I, 16 */
-    BOOL vs_consts_f[WINED3D_MAX_VS_CONSTS_F];
+    DWORD clipplane;                            /* WINED3D_MAX_CLIP_DISTANCES, 8 */
     DWORD textures : 20;                        /* WINED3D_MAX_COMBINED_SAMPLERS, 20 */
     DWORD indices : 1;
     DWORD material : 1;
@@ -3932,7 +3936,8 @@ struct wined3d_saved_states
     DWORD vertexShader : 1;
     DWORD scissorRect : 1;
     DWORD store_stream_offset : 1;
-    DWORD padding : 4;
+    DWORD blend_state : 1;
+    DWORD padding : 3;
 };
 
 struct StageState {
@@ -3956,18 +3961,6 @@ struct wined3d_stateblock
     unsigned int              num_contained_render_states;
     DWORD                     contained_transform_states[WINED3D_HIGHEST_TRANSFORM_STATE + 1];
     unsigned int              num_contained_transform_states;
-    DWORD                     contained_vs_consts_i[WINED3D_MAX_CONSTS_I];
-    unsigned int              num_contained_vs_consts_i;
-    DWORD                     contained_vs_consts_b[WINED3D_MAX_CONSTS_B];
-    unsigned int              num_contained_vs_consts_b;
-    DWORD                     contained_vs_consts_f[WINED3D_MAX_VS_CONSTS_F];
-    unsigned int              num_contained_vs_consts_f;
-    DWORD                     contained_ps_consts_i[WINED3D_MAX_CONSTS_I];
-    unsigned int              num_contained_ps_consts_i;
-    DWORD                     contained_ps_consts_b[WINED3D_MAX_CONSTS_B];
-    unsigned int              num_contained_ps_consts_b;
-    DWORD                     contained_ps_consts_f[WINED3D_MAX_PS_CONSTS_F];
-    unsigned int              num_contained_ps_consts_f;
     struct StageState         contained_tss_states[WINED3D_MAX_TEXTURES * (WINED3D_HIGHEST_TEXTURE_STATE + 1)];
     unsigned int              num_contained_tss_states;
     struct StageState         contained_sampler_states[WINED3D_MAX_COMBINED_SAMPLERS * WINED3D_HIGHEST_SAMPLER_STATE];
@@ -4179,9 +4172,9 @@ struct wined3d_buffer_ops
     void (*buffer_unload_location)(struct wined3d_buffer *buffer,
             struct wined3d_context *context, unsigned int location);
     void (*buffer_upload_ranges)(struct wined3d_buffer *buffer, struct wined3d_context *context, const void *data,
-            unsigned int data_offset, unsigned int range_count, const struct wined3d_map_range *ranges);
+            unsigned int data_offset, unsigned int range_count, const struct wined3d_range *ranges);
     void (*buffer_download_ranges)(struct wined3d_buffer *buffer, struct wined3d_context *context, void *data,
-            unsigned int data_offset, unsigned int range_count, const struct wined3d_map_range *ranges);
+            unsigned int data_offset, unsigned int range_count, const struct wined3d_range *ranges);
 };
 
 struct wined3d_buffer
@@ -4195,7 +4188,7 @@ struct wined3d_buffer
     void *map_ptr;
     uintptr_t buffer_object;
 
-    struct wined3d_map_range *maps;
+    struct wined3d_range *maps;
     SIZE_T maps_size, modified_areas;
     struct wined3d_fence *fence;
 
@@ -5277,7 +5270,7 @@ static inline void *wined3d_context_map_bo_address(struct wined3d_context *conte
 
 static inline void wined3d_context_unmap_bo_address(struct wined3d_context *context,
         const struct wined3d_bo_address *data, uint32_t bind_flags,
-        unsigned int range_count, const struct wined3d_map_range *ranges)
+        unsigned int range_count, const struct wined3d_range *ranges)
 {
     context->device->adapter->adapter_ops->adapter_unmap_bo_address(context, data, bind_flags, range_count, ranges);
 }
@@ -5325,6 +5318,65 @@ static inline void wined3d_viewport_get_z_range(const struct wined3d_viewport *v
 
     /* The magic constant is derived from tests. */
     *max_z = max(vp->max_z, vp->min_z + 0.001f);
+}
+
+static inline BOOL wined3d_bitmap_is_set(const uint32_t *map, unsigned int idx)
+{
+    return map[idx >> 5] & (1u << (idx & 0x1f));
+}
+
+static inline unsigned int wined3d_bitmap_ffs_xor(const uint32_t *bitmap, unsigned int bit_count,
+        unsigned int start, uint32_t xor_mask)
+{
+    const unsigned int word_bit_count = sizeof(*bitmap) * CHAR_BIT;
+    const uint32_t *ptr, *end_ptr;
+    uint32_t map, mask;
+
+    assert(bit_count < word_bit_count || !(bit_count % word_bit_count));
+
+    ptr = bitmap + start / word_bit_count;
+    end_ptr = bitmap + (bit_count + word_bit_count - 1) / word_bit_count;
+
+    if (ptr >= end_ptr)
+        return ~0u;
+
+    mask = ~0u << start % word_bit_count;
+    map = (*ptr ^ xor_mask) & mask;
+    while (!map)
+    {
+        if (++ptr == end_ptr)
+            return ~0u;
+        map = *ptr ^ xor_mask;
+    }
+    return (ptr - bitmap) * word_bit_count + wined3d_bit_scan(&map);
+}
+
+static inline unsigned int wined3d_bitmap_ffs(const uint32_t *bitmap, unsigned int bit_count, unsigned int start)
+{
+    return wined3d_bitmap_ffs_xor(bitmap, bit_count, start, 0);
+}
+
+static inline unsigned int wined3d_bitmap_ffz(const uint32_t *bitmap, unsigned int bit_count, unsigned int start)
+{
+    return wined3d_bitmap_ffs_xor(bitmap, bit_count, start, ~0u);
+}
+
+static inline BOOL wined3d_bitmap_get_range(const DWORD *bitmap, unsigned int bit_count,
+        unsigned int start, struct wined3d_range *range)
+{
+    unsigned int range_start, range_end;
+
+    range_start = wined3d_bitmap_ffs(bitmap, bit_count, start);
+    if (range_start == ~0u)
+        return FALSE;
+
+    range_end = wined3d_bitmap_ffz(bitmap, bit_count, range_start + 1);
+    if (range_end == ~0u)
+        range_end = bit_count;
+
+    range->offset = range_start;
+    range->size = range_end - range_start;
+    return TRUE;
 }
 
 /* The WNDCLASS-Name for the fake window which we use to retrieve the GL capabilities */

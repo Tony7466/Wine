@@ -179,13 +179,6 @@ static BSTR a2bstr(const char *str)
     return ret;
 }
 
-static int strcmp_wa(LPCWSTR strw, const char *stra)
-{
-    CHAR buf[512];
-    WideCharToMultiByte(CP_ACP, 0, strw, -1, buf, sizeof(buf), 0, 0);
-    return lstrcmpA(buf, stra);
-}
-
 static const char *vt2a(VARIANT *v)
 {
     if(V_VT(v) == (VT_BYREF|VT_VARIANT)) {
@@ -1040,7 +1033,7 @@ static IDispatchEx enumDisp = { &enumDispVtbl };
 
 static HRESULT WINAPI collectionObj_GetDispID(IDispatchEx *iface, BSTR bstrName, DWORD grfdex, DISPID *pid)
 {
-    if(!strcmp_wa(bstrName, "reset")) {
+    if(!lstrcmpW(bstrName, L"reset")) {
         *pid = DISPID_COLLOBJ_RESET;
         return S_OK;
     }
@@ -1841,7 +1834,7 @@ static HRESULT WINAPI ActiveScriptSite_GetItemInfo(IActiveScriptSite *iface, LPC
     ok(dwReturnMask == SCRIPTINFO_IUNKNOWN, "unexpected dwReturnMask %x\n", dwReturnMask);
     ok(!ppti, "ppti != NULL\n");
 
-    if(strcmp_wa(pstrName, "test"))
+    if(lstrcmpW(pstrName, L"test"))
         ok(0, "unexpected pstrName %s\n", wine_dbgstr_w(pstrName));
 
     *ppiunkItem = (IUnknown*)&Global;
@@ -2190,7 +2183,7 @@ static void test_procedures(void)
     CHECK_CALLED(OnEnterScript);
     CHECK_CALLED(OnLeaveScript);
     ok(V_VT(&v) == VT_BSTR, "Expected VT_BSTR, got %s\n", vt2a(&v));
-    ok(!strcmp_wa(V_BSTR(&v), "foobar"), "Wrong string, got %s\n", wine_dbgstr_w(V_BSTR(&v)));
+    ok(!lstrcmpW(V_BSTR(&v), L"foobar"), "Wrong string, got %s\n", wine_dbgstr_w(V_BSTR(&v)));
     VariantClear(&v);
     IDispatchEx_Release(proc);
 
@@ -2685,6 +2678,7 @@ static void test_isexpression(void)
 {
     IActiveScriptParse *parser;
     IActiveScript *engine;
+    IDispatch *disp;
     SCRIPTSTATE ss;
     HRESULT hres;
     VARIANT var;
@@ -2747,6 +2741,18 @@ static void test_isexpression(void)
     VariantClear(&var);
     SysFreeString(str);
 
+    /* Without a global host or named item context, "me" returns the script dispatch */
+    hres = IActiveScript_GetScriptDispatch(engine, NULL, &disp);
+    ok(hres == S_OK, "GetScriptDispatch failed: %08x\n", hres);
+    str = a2bstr("me");
+    hres = IActiveScriptParse_ParseScriptText(parser, str, NULL, NULL, NULL, 0, 0, SCRIPTTEXT_ISEXPRESSION, &var, NULL);
+    ok(hres == S_OK, "ParseScriptText failed: %08x\n", hres);
+    ok(V_VT(&var) == VT_DISPATCH, "Expected VT_DISPATCH, got %s\n", vt2a(&var));
+    ok(V_DISPATCH(&var) == disp, "Wrong dispatch returned for 'me'\n");
+    IDispatch_Release(disp);
+    VariantClear(&var);
+    SysFreeString(str);
+
     /* An expression can also refer to a variable, function, class, etc previously set */
     V_VT(&var) = VT_I2;
     str = a2bstr("If True Then foo = 42 Else foo = 0\n");
@@ -2776,7 +2782,7 @@ static void test_isexpression(void)
     hres = IActiveScriptParse_ParseScriptText(parser, str, NULL, NULL, NULL, 0, 0, SCRIPTTEXT_ISEXPRESSION, &var, NULL);
     ok(hres == S_OK, "ParseScriptText failed: %08x\n", hres);
     ok(V_VT(&var) == VT_BSTR, "Expected VT_BSTR, got %s\n", vt2a(&var));
-    ok(!strcmp_wa(V_BSTR(&var), "foo is 42"), "Wrong string, got %s\n", wine_dbgstr_w(V_BSTR(&var)));
+    ok(!lstrcmpW(V_BSTR(&var), L"foo is 42"), "Wrong string, got %s\n", wine_dbgstr_w(V_BSTR(&var)));
     VariantClear(&var);
     SysFreeString(str);
 

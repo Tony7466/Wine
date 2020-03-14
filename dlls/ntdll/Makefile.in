@@ -10,7 +10,6 @@ C_SRCS = \
 	actctx.c \
 	atom.c \
 	cdrom.c \
-	combclass.c \
 	critsection.c \
 	crypt.c \
 	debugbuffer.c \
