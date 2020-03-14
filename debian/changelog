@@ -1,3 +1,13 @@
+wine-development (5.3-1) UNRELEASED; urgency=medium
+
+  * New upstream release 5.3, released Feb 28, 2020.
+    - More work towards Ucrtbase runtime support.
+    - Full support for Unicode normalization.
+    - Improvements in Shell Folders handling.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 14 Mar 2020 18:05:01 +0000
+
 wine-development (5.2-3) unstable; urgency=medium
 
   * Install missing language support files (closes: #953137).
