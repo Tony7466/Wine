@@ -11,40 +11,41 @@ Files-Excluded:
  nls/*.nls
  libs/port/wctype.c
  libs/port/casemap.c
- libs/port/compose.c
- libs/port/decompose.c
+ libs/wine/compose.c
+ libs/wine/decompose.c
  libs/wine/digitmap.c
  libs/wine/collation.c
  dlls/dsound/fir.h
- dlls/*/tests/generated.c
+ dlls/itss/tests/data.chm
+ dlls/gdi32/direction.c
  dlls/gdi32/vertical.c
- dlls/ntdll/combclass.c
- dlls/wineps.drv/vertical.c
- dlls/dwrite/bracket.c
- dlls/dwrite/linebreak.c
- dlls/dwrite/mirror.c
- dlls/dwrite/scripts.c
- dlls/dwrite/scripts.h
  dlls/usp10/bracket.c
+ dlls/usp10/direction.c
  dlls/usp10/indicsyllable.c
  dlls/usp10/linebreak.c
  dlls/usp10/mirror.c
  dlls/usp10/shaping.c
- dlls/itss/tests/data.chm
+ dlls/dwrite/bracket.c
+ dlls/dwrite/direction.c
+ dlls/dwrite/linebreak.c
+ dlls/dwrite/mirror.c
+ dlls/dwrite/scripts.c
+ dlls/dwrite/scripts.h
  dlls/kernel32/nameprep.c
+ dlls/kernelbase/collation.c
+ dlls/kernelbase/digitmap.c
+ dlls/kernelbase/wctype.c
+ dlls/wineps.drv/vertical.c
  dlls/opengl32/opengl_ext.c
  dlls/opengl32/opengl_norm.c
  dlls/opengl32/opengl32.spec
- dlls/kernelbase/compose.c
- dlls/kernelbase/collation.c
- dlls/kernelbase/digitmap.c
- dlls/kernelbase/decompose.c
  dlls/cabinet/zlib.h
  dlls/cabinet/deflate.c
  dlls/wininet/zlib.h
  dlls/wininet/inflate.c
  dlls/opcservices/zlib.h
  dlls/opcservices/deflate.c
+ dlls/*/tests/generated.c
 Upstream-Name: Wine
 
 Files: *
@@ -77,6 +78,11 @@ License: Public-Domain
 Files: debian/unicode/tr10/*
 Copyright:
  Copyright (c) 1991-2002 Unicode, Inc.
+License: Unicode
+
+Files: debian/unicode/tr46/*
+Copyright:
+ Copyright (c) 2010-2019 Unicode, Inc.
 License: Unicode
 
 Files: debian/unicode/mappings/*

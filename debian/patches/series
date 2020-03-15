@@ -7,7 +7,6 @@ debianization/wineserver-persistence.patch
 
 disable/fold.patch
 disable/tests.patch
-disable/folder-reset.patch
 disable/line-wrapping.patch
 disable/addons-download.patch
 disable/po-modifications.patch

@@ -3,26 +3,44 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/make_unicode
 +++ b/tools/make_unicode
-@@ -21,12 +21,12 @@
+@@ -21,18 +21,19 @@
  
  use strict;
  
 -# base URLs for www.unicode.org files
+-my $UNIVERSION = "12.1.0";
 -my $MAPPINGS = "http://www.unicode.org/Public/MAPPINGS";
--my $UNIDATA = "http://www.unicode.org/Public/12.1.0/ucd/UCD.zip";
+-my $UNIDATA = "http://www.unicode.org/Public/$UNIVERSION/ucd/UCD.zip";
+-my $IDNADATA = "https://www.unicode.org/Public/idna/$UNIVERSION";
 -my $REPORTS = "http://www.unicode.org/reports";
 -my $RFCS = "http://www.rfc-editor.org/rfc";
 -my $MSDATA = "https://download.microsoft.com/download/C/F/7/CF713A5E-9FBC-4FD6-9246-275F65C0E498";
 +# Locations of unicode files
++my $UNIVERSION = `dpkg-parsechangelog --file /usr/share/doc/unicode-data/changelog.Debian.gz --show-field Version | sed s/-.*//`;
++chomp($UNIVERSION);
 +my $MAPPINGS = "debian/unicode/mappings";
 +my $UNIDATA = "/usr/share/unicode";
++my $IDNADATA = "debian/unicode/tr46/$UNIVERSION";
 +my $REPORTS = "debian/unicode";
 +my $RFCS = "debian/unicode";
 +my $MSDATA = "debian/unicode";
  my $MSCODEPAGES = "$MSDATA/Windows Supported Code Page Data Files.zip";
  
  # Sort keys file
-@@ -429,28 +429,17 @@ sub get_utf16($)
+-my $SORTKEYS = "tr10/allkeys.txt";
++my $SORTKEYS = "tr10/3.1.0/allkeys.txt";
+ 
+ # RFC3454 (stringprep data)
+ my $STRINGPREP = "rfc3454.txt";
+@@ -407,6 +408,7 @@ my @category_table = ();
+ my @joining_table = ();
+ my @direction_table = ();
+ my @decomp_table = ();
++my @compose_table = ();
+ my @combining_class_table = ();
+ my @decomp_compat_table = ();
+ my @comp_exclusions = ();
+@@ -446,28 +448,17 @@ sub to_utf16(@)
  sub open_data_file($$)
  {
      my ($base, $name) = @_;
@@ -56,11 +74,265 @@ author: Michael Gilbert <mgilbert@debian.org>
      return *FILE;
  }
  
-@@ -2354,6 +2343,7 @@ sub REPLACE_IN_FILE($@)
+@@ -659,6 +650,7 @@ sub load_data()
+             if ($decomp =~ /^([0-9a-fA-F]+)\s+([0-9a-fA-F]+)$/)
+             {
+                 $decomp_table[$src] = $decomp_compat_table[$src] = [ hex $1, hex $2 ];
++                push @compose_table, [ hex $1, hex $2, $src ];
+             }
+             elsif ($decomp =~ /^([0-9a-fA-F]+)$/)
+             {
+@@ -1125,18 +1117,24 @@ sub dump_indic($)
+         if (/^\s*([0-9a-fA-F]+)\s*;\s*([a-zA-Z]+)\s*#/)
+         {
+             my $type = $2;
++            if ("$type" ne "Top_And_Bottom_And_Left") # ignore unicode 13 type
++            {
+             die "unknown matra $type" unless defined $matra_types{$type};
+             $indic_table[hex $1] += $matra_types{$type} << 8;
++            }
+             next;
+         }
+         elsif (/^\s*([0-9a-fA-F]+)..\s*([0-9a-fA-F]+)\s*;\s*([A-Za-z_]+)\s*#/)
+         {
+             my $type = $3;
++            if ("$type" ne "Top_And_Bottom_And_Left") # ignore unicode 13 type
++            {
+             die "unknown matra $type" unless defined $matra_types{$type};
+             foreach my $i (hex $1 .. hex $2)
+             {
+                 $indic_table[$i] += $matra_types{$type} << 8;
+             }
++            }
+             next;
+         }
+         die "malformed line $_";
+@@ -2082,6 +2080,217 @@ sub dump_ctype_tables($)
+     save_file($filename);
+ }
+ 
++################################################################
++# dump the char composition table
++sub dump_compose_table($)
++{
++    my $filename = shift;
++
++    open OUTPUT,">$filename.new" or die "Cannot create $filename";
++    print "Building $filename\n";
++    print OUTPUT "/* Unicode char composition */\n";
++    print OUTPUT "/* generated from $UNIDATA:UnicodeData.txt */\n";
++    print OUTPUT "/* DO NOT EDIT!! */\n\n";
++    print OUTPUT "#include \"wine/asm.h\"\n\n";
++    print OUTPUT "#ifdef __ASM_OBSOLETE\n\n";
++    print OUTPUT "#include \"windef.h\"\n\n";
++
++    my @filled = ();
++    foreach my $i (@compose_table)
++    {
++        my @comp = @$i;
++        push @{$filled[$comp[1]]}, [ $comp[0], $comp[2] ];
++    }
++
++    # count how many different second chars we have
++
++    my $count = 0;
++    for (my $i = 0; $i < 65536; $i++)
++    {
++        next unless defined $filled[$i];
++        $count++;
++    }
++
++    # build the table of second chars and offsets
++
++    my $pos = $count + 1;
++    my @table = ();
++    for (my $i = 0; $i < 65536; $i++)
++    {
++        next unless defined $filled[$i];
++        push @table, $i, $pos;
++        $pos += @{$filled[$i]};
++    }
++    # terminator with last position
++    push @table, 0, $pos;
++    printf OUTPUT "static const WCHAR table[0x%x] =\n{\n", 2*$pos;
++    printf OUTPUT "    /* second chars + offsets */\n%s", dump_array( 16, 0, @table );
++
++    # build the table of first chars and mappings
++
++    for (my $i = 0; $i < 65536; $i++)
++    {
++        next unless defined $filled[$i];
++        my @table = ();
++        my @list = sort { $a->[0] <=> $b->[0] } @{$filled[$i]};
++        for (my $j = 0; $j <= $#list; $j++)
++        {
++            push @table, $list[$j][0], $list[$j][1];
++        }
++        printf OUTPUT ",\n    /* 0x%04x */\n%s", $i, dump_array( 16, 0, @table );
++    }
++    print OUTPUT "\n};\n\n";
++    print OUTPUT <<"EOF";
++static inline int binary_search( WCHAR ch, int low, int high )
++{
++    while (low <= high)
++    {
++        int pos = (low + high) / 2;
++        if (table[2 * pos] < ch) low = pos + 1;
++        else if (table[2 * pos] > ch) high = pos - 1;
++        else return pos;
++    }
++    return -1;
++}
++
++WCHAR DECLSPEC_HIDDEN wine_compose( const WCHAR *str )
++{
++    int pos, idx = 1, start = 0, count = $count;
++    for (;;)
++    {
++        if ((pos = binary_search( str[idx], start, count - 1 )) == -1) return 0;
++        if (!idx--) return table[2 * pos + 1];
++        start = table[2 * pos + 1];
++        count = table[2 * pos + 3];
++    }
++}
++
++#endif /* __ASM_OBSOLETE */
++EOF
++    close OUTPUT;
++    save_file($filename);
++}
++
++################################################################
++# dump a decomposition table
++sub dump_decompositions($@)
++{
++    my ($name, @decomp) = @_;
++
++    # first determine all the 16-char subsets that contain something
++
++    my @filled = (0) x 4096;
++    my $pos = 16;  # for the null subset
++    my $data_total = 0;
++    for (my $i = 0; $i < 65536; $i++)
++    {
++        next unless defined $decomp[$i];
++        if ($filled[$i >> 4] == 0)
++        {
++            $filled[$i >> 4] = $pos;
++            $pos += 16;
++        }
++        $data_total += @{$decomp[$i]};
++    }
++    my $total = $pos;
++
++    # now count the 256-char subsets that contain something
++
++    my @filled_idx = (256) x 256;
++    $pos = 256 + 16;
++    for (my $i = 0; $i < 4096; $i++)
++    {
++        next unless $filled[$i];
++        $filled_idx[$i >> 4] = $pos;
++        $pos += 16;
++        $i |= 15;
++    }
++    my $null_offset = $pos;  # null mapping
++    $total += $pos + 1; # add the offset sentinel
++
++    # add the index offsets to the subsets positions
++
++    for (my $i = 0; $i < 4096; $i++)
++    {
++        next unless $filled[$i];
++        $filled[$i] += $null_offset;
++    }
++
++    # dump the main index
++
++    printf OUTPUT "\nconst WCHAR DECLSPEC_HIDDEN %s[%d] =\n", $name, $total + $data_total;
++    printf OUTPUT "{\n    /* index */\n";
++    printf OUTPUT "%s", dump_array( 16, 0, @filled_idx );
++    printf OUTPUT ",\n    /* null sub-index */\n%s", dump_array( 16, 0, ($null_offset) x 16 );
++
++    # dump the second-level indexes
++
++    for (my $i = 0; $i < 256; $i++)
++    {
++        next unless ($filled_idx[$i] > 256);
++        my @table = @filled[($i<<4)..($i<<4)+15];
++        for (my $j = 0; $j < 16; $j++) { $table[$j] ||= $null_offset; }
++        printf OUTPUT ",\n    /* sub-index %02x */\n", $i;
++        printf OUTPUT "%s", dump_array( 16, 0, @table );
++    }
++
++    # dump the 16-char offsets
++
++    printf OUTPUT ",\n    /* null offsets */\n";
++    printf OUTPUT "%s", dump_array( 16, 0, ($total) x (16) );
++
++    $pos = $total;
++
++    my @data;
++    for (my $i = 0; $i < 4096; $i++)
++    {
++        next unless $filled[$i];
++        my @table = (0) x (16);
++        for (my $j = 0; $j < 16; $j++)
++        {
++            $table[$j] = $pos;
++            if (defined $decomp[($i<<4) + $j])
++            {
++                $pos += $#{$decomp[($i<<4) + $j]} + 1;
++                push @data, @{$decomp[($i<<4) + $j]};
++            }
++        }
++        printf OUTPUT ",\n    /* offsets 0x%03x0 .. 0x%03xf */\n", $i, $i;
++        printf OUTPUT "%s", dump_array( 16, 0, @table );
++    }
++
++    my @sentinel = $pos;
++    printf OUTPUT ",\n    /* offset sentinel */\n";
++    printf OUTPUT "%s", dump_array( 16, 0, @sentinel );
++
++    printf OUTPUT ",\n    /* data */\n";
++    printf OUTPUT "%s", dump_array( 16, 0, @data );
++
++    printf OUTPUT "\n};\n";
++}
++
++################################################################
++# dump the char decomposition table
++sub dump_decompose_table($$)
++{
++    my ($filename, $compat) = @_;
++
++    open OUTPUT,">$filename.new" or die "Cannot create $filename";
++    print "Building $filename\n";
++    print OUTPUT "/* Unicode char composition */\n";
++    print OUTPUT "/* generated from $UNIDATA:UnicodeData.txt */\n";
++    print OUTPUT "/* DO NOT EDIT!! */\n\n";
++    print OUTPUT "#include \"wine/asm.h\"\n\n";
++    print OUTPUT "#ifdef __ASM_OBSOLETE\n\n";
++    print OUTPUT "#include \"windef.h\"\n";
++
++    dump_decompositions( "nfd_table", build_decompositions( @decomp_table ));
++    dump_decompositions( "nfkd_table", build_decompositions( @decomp_compat_table )) if $compat;
++
++    print OUTPUT "\n#endif /* __ASM_OBSOLETE */\n";
++    close OUTPUT;
++    save_file($filename);
++}
+ 
+ sub rol($$)
+ {
+@@ -2513,7 +2722,10 @@ sub REPLACE_IN_FILE($@)
  chdir ".." if -f "./make_unicode";
  load_data();
  dump_case_mappings( "libs/port/casemap.c" );
 +dump_sortkeys( "libs/wine/collation.c" );
  dump_sortkeys( "dlls/kernelbase/collation.c" );
- dump_compose_table( "libs/port/compose.c" );
- dump_compose_table( "dlls/kernelbase/compose.c" );
++dump_compose_table( "libs/wine/compose.c" );
++dump_decompose_table( "libs/wine/decompose.c", 0 );
+ dump_ctype_tables( "libs/port/wctype.c" );
+ dump_bidi_dir_table( "dlls/gdi32/direction.c" );
+ dump_bidi_dir_table( "dlls/usp10/direction.c" );

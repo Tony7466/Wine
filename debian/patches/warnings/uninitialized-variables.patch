@@ -14,7 +14,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (hkey && !RegQueryValueExW(hkey, name, 0, &type, NULL, &size))
 --- a/dlls/d3dx9_36/texture.c
 +++ b/dlls/d3dx9_36/texture.c
-@@ -1301,6 +1301,10 @@ static inline void fill_texture(const st
+@@ -1286,6 +1286,10 @@ static inline void fill_texture(const st
              case 3: /* Blue */
                  comp_value = value->z;
                  break;
@@ -93,7 +93,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!desc) return E_INVALIDARG;
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -2659,6 +2659,10 @@ static void check_fbo_compat(struct wine
+@@ -2662,6 +2662,10 @@ static void check_fbo_compat(struct wine
                      case WINED3D_GL_RES_TYPE_COUNT:
                          color = 0;
                          break;
@@ -253,8 +253,8 @@ author: Michael Gilbert <mgilbert@debian.org>
      if(ts64.tv_sec != (MSVCRT___time32_t)ts64.tv_sec)
 --- a/dlls/mf/session.c
 +++ b/dlls/mf/session.c
-@@ -425,7 +425,7 @@ static void session_clear_topologies(str
- static void session_set_topo_status(struct media_session *session, struct queued_topology *topology, HRESULT status,
+@@ -483,7 +483,7 @@ static void session_clear_topologies(str
+ static void session_set_topo_status(struct media_session *session, HRESULT status,
          MF_TOPOSTATUS topo_status)
  {
 -    IMFMediaEvent *event;

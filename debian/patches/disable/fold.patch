@@ -3,10 +3,10 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/libs/wine/Makefile.in
 +++ b/libs/wine/Makefile.in
-@@ -71,7 +71,6 @@ C_SRCS = \
- 	cpsymbol.c \
+@@ -73,7 +73,6 @@ C_SRCS = \
  	cptable.c \
  	debug.c \
+ 	decompose.c \
 -	digitmap.c \
  	fold.c \
  	ldt.c \
