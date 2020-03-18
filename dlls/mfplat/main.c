@@ -85,7 +85,7 @@ static CRITICAL_SECTION local_handlers_section = { NULL, -1, 0, 0, 0, 0 };
 static struct list local_scheme_handlers = LIST_INIT(local_scheme_handlers);
 static struct list local_bytestream_handlers = LIST_INIT(local_bytestream_handlers);
 
-struct local_mft
+struct mft_registration
 {
     struct list entry;
     IClassFactory *factory;
@@ -97,6 +97,7 @@ struct local_mft
     UINT32 input_types_count;
     MFT_REGISTER_TYPE_INFO *output_types;
     UINT32 output_types_count;
+    BOOL local;
 };
 
 static CRITICAL_SECTION local_mfts_section = { NULL, -1, 0, 0, 0, 0 };
@@ -107,6 +108,8 @@ struct transform_activate
 {
     struct attributes attributes;
     IMFActivate IMFActivate_iface;
+    IClassFactory *factory;
+    IMFTransform *transform;
 };
 
 struct system_clock
@@ -194,6 +197,10 @@ static ULONG WINAPI transform_activate_Release(IMFActivate *iface)
     if (!refcount)
     {
         clear_attributes_object(&activate->attributes);
+        if (activate->factory)
+            IClassFactory_Release(activate->factory);
+        if (activate->transform)
+            IMFTransform_Release(activate->transform);
         heap_free(activate);
     }
 
@@ -478,21 +485,67 @@ static HRESULT WINAPI transform_activate_CopyAllItems(IMFActivate *iface, IMFAtt
 
 static HRESULT WINAPI transform_activate_ActivateObject(IMFActivate *iface, REFIID riid, void **obj)
 {
-    FIXME("%p, %s, %p.\n", iface, debugstr_guid(riid), obj);
+    struct transform_activate *activate = impl_from_IMFActivate(iface);
+    CLSID clsid;
+    HRESULT hr;
 
-    return E_NOTIMPL;
+    TRACE("%p, %s, %p.\n", iface, debugstr_guid(riid), obj);
+
+    EnterCriticalSection(&activate->attributes.cs);
+
+    if (!activate->transform)
+    {
+        if (activate->factory)
+        {
+            if (FAILED(hr = IClassFactory_CreateInstance(activate->factory, NULL, &IID_IMFTransform,
+                    (void **)&activate->transform)))
+            {
+                hr = MF_E_INVALIDREQUEST;
+            }
+        }
+        else
+        {
+            if (SUCCEEDED(hr = attributes_GetGUID(&activate->attributes, &MFT_TRANSFORM_CLSID_Attribute, &clsid)))
+            {
+                if (FAILED(hr = CoCreateInstance(&clsid, NULL, CLSCTX_INPROC_SERVER, &IID_IMFTransform,
+                        (void **)&activate->transform)))
+                {
+                    hr = MF_E_INVALIDREQUEST;
+                }
+            }
+        }
+    }
+
+    if (activate->transform)
+        hr = IMFTransform_QueryInterface(activate->transform, riid, obj);
+
+    LeaveCriticalSection(&activate->attributes.cs);
+
+    return hr;
 }
 
 static HRESULT WINAPI transform_activate_ShutdownObject(IMFActivate *iface)
 {
-    FIXME("%p.\n", iface);
+    struct transform_activate *activate = impl_from_IMFActivate(iface);
 
-    return E_NOTIMPL;
+    TRACE("%p.\n", iface);
+
+    EnterCriticalSection(&activate->attributes.cs);
+
+    if (activate->transform)
+    {
+        IMFTransform_Release(activate->transform);
+        activate->transform = NULL;
+    }
+
+    LeaveCriticalSection(&activate->attributes.cs);
+
+    return S_OK;
 }
 
 static HRESULT WINAPI transform_activate_DetachObject(IMFActivate *iface)
 {
-    FIXME("%p.\n", iface);
+    TRACE("%p.\n", iface);
 
     return E_NOTIMPL;
 }
@@ -537,12 +590,10 @@ static const IMFActivateVtbl transform_activate_vtbl =
     transform_activate_DetachObject,
 };
 
-HRESULT WINAPI MFCreateTransformActivate(IMFActivate **activate)
+static HRESULT create_transform_activate(IClassFactory *factory, IMFActivate **activate)
 {
     struct transform_activate *object;
     HRESULT hr;
-
-    TRACE("%p.\n", activate);
 
     object = heap_alloc_zero(sizeof(*object));
     if (!object)
@@ -555,10 +606,20 @@ HRESULT WINAPI MFCreateTransformActivate(IMFActivate **activate)
     }
 
     object->IMFActivate_iface.lpVtbl = &transform_activate_vtbl;
+    object->factory = factory;
+    if (object->factory)
+        IClassFactory_AddRef(object->factory);
 
     *activate = &object->IMFActivate_iface;
 
     return S_OK;
+}
+
+HRESULT WINAPI MFCreateTransformActivate(IMFActivate **activate)
+{
+    TRACE("%p.\n", activate);
+
+    return create_transform_activate(NULL, activate);
 }
 
 static const WCHAR transform_keyW[] = {'M','e','d','i','a','F','o','u','n','d','a','t','i','o','n','\\',
@@ -648,7 +709,7 @@ static BOOL GUIDFromString(LPCWSTR s, GUID *id)
         id->Data4[(i-19)/2] = guid_conv_table[s[i]] << 4 | guid_conv_table[s[i+1]];
     }
 
-    if (!s[37]) return TRUE;
+    if (!s[36]) return TRUE;
     return FALSE;
 }
 
@@ -774,7 +835,7 @@ HRESULT WINAPI MFTRegister(CLSID clsid, GUID category, LPWSTR name, UINT32 flags
     return hr;
 }
 
-static void release_local_mft(struct local_mft *mft)
+static void release_mft_registration(struct mft_registration *mft)
 {
     if (mft->factory)
         IClassFactory_Release(mft->factory);
@@ -788,7 +849,7 @@ static HRESULT mft_register_local(IClassFactory *factory, REFCLSID clsid, REFGUI
         UINT32 input_count, const MFT_REGISTER_TYPE_INFO *input_types, UINT32 output_count,
         const MFT_REGISTER_TYPE_INFO *output_types)
 {
-    struct local_mft *mft, *cur, *unreg_mft = NULL;
+    struct mft_registration *mft, *cur, *unreg_mft = NULL;
     HRESULT hr;
 
     if (!factory && !clsid)
@@ -807,7 +868,10 @@ static HRESULT mft_register_local(IClassFactory *factory, REFCLSID clsid, REFGUI
     if (clsid)
         mft->clsid = *clsid;
     mft->category = *category;
+    if (!(flags & (MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG_ASYNCMFT | MFT_ENUM_FLAG_HARDWARE)))
+        flags |= MFT_ENUM_FLAG_SYNCMFT;
     mft->flags = flags;
+    mft->local = TRUE;
     if (FAILED(hr = heap_strdupW(name, &mft->name)))
         goto failed;
 
@@ -835,7 +899,7 @@ static HRESULT mft_register_local(IClassFactory *factory, REFCLSID clsid, REFGUI
 
     EnterCriticalSection(&local_mfts_section);
 
-    LIST_FOR_EACH_ENTRY(cur, &local_mfts, struct local_mft, entry)
+    LIST_FOR_EACH_ENTRY(cur, &local_mfts, struct mft_registration, entry)
     {
         if (cur->factory == factory)
         {
@@ -849,11 +913,11 @@ static HRESULT mft_register_local(IClassFactory *factory, REFCLSID clsid, REFGUI
     LeaveCriticalSection(&local_mfts_section);
 
     if (unreg_mft)
-        release_local_mft(unreg_mft);
+        release_mft_registration(unreg_mft);
 
 failed:
     if (FAILED(hr))
-        release_local_mft(mft);
+        release_mft_registration(mft);
 
     return hr;
 }
@@ -880,7 +944,7 @@ HRESULT WINAPI MFTRegisterLocalByCLSID(REFCLSID clsid, REFGUID category, LPCWSTR
 
 static HRESULT mft_unregister_local(IClassFactory *factory, REFCLSID clsid)
 {
-    struct local_mft *cur, *cur2;
+    struct mft_registration *cur, *cur2;
     BOOL unregister_all = !factory && !clsid;
     struct list unreg;
 
@@ -888,7 +952,7 @@ static HRESULT mft_unregister_local(IClassFactory *factory, REFCLSID clsid)
 
     EnterCriticalSection(&local_mfts_section);
 
-    LIST_FOR_EACH_ENTRY_SAFE(cur, cur2, &local_mfts, struct local_mft, entry)
+    LIST_FOR_EACH_ENTRY_SAFE(cur, cur2, &local_mfts, struct mft_registration, entry)
     {
         if (!unregister_all)
         {
@@ -911,10 +975,10 @@ static HRESULT mft_unregister_local(IClassFactory *factory, REFCLSID clsid)
     if (!unregister_all && list_empty(&unreg))
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
 
-    LIST_FOR_EACH_ENTRY_SAFE(cur, cur2, &unreg, struct local_mft, entry)
+    LIST_FOR_EACH_ENTRY_SAFE(cur, cur2, &unreg, struct mft_registration, entry)
     {
         list_remove(&cur->entry);
-        release_local_mft(cur);
+        release_mft_registration(cur);
     }
 
     return S_OK;
@@ -945,135 +1009,432 @@ MFTIME WINAPI MFGetSystemTime(void)
     return mf;
 }
 
-static BOOL match_type(const WCHAR *clsid_str, const WCHAR *type_str, MFT_REGISTER_TYPE_INFO *type)
+static BOOL mft_is_type_info_match(struct mft_registration *mft, const GUID *category, UINT32 flags,
+        IMFPluginControl *plugin_control, const MFT_REGISTER_TYPE_INFO *input_type,
+        const MFT_REGISTER_TYPE_INFO *output_type)
 {
-    HKEY htransform, hfilter;
-    DWORD reg_type, size;
-    LONG ret = FALSE;
-    MFT_REGISTER_TYPE_INFO *info = NULL;
+    BOOL matching = TRUE;
+    DWORD model;
     int i;
 
-    if (RegOpenKeyW(HKEY_CLASSES_ROOT, transform_keyW, &htransform))
+    if (!IsEqualGUID(category, &mft->category))
         return FALSE;
 
-    if (RegOpenKeyW(htransform, clsid_str, &hfilter))
+    /* Default model is synchronous. */
+    model = mft->flags & (MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG_ASYNCMFT | MFT_ENUM_FLAG_HARDWARE);
+    if (!model)
+        model = MFT_ENUM_FLAG_SYNCMFT;
+    if (!(model & flags & (MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG_ASYNCMFT | MFT_ENUM_FLAG_HARDWARE)))
+        return FALSE;
+
+    /* These flags should be explicitly enabled. */
+    if (mft->flags & ~flags & (MFT_ENUM_FLAG_FIELDOFUSE | MFT_ENUM_FLAG_TRANSCODE_ONLY))
+        return FALSE;
+
+    if (flags & MFT_ENUM_FLAG_SORTANDFILTER && !mft->factory && plugin_control
+            && IMFPluginControl_IsDisabled(plugin_control, MF_Plugin_Type_MFT, &mft->clsid) == S_OK)
     {
-        RegCloseKey(htransform);
         return FALSE;
     }
 
-    if (RegQueryValueExW(hfilter, type_str, NULL, &reg_type, NULL, &size) != ERROR_SUCCESS)
+    if (input_type)
+    {
+        for (i = 0, matching = FALSE; input_type && i < mft->input_types_count; ++i)
+        {
+            if (!memcmp(&mft->input_types[i], input_type, sizeof(*input_type)))
+            {
+                matching = TRUE;
+                break;
+            }
+        }
+    }
+
+    if (output_type && matching)
+    {
+        for (i = 0, matching = FALSE; i < mft->output_types_count; ++i)
+        {
+            if (!memcmp(&mft->output_types[i], output_type, sizeof(*output_type)))
+            {
+                matching = TRUE;
+                break;
+            }
+        }
+    }
+
+    return matching;
+}
+
+static void mft_get_reg_type_info(const WCHAR *clsidW, const WCHAR *typeW, MFT_REGISTER_TYPE_INFO **type,
+        UINT32 *count)
+{
+    HKEY htransform, hfilter;
+    DWORD reg_type, size;
+
+    *type = NULL;
+    *count = 0;
+
+    if (RegOpenKeyW(HKEY_CLASSES_ROOT, transform_keyW, &htransform))
+        return;
+
+    if (RegOpenKeyW(htransform, clsidW, &hfilter))
+    {
+        RegCloseKey(htransform);
+        return;
+    }
+
+    if (RegQueryValueExW(hfilter, typeW, NULL, &reg_type, NULL, &size))
         goto out;
 
     if (reg_type != REG_BINARY)
         goto out;
 
-    if (!size || size % (sizeof(MFT_REGISTER_TYPE_INFO)) != 0)
+    if (!size || size % sizeof(**type))
         goto out;
 
-    info = HeapAlloc(GetProcessHeap(), 0, size);
-    if (!info)
+    if (!(*type = heap_alloc(size)))
         goto out;
 
-    if (RegQueryValueExW(hfilter, type_str, NULL, &reg_type, (LPBYTE)info, &size) != ERROR_SUCCESS)
-        goto out;
+    *count = size / sizeof(**type);
 
-    for (i = 0; i < size / sizeof(MFT_REGISTER_TYPE_INFO); i++)
+    if (RegQueryValueExW(hfilter, typeW, NULL, &reg_type, (BYTE *)*type, &size))
     {
-        if (IsEqualGUID(&info[i].guidMajorType, &type->guidMajorType) &&
-            IsEqualGUID(&info[i].guidSubtype,   &type->guidSubtype))
-        {
-            ret = TRUE;
-            break;
-        }
+        heap_free(*type);
+        *type = NULL;
+        *count = 0;
     }
 
 out:
-    HeapFree(GetProcessHeap(), 0, info);
     RegCloseKey(hfilter);
     RegCloseKey(htransform);
-    return ret;
+}
+
+static void mft_get_reg_flags(const WCHAR *clsidW, const WCHAR *nameW, DWORD *flags)
+{
+    DWORD ret, reg_type, size;
+    HKEY hroot, hmft;
+
+    *flags = 0;
+
+    if (RegOpenKeyW(HKEY_CLASSES_ROOT, transform_keyW, &hroot))
+        return;
+
+    ret = RegOpenKeyW(hroot, clsidW, &hmft);
+    RegCloseKey(hroot);
+    if (ret)
+        return;
+
+    reg_type = 0;
+    if (!RegQueryValueExW(hmft, nameW, NULL, &reg_type, NULL, &size) && reg_type == REG_DWORD)
+        RegQueryValueExW(hmft, nameW, NULL, &reg_type, (BYTE *)flags, &size);
+
+    RegCloseKey(hmft);
+}
+
+static HRESULT mft_collect_machine_reg(struct list *mfts, const GUID *category, UINT32 flags,
+        IMFPluginControl *plugin_control, const MFT_REGISTER_TYPE_INFO *input_type,
+        const MFT_REGISTER_TYPE_INFO *output_type)
+{
+    struct mft_registration mft, *cur;
+    HKEY hcategory, hlist;
+    WCHAR clsidW[64];
+    DWORD ret, size;
+    int index = 0;
+
+    if (RegOpenKeyW(HKEY_CLASSES_ROOT, categories_keyW, &hcategory))
+        return E_FAIL;
+
+    GUIDToString(clsidW, category);
+    ret = RegOpenKeyW(hcategory, clsidW, &hlist);
+    RegCloseKey(hcategory);
+    if (ret)
+        return E_FAIL;
+
+    size = ARRAY_SIZE(clsidW);
+    while (!RegEnumKeyExW(hlist, index, clsidW, &size, NULL, NULL, NULL, NULL))
+    {
+        memset(&mft, 0, sizeof(mft));
+        mft.category = *category;
+        if (!GUIDFromString(clsidW, &mft.clsid))
+            goto next;
+
+        mft_get_reg_flags(clsidW, mftflagsW, &mft.flags);
+
+        if (output_type)
+            mft_get_reg_type_info(clsidW, outputtypesW, &mft.output_types, &mft.output_types_count);
+
+        if (input_type)
+            mft_get_reg_type_info(clsidW, inputtypesW, &mft.input_types, &mft.input_types_count);
+
+        if (!mft_is_type_info_match(&mft, category, flags, plugin_control, input_type, output_type))
+        {
+            heap_free(mft.input_types);
+            heap_free(mft.output_types);
+            goto next;
+        }
+
+        cur = heap_alloc(sizeof(*cur));
+        /* Reuse allocated type arrays. */
+        *cur = mft;
+        list_add_tail(mfts, &cur->entry);
+
+    next:
+        size = ARRAY_SIZE(clsidW);
+        index++;
+    }
+
+    return S_OK;
+}
+
+static BOOL mft_is_preferred(IMFPluginControl *plugin_control, const CLSID *clsid)
+{
+    CLSID preferred;
+    WCHAR *selector;
+    int index = 0;
+
+    while (SUCCEEDED(IMFPluginControl_GetPreferredClsidByIndex(plugin_control, MF_Plugin_Type_MFT, index++, &selector,
+            &preferred)))
+    {
+        CoTaskMemFree(selector);
+
+        if (IsEqualGUID(&preferred, clsid))
+            return TRUE;
+    }
+
+    return FALSE;
+}
+
+static HRESULT mft_enum(GUID category, UINT32 flags, const MFT_REGISTER_TYPE_INFO *input_type,
+        const MFT_REGISTER_TYPE_INFO *output_type, IMFAttributes *attributes, IMFActivate ***activate, UINT32 *count)
+{
+    IMFPluginControl *plugin_control = NULL;
+    struct list mfts, mfts_sorted, *result = &mfts;
+    struct mft_registration *mft, *mft2;
+    unsigned int obj_count;
+    HRESULT hr;
+
+    *count = 0;
+    *activate = NULL;
+
+    if (!flags)
+        flags = MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG_LOCALMFT | MFT_ENUM_FLAG_SORTANDFILTER;
+
+    /* Synchronous processing is default. */
+    if (!(flags & (MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG_ASYNCMFT | MFT_ENUM_FLAG_HARDWARE)))
+        flags |= MFT_ENUM_FLAG_SYNCMFT;
+
+    if (FAILED(hr = MFGetPluginControl(&plugin_control)))
+    {
+        WARN("Failed to get plugin control instance, hr %#x.\n", hr);
+        return hr;
+    }
+
+    list_init(&mfts);
+
+    /* Collect from registry */
+    mft_collect_machine_reg(&mfts, &category, flags, plugin_control, input_type, output_type);
+
+    /* Collect locally registered ones. */
+    if (flags & MFT_ENUM_FLAG_LOCALMFT)
+    {
+        struct mft_registration *local;
+
+        EnterCriticalSection(&local_mfts_section);
+
+        LIST_FOR_EACH_ENTRY(local, &local_mfts, struct mft_registration, entry)
+        {
+            if (mft_is_type_info_match(local, &category, flags, plugin_control, input_type, output_type))
+            {
+                mft = heap_alloc_zero(sizeof(*mft));
+
+                mft->clsid = local->clsid;
+                mft->factory = local->factory;
+                if (mft->factory)
+                    IClassFactory_AddRef(mft->factory);
+                mft->flags = local->flags;
+                mft->local = local->local;
+
+                list_add_tail(&mfts, &mft->entry);
+            }
+        }
+
+        LeaveCriticalSection(&local_mfts_section);
+    }
+
+    list_init(&mfts_sorted);
+
+    if (flags & MFT_ENUM_FLAG_SORTANDFILTER)
+    {
+        /* Local registrations. */
+        LIST_FOR_EACH_ENTRY_SAFE(mft, mft2, &mfts, struct mft_registration, entry)
+        {
+            if (mft->local)
+            {
+                list_remove(&mft->entry);
+                list_add_tail(&mfts_sorted, &mft->entry);
+            }
+        }
+
+        /* FIXME: Sort by merit value, for the ones that got it. Currently not handled. */
+
+        /* Preferred transforms. */
+        LIST_FOR_EACH_ENTRY_SAFE(mft, mft2, &mfts, struct mft_registration, entry)
+        {
+            if (!mft->factory && mft_is_preferred(plugin_control, &mft->clsid))
+            {
+                list_remove(&mft->entry);
+                list_add_tail(&mfts_sorted, &mft->entry);
+            }
+        }
+
+        /* Append the rest. */
+        LIST_FOR_EACH_ENTRY_SAFE(mft, mft2, &mfts, struct mft_registration, entry)
+        {
+            list_remove(&mft->entry);
+            list_add_tail(&mfts_sorted, &mft->entry);
+        }
+
+        result = &mfts_sorted;
+    }
+
+    IMFPluginControl_Release(plugin_control);
+
+    /* Create activation objects from CLSID/IClassFactory. */
+
+    obj_count = list_count(result);
+
+    if (obj_count)
+    {
+        if (!(*activate = CoTaskMemAlloc(obj_count * sizeof(**activate))))
+            hr = E_OUTOFMEMORY;
+
+        obj_count = 0;
+
+        LIST_FOR_EACH_ENTRY_SAFE(mft, mft2, result, struct mft_registration, entry)
+        {
+            IMFActivate *mft_activate;
+
+            if (*activate)
+            {
+                if (SUCCEEDED(create_transform_activate(mft->factory, &mft_activate)))
+                {
+                    (*activate)[obj_count] = mft_activate;
+
+                    if (mft->local)
+                    {
+                        IMFActivate_SetUINT32(mft_activate, &MFT_PROCESS_LOCAL_Attribute, 1);
+                    }
+                    else
+                    {
+                        if (mft->name)
+                            IMFActivate_SetString(mft_activate, &MFT_FRIENDLY_NAME_Attribute, mft->name);
+                        if (mft->input_types)
+                            IMFActivate_SetBlob(mft_activate, &MFT_INPUT_TYPES_Attributes, (const UINT8 *)mft->input_types,
+                                    sizeof(*mft->input_types) * mft->input_types_count);
+                        if (mft->output_types)
+                            IMFActivate_SetBlob(mft_activate, &MFT_OUTPUT_TYPES_Attributes, (const UINT8 *)mft->output_types,
+                                    sizeof(*mft->output_types) * mft->output_types_count);
+                    }
+
+                    if (!mft->factory)
+                        IMFActivate_SetGUID(mft_activate, &MFT_TRANSFORM_CLSID_Attribute, &mft->clsid);
+
+                    IMFActivate_SetUINT32(mft_activate, &MF_TRANSFORM_FLAGS_Attribute, mft->flags);
+                    IMFActivate_SetGUID(mft_activate, &MF_TRANSFORM_CATEGORY_Attribute, &mft->category);
+
+                    obj_count++;
+                }
+            }
+
+            list_remove(&mft->entry);
+            release_mft_registration(mft);
+        }
+    }
+
+    if (!obj_count)
+    {
+        CoTaskMemFree(*activate);
+        *activate = NULL;
+    }
+    *count = obj_count;
+
+    return hr;
 }
 
 /***********************************************************************
  *      MFTEnum (mfplat.@)
  */
 HRESULT WINAPI MFTEnum(GUID category, UINT32 flags, MFT_REGISTER_TYPE_INFO *input_type,
-                       MFT_REGISTER_TYPE_INFO *output_type, IMFAttributes *attributes,
-                       CLSID **pclsids, UINT32 *pcount)
+        MFT_REGISTER_TYPE_INFO *output_type, IMFAttributes *attributes, CLSID **clsids, UINT32 *count)
 {
-    WCHAR buffer[64], clsid_str[MAX_PATH] = {0};
-    HKEY hcategory, hlist;
-    DWORD index = 0;
-    DWORD size = MAX_PATH;
-    CLSID *clsids = NULL;
-    UINT32 count = 0;
-    LONG ret;
+    struct mft_registration *mft, *mft2;
+    unsigned int mft_count;
+    struct list mfts;
+    HRESULT hr;
 
-    TRACE("(%s, %x, %p, %p, %p, %p, %p)\n", debugstr_guid(&category), flags, input_type,
-                                            output_type, attributes, pclsids, pcount);
+    TRACE("%s, %#x, %p, %p, %p, %p, %p.\n", debugstr_guid(&category), flags, input_type, output_type, attributes,
+            clsids, count);
 
-    if (!pclsids || !pcount)
+    if (!clsids || !count)
         return E_INVALIDARG;
 
-    if (RegOpenKeyW(HKEY_CLASSES_ROOT, categories_keyW, &hcategory))
-        return E_FAIL;
+    *count = 0;
 
-    GUIDToString(buffer, &category);
+    list_init(&mfts);
 
-    ret = RegOpenKeyW(hcategory, buffer, &hlist);
-    RegCloseKey(hcategory);
-    if (ret) return E_FAIL;
+    if (FAILED(hr = mft_collect_machine_reg(&mfts, &category, MFT_ENUM_FLAG_SYNCMFT, NULL, input_type, output_type)))
+        return hr;
 
-    while (RegEnumKeyExW(hlist, index, clsid_str, &size, NULL, NULL, NULL, NULL) == ERROR_SUCCESS)
+    mft_count = list_count(&mfts);
+
+    if (mft_count)
     {
-        GUID clsid;
-        void *tmp;
+        if (!(*clsids = CoTaskMemAlloc(mft_count * sizeof(**clsids))))
+            hr = E_OUTOFMEMORY;
 
-        if (!GUIDFromString(clsid_str, &clsid))
-            goto next;
-
-        if (output_type && !match_type(clsid_str, outputtypesW, output_type))
-            goto next;
-
-        if (input_type && !match_type(clsid_str, inputtypesW, input_type))
-            goto next;
-
-        tmp = CoTaskMemRealloc(clsids, (count + 1) * sizeof(GUID));
-        if (!tmp)
+        mft_count = 0;
+        LIST_FOR_EACH_ENTRY_SAFE(mft, mft2, &mfts, struct mft_registration, entry)
         {
-            CoTaskMemFree(clsids);
-            RegCloseKey(hlist);
-            return E_OUTOFMEMORY;
+            if (*clsids)
+                (*clsids)[mft_count++] = mft->clsid;
+            list_remove(&mft->entry);
+            release_mft_registration(mft);
         }
-
-        clsids = tmp;
-        clsids[count++] = clsid;
-
-    next:
-        size = MAX_PATH;
-        index++;
     }
 
-    *pclsids = clsids;
-    *pcount = count;
+    if (!mft_count)
+    {
+        CoTaskMemFree(*clsids);
+        *clsids = NULL;
+    }
+    *count = mft_count;
 
-    RegCloseKey(hlist);
-    return S_OK;
+    return hr;
 }
 
 /***********************************************************************
  *      MFTEnumEx (mfplat.@)
  */
 HRESULT WINAPI MFTEnumEx(GUID category, UINT32 flags, const MFT_REGISTER_TYPE_INFO *input_type,
-                         const MFT_REGISTER_TYPE_INFO *output_type, IMFActivate ***activate,
-                         UINT32 *pcount)
+        const MFT_REGISTER_TYPE_INFO *output_type, IMFActivate ***activate, UINT32 *count)
 {
-    FIXME("(%s, %x, %p, %p, %p, %p): stub\n", debugstr_guid(&category), flags, input_type,
-                                              output_type, activate, pcount);
+    TRACE("%s, %#x, %p, %p, %p, %p.\n", debugstr_guid(&category), flags, input_type, output_type, activate, count);
 
-    *pcount = 0;
-    return S_OK;
+    return mft_enum(category, flags, input_type, output_type, NULL, activate, count);
+}
+
+/***********************************************************************
+ *      MFTEnum2 (mfplat.@)
+ */
+HRESULT WINAPI MFTEnum2(GUID category, UINT32 flags, const MFT_REGISTER_TYPE_INFO *input_type,
+        const MFT_REGISTER_TYPE_INFO *output_type, IMFAttributes *attributes, IMFActivate ***activate, UINT32 *count)
+{
+    TRACE("%s, %#x, %p, %p, %p, %p, %p.\n", debugstr_guid(&category), flags, input_type, output_type, attributes,
+            activate, count);
+
+    if (attributes)
+        FIXME("Ignoring attributes.\n");
+
+    return mft_enum(category, flags, input_type, output_type, attributes, activate, count);
 }
 
 /***********************************************************************
@@ -1188,16 +1549,24 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_SINK_WRITER_ENCODER_CONFIG),
         X(MF_TOPOLOGY_NO_MARKIN_MARKOUT),
         X(MF_SOURCE_READER_ENABLE_TRANSCODE_ONLY_TRANSFORMS),
+        X(MFT_PREFERRED_ENCODER_PROFILE),
         X(MF_TOPOLOGY_DYNAMIC_CHANGE_NOT_ALLOWED),
         X(MF_MT_ALPHA_MODE),
         X(MF_PMP_SERVER_CONTEXT),
+        X(MFT_SUPPORT_DYNAMIC_FORMAT_CHANGE),
+        X(MFT_CODEC_MERIT_Attribute),
         X(MF_TOPOLOGY_PLAYBACK_MAX_DIMS),
         X(MF_LOW_LATENCY),
         X(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS),
         X(MF_MT_PIXEL_ASPECT_RATIO),
         X(MF_TOPOLOGY_ENABLE_XVP_FOR_PLAYBACK),
+        X(MFT_CONNECTED_STREAM_ATTRIBUTE),
         X(MF_MT_WRAPPED_TYPE),
         X(MF_MT_AVG_BITRATE),
+        X(MFT_CONNECTED_TO_HW_STREAM),
+        X(MF_SA_D3D_AWARE),
+        X(MFT_TRANSFORM_CLSID_Attribute),
+        X(MFT_TRANSFORM_CLSID_Attribute),
         X(MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING),
         X(MF_SESSION_APPROX_EVENT_OCCURRENCE_TIME),
         X(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_MAX_BUFFERS),
@@ -1215,14 +1584,17 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_MT_ALL_SAMPLES_INDEPENDENT),
         X(MF_PD_PREFERRED_LANGUAGE),
         X(MF_PD_PLAYBACK_BOUNDARY_TIME),
+        X(MF_ACTIVATE_MFT_LOCKED),
         X(MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING),
         X(MF_MT_FRAME_SIZE),
         X(MF_SINK_WRITER_ASYNC_CALLBACK),
         X(MF_TOPOLOGY_START_TIME_ON_PRESENTATION_SWITCH),
+        X(MFT_DECODER_EXPOSE_OUTPUT_TYPES_IN_NATIVE_ORDER),
         X(MF_TOPONODE_WORKQUEUE_MMCSS_PRIORITY),
         X(MF_MT_FRAME_RATE_RANGE_MAX),
         X(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_PROVIDER_DEVICE_ID),
         X(MF_TOPOLOGY_STATIC_PLAYBACK_OPTIMIZATIONS),
+        X(MF_TRANSFORM_CATEGORY_Attribute),
         X(MF_MT_AUDIO_FLOAT_SAMPLES_PER_SECOND),
         X(MFSampleExtension_ForwardedDecodeUnits),
         X(MF_EVENT_SOURCE_TOPOLOGY_CANCELED),
@@ -1238,6 +1610,7 @@ const char *debugstr_attr(const GUID *guid)
         X(MFSampleExtension_Token),
         X(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_CATEGORY),
         X(MF_MT_AUDIO_VALID_BITS_PER_SAMPLE),
+        X(MF_TRANSFORM_ASYNC_UNLOCK),
         X(MF_TOPOLOGY_ENUMERATE_SOURCE_TYPES),
         X(MF_MT_VIDEO_NO_FRAME_ORDERING),
         X(MFSampleExtension_3DVideo_SampleFormat),
@@ -1249,6 +1622,7 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_MT_AUDIO_FOLDDOWN_MATRIX),
         X(MF_MT_AUDIO_WMADRC_PEAKREF),
         X(MF_MT_AUDIO_WMADRC_PEAKTARGET),
+        X(MF_TRANSFORM_FLAGS_Attribute),
         X(MF_PD_SAMI_STYLELIST),
         X(MF_MT_AUDIO_WMADRC_AVGREF),
         X(MF_MT_AUDIO_BITS_PER_SAMPLE),
@@ -1259,6 +1633,8 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_SESSION_GLOBAL_TIME),
         X(MF_SESSION_QUALITY_MANAGER),
         X(MF_SESSION_CONTENT_PROTECTION_MANAGER),
+        X(MFT_REMUX_MARK_I_PICTURE_AS_CLEAN_POINT),
+        X(MFT_REMUX_MARK_I_PICTURE_AS_CLEAN_POINT),
         X(MF_READWRITE_MMCSS_PRIORITY_AUDIO),
         X(MF_BYTESTREAM_ORIGIN_NAME),
         X(MF_BYTESTREAM_CONTENT_TYPE),
@@ -1268,6 +1644,7 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_SD_SAMI_LANGUAGE),
         X(MF_EVENT_OUTPUT_NODE),
         X(MF_BYTESTREAM_LAST_MODIFIED_TIME),
+        X(MFT_ENUM_ADAPTER_LUID),
         X(MF_MT_FRAME_RATE_RANGE_MIN),
         X(MF_BYTESTREAM_IFO_FILE_URI),
         X(MF_EVENT_TOPOLOGY_STATUS),
@@ -1278,10 +1655,13 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_EVENT_SOURCE_CHARACTERISTICS_OLD),
         X(MF_SESSION_SERVER_CONTEXT),
         X(MF_MT_VIDEO_3D_FIRST_IS_LEFT),
+        X(MFT_DECODER_FINAL_VIDEO_RESOLUTION_HINT),
         X(MF_PD_ADAPTIVE_STREAMING),
+        X(MFT_PREFERRED_OUTPUTTYPE_Attribute),
         X(MFSampleExtension_Timestamp),
         X(MF_TOPONODE_PRIMARYOUTPUT),
         X(MF_MT_SUBTYPE),
+        X(MF_TRANSFORM_ASYNC),
         X(MF_TOPONODE_STREAMID),
         X(MF_TOPONODE_NOSHUTDOWN_ON_REMOVE),
         X(MF_SD_MUTUALLY_EXCLUSIVE),
@@ -1298,9 +1678,15 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_EVENT_SOURCE_PROJECTSTART),
         X(MF_EVENT_SOURCE_ACTUAL_START),
         X(MF_MT_AUDIO_SAMPLES_PER_BLOCK),
+        X(MFT_ENUM_HARDWARE_URL_Attribute),
         X(MF_SOURCE_READER_ASYNC_CALLBACK),
+        X(MFT_ENCODER_SUPPORTS_CONFIG_EVENT),
         X(MF_MT_AUDIO_FLAC_MAX_BLOCK_SIZE),
+        X(MFT_FRIENDLY_NAME_Attribute),
         X(MF_MT_FIXED_SIZE_SAMPLES),
+        X(MFT_SUPPORT_3DVIDEO),
+        X(MFT_SUPPORT_3DVIDEO),
+        X(MFT_INPUT_TYPES_Attributes),
         X(MF_EVENT_SCRUBSAMPLE_TIME),
         X(MF_MT_INTERLACE_MODE),
         X(MF_MT_VIDEO_RENDERER_EXTENSION_PROFILE),
@@ -1314,6 +1700,8 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_TOPONODE_TRANSFORM_OBJECTID),
         X(MF_DEVSOURCE_ATTRIBUTE_MEDIA_TYPE),
         X(MF_EVENT_MFT_INPUT_STREAM_ID),
+        X(MFT_ENUM_HARDWARE_VENDOR_ID_Attribute),
+        X(MFT_ENUM_TRANSCODE_ONLY_ATTRIBUTE),
         X(MF_READWRITE_MMCSS_PRIORITY),
         X(MF_MT_VIDEO_3D),
         X(MF_EVENT_START_PRESENTATION_TIME),
@@ -1330,6 +1718,8 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_SOURCE_READER_DISABLE_CAMERA_PLUGINS),
         X(MF_TOPOLOGY_RESOLUTION_STATUS),
         X(MF_PD_AUDIO_ISVARIABLEBITRATE),
+        X(MFT_PROCESS_LOCAL_Attribute),
+        X(MFT_PROCESS_LOCAL_Attribute),
         X(MF_MT_AAC_AUDIO_PROFILE_LEVEL_INDICATION),
         X(MF_MT_AUDIO_SAMPLES_PER_SECOND),
         X(MF_MT_FRAME_RATE),
@@ -1348,6 +1738,7 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_EVENT_MFT_CONTEXT),
         X(MF_MT_FORWARD_CUSTOM_SEI),
         X(MF_TOPONODE_CONNECT_METHOD),
+        X(MFT_OUTPUT_TYPES_Attributes),
         X(MF_SESSION_REMOTE_SOURCE_MODE),
         X(MF_MT_DEPTH_VALUE_UNIT),
         X(MF_MT_AUDIO_NUM_CHANNELS),
@@ -1363,6 +1754,7 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_MT_FORWARD_CUSTOM_NALU),
         X(MF_TOPONODE_ERROR_MAJORTYPE),
         X(MF_MT_SECURE),
+        X(MFT_FIELDOFUSE_UNLOCK_Attribute),
         X(MF_TOPONODE_ERROR_SUBTYPE),
         X(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE),
         X(MF_MT_VIDEO_3D_LEFT_IS_BASE),

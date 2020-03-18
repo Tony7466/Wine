@@ -66,6 +66,8 @@ struct d3d9
     IDirect3D9Ex IDirect3D9Ex_iface;
     LONG refcount;
     struct wined3d *wined3d;
+    struct wined3d_output **wined3d_outputs;
+    unsigned int wined3d_output_count;
     BOOL extended;
 };
 
@@ -90,6 +92,7 @@ struct d3d9_device
     struct wined3d_device_parent device_parent;
     LONG refcount;
     struct wined3d_device *wined3d_device;
+    unsigned int adapter_ordinal;
     struct d3d9 *d3d_parent;
 
     struct fvf_declaration *fvf_decls;
@@ -120,6 +123,7 @@ struct d3d9_device
     struct wined3d_swapchain **implicit_swapchains;
 
     struct wined3d_stateblock *recording, *state, *update_state;
+    const struct wined3d_stateblock_state *stateblock_state;
 };
 
 HRESULT device_init(struct d3d9_device *device, struct d3d9 *parent, struct wined3d *wined3d,

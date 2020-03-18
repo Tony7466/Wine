@@ -796,14 +796,6 @@ struct hlsl_ir_loop
     struct list *body;
 };
 
-struct hlsl_ir_assignment
-{
-    struct hlsl_ir_node node;
-    struct hlsl_ir_node *lhs;
-    struct hlsl_ir_node *rhs;
-    unsigned char writemask;
-};
-
 enum hlsl_ir_expr_op {
     HLSL_IR_UNOP_BIT_NOT = 0,
     HLSL_IR_UNOP_LOGIC_NOT,
@@ -907,9 +899,8 @@ enum hlsl_ir_deref_type
     HLSL_IR_DEREF_RECORD,
 };
 
-struct hlsl_ir_deref
+struct hlsl_deref
 {
-    struct hlsl_ir_node node;
     enum hlsl_ir_deref_type type;
     union
     {
@@ -925,6 +916,20 @@ struct hlsl_ir_deref
             struct hlsl_struct_field *field;
         } record;
     } v;
+};
+
+struct hlsl_ir_deref
+{
+    struct hlsl_ir_node node;
+    struct hlsl_deref src;
+};
+
+struct hlsl_ir_assignment
+{
+    struct hlsl_ir_node node;
+    struct hlsl_deref lhs;
+    struct hlsl_ir_node *rhs;
+    unsigned char writemask;
 };
 
 struct hlsl_ir_constant
@@ -1046,6 +1051,7 @@ struct hlsl_parse_ctx
 
     struct list types;
     struct wine_rb_tree functions;
+    const struct hlsl_ir_function_decl *cur_function;
 
     enum hlsl_matrix_majority matrix_majority;
 };
@@ -1060,8 +1066,8 @@ enum hlsl_error_level
 };
 
 void WINAPIV hlsl_message(const char *fmt, ...) PRINTF_ATTR(1,2) DECLSPEC_HIDDEN;
-void WINAPIV hlsl_report_message(const char *filename, DWORD line, DWORD column,
-        enum hlsl_error_level level, const char *fmt, ...) PRINTF_ATTR(5,6) DECLSPEC_HIDDEN;
+void WINAPIV hlsl_report_message(const struct source_location loc,
+        enum hlsl_error_level level, const char *fmt, ...) PRINTF_ATTR(3,4) DECLSPEC_HIDDEN;
 
 static inline struct hlsl_ir_expr *expr_from_node(const struct hlsl_ir_node *node)
 {
@@ -1138,10 +1144,12 @@ struct hlsl_ir_expr *new_expr(enum hlsl_ir_expr_op op, struct hlsl_ir_node **ope
         struct source_location *loc) DECLSPEC_HIDDEN;
 struct hlsl_ir_expr *new_cast(struct hlsl_ir_node *node, struct hlsl_type *type,
 	struct source_location *loc) DECLSPEC_HIDDEN;
+struct hlsl_ir_node *implicit_conversion(struct hlsl_ir_node *node, struct hlsl_type *type,
+        struct source_location *loc) DECLSPEC_HIDDEN;
 struct hlsl_ir_deref *new_var_deref(struct hlsl_ir_var *var) DECLSPEC_HIDDEN;
 struct hlsl_ir_deref *new_record_deref(struct hlsl_ir_node *record, struct hlsl_struct_field *field) DECLSPEC_HIDDEN;
 struct hlsl_ir_node *make_assignment(struct hlsl_ir_node *left, enum parse_assign_op assign_op,
-        DWORD writemask, struct hlsl_ir_node *right) DECLSPEC_HIDDEN;
+        struct hlsl_ir_node *right) DECLSPEC_HIDDEN;
 void push_scope(struct hlsl_parse_ctx *ctx) DECLSPEC_HIDDEN;
 BOOL pop_scope(struct hlsl_parse_ctx *ctx) DECLSPEC_HIDDEN;
 struct hlsl_ir_function_decl *new_func_decl(struct hlsl_type *return_type, struct list *parameters) DECLSPEC_HIDDEN;
@@ -1151,8 +1159,10 @@ void add_function_decl(struct wine_rb_tree *funcs, char *name, struct hlsl_ir_fu
 struct bwriter_shader *parse_hlsl_shader(const char *text, enum shader_type type, DWORD major, DWORD minor,
         const char *entrypoint, char **messages) DECLSPEC_HIDDEN;
 
+const char *debug_base_type(const struct hlsl_type *type) DECLSPEC_HIDDEN;
 const char *debug_hlsl_type(const struct hlsl_type *type) DECLSPEC_HIDDEN;
 const char *debug_modifiers(DWORD modifiers) DECLSPEC_HIDDEN;
+const char *debug_node_type(enum hlsl_ir_node_type type) DECLSPEC_HIDDEN;
 void debug_dump_ir_function_decl(const struct hlsl_ir_function_decl *func) DECLSPEC_HIDDEN;
 
 void free_hlsl_type(struct hlsl_type *type) DECLSPEC_HIDDEN;

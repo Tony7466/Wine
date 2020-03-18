@@ -556,7 +556,7 @@ static HRESULT ddraw_attach_d3d_device(struct ddraw *ddraw, HWND window,
 
     TRACE("ddraw %p.\n", ddraw);
 
-    if (FAILED(hr = wined3d_get_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode, NULL)))
+    if (FAILED(hr = wined3d_output_get_display_mode(ddraw->wined3d_output, &mode, NULL)))
     {
         ERR("Failed to get display mode.\n");
         return hr;
@@ -683,7 +683,7 @@ static HRESULT WINAPI ddraw7_RestoreDisplayMode(IDirectDraw7 *iface)
         return DDERR_NOEXCLUSIVEMODE;
     }
 
-    if (SUCCEEDED(hr = wined3d_set_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, NULL)))
+    if (SUCCEEDED(hr = wined3d_output_set_display_mode(ddraw->wined3d_output, NULL)))
         ddraw->flags &= ~DDRAW_RESTORE_MODE;
 
     InterlockedCompareExchange(&ddraw->device_state, DDRAW_DEVICE_STATE_NOT_RESTORED, DDRAW_DEVICE_STATE_OK);
@@ -1104,7 +1104,7 @@ static HRESULT WINAPI ddraw7_SetDisplayMode(IDirectDraw7 *iface, DWORD width, DW
 
     /* TODO: The possible return values from msdn suggest that the screen mode
      * can't be changed if a surface is locked or some drawing is in progress. */
-    if (SUCCEEDED(hr = wined3d_set_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode)))
+    if (SUCCEEDED(hr = wined3d_output_set_display_mode(ddraw->wined3d_output, &mode)))
     {
         if (ddraw->primary)
         {
@@ -1617,7 +1617,7 @@ static HRESULT WINAPI ddraw7_GetDisplayMode(IDirectDraw7 *iface, DDSURFACEDESC2 
 
     wined3d_mutex_lock();
 
-    if (FAILED(hr = wined3d_get_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode, NULL)))
+    if (FAILED(hr = wined3d_output_get_display_mode(ddraw->wined3d_output, &mode, NULL)))
     {
         ERR("Failed to get display mode, hr %#x.\n", hr);
         wined3d_mutex_unlock();
@@ -1710,7 +1710,7 @@ static HRESULT WINAPI ddraw7_GetFourCCCodes(IDirectDraw7 *iface, DWORD *NumCodes
 
     TRACE("iface %p, codes_count %p, codes %p.\n", iface, NumCodes, Codes);
 
-    if (FAILED(hr = wined3d_get_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode, NULL)))
+    if (FAILED(hr = wined3d_output_get_display_mode(ddraw->wined3d_output, &mode, NULL)))
     {
         ERR("Failed to get display mode, hr %#x.\n", hr);
         return hr;
@@ -1720,7 +1720,7 @@ static HRESULT WINAPI ddraw7_GetFourCCCodes(IDirectDraw7 *iface, DWORD *NumCodes
 
     for (i = 0; i < ARRAY_SIZE(formats); ++i)
     {
-        if (SUCCEEDED(wined3d_check_device_format(ddraw->wined3d, WINED3DADAPTER_DEFAULT, WINED3D_DEVICE_TYPE_HAL,
+        if (SUCCEEDED(wined3d_check_device_format(ddraw->wined3d, ddraw->wined3d_adapter, WINED3D_DEVICE_TYPE_HAL,
                 mode.format_id, 0, 0, WINED3D_RTYPE_TEXTURE_2D, formats[i])))
         {
             if (count < outsize)
@@ -1772,7 +1772,7 @@ static HRESULT WINAPI ddraw7_GetMonitorFrequency(IDirectDraw7 *iface, DWORD *fre
     TRACE("iface %p, frequency %p.\n", iface, frequency);
 
     wined3d_mutex_lock();
-    hr = wined3d_get_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode, NULL);
+    hr = wined3d_output_get_display_mode(ddraw->wined3d_output, &mode, NULL);
     wined3d_mutex_unlock();
     if (FAILED(hr))
     {
@@ -1824,7 +1824,7 @@ static HRESULT WINAPI ddraw7_GetVerticalBlankStatus(IDirectDraw7 *iface, BOOL *s
         return DDERR_INVALIDPARAMS;
 
     wined3d_mutex_lock();
-    hr = wined3d_get_adapter_raster_status(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &raster_status);
+    hr = wined3d_output_get_raster_status(ddraw->wined3d_output, &raster_status);
     wined3d_mutex_unlock();
     if (FAILED(hr))
     {
@@ -1907,13 +1907,13 @@ static HRESULT WINAPI ddraw7_GetAvailableVidMem(IDirectDraw7 *iface, DDSCAPS2 *c
     /* Some applications (e.g. 3DMark 2000) assume that the reported amount of
      * video memory doesn't include the memory used by the default framebuffer.
      */
-    if (FAILED(hr = wined3d_get_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode, NULL)))
+    if (FAILED(hr = wined3d_output_get_display_mode(ddraw->wined3d_output, &mode, NULL)))
     {
         WARN("Failed to get display mode, hr %#x.\n", hr);
         wined3d_mutex_unlock();
         return hr;
     }
-    framebuffer_size = wined3d_calculate_format_pitch(ddraw->wined3d, WINED3DADAPTER_DEFAULT,
+    framebuffer_size = wined3d_calculate_format_pitch(ddraw->wined3d_adapter,
             mode.format_id, mode.width);
     framebuffer_size *= mode.height;
 
@@ -1928,7 +1928,7 @@ static HRESULT WINAPI ddraw7_GetAvailableVidMem(IDirectDraw7 *iface, DDSCAPS2 *c
     {
         struct wined3d_adapter_identifier desc = {0};
 
-        hr = wined3d_get_adapter_identifier(ddraw->wined3d, WINED3DADAPTER_DEFAULT, 0, &desc);
+        hr = wined3d_adapter_get_identifier(ddraw->wined3d_adapter, 0, &desc);
         total_vidmem = min(UINT_MAX, desc.video_memory);
         *total = framebuffer_size > total_vidmem ? 0 : total_vidmem - framebuffer_size;
         TRACE("Total video memory %#x.\n", *total);
@@ -2170,7 +2170,7 @@ static HRESULT WINAPI ddraw7_GetScanLine(IDirectDraw7 *iface, DWORD *Scanline)
     TRACE("iface %p, line %p.\n", iface, Scanline);
 
     wined3d_mutex_lock();
-    hr = wined3d_get_adapter_raster_status(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &raster_status);
+    hr = wined3d_output_get_raster_status(ddraw->wined3d_output, &raster_status);
     wined3d_mutex_unlock();
     if (FAILED(hr))
     {
@@ -2404,7 +2404,7 @@ static HRESULT WINAPI ddraw7_EnumDisplayModes(IDirectDraw7 *iface, DWORD Flags,
     for(fmt = 0; fmt < ARRAY_SIZE(checkFormatList); fmt++)
     {
         modenum = 0;
-        while (wined3d_enum_adapter_modes(ddraw->wined3d, WINED3DADAPTER_DEFAULT, checkFormatList[fmt],
+        while (wined3d_output_get_mode(ddraw->wined3d_output, checkFormatList[fmt],
                 WINED3D_SCANLINE_ORDERING_UNKNOWN, modenum++, &mode) == WINED3D_OK)
         {
             BOOL found = FALSE;
@@ -2609,7 +2609,7 @@ static HRESULT WINAPI ddraw7_GetDeviceIdentifier(IDirectDraw7 *iface,
     adapter_id.description_size = sizeof(DDDI->szDescription);
     adapter_id.device_name_size = 0;
     wined3d_mutex_lock();
-    hr = wined3d_get_adapter_identifier(ddraw->wined3d, WINED3DADAPTER_DEFAULT, 0x0, &adapter_id);
+    hr = wined3d_adapter_get_identifier(ddraw->wined3d_adapter, 0x0, &adapter_id);
     wined3d_mutex_unlock();
     if (FAILED(hr)) return hr;
 
@@ -4432,7 +4432,7 @@ static HRESULT WINAPI d3d7_EnumZBufferFormats(IDirect3D7 *iface, REFCLSID device
      * not like that we'll have to find some workaround, like iterating over
      * all imaginable formats and collecting all the depth stencil formats we
      * can get. */
-    if (FAILED(hr = wined3d_get_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode, NULL)))
+    if (FAILED(hr = wined3d_output_get_display_mode(ddraw->wined3d_output, &mode, NULL)))
     {
         ERR("Failed to get display mode, hr %#x.\n", hr);
         wined3d_mutex_unlock();
@@ -4441,7 +4441,7 @@ static HRESULT WINAPI d3d7_EnumZBufferFormats(IDirect3D7 *iface, REFCLSID device
 
     for (i = 0; i < ARRAY_SIZE(formats); ++i)
     {
-        if (SUCCEEDED(wined3d_check_device_format(ddraw->wined3d, WINED3DADAPTER_DEFAULT, type,
+        if (SUCCEEDED(wined3d_check_device_format(ddraw->wined3d, ddraw->wined3d_adapter, type,
                 mode.format_id, 0, WINED3D_BIND_DEPTH_STENCIL, WINED3D_RTYPE_TEXTURE_2D, formats[i])))
         {
             DDPIXELFORMAT pformat;
@@ -4465,7 +4465,7 @@ static HRESULT WINAPI d3d7_EnumZBufferFormats(IDirect3D7 *iface, REFCLSID device
      * while others used dwZBufferBitDepth=32. In either case the pitch matches a 32 bits per
      * pixel format, so we use dwZBufferBitDepth=32. Some games expect 24. Windows Vista and
      * newer enumerate both versions, so we do the same(bug 22434) */
-    if (SUCCEEDED(wined3d_check_device_format(ddraw->wined3d, WINED3DADAPTER_DEFAULT, type, mode.format_id,
+    if (SUCCEEDED(wined3d_check_device_format(ddraw->wined3d, ddraw->wined3d_adapter, type, mode.format_id,
             0, WINED3D_BIND_DEPTH_STENCIL, WINED3D_RTYPE_TEXTURE_2D, WINED3DFMT_X8D24_UNORM)))
     {
         DDPIXELFORMAT x8d24 =
@@ -5003,6 +5003,20 @@ HRESULT ddraw_init(struct ddraw *ddraw, DWORD flags, enum wined3d_device_type de
         }
     }
 
+    if (!(ddraw->wined3d_adapter = wined3d_get_adapter(ddraw->wined3d, WINED3DADAPTER_DEFAULT)))
+    {
+        WARN("Failed to get the default wined3d adapter.\n");
+        wined3d_decref(ddraw->wined3d);
+        return E_FAIL;
+    }
+
+    if (!(ddraw->wined3d_output = wined3d_adapter_get_output(ddraw->wined3d_adapter, 0)))
+    {
+        WARN("Failed to get the default wined3d output.\n");
+        wined3d_decref(ddraw->wined3d);
+        return E_FAIL;
+    }
+
     if (FAILED(hr = wined3d_get_device_caps(ddraw->wined3d, WINED3DADAPTER_DEFAULT, device_type, &caps)))
     {
         ERR("Failed to get device caps, hr %#x.\n", hr);
@@ -5016,7 +5030,7 @@ HRESULT ddraw_init(struct ddraw *ddraw, DWORD flags, enum wined3d_device_type de
         ddraw->flags |= DDRAW_NO3D;
     }
 
-    if (FAILED(hr = wined3d_device_create(ddraw->wined3d, WINED3DADAPTER_DEFAULT, device_type,
+    if (FAILED(hr = wined3d_device_create(ddraw->wined3d, ddraw->wined3d_adapter, device_type,
             NULL, 0, DDRAW_STRIDE_ALIGNMENT, feature_levels, ARRAY_SIZE(feature_levels),
             &ddraw->device_parent, &ddraw->wined3d_device)))
     {

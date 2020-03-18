@@ -40,6 +40,7 @@
 #define D3DPRESENTFLAGS_MASK 0x00000fffu
 
 #define D3D8_MAX_VERTEX_SHADER_CONSTANTF 256
+#define D3D8_MAX_PIXEL_SHADER_CONSTANTF 8
 #define D3D8_MAX_STREAMS 16
 
 #define D3DFMT_RESZ MAKEFOURCC('R','E','S','Z')
@@ -57,6 +58,8 @@ struct d3d8
     IDirect3D8 IDirect3D8_iface;
     LONG refcount;
     struct wined3d *wined3d;
+    struct wined3d_output **wined3d_outputs;
+    unsigned int wined3d_output_count;
 };
 
 BOOL d3d8_init(struct d3d8 *d3d8) DECLSPEC_HIDDEN;
@@ -138,6 +141,7 @@ struct d3d8_device
     struct wined3d_swapchain *implicit_swapchain;
 
     struct wined3d_stateblock *recording, *state, *update_state;
+    const struct wined3d_stateblock_state *stateblock_state;
 };
 
 HRESULT device_init(struct d3d8_device *device, struct d3d8 *parent, struct wined3d *wined3d, UINT adapter,

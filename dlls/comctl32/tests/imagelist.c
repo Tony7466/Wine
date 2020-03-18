@@ -63,6 +63,7 @@ typedef struct _ILHEAD
 static HIMAGELIST (WINAPI *pImageList_Create)(int, int, UINT, int, int);
 static BOOL (WINAPI *pImageList_Destroy)(HIMAGELIST);
 static int (WINAPI *pImageList_Add)(HIMAGELIST, HBITMAP, HBITMAP);
+static int (WINAPI *pImageList_AddMasked)(HIMAGELIST, HBITMAP, COLORREF);
 static BOOL (WINAPI *pImageList_DrawIndirect)(IMAGELISTDRAWPARAMS*);
 static BOOL (WINAPI *pImageList_SetImageCount)(HIMAGELIST,UINT);
 static HRESULT (WINAPI *pImageList_CoCreateInstance)(REFCLSID,const IUnknown *,
@@ -76,6 +77,7 @@ static void (WINAPI *pImageList_EndDrag)(void);
 static INT (WINAPI *pImageList_GetImageCount)(HIMAGELIST);
 static BOOL (WINAPI *pImageList_SetDragCursorImage)(HIMAGELIST, int, int, int);
 static BOOL (WINAPI *pImageList_GetIconSize)(HIMAGELIST, int *, int *);
+static BOOL (WINAPI *pImageList_SetIconSize)(HIMAGELIST, INT, INT);
 static BOOL (WINAPI *pImageList_Remove)(HIMAGELIST, int);
 static INT (WINAPI *pImageList_ReplaceIcon)(HIMAGELIST, int, HICON);
 static BOOL (WINAPI *pImageList_Replace)(HIMAGELIST, int, HBITMAP, HBITMAP);
@@ -1362,12 +1364,12 @@ static void test_shell_imagelist(void)
     FreeLibrary(hShell32);
 }
 
-static HBITMAP create_test_bitmap(HDC hdc, int bpp, UINT32 pixel1, UINT32 pixel2)
+static HBITMAP create_test_bitmap(HDC hdc, UINT width, UINT height, WORD bpp, const UINT32 *bits)
 {
     HBITMAP hBitmap;
     UINT32 *buffer = NULL;
-    BITMAPINFO bitmapInfo = {{sizeof(BITMAPINFOHEADER), 2, 1, 1, bpp, BI_RGB,
-                                0, 0, 0, 0, 0}};
+    UINT stride = ((width * bpp + 31) >> 3) & ~3;
+    BITMAPINFO bitmapInfo = { { sizeof(BITMAPINFOHEADER), width, - height, 1, bpp, BI_RGB, 0, 0, 0, 0, 0 } };
 
     hBitmap = CreateDIBSection(hdc, &bitmapInfo, DIB_RGB_COLORS, (void**)&buffer, NULL, 0);
     ok(hBitmap != NULL && buffer != NULL, "CreateDIBSection failed.\n");
@@ -1378,8 +1380,7 @@ static HBITMAP create_test_bitmap(HDC hdc, int bpp, UINT32 pixel1, UINT32 pixel2
         return NULL;
     }
 
-    buffer[0] = pixel1;
-    buffer[1] = pixel2;
+    memcpy(buffer, bits, stride * height);
 
     return hBitmap;
 }
@@ -1444,14 +1445,59 @@ static void check_ImageList_DrawIndirect_broken(HDC hdc, HIMAGELIST himl, UINT32
        bits[0] & 0x00FFFFFF, expected, line);
 }
 
+static void check_ImageList_DrawIndirect_grayscale(HDC hdc, HIMAGELIST himl, UINT32 *dst_bits, const UINT32 *bitmap_bits,
+                                                   int index, UINT width, UINT height, int line)
+{
+    int i;
+    BOOL has_alpha = FALSE;
+    IMAGELISTDRAWPARAMS ildp = { sizeof(IMAGELISTDRAWPARAMS), himl, index, hdc,
+                                 0, 0, 0, 0, 0, 0, CLR_NONE, CLR_NONE, ILD_NORMAL, 0, ILS_SATURATE, 0, 0x00000000 };
+    memset(dst_bits, 0, width * height * sizeof(*dst_bits));
+    pImageList_DrawIndirect(&ildp);
+
+    for (i = 0; i < width *  height; i++)
+        if ((has_alpha = ((bitmap_bits[i] & 0xFF000000) != 0))) break;
+
+    for (i = 0; i < width * height; i++)
+    {
+        UINT32 expected, expected_winxp;
+        UINT32 red   = (bitmap_bits[i] & 0x00FF0000) >> 16;
+        UINT32 green = (bitmap_bits[i] & 0x0000FF00) >>  8;
+        UINT32 blue  = (bitmap_bits[i] & 0x000000FF) >>  0;
+        UINT32 gray = (red * 299 + green * 587 + blue * 114 + 500) / 1000;
+        UINT32 gray_winxp = (red + green  + blue) / 3;
+        if (has_alpha)
+        {
+            UINT32 alpha = (bitmap_bits[i] & 0xFF000000) >> 24;
+            gray = gray * alpha / 0xff * alpha / 0xff;
+            gray_winxp = gray_winxp * alpha / 0xff * 0x96 / 0xff;
+        }
+        expected = (gray << 16) | (gray << 8) | gray;
+        expected_winxp = (gray_winxp << 16) | (gray_winxp << 8) | gray_winxp;
+
+        ok(colour_match(dst_bits[i], expected) || broken(colour_match(dst_bits[i], expected_winxp)),
+           "ImageList_DrawIndirect: got Pixel(%d,%d) %08X, Expected a close match to %08X from line %d\n",
+           i % width, i / width, dst_bits[i] & 0x00FFFFFF, expected, line);
+    }
+}
+
 static void test_ImageList_DrawIndirect(void)
 {
+    const UINT32 bits_image[] =       { 0x00ABCDEF, 0x00ABCDEF };
+    const UINT32 bits_alpha[] =       { 0x89ABCDEF, 0x89ABCDEF };
+    const UINT32 bits_transparent[] = { 0x00ABCDEF, 0x89ABCDEF };
+
+    const UINT32 bits_4x4[] =  { 0x00ABCDEF, 0x89ABCDEF, 0xFFABCDEF, 0xFEDCBA98,
+                                 0x00345678, 0x12345678, 0xFF345678, 0x87654321,
+                                 0x00987654, 0xBA987654, 0xFF987654, 0x456789AB,
+                                 0x00000000, 0xFF000000, 0xFFFFFFFF, 0x00FFFFFF };
+
     HIMAGELIST himl = NULL;
     int ret;
     HDC hdcDst = NULL;
     HBITMAP hbmOld = NULL, hbmDst = NULL;
     HBITMAP hbmMask = NULL, hbmInverseMask = NULL;
-    HBITMAP hbmImage = NULL, hbmAlphaImage = NULL, hbmTransparentImage = NULL;
+    HBITMAP hbmImage = NULL, hbmAlphaImage = NULL, hbmTransparentImage = NULL, hbm4x4 = NULL;
     int iImage = -1, iAlphaImage = -1, iTransparentImage = -1;
     UINT32 *bits = 0;
     UINT32 maskBits = 0x00000000, inverseMaskBits = 0xFFFFFFFF;
@@ -1479,7 +1525,7 @@ static void test_ImageList_DrawIndirect(void)
     if(!himl) goto cleanup;
 
     /* Add a no-alpha image */
-    hbmImage = create_test_bitmap(hdcDst, 32, 0x00ABCDEF, 0x00ABCDEF);
+    hbmImage = create_test_bitmap(hdcDst, 2, 1, 32, bits_image);
     if(!hbmImage) goto cleanup;
 
     iImage = pImageList_Add(himl, hbmImage, hbmMask);
@@ -1487,7 +1533,7 @@ static void test_ImageList_DrawIndirect(void)
     if(iImage == -1) goto cleanup;
 
     /* Add an alpha image */
-    hbmAlphaImage = create_test_bitmap(hdcDst, 32, 0x89ABCDEF, 0x89ABCDEF);
+    hbmAlphaImage = create_test_bitmap(hdcDst, 2, 1, 32, bits_alpha);
     if(!hbmAlphaImage) goto cleanup;
 
     iAlphaImage = pImageList_Add(himl, hbmAlphaImage, hbmMask);
@@ -1495,7 +1541,7 @@ static void test_ImageList_DrawIndirect(void)
     if(iAlphaImage == -1) goto cleanup;
 
     /* Add a transparent alpha image */
-    hbmTransparentImage = create_test_bitmap(hdcDst, 32, 0x00ABCDEF, 0x89ABCDEF);
+    hbmTransparentImage = create_test_bitmap(hdcDst, 2, 1, 32, bits_transparent);
     if(!hbmTransparentImage) goto cleanup;
 
     iTransparentImage = pImageList_Add(himl, hbmTransparentImage, hbmMask);
@@ -1542,8 +1588,9 @@ static void test_ImageList_DrawIndirect(void)
     check_ImageList_DrawIndirect_ILD_ROP(hdcDst, himl, bits, iAlphaImage, SRCCOPY, 0x00D3E5F7, __LINE__);
     check_ImageList_DrawIndirect_ILD_ROP(hdcDst, himl, bits, iAlphaImage, SRCINVERT, 0x00D3E5F7, __LINE__);
 
-    todo_wine check_ImageList_DrawIndirect_fState(hdcDst, himl, bits, iImage, ILD_NORMAL, ILS_SATURATE, 0, 0x00CCCCCC, __LINE__);
-    todo_wine check_ImageList_DrawIndirect_broken(hdcDst, himl, bits, iAlphaImage, ILD_NORMAL, ILS_SATURATE, 0, 0x00AFAFAF, 0x00F0F0F0, __LINE__);
+    check_ImageList_DrawIndirect_grayscale(hdcDst, himl, bits, bits_image, iImage, 2, 1, __LINE__);
+    check_ImageList_DrawIndirect_grayscale(hdcDst, himl, bits, bits_alpha, iAlphaImage, 2, 1, __LINE__);
+    check_ImageList_DrawIndirect_grayscale(hdcDst, himl, bits, bits_transparent, iTransparentImage, 2, 1, __LINE__);
 
     check_ImageList_DrawIndirect_fState(hdcDst, himl, bits, iImage, ILD_NORMAL, ILS_GLOW, 0, 0x00ABCDEF, __LINE__);
     check_ImageList_DrawIndirect_fState(hdcDst, himl, bits, iImage, ILD_NORMAL, ILS_SHADOW, 0, 0x00ABCDEF, __LINE__);
@@ -1551,6 +1598,29 @@ static void test_ImageList_DrawIndirect(void)
     check_ImageList_DrawIndirect_fState(hdcDst, himl, bits, iImage, ILD_NORMAL, ILS_ALPHA, 127, 0x00D5E6F7, __LINE__);
     check_ImageList_DrawIndirect_broken(hdcDst, himl, bits, iAlphaImage, ILD_NORMAL, ILS_ALPHA, 127, 0x00E9F2FB, 0x00AEB7C0, __LINE__);
     todo_wine check_ImageList_DrawIndirect_broken(hdcDst, himl, bits, iAlphaImage, ILD_NORMAL, ILS_NORMAL, 127, 0x00E9F2FB, 0x00D3E5F7, __LINE__);
+
+    /* 4x4 bitmap tests */
+    SelectObject(hdcDst, hbmOld);
+    DeleteObject(hbmDst);
+    bitmapInfo.bmiHeader.biWidth = 4;
+    bitmapInfo.bmiHeader.biHeight = -4;
+    hbmDst = CreateDIBSection(hdcDst, &bitmapInfo, DIB_RGB_COLORS, (void**)&bits, NULL, 0);
+    ok (hbmDst && bits, "CreateDIBSection failed to return a valid bitmap and buffer\n");
+    if (!hbmDst || !bits) goto cleanup;
+    SelectObject(hdcDst, hbmDst);
+
+    hbm4x4 = create_test_bitmap(hdcDst, 4, 4, 32, bits_4x4);
+    if (!hbm4x4) goto cleanup;
+
+    ret = pImageList_SetIconSize(himl, 4, 4);
+    ok(ret, "ImageList_SetIconSize failed\n");
+    if (!ret) goto cleanup;
+
+    ret = pImageList_Add(himl, hbm4x4, NULL);
+    ok(ret != -1, "ImageList_Add failed\n");
+    if(ret == -1) goto cleanup;
+
+    check_ImageList_DrawIndirect_grayscale(hdcDst, himl, bits, bits_4x4, 0, 4, 4, __LINE__);
 
 cleanup:
 
@@ -1572,6 +1642,8 @@ cleanup:
         DeleteObject(hbmAlphaImage);
     if(hbmTransparentImage)
         DeleteObject(hbmTransparentImage);
+    if(hbm4x4)
+        DeleteObject(hbm4x4);
 
     if(himl)
     {
@@ -2260,6 +2332,71 @@ static void test_loadimage(void)
     pImageList_Destroy( list );
 }
 
+#define GetAValue(argb) ((BYTE) ((argb) >> 24))
+
+static void get_image_alpha(HIMAGELIST himl, int index, int width, int height, UINT32 *alpha)
+{
+    int i;
+    HBITMAP hbm_dst;
+    void *bitmap_bits;
+    BITMAPINFO bitmap_info = {{sizeof(BITMAPINFOHEADER), width, height, 1, 32, BI_RGB, 0, 0, 0, 0, 0}};
+
+    HDC hdc_dst = CreateCompatibleDC(0);
+    hbm_dst = CreateDIBSection(hdc_dst, &bitmap_info, DIB_RGB_COLORS, &bitmap_bits, NULL, 0);
+    SelectObject(hdc_dst, hbm_dst);
+
+    pImageList_Draw(himl, index, hdc_dst, 0, 0, ILD_TRANSPARENT);
+    memcpy(alpha, bitmap_bits, (size_t)(width * height * 32 / 8));
+    for (i = 0; i < width * height; i++)
+        alpha[i] = GetAValue(alpha[i]);
+
+    DeleteObject(hbm_dst);
+    DeleteDC(hdc_dst);
+}
+
+static void test_alpha(void)
+{
+    /* each line is a 2*1 bitmap */
+    const static UINT32 test_bitmaps[] =
+    {
+        0x00654321, 0x00ABCDEF,
+        0x00654321, 0xFFABCDEF,
+        0x00654321, 0x89ABCDEF,
+        0xFF654321, 0x00ABCDEF,
+        0xFF654321, 0xFFABCDEF,
+        0xFF654321, 0x89ABCDEF,
+        0x87654321, 0x00ABCDEF,
+        0x87654321, 0xFFABCDEF,
+        0x87654321, 0x89ABCDEF
+    };
+
+    int i, ret;
+    HDC hdc;
+    HBITMAP hbm_test;
+    HIMAGELIST himl;
+    UINT32 alpha[2];
+
+    hdc = CreateCompatibleDC(0);
+    himl = pImageList_Create(2, 1, ILC_COLOR32 | ILC_MASK, 0, 10);
+
+    for (i = 0; i < ARRAY_SIZE(test_bitmaps); i += 2)
+    {
+        hbm_test = create_test_bitmap(hdc, 2, 1, 32, test_bitmaps + i);
+        ret = pImageList_AddMasked(himl, hbm_test, CLR_NONE);
+        ok(ret == i / 2, "ImageList_AddMasked returned %d, expected %d\n", ret, i / 2);
+        DeleteObject(hbm_test);
+
+        get_image_alpha(himl, i / 2, 2, 1, alpha);
+        ok(alpha[0] == GetAValue(test_bitmaps[i]) && alpha[1] == GetAValue(test_bitmaps[i + 1]),
+           "Bitmap [%08X, %08X] returned alpha value [%02X, %02X], expected [%02X, %02X]\n",
+           test_bitmaps[i], test_bitmaps[i + 1], alpha[0], alpha[1],
+           GetAValue(test_bitmaps[i]), GetAValue(test_bitmaps[i + 1]));
+    }
+
+    pImageList_Destroy(himl);
+    DeleteDC(hdc);
+}
+
 static void test_IImageList_Clone(void)
 {
     IImageList *imgl, *imgl2;
@@ -2391,8 +2528,8 @@ static void init_functions(void)
     X(ImageList_Create);
     X(ImageList_Destroy);
     X(ImageList_Add);
+    X(ImageList_AddMasked);
     X(ImageList_DrawIndirect);
-    X(ImageList_SetImageCount);
     X(ImageList_SetImageCount);
     X2(ImageList_SetColorTable, 390);
     X(ImageList_GetFlags);
@@ -2402,6 +2539,7 @@ static void init_functions(void)
     X(ImageList_GetImageCount);
     X(ImageList_SetDragCursorImage);
     X(ImageList_GetIconSize);
+    X(ImageList_SetIconSize);
     X(ImageList_Remove);
     X(ImageList_ReplaceIcon);
     X(ImageList_Replace);
@@ -2461,6 +2599,7 @@ START_TEST(imagelist)
     test_color_table(ILC_COLOR8);
     test_copy();
     test_loadimage();
+    test_alpha();
 
     test_ImageList_DrawIndirect();
     test_shell_imagelist();

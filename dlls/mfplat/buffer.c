@@ -24,9 +24,12 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(mfplat);
 
+#define ALIGN_SIZE(size, alignment) (((size) + (alignment - 1)) & ~((alignment - 1)))
+
 struct memory_buffer
 {
     IMFMediaBuffer IMFMediaBuffer_iface;
+    IMF2DBuffer2 IMF2DBuffer2_iface;
     LONG refcount;
 
     BYTE *data;
@@ -49,7 +52,6 @@ struct sample
     size_t buffer_count;
     size_t capacity;
     DWORD flags;
-    CRITICAL_SECTION cs;
     DWORD prop_flags;
     LONGLONG duration;
     LONGLONG timestamp;
@@ -58,6 +60,11 @@ struct sample
 static inline struct memory_buffer *impl_from_IMFMediaBuffer(IMFMediaBuffer *iface)
 {
     return CONTAINING_RECORD(iface, struct memory_buffer, IMFMediaBuffer_iface);
+}
+
+static struct memory_buffer *impl_from_IMF2DBuffer2(IMF2DBuffer2 *iface)
+{
+    return CONTAINING_RECORD(iface, struct memory_buffer, IMF2DBuffer2_iface);
 }
 
 static inline struct sample *impl_from_IMFSample(IMFSample *iface)
@@ -180,7 +187,7 @@ static HRESULT WINAPI memory_buffer_GetMaxLength(IMFMediaBuffer *iface, DWORD *m
     return S_OK;
 }
 
-static const IMFMediaBufferVtbl memorybuffervtbl =
+static const IMFMediaBufferVtbl memory_1d_buffer_vtbl =
 {
     memory_buffer_QueryInterface,
     memory_buffer_AddRef,
@@ -192,28 +199,222 @@ static const IMFMediaBufferVtbl memorybuffervtbl =
     memory_buffer_GetMaxLength,
 };
 
-static HRESULT create_memory_buffer(DWORD max_length, DWORD alignment, IMFMediaBuffer **buffer)
+static HRESULT WINAPI memory_1d_2d_buffer_QueryInterface(IMFMediaBuffer *iface, REFIID riid, void **out)
+{
+    struct memory_buffer *buffer = impl_from_IMFMediaBuffer(iface);
+
+    TRACE("%p, %s, %p.\n", iface, debugstr_guid(riid), out);
+
+    if (IsEqualIID(riid, &IID_IMFMediaBuffer) ||
+            IsEqualIID(riid, &IID_IUnknown))
+    {
+        *out = &buffer->IMFMediaBuffer_iface;
+    }
+    else if (IsEqualIID(riid, &IID_IMF2DBuffer2) ||
+            IsEqualIID(riid, &IID_IMF2DBuffer))
+    {
+        *out = &buffer->IMF2DBuffer2_iface;
+    }
+    else
+    {
+        WARN("Unsupported interface %s.\n", debugstr_guid(riid));
+        *out = NULL;
+        return E_NOINTERFACE;
+    }
+
+    IUnknown_AddRef((IUnknown*)*out);
+    return S_OK;
+}
+
+static const IMFMediaBufferVtbl memory_1d_2d_buffer_vtbl =
+{
+    memory_1d_2d_buffer_QueryInterface,
+    memory_buffer_AddRef,
+    memory_buffer_Release,
+    memory_buffer_Lock,
+    memory_buffer_Unlock,
+    memory_buffer_GetCurrentLength,
+    memory_buffer_SetCurrentLength,
+    memory_buffer_GetMaxLength,
+};
+
+static HRESULT WINAPI memory_2d_buffer_QueryInterface(IMF2DBuffer2 *iface, REFIID riid, void **obj)
+{
+    struct memory_buffer *buffer = impl_from_IMF2DBuffer2(iface);
+    return IMFMediaBuffer_QueryInterface(&buffer->IMFMediaBuffer_iface, riid, obj);
+}
+
+static ULONG WINAPI memory_2d_buffer_AddRef(IMF2DBuffer2 *iface)
+{
+    struct memory_buffer *buffer = impl_from_IMF2DBuffer2(iface);
+    return IMFMediaBuffer_AddRef(&buffer->IMFMediaBuffer_iface);
+}
+
+static ULONG WINAPI memory_2d_buffer_Release(IMF2DBuffer2 *iface)
+{
+    struct memory_buffer *buffer = impl_from_IMF2DBuffer2(iface);
+    return IMFMediaBuffer_Release(&buffer->IMFMediaBuffer_iface);
+}
+
+static HRESULT WINAPI memory_2d_buffer_Lock2D(IMF2DBuffer2 *iface, BYTE **scanline0, LONG *pitch)
+{
+    FIXME("%p, %p, %p.\n", iface, scanline0, pitch);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI memory_2d_buffer_Unlock2D(IMF2DBuffer2 *iface)
+{
+    FIXME("%p.\n", iface);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI memory_2d_buffer_GetScanline0AndPitch(IMF2DBuffer2 *iface, BYTE **scanline0, LONG *pitch)
+{
+    FIXME("%p, %p, %p.\n", iface, scanline0, pitch);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI memory_2d_buffer_IsContiguousFormat(IMF2DBuffer2 *iface, BOOL *is_contiguous)
+{
+    FIXME("%p, %p.\n", iface, is_contiguous);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI memory_2d_buffer_GetContiguousLength(IMF2DBuffer2 *iface, DWORD *length)
+{
+    FIXME("%p, %p.\n", iface, length);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI memory_2d_buffer_ContiguousCopyTo(IMF2DBuffer2 *iface, BYTE *dest_buffer, DWORD dest_length)
+{
+    FIXME("%p, %p, %u.\n", iface, dest_buffer, dest_length);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI memory_2d_buffer_ContiguousCopyFrom(IMF2DBuffer2 *iface, const BYTE *src_buffer, DWORD src_length)
+{
+    FIXME("%p, %p, %u.\n", iface, src_buffer, src_length);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI memory_2d_buffer_Lock2DSize(IMF2DBuffer2 *iface, MF2DBuffer_LockFlags flags, BYTE **scanline0,
+        LONG *pitch, BYTE **buffer_start, DWORD *buffer_length)
+{
+    FIXME("%p, %#x, %p, %p, %p, %p.\n", iface, flags, scanline0, pitch, buffer_start, buffer_length);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI memory_2d_buffer_Copy2DTo(IMF2DBuffer2 *iface, IMF2DBuffer2 *dest_buffer)
+{
+    FIXME("%p, %p.\n", iface, dest_buffer);
+
+    return E_NOTIMPL;
+}
+
+static const IMF2DBuffer2Vtbl memory_2d_buffer_vtbl =
+{
+    memory_2d_buffer_QueryInterface,
+    memory_2d_buffer_AddRef,
+    memory_2d_buffer_Release,
+    memory_2d_buffer_Lock2D,
+    memory_2d_buffer_Unlock2D,
+    memory_2d_buffer_GetScanline0AndPitch,
+    memory_2d_buffer_IsContiguousFormat,
+    memory_2d_buffer_GetContiguousLength,
+    memory_2d_buffer_ContiguousCopyTo,
+    memory_2d_buffer_ContiguousCopyFrom,
+    memory_2d_buffer_Lock2DSize,
+    memory_2d_buffer_Copy2DTo,
+};
+
+static HRESULT memory_buffer_init(struct memory_buffer *buffer, DWORD max_length, DWORD alignment,
+        const IMFMediaBufferVtbl *vtbl)
+{
+    buffer->data = heap_alloc(ALIGN_SIZE(max_length, alignment));
+    if (!buffer->data)
+        return E_OUTOFMEMORY;
+
+    buffer->IMFMediaBuffer_iface.lpVtbl = vtbl;
+    buffer->refcount = 1;
+    buffer->max_length = max_length;
+    buffer->current_length = 0;
+
+    return S_OK;
+}
+
+static HRESULT create_1d_buffer(DWORD max_length, DWORD alignment, IMFMediaBuffer **buffer)
 {
     struct memory_buffer *object;
+    HRESULT hr;
 
     if (!buffer)
-        return E_INVALIDARG;
+        return E_POINTER;
 
-    object = heap_alloc(sizeof(*object));
+    *buffer = NULL;
+
+    object = heap_alloc_zero(sizeof(*object));
     if (!object)
         return E_OUTOFMEMORY;
 
-    object->data = heap_alloc((max_length + alignment) & ~alignment);
-    if (!object->data)
+    hr = memory_buffer_init(object, max_length, alignment, &memory_1d_buffer_vtbl);
+    if (FAILED(hr))
     {
         heap_free(object);
-        return E_OUTOFMEMORY;
+        return hr;
     }
 
-    object->IMFMediaBuffer_iface.lpVtbl = &memorybuffervtbl;
-    object->refcount = 1;
-    object->max_length = max_length;
-    object->current_length = 0;
+    *buffer = &object->IMFMediaBuffer_iface;
+
+    return S_OK;
+}
+
+static HRESULT create_2d_buffer(DWORD width, DWORD height, DWORD fourcc, IMFMediaBuffer **buffer)
+{
+    struct memory_buffer *object;
+    unsigned int bpp, max_length;
+    GUID subtype;
+    HRESULT hr;
+
+    if (!buffer)
+        return E_POINTER;
+
+    *buffer = NULL;
+
+    memcpy(&subtype, &MFVideoFormat_Base, sizeof(subtype));
+    subtype.Data1 = fourcc;
+
+    if (!(bpp = mf_format_get_bpp(&subtype)))
+        return MF_E_INVALIDMEDIATYPE;
+
+    object = heap_alloc_zero(sizeof(*object));
+    if (!object)
+        return E_OUTOFMEMORY;
+
+    switch (fourcc)
+    {
+        case MAKEFOURCC('N','V','1','2'):
+            max_length = ALIGN_SIZE(width * bpp, 64) * height * 3 / 2;
+            break;
+        default:
+            max_length = ALIGN_SIZE(width * bpp, 64) * height;
+    }
+
+    hr = memory_buffer_init(object, max_length, MF_1_BYTE_ALIGNMENT, &memory_1d_2d_buffer_vtbl);
+    object->IMF2DBuffer2_iface.lpVtbl = &memory_2d_buffer_vtbl;
+    if (FAILED(hr))
+    {
+        heap_free(object);
+        return hr;
+    }
 
     *buffer = &object->IMFMediaBuffer_iface;
 
@@ -227,7 +428,7 @@ HRESULT WINAPI MFCreateMemoryBuffer(DWORD max_length, IMFMediaBuffer **buffer)
 {
     TRACE("%u, %p.\n", max_length, buffer);
 
-    return create_memory_buffer(max_length, MF_1_BYTE_ALIGNMENT, buffer);
+    return create_1d_buffer(max_length, MF_1_BYTE_ALIGNMENT, buffer);
 }
 
 /***********************************************************************
@@ -237,7 +438,14 @@ HRESULT WINAPI MFCreateAlignedMemoryBuffer(DWORD max_length, DWORD alignment, IM
 {
     TRACE("%u, %u, %p.\n", max_length, alignment, buffer);
 
-    return create_memory_buffer(max_length, alignment, buffer);
+    return create_1d_buffer(max_length, alignment, buffer);
+}
+
+HRESULT WINAPI MFCreate2DMediaBuffer(DWORD width, DWORD height, DWORD fourcc, BOOL bottom_up, IMFMediaBuffer **buffer)
+{
+    TRACE("%u, %u, %#x, %d, %p.\n", width, height, fourcc, bottom_up, buffer);
+
+    return create_2d_buffer(width, height, fourcc, buffer);
 }
 
 static HRESULT WINAPI sample_QueryInterface(IMFSample *iface, REFIID riid, void **out)
@@ -281,7 +489,6 @@ static ULONG WINAPI sample_Release(IMFSample *iface)
         for (i = 0; i < sample->buffer_count; ++i)
             IMFMediaBuffer_Release(sample->buffers[i]);
         clear_attributes_object(&sample->attributes);
-        DeleteCriticalSection(&sample->cs);
         heap_free(sample->buffers);
         heap_free(sample);
     }
@@ -566,9 +773,9 @@ static HRESULT WINAPI sample_GetSampleFlags(IMFSample *iface, DWORD *flags)
 
     TRACE("%p, %p.\n", iface, flags);
 
-    EnterCriticalSection(&sample->cs);
+    EnterCriticalSection(&sample->attributes.cs);
     *flags = sample->flags;
-    LeaveCriticalSection(&sample->cs);
+    LeaveCriticalSection(&sample->attributes.cs);
 
     return S_OK;
 }
@@ -579,9 +786,9 @@ static HRESULT WINAPI sample_SetSampleFlags(IMFSample *iface, DWORD flags)
 
     TRACE("%p, %#x.\n", iface, flags);
 
-    EnterCriticalSection(&sample->cs);
+    EnterCriticalSection(&sample->attributes.cs);
     sample->flags = flags;
-    LeaveCriticalSection(&sample->cs);
+    LeaveCriticalSection(&sample->attributes.cs);
 
     return S_OK;
 }
@@ -593,12 +800,12 @@ static HRESULT WINAPI sample_GetSampleTime(IMFSample *iface, LONGLONG *timestamp
 
     TRACE("%p, %p.\n", iface, timestamp);
 
-    EnterCriticalSection(&sample->cs);
+    EnterCriticalSection(&sample->attributes.cs);
     if (sample->prop_flags & SAMPLE_PROP_HAS_TIMESTAMP)
         *timestamp = sample->timestamp;
     else
         hr = MF_E_NO_SAMPLE_TIMESTAMP;
-    LeaveCriticalSection(&sample->cs);
+    LeaveCriticalSection(&sample->attributes.cs);
 
     return hr;
 }
@@ -609,10 +816,10 @@ static HRESULT WINAPI sample_SetSampleTime(IMFSample *iface, LONGLONG timestamp)
 
     TRACE("%p, %s.\n", iface, wine_dbgstr_longlong(timestamp));
 
-    EnterCriticalSection(&sample->cs);
+    EnterCriticalSection(&sample->attributes.cs);
     sample->timestamp = timestamp;
     sample->prop_flags |= SAMPLE_PROP_HAS_TIMESTAMP;
-    LeaveCriticalSection(&sample->cs);
+    LeaveCriticalSection(&sample->attributes.cs);
 
     return S_OK;
 }
@@ -624,12 +831,12 @@ static HRESULT WINAPI sample_GetSampleDuration(IMFSample *iface, LONGLONG *durat
 
     TRACE("%p, %p.\n", iface, duration);
 
-    EnterCriticalSection(&sample->cs);
+    EnterCriticalSection(&sample->attributes.cs);
     if (sample->prop_flags & SAMPLE_PROP_HAS_DURATION)
         *duration = sample->duration;
     else
         hr = MF_E_NO_SAMPLE_DURATION;
-    LeaveCriticalSection(&sample->cs);
+    LeaveCriticalSection(&sample->attributes.cs);
 
     return hr;
 }
@@ -640,10 +847,10 @@ static HRESULT WINAPI sample_SetSampleDuration(IMFSample *iface, LONGLONG durati
 
     TRACE("%p, %s.\n", iface, wine_dbgstr_longlong(duration));
 
-    EnterCriticalSection(&sample->cs);
+    EnterCriticalSection(&sample->attributes.cs);
     sample->duration = duration;
     sample->prop_flags |= SAMPLE_PROP_HAS_DURATION;
-    LeaveCriticalSection(&sample->cs);
+    LeaveCriticalSection(&sample->attributes.cs);
 
     return S_OK;
 }
@@ -657,9 +864,9 @@ static HRESULT WINAPI sample_GetBufferCount(IMFSample *iface, DWORD *count)
     if (!count)
         return E_INVALIDARG;
 
-    EnterCriticalSection(&sample->cs);
+    EnterCriticalSection(&sample->attributes.cs);
     *count = sample->buffer_count;
-    LeaveCriticalSection(&sample->cs);
+    LeaveCriticalSection(&sample->attributes.cs);
 
     return S_OK;
 }
@@ -671,7 +878,7 @@ static HRESULT WINAPI sample_GetBufferByIndex(IMFSample *iface, DWORD index, IMF
 
     TRACE("%p, %u, %p.\n", iface, index, buffer);
 
-    EnterCriticalSection(&sample->cs);
+    EnterCriticalSection(&sample->attributes.cs);
     if (index < sample->buffer_count)
     {
         *buffer = sample->buffers[index];
@@ -679,7 +886,7 @@ static HRESULT WINAPI sample_GetBufferByIndex(IMFSample *iface, DWORD index, IMF
     }
     else
         hr = E_INVALIDARG;
-    LeaveCriticalSection(&sample->cs);
+    LeaveCriticalSection(&sample->attributes.cs);
 
     return hr;
 }
@@ -691,7 +898,7 @@ static HRESULT WINAPI sample_ConvertToContiguousBuffer(IMFSample *iface, IMFMedi
 
     TRACE("%p, %p.\n", iface, buffer);
 
-    EnterCriticalSection(&sample->cs);
+    EnterCriticalSection(&sample->attributes.cs);
 
     if (sample->buffer_count == 0)
         hr = E_UNEXPECTED;
@@ -706,7 +913,7 @@ static HRESULT WINAPI sample_ConvertToContiguousBuffer(IMFSample *iface, IMFMedi
         hr = E_NOTIMPL;
     }
 
-    LeaveCriticalSection(&sample->cs);
+    LeaveCriticalSection(&sample->attributes.cs);
 
     return hr;
 }
@@ -718,7 +925,7 @@ static HRESULT WINAPI sample_AddBuffer(IMFSample *iface, IMFMediaBuffer *buffer)
 
     TRACE("%p, %p.\n", iface, buffer);
 
-    EnterCriticalSection(&sample->cs);
+    EnterCriticalSection(&sample->attributes.cs);
     if (!mf_array_reserve((void **)&sample->buffers, &sample->capacity, sample->buffer_count + 1,
             sizeof(*sample->buffers)))
         hr = E_OUTOFMEMORY;
@@ -727,7 +934,7 @@ static HRESULT WINAPI sample_AddBuffer(IMFSample *iface, IMFMediaBuffer *buffer)
         sample->buffers[sample->buffer_count++] = buffer;
         IMFMediaBuffer_AddRef(buffer);
     }
-    LeaveCriticalSection(&sample->cs);
+    LeaveCriticalSection(&sample->attributes.cs);
 
     return hr;
 }
@@ -739,7 +946,7 @@ static HRESULT WINAPI sample_RemoveBufferByIndex(IMFSample *iface, DWORD index)
 
     TRACE("%p, %u.\n", iface, index);
 
-    EnterCriticalSection(&sample->cs);
+    EnterCriticalSection(&sample->attributes.cs);
     if (index < sample->buffer_count)
     {
         IMFMediaBuffer_Release(sample->buffers[index]);
@@ -752,7 +959,7 @@ static HRESULT WINAPI sample_RemoveBufferByIndex(IMFSample *iface, DWORD index)
     }
     else
         hr = E_INVALIDARG;
-    LeaveCriticalSection(&sample->cs);
+    LeaveCriticalSection(&sample->attributes.cs);
 
     return hr;
 }
@@ -764,41 +971,100 @@ static HRESULT WINAPI sample_RemoveAllBuffers(IMFSample *iface)
 
     TRACE("%p.\n", iface);
 
-    EnterCriticalSection(&sample->cs);
+    EnterCriticalSection(&sample->attributes.cs);
     for (i = 0; i < sample->buffer_count; ++i)
          IMFMediaBuffer_Release(sample->buffers[i]);
     sample->buffer_count = 0;
-    LeaveCriticalSection(&sample->cs);
+    LeaveCriticalSection(&sample->attributes.cs);
 
     return S_OK;
+}
+
+static DWORD sample_get_total_length(struct sample *sample)
+{
+    DWORD total_length = 0, length;
+    size_t i;
+
+    for (i = 0; i < sample->buffer_count; ++i)
+    {
+        length = 0;
+        if (SUCCEEDED(IMFMediaBuffer_GetCurrentLength(sample->buffers[i], &length)))
+            total_length += length;
+    }
+
+    return total_length;
 }
 
 static HRESULT WINAPI sample_GetTotalLength(IMFSample *iface, DWORD *total_length)
 {
     struct sample *sample = impl_from_IMFSample(iface);
-    DWORD length;
-    size_t i;
 
     TRACE("%p, %p.\n", iface, total_length);
 
-    *total_length = 0;
-
-    EnterCriticalSection(&sample->cs);
-    for (i = 0; i < sample->buffer_count; ++i)
-    {
-        if (SUCCEEDED(IMFMediaBuffer_GetCurrentLength(sample->buffers[i], &length)))
-            *total_length += length;
-    }
-    LeaveCriticalSection(&sample->cs);
+    EnterCriticalSection(&sample->attributes.cs);
+    *total_length = sample_get_total_length(sample);
+    LeaveCriticalSection(&sample->attributes.cs);
 
     return S_OK;
 }
 
 static HRESULT WINAPI sample_CopyToBuffer(IMFSample *iface, IMFMediaBuffer *buffer)
 {
-    FIXME("%p, %p.\n", iface, buffer);
+    struct sample *sample = impl_from_IMFSample(iface);
+    DWORD total_length, dst_length, dst_current_length, src_max_length, current_length;
+    BYTE *src_ptr, *dst_ptr;
+    BOOL locked;
+    HRESULT hr;
+    size_t i;
 
-    return E_NOTIMPL;
+    TRACE("%p, %p.\n", iface, buffer);
+
+    EnterCriticalSection(&sample->attributes.cs);
+
+    total_length = sample_get_total_length(sample);
+    dst_current_length = 0;
+
+    dst_ptr = NULL;
+    dst_length = current_length = 0;
+    locked = SUCCEEDED(hr = IMFMediaBuffer_Lock(buffer, &dst_ptr, &dst_length, &current_length));
+    if (locked)
+    {
+        if (dst_length < total_length)
+            hr = MF_E_BUFFERTOOSMALL;
+        else if (dst_ptr)
+        {
+            for (i = 0; i < sample->buffer_count && SUCCEEDED(hr); ++i)
+            {
+                src_ptr = NULL;
+                src_max_length = current_length = 0;
+                if (SUCCEEDED(hr = IMFMediaBuffer_Lock(sample->buffers[i], &src_ptr, &src_max_length, &current_length)))
+                {
+                    if (src_ptr)
+                    {
+                        if (current_length > dst_length)
+                            hr = MF_E_BUFFERTOOSMALL;
+                        else if (current_length)
+                        {
+                            memcpy(dst_ptr, src_ptr, current_length);
+                            dst_length -= current_length;
+                            dst_current_length += current_length;
+                            dst_ptr += current_length;
+                        }
+                    }
+                    IMFMediaBuffer_Unlock(sample->buffers[i]);
+                }
+            }
+        }
+    }
+
+    IMFMediaBuffer_SetCurrentLength(buffer, dst_current_length);
+
+    if (locked)
+        IMFMediaBuffer_Unlock(buffer);
+
+    LeaveCriticalSection(&sample->attributes.cs);
+
+    return hr;
 }
 
 static const IMFSampleVtbl samplevtbl =
@@ -873,7 +1139,6 @@ HRESULT WINAPI MFCreateSample(IMFSample **sample)
     }
 
     object->IMFSample_iface.lpVtbl = &samplevtbl;
-    InitializeCriticalSection(&object->cs);
 
     *sample = &object->IMFSample_iface;
 

@@ -224,6 +224,7 @@ struct wined3d_d3d_info
     uint32_t srgb_write_control : 1;
     uint32_t clip_control : 1;
     uint32_t full_ffp_varyings : 1;
+    uint32_t scaled_resolve : 1;
     enum wined3d_feature_level feature_level;
 
     DWORD multisample_draw_location;
@@ -2898,6 +2899,10 @@ struct wined3d_adapter_ops
 
 struct wined3d_output
 {
+    WCHAR device_name[CCHDEVICENAME];
+    struct wined3d_adapter *adapter;
+    enum wined3d_format_id screen_format;
+
     D3DKMT_HANDLE kmt_adapter;
     D3DKMT_HANDLE kmt_device;
     D3DDDI_VIDEO_PRESENT_SOURCE_ID vidpn_source_id;
@@ -2908,12 +2913,12 @@ struct wined3d_adapter
 {
     unsigned int ordinal;
     POINT monitor_position;
-    enum wined3d_format_id screen_format;
 
     struct wined3d_gl_info  gl_info;
     struct wined3d_d3d_info d3d_info;
     struct wined3d_driver_info driver_info;
-    struct wined3d_output output;
+    struct wined3d_output *outputs;
+    unsigned int output_count;
     UINT64 vram_bytes_used;
     GUID driver_uuid;
     GUID device_uuid;
@@ -3140,6 +3145,7 @@ struct wined3d_blend_state
     const struct wined3d_parent_ops *parent_ops;
 
     struct wined3d_device *device;
+    struct wine_rb_entry entry;
 };
 
 struct wined3d_rasterizer_state
@@ -3151,6 +3157,7 @@ struct wined3d_rasterizer_state
     const struct wined3d_parent_ops *parent_ops;
 
     struct wined3d_device *device;
+    struct wine_rb_entry entry;
 };
 
 struct wined3d_stream_output
@@ -3289,7 +3296,7 @@ struct wined3d_device
 
     struct list             resources; /* a linked list to track resources created by the device */
     struct list             shaders;   /* a linked list to track shaders (pixel and vertex)      */
-    struct wine_rb_tree samplers;
+    struct wine_rb_tree samplers, rasterizer_states, blend_states;
 
     /* Render Target Support */
     struct wined3d_fb_state fb;
@@ -3317,7 +3324,6 @@ struct wined3d_device
     /* Context management */
     struct wined3d_context **contexts;
     UINT context_count;
-    struct wined3d_blend_state *blend_state_atoc_enabled;
 };
 
 void wined3d_device_cleanup(struct wined3d_device *device) DECLSPEC_HIDDEN;
@@ -3936,8 +3942,10 @@ struct wined3d_saved_states
     DWORD vertexShader : 1;
     DWORD scissorRect : 1;
     DWORD store_stream_offset : 1;
-    DWORD blend_state : 1;
-    DWORD padding : 3;
+    DWORD alpha_to_coverage : 1;
+    DWORD lights : 1;
+    DWORD transforms : 1;
+    DWORD padding : 1;
 };
 
 struct StageState {
@@ -4479,6 +4487,7 @@ struct wined3d_swapchain
 
 void wined3d_swapchain_activate(struct wined3d_swapchain *swapchain, BOOL activate) DECLSPEC_HIDDEN;
 void wined3d_swapchain_cleanup(struct wined3d_swapchain *swapchain) DECLSPEC_HIDDEN;
+struct wined3d_output * wined3d_swapchain_get_output(const struct wined3d_swapchain *swapchain) DECLSPEC_HIDDEN;
 void swapchain_update_draw_bindings(struct wined3d_swapchain *swapchain) DECLSPEC_HIDDEN;
 void swapchain_set_max_frame_latency(struct wined3d_swapchain *swapchain,
         const struct wined3d_device *device) DECLSPEC_HIDDEN;

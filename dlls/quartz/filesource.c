@@ -353,6 +353,8 @@ static void async_reader_destroy(struct strmbase_filter *iface)
 
     strmbase_filter_cleanup(&filter->filter);
     free(filter);
+
+    InterlockedDecrement(&object_locks);
 }
 
 static HRESULT async_reader_query_interface(struct strmbase_filter *iface, REFIID iid, void **out)
@@ -412,7 +414,7 @@ static DWORD CALLBACK io_thread(void *arg)
     return 0;
 }
 
-HRESULT AsyncReader_create(IUnknown *outer, void **out)
+HRESULT async_reader_create(IUnknown *outer, IUnknown **out)
 {
     AsyncReader *object;
 
@@ -611,7 +613,8 @@ static HRESULT WINAPI FileAsyncReaderPin_AttemptConnection(struct strmbase_sourc
 
     TRACE("%p->(%p, %p)\n", This, pReceivePin, pmt);
 
-    /* FIXME: call queryacceptproc */
+    if (This->pin.ops->pin_query_accept(&This->pin, pmt) != S_OK)
+        return VFW_E_TYPE_NOT_ACCEPTED;
 
     This->pin.peer = pReceivePin;
     IPin_AddRef(pReceivePin);

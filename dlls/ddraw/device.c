@@ -1086,17 +1086,18 @@ static HRESULT d3d_device7_EnumTextureFormats(IDirect3DDevice7 *iface,
     wined3d_mutex_lock();
 
     memset(&mode, 0, sizeof(mode));
-    if (FAILED(hr = wined3d_get_adapter_display_mode(device->ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode, NULL)))
+    if (FAILED(hr = wined3d_output_get_display_mode(device->ddraw->wined3d_output, &mode, NULL)))
     {
         wined3d_mutex_unlock();
-        WARN("Cannot get the current adapter format\n");
+        WARN("Failed to get output display mode, hr %#x.\n", hr);
         return hr;
     }
 
     for (i = 0; i < ARRAY_SIZE(FormatList); ++i)
     {
-        if (wined3d_check_device_format(device->ddraw->wined3d, WINED3DADAPTER_DEFAULT, WINED3D_DEVICE_TYPE_HAL,
-                mode.format_id, 0, WINED3D_BIND_SHADER_RESOURCE, WINED3D_RTYPE_TEXTURE_2D, FormatList[i]) == D3D_OK)
+        if (wined3d_check_device_format(device->ddraw->wined3d, device->ddraw->wined3d_adapter,
+                WINED3D_DEVICE_TYPE_HAL, mode.format_id, 0, WINED3D_BIND_SHADER_RESOURCE,
+                WINED3D_RTYPE_TEXTURE_2D, FormatList[i]) == D3D_OK)
         {
             DDPIXELFORMAT pformat;
 
@@ -1117,7 +1118,7 @@ static HRESULT d3d_device7_EnumTextureFormats(IDirect3DDevice7 *iface,
 
     for (i = 0; i < ARRAY_SIZE(BumpFormatList); ++i)
     {
-        if (wined3d_check_device_format(device->ddraw->wined3d, WINED3DADAPTER_DEFAULT,
+        if (wined3d_check_device_format(device->ddraw->wined3d, device->ddraw->wined3d_adapter,
                 WINED3D_DEVICE_TYPE_HAL, mode.format_id, WINED3DUSAGE_QUERY_LEGACYBUMPMAP,
                 WINED3D_BIND_SHADER_RESOURCE, WINED3D_RTYPE_TEXTURE_2D, BumpFormatList[i]) == D3D_OK)
         {
@@ -1214,17 +1215,18 @@ static HRESULT WINAPI d3d_device2_EnumTextureFormats(IDirect3DDevice2 *iface,
     wined3d_mutex_lock();
 
     memset(&mode, 0, sizeof(mode));
-    if (FAILED(hr = wined3d_get_adapter_display_mode(device->ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode, NULL)))
+    if (FAILED(hr = wined3d_output_get_display_mode(device->ddraw->wined3d_output, &mode, NULL)))
     {
         wined3d_mutex_unlock();
-        WARN("Cannot get the current adapter format\n");
+        WARN("Failed to get output display mode, hr %#x.\n", hr);
         return hr;
     }
 
     for (i = 0; i < ARRAY_SIZE(FormatList); ++i)
     {
-        if (wined3d_check_device_format(device->ddraw->wined3d, WINED3DADAPTER_DEFAULT, WINED3D_DEVICE_TYPE_HAL,
-                mode.format_id, 0, WINED3D_BIND_SHADER_RESOURCE, WINED3D_RTYPE_TEXTURE_2D, FormatList[i]) == D3D_OK)
+        if (wined3d_check_device_format(device->ddraw->wined3d, device->ddraw->wined3d_adapter,
+                WINED3D_DEVICE_TYPE_HAL, mode.format_id, 0, WINED3D_BIND_SHADER_RESOURCE,
+                WINED3D_RTYPE_TEXTURE_2D, FormatList[i]) == D3D_OK)
         {
             DDSURFACEDESC sdesc;
 
@@ -3884,7 +3886,7 @@ static HRESULT WINAPI d3d_device7_GetClipStatus(IDirect3DDevice7 *iface, D3DCLIP
 
     FIXME("iface %p, clip_status %p stub.\n", iface, clip_status);
 
-    wined3d_device_get_viewports(device->wined3d_device, NULL, &vp);
+    vp = wined3d_stateblock_get_state(device->state)->viewport;
     clip_status->minx = vp.x;
     clip_status->maxx = vp.x + vp.width;
     clip_status->miny = vp.y;
@@ -5356,8 +5358,6 @@ static HRESULT d3d_device7_SetViewport(IDirect3DDevice7 *iface, D3DVIEWPORT7 *vi
     vp.max_z = viewport->dvMaxZ;
 
     wined3d_stateblock_set_viewport(device->update_state, &vp);
-    if (!device->recording)
-        wined3d_device_set_viewports(device->wined3d_device, 1, &vp);
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -5391,7 +5391,7 @@ static HRESULT d3d_device7_GetViewport(IDirect3DDevice7 *iface, D3DVIEWPORT7 *vi
         return DDERR_INVALIDPARAMS;
 
     wined3d_mutex_lock();
-    wined3d_device_get_viewports(device->wined3d_device, NULL, &wined3d_viewport);
+    wined3d_viewport = wined3d_stateblock_get_state(device->state)->viewport;
     wined3d_mutex_unlock();
 
     viewport->dwX = wined3d_viewport.x;
@@ -5448,8 +5448,6 @@ static HRESULT d3d_device7_SetMaterial(IDirect3DDevice7 *iface, D3DMATERIAL7 *ma
     wined3d_mutex_lock();
     /* Note: D3DMATERIAL7 is compatible with struct wined3d_material. */
     wined3d_stateblock_set_material(device->update_state, (const struct wined3d_material *)material);
-    if (!device->recording)
-        wined3d_device_set_material(device->wined3d_device, (const struct wined3d_material *)material);
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -5495,7 +5493,7 @@ static HRESULT d3d_device7_GetMaterial(IDirect3DDevice7 *iface, D3DMATERIAL7 *ma
 
     wined3d_mutex_lock();
     /* Note: D3DMATERIAL7 is compatible with struct wined3d_material. */
-    wined3d_device_get_material(device->wined3d_device, (struct wined3d_material *)material);
+    memcpy(material, &wined3d_stateblock_get_state(device->state)->material, sizeof(*material));
     wined3d_mutex_unlock();
 
     return D3D_OK;
@@ -5543,8 +5541,6 @@ static HRESULT d3d_device7_SetLight(IDirect3DDevice7 *iface, DWORD light_idx, D3
     wined3d_mutex_lock();
     /* Note: D3DLIGHT7 is compatible with struct wined3d_light. */
     hr = wined3d_stateblock_set_light(device->update_state, light_idx, (const struct wined3d_light *)light);
-    if (SUCCEEDED(hr) && !device->recording)
-        hr = wined3d_device_set_light(device->wined3d_device, light_idx, (const struct wined3d_light *)light);
     wined3d_mutex_unlock();
 
     return hr_ddraw_from_wined3d(hr);
@@ -5583,17 +5579,17 @@ static HRESULT WINAPI d3d_device7_SetLight_FPUPreserve(IDirect3DDevice7 *iface, 
 static HRESULT d3d_device7_GetLight(IDirect3DDevice7 *iface, DWORD light_idx, D3DLIGHT7 *light)
 {
     struct d3d_device *device = impl_from_IDirect3DDevice7(iface);
-    HRESULT rc;
+    BOOL enabled;
+    HRESULT hr;
 
     TRACE("iface %p, light_idx %u, light %p.\n", iface, light_idx, light);
 
     wined3d_mutex_lock();
     /* Note: D3DLIGHT7 is compatible with struct wined3d_light. */
-    rc =  wined3d_device_get_light(device->wined3d_device, light_idx, (struct wined3d_light *)light);
+    hr = wined3d_stateblock_get_light(device->state, light_idx, (struct wined3d_light *)light, &enabled);
     wined3d_mutex_unlock();
 
-    /* Translate the result. WineD3D returns other values than D3D7 */
-    return hr_ddraw_from_wined3d(rc);
+    return hr_ddraw_from_wined3d(hr);
 }
 
 static HRESULT WINAPI d3d_device7_GetLight_FPUSetup(IDirect3DDevice7 *iface, DWORD light_idx, D3DLIGHT7 *light)
@@ -6421,8 +6417,6 @@ static HRESULT d3d_device7_LightEnable(IDirect3DDevice7 *iface, DWORD light_idx,
 
     wined3d_mutex_lock();
     hr = wined3d_stateblock_set_light_enable(device->update_state, light_idx, enabled);
-    if (SUCCEEDED(hr) && !device->recording)
-        hr = wined3d_device_set_light_enable(device->wined3d_device, light_idx, enabled);
     wined3d_mutex_unlock();
 
     return hr_ddraw_from_wined3d(hr);
@@ -6464,6 +6458,7 @@ static HRESULT WINAPI d3d_device7_LightEnable_FPUPreserve(IDirect3DDevice7 *ifac
 static HRESULT d3d_device7_GetLightEnable(IDirect3DDevice7 *iface, DWORD light_idx, BOOL *enabled)
 {
     struct d3d_device *device = impl_from_IDirect3DDevice7(iface);
+    struct wined3d_light light;
     HRESULT hr;
 
     TRACE("iface %p, light_idx %u, enabled %p.\n", iface, light_idx, enabled);
@@ -6472,7 +6467,7 @@ static HRESULT d3d_device7_GetLightEnable(IDirect3DDevice7 *iface, DWORD light_i
         return DDERR_INVALIDPARAMS;
 
     wined3d_mutex_lock();
-    hr = wined3d_device_get_light_enable(device->wined3d_device, light_idx, enabled);
+    hr = wined3d_stateblock_get_light(device->state, light_idx, &light, enabled);
     wined3d_mutex_unlock();
 
     return hr_ddraw_from_wined3d(hr);

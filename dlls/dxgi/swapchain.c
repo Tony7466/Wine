@@ -156,15 +156,13 @@ static HRESULT dxgi_swapchain_set_fullscreen_state(struct wined3d_swapchain_stat
         const struct wined3d_swapchain_desc *swapchain_desc, IDXGIOutput *output)
 {
     struct dxgi_output *dxgi_output;
-    struct dxgi_adapter *adapter;
     HRESULT hr;
 
     dxgi_output = unsafe_impl_from_IDXGIOutput(output);
-    adapter = dxgi_output->adapter;
 
     wined3d_mutex_lock();
     hr = wined3d_swapchain_state_set_fullscreen(state, swapchain_desc,
-            adapter->factory->wined3d, adapter->ordinal, NULL);
+            dxgi_output->wined3d_output, NULL);
     wined3d_mutex_unlock();
 
     return hr;
@@ -175,7 +173,6 @@ static HRESULT dxgi_swapchain_resize_target(IDXGISwapChain1 *swapchain,
 {
     struct wined3d_display_mode mode;
     struct dxgi_output *dxgi_output;
-    struct dxgi_adapter *adapter;
     IDXGIOutput *output;
     HRESULT hr;
 
@@ -188,8 +185,6 @@ static HRESULT dxgi_swapchain_resize_target(IDXGISwapChain1 *swapchain,
     if (FAILED(hr = IDXGISwapChain1_GetContainingOutput(swapchain, &output)))
         return hr;
     dxgi_output = unsafe_impl_from_IDXGIOutput(output);
-    adapter = dxgi_output->adapter;
-    IDXGIOutput_Release(output);
 
     TRACE("Mode: %s.\n", debug_dxgi_mode(target_mode_desc));
 
@@ -198,7 +193,9 @@ static HRESULT dxgi_swapchain_resize_target(IDXGISwapChain1 *swapchain,
 
     wined3d_display_mode_from_dxgi(&mode, target_mode_desc);
 
-    return wined3d_swapchain_state_resize_target(state, adapter->factory->wined3d, adapter->ordinal, &mode);
+    hr = wined3d_swapchain_state_resize_target(state, dxgi_output->wined3d_output, &mode);
+    IDXGIOutput_Release(output);
+    return hr;
 }
 
 static HWND d3d11_swapchain_get_hwnd(struct d3d11_swapchain *swapchain)
@@ -2901,7 +2898,7 @@ static HRESULT d3d12_swapchain_init(struct d3d12_swapchain *swapchain, IWineDXGI
     if (FAILED(hr = wined3d_swapchain_desc_from_dxgi(&wined3d_desc, window, swapchain_desc, fullscreen_desc)))
         return hr;
     if (FAILED(hr = wined3d_swapchain_state_create(&wined3d_desc, window,
-            dxgi_adapter->factory->wined3d, dxgi_adapter->ordinal, &swapchain->state)))
+            dxgi_adapter->factory->wined3d, &swapchain->state)))
         return hr;
 
     if (swapchain_desc->BufferUsage && swapchain_desc->BufferUsage != DXGI_USAGE_RENDER_TARGET_OUTPUT)

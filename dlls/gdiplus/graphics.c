@@ -384,7 +384,12 @@ static GpStatus alpha_blend_bmp_pixels(GpGraphics *graphics, INT dst_x, INT dst_
             src_color = ((ARGB*)(src + src_stride * y))[x];
 
             if (comp_mode == CompositingModeSourceCopy)
-                GdipBitmapSetPixel(dst_bitmap, x+dst_x, y+dst_y, src_color);
+            {
+                if (!(src_color & 0xff000000))
+                    GdipBitmapSetPixel(dst_bitmap, x+dst_x, y+dst_y, 0);
+                else
+                    GdipBitmapSetPixel(dst_bitmap, x+dst_x, y+dst_y, src_color);
+            }
             else
             {
                 if (!(src_color & 0xff000000))
@@ -5373,7 +5378,13 @@ GpStatus WINGDIPAPI GdipMeasureCharacterRanges(GpGraphics* graphics,
     {
         stat = GdipSetEmpty(regions[i]);
         if (stat != Ok)
+        {
+            SelectObject(hdc, oldfont);
+            DeleteObject(gdifont);
+            if (temp_hdc)
+                DeleteDC(temp_hdc);
             return stat;
+        }
     }
 
     args.regions = regions;
@@ -7218,8 +7229,13 @@ static GpStatus SOFTWARE_GdipDrawDriverString(GpGraphics *graphics, GDIPCONST UI
     }
 
     if (max_glyphsize == 0)
+    {
         /* Nothing to draw. */
+        heap_free(pti);
+        DeleteDC(hdc);
+        DeleteObject(hfont);
         return Ok;
+    }
 
     glyph_mask = heap_alloc_zero(max_glyphsize);
     text_mask = heap_alloc_zero((max_x - min_x) * (max_y - min_y));

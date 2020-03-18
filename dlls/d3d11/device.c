@@ -707,7 +707,6 @@ static void STDMETHODCALLTYPE d3d11_immediate_context_OMSetBlendState(ID3D11Devi
     struct d3d_device *device = device_from_immediate_ID3D11DeviceContext1(iface);
     static const float default_blend_factor[] = {1.0f, 1.0f, 1.0f, 1.0f};
     struct d3d_blend_state *blend_state_impl;
-    const D3D11_BLEND_DESC *desc;
 
     TRACE("iface %p, blend_state %p, blend_factor %s, sample_mask 0x%08x.\n",
             iface, blend_state, debug_float4(blend_factor), sample_mask);
@@ -718,47 +717,11 @@ static void STDMETHODCALLTYPE d3d11_immediate_context_OMSetBlendState(ID3D11Devi
     wined3d_mutex_lock();
     wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_MULTISAMPLEMASK, sample_mask);
     if (!(blend_state_impl = unsafe_impl_from_ID3D11BlendState(blend_state)))
-    {
         wined3d_device_set_blend_state(device->wined3d_device, NULL,
                 (const struct wined3d_color *)blend_factor);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_ALPHABLENDENABLE, FALSE);
-        wined3d_device_set_render_state(device->wined3d_device,
-                WINED3D_RS_COLORWRITEENABLE, D3D11_COLOR_WRITE_ENABLE_ALL);
-        wined3d_device_set_render_state(device->wined3d_device,
-                WINED3D_RS_COLORWRITEENABLE1, D3D11_COLOR_WRITE_ENABLE_ALL);
-        wined3d_device_set_render_state(device->wined3d_device,
-                WINED3D_RS_COLORWRITEENABLE2, D3D11_COLOR_WRITE_ENABLE_ALL);
-        wined3d_device_set_render_state(device->wined3d_device,
-                WINED3D_RS_COLORWRITEENABLE3, D3D11_COLOR_WRITE_ENABLE_ALL);
-        wined3d_mutex_unlock();
-        return;
-    }
-
-    wined3d_device_set_blend_state(device->wined3d_device, blend_state_impl->wined3d_state,
-            (const struct wined3d_color *)blend_factor);
-    desc = &blend_state_impl->desc;
-    wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_ALPHABLENDENABLE,
-            desc->RenderTarget[0].BlendEnable);
-    if (desc->RenderTarget[0].BlendEnable)
-    {
-        const D3D11_RENDER_TARGET_BLEND_DESC *d = &desc->RenderTarget[0];
-
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_SRCBLEND, d->SrcBlend);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_DESTBLEND, d->DestBlend);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_BLENDOP, d->BlendOp);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_SEPARATEALPHABLENDENABLE, TRUE);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_SRCBLENDALPHA, d->SrcBlendAlpha);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_DESTBLENDALPHA, d->DestBlendAlpha);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_BLENDOPALPHA, d->BlendOpAlpha);
-    }
-    wined3d_device_set_render_state(device->wined3d_device,
-            WINED3D_RS_COLORWRITEENABLE, desc->RenderTarget[0].RenderTargetWriteMask);
-    wined3d_device_set_render_state(device->wined3d_device,
-            WINED3D_RS_COLORWRITEENABLE1, desc->RenderTarget[1].RenderTargetWriteMask);
-    wined3d_device_set_render_state(device->wined3d_device,
-            WINED3D_RS_COLORWRITEENABLE2, desc->RenderTarget[2].RenderTargetWriteMask);
-    wined3d_device_set_render_state(device->wined3d_device,
-            WINED3D_RS_COLORWRITEENABLE3, desc->RenderTarget[3].RenderTargetWriteMask);
+    else
+        wined3d_device_set_blend_state(device->wined3d_device, blend_state_impl->wined3d_state,
+                (const struct wined3d_color *)blend_factor);
     wined3d_mutex_unlock();
 }
 
@@ -929,11 +892,6 @@ static void STDMETHODCALLTYPE d3d11_immediate_context_RSSetState(ID3D11DeviceCon
     struct d3d_device *device = device_from_immediate_ID3D11DeviceContext1(iface);
     struct d3d_rasterizer_state *rasterizer_state_impl;
     const D3D11_RASTERIZER_DESC *desc;
-    union
-    {
-        DWORD d;
-        float f;
-    } scale_bias, const_bias;
 
     TRACE("iface %p, rasterizer_state %p.\n", iface, rasterizer_state);
 
@@ -941,13 +899,7 @@ static void STDMETHODCALLTYPE d3d11_immediate_context_RSSetState(ID3D11DeviceCon
     if (!(rasterizer_state_impl = unsafe_impl_from_ID3D11RasterizerState(rasterizer_state)))
     {
         wined3d_device_set_rasterizer_state(device->wined3d_device, NULL);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_FILLMODE, WINED3D_FILL_SOLID);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_CULLMODE, WINED3D_CULL_BACK);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_SLOPESCALEDEPTHBIAS, 0);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_DEPTHBIAS, 0);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_SCISSORTESTENABLE, FALSE);
         wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_MULTISAMPLEANTIALIAS, FALSE);
-        wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_ANTIALIASEDLINEENABLE, FALSE);
         wined3d_mutex_unlock();
         return;
     }
@@ -955,16 +907,7 @@ static void STDMETHODCALLTYPE d3d11_immediate_context_RSSetState(ID3D11DeviceCon
     wined3d_device_set_rasterizer_state(device->wined3d_device, rasterizer_state_impl->wined3d_state);
 
     desc = &rasterizer_state_impl->desc;
-    wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_FILLMODE, desc->FillMode);
-    wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_CULLMODE, desc->CullMode);
-    scale_bias.f = desc->SlopeScaledDepthBias;
-    const_bias.f = desc->DepthBias;
-    wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_SLOPESCALEDEPTHBIAS, scale_bias.d);
-    wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_DEPTHBIAS, const_bias.d);
-    wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_SCISSORTESTENABLE, desc->ScissorEnable);
     wined3d_device_set_render_state(device->wined3d_device, WINED3D_RS_MULTISAMPLEANTIALIAS, desc->MultisampleEnable);
-    wined3d_device_set_render_state(device->wined3d_device,
-            WINED3D_RS_ANTIALIASEDLINEENABLE, desc->AntialiasedLineEnable);
     wined3d_mutex_unlock();
 }
 
@@ -3375,6 +3318,7 @@ static HRESULT STDMETHODCALLTYPE d3d11_device_CheckFormatSupport(ID3D11Device2 *
 {
     struct d3d_device *device = impl_from_ID3D11Device2(iface);
     struct wined3d_device_creation_parameters params;
+    struct wined3d_adapter *wined3d_adapter;
     enum wined3d_format_id wined3d_format;
     D3D_FEATURE_LEVEL feature_level;
     struct wined3d *wined3d;
@@ -3412,9 +3356,10 @@ static HRESULT STDMETHODCALLTYPE d3d11_device_CheckFormatSupport(ID3D11Device2 *
     feature_level = device->feature_level;
     wined3d = wined3d_device_get_wined3d(device->wined3d_device);
     wined3d_device_get_creation_parameters(device->wined3d_device, &params);
+    wined3d_adapter = wined3d_get_adapter(wined3d, params.adapter_idx);
     for (i = 0; i < ARRAY_SIZE(flag_mapping); ++i)
     {
-        hr = wined3d_check_device_format(wined3d, params.adapter_idx, params.device_type,
+        hr = wined3d_check_device_format(wined3d, wined3d_adapter, params.device_type,
                 WINED3DFMT_UNKNOWN, 0, flag_mapping[i].bind_flags, flag_mapping[i].rtype, wined3d_format);
         if (hr == WINED3DERR_NOTAVAILABLE || hr == WINED3DOK_NOMIPGEN)
             continue;
@@ -3456,6 +3401,7 @@ static HRESULT STDMETHODCALLTYPE d3d11_device_CheckMultisampleQualityLevels(ID3D
 {
     struct d3d_device *device = impl_from_ID3D11Device2(iface);
     struct wined3d_device_creation_parameters params;
+    struct wined3d_adapter *wined3d_adapter;
     struct wined3d *wined3d;
     HRESULT hr;
 
@@ -3480,7 +3426,8 @@ static HRESULT STDMETHODCALLTYPE d3d11_device_CheckMultisampleQualityLevels(ID3D
     wined3d_mutex_lock();
     wined3d = wined3d_device_get_wined3d(device->wined3d_device);
     wined3d_device_get_creation_parameters(device->wined3d_device, &params);
-    hr = wined3d_check_device_multisample_type(wined3d, params.adapter_idx, params.device_type,
+    wined3d_adapter = wined3d_get_adapter(wined3d, params.adapter_idx);
+    hr = wined3d_check_device_multisample_type(wined3d_adapter, params.device_type,
             wined3dformat_from_dxgi_format(format), TRUE, sample_count, quality_level_count);
     wined3d_mutex_unlock();
 

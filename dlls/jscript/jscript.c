@@ -108,13 +108,33 @@ static inline BOOL is_started(script_ctx_t *ctx)
         || ctx->state == SCRIPTSTATE_DISCONNECTED;
 }
 
+HRESULT create_named_item_script_obj(script_ctx_t *ctx, named_item_t *item)
+{
+    /* FIXME: Create a separate script dispatch instead of using the global */
+    item->script_obj = ctx->global;
+    IDispatchEx_AddRef(&item->script_obj->IDispatchEx_iface);
+    return S_OK;
+}
+
+static void release_named_item_script_obj(named_item_t *item)
+{
+    if(!item->script_obj) return;
+
+    jsdisp_release(item->script_obj);
+    item->script_obj = NULL;
+}
+
 named_item_t *lookup_named_item(script_ctx_t *ctx, const WCHAR *item_name, unsigned flags)
 {
     named_item_t *item;
     HRESULT hr;
 
-    for(item = ctx->named_items; item; item = item->next) {
+    LIST_FOR_EACH_ENTRY(item, &ctx->named_items, named_item_t, entry) {
         if((item->flags & flags) == flags && !wcscmp(item->name, item_name)) {
+            if(!item->script_obj && !(item->flags & SCRIPTITEM_GLOBALMEMBERS)) {
+                hr = create_named_item_script_obj(ctx, item);
+                if(FAILED(hr)) return NULL;
+            }
             if(!item->disp && (flags || !(item->flags & SCRIPTITEM_CODEONLY))) {
                 IUnknown *unk;
 
@@ -371,6 +391,15 @@ static void clear_persistent_code_list(JScript *This)
     }
 }
 
+static void release_persistent_script_objs(JScript *This)
+{
+    bytecode_t *iter;
+
+    LIST_FOR_EACH_ENTRY(iter, &This->persistent_code, bytecode_t, entry)
+        if(iter->named_item)
+            release_named_item_script_obj(iter->named_item);
+}
+
 static void exec_queued_code(JScript *This)
 {
     bytecode_t *iter;
@@ -408,26 +437,16 @@ static void decrease_state(JScript *This, SCRIPTSTATE state)
             /* FALLTHROUGH */
         case SCRIPTSTATE_INITIALIZED:
             clear_script_queue(This);
+            release_persistent_script_objs(This);
 
-            if(This->ctx->host_global) {
-                IDispatch_Release(This->ctx->host_global);
-                This->ctx->host_global = NULL;
-            }
+            while(!list_empty(&This->ctx->named_items)) {
+                named_item_t *iter = LIST_ENTRY(list_head(&This->ctx->named_items), named_item_t, entry);
 
-            if(This->ctx->named_items) {
-                named_item_t *iter, *iter2;
-
-                iter = This->ctx->named_items;
-                while(iter) {
-                    iter2 = iter->next;
-
-                    if(iter->disp)
-                        IDispatch_Release(iter->disp);
-                    release_named_item(iter);
-                    iter = iter2;
-                }
-
-                This->ctx->named_items = NULL;
+                list_remove(&iter->entry);
+                if(iter->disp)
+                    IDispatch_Release(iter->disp);
+                release_named_item_script_obj(iter);
+                release_named_item(iter);
             }
 
             if(This->ctx->secmgr) {
@@ -681,6 +700,7 @@ static HRESULT WINAPI JScript_SetScriptSite(IActiveScript *iface,
         ctx->version = This->version;
         ctx->html_mode = This->html_mode;
         ctx->acc = jsval_undefined();
+        list_init(&ctx->named_items);
         heap_pool_init(&ctx->tmp_heap);
 
         hres = create_jscaller(ctx);
@@ -826,11 +846,6 @@ static HRESULT WINAPI JScript_AddNamedItem(IActiveScript *iface,
             WARN("object does not implement IDispatch\n");
             return hres;
         }
-
-        if(This->ctx->host_global)
-            IDispatch_Release(This->ctx->host_global);
-        IDispatch_AddRef(disp);
-        This->ctx->host_global = disp;
     }
 
     item = heap_alloc(sizeof(*item));
@@ -843,6 +858,7 @@ static HRESULT WINAPI JScript_AddNamedItem(IActiveScript *iface,
     item->ref = 1;
     item->disp = disp;
     item->flags = dwFlags;
+    item->script_obj = NULL;
     item->name = heap_strdupW(pstrName);
     if(!item->name) {
         if(disp)
@@ -851,9 +867,7 @@ static HRESULT WINAPI JScript_AddNamedItem(IActiveScript *iface,
         return E_OUTOFMEMORY;
     }
 
-    item->next = This->ctx->named_items;
-    This->ctx->named_items = item;
-
+    list_add_tail(&This->ctx->named_items, &item->entry);
     return S_OK;
 }
 
@@ -869,6 +883,7 @@ static HRESULT WINAPI JScript_GetScriptDispatch(IActiveScript *iface, LPCOLESTR 
                                                 IDispatch **ppdisp)
 {
     JScript *This = impl_from_IActiveScript(iface);
+    jsdisp_t *script_obj;
 
     TRACE("(%p)->(%s %p)\n", This, debugstr_w(pstrItemName), ppdisp);
 
@@ -880,7 +895,14 @@ static HRESULT WINAPI JScript_GetScriptDispatch(IActiveScript *iface, LPCOLESTR 
         return E_UNEXPECTED;
     }
 
-    *ppdisp = to_disp(This->ctx->global);
+    script_obj = This->ctx->global;
+    if(pstrItemName) {
+        named_item_t *item = lookup_named_item(This->ctx, pstrItemName, 0);
+        if(!item) return E_INVALIDARG;
+        if(item->script_obj) script_obj = item->script_obj;
+    }
+
+    *ppdisp = to_disp(script_obj);
     IDispatch_AddRef(*ppdisp);
     return S_OK;
 }
@@ -1001,6 +1023,7 @@ static HRESULT WINAPI JScriptParse_ParseScriptText(IActiveScriptParse *iface,
         DWORD dwFlags, VARIANT *pvarResult, EXCEPINFO *pexcepinfo)
 {
     JScript *This = impl_from_IActiveScriptParse(iface);
+    named_item_t *item = NULL;
     bytecode_t *code;
     jsexcept_t ei;
     HRESULT hres;
@@ -1012,9 +1035,18 @@ static HRESULT WINAPI JScriptParse_ParseScriptText(IActiveScriptParse *iface,
     if(This->thread_id != GetCurrentThreadId() || This->ctx->state == SCRIPTSTATE_CLOSED)
         return E_UNEXPECTED;
 
+    if(pstrItemName) {
+        item = lookup_named_item(This->ctx, pstrItemName, 0);
+        if(!item) {
+            WARN("Unknown context %s\n", debugstr_w(pstrItemName));
+            return E_INVALIDARG;
+        }
+        if(!item->script_obj) item = NULL;
+    }
+
     enter_script(This->ctx, &ei);
     hres = compile_script(This->ctx, pstrCode, dwSourceContextCookie, ulStartingLine, NULL, pstrDelimiter,
-            (dwFlags & SCRIPTTEXT_ISEXPRESSION) != 0, This->is_encode, &code);
+            (dwFlags & SCRIPTTEXT_ISEXPRESSION) != 0, This->is_encode, item, &code);
     if(FAILED(hres))
         return leave_script(This->ctx, hres);
 
@@ -1093,6 +1125,7 @@ static HRESULT WINAPI JScriptParseProcedure_ParseProcedureText(IActiveScriptPars
         CTXARG_T dwSourceContextCookie, ULONG ulStartingLineNumber, DWORD dwFlags, IDispatch **ppdisp)
 {
     JScript *This = impl_from_IActiveScriptParseProcedure2(iface);
+    named_item_t *item = NULL;
     bytecode_t *code;
     jsdisp_t *dispex;
     jsexcept_t ei;
@@ -1105,9 +1138,18 @@ static HRESULT WINAPI JScriptParseProcedure_ParseProcedureText(IActiveScriptPars
     if(This->thread_id != GetCurrentThreadId() || This->ctx->state == SCRIPTSTATE_CLOSED)
         return E_UNEXPECTED;
 
+    if(pstrItemName) {
+        item = lookup_named_item(This->ctx, pstrItemName, 0);
+        if(!item) {
+            WARN("Unknown context %s\n", debugstr_w(pstrItemName));
+            return E_INVALIDARG;
+        }
+        if(!item->script_obj) item = NULL;
+    }
+
     enter_script(This->ctx, &ei);
     hres = compile_script(This->ctx, pstrCode, dwSourceContextCookie, ulStartingLineNumber, pstrFormalParams,
-                          pstrDelimiter, FALSE, This->is_encode, &code);
+                          pstrDelimiter, FALSE, This->is_encode, item, &code);
     if(SUCCEEDED(hres))
         hres = create_source_function(This->ctx, code, &code->global_code, NULL,  &dispex);
     release_bytecode(code);

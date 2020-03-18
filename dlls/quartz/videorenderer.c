@@ -248,6 +248,8 @@ static void video_renderer_destroy(struct strmbase_renderer *iface)
     CloseHandle(filter->run_event);
     strmbase_renderer_cleanup(&filter->renderer);
     CoTaskMemFree(filter);
+
+    InterlockedDecrement(&object_locks);
 }
 
 static HRESULT video_renderer_query_interface(struct strmbase_renderer *iface, REFIID iid, void **out)
@@ -697,7 +699,7 @@ static const IOverlayVtbl overlay_vtbl =
     overlay_Unadvise,
 };
 
-HRESULT VideoRenderer_create(IUnknown *outer, void **out)
+HRESULT video_renderer_create(IUnknown *outer, IUnknown **out)
 {
     HRESULT hr;
     VideoRendererImpl * pVideoRenderer;
@@ -720,13 +722,13 @@ HRESULT VideoRenderer_create(IUnknown *outer, void **out)
     if (FAILED(hr))
         goto fail;
 
-    hr = strmbase_window_init(&pVideoRenderer->baseControlWindow, &IVideoWindow_VTable,
+    hr = video_window_init(&pVideoRenderer->baseControlWindow, &IVideoWindow_VTable,
             &pVideoRenderer->renderer.filter, &pVideoRenderer->renderer.sink.pin,
             &renderer_BaseWindowFuncTable);
     if (FAILED(hr))
         goto fail;
 
-    hr = strmbase_video_init(&pVideoRenderer->baseControlVideo, &pVideoRenderer->renderer.filter,
+    hr = basic_video_init(&pVideoRenderer->baseControlVideo, &pVideoRenderer->renderer.filter,
             &pVideoRenderer->renderer.sink.pin, &renderer_BaseControlVideoFuncTable);
     if (FAILED(hr))
         goto fail;
@@ -745,8 +747,8 @@ fail:
     return hr;
 }
 
-HRESULT VideoRendererDefault_create(IUnknown * pUnkOuter, LPVOID * ppv)
+HRESULT video_renderer_default_create(IUnknown *outer, IUnknown **out)
 {
     /* TODO: Attempt to use the VMR-7 renderer instead when possible */
-    return VideoRenderer_create(pUnkOuter, ppv);
+    return video_renderer_create(outer, out);
 }

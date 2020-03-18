@@ -215,16 +215,7 @@ static void add_dib_bits( HIMAGELIST himl, int pos, int count, int width, int he
             for (j = n * width; j < (n + 1) * width; j++)
                 if ((has_alpha = ((bits[i * stride + j] & 0xff000000) != 0))) break;
 
-        if (!has_alpha)  /* generate alpha channel from the mask */
-        {
-            for (i = 0; i < height; i++)
-                for (j = n * width; j < (n + 1) * width; j++)
-                    if (!mask_info || !((mask_bits[i * mask_stride + j / 8] << (j % 8)) & 0x80))
-                        bits[i * stride + j] |= 0xff000000;
-                    else
-                        bits[i * stride + j] = 0;
-        }
-        else
+        if (has_alpha)
         {
             himl->has_alpha[pos + n] = 1;
 
@@ -1251,7 +1242,7 @@ ImageList_DrawEx (HIMAGELIST himl, INT i, HDC hdc, INT x, INT y,
 
 static BOOL alpha_blend_image( HIMAGELIST himl, HDC dest_dc, int dest_x, int dest_y,
                                int src_x, int src_y, int cx, int cy, BLENDFUNCTION func,
-                               UINT style, COLORREF blend_col )
+                               UINT style, COLORREF blend_col, BOOL has_alpha, BOOL grayscale )
 {
     BOOL ret = FALSE;
     HDC hdc;
@@ -1302,7 +1293,19 @@ static BOOL alpha_blend_image( HIMAGELIST himl, HDC dest_dc, int dest_x, int des
         }
     }
 
-    if (himl->has_alpha)  /* we already have an alpha channel in this case */
+    if (grayscale)
+    {
+        for (i = 0, ptr = bits; i < cx * cy; i++, ptr++)
+        {
+            DWORD gray = (((*ptr & 0x00ff0000) >> 16) * 299 +
+                          ((*ptr & 0x0000ff00) >>  8) * 587 +
+                          ((*ptr & 0x000000ff) >>  0) * 114 + 500) / 1000;
+            if (has_alpha) gray = gray * (*ptr >> 24) / 255;
+            *ptr = (*ptr & 0xff000000)| (gray << 16) | (gray << 8) | gray;
+        }
+    }
+
+    if (has_alpha)  /* we already have an alpha channel in this case */
     {
         /* pre-multiply by the alpha channel */
         for (i = 0, ptr = bits; i < cx * cy; i++, ptr++)
@@ -1337,6 +1340,11 @@ static BOOL alpha_blend_image( HIMAGELIST himl, HDC dest_dc, int dest_x, int des
             for (j = 0; j < cx; j++, ptr++)
                 if ((((BYTE *)mask_bits)[i * width_bytes + j / 8] << (j % 8)) & 0x80) *ptr = 0;
                 else *ptr |= 0xff000000;
+    }
+    else
+    {
+        for (i = 0, ptr = bits; i < cx * cy; i++, ptr++)
+            *ptr |= 0xff000000;
     }
 
     ret = GdiAlphaBlend( dest_dc, dest_x, dest_y, cx, cy, hdc, 0, 0, cx, cy, func );
@@ -1426,7 +1434,7 @@ ImageList_DrawIndirect (IMAGELISTDRAWPARAMS *pimldp)
     oldImageBk = SetBkColor( hImageDC, RGB( 0xff, 0xff, 0xff ) );
 
     has_alpha = (himl->has_alpha && himl->has_alpha[pimldp->i]);
-    if (!bMask && (has_alpha || (fState & ILS_ALPHA)))
+    if (!bMask && (has_alpha || (fState & ILS_ALPHA) || (fState & ILS_SATURATE)))
     {
         COLORREF colour, blend_col = CLR_NONE;
         BLENDFUNCTION func;
@@ -1445,8 +1453,8 @@ ImageList_DrawIndirect (IMAGELISTDRAWPARAMS *pimldp)
 
         if (bIsTransparent)
         {
-            bResult = alpha_blend_image( himl, pimldp->hdcDst, pimldp->x, pimldp->y,
-                                         pt.x, pt.y, cx, cy, func, fStyle, blend_col );
+            bResult = alpha_blend_image( himl, pimldp->hdcDst, pimldp->x, pimldp->y, pt.x, pt.y, cx, cy,
+                                         func, fStyle, blend_col, has_alpha, fState & ILS_SATURATE );
             goto end;
         }
         colour = pimldp->rgbBk;
@@ -1455,7 +1463,8 @@ ImageList_DrawIndirect (IMAGELISTDRAWPARAMS *pimldp)
 
         hOldBrush = SelectObject (hImageDC, CreateSolidBrush (colour));
         PatBlt( hImageDC, 0, 0, cx, cy, PATCOPY );
-        alpha_blend_image( himl, hImageDC, 0, 0, pt.x, pt.y, cx, cy, func, fStyle, blend_col );
+        alpha_blend_image( himl, hImageDC, 0, 0, pt.x, pt.y, cx, cy, func,
+                           fStyle, blend_col, has_alpha, fState & ILS_SATURATE );
         DeleteObject (SelectObject (hImageDC, hOldBrush));
         bResult = BitBlt( pimldp->hdcDst, pimldp->x,  pimldp->y, cx, cy, hImageDC, 0, 0, SRCCOPY );
         goto end;
@@ -1549,7 +1558,6 @@ ImageList_DrawIndirect (IMAGELISTDRAWPARAMS *pimldp)
 	}
     }
 
-    if (fState & ILS_SATURATE) FIXME("ILS_SATURATE: unimplemented!\n");
     if (fState & ILS_GLOW) FIXME("ILS_GLOW: unimplemented!\n");
     if (fState & ILS_SHADOW) FIXME("ILS_SHADOW: unimplemented!\n");
 

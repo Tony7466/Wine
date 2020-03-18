@@ -437,10 +437,7 @@ void device_clear_render_targets(struct wined3d_device *device, UINT rt_count, c
         }
 
         gl_info->gl_ops.gl.p_glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-        context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE));
-        context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE1));
-        context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE2));
-        context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE3));
+        context_invalidate_state(context, STATE_BLEND);
         gl_info->gl_ops.gl.p_glClearColor(color->r, color->g, color->b, color->a);
         checkGLcall("glClearColor");
         clear_mask = clear_mask | GL_COLOR_BUFFER_BIT;
@@ -521,6 +518,20 @@ static void device_leftover_sampler(struct wine_rb_entry *entry, void *context)
     ERR("Leftover sampler %p.\n", sampler);
 }
 
+static void device_free_rasterizer_state(struct wine_rb_entry *entry, void *context)
+{
+    struct wined3d_rasterizer_state *state = WINE_RB_ENTRY_VALUE(entry, struct wined3d_rasterizer_state, entry);
+
+    wined3d_rasterizer_state_decref(state);
+}
+
+static void device_free_blend_state(struct wine_rb_entry *entry, void *context)
+{
+    struct wined3d_blend_state *state = WINE_RB_ENTRY_VALUE(entry, struct wined3d_blend_state, entry);
+
+    wined3d_blend_state_decref(state);
+}
+
 void wined3d_device_cleanup(struct wined3d_device *device)
 {
     unsigned int i;
@@ -528,7 +539,8 @@ void wined3d_device_cleanup(struct wined3d_device *device)
     if (device->swapchain_count)
         wined3d_device_uninit_3d(device);
 
-    wined3d_blend_state_decref(device->blend_state_atoc_enabled);
+    wine_rb_destroy(&device->rasterizer_states, device_free_rasterizer_state, NULL);
+    wine_rb_destroy(&device->blend_states, device_free_blend_state, NULL);
 
     wined3d_cs_destroy(device->cs);
 
@@ -1314,29 +1326,12 @@ HRESULT CDECL wined3d_device_get_stream_source(const struct wined3d_device *devi
     return WINED3D_OK;
 }
 
-HRESULT CDECL wined3d_device_set_stream_source_freq(struct wined3d_device *device, UINT stream_idx, UINT divider)
+static void wined3d_device_set_stream_source_freq(struct wined3d_device *device, UINT stream_idx, UINT divider)
 {
     struct wined3d_stream_state *stream;
     UINT old_flags, old_freq;
 
     TRACE("device %p, stream_idx %u, divider %#x.\n", device, stream_idx, divider);
-
-    /* Verify input. At least in d3d9 this is invalid. */
-    if ((divider & WINED3DSTREAMSOURCE_INSTANCEDATA) && (divider & WINED3DSTREAMSOURCE_INDEXEDDATA))
-    {
-        WARN("INSTANCEDATA and INDEXEDDATA were set, returning D3DERR_INVALIDCALL.\n");
-        return WINED3DERR_INVALIDCALL;
-    }
-    if ((divider & WINED3DSTREAMSOURCE_INSTANCEDATA) && !stream_idx)
-    {
-        WARN("INSTANCEDATA used on stream 0, returning D3DERR_INVALIDCALL.\n");
-        return WINED3DERR_INVALIDCALL;
-    }
-    if (!divider)
-    {
-        WARN("Divider is 0, returning D3DERR_INVALIDCALL.\n");
-        return WINED3DERR_INVALIDCALL;
-    }
 
     stream = &device->state.streams[stream_idx];
     old_flags = stream->flags;
@@ -1346,26 +1341,9 @@ HRESULT CDECL wined3d_device_set_stream_source_freq(struct wined3d_device *devic
     stream->frequency = divider & 0x7fffff;
     if (stream->frequency != old_freq || stream->flags != old_flags)
         wined3d_cs_emit_set_stream_source_freq(device->cs, stream_idx, stream->frequency, stream->flags);
-
-    return WINED3D_OK;
 }
 
-HRESULT CDECL wined3d_device_get_stream_source_freq(const struct wined3d_device *device,
-        UINT stream_idx, UINT *divider)
-{
-    const struct wined3d_stream_state *stream;
-
-    TRACE("device %p, stream_idx %u, divider %p.\n", device, stream_idx, divider);
-
-    stream = &device->state.streams[stream_idx];
-    *divider = stream->flags | stream->frequency;
-
-    TRACE("Returning %#x.\n", *divider);
-
-    return WINED3D_OK;
-}
-
-void CDECL wined3d_device_set_transform(struct wined3d_device *device,
+static void wined3d_device_set_transform(struct wined3d_device *device,
         enum wined3d_transform_state d3dts, const struct wined3d_matrix *matrix)
 {
     TRACE("device %p, state %s, matrix %p.\n",
@@ -1391,32 +1369,12 @@ void CDECL wined3d_device_set_transform(struct wined3d_device *device,
     wined3d_cs_emit_set_transform(device->cs, d3dts, matrix);
 }
 
-void CDECL wined3d_device_get_transform(const struct wined3d_device *device,
+static void wined3d_device_get_transform(const struct wined3d_device *device,
         enum wined3d_transform_state state, struct wined3d_matrix *matrix)
 {
     TRACE("device %p, state %s, matrix %p.\n", device, debug_d3dtstype(state), matrix);
 
     *matrix = device->state.transforms[state];
-}
-
-void CDECL wined3d_device_multiply_transform(struct wined3d_device *device,
-        enum wined3d_transform_state state, const struct wined3d_matrix *matrix)
-{
-    struct wined3d_matrix *mat;
-
-    TRACE("device %p, state %s, matrix %p.\n", device, debug_d3dtstype(state), matrix);
-
-    if (state > WINED3D_HIGHEST_TRANSFORM_STATE)
-    {
-        WARN("Unhandled transform state %#x.\n", state);
-        return;
-    }
-
-    /* Tests show that stateblock recording is ignored; the change goes directly
-     * into the primary stateblock. */
-    mat = &device->state.transforms[state];
-    multiply_matrix(mat, mat, matrix);
-    wined3d_cs_emit_set_transform(device->cs, state, mat);
 }
 
 /* Note lights are real special cases. Although the device caps state only
@@ -1426,46 +1384,16 @@ void CDECL wined3d_device_multiply_transform(struct wined3d_device *device,
  * stateblock problems. When capturing the state block, I duplicate the
  * hashmap, but when recording, just build a chain pretty much of commands to
  * be replayed. */
-HRESULT CDECL wined3d_device_set_light(struct wined3d_device *device,
+static void wined3d_device_set_light(struct wined3d_device *device,
         UINT light_idx, const struct wined3d_light *light)
 {
     struct wined3d_light_info *object = NULL;
-    HRESULT hr;
     float rho;
 
     TRACE("device %p, light_idx %u, light %p.\n", device, light_idx, light);
 
-    /* Check the parameter range. Need for speed most wanted sets junk lights
-     * which confuse the GL driver. */
-    if (!light)
-        return WINED3DERR_INVALIDCALL;
-
-    switch (light->type)
-    {
-        case WINED3D_LIGHT_POINT:
-        case WINED3D_LIGHT_SPOT:
-        case WINED3D_LIGHT_GLSPOT:
-            /* Incorrect attenuation values can cause the gl driver to crash.
-             * Happens with Need for speed most wanted. */
-            if (light->attenuation0 < 0.0f || light->attenuation1 < 0.0f || light->attenuation2 < 0.0f)
-            {
-                WARN("Attenuation is negative, returning WINED3DERR_INVALIDCALL.\n");
-                return WINED3DERR_INVALIDCALL;
-            }
-            break;
-
-        case WINED3D_LIGHT_DIRECTIONAL:
-        case WINED3D_LIGHT_PARALLELPOINT:
-            /* Ignores attenuation */
-            break;
-
-        default:
-        WARN("Light type out of range, returning WINED3DERR_INVALIDCALL\n");
-        return WINED3DERR_INVALIDCALL;
-    }
-
-    if (FAILED(hr = wined3d_light_state_set_light(&device->state.light_state, light_idx, light, &object)))
-        return hr;
+    if (FAILED(wined3d_light_state_set_light(&device->state.light_state, light_idx, light, &object)))
+        return;
 
     /* Initialize the object. */
     TRACE("Light %u setting to type %#x, diffuse %s, specular %s, ambient %s, "
@@ -1554,28 +1482,9 @@ HRESULT CDECL wined3d_device_set_light(struct wined3d_device *device,
     }
 
     wined3d_cs_emit_set_light(device->cs, object);
-
-    return WINED3D_OK;
 }
 
-HRESULT CDECL wined3d_device_get_light(const struct wined3d_device *device,
-        UINT light_idx, struct wined3d_light *light)
-{
-    struct wined3d_light_info *light_info;
-
-    TRACE("device %p, light_idx %u, light %p.\n", device, light_idx, light);
-
-    if (!(light_info = wined3d_light_state_get_light(&device->state.light_state, light_idx)))
-    {
-        TRACE("Light information requested but light not defined\n");
-        return WINED3DERR_INVALIDCALL;
-    }
-
-    *light = light_info->OriginalParms;
-    return WINED3D_OK;
-}
-
-HRESULT CDECL wined3d_device_set_light_enable(struct wined3d_device *device, UINT light_idx, BOOL enable)
+static void wined3d_device_set_light_enable(struct wined3d_device *device, UINT light_idx, BOOL enable)
 {
     struct wined3d_light_info *light_info;
 
@@ -1590,33 +1499,15 @@ HRESULT CDECL wined3d_device_set_light_enable(struct wined3d_device *device, UIN
         if (!(light_info = wined3d_light_state_get_light(&device->state.light_state, light_idx)))
         {
             FIXME("Adding default lights has failed dismally\n");
-            return WINED3DERR_INVALIDCALL;
+            return;
         }
     }
 
     wined3d_light_state_enable_light(&device->state.light_state, &device->adapter->d3d_info, light_info, enable);
     wined3d_cs_emit_set_light_enable(device->cs, light_idx, enable);
-
-    return WINED3D_OK;
 }
 
-HRESULT CDECL wined3d_device_get_light_enable(const struct wined3d_device *device, UINT light_idx, BOOL *enable)
-{
-    struct wined3d_light_info *light_info;
-
-    TRACE("device %p, light_idx %u, enable %p.\n", device, light_idx, enable);
-
-    if (!(light_info = wined3d_light_state_get_light(&device->state.light_state, light_idx)))
-    {
-        TRACE("Light enabled state requested but light not defined.\n");
-        return WINED3DERR_INVALIDCALL;
-    }
-    /* true is 128 according to SetLightEnable */
-    *enable = light_info->enabled ? 128 : 0;
-    return WINED3D_OK;
-}
-
-HRESULT CDECL wined3d_device_set_clip_plane(struct wined3d_device *device,
+static HRESULT wined3d_device_set_clip_plane(struct wined3d_device *device,
         UINT plane_idx, const struct wined3d_vec4 *plane)
 {
     TRACE("device %p, plane_idx %u, plane %p.\n", device, plane_idx, plane);
@@ -1636,22 +1527,6 @@ HRESULT CDECL wined3d_device_set_clip_plane(struct wined3d_device *device,
     device->state.clip_planes[plane_idx] = *plane;
 
     wined3d_cs_emit_set_clip_plane(device->cs, plane_idx, plane);
-
-    return WINED3D_OK;
-}
-
-HRESULT CDECL wined3d_device_get_clip_plane(const struct wined3d_device *device,
-        UINT plane_idx, struct wined3d_vec4 *plane)
-{
-    TRACE("device %p, plane_idx %u, plane %p.\n", device, plane_idx, plane);
-
-    if (plane_idx >= device->adapter->d3d_info.limits.max_clip_distances)
-    {
-        TRACE("Application has requested clipplane this device doesn't support.\n");
-        return WINED3DERR_INVALIDCALL;
-    }
-
-    *plane = device->state.clip_planes[plane_idx];
 
     return WINED3D_OK;
 }
@@ -1678,25 +1553,12 @@ HRESULT CDECL wined3d_device_get_clip_status(const struct wined3d_device *device
     return WINED3D_OK;
 }
 
-void CDECL wined3d_device_set_material(struct wined3d_device *device, const struct wined3d_material *material)
+static void wined3d_device_set_material(struct wined3d_device *device, const struct wined3d_material *material)
 {
     TRACE("device %p, material %p.\n", device, material);
 
     device->state.material = *material;
     wined3d_cs_emit_set_material(device->cs, material);
-}
-
-void CDECL wined3d_device_get_material(const struct wined3d_device *device, struct wined3d_material *material)
-{
-    TRACE("device %p, material %p.\n", device, material);
-
-    *material = device->state.material;
-
-    TRACE("diffuse %s\n", debug_color(&material->diffuse));
-    TRACE("ambient %s\n", debug_color(&material->ambient));
-    TRACE("specular %s\n", debug_color(&material->specular));
-    TRACE("emissive %s\n", debug_color(&material->emissive));
-    TRACE("power %.8e.\n", material->power);
 }
 
 void CDECL wined3d_device_set_index_buffer(struct wined3d_device *device,
@@ -1742,13 +1604,6 @@ void CDECL wined3d_device_set_base_vertex_index(struct wined3d_device *device, I
     TRACE("device %p, base_index %d.\n", device, base_index);
 
     device->state.base_vertex_index = base_index;
-}
-
-INT CDECL wined3d_device_get_base_vertex_index(const struct wined3d_device *device)
-{
-    TRACE("device %p.\n", device);
-
-    return device->state.base_vertex_index;
 }
 
 void CDECL wined3d_device_set_viewports(struct wined3d_device *device, unsigned int viewport_count,
@@ -1897,7 +1752,7 @@ DWORD CDECL wined3d_device_get_render_state(const struct wined3d_device *device,
     return device->state.render_states[state];
 }
 
-void CDECL wined3d_device_set_sampler_state(struct wined3d_device *device,
+static void wined3d_device_set_sampler_state(struct wined3d_device *device,
         UINT sampler_idx, enum wined3d_sampler_state state, DWORD value)
 {
     TRACE("device %p, sampler_idx %u, state %s, value %#x.\n",
@@ -1905,12 +1760,6 @@ void CDECL wined3d_device_set_sampler_state(struct wined3d_device *device,
 
     if (sampler_idx >= WINED3DVERTEXTEXTURESAMPLER0 && sampler_idx <= WINED3DVERTEXTEXTURESAMPLER3)
         sampler_idx -= (WINED3DVERTEXTEXTURESAMPLER0 - WINED3D_MAX_FRAGMENT_SAMPLERS);
-
-    if (sampler_idx >= ARRAY_SIZE(device->state.sampler_states))
-    {
-        WARN("Invalid sampler %u.\n", sampler_idx);
-        return; /* Windows accepts overflowing this array ... we do not. */
-    }
 
     if (value == device->state.sampler_states[sampler_idx][state])
     {
@@ -1920,24 +1769,6 @@ void CDECL wined3d_device_set_sampler_state(struct wined3d_device *device,
 
     device->state.sampler_states[sampler_idx][state] = value;
     wined3d_cs_emit_set_sampler_state(device->cs, sampler_idx, state, value);
-}
-
-DWORD CDECL wined3d_device_get_sampler_state(const struct wined3d_device *device,
-        UINT sampler_idx, enum wined3d_sampler_state state)
-{
-    TRACE("device %p, sampler_idx %u, state %s.\n",
-            device, sampler_idx, debug_d3dsamplerstate(state));
-
-    if (sampler_idx >= WINED3DVERTEXTEXTURESAMPLER0 && sampler_idx <= WINED3DVERTEXTEXTURESAMPLER3)
-        sampler_idx -= (WINED3DVERTEXTEXTURESAMPLER0 - WINED3D_MAX_FRAGMENT_SAMPLERS);
-
-    if (sampler_idx >= ARRAY_SIZE(device->state.sampler_states))
-    {
-        WARN("Invalid sampler %u.\n", sampler_idx);
-        return 0; /* Windows accepts overflowing this array ... we do not. */
-    }
-
-    return device->state.sampler_states[sampler_idx][state];
 }
 
 void CDECL wined3d_device_set_scissor_rects(struct wined3d_device *device, unsigned int rect_count,
@@ -2182,19 +2013,13 @@ struct wined3d_sampler * CDECL wined3d_device_get_vs_sampler(const struct wined3
     return wined3d_device_get_sampler(device, WINED3D_SHADER_TYPE_VERTEX, idx);
 }
 
-HRESULT CDECL wined3d_device_set_vs_consts_b(struct wined3d_device *device,
+static void wined3d_device_set_vs_consts_b(struct wined3d_device *device,
         unsigned int start_idx, unsigned int count, const BOOL *constants)
 {
     unsigned int i;
 
     TRACE("device %p, start_idx %u, count %u, constants %p.\n",
             device, start_idx, count, constants);
-
-    if (!constants || start_idx >= WINED3D_MAX_CONSTS_B)
-        return WINED3DERR_INVALIDCALL;
-
-    if (count > WINED3D_MAX_CONSTS_B - start_idx)
-        count = WINED3D_MAX_CONSTS_B - start_idx;
 
     memcpy(&device->state.vs_consts_b[start_idx], constants, count * sizeof(*constants));
     if (TRACE_ON(d3d))
@@ -2204,39 +2029,15 @@ HRESULT CDECL wined3d_device_set_vs_consts_b(struct wined3d_device *device,
     }
 
     wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_VS_B, start_idx, count, constants);
-
-    return WINED3D_OK;
 }
 
-HRESULT CDECL wined3d_device_get_vs_consts_b(const struct wined3d_device *device,
-        unsigned int start_idx, unsigned int count, BOOL *constants)
-{
-    TRACE("device %p, start_idx %u, count %u, constants %p.\n",
-            device, start_idx, count, constants);
-
-    if (!constants || start_idx >= WINED3D_MAX_CONSTS_B)
-        return WINED3DERR_INVALIDCALL;
-
-    if (count > WINED3D_MAX_CONSTS_B - start_idx)
-        count = WINED3D_MAX_CONSTS_B - start_idx;
-    memcpy(constants, &device->state.vs_consts_b[start_idx], count * sizeof(*constants));
-
-    return WINED3D_OK;
-}
-
-HRESULT CDECL wined3d_device_set_vs_consts_i(struct wined3d_device *device,
+static void wined3d_device_set_vs_consts_i(struct wined3d_device *device,
         unsigned int start_idx, unsigned int count, const struct wined3d_ivec4 *constants)
 {
     unsigned int i;
 
     TRACE("device %p, start_idx %u, count %u, constants %p.\n",
             device, start_idx, count, constants);
-
-    if (!constants || start_idx >= WINED3D_MAX_CONSTS_I)
-        return WINED3DERR_INVALIDCALL;
-
-    if (count > WINED3D_MAX_CONSTS_I - start_idx)
-        count = WINED3D_MAX_CONSTS_I - start_idx;
 
     memcpy(&device->state.vs_consts_i[start_idx], constants, count * sizeof(*constants));
     if (TRACE_ON(d3d))
@@ -2246,37 +2047,15 @@ HRESULT CDECL wined3d_device_set_vs_consts_i(struct wined3d_device *device,
     }
 
     wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_VS_I, start_idx, count, constants);
-
-    return WINED3D_OK;
 }
 
-HRESULT CDECL wined3d_device_get_vs_consts_i(const struct wined3d_device *device,
-        unsigned int start_idx, unsigned int count, struct wined3d_ivec4 *constants)
-{
-    TRACE("device %p, start_idx %u, count %u, constants %p.\n",
-            device, start_idx, count, constants);
-
-    if (!constants || start_idx >= WINED3D_MAX_CONSTS_I)
-        return WINED3DERR_INVALIDCALL;
-
-    if (count > WINED3D_MAX_CONSTS_I - start_idx)
-        count = WINED3D_MAX_CONSTS_I - start_idx;
-    memcpy(constants, &device->state.vs_consts_i[start_idx], count * sizeof(*constants));
-    return WINED3D_OK;
-}
-
-HRESULT CDECL wined3d_device_set_vs_consts_f(struct wined3d_device *device,
+static void wined3d_device_set_vs_consts_f(struct wined3d_device *device,
         unsigned int start_idx, unsigned int count, const struct wined3d_vec4 *constants)
 {
-    const struct wined3d_d3d_info *d3d_info = &device->adapter->d3d_info;
     unsigned int i;
 
     TRACE("device %p, start_idx %u, count %u, constants %p.\n",
             device, start_idx, count, constants);
-
-    if (!constants || start_idx >= d3d_info->limits.vs_uniform_count
-            || count > d3d_info->limits.vs_uniform_count - start_idx)
-        return WINED3DERR_INVALIDCALL;
 
     memcpy(&device->state.vs_consts_f[start_idx], constants, count * sizeof(*constants));
     if (TRACE_ON(d3d))
@@ -2286,25 +2065,6 @@ HRESULT CDECL wined3d_device_set_vs_consts_f(struct wined3d_device *device,
     }
 
     wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_VS_F, start_idx, count, constants);
-
-    return WINED3D_OK;
-}
-
-HRESULT CDECL wined3d_device_get_vs_consts_f(const struct wined3d_device *device,
-        unsigned int start_idx, unsigned int count, struct wined3d_vec4 *constants)
-{
-    const struct wined3d_d3d_info *d3d_info = &device->adapter->d3d_info;
-
-    TRACE("device %p, start_idx %u, count %u, constants %p.\n",
-            device, start_idx, count, constants);
-
-    if (!constants || start_idx >= d3d_info->limits.vs_uniform_count
-            || count > d3d_info->limits.vs_uniform_count - start_idx)
-        return WINED3DERR_INVALIDCALL;
-
-    memcpy(constants, &device->state.vs_consts_f[start_idx], count * sizeof(*constants));
-
-    return WINED3D_OK;
 }
 
 void CDECL wined3d_device_set_pixel_shader(struct wined3d_device *device, struct wined3d_shader *shader)
@@ -2361,19 +2121,13 @@ struct wined3d_sampler * CDECL wined3d_device_get_ps_sampler(const struct wined3
     return wined3d_device_get_sampler(device, WINED3D_SHADER_TYPE_PIXEL, idx);
 }
 
-HRESULT CDECL wined3d_device_set_ps_consts_b(struct wined3d_device *device,
+static void wined3d_device_set_ps_consts_b(struct wined3d_device *device,
         unsigned int start_idx, unsigned int count, const BOOL *constants)
 {
     unsigned int i;
 
     TRACE("device %p, start_idx %u, count %u, constants %p.\n",
             device, start_idx, count, constants);
-
-    if (!constants || start_idx >= WINED3D_MAX_CONSTS_B)
-        return WINED3DERR_INVALIDCALL;
-
-    if (count > WINED3D_MAX_CONSTS_B - start_idx)
-        count = WINED3D_MAX_CONSTS_B - start_idx;
 
     memcpy(&device->state.ps_consts_b[start_idx], constants, count * sizeof(*constants));
     if (TRACE_ON(d3d))
@@ -2383,39 +2137,15 @@ HRESULT CDECL wined3d_device_set_ps_consts_b(struct wined3d_device *device,
     }
 
     wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_PS_B, start_idx, count, constants);
-
-    return WINED3D_OK;
 }
 
-HRESULT CDECL wined3d_device_get_ps_consts_b(const struct wined3d_device *device,
-        unsigned int start_idx, unsigned int count, BOOL *constants)
-{
-    TRACE("device %p, start_idx %u, count %u,constants %p.\n",
-            device, start_idx, count, constants);
-
-    if (!constants || start_idx >= WINED3D_MAX_CONSTS_B)
-        return WINED3DERR_INVALIDCALL;
-
-    if (count > WINED3D_MAX_CONSTS_B - start_idx)
-        count = WINED3D_MAX_CONSTS_B - start_idx;
-    memcpy(constants, &device->state.ps_consts_b[start_idx], count * sizeof(*constants));
-
-    return WINED3D_OK;
-}
-
-HRESULT CDECL wined3d_device_set_ps_consts_i(struct wined3d_device *device,
+static void wined3d_device_set_ps_consts_i(struct wined3d_device *device,
         unsigned int start_idx, unsigned int count, const struct wined3d_ivec4 *constants)
 {
     unsigned int i;
 
     TRACE("device %p, start_idx %u, count %u, constants %p.\n",
             device, start_idx, count, constants);
-
-    if (!constants || start_idx >= WINED3D_MAX_CONSTS_I)
-        return WINED3DERR_INVALIDCALL;
-
-    if (count > WINED3D_MAX_CONSTS_I - start_idx)
-        count = WINED3D_MAX_CONSTS_I - start_idx;
 
     memcpy(&device->state.ps_consts_i[start_idx], constants, count * sizeof(*constants));
     if (TRACE_ON(d3d))
@@ -2425,38 +2155,15 @@ HRESULT CDECL wined3d_device_set_ps_consts_i(struct wined3d_device *device,
     }
 
     wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_PS_I, start_idx, count, constants);
-
-    return WINED3D_OK;
 }
 
-HRESULT CDECL wined3d_device_get_ps_consts_i(const struct wined3d_device *device,
-        unsigned int start_idx, unsigned int count, struct wined3d_ivec4 *constants)
-{
-    TRACE("device %p, start_idx %u, count %u, constants %p.\n",
-            device, start_idx, count, constants);
-
-    if (!constants || start_idx >= WINED3D_MAX_CONSTS_I)
-        return WINED3DERR_INVALIDCALL;
-
-    if (count > WINED3D_MAX_CONSTS_I - start_idx)
-        count = WINED3D_MAX_CONSTS_I - start_idx;
-    memcpy(constants, &device->state.ps_consts_i[start_idx], count * sizeof(*constants));
-
-    return WINED3D_OK;
-}
-
-HRESULT CDECL wined3d_device_set_ps_consts_f(struct wined3d_device *device,
+static void wined3d_device_set_ps_consts_f(struct wined3d_device *device,
         unsigned int start_idx, unsigned int count, const struct wined3d_vec4 *constants)
 {
-    const struct wined3d_d3d_info *d3d_info = &device->adapter->d3d_info;
     unsigned int i;
 
     TRACE("device %p, start_idx %u, count %u, constants %p.\n",
             device, start_idx, count, constants);
-
-    if (!constants || start_idx >= d3d_info->limits.ps_uniform_count
-            || count > d3d_info->limits.ps_uniform_count - start_idx)
-        return WINED3DERR_INVALIDCALL;
 
     memcpy(&device->state.ps_consts_f[start_idx], constants, count * sizeof(*constants));
     if (TRACE_ON(d3d))
@@ -2466,25 +2173,6 @@ HRESULT CDECL wined3d_device_set_ps_consts_f(struct wined3d_device *device,
     }
 
     wined3d_cs_push_constants(device->cs, WINED3D_PUSH_CONSTANTS_PS_F, start_idx, count, constants);
-
-    return WINED3D_OK;
-}
-
-HRESULT CDECL wined3d_device_get_ps_consts_f(const struct wined3d_device *device,
-        unsigned int start_idx, unsigned int count, struct wined3d_vec4 *constants)
-{
-    const struct wined3d_d3d_info *d3d_info = &device->adapter->d3d_info;
-
-    TRACE("device %p, start_idx %u, count %u, constants %p.\n",
-            device, start_idx, count, constants);
-
-    if (!constants || start_idx >= d3d_info->limits.ps_uniform_count
-            || count > d3d_info->limits.ps_uniform_count - start_idx)
-        return WINED3DERR_INVALIDCALL;
-
-    memcpy(constants, &device->state.ps_consts_f[start_idx], count * sizeof(*constants));
-
-    return WINED3D_OK;
 }
 
 void CDECL wined3d_device_set_hull_shader(struct wined3d_device *device, struct wined3d_shader *shader)
@@ -3731,19 +3419,13 @@ HRESULT CDECL wined3d_device_process_vertices(struct wined3d_device *device,
     return hr;
 }
 
-void CDECL wined3d_device_set_texture_stage_state(struct wined3d_device *device,
+static void wined3d_device_set_texture_stage_state(struct wined3d_device *device,
         UINT stage, enum wined3d_texture_stage_state state, DWORD value)
 {
     const struct wined3d_d3d_info *d3d_info = &device->adapter->d3d_info;
 
     TRACE("device %p, stage %u, state %s, value %#x.\n",
             device, stage, debug_d3dtexturestate(state), value);
-
-    if (state > WINED3D_HIGHEST_TEXTURE_STATE)
-    {
-        WARN("Invalid state %#x passed.\n", state);
-        return;
-    }
 
     if (stage >= d3d_info->limits.ffp_blend_stages)
     {
@@ -3763,22 +3445,7 @@ void CDECL wined3d_device_set_texture_stage_state(struct wined3d_device *device,
     wined3d_cs_emit_set_texture_state(device->cs, stage, state, value);
 }
 
-DWORD CDECL wined3d_device_get_texture_stage_state(const struct wined3d_device *device,
-        UINT stage, enum wined3d_texture_stage_state state)
-{
-    TRACE("device %p, stage %u, state %s.\n",
-            device, stage, debug_d3dtexturestate(state));
-
-    if (state > WINED3D_HIGHEST_TEXTURE_STATE)
-    {
-        WARN("Invalid state %#x passed.\n", state);
-        return 0;
-    }
-
-    return device->state.texture_states[stage][state];
-}
-
-void CDECL wined3d_device_set_texture(struct wined3d_device *device,
+static void wined3d_device_set_texture(struct wined3d_device *device,
         UINT stage, struct wined3d_texture *texture)
 {
     struct wined3d_texture *prev;
@@ -3816,33 +3483,15 @@ void CDECL wined3d_device_set_texture(struct wined3d_device *device,
     return;
 }
 
-struct wined3d_texture * CDECL wined3d_device_get_texture(const struct wined3d_device *device, UINT stage)
-{
-    TRACE("device %p, stage %u.\n", device, stage);
-
-    if (stage >= WINED3DVERTEXTEXTURESAMPLER0 && stage <= WINED3DVERTEXTEXTURESAMPLER3)
-        stage -= (WINED3DVERTEXTEXTURESAMPLER0 - WINED3D_MAX_FRAGMENT_SAMPLERS);
-
-    if (stage >= ARRAY_SIZE(device->state.textures))
-    {
-        WARN("Ignoring invalid stage %u.\n", stage);
-        return NULL; /* Windows accepts overflowing this array ... we do not. */
-    }
-
-    return device->state.textures[stage];
-}
-
 void CDECL wined3d_device_apply_stateblock(struct wined3d_device *device,
         struct wined3d_stateblock *stateblock)
 {
     const struct wined3d_stateblock_state *state = &stateblock->stateblock_state;
     const struct wined3d_saved_states *changed = &stateblock->changed;
     const unsigned int word_bit_count = sizeof(DWORD) * CHAR_BIT;
-    struct wined3d_blend_state *blend_state;
+    BOOL set_blend_state = FALSE, set_rasterizer_state = FALSE;
     unsigned int i, j, start, idx;
-    struct wined3d_color colour;
     struct wined3d_range range;
-    BOOL set_blend_state;
     DWORD map, stage;
 
     TRACE("device %p, stateblock %p.\n", device, stateblock);
@@ -3904,29 +3553,18 @@ void CDECL wined3d_device_apply_stateblock(struct wined3d_device *device,
         wined3d_device_set_ps_consts_b(device, range.offset, range.size, &state->ps_consts_b[range.offset]);
     }
 
-    for (i = 0; i < ARRAY_SIZE(state->light_state->light_map); ++i)
+    if (changed->lights)
     {
-        const struct wined3d_light_info *light;
-
-        LIST_FOR_EACH_ENTRY(light, &state->light_state->light_map[i], struct wined3d_light_info, entry)
+        for (i = 0; i < ARRAY_SIZE(state->light_state->light_map); ++i)
         {
-            wined3d_device_set_light(device, light->OriginalIndex, &light->OriginalParms);
-            wined3d_device_set_light_enable(device, light->OriginalIndex, light->glIndex != -1);
+            const struct wined3d_light_info *light;
+
+            LIST_FOR_EACH_ENTRY(light, &state->light_state->light_map[i], struct wined3d_light_info, entry)
+            {
+                wined3d_device_set_light(device, light->OriginalIndex, &light->OriginalParms);
+                wined3d_device_set_light_enable(device, light->OriginalIndex, light->glIndex != -1);
+            }
         }
-    }
-
-    if ((set_blend_state = changed->blend_state
-            || wined3d_bitmap_is_set(changed->renderState, WINED3D_RS_ADAPTIVETESS_Y)))
-    {
-        blend_state = state->rs[WINED3D_RS_ADAPTIVETESS_Y] == WINED3DFMT_ATOC
-                ? device->blend_state_atoc_enabled : state->blend_state;
-
-        if (wined3d_bitmap_is_set(changed->renderState, WINED3D_RS_BLENDFACTOR))
-            wined3d_color_from_d3dcolor(&colour, stateblock->stateblock_state.rs[WINED3D_RS_BLENDFACTOR]);
-        else
-            wined3d_device_get_blend_state(device, &colour);
-
-        wined3d_device_set_blend_state(device, blend_state, &colour);
     }
 
     for (i = 0; i < ARRAY_SIZE(changed->renderState); ++i)
@@ -3936,17 +3574,148 @@ void CDECL wined3d_device_apply_stateblock(struct wined3d_device *device,
         {
             j = wined3d_bit_scan(&map);
             idx = i * word_bit_count + j;
-            if (idx != WINED3D_RS_BLENDFACTOR)
-            {
-                wined3d_device_set_render_state(device, idx, state->rs[idx]);
-                continue;
-            }
 
-            if (!set_blend_state)
+            switch (idx)
             {
-                blend_state = wined3d_device_get_blend_state(device, &colour);
-                wined3d_color_from_d3dcolor(&colour, state->rs[idx]);
-                wined3d_device_set_blend_state(device, blend_state, &colour);
+                case WINED3D_RS_BLENDFACTOR:
+                case WINED3D_RS_ALPHABLENDENABLE:
+                case WINED3D_RS_SRCBLEND:
+                case WINED3D_RS_DESTBLEND:
+                case WINED3D_RS_BLENDOP:
+                case WINED3D_RS_SEPARATEALPHABLENDENABLE:
+                case WINED3D_RS_SRCBLENDALPHA:
+                case WINED3D_RS_DESTBLENDALPHA:
+                case WINED3D_RS_BLENDOPALPHA:
+                case WINED3D_RS_COLORWRITEENABLE:
+                case WINED3D_RS_COLORWRITEENABLE1:
+                case WINED3D_RS_COLORWRITEENABLE2:
+                case WINED3D_RS_COLORWRITEENABLE3:
+                    set_blend_state = TRUE;
+                    break;
+
+                case WINED3D_RS_FILLMODE:
+                case WINED3D_RS_CULLMODE:
+                case WINED3D_RS_SLOPESCALEDEPTHBIAS:
+                case WINED3D_RS_DEPTHBIAS:
+                case WINED3D_RS_SCISSORTESTENABLE:
+                case WINED3D_RS_ANTIALIASEDLINEENABLE:
+                    set_rasterizer_state = TRUE;
+                    break;
+
+                default:
+                    wined3d_device_set_render_state(device, idx, state->rs[idx]);
+                    break;
+            }
+        }
+    }
+
+    if (set_rasterizer_state)
+    {
+        struct wined3d_rasterizer_state *rasterizer_state;
+        struct wined3d_rasterizer_state_desc desc;
+        struct wine_rb_entry *entry;
+        union
+        {
+            DWORD d;
+            float f;
+        } bias;
+
+        memset(&desc, 0, sizeof(desc));
+        desc.fill_mode = state->rs[WINED3D_RS_FILLMODE];
+        desc.cull_mode = state->rs[WINED3D_RS_CULLMODE];
+        bias.d = state->rs[WINED3D_RS_DEPTHBIAS];
+        desc.depth_bias = bias.f;
+        bias.d = state->rs[WINED3D_RS_SLOPESCALEDEPTHBIAS];
+        desc.scale_bias = bias.f;
+        desc.depth_clip = TRUE;
+        desc.scissor = state->rs[WINED3D_RS_SCISSORTESTENABLE];
+        desc.line_antialias = state->rs[WINED3D_RS_ANTIALIASEDLINEENABLE];
+
+        if ((entry = wine_rb_get(&device->rasterizer_states, &desc)))
+        {
+            rasterizer_state = WINE_RB_ENTRY_VALUE(entry, struct wined3d_rasterizer_state, entry);
+            wined3d_device_set_rasterizer_state(device, rasterizer_state);
+        }
+        else if (SUCCEEDED(wined3d_rasterizer_state_create(device, &desc, NULL,
+                &wined3d_null_parent_ops, &rasterizer_state)))
+        {
+            wined3d_device_set_rasterizer_state(device, rasterizer_state);
+            if (wine_rb_put(&device->rasterizer_states, &desc, &rasterizer_state->entry) == -1)
+            {
+                ERR("Failed to insert rasterizer state.\n");
+                wined3d_rasterizer_state_decref(rasterizer_state);
+            }
+        }
+    }
+
+    if (set_blend_state || changed->alpha_to_coverage
+            || wined3d_bitmap_is_set(changed->renderState, WINED3D_RS_ADAPTIVETESS_Y))
+    {
+        struct wined3d_blend_state *blend_state;
+        struct wined3d_blend_state_desc desc;
+        struct wine_rb_entry *entry;
+        struct wined3d_color colour;
+
+        memset(&desc, 0, sizeof(desc));
+        desc.alpha_to_coverage = state->alpha_to_coverage;
+        desc.independent = FALSE;
+        if (state->rs[WINED3D_RS_ADAPTIVETESS_Y] == WINED3DFMT_ATOC)
+            desc.alpha_to_coverage = TRUE;
+        desc.rt[0].enable = state->rs[WINED3D_RS_ALPHABLENDENABLE];
+        desc.rt[0].src = state->rs[WINED3D_RS_SRCBLEND];
+        desc.rt[0].dst = state->rs[WINED3D_RS_DESTBLEND];
+        desc.rt[0].op = state->rs[WINED3D_RS_BLENDOP];
+        if (state->rs[WINED3D_RS_SEPARATEALPHABLENDENABLE])
+        {
+            desc.rt[0].src_alpha = state->rs[WINED3D_RS_SRCBLENDALPHA];
+            desc.rt[0].dst_alpha = state->rs[WINED3D_RS_DESTBLENDALPHA];
+            desc.rt[0].op_alpha = state->rs[WINED3D_RS_BLENDOPALPHA];
+        }
+        else
+        {
+            desc.rt[0].src_alpha = state->rs[WINED3D_RS_SRCBLEND];
+            desc.rt[0].dst_alpha = state->rs[WINED3D_RS_DESTBLEND];
+            desc.rt[0].op_alpha = state->rs[WINED3D_RS_BLENDOP];
+        }
+        desc.rt[0].writemask = state->rs[WINED3D_RS_COLORWRITEENABLE];
+        desc.rt[1].writemask = state->rs[WINED3D_RS_COLORWRITEENABLE1];
+        desc.rt[2].writemask = state->rs[WINED3D_RS_COLORWRITEENABLE2];
+        desc.rt[3].writemask = state->rs[WINED3D_RS_COLORWRITEENABLE3];
+        if (desc.rt[1].writemask != desc.rt[0].writemask
+                || desc.rt[2].writemask != desc.rt[0].writemask
+                || desc.rt[3].writemask != desc.rt[0].writemask)
+        {
+            desc.independent = TRUE;
+            for (i = 1; i < 4; ++i)
+            {
+                desc.rt[i].enable = desc.rt[0].enable;
+                desc.rt[i].src = desc.rt[0].src;
+                desc.rt[i].dst = desc.rt[0].dst;
+                desc.rt[i].op = desc.rt[0].op;
+                desc.rt[i].src_alpha = desc.rt[0].src_alpha;
+                desc.rt[i].dst_alpha = desc.rt[0].dst_alpha;
+                desc.rt[i].op_alpha = desc.rt[0].op_alpha;
+            }
+        }
+
+        if (wined3d_bitmap_is_set(changed->renderState, WINED3D_RS_BLENDFACTOR))
+            wined3d_color_from_d3dcolor(&colour, state->rs[WINED3D_RS_BLENDFACTOR]);
+        else
+            wined3d_device_get_blend_state(device, &colour);
+
+        if ((entry = wine_rb_get(&device->blend_states, &desc)))
+        {
+            blend_state = WINE_RB_ENTRY_VALUE(entry, struct wined3d_blend_state, entry);
+            wined3d_device_set_blend_state(device, blend_state, &colour);
+        }
+        else if (SUCCEEDED(wined3d_blend_state_create(device, &desc, NULL,
+                &wined3d_null_parent_ops, &blend_state)))
+        {
+            wined3d_device_set_blend_state(device, blend_state, &colour);
+            if (wine_rb_put(&device->blend_states, &desc, &blend_state->entry) == -1)
+            {
+                ERR("Failed to insert blend state.\n");
+                wined3d_blend_state_decref(blend_state);
             }
         }
     }
@@ -3974,14 +3743,17 @@ void CDECL wined3d_device_apply_stateblock(struct wined3d_device *device,
         }
     }
 
-    for (i = 0; i < ARRAY_SIZE(changed->transform); ++i)
+    if (changed->transforms)
     {
-        map = changed->transform[i];
-        while (map)
+        for (i = 0; i < ARRAY_SIZE(changed->transform); ++i)
         {
-            j = wined3d_bit_scan(&map);
-            idx = i * word_bit_count + j;
-            wined3d_device_set_transform(device, idx, &state->transforms[idx]);
+            map = changed->transform[i];
+            while (map)
+            {
+                j = wined3d_bit_scan(&map);
+                idx = i * word_bit_count + j;
+                wined3d_device_set_transform(device, idx, &state->transforms[idx]);
+            }
         }
     }
 
@@ -5159,7 +4931,7 @@ HRESULT CDECL wined3d_device_set_cursor_properties(struct wined3d_device *device
         return WINED3DERR_INVALIDCALL;
     }
 
-    if (FAILED(hr = wined3d_get_adapter_display_mode(device->wined3d, device->adapter->ordinal, &mode, NULL)))
+    if (FAILED(hr = wined3d_output_get_display_mode(&device->adapter->outputs[0], &mode, NULL)))
     {
         ERR("Failed to get display mode, hr %#x.\n", hr);
         return WINED3DERR_INVALIDCALL;
@@ -5341,6 +5113,7 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
     struct wined3d_swapchain *swapchain;
     struct wined3d_view_desc view_desc;
     BOOL backbuffer_resized, windowed;
+    struct wined3d_output *output;
     HRESULT hr = WINED3D_OK;
     unsigned int i;
 
@@ -5449,8 +5222,14 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
                 return hr;
             }
         }
+
+        if (!(output = wined3d_swapchain_get_output(swapchain)))
+        {
+            ERR("Failed to get output from swapchain %p.\n", swapchain);
+            return E_FAIL;
+        }
         if (FAILED(hr = wined3d_swapchain_state_set_fullscreen(&swapchain->state,
-                swapchain_desc, device->wined3d, device->adapter->ordinal, mode)))
+                swapchain_desc, output, mode)))
             return hr;
 
         /* Switch from fullscreen to windowed. */
@@ -5740,6 +5519,20 @@ static int wined3d_sampler_compare(const void *key, const struct wine_rb_entry *
     return memcmp(&sampler->desc, key, sizeof(sampler->desc));
 }
 
+static int wined3d_rasterizer_state_compare(const void *key, const struct wine_rb_entry *entry)
+{
+    const struct wined3d_rasterizer_state *state = WINE_RB_ENTRY_VALUE(entry, struct wined3d_rasterizer_state, entry);
+
+    return memcmp(&state->desc, key, sizeof(state->desc));
+}
+
+static int wined3d_blend_state_compare(const void *key, const struct wine_rb_entry *entry)
+{
+    const struct wined3d_blend_state *state = WINE_RB_ENTRY_VALUE(entry, struct wined3d_blend_state, entry);
+
+    return memcmp(&state->desc, key, sizeof(state->desc));
+}
+
 static BOOL wined3d_select_feature_level(const struct wined3d_adapter *adapter,
         const enum wined3d_feature_level *levels, unsigned int level_count,
         enum wined3d_feature_level *selected_level)
@@ -5769,7 +5562,6 @@ HRESULT wined3d_device_init(struct wined3d_device *device, struct wined3d *wined
     struct wined3d_adapter *adapter = wined3d->adapters[adapter_idx];
     const struct wined3d_fragment_pipe_ops *fragment_pipeline;
     const struct wined3d_vertex_pipe_ops *vertex_pipeline;
-    struct wined3d_blend_state_desc blend_state_desc;
     unsigned int i;
     HRESULT hr;
 
@@ -5800,6 +5592,8 @@ HRESULT wined3d_device_init(struct wined3d_device *device, struct wined3d *wined
     fragment_pipeline = adapter->fragment_pipe;
 
     wine_rb_init(&device->samplers, wined3d_sampler_compare);
+    wine_rb_init(&device->rasterizer_states, wined3d_rasterizer_state_compare);
+    wine_rb_init(&device->blend_states, wined3d_blend_state_compare);
 
     if (vertex_pipeline->vp_states && fragment_pipeline->states
             && FAILED(hr = compile_state_table(device->state_table, device->multistate_funcs,
@@ -5808,6 +5602,8 @@ HRESULT wined3d_device_init(struct wined3d_device *device, struct wined3d *wined
     {
         ERR("Failed to compile state table, hr %#x.\n", hr);
         wine_rb_destroy(&device->samplers, NULL, NULL);
+        wine_rb_destroy(&device->rasterizer_states, NULL, NULL);
+        wine_rb_destroy(&device->blend_states, NULL, NULL);
         wined3d_decref(device->wined3d);
         return hr;
     }
@@ -5824,18 +5620,6 @@ HRESULT wined3d_device_init(struct wined3d_device *device, struct wined3d *wined
         goto err;
     }
 
-    memset(&blend_state_desc, 0, sizeof(blend_state_desc));
-    blend_state_desc.alpha_to_coverage = TRUE;
-
-    if (FAILED(hr = wined3d_blend_state_create(device, &blend_state_desc,
-            NULL, &wined3d_null_parent_ops, &device->blend_state_atoc_enabled)))
-    {
-        ERR("Failed to create blend state object, hr %#x.\n", hr);
-        wined3d_cs_destroy(device->cs);
-        state_cleanup(&device->state);
-        goto err;
-    }
-
     return WINED3D_OK;
 
 err:
@@ -5844,6 +5628,8 @@ err:
         heap_free(device->multistate_funcs[i]);
     }
     wine_rb_destroy(&device->samplers, NULL, NULL);
+    wine_rb_destroy(&device->rasterizer_states, NULL, NULL);
+    wine_rb_destroy(&device->blend_states, NULL, NULL);
     wined3d_decref(device->wined3d);
     return hr;
 }

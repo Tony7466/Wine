@@ -591,7 +591,7 @@ static BOOL lookup_global_members(script_ctx_t *ctx, BSTR identifier, exprval_t 
     DISPID id;
     HRESULT hres;
 
-    for(item = ctx->named_items; item; item = item->next) {
+    LIST_FOR_EACH_ENTRY(item, &ctx->named_items, named_item_t, entry) {
         if(item->flags & SCRIPTITEM_GLOBALMEMBERS) {
             hres = disp_get_id(ctx, item->disp, identifier, identifier, 0, &id);
             if(SUCCEEDED(hres)) {
@@ -603,6 +603,21 @@ static BOOL lookup_global_members(script_ctx_t *ctx, BSTR identifier, exprval_t 
     }
 
     return FALSE;
+}
+
+IDispatch *lookup_global_host(script_ctx_t *ctx)
+{
+    IDispatch *disp = NULL;
+    named_item_t *item;
+
+    LIST_FOR_EACH_ENTRY(item, &ctx->named_items, named_item_t, entry) {
+        if(!(item->flags & SCRIPTITEM_GLOBALMEMBERS)) continue;
+        disp = item->disp;
+        break;
+    }
+    if(!disp) disp = to_disp(ctx->global);
+
+    return disp;
 }
 
 static int __cdecl local_ref_cmp(const void *key, const void *ref)
@@ -1218,12 +1233,21 @@ static HRESULT interp_call_member(script_ctx_t *ctx)
 /* ECMA-262 3rd Edition    11.1.1 */
 static HRESULT interp_this(script_ctx_t *ctx)
 {
-    call_frame_t *frame = ctx->call_ctx;
+    IDispatch *this_obj = ctx->call_ctx->this_obj;
 
     TRACE("\n");
 
-    IDispatch_AddRef(frame->this_obj);
-    return stack_push(ctx, jsval_disp(frame->this_obj));
+    if(!this_obj) {
+        named_item_t *item = ctx->call_ctx->bytecode->named_item;
+
+        if(item)
+            this_obj = (item->flags & SCRIPTITEM_CODEONLY) ? to_disp(item->script_obj) : item->disp;
+        else
+            this_obj = lookup_global_host(ctx);
+    }
+
+    IDispatch_AddRef(this_obj);
+    return stack_push(ctx, jsval_disp(this_obj));
 }
 
 static HRESULT interp_identifier_ref(script_ctx_t *ctx, BSTR identifier, unsigned flags)
@@ -2700,7 +2724,7 @@ static void print_backtrace(script_ctx_t *ctx)
         WARN("%u\t", depth);
         depth++;
 
-        if(frame->this_obj && frame->this_obj != to_disp(ctx->global) && frame->this_obj != ctx->host_global)
+        if(frame->this_obj)
             WARN("%p->", frame->this_obj);
         WARN("%s(", frame->function->name ? debugstr_w(frame->function->name) : "[unnamed]");
         if(frame->base_scope && frame->base_scope->frame) {
@@ -2972,6 +2996,13 @@ HRESULT exec_source(script_ctx_t *ctx, DWORD flags, bytecode_t *bytecode, functi
     unsigned i;
     HRESULT hres;
 
+    if(bytecode->named_item) {
+        if(!bytecode->named_item->script_obj) {
+            hres = create_named_item_script_obj(ctx, bytecode->named_item);
+            if(FAILED(hres)) return hres;
+        }
+    }
+
     if(!ctx->ei->enter_notified) {
         ctx->ei->enter_notified = TRUE;
         IActiveScriptSite_OnEnterScript(ctx->site);
@@ -2994,6 +3025,8 @@ HRESULT exec_source(script_ctx_t *ctx, DWORD flags, bytecode_t *bytecode, functi
     }
 
     if(flags & (EXEC_GLOBAL | EXEC_EVAL)) {
+        BOOL lookup_globals = (flags & EXEC_GLOBAL) && !bytecode->named_item;
+
         for(i=0; i < function->var_cnt; i++) {
             TRACE("[%d] %s %d\n", i, debugstr_w(function->variables[i].name), function->variables[i].func_id);
             if(function->variables[i].func_id != -1) {
@@ -3005,7 +3038,7 @@ HRESULT exec_source(script_ctx_t *ctx, DWORD flags, bytecode_t *bytecode, functi
 
                 hres = jsdisp_propput_name(variable_obj, function->variables[i].name, jsval_obj(func_obj));
                 jsdisp_release(func_obj);
-            }else if(!(flags & EXEC_GLOBAL) || !lookup_global_members(ctx, function->variables[i].name, NULL)) {
+            }else if(!lookup_globals || !lookup_global_members(ctx, function->variables[i].name, NULL)) {
                 DISPID id = 0;
 
                 hres = jsdisp_get_id(variable_obj, function->variables[i].name, fdexNameEnsure, &id);
@@ -3055,13 +3088,10 @@ HRESULT exec_source(script_ctx_t *ctx, DWORD flags, bytecode_t *bytecode, functi
 
     frame->ip = function->instr_off;
     frame->stack_base = ctx->stack_top;
-    if(this_obj)
+    if(this_obj) {
         frame->this_obj = this_obj;
-    else if(ctx->host_global)
-        frame->this_obj = ctx->host_global;
-    else
-        frame->this_obj = to_disp(ctx->global);
-    IDispatch_AddRef(frame->this_obj);
+        IDispatch_AddRef(frame->this_obj);
+    }
 
     if(function_instance)
         frame->function_instance = jsdisp_addref(function_instance);

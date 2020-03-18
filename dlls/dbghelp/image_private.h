@@ -67,7 +67,7 @@ struct image_file_map
         {
             size_t                      elf_size;
             size_t                      elf_start;
-            int                         fd;
+            HANDLE                      handle;
             const char*	                shstrtab;
             struct image_file_map*      alternate;      /* another ELF file (linked to this one) */
             char*                       target_copy;
@@ -110,6 +110,7 @@ struct image_file_map
         {
             HANDLE                      hMap;
             IMAGE_NT_HEADERS            ntheader;
+            BOOL                        builtin;
             unsigned                    full_count;
             void*                       full_map;
             struct

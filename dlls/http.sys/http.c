@@ -802,6 +802,12 @@ static BOOL host_matches(const struct connection *conn, const struct request_que
 {
     const char *conn_host = (conn->url[0] == '/') ? conn->host : conn->url + 7;
 
+    if (queue->url[7] == '+')
+    {
+        const char *queue_port = strchr(queue->url + 7, ':');
+        return !strncmp(queue_port, strchr(conn_host, ':'), strlen(queue_port) - 1 /* strip final slash */);
+    }
+
     return !memicmp(queue->url + 7, conn_host, strlen(queue->url) - 8 /* strip final slash */);
 }
 
@@ -1112,6 +1118,11 @@ static NTSTATUS http_add_url(struct request_queue *queue, IRP *irp)
             WARN("Address %s is already in use.\n", debugstr_a(params->url));
             return STATUS_SHARING_VIOLATION;
         }
+        else if (WSAGetLastError() == WSAEACCES)
+        {
+            WARN("Not enough permissions to bind to address %s.\n", debugstr_a(params->url));
+            return STATUS_ACCESS_DENIED;
+        }
         ERR("Failed to bind socket, error %u.\n", WSAGetLastError());
         return STATUS_UNSUCCESSFUL;
     }
@@ -1178,6 +1189,20 @@ static struct connection *get_connection(HTTP_REQUEST_ID req_id)
     return NULL;
 }
 
+static void WINAPI http_receive_request_cancel(DEVICE_OBJECT *device, IRP *irp)
+{
+    TRACE("device %p, irp %p.\n", device, irp);
+
+    IoReleaseCancelSpinLock(irp->CancelIrql);
+
+    EnterCriticalSection(&http_cs);
+    RemoveEntryList(&irp->Tail.Overlay.ListEntry);
+    LeaveCriticalSection(&http_cs);
+
+    irp->IoStatus.Status = STATUS_CANCELLED;
+    IoCompleteRequest(irp, IO_NO_INCREMENT);
+}
+
 static NTSTATUS http_receive_request(struct request_queue *queue, IRP *irp)
 {
     const struct http_receive_request_params *params = irp->AssociatedIrp.SystemBuffer;
@@ -1199,8 +1224,18 @@ static NTSTATUS http_receive_request(struct request_queue *queue, IRP *irp)
     if (params->id == HTTP_NULL_ID)
     {
         TRACE("Queuing IRP %p.\n", irp);
-        InsertTailList(&queue->irp_queue, &irp->Tail.Overlay.ListEntry);
-        ret = STATUS_PENDING;
+
+        IoSetCancelRoutine(irp, http_receive_request_cancel);
+        if (irp->Cancel && !IoSetCancelRoutine(irp, NULL))
+        {
+            /* The IRP was canceled before we set the cancel routine. */
+            ret = STATUS_CANCELLED;
+        }
+        else
+        {
+            InsertTailList(&queue->irp_queue, &irp->Tail.Overlay.ListEntry);
+            ret = STATUS_PENDING;
+        }
     }
     else
         ret = STATUS_CONNECTION_INVALID;
@@ -1372,8 +1407,20 @@ static NTSTATUS WINAPI dispatch_close(DEVICE_OBJECT *device, IRP *irp)
 {
     IO_STACK_LOCATION *stack = IoGetCurrentIrpStackLocation(irp);
     struct request_queue *queue = stack->FileObject->FsContext;
+    LIST_ENTRY *entry;
 
     TRACE("Closing queue %p.\n", queue);
+
+    EnterCriticalSection(&http_cs);
+
+    while ((entry = queue->irp_queue.Flink) != &queue->irp_queue)
+    {
+        IRP *queued_irp = CONTAINING_RECORD(entry, IRP, Tail.Overlay.ListEntry);
+        IoCancelIrp(queued_irp);
+    }
+
+    LeaveCriticalSection(&http_cs);
+
     close_queue(queue);
 
     irp->IoStatus.Status = STATUS_SUCCESS;
