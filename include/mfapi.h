@@ -274,6 +274,9 @@ DEFINE_GUID(MFT_CATEGORY_AUDIO_ENCODER,   0x91c64bd0, 0xf91e, 0x4d8c, 0x92, 0x76
 DEFINE_GUID(MFT_CATEGORY_AUDIO_EFFECT,    0x11064c48, 0x3648, 0x4ed0, 0x93, 0x2e, 0x05, 0xce, 0x8a, 0xc8, 0x11, 0xb7);
 DEFINE_GUID(MFT_CATEGORY_VIDEO_PROCESSOR, 0x302ea3fc, 0xaa5f, 0x47f9, 0x9f, 0x7a, 0xc2, 0x18, 0x8b, 0xb1, 0x63, 0x02);
 DEFINE_GUID(MFT_CATEGORY_OTHER,           0x90175d57, 0xb7ea, 0x4901, 0xae, 0xb3, 0x93, 0x3a, 0x87, 0x47, 0x75, 0x6f);
+DEFINE_GUID(MFT_ENUM_ADAPTER_LUID,        0x1d39518c, 0xe220, 0x4da8, 0xa0, 0x7f, 0xba, 0x17, 0x25, 0x52, 0xd6, 0xb1);
+DEFINE_GUID(MFT_SUPPORT_DYNAMIC_FORMAT_CHANGE, 0x53476a11, 0x3f13, 0x49fb, 0xac, 0x42, 0xee, 0x27, 0x33, 0xc9, 0x67, 0x41);
+
 
 DEFINE_GUID(MFMediaType_Audio,             0x73647561, 0x0000, 0x0010, 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71);
 DEFINE_GUID(MFMediaType_Binary,            0x72178c25, 0xe45b, 0x11d5, 0xbc, 0x2a, 0x00, 0xb0, 0xd0, 0xf3, 0xf4, 0xab);
@@ -399,6 +402,7 @@ HRESULT WINAPI MFCancelCreateFile(IUnknown *cancel_cookie);
 HRESULT WINAPI MFCancelWorkItem(MFWORKITEM_KEY key);
 BOOL    WINAPI MFCompareFullToPartialMediaType(IMFMediaType *full_type, IMFMediaType *partial_type);
 HRESULT WINAPI MFCopyImage(BYTE *dest, LONG deststride, const BYTE *src, LONG srcstride, DWORD width, DWORD lines);
+HRESULT WINAPI MFCreate2DMediaBuffer(DWORD width, DWORD height, DWORD fourcc, BOOL bottom_up, IMFMediaBuffer **buffer);
 HRESULT WINAPI MFCreateAlignedMemoryBuffer(DWORD max_length, DWORD alignment, IMFMediaBuffer **buffer);
 HRESULT WINAPI MFCreateAttributes(IMFAttributes **attributes, UINT32 size);
 HRESULT WINAPI MFCreateAsyncResult(IUnknown *object, IMFAsyncCallback *callback, IUnknown *state, IMFAsyncResult **result);
@@ -418,10 +422,14 @@ void *  WINAPI MFHeapAlloc(SIZE_T size, ULONG flags, char *file, int line, EAllo
 void    WINAPI MFHeapFree(void *ptr);
 HRESULT WINAPI MFGetAttributesAsBlob(IMFAttributes *attributes, UINT8 *buffer, UINT size);
 HRESULT WINAPI MFGetAttributesAsBlobSize(IMFAttributes *attributes, UINT32 *size);
+HRESULT WINAPI MFGetStrideForBitmapInfoHeader(DWORD format, DWORD width, LONG *stride);
+HRESULT WINAPI MFGetPlaneSize(DWORD format, DWORD width, DWORD height, DWORD *size);
 HRESULT WINAPI MFGetTimerPeriodicity(DWORD *periodicity);
 HRESULT WINAPI MFTEnum(GUID category, UINT32 flags, MFT_REGISTER_TYPE_INFO *input_type,
                        MFT_REGISTER_TYPE_INFO *output_type, IMFAttributes *attributes,
                        CLSID **pclsids, UINT32 *pcount);
+HRESULT WINAPI MFTEnum2(GUID category, UINT32 flags, const MFT_REGISTER_TYPE_INFO *input_type,
+        const MFT_REGISTER_TYPE_INFO *output_type, IMFAttributes *attributes, IMFActivate ***activate, UINT32 *count);
 HRESULT WINAPI MFTEnumEx(GUID category, UINT32 flags, const MFT_REGISTER_TYPE_INFO *input_type,
                          const MFT_REGISTER_TYPE_INFO *output_type, IMFActivate ***activate,
                          UINT32 *pcount);

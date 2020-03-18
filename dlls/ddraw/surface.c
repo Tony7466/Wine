@@ -6008,7 +6008,7 @@ HRESULT ddraw_surface_create(struct ddraw *ddraw, const DDSURFACEDESC2 *surface_
         return DDERR_INVALIDCAPS;
     }
 
-    if (FAILED(hr = wined3d_get_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode, NULL)))
+    if (FAILED(hr = wined3d_output_get_display_mode(ddraw->wined3d_output, &mode, NULL)))
     {
         ERR("Failed to get display mode, hr %#x.\n", hr);
         heap_free(texture);
@@ -6168,7 +6168,7 @@ HRESULT ddraw_surface_create(struct ddraw *ddraw, const DDSURFACEDESC2 *surface_
                 bind_flags |= WINED3D_BIND_RENDER_TARGET;
 
             if (!(ddraw->flags & DDRAW_NO3D) && SUCCEEDED(hr = wined3d_check_device_format(ddraw->wined3d,
-                    WINED3DADAPTER_DEFAULT, WINED3D_DEVICE_TYPE_HAL, mode.format_id,
+                    ddraw->wined3d_adapter, WINED3D_DEVICE_TYPE_HAL, mode.format_id,
                     usage, bind_flags, WINED3D_RTYPE_TEXTURE_2D, wined3d_desc.format)))
                 desc->ddsCaps.dwCaps |= DDSCAPS_VIDEOMEMORY;
             else
@@ -6265,7 +6265,7 @@ HRESULT ddraw_surface_create(struct ddraw *ddraw, const DDSURFACEDESC2 *surface_
             }
 
             if ((desc->dwFlags & DDSD_LINEARSIZE)
-                    && desc->u1.dwLinearSize < wined3d_calculate_format_pitch(ddraw->wined3d, WINED3DADAPTER_DEFAULT,
+                    && desc->u1.dwLinearSize < wined3d_calculate_format_pitch(ddraw->wined3d_adapter,
                             wined3d_desc.format, wined3d_desc.width) * ((desc->dwHeight + 3) / 4))
             {
                 WARN("Invalid linear size %u specified.\n", desc->u1.dwLinearSize);
@@ -6282,7 +6282,7 @@ HRESULT ddraw_surface_create(struct ddraw *ddraw, const DDSURFACEDESC2 *surface_
                 return DDERR_INVALIDPARAMS;
             }
 
-            if (desc->u1.lPitch < wined3d_calculate_format_pitch(ddraw->wined3d, WINED3DADAPTER_DEFAULT,
+            if (desc->u1.lPitch < wined3d_calculate_format_pitch(ddraw->wined3d_adapter,
                     wined3d_desc.format, wined3d_desc.width) || desc->u1.lPitch & 3)
             {
                 WARN("Invalid pitch %u specified.\n", desc->u1.lPitch);

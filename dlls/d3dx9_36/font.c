@@ -20,6 +20,8 @@
 
 #include "d3dx9_private.h"
 
+#include "usp10.h"
+
 WINE_DEFAULT_DEBUG_CHANNEL(d3dx);
 
 struct d3dx_glyph
@@ -420,30 +422,320 @@ static HRESULT WINAPI ID3DXFontImpl_PreloadGlyphs(ID3DXFont *iface, UINT first, 
 
 static HRESULT WINAPI ID3DXFontImpl_PreloadTextA(ID3DXFont *iface, const char *string, INT count)
 {
-    FIXME("iface %p, string %s, count %d stub!\n", iface, debugstr_a(string), count);
-    return E_NOTIMPL;
+    WCHAR *wstr;
+    HRESULT hr;
+    int countW;
+
+    TRACE("iface %p, string %s, count %d.\n", iface, debugstr_an(string, count), count);
+
+    if (!string && !count)
+        return D3D_OK;
+
+    if (!string)
+        return D3DERR_INVALIDCALL;
+
+    countW = MultiByteToWideChar(CP_ACP, 0, string, count < 0 ? -1 : count, NULL, 0);
+
+    wstr = heap_alloc(countW * sizeof(*wstr));
+    if (!wstr)
+        return E_OUTOFMEMORY;
+
+    MultiByteToWideChar(CP_ACP, 0, string, count < 0 ? -1 : count, wstr, countW);
+
+    hr = ID3DXFont_PreloadTextW(iface, wstr, count < 0 ? countW - 1 : countW);
+
+    heap_free(wstr);
+
+    return hr;
 }
 
 static HRESULT WINAPI ID3DXFontImpl_PreloadTextW(ID3DXFont *iface, const WCHAR *string, INT count)
 {
-    FIXME("iface %p, string %s, count %d stub!\n", iface, debugstr_w(string), count);
-    return E_NOTIMPL;
+    struct d3dx_font *font = impl_from_ID3DXFont(iface);
+    WORD *indices;
+    int i;
+
+    TRACE("iface %p, string %s, count %d.\n", iface, debugstr_wn(string, count), count);
+
+    if (!string && !count)
+        return D3D_OK;
+
+    if (!string)
+        return D3DERR_INVALIDCALL;
+
+    if (count < 0)
+        count = lstrlenW(string);
+
+    indices = heap_alloc(count * sizeof(*indices));
+    if (!indices)
+        return E_OUTOFMEMORY;
+
+    GetGlyphIndicesW(font->hdc, string, count, indices, 0);
+
+    for (i = 0; i < count; ++i)
+        ID3DXFont_PreloadGlyphs(iface, indices[i], indices[i]);
+
+    heap_free(indices);
+
+    return D3D_OK;
 }
 
 static INT WINAPI ID3DXFontImpl_DrawTextA(ID3DXFont *iface, ID3DXSprite *sprite,
         const char *string, INT count, RECT *rect, DWORD format, D3DCOLOR color)
 {
-    FIXME("iface %p, sprite %p, string %s, count %d, rect %s, format %#x, color 0x%08x stub!\n",
-            iface,  sprite, debugstr_a(string), count, wine_dbgstr_rect(rect), format, color);
-    return 1;
+    int ret, countW;
+    WCHAR *wstr;
+
+    TRACE("iface %p, sprite %p, string %s, count %d, rect %s, format %#x, color 0x%08x.\n",
+          iface,  sprite, debugstr_an(string, count), count, wine_dbgstr_rect(rect), format, color);
+
+    if (!string || !count)
+        return 0;
+
+    countW = MultiByteToWideChar(CP_ACP, 0, string, count < 0 ? -1 : count, NULL, 0);
+
+    if (!countW)
+        return 0;
+
+    wstr = heap_alloc_zero(countW * sizeof(*wstr));
+    if (!wstr)
+        return 0;
+
+    MultiByteToWideChar(CP_ACP, 0, string, count < 0 ? -1 : count, wstr, countW);
+
+    ret = ID3DXFont_DrawTextW(iface, sprite, wstr, count < 0 ? countW - 1 : countW,
+                              rect, format, color);
+
+    heap_free(wstr);
+
+    return ret;
+}
+
+static void word_break(HDC hdc, const WCHAR *str, unsigned int *str_len,
+        unsigned int chars_fit, unsigned int *chars_used, DWORD format, SIZE *size)
+{
+    SCRIPT_LOGATTR *sla;
+    SCRIPT_ANALYSIS sa;
+    unsigned int i;
+
+    *chars_used = 0;
+
+    sla = heap_alloc(*str_len * sizeof(*sla));
+    if (!sla)
+        return;
+
+    memset(&sa, 0, sizeof(sa));
+    sa.eScript = SCRIPT_UNDEFINED;
+
+    ScriptBreak(str, *str_len, &sa, sla);
+
+    /* Work back from the last character that did fit to a place where we can break */
+    i = chars_fit;
+    while (i > 0 && !sla[i].fSoftBreak) /* chars_fit < *str_len so this is valid */
+        --i;
+
+    /* If the there is no word that fits put in all characters that do fit */
+    if (!sla[i].fSoftBreak || (format & DT_SINGLELINE))
+        i = chars_fit;
+
+    *chars_used = i;
+    if (sla[i].fWhiteSpace)
+        ++(*chars_used);
+
+    /* Remove extra spaces */
+    while (i > 0 && sla[i-1].fWhiteSpace)
+        --i;
+    *str_len = i;
+
+    /* Remeasure the string */
+    GetTextExtentExPointW(hdc, str, *str_len, 0, NULL, NULL, size);
+    heap_free(sla);
+}
+
+static const WCHAR *read_line(HDC hdc, const WCHAR *str, int *count,
+        WCHAR *dest, unsigned int *dest_len, int width, DWORD format, SIZE *size)
+{
+    unsigned int i = 0;
+    int orig_count = *count;
+    int num_fit;
+
+    *dest_len = 0;
+    while (*count && (str[i] != '\n' || (format & DT_SINGLELINE)))
+    {
+        --(*count);
+        if (str[i] != '\r' && str[i] != '\n')
+            dest[(*dest_len)++] = str[i];
+        ++i;
+    }
+
+    num_fit = 0;
+    GetTextExtentExPointW(hdc, dest, *dest_len, width, &num_fit, NULL, size);
+
+    if (num_fit < *dest_len)
+    {
+        if (format & DT_WORDBREAK)
+        {
+            unsigned int chars_used;
+
+            word_break(hdc, dest, dest_len, num_fit, &chars_used, format, size);
+            *count = orig_count - chars_used;
+            i = chars_used;
+        }
+        else if (format & DT_SINGLELINE)
+        {
+            *dest_len = num_fit;
+            *count = 0;
+        }
+    }
+
+    if (*count && str[i] == '\n')
+    {
+        --(*count);
+        ++i;
+    }
+
+    if (*count)
+        return str + i;
+    return NULL;
 }
 
 static INT WINAPI ID3DXFontImpl_DrawTextW(ID3DXFont *iface, ID3DXSprite *sprite,
         const WCHAR *string, INT count, RECT *rect, DWORD format, D3DCOLOR color)
 {
-    FIXME("iface %p, sprite %p, string %s, count %d, rect %s, format %#x, color 0x%08x stub!\n",
-            iface,  sprite, debugstr_w(string), count, wine_dbgstr_rect(rect), format, color);
-    return 1;
+    struct d3dx_font *font = impl_from_ID3DXFont(iface);
+    ID3DXSprite *target = sprite;
+    WCHAR *line;
+    RECT textrect = {0};
+    int lh, x, y, width;
+    int max_width = 0;
+    int ret = 0;
+    SIZE size;
+
+    TRACE("iface %p, sprite %p, string %s, count %d, rect %s, format %#x, color 0x%08x.\n",
+          iface,  sprite, debugstr_wn(string, count), count, wine_dbgstr_rect(rect), format, color);
+
+    if (!string)
+        return 0;
+
+    if (count < 0)
+        count = lstrlenW(string);
+
+    if (!count)
+        return 0;
+
+    if (format & DT_CALCRECT)
+        format |= DT_NOCLIP;
+
+    if (format & DT_SINGLELINE)
+        format &= ~DT_WORDBREAK;
+
+    if (!rect)
+    {
+        y = ID3DXFont_DrawTextW(iface, NULL, string, count, &textrect, format | DT_CALCRECT, 0);
+
+        if (format & DT_CALCRECT)
+            return y;
+    }
+    else
+    {
+        textrect = *rect;
+    }
+
+    x = textrect.left;
+    y = textrect.top;
+    width = textrect.right - textrect.left;
+
+    lh = font->metrics.tmHeight;
+
+    line = heap_alloc(count * sizeof(*line));
+    if (!line)
+        return 0;
+
+    if (!(format & DT_CALCRECT) && !sprite)
+    {
+        D3DXCreateSprite(font->device, &target);
+        ID3DXSprite_Begin(target, 0);
+    }
+
+    while (string)
+    {
+        unsigned int line_len;
+
+        string = read_line(font->hdc, string, &count, line, &line_len, width, format, &size);
+
+        if (!(format & DT_CALCRECT))
+        {
+            GCP_RESULTSW results;
+            D3DXVECTOR3 pos;
+            unsigned int i;
+
+            memset(&results, 0, sizeof(results));
+            results.nGlyphs = line_len;
+
+            results.lpCaretPos = heap_alloc(line_len * sizeof(*results.lpCaretPos));
+            if (!results.lpCaretPos)
+                goto cleanup;
+
+            results.lpGlyphs = heap_alloc(line_len * sizeof(*results.lpGlyphs));
+            if (!results.lpGlyphs)
+            {
+                heap_free(results.lpCaretPos);
+                goto cleanup;
+            }
+
+            GetCharacterPlacementW(font->hdc, line, line_len, 0, &results, 0);
+
+            for (i = 0; i < results.nGlyphs; ++i)
+            {
+                IDirect3DTexture9 *texture;
+                POINT cell_inc;
+                RECT black_box;
+
+                ID3DXFont_GetGlyphData(iface, results.lpGlyphs[i], &texture, &black_box, &cell_inc);
+
+                if (!texture)
+                    continue;
+
+                pos.x = cell_inc.x + x + results.lpCaretPos[i];
+                pos.y = cell_inc.y + y;
+
+                ID3DXSprite_Draw(target, texture, &black_box, NULL, &pos, color);
+                IDirect3DTexture9_Release(texture);
+            }
+
+            heap_free(results.lpCaretPos);
+            heap_free(results.lpGlyphs);
+        }
+        else if (size.cx > max_width)
+        {
+            max_width = size.cx;
+        }
+
+        y += lh;
+        if (!(DT_NOCLIP & format) && (y > textrect.bottom))
+            break;
+    }
+
+    if (format & DT_CALCRECT)
+    {
+        *rect = textrect;
+
+        rect->bottom = y;
+        rect->right = rect->left + max_width;
+    }
+
+    ret = y - textrect.top;
+
+cleanup:
+    if (target != sprite)
+    {
+        ID3DXSprite_End(target);
+        ID3DXSprite_Release(target);
+    }
+
+    heap_free(line);
+
+    return ret;
 }
 
 static HRESULT WINAPI ID3DXFontImpl_OnLostDevice(ID3DXFont *iface)

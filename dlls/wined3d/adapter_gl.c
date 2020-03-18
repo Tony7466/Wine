@@ -74,6 +74,7 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_ARB_depth_texture",                ARB_DEPTH_TEXTURE             },
     {"GL_ARB_derivative_control",           ARB_DERIVATIVE_CONTROL        },
     {"GL_ARB_draw_buffers",                 ARB_DRAW_BUFFERS              },
+    {"GL_ARB_draw_buffers_blend",           ARB_DRAW_BUFFERS_BLEND        },
     {"GL_ARB_draw_elements_base_vertex",    ARB_DRAW_ELEMENTS_BASE_VERTEX },
     {"GL_ARB_draw_indirect",                ARB_DRAW_INDIRECT             },
     {"GL_ARB_draw_instanced",               ARB_DRAW_INSTANCED            },
@@ -179,6 +180,8 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_EXT_fog_coord",                    EXT_FOG_COORD                 },
     {"GL_EXT_framebuffer_blit",             EXT_FRAMEBUFFER_BLIT          },
     {"GL_EXT_framebuffer_multisample",      EXT_FRAMEBUFFER_MULTISAMPLE   },
+    {"GL_EXT_framebuffer_multisample_blit_scaled",
+                                   EXT_FRAMEBUFFER_MULTISAMPLE_BLIT_SCALED},
     {"GL_EXT_framebuffer_object",           EXT_FRAMEBUFFER_OBJECT        },
     {"GL_EXT_memory_object",                EXT_MEMORY_OBJECT             },
     {"GL_EXT_gpu_program_parameters",       EXT_GPU_PROGRAM_PARAMETERS    },
@@ -1308,6 +1311,7 @@ static enum wined3d_feature_level feature_level_from_caps(const struct wined3d_g
 
     if (gl_info->supported[WINED3D_GL_VERSION_3_2]
             && gl_info->supported[ARB_POLYGON_OFFSET_CLAMP]
+            && gl_info->supported[ARB_DRAW_BUFFERS_BLEND]
             && gl_info->supported[ARB_SAMPLER_OBJECTS])
     {
         if (shader_model >= 5
@@ -2677,8 +2681,12 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     USE_GL_FUNC(glBindVertexArray)                             /* OpenGL 3.0 */
     USE_GL_FUNC(glBlendColor)                                  /* OpenGL 1.4 */
     USE_GL_FUNC(glBlendEquation)                               /* OpenGL 1.4 */
+    USE_GL_FUNC(glBlendEquationi)                              /* OpenGL 4.0 */
     USE_GL_FUNC(glBlendEquationSeparate)                       /* OpenGL 2.0 */
+    USE_GL_FUNC(glBlendEquationSeparatei)                      /* OpenGL 4.0 */
+    USE_GL_FUNC(glBlendFunci)                                  /* OpenGL 4.0 */
     USE_GL_FUNC(glBlendFuncSeparate)                           /* OpenGL 1.4 */
+    USE_GL_FUNC(glBlendFuncSeparatei)                          /* OpenGL 4.0 */
     USE_GL_FUNC(glBufferData)                                  /* OpenGL 1.5 */
     USE_GL_FUNC(glBufferSubData)                               /* OpenGL 1.5 */
     USE_GL_FUNC(glColorMaski)                                  /* OpenGL 3.0 */
@@ -3368,6 +3376,7 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
         {ARB_TIMER_QUERY,                  MAKEDWORD_VERSION(3, 3)},
         {ARB_VERTEX_TYPE_2_10_10_10_REV,   MAKEDWORD_VERSION(3, 3)},
 
+        {ARB_DRAW_BUFFERS_BLEND,           MAKEDWORD_VERSION(4, 0)},
         {ARB_DRAW_INDIRECT,                MAKEDWORD_VERSION(4, 0)},
         {ARB_GPU_SHADER5,                  MAKEDWORD_VERSION(4, 0)},
         {ARB_SAMPLE_SHADING,               MAKEDWORD_VERSION(4, 0)},
@@ -5157,6 +5166,7 @@ static void wined3d_adapter_gl_init_d3d_info(struct wined3d_adapter_gl *adapter_
     d3d_info->srgb_write_control = !!gl_info->supported[ARB_FRAMEBUFFER_SRGB];
     d3d_info->clip_control = !!gl_info->supported[ARB_CLIP_CONTROL];
     d3d_info->full_ffp_varyings = !!(shader_caps.wined3d_caps & WINED3D_SHADER_CAP_FULL_FFP_VARYINGS);
+    d3d_info->scaled_resolve = !!gl_info->supported[EXT_FRAMEBUFFER_MULTISAMPLE_BLIT_SCALED];
     d3d_info->feature_level = feature_level_from_caps(gl_info, &shader_caps, &fragment_caps);
 
     if (gl_info->supported[ARB_TEXTURE_MULTISAMPLE])

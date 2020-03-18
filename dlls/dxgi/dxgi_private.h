@@ -144,11 +144,13 @@ struct dxgi_output
 {
     IDXGIOutput4 IDXGIOutput4_iface;
     LONG refcount;
+    struct wined3d_output *wined3d_output;
     struct wined3d_private_store private_store;
     struct dxgi_adapter *adapter;
 };
 
-HRESULT dxgi_output_create(struct dxgi_adapter *adapter, struct dxgi_output **output) DECLSPEC_HIDDEN;
+HRESULT dxgi_output_create(struct dxgi_adapter *adapter, unsigned int output_idx,
+        struct dxgi_output **output) DECLSPEC_HIDDEN;
 struct dxgi_output *unsafe_impl_from_IDXGIOutput(IDXGIOutput *iface) DECLSPEC_HIDDEN;
 
 /* IDXGIAdapter */
@@ -156,6 +158,7 @@ struct dxgi_adapter
 {
     IWineDXGIAdapter IWineDXGIAdapter_iface;
     LONG refcount;
+    struct wined3d_adapter *wined3d_adapter;
     struct wined3d_private_store private_store;
     UINT ordinal;
     struct dxgi_factory *factory;

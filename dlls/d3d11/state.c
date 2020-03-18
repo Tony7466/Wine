@@ -344,15 +344,7 @@ HRESULT d3d_blend_state_create(struct d3d_device *device, const D3D11_BLEND_DESC
             tmp_desc.RenderTarget[i].BlendOpAlpha = D3D11_BLEND_OP_ADD;
         }
         tmp_desc.RenderTarget[i].RenderTargetWriteMask = desc->RenderTarget[j].RenderTargetWriteMask;
-
-        if (i > 3 && tmp_desc.RenderTarget[i].RenderTargetWriteMask != D3D11_COLOR_WRITE_ENABLE_ALL)
-            FIXME("Color mask %#x not supported for render target %u.\n",
-                    tmp_desc.RenderTarget[i].RenderTargetWriteMask, i);
     }
-
-    /* glEnableIndexedEXT(GL_BLEND, ...) */
-    if (tmp_desc.IndependentBlendEnable)
-        FIXME("Per-rendertarget blend not implemented.\n");
 
     wined3d_mutex_lock();
     if ((entry = wine_rb_get(&device->blend_states, &tmp_desc)))
@@ -389,6 +381,18 @@ HRESULT d3d_blend_state_create(struct d3d_device *device, const D3D11_BLEND_DESC
     }
 
     wined3d_desc.alpha_to_coverage = desc->AlphaToCoverageEnable;
+    wined3d_desc.independent = desc->IndependentBlendEnable;
+    for (i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+    {
+        wined3d_desc.rt[i].enable = desc->RenderTarget[i].BlendEnable;
+        wined3d_desc.rt[i].src = desc->RenderTarget[i].SrcBlend;
+        wined3d_desc.rt[i].dst = desc->RenderTarget[i].DestBlend;
+        wined3d_desc.rt[i].op = desc->RenderTarget[i].BlendOp;
+        wined3d_desc.rt[i].src_alpha = desc->RenderTarget[i].SrcBlendAlpha;
+        wined3d_desc.rt[i].dst_alpha = desc->RenderTarget[i].DestBlendAlpha;
+        wined3d_desc.rt[i].op_alpha = desc->RenderTarget[i].BlendOpAlpha;
+        wined3d_desc.rt[i].writemask = desc->RenderTarget[i].RenderTargetWriteMask;
+    }
 
     /* We cannot fail after creating a wined3d_blend_state object. It
      * would lead to double free. */
@@ -1076,9 +1080,15 @@ static HRESULT d3d_rasterizer_state_init(struct d3d_rasterizer_state *state, str
         return E_FAIL;
     }
 
+    wined3d_desc.fill_mode = desc->FillMode;
+    wined3d_desc.cull_mode = desc->CullMode;
     wined3d_desc.front_ccw = desc->FrontCounterClockwise;
-    wined3d_desc.depth_clip = desc->DepthClipEnable;
+    wined3d_desc.depth_bias = desc->DepthBias;
     wined3d_desc.depth_bias_clamp = desc->DepthBiasClamp;
+    wined3d_desc.scale_bias = desc->SlopeScaledDepthBias;
+    wined3d_desc.depth_clip = desc->DepthClipEnable;
+    wined3d_desc.scissor = desc->ScissorEnable;
+    wined3d_desc.line_antialias = desc->AntialiasedLineEnable;
 
     /* We cannot fail after creating a wined3d_rasterizer_state object. It
      * would lead to double free. */

@@ -314,8 +314,34 @@ static char* get_temp_file(const char* prefix, const char* suffix)
     return tmp;
 }
 
-static const char* build_tool_name(struct options *opts, const char* base, const char* deflt)
+enum tool
 {
+    TOOL_CC,
+    TOOL_CXX,
+    TOOL_CPP,
+    TOOL_LD,
+};
+
+static const struct
+{
+    const char *base;
+    const char *llvm_base;
+    const char *deflt;
+} tool_names[] =
+{
+    { "gcc", "clang --driver-mode=gcc", CC },
+    { "g++", "clang --driver-mode=g++", CXX },
+    { "cpp", "clang --driver-mode=cpp", CPP },
+    { "ld",  "ld.lld",                  LD },
+};
+
+static strarray* build_tool_name( struct options *opts, enum tool tool )
+{
+    const char *base = tool_names[tool].base;
+    const char *llvm_base = tool_names[tool].llvm_base;
+    const char *deflt = tool_names[tool].deflt;
+    const char *path;
+    strarray *ret;
     char* str;
 
     if (opts->target && opts->version)
@@ -332,29 +358,52 @@ static const char* build_tool_name(struct options *opts, const char* base, const
     }
     else
         str = xstrdup(deflt);
-    return find_binary( opts->prefix, str );
+
+    if ((path = find_binary( opts->prefix, str ))) return strarray_fromstring( path, " " );
+
+    if (!opts->version) str = xstrdup( llvm_base );
+    else str = strmake( "%s-%s", llvm_base, opts->version );
+    path = find_binary( opts->prefix, str );
+    if (!path)
+    {
+        error( "Could not find %s\n", base );
+        return NULL;
+    }
+
+    ret = strarray_fromstring( path, " " );
+    if (!strncmp( llvm_base, "clang", 5 ))
+    {
+        if (opts->target)
+        {
+            strarray_add( ret, "-target" );
+            strarray_add( ret, opts->target );
+        }
+        strarray_add( ret, "-Wno-unused-command-line-argument" );
+        strarray_add( ret, "-fuse-ld=lld" );
+    }
+    return ret;
 }
 
 static strarray* get_translator(struct options *opts)
 {
-    const char *str = NULL;
+    enum tool tool;
 
     switch(opts->processor)
     {
     case proc_cpp:
-        str = build_tool_name(opts, "cpp", CPP);
+        tool = TOOL_CPP;
         break;
     case proc_cc:
     case proc_as:
-        str = build_tool_name(opts, "gcc", CC);
+        tool = TOOL_CC;
         break;
     case proc_cxx:
-        str = build_tool_name(opts, "g++", CXX);
+        tool = TOOL_CXX;
         break;
     default:
         assert(0);
     }
-    return strarray_fromstring( str, " " );
+    return build_tool_name( opts, tool );
 }
 
 static int try_link( const strarray *prefix, const strarray *link_tool, const char *cflags )
@@ -676,8 +725,8 @@ static void compile(struct options* opts, const char* lang)
 	/* mixing different C and C++ compilers isn't supported in configure anyway */
 	case proc_cc:
 	case proc_cxx:
-            gcc = strarray_fromstring(build_tool_name(opts, "gcc", CC), " ");
-            gpp = strarray_fromstring(build_tool_name(opts, "g++", CXX), " ");
+            gcc = build_tool_name(opts, TOOL_CC);
+            gpp = build_tool_name(opts, TOOL_CXX);
             for ( j = 0; !gcc_defs && j < comp_args->size; j++ )
             {
                 const char *cc = comp_args->base[j];
@@ -877,6 +926,7 @@ static strarray *get_winebuild_args(struct options *opts)
         binary = strmake( "%s/winebuild%s", bindir, EXEEXT );
     else
         binary = find_binary( opts->prefix, "winebuild" );
+    if (!binary) error( "Could not find winebuild\n" );
     strarray_add( spec_args, binary );
     if (verbose) strarray_add( spec_args, "-v" );
     if (keep_generated) strarray_add( spec_args, "--save-temps" );
@@ -988,7 +1038,7 @@ static void add_library( struct options *opts, strarray *lib_dirs, strarray *fil
 static void build(struct options* opts)
 {
     strarray *lib_dirs, *files;
-    strarray *spec_args, *link_args;
+    strarray *spec_args, *link_args, *tool;
     char *output_file, *output_path;
     const char *spec_o_name, *libgcc = NULL;
     const char *output_name, *spec_file, *lang;
@@ -1156,8 +1206,8 @@ static void build(struct options* opts)
 
     /* run winebuild to generate the .spec.o file */
     spec_args = get_winebuild_args( opts );
-    strarray_add( spec_args, strmake( "--cc-cmd=%s", build_tool_name( opts, "gcc", CC )));
-    if (!is_pe) strarray_add( spec_args, strmake( "--ld-cmd=%s", build_tool_name( opts, "ld", LD )));
+    if ((tool = build_tool_name( opts, TOOL_CC ))) strarray_add( spec_args, strmake( "--cc-cmd=%s", strarray_tostring( tool, " " )));
+    if (!is_pe && (tool = build_tool_name( opts, TOOL_LD ))) strarray_add( spec_args, strmake( "--ld-cmd=%s", strarray_tostring( tool, " " )));
 
     spec_o_name = get_temp_file(output_name, ".spec.o");
     if (opts->force_pointer_size)

@@ -89,6 +89,12 @@ static HRESULT (WINAPI *pMFTRegisterLocalByCLSID)(REFCLSID clsid, REFGUID catego
 static HRESULT (WINAPI *pMFTUnregisterLocal)(IClassFactory *factory);
 static HRESULT (WINAPI *pMFTUnregisterLocalByCLSID)(CLSID clsid);
 static HRESULT (WINAPI *pMFAllocateWorkQueueEx)(MFASYNC_WORKQUEUE_TYPE queue_type, DWORD *queue);
+static HRESULT (WINAPI *pMFTEnumEx)(GUID category, UINT32 flags, const MFT_REGISTER_TYPE_INFO *input_type,
+        const MFT_REGISTER_TYPE_INFO *output_type, IMFActivate ***activate, UINT32 *count);
+static HRESULT (WINAPI *pMFGetPlaneSize)(DWORD format, DWORD width, DWORD height, DWORD *size);
+static HRESULT (WINAPI *pMFGetStrideForBitmapInfoHeader)(DWORD format, DWORD width, LONG *stride);
+static HRESULT (WINAPI *pMFCreate2DMediaBuffer)(DWORD width, DWORD height, DWORD fourcc, BOOL bottom_up,
+        IMFMediaBuffer **buffer);
 
 static const WCHAR fileschemeW[] = L"file://";
 
@@ -656,16 +662,20 @@ static void init_functions(void)
     X(MFAllocateSerialWorkQueue);
     X(MFAllocateWorkQueueEx);
     X(MFCopyImage);
+    X(MFCreate2DMediaBuffer);
     X(MFCreateDXGIDeviceManager);
     X(MFCreateSourceResolver);
     X(MFCreateMFByteStreamOnStream);
+    X(MFCreateTransformActivate);
+    X(MFGetPlaneSize);
+    X(MFGetStrideForBitmapInfoHeader);
     X(MFHeapAlloc);
     X(MFHeapFree);
     X(MFPutWaitingWorkItem);
     X(MFRegisterLocalByteStreamHandler);
     X(MFRegisterLocalSchemeHandler);
     X(MFRemovePeriodicCallback);
-    X(MFCreateTransformActivate);
+    X(MFTEnumEx);
     X(MFTRegisterLocal);
     X(MFTRegisterLocalByCLSID);
     X(MFTUnregisterLocal);
@@ -1719,6 +1729,9 @@ static void test_system_memory_buffer(void)
     IMFMediaBuffer_Release(buffer);
 
     /* Aligned buffer. */
+    hr = MFCreateAlignedMemoryBuffer(16, MF_8_BYTE_ALIGNMENT, NULL);
+    ok(FAILED(hr), "Unexpected hr %#x.\n", hr);
+
     hr = MFCreateAlignedMemoryBuffer(201, MF_8_BYTE_ALIGNMENT, &buffer);
     ok(hr == S_OK, "Failed to create memory buffer, hr %#x.\n", hr);
 
@@ -1755,12 +1768,14 @@ static void test_system_memory_buffer(void)
 
 static void test_sample(void)
 {
+    static const DWORD test_pattern = 0x22222222;
     IMFMediaBuffer *buffer, *buffer2;
     DWORD count, flags, length;
     IMFAttributes *attributes;
     IMFSample *sample;
     LONGLONG time;
     HRESULT hr;
+    BYTE *data;
 
     hr = MFCreateSample( &sample );
     ok(hr == S_OK, "got 0x%08x\n", hr);
@@ -1861,6 +1876,94 @@ static void test_sample(void)
     ok(time == 1, "Unexpected timestamp.\n");
 
     IMFAttributes_Release(attributes);
+    IMFSample_Release(sample);
+
+    /* CopyToBuffer() */
+    hr = MFCreateSample(&sample);
+    ok(hr == S_OK, "Failed to create a sample, hr %#x.\n", hr);
+
+    hr = MFCreateMemoryBuffer(16, &buffer2);
+    ok(hr == S_OK, "Failed to create a buffer, hr %#x.\n", hr);
+
+    /* Sample with no buffers. */
+    hr = IMFMediaBuffer_SetCurrentLength(buffer2, 1);
+    ok(hr == S_OK, "Failed to set current length, hr %#x.\n", hr);
+    hr = IMFSample_CopyToBuffer(sample, buffer2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    hr = IMFMediaBuffer_GetCurrentLength(buffer2, &length);
+    ok(hr == S_OK, "Failed to get current length, hr %#x.\n", hr);
+    ok(!length, "Unexpected length %u.\n", length);
+
+    /* Single buffer, larger destination. */
+    hr = MFCreateMemoryBuffer(8, &buffer);
+    ok(hr == S_OK, "Failed to create a buffer, hr %#x.\n", hr);
+
+    hr = IMFMediaBuffer_Lock(buffer, &data, NULL, NULL);
+    ok(hr == S_OK, "Failed to lock buffer, hr %#x.\n", hr);
+    *(DWORD *)data = 0x11111111;
+    hr = IMFMediaBuffer_Unlock(buffer);
+    ok(hr == S_OK, "Failed to unlock, hr %#x.\n", hr);
+    hr = IMFMediaBuffer_SetCurrentLength(buffer, 4);
+    ok(hr == S_OK, "Failed to set current length, hr %#x.\n", hr);
+
+    hr = IMFSample_AddBuffer(sample, buffer);
+    ok(hr == S_OK, "Failed to add buffer, hr %#x.\n", hr);
+
+    /* Existing content is overwritten. */
+    hr = IMFMediaBuffer_SetCurrentLength(buffer2, 8);
+    ok(hr == S_OK, "Failed to set length, hr %#x.\n", hr);
+
+    hr = IMFSample_CopyToBuffer(sample, buffer2);
+    ok(hr == S_OK, "Failed to copy to buffer, hr %#x.\n", hr);
+
+    hr = IMFMediaBuffer_GetCurrentLength(buffer2, &length);
+    ok(hr == S_OK, "Failed to get length, hr %#x.\n", hr);
+    ok(length == 4, "Unexpected buffer length %u.\n", length);
+
+    /* Multiple buffers, matching total size. */
+    hr = IMFSample_AddBuffer(sample, buffer);
+    ok(hr == S_OK, "Failed to add buffer, hr %#x.\n", hr);
+
+    hr = IMFSample_GetBufferCount(sample, &count);
+    ok(hr == S_OK, "Failed to get buffer count, hr %#x.\n", hr);
+    ok(count == 2, "Unexpected buffer count %u.\n", count);
+
+    hr = IMFMediaBuffer_SetCurrentLength(buffer, 8);
+    ok(hr == S_OK, "Failed to set current length, hr %#x.\n", hr);
+
+    hr = IMFSample_CopyToBuffer(sample, buffer2);
+    ok(hr == S_OK, "Failed to copy to buffer, hr %#x.\n", hr);
+
+    hr = IMFMediaBuffer_GetCurrentLength(buffer2, &length);
+    ok(hr == S_OK, "Failed to get length, hr %#x.\n", hr);
+    ok(length == 16, "Unexpected buffer length %u.\n", length);
+
+    hr = IMFSample_AddBuffer(sample, buffer);
+    ok(hr == S_OK, "Failed to add buffer, hr %#x.\n", hr);
+
+    hr = IMFMediaBuffer_SetCurrentLength(buffer2, 1);
+    ok(hr == S_OK, "Failed to set buffer length, hr %#x.\n", hr);
+
+    hr = IMFMediaBuffer_Lock(buffer2, &data, NULL, NULL);
+    ok(hr == S_OK, "Failed to lock buffer, hr %#x.\n", hr);
+    *(DWORD *)data = test_pattern;
+    hr = IMFMediaBuffer_Unlock(buffer2);
+    ok(hr == S_OK, "Failed to unlock buffer, hr %#x.\n", hr);
+
+    hr = IMFSample_CopyToBuffer(sample, buffer2);
+    ok(hr == MF_E_BUFFERTOOSMALL, "Unexpected hr %#x.\n", hr);
+
+    hr = IMFMediaBuffer_Lock(buffer2, &data, NULL, NULL);
+    ok(hr == S_OK, "Failed to lock buffer, hr %#x.\n", hr);
+    ok(!memcmp(data, &test_pattern, sizeof(test_pattern)), "Unexpected contents, %#x\n", *(DWORD *)data);
+    hr = IMFMediaBuffer_Unlock(buffer2);
+    ok(hr == S_OK, "Failed to unlock buffer, hr %#x.\n", hr);
+
+    hr = IMFMediaBuffer_GetCurrentLength(buffer2, &length);
+    ok(hr == S_OK, "Failed to get length, hr %#x.\n", hr);
+    ok(!length, "Unexpected buffer length %u.\n", length);
+
+    IMFMediaBuffer_Release(buffer2);
     IMFSample_Release(sample);
 
     /* ConvertToContiguousBuffer() */
@@ -3069,7 +3172,7 @@ static void test_MFInvokeCallback(void)
 
 static void test_stream_descriptor(void)
 {
-    IMFMediaType *media_types[2], *media_type;
+    IMFMediaType *media_types[2], *media_type, *media_type2, *media_type3;
     IMFMediaTypeHandler *type_handler;
     IMFStreamDescriptor *stream_desc;
     GUID major_type;
@@ -3122,11 +3225,35 @@ static void test_stream_descriptor(void)
     hr = IMFMediaTypeHandler_GetMediaTypeByIndex(type_handler, 2, &media_type);
     ok(hr == MF_E_NO_MORE_TYPES, "Unexpected hr %#x.\n", hr);
 
+    /* IsMediaTypeSupported() */
+
+    hr = IMFMediaTypeHandler_IsMediaTypeSupported(type_handler, NULL, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    hr = IMFMediaTypeHandler_IsMediaTypeSupported(type_handler, NULL, &media_type2);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
     hr = MFCreateMediaType(&media_type);
     ok(hr == S_OK, "Failed to create media type, hr %#x.\n", hr);
 
+    hr = MFCreateMediaType(&media_type3);
+    ok(hr == S_OK, "Failed to create media type, hr %#x.\n", hr);
+
+    media_type2 = (void *)0xdeadbeef;
+    hr = IMFMediaTypeHandler_IsMediaTypeSupported(type_handler, media_type, &media_type2);
+    ok(hr == MF_E_INVALIDMEDIATYPE, "Unexpected hr %#x.\n", hr);
+    ok(!media_type2, "Unexpected pointer.\n");
+
+    hr = IMFMediaTypeHandler_SetCurrentMediaType(type_handler, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
     hr = IMFMediaTypeHandler_SetCurrentMediaType(type_handler, media_type);
     ok(hr == S_OK, "Failed to set current type, hr %#x.\n", hr);
+
+    media_type2 = (void *)0xdeadbeef;
+    hr = IMFMediaTypeHandler_IsMediaTypeSupported(type_handler, media_type, &media_type2);
+    ok(hr == MF_E_INVALIDMEDIATYPE, "Unexpected hr %#x.\n", hr);
+    ok(!media_type2, "Unexpected pointer.\n");
 
     hr = IMFMediaTypeHandler_GetMajorType(type_handler, &major_type);
     ok(hr == MF_E_ATTRIBUTENOTFOUND, "Unexpected hr %#x.\n", hr);
@@ -3138,11 +3265,111 @@ static void test_stream_descriptor(void)
     ok(hr == S_OK, "Failed to get major type, hr %#x.\n", hr);
     ok(IsEqualGUID(&major_type, &MFMediaType_Audio), "Unexpected major type.\n");
 
+    /* Mismatching major types. */
+    hr = IMFMediaType_SetGUID(media_type3, &MF_MT_MAJOR_TYPE, &MFMediaType_Video);
+    ok(hr == S_OK, "Failed to set major type, hr %#x.\n", hr);
+
+    media_type2 = (void *)0xdeadbeef;
+    hr = IMFMediaTypeHandler_IsMediaTypeSupported(type_handler, media_type3, &media_type2);
+    ok(hr == MF_E_INVALIDMEDIATYPE, "Unexpected hr %#x.\n", hr);
+    ok(!media_type2, "Unexpected pointer.\n");
+
+    /* Subtype missing. */
+    hr = IMFMediaType_SetGUID(media_type3, &MF_MT_MAJOR_TYPE, &MFMediaType_Audio);
+    ok(hr == S_OK, "Failed to set attribute, hr %#x.\n", hr);
+
+    hr = IMFMediaType_SetGUID(media_type, &MF_MT_SUBTYPE, &MFAudioFormat_PCM);
+    ok(hr == S_OK, "Failed to set attribute, hr %#x.\n", hr);
+
+    media_type2 = (void *)0xdeadbeef;
+    hr = IMFMediaTypeHandler_IsMediaTypeSupported(type_handler, media_type3, &media_type2);
+    ok(hr == MF_E_INVALIDMEDIATYPE, "Unexpected hr %#x.\n", hr);
+    ok(!media_type2, "Unexpected pointer.\n");
+
+    hr = IMFMediaType_SetGUID(media_type3, &MF_MT_SUBTYPE, &MFAudioFormat_PCM);
+    ok(hr == S_OK, "Failed to set attribute, hr %#x.\n", hr);
+
+    media_type2 = (void *)0xdeadbeef;
+    hr = IMFMediaTypeHandler_IsMediaTypeSupported(type_handler, media_type3, &media_type2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(!media_type2, "Unexpected pointer.\n");
+
+    /* Mismatching subtype. */
+    hr = IMFMediaType_SetGUID(media_type3, &MF_MT_SUBTYPE, &MFAudioFormat_MP3);
+    ok(hr == S_OK, "Failed to set attribute, hr %#x.\n", hr);
+
+    media_type2 = (void *)0xdeadbeef;
+    hr = IMFMediaTypeHandler_IsMediaTypeSupported(type_handler, media_type3, &media_type2);
+    ok(hr == MF_E_INVALIDMEDIATYPE, "Unexpected hr %#x.\n", hr);
+    ok(!media_type2, "Unexpected pointer.\n");
+
     hr = IMFMediaTypeHandler_GetMediaTypeCount(type_handler, &count);
     ok(hr == S_OK, "Failed to get type count, hr %#x.\n", hr);
     ok(count == ARRAY_SIZE(media_types), "Unexpected type count.\n");
 
+    IMFMediaTypeHandler_Release(type_handler);
+    IMFStreamDescriptor_Release(stream_desc);
+
+    /* IsMediaTypeSupported() for unset current type. */
+    hr = MFCreateStreamDescriptor(123, ARRAY_SIZE(media_types), media_types, &stream_desc);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    hr = IMFStreamDescriptor_GetMediaTypeHandler(stream_desc, &type_handler);
+    ok(hr == S_OK, "Failed to get type handler, hr %#x.\n", hr);
+
+    hr = IMFMediaTypeHandler_IsMediaTypeSupported(type_handler, media_type3, NULL);
+    ok(hr == MF_E_INVALIDMEDIATYPE, "Unexpected hr %#x.\n", hr);
+
+    /* Initialize one from initial type set. */
+    hr = IMFMediaType_CopyAllItems(media_type3, (IMFAttributes *)media_types[0]);
+    ok(hr == S_OK, "Failed to copy attributes, hr %#x.\n", hr);
+
+    media_type2 = (void *)0xdeadbeef;
+    hr = IMFMediaTypeHandler_IsMediaTypeSupported(type_handler, media_type3, &media_type2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(!media_type2, "Unexpected pointer.\n");
+
+    hr = IMFMediaType_SetGUID(media_type3, &MF_MT_SUBTYPE, &MFAudioFormat_PCM);
+    ok(hr == S_OK, "Failed to copy attributes, hr %#x.\n", hr);
+
+    media_type2 = (void *)0xdeadbeef;
+    hr = IMFMediaTypeHandler_IsMediaTypeSupported(type_handler, media_type3, &media_type2);
+    ok(hr == MF_E_INVALIDMEDIATYPE, "Unexpected hr %#x.\n", hr);
+    ok(!media_type2, "Unexpected pointer.\n");
+
+    hr = IMFMediaType_SetGUID(media_type3, &MF_MT_SUBTYPE, &MFAudioFormat_MP3);
+    ok(hr == S_OK, "Failed to copy attributes, hr %#x.\n", hr);
+
+    media_type2 = (void *)0xdeadbeef;
+    hr = IMFMediaTypeHandler_IsMediaTypeSupported(type_handler, media_type3, &media_type2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(!media_type2, "Unexpected pointer.\n");
+
+    /* Now set current type that's not compatible. */
+    hr = IMFMediaType_SetGUID(media_type3, &MF_MT_MAJOR_TYPE, &MFMediaType_Video);
+    ok(hr == S_OK, "Failed to copy attributes, hr %#x.\n", hr);
+
+    hr = IMFMediaType_SetGUID(media_type3, &MF_MT_SUBTYPE, &MFVideoFormat_RGB8);
+    ok(hr == S_OK, "Failed to copy attributes, hr %#x.\n", hr);
+
+    hr = IMFMediaTypeHandler_SetCurrentMediaType(type_handler, media_type3);
+    ok(hr == S_OK, "Failed to set current type, hr %#x.\n", hr);
+
+    media_type2 = (void *)0xdeadbeef;
+    hr = IMFMediaTypeHandler_IsMediaTypeSupported(type_handler, media_type3, &media_type2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(!media_type2, "Unexpected pointer.\n");
+
+    hr = IMFMediaType_CopyAllItems(media_types[0], (IMFAttributes *)media_type);
+    ok(hr == S_OK, "Failed to copy attributes, hr %#x.\n", hr);
+
+    media_type2 = (void *)0xdeadbeef;
+    hr = IMFMediaTypeHandler_IsMediaTypeSupported(type_handler, media_type, &media_type2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(!media_type2, "Unexpected pointer.\n");
+
     IMFMediaType_Release(media_type);
+    IMFMediaType_Release(media_type3);
 
     IMFMediaTypeHandler_Release(type_handler);
 
@@ -3157,6 +3384,7 @@ static void test_MFCalculateImageSize(void)
         UINT32 width;
         UINT32 height;
         UINT32 size;
+        UINT32 plane_size; /* Matches image size when 0. */
     }
     image_size_tests[] =
     {
@@ -3176,10 +3404,20 @@ static void test_MFCalculateImageSize(void)
         { &MFVideoFormat_A2R10G10B10, 1, 1, 4 },
         { &MFVideoFormat_A16B16G16R16F, 3, 5, 120 },
         { &MFVideoFormat_A16B16G16R16F, 1, 1, 8 },
+
+        /* YUV */
+        { &MFVideoFormat_NV12, 1, 3, 9, 4 },
+        { &MFVideoFormat_NV12, 1, 2, 6, 3 },
+        { &MFVideoFormat_NV12, 2, 2, 6, 6 },
+        { &MFVideoFormat_NV12, 3, 2, 12, 9 },
+        { &MFVideoFormat_NV12, 4, 2, 12, 12 },
     };
     unsigned int i;
     UINT32 size;
     HRESULT hr;
+
+    if (!pMFGetPlaneSize)
+        win_skip("MFGetPlaneSize() is not available.\n");
 
     size = 1;
     hr = MFCalculateImageSize(&IID_IUnknown, 1, 1, &size);
@@ -3196,7 +3434,18 @@ static void test_MFCalculateImageSize(void)
                 image_size_tests[i].height, &size);
         ok(hr == S_OK || (is_broken && hr == E_INVALIDARG), "%u: failed to calculate image size, hr %#x.\n", i, hr);
         ok(size == image_size_tests[i].size, "%u: unexpected image size %u, expected %u.\n", i, size,
-            image_size_tests[i].size);
+                image_size_tests[i].size);
+
+        if (pMFGetPlaneSize)
+        {
+            unsigned int plane_size = image_size_tests[i].plane_size ? image_size_tests[i].plane_size :
+                    image_size_tests[i].size;
+
+            hr = pMFGetPlaneSize(image_size_tests[i].subtype->Data1, image_size_tests[i].width, image_size_tests[i].height,
+                    &size);
+            ok(hr == S_OK, "%u: failed to get plane size, hr %#x.\n", i, hr);
+            ok(size == plane_size, "%u: unexpected plane size %u, expected %u.\n", i, size, plane_size);
+        }
     }
 }
 
@@ -4055,6 +4304,8 @@ static void test_MFTRegisterLocal(void)
 {
     IClassFactory test_factory = { &test_mft_factory_vtbl };
     MFT_REGISTER_TYPE_INFO input_types[1];
+    IMFActivate **activate;
+    UINT32 count, count2;
     HRESULT hr;
 
     if (!pMFTRegisterLocal)
@@ -4071,8 +4322,18 @@ static void test_MFTRegisterLocal(void)
     hr = pMFTRegisterLocal(&test_factory, &MFT_CATEGORY_OTHER, L"Local MFT name", 0, 1, input_types, 0, NULL);
     ok(hr == S_OK, "Failed to register MFT, hr %#x.\n", hr);
 
+    hr = pMFTEnumEx(MFT_CATEGORY_OTHER, MFT_ENUM_FLAG_LOCALMFT, NULL, NULL, &activate, &count);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(count > 0, "Unexpected count %u.\n", count);
+    CoTaskMemFree(activate);
+
     hr = pMFTUnregisterLocal(&test_factory);
     ok(hr == S_OK, "Failed to unregister MFT, hr %#x.\n", hr);
+
+    hr = pMFTEnumEx(MFT_CATEGORY_OTHER, MFT_ENUM_FLAG_LOCALMFT, NULL, NULL, &activate, &count2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(count2 < count, "Unexpected count %u.\n", count2);
+    CoTaskMemFree(activate);
 
     hr = pMFTUnregisterLocal(&test_factory);
     ok(hr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND), "Unexpected hr %#x.\n", hr);
@@ -4230,6 +4491,102 @@ static void test_queue_com_state(const char *name)
     ok(hr == S_OK, "Failed to shut down, hr %#x.\n", hr);
 }
 
+static void test_MFGetStrideForBitmapInfoHeader(void)
+{
+    static const struct stride_test
+    {
+        const GUID *subtype;
+        unsigned int width;
+        LONG stride;
+    }
+    stride_tests[] =
+    {
+        { &MFVideoFormat_RGB8, 3, -4 },
+        { &MFVideoFormat_RGB8, 1, -4 },
+        { &MFVideoFormat_RGB555, 3, -8 },
+        { &MFVideoFormat_RGB555, 1, -4 },
+        { &MFVideoFormat_RGB565, 3, -8 },
+        { &MFVideoFormat_RGB565, 1, -4 },
+        { &MFVideoFormat_RGB24, 3, -12 },
+        { &MFVideoFormat_RGB24, 1, -4 },
+        { &MFVideoFormat_RGB32, 3, -12 },
+        { &MFVideoFormat_RGB32, 1, -4 },
+        { &MFVideoFormat_ARGB32, 3, -12 },
+        { &MFVideoFormat_ARGB32, 1, -4 },
+        { &MFVideoFormat_A2R10G10B10, 3, -12 },
+        { &MFVideoFormat_A2R10G10B10, 1, -4 },
+        { &MFVideoFormat_A16B16G16R16F, 3, -24 },
+        { &MFVideoFormat_A16B16G16R16F, 1, -8 },
+
+        /* YUV */
+        { &MFVideoFormat_NV12, 1, 1 },
+        { &MFVideoFormat_NV12, 2, 2 },
+        { &MFVideoFormat_NV12, 3, 3 },
+    };
+    unsigned int i;
+    LONG stride;
+    HRESULT hr;
+
+    if (!pMFGetStrideForBitmapInfoHeader)
+    {
+        win_skip("MFGetStrideForBitmapInfoHeader() is not available.\n");
+        return;
+    }
+
+    hr = pMFGetStrideForBitmapInfoHeader(MAKEFOURCC('H','2','6','4'), 1, &stride);
+    ok(hr == MF_E_INVALIDMEDIATYPE, "Unexpected hr %#x.\n", hr);
+
+    for (i = 0; i < ARRAY_SIZE(stride_tests); ++i)
+    {
+        hr = pMFGetStrideForBitmapInfoHeader(stride_tests[i].subtype->Data1, stride_tests[i].width, &stride);
+        ok(hr == S_OK, "%u: failed to get stride, hr %#x.\n", i, hr);
+        ok(stride == stride_tests[i].stride, "%u: format %s, unexpected stride %d, expected %d.\n", i,
+                wine_dbgstr_an((char *)&stride_tests[i].subtype->Data1, 4), stride, stride_tests[i].stride);
+    }
+}
+
+static void test_MFCreate2DMediaBuffer(void)
+{
+    IMF2DBuffer2 *_2dbuffer2;
+    IMF2DBuffer *_2dbuffer;
+    IMFMediaBuffer *buffer;
+    DWORD length;
+    HRESULT hr;
+
+    if (!pMFCreate2DMediaBuffer)
+    {
+        win_skip("MFCreate2DMediaBuffer() is not available.\n");
+        return;
+    }
+
+    hr = pMFCreate2DMediaBuffer(2, 3, MAKEFOURCC('H','2','6','4'), FALSE, &buffer);
+    ok(hr == MF_E_INVALIDMEDIATYPE, "Unexpected hr %#x.\n", hr);
+
+    hr = pMFCreate2DMediaBuffer(2, 3, MAKEFOURCC('N','V','1','2'), FALSE, NULL);
+    ok(FAILED(hr), "Unexpected hr %#x.\n", hr);
+
+    hr = pMFCreate2DMediaBuffer(2, 3, MAKEFOURCC('N','V','1','2'), FALSE, &buffer);
+    ok(hr == S_OK, "Failed to create a buffer, hr %#x.\n", hr);
+
+    hr = IMFMediaBuffer_GetMaxLength(buffer, &length);
+    ok(hr == S_OK, "Failed to get length, hr %#x.\n", hr);
+    ok(length > 0, "Unexpected length.\n");
+
+    hr = IMFMediaBuffer_QueryInterface(buffer, &IID_IMF2DBuffer, (void **)&_2dbuffer);
+    ok(hr == S_OK, "Failed to get interface, hr %#x.\n", hr);
+    IMF2DBuffer_Release(_2dbuffer);
+
+    hr = IMFMediaBuffer_QueryInterface(buffer, &IID_IMF2DBuffer2, (void **)&_2dbuffer2);
+    ok(hr == S_OK || broken(hr == E_NOINTERFACE), "Failed to get interface, hr %#x.\n", hr);
+
+    if (SUCCEEDED(hr))
+        IMF2DBuffer2_Release(_2dbuffer2);
+    else
+        win_skip("IMF2DBuffer2 is not supported.\n");
+
+    IMFMediaBuffer_Release(buffer);
+}
+
 START_TEST(mfplat)
 {
     char **argv;
@@ -4281,6 +4638,8 @@ START_TEST(mfplat)
     test_MFCreateTransformActivate();
     test_MFTRegisterLocal();
     test_queue_com();
+    test_MFGetStrideForBitmapInfoHeader();
+    test_MFCreate2DMediaBuffer();
 
     CoUninitialize();
 }

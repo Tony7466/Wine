@@ -32,7 +32,7 @@ int hlsl_lex(void);
 struct hlsl_parse_ctx hlsl_ctx;
 
 struct YYLTYPE;
-static void set_location(struct source_location *loc, const struct YYLTYPE *l);
+static struct source_location get_location(const struct YYLTYPE *l);
 
 void WINAPIV hlsl_message(const char *fmt, ...)
 {
@@ -54,7 +54,7 @@ static const char *hlsl_get_error_level_name(enum hlsl_error_level level)
     return names[level];
 }
 
-void WINAPIV hlsl_report_message(const char *filename, DWORD line, DWORD column,
+void WINAPIV hlsl_report_message(const struct source_location loc,
         enum hlsl_error_level level, const char *fmt, ...)
 {
     __ms_va_list args;
@@ -86,7 +86,8 @@ void WINAPIV hlsl_report_message(const char *filename, DWORD line, DWORD column,
         }
     }
 
-    hlsl_message("%s:%u:%u: %s: %s\n", filename, line, column, hlsl_get_error_level_name(level), string);
+    hlsl_message("%s:%u:%u: %s: %s\n", loc.file, loc.line, loc.col,
+            hlsl_get_error_level_name(level), string);
     d3dcompiler_free(string);
 
     if (level == HLSL_LEVEL_ERROR)
@@ -97,7 +98,13 @@ void WINAPIV hlsl_report_message(const char *filename, DWORD line, DWORD column,
 
 static void hlsl_error(const char *s)
 {
-    hlsl_report_message(hlsl_ctx.source_file, hlsl_ctx.line_no, hlsl_ctx.column, HLSL_LEVEL_ERROR, "%s", s);
+    const struct source_location loc =
+    {
+        .file = hlsl_ctx.source_file,
+        .line = hlsl_ctx.line_no,
+        .col = hlsl_ctx.column,
+    };
+    hlsl_report_message(loc, HLSL_LEVEL_ERROR, "%s", s);
 }
 
 static void debug_dump_decl(struct hlsl_type *type, DWORD modifiers, const char *declname, unsigned int line_no)
@@ -108,11 +115,11 @@ static void debug_dump_decl(struct hlsl_type *type, DWORD modifiers, const char 
     TRACE("%s %s;\n", debug_hlsl_type(type), declname);
 }
 
-static void check_invalid_matrix_modifiers(DWORD modifiers, struct source_location *loc)
+static void check_invalid_matrix_modifiers(DWORD modifiers, struct source_location loc)
 {
     if (modifiers & (HLSL_MODIFIER_ROW_MAJOR | HLSL_MODIFIER_COLUMN_MAJOR))
     {
-        hlsl_report_message(loc->file, loc->line, loc->col, HLSL_LEVEL_ERROR,
+        hlsl_report_message(loc, HLSL_LEVEL_ERROR,
                 "'row_major' or 'column_major' modifiers are only allowed for matrices");
     }
 }
@@ -122,16 +129,8 @@ static BOOL declare_variable(struct hlsl_ir_var *decl, BOOL local)
     BOOL ret;
 
     TRACE("Declaring variable %s.\n", decl->name);
-    if (decl->data_type->type == HLSL_CLASS_MATRIX)
-    {
-        if (!(decl->modifiers & (HLSL_MODIFIER_ROW_MAJOR | HLSL_MODIFIER_COLUMN_MAJOR)))
-        {
-            decl->modifiers |= hlsl_ctx.matrix_majority == HLSL_ROW_MAJOR
-                    ? HLSL_MODIFIER_ROW_MAJOR : HLSL_MODIFIER_COLUMN_MAJOR;
-        }
-    }
-    else
-        check_invalid_matrix_modifiers(decl->modifiers, &decl->loc);
+    if (decl->data_type->type != HLSL_CLASS_MATRIX)
+        check_invalid_matrix_modifiers(decl->modifiers, decl->loc);
 
     if (local)
     {
@@ -139,12 +138,12 @@ static BOOL declare_variable(struct hlsl_ir_var *decl, BOOL local)
                 | HLSL_STORAGE_GROUPSHARED | HLSL_STORAGE_UNIFORM);
         if (invalid)
         {
-            hlsl_report_message(decl->loc.file, decl->loc.line, decl->loc.col, HLSL_LEVEL_ERROR,
+            hlsl_report_message(decl->loc, HLSL_LEVEL_ERROR,
                     "modifier '%s' invalid for local variables", debug_modifiers(invalid));
         }
         if (decl->semantic)
         {
-            hlsl_report_message(decl->loc.file, decl->loc.line, decl->loc.col, HLSL_LEVEL_ERROR,
+            hlsl_report_message(decl->loc, HLSL_LEVEL_ERROR,
                     "semantics are not allowed on local variables");
             return FALSE;
         }
@@ -153,8 +152,7 @@ static BOOL declare_variable(struct hlsl_ir_var *decl, BOOL local)
     {
         if (find_function(decl->name))
         {
-            hlsl_report_message(decl->loc.file, decl->loc.line, decl->loc.col, HLSL_LEVEL_ERROR,
-                    "redefinition of '%s'", decl->name);
+            hlsl_report_message(decl->loc, HLSL_LEVEL_ERROR, "redefinition of '%s'", decl->name);
             return FALSE;
         }
     }
@@ -163,26 +161,27 @@ static BOOL declare_variable(struct hlsl_ir_var *decl, BOOL local)
     {
         struct hlsl_ir_var *old = get_variable(hlsl_ctx.cur_scope, decl->name);
 
-        hlsl_report_message(decl->loc.file, decl->loc.line, decl->loc.col, HLSL_LEVEL_ERROR,
-                "\"%s\" already declared", decl->name);
-        hlsl_report_message(old->loc.file, old->loc.line, old->loc.col, HLSL_LEVEL_NOTE,
-                "\"%s\" was previously declared here", old->name);
+        hlsl_report_message(decl->loc, HLSL_LEVEL_ERROR, "\"%s\" already declared", decl->name);
+        hlsl_report_message(old->loc, HLSL_LEVEL_NOTE, "\"%s\" was previously declared here", old->name);
         return FALSE;
     }
     return TRUE;
 }
 
-static DWORD add_modifier(DWORD modifiers, DWORD mod, const struct YYLTYPE *loc);
-
-static BOOL check_type_modifiers(DWORD modifiers, struct source_location *loc)
+static DWORD add_modifiers(DWORD modifiers, DWORD mod, const struct source_location loc)
 {
-    if (modifiers & ~HLSL_TYPE_MODIFIERS_MASK)
+    if (modifiers & mod)
     {
-        hlsl_report_message(loc->file, loc->line, loc->col, HLSL_LEVEL_ERROR,
-                "modifier not allowed on typedefs");
-        return FALSE;
+        hlsl_report_message(loc, HLSL_LEVEL_ERROR, "modifier '%s' already specified", debug_modifiers(mod));
+        return modifiers;
     }
-    return TRUE;
+    if (mod & (HLSL_MODIFIER_ROW_MAJOR | HLSL_MODIFIER_COLUMN_MAJOR)
+            && modifiers & (HLSL_MODIFIER_ROW_MAJOR | HLSL_MODIFIER_COLUMN_MAJOR))
+    {
+        hlsl_report_message(loc, HLSL_LEVEL_ERROR, "more than one matrix majority keyword");
+        return modifiers;
+    }
+    return modifiers | mod;
 }
 
 static BOOL add_type_to_scope(struct hlsl_scope *scope, struct hlsl_type *def)
@@ -308,7 +307,7 @@ enum loop_type
 };
 
 static struct list *create_loop(enum loop_type type, struct list *init, struct list *cond,
-        struct list *iter, struct list *body, struct source_location *loc)
+        struct list *iter, struct list *body, struct source_location loc)
 {
     struct list *list = NULL;
     struct hlsl_ir_loop *loop = NULL;
@@ -326,7 +325,7 @@ static struct list *create_loop(enum loop_type type, struct list *init, struct l
     if (!loop)
         goto oom;
     loop->node.type = HLSL_IR_LOOP;
-    loop->node.loc = *loc;
+    loop->node.loc = loc;
     list_add_tail(list, &loop->node.entry);
     loop->body = d3dcompiler_alloc(sizeof(*loop->body));
     if (!loop->body)
@@ -481,6 +480,36 @@ static struct hlsl_ir_swizzle *get_swizzle(struct hlsl_ir_node *value, const cha
     return NULL;
 }
 
+static struct hlsl_ir_jump *new_return(struct hlsl_ir_node *value, struct source_location loc)
+{
+    struct hlsl_type *return_type = hlsl_ctx.cur_function->return_type;
+    struct hlsl_ir_jump *jump = d3dcompiler_alloc(sizeof(*jump));
+    if (!jump)
+    {
+        ERR("Out of memory\n");
+        return NULL;
+    }
+    jump->node.type = HLSL_IR_JUMP;
+    jump->node.loc = loc;
+    jump->type = HLSL_IR_JUMP_RETURN;
+    if (value)
+    {
+        if (!(jump->return_value = implicit_conversion(value, return_type, &loc)))
+        {
+            d3dcompiler_free(jump);
+            return NULL;
+        }
+    }
+    else if (return_type->base_type != HLSL_TYPE_VOID)
+    {
+        hlsl_report_message(loc, HLSL_LEVEL_ERROR, "non-void function must return a value");
+        d3dcompiler_free(jump);
+        return NULL;
+    }
+
+    return jump;
+}
+
 static void struct_var_initializer(struct list *list, struct hlsl_ir_var *var,
         struct parse_initializer *initializer)
 {
@@ -492,8 +521,7 @@ static void struct_var_initializer(struct list *list, struct hlsl_ir_var *var,
 
     if (initializer_size(initializer) != components_count_type(type))
     {
-        hlsl_report_message(var->loc.file, var->loc.line, var->loc.col, HLSL_LEVEL_ERROR,
-                "structure initializer mismatch");
+        hlsl_report_message(var->loc, HLSL_LEVEL_ERROR, "structure initializer mismatch");
         free_parse_initializer(initializer);
         return;
     }
@@ -520,7 +548,7 @@ static void struct_var_initializer(struct list *list, struct hlsl_ir_var *var,
             }
             deref->node.loc = node->loc;
             list_add_tail(list, &deref->node.entry);
-            assignment = make_assignment(&deref->node, ASSIGN_OP_ASSIGN, BWRITERSP_WRITEMASK_ALL, node);
+            assignment = make_assignment(&deref->node, ASSIGN_OP_ASSIGN, node);
             list_add_tail(list, &assignment->entry);
         }
         else
@@ -588,10 +616,9 @@ static struct list *declare_vars(struct hlsl_type *basic_type, DWORD modifiers, 
             local = FALSE;
         }
 
-        if (var->modifiers & HLSL_MODIFIER_CONST && !(var->modifiers & HLSL_STORAGE_UNIFORM) && !v->initializer.args_count)
+        if (type->modifiers & HLSL_MODIFIER_CONST && !(var->modifiers & HLSL_STORAGE_UNIFORM) && !v->initializer.args_count)
         {
-            hlsl_report_message(v->loc.file, v->loc.line, v->loc.col,
-                    HLSL_LEVEL_ERROR, "const variable without initializer");
+            hlsl_report_message(v->loc, HLSL_LEVEL_ERROR, "const variable without initializer");
             free_declaration(var);
             d3dcompiler_free(v);
             continue;
@@ -617,7 +644,7 @@ static struct list *declare_vars(struct hlsl_type *basic_type, DWORD modifiers, 
             {
                 if (size < type->dimx * type->dimy)
                 {
-                    hlsl_report_message(v->loc.file, v->loc.line, v->loc.col, HLSL_LEVEL_ERROR,
+                    hlsl_report_message(v->loc, HLSL_LEVEL_ERROR,
                             "'%s' initializer does not match", v->name);
                     free_parse_initializer(&v->initializer);
                     d3dcompiler_free(v);
@@ -627,7 +654,7 @@ static struct list *declare_vars(struct hlsl_type *basic_type, DWORD modifiers, 
             if ((type->type == HLSL_CLASS_STRUCT || type->type == HLSL_CLASS_ARRAY)
                     && components_count_type(type) != size)
             {
-                hlsl_report_message(v->loc.file, v->loc.line, v->loc.col, HLSL_LEVEL_ERROR,
+                hlsl_report_message(v->loc, HLSL_LEVEL_ERROR,
                         "'%s' initializer does not match", v->name);
                 free_parse_initializer(&v->initializer);
                 d3dcompiler_free(v);
@@ -667,8 +694,7 @@ static struct list *declare_vars(struct hlsl_type *basic_type, DWORD modifiers, 
 
             deref = new_var_deref(var);
             list_add_tail(statements_list, &deref->node.entry);
-            assignment = make_assignment(&deref->node, ASSIGN_OP_ASSIGN,
-                    BWRITERSP_WRITEMASK_ALL, v->initializer.args[0]);
+            assignment = make_assignment(&deref->node, ASSIGN_OP_ASSIGN, v->initializer.args[0]);
             d3dcompiler_free(v->initializer.args);
             list_add_tail(statements_list, &assignment->entry);
         }
@@ -689,6 +715,21 @@ static BOOL add_struct_field(struct list *fields, struct hlsl_struct_field *fiel
     }
     list_add_tail(fields, &field->entry);
     return TRUE;
+}
+
+static struct hlsl_type *apply_type_modifiers(struct hlsl_type *type, DWORD *modifiers, struct source_location loc)
+{
+    struct hlsl_type *new_type;
+
+    if (!(*modifiers & HLSL_TYPE_MODIFIERS_MASK))
+        return type;
+
+    if (!(new_type = clone_hlsl_type(type)))
+        return NULL;
+
+    new_type->modifiers = add_modifiers(new_type->modifiers, *modifiers, loc);
+    *modifiers &= ~HLSL_TYPE_MODIFIERS_MASK;
+    return new_type;
 }
 
 static struct list *gen_struct_fields(struct hlsl_type *type, DWORD modifiers, struct list *fields)
@@ -720,8 +761,7 @@ static struct list *gen_struct_fields(struct hlsl_type *type, DWORD modifiers, s
         field->semantic = v->semantic;
         if (v->initializer.args_count)
         {
-            hlsl_report_message(v->loc.file, v->loc.line, v->loc.col, HLSL_LEVEL_ERROR,
-                    "struct field with an initializer.\n");
+            hlsl_report_message(v->loc, HLSL_LEVEL_ERROR, "struct field with an initializer.\n");
             free_parse_initializer(&v->initializer);
         }
         list_add_tail(list, &field->entry);
@@ -751,20 +791,11 @@ static struct hlsl_type *new_struct_type(const char *name, DWORD modifiers, stru
     return type;
 }
 
-static BOOL add_typedef(DWORD modifiers, struct hlsl_type *orig_type, struct list *list,
-        struct source_location *loc)
+static BOOL add_typedef(DWORD modifiers, struct hlsl_type *orig_type, struct list *list)
 {
     BOOL ret;
     struct hlsl_type *type;
     struct parse_variable_def *v, *v_next;
-
-    if (!check_type_modifiers(modifiers, loc))
-    {
-        LIST_FOR_EACH_ENTRY_SAFE(v, v_next, list, struct parse_variable_def, entry)
-            d3dcompiler_free(v);
-        d3dcompiler_free(list);
-        return FALSE;
-    }
 
     LIST_FOR_EACH_ENTRY_SAFE(v, v_next, list, struct parse_variable_def, entry)
     {
@@ -782,12 +813,12 @@ static BOOL add_typedef(DWORD modifiers, struct hlsl_type *orig_type, struct lis
         type->modifiers |= modifiers;
 
         if (type->type != HLSL_CLASS_MATRIX)
-            check_invalid_matrix_modifiers(type->modifiers, &v->loc);
+            check_invalid_matrix_modifiers(type->modifiers, v->loc);
 
         ret = add_type_to_scope(hlsl_ctx.cur_scope, type);
         if (!ret)
         {
-            hlsl_report_message(v->loc.file, v->loc.line, v->loc.col, HLSL_LEVEL_ERROR,
+            hlsl_report_message(v->loc, HLSL_LEVEL_ERROR,
                     "redefinition of custom type '%s'", v->name);
         }
         d3dcompiler_free(v);
@@ -796,7 +827,7 @@ static BOOL add_typedef(DWORD modifiers, struct hlsl_type *orig_type, struct lis
     return TRUE;
 }
 
-static BOOL add_func_parameter(struct list *list, struct parse_parameter *param, const struct source_location *loc)
+static BOOL add_func_parameter(struct list *list, struct parse_parameter *param, const struct source_location loc)
 {
     struct hlsl_ir_var *decl = d3dcompiler_alloc(sizeof(*decl));
 
@@ -806,7 +837,7 @@ static BOOL add_func_parameter(struct list *list, struct parse_parameter *param,
         return FALSE;
     }
     decl->data_type = param->type;
-    decl->loc = *loc;
+    decl->loc = loc;
     decl->name = param->name;
     decl->semantic = param->semantic;
     decl->reg_reservation = param->reg_reservation;
@@ -913,6 +944,47 @@ static struct list *make_list(struct hlsl_ir_node *node)
     list_init(list);
     list_add_tail(list, &node->entry);
     return list;
+}
+
+static unsigned int evaluate_array_dimension(struct hlsl_ir_node *node)
+{
+    if (node->data_type->type != HLSL_CLASS_SCALAR)
+        return 0;
+
+    switch (node->type)
+    {
+    case HLSL_IR_CONSTANT:
+    {
+        struct hlsl_ir_constant *constant = constant_from_node(node);
+
+        switch (constant->node.data_type->base_type)
+        {
+        case HLSL_TYPE_UINT:
+            return constant->v.value.u[0];
+        case HLSL_TYPE_INT:
+            return constant->v.value.i[0];
+        case HLSL_TYPE_FLOAT:
+            return constant->v.value.f[0];
+        case HLSL_TYPE_DOUBLE:
+            return constant->v.value.d[0];
+        case HLSL_TYPE_BOOL:
+            return constant->v.value.b[0];
+        default:
+            WARN("Invalid type %s.\n", debug_base_type(constant->node.data_type));
+            return 0;
+        }
+    }
+    case HLSL_IR_CONSTRUCTOR:
+    case HLSL_IR_DEREF:
+    case HLSL_IR_EXPR:
+    case HLSL_IR_SWIZZLE:
+        FIXME("Unhandled type %s.\n", debug_node_type(node->type));
+        return 0;
+    case HLSL_IR_ASSIGNMENT:
+    default:
+        WARN("Invalid node type %s.\n", debug_node_type(node->type));
+        return 0;
+    }
 }
 
 %}
@@ -1117,18 +1189,16 @@ hlsl_prog:                /* empty */
                                 {
                                     if (decl->body && $2.decl->body)
                                     {
-                                        hlsl_report_message($2.decl->loc.file, $2.decl->loc.line,
-                                                $2.decl->loc.col, HLSL_LEVEL_ERROR,
+                                        hlsl_report_message($2.decl->loc, HLSL_LEVEL_ERROR,
                                                 "redefinition of function %s", debugstr_a($2.name));
                                         YYABORT;
                                     }
                                     else if (!compare_hlsl_types(decl->return_type, $2.decl->return_type))
                                     {
-                                        hlsl_report_message($2.decl->loc.file, $2.decl->loc.line,
-                                                $2.decl->loc.col, HLSL_LEVEL_ERROR,
+                                        hlsl_report_message($2.decl->loc, HLSL_LEVEL_ERROR,
                                                 "redefining function %s with a different return type",
                                                 debugstr_a($2.name));
-                                        hlsl_report_message(decl->loc.file, decl->loc.line, decl->loc.col, HLSL_LEVEL_NOTE,
+                                        hlsl_report_message(decl->loc, HLSL_LEVEL_NOTE,
                                                 "%s previously declared here",
                                                 debugstr_a($2.name));
                                         YYABORT;
@@ -1137,8 +1207,7 @@ hlsl_prog:                /* empty */
 
                                 if ($2.decl->return_type->base_type == HLSL_TYPE_VOID && $2.decl->semantic)
                                 {
-                                    hlsl_report_message($2.decl->loc.file, $2.decl->loc.line,
-                                            $2.decl->loc.col, HLSL_LEVEL_ERROR,
+                                    hlsl_report_message($2.decl->loc, HLSL_LEVEL_ERROR,
                                             "void function with a semantic");
                                 }
 
@@ -1181,17 +1250,18 @@ preproc_directive:        PRE_LINE STRING
 
 struct_declaration:       struct_spec variables_def_optional ';'
                             {
-                                struct source_location loc;
-
-                                set_location(&loc, &@3);
                                 if (!$2)
                                 {
                                     if (!$1->name)
                                     {
-                                        hlsl_report_message(loc.file, loc.line, loc.col,
-                                                HLSL_LEVEL_ERROR, "anonymous struct declaration with no variables");
+                                        hlsl_report_message(get_location(&@1), HLSL_LEVEL_ERROR,
+                                                "anonymous struct declaration with no variables");
                                     }
-                                    check_type_modifiers($1->modifiers, &loc);
+                                    if ($1->modifiers)
+                                    {
+                                        hlsl_report_message(get_location(&@1), HLSL_LEVEL_ERROR,
+                                                "modifier not allowed on struct type declaration");
+                                    }
                                 }
                                 $$ = declare_vars($1, 0, $2);
                             }
@@ -1202,16 +1272,14 @@ struct_spec:              named_struct_spec
 named_struct_spec:        var_modifiers KW_STRUCT any_identifier '{' fields_list '}'
                             {
                                 BOOL ret;
-                                struct source_location loc;
 
                                 TRACE("Structure %s declaration.\n", debugstr_a($3));
-                                set_location(&loc, &@1);
-                                check_invalid_matrix_modifiers($1, &loc);
+                                check_invalid_matrix_modifiers($1, get_location(&@1));
                                 $$ = new_struct_type($3, $1, $5);
 
                                 if (get_variable(hlsl_ctx.cur_scope, $3))
                                 {
-                                    hlsl_report_message(hlsl_ctx.source_file, @3.first_line, @3.first_column,
+                                    hlsl_report_message(get_location(&@3),
                                             HLSL_LEVEL_ERROR, "redefinition of '%s'", $3);
                                     YYABORT;
                                 }
@@ -1219,7 +1287,7 @@ named_struct_spec:        var_modifiers KW_STRUCT any_identifier '{' fields_list
                                 ret = add_type_to_scope(hlsl_ctx.cur_scope, $$);
                                 if (!ret)
                                 {
-                                    hlsl_report_message(hlsl_ctx.source_file, @3.first_line, @3.first_column,
+                                    hlsl_report_message(get_location(&@3),
                                             HLSL_LEVEL_ERROR, "redefinition of struct '%s'", $3);
                                     YYABORT;
                                 }
@@ -1227,11 +1295,8 @@ named_struct_spec:        var_modifiers KW_STRUCT any_identifier '{' fields_list
 
 unnamed_struct_spec:      var_modifiers KW_STRUCT '{' fields_list '}'
                             {
-                                struct source_location loc;
-
                                 TRACE("Anonymous structure declaration.\n");
-                                set_location(&loc, &@1);
-                                check_invalid_matrix_modifiers($1, &loc);
+                                check_invalid_matrix_modifiers($1, get_location(&@1));
                                 $$ = new_struct_type(NULL, $1, $4);
                             }
 
@@ -1255,7 +1320,7 @@ fields_list:              /* Empty */
                                     ret = add_struct_field($$, field);
                                     if (ret == FALSE)
                                     {
-                                        hlsl_report_message(hlsl_ctx.source_file, @2.first_line, @2.first_column,
+                                        hlsl_report_message(get_location(&@2),
                                                 HLSL_LEVEL_ERROR, "redefinition of '%s'", field->name);
                                         d3dcompiler_free(field);
                                     }
@@ -1265,7 +1330,12 @@ fields_list:              /* Empty */
 
 field:                    var_modifiers type variables_def ';'
                             {
-                                $$ = gen_struct_fields($2, $1, $3);
+                                struct hlsl_type *type;
+                                DWORD modifiers = $1;
+
+                                if (!(type = apply_type_modifiers($2, &modifiers, get_location(&@1))))
+                                    YYABORT;
+                                $$ = gen_struct_fields(type, modifiers, $3);
                             }
                         | unnamed_struct_spec variables_def ';'
                             {
@@ -1286,17 +1356,24 @@ func_declaration:         func_prototype compound_statement
                                 pop_scope(&hlsl_ctx);
                             }
 
+                        /* var_modifiers is necessary to avoid shift/reduce conflicts. */
 func_prototype:           var_modifiers type var_identifier '(' parameters ')' colon_attribute
                             {
+                                if ($1)
+                                {
+                                    hlsl_report_message(get_location(&@1), HLSL_LEVEL_ERROR,
+                                            "unexpected modifiers on a function");
+                                    YYABORT;
+                                }
                                 if (get_variable(hlsl_ctx.globals, $3))
                                 {
-                                    hlsl_report_message(hlsl_ctx.source_file, @3.first_line, @3.first_column,
+                                    hlsl_report_message(get_location(&@3),
                                             HLSL_LEVEL_ERROR, "redefinition of '%s'\n", $3);
                                     YYABORT;
                                 }
                                 if ($2->base_type == HLSL_TYPE_VOID && $7.semantic)
                                 {
-                                    hlsl_report_message(hlsl_ctx.source_file, @7.first_line, @7.first_column,
+                                    hlsl_report_message(get_location(&@7),
                                             HLSL_LEVEL_ERROR, "void function with a semantic");
                                 }
 
@@ -1313,7 +1390,8 @@ func_prototype:           var_modifiers type var_identifier '(' parameters ')' c
                                 }
                                 $$.name = $3;
                                 $$.decl->semantic = $7.semantic;
-                                set_location(&$$.decl->loc, &@3);
+                                $$.decl->loc = get_location(&@3);
+                                hlsl_ctx.cur_function = $$.decl;
                             }
 
 compound_statement:       '{' '}'
@@ -1383,12 +1461,9 @@ parameters:               scope_start
 
 param_list:               parameter
                             {
-                                struct source_location loc;
-
                                 $$ = d3dcompiler_alloc(sizeof(*$$));
                                 list_init($$);
-                                set_location(&loc, &@1);
-                                if (!add_func_parameter($$, &$1, &loc))
+                                if (!add_func_parameter($$, &$1, get_location(&@1)))
                                 {
                                     ERR("Error adding function parameter %s.\n", $1.name);
                                     set_parse_status(&hlsl_ctx.status, PARSE_ERR);
@@ -1397,13 +1472,10 @@ param_list:               parameter
                             }
                         | param_list ',' parameter
                             {
-                                struct source_location loc;
-
                                 $$ = $1;
-                                set_location(&loc, &@3);
-                                if (!add_func_parameter($$, &$3, &loc))
+                                if (!add_func_parameter($$, &$3, get_location(&@3)))
                                 {
-                                    hlsl_report_message(loc.file, loc.line, loc.col, HLSL_LEVEL_ERROR,
+                                    hlsl_report_message(get_location(&@3), HLSL_LEVEL_ERROR,
                                             "duplicate parameter %s", $3.name);
                                     YYABORT;
                                 }
@@ -1411,9 +1483,15 @@ param_list:               parameter
 
 parameter:                input_mods var_modifiers type any_identifier colon_attribute
                             {
+                                struct hlsl_type *type;
+                                DWORD modifiers = $2;
+
+                                if (!(type = apply_type_modifiers($3, &modifiers, get_location(&@2))))
+                                    YYABORT;
+
                                 $$.modifiers = $1 ? $1 : HLSL_MODIFIER_IN;
-                                $$.modifiers |= $2;
-                                $$.type = $3;
+                                $$.modifiers |= modifiers;
+                                $$.type = type;
                                 $$.name = $4;
                                 $$.semantic = $5.semantic;
                                 $$.reg_reservation = $5.reg_reservation;
@@ -1427,8 +1505,8 @@ input_mods:               /* Empty */
                             {
                                 if ($1 & $2)
                                 {
-                                    hlsl_report_message(hlsl_ctx.source_file, @2.first_line, @2.first_column,
-                                            HLSL_LEVEL_ERROR, "duplicate input-output modifiers");
+                                    hlsl_report_message(get_location(&@2), HLSL_LEVEL_ERROR,
+                                            "duplicate input-output modifiers");
                                     YYABORT;
                                 }
                                 $$ = $1 | $2;
@@ -1560,18 +1638,22 @@ declaration_statement:    declaration
 
 typedef:                  KW_TYPEDEF var_modifiers type type_specs ';'
                             {
-                                struct source_location loc;
-
-                                set_location(&loc, &@1);
-                                if (!add_typedef($2, $3, $4, &loc))
+                                if ($2 & ~HLSL_TYPE_MODIFIERS_MASK)
+                                {
+                                    struct parse_variable_def *v, *v_next;
+                                    hlsl_report_message(get_location(&@1),
+                                            HLSL_LEVEL_ERROR, "modifier not allowed on typedefs");
+                                    LIST_FOR_EACH_ENTRY_SAFE(v, v_next, $4, struct parse_variable_def, entry)
+                                        d3dcompiler_free(v);
+                                    d3dcompiler_free($4);
+                                    YYABORT;
+                                }
+                                if (!add_typedef($2, $3, $4))
                                     YYABORT;
                             }
                         | KW_TYPEDEF struct_spec type_specs ';'
                             {
-                                struct source_location loc;
-
-                                set_location(&loc, &@1);
-                                if (!add_typedef(0, $2, $3, &loc))
+                                if (!add_typedef(0, $2, $3))
                                     YYABORT;
                             }
 
@@ -1590,14 +1672,19 @@ type_specs:               type_spec
 type_spec:                any_identifier array
                             {
                                 $$ = d3dcompiler_alloc(sizeof(*$$));
-                                set_location(&$$->loc, &@1);
+                                $$->loc = get_location(&@1);
                                 $$->name = $1;
                                 $$->array_size = $2;
                             }
 
 declaration:              var_modifiers type variables_def ';'
                             {
-                                $$ = declare_vars($2, $1, $3);
+                                struct hlsl_type *type;
+                                DWORD modifiers = $1;
+
+                                if (!(type = apply_type_modifiers($2, &modifiers, get_location(&@1))))
+                                    YYABORT;
+                                $$ = declare_vars(type, modifiers, $3);
                             }
 
 variables_def_optional:   /* Empty */
@@ -1624,7 +1711,7 @@ variables_def:            variable_def
 variable_def:             any_identifier array colon_attribute
                             {
                                 $$ = d3dcompiler_alloc(sizeof(*$$));
-                                set_location(&$$->loc, &@1);
+                                $$->loc = get_location(&@1);
                                 $$->name = $1;
                                 $$->array_size = $2;
                                 $$->semantic = $3.semantic;
@@ -1634,7 +1721,7 @@ variable_def:             any_identifier array colon_attribute
                             {
                                 TRACE("Declaration with initializer.\n");
                                 $$ = d3dcompiler_alloc(sizeof(*$$));
-                                set_location(&$$->loc, &@1);
+                                $$->loc = get_location(&@1);
                                 $$->name = $1;
                                 $$->array_size = $2;
                                 $$->semantic = $3.semantic;
@@ -1648,9 +1735,25 @@ array:                    /* Empty */
                             }
                         | '[' expr ']'
                             {
-                                FIXME("Array.\n");
-                                $$ = 0;
+                                unsigned int size = evaluate_array_dimension(node_from_list($2));
+
                                 free_instr_list($2);
+
+                                if (!size)
+                                {
+                                    hlsl_report_message(get_location(&@2), HLSL_LEVEL_ERROR,
+                                            "array size is not a positive integer constant\n");
+                                    YYABORT;
+                                }
+                                TRACE("Array size %u.\n", size);
+
+                                if (size > 65536)
+                                {
+                                    hlsl_report_message(get_location(&@2), HLSL_LEVEL_ERROR,
+                                            "array size must be between 1 and 65536");
+                                    YYABORT;
+                                }
+                                $$ = size;
                             }
 
 var_modifiers:            /* Empty */
@@ -1659,47 +1762,47 @@ var_modifiers:            /* Empty */
                             }
                         | KW_EXTERN var_modifiers
                             {
-                                $$ = add_modifier($2, HLSL_STORAGE_EXTERN, &@1);
+                                $$ = add_modifiers($2, HLSL_STORAGE_EXTERN, get_location(&@1));
                             }
                         | KW_NOINTERPOLATION var_modifiers
                             {
-                                $$ = add_modifier($2, HLSL_STORAGE_NOINTERPOLATION, &@1);
+                                $$ = add_modifiers($2, HLSL_STORAGE_NOINTERPOLATION, get_location(&@1));
                             }
                         | KW_PRECISE var_modifiers
                             {
-                                $$ = add_modifier($2, HLSL_MODIFIER_PRECISE, &@1);
+                                $$ = add_modifiers($2, HLSL_MODIFIER_PRECISE, get_location(&@1));
                             }
                         | KW_SHARED var_modifiers
                             {
-                                $$ = add_modifier($2, HLSL_STORAGE_SHARED, &@1);
+                                $$ = add_modifiers($2, HLSL_STORAGE_SHARED, get_location(&@1));
                             }
                         | KW_GROUPSHARED var_modifiers
                             {
-                                $$ = add_modifier($2, HLSL_STORAGE_GROUPSHARED, &@1);
+                                $$ = add_modifiers($2, HLSL_STORAGE_GROUPSHARED, get_location(&@1));
                             }
                         | KW_STATIC var_modifiers
                             {
-                                $$ = add_modifier($2, HLSL_STORAGE_STATIC, &@1);
+                                $$ = add_modifiers($2, HLSL_STORAGE_STATIC, get_location(&@1));
                             }
                         | KW_UNIFORM var_modifiers
                             {
-                                $$ = add_modifier($2, HLSL_STORAGE_UNIFORM, &@1);
+                                $$ = add_modifiers($2, HLSL_STORAGE_UNIFORM, get_location(&@1));
                             }
                         | KW_VOLATILE var_modifiers
                             {
-                                $$ = add_modifier($2, HLSL_STORAGE_VOLATILE, &@1);
+                                $$ = add_modifiers($2, HLSL_STORAGE_VOLATILE, get_location(&@1));
                             }
                         | KW_CONST var_modifiers
                             {
-                                $$ = add_modifier($2, HLSL_MODIFIER_CONST, &@1);
+                                $$ = add_modifiers($2, HLSL_MODIFIER_CONST, get_location(&@1));
                             }
                         | KW_ROW_MAJOR var_modifiers
                             {
-                                $$ = add_modifier($2, HLSL_MODIFIER_ROW_MAJOR, &@1);
+                                $$ = add_modifiers($2, HLSL_MODIFIER_ROW_MAJOR, get_location(&@1));
                             }
                         | KW_COLUMN_MAJOR var_modifiers
                             {
-                                $$ = add_modifier($2, HLSL_MODIFIER_COLUMN_MAJOR, &@1);
+                                $$ = add_modifiers($2, HLSL_MODIFIER_COLUMN_MAJOR, get_location(&@1));
                             }
 
 complex_initializer:      initializer_expr
@@ -1769,26 +1872,22 @@ statement:                declaration_statement
                         | selection_statement
                         | loop_statement
 
-                          /* FIXME: add rule for return with no value */
 jump_statement:           KW_RETURN expr ';'
                             {
-                                struct hlsl_ir_jump *jump = d3dcompiler_alloc(sizeof(*jump));
-                                if (!jump)
-                                {
-                                    ERR("Out of memory\n");
+                                struct hlsl_ir_jump *jump;
+                                if (!(jump = new_return(node_from_list($2), get_location(&@1))))
                                     YYABORT;
-                                }
-                                jump->node.type = HLSL_IR_JUMP;
-                                set_location(&jump->node.loc, &@1);
-                                jump->type = HLSL_IR_JUMP_RETURN;
-                                jump->node.data_type = node_from_list($2)->data_type;
-                                jump->return_value = node_from_list($2);
-
-                                FIXME("Check for valued return on void function.\n");
-                                FIXME("Implicit conversion to the return type if needed, "
-				        "error out if conversion not possible.\n");
 
                                 $$ = $2;
+                                list_add_tail($$, &jump->node.entry);
+                            }
+                        | KW_RETURN ';'
+                            {
+                                struct hlsl_ir_jump *jump;
+                                if (!(jump = new_return(NULL, get_location(&@1))))
+                                    YYABORT;
+                                $$ = d3dcompiler_alloc(sizeof(*$$));
+                                list_init($$);
                                 list_add_tail($$, &jump->node.entry);
                             }
 
@@ -1801,14 +1900,13 @@ selection_statement:      KW_IF '(' expr ')' if_body
                                     YYABORT;
                                 }
                                 instr->node.type = HLSL_IR_IF;
-                                set_location(&instr->node.loc, &@1);
+                                instr->node.loc = get_location(&@1);
                                 instr->condition = node_from_list($3);
                                 instr->then_instrs = $5.then_instrs;
                                 instr->else_instrs = $5.else_instrs;
                                 if (instr->condition->data_type->dimx > 1 || instr->condition->data_type->dimy > 1)
                                 {
-                                    hlsl_report_message(instr->node.loc.file, instr->node.loc.line,
-                                            instr->node.loc.col, HLSL_LEVEL_ERROR,
+                                    hlsl_report_message(instr->node.loc, HLSL_LEVEL_ERROR,
                                             "if condition requires a scalar");
                                 }
                                 $$ = $3;
@@ -1828,33 +1926,23 @@ if_body:                  statement
 
 loop_statement:           KW_WHILE '(' expr ')' statement
                             {
-                                struct source_location loc;
-                                set_location(&loc, &@1);
-                                $$ = create_loop(LOOP_WHILE, NULL, $3, NULL, $5, &loc);
+                                $$ = create_loop(LOOP_WHILE, NULL, $3, NULL, $5, get_location(&@1));
                             }
                         | KW_DO statement KW_WHILE '(' expr ')' ';'
                             {
-                                struct source_location loc;
-                                set_location(&loc, &@1);
-                                $$ = create_loop(LOOP_DO_WHILE, NULL, $5, NULL, $2, &loc);
+                                $$ = create_loop(LOOP_DO_WHILE, NULL, $5, NULL, $2, get_location(&@1));
                             }
                         | KW_FOR '(' scope_start expr_statement expr_statement expr ')' statement
                             {
-                                struct source_location loc;
-
-                                set_location(&loc, &@1);
-                                $$ = create_loop(LOOP_FOR, $4, $5, $6, $8, &loc);
+                                $$ = create_loop(LOOP_FOR, $4, $5, $6, $8, get_location(&@1));
                                 pop_scope(&hlsl_ctx);
                             }
                         | KW_FOR '(' scope_start declaration expr_statement expr ')' statement
                             {
-                                struct source_location loc;
-
-                                set_location(&loc, &@1);
                                 if (!$4)
-                                    hlsl_report_message(loc.file, loc.line, loc.col, HLSL_LEVEL_WARNING,
+                                    hlsl_report_message(get_location(&@4), HLSL_LEVEL_WARNING,
                                             "no expressions in for loop initializer");
-                                $$ = create_loop(LOOP_FOR, $4, $5, $6, $8, &loc);
+                                $$ = create_loop(LOOP_FOR, $4, $5, $6, $8, get_location(&@1));
                                 pop_scope(&hlsl_ctx);
                             }
 
@@ -1877,7 +1965,7 @@ primary_expr:             C_FLOAT
                                     YYABORT;
                                 }
                                 c->node.type = HLSL_IR_CONSTANT;
-                                set_location(&c->node.loc, &yylloc);
+                                c->node.loc = get_location(&yylloc);
                                 c->node.data_type = new_hlsl_type(d3dcompiler_strdup("float"), HLSL_CLASS_SCALAR, HLSL_TYPE_FLOAT, 1, 1);
                                 c->v.value.f[0] = $1;
                                 if (!($$ = make_list(&c->node)))
@@ -1892,7 +1980,7 @@ primary_expr:             C_FLOAT
                                     YYABORT;
                                 }
                                 c->node.type = HLSL_IR_CONSTANT;
-                                set_location(&c->node.loc, &yylloc);
+                                c->node.loc = get_location(&yylloc);
                                 c->node.data_type = new_hlsl_type(d3dcompiler_strdup("int"), HLSL_CLASS_SCALAR, HLSL_TYPE_INT, 1, 1);
                                 c->v.value.i[0] = $1;
                                 if (!($$ = make_list(&c->node)))
@@ -1907,7 +1995,7 @@ primary_expr:             C_FLOAT
                                     YYABORT;
                                 }
                                 c->node.type = HLSL_IR_CONSTANT;
-                                set_location(&c->node.loc, &yylloc);
+                                c->node.loc = get_location(&yylloc);
                                 c->node.data_type = new_hlsl_type(d3dcompiler_strdup("bool"), HLSL_CLASS_SCALAR, HLSL_TYPE_BOOL, 1, 1);
                                 c->v.value.b[0] = $1;
                                 if (!($$ = make_list(&c->node)))
@@ -1927,7 +2015,7 @@ primary_expr:             C_FLOAT
                                 }
                                 if ((deref = new_var_deref(var)))
                                 {
-                                    set_location(&deref->node.loc, &@1);
+                                    deref->node.loc = get_location(&@1);
                                     if (!($$ = make_list(&deref->node)))
                                         YYABORT;
                                 }
@@ -1948,11 +2036,10 @@ postfix_expr:             primary_expr
                                 struct source_location loc;
                                 struct hlsl_ir_node *inc;
 
-                                set_location(&loc, &@2);
+                                loc = get_location(&@2);
                                 if (node_from_list($1)->data_type->modifiers & HLSL_MODIFIER_CONST)
                                 {
-                                    hlsl_report_message(loc.file, loc.line, loc.col, HLSL_LEVEL_ERROR,
-                                            "modifying a const expression");
+                                    hlsl_report_message(loc, HLSL_LEVEL_ERROR, "modifying a const expression");
                                     YYABORT;
                                 }
                                 inc = new_unary_expr(HLSL_IR_UNOP_POSTINC, node_from_list($1), loc);
@@ -1966,11 +2053,10 @@ postfix_expr:             primary_expr
                                 struct source_location loc;
                                 struct hlsl_ir_node *inc;
 
-                                set_location(&loc, &@2);
+                                loc = get_location(&@2);
                                 if (node_from_list($1)->data_type->modifiers & HLSL_MODIFIER_CONST)
                                 {
-                                    hlsl_report_message(loc.file, loc.line, loc.col, HLSL_LEVEL_ERROR,
-                                            "modifying a const expression");
+                                    hlsl_report_message(loc, HLSL_LEVEL_ERROR, "modifying a const expression");
                                     YYABORT;
                                 }
                                 inc = new_unary_expr(HLSL_IR_UNOP_POSTDEC, node_from_list($1), loc);
@@ -1984,7 +2070,7 @@ postfix_expr:             primary_expr
                                 struct hlsl_ir_node *node = node_from_list($1);
                                 struct source_location loc;
 
-                                set_location(&loc, &@2);
+                                loc = get_location(&@2);
                                 if (node->data_type->type == HLSL_CLASS_STRUCT)
                                 {
                                     struct hlsl_type *type = node->data_type;
@@ -2009,7 +2095,7 @@ postfix_expr:             primary_expr
                                     }
                                     if (!$$)
                                     {
-                                        hlsl_report_message(loc.file, loc.line, loc.col, HLSL_LEVEL_ERROR,
+                                        hlsl_report_message(loc, HLSL_LEVEL_ERROR,
                                                 "invalid subscript %s", debugstr_a($3));
                                         YYABORT;
                                     }
@@ -2021,7 +2107,7 @@ postfix_expr:             primary_expr
                                     swizzle = get_swizzle(node, $3, &loc);
                                     if (!swizzle)
                                     {
-                                        hlsl_report_message(loc.file, loc.line, loc.col, HLSL_LEVEL_ERROR,
+                                        hlsl_report_message(loc, HLSL_LEVEL_ERROR,
                                                 "invalid swizzle %s", debugstr_a($3));
                                         YYABORT;
                                     }
@@ -2029,7 +2115,7 @@ postfix_expr:             primary_expr
                                 }
                                 else
                                 {
-                                    hlsl_report_message(loc.file, loc.line, loc.col, HLSL_LEVEL_ERROR,
+                                    hlsl_report_message(loc, HLSL_LEVEL_ERROR,
                                             "invalid subscript %s", debugstr_a($3));
                                     YYABORT;
                                 }
@@ -2041,7 +2127,6 @@ postfix_expr:             primary_expr
                                  * We store it as an array dereference in any case. */
                                 struct hlsl_ir_deref *deref = d3dcompiler_alloc(sizeof(*deref));
                                 struct hlsl_type *expr_type = node_from_list($1)->data_type;
-                                struct source_location loc;
 
                                 TRACE("Array dereference from type %s\n", debug_hlsl_type(expr_type));
                                 if (!deref)
@@ -2050,8 +2135,7 @@ postfix_expr:             primary_expr
                                     YYABORT;
                                 }
                                 deref->node.type = HLSL_IR_DEREF;
-                                set_location(&loc, &@2);
-                                deref->node.loc = loc;
+                                deref->node.loc = get_location(&@2);
                                 if (expr_type->type == HLSL_CLASS_ARRAY)
                                 {
                                     deref->node.data_type = expr_type->e.array.type;
@@ -2067,11 +2151,9 @@ postfix_expr:             primary_expr
                                 else
                                 {
                                     if (expr_type->type == HLSL_CLASS_SCALAR)
-                                        hlsl_report_message(loc.file, loc.line, loc.col, HLSL_LEVEL_ERROR,
-                                                "array-indexed expression is scalar");
+                                        hlsl_report_message(get_location(&@2), HLSL_LEVEL_ERROR, "array-indexed expression is scalar");
                                     else
-                                        hlsl_report_message(loc.file, loc.line, loc.col, HLSL_LEVEL_ERROR,
-                                                "expression is not array-indexable");
+                                        hlsl_report_message(get_location(&@2), HLSL_LEVEL_ERROR, "expression is not array-indexable");
                                     d3dcompiler_free(deref);
                                     free_instr_list($1);
                                     free_instr_list($3);
@@ -2079,16 +2161,15 @@ postfix_expr:             primary_expr
                                 }
                                 if (node_from_list($3)->data_type->type != HLSL_CLASS_SCALAR)
                                 {
-                                    hlsl_report_message(loc.file, loc.line, loc.col, HLSL_LEVEL_ERROR,
-                                            "array index is not scalar");
+                                    hlsl_report_message(get_location(&@3), HLSL_LEVEL_ERROR, "array index is not scalar");
                                     d3dcompiler_free(deref);
                                     free_instr_list($1);
                                     free_instr_list($3);
                                     YYABORT;
                                 }
-                                deref->type = HLSL_IR_DEREF_ARRAY;
-                                deref->v.array.array = node_from_list($1);
-                                deref->v.array.index = node_from_list($3);
+                                deref->src.type = HLSL_IR_DEREF_ARRAY;
+                                deref->src.v.array.array = node_from_list($1);
+                                deref->src.v.array.index = node_from_list($3);
 
                                 $$ = append_binop($1, $3, &deref->node);
                             }
@@ -2124,7 +2205,7 @@ postfix_expr:             primary_expr
 
                                 constructor = d3dcompiler_alloc(sizeof(*constructor));
                                 constructor->node.type = HLSL_IR_CONSTRUCTOR;
-                                set_location(&constructor->node.loc, &@3);
+                                constructor->node.loc = get_location(&@3);
                                 constructor->node.data_type = $2;
                                 constructor->args_count = $4.args_count;
                                 memcpy(constructor->args, $4.args, $4.args_count * sizeof(*$4.args));
@@ -2140,11 +2221,10 @@ unary_expr:               postfix_expr
                             {
                                 struct source_location loc;
 
-                                set_location(&loc, &@1);
+                                loc = get_location(&@1);
                                 if (node_from_list($2)->data_type->modifiers & HLSL_MODIFIER_CONST)
                                 {
-                                    hlsl_report_message(loc.file, loc.line, loc.col, HLSL_LEVEL_ERROR,
-                                            "modifying a const expression");
+                                    hlsl_report_message(loc, HLSL_LEVEL_ERROR, "modifying a const expression");
                                     YYABORT;
                                 }
                                 $$ = append_unop($2, new_unary_expr(HLSL_IR_UNOP_PREINC, node_from_list($2), loc));
@@ -2153,11 +2233,10 @@ unary_expr:               postfix_expr
                             {
                                 struct source_location loc;
 
-                                set_location(&loc, &@1);
+                                loc = get_location(&@1);
                                 if (node_from_list($2)->data_type->modifiers & HLSL_MODIFIER_CONST)
                                 {
-                                    hlsl_report_message(loc.file, loc.line, loc.col, HLSL_LEVEL_ERROR,
-                                            "modifying a const expression");
+                                    hlsl_report_message(loc, HLSL_LEVEL_ERROR, "modifying a const expression");
                                     YYABORT;
                                 }
                                 $$ = append_unop($2, new_unary_expr(HLSL_IR_UNOP_PREDEC, node_from_list($2), loc));
@@ -2166,7 +2245,6 @@ unary_expr:               postfix_expr
                             {
                                 enum hlsl_ir_expr_op ops[] = {0, HLSL_IR_UNOP_NEG,
                                         HLSL_IR_UNOP_LOGIC_NOT, HLSL_IR_UNOP_BIT_NOT};
-                                struct source_location loc;
 
                                 if ($1 == UNARY_OP_PLUS)
                                 {
@@ -2174,8 +2252,7 @@ unary_expr:               postfix_expr
                                 }
                                 else
                                 {
-                                    set_location(&loc, &@1);
-                                    $$ = append_unop($2, new_unary_expr(ops[$1], node_from_list($2), loc));
+                                    $$ = append_unop($2, new_unary_expr(ops[$1], node_from_list($2), get_location(&@1)));
                                 }
                             }
                           /* var_modifiers just to avoid shift/reduce conflicts */
@@ -2185,11 +2262,10 @@ unary_expr:               postfix_expr
                                 struct hlsl_type *dst_type;
                                 struct source_location loc;
 
-                                set_location(&loc, &@3);
+                                loc = get_location(&@3);
                                 if ($2)
                                 {
-                                    hlsl_report_message(loc.file, loc.line, loc.col, HLSL_LEVEL_ERROR,
-                                            "unexpected modifier in a cast");
+                                    hlsl_report_message(loc, HLSL_LEVEL_ERROR, "unexpected modifier in a cast");
                                     YYABORT;
                                 }
 
@@ -2200,8 +2276,7 @@ unary_expr:               postfix_expr
 
                                 if (!compatible_data_types(src_type, dst_type))
                                 {
-                                    hlsl_report_message(loc.file, loc.line, loc.col, HLSL_LEVEL_ERROR,
-                                            "can't cast from %s to %s",
+                                    hlsl_report_message(loc, HLSL_LEVEL_ERROR, "can't cast from %s to %s",
                                             debug_hlsl_type(src_type), debug_hlsl_type(dst_type));
                                     YYABORT;
                                 }
@@ -2232,24 +2307,18 @@ mul_expr:                 unary_expr
                             }
                         | mul_expr '*' unary_expr
                             {
-                                struct source_location loc;
-
-                                set_location(&loc, &@2);
-                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_MUL, node_from_list($1), node_from_list($3), loc));
+                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_MUL,
+                                        node_from_list($1), node_from_list($3), get_location(&@2)));
                             }
                         | mul_expr '/' unary_expr
                             {
-                                struct source_location loc;
-
-                                set_location(&loc, &@2);
-                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_DIV, node_from_list($1), node_from_list($3), loc));
+                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_DIV,
+                                        node_from_list($1), node_from_list($3), get_location(&@2)));
                             }
                         | mul_expr '%' unary_expr
                             {
-                                struct source_location loc;
-
-                                set_location(&loc, &@2);
-                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_MOD, node_from_list($1), node_from_list($3), loc));
+                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_MOD,
+                                        node_from_list($1), node_from_list($3), get_location(&@2)));
                             }
 
 add_expr:                 mul_expr
@@ -2258,17 +2327,13 @@ add_expr:                 mul_expr
                             }
                         | add_expr '+' mul_expr
                             {
-                                struct source_location loc;
-
-                                set_location(&loc, &@2);
-                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_ADD, node_from_list($1), node_from_list($3), loc));
+                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_ADD,
+                                        node_from_list($1), node_from_list($3), get_location(&@2)));
                             }
                         | add_expr '-' mul_expr
                             {
-                                struct source_location loc;
-
-                                set_location(&loc, &@2);
-                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_SUB, node_from_list($1), node_from_list($3), loc));
+                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_SUB,
+                                        node_from_list($1), node_from_list($3), get_location(&@2)));
                             }
 
 shift_expr:               add_expr
@@ -2290,31 +2355,23 @@ relational_expr:          shift_expr
                             }
                         | relational_expr '<' shift_expr
                             {
-                                struct source_location loc;
-
-                                set_location(&loc, &@2);
-                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_LESS, node_from_list($1), node_from_list($3), loc));
+                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_LESS,
+                                        node_from_list($1), node_from_list($3), get_location(&@2)));
                             }
                         | relational_expr '>' shift_expr
                             {
-                                struct source_location loc;
-
-                                set_location(&loc, &@2);
-                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_GREATER, node_from_list($1), node_from_list($3), loc));
+                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_GREATER,
+                                        node_from_list($1), node_from_list($3), get_location(&@2)));
                             }
                         | relational_expr OP_LE shift_expr
                             {
-                                struct source_location loc;
-
-                                set_location(&loc, &@2);
-                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_LEQUAL, node_from_list($1), node_from_list($3), loc));
+                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_LEQUAL,
+                                        node_from_list($1), node_from_list($3), get_location(&@2)));
                             }
                         | relational_expr OP_GE shift_expr
                             {
-                                struct source_location loc;
-
-                                set_location(&loc, &@2);
-                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_GEQUAL, node_from_list($1), node_from_list($3), loc));
+                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_GEQUAL,
+                                        node_from_list($1), node_from_list($3), get_location(&@2)));
                             }
 
 equality_expr:            relational_expr
@@ -2323,17 +2380,13 @@ equality_expr:            relational_expr
                             }
                         | equality_expr OP_EQ relational_expr
                             {
-                                struct source_location loc;
-
-                                set_location(&loc, &@2);
-                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_EQUAL, node_from_list($1), node_from_list($3), loc));
+                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_EQUAL,
+                                        node_from_list($1), node_from_list($3), get_location(&@2)));
                             }
                         | equality_expr OP_NE relational_expr
                             {
-                                struct source_location loc;
-
-                                set_location(&loc, &@2);
-                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_NEQUAL, node_from_list($1), node_from_list($3), loc));
+                                $$ = append_binop($1, $3, new_binary_expr(HLSL_IR_BINOP_NEQUAL,
+                                        node_from_list($1), node_from_list($3), get_location(&@2)));
                             }
 
 bitand_expr:              equality_expr
@@ -2396,20 +2449,16 @@ assignment_expr:          conditional_expr
                             }
                         | unary_expr assign_op assignment_expr
                             {
-                                struct source_location loc;
                                 struct hlsl_ir_node *instr;
 
-                                set_location(&loc, &@2);
                                 if (node_from_list($1)->data_type->modifiers & HLSL_MODIFIER_CONST)
                                 {
-                                    hlsl_report_message(loc.file, loc.line, loc.col, HLSL_LEVEL_ERROR,
-                                            "l-value is const");
+                                    hlsl_report_message(get_location(&@2), HLSL_LEVEL_ERROR, "l-value is const");
                                     YYABORT;
                                 }
-                                if (!(instr = make_assignment(node_from_list($1), $2,
-                                        BWRITERSP_WRITEMASK_ALL, node_from_list($3))))
+                                if (!(instr = make_assignment(node_from_list($1), $2, node_from_list($3))))
                                     YYABORT;
-                                instr->loc = loc;
+                                instr->loc = get_location(&@2);
                                 $$ = append_binop($3, $1, instr);
                             }
 
@@ -2471,29 +2520,15 @@ expr:                     assignment_expr
 
 %%
 
-static void set_location(struct source_location *loc, const struct YYLTYPE *l)
+static struct source_location get_location(const struct YYLTYPE *l)
 {
-    loc->file = hlsl_ctx.source_file;
-    loc->line = l->first_line;
-    loc->col = l->first_column;
-}
-
-static DWORD add_modifier(DWORD modifiers, DWORD mod, const struct YYLTYPE *loc)
-{
-    if (modifiers & mod)
+    const struct source_location loc =
     {
-        hlsl_report_message(hlsl_ctx.source_file, loc->first_line, loc->first_column, HLSL_LEVEL_ERROR,
-                "modifier '%s' already specified", debug_modifiers(mod));
-        return modifiers;
-    }
-    if (mod & (HLSL_MODIFIER_ROW_MAJOR | HLSL_MODIFIER_COLUMN_MAJOR)
-            && modifiers & (HLSL_MODIFIER_ROW_MAJOR | HLSL_MODIFIER_COLUMN_MAJOR))
-    {
-        hlsl_report_message(hlsl_ctx.source_file, loc->first_line, loc->first_column, HLSL_LEVEL_ERROR,
-                "more than one matrix majority keyword");
-        return modifiers;
-    }
-    return modifiers | mod;
+        .file = hlsl_ctx.source_file,
+        .line = l->first_line,
+        .col = l->first_column,
+    };
+    return loc;
 }
 
 static void dump_function_decl(struct wine_rb_entry *entry, void *context)

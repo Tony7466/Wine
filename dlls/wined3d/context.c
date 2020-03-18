@@ -3148,13 +3148,13 @@ void wined3d_context_gl_apply_blit_state(struct wined3d_context_gl *context_gl, 
     gl_info->gl_ops.gl.p_glDisable(GL_DEPTH_TEST);
     context_invalidate_state(context, STATE_RENDER(WINED3D_RS_ZENABLE));
     gl_info->gl_ops.gl.p_glDisable(GL_BLEND);
-    context_invalidate_state(context, STATE_RENDER(WINED3D_RS_ALPHABLENDENABLE));
+    gl_info->gl_ops.gl.p_glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    context_invalidate_state(context, STATE_BLEND);
     gl_info->gl_ops.gl.p_glDisable(GL_CULL_FACE);
-    context_invalidate_state(context, STATE_RENDER(WINED3D_RS_CULLMODE));
+    gl_info->gl_ops.gl.p_glDisable(GL_SCISSOR_TEST);
+    context_invalidate_state(context, STATE_RASTERIZER);
     gl_info->gl_ops.gl.p_glDisable(GL_STENCIL_TEST);
     context_invalidate_state(context, STATE_RENDER(WINED3D_RS_STENCILENABLE));
-    gl_info->gl_ops.gl.p_glDisable(GL_SCISSOR_TEST);
-    context_invalidate_state(context, STATE_RENDER(WINED3D_RS_SCISSORTESTENABLE));
     if (gl_info->supported[ARB_POINT_SPRITE])
     {
         gl_info->gl_ops.gl.p_glDisable(GL_POINT_SPRITE_ARB);
@@ -3165,11 +3165,6 @@ void wined3d_context_gl_apply_blit_state(struct wined3d_context_gl *context_gl, 
         gl_info->gl_ops.gl.p_glDisable(GL_FRAMEBUFFER_SRGB);
         context_invalidate_state(context, STATE_RENDER(WINED3D_RS_SRGBWRITEENABLE));
     }
-    gl_info->gl_ops.gl.p_glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE));
-    context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE1));
-    context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE2));
-    context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE3));
 
     context->last_was_rhw = TRUE;
     context_invalidate_state(context, STATE_VDECL); /* because of last_was_rhw = TRUE */
@@ -3427,8 +3422,8 @@ BOOL wined3d_context_gl_apply_clear_state(struct wined3d_context_gl *context_gl,
     }
     checkGLcall("setting up state for clear");
 
-    context_invalidate_state(&context_gl->c, STATE_RENDER(WINED3D_RS_ALPHABLENDENABLE));
-    context_invalidate_state(&context_gl->c, STATE_RENDER(WINED3D_RS_SCISSORTESTENABLE));
+    context_invalidate_state(&context_gl->c, STATE_BLEND);
+    context_invalidate_state(&context_gl->c, STATE_RASTERIZER);
     context_invalidate_state(&context_gl->c, STATE_SCISSORRECT);
 
     return TRUE;
@@ -4459,7 +4454,7 @@ static void wined3d_context_gl_setup_target(struct wined3d_context_gl *context_g
      * the alpha blend state changes with different render target formats. */
     if (!context_gl->c.current_rt.texture)
     {
-        context_invalidate_state(&context_gl->c, STATE_RENDER(WINED3D_RS_ALPHABLENDENABLE));
+        context_invalidate_state(&context_gl->c, STATE_BLEND);
     }
     else
     {
@@ -4471,12 +4466,12 @@ static void wined3d_context_gl_setup_target(struct wined3d_context_gl *context_g
             /* Disable blending when the alpha mask has changed and when a format doesn't support blending. */
             if ((old->alpha_size && !new->alpha_size) || (!old->alpha_size && new->alpha_size)
                     || !(texture->resource.format_flags & WINED3DFMT_FLAG_POSTPIXELSHADER_BLENDING))
-                context_invalidate_state(&context_gl->c, STATE_RENDER(WINED3D_RS_ALPHABLENDENABLE));
+                context_invalidate_state(&context_gl->c, STATE_BLEND);
 
             /* Update sRGB writing when switching between formats that do/do not support sRGB writing */
             if ((context_gl->c.current_rt.texture->resource.format_flags & WINED3DFMT_FLAG_SRGB_WRITE)
                     != (texture->resource.format_flags & WINED3DFMT_FLAG_SRGB_WRITE))
-                context_invalidate_state(&context_gl->c, STATE_RENDER(WINED3D_RS_SRGBWRITEENABLE));
+                context_invalidate_state(&context_gl->c, STATE_BLEND);
         }
 
         /* When switching away from an offscreen render target, and we're not
@@ -5159,7 +5154,7 @@ void draw_primitive(struct wined3d_device *device, const struct wined3d_state *s
         if (!(rtv = fb->render_targets[i]) || rtv->format->id == WINED3DFMT_NULL)
             continue;
 
-        if (state->render_states[WINED3D_RS_COLORWRITEENABLE])
+        if (!state->blend_state || state->blend_state->desc.rt[0].writemask)
         {
             wined3d_rendertarget_view_load_location(rtv, context, rtv->resource->draw_binding);
             wined3d_rendertarget_view_invalidate_location(rtv, ~rtv->resource->draw_binding);

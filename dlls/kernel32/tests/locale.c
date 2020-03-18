@@ -25,6 +25,8 @@
  *  the control panel i8n page), we will still get the expected results.
  */
 
+#define _CRT_NON_CONFORMING_WCSTOK
+
 #include <assert.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -4197,7 +4199,7 @@ static void test_GetCPInfo(void)
                 for (i = 0; i <= sizeof(buf); i++)
                 {
                     memset( wbuf, 0xcc, sizeof(wbuf) );
-                    RtlCustomCPToUnicodeN( &table, wbuf, sizeof(wbuf), &reslen, (char *)buf, i );
+                    pRtlCustomCPToUnicodeN( &table, wbuf, sizeof(wbuf), &reslen, (char *)buf, i );
                     for (j = 0; j < 4; j++) if (expect[i][j] == 0xcccc) break;
                     ok( reslen == j * sizeof(WCHAR), "%u: wrong len %u\n", i, reslen );
                     for (j = 0; j < 4; j++)
@@ -4429,14 +4431,14 @@ static void test_IdnToNameprepUnicode(void)
         { 5, L"test", 0, 5, 5, L"test" },
         { 3, L"a\xe111z", 0, 0, 0, L"a\xe111z", 0, STATUS_NO_UNICODE_TRANSLATION },
         { 4, L"t\0e", 0, 0, 0, {0}, STATUS_NO_UNICODE_TRANSLATION, STATUS_NO_UNICODE_TRANSLATION },
-        { 1, L"T", 0, 1, 1, L"t" },
+        { 1, L"T", 0, 1, 1, L"T" },
         { 1, {0}, 0, 0 },
         /* 5 */
         { 6, L" -/[]", 0, 6, 6, L" -/[]" },
         { 3, L"a-a", IDN_USE_STD3_ASCII_RULES, 3, 3, L"a-a" },
         { 3, L"aa-", IDN_USE_STD3_ASCII_RULES, 0, 0, L"aa-" },
         { -1, L"T\xdf\x130\x143\x37a\x6a\x30c \xaa", 0, 12, 12, L"tssi\x307\x144 \x3b9\x1f0 a" },
-        { 11, L"t\xad\x34f\x1806\x180b\x180c\x180d\x200b\x200c\x200d", 0, 2, 0, L"t",
+        { 11, L"t\xad\x34f\x1806\x180b\x180c\x180d\x200b\x200c\x200d", 0, 0, 2, L"t",
           STATUS_NO_UNICODE_TRANSLATION },
         /* 10 */
         { 2, {0x3b0}, 0, 2, 2, {0x3b0} },
@@ -4445,6 +4447,9 @@ static void test_IdnToNameprepUnicode(void)
         { 5, L"a..a", 0, 0, 0, L"a..a" },
         { 3, L"a.", 0, 3, 3, L"a." },
         /* 15 */
+        { 5, L"T.\x105.A", 0, 5, 5, L"t.\x105.a" },
+        { 5, L"T.*.A", 0, 5, 5, L"T.*.A" },
+        { 5, L"X\xff0e.Z", 0, 0, 0, L"x..z" },
         { 63, L"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 0,
           63, 63, L"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
         { 64, L"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 0,
@@ -4513,7 +4518,7 @@ static void test_IdnToNameprepUnicode(void)
         if (ret == test_data[i].ret)
         {
             ok(err == ret ? 0xdeadbeef : ERROR_INVALID_NAME, "%d: err = %d\n", i, err);
-            ok(!wcsnicmp(test_data[i].out, buf, ret), "%d: buf = %s\n", i, wine_dbgstr_wn(buf, ret));
+            ok(!wcsncmp(test_data[i].out, buf, ret), "%d: buf = %s\n", i, wine_dbgstr_wn(buf, ret));
         }
         if (pRtlNormalizeString)
         {
@@ -4523,7 +4528,7 @@ static void test_IdnToNameprepUnicode(void)
             status = pRtlNormalizeString( 13, test_data[i].in, test_data[i].in_len, buf, &len );
             ok( status == test_data[i].status || broken(status == test_data[i].broken_status),
                 "%d: failed %x\n", i, status );
-            if (!status) ok( !wcsncmp(test_data[i].out, buf, len), "%d: buf = %s\n", i, wine_dbgstr_wn(buf, len));
+            if (!status) ok( !wcsnicmp(test_data[i].out, buf, len), "%d: buf = %s\n", i, wine_dbgstr_wn(buf, len));
         }
     }
 }
@@ -4567,10 +4572,9 @@ static void test_IdnToAscii(void)
         SetLastError(0xdeadbeef);
         ret = pIdnToAscii(test_data[i].flags, test_data[i].in, test_data[i].in_len, buf, ARRAY_SIZE(buf));
         err = GetLastError();
-        todo_wine_if (i > 9)
         ok(ret == test_data[i].ret || broken(ret == test_data[i].broken_ret), "%d: ret = %d\n", i, ret);
         ok(err == ret ? 0xdeadbeef : ERROR_INVALID_NAME, "%d: err = %d\n", i, err);
-        ok(!wcsncmp(test_data[i].out, buf, ret), "%d: buf = %s\n", i, wine_dbgstr_wn(buf, ret));
+        ok(!wcsnicmp(test_data[i].out, buf, ret), "%d: buf = %s\n", i, wine_dbgstr_wn(buf, ret));
     }
 }
 
@@ -4596,10 +4600,13 @@ static void test_IdnToUnicode(void)
         /* 5 */
         { 64, L"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 0, 0 },
         { 8, L"xn--7va", IDN_ALLOW_UNASSIGNED, 2, 2, L"\x380" },
+        { 8, L"xn--7va", 0, 0, 0, L"\x380" },
         { -1, L"xn----bm3an932a1l5d.xn--xvj", 0, 8, 0, L"\xd803\xde78\x46b5-\xa861.\x2e87" },
         { -1, L"xn--z123456789012345678901234567890123456789012345678901234-9te", 0,
           57, 57, L"\xe4z123456789012345678901234567890123456789012345678901234" },
+        /* 10 */
         { -1, L"foo.bar", 0, 8, 8, L"foo.bar" },
+        { -1, L"d.xn----dha", 0, 5, 5, L"d.\x00fc-" },
     };
 
     WCHAR buf[1024];
@@ -4608,13 +4615,11 @@ static void test_IdnToUnicode(void)
     for (i=0; i<ARRAY_SIZE(test_data); i++)
     {
         ret = pIdnToUnicode(test_data[i].flags, test_data[i].in, test_data[i].in_len, NULL, 0);
-        todo_wine_if (i > 6)
         ok(ret == test_data[i].ret || broken(ret == test_data[i].broken_ret), "%d: ret = %d\n", i, ret);
 
         SetLastError(0xdeadbeef);
         ret = pIdnToUnicode(test_data[i].flags, test_data[i].in, test_data[i].in_len, buf, ARRAY_SIZE(buf));
         err = GetLastError();
-        todo_wine_if (i > 6)
         ok(ret == test_data[i].ret || broken(ret == test_data[i].broken_ret), "%d: ret = %d\n", i, ret);
         ok(err == ret ? 0xdeadbeef : ERROR_INVALID_NAME, "%d: err = %d\n", i, err);
         ok(!wcsncmp(test_data[i].out, buf, ret), "%d: buf = %s\n", i, wine_dbgstr_wn(buf, ret));
@@ -4628,8 +4633,8 @@ static BOOL is_idn_error( const WCHAR *str )
     for (p = wcstok( err, L" []" ); p; p = wcstok( NULL, L" []" ) )
     {
         if (*p == 'B' || !wcscmp( p, L"V8" )) continue;  /* BiDi */
-        if (!wcscmp( p, L"V2" ) || !wcscmp( p, L"V3" )) continue;  /* CheckHyphens */
-        if (!wcscmp( p, L"V7" )) continue;  /* CheckJoiners */
+        if (!wcscmp( p, L"V2" )) continue;  /* CheckHyphens */
+        if (!wcscmp( p, L"V5" )) continue;  /* Combining marks */
         return TRUE;
     }
     return FALSE;
@@ -4685,9 +4690,15 @@ static void test_Idn(void)
             ret = pIdnToAscii( 0, columns[0], -1, dst, ARRAY_SIZE(dst) );
             if (!is_idn_error( error ))
             {
-                ok( ret, "line %u: toAscii failed for %s\n", line, debugstr_w(columns[0]) );
+                ok( ret, "line %u: toAscii failed for %s expected %s\n", line,
+                    debugstr_w(columns[0]), debugstr_w(expect) );
                 if (ret) ok( !wcscmp( dst, expect ), "line %u: got %s expected %s\n",
                              line, debugstr_w(dst), debugstr_w(expect) );
+            }
+            else
+            {
+                ok( !ret, "line %u: toAscii didn't fail for %s got %s expected error %s\n",
+                    line, debugstr_w(columns[0]), debugstr_w(dst), debugstr_w(error) );
             }
 
             expect = columns[1];
@@ -4695,7 +4706,7 @@ static void test_Idn(void)
             error = columns[2];
             SetLastError( 0xdeadbeef );
             memset( dst, 0xcc, sizeof(dst) );
-            ret = pIdnToUnicode( 0, columns[0], -1, dst, ARRAY_SIZE(dst) );
+            ret = pIdnToUnicode( IDN_USE_STD3_ASCII_RULES, columns[0], -1, dst, ARRAY_SIZE(dst) );
             for (i = 0; columns[0][i]; i++) if (columns[0][i] > 0x7f) break;
             if (columns[0][i])
             {
@@ -4703,9 +4714,15 @@ static void test_Idn(void)
             }
             else if (!is_idn_error( error ))
             {
-                ok( ret, "line %u: toUnicode failed for %s\n", line, debugstr_w(columns[0]) );
+                ok( ret, "line %u: toUnicode failed for %s expected %s\n", line,
+                    debugstr_w(columns[0]), debugstr_w(expect) );
                 if (ret) ok( !wcscmp( dst, expect ), "line %u: got %s expected %s\n",
                              line, debugstr_w(dst), debugstr_w(expect) );
+            }
+            else
+            {
+                ok( !ret, "line %u: toUnicode didn't fail for %s got %s expected error %s\n",
+                    line, debugstr_w(columns[0]), debugstr_w(dst), debugstr_w(error) );
             }
         }
         fclose( f );
@@ -5316,7 +5333,7 @@ static void test_GetSystemPreferredUILanguages(void)
     }
 
     /* (in)valid first parameter */
-    count = 0xdeadbeef;
+    count = 0;
     size = 0;
     SetLastError(0xdeadbeef);
     ret = pGetSystemPreferredUILanguages(0, &count, NULL, &size);
@@ -5324,7 +5341,6 @@ static void test_GetSystemPreferredUILanguages(void)
     ok(count, "Expected count > 0\n");
     ok(size % 6 == 1, "Expected size (%d) %% 6 == 1\n", size);
 
-    count = 0xdeadbeef;
     size = 0;
     SetLastError(0xdeadbeef);
     ret = pGetSystemPreferredUILanguages(MUI_FULL_LANGUAGE, &count, NULL, &size);
@@ -5332,7 +5348,6 @@ static void test_GetSystemPreferredUILanguages(void)
     ok(ERROR_INVALID_PARAMETER == GetLastError(),
        "Expected error ERROR_INVALID_PARAMETER, got %d\n", GetLastError());
 
-    count = 0xdeadbeef;
     size = 0;
     SetLastError(0xdeadbeef);
     ret = pGetSystemPreferredUILanguages(MUI_LANGUAGE_ID | MUI_FULL_LANGUAGE, &count, NULL, &size);
@@ -5340,7 +5355,6 @@ static void test_GetSystemPreferredUILanguages(void)
     ok(ERROR_INVALID_PARAMETER == GetLastError(),
        "Expected error ERROR_INVALID_PARAMETER, got %d\n", GetLastError());
 
-    count = 0xdeadbeef;
     size = 0;
     SetLastError(0xdeadbeef);
     ret = pGetSystemPreferredUILanguages(MUI_LANGUAGE_ID | MUI_LANGUAGE_NAME, &count, NULL, &size);
@@ -5348,7 +5362,7 @@ static void test_GetSystemPreferredUILanguages(void)
     ok(ERROR_INVALID_PARAMETER == GetLastError(),
        "Expected error ERROR_INVALID_PARAMETER, got %d\n", GetLastError());
 
-    count = 0xdeadbeef;
+    count = 0;
     size = 0;
     SetLastError(0xdeadbeef);
     ret = pGetSystemPreferredUILanguages(MUI_LANGUAGE_ID | MUI_MACHINE_LANGUAGE_SETTINGS, &count, NULL, &size);
@@ -5356,7 +5370,7 @@ static void test_GetSystemPreferredUILanguages(void)
     ok(count, "Expected count > 0\n");
     ok(size % 5 == 1, "Expected size (%d) %% 5 == 1\n", size);
 
-    count = 0xdeadbeef;
+    count = 0;
     size = 0;
     SetLastError(0xdeadbeef);
     ret = pGetSystemPreferredUILanguages(MUI_LANGUAGE_NAME | MUI_MACHINE_LANGUAGE_SETTINGS, &count, NULL, &size);
@@ -5370,7 +5384,6 @@ static void test_GetSystemPreferredUILanguages(void)
      */
 
     /* invalid third parameter */
-    count = 0xdeadbeef;
     size = 1;
     SetLastError(0xdeadbeef);
     ret = pGetSystemPreferredUILanguages(MUI_LANGUAGE_ID, &count, NULL, &size);
@@ -5383,7 +5396,7 @@ static void test_GetSystemPreferredUILanguages(void)
      * -> unhandled exception c0000005
      */
 
-    count = 0xdeadbeef;
+    count = 0;
     size_id = 0;
     SetLastError(0xdeadbeef);
     ret = pGetSystemPreferredUILanguages(MUI_LANGUAGE_ID, &count, NULL, &size_id);
@@ -5391,7 +5404,7 @@ static void test_GetSystemPreferredUILanguages(void)
     ok(count, "Expected count > 0\n");
     ok(size_id  % 5 == 1, "Expected size (%d) %% 5 == 1\n", size_id);
 
-    count = 0xdeadbeef;
+    count = 0;
     size_name = 0;
     SetLastError(0xdeadbeef);
     ret = pGetSystemPreferredUILanguages(MUI_LANGUAGE_NAME, &count, NULL, &size_name);
@@ -5413,7 +5426,7 @@ static void test_GetSystemPreferredUILanguages(void)
         return;
     }
 
-    count = 0xdeadbeef;
+    count = 0;
     size = size_buffer;
     memset(buffer, 0x5a, size_buffer * sizeof(WCHAR));
     SetLastError(0xdeadbeef);
@@ -5426,7 +5439,7 @@ static void test_GetSystemPreferredUILanguages(void)
            "Expected last two WCHARs being empty, got 0x%x 0x%x\n",
            buffer[size -2], buffer[size -1]);
 
-    count = 0xdeadbeef;
+    count = 0;
     size = size_buffer;
     memset(buffer, 0x5a, size_buffer * sizeof(WCHAR));
     SetLastError(0xdeadbeef);
@@ -5439,7 +5452,7 @@ static void test_GetSystemPreferredUILanguages(void)
            "Expected last two WCHARs being empty, got 0x%x 0x%x\n",
            buffer[size -2], buffer[size -1]);
 
-    count = 0xdeadbeef;
+    count = 0;
     size = size_buffer;
     SetLastError(0xdeadbeef);
     ret = pGetSystemPreferredUILanguages(MUI_LANGUAGE_NAME, &count, buffer, &size);
@@ -5451,7 +5464,7 @@ static void test_GetSystemPreferredUILanguages(void)
            "Expected last two WCHARs being empty, got 0x%x 0x%x\n",
            buffer[size -2], buffer[size -1]);
 
-    count = 0xdeadbeef;
+    count = 0;
     size = 0;
     SetLastError(0xdeadbeef);
     ret = pGetSystemPreferredUILanguages(MUI_MACHINE_LANGUAGE_SETTINGS, &count, NULL, &size);
@@ -5463,15 +5476,24 @@ static void test_GetSystemPreferredUILanguages(void)
            "Expected last two WCHARs being empty, got 0x%x 0x%x\n",
            buffer[size -2], buffer[size -1]);
 
-    count = 0xdeadbeef;
+    size = 0;
+    SetLastError(0xdeadbeef);
+    ret = pGetSystemPreferredUILanguages(MUI_LANGUAGE_ID, &count, buffer, &size);
+todo_wine
+    ok(!ret, "Expected GetSystemPreferredUILanguages to fail\n");
+todo_wine
+    ok(ERROR_INSUFFICIENT_BUFFER == GetLastError(),
+       "Expected error ERROR_INSUFFICIENT_BUFFER, got %d\n", GetLastError());
+    ok(size == size_id, "expected %u, got %u\n", size_id, size);
+
     size = 1;
     SetLastError(0xdeadbeef);
     ret = pGetSystemPreferredUILanguages(MUI_LANGUAGE_ID, &count, buffer, &size);
     ok(!ret, "Expected GetSystemPreferredUILanguages to fail\n");
     ok(ERROR_INSUFFICIENT_BUFFER == GetLastError(),
        "Expected error ERROR_INSUFFICIENT_BUFFER, got %d\n", GetLastError());
+    ok(size == size_id, "expected %u, got %u\n", size_id, size);
 
-    count = 0xdeadbeef;
     size = size_id -1;
     memset(buffer, 0x5a, size_buffer * sizeof(WCHAR));
     SetLastError(0xdeadbeef);
@@ -5479,8 +5501,8 @@ static void test_GetSystemPreferredUILanguages(void)
     ok(!ret, "Expected GetSystemPreferredUILanguages to fail\n");
     ok(ERROR_INSUFFICIENT_BUFFER == GetLastError(),
        "Expected error ERROR_INSUFFICIENT_BUFFER, got %d\n", GetLastError());
+    ok(size == size_id, "expected %u, got %u\n", size_id, size);
 
-    count = 0xdeadbeef;
     size = size_id -2;
     memset(buffer, 0x5a, size_buffer * sizeof(WCHAR));
     SetLastError(0xdeadbeef);
@@ -5488,6 +5510,7 @@ static void test_GetSystemPreferredUILanguages(void)
     ok(!ret, "Expected GetSystemPreferredUILanguages to fail\n");
     ok(ERROR_INSUFFICIENT_BUFFER == GetLastError(),
        "Expected error ERROR_INSUFFICIENT_BUFFER, got %d\n", GetLastError());
+    ok(size == size_id + 2 || size == size_id + 1 /* before win10 1809 */, "expected %u, got %u\n", size_id + 2, size);
 
     HeapFree(GetProcessHeap(), 0, buffer);
 }
@@ -5495,7 +5518,7 @@ static void test_GetSystemPreferredUILanguages(void)
 static void test_GetThreadPreferredUILanguages(void)
 {
     BOOL ret;
-    ULONG count, size;
+    ULONG count, size, size_id;
     WCHAR *buf;
 
     if (!pGetThreadPreferredUILanguages)
@@ -5515,6 +5538,49 @@ static void test_GetThreadPreferredUILanguages(void)
     ret = pGetThreadPreferredUILanguages(MUI_LANGUAGE_ID|MUI_UI_FALLBACK, &count, buf, &size);
     ok(ret, "got %u\n", GetLastError());
     ok(count, "expected count > 0\n");
+
+    size_id = count = 0;
+    ret = pGetThreadPreferredUILanguages(MUI_LANGUAGE_ID, &count, NULL, &size_id);
+    ok(ret, "got %u\n", GetLastError());
+    ok(count, "expected count > 0\n");
+    ok(size_id, "expected size > 0\n");
+    ok(size_id <= size, "expected size > 0\n");
+
+    size = 0;
+    SetLastError(0xdeadbeef);
+    ret = pGetThreadPreferredUILanguages(MUI_LANGUAGE_ID, &count, buf, &size);
+todo_wine
+    ok(!ret, "Expected GetThreadPreferredUILanguages to fail\n");
+todo_wine
+    ok(GetLastError() == ERROR_INSUFFICIENT_BUFFER,
+       "Expected error ERROR_INSUFFICIENT_BUFFER, got %d\n", GetLastError());
+    ok(size == size_id, "expected %u, got %u\n", size_id, size);
+
+    size = 1;
+    SetLastError(0xdeadbeef);
+    ret = pGetThreadPreferredUILanguages(MUI_LANGUAGE_ID, &count, buf, &size);
+    ok(!ret, "Expected GetThreadPreferredUILanguages to fail\n");
+    ok(GetLastError() == ERROR_INSUFFICIENT_BUFFER,
+       "Expected error ERROR_INSUFFICIENT_BUFFER, got %d\n", GetLastError());
+    ok(size == size_id, "expected %u, got %u\n", size_id, size);
+
+    size = size_id - 1;
+    SetLastError(0xdeadbeef);
+    ret = pGetThreadPreferredUILanguages(MUI_LANGUAGE_ID, &count, buf, &size);
+    ok(!ret, "Expected GetThreadPreferredUILanguages to fail\n");
+    ok(GetLastError() == ERROR_INSUFFICIENT_BUFFER,
+       "Expected error ERROR_INSUFFICIENT_BUFFER, got %d\n", GetLastError());
+    ok(size == size_id, "expected %u, got %u\n", size_id, size);
+
+    size = size_id - 2;
+    SetLastError(0xdeadbeef);
+    ret = pGetThreadPreferredUILanguages(0, &count, buf, &size);
+    ok(!ret, "Expected GetThreadPreferredUILanguages to fail\n");
+    ok(GetLastError() == ERROR_INSUFFICIENT_BUFFER,
+       "Expected error ERROR_INSUFFICIENT_BUFFER, got %d\n", GetLastError());
+todo_wine
+    ok(size == size_id || size == size_id - 1 /* before win10 1809 */, "expected %u, got %u\n", size_id, size);
+
     HeapFree(GetProcessHeap(), 0, buf);
 }
 
@@ -5524,14 +5590,12 @@ static void test_GetUserPreferredUILanguages(void)
     ULONG count, size, size_id, size_name, size_buffer;
     WCHAR *buffer;
 
-
     if (!pGetUserPreferredUILanguages)
     {
         win_skip("GetUserPreferredUILanguages is not available.\n");
         return;
     }
 
-    count = 0xdeadbeef;
     size = 0;
     SetLastError(0xdeadbeef);
     ret = pGetUserPreferredUILanguages(MUI_FULL_LANGUAGE, &count, NULL, &size);
@@ -5539,7 +5603,6 @@ static void test_GetUserPreferredUILanguages(void)
     ok(ERROR_INVALID_PARAMETER == GetLastError(),
        "Expected error ERROR_INVALID_PARAMETER, got %d\n", GetLastError());
 
-    count = 0xdeadbeef;
     size = 0;
     SetLastError(0xdeadbeef);
     ret = pGetUserPreferredUILanguages(MUI_LANGUAGE_ID | MUI_FULL_LANGUAGE, &count, NULL, &size);
@@ -5547,7 +5610,6 @@ static void test_GetUserPreferredUILanguages(void)
     ok(ERROR_INVALID_PARAMETER == GetLastError(),
        "Expected error ERROR_INVALID_PARAMETER, got %d\n", GetLastError());
 
-    count = 0xdeadbeef;
     size = 0;
     SetLastError(0xdeadbeef);
     ret = pGetUserPreferredUILanguages(MUI_LANGUAGE_ID | MUI_MACHINE_LANGUAGE_SETTINGS, &count, NULL, &size);
@@ -5555,7 +5617,6 @@ static void test_GetUserPreferredUILanguages(void)
     ok(ERROR_INVALID_PARAMETER == GetLastError(),
        "Expected error ERROR_INVALID_PARAMETER, got %d\n", GetLastError());
 
-    count = 0xdeadbeef;
     size = 1;
     SetLastError(0xdeadbeef);
     ret = pGetUserPreferredUILanguages(MUI_LANGUAGE_ID, &count, NULL, &size);
@@ -5563,7 +5624,7 @@ static void test_GetUserPreferredUILanguages(void)
     ok(ERROR_INVALID_PARAMETER == GetLastError(),
        "Expected error ERROR_INVALID_PARAMETER, got %d\n", GetLastError());
 
-    count = 0xdeadbeef;
+    count = 0;
     size_id = 0;
     SetLastError(0xdeadbeef);
     ret = pGetUserPreferredUILanguages(MUI_LANGUAGE_ID, &count, NULL, &size_id);
@@ -5571,7 +5632,7 @@ static void test_GetUserPreferredUILanguages(void)
     ok(count, "Expected count > 0\n");
     ok(size_id  % 5 == 1, "Expected size (%d) %% 5 == 1\n", size_id);
 
-    count = 0xdeadbeef;
+    count = 0;
     size_name = 0;
     SetLastError(0xdeadbeef);
     ret = pGetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &count, NULL, &size_name);
@@ -5588,7 +5649,7 @@ static void test_GetUserPreferredUILanguages(void)
 
     buffer = HeapAlloc(GetProcessHeap(), 0, size_buffer * sizeof(WCHAR));
 
-    count = 0xdeadbeef;
+    count = 0;
     size = size_buffer;
     memset(buffer, 0x5a, size_buffer * sizeof(WCHAR));
     SetLastError(0xdeadbeef);
@@ -5601,7 +5662,7 @@ static void test_GetUserPreferredUILanguages(void)
            "Expected last two WCHARs being empty, got 0x%x 0x%x\n",
            buffer[size -2], buffer[size -1]);
 
-    count = 0xdeadbeef;
+    count = 0;
     size = size_buffer;
     memset(buffer, 0x5a, size_buffer * sizeof(WCHAR));
     SetLastError(0xdeadbeef);
@@ -5614,7 +5675,7 @@ static void test_GetUserPreferredUILanguages(void)
            "Expected last two WCHARs being empty, got 0x%x 0x%x\n",
            buffer[size -2], buffer[size -1]);
 
-    count = 0xdeadbeef;
+    count = 0;
     size = size_buffer;
     SetLastError(0xdeadbeef);
     ret = pGetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &count, buffer, &size);
@@ -5626,7 +5687,6 @@ static void test_GetUserPreferredUILanguages(void)
            "Expected last two WCHARs being empty, got 0x%x 0x%x\n",
            buffer[size -2], buffer[size -1]);
 
-    count = 0xdeadbeef;
     size = 1;
     SetLastError(0xdeadbeef);
     ret = pGetUserPreferredUILanguages(MUI_LANGUAGE_ID, &count, buffer, &size);
@@ -5634,7 +5694,6 @@ static void test_GetUserPreferredUILanguages(void)
     ok(ERROR_INSUFFICIENT_BUFFER == GetLastError(),
        "Expected error ERROR_INSUFFICIENT_BUFFER, got %d\n", GetLastError());
 
-    count = 0xdeadbeef;
     size = size_id -1;
     memset(buffer, 0x5a, size_buffer * sizeof(WCHAR));
     SetLastError(0xdeadbeef);
@@ -5643,7 +5702,7 @@ static void test_GetUserPreferredUILanguages(void)
     ok(ERROR_INSUFFICIENT_BUFFER == GetLastError(),
        "Expected error ERROR_INSUFFICIENT_BUFFER, got %d\n", GetLastError());
 
-    count = 0xdeadbeef;
+    count = 0;
     size = size_id -2;
     memset(buffer, 0x5a, size_buffer * sizeof(WCHAR));
     SetLastError(0xdeadbeef);

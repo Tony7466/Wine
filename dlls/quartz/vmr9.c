@@ -519,6 +519,8 @@ static void vmr_destroy(struct strmbase_renderer *iface)
     BaseControlWindow_Destroy(&filter->baseControlWindow);
     strmbase_renderer_cleanup(&filter->renderer);
     CoTaskMemFree(filter);
+
+    InterlockedDecrement(&object_locks);
 }
 
 static HRESULT vmr_query_interface(struct strmbase_renderer *iface, REFIID iid, void **out)
@@ -2208,7 +2210,7 @@ static const IOverlayVtbl overlay_vtbl =
     overlay_Unadvise,
 };
 
-static HRESULT vmr_create(IUnknown *outer, void **out, const CLSID *clsid)
+static HRESULT vmr_create(IUnknown *outer, IUnknown **out, const CLSID *clsid)
 {
     HRESULT hr;
     struct quartz_vmr* pVMR;
@@ -2249,7 +2251,7 @@ static HRESULT vmr_create(IUnknown *outer, void **out, const CLSID *clsid)
     if (FAILED(hr))
         goto fail;
 
-    hr = strmbase_window_init(&pVMR->baseControlWindow, &IVideoWindow_VTable,
+    hr = video_window_init(&pVMR->baseControlWindow, &IVideoWindow_VTable,
             &pVMR->renderer.filter, &pVMR->renderer.sink.pin, &renderer_BaseWindowFuncTable);
     if (FAILED(hr))
         goto fail;
@@ -2257,7 +2259,7 @@ static HRESULT vmr_create(IUnknown *outer, void **out, const CLSID *clsid)
     if (FAILED(hr = BaseWindowImpl_PrepareWindow(&pVMR->baseControlWindow.baseWindow)))
         goto fail;
 
-    hr = strmbase_video_init(&pVMR->baseControlVideo, &pVMR->renderer.filter,
+    hr = basic_video_init(&pVMR->baseControlVideo, &pVMR->renderer.filter,
             &pVMR->renderer.sink.pin, &renderer_BaseControlVideoFuncTable);
     if (FAILED(hr))
         goto fail;
@@ -2278,14 +2280,14 @@ fail:
     return hr;
 }
 
-HRESULT VMR7Impl_create(IUnknown *outer_unk, LPVOID *ppv)
+HRESULT vmr7_create(IUnknown *outer, IUnknown **out)
 {
-    return vmr_create(outer_unk, ppv, &CLSID_VideoMixingRenderer);
+    return vmr_create(outer, out, &CLSID_VideoMixingRenderer);
 }
 
-HRESULT VMR9Impl_create(IUnknown *outer_unk, LPVOID *ppv)
+HRESULT vmr9_create(IUnknown *outer, IUnknown **out)
 {
-    return vmr_create(outer_unk, ppv, &CLSID_VideoMixingRenderer9);
+    return vmr_create(outer, out, &CLSID_VideoMixingRenderer9);
 }
 
 

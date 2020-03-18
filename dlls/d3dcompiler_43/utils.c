@@ -1191,8 +1191,7 @@ static struct hlsl_type *expr_common_type(struct hlsl_type *t1, struct hlsl_type
 
     if (t1->type > HLSL_CLASS_LAST_NUMERIC || t2->type > HLSL_CLASS_LAST_NUMERIC)
     {
-        hlsl_report_message(loc->file, loc->line, loc->col, HLSL_LEVEL_ERROR,
-                "non scalar/vector/matrix data type in expression");
+        hlsl_report_message(*loc, HLSL_LEVEL_ERROR, "non scalar/vector/matrix data type in expression");
         return NULL;
     }
 
@@ -1201,8 +1200,7 @@ static struct hlsl_type *expr_common_type(struct hlsl_type *t1, struct hlsl_type
 
     if (!expr_compatible_data_types(t1, t2))
     {
-        hlsl_report_message(loc->file, loc->line, loc->col, HLSL_LEVEL_ERROR,
-                "expression data types are incompatible");
+        hlsl_report_message(*loc, HLSL_LEVEL_ERROR, "expression data types are incompatible");
         return NULL;
     }
 
@@ -1275,16 +1273,30 @@ static struct hlsl_type *expr_common_type(struct hlsl_type *t1, struct hlsl_type
     return new_hlsl_type(NULL, type, base, dimx, dimy);
 }
 
-static struct hlsl_ir_node *implicit_conversion(struct hlsl_ir_node *node, struct hlsl_type *type,
+struct hlsl_ir_node *implicit_conversion(struct hlsl_ir_node *node, struct hlsl_type *dst_type,
         struct source_location *loc)
 {
+    struct hlsl_type *src_type = node->data_type;
     struct hlsl_ir_expr *cast;
 
-    if (compare_hlsl_types(node->data_type, type))
+    if (compare_hlsl_types(src_type, dst_type))
         return node;
-    TRACE("Implicit conversion of expression to %s\n", debug_hlsl_type(type));
-    if ((cast = new_cast(node, type, loc)))
-        list_add_after(&node->entry, &cast->node.entry);
+
+    if (!implicit_compatible_data_types(src_type, dst_type))
+    {
+        hlsl_report_message(*loc, HLSL_LEVEL_ERROR, "can't implicitly convert %s to %s",
+                debug_hlsl_type(src_type), debug_hlsl_type(dst_type));
+        return NULL;
+    }
+
+    if (dst_type->dimx * dst_type->dimy < src_type->dimx * src_type->dimy)
+        hlsl_report_message(*loc, HLSL_LEVEL_WARNING, "implicit truncation of vector type");
+
+    TRACE("Implicit conversion from %s to %s.\n", debug_hlsl_type(src_type), debug_hlsl_type(dst_type));
+
+    if (!(cast = new_cast(node, dst_type, loc)))
+        return NULL;
+    list_add_after(&node->entry, &cast->node.entry);
     return &cast->node;
 }
 
@@ -1316,6 +1328,8 @@ struct hlsl_ir_expr *new_expr(enum hlsl_ir_expr_op op, struct hlsl_ir_node **ope
     }
     for (i = 0; i <= 2; ++i)
     {
+        struct hlsl_ir_expr *cast;
+
         if (!operands[i])
             break;
         if (compare_hlsl_types(operands[i]->data_type, type))
@@ -1324,17 +1338,16 @@ struct hlsl_ir_expr *new_expr(enum hlsl_ir_expr_op op, struct hlsl_ir_node **ope
         if (operands[i]->data_type->dimx * operands[i]->data_type->dimy != 1
                 && operands[i]->data_type->dimx * operands[i]->data_type->dimy != type->dimx * type->dimy)
         {
-            hlsl_report_message(operands[i]->loc.file,
-                    operands[i]->loc.line, operands[i]->loc.col, HLSL_LEVEL_WARNING,
-                    "implicit truncation of vector/matrix type");
+            hlsl_report_message(operands[i]->loc, HLSL_LEVEL_WARNING, "implicit truncation of vector/matrix type");
         }
-        operands[i] = implicit_conversion(operands[i], type, &operands[i]->loc);
-        if (!operands[i])
+
+        if (!(cast = new_cast(operands[i], type, &operands[i]->loc)))
         {
-            ERR("Impossible to convert expression operand %u to %s\n", i + 1, debug_hlsl_type(type));
             d3dcompiler_free(expr);
             return NULL;
         }
+        list_add_after(&operands[i]->entry, &cast->node.entry);
+        operands[i] = &cast->node;
     }
     expr->node.data_type = type;
     expr->op = op;
@@ -1367,8 +1380,8 @@ struct hlsl_ir_deref *new_var_deref(struct hlsl_ir_var *var)
     }
     deref->node.type = HLSL_IR_DEREF;
     deref->node.data_type = var->data_type;
-    deref->type = HLSL_IR_DEREF_VAR;
-    deref->v.var = var;
+    deref->src.type = HLSL_IR_DEREF_VAR;
+    deref->src.v.var = var;
     return deref;
 }
 
@@ -1383,9 +1396,9 @@ struct hlsl_ir_deref *new_record_deref(struct hlsl_ir_node *record, struct hlsl_
     }
     deref->node.type = HLSL_IR_DEREF;
     deref->node.data_type = field->type;
-    deref->type = HLSL_IR_DEREF_RECORD;
-    deref->v.record.record = record;
-    deref->v.record.field = field;
+    deref->src.type = HLSL_IR_DEREF_RECORD;
+    deref->src.v.record.record = record;
+    deref->src.v.record.field = field;
     return deref;
 }
 
@@ -1409,12 +1422,46 @@ static enum hlsl_ir_expr_op op_from_assignment(enum parse_assign_op op)
     return ops[op];
 }
 
-struct hlsl_ir_node *make_assignment(struct hlsl_ir_node *left, enum parse_assign_op assign_op,
-        DWORD writemask, struct hlsl_ir_node *right)
+static unsigned int invert_swizzle(unsigned int *swizzle, unsigned int writemask)
+{
+    unsigned int i, j, bit = 0, inverted = 0, components, new_writemask = 0, new_swizzle = 0;
+
+    /* Apply the writemask to the swizzle to get a new writemask and swizzle. */
+    for (i = 0; i < 4; ++i)
+    {
+        if (writemask & (1 << i))
+        {
+            unsigned int s = (*swizzle >> (i * 2)) & 3;
+            new_swizzle |= s << (bit++ * 2);
+            if (new_writemask & (1 << s))
+                return 0;
+            new_writemask |= 1 << s;
+        }
+    }
+    components = bit;
+
+    /* Invert the swizzle. */
+    bit = 0;
+    for (i = 0; i < 4; ++i)
+    {
+        for (j = 0; j < components; ++j)
+        {
+            unsigned int s = (new_swizzle >> (j * 2)) & 3;
+            if (s == i)
+                inverted |= j << (bit++ * 2);
+        }
+    }
+
+    *swizzle = inverted;
+    return new_writemask;
+}
+
+struct hlsl_ir_node *make_assignment(struct hlsl_ir_node *lhs, enum parse_assign_op assign_op,
+        struct hlsl_ir_node *rhs)
 {
     struct hlsl_ir_assignment *assign = d3dcompiler_alloc(sizeof(*assign));
+    DWORD writemask = (1 << lhs->data_type->dimx) - 1;
     struct hlsl_type *type;
-    struct hlsl_ir_node *lhs, *rhs;
 
     if (!assign)
     {
@@ -1422,80 +1469,91 @@ struct hlsl_ir_node *make_assignment(struct hlsl_ir_node *left, enum parse_assig
         return NULL;
     }
 
+    while (lhs->type != HLSL_IR_DEREF)
+    {
+        struct hlsl_ir_node *lhs_inner;
+
+        if (lhs->type == HLSL_IR_EXPR && expr_from_node(lhs)->op == HLSL_IR_UNOP_CAST)
+        {
+            FIXME("Cast on the lhs.\n");
+            d3dcompiler_free(assign);
+            return NULL;
+        }
+        else if (lhs->type == HLSL_IR_SWIZZLE)
+        {
+            struct hlsl_ir_swizzle *swizzle = swizzle_from_node(lhs);
+
+            if (lhs->data_type->type == HLSL_CLASS_MATRIX)
+                FIXME("Assignments with writemasks and matrices on lhs are not supported yet.\n");
+
+            lhs_inner = swizzle->val;
+            list_remove(&lhs->entry);
+
+            list_add_after(&rhs->entry, &lhs->entry);
+            swizzle->val = rhs;
+            if (!(writemask = invert_swizzle(&swizzle->swizzle, writemask)))
+            {
+                hlsl_report_message(lhs->loc, HLSL_LEVEL_ERROR, "invalid writemask");
+                d3dcompiler_free(assign);
+                return NULL;
+            }
+            rhs = &swizzle->node;
+        }
+        else
+        {
+            hlsl_report_message(lhs->loc, HLSL_LEVEL_ERROR, "invalid lvalue");
+            d3dcompiler_free(assign);
+            return NULL;
+        }
+
+        lhs = lhs_inner;
+    }
+
     TRACE("Creating proper assignment expression.\n");
-    rhs = right;
     if (writemask == BWRITERSP_WRITEMASK_ALL)
-        type = left->data_type;
+        type = lhs->data_type;
     else
     {
         unsigned int dimx = 0;
         DWORD bitmask;
         enum hlsl_type_class type_class;
 
-        if (left->data_type->type > HLSL_CLASS_LAST_NUMERIC)
+        if (lhs->data_type->type > HLSL_CLASS_LAST_NUMERIC)
         {
-            hlsl_report_message(left->loc.file, left->loc.line, left->loc.col, HLSL_LEVEL_ERROR,
+            hlsl_report_message(lhs->loc, HLSL_LEVEL_ERROR,
                     "writemask on a non scalar/vector/matrix type");
             d3dcompiler_free(assign);
             return NULL;
         }
-        bitmask = writemask & ((1 << left->data_type->dimx) - 1);
+        bitmask = writemask & ((1 << lhs->data_type->dimx) - 1);
         while (bitmask)
         {
             if (bitmask & 1)
                 dimx++;
             bitmask >>= 1;
         }
-        if (left->data_type->type == HLSL_CLASS_MATRIX)
+        if (lhs->data_type->type == HLSL_CLASS_MATRIX)
             FIXME("Assignments with writemasks and matrices on lhs are not supported yet.\n");
         if (dimx == 1)
             type_class = HLSL_CLASS_SCALAR;
         else
-            type_class = left->data_type->type;
-        type = new_hlsl_type(NULL, type_class, left->data_type->base_type, dimx, 1);
+            type_class = lhs->data_type->type;
+        type = new_hlsl_type(NULL, type_class, lhs->data_type->base_type, dimx, 1);
     }
     assign->node.type = HLSL_IR_ASSIGNMENT;
-    assign->node.loc = left->loc;
+    assign->node.loc = lhs->loc;
     assign->node.data_type = type;
     assign->writemask = writemask;
-    FIXME("Check for casts in the lhs.\n");
 
-    lhs = left;
-    /* FIXME: check for invalid writemasks on the lhs. */
+    rhs = implicit_conversion(rhs, type, &rhs->loc);
 
-    if (!compare_hlsl_types(type, rhs->data_type))
-    {
-        struct hlsl_ir_node *converted_rhs;
-
-        if (!implicit_compatible_data_types(rhs->data_type, type))
-        {
-            hlsl_report_message(rhs->loc.file, rhs->loc.line, rhs->loc.col, HLSL_LEVEL_ERROR,
-                    "can't implicitly convert %s to %s",
-                    debug_hlsl_type(rhs->data_type), debug_hlsl_type(type));
-            d3dcompiler_free(assign);
-            return NULL;
-        }
-        if (lhs->data_type->dimx * lhs->data_type->dimy < rhs->data_type->dimx * rhs->data_type->dimy)
-            hlsl_report_message(rhs->loc.file, rhs->loc.line, rhs->loc.col, HLSL_LEVEL_WARNING,
-                    "implicit truncation of vector type");
-
-        converted_rhs = implicit_conversion(rhs, type, &rhs->loc);
-        if (!converted_rhs)
-        {
-            ERR("Couldn't implicitly convert expression to %s.\n", debug_hlsl_type(type));
-            d3dcompiler_free(assign);
-            return NULL;
-        }
-        rhs = converted_rhs;
-    }
-
-    assign->lhs = lhs;
+    assign->lhs = deref_from_node(lhs)->src;
     if (assign_op != ASSIGN_OP_ASSIGN)
     {
         enum hlsl_ir_expr_op op = op_from_assignment(assign_op);
         struct hlsl_ir_node *expr;
 
-        if (lhs->type != HLSL_IR_DEREF || deref_from_node(lhs)->type != HLSL_IR_DEREF_VAR)
+        if (assign->lhs.type != HLSL_IR_DEREF_VAR)
         {
             FIXME("LHS expression not supported in compound assignments yet.\n");
             assign->rhs = rhs;
@@ -1509,7 +1567,12 @@ struct hlsl_ir_node *make_assignment(struct hlsl_ir_node *left, enum parse_assig
         }
     }
     else
+    {
+        list_remove(&lhs->entry);
+        /* Don't recursively free the deref; we just copied its members. */
+        d3dcompiler_free(lhs);
         assign->rhs = rhs;
+    }
 
     return &assign->node;
 }
@@ -1663,7 +1726,7 @@ void init_functions_tree(struct wine_rb_tree *funcs)
     wine_rb_init(&hlsl_ctx.functions, compare_function_rb);
 }
 
-static const char *debug_base_type(const struct hlsl_type *type)
+const char *debug_base_type(const struct hlsl_type *type)
 {
     const char *name = "(unknown)";
 
@@ -1755,7 +1818,7 @@ const char *debug_modifiers(DWORD modifiers)
     return wine_dbg_sprintf("%s", string[0] ? string + 1 : "");
 }
 
-static const char *debug_node_type(enum hlsl_ir_node_type type)
+const char *debug_node_type(enum hlsl_ir_node_type type)
 {
     static const char * const names[] =
     {
@@ -1802,7 +1865,7 @@ static void debug_dump_ir_var(const struct hlsl_ir_var *var)
         wine_dbg_printf(" : %s", debugstr_a(var->semantic));
 }
 
-static void debug_dump_ir_deref(const struct hlsl_ir_deref *deref)
+static void debug_dump_deref(const struct hlsl_deref *deref)
 {
     switch (deref->type)
     {
@@ -1990,7 +2053,7 @@ static const char *debug_writemask(DWORD writemask)
 static void debug_dump_ir_assignment(const struct hlsl_ir_assignment *assign)
 {
     wine_dbg_printf("= (");
-    debug_dump_src(assign->lhs);
+    debug_dump_deref(&assign->lhs);
     if (assign->writemask != BWRITERSP_WRITEMASK_ALL)
         wine_dbg_printf("%s", debug_writemask(assign->writemask));
     wine_dbg_printf(" ");
@@ -2071,7 +2134,7 @@ static void debug_dump_instr(const struct hlsl_ir_node *instr)
             debug_dump_ir_expr(expr_from_node(instr));
             break;
         case HLSL_IR_DEREF:
-            debug_dump_ir_deref(deref_from_node(instr));
+            debug_dump_deref(&deref_from_node(instr)->src);
             break;
         case HLSL_IR_CONSTANT:
             debug_dump_ir_constant(constant_from_node(instr));

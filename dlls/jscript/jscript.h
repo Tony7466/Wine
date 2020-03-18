@@ -205,14 +205,16 @@ typedef HRESULT (*builtin_setter_t)(script_ctx_t*,jsdisp_t*,jsval_t);
 HRESULT builtin_set_const(script_ctx_t*,jsdisp_t*,jsval_t) DECLSPEC_HIDDEN;
 
 typedef struct named_item_t {
+    jsdisp_t *script_obj;
     IDispatch *disp;
     unsigned ref;
     DWORD flags;
     LPWSTR name;
 
-    struct named_item_t *next;
+    struct list entry;
 } named_item_t;
 
+HRESULT create_named_item_script_obj(script_ctx_t*,named_item_t*) DECLSPEC_HIDDEN;
 named_item_t *lookup_named_item(script_ctx_t*,const WCHAR*,unsigned) DECLSPEC_HIDDEN;
 void release_named_item(named_item_t*) DECLSPEC_HIDDEN;
 
@@ -409,7 +411,7 @@ struct _script_ctx_t {
     IActiveScript *active_script;
 
     struct _call_frame_t *call_ctx;
-    named_item_t *named_items;
+    struct list named_items;
     IActiveScriptSite *site;
     IInternetHostSecurityManager *secmgr;
     DWORD safeopt;
@@ -421,8 +423,6 @@ struct _script_ctx_t {
     jsexcept_t *ei;
 
     heap_pool_t tmp_heap;
-
-    IDispatch *host_global;
 
     jsval_t *stack;
     unsigned stack_size;

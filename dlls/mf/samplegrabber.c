@@ -101,6 +101,7 @@ struct sample_grabber_activate_context
 {
     IMFMediaType *media_type;
     IMFSampleGrabberSinkCallback *callback;
+    BOOL shut_down;
 };
 
 static void sample_grabber_free_private(void *user_context)
@@ -235,6 +236,9 @@ static HRESULT WINAPI sample_grabber_stream_GetEvent(IMFStreamSink *iface, DWORD
 
     TRACE("%p, %#x, %p.\n", iface, flags, event);
 
+    if (!stream->sink)
+        return MF_E_STREAMSINK_REMOVED;
+
     return IMFMediaEventQueue_GetEvent(stream->event_queue, flags, event);
 }
 
@@ -244,6 +248,9 @@ static HRESULT WINAPI sample_grabber_stream_BeginGetEvent(IMFStreamSink *iface, 
     struct sample_grabber_stream *stream = impl_from_IMFStreamSink(iface);
 
     TRACE("%p, %p, %p.\n", iface, callback, state);
+
+    if (!stream->sink)
+        return MF_E_STREAMSINK_REMOVED;
 
     return IMFMediaEventQueue_BeginGetEvent(stream->event_queue, callback, state);
 }
@@ -255,6 +262,9 @@ static HRESULT WINAPI sample_grabber_stream_EndGetEvent(IMFStreamSink *iface, IM
 
     TRACE("%p, %p, %p.\n", iface, result, event);
 
+    if (!stream->sink)
+        return MF_E_STREAMSINK_REMOVED;
+
     return IMFMediaEventQueue_EndGetEvent(stream->event_queue, result, event);
 }
 
@@ -264,6 +274,9 @@ static HRESULT WINAPI sample_grabber_stream_QueueEvent(IMFStreamSink *iface, Med
     struct sample_grabber_stream *stream = impl_from_IMFStreamSink(iface);
 
     TRACE("%p, %u, %s, %#x, %p.\n", iface, event_type, debugstr_guid(ext_type), hr, value);
+
+    if (!stream->sink)
+        return MF_E_STREAMSINK_REMOVED;
 
     return IMFMediaEventQueue_QueueEventParamVar(stream->event_queue, event_type, ext_type, hr, value);
 }
@@ -849,10 +862,7 @@ static ULONG WINAPI sample_grabber_sink_Release(IMFMediaSink *iface)
             IMFSampleGrabberSinkCallback2_Release(grabber->callback2);
         IMFMediaType_Release(grabber->media_type);
         if (grabber->event_queue)
-        {
-            IMFMediaEventQueue_Shutdown(grabber->event_queue);
             IMFMediaEventQueue_Release(grabber->event_queue);
-        }
         if (grabber->clock)
             IMFPresentationClock_Release(grabber->clock);
         if (grabber->timer)
@@ -1045,12 +1055,16 @@ static HRESULT WINAPI sample_grabber_sink_Shutdown(IMFMediaSink *iface)
     grabber->is_shut_down = TRUE;
     if (SUCCEEDED(hr = IMFSampleGrabberSinkCallback_OnShutdown(sample_grabber_get_callback(grabber))))
     {
+        /* Detach stream. */
         IMFMediaSink_Release(&grabber->stream->sink->IMFMediaSink_iface);
         EnterCriticalSection(&grabber->stream->cs);
         grabber->stream->sink = NULL;
+        IMFMediaEventQueue_Shutdown(grabber->stream->event_queue);
         LeaveCriticalSection(&grabber->stream->cs);
         IMFStreamSink_Release(&grabber->stream->IMFStreamSink_iface);
         grabber->stream = NULL;
+
+        IMFMediaEventQueue_Shutdown(grabber->event_queue);
     }
     LeaveCriticalSection(&grabber->cs);
 
@@ -1307,6 +1321,9 @@ static HRESULT sample_grabber_create_object(IMFAttributes *attributes, void *use
 
     TRACE("%p, %p, %p.\n", attributes, user_context, obj);
 
+    if (context->shut_down)
+        return MF_E_SHUTDOWN;
+
     /* At least major type is required. */
     if (FAILED(IMFMediaType_GetMajorType(context->media_type, &guid)))
         return MF_E_INVALIDMEDIATYPE;
@@ -1350,9 +1367,16 @@ failed:
     return hr;
 }
 
+static void sample_grabber_shutdown_object(void *user_context, IUnknown *obj)
+{
+    struct sample_grabber_activate_context *context = user_context;
+    context->shut_down = TRUE;
+}
+
 static const struct activate_funcs sample_grabber_activate_funcs =
 {
     sample_grabber_create_object,
+    sample_grabber_shutdown_object,
     sample_grabber_free_private,
 };
 

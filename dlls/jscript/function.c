@@ -612,10 +612,8 @@ static HRESULT NativeFunction_call(script_ctx_t *ctx, FunctionInstance *func, ID
 
     if(this_disp)
         set_disp(&vthis, this_disp);
-    else if(ctx->host_global)
-        set_disp(&vthis, ctx->host_global);
     else
-        set_jsdisp(&vthis, ctx->global);
+        set_disp(&vthis, lookup_global_host(ctx));
 
     hres = function->proc(ctx, &vthis, flags & ~DISPATCH_JSCRIPT_INTERNAL_MASK, argc, argv, r);
 
@@ -984,7 +982,8 @@ static HRESULT construct_function(script_ctx_t *ctx, unsigned argc, jsval_t *arg
     if(FAILED(hres))
         return hres;
 
-    hres = compile_script(ctx, str, 0, 0, NULL, NULL, FALSE, FALSE, &code);
+    hres = compile_script(ctx, str, 0, 0, NULL, NULL, FALSE, FALSE,
+                          ctx->call_ctx ? ctx->call_ctx->bytecode->named_item : NULL, &code);
     heap_free(str);
     if(FAILED(hres))
         return hres;

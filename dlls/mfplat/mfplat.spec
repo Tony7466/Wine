@@ -37,6 +37,7 @@
 @ stub MFConvertFromFP16Array
 @ stub MFConvertToFP16Array
 @ stdcall MFCopyImage(ptr long ptr long long long)
+@ stdcall MFCreate2DMediaBuffer(long long long long ptr)
 @ stub MFCreateAMMediaTypeFromMFMediaType
 @ stdcall MFCreateAlignedMemoryBuffer(long long ptr)
 @ stdcall MFCreateAsyncResult(ptr ptr ptr ptr)
@@ -96,12 +97,12 @@
 @ stub MFGetConfigurationString
 @ stub MFGetMFTMerit
 @ stub MFGetNumericNameFromSockaddr
-@ stub MFGetPlaneSize
+@ stdcall MFGetPlaneSize(long long long ptr)
 @ stub MFGetPlatform
 @ stdcall MFGetPluginControl(ptr)
 @ stub MFGetPrivateWorkqueues
 @ stub MFGetSockaddrFromNumericName
-@ stub MFGetStrideForBitmapInfoHeader
+@ stdcall MFGetStrideForBitmapInfoHeader(long long ptr)
 @ stdcall MFGetSystemTime()
 @ stdcall MFGetTimerPeriodicity(ptr)
 @ stub MFGetUncompressedVideoFormat
@@ -144,6 +145,7 @@
 @ stdcall MFStartup(long long)
 @ stub MFStreamDescriptorProtectMediaType
 @ stdcall MFTEnum(int128 long ptr ptr ptr ptr ptr)
+@ stdcall MFTEnum2(int128 long ptr ptr ptr ptr ptr)
 @ stdcall MFTEnumEx(int128 long ptr ptr ptr ptr)
 @ stub MFTGetInfo
 @ stdcall MFTRegister(int128 int128 wstr long long ptr long ptr ptr)

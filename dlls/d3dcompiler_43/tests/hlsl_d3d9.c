@@ -307,6 +307,21 @@ static void test_swizzle(void)
         "    return ret;\n"
         "}";
 
+    static const char ps_multiple_lhs_source[] =
+        "float4 main() : COLOR\n"
+        "{\n"
+        "    float4 ret = float4(0.1, 0.2, 0.3, 0.4);\n"
+        "    ret.wyz.yx = float2(0.5, 0.6).yx;\n"
+        "    return ret;\n"
+        "}";
+
+    static const char ps_multiple_rhs_source[] =
+        "float4 main() : COLOR\n"
+        "{\n"
+        "    float4 ret = float4(0.1, 0.2, 0.3, 0.4).ywxz.zyyz;\n"
+        "    return ret;\n"
+        "}";
+
     if (!init_test_context(&test_context))
         return;
     device = test_context.device;
@@ -328,6 +343,31 @@ static void test_swizzle(void)
 
         ID3D10Blob_Release(ps_code);
     }
+
+    todo_wine ps_code = compile_shader(ps_multiple_lhs_source, "ps_2_0");
+    if (ps_code)
+    {
+        draw_quad(device, ps_code);
+
+        v = get_color_vec4(device, 0, 0);
+        ok(compare_vec4(&v, 0.1f, 0.6f, 0.3f, 0.5f, 0),
+                "Got unexpected value {%.8e, %.8e, %.8e, %.8e}.\n", v.x, v.y, v.z, v.w);
+
+        ID3D10Blob_Release(ps_code);
+    }
+
+    todo_wine ps_code = compile_shader(ps_multiple_rhs_source, "ps_2_0");
+    if (ps_code)
+    {
+        draw_quad(device, ps_code);
+
+        v = get_color_vec4(device, 0, 0);
+        ok(compare_vec4(&v, 0.1f, 0.4f, 0.4f, 0.1f, 0),
+                "Got unexpected value {%.8e, %.8e, %.8e, %.8e}.\n", v.x, v.y, v.z, v.w);
+
+        ID3D10Blob_Release(ps_code);
+    }
+
     release_test_context(&test_context);
 }
 
@@ -604,10 +644,209 @@ static void test_comma(void)
     release_test_context(&test_context);
 }
 
+static void test_return(void)
+{
+    struct test_context test_context;
+    ID3D10Blob *ps_code = NULL;
+    struct vec4 v;
+
+    static const char *void_source =
+        "void main(float x : TEXCOORD0, out float4 ret : COLOR)\n"
+        "{\n"
+        "    ret = float4(0.1, 0.2, 0.3, 0.4);\n"
+        "    return;\n"
+        "    ret = float4(0.5, 0.6, 0.7, 0.8);\n"
+        "}";
+
+    static const char *implicit_conversion_source =
+        "float4 main(float x : TEXCOORD0) : COLOR\n"
+        "{\n"
+        "    return float2x2(0.4, 0.3, 0.2, 0.1);\n"
+        "}";
+
+    if (!init_test_context(&test_context))
+        return;
+
+    todo_wine ps_code = compile_shader(void_source, "ps_2_0");
+    if (ps_code)
+    {
+        draw_quad(test_context.device, ps_code);
+
+        v = get_color_vec4(test_context.device, 0, 0);
+        ok(compare_vec4(&v, 0.1f, 0.2f, 0.3f, 0.4f, 0),
+                "Got unexpected value {%.8e, %.8e, %.8e, %.8e}.\n", v.x, v.y, v.z, v.w);
+
+        ID3D10Blob_Release(ps_code);
+    }
+
+    todo_wine ps_code = compile_shader(implicit_conversion_source, "ps_2_0");
+    if (ps_code)
+    {
+        draw_quad(test_context.device, ps_code);
+
+        v = get_color_vec4(test_context.device, 0, 0);
+        ok(compare_vec4(&v, 0.4f, 0.3f, 0.2f, 0.1f, 0),
+                "Got unexpected value {%.8e, %.8e, %.8e, %.8e}.\n", v.x, v.y, v.z, v.w);
+
+        ID3D10Blob_Release(ps_code);
+    }
+
+    release_test_context(&test_context);
+}
+
+static void test_array_dimensions(void)
+{
+    struct test_context test_context;
+    ID3D10Blob *ps_code = NULL;
+    struct vec4 v;
+
+    static const char shader[] =
+        "float4 main(float x : TEXCOORD0) : COLOR\n"
+        "{\n"
+        "    const int dim = 4;\n"
+        "    float a[2 * 2] = {0.1, 0.2, 0.3, 0.4};\n"
+        "    float b[4.1] = a;\n"
+        "    float c[dim] = b;\n"
+        "    float d[true] = {c[0]};\n"
+        "    float e[65536];\n"
+        "    return float4(d[0], c[0], c[1], c[3]);\n"
+        "}";
+
+    if (!init_test_context(&test_context))
+        return;
+
+    todo_wine ps_code = compile_shader(shader, "ps_2_0");
+    if (ps_code)
+    {
+        draw_quad(test_context.device, ps_code);
+
+        v = get_color_vec4(test_context.device, 0, 0);
+        ok(compare_vec4(&v, 0.1f, 0.1f, 0.2f, 0.4f, 0),
+                "Got unexpected value {%.8e, %.8e, %.8e, %.8e}.\n", v.x, v.y, v.z, v.w);
+
+        ID3D10Blob_Release(ps_code);
+    }
+
+    release_test_context(&test_context);
+}
+
+static void check_constant_desc(const char *prefix, const D3DXCONSTANT_DESC *desc,
+        const D3DXCONSTANT_DESC *expect, BOOL nonzero_defaultvalue)
+{
+    ok(!strcmp(desc->Name, expect->Name), "%s: got Name %s.\n", prefix, debugstr_a(desc->Name));
+    ok(desc->RegisterSet == expect->RegisterSet, "%s: got RegisterSet %#x.\n", prefix, desc->RegisterSet);
+    ok(desc->RegisterCount == expect->RegisterCount, "%s: got RegisterCount %u.\n", prefix, desc->RegisterCount);
+    ok(desc->Class == expect->Class, "%s: got Class %#x.\n", prefix, desc->Class);
+    ok(desc->Type == expect->Type, "%s: got Type %#x.\n", prefix, desc->Type);
+    ok(desc->Rows == expect->Rows, "%s: got Rows %u.\n", prefix, desc->Rows);
+    ok(desc->Columns == expect->Columns, "%s: got Columns %u.\n", prefix, desc->Columns);
+    ok(desc->Elements == expect->Elements, "%s: got Elements %u.\n", prefix, desc->Elements);
+    ok(desc->StructMembers == expect->StructMembers, "%s: got StructMembers %u.\n", prefix, desc->StructMembers);
+    ok(desc->Bytes == expect->Bytes, "%s: got Bytes %u.\n", prefix, desc->Bytes);
+    ok(!!desc->DefaultValue == nonzero_defaultvalue, "%s: got DefaultValue %p.\n", prefix, desc->DefaultValue);
+}
+
+static void test_constant_table(void)
+{
+    static const char *source =
+        "uniform float4 a;\n"
+        "uniform float b;\n"
+        "uniform float unused;\n"
+        "uniform float3x1 c;\n"
+        "uniform row_major float3x1 d;\n"
+        "uniform uint e;\n"
+        "uniform struct\n"
+        "{\n"
+        "    float2x2 a;\n"
+        "    float b;\n"
+        "    float c;\n"
+        "} f;\n"
+        "uniform float g[5];\n"
+        "float4 main(uniform float4 h) : COLOR\n"
+        "{\n"
+        "    return a + b + c._31 + d._31 + f.c + g[e] + h;\n"
+        "}";
+
+    D3DXCONSTANTTABLE_DESC table_desc;
+    ID3DXConstantTable *constants;
+    ID3D10Blob *ps_code = NULL;
+    D3DXHANDLE handle, field;
+    D3DXCONSTANT_DESC desc;
+    unsigned int i, j;
+    HRESULT hr;
+    UINT count;
+
+    static const D3DXCONSTANT_DESC expect_constants[] =
+    {
+        {"$h", D3DXRS_FLOAT4, 0, 1, D3DXPC_VECTOR, D3DXPT_FLOAT, 1, 4, 1, 0, 16},
+        {"a", D3DXRS_FLOAT4, 0, 1, D3DXPC_VECTOR, D3DXPT_FLOAT, 1, 4, 1, 0, 16},
+        {"b", D3DXRS_FLOAT4, 0, 1, D3DXPC_SCALAR, D3DXPT_FLOAT, 1, 1, 1, 0, 4},
+        {"c", D3DXRS_FLOAT4, 0, 1, D3DXPC_MATRIX_COLUMNS, D3DXPT_FLOAT, 3, 1, 1, 0, 12},
+        {"d", D3DXRS_FLOAT4, 0, 3, D3DXPC_MATRIX_ROWS, D3DXPT_FLOAT, 3, 1, 1, 0, 12},
+        {"e", D3DXRS_FLOAT4, 0, 1, D3DXPC_SCALAR, D3DXPT_INT, 1, 1, 1, 0, 4},
+        {"f", D3DXRS_FLOAT4, 0, 4, D3DXPC_STRUCT, D3DXPT_VOID, 1, 6, 1, 3, 24},
+        {"g", D3DXRS_FLOAT4, 0, 5, D3DXPC_SCALAR, D3DXPT_FLOAT, 1, 1, 5, 0, 20},
+    };
+
+    static const D3DXCONSTANT_DESC expect_fields[] =
+    {
+        {"a", D3DXRS_FLOAT4, 0, 2, D3DXPC_MATRIX_COLUMNS, D3DXPT_FLOAT, 2, 2, 1, 0, 16},
+        {"b", D3DXRS_FLOAT4, 0, 1, D3DXPC_SCALAR, D3DXPT_FLOAT, 1, 1, 1, 0, 4},
+        {"c", D3DXRS_FLOAT4, 0, 1, D3DXPC_SCALAR, D3DXPT_FLOAT, 1, 1, 1, 0, 4},
+    };
+
+    todo_wine ps_code = compile_shader(source, "ps_2_0");
+    if (!ps_code)
+        return;
+
+    hr = pD3DXGetShaderConstantTable(ID3D10Blob_GetBufferPointer(ps_code), &constants);
+    ok(hr == D3D_OK, "Got hr %#x.\n", hr);
+
+    hr = ID3DXConstantTable_GetDesc(constants, &table_desc);
+    ok(hr == D3D_OK, "Got hr %#x.\n", hr);
+    ok(table_desc.Version == D3DPS_VERSION(2, 0), "Got Version %#x.\n", table_desc.Version);
+    ok(table_desc.Constants == 8, "Got %u constants.\n", table_desc.Constants);
+
+    for (i = 0; i < table_desc.Constants; ++i)
+    {
+        char prefix[30];
+
+        handle = ID3DXConstantTable_GetConstant(constants, NULL, i);
+        ok(!!handle, "Failed to get constant.\n");
+        memset(&desc, 0xcc, sizeof(desc));
+        count = 1;
+        hr = ID3DXConstantTable_GetConstantDesc(constants, handle, &desc, &count);
+        ok(hr == D3D_OK, "Got hr %#x.\n", hr);
+        ok(count == 1, "Got count %u.\n", count);
+        sprintf(prefix, "Test %u", i);
+        check_constant_desc(prefix, &desc, &expect_constants[i], FALSE);
+
+        if (!strcmp(desc.Name, "f"))
+        {
+            for (j = 0; j < ARRAY_SIZE(expect_fields); ++j)
+            {
+                field = ID3DXConstantTable_GetConstant(constants, handle, j);
+                ok(!!field, "Failed to get constant.\n");
+                memset(&desc, 0xcc, sizeof(desc));
+                count = 1;
+                hr = ID3DXConstantTable_GetConstantDesc(constants, field, &desc, &count);
+                ok(hr == D3D_OK, "Got hr %#x.\n", hr);
+                ok(count == 1, "Got count %u.\n", count);
+                sprintf(prefix, "Test %u, %u", i, j);
+                check_constant_desc(prefix, &desc, &expect_fields[j], !!j);
+            }
+        }
+    }
+
+    ID3DXConstantTable_Release(constants);
+    ID3D10Blob_Release(ps_code);
+}
+
 static void test_fail(void)
 {
     static const char *tests[] =
     {
+        /* 0 */
         "float4 test() : SV_TARGET\n"
         "{\n"
         "   return y;\n"
@@ -639,6 +878,7 @@ static void test_fail(void)
         "  return float4(x.x, x.y, 0, 0);\n"
         "}",
 
+        /* 5 */
         "float4 test() : SV_TARGET\n"
         "{\n"
         "   struct { int b,c; } x = {0};\n"
@@ -649,6 +889,46 @@ static void test_fail(void)
         "{\n"
         "   struct {} x = {};\n"
         "   return y;\n"
+        "}",
+
+        "float4 test(float2 pos : TEXCOORD0) : SV_TARGET\n"
+        "{\n"
+        "    return;\n"
+        "}",
+
+        "void test(float2 pos : TEXCOORD0)\n"
+        "{\n"
+        "    return pos;\n"
+        "}",
+
+        "float4 test(float2 pos : TEXCOORD0) : SV_TARGET\n"
+        "{\n"
+        "    return pos;\n"
+        "}",
+
+        /* 10 */
+        "float4 test(float2 pos: TEXCOORD0) : SV_TARGET\n"
+        "{\n"
+        "    float a[0];\n"
+        "    return float4(0, 0, 0, 0);\n"
+        "}",
+
+        "float4 test(float2 pos: TEXCOORD0) : SV_TARGET\n"
+        "{\n"
+        "    float a[65537];\n"
+        "    return float4(0, 0, 0, 0);\n"
+        "}",
+
+        "float4 test(float2 pos: TEXCOORD0) : SV_TARGET\n"
+        "{\n"
+        "    int x;\n"
+        "    float a[(x = 2)];\n"
+        "    return float4(0, 0, 0, 0);\n"
+        "}",
+
+        "uniform float4 test() : SV_TARGET\n"
+        "{\n"
+        "    return float4(0, 0, 0, 0);\n"
         "}",
     };
 
@@ -665,10 +945,9 @@ static void test_fail(void)
             compiled = errors = NULL;
             hr = ppD3DCompile(tests[i], strlen(tests[i]), NULL, NULL, NULL, "test", targets[j], 0, 0, &compiled, &errors);
             todo_wine ok(hr == E_FAIL, "Test %u, target %s, got unexpected hr %#x.\n", i, targets[j], hr);
-            todo_wine_if (i == 1) ok(!!errors, "Test %u, target %s, expected non-NULL error blob.\n", i, targets[j]);
+            ok(!!errors, "Test %u, target %s, expected non-NULL error blob.\n", i, targets[j]);
             ok(!compiled, "Test %u, target %s, expected no compiled shader blob.\n", i, targets[j]);
-            if (errors)
-                ID3D10Blob_Release(errors);
+            ID3D10Blob_Release(errors);
         }
     }
 }
@@ -710,5 +989,8 @@ START_TEST(hlsl_d3d9)
     test_float_vectors();
     test_trig();
     test_comma();
+    test_return();
+    test_array_dimensions();
+    test_constant_table();
     test_fail();
 }

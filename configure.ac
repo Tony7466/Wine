@@ -1041,6 +1041,20 @@ then
                 esac
                 shift
             done
+
+            dnl Check if cross compiler supports -target argument
+            llvm_target=$CROSSTARGET
+            if test -z "$llvm_target"
+            then
+                case $host_cpu in
+                *i[[3456789]]86*) llvm_target=i686-windows-gnu ;;
+                *) llvm_target=$host_cpu-windows-gnu ;;
+                esac
+            fi
+            WINE_TRY_CROSSCFLAGS([-target $llvm_target -fuse-ld=lld],
+                                 [CROSSTARGET=$llvm_target
+                                  EXTRACROSSCFLAGS="$EXTRACROSSCFLAGS -target $CROSSTARGET"
+                                  CFLAGS="$CFLAGS -fuse-ld=lld"])
         fi
         WINE_TRY_CROSSCFLAGS([-fno-strict-aliasing])
         dnl clang needs to be told to fail on unknown options
@@ -2698,7 +2712,6 @@ AC_CHECK_FUNCS(\
 	nearbyintf \
 	nexttoward \
 	nexttowardf \
-	powl \
 	remainder \
 	remainderf \
 	remquo \
@@ -3960,6 +3973,7 @@ WINE_CONFIG_MAKEFILE(programs/uninstaller)
 WINE_CONFIG_MAKEFILE(programs/unlodctr)
 WINE_CONFIG_MAKEFILE(programs/view)
 WINE_CONFIG_MAKEFILE(programs/wevtutil)
+WINE_CONFIG_MAKEFILE(programs/whoami)
 WINE_CONFIG_MAKEFILE(programs/wineboot)
 WINE_CONFIG_MAKEFILE(programs/winebrowser)
 WINE_CONFIG_MAKEFILE(programs/winecfg)
