@@ -54,7 +54,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  DECL_HANDLER(new_process);
  DECL_HANDLER(exec_process);
-@@ -2446,9 +2446,8 @@ C_ASSERT( sizeof(struct suspend_process_
+@@ -2447,9 +2447,8 @@ C_ASSERT( sizeof(struct suspend_process_
  C_ASSERT( FIELD_OFFSET(struct resume_process_request, handle) == 12 );
  C_ASSERT( sizeof(struct resume_process_request) == 16 );
  
@@ -80,7 +80,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  static void dump_new_process_request( const struct new_process_request *req )
  {
-@@ -5682,8 +5683,7 @@ static const struct
+@@ -5683,8 +5684,7 @@ static const struct
      { NULL, 0 }
  };
  

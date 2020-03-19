@@ -1,5 +1,4 @@
 debian/control
-debian/unicode/CodpageFiles
 
 wine
 config.*
@@ -51,7 +50,6 @@ dlls/dwrite/linebreak.c
 dlls/dwrite/mirror.c
 dlls/dwrite/scripts.c
 dlls/dwrite/scripts.h
-dlls/kernel32/nameprep.c
 dlls/kernelbase/collation.c
 dlls/kernelbase/digitmap.c
 dlls/kernelbase/wctype.c
@@ -62,6 +60,14 @@ include/wine/wgl*
 dlls/opengl32/opengl_ext.c
 dlls/opengl32/opengl_norm.c
 dlls/opengl32/opengl32.spec
+
+# automatically generated vulkan files
+include/wine/vulkan.h
+include/wine/vulkan_driver.h
+dlls/vulkan-1/vulkan-1.spec
+dlls/winevulkan/vulkan_thunks.h
+dlls/winevulkan/vulkan_thunks.c
+dlls/winevulkan/winevulkan.spec
 
 # automatically generated icon files
 */*/*.ico

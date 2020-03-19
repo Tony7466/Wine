@@ -3,26 +3,24 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/make_unicode
 +++ b/tools/make_unicode
-@@ -21,18 +21,19 @@
+@@ -21,17 +21,18 @@
  
  use strict;
  
 -# base URLs for www.unicode.org files
--my $UNIVERSION = "12.1.0";
--my $MAPPINGS = "http://www.unicode.org/Public/MAPPINGS";
--my $UNIDATA = "http://www.unicode.org/Public/$UNIVERSION/ucd/UCD.zip";
+-my $UNIVERSION = "13.0.0";
+-my $UNIDATA  = "https://www.unicode.org/Public/$UNIVERSION/ucd/UCD.zip";
 -my $IDNADATA = "https://www.unicode.org/Public/idna/$UNIVERSION";
+-my $JISDATA  = "https://www.unicode.org/Public/MAPPINGS/OBSOLETE/EASTASIA/JIS";
 -my $REPORTS = "http://www.unicode.org/reports";
--my $RFCS = "http://www.rfc-editor.org/rfc";
 -my $MSDATA = "https://download.microsoft.com/download/C/F/7/CF713A5E-9FBC-4FD6-9246-275F65C0E498";
 +# Locations of unicode files
 +my $UNIVERSION = `dpkg-parsechangelog --file /usr/share/doc/unicode-data/changelog.Debian.gz --show-field Version | sed s/-.*//`;
 +chomp($UNIVERSION);
-+my $MAPPINGS = "debian/unicode/mappings";
 +my $UNIDATA = "/usr/share/unicode";
 +my $IDNADATA = "debian/unicode/tr46/$UNIVERSION";
++my $JISDATA = "debian/unicode/mappings/OBSOLETE/EASTASIA/JIS";
 +my $REPORTS = "debian/unicode";
-+my $RFCS = "debian/unicode";
 +my $MSDATA = "debian/unicode";
  my $MSCODEPAGES = "$MSDATA/Windows Supported Code Page Data Files.zip";
  
@@ -30,9 +28,9 @@ author: Michael Gilbert <mgilbert@debian.org>
 -my $SORTKEYS = "tr10/allkeys.txt";
 +my $SORTKEYS = "tr10/3.1.0/allkeys.txt";
  
- # RFC3454 (stringprep data)
- my $STRINGPREP = "rfc3454.txt";
-@@ -407,6 +408,7 @@ my @category_table = ();
+ # Default char for undefined mappings
+ my $DEF_CHAR = ord '?';
+@@ -396,6 +397,7 @@ my @category_table = ();
  my @joining_table = ();
  my @direction_table = ();
  my @decomp_table = ();
@@ -40,41 +38,34 @@ author: Michael Gilbert <mgilbert@debian.org>
  my @combining_class_table = ();
  my @decomp_compat_table = ();
  my @comp_exclusions = ();
-@@ -446,28 +448,17 @@ sub to_utf16(@)
- sub open_data_file($$)
- {
-     my ($base, $name) = @_;
--    (my $dir = "data/$name") =~ s/\/[^\/]+$//;
-+    (my $dir = "$base") =~ s/\/[^\/]+$//;
-     local *FILE;
--    unless (-f "data/$name")
-+    unless (-f "$base/$name")
+@@ -440,24 +442,11 @@ sub open_data_file($$)
+ 
+     if ($base =~ /.*\/([^\/]+)\.zip$/)
      {
--        system "mkdir", "-p", $dir;
-         if ($base =~ /.*\/([^\/]+\.zip)$/)
-         {
--            my $zip = $1;
--            unless (-f "data/$zip")
--            {
--                print "Fetching $base...\n";
--                !system "wget", "-q", "-O", "data/$zip", "$base" or die "cannot fetch $base";
--            }
--            !system "unzip", "-q", "-d", "data", "data/$zip", $name or die "cannot extract $name from $zip";
--        }
--        else
+-        my $zip = $1;
+-        unless (-f "data/$zip")
 -        {
+-            mkdir "data";
+-            print "Fetching $base...\n";
+-            !system "wget", "-q", "-O", "data/$zip", $base or die "cannot fetch $base";
+-        }
+-        open FILE, "-|", "unzip", "-p", "data/$zip", $name or die "cannot extract $name from $zip";
++        open FILE, "-|", "unzip", "-p", "$base", $name or die "cannot extract $name from $base";
+     }
+     else
+     {
+-        unless (-f "data/$name")
+-        {
+-            system "mkdir", "-p", $dir;
 -            print "Fetching $base/$name...\n";
 -            !system "wget", "-q", "-O", "data/$name", "$base/$name" or die "cannot fetch $base/$name";
-+            !system "unzip", "-q", "-o", "-d", "$dir", "$base", $name or die "cannot extract $name from $base";
-+            $base = $dir;
-         }
+-        }
+-        open FILE, "<data/$name" or die "cannot open data/$name";
++        open FILE, "<$base/$name" or die "cannot open $base/$name";
      }
--    open FILE, "<data/$name" or die "cannot open data/$name";
-+    open FILE, "<$base/$name" or die "cannot open $base/$name";
      return *FILE;
  }
- 
-@@ -659,6 +650,7 @@ sub load_data()
+@@ -650,6 +639,7 @@ sub load_data()
              if ($decomp =~ /^([0-9a-fA-F]+)\s+([0-9a-fA-F]+)$/)
              {
                  $decomp_table[$src] = $decomp_compat_table[$src] = [ hex $1, hex $2 ];
@@ -82,32 +73,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              }
              elsif ($decomp =~ /^([0-9a-fA-F]+)$/)
              {
-@@ -1125,18 +1117,24 @@ sub dump_indic($)
-         if (/^\s*([0-9a-fA-F]+)\s*;\s*([a-zA-Z]+)\s*#/)
-         {
-             my $type = $2;
-+            if ("$type" ne "Top_And_Bottom_And_Left") # ignore unicode 13 type
-+            {
-             die "unknown matra $type" unless defined $matra_types{$type};
-             $indic_table[hex $1] += $matra_types{$type} << 8;
-+            }
-             next;
-         }
-         elsif (/^\s*([0-9a-fA-F]+)..\s*([0-9a-fA-F]+)\s*;\s*([A-Za-z_]+)\s*#/)
-         {
-             my $type = $3;
-+            if ("$type" ne "Top_And_Bottom_And_Left") # ignore unicode 13 type
-+            {
-             die "unknown matra $type" unless defined $matra_types{$type};
-             foreach my $i (hex $1 .. hex $2)
-             {
-                 $indic_table[$i] += $matra_types{$type} << 8;
-             }
-+            }
-             next;
-         }
-         die "malformed line $_";
-@@ -2082,6 +2080,217 @@ sub dump_ctype_tables($)
+@@ -1894,6 +1884,217 @@ sub dump_ctype_tables($)
      save_file($filename);
  }
  
@@ -325,7 +291,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  sub rol($$)
  {
-@@ -2513,7 +2722,10 @@ sub REPLACE_IN_FILE($@)
+@@ -2299,7 +2500,10 @@ sub save_file($)
  chdir ".." if -f "./make_unicode";
  load_data();
  dump_case_mappings( "libs/port/casemap.c" );

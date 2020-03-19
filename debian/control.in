@@ -14,8 +14,6 @@ Rules-Requires-Root: no
 Build-Depends:
  debhelper (>= 9~),
  clang [arm64],
- oss4-dev [kfreebsd-any],
- freebsd-glue [kfreebsd-any],
  lzma,
  flex,
  bison,
@@ -52,7 +50,7 @@ Build-Depends:
  libxml-parser-perl,
  libpng-dev,
  libssl-dev,
- libv4l-dev [linux-any kfreebsd-any],
+ libv4l-dev,
  libsdl2-dev,
  libxml2-dev,
  libgsm1-dev,
@@ -60,16 +58,16 @@ Build-Depends:
  libkrb5-dev,
  libsane-dev,
  libtiff-dev,
- libudev-dev [linux-any],
- libpulse-dev [!kfreebsd-any],
+ libudev-dev,
+ libpulse-dev,
  liblcms2-dev,
  libldap2-dev,
  libxslt1-dev,
  unixodbc-dev,
  libcups2-dev,
- libvkd3d-dev [linux-any],
- libcapi20-dev [linux-any],
- libvulkan-dev [linux-any],
+ libvkd3d-dev,
+ libcapi20-dev,
+ libvulkan-dev,
  libfaudio-dev (>= 19.06.07),
  libopenal-dev,
  libdbus-1-dev,
@@ -112,14 +110,13 @@ Provides:
  wine,
 Description: Windows API implementation - standard suite
  Wine is a free MS-Windows API implementation.
- This is still a work in progress and many applications may still not work.
  .
  This package provides essential wrappers and convenience tools for the
  standard Wine components. It also employs the Debian alternatives system to
  provide the usual command names, e.g. "wine" instead of "wineDEBSUFFIX".
 
 Package: wine32VERSION
-Architecture: any-i386 any-powerpc armel armhf
+Architecture: i386 armel armhf
 Multi-Arch: foreign
 Built-Using: ${built:Using}
 Depends:
@@ -132,7 +129,6 @@ Suggests:
  wine32VERSION-preloader (= ${binary:Version}),
 Description: Windows API implementation - 32-bit binary loader
  Wine is a free MS-Windows API implementation.
- This is still a work in progress and many applications may still not work.
  .
  This package provides the binary loader for 32-bit Windows applications.
 
@@ -151,12 +147,11 @@ Suggests:
  wine64VERSION-preloader (= ${binary:Version}),
 Description: Windows API implementation - 64-bit binary loader
  Wine is a free MS-Windows API implementation.
- This is still a work in progress and many applications may still not work.
  .
  This package provides the binary loader for 64-bit Windows applications.
 
 Package: wine32VERSION-preloader
-Architecture: i386 powerpc armel armhf
+Architecture: i386 armel armhf
 Multi-Arch: foreign
 Built-Using: ${built:Using}
 Depends:
@@ -164,7 +159,6 @@ Depends:
  wine32VERSION (= ${binary:Version}),
 Description: Windows API implementation - prelinked 32-bit binary loader
  Wine is a free MS-Windows API implementation.
- This is still a work in progress and many applications may still not work.
  .
  This package provides the prelinked loader for 32-bit Windows applications.
 
@@ -177,13 +171,12 @@ Depends:
  wine64VERSION (= ${binary:Version}),
 Description: Windows API implementation - prelinked 64-bit binary loader
  Wine is a free MS-Windows API implementation.
- This is still a work in progress and many applications may still not work.
  .
  This package provides the prelinked loader for 64-bit Windows applications.
 
 Package: wine32VERSION-tools
 Section: libdevel
-Architecture: any-i386 any-powerpc armel armhf
+Architecture: i386 armel armhf
 Multi-Arch: foreign
 Built-Using: ${built:Using}
 Depends:
@@ -199,7 +192,6 @@ Conflicts:
  wine64VERSION-tools,
 Description: Windows API implementation - 32-bit developer tools
  Wine is a free MS-Windows API implementation.
- This is still a work in progress and many applications may still not work.
  .
  This package provides Wine's 32-bit developer tools. They are capable of
  generating 32-bit results.
@@ -226,14 +218,13 @@ Conflicts:
  wine32VERSION-tools,
 Description: Windows API implementation - 64-bit developer tools
  Wine is a free MS-Windows API implementation.
- This is still a work in progress and many applications may still not work.
  .
  This package provides Wine's 64-bit developer tools. They are capable of
  generating both 32- and 64-bit results.
 
 Package: libwineVERSION
 Section: libs
-Architecture: amd64 any-i386 any-powerpc armel armhf arm64
+Architecture: amd64 i386 armel armhf arm64
 Multi-Arch: same
 Built-Using: ${built:Using}
 Depends:
@@ -263,13 +254,12 @@ Replaces:
  wine64VERSION (<< 4.7-2~),
 Description: Windows API implementation - library
  Wine is a free MS-Windows API implementation.
- This is still a work in progress and many applications may still not work.
  .
  This package provides the Wine library.
 
 Package: libwineVERSION-dev
 Section: libdevel
-Architecture: amd64 any-i386 any-powerpc armel armhf arm64
+Architecture: amd64 i386 armel armhf arm64
 Multi-Arch: same
 Built-Using: ${built:Using}
 Depends:
@@ -280,7 +270,6 @@ Recommends:
  wine64VERSION-tools (= ${binary:Version}) | wine32VERSION-tools (= ${binary:Version}),
 Description: Windows API implementation - development files
  Wine is a free MS-Windows API implementation.
- This is still a work in progress and many applications may still not work.
  .
  This package provides Wine's C header files and development libraries.
 
@@ -293,7 +282,6 @@ Description: Windows API implementation - development files
 #  binfmt-support,
 # Description: Register Wine as the interpreter for Windows executables
 #  Wine is a free MS-Windows API implementation.
-#  This is still a work in progress and many applications may still not work.
 #  .
 #  This package registers Wine as an interpreter for Windows executables, using
 #  the kernel binfmt_misc module.  This causes Wine to be invoked automatically
@@ -317,6 +305,5 @@ Description: Windows API implementation - development files
 #  ${misc:Depends},
 # Description: Windows API implementation - fonts
 #  Wine is a free MS-Windows API implementation.
-#  This is still a work in progress and many applications may still not work.
 #  .
 #  This package provides the fonts used by Wine.

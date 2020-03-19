@@ -1,0 +1,60 @@
+description: regenerate vulkan files
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/dlls/winevulkan/make_vulkan
++++ b/dlls/winevulkan/make_vulkan
+@@ -2072,7 +2072,9 @@ class VkGenerator(object):
+ 
+     def _generate_copyright(self, f, spec_file=False):
+         f.write("# " if spec_file else "/* ")
+-        f.write("Automatically generated from Vulkan vk.xml; DO NOT EDIT!\n")
++        f.write("Automatically generated from ")
++        f.write(self.registry._filename)
++        f.write("; DO NOT EDIT!\n")
+         lines = ["", "This file is generated from Vulkan vk.xml file covered",
+             "by the following copyright and permission notice:"]
+         lines.extend([l.rstrip(" ") for l in self.registry.copyright.splitlines()])
+@@ -2512,6 +2514,7 @@ class VkRegistry(object):
+         self.funcpointers = None
+         self.handles = None
+         self.structs = None
++        self._filename = reg_filename
+ 
+         # We aggregate all types in here for cross-referencing.
+         self.funcs = {}
+@@ -2995,11 +2998,6 @@ def set_working_directory():
+     path = os.path.dirname(path)
+     os.chdir(path)
+ 
+-def download_vk_xml(filename):
+-    url = "https://raw.github.com/KhronosGroup/Vulkan-Docs/v{0}/xml/vk.xml".format(VK_XML_VERSION)
+-    if not os.path.isfile(filename):
+-        urllib.request.urlretrieve(url, filename)
+-
+ def main():
+     parser = argparse.ArgumentParser()
+     parser.add_argument("-v", "--verbose", action="count", default=0, help="increase output verbosity")
+@@ -3014,8 +3012,7 @@ def main():
+ 
+     set_working_directory()
+ 
+-    vk_xml = "vk-{0}.xml".format(VK_XML_VERSION)
+-    download_vk_xml(vk_xml)
++    vk_xml = "/usr/share/vulkan/registry/vk.xml"
+     registry = VkRegistry(vk_xml)
+     generator = VkGenerator(registry)
+ 
+--- a/dlls/wined3d/utils.c
++++ b/dlls/wined3d/utils.c
+@@ -5323,9 +5323,9 @@ const char *wined3d_debug_vkresult(VkRes
+     switch (vr)
+     {
+ #define WINED3D_TO_STR(x) case x: return #x
+-        WINED3D_TO_STR(VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR);
++        WINED3D_TO_STR(VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS);
+         WINED3D_TO_STR(VK_ERROR_NOT_PERMITTED_EXT);
+-        WINED3D_TO_STR(VK_ERROR_FRAGMENTATION_EXT);
++        WINED3D_TO_STR(VK_ERROR_FRAGMENTATION);
+         WINED3D_TO_STR(VK_ERROR_INVALID_EXTERNAL_HANDLE);
+         WINED3D_TO_STR(VK_ERROR_OUT_OF_POOL_MEMORY);
+         WINED3D_TO_STR(VK_ERROR_INVALID_SHADER_NV);

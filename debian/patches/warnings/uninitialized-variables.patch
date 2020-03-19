@@ -25,17 +25,17 @@ author: Michael Gilbert <mgilbert@debian.org>
          }
  
          if (format->type == FORMAT_ARGBF16)
---- a/dlls/kernel32/locale.c
-+++ b/dlls/kernel32/locale.c
-@@ -923,7 +923,7 @@ INT WINAPI IdnToUnicode(DWORD dwFlags, L
-                         LPWSTR lpUnicodeCharStr, INT cchUnicodeChar)
- {
-     INT i, label_start, label_end, out_label, out = 0;
+--- a/dlls/ntdll/locale.c
++++ b/dlls/ntdll/locale.c
+@@ -2268,7 +2268,7 @@ NTSTATUS WINAPI RtlIdnToUnicode( DWORD f
+     int i, buflen, start, end, out_label, out = 0;
+     NTSTATUS status;
+     UINT buffer[64];
 -    WCHAR ch;
 +    WCHAR ch = '\0';
  
-     TRACE("%x %p %d %p %d\n", dwFlags, lpASCIICharStr, cchASCIIChar,
-         lpUnicodeCharStr, cchUnicodeChar);
+     if (!src || srclen < -1) return STATUS_INVALID_PARAMETER;
+     if (srclen == -1) srclen = strlenW( src ) + 1;
 --- a/dlls/msvcrt/misc.c
 +++ b/dlls/msvcrt/misc.c
 @@ -272,7 +272,7 @@ static void small_sort(void *base, MSVCR
@@ -253,7 +253,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if(ts64.tv_sec != (MSVCRT___time32_t)ts64.tv_sec)
 --- a/dlls/mf/session.c
 +++ b/dlls/mf/session.c
-@@ -483,7 +483,7 @@ static void session_clear_topologies(str
+@@ -531,7 +531,7 @@ static void session_clear_topologies(str
  static void session_set_topo_status(struct media_session *session, HRESULT status,
          MF_TOPOSTATUS topo_status)
  {

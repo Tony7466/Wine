@@ -1,14 +1,15 @@
-wine-development (5.4-1) UNRELEASED; urgency=medium
+wine-development (5.4-1) unstable; urgency=medium
 
   * New upstream release 5.4, released Mar 13, 2020.
-    - Unicode data updated to Unicode version 13.
     - Builtin programs use the new UCRTBase C runtime.
     - More correct support for Internationalized Domain Names.
     - Support for painting rounded rectangles in Direct2D.
     - Text drawing in D3DX9.
     - Various bug fixes.
+  * Rebuild automatically generated vulkan files.
+  * Drop hurd, powerpc, and kfreebsd architectures.
 
- -- Michael Gilbert <mgilbert@debian.org>  Wed, 18 Mar 2020 01:06:38 +0000
+ -- Michael Gilbert <mgilbert@debian.org>  Thu, 19 Mar 2020 23:28:21 +0000
 
 wine-development (5.3-1) unstable; urgency=medium
 

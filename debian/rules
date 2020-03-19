@@ -38,9 +38,6 @@ export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify
 # linker options
 export DEB_LDFLAGS_MAINT_APPEND+=-Wl,-rpath,/$(LIBDIR)
 
-# gcc 10 defaults to -fno-common but wine assumes -fcommon, so set it manually
-export DEB_CFLAGS_MAINT_APPEND+=-fcommon
-
 # ignore shift overflow warnings (currently only an issue on arm)
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-shift-overflow
 
@@ -64,16 +61,6 @@ CONFLAGS=--with-gnutls \
          --datarootdir=/$(DATDIR) \
          $(shell dpkg-buildflags --export=cmdline) \
 
-# flags specific to kfreebsd
-ifeq ($(DEB_BUILD_ARCH_OS), kfreebsd)
-export DEB_LDFLAGS_MAINT_APPEND+=-lfreebsd-glue
-endif
-
-# enable oss only on kfreebsd
-ifneq ($(DEB_HOST_ARCH_OS), kfreebsd)
-CONFLAGS+=--without-oss
-endif
-
 # enable wine64 on 64-bit architectures
 ifeq ($(DEB_BUILD_ARCH_BITS), 64)
 CONFLAGS+=--enable-win64
@@ -90,7 +77,10 @@ endif
 ifeq ($(DEB_HOST_ARCH), arm64)
 export CC=clang
 export CXX=clang++
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-enum-conversion -Wno-absolute-value
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-absolute-value
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-enum-conversion
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-misleading-indentation
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-implicit-int-float-conversion
 endif
 
 # use date of the latest changelog update as the build date
@@ -137,10 +127,11 @@ override_dh_auto_configure:
 	# automatically generated files
 	./debian/scripts/generate server/trace.generated make_requests
 	./debian/scripts/generate server/request.generated make_requests
-	./tools/make_fir
 	./tools/make_unicode
 	./tools/make_requests
+	cd dlls/dsound && ./make_fir
 	cd dlls/opengl32 && ./make_opengl
+	cd dlls/winevulkan && ./make_vulkan
 	# autotools files
 	ln -sf /usr/share/misc/config.sub tools
 	ln -sf /usr/share/misc/config.guess tools
@@ -220,10 +211,6 @@ override_dh_shlibdeps:
 	    -dRecommends -edebian/tmp/elf.recommends \
 	    -Tdebian/libwine$(VERSION).substvars
 	dh_shlibdeps
-
-override_dh_gencontrol:
-	dh_gencontrol -- \
-	    -Vbuilt:Using="$(shell dpkg-query -f '$${source:Package} (= $${source:Version}), ' -W khronos-api unicode-data)" \
 
 override_dh_bugfiles:
 	dh_bugfiles -A

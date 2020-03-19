@@ -1587,7 +1587,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
              if (lpsznewline != NULL)
                  len = lpsznewline - lpszcp;
              else
-@@ -3344,7 +3347,7 @@ BOOL WINAPI InternetTimeFromSystemTimeW(
+@@ -3347,7 +3350,7 @@ BOOL WINAPI InternetTimeFromSystemTimeW(
          return FALSE;
      }
  
@@ -1596,7 +1596,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
                WININET_wkday[time->wDayOfWeek],
                time->wDay,
                WININET_month[time->wMonth - 1],
-@@ -3395,13 +3398,15 @@ BOOL WINAPI InternetTimeToSystemTimeW( L
+@@ -3398,13 +3401,15 @@ BOOL WINAPI InternetTimeToSystemTimeW( L
       *  a SYSTEMTIME structure.
       */
  
@@ -1614,7 +1614,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
          {
              time->wDayOfWeek = i;
              break;
-@@ -3409,17 +3414,19 @@ BOOL WINAPI InternetTimeToSystemTimeW( L
+@@ -3412,17 +3417,19 @@ BOOL WINAPI InternetTimeToSystemTimeW( L
      }
  
      if (time->wDayOfWeek > 6) return TRUE;
@@ -1638,7 +1638,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
          {
              time->wMonth = i + 1;
              break;
-@@ -3427,24 +3434,24 @@ BOOL WINAPI InternetTimeToSystemTimeW( L
+@@ -3430,24 +3437,24 @@ BOOL WINAPI InternetTimeToSystemTimeW( L
      }
      if (time->wMonth == 0) return TRUE;
  
@@ -1671,7 +1671,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
      s = end;
  
      time->wMilliseconds = 0;
-@@ -3619,7 +3626,7 @@ static HINTERNET INTERNET_InternetOpenUr
+@@ -3622,7 +3629,7 @@ static HINTERNET INTERNET_InternetOpenUr
      urlComponents.dwPasswordLength = 1;
      urlComponents.dwUrlPathLength = 1;
      urlComponents.dwExtraInfoLength = 1;
@@ -1680,7 +1680,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
  	return NULL;
  
      if ((urlComponents.nScheme == INTERNET_SCHEME_HTTP || urlComponents.nScheme == INTERNET_SCHEME_HTTPS) &&
-@@ -4167,7 +4174,7 @@ BOOL WINAPI InternetCombineUrlW(LPCWSTR
+@@ -4170,7 +4177,7 @@ BOOL WINAPI InternetCombineUrlW(LPCWSTR
  #define MAX_WORD_DIGITS 5
  
  #define URL_GET_COMP_LENGTH(url, component) ((url)->dw##component##Length ? \
@@ -1689,7 +1689,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
  #define URL_GET_COMP_LENGTHA(url, component) ((url)->dw##component##Length ? \
      (url)->dw##component##Length : strlen((url)->lpsz##component))
  
-@@ -4239,7 +4246,7 @@ static BOOL calc_url_length(LPURL_COMPON
+@@ -4242,7 +4249,7 @@ static BOOL calc_url_length(LPURL_COMPON
          if (nScheme == INTERNET_SCHEME_DEFAULT)
              nScheme = INTERNET_SCHEME_HTTP;
          scheme = INTERNET_GetSchemeString(nScheme);
@@ -1698,7 +1698,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
      }
  
      (*lpdwUrlLength)++; /* ':' */
-@@ -4430,7 +4437,6 @@ BOOL WINAPI InternetCreateUrlW(LPURL_COM
+@@ -4433,7 +4440,6 @@ BOOL WINAPI InternetCreateUrlW(LPURL_COM
  {
      DWORD dwLen;
      INTERNET_SCHEME nScheme;
@@ -1706,7 +1706,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
  
      static const WCHAR slashSlashW[] = {'/','/'};
      static const WCHAR fmtW[] = {'%','u',0};
-@@ -4475,7 +4481,7 @@ BOOL WINAPI InternetCreateUrlW(LPURL_COM
+@@ -4478,7 +4484,7 @@ BOOL WINAPI InternetCreateUrlW(LPURL_COM
              nScheme = INTERNET_SCHEME_HTTP;
  
          scheme = INTERNET_GetSchemeString(nScheme);
@@ -1715,7 +1715,7 @@ description: revert upstream msvcrt commit 3c31cc5836026b45a40818ec874bbbcc4d6ad
          memcpy(lpszUrl, scheme, dwLen * sizeof(WCHAR));
          lpszUrl += dwLen;
      }
-@@ -4520,7 +4526,7 @@ BOOL WINAPI InternetCreateUrlW(LPURL_COM
+@@ -4523,7 +4529,7 @@ BOOL WINAPI InternetCreateUrlW(LPURL_COM
          {
              *lpszUrl = ':';
              lpszUrl++;
