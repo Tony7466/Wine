@@ -23,8 +23,10 @@ binary-indep/sfnt2fon.patch
 
 zlib/opc.patch
 zlib/cabinet.patch
+zlib/wininet0.patch
 zlib/wininet1.patch
 zlib/wininet2.patch
+zlib/wininet3.patch
 zlib/compile-link.patch
 
 fixes/arm.patch

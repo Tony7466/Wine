@@ -52,7 +52,6 @@ dlls/dwrite/scripts.c
 dlls/dwrite/scripts.h
 dlls/kernelbase/collation.c
 dlls/kernelbase/digitmap.c
-dlls/kernelbase/wctype.c
 dlls/wineps.drv/vertical.c
 
 # automatically generated opengl spec files

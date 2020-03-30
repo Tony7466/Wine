@@ -4,17 +4,6 @@ Author: Gianfranco Costamagna <locutusofborg@debian.org>
 Forwarded: pending
 Last-Update: 2019-12-31
 
---- a/dlls/d3dx9_36/effect.c
-+++ b/dlls/d3dx9_36/effect.c
-@@ -1469,7 +1469,7 @@ static HRESULT d3dx_set_shader_const_sta
-     D3DXVECTOR4 value;
-     HRESULT ret;
- 
--    if (op < 0 || op > SCT_PSINT)
-+    if (op > SCT_PSINT)
-     {
-         FIXME("Unknown op %u.\n", op);
-         return D3DERR_INVALIDCALL;
 --- a/dlls/gdiplus/graphics.c
 +++ b/dlls/gdiplus/graphics.c
 @@ -6861,8 +6861,8 @@ GpStatus WINGDIPAPI GdipTransformPoints(

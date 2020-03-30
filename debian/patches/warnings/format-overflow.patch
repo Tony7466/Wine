@@ -14,7 +14,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      int         style;
 --- a/dlls/krnl386.exe16/interrupts.c
 +++ b/dlls/krnl386.exe16/interrupts.c
-@@ -459,7 +459,7 @@ static void WINAPI DOSVM_Int11Handler( C
+@@ -467,7 +467,7 @@ static void WINAPI DOSVM_Int11Handler( C
      for (x=0; x < 9; x++)
      {
          HANDLE handle;

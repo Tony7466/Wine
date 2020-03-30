@@ -38,7 +38,6 @@ Files-Excluded:
  dlls/dwrite/scripts.h
  dlls/kernelbase/collation.c
  dlls/kernelbase/digitmap.c
- dlls/kernelbase/wctype.c
  dlls/wineps.drv/vertical.c
  dlls/opengl32/opengl_ext.c
  dlls/opengl32/opengl_norm.c
@@ -69,7 +68,7 @@ Copyright:
  Copyright (c) 2017 Jens Reyer <jre.winesim@gmail.com>
 License: FSFAP
 
-Files: debian/unicode/Windows Supported Code Page Data Files.zip
+Files: debian/unicode/Windows*
 Copyright:
  Non-copyrightable data
 License: Public-Domain

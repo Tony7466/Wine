@@ -22,7 +22,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      return $protocol;
  }
  
-@@ -446,7 +441,7 @@ foreach my $err (sort keys %errors)
+@@ -459,7 +454,7 @@ foreach my $err (sort keys %errors)
  push @trace_lines, "    { NULL, 0 }\n";
  push @trace_lines, "};\n";
  
@@ -31,7 +31,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                   "### make_requests begin ###",
                   "### make_requests end ###",
                   @trace_lines );
-@@ -473,7 +468,7 @@ foreach my $type (sort keys %formats)
+@@ -486,7 +481,7 @@ foreach my $type (sort keys %formats)
  push @request_lines, @asserts;
  push @request_lines, "\n#endif  /* WANT_REQUEST_HANDLERS */\n";
  
@@ -68,7 +68,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #endif  /* __WINE_SERVER_REQUEST_H */
 --- a/server/trace.c
 +++ b/server/trace.c
-@@ -1238,8 +1238,9 @@ static void dump_varargs_handle_infos( c
+@@ -1237,8 +1237,9 @@ static void dump_varargs_handle_infos( c
  
  typedef void (*dump_func)( const void *req );
  
@@ -80,7 +80,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  static void dump_new_process_request( const struct new_process_request *req )
  {
-@@ -5683,8 +5684,7 @@ static const struct
+@@ -5682,8 +5683,7 @@ static const struct
      { NULL, 0 }
  };
  

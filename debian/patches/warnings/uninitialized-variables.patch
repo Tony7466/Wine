@@ -27,7 +27,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (format->type == FORMAT_ARGBF16)
 --- a/dlls/ntdll/locale.c
 +++ b/dlls/ntdll/locale.c
-@@ -2268,7 +2268,7 @@ NTSTATUS WINAPI RtlIdnToUnicode( DWORD f
+@@ -2319,7 +2319,7 @@ NTSTATUS WINAPI RtlIdnToUnicode( DWORD f
      int i, buflen, start, end, out_label, out = 0;
      NTSTATUS status;
      UINT buffer[64];
@@ -73,7 +73,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/dlls/webservices/reader.c
 +++ b/dlls/webservices/reader.c
-@@ -2040,7 +2040,7 @@ static inline BOOL is_element_type( unsi
+@@ -2041,7 +2041,7 @@ static inline BOOL is_element_type( unsi
  
  static HRESULT read_attributes_bin( struct reader *reader, WS_XML_ELEMENT_NODE *elem )
  {
@@ -82,7 +82,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      unsigned char type;
      HRESULT hr;
  
-@@ -6357,7 +6357,7 @@ static HRESULT read_type_struct( struct
+@@ -6417,7 +6417,7 @@ static HRESULT read_type_struct( struct
                                   WS_HEAP *heap, void *ret, ULONG size, BOOL *found )
  {
      ULONG i, offset;
@@ -253,7 +253,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if(ts64.tv_sec != (MSVCRT___time32_t)ts64.tv_sec)
 --- a/dlls/mf/session.c
 +++ b/dlls/mf/session.c
-@@ -531,7 +531,7 @@ static void session_clear_topologies(str
+@@ -533,7 +533,7 @@ static void session_clear_topologies(str
  static void session_set_topo_status(struct media_session *session, HRESULT status,
          MF_TOPOSTATUS topo_status)
  {

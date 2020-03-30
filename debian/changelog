@@ -1,4 +1,4 @@
-wine-development (5.5-1) UNRELEASED; urgency=medium
+wine-development (5.5-1) unstable; urgency=medium
 
   * New upstream release 5.5, released Mar 27, 2020.
     - Builtin libraries use the new UCRTBase C runtime.
