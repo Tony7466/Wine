@@ -121,6 +121,7 @@ static HRESULT WINAPI d3d9_GetAdapterIdentifier(IDirect3D9Ex *iface, UINT adapte
     struct d3d9 *d3d9 = impl_from_IDirect3D9Ex(iface);
     struct wined3d_adapter_identifier adapter_id;
     struct wined3d_adapter *wined3d_adapter;
+    struct wined3d_output_desc output_desc;
     unsigned int output_idx;
     HRESULT hr;
 
@@ -131,12 +132,20 @@ static HRESULT WINAPI d3d9_GetAdapterIdentifier(IDirect3D9Ex *iface, UINT adapte
     if (output_idx >= d3d9->wined3d_output_count)
         return D3DERR_INVALIDCALL;
 
+    wined3d_mutex_lock();
+    if (FAILED(hr = wined3d_output_get_desc(d3d9->wined3d_outputs[output_idx], &output_desc)))
+    {
+        wined3d_mutex_unlock();
+        WARN("Failed to get output description, hr %#x.\n", hr);
+        return hr;
+    }
+    WideCharToMultiByte(CP_ACP, 0, output_desc.device_name, -1, identifier->DeviceName,
+            sizeof(identifier->DeviceName), NULL, NULL);
+
     adapter_id.driver = identifier->Driver;
     adapter_id.driver_size = sizeof(identifier->Driver);
     adapter_id.description = identifier->Description;
     adapter_id.description_size = sizeof(identifier->Description);
-    adapter_id.device_name = identifier->DeviceName;
-    adapter_id.device_name_size = sizeof(identifier->DeviceName);
 
     wined3d_adapter = wined3d_output_get_adapter(d3d9->wined3d_outputs[output_idx]);
     if (SUCCEEDED(hr = wined3d_adapter_get_identifier(wined3d_adapter, flags, &adapter_id)))
@@ -149,6 +158,7 @@ static HRESULT WINAPI d3d9_GetAdapterIdentifier(IDirect3D9Ex *iface, UINT adapte
         memcpy(&identifier->DeviceIdentifier, &adapter_id.device_identifier, sizeof(identifier->DeviceIdentifier));
         identifier->WHQLLevel = adapter_id.whql_level;
     }
+    wined3d_mutex_unlock();
 
     return hr;
 }
@@ -418,10 +428,16 @@ static HRESULT WINAPI d3d9_CheckDeviceFormatConversion(IDirect3D9Ex *iface, UINT
 static HRESULT WINAPI d3d9_GetDeviceCaps(IDirect3D9Ex *iface, UINT adapter, D3DDEVTYPE device_type, D3DCAPS9 *caps)
 {
     struct d3d9 *d3d9 = impl_from_IDirect3D9Ex(iface);
+    struct wined3d_adapter *wined3d_adapter;
     struct wined3d_caps wined3d_caps;
+    unsigned int output_idx;
     HRESULT hr;
 
     TRACE("iface %p, adapter %u, device_type %#x, caps %p.\n", iface, adapter, device_type, caps);
+
+    output_idx = adapter;
+    if (output_idx >= d3d9->wined3d_output_count)
+        return D3DERR_INVALIDCALL;
 
     if (!caps)
         return D3DERR_INVALIDCALL;
@@ -429,10 +445,11 @@ static HRESULT WINAPI d3d9_GetDeviceCaps(IDirect3D9Ex *iface, UINT adapter, D3DD
     memset(caps, 0, sizeof(*caps));
 
     wined3d_mutex_lock();
-    hr = wined3d_get_device_caps(d3d9->wined3d, adapter, device_type, &wined3d_caps);
+    wined3d_adapter = wined3d_output_get_adapter(d3d9->wined3d_outputs[output_idx]);
+    hr = wined3d_get_device_caps(wined3d_adapter, device_type, &wined3d_caps);
     wined3d_mutex_unlock();
 
-    d3dcaps_from_wined3dcaps(caps, &wined3d_caps);
+    d3d9_caps_from_wined3dcaps(d3d9, adapter, caps, &wined3d_caps);
 
     return hr;
 }
@@ -441,12 +458,17 @@ static HMONITOR WINAPI d3d9_GetAdapterMonitor(IDirect3D9Ex *iface, UINT adapter)
 {
     struct d3d9 *d3d9 = impl_from_IDirect3D9Ex(iface);
     struct wined3d_output_desc desc;
+    unsigned int output_idx;
     HRESULT hr;
 
     TRACE("iface %p, adapter %u.\n", iface, adapter);
 
+    output_idx = adapter;
+    if (output_idx >= d3d9->wined3d_output_count)
+        return NULL;
+
     wined3d_mutex_lock();
-    hr = wined3d_get_output_desc(d3d9->wined3d, adapter, &desc);
+    hr = wined3d_output_get_desc(d3d9->wined3d_outputs[output_idx], &desc);
     wined3d_mutex_unlock();
 
     if (FAILED(hr))
@@ -624,7 +646,6 @@ static HRESULT WINAPI d3d9_GetAdapterLUID(IDirect3D9Ex *iface, UINT adapter, LUI
 
     adapter_id.driver_size = 0;
     adapter_id.description_size = 0;
-    adapter_id.device_name_size = 0;
 
     wined3d_adapter = wined3d_output_get_adapter(d3d9->wined3d_outputs[output_idx]);
     if (SUCCEEDED(hr = wined3d_adapter_get_identifier(wined3d_adapter, 0, &adapter_id)))

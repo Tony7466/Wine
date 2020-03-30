@@ -43,7 +43,6 @@ WINE_DEFAULT_DEBUG_CHANNEL(nls);
 
 extern UINT CDECL __wine_get_unix_codepage(void);
 
-extern const unsigned short wctype_table[] DECLSPEC_HIDDEN;
 extern const unsigned int collation_table[] DECLSPEC_HIDDEN;
 
 static HANDLE kernel32_handle;
@@ -577,6 +576,36 @@ static unsigned int nb_codepages;
 
 static struct norm_table *norm_info;
 
+struct sortguid
+{
+    GUID  id;          /* sort GUID */
+    DWORD flags;       /* flags */
+    DWORD compr;       /* offset to compression table */
+    DWORD except;      /* exception table offset in sortkey table */
+    DWORD ling_except; /* exception table offset for linguistic casing */
+    DWORD casemap;     /* linguistic casemap table offset */
+};
+
+#define FLAG_HAS_3_BYTE_WEIGHTS 0x01
+#define FLAG_REVERSEDIACRITICS  0x10
+#define FLAG_DOUBLECOMPRESSION  0x20
+#define FLAG_INVERSECASING      0x40
+
+static const struct sortguid *current_locale_sort;
+
+static const GUID default_sort_guid = { 0x00000001, 0x57ee, 0x1e5c, { 0x00, 0xb4, 0xd0, 0x00, 0x0b, 0xb1, 0xe1, 0x1e }};
+
+static struct
+{
+    DWORD           *keys;       /* sortkey table, indexed by char */
+    USHORT          *casemap;    /* casemap table, in l_intl.nls format */
+    WORD            *ctypes;     /* CT_CTYPE1,2,3 values */
+    BYTE            *ctype_idx;  /* index to map char to ctypes array entry */
+    DWORD            version;    /* NLS version */
+    DWORD            guid_count; /* number of sort GUIDs */
+    struct sortguid *guids;      /* table of sort GUIDs */
+} sort;
+
 static CRITICAL_SECTION locale_section;
 static CRITICAL_SECTION_DEBUG critsect_debug =
 {
@@ -586,13 +615,94 @@ static CRITICAL_SECTION_DEBUG critsect_debug =
 };
 static CRITICAL_SECTION locale_section = { &critsect_debug, -1, 0, 0, 0, 0 };
 
+
+static void init_sortkeys( DWORD *ptr )
+{
+    WORD *ctype;
+    DWORD *table;
+
+    sort.keys = (DWORD *)((char *)ptr + ptr[0]);
+    sort.casemap = (USHORT *)((char *)ptr + ptr[1]);
+
+    ctype = (WORD *)((char *)ptr + ptr[2]);
+    sort.ctypes = ctype + 2;
+    sort.ctype_idx = (BYTE *)ctype + ctype[1] + 2;
+
+    table = (DWORD *)((char *)ptr + ptr[3]);
+    sort.version = table[0];
+    sort.guid_count = table[1];
+    sort.guids = (struct sortguid *)(table + 2);
+}
+
+
+static const struct sortguid *find_sortguid( const GUID *guid )
+{
+    int pos, ret, min = 0, max = sort.guid_count - 1;
+
+    while (min <= max)
+    {
+        pos = (min + max) / 2;
+        ret = memcmp( guid, &sort.guids[pos].id, sizeof(*guid) );
+        if (!ret) return &sort.guids[pos];
+        if (ret > 0) min = pos + 1;
+        else max = pos - 1;
+    }
+    ERR( "no sort found for %s\n", debugstr_guid( guid ));
+    return NULL;
+}
+
+
+static const struct sortguid *get_language_sort( const WCHAR *locale )
+{
+    WCHAR *p, *end, buffer[LOCALE_NAME_MAX_LENGTH], guidstr[39];
+    const struct sortguid *ret;
+    UNICODE_STRING str;
+    GUID guid;
+    HKEY key = 0;
+    DWORD size, type;
+
+    if (locale == LOCALE_NAME_USER_DEFAULT)
+    {
+        if (current_locale_sort) return current_locale_sort;
+        GetUserDefaultLocaleName( buffer, ARRAY_SIZE( buffer ));
+    }
+    else lstrcpynW( buffer, locale, LOCALE_NAME_MAX_LENGTH );
+
+    if (buffer[0] && !RegOpenKeyExW( nls_key, L"Sorting\\Ids", 0, KEY_READ, &key ))
+    {
+        for (;;)
+        {
+            size = sizeof(guidstr);
+            if (!RegQueryValueExW( key, buffer, NULL, &type, (BYTE *)guidstr, &size ) && type == REG_SZ)
+            {
+                RtlInitUnicodeString( &str, guidstr );
+                if (!RtlGUIDFromString( &str, &guid ))
+                {
+                    ret = find_sortguid( &guid );
+                    goto done;
+                }
+                break;
+            }
+            for (p = end = buffer; *p; p++) if (*p == '-' || *p == '_') end = p;
+            if (end == buffer) break;
+            *end = 0;
+        }
+    }
+    ret = find_sortguid( &default_sort_guid );
+done:
+    RegCloseKey( key );
+    return ret;
+}
+
+
 /***********************************************************************
  *		init_locale
  */
 void init_locale(void)
 {
     UINT ansi_cp = 0, oem_cp = 0;
-    USHORT *ansi_ptr, *oem_ptr, *casemap_ptr;
+    USHORT *ansi_ptr, *oem_ptr;
+    void *sort_ptr;
     LCID lcid = GetUserDefaultLCID();
     WCHAR bufferW[80];
     DYNAMIC_TIME_ZONE_INFORMATION timezone;
@@ -610,8 +720,9 @@ void init_locale(void)
     GetLocaleInfoW( LOCALE_SYSTEM_DEFAULT, LOCALE_IDEFAULTCODEPAGE | LOCALE_RETURN_NUMBER,
                     (WCHAR *)&oem_cp, sizeof(oem_cp)/sizeof(WCHAR) );
 
-    NtGetNlsSectionPtr( 10, 0, 0, (void **)&casemap_ptr, &size );
+    NtGetNlsSectionPtr( 9, 0, NULL, &sort_ptr, &size );
     NtGetNlsSectionPtr( 12, NormalizationC, NULL, (void **)&norm_info, &size );
+    init_sortkeys( sort_ptr );
 
     if (!ansi_cp || NtGetNlsSectionPtr( 11, ansi_cp, NULL, (void **)&ansi_ptr, &size ))
         NtGetNlsSectionPtr( 11, 1252, NULL, (void **)&ansi_ptr, &size );
@@ -619,8 +730,8 @@ void init_locale(void)
         NtGetNlsSectionPtr( 11, 437, NULL, (void **)&oem_ptr, &size );
     NtCurrentTeb()->Peb->AnsiCodePageData = ansi_ptr;
     NtCurrentTeb()->Peb->OemCodePageData = oem_ptr;
-    NtCurrentTeb()->Peb->UnicodeCaseTableData = casemap_ptr;
-    RtlInitNlsTables( ansi_ptr, oem_ptr, casemap_ptr, &nls_info );
+    NtCurrentTeb()->Peb->UnicodeCaseTableData = sort.casemap;
+    RtlInitNlsTables( ansi_ptr, oem_ptr, sort.casemap, &nls_info );
     RtlResetRtlTranslations( &nls_info );
 
     RegCreateKeyExW( HKEY_LOCAL_MACHINE, L"System\\CurrentControlSet\\Control\\Nls",
@@ -629,6 +740,8 @@ void init_locale(void)
                      0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &tz_key, NULL );
     RegCreateKeyExW( HKEY_CURRENT_USER, L"Control Panel\\International",
                      0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &intl_key, NULL );
+
+    current_locale_sort = get_language_sort( LOCALE_NAME_USER_DEFAULT );
 
     if (GetDynamicTimeZoneInformation( &timezone ) != TIME_ZONE_ID_INVALID &&
         !RegCreateKeyExW( HKEY_LOCAL_MACHINE, L"System\\CurrentControlSet\\Control\\TimeZoneInformation",
@@ -704,6 +817,14 @@ static inline USHORT get_table_entry( const USHORT *table, WCHAR ch )
 static inline WCHAR casemap( const USHORT *table, WCHAR ch )
 {
     return ch + table[table[table[ch >> 8] + ((ch >> 4) & 0x0f)] + (ch & 0x0f)];
+}
+
+
+static inline WORD get_char_type( DWORD type, WCHAR ch )
+{
+    const BYTE *ptr = sort.ctype_idx + ((const WORD *)sort.ctype_idx)[ch >> 8];
+    ptr = sort.ctype_idx + ((const WORD *)ptr)[(ch >> 4) & 0x0f] + (ch & 0x0f);
+    return sort.ctypes[*ptr * 3 + type / 2];
 }
 
 
@@ -2027,7 +2148,7 @@ static int get_sortkey( DWORD flags, const WCHAR *src, int srclen, char *dst, in
                 unsigned int ce;
 
                 if ((flags & NORM_IGNORESYMBOLS) &&
-                    (get_table_entry( wctype_table, wch ) & (C1_PUNCT | C1_SPACE)))
+                    (get_char_type( CT_CTYPE1, wch ) & (C1_PUNCT | C1_SPACE)))
                     continue;
 
                 if (flags & NORM_IGNORECASE) wch = casemap( nls_info.LowerCaseTable, wch );
@@ -2081,7 +2202,7 @@ static int get_sortkey( DWORD flags, const WCHAR *src, int srclen, char *dst, in
                 unsigned int ce;
 
                 if ((flags & NORM_IGNORESYMBOLS) &&
-                    (get_table_entry( wctype_table, wch ) & (C1_PUNCT | C1_SPACE)))
+                    (get_char_type( CT_CTYPE1, wch ) & (C1_PUNCT | C1_SPACE)))
                     continue;
 
                 if (flags & NORM_IGNORECASE) wch = casemap( nls_info.LowerCaseTable, wch );
@@ -2385,12 +2506,12 @@ static int compare_weights(int flags, const WCHAR *str1, int len1,
         {
             int skip = 0;
             /* FIXME: not tested */
-            if (get_table_entry( wctype_table, dstr1[dpos1] ) & (C1_PUNCT | C1_SPACE))
+            if (get_char_type( CT_CTYPE1, dstr1[dpos1] ) & (C1_PUNCT | C1_SPACE))
             {
                 inc_str_pos( &str1, &len1, &dpos1, &dlen1 );
                 skip = 1;
             }
-            if (get_table_entry( wctype_table, dstr2[dpos2] ) & (C1_PUNCT | C1_SPACE))
+            if (get_char_type( CT_CTYPE1, dstr2[dpos2] ) & (C1_PUNCT | C1_SPACE))
             {
                 inc_str_pos( &str2, &len2, &dpos2, &dlen2 );
                 skip = 1;
@@ -4140,6 +4261,60 @@ INT WINAPI DECLSPEC_HOTPATCH GetLocaleInfoEx( const WCHAR *locale, LCTYPE info, 
 
 
 /******************************************************************************
+ *	GetNLSVersion   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH GetNLSVersion( NLS_FUNCTION func, LCID lcid, NLSVERSIONINFO *info )
+{
+    WCHAR locale[LOCALE_NAME_MAX_LENGTH];
+
+    if (info->dwNLSVersionInfoSize < offsetof( NLSVERSIONINFO, dwEffectiveId ))
+    {
+        SetLastError( ERROR_INSUFFICIENT_BUFFER );
+        return FALSE;
+    }
+    if (!LCIDToLocaleName( lcid, locale, LOCALE_NAME_MAX_LENGTH, LOCALE_ALLOW_NEUTRAL_NAMES ))
+    {
+        SetLastError( ERROR_INVALID_PARAMETER );
+        return FALSE;
+    }
+    return GetNLSVersionEx( func, locale, (NLSVERSIONINFOEX *)info );
+}
+
+
+/******************************************************************************
+ *	GetNLSVersionEx   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH GetNLSVersionEx( NLS_FUNCTION func, const WCHAR *locale,
+                                               NLSVERSIONINFOEX *info )
+{
+    LCID lcid = 0;
+
+    if (func != COMPARE_STRING)
+    {
+        SetLastError( ERROR_INVALID_FLAGS );
+        return FALSE;
+    }
+    if (info->dwNLSVersionInfoSize < sizeof(*info) &&
+        (info->dwNLSVersionInfoSize != offsetof( NLSVERSIONINFO, dwEffectiveId )))
+    {
+        SetLastError( ERROR_INSUFFICIENT_BUFFER );
+        return FALSE;
+    }
+
+    if (!(lcid = LocaleNameToLCID( locale, 0 ))) return FALSE;
+
+    info->dwNLSVersion = info->dwDefinedVersion = sort.version;
+    if (info->dwNLSVersionInfoSize >= sizeof(*info))
+    {
+        const struct sortguid *sortid = get_language_sort( locale );
+        info->dwEffectiveId = lcid;
+        info->guidCustomVersion = sortid ? sortid->id : default_sort_guid;
+    }
+    return TRUE;
+}
+
+
+/******************************************************************************
  *	GetOEMCP   (kernelbase.@)
  */
 UINT WINAPI GetOEMCP(void)
@@ -4188,60 +4363,16 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetStringTypeW( DWORD type, const WCHAR *src, INT 
         SetLastError( ERROR_INVALID_PARAMETER );
         return FALSE;
     }
-
-    if (count == -1) count = lstrlenW(src) + 1;
-    switch (type)
+    if (type != CT_CTYPE1 && type != CT_CTYPE2 && type != CT_CTYPE3)
     {
-    case CT_CTYPE1:
-        while (count--) *chartype++ = get_table_entry( wctype_table, *src++ ) & 0xfff;
-        break;
-    case CT_CTYPE2:
-        while (count--) *chartype++ = get_table_entry( wctype_table, *src++ ) >> 12;
-        break;
-    case CT_CTYPE3:
-    {
-        WARN("CT_CTYPE3: semi-stub.\n");
-        while (count--)
-        {
-            int c = *src;
-            WORD type1, type3 = 0; /* C3_NOTAPPLICABLE */
-
-            type1 = get_table_entry( wctype_table, *src++ ) & 0xfff;
-            /* try to construct type3 from type1 */
-            if(type1 & C1_SPACE) type3 |= C3_SYMBOL;
-            if(type1 & C1_ALPHA) type3 |= C3_ALPHA;
-            if ((c>=0x30A0)&&(c<=0x30FF)) type3 |= C3_KATAKANA;
-            if ((c>=0x3040)&&(c<=0x309F)) type3 |= C3_HIRAGANA;
-            if ((c>=0x4E00)&&(c<=0x9FAF)) type3 |= C3_IDEOGRAPH;
-            if (c == 0x0640) type3 |= C3_KASHIDA;
-            if ((c>=0x3000)&&(c<=0x303F)) type3 |= C3_SYMBOL;
-
-            if ((c>=0xD800)&&(c<=0xDBFF)) type3 |= C3_HIGHSURROGATE;
-            if ((c>=0xDC00)&&(c<=0xDFFF)) type3 |= C3_LOWSURROGATE;
-
-            if ((c>=0xFF00)&&(c<=0xFF60)) type3 |= C3_FULLWIDTH;
-            if ((c>=0xFF00)&&(c<=0xFF20)) type3 |= C3_SYMBOL;
-            if ((c>=0xFF3B)&&(c<=0xFF40)) type3 |= C3_SYMBOL;
-            if ((c>=0xFF5B)&&(c<=0xFF60)) type3 |= C3_SYMBOL;
-            if ((c>=0xFF21)&&(c<=0xFF3A)) type3 |= C3_ALPHA;
-            if ((c>=0xFF41)&&(c<=0xFF5A)) type3 |= C3_ALPHA;
-            if ((c>=0xFFE0)&&(c<=0xFFE6)) type3 |= C3_FULLWIDTH;
-            if ((c>=0xFFE0)&&(c<=0xFFE6)) type3 |= C3_SYMBOL;
-
-            if ((c>=0xFF61)&&(c<=0xFFDC)) type3 |= C3_HALFWIDTH;
-            if ((c>=0xFF61)&&(c<=0xFF64)) type3 |= C3_SYMBOL;
-            if ((c>=0xFF65)&&(c<=0xFF9F)) type3 |= C3_KATAKANA;
-            if ((c>=0xFF65)&&(c<=0xFF9F)) type3 |= C3_ALPHA;
-            if ((c>=0xFFE8)&&(c<=0xFFEE)) type3 |= C3_HALFWIDTH;
-            if ((c>=0xFFE8)&&(c<=0xFFEE)) type3 |= C3_SYMBOL;
-            *chartype++ = type3;
-        }
-        break;
-    }
-    default:
         SetLastError( ERROR_INVALID_PARAMETER );
         return FALSE;
     }
+
+    if (count == -1) count = lstrlenW(src) + 1;
+
+    while (count--) *chartype++ = get_char_type( type, *src++ );
+
     return TRUE;
 }
 
@@ -4501,7 +4632,7 @@ INT WINAPI DECLSPEC_HOTPATCH IdnToUnicode( DWORD flags, const WCHAR *src, INT sr
 BOOL WINAPI DECLSPEC_HOTPATCH IsCharAlphaA( CHAR c )
 {
     WCHAR wc = nls_info.AnsiTableInfo.MultiByteTable[(unsigned char)c];
-    return !!(get_table_entry( wctype_table, wc ) & C1_ALPHA);
+    return !!(get_char_type( CT_CTYPE1, wc ) & C1_ALPHA);
 }
 
 
@@ -4510,7 +4641,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH IsCharAlphaA( CHAR c )
  */
 BOOL WINAPI DECLSPEC_HOTPATCH IsCharAlphaW( WCHAR wc )
 {
-    return !!(get_table_entry( wctype_table, wc ) & C1_ALPHA);
+    return !!(get_char_type( CT_CTYPE1, wc ) & C1_ALPHA);
 }
 
 
@@ -4520,7 +4651,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH IsCharAlphaW( WCHAR wc )
 BOOL WINAPI DECLSPEC_HOTPATCH IsCharAlphaNumericA( CHAR c )
 {
     WCHAR wc = nls_info.AnsiTableInfo.MultiByteTable[(unsigned char)c];
-    return !!(get_table_entry( wctype_table, wc ) & (C1_ALPHA | C1_DIGIT));
+    return !!(get_char_type( CT_CTYPE1, wc ) & (C1_ALPHA | C1_DIGIT));
 }
 
 
@@ -4529,7 +4660,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH IsCharAlphaNumericA( CHAR c )
  */
 BOOL WINAPI DECLSPEC_HOTPATCH IsCharAlphaNumericW( WCHAR wc )
 {
-    return !!(get_table_entry( wctype_table, wc ) & (C1_ALPHA | C1_DIGIT));
+    return !!(get_char_type( CT_CTYPE1, wc ) & (C1_ALPHA | C1_DIGIT));
 }
 
 
@@ -4538,7 +4669,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH IsCharAlphaNumericW( WCHAR wc )
  */
 BOOL WINAPI DECLSPEC_HOTPATCH IsCharBlankW( WCHAR wc )
 {
-    return !!(get_table_entry( wctype_table, wc ) & C1_BLANK);
+    return !!(get_char_type( CT_CTYPE1, wc ) & C1_BLANK);
 }
 
 
@@ -4547,7 +4678,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH IsCharBlankW( WCHAR wc )
  */
 BOOL WINAPI DECLSPEC_HOTPATCH IsCharCntrlW( WCHAR wc )
 {
-    return !!(get_table_entry( wctype_table, wc ) & C1_CNTRL);
+    return !!(get_char_type( CT_CTYPE1, wc ) & C1_CNTRL);
 }
 
 
@@ -4556,7 +4687,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH IsCharCntrlW( WCHAR wc )
  */
 BOOL WINAPI DECLSPEC_HOTPATCH IsCharDigitW( WCHAR wc )
 {
-    return !!(get_table_entry( wctype_table, wc ) & C1_DIGIT);
+    return !!(get_char_type( CT_CTYPE1, wc ) & C1_DIGIT);
 }
 
 
@@ -4566,7 +4697,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH IsCharDigitW( WCHAR wc )
 BOOL WINAPI DECLSPEC_HOTPATCH IsCharLowerA( CHAR c )
 {
     WCHAR wc = nls_info.AnsiTableInfo.MultiByteTable[(unsigned char)c];
-    return !!(get_table_entry( wctype_table, wc ) & C1_LOWER);
+    return !!(get_char_type( CT_CTYPE1, wc ) & C1_LOWER);
 }
 
 
@@ -4575,7 +4706,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH IsCharLowerA( CHAR c )
  */
 BOOL WINAPI DECLSPEC_HOTPATCH IsCharLowerW( WCHAR wc )
 {
-    return !!(get_table_entry( wctype_table, wc ) & C1_LOWER);
+    return !!(get_char_type( CT_CTYPE1, wc ) & C1_LOWER);
 }
 
 
@@ -4584,7 +4715,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH IsCharLowerW( WCHAR wc )
  */
 BOOL WINAPI DECLSPEC_HOTPATCH IsCharPunctW( WCHAR wc )
 {
-    return !!(get_table_entry( wctype_table, wc ) & C1_PUNCT);
+    return !!(get_char_type( CT_CTYPE1, wc ) & C1_PUNCT);
 }
 
 
@@ -4594,7 +4725,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH IsCharPunctW( WCHAR wc )
 BOOL WINAPI DECLSPEC_HOTPATCH IsCharSpaceA( CHAR c )
 {
     WCHAR wc = nls_info.AnsiTableInfo.MultiByteTable[(unsigned char)c];
-    return !!(get_table_entry( wctype_table, wc ) & C1_SPACE);
+    return !!(get_char_type( CT_CTYPE1, wc ) & C1_SPACE);
 }
 
 
@@ -4603,7 +4734,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH IsCharSpaceA( CHAR c )
  */
 BOOL WINAPI DECLSPEC_HOTPATCH IsCharSpaceW( WCHAR wc )
 {
-    return !!(get_table_entry( wctype_table, wc ) & C1_SPACE);
+    return !!(get_char_type( CT_CTYPE1, wc ) & C1_SPACE);
 }
 
 
@@ -4613,7 +4744,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH IsCharSpaceW( WCHAR wc )
 BOOL WINAPI DECLSPEC_HOTPATCH IsCharUpperA( CHAR c )
 {
     WCHAR wc = nls_info.AnsiTableInfo.MultiByteTable[(unsigned char)c];
-    return !!(get_table_entry( wctype_table, wc ) & C1_UPPER);
+    return !!(get_char_type( CT_CTYPE1, wc ) & C1_UPPER);
 }
 
 
@@ -4622,7 +4753,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH IsCharUpperA( CHAR c )
  */
 BOOL WINAPI DECLSPEC_HOTPATCH IsCharUpperW( WCHAR wc )
 {
-    return !!(get_table_entry( wctype_table, wc ) & C1_UPPER);
+    return !!(get_char_type( CT_CTYPE1, wc ) & C1_UPPER);
 }
 
 
@@ -4631,7 +4762,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH IsCharUpperW( WCHAR wc )
  */
 BOOL WINAPI DECLSPEC_HOTPATCH IsCharXDigitW( WCHAR wc )
 {
-    return !!(get_table_entry( wctype_table, wc ) & C1_XDIGIT);
+    return !!(get_char_type( CT_CTYPE1, wc ) & C1_XDIGIT);
 }
 
 
@@ -4729,6 +4860,39 @@ BOOL WINAPI DECLSPEC_HOTPATCH IsValidLocaleName( const WCHAR *locale )
 }
 
 
+/******************************************************************************
+ *	IsValidNLSVersion   (kernelbase.@)
+ */
+DWORD WINAPI DECLSPEC_HOTPATCH IsValidNLSVersion( NLS_FUNCTION func, const WCHAR *locale,
+                                                  NLSVERSIONINFOEX *info )
+{
+    static const GUID GUID_NULL;
+    NLSVERSIONINFOEX infoex;
+    DWORD ret;
+
+    if (func != COMPARE_STRING)
+    {
+        SetLastError( ERROR_INVALID_PARAMETER );
+        return FALSE;
+    }
+    if (info->dwNLSVersionInfoSize < sizeof(*info) &&
+        (info->dwNLSVersionInfoSize != offsetof( NLSVERSIONINFO, dwEffectiveId )))
+    {
+        SetLastError( ERROR_INVALID_PARAMETER );
+        return FALSE;
+    }
+    infoex.dwNLSVersionInfoSize = sizeof(infoex);
+    if (!GetNLSVersionEx( func, locale, &infoex )) return FALSE;
+
+    ret = (infoex.dwNLSVersion & ~0xff) == (info->dwNLSVersion & ~0xff);
+    if (ret && !IsEqualGUID( &info->guidCustomVersion, &GUID_NULL ))
+        ret = find_sortguid( &info->guidCustomVersion ) != NULL;
+
+    if (!ret) SetLastError( ERROR_SUCCESS );
+    return ret;
+}
+
+
 /***********************************************************************
  *	LCIDToLocaleName   (kernelbase.@)
  */
@@ -4748,6 +4912,7 @@ INT WINAPI DECLSPEC_HOTPATCH LCMapStringEx( const WCHAR *locale, DWORD flags, co
                                             WCHAR *dst, int dstlen, NLSVERSIONINFO *version,
                                             void *reserved, LPARAM handle )
 {
+    const struct sortguid *sortid;
     LPWSTR dst_ptr;
     INT len;
 
@@ -4777,6 +4942,13 @@ INT WINAPI DECLSPEC_HOTPATCH LCMapStringEx( const WCHAR *locale, DWORD flags, co
     }
 
     if (!dstlen) dst = NULL;
+
+    if (!(sortid = get_language_sort( locale )))
+    {
+        FIXME( "unknown locale %s\n", debugstr_w(locale) );
+        SetLastError( ERROR_INVALID_PARAMETER );
+        return 0;
+    }
 
     if (flags & LCMAP_SORTKEY)
     {
@@ -4822,7 +4994,7 @@ INT WINAPI DECLSPEC_HOTPATCH LCMapStringEx( const WCHAR *locale, DWORD flags, co
         if (flags & NORM_IGNORESYMBOLS)
         {
             for (len = 0; srclen; src++, srclen--)
-                if (!(get_table_entry( wctype_table, *src ) & (C1_PUNCT | C1_SPACE))) len++;
+                if (!(get_char_type( CT_CTYPE1, *src ) & (C1_PUNCT | C1_SPACE))) len++;
         }
         else if (flags & LCMAP_FULLWIDTH)
         {
@@ -4862,7 +5034,7 @@ INT WINAPI DECLSPEC_HOTPATCH LCMapStringEx( const WCHAR *locale, DWORD flags, co
     {
         for (len = dstlen, dst_ptr = dst; srclen && len; src++, srclen--)
         {
-            if ((flags & NORM_IGNORESYMBOLS) && (get_table_entry( wctype_table, *src ) & (C1_PUNCT | C1_SPACE)))
+            if ((flags & NORM_IGNORESYMBOLS) && (get_char_type( CT_CTYPE1, *src ) & (C1_PUNCT | C1_SPACE)))
                 continue;
             *dst_ptr++ = *src;
             len--;
@@ -4921,7 +5093,8 @@ INT WINAPI DECLSPEC_HOTPATCH LCMapStringEx( const WCHAR *locale, DWORD flags, co
 
     if (flags & (LCMAP_UPPERCASE | LCMAP_LOWERCASE))
     {
-        USHORT *table = (flags & LCMAP_LOWERCASE) ? nls_info.LowerCaseTable : nls_info.UpperCaseTable;
+        const USHORT *table = sort.casemap + (flags & LCMAP_LINGUISTIC_CASING ? sortid->casemap : 0);
+        table = table + 2 + (flags & LCMAP_LOWERCASE ? table[1] : 0);
         for (len = dstlen, dst_ptr = dst; srclen && len; src++, srclen--, len--)
             *dst_ptr++ = casemap( table, *src );
     }

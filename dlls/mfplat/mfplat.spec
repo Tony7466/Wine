@@ -40,7 +40,7 @@
 @ stdcall MFCreate2DMediaBuffer(long long long long ptr)
 @ stub MFCreateAMMediaTypeFromMFMediaType
 @ stdcall MFCreateAlignedMemoryBuffer(long long ptr)
-@ stdcall MFCreateAsyncResult(ptr ptr ptr ptr)
+@ stdcall MFCreateAsyncResult(ptr ptr ptr ptr) rtworkq.RtwqCreateAsyncResult
 @ stdcall MFCreateAttributes(ptr long)
 @ stub MFCreateAudioMediaType
 @ stdcall MFCreateCollection(ptr)
@@ -52,6 +52,7 @@
 @ stdcall MFCreateMFByteStreamOnStreamEx(ptr ptr)
 @ stdcall MFCreateMFByteStreamWrapper(ptr ptr)
 @ stub MFCreateMFVideoFormatFromMFMediaType
+@ stdcall MFCreateMediaBufferFromMediaType(ptr int64 long long ptr)
 @ stub MFCreateMediaBufferWrapper
 @ stdcall MFCreateMediaEvent(long ptr long ptr ptr)
 @ stdcall MFCreateMediaType(ptr)

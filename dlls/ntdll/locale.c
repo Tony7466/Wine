@@ -67,6 +67,7 @@ WINE_DEFAULT_DEBUG_CHANNEL(nls);
 
 enum nls_section_type
 {
+    NLS_SECTION_SORTKEYS = 9,
     NLS_SECTION_CASEMAP = 10,
     NLS_SECTION_CODEPAGE = 11,
     NLS_SECTION_NORMALIZE = 12
@@ -548,6 +549,9 @@ static NTSTATUS open_nls_data_file( ULONG type, ULONG id, HANDLE *file )
     {'\\','R','e','g','i','s','t','r','y','\\','M','a','c','h','i','n','e','\\','S','y','s','t','e','m','\\',
      'C','u','r','r','e','n','t','C','o','n','t','r','o','l','S','e','t','\\',
      'C','o','n','t','r','o','l','\\','N','l','s','\\','%','s',0};
+    static const WCHAR sortdirW[] = {'C',':','\\','w','i','n','d','o','w','s','\\',
+                                     'g','l','o','b','a','l','i','z','a','t','i','o','n','\\',
+                                     's','o','r','t','i','n','g','\\',0};
     static const WCHAR cpW[] = {'C','o','d','e','p','a','g','e',0};
     static const WCHAR normW[] = {'N','o','r','m','a','l','i','z','a','t','i','o','n',0};
     static const WCHAR langW[] = {'L','a','n','g','u','a','g','e',0};
@@ -564,21 +568,26 @@ static NTSTATUS open_nls_data_file( ULONG type, ULONG id, HANDLE *file )
     static const WCHAR normnfkcW[] = {'n','o','r','m','n','f','k','c','.','n','l','s',0};
     static const WCHAR normnfkdW[] = {'n','o','r','m','n','f','k','d','.','n','l','s',0};
     static const WCHAR normidnaW[] = {'n','o','r','m','i','d','n','a','.','n','l','s',0};
+    static const WCHAR sortkeysW[] = {'s','o','r','t','d','e','f','a','u','l','t','.','n','l','s',0};
 
     DWORD size;
     HANDLE handle;
-    NTSTATUS status;
+    NTSTATUS status = STATUS_OBJECT_NAME_NOT_FOUND;
     IO_STATUS_BLOCK io;
     OBJECT_ATTRIBUTES attr;
     UNICODE_STRING nameW, valueW;
     WCHAR buffer[MAX_PATH], value[10];
-    const WCHAR *name = NULL;
+    const WCHAR *name = NULL, *dir = system_dir;
     KEY_VALUE_PARTIAL_INFORMATION *info;
 
     /* get filename from registry */
 
     switch (type)
     {
+    case NLS_SECTION_SORTKEYS:
+        if (id) return STATUS_INVALID_PARAMETER_1;
+        buffer[0] = 0;
+        break;
     case NLS_SECTION_CASEMAP:
         if (id) return STATUS_UNSUCCESSFUL;
         sprintfW( buffer, keyfmtW, langW );
@@ -595,25 +604,33 @@ static NTSTATUS open_nls_data_file( ULONG type, ULONG id, HANDLE *file )
     default:
         return STATUS_INVALID_PARAMETER_1;
     }
-    RtlInitUnicodeString( &nameW, buffer );
-    RtlInitUnicodeString( &valueW, value );
-    InitializeObjectAttributes( &attr, &nameW, 0, 0, NULL );
-    if (!(status = NtOpenKey( &handle, KEY_READ, &attr )))
+
+    if (buffer[0])
     {
-        info = (KEY_VALUE_PARTIAL_INFORMATION *)buffer;
-        size = sizeof(buffer) - sizeof(WCHAR);
-        if (!(status = NtQueryValueKey( handle, &valueW, KeyValuePartialInformation, info, size, &size )))
+        RtlInitUnicodeString( &nameW, buffer );
+        RtlInitUnicodeString( &valueW, value );
+        InitializeObjectAttributes( &attr, &nameW, 0, 0, NULL );
+        if (!(status = NtOpenKey( &handle, KEY_READ, &attr )))
         {
-            ((WCHAR *)info->Data)[info->DataLength / sizeof(WCHAR)] = 0;
-            name = (WCHAR *)info->Data;
+            info = (KEY_VALUE_PARTIAL_INFORMATION *)buffer;
+            size = sizeof(buffer) - sizeof(WCHAR);
+            if (!(status = NtQueryValueKey( handle, &valueW, KeyValuePartialInformation, info, size, &size )))
+            {
+                ((WCHAR *)info->Data)[info->DataLength / sizeof(WCHAR)] = 0;
+                name = (WCHAR *)info->Data;
+            }
+            NtClose( handle );
         }
-        NtClose( handle );
     }
 
     if (!name || !*name)  /* otherwise some hardcoded defaults */
     {
         switch (type)
         {
+        case NLS_SECTION_SORTKEYS:
+            name = sortkeysW;
+            dir = sortdirW;
+            break;
         case NLS_SECTION_CASEMAP:
             name = intlW;
             break;
@@ -637,10 +654,10 @@ static NTSTATUS open_nls_data_file( ULONG type, ULONG id, HANDLE *file )
 
     /* try to open file in system dir */
 
-    valueW.MaximumLength = (strlenW(name) + strlenW(system_dir) + 5) * sizeof(WCHAR);
+    valueW.MaximumLength = (strlenW(name) + strlenW(dir) + 5) * sizeof(WCHAR);
     if (!(valueW.Buffer = RtlAllocateHeap( GetProcessHeap(), 0, valueW.MaximumLength )))
         return STATUS_NO_MEMORY;
-    valueW.Length = sprintfW( valueW.Buffer, pathfmtW, system_dir, name ) * sizeof(WCHAR);
+    valueW.Length = sprintfW( valueW.Buffer, pathfmtW, dir, name ) * sizeof(WCHAR);
     InitializeObjectAttributes( &attr, &valueW, 0, 0, NULL );
     status = NtOpenFile( file, GENERIC_READ, &attr, &io, FILE_SHARE_READ, FILE_SYNCHRONOUS_IO_ALERT );
     if (!status) TRACE( "found %s\n", debugstr_w( valueW.Buffer ));
@@ -1271,6 +1288,40 @@ BOOLEAN WINAPI RtlPrefixUnicodeString( const UNICODE_STRING *s1, const UNICODE_S
 }
 
 
+
+/******************************************************************************
+ *	RtlHashUnicodeString   (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlHashUnicodeString( const UNICODE_STRING *string, BOOLEAN case_insensitive,
+                                      ULONG alg, ULONG *hash )
+{
+    unsigned int i;
+
+    if (!string || !hash) return STATUS_INVALID_PARAMETER;
+
+    switch (alg)
+    {
+    case HASH_STRING_ALGORITHM_DEFAULT:
+    case HASH_STRING_ALGORITHM_X65599:
+        break;
+    default:
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    *hash = 0;
+    if (!case_insensitive)
+        for (i = 0; i < string->Length / sizeof(WCHAR); i++)
+            *hash = *hash * 65599 + string->Buffer[i];
+    else if (nls_info.UpperCaseTable)
+        for (i = 0; i < string->Length / sizeof(WCHAR); i++)
+            *hash = *hash * 65599 + casemap( nls_info.UpperCaseTable, string->Buffer[i] );
+    else  /* locale not setup yet */
+        for (i = 0; i < string->Length / sizeof(WCHAR); i++)
+            *hash = *hash * 65599 + casemap_ascii( string->Buffer[i] );
+    return STATUS_SUCCESS;
+}
+
+
 /**************************************************************************
  *	RtlCustomCPToUnicodeN   (NTDLL.@)
  */
@@ -1652,13 +1703,13 @@ NTSTATUS WINAPI RtlLocaleNameToLcid( const WCHAR *name, LCID *lcid, ULONG flags 
 
         if (PRIMARYLANGID(id) == LANG_NEUTRAL) continue;
 
-        if (!load_string( LOCALE_SNAME, id, buf, ARRAY_SIZE(buf) ) && !strcmpiW( name, buf ))
+        if (!load_string( LOCALE_SNAME, id, buf, ARRAY_SIZE(buf) ) && !wcsicmp( name, buf ))
         {
             *lcid = MAKELCID( id, SORT_DEFAULT );  /* FIXME: handle sort order */
             goto found;
         }
 
-        if (load_string( LOCALE_SISO639LANGNAME, id, buf, ARRAY_SIZE(buf) ) || strcmpiW( lang, buf ))
+        if (load_string( LOCALE_SISO639LANGNAME, id, buf, ARRAY_SIZE(buf) ) || wcsicmp( lang, buf ))
             continue;
 
         if (script)
@@ -1668,7 +1719,7 @@ NTSTATUS WINAPI RtlLocaleNameToLcid( const WCHAR *name, LCID *lcid, ULONG flags 
             p = buf;
             while (*p)
             {
-                if (!strncmpiW( p, script, len ) && (!p[len] || p[len] == ';')) break;
+                if (!wcsnicmp( p, script, len ) && (!p[len] || p[len] == ';')) break;
                 if (!(p = strchrW( p, ';'))) break;
                 p++;
             }

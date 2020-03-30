@@ -115,12 +115,9 @@ struct samplerdecl {
     DWORD                   mod;
 };
 
-#define INSTRARRAY_INITIAL_SIZE 8
 struct bwriter_shader {
     enum shader_type        type;
-
-    /* Shader version selected */
-    DWORD                   version;
+    unsigned char major_version, minor_version;
 
     /* Local constants. Every constant that is not defined below is loaded from
      * the global constant set at shader runtime
@@ -151,6 +148,8 @@ static inline void *d3dcompiler_alloc(SIZE_T size)
 
 static inline void *d3dcompiler_realloc(void *ptr, SIZE_T size)
 {
+    if (!ptr)
+        return d3dcompiler_alloc(size);
     return HeapReAlloc(GetProcessHeap(), 0, ptr, size);
 }
 
@@ -294,65 +293,6 @@ static inline void set_parse_status(enum parse_status *current, enum parse_statu
     else if (update == PARSE_WARN && *current == PARSE_SUCCESS)
         *current = PARSE_WARN;
 }
-
-/* A reasonable value as initial size */
-#define BYTECODEBUFFER_INITIAL_SIZE 32
-struct bytecode_buffer {
-    DWORD *data;
-    DWORD size;
-    DWORD alloc_size;
-    /* For tracking rare out of memory situations without passing
-     * return values around everywhere
-     */
-    HRESULT state;
-};
-
-struct bc_writer; /* Predeclaration for use in vtable parameters */
-
-typedef void (*instr_writer)(struct bc_writer *This,
-                             const struct instruction *instr,
-                             struct bytecode_buffer *buffer);
-
-struct bytecode_backend {
-    void (*header)(struct bc_writer *This, const struct bwriter_shader *shader,
-                   struct bytecode_buffer *buffer);
-    void (*end)(struct bc_writer *This, const struct bwriter_shader *shader,
-                struct bytecode_buffer *buffer);
-    void (*srcreg)(struct bc_writer *This, const struct shader_reg *reg,
-                   struct bytecode_buffer *buffer);
-    void (*dstreg)(struct bc_writer *This, const struct shader_reg *reg,
-                   struct bytecode_buffer *buffer, DWORD shift, DWORD mod);
-    void (*opcode)(struct bc_writer *This, const struct instruction *instr,
-                   DWORD token, struct bytecode_buffer *buffer);
-
-    const struct instr_handler_table {
-        DWORD opcode;
-        instr_writer func;
-    } *instructions;
-};
-
-/* Bytecode writing stuff */
-struct bc_writer {
-    const struct bytecode_backend *funcs;
-
-    /* Avoid result checking */
-    HRESULT                       state;
-
-    DWORD                         version;
-
-    /* Vertex shader varying mapping */
-    DWORD                         oPos_regnum;
-    DWORD                         oD_regnum[2];
-    DWORD                         oT_regnum[8];
-    DWORD                         oFog_regnum;
-    DWORD                         oFog_mask;
-    DWORD                         oPts_regnum;
-    DWORD                         oPts_mask;
-
-    /* Pixel shader specific members */
-    DWORD                         t_regnum[8];
-    DWORD                         v_regnum[2];
-};
 
 /* Debug utility routines */
 const char *debug_print_srcmod(DWORD mod) DECLSPEC_HIDDEN;
@@ -591,7 +531,7 @@ enum bwriterdeclusage
 #define T3_REG          5
 
 struct bwriter_shader *SlAssembleShader(const char *text, char **messages) DECLSPEC_HIDDEN;
-HRESULT SlWriteBytecode(const struct bwriter_shader *shader, int dxversion, DWORD **result, DWORD *size) DECLSPEC_HIDDEN;
+HRESULT shader_write_bytecode(const struct bwriter_shader *shader, DWORD **result, DWORD *size) DECLSPEC_HIDDEN;
 void SlDeleteShader(struct bwriter_shader *shader) DECLSPEC_HIDDEN;
 
 /* The general IR structure is inspired by Mesa GLSL hir, even though the code
@@ -734,14 +674,14 @@ struct hlsl_ir_node
 #define HLSL_MODIFIER_CONST          0x00000100
 #define HLSL_MODIFIER_ROW_MAJOR      0x00000200
 #define HLSL_MODIFIER_COLUMN_MAJOR   0x00000400
-#define HLSL_MODIFIER_IN             0x00000800
-#define HLSL_MODIFIER_OUT            0x00001000
+#define HLSL_STORAGE_IN              0x00000800
+#define HLSL_STORAGE_OUT             0x00001000
 
 #define HLSL_TYPE_MODIFIERS_MASK     (HLSL_MODIFIER_PRECISE | HLSL_STORAGE_VOLATILE | \
                                       HLSL_MODIFIER_CONST | HLSL_MODIFIER_ROW_MAJOR | \
                                       HLSL_MODIFIER_COLUMN_MAJOR)
 
-#define HLSL_MODIFIERS_COMPARISON_MASK (HLSL_MODIFIER_ROW_MAJOR | HLSL_MODIFIER_COLUMN_MAJOR)
+#define HLSL_MODIFIERS_MAJORITY_MASK (HLSL_MODIFIER_ROW_MAJOR | HLSL_MODIFIER_COLUMN_MAJOR)
 
 struct reg_reservation
 {

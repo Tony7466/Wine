@@ -20,9 +20,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-/* To get ICON_SMALL2 with the MSVC headers */
-#define _WIN32_WINNT 0x0501
-
 #include <assert.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -9451,7 +9448,7 @@ static void test_window_from_point(const char *argv0)
     ok(win == child, "WindowFromPoint returned %p, expected %p\n", win, child);
 
     SetEvent(end_event);
-    winetest_wait_child_process(info.hProcess);
+    wait_child_process(info.hProcess);
     CloseHandle(start_event);
     CloseHandle(end_event);
     CloseHandle(info.hProcess);
@@ -10302,7 +10299,7 @@ static void test_winproc_handles(const char *argv0)
     startup.cb = sizeof(startup);
     ok(CreateProcessA(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL,
                 &startup, &info), "CreateProcess failed.\n");
-    winetest_wait_child_process(info.hProcess);
+    wait_child_process(info.hProcess);
     CloseHandle(info.hProcess);
     CloseHandle(info.hThread);
 }
@@ -11825,7 +11822,7 @@ static void test_other_process_window(const char *argv0)
     ret = WaitForSingleObject(test_done_event, 5000);
     ok(ret == WAIT_OBJECT_0, "Unexpected ret %x.\n", ret);
 
-    winetest_wait_child_process(info.hProcess);
+    wait_child_process(info.hProcess);
     CloseHandle(window_ready_event);
     CloseHandle(test_done_event);
     CloseHandle(info.hProcess);

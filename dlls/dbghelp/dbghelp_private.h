@@ -71,8 +71,8 @@ struct sparse_array
 };
 
 void     sparse_array_init(struct sparse_array* sa, unsigned elt_sz, unsigned bucket_sz) DECLSPEC_HIDDEN;
-void*    sparse_array_find(const struct sparse_array* sa, unsigned long idx) DECLSPEC_HIDDEN;
-void*    sparse_array_add(struct sparse_array* sa, unsigned long key, struct pool* pool) DECLSPEC_HIDDEN;
+void*    sparse_array_find(const struct sparse_array* sa, ULONG_PTR idx) DECLSPEC_HIDDEN;
+void*    sparse_array_add(struct sparse_array* sa, ULONG_PTR key, struct pool* pool) DECLSPEC_HIDDEN;
 unsigned sparse_array_length(const struct sparse_array* sa) DECLSPEC_HIDDEN;
 
 struct hash_table_elt
@@ -115,6 +115,7 @@ void*    hash_table_iter_up(struct hash_table_iter* hti) DECLSPEC_HIDDEN;
 
 extern unsigned dbghelp_options DECLSPEC_HIDDEN;
 extern BOOL     dbghelp_opt_native DECLSPEC_HIDDEN;
+extern SYSTEM_INFO sysinfo DECLSPEC_HIDDEN;
 
 enum location_kind {loc_error,          /* reg is the error code */
                     loc_unavailable,    /* location is not available */
@@ -137,7 +138,7 @@ struct location
 {
     unsigned            kind : 8,
                         reg;
-    unsigned long       offset;
+    ULONG_PTR           offset;
 };
 
 struct symt
@@ -155,8 +156,8 @@ struct symt_ht
 struct symt_block
 {
     struct symt                 symt;
-    unsigned long               address;
-    unsigned long               size;
+    ULONG_PTR                   address;
+    ULONG_PTR                   size;
     struct symt*                container;      /* block, or func */
     struct vector               vchildren;      /* sub-blocks & local variables */
 };
@@ -164,7 +165,7 @@ struct symt_block
 struct symt_compiland
 {
     struct symt                 symt;
-    unsigned long               address;
+    ULONG_PTR                   address;
     unsigned                    source;
     struct vector               vchildren;      /* global variables & functions */
 };
@@ -193,8 +194,8 @@ struct symt_data
         /* DataIs{Member} (all values are in bits, not bytes) */
         struct
         {
-            long                        offset;
-            unsigned long               length;
+            LONG_PTR                    offset;
+            ULONG_PTR                   length;
         } member;
         /* DataIsConstant */
         VARIANT                 value;
@@ -205,10 +206,10 @@ struct symt_function
 {
     struct symt                 symt;
     struct hash_table_elt       hash_elt;       /* if global symbol */
-    unsigned long               address;
+    ULONG_PTR                   address;
     struct symt*                container;      /* compiland */
     struct symt*                type;           /* points to function_signature */
-    unsigned long               size;
+    ULONG_PTR                   size;
     struct vector               vlines;
     struct vector               vchildren;      /* locals, params, blocks, start/end, labels */
 };
@@ -227,8 +228,8 @@ struct symt_public
     struct hash_table_elt       hash_elt;
     struct symt*                container;      /* compiland */
     BOOL is_function;
-    unsigned long               address;
-    unsigned long               size;
+    ULONG_PTR                   address;
+    ULONG_PTR                   size;
 };
 
 struct symt_thunk
@@ -236,8 +237,8 @@ struct symt_thunk
     struct symt                 symt;
     struct hash_table_elt       hash_elt;
     struct symt*                container;      /* compiland */
-    unsigned long               address;
-    unsigned long               size;
+    ULONG_PTR                   address;
+    ULONG_PTR                   size;
     THUNK_ORDINAL               ordinal;        /* FIXME: doesn't seem to be accessible */
 };
 
@@ -256,7 +257,7 @@ struct symt_basic
     struct symt                 symt;
     struct hash_table_elt       hash_elt;
     enum BasicType              bt;
-    unsigned long               size;
+    ULONG_PTR                   size;
 };
 
 struct symt_enum
@@ -286,7 +287,7 @@ struct symt_pointer
 {
     struct symt                 symt;
     struct symt*                pointsto;
-    unsigned long               size;
+    ULONG_PTR                   size;
 };
 
 struct symt_typedef
@@ -386,10 +387,22 @@ struct module
     struct wine_rb_tree         sources_offsets_tree;
 };
 
+typedef BOOL (*enum_modules_cb)(const WCHAR*, ULONG_PTR addr, void* user);
+
+struct loader_ops
+{
+    BOOL (*synchronize_module_list)(struct process* process);
+    struct module* (*load_module)(struct process* process, const WCHAR* name, ULONG_PTR addr);
+    BOOL (*load_debug_info)(struct process *process, struct module* module);
+    BOOL (*enum_modules)(struct process* process, enum_modules_cb callback, void* user);
+    BOOL (*fetch_file_info)(struct process* process, const WCHAR* name, ULONG_PTR load_addr, DWORD_PTR* base, DWORD* size, DWORD* checksum);
+};
+
 struct process 
 {
     struct process*             next;
     HANDLE                      handle;
+    const struct loader_ops*    loader;
     WCHAR*                      search_path;
 
     PSYMBOL_REGISTERED_CALLBACK64       reg_cb;
@@ -398,7 +411,7 @@ struct process
     DWORD64                     reg_user;
 
     struct module*              lmodules;
-    unsigned long               dbg_hdr_addr;
+    ULONG_PTR                   dbg_hdr_addr;
 
     IMAGEHLP_STACK_FRAME        ctx_frame;
 
@@ -410,13 +423,13 @@ struct process
 
 struct line_info
 {
-    unsigned long               is_first : 1,
+    ULONG_PTR                   is_first : 1,
                                 is_last : 1,
                                 is_source_file : 1,
                                 line_number;
     union
     {
-        unsigned long               pc_offset;   /* if is_source_file isn't set */
+        ULONG_PTR                   pc_offset;   /* if is_source_file isn't set */
         unsigned                    source_file; /* if is_source_file is set */
     } u;
 };
@@ -497,7 +510,7 @@ struct dump_thread
 struct dump_context
 {
     /* process & thread information */
-    HANDLE                              hProcess;
+    struct process                     *process;
     DWORD                               pid;
     unsigned                            flags_out;
     /* thread information */
@@ -588,30 +601,15 @@ extern BOOL         pcs_callback(const struct process* pcs, ULONG action, void* 
 extern void*        fetch_buffer(struct process* pcs, unsigned size) DECLSPEC_HIDDEN;
 extern const char*  wine_dbgstr_addr(const ADDRESS64* addr) DECLSPEC_HIDDEN;
 extern struct cpu*  cpu_find(DWORD) DECLSPEC_HIDDEN;
-extern DWORD calc_crc32(int fd) DECLSPEC_HIDDEN;
-
-typedef BOOL (*enum_modules_cb)(const WCHAR*, unsigned long addr, void* user);
+extern DWORD calc_crc32(HANDLE handle) DECLSPEC_HIDDEN;
 
 /* elf_module.c */
-extern BOOL         elf_enum_modules(HANDLE hProc, enum_modules_cb, void*) DECLSPEC_HIDDEN;
-extern BOOL         elf_fetch_file_info(const WCHAR* name, DWORD_PTR* base, DWORD* size, DWORD* checksum) DECLSPEC_HIDDEN;
-struct image_file_map;
-extern BOOL         elf_load_debug_info(struct module* module) DECLSPEC_HIDDEN;
-extern struct module*
-                    elf_load_module(struct process* pcs, const WCHAR* name, unsigned long) DECLSPEC_HIDDEN;
-extern BOOL         elf_read_wine_loader_dbg_info(struct process* pcs) DECLSPEC_HIDDEN;
-extern BOOL         elf_synchronize_module_list(struct process* pcs) DECLSPEC_HIDDEN;
+extern BOOL         elf_read_wine_loader_dbg_info(struct process* pcs, ULONG_PTR addr) DECLSPEC_HIDDEN;
 struct elf_thunk_area;
-extern int          elf_is_in_thunk_area(unsigned long addr, const struct elf_thunk_area* thunks) DECLSPEC_HIDDEN;
+extern int          elf_is_in_thunk_area(ULONG_PTR addr, const struct elf_thunk_area* thunks) DECLSPEC_HIDDEN;
 
 /* macho_module.c */
-extern BOOL         macho_enum_modules(HANDLE hProc, enum_modules_cb, void*) DECLSPEC_HIDDEN;
-extern BOOL         macho_fetch_file_info(HANDLE process, const WCHAR* name, unsigned long load_addr, DWORD_PTR* base, DWORD* size, DWORD* checksum) DECLSPEC_HIDDEN;
-extern BOOL         macho_load_debug_info(struct process *pcs, struct module* module) DECLSPEC_HIDDEN;
-extern struct module*
-                    macho_load_module(struct process* pcs, const WCHAR* name, unsigned long) DECLSPEC_HIDDEN;
-extern BOOL         macho_read_wine_loader_dbg_info(struct process* pcs) DECLSPEC_HIDDEN;
-extern BOOL         macho_synchronize_module_list(struct process* pcs) DECLSPEC_HIDDEN;
+extern BOOL         macho_read_wine_loader_dbg_info(struct process* pcs, ULONG_PTR addr) DECLSPEC_HIDDEN;
 
 /* minidump.c */
 void minidump_add_memory_block(struct dump_context* dc, ULONG64 base, ULONG size, ULONG rva) DECLSPEC_HIDDEN;
@@ -620,6 +618,7 @@ void minidump_add_memory_block(struct dump_context* dc, ULONG64 base, ULONG size
 extern const WCHAR      S_ElfW[] DECLSPEC_HIDDEN;
 extern const WCHAR      S_WineLoaderW[] DECLSPEC_HIDDEN;
 extern const WCHAR      S_SlashW[] DECLSPEC_HIDDEN;
+extern const struct loader_ops no_loader_ops DECLSPEC_HIDDEN;
 
 extern struct module*
                     module_find_by_addr(const struct process* pcs, DWORD64 addr,
@@ -638,12 +637,10 @@ extern struct module*
                     module_new(struct process* pcs, const WCHAR* name,
                                enum module_type type, BOOL virtual,
                                DWORD64 addr, DWORD64 size,
-                               unsigned long stamp, unsigned long checksum) DECLSPEC_HIDDEN;
+                               ULONG_PTR stamp, ULONG_PTR checksum) DECLSPEC_HIDDEN;
 extern struct module*
                     module_get_containee(const struct process* pcs,
                                          const struct module* inner) DECLSPEC_HIDDEN;
-extern enum module_type
-                    module_get_type_by_name(const WCHAR* name) DECLSPEC_HIDDEN;
 extern void         module_reset_debug_info(struct module* module) DECLSPEC_HIDDEN;
 extern BOOL         module_remove(struct process* pcs,
                                   struct module* module) DECLSPEC_HIDDEN;
@@ -666,8 +663,13 @@ extern BOOL pdb_virtual_unwind(struct cpu_stack_walk *csw, DWORD_PTR ip,
 
 /* path.c */
 extern BOOL         path_find_symbol_file(const struct process* pcs, const struct module* module,
-                                          PCSTR full_path, const GUID* guid, DWORD dw1, DWORD dw2,
+                                          PCSTR full_path, enum module_type type, const GUID* guid, DWORD dw1, DWORD dw2,
                                           WCHAR *buffer, BOOL* is_unmatched) DECLSPEC_HIDDEN;
+extern WCHAR *get_dos_file_name(const WCHAR *filename) DECLSPEC_HIDDEN;
+extern BOOL search_dll_path(const WCHAR *name, BOOL (*match)(void*, HANDLE, const WCHAR*), void *param) DECLSPEC_HIDDEN;
+extern BOOL search_unix_path(const WCHAR *name, const char *path, BOOL (*match)(void*, HANDLE, const WCHAR*), void *param) DECLSPEC_HIDDEN;
+extern const WCHAR* file_name(const WCHAR* str) DECLSPEC_HIDDEN;
+extern const char* file_nameA(const char* str) DECLSPEC_HIDDEN;
 
 /* pe_module.c */
 extern BOOL         pe_load_nt_header(HANDLE hProc, DWORD64 base, IMAGE_NT_HEADERS* nth) DECLSPEC_HIDDEN;
@@ -687,17 +689,18 @@ extern const char*  source_get(const struct module* module, unsigned idx) DECLSP
 extern int          source_rb_compare(const void *key, const struct wine_rb_entry *entry) DECLSPEC_HIDDEN;
 
 /* stabs.c */
-typedef void (*stabs_def_cb)(struct module* module, unsigned long load_offset,
-                                const char* name, unsigned long offset,
+typedef void (*stabs_def_cb)(struct module* module, ULONG_PTR load_offset,
+                                const char* name, ULONG_PTR offset,
                                 BOOL is_public, BOOL is_global, unsigned char other,
                                 struct symt_compiland* compiland, void* user);
-extern BOOL         stabs_parse(struct module* module, unsigned long load_offset,
+extern BOOL         stabs_parse(struct module* module, ULONG_PTR load_offset,
                                 const char* stabs, int stablen,
                                 const char* strs, int strtablen,
                                 stabs_def_cb callback, void* user) DECLSPEC_HIDDEN;
 
 /* dwarf.c */
-extern BOOL         dwarf2_parse(struct module* module, unsigned long load_offset,
+struct image_file_map;
+extern BOOL         dwarf2_parse(struct module* module, ULONG_PTR load_offset,
                                  const struct elf_thunk_area* thunks,
                                  struct image_file_map* fmap) DECLSPEC_HIDDEN;
 extern BOOL dwarf2_virtual_unwind(struct cpu_stack_walk *csw, DWORD_PTR ip,
@@ -718,33 +721,33 @@ extern void         copy_symbolW(SYMBOL_INFOW* siw, const SYMBOL_INFO* si) DECLS
 extern struct symt_ht*
                     symt_find_nearest(struct module* module, DWORD_PTR addr) DECLSPEC_HIDDEN;
 extern struct symt_compiland*
-                    symt_new_compiland(struct module* module, unsigned long address,
+                    symt_new_compiland(struct module* module, ULONG_PTR address,
                                        unsigned src_idx) DECLSPEC_HIDDEN;
 extern struct symt_public*
                     symt_new_public(struct module* module, 
                                     struct symt_compiland* parent, 
                                     const char* typename,
                                     BOOL is_function,
-                                    unsigned long address,
+                                    ULONG_PTR address,
                                     unsigned size) DECLSPEC_HIDDEN;
 extern struct symt_data*
                     symt_new_global_variable(struct module* module, 
                                              struct symt_compiland* parent,
                                              const char* name, unsigned is_static,
-                                             struct location loc, unsigned long size,
+                                             struct location loc, ULONG_PTR size,
                                              struct symt* type) DECLSPEC_HIDDEN;
 extern struct symt_function*
                     symt_new_function(struct module* module,
                                       struct symt_compiland* parent,
                                       const char* name,
-                                      unsigned long addr, unsigned long size,
+                                      ULONG_PTR addr, ULONG_PTR size,
                                       struct symt* type) DECLSPEC_HIDDEN;
 extern BOOL         symt_normalize_function(struct module* module, 
                                             const struct symt_function* func) DECLSPEC_HIDDEN;
 extern void         symt_add_func_line(struct module* module,
                                        struct symt_function* func, 
                                        unsigned source_idx, int line_num, 
-                                       unsigned long offset) DECLSPEC_HIDDEN;
+                                       ULONG_PTR offset) DECLSPEC_HIDDEN;
 extern struct symt_data*
                     symt_add_func_local(struct module* module, 
                                         struct symt_function* func, 
@@ -774,7 +777,7 @@ extern struct symt_thunk*
                     symt_new_thunk(struct module* module, 
                                    struct symt_compiland* parent,
                                    const char* name, THUNK_ORDINAL ord,
-                                   unsigned long addr, unsigned long size) DECLSPEC_HIDDEN;
+                                   ULONG_PTR addr, ULONG_PTR size) DECLSPEC_HIDDEN;
 extern struct symt_data*
                     symt_new_constant(struct module* module,
                                       struct symt_compiland* parent,
@@ -783,7 +786,7 @@ extern struct symt_data*
 extern struct symt_hierarchy_point*
                     symt_new_label(struct module* module,
                                    struct symt_compiland* compiland,
-                                   const char* name, unsigned long address) DECLSPEC_HIDDEN;
+                                   const char* name, ULONG_PTR address) DECLSPEC_HIDDEN;
 extern struct symt* symt_index2ptr(struct module* module, DWORD id) DECLSPEC_HIDDEN;
 extern DWORD        symt_ptr2index(struct module* module, const struct symt* sym) DECLSPEC_HIDDEN;
 
@@ -823,7 +826,7 @@ extern BOOL         symt_add_function_signature_parameter(struct module* module,
 extern struct symt_pointer*
                     symt_new_pointer(struct module* module, 
                                      struct symt* ref_type,
-                                     unsigned long size) DECLSPEC_HIDDEN;
+                                     ULONG_PTR size) DECLSPEC_HIDDEN;
 extern struct symt_typedef*
                     symt_new_typedef(struct module* module, struct symt* ref, 
                                      const char* name) DECLSPEC_HIDDEN;

@@ -24,28 +24,30 @@
 #include <string.h>
 
 #include "dbghelp_private.h"
+#include "image_private.h"
 #include "winnls.h"
 #include "winternl.h"
 #include "wine/debug.h"
+#include "wine/heap.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(dbghelp);
 
-static inline BOOL is_sep(char ch) {return ch == '/' || ch == '\\';}
-static inline BOOL is_sepW(WCHAR ch) {return ch == '/' || ch == '\\';}
+static inline BOOL is_sepA(char ch) {return ch == '/' || ch == '\\';}
+static inline BOOL is_sep(WCHAR ch) {return ch == '/' || ch == '\\';}
 
-static inline const char* file_name(const char* str)
+const char* file_nameA(const char* str)
 {
     const char*       p;
 
-    for (p = str + strlen(str) - 1; p >= str && !is_sep(*p); p--);
+    for (p = str + strlen(str) - 1; p >= str && !is_sepA(*p); p--);
     return p + 1;
 }
 
-static inline const WCHAR* file_nameW(const WCHAR* str)
+const WCHAR* file_name(const WCHAR* str)
 {
     const WCHAR*      p;
 
-    for (p = str + strlenW(str) - 1; p >= str && !is_sepW(*p); p--);
+    for (p = str + strlenW(str) - 1; p >= str && !is_sep(*p); p--);
     return p + 1;
 }
 
@@ -53,7 +55,7 @@ static inline void file_pathW(const WCHAR *src, WCHAR *dst)
 {
     int len;
 
-    for (len = strlenW(src) - 1; (len > 0) && (!is_sepW(src[len])); len--);
+    for (len = strlenW(src) - 1; (len > 0) && (!is_sep(src[len])); len--);
     memcpy( dst, src, len * sizeof(WCHAR) );
     dst[len] = 0;
 }
@@ -70,7 +72,7 @@ HANDLE WINAPI FindDebugInfoFile(PCSTR FileName, PCSTR SymbolPath, PSTR DebugFile
                     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (h == INVALID_HANDLE_VALUE)
     {
-        if (!SearchPathA(SymbolPath, file_name(FileName), NULL, MAX_PATH, DebugFilePath, NULL))
+        if (!SearchPathA(SymbolPath, file_nameA(FileName), NULL, MAX_PATH, DebugFilePath, NULL))
             return NULL;
         h = CreateFileA(DebugFilePath, GENERIC_READ, FILE_SHARE_READ, NULL,
                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -180,7 +182,7 @@ BOOL WINAPI SymMatchFileNameW(PCWSTR file, PCWSTR match,
 
     while (fptr >= file && mptr >= match)
     {
-        if (toupperW(*fptr) != toupperW(*mptr) && !(is_sepW(*fptr) && is_sepW(*mptr)))
+        if (toupperW(*fptr) != toupperW(*mptr) && !(is_sep(*fptr) && is_sep(*mptr)))
             break;
         fptr--; mptr--;
     }
@@ -207,7 +209,7 @@ BOOL WINAPI SymMatchFileName(PCSTR file, PCSTR match,
 
     while (fptr >= file && mptr >= match)
     {
-        if (toupper(*fptr) != toupper(*mptr) && !(is_sep(*fptr) && is_sep(*mptr)))
+        if (toupper(*fptr) != toupper(*mptr) && !(is_sepA(*fptr) && is_sepA(*mptr)))
             break;
         fptr--; mptr--;
     }
@@ -384,7 +386,7 @@ BOOL WINAPI SymFindFileInPathW(HANDLE hProcess, PCWSTR searchPath, PCWSTR full_p
     s.cb = cb;
     s.user = user;
 
-    filename = file_nameW(full_path);
+    filename = file_name(full_path);
 
     /* first check full path to file */
     if (sffip_cb(full_path, &s))
@@ -472,7 +474,7 @@ struct module_find
 static BOOL CALLBACK module_find_cb(PCWSTR buffer, PVOID user)
 {
     struct module_find* mf = user;
-    DWORD               size, checksum, timestamp;
+    DWORD               size, timestamp;
     unsigned            matched = 0;
 
     /* the matching weights:
@@ -520,36 +522,6 @@ static BOOL CALLBACK module_find_cb(PCWSTR buffer, PVOID user)
             if (size != mf->dw2)
                 WARN("Found %s, but wrong size\n", debugstr_w(buffer));
             if (timestamp == mf->dw1 && size == mf->dw2) matched++;
-        }
-        break;
-    case DMT_ELF:
-        if (elf_fetch_file_info(buffer, 0, &size, &checksum))
-        {
-            matched++;
-            if (checksum == mf->dw1) matched++;
-            else
-                WARN("Found %s, but wrong checksums: %08x %08x\n",
-                     debugstr_w(buffer), checksum, mf->dw1);
-        }
-        else
-        {
-            WARN("Couldn't read %s\n", debugstr_w(buffer));
-            return FALSE;
-        }
-        break;
-    case DMT_MACHO:
-        if (macho_fetch_file_info(NULL, buffer, 0, 0, &size, &checksum))
-        {
-            matched++;
-            if (checksum == mf->dw1) matched++;
-            else
-                WARN("Found %s, but wrong checksums: %08x %08x\n",
-                     debugstr_w(buffer), checksum, mf->dw1);
-        }
-        else
-        {
-            WARN("Couldn't read %s\n", debugstr_w(buffer));
-            return FALSE;
         }
         break;
     case DMT_PDB:
@@ -623,7 +595,7 @@ static BOOL CALLBACK module_find_cb(PCWSTR buffer, PVOID user)
 }
 
 BOOL path_find_symbol_file(const struct process* pcs, const struct module* module,
-                           PCSTR full_path, const GUID* guid, DWORD dw1, DWORD dw2,
+                           PCSTR full_path, enum module_type type, const GUID* guid, DWORD dw1, DWORD dw2,
                            WCHAR *buffer, BOOL* is_unmatched)
 {
     struct module_find  mf;
@@ -641,8 +613,8 @@ BOOL path_find_symbol_file(const struct process* pcs, const struct module* modul
     mf.matched = 0;
 
     MultiByteToWideChar(CP_ACP, 0, full_path, -1, full_pathW, MAX_PATH);
-    filename = file_nameW(full_pathW);
-    mf.kind = module_get_type_by_name(filename);
+    filename = file_name(full_pathW);
+    mf.kind = type;
     *is_unmatched = FALSE;
 
     /* first check full path to file */
@@ -695,4 +667,156 @@ BOOL path_find_symbol_file(const struct process* pcs, const struct module* modul
         return TRUE;
     }
     return FALSE;
+}
+
+WCHAR *get_dos_file_name(const WCHAR *filename)
+{
+    WCHAR *dos_path;
+    size_t len;
+
+    if (*filename == '/')
+    {
+        char *unix_path;
+        len = WideCharToMultiByte(CP_UNIXCP, 0, filename, -1, NULL, 0, NULL, NULL);
+        unix_path = heap_alloc(len * sizeof(WCHAR));
+        WideCharToMultiByte(CP_UNIXCP, 0, filename, -1, unix_path, len, NULL, NULL);
+        dos_path = wine_get_dos_file_name(unix_path);
+        heap_free(unix_path);
+    }
+    else
+    {
+        len = lstrlenW(filename);
+        dos_path = heap_alloc((len + 1) * sizeof(WCHAR));
+        memcpy(dos_path, filename, (len + 1) * sizeof(WCHAR));
+    }
+    return dos_path;
+}
+
+BOOL search_dll_path(const WCHAR *name, BOOL (*match)(void*, HANDLE, const WCHAR*), void *param)
+{
+    size_t len, i;
+    HANDLE file;
+    WCHAR *buf;
+    BOOL ret;
+
+    static const WCHAR winebuilddirW[] = {'W','I','N','E','B','U','I','L','D','D','I','R',0};
+    static const WCHAR winedlldirW[] = {'W','I','N','E','D','L','L','D','I','R','%','u',0};
+
+    name = file_name(name);
+
+    if ((len = GetEnvironmentVariableW(winebuilddirW, NULL, 0)))
+    {
+        WCHAR *p, *end;
+        const WCHAR dllsW[] = { '\\','d','l','l','s','\\' };
+        const WCHAR programsW[] = { '\\','p','r','o','g','r','a','m','s','\\' };
+        const WCHAR dot_dllW[] = {'.','d','l','l',0};
+        const WCHAR dot_exeW[] = {'.','e','x','e',0};
+        const WCHAR dot_soW[] = {'.','s','o',0};
+
+        if (!(buf = heap_alloc((len + 8 + 3 * lstrlenW(name)) * sizeof(WCHAR)))) return FALSE;
+        end = buf + GetEnvironmentVariableW(winebuilddirW, buf, len);
+
+        memcpy(end, dllsW, sizeof(dllsW));
+        strcpyW(end + ARRAY_SIZE(dllsW), name);
+        if ((p = strrchrW(end, '.')) && !lstrcmpW(p, dot_soW)) *p = 0;
+        if ((p = strrchrW(end, '.')) && !lstrcmpW(p, dot_dllW)) *p = 0;
+        p = end + strlenW(end);
+        *p++ = '\\';
+        strcpyW(p, name);
+        file = CreateFileW(buf, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (file != INVALID_HANDLE_VALUE)
+        {
+            ret = match(param, file, buf);
+            CloseHandle(file);
+            if (ret) goto found;
+        }
+
+        memcpy(end, programsW, sizeof(programsW));
+        end += ARRAY_SIZE(programsW);
+        strcpyW(end, name);
+        if ((p = strrchrW(end, '.')) && !lstrcmpW(p, dot_soW)) *p = 0;
+        if ((p = strrchrW(end, '.')) && !lstrcmpW(p, dot_exeW)) *p = 0;
+        p = end + strlenW(end);
+        *p++ = '\\';
+        strcpyW(p, name);
+        file = CreateFileW(buf, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (file != INVALID_HANDLE_VALUE)
+        {
+            ret = match(param, file, buf);
+            CloseHandle(file);
+            if (ret) goto found;
+        }
+
+        heap_free(buf);
+    }
+
+    for (i = 0;; i++)
+    {
+        WCHAR env_name[64];
+        sprintfW(env_name, winedlldirW, i);
+        if (!(len = GetEnvironmentVariableW(env_name, NULL, 0))) break;
+        if (!(buf = heap_alloc((len + lstrlenW(name) + 2) * sizeof(WCHAR)))) return FALSE;
+
+        len = GetEnvironmentVariableW(env_name, buf, len);
+        buf[len++] = '\\';
+        strcpyW(buf + len, name);
+        file = CreateFileW(buf, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (file != INVALID_HANDLE_VALUE)
+        {
+            ret = match(param, file, buf);
+            CloseHandle(file);
+            if (ret) goto found;
+        }
+        heap_free(buf);
+    }
+
+    return FALSE;
+
+found:
+    TRACE("found %s\n", debugstr_w(buf));
+    heap_free(buf);
+    return TRUE;
+}
+
+BOOL search_unix_path(const WCHAR *name, const char *path, BOOL (*match)(void*, HANDLE, const WCHAR*), void *param)
+{
+    const char *iter, *next;
+    size_t size, len;
+    WCHAR *dos_path;
+    char *buf;
+    BOOL ret = FALSE;
+
+    if (!path) return FALSE;
+    name = file_name(name);
+
+    size = WideCharToMultiByte(CP_UNIXCP, 0, name, -1, NULL, 0, NULL, NULL) + strlen(path) + 1;
+    if (!(buf = heap_alloc(size))) return FALSE;
+
+    for (iter = path;; iter = next + 1)
+    {
+        if (!(next = strchr(iter, ':'))) next = iter + strlen(iter);
+        if (*iter == '/')
+        {
+            len = next - iter;
+            memcpy(buf, iter, len);
+            if (buf[len - 1] != '/') buf[len++] = '/';
+            WideCharToMultiByte(CP_UNIXCP, 0, name, -1, buf + len, size - len, NULL, NULL);
+            if ((dos_path = wine_get_dos_file_name(buf)))
+            {
+                HANDLE file = CreateFileW(dos_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+                if (file != INVALID_HANDLE_VALUE)
+                {
+                    ret = match(param, file, dos_path);
+                    CloseHandle(file);
+                    if (ret) TRACE("found %s\n", debugstr_w(dos_path));
+                }
+                heap_free(dos_path);
+                if (ret) break;
+            }
+        }
+        if (*next != ':') break;
+    }
+
+    heap_free(buf);
+    return ret;
 }

@@ -3152,9 +3152,10 @@ static void test_filter_state(void)
     hr = IMediaControl_Run(control);
     ok(hr == S_OK, "Got hr %#x.\n", hr);
     check_filter_state(graph, State_Running);
-    ok(source.start_time >= start_time && source.start_time < start_time + 500 * 10000,
-        "Expected time near %s, got %s.\n",
-        wine_dbgstr_longlong(start_time), wine_dbgstr_longlong(source.start_time));
+    if (winetest_interactive) /* Timing problems make this test too liable to fail. */
+        ok(source.start_time >= start_time && source.start_time < start_time + 500 * 10000,
+                "Expected time near %s, got %s.\n",
+                wine_dbgstr_longlong(start_time), wine_dbgstr_longlong(source.start_time));
     ok(sink.start_time == source.start_time, "Expected time %s, got %s.\n",
         wine_dbgstr_longlong(source.start_time), wine_dbgstr_longlong(sink.start_time));
 
@@ -3228,9 +3229,10 @@ static void test_filter_state(void)
     hr = IMediaFilter_Run(filter, 0);
     ok(hr == S_OK, "Got hr %#x.\n", hr);
     check_filter_state(graph, State_Running);
-    ok(source.start_time >= start_time && source.start_time < start_time + 500 * 10000,
-        "Expected time near %s, got %s.\n",
-        wine_dbgstr_longlong(start_time), wine_dbgstr_longlong(source.start_time));
+    if (winetest_interactive) /* Timing problems make this test too liable to fail. */
+        ok(source.start_time >= start_time && source.start_time < start_time + 500 * 10000,
+                "Expected time near %s, got %s.\n",
+                wine_dbgstr_longlong(start_time), wine_dbgstr_longlong(source.start_time));
     ok(sink.start_time == source.start_time, "Expected time %s, got %s.\n",
         wine_dbgstr_longlong(source.start_time), wine_dbgstr_longlong(sink.start_time));
 
@@ -3242,9 +3244,10 @@ static void test_filter_state(void)
     hr = IMediaFilter_Run(filter, 0);
     ok(hr == S_OK, "Got hr %#x.\n", hr);
     check_filter_state(graph, State_Running);
-    ok(source.start_time >= start_time && source.start_time < start_time + 500 * 10000,
-        "Expected time near %s, got %s.\n",
-        wine_dbgstr_longlong(start_time), wine_dbgstr_longlong(source.start_time));
+    if (winetest_interactive) /* Timing problems make this test too liable to fail. */
+        ok(source.start_time >= start_time && source.start_time < start_time + 500 * 10000,
+                "Expected time near %s, got %s.\n",
+                wine_dbgstr_longlong(start_time), wine_dbgstr_longlong(source.start_time));
     ok(sink.start_time == source.start_time, "Expected time %s, got %s.\n",
         wine_dbgstr_longlong(source.start_time), wine_dbgstr_longlong(sink.start_time));
 
@@ -3257,9 +3260,10 @@ static void test_filter_state(void)
     hr = IMediaFilter_Run(filter, 0);
     ok(hr == S_OK, "Got hr %#x.\n", hr);
     check_filter_state(graph, State_Running);
-    ok(source.start_time >= start_time && source.start_time < start_time + 500 * 10000,
-        "Expected time near %s, got %s.\n",
-        wine_dbgstr_longlong(start_time), wine_dbgstr_longlong(source.start_time));
+    if (winetest_interactive) /* Timing problems make this test too liable to fail. */
+        ok(source.start_time >= start_time && source.start_time < start_time + 500 * 10000,
+                "Expected time near %s, got %s.\n",
+                wine_dbgstr_longlong(start_time), wine_dbgstr_longlong(source.start_time));
     ok(sink.start_time == source.start_time, "Expected time %s, got %s.\n",
         wine_dbgstr_longlong(source.start_time), wine_dbgstr_longlong(sink.start_time));
 
@@ -3996,13 +4000,15 @@ static void test_graph_seeking(void)
 
     hr = IMediaSeeking_GetCurrentPosition(seeking, &time);
     ok(hr == S_OK, "Got hr %#x.\n", hr);
-    ok(abs(time - 1234 * 10000) < 40 * 10000,
-            "Expected about 1234ms, got %s.\n", wine_dbgstr_longlong(time));
+    if (winetest_interactive) /* Timing problems make this test too liable to fail. */
+        ok(abs(time - 1234 * 10000) < 40 * 10000,
+                "Expected about 1234ms, got %s.\n", wine_dbgstr_longlong(time));
     current = stop = 0xdeadbeef;
     hr = IMediaSeeking_GetPositions(seeking, &current, &stop);
     ok(hr == S_OK, "Got hr %#x.\n", hr);
-    ok(abs(current - 1234 * 10000) < 40 * 10000,
-            "Expected about 1234ms, got %s.\n", wine_dbgstr_longlong(current));
+    if (winetest_interactive) /* Timing problems make this test too liable to fail. */
+        ok(abs(current - 1234 * 10000) < 40 * 10000,
+                "Expected about 1234ms, got %s.\n", wine_dbgstr_longlong(current));
     ok(stop == 9000 * 10000, "Got time %s.\n", wine_dbgstr_longlong(stop));
 
     /* This remains true even if NoFlush is specified. */
@@ -4017,13 +4023,15 @@ static void test_graph_seeking(void)
 
     hr = IMediaSeeking_GetCurrentPosition(seeking, &time);
     ok(hr == S_OK, "Got hr %#x.\n", hr);
-    ok(abs(time - 1334 * 10000) < 80 * 10000,
-            "Expected about 1334ms, got %s.\n", wine_dbgstr_longlong(time));
+    if (winetest_interactive) /* Timing problems make this test too liable to fail. */
+        ok(abs(time - 1334 * 10000) < 80 * 10000,
+                "Expected about 1334ms, got %s.\n", wine_dbgstr_longlong(time));
     current = stop = 0xdeadbeef;
     hr = IMediaSeeking_GetPositions(seeking, &current, &stop);
     ok(hr == S_OK, "Got hr %#x.\n", hr);
-    ok(abs(current - 1334 * 10000) < 80 * 10000,
-            "Expected about 1334ms, got %s.\n", wine_dbgstr_longlong(current));
+    if (winetest_interactive) /* Timing problems make this test too liable to fail. */
+        ok(abs(current - 1334 * 10000) < 80 * 10000,
+                "Expected about 1334ms, got %s.\n", wine_dbgstr_longlong(current));
     ok(stop == 8000 * 10000, "Got time %s.\n", wine_dbgstr_longlong(stop));
 
     hr = IMediaControl_Pause(control);
@@ -4035,13 +4043,15 @@ static void test_graph_seeking(void)
 
     hr = IMediaSeeking_GetCurrentPosition(seeking, &time);
     ok(hr == S_OK, "Got hr %#x.\n", hr);
-    ok(abs(time - 1334 * 10000) < 80 * 10000,
-            "Expected about 1334ms, got %s.\n", wine_dbgstr_longlong(time));
+    if (winetest_interactive) /* Timing problems make this test too liable to fail. */
+        ok(abs(time - 1334 * 10000) < 80 * 10000,
+                "Expected about 1334ms, got %s.\n", wine_dbgstr_longlong(time));
     current = stop = 0xdeadbeef;
     hr = IMediaSeeking_GetPositions(seeking, &current, &stop);
     ok(hr == S_OK, "Got hr %#x.\n", hr);
-    ok(abs(current - 1334 * 10000) < 80 * 10000,
-            "Expected about 1334ms, got %s.\n", wine_dbgstr_longlong(current));
+    if (winetest_interactive) /* Timing problems make this test too liable to fail. */
+        ok(abs(current - 1334 * 10000) < 80 * 10000,
+                "Expected about 1334ms, got %s.\n", wine_dbgstr_longlong(current));
     ok(stop == 8000 * 10000, "Got time %s.\n", wine_dbgstr_longlong(stop));
 
     hr = IMediaControl_Stop(control);
@@ -4380,10 +4390,14 @@ static void test_window_threading(void)
     else
         skip("Could not find renderer window.\n");
 
+    SetActiveWindow(parent);
     expect_parent_message = FALSE;
     ref = IFilterGraph2_Release(graph);
     ok(!ref, "Got outstanding refcount %d.\n", ref);
     expect_parent_message = TRUE;
+
+    hwnd = GetActiveWindow();
+    ok(hwnd == parent, "Parent window lost focus, active window %p.\n", hwnd);
 
     hr = CoCreateInstance(&CLSID_FilterGraphNoThread, NULL, CLSCTX_INPROC_SERVER,
             &IID_IFilterGraph2, (void **)&graph);
@@ -4409,6 +4423,50 @@ static void test_window_threading(void)
     ok(ret, "Failed to delete file, error %u.\n", GetLastError());
 }
 
+/* Hyperdevotion Noire needs to be able to Render() from UYVY. */
+static void test_autoplug_uyvy(void)
+{
+    static const VIDEOINFOHEADER source_format =
+    {
+        .bmiHeader.biSize = sizeof(BITMAPINFOHEADER),
+        .bmiHeader.biWidth = 600,
+        .bmiHeader.biHeight = 400,
+        .bmiHeader.biCompression = mmioFOURCC('U','Y','V','Y'),
+        .bmiHeader.biBitCount = 16,
+    };
+    AM_MEDIA_TYPE source_type =
+    {
+        .majortype = MEDIATYPE_Video,
+        .subtype = MEDIASUBTYPE_UYVY,
+        .formattype = FORMAT_VideoInfo,
+        .cbFormat = sizeof(source_format),
+        .pbFormat = (BYTE *)&source_format,
+    };
+
+    IFilterGraph2 *graph = create_graph();
+    struct testpin source_pin;
+    struct testfilter source;
+    HRESULT hr;
+    ULONG ref;
+
+    testsource_init(&source_pin, NULL, 0);
+    testfilter_init(&source, &source_pin, 1);
+    source_pin.request_mt = &source_type;
+
+    IFilterGraph2_AddFilter(graph, &source.IBaseFilter_iface, L"source");
+
+    /* Windows 2008 doesn't seem to have an UYVY decoder, and the testbot chalks
+     * failure to decode up to missing audio hardware, even though we're not
+     * trying to render audio. */
+    hr = IFilterGraph2_Render(graph, &source_pin.IPin_iface);
+    todo_wine ok(hr == S_OK || hr == VFW_E_NO_AUDIO_HARDWARE, "Got hr %#x.\n", hr);
+
+    ref = IFilterGraph2_Release(graph);
+    ok(!ref, "Got outstanding refcount %d.\n", ref);
+    ok(source.ref == 1, "Got outstanding refcount %d.\n", source.ref);
+    ok(source_pin.ref == 1, "Got outstanding refcount %d.\n", source_pin.ref);
+}
+
 START_TEST(filtergraph)
 {
     CoInitializeEx(NULL, COINIT_MULTITHREADED);
@@ -4432,6 +4490,7 @@ START_TEST(filtergraph)
     test_default_sync_source();
     test_add_source_filter();
     test_window_threading();
+    test_autoplug_uyvy();
 
     CoUninitialize();
     test_render_with_multithread();

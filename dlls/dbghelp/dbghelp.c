@@ -68,8 +68,21 @@ WINE_DEFAULT_DEBUG_CHANNEL(dbghelp);
 
 unsigned   dbghelp_options = SYMOPT_UNDNAME;
 BOOL       dbghelp_opt_native = FALSE;
+SYSTEM_INFO sysinfo;
 
 static struct process* process_first /* = NULL */;
+
+BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
+{
+    switch (reason)
+    {
+    case DLL_PROCESS_ATTACH:
+        GetSystemInfo(&sysinfo);
+        DisableThreadLibraryCalls(instance);
+        break;
+    }
+    return TRUE;
+}
 
 /******************************************************************
  *		process_find_by_handle
@@ -261,11 +274,27 @@ static BOOL WINAPI process_invade_cb(PCWSTR name, ULONG64 base, ULONG size, PVOI
  */
 static BOOL check_live_target(struct process* pcs)
 {
+    PROCESS_BASIC_INFORMATION pbi;
+    ULONG_PTR base = 0;
+
     if (!GetProcessId(pcs->handle)) return FALSE;
     if (GetEnvironmentVariableA("DBGHELP_NOLIVE", NULL, 0)) return FALSE;
-    if (!elf_read_wine_loader_dbg_info(pcs))
-        macho_read_wine_loader_dbg_info(pcs);
-    return TRUE;
+
+    if (NtQueryInformationProcess( pcs->handle, ProcessBasicInformation,
+                                   &pbi, sizeof(pbi), NULL ))
+        return FALSE;
+
+    if (!pcs->is_64bit)
+    {
+        PEB32 *peb32 = (PEB32 *)pbi.PebBaseAddress;
+        DWORD base32 = 0;
+        ReadProcessMemory(pcs->handle, &peb32->Reserved[0], &base32, sizeof(base32), NULL);
+        base = base32;
+    }
+    else ReadProcessMemory(pcs->handle, &pbi.PebBaseAddress->Reserved[0], &base, sizeof(base), NULL);
+
+    TRACE("got debug info address %#lx from PEB %p\n", base, pbi.PebBaseAddress);
+    return elf_read_wine_loader_dbg_info(pcs, base) || macho_read_wine_loader_dbg_info(pcs, base);
 }
 
 /******************************************************************
@@ -321,6 +350,7 @@ BOOL WINAPI SymInitializeW(HANDLE hProcess, PCWSTR UserSearchPath, BOOL fInvadeP
 
     pcs->handle = hProcess;
     pcs->is_64bit = (sizeof(void *) == 8 || wow64) && !child_wow64;
+    pcs->loader = &no_loader_ops; /* platform-specific initialization will override it if loader debug info can be found */
 
     if (UserSearchPath)
     {
@@ -366,8 +396,7 @@ BOOL WINAPI SymInitializeW(HANDLE hProcess, PCWSTR UserSearchPath, BOOL fInvadeP
     {
         if (fInvadeProcess)
             EnumerateLoadedModulesW64(hProcess, process_invade_cb, hProcess);
-        elf_synchronize_module_list(pcs);
-        macho_synchronize_module_list(pcs);
+        pcs->loader->synchronize_module_list(pcs);
     }
     else if (fInvadeProcess)
     {
@@ -723,14 +752,14 @@ void WINAPI WinDbgExtensionDllInit(PWINDBG_EXTENSION_APIS lpExtensionApis,
 {
 }
 
-DWORD calc_crc32(int fd)
+DWORD calc_crc32(HANDLE handle)
 {
     BYTE buffer[8192];
     DWORD crc = 0;
-    int len;
+    DWORD len;
 
-    lseek(fd, 0, SEEK_SET);
-    while ((len = read(fd, buffer, sizeof(buffer))) > 0)
+    SetFilePointer(handle, 0, 0, FILE_BEGIN);
+    while (ReadFile(handle, buffer, sizeof(buffer), &len, NULL) && len)
         crc = RtlComputeCrc32(crc, buffer, len);
     return crc;
 }

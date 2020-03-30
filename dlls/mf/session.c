@@ -31,6 +31,8 @@
 #include "wine/heap.h"
 #include "wine/list.h"
 
+#include "mf_private.h"
+
 WINE_DEFAULT_DEBUG_CHANNEL(mfplat);
 
 enum session_command
@@ -164,7 +166,7 @@ struct topo_node
 enum presentation_flags
 {
     SESSION_FLAG_SOURCES_SUBSCRIBED = 0x1,
-    SESSION_FLAG_SINKS_SUBSCRIBED = 0x2,
+    SESSION_FLAG_PRESENTATION_CLOCK_SET = 0x2,
     SESSION_FLAG_FINALIZE_SINKS = 0x4,
 };
 
@@ -1187,7 +1189,7 @@ static HRESULT session_set_current_topology(struct media_session *session, IMFTo
     {
         IMFMediaEvent_SetUINT64(event, &MF_EVENT_START_PRESENTATION_TIME, 0);
         IMFMediaEvent_SetUINT64(event, &MF_EVENT_PRESENTATION_TIME_OFFSET, 0);
-        IMFMediaEvent_GetUINT64(event, &MF_EVENT_START_PRESENTATION_TIME_AT_OUTPUT, 0);
+        IMFMediaEvent_SetUINT64(event, &MF_EVENT_START_PRESENTATION_TIME_AT_OUTPUT, 0);
 
         IMFMediaEventQueue_QueueEvent(session->event_queue, event);
         IMFMediaEvent_Release(event);
@@ -1911,9 +1913,21 @@ static enum object_state session_get_object_state_for_event(MediaEventType event
     }
 }
 
+static void session_set_consumed_clock(IUnknown *object, IMFPresentationClock *clock)
+{
+    IMFClockConsumer *consumer;
+
+    if (SUCCEEDED(IUnknown_QueryInterface(object, &IID_IMFClockConsumer, (void **)&consumer)))
+    {
+        IMFClockConsumer_SetPresentationClock(consumer, clock);
+        IMFClockConsumer_Release(consumer);
+    }
+}
+
 static HRESULT session_start_clock(struct media_session *session)
 {
     IMFPresentationTimeSource *time_source = NULL;
+    struct media_source *source;
     LONGLONG start_offset = 0;
     struct media_sink *sink;
     struct topo_node *node;
@@ -1925,8 +1939,9 @@ static HRESULT session_start_clock(struct media_session *session)
             IMFTransform_ProcessMessage(node->object.transform, MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
     }
 
-    if (!(session->presentation.flags & SESSION_FLAG_SINKS_SUBSCRIBED))
+    if (!(session->presentation.flags & SESSION_FLAG_PRESENTATION_CLOCK_SET))
     {
+        /* Attempt to get time source from the sinks. */
         LIST_FOR_EACH_ENTRY(sink, &session->presentation.sinks, struct media_sink, entry)
         {
             if (SUCCEEDED(IMFMediaSink_QueryInterface(sink->sink, &IID_IMFPresentationTimeSource,
@@ -1957,6 +1972,12 @@ static HRESULT session_start_clock(struct media_session *session)
             }
         }
 
+        /* Set clock for all topology nodes. */
+        LIST_FOR_EACH_ENTRY(source, &session->presentation.sources, struct media_source, entry)
+        {
+            session_set_consumed_clock((IUnknown *)source->source, session->clock);
+        }
+
         LIST_FOR_EACH_ENTRY(sink, &session->presentation.sinks, struct media_sink, entry)
         {
             if (sink->event_generator && FAILED(hr = IMFMediaEventGenerator_BeginGetEvent(sink->event_generator,
@@ -1969,7 +1990,15 @@ static HRESULT session_start_clock(struct media_session *session)
                 WARN("Failed to set presentation clock for the sink, hr %#x.\n", hr);
         }
 
-        session->presentation.flags |= SESSION_FLAG_SINKS_SUBSCRIBED;
+        LIST_FOR_EACH_ENTRY(node, &session->presentation.nodes, struct topo_node, entry)
+        {
+            if (node->type != MF_TOPOLOGY_TRANSFORM_NODE)
+                continue;
+
+            session_set_consumed_clock(node->object.object, session->clock);
+        }
+
+        session->presentation.flags |= SESSION_FLAG_PRESENTATION_CLOCK_SET;
     }
 
     if (IsEqualGUID(&session->presentation.time_format, &GUID_NULL))
@@ -2257,9 +2286,6 @@ static HRESULT transform_node_get_sample(struct topo_node *node, DWORD output, I
     {
         IMFMediaBuffer *buffer = NULL;
 
-        if (!stream_info.cbSize)
-            FIXME("Unhandled buffer size %u.\n", stream_info.cbSize);
-
         hr = MFCreateAlignedMemoryBuffer(stream_info.cbSize, stream_info.cbAlignment, &buffer);
         if (SUCCEEDED(hr))
             hr = MFCreateSample(&buffers[output].pSample);
@@ -2495,6 +2521,38 @@ static void session_deliver_sample(struct media_session *session, IMFMediaStream
     IMFTopologyNode_Release(downstream_node);
 }
 
+static void session_sink_invalidated(struct media_session *session, IMFMediaEvent *event, IMFStreamSink *sink)
+{
+    struct topo_node *node, *sink_node = NULL;
+    HRESULT hr;
+
+    LIST_FOR_EACH_ENTRY(node, &session->presentation.nodes, struct topo_node, entry)
+    {
+        if (node->type == MF_TOPOLOGY_OUTPUT_NODE && node->object.sink_stream == sink)
+        {
+            sink_node = node;
+            break;
+        }
+    }
+
+    if (!sink_node)
+        return;
+
+    if (!event)
+    {
+        if (FAILED(hr = MFCreateMediaEvent(MESinkInvalidated, &GUID_NULL, S_OK, NULL, &event)))
+            WARN("Failed to create event, hr %#x.\n", hr);
+    }
+
+    if (!event)
+        return;
+
+    IMFMediaEvent_SetUINT64(event, &MF_EVENT_OUTPUT_NODE, sink_node->node_id);
+    IMFMediaEventQueue_QueueEvent(session->event_queue, event);
+
+    session_set_topo_status(session, S_OK, MF_TOPOSTATUS_ENDED);
+}
+
 static HRESULT WINAPI session_events_callback_Invoke(IMFAsyncCallback *iface, IMFAsyncResult *result)
 {
     struct media_session *session = impl_from_events_callback_IMFAsyncCallback(iface);
@@ -2576,13 +2634,39 @@ static HRESULT WINAPI session_events_callback_Invoke(IMFAsyncCallback *iface, IM
             EnterCriticalSection(&session->cs);
             session_request_sample(session, (IMFStreamSink *)event_source);
             LeaveCriticalSection(&session->cs);
-            break;
 
+            break;
         case MEMediaSample:
 
             EnterCriticalSection(&session->cs);
             session_deliver_sample(session, (IMFMediaStream *)event_source, &value);
             LeaveCriticalSection(&session->cs);
+
+            break;
+        case MEAudioSessionGroupingParamChanged:
+        case MEAudioSessionIconChanged:
+        case MEAudioSessionNameChanged:
+        case MEAudioSessionVolumeChanged:
+
+            IMFMediaEventQueue_QueueEvent(session->event_queue, event);
+
+            break;
+        case MEAudioSessionDeviceRemoved:
+        case MEAudioSessionDisconnected:
+        case MEAudioSessionExclusiveModeOverride:
+        case MEAudioSessionFormatChanged:
+        case MEAudioSessionServerShutdown:
+
+            IMFMediaEventQueue_QueueEvent(session->event_queue, event);
+            /* fallthrough */
+        case MESinkInvalidated:
+
+            EnterCriticalSection(&session->cs);
+            session_sink_invalidated(session, event_type == MESinkInvalidated ? event : NULL,
+                    (IMFStreamSink *)event_source);
+            LeaveCriticalSection(&session->cs);
+
+            break;
         default:
             ;
     }
@@ -2721,28 +2805,41 @@ static ULONG WINAPI session_rate_support_Release(IMFRateSupport *iface)
     return IMFMediaSession_Release(&session->IMFMediaSession_iface);
 }
 
-static void session_presentation_object_get_rate(IUnknown *object, MFRATE_DIRECTION direction,
+static HRESULT session_presentation_object_get_rate(IUnknown *object, MFRATE_DIRECTION direction,
         BOOL thin, BOOL fastest, float *result)
 {
     IMFRateSupport *rate_support;
     float rate;
+    HRESULT hr;
 
-    if (SUCCEEDED(MFGetService(object, &MF_RATE_CONTROL_SERVICE, &IID_IMFRateSupport, (void **)&rate_support)))
+    /* For objects that don't support rate control, it's assumed that only forward direction is allowed, at 1.0f. */
+
+    if (FAILED(hr = MFGetService(object, &MF_RATE_CONTROL_SERVICE, &IID_IMFRateSupport, (void **)&rate_support)))
     {
-        rate = 0.0f;
-        if (fastest)
+        if (direction == MFRATE_FORWARD)
         {
-            if (SUCCEEDED(IMFRateSupport_GetFastestRate(rate_support, direction, thin, &rate)))
-                *result = min(fabsf(rate), *result);
+            *result = 1.0f;
+            return S_OK;
         }
         else
-        {
-            if (SUCCEEDED(IMFRateSupport_GetSlowestRate(rate_support, direction, thin, &rate)))
-                *result = max(fabsf(rate), *result);
-        }
-
-        IMFRateSupport_Release(rate_support);
+            return MF_E_REVERSE_UNSUPPORTED;
     }
+
+    rate = 0.0f;
+    if (fastest)
+    {
+        if (SUCCEEDED(hr = IMFRateSupport_GetFastestRate(rate_support, direction, thin, &rate)))
+            *result = min(fabsf(rate), *result);
+    }
+    else
+    {
+        if (SUCCEEDED(hr = IMFRateSupport_GetSlowestRate(rate_support, direction, thin, &rate)))
+            *result = max(fabsf(rate), *result);
+    }
+
+    IMFRateSupport_Release(rate_support);
+
+    return hr;
 }
 
 static HRESULT session_get_presentation_rate(struct media_session *session, MFRATE_DIRECTION direction,
@@ -2750,24 +2847,33 @@ static HRESULT session_get_presentation_rate(struct media_session *session, MFRA
 {
     struct media_source *source;
     struct media_sink *sink;
+    HRESULT hr = E_POINTER;
 
     *result = 0.0f;
 
     EnterCriticalSection(&session->cs);
 
-    LIST_FOR_EACH_ENTRY(source, &session->presentation.sources, struct media_source, entry)
+    if (session->presentation.topo_status != MF_TOPOSTATUS_INVALID)
     {
-        session_presentation_object_get_rate((IUnknown *)source->source, direction, thin, fastest, result);
-    }
+        LIST_FOR_EACH_ENTRY(source, &session->presentation.sources, struct media_source, entry)
+        {
+            if (FAILED(hr = session_presentation_object_get_rate((IUnknown *)source->source, direction, thin, fastest, result)))
+                break;
+        }
 
-    LIST_FOR_EACH_ENTRY(sink, &session->presentation.sinks, struct media_sink, entry)
-    {
-        session_presentation_object_get_rate((IUnknown *)sink->sink, direction, thin, fastest, result);
+        if (SUCCEEDED(hr))
+        {
+            LIST_FOR_EACH_ENTRY(sink, &session->presentation.sinks, struct media_sink, entry)
+            {
+                if (FAILED(hr = session_presentation_object_get_rate((IUnknown *)sink->sink, direction, thin, fastest, result)))
+                    break;
+            }
+        }
     }
 
     LeaveCriticalSection(&session->cs);
 
-    return S_OK;
+    return hr;
 }
 
 static HRESULT WINAPI session_rate_support_GetSlowestRate(IMFRateSupport *iface, MFRATE_DIRECTION direction,
@@ -3465,7 +3571,7 @@ static HRESULT WINAPI present_clock_Start(IMFPresentationClock *iface, LONGLONG 
     struct clock_state_change_param param = {{0}};
     HRESULT hr;
 
-    TRACE("%p, %s.\n", iface, wine_dbgstr_longlong(start_offset));
+    TRACE("%p, %s.\n", iface, debugstr_time(start_offset));
 
     EnterCriticalSection(&clock->cs);
     clock->start_offset = param.u.offset = start_offset;
@@ -3690,7 +3796,7 @@ static HRESULT WINAPI present_clock_timer_SetTimer(IMFTimer *iface, DWORD flags,
     struct clock_timer *clock_timer;
     HRESULT hr;
 
-    TRACE("%p, %#x, %s, %p, %p, %p.\n", iface, flags, wine_dbgstr_longlong(time), callback, state, cancel_key);
+    TRACE("%p, %#x, %s, %p, %p, %p.\n", iface, flags, debugstr_time(time), callback, state, cancel_key);
 
     if (!(clock_timer = heap_alloc_zero(sizeof(*clock_timer))))
         return E_OUTOFMEMORY;

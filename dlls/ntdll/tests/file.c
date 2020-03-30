@@ -2097,7 +2097,7 @@ static void test_file_rename_information(void)
     res = pNtQueryInformationFile( handle, &io, fni, sizeof(FILE_NAME_INFORMATION) + MAX_PATH * sizeof(WCHAR), FileNameInformation );
     ok( res == STATUS_SUCCESS, "res expected STATUS_SUCCESS, got %x\n", res );
     fni->FileName[ fni->FileNameLength / sizeof(WCHAR) ] = 0;
-    todo_wine ok( !lstrcmpiW(fni->FileName, newpath + 2), "FileName expected %s, got %s\n",
+    ok( !lstrcmpiW(fni->FileName, newpath + 2), "FileName expected %s, got %s\n",
                   wine_dbgstr_w(newpath + 2), wine_dbgstr_w(fni->FileName) );
     HeapFree( GetProcessHeap(), 0, fni );
 
@@ -3955,12 +3955,12 @@ static void test_query_attribute_information_file(void)
 
     ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %d\n", status);
     ok(U(io).Status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %d\n", U(io).Status);
-    ok(ffai->FileSystemAttribute != 0, "Missing FileSystemAttribute\n");
+    ok(ffai->FileSystemAttributes != 0, "Missing FileSystemAttributes\n");
     ok(ffai->MaximumComponentNameLength != 0, "Missing MaximumComponentNameLength\n");
     ok(ffai->FileSystemNameLength != 0, "Missing FileSystemNameLength\n");
 
-    trace("FileSystemAttribute: %x MaximumComponentNameLength: %x FileSystemName: %s\n",
-          ffai->FileSystemAttribute, ffai->MaximumComponentNameLength,
+    trace("FileSystemAttributes: %x MaximumComponentNameLength: %x FileSystemName: %s\n",
+          ffai->FileSystemAttributes, ffai->MaximumComponentNameLength,
           wine_dbgstr_wn(ffai->FileSystemName, ffai->FileSystemNameLength / sizeof(WCHAR)));
 
     CloseHandle( dir );

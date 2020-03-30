@@ -142,30 +142,28 @@ static struct object *directory_lookup_name( struct object *obj, struct unicode_
     struct directory *dir = (struct directory *)obj;
     struct object *found;
     struct unicode_str tmp;
-    const WCHAR *p;
 
     assert( obj->ops == &directory_ops );
 
     if (!name) return NULL;  /* open the directory itself */
 
-    if (!(p = memchrW( name->str, '\\', name->len / sizeof(WCHAR) )))
-        /* Last element in the path name */
-        tmp.len = name->len;
-    else
-        tmp.len = (p - name->str) * sizeof(WCHAR);
-
     tmp.str = name->str;
+    tmp.len = get_path_element( name->str, name->len );
+
     if ((found = find_object( dir->entries, &tmp, attr )))
     {
-        /* Skip trailing \\ */
-        if (p)
+        /* Skip trailing \\ and move to the next element */
+        if (tmp.len < name->len)
         {
-            p++;
             tmp.len += sizeof(WCHAR);
+            name->str += tmp.len / sizeof(WCHAR);
+            name->len -= tmp.len;
         }
-        /* Move to the next element*/
-        name->str = p;
-        name->len -= tmp.len;
+        else
+        {
+            name->str = NULL;
+            name->len = 0;
+        }
         return found;
     }
 
@@ -173,7 +171,7 @@ static struct object *directory_lookup_name( struct object *obj, struct unicode_
     {
         if (tmp.len == 0) /* Double backslash */
             set_error( STATUS_OBJECT_NAME_INVALID );
-        else if (p)  /* Path still has backslashes */
+        else if (tmp.len < name->len)  /* Path still has backslashes */
             set_error( STATUS_OBJECT_PATH_NOT_FOUND );
     }
     return NULL;
@@ -272,12 +270,12 @@ static void create_session( unsigned int id )
     static const struct unicode_str link_local_str = {link_localW, sizeof(link_localW)};
     static const struct unicode_str link_session_str = {link_sessionW, sizeof(link_sessionW)};
 
-    static const WCHAR fmt_u[] = {'%','u',0};
     static struct directory *dir_bno_global, *dir_sessions, *dir_bnolinks;
     struct directory *dir_id, *dir_bno, *dir_dosdevices, *dir_windows, *dir_winstation;
     struct object *link_global, *link_local, *link_session, *link_bno, *link_windows;
     struct unicode_str id_str;
-    WCHAR id_strW[10];
+    char id_strA[10];
+    WCHAR *id_strW;
 
     if (!id)
     {
@@ -289,9 +287,8 @@ static void create_session( unsigned int id )
         make_object_static( (struct object *)dir_sessions );
     }
 
-    sprintfW( id_strW, fmt_u, id );
-    id_str.str = id_strW;
-    id_str.len = strlenW( id_strW ) * sizeof(WCHAR);
+    sprintf( id_strA, "%u", id );
+    id_strW = ascii_to_unicode_str( id_strA, &id_str );
     dir_id = create_directory( &dir_sessions->obj, &id_str, 0, HASH_SIZE, NULL );
     dir_dosdevices = create_directory( &dir_id->obj, &dir_dosdevices_str, 0, HASH_SIZE, NULL );
 
@@ -327,6 +324,7 @@ static void create_session( unsigned int id )
     release_object( dir_windows );
     release_object( dir_bno );
     release_object( dir_id );
+    free( id_strW );
 }
 
 void init_directories(void)

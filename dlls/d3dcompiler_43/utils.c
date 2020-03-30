@@ -892,8 +892,8 @@ BOOL compare_hlsl_types(const struct hlsl_type *t1, const struct hlsl_type *t2)
         return FALSE;
     if (t1->base_type == HLSL_TYPE_SAMPLER && t1->sampler_dim != t2->sampler_dim)
         return FALSE;
-    if ((t1->modifiers & HLSL_MODIFIERS_COMPARISON_MASK)
-            != (t2->modifiers & HLSL_MODIFIERS_COMPARISON_MASK))
+    if ((t1->modifiers & HLSL_MODIFIERS_MAJORITY_MASK)
+            != (t2->modifiers & HLSL_MODIFIERS_MAJORITY_MASK))
         return FALSE;
     if (t1->dimx != t2->dimx)
         return FALSE;
@@ -1456,6 +1456,29 @@ static unsigned int invert_swizzle(unsigned int *swizzle, unsigned int writemask
     return new_writemask;
 }
 
+static BOOL validate_lhs_deref(const struct hlsl_ir_node *lhs)
+{
+    struct hlsl_ir_deref *deref;
+
+    if (lhs->type != HLSL_IR_DEREF)
+    {
+        hlsl_report_message(lhs->loc, HLSL_LEVEL_ERROR, "invalid lvalue");
+        return FALSE;
+    }
+
+    deref = deref_from_node(lhs);
+
+    if (deref->src.type == HLSL_IR_DEREF_VAR)
+        return TRUE;
+    if (deref->src.type == HLSL_IR_DEREF_ARRAY)
+        return validate_lhs_deref(deref->src.v.array.array);
+    if (deref->src.type == HLSL_IR_DEREF_RECORD)
+        return validate_lhs_deref(deref->src.v.record.record);
+
+    assert(0);
+    return FALSE;
+}
+
 struct hlsl_ir_node *make_assignment(struct hlsl_ir_node *lhs, enum parse_assign_op assign_op,
         struct hlsl_ir_node *rhs)
 {
@@ -1507,6 +1530,12 @@ struct hlsl_ir_node *make_assignment(struct hlsl_ir_node *lhs, enum parse_assign
         }
 
         lhs = lhs_inner;
+    }
+
+    if (!validate_lhs_deref(lhs))
+    {
+        d3dcompiler_free(assign);
+        return NULL;
     }
 
     TRACE("Creating proper assignment expression.\n");
@@ -1808,11 +1837,11 @@ const char *debug_modifiers(DWORD modifiers)
         strcat(string, " row_major");                    /* 10 */
     if (modifiers & HLSL_MODIFIER_COLUMN_MAJOR)
         strcat(string, " column_major");                 /* 13 */
-    if ((modifiers & (HLSL_MODIFIER_IN | HLSL_MODIFIER_OUT)) == (HLSL_MODIFIER_IN | HLSL_MODIFIER_OUT))
+    if ((modifiers & (HLSL_STORAGE_IN | HLSL_STORAGE_OUT)) == (HLSL_STORAGE_IN | HLSL_STORAGE_OUT))
         strcat(string, " inout");                        /* 6 */
-    else if (modifiers & HLSL_MODIFIER_IN)
+    else if (modifiers & HLSL_STORAGE_IN)
         strcat(string, " in");                           /* 3 */
-    else if (modifiers & HLSL_MODIFIER_OUT)
+    else if (modifiers & HLSL_STORAGE_OUT)
         strcat(string, " out");                          /* 4 */
 
     return wine_dbg_sprintf("%s", string[0] ? string + 1 : "");

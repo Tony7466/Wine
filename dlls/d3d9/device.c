@@ -360,7 +360,8 @@ static BOOL wined3d_swapchain_desc_from_present_parameters(struct wined3d_swapch
     return TRUE;
 }
 
-void d3dcaps_from_wined3dcaps(D3DCAPS9 *caps, const struct wined3d_caps *wined3d_caps)
+void d3d9_caps_from_wined3dcaps(const struct d3d9 *d3d9, unsigned int adapter_ordinal,
+        D3DCAPS9 *caps, const struct wined3d_caps *wined3d_caps)
 {
     static const DWORD ps_minor_version[] = {0, 4, 0, 0};
     static const DWORD vs_minor_version[] = {0, 1, 0, 0};
@@ -370,9 +371,14 @@ void d3dcaps_from_wined3dcaps(D3DCAPS9 *caps, const struct wined3d_caps *wined3d
         D3DPTFILTERCAPS_MIPFPOINT      | D3DPTFILTERCAPS_MIPFLINEAR    | D3DPTFILTERCAPS_MAGFPOINT       |
         D3DPTFILTERCAPS_MAGFLINEAR     |D3DPTFILTERCAPS_MAGFANISOTROPIC|D3DPTFILTERCAPS_MAGFPYRAMIDALQUAD|
         D3DPTFILTERCAPS_MAGFGAUSSIANQUAD;
+    struct wined3d_adapter *wined3d_adapter;
+    struct wined3d_output_desc output_desc;
+    struct wined3d_output *wined3d_output;
+    unsigned int output_idx;
+    HRESULT hr;
 
     caps->DeviceType                        = (D3DDEVTYPE)wined3d_caps->DeviceType;
-    caps->AdapterOrdinal                    = wined3d_caps->AdapterOrdinal;
+    caps->AdapterOrdinal                    = adapter_ordinal;
     caps->Caps                              = wined3d_caps->Caps;
     caps->Caps2                             = wined3d_caps->Caps2;
     caps->Caps3                             = wined3d_caps->Caps3;
@@ -426,9 +432,6 @@ void d3dcaps_from_wined3dcaps(D3DCAPS9 *caps, const struct wined3d_caps *wined3d
     caps->PixelShader1xMaxValue             = wined3d_caps->PixelShader1xMaxValue;
     caps->DevCaps2                          = wined3d_caps->DevCaps2;
     caps->MaxNpatchTessellationLevel        = wined3d_caps->MaxNpatchTessellationLevel;
-    caps->MasterAdapterOrdinal              = wined3d_caps->MasterAdapterOrdinal;
-    caps->AdapterOrdinalInGroup             = wined3d_caps->AdapterOrdinalInGroup;
-    caps->NumberOfAdaptersInGroup           = wined3d_caps->NumberOfAdaptersInGroup;
     caps->DeclTypes                         = wined3d_caps->DeclTypes;
     caps->NumSimultaneousRTs                = wined3d_caps->NumSimultaneousRTs;
     caps->StretchRectFilterCaps             = wined3d_caps->StretchRectFilterCaps;
@@ -519,6 +522,32 @@ void d3dcaps_from_wined3dcaps(D3DCAPS9 *caps, const struct wined3d_caps *wined3d
     {
         DWORD major = caps->VertexShaderVersion;
         caps->VertexShaderVersion = D3DVS_VERSION(major, vs_minor_version[major]);
+    }
+
+    /* Get adapter group information */
+    output_idx = adapter_ordinal;
+    wined3d_output = d3d9->wined3d_outputs[output_idx];
+
+    wined3d_mutex_lock();
+    hr = wined3d_output_get_desc(wined3d_output, &output_desc);
+    wined3d_mutex_unlock();
+
+    if (FAILED(hr))
+    {
+        ERR("Failed to get output desc, hr %#x.\n", hr);
+        return;
+    }
+
+    caps->MasterAdapterOrdinal = output_idx - output_desc.ordinal;
+    caps->AdapterOrdinalInGroup = output_desc.ordinal;
+    if (!caps->AdapterOrdinalInGroup)
+    {
+        wined3d_adapter = wined3d_output_get_adapter(wined3d_output);
+        caps->NumberOfAdaptersInGroup = wined3d_adapter_get_output_count(wined3d_adapter);
+    }
+    else
+    {
+        caps->NumberOfAdaptersInGroup = 0;
     }
 }
 
@@ -709,7 +738,7 @@ static HRESULT WINAPI d3d9_device_GetDeviceCaps(IDirect3DDevice9Ex *iface, D3DCA
     hr = wined3d_device_get_device_caps(device->wined3d_device, &wined3d_caps);
     wined3d_mutex_unlock();
 
-    d3dcaps_from_wined3dcaps(caps, &wined3d_caps);
+    d3d9_caps_from_wined3dcaps(device->d3d_parent, device->adapter_ordinal, caps, &wined3d_caps);
 
     return hr;
 }
@@ -749,6 +778,7 @@ static HRESULT WINAPI d3d9_device_GetCreationParameters(IDirect3DDevice9Ex *ifac
             (struct wined3d_device_creation_parameters *)parameters);
     wined3d_mutex_unlock();
 
+    parameters->AdapterOrdinal = device->adapter_ordinal;
     return D3D_OK;
 }
 
@@ -2514,8 +2544,8 @@ static HRESULT WINAPI d3d9_device_GetTexture(IDirect3DDevice9Ex *iface, DWORD st
     if (!texture)
         return D3DERR_INVALIDCALL;
 
-    if (stage >= WINED3DVERTEXTEXTURESAMPLER0 && stage <= WINED3DVERTEXTEXTURESAMPLER3)
-        stage -= (WINED3DVERTEXTEXTURESAMPLER0 - WINED3D_MAX_FRAGMENT_SAMPLERS);
+    if (stage >= D3DVERTEXTEXTURESAMPLER0 && stage <= D3DVERTEXTEXTURESAMPLER3)
+        stage -= D3DVERTEXTEXTURESAMPLER0 - WINED3D_VERTEX_SAMPLER_OFFSET;
 
     if (stage >= ARRAY_SIZE(state->textures))
     {
@@ -2550,20 +2580,20 @@ static HRESULT WINAPI d3d9_device_SetTexture(IDirect3DDevice9Ex *iface, DWORD st
 
     texture_impl = unsafe_impl_from_IDirect3DBaseTexture9(texture);
 
+    if (stage >= D3DVERTEXTEXTURESAMPLER0 && stage <= D3DVERTEXTEXTURESAMPLER3)
+        stage -= D3DVERTEXTEXTURESAMPLER0 - WINED3D_VERTEX_SAMPLER_OFFSET;
+
     wined3d_mutex_lock();
     wined3d_stateblock_set_texture(device->update_state, stage,
             texture_impl ? texture_impl->wined3d_texture : NULL);
     if (!device->recording)
     {
-        unsigned int i = stage < 16 || (stage >= D3DVERTEXTEXTURESAMPLER0 && stage <= D3DVERTEXTEXTURESAMPLER3)
-                ? stage < 16 ? stage : stage - D3DVERTEXTEXTURESAMPLER0 + 16 : ~0u;
-
-        if (i < D3D9_MAX_TEXTURE_UNITS)
+        if (stage < D3D9_MAX_TEXTURE_UNITS)
         {
             if (texture_impl && texture_impl->usage & D3DUSAGE_AUTOGENMIPMAP)
-                device->auto_mipmaps |= 1u << i;
+                device->auto_mipmaps |= 1u << stage;
             else
-                device->auto_mipmaps &= ~(1u << i);
+                device->auto_mipmaps &= ~(1u << stage);
         }
     }
     wined3d_mutex_unlock();
@@ -2656,8 +2686,8 @@ static HRESULT WINAPI d3d9_device_GetSamplerState(IDirect3DDevice9Ex *iface,
 
     TRACE("iface %p, sampler_idx %u, state %#x, value %p.\n", iface, sampler_idx, state, value);
 
-    if (sampler_idx >= WINED3DVERTEXTEXTURESAMPLER0 && sampler_idx <= WINED3DVERTEXTEXTURESAMPLER3)
-        sampler_idx -= (WINED3DVERTEXTEXTURESAMPLER0 - WINED3D_MAX_FRAGMENT_SAMPLERS);
+    if (sampler_idx >= D3DVERTEXTEXTURESAMPLER0 && sampler_idx <= D3DVERTEXTEXTURESAMPLER3)
+        sampler_idx -= D3DVERTEXTEXTURESAMPLER0 - WINED3D_VERTEX_SAMPLER_OFFSET;
 
     if (sampler_idx >= ARRAY_SIZE(device_state->sampler_states))
     {
@@ -2680,6 +2710,9 @@ static HRESULT WINAPI DECLSPEC_HOTPATCH d3d9_device_SetSamplerState(IDirect3DDev
     struct d3d9_device *device = impl_from_IDirect3DDevice9Ex(iface);
 
     TRACE("iface %p, sampler %u, state %#x, value %#x.\n", iface, sampler, state, value);
+
+    if (sampler >= D3DVERTEXTEXTURESAMPLER0 && sampler <= D3DVERTEXTEXTURESAMPLER3)
+        sampler -= D3DVERTEXTEXTURESAMPLER0 - WINED3D_VERTEX_SAMPLER_OFFSET;
 
     wined3d_mutex_lock();
     wined3d_stateblock_set_sampler_state(device->update_state, sampler, state, value);
@@ -4592,9 +4625,10 @@ HRESULT device_init(struct d3d9_device *device, struct d3d9 *parent, struct wine
     struct wined3d_swapchain_desc *swapchain_desc;
     struct wined3d_adapter *wined3d_adapter;
     struct d3d9_swapchain *d3d_swapchain;
-    struct wined3d_caps caps;
+    struct wined3d_caps wined3d_caps;
     unsigned int output_idx;
     unsigned i, count = 1;
+    D3DCAPS9 caps;
     HRESULT hr;
 
     static const enum wined3d_feature_level feature_levels[] =
@@ -4633,7 +4667,8 @@ HRESULT device_init(struct d3d9_device *device, struct d3d9 *parent, struct wine
         return hr;
     }
 
-    wined3d_get_device_caps(wined3d, adapter, device_type, &caps);
+    wined3d_get_device_caps(wined3d_adapter, device_type, &wined3d_caps);
+    d3d9_caps_from_wined3dcaps(parent, adapter, &caps, &wined3d_caps);
     device->max_user_clip_planes = caps.MaxUserClipPlanes;
     device->vs_uniform_count = caps.MaxVertexShaderConst;
     if (flags & D3DCREATE_ADAPTERGROUP_DEVICE)

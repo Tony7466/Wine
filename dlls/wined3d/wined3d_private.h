@@ -284,7 +284,6 @@ static inline enum complex_fixup get_complex_fixup(struct color_fixup_desc fixup
 #define MAX_CONSTANT_BUFFERS        15
 #define MAX_SAMPLER_OBJECTS         16
 #define MAX_SHADER_RESOURCE_VIEWS   128
-#define MAX_RENDER_TARGET_VIEWS     8
 #define MAX_UNORDERED_ACCESS_VIEWS  8
 #define MAX_TGSM_REGISTERS          8192
 #define MAX_VERTEX_BLENDS           4
@@ -1393,8 +1392,9 @@ struct ps_compile_args
     DWORD flatshading : 1;
     DWORD alpha_test_func : 3;
     DWORD render_offscreen : 1;
-    DWORD rt_alpha_swizzle : 8; /* MAX_RENDER_TARGET_VIEWS, 8 */
-    DWORD padding : 18;
+    DWORD rt_alpha_swizzle : 8; /* WINED3D_MAX_RENDER_TARGETS, 8 */
+    DWORD dual_source_blend : 1;
+    DWORD padding : 17;
 };
 
 enum fog_src_type
@@ -1916,7 +1916,7 @@ struct wined3d_rendertarget_info
 
 struct wined3d_fb_state
 {
-    struct wined3d_rendertarget_view *render_targets[MAX_RENDER_TARGET_VIEWS];
+    struct wined3d_rendertarget_view *render_targets[WINED3D_MAX_RENDER_TARGETS];
     struct wined3d_rendertarget_view *depth_stencil;
 };
 
@@ -1954,7 +1954,7 @@ struct wined3d_context
     DWORD last_was_ffp_blit : 1;
     DWORD last_was_blit : 1;
     DWORD last_was_ckey : 1;
-    DWORD namedArraysLoaded : 1;
+    DWORD last_was_dual_source_blend : 1;
     DWORD texShaderBumpMap : 8;         /* WINED3D_MAX_TEXTURES, 8 */
     DWORD lastWasPow2Texture : 8;       /* WINED3D_MAX_TEXTURES, 8 */
     DWORD fixed_function_usage_map : 8; /* WINED3D_MAX_TEXTURES, 8 */
@@ -1971,7 +1971,8 @@ struct wined3d_context
     DWORD destroyed : 1;
     DWORD destroy_delayed : 1;
     DWORD clip_distance_mask : 8; /* WINED3D_MAX_CLIP_DISTANCES, 8 */
-    DWORD padding : 14;
+    DWORD namedArraysLoaded : 1;
+    DWORD padding : 13;
 
     DWORD constant_update_mask;
     DWORD numbered_array_mask;
@@ -2043,7 +2044,7 @@ struct wined3d_context_gl
     struct fbo_entry *current_fbo;
     GLuint fbo_read_binding;
     GLuint fbo_draw_binding;
-    struct wined3d_rendertarget_info blit_targets[MAX_RENDER_TARGET_VIEWS];
+    struct wined3d_rendertarget_info blit_targets[WINED3D_MAX_RENDER_TARGETS];
     uint32_t draw_buffers_mask; /* Enabled draw buffers, 31 max. */
 
     /* Queries. */
@@ -2591,6 +2592,7 @@ enum wined3d_pci_device
     CARD_NVIDIA_TITANX_PASCAL       = 0x1b00,
     CARD_NVIDIA_TITANV              = 0x1d81,
     CARD_NVIDIA_GEFORCE_GTX1650SUPER= 0x2187,
+    CARD_NVIDIA_GEFORCE_GTX1660SUPER= 0x21c4,
     CARD_NVIDIA_GEFORCE_GTX1660TI   = 0x2182,
     CARD_NVIDIA_GEFORCE_RTX2060     = 0x1f08,
     CARD_NVIDIA_GEFORCE_RTX2070     = 0x1f07,
@@ -2899,6 +2901,7 @@ struct wined3d_adapter_ops
 
 struct wined3d_output
 {
+    unsigned int ordinal;
     WCHAR device_name[CCHDEVICENAME];
     struct wined3d_adapter *adapter;
     enum wined3d_format_id screen_format;
@@ -2912,7 +2915,6 @@ struct wined3d_output
 struct wined3d_adapter
 {
     unsigned int ordinal;
-    POINT monitor_position;
 
     struct wined3d_gl_info  gl_info;
     struct wined3d_d3d_info d3d_info;
@@ -3140,6 +3142,7 @@ struct wined3d_blend_state
 {
     LONG refcount;
     struct wined3d_blend_state_desc desc;
+    BOOL dual_source;
 
     void *parent;
     const struct wined3d_parent_ops *parent_ops;
@@ -3182,7 +3185,7 @@ struct wined3d_light_state
 struct wined3d_state
 {
     DWORD flags;
-    const struct wined3d_fb_state *fb;
+    struct wined3d_fb_state fb;
 
     struct wined3d_vertex_declaration *vertex_declaration;
     struct wined3d_stream_output stream_output[WINED3D_MAX_STREAM_OUTPUT_BUFFERS];
@@ -3299,7 +3302,6 @@ struct wined3d_device
     struct wine_rb_tree samplers, rasterizer_states, blend_states;
 
     /* Render Target Support */
-    struct wined3d_fb_state fb;
     struct wined3d_rendertarget_view *auto_depth_stencil_view;
 
     /* Cursor management */
@@ -3855,7 +3857,7 @@ struct fbo_entry
     struct wined3d_fbo_entry_key
     {
         DWORD rb_namespace;
-        struct wined3d_fbo_resource objects[MAX_RENDER_TARGET_VIEWS + 1];
+        struct wined3d_fbo_resource objects[WINED3D_MAX_RENDER_TARGETS + 1];
     } key;
 };
 
@@ -3987,8 +3989,7 @@ HRESULT wined3d_light_state_set_light(struct wined3d_light_state *state, DWORD l
         const struct wined3d_light *params, struct wined3d_light_info **light_info) DECLSPEC_HIDDEN;
 
 void state_cleanup(struct wined3d_state *state) DECLSPEC_HIDDEN;
-void state_init(struct wined3d_state *state, struct wined3d_fb_state *fb,
-        const struct wined3d_d3d_info *d3d_info, DWORD flags) DECLSPEC_HIDDEN;
+void state_init(struct wined3d_state *state, const struct wined3d_d3d_info *d3d_info, DWORD flags) DECLSPEC_HIDDEN;
 void state_unbind_resources(struct wined3d_state *state) DECLSPEC_HIDDEN;
 
 enum wined3d_cs_queue_id
@@ -4031,7 +4032,6 @@ struct wined3d_cs
 {
     const struct wined3d_cs_ops *ops;
     struct wined3d_device *device;
-    struct wined3d_fb_state fb;
     struct wined3d_state state;
     HMODULE wined3d_module;
     HANDLE thread;
@@ -5115,10 +5115,10 @@ static inline BOOL needs_separate_srgb_gl_texture(const struct wined3d_context *
     return FALSE;
 }
 
-static inline BOOL needs_srgb_write(const struct wined3d_context *context,
+static inline BOOL needs_srgb_write(const struct wined3d_d3d_info *d3d_info,
         const struct wined3d_state *state, const struct wined3d_fb_state *fb)
 {
-    return (!(context->d3d_info->wined3d_creation_flags & WINED3D_SRGB_READ_WRITE_CONTROL)
+    return (!(d3d_info->wined3d_creation_flags & WINED3D_SRGB_READ_WRITE_CONTROL)
             || state->render_states[WINED3D_RS_SRGBWRITEENABLE])
             && fb->render_targets[0] && fb->render_targets[0]->format_flags & WINED3DFMT_FLAG_SRGB_WRITE;
 }
@@ -5302,19 +5302,19 @@ static inline BOOL wined3d_dsv_srv_conflict(const struct wined3d_rendertarget_vi
 static inline BOOL wined3d_resource_check_fbo_attached(const struct wined3d_state *state,
         const struct wined3d_resource *resource, const struct wined3d_format *srv_format)
 {
-    struct wined3d_rendertarget_view * const *rts = &state->fb->render_targets[0];
+    struct wined3d_rendertarget_view * const *rts = &state->fb.render_targets[0];
     const struct wined3d_rendertarget_view *dsv;
     unsigned int i;
 
     if ((resource->bind_flags & WINED3D_BIND_DEPTH_STENCIL)
-            && (dsv = state->fb->depth_stencil) && dsv->resource == resource
+            && (dsv = state->fb.depth_stencil) && dsv->resource == resource
             && wined3d_dsv_srv_conflict(dsv, srv_format))
         return TRUE;
 
     if (!(resource->bind_flags & WINED3D_BIND_RENDER_TARGET))
         return FALSE;
 
-    for (i = 0; i < MAX_RENDER_TARGET_VIEWS; ++i)
+    for (i = 0; i < WINED3D_MAX_RENDER_TARGETS; ++i)
         if (rts[i] && rts[i]->resource == resource)
             return TRUE;
 

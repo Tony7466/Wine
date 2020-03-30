@@ -1311,7 +1311,6 @@ static enum wined3d_feature_level feature_level_from_caps(const struct wined3d_g
 
     if (gl_info->supported[WINED3D_GL_VERSION_3_2]
             && gl_info->supported[ARB_POLYGON_OFFSET_CLAMP]
-            && gl_info->supported[ARB_DRAW_BUFFERS_BLEND]
             && gl_info->supported[ARB_SAMPLER_OBJECTS])
     {
         if (shader_model >= 5
@@ -1321,7 +1320,8 @@ static enum wined3d_feature_level feature_level_from_caps(const struct wined3d_g
 
         if (shader_model >= 4)
         {
-            if (gl_info->supported[ARB_TEXTURE_CUBE_MAP_ARRAY])
+            if (gl_info->supported[ARB_TEXTURE_CUBE_MAP_ARRAY]
+                    && gl_info->supported[ARB_DRAW_BUFFERS_BLEND])
                 return WINED3D_FEATURE_LEVEL_10_1;
             return WINED3D_FEATURE_LEVEL_10;
         }
@@ -1363,6 +1363,7 @@ cards_nvidia_binary[] =
     {"RTX 2070",                    CARD_NVIDIA_GEFORCE_RTX2070},   /* GeForce 2000 - highend */
     {"RTX 2060",                    CARD_NVIDIA_GEFORCE_RTX2060},   /* GeForce 2000 - highend */
     {"GTX 1660 Ti",                 CARD_NVIDIA_GEFORCE_GTX1660TI}, /* GeForce 1600 - highend */
+    {"GTX 1660 SUPER",              CARD_NVIDIA_GEFORCE_GTX1660SUPER}, /* GeForce 1600 - highend */
     {"GTX 1650 SUPER",              CARD_NVIDIA_GEFORCE_GTX1650SUPER}, /* GeForce 1600 - midend high */
     {"TITAN V",                     CARD_NVIDIA_TITANV},            /* GeForce 1000 - highend */
     {"TITAN X (Pascal)",            CARD_NVIDIA_TITANX_PASCAL},     /* GeForce 1000 - highend */
@@ -2180,6 +2181,11 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     USE_GL_FUNC(glGetDebugMessageLogARB)
     /* GL_ARB_draw_buffers */
     USE_GL_FUNC(glDrawBuffersARB)
+    /* GL_ARB_draw_buffers_blend */
+    USE_GL_FUNC(glBlendEquationiARB)
+    USE_GL_FUNC(glBlendEquationSeparateiARB)
+    USE_GL_FUNC(glBlendFunciARB)
+    USE_GL_FUNC(glBlendFuncSeparateiARB)
     /* GL_ARB_draw_elements_base_vertex */
     USE_GL_FUNC(glDrawElementsBaseVertex)
     USE_GL_FUNC(glDrawElementsInstancedBaseVertex)
@@ -2821,8 +2827,12 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     MAP_GL_FUNCTION(glBindFragDataLocation, glBindFragDataLocationEXT);
     MAP_GL_FUNCTION(glBlendColor, glBlendColorEXT);
     MAP_GL_FUNCTION(glBlendEquation, glBlendEquationEXT);
+    MAP_GL_FUNCTION(glBlendEquationi, glBlendEquationiARB);
     MAP_GL_FUNCTION(glBlendEquationSeparate, glBlendEquationSeparateEXT);
+    MAP_GL_FUNCTION(glBlendEquationSeparatei, glBlendEquationSeparateiARB);
+    MAP_GL_FUNCTION(glBlendFunci, glBlendFunciARB);
     MAP_GL_FUNCTION(glBlendFuncSeparate, glBlendFuncSeparateEXT);
+    MAP_GL_FUNCTION(glBlendFuncSeparatei, glBlendFuncSeparateiARB);
     MAP_GL_FUNCTION(glBufferData, glBufferDataARB);
     MAP_GL_FUNCTION(glBufferSubData, glBufferSubDataARB);
     MAP_GL_FUNCTION(glColorMaski, glColorMaskIndexedEXT);
@@ -2984,7 +2994,7 @@ static void wined3d_adapter_init_limits(struct wined3d_gl_info *gl_info)
     if (gl_info->supported[ARB_DRAW_BUFFERS] && wined3d_settings.offscreen_rendering_mode == ORM_FBO)
     {
         gl_info->gl_ops.gl.p_glGetIntegerv(GL_MAX_DRAW_BUFFERS_ARB, &gl_max);
-        gl_info->limits.buffers = min(MAX_RENDER_TARGET_VIEWS, gl_max);
+        gl_info->limits.buffers = min(WINED3D_MAX_RENDER_TARGETS, gl_max);
         TRACE("Max draw buffers: %u.\n", gl_max);
     }
     if (gl_info->supported[ARB_MULTITEXTURE])
@@ -3413,7 +3423,7 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
         {ARB_STENCIL_TEXTURING,            MAKEDWORD_VERSION(4, 3)},
         {ARB_TEXTURE_BUFFER_RANGE,         MAKEDWORD_VERSION(4, 3)},
         {ARB_TEXTURE_QUERY_LEVELS,         MAKEDWORD_VERSION(4, 3)},
-        {ARB_TEXTURE_STORAGE_MULTISAMPLE,  MAKEDWORD_VERSION(4, 2)},
+        {ARB_TEXTURE_STORAGE_MULTISAMPLE,  MAKEDWORD_VERSION(4, 3)},
         {ARB_TEXTURE_VIEW,                 MAKEDWORD_VERSION(4, 3)},
 
         {ARB_BUFFER_STORAGE,               MAKEDWORD_VERSION(4, 4)},
