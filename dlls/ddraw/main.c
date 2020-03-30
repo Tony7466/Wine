@@ -59,6 +59,7 @@ static void ddraw_enumerate_secondary_devices(struct wined3d *wined3d, LPDDENUMC
     struct wined3d_adapter_identifier adapter_id;
     struct wined3d_adapter *wined3d_adapter;
     struct wined3d_output_desc output_desc;
+    struct wined3d_output *wined3d_output;
     unsigned int interface_count = 0;
     unsigned int adapter_idx = 0;
     unsigned int output_idx;
@@ -67,15 +68,13 @@ static void ddraw_enumerate_secondary_devices(struct wined3d *wined3d, LPDDENUMC
 
     while (cont_enum && (wined3d_adapter = wined3d_get_adapter(wined3d, adapter_idx)))
     {
-        char DriverName[512] = "", DriverDescription[512] = "";
+        char device_name[512] = "", description[512] = "";
 
         /* The Battle.net System Checker expects the GetAdapterIdentifier DeviceName to match the
          * Driver Name, so obtain the DeviceName and GUID from D3D. */
         memset(&adapter_id, 0x0, sizeof(adapter_id));
-        adapter_id.device_name = DriverName;
-        adapter_id.device_name_size = sizeof(DriverName);
-        adapter_id.description = DriverDescription;
-        adapter_id.description_size = sizeof(DriverDescription);
+        adapter_id.description = description;
+        adapter_id.description_size = sizeof(description);
 
         wined3d_mutex_lock();
         if (FAILED(hr = wined3d_adapter_get_identifier(wined3d_adapter, 0x0, &adapter_id)))
@@ -86,11 +85,11 @@ static void ddraw_enumerate_secondary_devices(struct wined3d *wined3d, LPDDENUMC
         }
         wined3d_mutex_unlock();
 
-        for (output_idx = 0; cont_enum && wined3d_adapter_get_output(wined3d_adapter, output_idx);
-                ++output_idx)
+        for (output_idx = 0; cont_enum && (wined3d_output = wined3d_adapter_get_output(
+                wined3d_adapter, output_idx)); ++output_idx)
         {
             wined3d_mutex_lock();
-            if (FAILED(hr = wined3d_get_output_desc(wined3d, output_idx, &output_desc)))
+            if (FAILED(hr = wined3d_output_get_desc(wined3d_output, &output_desc)))
             {
                 WARN("Failed to get output description, hr %#x.\n", hr);
                 wined3d_mutex_unlock();
@@ -100,8 +99,10 @@ static void ddraw_enumerate_secondary_devices(struct wined3d *wined3d, LPDDENUMC
 
             TRACE("Interface %u: %s\n", interface_count++,
                     wine_dbgstr_guid(&adapter_id.device_identifier));
+            WideCharToMultiByte(CP_ACP, 0, output_desc.device_name, -1, device_name,
+                    sizeof(device_name), NULL, NULL);
             cont_enum = callback(&adapter_id.device_identifier, adapter_id.description,
-                    adapter_id.device_name, context, output_desc.monitor);
+                    device_name, context, output_desc.monitor);
         }
 
         if (FAILED(hr))

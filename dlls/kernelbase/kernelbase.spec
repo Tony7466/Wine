@@ -565,8 +565,8 @@
 @ stdcall GetModuleHandleExW(long ptr ptr)
 @ stdcall GetModuleHandleW(wstr)
 # @ stub GetModuleInformation
-@ stub GetNLSVersion
-@ stub GetNLSVersionEx
+@ stdcall GetNLSVersion(long long ptr)
+@ stdcall GetNLSVersionEx(long wstr ptr)
 @ stub GetNamedLocaleHashNode
 @ stub GetNamedPipeAttribute
 @ stub GetNamedPipeClientComputerNameW
@@ -878,7 +878,7 @@
 @ stdcall IsValidLanguageGroup(long long)
 @ stdcall IsValidLocale(long long)
 @ stdcall IsValidLocaleName(wstr)
-# @ stub IsValidNLSVersion
+@ stdcall IsValidNLSVersion(long wstr ptr)
 @ stub IsValidRelativeSecurityDescriptor
 @ stdcall IsValidSecurityDescriptor(ptr)
 @ stdcall IsValidSid(ptr)

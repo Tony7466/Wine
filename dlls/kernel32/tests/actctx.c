@@ -2506,7 +2506,7 @@ static void run_child_process(void)
     sprintf(cmdline, "\"%s\" %s manifest1", argv[0], argv[1]);
     ret = CreateProcessA(argv[0], cmdline, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
     ok(ret, "Could not create process: %u\n", GetLastError());
-    winetest_wait_child_process( pi.hProcess );
+    wait_child_process( pi.hProcess );
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
     DeleteFileA(path);
@@ -2851,7 +2851,7 @@ static void test_with_compat(HANDLE handle, DWORD num_compat, const GUID* expect
                             wine_dbgstr_guid(&compat_info.Elements[n].Id),
                             wine_dbgstr_guid(expected_compat[n]),
                             n);
-        ok_(__FILE__, line)(compat_info.Elements[n].Type == ACTCX_COMPATIBILITY_ELEMENT_TYPE_OS,
+        ok_(__FILE__, line)(compat_info.Elements[n].Type == ACTCTX_COMPATIBILITY_ELEMENT_TYPE_OS,
                             "Wrong type, got %u for %u\n", (DWORD)compat_info.Elements[n].Type, n);
     }
 }
@@ -3470,7 +3470,7 @@ static void run_child_process_two_dll(int run)
     ret = CreateProcessA(exe, cmdline, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
     ok(ret, "Could not create process: %u\n", GetLastError());
 
-    winetest_wait_child_process( pi.hProcess );
+    wait_child_process( pi.hProcess );
 
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);

@@ -924,6 +924,7 @@ static void test_coop_level_d3d_state(void)
     IDirect3DDevice2 *device;
     D3DMATERIAL material;
     IDirectDraw2 *ddraw;
+    DDSURFACEDESC lock;
     D3DCOLOR color;
     DWORD value;
     HWND window;
@@ -958,26 +959,39 @@ static void test_coop_level_d3d_state(void)
     ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
 
     hr = IDirect3DDevice2_GetRenderTarget(device, &rt);
-    ok(SUCCEEDED(hr), "Failed to get render target, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DDevice2_GetRenderState(device, D3DRENDERSTATE_ZENABLE, &value);
-    ok(SUCCEEDED(hr), "Failed to get render state, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     ok(!!value, "Got unexpected z-enable state %#x.\n", value);
     hr = IDirect3DDevice2_GetRenderState(device, D3DRENDERSTATE_ALPHABLENDENABLE, &value);
-    ok(SUCCEEDED(hr), "Failed to get render state, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     ok(!value, "Got unexpected alpha blend enable state %#x.\n", value);
     hr = IDirect3DDevice2_SetRenderState(device, D3DRENDERSTATE_ALPHABLENDENABLE, TRUE);
-    ok(SUCCEEDED(hr), "Failed to set render state, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DViewport2_Clear(viewport, 1, &clear_rect, D3DCLEAR_TARGET);
-    ok(SUCCEEDED(hr), "Failed to clear viewport, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     color = get_surface_color(rt, 320, 240);
     ok(compare_color(color, 0x00ff0000, 1), "Got unexpected color 0x%08x.\n", color);
 
     hr = IDirectDraw2_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
-    ok(SUCCEEDED(hr), "Failed to set cooperative level, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirectDrawSurface_IsLost(rt);
     ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+
+    memset(&lock, 0, sizeof(lock));
+    lock.dwSize = sizeof(lock);
+    lock.lpSurface = (void *)0xdeadbeef;
+    hr = IDirectDrawSurface2_Lock(rt, NULL, &lock, DDLOCK_READONLY, NULL);
+    ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+    ok(lock.lpSurface == (void *)0xdeadbeef, "Got unexpected lock.lpSurface %p.\n", lock.lpSurface);
+
     hr = restore_surfaces(ddraw);
-    ok(SUCCEEDED(hr), "Failed to restore surfaces, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDirectDrawSurface2_Lock(rt, NULL, &lock, DDLOCK_READONLY, NULL);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirectDrawSurface2_Unlock(rt, NULL);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
 
     memset(&material, 0, sizeof(material));
     material.dwSize = sizeof(material);
@@ -986,19 +1000,19 @@ static void test_coop_level_d3d_state(void)
     U3(U(material).diffuse).b = 0.0f;
     U4(U(material).diffuse).a = 1.0f;
     hr = IDirect3DMaterial2_SetMaterial(background, &material);
-    ok(SUCCEEDED(hr), "Failed to set material data, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
 
     hr = IDirect3DDevice2_GetRenderTarget(device, &surface);
-    ok(SUCCEEDED(hr), "Failed to get render target, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     ok(surface == rt, "Got unexpected surface %p.\n", surface);
     hr = IDirect3DDevice2_GetRenderState(device, D3DRENDERSTATE_ZENABLE, &value);
-    ok(SUCCEEDED(hr), "Failed to get render state, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     ok(!!value, "Got unexpected z-enable state %#x.\n", value);
     hr = IDirect3DDevice2_GetRenderState(device, D3DRENDERSTATE_ALPHABLENDENABLE, &value);
-    ok(SUCCEEDED(hr), "Failed to get render state, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     ok(!!value, "Got unexpected alpha blend enable state %#x.\n", value);
     hr = IDirect3DViewport2_Clear(viewport, 1, &clear_rect, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER);
-    ok(SUCCEEDED(hr), "Failed to clear viewport, hr %#x.\n", hr);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     color = get_surface_color(rt, 320, 240);
     ok(compare_color(color, 0x0000ff00, 1) || broken(compare_color(color, 0x00000000, 1)),
             "Got unexpected color 0x%08x.\n", color);
@@ -4943,22 +4957,30 @@ static void test_surface_discard(void)
     unsigned int i;
 
     window = create_window();
-    ddraw = create_ddraw();
-    ok(!!ddraw, "Failed to create a ddraw object.\n");
-    if (!(device = create_device(ddraw, window, DDSCL_NORMAL)))
-    {
-        skip("Failed to create a 3D device, skipping test.\n");
-        DestroyWindow(window);
-        IDirectDraw2_Release(ddraw);
-        return;
-    }
-
-    hr = IDirect3DDevice2_GetRenderTarget(device, &target);
-    ok(SUCCEEDED(hr), "Failed to get render target, hr %#x.\n", hr);
 
     for (i = 0; i < ARRAY_SIZE(tests); i++)
     {
         BOOL discarded;
+
+        /* Sigh. Anything other than the first run of the loop randomly fails with
+         * DDERR_SURFACELOST on my Radeon Pro 560 on Win10 19.09. Most of the time
+         * the blit fails, but with sleeps added between surface creation and lock
+         * the lock can fail too. Interestingly ddraw claims the render target has
+         * been lost, not the test surface.
+         *
+         * Recreating ddraw every iteration seems to fix this. */
+        ddraw = create_ddraw();
+        ok(!!ddraw, "Failed to create a ddraw object.\n");
+        if (!(device = create_device(ddraw, window, DDSCL_NORMAL)))
+        {
+            skip("Failed to create a 3D device, skipping test.\n");
+            DestroyWindow(window);
+            IDirectDraw2_Release(ddraw);
+            return;
+        }
+
+        hr = IDirect3DDevice2_GetRenderTarget(device, &target);
+        ok(SUCCEEDED(hr), "Failed to get render target, hr %#x.\n", hr);
 
         memset(&ddsd, 0, sizeof(ddsd));
         ddsd.dwSize = sizeof(ddsd);
@@ -5005,11 +5027,12 @@ static void test_surface_discard(void)
         /* Windows 7 reliably changes the address of surfaces that are discardable (Nvidia Kepler,
          * AMD r500, evergreen). Windows XP, at least on AMD r200, never changes the pointer. */
         ok(!discarded || tests[i].discard, "Expected surface not to be discarded, case %u\n", i);
+
+        IDirectDrawSurface_Release(target);
+        IDirect3DDevice2_Release(device);
+        IDirectDraw2_Release(ddraw);
     }
 
-    IDirectDrawSurface_Release(target);
-    IDirect3DDevice2_Release(device);
-    IDirectDraw2_Release(ddraw);
     DestroyWindow(window);
 }
 

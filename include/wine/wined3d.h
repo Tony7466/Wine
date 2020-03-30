@@ -1035,10 +1035,7 @@ enum wined3d_shader_type
 
 /* VTF defines */
 #define WINED3DDMAPSAMPLER                                      0x100
-#define WINED3DVERTEXTEXTURESAMPLER0                            (WINED3DDMAPSAMPLER + 1)
-#define WINED3DVERTEXTEXTURESAMPLER1                            (WINED3DDMAPSAMPLER + 2)
-#define WINED3DVERTEXTEXTURESAMPLER2                            (WINED3DDMAPSAMPLER + 3)
-#define WINED3DVERTEXTEXTURESAMPLER3                            (WINED3DDMAPSAMPLER + 4)
+#define WINED3D_VERTEX_SAMPLER_OFFSET                           WINED3D_MAX_FRAGMENT_SAMPLERS
 
 #define WINED3DCAPS3_ALPHA_FULLSCREEN_FLIP_OR_DISCARD           0x00000020
 #define WINED3DCAPS3_LINEAR_TO_SRGB_PRESENTATION                0x00000080
@@ -1745,8 +1742,6 @@ struct wined3d_adapter_identifier
     unsigned int driver_size;
     char *description;
     unsigned int description_size;
-    char *device_name;
-    unsigned int device_name_size;
     LARGE_INTEGER driver_version;
     DWORD vendor_id;
     DWORD device_id;
@@ -1912,7 +1907,6 @@ struct wined3d_ddraw_caps
 struct wined3d_caps
 {
     enum wined3d_device_type DeviceType;
-    UINT AdapterOrdinal;
 
     DWORD Caps;
     DWORD Caps2;
@@ -1980,9 +1974,6 @@ struct wined3d_caps
 
     float MaxNpatchTessellationLevel;
 
-    UINT MasterAdapterOrdinal;
-    UINT AdapterOrdinalInGroup;
-    UINT NumberOfAdaptersInGroup;
     DWORD DeclTypes;
     DWORD NumSimultaneousRTs;
     DWORD StretchRectFilterCaps;
@@ -2141,6 +2132,7 @@ struct wined3d_view_desc
 
 struct wined3d_output_desc
 {
+    unsigned int ordinal;
     WCHAR device_name[CCHDEVICENAME];
     RECT desktop_rect;
     BOOL attached_to_desktop;
@@ -2282,10 +2274,8 @@ ULONG __cdecl wined3d_decref(struct wined3d *wined3d);
 struct wined3d_adapter * __cdecl wined3d_get_adapter(const struct wined3d *wined3d,
         unsigned int idx);
 UINT __cdecl wined3d_get_adapter_count(const struct wined3d *wined3d);
-HRESULT __cdecl wined3d_get_device_caps(const struct wined3d *wined3d, unsigned int adapter_idx,
+HRESULT __cdecl wined3d_get_device_caps(const struct wined3d_adapter *adapter,
         enum wined3d_device_type device_type, struct wined3d_caps *caps);
-HRESULT __cdecl wined3d_get_output_desc(const struct wined3d *wined3d, unsigned int adapter_idx,
-        struct wined3d_output_desc *desc);
 ULONG __cdecl wined3d_incref(struct wined3d *wined3d);
 HRESULT __cdecl wined3d_register_software_device(struct wined3d *wined3d, void *init_function);
 BOOL __cdecl wined3d_register_window(struct wined3d *wined3d, HWND window,
@@ -2512,6 +2502,8 @@ HRESULT __cdecl wined3d_device_validate_device(const struct wined3d_device *devi
 HRESULT __cdecl wined3d_output_find_closest_matching_mode(const struct wined3d_output *output,
         struct wined3d_display_mode *mode);
 struct wined3d_adapter * __cdecl wined3d_output_get_adapter(const struct wined3d_output *output);
+HRESULT __cdecl wined3d_output_get_desc(const struct wined3d_output *output,
+        struct wined3d_output_desc *desc);
 HRESULT __cdecl wined3d_output_get_display_mode(const struct wined3d_output *output,
         struct wined3d_display_mode *mode, enum wined3d_display_rotation *rotation);
 HRESULT __cdecl wined3d_output_get_mode(const struct wined3d_output *output,

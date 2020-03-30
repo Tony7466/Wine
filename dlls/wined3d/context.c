@@ -2755,7 +2755,7 @@ static inline GLenum draw_buffer_from_rt_mask(DWORD rt_mask)
 static void wined3d_context_gl_apply_draw_buffers(struct wined3d_context_gl *context_gl, uint32_t rt_mask)
 {
     const struct wined3d_gl_info *gl_info = context_gl->gl_info;
-    GLenum draw_buffers[MAX_RENDER_TARGET_VIEWS];
+    GLenum draw_buffers[WINED3D_MAX_RENDER_TARGETS];
 
     if (!rt_mask)
     {
@@ -3319,7 +3319,7 @@ BOOL wined3d_context_gl_apply_clear_state(struct wined3d_context_gl *context_gl,
     uint32_t rt_mask = 0, *cur_mask;
     unsigned int i;
 
-    if (isStateDirty(&context_gl->c, STATE_FRAMEBUFFER) || fb != state->fb
+    if (isStateDirty(&context_gl->c, STATE_FRAMEBUFFER) || fb != &state->fb
             || rt_count != gl_info->limits.buffers)
     {
         if (!have_framebuffer_attachment(rt_count, rts, dsv))
@@ -3414,7 +3414,7 @@ BOOL wined3d_context_gl_apply_clear_state(struct wined3d_context_gl *context_gl,
     gl_info->gl_ops.gl.p_glEnable(GL_SCISSOR_TEST);
     if (rt_count && gl_info->supported[ARB_FRAMEBUFFER_SRGB])
     {
-        if (needs_srgb_write(&context_gl->c, state, fb))
+        if (needs_srgb_write(context_gl->c.d3d_info, state, fb))
             gl_info->gl_ops.gl.p_glEnable(GL_FRAMEBUFFER_SRGB);
         else
             gl_info->gl_ops.gl.p_glDisable(GL_FRAMEBUFFER_SRGB);
@@ -3431,7 +3431,7 @@ BOOL wined3d_context_gl_apply_clear_state(struct wined3d_context_gl *context_gl,
 
 static uint32_t find_draw_buffers_mask(const struct wined3d_context_gl *context_gl, const struct wined3d_state *state)
 {
-    struct wined3d_rendertarget_view * const *rts = state->fb->render_targets;
+    struct wined3d_rendertarget_view * const *rts = state->fb.render_targets;
     struct wined3d_shader *ps = state->shader[WINED3D_SHADER_TYPE_PIXEL];
     const struct wined3d_gl_info *gl_info = context_gl->gl_info;
     unsigned int rt_mask, mask;
@@ -3444,6 +3444,8 @@ static uint32_t find_draw_buffers_mask(const struct wined3d_context_gl *context_
 
     rt_mask = ps ? ps->reg_maps.rt_mask : 1;
     rt_mask &= (1u << gl_info->limits.buffers) - 1;
+    if (state->blend_state && state->blend_state->dual_source)
+        rt_mask = 1;
 
     mask = rt_mask;
     while (mask)
@@ -3461,7 +3463,7 @@ void context_state_fb(struct wined3d_context *context, const struct wined3d_stat
 {
     struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     uint32_t rt_mask = find_draw_buffers_mask(context_gl, state);
-    const struct wined3d_fb_state *fb = state->fb;
+    const struct wined3d_fb_state *fb = &state->fb;
     DWORD color_location = 0;
     DWORD *cur_mask;
 
@@ -4223,12 +4225,12 @@ static void context_load_stream_output_buffers(struct wined3d_context *context,
 
 /* Context activation is done by the caller. */
 static BOOL context_apply_draw_state(struct wined3d_context *context,
-        const struct wined3d_device *device, const struct wined3d_state *state)
+        const struct wined3d_device *device, const struct wined3d_state *state, BOOL indexed)
 {
     const struct wined3d_state_entry *state_table = context->state_table;
     struct wined3d_context_gl *context_gl = wined3d_context_gl(context);
     const struct wined3d_gl_info *gl_info = context_gl->gl_info;
-    const struct wined3d_fb_state *fb = state->fb;
+    const struct wined3d_fb_state *fb = &state->fb;
     unsigned int i, base;
     WORD map;
 
@@ -4275,7 +4277,7 @@ static BOOL context_apply_draw_state(struct wined3d_context *context,
         if (isStateDirty(context, STATE_STREAMSRC))
             context_update_stream_info(context, state);
     }
-    if (state->index_buffer)
+    if (indexed && state->index_buffer)
     {
         if (context->stream_info.all_vbo)
             wined3d_buffer_load(state->index_buffer, context, state);
@@ -4471,7 +4473,7 @@ static void wined3d_context_gl_setup_target(struct wined3d_context_gl *context_g
             /* Update sRGB writing when switching between formats that do/do not support sRGB writing */
             if ((context_gl->c.current_rt.texture->resource.format_flags & WINED3DFMT_FLAG_SRGB_WRITE)
                     != (texture->resource.format_flags & WINED3DFMT_FLAG_SRGB_WRITE))
-                context_invalidate_state(&context_gl->c, STATE_BLEND);
+                context_invalidate_state(&context_gl->c, STATE_RENDER(WINED3D_RS_SRGBWRITEENABLE));
         }
 
         /* When switching away from an offscreen render target, and we're not
@@ -5105,12 +5107,21 @@ static GLenum gl_tfb_primitive_type_from_d3d(enum wined3d_primitive_type primiti
     }
 }
 
+static unsigned int get_render_target_writemask(const struct wined3d_blend_state *state, unsigned int index)
+{
+    if (!state)
+        return 0xf;
+    if (!state->desc.independent)
+        index = 0;
+    return state->desc.rt[index].writemask;
+}
+
 /* Routine common to the draw primitive and draw indexed primitive routines */
 void draw_primitive(struct wined3d_device *device, const struct wined3d_state *state,
         const struct wined3d_draw_parameters *parameters)
 {
     BOOL emulation = FALSE, rasterizer_discard = FALSE;
-    const struct wined3d_fb_state *fb = state->fb;
+    const struct wined3d_fb_state *fb = &state->fb;
     const struct wined3d_stream_info *stream_info;
     struct wined3d_rendertarget_view *dsv, *rtv;
     struct wined3d_stream_info si_emulated;
@@ -5154,7 +5165,7 @@ void draw_primitive(struct wined3d_device *device, const struct wined3d_state *s
         if (!(rtv = fb->render_targets[i]) || rtv->format->id == WINED3DFMT_NULL)
             continue;
 
-        if (!state->blend_state || state->blend_state->desc.rt[0].writemask)
+        if (get_render_target_writemask(state->blend_state, i))
         {
             wined3d_rendertarget_view_load_location(rtv, context, rtv->resource->draw_binding);
             wined3d_rendertarget_view_invalidate_location(rtv, ~rtv->resource->draw_binding);
@@ -5183,7 +5194,7 @@ void draw_primitive(struct wined3d_device *device, const struct wined3d_state *s
     if (parameters->indirect)
         wined3d_buffer_load(parameters->u.indirect.buffer, context, state);
 
-    if (!context_apply_draw_state(context, device, state))
+    if (!context_apply_draw_state(context, device, state, parameters->indexed))
     {
         context_release(context);
         WARN("Unable to apply draw state, skipping draw.\n");

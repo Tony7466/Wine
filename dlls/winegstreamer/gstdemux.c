@@ -43,8 +43,6 @@ WINE_DEFAULT_DEBUG_CHANNEL(gstreamer);
 
 static const GUID MEDIASUBTYPE_CVID = {mmioFOURCC('c','v','i','d'), 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71}};
 
-static pthread_key_t wine_gst_key;
-
 struct gstdemux
 {
     struct strmbase_filter filter;
@@ -79,6 +77,7 @@ struct gstdemux_source
     IQualityControl IQualityControl_iface;
 
     GstPad *their_src, *post_sink, *post_src, *my_sink;
+    GstElement *flip;
     AM_MEDIA_TYPE mt;
     HANDLE caps_event;
     GstSegment *segment;
@@ -100,17 +99,6 @@ static HRESULT WINAPI GST_ChangeCurrent(IMediaSeeking *iface);
 static HRESULT WINAPI GST_ChangeStop(IMediaSeeking *iface);
 static HRESULT WINAPI GST_ChangeRate(IMediaSeeking *iface);
 
-void mark_wine_thread(void)
-{
-    /* set it to non-NULL to indicate that this is a Wine thread */
-    pthread_setspecific(wine_gst_key, &wine_gst_key);
-}
-
-BOOL is_wine_thread(void)
-{
-    return pthread_getspecific(wine_gst_key) != NULL;
-}
-
 static gboolean amt_from_gst_caps_audio_raw(const GstCaps *caps, AM_MEDIA_TYPE *amt)
 {
     WAVEFORMATEXTENSIBLE *wfe;
@@ -121,7 +109,7 @@ static gboolean amt_from_gst_caps_audio_raw(const GstCaps *caps, AM_MEDIA_TYPE *
     if (!gst_audio_info_from_caps (&ainfo, caps))
         return FALSE;
 
-    wfe = heap_alloc(sizeof(*wfe));
+    wfe = CoTaskMemAlloc(sizeof(*wfe));
     wfx = (WAVEFORMATEX*)wfe;
     amt->majortype = MEDIATYPE_Audio;
     amt->subtype = MEDIASUBTYPE_PCM;
@@ -172,21 +160,16 @@ static gboolean amt_from_gst_caps_audio_raw(const GstCaps *caps, AM_MEDIA_TYPE *
     return TRUE;
 }
 
-static gboolean amt_from_gst_caps_video_raw(const GstCaps *caps, AM_MEDIA_TYPE *amt)
+static gboolean amt_from_gst_video_info(const GstVideoInfo *info, AM_MEDIA_TYPE *amt)
 {
     VIDEOINFOHEADER *vih;
     BITMAPINFOHEADER *bih;
-    gint32 width, height, nom, denom;
-    GstVideoInfo vinfo;
+    gint32 width, height;
 
-    if (!gst_video_info_from_caps (&vinfo, caps))
-        return FALSE;
-    width = vinfo.width;
-    height = vinfo.height;
-    nom = vinfo.fps_n;
-    denom = vinfo.fps_d;
+    width = GST_VIDEO_INFO_WIDTH(info);
+    height = GST_VIDEO_INFO_HEIGHT(info);
 
-    vih = heap_alloc(sizeof(*vih));
+    vih = CoTaskMemAlloc(sizeof(*vih));
     bih = &vih->bmiHeader;
 
     amt->formattype = FORMAT_VideoInfo;
@@ -199,9 +182,9 @@ static gboolean amt_from_gst_caps_video_raw(const GstCaps *caps, AM_MEDIA_TYPE *
     ZeroMemory(vih, sizeof(*vih));
     amt->majortype = MEDIATYPE_Video;
 
-    if (GST_VIDEO_INFO_IS_RGB(&vinfo))
+    if (GST_VIDEO_INFO_IS_RGB(info))
     {
-        switch (vinfo.finfo->format)
+        switch (GST_VIDEO_INFO_FORMAT(info))
         {
         case GST_VIDEO_FORMAT_BGRA:
             amt->subtype = MEDIASUBTYPE_ARGB32;
@@ -224,15 +207,16 @@ static gboolean amt_from_gst_caps_video_raw(const GstCaps *caps, AM_MEDIA_TYPE *
             bih->biBitCount = 16;
             break;
         default:
-            FIXME("Unhandled type %s.\n", vinfo.finfo->name);
-            heap_free(vih);
+            FIXME("Unhandled type %s.\n", GST_VIDEO_INFO_NAME(info));
+            CoTaskMemFree(vih);
             return FALSE;
         }
         bih->biCompression = BI_RGB;
     } else {
         amt->subtype = MEDIATYPE_Video;
-        if (!(amt->subtype.Data1 = gst_video_format_to_fourcc(vinfo.finfo->format))) {
-            heap_free(vih);
+        if (!(amt->subtype.Data1 = gst_video_format_to_fourcc(GST_VIDEO_INFO_FORMAT(info))))
+        {
+            CoTaskMemFree(vih);
             return FALSE;
         }
         switch (amt->subtype.Data1) {
@@ -243,12 +227,14 @@ static gboolean amt_from_gst_caps_video_raw(const GstCaps *caps, AM_MEDIA_TYPE *
                 bih->biBitCount = 12; break;
             case mmioFOURCC('Y','U','Y','2'):
             case mmioFOURCC('Y','V','Y','U'):
+            case mmioFOURCC('U','Y','V','Y'):
                 bih->biBitCount = 16; break;
         }
         bih->biCompression = amt->subtype.Data1;
     }
-    bih->biSizeImage = width * height * bih->biBitCount / 8;
-    if ((vih->AvgTimePerFrame = (REFERENCE_TIME)MulDiv(10000000, denom, nom)) == -1)
+    bih->biSizeImage = GST_VIDEO_INFO_SIZE(info);
+    if ((vih->AvgTimePerFrame = (REFERENCE_TIME)MulDiv(10000000,
+            GST_VIDEO_INFO_FPS_D(info), GST_VIDEO_INFO_FPS_N(info))) == -1)
         vih->AvgTimePerFrame = 0; /* zero division or integer overflow */
     bih->biSize = sizeof(*bih);
     bih->biWidth = width;
@@ -331,7 +317,13 @@ static gboolean amt_from_gst_caps(const GstCaps *caps, AM_MEDIA_TYPE *mt)
     if (!strcmp(type, "audio/x-raw"))
         return amt_from_gst_caps_audio_raw(caps, mt);
     else if (!strcmp(type, "video/x-raw"))
-        return amt_from_gst_caps_video_raw(caps, mt);
+    {
+        GstVideoInfo info;
+
+        if (!gst_video_info_from_caps(&info, caps))
+            return FALSE;
+        return amt_from_gst_video_info(&info, mt);
+    }
     else if (!strcmp(type, "audio/mpeg"))
         return amt_from_gst_caps_audio_mpeg(caps, mt);
     else if (!strcmp(type, "video/x-cinepak"))
@@ -417,11 +409,12 @@ static GstCaps *amt_to_gst_caps_video(const AM_MEDIA_TYPE *mt)
     gst_video_info_set_format(&info, format, vih->bmiHeader.biWidth, vih->bmiHeader.biHeight);
     if ((caps = gst_video_info_to_caps(&info)))
     {
-        /* Clear the framerate; we don't actually care about it. (Yes,
-         * VIDEOINFOHEADER has an AvgTimePerFrame field, but that shouldn't
-         * matter for checking compatible caps.) */
+        /* Clear some fields that shouldn't prevent us from connecting. */
         for (i = 0; i < gst_caps_get_size(caps); ++i)
+        {
             gst_structure_remove_field(gst_caps_get_structure(caps, i), "framerate");
+            gst_structure_remove_field(gst_caps_get_structure(caps, i), "pixel-aspect-ratio");
+        }
     }
     return caps;
 }
@@ -1019,15 +1012,13 @@ static void init_new_decoded_pad(GstElement *bin, GstPad *pad, struct gstdemux *
             return;
         }
 
-        /* GStreamer outputs video top-down, but DirectShow expects bottom-up. */
+        /* GStreamer outputs RGB video top-down, but DirectShow expects bottom-up. */
         if (!(flip = gst_element_factory_make("videoflip", NULL)))
         {
             ERR("Failed to create videoflip, are %u-bit GStreamer \"good\" plugins installed?\n",
                     8 * (int)sizeof(void *));
             return;
         }
-
-        gst_util_set_object_arg(G_OBJECT(flip), "method", "vertical-flip");
 
         gst_bin_add(GST_BIN(This->container), vconv); /* bin takes ownership */
         gst_element_sync_state_with_parent(vconv);
@@ -1038,6 +1029,7 @@ static void init_new_decoded_pad(GstElement *bin, GstPad *pad, struct gstdemux *
 
         pin->post_sink = gst_element_get_static_pad(vconv, "sink");
         pin->post_src = gst_element_get_static_pad(flip, "src");
+        pin->flip = flip;
     }
     else if (!strcmp(typename, "audio/x-raw"))
     {
@@ -1649,26 +1641,19 @@ static HRESULT gstdecoder_source_query_accept(struct gstdemux_source *pin, const
 static HRESULT gstdecoder_source_get_media_type(struct gstdemux_source *pin,
         unsigned int index, AM_MEDIA_TYPE *mt)
 {
-    static const struct
-    {
-        const GUID *subtype;
-        WORD bpp;
-        DWORD compression;
-    }
-    video_types[] =
+    static const GstVideoFormat video_formats[] =
     {
         /* Roughly ordered by preference from videoflip. */
-        {&MEDIASUBTYPE_AYUV, 32, mmioFOURCC('A','Y','U','V')},
-        {&MEDIASUBTYPE_ARGB32, 32, BI_RGB},
-        {&MEDIASUBTYPE_RGB32, 32, BI_RGB},
-        {&MEDIASUBTYPE_RGB24, 24, BI_RGB},
-        {&MEDIASUBTYPE_I420, 12, mmioFOURCC('I','4','2','0')},
-        {&MEDIASUBTYPE_YV12, 12, mmioFOURCC('Y','V','1','2')},
-        {&MEDIASUBTYPE_IYUV, 12, mmioFOURCC('I','Y','U','V')},
-        {&MEDIASUBTYPE_YUY2, 16, mmioFOURCC('Y','U','Y','2')},
-        {&MEDIASUBTYPE_UYVY, 16, mmioFOURCC('U','Y','V','Y')},
-        {&MEDIASUBTYPE_YVYU, 16, mmioFOURCC('Y','V','Y','U')},
-        {&MEDIASUBTYPE_NV12, 12, mmioFOURCC('N','V','1','2')},
+        GST_VIDEO_FORMAT_AYUV,
+        GST_VIDEO_FORMAT_BGRA,
+        GST_VIDEO_FORMAT_BGRx,
+        GST_VIDEO_FORMAT_BGR,
+        GST_VIDEO_FORMAT_I420,
+        GST_VIDEO_FORMAT_YV12,
+        GST_VIDEO_FORMAT_YUY2,
+        GST_VIDEO_FORMAT_UYVY,
+        GST_VIDEO_FORMAT_YVYU,
+        GST_VIDEO_FORMAT_NV12,
     };
 
     if (!index)
@@ -1677,19 +1662,15 @@ static HRESULT gstdecoder_source_get_media_type(struct gstdemux_source *pin,
         return S_OK;
     }
     else if (IsEqualGUID(&pin->mt.majortype, &MEDIATYPE_Video)
-            && index - 1 < ARRAY_SIZE(video_types))
+            && index - 1 < ARRAY_SIZE(video_formats))
     {
-        VIDEOINFOHEADER *vih;
+        const VIDEOINFOHEADER *vih = (VIDEOINFOHEADER *)pin->mt.pbFormat;
+        GstVideoInfo info;
 
-        *mt = pin->mt;
-        mt->subtype = *video_types[index - 1].subtype;
-        mt->pbFormat = CoTaskMemAlloc(pin->mt.cbFormat);
-        memcpy(mt->pbFormat, pin->mt.pbFormat, pin->mt.cbFormat);
-        vih = (VIDEOINFOHEADER *)mt->pbFormat;
-        vih->bmiHeader.biBitCount = video_types[index - 1].bpp;
-        vih->bmiHeader.biCompression = video_types[index - 1].compression;
-        vih->bmiHeader.biSizeImage = vih->bmiHeader.biWidth
-                * vih->bmiHeader.biHeight * vih->bmiHeader.biBitCount / 8;
+        gst_video_info_set_format(&info, video_formats[index - 1],
+                vih->bmiHeader.biWidth, vih->bmiHeader.biHeight);
+        if (!amt_from_gst_video_info(&info, mt))
+            return E_OUTOFMEMORY;
         return S_OK;
     }
     else if (IsEqualGUID(&pin->mt.majortype, &MEDIATYPE_Audio) && index == 1)
@@ -1972,6 +1953,9 @@ static ULONG WINAPI GST_QualityControl_Release(IQualityControl *iface)
 static HRESULT WINAPI GST_QualityControl_Notify(IQualityControl *iface, IBaseFilter *sender, Quality qm)
 {
     struct gstdemux_source *pin = impl_from_IQualityControl(iface);
+    GstQOSType type = GST_QOS_TYPE_OVERFLOW;
+    GstClockTime timestamp;
+    GstClockTimeDiff diff;
     GstEvent *evt;
 
     TRACE("(%p)->(%p, { 0x%x %u %s %s })\n", pin, sender,
@@ -1981,11 +1965,23 @@ static HRESULT WINAPI GST_QualityControl_Notify(IQualityControl *iface, IBaseFil
 
     mark_wine_thread();
 
-    if (qm.Type == Flood)
-        qm.Late = 0;
+    /* GSTQOS_TYPE_OVERFLOW is also used for buffers that arrive on time, but
+     * DirectShow filters might use Famine, so check that there actually is an
+     * underrun. */
+    if (qm.Type == Famine && qm.Proportion > 1000)
+        type = GST_QOS_TYPE_UNDERFLOW;
 
-    evt = gst_event_new_qos(qm.Type == Famine ? GST_QOS_TYPE_UNDERFLOW : GST_QOS_TYPE_OVERFLOW,
-            qm.Proportion / 1000., qm.Late * 100, qm.TimeStamp * 100);
+    /* DirectShow filters sometimes pass negative timestamps (Audiosurf uses the
+     * current time instead of the time of the last buffer). GstClockTime is
+     * unsigned, so clamp it to 0. */
+    timestamp = max(qm.TimeStamp * 100, 0);
+
+    /* The documentation specifies that timestamp + diff must be nonnegative. */
+    diff = qm.Late * 100;
+    if (timestamp < -diff)
+        diff = -timestamp;
+
+    evt = gst_event_new_qos(type, qm.Proportion / 1000.0, diff, timestamp);
 
     if (!evt) {
         WARN("Failed to create QOS event\n");
@@ -2058,6 +2054,9 @@ static HRESULT WINAPI GSTOutPin_DecideBufferSize(struct strmbase_source *iface,
     {
         VIDEOINFOHEADER *format = (VIDEOINFOHEADER *)pin->pin.pin.mt.pbFormat;
         buffer_size = format->bmiHeader.biSizeImage;
+
+        gst_util_set_object_arg(G_OBJECT(pin->flip), "method",
+                format->bmiHeader.biCompression == BI_RGB ? "vertical-flip" : "none");
     }
     else if (IsEqualGUID(&pin->pin.pin.mt.formattype, &FORMAT_WaveFormatEx)
             && (IsEqualGUID(&pin->pin.pin.mt.subtype, &MEDIASUBTYPE_PCM)
@@ -2176,14 +2175,8 @@ static HRESULT GST_RemoveOutputPins(struct gstdemux *This)
     return S_OK;
 }
 
-pthread_mutex_t cb_list_lock = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t cb_list_cond = PTHREAD_COND_INITIALIZER;
-struct list cb_list = LIST_INIT(cb_list);
-
-void CALLBACK perform_cb(TP_CALLBACK_INSTANCE *instance, void *user)
+void perform_cb_gstdemux(struct cb_data *cbdata)
 {
-    struct cb_data *cbdata = user;
-
     switch(cbdata->type)
     {
     case WATCH_BUS:
@@ -2194,8 +2187,8 @@ void CALLBACK perform_cb(TP_CALLBACK_INSTANCE *instance, void *user)
         }
     case EXISTING_NEW_PAD:
         {
-            struct existing_new_pad_data *data = &cbdata->u.existing_new_pad_data;
-            existing_new_pad(data->bin, data->pad, data->user);
+            struct pad_added_data *data = &cbdata->u.pad_added_data;
+            existing_new_pad(data->element, data->pad, data->user);
             break;
         }
     case QUERY_FUNCTION:
@@ -2213,13 +2206,13 @@ void CALLBACK perform_cb(TP_CALLBACK_INSTANCE *instance, void *user)
     case NO_MORE_PADS:
         {
             struct no_more_pads_data *data = &cbdata->u.no_more_pads_data;
-            no_more_pads(data->decodebin, data->user);
+            no_more_pads(data->element, data->user);
             break;
         }
     case REQUEST_BUFFER_SRC:
         {
-            struct request_buffer_src_data *data = &cbdata->u.request_buffer_src_data;
-            cbdata->u.request_buffer_src_data.ret = request_buffer_src(data->pad, data->parent,
+            struct getrange_data *data = &cbdata->u.getrange_data;
+            cbdata->u.getrange_data.ret = request_buffer_src(data->pad, data->parent,
                     data->ofs, data->len, data->buf);
             break;
         }
@@ -2243,8 +2236,8 @@ void CALLBACK perform_cb(TP_CALLBACK_INSTANCE *instance, void *user)
         }
     case REMOVED_DECODED_PAD:
         {
-            struct removed_decoded_pad_data *data = &cbdata->u.removed_decoded_pad_data;
-            removed_decoded_pad(data->bin, data->pad, data->user);
+            struct pad_removed_data *data = &cbdata->u.pad_removed_data;
+            removed_decoded_pad(data->element, data->pad, data->user);
             break;
         }
     case AUTOPLUG_BLACKLIST:
@@ -2267,44 +2260,11 @@ void CALLBACK perform_cb(TP_CALLBACK_INSTANCE *instance, void *user)
                     data->query);
             break;
         }
-    }
-
-    pthread_mutex_lock(&cbdata->lock);
-    cbdata->finished = 1;
-    pthread_cond_broadcast(&cbdata->cond);
-    pthread_mutex_unlock(&cbdata->lock);
-}
-
-static DWORD WINAPI dispatch_thread(void *user)
-{
-    struct cb_data *cbdata;
-
-    CoInitializeEx(NULL, COINIT_MULTITHREADED);
-
-    pthread_mutex_lock(&cb_list_lock);
-
-    while(1){
-        pthread_cond_wait(&cb_list_cond, &cb_list_lock);
-
-        while(!list_empty(&cb_list)){
-            cbdata = LIST_ENTRY(list_head(&cb_list), struct cb_data, entry);
-            list_remove(&cbdata->entry);
-
-            TrySubmitThreadpoolCallback(&perform_cb, cbdata, NULL);
+    default:
+        {
+            assert(0);
         }
     }
-
-    pthread_mutex_unlock(&cb_list_lock);
-
-    CoUninitialize();
-
-    return 0;
-}
-
-void start_dispatch_thread(void)
-{
-    pthread_key_create(&wine_gst_key, NULL);
-    CloseHandle(CreateThread(NULL, 0, &dispatch_thread, NULL, 0, NULL));
 }
 
 static BOOL compare_media_types(const AM_MEDIA_TYPE *a, const AM_MEDIA_TYPE *b)

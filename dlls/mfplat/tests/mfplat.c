@@ -41,12 +41,18 @@
 #define D3D11_INIT_GUID
 #include "initguid.h"
 #include "d3d11_4.h"
+#include "d3d9types.h"
 
 DEFINE_GUID(DUMMY_CLSID, 0x12345678,0x1234,0x1234,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19);
 DEFINE_GUID(DUMMY_GUID1, 0x12345678,0x1234,0x1234,0x21,0x21,0x21,0x21,0x21,0x21,0x21,0x21);
 DEFINE_GUID(DUMMY_GUID2, 0x12345678,0x1234,0x1234,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22);
 DEFINE_GUID(DUMMY_GUID3, 0x12345678,0x1234,0x1234,0x23,0x23,0x23,0x23,0x23,0x23,0x23,0x23);
 DEFINE_GUID(CLSID_FileSchemeHandler, 0x477ec299, 0x1421, 0x4bdd, 0x97, 0x1f, 0x7c, 0xcb, 0x93, 0x3f, 0x21, 0xad);
+
+DEFINE_MEDIATYPE_GUID(MFVideoFormat_IMC1, MAKEFOURCC('I','M','C','1'));
+DEFINE_MEDIATYPE_GUID(MFVideoFormat_IMC2, MAKEFOURCC('I','M','C','2'));
+DEFINE_MEDIATYPE_GUID(MFVideoFormat_IMC3, MAKEFOURCC('I','M','C','3'));
+DEFINE_MEDIATYPE_GUID(MFVideoFormat_IMC4, MAKEFOURCC('I','M','C','4'));
 
 static BOOL is_win8_plus;
 
@@ -95,6 +101,8 @@ static HRESULT (WINAPI *pMFGetPlaneSize)(DWORD format, DWORD width, DWORD height
 static HRESULT (WINAPI *pMFGetStrideForBitmapInfoHeader)(DWORD format, DWORD width, LONG *stride);
 static HRESULT (WINAPI *pMFCreate2DMediaBuffer)(DWORD width, DWORD height, DWORD fourcc, BOOL bottom_up,
         IMFMediaBuffer **buffer);
+static HRESULT (WINAPI *pMFCreateMediaBufferFromMediaType)(IMFMediaType *media_type, LONGLONG duration, DWORD min_length,
+        DWORD min_alignment, IMFMediaBuffer **buffer);
 
 static const WCHAR fileschemeW[] = L"file://";
 
@@ -665,6 +673,7 @@ static void init_functions(void)
     X(MFCreate2DMediaBuffer);
     X(MFCreateDXGIDeviceManager);
     X(MFCreateSourceResolver);
+    X(MFCreateMediaBufferFromMediaType);
     X(MFCreateMFByteStreamOnStream);
     X(MFCreateTransformActivate);
     X(MFGetPlaneSize);
@@ -1769,7 +1778,7 @@ static void test_system_memory_buffer(void)
 static void test_sample(void)
 {
     static const DWORD test_pattern = 0x22222222;
-    IMFMediaBuffer *buffer, *buffer2;
+    IMFMediaBuffer *buffer, *buffer2, *buffer3;
     DWORD count, flags, length;
     IMFAttributes *attributes;
     IMFSample *sample;
@@ -1984,13 +1993,22 @@ static void test_sample(void)
     ok(buffer2 == buffer, "Unexpected buffer instance.\n");
     IMFMediaBuffer_Release(buffer2);
 
+    hr = IMFSample_ConvertToContiguousBuffer(sample, NULL);
+    ok(hr == S_OK, "Failed to convert, hr %#x.\n", hr);
+
     hr = IMFSample_ConvertToContiguousBuffer(sample, &buffer2);
     ok(hr == S_OK, "Failed to convert, hr %#x.\n", hr);
     ok(buffer2 == buffer, "Unexpected buffer instance.\n");
     IMFMediaBuffer_Release(buffer2);
 
+    hr = IMFMediaBuffer_SetCurrentLength(buffer, 3);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
     hr = MFCreateMemoryBuffer(16, &buffer2);
     ok(hr == S_OK, "Failed to create a buffer, hr %#x.\n", hr);
+
+    hr = IMFMediaBuffer_SetCurrentLength(buffer2, 4);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
 
     hr = IMFSample_AddBuffer(sample, buffer2);
     ok(hr == S_OK, "Failed to add buffer, hr %#x.\n", hr);
@@ -2000,15 +2018,35 @@ static void test_sample(void)
     ok(hr == S_OK, "Failed to get buffer count, hr %#x.\n", hr);
     ok(count == 2, "Unexpected buffer count %u.\n", count);
 
-    hr = IMFSample_ConvertToContiguousBuffer(sample, &buffer2);
-todo_wine
+    hr = IMFSample_ConvertToContiguousBuffer(sample, &buffer3);
     ok(hr == S_OK, "Failed to convert, hr %#x.\n", hr);
-    if (SUCCEEDED(hr))
-        IMFMediaBuffer_Release(buffer2);
+
+    hr = IMFMediaBuffer_GetMaxLength(buffer3, &length);
+    ok(hr == S_OK, "Failed to get maximum length, hr %#x.\n", hr);
+    ok(length == 7, "Unexpected length %u.\n", length);
+
+    hr = IMFMediaBuffer_GetCurrentLength(buffer3, &length);
+    ok(hr == S_OK, "Failed to get maximum length, hr %#x.\n", hr);
+    ok(length == 7, "Unexpected length %u.\n", length);
+
+    IMFMediaBuffer_Release(buffer3);
 
     hr = IMFSample_GetBufferCount(sample, &count);
     ok(hr == S_OK, "Failed to get buffer count, hr %#x.\n", hr);
-todo_wine
+    ok(count == 1, "Unexpected buffer count %u.\n", count);
+
+    hr = IMFSample_AddBuffer(sample, buffer);
+    ok(hr == S_OK, "Failed to add buffer, hr %#x.\n", hr);
+
+    hr = IMFSample_GetBufferCount(sample, &count);
+    ok(hr == S_OK, "Failed to get buffer count, hr %#x.\n", hr);
+    ok(count == 2, "Unexpected buffer count %u.\n", count);
+
+    hr = IMFSample_ConvertToContiguousBuffer(sample, NULL);
+    ok(hr == S_OK, "Failed to convert, hr %#x.\n", hr);
+
+    hr = IMFSample_GetBufferCount(sample, &count);
+    ok(hr == S_OK, "Failed to get buffer count, hr %#x.\n", hr);
     ok(count == 1, "Unexpected buffer count %u.\n", count);
 
     IMFMediaBuffer_Release(buffer);
@@ -2028,7 +2066,7 @@ static HRESULT WINAPI testcallback_Invoke(IMFAsyncCallback *iface, IMFAsyncResul
     state = IMFAsyncResult_GetStateNoAddRef(result);
     if (state && SUCCEEDED(IUnknown_QueryInterface(state, &IID_IMFMediaEventQueue, (void **)&queue)))
     {
-        IMFMediaEvent *event;
+        IMFMediaEvent *event = NULL, *event2;
 
         if (is_win8_plus)
         {
@@ -2041,10 +2079,11 @@ static HRESULT WINAPI testcallback_Invoke(IMFAsyncCallback *iface, IMFAsyncResul
             hr = IMFMediaEventQueue_EndGetEvent(queue, result, &event);
             ok(hr == S_OK, "Failed to finalize GetEvent, hr %#x.\n", hr);
 
-            hr = IMFMediaEventQueue_EndGetEvent(queue, result, &event);
+            hr = IMFMediaEventQueue_EndGetEvent(queue, result, &event2);
             ok(hr == E_FAIL, "Unexpected result, hr %#x.\n", hr);
 
-            IMFMediaEvent_Release(event);
+            if (event)
+                IMFMediaEvent_Release(event);
         }
 
         hr = IMFAsyncResult_GetObject(result, &obj);
@@ -2681,7 +2720,7 @@ static void test_event_queue(void)
     hr = IMFMediaEventQueue_QueueEvent(queue, event);
     ok(hr == S_OK, "Failed to queue event, hr %#x.\n", hr);
 
-    ret = WaitForSingleObject(callback.event, 100);
+    ret = WaitForSingleObject(callback.event, 500);
     ok(ret == WAIT_OBJECT_0, "Unexpected return value %#x.\n", ret);
 
     CloseHandle(callback.event);
@@ -3411,6 +3450,40 @@ static void test_MFCalculateImageSize(void)
         { &MFVideoFormat_NV12, 2, 2, 6, 6 },
         { &MFVideoFormat_NV12, 3, 2, 12, 9 },
         { &MFVideoFormat_NV12, 4, 2, 12, 12 },
+        { &MFVideoFormat_AYUV, 1, 1, 4 },
+        { &MFVideoFormat_AYUV, 2, 1, 8 },
+        { &MFVideoFormat_AYUV, 1, 2, 8 },
+        { &MFVideoFormat_AYUV, 4, 3, 48 },
+        { &MFVideoFormat_IMC1, 1, 1, 4 },
+        { &MFVideoFormat_IMC1, 2, 1, 4 },
+        { &MFVideoFormat_IMC1, 1, 2, 8 },
+        { &MFVideoFormat_IMC1, 4, 3, 24 },
+        { &MFVideoFormat_IMC3, 1, 1, 4 },
+        { &MFVideoFormat_IMC3, 2, 1, 4 },
+        { &MFVideoFormat_IMC3, 1, 2, 8 },
+        { &MFVideoFormat_IMC3, 4, 3, 24 },
+        { &MFVideoFormat_IMC2, 1, 3, 9, 4 },
+        { &MFVideoFormat_IMC2, 1, 2, 6, 3 },
+        { &MFVideoFormat_IMC2, 2, 2, 6, 6 },
+        { &MFVideoFormat_IMC2, 3, 2, 12, 9 },
+        { &MFVideoFormat_IMC2, 4, 2, 12, 12 },
+        { &MFVideoFormat_IMC4, 1, 3, 9, 4 },
+        { &MFVideoFormat_IMC4, 1, 2, 6, 3 },
+        { &MFVideoFormat_IMC4, 2, 2, 6, 6 },
+        { &MFVideoFormat_IMC4, 3, 2, 12, 9 },
+        { &MFVideoFormat_IMC4, 4, 2, 12, 12 },
+        { &MFVideoFormat_YV12, 1, 1, 3, 1 },
+        { &MFVideoFormat_YV12, 2, 1, 3 },
+        { &MFVideoFormat_YV12, 1, 2, 6, 3 },
+        { &MFVideoFormat_YV12, 4, 3, 18 },
+
+        { &MFVideoFormat_YUY2, 2, 1, 4 },
+        { &MFVideoFormat_YUY2, 4, 3, 24 },
+        { &MFVideoFormat_YUY2, 128, 128, 32768 },
+
+        { &MFVideoFormat_UYVY, 2, 1, 4 },
+        { &MFVideoFormat_UYVY, 4, 3, 24 },
+        { &MFVideoFormat_UYVY, 128, 128, 32768 },
     };
     unsigned int i;
     UINT32 size;
@@ -3426,23 +3499,22 @@ static void test_MFCalculateImageSize(void)
 
     for (i = 0; i < ARRAY_SIZE(image_size_tests); ++i)
     {
-        /* Those are supported since Win10. */
-        BOOL is_broken = IsEqualGUID(image_size_tests[i].subtype, &MFVideoFormat_A16B16G16R16F) ||
-                IsEqualGUID(image_size_tests[i].subtype, &MFVideoFormat_A2R10G10B10);
+        const struct image_size_test *ptr = &image_size_tests[i];
 
-        hr = MFCalculateImageSize(image_size_tests[i].subtype, image_size_tests[i].width,
-                image_size_tests[i].height, &size);
+        /* Those are supported since Win10. */
+        BOOL is_broken = IsEqualGUID(ptr->subtype, &MFVideoFormat_A16B16G16R16F) ||
+                IsEqualGUID(ptr->subtype, &MFVideoFormat_A2R10G10B10);
+
+        hr = MFCalculateImageSize(ptr->subtype, ptr->width, ptr->height, &size);
         ok(hr == S_OK || (is_broken && hr == E_INVALIDARG), "%u: failed to calculate image size, hr %#x.\n", i, hr);
-        ok(size == image_size_tests[i].size, "%u: unexpected image size %u, expected %u.\n", i, size,
-                image_size_tests[i].size);
+        ok(size == ptr->size, "%u: unexpected image size %u, expected %u. Size %u x %u, format %s.\n", i, size, ptr->size,
+                ptr->width, ptr->height, wine_dbgstr_an((char *)&ptr->subtype->Data1, 4));
 
         if (pMFGetPlaneSize)
         {
-            unsigned int plane_size = image_size_tests[i].plane_size ? image_size_tests[i].plane_size :
-                    image_size_tests[i].size;
+            unsigned int plane_size = ptr->plane_size ? ptr->plane_size : ptr->size;
 
-            hr = pMFGetPlaneSize(image_size_tests[i].subtype->Data1, image_size_tests[i].width, image_size_tests[i].height,
-                    &size);
+            hr = pMFGetPlaneSize(ptr->subtype->Data1, ptr->width, ptr->height, &size);
             ok(hr == S_OK, "%u: failed to get plane size, hr %#x.\n", i, hr);
             ok(size == plane_size, "%u: unexpected plane size %u, expected %u.\n", i, size, plane_size);
         }
@@ -4399,7 +4471,7 @@ static void test_queue_com(void)
         sprintf(path_name, "%s mfplat s%d", argv[0], system_queues[i]);
         ok(CreateProcessA( NULL, path_name, NULL, NULL, FALSE, 0, NULL, NULL, &startup, &info),
                 "CreateProcess failed.\n" );
-        winetest_wait_child_process(info.hProcess);
+        wait_child_process(info.hProcess);
         CloseHandle(info.hProcess);
         CloseHandle(info.hThread);
     }
@@ -4411,7 +4483,7 @@ static void test_queue_com(void)
         sprintf(path_name, "%s mfplat u%d", argv[0], user_queues[i]);
         ok(CreateProcessA( NULL, path_name, NULL, NULL, FALSE, 0, NULL, NULL, &startup, &info),
                 "CreateProcess failed.\n" );
-        winetest_wait_child_process(info.hProcess);
+        wait_child_process(info.hProcess);
         CloseHandle(info.hProcess);
         CloseHandle(info.hThread);
     }
@@ -4522,6 +4594,24 @@ static void test_MFGetStrideForBitmapInfoHeader(void)
         { &MFVideoFormat_NV12, 1, 1 },
         { &MFVideoFormat_NV12, 2, 2 },
         { &MFVideoFormat_NV12, 3, 3 },
+        { &MFVideoFormat_AYUV, 1, 4 },
+        { &MFVideoFormat_AYUV, 4, 16 },
+        { &MFVideoFormat_AYUV, 5, 20 },
+        { &MFVideoFormat_IMC1, 1, 4 },
+        { &MFVideoFormat_IMC1, 2, 4 },
+        { &MFVideoFormat_IMC1, 3, 8 },
+        { &MFVideoFormat_IMC3, 1, 4 },
+        { &MFVideoFormat_IMC3, 2, 4 },
+        { &MFVideoFormat_IMC3, 3, 8 },
+        { &MFVideoFormat_IMC2, 1, 1 },
+        { &MFVideoFormat_IMC2, 2, 2 },
+        { &MFVideoFormat_IMC2, 3, 3 },
+        { &MFVideoFormat_IMC4, 1, 1 },
+        { &MFVideoFormat_IMC4, 2, 2 },
+        { &MFVideoFormat_IMC4, 3, 3 },
+        { &MFVideoFormat_YV12, 1, 1 },
+        { &MFVideoFormat_YV12, 2, 2 },
+        { &MFVideoFormat_YV12, 3, 3 },
     };
     unsigned int i;
     LONG stride;
@@ -4547,11 +4637,66 @@ static void test_MFGetStrideForBitmapInfoHeader(void)
 
 static void test_MFCreate2DMediaBuffer(void)
 {
+    static const struct _2d_buffer_test
+    {
+        unsigned int width;
+        unsigned int height;
+        unsigned int fourcc;
+        unsigned int contiguous_length;
+        int pitch;
+        unsigned int plane_multiplier;
+    } _2d_buffer_tests[] =
+    {
+        { 2, 2, MAKEFOURCC('N','V','1','2'), 6, 64 },
+        { 4, 2, MAKEFOURCC('N','V','1','2'), 12, 64 },
+        { 2, 4, MAKEFOURCC('N','V','1','2'), 12, 64 },
+        { 1, 3, MAKEFOURCC('N','V','1','2'), 4, 64 },
+
+        { 2, 2, MAKEFOURCC('I','M','C','2'), 6, 128 },
+        { 4, 2, MAKEFOURCC('I','M','C','2'), 12, 128 },
+        { 2, 4, MAKEFOURCC('I','M','C','2'), 12, 128 },
+        { 2, 2, MAKEFOURCC('I','M','C','4'), 6, 128 },
+        { 4, 2, MAKEFOURCC('I','M','C','4'), 12, 128 },
+        { 2, 4, MAKEFOURCC('I','M','C','4'), 12, 128 },
+
+        { 4,  2, MAKEFOURCC('I','M','C','1'),  32, 128, 2 },
+        { 4,  4, MAKEFOURCC('I','M','C','1'),  64, 128, 2 },
+        { 4, 16, MAKEFOURCC('I','M','C','1'), 256, 128, 2 },
+        { 4, 20, MAKEFOURCC('I','M','C','1'), 320, 128, 2 },
+
+        { 4,  2, MAKEFOURCC('I','M','C','3'),  32, 128, 2 },
+        { 4,  4, MAKEFOURCC('I','M','C','3'),  64, 128, 2 },
+        { 4, 16, MAKEFOURCC('I','M','C','3'), 256, 128, 2 },
+        { 4, 20, MAKEFOURCC('I','M','C','3'), 320, 128, 2 },
+
+        { 4,  2, MAKEFOURCC('Y','V','1','2'),  12, 128 },
+        { 4,  4, MAKEFOURCC('Y','V','1','2'),  24, 128 },
+        { 4, 16, MAKEFOURCC('Y','V','1','2'),  96, 128 },
+
+        { 4,  2, MAKEFOURCC('A','Y','U','V'),  32, 64 },
+        { 4,  4, MAKEFOURCC('A','Y','U','V'),  64, 64 },
+        { 4, 16, MAKEFOURCC('A','Y','U','V'), 256, 64 },
+
+        { 4,  2, MAKEFOURCC('Y','U','Y','2'),  16, 64 },
+        { 4,  4, MAKEFOURCC('Y','U','Y','2'),  32, 64 },
+        { 4, 16, MAKEFOURCC('Y','U','Y','2'), 128, 64 },
+
+        { 4,  2, MAKEFOURCC('U','Y','V','Y'),  16, 64 },
+        { 4,  4, MAKEFOURCC('U','Y','V','Y'),  32, 64 },
+        { 4, 16, MAKEFOURCC('U','Y','V','Y'), 128, 64 },
+
+        { 2, 4, D3DFMT_A8R8G8B8, 32, 64 },
+        { 1, 4, D3DFMT_A8R8G8B8, 16, 64 },
+        { 4, 1, D3DFMT_A8R8G8B8, 16, 64 },
+    };
+    unsigned int max_length, length, length2;
+    BYTE *buffer_start, *data, *data2;
     IMF2DBuffer2 *_2dbuffer2;
     IMF2DBuffer *_2dbuffer;
     IMFMediaBuffer *buffer;
-    DWORD length;
+    int i, pitch, pitch2;
     HRESULT hr;
+    BOOL ret;
 
     if (!pMFCreate2DMediaBuffer)
     {
@@ -4565,26 +4710,281 @@ static void test_MFCreate2DMediaBuffer(void)
     hr = pMFCreate2DMediaBuffer(2, 3, MAKEFOURCC('N','V','1','2'), FALSE, NULL);
     ok(FAILED(hr), "Unexpected hr %#x.\n", hr);
 
+    /* YUV formats can't be bottom-up. */
+    hr = pMFCreate2DMediaBuffer(2, 3, MAKEFOURCC('N','V','1','2'), TRUE, &buffer);
+    ok(hr == MF_E_INVALIDMEDIATYPE, "Unexpected hr %#x.\n", hr);
+
     hr = pMFCreate2DMediaBuffer(2, 3, MAKEFOURCC('N','V','1','2'), FALSE, &buffer);
     ok(hr == S_OK, "Failed to create a buffer, hr %#x.\n", hr);
 
-    hr = IMFMediaBuffer_GetMaxLength(buffer, &length);
+    /* Full backing buffer size, with 64 bytes per row alignment.  */
+    hr = IMFMediaBuffer_GetMaxLength(buffer, &max_length);
     ok(hr == S_OK, "Failed to get length, hr %#x.\n", hr);
-    ok(length > 0, "Unexpected length.\n");
+    ok(max_length > 0, "Unexpected length %u.\n", max_length);
+
+    hr = IMFMediaBuffer_GetCurrentLength(buffer, &length);
+    ok(hr == S_OK, "Failed to get current length, hr %#x.\n", hr);
+    ok(!length, "Unexpected length.\n");
+
+    hr = IMFMediaBuffer_SetCurrentLength(buffer, 10);
+    ok(hr == S_OK, "Failed to set current length, hr %#x.\n", hr);
+
+    hr = IMFMediaBuffer_GetCurrentLength(buffer, &length);
+    ok(hr == S_OK, "Failed to get current length, hr %#x.\n", hr);
+    ok(length == 10, "Unexpected length.\n");
+
+    /* Linear lock/unlock. */
+
+    hr = IMFMediaBuffer_Lock(buffer, NULL, &max_length, &length);
+    ok(FAILED(hr), "Unexpected hr %#x.\n", hr);
+
+    /* Linear locking call returns plane size.*/
+    hr = IMFMediaBuffer_Lock(buffer, &data, &max_length, &length);
+    ok(hr == S_OK, "Failed to lock buffer, hr %#x.\n", hr);
+    ok(max_length == length, "Unexpected length.\n");
+
+    length = 0;
+    pMFGetPlaneSize(MAKEFOURCC('N','V','1','2'), 2, 3, &length);
+    ok(max_length == length && length == 9, "Unexpected length %u.\n", length);
+
+    /* Already locked */
+    hr = IMFMediaBuffer_Lock(buffer, &data2, NULL, NULL);
+    ok(hr == S_OK, "Failed to lock buffer, hr %#x.\n", hr);
+    ok(data2 == data, "Unexpected pointer.\n");
+
+    hr = IMFMediaBuffer_Unlock(buffer);
+    ok(hr == S_OK, "Failed to unlock buffer, hr %#x.\n", hr);
 
     hr = IMFMediaBuffer_QueryInterface(buffer, &IID_IMF2DBuffer, (void **)&_2dbuffer);
     ok(hr == S_OK, "Failed to get interface, hr %#x.\n", hr);
-    IMF2DBuffer_Release(_2dbuffer);
+
+    hr = IMF2DBuffer_GetContiguousLength(_2dbuffer, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    hr = IMF2DBuffer_GetContiguousLength(_2dbuffer, &length);
+    ok(hr == S_OK, "Failed to get length, hr %#x.\n", hr);
+    ok(length == 9, "Unexpected length %u.\n", length);
+
+    hr = IMF2DBuffer_IsContiguousFormat(_2dbuffer, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    /* 2D lock. */
+    hr = IMF2DBuffer_Lock2D(_2dbuffer, &data, &pitch);
+    ok(hr == MF_E_UNEXPECTED, "Unexpected hr %#x.\n", hr);
+
+    hr = IMF2DBuffer_GetScanline0AndPitch(_2dbuffer, &data, &pitch);
+    ok(hr == HRESULT_FROM_WIN32(ERROR_WAS_UNLOCKED), "Unexpected hr %#x.\n", hr);
+
+    hr = IMFMediaBuffer_Unlock(buffer);
+    ok(hr == S_OK, "Failed to unlock buffer, hr %#x.\n", hr);
+
+    hr = IMF2DBuffer_GetScanline0AndPitch(_2dbuffer, &data, &pitch);
+    ok(hr == HRESULT_FROM_WIN32(ERROR_WAS_UNLOCKED), "Unexpected hr %#x.\n", hr);
+
+    hr = IMF2DBuffer_Lock2D(_2dbuffer, NULL, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    hr = IMF2DBuffer_Lock2D(_2dbuffer, &data, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    hr = IMF2DBuffer_Lock2D(_2dbuffer, NULL, &pitch);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    hr = IMF2DBuffer_Lock2D(_2dbuffer, &data, &pitch);
+    ok(hr == S_OK, "Failed to lock buffer, hr %#x.\n", hr);
+    ok(!!data, "Expected data pointer.\n");
+    ok(pitch == 64, "Unexpected pitch %d.\n", pitch);
+
+    hr = IMF2DBuffer_Lock2D(_2dbuffer, &data2, &pitch);
+    ok(hr == S_OK, "Failed to lock buffer, hr %#x.\n", hr);
+    ok(data == data2, "Expected data pointer.\n");
+
+    hr = IMF2DBuffer_GetScanline0AndPitch(_2dbuffer, NULL, &pitch);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    hr = IMF2DBuffer_GetScanline0AndPitch(_2dbuffer, &data, NULL);
+    ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+    /* Active 2D lock */
+    hr = IMFMediaBuffer_Lock(buffer, &data2, NULL, NULL);
+    ok(hr == MF_E_INVALIDREQUEST, "Unexpected hr %#x.\n", hr);
+
+    hr = IMF2DBuffer_Unlock2D(_2dbuffer);
+    ok(hr == S_OK, "Failed to unlock buffer, hr %#x.\n", hr);
+
+    hr = IMFMediaBuffer_Lock(buffer, &data2, NULL, NULL);
+    ok(hr == MF_E_INVALIDREQUEST, "Unexpected hr %#x.\n", hr);
+
+    hr = IMF2DBuffer_Unlock2D(_2dbuffer);
+    ok(hr == S_OK, "Failed to unlock buffer, hr %#x.\n", hr);
+
+    hr = IMF2DBuffer_Unlock2D(_2dbuffer);
+    ok(hr == HRESULT_FROM_WIN32(ERROR_WAS_UNLOCKED), "Unexpected hr %#x.\n", hr);
 
     hr = IMFMediaBuffer_QueryInterface(buffer, &IID_IMF2DBuffer2, (void **)&_2dbuffer2);
     ok(hr == S_OK || broken(hr == E_NOINTERFACE), "Failed to get interface, hr %#x.\n", hr);
 
     if (SUCCEEDED(hr))
+    {
+        hr = IMF2DBuffer_Lock2D(_2dbuffer, &data, &pitch);
+        ok(hr == S_OK, "Failed to lock buffer, hr %#x.\n", hr);
+
+        hr = IMF2DBuffer2_Lock2DSize(_2dbuffer2, MF2DBuffer_LockFlags_Read, &data2, &pitch, &buffer_start, &length);
+        ok(hr == S_OK, "Failed to lock buffer, hr %#x.\n", hr);
+
+        hr = IMF2DBuffer_Unlock2D(_2dbuffer);
+        ok(hr == S_OK, "Failed to unlock buffer, hr %#x.\n", hr);
+
+        hr = IMF2DBuffer_Unlock2D(_2dbuffer);
+        ok(hr == S_OK, "Failed to unlock buffer, hr %#x.\n", hr);
+
+        /* Flags are ignored. */
+        hr = IMF2DBuffer2_Lock2DSize(_2dbuffer2, MF2DBuffer_LockFlags_Read, &data2, &pitch, &buffer_start, &length);
+        ok(hr == S_OK, "Failed to lock buffer, hr %#x.\n", hr);
+
+        hr = IMF2DBuffer2_Lock2DSize(_2dbuffer2, MF2DBuffer_LockFlags_Write, &data2, &pitch, &buffer_start, &length);
+        ok(hr == S_OK, "Failed to lock buffer, hr %#x.\n", hr);
+
+        hr = IMF2DBuffer_Unlock2D(_2dbuffer);
+        ok(hr == S_OK, "Failed to unlock buffer, hr %#x.\n", hr);
+
+        hr = IMF2DBuffer_Unlock2D(_2dbuffer);
+        ok(hr == S_OK, "Failed to unlock buffer, hr %#x.\n", hr);
+
+        hr = IMF2DBuffer2_Lock2DSize(_2dbuffer2, MF2DBuffer_LockFlags_Write, &data2, &pitch, NULL, &length);
+        ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
+        hr = IMF2DBuffer2_Lock2DSize(_2dbuffer2, MF2DBuffer_LockFlags_Write, &data2, &pitch, &buffer_start, NULL);
+        ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
+
         IMF2DBuffer2_Release(_2dbuffer2);
+    }
     else
         win_skip("IMF2DBuffer2 is not supported.\n");
 
+    IMF2DBuffer_Release(_2dbuffer);
+
     IMFMediaBuffer_Release(buffer);
+
+    for (i = 0; i < ARRAY_SIZE(_2d_buffer_tests); ++i)
+    {
+        const struct _2d_buffer_test *ptr = &_2d_buffer_tests[i];
+
+        hr = pMFCreate2DMediaBuffer(ptr->width, ptr->height, ptr->fourcc, FALSE, &buffer);
+        ok(hr == S_OK, "Failed to create a buffer, hr %#x.\n", hr);
+
+        hr = IMFMediaBuffer_QueryInterface(buffer, &IID_IMF2DBuffer, (void **)&_2dbuffer);
+        ok(hr == S_OK, "Failed to get interface, hr %#x.\n", hr);
+
+        hr = IMF2DBuffer_GetContiguousLength(_2dbuffer, &length);
+        ok(hr == S_OK, "Failed to get length, hr %#x.\n", hr);
+        ok(length == ptr->contiguous_length, "%d: unexpected contiguous length %u for %u x %u, format %s.\n",
+                i, length, ptr->width, ptr->height, wine_dbgstr_an((char *)&ptr->fourcc, 4));
+
+        hr = IMFMediaBuffer_Lock(buffer, &data, &length2, NULL);
+        ok(hr == S_OK, "Failed to lock buffer, hr %#x.\n", hr);
+        ok(length == ptr->contiguous_length, "%d: unexpected linear buffer length %u for %u x %u, format %s.\n",
+                i, length2, ptr->width, ptr->height, wine_dbgstr_an((char *)&ptr->fourcc, 4));
+
+        hr = IMFMediaBuffer_Unlock(buffer);
+        ok(hr == S_OK, "Failed to unlock buffer, hr %#x.\n", hr);
+
+        hr = pMFGetPlaneSize(ptr->fourcc, ptr->width, ptr->height, &length2);
+        ok(hr == S_OK, "Failed to get plane size, hr %#x.\n", hr);
+        if (ptr->plane_multiplier)
+            length2 *= ptr->plane_multiplier;
+        ok(length2 == length, "%d: contiguous length %u does not match plane size %u, %u x %u, format %s.\n", i, length,
+                length2, ptr->width, ptr->height, wine_dbgstr_an((char *)&ptr->fourcc, 4));
+
+        hr = IMF2DBuffer_Lock2D(_2dbuffer, &data, &pitch);
+        ok(hr == S_OK, "Failed to lock buffer, hr %#x.\n", hr);
+
+        hr = IMF2DBuffer_GetScanline0AndPitch(_2dbuffer, &data2, &pitch2);
+        ok(hr == S_OK, "Failed to get scanline, hr %#x.\n", hr);
+        ok(data2 == data, "Unexpected data pointer.\n");
+        ok(pitch == pitch2, "Unexpected pitch.\n");
+
+        hr = IMF2DBuffer_Unlock2D(_2dbuffer);
+        ok(hr == S_OK, "Failed to unlock buffer, hr %#x.\n", hr);
+
+        ok(pitch == ptr->pitch, "%d: unexpected pitch %d, expected %d, %u x %u, format %s.\n", i, pitch, ptr->pitch,
+                ptr->width, ptr->height, wine_dbgstr_an((char *)&ptr->fourcc, 4));
+
+        ret = TRUE;
+        hr = IMF2DBuffer_IsContiguousFormat(_2dbuffer, &ret);
+        ok(hr == S_OK, "Failed to get format flag, hr %#x.\n", hr);
+        ok(!ret, "%d: unexpected format flag %d.\n", i, ret);
+
+        IMF2DBuffer_Release(_2dbuffer);
+
+        IMFMediaBuffer_Release(buffer);
+    }
+}
+
+static void test_MFCreateMediaBufferFromMediaType(void)
+{
+    static struct audio_buffer_test
+    {
+        unsigned int duration;
+        unsigned int min_length;
+        unsigned int min_alignment;
+        unsigned int block_alignment;
+        unsigned int bytes_per_second;
+        unsigned int buffer_length;
+    } audio_tests[] =
+    {
+        { 0,  0,  0,  4,  0, 20 },
+        { 0, 16,  0,  4,  0, 20 },
+        { 0,  0, 32,  4,  0, 36 },
+        { 0, 64, 32,  4,  0, 64 },
+        { 1,  0,  0,  4, 16, 36 },
+        { 2,  0,  0,  4, 16, 52 },
+    };
+    IMFMediaBuffer *buffer;
+    UINT32 length;
+    HRESULT hr;
+    IMFMediaType *media_type;
+    unsigned int i;
+
+    if (!pMFCreateMediaBufferFromMediaType)
+    {
+        win_skip("MFCreateMediaBufferFromMediaType() is not available.\n");
+        return;
+    }
+
+    hr = pMFCreateMediaBufferFromMediaType(NULL, 0, 0, 0, &buffer);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    hr = MFCreateMediaType(&media_type);
+    ok(hr == S_OK, "Failed to create media type, hr %#x.\n", hr);
+
+    hr = IMFMediaType_SetGUID(media_type, &MF_MT_MAJOR_TYPE, &MFMediaType_Audio);
+    ok(hr == S_OK, "Failed to set attribute, hr %#x.\n", hr);
+
+    for (i = 0; i < ARRAY_SIZE(audio_tests); ++i)
+    {
+        const struct audio_buffer_test *ptr = &audio_tests[i];
+
+        hr = IMFMediaType_SetUINT32(media_type, &MF_MT_AUDIO_BLOCK_ALIGNMENT, ptr->block_alignment);
+        ok(hr == S_OK, "Failed to set attribute, hr %#x.\n", hr);
+
+        hr = IMFMediaType_SetUINT32(media_type, &MF_MT_AUDIO_AVG_BYTES_PER_SECOND, ptr->bytes_per_second);
+        ok(hr == S_OK, "Failed to set attribute, hr %#x.\n", hr);
+
+        hr = pMFCreateMediaBufferFromMediaType(media_type, ptr->duration * 10000000, ptr->min_length,
+                ptr->min_alignment, &buffer);
+        ok(hr == S_OK || broken(FAILED(hr)) /* Win8 */, "Unexpected hr %#x.\n", hr);
+        if (FAILED(hr))
+            break;
+
+        hr = IMFMediaBuffer_GetMaxLength(buffer, &length);
+        ok(hr == S_OK, "Failed to get length, hr %#x.\n", hr);
+        ok(ptr->buffer_length == length, "%d: unexpected buffer length %u, expected %u.\n", i, length, ptr->buffer_length);
+
+        IMFMediaBuffer_Release(buffer);
+    }
+
+    IMFMediaType_Release(media_type);
 }
 
 START_TEST(mfplat)
@@ -4640,6 +5040,7 @@ START_TEST(mfplat)
     test_queue_com();
     test_MFGetStrideForBitmapInfoHeader();
     test_MFCreate2DMediaBuffer();
+    test_MFCreateMediaBufferFromMediaType();
 
     CoUninitialize();
 }

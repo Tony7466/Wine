@@ -29,6 +29,7 @@
 #include "winreg.h"
 
 #include "initguid.h"
+#include "rtworkq.h"
 #include "ole2.h"
 #include "propsys.h"
 #include "dxgi.h"
@@ -40,7 +41,6 @@
 #include "mfreadwrite.h"
 #include "propvarutil.h"
 #include "strsafe.h"
-#include "rtworkq.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(mfplat);
 
@@ -1002,8 +1002,6 @@ MFTIME WINAPI MFGetSystemTime(void)
 {
     MFTIME mf;
 
-    TRACE("()\n");
-
     GetSystemTimeAsFileTime( (FILETIME*)&mf );
 
     return mf;
@@ -1510,7 +1508,7 @@ HRESULT WINAPI MFShutdown(void)
  */
 HRESULT WINAPI MFCopyImage(BYTE *dest, LONG deststride, const BYTE *src, LONG srcstride, DWORD width, DWORD lines)
 {
-    TRACE("(%p, %d, %p, %d, %u, %u)\n", dest, deststride, src, srcstride, width, lines);
+    TRACE("%p, %d, %p, %d, %u, %u.\n", dest, deststride, src, srcstride, width, lines);
 
     while (lines--)
     {
@@ -1542,33 +1540,50 @@ const char *debugstr_attr(const GUID *guid)
 #define X(g) { &(g), #g }
         X(MF_READWRITE_MMCSS_CLASS),
         X(MF_TOPONODE_MARKIN_HERE),
+        X(MF_MT_H264_SUPPORTED_SYNC_FRAME_TYPES),
         X(MF_TOPONODE_MARKOUT_HERE),
         X(MF_TOPONODE_DECODER),
         X(MF_TOPOLOGY_PROJECTSTART),
+        X(MF_VIDEO_MAX_MB_PER_SEC),
         X(MF_TOPOLOGY_PROJECTSTOP),
         X(MF_SINK_WRITER_ENCODER_CONFIG),
         X(MF_TOPOLOGY_NO_MARKIN_MARKOUT),
+        X(MF_MT_H264_CAPABILITIES),
         X(MF_SOURCE_READER_ENABLE_TRANSCODE_ONLY_TRANSFORMS),
         X(MFT_PREFERRED_ENCODER_PROFILE),
         X(MF_TOPOLOGY_DYNAMIC_CHANGE_NOT_ALLOWED),
+        X(MF_MT_MPEG2_PROFILE),
+        X(MF_MT_VIDEO_PROFILE),
+        X(MF_MT_DV_AAUX_CTRL_PACK_1),
         X(MF_MT_ALPHA_MODE),
+        X(MF_MT_MPEG2_TIMECODE),
         X(MF_PMP_SERVER_CONTEXT),
         X(MFT_SUPPORT_DYNAMIC_FORMAT_CHANGE),
+        X(MF_MT_CUSTOM_VIDEO_PRIMARIES),
+        X(MF_MT_TIMESTAMP_CAN_BE_DTS),
         X(MFT_CODEC_MERIT_Attribute),
         X(MF_TOPOLOGY_PLAYBACK_MAX_DIMS),
         X(MF_LOW_LATENCY),
         X(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS),
+        X(MF_MT_MPEG2_FLAGS),
         X(MF_MT_PIXEL_ASPECT_RATIO),
         X(MF_TOPOLOGY_ENABLE_XVP_FOR_PLAYBACK),
         X(MFT_CONNECTED_STREAM_ATTRIBUTE),
+        X(MF_MT_REALTIME_CONTENT),
         X(MF_MT_WRAPPED_TYPE),
+        X(MF_MT_DRM_FLAGS),
         X(MF_MT_AVG_BITRATE),
+        X(MF_MT_DECODER_USE_MAX_RESOLUTION),
+        X(MF_MT_MAX_LUMINANCE_LEVEL),
         X(MFT_CONNECTED_TO_HW_STREAM),
         X(MF_SA_D3D_AWARE),
+        X(MF_MT_MAX_KEYFRAME_SPACING),
         X(MFT_TRANSFORM_CLSID_Attribute),
         X(MFT_TRANSFORM_CLSID_Attribute),
         X(MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING),
+        X(MF_MT_AM_FORMAT_TYPE),
         X(MF_SESSION_APPROX_EVENT_OCCURRENCE_TIME),
+        X(MF_MT_H264_MAX_MB_PER_SEC),
         X(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_MAX_BUFFERS),
         X(MF_MT_AUDIO_BLOCK_ALIGNMENT),
         X(MF_PD_PMPHOST_CONTEXT),
@@ -1579,6 +1594,7 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_PD_VIDEO_ENCODING_BITRATE),
         X(MFSampleExtension_TargetGlobalLuminance),
         X(MF_PD_MIME_TYPE),
+        X(MF_MT_H264_SUPPORTED_SLICE_MODES),
         X(MF_PD_LAST_MODIFIED_TIME),
         X(MF_PD_PLAYBACK_ELEMENT_ID),
         X(MF_MT_ALL_SAMPLES_INDEPENDENT),
@@ -1587,33 +1603,54 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_ACTIVATE_MFT_LOCKED),
         X(MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING),
         X(MF_MT_FRAME_SIZE),
+        X(MF_MT_H264_SIMULCAST_SUPPORT),
         X(MF_SINK_WRITER_ASYNC_CALLBACK),
         X(MF_TOPOLOGY_START_TIME_ON_PRESENTATION_SWITCH),
         X(MFT_DECODER_EXPOSE_OUTPUT_TYPES_IN_NATIVE_ORDER),
         X(MF_TOPONODE_WORKQUEUE_MMCSS_PRIORITY),
         X(MF_MT_FRAME_RATE_RANGE_MAX),
+        X(MF_MT_PALETTE),
         X(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_PROVIDER_DEVICE_ID),
         X(MF_TOPOLOGY_STATIC_PLAYBACK_OPTIMIZATIONS),
+        X(MF_MT_GEOMETRIC_APERTURE),
+        X(MF_MT_ORIGINAL_WAVE_FORMAT_TAG),
+        X(MF_MT_DV_AAUX_SRC_PACK_1),
+        X(MF_MT_DEFAULT_STRIDE),
+        X(MF_MT_ARBITRARY_FORMAT),
         X(MF_TRANSFORM_CATEGORY_Attribute),
+        X(MF_MT_MPEG2_HDCP),
         X(MF_MT_AUDIO_FLOAT_SAMPLES_PER_SECOND),
+        X(MF_MT_SPATIAL_AUDIO_MAX_DYNAMIC_OBJECTS),
+        X(MF_MT_DECODER_MAX_DPB_COUNT),
         X(MFSampleExtension_ForwardedDecodeUnits),
+        X(MF_MT_DV_AAUX_CTRL_PACK_0),
+        X(MF_MT_YUV_MATRIX),
         X(MF_EVENT_SOURCE_TOPOLOGY_CANCELED),
+        X(MF_MT_MPEG4_CURRENT_SAMPLE_ENTRY),
+        X(MF_MT_MAX_FRAME_AVERAGE_LUMINANCE_LEVEL),
         X(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_AUDCAP_ENDPOINT_ID),
         X(MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME),
         X(MF_MT_VIDEO_ROTATION),
         X(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_AUDCAP_SYMBOLIC_LINK),
         X(MF_MT_USER_DATA),
+        X(MF_MT_MIN_MASTERING_LUMINANCE),
         X(MF_EVENT_STREAM_METADATA_SYSTEMID),
         X(MF_MT_AUDIO_CHANNEL_MASK),
         X(MF_SOURCE_READER_DISCONNECT_MEDIASOURCE_ON_SHUTDOWN),
         X(MF_READWRITE_DISABLE_CONVERTERS),
+        X(MF_MT_MINIMUM_DISPLAY_APERTURE),
         X(MFSampleExtension_Token),
         X(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_CATEGORY),
         X(MF_MT_AUDIO_VALID_BITS_PER_SAMPLE),
         X(MF_TRANSFORM_ASYNC_UNLOCK),
+        X(MF_DISABLE_FRAME_CORRUPTION_INFO),
         X(MF_TOPOLOGY_ENUMERATE_SOURCE_TYPES),
         X(MF_MT_VIDEO_NO_FRAME_ORDERING),
+        X(MF_MT_VIDEO_CHROMA_SITING),
         X(MFSampleExtension_3DVideo_SampleFormat),
+        X(MF_MT_H264_RESOLUTION_SCALING),
+        X(MF_MT_MPEG2_LEVEL),
+        X(MF_MT_VIDEO_LEVEL),
         X(MF_SAMPLEGRABBERSINK_SAMPLE_TIME_OFFSET),
         X(MF_MT_SAMPLE_SIZE),
         X(MF_MT_AAC_PAYLOAD_TYPE),
@@ -1623,6 +1660,7 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_MT_AUDIO_WMADRC_PEAKREF),
         X(MF_MT_AUDIO_WMADRC_PEAKTARGET),
         X(MF_TRANSFORM_FLAGS_Attribute),
+        X(MF_MT_H264_SUPPORTED_RATE_CONTROL_MODES),
         X(MF_PD_SAMI_STYLELIST),
         X(MF_MT_AUDIO_WMADRC_AVGREF),
         X(MF_MT_AUDIO_BITS_PER_SAMPLE),
@@ -1633,9 +1671,13 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_SESSION_GLOBAL_TIME),
         X(MF_SESSION_QUALITY_MANAGER),
         X(MF_SESSION_CONTENT_PROTECTION_MANAGER),
+        X(MF_MT_MPEG4_SAMPLE_DESCRIPTION),
+        X(MF_MT_MPEG_START_TIME_CODE),
         X(MFT_REMUX_MARK_I_PICTURE_AS_CLEAN_POINT),
         X(MFT_REMUX_MARK_I_PICTURE_AS_CLEAN_POINT),
         X(MF_READWRITE_MMCSS_PRIORITY_AUDIO),
+        X(MF_MT_H264_MAX_CODEC_CONFIG_DELAY),
+        X(MF_MT_DV_AAUX_SRC_PACK_0),
         X(MF_BYTESTREAM_ORIGIN_NAME),
         X(MF_BYTESTREAM_CONTENT_TYPE),
         X(MF_MT_DEPTH_MEASUREMENT),
@@ -1651,12 +1693,14 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_BYTESTREAM_DLNA_PROFILE_ID),
         X(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_AUDCAP_ROLE),
         X(MF_MT_MAJOR_TYPE),
+        X(MF_MT_IN_BAND_PARAMETER_SET),
         X(MF_EVENT_SOURCE_CHARACTERISTICS),
         X(MF_EVENT_SOURCE_CHARACTERISTICS_OLD),
         X(MF_SESSION_SERVER_CONTEXT),
         X(MF_MT_VIDEO_3D_FIRST_IS_LEFT),
         X(MFT_DECODER_FINAL_VIDEO_RESOLUTION_HINT),
         X(MF_PD_ADAPTIVE_STREAMING),
+        X(MF_MT_H264_SUPPORTED_USAGES),
         X(MFT_PREFERRED_OUTPUTTYPE_Attribute),
         X(MFSampleExtension_Timestamp),
         X(MF_TOPONODE_PRIMARYOUTPUT),
@@ -1664,8 +1708,10 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_TRANSFORM_ASYNC),
         X(MF_TOPONODE_STREAMID),
         X(MF_TOPONODE_NOSHUTDOWN_ON_REMOVE),
+        X(MF_MT_VIDEO_LIGHTING),
         X(MF_SD_MUTUALLY_EXCLUSIVE),
         X(MF_SD_STREAM_NAME),
+        X(MF_MT_DV_VAUX_SRC_PACK),
         X(MF_TOPONODE_RATELESS),
         X(MF_EVENT_STREAM_METADATA_CONTENT_KEYIDS),
         X(MF_TOPONODE_DISABLE_PREROLL),
@@ -1674,12 +1720,14 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_SOURCE_READER_D3D_MANAGER),
         X(MF_SINK_WRITER_D3D_MANAGER),
         X(MFSampleExtension_3DVideo),
+        X(MF_MT_H264_USAGE),
         X(MF_EVENT_SOURCE_FAKE_START),
         X(MF_EVENT_SOURCE_PROJECTSTART),
         X(MF_EVENT_SOURCE_ACTUAL_START),
         X(MF_MT_AUDIO_SAMPLES_PER_BLOCK),
         X(MFT_ENUM_HARDWARE_URL_Attribute),
         X(MF_SOURCE_READER_ASYNC_CALLBACK),
+        X(MF_MT_OUTPUT_BUFFER_NUM),
         X(MFT_ENCODER_SUPPORTS_CONFIG_EVENT),
         X(MF_MT_AUDIO_FLAC_MAX_BLOCK_SIZE),
         X(MFT_FRIENDLY_NAME_Attribute),
@@ -1687,19 +1735,29 @@ const char *debugstr_attr(const GUID *guid)
         X(MFT_SUPPORT_3DVIDEO),
         X(MFT_SUPPORT_3DVIDEO),
         X(MFT_INPUT_TYPES_Attributes),
+        X(MF_MT_H264_LAYOUT_PER_STREAM),
         X(MF_EVENT_SCRUBSAMPLE_TIME),
+        X(MF_MT_SPATIAL_AUDIO_MAX_METADATA_ITEMS),
+        X(MF_MT_MPEG2_ONE_FRAME_PER_PACKET),
         X(MF_MT_INTERLACE_MODE),
         X(MF_MT_VIDEO_RENDERER_EXTENSION_PROFILE),
         X(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_HW_SOURCE),
         X(MF_MT_AUDIO_PREFER_WAVEFORMATEX),
+        X(MF_MT_H264_SVC_CAPABILITIES),
         X(MF_TOPONODE_WORKQUEUE_ITEM_PRIORITY),
+        X(MF_MT_SPATIAL_AUDIO_OBJECT_METADATA_LENGTH),
+        X(MF_MT_SPATIAL_AUDIO_OBJECT_METADATA_FORMAT_ID),
         X(MF_SAMPLEGRABBERSINK_IGNORE_CLOCK),
+        X(MF_MT_PAN_SCAN_ENABLED),
+        X(MF_MT_DV_VAUX_CTRL_PACK),
         X(MFSampleExtension_ForwardedDecodeUnitType),
         X(MF_MT_AUDIO_AVG_BYTES_PER_SECOND),
         X(MF_SOURCE_READER_MEDIASOURCE_CHARACTERISTICS),
+        X(MF_MT_SPATIAL_AUDIO_MIN_METADATA_ITEM_OFFSET_SPACING),
         X(MF_TOPONODE_TRANSFORM_OBJECTID),
         X(MF_DEVSOURCE_ATTRIBUTE_MEDIA_TYPE),
         X(MF_EVENT_MFT_INPUT_STREAM_ID),
+        X(MF_MT_SOURCE_CONTENT_HINT),
         X(MFT_ENUM_HARDWARE_VENDOR_ID_Attribute),
         X(MFT_ENUM_TRANSCODE_ONLY_ATTRIBUTE),
         X(MF_READWRITE_MMCSS_PRIORITY),
@@ -1711,20 +1769,33 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_EVENT_START_PRESENTATION_TIME_AT_OUTPUT),
         X(MFSampleExtension_DecodeTimestamp),
         X(MF_MT_VIDEO_H264_NO_FMOASO),
+        X(MF_MT_AVG_BIT_ERROR_RATE),
+        X(MF_MT_VIDEO_PRIMARIES),
         X(MF_SINK_WRITER_DISABLE_THROTTLING),
+        X(MF_MT_H264_RATE_CONTROL_MODES),
         X(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK),
         X(MF_READWRITE_D3D_OPTIONAL),
         X(MF_READWRITE_MMCSS_CLASS_AUDIO),
         X(MF_SOURCE_READER_DISABLE_CAMERA_PLUGINS),
+        X(MF_MT_MPEG4_TRACK_TYPE),
+        X(MF_MT_PAN_SCAN_APERTURE),
         X(MF_TOPOLOGY_RESOLUTION_STATUS),
+        X(MF_MT_ORIGINAL_4CC),
         X(MF_PD_AUDIO_ISVARIABLEBITRATE),
+        X(MF_MT_MPEG2_CONTENT_PACKET),
         X(MFT_PROCESS_LOCAL_Attribute),
         X(MFT_PROCESS_LOCAL_Attribute),
+        X(MF_MT_PAD_CONTROL_FLAGS),
+        X(MF_MT_VIDEO_NOMINAL_RANGE),
         X(MF_MT_AAC_AUDIO_PROFILE_LEVEL_INDICATION),
+        X(MF_MT_MPEG_SEQUENCE_HEADER),
         X(MF_MT_AUDIO_SAMPLES_PER_SECOND),
+        X(MF_MT_SPATIAL_AUDIO_DATA_PRESENT),
         X(MF_MT_FRAME_RATE),
         X(MF_TOPONODE_FLUSH),
+        X(MF_MT_MPEG2_STANDARD),
         X(MF_TOPONODE_DRAIN),
+        X(MF_MT_TRANSFER_FUNCTION),
         X(MF_TOPONODE_MEDIASTART),
         X(MF_TOPONODE_MEDIASTOP),
         X(MF_SOURCE_READER_MEDIASOURCE_CONFIG),
@@ -1739,9 +1810,11 @@ const char *debugstr_attr(const GUID *guid)
         X(MF_MT_FORWARD_CUSTOM_SEI),
         X(MF_TOPONODE_CONNECT_METHOD),
         X(MFT_OUTPUT_TYPES_Attributes),
+        X(MF_MT_IMAGE_LOSS_TOLERANT),
         X(MF_SESSION_REMOTE_SOURCE_MODE),
         X(MF_MT_DEPTH_VALUE_UNIT),
         X(MF_MT_AUDIO_NUM_CHANNELS),
+        X(MF_MT_ARBITRARY_HEADER),
         X(MF_TOPOLOGY_DXVA_MODE),
         X(MF_TOPONODE_LOCKED),
         X(MF_TOPONODE_WORKQUEUE_ID),
@@ -2017,6 +2090,19 @@ static const char *debugstr_eventid(DWORD event)
         X(MEWMDRMProximityCompleted),
         X(MEWMDRMLicenseStoreCleaned),
         X(MEWMDRMRevocationDownloadCompleted),
+        X(METransformUnknown),
+        X(METransformNeedInput),
+        X(METransformHaveOutput),
+        X(METransformDrainComplete),
+        X(METransformMarker),
+        X(METransformInputStreamStateChanged),
+        X(MEByteStreamCharacteristicsChanged),
+        X(MEVideoCaptureDeviceRemoved),
+        X(MEVideoCaptureDevicePreempted),
+        X(MEStreamSinkFormatInvalidated),
+        X(MEEncodingParameters),
+        X(MEContentProtectionMetadata),
+        X(MEDeviceThermalStateChanged),
 #undef X
     };
 
@@ -3363,8 +3449,8 @@ typedef struct bytestream
     struct attributes attributes;
     IMFByteStream IMFByteStream_iface;
     IMFGetService IMFGetService_iface;
-    IMFAsyncCallback read_callback;
-    IMFAsyncCallback write_callback;
+    IRtwqAsyncCallback read_callback;
+    IRtwqAsyncCallback write_callback;
     IStream *stream;
     HANDLE hfile;
     QWORD position;
@@ -3383,12 +3469,12 @@ static struct bytestream *impl_bytestream_from_IMFGetService(IMFGetService *ifac
     return CONTAINING_RECORD(iface, struct bytestream, IMFGetService_iface);
 }
 
-static struct bytestream *impl_from_read_callback_IMFAsyncCallback(IMFAsyncCallback *iface)
+static struct bytestream *impl_from_read_callback_IRtwqAsyncCallback(IRtwqAsyncCallback *iface)
 {
     return CONTAINING_RECORD(iface, struct bytestream, read_callback);
 }
 
-static struct bytestream *impl_from_write_callback_IMFAsyncCallback(IMFAsyncCallback *iface)
+static struct bytestream *impl_from_write_callback_IRtwqAsyncCallback(IRtwqAsyncCallback *iface)
 {
     return CONTAINING_RECORD(iface, struct bytestream, write_callback);
 }
@@ -3473,7 +3559,7 @@ static HRESULT bytestream_create_io_request(struct bytestream *stream, enum asyn
         const BYTE *data, ULONG size, IMFAsyncCallback *callback, IUnknown *state)
 {
     struct async_stream_op *op;
-    IMFAsyncResult *request;
+    IRtwqAsyncResult *request;
     HRESULT hr;
 
     op = heap_alloc(sizeof(*op));
@@ -3486,15 +3572,18 @@ static HRESULT bytestream_create_io_request(struct bytestream *stream, enum asyn
     op->position = stream->position;
     op->requested_length = size;
     op->type = type;
-    if (FAILED(hr = MFCreateAsyncResult((IUnknown *)&stream->IMFByteStream_iface, callback, state, &op->caller)))
+    if (FAILED(hr = RtwqCreateAsyncResult((IUnknown *)&stream->IMFByteStream_iface, (IRtwqAsyncCallback *)callback, state,
+            (IRtwqAsyncResult **)&op->caller)))
+    {
         goto failed;
+    }
 
-    if (FAILED(hr = MFCreateAsyncResult(&op->IUnknown_iface, type == ASYNC_STREAM_OP_READ ? &stream->read_callback :
+    if (FAILED(hr = RtwqCreateAsyncResult(&op->IUnknown_iface, type == ASYNC_STREAM_OP_READ ? &stream->read_callback :
             &stream->write_callback, NULL, &request)))
         goto failed;
 
-    MFPutWorkItemEx(MFASYNC_CALLBACK_QUEUE_STANDARD, request);
-    IMFAsyncResult_Release(request);
+    RtwqPutWorkItem(MFASYNC_CALLBACK_QUEUE_STANDARD, 0, request);
+    IRtwqAsyncResult_Release(request);
 
 failed:
     IUnknown_Release(&op->IUnknown_iface);
@@ -3530,13 +3619,13 @@ static HRESULT bytestream_complete_io_request(struct bytestream *stream, enum as
     return hr;
 }
 
-static HRESULT WINAPI bytestream_callback_QueryInterface(IMFAsyncCallback *iface, REFIID riid, void **obj)
+static HRESULT WINAPI bytestream_callback_QueryInterface(IRtwqAsyncCallback *iface, REFIID riid, void **obj)
 {
-    if (IsEqualIID(riid, &IID_IMFAsyncCallback) ||
+    if (IsEqualIID(riid, &IID_IRtwqAsyncCallback) ||
             IsEqualIID(riid, &IID_IUnknown))
     {
         *obj = iface;
-        IMFAsyncCallback_AddRef(iface);
+        IRtwqAsyncCallback_AddRef(iface);
         return S_OK;
     }
 
@@ -3545,32 +3634,32 @@ static HRESULT WINAPI bytestream_callback_QueryInterface(IMFAsyncCallback *iface
     return E_NOINTERFACE;
 }
 
-static ULONG WINAPI bytestream_read_callback_AddRef(IMFAsyncCallback *iface)
+static ULONG WINAPI bytestream_read_callback_AddRef(IRtwqAsyncCallback *iface)
 {
-    struct bytestream *stream = impl_from_read_callback_IMFAsyncCallback(iface);
+    struct bytestream *stream = impl_from_read_callback_IRtwqAsyncCallback(iface);
     return IMFByteStream_AddRef(&stream->IMFByteStream_iface);
 }
 
-static ULONG WINAPI bytestream_read_callback_Release(IMFAsyncCallback *iface)
+static ULONG WINAPI bytestream_read_callback_Release(IRtwqAsyncCallback *iface)
 {
-    struct bytestream *stream = impl_from_read_callback_IMFAsyncCallback(iface);
+    struct bytestream *stream = impl_from_read_callback_IRtwqAsyncCallback(iface);
     return IMFByteStream_Release(&stream->IMFByteStream_iface);
 }
 
-static HRESULT WINAPI bytestream_callback_GetParameters(IMFAsyncCallback *iface, DWORD *flags, DWORD *queue)
+static HRESULT WINAPI bytestream_callback_GetParameters(IRtwqAsyncCallback *iface, DWORD *flags, DWORD *queue)
 {
     return E_NOTIMPL;
 }
 
-static ULONG WINAPI bytestream_write_callback_AddRef(IMFAsyncCallback *iface)
+static ULONG WINAPI bytestream_write_callback_AddRef(IRtwqAsyncCallback *iface)
 {
-    struct bytestream *stream = impl_from_write_callback_IMFAsyncCallback(iface);
+    struct bytestream *stream = impl_from_write_callback_IRtwqAsyncCallback(iface);
     return IMFByteStream_AddRef(&stream->IMFByteStream_iface);
 }
 
-static ULONG WINAPI bytestream_write_callback_Release(IMFAsyncCallback *iface)
+static ULONG WINAPI bytestream_write_callback_Release(IRtwqAsyncCallback *iface)
 {
-    struct bytestream *stream = impl_from_write_callback_IMFAsyncCallback(iface);
+    struct bytestream *stream = impl_from_write_callback_IRtwqAsyncCallback(iface);
     return IMFByteStream_Release(&stream->IMFByteStream_iface);
 }
 
@@ -4104,15 +4193,15 @@ static const IMFAttributesVtbl mfbytestream_attributes_vtbl =
     mfattributes_CopyAllItems
 };
 
-static HRESULT WINAPI bytestream_stream_read_callback_Invoke(IMFAsyncCallback *iface, IMFAsyncResult *result)
+static HRESULT WINAPI bytestream_stream_read_callback_Invoke(IRtwqAsyncCallback *iface, IRtwqAsyncResult *result)
 {
-    struct bytestream *stream = impl_from_read_callback_IMFAsyncCallback(iface);
+    struct bytestream *stream = impl_from_read_callback_IRtwqAsyncCallback(iface);
     struct async_stream_op *op;
     LARGE_INTEGER position;
     IUnknown *object;
     HRESULT hr;
 
-    if (FAILED(hr = IMFAsyncResult_GetObject(result, &object)))
+    if (FAILED(hr = IRtwqAsyncResult_GetObject(result, &object)))
         return hr;
 
     op = impl_async_stream_op_from_IUnknown(object);
@@ -4136,15 +4225,15 @@ static HRESULT WINAPI bytestream_stream_read_callback_Invoke(IMFAsyncCallback *i
     return S_OK;
 }
 
-static HRESULT WINAPI bytestream_stream_write_callback_Invoke(IMFAsyncCallback *iface, IMFAsyncResult *result)
+static HRESULT WINAPI bytestream_stream_write_callback_Invoke(IRtwqAsyncCallback *iface, IRtwqAsyncResult *result)
 {
-    struct bytestream *stream = impl_from_read_callback_IMFAsyncCallback(iface);
+    struct bytestream *stream = impl_from_read_callback_IRtwqAsyncCallback(iface);
     struct async_stream_op *op;
     LARGE_INTEGER position;
     IUnknown *object;
     HRESULT hr;
 
-    if (FAILED(hr = IMFAsyncResult_GetObject(result, &object)))
+    if (FAILED(hr = IRtwqAsyncResult_GetObject(result, &object)))
         return hr;
 
     op = impl_async_stream_op_from_IUnknown(object);
@@ -4168,7 +4257,7 @@ static HRESULT WINAPI bytestream_stream_write_callback_Invoke(IMFAsyncCallback *
     return S_OK;
 }
 
-static const IMFAsyncCallbackVtbl bytestream_stream_read_callback_vtbl =
+static const IRtwqAsyncCallbackVtbl bytestream_stream_read_callback_vtbl =
 {
     bytestream_callback_QueryInterface,
     bytestream_read_callback_AddRef,
@@ -4177,7 +4266,7 @@ static const IMFAsyncCallbackVtbl bytestream_stream_read_callback_vtbl =
     bytestream_stream_read_callback_Invoke,
 };
 
-static const IMFAsyncCallbackVtbl bytestream_stream_write_callback_vtbl =
+static const IRtwqAsyncCallbackVtbl bytestream_stream_write_callback_vtbl =
 {
     bytestream_callback_QueryInterface,
     bytestream_write_callback_AddRef,
@@ -4235,21 +4324,21 @@ HRESULT WINAPI MFCreateMFByteStreamOnStream(IStream *stream, IMFByteStream **byt
     return S_OK;
 }
 
-static HRESULT WINAPI bytestream_file_read_callback_Invoke(IMFAsyncCallback *iface, IMFAsyncResult *result)
+static HRESULT WINAPI bytestream_file_read_callback_Invoke(IRtwqAsyncCallback *iface, IRtwqAsyncResult *result)
 {
     FIXME("%p, %p.\n", iface, result);
 
     return E_NOTIMPL;
 }
 
-static HRESULT WINAPI bytestream_file_write_callback_Invoke(IMFAsyncCallback *iface, IMFAsyncResult *result)
+static HRESULT WINAPI bytestream_file_write_callback_Invoke(IRtwqAsyncCallback *iface, IRtwqAsyncResult *result)
 {
     FIXME("%p, %p.\n", iface, result);
 
     return E_NOTIMPL;
 }
 
-static const IMFAsyncCallbackVtbl bytestream_file_read_callback_vtbl =
+static const IRtwqAsyncCallbackVtbl bytestream_file_read_callback_vtbl =
 {
     bytestream_callback_QueryInterface,
     bytestream_read_callback_AddRef,
@@ -4258,7 +4347,7 @@ static const IMFAsyncCallbackVtbl bytestream_file_read_callback_vtbl =
     bytestream_file_read_callback_Invoke,
 };
 
-static const IMFAsyncCallbackVtbl bytestream_file_write_callback_vtbl =
+static const IRtwqAsyncCallbackVtbl bytestream_file_write_callback_vtbl =
 {
     bytestream_callback_QueryInterface,
     bytestream_write_callback_AddRef,
@@ -5742,7 +5831,7 @@ struct resolver_queued_result
     IUnknown *object;
     MF_OBJECT_TYPE obj_type;
     HRESULT hr;
-    IMFAsyncResult *inner_result;
+    IRtwqAsyncResult *inner_result;
     enum resolved_object_origin origin;
 };
 
@@ -5764,8 +5853,8 @@ struct source_resolver
 {
     IMFSourceResolver IMFSourceResolver_iface;
     LONG refcount;
-    IMFAsyncCallback stream_callback;
-    IMFAsyncCallback url_callback;
+    IRtwqAsyncCallback stream_callback;
+    IRtwqAsyncCallback url_callback;
     CRITICAL_SECTION cs;
     struct list pending;
 };
@@ -5775,20 +5864,20 @@ static struct source_resolver *impl_from_IMFSourceResolver(IMFSourceResolver *if
     return CONTAINING_RECORD(iface, struct source_resolver, IMFSourceResolver_iface);
 }
 
-static struct source_resolver *impl_from_stream_IMFAsyncCallback(IMFAsyncCallback *iface)
+static struct source_resolver *impl_from_stream_IRtwqAsyncCallback(IRtwqAsyncCallback *iface)
 {
     return CONTAINING_RECORD(iface, struct source_resolver, stream_callback);
 }
 
-static struct source_resolver *impl_from_url_IMFAsyncCallback(IMFAsyncCallback *iface)
+static struct source_resolver *impl_from_url_IRtwqAsyncCallback(IRtwqAsyncCallback *iface)
 {
     return CONTAINING_RECORD(iface, struct source_resolver, url_callback);
 }
 
 static HRESULT resolver_handler_end_create(struct source_resolver *resolver, enum resolved_object_origin origin,
-        IMFAsyncResult *result)
+        IRtwqAsyncResult *result)
 {
-    IMFAsyncResult *inner_result = (IMFAsyncResult *)IMFAsyncResult_GetStateNoAddRef(result);
+    IRtwqAsyncResult *inner_result = (IRtwqAsyncResult *)IRtwqAsyncResult_GetStateNoAddRef(result);
     struct resolver_queued_result *queued_result;
     union
     {
@@ -5799,16 +5888,16 @@ static HRESULT resolver_handler_end_create(struct source_resolver *resolver, enu
 
     queued_result = heap_alloc_zero(sizeof(*queued_result));
 
-    IMFAsyncResult_GetObject(inner_result, &handler.handler);
+    IRtwqAsyncResult_GetObject(inner_result, &handler.handler);
 
     switch (origin)
     {
         case OBJECT_FROM_BYTESTREAM:
-            queued_result->hr = IMFByteStreamHandler_EndCreateObject(handler.stream_handler, result,
+            queued_result->hr = IMFByteStreamHandler_EndCreateObject(handler.stream_handler, (IMFAsyncResult *)result,
                     &queued_result->obj_type, &queued_result->object);
             break;
         case OBJECT_FROM_URL:
-            queued_result->hr = IMFSchemeHandler_EndCreateObject(handler.scheme_handler, result,
+            queued_result->hr = IMFSchemeHandler_EndCreateObject(handler.scheme_handler, (IMFAsyncResult *)result,
                     &queued_result->obj_type, &queued_result->object);
             break;
         default:
@@ -5819,12 +5908,12 @@ static HRESULT resolver_handler_end_create(struct source_resolver *resolver, enu
 
     if (SUCCEEDED(queued_result->hr))
     {
-        MFASYNCRESULT *data = (MFASYNCRESULT *)inner_result;
+        RTWQASYNCRESULT *data = (RTWQASYNCRESULT *)inner_result;
 
         if (data->hEvent)
         {
             queued_result->inner_result = inner_result;
-            IMFAsyncResult_AddRef(queued_result->inner_result);
+            IRtwqAsyncResult_AddRef(queued_result->inner_result);
         }
 
         /* Push resolved object type and created object, so we don't have to guess on End*() call. */
@@ -5836,13 +5925,13 @@ static HRESULT resolver_handler_end_create(struct source_resolver *resolver, enu
             SetEvent(data->hEvent);
         else
         {
-            IUnknown *caller_state = IMFAsyncResult_GetStateNoAddRef(inner_result);
-            IMFAsyncResult *caller_result;
+            IUnknown *caller_state = IRtwqAsyncResult_GetStateNoAddRef(inner_result);
+            IRtwqAsyncResult *caller_result;
 
-            if (SUCCEEDED(MFCreateAsyncResult(queued_result->object, data->pCallback, caller_state, &caller_result)))
+            if (SUCCEEDED(RtwqCreateAsyncResult(queued_result->object, data->pCallback, caller_state, &caller_result)))
             {
-                MFInvokeCallback(caller_result);
-                IMFAsyncResult_Release(caller_result);
+                RtwqInvokeCallback(caller_result);
+                IRtwqAsyncResult_Release(caller_result);
             }
         }
     }
@@ -5930,13 +6019,13 @@ static HRESULT resolver_create_cancel_object(IUnknown *handler, enum resolved_ob
     return S_OK;
 }
 
-static HRESULT WINAPI source_resolver_callback_QueryInterface(IMFAsyncCallback *iface, REFIID riid, void **obj)
+static HRESULT WINAPI source_resolver_callback_QueryInterface(IRtwqAsyncCallback *iface, REFIID riid, void **obj)
 {
-    if (IsEqualIID(riid, &IID_IMFAsyncCallback) ||
+    if (IsEqualIID(riid, &IID_IRtwqAsyncCallback) ||
             IsEqualIID(riid, &IID_IUnknown))
     {
         *obj = iface;
-        IMFAsyncCallback_AddRef(iface);
+        IRtwqAsyncCallback_AddRef(iface);
         return S_OK;
     }
 
@@ -5944,31 +6033,31 @@ static HRESULT WINAPI source_resolver_callback_QueryInterface(IMFAsyncCallback *
     return E_NOINTERFACE;
 }
 
-static ULONG WINAPI source_resolver_callback_stream_AddRef(IMFAsyncCallback *iface)
+static ULONG WINAPI source_resolver_callback_stream_AddRef(IRtwqAsyncCallback *iface)
 {
-    struct source_resolver *resolver = impl_from_stream_IMFAsyncCallback(iface);
+    struct source_resolver *resolver = impl_from_stream_IRtwqAsyncCallback(iface);
     return IMFSourceResolver_AddRef(&resolver->IMFSourceResolver_iface);
 }
 
-static ULONG WINAPI source_resolver_callback_stream_Release(IMFAsyncCallback *iface)
+static ULONG WINAPI source_resolver_callback_stream_Release(IRtwqAsyncCallback *iface)
 {
-    struct source_resolver *resolver = impl_from_stream_IMFAsyncCallback(iface);
+    struct source_resolver *resolver = impl_from_stream_IRtwqAsyncCallback(iface);
     return IMFSourceResolver_Release(&resolver->IMFSourceResolver_iface);
 }
 
-static HRESULT WINAPI source_resolver_callback_GetParameters(IMFAsyncCallback *iface, DWORD *flags, DWORD *queue)
+static HRESULT WINAPI source_resolver_callback_GetParameters(IRtwqAsyncCallback *iface, DWORD *flags, DWORD *queue)
 {
     return E_NOTIMPL;
 }
 
-static HRESULT WINAPI source_resolver_callback_stream_Invoke(IMFAsyncCallback *iface, IMFAsyncResult *result)
+static HRESULT WINAPI source_resolver_callback_stream_Invoke(IRtwqAsyncCallback *iface, IRtwqAsyncResult *result)
 {
-    struct source_resolver *resolver = impl_from_stream_IMFAsyncCallback(iface);
+    struct source_resolver *resolver = impl_from_stream_IRtwqAsyncCallback(iface);
 
     return resolver_handler_end_create(resolver, OBJECT_FROM_BYTESTREAM, result);
 }
 
-static const IMFAsyncCallbackVtbl source_resolver_callback_stream_vtbl =
+static const IRtwqAsyncCallbackVtbl source_resolver_callback_stream_vtbl =
 {
     source_resolver_callback_QueryInterface,
     source_resolver_callback_stream_AddRef,
@@ -5977,26 +6066,26 @@ static const IMFAsyncCallbackVtbl source_resolver_callback_stream_vtbl =
     source_resolver_callback_stream_Invoke,
 };
 
-static ULONG WINAPI source_resolver_callback_url_AddRef(IMFAsyncCallback *iface)
+static ULONG WINAPI source_resolver_callback_url_AddRef(IRtwqAsyncCallback *iface)
 {
-    struct source_resolver *resolver = impl_from_url_IMFAsyncCallback(iface);
+    struct source_resolver *resolver = impl_from_url_IRtwqAsyncCallback(iface);
     return IMFSourceResolver_AddRef(&resolver->IMFSourceResolver_iface);
 }
 
-static ULONG WINAPI source_resolver_callback_url_Release(IMFAsyncCallback *iface)
+static ULONG WINAPI source_resolver_callback_url_Release(IRtwqAsyncCallback *iface)
 {
-    struct source_resolver *resolver = impl_from_url_IMFAsyncCallback(iface);
+    struct source_resolver *resolver = impl_from_url_IRtwqAsyncCallback(iface);
     return IMFSourceResolver_Release(&resolver->IMFSourceResolver_iface);
 }
 
-static HRESULT WINAPI source_resolver_callback_url_Invoke(IMFAsyncCallback *iface, IMFAsyncResult *result)
+static HRESULT WINAPI source_resolver_callback_url_Invoke(IRtwqAsyncCallback *iface, IRtwqAsyncResult *result)
 {
-    struct source_resolver *resolver = impl_from_url_IMFAsyncCallback(iface);
+    struct source_resolver *resolver = impl_from_url_IRtwqAsyncCallback(iface);
 
     return resolver_handler_end_create(resolver, OBJECT_FROM_URL, result);
 }
 
-static const IMFAsyncCallbackVtbl source_resolver_callback_url_vtbl =
+static const IRtwqAsyncCallbackVtbl source_resolver_callback_url_vtbl =
 {
     source_resolver_callback_QueryInterface,
     source_resolver_callback_url_AddRef,
@@ -6227,13 +6316,13 @@ static HRESULT resolver_get_scheme_handler(const WCHAR *url, DWORD flags, IMFSch
 }
 
 static HRESULT resolver_end_create_object(struct source_resolver *resolver, enum resolved_object_origin origin,
-        IMFAsyncResult *result, MF_OBJECT_TYPE *obj_type, IUnknown **out)
+        IRtwqAsyncResult *result, MF_OBJECT_TYPE *obj_type, IUnknown **out)
 {
     struct resolver_queued_result *queued_result = NULL, *iter;
     IUnknown *object;
     HRESULT hr;
 
-    if (FAILED(hr = IMFAsyncResult_GetObject(result, &object)))
+    if (FAILED(hr = IRtwqAsyncResult_GetObject(result, &object)))
         return hr;
 
     EnterCriticalSection(&resolver->cs);
@@ -6258,7 +6347,7 @@ static HRESULT resolver_end_create_object(struct source_resolver *resolver, enum
         *obj_type = queued_result->obj_type;
         hr = queued_result->hr;
         if (queued_result->inner_result)
-            IMFAsyncResult_Release(queued_result->inner_result);
+            IRtwqAsyncResult_Release(queued_result->inner_result);
         heap_free(queued_result);
     }
     else
@@ -6328,8 +6417,8 @@ static HRESULT WINAPI source_resolver_CreateObjectFromURL(IMFSourceResolver *ifa
 {
     struct source_resolver *resolver = impl_from_IMFSourceResolver(iface);
     IMFSchemeHandler *handler;
-    IMFAsyncResult *result;
-    MFASYNCRESULT *data;
+    IRtwqAsyncResult *result;
+    RTWQASYNCRESULT *data;
     HRESULT hr;
 
     TRACE("%p, %s, %#x, %p, %p, %p.\n", iface, debugstr_w(url), flags, props, obj_type, object);
@@ -6340,26 +6429,26 @@ static HRESULT WINAPI source_resolver_CreateObjectFromURL(IMFSourceResolver *ifa
     if (FAILED(hr = resolver_get_scheme_handler(url, flags, &handler)))
         return hr;
 
-    hr = MFCreateAsyncResult((IUnknown *)handler, NULL, NULL, &result);
+    hr = RtwqCreateAsyncResult((IUnknown *)handler, NULL, NULL, &result);
     IMFSchemeHandler_Release(handler);
     if (FAILED(hr))
         return hr;
 
-    data = (MFASYNCRESULT *)result;
+    data = (RTWQASYNCRESULT *)result;
     data->hEvent = CreateEventW(NULL, FALSE, FALSE, NULL);
 
-    hr = IMFSchemeHandler_BeginCreateObject(handler, url, flags, props, NULL, &resolver->url_callback,
+    hr = IMFSchemeHandler_BeginCreateObject(handler, url, flags, props, NULL, (IMFAsyncCallback *)&resolver->url_callback,
             (IUnknown *)result);
     if (FAILED(hr))
     {
-        IMFAsyncResult_Release(result);
+        IRtwqAsyncResult_Release(result);
         return hr;
     }
 
     WaitForSingleObject(data->hEvent, INFINITE);
 
     hr = resolver_end_create_object(resolver, OBJECT_FROM_URL, result, obj_type, object);
-    IMFAsyncResult_Release(result);
+    IRtwqAsyncResult_Release(result);
 
     return hr;
 }
@@ -6369,8 +6458,8 @@ static HRESULT WINAPI source_resolver_CreateObjectFromByteStream(IMFSourceResolv
 {
     struct source_resolver *resolver = impl_from_IMFSourceResolver(iface);
     IMFByteStreamHandler *handler;
-    IMFAsyncResult *result;
-    MFASYNCRESULT *data;
+    IRtwqAsyncResult *result;
+    RTWQASYNCRESULT *data;
     HRESULT hr;
 
     TRACE("%p, %p, %s, %#x, %p, %p, %p.\n", iface, stream, debugstr_w(url), flags, props, obj_type, object);
@@ -6381,26 +6470,26 @@ static HRESULT WINAPI source_resolver_CreateObjectFromByteStream(IMFSourceResolv
     if (FAILED(hr = resolver_get_bytestream_handler(stream, url, flags, &handler)))
         goto fallback;
 
-    hr = MFCreateAsyncResult((IUnknown *)handler, NULL, NULL, &result);
+    hr = RtwqCreateAsyncResult((IUnknown *)handler, NULL, NULL, &result);
     IMFByteStreamHandler_Release(handler);
     if (FAILED(hr))
         return hr;
 
-    data = (MFASYNCRESULT *)result;
+    data = (RTWQASYNCRESULT *)result;
     data->hEvent = CreateEventW(NULL, FALSE, FALSE, NULL);
 
-    hr = IMFByteStreamHandler_BeginCreateObject(handler, stream, url, flags, props, NULL, &resolver->stream_callback,
-            (IUnknown *)result);
+    hr = IMFByteStreamHandler_BeginCreateObject(handler, stream, url, flags, props, NULL,
+            (IMFAsyncCallback *)&resolver->stream_callback, (IUnknown *)result);
     if (FAILED(hr))
     {
-        IMFAsyncResult_Release(result);
+        IRtwqAsyncResult_Release(result);
         return hr;
     }
 
     WaitForSingleObject(data->hEvent, INFINITE);
 
     hr = resolver_end_create_object(resolver, OBJECT_FROM_BYTESTREAM, result, obj_type, object);
-    IMFAsyncResult_Release(result);
+    IRtwqAsyncResult_Release(result);
 
     /* TODO: following stub is left intentionally until real source plugins are implemented.  */
     if (SUCCEEDED(hr))
@@ -6432,7 +6521,7 @@ static HRESULT WINAPI source_resolver_BeginCreateObjectFromURL(IMFSourceResolver
     struct source_resolver *resolver = impl_from_IMFSourceResolver(iface);
     IMFSchemeHandler *handler;
     IUnknown *inner_cookie = NULL;
-    IMFAsyncResult *result;
+    IRtwqAsyncResult *result;
     HRESULT hr;
 
     TRACE("%p, %s, %#x, %p, %p, %p, %p.\n", iface, debugstr_w(url), flags, props, cancel_cookie, callback, state);
@@ -6443,18 +6532,18 @@ static HRESULT WINAPI source_resolver_BeginCreateObjectFromURL(IMFSourceResolver
     if (cancel_cookie)
         *cancel_cookie = NULL;
 
-    hr = MFCreateAsyncResult((IUnknown *)handler, callback, state, &result);
+    hr = RtwqCreateAsyncResult((IUnknown *)handler, (IRtwqAsyncCallback *)callback, state, &result);
     IMFSchemeHandler_Release(handler);
     if (FAILED(hr))
         return hr;
 
     hr = IMFSchemeHandler_BeginCreateObject(handler, url, flags, props, cancel_cookie ? &inner_cookie : NULL,
-            &resolver->url_callback, (IUnknown *)result);
+            (IMFAsyncCallback *)&resolver->url_callback, (IUnknown *)result);
 
     if (SUCCEEDED(hr) && inner_cookie)
         resolver_create_cancel_object((IUnknown *)handler, OBJECT_FROM_URL, inner_cookie, cancel_cookie);
 
-    IMFAsyncResult_Release(result);
+    IRtwqAsyncResult_Release(result);
 
     return hr;
 }
@@ -6466,7 +6555,7 @@ static HRESULT WINAPI source_resolver_EndCreateObjectFromURL(IMFSourceResolver *
 
     TRACE("%p, %p, %p, %p.\n", iface, result, obj_type, object);
 
-    return resolver_end_create_object(resolver, OBJECT_FROM_URL, result, obj_type, object);
+    return resolver_end_create_object(resolver, OBJECT_FROM_URL, (IRtwqAsyncResult *)result, obj_type, object);
 }
 
 static HRESULT WINAPI source_resolver_BeginCreateObjectFromByteStream(IMFSourceResolver *iface, IMFByteStream *stream,
@@ -6476,7 +6565,7 @@ static HRESULT WINAPI source_resolver_BeginCreateObjectFromByteStream(IMFSourceR
     struct source_resolver *resolver = impl_from_IMFSourceResolver(iface);
     IMFByteStreamHandler *handler;
     IUnknown *inner_cookie = NULL;
-    IMFAsyncResult *result;
+    IRtwqAsyncResult *result;
     HRESULT hr;
 
     TRACE("%p, %p, %s, %#x, %p, %p, %p, %p.\n", iface, stream, debugstr_w(url), flags, props, cancel_cookie,
@@ -6488,19 +6577,19 @@ static HRESULT WINAPI source_resolver_BeginCreateObjectFromByteStream(IMFSourceR
     if (cancel_cookie)
         *cancel_cookie = NULL;
 
-    hr = MFCreateAsyncResult((IUnknown *)handler, callback, state, &result);
+    hr = RtwqCreateAsyncResult((IUnknown *)handler, (IRtwqAsyncCallback *)callback, state, &result);
     IMFByteStreamHandler_Release(handler);
     if (FAILED(hr))
         return hr;
 
     hr = IMFByteStreamHandler_BeginCreateObject(handler, stream, url, flags, props,
-            cancel_cookie ? &inner_cookie : NULL, &resolver->stream_callback, (IUnknown *)result);
+            cancel_cookie ? &inner_cookie : NULL, (IMFAsyncCallback *)&resolver->stream_callback, (IUnknown *)result);
 
     /* Cancel object wraps underlying handler cancel cookie with context necessary to call CancelObjectCreate(). */
     if (SUCCEEDED(hr) && inner_cookie)
         resolver_create_cancel_object((IUnknown *)handler, OBJECT_FROM_BYTESTREAM, inner_cookie, cancel_cookie);
 
-    IMFAsyncResult_Release(result);
+    IRtwqAsyncResult_Release(result);
 
     return hr;
 }
@@ -6512,7 +6601,7 @@ static HRESULT WINAPI source_resolver_EndCreateObjectFromByteStream(IMFSourceRes
 
     TRACE("%p, %p, %p, %p.\n", iface, result, obj_type, object);
 
-    return resolver_end_create_object(resolver, OBJECT_FROM_BYTESTREAM, result, obj_type, object);
+    return resolver_end_create_object(resolver, OBJECT_FROM_BYTESTREAM, (IRtwqAsyncResult *)result, obj_type, object);
 }
 
 static HRESULT WINAPI source_resolver_CancelObjectCreation(IMFSourceResolver *iface, IUnknown *cancel_cookie)
@@ -7055,7 +7144,7 @@ struct event_queue
     struct list events;
     BOOL is_shut_down;
     BOOL notified;
-    IMFAsyncResult *subscriber;
+    IRtwqAsyncResult *subscriber;
 };
 
 struct queued_event
@@ -7182,7 +7271,7 @@ static void queue_notify_subscriber(struct event_queue *queue)
         return;
 
     queue->notified = TRUE;
-    MFPutWorkItemEx(MFASYNC_CALLBACK_QUEUE_STANDARD, queue->subscriber);
+    RtwqPutWorkItem(MFASYNC_CALLBACK_QUEUE_STANDARD, 0, queue->subscriber);
 }
 
 static HRESULT WINAPI eventqueue_BeginGetEvent(IMFMediaEventQueue *iface, IMFAsyncCallback *callback, IUnknown *state)
@@ -7203,14 +7292,14 @@ static HRESULT WINAPI eventqueue_BeginGetEvent(IMFMediaEventQueue *iface, IMFAsy
     else if (result_data)
     {
         if (result_data->pCallback == callback)
-            hr = IMFAsyncResult_GetStateNoAddRef(queue->subscriber) == state ?
+            hr = IRtwqAsyncResult_GetStateNoAddRef(queue->subscriber) == state ?
                     MF_S_MULTIPLE_BEGIN : MF_E_MULTIPLE_BEGIN;
         else
             hr = MF_E_MULTIPLE_SUBSCRIBERS;
     }
     else
     {
-        hr = MFCreateAsyncResult(NULL, callback, state, &queue->subscriber);
+        hr = RtwqCreateAsyncResult(NULL, (IRtwqAsyncCallback *)callback, state, &queue->subscriber);
         if (SUCCEEDED(hr))
             queue_notify_subscriber(queue);
     }
@@ -7231,11 +7320,11 @@ static HRESULT WINAPI eventqueue_EndGetEvent(IMFMediaEventQueue *iface, IMFAsync
 
     if (queue->is_shut_down)
         hr = MF_E_SHUTDOWN;
-    else if (queue->subscriber == result)
+    else if (queue->subscriber == (IRtwqAsyncResult *)result)
     {
         *event = queue_pop_event(queue);
         if (queue->subscriber)
-            IMFAsyncResult_Release(queue->subscriber);
+            IRtwqAsyncResult_Release(queue->subscriber);
         queue->subscriber = NULL;
         queue->notified = FALSE;
         hr = *event ? S_OK : E_FAIL;
@@ -7971,7 +8060,7 @@ static HRESULT WINAPI system_time_source_sink_OnClockStart(IMFClockStateSink *if
     struct system_time_source *source = impl_from_IMFClockStateSink(iface);
     HRESULT hr;
 
-    TRACE("%p, %s, %s.\n", iface, wine_dbgstr_longlong(system_time), wine_dbgstr_longlong(start_offset));
+    TRACE("%p, %s, %s.\n", iface, debugstr_time(system_time), debugstr_time(start_offset));
 
     EnterCriticalSection(&source->cs);
     if (SUCCEEDED(hr = system_time_source_change_state(source, CLOCK_CMD_START)))
@@ -7989,7 +8078,7 @@ static HRESULT WINAPI system_time_source_sink_OnClockStop(IMFClockStateSink *ifa
     struct system_time_source *source = impl_from_IMFClockStateSink(iface);
     HRESULT hr;
 
-    TRACE("%p, %s.\n", iface, wine_dbgstr_longlong(system_time));
+    TRACE("%p, %s.\n", iface, debugstr_time(system_time));
 
     EnterCriticalSection(&source->cs);
     if (SUCCEEDED(hr = system_time_source_change_state(source, CLOCK_CMD_STOP)))
@@ -8004,7 +8093,7 @@ static HRESULT WINAPI system_time_source_sink_OnClockPause(IMFClockStateSink *if
     struct system_time_source *source = impl_from_IMFClockStateSink(iface);
     HRESULT hr;
 
-    TRACE("%p, %s.\n", iface, wine_dbgstr_longlong(system_time));
+    TRACE("%p, %s.\n", iface, debugstr_time(system_time));
 
     EnterCriticalSection(&source->cs);
     if (SUCCEEDED(hr = system_time_source_change_state(source, CLOCK_CMD_PAUSE)))
@@ -8022,7 +8111,7 @@ static HRESULT WINAPI system_time_source_sink_OnClockRestart(IMFClockStateSink *
     struct system_time_source *source = impl_from_IMFClockStateSink(iface);
     HRESULT hr;
 
-    TRACE("%p, %s.\n", iface, wine_dbgstr_longlong(system_time));
+    TRACE("%p, %s.\n", iface, debugstr_time(system_time));
 
     EnterCriticalSection(&source->cs);
     if (SUCCEEDED(hr = system_time_source_change_state(source, CLOCK_CMD_RESTART)))
@@ -8040,7 +8129,7 @@ static HRESULT WINAPI system_time_source_sink_OnClockSetRate(IMFClockStateSink *
     struct system_time_source *source = impl_from_IMFClockStateSink(iface);
     double intpart;
 
-    TRACE("%p, %s, %f.\n", iface, wine_dbgstr_longlong(system_time), rate);
+    TRACE("%p, %s, %f.\n", iface, debugstr_time(system_time), rate);
 
     if (rate == 0.0f)
         return MF_E_UNSUPPORTED_RATE;
@@ -8101,7 +8190,7 @@ HRESULT WINAPI MFCreateSystemTimeSource(IMFPresentationTimeSource **time_source)
 
 struct async_create_file
 {
-    IMFAsyncCallback IMFAsyncCallback_iface;
+    IRtwqAsyncCallback IRtwqAsyncCallback_iface;
     LONG refcount;
     MF_FILE_ACCESSMODE access_mode;
     MF_FILE_OPENMODE open_mode;
@@ -8112,25 +8201,25 @@ struct async_create_file
 struct async_create_file_result
 {
     struct list entry;
-    IMFAsyncResult *result;
+    IRtwqAsyncResult *result;
     IMFByteStream *stream;
 };
 
 static struct list async_create_file_results = LIST_INIT(async_create_file_results);
 static CRITICAL_SECTION async_create_file_cs = { NULL, -1, 0, 0, 0, 0 };
 
-static struct async_create_file *impl_from_create_file_IMFAsyncCallback(IMFAsyncCallback *iface)
+static struct async_create_file *impl_from_create_file_IRtwqAsyncCallback(IRtwqAsyncCallback *iface)
 {
-    return CONTAINING_RECORD(iface, struct async_create_file, IMFAsyncCallback_iface);
+    return CONTAINING_RECORD(iface, struct async_create_file, IRtwqAsyncCallback_iface);
 }
 
-static HRESULT WINAPI async_create_file_callback_QueryInterface(IMFAsyncCallback *iface, REFIID riid, void **obj)
+static HRESULT WINAPI async_create_file_callback_QueryInterface(IRtwqAsyncCallback *iface, REFIID riid, void **obj)
 {
-    if (IsEqualIID(riid, &IID_IMFAsyncCallback) ||
+    if (IsEqualIID(riid, &IID_IRtwqAsyncCallback) ||
             IsEqualIID(riid, &IID_IUnknown))
     {
         *obj = iface;
-        IMFAsyncCallback_AddRef(iface);
+        IRtwqAsyncCallback_AddRef(iface);
         return S_OK;
     }
 
@@ -8138,9 +8227,9 @@ static HRESULT WINAPI async_create_file_callback_QueryInterface(IMFAsyncCallback
     return E_NOINTERFACE;
 }
 
-static ULONG WINAPI async_create_file_callback_AddRef(IMFAsyncCallback *iface)
+static ULONG WINAPI async_create_file_callback_AddRef(IRtwqAsyncCallback *iface)
 {
-    struct async_create_file *async = impl_from_create_file_IMFAsyncCallback(iface);
+    struct async_create_file *async = impl_from_create_file_IRtwqAsyncCallback(iface);
     ULONG refcount = InterlockedIncrement(&async->refcount);
 
     TRACE("%p, refcount %u.\n", iface, refcount);
@@ -8148,9 +8237,9 @@ static ULONG WINAPI async_create_file_callback_AddRef(IMFAsyncCallback *iface)
     return refcount;
 }
 
-static ULONG WINAPI async_create_file_callback_Release(IMFAsyncCallback *iface)
+static ULONG WINAPI async_create_file_callback_Release(IRtwqAsyncCallback *iface)
 {
-    struct async_create_file *async = impl_from_create_file_IMFAsyncCallback(iface);
+    struct async_create_file *async = impl_from_create_file_IRtwqAsyncCallback(iface);
     ULONG refcount = InterlockedDecrement(&async->refcount);
 
     TRACE("%p, refcount %u.\n", iface, refcount);
@@ -8164,19 +8253,19 @@ static ULONG WINAPI async_create_file_callback_Release(IMFAsyncCallback *iface)
     return refcount;
 }
 
-static HRESULT WINAPI async_create_file_callback_GetParameters(IMFAsyncCallback *iface, DWORD *flags, DWORD *queue)
+static HRESULT WINAPI async_create_file_callback_GetParameters(IRtwqAsyncCallback *iface, DWORD *flags, DWORD *queue)
 {
     return E_NOTIMPL;
 }
 
-static HRESULT WINAPI async_create_file_callback_Invoke(IMFAsyncCallback *iface, IMFAsyncResult *result)
+static HRESULT WINAPI async_create_file_callback_Invoke(IRtwqAsyncCallback *iface, IRtwqAsyncResult *result)
 {
-    struct async_create_file *async = impl_from_create_file_IMFAsyncCallback(iface);
-    IMFAsyncResult *caller;
+    struct async_create_file *async = impl_from_create_file_IRtwqAsyncCallback(iface);
+    IRtwqAsyncResult *caller;
     IMFByteStream *stream;
     HRESULT hr;
 
-    caller = (IMFAsyncResult *)IMFAsyncResult_GetStateNoAddRef(result);
+    caller = (IRtwqAsyncResult *)IRtwqAsyncResult_GetStateNoAddRef(result);
 
     hr = MFCreateFile(async->access_mode, async->open_mode, async->flags, async->path, &stream);
     if (SUCCEEDED(hr))
@@ -8187,7 +8276,7 @@ static HRESULT WINAPI async_create_file_callback_Invoke(IMFAsyncCallback *iface,
         if (result_item)
         {
             result_item->result = caller;
-            IMFAsyncResult_AddRef(caller);
+            IRtwqAsyncResult_AddRef(caller);
             result_item->stream = stream;
             IMFByteStream_AddRef(stream);
 
@@ -8199,14 +8288,14 @@ static HRESULT WINAPI async_create_file_callback_Invoke(IMFAsyncCallback *iface,
         IMFByteStream_Release(stream);
     }
     else
-        IMFAsyncResult_SetStatus(caller, hr);
+        IRtwqAsyncResult_SetStatus(caller, hr);
 
-    MFInvokeCallback(caller);
+    RtwqInvokeCallback(caller);
 
     return S_OK;
 }
 
-static const IMFAsyncCallbackVtbl async_create_file_callback_vtbl =
+static const IRtwqAsyncCallbackVtbl async_create_file_callback_vtbl =
 {
     async_create_file_callback_QueryInterface,
     async_create_file_callback_AddRef,
@@ -8222,7 +8311,7 @@ HRESULT WINAPI MFBeginCreateFile(MF_FILE_ACCESSMODE access_mode, MF_FILE_OPENMOD
         const WCHAR *path, IMFAsyncCallback *callback, IUnknown *state, IUnknown **cancel_cookie)
 {
     struct async_create_file *async = NULL;
-    IMFAsyncResult *caller, *item = NULL;
+    IRtwqAsyncResult *caller, *item = NULL;
     HRESULT hr;
 
     TRACE("%#x, %#x, %#x, %s, %p, %p, %p.\n", access_mode, open_mode, flags, debugstr_w(path), callback, state,
@@ -8231,7 +8320,7 @@ HRESULT WINAPI MFBeginCreateFile(MF_FILE_ACCESSMODE access_mode, MF_FILE_OPENMOD
     if (cancel_cookie)
         *cancel_cookie = NULL;
 
-    if (FAILED(hr = MFCreateAsyncResult(NULL, callback, state, &caller)))
+    if (FAILED(hr = RtwqCreateAsyncResult(NULL, (IRtwqAsyncCallback *)callback, state, &caller)))
         return hr;
 
     async = heap_alloc(sizeof(*async));
@@ -8241,7 +8330,7 @@ HRESULT WINAPI MFBeginCreateFile(MF_FILE_ACCESSMODE access_mode, MF_FILE_OPENMOD
         goto failed;
     }
 
-    async->IMFAsyncCallback_iface.lpVtbl = &async_create_file_callback_vtbl;
+    async->IRtwqAsyncCallback_iface.lpVtbl = &async_create_file_callback_vtbl;
     async->refcount = 1;
     async->access_mode = access_mode;
     async->open_mode = open_mode;
@@ -8249,7 +8338,7 @@ HRESULT WINAPI MFBeginCreateFile(MF_FILE_ACCESSMODE access_mode, MF_FILE_OPENMOD
     if (FAILED(hr = heap_strdupW(path, &async->path)))
         goto failed;
 
-    hr = MFCreateAsyncResult(NULL, &async->IMFAsyncCallback_iface, (IUnknown *)caller, &item);
+    hr = RtwqCreateAsyncResult(NULL, &async->IRtwqAsyncCallback_iface, (IUnknown *)caller, &item);
     if (FAILED(hr))
         goto failed;
 
@@ -8259,15 +8348,15 @@ HRESULT WINAPI MFBeginCreateFile(MF_FILE_ACCESSMODE access_mode, MF_FILE_OPENMOD
         IUnknown_AddRef(*cancel_cookie);
     }
 
-    hr = MFInvokeCallback(item);
+    hr = RtwqInvokeCallback(item);
 
 failed:
     if (async)
-        IMFAsyncCallback_Release(&async->IMFAsyncCallback_iface);
+        IRtwqAsyncCallback_Release(&async->IRtwqAsyncCallback_iface);
     if (item)
-        IMFAsyncResult_Release(item);
+        IRtwqAsyncResult_Release(item);
     if (caller)
-        IMFAsyncResult_Release(caller);
+        IRtwqAsyncResult_Release(caller);
 
     return hr;
 }
@@ -8276,11 +8365,11 @@ static HRESULT async_create_file_pull_result(IUnknown *unk, IMFByteStream **stre
 {
     struct async_create_file_result *item;
     HRESULT hr = MF_E_UNEXPECTED;
-    IMFAsyncResult *result;
+    IRtwqAsyncResult *result;
 
     *stream = NULL;
 
-    if (FAILED(IUnknown_QueryInterface(unk, &IID_IMFAsyncResult, (void **)&result)))
+    if (FAILED(IUnknown_QueryInterface(unk, &IID_IRtwqAsyncResult, (void **)&result)))
         return hr;
 
     EnterCriticalSection(&async_create_file_cs);
@@ -8290,7 +8379,7 @@ static HRESULT async_create_file_pull_result(IUnknown *unk, IMFByteStream **stre
         if (result == item->result)
         {
             *stream = item->stream;
-            IMFAsyncResult_Release(item->result);
+            IRtwqAsyncResult_Release(item->result);
             list_remove(&item->entry);
             heap_free(item);
             break;
@@ -8300,9 +8389,9 @@ static HRESULT async_create_file_pull_result(IUnknown *unk, IMFByteStream **stre
     LeaveCriticalSection(&async_create_file_cs);
 
     if (*stream)
-        hr = IMFAsyncResult_GetStatus(result);
+        hr = IRtwqAsyncResult_GetStatus(result);
 
-    IMFAsyncResult_Release(result);
+    IRtwqAsyncResult_Release(result);
 
     return hr;
 }

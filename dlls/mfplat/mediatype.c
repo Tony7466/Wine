@@ -19,7 +19,6 @@
 #define COBJMACROS
 
 #include "mfplat_private.h"
-#include "d3d9types.h"
 
 #include "initguid.h"
 #include "ks.h"
@@ -28,6 +27,11 @@
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(mfplat);
+
+DEFINE_MEDIATYPE_GUID(MFVideoFormat_IMC1, MAKEFOURCC('I','M','C','1'));
+DEFINE_MEDIATYPE_GUID(MFVideoFormat_IMC2, MAKEFOURCC('I','M','C','2'));
+DEFINE_MEDIATYPE_GUID(MFVideoFormat_IMC3, MAKEFOURCC('I','M','C','3'));
+DEFINE_MEDIATYPE_GUID(MFVideoFormat_IMC4, MAKEFOURCC('I','M','C','4'));
 
 struct media_type
 {
@@ -1763,9 +1767,10 @@ HRESULT WINAPI MFCreatePresentationDescriptor(DWORD count, IMFStreamDescriptor *
 struct uncompressed_video_format
 {
     const GUID *subtype;
-    unsigned int bytes_per_pixel;
-    unsigned int alignment;
-    BOOL bottom_up;
+    unsigned char bytes_per_pixel;
+    unsigned char alignment;
+    unsigned char bottom_up;
+    unsigned char yuv;
 };
 
 static int __cdecl uncompressed_video_format_compare(const void *a, const void *b)
@@ -1777,18 +1782,26 @@ static int __cdecl uncompressed_video_format_compare(const void *a, const void *
 
 static const struct uncompressed_video_format video_formats[] =
 {
-    { &MFVideoFormat_RGB24,         3, 3, 1 },
-    { &MFVideoFormat_ARGB32,        4, 3, 1 },
-    { &MFVideoFormat_RGB32,         4, 3, 1 },
-    { &MFVideoFormat_RGB565,        2, 3, 1 },
-    { &MFVideoFormat_RGB555,        2, 3, 1 },
-    { &MFVideoFormat_A2R10G10B10,   4, 3, 1 },
-    { &MFVideoFormat_RGB8,          1, 3, 1 },
-    { &MFVideoFormat_L8,            1, 3, 1 },
-    { &MFVideoFormat_NV12,          1, 0, 0 },
-    { &MFVideoFormat_D16,           2, 3, 0 },
-    { &MFVideoFormat_L16,           2, 3, 0 },
-    { &MFVideoFormat_A16B16G16R16F, 8, 3, 1 },
+    { &MFVideoFormat_RGB24,         4, 3, 1, 0 },
+    { &MFVideoFormat_ARGB32,        4, 3, 1, 0 },
+    { &MFVideoFormat_RGB32,         4, 3, 1, 0 },
+    { &MFVideoFormat_RGB565,        2, 3, 1, 0 },
+    { &MFVideoFormat_RGB555,        2, 3, 1, 0 },
+    { &MFVideoFormat_A2R10G10B10,   4, 3, 1, 0 },
+    { &MFVideoFormat_RGB8,          1, 3, 1, 0 },
+    { &MFVideoFormat_L8,            1, 3, 1, 0 },
+    { &MFVideoFormat_AYUV,          4, 3, 0, 1 },
+    { &MFVideoFormat_IMC1,          2, 3, 0, 1 },
+    { &MFVideoFormat_IMC2,          1, 0, 0, 1 },
+    { &MFVideoFormat_IMC3,          2, 3, 0, 1 },
+    { &MFVideoFormat_IMC4,          1, 0, 0, 1 },
+    { &MFVideoFormat_NV12,          1, 0, 0, 1 },
+    { &MFVideoFormat_D16,           2, 3, 0, 0 },
+    { &MFVideoFormat_L16,           2, 3, 0, 0 },
+    { &MFVideoFormat_UYVY,          2, 0, 0, 1 },
+    { &MFVideoFormat_YUY2,          2, 0, 0, 1 },
+    { &MFVideoFormat_YV12,          1, 0, 0, 1 },
+    { &MFVideoFormat_A16B16G16R16F, 8, 3, 1, 0 },
 };
 
 static struct uncompressed_video_format *mf_get_video_format(const GUID *subtype)
@@ -1802,10 +1815,17 @@ static unsigned int mf_get_stride_for_format(const struct uncompressed_video_for
     return (width * format->bytes_per_pixel + format->alignment) & ~format->alignment;
 }
 
-unsigned int mf_format_get_bpp(const GUID *subtype)
+unsigned int mf_format_get_stride(const GUID *subtype, unsigned int width, BOOL *is_yuv)
 {
     struct uncompressed_video_format *format = mf_get_video_format(subtype);
-    return format ? format->bytes_per_pixel : 0;
+
+    if (format)
+    {
+        *is_yuv = format->yuv;
+        return mf_get_stride_for_format(format, width);
+    }
+
+    return 0;
 }
 
 /***********************************************************************
@@ -1816,7 +1836,7 @@ HRESULT WINAPI MFGetStrideForBitmapInfoHeader(DWORD fourcc, DWORD width, LONG *s
     struct uncompressed_video_format *format;
     GUID subtype;
 
-    TRACE("%#x, %u, %p.\n", fourcc, width, stride);
+    TRACE("%s, %u, %p.\n", debugstr_fourcc(fourcc), width, stride);
 
     memcpy(&subtype, &MFVideoFormat_Base, sizeof(subtype));
     subtype.Data1 = fourcc;
@@ -1852,7 +1872,10 @@ HRESULT WINAPI MFCalculateImageSize(REFGUID subtype, UINT32 width, UINT32 height
 
     switch (subtype->Data1)
     {
+        case MAKEFOURCC('I','M','C','2'):
+        case MAKEFOURCC('I','M','C','4'):
         case MAKEFOURCC('N','V','1','2'):
+        case MAKEFOURCC('Y','V','1','2'):
             /* 2 x 2 block, interleaving UV for half the height */
             *size = ((width + 1) & ~1) * height * 3 / 2;
             break;
@@ -1878,7 +1901,7 @@ HRESULT WINAPI MFGetPlaneSize(DWORD fourcc, DWORD width, DWORD height, DWORD *si
     unsigned int stride;
     GUID subtype;
 
-    TRACE("%#x, %u, %u, %p.\n", fourcc, width, height, size);
+    TRACE("%s, %u, %u, %p.\n", debugstr_fourcc(fourcc), width, height, size);
 
     memcpy(&subtype, &MFVideoFormat_Base, sizeof(subtype));
     subtype.Data1 = fourcc;
@@ -1890,7 +1913,10 @@ HRESULT WINAPI MFGetPlaneSize(DWORD fourcc, DWORD width, DWORD height, DWORD *si
 
     switch (fourcc)
     {
+        case MAKEFOURCC('I','M','C','2'):
+        case MAKEFOURCC('I','M','C','4'):
         case MAKEFOURCC('N','V','1','2'):
+        case MAKEFOURCC('Y','V','1','2'):
             *size = stride * height * 3 / 2;
             break;
         default:

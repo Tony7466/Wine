@@ -1502,6 +1502,9 @@ static void test_ImageList_DrawIndirect(void)
     UINT32 *bits = 0;
     UINT32 maskBits = 0x00000000, inverseMaskBits = 0xFFFFFFFF;
     int bpp, broken_value;
+    IImageList *imgl;
+    DWORD flags;
+    HRESULT hr;
 
     BITMAPINFO bitmapInfo = {{sizeof(BITMAPINFOHEADER), 2, 1, 1, 32, BI_RGB,
                                 0, 0, 0, 0, 0}};
@@ -1514,46 +1517,59 @@ static void test_ImageList_DrawIndirect(void)
 
     hbmMask = CreateBitmap(2, 1, 1, 1, &maskBits);
     ok(hbmMask != 0, "CreateBitmap failed\n");
-    if(!hbmMask) goto cleanup;
 
     hbmInverseMask = CreateBitmap(2, 1, 1, 1, &inverseMaskBits);
     ok(hbmInverseMask != 0, "CreateBitmap failed\n");
-    if(!hbmInverseMask) goto cleanup;
 
     himl = pImageList_Create(2, 1, ILC_COLOR32, 0, 1);
     ok(himl != 0, "ImageList_Create failed\n");
-    if(!himl) goto cleanup;
+
+    hr = pHIMAGELIST_QueryInterface(himl, &IID_IImageList, (void **) &imgl);
+    ok(hr == S_OK, "Failed to get interface, hr %#x.\n", hr);
 
     /* Add a no-alpha image */
     hbmImage = create_test_bitmap(hdcDst, 2, 1, 32, bits_image);
-    if(!hbmImage) goto cleanup;
+    ok(hbmImage != NULL, "Failed to create test bitmap.\n");
 
     iImage = pImageList_Add(himl, hbmImage, hbmMask);
     ok(iImage != -1, "ImageList_Add failed\n");
-    if(iImage == -1) goto cleanup;
+
+    hr = IImageList_GetItemFlags(imgl, 1000, &flags);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    hr = IImageList_GetItemFlags(imgl, 1000, NULL);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    hr = IImageList_GetItemFlags(imgl, iImage, &flags);
+    ok(hr == S_OK, "Failed to get item flags, hr %#x.\n", hr);
+    ok(!flags, "Unexpected flags %#x.\n", flags);
 
     /* Add an alpha image */
     hbmAlphaImage = create_test_bitmap(hdcDst, 2, 1, 32, bits_alpha);
-    if(!hbmAlphaImage) goto cleanup;
+    ok(hbmAlphaImage != NULL, "Failed to create test bitmap.\n");
 
     iAlphaImage = pImageList_Add(himl, hbmAlphaImage, hbmMask);
     ok(iAlphaImage != -1, "ImageList_Add failed\n");
-    if(iAlphaImage == -1) goto cleanup;
+
+    hr = IImageList_GetItemFlags(imgl, iAlphaImage, &flags);
+    ok(hr == S_OK, "Failed to get item flags, hr %#x.\n", hr);
+    ok(flags & ILIF_ALPHA, "Unexpected flags %#x.\n", flags);
 
     /* Add a transparent alpha image */
     hbmTransparentImage = create_test_bitmap(hdcDst, 2, 1, 32, bits_transparent);
-    if(!hbmTransparentImage) goto cleanup;
+    ok(hbmTransparentImage != NULL, "Failed to create test bitmap.\n");
 
     iTransparentImage = pImageList_Add(himl, hbmTransparentImage, hbmMask);
     ok(iTransparentImage != -1, "ImageList_Add failed\n");
-    if(iTransparentImage == -1) goto cleanup;
+
+    hr = IImageList_GetItemFlags(imgl, iTransparentImage, &flags);
+    ok(hr == S_OK, "Failed to get item flags, hr %#x.\n", hr);
+    ok(flags & ILIF_ALPHA, "Unexpected flags %#x.\n", flags);
 
     /* 32-bit Tests */
     bitmapInfo.bmiHeader.biBitCount = 32;
     hbmDst = CreateDIBSection(hdcDst, &bitmapInfo, DIB_RGB_COLORS, (void**)&bits, NULL, 0);
     ok (hbmDst && bits, "CreateDIBSection failed to return a valid bitmap and buffer\n");
-    if (!hbmDst || !bits)
-        goto cleanup;
     hbmOld = SelectObject(hdcDst, hbmDst);
 
     check_ImageList_DrawIndirect_fStyle(hdcDst, himl, bits, iImage, ILD_NORMAL, 0x00ABCDEF, __LINE__);
@@ -1606,23 +1622,18 @@ static void test_ImageList_DrawIndirect(void)
     bitmapInfo.bmiHeader.biHeight = -4;
     hbmDst = CreateDIBSection(hdcDst, &bitmapInfo, DIB_RGB_COLORS, (void**)&bits, NULL, 0);
     ok (hbmDst && bits, "CreateDIBSection failed to return a valid bitmap and buffer\n");
-    if (!hbmDst || !bits) goto cleanup;
     SelectObject(hdcDst, hbmDst);
 
     hbm4x4 = create_test_bitmap(hdcDst, 4, 4, 32, bits_4x4);
-    if (!hbm4x4) goto cleanup;
+    ok(hbm4x4 != NULL, "Failed to create a test bitmap.\n");
 
     ret = pImageList_SetIconSize(himl, 4, 4);
     ok(ret, "ImageList_SetIconSize failed\n");
-    if (!ret) goto cleanup;
 
     ret = pImageList_Add(himl, hbm4x4, NULL);
     ok(ret != -1, "ImageList_Add failed\n");
-    if(ret == -1) goto cleanup;
 
     check_ImageList_DrawIndirect_grayscale(hdcDst, himl, bits, bits_4x4, 0, 4, 4, __LINE__);
-
-cleanup:
 
     if(hbmOld)
         SelectObject(hdcDst, hbmOld);
@@ -1713,7 +1724,7 @@ static void test_iimagelist(void)
     if (!himl)
         return;
 
-    hr = (pHIMAGELIST_QueryInterface)(himl, &IID_IImageList, (void **) &imgl);
+    hr = pHIMAGELIST_QueryInterface(himl, &IID_IImageList, (void **) &imgl);
     ok(SUCCEEDED(hr), "HIMAGELIST_QueryInterface failed, hr=%x\n", hr);
 
     if (hr == S_OK)

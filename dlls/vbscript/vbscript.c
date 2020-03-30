@@ -198,6 +198,27 @@ static void exec_queued_code(script_ctx_t *ctx)
     }
 }
 
+static HRESULT retrieve_named_item_disp(IActiveScriptSite *site, named_item_t *item)
+{
+    IUnknown *unk;
+    HRESULT hres;
+
+    hres = IActiveScriptSite_GetItemInfo(site, item->name, SCRIPTINFO_IUNKNOWN, &unk, NULL);
+    if(FAILED(hres)) {
+        WARN("GetItemInfo failed: %08x\n", hres);
+        return hres;
+    }
+
+    hres = IUnknown_QueryInterface(unk, &IID_IDispatch, (void**)&item->disp);
+    IUnknown_Release(unk);
+    if(FAILED(hres)) {
+        WARN("object does not implement IDispatch\n");
+        return hres;
+    }
+
+    return S_OK;
+}
+
 named_item_t *lookup_named_item(script_ctx_t *ctx, const WCHAR *name, unsigned flags)
 {
     named_item_t *item;
@@ -209,22 +230,10 @@ named_item_t *lookup_named_item(script_ctx_t *ctx, const WCHAR *name, unsigned f
                 hres = create_script_disp(ctx, &item->script_obj);
                 if(FAILED(hres)) return NULL;
             }
+
             if(!item->disp && (flags || !(item->flags & SCRIPTITEM_CODEONLY))) {
-                IUnknown *unk;
-
-                hres = IActiveScriptSite_GetItemInfo(ctx->site, item->name,
-                                                     SCRIPTINFO_IUNKNOWN, &unk, NULL);
-                if(FAILED(hres)) {
-                    WARN("GetItemInfo failed: %08x\n", hres);
-                    continue;
-                }
-
-                hres = IUnknown_QueryInterface(unk, &IID_IDispatch, (void**)&item->disp);
-                IUnknown_Release(unk);
-                if(FAILED(hres)) {
-                    WARN("object does not implement IDispatch\n");
-                    continue;
-                }
+                hres = retrieve_named_item_disp(ctx->site, item);
+                if(FAILED(hres)) continue;
             }
 
             return item;
@@ -253,6 +262,7 @@ void release_named_item(named_item_t *item)
 
 static void release_script(script_ctx_t *ctx)
 {
+    named_item_t *item, *item_next;
     vbscode_t *code, *code_next;
 
     collect_objects(ctx);
@@ -273,14 +283,19 @@ static void release_script(script_ctx_t *ctx)
         }
     }
 
-    while(!list_empty(&ctx->named_items)) {
-        named_item_t *iter = LIST_ENTRY(list_head(&ctx->named_items), named_item_t, entry);
-
-        list_remove(&iter->entry);
-        if(iter->disp)
-            IDispatch_Release(iter->disp);
-        release_named_item_script_obj(iter);
-        release_named_item(iter);
+    LIST_FOR_EACH_ENTRY_SAFE(item, item_next, &ctx->named_items, named_item_t, entry)
+    {
+        if(item->disp)
+        {
+            IDispatch_Release(item->disp);
+            item->disp = NULL;
+        }
+        release_named_item_script_obj(item);
+        if(!(item->flags & SCRIPTITEM_ISPERSISTENT))
+        {
+            list_remove(&item->entry);
+            release_named_item(item);
+        }
     }
 
     if(ctx->secmgr) {
@@ -312,6 +327,15 @@ static void release_code_list(script_ctx_t *ctx)
     }
 }
 
+static void release_named_item_list(script_ctx_t *ctx)
+{
+    while(!list_empty(&ctx->named_items)) {
+        named_item_t *iter = LIST_ENTRY(list_head(&ctx->named_items), named_item_t, entry);
+        list_remove(&iter->entry);
+        release_named_item(iter);
+    }
+}
+
 static void decrease_state(VBScript *This, SCRIPTSTATE state)
 {
     switch(This->state) {
@@ -331,8 +355,10 @@ static void decrease_state(VBScript *This, SCRIPTSTATE state)
             break;
         release_script(This->ctx);
         This->thread_id = 0;
-        if(state == SCRIPTSTATE_CLOSED)
+        if(state == SCRIPTSTATE_CLOSED) {
             release_code_list(This->ctx);
+            release_named_item_list(This->ctx);
+        }
         break;
     case SCRIPTSTATE_CLOSED:
         break;
@@ -530,6 +556,7 @@ static ULONG WINAPI VBScript_Release(IActiveScript *iface)
 static HRESULT WINAPI VBScript_SetScriptSite(IActiveScript *iface, IActiveScriptSite *pass)
 {
     VBScript *This = impl_from_IActiveScript(iface);
+    named_item_t *item;
     LCID lcid;
     HRESULT hres;
 
@@ -543,6 +570,16 @@ static HRESULT WINAPI VBScript_SetScriptSite(IActiveScript *iface, IActiveScript
 
     if(InterlockedCompareExchange(&This->thread_id, GetCurrentThreadId(), 0))
         return E_UNEXPECTED;
+
+    /* Retrieve new dispatches for persistent named items */
+    LIST_FOR_EACH_ENTRY(item, &This->ctx->named_items, named_item_t, entry)
+    {
+        if(!item->disp)
+        {
+            hres = retrieve_named_item_disp(pass, item);
+            if(FAILED(hres)) return hres;
+        }
+    }
 
     hres = create_script_disp(This->ctx, &This->ctx->script_obj);
     if(FAILED(hres))

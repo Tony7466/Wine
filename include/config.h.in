@@ -152,6 +152,9 @@
 /* Define to 1 if you have the `fallocate' function. */
 #undef HAVE_FALLOCATE
 
+/* Define to 1 if you have the `FAudioLinkedVersion' function. */
+#undef HAVE_FAUDIOLINKEDVERSION
+
 /* Define to 1 if you have the `FAudio_CommitOperationSet' function. */
 #undef HAVE_FAUDIO_COMMITOPERATIONSET
 
@@ -704,9 +707,6 @@
 /* Define to 1 if you have the <port.h> header file. */
 #undef HAVE_PORT_H
 
-/* Define if we can use ppdev.h for parallel port access */
-#undef HAVE_PPDEV
-
 /* Define to 1 if you have the `prctl' function. */
 #undef HAVE_PRCTL
 
@@ -775,6 +775,9 @@
 
 /* Define to 1 if you have the `roundf' function. */
 #undef HAVE_ROUNDF
+
+/* Define to 1 if you have the <sasl/sasl.h> header file. */
+#undef HAVE_SASL_SASL_H
 
 /* Define to 1 if you have the <sched.h> header file. */
 #undef HAVE_SCHED_H

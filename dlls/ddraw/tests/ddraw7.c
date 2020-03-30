@@ -1056,6 +1056,7 @@ static void test_coop_level_d3d_state(void)
     IDirectDrawSurface7 *rt, *surface;
     IDirect3DDevice7 *device;
     IDirectDraw7 *ddraw;
+    DDSURFACEDESC2 lock;
     IDirect3D7 *d3d;
     D3DCOLOR color;
     DDSCAPS2 caps;
@@ -1116,6 +1117,13 @@ static void test_coop_level_d3d_state(void)
     hr = IDirectDrawSurface7_IsLost(rt);
     ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
 
+    memset(&lock, 0, sizeof(lock));
+    lock.dwSize = sizeof(lock);
+    lock.lpSurface = (void *)0xdeadbeef;
+    hr = IDirectDrawSurface7_Lock(rt, NULL, &lock, DDLOCK_READONLY, NULL);
+    ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
+    ok(lock.lpSurface == (void *)0xdeadbeef, "Got unexpected lock.lpSurface %p.\n", lock.lpSurface);
+
     memset(&caps, 0, sizeof(caps));
     caps.dwCaps = DDSCAPS_ZBUFFER;
     hr = IDirectDrawSurface7_GetAttachedSurface(rt, &caps, &surface);
@@ -1125,6 +1133,11 @@ static void test_coop_level_d3d_state(void)
     ok(hr == DDERR_SURFACELOST, "Got unexpected hr %#x.\n", hr);
 
     hr = IDirectDraw7_RestoreAllSurfaces(ddraw);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDirectDrawSurface7_Lock(rt, NULL, &lock, DDLOCK_READONLY, NULL);
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+    hr = IDirectDrawSurface7_Unlock(rt, NULL);
     ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
 
     caps.dwCaps = DDSCAPS_ZBUFFER;
@@ -6379,22 +6392,30 @@ static void test_surface_discard(void)
     unsigned int i;
 
     window = create_window();
-    if (!(device = create_device(window, DDSCL_NORMAL)))
-    {
-        skip("Failed to create a 3D device, skipping test.\n");
-        DestroyWindow(window);
-        return;
-    }
-    hr = IDirect3DDevice7_GetDirect3D(device, &d3d);
-    ok(SUCCEEDED(hr), "Failed to get d3d interface, hr %#x.\n", hr);
-    hr = IDirect3D7_QueryInterface(d3d, &IID_IDirectDraw7, (void **)&ddraw);
-    ok(SUCCEEDED(hr), "Failed to get ddraw interface, hr %#x.\n", hr);
-    hr = IDirect3DDevice7_GetRenderTarget(device, &target);
-    ok(SUCCEEDED(hr), "Failed to get render target, hr %#x.\n", hr);
 
     for (i = 0; i < ARRAY_SIZE(tests); ++i)
     {
         BOOL discarded;
+
+        /* Sigh. Anything other than the first run of the loop randomly fails with
+         * DDERR_SURFACELOST on my Radeon Pro 560 on Win10 19.09. Most of the time
+         * the blit fails, but with sleeps added between surface creation and lock
+         * the lock can fail too. Interestingly ddraw claims the render target has
+         * been lost, not the test surface.
+         *
+         * Recreating ddraw every iteration seems to fix this. */
+        if (!(device = create_device(window, DDSCL_NORMAL)))
+        {
+            skip("Failed to create a 3D device, skipping test.\n");
+            DestroyWindow(window);
+            return;
+        }
+        hr = IDirect3DDevice7_GetDirect3D(device, &d3d);
+        ok(SUCCEEDED(hr), "Failed to get d3d interface, hr %#x.\n", hr);
+        hr = IDirect3D7_QueryInterface(d3d, &IID_IDirectDraw7, (void **)&ddraw);
+        ok(SUCCEEDED(hr), "Failed to get ddraw interface, hr %#x.\n", hr);
+        hr = IDirect3DDevice7_GetRenderTarget(device, &target);
+        ok(SUCCEEDED(hr), "Failed to get render target, hr %#x.\n", hr);
 
         memset(&ddsd, 0, sizeof(ddsd));
         ddsd.dwSize = sizeof(ddsd);
@@ -6438,12 +6459,13 @@ static void test_surface_discard(void)
         /* Windows 7 reliably changes the address of surfaces that are discardable (Nvidia Kepler,
          * AMD r500, evergreen). Windows XP, at least on AMD r200, does not. */
         ok(!discarded || tests[i].discard, "Expected surface not to be discarded, case %u\n", i);
+
+        IDirectDrawSurface7_Release(target);
+        IDirectDraw7_Release(ddraw);
+        IDirect3D7_Release(d3d);
+        IDirect3DDevice7_Release(device);
     }
 
-    IDirectDrawSurface7_Release(target);
-    IDirectDraw7_Release(ddraw);
-    IDirect3D7_Release(d3d);
-    IDirect3DDevice7_Release(device);
     DestroyWindow(window);
 }
 
@@ -17118,16 +17140,16 @@ static void test_compressed_surface_stretch(void)
             {
                 U4(src_surface_desc).ddpfPixelFormat = test_formats[k].fmt;
                 hr = IDirectDraw7_CreateSurface(ddraw, &src_surface_desc, &src_surf, NULL);
-                ok(hr == DD_OK, "Test (%u, %u, %u, %u), got unexpected hr %#x.\n", i, j, k, l, hr);
+                ok(hr == DD_OK, "Test (%u, %u, %u), got unexpected hr %#x.\n", i, j, k, hr);
 
                 U5(fx).dwFillColor = 0x801f;
                 hr = IDirectDrawSurface7_Blt(rb_surf, NULL, NULL, NULL, DDBLT_COLORFILL | DDBLT_WAIT, &fx);
-                ok(hr == DD_OK, "Test (%u, %u, %u, %u), got unexpected hr %#x.\n", i, j, k, l, hr);
+                ok(hr == DD_OK, "Test (%u, %u, %u), got unexpected hr %#x.\n", i, j, k, hr);
 
                 hr = IDirectDrawSurface7_Blt(src_surf, &src_rect, rb_surf, &src_rect, DDBLT_WAIT, NULL);
 
                 todo_wine_if(test_formats[k].fmt.dwFlags == DDPF_FOURCC && test_sizes[j].todo_src)
-                ok(hr == DD_OK, "Test (%u, %u, %u, %u), got unexpected hr %#x.\n", i, j, k, l, hr);
+                ok(hr == DD_OK, "Test (%u, %u, %u), got unexpected hr %#x.\n", i, j, k, hr);
                 if (FAILED(hr))
                 {
                     IDirectDrawSurface7_Release(src_surf);

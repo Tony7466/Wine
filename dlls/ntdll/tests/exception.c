@@ -21,10 +21,6 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-#ifndef _WIN32_WINNT
-#define _WIN32_WINNT 0x500 /* For NTSTATUS */
-#endif
-
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
 #define NONAMELESSUNION
@@ -1182,7 +1178,7 @@ static void test_debugger(void)
 
     } while (de.dwDebugEventCode != EXIT_PROCESS_DEBUG_EVENT);
 
-    winetest_wait_child_process( pi.hProcess );
+    wait_child_process( pi.hProcess );
     ret = CloseHandle(pi.hThread);
     ok(ret, "error %u\n", GetLastError());
     ret = CloseHandle(pi.hProcess);
@@ -3402,7 +3398,7 @@ static void test_suspend_process(void)
 
     SetEvent(event);
 
-    winetest_wait_child_process(info.hProcess);
+    wait_child_process(info.hProcess);
 
     CloseHandle(info.hProcess);
     CloseHandle(info.hThread);

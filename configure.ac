@@ -32,6 +32,7 @@ AC_ARG_ENABLE(win16, AS_HELP_STRING([--disable-win16],[do not include Win16 supp
 AC_ARG_ENABLE(win64, AS_HELP_STRING([--enable-win64],[build a Win64 emulator on AMD64 (won't run Win32 binaries)]))
 AC_ARG_ENABLE(tests, AS_HELP_STRING([--disable-tests],[do not build the regression tests]))
 AC_ARG_ENABLE(maintainer-mode, AS_HELP_STRING([--enable-maintainer-mode],[enable maintainer-specific build rules]))
+AC_ARG_ENABLE(werror, AS_HELP_STRING([--enable-werror],[treat compilation warnings as errors]))
 
 AC_ARG_WITH(alsa,      AS_HELP_STRING([--without-alsa],[do not use the Alsa sound support]))
 AC_ARG_WITH(capi,      AS_HELP_STRING([--without-capi],[do not use CAPI (ISDN support)]))
@@ -373,6 +374,9 @@ else
   dnl Maintainer mode requires gettext
   with_gettext=yes
   with_gettextpo=yes
+
+  dnl Maintainer mode wants -Werror
+  enable_werror=yes
 fi
 
 test "x$with_gettext" != xno || MSGFMT=false
@@ -483,6 +487,7 @@ AC_CHECK_HEADERS(\
 	port.h \
 	pthread.h \
 	pwd.h \
+	sasl/sasl.h \
 	sched.h \
 	scsi/scsi.h \
 	scsi/scsi_ioctl.h \
@@ -1092,7 +1097,7 @@ then
 
         WINE_TRY_CROSSCFLAGS([-Wl,-delayload,autoconftest.dll], [AC_SUBST(DELAYLOADFLAG,["-Wl,-delayload,"])])
 
-        if test "x$enable_maintainer_mode" = xyes
+        if test "x$enable_werror" = "xyes"
         then
             WINE_TRY_CROSSCFLAGS([-Werror])
         fi
@@ -1574,18 +1579,6 @@ WINE_ERROR_WITH(freetype,[test "x$ac_cv_lib_soname_freetype" = x],
                 [FreeType ${notice_platform}development files not found. Fonts will not be built.],
                 [enable_fonts])
 
-dnl **** Check for parport (currently Linux only) ****
-AC_CACHE_CHECK([for parport header/ppdev.h], ac_cv_c_ppdev,
- AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#ifdef HAVE_SYS_IOCTL_H
-# include <sys/ioctl.h>
-#endif
-#include <linux/ppdev.h>]], [[ioctl (1,PPCLAIM,0)]])],
-    [ac_cv_c_ppdev="yes"],[ac_cv_c_ppdev="no"]))
-if test "$ac_cv_c_ppdev" = "yes"
-then
-    AC_DEFINE(HAVE_PPDEV, 1, [Define if we can use ppdev.h for parallel port access])
-fi
-
 dnl **** Check for pthread functions ****
 WINE_CHECK_LIB_FUNCS(\
         pthread_getthreadid_np,
@@ -1752,7 +1745,8 @@ then
         [AC_CHECK_HEADERS([FAudio.h],
             [WINE_CHECK_SONAME(FAudio,FAudioCreate,,,[$FAUDIO_LIBS],[[libFAudio*]])])
              WINE_CHECK_LIB_FUNCS([FAudio_CommitOperationSet \
-                                   F3DAudioInitialize8], [$FAUDIO_LIBS])
+                                   F3DAudioInitialize8 \
+                                   FAudioLinkedVersion], [$FAUDIO_LIBS])
             ])
 fi
 WINE_NOTICE_WITH(faudio,[test "x$ac_cv_lib_soname_FAudio" = "x"],
@@ -2080,8 +2074,8 @@ char*f(const char *h,char n) {return strchr(h,n);}]])],[ac_cv_c_logicalop_noisy=
 
   CFLAGS=$saved_CFLAGS
 
-  dnl Enable -Werror for maintainer mode
-  if test "x$enable_maintainer_mode" = "xyes"
+  dnl Enable -Werror
+  if test "x$enable_werror" = "xyes"
   then
       WINE_TRY_CFLAGS([-Werror])
   fi
@@ -2800,6 +2794,7 @@ WINE_CONFIG_MAKEFILE(dlls/acledit)
 WINE_CONFIG_MAKEFILE(dlls/aclui)
 WINE_CONFIG_MAKEFILE(dlls/activeds.tlb)
 WINE_CONFIG_MAKEFILE(dlls/activeds)
+WINE_CONFIG_MAKEFILE(dlls/activeds/tests)
 WINE_CONFIG_MAKEFILE(dlls/actxprxy)
 WINE_CONFIG_MAKEFILE(dlls/adsiid)
 WINE_CONFIG_MAKEFILE(dlls/adsldp)
@@ -2901,6 +2896,7 @@ WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-quirks-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-realtime-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-registry-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-registry-l2-1-0)
+WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-registry-l2-2-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-registryuserspecific-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-rtlsupport-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-rtlsupport-l1-2-0)

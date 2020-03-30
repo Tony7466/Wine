@@ -1090,7 +1090,7 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
     return TRUE;
 }
 
-static HRESULT prop_string_vector_append(PROPVARIANT *vector, unsigned int *count, BOOL unique, const WCHAR *str)
+static HRESULT prop_string_vector_append(PROPVARIANT *vector, unsigned int *capacity, BOOL unique, const WCHAR *str)
 {
     WCHAR *ptrW;
     int len, i;
@@ -1104,17 +1104,17 @@ static HRESULT prop_string_vector_append(PROPVARIANT *vector, unsigned int *coun
         }
     }
 
-    if (!vector->calpwstr.cElems || *count > vector->calpwstr.cElems - 1)
+    if (!*capacity || *capacity - 1 < vector->calpwstr.cElems)
     {
         unsigned int new_count;
         WCHAR **ptr;
 
-        new_count = *count ? *count * 2 : 10;
+        new_count = *capacity ? *capacity * 2 : 10;
         ptr = CoTaskMemRealloc(vector->calpwstr.pElems, new_count * sizeof(*vector->calpwstr.pElems));
         if (!ptr)
             return E_OUTOFMEMORY;
         vector->calpwstr.pElems = ptr;
-        *count = new_count;
+        *capacity = new_count;
     }
 
     len = lstrlenW(str);
@@ -1129,12 +1129,14 @@ static HRESULT prop_string_vector_append(PROPVARIANT *vector, unsigned int *coun
 
 static int __cdecl qsort_string_compare(const void *a, const void *b)
 {
-    return lstrcmpW(a, b);
+    const WCHAR *left = *(const WCHAR **)a, *right = *(const WCHAR **)b;
+    return lstrcmpW(left, right);
 }
 
 static HRESULT mf_get_handler_strings(const WCHAR *path, WCHAR filter, unsigned int maxlen, PROPVARIANT *dst)
 {
     static const HKEY hkey_roots[2] = { HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE };
+    unsigned int capacity = 0, count, size;
     HRESULT hr = S_OK;
     int i, index;
     WCHAR *buffW;
@@ -1148,8 +1150,6 @@ static HRESULT mf_get_handler_strings(const WCHAR *path, WCHAR filter, unsigned 
 
     for (i = 0; i < ARRAY_SIZE(hkey_roots); ++i)
     {
-        unsigned int count;
-        DWORD size;
         HKEY hkey;
 
         if (RegOpenKeyW(hkey_roots[i], path, &hkey))
@@ -1162,7 +1162,8 @@ static HRESULT mf_get_handler_strings(const WCHAR *path, WCHAR filter, unsigned 
         {
             if (filter && !wcschr(buffW, filter))
                 continue;
-            if (FAILED(hr = prop_string_vector_append(dst, &count, i > 0, buffW)))
+
+            if (FAILED(hr = prop_string_vector_append(dst, &capacity, i > 0, buffW)))
                 break;
             size = maxlen;
         }
@@ -1894,7 +1895,7 @@ static HRESULT WINAPI sample_copier_transform_GetOutputStatus(IMFTransform *ifac
 
 static HRESULT WINAPI sample_copier_transform_SetOutputBounds(IMFTransform *iface, LONGLONG lower, LONGLONG upper)
 {
-    TRACE("%p, %s, %s.\n", iface, wine_dbgstr_longlong(lower), wine_dbgstr_longlong(upper));
+    TRACE("%p, %s, %s.\n", iface, debugstr_time(lower), debugstr_time(upper));
 
     return E_NOTIMPL;
 }
@@ -1957,6 +1958,7 @@ static HRESULT WINAPI sample_copier_transform_ProcessOutput(IMFTransform *iface,
         MFT_OUTPUT_DATA_BUFFER *buffers, DWORD *status)
 {
     struct sample_copier *transform = impl_copier_from_IMFTransform(iface);
+    IMFMediaBuffer *buffer;
     DWORD sample_flags;
     HRESULT hr = S_OK;
     LONGLONG time;
@@ -1981,7 +1983,15 @@ static HRESULT WINAPI sample_copier_transform_ProcessOutput(IMFTransform *iface,
         if (SUCCEEDED(IMFSample_GetSampleFlags(transform->sample, &sample_flags)))
             IMFSample_SetSampleFlags(buffers->pSample, sample_flags);
 
-        FIXME("Copy buffers.\n");
+        if (SUCCEEDED(IMFSample_ConvertToContiguousBuffer(transform->sample, NULL)))
+        {
+            if (SUCCEEDED(IMFSample_GetBufferByIndex(buffers->pSample, 0, &buffer)))
+            {
+                if (FAILED(IMFSample_CopyToBuffer(transform->sample, buffer)))
+                    hr = MF_E_UNEXPECTED;
+                IMFMediaBuffer_Release(buffer);
+            }
+        }
 
         IMFSample_Release(transform->sample);
         transform->sample = NULL;
