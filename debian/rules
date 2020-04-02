@@ -32,8 +32,8 @@ ifeq (,$(findstring ~bpo9,$(DEB_VERSION)))
 export DEB_RULES_REQUIRES_ROOT=no
 endif
 
-# enable hardening buildflags (fortify is not yet supported upstream)
-export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify
+# enable hardening buildflags (fortify is not yet supported upstream and mingw does not yet support stackprotector)
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector
 
 # linker options
 export DEB_LDFLAGS_MAINT_APPEND+=-Wl,-rpath,/$(LIBDIR)
@@ -48,11 +48,13 @@ export DEB_CFLAGS_MAINT_APPEND+=-Wno-unused-function
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-deprecated-declarations
 
 # configure options
-CONFLAGS=--with-gnutls \
+CONFLAGS=--with-mingw \
+         --with-gnutls \
          --without-hal \
-         --without-mingw \
+         --without-oss \
          --without-netapi \
          --disable-tests \
+         --enable-werror \
          --enable-maintainer-mode \
          --libdir=/$(LIBDIR) \
          --bindir=/$(BINDIR) \
@@ -74,14 +76,14 @@ export DEB_LDFLAGS_MAINT_APPEND+=-march=armv5t
 endif
 
 # on arm64 build using clang
-ifeq ($(DEB_HOST_ARCH), arm64)
-export CC=clang
-export CXX=clang++
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-absolute-value
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-enum-conversion
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-misleading-indentation
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-implicit-int-float-conversion
-endif
+#ifeq ($(DEB_HOST_ARCH), arm64)
+#export CC=clang
+#export CXX=clang++
+#export DEB_CFLAGS_MAINT_APPEND+=-Wno-absolute-value
+#export DEB_CFLAGS_MAINT_APPEND+=-Wno-enum-conversion
+#export DEB_CFLAGS_MAINT_APPEND+=-Wno-misleading-indentation
+#export DEB_CFLAGS_MAINT_APPEND+=-Wno-implicit-int-float-conversion
+#endif
 
 # use date of the latest changelog update as the build date
 export WIDL_TIME_OVERRIDE=$(SOURCE_DATE_EPOCH)
@@ -89,16 +91,6 @@ export WIDL_TIME_OVERRIDE=$(SOURCE_DATE_EPOCH)
 # additional files to generate
 INSTALLS=$(shell ls debian/*VERSION* | sed s/VERSION/$(VERSION)/) \
          debian/bug-control \
-
-# sonames to compute additional dependencies
-sonamesDepends=$(shell \
-    grep "^\#define SONAME_" include/config.h | \
-    grep -E "libfontconfig|libfreetype|libncurses" | \
-    cut -d\" -f2)
-sonamesRecommends=$(shell \
-    grep "^\#define SONAME_" include/config.h | \
-    grep -v libnetapi | \
-    cut -d\" -f2)
 
 debian/control: debian/control.in
 	sed "s/VERSION/$(VERSION)/g;s/DEBSUFFIX/$(DEBSUFFIX)/g" < $< > $@
@@ -179,8 +171,10 @@ override_dh_auto_install-indep: $(INSTALLS)
 	    done
 	for file in $$(find . ! -path "./debian/*" -name \*.man); do \
 	    rename=$$(basename $$file | sed "s/\\./$(DEBSUFFIX)./;s/UTF-8\\.//"); \
-	    cp $$file debian/tmp/$$rename || true; \
+	    mv $$file debian/tmp/$$rename || true; \
 	    done
+	rm -f debian/tmp/usr/lib/*/wineserver
+	rm -f debian/tmp/notepad*.man debian/tmp/winemine*.man
 	# extract hicolor icon from logo.svg
 	sed '/image\/png/d;s|width="611"|width="209"|' programs/winecfg/logo.svg > debian/tmp/wine$(DEBSUFFIX).svg
 
@@ -188,32 +182,37 @@ override_dh_auto_install-arch: $(INSTALLS)
 	mkdir -p debian/tmp
 	cp ANNOUNCE debian/tmp/NEWS
 	cp tools/winedump/README debian/tmp/README.winedump
-	cp server/wineserver debian/tmp/wineserver$(DEB_BUILD_ARCH_BITS)
+	mv server/wineserver debian/tmp/wineserver$(DEB_BUILD_ARCH_BITS)
 	sed "s|BINDIR|$(BINDIR)|g" debian/scripts/winegcc.in > debian/tmp/winegcc$(DEBSUFFIX)
 	sed "s|BINDIR|$(BINDIR)|g;s|VERSION|$(VERSION)|g" debian/scripts/wineserver.in > debian/tmp/wineserver
 	chmod 755 debian/tmp/wineserver
 	dh_auto_install
 	for file in $$(find . ! -path "./debian/*" -name \*.man); do \
 	    rename=$$(basename $$file | sed "s/\\./$(DEBSUFFIX)./;s/UTF-8\\.//"); \
-	    cp $$file debian/tmp/$$rename || true; \
+	    mv $$file debian/tmp/$$rename || true; \
 	    done
-	cp loader/wine.man debian/tmp/usr/share/man/man1/wine64$(DEBSUFFIX).1
 	test -f debian/tmp/$(BINDIR)/wine-preloader || \
 	    cp debian/scripts/wine-preloader debian/tmp/$(BINDIR)
+	rm -rf debian/tmp/usr/share/man
+	rm -f debian/tmp/usr/lib/*/wineserver
+	rm -f debian/tmp/notepad*.man debian/tmp/winemine*.man
 
 override_dh_shlibdeps:
 	mkdir -p debian/tmp
-	./debian/scripts/sonames2elf $(sonamesDepends) > debian/tmp/elf.depends
-	./debian/scripts/sonames2elf $(sonamesRecommends) > debian/tmp/elf.recommends
+	echo > debian/tmp/elf.recommends
+	./debian/scripts/sonames2elf $(shell ./debian/scripts/config2sonames "libfontconfig|libfreetype|libncurses") > debian/tmp/elf.depends
 	dpkg-shlibdeps --warnings=1 \
 	    -pdlopen \
 	    -dDepends -edebian/tmp/elf.depends \
 	    -dRecommends -edebian/tmp/elf.recommends \
-	    -Tdebian/libwine$(VERSION).substvars
+	    -Tdebian/libwine$(VERSION).substvars 2>/dev/null
 	dh_shlibdeps
 
 override_dh_bugfiles:
 	dh_bugfiles -A
+
+override_dh_missing:
+	dh_missing --fail-missing -X elf.depends -X elf.recommends -X wine.desktop
 
 override_dh_clean:
 	dh_clean -- $(INSTALLS)

@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -2010,6 +2010,11 @@ then
+@@ -2009,6 +2009,11 @@ then
    WINE_TRY_CFLAGS([-fno-stack-protector])
    WINE_TRY_CFLAGS([-fno-strict-aliasing])
    WINE_TRY_CFLAGS([-fexcess-precision=standard],[AC_SUBST(EXCESS_PRECISION_CFLAGS,"-fexcess-precision=standard")])

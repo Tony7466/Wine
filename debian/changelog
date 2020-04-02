@@ -1,3 +1,11 @@
+wine-development (5.5-2) unstable; urgency=medium
+
+  * Remove Built-Using fields.
+  * Detect files missing from the binary packages.
+  * Build using mingw (most executables and DLLs are Windows PE files now).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Tue, 31 Mar 2020 23:07:21 +0000
+
 wine-development (5.5-1) unstable; urgency=medium
 
   * New upstream release 5.5, released Mar 27, 2020.

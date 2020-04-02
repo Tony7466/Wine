@@ -1,0 +1,17 @@
+description: do not generate duplicate winapploader tools
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/tools/makedep.c
++++ b/tools/makedep.c
+@@ -3353,11 +3353,6 @@ static void output_module( struct makefi
+ 
+     if (spec_file)
+         output_man_pages( make );
+-    else if (*dll_ext && !make->is_win16 && strendswith( make->module, ".exe" ))
+-    {
+-        char *binary = replace_extension( make->module, ".exe", "" );
+-        add_install_rule( make, binary, "wineapploader", strmake( "t$(bindir)/%s", binary ));
+-    }
+ }
+ 
+ 

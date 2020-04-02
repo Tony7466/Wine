@@ -1,8 +1,33 @@
+# windows PE files
+debian/tmp/usr/lib/*/*/*.com
+debian/tmp/usr/lib/*/*/*.dll
+debian/tmp/usr/lib/*/*/*.drv
+debian/tmp/usr/lib/*/*/*.exe
+debian/tmp/usr/lib/*/*/*.acm
+debian/tmp/usr/lib/*/*/*.cpl
+debian/tmp/usr/lib/*/*/*.ocx
+debian/tmp/usr/lib/*/*/*.sys
+debian/tmp/usr/lib/*/*/*.tlb
+debian/tmp/usr/lib/*/*/*.vxd
+
+# 16-bit windows PE files
+debian/tmp/usr/lib/*/*/*.dll16
+debian/tmp/usr/lib/*/*/*.drv16
+debian/tmp/usr/lib/*/*/*.exe16
+debian/tmp/usr/lib/*/*/*.mod16
+
+# fake PE files and their corresponding ELF files
 debian/tmp/usr/lib/*/*/*.*.so
 debian/tmp/usr/lib/*/*/fakedlls
+
+# wine library
 debian/tmp/usr/lib/*/*/libwine.so.*
 
-debian/tmp/usr/share/*/wine/*.*
-debian/tmp/usr/share/*/wine/nls/*
-
+# wine server
 debian/tmp/wineserver usr/lib/wineVERSION
+
+# configuration files
+debian/tmp/usr/share/*/wine/*
+
+# language support files
+debian/tmp/usr/share/*/wine/nls/*

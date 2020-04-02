@@ -13,7 +13,7 @@ Standards-Version: 4.5.0
 Rules-Requires-Root: no
 Build-Depends:
  debhelper (>= 9~),
- clang [arm64],
+ gcc-mingw-w64-i686,
  lzma,
  flex,
  bison,
@@ -89,7 +89,6 @@ Build-Depends:
 Package: wineVERSION
 Architecture: all
 Multi-Arch: foreign
-Built-Using: ${built:Using}
 Depends:
  ${misc:Depends},
  wine64VERSION (>= ${source:Version}) | wine32VERSION (>= ${source:Version}),
@@ -118,7 +117,6 @@ Description: Windows API implementation - standard suite
 Package: wine32VERSION
 Architecture: i386 armel armhf
 Multi-Arch: foreign
-Built-Using: ${built:Using}
 Depends:
  ${misc:Depends},
  ${shlibs:Depends},
@@ -135,7 +133,6 @@ Description: Windows API implementation - 32-bit binary loader
 Package: wine64VERSION
 Architecture: amd64 arm64
 Multi-Arch: foreign
-Built-Using: ${built:Using}
 Depends:
  ${misc:Depends},
  ${shlibs:Depends},
@@ -153,7 +150,6 @@ Description: Windows API implementation - 64-bit binary loader
 Package: wine32VERSION-preloader
 Architecture: i386 armel armhf
 Multi-Arch: foreign
-Built-Using: ${built:Using}
 Depends:
  ${misc:Depends},
  wine32VERSION (= ${binary:Version}),
@@ -165,7 +161,6 @@ Description: Windows API implementation - prelinked 32-bit binary loader
 Package: wine64VERSION-preloader
 Architecture: amd64 arm64
 Multi-Arch: foreign
-Built-Using: ${built:Using}
 Depends:
  ${misc:Depends},
  wine64VERSION (= ${binary:Version}),
@@ -178,7 +173,6 @@ Package: wine32VERSION-tools
 Section: libdevel
 Architecture: i386 armel armhf
 Multi-Arch: foreign
-Built-Using: ${built:Using}
 Depends:
  gcc | gcc-multilib:amd64 [i386],
  ${perl:Depends},
@@ -200,7 +194,6 @@ Package: wine64VERSION-tools
 Section: libdevel
 Architecture: amd64 arm64
 Multi-Arch: foreign
-Built-Using: ${built:Using}
 Depends:
  gcc,
  ${perl:Depends},
@@ -226,7 +219,6 @@ Package: libwineVERSION
 Section: libs
 Architecture: amd64 i386 armel armhf arm64
 Multi-Arch: same
-Built-Using: ${built:Using}
 Depends:
  ${misc:Depends},
  ${dlopen:Depends},
@@ -261,7 +253,6 @@ Package: libwineVERSION-dev
 Section: libdevel
 Architecture: amd64 i386 armel armhf arm64
 Multi-Arch: same
-Built-Using: ${built:Using}
 Depends:
  ${misc:Depends},
  libwineVERSION (= ${binary:Version}),
@@ -299,8 +290,6 @@ Description: Windows API implementation - development files
 # Section: fonts
 # Architecture: all
 # Multi-Arch: foreign
-# Built-Using:
-#  ${built:Using}
 # Depends:
 #  ${misc:Depends},
 # Description: Windows API implementation - fonts
