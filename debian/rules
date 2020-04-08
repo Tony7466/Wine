@@ -48,10 +48,10 @@ export DEB_CFLAGS_MAINT_APPEND+=-Wno-unused-function
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-deprecated-declarations
 
 # configure options
-CONFLAGS=--with-mingw \
-         --with-gnutls \
+CONFLAGS=--with-gnutls \
          --without-hal \
          --without-oss \
+         --without-sane \
          --without-netapi \
          --disable-tests \
          --enable-werror \
@@ -68,6 +68,14 @@ ifeq ($(DEB_BUILD_ARCH_BITS), 64)
 CONFLAGS+=--enable-win64
 endif
 
+# build with mingw on intel architectures
+ifeq ($(DEB_HOST_ARCH), i386)
+CONFLAGS+=--with-mingw
+endif
+ifeq ($(DEB_HOST_ARCH), amd64)
+CONFLAGS+=--with-mingw
+endif
+
 # on armel build for armv5t
 ifeq ($(DEB_HOST_ARCH), armel)
 CONFLAGS+=--with-float-abi=soft
@@ -76,14 +84,14 @@ export DEB_LDFLAGS_MAINT_APPEND+=-march=armv5t
 endif
 
 # on arm64 build using clang
-#ifeq ($(DEB_HOST_ARCH), arm64)
-#export CC=clang
-#export CXX=clang++
-#export DEB_CFLAGS_MAINT_APPEND+=-Wno-absolute-value
-#export DEB_CFLAGS_MAINT_APPEND+=-Wno-enum-conversion
-#export DEB_CFLAGS_MAINT_APPEND+=-Wno-misleading-indentation
-#export DEB_CFLAGS_MAINT_APPEND+=-Wno-implicit-int-float-conversion
-#endif
+ifeq ($(DEB_HOST_ARCH), arm64)
+export CC=clang
+export CXX=clang++
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-absolute-value
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-enum-conversion
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-misleading-indentation
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-implicit-int-float-conversion
+endif
 
 # use date of the latest changelog update as the build date
 export WIDL_TIME_OVERRIDE=$(SOURCE_DATE_EPOCH)
@@ -186,11 +194,23 @@ override_dh_auto_install-arch: $(INSTALLS)
 	sed "s|BINDIR|$(BINDIR)|g" debian/scripts/winegcc.in > debian/tmp/winegcc$(DEBSUFFIX)
 	sed "s|BINDIR|$(BINDIR)|g;s|VERSION|$(VERSION)|g" debian/scripts/wineserver.in > debian/tmp/wineserver
 	chmod 755 debian/tmp/wineserver
+ifeq ($(DEB_BUILD_ARCH_BITS), 32)
+	echo >> debian/libwine$(VERSION).install
+	echo "# 16-bit windows PE files" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*.vxd" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*.dll16" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*.drv16" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*.exe16" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*.mod16" >> debian/libwine$(VERSION).install
+endif
 	dh_auto_install
 	for file in $$(find . ! -path "./debian/*" -name \*.man); do \
 	    rename=$$(basename $$file | sed "s/\\./$(DEBSUFFIX)./;s/UTF-8\\.//"); \
 	    mv $$file debian/tmp/$$rename || true; \
 	    done
+ifeq ($(DEB_BUILD_ARCH_BITS), 64)
+	cp debian/tmp/wine$(DEBSUFFIX).man debian/tmp/wine64$(DEBSUFFIX).man
+endif
 	test -f debian/tmp/$(BINDIR)/wine-preloader || \
 	    cp debian/scripts/wine-preloader debian/tmp/$(BINDIR)
 	rm -rf debian/tmp/usr/share/man

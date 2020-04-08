@@ -1,3 +1,11 @@
+wine-development (5.5-3) unstable; urgency=medium
+
+  * Drop libsane from the build dependencies.
+  * Do not build with mingw on arm architectures.
+  * Support building with mingw on amd64 (closes: #955690).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Thu, 02 Apr 2020 22:32:21 +0000
+
 wine-development (5.5-2) unstable; urgency=medium
 
   * Remove Built-Using fields.
