@@ -19,7 +19,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  # Sort keys file
  my $SORTKEYS = "tr10/allkeys.txt";
-@@ -433,15 +433,8 @@ my %joining_forms =
+@@ -434,15 +434,8 @@ my %joining_forms =
  sub open_data_file($$)
  {
      my ($base, $name) = @_;
@@ -36,7 +36,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      return *FILE;
  }
  
-@@ -2939,9 +2932,10 @@ dump_vertical( "dlls/gdi32/vertical.c" )
+@@ -2940,9 +2933,10 @@ dump_vertical( "dlls/gdi32/vertical.c" )
  dump_vertical( "dlls/wineps.drv/vertical.c" );
  dump_nameprep( "dlls/kernel32/nameprep.c" );
  

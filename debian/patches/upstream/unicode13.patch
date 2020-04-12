@@ -1,0 +1,16 @@
+description: build with unicode-data 13
+origin: backport, https://source.winehq.org/git/wine.git/commit/b83af7c763
+bug-debian: https://bugs.debian.org/954132
+
+--- a/tools/make_unicode
++++ b/tools/make_unicode
+@@ -193,7 +193,8 @@ my %matra_types =
+     "Top_And_Bottom_And_Right"  => 0x0c,
+     "Overstruck"  => 0x0d,
+     "Invisible"  => 0x0e,
+-    "Bottom_And_Left"  => 0x0f
++    "Bottom_And_Left"  => 0x0f,
++    "Top_And_Bottom_And_Left"  => 0x10,
+ );
+ 
+ my %nameprep_flags =

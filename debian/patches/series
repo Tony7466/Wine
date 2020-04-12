@@ -1,3 +1,5 @@
+upstream/unicode13.patch
+
 debianization/addons.patch
 debianization/makefile.patch
 debianization/winebuild.patch
