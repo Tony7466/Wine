@@ -1,3 +1,11 @@
+wine (5.0-4) unstable; urgency=medium
+
+  * Switch to git branches 'bullseye' and 'upstream-stable'.
+  * Support building with unicode-data 13 (closes: #954132).
+    - Thanks to Graham Inggs.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 20 Apr 2020 20:49:41 +0200
+
 wine (5.0-3) unstable; urgency=medium
 
   * Support building with clang 9 on arm64 (closes: #951507).
