@@ -22,6 +22,15 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          # We aggregate all types in here for cross-referencing.
          self.funcs = {}
+@@ -2798,7 +2801,7 @@ class VkRegistry(object):
+                 continue
+ 
+             platform = ext.attrib.get("platform")
+-            if platform and platform != "win32":
++            if platform and platform != "win32" and ext_name != "VK_KHR_ray_tracing":
+                 LOGGER.debug("Skipping extensions {0} for platform {1}".format(ext_name, platform))
+                 continue;
+ 
 @@ -3038,11 +3041,6 @@ def set_working_directory():
      path = os.path.dirname(path)
      os.chdir(path)

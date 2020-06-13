@@ -1,14 +1,3 @@
-# windows PE files
-debian/tmp/usr/lib/*/*/*.com
-debian/tmp/usr/lib/*/*/*.dll
-debian/tmp/usr/lib/*/*/*.drv
-debian/tmp/usr/lib/*/*/*.exe
-debian/tmp/usr/lib/*/*/*.acm
-debian/tmp/usr/lib/*/*/*.cpl
-debian/tmp/usr/lib/*/*/*.ocx
-debian/tmp/usr/lib/*/*/*.sys
-debian/tmp/usr/lib/*/*/*.tlb
-
 # fake PE files and their corresponding ELF files
 debian/tmp/usr/lib/*/*/*.*.so
 debian/tmp/usr/lib/*/*/fakedlls

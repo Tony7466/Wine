@@ -64,7 +64,7 @@ CONFLAGS=--with-gnutls \
          $(shell dpkg-buildflags --export=cmdline) \
 
 # enable wine64 on 64-bit architectures
-ifeq ($(DEB_BUILD_ARCH_BITS), 64)
+ifeq ($(DEB_HOST_ARCH_BITS), 64)
 CONFLAGS+=--enable-win64
 endif
 
@@ -190,11 +190,11 @@ override_dh_auto_install-arch: $(INSTALLS)
 	mkdir -p debian/tmp
 	cp ANNOUNCE debian/tmp/NEWS
 	cp tools/winedump/README debian/tmp/README.winedump
-	mv server/wineserver debian/tmp/wineserver$(DEB_BUILD_ARCH_BITS)
+	mv server/wineserver debian/tmp/wineserver$(DEB_HOST_ARCH_BITS)
 	sed "s|BINDIR|$(BINDIR)|g" debian/scripts/winegcc.in > debian/tmp/winegcc$(DEBSUFFIX)
 	sed "s|BINDIR|$(BINDIR)|g;s|VERSION|$(VERSION)|g" debian/scripts/wineserver.in > debian/tmp/wineserver
 	chmod 755 debian/tmp/wineserver
-ifeq ($(DEB_BUILD_ARCH_BITS), 32)
+ifeq ($(DEB_HOST_ARCH), i386)
 	echo >> debian/libwine$(VERSION).install
 	echo "# 16-bit windows PE files" >> debian/libwine$(VERSION).install
 	echo "debian/tmp/usr/lib/*/*/*.vxd" >> debian/libwine$(VERSION).install
@@ -203,12 +203,25 @@ ifeq ($(DEB_BUILD_ARCH_BITS), 32)
 	echo "debian/tmp/usr/lib/*/*/*.exe16" >> debian/libwine$(VERSION).install
 	echo "debian/tmp/usr/lib/*/*/*.mod16" >> debian/libwine$(VERSION).install
 endif
+ifneq (,$(filter $(DEB_HOST_ARCH),i386 amd64))
+	echo >> debian/libwine$(VERSION).install
+	echo "# windows PE files" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*.com" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*.dll" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*.drv" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*.exe" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*.acm" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*.cpl" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*.ocx" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*.sys" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*.tlb" >> debian/libwine$(VERSION).install
+endif
 	dh_auto_install
 	for file in $$(find . ! -path "./debian/*" -name \*.man); do \
 	    rename=$$(basename $$file | sed "s/\\./$(DEBSUFFIX)./;s/UTF-8\\.//"); \
 	    mv $$file debian/tmp/$$rename || true; \
 	    done
-ifeq ($(DEB_BUILD_ARCH_BITS), 64)
+ifeq ($(DEB_HOST_ARCH_BITS), 64)
 	cp debian/tmp/wine$(DEBSUFFIX).man debian/tmp/wine64$(DEBSUFFIX).man
 endif
 	test -f debian/tmp/$(BINDIR)/wine-preloader || \
