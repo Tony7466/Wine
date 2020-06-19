@@ -1,0 +1,11 @@
+CPE: cpe:/a:winehq:wine
+FAQ: https://wiki.winehq.org/FAQ
+Bug-Database: https://bugs.winehq.org
+Bug-Submit: https://bugs.winehq.org/enter_bug.cgi
+Changelog: https://source.winehq.org/git/wine.git/?a=shortlog
+Donation: https://www.winehq.org/donate
+Documentation: https://www.winehq.org/documentation
+Screenshots: https://appdb.winehq.org/objectManager.php?sClass=screenshot&sTitle=View+Screenshots
+Other-References: https://appdb.winehq.org
+Repository: https://source.winehq.org/git/wine.git
+Repository-Browse: https://source.winehq.org/git/wine.git

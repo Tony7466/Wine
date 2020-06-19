@@ -1,6 +1,14 @@
+wine-development (5.5-5) unstable; urgency=medium
+
+  * Fix some lintian warnings.
+  * Add upstream metadata information.
+  * Support building with vulkan 1.2.141 (closes: #963094).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 13 Jun 2020 22:58:54 +0000
+
 wine-development (5.5-4) unstable; urgency=medium
 
-  * Support building with vulkan 1.2.
+  * Support building with vulkan 1.2.135.
   * Fix installation of dlls on arm platforms (closes: #956028).
     - Thanks to Gianfranco Costamagna.
 

@@ -3,7 +3,39 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/winevulkan/make_vulkan
 +++ b/dlls/winevulkan/make_vulkan
-@@ -2113,7 +2113,9 @@ class VkGenerator(object):
+@@ -249,7 +249,10 @@ class VkBaseType(object):
+     def definition(self):
+         # Definition is similar for alias or non-alias as type
+         # is already set to alias.
+-        return "typedef {0} {1};\n".format(self.type, self.name)
++        if not self.type is None:
++            return "typedef {0} {1};\n".format(self.type, self.name)
++        else:
++            return "struct {0};\n".format(self.name)
+ 
+     def is_alias(self):
+         return bool(self.alias)
+@@ -388,7 +391,9 @@ class VkEnum(object):
+             if not value.is_alias() and v.value == value.value:
+                 LOGGER.debug("Adding duplicate enum value {0} to {1}".format(v, self.name))
+                 return
+-        self.values.append(value)
++        # Avoid adding duplicate aliases multiple times
++        if not any(x.name == value.name for x in self.values):
++            self.values.append(value)
+ 
+     def definition(self):
+         if self.is_alias():
+@@ -1251,7 +1256,7 @@ class VkParam(object):
+         # Since we have parsed all types before hand, this should not happen.
+         type_info = types.get(type_elem.text, None)
+         if type_info is None:
+-            LOGGER.err("type info not found for: {0}".format(type_elem.text))
++            LOGGER.error("type info not found for: {0}".format(type_elem.text))
+ 
+         return VkParam(type_info, const=const, pointer=pointer, name=name, array_len=array_len, dyn_array_len=dyn_array_len)
+ 
+@@ -2113,7 +2118,9 @@ class VkGenerator(object):
  
      def _generate_copyright(self, f, spec_file=False):
          f.write("# " if spec_file else "/* ")
@@ -14,7 +46,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          lines = ["", "This file is generated from Vulkan vk.xml file covered",
              "by the following copyright and permission notice:"]
          lines.extend([l.rstrip(" ") for l in self.registry.copyright.splitlines()])
-@@ -2553,6 +2555,7 @@ class VkRegistry(object):
+@@ -2553,6 +2560,7 @@ class VkRegistry(object):
          self.funcpointers = None
          self.handles = None
          self.structs = None
@@ -22,7 +54,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          # We aggregate all types in here for cross-referencing.
          self.funcs = {}
-@@ -2798,7 +2801,7 @@ class VkRegistry(object):
+@@ -2798,7 +2806,7 @@ class VkRegistry(object):
                  continue
  
              platform = ext.attrib.get("platform")
@@ -31,7 +63,18 @@ author: Michael Gilbert <mgilbert@debian.org>
                  LOGGER.debug("Skipping extensions {0} for platform {1}".format(ext_name, platform))
                  continue;
  
-@@ -3038,11 +3041,6 @@ def set_working_directory():
+@@ -2902,7 +2910,9 @@ class VkRegistry(object):
+ 
+             if type_info["category"] == "basetype":
+                 name = t.find("name").text
+-                _type = t.find("type").text
++                _type = None
++                if not t.find("type") is None:
++                    _type = t.find("type").text
+                 basetype = VkBaseType(name, _type)
+                 base_types.append(basetype)
+                 type_info["data"] = basetype
+@@ -3038,11 +3048,6 @@ def set_working_directory():
      path = os.path.dirname(path)
      os.chdir(path)
  
@@ -43,7 +86,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  def main():
      parser = argparse.ArgumentParser()
      parser.add_argument("-v", "--verbose", action="count", default=0, help="increase output verbosity")
-@@ -3057,8 +3055,7 @@ def main():
+@@ -3057,8 +3062,7 @@ def main():
  
      set_working_directory()
  
