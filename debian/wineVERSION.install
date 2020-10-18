@@ -1,5 +1,14 @@
+# wine launcher
 debian/tmp/wineDEBSUFFIX usr/bin
+
+# wine application loader
 debian/tmp/wineapploader usr/lib/wineVERSION
+
+# wine icon
 debian/tmp/wineDEBSUFFIX.svg usr/share/icons/hicolor/scalable/apps/
 
+# application metadata
 debian/org.winehq.wineVERSION.appdata.xml usr/share/metainfo/
+
+# language support files
+nls/*.nls usr/share/wineVERSION/wine/nls/

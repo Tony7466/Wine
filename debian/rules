@@ -44,9 +44,6 @@ export DEB_CFLAGS_MAINT_APPEND+=-Wno-shift-overflow
 # ignore all defined but unused function warnings
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-unused-function
 
-# ignore warning about deprecated CUPS API for now
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-deprecated-declarations
-
 # configure options
 CONFLAGS=--with-gnutls \
          --without-hal \
@@ -113,7 +110,7 @@ debian/wine64$(VERSION)%: debian/wine64VERSION%
 	sed "s/VERSION/$(VERSION)/g;s/DEBSUFFIX/$(DEBSUFFIX)/g" < $< > $@
 
 debian/libwine$(VERSION)%: debian/libwineVERSION%
-	sed s/VERSION/$(VERSION)/g < $< > $@
+	sed "s/VERSION/$(VERSION)/g;s/DEB_HOST_MULTIARCH/$(DEB_HOST_MULTIARCH)/g;s/DEB_HOST_GNU_CPU/$(DEB_HOST_GNU_CPU)/g" < $< > $@
 
 debian/bug-control: debian/bug-control.in
 	sed s/VERSION/$(VERSION)/g < $< > $@
@@ -227,6 +224,7 @@ endif
 	test -f debian/tmp/$(BINDIR)/wine-preloader || \
 	    cp debian/scripts/wine-preloader debian/tmp/$(BINDIR)
 	rm -rf debian/tmp/usr/share/man
+	rm -rf debian/tmp/usr/share/wine$(DEBSUFFIX)/wine/nls
 	rm -f debian/tmp/usr/lib/*/wineserver
 	rm -f debian/tmp/notepad*.man debian/tmp/winemine*.man
 
@@ -240,6 +238,9 @@ override_dh_shlibdeps:
 	    -dRecommends -edebian/tmp/elf.recommends \
 	    -Tdebian/libwine$(VERSION).substvars 2>/dev/null
 	dh_shlibdeps
+
+override_dh_makeshlibs:
+	dh_makeshlibs -X libwine
 
 override_dh_bugfiles:
 	dh_bugfiles -A

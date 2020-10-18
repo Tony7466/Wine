@@ -1,0 +1,16 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "configure" ] || [ "$1" = "triggered" ] || [ "$1" = "upgrade" ] ; then
+    in=/usr/DEB_HOST_GNU_CPU-w64-mingw32/lib/zlib*.dll
+    out=/usr/lib/DEB_HOST_MULTIARCH/wineVERSION/$(basename $in)
+
+    head -c 64 $in > $out
+    printf "%b" "Wine builtin DLL" >> $out
+    printf "%b" "\0\0\0\0\0\0\0\0" >> $out
+    printf "%b" "\0\0\0\0\0\0\0\0" >> $out
+    tail -c +97 $in >> $out
+fi
+
+#DEBHELPER#

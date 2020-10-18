@@ -7,6 +7,8 @@ debianization/version-string.patch
 debianization/winemenubuilder.patch
 debianization/wineserver-persistence.patch
 
+system/zlib.h
+
 disable/fold.patch
 disable/tests.patch
 disable/line-wrapping.patch
@@ -22,14 +24,6 @@ generate/request.patch
 
 binary-indep/manpages.patch
 binary-indep/sfnt2fon.patch
-
-zlib/opc.patch
-zlib/cabinet.patch
-zlib/wininet0.patch
-zlib/wininet1.patch
-zlib/wininet2.patch
-zlib/wininet3.patch
-zlib/compile-link.patch
 
 fixes/arm.patch
 fixes/arm64.patch
@@ -49,5 +43,4 @@ warnings/format-overflow.patch
 warnings/incorrect-bounds.patch
 warnings/argument-promotion.patch
 warnings/discarded-qualifiers.patch
-warnings/incompatible-pointers.patch
 warnings/uninitialized-variables.patch

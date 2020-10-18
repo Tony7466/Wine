@@ -1,0 +1,9 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "remove" ] ; then
+    rm -f /usr/lib/DEB_HOST_MULTIARCH/wineVERSION/zlib*.dll
+fi
+
+#DEBHELPER#

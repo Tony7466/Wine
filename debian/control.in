@@ -12,7 +12,7 @@ Vcs-Browser: https://salsa.debian.org/wine-team/wine
 Standards-Version: 4.5.0
 Rules-Requires-Root: no
 Build-Depends:
- debhelper (>= 9~),
+ debhelper (>= 9.20160403~),
  clang [arm64],
  gcc-mingw-w64-i686 [i386],
  gcc-mingw-w64-x86-64 [amd64],
@@ -103,8 +103,10 @@ Suggests:
  dosbox (>= 0.74-4.2~),
  exe-thumbnailer | kio-extras,
 Breaks:
+ libwineVERSION (<< 5.5-6),
  wine-stable (<< 3.0.1ubuntu1~),
 Replaces:
+ libwineVERSION (<< 5.5-6),
  wine-stable (<< 3.0.1ubuntu1~),
 Provides:
  wine,
@@ -224,6 +226,7 @@ Depends:
  ${misc:Depends},
  ${dlopen:Depends},
  ${shlibs:Depends},
+ libz-mingw-w64,
 Recommends:
  ${dlopen:Recommends},
  libgl1-mesa-dri,

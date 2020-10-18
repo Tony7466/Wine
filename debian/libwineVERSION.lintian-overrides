@@ -1,5 +1,3 @@
-# debhelper bug causes these
-package-has-unnecessary-activation-of-ldconfig-trigger
 # unfortunately wine doesn't do fortify hardening
 hardening-no-fortify-functions
 # incorrectly flagged
