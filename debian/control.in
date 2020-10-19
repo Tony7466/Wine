@@ -16,6 +16,7 @@ Build-Depends:
  clang [arm64],
  gcc-mingw-w64-i686 [i386],
  gcc-mingw-w64-x86-64 [amd64],
+ libz-mingw-w64-dev,
  lzma,
  flex,
  bison,

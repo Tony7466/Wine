@@ -1,3 +1,10 @@
+wine-development (5.5-7) unstable; urgency=medium
+
+  * Fix wine.desktop installation.
+  * Add libz-mingw-w64-dev to the build dependencies.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Mon, 19 Oct 2020 02:31:30 +0000
+
 wine-development (5.5-6) unstable; urgency=medium
 
   * Link against libz-mingw-w64.
