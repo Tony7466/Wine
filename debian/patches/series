@@ -40,6 +40,7 @@ warnings/arm64-tautological-compare.patch
 warnings/bison.patch
 warnings/array-bounds.patch
 warnings/format-overflow.patch
+warnings/strcpy-overflow.patch
 warnings/incorrect-bounds.patch
 warnings/argument-promotion.patch
 warnings/discarded-qualifiers.patch

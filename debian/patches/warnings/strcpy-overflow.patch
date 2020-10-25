@@ -1,0 +1,15 @@
+description: work around strcpy array bounds warning
+bug-debian: http://bugs.debian.org/966847
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/dlls/shell32/cpanelfolder.c
++++ b/dlls/shell32/cpanelfolder.c
+@@ -1077,7 +1077,7 @@ static HRESULT WINAPI IShellExecuteHookA
+ 	return E_INVALIDARG;
+ 
+     path[0] = '\"';
+-    lstrcpyA(path+1, pcpanel->szName);
++    lstrcpyA(path+1, (char*)pcpanel + offsetof(PIDLCPanelStruct, szName));
+ 
+     /* pass applet name to Control_RunDLL to distinguish between applets in one .cpl file */
+     lstrcatA(path, "\" ");
