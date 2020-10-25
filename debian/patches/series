@@ -7,7 +7,7 @@ debianization/version-string.patch
 debianization/winemenubuilder.patch
 debianization/wineserver-persistence.patch
 
-system/zlib.h
+system/zlib.patch
 
 disable/fold.patch
 disable/tests.patch

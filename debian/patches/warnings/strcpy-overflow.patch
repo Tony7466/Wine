@@ -4,7 +4,29 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/shell32/cpanelfolder.c
 +++ b/dlls/shell32/cpanelfolder.c
-@@ -1077,7 +1077,7 @@ static HRESULT WINAPI IShellExecuteHookA
+@@ -229,6 +229,7 @@ static HRESULT WINAPI ISF_ControlPanel_f
+ static LPITEMIDLIST _ILCreateCPanelApplet(LPCSTR name, LPCSTR displayName,
+  LPCSTR comment, int iconIdx)
+ {
++    char* offset;
+     PIDLCPanelStruct *p;
+     LPITEMIDLIST pidl;
+     PIDLDATA tmp;
+@@ -259,9 +260,10 @@ static LPITEMIDLIST _ILCreateCPanelApple
+     memcpy(pidl->mkid.abID, &tmp, 2+size0);
+ 
+     p = &((PIDLDATA*)pidl->mkid.abID)->u.cpanel;
+-    strcpy(p->szName, name);
+-    strcpy(p->szName+tmp.u.cpanel.offsDispName, displayName);
+-    strcpy(p->szName+tmp.u.cpanel.offsComment, comment);
++    offset = (char*)p + offsetof(PIDLCPanelStruct, szName);
++    strcpy(offset, name);
++    strcpy(offset+tmp.u.cpanel.offsDispName, displayName);
++    strcpy(offset+tmp.u.cpanel.offsComment, comment);
+ 
+     *(WORD*)((char*)pidl+(size+2)) = 0;
+ 
+@@ -1077,7 +1079,7 @@ static HRESULT WINAPI IShellExecuteHookA
  	return E_INVALIDARG;
  
      path[0] = '\"';

@@ -63,6 +63,9 @@ CONFLAGS=--with-gnutls \
 # enable wine64 on 64-bit architectures
 ifeq ($(DEB_HOST_ARCH_BITS), 64)
 CONFLAGS+=--enable-win64
+# set "-Wno-format" (many format strings are not yet updated for 64-bit)
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-format
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector,-format
 endif
 
 # build with mingw on intel architectures
@@ -240,7 +243,8 @@ override_dh_shlibdeps:
 	dh_shlibdeps
 
 override_dh_makeshlibs:
-	dh_makeshlibs -X libwine
+	# avoid unnecessary calls to ldconfig
+	dh_makeshlibs -n
 
 override_dh_bugfiles:
 	dh_bugfiles -A

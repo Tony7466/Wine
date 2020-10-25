@@ -1,3 +1,11 @@
+wine-development (5.5-9) unstable; urgency=medium
+
+  * Build with -Wno-format on 64-bit architectures.
+  * Work around another strcpy array bounds warning.
+  * Use dh_makeshlibs -n to avoid unnecessary calls to ldconfig.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 25 Oct 2020 19:40:26 +0000
+
 wine-development (5.5-8) unstable; urgency=medium
 
   * Work around strcpy array bounds warning (closes: #966847).
