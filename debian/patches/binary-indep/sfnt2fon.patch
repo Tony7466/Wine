@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3871,7 +3871,6 @@ WINE_CONFIG_MAKEFILE(dlls/xmllite/tests)
+@@ -3873,7 +3873,6 @@ WINE_CONFIG_MAKEFILE(dlls/xmllite/tests)
  WINE_CONFIG_MAKEFILE(dlls/xolehlp)
  WINE_CONFIG_MAKEFILE(dlls/xpsprint)
  WINE_CONFIG_MAKEFILE(dlls/xpssvcs)
@@ -11,7 +11,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  WINE_CONFIG_MAKEFILE(include)
  WINE_CONFIG_MAKEFILE(libs/port)
  WINE_CONFIG_MAKEFILE(libs/wine)
-@@ -3988,7 +3987,6 @@ WINE_CONFIG_MAKEFILE(programs/xcopy)
+@@ -3992,7 +3991,6 @@ WINE_CONFIG_MAKEFILE(programs/xcopy)
  WINE_CONFIG_MAKEFILE(programs/xcopy/tests)
  WINE_CONFIG_MAKEFILE(server)
  WINE_CONFIG_MAKEFILE(tools,,[test "x$enable_tools" = xno])

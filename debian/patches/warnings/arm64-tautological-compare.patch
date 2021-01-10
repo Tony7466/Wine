@@ -17,7 +17,7 @@ Last-Update: 2019-12-31
          return D3DERR_INVALIDCALL;
 --- a/dlls/gdiplus/graphics.c
 +++ b/dlls/gdiplus/graphics.c
-@@ -6836,8 +6836,8 @@ GpStatus WINGDIPAPI GdipTransformPoints(
+@@ -6853,8 +6853,8 @@ GpStatus WINGDIPAPI GdipTransformPoints(
                                          GpCoordinateSpace src_space, GpPointF *points, INT count)
  {
      if(!graphics || !points || count <= 0 ||

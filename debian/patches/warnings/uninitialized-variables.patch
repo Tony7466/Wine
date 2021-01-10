@@ -172,7 +172,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (FAILED(hr = clock_call_state_change(system_time, param, notification, clock->time_source_sink)))
 --- a/tools/winedump/msc.c
 +++ b/tools/winedump/msc.c
-@@ -281,7 +281,7 @@ static void do_field(const unsigned char
+@@ -282,7 +282,7 @@ static void do_field(const unsigned char
      const unsigned char*        ptr = start;
      const char*                 cstr;
      const struct p_string*      pstr;
@@ -181,7 +181,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      while (ptr < end)
      {
-@@ -573,7 +573,7 @@ static void do_field(const unsigned char
+@@ -574,7 +574,7 @@ static void do_field(const unsigned char
  static void codeview_dump_one_type(unsigned curr_type, const union codeview_type* type)
  {
      const union codeview_reftype* reftype = (const union codeview_reftype*)type;

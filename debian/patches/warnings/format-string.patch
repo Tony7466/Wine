@@ -1,0 +1,14 @@
+description: fix incorrect format string type
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/dlls/d3d9/d3d9_main.c
++++ b/dlls/d3d9/d3d9_main.c
+@@ -151,7 +151,7 @@ static ULONG WINAPI shader_validator_Rel
+ static HRESULT WINAPI shader_validator_Begin(IDirect3DShaderValidator9 *iface,
+         shader_validator_cb callback, void *context, DWORD_PTR arg3)
+ {
+-    FIXME("iface %p, callback %p, context %p, arg3 %#Ix, stub!\n", iface, callback, context, arg3);
++    FIXME("iface %p, callback %p, context %p, arg3 %lx, stub!\n", iface, callback, context, arg3);
+ 
+     return S_OK;
+ }

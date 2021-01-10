@@ -63,8 +63,8 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
 +        }
 +        else
 +        {
-+            const char *tmp_default = "/tmp";
-+            tmp_dir = xmalloc( sizeof(tmp_default) + 1 );
++            const char tmp_default[] = "/tmp";
++            tmp_dir = xmalloc( sizeof(tmp_default) );
 +            strcpy( tmp_dir, tmp_default );
 +        }
 +
@@ -166,7 +166,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  /* create the server directory and chdir to it */
  static char *create_server_dir( int force )
  {
-+    const char *server_root_prefix = "/run/user";
++    const char server_root_prefix[] = "/run/user";
      const char *prefix = getenv( "WINEPREFIX" );
 -    char *p, *config_dir;
 +    char *p, *config_dir, *run_dir;
@@ -181,13 +181,13 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
 -    if (!(server_dir = malloc( len ))) fatal_error( "out of memory\n" );
 -    sprintf( server_dir, "/tmp/.wine-%u", getuid() );
 +    /* use /run/user/$uid as wineserver's tmpdir by default */
-+    if (!(run_dir = malloc( sizeof(server_root_prefix) + 12 )))
++    if (!(run_dir = malloc( sizeof(server_root_prefix) + 13 )))
 +        fatal_error( "out of memory\n" );
 +    sprintf( run_dir, "%s/%u", server_root_prefix, getuid() );
 +
 +    if (opendir( run_dir )) /* use /run as the temporary directory */
 +    {
-+        len += sizeof(server_root_prefix) + 17;
++        len += strlen(run_dir) + 6;
 +        if (!(server_dir = malloc( len )))
 +            fatal_error( "out of memory\n" );
 +        sprintf( server_dir, "%s/wine", run_dir );

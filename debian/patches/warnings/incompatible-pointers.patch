@@ -21,7 +21,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              return INTERNET_SCHEME_FIRST + i;
  
      return INTERNET_SCHEME_UNKNOWN;
-@@ -4218,7 +4218,7 @@ static LPCWSTR INTERNET_GetSchemeString(
+@@ -4221,7 +4221,7 @@ static LPCWSTR INTERNET_GetSchemeString(
      index = scheme - INTERNET_SCHEME_FIRST;
      if (index >= ARRAY_SIZE(url_schemes))
          return NULL;

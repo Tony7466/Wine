@@ -43,6 +43,7 @@ warnings/arm64-tautological-compare.patch
 warnings/bison.patch
 warnings/printf-null.patch
 warnings/array-bounds.patch
+warnings/format-string.patch
 warnings/format-overflow.patch
 warnings/incorrect-bounds.patch
 warnings/argument-promotion.patch
