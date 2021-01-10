@@ -140,6 +140,7 @@
 #include "commctrl.h"
 #include "comctl32.h"
 #include "uxtheme.h"
+#include "shlwapi.h"
 
 #include "wine/debug.h"
 
@@ -1054,30 +1055,30 @@ static inline DWORD notify_customdraw (const LISTVIEW_INFO *infoPtr, DWORD dwDra
     return result;
 }
 
-static void prepaint_setup (const LISTVIEW_INFO *infoPtr, HDC hdc, NMLVCUSTOMDRAW *lpnmlvcd, BOOL SubItem)
+static void prepaint_setup (const LISTVIEW_INFO *infoPtr, HDC hdc, const NMLVCUSTOMDRAW *cd, BOOL SubItem)
 {
     COLORREF backcolor, textcolor;
+
+    backcolor = cd->clrTextBk;
+    textcolor = cd->clrText;
 
     /* apparently, for selected items, we have to override the returned values */
     if (!SubItem)
     {
-        if (lpnmlvcd->nmcd.uItemState & CDIS_SELECTED)
+        if (cd->nmcd.uItemState & CDIS_SELECTED)
         {
             if (infoPtr->bFocus)
             {
-                lpnmlvcd->clrTextBk = comctl32_color.clrHighlight;
-                lpnmlvcd->clrText   = comctl32_color.clrHighlightText;
+                backcolor = comctl32_color.clrHighlight;
+                textcolor = comctl32_color.clrHighlightText;
             }
             else if (infoPtr->dwStyle & LVS_SHOWSELALWAYS)
             {
-                lpnmlvcd->clrTextBk = comctl32_color.clr3dFace;
-                lpnmlvcd->clrText   = comctl32_color.clrBtnText;
+                backcolor = comctl32_color.clr3dFace;
+                textcolor = comctl32_color.clrBtnText;
             }
         }
     }
-
-    backcolor = lpnmlvcd->clrTextBk;
-    textcolor = lpnmlvcd->clrText;
 
     if (backcolor == CLR_DEFAULT)
         backcolor = comctl32_color.clrWindow;
@@ -4811,11 +4812,6 @@ static BOOL LISTVIEW_DrawItem(LISTVIEW_INFO *infoPtr, HDC hdc, INT nItem, ITERAT
 
             if (cdsubitemmode & CDRF_NOTIFYSUBITEMDRAW)
                 subitemstage = notify_customdraw(infoPtr, CDDS_SUBITEM | CDDS_ITEMPREPAINT, &nmlvcd);
-            else
-            {
-                nmlvcd.clrTextBk = infoPtr->clrTextBk;
-                nmlvcd.clrText   = infoPtr->clrText;
-            }
 
             if (subitems->nItem == 0 || (cdmode & CDRF_NOTIFYITEMDRAW))
                 prepaint_setup(infoPtr, hdc, &nmlvcd, FALSE);
@@ -6313,6 +6309,7 @@ static INT LISTVIEW_FindItemW(const LISTVIEW_INFO *infoPtr, INT nStart,
     INT nItem = nStart + 1, nLast = infoPtr->nItemCount, nNearestItem = -1;
     ULONG xdist, ydist, dist, mindist = 0x7fffffff;
     POINT Position, Destination;
+    int search_len = 0;
     LVITEMW lvItem;
 
     /* Search in virtual listviews should be done by application, not by
@@ -6378,6 +6375,9 @@ static INT LISTVIEW_FindItemW(const LISTVIEW_INFO *infoPtr, INT nStart,
 
     nItem = bNearest ? -1 : nStart + 1;
 
+    if (lpFindInfo->flags & (LVFI_PARTIAL | LVFI_SUBSTRING))
+        search_len = lstrlenW(lpFindInfo->psz);
+
 again:
     for (; nItem < nLast; nItem++)
     {
@@ -6398,12 +6398,11 @@ again:
 	{
             if (lpFindInfo->flags & (LVFI_PARTIAL | LVFI_SUBSTRING))
             {
-		WCHAR *p = wcsstr(lvItem.pszText, lpFindInfo->psz);
-		if (!p || p != lvItem.pszText) continue;
+                if (StrCmpNIW(lvItem.pszText, lpFindInfo->psz, search_len)) continue;
             }
             else
             {
-            	if (lstrcmpW(lvItem.pszText, lpFindInfo->psz) != 0) continue;
+                if (StrCmpIW(lvItem.pszText, lpFindInfo->psz)) continue;
             }
 	}
 
@@ -8740,7 +8739,7 @@ static DWORD LISTVIEW_SetIconSpacing(LISTVIEW_INFO *infoPtr, INT cx, INT cy)
     return oldspacing;
 }
 
-static inline void set_icon_size(SIZE *size, HIMAGELIST himl, BOOL small)
+static inline void set_icon_size(SIZE *size, HIMAGELIST himl, BOOL is_small)
 {
     INT cx, cy;
     
@@ -8751,8 +8750,8 @@ static inline void set_icon_size(SIZE *size, HIMAGELIST himl, BOOL small)
     }
     else
     {
-	size->cx = GetSystemMetrics(small ? SM_CXSMICON : SM_CXICON);
-	size->cy = GetSystemMetrics(small ? SM_CYSMICON : SM_CYICON);
+        size->cx = GetSystemMetrics(is_small ? SM_CXSMICON : SM_CXICON);
+        size->cy = GetSystemMetrics(is_small ? SM_CYSMICON : SM_CYICON);
     }
 }
 
@@ -11086,7 +11085,6 @@ static void LISTVIEW_UpdateSize(LISTVIEW_INFO *infoPtr)
 
         rect = infoPtr->rcList;
         rect.left += origin.x;
-        rect.top += origin.y;
 
         hl.prc = &rect;
 	hl.pwpos = &wp;

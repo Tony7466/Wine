@@ -524,6 +524,7 @@ HKLM,System\CurrentControlSet\Control\Class\{745a17a0-74d3-11d0-b6fe-00a0c90f57d
 
 [CurrentVersion]
 HKCU,%CurrentVersion%\Run,,16
+HKCU,%CurrentVersionNT%\Winlogon,,16
 HKLM,%CurrentVersion%,"CommonFilesDir",,"%16427%"
 HKLM,%CurrentVersion%,"FirstInstallDateTime",1,21,81,7c,23
 HKLM,%CurrentVersion%,"ProductId",,"12345-oem-0000001-54321"
@@ -549,7 +550,6 @@ HKLM,%CurrentVersion%\Setup,"SharedDir",,"%25%"
 HKLM,%CurrentVersion%\Setup\WindowsFeatures\WindowsMediaVersion,,,"12.0.7601.18840"
 HKLM,%CurrentVersion%\Shell Extensions\Approved,,16
 HKLM,%CurrentVersion%\Uninstall,,16
-HKLM,%CurrentVersion%\Winlogon,,16
 HKLM,%CurrentVersionNT%,"InstallDate",0x10003,1273299354
 HKLM,%CurrentVersionNT%,"ProductId",,"12345-oem-0000001-54321"
 HKLM,%CurrentVersionNT%,"RegisteredOrganization",2,""
@@ -572,6 +572,7 @@ HKLM,%CurrentVersionNT%\Perflib,,16
 HKLM,%CurrentVersionNT%\Ports,,16
 HKLM,%CurrentVersionNT%\Print,,16
 HKLM,%CurrentVersionNT%\ProfileList,,16
+HKLM,%CurrentVersionNT%\Winlogon,"Shell",,"explorer.exe"
 
 [CurrentVersionWow64]
 HKLM,%CurrentVersion%,"ProgramFilesDir (x86)",,"%16426%"
@@ -2816,6 +2817,16 @@ HKLM,%CurrentVersionNT%\Time Zones\Alaskan Standard Time\Dynamic DST,"2006",1,1c
 HKLM,%CurrentVersionNT%\Time Zones\Alaskan Standard Time\Dynamic DST,"2007",1,1c,02,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0b,00,00,00,01,00,02,00,00,00,00,00,00,00,00,00,03,00,00,00,02,00,02,00,00,00,00,00,00,00
 HKLM,%CurrentVersionNT%\Time Zones\Alaskan Standard Time\Dynamic DST,"FirstEntry",0x10001,"2006"
 HKLM,%CurrentVersionNT%\Time Zones\Alaskan Standard Time\Dynamic DST,"LastEntry",0x10001,"2007"
+HKLM,%CurrentVersionNT%\Time Zones\Aleutian Standard Time,"Display",,"America/Adak"
+HKLM,%CurrentVersionNT%\Time Zones\Aleutian Standard Time,"Dlt",,"Aleutian Daylight Time"
+HKLM,%CurrentVersionNT%\Time Zones\Aleutian Standard Time,"MUI_Dlt",,"@tzres.dll,-55201"
+HKLM,%CurrentVersionNT%\Time Zones\Aleutian Standard Time,"MUI_Std",,"@tzres.dll,-55200"
+HKLM,%CurrentVersionNT%\Time Zones\Aleutian Standard Time,"Std",,"Aleutian Standard Time"
+HKLM,%CurrentVersionNT%\Time Zones\Aleutian Standard Time,"TZI",1,58,02,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0b,00,00,00,01,00,02,00,00,00,00,00,00,00,00,00,03,00,00,00,02,00,02,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Aleutian Standard Time\Dynamic DST,"2006",1,58,02,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0a,00,00,00,05,00,02,00,00,00,00,00,00,00,00,00,04,00,00,00,01,00,02,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Aleutian Standard Time\Dynamic DST,"2007",1,58,02,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0b,00,00,00,01,00,02,00,00,00,00,00,00,00,00,00,03,00,00,00,02,00,02,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Aleutian Standard Time\Dynamic DST,"FirstEntry",0x10001,"2006"
+HKLM,%CurrentVersionNT%\Time Zones\Aleutian Standard Time\Dynamic DST,"LastEntry",0x10001,"2007"
 HKLM,%CurrentVersionNT%\Time Zones\Arab Standard Time,"Display",,"Asia/Riyadh"
 HKLM,%CurrentVersionNT%\Time Zones\Arab Standard Time,"Dlt",,"Arab Daylight Time"
 HKLM,%CurrentVersionNT%\Time Zones\Arab Standard Time,"MUI_Dlt",,"@tzres.dll,-41969"
@@ -2888,6 +2899,17 @@ HKLM,%CurrentVersionNT%\Time Zones\Belarus Standard Time,"MUI_Dlt",,"@tzres.dll,
 HKLM,%CurrentVersionNT%\Time Zones\Belarus Standard Time,"MUI_Std",,"@tzres.dll,-56576"
 HKLM,%CurrentVersionNT%\Time Zones\Belarus Standard Time,"Std",,"Belarus Standard Time"
 HKLM,%CurrentVersionNT%\Time Zones\Belarus Standard Time,"TZI",1,4c,ff,ff,ff,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Bougainville Standard Time,"Display",,"Pacific/Bougainville"
+HKLM,%CurrentVersionNT%\Time Zones\Bougainville Standard Time,"Dlt",,"Bougainville Daylight Time"
+HKLM,%CurrentVersionNT%\Time Zones\Bougainville Standard Time,"MUI_Dlt",,"@tzres.dll,-51969"
+HKLM,%CurrentVersionNT%\Time Zones\Bougainville Standard Time,"MUI_Std",,"@tzres.dll,-51968"
+HKLM,%CurrentVersionNT%\Time Zones\Bougainville Standard Time,"Std",,"Bougainville Standard Time"
+HKLM,%CurrentVersionNT%\Time Zones\Bougainville Standard Time,"TZI",1,6c,fd,ff,ff,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Bougainville Standard Time\Dynamic DST,"2013",1,a8,fd,ff,ff,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Bougainville Standard Time\Dynamic DST,"2014",1,a8,fd,ff,ff,00,00,00,00,c4,ff,ff,ff,00,00,01,00,03,00,01,00,00,00,00,00,00,00,00,00,00,00,0c,00,00,00,05,00,02,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Bougainville Standard Time\Dynamic DST,"2015",1,6c,fd,ff,ff,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Bougainville Standard Time\Dynamic DST,"FirstEntry",0x10001,"2013"
+HKLM,%CurrentVersionNT%\Time Zones\Bougainville Standard Time\Dynamic DST,"LastEntry",0x10001,"2015"
 HKLM,%CurrentVersionNT%\Time Zones\Canada Central Standard Time,"Display",,"America/Regina"
 HKLM,%CurrentVersionNT%\Time Zones\Canada Central Standard Time,"Dlt",,"Canada Central Daylight Time"
 HKLM,%CurrentVersionNT%\Time Zones\Canada Central Standard Time,"MUI_Dlt",,"@tzres.dll,-25713"
@@ -2971,6 +2993,17 @@ HKLM,%CurrentVersionNT%\Time Zones\Central Standard Time (Mexico),"MUI_Dlt",,"@t
 HKLM,%CurrentVersionNT%\Time Zones\Central Standard Time (Mexico),"MUI_Std",,"@tzres.dll,-32800"
 HKLM,%CurrentVersionNT%\Time Zones\Central Standard Time (Mexico),"Std",,"Central Standard Time (Mexico)"
 HKLM,%CurrentVersionNT%\Time Zones\Central Standard Time (Mexico),"TZI",1,68,01,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0a,00,00,00,05,00,02,00,00,00,00,00,00,00,00,00,04,00,00,00,01,00,02,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Chatham Islands Standard Time,"Display",,"Pacific/Chatham"
+HKLM,%CurrentVersionNT%\Time Zones\Chatham Islands Standard Time,"Dlt",,"Chatham Islands Daylight Time"
+HKLM,%CurrentVersionNT%\Time Zones\Chatham Islands Standard Time,"MUI_Dlt",,"@tzres.dll,-62305"
+HKLM,%CurrentVersionNT%\Time Zones\Chatham Islands Standard Time,"MUI_Std",,"@tzres.dll,-62304"
+HKLM,%CurrentVersionNT%\Time Zones\Chatham Islands Standard Time,"Std",,"Chatham Islands Standard Time"
+HKLM,%CurrentVersionNT%\Time Zones\Chatham Islands Standard Time,"TZI",1,03,fd,ff,ff,00,00,00,00,c4,ff,ff,ff,00,00,04,00,00,00,01,00,03,00,2d,00,00,00,00,00,00,00,09,00,00,00,05,00,02,00,2d,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Chatham Islands Standard Time\Dynamic DST,"2006",1,03,fd,ff,ff,00,00,00,00,c4,ff,ff,ff,00,00,03,00,00,00,03,00,03,00,2d,00,00,00,00,00,00,00,0a,00,00,00,01,00,02,00,2d,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Chatham Islands Standard Time\Dynamic DST,"2007",1,03,fd,ff,ff,00,00,00,00,c4,ff,ff,ff,00,00,03,00,00,00,03,00,03,00,2d,00,00,00,00,00,00,00,09,00,00,00,05,00,02,00,2d,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Chatham Islands Standard Time\Dynamic DST,"2008",1,03,fd,ff,ff,00,00,00,00,c4,ff,ff,ff,00,00,04,00,00,00,01,00,03,00,2d,00,00,00,00,00,00,00,09,00,00,00,05,00,02,00,2d,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Chatham Islands Standard Time\Dynamic DST,"FirstEntry",0x10001,"2006"
+HKLM,%CurrentVersionNT%\Time Zones\Chatham Islands Standard Time\Dynamic DST,"LastEntry",0x10001,"2008"
 HKLM,%CurrentVersionNT%\Time Zones\China Standard Time,"Display",,"Asia/Shanghai"
 HKLM,%CurrentVersionNT%\Time Zones\China Standard Time,"Dlt",,"China Daylight Time"
 HKLM,%CurrentVersionNT%\Time Zones\China Standard Time,"MUI_Dlt",,"@tzres.dll,-161"
@@ -3139,6 +3172,28 @@ HKLM,%CurrentVersionNT%\Time Zones\GTB Standard Time,"MUI_Dlt",,"@tzres.dll,-241
 HKLM,%CurrentVersionNT%\Time Zones\GTB Standard Time,"MUI_Std",,"@tzres.dll,-24192"
 HKLM,%CurrentVersionNT%\Time Zones\GTB Standard Time,"Std",,"GTB Standard Time"
 HKLM,%CurrentVersionNT%\Time Zones\GTB Standard Time,"TZI",1,88,ff,ff,ff,00,00,00,00,c4,ff,ff,ff,00,00,0a,00,00,00,05,00,04,00,00,00,00,00,00,00,00,00,03,00,00,00,05,00,03,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time,"Display",,"America/Port-au-Prince"
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time,"Dlt",,"Haiti Daylight Time"
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time,"MUI_Dlt",,"@tzres.dll,-2897"
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time,"MUI_Std",,"@tzres.dll,-2896"
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time,"Std",,"Haiti Standard Time"
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time,"TZI",1,2c,01,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0b,00,00,00,01,00,02,00,00,00,00,00,00,00,00,00,03,00,00,00,02,00,02,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2004",1,2c,01,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2005",1,2c,01,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0a,00,00,00,05,00,00,00,00,00,00,00,00,00,00,00,04,00,00,00,01,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2006",1,2c,01,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0a,00,00,00,05,00,00,00,00,00,00,00,00,00,00,00,04,00,00,00,01,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2007",1,2c,01,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2008",1,2c,01,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2009",1,2c,01,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2010",1,2c,01,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2011",1,2c,01,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2012",1,2c,01,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0b,00,00,00,01,00,02,00,00,00,00,00,00,00,00,00,03,00,00,00,02,00,02,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2013",1,2c,01,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0b,00,00,00,01,00,02,00,00,00,00,00,00,00,00,00,03,00,00,00,02,00,02,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2014",1,2c,01,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0b,00,00,00,01,00,02,00,00,00,00,00,00,00,00,00,03,00,00,00,02,00,02,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2015",1,2c,01,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0b,00,00,00,01,00,02,00,00,00,00,00,00,00,00,00,03,00,00,00,02,00,02,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2016",1,2c,01,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"2017",1,2c,01,00,00,00,00,00,00,c4,ff,ff,ff,00,00,0b,00,00,00,01,00,02,00,00,00,00,00,00,00,00,00,03,00,00,00,02,00,02,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"FirstEntry",0x10001,"2004"
+HKLM,%CurrentVersionNT%\Time Zones\Haiti Standard Time\Dynamic DST,"LastEntry",0x10001,"2017"
 HKLM,%CurrentVersionNT%\Time Zones\Hawaiian Standard Time,"Display",,"Pacific/Honolulu"
 HKLM,%CurrentVersionNT%\Time Zones\Hawaiian Standard Time,"Dlt",,"Hawaiian Daylight Time"
 HKLM,%CurrentVersionNT%\Time Zones\Hawaiian Standard Time,"MUI_Dlt",,"@tzres.dll,-53377"
@@ -3276,6 +3331,12 @@ HKLM,%CurrentVersionNT%\Time Zones\Magadan Standard Time,"MUI_Dlt",,"@tzres.dll,
 HKLM,%CurrentVersionNT%\Time Zones\Magadan Standard Time,"MUI_Std",,"@tzres.dll,-8832"
 HKLM,%CurrentVersionNT%\Time Zones\Magadan Standard Time,"Std",,"Magadan Standard Time"
 HKLM,%CurrentVersionNT%\Time Zones\Magadan Standard Time,"TZI",1,a8,fd,ff,ff,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+HKLM,%CurrentVersionNT%\Time Zones\Marquesas Standard Time,"Display",,"Pacific/Marquesas"
+HKLM,%CurrentVersionNT%\Time Zones\Marquesas Standard Time,"Dlt",,"Marquesas Daylight Time"
+HKLM,%CurrentVersionNT%\Time Zones\Marquesas Standard Time,"MUI_Dlt",,"@tzres.dll,-20737"
+HKLM,%CurrentVersionNT%\Time Zones\Marquesas Standard Time,"MUI_Std",,"@tzres.dll,-20736"
+HKLM,%CurrentVersionNT%\Time Zones\Marquesas Standard Time,"Std",,"Marquesas Standard Time"
+HKLM,%CurrentVersionNT%\Time Zones\Marquesas Standard Time,"TZI",1,3a,02,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
 HKLM,%CurrentVersionNT%\Time Zones\Mauritius Standard Time,"Display",,"Indian/Mauritius"
 HKLM,%CurrentVersionNT%\Time Zones\Mauritius Standard Time,"Dlt",,"Mauritius Daylight Time"
 HKLM,%CurrentVersionNT%\Time Zones\Mauritius Standard Time,"MUI_Dlt",,"@tzres.dll,-60897"

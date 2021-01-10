@@ -127,18 +127,18 @@ static ULONG WINAPI ddraw_IAMMediaStream_Release(IAMMediaStream *iface)
 
 /*** IMediaStream methods ***/
 static HRESULT WINAPI ddraw_IAMMediaStream_GetMultiMediaStream(IAMMediaStream *iface,
-        IMultiMediaStream** multi_media_stream)
+        IMultiMediaStream **mmstream)
 {
-    struct ddraw_stream *This = impl_from_IAMMediaStream(iface);
+    struct ddraw_stream *stream = impl_from_IAMMediaStream(iface);
 
-    TRACE("(%p/%p)->(%p)\n", This, iface, multi_media_stream);
+    TRACE("stream %p, mmstream %p.\n", stream, mmstream);
 
-    if (!multi_media_stream)
+    if (!mmstream)
         return E_POINTER;
 
-    IMultiMediaStream_AddRef(This->parent);
-    *multi_media_stream = This->parent;
-
+    if (stream->parent)
+        IMultiMediaStream_AddRef(stream->parent);
+    *mmstream = stream->parent;
     return S_OK;
 }
 
@@ -392,6 +392,9 @@ static HRESULT WINAPI ddraw_IDirectDrawMediaStream_GetDirectDraw(IDirectDrawMedi
     struct ddraw_stream *This = impl_from_IDirectDrawMediaStream(iface);
 
     TRACE("(%p)->(%p)\n", iface, ddraw);
+
+    if (!ddraw)
+        return E_POINTER;
 
     *ddraw = NULL;
     if (!This->ddraw)

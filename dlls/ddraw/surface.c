@@ -5405,7 +5405,8 @@ static HRESULT WINAPI d3d_texture1_Load(IDirect3DTexture *iface, IDirect3DTextur
  * The VTable
  *****************************************************************************/
 
-static const struct IDirectDrawSurface7Vtbl ddraw_surface7_vtbl =
+/* Some windowed mode wrappers expect this vtbl to be writable. */
+static struct IDirectDrawSurface7Vtbl ddraw_surface7_vtbl =
 {
     /* IUnknown */
     ddraw_surface7_QueryInterface,
@@ -5464,7 +5465,8 @@ static const struct IDirectDrawSurface7Vtbl ddraw_surface7_vtbl =
     ddraw_surface7_GetLOD,
 };
 
-static const struct IDirectDrawSurface4Vtbl ddraw_surface4_vtbl =
+/* Some windowed mode wrappers expect this vtbl to be writable. */
+static struct IDirectDrawSurface4Vtbl ddraw_surface4_vtbl =
 {
     /* IUnknown */
     ddraw_surface4_QueryInterface,
@@ -5518,7 +5520,8 @@ static const struct IDirectDrawSurface4Vtbl ddraw_surface4_vtbl =
     ddraw_surface4_ChangeUniquenessValue,
 };
 
-static const struct IDirectDrawSurface3Vtbl ddraw_surface3_vtbl =
+/* Some windowed mode wrappers expect this vtbl to be writable. */
+static struct IDirectDrawSurface3Vtbl ddraw_surface3_vtbl =
 {
     /* IUnknown */
     ddraw_surface3_QueryInterface,
@@ -5566,7 +5569,8 @@ static const struct IDirectDrawSurface3Vtbl ddraw_surface3_vtbl =
     ddraw_surface3_SetSurfaceDesc,
 };
 
-static const struct IDirectDrawSurface2Vtbl ddraw_surface2_vtbl =
+/* Some windowed mode wrappers expect this vtbl to be writable. */
+static struct IDirectDrawSurface2Vtbl ddraw_surface2_vtbl =
 {
     /* IUnknown */
     ddraw_surface2_QueryInterface,
@@ -5612,7 +5616,8 @@ static const struct IDirectDrawSurface2Vtbl ddraw_surface2_vtbl =
     ddraw_surface2_PageUnlock,
 };
 
-static const struct IDirectDrawSurfaceVtbl ddraw_surface1_vtbl =
+/* Bad Mojo Redux expects this vtbl to be writable. */
+static struct IDirectDrawSurfaceVtbl ddraw_surface1_vtbl =
 {
     /* IUnknown */
     ddraw_surface1_QueryInterface,
@@ -6209,6 +6214,7 @@ HRESULT ddraw_surface_create(struct ddraw *ddraw, const DDSURFACEDESC2 *surface_
 
         if (desc->ddsCaps.dwCaps2 & (DDSCAPS2_TEXTUREMANAGE | DDSCAPS2_D3DTEXTUREMANAGE))
         {
+            wined3d_desc.bind_flags &= ~WINED3D_BIND_RENDER_TARGET;
             wined3d_desc.access = WINED3D_RESOURCE_ACCESS_GPU | WINED3D_RESOURCE_ACCESS_CPU
                     | WINED3D_RESOURCE_ACCESS_MAP_R | WINED3D_RESOURCE_ACCESS_MAP_W;
             /* Managed textures have the system memory flag set. */

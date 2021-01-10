@@ -734,6 +734,7 @@ static void delete_device(struct device *device)
 
     RegCloseKey(device->key);
     heap_free(device->instanceId);
+    heap_free(device->drivers);
 
     LIST_FOR_EACH_ENTRY_SAFE(iface, next, &device->interfaces,
             struct device_iface, entry)
@@ -4160,7 +4161,11 @@ BOOL WINAPI SetupDiGetINFClassW(PCWSTR inf, LPGUID class_guid, PWSTR class_name,
     have_name = 0 < dret;
 
     if (dret >= MAX_PATH -1) FIXME("buffer might be too small\n");
-    if (have_guid && !have_name) FIXME("class name lookup via guid not implemented\n");
+    if (have_guid && !have_name)
+    {
+        class_name[0] = '\0';
+        FIXME("class name lookup via guid not implemented\n");
+    }
 
     if (have_name)
     {
@@ -4224,6 +4229,7 @@ BOOL WINAPI SetupDiGetDevicePropertyW(HDEVINFO devinfo, PSP_DEVINFO_DATA device_
     {
         value_size = prop_buff_size;
         ls = RegQueryValueExW(hkey, NULL, NULL, &value_type, prop_buff, &value_size);
+        RegCloseKey(hkey);
     }
 
     switch (ls)
@@ -4570,16 +4576,42 @@ BOOL WINAPI SetupDiBuildDriverInfoList(HDEVINFO devinfo, SP_DEVINFO_DATA *device
     return TRUE;
 }
 
+static BOOL copy_driver_data(SP_DRVINFO_DATA_W *data, const struct driver *driver)
+{
+    INFCONTEXT ctx;
+    HINF hinf;
+
+    if ((hinf = SetupOpenInfFileW(driver->inf_path, NULL, INF_STYLE_WIN4, NULL)) == INVALID_HANDLE_VALUE)
+        return FALSE;
+
+    data->ProviderName[0] = 0;
+    if (SetupFindFirstLineW(hinf, L"Version", L"Provider", &ctx))
+        SetupGetStringFieldW(&ctx, 1, data->ProviderName, ARRAY_SIZE(data->ProviderName), NULL);
+    wcscpy(data->Description, driver->description);
+    wcscpy(data->MfgName, driver->manufacturer);
+    data->DriverType = SPDIT_COMPATDRIVER;
+
+    SetupCloseInfFile(hinf);
+
+    return TRUE;
+}
+
+static void driver_data_wtoa(SP_DRVINFO_DATA_A *a, const SP_DRVINFO_DATA_W *w)
+{
+    a->DriverType = w->DriverType;
+    a->Reserved = w->Reserved;
+    WideCharToMultiByte(CP_ACP, 0, w->Description, -1, a->Description, sizeof(a->Description), NULL, NULL);
+    WideCharToMultiByte(CP_ACP, 0, w->MfgName, -1, a->MfgName, sizeof(a->MfgName), NULL, NULL);
+    WideCharToMultiByte(CP_ACP, 0, w->ProviderName, -1, a->ProviderName, sizeof(a->ProviderName), NULL, NULL);
+}
+
 /***********************************************************************
  *              SetupDiEnumDriverInfoW (SETUPAPI.@)
  */
 BOOL WINAPI SetupDiEnumDriverInfoW(HDEVINFO devinfo, SP_DEVINFO_DATA *device_data,
         DWORD type, DWORD index, SP_DRVINFO_DATA_W *driver_data)
 {
-    static const WCHAR providerW[] = {'P','r','o','v','i','d','e','r',0};
     struct device *device;
-    INFCONTEXT ctx;
-    HINF hinf;
 
     TRACE("devinfo %p, device_data %p, type %#x, index %u, driver_data %p.\n",
             devinfo, device_data, type, index, driver_data);
@@ -4600,19 +4632,7 @@ BOOL WINAPI SetupDiEnumDriverInfoW(HDEVINFO devinfo, SP_DEVINFO_DATA *device_dat
         return FALSE;
     }
 
-    if ((hinf = SetupOpenInfFileW(device->drivers[index].inf_path, NULL, INF_STYLE_WIN4, NULL)) == INVALID_HANDLE_VALUE)
-        return FALSE;
-
-    driver_data->ProviderName[0] = 0;
-    if (SetupFindFirstLineW(hinf, Version, providerW, &ctx))
-        SetupGetStringFieldW(&ctx, 1, driver_data->ProviderName, ARRAY_SIZE(driver_data->ProviderName), NULL);
-    lstrcpyW(driver_data->Description, device->drivers[index].description);
-    lstrcpyW(driver_data->MfgName, device->drivers[index].manufacturer);
-    driver_data->DriverType = SPDIT_COMPATDRIVER;
-
-    SetupCloseInfFile(hinf);
-
-    return TRUE;
+    return copy_driver_data(driver_data, &device->drivers[index]);
 }
 
 /***********************************************************************
@@ -4626,14 +4646,8 @@ BOOL WINAPI SetupDiEnumDriverInfoA(HDEVINFO devinfo, SP_DEVINFO_DATA *device_dat
 
     driver_dataW.cbSize = sizeof(driver_dataW);
     ret = SetupDiEnumDriverInfoW(devinfo, device_data, type, index, &driver_dataW);
-    driver_data->DriverType = driver_dataW.DriverType;
-    driver_data->Reserved = driver_dataW.Reserved;
-    WideCharToMultiByte(CP_ACP, 0, driver_dataW.Description, -1, driver_data->Description,
-            sizeof(driver_data->Description), NULL, NULL);
-    WideCharToMultiByte(CP_ACP, 0, driver_dataW.MfgName, -1, driver_data->MfgName,
-            sizeof(driver_data->MfgName), NULL, NULL);
-    WideCharToMultiByte(CP_ACP, 0, driver_dataW.ProviderName, -1, driver_data->ProviderName,
-            sizeof(driver_data->ProviderName), NULL, NULL);
+    if (ret) driver_data_wtoa(driver_data, &driver_dataW);
+
     return ret;
 }
 
@@ -4661,6 +4675,41 @@ BOOL WINAPI SetupDiSelectBestCompatDrv(HDEVINFO devinfo, SP_DEVINFO_DATA *device
     device->selected_driver = &device->drivers[0];
 
     return TRUE;
+}
+
+/***********************************************************************
+ *              SetupDiGetSelectedDriverW (SETUPAPI.@)
+ */
+BOOL WINAPI SetupDiGetSelectedDriverW(HDEVINFO devinfo, SP_DEVINFO_DATA *device_data, SP_DRVINFO_DATA_W *driver_data)
+{
+    struct device *device;
+
+    TRACE("devinfo %p, device_data %p, driver_data %p.\n", devinfo, device_data, driver_data);
+
+    if (!(device = get_device(devinfo, device_data)))
+        return FALSE;
+
+    if (!device->selected_driver)
+    {
+        SetLastError(ERROR_NO_DRIVER_SELECTED);
+        return FALSE;
+    }
+
+    return copy_driver_data(driver_data, device->selected_driver);
+}
+
+/***********************************************************************
+ *              SetupDiGetSelectedDriverA (SETUPAPI.@)
+ */
+BOOL WINAPI SetupDiGetSelectedDriverA(HDEVINFO devinfo, SP_DEVINFO_DATA *device_data, SP_DRVINFO_DATA_A *driver_data)
+{
+    SP_DRVINFO_DATA_W driver_dataW;
+    BOOL ret;
+
+    driver_dataW.cbSize = sizeof(driver_dataW);
+    if ((ret = SetupDiGetSelectedDriverW(devinfo, device_data, &driver_dataW)))
+        driver_data_wtoa(driver_data, &driver_dataW);
+    return ret;
 }
 
 /***********************************************************************

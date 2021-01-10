@@ -1941,11 +1941,8 @@ static LRESULT WINAPI cd_wndproc(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 return CDRF_NOTIFYSUBITEMDRAW|CDRF_NOTIFYPOSTPAINT;
             case CDDS_ITEMPREPAINT | CDDS_SUBITEM:
                 clr = GetBkColor(nmlvcd->nmcd.hdc);
-                todo_wine_if(showsel_always && is_selected && nmlvcd->iSubItem)
-                {
-                    ok(nmlvcd->clrTextBk == CLR_DEFAULT, "Unexpected text background %#x.\n", nmlvcd->clrTextBk);
-                    ok(nmlvcd->clrText == RGB(0, 255, 0), "Unexpected text color %#x.\n", nmlvcd->clrText);
-                }
+                ok(nmlvcd->clrTextBk == CLR_DEFAULT, "Unexpected text background %#x.\n", nmlvcd->clrTextBk);
+                ok(nmlvcd->clrText == RGB(0, 255, 0), "Unexpected text color %#x.\n", nmlvcd->clrText);
                 if (showsel_always && is_selected && nmlvcd->iSubItem)
                     ok(clr == GetSysColor(COLOR_3DFACE), "Unexpected background color %#x.\n", clr);
                 else
@@ -1962,11 +1959,8 @@ static LRESULT WINAPI cd_wndproc(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                     ok(clr == c0ffee, "Unexpected background color %#x.\n", clr);
                 }
 
-                todo_wine_if(showsel_always)
-                {
-                    ok(nmlvcd->clrTextBk == CLR_DEFAULT, "Unexpected text background color %#x.\n", nmlvcd->clrTextBk);
-                    ok(nmlvcd->clrText == RGB(0, 255, 0), "got 0x%x\n", nmlvcd->clrText);
-                }
+                ok(nmlvcd->clrTextBk == CLR_DEFAULT, "Unexpected text background color %#x.\n", nmlvcd->clrTextBk);
+                ok(nmlvcd->clrText == RGB(0, 255, 0), "got 0x%x\n", nmlvcd->clrText);
                 return CDRF_DODEFAULT;
             }
             return CDRF_DODEFAULT;
@@ -5365,6 +5359,19 @@ static void test_finditem(void)
     fi.flags = LVFI_SUBSTRING | LVFI_PARTIAL;
     r = SendMessageA(hwnd, LVM_FINDITEMA, -1, (LPARAM)&fi);
     expect(0, r);
+
+    /* Case sensitivity. */
+    strcpy(f, "Foo");
+    fi.flags = LVFI_STRING;
+    fi.psz = f;
+    r = SendMessageA(hwnd, LVM_FINDITEMA, -1, (LPARAM)&fi);
+    ok(!r, "Unexpected item index %d.\n", r);
+
+    strcpy(f, "F");
+    fi.flags = LVFI_SUBSTRING;
+    fi.psz = f;
+    r = SendMessageA(hwnd, LVM_FINDITEMA, -1, (LPARAM)&fi);
+    ok(!r, "Unexpected item index %d.\n", r);
 
     DestroyWindow(hwnd);
 }
