@@ -299,6 +299,8 @@ static inline struct dwrite_font *impl_from_IDWriteFont3(IDWriteFont3 *iface)
     return CONTAINING_RECORD(iface, struct dwrite_font, IDWriteFont3_iface);
 }
 
+static struct dwrite_font *unsafe_impl_from_IDWriteFont(IDWriteFont *iface);
+
 static inline struct dwrite_fontfile *impl_from_IDWriteFontFile(IDWriteFontFile *iface)
 {
     return CONTAINING_RECORD(iface, struct dwrite_fontfile, IDWriteFontFile_iface);
@@ -470,6 +472,29 @@ void fontface_detach_from_cache(IDWriteFontFace5 *iface)
 {
     struct dwrite_fontface *fontface = impl_from_IDWriteFontFace5(iface);
     fontface->cached = NULL;
+}
+
+static BOOL is_same_fontfile(IDWriteFontFile *left, IDWriteFontFile *right)
+{
+    UINT32 left_key_size, right_key_size;
+    const void *left_key, *right_key;
+    HRESULT hr;
+
+    if (left == right)
+        return TRUE;
+
+    hr = IDWriteFontFile_GetReferenceKey(left, &left_key, &left_key_size);
+    if (FAILED(hr))
+        return FALSE;
+
+    hr = IDWriteFontFile_GetReferenceKey(right, &right_key, &right_key_size);
+    if (FAILED(hr))
+        return FALSE;
+
+    if (left_key_size != right_key_size)
+        return FALSE;
+
+    return !memcmp(left_key, right_key, left_key_size);
 }
 
 static HRESULT WINAPI dwritefontface_QueryInterface(IDWriteFontFace5 *iface, REFIID riid, void **obj)
@@ -1446,6 +1471,22 @@ static HRESULT WINAPI dwritefontface5_GetFontResource(IDWriteFontFace5 *iface, I
     return IDWriteFactory7_CreateFontResource(fontface->factory, fontface->files[0], fontface->index, resource);
 }
 
+static BOOL WINAPI dwritefontface5_Equals(IDWriteFontFace5 *iface, IDWriteFontFace *other)
+{
+    struct dwrite_fontface *fontface = impl_from_IDWriteFontFace5(iface), *other_face;
+
+    TRACE("%p, %p.\n", iface, other);
+
+    if (!(other_face = unsafe_impl_from_IDWriteFontFace(other)))
+        return FALSE;
+
+    /* TODO: add variations support */
+
+    return fontface->index == other_face->index &&
+            fontface->simulations == other_face->simulations &&
+            is_same_fontfile(fontface->files[0], other_face->files[0]);
+}
+
 static const IDWriteFontFace5Vtbl dwritefontfacevtbl =
 {
     dwritefontface_QueryInterface,
@@ -1505,6 +1546,7 @@ static const IDWriteFontFace5Vtbl dwritefontfacevtbl =
     dwritefontface5_GetFontAxisValues,
     dwritefontface5_HasVariations,
     dwritefontface5_GetFontResource,
+    dwritefontface5_Equals,
 };
 
 static HRESULT get_fontface_from_font(struct dwrite_font *font, IDWriteFontFace5 **fontface)
@@ -1821,11 +1863,18 @@ static HRESULT WINAPI dwritefont3_CreateFontFace(IDWriteFont3 *iface, IDWriteFon
     return get_fontface_from_font(font, (IDWriteFontFace5 **)fontface);
 }
 
-static BOOL WINAPI dwritefont3_Equals(IDWriteFont3 *iface, IDWriteFont *font)
+static BOOL WINAPI dwritefont3_Equals(IDWriteFont3 *iface, IDWriteFont *other)
 {
-    struct dwrite_font *This = impl_from_IDWriteFont3(iface);
-    FIXME("(%p)->(%p): stub\n", This, font);
-    return FALSE;
+    struct dwrite_font *font = impl_from_IDWriteFont3(iface), *other_font;
+
+    TRACE("%p, %p.\n", iface, other);
+
+    if (!(other_font = unsafe_impl_from_IDWriteFont(other)))
+        return FALSE;
+
+    return font->data->face_index == other_font->data->face_index
+            && font->data->simulations == other_font->data->simulations
+            && is_same_fontfile(font->data->file, other_font->data->file);
 }
 
 static HRESULT WINAPI dwritefont3_GetFontFaceReference(IDWriteFont3 *iface, IDWriteFontFaceReference **reference)
@@ -2689,29 +2738,6 @@ static HRESULT WINAPI dwritefontcollection_FindFamilyName(IDWriteFontCollection3
     *index = collection_find_family(collection, name);
     *exists = *index != ~0u;
     return S_OK;
-}
-
-static BOOL is_same_fontfile(IDWriteFontFile *left, IDWriteFontFile *right)
-{
-    UINT32 left_key_size, right_key_size;
-    const void *left_key, *right_key;
-    HRESULT hr;
-
-    if (left == right)
-        return TRUE;
-
-    hr = IDWriteFontFile_GetReferenceKey(left, &left_key, &left_key_size);
-    if (FAILED(hr))
-        return FALSE;
-
-    hr = IDWriteFontFile_GetReferenceKey(right, &right_key, &right_key_size);
-    if (FAILED(hr))
-        return FALSE;
-
-    if (left_key_size != right_key_size)
-        return FALSE;
-
-    return !memcmp(left_key, right_key, left_key_size);
 }
 
 static HRESULT WINAPI dwritefontcollection_GetFontFromFontFace(IDWriteFontCollection3 *iface, IDWriteFontFace *face,
@@ -6263,9 +6289,21 @@ static HRESULT WINAPI fontfacereference_EnqueueFileFragmentDownloadRequest(IDWri
 
 static HRESULT WINAPI fontfacereference1_CreateFontFace(IDWriteFontFaceReference1 *iface, IDWriteFontFace5 **fontface)
 {
-    FIXME("%p, %p.\n", iface, fontface);
+    struct dwrite_fontfacereference *reference = impl_from_IDWriteFontFaceReference1(iface);
+    IDWriteFontFace3 *fontface3;
+    HRESULT hr;
 
-    return E_NOTIMPL;
+    TRACE("%p, %p.\n", iface, fontface);
+
+    /* FIXME: created instance should likely respect given axis. */
+    if (SUCCEEDED(hr = IDWriteFontFaceReference1_CreateFontFaceWithSimulations(iface, reference->simulations,
+            &fontface3)))
+    {
+        hr = IDWriteFontFace3_QueryInterface(fontface3, &IID_IDWriteFontFace5, (void **)fontface);
+        IDWriteFontFace3_Release(fontface3);
+    }
+
+    return hr;
 }
 
 static UINT32 WINAPI fontfacereference1_GetFontAxisValueCount(IDWriteFontFaceReference1 *iface)

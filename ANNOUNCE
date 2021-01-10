@@ -1,25 +1,12 @@
-The Wine team is proud to announce that the stable release Wine 5.0
-is now available.
+The Wine maintenance release 5.0.3 is now available.
 
-This release represents a year of development effort and over 7,400
-individual changes. It contains a large number of improvements that
-are listed in the release notes below. The main highlights are:
-
-  - Builtin modules in PE format.
-  - Multi-monitor support.
-  - XAudio2 reimplementation.
-  - Vulkan 1.1 support.
-
-This release is dedicated to the memory of Józef Kucia, who passed
-away in August 2019 at the young age of 30. Józef was a major
-contributor to Wine's Direct3D implementation, and the lead developer
-of the vkd3d project. His skills and his kindness are sorely missed by
-all of us.
+What's new in this release (see below for details):
+  - Various bug fixes
 
 The source is available from the following locations:
 
-  https://dl.winehq.org/wine/source/5.0/wine-5.0.tar.xz
-  http://mirrors.ibiblio.org/wine/source/5.0/wine-5.0.tar.xz
+  https://dl.winehq.org/wine/source/5.0/wine-5.0.3.tar.xz
+  http://mirrors.ibiblio.org/wine/source/5.0/wine-5.0.3.tar.xz
 
 Binary packages for various distributions will be available from:
 
@@ -35,393 +22,193 @@ AUTHORS in the distribution for the complete list.
 
 ----------------------------------------------------------------
 
-What's new in Wine 5.0
-======================
-
-
-*** PE modules
-
-- Most modules are built in PE format (Portable Executable, the
-  Windows binary format) instead of ELF when the MinGW compiler is
-  available. This helps various copy protection schemes that check
-  that the on-disk and in-memory contents of system modules are
-  identical.
-
-- The actual PE binaries are copied into the Wine prefix instead of
-  the fake DLL files. This makes the prefix look more like a real
-  Windows installation, at the cost of some extra disk space.
-
-- Modules that have been converted to PE can use standard wide-char C
-  functions, as well as wide-char character constants like L"abc".
-  This makes the code easier to read.
-
-- Not all modules have been converted to PE yet; this is an ongoing
-  process that will continue during the Wine 5.x development series.
-
-- The Wine C runtime is updated to support linking to MinGW-compiled
-  binaries; it is used by default instead of the MinGW runtime when
-  building DLLs.
-
-
-*** Graphics
-
-- Multiple display adapters and monitors are properly supported,
-  including dynamic configuration changes.
-
-- The Vulkan driver supports up to version 1.1.126 of the Vulkan spec.
-
-- The WindowsCodecs library is able to convert more bitmap formats,
-  including palette-indexed formats.
-
-
-*** Direct3D
-
-- Fullscreen Direct3D applications inhibit the screensaver.
-
-- DXGI swapchain presents inform the application when the
-  corresponding window is minimized. This typically allows
-  applications to reduce CPU usage while minimized, and is in some
-  cases required to allow the application window to be restored again.
-
-- Switching between fullscreen and windowed modes using the standard
-  Alt+Enter combination is implemented for DXGI applications.
-
-- The following features are implemented for Direct3D 12 applications:
-  - Switching between fullscreen and windowed.
-  - Changing display modes.
-  - Scaled presents.
-  - Swap intervals.
-  These features were previously already implemented for earlier
-  versions of the Direct3D API.
-
-- The handling of various edge cases is improved. Among others:
-  - Out of range reference values for the alpha and stencil tests.
-  - Sampling 2D resources with 3D samplers and vice versa.
-  - Drawing with mapped textures and buffers.
-  - Usage of invalid DirectDraw clipper objects.
-  - Creating Direct3D devices on invalid Windows, like the desktop
-    window.
-  - Viewports with a minimum Z larger than or equal to the maximum Z.
-  - Resources bound through both shader-resource views and
-    render-target or depth-stencil views at the same time.
-  - Blits between formats with and without alpha components.
-  Since well-behaved applications don't rely on these edge cases, they
-  typically only affect one or two applications each. There are
-  nevertheless quite a number of them.
-
-- Dirty texture regions are tracked more accurately for Direct3D 8 and 9
-  texture uploads.
-
-- Uploads of S3TC-compressed 3D textures require less address space.
-  Since 3D textures can be potentially large, and address space
-  exhaustion is a concern for 32-bit applications, S3TC-compressed 3D
-  textures are uploaded per-slice, instead of in a single upload.
-
-- The ID3D11Multithread interface is implemented.
-
-- Various lighting calculation fixes and improvements for older
-  DirectDraw applications have been made.
-
-- Limited support for blits across swapchains is implemented.
-
-- More shader reflection APIs are implemented.
-
-- The wined3d CPU blitter can handle compressed source resources.
-  Support for compressed destination resources was already implemented
-  in a previous release.
-
-- The Direct3D graphics card database recognizes more graphics cards.
-
-- New HKEY_CURRENT_USER\Software\Wine\Direct3D registry keys:
-  - "shader_backend" (REG_SZ)
-    The shader backend to use. Possible values are "glsl" (default)
-    for GLSL, "arb" for ARB vertex/fragment programs and "none" to
-    disable shader support.
-  - "strict_shader_math" (REG_DWORD)
-    Enable (0x1) or disable (0x0, default) stricter translation of
-    Direct3D shaders, potentially at a performance cost. This
-    currently only makes a difference with the default GLSL shader
-    backend in combination with the proprietary NVIDIA drivers.
-
-- Deprecated HKEY_CURRENT_USER\Software\Wine\Direct3D registry key:
-  - "UseGLSL"
-    This has been superseded by the "shader_backend" setting above.
-
-
-*** D3DX
-
-- Support for compressing textures using S3TC-compression is
-  implemented.
-
-- Various operations, like e.g. texture fills, on unmappable surfaces
-  are implemented more correctly. Previously their implementation
-  relied on the underlying Direct3D implementation not enforcing
-  mapping restrictions.
-
-- Various improvements and fixes have been made to the effect
-  framework.
-
-
-*** Kernel
-
-- Most of the functions that used to be in Kernel32 are moved to
-  KernelBase, to follow the architecture of recent Windows versions.
-
-- Libraries of the wrong 32/64-bitness are ignored when found in the
-  search path, to enable loading the correct one if it's found further
-  in the path.
-
-- Kernel objects are better emulated for device drivers that expect to
-  manipulate objects from the kernel side.
-
-- The kernel-level synchronization objects like spin locks, fast
-  mutexes, remove locks, and resource variables are implemented.
-
-- The system battery state is properly reported to applications.
-
-
-*** User interface
-
-- Minimized windows are displayed using their title bar instead of the
-  old Windows 3.1-style icons.
-
-- The new button styles Split Buttons and Command Links are
-  implemented.
-
-- The Edit control sets margins correctly also for CJK fonts.
-
-
-*** Desktop integration
-
-- Symbolic links to the corresponding Unix directories are created for
-  the 'Downloads' and 'Templates' folders.
-
-
-*** Input devices
-
-- Plug & Play device drivers can be installed and loaded on startup.
-
-- Game controllers are better supported, including proper support for
-  hat switch, wheel, gas and brake controls.
-
-- The old joystick API of Linux versions earlier than 2.2 is no longer
-  supported.
-
-
-*** .NET
-
-- The Mono engine is updated to version 4.9.4, including parts of the
-  Windows Presentation Foundation (WPF) framework.
-
-- The Gecko and Mono add-ons support shared installation, where the
-  files are used directly from a global location under /usr/share/wine
-  instead of being copied into every new prefix.
-
-
-*** Internet and networking
-
-- The Gecko engine is refreshed to support recent toolchains.
-
-- A number of new HTML APIs are implemented.
-
-- MSHTML supports some SVG elements.
-
-- Error object and exception propagation are supported in VBScript.
-
-- A number of VBScript builtin functions are implemented.
-
-- JScript EcmaScript compliant mode is extended to support more
-  features.
-
-- JScript and VBScript script objects expose type info interfaces.
-
-- The HTTP proxy configuration can be retrieved through DHCP.
-
-- Passport HTTP redirects are supported.
-
-- The HTTP service and corresponding client-side library (HTTPAPI) are
-  partially implemented.
-
-
-*** Cryptography
-
-- ECC (elliptic-curve) keys are supported when using GnuTLS.
-
-- Importing keys and certificates from PFX blobs is implemented.
-
-- The PBKDF2 key derivation algorithm is supported.
-
-
-*** Text and fonts
-
-- OpenType positioning features are supported in DirectWrite, and
-  enabled for Latin script by default, including kerning.
-
-- Font data access is made safer by validating the various data tables
-  before using them.
-
-- DirectWrite interfaces are updated to a recent SDK, implementing
-  some of the latest API additions.
-
-
-*** Audio / Video
-
-- The XAudio2 libraries are reimplemented to use the external FAudio
-  library, for better compatibility.
-
-- The Media Foundation libraries are fleshed out, including:
-  - Support for builtin and user async work queues.
-  - Ability to submit periodic callbacks, waiting, scheduled, and
-    regular work items, with support for item priority.
-  - Support for media event queues.
-  - Various core API to handle media type objects, stream and
-    presentation descriptors, object attributes, byte stream objects,
-    samples and buffers.
-  - Initial Source Resolver implementation.
-  - Initial implementation of Source Reader API.
-  - Implementation for Sample Grabber object.
-  - Core support for building topology objects.
-  - Builtin presentation clock implementation, started implementing
-    Media Session functionality.
-
-- The video capture filter has been ported to use v4l2 instead of the
-  deprecated v4l1 API, allowing the use of some cameras which do not
-  support v4l1.
-
-- Support for YUV to RGB translation and reading from v4l2 devices
-  using mmap() has been removed; we now depend on libv4l2 for both of
-  these things.
-
-- The builtin AVI, MPEG-I, and WAVE decoders have been removed; we now
-  depend on GStreamer or the Mac QuickTime Toolkit to decode such
-  media files.
-
-- Some more VMR7 configuration APIs are implemented.
-
-- The sound drivers support per-channel volume adjustments.
-
-
-*** Internationalization
-
-- Unicode character tables are based on version 12.1.0 of the Unicode
-  Standard.
-
-- Unicode normalization is implemented.
-
-- The geographic region id is automatically set in the registry based
-  on the current locale. It can be modified if necessary under
-  HKEY_CURRENT_USER\Control Panel\International\Geo.
-
-- The Sinhalese and Asturian locales are supported.
-
-- Codepage 28601 (Latin/Thai) is supported.
-
-
-*** RPC/COM
-
-- The typelib marshaller supports complex structs and arrays.
-
-- There is an initial implementation of the Windows Script runtime
-  library.
-
-- There is an initial implementation of the Microsoft ActiveX Data
-  Objects (ADO) library.
-
-
-*** Installers
-
-- Microsoft Installer (MSI) Patch Files are supported.
-
-- The WUSA tool (Windows Update Standalone Installer) supports
-  installing .MSU update files.
-
-
-*** ARM platforms
-
-- Exception unwinding is implemented for ARM64, using the libunwind
-  library.
-
-- OLE stubless proxies are supported on ARM64.
-
-
-*** Development tools / Winelib
-
-- The Visual Studio remote debugger can be used to debug applications
-  running under Wine.
-
-- The Debug Engine library (DBGENG) is partially implemented.
-
-- Binaries built for a Windows target no longer depend on the libwine
-  library, to enable them to run on Windows without any extra
-  dependencies. The libwine library is no longer built for Windows at
-  all.
-
-- The Resource Compiler and IDL Compiler support a '--sysroot' option
-  to allow locating header files in cross-compile environments.
-
-- Winegcc supports the options '--target', '--wine-objdir',
-  '--winebuild' and '-fuse-ld' that make it easier to use as a
-  cross-compiler, or with custom toolchains.
-
-- The wine/unicode.h header is no longer available to applications,
-  since the functions will ultimately be removed and replaced by the
-  standard C runtime wide character functions.
-
-
-*** Build infrastructure
-
-- Test binaries are built in PE format if MinGW is available, so the
-  same test binary can run on both Wine and Windows. The 'crosstest'
-  make target is no longer needed or supported.
-
-- The 'fastcall' calling convention is supported in spec files. It
-  uses the correct name mangling for Windows builds.
-
-- A '-import' entry point flag is supported in spec files, to mark
-  functions that need a hotpatch code prefix to be generated for their
-  import thunks.
-
-- Winebuild supports a '--builtin' option to add a special signature
-  to PE binaries to mark them as Wine builtins.
-
-
-*** Builtin applications
-
-- The CHCP tool is implemented. It allows setting the console codepage.
-
-- The MSIDB tool is implemented. It allows manipulating MSI databases.
-
-
-*** Performance improvements
-
-- The various time functions use higher performance system clocks if
-  available, to reduce the overhead in the rendering loop of many
-  games.
-
-- File lookups take advantage of the ext4 filesystem case folding
-  support if it's enabled on the directory being searched.
-
-- No-data style listboxes (LBS_NODATA) have better performance for
-  large numbers of items.
-
-- Slim Reader/Writer locks, keyed events, and condition variables use
-  futexes on Linux to avoid wineserver round trips.
-
-
-*** New external dependencies
-
-- The MinGW-w64 cross-compiler is used to build modules in PE format.
-
-- The FAudio library is used to implement XAudio2.
-
-- The Inotify library is used for file change notifications on BSD
-  platforms.
-
-- The Unwind library is used for exception handling on ARM64.
-
-- The Video4Linux version 2 library is used instead of version 1.
-
+Bugs fixed in 5.0.3 (total 44):
+
+   7102  Microsoft Word 6.0 for Windows: copy/paste causes crash on unimplemented function ole2.dll16.OLEISCURRENTCLIPBOARD
+  26171  BVRP classic phone tools installer reports error 'Insufficient buffer' when trying to install print processor (AddPrintProcessorA stub should be symmetric to AddPrintProcessorW)
+  35903  CED1401 USB function driver fails to install (setupapi should use the original INF path as a default source path when copying files)
+  38020  Foxit Reader 6.12 crashes on unimplemented function msasn1.dll.ASN1_CreateModule during validation of digital signatures
+  44127  Metal Gear Solid V: Ground Zeroes doesn't launch
+  44306  Visual Novel "A Clockwork Ley-Line: The Borderline of Dusk" doesn't work with d3d9
+  44925  Multiple kernel drivers require 'ntoskrnl.exe.ExCreateCallback' stub to return STATUS_SUCCESS (StarForce v3, TrackMania Nations ESWC. Denuvo Anti-Cheat)
+  45536  Total Commander 9.x crashes on unimplemented function usp10.dll.ScriptGetFontAlternateGlyphs when Wine is not detected via named export 'ntdll.wine_get_version'
+  46726  Dirt Rally 2.0 does not use embedded CA cert
+  46818  PS4 Remote Play 2.x (.NET 4.x app) crashes on Sign-In PlayStation network (mshtml:HTMLDocument_get_cookie should not fail for 'about:blank')
+  48256  pwsh.exe (from Powershell-6.*) crashes after 20~50 sec: System.EntryPointNotFoundException: Unable to find an entry point named 'FreeAddrInfoEx' in DLL 'ws2_32.dll'.
+  48405  Battle.Net Launcher Beta crashes with Windows version set to 10
+  48668  rFactor2 - Physics thread slower on multiplayer mode
+  48779  Secret Files 3 crashes at launch (needs d3dx9_skin_info_Clone)
+  48938  Ashes of the Singularity: Escalation crashes on start
+  48959  S-Gear 2 installer does not recognize wine as Windows 10
+  49147  Microsoft Teams 1.3.x crashes on unimplemented function setupapi.dll.CM_Get_Device_Interface_AliasW
+  49178  Spitfire Audio 3.x crashes on start due to 'WTSQuerySessionInformationA' stub not initializing out parameters
+  49179  winetest.exe fails to run on windows arm (surface rt / armv7): procedure entry point NtCurrentTeb could not be located in the dynamic link library C:\Users\User\Desktop\winetest.exe
+  49189  Auslogics Registry Cleaner 8.x crashes and shows "OLE error 80004001" (SetCurrentProcessExplicitAppUserModelID stub needs to return S_OK)
+  49221  Denuvo Anti-Cheat 'denuvo-anti-cheat.sys' crashes due to unhandled emulation of MSR register reads related to CPU / virtualization features (returning zero value is sufficient)
+  49257  Avast Free Antivirus 20.3 crashes before installing due to unimplemented function rpcrt4.dll.RpcIfInqId
+  49264  MultiSync installation crashes (needs _Command::get/put_CommandText)
+  49272  MultiSync installation crashes (msado15.dll needs {b196b284-bab4-101a-b69c-00aa00341d07} IConnectionPointContainer)
+  49281  FinanceExplorer crashes inside msado15.dll
+  49289  Denuvo Anti-Cheat 'denuvo-anti-cheat.sys' crashes on unimplemented function ntoskrnl.exe.ExRegisterCallback
+  49291  Denuvo Anti-Cheat 'denuvo-anti-cheat.sys' crashes on unimplemented function ntoskrnl.exe.ExUnregisterCallback when unloading
+  49303  MultiSync installation crashes (msado15.dll needs IConnectionPointContainer::FindConnectionPoint)
+  49322  cmudpro334 shows error on unimplemented ITaskbarList::SetOverlayIcon()
+  49352  JamKazam 1.0.3744 msi installer fails at 'InstallFiles' action (incorrect handling of administrative image with compressed source files)
+  49372  winedump crashes for sltg typelib files
+  49379  Altium Designer 20 crashes on missing d2d1.dll.D2D1CreateDevice
+  49388  MultiSync installation crashes (msado15.dll needs IConnectionPoint::Advise)
+  49439  Printing and scanning software for Brother L2540DW fails to install (VBScript parser can't handle a "case else" statement with a comment and no statements to execute)
+  49460  where.exe is missing in wine (affects Waves Central )
+  49487  ListView control custom draw in report view shows blank item if handler clears uItemState CDIS_SELECTED flag
+  49488  uninitialized bytes in server call from ntdll/server_write_file
+  49570  LVM_FINDITEM should do case-insensitive test for item text
+  49620  Tableau Desktop fails to install
+  49656  SAP GUI - Ws2_32.getaddrinfo crashes with non-standard service (/etc/services)
+  49662  Wine Internet Explorer crashes on https://[2600::]/
+  49664  FrostyModManager v1.0.5.9 crashes on launch
+  49666  Red Dead Redemption 2 requires HEAP flags offset to match Windows
+  49685  Gigabyte "EasyTune" service crashes in wbemprox
+
+----------------------------------------------------------------
+
+Changes since 5.0.2:
+
+Aaro Altonen (8):
+      msado15: Implement _Command get/put CommandType.
+      msado15: Implement _Command get/put CommandText.
+      msado15: Add IConnectionPointContainer stub to _Connection.
+      msado15: Add IConnectionPoint stub to _Connection.
+      msado15: Implement IConnectionPointContainer_FindConnectionPoint.
+      include: Add ConnectionEventsVt definition.
+      msado15/tests: Add tests for IConnectionPoint::Advise/Unadvise.
+      msado15: Implement IConnectionPoint::Advise/Unadvise.
+
+Akihiro Sagawa (1):
+      documentation: Update Japanese translation.
+
+Alex Henrie (2):
+      urlmon: Call parse_host in combine_uri to set related parse_data fields.
+      urlmon: Fix null pointer dereference in process_hook_section (Coverity).
+
+Alexandre Julliard (1):
+      setupapi: Support a WineSourceDirs section to copy files from the Wine build or data dir.
+
+Alistair Leslie-Hughes (1):
+      msado15: Implement _Connection get/put ConnectionString.
+
+Anton Baskanov (1):
+      amstream: Don't crash if parent is NULL in AMAudioStream:: and AMDirectDrawStream::GetMultiMediaStream.
+
+Brendan Shanks (5):
+      winhttp: Treat a partial certificate chain as having an unknown/invalid CA.
+      whoami: Add semi-stub application to display username.
+      winevulkan: Don't initialize the Vulkan driver in DllMain().
+      ntdll: Pad HEAP structure so 'flags' offset matches recent Windows.
+      winemac.drv: Fix warnings for constants deprecated by macOS 10.14.
+
+Changping Yu (2):
+      kernel32/tests: Add test for thread enumeration order in toolhelp.
+      kernel32: Adjust thread creation insertion order.
+
+Derek Lesho (1):
+      msctf: Always provide a context when from GetBase/Top.
+
+Dmitry Kislyuk (1):
+      vbscript: Parse empty CASE ELSE clause.
+
+Dmitry Timoshkov (1):
+      winedump: Fix parsing of SLTG typelib created with some old tool.
+
+Gijs Vermeulen (5):
+      wtsapi32: Implement WTSQuerySessionInformationA.
+      d3dx9: Implement ID3DXSkinInfo_Clone().
+      amstream: Don't crash on NULL ddraw in IDirectDrawMediaStream::GetDirectDraw().
+      wbemprox: Set obj to NULL on error in get_object().
+      wbemprox: Don't crash in IWbemClassObject::Put() when called with empty class object.
+
+Hans Leidekker (3):
+      msado15: Fix NULL pointer dereference in close_recordset.
+      msi: Fix installing from administrative image with compressed source files.
+      ws2_32: Avoid a crash in WS_getaddrinfo when the specified service doesn't exist.
+
+Jacek Caban (3):
+      winnt.h: Provide inline NtCurrentTeb implementation for mingw arm builds.
+      mshtml: Return NULL in IHTMLDocument2::get_cookie if InternetGetCookieExW failes.
+      urlmon: Remove unused flags argument from parse_host.
+
+Jefferson Carpenter (1):
+      ntoskrnl.exe: Set reserved to 0 in pnp WM_DEVICECHANGE broadcast.
+
+Jiajin Cui (1):
+      gdiplus: Fix crash if failed to create bitmap.
+
+Julian Rüger (1):
+      documentation: Update German translation.
+
+Louis Lenders (7):
+      usp10: Add stub for ScriptGetFontAlternateGlyphs.
+      shcore: Return S_OK in SetCurrentProcessExplicitAppUserModelID.
+      ws2_32: Add FreeAddrInfoEx.
+      setupapi: Add stub for CM_Get_Device_Interface_Alias{A,W}.
+      explorerframe: Return S_OK in ITaskbarList::SetOverlayIcon.
+      where.exe: Add stub program.
+      sc.exe: Fake succes for the SdSet argument.
+
+Matteo Bruni (3):
+      wined3d: Add GPU information for AMD Raven Ridge.
+      user32: Add missing WM_WINE_CLIPCURSOR message type name.
+      user32: Make sure update_window_state() is always executed on the owner thread.
+
+Nikolay Sivov (7):
+      d2d1: Implement D2D1CreateDevice().
+      dwrite: Implement IDWriteFont::Equals().
+      dwrite: Add partial implementation for IDWriteFontFace5::Equals().
+      comctl32/listview: Rename helper argument.
+      comctl32/listview: Use case-insensitive compare in LVM_FINDITEM.
+      comctl32/listview: Do no alter custom draw text colors between notification stages.
+      winedbg: Double dll name buffer size for unimplemented function exception.
+
+Paul Gofman (7):
+      ntoskrnl.exe: Return STATUS_SUCCESS from ExCreateCallback() stub.
+      ntoskrnl.exe: Return zero for unknown msr registers.
+      ntoskrnl.exe: Add stub for ExRegisterCallback() function.
+      ntoskrnl.exe: Add stub for ExUnregisterCallback() function.
+      ws2_32: Optimize interface_bind_check() by caching adapter addresses.
+      winebuild: Correct hotpatching prologue in import thunks for x86_64.
+      shell32: Only consider copy operation multidest if the number of dst files is greater than one.
+
+Piotr Caban (1):
+      msasn1: Fix buffer allocations.
+
+Rémi Bernon (1):
+      kernel32: Catch process creation breakpoint exceptions.
+
+Vijay Kiran Kamuju (12):
+      ole2.dll16: Add stub OleIsCurrentClipboard function.
+      winspool.drv: Implement AddPrintProcessorA via AddPrintProcessorW.
+      include: Add related ASN1encoding_s and ASN1decoding_s structs.
+      msasn1: Add ASN1_CreateModule stub implementation.
+      msasn1/tests: Add initial tests.
+      msasn1: Implement ASN1_CreateModule function.
+      msasn1: Implement ASN1_CloseModule function.
+      msasn1: Add partial implementation of ASN1_CreateEncoder.
+      msasn1: Add stub for ASN1_CloseEncoder function.
+      msasn1: Add partial implementation of ASN1_CreateDecoder.
+      msasn1: Add stub for ASN1_CloseDecoder function.
+      msasn1: Add stub for ASN1_Decode function.
+
+Zebediah Figura (6):
+      setupapi: Reset the source file pointer when comparing files.
+      setupapi: Store the original INF file path in a .pnf file.
+      setupapi: Use the original INF source path if possible when copying files.
+      winecfg: Set the Current{Major, Minor}VersionNumber registry values.
+      wbemprox: Return WBEM_E_NOT_FOUND from get_object() if no object is available.
+      d3dcompiler: Iterate through the instruction list in reverse in free_instr_list() (Valgrind).
+
+Zhiyi Zhang (2):
+      rpcrt4: Implement RpcIfInqId().
+      dwmapi: Check NULL parameter in DwmIsCompositionEnabled().
 
 --
-Alexandre Julliard
-julliard@winehq.org
+Michael Stefaniuc
+mstefani@winehq.org

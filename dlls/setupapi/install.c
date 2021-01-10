@@ -32,6 +32,7 @@
 #include "winnls.h"
 #include "winsvc.h"
 #include "shlobj.h"
+#include "shlwapi.h"
 #include "objidl.h"
 #include "objbase.h"
 #include "setupapi.h"
@@ -146,6 +147,29 @@ static WCHAR *dup_section_line_field( HINF hinf, const WCHAR *section, const WCH
     return buffer;
 }
 
+static void get_inf_src_path( HINF hinf, WCHAR *path )
+{
+    const WCHAR *inf_path = PARSER_get_inf_filename( hinf );
+    WCHAR pnf_path[MAX_PATH];
+    FILE *pnf;
+
+    wcscpy( pnf_path, inf_path );
+    PathRemoveExtensionW( pnf_path );
+    PathAddExtensionW( pnf_path, L".pnf" );
+    if ((pnf = _wfopen( pnf_path, L"r" )))
+    {
+        if (fgetws( path, MAX_PATH, pnf ) && !wcscmp( path, PNF_HEADER ))
+        {
+            fgetws( path, MAX_PATH, pnf );
+            TRACE("using original source path %s\n", debugstr_w(path));
+            fclose( pnf );
+            return;
+        }
+        fclose( pnf );
+    }
+    wcscpy( path, inf_path );
+}
+
 /***********************************************************************
  *            copy_files_callback
  *
@@ -153,13 +177,31 @@ static WCHAR *dup_section_line_field( HINF hinf, const WCHAR *section, const WCH
  */
 static BOOL copy_files_callback( HINF hinf, PCWSTR field, void *arg )
 {
+    INFCONTEXT context;
     struct files_callback_info *info = arg;
     WCHAR src_root[MAX_PATH], *p;
 
     if (!info->src_root)
     {
-        lstrcpyW( src_root, PARSER_get_inf_filename( hinf ) );
-        if ((p = wcsrchr( src_root, '\\' ))) *p = 0;
+        const WCHAR *build_dir = _wgetenv( L"WINEBUILDDIR" );
+        const WCHAR *data_dir = _wgetenv( L"WINEDATADIR" );
+
+        if ((build_dir || data_dir) && SetupFindFirstLineW( hinf, L"WineSourceDirs", field, &context ))
+        {
+            lstrcpyW( src_root, build_dir ? build_dir : data_dir );
+            src_root[1] = '\\';  /* change \??\ to \\?\ */
+            p = src_root + lstrlenW(src_root);
+            *p++ = '\\';
+            if (!build_dir || !SetupGetStringFieldW( &context, 2, p, MAX_PATH - (p - src_root), NULL ))
+            {
+                if (!SetupGetStringFieldW( &context, 1, p, MAX_PATH - (p - src_root), NULL )) p[-1] = 0;
+            }
+        }
+        else
+        {
+            get_inf_src_path( hinf, src_root );
+            if ((p = wcsrchr( src_root, '\\' ))) *p = 0;
+        }
     }
 
     if (field[0] == '@')  /* special case: copy single file */

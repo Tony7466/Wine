@@ -767,6 +767,35 @@ function test_getPrototypeOf() {
     next_test();
 }
 
+function test_toString() {
+    var tmp, obj;
+
+    (function () { tmp = Object.prototype.toString.call(arguments); })();
+    todo_wine.
+    ok(tmp === "[object Arguments]", "toString.call(arguments) = " + tmp);
+    tmp = Object.prototype.toString.call(this);
+    todo_wine.
+    ok(tmp === "[object Window]", "toString.call(null) = " + tmp);
+    tmp = Object.prototype.toString.call(null);
+    todo_wine.
+    ok(tmp === "[object Null]", "toString.call(null) = " + tmp);
+    tmp = Object.prototype.toString.call(undefined);
+    todo_wine.
+    ok(tmp === "[object Undefined]", "toString.call(undefined) = " + tmp);
+    tmp = Object.prototype.toString.call();
+    todo_wine.
+    ok(tmp === "[object Undefined]", "toString.call() = " + tmp);
+
+    obj = Object.create(null);
+    tmp = Object.prototype.toString.call(obj);
+    ok(tmp === "[object Object]", "toString.call(Object.create(null)) = " + tmp);
+    obj = Object.create(Number.prototype);
+    tmp = Object.prototype.toString.call(obj);
+    ok(tmp === "[object Object]", "toString.call(Object.create(Number.prototype)) = " + tmp);
+
+    next_test();
+}
+
 function test_bind() {
     var f, r;
     var o = new Object(), o2 = new Object();
@@ -860,5 +889,6 @@ var tests = [
     test_global_properties,
     test_string_split,
     test_getPrototypeOf,
+    test_toString,
     test_bind
 ];

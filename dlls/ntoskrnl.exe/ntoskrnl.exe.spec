@@ -180,7 +180,7 @@
 @ stub ExRaiseException
 @ stub ExRaiseHardError
 @ stub ExRaiseStatus
-@ stub ExRegisterCallback
+@ stdcall ExRegisterCallback(ptr ptr ptr)
 @ stub ExReinitializeResourceLite
 @ stdcall ExReleaseResourceForThreadLite(ptr long)
 @ extern ExSemaphoreObjectType
@@ -188,7 +188,7 @@
 @ stdcall ExSetTimerResolution(long long)
 @ stub ExSystemExceptionFilter
 @ stdcall ExSystemTimeToLocalTime(ptr ptr) RtlSystemTimeToLocalTime
-@ stub ExUnregisterCallback
+@ stdcall ExUnregisterCallback(ptr)
 @ stdcall ExUuidCreate(ptr)
 @ stub ExVerifySuite
 @ stub ExWindowStationObjectType

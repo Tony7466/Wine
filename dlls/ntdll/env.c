@@ -973,14 +973,21 @@ NTSTATUS WINAPI RtlQueryEnvironmentVariable_U(PWSTR env,
  */
 void WINAPI RtlSetCurrentEnvironment(PWSTR new_env, PWSTR* old_env)
 {
+    WCHAR *prev;
+
     TRACE("(%p %p)\n", new_env, old_env);
 
     RtlAcquirePebLock();
 
-    if (old_env) *old_env = NtCurrentTeb()->Peb->ProcessParameters->Environment;
+    prev = NtCurrentTeb()->Peb->ProcessParameters->Environment;
     NtCurrentTeb()->Peb->ProcessParameters->Environment = new_env;
 
     RtlReleasePebLock();
+
+    if (old_env)
+        *old_env = prev;
+    else
+        RtlDestroyEnvironment( prev );
 }
 
 
@@ -1462,6 +1469,7 @@ void init_user_process_params( SIZE_T data_size )
 
         params->Environment = env;
         NtCurrentTeb()->Peb->ProcessParameters = params;
+        RtlFreeUnicodeString( &initial_params.ImagePathName );
         RtlFreeUnicodeString( &cmdline );
         RtlReleasePath( load_path );
 
