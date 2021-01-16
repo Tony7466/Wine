@@ -1,0 +1,31 @@
+From: Alexandre Julliard <julliard@winehq.org>
+Date: Thu, 26 Nov 2020 17:31:53 +0100
+Subject: shell32: Silence buffer overflow compiler warnings.
+
+Signed-off-by: Alexandre Julliard <julliard@winehq.org>
+Origin: upstream, 6.0-rc1, commit:6624cabbb7cfe33c179a02238b4c9b91d3c3297e
+
+--- a/dlls/shell32/cpanelfolder.c
++++ b/dlls/shell32/cpanelfolder.c
+@@ -259,9 +259,9 @@ static LPITEMIDLIST _ILCreateCPanelApple
+     memcpy(pidl->mkid.abID, &tmp, 2+size0);
+ 
+     p = &((PIDLDATA*)pidl->mkid.abID)->u.cpanel;
+-    strcpy(p->szName, name);
+-    strcpy(p->szName+tmp.u.cpanel.offsDispName, displayName);
+-    strcpy(p->szName+tmp.u.cpanel.offsComment, comment);
++    memcpy(p->szName, name, strlen(name) + 1);
++    memcpy(p->szName+tmp.u.cpanel.offsDispName, displayName, strlen(displayName) + 1);
++    memcpy(p->szName+tmp.u.cpanel.offsComment, comment, strlen(comment) + 1);
+ 
+     *(WORD*)((char*)pidl+(size+2)) = 0;
+ 
+@@ -1077,7 +1077,7 @@ static HRESULT WINAPI IShellExecuteHookA
+ 	return E_INVALIDARG;
+ 
+     path[0] = '\"';
+-    lstrcpyA(path+1, pcpanel->szName);
++    memcpy(path+1, pcpanel->szName, strlen(pcpanel->szName) + 1);
+ 
+     /* pass applet name to Control_RunDLL to distinguish between applets in one .cpl file */
+     lstrcatA(path, "\" ");

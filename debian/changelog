@@ -1,3 +1,9 @@
+wine (5.0.3-2) unstable; urgency=medium
+
+  * Work around array bounds compiler warnings (closes: #980048).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 16 Jan 2021 01:20:17 +0000
+
 wine (5.0.3-1) unstable; urgency=medium
 
   * New upstream release 5.0.3, released Nov 10, 2020.
