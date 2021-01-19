@@ -1,3 +1,9 @@
+wine (5.0.3-3) unstable; urgency=medium
+
+  * Ignore new compiler warnings on arm64.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 16 Jan 2021 14:05:42 +0000
+
 wine (5.0.3-2) unstable; urgency=medium
 
   * Work around array bounds compiler warnings (closes: #980048).

@@ -90,7 +90,7 @@ endif
 ifeq ($(DEB_HOST_ARCH), arm64)
 export CC=clang
 export CXX=clang++
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-enum-conversion -Wno-absolute-value
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-enum-conversion -Wno-absolute-value -Wno-misleading-indentation -Wno-implicit-const-int-float-conversion -Wno-sizeof-array-div
 endif
 
 # use date of the latest changelog update as the build date
