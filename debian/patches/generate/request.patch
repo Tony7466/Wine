@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/make_requests
 +++ b/tools/make_requests
-@@ -272,16 +272,11 @@ sub PARSE_REQUESTS()
+@@ -273,16 +273,11 @@ sub PARSE_REQUESTS()
  }
  
  ### Retrieve the server protocol version from the existing server_protocol.h file
@@ -22,7 +22,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      return $protocol;
  }
  
-@@ -459,7 +454,7 @@ foreach my $err (sort keys %errors)
+@@ -460,7 +455,7 @@ foreach my $err (sort keys %errors)
  push @trace_lines, "    { NULL, 0 }\n";
  push @trace_lines, "};\n";
  
@@ -31,7 +31,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                   "### make_requests begin ###",
                   "### make_requests end ###",
                   @trace_lines );
-@@ -486,7 +481,7 @@ foreach my $type (sort keys %formats)
+@@ -487,7 +482,7 @@ foreach my $type (sort keys %formats)
  push @request_lines, @asserts;
  push @request_lines, "\n#endif  /* WANT_REQUEST_HANDLERS */\n";
  
@@ -42,7 +42,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                   @request_lines );
 --- a/server/request.h
 +++ b/server/request.h
-@@ -109,9 +109,9 @@ static inline void set_reply_data_ptr( v
+@@ -115,9 +115,9 @@ static inline void set_reply_data_ptr( v
      current->reply_data = data;
  }
  
@@ -54,7 +54,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  DECL_HANDLER(new_process);
  DECL_HANDLER(exec_process);
-@@ -2447,9 +2447,8 @@ C_ASSERT( sizeof(struct suspend_process_
+@@ -2453,9 +2453,8 @@ C_ASSERT( sizeof(struct suspend_process_
  C_ASSERT( FIELD_OFFSET(struct resume_process_request, handle) == 12 );
  C_ASSERT( sizeof(struct resume_process_request) == 16 );
  
@@ -68,7 +68,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #endif  /* __WINE_SERVER_REQUEST_H */
 --- a/server/trace.c
 +++ b/server/trace.c
-@@ -1237,8 +1237,9 @@ static void dump_varargs_handle_infos( c
+@@ -1243,8 +1243,9 @@ static void dump_varargs_handle_infos( c
  
  typedef void (*dump_func)( const void *req );
  
@@ -80,7 +80,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  static void dump_new_process_request( const struct new_process_request *req )
  {
-@@ -5682,8 +5683,7 @@ static const struct
+@@ -5687,8 +5688,7 @@ static const struct
      { NULL, 0 }
  };
  

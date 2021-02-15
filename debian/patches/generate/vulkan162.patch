@@ -1,0 +1,53 @@
+description: support vulkan 1.2.162
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/dlls/winevulkan/make_vulkan
++++ b/dlls/winevulkan/make_vulkan
+@@ -64,7 +64,7 @@ from enum import Enum
+ LOGGER = logging.Logger("vulkan")
+ LOGGER.addHandler(logging.StreamHandler())
+ 
+-VK_XML_VERSION = "1.2.134"
++VK_XML_VERSION = "1.2.162"
+ WINE_VK_VERSION = (1, 2)
+ 
+ # Filenames to create.
+@@ -123,6 +123,10 @@ BLACKLISTED_EXTENSIONS = [
+     # Deprecated extensions
+     "VK_NV_external_memory_capabilities",
+     "VK_NV_external_memory_win32",
++
++    # Vulkan extensions that are not yet handled by wine.
++    "VK_KHR_ray_tracing",
++    "VK_EXT_device_memory_report",
+ ]
+ 
+ # The Vulkan loader provides entry-points for core functionality and important
+@@ -1166,6 +1170,8 @@ class VkMember(object):
+             return False
+         elif self.type in ["uint64_t", "VkDeviceSize"]:
+             return True
++        elif self.type in ["uint64_t", "VkDeviceAddress"]:
++            return True
+         elif self.is_struct():
+             struct = self.type_info["data"]
+             return struct.needs_alignment()
+@@ -1350,6 +1356,9 @@ class VkParam(object):
+             elif self.type in ["uint64_t", "VkDeviceSize"]:
+                 self.format_str = "0x%s"
+                 self.format_conv = "wine_dbgstr_longlong({0})"
++            elif self.type in ["uint64_t", "VkDeviceAddress"]:
++                self.format_str = "0x%s"
++                self.format_conv = "wine_dbgstr_longlong({0})"
+             elif self.type == "HANDLE":
+                 self.format_str = "%p"
+             elif self.type in ["VisualID", "xcb_visualid_t", "RROutput"]:
+@@ -1538,6 +1547,8 @@ class VkParam(object):
+             return "long"
+         if self.type in ["uint64_t", "VkDeviceSize"]:
+             return "int64"
++        if self.type in ["uint64_t", "VkDeviceAddress"]:
++            return "int64"
+ 
+         LOGGER.error("Unhandled spec conversion for type: {0}".format(self.type))
+ 

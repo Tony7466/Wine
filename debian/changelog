@@ -1,4 +1,4 @@
-wine-development (5.6-1) UNRELEASED; urgency=medium
+wine-development (5.6-1) unstable; urgency=medium
 
   * New upstream release 5.6, released Apr 10, 2020.
     - Still more Media Foundation work.
@@ -6,8 +6,9 @@ wine-development (5.6-1) UNRELEASED; urgency=medium
     - A few more modules converted to PE.
     - Improvements to gdb proxy mode.
     - Various bug fixes.
+  * Support building with vulkan 1.2.162.
 
- -- Michael Gilbert <mgilbert@debian.org>  Sat, 01 May 2021 13:40:57 +0000
+ -- Michael Gilbert <mgilbert@debian.org>  Tue, 16 Feb 2021 03:40:53 +0000
 
 wine-development (5.5-9) unstable; urgency=medium
 

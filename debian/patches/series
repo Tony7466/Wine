@@ -19,6 +19,7 @@ disable/blacklist-extensions.patch
 generate/icons.patch
 generate/opengl.patch
 generate/vulkan.patch
+generate/vulkan162.patch
 generate/unicode.patch
 generate/request.patch
 

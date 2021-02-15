@@ -38,8 +38,8 @@ export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector
 # linker options
 export DEB_LDFLAGS_MAINT_APPEND+=-Wl,-rpath,/$(LIBDIR)
 
-# ignore shift overflow warnings (currently only an issue on arm)
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-shift-overflow
+# do not treat compiler warnings as errors
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-error
 
 # ignore all defined but unused function warnings
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-unused-function
@@ -83,14 +83,11 @@ export DEB_CFLAGS_MAINT_APPEND+=-march=armv5t
 export DEB_LDFLAGS_MAINT_APPEND+=-march=armv5t
 endif
 
-# on arm64 build using clang
+# on arm64 build using clang and ignore compiler warnings
 ifeq ($(DEB_HOST_ARCH), arm64)
 export CC=clang
 export CXX=clang++
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-absolute-value
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-enum-conversion
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-misleading-indentation
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-implicit-int-float-conversion
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-error
 endif
 
 # use date of the latest changelog update as the build date
@@ -154,6 +151,10 @@ override_dh_auto_configure:
 	ln -sf ../../dlls/shell32/resources/folder_open.svg dlls/comdlg32/folder2.svg
 	ln -sf ../../dlls/shell32/resources/disk_drive.svg dlls/comdlg32/floppy.svg
 	ln -sf ../../dlls/shell32/resources/optical_drive.svg dlls/comdlg32/cdrom.svg
+ifneq (,$(filter $(DEB_HOST_ARCH),i386 amd64))
+	# ensure system zlib files are used for i386 and amd64
+	rm -f dlls/*/zlib.h dlls/*/inflate.c dlls/*/deflate.c
+endif
 	# execute wine's configure script
 	./configure $(CONFLAGS)
 

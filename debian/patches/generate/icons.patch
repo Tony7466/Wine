@@ -13,7 +13,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      /* try in src file directory */
      if ((file = open_file_same_dir( pFile->included_by, pFile->name, &pFile->filename ))) return file;
  
-@@ -2902,6 +2905,14 @@ static void output_source_svg( struct ma
+@@ -2904,6 +2907,14 @@ static void output_source_svg( struct ma
  
          if (images[i])
          {
@@ -38,7 +38,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 +SVG_SRCS = regedit.svg folderopen.svg folder.svg computer.svg string.svg bin.svg
 --- a/dlls/display.drv16/Makefile.in
 +++ b/dlls/display.drv16/Makefile.in
-@@ -6,3 +6,5 @@ EXTRADLLFLAGS = -m16 -mno-cygwin
+@@ -6,3 +6,5 @@ EXTRADLLFLAGS = -m16
  C_SRCS = display.c
  
  RC_SRCS = display.rc

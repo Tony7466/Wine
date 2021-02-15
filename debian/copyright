@@ -21,6 +21,7 @@ Files-Excluded:
  dlls/vulkan-1/vulkan-1.spec
  dlls/winevulkan/vulkan_thunks.h
  dlls/winevulkan/vulkan_thunks.c
+ dlls/winevulkan/winevulkan.json
  dlls/winevulkan/winevulkan.spec
  dlls/gdi32/direction.c
  dlls/gdi32/vertical.c
@@ -42,12 +43,6 @@ Files-Excluded:
  dlls/opengl32/opengl_ext.c
  dlls/opengl32/opengl_norm.c
  dlls/opengl32/opengl32.spec
- dlls/cabinet/zlib.h
- dlls/cabinet/deflate.c
- dlls/wininet/zlib.h
- dlls/wininet/inflate.c
- dlls/opcservices/zlib.h
- dlls/opcservices/deflate.c
  dlls/*/tests/generated.c
 Upstream-Name: Wine
 

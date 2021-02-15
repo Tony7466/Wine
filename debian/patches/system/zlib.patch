@@ -24,7 +24,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  MODULE    = cabinet.dll
  IMPORTLIB = cabinet
  
-+CROSSLDFLAGS  = $(Z_LIBS)
++CROSSLDFLAGS  = -lz
  EXTRADLLFLAGS = -mno-cygwin
  
  C_SRCS = \
@@ -59,7 +59,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  MODULE  = opcservices.dll
  IMPORTS = uuid ole32 advapi32 urlmon xmllite oleaut32
  
-+CROSSLDFLAGS  = $(Z_LIBS)
++CROSSLDFLAGS  = -lz
  EXTRADLLFLAGS = -mno-cygwin
  
  C_SRCS = \
@@ -114,7 +114,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  IMPORTS   = mpr shlwapi shell32 user32 ws2_32 advapi32
  DELAYIMPORTS = secur32 crypt32 cryptui dhcpcsvc iphlpapi
  
-+CROSSLDFLAGS  = $(Z_LIBS)
++CROSSLDFLAGS  = -lz
  EXTRADLLFLAGS = -mno-cygwin
  
  C_SRCS = \
@@ -126,3 +126,41 @@ author: Michael Gilbert <mgilbert@debian.org>
  	internet.c \
  	netconnection.c \
  	urlcache.c \
+--- a/dlls/dbghelp/Makefile.in
++++ b/dlls/dbghelp/Makefile.in
+@@ -3,6 +3,7 @@ IMPORTLIB = dbghelp
+ EXTRADEFS = -D_IMAGEHLP_SOURCE_
+ DELAYIMPORTS = version
+ 
++CROSSLDFLAGS = -lz
+ EXTRADLLFLAGS = -mno-cygwin
+ 
+ C_SRCS = \
+@@ -16,7 +17,6 @@ C_SRCS = \
+ 	dwarf.c \
+ 	elf_module.c \
+ 	image.c \
+-	inflate.c \
+ 	macho_module.c \
+ 	minidump.c \
+ 	module.c \
+--- a/dlls/dbghelp/dwarf.c
++++ b/dlls/dbghelp/dwarf.c
+@@ -22,6 +22,9 @@
+ 
+ #define NONAMELESSUNION
+ 
++#include "zlib.h"
++#undef FAR
++
+ #include <sys/types.h>
+ #include <limits.h>
+ #include <stdlib.h>
+@@ -39,7 +42,6 @@
+ 
+ #include "dbghelp_private.h"
+ #include "image_private.h"
+-#include "zlib.h"
+ 
+ #include "wine/debug.h"
+ 

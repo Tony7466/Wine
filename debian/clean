@@ -11,14 +11,6 @@ include/stamp-h
 include/config.h
 include/config.h.in
 
-# zlib
-dlls/wininet/zlib.h
-dlls/wininet/inflate.c
-dlls/cabinet/zlib.h
-dlls/cabinet/deflate.c
-dlls/opcservices/zlib.h
-dlls/opcservices/deflate.c
-
 # automatically generated files
 dlls/dsound/fir.h
 dlls/*/tests/generated.c
@@ -66,6 +58,7 @@ include/wine/vulkan_driver.h
 dlls/vulkan-1/vulkan-1.spec
 dlls/winevulkan/vulkan_thunks.h
 dlls/winevulkan/vulkan_thunks.c
+dlls/winevulkan/winevulkan.json
 dlls/winevulkan/winevulkan.spec
 
 # automatically generated icon files
