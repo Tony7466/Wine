@@ -1,0 +1,15 @@
+#!/bin/sh -e
+
+if [ "$#" -eq "0" ]; then
+  echo "usage: $0 ELF [PATTERN...]"
+  exit 1
+fi
+output=$1
+shift
+
+sonames=$(grep "^\#define SONAME_" include/config.h | cut -d\" -f2)
+if [ "$#" -eq "0" ]; then
+  ./debian/scripts/sonames2elf $(echo "$sonames") > $output
+else
+  ./debian/scripts/sonames2elf $(echo "$sonames" | grep -E "$@") > $output
+fi

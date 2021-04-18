@@ -1,6 +1,7 @@
 debianization/mingw.patch
 debianization/addons.patch
 debianization/makefile.patch
+debianization/manpages.patch
 debianization/winebuild.patch
 debianization/wineapploader.patch
 debianization/version-string.patch

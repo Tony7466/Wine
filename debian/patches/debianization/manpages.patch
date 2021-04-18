@@ -1,0 +1,26 @@
+description: fix lintian manpage warnings
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/programs/msiexec/msiexec.man.in
++++ b/programs/msiexec/msiexec.man.in
+@@ -23,7 +23,7 @@ Same as \fB/x\fR.
+ .IP \fB/f\fR\ \
+ \fR[\fBp\fR|\fBo\fR|\fBe\fR|\fBd\fR|\fBc\fR|\fBa\fR|\fBu\fR|\fBm\fR|\fBs\fR|\fBv\fR]\ \
+ \fR{\fIpackage\fR|\fIproductcode\fR}
+-Repair an installation. Default options are \'omus\'
++Repair an installation. Default options are 'omus'
+ .IP "\fBp\fR"
+ Reinstall the file if it is missing.
+ .IP "\fBo\fR"
+@@ -64,9 +64,9 @@ Shows a full UI.
+ .IP \fB/l\fR[\fB*\fR]\
+ [\fBi\fR|\fBw\fR|\fBe\fR|\fBa\fR|\fBr\fR|\fBu\fR|\fBc\fR|\fBm\fR|\fBo\fR|\fBp\fR|\fBv\fR]\
+ [\fB+\fR|\fB!\fR]\ {\fIlogfile\fR}
+-Enable logging to \fIlogfile\fR. Defaults are \'iwearmo\'.
++Enable logging to \fIlogfile\fR. Defaults are 'iwearmo'.
+ .IP "\fB*\fR"
+-Enable all logging options except \'v\' and \'x\'.
++Enable all logging options except 'v' and 'x'.
+ .IP "\fBi\fR"
+ Log status messages.
+ .IP "\fBw\fR"
