@@ -45,9 +45,6 @@
 #ifdef HAVE_SYS_SIGNAL_H
 # include <sys/signal.h>
 #endif
-#ifdef HAVE_SYS_SYSCTL_H
-# include <sys/sysctl.h>
-#endif
 #ifdef HAVE_SYS_UCONTEXT_H
 # include <sys/ucontext.h>
 #endif
@@ -474,8 +471,6 @@ struct stack_layout
 typedef int (*wine_signal_handler)(unsigned int sig);
 
 static const size_t teb_size = 4096;  /* we reserve one page for the TEB */
-static size_t signal_stack_mask;
-static size_t signal_stack_size;
 
 static ULONG first_ldt_entry = 32;
 
@@ -2330,29 +2325,8 @@ static RTL_CRITICAL_SECTION_DEBUG critsect_debug =
       0, 0, { (DWORD_PTR)(__FILE__ ": ldt_section") }
 };
 static RTL_CRITICAL_SECTION ldt_section = { &critsect_debug, -1, 0, 0, 0, 0 };
-static sigset_t ldt_sigset;
 
 static const LDT_ENTRY null_entry;
-
-static void ldt_lock(void)
-{
-    sigset_t sigset;
-
-    pthread_sigmask( SIG_BLOCK, &server_block_set, &sigset );
-    RtlEnterCriticalSection( &ldt_section );
-    if (ldt_section.RecursionCount == 1) ldt_sigset = sigset;
-}
-
-static void ldt_unlock(void)
-{
-    if (ldt_section.RecursionCount == 1)
-    {
-        sigset_t sigset = ldt_sigset;
-        RtlLeaveCriticalSection( &ldt_section );
-        pthread_sigmask( SIG_SETMASK, &sigset, NULL );
-    }
-    else RtlLeaveCriticalSection( &ldt_section );
-}
 
 static inline void *ldt_get_base( LDT_ENTRY ent )
 {
@@ -2438,65 +2412,6 @@ static void ldt_set_entry( WORD sel, LDT_ENTRY entry )
                                     LDT_FLAGS_ALLOCATED);
 }
 
-static void ldt_init(void)
-{
-#ifdef __linux__
-    /* the preloader may have allocated it already */
-    gdt_fs_sel = get_fs();
-    if (!gdt_fs_sel || !is_gdt_sel( gdt_fs_sel ))
-    {
-        struct modify_ldt_s ldt_info = { -1 };
-
-        ldt_info.seg_32bit = 1;
-        ldt_info.usable = 1;
-        if (set_thread_area( &ldt_info ) >= 0) gdt_fs_sel = (ldt_info.entry_number << 3) | 3;
-        else gdt_fs_sel = 0;
-    }
-#elif defined(__FreeBSD__) || defined (__FreeBSD_kernel__)
-    gdt_fs_sel = GSEL( GUFS_SEL, SEL_UPL );
-#endif
-}
-
-WORD ldt_alloc_fs( TEB *teb, int first_thread )
-{
-    LDT_ENTRY entry;
-    int idx;
-
-    if (gdt_fs_sel) return gdt_fs_sel;
-
-    entry = ldt_make_entry( teb, teb_size - 1, LDT_FLAGS_DATA | LDT_FLAGS_32BIT );
-
-    if (first_thread)  /* no locking for first thread */
-    {
-        /* leave some space if libc is using the LDT for %gs */
-        if (!is_gdt_sel( get_gs() )) first_ldt_entry = 512;
-        idx = first_ldt_entry;
-        ldt_set_entry( (idx << 3) | 7, entry );
-    }
-    else
-    {
-        ldt_lock();
-        for (idx = first_ldt_entry; idx < LDT_SIZE; idx++)
-        {
-            if (__wine_ldt_copy.flags[idx]) continue;
-            ldt_set_entry( (idx << 3) | 7, entry );
-            break;
-        }
-        ldt_unlock();
-        if (idx == LDT_SIZE) return 0;
-    }
-    return (idx << 3) | 7;
-}
-
-static void ldt_free_fs( WORD sel )
-{
-    if (sel == gdt_fs_sel) return;
-
-    ldt_lock();
-    __wine_ldt_copy.flags[sel >> 3] = 0;
-    ldt_unlock();
-}
-
 static void ldt_set_fs( WORD sel, TEB *teb )
 {
     if (sel == gdt_fs_sel)
@@ -2571,57 +2486,82 @@ NTSTATUS get_thread_ldt_entry( HANDLE handle, void *data, ULONG len, ULONG *ret_
  */
 NTSTATUS WINAPI NtSetLdtEntries( ULONG sel1, LDT_ENTRY entry1, ULONG sel2, LDT_ENTRY entry2 )
 {
+    sigset_t sigset;
+
     if (sel1 >> 16 || sel2 >> 16) return STATUS_INVALID_LDT_DESCRIPTOR;
     if (sel1 && (sel1 >> 3) < first_ldt_entry) return STATUS_INVALID_LDT_DESCRIPTOR;
     if (sel2 && (sel2 >> 3) < first_ldt_entry) return STATUS_INVALID_LDT_DESCRIPTOR;
 
-    ldt_lock();
+    server_enter_uninterrupted_section( &ldt_section, &sigset );
     if (sel1) ldt_set_entry( sel1, entry1 );
     if (sel2) ldt_set_entry( sel2, entry2 );
-    ldt_unlock();
+    server_leave_uninterrupted_section( &ldt_section, &sigset );
    return STATUS_SUCCESS;
+}
+
+
+/**********************************************************************
+ *             signal_init_threading
+ */
+void signal_init_threading(void)
+{
+#ifdef __linux__
+    /* the preloader may have allocated it already */
+    gdt_fs_sel = get_fs();
+    if (!gdt_fs_sel || !is_gdt_sel( gdt_fs_sel ))
+    {
+        struct modify_ldt_s ldt_info = { -1 };
+
+        ldt_info.seg_32bit = 1;
+        ldt_info.usable = 1;
+        if (set_thread_area( &ldt_info ) >= 0) gdt_fs_sel = (ldt_info.entry_number << 3) | 3;
+        else gdt_fs_sel = 0;
+    }
+#elif defined(__FreeBSD__) || defined (__FreeBSD_kernel__)
+    gdt_fs_sel = GSEL( GUFS_SEL, SEL_UPL );
+#endif
 }
 
 
 /**********************************************************************
  *		signal_alloc_thread
  */
-NTSTATUS signal_alloc_thread( TEB **teb )
+NTSTATUS signal_alloc_thread( TEB *teb )
 {
-    static size_t sigstack_alignment;
-    struct x86_thread_data *thread_data;
-    SIZE_T size;
-    void *addr = NULL;
-    NTSTATUS status;
-    int first_thread = !sigstack_alignment;
+    struct x86_thread_data *thread_data = (struct x86_thread_data *)teb->SystemReserved2;
 
-    if (!sigstack_alignment)
+    if (!gdt_fs_sel)
     {
-        size_t min_size = teb_size + max( MINSIGSTKSZ, 8192 );
-        /* find the first power of two not smaller than min_size */
-        sigstack_alignment = 12;
-        while ((1u << sigstack_alignment) < min_size) sigstack_alignment++;
-        signal_stack_mask = (1 << sigstack_alignment) - 1;
-        signal_stack_size = (1 << sigstack_alignment) - teb_size;
-        ldt_init();
-    }
+        static int first_thread = 1;
+        sigset_t sigset;
+        int idx;
+        LDT_ENTRY entry = ldt_make_entry( teb, teb_size - 1, LDT_FLAGS_DATA | LDT_FLAGS_32BIT );
 
-    size = signal_stack_mask + 1;
-    if (!(status = virtual_alloc_aligned( &addr, 0, &size, MEM_COMMIT | MEM_TOP_DOWN,
-                                          PAGE_READWRITE, sigstack_alignment )))
-    {
-        *teb = addr;
-        (*teb)->Tib.Self = &(*teb)->Tib;
-        (*teb)->Tib.ExceptionList = (void *)~0UL;
-        thread_data = (struct x86_thread_data *)(*teb)->SystemReserved2;
-        if (!(thread_data->fs = ldt_alloc_fs( *teb, first_thread )))
+        if (first_thread)  /* no locking for first thread */
         {
-            size = 0;
-            NtFreeVirtualMemory( NtCurrentProcess(), &addr, &size, MEM_RELEASE );
-            status = STATUS_TOO_MANY_THREADS;
+            /* leave some space if libc is using the LDT for %gs */
+            if (!is_gdt_sel( get_gs() )) first_ldt_entry = 512;
+            idx = first_ldt_entry;
+            ldt_set_entry( (idx << 3) | 7, entry );
+            first_thread = 0;
         }
+        else
+        {
+            server_enter_uninterrupted_section( &ldt_section, &sigset );
+            for (idx = first_ldt_entry; idx < LDT_SIZE; idx++)
+            {
+                if (__wine_ldt_copy.flags[idx]) continue;
+                ldt_set_entry( (idx << 3) | 7, entry );
+                break;
+            }
+            server_leave_uninterrupted_section( &ldt_section, &sigset );
+            if (idx == LDT_SIZE) return STATUS_TOO_MANY_THREADS;
+        }
+        thread_data->fs = (idx << 3) | 7;
     }
-    return status;
+    else thread_data->fs = gdt_fs_sel;
+
+    return STATUS_SUCCESS;
 }
 
 
@@ -2630,11 +2570,14 @@ NTSTATUS signal_alloc_thread( TEB **teb )
  */
 void signal_free_thread( TEB *teb )
 {
-    SIZE_T size = 0;
     struct x86_thread_data *thread_data = (struct x86_thread_data *)teb->SystemReserved2;
+    sigset_t sigset;
 
-    ldt_free_fs( thread_data->fs );
-    NtFreeVirtualMemory( NtCurrentProcess(), (void **)&teb, &size, MEM_RELEASE );
+    if (gdt_fs_sel) return;
+
+    server_enter_uninterrupted_section( &ldt_section, &sigset );
+    __wine_ldt_copy.flags[thread_data->fs >> 3] = 0;
+    server_leave_uninterrupted_section( &ldt_section, &sigset );
 }
 
 
@@ -2646,14 +2589,6 @@ void signal_init_thread( TEB *teb )
     const WORD fpu_cw = 0x27f;
     struct x86_thread_data *thread_data = (struct x86_thread_data *)teb->SystemReserved2;
     stack_t ss;
-
-#ifdef __APPLE__
-    int mib[2], val = 1;
-
-    mib[0] = CTL_KERN;
-    mib[1] = KERN_THALTSTACK;
-    sysctl( mib, 2, NULL, NULL, &val, sizeof(val) );
-#endif
 
     ss.ss_sp    = (char *)teb + teb_size;
     ss.ss_size  = signal_stack_size;
@@ -3115,7 +3050,7 @@ __ASM_STDCALL_FUNC( NtCurrentTeb, 0, ".byte 0x64\n\tmovl 0x18,%eax\n\tret" )
 /**************************************************************************
  *           _chkstk   (NTDLL.@)
  */
-__ASM_STDCALL_FUNC( _chkstk, 0,
+__ASM_GLOBAL_FUNC( _chkstk,
                    "negl %eax\n\t"
                    "addl %esp,%eax\n\t"
                    "xchgl %esp,%eax\n\t"
@@ -3126,7 +3061,7 @@ __ASM_STDCALL_FUNC( _chkstk, 0,
 /**************************************************************************
  *           _alloca_probe   (NTDLL.@)
  */
-__ASM_STDCALL_FUNC( _alloca_probe, 0,
+__ASM_GLOBAL_FUNC( _alloca_probe,
                    "negl %eax\n\t"
                    "addl %esp,%eax\n\t"
                    "xchgl %esp,%eax\n\t"

@@ -77,7 +77,10 @@ extern LPCSTR debugstr_us( const UNICODE_STRING *str ) DECLSPEC_HIDDEN;
 extern LPCSTR debugstr_ObjectAttributes(const OBJECT_ATTRIBUTES *oa) DECLSPEC_HIDDEN;
 
 /* init routines */
-extern NTSTATUS signal_alloc_thread( TEB **teb ) DECLSPEC_HIDDEN;
+extern SIZE_T signal_stack_size DECLSPEC_HIDDEN;
+extern SIZE_T signal_stack_mask DECLSPEC_HIDDEN;
+extern void signal_init_threading(void) DECLSPEC_HIDDEN;
+extern NTSTATUS signal_alloc_thread( TEB *teb ) DECLSPEC_HIDDEN;
 extern void signal_free_thread( TEB *teb ) DECLSPEC_HIDDEN;
 extern void signal_init_thread( TEB *teb ) DECLSPEC_HIDDEN;
 extern void signal_init_process(void) DECLSPEC_HIDDEN;
@@ -90,12 +93,12 @@ extern void debug_init(void) DECLSPEC_HIDDEN;
 extern TEB *thread_init(void) DECLSPEC_HIDDEN;
 extern void actctx_init(void) DECLSPEC_HIDDEN;
 extern void virtual_init(void) DECLSPEC_HIDDEN;
-extern void virtual_init_threading(void) DECLSPEC_HIDDEN;
 extern void fill_cpu_info(void) DECLSPEC_HIDDEN;
 extern void heap_set_debug_flags( HANDLE handle ) DECLSPEC_HIDDEN;
 extern void init_unix_codepage(void) DECLSPEC_HIDDEN;
 extern void init_locale( HMODULE module ) DECLSPEC_HIDDEN;
 extern void init_user_process_params( SIZE_T data_size ) DECLSPEC_HIDDEN;
+extern void init_paths(void) DECLSPEC_HIDDEN;
 extern char **build_envp( const WCHAR *envW ) DECLSPEC_HIDDEN;
 extern NTSTATUS restart_process( RTL_USER_PROCESS_PARAMETERS *params, NTSTATUS status ) DECLSPEC_HIDDEN;
 
@@ -104,9 +107,15 @@ extern char **__wine_main_argv;
 extern WCHAR **__wine_main_wargv;
 
 /* server support */
+extern const char *build_dir DECLSPEC_HIDDEN;
+extern const char *data_dir DECLSPEC_HIDDEN;
+extern const char *config_dir DECLSPEC_HIDDEN;
+extern const char **dll_paths DECLSPEC_HIDDEN;
+extern size_t dll_path_maxlen DECLSPEC_HIDDEN;
 extern timeout_t server_start_time DECLSPEC_HIDDEN;
 extern unsigned int server_cpus DECLSPEC_HIDDEN;
 extern BOOL is_wow64 DECLSPEC_HIDDEN;
+extern NTSTATUS exec_wineloader( char **argv, int socketfd, const pe_image_info_t *pe_info ) DECLSPEC_HIDDEN;
 extern void server_init_process(void) DECLSPEC_HIDDEN;
 extern void server_init_process_done(void) DECLSPEC_HIDDEN;
 extern size_t server_init_thread( void *entry_point, BOOL *suspend ) DECLSPEC_HIDDEN;
@@ -183,13 +192,16 @@ extern NTSTATUS nt_to_unix_file_name_attr( const OBJECT_ATTRIBUTES *attr, ANSI_S
                                            UINT disposition ) DECLSPEC_HIDDEN;
 
 /* virtual memory */
-extern NTSTATUS virtual_alloc_aligned( PVOID *ret, unsigned short zero_bits_64, SIZE_T *size_ptr,
-                                       ULONG type, ULONG protect, ULONG alignment ) DECLSPEC_HIDDEN;
+extern NTSTATUS virtual_alloc( PVOID *ret, unsigned short zero_bits_64, SIZE_T *size_ptr,
+                               ULONG type, ULONG protect ) DECLSPEC_HIDDEN;
 extern NTSTATUS virtual_map_section( HANDLE handle, PVOID *addr_ptr, unsigned short zero_bits_64, SIZE_T commit_size,
                                      const LARGE_INTEGER *offset_ptr, SIZE_T *size_ptr, ULONG alloc_type,
                                      ULONG protect, pe_image_info_t *image_info ) DECLSPEC_HIDDEN;
 extern void virtual_get_system_info( SYSTEM_BASIC_INFORMATION *info ) DECLSPEC_HIDDEN;
 extern NTSTATUS virtual_create_builtin_view( void *base ) DECLSPEC_HIDDEN;
+extern TEB * virtual_alloc_first_teb(void) DECLSPEC_HIDDEN;
+extern NTSTATUS virtual_alloc_teb( TEB **teb ) DECLSPEC_HIDDEN;
+extern void virtual_free_teb( TEB *teb ) DECLSPEC_HIDDEN;
 extern NTSTATUS virtual_alloc_thread_stack( INITIAL_TEB *stack, SIZE_T reserve_size,
                                             SIZE_T commit_size, SIZE_T *pthread_size ) DECLSPEC_HIDDEN;
 extern void virtual_clear_thread_stack( void *stack_end ) DECLSPEC_HIDDEN;
@@ -281,6 +293,10 @@ extern SYSTEM_CPU_INFORMATION cpu_info DECLSPEC_HIDDEN;
 
 NTSTATUS WINAPI RtlHashUnicodeString(PCUNICODE_STRING,BOOLEAN,ULONG,ULONG*);
 void     WINAPI LdrInitializeThunk(CONTEXT*,void**,ULONG_PTR,ULONG_PTR);
+
+#ifndef __GCC_HAVE_SYNC_COMPARE_AND_SWAP_8
+#define InterlockedCompareExchange64(dest,xchg,cmp) RtlInterlockedCompareExchange64(dest,xchg,cmp)
+#endif
 
 /* string functions */
 int    __cdecl NTDLL_tolower( int c );

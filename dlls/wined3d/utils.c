@@ -4135,70 +4135,78 @@ static void init_vulkan_format_info(struct wined3d_format_vk *format,
     {
         enum wined3d_format_id id;
         VkFormat vk_format;
+        const char *fixup;
     }
     vulkan_formats[] =
     {
-        {WINED3DFMT_R32G32B32A32_FLOAT,    VK_FORMAT_R32G32B32A32_SFLOAT,     },
-        {WINED3DFMT_R32G32B32A32_UINT,     VK_FORMAT_R32G32B32A32_UINT,       },
-        {WINED3DFMT_R32G32B32A32_SINT,     VK_FORMAT_R32G32B32A32_SINT,       },
-        {WINED3DFMT_R32G32B32_FLOAT,       VK_FORMAT_R32G32B32_SFLOAT,        },
-        {WINED3DFMT_R32G32B32_UINT,        VK_FORMAT_R32G32B32_UINT,          },
-        {WINED3DFMT_R32G32B32_SINT,        VK_FORMAT_R32G32B32_SINT,          },
-        {WINED3DFMT_R16G16B16A16_FLOAT,    VK_FORMAT_R16G16B16A16_SFLOAT,     },
-        {WINED3DFMT_R16G16B16A16_UNORM,    VK_FORMAT_R16G16B16A16_UNORM,      },
-        {WINED3DFMT_R16G16B16A16_UINT,     VK_FORMAT_R16G16B16A16_UINT,       },
-        {WINED3DFMT_R16G16B16A16_SNORM,    VK_FORMAT_R16G16B16A16_SNORM,      },
-        {WINED3DFMT_R16G16B16A16_SINT,     VK_FORMAT_R16G16B16A16_SINT,       },
-        {WINED3DFMT_R32G32_FLOAT,          VK_FORMAT_R32G32_SFLOAT,           },
-        {WINED3DFMT_R32G32_UINT,           VK_FORMAT_R32G32_UINT,             },
-        {WINED3DFMT_R32G32_SINT,           VK_FORMAT_R32G32_SINT,             },
-        {WINED3DFMT_R10G10B10A2_UNORM,     VK_FORMAT_A2B10G10R10_UNORM_PACK32,},
-        {WINED3DFMT_R11G11B10_FLOAT,       VK_FORMAT_B10G11R11_UFLOAT_PACK32, },
-        {WINED3DFMT_R8G8_UNORM,            VK_FORMAT_R8G8_UNORM,              },
-        {WINED3DFMT_R8G8_UINT,             VK_FORMAT_R8G8_UINT,               },
-        {WINED3DFMT_R8G8_SNORM,            VK_FORMAT_R8G8_SNORM,              },
-        {WINED3DFMT_R8G8_SINT,             VK_FORMAT_R8G8_SINT,               },
-        {WINED3DFMT_R8G8B8A8_UNORM,        VK_FORMAT_R8G8B8A8_UNORM,          },
-        {WINED3DFMT_R8G8B8A8_UNORM_SRGB,   VK_FORMAT_R8G8B8A8_SRGB,           },
-        {WINED3DFMT_R8G8B8A8_UINT,         VK_FORMAT_R8G8B8A8_UINT,           },
-        {WINED3DFMT_R8G8B8A8_SNORM,        VK_FORMAT_R8G8B8A8_SNORM,          },
-        {WINED3DFMT_R8G8B8A8_SINT,         VK_FORMAT_R8G8B8A8_SINT,           },
-        {WINED3DFMT_R16G16_FLOAT,          VK_FORMAT_R16G16_SFLOAT,           },
-        {WINED3DFMT_R16G16_UNORM,          VK_FORMAT_R16G16_UNORM,            },
-        {WINED3DFMT_R16G16_UINT,           VK_FORMAT_R16G16_UINT,             },
-        {WINED3DFMT_R16G16_SNORM,          VK_FORMAT_R16G16_SNORM,            },
-        {WINED3DFMT_R16G16_SINT,           VK_FORMAT_R16G16_SINT,             },
-        {WINED3DFMT_D32_FLOAT,             VK_FORMAT_D32_SFLOAT,              },
-        {WINED3DFMT_R32_FLOAT,             VK_FORMAT_R32_SFLOAT,              },
-        {WINED3DFMT_R32_UINT,              VK_FORMAT_R32_UINT,                },
-        {WINED3DFMT_R32_SINT,              VK_FORMAT_R32_SINT,                },
-        {WINED3DFMT_R16_FLOAT,             VK_FORMAT_R16_SFLOAT,              },
-        {WINED3DFMT_D16_UNORM,             VK_FORMAT_D16_UNORM,               },
-        {WINED3DFMT_R16_UNORM,             VK_FORMAT_R16_UNORM,               },
-        {WINED3DFMT_R16_UINT,              VK_FORMAT_R16_UINT,                },
-        {WINED3DFMT_R16_SNORM,             VK_FORMAT_R16_SNORM,               },
-        {WINED3DFMT_R16_SINT,              VK_FORMAT_R16_SINT,                },
-        {WINED3DFMT_R8_UNORM,              VK_FORMAT_R8_UNORM,                },
-        {WINED3DFMT_R8_UINT,               VK_FORMAT_R8_UINT,                 },
-        {WINED3DFMT_R8_SNORM,              VK_FORMAT_R8_SNORM,                },
-        {WINED3DFMT_R8_SINT,               VK_FORMAT_R8_SINT,                 },
-        {WINED3DFMT_A8_UNORM,              VK_FORMAT_R8_UNORM,                },
-        {WINED3DFMT_B8G8R8A8_UNORM,        VK_FORMAT_B8G8R8A8_UNORM,          },
-        {WINED3DFMT_B8G8R8A8_UNORM_SRGB,   VK_FORMAT_B8G8R8A8_SRGB,           },
-        {WINED3DFMT_BC1_UNORM,             VK_FORMAT_BC1_RGBA_UNORM_BLOCK,    },
-        {WINED3DFMT_BC1_UNORM_SRGB,        VK_FORMAT_BC1_RGBA_SRGB_BLOCK,     },
-        {WINED3DFMT_BC2_UNORM,             VK_FORMAT_BC2_UNORM_BLOCK,         },
-        {WINED3DFMT_BC2_UNORM_SRGB,        VK_FORMAT_BC2_SRGB_BLOCK,          },
-        {WINED3DFMT_BC3_UNORM,             VK_FORMAT_BC3_UNORM_BLOCK,         },
-        {WINED3DFMT_BC3_UNORM_SRGB,        VK_FORMAT_BC3_SRGB_BLOCK,          },
-        {WINED3DFMT_BC4_UNORM,             VK_FORMAT_BC4_UNORM_BLOCK,         },
-        {WINED3DFMT_BC4_SNORM,             VK_FORMAT_BC4_SNORM_BLOCK,         },
-        {WINED3DFMT_BC5_UNORM,             VK_FORMAT_BC5_UNORM_BLOCK,         },
-        {WINED3DFMT_BC5_SNORM,             VK_FORMAT_BC5_SNORM_BLOCK,         },
-        {WINED3DFMT_BC6H_UF16,             VK_FORMAT_BC6H_UFLOAT_BLOCK,       },
-        {WINED3DFMT_BC6H_SF16,             VK_FORMAT_BC6H_SFLOAT_BLOCK,       },
-        {WINED3DFMT_BC7_UNORM,             VK_FORMAT_BC7_UNORM_BLOCK,         },
-        {WINED3DFMT_BC7_UNORM_SRGB,        VK_FORMAT_BC7_SRGB_BLOCK,          },
+        {WINED3DFMT_R32G32B32A32_FLOAT,         VK_FORMAT_R32G32B32A32_SFLOAT,     },
+        {WINED3DFMT_R32G32B32A32_UINT,          VK_FORMAT_R32G32B32A32_UINT,       },
+        {WINED3DFMT_R32G32B32A32_SINT,          VK_FORMAT_R32G32B32A32_SINT,       },
+        {WINED3DFMT_R32G32B32_FLOAT,            VK_FORMAT_R32G32B32_SFLOAT,        },
+        {WINED3DFMT_R32G32B32_UINT,             VK_FORMAT_R32G32B32_UINT,          },
+        {WINED3DFMT_R32G32B32_SINT,             VK_FORMAT_R32G32B32_SINT,          },
+        {WINED3DFMT_R16G16B16A16_FLOAT,         VK_FORMAT_R16G16B16A16_SFLOAT,     },
+        {WINED3DFMT_R16G16B16A16_UNORM,         VK_FORMAT_R16G16B16A16_UNORM,      },
+        {WINED3DFMT_R16G16B16A16_UINT,          VK_FORMAT_R16G16B16A16_UINT,       },
+        {WINED3DFMT_R16G16B16A16_SNORM,         VK_FORMAT_R16G16B16A16_SNORM,      },
+        {WINED3DFMT_R16G16B16A16_SINT,          VK_FORMAT_R16G16B16A16_SINT,       },
+        {WINED3DFMT_R32G32_FLOAT,               VK_FORMAT_R32G32_SFLOAT,           },
+        {WINED3DFMT_R32G32_UINT,                VK_FORMAT_R32G32_UINT,             },
+        {WINED3DFMT_R32G32_SINT,                VK_FORMAT_R32G32_SINT,             },
+        {WINED3DFMT_R10G10B10A2_UNORM,          VK_FORMAT_A2B10G10R10_UNORM_PACK32,},
+        {WINED3DFMT_R11G11B10_FLOAT,            VK_FORMAT_B10G11R11_UFLOAT_PACK32, },
+        {WINED3DFMT_R8G8_UNORM,                 VK_FORMAT_R8G8_UNORM,              },
+        {WINED3DFMT_R8G8_UINT,                  VK_FORMAT_R8G8_UINT,               },
+        {WINED3DFMT_R8G8_SNORM,                 VK_FORMAT_R8G8_SNORM,              },
+        {WINED3DFMT_R8G8_SINT,                  VK_FORMAT_R8G8_SINT,               },
+        {WINED3DFMT_R8G8B8A8_UNORM,             VK_FORMAT_R8G8B8A8_UNORM,          },
+        {WINED3DFMT_R8G8B8A8_UNORM_SRGB,        VK_FORMAT_R8G8B8A8_SRGB,           },
+        {WINED3DFMT_R8G8B8A8_UINT,              VK_FORMAT_R8G8B8A8_UINT,           },
+        {WINED3DFMT_R8G8B8A8_SNORM,             VK_FORMAT_R8G8B8A8_SNORM,          },
+        {WINED3DFMT_R8G8B8A8_SINT,              VK_FORMAT_R8G8B8A8_SINT,           },
+        {WINED3DFMT_R16G16_FLOAT,               VK_FORMAT_R16G16_SFLOAT,           },
+        {WINED3DFMT_R16G16_UNORM,               VK_FORMAT_R16G16_UNORM,            },
+        {WINED3DFMT_R16G16_UINT,                VK_FORMAT_R16G16_UINT,             },
+        {WINED3DFMT_R16G16_SNORM,               VK_FORMAT_R16G16_SNORM,            },
+        {WINED3DFMT_R16G16_SINT,                VK_FORMAT_R16G16_SINT,             },
+        {WINED3DFMT_D32_FLOAT,                  VK_FORMAT_D32_SFLOAT,              },
+        {WINED3DFMT_R32_FLOAT,                  VK_FORMAT_R32_SFLOAT,              },
+        {WINED3DFMT_R32_UINT,                   VK_FORMAT_R32_UINT,                },
+        {WINED3DFMT_R32_SINT,                   VK_FORMAT_R32_SINT,                },
+        {WINED3DFMT_R16_FLOAT,                  VK_FORMAT_R16_SFLOAT,              },
+        {WINED3DFMT_D16_UNORM,                  VK_FORMAT_D16_UNORM,               },
+        {WINED3DFMT_R16_UNORM,                  VK_FORMAT_R16_UNORM,               },
+        {WINED3DFMT_R16_UINT,                   VK_FORMAT_R16_UINT,                },
+        {WINED3DFMT_R16_SNORM,                  VK_FORMAT_R16_SNORM,               },
+        {WINED3DFMT_R16_SINT,                   VK_FORMAT_R16_SINT,                },
+        {WINED3DFMT_R8_UNORM,                   VK_FORMAT_R8_UNORM,                },
+        {WINED3DFMT_R8_UINT,                    VK_FORMAT_R8_UINT,                 },
+        {WINED3DFMT_R8_SNORM,                   VK_FORMAT_R8_SNORM,                },
+        {WINED3DFMT_R8_SINT,                    VK_FORMAT_R8_SINT,                 },
+        {WINED3DFMT_A8_UNORM,                   VK_FORMAT_R8_UNORM,                "000X"},
+        {WINED3DFMT_B8G8R8A8_UNORM,             VK_FORMAT_B8G8R8A8_UNORM,          },
+        {WINED3DFMT_B8G8R8A8_UNORM_SRGB,        VK_FORMAT_B8G8R8A8_SRGB,           },
+        {WINED3DFMT_B8G8R8X8_UNORM,             VK_FORMAT_B8G8R8A8_UNORM,          "XYZ1"},
+        {WINED3DFMT_B8G8R8X8_UNORM_SRGB,        VK_FORMAT_B8G8R8A8_SRGB,           "XYZ1"},
+        {WINED3DFMT_BC1_UNORM,                  VK_FORMAT_BC1_RGBA_UNORM_BLOCK,    },
+        {WINED3DFMT_BC1_UNORM_SRGB,             VK_FORMAT_BC1_RGBA_SRGB_BLOCK,     },
+        {WINED3DFMT_BC2_UNORM,                  VK_FORMAT_BC2_UNORM_BLOCK,         },
+        {WINED3DFMT_BC2_UNORM_SRGB,             VK_FORMAT_BC2_SRGB_BLOCK,          },
+        {WINED3DFMT_BC3_UNORM,                  VK_FORMAT_BC3_UNORM_BLOCK,         },
+        {WINED3DFMT_BC3_UNORM_SRGB,             VK_FORMAT_BC3_SRGB_BLOCK,          },
+        {WINED3DFMT_BC4_UNORM,                  VK_FORMAT_BC4_UNORM_BLOCK,         },
+        {WINED3DFMT_BC4_SNORM,                  VK_FORMAT_BC4_SNORM_BLOCK,         },
+        {WINED3DFMT_BC5_UNORM,                  VK_FORMAT_BC5_UNORM_BLOCK,         },
+        {WINED3DFMT_BC5_SNORM,                  VK_FORMAT_BC5_SNORM_BLOCK,         },
+        {WINED3DFMT_BC6H_UF16,                  VK_FORMAT_BC6H_UFLOAT_BLOCK,       },
+        {WINED3DFMT_BC6H_SF16,                  VK_FORMAT_BC6H_SFLOAT_BLOCK,       },
+        {WINED3DFMT_BC7_UNORM,                  VK_FORMAT_BC7_UNORM_BLOCK,         },
+        {WINED3DFMT_BC7_UNORM_SRGB,             VK_FORMAT_BC7_SRGB_BLOCK,          },
+        {WINED3DFMT_R9G9B9E5_SHAREDEXP,         VK_FORMAT_E5B9G9R9_UFLOAT_PACK32,  },
+        {WINED3DFMT_D32_FLOAT_S8X24_UINT,       VK_FORMAT_D32_SFLOAT_S8_UINT,      },
+        {WINED3DFMT_R32_FLOAT_X8X24_TYPELESS,   VK_FORMAT_D32_SFLOAT_S8_UINT,      },
+        {WINED3DFMT_X32_TYPELESS_G8X24_UINT,    VK_FORMAT_D32_SFLOAT_S8_UINT,      },
+        {WINED3DFMT_D24_UNORM_S8_UINT,          VK_FORMAT_D32_SFLOAT_S8_UINT,      },
     };
     VkFormat vk_format = VK_FORMAT_UNDEFINED;
     VkImageFormatProperties image_properties;
@@ -4206,6 +4214,7 @@ static void init_vulkan_format_info(struct wined3d_format_vk *format,
     VkFormatProperties properties;
     VkImageUsageFlags vk_usage;
     unsigned int flags;
+    const char *fixup;
     unsigned int i;
     VkResult vr;
 
@@ -4214,6 +4223,7 @@ static void init_vulkan_format_info(struct wined3d_format_vk *format,
         if (vulkan_formats[i].id == format->f.id)
         {
             vk_format = vulkan_formats[i].vk_format;
+            fixup = vulkan_formats[i].fixup;
             break;
         }
     }
@@ -4224,6 +4234,10 @@ static void init_vulkan_format_info(struct wined3d_format_vk *format,
     }
 
     format->vk_format = vk_format;
+    if (fixup)
+        format->f.color_fixup = create_color_fixup_desc_from_string(fixup);
+    else
+        format->f.color_fixup = COLOR_FIXUP_IDENTITY;
 
     VK_CALL(vkGetPhysicalDeviceFormatProperties(vk_physical_device, vk_format, &properties));
 

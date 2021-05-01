@@ -49,7 +49,8 @@ DEFINE_GUID(DUMMY_CLSID, 0x12345678,0x1234,0x1234,0x12,0x13,0x14,0x15,0x16,0x17,
 DEFINE_GUID(DUMMY_GUID1, 0x12345678,0x1234,0x1234,0x21,0x21,0x21,0x21,0x21,0x21,0x21,0x21);
 DEFINE_GUID(DUMMY_GUID2, 0x12345678,0x1234,0x1234,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22);
 DEFINE_GUID(DUMMY_GUID3, 0x12345678,0x1234,0x1234,0x23,0x23,0x23,0x23,0x23,0x23,0x23,0x23);
-DEFINE_GUID(CLSID_FileSchemeHandler, 0x477ec299, 0x1421, 0x4bdd, 0x97, 0x1f, 0x7c, 0xcb, 0x93, 0x3f, 0x21, 0xad);
+
+extern const CLSID CLSID_FileSchemePlugin;
 
 DEFINE_MEDIATYPE_GUID(MFVideoFormat_IMC1, MAKEFOURCC('I','M','C','1'));
 DEFINE_MEDIATYPE_GUID(MFVideoFormat_IMC2, MAKEFOURCC('I','M','C','2'));
@@ -604,6 +605,10 @@ skip_source_tests:
     /* Create from URL. */
     callback.event = CreateEventA(NULL, FALSE, FALSE, NULL);
 
+    hr = IMFSourceResolver_CreateObjectFromURL(resolver, L"nonexisting.mp4", MF_RESOLUTION_BYTESTREAM, NULL, &obj_type,
+            (IUnknown **)&stream);
+    ok(hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND), "Unexpected hr %#x.\n", hr);
+
     hr = IMFSourceResolver_CreateObjectFromURL(resolver, filename, MF_RESOLUTION_BYTESTREAM, NULL, &obj_type,
             (IUnknown **)&stream);
     ok(hr == S_OK, "Failed to resolve url, hr %#x.\n", hr);
@@ -634,7 +639,7 @@ skip_source_tests:
     ok(SUCCEEDED(hr), "Failed to initialize, hr %#x.\n", hr);
     do_uninit = hr == S_OK;
 
-    hr = CoCreateInstance(&CLSID_FileSchemeHandler, NULL, CLSCTX_INPROC_SERVER, &IID_IMFSchemeHandler,
+    hr = CoCreateInstance(&CLSID_FileSchemePlugin, NULL, CLSCTX_INPROC_SERVER, &IID_IMFSchemeHandler,
             (void **)&scheme_handler);
     ok(hr == S_OK, "Failed to create handler object, hr %#x.\n", hr);
 
@@ -3548,41 +3553,56 @@ static void test_MFCalculateImageSize(void)
         { &MFVideoFormat_NV12, 1, 2, 6, 3 },
         { &MFVideoFormat_NV12, 2, 2, 6, 6 },
         { &MFVideoFormat_NV12, 3, 2, 12, 9 },
-        { &MFVideoFormat_NV12, 4, 2, 12, 12 },
+        { &MFVideoFormat_NV12, 4, 2, 12 },
+        { &MFVideoFormat_NV12, 320, 240, 115200 },
         { &MFVideoFormat_AYUV, 1, 1, 4 },
         { &MFVideoFormat_AYUV, 2, 1, 8 },
         { &MFVideoFormat_AYUV, 1, 2, 8 },
         { &MFVideoFormat_AYUV, 4, 3, 48 },
+        { &MFVideoFormat_AYUV, 320, 240, 307200 },
         { &MFVideoFormat_IMC1, 1, 1, 4 },
         { &MFVideoFormat_IMC1, 2, 1, 4 },
         { &MFVideoFormat_IMC1, 1, 2, 8 },
         { &MFVideoFormat_IMC1, 4, 3, 24 },
+        { &MFVideoFormat_IMC1, 320, 240, 153600 },
         { &MFVideoFormat_IMC3, 1, 1, 4 },
         { &MFVideoFormat_IMC3, 2, 1, 4 },
         { &MFVideoFormat_IMC3, 1, 2, 8 },
         { &MFVideoFormat_IMC3, 4, 3, 24 },
+        { &MFVideoFormat_IMC3, 320, 240, 153600 },
         { &MFVideoFormat_IMC2, 1, 3, 9, 4 },
         { &MFVideoFormat_IMC2, 1, 2, 6, 3 },
         { &MFVideoFormat_IMC2, 2, 2, 6, 6 },
         { &MFVideoFormat_IMC2, 3, 2, 12, 9 },
-        { &MFVideoFormat_IMC2, 4, 2, 12, 12 },
+        { &MFVideoFormat_IMC2, 4, 2, 12 },
+        { &MFVideoFormat_IMC2, 320, 240, 115200 },
         { &MFVideoFormat_IMC4, 1, 3, 9, 4 },
         { &MFVideoFormat_IMC4, 1, 2, 6, 3 },
         { &MFVideoFormat_IMC4, 2, 2, 6, 6 },
         { &MFVideoFormat_IMC4, 3, 2, 12, 9 },
-        { &MFVideoFormat_IMC4, 4, 2, 12, 12 },
+        { &MFVideoFormat_IMC4, 4, 2, 12 },
+        { &MFVideoFormat_IMC4, 320, 240, 115200 },
         { &MFVideoFormat_YV12, 1, 1, 3, 1 },
         { &MFVideoFormat_YV12, 2, 1, 3 },
         { &MFVideoFormat_YV12, 1, 2, 6, 3 },
         { &MFVideoFormat_YV12, 4, 3, 18 },
+        { &MFVideoFormat_YV12, 320, 240, 115200 },
+
+        { &MFVideoFormat_I420, 1, 1, 3, 1 },
+        { &MFVideoFormat_I420, 2, 1, 3 },
+        { &MFVideoFormat_I420, 1, 2, 6, 3 },
+        { &MFVideoFormat_I420, 4, 3, 18 },
+        { &MFVideoFormat_I420, 320, 240, 115200 },
 
         { &MFVideoFormat_YUY2, 2, 1, 4 },
         { &MFVideoFormat_YUY2, 4, 3, 24 },
         { &MFVideoFormat_YUY2, 128, 128, 32768 },
+        { &MFVideoFormat_YUY2, 320, 240, 153600 },
 
         { &MFVideoFormat_UYVY, 2, 1, 4 },
         { &MFVideoFormat_UYVY, 4, 3, 24 },
         { &MFVideoFormat_UYVY, 128, 128, 32768 },
+        { &MFVideoFormat_UYVY, 320, 240, 153600 },
     };
     unsigned int i;
     UINT32 size;
@@ -4711,6 +4731,11 @@ static void test_MFGetStrideForBitmapInfoHeader(void)
         { &MFVideoFormat_YV12, 1, 1 },
         { &MFVideoFormat_YV12, 2, 2 },
         { &MFVideoFormat_YV12, 3, 3 },
+        { &MFVideoFormat_YV12, 320, 320 },
+        { &MFVideoFormat_I420, 1, 1 },
+        { &MFVideoFormat_I420, 2, 2 },
+        { &MFVideoFormat_I420, 3, 3 },
+        { &MFVideoFormat_I420, 320, 320 },
     };
     unsigned int i;
     LONG stride;

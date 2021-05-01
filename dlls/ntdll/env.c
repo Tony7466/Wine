@@ -27,6 +27,9 @@
 #ifdef HAVE_SYS_STAT_H
 # include <sys/stat.h>
 #endif
+#ifdef HAVE_PWD_H
+# include <pwd.h>
+#endif
 #ifdef HAVE_UNISTD_H
 # include <unistd.h>
 #endif
@@ -35,7 +38,6 @@
 #define WIN32_NO_STATUS
 #include "windef.h"
 #include "winternl.h"
-#include "wine/library.h"
 #include "wine/debug.h"
 #include "ntdll_misc.h"
 #include "winnt.h"
@@ -386,28 +388,40 @@ static void set_wow64_environment( WCHAR **env )
     UNICODE_STRING valW = { 0, sizeof(buf), buf };
     OBJECT_ATTRIBUTES attr;
     UNICODE_STRING nameW;
-    const char *p, *name;
+    const char *p;
+    const char *home = getenv( "HOME" );
+    const char *name = getenv( "USER" );
     WCHAR *val;
     HANDLE hkey;
     DWORD i;
 
+    if (!home || !name)
+    {
+        struct passwd *pwd = getpwuid( getuid() );
+        if (pwd)
+        {
+            if (!home) home = pwd->pw_dir;
+            if (!name) name = pwd->pw_name;
+        }
+    }
+
     /* set the Wine paths */
 
-    set_wine_path_variable( env, winedatadirW, wine_get_data_dir() );
-    set_wine_path_variable( env, winehomedirW, getenv("HOME") );
-    set_wine_path_variable( env, winebuilddirW, wine_get_build_dir() );
-    set_wine_path_variable( env, wineconfigdirW, wine_get_config_dir() );
-    for (i = 0; (p = wine_dll_enum_load_path( i )); i++)
+    set_wine_path_variable( env, winedatadirW, data_dir );
+    set_wine_path_variable( env, winehomedirW, home );
+    set_wine_path_variable( env, winebuilddirW, build_dir );
+    set_wine_path_variable( env, wineconfigdirW, config_dir );
+    for (i = 0; dll_paths[i]; i++)
     {
         NTDLL_swprintf( buf, winedlldirW, i );
-        set_wine_path_variable( env, buf, p );
+        set_wine_path_variable( env, buf, dll_paths[i] );
     }
     NTDLL_swprintf( buf, winedlldirW, i );
     set_wine_path_variable( env, buf, NULL );
 
     /* set user name */
 
-    name = wine_get_user_name();
+    if (!name) name = "wine";
     if ((p = strrchr( name, '/' ))) name = p + 1;
     if ((p = strrchr( name, '\\' ))) name = p + 1;
     ntdll_umbstowcs( name, strlen(name) + 1, buf, ARRAY_SIZE(buf) );
@@ -982,14 +996,21 @@ NTSTATUS WINAPI RtlQueryEnvironmentVariable_U(PWSTR env,
  */
 void WINAPI RtlSetCurrentEnvironment(PWSTR new_env, PWSTR* old_env)
 {
+    WCHAR *prev;
+
     TRACE("(%p %p)\n", new_env, old_env);
 
     RtlAcquirePebLock();
 
-    if (old_env) *old_env = NtCurrentTeb()->Peb->ProcessParameters->Environment;
+    prev = NtCurrentTeb()->Peb->ProcessParameters->Environment;
     NtCurrentTeb()->Peb->ProcessParameters->Environment = new_env;
 
     RtlReleasePebLock();
+
+    if (old_env)
+        *old_env = prev;
+    else
+        RtlDestroyEnvironment( prev );
 }
 
 

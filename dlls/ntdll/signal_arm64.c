@@ -111,7 +111,6 @@ static DWORD64 get_fault_esr( ucontext_t *sigcontext )
 #endif /* linux */
 
 static const size_t teb_size = 0x2000;  /* we reserve two pages for the TEB */
-static const size_t signal_stack_size = max( MINSIGSTKSZ, 8192 );
 
 /* stack layout when calling an exception raise function */
 struct stack_layout
@@ -284,7 +283,7 @@ __ASM_STDCALL_FUNC( RtlCaptureContext, 8,
  */
 static void set_cpu_context( const CONTEXT *context )
 {
-    interlocked_xchg_ptr( (void **)&arm64_thread_data()->context, (void *)context );
+    InterlockedExchangePointer( (void **)&arm64_thread_data()->context, (void *)context );
     raise( SIGUSR2 );
 }
 
@@ -1230,7 +1229,7 @@ static void usr1_handler( int signal, siginfo_t *siginfo, void *sigcontext )
  */
 static void usr2_handler( int signal, siginfo_t *siginfo, void *sigcontext )
 {
-    CONTEXT *context = interlocked_xchg_ptr( (void **)&arm64_thread_data()->context, NULL );
+    CONTEXT *context = InterlockedExchangePointer( (void **)&arm64_thread_data()->context, NULL );
     if (!context) return;
     if ((context->ContextFlags & ~CONTEXT_ARM64) & CONTEXT_FLOATING_POINT)
         restore_fpu( context, sigcontext );
@@ -1251,22 +1250,20 @@ int CDECL __wine_set_signal_handler(unsigned int sig, wine_signal_handler wsh)
 
 
 /**********************************************************************
+ *             signal_init_threading
+ */
+void signal_init_threading(void)
+{
+    pthread_key_create( &teb_key, NULL );
+}
+
+
+/**********************************************************************
  *             signal_alloc_thread
  */
-NTSTATUS signal_alloc_thread( TEB **teb )
+NTSTATUS signal_alloc_thread( TEB *teb )
 {
-    SIZE_T size;
-    NTSTATUS status;
-
-    size = teb_size + max( MINSIGSTKSZ, 8192 );
-    *teb = NULL;
-    if (!(status = virtual_alloc_aligned( (void **)teb, 0, &size, MEM_COMMIT | MEM_TOP_DOWN,
-                                          PAGE_READWRITE, 13 )))
-    {
-        (*teb)->Tib.Self = &(*teb)->Tib;
-        (*teb)->Tib.ExceptionList = (void *)~0UL;
-    }
-    return status;
+    return STATUS_SUCCESS;
 }
 
 
@@ -1275,9 +1272,6 @@ NTSTATUS signal_alloc_thread( TEB **teb )
  */
 void signal_free_thread( TEB *teb )
 {
-    SIZE_T size = 0;
-
-    NtFreeVirtualMemory( NtCurrentProcess(), (void **)&teb, &size, MEM_RELEASE );
 }
 
 
@@ -1286,14 +1280,7 @@ void signal_free_thread( TEB *teb )
  */
 void signal_init_thread( TEB *teb )
 {
-    static BOOL init_done;
     stack_t ss;
-
-    if (!init_done)
-    {
-        pthread_key_create( &teb_key, NULL );
-        init_done = TRUE;
-    }
 
     ss.ss_sp    = (char *)teb + teb_size;
     ss.ss_size  = signal_stack_size;

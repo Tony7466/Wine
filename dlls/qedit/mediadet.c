@@ -103,40 +103,37 @@ static HRESULT get_filter_info(IMoniker *moniker, GUID *clsid, VARIANT *var)
     return hr;
 }
 
+static HRESULT get_pin_media_type(IPin *pin, AM_MEDIA_TYPE *out)
+{
+    IEnumMediaTypes *enummt;
+    AM_MEDIA_TYPE *pmt;
+    HRESULT hr;
+
+    if (FAILED(hr = IPin_EnumMediaTypes(pin, &enummt)))
+        return hr;
+    hr = IEnumMediaTypes_Next(enummt, 1, &pmt, NULL);
+    IEnumMediaTypes_Release(enummt);
+    if (hr != S_OK)
+        return E_NOINTERFACE;
+
+    *out = *pmt;
+    CoTaskMemFree(pmt);
+    return S_OK;
+}
+
 static HRESULT find_splitter(MediaDetImpl *detector)
 {
     IPin *source_pin, *splitter_pin;
-    IFileSourceFilter *file_source;
     IEnumMoniker *enum_moniker;
     IFilterMapper2 *mapper;
     IBaseFilter *splitter;
     IEnumPins *enum_pins;
-    LPOLESTR filename;
     AM_MEDIA_TYPE mt;
     IMoniker *mon;
     GUID type[2];
     VARIANT var;
     HRESULT hr;
     GUID clsid;
-
-    if (FAILED(hr = IBaseFilter_QueryInterface(detector->source,
-            &IID_IFileSourceFilter, (void **)&file_source)))
-    {
-        ERR("Failed to get file source interface.\n");
-        return hr;
-    }
-
-    hr = IFileSourceFilter_GetCurFile(file_source, &filename, &mt);
-    IFileSourceFilter_Release(file_source);
-    CoTaskMemFree(filename);
-    if (FAILED(hr))
-    {
-        ERR("Failed to get current file, hr %#x.\n", hr);
-        return hr;
-    }
-    type[0] = mt.majortype;
-    type[1] = mt.subtype;
-    FreeMediaType(&mt);
 
     if (FAILED(hr = IBaseFilter_EnumPins(detector->source, &enum_pins)))
     {
@@ -145,11 +142,22 @@ static HRESULT find_splitter(MediaDetImpl *detector)
     }
     hr = IEnumPins_Next(enum_pins, 1, &source_pin, NULL);
     IEnumPins_Release(enum_pins);
-    if (FAILED(hr))
+    if (hr != S_OK)
     {
         ERR("Failed to get source pin, hr %#x.\n", hr);
         return hr;
     }
+
+    if (FAILED(hr = get_pin_media_type(source_pin, &mt)))
+    {
+        ERR("Failed to get media type, hr %#x.\n", hr);
+        IPin_Release(source_pin);
+        return hr;
+    }
+
+    type[0] = mt.majortype;
+    type[1] = mt.subtype;
+    FreeMediaType(&mt);
 
     if (FAILED(hr = CoCreateInstance(&CLSID_FilterMapper2, NULL,
             CLSCTX_INPROC_SERVER, &IID_IFilterMapper2, (void **)&mapper)))
@@ -197,7 +205,7 @@ static HRESULT find_splitter(MediaDetImpl *detector)
 
         hr = IEnumPins_Next(enum_pins, 1, &splitter_pin, NULL);
         IEnumPins_Release(enum_pins);
-        if (FAILED(hr))
+        if (hr != S_OK)
             goto next;
 
         hr = IPin_Connect(source_pin, splitter_pin, NULL);
@@ -516,11 +524,35 @@ static HRESULT WINAPI MediaDet_get_StreamTypeB(IMediaDet *iface, BSTR *bstr)
     return hr;
 }
 
-static HRESULT WINAPI MediaDet_get_StreamLength(IMediaDet* iface, double *pVal)
+static HRESULT WINAPI MediaDet_get_StreamLength(IMediaDet *iface, double *length)
 {
-    MediaDetImpl *This = impl_from_IMediaDet(iface);
-    FIXME("(%p): stub!\n", This);
-    return VFW_E_INVALIDMEDIATYPE;
+    MediaDetImpl *detector = impl_from_IMediaDet(iface);
+    IMediaSeeking *seeking;
+    HRESULT hr;
+
+    TRACE("detector %p, length %p.\n", detector, length);
+
+    if (!length)
+        return E_POINTER;
+
+    if (!detector->cur_pin)
+        return E_INVALIDARG;
+
+    if (SUCCEEDED(hr = IPin_QueryInterface(detector->cur_pin,
+                &IID_IMediaSeeking, (void **)&seeking)))
+    {
+        LONGLONG duration;
+
+        if (SUCCEEDED(hr = IMediaSeeking_GetDuration(seeking, &duration)))
+        {
+            /* Windows assumes the time format is TIME_FORMAT_MEDIA_TIME
+               and does not check it nor convert it, as tests show. */
+            *length = (REFTIME)duration / 10000000;
+        }
+        IMediaSeeking_Release(seeking);
+    }
+
+    return hr;
 }
 
 static HRESULT WINAPI MediaDet_get_Filename(IMediaDet* iface, BSTR *pVal)
@@ -611,9 +643,6 @@ static HRESULT WINAPI MediaDet_get_StreamMediaType(IMediaDet* iface,
                                                    AM_MEDIA_TYPE *pVal)
 {
     MediaDetImpl *This = impl_from_IMediaDet(iface);
-    IEnumMediaTypes *types;
-    AM_MEDIA_TYPE *pmt;
-    HRESULT hr;
 
     TRACE("(%p)\n", This);
 
@@ -623,22 +652,7 @@ static HRESULT WINAPI MediaDet_get_StreamMediaType(IMediaDet* iface,
     if (!This->cur_pin)
         return E_INVALIDARG;
 
-    hr = IPin_EnumMediaTypes(This->cur_pin, &types);
-    if (SUCCEEDED(hr))
-    {
-        hr = (IEnumMediaTypes_Next(types, 1, &pmt, NULL) == S_OK
-              ? S_OK
-              : E_NOINTERFACE);
-        IEnumMediaTypes_Release(types);
-    }
-
-    if (SUCCEEDED(hr))
-    {
-        *pVal = *pmt;
-        CoTaskMemFree(pmt);
-    }
-
-    return hr;
+    return get_pin_media_type(This->cur_pin, pVal);
 }
 
 static HRESULT WINAPI MediaDet_GetSampleGrabber(IMediaDet* iface,

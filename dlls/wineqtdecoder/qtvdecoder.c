@@ -168,11 +168,6 @@ static HRESULT video_decoder_sink_query_interface(struct strmbase_pin *iface, RE
     return S_OK;
 }
 
-static HRESULT video_decoder_sink_query_accept(struct strmbase_pin *iface, const AM_MEDIA_TYPE *mt)
-{
-    return S_OK;
-}
-
 static void trackingCallback(
                     void *decompressionTrackingRefCon,
                     OSStatus result,
@@ -462,8 +457,6 @@ static void video_decoder_sink_disconnect(struct strmbase_sink *iface)
 static const struct strmbase_sink_ops sink_ops =
 {
     .base.pin_query_interface = video_decoder_sink_query_interface,
-    .base.pin_query_accept = video_decoder_sink_query_accept,
-    .base.pin_get_media_type = strmbase_pin_get_media_type,
     .pfnReceive = video_decoder_sink_Receive,
     .sink_connect = video_decoder_sink_connect,
     .sink_disconnect = video_decoder_sink_disconnect,
@@ -609,6 +602,8 @@ static const struct strmbase_filter_ops filter_ops =
 
 HRESULT video_decoder_create(IUnknown *outer, IUnknown **out)
 {
+    static const WCHAR inW[] = { 'I','n',0 };
+    static const WCHAR outW[] = { 'O','u','t',0 };
     QTVDecoderImpl *object;
     HRESULT hr;
     ISeekingPassThru *passthrough;
@@ -621,9 +616,9 @@ HRESULT video_decoder_create(IUnknown *outer, IUnknown **out)
     InitializeCriticalSection(&object->stream_cs);
     object->stream_cs.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__": QTVDecoderImpl.stream_cs");
 
-    strmbase_sink_init(&object->sink, &object->filter, L"In", &sink_ops, NULL);
+    strmbase_sink_init(&object->sink, &object->filter, inW, &sink_ops, NULL);
 
-    strmbase_source_init(&object->source, &object->filter, L"Out", &source_ops);
+    strmbase_source_init(&object->source, &object->filter, outW, &source_ops);
 
     if (FAILED(hr = CoCreateInstance(&CLSID_SeekingPassThru,
             (IUnknown *)&object->source.pin.IPin_iface, CLSCTX_INPROC_SERVER,

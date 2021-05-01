@@ -813,8 +813,8 @@ static void *adapter_vk_map_bo_address(struct wined3d_context *context,
     struct wined3d_device_vk *device_vk;
     VkCommandBuffer vk_command_buffer;
     VkBufferMemoryBarrier vk_barrier;
+    struct wined3d_bo_vk *bo, tmp;
     VkMappedMemoryRange range;
-    struct wined3d_bo_vk *bo;
     void *map_ptr;
 
     if (!(bo = (struct wined3d_bo_vk *)data->buffer_object))
@@ -825,6 +825,19 @@ static void *adapter_vk_map_bo_address(struct wined3d_context *context,
 
     if (map_flags & WINED3D_MAP_NOOVERWRITE)
         goto map;
+
+    if ((map_flags & WINED3D_MAP_DISCARD) && bo->command_buffer_id > context_vk->completed_command_buffer_id)
+    {
+        if (wined3d_context_vk_create_bo(context_vk, bo->size, bo->usage, bo->memory_type, &tmp))
+        {
+            wined3d_context_vk_destroy_bo(context_vk, bo);
+            *bo = tmp;
+
+            goto map;
+        }
+
+        ERR("Failed to create new buffer object.\n");
+    }
 
     if (map_flags & WINED3D_MAP_READ)
     {
@@ -1200,6 +1213,100 @@ static HRESULT adapter_vk_create_rendertarget_view(const struct wined3d_view_des
     return hr;
 }
 
+struct wined3d_view_vk_destroy_ctx
+{
+    struct wined3d_device_vk *device_vk;
+    VkBufferView *vk_buffer_view;
+    VkImageView *vk_image_view;
+    struct wined3d_bo_vk *vk_counter_bo;
+    VkBufferView *vk_counter_view;
+    uint64_t *command_buffer_id;
+    void *object;
+    struct wined3d_view_vk_destroy_ctx *free;
+};
+
+static void wined3d_view_vk_destroy_object(void *object)
+{
+    struct wined3d_view_vk_destroy_ctx *ctx = object;
+    const struct wined3d_vk_info *vk_info;
+    struct wined3d_device_vk *device_vk;
+    struct wined3d_context *context;
+
+    device_vk = ctx->device_vk;
+    vk_info = &wined3d_adapter_vk(device_vk->d.adapter)->vk_info;
+    context = context_acquire(&device_vk->d, NULL, 0);
+
+    if (ctx->vk_buffer_view)
+    {
+        if (context)
+        {
+            wined3d_context_vk_destroy_buffer_view(wined3d_context_vk(context),
+                    *ctx->vk_buffer_view, *ctx->command_buffer_id);
+        }
+        else
+        {
+            VK_CALL(vkDestroyBufferView(device_vk->vk_device, *ctx->vk_buffer_view, NULL));
+            TRACE("Destroyed buffer view 0x%s.\n", wine_dbgstr_longlong(*ctx->vk_buffer_view));
+        }
+    }
+    if (ctx->vk_image_view)
+    {
+        if (context)
+        {
+            wined3d_context_vk_destroy_image_view(wined3d_context_vk(context),
+                    *ctx->vk_image_view, *ctx->command_buffer_id);
+        }
+        else
+        {
+            VK_CALL(vkDestroyImageView(device_vk->vk_device, *ctx->vk_image_view, NULL));
+            TRACE("Destroyed image view 0x%s.\n", wine_dbgstr_longlong(*ctx->vk_image_view));
+        }
+    }
+    if (ctx->vk_counter_bo && ctx->vk_counter_bo->vk_buffer)
+        wined3d_context_vk_destroy_bo(wined3d_context_vk(context), ctx->vk_counter_bo);
+    if (ctx->vk_counter_view)
+    {
+        if (context)
+        {
+            wined3d_context_vk_destroy_buffer_view(wined3d_context_vk(context),
+                    *ctx->vk_counter_view, *ctx->command_buffer_id);
+        }
+        else
+        {
+            VK_CALL(vkDestroyBufferView(device_vk->vk_device, *ctx->vk_counter_view, NULL));
+            TRACE("Destroyed counter buffer view 0x%s.\n", wine_dbgstr_longlong(*ctx->vk_counter_view));
+        }
+    }
+
+    if (context)
+        context_release(context);
+
+    heap_free(ctx->object);
+    heap_free(ctx->free);
+}
+
+static void wined3d_view_vk_destroy(struct wined3d_device *device, VkBufferView *vk_buffer_view,
+        VkImageView *vk_image_view, struct wined3d_bo_vk *vk_counter_bo,
+        VkBufferView *vk_counter_view, uint64_t *command_buffer_id, void *view_vk)
+{
+    struct wined3d_view_vk_destroy_ctx *ctx, c;
+
+    if (!(ctx = heap_alloc(sizeof(*ctx))))
+        ctx = &c;
+    ctx->device_vk = wined3d_device_vk(device);
+    ctx->vk_buffer_view = vk_buffer_view;
+    ctx->vk_image_view = vk_image_view;
+    ctx->vk_counter_bo = vk_counter_bo;
+    ctx->vk_counter_view = vk_counter_view;
+    ctx->command_buffer_id = command_buffer_id;
+    ctx->object = view_vk;
+    ctx->free = ctx != &c ? ctx : NULL;
+
+    wined3d_cs_destroy_object(device->cs, wined3d_view_vk_destroy_object, ctx);
+    if (ctx == &c)
+        device->cs->ops->finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
+}
+
 static void adapter_vk_destroy_rendertarget_view(struct wined3d_rendertarget_view *view)
 {
     struct wined3d_rendertarget_view_vk *view_vk = wined3d_rendertarget_view_vk(view);
@@ -1215,7 +1322,8 @@ static void adapter_vk_destroy_rendertarget_view(struct wined3d_rendertarget_vie
     if (swapchain_count)
         wined3d_device_incref(device);
     wined3d_rendertarget_view_cleanup(&view_vk->v);
-    wined3d_cs_destroy_object(device->cs, heap_free, view_vk);
+    wined3d_view_vk_destroy(device, NULL, &view_vk->vk_image_view,
+            NULL, NULL, &view_vk->command_buffer_id, view_vk);
     if (swapchain_count)
         wined3d_device_decref(device);
 }
@@ -1248,11 +1356,14 @@ static HRESULT adapter_vk_create_shader_resource_view(const struct wined3d_view_
 
 static void adapter_vk_destroy_shader_resource_view(struct wined3d_shader_resource_view *view)
 {
-    struct wined3d_shader_resource_view_vk *view_vk = wined3d_shader_resource_view_vk(view);
-    struct wined3d_device *device = view_vk->v.resource->device;
+    struct wined3d_shader_resource_view_vk *srv_vk = wined3d_shader_resource_view_vk(view);
+    struct wined3d_device *device = srv_vk->v.resource->device;
     unsigned int swapchain_count = device->swapchain_count;
+    struct wined3d_view_vk *view_vk = &srv_vk->view_vk;
+    VkBufferView *vk_buffer_view = NULL;
+    VkImageView *vk_image_view = NULL;
 
-    TRACE("view_vk %p.\n", view_vk);
+    TRACE("srv_vk %p.\n", srv_vk);
 
     /* Take a reference to the device, in case releasing the view's resource
      * would cause the device to be destroyed. However, swapchain resources
@@ -1260,8 +1371,13 @@ static void adapter_vk_destroy_shader_resource_view(struct wined3d_shader_resour
      * the refcount on a device that's in the process of being destroyed. */
     if (swapchain_count)
         wined3d_device_incref(device);
-    wined3d_shader_resource_view_cleanup(&view_vk->v);
-    wined3d_cs_destroy_object(device->cs, heap_free, view_vk);
+    if (srv_vk->v.resource->type == WINED3D_RTYPE_BUFFER)
+        vk_buffer_view = &view_vk->u.vk_buffer_view;
+    else
+        vk_image_view = &view_vk->u.vk_image_info.imageView;
+    wined3d_shader_resource_view_cleanup(&srv_vk->v);
+    wined3d_view_vk_destroy(device, vk_buffer_view, vk_image_view,
+            NULL, NULL, &view_vk->command_buffer_id, srv_vk);
     if (swapchain_count)
         wined3d_device_decref(device);
 }
@@ -1294,11 +1410,14 @@ static HRESULT adapter_vk_create_unordered_access_view(const struct wined3d_view
 
 static void adapter_vk_destroy_unordered_access_view(struct wined3d_unordered_access_view *view)
 {
-    struct wined3d_unordered_access_view_vk *view_vk = wined3d_unordered_access_view_vk(view);
-    struct wined3d_device *device = view_vk->v.resource->device;
+    struct wined3d_unordered_access_view_vk *uav_vk = wined3d_unordered_access_view_vk(view);
+    struct wined3d_device *device = uav_vk->v.resource->device;
     unsigned int swapchain_count = device->swapchain_count;
+    struct wined3d_view_vk *view_vk = &uav_vk->view_vk;
+    VkBufferView *vk_buffer_view = NULL;
+    VkImageView *vk_image_view = NULL;
 
-    TRACE("view_vk %p.\n", view_vk);
+    TRACE("uav_vk %p.\n", uav_vk);
 
     /* Take a reference to the device, in case releasing the view's resource
      * would cause the device to be destroyed. However, swapchain resources
@@ -1306,8 +1425,13 @@ static void adapter_vk_destroy_unordered_access_view(struct wined3d_unordered_ac
      * the refcount on a device that's in the process of being destroyed. */
     if (swapchain_count)
         wined3d_device_incref(device);
-    wined3d_unordered_access_view_cleanup(&view_vk->v);
-    wined3d_cs_destroy_object(device->cs, heap_free, view_vk);
+    if (uav_vk->v.resource->type == WINED3D_RTYPE_BUFFER)
+        vk_buffer_view = &view_vk->u.vk_buffer_view;
+    else
+        vk_image_view = &view_vk->u.vk_image_info.imageView;
+    wined3d_unordered_access_view_cleanup(&uav_vk->v);
+    wined3d_view_vk_destroy(device, vk_buffer_view, vk_image_view, &uav_vk->counter_bo,
+            &uav_vk->vk_counter_view, &view_vk->command_buffer_id, uav_vk);
     if (swapchain_count)
         wined3d_device_decref(device);
 }
@@ -1315,7 +1439,7 @@ static void adapter_vk_destroy_unordered_access_view(struct wined3d_unordered_ac
 static HRESULT adapter_vk_create_sampler(struct wined3d_device *device, const struct wined3d_sampler_desc *desc,
         void *parent, const struct wined3d_parent_ops *parent_ops, struct wined3d_sampler **sampler)
 {
-    struct wined3d_sampler *sampler_vk;
+    struct wined3d_sampler_vk *sampler_vk;
 
     TRACE("device %p, desc %p, parent %p, parent_ops %p, sampler %p.\n",
             device, desc, parent, parent_ops, sampler);
@@ -1326,16 +1450,31 @@ static HRESULT adapter_vk_create_sampler(struct wined3d_device *device, const st
     wined3d_sampler_vk_init(sampler_vk, device, desc, parent, parent_ops);
 
     TRACE("Created sampler %p.\n", sampler_vk);
-    *sampler = sampler_vk;
+    *sampler = &sampler_vk->s;
 
     return WINED3D_OK;
 }
 
+static void wined3d_sampler_vk_destroy_object(void *object)
+{
+    struct wined3d_sampler_vk *sampler_vk = object;
+    struct wined3d_context_vk *context_vk;
+
+    context_vk = wined3d_context_vk(context_acquire(sampler_vk->s.device, NULL, 0));
+
+    wined3d_context_vk_destroy_sampler(context_vk, sampler_vk->vk_image_info.sampler, sampler_vk->command_buffer_id);
+    heap_free(sampler_vk);
+
+    context_release(&context_vk->c);
+}
+
 static void adapter_vk_destroy_sampler(struct wined3d_sampler *sampler)
 {
-    TRACE("sampler %p.\n", sampler);
+    struct wined3d_sampler_vk *sampler_vk = wined3d_sampler_vk(sampler);
 
-    wined3d_cs_destroy_object(sampler->device->cs, heap_free, sampler);
+    TRACE("sampler_vk %p.\n", sampler_vk);
+
+    wined3d_cs_destroy_object(sampler->device->cs, wined3d_sampler_vk_destroy_object, sampler_vk);
 }
 
 static HRESULT adapter_vk_create_query(struct wined3d_device *device, enum wined3d_query_type type,
@@ -1354,7 +1493,23 @@ static void adapter_vk_destroy_query(struct wined3d_query *query)
 
 static void adapter_vk_flush_context(struct wined3d_context *context)
 {
-    TRACE("context %p.\n", context);
+    struct wined3d_context_vk *context_vk = wined3d_context_vk(context);
+
+    TRACE("context_vk %p.\n", context_vk);
+
+    wined3d_context_vk_submit_command_buffer(context_vk, 0, NULL, NULL, 0, NULL);
+}
+
+static void adapter_vk_draw_primitive(struct wined3d_device *device,
+        const struct wined3d_state *state, const struct wined3d_draw_parameters *parameters)
+{
+    FIXME("device %p, state %p, parameters %p.\n", device, state, parameters);
+}
+
+static void adapter_vk_dispatch_compute(struct wined3d_device *device,
+        const struct wined3d_state *state, const struct wined3d_dispatch_parameters *parameters)
+{
+    FIXME("device %p, state %p, parameters %p.\n", device, state, parameters);
 }
 
 void adapter_vk_clear_uav(struct wined3d_context *context,
@@ -1365,36 +1520,38 @@ void adapter_vk_clear_uav(struct wined3d_context *context,
 
 static const struct wined3d_adapter_ops wined3d_adapter_vk_ops =
 {
-    adapter_vk_destroy,
-    adapter_vk_create_device,
-    adapter_vk_destroy_device,
-    adapter_vk_acquire_context,
-    adapter_vk_release_context,
-    adapter_vk_get_wined3d_caps,
-    adapter_vk_check_format,
-    adapter_vk_init_3d,
-    adapter_vk_uninit_3d,
-    adapter_vk_map_bo_address,
-    adapter_vk_unmap_bo_address,
-    adapter_vk_copy_bo_address,
-    adapter_vk_create_swapchain,
-    adapter_vk_destroy_swapchain,
-    adapter_vk_create_buffer,
-    adapter_vk_destroy_buffer,
-    adapter_vk_create_texture,
-    adapter_vk_destroy_texture,
-    adapter_vk_create_rendertarget_view,
-    adapter_vk_destroy_rendertarget_view,
-    adapter_vk_create_shader_resource_view,
-    adapter_vk_destroy_shader_resource_view,
-    adapter_vk_create_unordered_access_view,
-    adapter_vk_destroy_unordered_access_view,
-    adapter_vk_create_sampler,
-    adapter_vk_destroy_sampler,
-    adapter_vk_create_query,
-    adapter_vk_destroy_query,
-    adapter_vk_flush_context,
-    adapter_vk_clear_uav,
+    .adapter_destroy = adapter_vk_destroy,
+    .adapter_create_device = adapter_vk_create_device,
+    .adapter_destroy_device = adapter_vk_destroy_device,
+    .adapter_acquire_context = adapter_vk_acquire_context,
+    .adapter_release_context = adapter_vk_release_context,
+    .adapter_get_wined3d_caps = adapter_vk_get_wined3d_caps,
+    .adapter_check_format = adapter_vk_check_format,
+    .adapter_init_3d = adapter_vk_init_3d,
+    .adapter_uninit_3d = adapter_vk_uninit_3d,
+    .adapter_map_bo_address = adapter_vk_map_bo_address,
+    .adapter_unmap_bo_address = adapter_vk_unmap_bo_address,
+    .adapter_copy_bo_address = adapter_vk_copy_bo_address,
+    .adapter_create_swapchain = adapter_vk_create_swapchain,
+    .adapter_destroy_swapchain = adapter_vk_destroy_swapchain,
+    .adapter_create_buffer = adapter_vk_create_buffer,
+    .adapter_destroy_buffer = adapter_vk_destroy_buffer,
+    .adapter_create_texture = adapter_vk_create_texture,
+    .adapter_destroy_texture = adapter_vk_destroy_texture,
+    .adapter_create_rendertarget_view = adapter_vk_create_rendertarget_view,
+    .adapter_destroy_rendertarget_view = adapter_vk_destroy_rendertarget_view,
+    .adapter_create_shader_resource_view = adapter_vk_create_shader_resource_view,
+    .adapter_destroy_shader_resource_view = adapter_vk_destroy_shader_resource_view,
+    .adapter_create_unordered_access_view = adapter_vk_create_unordered_access_view,
+    .adapter_destroy_unordered_access_view = adapter_vk_destroy_unordered_access_view,
+    .adapter_create_sampler = adapter_vk_create_sampler,
+    .adapter_destroy_sampler = adapter_vk_destroy_sampler,
+    .adapter_create_query = adapter_vk_create_query,
+    .adapter_destroy_query = adapter_vk_destroy_query,
+    .adapter_flush_context = adapter_vk_flush_context,
+    .adapter_draw_primitive = adapter_vk_draw_primitive,
+    .adapter_dispatch_compute = adapter_vk_dispatch_compute,
+    .adapter_clear_uav = adapter_vk_clear_uav,
 };
 
 static unsigned int wined3d_get_wine_vk_version(void)

@@ -1706,7 +1706,13 @@ DECL_HANDLER(select)
     else if (get_error() != STATUS_PENDING && get_reply_max_size() == sizeof(context_t) &&
              current->context && current->suspend_cookie == req->cookie)
     {
-        if (current->context->regs.flags) set_reply_data( &current->context->regs, sizeof(context_t) );
+        if (current->context->regs.flags)
+        {
+            unsigned int system_flags = get_context_system_regs(current->process->cpu) &
+                                        current->context->regs.flags;
+            if (system_flags) set_thread_context( current, &current->context->regs, system_flags );
+            set_reply_data( &current->context->regs, sizeof(context_t) );
+        }
         release_object( current->context );
         current->context = NULL;
     }
@@ -1840,7 +1846,7 @@ DECL_HANDLER(get_thread_context)
             if (thread->context)
             {
                 /* make sure that system regs are valid in thread context */
-                if (req->flags & system_flags & ~thread->context->regs.flags)
+                if (thread->unix_tid != -1 && (req->flags & system_flags & ~thread->context->regs.flags))
                     get_thread_context( thread, &thread->context->regs, req->flags & system_flags );
                 if (!get_error()) thread_context = (struct context *)grab_object( thread->context );
             }
@@ -1848,7 +1854,7 @@ DECL_HANDLER(get_thread_context)
             {
                 assert( reply->self );
                 memset( context, 0, sizeof(context_t) );
-                context->cpu = thread_context->regs.cpu;
+                context->cpu = thread->process->cpu;
                 if (req->flags & system_flags)
                 {
                     get_thread_context( thread, context, req->flags & system_flags );
@@ -1896,14 +1902,13 @@ DECL_HANDLER(set_thread_context)
     else
     {
         unsigned int system_flags = get_context_system_regs(context->cpu) & context->flags;
-        unsigned int client_flags = context->flags & ~system_flags;
 
-        if (system_flags) set_thread_context( thread, context, system_flags );
-        if (thread != current && !get_error()) stop_thread( thread );
+        if (thread != current) stop_thread( thread );
+        else if (system_flags) set_thread_context( thread, context, system_flags );
         if (thread->context && !get_error())
         {
             copy_context( &thread->context->regs, context, context->flags );
-            thread->context->regs.flags |= client_flags;
+            thread->context->regs.flags |= context->flags;
         }
     }
 

@@ -246,13 +246,10 @@ TEB *thread_init(void)
     user_shared_data = addr;
     memcpy( user_shared_data->NtSystemRoot, default_windirW, sizeof(default_windirW) );
 
-    /* allocate and initialize the PEB */
+    /* allocate and initialize the PEB and initial TEB */
 
-    addr = NULL;
-    size = sizeof(*peb);
-    virtual_alloc_aligned( &addr, 0, &size, MEM_COMMIT | MEM_TOP_DOWN, PAGE_READWRITE, 1 );
-    peb = addr;
-
+    teb = virtual_alloc_first_teb();
+    peb = teb->Peb;
     peb->FastPebLock        = &peb_lock;
     peb->TlsBitmap          = &tls_bitmap;
     peb->TlsExpansionBitmap = &tls_expansion_bitmap;
@@ -282,23 +279,14 @@ TEB *thread_init(void)
      */
     peb->SessionId = 1;
 
-    /* allocate and initialize the initial TEB */
-
-    signal_alloc_thread( &teb );
-    teb->Peb = peb;
-    teb->Tib.StackBase = (void *)~0UL;
-    teb->StaticUnicodeString.Buffer = teb->StaticUnicodeBuffer;
-    teb->StaticUnicodeString.MaximumLength = sizeof(teb->StaticUnicodeBuffer);
-
     thread_data = (struct ntdll_thread_data *)&teb->GdiTebBatch;
     thread_data->request_fd = -1;
     thread_data->reply_fd   = -1;
     thread_data->wait_fd[0] = -1;
     thread_data->wait_fd[1] = -1;
 
-    signal_init_thread( teb );
-    virtual_init_threading();
     debug_init();
+    init_paths();
     set_process_name( __wine_main_argc, __wine_main_argv );
 
     /* initialize time values in user_shared_data */
@@ -319,34 +307,12 @@ TEB *thread_init(void)
 
 
 /***********************************************************************
- *           free_thread_data
- */
-static void free_thread_data( TEB *teb )
-{
-    struct ntdll_thread_data *thread_data = (struct ntdll_thread_data *)&teb->GdiTebBatch;
-    SIZE_T size;
-
-    if (teb->DeallocationStack)
-    {
-        size = 0;
-        NtFreeVirtualMemory( GetCurrentProcess(), &teb->DeallocationStack, &size, MEM_RELEASE );
-    }
-    if (thread_data->start_stack)
-    {
-        size = 0;
-        NtFreeVirtualMemory( GetCurrentProcess(), &thread_data->start_stack, &size, MEM_RELEASE );
-    }
-    signal_free_thread( teb );
-}
-
-
-/***********************************************************************
  *           abort_thread
  */
 void abort_thread( int status )
 {
     pthread_sigmask( SIG_BLOCK, &server_block_set, NULL );
-    if (interlocked_xchg_add( &nb_threads, -1 ) <= 1) _exit( get_unix_exit_code( status ));
+    if (InterlockedDecrement( &nb_threads ) <= 0) _exit( get_unix_exit_code( status ));
     signal_exit_thread( status );
 }
 
@@ -383,7 +349,7 @@ void WINAPI RtlExitUserThread( ULONG status )
         SERVER_END_REQ;
     }
 
-    if (interlocked_xchg_add( &nb_threads, -1 ) <= 1)
+    if (InterlockedDecrement( &nb_threads ) <= 0)
     {
         LdrShutdownProcess();
         pthread_sigmask( SIG_BLOCK, &server_block_set, NULL );
@@ -395,14 +361,14 @@ void WINAPI RtlExitUserThread( ULONG status )
 
     pthread_sigmask( SIG_BLOCK, &server_block_set, NULL );
 
-    if ((teb = interlocked_xchg_ptr( &prev_teb, NtCurrentTeb() )))
+    if ((teb = InterlockedExchangePointer( &prev_teb, NtCurrentTeb() )))
     {
         struct ntdll_thread_data *thread_data = (struct ntdll_thread_data *)&teb->GdiTebBatch;
 
         if (thread_data->pthread_id)
         {
             pthread_join( thread_data->pthread_id, NULL );
-            free_thread_data( teb );
+            virtual_free_teb( teb );
         }
     }
 
@@ -537,13 +503,10 @@ NTSTATUS WINAPI RtlCreateUserThread( HANDLE process, SECURITY_DESCRIPTOR *descr,
 
     pthread_sigmask( SIG_BLOCK, &server_block_set, &sigset );
 
-    if ((status = signal_alloc_thread( &teb ))) goto error;
+    if ((status = virtual_alloc_teb( &teb ))) goto error;
 
-    teb->Peb = NtCurrentTeb()->Peb;
     teb->ClientId.UniqueProcess = ULongToHandle(GetCurrentProcessId());
     teb->ClientId.UniqueThread  = ULongToHandle(tid);
-    teb->StaticUnicodeString.Buffer        = teb->StaticUnicodeBuffer;
-    teb->StaticUnicodeString.MaximumLength = sizeof(teb->StaticUnicodeBuffer);
 
     /* create default activation context frame for new thread */
     RtlGetActiveActivationContext(&actctx);
@@ -582,10 +545,10 @@ NTSTATUS WINAPI RtlCreateUserThread( HANDLE process, SECURITY_DESCRIPTOR *descr,
                          (char *)teb->Tib.StackBase + extra_stack - (char *)teb->DeallocationStack );
     pthread_attr_setguardsize( &attr, 0 );
     pthread_attr_setscope( &attr, PTHREAD_SCOPE_SYSTEM ); /* force creating a kernel thread */
-    interlocked_xchg_add( &nb_threads, 1 );
+    InterlockedIncrement( &nb_threads );
     if (pthread_create( &pthread_id, &attr, (void * (*)(void *))start_thread, info ))
     {
-        interlocked_xchg_add( &nb_threads, -1 );
+        InterlockedDecrement( &nb_threads );
         pthread_attr_destroy( &attr );
         status = STATUS_NO_MEMORY;
         goto error;
@@ -600,7 +563,7 @@ NTSTATUS WINAPI RtlCreateUserThread( HANDLE process, SECURITY_DESCRIPTOR *descr,
     return STATUS_SUCCESS;
 
 error:
-    if (teb) free_thread_data( teb );
+    if (teb) virtual_free_teb( teb );
     if (handle) NtClose( handle );
     pthread_sigmask( SIG_SETMASK, &sigset, NULL );
     close( request_pipe[1] );
