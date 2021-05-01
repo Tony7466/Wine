@@ -1,3 +1,15 @@
+wine-development (5.8-1) UNRELEASED; urgency=medium
+
+  * New upstream release 5.8, released May 8, 2020.
+    - Support for Plug & Play device notifications.
+    - More support for building with Clang in MSVC mode.
+    - Still more progress on the WineD3D Vulkan backend.
+    - Initial implementation of a GIF encoder.
+    - Vulkan spec update.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 01 May 2021 22:38:12 +0000
+
 wine-development (5.7-1) unstable; urgency=medium
 
   * New upstream release 5.7, released Apr 24, 2020.
