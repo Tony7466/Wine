@@ -1,3 +1,14 @@
+wine-development (5.6-1) UNRELEASED; urgency=medium
+
+  * New upstream release 5.6, released Apr 10, 2020.
+    - Still more Media Foundation work.
+    - Improvements to Active Directory LDAP support.
+    - A few more modules converted to PE.
+    - Improvements to gdb proxy mode.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 01 May 2021 13:40:57 +0000
+
 wine-development (5.5-9) unstable; urgency=medium
 
   * Build with -Wno-format on 64-bit architectures.
