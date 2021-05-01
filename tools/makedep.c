@@ -2148,9 +2148,12 @@ static struct strarray add_default_libraries( const struct makefile *make, struc
     struct strarray all_libs = empty_strarray;
     unsigned int i, j;
 
-    if (!make->use_msvcrt) strarray_add( &all_libs, "-lwine_port" );
-    strarray_addall( &all_libs, get_expanded_make_var_array( make, "EXTRALIBS" ));
-    strarray_addall( &all_libs, libs );
+    if (!make->use_msvcrt)
+    {
+        strarray_add( &all_libs, "-lwine_port" );
+        strarray_addall( &all_libs, get_expanded_make_var_array( make, "EXTRALIBS" ));
+        strarray_addall( &all_libs, libs );
+    }
 
     for (i = 0; i < all_libs.count; i++)
     {
@@ -2236,7 +2239,6 @@ static struct strarray get_default_imports( const struct makefile *make )
     struct strarray ret = empty_strarray;
 
     if (strarray_exists( &make->extradllflags, "-nodefaultlibs" )) return ret;
-    if (make->use_msvcrt) strarray_add( &ret, "msvcrt" );
     strarray_add( &ret, "winecrt0" );
     if (make->is_win16) strarray_add( &ret, "kernel" );
     strarray_add( &ret, "kernel32" );
@@ -3000,7 +3002,6 @@ static void output_source_spec( struct makefile *make, struct incl_file *source,
     if (!dll_flags.count) dll_flags = make->extradllflags;
     all_libs = add_import_libs( make, &dep_libs, imports, 0 );
     add_import_libs( make, &dep_libs, get_default_imports( make ), 0 ); /* dependencies only */
-    strarray_addall( &all_libs, libs );
     dll_name = strmake( "%s.dll%s", obj, make->is_cross ? "" : dll_ext );
     obj_name = strmake( "%s%s", obj_dir_path( make, obj ), make->is_cross ? ".cross.o" : ".o" );
 
@@ -3447,7 +3448,6 @@ static void output_test_module( struct makefile *make )
     const char *parent_ext = parent && parent->is_cross ? "" : dll_ext;
 
     add_import_libs( make, &dep_libs, get_default_imports( make ), 0 ); /* dependencies only */
-    strarray_addall( &all_libs, libs );
     strarray_add( &make->all_targets, strmake( "%s%s", testmodule, ext ));
     strarray_add( &make->clean_files, strmake( "%s%s", stripped, ext ));
     output( "%s%s:\n", obj_dir_path( make, testmodule ), ext );
@@ -3518,7 +3518,8 @@ static void output_programs( struct makefile *make )
         struct strarray symlinks = get_expanded_file_local_var( make, make->programs.str[i], "SYMLINKS" );
 
         if (!objs.count) objs = make->object_files;
-        strarray_addall( &all_libs, add_default_libraries( make, &deps ));
+        if (!strarray_exists( &all_libs, "-nodefaultlibs" ))
+            strarray_addall( &all_libs, add_default_libraries( make, &deps ));
 
         output( "%s:", obj_dir_path( make, program ) );
         output_filenames_obj_dir( make, objs );
@@ -4204,12 +4205,12 @@ static void load_sources( struct makefile *make )
 
     if (make->module && strendswith( make->module, ".a" )) make->staticlib = make->module;
 
-    if ((make->module && make->staticlib) || make->testdll)
-        strarray_add( &make->extradllflags, "-mno-cygwin" );
+    make->is_win16 = strarray_exists( &make->extradllflags, "-m16" );
+    if ((make->module && make->staticlib) || make->testdll || make->is_win16)
+        strarray_add_uniq( &make->extradllflags, "-mno-cygwin" );
 
     strarray_addall( &make->extradllflags, get_expanded_make_var_array( make, "APPMODE" ));
     make->disabled   = make->base_dir && strarray_exists( &disabled_dirs, make->base_dir );
-    make->is_win16   = strarray_exists( &make->extradllflags, "-m16" );
     make->use_msvcrt = strarray_exists( &make->extradllflags, "-mno-cygwin" );
     make->is_exe     = strarray_exists( &make->extradllflags, "-mconsole" ) ||
                        strarray_exists( &make->extradllflags, "-mwindows" );
@@ -4270,12 +4271,8 @@ static void load_sources( struct makefile *make )
         }
         if (!crt_dll && !strarray_exists( &make->extradllflags, "-nodefaultlibs" ))
         {
-            if (make->use_msvcrt && !make->testdll && !make->staticlib)
-            {
-                strarray_add( &make->imports, "ucrtbase" );
-                crt_dll = "ucrtbase";
-            }
-            else crt_dll = "msvcrt";
+            crt_dll = !make->testdll && !make->staticlib ? "ucrtbase" : "msvcrt";
+            strarray_add( &make->imports, crt_dll );
         }
         if (crt_dll && !strncmp( crt_dll, "ucrt", 4 )) strarray_add( &make->define_args, "-D_UCRT" );
     }
@@ -4289,7 +4286,6 @@ static void load_sources( struct makefile *make )
     {
         for (i = 0; i < make->imports.count; i++)
             strarray_add_uniq( &cross_import_libs, make->imports.str[i] );
-        if (crt_dll) strarray_add_uniq( &cross_import_libs, crt_dll );
         if (make->is_win16) strarray_add_uniq( &cross_import_libs, "kernel" );
         strarray_add_uniq( &cross_import_libs, "winecrt0" );
         strarray_add_uniq( &cross_import_libs, "kernel32" );

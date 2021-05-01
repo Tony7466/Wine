@@ -71,7 +71,6 @@
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
 #include "wine/debug.h"
-#include "wine/unicode.h"
 #include "windef.h"
 #include "winternl.h"
 #include "ntdll_misc.h"
@@ -2673,10 +2672,10 @@ NTSTATUS WINAPI NtQuerySystemInformation(
                         procname[wine_server_reply_size(reply) / sizeof(WCHAR)] = 0;
 
                         /* Get only the executable name, not the path */
-                        if ((exename = strrchrW(procname, '\\')) != NULL) exename++;
+                        if ((exename = wcsrchr(procname, '\\')) != NULL) exename++;
                         else exename = procname;
 
-                        wlen = (strlenW(exename) + 1) * sizeof(WCHAR);
+                        wlen = (wcslen(exename) + 1) * sizeof(WCHAR);
 
                         procstructlen = sizeof(*spi) + wlen + ((reply->threads - 1) * sizeof(SYSTEM_THREAD_INFORMATION));
 
@@ -3718,18 +3717,6 @@ NTSTATUS WINAPI NtSystemDebugControl(SYSDBG_COMMAND command, PVOID inbuffer, ULO
                                      ULONG outbuflength, PULONG retlength)
 {
     FIXME("(%d, %p, %d, %p, %d, %p), stub\n", command, inbuffer, inbuflength, outbuffer, outbuflength, retlength);
-
-    return STATUS_NOT_IMPLEMENTED;
-}
-
-/******************************************************************************
- *  NtSetLdtEntries   (NTDLL.@)
- *  ZwSetLdtEntries   (NTDLL.@)
- */
-NTSTATUS WINAPI NtSetLdtEntries(ULONG selector1, ULONG entry1_low, ULONG entry1_high,
-                                ULONG selector2, ULONG entry2_low, ULONG entry2_high)
-{
-    FIXME("(%u, %u, %u, %u, %u, %u): stub\n", selector1, entry1_low, entry1_high, selector2, entry2_low, entry2_high);
 
     return STATUS_NOT_IMPLEMENTED;
 }

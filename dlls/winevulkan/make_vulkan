@@ -71,6 +71,7 @@ WINE_VK_VERSION = (1, 2)
 WINE_VULKAN_H = "../../include/wine/vulkan.h"
 WINE_VULKAN_DRIVER_H = "../../include/wine/vulkan_driver.h"
 WINE_VULKAN_LOADER_SPEC = "../vulkan-1/vulkan-1.spec"
+WINE_VULKAN_JSON = "winevulkan.json"
 WINE_VULKAN_SPEC = "winevulkan.spec"
 WINE_VULKAN_THUNKS_C = "vulkan_thunks.c"
 WINE_VULKAN_THUNKS_H = "vulkan_thunks.h"
@@ -95,7 +96,6 @@ BLACKLISTED_EXTENSIONS = [
     "VK_EXT_validation_features",
     "VK_EXT_validation_flags",
     "VK_KHR_display", # Needs WSI work.
-    "VK_KHR_get_surface_capabilities2",
     "VK_KHR_surface_protected_capabilities",
 
     # Device extensions
@@ -138,7 +138,7 @@ CORE_EXTENSIONS = [
 # Functions part of our winevulkan graphics driver interface.
 # DRIVER_VERSION should be bumped on any change to driver interface
 # in FUNCTION_OVERRIDES
-DRIVER_VERSION = 7
+DRIVER_VERSION = 8
 
 # Table of functions for which we have a special implementation.
 # These are regular device / instance functions for which we need
@@ -184,6 +184,10 @@ FUNCTION_OVERRIDES = {
     "vkGetPhysicalDeviceSurfaceCapabilitiesKHR" : {"dispatch" : True, "driver" : True, "thunk" : True},
     "vkGetPhysicalDeviceSurfaceFormatsKHR" : {"dispatch" : True, "driver" : True, "thunk" : True},
     "vkGetPhysicalDeviceSurfacePresentModesKHR" : {"dispatch" : True, "driver" : True, "thunk" : True},
+
+    # VK_KHR_get_surface_capabilities2
+    "vkGetPhysicalDeviceSurfaceCapabilities2KHR" : {"dispatch" : True, "driver" : True, "thunk" : True},
+    "vkGetPhysicalDeviceSurfaceFormats2KHR" : {"dispatch" : True, "driver" : True, "thunk" : True},
 
     # VK_KHR_win32_surface
     "vkCreateWin32SurfaceKHR" : {"dispatch" : True, "driver" : True, "thunk" : True},
@@ -2526,6 +2530,9 @@ class VkGenerator(object):
             else:
                 f.write("@ stub {0}\n".format(func.name))
 
+        f.write("@ stdcall -private DllRegisterServer()\n")
+        f.write("@ stdcall -private DllUnregisterServer()\n")
+
     def generate_vulkan_loader_spec(self, f):
         self._generate_copyright(f, spec_file=True)
 
@@ -3033,6 +3040,15 @@ class VkRegistry(object):
         self.handles = sorted(handles, key=lambda handle: handle.name)
         self.structs = sorted(structs, key=lambda struct: struct.name)
 
+def generate_vulkan_json(f):
+    f.write("{\n")
+    f.write("    \"file_format_version\": \"1.0.0\",\n")
+    f.write("    \"ICD\": {\n")
+    f.write("        \"library_path\": \".\\\\winevulkan.dll\",\n")
+    f.write("        \"api_version\": \"{0}\"\n".format(VK_XML_VERSION))
+    f.write("    }\n")
+    f.write("}\n")
+
 def set_working_directory():
     path = os.path.abspath(__file__)
     path = os.path.dirname(path)
@@ -3073,6 +3089,9 @@ def main():
 
     with open(WINE_VULKAN_THUNKS_C, "w") as f:
         generator.generate_thunks_c(f, "wine_")
+
+    with open(WINE_VULKAN_JSON, "w") as f:
+        generate_vulkan_json(f)
 
     with open(WINE_VULKAN_SPEC, "w") as f:
         generator.generate_vulkan_spec(f)

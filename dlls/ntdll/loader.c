@@ -38,7 +38,6 @@
 
 #include "wine/exception.h"
 #include "wine/library.h"
-#include "wine/unicode.h"
 #include "wine/debug.h"
 #include "wine/list.h"
 #include "wine/server.h"
@@ -182,7 +181,7 @@ static inline void *get_rva( HMODULE module, DWORD va )
 /* check whether the file name contains a path */
 static inline BOOL contains_path( LPCWSTR name )
 {
-    return ((*name && (name[1] == ':')) || strchrW(name, '/') || strchrW(name, '\\'));
+    return ((*name && (name[1] == ':')) || wcschr(name, '/') || wcschr(name, '\\'));
 }
 
 #define RTL_UNLOAD_EVENT_TRACE_NUMBER 64
@@ -198,6 +197,7 @@ typedef struct _RTL_UNLOAD_EVENT_TRACE
 } RTL_UNLOAD_EVENT_TRACE, *PRTL_UNLOAD_EVENT_TRACE;
 
 static RTL_UNLOAD_EVENT_TRACE unload_traces[RTL_UNLOAD_EVENT_TRACE_NUMBER];
+static RTL_UNLOAD_EVENT_TRACE *unload_trace_ptr;
 static unsigned int unload_trace_seq;
 
 static void module_push_unload_trace( const LDR_MODULE *ldr )
@@ -214,6 +214,7 @@ static void module_push_unload_trace( const LDR_MODULE *ldr )
     ptr->ImageName[len / sizeof(*ptr->ImageName)] = 0;
 
     unload_trace_seq = (unload_trace_seq + 1) % ARRAY_SIZE(unload_traces);
+    unload_trace_ptr = unload_traces;
 }
 
 /*********************************************************************
@@ -234,7 +235,7 @@ void WINAPI RtlGetUnloadEventTraceEx(ULONG **size, ULONG **count, void **trace)
 
     *size = &element_size;
     *count = &element_count;
-    *trace = unload_traces;
+    *trace = &unload_trace_ptr;
 }
 
 /*************************************************************************
@@ -608,7 +609,7 @@ static FARPROC find_forwarded_export( HMODULE module, const char *forward, LPCWS
     if ((end - forward) * sizeof(WCHAR) >= sizeof(mod_name)) return NULL;
     ascii_to_unicode( mod_name, forward, end - forward );
     mod_name[end - forward] = 0;
-    if (!strchrW( mod_name, '.' ))
+    if (!wcschr( mod_name, '.' ))
     {
         if ((end - forward) * sizeof(WCHAR) >= sizeof(mod_name) - sizeof(dllW)) return NULL;
         memcpy( mod_name + (end - forward), dllW, sizeof(dllW) );
@@ -1186,7 +1187,7 @@ static WINE_MODREF *alloc_module( HMODULE hModule, const UNICODE_STRING *nt_name
     wm->ldr.LoadCount     = 1;
 
     RtlCreateUnicodeString( &wm->ldr.FullDllName, nt_name->Buffer + 4 /* \??\ prefix */ );
-    if ((p = strrchrW( wm->ldr.FullDllName.Buffer, '\\' ))) p++;
+    if ((p = wcsrchr( wm->ldr.FullDllName.Buffer, '\\' ))) p++;
     else p = wm->ldr.FullDllName.Buffer;
     RtlInitUnicodeString( &wm->ldr.BaseDllName, p );
 
@@ -1749,16 +1750,17 @@ static BOOL get_builtin_fullname( UNICODE_STRING *nt_name, const UNICODE_STRING 
 {
     static const WCHAR nt_prefixW[] = {'\\','?','?','\\',0};
     static const WCHAR soW[] = {'.','s','o',0};
-    WCHAR *p, *fullname;
-    size_t i, len = strlen(filename);
+    WCHAR *p, *fullname, filenameW[256];
+    size_t len = strlen(filename);
+
+    if (len >= ARRAY_SIZE(filenameW)) return FALSE;
+    ascii_to_unicode( filenameW, filename, len + 1 );
 
     /* check if path can correspond to the dll we have */
-    if (path && (p = strrchrW( path->Buffer, '\\' )))
+    if (path && (p = wcsrchr( path->Buffer, '\\' )))
     {
         p++;
-        for (i = 0; i < len; i++)
-            if (tolowerW(p[i]) != tolowerW( (WCHAR)filename[i]) ) break;
-        if (i == len && (!p[len] || !wcsicmp( p + len, soW )))
+        if (!wcsnicmp( p, filenameW, len ) && (!p[len] || !wcsicmp( p + len, soW )))
         {
             /* the filename matches, use path as the full path */
             len += p - path->Buffer;
@@ -1771,11 +1773,11 @@ static BOOL get_builtin_fullname( UNICODE_STRING *nt_name, const UNICODE_STRING 
     }
 
     if (!(fullname = RtlAllocateHeap( GetProcessHeap(), 0,
-                                      (strlenW(system_dir) + len + 5) * sizeof(WCHAR) )))
+                                      (wcslen(system_dir) + len + 5) * sizeof(WCHAR) )))
         return FALSE;
-    strcpyW( fullname, nt_prefixW );
-    strcatW( fullname, system_dir );
-    ascii_to_unicode( fullname + strlenW(fullname), filename, len + 1 );
+    wcscpy( fullname, nt_prefixW );
+    wcscat( fullname, system_dir );
+    wcscat( fullname, filenameW );
 done:
     RtlInitUnicodeString( nt_name, fullname );
     return TRUE;
@@ -2100,8 +2102,8 @@ static inline const WCHAR *get_module_path_end( const WCHAR *module )
     const WCHAR *p;
     const WCHAR *mod_end = module;
 
-    if ((p = strrchrW( mod_end, '\\' ))) mod_end = p;
-    if ((p = strrchrW( mod_end, '/' ))) mod_end = p;
+    if ((p = wcsrchr( mod_end, '\\' ))) mod_end = p;
+    if ((p = wcsrchr( mod_end, '/' ))) mod_end = p;
     if (mod_end == module + 2 && module[1] == ':') mod_end++;
     if (mod_end == module && module[0] && module[1] == ':') mod_end += 2;
     return mod_end;
@@ -2115,7 +2117,7 @@ static inline const WCHAR *get_module_path_end( const WCHAR *module )
  */
 static inline WCHAR *append_path( WCHAR *p, const WCHAR *str, int len )
 {
-    if (len == -1) len = strlenW(str);
+    if (len == -1) len = wcslen(str);
     if (!len) return p;
     memcpy( p, str, len * sizeof(WCHAR) );
     p[len] = ';';
@@ -2148,7 +2150,7 @@ static NTSTATUS get_dll_load_path( LPCWSTR module, LPCWSTR dll_dir, ULONG safe_m
     if (RtlQueryEnvironmentVariable_U( NULL, &name, &value ) == STATUS_BUFFER_TOO_SMALL)
         path_len = value.Length;
 
-    if (dll_dir) len += strlenW( dll_dir ) + 1;
+    if (dll_dir) len += wcslen( dll_dir ) + 1;
     else len += 2;  /* current directory */
     if (!(p = ret = RtlAllocateHeap( GetProcessHeap(), 0, path_len + len * sizeof(WCHAR) )))
         return STATUS_NO_MEMORY;
@@ -2218,11 +2220,11 @@ static NTSTATUS get_dll_load_path_search_flags( LPCWSTR module, DWORD flags, WCH
     if (flags & LOAD_LIBRARY_SEARCH_USER_DIRS)
     {
         LIST_FOR_EACH_ENTRY( dir, &dll_dir_list, struct dll_dir_entry, entry )
-            len += strlenW( dir->dir + 4 /* \??\ */ ) + 1;
+            len += wcslen( dir->dir + 4 /* \??\ */ ) + 1;
         if (dll_directory.Length) len += dll_directory.Length / sizeof(WCHAR) + 1;
     }
 
-    if (flags & LOAD_LIBRARY_SEARCH_SYSTEM32) len += strlenW( system_dir );
+    if (flags & LOAD_LIBRARY_SEARCH_SYSTEM32) len += wcslen( system_dir );
 
     if ((p = ret = RtlAllocateHeap( GetProcessHeap(), 0, len * sizeof(WCHAR) )))
     {
@@ -2234,7 +2236,7 @@ static NTSTATUS get_dll_load_path_search_flags( LPCWSTR module, DWORD flags, WCH
                 p = append_path( p, dir->dir + 4 /* \??\ */, -1 );
             p = append_path( p, dll_directory.Buffer, dll_directory.Length / sizeof(WCHAR) );
         }
-        if (flags & LOAD_LIBRARY_SEARCH_SYSTEM32) strcpyW( p, system_dir );
+        if (flags & LOAD_LIBRARY_SEARCH_SYSTEM32) wcscpy( p, system_dir );
         else
         {
             if (p > ret) p--;
@@ -2528,7 +2530,7 @@ static NTSTATUS find_builtin_dll( const WCHAR *name, WINE_MODREF **pwm,
     NTSTATUS status = STATUS_DLL_NOT_FOUND;
     BOOL found_image = FALSE;
 
-    len = strlenW( name );
+    len = wcslen( name );
     if (build_dir) maxlen = strlen(build_dir) + sizeof("/programs/") + len;
     for (i = 0; (path = wine_dll_enum_load_path( i )); i++) maxlen = max( maxlen, strlen(path)+1 );
     maxlen += len + sizeof(".so");
@@ -2594,7 +2596,6 @@ done:
 static NTSTATUS load_so_dll( LPCWSTR load_path, const UNICODE_STRING *nt_name,
                              const char *so_name, WINE_MODREF** pwm )
 {
-    char error[256];
     void *handle;
     struct builtin_load_info info, *prev_info;
     ANSI_STRING unix_name;
@@ -2618,7 +2619,7 @@ static NTSTATUS load_so_dll( LPCWSTR load_path, const UNICODE_STRING *nt_name,
 
     prev_info = builtin_load_info;
     builtin_load_info = &info;
-    handle = wine_dlopen( so_name ? so_name : unix_name.Buffer, RTLD_NOW, error, sizeof(error) );
+    handle = dlopen( so_name ? so_name : unix_name.Buffer, RTLD_NOW );
     builtin_load_info = prev_info;
     RtlFreeHeap( GetProcessHeap(), 0, unix_name.Buffer );
 
@@ -2626,10 +2627,10 @@ static NTSTATUS load_so_dll( LPCWSTR load_path, const UNICODE_STRING *nt_name,
     {
         if (so_name)
         {
-            ERR("failed to load .so lib %s: %s\n", debugstr_a(so_name), error );
+            ERR("failed to load .so lib %s: %s\n", debugstr_a(so_name), dlerror() );
             return STATUS_PROCEDURE_NOT_FOUND;
         }
-        WARN( "failed to load .so lib %s: %s\n", debugstr_us(nt_name), error );
+        WARN( "failed to load .so lib %s: %s\n", debugstr_us(nt_name), dlerror() );
         return STATUS_INVALID_IMAGE_FORMAT;
     }
 
@@ -2649,7 +2650,7 @@ static NTSTATUS load_so_dll( LPCWSTR load_path, const UNICODE_STRING *nt_name,
                debugstr_w(info.wm->ldr.FullDllName.Buffer), info.wm->ldr.BaseAddress,
                debugstr_us(nt_name) );
         if (info.wm->ldr.LoadCount != -1) info.wm->ldr.LoadCount++;
-        wine_dlclose( handle, NULL, 0 ); /* release the libdl refcount */
+        dlclose( handle ); /* release the libdl refcount */
     }
     else
     {
@@ -2662,7 +2663,7 @@ static NTSTATUS load_so_dll( LPCWSTR load_path, const UNICODE_STRING *nt_name,
     return STATUS_SUCCESS;
 
 failed:
-    wine_dlclose( handle, NULL, 0 );
+    dlclose( handle );
     return info.status;
 }
 
@@ -2682,8 +2683,8 @@ static NTSTATUS load_builtin_dll( LPCWSTR load_path, const UNICODE_STRING *nt_na
 
     /* Fix the name in case we have a full path and extension */
     name = nt_name->Buffer;
-    if ((p = strrchrW( name, '\\' ))) name = p + 1;
-    if ((p = strrchrW( name, '/' ))) name = p + 1;
+    if ((p = wcsrchr( name, '\\' ))) name = p + 1;
+    if ((p = wcsrchr( name, '/' ))) name = p + 1;
 
     TRACE("Trying built-in %s\n", debugstr_w(name));
 
@@ -2760,11 +2761,11 @@ static NTSTATUS find_actctx_dll( LPCWSTR libname, LPWSTR *fullname )
         goto done;
     }
 
-    if ((p = strrchrW( info->lpAssemblyManifestPath, '\\' )))
+    if ((p = wcsrchr( info->lpAssemblyManifestPath, '\\' )))
     {
         DWORD len, dirlen = info->ulAssemblyDirectoryNameLength / sizeof(WCHAR);
         p++;
-        len = strlenW( p );
+        len = wcslen( p );
         if (!dirlen || len <= dirlen ||
             RtlCompareUnicodeStrings( p, dirlen, info->lpAssemblyDirectoryName, dirlen, TRUE ) ||
             wcsicmp( p + dirlen, dotManifestW ))
@@ -2780,7 +2781,7 @@ static NTSTATUS find_actctx_dll( LPCWSTR libname, LPWSTR *fullname )
             }
             memcpy( p, info->lpAssemblyManifestPath, dirlen * sizeof(WCHAR) );
             p += dirlen;
-            strcpyW( p, libname );
+            wcscpy( p, libname );
             goto done;
         }
     }
@@ -2791,7 +2792,7 @@ static NTSTATUS find_actctx_dll( LPCWSTR libname, LPWSTR *fullname )
         goto done;
     }
 
-    needed = (strlenW(user_shared_data->NtSystemRoot) * sizeof(WCHAR) +
+    needed = (wcslen(user_shared_data->NtSystemRoot) * sizeof(WCHAR) +
               sizeof(winsxsW) + info->ulAssemblyDirectoryNameLength + nameW.Length + 2*sizeof(WCHAR));
 
     if (!(*fullname = p = RtlAllocateHeap( GetProcessHeap(), 0, needed )))
@@ -2799,14 +2800,14 @@ static NTSTATUS find_actctx_dll( LPCWSTR libname, LPWSTR *fullname )
         status = STATUS_NO_MEMORY;
         goto done;
     }
-    strcpyW( p, user_shared_data->NtSystemRoot );
-    p += strlenW(p);
+    wcscpy( p, user_shared_data->NtSystemRoot );
+    p += wcslen(p);
     memcpy( p, winsxsW, sizeof(winsxsW) );
     p += ARRAY_SIZE( winsxsW );
     memcpy( p, info->lpAssemblyDirectoryName, info->ulAssemblyDirectoryNameLength );
     p += info->ulAssemblyDirectoryNameLength / sizeof(WCHAR);
     *p++ = '\\';
-    strcpyW( p, libname );
+    wcscpy( p, libname );
 done:
     RtlFreeHeap( GetProcessHeap(), 0, info );
     RtlReleaseActivationContext( data.hActCtx );
@@ -2826,10 +2827,10 @@ static NTSTATUS search_dll_file( LPCWSTR paths, LPCWSTR search, UNICODE_STRING *
     WCHAR *name;
     BOOL found_image = FALSE;
     NTSTATUS status = STATUS_DLL_NOT_FOUND;
-    ULONG len = strlenW( paths );
+    ULONG len = wcslen( paths );
 
-    if (len < strlenW( system_dir )) len = strlenW( system_dir );
-    len += strlenW( search ) + 2;
+    if (len < wcslen( system_dir )) len = wcslen( system_dir );
+    len += wcslen( search ) + 2;
 
     if (!(name = RtlAllocateHeap( GetProcessHeap(), 0, len * sizeof(WCHAR) )))
         return STATUS_NO_MEMORY;
@@ -2843,7 +2844,7 @@ static NTSTATUS search_dll_file( LPCWSTR paths, LPCWSTR search, UNICODE_STRING *
         if (*ptr == ';') ptr++;
         memcpy( name, paths, len * sizeof(WCHAR) );
         if (len && name[len - 1] != '\\') name[len++] = '\\';
-        strcpyW( name + len, search );
+        wcscpy( name + len, search );
 
         nt_name->Buffer = NULL;
         if ((status = RtlDosPathNameToNtPathName_U_WithStatus( name, nt_name, NULL, NULL ))) goto done;
@@ -2858,8 +2859,8 @@ static NTSTATUS search_dll_file( LPCWSTR paths, LPCWSTR search, UNICODE_STRING *
     if (!found_image)
     {
         /* not found, return file in the system dir to be loaded as builtin */
-        strcpyW( name, system_dir );
-        strcatW( name, search );
+        wcscpy( name, system_dir );
+        wcscat( name, search );
         if (!RtlDosPathNameToNtPathName_U( name, nt_name, NULL, NULL )) status = STATUS_NO_MEMORY;
     }
     else status = STATUS_IMAGE_MACHINE_TYPE_MISMATCH;
@@ -2889,13 +2890,13 @@ static NTSTATUS find_dll_file( const WCHAR *load_path, const WCHAR *libname, con
 
     if (default_ext)  /* first append default extension */
     {
-        if (!(ext = strrchrW( libname, '.')) || strchrW( ext, '/' ) || strchrW( ext, '\\'))
+        if (!(ext = wcsrchr( libname, '.')) || wcschr( ext, '/' ) || wcschr( ext, '\\'))
         {
             if (!(dllname = RtlAllocateHeap( GetProcessHeap(), 0,
-                                             (strlenW(libname)+strlenW(default_ext)+1) * sizeof(WCHAR))))
+                                             (wcslen(libname)+wcslen(default_ext)+1) * sizeof(WCHAR))))
                 return STATUS_NO_MEMORY;
-            strcpyW( dllname, libname );
-            strcatW( dllname, default_ext );
+            wcscpy( dllname, libname );
+            wcscat( dllname, default_ext );
             libname = dllname;
         }
     }
@@ -3318,7 +3319,7 @@ static NTSTATUS query_dword_option( HANDLE hkey, LPCWSTR name, ULONG *value )
     if (info->Type != REG_DWORD)
     {
         buffer[size / sizeof(WCHAR)] = 0;
-        *value = strtoulW( (WCHAR *)info->Data, 0, 16 );
+        *value = wcstoul( (WCHAR *)info->Data, 0, 16 );
     }
     else memcpy( value, info->Data, sizeof(*value) );
     return status;
@@ -3378,8 +3379,8 @@ NTSTATUS WINAPI LdrQueryImageFileExecutionOptions( const UNICODE_STRING *key, LP
     attr.SecurityDescriptor = NULL;
     attr.SecurityQualityOfService = NULL;
 
-    if ((p = memrchrW( key->Buffer, '\\', key->Length / sizeof(WCHAR) ))) p++;
-    else p = key->Buffer;
+    p = key->Buffer + key->Length / sizeof(WCHAR);
+    while (p > key->Buffer && p[-1] != '\\') p--;
     len = key->Length - (p - key->Buffer) * sizeof(WCHAR);
     name_str.Buffer = path;
     name_str.Length = sizeof(optionsW) + len;
@@ -3586,8 +3587,7 @@ static void free_modref( WINE_MODREF *wm )
 
     free_tls_slot( &wm->ldr );
     RtlReleaseActivationContext( wm->ldr.ActivationContext );
-    if ((wm->ldr.Flags & LDR_WINE_INTERNAL) && wm->ldr.SectionHandle)
-        wine_dlclose( wm->ldr.SectionHandle, NULL, 0 );
+    if ((wm->ldr.Flags & LDR_WINE_INTERNAL) && wm->ldr.SectionHandle) dlclose( wm->ldr.SectionHandle );
     NtUnmapViewOfSection( NtCurrentProcess(), wm->ldr.BaseAddress );
     if (cached_modref == wm) cached_modref = NULL;
     RtlFreeUnicodeString( &wm->ldr.FullDllName );
@@ -4161,7 +4161,7 @@ NTSTATUS WINAPI RtlGetExePath( PCWSTR name, PWSTR *path )
     const WCHAR *module = NtCurrentTeb()->Peb->ProcessParameters->ImagePathName.Buffer;
 
     /* same check as NeedCurrentDirectoryForExePathW */
-    if (!strchrW( name, '\\' ))
+    if (!wcschr( name, '\\' ))
     {
         static const WCHAR env_name[] = {'N','o','D','e','f','a','u','l','t','C','u','r','r','e','n','t',
                                          'D','i','r','e','c','t','o','r','y','I','n',
