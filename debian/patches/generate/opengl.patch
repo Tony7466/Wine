@@ -3,34 +3,36 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/opengl32/make_opengl
 +++ b/dlls/opengl32/make_opengl
-@@ -315,13 +315,6 @@ if ($version eq "1.0") {
+@@ -326,16 +326,6 @@ if ($version eq "1.0") {
  }
  
  #
 -# Fetch the registry files
 -#
---f "gl.xml" || system "wget https://raw.github.com/KhronosGroup/OpenGL-Registry/master/xml/gl.xml" || die "cannot download gl.xml";
---f "wgl.xml" || system "wget https://raw.github.com/KhronosGroup/OpenGL-Registry/master/xml/wgl.xml" || die "cannot download wgl.xml";
+-my $url="https://raw.githubusercontent.com/KhronosGroup/OpenGL-Registry";
+-my $commit="03e1bfb87c4664d34dc7822fb591841eec747094";
+-
+--f "gl-$commit.xml" || system "wget", "-O", "gl-$commit.xml", "$url/$commit/xml/gl.xml" || die "cannot download gl.xml";
+--f "wgl-$commit.xml" || system "wget", "-O", "wgl-$commit.xml", "$url/$commit/xml/wgl.xml" || die "cannot download wgl.xml";
 -
 -
 -#
  # Then, create the list of all OpenGL functions using the registry
  # files. This will create two hash-tables, one with all the function
  # whose category matches the one listed in '@norm_categories', the other
-@@ -559,21 +552,22 @@ sub parse_file($)
+@@ -579,22 +569,12 @@ sub parse_file($)
      }
  }
  
--parse_file( "gl.xml" );
--parse_file( "wgl.xml" );
+-parse_file( "gl-$commit.xml" );
+-parse_file( "wgl-$commit.xml" );
 +parse_file( "/usr/share/khronos-api/gl.xml" );
 +parse_file( "/usr/share/khronos-api/wgl.xml" );
  parse_file( "winegl.xml" );
  
- #
- # Get the current wgl_driver.h version
-+# Modified by -1, see debian/scripts/import
- #
+-#
+-# Get the current wgl_driver.h version
+-#
 -my $wgl_version = 0;
 -open HEADER, "<$wgl_driver_file" or die "cannot open $wgl_driver_file";
 -while (<HEADER>)
@@ -39,14 +41,9 @@ author: Michael Gilbert <mgilbert@debian.org>
 -    $wgl_version = $1;
 -    last;
 -}
+-close HEADER;
++# Current wgl_driver.h version, modified by debian/scripts/import
 +my $wgl_version = 20;
-+
-+#
-+# Generate the wglext.h file
-+#
-+my $wglext_file = "../../include/wine/wglext.h";
-+open HEADER, ">$wglext_file" or die "cannot create $wglext_file";
-+print HEADER "#include <khronos-api/GL/wglext.h>";
- close HEADER;
  
  #
+ # Generate the wgl_driver.h file

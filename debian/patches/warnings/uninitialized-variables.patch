@@ -93,7 +93,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!desc) return E_INVALIDARG;
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -2662,6 +2662,10 @@ static void check_fbo_compat(struct wine
+@@ -2670,6 +2670,10 @@ static void check_fbo_compat(struct wine
                      case WINED3D_GL_RES_TYPE_COUNT:
                          color = 0;
                          break;
@@ -106,7 +106,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/dlls/devenum/createdevenum.c
 +++ b/dlls/devenum/createdevenum.c
-@@ -387,7 +387,7 @@ static void write_filter_data(IPropertyB
+@@ -374,7 +374,7 @@ static void write_filter_data(IPropertyB
      HRESULT hr;
  
      hr = CoCreateInstance(&CLSID_FilterMapper2, NULL, CLSCTX_INPROC, &IID_IAMFilterData, (void **)&fildata);
@@ -115,7 +115,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      hr = IAMFilterData_CreateFilterData(fildata, rgf, &data, &size);
      if (FAILED(hr)) goto cleanup;
-@@ -408,8 +408,9 @@ static void write_filter_data(IPropertyB
+@@ -395,8 +395,9 @@ static void write_filter_data(IPropertyB
      if (FAILED(hr)) goto cleanup;
  
  cleanup:
@@ -125,17 +125,6 @@ author: Michael Gilbert <mgilbert@debian.org>
 +    VariantClear(&var);
      IAMFilterData_Release(fildata);
  }
- 
---- a/dlls/devenum/mediacatenum.c
-+++ b/dlls/devenum/mediacatenum.c
-@@ -128,7 +128,7 @@ static HRESULT WINAPI DEVENUM_IPropertyB
-     HRESULT res = S_OK;
-     LONG reswin32 = ERROR_SUCCESS;
-     WCHAR name[80];
--    HKEY hkey;
-+    HKEY hkey = NULL;
- 
-     TRACE("(%p)->(%s, %p, %p)\n", This, debugstr_w(pszPropName), pVar, pErrorLog);
  
 --- a/dlls/user32/sysparams.c
 +++ b/dlls/user32/sysparams.c
@@ -253,7 +242,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if(ts64.tv_sec != (MSVCRT___time32_t)ts64.tv_sec)
 --- a/dlls/mf/session.c
 +++ b/dlls/mf/session.c
-@@ -533,7 +533,7 @@ static void session_clear_topologies(str
+@@ -551,7 +551,7 @@ static void session_clear_topologies(str
  static void session_set_topo_status(struct media_session *session, HRESULT status,
          MF_TOPOSTATUS topo_status)
  {

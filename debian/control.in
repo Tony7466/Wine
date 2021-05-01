@@ -9,7 +9,7 @@ Uploaders:
  Jens Reyer <jre.winesim@gmail.com>,
 Vcs-Git: https://salsa.debian.org/wine-team/wine.git
 Vcs-Browser: https://salsa.debian.org/wine-team/wine
-Standards-Version: 4.5.0
+Standards-Version: 4.5.1
 Rules-Requires-Root: no
 Build-Depends:
  debhelper (>= 9.20160403~),
@@ -244,9 +244,11 @@ Suggests:
 Pre-Depends:
  ${misc:Pre-Depends},
 Breaks:
+ wineVERSION (<< 4.7-2~),
  wine32VERSION (<< 4.7-2~),
  wine64VERSION (<< 4.7-2~),
 Replaces:
+ wineVERSION (<< 4.7-2~),
  wine32VERSION (<< 4.7-2~),
  wine64VERSION (<< 4.7-2~),
 Description: Windows API implementation - library

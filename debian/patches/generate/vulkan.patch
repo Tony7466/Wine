@@ -81,7 +81,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          # We aggregate all types in here for cross-referencing.
          self.funcs = {}
-@@ -2909,7 +2917,9 @@ class VkRegistry(object):
+@@ -2953,7 +2961,9 @@ class VkRegistry(object):
  
              if type_info["category"] == "basetype":
                  name = t.find("name").text
@@ -92,7 +92,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                  basetype = VkBaseType(name, _type)
                  base_types.append(basetype)
                  type_info["data"] = basetype
-@@ -3054,11 +3064,6 @@ def set_working_directory():
+@@ -3098,11 +3108,6 @@ def set_working_directory():
      path = os.path.dirname(path)
      os.chdir(path)
  
@@ -104,7 +104,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  def main():
      parser = argparse.ArgumentParser()
      parser.add_argument("-v", "--verbose", action="count", default=0, help="increase output verbosity")
-@@ -3073,8 +3078,7 @@ def main():
+@@ -3117,8 +3122,7 @@ def main():
  
      set_working_directory()
  
@@ -116,7 +116,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -5326,9 +5326,9 @@ const char *wined3d_debug_vkresult(VkRes
+@@ -5342,9 +5342,9 @@ const char *wined3d_debug_vkresult(VkRes
      switch (vr)
      {
  #define WINED3D_TO_STR(x) case x: return #x
