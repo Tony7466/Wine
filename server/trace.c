@@ -159,15 +159,15 @@ static void dump_apc_call( const char *prefix, const apc_call_t *call )
         fprintf( stderr, "APC_NONE" );
         break;
     case APC_USER:
-        dump_uint64( "APC_USER,func=", &call->user.func );
-        dump_uint64( ",args={", &call->user.args[0] );
-        dump_uint64( ",", &call->user.args[1] );
-        dump_uint64( ",", &call->user.args[2] );
+        dump_uint64( "APC_USER,func=", &call->user.user.func );
+        dump_uint64( ",args={", &call->user.user.args[0] );
+        dump_uint64( ",", &call->user.user.args[1] );
+        dump_uint64( ",", &call->user.user.args[2] );
         fputc( '}', stderr );
         break;
     case APC_TIMER:
-        dump_timeout( "APC_TIMER,time=", &call->timer.time );
-        dump_uint64( ",arg=", &call->timer.arg );
+        dump_timeout( "APC_TIMER,time=", &call->user.timer.time );
+        dump_uint64( ",arg=", &call->user.timer.arg );
         break;
     case APC_ASYNC_IO:
         dump_uint64( "APC_ASYNC_IO,user=", &call->async_io.user );
@@ -1588,15 +1588,18 @@ static void dump_select_request( const struct select_request *req )
     fprintf( stderr, " flags=%d", req->flags );
     dump_uint64( ", cookie=", &req->cookie );
     dump_abstime( ", timeout=", &req->timeout );
+    fprintf( stderr, ", size=%u", req->size );
     fprintf( stderr, ", prev_apc=%04x", req->prev_apc );
     dump_varargs_apc_result( ", result=", cur_size );
-    dump_varargs_select_op( ", data=", cur_size );
+    dump_varargs_select_op( ", data=", min(cur_size,req->size) );
+    dump_varargs_context( ", context=", cur_size );
 }
 
 static void dump_select_reply( const struct select_reply *req )
 {
     dump_apc_call( " call=", &req->call );
     fprintf( stderr, ", apc_handle=%04x", req->apc_handle );
+    dump_varargs_context( ", context=", cur_size );
 }
 
 static void dump_create_event_request( const struct create_event_request *req )
@@ -2432,7 +2435,6 @@ static void dump_queue_exception_event_request( const struct queue_exception_eve
     dump_uint64( ", address=", &req->address );
     fprintf( stderr, ", len=%u", req->len );
     dump_varargs_uints64( ", params=", min(cur_size,req->len) );
-    dump_varargs_context( ", context=", cur_size );
 }
 
 static void dump_queue_exception_event_reply( const struct queue_exception_event_reply *req )
@@ -2443,11 +2445,6 @@ static void dump_queue_exception_event_reply( const struct queue_exception_event
 static void dump_get_exception_status_request( const struct get_exception_status_request *req )
 {
     fprintf( stderr, " handle=%04x", req->handle );
-}
-
-static void dump_get_exception_status_reply( const struct get_exception_status_reply *req )
-{
-    dump_varargs_context( " context=", cur_size );
 }
 
 static void dump_continue_debug_event_request( const struct continue_debug_event_request *req )
@@ -2678,19 +2675,18 @@ static void dump_get_thread_context_request( const struct get_thread_context_req
 {
     fprintf( stderr, " handle=%04x", req->handle );
     fprintf( stderr, ", flags=%08x", req->flags );
-    fprintf( stderr, ", suspend=%d", req->suspend );
 }
 
 static void dump_get_thread_context_reply( const struct get_thread_context_reply *req )
 {
     fprintf( stderr, " self=%d", req->self );
+    fprintf( stderr, ", handle=%04x", req->handle );
     dump_varargs_context( ", context=", cur_size );
 }
 
 static void dump_set_thread_context_request( const struct set_thread_context_request *req )
 {
     fprintf( stderr, " handle=%04x", req->handle );
-    fprintf( stderr, ", suspend=%d", req->suspend );
     dump_varargs_context( ", context=", cur_size );
 }
 
@@ -4534,20 +4530,6 @@ static void dump_update_rawinput_devices_request( const struct update_rawinput_d
     dump_varargs_rawinput_devices( " devices=", cur_size );
 }
 
-static void dump_get_suspend_context_request( const struct get_suspend_context_request *req )
-{
-}
-
-static void dump_get_suspend_context_reply( const struct get_suspend_context_reply *req )
-{
-    dump_varargs_context( " context=", cur_size );
-}
-
-static void dump_set_suspend_context_request( const struct set_suspend_context_request *req )
-{
-    dump_varargs_context( " context=", cur_size );
-}
-
 static void dump_create_job_request( const struct create_job_request *req )
 {
     fprintf( stderr, " access=%08x", req->access );
@@ -4900,8 +4882,6 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_free_user_handle_request,
     (dump_func)dump_set_cursor_request,
     (dump_func)dump_update_rawinput_devices_request,
-    (dump_func)dump_get_suspend_context_request,
-    (dump_func)dump_set_suspend_context_request,
     (dump_func)dump_create_job_request,
     (dump_func)dump_open_job_request,
     (dump_func)dump_assign_job_request,
@@ -5012,7 +4992,7 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_next_thread_reply,
     (dump_func)dump_wait_debug_event_reply,
     (dump_func)dump_queue_exception_event_reply,
-    (dump_func)dump_get_exception_status_reply,
+    NULL,
     NULL,
     NULL,
     NULL,
@@ -5199,8 +5179,6 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_alloc_user_handle_reply,
     NULL,
     (dump_func)dump_set_cursor_reply,
-    NULL,
-    (dump_func)dump_get_suspend_context_reply,
     NULL,
     (dump_func)dump_create_job_reply,
     (dump_func)dump_open_job_reply,
@@ -5500,8 +5478,6 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "free_user_handle",
     "set_cursor",
     "update_rawinput_devices",
-    "get_suspend_context",
-    "set_suspend_context",
     "create_job",
     "open_job",
     "assign_job",

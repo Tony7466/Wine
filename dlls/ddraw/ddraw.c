@@ -1146,11 +1146,7 @@ static HRESULT WINAPI ddraw7_SetDisplayMode(IDirectDraw7 *iface, DWORD width, DW
 
     wined3d_mutex_unlock();
 
-    switch (hr)
-    {
-        case WINED3DERR_NOTAVAILABLE: return DDERR_UNSUPPORTED;
-        default:                      return hr;
-    }
+    return hr_ddraw_from_wined3d(hr);
 }
 
 static HRESULT WINAPI ddraw4_SetDisplayMode(IDirectDraw4 *iface, DWORD width, DWORD height,
@@ -1340,6 +1336,8 @@ HRESULT ddraw_get_d3dcaps(const struct ddraw *ddraw, D3DDEVICEDESC7 *caps)
     if (caps->dpcLineCaps.dwRasterCaps & WINED3DPRASTERCAPS_DEPTHBIAS)
         caps->dpcLineCaps.dwRasterCaps = (caps->dpcLineCaps.dwRasterCaps | D3DPRASTERCAPS_ZBIAS)
                 & ~WINED3DPRASTERCAPS_DEPTHBIAS;
+    if (wined3d_caps.LineCaps & WINED3DLINECAPS_ANTIALIAS)
+        caps->dpcLineCaps.dwRasterCaps |= D3DPRASTERCAPS_ANTIALIASEDGES;
 
     caps->dpcLineCaps.dwZCmpCaps &= (
         D3DPCMPCAPS_NEVER                | D3DPCMPCAPS_LESS                    | D3DPCMPCAPS_EQUAL                   |
@@ -4899,7 +4897,7 @@ void ddraw_update_lost_surfaces(struct ddraw *ddraw)
 
     LIST_FOR_EACH_ENTRY(surface, &ddraw->surface_list, struct ddraw_surface, surface_list_entry)
     {
-        surface->is_lost = TRUE;
+        surface->is_lost = ddraw_surface_can_be_lost(surface);
     }
     ddraw->device_state = DDRAW_DEVICE_STATE_OK;
 }

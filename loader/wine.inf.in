@@ -2614,6 +2614,7 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 12,,tdi.sys,-
 12,,winebus.sys,-
 12,,winehid.sys,-
+12,,wineusb.sys,-
 ; skip .NET fake dlls in Wine Mono package
 11,,aspnet_regiis.exe,-
 11,,ngen.exe,-
@@ -2665,6 +2666,7 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 12,,tdi.sys
 12,,winebus.sys
 12,,winehid.sys
+12,,wineusb.sys
 ; skip .NET fake dlls in Wine Mono package
 11,,aspnet_regiis.exe,-
 11,,ngen.exe,-
@@ -3736,6 +3738,8 @@ HKLM,"System\CurrentControlSet\Services\Winsock2\Parameters\Protocol_Catalog9\Ca
 
 [VersionInfo]
 HKLM,%CurrentVersionNT%,"CurrentVersion",2,"6.1"
+HKLM,%CurrentVersionNT%,"CurrentMajorVersionNumber",0x10001,6
+HKLM,%CurrentVersionNT%,"CurrentMinorVersionNumber",0x10001,1
 HKLM,%CurrentVersionNT%,"CSDVersion",2,"Service Pack 1"
 HKLM,%CurrentVersionNT%,"CurrentBuild",2,"7601"
 HKLM,%CurrentVersionNT%,"CurrentBuildNumber",2,"7601"
@@ -3849,6 +3853,7 @@ HKLM,Software\Wine\LicenseInformation,"Shell-PremiumInBoxGames-Chess-EnableGame"
 [InfFiles]
 winebus.inf
 winehid.inf
+wineusb.inf
 
 [NlsFiles]
 c_037.nls

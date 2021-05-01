@@ -30,6 +30,13 @@
 #include "wine/server.h"
 #include "wine/asm.h"
 
+#define DECLARE_CRITICAL_SECTION(cs) \
+    static RTL_CRITICAL_SECTION cs; \
+    static RTL_CRITICAL_SECTION_DEBUG cs##_debug = \
+    { 0, 0, &cs, { &cs##_debug.ProcessLocksList, &cs##_debug.ProcessLocksList }, \
+      0, 0, { (DWORD_PTR)(__FILE__ ": " # cs) }}; \
+    static RTL_CRITICAL_SECTION cs = { &cs##_debug, -1, 0, 0, 0, 0 };
+
 #define MAX_NT_PATH_LENGTH 277
 
 #define MAX_DOS_DRIVES 26
@@ -53,7 +60,7 @@ extern ULONG_PTR get_system_affinity_mask(void) DECLSPEC_HIDDEN;
 extern void wait_suspend( CONTEXT *context ) DECLSPEC_HIDDEN;
 extern NTSTATUS send_debug_event( EXCEPTION_RECORD *rec, int first_chance, CONTEXT *context ) DECLSPEC_HIDDEN;
 extern LONG call_vectored_handlers( EXCEPTION_RECORD *rec, CONTEXT *context ) DECLSPEC_HIDDEN;
-extern void raise_status( NTSTATUS status, EXCEPTION_RECORD *rec ) DECLSPEC_NORETURN DECLSPEC_HIDDEN;
+extern void DECLSPEC_NORETURN raise_status( NTSTATUS status, EXCEPTION_RECORD *rec ) DECLSPEC_HIDDEN;
 extern NTSTATUS context_to_server( context_t *to, const CONTEXT *from ) DECLSPEC_HIDDEN;
 extern NTSTATUS context_from_server( CONTEXT *to, const context_t *from ) DECLSPEC_HIDDEN;
 extern NTSTATUS set_thread_context( HANDLE handle, const context_t *context, BOOL *self ) DECLSPEC_HIDDEN;
@@ -62,7 +69,7 @@ extern NTSTATUS get_thread_ldt_entry( HANDLE handle, void *data, ULONG len, ULON
 extern LONG WINAPI call_unhandled_exception_filter( PEXCEPTION_POINTERS eptr ) DECLSPEC_HIDDEN;
 
 #if defined(__x86_64__) || defined(__arm__) || defined(__aarch64__)
-extern RUNTIME_FUNCTION *lookup_function_info( ULONG_PTR pc, ULONG_PTR *base, LDR_MODULE **module ) DECLSPEC_HIDDEN;
+extern RUNTIME_FUNCTION *lookup_function_info( ULONG_PTR pc, ULONG_PTR *base, LDR_DATA_TABLE_ENTRY **module ) DECLSPEC_HIDDEN;
 #endif
 
 /* debug helpers */
@@ -109,8 +116,10 @@ extern sigset_t server_block_set DECLSPEC_HIDDEN;
 extern unsigned int server_call_unlocked( void *req_ptr ) DECLSPEC_HIDDEN;
 extern void server_enter_uninterrupted_section( RTL_CRITICAL_SECTION *cs, sigset_t *sigset ) DECLSPEC_HIDDEN;
 extern void server_leave_uninterrupted_section( RTL_CRITICAL_SECTION *cs, sigset_t *sigset ) DECLSPEC_HIDDEN;
-extern unsigned int server_select( const select_op_t *select_op, data_size_t size,
-                                   UINT flags, const LARGE_INTEGER *timeout ) DECLSPEC_HIDDEN;
+extern unsigned int server_select( const select_op_t *select_op, data_size_t size, UINT flags,
+                                   timeout_t abs_timeout, CONTEXT *context, RTL_CRITICAL_SECTION *cs, user_apc_t *user_apc ) DECLSPEC_HIDDEN;
+extern unsigned int server_wait( const select_op_t *select_op, data_size_t size,
+                                 UINT flags, const LARGE_INTEGER *timeout ) DECLSPEC_HIDDEN;
 extern unsigned int server_queue_process_apc( HANDLE process, const apc_call_t *call, apc_result_t *result ) DECLSPEC_HIDDEN;
 extern int server_remove_fd_from_cache( HANDLE handle ) DECLSPEC_HIDDEN;
 extern int server_get_unix_fd( HANDLE handle, unsigned int access, int *unix_fd,
@@ -119,8 +128,6 @@ extern int server_pipe( int fd[2] ) DECLSPEC_HIDDEN;
 extern NTSTATUS alloc_object_attributes( const OBJECT_ATTRIBUTES *attr, struct object_attributes **ret,
                                          data_size_t *ret_len ) DECLSPEC_HIDDEN;
 extern NTSTATUS validate_open_object_attributes( const OBJECT_ATTRIBUTES *attr ) DECLSPEC_HIDDEN;
-extern int wait_select_reply( void *cookie ) DECLSPEC_HIDDEN;
-extern void invoke_apc( const apc_call_t *call, apc_result_t *result ) DECLSPEC_HIDDEN;
 
 /* module handling */
 extern LIST_ENTRY tls_links DECLSPEC_HIDDEN;

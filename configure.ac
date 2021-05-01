@@ -84,6 +84,7 @@ AC_ARG_WITH(sdl,       AS_HELP_STRING([--without-sdl],[do not use SDL]))
 AC_ARG_WITH(tiff,      AS_HELP_STRING([--without-tiff],[do not use TIFF]))
 AC_ARG_WITH(udev,      AS_HELP_STRING([--without-udev],[do not use udev (plug and play support)]))
 AC_ARG_WITH(unwind,    AS_HELP_STRING([--without-unwind],[do not use the libunwind library (exception handling)]))
+AC_ARG_WITH(usb,       AS_HELP_STRING([--without-usb],[do not use the libusb library]))
 AC_ARG_WITH(v4l2,      AS_HELP_STRING([--without-v4l2],[do not use v4l2 (video capture)]))
 AC_ARG_WITH(vkd3d,     AS_HELP_STRING([--without-vkd3d],[do not use vkd3d (Direct3D 12 support)]))
 AC_ARG_WITH(vulkan,    AS_HELP_STRING([--without-vulkan],[do not use Vulkan]))
@@ -1474,6 +1475,18 @@ fi
 WINE_NOTICE_WITH(sane,[test "x$ac_cv_lib_soname_sane" = "x"],
                  [libsane ${notice_platform}development files not found, scanners won't be supported.])
 
+dnl **** Check for libusb ****
+if test "x$with_usb" != "xno"
+then
+    WINE_PACKAGE_FLAGS(USB,[libusb-1.0],[-lusb-1.0],,,
+        [AC_CHECK_HEADER([libusb.h],
+            [AC_CHECK_LIB(usb-1.0,libusb_interrupt_event_handler,[:],[USB_LIBS=""],[$USB_LIBS])],
+            [USB_LIBS=""])])
+fi
+WINE_NOTICE_WITH(usb,[test "$ac_cv_lib_usb_1_0_libusb_interrupt_event_handler" != "yes"],
+                 [libusb-1.0 ${notice_platform}development files not found (or too old), USB devices won't be supported.],
+                 [enable_wineusb_sys])
+
 dnl **** Check for libv4l2 ****
 if test "x$with_v4l2" != "xno"
 then
@@ -2182,7 +2195,7 @@ CFLAGS="$ac_save_CFLAGS"
 
 dnl Check for -ldl
 AC_SEARCH_LIBS(dlopen, dl)
-WINE_CHECK_LIB_FUNCS(dladdr,[$DL_LIBS])
+WINE_CHECK_LIB_FUNCS(dladdr dlinfo,[$DL_LIBS])
 
 dnl Check for -lpoll for Mac OS X/Darwin
 if test "$ac_cv_func_poll" = no
@@ -3582,6 +3595,7 @@ WINE_CONFIG_MAKEFILE(dlls/qasf)
 WINE_CONFIG_MAKEFILE(dlls/qasf/tests)
 WINE_CONFIG_MAKEFILE(dlls/qcap)
 WINE_CONFIG_MAKEFILE(dlls/qcap/tests)
+WINE_CONFIG_MAKEFILE(dlls/qdvd)
 WINE_CONFIG_MAKEFILE(dlls/qedit)
 WINE_CONFIG_MAKEFILE(dlls/qedit/tests)
 WINE_CONFIG_MAKEFILE(dlls/qmgr)
@@ -3779,6 +3793,7 @@ WINE_CONFIG_MAKEFILE(dlls/wineps.drv)
 WINE_CONFIG_MAKEFILE(dlls/wineps16.drv16,enable_win16)
 WINE_CONFIG_MAKEFILE(dlls/winepulse.drv)
 WINE_CONFIG_MAKEFILE(dlls/wineqtdecoder)
+WINE_CONFIG_MAKEFILE(dlls/wineusb.sys)
 WINE_CONFIG_MAKEFILE(dlls/winevulkan)
 WINE_CONFIG_MAKEFILE(dlls/winex11.drv)
 WINE_CONFIG_MAKEFILE(dlls/wing.dll16,enable_win16)
@@ -4084,6 +4099,7 @@ fonts \
 loader/wine.inf \
 loader/winebus.inf \
 loader/winehid.inf \
+loader/wineusb.inf \
 nls \
 programs/msidb/msidb \
 programs/msiexec/msiexec \

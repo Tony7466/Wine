@@ -490,6 +490,12 @@ typedef union
         abstime_t        time;     /* time of expiration */
         client_ptr_t     arg;      /* user argument */
     } timer;
+} user_apc_t;
+
+typedef union
+{
+    enum apc_type type;
+    user_apc_t    user;
     struct
     {
         enum apc_type    type;     /* APC_ASYNC_IO */
@@ -1100,12 +1106,15 @@ struct rawinput_device
     int          flags;        /* wait flags (see below) */
     client_ptr_t cookie;       /* magic cookie to return to client */
     abstime_t    timeout;      /* timeout */
+    data_size_t  size;         /* size of select_op */
     obj_handle_t prev_apc;     /* handle to previous APC */
     VARARG(result,apc_result); /* result of previous APC */
-    VARARG(data,select_op);    /* operation-specific data */
+    VARARG(data,select_op,size); /* operation-specific data */
+    VARARG(context,context);   /* suspend context */
 @REPLY
     apc_call_t   call;         /* APC call arguments */
     obj_handle_t apc_handle;   /* handle to next APC */
+    VARARG(context,context);   /* suspend context */
 @END
 #define SELECT_ALERTABLE     1
 #define SELECT_INTERRUPTIBLE 2
@@ -1925,7 +1934,6 @@ enum char_info_mode
     client_ptr_t  address;     /* exception address */
     data_size_t   len;         /* size of parameters */
     VARARG(params,uints64,len);/* exception parameters */
-    VARARG(context,context);   /* thread context */
 @REPLY
     obj_handle_t     handle;   /* handle to the queued event */
 @END
@@ -1934,8 +1942,6 @@ enum char_info_mode
 /* Retrieve the status of an exception event */
 @REQ(get_exception_status)
     obj_handle_t     handle;   /* handle to the queued event */
-@REPLY
-    VARARG(context,context);   /* modified thread context */
 @END
 
 
@@ -2151,11 +2157,11 @@ enum char_info_mode
 
 /* Retrieve the current context of a thread */
 @REQ(get_thread_context)
-    obj_handle_t handle;       /* thread handle */
+    obj_handle_t handle;       /* thread or context handle */
     unsigned int flags;        /* context flags */
-    int          suspend;      /* suspend the thread if needed */
 @REPLY
     int          self;         /* was it a handle to the current thread? */
+    obj_handle_t handle;       /* pending context handle */
     VARARG(context,context);   /* thread context */
 @END
 
@@ -2163,7 +2169,6 @@ enum char_info_mode
 /* Set the current context of a thread */
 @REQ(set_thread_context)
     obj_handle_t handle;       /* thread handle */
-    int          suspend;      /* suspend the thread if needed */
     VARARG(context,context);   /* thread context */
 @REPLY
     int          self;         /* was it a handle to the current thread? */
@@ -3877,19 +3882,6 @@ struct handle_info
 /* Modify the list of registered rawinput devices */
 @REQ(update_rawinput_devices)
     VARARG(devices,rawinput_devices);
-@END
-
-
-/* Retrieve the suspended context of a thread */
-@REQ(get_suspend_context)
-@REPLY
-    VARARG(context,context);   /* thread context */
-@END
-
-
-/* Store the suspend context of a thread */
-@REQ(set_suspend_context)
-    VARARG(context,context);   /* thread context */
 @END
 
 

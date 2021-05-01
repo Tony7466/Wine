@@ -349,7 +349,7 @@ void server_leave_uninterrupted_section( RTL_CRITICAL_SECTION *cs, sigset_t *sig
  *
  * Wait for a reply on the waiting pipe of the current thread.
  */
-int wait_select_reply( void *cookie )
+static int wait_select_reply( void *cookie )
 {
     int signaled;
     struct wake_up_reply reply;
@@ -381,13 +381,36 @@ int wait_select_reply( void *cookie )
 }
 
 
+static void invoke_apc( const user_apc_t *apc )
+{
+    switch( apc->type )
+    {
+    case APC_USER:
+    {
+        void (WINAPI *func)(ULONG_PTR,ULONG_PTR,ULONG_PTR) = wine_server_get_ptr( apc->user.func );
+        func( apc->user.args[0], apc->user.args[1], apc->user.args[2] );
+        break;
+    }
+    case APC_TIMER:
+    {
+        void (WINAPI *func)(void*, unsigned int, unsigned int) = wine_server_get_ptr( apc->user.func );
+        func( wine_server_get_ptr( apc->user.args[1] ),
+              (DWORD)apc->timer.time, (DWORD)(apc->timer.time >> 32) );
+        break;
+    }
+    default:
+        server_protocol_error( "get_apc_request: bad type %d\n", apc->type );
+        break;
+    }
+}
+
 /***********************************************************************
  *              invoke_apc
  *
  * Invoke a single APC.
  *
  */
-void invoke_apc( const apc_call_t *call, apc_result_t *result )
+static void invoke_system_apc( const apc_call_t *call, apc_result_t *result )
 {
     SIZE_T size;
     void *addr;
@@ -399,19 +422,6 @@ void invoke_apc( const apc_call_t *call, apc_result_t *result )
     {
     case APC_NONE:
         break;
-    case APC_USER:
-    {
-        void (WINAPI *func)(ULONG_PTR,ULONG_PTR,ULONG_PTR) = wine_server_get_ptr( call->user.func );
-        func( call->user.args[0], call->user.args[1], call->user.args[2] );
-        break;
-    }
-    case APC_TIMER:
-    {
-        void (WINAPI *func)(void*, unsigned int, unsigned int) = wine_server_get_ptr( call->timer.func );
-        func( wine_server_get_ptr( call->timer.arg ),
-              (DWORD)call->timer.time, (DWORD)(call->timer.time >> 32) );
-        break;
-    }
     case APC_ASYNC_IO:
     {
         IO_STATUS_BLOCK *iosb = wine_server_get_ptr( call->async_io.sb );
@@ -592,25 +602,22 @@ void invoke_apc( const apc_call_t *call, apc_result_t *result )
  *              server_select
  */
 unsigned int server_select( const select_op_t *select_op, data_size_t size, UINT flags,
-                            const LARGE_INTEGER *timeout )
+                            timeout_t abs_timeout, CONTEXT *context, RTL_CRITICAL_SECTION *cs, user_apc_t *user_apc )
 {
     unsigned int ret;
     int cookie;
-    BOOL user_apc = FALSE;
     obj_handle_t apc_handle = 0;
+    context_t server_context;
+    BOOL suspend_context = FALSE;
     apc_call_t call;
     apc_result_t result;
-    abstime_t abs_timeout = timeout ? timeout->QuadPart : TIMEOUT_INFINITE;
     sigset_t old_set;
 
     memset( &result, 0, sizeof(result) );
-
-    if (abs_timeout < 0)
+    if (context)
     {
-        LARGE_INTEGER now;
-
-        RtlQueryPerformanceCounter(&now);
-        abs_timeout -= now.QuadPart;
+        suspend_context = TRUE;
+        context_to_server( &server_context, context );
     }
 
     do
@@ -624,36 +631,85 @@ unsigned int server_select( const select_op_t *select_op, data_size_t size, UINT
                 req->cookie   = wine_server_client_ptr( &cookie );
                 req->prev_apc = apc_handle;
                 req->timeout  = abs_timeout;
+                req->size     = size;
                 wine_server_add_data( req, &result, sizeof(result) );
                 wine_server_add_data( req, select_op, size );
+                if (suspend_context)
+                {
+                    wine_server_add_data( req, &server_context, sizeof(server_context) );
+                    suspend_context = FALSE; /* server owns the context now */
+                }
+                if (context) wine_server_set_reply( req, &server_context, sizeof(server_context) );
                 ret = server_call_unlocked( req );
                 apc_handle  = reply->apc_handle;
                 call        = reply->call;
+                if (wine_server_reply_size( reply ))
+                {
+                    DWORD context_flags = context->ContextFlags; /* unchanged registers are still available */
+                    context_from_server( context, &server_context );
+                    context->ContextFlags |= context_flags;
+                }
             }
             SERVER_END_REQ;
+
+            if (ret != STATUS_KERNEL_APC) break;
+            invoke_system_apc( &call, &result );
 
             /* don't signal multiple times */
             if (size >= sizeof(select_op->signal_and_wait) && select_op->op == SELECT_SIGNAL_AND_WAIT)
                 size = offsetof( select_op_t, signal_and_wait.signal );
-
-            if (ret != STATUS_KERNEL_APC) break;
-            invoke_apc( &call, &result );
         }
         pthread_sigmask( SIG_SETMASK, &old_set, NULL );
-
-        if (ret == STATUS_USER_APC)
+        if (cs)
         {
-            invoke_apc( &call, &result );
-            /* if we ran a user apc we have to check once more if additional apcs are queued,
-             * but we don't want to wait */
-            abs_timeout = 0;
-            user_apc = TRUE;
-            size = 0;
+            RtlLeaveCriticalSection( cs );
+            cs = NULL;
         }
+        if (ret != STATUS_PENDING) break;
 
-        if (ret == STATUS_PENDING) ret = wait_select_reply( &cookie );
+        ret = wait_select_reply( &cookie );
     }
     while (ret == STATUS_USER_APC || ret == STATUS_KERNEL_APC);
+
+    if (ret == STATUS_USER_APC) *user_apc = call.user;
+    return ret;
+}
+
+
+/***********************************************************************
+ *              server_wait
+ */
+unsigned int server_wait( const select_op_t *select_op, data_size_t size, UINT flags,
+                          const LARGE_INTEGER *timeout )
+{
+    timeout_t abs_timeout = timeout ? timeout->QuadPart : TIMEOUT_INFINITE;
+    BOOL user_apc = FALSE;
+    unsigned int ret;
+    user_apc_t apc;
+
+    if (abs_timeout < 0)
+    {
+        LARGE_INTEGER now;
+
+        RtlQueryPerformanceCounter(&now);
+        abs_timeout -= now.QuadPart;
+    }
+
+    for (;;)
+    {
+        ret = server_select( select_op, size, flags, abs_timeout, NULL, NULL, &apc );
+        if (ret != STATUS_USER_APC) break;
+        invoke_apc( &apc );
+
+        /* if we ran a user apc we have to check once more if additional apcs are queued,
+         * but we don't want to wait */
+        abs_timeout = 0;
+        user_apc = TRUE;
+        size = 0;
+        /* don't signal multiple times */
+        if (size >= sizeof(select_op->signal_and_wait) && select_op->op == SELECT_SIGNAL_AND_WAIT)
+            size = offsetof( select_op_t, signal_and_wait.signal );
+    }
 
     if (ret == STATUS_TIMEOUT && user_apc) ret = STATUS_USER_APC;
 
@@ -692,7 +748,7 @@ unsigned int server_queue_process_apc( HANDLE process, const apc_call_t *call, a
 
         if (self)
         {
-            invoke_apc( call, result );
+            invoke_system_apc( call, result );
         }
         else
         {

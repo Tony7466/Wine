@@ -1320,6 +1320,10 @@ static const struct wined3d_format_texture_info format_texture_info[] =
             GL_LUMINANCE_ALPHA,         GL_UNSIGNED_BYTE,                 0,
             WINED3DFMT_FLAG_FILTERING,
             WINED3D_GL_LEGACY_CONTEXT,  NULL},
+    {WINED3DFMT_UYVY,                   GL_RGB_RAW_422_APPLE,             GL_RGB_RAW_422_APPLE,                   0,
+            GL_RGB_422_APPLE,           GL_UNSIGNED_SHORT_8_8_APPLE,      0,
+            WINED3DFMT_FLAG_FILTERING,
+            APPLE_RGB_422,              NULL},
     {WINED3DFMT_UYVY,                   GL_RGB,                           GL_RGB,                                 0,
             GL_YCBCR_422_APPLE,         GL_UNSIGNED_SHORT_8_8_APPLE,      0,
             WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_FILTERING,
@@ -1332,6 +1336,10 @@ static const struct wined3d_format_texture_info format_texture_info[] =
             GL_LUMINANCE_ALPHA,         GL_UNSIGNED_BYTE,                 0,
             WINED3DFMT_FLAG_FILTERING,
             WINED3D_GL_LEGACY_CONTEXT,  NULL},
+    {WINED3DFMT_YUY2,                   GL_RGB_RAW_422_APPLE,             GL_RGB_RAW_422_APPLE,                   0,
+            GL_RGB_422_APPLE,           GL_UNSIGNED_SHORT_8_8_REV_APPLE,  0,
+            WINED3DFMT_FLAG_FILTERING,
+            APPLE_RGB_422,              NULL},
     {WINED3DFMT_YUY2,                   GL_RGB,                           GL_RGB,                                 0,
             GL_YCBCR_422_APPLE,         GL_UNSIGNED_SHORT_8_8_REV_APPLE,  0,
             WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_FILTERING,
@@ -2578,7 +2586,7 @@ static void check_fbo_compat(struct wined3d_caps_gl_ctx *ctx, struct wined3d_for
                 && format->format != GL_LUMINANCE && format->format != GL_LUMINANCE_ALPHA
                 && (format->f.red_size || format->f.alpha_size))
         {
-            DWORD readback[16 * 16 * 16], color, r_range, a_range;
+            DWORD readback[16 * 16 * 16], color = 0, r_range, a_range;
             BYTE r, a;
             BOOL match = TRUE;
             GLuint rb;
@@ -3577,7 +3585,8 @@ static void apply_format_fixups(struct wined3d_adapter *adapter, struct wined3d_
         format->f.color_fixup = create_color_fixup_desc_from_string(fixups[i].fixup);
     }
 
-    if (!gl_info->supported[APPLE_YCBCR_422] && (gl_info->supported[ARB_FRAGMENT_PROGRAM]
+    if (!gl_info->supported[APPLE_YCBCR_422] && !gl_info->supported[APPLE_RGB_422]
+            && (gl_info->supported[ARB_FRAGMENT_PROGRAM]
             || (gl_info->supported[ARB_FRAGMENT_SHADER] && gl_info->supported[ARB_VERTEX_SHADER])))
     {
         format = get_format_gl_internal(adapter, WINED3DFMT_YUY2);
@@ -3585,6 +3594,14 @@ static void apply_format_fixups(struct wined3d_adapter *adapter, struct wined3d_
 
         format = get_format_gl_internal(adapter, WINED3DFMT_UYVY);
         format->f.color_fixup = create_complex_fixup_desc(COMPLEX_FIXUP_UYVY);
+    }
+    else if (!gl_info->supported[APPLE_YCBCR_422] && gl_info->supported[APPLE_RGB_422])
+    {
+        format = get_format_gl_internal(adapter, WINED3DFMT_YUY2);
+        format->f.color_fixup = create_complex_fixup_desc(COMPLEX_FIXUP_YUV);
+
+        format = get_format_gl_internal(adapter, WINED3DFMT_UYVY);
+        format->f.color_fixup = create_complex_fixup_desc(COMPLEX_FIXUP_YUV);
     }
     else if (!gl_info->supported[APPLE_YCBCR_422] && (!gl_info->supported[ARB_FRAGMENT_PROGRAM]
             && (!gl_info->supported[ARB_FRAGMENT_SHADER] || !gl_info->supported[ARB_VERTEX_SHADER])))
@@ -4921,7 +4938,6 @@ const char *debug_d3drenderstate(enum wined3d_render_state state)
         D3DSTATE_TO_STR(WINED3D_RS_FOGEND);
         D3DSTATE_TO_STR(WINED3D_RS_FOGDENSITY);
         D3DSTATE_TO_STR(WINED3D_RS_STIPPLEENABLE);
-        D3DSTATE_TO_STR(WINED3D_RS_EDGEANTIALIAS);
         D3DSTATE_TO_STR(WINED3D_RS_COLORKEYENABLE);
         D3DSTATE_TO_STR(WINED3D_RS_MIPMAPLODBIAS);
         D3DSTATE_TO_STR(WINED3D_RS_RANGEFOGENABLE);
@@ -5390,6 +5406,7 @@ static const char *debug_complex_fixup(enum complex_fixup fixup)
         WINED3D_TO_STR(COMPLEX_FIXUP_YV12);
         WINED3D_TO_STR(COMPLEX_FIXUP_NV12);
         WINED3D_TO_STR(COMPLEX_FIXUP_P8);
+        WINED3D_TO_STR(COMPLEX_FIXUP_YUV);
 #undef WINED3D_TO_STR
         default:
             FIXME("Unrecognized complex fixup %#x\n", fixup);
@@ -5957,6 +5974,36 @@ enum wined3d_format_id pixelformat_for_depth(DWORD depth)
         case 24: return WINED3DFMT_B8G8R8X8_UNORM; /* Robots needs 24bit to be WINED3DFMT_B8G8R8X8_UNORM */
         case 32: return WINED3DFMT_B8G8R8X8_UNORM; /* EVE online and the Fur demo need 32bit AdapterDisplayMode to return WINED3DFMT_B8G8R8X8_UNORM */
         default: return WINED3DFMT_UNKNOWN;
+    }
+}
+
+void wined3d_format_copy_data(const struct wined3d_format *format, const uint8_t *src,
+        unsigned int src_row_pitch, unsigned int src_slice_pitch, uint8_t *dst, unsigned int dst_row_pitch,
+        unsigned int dst_slice_pitch, unsigned int w, unsigned int h, unsigned int d)
+{
+    unsigned int row_block_count, row_count, row_size, slice, row;
+    unsigned int slice_count = d;
+    const uint8_t *src_row;
+    uint8_t *dst_row;
+
+    row_block_count = (w + format->block_width - 1) / format->block_width;
+    row_count = (h + format->block_height - 1) / format->block_height;
+    row_size = row_block_count * format->block_byte_count;
+
+    if (src_row_pitch == row_size && dst_row_pitch == row_size && src_slice_pitch == dst_slice_pitch)
+    {
+        memcpy(dst, src, slice_count * row_count * row_size);
+        return;
+    }
+
+    for (slice = 0; slice < slice_count; ++slice)
+    {
+        for (row = 0; row < row_count; ++row)
+        {
+            src_row = &src[slice * src_slice_pitch + row * src_row_pitch];
+            dst_row = &dst[slice * dst_slice_pitch + row * dst_row_pitch];
+            memcpy(dst_row, src_row, row_size);
+        }
     }
 }
 
@@ -7060,4 +7107,219 @@ void compute_normal_matrix(float *normal_matrix, BOOL legacy_lighting,
     for (i = 0; i < 3; ++i)
         for (j = 0; j < 3; ++j)
             normal_matrix[i * 3 + j] = (&mv._11)[j * 4 + i];
+}
+
+static void wined3d_allocator_release_block(struct wined3d_allocator *allocator,
+        struct wined3d_allocator_block *block)
+{
+    block->parent = allocator->free;
+    allocator->free = block;
+}
+
+static struct wined3d_allocator_block *wined3d_allocator_acquire_block(struct wined3d_allocator *allocator)
+{
+    struct wined3d_allocator_block *block;
+
+    if (!allocator->free)
+        return heap_alloc(sizeof(*block));
+
+    block = allocator->free;
+    allocator->free = block->parent;
+
+    return block;
+}
+
+void wined3d_allocator_block_free(struct wined3d_allocator_block *block)
+{
+    struct wined3d_allocator *allocator = block->chunk->allocator;
+    struct wined3d_allocator_block *parent;
+
+    while ((parent = block->parent) && block->sibling->free)
+    {
+        list_remove(&block->sibling->entry);
+        wined3d_allocator_release_block(allocator, block->sibling);
+        wined3d_allocator_release_block(allocator, block);
+        block = parent;
+    }
+
+    block->free = true;
+    list_add_head(&block->chunk->available[block->order], &block->entry);
+}
+
+static void wined3d_allocator_block_init(struct wined3d_allocator_block *block,
+        struct wined3d_allocator_chunk *chunk, struct wined3d_allocator_block *parent,
+        struct wined3d_allocator_block *sibling, unsigned int order, size_t offset, bool free)
+{
+    list_init(&block->entry);
+    block->chunk = chunk;
+    block->parent = parent;
+    block->sibling = sibling;
+    block->order = order;
+    block->offset = offset;
+    block->free = free;
+}
+
+void wined3d_allocator_chunk_cleanup(struct wined3d_allocator_chunk *chunk)
+{
+    struct wined3d_allocator_block *block;
+    size_t i;
+
+    if (list_empty(&chunk->available[0]))
+    {
+        ERR("Chunk %p is not empty.\n", chunk);
+        return;
+    }
+
+    for (i = 1; i < ARRAY_SIZE(chunk->available); ++i)
+    {
+        if (!list_empty(&chunk->available[i]))
+        {
+            ERR("Chunk %p is not empty.\n", chunk);
+            return;
+        }
+    }
+
+    block = LIST_ENTRY(list_head(&chunk->available[0]), struct wined3d_allocator_block, entry);
+    wined3d_allocator_release_block(chunk->allocator, block);
+}
+
+bool wined3d_allocator_chunk_init(struct wined3d_allocator_chunk *chunk, struct wined3d_allocator *allocator)
+{
+    struct wined3d_allocator_block *block;
+    unsigned int i;
+
+    if (!(block = wined3d_allocator_acquire_block(allocator)))
+        return false;
+    wined3d_allocator_block_init(block, chunk, NULL, NULL, 0, 0, true);
+
+    list_init(&chunk->entry);
+    for (i = 0; i < ARRAY_SIZE(chunk->available); ++i)
+    {
+        list_init(&chunk->available[i]);
+    }
+    list_add_head(&chunk->available[0], &block->entry);
+    chunk->allocator = allocator;
+    chunk->map_count = 0;
+    chunk->map_ptr = NULL;
+
+    return true;
+}
+
+void wined3d_allocator_cleanup(struct wined3d_allocator *allocator)
+{
+    struct wined3d_allocator_chunk *chunk, *chunk2;
+    struct wined3d_allocator_block *block, *next;
+    size_t i;
+
+    for (i = 0; i < allocator->pool_count; ++i)
+    {
+        LIST_FOR_EACH_ENTRY_SAFE(chunk, chunk2, &allocator->pools[i].chunks, struct wined3d_allocator_chunk, entry)
+        {
+            list_remove(&chunk->entry);
+            allocator->ops->allocator_destroy_chunk(chunk);
+        }
+    }
+    heap_free(allocator->pools);
+
+    next = allocator->free;
+    while ((block = next))
+    {
+        next = block->parent;
+        heap_free(block);
+    }
+}
+
+static struct wined3d_allocator_block *wined3d_allocator_chunk_allocate(struct wined3d_allocator_chunk *chunk,
+        unsigned int order)
+{
+    struct wined3d_allocator_block *block, *left, *right;
+    unsigned int i = order;
+
+    while (i)
+    {
+        if (!list_empty(&chunk->available[i]))
+            break;
+        --i;
+    }
+
+    if (list_empty(&chunk->available[i]))
+        return NULL;
+
+    block = LIST_ENTRY(list_head(&chunk->available[i]), struct wined3d_allocator_block, entry);
+    list_remove(&block->entry);
+    block->free = false;
+
+    while (i < order)
+    {
+        if (!(left = wined3d_allocator_acquire_block(chunk->allocator)))
+        {
+            ERR("Failed to allocate left.\n");
+            break;
+        }
+
+        if (!(right = wined3d_allocator_acquire_block(chunk->allocator)))
+        {
+            ERR("Failed to allocate right.\n");
+            wined3d_allocator_release_block(chunk->allocator, left);
+            break;
+        }
+
+        wined3d_allocator_block_init(left, chunk, block, right, block->order + 1, block->offset, false);
+        wined3d_allocator_block_init(right, chunk, block, left, block->order + 1,
+                block->offset + (WINED3D_ALLOCATOR_CHUNK_SIZE >> left->order), true);
+        list_add_head(&chunk->available[right->order], &right->entry);
+
+        block = left;
+        ++i;
+    }
+
+    return block;
+}
+
+struct wined3d_allocator_block *wined3d_allocator_allocate(struct wined3d_allocator *allocator,
+        struct wined3d_context *context, unsigned int memory_type, size_t size)
+{
+    struct wined3d_allocator_chunk *chunk;
+    struct wined3d_allocator_block *block;
+    unsigned int order;
+
+    if (size > WINED3D_ALLOCATOR_CHUNK_SIZE / 2)
+        return NULL;
+
+    if (size < WINED3D_ALLOCATOR_MIN_BLOCK_SIZE)
+        order = WINED3D_ALLOCATOR_CHUNK_ORDER_COUNT - 1;
+    else
+        order = wined3d_log2i(WINED3D_ALLOCATOR_CHUNK_SIZE / size);
+
+    LIST_FOR_EACH_ENTRY(chunk, &allocator->pools[memory_type].chunks, struct wined3d_allocator_chunk, entry)
+    {
+        if ((block = wined3d_allocator_chunk_allocate(chunk, order)))
+            return block;
+    }
+
+    if (!(chunk = allocator->ops->allocator_create_chunk(allocator,
+            context, memory_type, WINED3D_ALLOCATOR_CHUNK_SIZE)))
+        return NULL;
+
+    if (!(block = wined3d_allocator_chunk_allocate(chunk, order)))
+        return NULL;
+
+    return block;
+}
+
+bool wined3d_allocator_init(struct wined3d_allocator *allocator,
+        size_t pool_count, const struct wined3d_allocator_ops *allocator_ops)
+{
+    size_t i;
+
+    allocator->ops = allocator_ops;
+    allocator->pool_count = pool_count;
+    if (!(allocator->pools = heap_calloc(pool_count, sizeof(*allocator->pools))))
+        return false;
+    for (i = 0; i < pool_count; ++i)
+    {
+        list_init(&allocator->pools[i].chunks);
+    }
+
+    return true;
 }
