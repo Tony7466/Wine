@@ -27,6 +27,7 @@
 #include "windef.h"
 #include "winnt.h"
 #include "winternl.h"
+#include "unixlib.h"
 #include "wine/server.h"
 #include "wine/asm.h"
 
@@ -98,7 +99,6 @@ extern void heap_set_debug_flags( HANDLE handle ) DECLSPEC_HIDDEN;
 extern void init_unix_codepage(void) DECLSPEC_HIDDEN;
 extern void init_locale( HMODULE module ) DECLSPEC_HIDDEN;
 extern void init_user_process_params( SIZE_T data_size ) DECLSPEC_HIDDEN;
-extern void init_paths(void) DECLSPEC_HIDDEN;
 extern char **build_envp( const WCHAR *envW ) DECLSPEC_HIDDEN;
 extern NTSTATUS restart_process( RTL_USER_PROCESS_PARAMETERS *params, NTSTATUS status ) DECLSPEC_HIDDEN;
 
@@ -110,8 +110,6 @@ extern WCHAR **__wine_main_wargv;
 extern const char *build_dir DECLSPEC_HIDDEN;
 extern const char *data_dir DECLSPEC_HIDDEN;
 extern const char *config_dir DECLSPEC_HIDDEN;
-extern const char **dll_paths DECLSPEC_HIDDEN;
-extern size_t dll_path_maxlen DECLSPEC_HIDDEN;
 extern timeout_t server_start_time DECLSPEC_HIDDEN;
 extern unsigned int server_cpus DECLSPEC_HIDDEN;
 extern BOOL is_wow64 DECLSPEC_HIDDEN;
@@ -146,9 +144,11 @@ extern FARPROC SNOOP_GetProcAddress( HMODULE hmod, const IMAGE_EXPORT_DIRECTORY 
                                      FARPROC origfun, DWORD ordinal, const WCHAR *user ) DECLSPEC_HIDDEN;
 extern void RELAY_SetupDLL( HMODULE hmod ) DECLSPEC_HIDDEN;
 extern void SNOOP_SetupDLL( HMODULE hmod ) DECLSPEC_HIDDEN;
+extern const WCHAR windows_dir[] DECLSPEC_HIDDEN;
 extern const WCHAR system_dir[] DECLSPEC_HIDDEN;
 extern const WCHAR syswow64_dir[] DECLSPEC_HIDDEN;
 
+extern const struct unix_funcs *unix_funcs DECLSPEC_HIDDEN;
 extern void (WINAPI *kernel32_start_process)(LPTHREAD_START_ROUTINE,void*) DECLSPEC_HIDDEN;
 
 /* Device IO */
@@ -221,6 +221,7 @@ extern void virtual_set_large_address_space(void) DECLSPEC_HIDDEN;
 extern void virtual_fill_image_information( const pe_image_info_t *pe_info,
                                             SECTION_IMAGE_INFORMATION *info ) DECLSPEC_HIDDEN;
 extern struct _KUSER_SHARED_DATA *user_shared_data DECLSPEC_HIDDEN;
+extern HANDLE user_shared_data_init_done(void) DECLSPEC_HIDDEN;
 
 /* completion */
 extern NTSTATUS NTDLL_AddCompletion( HANDLE hFile, ULONG_PTR CompletionValue,
@@ -324,6 +325,7 @@ LPWSTR __cdecl NTDLL_wcstok( LPWSTR str, LPCWSTR delim );
 LONG   __cdecl NTDLL_wcstol( LPCWSTR s, LPWSTR *end, INT base );
 ULONG  __cdecl NTDLL_wcstoul( LPCWSTR s, LPWSTR *end, INT base );
 int    WINAPIV NTDLL_swprintf( WCHAR *str, const WCHAR *format, ... );
+int    WINAPIV _snwprintf_s( WCHAR *str, SIZE_T size, SIZE_T len, const WCHAR *format, ... );
 
 #define wcsicmp(s1,s2) NTDLL__wcsicmp(s1,s2)
 #define wcsnicmp(s1,s2,n) NTDLL__wcsnicmp(s1,s2,n)

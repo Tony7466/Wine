@@ -18,6 +18,7 @@ SOURCES = \
 	appcompatapi.h \
 	appmgmt.h \
 	appmodel.h \
+	asferr.h \
 	asptlb.idl \
 	asynot.idl \
 	asysta.idl \
@@ -36,6 +37,7 @@ SOURCES = \
 	avrt.h \
 	axcore.idl \
 	axextend.idl \
+	axextendenums.h \
 	basetsd.h \
 	basetyps.h \
 	bcrypt.h \
@@ -226,6 +228,7 @@ SOURCES = \
 	docobjectservice.idl \
 	downloadmgr.idl \
 	dpaddr.h \
+	dpfilter.h \
 	dplay.h \
 	dplay8.h \
 	dplobby.h \
@@ -274,6 +277,7 @@ SOURCES = \
 	excpt.h \
 	exdisp.idl \
 	exdispid.h \
+	exposeenums2managed.h \
 	fci.h \
 	fdi.h \
 	fileapi.h \
@@ -678,6 +682,7 @@ SOURCES = \
 	uiautomationcore.idl \
 	uiautomationcoreapi.h \
 	uiribbon.idl \
+	unexposeenums2managed.h \
 	unknwn.idl \
 	urlhist.idl \
 	urlmon.idl \
@@ -710,6 +715,7 @@ SOURCES = \
 	wia_xp.idl \
 	wiadef.h \
 	wimgapi.h \
+	winapifamily.h \
 	winbase.h \
 	wincodec.idl \
 	wincodecsdk.idl \

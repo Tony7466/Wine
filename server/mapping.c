@@ -35,6 +35,7 @@
 #define WIN32_NO_STATUS
 #include "windef.h"
 #include "winternl.h"
+#include "ddk/wdm.h"
 
 #include "file.h"
 #include "handle.h"
@@ -579,7 +580,7 @@ static unsigned int get_image_params( struct mapping *mapping, file_pos_t file_s
         } opt;
     } nt;
     off_t pos;
-    int size;
+    int size, opt_size;
     size_t mz_size, clr_va, clr_size;
     unsigned int i, cpu_mask = get_supported_cpu_mask();
 
@@ -595,7 +596,8 @@ static unsigned int get_image_params( struct mapping *mapping, file_pos_t file_s
     size = pread( unix_fd, &nt, sizeof(nt), pos );
     if (size < sizeof(nt.Signature) + sizeof(nt.FileHeader)) return STATUS_INVALID_IMAGE_PROTECT;
     /* zero out Optional header in the case it's not present or partial */
-    size = min( size, sizeof(nt.Signature) + sizeof(nt.FileHeader) + nt.FileHeader.SizeOfOptionalHeader );
+    opt_size = max( nt.FileHeader.SizeOfOptionalHeader, offsetof( IMAGE_OPTIONAL_HEADER32, CheckSum ));
+    size = min( size, sizeof(nt.Signature) + sizeof(nt.FileHeader) + opt_size );
     if (size < sizeof(nt)) memset( (char *)&nt + size, 0, sizeof(nt) - size );
     if (nt.Signature != IMAGE_NT_SIGNATURE)
     {
@@ -941,6 +943,68 @@ int get_page_size(void)
 {
     if (!page_mask) page_mask = sysconf( _SC_PAGESIZE ) - 1;
     return page_mask + 1;
+}
+
+static KSHARED_USER_DATA *kusd = MAP_FAILED;
+static const timeout_t kusd_timeout = 16 * -TICKS_PER_SEC / 1000;
+
+static void kusd_set_current_time( void *private )
+{
+    ULONG system_time_high = current_time >> 32;
+    ULONG system_time_low = current_time & 0xffffffff;
+    ULONG interrupt_time_high = monotonic_time >> 32;
+    ULONG interrupt_time_low = monotonic_time & 0xffffffff;
+    ULONG tick_count_high = (monotonic_time * 1000 / TICKS_PER_SEC) >> 32;
+    ULONG tick_count_low = (monotonic_time * 1000 / TICKS_PER_SEC) & 0xffffffff;
+    KSHARED_USER_DATA *ptr = kusd;
+
+    add_timeout_user( kusd_timeout, kusd_set_current_time, NULL );
+
+    /* on X86 there should be total store order guarantees, so volatile is enough
+     * to ensure the stores aren't reordered by the compiler, and then they will
+     * always be seen in-order from other CPUs. On other archs, we need atomic
+     * intrinsics to guarantee that. */
+#if defined(__i386__) || defined(__x86_64__)
+    ptr->SystemTime.High2Time = system_time_high;
+    ptr->SystemTime.LowPart = system_time_low;
+    ptr->SystemTime.High1Time = system_time_high;
+
+    ptr->InterruptTime.High2Time = interrupt_time_high;
+    ptr->InterruptTime.LowPart = interrupt_time_low;
+    ptr->InterruptTime.High1Time = interrupt_time_high;
+
+    ptr->TickCount.High2Time = tick_count_high;
+    ptr->TickCount.LowPart = tick_count_low;
+    ptr->TickCount.High1Time = tick_count_high;
+    *(volatile ULONG *)&ptr->TickCountLowDeprecated = tick_count_low;
+#else
+    __atomic_store_n(&ptr->SystemTime.High2Time, system_time_high, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&ptr->SystemTime.LowPart, system_time_low, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&ptr->SystemTime.High1Time, system_time_high, __ATOMIC_SEQ_CST);
+
+    __atomic_store_n(&ptr->InterruptTime.High2Time, interrupt_time_high, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&ptr->InterruptTime.LowPart, interrupt_time_low, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&ptr->InterruptTime.High1Time, interrupt_time_high, __ATOMIC_SEQ_CST);
+
+    __atomic_store_n(&ptr->TickCount.High2Time, tick_count_high, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&ptr->TickCount.LowPart, tick_count_low, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&ptr->TickCount.High1Time, tick_count_high, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&ptr->TickCountLowDeprecated, tick_count_low, __ATOMIC_SEQ_CST);
+#endif
+}
+
+void init_kusd_mapping( struct mapping *mapping )
+{
+    if (kusd != MAP_FAILED) return;
+
+    grab_object( mapping );
+    make_object_static( &mapping->obj );
+
+    if ((kusd = mmap( NULL, mapping->size, PROT_WRITE, MAP_SHARED,
+                      get_unix_fd( mapping->fd ), 0 )) == MAP_FAILED)
+        set_error( STATUS_NO_MEMORY );
+    else
+        kusd_set_current_time( NULL );
 }
 
 /* create a file mapping */
