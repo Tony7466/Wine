@@ -11,7 +11,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 +    DWORD type, size = 0;
      WCHAR *str;
  
-     if (hkey && !RegQueryValueExW(hkey, name, 0, &type, NULL, &size))
+     if (RegQueryValueExW(hkey, name, 0, &type, NULL, &size))
 --- a/dlls/d3dx9_36/texture.c
 +++ b/dlls/d3dx9_36/texture.c
 @@ -1286,6 +1286,10 @@ static inline void fill_texture(const st
@@ -27,7 +27,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (format->type == FORMAT_ARGBF16)
 --- a/dlls/ntdll/locale.c
 +++ b/dlls/ntdll/locale.c
-@@ -2325,7 +2325,7 @@ NTSTATUS WINAPI RtlIdnToUnicode( DWORD f
+@@ -2322,7 +2322,7 @@ NTSTATUS WINAPI RtlIdnToUnicode( DWORD f
      int i, buflen, start, end, out_label, out = 0;
      NTSTATUS status;
      UINT buffer[64];
@@ -220,7 +220,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          *buflen = len;
 --- a/dlls/msi/automation.c
 +++ b/dlls/msi/automation.c
-@@ -1837,7 +1837,7 @@ static HRESULT InstallerImpl_SummaryInfo
+@@ -1823,7 +1823,7 @@ static HRESULT InstallerImpl_SummaryInfo
      UINT ret;
      HRESULT hr;
      MSIHANDLE hsuminfo;

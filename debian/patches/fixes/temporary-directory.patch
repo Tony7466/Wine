@@ -14,16 +14,16 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  #include <errno.h>
  #include <sys/stat.h>
  #ifdef HAVE_UNISTD_H
-@@ -43,7 +44,7 @@
- #include "wine/library.h"
+@@ -342,7 +343,7 @@ done:
+ #ifdef __ASM_OBSOLETE
  
  static const char server_config_dir[] = "/.wine";        /* config dir relative to $HOME */
 -static const char server_root_prefix[] = "/tmp/.wine";   /* prefix for server root dir */
 +static const char server_root_prefix[] = "/run/user";    /* prefix for server root dir */
  static const char server_dir_prefix[] = "/server-";      /* prefix for server dir */
  
- static char *bindir;
-@@ -224,14 +225,107 @@ static char *get_runtime_argvdir( const
+ static char *config_dir;
+@@ -372,14 +373,107 @@ static void fatal_perror( const char *er
  /* initialize the server directory value */
  static void init_server_dir( dev_t dev, ino_t ino )
  {
@@ -63,8 +63,8 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
 +        }
 +        else
 +        {
-+            const char *tmp_default = "/tmp";
-+            tmp_dir = xmalloc( sizeof(tmp_default) + 1 );
++            const char tmp_default[] = "/tmp";
++            tmp_dir = xmalloc( sizeof(tmp_default) );
 +            strcpy( tmp_dir, tmp_default );
 +        }
 +
@@ -166,7 +166,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  /* create the server directory and chdir to it */
  static char *create_server_dir( int force )
  {
-+    const char *server_root_prefix = "/run/user";
++    const char server_root_prefix[] = "/run/user";
      const char *prefix = getenv( "WINEPREFIX" );
 -    char *p, *config_dir;
 +    char *p, *config_dir, *run_dir;
@@ -181,13 +181,13 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
 -    if (!(server_dir = malloc( len ))) fatal_error( "out of memory\n" );
 -    sprintf( server_dir, "/tmp/.wine-%u", getuid() );
 +    /* use /run/user/$uid as wineserver's tmpdir by default */
-+    if (!(run_dir = malloc( sizeof(server_root_prefix) + 12 )))
++    if (!(run_dir = malloc( sizeof(server_root_prefix) + 13 )))
 +        fatal_error( "out of memory\n" );
 +    sprintf( run_dir, "%s/%u", server_root_prefix, getuid() );
 +
 +    if (opendir( run_dir )) /* use /run as the temporary directory */
 +    {
-+        len += sizeof(server_root_prefix) + 17;
++        len += strlen(run_dir) + 6;
 +        if (!(server_dir = malloc( len )))
 +            fatal_error( "out of memory\n" );
 +        sprintf( server_dir, "%s/wine", run_dir );

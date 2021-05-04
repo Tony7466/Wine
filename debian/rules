@@ -207,6 +207,7 @@ endif
 ifneq (,$(filter $(DEB_HOST_ARCH),i386 amd64))
 	echo >> debian/libwine$(VERSION).install
 	echo "# windows PE files" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*.ax" >> debian/libwine$(VERSION).install
 	echo "debian/tmp/usr/lib/*/*/*.com" >> debian/libwine$(VERSION).install
 	echo "debian/tmp/usr/lib/*/*/*.dll" >> debian/libwine$(VERSION).install
 	echo "debian/tmp/usr/lib/*/*/*.drv" >> debian/libwine$(VERSION).install
