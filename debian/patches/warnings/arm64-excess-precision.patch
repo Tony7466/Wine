@@ -3,15 +3,14 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -2039,6 +2039,11 @@ then
-   WINE_TRY_CFLAGS([-fno-stack-protector])
-   WINE_TRY_CFLAGS([-fno-strict-aliasing])
-   WINE_TRY_CFLAGS([-fexcess-precision=standard],[AC_SUBST(EXCESS_PRECISION_CFLAGS,"-fexcess-precision=standard")])
+@@ -2067,6 +2067,10 @@ then
+     WINE_TRY_CFLAGS([-fexcess-precision=standard],[AC_SUBST(EXCESS_PRECISION_CFLAGS,"-fexcess-precision=standard")])
+   fi
+ 
++  case $host_cpu in
++    *aarch64*) EXCESS_PRECISION_CFLAGS="" ;;
++  esac
 +
-+case $host_cpu in
-+  *aarch64*) EXCESS_PRECISION_CFLAGS="" ;;
-+esac
-+
-   WINE_TRY_CFLAGS([-Wdeclaration-after-statement])
-   WINE_TRY_CFLAGS([-Wempty-body])
-   WINE_TRY_CFLAGS([-Wignored-qualifiers])
+   dnl Check for noisy string.h
+   WINE_TRY_CFLAGS([-Wpointer-arith],
+      [saved_string_h_CFLAGS=$CFLAGS

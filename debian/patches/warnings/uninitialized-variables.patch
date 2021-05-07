@@ -27,7 +27,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (format->type == FORMAT_ARGBF16)
 --- a/dlls/ntdll/locale.c
 +++ b/dlls/ntdll/locale.c
-@@ -2322,7 +2322,7 @@ NTSTATUS WINAPI RtlIdnToUnicode( DWORD f
+@@ -2298,7 +2298,7 @@ NTSTATUS WINAPI RtlIdnToUnicode( DWORD f
      int i, buflen, start, end, out_label, out = 0;
      NTSTATUS status;
      UINT buffer[64];
@@ -93,7 +93,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!desc) return E_INVALIDARG;
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -2670,6 +2670,10 @@ static void check_fbo_compat(struct wine
+@@ -2651,6 +2651,10 @@ static void check_fbo_compat(struct wine
                      case WINED3D_GL_RES_TYPE_COUNT:
                          color = 0;
                          break;
@@ -103,28 +103,6 @@ author: Michael Gilbert <mgilbert@debian.org>
 +                        break;
                  }
                  checkGLcall("Post-pixelshader blending check");
- 
---- a/dlls/devenum/createdevenum.c
-+++ b/dlls/devenum/createdevenum.c
-@@ -374,7 +374,7 @@ static void write_filter_data(IPropertyB
-     HRESULT hr;
- 
-     hr = CoCreateInstance(&CLSID_FilterMapper2, NULL, CLSCTX_INPROC, &IID_IAMFilterData, (void **)&fildata);
--    if (FAILED(hr)) goto cleanup;
-+    if (FAILED(hr)) goto cleanup2;
- 
-     hr = IAMFilterData_CreateFilterData(fildata, rgf, &data, &size);
-     if (FAILED(hr)) goto cleanup;
-@@ -395,8 +395,9 @@ static void write_filter_data(IPropertyB
-     if (FAILED(hr)) goto cleanup;
- 
- cleanup:
--    VariantClear(&var);
-     CoTaskMemFree(data);
-+cleanup2:
-+    VariantClear(&var);
-     IAMFilterData_Release(fildata);
- }
  
 --- a/dlls/user32/sysparams.c
 +++ b/dlls/user32/sysparams.c
@@ -242,7 +220,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if(ts64.tv_sec != (MSVCRT___time32_t)ts64.tv_sec)
 --- a/dlls/mf/session.c
 +++ b/dlls/mf/session.c
-@@ -551,7 +551,7 @@ static void session_clear_topologies(str
+@@ -580,7 +580,7 @@ static void session_clear_topologies(str
  static void session_set_topo_status(struct media_session *session, HRESULT status,
          MF_TOPOSTATUS topo_status)
  {

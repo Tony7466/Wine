@@ -42,6 +42,6 @@ warnings/bison.patch
 warnings/format-overflow.patch
 warnings/strcpy-overflow.patch
 warnings/incorrect-bounds.patch
-warnings/argument-promotion.patch
+# warnings/argument-promotion.patch # probably fixed???
 warnings/discarded-qualifiers.patch
 warnings/uninitialized-variables.patch

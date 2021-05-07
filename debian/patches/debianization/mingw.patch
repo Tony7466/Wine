@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -1034,12 +1034,11 @@ then
+@@ -1035,12 +1035,11 @@ then
      then
          ac_save_CC="$CC"
          saved_CFLAGS=$CFLAGS
