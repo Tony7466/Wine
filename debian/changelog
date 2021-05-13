@@ -1,3 +1,16 @@
+wine-development (5.10-1) UNRELEASED; urgency=medium
+
+  * New upstream release 5.10, released Jun 5, 2020.
+    - More progress on the WineD3D Vulkan backend.
+    - Beginnings of a separate Unix library for NTDLL.
+    - Better support for anti-cheat kernel drivers.
+    - More glyph substitutions in DirectWrite.
+    - Support for DSS private keys.
+    - ARM64 exception handling fixes.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Thu, 13 May 2021 02:41:41 +0000
+
 wine-development (5.9-2) unstable; urgency=medium
 
   * Update to debhelper 13.
