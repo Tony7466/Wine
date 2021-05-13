@@ -621,6 +621,29 @@ NTSTATUS WINAPI NtQueryInformationProcess(
         else
             ret = STATUS_INVALID_PARAMETER;
         break;
+
+    case ProcessImageInformation:
+        len = sizeof(SECTION_IMAGE_INFORMATION);
+        if (ProcessInformationLength == len)
+        {
+            if (ProcessInformation)
+            {
+                pe_image_info_t pe_info;
+
+                SERVER_START_REQ( get_process_info )
+                {
+                    req->handle = wine_server_obj_handle( ProcessHandle );
+                    wine_server_set_reply( req, &pe_info, sizeof(pe_info) );
+                    if ((ret = wine_server_call( req )) == STATUS_SUCCESS)
+                        virtual_fill_image_information( &pe_info, ProcessInformation );
+                }
+                SERVER_END_REQ;
+            }
+            else ret = STATUS_ACCESS_VIOLATION;
+        }
+        else ret = STATUS_INFO_LENGTH_MISMATCH;
+        break;
+
     default:
         FIXME("(%p,info_class=%d,%p,0x%08x,%p) Unknown information class\n",
               ProcessHandle,ProcessInformationClass,
@@ -711,7 +734,7 @@ NTSTATUS WINAPI NtSetInformationProcess(
                 return STATUS_INVALID_PARAMETER;
             }
             execute_flags = *(ULONG *)ProcessInformation;
-            VIRTUAL_SetForceExec( enable );
+            unix_funcs->virtual_set_force_exec( enable );
         }
         break;
 
@@ -1765,16 +1788,5 @@ void WINAPI DbgUiRemoteBreakin( void *arg )
  */
 NTSTATUS WINAPI DbgUiIssueRemoteBreakin( HANDLE process )
 {
-    apc_call_t call;
-    apc_result_t result;
-    NTSTATUS status;
-
-    TRACE( "(%p)\n", process );
-
-    memset( &call, 0, sizeof(call) );
-
-    call.type = APC_BREAK_PROCESS;
-    status = server_queue_process_apc( process, &call, &result );
-    if (status) return status;
-    return result.break_process.status;
+    return unix_funcs->DbgUiIssueRemoteBreakin( process );
 }

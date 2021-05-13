@@ -62,11 +62,8 @@ extern void wait_suspend( CONTEXT *context ) DECLSPEC_HIDDEN;
 extern NTSTATUS send_debug_event( EXCEPTION_RECORD *rec, int first_chance, CONTEXT *context ) DECLSPEC_HIDDEN;
 extern LONG call_vectored_handlers( EXCEPTION_RECORD *rec, CONTEXT *context ) DECLSPEC_HIDDEN;
 extern void DECLSPEC_NORETURN raise_status( NTSTATUS status, EXCEPTION_RECORD *rec ) DECLSPEC_HIDDEN;
-extern NTSTATUS context_to_server( context_t *to, const CONTEXT *from ) DECLSPEC_HIDDEN;
-extern NTSTATUS context_from_server( CONTEXT *to, const context_t *from ) DECLSPEC_HIDDEN;
 extern NTSTATUS set_thread_context( HANDLE handle, const context_t *context, BOOL *self ) DECLSPEC_HIDDEN;
 extern NTSTATUS get_thread_context( HANDLE handle, context_t *context, unsigned int flags, BOOL *self ) DECLSPEC_HIDDEN;
-extern NTSTATUS get_thread_ldt_entry( HANDLE handle, void *data, ULONG len, ULONG *ret_len ) DECLSPEC_HIDDEN;
 extern LONG WINAPI call_unhandled_exception_filter( PEXCEPTION_POINTERS eptr ) DECLSPEC_HIDDEN;
 
 #if defined(__x86_64__) || defined(__arm__) || defined(__aarch64__)
@@ -80,18 +77,10 @@ extern LPCSTR debugstr_ObjectAttributes(const OBJECT_ATTRIBUTES *oa) DECLSPEC_HI
 /* init routines */
 extern SIZE_T signal_stack_size DECLSPEC_HIDDEN;
 extern SIZE_T signal_stack_mask DECLSPEC_HIDDEN;
-extern void signal_init_threading(void) DECLSPEC_HIDDEN;
-extern NTSTATUS signal_alloc_thread( TEB *teb ) DECLSPEC_HIDDEN;
-extern void signal_free_thread( TEB *teb ) DECLSPEC_HIDDEN;
-extern void signal_init_thread( TEB *teb ) DECLSPEC_HIDDEN;
 extern void signal_init_process(void) DECLSPEC_HIDDEN;
-extern void signal_start_thread( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend ) DECLSPEC_HIDDEN;
-extern void signal_start_process( LPTHREAD_START_ROUTINE entry, BOOL suspend ) DECLSPEC_HIDDEN;
-extern void DECLSPEC_NORETURN signal_exit_thread( int status ) DECLSPEC_HIDDEN;
-extern void DECLSPEC_NORETURN signal_exit_process( int status ) DECLSPEC_HIDDEN;
 extern void version_init(void) DECLSPEC_HIDDEN;
 extern void debug_init(void) DECLSPEC_HIDDEN;
-extern TEB *thread_init(void) DECLSPEC_HIDDEN;
+extern TEB *thread_init( SIZE_T *info_size, BOOL *suspend ) DECLSPEC_HIDDEN;
 extern void actctx_init(void) DECLSPEC_HIDDEN;
 extern void virtual_init(void) DECLSPEC_HIDDEN;
 extern void fill_cpu_info(void) DECLSPEC_HIDDEN;
@@ -116,11 +105,7 @@ extern BOOL is_wow64 DECLSPEC_HIDDEN;
 extern NTSTATUS exec_wineloader( char **argv, int socketfd, const pe_image_info_t *pe_info ) DECLSPEC_HIDDEN;
 extern void server_init_process(void) DECLSPEC_HIDDEN;
 extern void server_init_process_done(void) DECLSPEC_HIDDEN;
-extern size_t server_init_thread( void *entry_point, BOOL *suspend ) DECLSPEC_HIDDEN;
-extern void DECLSPEC_NORETURN abort_thread( int status ) DECLSPEC_HIDDEN;
-extern void DECLSPEC_NORETURN exit_thread( int status ) DECLSPEC_HIDDEN;
 extern sigset_t server_block_set DECLSPEC_HIDDEN;
-extern unsigned int server_call_unlocked( void *req_ptr ) DECLSPEC_HIDDEN;
 extern void server_enter_uninterrupted_section( RTL_CRITICAL_SECTION *cs, sigset_t *sigset ) DECLSPEC_HIDDEN;
 extern void server_leave_uninterrupted_section( RTL_CRITICAL_SECTION *cs, sigset_t *sigset ) DECLSPEC_HIDDEN;
 extern unsigned int server_select( const select_op_t *select_op, data_size_t size, UINT flags,
@@ -128,10 +113,6 @@ extern unsigned int server_select( const select_op_t *select_op, data_size_t siz
 extern unsigned int server_wait( const select_op_t *select_op, data_size_t size,
                                  UINT flags, const LARGE_INTEGER *timeout ) DECLSPEC_HIDDEN;
 extern unsigned int server_queue_process_apc( HANDLE process, const apc_call_t *call, apc_result_t *result ) DECLSPEC_HIDDEN;
-extern int server_remove_fd_from_cache( HANDLE handle ) DECLSPEC_HIDDEN;
-extern int server_get_unix_fd( HANDLE handle, unsigned int access, int *unix_fd,
-                               int *needs_close, enum server_fd_type *type, unsigned int *options ) DECLSPEC_HIDDEN;
-extern int server_pipe( int fd[2] ) DECLSPEC_HIDDEN;
 extern NTSTATUS alloc_object_attributes( const OBJECT_ATTRIBUTES *attr, struct object_attributes **ret,
                                          data_size_t *ret_len ) DECLSPEC_HIDDEN;
 extern NTSTATUS validate_open_object_attributes( const OBJECT_ATTRIBUTES *attr ) DECLSPEC_HIDDEN;
@@ -192,36 +173,9 @@ extern NTSTATUS nt_to_unix_file_name_attr( const OBJECT_ATTRIBUTES *attr, ANSI_S
                                            UINT disposition ) DECLSPEC_HIDDEN;
 
 /* virtual memory */
-extern NTSTATUS virtual_alloc( PVOID *ret, unsigned short zero_bits_64, SIZE_T *size_ptr,
-                               ULONG type, ULONG protect ) DECLSPEC_HIDDEN;
-extern NTSTATUS virtual_map_section( HANDLE handle, PVOID *addr_ptr, unsigned short zero_bits_64, SIZE_T commit_size,
-                                     const LARGE_INTEGER *offset_ptr, SIZE_T *size_ptr, ULONG alloc_type,
-                                     ULONG protect, pe_image_info_t *image_info ) DECLSPEC_HIDDEN;
-extern void virtual_get_system_info( SYSTEM_BASIC_INFORMATION *info ) DECLSPEC_HIDDEN;
-extern NTSTATUS virtual_create_builtin_view( void *base ) DECLSPEC_HIDDEN;
-extern TEB * virtual_alloc_first_teb(void) DECLSPEC_HIDDEN;
-extern NTSTATUS virtual_alloc_teb( TEB **teb ) DECLSPEC_HIDDEN;
-extern void virtual_free_teb( TEB *teb ) DECLSPEC_HIDDEN;
-extern NTSTATUS virtual_alloc_thread_stack( INITIAL_TEB *stack, SIZE_T reserve_size,
-                                            SIZE_T commit_size, SIZE_T *pthread_size ) DECLSPEC_HIDDEN;
-extern void virtual_clear_thread_stack( void *stack_end ) DECLSPEC_HIDDEN;
-extern int virtual_handle_stack_fault( void *addr ) DECLSPEC_HIDDEN;
-extern BOOL virtual_is_valid_code_address( const void *addr, SIZE_T size ) DECLSPEC_HIDDEN;
-extern NTSTATUS virtual_handle_fault( LPCVOID addr, DWORD err, BOOL on_signal_stack ) DECLSPEC_HIDDEN;
-extern unsigned int virtual_locked_server_call( void *req_ptr ) DECLSPEC_HIDDEN;
-extern ssize_t virtual_locked_read( int fd, void *addr, size_t size ) DECLSPEC_HIDDEN;
-extern ssize_t virtual_locked_pread( int fd, void *addr, size_t size, off_t offset ) DECLSPEC_HIDDEN;
-extern BOOL virtual_check_buffer_for_read( const void *ptr, SIZE_T size ) DECLSPEC_HIDDEN;
-extern BOOL virtual_check_buffer_for_write( void *ptr, SIZE_T size ) DECLSPEC_HIDDEN;
-extern SIZE_T virtual_uninterrupted_read_memory( const void *addr, void *buffer, SIZE_T size ) DECLSPEC_HIDDEN;
-extern NTSTATUS virtual_uninterrupted_write_memory( void *addr, const void *buffer, SIZE_T size ) DECLSPEC_HIDDEN;
-extern void VIRTUAL_SetForceExec( BOOL enable ) DECLSPEC_HIDDEN;
-extern void virtual_release_address_space(void) DECLSPEC_HIDDEN;
-extern void virtual_set_large_address_space(void) DECLSPEC_HIDDEN;
 extern void virtual_fill_image_information( const pe_image_info_t *pe_info,
                                             SECTION_IMAGE_INFORMATION *info ) DECLSPEC_HIDDEN;
 extern struct _KUSER_SHARED_DATA *user_shared_data DECLSPEC_HIDDEN;
-extern HANDLE user_shared_data_init_done(void) DECLSPEC_HIDDEN;
 
 /* completion */
 extern NTSTATUS NTDLL_AddCompletion( HANDLE hFile, ULONG_PTR CompletionValue,
@@ -249,14 +203,6 @@ enum loadorder
 };
 
 extern enum loadorder get_load_order( const WCHAR *app_name, const UNICODE_STRING *nt_name ) DECLSPEC_HIDDEN;
-
-struct debug_info
-{
-    unsigned int str_pos;       /* current position in strings buffer */
-    unsigned int out_pos;       /* current position in output buffer */
-    char         strings[1024]; /* buffer for temporary strings */
-    char         output[1024];  /* current output line */
-};
 
 /* thread private data, stored in NtCurrentTeb()->GdiTebBatch */
 struct ntdll_thread_data

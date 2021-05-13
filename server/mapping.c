@@ -127,6 +127,7 @@ struct memory_view
     struct fd      *fd;              /* fd for mapped file */
     struct ranges  *committed;       /* list of committed ranges in this mapping */
     struct shared_map *shared;       /* temp file for shared PE mapping */
+    pe_image_info_t image;           /* image info (for PE image mapping) */
     unsigned int    flags;           /* SEC_* flags */
     client_ptr_t    base;            /* view base address (in process addr space) */
     mem_size_t      size;            /* view size */
@@ -781,10 +782,10 @@ static unsigned int get_mapping_flags( obj_handle_t handle, unsigned int flags )
 }
 
 
-static struct object *create_mapping( struct object *root, const struct unicode_str *name,
-                                      unsigned int attr, mem_size_t size, unsigned int flags,
-                                      obj_handle_t handle, unsigned int file_access,
-                                      const struct security_descriptor *sd )
+static struct mapping *create_mapping( struct object *root, const struct unicode_str *name,
+                                       unsigned int attr, mem_size_t size, unsigned int flags,
+                                       obj_handle_t handle, unsigned int file_access,
+                                       const struct security_descriptor *sd )
 {
     struct mapping *mapping;
     struct file *file;
@@ -797,7 +798,7 @@ static struct object *create_mapping( struct object *root, const struct unicode_
     if (!(mapping = create_named_object( root, &mapping_ops, name, attr, sd )))
         return NULL;
     if (get_error() == STATUS_OBJECT_NAME_EXISTS)
-        return &mapping->obj;  /* Nothing else to do */
+        return mapping;  /* Nothing else to do */
 
     mapping->size        = size;
     mapping->fd          = NULL;
@@ -836,7 +837,7 @@ static struct object *create_mapping( struct object *root, const struct unicode_
         if (flags & SEC_IMAGE)
         {
             unsigned int err = get_image_params( mapping, st.st_size, unix_fd );
-            if (!err) return &mapping->obj;
+            if (!err) return mapping;
             set_error( err );
             goto error;
         }
@@ -872,14 +873,14 @@ static struct object *create_mapping( struct object *root, const struct unicode_
                                                  FILE_SYNCHRONOUS_IO_NONALERT ))) goto error;
         allow_fd_caching( mapping->fd );
     }
-    return &mapping->obj;
+    return mapping;
 
  error:
     release_object( mapping );
     return NULL;
 }
 
-struct mapping *get_mapping_obj( struct process *process, obj_handle_t handle, unsigned int access )
+static struct mapping *get_mapping_obj( struct process *process, obj_handle_t handle, unsigned int access )
 {
     return (struct mapping *)get_handle_obj( process, handle, access, &mapping_ops );
 }
@@ -892,6 +893,15 @@ struct file *get_mapping_file( struct process *process, client_ptr_t base,
 
     if (!view || !view->fd) return NULL;
     return create_file_for_fd_obj( view->fd, access, sharing );
+}
+
+/* get the image info for a SEC_IMAGE mapping */
+const pe_image_info_t *get_mapping_image_info( struct process *process, client_ptr_t base )
+{
+    struct memory_view *view = find_mapped_view( process, base );
+
+    if (!view || !(view->flags & SEC_IMAGE)) return NULL;
+    return &view->image;
 }
 
 static void mapping_dump( struct object *obj, int verbose )
@@ -945,87 +955,39 @@ int get_page_size(void)
     return page_mask + 1;
 }
 
-static KSHARED_USER_DATA *kusd = MAP_FAILED;
-static const timeout_t kusd_timeout = 16 * -TICKS_PER_SEC / 1000;
-
-static void kusd_set_current_time( void *private )
+struct object *create_user_data_mapping( struct object *root, const struct unicode_str *name,
+                                        unsigned int attr, const struct security_descriptor *sd )
 {
-    ULONG system_time_high = current_time >> 32;
-    ULONG system_time_low = current_time & 0xffffffff;
-    ULONG interrupt_time_high = monotonic_time >> 32;
-    ULONG interrupt_time_low = monotonic_time & 0xffffffff;
-    ULONG tick_count_high = (monotonic_time * 1000 / TICKS_PER_SEC) >> 32;
-    ULONG tick_count_low = (monotonic_time * 1000 / TICKS_PER_SEC) & 0xffffffff;
-    KSHARED_USER_DATA *ptr = kusd;
+    void *ptr;
+    struct mapping *mapping;
 
-    add_timeout_user( kusd_timeout, kusd_set_current_time, NULL );
-
-    /* on X86 there should be total store order guarantees, so volatile is enough
-     * to ensure the stores aren't reordered by the compiler, and then they will
-     * always be seen in-order from other CPUs. On other archs, we need atomic
-     * intrinsics to guarantee that. */
-#if defined(__i386__) || defined(__x86_64__)
-    ptr->SystemTime.High2Time = system_time_high;
-    ptr->SystemTime.LowPart = system_time_low;
-    ptr->SystemTime.High1Time = system_time_high;
-
-    ptr->InterruptTime.High2Time = interrupt_time_high;
-    ptr->InterruptTime.LowPart = interrupt_time_low;
-    ptr->InterruptTime.High1Time = interrupt_time_high;
-
-    ptr->TickCount.High2Time = tick_count_high;
-    ptr->TickCount.LowPart = tick_count_low;
-    ptr->TickCount.High1Time = tick_count_high;
-    *(volatile ULONG *)&ptr->TickCountLowDeprecated = tick_count_low;
-#else
-    __atomic_store_n(&ptr->SystemTime.High2Time, system_time_high, __ATOMIC_SEQ_CST);
-    __atomic_store_n(&ptr->SystemTime.LowPart, system_time_low, __ATOMIC_SEQ_CST);
-    __atomic_store_n(&ptr->SystemTime.High1Time, system_time_high, __ATOMIC_SEQ_CST);
-
-    __atomic_store_n(&ptr->InterruptTime.High2Time, interrupt_time_high, __ATOMIC_SEQ_CST);
-    __atomic_store_n(&ptr->InterruptTime.LowPart, interrupt_time_low, __ATOMIC_SEQ_CST);
-    __atomic_store_n(&ptr->InterruptTime.High1Time, interrupt_time_high, __ATOMIC_SEQ_CST);
-
-    __atomic_store_n(&ptr->TickCount.High2Time, tick_count_high, __ATOMIC_SEQ_CST);
-    __atomic_store_n(&ptr->TickCount.LowPart, tick_count_low, __ATOMIC_SEQ_CST);
-    __atomic_store_n(&ptr->TickCount.High1Time, tick_count_high, __ATOMIC_SEQ_CST);
-    __atomic_store_n(&ptr->TickCountLowDeprecated, tick_count_low, __ATOMIC_SEQ_CST);
-#endif
-}
-
-void init_kusd_mapping( struct mapping *mapping )
-{
-    if (kusd != MAP_FAILED) return;
-
-    grab_object( mapping );
-    make_object_static( &mapping->obj );
-
-    if ((kusd = mmap( NULL, mapping->size, PROT_WRITE, MAP_SHARED,
-                      get_unix_fd( mapping->fd ), 0 )) == MAP_FAILED)
-        set_error( STATUS_NO_MEMORY );
-    else
-        kusd_set_current_time( NULL );
+    if (!(mapping = create_mapping( root, name, OBJ_OPENIF, sizeof(KSHARED_USER_DATA),
+                                    SEC_COMMIT, 0, FILE_READ_DATA | FILE_WRITE_DATA, NULL ))) return NULL;
+    ptr = mmap( NULL, mapping->size, PROT_WRITE, MAP_SHARED, get_unix_fd( mapping->fd ), 0 );
+    if (ptr != MAP_FAILED) user_shared_data = ptr;
+    return &mapping->obj;
 }
 
 /* create a file mapping */
 DECL_HANDLER(create_mapping)
 {
-    struct object *root, *obj;
+    struct object *root;
+    struct mapping *mapping;
     struct unicode_str name;
     const struct security_descriptor *sd;
     const struct object_attributes *objattr = get_req_object_attributes( &sd, &name, &root );
 
     if (!objattr) return;
 
-    if ((obj = create_mapping( root, &name, objattr->attributes, req->size, req->flags,
-                               req->file_handle, req->file_access, sd )))
+    if ((mapping = create_mapping( root, &name, objattr->attributes, req->size, req->flags,
+                                   req->file_handle, req->file_access, sd )))
     {
         if (get_error() == STATUS_OBJECT_NAME_EXISTS)
-            reply->handle = alloc_handle( current->process, obj, req->access, objattr->attributes );
+            reply->handle = alloc_handle( current->process, &mapping->obj, req->access, objattr->attributes );
         else
-            reply->handle = alloc_handle_no_access_check( current->process, obj,
+            reply->handle = alloc_handle_no_access_check( current->process, &mapping->obj,
                                                           req->access, objattr->attributes );
-        release_object( obj );
+        release_object( mapping );
     }
 
     if (root) release_object( root );
@@ -1113,6 +1075,7 @@ DECL_HANDLER(map_view)
         view->fd        = !is_fd_removable( mapping->fd ) ? (struct fd *)grab_object( mapping->fd ) : NULL;
         view->committed = mapping->committed ? (struct ranges *)grab_object( mapping->committed ) : NULL;
         view->shared    = mapping->shared ? (struct shared_map *)grab_object( mapping->shared ) : NULL;
+        if (mapping->flags & SEC_IMAGE) view->image = mapping->image;
         list_add_tail( &current->process->views, &view->entry );
     }
 

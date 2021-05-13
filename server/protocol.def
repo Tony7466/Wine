@@ -509,7 +509,7 @@ typedef union
         unsigned int     op_type;      /* type of operation */
         client_ptr_t     addr;         /* requested address */
         mem_size_t       size;         /* allocation size */
-        unsigned int     zero_bits_64; /* number of zero high bits */
+        mem_size_t       zero_bits;    /* number of zero high bits */
         unsigned int     prot;         /* memory protection flags */
     } virtual_alloc;
     struct
@@ -560,9 +560,9 @@ typedef union
         client_ptr_t     addr;         /* requested address */
         mem_size_t       size;         /* allocation size */
         file_pos_t       offset;       /* file offset */
+        mem_size_t       zero_bits;    /* number of zero high bits */
         unsigned int     alloc_type;   /* allocation type */
-        unsigned short   zero_bits_64; /* number of zero high bits */
-        unsigned short   prot;         /* memory protection flags */
+        unsigned int     prot;         /* memory protection flags */
     } map_view;
     struct
     {
@@ -573,7 +573,7 @@ typedef union
     struct
     {
         enum apc_type    type;      /* APC_CREATE_THREAD */
-        int              suspend;   /* suspended thread? */
+        unsigned int     flags;     /* creation flags */
         client_ptr_t     func;      /* void (__stdcall *func)(void*);  start function */
         client_ptr_t     arg;       /* argument for start function */
         mem_size_t       reserve;   /* reserve size for thread stack */
@@ -661,6 +661,7 @@ typedef union
     {
         enum apc_type    type;      /* APC_CREATE_THREAD */
         unsigned int     status;    /* status returned by call */
+        process_id_t     pid;       /* process id */
         thread_id_t      tid;       /* thread id */
         obj_handle_t     handle;    /* handle to new thread */
     } create_thread;
@@ -854,7 +855,6 @@ struct rawinput_device
     mod_handle_t module;       /* main module base address */
     client_ptr_t ldt_copy;     /* address of LDT copy (in thread address space) */
     client_ptr_t entry;        /* process entry point */
-    obj_handle_t usd_handle;   /* USD mapping handle */
 @REPLY
     int          suspend;      /* is process suspended? */
 @END
@@ -896,7 +896,6 @@ struct rawinput_device
     int          exit_code;    /* thread exit code */
 @REPLY
     int          self;         /* suicide? */
-    int          last;         /* last thread in this process? */
 @END
 
 
@@ -915,6 +914,7 @@ struct rawinput_device
     client_cpu_t cpu;              /* CPU that this process is running on */
     short int    debugger_present; /* process is being debugged */
     short int    debug_children;   /* inherit debugger to child processes */
+    VARARG(image,pe_image_info);   /* image info for main exe */
 @END
 
 

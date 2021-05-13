@@ -1874,7 +1874,7 @@ static NTSTATUS build_so_dll_module( const WCHAR *load_path, const UNICODE_STRIN
 
     if (!(wm = alloc_module( module, nt_name, TRUE ))) return STATUS_NO_MEMORY;
 
-    virtual_create_builtin_view( module );
+    unix_funcs->virtual_create_builtin_view( module );
 
     if (!(flags & DONT_RESOLVE_DLL_REFERENCES) &&
         ((nt->FileHeader.Characteristics & IMAGE_FILE_DLL) ||
@@ -2340,7 +2340,7 @@ static NTSTATUS open_dll_file( UNICODE_STRING *nt_name, WINE_MODREF **pwm,
         return STATUS_DLL_NOT_FOUND;
     }
 
-    if (!server_get_unix_fd( handle, 0, &fd, &needs_close, NULL, NULL ))
+    if (!unix_funcs->server_get_unix_fd( handle, 0, &fd, &needs_close, NULL, NULL ))
     {
         fstat( fd, st );
         if (needs_close) close( fd );
@@ -2368,8 +2368,8 @@ static NTSTATUS open_dll_file( UNICODE_STRING *nt_name, WINE_MODREF **pwm,
             NtUnmapViewOfSection( NtCurrentProcess(), *module );
             *module = NULL;
         }
-        status = virtual_map_section( mapping, module, 0, 0, NULL, &len,
-                                      0, PAGE_EXECUTE_READ, image_info );
+        status = unix_funcs->virtual_map_section( mapping, module, 0, 0, NULL, &len,
+                                                  0, PAGE_EXECUTE_READ, image_info );
         if (status == STATUS_IMAGE_NOT_AT_BASE) status = STATUS_SUCCESS;
         NtClose( mapping );
     }
@@ -2582,7 +2582,7 @@ static NTSTATUS find_builtin_dll( const WCHAR *name, WINE_MODREF **pwm,
 
     len = wcslen( name );
     if (build_dir) maxlen = strlen(build_dir) + sizeof("/programs/") + len;
-    maxlen = max( maxlen, dll_path_maxlen ) + len + sizeof(".so");
+    maxlen = max( maxlen, dll_path_maxlen + 1 ) + len + sizeof(".so");
 
     if (!(file = RtlAllocateHeap( GetProcessHeap(), 0, maxlen ))) return STATUS_NO_MEMORY;
 
@@ -3885,7 +3885,7 @@ void WINAPI LdrInitializeThunk( CONTEXT *context, void **entry, ULONG_PTR unknow
             }
         }
         attach_implicitly_loaded_dlls( context );
-        virtual_release_address_space();
+        unix_funcs->virtual_release_address_space();
         if (wm->ldr.TlsIndex != -1) call_tls_callbacks( wm->ldr.DllBase, DLL_PROCESS_ATTACH );
         if (wm->so_handle) call_constructors( wm );
         if (wm->ldr.ActivationContext) RtlDeactivateActivationContext( 0, cookie );
@@ -4376,13 +4376,8 @@ void __wine_process_init(void)
 
     if (!unix_funcs) load_ntdll_so( ntdll_module, &__wine_spec_nt_header );
 
-    teb = thread_init();
+    teb = thread_init( &info_size, &suspend );
     peb = teb->Peb;
-
-    /* setup the server connection */
-    server_init_process();
-    info_size = server_init_thread( peb, &suspend );
-
     peb->ProcessHeap = RtlCreateHeap( HEAP_GROWABLE, NULL, 0, 0, NULL, NULL );
     peb->LoaderLock = &loader_section;
 
@@ -4462,7 +4457,7 @@ void __wine_process_init(void)
         NtTerminateProcess( GetCurrentProcess(), status );
     }
 
-    virtual_set_large_address_space();
+    unix_funcs->virtual_set_large_address_space();
 
     /* the main exe needs to be the first in the load order list */
     RemoveEntryList( &wm->ldr.InLoadOrderLinks );
@@ -4470,7 +4465,7 @@ void __wine_process_init(void)
     RemoveEntryList( &wm->ldr.InMemoryOrderLinks );
     InsertHeadList( &peb->LdrData->InMemoryOrderModuleList, &wm->ldr.InMemoryOrderLinks );
 
-    virtual_alloc_thread_stack( &stack, 0, 0, NULL );
+    unix_funcs->virtual_alloc_thread_stack( &stack, 0, 0, NULL );
     teb->Tib.StackBase = stack.StackBase;
     teb->Tib.StackLimit = stack.StackLimit;
     teb->DeallocationStack = stack.DeallocationStack;

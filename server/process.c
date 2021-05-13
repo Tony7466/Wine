@@ -1361,7 +1361,6 @@ DECL_HANDLER(init_process_done)
 {
     struct process_dll *dll;
     struct process *process = current->process;
-    struct mapping *mapping;
 
     if (is_process_init_done(process))
     {
@@ -1373,13 +1372,6 @@ DECL_HANDLER(init_process_done)
         set_error( STATUS_DLL_NOT_FOUND );
         return;
     }
-    if (!(mapping = get_mapping_obj( current->process, req->usd_handle, SECTION_MAP_WRITE )))
-    {
-        set_error( STATUS_INVALID_PARAMETER );
-        return;
-    }
-    init_kusd_mapping( mapping );
-    release_object( mapping );
 
     /* main exe is the first in the dll list */
     list_remove( &dll->entry );
@@ -1447,6 +1439,13 @@ DECL_HANDLER(get_process_info)
         reply->cpu              = process->cpu;
         reply->debugger_present = !!process->debugger;
         reply->debug_children   = process->debug_children;
+        if (get_reply_max_size())
+        {
+            const pe_image_info_t *info;
+            struct process_dll *exe = get_process_exe_module( process );
+            if (exe && (info = get_mapping_image_info( process, exe->base )))
+                set_reply_data( info, min( sizeof(*info), get_reply_max_size() ));
+        }
         release_object( process );
     }
 }

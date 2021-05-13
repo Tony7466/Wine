@@ -106,11 +106,12 @@ static char **main_envp;
 static char *argv0;
 static const char *bin_dir;
 static const char *dll_dir;
-static const char *data_dir;
-static const char *build_dir;
-static const char *config_dir;
 static const char **dll_paths;
 static SIZE_T dll_path_maxlen;
+
+const char *data_dir = NULL;
+const char *build_dir = NULL;
+const char *config_dir = NULL;
 
 static CPTABLEINFO unix_table;
 
@@ -686,7 +687,7 @@ static void exec_wineserver( char **argv )
  *
  * Start a new wine server.
  */
-static void CDECL start_server( BOOL debug )
+void start_server( BOOL debug )
 {
     static BOOL started;  /* we only try once */
     char *argv[3];
@@ -982,6 +983,60 @@ static HMODULE load_ntdll(void)
  */
 static struct unix_funcs unix_funcs =
 {
+    NtAllocateVirtualMemory,
+    NtAreMappedFilesTheSame,
+    NtCancelTimer,
+    NtClearEvent,
+    NtClose,
+    NtCreateEvent,
+    NtCreateKeyedEvent,
+    NtCreateMutant,
+    NtCreateSection,
+    NtCreateSemaphore,
+    NtCreateThreadEx,
+    NtCreateTimer,
+    NtCurrentTeb,
+    NtDelayExecution,
+    NtDuplicateObject,
+    NtFlushVirtualMemory,
+    NtFreeVirtualMemory,
+    NtGetContextThread,
+    NtGetWriteWatch,
+    NtLockVirtualMemory,
+    NtMapViewOfSection,
+    NtOpenEvent,
+    NtOpenKeyedEvent,
+    NtOpenMutant,
+    NtOpenSection,
+    NtOpenSemaphore,
+    NtOpenTimer,
+    NtProtectVirtualMemory,
+    NtPulseEvent,
+    NtQueryEvent,
+    NtQueryMutant,
+    NtQuerySection,
+    NtQuerySemaphore,
+    NtQueryTimer,
+    NtQueryVirtualMemory,
+    NtReadVirtualMemory,
+    NtReleaseKeyedEvent,
+    NtReleaseMutant,
+    NtReleaseSemaphore,
+    NtResetEvent,
+    NtResetWriteWatch,
+    NtSetContextThread,
+    NtSetEvent,
+    NtSetLdtEntries,
+    NtSetTimer,
+    NtSignalAndWaitForSingleObject,
+    NtUnlockVirtualMemory,
+    NtUnmapViewOfSection,
+    NtWaitForKeyedEvent,
+    NtWaitForMultipleObjects,
+    NtWaitForSingleObject,
+    NtWriteVirtualMemory,
+    NtYieldExecution,
+    DbgUiIssueRemoteBreakin,
     get_main_args,
     get_paths,
     get_dll_path,
@@ -990,13 +1045,40 @@ static struct unix_funcs unix_funcs =
     get_build_id,
     get_host_version,
     exec_wineloader,
-    start_server,
     map_so_dll,
-    mmap_add_reserved_area,
-    mmap_remove_reserved_area,
-    mmap_is_in_reserved_area,
-    mmap_enum_reserved_areas,
-    dbg_init,
+    virtual_map_section,
+    virtual_get_system_info,
+    virtual_create_builtin_view,
+    virtual_alloc_thread_stack,
+    virtual_handle_fault,
+    virtual_locked_server_call,
+    virtual_locked_read,
+    virtual_locked_pread,
+    virtual_locked_recvmsg,
+    virtual_is_valid_code_address,
+    virtual_handle_stack_fault,
+    virtual_check_buffer_for_read,
+    virtual_check_buffer_for_write,
+    virtual_uninterrupted_read_memory,
+    virtual_uninterrupted_write_memory,
+    virtual_set_force_exec,
+    virtual_release_address_space,
+    virtual_set_large_address_space,
+    init_threading,
+    start_process,
+    abort_thread,
+    exit_thread,
+    exit_process,
+    get_thread_ldt_entry,
+    wine_server_call,
+    server_select,
+    server_wait,
+    server_send_fd,
+    server_get_unix_fd,
+    server_fd_to_handle,
+    server_handle_to_fd,
+    server_release_fd,
+    server_init_process_done,
     __wine_dbg_get_channel_flags,
     __wine_dbg_strdup,
     __wine_dbg_output,

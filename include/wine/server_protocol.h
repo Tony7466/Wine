@@ -493,7 +493,7 @@ typedef union
         unsigned int     op_type;
         client_ptr_t     addr;
         mem_size_t       size;
-        unsigned int     zero_bits_64;
+        mem_size_t       zero_bits;
         unsigned int     prot;
     } virtual_alloc;
     struct
@@ -544,9 +544,9 @@ typedef union
         client_ptr_t     addr;
         mem_size_t       size;
         file_pos_t       offset;
+        mem_size_t       zero_bits;
         unsigned int     alloc_type;
-        unsigned short   zero_bits_64;
-        unsigned short   prot;
+        unsigned int     prot;
     } map_view;
     struct
     {
@@ -557,7 +557,7 @@ typedef union
     struct
     {
         enum apc_type    type;
-        int              suspend;
+        unsigned int     flags;
         client_ptr_t     func;
         client_ptr_t     arg;
         mem_size_t       reserve;
@@ -645,6 +645,7 @@ typedef union
     {
         enum apc_type    type;
         unsigned int     status;
+        process_id_t     pid;
         thread_id_t      tid;
         obj_handle_t     handle;
     } create_thread;
@@ -872,8 +873,6 @@ struct init_process_done_request
     mod_handle_t module;
     client_ptr_t ldt_copy;
     client_ptr_t entry;
-    obj_handle_t usd_handle;
-    char __pad_44[4];
 };
 struct init_process_done_reply
 {
@@ -938,7 +937,7 @@ struct terminate_thread_reply
 {
     struct reply_header __header;
     int          self;
-    int          last;
+    char __pad_12[4];
 };
 
 
@@ -962,6 +961,7 @@ struct get_process_info_reply
     client_cpu_t cpu;
     short int    debugger_present;
     short int    debug_children;
+    /* VARARG(image,pe_image_info); */
 };
 
 
@@ -1271,7 +1271,7 @@ struct select_reply
     apc_call_t   call;
     obj_handle_t apc_handle;
     /* VARARG(context,context); */
-    char __pad_52[4];
+    char __pad_60[4];
 };
 #define SELECT_ALERTABLE     1
 #define SELECT_INTERRUPTIBLE 2
@@ -6684,7 +6684,7 @@ union generic_reply
 
 /* ### protocol_version begin ### */
 
-#define SERVER_PROTOCOL_VERSION 603
+#define SERVER_PROTOCOL_VERSION 608
 
 /* ### protocol_version end ### */
 

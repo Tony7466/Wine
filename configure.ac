@@ -473,7 +473,6 @@ AC_CHECK_HEADERS(\
 	mach/mach.h \
 	mach/machine.h \
 	machine/cpu.h \
-	machine/limits.h \
 	machine/sysarch.h \
 	mntent.h \
 	ncurses.h \
@@ -503,7 +502,6 @@ AC_CHECK_HEADERS(\
 	sys/filio.h \
 	sys/ioctl.h \
 	sys/ipc.h \
-	sys/limits.h \
 	sys/link.h \
 	sys/mman.h \
 	sys/modem.h \
@@ -1092,6 +1090,7 @@ then
         WINE_TRY_CROSSCFLAGS([-Wwrite-strings])
         WINE_TRY_CROSSCFLAGS([-Wpointer-arith])
         WINE_TRY_CROSSCFLAGS([-Wlogical-op])
+        WINE_TRY_CROSSCFLAGS([-Wabsolute-value])
 
         case $host_cpu in
           *i[[3456789]]86*) WINE_TRY_CROSSCFLAGS([-fno-omit-frame-pointer]) ;;
@@ -2143,6 +2142,7 @@ AC_CACHE_CHECK([whether CFI directives are supported in assembly code], ac_cv_c_
                       ac_cv_c_cfi_support="yes",ac_cv_c_cfi_support="no"))
 if test "$ac_cv_c_cfi_support" = "yes"
 then
+   DLLFLAGS="$DLLFLAGS -fasynchronous-unwind-tables"
    LDDLLFLAGS="$LDDLLFLAGS -fasynchronous-unwind-tables"
 else
    if test "x$enable_win64" = "xyes"
@@ -2217,7 +2217,6 @@ AC_CHECK_FUNCS(\
 	sysinfo \
 	tcdrain \
 	thr_kill2 \
-	timegm \
 	usleep
 )
 CFLAGS="$ac_save_CFLAGS"
@@ -2249,9 +2248,6 @@ AC_CHECK_FUNCS(\
 	getprotobyname \
 	getprotobynumber \
 	getservbyport \
-	inet_addr \
-	inet_network \
-	inet_ntop \
 )
 
 dnl Check for clock_gettime which may be in -lrt
@@ -2891,9 +2887,11 @@ WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-libraryloader-l1-1-1)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-libraryloader-l1-2-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-libraryloader-l1-2-1)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-libraryloader-l1-2-2)
+WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-libraryloader-l2-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localization-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localization-l1-2-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localization-l1-2-1)
+WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localization-l1-2-2)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localization-l2-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localization-obsolete-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localization-obsolete-l1-2-0)
@@ -2903,6 +2901,7 @@ WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localregistry-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-memory-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-memory-l1-1-1)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-memory-l1-1-2)
+WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-memory-l1-1-4)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-misc-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-namedpipe-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-namedpipe-l1-2-0)
@@ -2991,6 +2990,7 @@ WINE_CONFIG_MAKEFILE(dlls/api-ms-win-devices-config-l1-1-1)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-devices-query-l1-1-1)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-downlevel-advapi32-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-downlevel-advapi32-l2-1-0)
+WINE_CONFIG_MAKEFILE(dlls/api-ms-win-downlevel-kernel32-l2-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-downlevel-normaliz-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-downlevel-ole32-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-downlevel-shell32-l1-1-0)
@@ -3556,6 +3556,7 @@ WINE_CONFIG_MAKEFILE(dlls/netapi32)
 WINE_CONFIG_MAKEFILE(dlls/netapi32/tests)
 WINE_CONFIG_MAKEFILE(dlls/netcfgx)
 WINE_CONFIG_MAKEFILE(dlls/netcfgx/tests)
+WINE_CONFIG_MAKEFILE(dlls/netio.sys)
 WINE_CONFIG_MAKEFILE(dlls/netprofm)
 WINE_CONFIG_MAKEFILE(dlls/netprofm/tests)
 WINE_CONFIG_MAKEFILE(dlls/newdev)

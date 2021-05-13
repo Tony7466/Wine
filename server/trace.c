@@ -177,9 +177,8 @@ static void dump_apc_call( const char *prefix, const apc_call_t *call )
     case APC_VIRTUAL_ALLOC:
         dump_uint64( "APC_VIRTUAL_ALLOC,addr==", &call->virtual_alloc.addr );
         dump_uint64( ",size=", &call->virtual_alloc.size );
-        fprintf( stderr, ",zero_bits_64=%u,op_type=%x,prot=%x",
-                 call->virtual_alloc.zero_bits_64, call->virtual_alloc.op_type,
-                 call->virtual_alloc.prot );
+        dump_uint64( ",zero_bits=", &call->virtual_alloc.zero_bits );
+        fprintf( stderr, ",op_type=%x,prot=%x", call->virtual_alloc.op_type, call->virtual_alloc.prot );
         break;
     case APC_VIRTUAL_FREE:
         dump_uint64( "APC_VIRTUAL_FREE,addr=", &call->virtual_free.addr );
@@ -211,8 +210,8 @@ static void dump_apc_call( const char *prefix, const apc_call_t *call )
         dump_uint64( ",addr=", &call->map_view.addr );
         dump_uint64( ",size=", &call->map_view.size );
         dump_uint64( ",offset=", &call->map_view.offset );
-        fprintf( stderr, ",zero_bits_64=%u,alloc_type=%x,prot=%x",
-                 call->map_view.zero_bits_64, call->map_view.alloc_type, call->map_view.prot );
+        dump_uint64( ",zero_bits=", &call->map_view.zero_bits );
+        fprintf( stderr, ",alloc_type=%x,prot=%x", call->map_view.alloc_type, call->map_view.prot );
         break;
     case APC_UNMAP_VIEW:
         dump_uint64( "APC_UNMAP_VIEW,addr=", &call->unmap_view.addr );
@@ -222,7 +221,7 @@ static void dump_apc_call( const char *prefix, const apc_call_t *call )
         dump_uint64( ",arg=", &call->create_thread.arg );
         dump_uint64( ",reserve=", &call->create_thread.reserve );
         dump_uint64( ",commit=", &call->create_thread.commit );
-        fprintf( stderr, ",suspend=%u", call->create_thread.suspend );
+        fprintf( stderr, ",flags=%x", call->create_thread.flags );
         break;
     case APC_BREAK_PROCESS:
         fprintf( stderr, "APC_BREAK_PROCESS" );
@@ -303,9 +302,9 @@ static void dump_apc_result( const char *prefix, const apc_result_t *result )
                  get_status_name( result->unmap_view.status ) );
         break;
     case APC_CREATE_THREAD:
-        fprintf( stderr, "APC_CREATE_THREAD,status=%s,tid=%04x,handle=%04x",
+        fprintf( stderr, "APC_CREATE_THREAD,status=%s,pid=%04x,tid=%04x,handle=%04x",
                  get_status_name( result->create_thread.status ),
-                 result->create_thread.tid, result->create_thread.handle );
+                 result->create_thread.pid, result->create_thread.tid, result->create_thread.handle );
         break;
     case APC_BREAK_PROCESS:
         fprintf( stderr, "APC_BREAK_PROCESS,status=%s", get_status_name( result->break_process.status ) );
@@ -1317,7 +1316,6 @@ static void dump_init_process_done_request( const struct init_process_done_reque
     dump_uint64( ", module=", &req->module );
     dump_uint64( ", ldt_copy=", &req->ldt_copy );
     dump_uint64( ", entry=", &req->entry );
-    fprintf( stderr, ", usd_handle=%04x", req->usd_handle );
 }
 
 static void dump_init_process_done_reply( const struct init_process_done_reply *req )
@@ -1368,7 +1366,6 @@ static void dump_terminate_thread_request( const struct terminate_thread_request
 static void dump_terminate_thread_reply( const struct terminate_thread_reply *req )
 {
     fprintf( stderr, " self=%d", req->self );
-    fprintf( stderr, ", last=%d", req->last );
 }
 
 static void dump_get_process_info_request( const struct get_process_info_request *req )
@@ -1389,6 +1386,7 @@ static void dump_get_process_info_reply( const struct get_process_info_reply *re
     dump_client_cpu( ", cpu=", &req->cpu );
     fprintf( stderr, ", debugger_present=%d", req->debugger_present );
     fprintf( stderr, ", debug_children=%d", req->debug_children );
+    dump_varargs_pe_image_info( ", image=", cur_size );
 }
 
 static void dump_get_process_vm_counters_request( const struct get_process_vm_counters_request *req )

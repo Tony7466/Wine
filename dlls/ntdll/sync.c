@@ -246,34 +246,10 @@ NTSTATUS validate_open_object_attributes( const OBJECT_ATTRIBUTES *attr )
 /******************************************************************************
  *  NtCreateSemaphore (NTDLL.@)
  */
-NTSTATUS WINAPI NtCreateSemaphore( OUT PHANDLE SemaphoreHandle,
-                                   IN ACCESS_MASK access,
-                                   IN const OBJECT_ATTRIBUTES *attr OPTIONAL,
-                                   IN LONG InitialCount,
-                                   IN LONG MaximumCount )
+NTSTATUS WINAPI NtCreateSemaphore( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr,
+                                   LONG initial, LONG max )
 {
-    NTSTATUS ret;
-    data_size_t len;
-    struct object_attributes *objattr;
-
-    if (MaximumCount <= 0 || InitialCount < 0 || InitialCount > MaximumCount)
-        return STATUS_INVALID_PARAMETER;
-
-    if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
-
-    SERVER_START_REQ( create_semaphore )
-    {
-        req->access  = access;
-        req->initial = InitialCount;
-        req->max     = MaximumCount;
-        wine_server_add_data( req, objattr, len );
-        ret = wine_server_call( req );
-        *SemaphoreHandle = wine_server_ptr_handle( reply->handle );
-    }
-    SERVER_END_REQ;
-
-    RtlFreeHeap( GetProcessHeap(), 0, objattr );
-    return ret;
+    return unix_funcs->NtCreateSemaphore( handle, access, attr, initial, max );
 }
 
 /******************************************************************************
@@ -281,22 +257,7 @@ NTSTATUS WINAPI NtCreateSemaphore( OUT PHANDLE SemaphoreHandle,
  */
 NTSTATUS WINAPI NtOpenSemaphore( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS ret;
-
-    if ((ret = validate_open_object_attributes( attr ))) return ret;
-
-    SERVER_START_REQ( open_semaphore )
-    {
-        req->access     = access;
-        req->attributes = attr->Attributes;
-        req->rootdir    = wine_server_obj_handle( attr->RootDirectory );
-        if (attr->ObjectName)
-            wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
-        ret = wine_server_call( req );
-        *handle = wine_server_ptr_handle( reply->handle );
-    }
-    SERVER_END_REQ;
-    return ret;
+    return unix_funcs->NtOpenSemaphore( handle, access, attr );
 }
 
 /******************************************************************************
@@ -305,32 +266,7 @@ NTSTATUS WINAPI NtOpenSemaphore( HANDLE *handle, ACCESS_MASK access, const OBJEC
 NTSTATUS WINAPI NtQuerySemaphore( HANDLE handle, SEMAPHORE_INFORMATION_CLASS class,
                                   void *info, ULONG len, ULONG *ret_len )
 {
-    NTSTATUS ret;
-    SEMAPHORE_BASIC_INFORMATION *out = info;
-
-    TRACE("(%p, %u, %p, %u, %p)\n", handle, class, info, len, ret_len);
-
-    if (class != SemaphoreBasicInformation)
-    {
-        FIXME("(%p,%d,%u) Unknown class\n", handle, class, len);
-        return STATUS_INVALID_INFO_CLASS;
-    }
-
-    if (len != sizeof(SEMAPHORE_BASIC_INFORMATION)) return STATUS_INFO_LENGTH_MISMATCH;
-
-    SERVER_START_REQ( query_semaphore )
-    {
-        req->handle = wine_server_obj_handle( handle );
-        if (!(ret = wine_server_call( req )))
-        {
-            out->CurrentCount = reply->current;
-            out->MaximumCount = reply->max;
-            if (ret_len) *ret_len = sizeof(SEMAPHORE_BASIC_INFORMATION);
-        }
-    }
-    SERVER_END_REQ;
-
-    return ret;
+    return unix_funcs->NtQuerySemaphore( handle, class, info, len, ret_len );
 }
 
 /******************************************************************************
@@ -338,18 +274,7 @@ NTSTATUS WINAPI NtQuerySemaphore( HANDLE handle, SEMAPHORE_INFORMATION_CLASS cla
  */
 NTSTATUS WINAPI NtReleaseSemaphore( HANDLE handle, ULONG count, PULONG previous )
 {
-    NTSTATUS ret;
-    SERVER_START_REQ( release_semaphore )
-    {
-        req->handle = wine_server_obj_handle( handle );
-        req->count  = count;
-        if (!(ret = wine_server_call( req )))
-        {
-            if (previous) *previous = reply->prev_count;
-        }
-    }
-    SERVER_END_REQ;
-    return ret;
+    return unix_funcs->NtReleaseSemaphore( handle, count, previous );
 }
 
 /*
@@ -360,28 +285,10 @@ NTSTATUS WINAPI NtReleaseSemaphore( HANDLE handle, ULONG count, PULONG previous 
  * NtCreateEvent (NTDLL.@)
  * ZwCreateEvent (NTDLL.@)
  */
-NTSTATUS WINAPI NtCreateEvent( PHANDLE EventHandle, ACCESS_MASK DesiredAccess,
-                               const OBJECT_ATTRIBUTES *attr, EVENT_TYPE type, BOOLEAN InitialState)
+NTSTATUS WINAPI NtCreateEvent( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr,
+                               EVENT_TYPE type, BOOLEAN state )
 {
-    NTSTATUS ret;
-    data_size_t len;
-    struct object_attributes *objattr;
-
-    if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
-
-    SERVER_START_REQ( create_event )
-    {
-        req->access = DesiredAccess;
-        req->manual_reset = (type == NotificationEvent);
-        req->initial_state = InitialState;
-        wine_server_add_data( req, objattr, len );
-        ret = wine_server_call( req );
-        *EventHandle = wine_server_ptr_handle( reply->handle );
-    }
-    SERVER_END_REQ;
-
-    RtlFreeHeap( GetProcessHeap(), 0, objattr );
-    return ret;
+    return unix_funcs->NtCreateEvent( handle, access, attr, type, state );
 }
 
 /******************************************************************************
@@ -390,22 +297,7 @@ NTSTATUS WINAPI NtCreateEvent( PHANDLE EventHandle, ACCESS_MASK DesiredAccess,
  */
 NTSTATUS WINAPI NtOpenEvent( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS ret;
-
-    if ((ret = validate_open_object_attributes( attr ))) return ret;
-
-    SERVER_START_REQ( open_event )
-    {
-        req->access     = access;
-        req->attributes = attr->Attributes;
-        req->rootdir    = wine_server_obj_handle( attr->RootDirectory );
-        if (attr->ObjectName)
-            wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
-        ret = wine_server_call( req );
-        *handle = wine_server_ptr_handle( reply->handle );
-    }
-    SERVER_END_REQ;
-    return ret;
+    return unix_funcs->NtOpenEvent( handle, access, attr );
 }
 
 
@@ -415,16 +307,7 @@ NTSTATUS WINAPI NtOpenEvent( HANDLE *handle, ACCESS_MASK access, const OBJECT_AT
  */
 NTSTATUS WINAPI NtSetEvent( HANDLE handle, LONG *prev_state )
 {
-    NTSTATUS ret;
-    SERVER_START_REQ( event_op )
-    {
-        req->handle = wine_server_obj_handle( handle );
-        req->op     = SET_EVENT;
-        ret = wine_server_call( req );
-        if (!ret && prev_state) *prev_state = reply->state;
-    }
-    SERVER_END_REQ;
-    return ret;
+    return unix_funcs->NtSetEvent( handle, prev_state );
 }
 
 /******************************************************************************
@@ -432,16 +315,7 @@ NTSTATUS WINAPI NtSetEvent( HANDLE handle, LONG *prev_state )
  */
 NTSTATUS WINAPI NtResetEvent( HANDLE handle, LONG *prev_state )
 {
-    NTSTATUS ret;
-    SERVER_START_REQ( event_op )
-    {
-        req->handle = wine_server_obj_handle( handle );
-        req->op     = RESET_EVENT;
-        ret = wine_server_call( req );
-        if (!ret && prev_state) *prev_state = reply->state;
-    }
-    SERVER_END_REQ;
-    return ret;
+    return unix_funcs->NtResetEvent( handle, prev_state );
 }
 
 /******************************************************************************
@@ -452,7 +326,7 @@ NTSTATUS WINAPI NtResetEvent( HANDLE handle, LONG *prev_state )
  */
 NTSTATUS WINAPI NtClearEvent ( HANDLE handle )
 {
-    return NtResetEvent( handle, NULL );
+    return unix_funcs->NtClearEvent( handle );
 }
 
 /******************************************************************************
@@ -463,17 +337,7 @@ NTSTATUS WINAPI NtClearEvent ( HANDLE handle )
  */
 NTSTATUS WINAPI NtPulseEvent( HANDLE handle, LONG *prev_state )
 {
-    NTSTATUS ret;
-
-    SERVER_START_REQ( event_op )
-    {
-        req->handle = wine_server_obj_handle( handle );
-        req->op     = PULSE_EVENT;
-        ret = wine_server_call( req );
-        if (!ret && prev_state) *prev_state = reply->state;
-    }
-    SERVER_END_REQ;
-    return ret;
+    return unix_funcs->NtPulseEvent( handle, prev_state );
 }
 
 /******************************************************************************
@@ -482,33 +346,7 @@ NTSTATUS WINAPI NtPulseEvent( HANDLE handle, LONG *prev_state )
 NTSTATUS WINAPI NtQueryEvent( HANDLE handle, EVENT_INFORMATION_CLASS class,
                               void *info, ULONG len, ULONG *ret_len )
 {
-    NTSTATUS ret;
-    EVENT_BASIC_INFORMATION *out = info;
-
-    TRACE("(%p, %u, %p, %u, %p)\n", handle, class, info, len, ret_len);
-
-    if (class != EventBasicInformation)
-    {
-        FIXME("(%p, %d, %d) Unknown class\n",
-              handle, class, len);
-        return STATUS_INVALID_INFO_CLASS;
-    }
-
-    if (len != sizeof(EVENT_BASIC_INFORMATION)) return STATUS_INFO_LENGTH_MISMATCH;
-
-    SERVER_START_REQ( query_event )
-    {
-        req->handle = wine_server_obj_handle( handle );
-        if (!(ret = wine_server_call( req )))
-        {
-            out->EventType  = reply->manual_reset ? NotificationEvent : SynchronizationEvent;
-            out->EventState = reply->state;
-            if (ret_len) *ret_len = sizeof(EVENT_BASIC_INFORMATION);
-        }
-    }
-    SERVER_END_REQ;
-
-    return ret;
+    return unix_funcs->NtQueryEvent( handle, class, info, len, ret_len );
 }
 
 /*
@@ -519,29 +357,10 @@ NTSTATUS WINAPI NtQueryEvent( HANDLE handle, EVENT_INFORMATION_CLASS class,
  *              NtCreateMutant                          [NTDLL.@]
  *              ZwCreateMutant                          [NTDLL.@]
  */
-NTSTATUS WINAPI NtCreateMutant(OUT HANDLE* MutantHandle,
-                               IN ACCESS_MASK access,
-                               IN const OBJECT_ATTRIBUTES* attr OPTIONAL,
-                               IN BOOLEAN InitialOwner)
+NTSTATUS WINAPI NtCreateMutant( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr,
+                                BOOLEAN owned )
 {
-    NTSTATUS status;
-    data_size_t len;
-    struct object_attributes *objattr;
-
-    if ((status = alloc_object_attributes( attr, &objattr, &len ))) return status;
-
-    SERVER_START_REQ( create_mutex )
-    {
-        req->access  = access;
-        req->owned   = InitialOwner;
-        wine_server_add_data( req, objattr, len );
-        status = wine_server_call( req );
-        *MutantHandle = wine_server_ptr_handle( reply->handle );
-    }
-    SERVER_END_REQ;
-
-    RtlFreeHeap( GetProcessHeap(), 0, objattr );
-    return status;
+    return unix_funcs->NtCreateMutant( handle, access, attr, owned );
 }
 
 /**************************************************************************
@@ -550,40 +369,16 @@ NTSTATUS WINAPI NtCreateMutant(OUT HANDLE* MutantHandle,
  */
 NTSTATUS WINAPI NtOpenMutant( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS    status;
-
-    if ((status = validate_open_object_attributes( attr ))) return status;
-
-    SERVER_START_REQ( open_mutex )
-    {
-        req->access  = access;
-        req->attributes = attr->Attributes;
-        req->rootdir = wine_server_obj_handle( attr->RootDirectory );
-        if (attr->ObjectName)
-            wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
-        status = wine_server_call( req );
-        *handle = wine_server_ptr_handle( reply->handle );
-    }
-    SERVER_END_REQ;
-    return status;
+    return unix_funcs->NtOpenMutant( handle, access, attr );
 }
 
 /**************************************************************************
  *		NtReleaseMutant				[NTDLL.@]
  *		ZwReleaseMutant				[NTDLL.@]
  */
-NTSTATUS WINAPI NtReleaseMutant( IN HANDLE handle, OUT PLONG prev_count OPTIONAL)
+NTSTATUS WINAPI NtReleaseMutant( HANDLE handle, LONG *prev_count )
 {
-    NTSTATUS    status;
-
-    SERVER_START_REQ( release_mutex )
-    {
-        req->handle = wine_server_obj_handle( handle );
-        status = wine_server_call( req );
-        if (prev_count) *prev_count = 1 - reply->prev_count;
-    }
-    SERVER_END_REQ;
-    return status;
+    return unix_funcs->NtReleaseMutant( handle, prev_count );
 }
 
 /******************************************************************
@@ -593,34 +388,7 @@ NTSTATUS WINAPI NtReleaseMutant( IN HANDLE handle, OUT PLONG prev_count OPTIONAL
 NTSTATUS WINAPI NtQueryMutant( HANDLE handle, MUTANT_INFORMATION_CLASS class,
                                void *info, ULONG len, ULONG *ret_len )
 {
-    NTSTATUS ret;
-    MUTANT_BASIC_INFORMATION *out = info;
-
-    TRACE("(%p, %u, %p, %u, %p)\n", handle, class, info, len, ret_len);
-
-    if (class != MutantBasicInformation)
-    {
-        FIXME("(%p, %d, %d) Unknown class\n",
-              handle, class, len);
-        return STATUS_INVALID_INFO_CLASS;
-    }
-
-    if (len != sizeof(MUTANT_BASIC_INFORMATION)) return STATUS_INFO_LENGTH_MISMATCH;
-
-    SERVER_START_REQ( query_mutex )
-    {
-        req->handle = wine_server_obj_handle( handle );
-        if (!(ret = wine_server_call( req )))
-        {
-            out->CurrentCount   = 1 - reply->count;
-            out->OwnedByCaller  = reply->owned;
-            out->AbandonedState = reply->abandoned;
-            if (ret_len) *ret_len = sizeof(MUTANT_BASIC_INFORMATION);
-        }
-    }
-    SERVER_END_REQ;
-
-    return ret;
+    return unix_funcs->NtQueryMutant( handle, class, info, len, ret_len );
 }
 
 /*
@@ -879,33 +647,10 @@ NTSTATUS WINAPI NtAssignProcessToJobObject( HANDLE job, HANDLE process )
  *		NtCreateTimer				[NTDLL.@]
  *		ZwCreateTimer				[NTDLL.@]
  */
-NTSTATUS WINAPI NtCreateTimer(OUT HANDLE *handle,
-                              IN ACCESS_MASK access,
-                              IN const OBJECT_ATTRIBUTES *attr OPTIONAL,
-                              IN TIMER_TYPE timer_type)
+NTSTATUS WINAPI NtCreateTimer( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr,
+                               TIMER_TYPE type )
 {
-    NTSTATUS status;
-    data_size_t len;
-    struct object_attributes *objattr;
-
-    if (timer_type != NotificationTimer && timer_type != SynchronizationTimer)
-        return STATUS_INVALID_PARAMETER;
-
-    if ((status = alloc_object_attributes( attr, &objattr, &len ))) return status;
-
-    SERVER_START_REQ( create_timer )
-    {
-        req->access  = access;
-        req->manual  = (timer_type == NotificationTimer);
-        wine_server_add_data( req, objattr, len );
-        status = wine_server_call( req );
-        *handle = wine_server_ptr_handle( reply->handle );
-    }
-    SERVER_END_REQ;
-
-    RtlFreeHeap( GetProcessHeap(), 0, objattr );
-    return status;
-
+    return unix_funcs->NtCreateTimer( handle, access, attr, type );
 }
 
 /**************************************************************************
@@ -914,148 +659,35 @@ NTSTATUS WINAPI NtCreateTimer(OUT HANDLE *handle,
  */
 NTSTATUS WINAPI NtOpenTimer( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS status;
-
-    if ((status = validate_open_object_attributes( attr ))) return status;
-
-    SERVER_START_REQ( open_timer )
-    {
-        req->access     = access;
-        req->attributes = attr->Attributes;
-        req->rootdir    = wine_server_obj_handle( attr->RootDirectory );
-        if (attr->ObjectName)
-            wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
-        status = wine_server_call( req );
-        *handle = wine_server_ptr_handle( reply->handle );
-    }
-    SERVER_END_REQ;
-    return status;
+    return unix_funcs->NtOpenTimer( handle, access, attr );
 }
 
 /**************************************************************************
  *		NtSetTimer				[NTDLL.@]
  *		ZwSetTimer				[NTDLL.@]
  */
-NTSTATUS WINAPI NtSetTimer(IN HANDLE handle,
-                           IN const LARGE_INTEGER* when,
-                           IN PTIMER_APC_ROUTINE callback,
-                           IN PVOID callback_arg,
-                           IN BOOLEAN resume,
-                           IN ULONG period OPTIONAL,
-                           OUT PBOOLEAN state OPTIONAL)
+NTSTATUS WINAPI NtSetTimer( HANDLE handle, const LARGE_INTEGER *when, PTIMER_APC_ROUTINE callback,
+                            void *arg, BOOLEAN resume, ULONG period, BOOLEAN *state )
 {
-    NTSTATUS    status = STATUS_SUCCESS;
-
-    TRACE("(%p,%p,%p,%p,%08x,0x%08x,%p)\n",
-          handle, when, callback, callback_arg, resume, period, state);
-
-    SERVER_START_REQ( set_timer )
-    {
-        req->handle   = wine_server_obj_handle( handle );
-        req->period   = period;
-        req->expire   = when->QuadPart;
-        req->callback = wine_server_client_ptr( callback );
-        req->arg      = wine_server_client_ptr( callback_arg );
-        status = wine_server_call( req );
-        if (state) *state = reply->signaled;
-    }
-    SERVER_END_REQ;
-
-    /* set error but can still succeed */
-    if (resume && status == STATUS_SUCCESS) return STATUS_TIMER_RESUME_IGNORED;
-    return status;
+    return unix_funcs->NtSetTimer( handle, when, callback, arg, resume, period, state );
 }
 
 /**************************************************************************
  *		NtCancelTimer				[NTDLL.@]
  *		ZwCancelTimer				[NTDLL.@]
  */
-NTSTATUS WINAPI NtCancelTimer(IN HANDLE handle, OUT BOOLEAN* state)
+NTSTATUS WINAPI NtCancelTimer( HANDLE handle, BOOLEAN *state )
 {
-    NTSTATUS    status;
-
-    SERVER_START_REQ( cancel_timer )
-    {
-        req->handle = wine_server_obj_handle( handle );
-        status = wine_server_call( req );
-        if (state) *state = reply->signaled;
-    }
-    SERVER_END_REQ;
-    return status;
+    return unix_funcs->NtCancelTimer( handle, state );
 }
 
 /******************************************************************************
  *  NtQueryTimer (NTDLL.@)
- *
- * Retrieves information about a timer.
- *
- * PARAMS
- *  TimerHandle           [I] The timer to retrieve information about.
- *  TimerInformationClass [I] The type of information to retrieve.
- *  TimerInformation      [O] Pointer to buffer to store information in.
- *  Length                [I] The length of the buffer pointed to by TimerInformation.
- *  ReturnLength          [O] Optional. The size of buffer actually used.
- *
- * RETURNS
- *  Success: STATUS_SUCCESS
- *  Failure: STATUS_INFO_LENGTH_MISMATCH, if Length doesn't match the required data
- *           size for the class specified.
- *           STATUS_INVALID_INFO_CLASS, if an invalid TimerInformationClass was specified.
- *           STATUS_ACCESS_DENIED, if TimerHandle does not have TIMER_QUERY_STATE access
- *           to the timer.
  */
-NTSTATUS WINAPI NtQueryTimer(
-    HANDLE TimerHandle,
-    TIMER_INFORMATION_CLASS TimerInformationClass,
-    PVOID TimerInformation,
-    ULONG Length,
-    PULONG ReturnLength)
+NTSTATUS WINAPI NtQueryTimer( HANDLE handle, TIMER_INFORMATION_CLASS class,
+                              void *info, ULONG len, ULONG *ret_len )
 {
-    TIMER_BASIC_INFORMATION * basic_info = TimerInformation;
-    NTSTATUS status;
-    LARGE_INTEGER now;
-
-    TRACE("(%p,%d,%p,0x%08x,%p)\n", TimerHandle, TimerInformationClass,
-       TimerInformation, Length, ReturnLength);
-
-    switch (TimerInformationClass)
-    {
-    case TimerBasicInformation:
-        if (Length < sizeof(TIMER_BASIC_INFORMATION))
-            return STATUS_INFO_LENGTH_MISMATCH;
-
-        SERVER_START_REQ(get_timer_info)
-        {
-            req->handle = wine_server_obj_handle( TimerHandle );
-            status = wine_server_call(req);
-
-            /* convert server time to absolute NTDLL time */
-            basic_info->RemainingTime.QuadPart = reply->when;
-            basic_info->TimerState = reply->signaled;
-        }
-        SERVER_END_REQ;
-
-        /* convert into relative time */
-        if (basic_info->RemainingTime.QuadPart > 0)
-            NtQuerySystemTime(&now);
-        else
-        {
-            RtlQueryPerformanceCounter(&now);
-            basic_info->RemainingTime.QuadPart = -basic_info->RemainingTime.QuadPart;
-        }
-
-        if (now.QuadPart > basic_info->RemainingTime.QuadPart)
-            basic_info->RemainingTime.QuadPart = 0;
-        else
-            basic_info->RemainingTime.QuadPart -= now.QuadPart;
-
-        if (ReturnLength) *ReturnLength = sizeof(TIMER_BASIC_INFORMATION);
-
-        return status;
-    }
-
-    FIXME("Unhandled class %d\n", TimerInformationClass);
-    return STATUS_INVALID_INFO_CLASS;
+    return unix_funcs->NtQueryTimer( handle, class, info, len, ret_len );
 }
 
 
@@ -1089,22 +721,6 @@ NTSTATUS WINAPI NtSetTimerResolution(IN ULONG resolution,
 
 /* wait operations */
 
-static NTSTATUS wait_objects( DWORD count, const HANDLE *handles,
-                              BOOLEAN wait_any, BOOLEAN alertable,
-                              const LARGE_INTEGER *timeout )
-{
-    select_op_t select_op;
-    UINT i, flags = SELECT_INTERRUPTIBLE;
-
-    if (!count || count > MAXIMUM_WAIT_OBJECTS) return STATUS_INVALID_PARAMETER_1;
-
-    if (alertable) flags |= SELECT_ALERTABLE;
-    select_op.wait.op = wait_any ? SELECT_WAIT : SELECT_WAIT_ALL;
-    for (i = 0; i < count; i++) select_op.wait.handles[i] = wine_server_obj_handle( handles[i] );
-    return server_wait( &select_op, offsetof( select_op_t, wait.handles[count] ), flags, timeout );
-}
-
-
 /******************************************************************
  *		NtWaitForMultipleObjects (NTDLL.@)
  */
@@ -1112,7 +728,7 @@ NTSTATUS WINAPI NtWaitForMultipleObjects( DWORD count, const HANDLE *handles,
                                           BOOLEAN wait_any, BOOLEAN alertable,
                                           const LARGE_INTEGER *timeout )
 {
-    return wait_objects( count, handles, wait_any, alertable, timeout );
+    return unix_funcs->NtWaitForMultipleObjects( count, handles, wait_any, alertable, timeout );
 }
 
 
@@ -1121,26 +737,17 @@ NTSTATUS WINAPI NtWaitForMultipleObjects( DWORD count, const HANDLE *handles,
  */
 NTSTATUS WINAPI NtWaitForSingleObject(HANDLE handle, BOOLEAN alertable, const LARGE_INTEGER *timeout )
 {
-    return wait_objects( 1, &handle, FALSE, alertable, timeout );
+    return unix_funcs->NtWaitForSingleObject( handle, alertable, timeout );
 }
 
 
 /******************************************************************
  *		NtSignalAndWaitForSingleObject (NTDLL.@)
  */
-NTSTATUS WINAPI NtSignalAndWaitForSingleObject( HANDLE hSignalObject, HANDLE hWaitObject,
+NTSTATUS WINAPI NtSignalAndWaitForSingleObject( HANDLE signal, HANDLE wait,
                                                 BOOLEAN alertable, const LARGE_INTEGER *timeout )
 {
-    select_op_t select_op;
-    UINT flags = SELECT_INTERRUPTIBLE;
-
-    if (!hSignalObject) return STATUS_INVALID_HANDLE;
-
-    if (alertable) flags |= SELECT_ALERTABLE;
-    select_op.signal_and_wait.op = SELECT_SIGNAL_AND_WAIT;
-    select_op.signal_and_wait.wait = wine_server_obj_handle( hWaitObject );
-    select_op.signal_and_wait.signal = wine_server_obj_handle( hSignalObject );
-    return server_wait( &select_op, sizeof(select_op.signal_and_wait), flags, timeout );
+    return unix_funcs->NtSignalAndWaitForSingleObject( signal, wait, alertable, timeout );
 }
 
 
@@ -1149,12 +756,7 @@ NTSTATUS WINAPI NtSignalAndWaitForSingleObject( HANDLE hSignalObject, HANDLE hWa
  */
 NTSTATUS WINAPI NtYieldExecution(void)
 {
-#ifdef HAVE_SCHED_YIELD
-    sched_yield();
-    return STATUS_SUCCESS;
-#else
-    return STATUS_NO_YIELD_PERFORMED;
-#endif
+    return unix_funcs->NtYieldExecution();
 }
 
 
@@ -1163,41 +765,7 @@ NTSTATUS WINAPI NtYieldExecution(void)
  */
 NTSTATUS WINAPI NtDelayExecution( BOOLEAN alertable, const LARGE_INTEGER *timeout )
 {
-    /* if alertable, we need to query the server */
-    if (alertable)
-        return server_wait( NULL, 0, SELECT_INTERRUPTIBLE | SELECT_ALERTABLE, timeout );
-
-    if (!timeout || timeout->QuadPart == TIMEOUT_INFINITE)  /* sleep forever */
-    {
-        for (;;) select( 0, NULL, NULL, NULL, NULL );
-    }
-    else
-    {
-        LARGE_INTEGER now;
-        timeout_t when, diff;
-
-        if ((when = timeout->QuadPart) < 0)
-        {
-            NtQuerySystemTime( &now );
-            when = now.QuadPart - when;
-        }
-
-        /* Note that we yield after establishing the desired timeout */
-        NtYieldExecution();
-        if (!when) return STATUS_SUCCESS;
-
-        for (;;)
-        {
-            struct timeval tv;
-            NtQuerySystemTime( &now );
-            diff = (when - now.QuadPart + 9) / 10;
-            if (diff <= 0) break;
-            tv.tv_sec  = diff / 1000000;
-            tv.tv_usec = diff % 1000000;
-            if (select( 0, NULL, NULL, NULL, &tv ) != -1) break;
-        }
-    }
-    return STATUS_SUCCESS;
+    return unix_funcs->NtDelayExecution( alertable, timeout );
 }
 
 
@@ -1207,23 +775,7 @@ NTSTATUS WINAPI NtDelayExecution( BOOLEAN alertable, const LARGE_INTEGER *timeou
 NTSTATUS WINAPI NtCreateKeyedEvent( HANDLE *handle, ACCESS_MASK access,
                                     const OBJECT_ATTRIBUTES *attr, ULONG flags )
 {
-    NTSTATUS ret;
-    data_size_t len;
-    struct object_attributes *objattr;
-
-    if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
-
-    SERVER_START_REQ( create_keyed_event )
-    {
-        req->access = access;
-        wine_server_add_data( req, objattr, len );
-        ret = wine_server_call( req );
-        *handle = wine_server_ptr_handle( reply->handle );
-    }
-    SERVER_END_REQ;
-
-    RtlFreeHeap( GetProcessHeap(), 0, objattr );
-    return ret;
+    return unix_funcs->NtCreateKeyedEvent( handle, access, attr, flags );
 }
 
 /******************************************************************************
@@ -1231,22 +783,7 @@ NTSTATUS WINAPI NtCreateKeyedEvent( HANDLE *handle, ACCESS_MASK access,
  */
 NTSTATUS WINAPI NtOpenKeyedEvent( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS ret;
-
-    if ((ret = validate_open_object_attributes( attr ))) return ret;
-
-    SERVER_START_REQ( open_keyed_event )
-    {
-        req->access     = access;
-        req->attributes = attr->Attributes;
-        req->rootdir    = wine_server_obj_handle( attr->RootDirectory );
-        if (attr->ObjectName)
-            wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
-        ret = wine_server_call( req );
-        *handle = wine_server_ptr_handle( reply->handle );
-    }
-    SERVER_END_REQ;
-    return ret;
+    return unix_funcs->NtOpenKeyedEvent( handle, access, attr );
 }
 
 /******************************************************************************
@@ -1255,16 +792,7 @@ NTSTATUS WINAPI NtOpenKeyedEvent( HANDLE *handle, ACCESS_MASK access, const OBJE
 NTSTATUS WINAPI NtWaitForKeyedEvent( HANDLE handle, const void *key,
                                      BOOLEAN alertable, const LARGE_INTEGER *timeout )
 {
-    select_op_t select_op;
-    UINT flags = SELECT_INTERRUPTIBLE;
-
-    if (!handle) handle = keyed_event;
-    if ((ULONG_PTR)key & 1) return STATUS_INVALID_PARAMETER_1;
-    if (alertable) flags |= SELECT_ALERTABLE;
-    select_op.keyed_event.op     = SELECT_KEYED_EVENT_WAIT;
-    select_op.keyed_event.handle = wine_server_obj_handle( handle );
-    select_op.keyed_event.key    = wine_server_client_ptr( key );
-    return server_wait( &select_op, sizeof(select_op.keyed_event), flags, timeout );
+    return unix_funcs->NtWaitForKeyedEvent( handle, key, alertable, timeout );
 }
 
 /******************************************************************************
@@ -1273,16 +801,7 @@ NTSTATUS WINAPI NtWaitForKeyedEvent( HANDLE handle, const void *key,
 NTSTATUS WINAPI NtReleaseKeyedEvent( HANDLE handle, const void *key,
                                      BOOLEAN alertable, const LARGE_INTEGER *timeout )
 {
-    select_op_t select_op;
-    UINT flags = SELECT_INTERRUPTIBLE;
-
-    if (!handle) handle = keyed_event;
-    if ((ULONG_PTR)key & 1) return STATUS_INVALID_PARAMETER_1;
-    if (alertable) flags |= SELECT_ALERTABLE;
-    select_op.keyed_event.op     = SELECT_KEYED_EVENT_RELEASE;
-    select_op.keyed_event.handle = wine_server_obj_handle( handle );
-    select_op.keyed_event.key    = wine_server_client_ptr( key );
-    return server_wait( &select_op, sizeof(select_op.keyed_event), flags, timeout );
+    return unix_funcs->NtReleaseKeyedEvent( handle, key, alertable, timeout );
 }
 
 /******************************************************************
@@ -2579,7 +2098,7 @@ NTSTATUS WINAPI RtlWaitOnAddress( const void *addr, const void *cmp, SIZE_T size
     select_op.keyed_event.handle = wine_server_obj_handle( keyed_event );
     select_op.keyed_event.key    = wine_server_client_ptr( addr );
 
-    return server_select( &select_op, sizeof(select_op.keyed_event), SELECT_INTERRUPTIBLE, abs_timeout, NULL, &addr_section, NULL );
+    return unix_funcs->server_select( &select_op, sizeof(select_op.keyed_event), SELECT_INTERRUPTIBLE, abs_timeout, NULL, &addr_section, NULL );
 }
 
 /***********************************************************************

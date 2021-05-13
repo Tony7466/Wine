@@ -252,6 +252,24 @@ static BOOL write_registry_settings(const DEVMODEW *dm)
     return ret;
 }
 
+BOOL get_primary_adapter(WCHAR *name)
+{
+    DISPLAY_DEVICEW dd;
+    DWORD i;
+
+    dd.cb = sizeof(dd);
+    for (i = 0; EnumDisplayDevicesW(NULL, i, &dd, 0); ++i)
+    {
+        if (dd.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE)
+        {
+            lstrcpyW(name, dd.DeviceName);
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
 /***********************************************************************
  *		EnumDisplaySettingsEx  (X11DRV.@)
  *
@@ -311,6 +329,15 @@ BOOL CDECL X11DRV_EnumDisplaySettingsEx( LPCWSTR name, DWORD n, LPDEVMODEW devmo
     return FALSE;
 }
 
+BOOL is_detached_mode(const DEVMODEW *mode)
+{
+    return mode->dmFields & DM_POSITION &&
+           mode->dmFields & DM_PELSWIDTH &&
+           mode->dmFields & DM_PELSHEIGHT &&
+           mode->dmPelsWidth == 0 &&
+           mode->dmPelsHeight == 0;
+}
+
 /***********************************************************************
  *		ChangeDisplaySettingsEx  (X11DRV.@)
  *
@@ -318,8 +345,39 @@ BOOL CDECL X11DRV_EnumDisplaySettingsEx( LPCWSTR name, DWORD n, LPDEVMODEW devmo
 LONG CDECL X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
                                            HWND hwnd, DWORD flags, LPVOID lpvoid )
 {
+    WCHAR primary_adapter[CCHDEVICENAME];
     char bpp_buffer[16], freq_buffer[18];
+    DEVMODEW default_mode;
     DWORD i;
+
+    if (!get_primary_adapter(primary_adapter))
+        return DISP_CHANGE_FAILED;
+
+    if (!devname && !devmode)
+    {
+        default_mode.dmSize = sizeof(default_mode);
+        if (!EnumDisplaySettingsExW(primary_adapter, ENUM_REGISTRY_SETTINGS, &default_mode, 0))
+        {
+            ERR("Default mode not found for %s!\n", wine_dbgstr_w(primary_adapter));
+            return DISP_CHANGE_BADMODE;
+        }
+
+        devname = primary_adapter;
+        devmode = &default_mode;
+    }
+
+    if (lstrcmpiW(primary_adapter, devname))
+    {
+        FIXME("Changing non-primary adapter %s settings is currently unsupported.\n",
+              wine_dbgstr_w(devname));
+        return DISP_CHANGE_SUCCESSFUL;
+    }
+
+    if (is_detached_mode(devmode))
+    {
+        FIXME("Detaching adapters is currently unsupported.\n");
+        return DISP_CHANGE_SUCCESSFUL;
+    }
 
     for (i = 0; i < dd_mode_count; i++)
     {
