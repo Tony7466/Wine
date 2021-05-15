@@ -1,7 +1,6 @@
-wine-development (5.11-1) UNRELEASED; urgency=medium
+wine-development (5.11-1) unstable; urgency=medium
 
   * New upstream release 5.11, released Jun 19, 2020.
-    - Wine Mono engine updated to 5.1.0, with WpfGfx library support.
     - More work on the separate Unix library for NTDLL.
     - Beginnings of a NetIO kernel driver implementation.
     - Initial support for the Print Ticket API.

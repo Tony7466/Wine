@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -1556,14 +1556,6 @@ static struct file *open_include_file( c
+@@ -1557,14 +1557,6 @@ static struct file *open_include_file( c
          }
      }
  
@@ -136,7 +136,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  EXTRADLLFLAGS = -mno-cygwin
  
  C_SRCS = \
-@@ -16,7 +17,6 @@ C_SRCS = \
+@@ -15,7 +16,6 @@ C_SRCS = \
  	dwarf.c \
  	elf_module.c \
  	image.c \

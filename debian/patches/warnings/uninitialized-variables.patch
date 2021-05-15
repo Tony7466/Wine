@@ -14,20 +14,18 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (RegQueryValueExW(hkey, name, 0, &type, NULL, &size))
 --- a/dlls/d3dx9_36/texture.c
 +++ b/dlls/d3dx9_36/texture.c
-@@ -1286,6 +1286,10 @@ static inline void fill_texture(const st
-             case 3: /* Blue */
-                 comp_value = value->z;
-                 break;
-+            default: /* Unhandled */
-+                comp_value = 0.f;
-+                ERR("Unhandled component, %#x\n", c);
-+                break;
-         }
+@@ -1269,7 +1269,7 @@ static inline void fill_texture(const st
  
-         if (format->type == FORMAT_ARGBF16)
+     for (c = 0; c < 4; c++)
+     {
+-        float comp_value;
++        float comp_value = 0.f;
+         DWORD i, v = 0, mask32 = format->bits[c] == 32 ? ~0U : ((1 << format->bits[c]) - 1);
+ 
+         switch (c)
 --- a/dlls/ntdll/locale.c
 +++ b/dlls/ntdll/locale.c
-@@ -2298,7 +2298,7 @@ NTSTATUS WINAPI RtlIdnToUnicode( DWORD f
+@@ -2173,7 +2173,7 @@ NTSTATUS WINAPI RtlIdnToUnicode( DWORD f
      int i, buflen, start, end, out_label, out = 0;
      NTSTATUS status;
      UINT buffer[64];
@@ -49,14 +47,13 @@ author: Michael Gilbert <mgilbert@debian.org>
          max = base;
 --- a/dlls/msxml3/xdr.c
 +++ b/dlls/msxml3/xdr.c
-@@ -603,6 +603,10 @@ static xmlNodePtr XDR_E_ElementType(xmlN
+@@ -603,6 +603,9 @@ static xmlNodePtr XDR_E_ElementType(xmlN
                          case ORDER_ONE:
                              xsd_child = xmlNewChild(xsd_base, NULL, xs_all, NULL);
                              break;
 +                        default:
 +                            xsd_child = NULL;
 +                            ERR("Unhandled order enum %d\n", (int)order);
-+                            break;
                      }
  
                      FOREACH_CHILD(xdr, xdr_child)
@@ -93,14 +90,13 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!desc) return E_INVALIDARG;
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -2648,6 +2648,10 @@ static void check_fbo_compat(struct wine
+@@ -2586,6 +2586,9 @@ static void check_fbo_compat(struct wine
                      case WINED3D_GL_RES_TYPE_COUNT:
                          color = 0;
                          break;
 +                    default:
 +                        color = 0;
 +                        ERR("Unhandled type enum %d\n", (int)type);
-+                        break;
                  }
                  checkGLcall("Post-pixelshader blending check");
  
@@ -153,7 +149,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  /* remove a name from a name table */
 --- a/dlls/mciseq/mcimidi.c
 +++ b/dlls/mciseq/mcimidi.c
-@@ -246,9 +246,9 @@ static DWORD	MIDI_mciReadNextEvent(WINE_
+@@ -247,9 +247,9 @@ static DWORD	MIDI_mciReadNextEvent(WINE_
  {
      BYTE	b1, b2 = 0, b3;
      WORD	hw = 0;
@@ -165,18 +161,6 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (mmioSeek(wmm->hFile, mmt->dwIndex, SEEK_SET) != mmt->dwIndex) {
  	WARN("Can't seek at %08X\n", mmt->dwIndex);
---- a/dlls/riched20/editor.c
-+++ b/dlls/riched20/editor.c
-@@ -1142,6 +1142,9 @@ static HRESULT insert_static_object(ME_T
-       stgm.tymed = TYMED_GDI;
-       stgm.u.hBitmap = hbmp;
-       fm.cfFormat = CF_BITMAP;
-+  } else {
-+      stgm.tymed = TYMED_NULL;
-+      ERR("using TYMED_NULL for fm\n");
-   }
-   stgm.pUnkForRelease = NULL;
- 
 --- a/dlls/msi/automation.c
 +++ b/dlls/msi/automation.c
 @@ -1823,7 +1823,7 @@ static HRESULT InstallerImpl_SummaryInfo
