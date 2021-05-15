@@ -744,6 +744,21 @@ typedef struct _FILE_PIPE_LOCAL_INFORMATION {
 #define FILE_PIPE_CONNECTED_STATE           0x00000003
 #define FILE_PIPE_CLOSING_STATE             0x00000004
 
+typedef struct _FILE_OBJECTID_BUFFER
+{
+    BYTE ObjectId[16];
+    union
+    {
+        struct
+        {
+            BYTE BirthVolumeId[16];
+            BYTE BirthObjectId[16];
+            BYTE DomainId[16];
+        } DUMMYSTRUCTNAME;
+        BYTE ExtendedInfo[48];
+    } DUMMYUNIONNAME;
+} FILE_OBJECTID_BUFFER, *PFILE_OBJECTID_BUFFER;
+
 typedef struct _FILE_OBJECTID_INFORMATION {
     LONGLONG FileReference;
     UCHAR ObjectId[16];
@@ -971,6 +986,7 @@ typedef enum _SYSTEM_INFORMATION_CLASS {
     SystemSuperfetchInformation = 79,
     SystemMemoryListInformation = 80,
     SystemFileCacheInformationEx = 81,
+    SystemDynamicTimeZoneInformation = 102,
     SystemLogicalProcessorInformationEx = 107,
     SystemInformationClassMax
 } SYSTEM_INFORMATION_CLASS, *PSYSTEM_INFORMATION_CLASS;
@@ -1467,10 +1483,10 @@ typedef struct _SYSTEM_PERFORMANCE_INFORMATION {
 
 typedef struct _SYSTEM_TIMEOFDAY_INFORMATION {
 #ifdef __WINESRC__
-    LARGE_INTEGER liKeBootTime;
-    LARGE_INTEGER liKeSystemTime;
-    LARGE_INTEGER liExpTimeZoneBias;
-    ULONG uCurrentTimeZoneId;
+    LARGE_INTEGER BootTime;
+    LARGE_INTEGER SystemTime;
+    LARGE_INTEGER TimeZoneBias;
+    ULONG TimeZoneId;
     ULONG Reserved;
     ULONGLONG BootTimeBias;
     ULONGLONG SleepTimeBias;
@@ -1568,12 +1584,11 @@ typedef struct _SYSTEM_KERNEL_DEBUGGER_INFORMATION {
 	BOOLEAN  DebuggerNotPresent;
 } SYSTEM_KERNEL_DEBUGGER_INFORMATION, *PSYSTEM_KERNEL_DEBUGGER_INFORMATION;
 
-/* System Information Class 0x05 */
-
-typedef struct _VM_COUNTERS_ {
+typedef struct _VM_COUNTERS
+{
     SIZE_T PeakVirtualSize;
     SIZE_T VirtualSize;
-    ULONG  PageFaultCount;
+    ULONG PageFaultCount;
     SIZE_T PeakWorkingSetSize;
     SIZE_T WorkingSetSize;
     SIZE_T QuotaPeakPagedPoolUsage;
@@ -1582,8 +1597,23 @@ typedef struct _VM_COUNTERS_ {
     SIZE_T QuotaNonPagedPoolUsage;
     SIZE_T PagefileUsage;
     SIZE_T PeakPagefileUsage;
-    SIZE_T PrivatePageCount;
 } VM_COUNTERS, *PVM_COUNTERS;
+
+typedef struct _VM_COUNTERS_EX
+{
+    SIZE_T PeakVirtualSize;
+    SIZE_T VirtualSize;
+    ULONG PageFaultCount;
+    SIZE_T PeakWorkingSetSize;
+    SIZE_T WorkingSetSize;
+    SIZE_T QuotaPeakPagedPoolUsage;
+    SIZE_T QuotaPagedPoolUsage;
+    SIZE_T QuotaPeakNonPagedPoolUsage;
+    SIZE_T QuotaNonPagedPoolUsage;
+    SIZE_T PagefileUsage;
+    SIZE_T PeakPagefileUsage;
+    SIZE_T PrivateUsage;
+} VM_COUNTERS_EX, *PVM_COUNTERS_EX;
 
 typedef struct _SYSTEM_PROCESS_INFORMATION {
 #ifdef __WINESRC__                  /* win32/win64 */
@@ -1600,7 +1630,7 @@ typedef struct _SYSTEM_PROCESS_INFORMATION {
     ULONG HandleCount;                 /* 4c/60 */
     ULONG SessionId;                   /* 50/64 */
     DWORD dwUnknown4;                  /* 54/68 */
-    VM_COUNTERS vmCounters;            /* 58/70 */
+    VM_COUNTERS_EX vmCounters;         /* 58/70 */
     IO_COUNTERS ioCounters;            /* 88/d0 */
     SYSTEM_THREAD_INFORMATION ti[1];   /* b8/100 */
 #else

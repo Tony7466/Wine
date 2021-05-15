@@ -234,6 +234,7 @@ static inline void init_thread_structure( struct thread *thread )
     thread->exit_code       = 0;
     thread->priority        = 0;
     thread->suspend         = 0;
+    thread->dbg_hidden      = 0;
     thread->desktop_users   = 0;
     thread->token           = NULL;
     thread->desc            = NULL;
@@ -329,7 +330,7 @@ struct thread *create_thread( int fd, struct process *process, const struct secu
     thread->affinity = process->affinity;
     if (!current) current = thread;
 
-    list_add_head( &thread_list, &thread->entry );
+    list_add_tail( &thread_list, &thread->entry );
 
     if (sd && !set_sd_defaults_from_token( &thread->obj, sd,
                                            OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION |
@@ -624,6 +625,8 @@ static void set_thread_info( struct thread *thread,
         security_set_thread_token( thread, req->token );
     if (req->mask & SET_THREAD_INFO_ENTRYPOINT)
         thread->entry_point = req->entry_point;
+    if (req->mask & SET_THREAD_INFO_DBG_HIDDEN)
+        thread->dbg_hidden = 1;
     if (req->mask & SET_THREAD_INFO_DESCRIPTION)
     {
         WCHAR *desc;
@@ -1515,11 +1518,10 @@ DECL_HANDLER(open_thread)
 DECL_HANDLER(get_thread_info)
 {
     struct thread *thread;
-    obj_handle_t handle = req->handle;
+    unsigned int access = req->access & (THREAD_QUERY_INFORMATION | THREAD_QUERY_LIMITED_INFORMATION);
 
-    if (!handle) thread = get_thread_from_id( req->tid_in );
-    else thread = get_thread_from_handle( req->handle, THREAD_QUERY_LIMITED_INFORMATION );
-
+    if (!access) access = THREAD_QUERY_LIMITED_INFORMATION;
+    thread = get_thread_from_handle( req->handle, access );
     if (thread)
     {
         reply->pid            = get_process_id( thread->process );
@@ -1531,6 +1533,7 @@ DECL_HANDLER(get_thread_info)
         reply->affinity       = thread->affinity;
         reply->last           = thread->process->running_threads == 1;
         reply->suspend_count  = thread->suspend;
+        reply->dbg_hidden     = thread->dbg_hidden;
         reply->desc_len       = thread->desc_len;
 
         if (thread->desc && get_reply_max_size())
@@ -1550,10 +1553,12 @@ DECL_HANDLER(get_thread_times)
 {
     struct thread *thread;
 
-    if ((thread = get_thread_from_handle( req->handle, THREAD_QUERY_INFORMATION )))
+    if ((thread = get_thread_from_handle( req->handle, THREAD_QUERY_LIMITED_INFORMATION )))
     {
         reply->creation_time  = thread->creation_time;
         reply->exit_time      = thread->exit_time;
+        reply->unix_pid       = thread->unix_pid;
+        reply->unix_tid       = thread->unix_tid;
 
         release_object( thread );
     }

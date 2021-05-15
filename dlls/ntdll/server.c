@@ -18,9 +18,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-#include "wine/port.h"
-
 #include <assert.h>
 #include <ctype.h>
 #include <stdarg.h>
@@ -36,14 +33,7 @@
 #include "wine/debug.h"
 #include "ntdll_misc.h"
 
-const char *build_dir = NULL;
-const char *data_dir = NULL;
-const char *config_dir = NULL;
-
-unsigned int server_cpus = 0;
 BOOL is_wow64 = FALSE;
-
-timeout_t server_start_time = 0;  /* time of server startup */
 
 /***********************************************************************
  *           wine_server_call (NTDLL.@)

@@ -19,8 +19,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-
 #include <time.h>
 #include <math.h>
 
@@ -51,7 +49,7 @@ LPCSTR debugstr_us( const UNICODE_STRING *us )
 /*********************************************************************
  *                  wine_get_version   (NTDLL.@)
  */
-const char * CDECL NTDLL_wine_get_version(void)
+const char * CDECL wine_get_version(void)
 {
     return unix_funcs->get_version();
 }
@@ -59,7 +57,7 @@ const char * CDECL NTDLL_wine_get_version(void)
 /*********************************************************************
  *                  wine_get_build_id   (NTDLL.@)
  */
-const char * CDECL NTDLL_wine_get_build_id(void)
+const char * CDECL wine_get_build_id(void)
 {
     return unix_funcs->get_build_id();
 }
@@ -67,7 +65,7 @@ const char * CDECL NTDLL_wine_get_build_id(void)
 /*********************************************************************
  *                  wine_get_host_version   (NTDLL.@)
  */
-void CDECL NTDLL_wine_get_host_version( const char **sysname, const char **release )
+void CDECL wine_get_host_version( const char **sysname, const char **release )
 {
     return unix_funcs->get_host_version( sysname, release );
 }
@@ -75,97 +73,89 @@ void CDECL NTDLL_wine_get_host_version( const char **sysname, const char **relea
 /*********************************************************************
  *                  abs   (NTDLL.@)
  */
-int CDECL NTDLL_abs( int i )
+int CDECL abs( int i )
 {
-    return abs( i );
-}
-
-/*********************************************************************
- *                  labs   (NTDLL.@)
- */
-LONG CDECL NTDLL_labs( LONG i )
-{
-    return labs( i );
+    return i >= 0 ? i : -i;
 }
 
 /*********************************************************************
  *                  atan   (NTDLL.@)
  */
-double CDECL NTDLL_atan( double d )
+double CDECL atan( double d )
 {
-    return atan( d );
+    return unix_funcs->atan( d );
 }
 
 /*********************************************************************
  *                  ceil   (NTDLL.@)
  */
-double CDECL NTDLL_ceil( double d )
+double CDECL ceil( double d )
 {
-    return ceil( d );
+    return unix_funcs->ceil( d );
 }
 
 /*********************************************************************
  *                  cos   (NTDLL.@)
  */
-double CDECL NTDLL_cos( double d )
+double CDECL cos( double d )
 {
-    return cos( d );
+    return unix_funcs->cos( d );
 }
 
 /*********************************************************************
  *                  fabs   (NTDLL.@)
  */
-double CDECL NTDLL_fabs( double d )
+double CDECL fabs( double d )
 {
-    return fabs( d );
+    return unix_funcs->fabs( d );
 }
 
 /*********************************************************************
  *                  floor   (NTDLL.@)
  */
-double CDECL NTDLL_floor( double d )
+double CDECL floor( double d )
 {
-    return floor( d );
+    return unix_funcs->floor( d );
 }
 
 /*********************************************************************
  *                  log   (NTDLL.@)
  */
-double CDECL NTDLL_log( double d )
+double CDECL log( double d )
 {
-    return log( d );
+    return unix_funcs->log( d );
 }
 
 /*********************************************************************
  *                  pow   (NTDLL.@)
  */
-double CDECL NTDLL_pow( double x, double y )
+double CDECL pow( double x, double y )
 {
-    return pow( x, y );
+    return unix_funcs->pow( x, y );
 }
 
 /*********************************************************************
  *                  sin   (NTDLL.@)
  */
-double CDECL NTDLL_sin( double d )
+double CDECL sin( double d )
 {
-    return sin( d );
+    return unix_funcs->sin( d );
 }
 
 /*********************************************************************
  *                  sqrt   (NTDLL.@)
  */
-double CDECL NTDLL_sqrt( double d )
+double CDECL sqrt( double d )
 {
-    return sqrt( d );
+    return unix_funcs->sqrt( d );
 }
 
 /*********************************************************************
  *                  tan   (NTDLL.@)
  */
-double CDECL NTDLL_tan( double d )
+double CDECL tan( double d )
 {
-    return tan( d );
+    return unix_funcs->tan( d );
 }
 
 #if defined(__GNUC__) && defined(__i386__)
@@ -179,52 +169,52 @@ double CDECL NTDLL_tan( double d )
 /*********************************************************************
  *		_CIcos (NTDLL.@)
  */
-double CDECL NTDLL__CIcos(void)
+double CDECL _CIcos(void)
 {
     FPU_DOUBLE(x);
-    return NTDLL_cos(x);
+    return cos(x);
 }
 
 /*********************************************************************
  *		_CIlog (NTDLL.@)
  */
-double CDECL NTDLL__CIlog(void)
+double CDECL _CIlog(void)
 {
     FPU_DOUBLE(x);
-    return NTDLL_log(x);
+    return log(x);
 }
 
 /*********************************************************************
  *		_CIpow (NTDLL.@)
  */
-double CDECL NTDLL__CIpow(void)
+double CDECL _CIpow(void)
 {
     FPU_DOUBLES(x,y);
-    return NTDLL_pow(x,y);
+    return pow(x,y);
 }
 
 /*********************************************************************
  *		_CIsin (NTDLL.@)
  */
-double CDECL NTDLL__CIsin(void)
+double CDECL _CIsin(void)
 {
     FPU_DOUBLE(x);
-    return NTDLL_sin(x);
+    return sin(x);
 }
 
 /*********************************************************************
  *		_CIsqrt (NTDLL.@)
  */
-double CDECL NTDLL__CIsqrt(void)
+double CDECL _CIsqrt(void)
 {
     FPU_DOUBLE(x);
-    return NTDLL_sqrt(x);
+    return sqrt(x);
 }
 
 /*********************************************************************
  *                  _ftol   (NTDLL.@)
  */
-LONGLONG CDECL NTDLL__ftol(void)
+LONGLONG CDECL _ftol(void)
 {
     FPU_DOUBLE(x);
     return (LONGLONG)x;
@@ -265,8 +255,8 @@ NTDLL_mergesort( void *arr, void *barr, size_t elemsize, int(__cdecl *compar)(co
 /*********************************************************************
  *                  qsort   (NTDLL.@)
  */
-void __cdecl NTDLL_qsort( void *base, size_t nmemb, size_t size,
-                          int(__cdecl *compar)(const void *, const void *) )
+void __cdecl qsort( void *base, size_t nmemb, size_t size,
+                    int (__cdecl *compar)(const void *, const void *) )
 {
     void *secondarr;
     if (nmemb < 2 || size == 0) return;
@@ -278,9 +268,8 @@ void __cdecl NTDLL_qsort( void *base, size_t nmemb, size_t size,
 /*********************************************************************
  *                  bsearch   (NTDLL.@)
  */
-void * __cdecl
-NTDLL_bsearch( const void *key, const void *base, size_t nmemb,
-               size_t size, int (__cdecl *compar)(const void *, const void *) )
+void * __cdecl bsearch( const void *key, const void *base, size_t nmemb,
+                        size_t size, int (__cdecl *compar)(const void *, const void *) )
 {
     ssize_t min = 0;
     ssize_t max = nmemb - 1;

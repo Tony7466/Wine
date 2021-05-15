@@ -131,6 +131,15 @@ typedef void (WINAPI *raise_func)( EXCEPTION_RECORD *rec, CONTEXT *context );
 
 
 /***********************************************************************
+ *           unwind_builtin_dll
+ */
+NTSTATUS CDECL unwind_builtin_dll( ULONG type, struct _DISPATCHER_CONTEXT *dispatch, CONTEXT *context )
+{
+    return STATUS_UNSUCCESSFUL;
+}
+
+
+/***********************************************************************
  *           get_trap_code
  *
  * Get the trap code for a signal.
@@ -522,6 +531,10 @@ static EXCEPTION_RECORD *setup_exception( ucontext_t *sigcontext, raise_func fun
     return &stack->rec;
 }
 
+void WINAPI call_user_exception_dispatcher( EXCEPTION_RECORD *rec, CONTEXT *context )
+{
+    pKiUserExceptionDispatcher( rec, context );
+}
 
 /**********************************************************************
  *		raise_segv_exception

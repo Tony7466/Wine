@@ -263,8 +263,7 @@ NTSTATUS alloc_object_attributes( const OBJECT_ATTRIBUTES *attr, struct object_a
 
     len = (len + 3) & ~3;  /* DWORD-align the entire structure */
 
-    *ret = RtlAllocateHeap( GetProcessHeap(), HEAP_ZERO_MEMORY, len );
-    if (!*ret) return STATUS_NO_MEMORY;
+    if (!(*ret = calloc( len, 1 ))) return STATUS_NO_MEMORY;
 
     (*ret)->rootdir = wine_server_obj_handle( attr->RootDirectory );
     (*ret)->attributes = attr->Attributes;
@@ -341,7 +340,7 @@ NTSTATUS WINAPI NtCreateSemaphore( HANDLE *handle, ACCESS_MASK access, const OBJ
     }
     SERVER_END_REQ;
 
-    RtlFreeHeap( GetProcessHeap(), 0, objattr );
+    free( objattr );
     return ret;
 }
 
@@ -448,7 +447,7 @@ NTSTATUS WINAPI NtCreateEvent( HANDLE *handle, ACCESS_MASK access, const OBJECT_
     }
     SERVER_END_REQ;
 
-    RtlFreeHeap( GetProcessHeap(), 0, objattr );
+    free( objattr );
     return ret;
 }
 
@@ -601,7 +600,7 @@ NTSTATUS WINAPI NtCreateMutant( HANDLE *handle, ACCESS_MASK access, const OBJECT
     }
     SERVER_END_REQ;
 
-    RtlFreeHeap( GetProcessHeap(), 0, objattr );
+    free( objattr );
     return ret;
 }
 
@@ -702,7 +701,7 @@ NTSTATUS WINAPI NtCreateJobObject( HANDLE *handle, ACCESS_MASK access, const OBJ
         *handle = wine_server_ptr_handle( reply->handle );
     }
     SERVER_END_REQ;
-    RtlFreeHeap( GetProcessHeap(), 0, objattr );
+    free( objattr );
     return ret;
 }
 
@@ -937,7 +936,7 @@ NTSTATUS WINAPI NtCreateTimer( HANDLE *handle, ACCESS_MASK access, const OBJECT_
     }
     SERVER_END_REQ;
 
-    RtlFreeHeap( GetProcessHeap(), 0, objattr );
+    free( objattr );
     return ret;
 
 }
@@ -1044,7 +1043,7 @@ NTSTATUS WINAPI NtQueryTimer( HANDLE handle, TIMER_INFORMATION_CLASS class,
         if (basic_info->RemainingTime.QuadPart > 0) NtQuerySystemTime( &now );
         else
         {
-            RtlQueryPerformanceCounter( &now );
+            NtQueryPerformanceCounter( &now, NULL );
             basic_info->RemainingTime.QuadPart = -basic_info->RemainingTime.QuadPart;
         }
 
@@ -1243,6 +1242,23 @@ ULONG WINAPI NtGetTickCount(void)
 
 
 /******************************************************************************
+ *              RtlGetSystemTimePrecise (NTDLL.@)
+ */
+LONGLONG WINAPI RtlGetSystemTimePrecise(void)
+{
+    struct timeval now;
+#ifdef HAVE_CLOCK_GETTIME
+    struct timespec ts;
+
+    if (!clock_gettime( CLOCK_REALTIME, &ts ))
+        return ts.tv_sec * (ULONGLONG)TICKSPERSEC + TICKS_1601_TO_1970 + (ts.tv_nsec + 50) / 100;
+#endif
+    gettimeofday( &now, 0 );
+    return now.tv_sec * (ULONGLONG)TICKSPERSEC + TICKS_1601_TO_1970 + now.tv_usec * 10;
+}
+
+
+/******************************************************************************
  *              NtCreateKeyedEvent (NTDLL.@)
  */
 NTSTATUS WINAPI NtCreateKeyedEvent( HANDLE *handle, ACCESS_MASK access,
@@ -1263,7 +1279,7 @@ NTSTATUS WINAPI NtCreateKeyedEvent( HANDLE *handle, ACCESS_MASK access,
     }
     SERVER_END_REQ;
 
-    RtlFreeHeap( GetProcessHeap(), 0, objattr );
+    free( objattr );
     return ret;
 }
 
@@ -1353,7 +1369,7 @@ NTSTATUS WINAPI NtCreateIoCompletion( HANDLE *handle, ACCESS_MASK access, OBJECT
     }
     SERVER_END_REQ;
 
-    RtlFreeHeap( GetProcessHeap(), 0, objattr );
+    free( objattr );
     return status;
 }
 
@@ -1566,7 +1582,7 @@ NTSTATUS WINAPI NtCreateSection( HANDLE *handle, ACCESS_MASK access, const OBJEC
     }
     SERVER_END_REQ;
 
-    RtlFreeHeap( GetProcessHeap(), 0, objattr );
+    free( objattr );
     return ret;
 }
 
@@ -2248,7 +2264,7 @@ NTSTATUS WINAPI RtlWaitOnAddress( const void *addr, const void *cmp, SIZE_T size
     {
         LARGE_INTEGER now;
 
-        RtlQueryPerformanceCounter(&now);
+        NtQueryPerformanceCounter( &now, NULL );
         abs_timeout -= now.QuadPart;
     }
 

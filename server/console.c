@@ -75,6 +75,8 @@ struct console_input
 static void console_input_dump( struct object *obj, int verbose );
 static void console_input_destroy( struct object *obj );
 static struct fd *console_input_get_fd( struct object *obj );
+static struct object *console_input_open_file( struct object *obj, unsigned int access,
+                                               unsigned int sharing, unsigned int options );
 
 static const struct object_ops console_input_ops =
 {
@@ -93,7 +95,7 @@ static const struct object_ops console_input_ops =
     no_lookup_name,                   /* lookup_name */
     no_link_name,                     /* link_name */
     NULL,                             /* unlink_name */
-    no_open_file,                     /* open_file */
+    console_input_open_file,          /* open_file */
     no_kernel_obj_list,               /* get_kernel_obj_list */
     no_close_handle,                  /* close_handle */
     console_input_destroy             /* destroy */
@@ -171,6 +173,8 @@ struct screen_buffer
 static void screen_buffer_dump( struct object *obj, int verbose );
 static void screen_buffer_destroy( struct object *obj );
 static struct fd *screen_buffer_get_fd( struct object *obj );
+static struct object *screen_buffer_open_file( struct object *obj, unsigned int access,
+                                               unsigned int sharing, unsigned int options );
 
 static const struct object_ops screen_buffer_ops =
 {
@@ -189,7 +193,7 @@ static const struct object_ops screen_buffer_ops =
     no_lookup_name,                   /* lookup_name */
     no_link_name,                     /* link_name */
     NULL,                             /* unlink_name */
-    no_open_file,                     /* open_file */
+    screen_buffer_open_file,          /* open_file */
     no_kernel_obj_list,               /* get_kernel_obj_list */
     no_close_handle,                  /* close_handle */
     screen_buffer_destroy             /* destroy */
@@ -210,6 +214,35 @@ static const struct fd_ops console_fd_ops =
     default_fd_ioctl,             /* ioctl */
     default_fd_queue_async,       /* queue_async */
     default_fd_reselect_async     /* reselect_async */
+};
+
+static struct object_type *console_device_get_type( struct object *obj );
+static void console_device_dump( struct object *obj, int verbose );
+static struct object *console_device_lookup_name( struct object *obj, struct unicode_str *name, unsigned int attr );
+static struct object *console_device_open_file( struct object *obj, unsigned int access,
+                                                unsigned int sharing, unsigned int options );
+
+static const struct object_ops console_device_ops =
+{
+    sizeof(struct object),            /* size */
+    console_device_dump,              /* dump */
+    console_device_get_type,          /* get_type */
+    no_add_queue,                     /* add_queue */
+    NULL,                             /* remove_queue */
+    NULL,                             /* signaled */
+    no_satisfied,                     /* satisfied */
+    no_signal,                        /* signal */
+    no_get_fd,                        /* get_fd */
+    default_fd_map_access,            /* map_access */
+    default_get_sd,                   /* get_sd */
+    default_set_sd,                   /* set_sd */
+    console_device_lookup_name,       /* lookup_name */
+    directory_link_name,              /* link_name */
+    default_unlink_name,              /* unlink_name */
+    console_device_open_file,         /* open_file */
+    no_kernel_obj_list,               /* get_kernel_obj_list */
+    no_close_handle,                  /* close_handle */
+    no_destroy                        /* destroy */
 };
 
 static struct list screen_buffer_list = LIST_INIT(screen_buffer_list);
@@ -1175,6 +1208,12 @@ static void console_input_destroy( struct object *obj )
     free( console_in->history );
 }
 
+static struct object *console_input_open_file( struct object *obj, unsigned int access,
+                                               unsigned int sharing, unsigned int options )
+{
+    return grab_object( obj );
+}
+
 static void screen_buffer_dump( struct object *obj, int verbose )
 {
     struct screen_buffer *screen_buffer = (struct screen_buffer *)obj;
@@ -1208,6 +1247,12 @@ static void screen_buffer_destroy( struct object *obj )
     if (screen_buffer->fd) release_object( screen_buffer->fd );
     free( screen_buffer->data );
     free( screen_buffer->font.face_name );
+}
+
+static struct object *screen_buffer_open_file( struct object *obj, unsigned int access,
+                                               unsigned int sharing, unsigned int options )
+{
+    return grab_object( obj );
 }
 
 static struct fd *screen_buffer_get_fd( struct object *obj )
@@ -1440,6 +1485,79 @@ static void scroll_console_output( struct screen_buffer *screen_buffer, int xsrc
     console_input_events_append( screen_buffer->input, &evt );
 }
 
+static struct object_type *console_device_get_type( struct object *obj )
+{
+    static const WCHAR name[] = {'D','e','v','i','c','e'};
+    static const struct unicode_str str = { name, sizeof(name) };
+    return get_object_type( &str );
+}
+
+static void console_device_dump( struct object *obj, int verbose )
+{
+    fputs( "Console device\n", stderr );
+}
+
+static struct object *console_device_lookup_name( struct object *obj, struct unicode_str *name, unsigned int attr )
+{
+    static const WCHAR consoleW[]     = {'C','o','n','s','o','l','e'};
+    static const WCHAR current_inW[]  = {'C','u','r','r','e','n','t','I','n'};
+    static const WCHAR current_outW[] = {'C','u','r','r','e','n','t','O','u','t'};
+
+    if (name->len == sizeof(current_inW) && !memcmp( name->str, current_inW, name->len ))
+    {
+        if (!current->process->console)
+        {
+            set_error( STATUS_INVALID_HANDLE );
+            return NULL;
+        }
+        name->len = 0;
+        return grab_object( current->process->console );
+    }
+
+    if (name->len == sizeof(current_outW) && !memcmp( name->str, current_outW, name->len ))
+    {
+        if (!current->process->console || !current->process->console->active)
+        {
+            set_error( STATUS_INVALID_HANDLE );
+            return NULL;
+        }
+        name->len = 0;
+        return grab_object( current->process->console->active );
+    }
+
+    if (name->len == sizeof(consoleW) && !memcmp( name->str, consoleW, name->len ))
+    {
+        name->len = 0;
+        return grab_object( obj );
+    }
+
+    return NULL;
+}
+
+static struct object *console_device_open_file( struct object *obj, unsigned int access,
+                                                unsigned int sharing, unsigned int options )
+{
+    int is_output;
+    access = default_fd_map_access( obj, access );
+    is_output = access & FILE_WRITE_DATA;
+    if (!current->process->console || (is_output && !current->process->console))
+    {
+        set_error( STATUS_INVALID_HANDLE );
+        return NULL;
+    }
+    if (is_output && (access & FILE_READ_DATA))
+    {
+        set_error( STATUS_INVALID_PARAMETER );
+        return NULL;
+    }
+    return is_output ? grab_object( current->process->console->active ) : grab_object( current->process->console );
+}
+
+struct object *create_console_device( struct object *root, const struct unicode_str *name )
+{
+    return create_named_object( root, &console_device_ops, name, 0, NULL );
+}
+
 /* allocate a console for the renderer */
 DECL_HANDLER(alloc_console)
 {
@@ -1546,19 +1664,8 @@ DECL_HANDLER(open_console)
 {
     struct object      *obj = NULL;
 
-    reply->handle = 0;
-    if (!req->from)
-    {
-        if (current->process->console)
-            obj = grab_object( (struct object*)current->process->console );
-    }
-    else if (req->from == (obj_handle_t)1)
-    {
-        if (current->process->console && current->process->console->active)
-            obj = grab_object( (struct object*)current->process->console->active );
-    }
-    else if ((obj = get_handle_obj( current->process, req->from,
-                                    FILE_READ_PROPERTIES|FILE_WRITE_PROPERTIES, &console_input_ops )))
+    if ((obj = get_handle_obj( current->process, req->from,
+                               FILE_READ_PROPERTIES|FILE_WRITE_PROPERTIES, &console_input_ops )))
     {
         struct console_input *console = (struct console_input *)obj;
         obj = (console->active) ? grab_object( console->active ) : NULL;

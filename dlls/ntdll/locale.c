@@ -19,8 +19,6 @@
  */
 
 #define NONAMELESSUNION
-#include "config.h"
-#include "wine/port.h"
 
 #include <stdarg.h>
 #include <string.h>
@@ -585,16 +583,16 @@ static NTSTATUS open_nls_data_file( ULONG type, ULONG id, HANDLE *file )
         break;
     case NLS_SECTION_CASEMAP:
         if (id) return STATUS_UNSUCCESSFUL;
-        NTDLL_swprintf( buffer, keyfmtW, langW );
-        NTDLL_swprintf( value, langfmtW, LANGIDFROMLCID(system_lcid) );
+        swprintf( buffer, ARRAY_SIZE(buffer), keyfmtW, langW );
+        swprintf( value, ARRAY_SIZE(value), langfmtW, LANGIDFROMLCID(system_lcid) );
         break;
     case NLS_SECTION_CODEPAGE:
-        NTDLL_swprintf( buffer, keyfmtW, cpW );
-        NTDLL_swprintf( value, cpfmtW, id );
+        swprintf( buffer, ARRAY_SIZE(buffer), keyfmtW, cpW );
+        swprintf( value, ARRAY_SIZE(value), cpfmtW, id );
         break;
     case NLS_SECTION_NORMALIZE:
-        NTDLL_swprintf( buffer, keyfmtW, normW );
-        NTDLL_swprintf( value, normfmtW, id );
+        swprintf( buffer, ARRAY_SIZE(buffer), keyfmtW, normW );
+        swprintf( value, ARRAY_SIZE(value), normfmtW, id );
         break;
     default:
         return STATUS_INVALID_PARAMETER_1;
@@ -630,7 +628,7 @@ static NTSTATUS open_nls_data_file( ULONG type, ULONG id, HANDLE *file )
             name = intlW;
             break;
         case NLS_SECTION_CODEPAGE:
-            NTDLL_swprintf( buffer, cpdefaultW, id );
+            swprintf( buffer, ARRAY_SIZE(buffer), cpdefaultW, id );
             name = buffer;
             break;
         case NLS_SECTION_NORMALIZE:
@@ -652,7 +650,8 @@ static NTSTATUS open_nls_data_file( ULONG type, ULONG id, HANDLE *file )
     valueW.MaximumLength = (wcslen(name) + wcslen(dir) + 5) * sizeof(WCHAR);
     if (!(valueW.Buffer = RtlAllocateHeap( GetProcessHeap(), 0, valueW.MaximumLength )))
         return STATUS_NO_MEMORY;
-    valueW.Length = NTDLL_swprintf( valueW.Buffer, pathfmtW, dir, name ) * sizeof(WCHAR);
+    valueW.Length = swprintf( valueW.Buffer, valueW.MaximumLength/sizeof(WCHAR),
+                              pathfmtW, dir, name ) * sizeof(WCHAR);
     InitializeObjectAttributes( &attr, &valueW, 0, 0, NULL );
     status = NtOpenFile( file, GENERIC_READ, &attr, &io, FILE_SHARE_READ, FILE_SYNCHRONOUS_IO_ALERT );
     if (!status) TRACE( "found %s\n", debugstr_w( valueW.Buffer ));
@@ -688,7 +687,8 @@ static NTSTATUS open_nls_data_file( ULONG type, ULONG id, HANDLE *file )
 
 void init_unix_codepage(void)
 {
-    unix_funcs->get_unix_codepage( &unix_table );
+    USHORT *data = unix_funcs->get_unix_codepage_data();
+    if (data) RtlInitCodePageTable( data, &unix_table );
 }
 
 
@@ -723,11 +723,6 @@ void init_locale( HMODULE module )
     WCHAR user_locale[LOCALE_NAME_MAX_LENGTH];
     LCID system_lcid, user_lcid;
 
-#ifdef __APPLE__
-    const struct norm_table *info;
-    load_norm_table( NormalizationC, &info );
-#endif
-
     kernel32_handle = module;
 
     unix_funcs->get_locales( system_locale, user_locale );
@@ -754,13 +749,7 @@ DWORD ntdll_umbstowcs( const char *src, DWORD srclen, WCHAR *dst, DWORD dstlen )
         RtlCustomCPToUnicodeN( &unix_table, dst, dstlen * sizeof(WCHAR), &reslen, src, srclen );
     else
         RtlUTF8ToUnicodeN( dst, dstlen * sizeof(WCHAR), &reslen, src, srclen );
-
-    reslen /= sizeof(WCHAR);
-#ifdef __APPLE__  /* work around broken Mac OS X filesystem that enforces decomposed Unicode */
-    if (reslen && dst && norm_tables[NormalizationC])
-        reslen = compose_string( norm_tables[NormalizationC], dst, reslen );
-#endif
-    return reslen;
+    return reslen / sizeof(WCHAR);
 }
 
 
@@ -1479,7 +1468,7 @@ NTSTATUS WINAPI RtlUpcaseUnicodeToOemN( char *dst, DWORD dstlen, DWORD *reslen,
 /*********************************************************************
  *	towlower   (NTDLL.@)
  */
-WCHAR __cdecl NTDLL_towlower( WCHAR ch )
+WCHAR __cdecl towlower( WCHAR ch )
 {
     if (ch >= 0x100) return ch;
     return casemap( nls_info.LowerCaseTable, ch );
@@ -1489,7 +1478,7 @@ WCHAR __cdecl NTDLL_towlower( WCHAR ch )
 /*********************************************************************
  *           towupper    (NTDLL.@)
  */
-WCHAR __cdecl NTDLL_towupper( WCHAR ch )
+WCHAR __cdecl towupper( WCHAR ch )
 {
     if (nls_info.UpperCaseTable) return casemap( nls_info.UpperCaseTable, ch );
     return casemap_ascii( ch );

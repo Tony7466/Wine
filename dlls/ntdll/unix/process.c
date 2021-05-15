@@ -417,10 +417,8 @@ static NTSTATUS get_pe_file_info( UNICODE_STRING *path, HANDLE *handle, pe_image
             /* assume current arch */
 #if defined(__i386__) || defined(__x86_64__)
             info->cpu = is_64bit ? CPU_x86_64 : CPU_x86;
-#elif defined(__arm__)
-            info->cpu = CPU_ARM;
-#elif defined(__aarch64__)
-            info->cpu = CPU_ARM64;
+#else
+            info->cpu = client_cpu;
 #endif
             *handle = 0;
             return STATUS_SUCCESS;
@@ -525,7 +523,6 @@ static void set_stdio_fd( int stdin_fd, int stdout_fd )
 static NTSTATUS spawn_process( const RTL_USER_PROCESS_PARAMETERS *params, int socketfd,
                                int unixdir, char *winedebug, const pe_image_info_t *pe_info )
 {
-    const int is_child_64bit = (pe_info->cpu == CPU_x86_64 || pe_info->cpu == CPU_ARM64);
     NTSTATUS status = STATUS_SUCCESS;
     int stdin_fd = -1, stdout_fd = -1;
     pid_t pid;
@@ -558,8 +555,7 @@ static NTSTATUS spawn_process( const RTL_USER_PROCESS_PARAMETERS *params, int so
             }
             argv = build_argv( &params->CommandLine, 2 );
 
-            exec_wineloader( argv, socketfd, is_child_64bit,
-                             pe_info->base, pe_info->base + pe_info->map_size );
+            exec_wineloader( argv, socketfd, pe_info );
             _exit(1);
         }
 
@@ -588,10 +584,11 @@ static NTSTATUS spawn_process( const RTL_USER_PROCESS_PARAMETERS *params, int so
 NTSTATUS CDECL exec_process( UNICODE_STRING *path, UNICODE_STRING *cmdline, NTSTATUS status )
 {
     pe_image_info_t pe_info;
-    BOOL is_child_64bit;
-    int socketfd[2];
+    int unixdir, socketfd[2];
     char **argv;
     HANDLE handle;
+
+    if (startup_info_size) return status;  /* started from another Win32 process */
 
     switch (status)
     {
@@ -601,7 +598,6 @@ NTSTATUS CDECL exec_process( UNICODE_STRING *path, UNICODE_STRING *cmdline, NTST
     case STATUS_INVALID_IMAGE_NOT_MZ:
         if (getenv( "WINEPRELOADRESERVE" )) return status;
         if ((status = get_pe_file_info( path, &handle, &pe_info ))) return status;
-        is_child_64bit = (pe_info.cpu == CPU_x86_64 || pe_info.cpu == CPU_ARM64);
         break;
     case STATUS_INVALID_IMAGE_WIN_16:
     case STATUS_INVALID_IMAGE_NE_FORMAT:
@@ -609,11 +605,12 @@ NTSTATUS CDECL exec_process( UNICODE_STRING *path, UNICODE_STRING *cmdline, NTST
         /* we'll start winevdm */
         memset( &pe_info, 0, sizeof(pe_info) );
         pe_info.cpu = CPU_x86;
-        is_child_64bit = FALSE;
         break;
     default:
         return status;
     }
+
+    unixdir = get_unix_curdir( NtCurrentTeb()->Peb->ProcessParameters );
 
     if (socketpair( PF_UNIX, SOCK_STREAM, 0, socketfd ) == -1) return STATUS_TOO_MANY_OPENED_FILES;
 #ifdef SO_PASSCRED
@@ -637,10 +634,10 @@ NTSTATUS CDECL exec_process( UNICODE_STRING *path, UNICODE_STRING *cmdline, NTST
     if (!status)
     {
         if (!(argv = build_argv( cmdline, 2 ))) return STATUS_NO_MEMORY;
+        fchdir( unixdir );
         do
         {
-            status = exec_wineloader( argv, socketfd[0], is_child_64bit,
-                                      pe_info.base, pe_info.base + pe_info.map_size );
+            status = exec_wineloader( argv, socketfd[0], &pe_info );
         }
 #ifdef __APPLE__
         while (errno == ENOTSUP && terminate_main_thread());
@@ -833,7 +830,7 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
     if (socketpair( PF_UNIX, SOCK_STREAM, 0, socketfd ) == -1)
     {
         status = STATUS_TOO_MANY_OPENED_FILES;
-        RtlFreeHeap( GetProcessHeap(), 0, objattr );
+        free( objattr );
         goto done;
     }
 #ifdef SO_PASSCRED
@@ -870,7 +867,7 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
         process_info = wine_server_ptr_handle( reply->info );
     }
     SERVER_END_REQ;
-    RtlFreeHeap( GetProcessHeap(), 0, objattr );
+    free( objattr );
 
     if (status)
     {
@@ -903,7 +900,7 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
         }
     }
     SERVER_END_REQ;
-    RtlFreeHeap( GetProcessHeap(), 0, objattr );
+    free( objattr );
     if (status) goto done;
 
     /* create the child process */
@@ -1005,7 +1002,7 @@ NTSTATUS WINAPI NtTerminateProcess( HANDLE handle, LONG exit_code )
 
 #if defined(HAVE_MACH_MACH_H)
 
-static void fill_VM_COUNTERS(VM_COUNTERS* pvmi)
+static void fill_VM_COUNTERS( VM_COUNTERS_EX *pvmi )
 {
 #if defined(MACH_TASK_BASIC_INFO)
     struct mach_task_basic_info info;
@@ -1022,7 +1019,7 @@ static void fill_VM_COUNTERS(VM_COUNTERS* pvmi)
 
 #elif defined(linux)
 
-static void fill_VM_COUNTERS(VM_COUNTERS* pvmi)
+static void fill_VM_COUNTERS( VM_COUNTERS_EX *pvmi )
 {
     FILE *f;
     char line[256];
@@ -1053,7 +1050,7 @@ static void fill_VM_COUNTERS(VM_COUNTERS* pvmi)
 
 #else
 
-static void fill_VM_COUNTERS(VM_COUNTERS* pvmi)
+static void fill_VM_COUNTERS( VM_COUNTERS_EX *pvmi )
 {
     /* FIXME : real data */
 }
@@ -1165,15 +1162,15 @@ NTSTATUS WINAPI NtQueryInformationProcess( HANDLE handle, PROCESSINFOCLASS class
 
     case ProcessVmCounters:
         {
-            VM_COUNTERS pvmi;
+            VM_COUNTERS_EX pvmi;
 
-            /* older Windows versions don't have the PrivatePageCount field */
-            if (size >= FIELD_OFFSET(VM_COUNTERS,PrivatePageCount))
+            /* older Windows versions don't have the PrivateUsage field */
+            if (size >= sizeof(VM_COUNTERS))
             {
                 if (!info) ret = STATUS_ACCESS_VIOLATION;
                 else
                 {
-                    memset(&pvmi, 0 , sizeof(VM_COUNTERS));
+                    memset(&pvmi, 0, sizeof(pvmi));
                     if (handle == GetCurrentProcess()) fill_VM_COUNTERS(&pvmi);
                     else
                     {
@@ -1193,11 +1190,13 @@ NTSTATUS WINAPI NtQueryInformationProcess( HANDLE handle, PROCESSINFOCLASS class
                         SERVER_END_REQ;
                         if (ret) break;
                     }
+                    if (size >= sizeof(VM_COUNTERS_EX))
+                        pvmi.PrivateUsage = pvmi.PagefileUsage;
                     len = size;
-                    if (len != FIELD_OFFSET(VM_COUNTERS,PrivatePageCount)) len = sizeof(VM_COUNTERS);
-                    memcpy(info, &pvmi, min(size,sizeof(VM_COUNTERS)));
+                    if (len != sizeof(VM_COUNTERS)) len = sizeof(VM_COUNTERS_EX);
+                    memcpy(info, &pvmi, min(size, sizeof(pvmi)));
                 }
-                if (size != FIELD_OFFSET(VM_COUNTERS,PrivatePageCount) && size != sizeof(VM_COUNTERS))
+                if (size != sizeof(VM_COUNTERS) && size != sizeof(VM_COUNTERS_EX))
                     ret = STATUS_INFO_LENGTH_MISMATCH;
             }
             else

@@ -3596,7 +3596,7 @@ NTSTATUS WINAPI NtCreateFile( HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBU
             *handle = wine_server_ptr_handle( reply->handle );
         }
         SERVER_END_REQ;
-        RtlFreeHeap( GetProcessHeap(), 0, objattr );
+        free( objattr );
         RtlFreeAnsiString( &unix_name );
     }
     else WARN( "%s not found (%x)\n", debugstr_us(attr->ObjectName), io->u.Status );
@@ -3671,7 +3671,7 @@ NTSTATUS WINAPI NtCreateMailslotFile( HANDLE *handle, ULONG access, OBJECT_ATTRI
     }
     SERVER_END_REQ;
 
-    RtlFreeHeap( GetProcessHeap(), 0, objattr );
+    free( objattr );
     return status;
 }
 
@@ -3719,7 +3719,7 @@ NTSTATUS WINAPI NtCreateNamedPipeFile( HANDLE *handle, ULONG access, OBJECT_ATTR
     }
     SERVER_END_REQ;
 
-    RtlFreeHeap( GetProcessHeap(), 0, objattr );
+    free( objattr );
     return status;
 }
 
@@ -4489,11 +4489,11 @@ static struct async_fileio *alloc_fileio( DWORD size, async_callback_t callback,
     while (io)
     {
         struct async_fileio *next = io->next;
-        RtlFreeHeap( GetProcessHeap(), 0, io );
+        free( io );
         io = next;
     }
 
-    if ((io = RtlAllocateHeap( GetProcessHeap(), 0, size )))
+    if ((io = malloc( size )))
     {
         io->callback = callback;
         io->handle   = handle;
@@ -4676,7 +4676,7 @@ static NTSTATUS server_read_file( HANDLE handle, HANDLE event, PIO_APC_ROUTINE a
     }
     SERVER_END_REQ;
 
-    if (status != STATUS_PENDING) RtlFreeHeap( GetProcessHeap(), 0, async );
+    if (status != STATUS_PENDING) free( async );
 
     if (wait_handle) status = wait_async( wait_handle, (options & FILE_SYNCHRONOUS_IO_ALERT), io );
     return status;
@@ -4714,7 +4714,7 @@ static NTSTATUS server_write_file( HANDLE handle, HANDLE event, PIO_APC_ROUTINE 
     }
     SERVER_END_REQ;
 
-    if (status != STATUS_PENDING) RtlFreeHeap( GetProcessHeap(), 0, async );
+    if (status != STATUS_PENDING) free( async );
 
     if (wait_handle) status = wait_async( wait_handle, (options & FILE_SYNCHRONOUS_IO_ALERT), io );
     return status;
@@ -4759,7 +4759,7 @@ static NTSTATUS server_ioctl_file( HANDLE handle, HANDLE event,
         FIXME("Unsupported ioctl %x (device=%x access=%x func=%x method=%x)\n",
               code, code >> 16, (code >> 14) & 3, (code >> 2) & 0xfff, code & 3);
 
-    if (status != STATUS_PENDING) RtlFreeHeap( GetProcessHeap(), 0, async );
+    if (status != STATUS_PENDING) free( async );
 
     if (wait_handle) status = wait_async( wait_handle, (options & FILE_SYNCHRONOUS_IO_ALERT), io );
     return status;
@@ -4922,7 +4922,7 @@ static NTSTATUS register_async_file_read( HANDLE handle, HANDLE event,
     }
     SERVER_END_REQ;
 
-    if (status != STATUS_PENDING) RtlFreeHeap( GetProcessHeap(), 0, fileio );
+    if (status != STATUS_PENDING) free( fileio );
     return status;
 }
 
@@ -5388,7 +5388,7 @@ NTSTATUS WINAPI NtWriteFile( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, v
             }
             SERVER_END_REQ;
 
-            if (status != STATUS_PENDING) RtlFreeHeap( GetProcessHeap(), 0, fileio );
+            if (status != STATUS_PENDING) free( fileio );
             goto err;
         }
         else  /* synchronous write, wait for the fd to become ready */
@@ -5666,6 +5666,29 @@ NTSTATUS WINAPI NtFsControlFile( HANDLE handle, HANDLE event, PIO_APC_ROUTINE ap
         }
         break;
     }
+
+    case FSCTL_GET_OBJECT_ID:
+    {
+        FILE_OBJECTID_BUFFER *info = out_buffer;
+        int fd, needs_close;
+        struct stat st;
+
+        io->Information = 0;
+        if (out_size >= sizeof(*info))
+        {
+            status = server_get_unix_fd( handle, 0, &fd, &needs_close, NULL, NULL );
+            if (status) break;
+            fstat( fd, &st );
+            if (needs_close) close( fd );
+            memset( info, 0, sizeof(*info) );
+            memcpy( info->ObjectId, &st.st_dev, sizeof(st.st_dev) );
+            memcpy( info->ObjectId + 8, &st.st_ino, sizeof(st.st_ino) );
+            io->Information = sizeof(*info);
+        }
+        else status = STATUS_BUFFER_TOO_SMALL;
+        break;
+    }
+
     case FSCTL_SET_SPARSE:
         TRACE("FSCTL_SET_SPARSE: Ignoring request\n");
         io->Information = 0;
@@ -5697,7 +5720,7 @@ NTSTATUS WINAPI NtFlushBuffersFile( HANDLE handle, IO_STATUS_BLOCK *io )
     if (ret == STATUS_ACCESS_DENIED)
         ret = server_get_unix_fd( handle, FILE_APPEND_DATA, &fd, &needs_close, &type, NULL );
 
-    if (!ret && (type == FD_TYPE_FILE || type == FD_TYPE_DIR))
+    if (!ret && (type == FD_TYPE_FILE || type == FD_TYPE_DIR || type == FD_TYPE_CHAR))
     {
         if (fsync(fd)) ret = errno_to_status( errno );
         io->u.Status    = ret;
@@ -5729,7 +5752,7 @@ NTSTATUS WINAPI NtFlushBuffersFile( HANDLE handle, IO_STATUS_BLOCK *io )
         }
         SERVER_END_REQ;
 
-        if (ret != STATUS_PENDING) RtlFreeHeap( GetProcessHeap(), 0, async );
+        if (ret != STATUS_PENDING) free( async );
 
         if (wait_handle) ret = wait_async( wait_handle, FALSE, io );
     }
@@ -5860,7 +5883,7 @@ NTSTATUS WINAPI NtNotifyChangeDirectoryFile( HANDLE handle, HANDLE event, PIO_AP
     }
     SERVER_END_REQ;
 
-    if (status != STATUS_PENDING) RtlFreeHeap( GetProcessHeap(), 0, fileio );
+    if (status != STATUS_PENDING) free( fileio );
     return status;
 }
 

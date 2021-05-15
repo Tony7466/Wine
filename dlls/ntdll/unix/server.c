@@ -100,18 +100,6 @@ WINE_DEFAULT_DEBUG_CHANNEL(server);
 #define SOCKETNAME "socket"        /* name of the socket file */
 #define LOCKNAME   "lock"          /* name of the lock file */
 
-#ifdef __i386__
-static const enum cpu_type client_cpu = CPU_x86;
-#elif defined(__x86_64__)
-static const enum cpu_type client_cpu = CPU_x86_64;
-#elif defined(__arm__)
-static const enum cpu_type client_cpu = CPU_ARM;
-#elif defined(__aarch64__)
-static const enum cpu_type client_cpu = CPU_ARM64;
-#else
-#error Unsupported CPU
-#endif
-
 static const BOOL is_win64 = (sizeof(void *) > sizeof(int));
 
 static const char *server_dir;
@@ -124,15 +112,7 @@ timeout_t server_start_time = 0;  /* time of server startup */
 sigset_t server_block_set;  /* signals to block during server calls */
 static int fd_socket = -1;  /* socket to exchange file descriptors with the server */
 static pid_t server_pid;
-
-static RTL_CRITICAL_SECTION fd_cache_section;
-static RTL_CRITICAL_SECTION_DEBUG critsect_debug =
-{
-    0, 0, &fd_cache_section,
-    { &critsect_debug.ProcessLocksList, &critsect_debug.ProcessLocksList },
-      0, 0, { (DWORD_PTR)(__FILE__ ": fd_cache_section") }
-};
-static RTL_CRITICAL_SECTION fd_cache_section = { &critsect_debug, -1, 0, 0, 0, 0 };
+static pthread_mutex_t fd_cache_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* atomically exchange a 64-bit value */
 static inline LONG64 interlocked_xchg64( LONG64 *dest, LONG64 val )
@@ -315,19 +295,19 @@ unsigned int CDECL wine_server_call( void *req_ptr )
 /***********************************************************************
  *           server_enter_uninterrupted_section
  */
-void server_enter_uninterrupted_section( RTL_CRITICAL_SECTION *cs, sigset_t *sigset )
+void server_enter_uninterrupted_section( pthread_mutex_t *mutex, sigset_t *sigset )
 {
     pthread_sigmask( SIG_BLOCK, &server_block_set, sigset );
-    RtlEnterCriticalSection( cs );
+    pthread_mutex_lock( mutex );
 }
 
 
 /***********************************************************************
  *           server_leave_uninterrupted_section
  */
-void server_leave_uninterrupted_section( RTL_CRITICAL_SECTION *cs, sigset_t *sigset )
+void server_leave_uninterrupted_section( pthread_mutex_t *mutex, sigset_t *sigset )
 {
-    RtlLeaveCriticalSection( cs );
+    pthread_mutex_unlock( mutex );
     pthread_sigmask( SIG_SETMASK, sigset, NULL );
 }
 
@@ -691,7 +671,7 @@ unsigned int server_wait( const select_op_t *select_op, data_size_t size, UINT f
     {
         LARGE_INTEGER now;
 
-        RtlQueryPerformanceCounter(&now);
+        NtQueryPerformanceCounter( &now, NULL );
         abs_timeout -= now.QuadPart;
     }
 
@@ -999,8 +979,8 @@ static int remove_fd_from_cache( HANDLE handle )
  *
  * The returned unix_fd should be closed iff needs_close is non-zero.
  */
-int CDECL server_get_unix_fd( HANDLE handle, unsigned int wanted_access, int *unix_fd,
-                              int *needs_close, enum server_fd_type *type, unsigned int *options )
+int server_get_unix_fd( HANDLE handle, unsigned int wanted_access, int *unix_fd,
+                        int *needs_close, enum server_fd_type *type, unsigned int *options )
 {
     sigset_t sigset;
     obj_handle_t fd_handle;
@@ -1014,7 +994,7 @@ int CDECL server_get_unix_fd( HANDLE handle, unsigned int wanted_access, int *un
     ret = get_cached_fd( handle, &fd, type, &access, options );
     if (ret != STATUS_INVALID_HANDLE) goto done;
 
-    server_enter_uninterrupted_section( &fd_cache_section, &sigset );
+    server_enter_uninterrupted_section( &fd_cache_mutex, &sigset );
     ret = get_cached_fd( handle, &fd, type, &access, options );
     if (ret == STATUS_INVALID_HANDLE)
     {
@@ -1042,7 +1022,7 @@ int CDECL server_get_unix_fd( HANDLE handle, unsigned int wanted_access, int *un
         }
         SERVER_END_REQ;
     }
-    server_leave_uninterrupted_section( &fd_cache_section, &sigset );
+    server_leave_uninterrupted_section( &fd_cache_mutex, &sigset );
 
 done:
     if (!ret && ((access & wanted_access) != wanted_access))
@@ -1473,9 +1453,6 @@ void server_init_process(void)
  */
 void CDECL server_init_process_done( void *relay )
 {
-#ifdef __i386__
-    extern struct ldt_copy __wine_ldt_copy;
-#endif
     PEB *peb = NtCurrentTeb()->Peb;
     IMAGE_NT_HEADERS *nt = RtlImageNtHeader( peb->ImageBaseAddress );
     void *entry = (char *)peb->ImageBaseAddress + nt->OptionalHeader.AddressOfEntryPoint;

@@ -1415,7 +1415,7 @@ static void dump_set_process_info_request( const struct set_process_info_request
 static void dump_get_thread_info_request( const struct get_thread_info_request *req )
 {
     fprintf( stderr, " handle=%04x", req->handle );
-    fprintf( stderr, ", tid_in=%04x", req->tid_in );
+    fprintf( stderr, ", access=%08x", req->access );
 }
 
 static void dump_get_thread_info_reply( const struct get_thread_info_reply *req )
@@ -1429,6 +1429,7 @@ static void dump_get_thread_info_reply( const struct get_thread_info_reply *req 
     fprintf( stderr, ", priority=%d", req->priority );
     fprintf( stderr, ", last=%d", req->last );
     fprintf( stderr, ", suspend_count=%d", req->suspend_count );
+    fprintf( stderr, ", dbg_hidden=%d", req->dbg_hidden );
     fprintf( stderr, ", desc_len=%u", req->desc_len );
     dump_varargs_unicode_str( ", desc=", cur_size );
 }
@@ -1442,6 +1443,8 @@ static void dump_get_thread_times_reply( const struct get_thread_times_reply *re
 {
     dump_timeout( " creation_time=", &req->creation_time );
     dump_timeout( ", exit_time=", &req->exit_time );
+    fprintf( stderr, ", unix_pid=%d", req->unix_pid );
+    fprintf( stderr, ", unix_tid=%d", req->unix_tid );
 }
 
 static void dump_set_thread_info_request( const struct set_thread_info_request *req )
@@ -2410,6 +2413,7 @@ static void dump_next_thread_reply( const struct next_thread_reply *req )
     fprintf( stderr, ", tid=%04x", req->tid );
     fprintf( stderr, ", base_pri=%d", req->base_pri );
     fprintf( stderr, ", delta_pri=%d", req->delta_pri );
+    fprintf( stderr, ", unix_tid=%d", req->unix_tid );
 }
 
 static void dump_wait_debug_event_request( const struct wait_debug_event_request *req )
@@ -4524,6 +4528,19 @@ static void dump_set_cursor_reply( const struct set_cursor_reply *req )
     fprintf( stderr, ", last_change=%08x", req->last_change );
 }
 
+static void dump_get_rawinput_buffer_request( const struct get_rawinput_buffer_request *req )
+{
+    fprintf( stderr, " rawinput_size=%u", req->rawinput_size );
+    fprintf( stderr, ", buffer_size=%u", req->buffer_size );
+}
+
+static void dump_get_rawinput_buffer_reply( const struct get_rawinput_buffer_reply *req )
+{
+    fprintf( stderr, " next_size=%u", req->next_size );
+    fprintf( stderr, ", count=%08x", req->count );
+    dump_varargs_bytes( ", data=", cur_size );
+}
+
 static void dump_update_rawinput_devices_request( const struct update_rawinput_devices_request *req )
 {
     dump_varargs_rawinput_devices( " devices=", cur_size );
@@ -4891,6 +4908,7 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_alloc_user_handle_request,
     (dump_func)dump_free_user_handle_request,
     (dump_func)dump_set_cursor_request,
+    (dump_func)dump_get_rawinput_buffer_request,
     (dump_func)dump_update_rawinput_devices_request,
     (dump_func)dump_create_job_request,
     (dump_func)dump_open_job_request,
@@ -5190,6 +5208,7 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_alloc_user_handle_reply,
     NULL,
     (dump_func)dump_set_cursor_reply,
+    (dump_func)dump_get_rawinput_buffer_reply,
     NULL,
     (dump_func)dump_create_job_reply,
     (dump_func)dump_open_job_reply,
@@ -5489,6 +5508,7 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "alloc_user_handle",
     "free_user_handle",
     "set_cursor",
+    "get_rawinput_buffer",
     "update_rawinput_devices",
     "create_job",
     "open_job",
@@ -5551,6 +5571,7 @@ static const struct
     { "HANDLE_NOT_CLOSABLE",         STATUS_HANDLE_NOT_CLOSABLE },
     { "HOST_UNREACHABLE",            STATUS_HOST_UNREACHABLE },
     { "ILLEGAL_FUNCTION",            STATUS_ILLEGAL_FUNCTION },
+    { "IMAGE_NOT_AT_BASE",           STATUS_IMAGE_NOT_AT_BASE },
     { "INFO_LENGTH_MISMATCH",        STATUS_INFO_LENGTH_MISMATCH },
     { "INSTANCE_NOT_AVAILABLE",      STATUS_INSTANCE_NOT_AVAILABLE },
     { "INSUFFICIENT_RESOURCES",      STATUS_INSUFFICIENT_RESOURCES },

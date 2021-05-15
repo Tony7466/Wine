@@ -945,7 +945,7 @@ struct rawinput_device
 /* Retrieve information about a thread */
 @REQ(get_thread_info)
     obj_handle_t handle;        /* thread handle */
-    thread_id_t  tid_in;        /* thread id (optional) */
+    unsigned int access;        /* required access rights */
 @REPLY
     process_id_t pid;           /* server process id */
     thread_id_t  tid;           /* server thread id */
@@ -956,6 +956,7 @@ struct rawinput_device
     int          priority;      /* thread priority level */
     int          last;          /* last thread in process */
     int          suspend_count; /* thread suspend count */
+    int          dbg_hidden;    /* thread hidden from debugger */
     data_size_t  desc_len;      /* description length in bytes */
     VARARG(desc,unicode_str);   /* description string */
 @END
@@ -967,6 +968,8 @@ struct rawinput_device
 @REPLY
     timeout_t    creation_time; /* thread creation time */
     timeout_t    exit_time;     /* thread exit time */
+    int          unix_pid;      /* thread native pid */
+    int          unix_tid;      /* thread native pid */
 @END
 
 
@@ -985,6 +988,7 @@ struct rawinput_device
 #define SET_THREAD_INFO_TOKEN       0x04
 #define SET_THREAD_INFO_ENTRYPOINT  0x08
 #define SET_THREAD_INFO_DESCRIPTION 0x10
+#define SET_THREAD_INFO_DBG_HIDDEN  0x20
 
 
 /* Retrieve information about a module */
@@ -1523,8 +1527,7 @@ struct console_renderer_event
 
 /* Open a handle to the process console */
 @REQ(open_console)
-    obj_handle_t from;          /* 0 (resp 1) input (resp output) of current process console */
-                                /* otherwise console_in handle to get active screen buffer? */
+    obj_handle_t from;          /* console_in handle to get active screen buffer */
     unsigned int access;        /* wanted access rights */
     unsigned int attributes;    /* object attributes */
     int          share;         /* share mask (only for output handles) */
@@ -1912,6 +1915,7 @@ enum char_info_mode
     thread_id_t  tid;           /* thread id */
     int          base_pri;      /* base priority */
     int          delta_pri;     /* delta priority */
+    int          unix_tid;      /* thread native pid */
 @END
 
 
@@ -3879,6 +3883,16 @@ struct handle_info
 #define SET_CURSOR_CLIP   0x08
 #define SET_CURSOR_NOCLIP 0x10
 
+
+/* Batch read rawinput message data */
+@REQ(get_rawinput_buffer)
+    data_size_t rawinput_size; /* size of RAWINPUT structure */
+    data_size_t buffer_size;   /* size of output buffer */
+@REPLY
+    data_size_t next_size; /* minimum size to get next message data */
+    unsigned int count;
+    VARARG(data,bytes);
+@END
 
 /* Modify the list of registered rawinput devices */
 @REQ(update_rawinput_devices)

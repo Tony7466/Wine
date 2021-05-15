@@ -19,25 +19,18 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-#include "wine/port.h"
-
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
 #include <math.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
 #include "windef.h"
 #include "ntdll_misc.h"
 #include "wine/exception.h"
-#include "wine/library.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(ntdll);
@@ -1827,13 +1820,14 @@ NTSTATUS WINAPI RtlConvertSidToUnicodeString(
     DWORD i, len;
 
     *p++ = 'S';
-    p += NTDLL_swprintf( p, formatW, sid->Revision );
-    p += NTDLL_swprintf( p, formatW, MAKELONG( MAKEWORD( sid->IdentifierAuthority.Value[5],
-                                                   sid->IdentifierAuthority.Value[4] ),
-                                         MAKEWORD( sid->IdentifierAuthority.Value[3],
-                                                   sid->IdentifierAuthority.Value[2] )));
+    p += swprintf( p, ARRAY_SIZE(buffer) - (p - buffer), formatW, sid->Revision );
+    p += swprintf( p, ARRAY_SIZE(buffer) - (p - buffer), formatW,
+                   MAKELONG( MAKEWORD( sid->IdentifierAuthority.Value[5],
+                                       sid->IdentifierAuthority.Value[4] ),
+                             MAKEWORD( sid->IdentifierAuthority.Value[3],
+                                       sid->IdentifierAuthority.Value[2] )));
     for (i = 0; i < sid->SubAuthorityCount; i++)
-        p += NTDLL_swprintf( p, formatW, sid->SubAuthority[i] );
+        p += swprintf( p, ARRAY_SIZE(buffer) - (p - buffer), formatW, sid->SubAuthority[i] );
 
     len = (p + 1 - buffer) * sizeof(WCHAR);
 

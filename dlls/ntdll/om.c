@@ -19,14 +19,9 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
@@ -364,9 +359,12 @@ static LONG WINAPI invalid_handle_exception_handler( EXCEPTION_POINTERS *eptr )
 /* Everquest 2 / Pirates of the Burning Sea hooks NtClose, so we need a wrapper */
 NTSTATUS close_handle( HANDLE handle )
 {
+    DWORD_PTR debug_port;
     NTSTATUS ret = unix_funcs->NtClose( handle );
 
-    if (ret == STATUS_INVALID_HANDLE && handle && NtCurrentTeb()->Peb->BeingDebugged)
+    if (ret == STATUS_INVALID_HANDLE && handle && NtCurrentTeb()->Peb->BeingDebugged &&
+        !NtQueryInformationProcess( NtCurrentProcess(), ProcessDebugPort, &debug_port,
+                                    sizeof(debug_port), NULL) && debug_port)
     {
         __TRY
         {

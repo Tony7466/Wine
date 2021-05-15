@@ -20,21 +20,12 @@
 
 #ifdef __i386__
 
-#include "config.h"
-#include "wine/port.h"
-
 #include <errno.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <sys/types.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
-#ifdef HAVE_SYS_PARAM_H
-# include <sys/param.h>
-#endif
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
@@ -95,6 +86,8 @@ static inline struct x86_thread_data *x86_thread_data(void)
     return (struct x86_thread_data *)NtCurrentTeb()->SystemReserved2;
 }
 
+struct ldt_copy *__wine_ldt_copy = NULL;
+
 /* Exception record for handling exceptions happening inside exception handlers */
 typedef struct
 {
@@ -105,15 +98,6 @@ typedef struct
 extern DWORD EXC_CallHandler( EXCEPTION_RECORD *record, EXCEPTION_REGISTRATION_RECORD *frame,
                               CONTEXT *context, EXCEPTION_REGISTRATION_RECORD **dispatcher,
                               PEXCEPTION_HANDLER handler, PEXCEPTION_HANDLER nested_handler );
-
-/***********************************************************************
- *           has_fpux
- */
-static inline int has_fpux(void)
-{
-    return (cpu_info.FeatureSet & CPU_FEATURE_FXSR);
-}
-
 
 /*******************************************************************
  *         is_valid_frame
@@ -304,7 +288,6 @@ static inline void save_fpux( CONTEXT *context )
     char buffer[sizeof(XMM_SAVE_AREA32) + 16];
     XMM_SAVE_AREA32 *state = (XMM_SAVE_AREA32 *)(((ULONG_PTR)buffer + 15) & ~15);
 
-    if (!has_fpux()) return;
     context->ContextFlags |= CONTEXT_EXTENDED_REGISTERS;
     __asm__ __volatile__( "fxsave %0" : "=m" (*state) );
     memcpy( context->ExtendedRegisters, state, sizeof(*state) );
@@ -370,7 +353,7 @@ NTSTATUS CDECL DECLSPEC_HIDDEN __regs_NtGetContextThread( DWORD edi, DWORD esi, 
     {
         context->Ebp    = ebp;
         context->Esp    = (DWORD)&retaddr;
-        context->Eip    = *(&edi - 1);
+        context->Eip    = (DWORD)NtGetContextThread + 12;
         context->EFlags = eflags;
     }
     return unix_funcs->NtGetContextThread( handle, context );
@@ -565,12 +548,16 @@ USHORT WINAPI RtlCaptureStackBackTrace( ULONG skip, ULONG count, PVOID *buffer, 
 /**********************************************************************
  *		DbgBreakPoint   (NTDLL.@)
  */
-__ASM_STDCALL_FUNC( DbgBreakPoint, 0, "int $3; ret")
+__ASM_STDCALL_FUNC( DbgBreakPoint, 0, "int $3; ret"
+                    "\n\tnop; nop; nop; nop; nop; nop; nop; nop"
+                    "\n\tnop; nop; nop; nop; nop; nop" );
 
 /**********************************************************************
  *		DbgUserBreakPoint   (NTDLL.@)
  */
-__ASM_STDCALL_FUNC( DbgUserBreakPoint, 0, "int $3; ret")
+__ASM_STDCALL_FUNC( DbgUserBreakPoint, 0, "int $3; ret"
+                    "\n\tnop; nop; nop; nop; nop; nop; nop; nop"
+                    "\n\tnop; nop; nop; nop; nop; nop" );
 
 /**********************************************************************
  *           NtCurrentTeb   (NTDLL.@)

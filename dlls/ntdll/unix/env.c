@@ -66,15 +66,23 @@ extern char **__wine_main_environ;
 extern WCHAR **__wine_main_wargv;
 
 USHORT *uctable = NULL, *lctable = NULL;
+SIZE_T startup_info_size = 0;
 
-static int main_argc;
-static char **main_argv;
-static char **main_envp;
+int main_argc = 0;
+char **main_argv = NULL;
+char **main_envp = NULL;
 static WCHAR **main_wargv;
 
-static CPTABLEINFO unix_table;
-static WCHAR system_locale[LOCALE_NAME_MAX_LENGTH];
-static WCHAR user_locale[LOCALE_NAME_MAX_LENGTH];
+static char system_locale[LOCALE_NAME_MAX_LENGTH];
+static char user_locale[LOCALE_NAME_MAX_LENGTH];
+
+static struct
+{
+    USHORT *data;
+    USHORT *dbcs;
+    USHORT *mbtable;
+    void   *wctable;
+} unix_cp;
 
 static void *read_nls_file( const char *name )
 {
@@ -104,6 +112,21 @@ static void *read_nls_file( const char *name )
     else ERR( "failed to load %s\n", path );
     free( path );
     return ret;
+}
+
+
+static int get_utf16( const WCHAR *src, unsigned int srclen, unsigned int *ch )
+{
+    if (IS_HIGH_SURROGATE( src[0] ))
+    {
+        if (srclen <= 1) return 0;
+        if (!IS_LOW_SURROGATE( src[1] )) return 0;
+        *ch = 0x10000 + ((src[0] & 0x3ff) << 10) + (src[1] & 0x3ff);
+        return 2;
+    }
+    if (IS_LOW_SURROGATE( src[0] )) return 0;
+    *ch = src[0];
+    return 1;
 }
 
 
@@ -145,20 +168,6 @@ static struct norm_table *nfc_table;
 static void init_unix_codepage(void)
 {
     nfc_table = read_nls_file( "normnfc" );
-}
-
-static int get_utf16( const WCHAR *src, unsigned int srclen, unsigned int *ch )
-{
-    if (IS_HIGH_SURROGATE( src[0] ))
-    {
-        if (srclen <= 1) return 0;
-        if (!IS_LOW_SURROGATE( src[1] )) return 0;
-        *ch = 0x10000 + ((src[0] & 0x3ff) << 10) + (src[1] & 0x3ff);
-        return 2;
-    }
-    if (IS_LOW_SURROGATE( src[0] )) return 0;
-    *ch = src[0];
-    return 1;
 }
 
 static void put_utf16( WCHAR *dst, unsigned int ch )
@@ -351,6 +360,17 @@ static const struct { const char *name; UINT cp; } charset_names[] =
     { "UTF8", CP_UTF8 }
 };
 
+static void init_unix_cptable( USHORT *ptr )
+{
+    unix_cp.data = ptr;
+    ptr += ptr[0];
+    unix_cp.wctable = ptr + ptr[0] + 1;
+    unix_cp.mbtable = ++ptr;
+    ptr += 256;
+    if (*ptr++) ptr += 256;  /* glyph table */
+    if (*ptr) unix_cp.dbcs = ptr + 1; /* dbcs ranges */
+}
+
 static void init_unix_codepage(void)
 {
     char charset_name[16];
@@ -382,7 +402,7 @@ static void init_unix_codepage(void)
                 void *data;
 
                 sprintf( name, "c_%03u", charset_names[pos].cp );
-                if ((data = read_nls_file( name ))) RtlInitCodePageTable( data, &unix_table );
+                if ((data = read_nls_file( name ))) init_unix_cptable( data );
             }
             return;
         }
@@ -421,6 +441,58 @@ static inline BOOL is_special_env_var( const char *var )
 }
 
 
+static unsigned int decode_utf8_char( unsigned char ch, const char **str, const char *strend )
+{
+    /* number of following bytes in sequence based on first byte value (for bytes above 0x7f) */
+    static const char utf8_length[128] =
+    {
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, /* 0x80-0x8f */
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, /* 0x90-0x9f */
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, /* 0xa0-0xaf */
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, /* 0xb0-0xbf */
+        0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1, /* 0xc0-0xcf */
+        1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, /* 0xd0-0xdf */
+        2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, /* 0xe0-0xef */
+        3,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0  /* 0xf0-0xff */
+    };
+
+    /* first byte mask depending on UTF-8 sequence length */
+    static const unsigned char utf8_mask[4] = { 0x7f, 0x1f, 0x0f, 0x07 };
+
+    unsigned int len = utf8_length[ch - 0x80];
+    unsigned int res = ch & utf8_mask[len];
+    const char *end = *str + len;
+
+    if (end > strend)
+    {
+        *str = end;
+        return ~0;
+    }
+    switch (len)
+    {
+    case 3:
+        if ((ch = end[-3] ^ 0x80) >= 0x40) break;
+        res = (res << 6) | ch;
+        (*str)++;
+        if (res < 0x10) break;
+    case 2:
+        if ((ch = end[-2] ^ 0x80) >= 0x40) break;
+        res = (res << 6) | ch;
+        if (res >= 0x110000 >> 6) break;
+        (*str)++;
+        if (res < 0x20) break;
+        if (res >= 0xd800 >> 6 && res <= 0xdfff >> 6) break;
+    case 1:
+        if ((ch = end[-1] ^ 0x80) >= 0x40) break;
+        res = (res << 6) | ch;
+        (*str)++;
+        if (res < 0x80) break;
+        return res;
+    }
+    return ~0;
+}
+
+
 /******************************************************************
  *      ntdll_umbstowcs
  */
@@ -428,15 +500,66 @@ DWORD ntdll_umbstowcs( const char *src, DWORD srclen, WCHAR *dst, DWORD dstlen )
 {
     DWORD reslen;
 
-    if (unix_table.CodePage)
-        RtlCustomCPToUnicodeN( &unix_table, dst, dstlen * sizeof(WCHAR), &reslen, src, srclen );
-    else
-        RtlUTF8ToUnicodeN( dst, dstlen * sizeof(WCHAR), &reslen, src, srclen );
+    if (unix_cp.data)
+    {
+        DWORD i;
 
-    reslen /= sizeof(WCHAR);
+        if (unix_cp.dbcs)
+        {
+            for (i = dstlen; srclen && i; i--, srclen--, src++, dst++)
+            {
+                USHORT off = unix_cp.dbcs[(unsigned char)*src];
+                if (off && srclen > 1)
+                {
+                    src++;
+                    srclen--;
+                    *dst = unix_cp.dbcs[off + (unsigned char)*src];
+                }
+                else *dst = unix_cp.mbtable[(unsigned char)*src];
+            }
+            reslen = dstlen - i;
+        }
+        else
+        {
+            reslen = min( srclen, dstlen );
+            for (i = 0; i < reslen; i++) dst[i] = unix_cp.mbtable[(unsigned char)src[i]];
+        }
+    }
+    else  /* utf-8 */
+    {
+        unsigned int res;
+        const char *srcend = src + srclen;
+        WCHAR *dstend = dst + dstlen;
+
+        while ((dst < dstend) && (src < srcend))
+        {
+            unsigned char ch = *src++;
+            if (ch < 0x80)  /* special fast case for 7-bit ASCII */
+            {
+                *dst++ = ch;
+                continue;
+            }
+            if ((res = decode_utf8_char( ch, &src, srcend )) <= 0xffff)
+            {
+                *dst++ = res;
+            }
+            else if (res <= 0x10ffff)  /* we need surrogates */
+            {
+                res -= 0x10000;
+                *dst++ = 0xd800 | (res >> 10);
+                if (dst == dstend) break;
+                *dst++ = 0xdc00 | (res & 0x3ff);
+            }
+            else
+            {
+                *dst++ = 0xfffd;
+            }
+        }
+        reslen = dstlen - (dstend - dst);
 #ifdef __APPLE__  /* work around broken Mac OS X filesystem that enforces NFD */
-    if (reslen && nfc_table) reslen = compose_string( nfc_table, dst, reslen );
+        if (reslen && nfc_table) reslen = compose_string( nfc_table, dst - reslen, reslen );
 #endif
+    }
     return reslen;
 }
 
@@ -448,25 +571,24 @@ int ntdll_wcstoumbs( const WCHAR *src, DWORD srclen, char *dst, DWORD dstlen, BO
 {
     DWORD i, reslen;
 
-    if (unix_table.CodePage)
+    if (unix_cp.data)
     {
-        if (unix_table.DBCSOffsets)
+        if (unix_cp.dbcs)
         {
-            const unsigned short *uni2cp = unix_table.WideCharTable;
+            const unsigned short *uni2cp = unix_cp.wctable;
             for (i = dstlen; srclen && i; i--, srclen--, src++)
             {
                 unsigned short ch = uni2cp[*src];
                 if (ch >> 8)
                 {
-                    if (strict && unix_table.DBCSOffsets[unix_table.DBCSOffsets[ch >> 8] + (ch & 0xff)] != *src)
-                        return -1;
+                    if (strict && unix_cp.dbcs[unix_cp.dbcs[ch >> 8] + (ch & 0xff)] != *src) return -1;
                     if (i == 1) break;  /* do not output a partial char */
                     i--;
                     *dst++ = ch >> 8;
                 }
                 else
                 {
-                    if (unix_table.MultiByteTable[ch] != *src) return -1;
+                    if (unix_cp.mbtable[ch] != *src) return -1;
                     *dst++ = (char)ch;
                 }
             }
@@ -474,18 +596,72 @@ int ntdll_wcstoumbs( const WCHAR *src, DWORD srclen, char *dst, DWORD dstlen, BO
         }
         else
         {
-            const unsigned char *uni2cp = unix_table.WideCharTable;
+            const unsigned char *uni2cp = unix_cp.wctable;
             reslen = min( srclen, dstlen );
             for (i = 0; i < reslen; i++)
             {
                 unsigned char ch = uni2cp[src[i]];
-                if (strict && unix_table.MultiByteTable[ch] != src[i]) return -1;
+                if (strict && unix_cp.mbtable[ch] != src[i]) return -1;
                 dst[i] = ch;
             }
         }
     }
-    else RtlUnicodeToUTF8N( dst, dstlen, &reslen, src, srclen * sizeof(WCHAR) );
+    else  /* utf-8 */
+    {
+        char *end;
+        unsigned int val;
 
+        for (end = dst + dstlen; srclen; srclen--, src++)
+        {
+            WCHAR ch = *src;
+
+            if (ch < 0x80)  /* 0x00-0x7f: 1 byte */
+            {
+                if (dst > end - 1) break;
+                *dst++ = ch;
+                continue;
+            }
+            if (ch < 0x800)  /* 0x80-0x7ff: 2 bytes */
+            {
+                if (dst > end - 2) break;
+                dst[1] = 0x80 | (ch & 0x3f);
+                ch >>= 6;
+                dst[0] = 0xc0 | ch;
+                dst += 2;
+                continue;
+            }
+            if (!get_utf16( src, srclen, &val ))
+            {
+                if (strict) return -1;
+                val = 0xfffd;
+            }
+            if (val < 0x10000)  /* 0x800-0xffff: 3 bytes */
+            {
+                if (dst > end - 3) break;
+                dst[2] = 0x80 | (val & 0x3f);
+                val >>= 6;
+                dst[1] = 0x80 | (val & 0x3f);
+                val >>= 6;
+                dst[0] = 0xe0 | val;
+                dst += 3;
+            }
+            else   /* 0x10000-0x10ffff: 4 bytes */
+            {
+                if (dst > end - 4) break;
+                dst[3] = 0x80 | (val & 0x3f);
+                val >>= 6;
+                dst[2] = 0x80 | (val & 0x3f);
+                val >>= 6;
+                dst[1] = 0x80 | (val & 0x3f);
+                val >>= 6;
+                dst[0] = 0xf0 | val;
+                dst += 4;
+                src++;
+                srclen--;
+            }
+        }
+        reslen = dstlen - (end - dst);
+    }
     return reslen;
 }
 
@@ -648,18 +824,11 @@ static WCHAR **build_wargv( char **argv )
 
 /* Unix format is: lang[_country][.charset][@modifier]
  * Windows format is: lang[-script][-country][_modifier] */
-static BOOL unix_to_win_locale( const char *unix_name, WCHAR *win_name )
+static BOOL unix_to_win_locale( const char *unix_name, char *win_name )
 {
-    static const WCHAR sepW[] = {'_','.','@',0};
-    static const WCHAR posixW[] = {'P','O','S','I','X',0};
-    static const WCHAR cW[] = {'C',0};
-    static const WCHAR euroW[] = {'e','u','r','o',0};
-    static const WCHAR latinW[] = {'l','a','t','i','n',0};
-    static const WCHAR latnW[] = {'-','L','a','t','n',0};
-    static const WCHAR enUSW[] = {'e','n','-','U','S',0};
-    WCHAR buffer[LOCALE_NAME_MAX_LENGTH];
-    WCHAR *p, *country = NULL, *modifier = NULL;
-    DWORD len;
+    static const char sep[] = "_.@";
+    char buffer[LOCALE_NAME_MAX_LENGTH];
+    char *p, *country = NULL, *modifier = NULL;
 
     if (!unix_name || !unix_name[0] || !strcmp( unix_name, "C" ))
     {
@@ -667,16 +836,14 @@ static BOOL unix_to_win_locale( const char *unix_name, WCHAR *win_name )
         if (!unix_name || !unix_name[0]) return FALSE;
     }
 
-    len = ntdll_umbstowcs( unix_name, strlen(unix_name), buffer, ARRAY_SIZE(buffer) );
-    if (len == ARRAY_SIZE(buffer)) return FALSE;
-    buffer[len] = 0;
-
-    if (!(p = wcspbrk( buffer, sepW )))
+    if (strlen( unix_name ) >= LOCALE_NAME_MAX_LENGTH) return FALSE;
+    strcpy( buffer, unix_name );
+    if (!(p = strpbrk( buffer, sep )))
     {
-        if (!wcscmp( buffer, posixW ) || !wcscmp( buffer, cW ))
-            wcscpy( win_name, enUSW );
+        if (!strcmp( buffer, "POSIX" ) || !strcmp( buffer, "C" ))
+            strcpy( win_name, "en-US" );
         else
-            wcscpy( win_name, buffer );
+            strcpy( win_name, buffer );
         return TRUE;
     }
 
@@ -684,13 +851,13 @@ static BOOL unix_to_win_locale( const char *unix_name, WCHAR *win_name )
     {
         *p++ = 0;
         country = p;
-        p = wcspbrk( p, sepW + 1 );
+        p = strpbrk( p, sep + 1 );
     }
     if (p && *p == '.')
     {
         *p++ = 0;
         /* charset, ignore */
-        p = wcschr( p, '@' );
+        p = strchr( p, '@' );
     }
     if (p)
     {
@@ -700,18 +867,18 @@ static BOOL unix_to_win_locale( const char *unix_name, WCHAR *win_name )
 
     /* rebuild a Windows name */
 
-    wcscpy( win_name, buffer );
+    strcpy( win_name, buffer );
     if (modifier)
     {
-        if (!wcscmp( modifier, latinW )) wcscat( win_name, latnW );
-        else if (!wcscmp( modifier, euroW )) {} /* ignore */
+        if (!strcmp( modifier, "latin" )) strcat( win_name, "-Latn" );
+        else if (!strcmp( modifier, "euro" )) {} /* ignore */
         else return FALSE;
     }
     if (country)
     {
-        p = win_name + wcslen(win_name);
+        p = win_name + strlen(win_name);
         *p++ = '-';
-        wcscpy( p, country );
+        strcpy( p, country );
     }
     return TRUE;
 }
@@ -802,18 +969,16 @@ void init_environment( int argc, char *argv[], char *envp[] )
 }
 
 
-/*************************************************************************
- *		get_main_args
- *
- * Return the initial arguments.
- */
-void CDECL get_main_args( int *argc, char **argv[], char **envp[] )
-{
-    *argc  = main_argc;
-    *argv  = main_argv;
-    *envp  = main_envp;
-}
-
+static const char overrides_help_message[] =
+    "Syntax:\n"
+    "  WINEDLLOVERRIDES=\"entry;entry;entry...\"\n"
+    "    where each entry is of the form:\n"
+    "        module[,module...]={native|builtin}[,{b|n}]\n"
+    "\n"
+    "    Only the first letter of the override (native or builtin)\n"
+    "    is significant.\n\n"
+    "Example:\n"
+    "  WINEDLLOVERRIDES=\"comdlg32=n,b;shell32,shlwapi=b\"\n";
 
 /*************************************************************************
  *		get_initial_environment
@@ -835,6 +1000,11 @@ NTSTATUS CDECL get_initial_environment( WCHAR **wargv[], WCHAR *env, SIZE_T *siz
         {
             if (is_special_env_var( str + 4 )) str += 4;
             else if (!strncmp( str, "WINEPRELOADRESERVE=", 19 )) continue;  /* skip it */
+            else if (!strcmp( str, "WINEDLLOVERRIDES=help" ))
+            {
+                MESSAGE( overrides_help_message );
+                exit(0);
+            }
         }
         else if (is_special_env_var( str )) continue;  /* skip it */
 
@@ -851,6 +1021,144 @@ NTSTATUS CDECL get_initial_environment( WCHAR **wargv[], WCHAR *env, SIZE_T *siz
     /* estimate needed size */
     for (e = main_envp, *size = 1; *e; e++) if (!is_special_env_var( *e )) *size += strlen(*e) + 1;
     return STATUS_BUFFER_TOO_SMALL;
+}
+
+
+/* append a variable to the environment */
+static void append_envA( WCHAR *env, SIZE_T *pos, const char *name, const char *value )
+{
+    SIZE_T i = *pos;
+
+    while (*name) env[i++] = (unsigned char)*name++;
+    if (value)
+    {
+        env[i++] = '=';
+        i += ntdll_umbstowcs( value, strlen(value), env + i, strlen(value) );
+    }
+    env[i++] = 0;
+    *pos = i;
+}
+
+static void append_envW( WCHAR *env, SIZE_T *pos, const char *name, const WCHAR *value )
+{
+    SIZE_T i = *pos;
+
+    while (*name) env[i++] = (unsigned char)*name++;
+    if (value)
+    {
+        env[i++] = '=';
+        while (*value) env[i++] = *value++;
+    }
+    env[i++] = 0;
+    *pos = i;
+}
+
+/* set an environment variable for one of the wine path variables */
+static void add_path_var( WCHAR *env, SIZE_T *pos, const char *name, const char *path )
+{
+    UNICODE_STRING nt_name;
+    ANSI_STRING unix_name;
+
+    if (!path) append_envW( env, pos, name, NULL );
+    else
+    {
+        RtlInitAnsiString( &unix_name, path );
+        if (unix_to_nt_file_name( &unix_name, &nt_name )) return;
+        append_envW( env, pos, name, nt_name.Buffer );
+        RtlFreeUnicodeString( &nt_name );
+    }
+}
+
+
+/*************************************************************************
+ *		get_startup_info
+ *
+ * Get the startup information from the server.
+ */
+NTSTATUS CDECL get_startup_info( startup_info_t *info, SIZE_T *total_size, SIZE_T *info_size )
+{
+    NTSTATUS status;
+
+    if (*total_size < startup_info_size)
+    {
+        *total_size = startup_info_size;
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+    SERVER_START_REQ( get_startup_info )
+    {
+        wine_server_set_reply( req, info, *total_size );
+        status = wine_server_call( req );
+        *total_size = wine_server_reply_size( reply );
+        *info_size = reply->info_size;
+    }
+    SERVER_END_REQ;
+    return status;
+}
+
+
+/*************************************************************************
+ *		get_dynamic_environment
+ *
+ * Get the environment variables that can differ between processes.
+ */
+NTSTATUS CDECL get_dynamic_environment( WCHAR *env, SIZE_T *size )
+{
+    const char *overrides = getenv( "WINEDLLOVERRIDES" );
+    SIZE_T alloc, pos = 0;
+    WCHAR *buffer;
+    DWORD i;
+    char dlldir[22];
+    NTSTATUS status = STATUS_SUCCESS;
+
+    alloc = 20 * 7;  /* 7 variable names */
+    if (data_dir) alloc += strlen( data_dir ) + 9;
+    if (home_dir) alloc += strlen( home_dir ) + 9;
+    if (build_dir) alloc += strlen( build_dir ) + 9;
+    if (config_dir) alloc += strlen( config_dir ) + 9;
+    if (user_name) alloc += strlen( user_name );
+    if (overrides) alloc += strlen( overrides );
+    for (i = 0; dll_paths[i]; i++) alloc += 20 + strlen( dll_paths[i] ) + 9;
+
+    if (!(buffer = malloc( alloc * sizeof(WCHAR) ))) return STATUS_NO_MEMORY;
+    pos = 0;
+    add_path_var( buffer, &pos, "WINEDATADIR", data_dir );
+    add_path_var( buffer, &pos, "WINEHOMEDIR", home_dir );
+    add_path_var( buffer, &pos, "WINEBUILDDIR", build_dir );
+    add_path_var( buffer, &pos, "WINECONFIGDIR", config_dir );
+    for (i = 0; dll_paths[i]; i++)
+    {
+        sprintf( dlldir, "WINEDLLDIR%u", i );
+        add_path_var( buffer, &pos, dlldir, dll_paths[i] );
+    }
+    sprintf( dlldir, "WINEDLLDIR%u", i );
+    append_envW( buffer, &pos, dlldir, NULL );
+    append_envA( buffer, &pos, "WINEUSERNAME", user_name );
+    append_envA( buffer, &pos, "WINEDLLOVERRIDES", overrides );
+    assert( pos <= alloc );
+
+    if (pos < *size)
+    {
+        memcpy( env, buffer, pos * sizeof(WCHAR) );
+        env[pos] = 0;
+    }
+    else status = STATUS_BUFFER_TOO_SMALL;
+    *size = pos + 1;
+    return status;
+}
+
+
+/*************************************************************************
+ *		get_initial_console
+ *
+ * Return the initial console handles.
+ */
+void CDECL get_initial_console( HANDLE *handle, HANDLE *std_in, HANDLE *std_out, HANDLE *std_err )
+{
+    *handle = *std_in = *std_out = *std_err = 0;
+    if (isatty(0) || isatty(1) || isatty(2)) *handle = (HANDLE)2; /* see kernel32/kernel_private.h */
+    if (!isatty(0)) server_fd_to_handle( 0, GENERIC_READ|SYNCHRONIZE,  OBJ_INHERIT, std_in );
+    if (!isatty(1)) server_fd_to_handle( 1, GENERIC_WRITE|SYNCHRONIZE, OBJ_INHERIT, std_out );
+    if (!isatty(2)) server_fd_to_handle( 2, GENERIC_WRITE|SYNCHRONIZE, OBJ_INHERIT, std_err );
 }
 
 
@@ -924,13 +1232,13 @@ void CDECL get_initial_directory( UNICODE_STRING *dir )
 
 
 /*************************************************************************
- *		get_unix_codepage
+ *		get_unix_codepage_data
  *
  * Return the Unix codepage data.
  */
-void CDECL get_unix_codepage( CPTABLEINFO *table )
+USHORT * CDECL get_unix_codepage_data(void)
 {
-    *table = unix_table;
+    return unix_cp.data;
 }
 
 
@@ -941,6 +1249,6 @@ void CDECL get_unix_codepage( CPTABLEINFO *table )
  */
 void CDECL get_locales( WCHAR *sys, WCHAR *user )
 {
-    wcscpy( sys, system_locale );
-    wcscpy( user, user_locale );
+    ntdll_umbstowcs( system_locale, strlen(system_locale) + 1, sys, LOCALE_NAME_MAX_LENGTH );
+    ntdll_umbstowcs( user_locale, strlen(user_locale) + 1, user, LOCALE_NAME_MAX_LENGTH );
 }

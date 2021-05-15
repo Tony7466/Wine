@@ -21,17 +21,8 @@
 
 #ifdef __arm__
 
-#include "config.h"
-#include "wine/port.h"
-
-#include <assert.h>
-#include <signal.h>
 #include <stdlib.h>
 #include <stdarg.h>
-#include <stdio.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
 
 #define NONAMELESSUNION
 #define NONAMELESSSTRUCT
@@ -83,27 +74,6 @@ __ASM_STDCALL_FUNC( RtlCaptureContext, 4,
                     "str r1, [r0, #0x44]\n\t"  /* context->Cpsr */
                     "bx lr"
                     )
-
-
-/***********************************************************************
- *           set_cpu_context
- *
- * Set the new CPU context.
- */
-void DECLSPEC_HIDDEN set_cpu_context( const CONTEXT *context );
-__ASM_GLOBAL_FUNC( set_cpu_context,
-                   ".arm\n\t"
-                   "ldr r2, [r0, #0x44]\n\t"  /* context->Cpsr */
-                   "tst r2, #0x20\n\t"        /* thumb? */
-                   "ldr r1, [r0, #0x40]\n\t"  /* context->Pc */
-                   "orrne r1, r1, #1\n\t"     /* Adjust PC according to thumb */
-                   "biceq r1, r1, #1\n\t"     /* Adjust PC according to arm */
-                   "msr CPSR_f, r2\n\t"
-                   "ldr lr, [r0, #0x3c]\n\t"  /* context->Lr */
-                   "ldr sp, [r0, #0x38]\n\t"  /* context->Sp */
-                   "push {r1}\n\t"
-                   "ldmib r0, {r0-r12}\n\t"   /* context->R0..R12 */
-                   "pop {pc}" )
 
 
 /**********************************************************************
@@ -290,18 +260,12 @@ USHORT WINAPI RtlCaptureStackBackTrace( ULONG skip, ULONG count, PVOID *buffer, 
 /**********************************************************************
  *              DbgBreakPoint   (NTDLL.@)
  */
-void WINAPI DbgBreakPoint(void)
-{
-     kill(getpid(), SIGTRAP);
-}
+__ASM_STDCALL_FUNC( DbgBreakPoint, 0, "bkpt #0; bx lr; nop; nop; nop; nop" );
 
 /**********************************************************************
  *              DbgUserBreakPoint   (NTDLL.@)
  */
-void WINAPI DbgUserBreakPoint(void)
-{
-     kill(getpid(), SIGTRAP);
-}
+__ASM_STDCALL_FUNC( DbgUserBreakPoint, 0, "bkpt #0; bx lr; nop; nop; nop; nop" );
 
 /**********************************************************************
  *           NtCurrentTeb   (NTDLL.@)

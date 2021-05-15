@@ -18,9 +18,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-#include "wine/port.h"
-
 #include <assert.h>
 #include <stdarg.h>
 #include <limits.h>
@@ -39,24 +36,6 @@
 WINE_DECLARE_DEBUG_CHANNEL(relay);
 
 struct _KUSER_SHARED_DATA *user_shared_data = (void *)0x7ffe0000;
-
-static PEB *peb;
-static PEB_LDR_DATA ldr;
-static RTL_BITMAP tls_bitmap;
-static RTL_BITMAP tls_expansion_bitmap;
-static RTL_BITMAP fls_bitmap;
-static int nb_threads = 1;
-
-struct ldt_copy *__wine_ldt_copy = NULL;
-
-static RTL_CRITICAL_SECTION peb_lock;
-static RTL_CRITICAL_SECTION_DEBUG critsect_debug =
-{
-    0, 0, &peb_lock,
-    { &critsect_debug.ProcessLocksList, &critsect_debug.ProcessLocksList },
-      0, 0, { (DWORD_PTR)(__FILE__ ": peb_lock") }
-};
-static RTL_CRITICAL_SECTION peb_lock = { &critsect_debug, -1, 0, 0, 0, 0 };
 
 
 /***********************************************************************
@@ -96,57 +75,12 @@ int __cdecl __wine_dbg_output( const char *str )
 
 
 /***********************************************************************
- *           thread_init
- *
- * Setup the initial thread.
- *
- * NOTES: The first allocated TEB on NT is at 0x7ffde000.
- */
-TEB *thread_init( SIZE_T *info_size, BOOL *suspend )
-{
-    TEB *teb = unix_funcs->init_threading( &nb_threads, &__wine_ldt_copy, info_size, suspend, &server_cpus,
-                                           &is_wow64, &server_start_time );
-
-    peb = teb->Peb;
-    peb->FastPebLock        = &peb_lock;
-    peb->TlsBitmap          = &tls_bitmap;
-    peb->TlsExpansionBitmap = &tls_expansion_bitmap;
-    peb->FlsBitmap          = &fls_bitmap;
-    peb->LdrData            = &ldr;
-    peb->OSMajorVersion     = 5;
-    peb->OSMinorVersion     = 1;
-    peb->OSBuildNumber      = 0xA28;
-    peb->OSPlatformId       = VER_PLATFORM_WIN32_NT;
-    ldr.Length = sizeof(ldr);
-    ldr.Initialized = TRUE;
-    RtlInitializeBitMap( &tls_bitmap, peb->TlsBitmapBits, sizeof(peb->TlsBitmapBits) * 8 );
-    RtlInitializeBitMap( &tls_expansion_bitmap, peb->TlsExpansionBitmapBits,
-                         sizeof(peb->TlsExpansionBitmapBits) * 8 );
-    RtlInitializeBitMap( &fls_bitmap, peb->FlsBitmapBits, sizeof(peb->FlsBitmapBits) * 8 );
-    RtlSetBits( peb->TlsBitmap, 0, 1 ); /* TLS index 0 is reserved and should be initialized to NULL. */
-    RtlSetBits( peb->FlsBitmap, 0, 1 );
-    InitializeListHead( &peb->FlsListHead );
-    InitializeListHead( &ldr.InLoadOrderModuleList );
-    InitializeListHead( &ldr.InMemoryOrderModuleList );
-    InitializeListHead( &ldr.InInitializationOrderModuleList );
-
-    /*
-     * Starting with Vista, the first user to log on has session id 1.
-     * Session id 0 is for processes that don't interact with the user (like services).
-     */
-    peb->SessionId = 1;
-
-    unix_funcs->get_paths( &build_dir, &data_dir, &config_dir );
-    fill_cpu_info();
-    return teb;
-}
-
-
-/***********************************************************************
  *           RtlExitUserThread  (NTDLL.@)
  */
 void WINAPI RtlExitUserThread( ULONG status )
 {
+    ULONG last;
+
     if (status)  /* send the exit code to the server (0 is already the default) */
     {
         SERVER_START_REQ( terminate_thread )
@@ -158,12 +92,12 @@ void WINAPI RtlExitUserThread( ULONG status )
         SERVER_END_REQ;
     }
 
-    if (InterlockedDecrement( &nb_threads ) <= 0)
+    NtQueryInformationThread( GetCurrentThread(), ThreadAmILastThread, &last, sizeof(last), NULL );
+    if (last)
     {
         LdrShutdownProcess();
         unix_funcs->exit_process( status );
     }
-
     LdrShutdownThread();
     RtlFreeThreadActivationContextStack();
     for (;;) unix_funcs->exit_thread( status );
@@ -212,7 +146,6 @@ void DECLSPEC_HIDDEN call_thread_func( PRTL_THREAD_START_ROUTINE entry, void *ar
         NtTerminateThread( GetCurrentThread(), GetExceptionCode() );
     }
     __ENDTRY
-    abort();  /* should not be reached */
 }
 
 #else  /* __i386__ */
@@ -229,7 +162,6 @@ void WINAPI RtlUserThreadStart( PRTL_THREAD_START_ROUTINE entry, void *arg )
         NtTerminateThread( GetCurrentThread(), GetExceptionCode() );
     }
     __ENDTRY
-    abort();  /* should not be reached */
 }
 
 #endif  /* __i386__ */
@@ -287,8 +219,7 @@ NTSTATUS WINAPI RtlCreateUserThread( HANDLE process, SECURITY_DESCRIPTOR *descr,
  */
 ULONG WINAPI RtlGetNtGlobalFlags(void)
 {
-    if (!peb) return 0;  /* init not done yet */
-    return peb->NtGlobalFlag;
+    return NtCurrentTeb()->Peb->NtGlobalFlag;
 }
 
 
