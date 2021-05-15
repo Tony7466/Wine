@@ -15,9 +15,9 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  #ifdef __ANDROID__  /* there's no /tmp dir on Android */
      root = build_path( config_dir, ".wineserver" );
  #else
---- a/dlls/ntdll/server.c
-+++ b/dlls/ntdll/server.c
-@@ -1179,6 +1179,17 @@ int server_pipe( int fd[2] )
+--- a/dlls/ntdll/unix/server.c
++++ b/dlls/ntdll/unix/server.c
+@@ -1132,6 +1132,17 @@ int server_pipe( int fd[2] )
      return ret;
  }
  
@@ -35,7 +35,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  
  /***********************************************************************
   *           init_server_dir
-@@ -1188,16 +1199,113 @@ static const char *init_server_dir( dev_
+@@ -1141,16 +1152,113 @@ static const char *init_server_dir( dev_
      char *p, *dir;
      size_t len = sizeof("/server-") + 2 * sizeof(dev) + 2 * sizeof(ino) + 2;
  
@@ -173,7 +173,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
      if (st->st_mode & 077) fatal_error( "%s must not be accessible by other users\n", name );
  }
  
-+char *server_build_path( const char *dir, const char *name )
++static char *server_build_path( const char *dir, const char *name )
 +{
 +    size_t len = strlen(dir);
 +    char *ret = malloc( len + strlen(name) + 2 );

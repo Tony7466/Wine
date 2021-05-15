@@ -1,4 +1,4 @@
-wine-development (5.10-1) UNRELEASED; urgency=medium
+wine-development (5.10-1) unstable; urgency=medium
 
   * New upstream release 5.10, released Jun 5, 2020.
     - More progress on the WineD3D Vulkan backend.

@@ -82,7 +82,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -5336,9 +5336,9 @@ const char *wined3d_debug_vkresult(VkRes
+@@ -5335,9 +5335,9 @@ const char *wined3d_debug_vkresult(VkRes
      switch (vr)
      {
  #define WINED3D_TO_STR(x) case x: return #x
