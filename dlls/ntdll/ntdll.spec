@@ -69,7 +69,7 @@
 @ stub KiRaiseUserExceptionDispatcher
 @ stub KiUserApcDispatcher
 @ stub KiUserCallbackDispatcher
-@ stub KiUserExceptionDispatcher
+@ stdcall -norelay KiUserExceptionDispatcher(ptr ptr)
 # @ stub LdrAccessOutOfProcessResource
 @ stdcall LdrAccessResource(long ptr ptr ptr)
 @ stdcall LdrAddDllDirectory(ptr ptr)
@@ -157,7 +157,7 @@
 @ stdcall NtCompleteConnectPort(ptr)
 # @ stub NtCompressKey
 @ stdcall NtConnectPort(ptr ptr ptr ptr ptr ptr ptr ptr)
-@ stub NtContinue
+@ stdcall NtContinue(ptr long)
 # @ stub NtCreateDebugObject
 @ stdcall NtCreateDirectoryObject(ptr long ptr)
 @ stdcall NtCreateEvent(ptr long ptr long long)
@@ -186,6 +186,7 @@
 @ stdcall NtCreateThreadEx(ptr long ptr long ptr ptr long long long long ptr)
 @ stdcall NtCreateTimer(ptr long ptr long)
 @ stub NtCreateToken
+@ stdcall NtCreateUserProcess(ptr ptr long long ptr ptr long long ptr ptr ptr)
 # @ stub NtCreateWaitablePort
 @ stdcall -arch=win32,arm64 NtCurrentTeb()
 # @ stub NtDebugActiveProcess
@@ -1145,7 +1146,7 @@
 @ stdcall -private ZwCompleteConnectPort(ptr) NtCompleteConnectPort
 # @ stub ZwCompressKey
 @ stdcall -private ZwConnectPort(ptr ptr ptr ptr ptr ptr ptr ptr) NtConnectPort
-@ stub ZwContinue
+@ stdcall -private ZwContinue(ptr long) NtContinue
 # @ stub ZwCreateDebugObject
 @ stdcall -private ZwCreateDirectoryObject(ptr long ptr) NtCreateDirectoryObject
 @ stdcall -private ZwCreateEvent(ptr long ptr long long) NtCreateEvent
@@ -1427,17 +1428,17 @@
 @ cdecl __iscsym(long) NTDLL___iscsym
 @ cdecl __iscsymf(long) NTDLL___iscsymf
 @ cdecl __toascii(long) NTDLL___toascii
-@ stdcall -arch=i386 -ret64 _alldiv(int64 int64)
-@ stdcall -arch=i386 -norelay _alldvrm(int64 int64)
-@ stdcall -arch=i386 -ret64 _allmul(int64 int64)
-@ stdcall -arch=i386 -norelay _alloca_probe()
-@ stdcall -arch=i386 -ret64 _allrem(int64 int64)
+@ cdecl -arch=i386 -ret64 _alldiv(int64 int64)
+@ cdecl -arch=i386 -norelay _alldvrm(int64 int64)
+@ cdecl -arch=i386 -ret64 _allmul(int64 int64)
+@ cdecl -arch=i386 -norelay _alloca_probe()
+@ cdecl -arch=i386 -ret64 _allrem(int64 int64)
 @ stdcall -arch=i386 -ret64 _allshl(int64 long)
 @ stdcall -arch=i386 -ret64 _allshr(int64 long)
 @ cdecl -ret64 _atoi64(str)
-@ stdcall -arch=i386 -ret64 _aulldiv(int64 int64)
-@ stdcall -arch=i386 -norelay _aulldvrm(int64 int64)
-@ stdcall -arch=i386 -ret64 _aullrem(int64 int64)
+@ cdecl -arch=i386 -ret64 _aulldiv(int64 int64)
+@ cdecl -arch=i386 -norelay _aulldvrm(int64 int64)
+@ cdecl -arch=i386 -ret64 _aullrem(int64 int64)
 @ stdcall -arch=i386 -ret64 _aullshr(int64 long)
 @ cdecl -arch=i386 -norelay _chkstk()
 @ stub _fltused
@@ -1600,9 +1601,6 @@
 
 # Codepages
 @ cdecl __wine_get_unix_codepage()
-
-# signal handling
-@ cdecl __wine_set_signal_handler(long ptr)
 
 # Filesystem
 @ cdecl wine_nt_to_unix_file_name(ptr ptr long long)

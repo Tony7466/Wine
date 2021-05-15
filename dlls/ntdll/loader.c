@@ -1372,8 +1372,10 @@ static void call_constructors( WINE_MODREF *wm )
     {
         caddr_t relocbase = (caddr_t)map->l_addr;
 
-#ifdef __FreeBSD__  /* FreeBSD doesn't relocate l_addr */
-        if (!get_relocbase(map->l_addr, &relocbase)) return;
+#ifdef __FreeBSD__
+        /* On older FreeBSD versions, l_addr was the absolute load address, now it's the relocation offset. */
+        if (!dlsym(RTLD_DEFAULT, "_rtld_version_laddr_offset"))
+            if (!get_relocbase(map->l_addr, &relocbase)) return;
 #endif
         switch (dyn->d_tag)
         {
@@ -3590,8 +3592,7 @@ void WINAPI RtlExitUserProcess( DWORD status )
     RtlAcquirePebLock();
     NtTerminateProcess( 0, status );
     LdrShutdownProcess();
-    NtTerminateProcess( GetCurrentProcess(), status );
-    exit( get_unix_exit_code( status ));
+    for (;;) NtTerminateProcess( GetCurrentProcess(), status );
 }
 
 /******************************************************************
@@ -3628,8 +3629,6 @@ void WINAPI LdrShutdownThread(void)
 
     RtlAcquirePebLock();
     RemoveEntryList( &NtCurrentTeb()->TlsLinks );
-    RtlReleasePebLock();
-
     if ((pointers = NtCurrentTeb()->ThreadLocalStoragePointer))
     {
         for (i = 0; i < tls_module_count; i++) RtlFreeHeap( GetProcessHeap(), 0, pointers[i] );
@@ -3637,6 +3636,9 @@ void WINAPI LdrShutdownThread(void)
     }
     RtlFreeHeap( GetProcessHeap(), 0, NtCurrentTeb()->FlsSlots );
     RtlFreeHeap( GetProcessHeap(), 0, NtCurrentTeb()->TlsExpansionSlots );
+    NtCurrentTeb()->TlsExpansionSlots = NULL;
+    RtlReleasePebLock();
+
     RtlLeaveCriticalSection( &loader_section );
 }
 
@@ -3819,15 +3821,12 @@ PIMAGE_NT_HEADERS WINAPI RtlImageNtHeader(HMODULE hModule)
  */
 void WINAPI LdrInitializeThunk( CONTEXT *context, void **entry, ULONG_PTR unknown3, ULONG_PTR unknown4 )
 {
-    static const LARGE_INTEGER zero;
     static int attach_done;
     int i;
     NTSTATUS status;
     ULONG_PTR cookie;
     WINE_MODREF *wm;
     LPCWSTR load_path = NtCurrentTeb()->Peb->ProcessParameters->DllPath.Buffer;
-
-    pthread_sigmask( SIG_UNBLOCK, &server_block_set, NULL );
 
     if (process_detaching) return;
 
@@ -3898,8 +3897,6 @@ void WINAPI LdrInitializeThunk( CONTEXT *context, void **entry, ULONG_PTR unknow
     }
 
     RtlLeaveCriticalSection( &loader_section );
-
-    NtDelayExecution( TRUE, &zero );
 }
 
 
@@ -4362,6 +4359,7 @@ void __wine_process_init(void)
     static const WCHAR kernel32W[] = {'\\','?','?','\\','C',':','\\','w','i','n','d','o','w','s','\\',
                                       's','y','s','t','e','m','3','2','\\',
                                       'k','e','r','n','e','l','3','2','.','d','l','l',0};
+    void (WINAPI *kernel32_start_process)(LPTHREAD_START_ROUTINE,void*) = NULL;
     RTL_USER_PROCESS_PARAMETERS *params;
     WINE_MODREF *wm;
     NTSTATUS status;
@@ -4385,12 +4383,6 @@ void __wine_process_init(void)
     init_directories();
     init_user_process_params( info_size );
     params = peb->ProcessParameters;
-
-    NtCreateKeyedEvent( &keyed_event, GENERIC_READ | GENERIC_WRITE, NULL, 0 );
-
-    /* retrieve current umask */
-    FILE_umask = umask(0777);
-    umask( FILE_umask );
 
     load_global_options();
     version_init();
@@ -4470,7 +4462,7 @@ void __wine_process_init(void)
     teb->Tib.StackLimit = stack.StackLimit;
     teb->DeallocationStack = stack.DeallocationStack;
 
-    server_init_process_done();
+    unix_funcs->server_init_process_done( kernel32_start_process );
 }
 
 /***********************************************************************

@@ -483,41 +483,17 @@ static void set_wow64_environment( WCHAR **env )
  *
  * Build the Win32 environment from the Unix environment
  */
-static WCHAR *build_initial_environment( char **env )
+static WCHAR *build_initial_environment( WCHAR **wargv[] )
 {
-    SIZE_T size = 1;
-    char **e;
-    WCHAR *p, *ptr;
+    SIZE_T size = 1024;
+    WCHAR *ptr;
 
-    /* compute the total size of the Unix environment */
-
-    for (e = env; *e; e++)
+    for (;;)
     {
-        if (is_special_env_var( *e )) continue;
-        size += strlen(*e) + 1;
+        if (!(ptr = RtlAllocateHeap( GetProcessHeap(), 0, size * sizeof(WCHAR) ))) return NULL;
+        if (!unix_funcs->get_initial_environment( wargv, ptr, &size )) break;
+        RtlFreeHeap( GetProcessHeap(), 0, ptr );
     }
-
-    if (!(ptr = RtlAllocateHeap( GetProcessHeap(), 0, size * sizeof(WCHAR) ))) return NULL;
-    p = ptr;
-
-    /* and fill it with the Unix environment */
-
-    for (e = env; *e; e++)
-    {
-        char *str = *e;
-
-        /* skip Unix special variables and use the Wine variants instead */
-        if (!strncmp( str, "WINE", 4 ))
-        {
-            if (is_special_env_var( str + 4 )) str += 4;
-            else if (!strncmp( str, "WINEPRELOADRESERVE=", 19 )) continue;  /* skip it */
-        }
-        else if (is_special_env_var( str )) continue;  /* skip it */
-
-        ntdll_umbstowcs( str, strlen(str) + 1, p, size - (p - ptr) );
-        p += wcslen(p) + 1;
-    }
-    *p = 0;
     first_prefix_start = set_registry_environment( &ptr, TRUE );
     set_additional_environment( &ptr );
     return ptr;
@@ -598,69 +574,13 @@ char **build_envp( const WCHAR *envW )
  */
 static void get_current_directory( UNICODE_STRING *dir )
 {
-    const char *pwd;
-    char *cwd;
-    int size;
-
-    dir->Length = 0;
-
-    /* try to get it from the Unix cwd */
-
-    for (size = 1024; ; size *= 2)
-    {
-        if (!(cwd = RtlAllocateHeap( GetProcessHeap(), 0, size ))) break;
-        if (getcwd( cwd, size )) break;
-        RtlFreeHeap( GetProcessHeap(), 0, cwd );
-        if (errno == ERANGE) continue;
-        cwd = NULL;
-        break;
-    }
-
-    /* try to use PWD if it is valid, so that we don't resolve symlinks */
-
-    pwd = getenv( "PWD" );
-    if (cwd)
-    {
-        struct stat st1, st2;
-
-        if (!pwd || stat( pwd, &st1 ) == -1 ||
-            (!stat( cwd, &st2 ) && (st1.st_dev != st2.st_dev || st1.st_ino != st2.st_ino)))
-            pwd = cwd;
-    }
-
-    if (pwd)
-    {
-        ANSI_STRING unix_name;
-        UNICODE_STRING nt_name;
-
-        RtlInitAnsiString( &unix_name, pwd );
-        if (!wine_unix_to_nt_file_name( &unix_name, &nt_name ))
-        {
-            /* skip the \??\ prefix */
-            if (nt_name.Length > 6 * sizeof(WCHAR) && nt_name.Buffer[5] == ':')
-            {
-                dir->Length = nt_name.Length - 4 * sizeof(WCHAR);
-                memcpy( dir->Buffer, nt_name.Buffer + 4, dir->Length );
-            }
-            else  /* change \??\ to \\?\ */
-            {
-                dir->Length = nt_name.Length;
-                memcpy( dir->Buffer, nt_name.Buffer, dir->Length );
-                dir->Buffer[1] = '\\';
-            }
-            RtlFreeUnicodeString( &nt_name );
-        }
-    }
+    unix_funcs->get_initial_directory( dir );
 
     if (!dir->Length)  /* still not initialized */
     {
-        MESSAGE("Warning: could not find DOS drive for current working directory '%s', "
-                "starting in the Windows directory.\n", cwd ? cwd : "" );
         dir->Length = wcslen( windows_dir ) * sizeof(WCHAR);
         memcpy( dir->Buffer, windows_dir, dir->Length );
     }
-    RtlFreeHeap( GetProcessHeap(), 0, cwd );
-
     /* add trailing backslash */
     if (dir->Buffer[dir->Length / sizeof(WCHAR) - 1] != '\\')
     {
@@ -687,14 +607,11 @@ static inline BOOL is_path_prefix( const WCHAR *prefix, const WCHAR *path, const
 /***********************************************************************
  *           get_image_path
  */
-static void get_image_path( const char *argv0, UNICODE_STRING *path )
+static void get_image_path( const WCHAR *name, UNICODE_STRING *path )
 {
     static const WCHAR exeW[] = {'.','e','x','e',0};
-    WCHAR *load_path, *file_part, *name, full_name[MAX_PATH];
-    DWORD len = strlen(argv0) + 1;
-
-    if (!(name = RtlAllocateHeap( GetProcessHeap(), 0, len * sizeof(WCHAR) ))) goto failed;
-    ntdll_umbstowcs( argv0, len, name, len );
+    WCHAR *load_path, *file_part, full_name[MAX_PATH];
+    DWORD len;
 
     if (RtlDetermineDosPathNameType_U( name ) != RELATIVE_PATH ||
         wcschr( name, '/' ) || wcschr( name, '\\' ))
@@ -732,48 +649,11 @@ static void get_image_path( const char *argv0, UNICODE_STRING *path )
     }
 done:
     RtlCreateUnicodeString( path, full_name );
-    RtlFreeHeap( GetProcessHeap(), 0, name );
     return;
 
 failed:
-    MESSAGE( "wine: cannot find '%s'\n", argv0 );
+    MESSAGE( "wine: cannot find %s\n", debugstr_w(name) );
     RtlExitUserProcess( GetLastError() );
-}
-
-
-/***********************************************************************
- *              set_library_wargv
- *
- * Set the Wine library Unicode argv global variables.
- */
-static void set_library_wargv( char **argv, const UNICODE_STRING *image )
-{
-    int argc;
-    WCHAR *p, **wargv;
-    DWORD total = 0;
-
-    if (image) total += 1 + image->Length / sizeof(WCHAR);
-    for (argc = (image != NULL); argv[argc]; argc++) total += strlen(argv[argc]) + 1;
-
-    wargv = RtlAllocateHeap( GetProcessHeap(), 0,
-                             total * sizeof(WCHAR) + (argc + 1) * sizeof(*wargv) );
-    p = (WCHAR *)(wargv + argc + 1);
-    if (image)
-    {
-        wcscpy( p, image->Buffer );
-        wargv[0] = p;
-        p += 1 + image->Length / sizeof(WCHAR);
-        total -= 1 + image->Length / sizeof(WCHAR);
-    }
-    for (argc = (image != NULL); argv[argc]; argc++)
-    {
-        DWORD reslen = ntdll_umbstowcs( argv[argc], strlen(argv[argc]) + 1, p, total );
-        wargv[argc] = p;
-        p += reslen;
-        total -= reslen;
-    }
-    wargv[argc] = NULL;
-    __wine_main_wargv = wargv;
 }
 
 
@@ -811,8 +691,7 @@ static void build_command_line( WCHAR **argv, UNICODE_STRING *cmdline )
 
     len = 1;
     for (arg = argv; *arg; arg++) len += 3 + 2 * wcslen( *arg );
-    cmdline->MaximumLength = len * sizeof(WCHAR);
-    if (!(cmdline->Buffer = RtlAllocateHeap( GetProcessHeap(), 0, cmdline->MaximumLength ))) return;
+    if (!(cmdline->Buffer = RtlAllocateHeap( GetProcessHeap(), 0, len * sizeof(WCHAR) ))) return;
 
     p = cmdline->Buffer;
     for (arg = argv; *arg; arg++)
@@ -858,7 +737,13 @@ static void build_command_line( WCHAR **argv, UNICODE_STRING *cmdline )
     }
     if (p > cmdline->Buffer) p--;  /* remove last space */
     *p = 0;
+    if (p - cmdline->Buffer >= 32767)
+    {
+        ERR( "command line too long (%u)\n", (DWORD)(p - cmdline->Buffer) );
+        NtTerminateProcess( GetCurrentProcess(), 1 );
+    }
     cmdline->Length = (p - cmdline->Buffer) * sizeof(WCHAR);
+    cmdline->MaximumLength = cmdline->Length + sizeof(WCHAR);
 }
 
 
@@ -1499,10 +1384,7 @@ void init_user_process_params( SIZE_T data_size )
     startup_info_t *info = NULL;
     RTL_USER_PROCESS_PARAMETERS *params = NULL;
     UNICODE_STRING curdir, dllpath, imagepath, cmdline, title, desktop, shellinfo, runtime;
-    int argc;
-    char **argv, **envp;
-
-    unix_funcs->get_main_args( &argc, &argv, &envp );
+    WCHAR **wargv;
 
     if (!data_size)
     {
@@ -1510,14 +1392,14 @@ void init_user_process_params( SIZE_T data_size )
         WCHAR *env, curdir_buffer[MAX_PATH];
 
         NtCurrentTeb()->Peb->ProcessParameters = &initial_params;
-        initial_params.Environment = build_initial_environment( envp );
+        initial_params.Environment = build_initial_environment( &wargv );
         curdir.Buffer = curdir_buffer;
         curdir.MaximumLength = sizeof(curdir_buffer);
         get_current_directory( &curdir );
         initial_params.CurrentDirectory.DosPath = curdir;
-        get_image_path( argv[0], &initial_params.ImagePathName );
-        set_library_wargv( argv, &initial_params.ImagePathName );
-        build_command_line( __wine_main_wargv, &cmdline );
+        get_image_path( wargv[0], &initial_params.ImagePathName );
+        wargv[0] = initial_params.ImagePathName.Buffer;
+        build_command_line( wargv, &cmdline );
         LdrGetDllPath( initial_params.ImagePathName.Buffer, 0, &load_path, &dummy );
         RtlInitUnicodeString( &dllpath, load_path );
 
@@ -1530,7 +1412,6 @@ void init_user_process_params( SIZE_T data_size )
 
         params->Environment = env;
         NtCurrentTeb()->Peb->ProcessParameters = params;
-        RtlFreeUnicodeString( &initial_params.ImagePathName );
         RtlFreeUnicodeString( &cmdline );
         RtlReleasePath( load_path );
 
@@ -1604,8 +1485,6 @@ void init_user_process_params( SIZE_T data_size )
         else params->Environment[0] = 0;
     }
 
-    set_library_wargv( argv, NULL );
-
 done:
     RtlFreeHeap( GetProcessHeap(), 0, info );
     if (RtlSetCurrentDirectory_U( &params->CurrentDirectory.DosPath ))
@@ -1615,6 +1494,5 @@ done:
         RtlInitUnicodeString( &curdir, windows_dir );
         RtlSetCurrentDirectory_U( &curdir );
     }
-    if (!params->CurrentDirectory.Handle) chdir("/"); /* avoid locking removable devices */
     set_wow64_environment( &params->Environment );
 }

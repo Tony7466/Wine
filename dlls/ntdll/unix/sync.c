@@ -55,20 +55,158 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#ifdef __APPLE__
+# include <mach/mach.h>
+# include <mach/task.h>
+# include <mach/semaphore.h>
+# include <mach/mach_time.h>
+#endif
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
 #define NONAMELESSUNION
 #include "windef.h"
 #include "winternl.h"
+#include "ddk/wdm.h"
 #include "wine/server.h"
 #include "wine/debug.h"
 #include "unix_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(sync);
 
-
 HANDLE keyed_event = 0;
+
+static const LARGE_INTEGER zero_timeout;
+
+static RTL_CRITICAL_SECTION addr_section;
+static RTL_CRITICAL_SECTION_DEBUG addr_section_debug =
+{
+    0, 0, &addr_section,
+    { &addr_section_debug.ProcessLocksList, &addr_section_debug.ProcessLocksList },
+      0, 0, { (DWORD_PTR)(__FILE__ ": addr_section") }
+};
+static RTL_CRITICAL_SECTION addr_section = { &addr_section_debug, -1, 0, 0, 0, 0 };
+
+
+/* return a monotonic time counter, in Win32 ticks */
+static inline ULONGLONG monotonic_counter(void)
+{
+    struct timeval now;
+#ifdef __APPLE__
+    static mach_timebase_info_data_t timebase;
+
+    if (!timebase.denom) mach_timebase_info( &timebase );
+#ifdef HAVE_MACH_CONTINUOUS_TIME
+    if (&mach_continuous_time != NULL)
+        return mach_continuous_time() * timebase.numer / timebase.denom / 100;
+#endif
+    return mach_absolute_time() * timebase.numer / timebase.denom / 100;
+#elif defined(HAVE_CLOCK_GETTIME)
+    struct timespec ts;
+#ifdef CLOCK_MONOTONIC_RAW
+    if (!clock_gettime( CLOCK_MONOTONIC_RAW, &ts ))
+        return ts.tv_sec * (ULONGLONG)TICKSPERSEC + ts.tv_nsec / 100;
+#endif
+    if (!clock_gettime( CLOCK_MONOTONIC, &ts ))
+        return ts.tv_sec * (ULONGLONG)TICKSPERSEC + ts.tv_nsec / 100;
+#endif
+    gettimeofday( &now, 0 );
+    return now.tv_sec * (ULONGLONG)TICKSPERSEC + now.tv_usec * 10 + TICKS_1601_TO_1970 - server_start_time;
+}
+
+
+#ifdef __linux__
+
+#define FUTEX_WAIT 0
+#define FUTEX_WAKE 1
+#define FUTEX_WAIT_BITSET 9
+#define FUTEX_WAKE_BITSET 10
+
+static int futex_private = 128;
+
+static inline int futex_wait( const int *addr, int val, struct timespec *timeout )
+{
+    return syscall( __NR_futex, addr, FUTEX_WAIT | futex_private, val, timeout, 0, 0 );
+}
+
+static inline int futex_wake( const int *addr, int val )
+{
+    return syscall( __NR_futex, addr, FUTEX_WAKE | futex_private, val, NULL, 0, 0 );
+}
+
+static inline int futex_wait_bitset( const int *addr, int val, struct timespec *timeout, int mask )
+{
+    return syscall( __NR_futex, addr, FUTEX_WAIT_BITSET | futex_private, val, timeout, 0, mask );
+}
+
+static inline int futex_wake_bitset( const int *addr, int val, int mask )
+{
+    return syscall( __NR_futex, addr, FUTEX_WAKE_BITSET | futex_private, val, NULL, 0, mask );
+}
+
+static inline int use_futexes(void)
+{
+    static int supported = -1;
+
+    if (supported == -1)
+    {
+        futex_wait( &supported, 10, NULL );
+        if (errno == ENOSYS)
+        {
+            futex_private = 0;
+            futex_wait( &supported, 10, NULL );
+        }
+        supported = (errno != ENOSYS);
+    }
+    return supported;
+}
+
+static int *get_futex(void **ptr)
+{
+    if (sizeof(void *) == 8)
+        return (int *)((((ULONG_PTR)ptr) + 3) & ~3);
+    else if (!(((ULONG_PTR)ptr) & 3))
+        return (int *)ptr;
+    else
+        return NULL;
+}
+
+static void timespec_from_timeout( struct timespec *timespec, const LARGE_INTEGER *timeout )
+{
+    LARGE_INTEGER now;
+    timeout_t diff;
+
+    if (timeout->QuadPart > 0)
+    {
+        NtQuerySystemTime( &now );
+        diff = timeout->QuadPart - now.QuadPart;
+    }
+    else
+        diff = -timeout->QuadPart;
+
+    timespec->tv_sec  = diff / TICKSPERSEC;
+    timespec->tv_nsec = (diff % TICKSPERSEC) * 100;
+}
+
+#endif
+
+
+static BOOL compare_addr( const void *addr, const void *cmp, SIZE_T size )
+{
+    switch (size)
+    {
+        case 1:
+            return (*(const UCHAR *)addr == *(const UCHAR *)cmp);
+        case 2:
+            return (*(const USHORT *)addr == *(const USHORT *)cmp);
+        case 4:
+            return (*(const ULONG *)addr == *(const ULONG *)cmp);
+        case 8:
+            return (*(const ULONG64 *)addr == *(const ULONG64 *)cmp);
+    }
+
+    return FALSE;
+}
 
 
 /* create a struct security_descriptor and contained information in one contiguous piece of memory */
@@ -76,11 +214,9 @@ NTSTATUS alloc_object_attributes( const OBJECT_ATTRIBUTES *attr, struct object_a
                                   data_size_t *ret_len )
 {
     unsigned int len = sizeof(**ret);
-    PSID owner = NULL, group = NULL;
-    ACL *dacl, *sacl;
-    BOOLEAN dacl_present, sacl_present, defaulted;
-    PSECURITY_DESCRIPTOR sd;
-    NTSTATUS status;
+    SID *owner = NULL, *group = NULL;
+    ACL *dacl = NULL, *sacl = NULL;
+    SECURITY_DESCRIPTOR *sd;
 
     *ret = NULL;
     *ret_len = 0;
@@ -92,15 +228,27 @@ NTSTATUS alloc_object_attributes( const OBJECT_ATTRIBUTES *attr, struct object_a
     if ((sd = attr->SecurityDescriptor))
     {
         len += sizeof(struct security_descriptor);
+	if (sd->Revision != SECURITY_DESCRIPTOR_REVISION) return STATUS_UNKNOWN_REVISION;
+        if (sd->Control & SE_SELF_RELATIVE)
+        {
+            SECURITY_DESCRIPTOR_RELATIVE *rel = (SECURITY_DESCRIPTOR_RELATIVE *)sd;
+            if (rel->Owner) owner = (PSID)((BYTE *)rel + rel->Owner);
+            if (rel->Group) group = (PSID)((BYTE *)rel + rel->Group);
+            if ((sd->Control & SE_SACL_PRESENT) && rel->Sacl) sacl = (PSID)((BYTE *)rel + rel->Sacl);
+            if ((sd->Control & SE_DACL_PRESENT) && rel->Dacl) dacl = (PSID)((BYTE *)rel + rel->Dacl);
+        }
+        else
+        {
+            owner = sd->Owner;
+            group = sd->Group;
+            if (sd->Control & SE_SACL_PRESENT) sacl = sd->Sacl;
+            if (sd->Control & SE_DACL_PRESENT) dacl = sd->Dacl;
+        }
 
-        if ((status = RtlGetOwnerSecurityDescriptor( sd, &owner, &defaulted ))) return status;
-        if ((status = RtlGetGroupSecurityDescriptor( sd, &group, &defaulted ))) return status;
-        if ((status = RtlGetSaclSecurityDescriptor( sd, &sacl_present, &sacl, &defaulted ))) return status;
-        if ((status = RtlGetDaclSecurityDescriptor( sd, &dacl_present, &dacl, &defaulted ))) return status;
-        if (owner) len += RtlLengthSid( owner );
-        if (group) len += RtlLengthSid( group );
-        if (sacl_present && sacl) len += sacl->AclSize;
-        if (dacl_present && dacl) len += dacl->AclSize;
+        if (owner) len += offsetof( SID, SubAuthority[owner->SubAuthorityCount] );
+        if (group) len += offsetof( SID, SubAuthority[group->SubAuthorityCount] );
+        if (sacl) len += sacl->AclSize;
+        if (dacl) len += dacl->AclSize;
 
         /* fix alignment for the Unicode name that follows the structure */
         len = (len + sizeof(WCHAR) - 1) & ~(sizeof(WCHAR) - 1);
@@ -126,11 +274,11 @@ NTSTATUS alloc_object_attributes( const OBJECT_ATTRIBUTES *attr, struct object_a
         struct security_descriptor *descr = (struct security_descriptor *)(*ret + 1);
         unsigned char *ptr = (unsigned char *)(descr + 1);
 
-        descr->control = ((SECURITY_DESCRIPTOR *)sd)->Control & ~SE_SELF_RELATIVE;
-        if (owner) descr->owner_len = RtlLengthSid( owner );
-        if (group) descr->group_len = RtlLengthSid( group );
-        if (sacl_present && sacl) descr->sacl_len = sacl->AclSize;
-        if (dacl_present && dacl) descr->dacl_len = dacl->AclSize;
+        descr->control = sd->Control & ~SE_SELF_RELATIVE;
+        if (owner) descr->owner_len = offsetof( SID, SubAuthority[owner->SubAuthorityCount] );
+        if (group) descr->group_len = offsetof( SID, SubAuthority[group->SubAuthorityCount] );
+        if (sacl) descr->sacl_len = sacl->AclSize;
+        if (dacl) descr->dacl_len = dacl->AclSize;
 
         memcpy( ptr, owner, descr->owner_len );
         ptr += descr->owner_len;
@@ -536,6 +684,236 @@ NTSTATUS WINAPI NtQueryMutant( HANDLE handle, MUTANT_INFORMATION_CLASS class,
 
 
 /**************************************************************************
+ *		NtCreateJobObject (NTDLL.@)
+ */
+NTSTATUS WINAPI NtCreateJobObject( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
+{
+    NTSTATUS ret;
+    data_size_t len;
+    struct object_attributes *objattr;
+
+    if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
+
+    SERVER_START_REQ( create_job )
+    {
+        req->access = access;
+        wine_server_add_data( req, objattr, len );
+        ret = wine_server_call( req );
+        *handle = wine_server_ptr_handle( reply->handle );
+    }
+    SERVER_END_REQ;
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
+    return ret;
+}
+
+
+/**************************************************************************
+ *		NtOpenJobObject (NTDLL.@)
+ */
+NTSTATUS WINAPI NtOpenJobObject( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
+{
+    NTSTATUS ret;
+
+    if ((ret = validate_open_object_attributes( attr ))) return ret;
+
+    SERVER_START_REQ( open_job )
+    {
+        req->access     = access;
+        req->attributes = attr->Attributes;
+        req->rootdir    = wine_server_obj_handle( attr->RootDirectory );
+        if (attr->ObjectName)
+            wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
+        ret = wine_server_call( req );
+        *handle = wine_server_ptr_handle( reply->handle );
+    }
+    SERVER_END_REQ;
+    return ret;
+}
+
+
+/**************************************************************************
+ *		NtTerminateJobObject (NTDLL.@)
+ */
+NTSTATUS WINAPI NtTerminateJobObject( HANDLE handle, NTSTATUS status )
+{
+    NTSTATUS ret;
+
+    TRACE( "(%p, %d)\n", handle, status );
+
+    SERVER_START_REQ( terminate_job )
+    {
+        req->handle = wine_server_obj_handle( handle );
+        req->status = status;
+        ret = wine_server_call( req );
+    }
+    SERVER_END_REQ;
+
+    return ret;
+}
+
+
+/**************************************************************************
+ *		NtQueryInformationJobObject (NTDLL.@)
+ */
+NTSTATUS WINAPI NtQueryInformationJobObject( HANDLE handle, JOBOBJECTINFOCLASS class, void *info,
+                                             ULONG len, ULONG *ret_len )
+{
+    NTSTATUS ret;
+
+    TRACE( "semi-stub: %p %u %p %u %p\n", handle, class, info, len, ret_len );
+
+    if (class >= MaxJobObjectInfoClass) return STATUS_INVALID_PARAMETER;
+
+    switch (class)
+    {
+    case JobObjectBasicAccountingInformation:
+    {
+        JOBOBJECT_BASIC_ACCOUNTING_INFORMATION *accounting = info;
+
+        if (len < sizeof(*accounting)) return STATUS_INFO_LENGTH_MISMATCH;
+        SERVER_START_REQ(get_job_info)
+        {
+            req->handle = wine_server_obj_handle( handle );
+            if (!(ret = wine_server_call( req )))
+            {
+                memset( accounting, 0, sizeof(*accounting) );
+                accounting->TotalProcesses = reply->total_processes;
+                accounting->ActiveProcesses = reply->active_processes;
+            }
+        }
+        SERVER_END_REQ;
+        if (ret_len) *ret_len = sizeof(*accounting);
+        return ret;
+    }
+    case JobObjectBasicProcessIdList:
+    {
+        JOBOBJECT_BASIC_PROCESS_ID_LIST *process = info;
+
+        if (len < sizeof(*process)) return STATUS_INFO_LENGTH_MISMATCH;
+        memset( process, 0, sizeof(*process) );
+        if (ret_len) *ret_len = sizeof(*process);
+        return STATUS_SUCCESS;
+    }
+    case JobObjectExtendedLimitInformation:
+    {
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION *extended_limit = info;
+
+        if (len < sizeof(*extended_limit)) return STATUS_INFO_LENGTH_MISMATCH;
+        memset( extended_limit, 0, sizeof(*extended_limit) );
+        if (ret_len) *ret_len = sizeof(*extended_limit);
+        return STATUS_SUCCESS;
+    }
+    case JobObjectBasicLimitInformation:
+    {
+        JOBOBJECT_BASIC_LIMIT_INFORMATION *basic_limit = info;
+
+        if (len < sizeof(*basic_limit)) return STATUS_INFO_LENGTH_MISMATCH;
+        memset( basic_limit, 0, sizeof(*basic_limit) );
+        if (ret_len) *ret_len = sizeof(*basic_limit);
+        return STATUS_SUCCESS;
+    }
+    default:
+        return STATUS_NOT_IMPLEMENTED;
+    }
+}
+
+
+/**************************************************************************
+ *		NtSetInformationJobObject (NTDLL.@)
+ */
+NTSTATUS WINAPI NtSetInformationJobObject( HANDLE handle, JOBOBJECTINFOCLASS class, void *info, ULONG len )
+{
+    NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+    JOBOBJECT_BASIC_LIMIT_INFORMATION *basic_limit;
+    ULONG info_size = sizeof(JOBOBJECT_BASIC_LIMIT_INFORMATION);
+    DWORD limit_flags = JOB_OBJECT_BASIC_LIMIT_VALID_FLAGS;
+
+    TRACE( "(%p, %u, %p, %u)\n", handle, class, info, len );
+
+    if (class >= MaxJobObjectInfoClass) return STATUS_INVALID_PARAMETER;
+
+    switch (class)
+    {
+
+    case JobObjectExtendedLimitInformation:
+        info_size = sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION);
+        limit_flags = JOB_OBJECT_EXTENDED_LIMIT_VALID_FLAGS;
+        /* fall through */
+    case JobObjectBasicLimitInformation:
+        if (len != info_size) return STATUS_INVALID_PARAMETER;
+        basic_limit = info;
+        if (basic_limit->LimitFlags & ~limit_flags) return STATUS_INVALID_PARAMETER;
+        SERVER_START_REQ( set_job_limits )
+        {
+            req->handle = wine_server_obj_handle( handle );
+            req->limit_flags = basic_limit->LimitFlags;
+            status = wine_server_call( req );
+        }
+        SERVER_END_REQ;
+        break;
+    case JobObjectAssociateCompletionPortInformation:
+        if (len != sizeof(JOBOBJECT_ASSOCIATE_COMPLETION_PORT)) return STATUS_INVALID_PARAMETER;
+        SERVER_START_REQ( set_job_completion_port )
+        {
+            JOBOBJECT_ASSOCIATE_COMPLETION_PORT *port_info = info;
+            req->job = wine_server_obj_handle( handle );
+            req->port = wine_server_obj_handle( port_info->CompletionPort );
+            req->key = wine_server_client_ptr( port_info->CompletionKey );
+            status = wine_server_call( req );
+        }
+        SERVER_END_REQ;
+        break;
+    case JobObjectBasicUIRestrictions:
+        status = STATUS_SUCCESS;
+        /* fall through */
+    default:
+        FIXME( "stub: %p %u %p %u\n", handle, class, info, len );
+    }
+    return status;
+}
+
+
+/**************************************************************************
+ *		NtIsProcessInJob (NTDLL.@)
+ */
+NTSTATUS WINAPI NtIsProcessInJob( HANDLE process, HANDLE job )
+{
+    NTSTATUS status;
+
+    TRACE( "(%p %p)\n", job, process );
+
+    SERVER_START_REQ( process_in_job )
+    {
+        req->job     = wine_server_obj_handle( job );
+        req->process = wine_server_obj_handle( process );
+        status = wine_server_call( req );
+    }
+    SERVER_END_REQ;
+    return status;
+}
+
+
+/**************************************************************************
+ *		NtAssignProcessToJobObject (NTDLL.@)
+ */
+NTSTATUS WINAPI NtAssignProcessToJobObject( HANDLE job, HANDLE process )
+{
+    NTSTATUS status;
+
+    TRACE( "(%p %p)\n", job, process );
+
+    SERVER_START_REQ( assign_job )
+    {
+        req->job     = wine_server_obj_handle( job );
+        req->process = wine_server_obj_handle( process );
+        status = wine_server_call( req );
+    }
+    SERVER_END_REQ;
+    return status;
+}
+
+
+/**************************************************************************
  *		NtCreateTimer (NTDLL.@)
  */
 NTSTATUS WINAPI NtCreateTimer( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr,
@@ -787,6 +1165,84 @@ NTSTATUS WINAPI NtDelayExecution( BOOLEAN alertable, const LARGE_INTEGER *timeou
 
 
 /******************************************************************************
+ *              NtQueryPerformanceCounter (NTDLL.@)
+ */
+NTSTATUS WINAPI NtQueryPerformanceCounter( LARGE_INTEGER *counter, LARGE_INTEGER *frequency )
+{
+    counter->QuadPart = monotonic_counter();
+    if (frequency) frequency->QuadPart = TICKSPERSEC;
+    return STATUS_SUCCESS;
+}
+
+
+/***********************************************************************
+ *              NtQuerySystemTime (NTDLL.@)
+ */
+NTSTATUS WINAPI NtQuerySystemTime( LARGE_INTEGER *time )
+{
+#ifdef HAVE_CLOCK_GETTIME
+    struct timespec ts;
+    static clockid_t clock_id = CLOCK_MONOTONIC; /* placeholder */
+
+    if (clock_id == CLOCK_MONOTONIC)
+    {
+#ifdef CLOCK_REALTIME_COARSE
+        struct timespec res;
+
+        /* Use CLOCK_REALTIME_COARSE if it has 1 ms or better resolution */
+        if (!clock_getres( CLOCK_REALTIME_COARSE, &res ) && res.tv_sec == 0 && res.tv_nsec <= 1000000)
+            clock_id = CLOCK_REALTIME_COARSE;
+        else
+#endif /* CLOCK_REALTIME_COARSE */
+            clock_id = CLOCK_REALTIME;
+    }
+
+    if (!clock_gettime( clock_id, &ts ))
+    {
+        time->QuadPart = ts.tv_sec * (ULONGLONG)TICKSPERSEC + TICKS_1601_TO_1970;
+        time->QuadPart += (ts.tv_nsec + 50) / 100;
+    }
+    else
+#endif /* HAVE_CLOCK_GETTIME */
+    {
+        struct timeval now;
+
+        gettimeofday( &now, 0 );
+        time->QuadPart = now.tv_sec * (ULONGLONG)TICKSPERSEC + TICKS_1601_TO_1970;
+        time->QuadPart += now.tv_usec * 10;
+    }
+    return STATUS_SUCCESS;
+}
+
+
+/***********************************************************************
+ *              NtSetSystemTime (NTDLL.@)
+ */
+NTSTATUS WINAPI NtSetSystemTime( const LARGE_INTEGER *new, LARGE_INTEGER *old )
+{
+    LARGE_INTEGER now;
+    LONGLONG diff;
+
+    NtQuerySystemTime( &now );
+    if (old) *old = now;
+    diff = new->QuadPart - now.QuadPart;
+    if (diff > -TICKSPERSEC / 2 && diff < TICKSPERSEC / 2) return STATUS_SUCCESS;
+    ERR( "not allowed: difference %d ms\n", (int)(diff / 10000) );
+    return STATUS_PRIVILEGE_NOT_HELD;
+}
+
+
+/******************************************************************************
+ *              NtGetTickCount (NTDLL.@)
+ */
+ULONG WINAPI NtGetTickCount(void)
+{
+    /* note: we ignore TickCountMultiplier */
+    return user_shared_data->u.TickCount.LowPart;
+}
+
+
+/******************************************************************************
  *              NtCreateKeyedEvent (NTDLL.@)
  */
 NTSTATUS WINAPI NtCreateKeyedEvent( HANDLE *handle, ACCESS_MASK access,
@@ -874,6 +1330,195 @@ NTSTATUS WINAPI NtReleaseKeyedEvent( HANDLE handle, const void *key,
 
 
 /***********************************************************************
+ *             NtCreateIoCompletion (NTDLL.@)
+ */
+NTSTATUS WINAPI NtCreateIoCompletion( HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBUTES *attr,
+                                      ULONG threads )
+{
+    NTSTATUS status;
+    data_size_t len;
+    struct object_attributes *objattr;
+
+    TRACE( "(%p, %x, %p, %d)\n", handle, access, attr, threads );
+
+    if (!handle) return STATUS_INVALID_PARAMETER;
+    if ((status = alloc_object_attributes( attr, &objattr, &len ))) return status;
+
+    SERVER_START_REQ( create_completion )
+    {
+        req->access     = access;
+        req->concurrent = threads;
+        wine_server_add_data( req, objattr, len );
+        if (!(status = wine_server_call( req ))) *handle = wine_server_ptr_handle( reply->handle );
+    }
+    SERVER_END_REQ;
+
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
+    return status;
+}
+
+
+/***********************************************************************
+ *             NtOpenIoCompletion (NTDLL.@)
+ */
+NTSTATUS WINAPI NtOpenIoCompletion( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
+{
+    NTSTATUS status;
+
+    if (!handle) return STATUS_INVALID_PARAMETER;
+    if ((status = validate_open_object_attributes( attr ))) return status;
+
+    SERVER_START_REQ( open_completion )
+    {
+        req->access     = access;
+        req->attributes = attr->Attributes;
+        req->rootdir    = wine_server_obj_handle( attr->RootDirectory );
+        if (attr->ObjectName)
+            wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
+        status = wine_server_call( req );
+        *handle = wine_server_ptr_handle( reply->handle );
+    }
+    SERVER_END_REQ;
+    return status;
+}
+
+
+/***********************************************************************
+ *             NtSetIoCompletion (NTDLL.@)
+ */
+NTSTATUS WINAPI NtSetIoCompletion( HANDLE handle, ULONG_PTR key, ULONG_PTR value,
+                                   NTSTATUS status, SIZE_T count )
+{
+    NTSTATUS ret;
+
+    TRACE( "(%p, %lx, %lx, %x, %lx)\n", handle, key, value, status, count );
+
+    SERVER_START_REQ( add_completion )
+    {
+        req->handle      = wine_server_obj_handle( handle );
+        req->ckey        = key;
+        req->cvalue      = value;
+        req->status      = status;
+        req->information = count;
+        ret = wine_server_call( req );
+    }
+    SERVER_END_REQ;
+    return ret;
+}
+
+
+/***********************************************************************
+ *             NtRemoveIoCompletion (NTDLL.@)
+ */
+NTSTATUS WINAPI NtRemoveIoCompletion( HANDLE handle, ULONG_PTR *key, ULONG_PTR *value,
+                                      IO_STATUS_BLOCK *io, LARGE_INTEGER *timeout )
+{
+    NTSTATUS status;
+
+    TRACE( "(%p, %p, %p, %p, %p)\n", handle, key, value, io, timeout );
+
+    for (;;)
+    {
+        SERVER_START_REQ( remove_completion )
+        {
+            req->handle = wine_server_obj_handle( handle );
+            if (!(status = wine_server_call( req )))
+            {
+                *key            = reply->ckey;
+                *value          = reply->cvalue;
+                io->Information = reply->information;
+                io->u.Status    = reply->status;
+            }
+        }
+        SERVER_END_REQ;
+        if (status != STATUS_PENDING) return status;
+        status = NtWaitForSingleObject( handle, FALSE, timeout );
+        if (status != WAIT_OBJECT_0) return status;
+    }
+}
+
+
+/***********************************************************************
+ *             NtRemoveIoCompletionEx (NTDLL.@)
+ */
+NTSTATUS WINAPI NtRemoveIoCompletionEx( HANDLE handle, FILE_IO_COMPLETION_INFORMATION *info, ULONG count,
+                                        ULONG *written, LARGE_INTEGER *timeout, BOOLEAN alertable )
+{
+    NTSTATUS status;
+    ULONG i = 0;
+
+    TRACE( "%p %p %u %p %p %u\n", handle, info, count, written, timeout, alertable );
+
+    for (;;)
+    {
+        while (i < count)
+        {
+            SERVER_START_REQ( remove_completion )
+            {
+                req->handle = wine_server_obj_handle( handle );
+                if (!(status = wine_server_call( req )))
+                {
+                    info[i].CompletionKey             = reply->ckey;
+                    info[i].CompletionValue           = reply->cvalue;
+                    info[i].IoStatusBlock.Information = reply->information;
+                    info[i].IoStatusBlock.u.Status    = reply->status;
+                }
+            }
+            SERVER_END_REQ;
+            if (status != STATUS_SUCCESS) break;
+            ++i;
+        }
+        if (i || status != STATUS_PENDING)
+        {
+            if (status == STATUS_PENDING) status = STATUS_SUCCESS;
+            break;
+        }
+        status = NtWaitForSingleObject( handle, alertable, timeout );
+        if (status != WAIT_OBJECT_0) break;
+    }
+    *written = i ? i : 1;
+    return status;
+}
+
+
+/***********************************************************************
+ *             NtQueryIoCompletion (NTDLL.@)
+ */
+NTSTATUS WINAPI NtQueryIoCompletion( HANDLE handle, IO_COMPLETION_INFORMATION_CLASS class,
+                                     void *buffer, ULONG len, ULONG *ret_len )
+{
+    NTSTATUS status;
+
+    TRACE( "(%p, %d, %p, 0x%x, %p)\n", handle, class, buffer, len, ret_len );
+
+    if (!buffer) return STATUS_INVALID_PARAMETER;
+
+    switch (class)
+    {
+    case IoCompletionBasicInformation:
+    {
+        ULONG *info = buffer;
+        if (ret_len) *ret_len = sizeof(*info);
+        if (len == sizeof(*info))
+        {
+            SERVER_START_REQ( query_completion )
+            {
+                req->handle = wine_server_obj_handle( handle );
+                if (!(status = wine_server_call( req ))) *info = reply->depth;
+            }
+            SERVER_END_REQ;
+        }
+        else status = STATUS_INFO_LENGTH_MISMATCH;
+        break;
+    }
+    default:
+        return STATUS_INVALID_PARAMETER;
+    }
+    return status;
+}
+
+
+/***********************************************************************
  *             NtCreateSection (NTDLL.@)
  */
 NTSTATUS WINAPI NtCreateSection( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr,
@@ -947,4 +1592,693 @@ NTSTATUS WINAPI NtOpenSection( HANDLE *handle, ACCESS_MASK access, const OBJECT_
     }
     SERVER_END_REQ;
     return ret;
+}
+
+
+static void *no_debug_info_marker = (void *)(ULONG_PTR)-1;
+
+static BOOL crit_section_has_debuginfo(const RTL_CRITICAL_SECTION *crit)
+{
+    return crit->DebugInfo != NULL && crit->DebugInfo != no_debug_info_marker;
+}
+
+#ifdef __linux__
+
+static inline NTSTATUS fast_critsection_wait( RTL_CRITICAL_SECTION *crit, int timeout )
+{
+    int val;
+    struct timespec timespec;
+
+    if (!use_futexes()) return STATUS_NOT_IMPLEMENTED;
+
+    timespec.tv_sec  = timeout;
+    timespec.tv_nsec = 0;
+    while ((val = InterlockedCompareExchange( (int *)&crit->LockSemaphore, 0, 1 )) != 1)
+    {
+        /* note: this may wait longer than specified in case of signals or */
+        /*       multiple wake-ups, but that shouldn't be a problem */
+        if (futex_wait( (int *)&crit->LockSemaphore, val, &timespec ) == -1 && errno == ETIMEDOUT)
+            return STATUS_TIMEOUT;
+    }
+    return STATUS_WAIT_0;
+}
+
+static inline NTSTATUS fast_critsection_wake( RTL_CRITICAL_SECTION *crit )
+{
+    if (!use_futexes()) return STATUS_NOT_IMPLEMENTED;
+
+    *(int *)&crit->LockSemaphore = 1;
+    futex_wake( (int *)&crit->LockSemaphore, 1 );
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS CDECL fast_RtlDeleteCriticalSection( RTL_CRITICAL_SECTION *crit )
+{
+    if (!use_futexes()) return STATUS_NOT_IMPLEMENTED;
+    return STATUS_SUCCESS;
+}
+
+#elif defined(__APPLE__)
+
+static inline semaphore_t get_mach_semaphore( RTL_CRITICAL_SECTION *crit )
+{
+    semaphore_t ret = *(int *)&crit->LockSemaphore;
+    if (!ret)
+    {
+        semaphore_t sem;
+        if (semaphore_create( mach_task_self(), &sem, SYNC_POLICY_FIFO, 0 )) return 0;
+        if (!(ret = InterlockedCompareExchange( (int *)&crit->LockSemaphore, sem, 0 )))
+            ret = sem;
+        else
+            semaphore_destroy( mach_task_self(), sem );  /* somebody beat us to it */
+    }
+    return ret;
+}
+
+static inline NTSTATUS fast_critsection_wait( RTL_CRITICAL_SECTION *crit, int timeout )
+{
+    mach_timespec_t timespec;
+    semaphore_t sem = get_mach_semaphore( crit );
+
+    timespec.tv_sec = timeout;
+    timespec.tv_nsec = 0;
+    for (;;)
+    {
+        switch( semaphore_timedwait( sem, timespec ))
+        {
+        case KERN_SUCCESS:
+            return STATUS_WAIT_0;
+        case KERN_ABORTED:
+            continue;  /* got a signal, restart */
+        case KERN_OPERATION_TIMED_OUT:
+            return STATUS_TIMEOUT;
+        default:
+            return STATUS_INVALID_HANDLE;
+        }
+    }
+}
+
+static inline NTSTATUS fast_critsection_wake( RTL_CRITICAL_SECTION *crit )
+{
+    semaphore_t sem = get_mach_semaphore( crit );
+    semaphore_signal( sem );
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS CDECL fast_RtlDeleteCriticalSection( RTL_CRITICAL_SECTION *crit )
+{
+    semaphore_destroy( mach_task_self(), *(int *)&crit->LockSemaphore );
+    return STATUS_SUCCESS;
+}
+
+#else  /* __APPLE__ */
+
+static inline NTSTATUS fast_critsection_wait( RTL_CRITICAL_SECTION *crit, int timeout )
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+static inline NTSTATUS fast_critsection_wake( RTL_CRITICAL_SECTION *crit )
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+NTSTATUS CDECL fast_RtlDeleteCriticalSection( RTL_CRITICAL_SECTION *crit )
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+#endif
+
+static inline HANDLE get_critsection_semaphore( RTL_CRITICAL_SECTION *crit )
+{
+    HANDLE ret = crit->LockSemaphore;
+    if (!ret)
+    {
+        HANDLE sem;
+        if (NtCreateSemaphore( &sem, SEMAPHORE_ALL_ACCESS, NULL, 0, 1 )) return 0;
+        if (!(ret = InterlockedCompareExchangePointer( &crit->LockSemaphore, sem, 0 )))
+            ret = sem;
+        else
+            NtClose( sem );  /* somebody beat us to it */
+    }
+    return ret;
+}
+
+NTSTATUS CDECL fast_RtlpWaitForCriticalSection( RTL_CRITICAL_SECTION *crit, int timeout )
+{
+    NTSTATUS ret;
+
+    /* debug info is cleared by MakeCriticalSectionGlobal */
+    if (!crit_section_has_debuginfo( crit ) ||
+        ((ret = fast_critsection_wait( crit, timeout )) == STATUS_NOT_IMPLEMENTED))
+    {
+        HANDLE sem = get_critsection_semaphore( crit );
+        LARGE_INTEGER time;
+        select_op_t select_op;
+
+        time.QuadPart = timeout * (LONGLONG)-10000000;
+        select_op.wait.op = SELECT_WAIT;
+        select_op.wait.handles[0] = wine_server_obj_handle( sem );
+        ret = server_wait( &select_op, offsetof( select_op_t, wait.handles[1] ), 0, &time );
+    }
+    return ret;
+}
+
+NTSTATUS CDECL fast_RtlpUnWaitCriticalSection( RTL_CRITICAL_SECTION *crit )
+{
+    NTSTATUS ret;
+
+    /* debug info is cleared by MakeCriticalSectionGlobal */
+    if (!crit_section_has_debuginfo( crit ) ||
+        ((ret = fast_critsection_wake( crit )) == STATUS_NOT_IMPLEMENTED))
+    {
+        HANDLE sem = get_critsection_semaphore( crit );
+        ret = NtReleaseSemaphore( sem, 1, NULL );
+    }
+    return ret;
+}
+
+
+
+#ifdef __linux__
+
+/* Futex-based SRW lock implementation:
+ *
+ * Since we can rely on the kernel to release all threads and don't need to
+ * worry about NtReleaseKeyedEvent(), we can simplify the layout a bit. The
+ * layout looks like this:
+ *
+ *    31 - Exclusive lock bit, set if the resource is owned exclusively.
+ * 30-16 - Number of exclusive waiters. Unlike the fallback implementation,
+ *         this does not include the thread owning the lock, or shared threads
+ *         waiting on the lock.
+ *    15 - Does this lock have any shared waiters? We use this as an
+ *         optimization to avoid unnecessary FUTEX_WAKE_BITSET calls when
+ *         releasing an exclusive lock.
+ *  14-0 - Number of shared owners. Unlike the fallback implementation, this
+ *         does not include the number of shared threads waiting on the lock.
+ *         Thus the state [1, x, >=1] will never occur.
+ */
+
+#define SRWLOCK_FUTEX_EXCLUSIVE_LOCK_BIT        0x80000000
+#define SRWLOCK_FUTEX_EXCLUSIVE_WAITERS_MASK    0x7fff0000
+#define SRWLOCK_FUTEX_EXCLUSIVE_WAITERS_INC     0x00010000
+#define SRWLOCK_FUTEX_SHARED_WAITERS_BIT        0x00008000
+#define SRWLOCK_FUTEX_SHARED_OWNERS_MASK        0x00007fff
+#define SRWLOCK_FUTEX_SHARED_OWNERS_INC         0x00000001
+
+/* Futex bitmasks; these are independent from the bits in the lock itself. */
+#define SRWLOCK_FUTEX_BITSET_EXCLUSIVE  1
+#define SRWLOCK_FUTEX_BITSET_SHARED     2
+
+NTSTATUS CDECL fast_RtlTryAcquireSRWLockExclusive( RTL_SRWLOCK *lock )
+{
+    int old, new, *futex;
+    NTSTATUS ret;
+
+    if (!use_futexes()) return STATUS_NOT_IMPLEMENTED;
+
+    if (!(futex = get_futex( &lock->Ptr )))
+        return STATUS_NOT_IMPLEMENTED;
+
+    do
+    {
+        old = *futex;
+
+        if (!(old & SRWLOCK_FUTEX_EXCLUSIVE_LOCK_BIT)
+                && !(old & SRWLOCK_FUTEX_SHARED_OWNERS_MASK))
+        {
+            /* Not locked exclusive or shared. We can try to grab it. */
+            new = old | SRWLOCK_FUTEX_EXCLUSIVE_LOCK_BIT;
+            ret = STATUS_SUCCESS;
+        }
+        else
+        {
+            new = old;
+            ret = STATUS_TIMEOUT;
+        }
+    } while (InterlockedCompareExchange( futex, new, old ) != old);
+
+    return ret;
+}
+
+NTSTATUS CDECL fast_RtlAcquireSRWLockExclusive( RTL_SRWLOCK *lock )
+{
+    int old, new, *futex;
+    BOOLEAN wait;
+
+    if (!use_futexes()) return STATUS_NOT_IMPLEMENTED;
+
+    if (!(futex = get_futex( &lock->Ptr )))
+        return STATUS_NOT_IMPLEMENTED;
+
+    /* Atomically increment the exclusive waiter count. */
+    do
+    {
+        old = *futex;
+        new = old + SRWLOCK_FUTEX_EXCLUSIVE_WAITERS_INC;
+        assert(new & SRWLOCK_FUTEX_EXCLUSIVE_WAITERS_MASK);
+    } while (InterlockedCompareExchange( futex, new, old ) != old);
+
+    for (;;)
+    {
+        do
+        {
+            old = *futex;
+
+            if (!(old & SRWLOCK_FUTEX_EXCLUSIVE_LOCK_BIT)
+                    && !(old & SRWLOCK_FUTEX_SHARED_OWNERS_MASK))
+            {
+                /* Not locked exclusive or shared. We can try to grab it. */
+                new = old | SRWLOCK_FUTEX_EXCLUSIVE_LOCK_BIT;
+                assert(old & SRWLOCK_FUTEX_EXCLUSIVE_WAITERS_MASK);
+                new -= SRWLOCK_FUTEX_EXCLUSIVE_WAITERS_INC;
+                wait = FALSE;
+            }
+            else
+            {
+                new = old;
+                wait = TRUE;
+            }
+        } while (InterlockedCompareExchange( futex, new, old ) != old);
+
+        if (!wait)
+            return STATUS_SUCCESS;
+
+        futex_wait_bitset( futex, new, NULL, SRWLOCK_FUTEX_BITSET_EXCLUSIVE );
+    }
+
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS CDECL fast_RtlTryAcquireSRWLockShared( RTL_SRWLOCK *lock )
+{
+    int new, old, *futex;
+    NTSTATUS ret;
+
+    if (!use_futexes()) return STATUS_NOT_IMPLEMENTED;
+
+    if (!(futex = get_futex( &lock->Ptr )))
+        return STATUS_NOT_IMPLEMENTED;
+
+    do
+    {
+        old = *futex;
+
+        if (!(old & SRWLOCK_FUTEX_EXCLUSIVE_LOCK_BIT)
+                && !(old & SRWLOCK_FUTEX_EXCLUSIVE_WAITERS_MASK))
+        {
+            /* Not locked exclusive, and no exclusive waiters. We can try to
+             * grab it. */
+            new = old + SRWLOCK_FUTEX_SHARED_OWNERS_INC;
+            assert(new & SRWLOCK_FUTEX_SHARED_OWNERS_MASK);
+            ret = STATUS_SUCCESS;
+        }
+        else
+        {
+            new = old;
+            ret = STATUS_TIMEOUT;
+        }
+    } while (InterlockedCompareExchange( futex, new, old ) != old);
+
+    return ret;
+}
+
+NTSTATUS CDECL fast_RtlAcquireSRWLockShared( RTL_SRWLOCK *lock )
+{
+    int old, new, *futex;
+    BOOLEAN wait;
+
+    if (!use_futexes()) return STATUS_NOT_IMPLEMENTED;
+
+    if (!(futex = get_futex( &lock->Ptr )))
+        return STATUS_NOT_IMPLEMENTED;
+
+    for (;;)
+    {
+        do
+        {
+            old = *futex;
+
+            if (!(old & SRWLOCK_FUTEX_EXCLUSIVE_LOCK_BIT)
+                    && !(old & SRWLOCK_FUTEX_EXCLUSIVE_WAITERS_MASK))
+            {
+                /* Not locked exclusive, and no exclusive waiters. We can try
+                 * to grab it. */
+                new = old + SRWLOCK_FUTEX_SHARED_OWNERS_INC;
+                assert(new & SRWLOCK_FUTEX_SHARED_OWNERS_MASK);
+                wait = FALSE;
+            }
+            else
+            {
+                new = old | SRWLOCK_FUTEX_SHARED_WAITERS_BIT;
+                wait = TRUE;
+            }
+        } while (InterlockedCompareExchange( futex, new, old ) != old);
+
+        if (!wait)
+            return STATUS_SUCCESS;
+
+        futex_wait_bitset( futex, new, NULL, SRWLOCK_FUTEX_BITSET_SHARED );
+    }
+
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS CDECL fast_RtlReleaseSRWLockExclusive( RTL_SRWLOCK *lock )
+{
+    int old, new, *futex;
+
+    if (!use_futexes()) return STATUS_NOT_IMPLEMENTED;
+
+    if (!(futex = get_futex( &lock->Ptr )))
+        return STATUS_NOT_IMPLEMENTED;
+
+    do
+    {
+        old = *futex;
+
+        if (!(old & SRWLOCK_FUTEX_EXCLUSIVE_LOCK_BIT))
+        {
+            ERR("Lock %p is not owned exclusive! (%#x)\n", lock, *futex);
+            return STATUS_RESOURCE_NOT_OWNED;
+        }
+
+        new = old & ~SRWLOCK_FUTEX_EXCLUSIVE_LOCK_BIT;
+
+        if (!(new & SRWLOCK_FUTEX_EXCLUSIVE_WAITERS_MASK))
+            new &= ~SRWLOCK_FUTEX_SHARED_WAITERS_BIT;
+    } while (InterlockedCompareExchange( futex, new, old ) != old);
+
+    if (new & SRWLOCK_FUTEX_EXCLUSIVE_WAITERS_MASK)
+        futex_wake_bitset( futex, 1, SRWLOCK_FUTEX_BITSET_EXCLUSIVE );
+    else if (old & SRWLOCK_FUTEX_SHARED_WAITERS_BIT)
+        futex_wake_bitset( futex, INT_MAX, SRWLOCK_FUTEX_BITSET_SHARED );
+
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS CDECL fast_RtlReleaseSRWLockShared( RTL_SRWLOCK *lock )
+{
+    int old, new, *futex;
+
+    if (!use_futexes()) return STATUS_NOT_IMPLEMENTED;
+
+    if (!(futex = get_futex( &lock->Ptr )))
+        return STATUS_NOT_IMPLEMENTED;
+
+    do
+    {
+        old = *futex;
+
+        if (old & SRWLOCK_FUTEX_EXCLUSIVE_LOCK_BIT)
+        {
+            ERR("Lock %p is owned exclusive! (%#x)\n", lock, *futex);
+            return STATUS_RESOURCE_NOT_OWNED;
+        }
+        else if (!(old & SRWLOCK_FUTEX_SHARED_OWNERS_MASK))
+        {
+            ERR("Lock %p is not owned shared! (%#x)\n", lock, *futex);
+            return STATUS_RESOURCE_NOT_OWNED;
+        }
+
+        new = old - SRWLOCK_FUTEX_SHARED_OWNERS_INC;
+    } while (InterlockedCompareExchange( futex, new, old ) != old);
+
+    /* Optimization: only bother waking if there are actually exclusive waiters. */
+    if (!(new & SRWLOCK_FUTEX_SHARED_OWNERS_MASK) && (new & SRWLOCK_FUTEX_EXCLUSIVE_WAITERS_MASK))
+        futex_wake_bitset( futex, 1, SRWLOCK_FUTEX_BITSET_EXCLUSIVE );
+
+    return STATUS_SUCCESS;
+}
+
+static NTSTATUS wait_cv( int *futex, int val, const LARGE_INTEGER *timeout )
+{
+    struct timespec timespec;
+    int ret;
+
+    if (timeout && timeout->QuadPart != TIMEOUT_INFINITE)
+    {
+        timespec_from_timeout( &timespec, timeout );
+        ret = futex_wait( futex, val, &timespec );
+    }
+    else
+        ret = futex_wait( futex, val, NULL );
+
+    if (ret == -1 && errno == ETIMEDOUT)
+        return STATUS_TIMEOUT;
+    return STATUS_WAIT_0;
+}
+
+NTSTATUS CDECL fast_RtlSleepConditionVariableCS( RTL_CONDITION_VARIABLE *variable,
+                                                 RTL_CRITICAL_SECTION *cs, const LARGE_INTEGER *timeout )
+{
+    NTSTATUS status;
+    int val, *futex;
+
+    if (!use_futexes())
+        return STATUS_NOT_IMPLEMENTED;
+
+    if (!(futex = get_futex( &variable->Ptr )))
+        return STATUS_NOT_IMPLEMENTED;
+
+    val = *futex;
+
+    RtlLeaveCriticalSection( cs );
+    status = wait_cv( futex, val, timeout );
+    RtlEnterCriticalSection( cs );
+    return status;
+}
+
+NTSTATUS CDECL fast_RtlSleepConditionVariableSRW( RTL_CONDITION_VARIABLE *variable, RTL_SRWLOCK *lock,
+                                                  const LARGE_INTEGER *timeout, ULONG flags )
+{
+    NTSTATUS status;
+    int val, *futex;
+
+    if (!use_futexes())
+        return STATUS_NOT_IMPLEMENTED;
+
+    if (!(futex = get_futex( &variable->Ptr )) || !get_futex( &lock->Ptr ))
+        return STATUS_NOT_IMPLEMENTED;
+
+    val = *futex;
+
+    if (flags & RTL_CONDITION_VARIABLE_LOCKMODE_SHARED)
+        fast_RtlReleaseSRWLockShared( lock );
+    else
+        fast_RtlReleaseSRWLockExclusive( lock );
+
+    status = wait_cv( futex, val, timeout );
+
+    if (flags & RTL_CONDITION_VARIABLE_LOCKMODE_SHARED)
+        fast_RtlAcquireSRWLockShared( lock );
+    else
+        fast_RtlAcquireSRWLockExclusive( lock );
+    return status;
+}
+
+NTSTATUS CDECL fast_RtlWakeConditionVariable( RTL_CONDITION_VARIABLE *variable, int count )
+{
+    int *futex;
+
+    if (!use_futexes()) return STATUS_NOT_IMPLEMENTED;
+
+    if (!(futex = get_futex( &variable->Ptr )))
+        return STATUS_NOT_IMPLEMENTED;
+
+    InterlockedIncrement( futex );
+    futex_wake( futex, count );
+    return STATUS_SUCCESS;
+}
+
+
+/* We can't map addresses to futex directly, because an application can wait on
+ * 8 bytes, and we can't pass all 8 as the compare value to futex(). Instead we
+ * map all addresses to a small fixed table of futexes. This may result in
+ * spurious wakes, but the application is already expected to handle those. */
+
+static int addr_futex_table[256];
+
+static inline int *hash_addr( const void *addr )
+{
+    ULONG_PTR val = (ULONG_PTR)addr;
+
+    return &addr_futex_table[(val >> 2) & 255];
+}
+
+static inline NTSTATUS fast_wait_addr( const void *addr, const void *cmp, SIZE_T size,
+                                       const LARGE_INTEGER *timeout )
+{
+    int *futex;
+    int val;
+    struct timespec timespec;
+    int ret;
+
+    if (!use_futexes())
+        return STATUS_NOT_IMPLEMENTED;
+
+    futex = hash_addr( addr );
+
+    /* We must read the previous value of the futex before checking the value
+     * of the address being waited on. That way, if we receive a wake between
+     * now and waiting on the futex, we know that val will have changed.
+     * Use an atomic load so that memory accesses are ordered between this read
+     * and the increment below. */
+    val = InterlockedCompareExchange( futex, 0, 0 );
+    if (!compare_addr( addr, cmp, size ))
+        return STATUS_SUCCESS;
+
+    if (timeout)
+    {
+        timespec_from_timeout( &timespec, timeout );
+        ret = futex_wait( futex, val, &timespec );
+    }
+    else
+        ret = futex_wait( futex, val, NULL );
+
+    if (ret == -1 && errno == ETIMEDOUT)
+        return STATUS_TIMEOUT;
+    return STATUS_SUCCESS;
+}
+
+static inline NTSTATUS fast_wake_addr( const void *addr )
+{
+    int *futex;
+
+    if (!use_futexes())
+        return STATUS_NOT_IMPLEMENTED;
+
+    futex = hash_addr( addr );
+
+    InterlockedIncrement( futex );
+
+    futex_wake( futex, INT_MAX );
+    return STATUS_SUCCESS;
+}
+
+#else
+
+NTSTATUS CDECL fast_RtlTryAcquireSRWLockExclusive( RTL_SRWLOCK *lock )
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+NTSTATUS CDECL fast_RtlAcquireSRWLockExclusive( RTL_SRWLOCK *lock )
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+NTSTATUS CDECL fast_RtlTryAcquireSRWLockShared( RTL_SRWLOCK *lock )
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+NTSTATUS CDECL fast_RtlAcquireSRWLockShared( RTL_SRWLOCK *lock )
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+NTSTATUS CDECL fast_RtlReleaseSRWLockExclusive( RTL_SRWLOCK *lock )
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+NTSTATUS CDECL fast_RtlReleaseSRWLockShared( RTL_SRWLOCK *lock )
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+NTSTATUS CDECL fast_RtlSleepConditionVariableSRW( RTL_CONDITION_VARIABLE *variable, RTL_SRWLOCK *lock,
+                                                  const LARGE_INTEGER *timeout, ULONG flags )
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+NTSTATUS CDECL fast_RtlSleepConditionVariableCS( RTL_CONDITION_VARIABLE *variable,
+                                                 RTL_CRITICAL_SECTION *cs, const LARGE_INTEGER *timeout )
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+NTSTATUS CDECL fast_RtlWakeConditionVariable( RTL_CONDITION_VARIABLE *variable, int count )
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+static inline NTSTATUS fast_wait_addr( const void *addr, const void *cmp, SIZE_T size,
+                                       const LARGE_INTEGER *timeout )
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+static inline NTSTATUS fast_wake_addr( const void *addr )
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+#endif
+
+
+/***********************************************************************
+ *           RtlWaitOnAddress   (NTDLL.@)
+ */
+NTSTATUS WINAPI RtlWaitOnAddress( const void *addr, const void *cmp, SIZE_T size,
+                                  const LARGE_INTEGER *timeout )
+{
+    select_op_t select_op;
+    NTSTATUS ret;
+    timeout_t abs_timeout = timeout ? timeout->QuadPart : TIMEOUT_INFINITE;
+
+    if (size != 1 && size != 2 && size != 4 && size != 8)
+        return STATUS_INVALID_PARAMETER;
+
+    if ((ret = fast_wait_addr( addr, cmp, size, timeout )) != STATUS_NOT_IMPLEMENTED)
+        return ret;
+
+    RtlEnterCriticalSection( &addr_section );
+    if (!compare_addr( addr, cmp, size ))
+    {
+        RtlLeaveCriticalSection( &addr_section );
+        return STATUS_SUCCESS;
+    }
+
+    if (abs_timeout < 0)
+    {
+        LARGE_INTEGER now;
+
+        RtlQueryPerformanceCounter(&now);
+        abs_timeout -= now.QuadPart;
+    }
+
+    select_op.keyed_event.op     = SELECT_KEYED_EVENT_WAIT;
+    select_op.keyed_event.handle = wine_server_obj_handle( keyed_event );
+    select_op.keyed_event.key    = wine_server_client_ptr( addr );
+
+    return server_select( &select_op, sizeof(select_op.keyed_event), SELECT_INTERRUPTIBLE, abs_timeout, NULL, &addr_section, NULL );
+}
+
+/***********************************************************************
+ *           RtlWakeAddressAll    (NTDLL.@)
+ */
+void WINAPI RtlWakeAddressAll( const void *addr )
+{
+    if (fast_wake_addr( addr ) != STATUS_NOT_IMPLEMENTED) return;
+
+    RtlEnterCriticalSection( &addr_section );
+    while (NtReleaseKeyedEvent( 0, addr, 0, &zero_timeout ) == STATUS_SUCCESS) {}
+    RtlLeaveCriticalSection( &addr_section );
+}
+
+/***********************************************************************
+ *           RtlWakeAddressSingle (NTDLL.@)
+ */
+void WINAPI RtlWakeAddressSingle( const void *addr )
+{
+    if (fast_wake_addr( addr ) != STATUS_NOT_IMPLEMENTED) return;
+
+    RtlEnterCriticalSection( &addr_section );
+    NtReleaseKeyedEvent( 0, addr, 0, &zero_timeout );
+    RtlLeaveCriticalSection( &addr_section );
 }

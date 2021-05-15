@@ -104,8 +104,6 @@ WINE_DEFAULT_DEBUG_CHANNEL(server);
 static const enum cpu_type client_cpu = CPU_x86;
 #elif defined(__x86_64__)
 static const enum cpu_type client_cpu = CPU_x86_64;
-#elif defined(__powerpc__)
-static const enum cpu_type client_cpu = CPU_POWERPC;
 #elif defined(__arm__)
 static const enum cpu_type client_cpu = CPU_ARM;
 #elif defined(__aarch64__)
@@ -587,7 +585,7 @@ static void invoke_system_apc( const apc_call_t *call, apc_result_t *result )
 
         result->type = APC_BREAK_PROCESS;
         result->break_process.status = NtCreateThreadEx( &handle, THREAD_ALL_ACCESS, NULL,
-                                                         NtCurrentProcess(), DbgUiRemoteBreakin, NULL,
+                                                         NtCurrentProcess(), pDbgUiRemoteBreakin, NULL,
                                                          0, 0, 0, 0, NULL );
         if (!result->break_process.status) NtClose( handle );
         break;
@@ -602,9 +600,9 @@ static void invoke_system_apc( const apc_call_t *call, apc_result_t *result )
 /***********************************************************************
  *              server_select
  */
-unsigned int CDECL server_select( const select_op_t *select_op, data_size_t size, UINT flags,
-                                  timeout_t abs_timeout, CONTEXT *context, RTL_CRITICAL_SECTION *cs,
-                                  user_apc_t *user_apc )
+unsigned int server_select( const select_op_t *select_op, data_size_t size, UINT flags,
+                            timeout_t abs_timeout, CONTEXT *context, RTL_CRITICAL_SECTION *cs,
+                            user_apc_t *user_apc )
 {
     unsigned int ret;
     int cookie;
@@ -681,8 +679,8 @@ unsigned int CDECL server_select( const select_op_t *select_op, data_size_t size
 /***********************************************************************
  *              server_wait
  */
-unsigned int CDECL server_wait( const select_op_t *select_op, data_size_t size, UINT flags,
-                                const LARGE_INTEGER *timeout )
+unsigned int server_wait( const select_op_t *select_op, data_size_t size, UINT flags,
+                          const LARGE_INTEGER *timeout )
 {
     timeout_t abs_timeout = timeout ? timeout->QuadPart : TIMEOUT_INFINITE;
     BOOL user_apc = FALSE;
@@ -1473,11 +1471,42 @@ void server_init_process(void)
 /***********************************************************************
  *           server_init_process_done
  */
-void CDECL server_init_process_done(void)
+void CDECL server_init_process_done( void *relay )
 {
+#ifdef __i386__
+    extern struct ldt_copy __wine_ldt_copy;
+#endif
+    PEB *peb = NtCurrentTeb()->Peb;
+    IMAGE_NT_HEADERS *nt = RtlImageNtHeader( peb->ImageBaseAddress );
+    void *entry = (char *)peb->ImageBaseAddress + nt->OptionalHeader.AddressOfEntryPoint;
+    NTSTATUS status;
+    int suspend;
+
 #ifdef __APPLE__
     send_server_task_port();
 #endif
+
+    /* Install signal handlers; this cannot be done earlier, since we cannot
+     * send exceptions to the debugger before the create process event that
+     * is sent by init_process_done */
+    signal_init_process();
+
+    /* Signal the parent process to continue */
+    SERVER_START_REQ( init_process_done )
+    {
+        req->module   = wine_server_client_ptr( peb->ImageBaseAddress );
+#ifdef __i386__
+        req->ldt_copy = wine_server_client_ptr( &__wine_ldt_copy );
+#endif
+        req->entry    = wine_server_client_ptr( entry );
+        req->gui      = (nt->OptionalHeader.Subsystem != IMAGE_SUBSYSTEM_WINDOWS_CUI);
+        status = wine_server_call( req );
+        suspend = reply->suspend;
+    }
+    SERVER_END_REQ;
+
+    assert( !status );
+    signal_start_thread( entry, peb, suspend, relay, NtCurrentTeb() );
 }
 
 

@@ -134,7 +134,6 @@ static RTL_CRITICAL_SECTION csVirtual = { &critsect_debug, -1, 0, 0, 0, 0 };
 
 static const BOOL is_win64 = (sizeof(void *) > sizeof(int));
 static const UINT page_shift = 12;
-static const UINT_PTR page_size = 0x1000;
 static const UINT_PTR page_mask = 0xfff;
 static const UINT_PTR granularity_mask = 0xffff;
 
@@ -161,7 +160,7 @@ static void *user_space_limit    = (void *)0x7fff0000;
 static void *working_set_limit   = (void *)0x7fff0000;
 #endif
 
-static struct _KUSER_SHARED_DATA *user_shared_data = (void *)0x7ffe0000;
+struct _KUSER_SHARED_DATA *user_shared_data = (void *)0x7ffe0000;
 
 SIZE_T signal_stack_size = 0;
 SIZE_T signal_stack_mask = 0;
@@ -171,6 +170,7 @@ static SIZE_T signal_stack_align;
 static TEB *teb_block;
 static TEB *next_free_teb;
 static int teb_block_pos;
+static struct list teb_list = LIST_INIT( teb_list );
 
 #define ROUND_ADDR(addr,mask) ((void *)((UINT_PTR)(addr) & ~(UINT_PTR)(mask)))
 #define ROUND_SIZE(addr,size) (((SIZE_T)(size) + ((UINT_PTR)(addr) & page_mask) + page_mask) & ~page_mask)
@@ -2458,7 +2458,7 @@ void virtual_init(void)
 }
 
 
-static ULONG_PTR get_system_affinity_mask(void)
+ULONG_PTR get_system_affinity_mask(void)
 {
     ULONG num_cpus = NtCurrentTeb()->Peb->NumberOfProcessors;
     if (num_cpus >= sizeof(ULONG_PTR) * 8) return ~(ULONG_PTR)0;
@@ -2538,6 +2538,25 @@ NTSTATUS CDECL virtual_create_builtin_view( void *module )
 }
 
 
+/* set some initial values in a new TEB */
+static void init_teb( TEB *teb, PEB *peb )
+{
+    struct ntdll_thread_data *thread_data = (struct ntdll_thread_data *)&teb->GdiTebBatch;
+
+    teb->Peb = peb;
+    teb->Tib.Self = &teb->Tib;
+    teb->Tib.ExceptionList = (void *)~0ul;
+    teb->Tib.StackBase = (void *)~0ul;
+    teb->StaticUnicodeString.Buffer = teb->StaticUnicodeBuffer;
+    teb->StaticUnicodeString.MaximumLength = sizeof(teb->StaticUnicodeBuffer);
+    thread_data->request_fd = -1;
+    thread_data->reply_fd   = -1;
+    thread_data->wait_fd[0] = -1;
+    thread_data->wait_fd[1] = -1;
+    list_add_head( &teb_list, &thread_data->entry );
+}
+
+
 /***********************************************************************
  *           virtual_alloc_first_teb
  */
@@ -2567,13 +2586,8 @@ TEB *virtual_alloc_first_teb(void)
     peb = (PEB *)((char *)teb_block + 32 * teb_size - peb_size);
     NtAllocateVirtualMemory( NtCurrentProcess(), (void **)&teb, 0, &teb_size, MEM_COMMIT, PAGE_READWRITE );
     NtAllocateVirtualMemory( NtCurrentProcess(), (void **)&peb, 0, &peb_size, MEM_COMMIT, PAGE_READWRITE );
-
-    teb->Peb = peb;
-    teb->Tib.Self = &teb->Tib;
-    teb->Tib.ExceptionList = (void *)~0ul;
-    teb->Tib.StackBase = (void *)~0ul;
-    teb->StaticUnicodeString.Buffer = teb->StaticUnicodeBuffer;
-    teb->StaticUnicodeString.MaximumLength = sizeof(teb->StaticUnicodeBuffer);
+    init_teb( teb, peb );
+    *(ULONG_PTR *)peb->Reserved = get_image_address();
     use_locks = TRUE;
     return teb;
 }
@@ -2616,14 +2630,10 @@ NTSTATUS virtual_alloc_teb( TEB **ret_teb )
         NtAllocateVirtualMemory( NtCurrentProcess(), (void **)&teb, 0, &teb_size,
                                  MEM_COMMIT, PAGE_READWRITE );
     }
+    init_teb( teb, NtCurrentTeb()->Peb );
+    *ret_teb = teb;
     server_leave_uninterrupted_section( &csVirtual, &sigset );
 
-    *ret_teb = teb;
-    teb->Peb = NtCurrentTeb()->Peb;
-    teb->Tib.Self = &teb->Tib;
-    teb->Tib.ExceptionList = (void *)~0UL;
-    teb->StaticUnicodeString.Buffer = teb->StaticUnicodeBuffer;
-    teb->StaticUnicodeString.MaximumLength = sizeof(teb->StaticUnicodeBuffer);
     if ((status = signal_alloc_thread( teb )))
     {
         server_enter_uninterrupted_section( &csVirtual, &sigset );
@@ -2657,9 +2667,46 @@ void virtual_free_teb( TEB *teb )
     }
 
     server_enter_uninterrupted_section( &csVirtual, &sigset );
+    list_remove( &thread_data->entry );
     *(TEB **)teb = next_free_teb;
     next_free_teb = teb;
     server_leave_uninterrupted_section( &csVirtual, &sigset );
+}
+
+
+/***********************************************************************
+ *           virtual_clear_tls_index
+ */
+NTSTATUS virtual_clear_tls_index( ULONG index )
+{
+    struct ntdll_thread_data *thread_data;
+    sigset_t sigset;
+
+    if (index < TLS_MINIMUM_AVAILABLE)
+    {
+        server_enter_uninterrupted_section( &csVirtual, &sigset );
+        LIST_FOR_EACH_ENTRY( thread_data, &teb_list, struct ntdll_thread_data, entry )
+        {
+            TEB *teb = CONTAINING_RECORD( thread_data, TEB, GdiTebBatch );
+            teb->TlsSlots[index] = 0;
+        }
+        server_leave_uninterrupted_section( &csVirtual, &sigset );
+    }
+    else
+    {
+        index -= TLS_MINIMUM_AVAILABLE;
+        if (index >= 8 * sizeof(NtCurrentTeb()->Peb->TlsExpansionBitmapBits))
+            return STATUS_INVALID_PARAMETER;
+
+        server_enter_uninterrupted_section( &csVirtual, &sigset );
+        LIST_FOR_EACH_ENTRY( thread_data, &teb_list, struct ntdll_thread_data, entry )
+        {
+            TEB *teb = CONTAINING_RECORD( thread_data, TEB, GdiTebBatch );
+            if (teb->TlsExpansionSlots) teb->TlsExpansionSlots[index] = 0;
+        }
+        server_leave_uninterrupted_section( &csVirtual, &sigset );
+    }
+    return STATUS_SUCCESS;
 }
 
 
@@ -2780,7 +2827,7 @@ void virtual_map_user_shared_data(void)
 /***********************************************************************
  *           virtual_handle_fault
  */
-NTSTATUS CDECL virtual_handle_fault( LPCVOID addr, DWORD err, BOOL on_signal_stack )
+NTSTATUS virtual_handle_fault( LPCVOID addr, DWORD err, BOOL on_signal_stack )
 {
     NTSTATUS ret = STATUS_ACCESS_VIOLATION;
     void *page = ROUND_ADDR( addr, page_mask );
@@ -2841,7 +2888,7 @@ static NTSTATUS check_write_access( void *base, size_t size, BOOL *has_write_wat
 /***********************************************************************
  *           virtual_locked_server_call
  */
-unsigned int CDECL virtual_locked_server_call( void *req_ptr )
+unsigned int virtual_locked_server_call( void *req_ptr )
 {
     struct __server_request_info * const req = req_ptr;
     sigset_t sigset;
@@ -2866,7 +2913,7 @@ unsigned int CDECL virtual_locked_server_call( void *req_ptr )
 /***********************************************************************
  *           virtual_locked_read
  */
-ssize_t CDECL virtual_locked_read( int fd, void *addr, size_t size )
+ssize_t virtual_locked_read( int fd, void *addr, size_t size )
 {
     sigset_t sigset;
     BOOL has_write_watch = FALSE;
@@ -2891,7 +2938,7 @@ ssize_t CDECL virtual_locked_read( int fd, void *addr, size_t size )
 /***********************************************************************
  *           virtual_locked_pread
  */
-ssize_t CDECL virtual_locked_pread( int fd, void *addr, size_t size, off_t offset )
+ssize_t virtual_locked_pread( int fd, void *addr, size_t size, off_t offset )
 {
     sigset_t sigset;
     BOOL has_write_watch = FALSE;
@@ -2947,7 +2994,7 @@ ssize_t CDECL virtual_locked_recvmsg( int fd, struct msghdr *hdr, int flags )
 /***********************************************************************
  *           virtual_is_valid_code_address
  */
-BOOL CDECL virtual_is_valid_code_address( const void *addr, SIZE_T size )
+BOOL virtual_is_valid_code_address( const void *addr, SIZE_T size )
 {
     struct file_view *view;
     BOOL ret = FALSE;
@@ -2968,7 +3015,7 @@ BOOL CDECL virtual_is_valid_code_address( const void *addr, SIZE_T size )
  * Return 1 if safely handled, -1 if handled into the overflow space.
  * Called from inside a signal handler.
  */
-int CDECL virtual_handle_stack_fault( void *addr )
+int virtual_handle_stack_fault( void *addr )
 {
     int ret = 0;
 
@@ -3007,7 +3054,7 @@ int CDECL virtual_handle_stack_fault( void *addr )
  *
  * Check if a memory buffer can be read, triggering page faults if needed for DIB section access.
  */
-BOOL CDECL virtual_check_buffer_for_read( const void *ptr, SIZE_T size )
+BOOL virtual_check_buffer_for_read( const void *ptr, SIZE_T size )
 {
     if (!size) return TRUE;
     if (!ptr) return FALSE;
@@ -3041,7 +3088,7 @@ BOOL CDECL virtual_check_buffer_for_read( const void *ptr, SIZE_T size )
  *
  * Check if a memory buffer can be written to, triggering page faults if needed for write watches.
  */
-BOOL CDECL virtual_check_buffer_for_write( void *ptr, SIZE_T size )
+BOOL virtual_check_buffer_for_write( void *ptr, SIZE_T size )
 {
     if (!size) return TRUE;
     if (!ptr) return FALSE;
@@ -3069,6 +3116,50 @@ BOOL CDECL virtual_check_buffer_for_write( void *ptr, SIZE_T size )
 }
 
 
+/*************************************************************
+ *            IsBadStringPtrA
+ *
+ * IsBadStringPtrA replacement for ntdll, to catch exception in debug traces.
+ */
+BOOL WINAPI IsBadStringPtrA( LPCSTR str, UINT_PTR max )
+{
+    if (!str) return TRUE;
+    __TRY
+    {
+        volatile const char *p = str;
+        while (p != str + max) if (!*p++) break;
+    }
+    __EXCEPT_PAGE_FAULT
+    {
+        return TRUE;
+    }
+    __ENDTRY
+    return FALSE;
+}
+
+
+/*************************************************************
+ *            IsBadStringPtrW
+ *
+ * IsBadStringPtrW replacement for ntdll, to catch exception in debug traces.
+ */
+BOOL WINAPI IsBadStringPtrW( LPCWSTR str, UINT_PTR max )
+{
+    if (!str) return TRUE;
+    __TRY
+    {
+        volatile const WCHAR *p = str;
+        while (p != str + max) if (!*p++) break;
+    }
+    __EXCEPT_PAGE_FAULT
+    {
+        return TRUE;
+    }
+    __ENDTRY
+    return FALSE;
+}
+
+
 /***********************************************************************
  *           virtual_uninterrupted_read_memory
  *
@@ -3076,7 +3167,7 @@ BOOL CDECL virtual_check_buffer_for_write( void *ptr, SIZE_T size )
  * permissions are checked before accessing each page, to ensure that no
  * exceptions can happen.
  */
-SIZE_T CDECL virtual_uninterrupted_read_memory( const void *addr, void *buffer, SIZE_T size )
+SIZE_T virtual_uninterrupted_read_memory( const void *addr, void *buffer, SIZE_T size )
 {
     struct file_view *view;
     sigset_t sigset;
@@ -3112,7 +3203,7 @@ SIZE_T CDECL virtual_uninterrupted_read_memory( const void *addr, void *buffer, 
  * permissions are checked before accessing each page, to ensure that no
  * exceptions can happen.
  */
-NTSTATUS CDECL virtual_uninterrupted_write_memory( void *addr, const void *buffer, SIZE_T size )
+NTSTATUS virtual_uninterrupted_write_memory( void *addr, const void *buffer, SIZE_T size )
 {
     BOOL has_write_watch = FALSE;
     sigset_t sigset;
@@ -3136,7 +3227,7 @@ NTSTATUS CDECL virtual_uninterrupted_write_memory( void *addr, const void *buffe
  *
  * Whether to force exec prot on all views.
  */
-void CDECL virtual_set_force_exec( BOOL enable )
+void virtual_set_force_exec( BOOL enable )
 {
     struct file_view *view;
     sigset_t sigset;
@@ -3991,7 +4082,7 @@ NTSTATUS WINAPI NtUnmapViewOfSection( HANDLE process, PVOID addr )
  *
  * Helper for NtQuerySection.
  */
-static void virtual_fill_image_information( const pe_image_info_t *pe_info, SECTION_IMAGE_INFORMATION *info )
+void virtual_fill_image_information( const pe_image_info_t *pe_info, SECTION_IMAGE_INFORMATION *info )
 {
     info->TransferAddress      = wine_server_get_ptr( pe_info->entry_point );
     info->ZeroBits             = pe_info->zerobits;
@@ -4293,4 +4384,39 @@ NTSTATUS WINAPI NtAreMappedFilesTheSame(PVOID addr1, PVOID addr2)
 
     server_leave_uninterrupted_section( &csVirtual, &sigset );
     return status;
+}
+
+
+/**********************************************************************
+ *           NtFlushInstructionCache  (NTDLL.@)
+ */
+NTSTATUS WINAPI NtFlushInstructionCache( HANDLE handle, const void *addr, SIZE_T size )
+{
+#if defined(__x86_64__) || defined(__i386__)
+    /* no-op */
+#elif defined(HAVE___CLEAR_CACHE)
+    if (handle == GetCurrentProcess())
+    {
+        __clear_cache( (char *)addr, (char *)addr + size );
+    }
+    else
+    {
+        static int once;
+        if (!once++) FIXME( "%p %p %ld other process not supported\n", handle, addr, size );
+    }
+#else
+    static int once;
+    if (!once++) FIXME( "%p %p %ld\n", handle, addr, size );
+#endif
+    return STATUS_SUCCESS;
+}
+
+
+/**********************************************************************
+ *           NtFlushProcessWriteBuffers  (NTDLL.@)
+ */
+void WINAPI NtFlushProcessWriteBuffers(void)
+{
+    static int once = 0;
+    if (!once++) FIXME( "stub\n" );
 }

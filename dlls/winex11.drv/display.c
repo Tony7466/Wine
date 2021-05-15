@@ -43,7 +43,8 @@ DEFINE_DEVPROPKEY(DEVPROPKEY_GPU_LUID, 0x60b193cb, 0x5276, 0x4d0f, 0x96, 0xfc, 0
 DEFINE_DEVPROPKEY(DEVPROPKEY_MONITOR_GPU_LUID, 0xca085853, 0x16ce, 0x48aa, 0xb1, 0x14, 0xde, 0x9c, 0x72, 0x33, 0x42, 0x23, 1);
 DEFINE_DEVPROPKEY(DEVPROPKEY_MONITOR_OUTPUT_ID, 0xca085853, 0x16ce, 0x48aa, 0xb1, 0x14, 0xde, 0x9c, 0x72, 0x33, 0x42, 0x23, 2);
 
-/* Wine specific monitor properties */
+/* Wine specific properties */
+DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_GPU_VULKAN_UUID, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5c, 2);
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_STATEFLAGS, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 2);
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_RCMONITOR, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 3);
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_RCWORK, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 4);
@@ -124,7 +125,7 @@ static CRITICAL_SECTION_DEBUG screen_critsect_debug =
 };
 static CRITICAL_SECTION screen_section = {&screen_critsect_debug, -1, 0, 0, 0, 0};
 
-static HANDLE get_display_device_init_mutex(void)
+HANDLE get_display_device_init_mutex(void)
 {
     static const WCHAR init_mutexW[] = {'d','i','s','p','l','a','y','_','d','e','v','i','c','e','_','i','n','i','t',0};
     HANDLE mutex = CreateMutexW(NULL, FALSE, init_mutexW);
@@ -133,7 +134,7 @@ static HANDLE get_display_device_init_mutex(void)
     return mutex;
 }
 
-static void release_display_device_init_mutex(HANDLE mutex)
+void release_display_device_init_mutex(HANDLE mutex)
 {
     ReleaseMutex(mutex);
     CloseHandle(mutex);
@@ -337,6 +338,8 @@ static BOOL X11DRV_InitGpu(HDEVINFO devinfo, const struct x11drv_gpu *gpu, INT g
     BOOL ret = FALSE;
     FILETIME filetime;
 
+    TRACE("GPU id:0x%s name:%s.\n", wine_dbgstr_longlong(gpu->id), wine_dbgstr_w(gpu->name));
+
     sprintfW(instanceW, gpu_instance_fmtW, gpu->vendor_id, gpu->device_id, gpu->subsys_id, gpu->revision_id, gpu_index);
     if (!SetupDiOpenDeviceInfoW(devinfo, instanceW, NULL, 0, &device_data))
     {
@@ -369,8 +372,14 @@ static BOOL X11DRV_InitGpu(HDEVINFO devinfo, const struct x11drv_gpu *gpu, INT g
             goto done;
     }
     *gpu_luid = luid;
-    TRACE("GPU id:0x%s name:%s LUID:%08x:%08x.\n", wine_dbgstr_longlong(gpu->id),
-          wine_dbgstr_w(gpu->name), luid.HighPart, luid.LowPart);
+    TRACE("LUID:%08x:%08x.\n", luid.HighPart, luid.LowPart);
+
+    /* Write WINE_DEVPROPKEY_GPU_VULKAN_UUID property */
+    if (!SetupDiSetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_GPU_VULKAN_UUID,
+                                   DEVPROP_TYPE_GUID, (const BYTE *)&gpu->vulkan_uuid,
+                                   sizeof(gpu->vulkan_uuid), 0))
+        goto done;
+    TRACE("Vulkan UUID:%s.\n", wine_dbgstr_guid(&gpu->vulkan_uuid));
 
     /* Open driver key.
      * This is where HKLM\System\CurrentControlSet\Control\Video\{GPU GUID}\{Adapter Index} links to */
@@ -484,7 +493,7 @@ done:
 }
 
 static BOOL X11DRV_InitMonitor(HDEVINFO devinfo, const struct x11drv_monitor *monitor, int monitor_index,
-                               int video_index, const LUID *gpu_luid)
+                               int video_index, const LUID *gpu_luid, UINT output_id)
 {
     SP_DEVINFO_DATA device_data = {sizeof(SP_DEVINFO_DATA)};
     WCHAR bufferW[MAX_PATH];
@@ -509,7 +518,7 @@ static BOOL X11DRV_InitMonitor(HDEVINFO devinfo, const struct x11drv_monitor *mo
 
     /* Write DEVPROPKEY_MONITOR_OUTPUT_ID */
     if (!SetupDiSetDevicePropertyW(devinfo, &device_data, &DEVPROPKEY_MONITOR_OUTPUT_ID,
-                                   DEVPROP_TYPE_UINT32, (const BYTE *)&video_index, sizeof(video_index), 0))
+                                   DEVPROP_TYPE_UINT32, (const BYTE *)&output_id, sizeof(output_id), 0))
         goto done;
 
     /* Create driver key */
@@ -614,6 +623,7 @@ void X11DRV_DisplayDevices_Init(BOOL force)
     WCHAR guidW[40];
     WCHAR driverW[1024];
     LUID gpu_luid;
+    UINT output_id = 0;
 
     mutex = get_display_device_init_mutex();
 
@@ -664,7 +674,7 @@ void X11DRV_DisplayDevices_Init(BOOL force)
             for (monitor = 0; monitor < monitor_count; monitor++)
             {
                 TRACE("monitor: %#x %s\n", monitor, wine_dbgstr_w(monitors[monitor].name));
-                if (!X11DRV_InitMonitor(monitor_devinfo, &monitors[monitor], monitor, video_index, &gpu_luid))
+                if (!X11DRV_InitMonitor(monitor_devinfo, &monitors[monitor], monitor, video_index, &gpu_luid, output_id++))
                     goto done;
             }
 

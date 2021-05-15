@@ -27,19 +27,23 @@
 
 #include <assert.h>
 #include <errno.h>
-#include <locale.h>
-#include <langinfo.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <signal.h>
 #ifdef HAVE_PWD_H
 # include <pwd.h>
 #endif
+#ifdef HAVE_ELF_H
+# include <elf.h>
+#endif
+#ifdef HAVE_LINK_H
+# include <link.h>
+#endif
+#ifdef HAVE_SYS_AUXV_H
+# include <sys/auxv.h>
+#endif
 #ifdef HAVE_SYS_MMAN_H
 # include <sys/mman.h>
-#endif
-#ifdef HAVE_SYS_PRCTL_H
-# include <sys/prctl.h>
 #endif
 #ifdef HAVE_SYS_RESOURCE_H
 # include <sys/resource.h>
@@ -58,6 +62,8 @@
 # undef LoadResource
 # undef GetCurrentThread
 # include <pthread.h>
+# include <mach/mach.h>
+# include <mach/mach_error.h>
 # include <mach-o/getsect.h>
 # include <crt_externs.h>
 # include <spawn.h>
@@ -82,7 +88,13 @@
 WINE_DEFAULT_DEBUG_CHANNEL(ntdll);
 
 extern IMAGE_NT_HEADERS __wine_spec_nt_header;
-extern void CDECL __wine_set_unix_funcs( int version, const struct unix_funcs *funcs );
+
+void     (WINAPI *pDbgUiRemoteBreakin)( void *arg ) = NULL;
+NTSTATUS (WINAPI *pKiUserExceptionDispatcher)(EXCEPTION_RECORD*,CONTEXT*) = NULL;
+void     (WINAPI *pLdrInitializeThunk)(CONTEXT*,void**,ULONG_PTR,ULONG_PTR) = NULL;
+void     (WINAPI *pRtlUserThreadStart)( PRTL_THREAD_START_ROUTINE entry, void *arg ) = NULL;
+
+static void (CDECL *p__wine_set_unix_funcs)( int version, const struct unix_funcs *funcs );
 
 #ifdef __GNUC__
 static void fatal_error( const char *err, ... ) __attribute__((noreturn, format(printf,1,2)));
@@ -100,9 +112,6 @@ static const BOOL use_preloader = FALSE;
 
 static const BOOL is_win64 = (sizeof(void *) > sizeof(int));
 
-static int main_argc;
-static char **main_argv;
-static char **main_envp;
 static char *argv0;
 static const char *bin_dir;
 static const char *dll_dir;
@@ -112,8 +121,6 @@ static SIZE_T dll_path_maxlen;
 const char *data_dir = NULL;
 const char *build_dir = NULL;
 const char *config_dir = NULL;
-
-static CPTABLEINFO unix_table;
 
 static inline void *get_rva( const IMAGE_NT_HEADERS *nt, ULONG_PTR addr )
 {
@@ -275,9 +282,6 @@ static void init_paths( int argc, char *argv[], char *envp[] )
 {
     Dl_info info;
 
-    __wine_main_argc = main_argc = argc;
-    __wine_main_argv = main_argv = argv;
-    __wine_main_environ = main_envp = envp;
     argv0 = strdup( argv[0] );
 
     if (!dladdr( init_paths, &info ) || !(dll_dir = realpath_dirname( info.dli_fname )))
@@ -299,136 +303,6 @@ static void init_paths( int argc, char *argv[], char *envp[] )
     set_dll_path();
     set_config_dir();
 }
-
-#if !defined(__APPLE__) && !defined(__ANDROID__)  /* these platforms always use UTF-8 */
-
-/* charset to codepage map, sorted by name */
-static const struct { const char *name; UINT cp; } charset_names[] =
-{
-    { "ANSIX341968", 20127 },
-    { "BIG5", 950 },
-    { "BIG5HKSCS", 950 },
-    { "CP1250", 1250 },
-    { "CP1251", 1251 },
-    { "CP1252", 1252 },
-    { "CP1253", 1253 },
-    { "CP1254", 1254 },
-    { "CP1255", 1255 },
-    { "CP1256", 1256 },
-    { "CP1257", 1257 },
-    { "CP1258", 1258 },
-    { "CP932", 932 },
-    { "CP936", 936 },
-    { "CP949", 949 },
-    { "CP950", 950 },
-    { "EUCJP", 20932 },
-    { "EUCKR", 949 },
-    { "GB18030", 936  /* 54936 */ },
-    { "GB2312", 936 },
-    { "GBK", 936 },
-    { "IBM037", 37 },
-    { "IBM1026", 1026 },
-    { "IBM424", 20424 },
-    { "IBM437", 437 },
-    { "IBM500", 500 },
-    { "IBM850", 850 },
-    { "IBM852", 852 },
-    { "IBM855", 855 },
-    { "IBM857", 857 },
-    { "IBM860", 860 },
-    { "IBM861", 861 },
-    { "IBM862", 862 },
-    { "IBM863", 863 },
-    { "IBM864", 864 },
-    { "IBM865", 865 },
-    { "IBM866", 866 },
-    { "IBM869", 869 },
-    { "IBM874", 874 },
-    { "IBM875", 875 },
-    { "ISO88591", 28591 },
-    { "ISO885913", 28603 },
-    { "ISO885915", 28605 },
-    { "ISO88592", 28592 },
-    { "ISO88593", 28593 },
-    { "ISO88594", 28594 },
-    { "ISO88595", 28595 },
-    { "ISO88596", 28596 },
-    { "ISO88597", 28597 },
-    { "ISO88598", 28598 },
-    { "ISO88599", 28599 },
-    { "KOI8R", 20866 },
-    { "KOI8U", 21866 },
-    { "TIS620", 28601 },
-    { "UTF8", CP_UTF8 }
-};
-
-static void load_unix_cptable( unsigned int cp )
-{
-    const char *dir = build_dir ? build_dir : data_dir;
-    struct stat st;
-    char *name;
-    void *data;
-    int fd;
-
-    if (!(name = malloc( strlen(dir) + 22 ))) return;
-    sprintf( name, "%s/nls/c_%03u.nls", dir, cp );
-    if ((fd = open( name, O_RDONLY )) != -1)
-    {
-        fstat( fd, &st );
-        if ((data = malloc( st.st_size )) && st.st_size > 0x10000 &&
-            read( fd, data, st.st_size ) == st.st_size)
-        {
-            RtlInitCodePageTable( data, &unix_table );
-        }
-        else
-        {
-            free( data );
-        }
-        close( fd );
-    }
-    else ERR( "failed to load %s\n", name );
-    free( name );
-}
-
-static void init_unix_codepage(void)
-{
-    char charset_name[16];
-    const char *name;
-    size_t i, j;
-    int min = 0, max = ARRAY_SIZE(charset_names) - 1;
-
-    setlocale( LC_CTYPE, "" );
-    if (!(name = nl_langinfo( CODESET ))) return;
-
-    /* remove punctuation characters from charset name */
-    for (i = j = 0; name[i] && j < sizeof(charset_name)-1; i++)
-    {
-        if (name[i] >= '0' && name[i] <= '9') charset_name[j++] = name[i];
-        else if (name[i] >= 'A' && name[i] <= 'Z') charset_name[j++] = name[i];
-        else if (name[i] >= 'a' && name[i] <= 'z') charset_name[j++] = name[i] + ('A' - 'a');
-    }
-    charset_name[j] = 0;
-
-    while (min <= max)
-    {
-        int pos = (min + max) / 2;
-        int res = strcmp( charset_names[pos].name, charset_name );
-        if (!res)
-        {
-            if (charset_names[pos].cp != CP_UTF8) load_unix_cptable( charset_names[pos].cp );
-            return;
-        }
-        if (res > 0) max = pos - 1;
-        else min = pos + 1;
-    }
-    ERR( "unrecognized charset '%s'\n", name );
-}
-
-#else  /* __APPLE__ || __ANDROID__ */
-
-static void init_unix_codepage(void) { }
-
-#endif  /* __APPLE__ || __ANDROID__ */
 
 
 /*********************************************************************
@@ -474,19 +348,6 @@ void CDECL get_host_version( const char **sysname, const char **release )
 
 
 /*************************************************************************
- *		get_main_args
- *
- * Return the initial arguments.
- */
-static void CDECL get_main_args( int *argc, char **argv[], char **envp[] )
-{
-    *argc = main_argc;
-    *argv = main_argv;
-    *envp = main_envp;
-}
-
-
-/*************************************************************************
  *		get_paths
  *
  * Return the various configuration paths.
@@ -508,17 +369,6 @@ static void CDECL get_dll_path( const char ***paths, SIZE_T *maxlen )
 {
     *paths = dll_paths;
     *maxlen = dll_path_maxlen;
-}
-
-
-/*************************************************************************
- *		get_unix_codepage
- *
- * Return the Unix codepage data.
- */
-static void CDECL get_unix_codepage( CPTABLEINFO *table )
-{
-    *table = unix_table;
 }
 
 
@@ -591,8 +441,8 @@ static NTSTATUS loader_exec( const char *loader, char **argv, int is_child_64bit
  *
  * argv[0] and argv[1] must be reserved for the preloader and loader respectively.
  */
-static NTSTATUS CDECL exec_wineloader( char **argv, int socketfd, int is_child_64bit,
-                                       ULONGLONG res_start, ULONGLONG res_end )
+NTSTATUS exec_wineloader( char **argv, int socketfd, int is_child_64bit,
+                          ULONGLONG res_start, ULONGLONG res_end )
 {
     const char *loader = argv0;
     const char *loader_env = getenv( "WINELOADER" );
@@ -880,31 +730,36 @@ static ULONG_PTR find_ordinal_export( HMODULE module, const IMAGE_EXPORT_DIRECTO
 }
 
 static ULONG_PTR find_named_export( HMODULE module, const IMAGE_EXPORT_DIRECTORY *exports,
-                                    const IMAGE_IMPORT_BY_NAME *name )
+                                    const char *name )
 {
     const WORD *ordinals = (const WORD *)((BYTE *)module + exports->AddressOfNameOrdinals);
     const DWORD *names = (const DWORD *)((BYTE *)module + exports->AddressOfNames);
     int min = 0, max = exports->NumberOfNames - 1;
 
-    /* first check the hint */
-    if (name->Hint <= max)
+    while (min <= max)
+    {
+        int res, pos = (min + max) / 2;
+        char *ename = (char *)module + names[pos];
+        if (!(res = strcmp( ename, name ))) return find_ordinal_export( module, exports, ordinals[pos] );
+        if (res > 0) max = pos - 1;
+        else min = pos + 1;
+    }
+    return 0;
+}
+
+static ULONG_PTR find_pe_export( HMODULE module, const IMAGE_EXPORT_DIRECTORY *exports,
+                                 const IMAGE_IMPORT_BY_NAME *name )
+{
+    const WORD *ordinals = (const WORD *)((BYTE *)module + exports->AddressOfNameOrdinals);
+    const DWORD *names = (const DWORD *)((BYTE *)module + exports->AddressOfNames);
+
+    if (name->Hint < exports->NumberOfNames)
     {
         char *ename = (char *)module + names[name->Hint];
         if (!strcmp( ename, (char *)name->Name ))
             return find_ordinal_export( module, exports, ordinals[name->Hint] );
     }
-
-    /* then do a binary search */
-    while (min <= max)
-    {
-        int res, pos = (min + max) / 2;
-        char *ename = (char *)module + names[pos];
-        if (!(res = strcmp( ename, (char *)name->Name )))
-            return find_ordinal_export( module, exports, ordinals[pos] );
-        if (res > 0) max = pos - 1;
-        else min = pos + 1;
-    }
-    return 0;
+    return find_named_export( module, exports, (char *)name->Name );
 }
 
 static void fixup_ntdll_imports( const IMAGE_NT_HEADERS *nt, HMODULE ntdll_module )
@@ -917,38 +772,45 @@ static void fixup_ntdll_imports( const IMAGE_NT_HEADERS *nt, HMODULE ntdll_modul
     assert( ntdll_exports );
 
     descr = get_rva( nt, nt->OptionalHeader.DataDirectory[IMAGE_FILE_IMPORT_DIRECTORY].VirtualAddress );
-    while (descr->Name)
+
+    /* ntdll must be the only import */
+    assert( !strcmp( get_rva( nt, descr->Name ), "ntdll.dll" ));
+    assert( !descr[1].Name );
+
+    thunk_list = get_rva( nt, (DWORD)descr->FirstThunk );
+    if (descr->u.OriginalFirstThunk)
+        import_list = get_rva( nt, (DWORD)descr->u.OriginalFirstThunk );
+    else
+        import_list = thunk_list;
+
+    while (import_list->u1.Ordinal)
     {
-        /* ntdll must be the only import */
-        assert( !strcmp( get_rva( nt, descr->Name ), "ntdll.dll" ));
-
-        thunk_list = get_rva( nt, (DWORD)descr->FirstThunk );
-        if (descr->u.OriginalFirstThunk)
-            import_list = get_rva( nt, (DWORD)descr->u.OriginalFirstThunk );
-        else
-            import_list = thunk_list;
-
-
-        while (import_list->u1.Ordinal)
+        if (IMAGE_SNAP_BY_ORDINAL( import_list->u1.Ordinal ))
         {
-            if (IMAGE_SNAP_BY_ORDINAL( import_list->u1.Ordinal ))
-            {
-                int ordinal = IMAGE_ORDINAL( import_list->u1.Ordinal ) - ntdll_exports->Base;
-                thunk_list->u1.Function = find_ordinal_export( ntdll_module, ntdll_exports, ordinal );
-                if (!thunk_list->u1.Function) ERR( "ordinal %u not found\n", ordinal );
-            }
-            else  /* import by name */
-            {
-                IMAGE_IMPORT_BY_NAME *pe_name = get_rva( nt, import_list->u1.AddressOfData );
-                thunk_list->u1.Function = find_named_export( ntdll_module, ntdll_exports, pe_name );
-                if (!thunk_list->u1.Function) ERR( "%s not found\n", pe_name->Name );
-            }
-            import_list++;
-            thunk_list++;
+            int ordinal = IMAGE_ORDINAL( import_list->u1.Ordinal ) - ntdll_exports->Base;
+            thunk_list->u1.Function = find_ordinal_export( ntdll_module, ntdll_exports, ordinal );
+            if (!thunk_list->u1.Function) ERR( "ordinal %u not found\n", ordinal );
         }
-
-        descr++;
+        else  /* import by name */
+        {
+            IMAGE_IMPORT_BY_NAME *pe_name = get_rva( nt, import_list->u1.AddressOfData );
+            thunk_list->u1.Function = find_pe_export( ntdll_module, ntdll_exports, pe_name );
+            if (!thunk_list->u1.Function) ERR( "%s not found\n", pe_name->Name );
+        }
+        import_list++;
+        thunk_list++;
     }
+
+#define GET_FUNC(name) \
+    if (!(p##name = (void *)find_named_export( ntdll_module, ntdll_exports, #name ))) \
+        ERR( "%s not found\n", #name )
+
+    GET_FUNC( DbgUiRemoteBreakin );
+    GET_FUNC( KiUserExceptionDispatcher );
+    GET_FUNC( LdrInitializeThunk );
+    GET_FUNC( RtlUserThreadStart );
+    GET_FUNC( __wine_set_unix_funcs );
+#undef GET_FUNC
 }
 
 /***********************************************************************
@@ -979,106 +841,197 @@ static HMODULE load_ntdll(void)
 
 
 /***********************************************************************
+ *           get_image_address
+ */
+ULONG_PTR get_image_address(void)
+{
+#ifdef HAVE_GETAUXVAL
+    ULONG_PTR size, num, phdr_addr = getauxval( AT_PHDR );
+    ElfW(Phdr) *phdr;
+
+    if (!phdr_addr) return 0;
+    phdr = (ElfW(Phdr) *)phdr_addr;
+    size = getauxval( AT_PHENT );
+    num = getauxval( AT_PHNUM );
+    while (num--)
+    {
+        if (phdr->p_type == PT_PHDR) return phdr_addr - phdr->p_offset;
+        phdr = (ElfW(Phdr) *)((char *)phdr + size);
+    }
+#elif defined(__APPLE__) && defined(TASK_DYLD_INFO)
+    struct task_dyld_info dyld_info;
+    mach_msg_type_number_t size = TASK_DYLD_INFO_COUNT;
+
+    if (task_info(mach_task_self(), TASK_DYLD_INFO, (task_info_t)&dyld_info, &size) == KERN_SUCCESS)
+        return dyld_info.all_image_info_addr;
+#endif
+    return 0;
+}
+
+
+/***********************************************************************
  *           unix_funcs
  */
 static struct unix_funcs unix_funcs =
 {
+    NtAlertResumeThread,
+    NtAlertThread,
     NtAllocateVirtualMemory,
     NtAreMappedFilesTheSame,
+    NtAssignProcessToJobObject,
     NtCancelTimer,
     NtClearEvent,
     NtClose,
+    NtContinue,
     NtCreateEvent,
+    NtCreateFile,
+    NtCreateIoCompletion,
+    NtCreateJobObject,
     NtCreateKeyedEvent,
+    NtCreateMailslotFile,
     NtCreateMutant,
+    NtCreateNamedPipeFile,
     NtCreateSection,
     NtCreateSemaphore,
     NtCreateThreadEx,
     NtCreateTimer,
+    NtCreateUserProcess,
     NtCurrentTeb,
     NtDelayExecution,
+    NtDeleteFile,
+    NtDeviceIoControlFile,
     NtDuplicateObject,
+    NtFlushBuffersFile,
+    NtFlushInstructionCache,
+    NtFlushProcessWriteBuffers,
     NtFlushVirtualMemory,
     NtFreeVirtualMemory,
+    NtFsControlFile,
     NtGetContextThread,
+    NtGetCurrentProcessorNumber,
     NtGetWriteWatch,
+    NtIsProcessInJob,
     NtLockVirtualMemory,
     NtMapViewOfSection,
+    NtNotifyChangeDirectoryFile,
     NtOpenEvent,
+    NtOpenFile,
+    NtOpenIoCompletion,
+    NtOpenJobObject,
     NtOpenKeyedEvent,
     NtOpenMutant,
+    NtOpenProcess,
     NtOpenSection,
     NtOpenSemaphore,
+    NtOpenThread,
     NtOpenTimer,
     NtProtectVirtualMemory,
     NtPulseEvent,
+    NtQueryAttributesFile,
+    NtQueryDirectoryFile,
     NtQueryEvent,
+    NtQueryFullAttributesFile,
+    NtQueryInformationFile,
+    NtQueryInformationJobObject,
+    NtQueryInformationProcess,
+    NtQueryInformationThread,
+    NtQueryIoCompletion,
     NtQueryMutant,
+    NtQueryPerformanceCounter,
     NtQuerySection,
     NtQuerySemaphore,
+    NtQuerySystemTime,
     NtQueryTimer,
     NtQueryVirtualMemory,
+    NtQueryVolumeInformationFile,
+    NtQueueApcThread,
+    NtRaiseException,
+    NtReadFile,
+    NtReadFileScatter,
     NtReadVirtualMemory,
     NtReleaseKeyedEvent,
     NtReleaseMutant,
     NtReleaseSemaphore,
+    NtRemoveIoCompletion,
+    NtRemoveIoCompletionEx,
     NtResetEvent,
     NtResetWriteWatch,
+    NtResumeProcess,
+    NtResumeThread,
     NtSetContextThread,
     NtSetEvent,
+    NtSetInformationFile,
+    NtSetInformationJobObject,
+    NtSetInformationProcess,
+    NtSetInformationThread,
+    NtSetIoCompletion,
     NtSetLdtEntries,
+    NtSetSystemTime,
     NtSetTimer,
+    NtSetVolumeInformationFile,
     NtSignalAndWaitForSingleObject,
+    NtSuspendProcess,
+    NtSuspendThread,
+    NtTerminateJobObject,
+    NtTerminateProcess,
+    NtTerminateThread,
     NtUnlockVirtualMemory,
     NtUnmapViewOfSection,
     NtWaitForKeyedEvent,
     NtWaitForMultipleObjects,
     NtWaitForSingleObject,
+    NtWriteFile,
+    NtWriteFileGather,
     NtWriteVirtualMemory,
     NtYieldExecution,
     DbgUiIssueRemoteBreakin,
+    RtlWaitOnAddress,
+    RtlWakeAddressAll,
+    RtlWakeAddressSingle,
+    fast_RtlpWaitForCriticalSection,
+    fast_RtlpUnWaitCriticalSection,
+    fast_RtlDeleteCriticalSection,
+    fast_RtlTryAcquireSRWLockExclusive,
+    fast_RtlAcquireSRWLockExclusive,
+    fast_RtlTryAcquireSRWLockShared,
+    fast_RtlAcquireSRWLockShared,
+    fast_RtlReleaseSRWLockExclusive,
+    fast_RtlReleaseSRWLockShared,
+    fast_RtlSleepConditionVariableSRW,
+    fast_RtlSleepConditionVariableCS,
+    fast_RtlWakeConditionVariable,
     get_main_args,
+    get_initial_environment,
+    get_initial_directory,
     get_paths,
     get_dll_path,
     get_unix_codepage,
+    get_locales,
     get_version,
     get_build_id,
     get_host_version,
-    exec_wineloader,
     map_so_dll,
     virtual_map_section,
     virtual_get_system_info,
     virtual_create_builtin_view,
     virtual_alloc_thread_stack,
-    virtual_handle_fault,
-    virtual_locked_server_call,
-    virtual_locked_read,
-    virtual_locked_pread,
     virtual_locked_recvmsg,
-    virtual_is_valid_code_address,
-    virtual_handle_stack_fault,
-    virtual_check_buffer_for_read,
-    virtual_check_buffer_for_write,
-    virtual_uninterrupted_read_memory,
-    virtual_uninterrupted_write_memory,
-    virtual_set_force_exec,
     virtual_release_address_space,
     virtual_set_large_address_space,
     init_threading,
-    start_process,
-    abort_thread,
     exit_thread,
     exit_process,
-    get_thread_ldt_entry,
+    exec_process,
     wine_server_call,
-    server_select,
-    server_wait,
     server_send_fd,
     server_get_unix_fd,
     server_fd_to_handle,
     server_handle_to_fd,
     server_release_fd,
     server_init_process_done,
+    nt_to_unix_file_name,
+    unix_to_nt_file_name,
+    set_show_dot_files,
     __wine_dbg_get_channel_flags,
     __wine_dbg_strdup,
     __wine_dbg_output,
@@ -1095,7 +1048,7 @@ struct apple_stack_info
 
 static void *apple_wine_thread( void *arg )
 {
-    __wine_set_unix_funcs( NTDLL_UNIXLIB_VERSION, &unix_funcs );
+    p__wine_set_unix_funcs( NTDLL_UNIXLIB_VERSION, &unix_funcs );
     return NULL;
 }
 
@@ -1278,68 +1231,6 @@ static int pre_exec(void)
 
 
 /***********************************************************************
- *           set_process_name
- *
- * Change the process name in the ps output.
- */
-static void set_process_name( int argc, char *argv[] )
-{
-    BOOL shift_strings;
-    char *p, *name;
-    int i;
-
-#ifdef HAVE_SETPROCTITLE
-    setproctitle("-%s", argv[1]);
-    shift_strings = FALSE;
-#else
-    p = argv[0];
-
-    shift_strings = (argc >= 2);
-    for (i = 1; i < argc; i++)
-    {
-        p += strlen(p) + 1;
-        if (p != argv[i])
-        {
-            shift_strings = FALSE;
-            break;
-        }
-    }
-#endif
-
-    if (shift_strings)
-    {
-        int offset = argv[1] - argv[0];
-        char *end = argv[argc-1] + strlen(argv[argc-1]) + 1;
-        memmove( argv[0], argv[1], end - argv[1] );
-        memset( end - offset, 0, offset );
-        for (i = 1; i < argc; i++)
-            argv[i-1] = argv[i] - offset;
-        argv[i-1] = NULL;
-    }
-    else
-    {
-        /* remove argv[0] */
-        memmove( argv, argv + 1, argc * sizeof(argv[0]) );
-    }
-
-    name = argv[0];
-    if ((p = strrchr( name, '\\' ))) name = p + 1;
-    if ((p = strrchr( name, '/' ))) name = p + 1;
-
-#if defined(HAVE_SETPROGNAME)
-    setprogname( name );
-#endif
-
-#ifdef HAVE_PRCTL
-#ifndef PR_SET_NAME
-# define PR_SET_NAME 15
-#endif
-    prctl( PR_SET_NAME, name );
-#endif  /* HAVE_PRCTL */
-}
-
-
-/***********************************************************************
  *           check_command_line
  *
  * Check if command line is one that needs to be handled specially.
@@ -1407,13 +1298,12 @@ void __wine_main( int argc, char *argv[], char *envp[] )
     module = load_ntdll();
     fixup_ntdll_imports( &__wine_spec_nt_header, module );
 
-    set_process_name( argc, argv );
-    init_unix_codepage();
+    init_environment( argc, argv, envp );
 
 #ifdef __APPLE__
     apple_main_thread();
 #endif
-    __wine_set_unix_funcs( NTDLL_UNIXLIB_VERSION, &unix_funcs );
+    p__wine_set_unix_funcs( NTDLL_UNIXLIB_VERSION, &unix_funcs );
 }
 
 
@@ -1442,8 +1332,7 @@ NTSTATUS __cdecl __wine_init_unix_lib( HMODULE module, const void *ptr_in, void 
 
     map_so_dll( nt, module );
     fixup_ntdll_imports( &__wine_spec_nt_header, module );
-    set_process_name( __wine_main_argc, __wine_main_argv );
-    init_unix_codepage();
+    init_environment( __wine_main_argc, __wine_main_argv, envp );
     *(struct unix_funcs **)ptr_out = &unix_funcs;
     wine_mmap_enum_reserved_areas( add_area, NULL, 0 );
     return STATUS_SUCCESS;
