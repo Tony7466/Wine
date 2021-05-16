@@ -88,7 +88,6 @@ struct startup_info
 {
     PRTL_THREAD_START_ROUTINE entry;
     void                     *arg;
-    HANDLE                    actctx;
 };
 
 /***********************************************************************
@@ -102,18 +101,12 @@ static void start_thread( TEB *teb )
     struct ntdll_thread_data *thread_data = (struct ntdll_thread_data *)&teb->GdiTebBatch;
     struct debug_info debug_info;
     BOOL suspend;
-    ULONG_PTR cookie;
 
     debug_info.str_pos = debug_info.out_pos = 0;
     thread_data->debug_info = &debug_info;
     thread_data->pthread_id = pthread_self();
     signal_init_thread( teb );
     server_init_thread( info->entry, &suspend );
-    if (info->actctx)
-    {
-        RtlActivateActivationContext( 0, info->actctx, &cookie );
-        RtlReleaseActivationContext( info->actctx );
-    }
     signal_start_thread( info->entry, info->arg, suspend, pRtlUserThreadStart, teb );
 }
 
@@ -123,7 +116,7 @@ static void start_thread( TEB *teb )
  *
  * Update the output attributes.
  */
-static void update_attr_list( PS_ATTRIBUTE_LIST *attr, const CLIENT_ID *id )
+static void update_attr_list( PS_ATTRIBUTE_LIST *attr, const CLIENT_ID *id, TEB *teb )
 {
     SIZE_T i, count = (attr->TotalLength - sizeof(attr->TotalLength)) / sizeof(PS_ATTRIBUTE);
 
@@ -133,6 +126,12 @@ static void update_attr_list( PS_ATTRIBUTE_LIST *attr, const CLIENT_ID *id )
         {
             SIZE_T size = min( attr->Attributes[i].Size, sizeof(*id) );
             memcpy( attr->Attributes[i].ValuePtr, id, size );
+            if (attr->Attributes[i].ReturnLength) *attr->Attributes[i].ReturnLength = size;
+        }
+        else if (attr->Attributes[i].Attribute == PS_ATTRIBUTE_TEB_ADDRESS)
+        {
+            SIZE_T size = min( attr->Attributes[i].Size, sizeof(teb) );
+            memcpy( attr->Attributes[i].ValuePtr, &teb, size );
             if (attr->Attributes[i].ReturnLength) *attr->Attributes[i].ReturnLength = size;
         }
     }
@@ -158,7 +157,6 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
     int request_pipe[2];
     SIZE_T extra_stack = PTHREAD_STACK_MIN;
     CLIENT_ID client_id;
-    HANDLE actctx;
     TEB *teb;
     INITIAL_TEB stack;
     NTSTATUS status;
@@ -181,10 +179,11 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
 
         if (result.create_thread.status == STATUS_SUCCESS)
         {
+            TEB *teb = wine_server_get_ptr( result.create_thread.teb );
             *handle = wine_server_ptr_handle( result.create_thread.handle );
             client_id.UniqueProcess = ULongToHandle( result.create_thread.pid );
             client_id.UniqueThread  = ULongToHandle( result.create_thread.tid );
-            if (attr_list) update_attr_list( attr_list, &client_id );
+            if (attr_list) update_attr_list( attr_list, &client_id, teb );
         }
         return result.create_thread.status;
     }
@@ -223,8 +222,6 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
         return status;
     }
 
-    RtlGetActiveActivationContext( &actctx );
-
     pthread_sigmask( SIG_BLOCK, &server_block_set, &sigset );
 
     if ((status = virtual_alloc_teb( &teb ))) goto done;
@@ -242,7 +239,6 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
     info = (struct startup_info *)(teb + 1);
     info->entry  = start;
     info->arg    = param;
-    info->actctx = actctx;
 
     teb->Tib.StackBase = stack.StackBase;
     teb->Tib.StackLimit = stack.StackLimit;
@@ -271,11 +267,10 @@ done:
     if (status)
     {
         NtClose( *handle );
-        RtlReleaseActivationContext( actctx );
         close( request_pipe[1] );
         return status;
     }
-    if (attr_list) update_attr_list( attr_list, &client_id );
+    if (attr_list) update_attr_list( attr_list, &client_id, teb );
     return STATUS_SUCCESS;
 }
 
@@ -415,7 +410,7 @@ NTSTATUS WINAPI NtRaiseException( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL 
     if (status == DBG_CONTINUE || status == DBG_EXCEPTION_HANDLED)
         NtSetContextThread( GetCurrentThread(), context );
 
-    if (first_chance) call_user_exception_dispatcher( rec, context );
+    if (first_chance) call_user_exception_dispatcher( rec, context, pKiUserExceptionDispatcher );
 
     if (rec->ExceptionFlags & EH_STACK_INVALID)
         ERR("Exception frame is not in stack limits => unable to dispatch exception.\n");
@@ -806,7 +801,7 @@ BOOL get_thread_times(int unix_pid, int unix_tid, LARGE_INTEGER *kernel_time, LA
         sprintf( buf, "/proc/%u/task/%u/stat", unix_pid, unix_tid );
     if (!(f = fopen( buf, "r" )))
     {
-        ERR("Failed to open %s: %s\n", buf, strerror(errno));
+        WARN("Failed to open %s: %s\n", buf, strerror(errno));
         return FALSE;
     }
 

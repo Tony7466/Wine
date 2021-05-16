@@ -496,32 +496,24 @@ void init_cpu_info(void)
            cpu_info.Architecture, cpu_info.Level, cpu_info.Revision, cpu_info.FeatureSet );
 }
 
-static BOOL grow_logical_proc_buf( SYSTEM_LOGICAL_PROCESSOR_INFORMATION **pdata,
-                                   SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX **pdataex, DWORD *max_len )
+static BOOL grow_logical_proc_buf( SYSTEM_LOGICAL_PROCESSOR_INFORMATION **pdata, DWORD *max_len )
 {
-    if (pdata)
-    {
-        SYSTEM_LOGICAL_PROCESSOR_INFORMATION *new_data;
+    SYSTEM_LOGICAL_PROCESSOR_INFORMATION *new_data;
 
-        *max_len *= 2;
-        new_data = RtlReAllocateHeap(GetProcessHeap(), 0, *pdata, *max_len*sizeof(*new_data));
-        if (!new_data)
-            return FALSE;
+    *max_len *= 2;
+    if (!(new_data = realloc( *pdata, *max_len*sizeof(*new_data) ))) return FALSE;
+    *pdata = new_data;
+    return TRUE;
+}
 
-        *pdata = new_data;
-    }
-    else
-    {
-        SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *new_dataex;
-
-        *max_len *= 2;
-        new_dataex = RtlReAllocateHeap(GetProcessHeap(), HEAP_ZERO_MEMORY, *pdataex, *max_len*sizeof(*new_dataex));
-        if (!new_dataex)
-            return FALSE;
-
-        *pdataex = new_dataex;
-    }
-
+static BOOL grow_logical_proc_ex_buf( SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX **pdataex, DWORD *max_len )
+{
+    SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *new_dataex;
+    DWORD new_len = *max_len * 2;
+    if (!(new_dataex = realloc( *pdataex, new_len * sizeof(*new_dataex) ))) return FALSE;
+    memset( new_dataex + *max_len, 0, (new_len - *max_len) * sizeof(*new_dataex) );
+    *pdataex = new_dataex;
+    *max_len = new_len;
     return TRUE;
 }
 
@@ -570,7 +562,7 @@ static BOOL logical_proc_info_add_by_id( SYSTEM_LOGICAL_PROCESSOR_INFORMATION **
 
         while (*len == *pmax_len)
         {
-            if (!grow_logical_proc_buf(pdata, NULL, pmax_len)) return FALSE;
+            if (!grow_logical_proc_buf(pdata, pmax_len)) return FALSE;
         }
 
         (*pdata)[i].Relationship = rel;
@@ -606,7 +598,7 @@ static BOOL logical_proc_info_add_by_id( SYSTEM_LOGICAL_PROCESSOR_INFORMATION **
 
         while (ofs + log_proc_ex_size_plus(sizeof(PROCESSOR_RELATIONSHIP)) > *pmax_len)
         {
-            if (!grow_logical_proc_buf(NULL, pdataex, pmax_len)) return FALSE;
+            if (!grow_logical_proc_ex_buf(pdataex, pmax_len)) return FALSE;
         }
 
         dataex = (SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *)(((char *)*pdataex) + ofs);
@@ -647,7 +639,7 @@ static BOOL logical_proc_info_add_cache( SYSTEM_LOGICAL_PROCESSOR_INFORMATION **
         }
 
         while (*len == *pmax_len)
-            if (!grow_logical_proc_buf(pdata, NULL, pmax_len)) return FALSE;
+            if (!grow_logical_proc_buf(pdata, pmax_len)) return FALSE;
 
         (*pdata)[i].Relationship = RelationCache;
         (*pdata)[i].ProcessorMask = mask;
@@ -670,7 +662,7 @@ static BOOL logical_proc_info_add_cache( SYSTEM_LOGICAL_PROCESSOR_INFORMATION **
 
         while (ofs + log_proc_ex_size_plus(sizeof(CACHE_RELATIONSHIP)) > *pmax_len)
         {
-            if (!grow_logical_proc_buf(NULL, pdataex, pmax_len)) return FALSE;
+            if (!grow_logical_proc_ex_buf(pdataex, pmax_len)) return FALSE;
         }
 
         dataex = (SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *)(((char *)*pdataex) + ofs);
@@ -698,7 +690,7 @@ static BOOL logical_proc_info_add_numa_node( SYSTEM_LOGICAL_PROCESSOR_INFORMATIO
     if (pdata)
     {
         while (*len == *pmax_len)
-            if (!grow_logical_proc_buf(pdata, NULL, pmax_len)) return FALSE;
+            if (!grow_logical_proc_buf(pdata, pmax_len)) return FALSE;
 
         (*pdata)[*len].Relationship = RelationNumaNode;
         (*pdata)[*len].ProcessorMask = mask;
@@ -711,7 +703,7 @@ static BOOL logical_proc_info_add_numa_node( SYSTEM_LOGICAL_PROCESSOR_INFORMATIO
 
         while (*len + log_proc_ex_size_plus(sizeof(NUMA_NODE_RELATIONSHIP)) > *pmax_len)
         {
-            if (!grow_logical_proc_buf(NULL, pdataex, pmax_len)) return FALSE;
+            if (!grow_logical_proc_ex_buf(pdataex, pmax_len)) return FALSE;
         }
 
         dataex = (SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *)(((char *)*pdataex) + *len);
@@ -734,7 +726,7 @@ static BOOL logical_proc_info_add_group( SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX
     SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *dataex;
 
     while (*len + log_proc_ex_size_plus(sizeof(GROUP_RELATIONSHIP)) > *pmax_len)
-        if (!grow_logical_proc_buf(NULL, pdataex, pmax_len)) return FALSE;
+        if (!grow_logical_proc_ex_buf(pdataex, pmax_len)) return FALSE;
 
     dataex = (SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *)(((char *)*pdataex) + *len);
 
@@ -1729,7 +1721,8 @@ static BOOL reg_query_value( HKEY key, LPCWSTR name, DWORD type, void *data, DWO
 
     if (count > sizeof(buf) - sizeof(KEY_VALUE_PARTIAL_INFORMATION)) return FALSE;
 
-    RtlInitUnicodeString( &nameW, name );
+    nameW.Buffer = (WCHAR *)name;
+    nameW.Length = wcslen( name ) * sizeof(WCHAR);
     if (NtQueryValueKey( key, &nameW, KeyValuePartialInformation, buf, sizeof(buf), &count ))
         return FALSE;
 
@@ -1756,7 +1749,7 @@ static void find_reg_tz_info(RTL_DYNAMIC_TIME_ZONE_INFORMATION *tzi, const char*
     HANDLE key, subkey, subkey_dyn = 0;
     ULONG idx, len;
     OBJECT_ATTRIBUTES attr;
-    UNICODE_STRING nameW, nameDynamicW;
+    UNICODE_STRING nameW;
     WCHAR yearW[16];
     char buffer[128];
     KEY_BASIC_INFORMATION *info = (KEY_BASIC_INFORMATION *)buffer;
@@ -1764,9 +1757,8 @@ static void find_reg_tz_info(RTL_DYNAMIC_TIME_ZONE_INFORMATION *tzi, const char*
     sprintf( buffer, "%u", year );
     ascii_to_unicode( yearW, buffer, strlen(buffer) + 1 );
 
-    RtlInitUnicodeString( &nameW, Time_ZonesW );
-    RtlInitUnicodeString( &nameDynamicW, Dynamic_DstW );
-
+    nameW.Buffer = (WCHAR *)Time_ZonesW;
+    nameW.Length = sizeof(Time_ZonesW) - sizeof(WCHAR);
     InitializeObjectAttributes( &attr, &nameW, 0, 0, NULL );
     if (NtOpenKey( &key, KEY_READ, &attr )) return;
 
@@ -1785,7 +1777,7 @@ static void find_reg_tz_info(RTL_DYNAMIC_TIME_ZONE_INFORMATION *tzi, const char*
 
         nameW.Buffer = info->Name;
         nameW.Length = info->NameLength;
-        InitializeObjectAttributes( &attr, &nameW, 0, key, NULL );
+        attr.RootDirectory = key;
         if (NtOpenKey( &subkey, KEY_READ, &attr )) continue;
 
         memset( &reg_tzi, 0, sizeof(reg_tzi) );
@@ -1801,7 +1793,9 @@ static void find_reg_tz_info(RTL_DYNAMIC_TIME_ZONE_INFORMATION *tzi, const char*
             goto next;
 
         /* Check for Dynamic DST entry first */
-        InitializeObjectAttributes( &attr, &nameDynamicW, 0, subkey, NULL );
+        nameW.Buffer = (WCHAR *)Dynamic_DstW;
+        nameW.Length = sizeof(Dynamic_DstW) - sizeof(WCHAR);
+        attr.RootDirectory = subkey;
         if (!NtOpenKey( &subkey_dyn, KEY_READ, &attr ))
         {
             is_dynamic = reg_query_value( subkey_dyn, yearW, REG_BINARY, &tz_data, sizeof(tz_data) );
@@ -1874,17 +1868,9 @@ static time_t find_dst_change(unsigned long min, unsigned long max, int *is_dst)
     return min;
 }
 
-static RTL_CRITICAL_SECTION TIME_tz_section;
-static RTL_CRITICAL_SECTION_DEBUG critsect_debug =
-{
-    0, 0, &TIME_tz_section,
-    { &critsect_debug.ProcessLocksList, &critsect_debug.ProcessLocksList },
-      0, 0, { (DWORD_PTR)(__FILE__ ": TIME_tz_section") }
-};
-static RTL_CRITICAL_SECTION TIME_tz_section = { &critsect_debug, -1, 0, 0, 0, 0 };
-
 static void get_timezone_info( RTL_DYNAMIC_TIME_ZONE_INFORMATION *tzi )
 {
+    static pthread_mutex_t tz_mutex = PTHREAD_MUTEX_INITIALIZER;
     static RTL_DYNAMIC_TIME_ZONE_INFORMATION cached_tzi;
     static int current_year = -1, current_bias = 65535;
     struct tm *tm;
@@ -1892,7 +1878,7 @@ static void get_timezone_info( RTL_DYNAMIC_TIME_ZONE_INFORMATION *tzi )
     time_t year_start, year_end, tmp, dlt = 0, std = 0;
     int is_dst, bias;
 
-    RtlEnterCriticalSection( &TIME_tz_section );
+    pthread_mutex_lock( &tz_mutex );
 
     year_start = time(NULL);
     tm = gmtime(&year_start);
@@ -1902,7 +1888,7 @@ static void get_timezone_info( RTL_DYNAMIC_TIME_ZONE_INFORMATION *tzi )
     if (current_year == tm->tm_year && current_bias == bias)
     {
         *tzi = cached_tzi;
-        RtlLeaveCriticalSection( &TIME_tz_section );
+        pthread_mutex_unlock( &tz_mutex );
         return;
     }
 
@@ -1995,7 +1981,7 @@ static void get_timezone_info( RTL_DYNAMIC_TIME_ZONE_INFORMATION *tzi )
 
     find_reg_tz_info(tzi, tz_name, current_year + 1900);
     cached_tzi = *tzi;
-    RtlLeaveCriticalSection( &TIME_tz_section );
+    pthread_mutex_unlock( &tz_mutex );
 }
 
 
@@ -2083,132 +2069,104 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
 
     case SystemProcessInformation:
     {
-        SYSTEM_PROCESS_INFORMATION *spi = info;
-        SYSTEM_PROCESS_INFORMATION *last = NULL;
-        HANDLE handle = 0;
-        WCHAR procname[1024];
-        WCHAR* exename;
-        DWORD wlen = 0;
-        DWORD procstructlen = 0;
+        unsigned int process_count, i, j;
+        char *buffer = NULL;
+        unsigned int pos = 0;
 
-        SERVER_START_REQ( create_snapshot )
+        if (size && !(buffer = malloc( size )))
         {
-            req->flags = SNAP_PROCESS | SNAP_THREAD;
-            if (!(ret = wine_server_call( req ))) handle = wine_server_ptr_handle( reply->handle );
+            ret = STATUS_NO_MEMORY;
+            break;
+        }
+
+        SERVER_START_REQ( list_processes )
+        {
+            wine_server_set_reply( req, buffer, size );
+            ret = wine_server_call( req );
+            len = reply->info_size;
+            process_count = reply->process_count;
         }
         SERVER_END_REQ;
 
-        len = 0;
-        while (ret == STATUS_SUCCESS)
+        if (ret)
         {
-            int unix_pid = -1;
-            SERVER_START_REQ( next_process )
+            free( buffer );
+            break;
+        }
+
+        len = 0;
+
+        for (i = 0; i < process_count; i++)
+        {
+            SYSTEM_PROCESS_INFORMATION *nt_process = (SYSTEM_PROCESS_INFORMATION *)((char *)info + len);
+            const struct process_info *server_process;
+            const WCHAR *server_name, *file_part;
+            ULONG proc_len;
+            ULONG name_len = 0;
+
+            pos = (pos + 7) & ~7;
+            server_process = (const struct process_info *)(buffer + pos);
+            pos += sizeof(*server_process);
+
+            server_name = (const WCHAR *)(buffer + pos);
+            file_part = server_name + (server_process->name_len / sizeof(WCHAR));
+            pos += server_process->name_len;
+            while (file_part > server_name && file_part[-1] != '\\')
             {
-                req->handle = wine_server_obj_handle( handle );
-                req->reset = (len == 0);
-                wine_server_set_reply( req, procname, sizeof(procname) - sizeof(WCHAR) );
-                if (!(ret = wine_server_call( req )))
-                {
-                    unix_pid = reply->unix_pid;
-
-                    /* Make sure procname is 0 terminated */
-                    procname[wine_server_reply_size(reply) / sizeof(WCHAR)] = 0;
-
-                    /* Get only the executable name, not the path */
-                    if ((exename = wcsrchr(procname, '\\')) != NULL) exename++;
-                    else exename = procname;
-
-                    wlen = (wcslen(exename) + 1) * sizeof(WCHAR);
-                    procstructlen = sizeof(*spi) + wlen + ((reply->threads - 1) * sizeof(SYSTEM_THREAD_INFORMATION));
-
-                    if (size >= len + procstructlen)
-                    {
-                        /* ftCreationTime, ftUserTime, ftKernelTime;
-                         * vmCounters, ioCounters
-                         */
-                        memset(spi, 0, sizeof(*spi));
-
-                        spi->NextEntryOffset = procstructlen - wlen;
-                        spi->dwThreadCount = reply->threads;
-
-                        /* spi->pszProcessName will be set later on */
-
-                        spi->dwBasePriority = reply->priority;
-                        spi->UniqueProcessId = UlongToHandle(reply->pid);
-                        spi->ParentProcessId = UlongToHandle(reply->ppid);
-                        spi->HandleCount = reply->handles;
-
-                        /* spi->ti will be set later on */
-
-                    }
-                    len += procstructlen;
-                }
-            }
-            SERVER_END_REQ;
-            if (ret != STATUS_SUCCESS)
-            {
-                if (ret == STATUS_NO_MORE_FILES) ret = STATUS_SUCCESS;
-                break;
+                file_part--;
+                name_len++;
             }
 
-            if (size >= len)
+            proc_len = sizeof(*nt_process) + server_process->thread_count * sizeof(SYSTEM_THREAD_INFORMATION)
+                         + (name_len + 1) * sizeof(WCHAR);
+            len += proc_len;
+
+            if (len <= size)
             {
-                int     i, j;
+                memset(nt_process, 0, sizeof(*nt_process));
+                if (i < process_count - 1)
+                    nt_process->NextEntryOffset = proc_len;
+                nt_process->CreationTime.QuadPart = server_process->start_time;
+                nt_process->dwThreadCount = server_process->thread_count;
+                nt_process->dwBasePriority = server_process->priority;
+                nt_process->UniqueProcessId = UlongToHandle(server_process->pid);
+                nt_process->ParentProcessId = UlongToHandle(server_process->parent_pid);
+                nt_process->HandleCount = server_process->handle_count;
+                get_thread_times( server_process->unix_pid, -1, &nt_process->KernelTime, &nt_process->UserTime );
+                fill_vm_counters( &nt_process->vmCounters, server_process->unix_pid );
+            }
 
-                get_thread_times(unix_pid, -1, &spi->KernelTime, &spi->UserTime);
+            pos = (pos + 7) & ~7;
+            for (j = 0; j < server_process->thread_count; j++)
+            {
+                const struct thread_info *server_thread = (const struct thread_info *)(buffer + pos);
 
-                /* set thread info */
-                i = j = 0;
-                while (ret == STATUS_SUCCESS)
+                if (len <= size)
                 {
-                    int unix_tid, pid, tid, base_pri, delta_pri;
-                    SERVER_START_REQ( next_thread )
-                    {
-                        req->handle = wine_server_obj_handle( handle );
-                        req->reset = (j == 0);
-                        if (!(ret = wine_server_call( req )))
-                        {
-                            unix_tid = reply->unix_tid;
-                            pid = reply->pid;
-                            tid = reply->tid;
-                            base_pri = reply->base_pri;
-                            delta_pri = reply->delta_pri;
-                            j++;
-                        }
-                    }
-                    SERVER_END_REQ;
-
-                    if (!ret)
-                    {
-                        if (UlongToHandle(pid) == spi->UniqueProcessId)
-                        {
-                            memset(&spi->ti[i], 0, sizeof(spi->ti));
-
-                            spi->ti[i].CreateTime.QuadPart = 0xdeadbeef;
-                            spi->ti[i].ClientId.UniqueProcess = UlongToHandle(pid);
-                            spi->ti[i].ClientId.UniqueThread  = UlongToHandle(tid);
-                            spi->ti[i].dwCurrentPriority = base_pri + delta_pri;
-                            spi->ti[i].dwBasePriority = base_pri;
-                            get_thread_times(unix_pid, unix_tid, &spi->ti[i].KernelTime, &spi->ti[i].UserTime);
-                            i++;
-                        }
-                    }
+                    nt_process->ti[j].CreateTime.QuadPart = server_thread->start_time;
+                    nt_process->ti[j].ClientId.UniqueProcess = UlongToHandle(server_process->pid);
+                    nt_process->ti[j].ClientId.UniqueThread = UlongToHandle(server_thread->tid);
+                    nt_process->ti[j].dwCurrentPriority = server_thread->current_priority;
+                    nt_process->ti[j].dwBasePriority = server_thread->base_priority;
+                    get_thread_times( server_process->unix_pid, server_thread->unix_tid,
+                                      &nt_process->ti[j].KernelTime, &nt_process->ti[j].UserTime );
                 }
-                if (ret == STATUS_NO_MORE_FILES) ret = STATUS_SUCCESS;
 
-                /* now append process name */
-                spi->ProcessName.Buffer = (WCHAR*)((char*)spi + spi->NextEntryOffset);
-                spi->ProcessName.Length = wlen - sizeof(WCHAR);
-                spi->ProcessName.MaximumLength = wlen;
-                memcpy( spi->ProcessName.Buffer, exename, wlen );
-                spi->NextEntryOffset += wlen;
-                last = spi;
-                spi = (SYSTEM_PROCESS_INFORMATION*)((char*)spi + spi->NextEntryOffset);
+                pos += sizeof(*server_thread);
+            }
+
+            if (len <= size)
+            {
+                nt_process->ProcessName.Buffer = (WCHAR *)&nt_process->ti[server_process->thread_count];
+                nt_process->ProcessName.Length = name_len * sizeof(WCHAR);
+                nt_process->ProcessName.MaximumLength = (name_len + 1) * sizeof(WCHAR);
+                memcpy(nt_process->ProcessName.Buffer, file_part, name_len * sizeof(WCHAR));
+                nt_process->ProcessName.Buffer[name_len] = 0;
             }
         }
-        if (ret == STATUS_SUCCESS && last) last->NextEntryOffset = 0;
+
         if (len > size) ret = STATUS_INFO_LENGTH_MISMATCH;
-        if (handle) NtClose( handle );
+        free( buffer );
         break;
     }
 
@@ -2222,6 +2180,11 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
         {
             len = 0;
             ret = STATUS_INFO_LENGTH_MISMATCH;
+            break;
+        }
+        if (!(sppi = calloc( out_cpus, sizeof(*sppi) )))
+        {
+            ret = STATUS_NO_MEMORY;
             break;
         }
         else
@@ -2238,8 +2201,6 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
             {
                 int i;
                 cpus = min(cpus,out_cpus);
-                len = sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION) * cpus;
-                sppi = RtlAllocateHeap(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
                 for (i = 0; i < cpus; i++)
                 {
                     sppi[i].IdleTime.QuadPart = pinfo[i].cpu_ticks[CPU_STATE_IDLE];
@@ -2256,7 +2217,7 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
             {
                 unsigned long clk_tck = sysconf(_SC_CLK_TCK);
                 unsigned long usr,nice,sys,idle,remainder[8];
-                int i, count;
+                int i, count, id;
                 char name[32];
                 char line[255];
 
@@ -2272,17 +2233,12 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
                     for (i = 0; i + 5 < count; ++i) sys += remainder[i];
                     sys += idle;
                     usr += nice;
-                    cpus = atoi( name + 3 ) + 1;
-                    if (cpus > out_cpus) break;
-                    len = sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION) * cpus;
-                    if (sppi)
-                        sppi = RtlReAllocateHeap( GetProcessHeap(), HEAP_ZERO_MEMORY, sppi, len );
-                    else
-                        sppi = RtlAllocateHeap( GetProcessHeap(), HEAP_ZERO_MEMORY, len );
-
-                    sppi[cpus-1].IdleTime.QuadPart   = (ULONGLONG)idle * 10000000 / clk_tck;
-                    sppi[cpus-1].KernelTime.QuadPart = (ULONGLONG)sys * 10000000 / clk_tck;
-                    sppi[cpus-1].UserTime.QuadPart   = (ULONGLONG)usr * 10000000 / clk_tck;
+                    id = atoi( name + 3 ) + 1;
+                    if (id > out_cpus) break;
+                    if (id > cpus) cpus = id;
+                    sppi[id-1].IdleTime.QuadPart   = (ULONGLONG)idle * 10000000 / clk_tck;
+                    sppi[id-1].KernelTime.QuadPart = (ULONGLONG)sys * 10000000 / clk_tck;
+                    sppi[id-1].UserTime.QuadPart   = (ULONGLONG)usr * 10000000 / clk_tck;
                 }
                 fclose(cpuinfo);
             }
@@ -2293,8 +2249,6 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
             static int i = 1;
             unsigned int n;
             cpus = min(NtCurrentTeb()->Peb->NumberOfProcessors, out_cpus);
-            len = sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION) * cpus;
-            sppi = RtlAllocateHeap(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
             FIXME("stub info_class SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION\n");
             /* many programs expect these values to change so fake change */
             for (n = 0; n < cpus; n++)
@@ -2306,6 +2260,7 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
             i++;
         }
 
+        len = sizeof(*sppi) * cpus;
         if (size >= len)
         {
             if (!info) ret = STATUS_ACCESS_VIOLATION;
@@ -2313,15 +2268,46 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
         }
         else ret = STATUS_INFO_LENGTH_MISMATCH;
 
-        RtlFreeHeap(GetProcessHeap(),0,sppi);
+        free( sppi );
         break;
     }
 
     case SystemModuleInformation:
-        /* FIXME: should be system-wide */
+    {
+        /* FIXME: return some fake info for now */
+        static const char *fake_modules[] =
+        {
+            "\\SystemRoot\\system32\\ntoskrnl.exe",
+            "\\SystemRoot\\system32\\hal.dll",
+            "\\SystemRoot\\system32\\drivers\\mountmgr.sys"
+        };
+
         if (!info) ret = STATUS_ACCESS_VIOLATION;
-        else ret = LdrQueryProcessModuleInformation( info, size, &len );
+        else
+        {
+            ULONG i;
+            SYSTEM_MODULE_INFORMATION *smi = info;
+
+            len = offsetof( SYSTEM_MODULE_INFORMATION, Modules[ARRAY_SIZE(fake_modules)] );
+            if (len <= size)
+            {
+                memset( smi, 0, len );
+                for (i = 0; i < ARRAY_SIZE(fake_modules); i++)
+                {
+                    SYSTEM_MODULE *sm = &smi->Modules[i];
+                    sm->ImageBaseAddress = (char *)0x10000000 + 0x200000 * i;
+                    sm->ImageSize = 0x200000;
+                    sm->LoadOrderIndex = i;
+                    sm->LoadCount = 1;
+                    strcpy( (char *)sm->Name, fake_modules[i] );
+                    sm->NameOffset = strrchr( fake_modules[i], '\\' ) - fake_modules[i] + 1;
+                }
+                smi->ModulesCount = i;
+            }
+            else ret = STATUS_INFO_LENGTH_MISMATCH;
+        }
         break;
+    }
 
     case SystemHandleInformation:
     {
@@ -2341,8 +2327,7 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
         }
 
         num_handles = (size - FIELD_OFFSET( SYSTEM_HANDLE_INFORMATION, Handle )) / sizeof(SYSTEM_HANDLE_ENTRY);
-        if (!(handle_info = RtlAllocateHeap( GetProcessHeap(), 0, sizeof(*handle_info) * num_handles )))
-            return STATUS_NO_MEMORY;
+        if (!(handle_info = malloc( sizeof(*handle_info) * num_handles ))) return STATUS_NO_MEMORY;
 
         SERVER_START_REQ( get_system_handles )
         {
@@ -2369,7 +2354,7 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
         }
         SERVER_END_REQ;
 
-        RtlFreeHeap( GetProcessHeap(), 0, handle_info );
+        free( handle_info );
         break;
     }
 
@@ -2482,27 +2467,23 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
         /* Each logical processor may use up to 7 entries in returned table:
          * core, numa node, package, L1i, L1d, L2, L3 */
         len = 7 * NtCurrentTeb()->Peb->NumberOfProcessors;
-        buf = RtlAllocateHeap(GetProcessHeap(), 0, len * sizeof(*buf));
+        buf = malloc( len * sizeof(*buf) );
         if (!buf)
         {
             ret = STATUS_NO_MEMORY;
             break;
         }
-
         ret = create_logical_proc_info(&buf, NULL, &len, RelationAll);
-        if( ret != STATUS_SUCCESS )
+        if (!ret)
         {
-            RtlFreeHeap(GetProcessHeap(), 0, buf);
-            break;
+            if (size >= len)
+            {
+                if (!info) ret = STATUS_ACCESS_VIOLATION;
+                else memcpy( info, buf, len);
+            }
+            else ret = STATUS_INFO_LENGTH_MISMATCH;
         }
-
-        if (size >= len)
-        {
-            if (!info) ret = STATUS_ACCESS_VIOLATION;
-            else memcpy( info, buf, len);
-        }
-        else ret = STATUS_INFO_LENGTH_MISMATCH;
-        RtlFreeHeap(GetProcessHeap(), 0, buf);
+        free( buf );
         break;
     }
 
@@ -2603,29 +2584,22 @@ NTSTATUS WINAPI NtQuerySystemInformationEx( SYSTEM_INFORMATION_CLASS class,
         }
 
         len = 3 * sizeof(*buf);
-        buf = RtlAllocateHeap(GetProcessHeap(), 0, len);
-        if (!buf)
+        if (!(buf = malloc( len )))
         {
             ret = STATUS_NO_MEMORY;
             break;
         }
-
         ret = create_logical_proc_info(NULL, &buf, &len, *(DWORD *)query);
-        if (ret != STATUS_SUCCESS)
+        if (!ret)
         {
-            RtlFreeHeap(GetProcessHeap(), 0, buf);
-            break;
+            if (size >= len)
+            {
+                if (!info) ret = STATUS_ACCESS_VIOLATION;
+                else memcpy(info, buf, len);
+            }
+            else ret = STATUS_INFO_LENGTH_MISMATCH;
         }
-
-        if (size >= len)
-        {
-            if (!info) ret = STATUS_ACCESS_VIOLATION;
-            else memcpy(info, buf, len);
-        }
-        else
-            ret = STATUS_INFO_LENGTH_MISMATCH;
-
-        RtlFreeHeap(GetProcessHeap(), 0, buf);
+        free( buf );
         break;
     }
 
@@ -2635,6 +2609,60 @@ NTSTATUS WINAPI NtQuerySystemInformationEx( SYSTEM_INFORMATION_CLASS class,
     }
     if (ret_size) *ret_size = len;
     return ret;
+}
+
+
+/******************************************************************************
+ *              NtSetSystemInformation  (NTDLL.@)
+ */
+NTSTATUS WINAPI NtSetSystemInformation( SYSTEM_INFORMATION_CLASS class, void *info, ULONG length )
+{
+    FIXME( "(0x%08x,%p,0x%08x) stub\n", class, info, length );
+    return STATUS_SUCCESS;
+}
+
+
+/******************************************************************************
+ *              NtQuerySystemEnvironmentValue  (NTDLL.@)
+ */
+NTSTATUS WINAPI NtQuerySystemEnvironmentValue( UNICODE_STRING *name, WCHAR *buffer, ULONG length,
+                                               ULONG *retlen )
+{
+    FIXME( "(%s, %p, %u, %p), stub\n", debugstr_us(name), buffer, length, retlen );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+
+/******************************************************************************
+ *              NtQuerySystemEnvironmentValueEx  (NTDLL.@)
+ */
+NTSTATUS WINAPI NtQuerySystemEnvironmentValueEx( UNICODE_STRING *name, GUID *vendor, void *buffer,
+                                                 ULONG *retlen, ULONG *attrib )
+{
+    FIXME( "(%s, %s, %p, %p, %p), stub\n", debugstr_us(name),
+           debugstr_guid(vendor), buffer, retlen, attrib );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+
+/******************************************************************************
+ *              NtSystemDebugControl  (NTDLL.@)
+ */
+NTSTATUS WINAPI NtSystemDebugControl( SYSDBG_COMMAND command, void *in_buff, ULONG in_len,
+                                      void *out_buff, ULONG out_len, ULONG *retlen )
+{
+    FIXME( "(%d, %p, %d, %p, %d, %p), stub\n", command, in_buff, in_len, out_buff, out_len, retlen );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+
+/******************************************************************************
+ *              NtShutdownSystem  (NTDLL.@)
+ */
+NTSTATUS WINAPI NtShutdownSystem( SHUTDOWN_ACTION action )
+{
+    FIXME( "%d\n", action );
+    return STATUS_SUCCESS;
 }
 
 
@@ -2990,4 +3018,59 @@ NTSTATUS WINAPI NtPowerInformation( POWER_INFORMATION_LEVEL level, void *input, 
         WARN( "Unimplemented NtPowerInformation action: %d\n", level );
         return STATUS_NOT_IMPLEMENTED;
     }
+}
+
+
+/******************************************************************************
+ *              NtInitiatePowerAction  (NTDLL.@)
+ */
+NTSTATUS WINAPI NtInitiatePowerAction( POWER_ACTION action, SYSTEM_POWER_STATE state,
+                                       ULONG flags, BOOLEAN async )
+{
+    FIXME( "(%d,%d,0x%08x,%d),stub\n", action, state, flags, async );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+
+/******************************************************************************
+ *              NtCreatePowerRequest  (NTDLL.@)
+ */
+NTSTATUS WINAPI NtCreatePowerRequest( HANDLE *handle, COUNTED_REASON_CONTEXT *context )
+{
+    FIXME( "(%p, %p): stub\n", handle, context );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+
+/******************************************************************************
+ *              NtSetPowerRequest  (NTDLL.@)
+ */
+NTSTATUS WINAPI NtSetPowerRequest( HANDLE handle, POWER_REQUEST_TYPE type )
+{
+    FIXME( "(%p, %u): stub\n", handle, type );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+
+/******************************************************************************
+ *              NtClearPowerRequest  (NTDLL.@)
+ */
+NTSTATUS WINAPI NtClearPowerRequest( HANDLE handle, POWER_REQUEST_TYPE type )
+{
+    FIXME( "(%p, %u): stub\n", handle, type );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+
+/******************************************************************************
+ *              NtSetThreadExecutionState  (NTDLL.@)
+ */
+NTSTATUS WINAPI NtSetThreadExecutionState( EXECUTION_STATE new_state, EXECUTION_STATE *old_state )
+{
+    static EXECUTION_STATE current = ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED | ES_USER_PRESENT;
+
+    WARN( "(0x%x, %p): stub, harmless.\n", new_state, old_state );
+    *old_state = current;
+    if (!(current & ES_CONTINUOUS) || (new_state & ES_CONTINUOUS)) current = new_state;
+    return STATUS_SUCCESS;
 }

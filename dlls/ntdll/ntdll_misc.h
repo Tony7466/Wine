@@ -73,7 +73,6 @@ extern NTSTATUS restart_process( RTL_USER_PROCESS_PARAMETERS *params, NTSTATUS s
 extern BOOL is_wow64 DECLSPEC_HIDDEN;
 extern NTSTATUS alloc_object_attributes( const OBJECT_ATTRIBUTES *attr, struct object_attributes **ret,
                                          data_size_t *ret_len ) DECLSPEC_HIDDEN;
-extern NTSTATUS validate_open_object_attributes( const OBJECT_ATTRIBUTES *attr ) DECLSPEC_HIDDEN;
 
 /* module handling */
 extern LIST_ENTRY tls_links DECLSPEC_HIDDEN;
@@ -89,8 +88,6 @@ extern const WCHAR syswow64_dir[] DECLSPEC_HIDDEN;
 
 extern const struct unix_funcs *unix_funcs DECLSPEC_HIDDEN;
 
-/* file I/O */
-extern NTSTATUS server_get_unix_name( HANDLE handle, ANSI_STRING *unix_name ) DECLSPEC_HIDDEN;
 extern void init_directories(void) DECLSPEC_HIDDEN;
 
 extern struct _KUSER_SHARED_DATA *user_shared_data DECLSPEC_HIDDEN;

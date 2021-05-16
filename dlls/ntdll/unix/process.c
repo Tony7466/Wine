@@ -233,7 +233,7 @@ static startup_info_t *create_startup_info( const RTL_USER_PROCESS_PARAMETERS *p
     size = (size + 1) & ~1;
     *info_size = size;
 
-    if (!(info = RtlAllocateHeap( GetProcessHeap(), HEAP_ZERO_MEMORY, size ))) return NULL;
+    if (!(info = calloc( size, 1 ))) return NULL;
 
     info->debug_flags   = params->DebugFlags;
     info->console_flags = params->ConsoleFlags;
@@ -461,7 +461,7 @@ static ULONG get_env_size( const RTL_USER_PROCESS_PARAMETERS *params, char **win
         if (!*winedebug && !wcsncmp( ptr, WINEDEBUG, ARRAY_SIZE( WINEDEBUG ) - 1 ))
         {
             DWORD len = wcslen(ptr) * 3 + 1;
-            if ((*winedebug = RtlAllocateHeap( GetProcessHeap(), 0, len )))
+            if ((*winedebug = malloc( len )))
                 ntdll_wcstoumbs( ptr, wcslen(ptr) + 1, *winedebug, len, FALSE );
         }
         ptr += wcslen(ptr) + 1;
@@ -476,6 +476,10 @@ static ULONG get_env_size( const RTL_USER_PROCESS_PARAMETERS *params, char **win
  */
 static int get_unix_curdir( const RTL_USER_PROCESS_PARAMETERS *params )
 {
+    static const WCHAR ntprefixW[] = {'\\','?','?','\\',0};
+    static const WCHAR uncprefixW[] = {'U','N','C','\\',0};
+    const UNICODE_STRING *curdir = &params->CurrentDirectory.DosPath;
+    const WCHAR *dir = curdir->Buffer;
     UNICODE_STRING nt_name;
     OBJECT_ATTRIBUTES attr;
     IO_STATUS_BLOCK io;
@@ -483,13 +487,27 @@ static int get_unix_curdir( const RTL_USER_PROCESS_PARAMETERS *params )
     HANDLE handle;
     int fd = -1;
 
-    if (!RtlDosPathNameToNtPathName_U( params->CurrentDirectory.DosPath.Buffer, &nt_name, NULL, NULL ))
-        return -1;
+    if (!(nt_name.Buffer = malloc( curdir->Length + 8 * sizeof(WCHAR) ))) return -1;
+
+    /* simplified version of RtlDosPathNameToNtPathName_U */
+    wcscpy( nt_name.Buffer, ntprefixW );
+    if (dir[0] == '\\' && dir[1] == '\\')
+    {
+        if ((dir[2] == '.' || dir[2] == '?') && dir[3] == '\\') dir += 4;
+        else
+        {
+            wcscat( nt_name.Buffer, uncprefixW );
+            dir += 2;
+        }
+    }
+    wcscat( nt_name.Buffer, dir );
+    nt_name.Length = wcslen( nt_name.Buffer ) * sizeof(WCHAR);
+
     InitializeObjectAttributes( &attr, &nt_name, OBJ_CASE_INSENSITIVE, 0, NULL );
     status = NtOpenFile( &handle, FILE_TRAVERSE | SYNCHRONIZE, &attr, &io,
                          FILE_SHARE_READ | FILE_SHARE_WRITE,
                          FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT );
-    RtlFreeUnicodeString( &nt_name );
+    free( nt_name.Buffer );
     if (status) return -1;
     server_handle_to_fd( handle, FILE_TRAVERSE, &fd, NULL );
     NtClose( handle );
@@ -662,10 +680,10 @@ static NTSTATUS fork_and_exec( UNICODE_STRING *path, int unixdir,
     pid_t pid;
     int fd[2], stdin_fd = -1, stdout_fd = -1;
     char **argv, **envp;
-    ANSI_STRING unix_name;
+    char *unix_name;
     NTSTATUS status;
 
-    status = nt_to_unix_file_name( path, &unix_name, FILE_OPEN, FALSE );
+    status = nt_to_unix_file_name( path, &unix_name, FILE_OPEN );
     if (status) return status;
 
 #ifdef HAVE_PIPE2
@@ -712,7 +730,7 @@ static NTSTATUS fork_and_exec( UNICODE_STRING *path, int unixdir,
                 fchdir( unixdir );
                 close( unixdir );
             }
-            execve( unix_name.Buffer, argv, envp );
+            execve( unix_name, argv, envp );
         }
 
         if (pid <= 0)  /* grandchild if exec failed or child if fork failed */
@@ -750,7 +768,7 @@ static NTSTATUS fork_and_exec( UNICODE_STRING *path, int unixdir,
     if (stdin_fd != -1) close( stdin_fd );
     if (stdout_fd != -1) close( stdout_fd );
 done:
-    RtlFreeAnsiString( &unix_name );
+    free( unix_name );
     return status;
 }
 
@@ -973,8 +991,8 @@ done:
     if (thread_handle) NtClose( thread_handle );
     if (socketfd[0] != -1) close( socketfd[0] );
     if (unixdir != -1) close( unixdir );
-    RtlFreeHeap( GetProcessHeap(), 0, startup_info );
-    RtlFreeHeap( GetProcessHeap(), 0, winedebug );
+    free( startup_info );
+    free( winedebug );
     return status;
 }
 
@@ -1002,10 +1020,13 @@ NTSTATUS WINAPI NtTerminateProcess( HANDLE handle, LONG exit_code )
 
 #if defined(HAVE_MACH_MACH_H)
 
-static void fill_VM_COUNTERS( VM_COUNTERS_EX *pvmi )
+void fill_vm_counters( VM_COUNTERS_EX *pvmi, int unix_pid )
 {
 #if defined(MACH_TASK_BASIC_INFO)
     struct mach_task_basic_info info;
+
+    if (unix_pid != -1) return; /* FIXME: Retrieve information for other processes. */
+
     mach_msg_type_number_t infoCount = MACH_TASK_BASIC_INFO_COUNT;
     if(task_info(mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t)&info, &infoCount) == KERN_SUCCESS)
     {
@@ -1019,13 +1040,17 @@ static void fill_VM_COUNTERS( VM_COUNTERS_EX *pvmi )
 
 #elif defined(linux)
 
-static void fill_VM_COUNTERS( VM_COUNTERS_EX *pvmi )
+void fill_vm_counters( VM_COUNTERS_EX *pvmi, int unix_pid )
 {
     FILE *f;
-    char line[256];
+    char line[256], path[26];
     unsigned long value;
 
-    f = fopen("/proc/self/status", "r");
+    if (unix_pid == -1)
+        strcpy( path, "/proc/self/status" );
+    else
+        sprintf( path, "/proc/%u/status", unix_pid);
+    f = fopen( path, "r" );
     if (!f) return;
 
     while (fgets(line, sizeof(line), f))
@@ -1050,7 +1075,7 @@ static void fill_VM_COUNTERS( VM_COUNTERS_EX *pvmi )
 
 #else
 
-static void fill_VM_COUNTERS( VM_COUNTERS_EX *pvmi )
+void fill_vm_counters( VM_COUNTERS_EX *pvmi, int unix_pid )
 {
     /* FIXME : real data */
 }
@@ -1171,7 +1196,7 @@ NTSTATUS WINAPI NtQueryInformationProcess( HANDLE handle, PROCESSINFOCLASS class
                 else
                 {
                     memset(&pvmi, 0, sizeof(pvmi));
-                    if (handle == GetCurrentProcess()) fill_VM_COUNTERS(&pvmi);
+                    if (handle == GetCurrentProcess()) fill_vm_counters( &pvmi, -1 );
                     else
                     {
                         SERVER_START_REQ(get_process_vm_counters)

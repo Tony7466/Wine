@@ -168,19 +168,6 @@ void WINAPI RtlUserThreadStart( PRTL_THREAD_START_ROUTINE entry, void *arg )
 
 
 /***********************************************************************
- *              NtCreateThreadEx   (NTDLL.@)
- */
-NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle_ptr, ACCESS_MASK access, OBJECT_ATTRIBUTES *attr,
-                                  HANDLE process, PRTL_THREAD_START_ROUTINE start, void *param,
-                                  ULONG flags, SIZE_T zero_bits, SIZE_T stack_commit,
-                                  SIZE_T stack_reserve, PS_ATTRIBUTE_LIST *attr_list )
-{
-    return unix_funcs->NtCreateThreadEx( handle_ptr, access, attr, process, start, param,
-                                         flags, zero_bits, stack_commit, stack_reserve, attr_list );
-}
-
-
-/***********************************************************************
  *              RtlCreateUserThread   (NTDLL.@)
  */
 NTSTATUS WINAPI RtlCreateUserThread( HANDLE process, SECURITY_DESCRIPTOR *descr,
@@ -190,26 +177,45 @@ NTSTATUS WINAPI RtlCreateUserThread( HANDLE process, SECURITY_DESCRIPTOR *descr,
                                      HANDLE *handle_ptr, CLIENT_ID *id )
 {
     ULONG flags = suspended ? THREAD_CREATE_FLAGS_CREATE_SUSPENDED : 0;
-    HANDLE handle;
+    ULONG_PTR buffer[offsetof( PS_ATTRIBUTE_LIST, Attributes[2] ) / sizeof(ULONG_PTR)];
+    PS_ATTRIBUTE_LIST *attr_list = (PS_ATTRIBUTE_LIST *)buffer;
+    HANDLE handle, actctx;
+    TEB *teb;
+    ULONG ret;
     NTSTATUS status;
     CLIENT_ID client_id;
     OBJECT_ATTRIBUTES attr;
-    PS_ATTRIBUTE_LIST attr_list = { sizeof(attr_list) };
 
-    attr_list.Attributes[0].Attribute = PS_ATTRIBUTE_CLIENT_ID;
-    attr_list.Attributes[0].Size      = sizeof(client_id);
-    attr_list.Attributes[0].ValuePtr  = &client_id;
+    attr_list->TotalLength = sizeof(buffer);
+    attr_list->Attributes[0].Attribute    = PS_ATTRIBUTE_CLIENT_ID;
+    attr_list->Attributes[0].Size         = sizeof(client_id);
+    attr_list->Attributes[0].ValuePtr     = &client_id;
+    attr_list->Attributes[0].ReturnLength = NULL;
+    attr_list->Attributes[1].Attribute    = PS_ATTRIBUTE_TEB_ADDRESS;
+    attr_list->Attributes[1].Size         = sizeof(teb);
+    attr_list->Attributes[1].ValuePtr     = &teb;
+    attr_list->Attributes[1].ReturnLength = NULL;
 
     InitializeObjectAttributes( &attr, NULL, 0, NULL, descr );
 
+    RtlGetActiveActivationContext( &actctx );
+    if (actctx) flags |= THREAD_CREATE_FLAGS_CREATE_SUSPENDED;
+
     status = NtCreateThreadEx( &handle, THREAD_ALL_ACCESS, &attr, process, start, param,
-                               flags, 0, stack_commit, stack_reserve, &attr_list );
+                               flags, 0, stack_commit, stack_reserve, attr_list );
     if (!status)
     {
+        if (actctx)
+        {
+            ULONG_PTR cookie;
+            RtlActivateActivationContextEx( 0, teb, actctx, &cookie );
+            if (!suspended) NtResumeThread( handle, &ret );
+        }
         if (id) *id = client_id;
         if (handle_ptr) *handle_ptr = handle;
         else NtClose( handle );
     }
+    if (actctx) RtlReleaseActivationContext( actctx );
     return status;
 }
 
@@ -220,77 +226,6 @@ NTSTATUS WINAPI RtlCreateUserThread( HANDLE process, SECURITY_DESCRIPTOR *descr,
 ULONG WINAPI RtlGetNtGlobalFlags(void)
 {
     return NtCurrentTeb()->Peb->NtGlobalFlag;
-}
-
-
-/***********************************************************************
- *              NtOpenThread   (NTDLL.@)
- *              ZwOpenThread   (NTDLL.@)
- */
-NTSTATUS WINAPI NtOpenThread( HANDLE *handle, ACCESS_MASK access,
-                              const OBJECT_ATTRIBUTES *attr, const CLIENT_ID *id )
-{
-    return unix_funcs->NtOpenThread( handle, access, attr, id );
-}
-
-
-/******************************************************************************
- *              NtSuspendThread   (NTDLL.@)
- *              ZwSuspendThread   (NTDLL.@)
- */
-NTSTATUS WINAPI NtSuspendThread( HANDLE handle, PULONG count )
-{
-    return unix_funcs->NtSuspendThread( handle, count );
-}
-
-
-/******************************************************************************
- *              NtResumeThread   (NTDLL.@)
- *              ZwResumeThread   (NTDLL.@)
- */
-NTSTATUS WINAPI NtResumeThread( HANDLE handle, PULONG count )
-{
-    return unix_funcs->NtResumeThread( handle, count );
-}
-
-
-/******************************************************************************
- *              NtAlertResumeThread   (NTDLL.@)
- *              ZwAlertResumeThread   (NTDLL.@)
- */
-NTSTATUS WINAPI NtAlertResumeThread( HANDLE handle, PULONG count )
-{
-    return unix_funcs->NtAlertResumeThread( handle, count );
-}
-
-
-/******************************************************************************
- *              NtAlertThread   (NTDLL.@)
- *              ZwAlertThread   (NTDLL.@)
- */
-NTSTATUS WINAPI NtAlertThread( HANDLE handle )
-{
-    return unix_funcs->NtAlertThread( handle );
-}
-
-
-/******************************************************************************
- *              NtTerminateThread  (NTDLL.@)
- *              ZwTerminateThread  (NTDLL.@)
- */
-NTSTATUS WINAPI NtTerminateThread( HANDLE handle, LONG exit_code )
-{
-    return unix_funcs->NtTerminateThread( handle, exit_code );
-}
-
-
-/******************************************************************************
- *              NtQueueApcThread  (NTDLL.@)
- */
-NTSTATUS WINAPI NtQueueApcThread( HANDLE handle, PNTAPCFUNC func, ULONG_PTR arg1,
-                                  ULONG_PTR arg2, ULONG_PTR arg3 )
-{
-    return unix_funcs->NtQueueApcThread( handle, func, arg1, arg2, arg3 );
 }
 
 
@@ -323,25 +258,6 @@ TEB_ACTIVE_FRAME * WINAPI RtlGetFrame(void)
 
 
 /***********************************************************************
- *              NtContinue  (NTDLL.@)
- */
-NTSTATUS WINAPI NtContinue( CONTEXT *context, BOOLEAN alertable )
-{
-    return unix_funcs->NtContinue( context, alertable );
-}
-
-
-/***********************************************************************
- *              NtSetContextThread  (NTDLL.@)
- *              ZwSetContextThread  (NTDLL.@)
- */
-NTSTATUS WINAPI NtSetContextThread( HANDLE handle, const CONTEXT *context )
-{
-    return unix_funcs->NtSetContextThread( handle, context );
-}
-
-
-/***********************************************************************
  *              NtGetContextThread  (NTDLL.@)
  *              ZwGetContextThread  (NTDLL.@)
  */
@@ -351,46 +267,3 @@ NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
     return unix_funcs->NtGetContextThread( handle, context );
 }
 #endif
-
-
-/******************************************************************************
- *           NtSetLdtEntries   (NTDLL.@)
- *           ZwSetLdtEntries   (NTDLL.@)
- */
-NTSTATUS WINAPI NtSetLdtEntries( ULONG sel1, LDT_ENTRY entry1, ULONG sel2, LDT_ENTRY entry2 )
-{
-    return unix_funcs->NtSetLdtEntries( sel1, entry1, sel2, entry2 );
-}
-
-
-/******************************************************************************
- *              NtQueryInformationThread  (NTDLL.@)
- *              ZwQueryInformationThread  (NTDLL.@)
- */
-NTSTATUS WINAPI NtQueryInformationThread( HANDLE handle, THREADINFOCLASS class,
-                                          void *data, ULONG length, ULONG *ret_len )
-{
-    return unix_funcs->NtQueryInformationThread( handle, class, data, length, ret_len );
-}
-
-
-/******************************************************************************
- *              NtSetInformationThread  (NTDLL.@)
- *              ZwSetInformationThread  (NTDLL.@)
- */
-NTSTATUS WINAPI NtSetInformationThread( HANDLE handle, THREADINFOCLASS class,
-                                        LPCVOID data, ULONG length )
-{
-    return unix_funcs->NtSetInformationThread( handle, class, data, length );
-}
-
-/******************************************************************************
- * NtGetCurrentProcessorNumber (NTDLL.@)
- *
- * Return the processor, on which the thread is running
- *
- */
-ULONG WINAPI NtGetCurrentProcessorNumber(void)
-{
-    return unix_funcs->NtGetCurrentProcessorNumber();
-}

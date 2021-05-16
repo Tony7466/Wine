@@ -16,7 +16,6 @@ C_SRCS = \
 	env.c \
 	error.c \
 	exception.c \
-	file.c \
 	handletable.c \
 	heap.c \
 	large_int.c \
@@ -52,6 +51,7 @@ C_SRCS = \
 	unix/file.c \
 	unix/loader.c \
 	unix/process.c \
+	unix/registry.c \
 	unix/serial.c \
 	unix/server.c \
 	unix/signal_arm.c \

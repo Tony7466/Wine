@@ -826,34 +826,12 @@ NTSTATUS WINAPI NtReplyWaitReceivePort(
  *	Misc
  */
 
- /******************************************************************************
- *  NtSetIntervalProfile	[NTDLL.@]
- *  ZwSetIntervalProfile	[NTDLL.@]
- */
-NTSTATUS WINAPI NtSetIntervalProfile(
-        ULONG Interval,
-        KPROFILE_SOURCE Source)
-{
-    FIXME("%u,%d\n", Interval, Source);
-    return STATUS_SUCCESS;
-}
-
 /***********************************************************************
  * RtlIsProcessorFeaturePresent [NTDLL.@]
  */
 BOOLEAN WINAPI RtlIsProcessorFeaturePresent( UINT feature )
 {
     return feature < PROCESSOR_FEATURE_MAX && user_shared_data->ProcessorFeatures[feature];
-}
-
-/******************************************************************************
- * NtQuerySystemInformation [NTDLL.@]
- * ZwQuerySystemInformation [NTDLL.@]
- */
-NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
-                                          void *info, ULONG size, ULONG *ret_size )
-{
-    return unix_funcs->NtQuerySystemInformation( class, info, size, ret_size );
 }
 
 /******************************************************************************
@@ -873,27 +851,6 @@ NTSTATUS WINAPI /* DECLSPEC_HOTPATCH */ RtlGetNativeSystemInformation(
      *     - HighestUserAddress field for SystemBasicInformation;
      *     - Some information classes are not supported by RtlGetNativeSystemInformation. */
     return NtQuerySystemInformation( SystemInformationClass, SystemInformation, Length, ResultLength );
-}
-
-/******************************************************************************
- * NtQuerySystemInformationEx [NTDLL.@]
- * ZwQuerySystemInformationEx [NTDLL.@]
- */
-NTSTATUS WINAPI NtQuerySystemInformationEx( SYSTEM_INFORMATION_CLASS class,
-                                            void *query, ULONG query_len,
-                                            void *info, ULONG size, ULONG *ret_size )
-{
-    return unix_funcs->NtQuerySystemInformationEx( class, query, query_len, info, size, ret_size );
-}
-
-/******************************************************************************
- * NtSetSystemInformation [NTDLL.@]
- * ZwSetSystemInformation [NTDLL.@]
- */
-NTSTATUS WINAPI NtSetSystemInformation(SYSTEM_INFORMATION_CLASS SystemInformationClass, PVOID SystemInformation, ULONG Length)
-{
-    FIXME("(0x%08x,%p,0x%08x) stub\n",SystemInformationClass,SystemInformation,Length);
-    return STATUS_SUCCESS;
 }
 
 /******************************************************************************
@@ -926,91 +883,6 @@ NTSTATUS WINAPI NtDisplayString ( PUNICODE_STRING string )
         RtlFreeAnsiString( &stringA );
     }
     return ret;
-}
-
-/******************************************************************************
- *  NtInitiatePowerAction                       [NTDLL.@]
- *
- */
-NTSTATUS WINAPI NtInitiatePowerAction(
-	IN POWER_ACTION SystemAction,
-	IN SYSTEM_POWER_STATE MinSystemState,
-	IN ULONG Flags,
-	IN BOOLEAN Asynchronous)
-{
-        FIXME("(%d,%d,0x%08x,%d),stub\n",
-		SystemAction,MinSystemState,Flags,Asynchronous);
-        return STATUS_NOT_IMPLEMENTED;
-}
-
-/******************************************************************************
- *  NtSetThreadExecutionState                   [NTDLL.@]
- *
- */
-NTSTATUS WINAPI NtSetThreadExecutionState( EXECUTION_STATE new_state, EXECUTION_STATE *old_state )
-{
-    static EXECUTION_STATE current =
-        ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED | ES_USER_PRESENT;
-    *old_state = current;
-
-    WARN( "(0x%x, %p): stub, harmless.\n", new_state, old_state );
-
-    if (!(current & ES_CONTINUOUS) || (new_state & ES_CONTINUOUS))
-        current = new_state;
-    return STATUS_SUCCESS;
-}
-
-/******************************************************************************
- *  NtCreatePowerRequest                        [NTDLL.@]
- *
- */
-NTSTATUS WINAPI NtCreatePowerRequest( HANDLE *handle, COUNTED_REASON_CONTEXT *context )
-{
-    FIXME( "(%p, %p): stub\n", handle, context );
-
-    return STATUS_NOT_IMPLEMENTED;
-}
-
-/******************************************************************************
- *  NtSetPowerRequest                           [NTDLL.@]
- *
- */
-NTSTATUS WINAPI NtSetPowerRequest( HANDLE handle, POWER_REQUEST_TYPE type )
-{
-    FIXME( "(%p, %u): stub\n", handle, type );
-
-    return STATUS_NOT_IMPLEMENTED;
-}
-
-/******************************************************************************
- *  NtClearPowerRequest                         [NTDLL.@]
- *
- */
-NTSTATUS WINAPI NtClearPowerRequest( HANDLE handle, POWER_REQUEST_TYPE type )
-{
-    FIXME( "(%p, %u): stub\n", handle, type );
-
-    return STATUS_NOT_IMPLEMENTED;
-}
-
-/******************************************************************************
- *  NtPowerInformation				[NTDLL.@]
- *
- */
-NTSTATUS WINAPI NtPowerInformation( POWER_INFORMATION_LEVEL level, void *input, ULONG in_size,
-                                    void *output, ULONG out_size )
-{
-    return unix_funcs->NtPowerInformation( level, input, in_size, output, out_size );
-}
-
-/******************************************************************************
- *  NtShutdownSystem				[NTDLL.@]
- *
- */
-NTSTATUS WINAPI NtShutdownSystem(SHUTDOWN_ACTION Action)
-{
-    FIXME("%d\n",Action);
-    return STATUS_SUCCESS;
 }
 
 /******************************************************************************
@@ -1082,18 +954,6 @@ NTSTATUS WINAPI NtAccessCheckAndAuditAlarm(PUNICODE_STRING SubsystemName, HANDLE
     FIXME("(%s, %p, %s, %p, 0x%08x, %p, %d, %p, %p, %p), stub\n", debugstr_us(SubsystemName), HandleId,
           debugstr_us(ObjectTypeName), SecurityDescriptor, DesiredAccess, GenericMapping, ObjectCreation,
           GrantedAccess, AccessStatus, GenerateOnClose);
-
-    return STATUS_NOT_IMPLEMENTED;
-}
-
-/******************************************************************************
- *  NtSystemDebugControl   (NTDLL.@)
- *  ZwSystemDebugControl   (NTDLL.@)
- */
-NTSTATUS WINAPI NtSystemDebugControl(SYSDBG_COMMAND command, PVOID inbuffer, ULONG inbuflength, PVOID outbuffer,
-                                     ULONG outbuflength, PULONG retlength)
-{
-    FIXME("(%d, %p, %d, %p, %d, %p), stub\n", command, inbuffer, inbuflength, outbuffer, outbuflength, retlength);
 
     return STATUS_NOT_IMPLEMENTED;
 }

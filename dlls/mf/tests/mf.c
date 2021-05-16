@@ -41,6 +41,7 @@ DEFINE_GUID(MFVideoFormat_ABGR32, 0x00000020, 0x0000, 0x0010, 0x80, 0x00, 0x00, 
 #include "initguid.h"
 #include "mmdeviceapi.h"
 #include "audioclient.h"
+#include "evr.h"
 
 #include "wine/test.h"
 
@@ -1399,6 +1400,7 @@ static void test_topology_loader(void)
     IMFPresentationDescriptor *pd;
     IMFSourceResolver *resolver;
     IMFActivate *sink_activate;
+    IMFStreamSink *stream_sink;
     unsigned int count, value;
     IMFMediaType *media_type;
     IMFStreamDescriptor *sd;
@@ -1511,15 +1513,19 @@ todo_wine
     hr = IMFActivate_ActivateObject(sink_activate, &IID_IMFMediaSink, (void **)&sink);
     ok(hr == S_OK, "Failed to activate, hr %#x.\n", hr);
 
-    hr = IMFTopologyNode_SetObject(sink_node, (IUnknown *)sink);
+    hr = IMFMediaSink_GetStreamSinkByIndex(sink, 0, &stream_sink);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    hr = IMFTopologyNode_SetObject(sink_node, (IUnknown *)stream_sink);
     ok(hr == S_OK, "Failed to set object, hr %#x.\n", hr);
+
+    IMFStreamSink_Release(stream_sink);
 
     hr = IMFTopology_GetCount(topology, &count);
     ok(hr == S_OK, "Failed to get attribute count, hr %#x.\n", hr);
     ok(count == 0, "Unexpected count %u.\n", count);
 
     hr = IMFTopoLoader_Load(loader, topology, &full_topology, NULL);
-todo_wine
     ok(hr == S_OK, "Failed to resolve topology, hr %#x.\n", hr);
     ok(full_topology != topology, "Unexpected instance.\n");
 
@@ -3226,9 +3232,15 @@ todo_wine
 
 static void test_evr(void)
 {
+    IMFMediaEventGenerator *ev_generator;
+    IMFVideoRenderer *video_renderer;
+    IMFClockStateSink *clock_sink;
+    IMFMediaSinkPreroll *preroll;
     IMFMediaSink *sink, *sink2;
     IMFActivate *activate;
     DWORD flags, count;
+    IMFGetService *gs;
+    IUnknown *unk;
     UINT64 value;
     HRESULT hr;
 
@@ -3250,13 +3262,36 @@ static void test_evr(void)
     ok(!value, "Unexpected value.\n");
 
     hr = IMFActivate_ActivateObject(activate, &IID_IMFMediaSink, (void **)&sink);
-todo_wine
     ok(hr == S_OK, "Failed to activate, hr %#x.\n", hr);
 
-if (hr == S_OK)
-{
     hr = IMFMediaSink_GetCharacteristics(sink, &flags);
     ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(flags == (MEDIASINK_CAN_PREROLL | MEDIASINK_CLOCK_REQUIRED), "Unexpected flags %#x.\n", flags);
+
+    hr = IMFMediaSink_QueryInterface(sink, &IID_IMFMediaSinkPreroll, (void **)&preroll);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    IMFMediaSinkPreroll_Release(preroll);
+
+    hr = IMFMediaSink_QueryInterface(sink, &IID_IMFVideoRenderer, (void **)&video_renderer);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    IMFVideoRenderer_Release(video_renderer);
+
+    hr = IMFMediaSink_QueryInterface(sink, &IID_IMFMediaEventGenerator, (void **)&ev_generator);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    IMFMediaEventGenerator_Release(ev_generator);
+
+    hr = IMFMediaSink_QueryInterface(sink, &IID_IMFClockStateSink, (void **)&clock_sink);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    IMFClockStateSink_Release(clock_sink);
+
+    hr = IMFMediaSink_QueryInterface(sink, &IID_IMFGetService, (void **)&gs);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    hr = IMFGetService_GetService(gs, &MR_VIDEO_MIXER_SERVICE, &IID_IMFVideoMixerControl, (void **)&unk);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    IUnknown_Release(unk);
+
+    IMFGetService_Release(gs);
 
     hr = IMFActivate_ShutdownObject(activate);
     ok(hr == S_OK, "Failed to shut down, hr %#x.\n", hr);
@@ -3267,6 +3302,7 @@ if (hr == S_OK)
     /* Activate again. */
     hr = IMFActivate_ActivateObject(activate, &IID_IMFMediaSink, (void **)&sink2);
     ok(hr == S_OK, "Failed to activate, hr %#x.\n", hr);
+todo_wine
     ok(sink == sink2, "Unexpected instance.\n");
     IMFMediaSink_Release(sink2);
 
@@ -3284,7 +3320,7 @@ if (hr == S_OK)
 
     IMFMediaSink_Release(sink2);
     IMFMediaSink_Release(sink);
-}
+
     IMFActivate_Release(activate);
 
     CoUninitialize();

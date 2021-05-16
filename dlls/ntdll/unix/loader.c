@@ -794,6 +794,7 @@ static void fixup_ntdll_imports( const IMAGE_NT_HEADERS *nt )
     const IMAGE_IMPORT_DESCRIPTOR *descr;
     const IMAGE_THUNK_DATA *import_list;
     IMAGE_THUNK_DATA *thunk_list;
+    void **ptr;
 
     assert( ntdll_exports );
 
@@ -836,14 +837,16 @@ static void fixup_ntdll_imports( const IMAGE_NT_HEADERS *nt )
     GET_FUNC( LdrInitializeThunk );
     GET_FUNC( RtlUserThreadStart );
     GET_FUNC( __wine_set_unix_funcs );
-#ifdef __i386__
-    {
-        struct ldt_copy **p__wine_ldt_copy;
-        GET_FUNC( __wine_ldt_copy );
-        *p__wine_ldt_copy = &__wine_ldt_copy;
-    }
-#endif
 #undef GET_FUNC
+#define SET_PTR(name,val) \
+    if ((ptr = (void *)find_named_export( ntdll_module, ntdll_exports, #name ))) *ptr = val; \
+    else ERR( "%s not found\n", #name )
+
+    SET_PTR( __wine_syscall_dispatcher, __wine_syscall_dispatcher );
+#ifdef __i386__
+    SET_PTR( __wine_ldt_copy, &__wine_ldt_copy );
+#endif
+#undef SET_PTR
 }
 
 
@@ -924,18 +927,18 @@ already_loaded:
 static NTSTATUS CDECL load_so_dll( UNICODE_STRING *nt_name, void **module )
 {
     static const WCHAR soW[] = {'.','s','o',0};
-    ANSI_STRING unix_name;
+    char *unix_name;
     NTSTATUS status;
     DWORD len;
 
-    if (nt_to_unix_file_name( nt_name, &unix_name, FILE_OPEN, FALSE )) return STATUS_DLL_NOT_FOUND;
+    if (nt_to_unix_file_name( nt_name, &unix_name, FILE_OPEN )) return STATUS_DLL_NOT_FOUND;
 
     /* remove .so extension from Windows name */
     len = nt_name->Length / sizeof(WCHAR);
     if (len > 3 && !wcsicmp( nt_name->Buffer + len - 3, soW )) nt_name->Length -= 3 * sizeof(WCHAR);
 
-    status = dlopen_dll( unix_name.Buffer, module );
-    RtlFreeAnsiString( &unix_name );
+    status = dlopen_dll( unix_name, module );
+    free( unix_name );
     return status;
 }
 
@@ -987,29 +990,26 @@ static inline char *prepend( char *buffer, const char *str, size_t len )
  *
  * Open a file for a new dll. Helper for find_dll_file.
  */
-static NTSTATUS open_dll_file( UNICODE_STRING *nt_name, void **module, pe_image_info_t *image_info )
+static NTSTATUS open_dll_file( const char *name, void **module, pe_image_info_t *image_info )
 {
     struct builtin_module *builtin;
-    FILE_BASIC_INFORMATION info;
-    OBJECT_ATTRIBUTES attr;
+    OBJECT_ATTRIBUTES attr = { sizeof(attr) };
     IO_STATUS_BLOCK io;
     LARGE_INTEGER size;
     FILE_OBJECTID_BUFFER id;
+    struct stat st;
     SIZE_T len = 0;
     NTSTATUS status;
     HANDLE handle, mapping;
 
-    InitializeObjectAttributes( &attr, nt_name, OBJ_CASE_INSENSITIVE, 0, NULL );
-    if ((status = NtOpenFile( &handle, GENERIC_READ | SYNCHRONIZE, &attr, &io,
-                              FILE_SHARE_READ | FILE_SHARE_DELETE,
-                              FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE )))
+    if ((status = open_unix_file( &handle, name, GENERIC_READ | SYNCHRONIZE, &attr, 0,
+                                  FILE_SHARE_READ | FILE_SHARE_DELETE, FILE_OPEN,
+                                  FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE, NULL, 0 )))
     {
-        if (status != STATUS_OBJECT_PATH_NOT_FOUND &&
-            status != STATUS_OBJECT_NAME_NOT_FOUND &&
-            !NtQueryAttributesFile( &attr, &info ))
+        if (status != STATUS_OBJECT_PATH_NOT_FOUND && status != STATUS_OBJECT_NAME_NOT_FOUND)
         {
             /* if the file exists but failed to open, report the error */
-            return status;
+            if (!stat( name, &st )) return status;
         }
         /* otherwise continue searching */
         return STATUS_DLL_NOT_FOUND;
@@ -1021,7 +1021,7 @@ static NTSTATUS open_dll_file( UNICODE_STRING *nt_name, void **module, pe_image_
         {
             if (!memcmp( &builtin->id, id.ObjectId, sizeof(builtin->id) ))
             {
-                TRACE( "%s is the same file as existing module %p\n", debugstr_w( nt_name->Buffer ),
+                TRACE( "%s is the same file as existing module %p\n", debugstr_a(name),
                        builtin->module );
                 NtClose( handle );
                 NtUnmapViewOfSection( NtCurrentProcess(), *module );
@@ -1052,12 +1052,12 @@ static NTSTATUS open_dll_file( UNICODE_STRING *nt_name, void **module, pe_image_
     /* ignore non-builtins */
     if (!(image_info->image_flags & IMAGE_FLAGS_WineBuiltin))
     {
-        WARN( "%s found in WINEDLLPATH but not a builtin, ignoring\n", debugstr_us(nt_name) );
+        WARN( "%s found in WINEDLLPATH but not a builtin, ignoring\n", debugstr_a(name) );
         status = STATUS_DLL_NOT_FOUND;
     }
     else if (image_info->cpu != client_cpu)
     {
-        TRACE( "%s is for CPU %u, continuing search\n", debugstr_us(nt_name), image_info->cpu );
+        TRACE( "%s is for CPU %u, continuing search\n", debugstr_a(name), image_info->cpu );
         status = STATUS_IMAGE_MACHINE_TYPE_MISMATCH;
     }
 
@@ -1077,18 +1077,10 @@ static NTSTATUS open_dll_file( UNICODE_STRING *nt_name, void **module, pe_image_
  */
 static NTSTATUS open_builtin_file( char *name, void **module, pe_image_info_t *image_info )
 {
-    ANSI_STRING strA;
-    UNICODE_STRING nt_name;
     NTSTATUS status;
     int fd;
 
-    nt_name.Buffer = NULL;
-    RtlInitAnsiString( &strA, name );
-    if ((status = unix_to_nt_file_name( &strA, &nt_name ))) return status;
-
-    status = open_dll_file( &nt_name, module, image_info );
-    RtlFreeUnicodeString( &nt_name );
-
+    status = open_dll_file( name, module, image_info );
     if (status != STATUS_DLL_NOT_FOUND) return status;
 
     /* try .so file */
@@ -1366,119 +1358,10 @@ static double CDECL ntdll_tan( double d )   { return tan( d ); }
  */
 static struct unix_funcs unix_funcs =
 {
-    NtAlertResumeThread,
-    NtAlertThread,
-    NtAllocateVirtualMemory,
-    NtAreMappedFilesTheSame,
-    NtAssignProcessToJobObject,
-    NtCancelTimer,
-    NtClearEvent,
     NtClose,
-    NtContinue,
-    NtCreateEvent,
-    NtCreateFile,
-    NtCreateIoCompletion,
-    NtCreateJobObject,
-    NtCreateKeyedEvent,
-    NtCreateMailslotFile,
-    NtCreateMutant,
-    NtCreateNamedPipeFile,
-    NtCreateSection,
-    NtCreateSemaphore,
-    NtCreateThreadEx,
-    NtCreateTimer,
-    NtCreateUserProcess,
     NtCurrentTeb,
-    NtDelayExecution,
-    NtDeleteFile,
-    NtDeviceIoControlFile,
-    NtDuplicateObject,
-    NtFlushBuffersFile,
-    NtFlushInstructionCache,
-    NtFlushProcessWriteBuffers,
-    NtFlushVirtualMemory,
-    NtFreeVirtualMemory,
-    NtFsControlFile,
     NtGetContextThread,
-    NtGetCurrentProcessorNumber,
-    NtGetWriteWatch,
-    NtIsProcessInJob,
-    NtLockVirtualMemory,
-    NtMapViewOfSection,
-    NtNotifyChangeDirectoryFile,
-    NtOpenEvent,
-    NtOpenFile,
-    NtOpenIoCompletion,
-    NtOpenJobObject,
-    NtOpenKeyedEvent,
-    NtOpenMutant,
-    NtOpenProcess,
-    NtOpenSection,
-    NtOpenSemaphore,
-    NtOpenThread,
-    NtOpenTimer,
-    NtPowerInformation,
-    NtProtectVirtualMemory,
-    NtPulseEvent,
-    NtQueryAttributesFile,
-    NtQueryDirectoryFile,
-    NtQueryEvent,
-    NtQueryFullAttributesFile,
-    NtQueryInformationFile,
-    NtQueryInformationJobObject,
-    NtQueryInformationProcess,
-    NtQueryInformationThread,
-    NtQueryIoCompletion,
-    NtQueryMutant,
     NtQueryPerformanceCounter,
-    NtQuerySection,
-    NtQuerySemaphore,
-    NtQuerySystemInformation,
-    NtQuerySystemInformationEx,
-    NtQuerySystemTime,
-    NtQueryTimer,
-    NtQueryVirtualMemory,
-    NtQueryVolumeInformationFile,
-    NtQueueApcThread,
-    NtRaiseException,
-    NtReadFile,
-    NtReadFileScatter,
-    NtReadVirtualMemory,
-    NtReleaseKeyedEvent,
-    NtReleaseMutant,
-    NtReleaseSemaphore,
-    NtRemoveIoCompletion,
-    NtRemoveIoCompletionEx,
-    NtResetEvent,
-    NtResetWriteWatch,
-    NtResumeProcess,
-    NtResumeThread,
-    NtSetContextThread,
-    NtSetEvent,
-    NtSetInformationFile,
-    NtSetInformationJobObject,
-    NtSetInformationProcess,
-    NtSetInformationThread,
-    NtSetIoCompletion,
-    NtSetLdtEntries,
-    NtSetSystemTime,
-    NtSetTimer,
-    NtSetVolumeInformationFile,
-    NtSignalAndWaitForSingleObject,
-    NtSuspendProcess,
-    NtSuspendThread,
-    NtTerminateJobObject,
-    NtTerminateProcess,
-    NtTerminateThread,
-    NtUnlockVirtualMemory,
-    NtUnmapViewOfSection,
-    NtWaitForKeyedEvent,
-    NtWaitForMultipleObjects,
-    NtWaitForSingleObject,
-    NtWriteFile,
-    NtWriteFileGather,
-    NtWriteVirtualMemory,
-    NtYieldExecution,
     DbgUiIssueRemoteBreakin,
     RtlGetSystemTimePrecise,
     RtlWaitOnAddress,
@@ -1530,8 +1413,8 @@ static struct unix_funcs unix_funcs =
     server_handle_to_fd,
     server_release_fd,
     server_init_process_done,
-    nt_to_unix_file_name,
-    unix_to_nt_file_name,
+    wine_nt_to_unix_file_name,
+    wine_unix_to_nt_file_name,
     set_show_dot_files,
     load_so_dll,
     load_builtin_dll,

@@ -2245,8 +2245,6 @@ AC_CHECK_FUNCS(\
 	getaddrinfo \
 	getnameinfo \
 	getnetbyname \
-	getprotobyname \
-	getprotobynumber \
 	getservbyport \
 )
 
@@ -2946,6 +2944,7 @@ WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-synch-l1-2-1)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-sysinfo-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-sysinfo-l1-2-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-sysinfo-l1-2-1)
+WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-systemtopology-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-threadpool-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-threadpool-l1-2-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-threadpool-legacy-l1-1-0)
@@ -3633,6 +3632,7 @@ WINE_CONFIG_MAKEFILE(dlls/qasf/tests)
 WINE_CONFIG_MAKEFILE(dlls/qcap)
 WINE_CONFIG_MAKEFILE(dlls/qcap/tests)
 WINE_CONFIG_MAKEFILE(dlls/qdvd)
+WINE_CONFIG_MAKEFILE(dlls/qdvd/tests)
 WINE_CONFIG_MAKEFILE(dlls/qedit)
 WINE_CONFIG_MAKEFILE(dlls/qedit/tests)
 WINE_CONFIG_MAKEFILE(dlls/qmgr)

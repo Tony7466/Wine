@@ -460,6 +460,9 @@ static void add_undef_import( const char *name, int is_ordinal )
 static int has_stubs( const DLLSPEC *spec )
 {
     int i;
+
+    if (unix_lib) return 0;
+
     for (i = 0; i < spec->nb_entry_points; i++)
     {
         ORDDEF *odp = &spec->entry_points[i];
@@ -503,6 +506,8 @@ static void check_undefined_forwards( DLLSPEC *spec )
     char *link_name, *api_name, *dll_name, *p;
     int i;
 
+    if (unix_lib) return;
+
     for (i = 0; i < spec->nb_entry_points; i++)
     {
         ORDDEF *odp = &spec->entry_points[i];
@@ -533,11 +538,14 @@ static void check_undefined_exports( DLLSPEC *spec )
 {
     int i;
 
+    if (unix_lib) return;
+
     for (i = 0; i < spec->nb_entry_points; i++)
     {
         ORDDEF *odp = &spec->entry_points[i];
         if (odp->type == TYPE_STUB || odp->type == TYPE_ABS || odp->type == TYPE_VARIABLE) continue;
         if (odp->flags & FLAG_FORWARD) continue;
+        if (odp->flags & FLAG_SYSCALL) continue;
         if (find_name( odp->link_name, &undef_symbols ))
         {
             switch(odp->type)
@@ -555,6 +563,7 @@ static void check_undefined_exports( DLLSPEC *spec )
                             spec->src_name, odp->lineno, odp->link_name );
                 break;
             default:
+                if (!strcmp( odp->link_name, "__wine_syscall_dispatcher" )) break;
                 error( "%s:%d: external symbol '%s' is not a function\n",
                        spec->src_name, odp->lineno, odp->link_name );
                 break;
@@ -570,6 +579,8 @@ static char *create_undef_symbols_file( DLLSPEC *spec )
     int i;
     unsigned int j;
 
+    if (unix_lib) return NULL;
+
     as_file = open_temp_output_file( ".s" );
     output( "\t.data\n" );
 
@@ -578,6 +589,7 @@ static char *create_undef_symbols_file( DLLSPEC *spec )
         ORDDEF *odp = &spec->entry_points[i];
         if (odp->type == TYPE_STUB || odp->type == TYPE_ABS || odp->type == TYPE_VARIABLE) continue;
         if (odp->flags & FLAG_FORWARD) continue;
+        if (odp->flags & FLAG_SYSCALL) continue;
         output( "\t%s %s\n", get_asm_ptr_keyword(), asm_name( get_link_name( odp )));
     }
     for (j = 0; j < extra_ld_symbols.count; j++)
@@ -1390,6 +1402,266 @@ void output_stubs( DLLSPEC *spec )
         }
     }
 }
+
+static int cmp_link_name( const void *e1, const void *e2 )
+{
+    const ORDDEF *odp1 = *(const ORDDEF * const *)e1;
+    const ORDDEF *odp2 = *(const ORDDEF * const *)e2;
+
+    return strcmp( odp1->link_name, odp2->link_name );
+}
+
+
+/* output the functions for system calls */
+void output_syscalls( DLLSPEC *spec )
+{
+    const unsigned int invalid_param = 0xc000000d; /* STATUS_INVALID_PARAMETER */
+    int i, count;
+    ORDDEF **syscalls = NULL;
+
+    for (i = count = 0; i < spec->nb_entry_points; i++)
+    {
+        ORDDEF *odp = &spec->entry_points[i];
+        if (!(odp->flags & FLAG_SYSCALL)) continue;
+        if (!syscalls) syscalls = xmalloc( (spec->nb_entry_points - i) * sizeof(*syscalls) );
+        syscalls[count++] = odp;
+    }
+    if (!count) return;
+    count = sort_func_list( syscalls, count, cmp_link_name );
+
+    output( "\n/* system calls */\n\n" );
+    output( "\t.text\n" );
+
+    if (unix_lib)
+    {
+        output( "\t.align %d\n", get_alignment(4) );
+        output( "\t%s\n", func_declaration("__wine_syscall_dispatcher") );
+        output( "%s\n", asm_globl("__wine_syscall_dispatcher") );
+        output_cfi( ".cfi_startproc" );
+        switch (target_cpu)
+        {
+        case CPU_x86:
+            output( "\tpushl %%ebp\n" );
+            output_cfi( ".cfi_adjust_cfa_offset 4\n" );
+            output_cfi( ".cfi_rel_offset %%ebp,0\n" );
+            output( "\tmovl %%esp,%%ebp\n" );
+            output_cfi( ".cfi_def_cfa_register %%ebp\n" );
+            output( "\tpushl %%esi\n" );
+            output_cfi( ".cfi_rel_offset %%esi,-4\n" );
+            output( "\tpushl %%edi\n" );
+            output_cfi( ".cfi_rel_offset %%edi,-8\n" );
+            output( "\tcmpl $%u,%%eax\n", count );
+            output( "\tjae 3f\n" );
+            if (UsePIC)
+            {
+                output( "\tmovl %%eax,%%edx\n" );
+                output( "\tcall %s\n", asm_name("__wine_spec_get_pc_thunk_eax") );
+                output( "1:\tmovzbl .Lsyscall_args-1b(%%eax,%%edx,1),%%ecx\n" );
+                needs_get_pc_thunk = 1;
+            }
+            else output( "\tmovzbl .Lsyscall_args(%%eax),%%ecx\n" );
+            output( "\tsubl %%ecx,%%esp\n" );
+            output( "\tshrl $2,%%ecx\n" );
+            output( "\tleal 12(%%ebp),%%esi\n" );
+            output( "\tandl $~15,%%esp\n" );
+            output( "\tmovl %%esp,%%edi\n" );
+            output( "\tcld\n" );
+            output( "\trep; movsl\n" );
+            if (UsePIC)
+                output( "\tcall *.Lsyscall_table-1b(%%eax,%%edx,4)\n" );
+            else
+                output( "\tcall *.Lsyscall_table(,%%eax,4)\n" );
+            output( "\tleal -8(%%ebp),%%esp\n" );
+            output( "2:\tpopl %%edi\n" );
+            output_cfi( ".cfi_same_value %%edi\n" );
+            output( "\tpopl %%esi\n" );
+            output_cfi( ".cfi_same_value %%esi\n" );
+            output( "\tpopl %%ebp\n" );
+            output_cfi( ".cfi_def_cfa %%esp,4\n" );
+            output_cfi( ".cfi_same_value %%ebp\n" );
+            output( "\tret\n" );
+            output( "3:\tmovl $0x%x,%%eax\n", invalid_param );
+            output( "\tjmp 2b\n" );
+            break;
+        case CPU_x86_64:
+            output( "\tpushq %%rbp\n" );
+            output_cfi( ".cfi_adjust_cfa_offset 8" );
+            output_cfi( ".cfi_rel_offset %%rbp,0" );
+            output( "\tmovq %%rsp,%%rbp\n" );
+            output_cfi( ".cfi_def_cfa_register %%rbp" );
+            output( "\tpushq %%rsi\n" );
+            output_cfi( ".cfi_rel_offset %%rsi,-8" );
+            output( "\tpushq %%rdi\n" );
+            output_cfi( ".cfi_rel_offset %%rdi,-16" );
+            /* Legends of Runeterra hooks the first system call return instruction, and
+             * depends on us returning to it. Adjust the return address accordingly. */
+            output( "\tsubq $0xb,0x8(%%rbp)\n" );
+            output( "\tcmpq $%u,%%rax\n", count );
+            output( "\tjae 4f\n" );
+            output( "\tleaq .Lsyscall_args(%%rip),%%rcx\n" );
+            output( "\tmovzbl (%%rcx,%%rax),%%ecx\n" );
+            output( "\tsubq $0x20,%%rcx\n" );
+            output( "\tja 1f\n" );
+            output( "\tandq $~15,%%rsp\n\t" );
+            output( "\tjmp 2f\n" );
+            output( "1:\tsubq %%rcx,%%rsp\n" );
+            output( "\tshrq $3,%%rcx\n" );
+            output( "\tleaq 0x38(%%rbp),%%rsi\n" );
+            output( "\tandq $~15,%%rsp\n\t" );
+            output( "\tmovq %%rsp,%%rdi\n" );
+            output( "\tcld\n" );
+            output( "\trep; movsq\n" );
+            output( "2:\tmovq %%r10,%%rcx\n" );
+            output( "\tsubq $0x20,%%rsp\n" );
+            output( "\tleaq .Lsyscall_table(%%rip),%%r10\n" );
+            output( "\tcallq *(%%r10,%%rax,8)\n" );
+            output( "3:\tleaq -0x10(%%rbp),%%rsp\n" );
+            output( "\tpopq %%rdi\n" );
+            output_cfi( ".cfi_same_value %%rdi" );
+            output( "\tpopq %%rsi\n" );
+            output_cfi( ".cfi_same_value %%rsi" );
+            output_cfi( ".cfi_def_cfa_register %%rsp" );
+            output( "\tpopq %%rbp\n" );
+            output_cfi( ".cfi_adjust_cfa_offset -8" );
+            output_cfi( ".cfi_same_value %%rbp" );
+            output( "\tret\n" );
+            output( "4:\tmovl $0x%x,%%eax\n", invalid_param );
+            output( "\tjmp 3b\n" );
+            break;
+        case CPU_ARM:
+            output( "\tldr r1, 4f\n" );
+            output( "\tcmp r0, r1\n" );
+            output( "\tbcs 2f\n" );
+            output( "\tldr r1, 3f\n");
+            output( "\tadd r1, pc\n");
+            output( "\tldr ip, [r1, r0, lsl #2]\n");
+            output( "1:\tpop {r0-r1}\n" );
+            output( "\tbx ip\n");
+            output( "2:\tpop {r0-r1}\n" );
+            output( "\tldr r0,5f\n" );
+            output( "bx lr\n" );
+            output( "3:\t.long .Lsyscall_table-1b\n" );
+            output( "4:\t.long %u\n", count );
+            output( "5:\t.long 0x%x\n", invalid_param );
+            break;
+        case CPU_ARM64:
+            output( "\tcmp x8, %u\n", count );
+            output( "\tbcs 1f\n" );
+            output( "\tadrp x16, .Lsyscall_table\n" );
+            output( "\tadd x16, x16, #:lo12:.Lsyscall_table\n" );
+            output( "\tldr x16, [x16, x8, lsl 3]\n" );
+            output( "\tbr x16\n" );
+            output( "1:\tmov x0, #0x%x\n", invalid_param & 0xffff0000 );
+            output( "\tmovk x0, #0x%x\n", invalid_param & 0x0000ffff );
+            output( "\tret\n" );
+            break;
+        default:
+            assert(0);
+        }
+        output_cfi( ".cfi_endproc" );
+        output_function_size( "__wine_syscall_dispatcher" );
+
+        output( "\t.data\n" );
+        output( "\t.align %d\n", get_alignment( get_ptr_size() ) );
+        output( ".Lsyscall_table:\n" );
+        for (i = 0; i < count; i++)
+            output( "\t%s %s\n", get_asm_ptr_keyword(), asm_name( get_link_name( syscalls[i] )));
+        output( ".Lsyscall_args:\n" );
+        for (i = 0; i < count; i++)
+            output( "\t.byte %u\n", get_args_size( syscalls[i] ));
+        return;
+    }
+
+    for (i = 0; i < count; i++)
+    {
+        ORDDEF *odp = syscalls[i];
+        const char *name = get_link_name(odp);
+        output( "\t.align %d\n", get_alignment(16) );
+        output( "\t%s\n", func_declaration(name) );
+        output( "%s\n", asm_globl(name) );
+        output_cfi( ".cfi_startproc" );
+        switch (target_cpu)
+        {
+        case CPU_x86:
+            if (UsePIC)
+            {
+                output( "\tcall %s\n", asm_name("__wine_spec_get_pc_thunk_eax") );
+                output( "1:\tmovl %s-1b(%%eax),%%edx\n", asm_name("__wine_syscall_dispatcher") );
+                output( "\tmovl $%u,%%eax\n", i );
+                needs_get_pc_thunk = 1;
+            }
+            else
+            {
+                output( "\tmovl $%u,%%eax\n", i );
+                output( "\tmovl $%s,%%edx\n", asm_name("__wine_syscall") );
+            }
+            output( "\tcall *%%edx\n" );
+            output( "\tret $%u\n", get_args_size( odp ));
+            break;
+        case CPU_x86_64:
+            /* Chromium depends on syscall thunks having the same form as on
+             * Windows. For 64-bit systems the only viable form we can emulate is
+             * having an int $0x2e fallback. Since actually using an interrupt is
+             * expensive, and since for some reason Chromium doesn't actually
+             * validate that instruction, we can just put a jmp there instead. */
+            output( "\t.byte 0x4c,0x8b,0xd1\n" ); /* movq %rcx,%r10 */
+            output( "\t.byte 0xb8\n" );           /* movl $i,%eax */
+            output( "\t.long %u\n", i );
+            output( "\t.byte 0xf6,0x04,0x25,0x08,0x03,0xfe,0x7f,0x01\n" ); /* testb $1,0x7ffe0308 */
+            output( "\t.byte 0x75,0x03\n" );      /* jne 1f */
+            output( "\t.byte 0x0f,0x05\n" );      /* syscall */
+            output( "\t.byte 0xc3\n" );           /* ret */
+            output( "\tjmp 1f\n" );
+            output( "\t.byte 0xc3\n" );           /* ret */
+            if (target_platform == PLATFORM_WINDOWS)
+            {
+                output( "1:\t.byte 0xff,0x14,0x25\n" ); /* 2: callq *(__wine_syscall_dispatcher) */
+                output( "\t.long __wine_syscall_dispatcher\n" );
+            }
+            else
+            {
+                output( "\tnop\n" );
+                output( "1:\tcallq *%s(%%rip)\n", asm_name("__wine_syscall_dispatcher") );
+            }
+            output( "\tret\n" );
+            break;
+        case CPU_ARM:
+            output( "\tpush {r0-r1}\n" );
+            output( "\tldr r0, 3f\n");
+            output( "\tldr r1, 2f\n");
+            output( "\tadd r1, pc\n");
+            output( "\tldr ip, [r1]\n");
+            output( "1:\tbx ip\n");
+            output( "2:\t.long %s-1b\n", asm_name("__wine_syscall_dispatcher") );
+            output( "3:\t.long %u\n", i );
+            break;
+        case CPU_ARM64:
+            output( "\tmov x8, #%u\n", i );
+            output( "\tadrp x16, %s\n", asm_name("__wine_syscall_dispatcher") );
+            output( "\tldr x16, [x16, #:lo12:%s]\n", asm_name("__wine_syscall_dispatcher") );
+            output( "\tbr x16\n");
+            break;
+        default:
+            assert(0);
+        }
+        output_cfi( ".cfi_endproc" );
+        output_function_size( name );
+    }
+
+    if (target_cpu == CPU_x86 && !UsePIC)
+    {
+        output( "\t.align %d\n", get_alignment(16) );
+        output( "\t%s\n", func_declaration("__wine_syscall") );
+        output( "%s:\n", asm_name("__wine_syscall") );
+        output( "\tjmp *(%s)\n", asm_name("__wine_syscall_dispatcher") );
+        output_function_size( "__wine_syscall" );
+    }
+    output( "\t.data\n" );
+    output( "\t.align %d\n", get_alignment( get_ptr_size() ) );
+    output( "%s\n", asm_globl("__wine_syscall_dispatcher") );
+    output( "\t%s 0\n", get_asm_ptr_keyword() );
+}
+
 
 /* output the import and delayed import tables of a Win32 module */
 void output_imports( DLLSPEC *spec )

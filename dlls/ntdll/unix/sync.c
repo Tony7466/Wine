@@ -78,15 +78,7 @@ HANDLE keyed_event = 0;
 
 static const LARGE_INTEGER zero_timeout;
 
-static RTL_CRITICAL_SECTION addr_section;
-static RTL_CRITICAL_SECTION_DEBUG addr_section_debug =
-{
-    0, 0, &addr_section,
-    { &addr_section_debug.ProcessLocksList, &addr_section_debug.ProcessLocksList },
-      0, 0, { (DWORD_PTR)(__FILE__ ": addr_section") }
-};
-static RTL_CRITICAL_SECTION addr_section = { &addr_section_debug, -1, 0, 0, 0, 0 };
-
+static pthread_mutex_t addr_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* return a monotonic time counter, in Win32 ticks */
 static inline ULONGLONG monotonic_counter(void)
@@ -913,6 +905,207 @@ NTSTATUS WINAPI NtAssignProcessToJobObject( HANDLE job, HANDLE process )
 
 
 /**************************************************************************
+ *           NtCreateDirectoryObject   (NTDLL.@)
+ */
+NTSTATUS WINAPI NtCreateDirectoryObject( HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBUTES *attr )
+{
+    NTSTATUS ret;
+    data_size_t len;
+    struct object_attributes *objattr;
+
+    if (!handle) return STATUS_ACCESS_VIOLATION;
+
+    if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
+
+    SERVER_START_REQ( create_directory )
+    {
+        req->access = access;
+        wine_server_add_data( req, objattr, len );
+        ret = wine_server_call( req );
+        *handle = wine_server_ptr_handle( reply->handle );
+    }
+    SERVER_END_REQ;
+    free( objattr );
+    return ret;
+}
+
+
+/**************************************************************************
+ *           NtOpenDirectoryObject   (NTDLL.@)
+ */
+NTSTATUS WINAPI NtOpenDirectoryObject( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
+{
+    NTSTATUS ret;
+
+    if (!handle) return STATUS_ACCESS_VIOLATION;
+    if ((ret = validate_open_object_attributes( attr ))) return ret;
+
+    SERVER_START_REQ( open_directory )
+    {
+        req->access     = access;
+        req->attributes = attr->Attributes;
+        req->rootdir    = wine_server_obj_handle( attr->RootDirectory );
+        if (attr->ObjectName)
+            wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
+        ret = wine_server_call( req );
+        *handle = wine_server_ptr_handle( reply->handle );
+    }
+    SERVER_END_REQ;
+    return ret;
+}
+
+
+/**************************************************************************
+ *           NtQueryDirectoryObject   (NTDLL.@)
+ */
+NTSTATUS WINAPI NtQueryDirectoryObject( HANDLE handle, DIRECTORY_BASIC_INFORMATION *buffer,
+                                        ULONG size, BOOLEAN single_entry, BOOLEAN restart,
+                                        ULONG *context, ULONG *ret_size )
+{
+    NTSTATUS ret;
+
+    if (restart) *context = 0;
+
+    if (single_entry)
+    {
+        if (size <= sizeof(*buffer) + 2 * sizeof(WCHAR)) return STATUS_BUFFER_OVERFLOW;
+
+        SERVER_START_REQ( get_directory_entry )
+        {
+            req->handle = wine_server_obj_handle( handle );
+            req->index = *context;
+            wine_server_set_reply( req, buffer + 1, size - sizeof(*buffer) - 2*sizeof(WCHAR) );
+            if (!(ret = wine_server_call( req )))
+            {
+                buffer->ObjectName.Buffer = (WCHAR *)(buffer + 1);
+                buffer->ObjectName.Length = reply->name_len;
+                buffer->ObjectName.MaximumLength = reply->name_len + sizeof(WCHAR);
+                buffer->ObjectTypeName.Buffer = (WCHAR *)(buffer + 1) + reply->name_len/sizeof(WCHAR) + 1;
+                buffer->ObjectTypeName.Length = wine_server_reply_size( reply ) - reply->name_len;
+                buffer->ObjectTypeName.MaximumLength = buffer->ObjectTypeName.Length + sizeof(WCHAR);
+                /* make room for the terminating null */
+                memmove( buffer->ObjectTypeName.Buffer, buffer->ObjectTypeName.Buffer - 1,
+                         buffer->ObjectTypeName.Length );
+                buffer->ObjectName.Buffer[buffer->ObjectName.Length/sizeof(WCHAR)] = 0;
+                buffer->ObjectTypeName.Buffer[buffer->ObjectTypeName.Length/sizeof(WCHAR)] = 0;
+                (*context)++;
+            }
+        }
+        SERVER_END_REQ;
+        if (ret_size)
+            *ret_size = buffer->ObjectName.MaximumLength + buffer->ObjectTypeName.MaximumLength + sizeof(*buffer);
+    }
+    else
+    {
+        FIXME("multiple entries not implemented\n");
+        ret = STATUS_NOT_IMPLEMENTED;
+    }
+    return ret;
+}
+
+
+/**************************************************************************
+ *           NtCreateSymbolicLinkObject   (NTDLL.@)
+ */
+NTSTATUS WINAPI NtCreateSymbolicLinkObject( HANDLE *handle, ACCESS_MASK access,
+                                            OBJECT_ATTRIBUTES *attr, UNICODE_STRING *target )
+{
+    NTSTATUS ret;
+    data_size_t len;
+    struct object_attributes *objattr;
+
+    if (!handle || !attr || !target) return STATUS_ACCESS_VIOLATION;
+    if (!target->Buffer) return STATUS_INVALID_PARAMETER;
+
+    if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
+
+    SERVER_START_REQ( create_symlink )
+    {
+        req->access = access;
+        wine_server_add_data( req, objattr, len );
+        wine_server_add_data( req, target->Buffer, target->Length );
+        ret = wine_server_call( req );
+        *handle = wine_server_ptr_handle( reply->handle );
+    }
+    SERVER_END_REQ;
+    free( objattr );
+    return ret;
+}
+
+
+/**************************************************************************
+ *           NtOpenSymbolicLinkObject   (NTDLL.@)
+ */
+NTSTATUS WINAPI NtOpenSymbolicLinkObject( HANDLE *handle, ACCESS_MASK access,
+                                          const OBJECT_ATTRIBUTES *attr )
+{
+    NTSTATUS ret;
+
+    if (!handle) return STATUS_ACCESS_VIOLATION;
+    if ((ret = validate_open_object_attributes( attr ))) return ret;
+
+    SERVER_START_REQ( open_symlink )
+    {
+        req->access     = access;
+        req->attributes = attr->Attributes;
+        req->rootdir    = wine_server_obj_handle( attr->RootDirectory );
+        if (attr->ObjectName)
+            wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
+        ret = wine_server_call( req );
+        *handle = wine_server_ptr_handle( reply->handle );
+    }
+    SERVER_END_REQ;
+    return ret;
+}
+
+
+/**************************************************************************
+ *           NtQuerySymbolicLinkObject   (NTDLL.@)
+ */
+NTSTATUS WINAPI NtQuerySymbolicLinkObject( HANDLE handle, UNICODE_STRING *target, ULONG *length )
+{
+    NTSTATUS ret;
+
+    if (!target) return STATUS_ACCESS_VIOLATION;
+
+    SERVER_START_REQ( query_symlink )
+    {
+        req->handle = wine_server_obj_handle( handle );
+        if (target->MaximumLength >= sizeof(WCHAR))
+            wine_server_set_reply( req, target->Buffer, target->MaximumLength - sizeof(WCHAR) );
+        if (!(ret = wine_server_call( req )))
+        {
+            target->Length = wine_server_reply_size(reply);
+            target->Buffer[target->Length / sizeof(WCHAR)] = 0;
+            if (length) *length = reply->total + sizeof(WCHAR);
+        }
+        else if (length && ret == STATUS_BUFFER_TOO_SMALL) *length = reply->total + sizeof(WCHAR);
+    }
+    SERVER_END_REQ;
+    return ret;
+}
+
+
+/**************************************************************************
+ *		NtMakeTemporaryObject (NTDLL.@)
+ */
+NTSTATUS WINAPI NtMakeTemporaryObject( HANDLE handle )
+{
+    NTSTATUS ret;
+
+    TRACE("%p\n", handle);
+
+    SERVER_START_REQ( make_temporary )
+    {
+        req->handle = wine_server_obj_handle( handle );
+        ret = wine_server_call( req );
+    }
+    SERVER_END_REQ;
+    return ret;
+}
+
+
+/**************************************************************************
  *		NtCreateTimer (NTDLL.@)
  */
 NTSTATUS WINAPI NtCreateTimer( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr,
@@ -1228,6 +1421,36 @@ NTSTATUS WINAPI NtSetSystemTime( const LARGE_INTEGER *new, LARGE_INTEGER *old )
     if (diff > -TICKSPERSEC / 2 && diff < TICKSPERSEC / 2) return STATUS_SUCCESS;
     ERR( "not allowed: difference %d ms\n", (int)(diff / 10000) );
     return STATUS_PRIVILEGE_NOT_HELD;
+}
+
+
+/***********************************************************************
+ *              NtQueryTimerResolution (NTDLL.@)
+ */
+NTSTATUS WINAPI NtQueryTimerResolution( ULONG *min_res, ULONG *max_res, ULONG *current_res )
+{
+    FIXME( "(%p,%p,%p), stub!\n", min_res, max_res, current_res );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+
+/***********************************************************************
+ *              NtSetTimerResolution (NTDLL.@)
+ */
+NTSTATUS WINAPI NtSetTimerResolution( ULONG res, BOOLEAN set, ULONG *current_res )
+{
+    FIXME( "(%u,%u,%p), stub!\n", res, set, current_res );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+
+/******************************************************************************
+ *              NtSetIntervalProfile (NTDLL.@)
+ */
+NTSTATUS WINAPI NtSetIntervalProfile( ULONG interval, KPROFILE_SOURCE source )
+{
+    FIXME( "%u,%d\n", interval, source );
+    return STATUS_SUCCESS;
 }
 
 
@@ -1608,6 +1831,188 @@ NTSTATUS WINAPI NtOpenSection( HANDLE *handle, ACCESS_MASK access, const OBJECT_
     }
     SERVER_END_REQ;
     return ret;
+}
+
+
+#define MAX_ATOM_LEN  255
+#define IS_INTATOM(x) (((ULONG_PTR)(x) >> 16) == 0)
+
+static NTSTATUS is_integral_atom( const WCHAR *atomstr, ULONG len, RTL_ATOM *ret_atom )
+{
+    RTL_ATOM atom;
+
+    if ((ULONG_PTR)atomstr >> 16)
+    {
+        const WCHAR* ptr = atomstr;
+        if (!len) return STATUS_OBJECT_NAME_INVALID;
+
+        if (*ptr++ == '#')
+        {
+            atom = 0;
+            while (ptr < atomstr + len && *ptr >= '0' && *ptr <= '9')
+            {
+                atom = atom * 10 + *ptr++ - '0';
+            }
+            if (ptr > atomstr + 1 && ptr == atomstr + len) goto done;
+        }
+        if (len > MAX_ATOM_LEN) return STATUS_INVALID_PARAMETER;
+        return STATUS_MORE_ENTRIES;
+    }
+    else atom = LOWORD( atomstr );
+done:
+    if (!atom || atom >= MAXINTATOM) return STATUS_INVALID_PARAMETER;
+    *ret_atom = atom;
+    return STATUS_SUCCESS;
+}
+
+static ULONG integral_atom_name( WCHAR *buffer, ULONG len, RTL_ATOM atom )
+{
+    char tmp[16];
+    int ret = sprintf( tmp, "#%u", atom );
+
+    len /= sizeof(WCHAR);
+    if (len)
+    {
+        if (len <= ret) ret = len - 1;
+        ascii_to_unicode( buffer, tmp, ret );
+        buffer[ret] = 0;
+    }
+    return ret * sizeof(WCHAR);
+}
+
+
+/***********************************************************************
+ *             NtAddAtom (NTDLL.@)
+ */
+NTSTATUS WINAPI NtAddAtom( const WCHAR *name, ULONG length, RTL_ATOM *atom )
+{
+    NTSTATUS status = is_integral_atom( name, length / sizeof(WCHAR), atom );
+
+    if (status == STATUS_MORE_ENTRIES)
+    {
+        SERVER_START_REQ( add_atom )
+        {
+            wine_server_add_data( req, name, length );
+            req->table = 0;
+            status = wine_server_call( req );
+            *atom = reply->atom;
+        }
+        SERVER_END_REQ;
+    }
+    TRACE( "%s -> %x\n", debugstr_wn(name, length/sizeof(WCHAR)), status == STATUS_SUCCESS ? *atom : 0 );
+    return status;
+}
+
+
+/***********************************************************************
+ *             NtDeleteAtom (NTDLL.@)
+ */
+NTSTATUS WINAPI NtDeleteAtom( RTL_ATOM atom )
+{
+    NTSTATUS status;
+
+    SERVER_START_REQ( delete_atom )
+    {
+        req->atom = atom;
+        req->table = 0;
+        status = wine_server_call( req );
+    }
+    SERVER_END_REQ;
+    return status;
+}
+
+
+/***********************************************************************
+ *             NtFindAtom (NTDLL.@)
+ */
+NTSTATUS WINAPI NtFindAtom( const WCHAR *name, ULONG length, RTL_ATOM *atom )
+{
+    NTSTATUS status = is_integral_atom( name, length / sizeof(WCHAR), atom );
+
+    if (status == STATUS_MORE_ENTRIES)
+    {
+        SERVER_START_REQ( find_atom )
+        {
+            wine_server_add_data( req, name, length );
+            req->table = 0;
+            status = wine_server_call( req );
+            *atom = reply->atom;
+        }
+        SERVER_END_REQ;
+    }
+    TRACE( "%s -> %x\n", debugstr_wn(name, length/sizeof(WCHAR)), status == STATUS_SUCCESS ? *atom : 0 );
+    return status;
+}
+
+
+/***********************************************************************
+ *             NtQueryInformationAtom (NTDLL.@)
+ */
+NTSTATUS WINAPI NtQueryInformationAtom( RTL_ATOM atom, ATOM_INFORMATION_CLASS class,
+                                        void *ptr, ULONG size, ULONG *retsize )
+{
+    NTSTATUS status;
+
+    switch (class)
+    {
+    case AtomBasicInformation:
+    {
+        ULONG name_len;
+        ATOM_BASIC_INFORMATION *abi = ptr;
+
+        if (size < sizeof(ATOM_BASIC_INFORMATION)) return STATUS_INVALID_PARAMETER;
+        name_len = size - sizeof(ATOM_BASIC_INFORMATION);
+
+        if (atom < MAXINTATOM)
+        {
+            if (atom)
+            {
+                abi->NameLength = integral_atom_name( abi->Name, name_len, atom );
+                status = name_len ? STATUS_SUCCESS : STATUS_BUFFER_TOO_SMALL;
+                abi->ReferenceCount = 1;
+                abi->Pinned = 1;
+            }
+            else status = STATUS_INVALID_PARAMETER;
+        }
+        else
+        {
+            SERVER_START_REQ( get_atom_information )
+            {
+                req->atom = atom;
+                if (name_len) wine_server_set_reply( req, abi->Name, name_len );
+                status = wine_server_call( req );
+                if (status == STATUS_SUCCESS)
+                {
+                    name_len = wine_server_reply_size( reply );
+                    if (name_len)
+                    {
+                        abi->NameLength = name_len;
+                        abi->Name[name_len / sizeof(WCHAR)] = 0;
+                    }
+                    else
+                    {
+                        name_len = reply->total;
+                        abi->NameLength = name_len;
+                        status = STATUS_BUFFER_TOO_SMALL;
+                    }
+                    abi->ReferenceCount = reply->count;
+                    abi->Pinned = reply->pinned;
+                }
+                else name_len = 0;
+            }
+            SERVER_END_REQ;
+        }
+        TRACE( "%x -> %s (%u)\n", atom, debugstr_wn(abi->Name, abi->NameLength / sizeof(WCHAR)), status );
+        if (retsize) *retsize = sizeof(ATOM_BASIC_INFORMATION) + name_len;
+        break;
+    }
+
+    default:
+        FIXME( "Unsupported class %u\n", class );
+        status = STATUS_INVALID_INFO_CLASS;
+        break;
+    }
+    return status;
 }
 
 
@@ -2253,10 +2658,10 @@ NTSTATUS WINAPI RtlWaitOnAddress( const void *addr, const void *cmp, SIZE_T size
     if ((ret = fast_wait_addr( addr, cmp, size, timeout )) != STATUS_NOT_IMPLEMENTED)
         return ret;
 
-    RtlEnterCriticalSection( &addr_section );
+    pthread_mutex_lock( &addr_mutex );
     if (!compare_addr( addr, cmp, size ))
     {
-        RtlLeaveCriticalSection( &addr_section );
+        pthread_mutex_unlock( &addr_mutex );
         return STATUS_SUCCESS;
     }
 
@@ -2272,7 +2677,8 @@ NTSTATUS WINAPI RtlWaitOnAddress( const void *addr, const void *cmp, SIZE_T size
     select_op.keyed_event.handle = wine_server_obj_handle( keyed_event );
     select_op.keyed_event.key    = wine_server_client_ptr( addr );
 
-    return server_select( &select_op, sizeof(select_op.keyed_event), SELECT_INTERRUPTIBLE, abs_timeout, NULL, &addr_section, NULL );
+    return server_select( &select_op, sizeof(select_op.keyed_event), SELECT_INTERRUPTIBLE,
+                          abs_timeout, NULL, &addr_mutex, NULL );
 }
 
 /***********************************************************************
@@ -2282,9 +2688,9 @@ void WINAPI RtlWakeAddressAll( const void *addr )
 {
     if (fast_wake_addr( addr ) != STATUS_NOT_IMPLEMENTED) return;
 
-    RtlEnterCriticalSection( &addr_section );
+    pthread_mutex_lock( &addr_mutex );
     while (NtReleaseKeyedEvent( 0, addr, 0, &zero_timeout ) == STATUS_SUCCESS) {}
-    RtlLeaveCriticalSection( &addr_section );
+    pthread_mutex_unlock( &addr_mutex );
 }
 
 /***********************************************************************
@@ -2294,7 +2700,7 @@ void WINAPI RtlWakeAddressSingle( const void *addr )
 {
     if (fast_wake_addr( addr ) != STATUS_NOT_IMPLEMENTED) return;
 
-    RtlEnterCriticalSection( &addr_section );
+    pthread_mutex_lock( &addr_mutex );
     NtReleaseKeyedEvent( 0, addr, 0, &zero_timeout );
-    RtlLeaveCriticalSection( &addr_section );
+    pthread_mutex_unlock( &addr_mutex );
 }

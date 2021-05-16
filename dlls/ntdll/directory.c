@@ -84,24 +84,6 @@ void init_directories(void)
 
 
 /******************************************************************************
- *  NtQueryDirectoryFile	[NTDLL.@]
- *  ZwQueryDirectoryFile	[NTDLL.@]
- */
-NTSTATUS WINAPI DECLSPEC_HOTPATCH NtQueryDirectoryFile( HANDLE handle, HANDLE event,
-                                      PIO_APC_ROUTINE apc_routine, PVOID apc_context,
-                                      PIO_STATUS_BLOCK io,
-                                      PVOID buffer, ULONG length,
-                                      FILE_INFORMATION_CLASS info_class,
-                                      BOOLEAN single_entry,
-                                      PUNICODE_STRING mask,
-                                      BOOLEAN restart_scan )
-{
-    return unix_funcs->NtQueryDirectoryFile( handle, event, apc_routine, apc_context, io, buffer, length,
-                                             info_class, single_entry, mask, restart_scan );
-}
-
-
-/******************************************************************************
  *           wine_nt_to_unix_file_name  (NTDLL.@) Not a Windows API
  *
  * Convert a file name from NT namespace to Unix namespace.
@@ -110,10 +92,10 @@ NTSTATUS WINAPI DECLSPEC_HOTPATCH NtQueryDirectoryFile( HANDLE handle, HANDLE ev
  * element doesn't have to exist; in that case STATUS_NO_SUCH_FILE is
  * returned, but the unix name is still filled in properly.
  */
-NTSTATUS CDECL wine_nt_to_unix_file_name( const UNICODE_STRING *nameW, ANSI_STRING *unix_name_ret,
-                                          UINT disposition, BOOLEAN check_case )
+NTSTATUS CDECL wine_nt_to_unix_file_name( const UNICODE_STRING *nameW, char *nameA, SIZE_T *size,
+                                          UINT disposition )
 {
-    return unix_funcs->nt_to_unix_file_name( nameW, unix_name_ret, disposition, check_case );
+    return unix_funcs->nt_to_unix_file_name( nameW, nameA, size, disposition );
 }
 
 
