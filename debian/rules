@@ -38,9 +38,6 @@ export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector
 # linker options
 export DEB_LDFLAGS_MAINT_APPEND+=-Wl,-rpath,/$(LIBDIR)
 
-# do not treat compiler warnings as errors
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-error
-
 # ignore all defined but unused function warnings
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-unused-function
 

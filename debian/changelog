@@ -1,4 +1,4 @@
-wine-development (5.13-1) UNRELEASED; urgency=medium
+wine-development (5.13-1) unstable; urgency=medium
 
   * New upstream release 5.13, released Jul 17, 2020.
     - Re-mapping of INI files to the registry.

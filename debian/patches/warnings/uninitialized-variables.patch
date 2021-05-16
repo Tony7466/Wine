@@ -172,20 +172,9 @@ author: Michael Gilbert <mgilbert@debian.org>
      VARIANTARG varg0, varg1;
  
      if (!(wFlags & DISPATCH_PROPERTYGET))
---- a/dlls/msvcrt/time.c
-+++ b/dlls/msvcrt/time.c
-@@ -1998,6 +1998,8 @@ int CDECL _timespec32_get(struct _timesp
- {
-     struct _timespec64 ts64;
- 
-+    if(base == 0)
-+        return 0;
-     if(_timespec64_get(&ts64, base) != base)
-         return 0;
-     if(ts64.tv_sec != (MSVCRT___time32_t)ts64.tv_sec)
 --- a/dlls/mf/session.c
 +++ b/dlls/mf/session.c
-@@ -580,7 +580,7 @@ static void session_clear_topologies(str
+@@ -578,7 +578,7 @@ static void session_clear_topologies(str
  static void session_set_topo_status(struct media_session *session, HRESULT status,
          MF_TOPOSTATUS topo_status)
  {
