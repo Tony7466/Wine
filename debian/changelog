@@ -1,3 +1,14 @@
+wine-development (5.13-1) UNRELEASED; urgency=medium
+
+  * New upstream release 5.13, released Jul 17, 2020.
+    - Re-mapping of INI files to the registry.
+    - System call thunks in NTDLL.
+    - Reimplementation of floating point numbers printing.
+    - Beginnings of a restructuration of the console support.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 16 May 2021 17:19:36 +0000
+
 wine-development (5.12-1) unstable; urgency=medium
 
   * New upstream release 5.12, released Jul 3, 2020.
