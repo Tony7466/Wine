@@ -1,11 +1,12 @@
-wine-development (5.12-1) UNRELEASED; urgency=medium
+wine-development (5.12-1) unstable; urgency=medium
 
   * New upstream release 5.12, released Jul 3, 2020.
     - NTDLL converted to PE format.
     - Support for the WebSocket API.
     - Improved RawInput support.
-    - Vulkan spec update.
     - Various bug fixes.
+  * Fix AppStream mediatype metadata.
+  * Remove multiarch:same from the dev package.
 
  -- Michael Gilbert <mgilbert@debian.org>  Sat, 15 May 2021 19:59:05 +0000
 

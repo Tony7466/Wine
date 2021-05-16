@@ -259,7 +259,6 @@ Description: Windows API implementation - library
 Package: libwineVERSION-dev
 Section: libdevel
 Architecture: amd64 i386 armel armhf arm64
-Multi-Arch: same
 Depends:
  ${misc:Depends},
  libwineVERSION (= ${binary:Version}),

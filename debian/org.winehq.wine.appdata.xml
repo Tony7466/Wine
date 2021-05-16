@@ -34,9 +34,9 @@
     <category>Emulator</category>
   </categories>
 
-  <mimetypes>
-    <mimetype>application/x-ms-dos-executable</mimetype>
-    <mimetype>application/x-msi</mimetype>
-    <mimetype>application/x-ms-shortcut</mimetype>
-  </mimetypes>
+  <provides>
+    <mediatype>application/x-ms-dos-executable</mediatype>
+    <mediatype>application/x-msi</mediatype>
+    <mediatype>application/x-ms-shortcut</mediatype>
+  </provides>
 </component>

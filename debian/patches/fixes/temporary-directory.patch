@@ -17,7 +17,15 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  #else
 --- a/dlls/ntdll/unix/server.c
 +++ b/dlls/ntdll/unix/server.c
-@@ -1130,6 +1130,17 @@ int server_pipe( int fd[2] )
+@@ -25,6 +25,7 @@
+ #include "config.h"
+ #include "wine/port.h"
+ 
++#include <dirent.h>
+ #include <assert.h>
+ #include <ctype.h>
+ #include <errno.h>
+@@ -1110,6 +1111,17 @@ int server_pipe( int fd[2] )
      return ret;
  }
  
@@ -35,7 +43,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  
  /***********************************************************************
   *           init_server_dir
-@@ -1139,16 +1150,113 @@ static const char *init_server_dir( dev_
+@@ -1119,16 +1131,113 @@ static const char *init_server_dir( dev_
      char *p, *dir;
      size_t len = sizeof("/server-") + 2 * sizeof(dev) + 2 * sizeof(ino) + 2;
  
