@@ -1,3 +1,15 @@
+wine-development (5.15-1) UNRELEASED; urgency=medium
+
+  * New upstream release 5.15, released Aug 14, 2020.
+    - Initial implementation of the XACT Engine libraries.
+    - Beginnings of a math library in MSVCRT based on Musl.
+    - Still more restructuration of the console support.
+    - Direct Input performance improvements.
+    - Exception handling fixes on x86-64.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Wed, 19 May 2021 23:56:14 +0000
+
 wine-development (5.14-1) unstable; urgency=medium
 
   * New upstream release 5.14, released Aug 1, 2020.
