@@ -473,6 +473,17 @@ enum i386_trap_code
 #endif
 };
 
+struct syscall_frame
+{
+    struct syscall_frame *prev_frame;
+    DWORD                 edi;
+    DWORD                 esi;
+    DWORD                 ebx;
+    DWORD                 ebp;
+    DWORD                 thunk_addr;
+    DWORD                 ret_addr;
+};
+
 struct x86_thread_data
 {
     DWORD              fs;            /* 1d4 TEB selector */
@@ -484,15 +495,17 @@ struct x86_thread_data
     DWORD              dr6;           /* 1ec */
     DWORD              dr7;           /* 1f0 */
     void              *exit_frame;    /* 1f4 exit frame pointer */
-    /* the ntdll_thread_data structure follows here */
+    struct syscall_frame *syscall_frame; /* 1f8 frame pointer on syscall entry */
 };
 
-C_ASSERT( offsetof( TEB, SystemReserved2 ) + offsetof( struct x86_thread_data, gs ) == 0x1d8 );
-C_ASSERT( offsetof( TEB, SystemReserved2 ) + offsetof( struct x86_thread_data, exit_frame ) == 0x1f4 );
+C_ASSERT( sizeof(struct x86_thread_data) <= sizeof(((struct ntdll_thread_data *)0)->cpu_data) );
+C_ASSERT( offsetof( TEB, GdiTebBatch ) + offsetof( struct x86_thread_data, gs ) == 0x1d8 );
+C_ASSERT( offsetof( TEB, GdiTebBatch ) + offsetof( struct x86_thread_data, exit_frame ) == 0x1f4 );
+C_ASSERT( offsetof( TEB, GdiTebBatch ) + offsetof( struct x86_thread_data, syscall_frame ) == 0x1f8 );
 
 static inline struct x86_thread_data *x86_thread_data(void)
 {
-    return (struct x86_thread_data *)NtCurrentTeb()->SystemReserved2;
+    return (struct x86_thread_data *)ntdll_get_thread_data()->cpu_data;
 }
 
 static inline WORD get_cs(void) { WORD res; __asm__( "movw %%cs,%0" : "=r" (res) ); return res; }
@@ -539,7 +552,7 @@ static inline TEB *get_current_teb(void)
 {
     unsigned long esp;
     __asm__("movl %%esp,%0" : "=g" (esp) );
-    return (TEB *)(esp & ~signal_stack_mask);
+    return (TEB *)((esp & ~signal_stack_mask) + teb_offset);
 }
 
 
@@ -567,7 +580,7 @@ static void wine_sigacthandler( int signal, siginfo_t *siginfo, void *sigcontext
 
     __asm__ __volatile__("mov %ss,%ax; mov %ax,%ds; mov %ax,%es");
 
-    thread_data = (struct x86_thread_data *)get_current_teb()->SystemReserved2;
+    thread_data = (struct x86_thread_data *)get_current_teb()->GdiTebBatch;
     set_fs( thread_data->fs );
     set_gs( thread_data->gs );
 
@@ -615,7 +628,7 @@ static inline void *init_handler( const ucontext_t *sigcontext )
 
 #ifndef __sun  /* see above for Solaris handling */
     {
-        struct x86_thread_data *thread_data = (struct x86_thread_data *)teb->SystemReserved2;
+        struct x86_thread_data *thread_data = (struct x86_thread_data *)&teb->GdiTebBatch;
         set_fs( thread_data->fs );
         set_gs( thread_data->gs );
     }
@@ -1137,6 +1150,7 @@ NTSTATUS WINAPI NtSetContextThread( HANDLE handle, const CONTEXT *context )
 NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
 {
     NTSTATUS ret;
+    struct syscall_frame *frame = x86_thread_data()->syscall_frame;
     DWORD needed_flags = context->ContextFlags & ~CONTEXT_i386;
     BOOL self = (handle == GetCurrentThread());
 
@@ -1158,16 +1172,21 @@ NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
         if (needed_flags & CONTEXT_INTEGER)
         {
             context->Eax = 0;
+            context->Ebx = frame->ebx;
             context->Ecx = 0;
             context->Edx = 0;
-            /* other registers already set from asm wrapper */
+            context->Esi = frame->esi;
+            context->Edi = frame->edi;
             context->ContextFlags |= CONTEXT_INTEGER;
         }
         if (needed_flags & CONTEXT_CONTROL)
         {
+            context->Esp    = (DWORD)&frame->thunk_addr;
+            context->Ebp    = frame->ebp;
+            context->Eip    = frame->thunk_addr;
+            context->EFlags = 0x202;
             context->SegCs  = get_cs();
             context->SegSs  = get_ds();
-            /* other registers already set from asm wrapper */
             context->ContextFlags |= CONTEXT_CONTROL;
         }
         if (needed_flags & CONTEXT_SEGMENTS)
@@ -1936,7 +1955,7 @@ static void ldt_set_fs( WORD sel, TEB *teb )
         struct modify_ldt_s ldt_info = { sel >> 3 };
 
         ldt_info.base_addr = teb;
-        ldt_info.limit     = teb_size - 1;
+        ldt_info.limit     = page_size - 1;
         ldt_info.seg_32bit = 1;
         if (set_thread_area( &ldt_info ) < 0) perror( "set_thread_area" );
 #elif defined(__FreeBSD__) || defined (__FreeBSD_kernel__) || defined(__DragonFly__)
@@ -2044,14 +2063,14 @@ void signal_init_threading(void)
  */
 NTSTATUS signal_alloc_thread( TEB *teb )
 {
-    struct x86_thread_data *thread_data = (struct x86_thread_data *)teb->SystemReserved2;
+    struct x86_thread_data *thread_data = (struct x86_thread_data *)&teb->GdiTebBatch;
 
     if (!gdt_fs_sel)
     {
         static int first_thread = 1;
         sigset_t sigset;
         int idx;
-        LDT_ENTRY entry = ldt_make_entry( teb, teb_size - 1, LDT_FLAGS_DATA | LDT_FLAGS_32BIT );
+        LDT_ENTRY entry = ldt_make_entry( teb, page_size - 1, LDT_FLAGS_DATA | LDT_FLAGS_32BIT );
 
         if (first_thread)  /* no locking for first thread */
         {
@@ -2086,7 +2105,7 @@ NTSTATUS signal_alloc_thread( TEB *teb )
  */
 void signal_free_thread( TEB *teb )
 {
-    struct x86_thread_data *thread_data = (struct x86_thread_data *)teb->SystemReserved2;
+    struct x86_thread_data *thread_data = (struct x86_thread_data *)&teb->GdiTebBatch;
     sigset_t sigset;
 
     if (gdt_fs_sel) return;
@@ -2103,7 +2122,7 @@ void signal_free_thread( TEB *teb )
 void signal_init_thread( TEB *teb )
 {
     const WORD fpu_cw = 0x27f;
-    struct x86_thread_data *thread_data = (struct x86_thread_data *)teb->SystemReserved2;
+    struct x86_thread_data *thread_data = (struct x86_thread_data *)&teb->GdiTebBatch;
 
     ldt_set_fs( thread_data->fs, teb );
     thread_data->gs = get_gs();

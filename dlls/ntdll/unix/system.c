@@ -2907,11 +2907,12 @@ NTSTATUS WINAPI NtPowerInformation( POWER_INFORMATION_LEVEL level, void *input, 
             FILE* f;
 
             for(i = 0; i < out_cpus; i++) {
-                sprintf(filename, "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq", i);
+                sprintf(filename, "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", i);
                 f = fopen(filename, "r");
-                if (f && (fscanf(f, "%d", &cpu_power[i].CurrentMhz) == 1)) {
-                    cpu_power[i].CurrentMhz /= 1000;
+                if (f && (fscanf(f, "%d", &cpu_power[i].MaxMhz) == 1)) {
+                    cpu_power[i].MaxMhz /= 1000;
                     fclose(f);
+                    cpu_power[i].CurrentMhz = cpu_power[i].MaxMhz;
                 }
                 else {
                     if(i == 0) {
@@ -2921,16 +2922,6 @@ NTSTATUS WINAPI NtPowerInformation( POWER_INFORMATION_LEVEL level, void *input, 
                     }
                     else
                         cpu_power[i].CurrentMhz = cpu_power[0].CurrentMhz;
-                    if(f) fclose(f);
-                }
-
-                sprintf(filename, "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", i);
-                f = fopen(filename, "r");
-                if (f && (fscanf(f, "%d", &cpu_power[i].MaxMhz) == 1)) {
-                    cpu_power[i].MaxMhz /= 1000;
-                    fclose(f);
-                }
-                else {
                     cpu_power[i].MaxMhz = cpu_power[i].CurrentMhz;
                     if(f) fclose(f);
                 }
@@ -3018,6 +3009,48 @@ NTSTATUS WINAPI NtPowerInformation( POWER_INFORMATION_LEVEL level, void *input, 
         WARN( "Unimplemented NtPowerInformation action: %d\n", level );
         return STATUS_NOT_IMPLEMENTED;
     }
+}
+
+
+/******************************************************************************
+ *              NtLoadDriver  (NTDLL.@)
+ */
+NTSTATUS WINAPI NtLoadDriver( const UNICODE_STRING *name )
+{
+    FIXME( "(%s), stub!\n", debugstr_us(name) );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+
+/******************************************************************************
+ *              NtUnloadDriver  (NTDLL.@)
+ */
+NTSTATUS WINAPI NtUnloadDriver( const UNICODE_STRING *name )
+{
+    FIXME( "(%s), stub!\n", debugstr_us(name) );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+
+/******************************************************************************
+ *              NtDisplayString  (NTDLL.@)
+ */
+NTSTATUS WINAPI NtDisplayString( UNICODE_STRING *string )
+{
+    ERR( "%s\n", debugstr_us(string) );
+    return STATUS_SUCCESS;
+}
+
+
+/******************************************************************************
+ *              NtRaiseHardError  (NTDLL.@)
+ */
+NTSTATUS WINAPI NtRaiseHardError( NTSTATUS status, ULONG count,
+                                  UNICODE_STRING *params_mask, void **params,
+                                  HARDERROR_RESPONSE_OPTION option, HARDERROR_RESPONSE *response )
+{
+    FIXME( "%08x stub\n", status );
+    return STATUS_NOT_IMPLEMENTED;
 }
 
 

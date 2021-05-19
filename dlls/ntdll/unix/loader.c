@@ -95,6 +95,7 @@ WINE_DEFAULT_DEBUG_CHANNEL(module);
 extern IMAGE_NT_HEADERS __wine_spec_nt_header;
 
 void     (WINAPI *pDbgUiRemoteBreakin)( void *arg ) = NULL;
+void     (WINAPI *pKiRaiseUserExceptionDispatcher)(void) = NULL;
 NTSTATUS (WINAPI *pKiUserExceptionDispatcher)(EXCEPTION_RECORD*,CONTEXT*) = NULL;
 void     (WINAPI *pLdrInitializeThunk)(CONTEXT*,void**,ULONG_PTR,ULONG_PTR) = NULL;
 void     (WINAPI *pRtlUserThreadStart)( PRTL_THREAD_START_ROUTINE entry, void *arg ) = NULL;
@@ -128,7 +129,8 @@ static HMODULE ntdll_module;
 
 struct file_id
 {
-    BYTE ObjectId[16];
+    dev_t dev;
+    ino_t ino;
 };
 
 struct builtin_module
@@ -141,13 +143,17 @@ struct builtin_module
 
 static struct list builtin_modules = LIST_INIT( builtin_modules );
 
-static NTSTATUS add_builtin_module( void *module, void *handle, const FILE_OBJECTID_BUFFER *id )
+static NTSTATUS add_builtin_module( void *module, void *handle, const struct stat *st )
 {
     struct builtin_module *builtin;
     if (!(builtin = malloc( sizeof(*builtin) ))) return STATUS_NO_MEMORY;
     builtin->handle = handle;
     builtin->module = module;
-    if (id) memcpy( &builtin->id, id->ObjectId, sizeof(builtin->id) );
+    if (st)
+    {
+        builtin->id.dev = st->st_dev;
+        builtin->id.ino = st->st_ino;
+    }
     else memset( &builtin->id, 0, sizeof(builtin->id) );
     list_add_tail( &builtin_modules, &builtin->entry );
     return STATUS_SUCCESS;
@@ -833,6 +839,7 @@ static void fixup_ntdll_imports( const IMAGE_NT_HEADERS *nt )
         ERR( "%s not found\n", #name )
 
     GET_FUNC( DbgUiRemoteBreakin );
+    GET_FUNC( KiRaiseUserExceptionDispatcher );
     GET_FUNC( KiUserExceptionDispatcher );
     GET_FUNC( LdrInitializeThunk );
     GET_FUNC( RtlUserThreadStart );
@@ -994,9 +1001,7 @@ static NTSTATUS open_dll_file( const char *name, void **module, pe_image_info_t 
 {
     struct builtin_module *builtin;
     OBJECT_ATTRIBUTES attr = { sizeof(attr) };
-    IO_STATUS_BLOCK io;
     LARGE_INTEGER size;
-    FILE_OBJECTID_BUFFER id;
     struct stat st;
     SIZE_T len = 0;
     NTSTATUS status;
@@ -1015,11 +1020,11 @@ static NTSTATUS open_dll_file( const char *name, void **module, pe_image_info_t 
         return STATUS_DLL_NOT_FOUND;
     }
 
-    if (!NtFsControlFile( handle, 0, NULL, NULL, &io, FSCTL_GET_OBJECT_ID, NULL, 0, &id, sizeof(id) ))
+    if (!stat( name, &st ))
     {
         LIST_FOR_EACH_ENTRY( builtin, &builtin_modules, struct builtin_module, entry )
         {
-            if (!memcmp( &builtin->id, id.ObjectId, sizeof(builtin->id) ))
+            if (builtin->id.dev == st.st_dev && builtin->id.ino == st.st_ino)
             {
                 TRACE( "%s is the same file as existing module %p\n", debugstr_a(name),
                        builtin->module );
@@ -1030,7 +1035,7 @@ static NTSTATUS open_dll_file( const char *name, void **module, pe_image_info_t 
             }
         }
     }
-    else memset( id.ObjectId, 0, sizeof(id.ObjectId) );
+    else memset( &st, 0, sizeof(st) );
 
     size.QuadPart = 0;
     status = NtCreateSection( &mapping, STANDARD_RIGHTS_REQUIRED | SECTION_QUERY |
@@ -1061,7 +1066,7 @@ static NTSTATUS open_dll_file( const char *name, void **module, pe_image_info_t 
         status = STATUS_IMAGE_MACHINE_TYPE_MISMATCH;
     }
 
-    if (!status) status = add_builtin_module( *module, NULL, &id );
+    if (!status) status = add_builtin_module( *module, NULL, &st );
 
     if (status)
     {
@@ -1296,7 +1301,10 @@ static HMODULE load_ntdll(void)
 
     if ((fd = open( name, O_RDONLY )) != -1)
     {
-        status = virtual_map_ntdll( fd, &module );
+        struct stat st;
+        fstat( fd, &st );
+        if (!(status = virtual_map_ntdll( fd, &module )))
+            add_builtin_module( module, NULL, &st );
         close( fd );
     }
     else
@@ -1358,10 +1366,7 @@ static double CDECL ntdll_tan( double d )   { return tan( d ); }
  */
 static struct unix_funcs unix_funcs =
 {
-    NtClose,
     NtCurrentTeb,
-    NtGetContextThread,
-    NtQueryPerformanceCounter,
     DbgUiIssueRemoteBreakin,
     RtlGetSystemTimePrecise,
     RtlWaitOnAddress,
@@ -1400,12 +1405,8 @@ static struct unix_funcs unix_funcs =
     get_build_id,
     get_host_version,
     virtual_map_section,
-    virtual_alloc_thread_stack,
     virtual_locked_recvmsg,
     virtual_release_address_space,
-    virtual_set_large_address_space,
-    exit_thread,
-    exit_process,
     exec_process,
     wine_server_call,
     server_send_fd,

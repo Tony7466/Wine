@@ -1060,8 +1060,8 @@ then
             if test -z "$llvm_target"
             then
                 case $host_cpu in
-                *i[[3456789]]86*) llvm_target=i686-windows-gnu ;;
-                *) llvm_target=$host_cpu-windows-gnu ;;
+                *i[[3456789]]86*) llvm_target=i686-windows ;;
+                *) llvm_target=$host_cpu-windows ;;
                 esac
             fi
             case $llvm_target in
@@ -1255,10 +1255,6 @@ then
 #include <X11/extensions/Xrandr.h>]], [[static typeof(XRRSetScreenConfigAndRate) * func; if (func) return 0;]])],
                   [WINE_CHECK_SONAME(Xrandr,XRRQueryExtension,
                     [AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <X11/Xlib.h>
-#include <X11/extensions/Xrandr.h>]], [[static typeof(XRRGetScreenResources) *f; if (f) return 0;]])],
-                      [AC_DEFINE(HAVE_XRRGETSCREENRESOURCES, 1,
-                        [Define if Xrandr has the XRRGetScreenResources function])])
-                     AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <X11/Xlib.h>
 #include <X11/extensions/Xrandr.h>]], [[static typeof(XRRGetProviderResources) *f; if (f) return 0;]])],
                       [AC_DEFINE(HAVE_XRRGETPROVIDERRESOURCES, 1,
                         [Define if Xrandr has the XRRGetProviderResources function])],
@@ -3249,6 +3245,7 @@ WINE_CONFIG_MAKEFILE(dlls/dpvoice/tests)
 WINE_CONFIG_MAKEFILE(dlls/dpwsockx)
 WINE_CONFIG_MAKEFILE(dlls/drmclien)
 WINE_CONFIG_MAKEFILE(dlls/dsdmo)
+WINE_CONFIG_MAKEFILE(dlls/dsdmo/tests)
 WINE_CONFIG_MAKEFILE(dlls/dsound)
 WINE_CONFIG_MAKEFILE(dlls/dsound/tests)
 WINE_CONFIG_MAKEFILE(dlls/dsquery)
@@ -3515,6 +3512,7 @@ WINE_CONFIG_MAKEFILE(dlls/msvcp120/tests)
 WINE_CONFIG_MAKEFILE(dlls/msvcp120_app)
 WINE_CONFIG_MAKEFILE(dlls/msvcp140)
 WINE_CONFIG_MAKEFILE(dlls/msvcp140/tests)
+WINE_CONFIG_MAKEFILE(dlls/msvcp140_1)
 WINE_CONFIG_MAKEFILE(dlls/msvcp60)
 WINE_CONFIG_MAKEFILE(dlls/msvcp60/tests)
 WINE_CONFIG_MAKEFILE(dlls/msvcp70)

@@ -124,9 +124,11 @@ static void dump_ioctl_code( const char *prefix, const ioctl_code_t *code )
         CASE(IOCTL_CONDRV_GET_TITLE);
         CASE(IOCTL_CONDRV_PEEK);
         CASE(IOCTL_CONDRV_READ_INPUT);
+        CASE(IOCTL_CONDRV_READ_OUTPUT);
         CASE(IOCTL_CONDRV_SET_MODE);
         CASE(IOCTL_CONDRV_SET_OUTPUT_INFO);
         CASE(IOCTL_CONDRV_WRITE_INPUT);
+        CASE(IOCTL_CONDRV_WRITE_OUTPUT);
         CASE(FSCTL_DISMOUNT_VOLUME);
         CASE(FSCTL_PIPE_DISCONNECT);
         CASE(FSCTL_PIPE_LISTEN);
@@ -2039,29 +2041,9 @@ static void dump_free_console_request( const struct free_console_request *req )
 {
 }
 
-static void dump_open_console_request( const struct open_console_request *req )
-{
-    fprintf( stderr, " from=%04x", req->from );
-    fprintf( stderr, ", access=%08x", req->access );
-    fprintf( stderr, ", attributes=%08x", req->attributes );
-    fprintf( stderr, ", share=%d", req->share );
-}
-
-static void dump_open_console_reply( const struct open_console_reply *req )
-{
-    fprintf( stderr, " handle=%04x", req->handle );
-}
-
 static void dump_attach_console_request( const struct attach_console_request *req )
 {
     fprintf( stderr, " pid=%04x", req->pid );
-}
-
-static void dump_attach_console_reply( const struct attach_console_reply *req )
-{
-    fprintf( stderr, " std_in=%04x", req->std_in );
-    fprintf( stderr, ", std_out=%04x", req->std_out );
-    fprintf( stderr, ", std_err=%04x", req->std_err );
 }
 
 static void dump_get_console_wait_event_request( const struct get_console_wait_event_request *req )
@@ -2135,50 +2117,6 @@ static void dump_create_console_output_request( const struct create_console_outp
 static void dump_create_console_output_reply( const struct create_console_output_reply *req )
 {
     fprintf( stderr, " handle_out=%04x", req->handle_out );
-}
-
-static void dump_write_console_output_request( const struct write_console_output_request *req )
-{
-    fprintf( stderr, " handle=%04x", req->handle );
-    fprintf( stderr, ", x=%d", req->x );
-    fprintf( stderr, ", y=%d", req->y );
-    fprintf( stderr, ", mode=%d", req->mode );
-    fprintf( stderr, ", wrap=%d", req->wrap );
-    dump_varargs_bytes( ", data=", cur_size );
-}
-
-static void dump_write_console_output_reply( const struct write_console_output_reply *req )
-{
-    fprintf( stderr, " written=%d", req->written );
-    fprintf( stderr, ", width=%d", req->width );
-    fprintf( stderr, ", height=%d", req->height );
-}
-
-static void dump_read_console_output_request( const struct read_console_output_request *req )
-{
-    fprintf( stderr, " handle=%04x", req->handle );
-    fprintf( stderr, ", x=%d", req->x );
-    fprintf( stderr, ", y=%d", req->y );
-    fprintf( stderr, ", mode=%d", req->mode );
-    fprintf( stderr, ", wrap=%d", req->wrap );
-}
-
-static void dump_read_console_output_reply( const struct read_console_output_reply *req )
-{
-    fprintf( stderr, " width=%d", req->width );
-    fprintf( stderr, ", height=%d", req->height );
-    dump_varargs_bytes( ", data=", cur_size );
-}
-
-static void dump_move_console_output_request( const struct move_console_output_request *req )
-{
-    fprintf( stderr, " handle=%04x", req->handle );
-    fprintf( stderr, ", x_src=%d", req->x_src );
-    fprintf( stderr, ", y_src=%d", req->y_src );
-    fprintf( stderr, ", x_dst=%d", req->x_dst );
-    fprintf( stderr, ", y_dst=%d", req->y_dst );
-    fprintf( stderr, ", w=%d", req->w );
-    fprintf( stderr, ", h=%d", req->h );
 }
 
 static void dump_send_console_signal_request( const struct send_console_signal_request *req )
@@ -4562,7 +4500,6 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_set_socket_deferred_request,
     (dump_func)dump_alloc_console_request,
     (dump_func)dump_free_console_request,
-    (dump_func)dump_open_console_request,
     (dump_func)dump_attach_console_request,
     (dump_func)dump_get_console_wait_event_request,
     (dump_func)dump_set_console_input_info_request,
@@ -4570,9 +4507,6 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_append_console_input_history_request,
     (dump_func)dump_get_console_input_history_request,
     (dump_func)dump_create_console_output_request,
-    (dump_func)dump_write_console_output_request,
-    (dump_func)dump_read_console_output_request,
-    (dump_func)dump_move_console_output_request,
     (dump_func)dump_send_console_signal_request,
     (dump_func)dump_read_directory_changes_request,
     (dump_func)dump_read_change_request,
@@ -4852,17 +4786,13 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     NULL,
     (dump_func)dump_alloc_console_reply,
     NULL,
-    (dump_func)dump_open_console_reply,
-    (dump_func)dump_attach_console_reply,
+    NULL,
     (dump_func)dump_get_console_wait_event_reply,
     NULL,
     (dump_func)dump_get_console_input_info_reply,
     NULL,
     (dump_func)dump_get_console_input_history_reply,
     (dump_func)dump_create_console_output_reply,
-    (dump_func)dump_write_console_output_reply,
-    (dump_func)dump_read_console_output_reply,
-    NULL,
     NULL,
     NULL,
     (dump_func)dump_read_change_reply,
@@ -5142,7 +5072,6 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "set_socket_deferred",
     "alloc_console",
     "free_console",
-    "open_console",
     "attach_console",
     "get_console_wait_event",
     "set_console_input_info",
@@ -5150,9 +5079,6 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "append_console_input_history",
     "get_console_input_history",
     "create_console_output",
-    "write_console_output",
-    "read_console_output",
-    "move_console_output",
     "send_console_signal",
     "read_directory_changes",
     "read_change",

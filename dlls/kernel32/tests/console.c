@@ -640,7 +640,8 @@ static void testScroll(HANDLE hCon, COORD sbSize)
     clip.Top = H / 2;
     clip.Bottom = min(H + H / 2, sbSize.Y - 1);
 
-    ok(ScrollConsoleScreenBufferA(hCon, &scroll, &clip, dst, &ci), "Scrolling SB\n");
+    ret = ScrollConsoleScreenBufferA(hCon, &scroll, &clip, dst, &ci);
+    ok(ret, "ScrollConsoleScreenBufferA failed: %u\n", GetLastError());
 
     for (c.Y = 0; c.Y < sbSize.Y; c.Y++)
     {
@@ -2046,6 +2047,12 @@ static void test_WriteConsoleOutputCharacterA(HANDLE output_handle)
     ret = WriteConsoleOutputCharacterA(output_handle, output, 1, origin, &count);
     ok(ret == TRUE, "Expected WriteConsoleOutputCharacterA to return TRUE, got %d\n", ret);
     ok(count == 1, "Expected count to be 1, got %u\n", count);
+
+    count = 0xdeadbeef;
+    origin.X = 200;
+    ret = WriteConsoleOutputCharacterA(output_handle, output, 0, origin, &count);
+    ok(ret == TRUE, "Expected WriteConsoleOutputCharacterA to return TRUE, got %d\n", ret);
+    ok(count == 0, "Expected count to be 0, got %u\n", count);
 }
 
 static void test_WriteConsoleOutputCharacterW(HANDLE output_handle)
@@ -2130,6 +2137,13 @@ static void test_WriteConsoleOutputCharacterW(HANDLE output_handle)
     ret = WriteConsoleOutputCharacterW(output_handle, outputW, 1, origin, &count);
     ok(ret == TRUE, "Expected WriteConsoleOutputCharacterW to return TRUE, got %d\n", ret);
     ok(count == 1, "Expected count to be 1, got %u\n", count);
+
+    count = 0xdeadbeef;
+    origin.X = 200;
+    ret = WriteConsoleOutputCharacterW(output_handle, outputW, 0, origin, &count);
+    ok(ret == TRUE, "Expected WriteConsoleOutputCharacterW to return TRUE, got %d\n", ret);
+    ok(count == 0, "Expected count to be 0, got %u\n", count);
+
 }
 
 static void test_WriteConsoleOutputAttribute(HANDLE output_handle)
@@ -2213,6 +2227,156 @@ static void test_WriteConsoleOutputAttribute(HANDLE output_handle)
     ret = WriteConsoleOutputAttribute(output_handle, &attr, 1, origin, &count);
     ok(ret == TRUE, "Expected WriteConsoleOutputAttribute to return TRUE, got %d\n", ret);
     ok(count == 1, "Expected count to be 1, got %u\n", count);
+
+    count = 0xdeadbeef;
+    origin.X = 200;
+    ret = WriteConsoleOutputAttribute(output_handle, &attr, 0, origin, &count);
+    ok(ret == TRUE, "Expected WriteConsoleOutputAttribute to return TRUE, got %d\n", ret);
+    ok(count == 0, "Expected count to be 0, got %u\n", count);
+}
+
+static void set_region(SMALL_RECT *region, unsigned int left, unsigned int top, unsigned int right, unsigned int bottom)
+{
+    region->Left   = left;
+    region->Top    = top;
+    region->Right  = right;
+    region->Bottom = bottom;
+}
+
+#define check_region(a,b,c,d,e) check_region_(__LINE__,a,b,c,d,e)
+static void check_region_(unsigned int line, const SMALL_RECT *region, unsigned int left, unsigned int top, int right, int bottom)
+{
+    ok_(__FILE__,line)(region->Left == left, "Left = %u, expected %u\n", region->Left, left);
+    ok_(__FILE__,line)(region->Top == top, "Top = %u, expected %u\n", region->Top, top);
+    /* In multiple places returned region depends on Windows versions: some return right < left, others leave it untouched */
+    if (right >= 0)
+        ok_(__FILE__,line)(region->Right == right, "Right = %u, expected %u\n", region->Right, right);
+    else
+        ok_(__FILE__,line)(region->Right == -right || region->Right == region->Left - 1,
+                           "Right = %u, expected %d\n", region->Right, right);
+    if (bottom >= 0)
+        ok_(__FILE__,line)(region->Bottom == bottom, "Bottom = %u, expected %u\n", region->Bottom, bottom);
+    else
+        ok_(__FILE__,line)(region->Bottom == -bottom || region->Bottom == region->Top - 1,
+                           "Bottom = %u, expected %d\n", region->Bottom, bottom);
+}
+
+static void test_WriteConsoleOutput(HANDLE console)
+{
+    CONSOLE_SCREEN_BUFFER_INFO info;
+    CHAR_INFO char_info_buf[2048];
+    SMALL_RECT region;
+    COORD size, coord;
+    unsigned int i;
+    BOOL ret;
+
+    for (i = 0; i < ARRAY_SIZE(char_info_buf); i++)
+    {
+        char_info_buf[i].Char.UnicodeChar = '0' + i % 10;
+        char_info_buf[i].Attributes = 0;
+    }
+
+    ret = GetConsoleScreenBufferInfo(console, &info);
+    ok(ret, "GetConsoleScreenBufferInfo failed: %u\n", GetLastError());
+
+    size.X = 23;
+    size.Y = 17;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 10, 7, 15, 11);
+    ret = WriteConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok(ret, "WriteConsoleOutputW failed: %u\n", GetLastError());
+    check_region(&region, 10, 7, 15, 11);
+
+    size.X = 23;
+    size.Y = 17;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 200, 7, 15, 211);
+    ret = WriteConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok(!ret && GetLastError() == ERROR_INVALID_PARAMETER, "WriteConsoleOutputW returned: %x(%u)\n", ret, GetLastError());
+    check_region(&region, 200, 7, 15, 211);
+
+    size.X = 23;
+    size.Y = 17;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 200, 7, 211, 8);
+    ret = WriteConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok(ret, "WriteConsoleOutputW failed: %u\n", GetLastError());
+    check_region(&region, 200, 7, 211, 8);
+
+    size.X = 23;
+    size.Y = 17;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 10, 7, 9, 11);
+    ret = WriteConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok(!ret && GetLastError() == ERROR_INVALID_PARAMETER, "WriteConsoleOutputW returned: %x(%u)\n", ret, GetLastError());
+    check_region(&region, 10, 7, 9, 11);
+
+    size.X = 23;
+    size.Y = 17;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 10, 7, 11, 6);
+    ret = WriteConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok(!ret && GetLastError() == ERROR_INVALID_PARAMETER, "WriteConsoleOutputW returned: %x(%u)\n", ret, GetLastError());
+    check_region(&region, 10, 7, 11, 6);
+
+    size.X = 2;
+    size.Y = 17;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 10, 7, 15, 11);
+    ret = WriteConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok(!ret && GetLastError() == ERROR_INVALID_PARAMETER, "WriteConsoleOutputW returned: %x(%u)\n", ret, GetLastError());
+    check_region(&region, 10, 7, 15, 11);
+
+    size.X = 23;
+    size.Y = 3;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 10, 7, 15, 11);
+    ret = WriteConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok(!ret && GetLastError() == ERROR_INVALID_PARAMETER, "WriteConsoleOutputW returned: %x(%u)\n", ret, GetLastError());
+    check_region(&region, 10, 7, 15, 11);
+
+    size.X = 6;
+    size.Y = 17;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 10, 7, 15, 11);
+    ret = WriteConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok(ret, "WriteConsoleOutputW failed: %u\n", GetLastError());
+    check_region(&region, 10, 7, 13, 11);
+
+    size.X = 6;
+    size.Y = 17;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 10, 7, 15, 11);
+    ret = WriteConsoleOutputW((HANDLE)0xdeadbeef, char_info_buf, size, coord, &region);
+    ok(!ret && GetLastError() == ERROR_INVALID_HANDLE, "WriteConsoleOutputW returned: %x(%u)\n", ret, GetLastError());
+    if (!skip_nt) check_region(&region, 10, 7, 13, 11);
+
+    size.X = 16;
+    size.Y = 7;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 10, 7, 15, 11);
+    ret = WriteConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok(ret, "WriteConsoleOutputW failed: %u\n", GetLastError());
+    check_region(&region, 10, 7, 15, 10);
+
+    size.X = 16;
+    size.Y = 7;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, info.dwSize.X - 2, 7, info.dwSize.X + 2, 7);
+    ret = WriteConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok(ret, "WriteConsoleOutputW failed: %u\n", GetLastError());
+    check_region(&region, info.dwSize.X - 2, 7, info.dwSize.X - 1, 7);
 }
 
 static void test_FillConsoleOutputCharacterA(HANDLE output_handle)
@@ -2479,6 +2643,12 @@ static void test_ReadConsoleOutputCharacterA(HANDLE output_handle)
     ret = ReadConsoleOutputCharacterA(output_handle, &read, 1, origin, &count);
     ok(ret == TRUE, "Expected ReadConsoleOutputCharacterA to return TRUE, got %d\n", ret);
     ok(count == 1, "Expected count to be 1, got %u\n", count);
+
+    count = 0xdeadbeef;
+    origin.X = 200;
+    ret = ReadConsoleOutputCharacterA(output_handle, &read, 1, origin, &count);
+    ok(ret == TRUE, "Expected ReadConsoleOutputCharacterA to return TRUE, got %d\n", ret);
+    ok(count == 0, "Expected count to be 0, got %u\n", count);
 }
 
 static void test_ReadConsoleOutputCharacterW(HANDLE output_handle)
@@ -2563,6 +2733,12 @@ static void test_ReadConsoleOutputCharacterW(HANDLE output_handle)
     ret = ReadConsoleOutputCharacterW(output_handle, &read, 1, origin, &count);
     ok(ret == TRUE, "Expected ReadConsoleOutputCharacterW to return TRUE, got %d\n", ret);
     ok(count == 1, "Expected count to be 1, got %u\n", count);
+
+    count = 0xdeadbeef;
+    origin.X = 200;
+    ret = ReadConsoleOutputCharacterW(output_handle, &read, 1, origin, &count);
+    ok(ret == TRUE, "Expected ReadConsoleOutputCharacterW to return TRUE, got %d\n", ret);
+    ok(count == 0, "Expected count to be 0, got %u\n", count);
 }
 
 static void test_ReadConsoleOutputAttribute(HANDLE output_handle)
@@ -2646,6 +2822,154 @@ static void test_ReadConsoleOutputAttribute(HANDLE output_handle)
     ret = ReadConsoleOutputAttribute(output_handle, &attr, 1, origin, &count);
     ok(ret == TRUE, "Expected ReadConsoleOutputAttribute to return TRUE, got %d\n", ret);
     ok(count == 1, "Expected count to be 1, got %u\n", count);
+
+    count = 0xdeadbeef;
+    origin.X = 200;
+    ret = ReadConsoleOutputAttribute(output_handle, &attr, 1, origin, &count);
+    ok(ret == TRUE, "Expected ReadConsoleOutputAttribute to return TRUE, got %d\n", ret);
+    ok(count == 0, "Expected count to be 1, got %u\n", count);
+}
+
+static void test_ReadConsoleOutput(HANDLE console)
+{
+    CONSOLE_SCREEN_BUFFER_INFO info;
+    CHAR_INFO char_info_buf[2048];
+    SMALL_RECT region;
+    COORD size, coord;
+    DWORD count;
+    WCHAR ch;
+    BOOL ret;
+
+    if (skip_nt) return;
+
+    ret = GetConsoleScreenBufferInfo(console, &info);
+    ok(ret, "GetConsoleScreenBufferInfo failed: %u\n", GetLastError());
+
+    size.X = 23;
+    size.Y = 17;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 10, 7, 15, 11);
+    ret = ReadConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok(ret, "ReadConsoleOutputW failed: %u\n", GetLastError());
+    check_region(&region, 10, 7, 15, 11);
+
+    size.X = 23;
+    size.Y = 17;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 200, 7, 15, 211);
+    ret = ReadConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok(!ret && GetLastError() == ERROR_NOT_ENOUGH_MEMORY, "ReadConsoleOutputW returned: %x(%u)\n", ret, GetLastError());
+    check_region(&region, 200, 7, 15, 211);
+
+    size.X = 23;
+    size.Y = 17;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 200, 7, 211, 8);
+    ret = ReadConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok((!ret && (GetLastError() == ERROR_INVALID_PARAMETER || GetLastError() == ERROR_INVALID_FUNCTION)) || broken(ret /* win8 */),
+       "ReadConsoleOutputW returned: %x %u\n", ret, GetLastError());
+    if (!ret && GetLastError() == ERROR_INVALID_PARAMETER) check_region(&region, 200, 7, -211, -8);
+
+    size.X = 23;
+    size.Y = 17;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 10, 7, 9, 11);
+    ret = ReadConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok((!ret && (GetLastError() == ERROR_INVALID_FUNCTION || GetLastError() == ERROR_NOT_ENOUGH_MEMORY)) || broken(ret /* win8 */),
+       "ReadConsoleOutputW returned: %x(%u)\n", ret, GetLastError());
+    check_region(&region, 10, 7, 9, -11);
+
+    size.X = 23;
+    size.Y = 17;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 10, 7, 11, 6);
+    ret = ReadConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok((!ret && (GetLastError() == ERROR_INVALID_FUNCTION || GetLastError() == ERROR_NOT_ENOUGH_MEMORY)) || broken(ret /* win8 */),
+       "ReadConsoleOutputW returned: %x(%u)\n", ret, GetLastError());
+    check_region(&region, 10, 7, -11, 6);
+
+    size.X = 2;
+    size.Y = 17;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 10, 7, 15, 11);
+    ret = ReadConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok((!ret && (GetLastError() == ERROR_INVALID_FUNCTION || GetLastError() == ERROR_NOT_ENOUGH_MEMORY)) || broken(ret /* win8 */),
+       "ReadConsoleOutputW returned: %x(%u)\n", ret, GetLastError());
+    check_region(&region, 10, 7, -15, -11);
+
+    size.X = 23;
+    size.Y = 3;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 10, 7, 15, 11);
+    ret = ReadConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok((!ret && (GetLastError() == ERROR_INVALID_FUNCTION || GetLastError() == ERROR_NOT_ENOUGH_MEMORY)) || broken(ret /* win8 */),
+       "ReadConsoleOutputW returned: %x(%u)\n", ret, GetLastError());
+    check_region(&region, 10, 7, -15, 6);
+
+    size.X = 6;
+    size.Y = 17;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 10, 7, 15, 11);
+    ret = ReadConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok(ret, "ReadConsoleOutputW failed: %u\n", GetLastError());
+    check_region(&region, 10, 7, 13, 11);
+
+    size.X = 6;
+    size.Y = 17;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 10, 7, 15, 11);
+    ret = ReadConsoleOutputW((HANDLE)0xdeadbeef, char_info_buf, size, coord, &region);
+    ok(!ret && GetLastError() == ERROR_INVALID_HANDLE, "ReadConsoleOutputW returned: %x(%u)\n", ret, GetLastError());
+    if (!skip_nt) check_region(&region, 10, 7, 13, 11);
+
+    size.X = 16;
+    size.Y = 7;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, 10, 7, 15, 11);
+    ret = ReadConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok(ret, "ReadConsoleOutputW failed: %u\n", GetLastError());
+    check_region(&region, 10, 7, 15, 10);
+
+    size.X = 16;
+    size.Y = 7;
+    coord.X = 2;
+    coord.Y = 3;
+    set_region(&region, info.dwSize.X - 2, 7, info.dwSize.X + 2, 7);
+    ret = ReadConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok(ret || GetLastError() == ERROR_INVALID_PARAMETER, "ReadConsoleOutputW failed: %u\n", GetLastError());
+    if (ret) check_region(&region, info.dwSize.X - 2, 7, info.dwSize.X - 1, 7);
+
+    coord.X = 2;
+    coord.Y = 3;
+    ret = WriteConsoleOutputCharacterW(console, L"xyz", 3, coord, &count);
+    ok(ret, "WriteConsoleOutputCharacterW failed: %u\n", GetLastError());
+    ok(count == 3, "count = %u\n", count);
+
+    memset(char_info_buf, 0xc0, sizeof(char_info_buf));
+    size.X = 16;
+    size.Y = 7;
+    coord.X = 5;
+    coord.Y = 6;
+    set_region(&region, 2, 3, 5, 3);
+    ret = ReadConsoleOutputW(console, char_info_buf, size, coord, &region);
+    ok(ret, "ReadConsoleOutputW failed: %u\n", GetLastError());
+    check_region(&region, 2, 3, 5, 3);
+    ch = char_info_buf[coord.Y * size.X + coord.X].Char.UnicodeChar;
+    ok(ch == 'x', "unexpected char %c/%x\n", ch, ch);
+    ch = char_info_buf[coord.Y * size.X + coord.X + 1].Char.UnicodeChar;
+    ok(ch == 'y', "unexpected char %c/%x\n", ch, ch);
+    ch = char_info_buf[coord.Y * size.X + coord.X + 2].Char.UnicodeChar;
+    ok(ch == 'z', "unexpected char %c/%x\n", ch, ch);
 }
 
 static void test_ReadConsole(void)
@@ -3290,6 +3614,12 @@ static void test_FreeConsole(void)
        (GetLastError() == ERROR_INVALID_HANDLE || broken(GetLastError() == ERROR_FILE_NOT_FOUND /* winxp */)),
        "CreateFileA failed: %u\n", GetLastError());
 
+    handle = CreateConsoleScreenBuffer(GENERIC_READ | GENERIC_WRITE,
+                                       FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+                                       CONSOLE_TEXTMODE_BUFFER, NULL);
+    ok(handle == INVALID_HANDLE_VALUE && GetLastError() == ERROR_INVALID_HANDLE,
+       "CreateConsoleScreenBuffer returned: %p (%u)\n", handle, GetLastError());
+
     if (!skip_nt)
     {
         SetStdHandle( STD_INPUT_HANDLE, (HANDLE)0xdeadbeef );
@@ -3440,6 +3770,105 @@ static void test_AttachConsole(HANDLE console)
     ok(!memcmp(buf, "Child", 5), "Unexpected console output\n");
 }
 
+static void test_AllocConsole_child(void)
+{
+    HANDLE unbound_output;
+    HANDLE prev_output, prev_error;
+    STARTUPINFOW si;
+    DWORD mode;
+    BOOL res;
+
+    GetStartupInfoW(&si);
+
+    prev_output = GetStdHandle(STD_OUTPUT_HANDLE);
+    res = DuplicateHandle(GetCurrentProcess(), prev_output, GetCurrentProcess(), &unbound_output,
+                          0, FALSE, DUPLICATE_SAME_ACCESS);
+    ok(res, "DuplicateHandle failed: %u\n", GetLastError());
+
+    res = GetConsoleMode(unbound_output, &mode);
+    ok(res, "GetConsoleMode failed: %u\n", GetLastError());
+
+    prev_error = GetStdHandle(STD_ERROR_HANDLE);
+    if (si.dwFlags & STARTF_USESTDHANDLES)
+    {
+        res = GetConsoleMode(prev_error, &mode);
+        ok(!res && GetLastError() == ERROR_INVALID_HANDLE, "GetConsoleMode failed: %u\n", GetLastError());
+    }
+
+    FreeConsole();
+
+    ok(GetStdHandle(STD_OUTPUT_HANDLE) == prev_output, "GetStdHandle(STD_OUTPUT_HANDLE) = %p\n", GetStdHandle(STD_OUTPUT_HANDLE));
+    ok(GetStdHandle(STD_ERROR_HANDLE) == prev_error, "GetStdHandle(STD_ERROR_HANDLE) = %p\n", GetStdHandle(STD_ERROR_HANDLE));
+    res = GetConsoleMode(unbound_output, &mode);
+    todo_wine
+    ok(!res && GetLastError() == ERROR_INVALID_HANDLE, "GetConsoleMode failed: %u\n", GetLastError());
+
+    res = AllocConsole();
+    ok(res, "AllocConsole failed: %u\n", GetLastError());
+
+    if (si.dwFlags & STARTF_USESTDHANDLES)
+    {
+        ok(GetStdHandle(STD_OUTPUT_HANDLE) == prev_output, "GetStdHandle(STD_OUTPUT_HANDLE) = %p\n", GetStdHandle(STD_OUTPUT_HANDLE));
+        ok(GetStdHandle(STD_ERROR_HANDLE) == prev_error, "GetStdHandle(STD_ERROR_HANDLE) = %p\n", GetStdHandle(STD_ERROR_HANDLE));
+    }
+
+    res = GetConsoleMode(unbound_output, &mode);
+    ok(res, "GetConsoleMode failed: %u\n", GetLastError());
+
+    FreeConsole();
+    SetStdHandle(STD_OUTPUT_HANDLE, NULL);
+    SetStdHandle(STD_ERROR_HANDLE, NULL);
+    res = AllocConsole();
+    ok(res, "AllocConsole failed: %u\n", GetLastError());
+
+    ok(GetStdHandle(STD_OUTPUT_HANDLE) != NULL, "GetStdHandle(STD_OUTPUT_HANDLE) = %p\n", GetStdHandle(STD_OUTPUT_HANDLE));
+    ok(GetStdHandle(STD_ERROR_HANDLE) != NULL, "GetStdHandle(STD_ERROR_HANDLE) = %p\n", GetStdHandle(STD_ERROR_HANDLE));
+
+    res = GetConsoleMode(unbound_output, &mode);
+    ok(res, "GetConsoleMode failed: %u\n", GetLastError());
+    res = GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &mode);
+    ok(res, "GetConsoleMode failed: %u\n", GetLastError());
+    res = GetConsoleMode(GetStdHandle(STD_ERROR_HANDLE), &mode);
+    ok(res, "GetConsoleMode failed: %u\n", GetLastError());
+
+    res = CloseHandle(unbound_output);
+    ok(res, "CloseHandle failed: %u\n", GetLastError());
+}
+
+static void test_AllocConsole(void)
+{
+    SECURITY_ATTRIBUTES inheritable_attr = { sizeof(inheritable_attr), NULL, TRUE };
+    STARTUPINFOA si = { sizeof(si) };
+    PROCESS_INFORMATION info;
+    char **argv, buf[MAX_PATH];
+    HANDLE pipe_read, pipe_write;
+    BOOL res;
+
+    if (skip_nt) return;
+
+    winetest_get_mainargs(&argv);
+    sprintf(buf, "\"%s\" console alloc_console", argv[0], GetCurrentProcessId());
+    res = CreateProcessA(NULL, buf, NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL, NULL, &si, &info);
+    ok(res, "CreateProcess failed: %u\n", GetLastError());
+    CloseHandle(info.hThread);
+    wait_child_process(info.hProcess);
+    CloseHandle(info.hProcess);
+
+    res = CreatePipe(&pipe_read, &pipe_write, &inheritable_attr, 0);
+    ok(res, "CreatePipe failed: %u\n", GetLastError());
+
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdError = pipe_write;
+    res = CreateProcessA(NULL, buf, NULL, NULL, TRUE, CREATE_NEW_CONSOLE, NULL, NULL, &si, &info);
+    ok(res, "CreateProcess failed: %u\n", GetLastError());
+    CloseHandle(info.hThread);
+    wait_child_process(info.hProcess);
+    CloseHandle(info.hProcess);
+
+    CloseHandle(pipe_read);
+    CloseHandle(pipe_write);
+}
+
 START_TEST(console)
 {
     static const char font_name[] = "Lucida Console";
@@ -3463,6 +3892,12 @@ START_TEST(console)
         DWORD parent_pid;
         sscanf(argv[3], "%x", &parent_pid);
         test_AttachConsole_child(parent_pid);
+        return;
+    }
+
+    if (argc == 3 && !strcmp(argv[2], "alloc_console"))
+    {
+        test_AllocConsole_child();
         return;
     }
 
@@ -3591,12 +4026,14 @@ START_TEST(console)
     test_WriteConsoleOutputCharacterA(hConOut);
     test_WriteConsoleOutputCharacterW(hConOut);
     test_WriteConsoleOutputAttribute(hConOut);
+    test_WriteConsoleOutput(hConOut);
     test_FillConsoleOutputCharacterA(hConOut);
     test_FillConsoleOutputCharacterW(hConOut);
     test_FillConsoleOutputAttribute(hConOut);
     test_ReadConsoleOutputCharacterA(hConOut);
     test_ReadConsoleOutputCharacterW(hConOut);
     test_ReadConsoleOutputAttribute(hConOut);
+    test_ReadConsoleOutput(hConOut);
     test_GetCurrentConsoleFont(hConOut);
     test_GetCurrentConsoleFontEx(hConOut);
     test_GetConsoleFontSize(hConOut);
@@ -3606,5 +4043,6 @@ START_TEST(console)
     test_GetConsoleScreenBufferInfoEx(hConOut);
     test_SetConsoleScreenBufferInfoEx(hConOut);
     test_AttachConsole(hConOut);
+    test_AllocConsole();
     test_FreeConsole();
 }

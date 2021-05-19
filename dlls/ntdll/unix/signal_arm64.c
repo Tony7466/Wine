@@ -69,9 +69,7 @@
 #include "unix_private.h"
 #include "wine/debug.h"
 
-#ifdef HAVE_LIBUNWIND
 WINE_DEFAULT_DEBUG_CHANNEL(seh);
-#endif
 
 /***********************************************************************
  * signal context platform-specific definitions
@@ -116,18 +114,31 @@ static DWORD64 get_fault_esr( ucontext_t *sigcontext )
 
 static pthread_key_t teb_key;
 
-struct arm64_thread_data
+struct syscall_frame
 {
-    void     *exit_frame;    /* exit frame pointer */
-    CONTEXT  *context;       /* context to set with SIGUSR2 */
+    ULONG64 x29;
+    ULONG64 thunk_addr;
+    ULONG64 x0, x1, x2, x3, x4, x5, x6, x7, x8;
+    struct syscall_frame *prev_frame;
+    ULONG64 x19, x20, x21, x22, x23, x24, x25, x26, x27, x28;
+    ULONG64 thunk_x29;
+    ULONG64 ret_addr;
 };
 
-C_ASSERT( sizeof(struct arm64_thread_data) <= sizeof(((TEB *)0)->SystemReserved2) );
-C_ASSERT( offsetof( TEB, SystemReserved2 ) + offsetof( struct arm64_thread_data, exit_frame ) == 0x300 );
+struct arm64_thread_data
+{
+    void                 *exit_frame;    /* 02f0 exit frame pointer */
+    struct syscall_frame *syscall_frame; /* 02f8 frame pointer on syscall entry */
+    CONTEXT              *context;       /* 0300 context to set with SIGUSR2 */
+};
+
+C_ASSERT( sizeof(struct arm64_thread_data) <= sizeof(((struct ntdll_thread_data *)0)->cpu_data) );
+C_ASSERT( offsetof( TEB, GdiTebBatch ) + offsetof( struct arm64_thread_data, exit_frame ) == 0x2f0 );
+C_ASSERT( offsetof( TEB, GdiTebBatch ) + offsetof( struct arm64_thread_data, syscall_frame ) == 0x2f8 );
 
 static inline struct arm64_thread_data *arm64_thread_data(void)
 {
-    return (struct arm64_thread_data *)NtCurrentTeb()->SystemReserved2;
+    return (struct arm64_thread_data *)ntdll_get_thread_data()->cpu_data;
 }
 
 
@@ -335,42 +346,6 @@ static unsigned int get_server_context_flags( DWORD flags )
 
 
 /***********************************************************************
- *           copy_context
- *
- * Copy a register context according to the flags.
- */
-static void copy_context( CONTEXT *to, const CONTEXT *from, DWORD flags )
-{
-    flags &= ~CONTEXT_ARM64;  /* get rid of CPU id */
-    if (flags & CONTEXT_CONTROL)
-    {
-        to->u.s.Fp  = from->u.s.Fp;
-        to->u.s.Lr  = from->u.s.Lr;
-        to->Sp      = from->Sp;
-        to->Pc      = from->Pc;
-        to->Cpsr    = from->Cpsr;
-    }
-    if (flags & CONTEXT_INTEGER)
-    {
-        memcpy( to->u.X, from->u.X, sizeof(to->u.X) );
-    }
-    if (flags & CONTEXT_FLOATING_POINT)
-    {
-        memcpy( to->V, from->V, sizeof(to->V) );
-        to->Fpcr = from->Fpcr;
-        to->Fpsr = from->Fpsr;
-    }
-    if (flags & CONTEXT_DEBUG_REGISTERS)
-    {
-        memcpy( to->Bcr, from->Bcr, sizeof(to->Bcr) );
-        memcpy( to->Bvr, from->Bvr, sizeof(to->Bvr) );
-        memcpy( to->Wcr, from->Wcr, sizeof(to->Wcr) );
-        memcpy( to->Wvr, from->Wvr, sizeof(to->Wvr) );
-    }
-}
-
-
-/***********************************************************************
  *           context_to_server
  *
  * Convert a register context to the server format.
@@ -501,7 +476,8 @@ NTSTATUS WINAPI NtSetContextThread( HANDLE handle, const CONTEXT *context )
 NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
 {
     NTSTATUS ret;
-    DWORD needed_flags = context->ContextFlags;
+    struct syscall_frame *frame = arm64_thread_data()->syscall_frame;
+    DWORD needed_flags = context->ContextFlags & ~CONTEXT_ARM64;
     BOOL self = (handle == GetCurrentThread());
 
     if (!self)
@@ -514,12 +490,26 @@ NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
         needed_flags &= ~context->ContextFlags;
     }
 
-    if (self && needed_flags)
+    if (self)
     {
-        CONTEXT ctx;
-        RtlCaptureContext( &ctx );
-        copy_context( context, &ctx, ctx.ContextFlags & needed_flags );
-        context->ContextFlags |= ctx.ContextFlags & needed_flags;
+        if (needed_flags & CONTEXT_INTEGER)
+        {
+            memset( context->u.X, 0, sizeof(context->u.X[0]) * 18 );
+            context->u.X[18] = (DWORD64)NtCurrentTeb();
+            memcpy( context->u.X + 19, &frame->x19, sizeof(context->u.X[0]) * 10 );
+            context->ContextFlags |= CONTEXT_INTEGER;
+        }
+        if (needed_flags & CONTEXT_CONTROL)
+        {
+            context->u.s.Fp  = frame->x29;
+            context->u.s.Lr  = frame->ret_addr;
+            context->Sp      = (ULONG64)&frame->thunk_x29;
+            context->Pc      = frame->thunk_addr;
+            context->Cpsr    = 0;
+            context->ContextFlags |= CONTEXT_CONTROL;
+        }
+        if (needed_flags & CONTEXT_FLOATING_POINT) FIXME( "floating point not supported\n" );
+        if (needed_flags & CONTEXT_DEBUG_REGISTERS) FIXME( "debug registers not supported\n" );
     }
     return STATUS_SUCCESS;
 }
@@ -658,6 +648,7 @@ static void trap_handler( int signal, siginfo_t *siginfo, void *sigcontext )
     case TRAP_BRKPT:
     default:
         rec.ExceptionCode = EXCEPTION_BREAKPOINT;
+        rec.NumberParameters = 1;
         break;
     }
     setup_exception( sigcontext, &rec );
@@ -932,7 +923,7 @@ __ASM_GLOBAL_FUNC( signal_start_thread,
                    "mov x18, x4\n\t"             /* teb */
                    /* store exit frame */
                    "mov x29, sp\n\t"
-                   "str x29, [x4, #0x300]\n\t"  /* arm64_thread_data()->exit_frame */
+                   "str x29, [x4, #0x2f0]\n\t"  /* arm64_thread_data()->exit_frame */
                    /* switch to thread stack */
                    "ldr x5, [x4, #8]\n\t"       /* teb->Tib.StackBase */
                    "sub sp, x5, #0x1000\n\t"
@@ -971,8 +962,8 @@ __ASM_GLOBAL_FUNC( signal_start_thread,
 extern void DECLSPEC_NORETURN call_thread_exit_func( int status, void (*func)(int), TEB *teb );
 __ASM_GLOBAL_FUNC( call_thread_exit_func,
                    "stp x29, x30, [sp,#-16]!\n\t"
-                   "ldr x3, [x2, #0x300]\n\t"  /* arm64_thread_data()->exit_frame */
-                   "str xzr, [x2, #0x300]\n\t"
+                   "ldr x3, [x2, #0x2f0]\n\t"  /* arm64_thread_data()->exit_frame */
+                   "str xzr, [x2, #0x2f0]\n\t"
                    "cbz x3, 1f\n\t"
                    "mov sp, x3\n"
                    "1:\tldp x29, x30, [sp], #16\n\t"

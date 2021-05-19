@@ -172,6 +172,37 @@ enum arm_trap_code
     TRAP_ARM_ALIGNFLT   = 17,  /* Alignment check exception */
 };
 
+struct syscall_frame
+{
+    struct syscall_frame *prev_frame;
+    DWORD                 cpsr;
+    DWORD                 r5;
+    DWORD                 r6;
+    DWORD                 r7;
+    DWORD                 r8;
+    DWORD                 r9;
+    DWORD                 r10;
+    DWORD                 r11;
+    DWORD                 thunk_addr;
+    DWORD                 r4;
+    DWORD                 ret_addr;
+};
+
+struct arm_thread_data
+{
+    void                 *exit_frame;    /* 1d4 exit frame pointer */
+    struct syscall_frame *syscall_frame; /* 1d8 frame pointer on syscall entry */
+};
+
+C_ASSERT( sizeof(struct arm_thread_data) <= sizeof(((struct ntdll_thread_data *)0)->cpu_data) );
+C_ASSERT( offsetof( TEB, GdiTebBatch ) + offsetof( struct arm_thread_data, exit_frame ) == 0x1d4 );
+C_ASSERT( offsetof( TEB, GdiTebBatch ) + offsetof( struct arm_thread_data, syscall_frame ) == 0x1d8 );
+
+static inline struct arm_thread_data *arm_thread_data(void)
+{
+    return (struct arm_thread_data *)ntdll_get_thread_data()->cpu_data;
+}
+
 
 /***********************************************************************
  *           unwind_builtin_dll
@@ -309,45 +340,6 @@ static unsigned int get_server_context_flags( DWORD flags )
 
 
 /***********************************************************************
- *           copy_context
- *
- * Copy a register context according to the flags.
- */
-static void copy_context( CONTEXT *to, const CONTEXT *from, DWORD flags )
-{
-    flags &= ~CONTEXT_ARM;  /* get rid of CPU id */
-    if (flags & CONTEXT_CONTROL)
-    {
-        to->Sp      = from->Sp;
-        to->Lr      = from->Lr;
-        to->Pc      = from->Pc;
-        to->Cpsr    = from->Cpsr;
-    }
-    if (flags & CONTEXT_INTEGER)
-    {
-        to->R0  = from->R0;
-        to->R1  = from->R1;
-        to->R2  = from->R2;
-        to->R3  = from->R3;
-        to->R4  = from->R4;
-        to->R5  = from->R5;
-        to->R6  = from->R6;
-        to->R7  = from->R7;
-        to->R8  = from->R8;
-        to->R9  = from->R9;
-        to->R10 = from->R10;
-        to->R11 = from->R11;
-        to->R12 = from->R12;
-    }
-    if (flags & CONTEXT_FLOATING_POINT)
-    {
-        to->Fpscr = from->Fpscr;
-        memcpy( to->u.D, from->u.D, sizeof(to->u.D) );
-    }
-}
-
-
-/***********************************************************************
  *           context_to_server
  *
  * Convert a register context to the server format.
@@ -481,7 +473,8 @@ NTSTATUS WINAPI NtSetContextThread( HANDLE handle, const CONTEXT *context )
 NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
 {
     NTSTATUS ret;
-    DWORD needed_flags = context->ContextFlags;
+    struct syscall_frame *frame = arm_thread_data()->syscall_frame;
+    DWORD needed_flags = context->ContextFlags & ~CONTEXT_ARM;
     BOOL self = (handle == GetCurrentThread());
 
     if (!self)
@@ -494,12 +487,34 @@ NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
         needed_flags &= ~context->ContextFlags;
     }
 
-    if (self && needed_flags)
+    if (self)
     {
-        CONTEXT ctx;
-        RtlCaptureContext( &ctx );
-        copy_context( context, &ctx, ctx.ContextFlags & needed_flags );
-        context->ContextFlags |= ctx.ContextFlags & needed_flags;
+        if (needed_flags & CONTEXT_INTEGER)
+        {
+            context->R0  = 0;
+            context->R1  = 0;
+            context->R2  = 0;
+            context->R3  = 0;
+            context->R4  = frame->r4;
+            context->R5  = frame->r5;
+            context->R6  = frame->r6;
+            context->R7  = frame->r7;
+            context->R8  = frame->r8;
+            context->R9  = frame->r9;
+            context->R10 = frame->r10;
+            context->R11 = frame->r11;
+            context->R12 = 0;
+            context->ContextFlags |= CONTEXT_INTEGER;
+        }
+        if (needed_flags & CONTEXT_CONTROL)
+        {
+            context->Sp   = (DWORD)&frame->r4;
+            context->Lr   = frame->thunk_addr;
+            context->Pc   = frame->thunk_addr;
+            context->Cpsr = frame->cpsr;
+            context->ContextFlags |= CONTEXT_CONTROL;
+        }
+        if (needed_flags & CONTEXT_FLOATING_POINT) FIXME( "floating point not implemented\n" );
     }
     return STATUS_SUCCESS;
 }
@@ -624,6 +639,7 @@ static void trap_handler( int signal, siginfo_t *siginfo, void *sigcontext )
     case TRAP_BRKPT:
     default:
         rec.ExceptionCode = EXCEPTION_BREAKPOINT;
+        rec.NumberParameters = 1;
         break;
     }
     setup_exception( sigcontext, &rec );
@@ -880,7 +896,7 @@ __ASM_GLOBAL_FUNC( signal_start_thread,
                    "push {r4-r12,lr}\n\t"
                    /* store exit frame */
                    "ldr r4, [sp, #40]\n\t"    /* teb */
-                   "str sp, [r4, #0x1d4]\n\t" /* teb->SystemReserved2 */
+                   "str sp, [r4, #0x1d4]\n\t" /* teb->GdiTebBatch */
                    /* switch to thread stack */
                    "ldr r4, [r4, #4]\n\t"     /* teb->Tib.StackBase */
                    "sub sp, r4, #0x1000\n\t"
@@ -899,7 +915,7 @@ __ASM_GLOBAL_FUNC( signal_start_thread,
 extern void DECLSPEC_NORETURN call_thread_exit_func( int status, void (*func)(int), TEB *teb );
 __ASM_GLOBAL_FUNC( call_thread_exit_func,
                    ".arm\n\t"
-                   "ldr r3, [r2, #0x1d4]\n\t"  /* teb->SystemReserved2 */
+                   "ldr r3, [r2, #0x1d4]\n\t"  /* teb->GdiTebBatch */
                    "mov ip, #0\n\t"
                    "str ip, [r2, #0x1d4]\n\t"
                    "cmp r3, ip\n\t"

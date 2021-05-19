@@ -1471,6 +1471,7 @@ void CDECL server_init_process_done( void *relay )
 #ifdef __APPLE__
     send_server_task_port();
 #endif
+    if (nt->FileHeader.Characteristics & IMAGE_FILE_LARGE_ADDRESS_AWARE) virtual_set_large_address_space();
 
     /* Install signal handlers; this cannot be done earlier, since we cannot
      * send exceptions to the debugger before the create process event that
@@ -1550,8 +1551,18 @@ size_t server_init_thread( void *entry_point, BOOL *suspend )
     }
     SERVER_END_REQ;
 
-    is_wow64 = !is_win64 && (server_cpus & ((1 << CPU_x86_64) | (1 << CPU_ARM64))) != 0;
-    ntdll_get_thread_data()->wow64_redir = is_wow64;
+#ifndef _WIN64
+    is_wow64 = (server_cpus & ((1 << CPU_x86_64) | (1 << CPU_ARM64))) != 0;
+    if (is_wow64)
+    {
+        TEB64 *teb64 = (TEB64 *)((char *)NtCurrentTeb() - teb_offset);
+
+        NtCurrentTeb()->GdiBatchCount = PtrToUlong( teb64 );
+        NtCurrentTeb()->WowTebOffset  = -teb_offset;
+        teb64->ClientId.UniqueProcess = PtrToUlong( NtCurrentTeb()->ClientId.UniqueProcess );
+        teb64->ClientId.UniqueThread  = PtrToUlong( NtCurrentTeb()->ClientId.UniqueThread );
+    }
+#endif
 
     switch (ret)
     {
@@ -1629,6 +1640,7 @@ NTSTATUS WINAPI NtDuplicateObject( HANDLE source_process, HANDLE source, HANDLE 
  */
 NTSTATUS WINAPI NtClose( HANDLE handle )
 {
+    HANDLE port;
     NTSTATUS ret;
     int fd = remove_fd_from_cache( handle );
 
@@ -1639,5 +1651,13 @@ NTSTATUS WINAPI NtClose( HANDLE handle )
     }
     SERVER_END_REQ;
     if (fd != -1) close( fd );
+
+    if (ret != STATUS_INVALID_HANDLE || !handle) return ret;
+    if (!NtCurrentTeb()->Peb->BeingDebugged) return ret;
+    if (!NtQueryInformationProcess( NtCurrentProcess(), ProcessDebugPort, &port, sizeof(port), NULL) && port)
+    {
+        NtCurrentTeb()->ExceptionCode = ret;
+        pKiRaiseUserExceptionDispatcher();
+    }
     return ret;
 }

@@ -240,23 +240,43 @@ struct stack_layout
 
 C_ASSERT( sizeof(struct stack_layout) == 0x630 ); /* Should match the size in call_user_exception_dispatcher(). */
 
-struct amd64_thread_data
+struct syscall_frame
 {
-    DWORD_PTR dr0;           /* debug registers */
-    DWORD_PTR dr1;
-    DWORD_PTR dr2;
-    DWORD_PTR dr3;
-    DWORD_PTR dr6;
-    DWORD_PTR dr7;
-    void     *exit_frame;    /* exit frame pointer */
+    struct syscall_frame *prev_frame;
+    ULONG64               pad;
+    ULONG64               xmm[10 * 2];  /* xmm6-xmm15 */
+    ULONG64               mxcsr;
+    ULONG64               r12;
+    ULONG64               r13;
+    ULONG64               r14;
+    ULONG64               r15;
+    ULONG64               rdi;
+    ULONG64               rsi;
+    ULONG64               rbx;
+    ULONG64               rbp;
+    ULONG64               thunk_addr;
+    ULONG64               ret_addr;
 };
 
-C_ASSERT( sizeof(struct amd64_thread_data) <= sizeof(((TEB *)0)->SystemReserved2) );
-C_ASSERT( offsetof( TEB, SystemReserved2 ) + offsetof( struct amd64_thread_data, exit_frame ) == 0x330 );
+struct amd64_thread_data
+{
+    DWORD_PTR             dr0;           /* 02f0 debug registers */
+    DWORD_PTR             dr1;           /* 02f8 */
+    DWORD_PTR             dr2;           /* 0300 */
+    DWORD_PTR             dr3;           /* 0308 */
+    DWORD_PTR             dr6;           /* 0310 */
+    DWORD_PTR             dr7;           /* 0318 */
+    void                 *exit_frame;    /* 0320 exit frame pointer */
+    struct syscall_frame *syscall_frame; /* 0328 syscall frame pointer */
+};
+
+C_ASSERT( sizeof(struct amd64_thread_data) <= sizeof(((struct ntdll_thread_data *)0)->cpu_data) );
+C_ASSERT( offsetof( TEB, GdiTebBatch ) + offsetof( struct amd64_thread_data, exit_frame ) == 0x320 );
+C_ASSERT( offsetof( TEB, GdiTebBatch ) + offsetof( struct amd64_thread_data, syscall_frame ) == 0x328 );
 
 static inline struct amd64_thread_data *amd64_thread_data(void)
 {
-    return (struct amd64_thread_data *)NtCurrentTeb()->SystemReserved2;
+    return (struct amd64_thread_data *)ntdll_get_thread_data()->cpu_data;
 }
 
 
@@ -1529,64 +1549,6 @@ static unsigned int get_server_context_flags( DWORD flags )
 
 
 /***********************************************************************
- *           copy_context
- *
- * Copy a register context according to the flags.
- */
-static void copy_context( CONTEXT *to, const CONTEXT *from, DWORD flags )
-{
-    flags &= ~CONTEXT_AMD64;  /* get rid of CPU id */
-    if (flags & CONTEXT_CONTROL)
-    {
-        to->Rbp    = from->Rbp;
-        to->Rip    = from->Rip;
-        to->Rsp    = from->Rsp;
-        to->SegCs  = from->SegCs;
-        to->SegSs  = from->SegSs;
-        to->EFlags = from->EFlags;
-    }
-    if (flags & CONTEXT_INTEGER)
-    {
-        to->Rax = from->Rax;
-        to->Rcx = from->Rcx;
-        to->Rdx = from->Rdx;
-        to->Rbx = from->Rbx;
-        to->Rsi = from->Rsi;
-        to->Rdi = from->Rdi;
-        to->R8  = from->R8;
-        to->R9  = from->R9;
-        to->R10 = from->R10;
-        to->R11 = from->R11;
-        to->R12 = from->R12;
-        to->R13 = from->R13;
-        to->R14 = from->R14;
-        to->R15 = from->R15;
-    }
-    if (flags & CONTEXT_SEGMENTS)
-    {
-        to->SegDs = from->SegDs;
-        to->SegEs = from->SegEs;
-        to->SegFs = from->SegFs;
-        to->SegGs = from->SegGs;
-    }
-    if (flags & CONTEXT_FLOATING_POINT)
-    {
-        to->MxCsr = from->MxCsr;
-        to->u.FltSave = from->u.FltSave;
-    }
-    if (flags & CONTEXT_DEBUG_REGISTERS)
-    {
-        to->Dr0 = from->Dr0;
-        to->Dr1 = from->Dr1;
-        to->Dr2 = from->Dr2;
-        to->Dr3 = from->Dr3;
-        to->Dr6 = from->Dr6;
-        to->Dr7 = from->Dr7;
-    }
-}
-
-
-/***********************************************************************
  *           context_to_server
  *
  * Convert a register context to the server format.
@@ -1776,11 +1738,12 @@ NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
 {
     NTSTATUS ret;
     DWORD needed_flags;
+    struct syscall_frame *frame = amd64_thread_data()->syscall_frame;
     BOOL self = (handle == GetCurrentThread());
 
     if (!context) return STATUS_INVALID_PARAMETER;
 
-    needed_flags = context->ContextFlags;
+    needed_flags = context->ContextFlags & ~CONTEXT_AMD64;
 
     /* debug registers require a server call */
     if (context->ContextFlags & (CONTEXT_DEBUG_REGISTERS & ~CONTEXT_AMD64)) self = FALSE;
@@ -1797,12 +1760,49 @@ NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
 
     if (self)
     {
-        if (needed_flags)
+        if (needed_flags & CONTEXT_INTEGER)
         {
-            CONTEXT ctx;
-            RtlCaptureContext( &ctx );
-            copy_context( context, &ctx, ctx.ContextFlags & needed_flags );
-            context->ContextFlags |= ctx.ContextFlags & needed_flags;
+            context->Rax = 0;
+            context->Rbx = frame->rbx;
+            context->Rcx = 0;
+            context->Rdx = 0;
+            context->Rsi = frame->rsi;
+            context->Rdi = frame->rdi;
+            context->R8  = 0;
+            context->R9  = 0;
+            context->R10 = 0;
+            context->R11 = 0;
+            context->R12 = frame->r12;
+            context->R13 = frame->r13;
+            context->R14 = frame->r14;
+            context->R15 = frame->r15;
+            context->ContextFlags |= CONTEXT_INTEGER;
+        }
+        if (needed_flags & CONTEXT_CONTROL)
+        {
+            context->Rsp    = (ULONG64)&frame->ret_addr;
+            context->Rbp    = frame->rbp;
+            context->Rip    = frame->thunk_addr;
+            context->EFlags = 0x202;
+            __asm__( "movw %%cs,%0" : "=g" (context->SegCs) );
+            __asm__( "movw %%ss,%0" : "=g" (context->SegSs) );
+            context->ContextFlags |= CONTEXT_CONTROL;
+        }
+        if (needed_flags & CONTEXT_SEGMENTS)
+        {
+            __asm__( "movw %%ds,%0" : "=g" (context->SegDs) );
+            __asm__( "movw %%es,%0" : "=g" (context->SegEs) );
+            __asm__( "movw %%fs,%0" : "=g" (context->SegFs) );
+            __asm__( "movw %%gs,%0" : "=g" (context->SegGs) );
+            context->ContextFlags |= CONTEXT_SEGMENTS;
+        }
+        if (needed_flags & CONTEXT_FLOATING_POINT)
+        {
+            __asm__( "fxsave %0" : "=m" (context->u.FltSave) );
+            context->MxCsr = frame->mxcsr;
+            memset( &context->u.s.Xmm0, 0, 6 * sizeof(context->u.s.Xmm0) );
+            memcpy( &context->u.s.Xmm6, frame->xmm, 10 * sizeof(context->u.s.Xmm0) );
+            context->ContextFlags |= CONTEXT_FLOATING_POINT;
         }
         /* update the cached version of the debug registers */
         if (context->ContextFlags & (CONTEXT_DEBUG_REGISTERS & ~CONTEXT_AMD64))
@@ -2479,7 +2479,7 @@ __ASM_GLOBAL_FUNC( signal_start_thread,
                    __ASM_CFI(".cfi_rel_offset %r15,8\n\t")
                    /* store exit frame */
                    "movq %gs:0x30,%rax\n\t"
-                   "movq %rsp,0x330(%rax)\n\t"      /* amd64_thread_data()->exit_frame */
+                   "movq %rsp,0x320(%rax)\n\t"      /* amd64_thread_data()->exit_frame */
                    /* switch to thread stack */
                    "movq 8(%rax),%rax\n\t"          /* NtCurrentTeb()->Tib.StackBase */
                    "leaq -0x1000(%rax),%rsp\n\t"
@@ -2503,7 +2503,7 @@ __ASM_GLOBAL_FUNC( signal_start_thread,
 __ASM_GLOBAL_FUNC( signal_exit_thread,
                    /* fetch exit frame */
                    "movq %gs:0x30,%rax\n\t"
-                   "movq 0x330(%rax),%rdx\n\t"      /* amd64_thread_data()->exit_frame */
+                   "movq 0x320(%rax),%rdx\n\t"      /* amd64_thread_data()->exit_frame */
                    "testq %rdx,%rdx\n\t"
                    "jnz 1f\n\t"
                    "jmp *%rsi\n"

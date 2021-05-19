@@ -1472,24 +1472,9 @@ enum server_fd_type
 @END
 
 
-/* Open a handle to the process console */
-@REQ(open_console)
-    obj_handle_t from;          /* console_in handle to get active screen buffer */
-    unsigned int access;        /* wanted access rights */
-    unsigned int attributes;    /* object attributes */
-    int          share;         /* share mask (only for output handles) */
-@REPLY
-    obj_handle_t handle;        /* handle to the console */
-@END
-
-
 /* Attach to a other process's console */
 @REQ(attach_console)
     process_id_t pid;           /* pid of attached console process */
-@REPLY
-    obj_handle_t std_in;        /* attached stdin */
-    obj_handle_t std_out;       /* attached stdout */
-    obj_handle_t std_err;       /* attached stderr */
 @END
 
 
@@ -1564,54 +1549,6 @@ enum server_fd_type
     int          fd;            /* for bare consoles, fd the screen-buffer is attached to */
 @REPLY
     obj_handle_t handle_out;    /* handle to the screen buffer */
-@END
-
-
-/* write data (chars and/or attributes) in a screen buffer */
-@REQ(write_console_output)
-    obj_handle_t handle;        /* handle to the console output */
-    int          x;             /* position where to start writing */
-    int          y;
-    int          mode;          /* char info (see below) */
-    int          wrap;          /* wrap around at end of line? */
-    VARARG(data,bytes);         /* info to write */
-@REPLY
-    int          written;       /* number of char infos actually written */
-    int          width;         /* width of screen buffer */
-    int          height;        /* height of screen buffer */
-@END
-enum char_info_mode
-{
-    CHAR_INFO_MODE_TEXT,        /* characters only */
-    CHAR_INFO_MODE_ATTR,        /* attributes only */
-    CHAR_INFO_MODE_TEXTATTR,    /* both characters and attributes */
-    CHAR_INFO_MODE_TEXTSTDATTR  /* characters but use standard attributes */
-};
-
-
-/* read data (chars and/or attributes) from a screen buffer */
-@REQ(read_console_output)
-    obj_handle_t handle;        /* handle to the console output */
-    int          x;             /* position (x,y) where to start reading */
-    int          y;
-    int          mode;          /* char info mode */
-    int          wrap;          /* wrap around at end of line? */
-@REPLY
-    int          width;         /* width of screen buffer */
-    int          height;        /* height of screen buffer */
-    VARARG(data,bytes);
-@END
-
-
-/* move a rect (of data) in screen buffer content */
-@REQ(move_console_output)
-    obj_handle_t handle;        /* handle to the console output */
-    short int    x_src;         /* position (x, y) of rect to start moving from */
-    short int    y_src;
-    short int    x_dst;         /* position (x, y) of rect to move to */
-    short int    y_dst;
-    short int    w;             /* size of the rect (width, height) to move */
-    short int    h;
 @END
 
 
