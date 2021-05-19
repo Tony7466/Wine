@@ -620,8 +620,8 @@ int free_console( struct process *process )
  *	2/ parent is a renderer which launches process, and process should attach to the console
  *	   rendered by parent
  */
-void inherit_console( struct thread *parent_thread, struct process *parent, struct process *process,
-                      obj_handle_t hconin )
+obj_handle_t inherit_console( struct thread *parent_thread, struct process *parent, struct process *process,
+                              obj_handle_t hconin )
 {
     int done = 0;
 
@@ -652,6 +652,10 @@ void inherit_console( struct thread *parent_thread, struct process *parent, stru
         process->console = (struct console_input *)grab_object( parent->console );
         process->console->num_proc++;
     }
+
+    if (!process->console) return 0;
+    return alloc_handle( process, process->console,
+                         SYNCHRONIZE | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES, 0 );
 }
 
 struct thread *console_get_renderer( struct console_input *console )
@@ -1591,6 +1595,7 @@ static int console_input_ioctl( struct fd *fd, ioctl_code_t code, struct async *
             info.output_cp     = console->output_cp;
             info.history_mode  = console->history_mode;
             info.history_size  = console->history_size;
+            info.history_index = console->history_index;
             info.edition_mode  = console->edition_mode;
             info.input_count   = console->recnum;
             info.win           = console->win;
@@ -2124,24 +2129,6 @@ DECL_HANDLER(attach_console)
 DECL_HANDLER(set_console_input_info)
 {
     set_console_input_info( req, get_req_data(), get_req_data_size() );
-}
-
-/* get info about a console (output only) */
-DECL_HANDLER(get_console_input_info)
-{
-    struct console_input *console;
-
-    if (!(console = console_input_get( req->handle, FILE_READ_PROPERTIES ))) return;
-    if (console->title) set_reply_data( console->title, min( console->title_len, get_reply_max_size() ));
-    reply->history_mode  = console->history_mode;
-    reply->history_size  = console->history_size;
-    reply->history_index = console->history_index;
-    reply->edition_mode  = console->edition_mode;
-    reply->input_cp      = console->input_cp;
-    reply->output_cp     = console->output_cp;
-    reply->win           = console->win;
-
-    release_object( console );
 }
 
 /* appends a string to console's history */

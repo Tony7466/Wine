@@ -1887,6 +1887,61 @@ static void setup_exception( ucontext_t *sigcontext, EXCEPTION_RECORD *rec )
     setup_raise_exception( sigcontext, rec, &context );
 }
 
+
+/***********************************************************************
+ *           call_user_apc
+ */
+void WINAPI call_user_apc( CONTEXT *context_ptr, ULONG_PTR ctx, ULONG_PTR arg1,
+                           ULONG_PTR arg2, PNTAPCFUNC func )
+{
+    CONTEXT context;
+
+    if (!context_ptr)
+    {
+        context.ContextFlags = CONTEXT_FULL;
+        NtGetContextThread( GetCurrentThread(), &context );
+        context.Rax = STATUS_USER_APC;
+        context_ptr = &context;
+    }
+    pKiUserApcDispatcher( context_ptr, ctx, arg1, arg2, func );
+}
+
+
+/***********************************************************************
+ *           call_raise_user_exception_dispatcher
+ */
+__ASM_GLOBAL_FUNC( call_raise_user_exception_dispatcher,
+                   "movq %gs:0x30,%rdx\n\t"
+                   "movq 0x328(%rdx),%rax\n\t"    /* amd64_thread_data()->syscall_frame */
+                   "pushq (%rax)\n\t"             /* frame->prev_frame */
+                   "popq 0x328(%rdx)\n\t"
+                   "movdqu 0x10(%rax),%xmm6\n\t"  /* frame->xmm[0..19 */
+                   "movdqu 0x20(%rax),%xmm7\n\t"
+                   "movdqu 0x30(%rax),%xmm8\n\t"
+                   "movdqu 0x40(%rax),%xmm9\n\t"
+                   "movdqu 0x50(%rax),%xmm10\n\t"
+                   "movdqu 0x60(%rax),%xmm11\n\t"
+                   "movdqu 0x70(%rax),%xmm12\n\t"
+                   "movdqu 0x80(%rax),%xmm13\n\t"
+                   "movdqu 0x90(%rax),%xmm14\n\t"
+                   "movdqu 0xa0(%rax),%xmm15\n\t"
+                   "ldmxcsr 0xb0(%rax)\n\t"       /* frame->mxcsr */
+                   "movq 0xb8(%rax),%r12\n\t"     /* frame->r12 */
+                   "movq 0xc0(%rax),%r13\n\t"     /* frame->r13 */
+                   "movq 0xc8(%rax),%r14\n\t"     /* frame->r14 */
+                   "movq 0xd0(%rax),%r15\n\t"     /* frame->r15 */
+                   "movq 0xd8(%rax),%rdi\n\t"     /* frame->rdi */
+                   "movq 0xe0(%rax),%rsi\n\t"     /* frame->rsi */
+                   "movq 0xe8(%rax),%rbx\n\t"     /* frame->rbx */
+                   "movq 0xf0(%rax),%rbp\n\t"     /* frame->rbp */
+                   "leaq 0x100(%rax),%rsp\n\t"
+                   "jmpq *%rcx" )
+
+
+/***********************************************************************
+ *           call_user_exception_dispatcher
+ */
+
 extern void WINAPI user_exception_dispatcher_trampoline( struct stack_layout *stack,
         void *pKiUserExceptionDispatcher );
 
@@ -1902,15 +1957,15 @@ void WINAPI do_call_user_exception_dispatcher( EXCEPTION_RECORD *rec, CONTEXT *c
                                                NTSTATUS (WINAPI *dispatcher)(EXCEPTION_RECORD*,CONTEXT*),
                                                struct stack_layout *stack )
 {
+    struct syscall_frame *frame = amd64_thread_data()->syscall_frame;
+
     memmove(&stack->context, context, sizeof(*context));
     memcpy(&stack->rec, rec, sizeof(*rec));
 
-    if (stack->rec.ExceptionCode == EXCEPTION_BREAKPOINT)
-    {
-        /* fix up instruction pointer in context for EXCEPTION_BREAKPOINT */
-        stack->context.Rip--;
-    }
+    /* fix up instruction pointer in context for EXCEPTION_BREAKPOINT */
+    if (stack->rec.ExceptionCode == EXCEPTION_BREAKPOINT) stack->context.Rip--;
 
+    amd64_thread_data()->syscall_frame = frame->prev_frame;
     user_exception_dispatcher_trampoline( stack, dispatcher );
 }
 

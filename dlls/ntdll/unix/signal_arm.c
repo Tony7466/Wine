@@ -524,7 +524,8 @@ extern void raise_func_trampoline_thumb( EXCEPTION_RECORD *rec, CONTEXT *context
 __ASM_GLOBAL_FUNC( raise_func_trampoline_thumb,
                    ".thumb\n\t"
                    "bx r2\n\t"
-                   "bkpt")
+                   "bkpt\n\t"
+                   ".arm")
 
 extern void raise_func_trampoline_arm( EXCEPTION_RECORD *rec, CONTEXT *context, void *func );
 __ASM_GLOBAL_FUNC( raise_func_trampoline_arm,
@@ -551,6 +552,7 @@ static void setup_exception( ucontext_t *sigcontext, EXCEPTION_RECORD *rec )
 
     rec->ExceptionAddress = (void *)PC_sig(sigcontext);
     save_context( &context, sigcontext );
+    if (rec->ExceptionCode == EXCEPTION_BREAKPOINT) context.Pc += 4;
 
     status = send_debug_event( rec, &context, TRUE );
     if (status == DBG_CONTINUE || status == DBG_EXCEPTION_HANDLED)
@@ -574,11 +576,55 @@ static void setup_exception( ucontext_t *sigcontext, EXCEPTION_RECORD *rec )
     REGn_sig(2, sigcontext) = (DWORD)pKiUserExceptionDispatcher;
 }
 
-void WINAPI call_user_exception_dispatcher( EXCEPTION_RECORD *rec, CONTEXT *context,
-                                            NTSTATUS (WINAPI *dispatcher)(EXCEPTION_RECORD*,CONTEXT*) )
+
+/***********************************************************************
+ *           call_user_apc
+ */
+void WINAPI call_user_apc( CONTEXT *context_ptr, ULONG_PTR ctx, ULONG_PTR arg1,
+                           ULONG_PTR arg2, PNTAPCFUNC func )
 {
-    dispatcher( rec, context );
+    CONTEXT context;
+
+    if (!context_ptr)
+    {
+        context.ContextFlags = CONTEXT_FULL;
+        NtGetContextThread( GetCurrentThread(), &context );
+        context.R0 = STATUS_USER_APC;
+        context_ptr = &context;
+    }
+    pKiUserApcDispatcher( context_ptr, ctx, arg1, arg2, func );
 }
+
+
+/***********************************************************************
+ *           call_raise_user_exception_dispatcher
+ */
+__ASM_GLOBAL_FUNC( call_raise_user_exception_dispatcher,
+                   "mov r2, r0\n\t"  /* dispatcher */
+                   "b " __ASM_NAME("call_user_exception_dispatcher") )
+
+
+/***********************************************************************
+ *           call_user_exception_dispatcher
+ */
+__ASM_GLOBAL_FUNC( call_user_exception_dispatcher,
+                   "mov r4, r0\n\t"
+                   "mov r5, r1\n\t"
+                   "mov r6, r2\n\t"
+                   "bl " __ASM_NAME("NtCurrentTeb") "\n\t"
+                   "add r7, r0, #0x1d8\n\t"  /* arm_thread_data()->syscall_frame */
+                   "mov r0, r4\n\t"
+                   "mov r1, r5\n\t"
+                   "mov r2, r6\n\t"
+                   "ldr r3, [r7]\n\t"
+                   "ldr r4, [r3]\n\t"        /* frame->prev_frame */
+                   "str r4, [r7]\n\t"
+                   "add r3, r3, #8\n\t"
+                   "ldm r3, {r5-r11}\n\t"
+                   "ldr r4, [r3, #32]\n\t"
+                   "ldr lr, [r3, #36]\n\t"
+                   "add sp, r3, #40\n\t"
+                   "bx r2" )
 
 
 /**********************************************************************

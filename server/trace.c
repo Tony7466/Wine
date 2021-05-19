@@ -2070,23 +2070,6 @@ static void dump_set_console_input_info_request( const struct set_console_input_
     dump_varargs_unicode_str( ", title=", cur_size );
 }
 
-static void dump_get_console_input_info_request( const struct get_console_input_info_request *req )
-{
-    fprintf( stderr, " handle=%04x", req->handle );
-}
-
-static void dump_get_console_input_info_reply( const struct get_console_input_info_reply *req )
-{
-    fprintf( stderr, " history_mode=%d", req->history_mode );
-    fprintf( stderr, ", history_size=%d", req->history_size );
-    fprintf( stderr, ", history_index=%d", req->history_index );
-    fprintf( stderr, ", edition_mode=%d", req->edition_mode );
-    fprintf( stderr, ", input_cp=%d", req->input_cp );
-    fprintf( stderr, ", output_cp=%d", req->output_cp );
-    fprintf( stderr, ", win=%08x", req->win );
-    dump_varargs_unicode_str( ", title=", cur_size );
-}
-
 static void dump_append_console_input_history_request( const struct append_console_input_history_request *req )
 {
     fprintf( stderr, " handle=%04x", req->handle );
@@ -4359,6 +4342,16 @@ static void dump_update_rawinput_devices_request( const struct update_rawinput_d
     dump_varargs_rawinput_devices( " devices=", cur_size );
 }
 
+static void dump_get_rawinput_devices_request( const struct get_rawinput_devices_request *req )
+{
+}
+
+static void dump_get_rawinput_devices_reply( const struct get_rawinput_devices_reply *req )
+{
+    fprintf( stderr, " device_count=%08x", req->device_count );
+    dump_varargs_rawinput_devices( ", devices=", cur_size );
+}
+
 static void dump_create_job_request( const struct create_job_request *req )
 {
     fprintf( stderr, " access=%08x", req->access );
@@ -4503,7 +4496,6 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_attach_console_request,
     (dump_func)dump_get_console_wait_event_request,
     (dump_func)dump_set_console_input_info_request,
-    (dump_func)dump_get_console_input_info_request,
     (dump_func)dump_append_console_input_history_request,
     (dump_func)dump_get_console_input_history_request,
     (dump_func)dump_create_console_output_request,
@@ -4709,6 +4701,7 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_set_cursor_request,
     (dump_func)dump_get_rawinput_buffer_request,
     (dump_func)dump_update_rawinput_devices_request,
+    (dump_func)dump_get_rawinput_devices_request,
     (dump_func)dump_create_job_request,
     (dump_func)dump_open_job_request,
     (dump_func)dump_assign_job_request,
@@ -4789,7 +4782,6 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     NULL,
     (dump_func)dump_get_console_wait_event_reply,
     NULL,
-    (dump_func)dump_get_console_input_info_reply,
     NULL,
     (dump_func)dump_get_console_input_history_reply,
     (dump_func)dump_create_console_output_reply,
@@ -4995,6 +4987,7 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_set_cursor_reply,
     (dump_func)dump_get_rawinput_buffer_reply,
     NULL,
+    (dump_func)dump_get_rawinput_devices_reply,
     (dump_func)dump_create_job_reply,
     (dump_func)dump_open_job_reply,
     NULL,
@@ -5075,7 +5068,6 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "attach_console",
     "get_console_wait_event",
     "set_console_input_info",
-    "get_console_input_info",
     "append_console_input_history",
     "get_console_input_history",
     "create_console_output",
@@ -5281,6 +5273,7 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "set_cursor",
     "get_rawinput_buffer",
     "update_rawinput_devices",
+    "get_rawinput_devices",
     "create_job",
     "open_job",
     "assign_job",

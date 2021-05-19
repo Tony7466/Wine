@@ -1904,27 +1904,6 @@ struct set_console_input_info_reply
 
 
 
-struct get_console_input_info_request
-{
-    struct request_header __header;
-    obj_handle_t  handle;
-};
-struct get_console_input_info_reply
-{
-    struct reply_header __header;
-    int           history_mode;
-    int           history_size;
-    int           history_index;
-    int           edition_mode;
-    int           input_cp;
-    int           output_cp;
-    user_handle_t win;
-    /* VARARG(title,unicode_str); */
-    char __pad_36[4];
-};
-
-
-
 struct append_console_input_history_request
 {
     struct request_header __header;
@@ -5343,6 +5322,19 @@ struct update_rawinput_devices_reply
 };
 
 
+struct get_rawinput_devices_request
+{
+    struct request_header __header;
+    char __pad_12[4];
+};
+struct get_rawinput_devices_reply
+{
+    struct reply_header __header;
+    unsigned int device_count;
+    /* VARARG(devices,rawinput_devices); */
+    char __pad_12[4];
+};
+
 
 struct create_job_request
 {
@@ -5553,7 +5545,6 @@ enum request
     REQ_attach_console,
     REQ_get_console_wait_event,
     REQ_set_console_input_info,
-    REQ_get_console_input_info,
     REQ_append_console_input_history,
     REQ_get_console_input_history,
     REQ_create_console_output,
@@ -5759,6 +5750,7 @@ enum request
     REQ_set_cursor,
     REQ_get_rawinput_buffer,
     REQ_update_rawinput_devices,
+    REQ_get_rawinput_devices,
     REQ_create_job,
     REQ_open_job,
     REQ_assign_job,
@@ -5843,7 +5835,6 @@ union generic_request
     struct attach_console_request attach_console_request;
     struct get_console_wait_event_request get_console_wait_event_request;
     struct set_console_input_info_request set_console_input_info_request;
-    struct get_console_input_info_request get_console_input_info_request;
     struct append_console_input_history_request append_console_input_history_request;
     struct get_console_input_history_request get_console_input_history_request;
     struct create_console_output_request create_console_output_request;
@@ -6049,6 +6040,7 @@ union generic_request
     struct set_cursor_request set_cursor_request;
     struct get_rawinput_buffer_request get_rawinput_buffer_request;
     struct update_rawinput_devices_request update_rawinput_devices_request;
+    struct get_rawinput_devices_request get_rawinput_devices_request;
     struct create_job_request create_job_request;
     struct open_job_request open_job_request;
     struct assign_job_request assign_job_request;
@@ -6131,7 +6123,6 @@ union generic_reply
     struct attach_console_reply attach_console_reply;
     struct get_console_wait_event_reply get_console_wait_event_reply;
     struct set_console_input_info_reply set_console_input_info_reply;
-    struct get_console_input_info_reply get_console_input_info_reply;
     struct append_console_input_history_reply append_console_input_history_reply;
     struct get_console_input_history_reply get_console_input_history_reply;
     struct create_console_output_reply create_console_output_reply;
@@ -6337,6 +6328,7 @@ union generic_reply
     struct set_cursor_reply set_cursor_reply;
     struct get_rawinput_buffer_reply get_rawinput_buffer_reply;
     struct update_rawinput_devices_reply update_rawinput_devices_reply;
+    struct get_rawinput_devices_reply get_rawinput_devices_reply;
     struct create_job_reply create_job_reply;
     struct open_job_reply open_job_reply;
     struct assign_job_reply assign_job_reply;
@@ -6351,7 +6343,7 @@ union generic_reply
 
 /* ### protocol_version begin ### */
 
-#define SERVER_PROTOCOL_VERSION 634
+#define SERVER_PROTOCOL_VERSION 636
 
 /* ### protocol_version end ### */
 

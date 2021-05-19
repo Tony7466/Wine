@@ -554,6 +554,7 @@ static void setup_exception( ucontext_t *sigcontext, EXCEPTION_RECORD *rec )
     rec->ExceptionAddress = (void *)PC_sig(sigcontext);
     save_context( &context, sigcontext );
     save_fpu( &context, sigcontext );
+    if (rec->ExceptionCode == EXCEPTION_BREAKPOINT) context.Pc += 4;
 
     status = send_debug_event( rec, &context, TRUE );
     if (status == DBG_CONTINUE || status == DBG_EXCEPTION_HANDLED)
@@ -561,9 +562,6 @@ static void setup_exception( ucontext_t *sigcontext, EXCEPTION_RECORD *rec )
         restore_context( &context, sigcontext );
         return;
     }
-
-    /* fix up instruction pointer in context for EXCEPTION_BREAKPOINT */
-    if (rec->ExceptionCode == EXCEPTION_BREAKPOINT) context.Pc += 4;
 
     stack = virtual_setup_exception( stack_ptr, (sizeof(*stack) + 15) & ~15, rec );
     stack->rec = *rec;
@@ -579,11 +577,58 @@ static void setup_exception( ucontext_t *sigcontext, EXCEPTION_RECORD *rec )
     REGn_sig(18, sigcontext) = (ULONG_PTR)NtCurrentTeb();
 }
 
-void WINAPI call_user_exception_dispatcher( EXCEPTION_RECORD *rec, CONTEXT *context,
-                                            NTSTATUS (WINAPI *dispatcher)(EXCEPTION_RECORD*,CONTEXT*) )
+
+/***********************************************************************
+ *           call_user_apc
+ */
+void WINAPI call_user_apc( CONTEXT *context_ptr, ULONG_PTR ctx, ULONG_PTR arg1,
+                           ULONG_PTR arg2, PNTAPCFUNC func )
 {
-    dispatcher( rec, context );
+    CONTEXT context;
+
+    if (!context_ptr)
+    {
+        context.ContextFlags = CONTEXT_FULL;
+        NtGetContextThread( GetCurrentThread(), &context );
+        context.u.s.X0 = STATUS_USER_APC;
+        context_ptr = &context;
+    }
+    pKiUserApcDispatcher( context_ptr, ctx, arg1, arg2, func );
 }
+
+
+/***********************************************************************
+ *           call_raise_user_exception_dispatcher
+ */
+__ASM_GLOBAL_FUNC( call_raise_user_exception_dispatcher,
+                   "mov x2, x0\n\t"  /* dispatcher */
+                   "b " __ASM_NAME("call_user_exception_dispatcher") )
+
+
+/***********************************************************************
+ *           call_user_exception_dispatcher
+ */
+__ASM_GLOBAL_FUNC( call_user_exception_dispatcher,
+                   "mov x19, x0\n\t"
+                   "mov x20, x1\n\t"
+                   "mov x21, x2\n\t"
+                   "bl " __ASM_NAME("NtCurrentTeb") "\n\t"
+                   "add x4, x0, #0x2f8\n\t"        /* arm64_thread_data()->syscall_frame */
+                   "ldr x5, [x4]\n\t"
+                   "ldr x6, [x5, #88]\n\t"         /* frame->prev_frame */
+                   "str x6, [x4]\n\t"
+                   "mov x0, x19\n\t"
+                   "mov x1, x20\n\t"
+                   "mov x2, x21\n\t"
+                   "ldp x19, x20, [x5, #96]\n\t"   /* frame->x19,x20 */
+                   "ldp x21, x22, [x5, #112]\n\t"  /* frame->x21,x22 */
+                   "ldp x23, x24, [x5, #128]\n\t"  /* frame->x23,x24 */
+                   "ldp x25, x26, [x5, #144]\n\t"  /* frame->x25,x26 */
+                   "ldp x27, x28, [x5, #160]\n\t"  /* frame->x27,x28 */
+                   "ldp x29, x30, [x5, #176]\n\t"  /* frame->thunk_x29,ret_addr */
+                   "add sp, x5, #192\n\t"
+                   "br x2" )
+
 
 /**********************************************************************
  *		segv_handler

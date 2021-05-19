@@ -301,7 +301,8 @@ static void testWriteNotWrappedProcessed(HANDLE hCon, COORD sbSize)
     int			p;
     WORD                attr;
 
-    ok(GetConsoleMode(hCon, &mode) && SetConsoleMode(hCon, (mode | ENABLE_PROCESSED_OUTPUT) & ~ENABLE_WRAP_AT_EOL_OUTPUT),
+    ok(GetConsoleMode(hCon, &mode) && SetConsoleMode(hCon, (mode | ENABLE_PROCESSED_OUTPUT) &
+                                                     ~(ENABLE_WRAP_AT_EOL_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING)),
        "clearing wrap at EOL & setting processed output\n");
 
     /* write line, wrapping disabled, buffer exceeds sb width */
@@ -2860,8 +2861,8 @@ static void test_ReadConsoleOutput(HANDLE console)
     coord.Y = 3;
     set_region(&region, 200, 7, 15, 211);
     ret = ReadConsoleOutputW(console, char_info_buf, size, coord, &region);
-    ok(!ret && GetLastError() == ERROR_NOT_ENOUGH_MEMORY, "ReadConsoleOutputW returned: %x(%u)\n", ret, GetLastError());
-    check_region(&region, 200, 7, 15, 211);
+    ok(!ret, "ReadConsoleOutputW returned: %x(%u)\n", ret, GetLastError());
+    check_region(&region, 200, 7, -15, -211);
 
     size.X = 23;
     size.Y = 17;
@@ -3588,11 +3589,20 @@ static void test_GetConsoleScreenBufferInfoEx(HANDLE std_output)
 
 static void test_FreeConsole(void)
 {
+    WCHAR title[16];
     HANDLE handle;
+    DWORD size;
+    HWND hwnd;
+    UINT cp;
     BOOL ret;
+
+    ok(RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle != NULL, "ConsoleHandle is NULL\n");
 
     ret = FreeConsole();
     ok(ret, "FreeConsole failed: %u\n", GetLastError());
+
+    ok(RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle == NULL, "ConsoleHandle = %p\n",
+       RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle);
 
     handle = CreateFileA("CONOUT$", GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, 0);
     ok(handle == INVALID_HANDLE_VALUE &&
@@ -3619,6 +3629,28 @@ static void test_FreeConsole(void)
                                        CONSOLE_TEXTMODE_BUFFER, NULL);
     ok(handle == INVALID_HANDLE_VALUE && GetLastError() == ERROR_INVALID_HANDLE,
        "CreateConsoleScreenBuffer returned: %p (%u)\n", handle, GetLastError());
+
+    SetLastError(0xdeadbeef);
+    cp = GetConsoleCP();
+    ok(!cp, "cp = %x\n", cp);
+    ok(GetLastError() == ERROR_INVALID_HANDLE, "last error %u\n", GetLastError());
+
+    SetLastError(0xdeadbeef);
+    cp = GetConsoleOutputCP();
+    ok(!cp, "cp = %x\n", cp);
+    ok(GetLastError() == ERROR_INVALID_HANDLE, "last error %u\n", GetLastError());
+
+    SetLastError(0xdeadbeef);
+    memset( title, 0xc0, sizeof(title) );
+    size = GetConsoleTitleW( title, ARRAY_SIZE(title) );
+    ok(!size, "GetConsoleTitleW returned %u\n", size);
+    ok(title[0] == 0xc0c0, "title byffer changed\n");
+    ok(GetLastError() == ERROR_INVALID_HANDLE, "last error %u\n", GetLastError());
+
+    SetLastError(0xdeadbeef);
+    hwnd = GetConsoleWindow();
+    ok(!hwnd, "hwnd = %p\n", hwnd);
+    ok(GetLastError() == ERROR_INVALID_HANDLE, "last error %u\n", GetLastError());
 
     if (!skip_nt)
     {
@@ -3678,6 +3710,30 @@ static void test_SetConsoleScreenBufferInfoEx(HANDLE std_output)
     CloseHandle(std_input);
 }
 
+static void test_console_title(void)
+{
+    WCHAR buf[64];
+    BOOL ret;
+
+    ret = SetConsoleTitleW(L"test");
+    ok(ret, "SetConsoleTitleW failed: %u\n", GetLastError());
+
+    ret = GetConsoleTitleW(buf, ARRAY_SIZE(buf));
+    ok(ret, "GetConsoleTitleW failed: %u\n", GetLastError());
+    ok(!wcscmp(buf, L"test"), "title = %s\n", wine_dbgstr_w(buf));
+
+    if (!skip_nt)
+    {
+        ret = GetConsoleTitleW(buf, 2);
+        ok(ret, "GetConsoleTitleW failed: %u\n", GetLastError());
+        ok(!wcscmp(buf, L"t"), "title = %s\n", wine_dbgstr_w(buf));
+
+        ret = GetConsoleTitleW(buf, 4);
+        ok(ret, "GetConsoleTitleW failed: %u\n", GetLastError());
+        ok(!wcscmp(buf, L"tes"), "title = %s\n", wine_dbgstr_w(buf));
+    }
+}
+
 static void test_AttachConsole_child(DWORD console_pid)
 {
     HANDLE pipe_in, pipe_out;
@@ -3694,8 +3750,11 @@ static void test_AttachConsole_child(DWORD console_pid)
     ok(!res && GetLastError() == ERROR_ACCESS_DENIED,
        "AttachConsole returned: %x(%u)\n", res, GetLastError());
 
+    ok(RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle != NULL, "ConsoleHandle is NULL\n");
     res = FreeConsole();
     ok(res, "FreeConsole failed: %u\n", GetLastError());
+    ok(RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle == NULL, "ConsoleHandle = %p\n",
+       RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle);
 
     SetStdHandle(STD_ERROR_HANDLE, pipe_out);
 
@@ -3703,6 +3762,7 @@ static void test_AttachConsole_child(DWORD console_pid)
     ok(res, "AttachConsole failed: %u\n", GetLastError());
 
     ok(pipe_out != GetStdHandle(STD_ERROR_HANDLE), "std handle not set to console\n");
+    ok(RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle != NULL, "ConsoleHandle is NULL\n");
 
     console = CreateFileA("CONOUT$", GENERIC_READ|GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, 0);
     ok(console != INVALID_HANDLE_VALUE, "Could not open console\n");
@@ -3871,14 +3931,9 @@ static void test_AllocConsole(void)
 
 START_TEST(console)
 {
-    static const char font_name[] = "Lucida Console";
     HANDLE hConIn, hConOut;
-    BOOL ret;
+    BOOL ret, test_current;
     CONSOLE_SCREEN_BUFFER_INFO	sbi;
-    LONG err;
-    HKEY console_key;
-    char old_font[LF_FACESIZE];
-    BOOL delete = FALSE;
     DWORD size;
     char **argv;
     int argc;
@@ -3901,62 +3956,67 @@ START_TEST(console)
         return;
     }
 
-    /* be sure we have a clean console (and that's our own)
-     * FIXME: this will make the test fail (currently) if we don't run
-     * under X11
-     * Another solution would be to rerun the test under wineconsole with
-     * the curses backend
-     */
+    test_current = argc >= 3 && !strcmp(argv[2], "--current");
 
-    /* ReadConsoleOutputW doesn't retrieve characters from the output buffer
-     * correctly for characters that don't have a glyph in the console font. So,
-     * we first set the console font to Lucida Console (which has a wider
-     * selection of glyphs available than the default raster fonts). We want
-     * to be able to restore the original font afterwards, so don't change
-     * if we can't read the original font.
-     */
-    err = RegOpenKeyExA(HKEY_CURRENT_USER, "Console", 0,
-                        KEY_QUERY_VALUE | KEY_SET_VALUE, &console_key);
-    if (err == ERROR_SUCCESS)
+    if (!test_current)
     {
-        size = sizeof(old_font);
-        err = RegQueryValueExA(console_key, "FaceName", NULL, NULL,
-                               (LPBYTE) old_font, &size);
-        if (err == ERROR_SUCCESS || err == ERROR_FILE_NOT_FOUND)
+        static const char font_name[] = "Lucida Console";
+        HKEY console_key;
+        char old_font[LF_FACESIZE];
+        BOOL delete = FALSE;
+        LONG err;
+
+        /* ReadConsoleOutputW doesn't retrieve characters from the output buffer
+         * correctly for characters that don't have a glyph in the console font. So,
+         * we first set the console font to Lucida Console (which has a wider
+         * selection of glyphs available than the default raster fonts). We want
+         * to be able to restore the original font afterwards, so don't change
+         * if we can't read the original font.
+         */
+        err = RegOpenKeyExA(HKEY_CURRENT_USER, "Console", 0,
+                            KEY_QUERY_VALUE | KEY_SET_VALUE, &console_key);
+        if (err == ERROR_SUCCESS)
         {
-            delete = (err == ERROR_FILE_NOT_FOUND);
-            err = RegSetValueExA(console_key, "FaceName", 0, REG_SZ,
-                                 (const BYTE *) font_name, sizeof(font_name));
-            if (err != ERROR_SUCCESS)
-                trace("Unable to change default console font, error %d\n", err);
+            size = sizeof(old_font);
+            err = RegQueryValueExA(console_key, "FaceName", NULL, NULL,
+                                   (LPBYTE) old_font, &size);
+            if (err == ERROR_SUCCESS || err == ERROR_FILE_NOT_FOUND)
+            {
+                delete = (err == ERROR_FILE_NOT_FOUND);
+                err = RegSetValueExA(console_key, "FaceName", 0, REG_SZ,
+                                     (const BYTE *) font_name, sizeof(font_name));
+                if (err != ERROR_SUCCESS)
+                    trace("Unable to change default console font, error %d\n", err);
+            }
+            else
+            {
+                trace("Unable to query default console font, error %d\n", err);
+                RegCloseKey(console_key);
+                console_key = NULL;
+            }
         }
         else
         {
-            trace("Unable to query default console font, error %d\n", err);
-            RegCloseKey(console_key);
+            trace("Unable to open HKCU\\Console, error %d\n", err);
             console_key = NULL;
         }
-    }
-    else
-    {
-        trace("Unable to open HKCU\\Console, error %d\n", err);
-        console_key = NULL;
+
+        /* Now detach and open a fresh console to play with */
+        FreeConsole();
+        ok(AllocConsole(), "Couldn't alloc console\n");
+
+        /* Restore default console font if needed */
+        if (console_key != NULL)
+        {
+            if (delete)
+                err = RegDeleteValueA(console_key, "FaceName");
+            else
+                err = RegSetValueExA(console_key, "FaceName", 0, REG_SZ,
+                                     (const BYTE *) old_font, strlen(old_font) + 1);
+            ok(err == ERROR_SUCCESS, "Unable to restore default console font, error %d\n", err);
+        }
     }
 
-    /* Now detach and open a fresh console to play with */
-    FreeConsole();
-    ok(AllocConsole(), "Couldn't alloc console\n");
-
-    /* Restore default console font if needed */
-    if (console_key != NULL)
-    {
-        if (delete)
-            err = RegDeleteValueA(console_key, "FaceName");
-        else
-            err = RegSetValueExA(console_key, "FaceName", 0, REG_SZ,
-                                 (const BYTE *) old_font, strlen(old_font) + 1);
-        ok(err == ERROR_SUCCESS, "Unable to restore default console font, error %d\n", err);
-    }
     hConIn = CreateFileA("CONIN$", GENERIC_READ|GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, 0);
     hConOut = CreateFileA("CONOUT$", GENERIC_READ|GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, 0);
 
@@ -3992,19 +4052,22 @@ START_TEST(console)
     /* will test all the scrolling operations */
     testScroll(hConOut, sbi.dwSize);
     /* will test sb creation / modification / codepage handling */
-    testScreenBuffer(hConOut);
+    if (!test_current) testScreenBuffer(hConOut);
     /* Test waiting for a console handle */
     testWaitForConsoleInput(hConIn);
 
-    /* clear duplicated console font table */
-    CloseHandle(hConIn);
-    CloseHandle(hConOut);
-    FreeConsole();
-    ok(AllocConsole(), "Couldn't alloc console\n");
-    hConIn = CreateFileA("CONIN$", GENERIC_READ|GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, 0);
-    hConOut = CreateFileA("CONOUT$", GENERIC_READ|GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, 0);
-    ok(hConIn != INVALID_HANDLE_VALUE, "Opening ConIn\n");
-    ok(hConOut != INVALID_HANDLE_VALUE, "Opening ConOut\n");
+    if (!test_current)
+    {
+        /* clear duplicated console font table */
+        CloseHandle(hConIn);
+        CloseHandle(hConOut);
+        FreeConsole();
+        ok(AllocConsole(), "Couldn't alloc console\n");
+        hConIn = CreateFileA("CONIN$", GENERIC_READ|GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, 0);
+        hConOut = CreateFileA("CONOUT$", GENERIC_READ|GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, 0);
+        ok(hConIn != INVALID_HANDLE_VALUE, "Opening ConIn\n");
+        ok(hConOut != INVALID_HANDLE_VALUE, "Opening ConOut\n");
+    }
 
     testCtrlHandler();
     /* still to be done: access rights & access on objects */
@@ -4042,7 +4105,11 @@ START_TEST(console)
     test_SetConsoleFont(hConOut);
     test_GetConsoleScreenBufferInfoEx(hConOut);
     test_SetConsoleScreenBufferInfoEx(hConOut);
-    test_AttachConsole(hConOut);
-    test_AllocConsole();
-    test_FreeConsole();
+    test_console_title();
+    if (!test_current)
+    {
+        test_AttachConsole(hConOut);
+        test_AllocConsole();
+        test_FreeConsole();
+    }
 }

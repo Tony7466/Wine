@@ -95,7 +95,8 @@ WINE_DEFAULT_DEBUG_CHANNEL(module);
 extern IMAGE_NT_HEADERS __wine_spec_nt_header;
 
 void     (WINAPI *pDbgUiRemoteBreakin)( void *arg ) = NULL;
-void     (WINAPI *pKiRaiseUserExceptionDispatcher)(void) = NULL;
+NTSTATUS (WINAPI *pKiRaiseUserExceptionDispatcher)(void) = NULL;
+void     (WINAPI *pKiUserApcDispatcher)(CONTEXT*,ULONG_PTR,ULONG_PTR,ULONG_PTR,PNTAPCFUNC) = NULL;
 NTSTATUS (WINAPI *pKiUserExceptionDispatcher)(EXCEPTION_RECORD*,CONTEXT*) = NULL;
 void     (WINAPI *pLdrInitializeThunk)(CONTEXT*,void**,ULONG_PTR,ULONG_PTR) = NULL;
 void     (WINAPI *pRtlUserThreadStart)( PRTL_THREAD_START_ROUTINE entry, void *arg ) = NULL;
@@ -841,6 +842,7 @@ static void fixup_ntdll_imports( const IMAGE_NT_HEADERS *nt )
     GET_FUNC( DbgUiRemoteBreakin );
     GET_FUNC( KiRaiseUserExceptionDispatcher );
     GET_FUNC( KiUserExceptionDispatcher );
+    GET_FUNC( KiUserApcDispatcher );
     GET_FUNC( LdrInitializeThunk );
     GET_FUNC( RtlUserThreadStart );
     GET_FUNC( __wine_set_unix_funcs );
@@ -1683,14 +1685,14 @@ void __wine_main( int argc, char *argv[], char *envp[] )
 
     if (!getenv( "WINELOADERNOEXEC" ))  /* first time around */
     {
-        static char noexec[] = "WINELOADERNOEXEC=1";
-
-        putenv( noexec );
         check_command_line( argc, argv );
         if (pre_exec())
         {
+            static char noexec[] = "WINELOADERNOEXEC=1";
             char **new_argv = malloc( (argc + 2) * sizeof(*argv) );
+
             memcpy( new_argv + 1, argv, (argc + 1) * sizeof(*argv) );
+            putenv( noexec );
             loader_exec( argv0, new_argv, client_cpu );
             fatal_error( "could not exec the wine loader\n" );
         }
