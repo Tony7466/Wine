@@ -1,0 +1,20 @@
+description: avoid shifting into the signed bit of integers
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/programs/winedbg/be_arm.c
++++ b/programs/winedbg/be_arm.c
+@@ -718,12 +718,12 @@ static UINT thumb2_disasm_branch(UINT in
+     if (C)
+     {
+         offset |= I1 << 19 | I2 << 18 | (inst & 0x003f0000) >> 4;
+-        if (S) offset |= 0x0fff << 20;
++        if (S) offset |= 0xfff00000;
+     }
+     else
+     {
+         offset |= I1 << 23 | I2 << 22 | (inst & 0x03ff0000) >> 4;
+-        if (S) offset |= 0xff << 24;
++        if (S) offset |= 0xff000000;
+     }
+ 
+     dbg_printf("\n\tb%s%s\t", L ? "l" : "", C ? tbl_cond[(inst >> 22) & 0x0f] : "");
