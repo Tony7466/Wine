@@ -1,4 +1,4 @@
-wine-development (5.15-1) UNRELEASED; urgency=medium
+wine-development (5.15-1) unstable; urgency=medium
 
   * New upstream release 5.15, released Aug 14, 2020.
     - Initial implementation of the XACT Engine libraries.

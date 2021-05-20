@@ -32,6 +32,7 @@ fixes/gstbase.patch
 fixes/printer-resolution.patch
 fixes/temporary-directory.patch
 
+armhf/array-bounds.patch
 armhf/shift-overflow.patch
 
 arm64/excess-precision.patch
