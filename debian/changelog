@@ -1,3 +1,13 @@
+wine-development (5.16-1) UNRELEASED; urgency=medium
+
+  * New upstream release 5.16, released Aug 28, 2020.
+    - Support for x86 AVX registers.
+    - Some ARM64 fixes for macOS.
+    - Still more restructuration of the console support.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Fri, 21 May 2021 00:03:51 +0000
+
 wine-development (5.15-1) unstable; urgency=medium
 
   * New upstream release 5.15, released Aug 14, 2020.
