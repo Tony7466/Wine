@@ -1,8 +1,7 @@
-wine-development (5.16-1) UNRELEASED; urgency=medium
+wine-development (5.16-1) unstable; urgency=medium
 
   * New upstream release 5.16, released Aug 28, 2020.
     - Support for x86 AVX registers.
-    - Some ARM64 fixes for macOS.
     - Still more restructuration of the console support.
     - Various bug fixes.
 

@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -3432,11 +3432,6 @@ static void output_module( struct makefi
+@@ -3436,11 +3436,6 @@ static void output_module( struct makefi
  
      if (spec_file)
          output_man_pages( make );
