@@ -105,11 +105,3 @@ void WINAPI RtlFreeUserStack( void *stack )
 
     NtFreeVirtualMemory( NtCurrentProcess(), &stack, &size, MEM_RELEASE );
 }
-
-/***********************************************************************
- *           __wine_locked_recvmsg
- */
-ssize_t CDECL __wine_locked_recvmsg( int fd, struct msghdr *hdr, int flags )
-{
-    return unix_funcs->virtual_locked_recvmsg( fd, hdr, flags );
-}

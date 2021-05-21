@@ -59,6 +59,7 @@ struct console_input
     int                          recnum;        /* number of input records */
     INPUT_RECORD                *records;       /* input records */
     struct console_input_events *evt;           /* synchronization event with renderer */
+    struct console_server       *server;        /* console server object */
     WCHAR                       *title;         /* console title */
     data_size_t                  title_len;     /* length of console title */
     struct history_line        **history;       /* lines history */
@@ -69,8 +70,10 @@ struct console_input
     int                          input_cp;      /* console input codepage */
     int                          output_cp;     /* console output codepage */
     user_handle_t                win;           /* window handle if backend supports it */
+    unsigned int                 last_id;       /* id of last created console buffer */
     struct event                *event;         /* event to wait on for input queue */
     struct fd                   *fd;            /* for bare console, attached input fd */
+    struct async_queue           ioctl_q;       /* ioctl queue */
     struct async_queue           read_q;        /* read queue */
 };
 
@@ -178,6 +181,53 @@ static const struct fd_ops console_input_events_fd_ops =
     default_fd_reselect_async     /* reselect_async */
 };
 
+struct console_host_ioctl
+{
+    unsigned int          code;        /* ioctl code */
+    int                   output;      /* output id for screen buffer ioctls */
+    struct async         *async;       /* ioctl async */
+    struct list           entry;       /* list entry */
+};
+
+struct console_server
+{
+    struct object         obj;         /* object header */
+    struct console_input *console;     /* attached console */
+    struct list           queue;       /* ioctl queue */
+    struct list           read_queue;  /* blocking read queue */
+    int                   busy;        /* flag if server processing an ioctl */
+};
+
+static void console_server_dump( struct object *obj, int verbose );
+static void console_server_destroy( struct object *obj );
+static int console_server_signaled( struct object *obj, struct wait_queue_entry *entry );
+static struct object *console_server_lookup_name( struct object *obj, struct unicode_str *name, unsigned int attr );
+static struct object *console_server_open_file( struct object *obj, unsigned int access,
+                                                unsigned int sharing, unsigned int options );
+
+static const struct object_ops console_server_ops =
+{
+    sizeof(struct console_server),    /* size */
+    console_server_dump,              /* dump */
+    no_get_type,                      /* get_type */
+    add_queue,                        /* add_queue */
+    remove_queue,                     /* remove_queue */
+    console_server_signaled,          /* signaled */
+    no_satisfied,                     /* satisfied */
+    no_signal,                        /* signal */
+    no_get_fd,                        /* get_fd */
+    default_fd_map_access,            /* map_access */
+    default_get_sd,                   /* get_sd */
+    default_set_sd,                   /* set_sd */
+    console_server_lookup_name,       /* lookup_name */
+    no_link_name,                     /* link_name */
+    NULL,                             /* unlink_name */
+    console_server_open_file,         /* open_file */
+    no_kernel_obj_list,               /* get_kernel_obj_list */
+    fd_close_handle,                  /* close_handle */
+    console_server_destroy            /* destroy */
+};
+
 struct font_info
 {
     short int width;
@@ -193,6 +243,7 @@ struct screen_buffer
     struct object         obj;           /* object header */
     struct list           entry;         /* entry in list of all screen buffers */
     struct console_input *input;         /* associated console input */
+    unsigned int          id;            /* buffer id */
     unsigned int          mode;          /* output mode */
     int                   cursor_size;   /* size of cursor (percentage filled) */
     int                   cursor_visible;/* cursor visibility flag */
@@ -210,6 +261,7 @@ struct screen_buffer
 					  * as seen in wineconsole */
     struct font_info      font;          /* console font information */
     struct fd            *fd;            /* for bare console, attached output fd */
+    struct async_queue    ioctl_q;       /* ioctl queue */
 };
 
 static void screen_buffer_dump( struct object *obj, int verbose );
@@ -451,6 +503,7 @@ static struct object *create_console_input( int fd )
     console_input->recnum        = 0;
     console_input->records       = NULL;
     console_input->evt           = NULL;
+    console_input->server        = NULL;
     console_input->title         = NULL;
     console_input->title_len     = 0;
     console_input->history_size  = 50;
@@ -463,6 +516,8 @@ static struct object *create_console_input( int fd )
     console_input->win           = 0;
     console_input->event         = create_event( NULL, NULL, 0, 1, 0, NULL );
     console_input->fd            = NULL;
+    console_input->last_id       = 0;
+    init_async_queue( &console_input->ioctl_q );
     init_async_queue( &console_input->read_q );
 
     if (!console_input->history || !console_input->event)
@@ -491,10 +546,70 @@ static struct object *create_console_input( int fd )
     return &console_input->obj;
 }
 
-static void generate_sb_initial_events( struct console_input *console_input )
+static void console_host_ioctl_terminate( struct console_host_ioctl *call, unsigned int status )
 {
-    struct screen_buffer *screen_buffer = console_input->active;
+    if (call->async)
+    {
+        async_terminate( call->async, status );
+        release_object( call->async );
+    }
+    free( call );
+}
+
+static int queue_host_ioctl( struct console_server *server, unsigned int code, unsigned int output,
+                             struct async *async, struct async_queue *queue )
+{
+    struct console_host_ioctl *ioctl;
+
+    if (!(ioctl = mem_alloc( sizeof(*ioctl) ))) return 0;
+    ioctl->code   = code;
+    ioctl->output = output;
+    ioctl->async  = NULL;
+    if (async)
+    {
+        ioctl->async = (struct async *)grab_object( async );
+        queue_async( queue, async );
+    }
+    list_add_tail( &server->queue, &ioctl->entry );
+    wake_up( &server->obj, 0 );
+    if (async) set_error( STATUS_PENDING );
+    return 0;
+}
+
+static void disconnect_console_server( struct console_server *server )
+{
+    while (!list_empty( &server->queue ))
+    {
+        struct console_host_ioctl *call = LIST_ENTRY( list_head( &server->queue ), struct console_host_ioctl, entry );
+        list_remove( &call->entry );
+        console_host_ioctl_terminate( call, STATUS_CANCELLED );
+    }
+    while (!list_empty( &server->read_queue ))
+    {
+        struct console_host_ioctl *call = LIST_ENTRY( list_head( &server->read_queue ), struct console_host_ioctl, entry );
+        list_remove( &call->entry );
+        console_host_ioctl_terminate( call, STATUS_CANCELLED );
+    }
+
+    if (server->console)
+    {
+        assert( server->console->server == server );
+        server->console->server = NULL;
+        server->console = NULL;
+        wake_up( &server->obj, 0 );
+    }
+}
+
+static void set_active_screen_buffer( struct console_input *console_input, struct screen_buffer *screen_buffer )
+{
     struct condrv_renderer_event evt;
+
+    if (console_input->active == screen_buffer) return;
+    if (console_input->active) release_object( console_input->active );
+    console_input->active = (struct screen_buffer *)grab_object( screen_buffer );
+
+    if (console_input->server) queue_host_ioctl( console_input->server, IOCTL_CONDRV_ACTIVATE,
+                                                 screen_buffer->id, NULL, NULL );
 
     evt.event = CONSOLE_RENDERER_SB_RESIZE_EVENT;
     evt.u.resize.width  = screen_buffer->width;
@@ -529,11 +644,18 @@ static struct object *create_console_output( struct console_input *console_input
     struct screen_buffer *screen_buffer;
     int	i;
 
+    if (console_input->last_id == ~0)
+    {
+        set_error( STATUS_NO_MEMORY );
+        return NULL;
+    }
+
     if (!(screen_buffer = alloc_object( &screen_buffer_ops )))
     {
         if (fd != -1) close( fd );
         return NULL;
     }
+    screen_buffer->id             = ++console_input->last_id;
     screen_buffer->mode           = ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT;
     screen_buffer->input          = console_input;
     screen_buffer->cursor_size    = 100;
@@ -558,6 +680,7 @@ static struct object *create_console_output( struct console_input *console_input
     screen_buffer->font.face_name = NULL;
     screen_buffer->font.face_len  = 0;
     memset( screen_buffer->color_map, 0, sizeof(screen_buffer->color_map) );
+    init_async_queue( &screen_buffer->ioctl_q );
     list_add_head( &screen_buffer_list, &screen_buffer->entry );
 
     if (fd != -1)
@@ -586,11 +709,9 @@ static struct object *create_console_output( struct console_input *console_input
         memcpy( &screen_buffer->data[i * screen_buffer->width], screen_buffer->data,
                 screen_buffer->width * sizeof(char_info_t) );
 
-    if (!console_input->active)
-    {
-	console_input->active = (struct screen_buffer*)grab_object( screen_buffer );
-        generate_sb_initial_events( console_input );
-    }
+    if (console_input->server) queue_host_ioctl( console_input->server, IOCTL_CONDRV_INIT_OUTPUT,
+                                                 screen_buffer->id, NULL, NULL );
+    if (!console_input->active) set_active_screen_buffer( console_input, screen_buffer );
     return &screen_buffer->obj;
 }
 
@@ -620,40 +741,29 @@ int free_console( struct process *process )
  *	2/ parent is a renderer which launches process, and process should attach to the console
  *	   rendered by parent
  */
-obj_handle_t inherit_console( struct thread *parent_thread, struct process *parent, struct process *process,
+obj_handle_t inherit_console( struct thread *parent_thread, obj_handle_t handle, struct process *process,
                               obj_handle_t hconin )
 {
-    int done = 0;
+    struct console_input *console = NULL;
+
+    if (handle && !(console = (struct console_input *)get_handle_obj( current->process, handle, 0,
+                                                                      &console_input_ops )))
+        return 0;
 
     /* if parent is a renderer, then attach current process to its console
      * a bit hacky....
      */
-    if (hconin && parent_thread)
+    if (!console && hconin && parent_thread)
     {
-        struct console_input *console;
-
         /* FIXME: should we check some access rights ? */
-        if ((console = (struct console_input *)get_handle_obj( parent, hconin,
-                                                               0, &console_input_ops )))
-        {
-            if (console->renderer == parent_thread)
-            {
-                process->console = (struct console_input *)grab_object( console );
-                process->console->num_proc++;
-                done = 1;
-            }
-            release_object( console );
-        }
-        else clear_error();  /* ignore error */
+        if (!(console = (struct console_input *)get_handle_obj( parent_thread->process, hconin,
+                                                                0, &console_input_ops )))
+            clear_error();  /* ignore error */
     }
-    /* otherwise, if parent has a console, attach child to this console */
-    if (!done && parent->console)
-    {
-        process->console = (struct console_input *)grab_object( parent->console );
-        process->console->num_proc++;
-    }
+    if (!console) return 0;
 
-    if (!process->console) return 0;
+    process->console = console;
+    console->num_proc++;
     return alloc_handle( process, process->console,
                          SYNCHRONIZE | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES, 0 );
 }
@@ -823,48 +933,6 @@ static int write_console_input( struct console_input* console, int count,
     }
     if (console->recnum) set_event( console->event );
     return 1;
-}
-
-/* set misc console input information */
-static int set_console_input_info( const struct set_console_input_info_request *req,
-				   const WCHAR *title, data_size_t len )
-{
-    struct console_input *console;
-    struct condrv_renderer_event evt;
-
-    if (!(console = console_input_get( req->handle, FILE_WRITE_PROPERTIES ))) goto error;
-    if (console_input_is_bare(console) && (req->mask & SET_CONSOLE_INPUT_INFO_WIN))
-    {
-        set_error( STATUS_UNSUCCESSFUL );
-        goto error;
-    }
-
-    memset(&evt.u, 0, sizeof(evt.u));
-    if (req->mask & SET_CONSOLE_INPUT_INFO_TITLE)
-    {
-        WCHAR *new_title = NULL;
-
-        len = (len / sizeof(WCHAR)) * sizeof(WCHAR);
-        if (len && !(new_title = memdup( title, len ))) goto error;
-        free( console->title );
-        console->title = new_title;
-        console->title_len = len;
-        evt.event = CONSOLE_RENDERER_TITLE_EVENT;
-        console_input_events_append( console, &evt );
-    }
-    if (req->mask & SET_CONSOLE_INPUT_INFO_INPUT_CODEPAGE)
-    {
-        console->input_cp = req->input_cp;
-    }
-    if (req->mask & SET_CONSOLE_INPUT_INFO_OUTPUT_CODEPAGE)
-    {
-        console->output_cp = req->output_cp;
-    }
-    release_object( console );
-    return 1;
- error:
-    if (console) release_object( console );
-    return 0;
 }
 
 /* resize a screen buffer */
@@ -1167,6 +1235,13 @@ static void console_input_destroy( struct object *obj )
     int				i;
 
     assert( obj->ops == &console_input_ops );
+
+    if (console_in->server)
+    {
+        assert( console_in->server->console == console_in );
+        disconnect_console_server( console_in->server );
+    }
+
     free( console_in->title );
     free( console_in->records );
 
@@ -1178,6 +1253,7 @@ static void console_input_destroy( struct object *obj )
         if (curr->input == console_in) curr->input = NULL;
     }
 
+    free_async_queue( &console_in->ioctl_q );
     free_async_queue( &console_in->read_q );
     if (console_in->evt)
         console_in->evt->console = NULL;
@@ -1212,22 +1288,11 @@ static void screen_buffer_destroy( struct object *obj )
     assert( obj->ops == &screen_buffer_ops );
 
     list_remove( &screen_buffer->entry );
-
-    if (screen_buffer->input && screen_buffer->input->active == screen_buffer)
-    {
-        struct screen_buffer *sb;
-
-        screen_buffer->input->active = NULL;
-        LIST_FOR_EACH_ENTRY( sb, &screen_buffer_list, struct screen_buffer, entry )
-        {
-            if (sb->input == screen_buffer->input)
-            {
-                sb->input->active = sb;
-                break;
-            }
-        }
-    }
+    if (screen_buffer->input && screen_buffer->input->server)
+        queue_host_ioctl( screen_buffer->input->server, IOCTL_CONDRV_CLOSE_OUTPUT,
+                          screen_buffer->id, NULL, NULL );
     if (screen_buffer->fd) release_object( screen_buffer->fd );
+    free_async_queue( &screen_buffer->ioctl_q );
     free( screen_buffer->data );
     free( screen_buffer->font.face_name );
 }
@@ -1522,6 +1587,81 @@ static void scroll_console_output( struct screen_buffer *screen_buffer, int xsrc
     console_input_events_append( screen_buffer->input, &evt );
 }
 
+static void console_server_dump( struct object *obj, int verbose )
+{
+    assert( obj->ops == &console_server_ops );
+    fprintf( stderr, "Console server\n" );
+}
+
+static void console_server_destroy( struct object *obj )
+{
+    struct console_server *server = (struct console_server *)obj;
+    assert( obj->ops == &console_server_ops );
+    disconnect_console_server( server );
+}
+
+static struct object *console_server_lookup_name( struct object *obj, struct unicode_str *name, unsigned int attr )
+{
+    struct console_server *server = (struct console_server*)obj;
+    static const WCHAR referenceW[] = {'R','e','f','e','r','e','n','c','e'};
+    assert( obj->ops == &console_server_ops );
+
+    if (name->len == sizeof(referenceW) && !memcmp( name->str, referenceW, name->len ))
+    {
+        struct screen_buffer *screen_buffer;
+        name->len = 0;
+        if (server->console)
+        {
+            set_error( STATUS_INVALID_HANDLE );
+            return 0;
+        }
+        if (!(server->console = (struct console_input *)create_console_input( -1 ))) return NULL;
+        if (!(screen_buffer = (struct screen_buffer *)create_console_output( server->console, -1 )))
+        {
+            release_object( server->console );
+            server->console = NULL;
+            return NULL;
+        }
+        release_object( screen_buffer );
+        server->console->server = server;
+
+        return &server->console->obj;
+    }
+
+    return NULL;
+}
+
+static int console_server_signaled( struct object *obj, struct wait_queue_entry *entry )
+{
+    struct console_server *server = (struct console_server*)obj;
+    assert( obj->ops == &console_server_ops );
+    return !server->console || !list_empty( &server->queue );
+}
+
+static struct object *console_server_open_file( struct object *obj, unsigned int access,
+                                                unsigned int sharing, unsigned int options )
+{
+    return grab_object( obj );
+}
+
+static struct object *create_console_server( void )
+{
+    struct console_server *server;
+
+    if (!(server = alloc_object( &console_server_ops ))) return NULL;
+    server->console = NULL;
+    server->busy    = 0;
+    list_init( &server->queue );
+    list_init( &server->read_queue );
+
+    return &server->obj;
+}
+
+static int is_blocking_read_ioctl( unsigned int code )
+{
+    return code == IOCTL_CONDRV_READ_INPUT;
+}
+
 static int console_input_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
 {
     struct console_input *console = get_fd_user( fd );
@@ -1529,6 +1669,8 @@ static int console_input_ioctl( struct fd *fd, ioctl_code_t code, struct async *
     switch (code)
     {
     case IOCTL_CONDRV_GET_MODE:
+        if (console->server)
+            return queue_host_ioctl( console->server, code, 0, async, &console->ioctl_q );
         if (get_reply_max_size() != sizeof(console->mode))
         {
             set_error( STATUS_INVALID_PARAMETER );
@@ -1537,6 +1679,8 @@ static int console_input_ioctl( struct fd *fd, ioctl_code_t code, struct async *
         return set_reply_data( &console->mode, sizeof(console->mode) ) != NULL;
 
     case IOCTL_CONDRV_SET_MODE:
+        if (console->server)
+            return queue_host_ioctl( console->server, code, 0, async, &console->ioctl_q );
         if (get_req_data_size() != sizeof(console->mode))
         {
             set_error( STATUS_INVALID_PARAMETER );
@@ -1548,6 +1692,8 @@ static int console_input_ioctl( struct fd *fd, ioctl_code_t code, struct async *
     case IOCTL_CONDRV_READ_INPUT:
         {
             int blocking = 0;
+            if (console->server)
+                return queue_host_ioctl( console->server, code, 0, async, &console->ioctl_q );
             if (get_reply_max_size() % sizeof(INPUT_RECORD))
             {
                 set_error( STATUS_INVALID_PARAMETER );
@@ -1572,9 +1718,13 @@ static int console_input_ioctl( struct fd *fd, ioctl_code_t code, struct async *
         }
 
     case IOCTL_CONDRV_WRITE_INPUT:
+        if (console->server)
+            return queue_host_ioctl( console->server, code, 0, async, &console->ioctl_q );
         return write_console_input( console, get_req_data_size() / sizeof(INPUT_RECORD), get_req_data() );
 
     case IOCTL_CONDRV_PEEK:
+        if (console->server)
+            return queue_host_ioctl( console->server, code, 0, async, &console->ioctl_q );
         if (get_reply_max_size() % sizeof(INPUT_RECORD))
         {
             set_error( STATUS_INVALID_PARAMETER );
@@ -1586,6 +1736,8 @@ static int console_input_ioctl( struct fd *fd, ioctl_code_t code, struct async *
     case IOCTL_CONDRV_GET_INPUT_INFO:
         {
             struct condrv_input_info info;
+            if (console->server)
+                return queue_host_ioctl( console->server, code, 0, async, &console->ioctl_q );
             if (get_reply_max_size() != sizeof(info))
             {
                 set_error( STATUS_INVALID_PARAMETER );
@@ -1605,6 +1757,8 @@ static int console_input_ioctl( struct fd *fd, ioctl_code_t code, struct async *
     case IOCTL_CONDRV_SET_INPUT_INFO:
         {
             const struct condrv_input_info_params *params = get_req_data();
+            if (console->server)
+                return queue_host_ioctl( console->server, code, 0, async, &console->ioctl_q );
             if (get_req_data_size() != sizeof(*params))
             {
                 set_error( STATUS_INVALID_PARAMETER );
@@ -1662,6 +1816,8 @@ static int console_input_ioctl( struct fd *fd, ioctl_code_t code, struct async *
         }
 
     case IOCTL_CONDRV_GET_TITLE:
+        if (console->server)
+            return queue_host_ioctl( console->server, code, 0, async, &console->ioctl_q );
         if (!console->title_len) return 1;
         return set_reply_data( console->title, min( console->title_len, get_reply_max_size() )) != NULL;
 
@@ -1671,6 +1827,8 @@ static int console_input_ioctl( struct fd *fd, ioctl_code_t code, struct async *
             struct condrv_renderer_event evt;
             WCHAR *title = NULL;
 
+            if (console->server)
+                return queue_host_ioctl( console->server, code, 0, async, &console->ioctl_q );
             if (len % sizeof(WCHAR))
             {
                 set_error( STATUS_INVALID_PARAMETER );
@@ -1699,6 +1857,9 @@ static int screen_buffer_ioctl( struct fd *fd, ioctl_code_t code, struct async *
     switch (code)
     {
     case IOCTL_CONDRV_GET_MODE:
+        if (screen_buffer->input && screen_buffer->input->server)
+            return queue_host_ioctl( screen_buffer->input->server, code, screen_buffer->id,
+                                     async, &screen_buffer->ioctl_q );
         if (get_reply_max_size() != sizeof(screen_buffer->mode))
         {
             set_error( STATUS_INVALID_PARAMETER );
@@ -1707,6 +1868,9 @@ static int screen_buffer_ioctl( struct fd *fd, ioctl_code_t code, struct async *
         return set_reply_data( &screen_buffer->mode, sizeof(screen_buffer->mode) ) != NULL;
 
     case IOCTL_CONDRV_SET_MODE:
+        if (screen_buffer->input && screen_buffer->input->server)
+            return queue_host_ioctl( screen_buffer->input->server, code, screen_buffer->id,
+                                     async, &screen_buffer->ioctl_q );
         if (get_req_data_size() != sizeof(screen_buffer->mode))
         {
             set_error( STATUS_INVALID_PARAMETER );
@@ -1718,6 +1882,9 @@ static int screen_buffer_ioctl( struct fd *fd, ioctl_code_t code, struct async *
     case IOCTL_CONDRV_READ_OUTPUT:
         {
             const struct condrv_output_params *params = get_req_data();
+            if (screen_buffer->input && screen_buffer->input->server)
+                return queue_host_ioctl( screen_buffer->input->server, code, screen_buffer->id,
+                                         async, &screen_buffer->ioctl_q );
             if (get_req_data_size() != sizeof(*params))
             {
                 set_error( STATUS_INVALID_PARAMETER );
@@ -1733,6 +1900,9 @@ static int screen_buffer_ioctl( struct fd *fd, ioctl_code_t code, struct async *
         }
 
     case IOCTL_CONDRV_WRITE_OUTPUT:
+        if (screen_buffer->input && screen_buffer->input->server)
+            return queue_host_ioctl( screen_buffer->input->server, code, screen_buffer->id,
+                                     async, &screen_buffer->ioctl_q );
         if (get_req_data_size() < sizeof(struct condrv_output_params) ||
             (get_reply_max_size() != sizeof(SMALL_RECT) && get_reply_max_size() != sizeof(unsigned int)))
         {
@@ -1752,6 +1922,9 @@ static int screen_buffer_ioctl( struct fd *fd, ioctl_code_t code, struct async *
             struct condrv_output_info *info;
             data_size_t size;
 
+            if (screen_buffer->input && screen_buffer->input->server)
+                return queue_host_ioctl( screen_buffer->input->server, code, screen_buffer->id,
+                                         async, &screen_buffer->ioctl_q );
             size = min( sizeof(*info) + screen_buffer->font.face_len, get_reply_max_size() );
             if (size < sizeof(*info))
             {
@@ -1787,6 +1960,9 @@ static int screen_buffer_ioctl( struct fd *fd, ioctl_code_t code, struct async *
     case IOCTL_CONDRV_SET_OUTPUT_INFO:
         {
             const struct condrv_output_info_params *params = get_req_data();
+            if (screen_buffer->input && screen_buffer->input->server)
+                return queue_host_ioctl( screen_buffer->input->server, code, screen_buffer->id,
+                                         async, &screen_buffer->ioctl_q );
             if (get_req_data_size() < sizeof(*params))
             {
                 set_error( STATUS_INVALID_PARAMETER );
@@ -1801,18 +1977,17 @@ static int screen_buffer_ioctl( struct fd *fd, ioctl_code_t code, struct async *
         }
 
     case IOCTL_CONDRV_ACTIVATE:
+        if (screen_buffer->input && screen_buffer->input->server)
+            return queue_host_ioctl( screen_buffer->input->server, code, screen_buffer->id,
+                                     async, &screen_buffer->ioctl_q );
+
         if (!screen_buffer->input)
         {
             set_error( STATUS_INVALID_HANDLE );
             return 0;
         }
 
-        if (screen_buffer != screen_buffer->input->active)
-        {
-            if (screen_buffer->input->active) release_object( screen_buffer->input->active );
-            screen_buffer->input->active = (struct screen_buffer *)grab_object( screen_buffer );
-            generate_sb_initial_events( screen_buffer->input );
-        }
+        set_active_screen_buffer( screen_buffer->input, screen_buffer );
         return 1;
 
     case IOCTL_CONDRV_FILL_OUTPUT:
@@ -1820,6 +1995,9 @@ static int screen_buffer_ioctl( struct fd *fd, ioctl_code_t code, struct async *
             const struct condrv_fill_output_params *params = get_req_data();
             char_info_t data;
             DWORD written;
+            if (screen_buffer->input && screen_buffer->input->server)
+                return queue_host_ioctl( screen_buffer->input->server, code, screen_buffer->id,
+                                         async, &screen_buffer->ioctl_q );
             if (get_req_data_size() != sizeof(*params) ||
                 (get_reply_max_size() && get_reply_max_size() != sizeof(written)))
             {
@@ -1839,6 +2017,11 @@ static int screen_buffer_ioctl( struct fd *fd, ioctl_code_t code, struct async *
         {
             const struct condrv_scroll_params *params = get_req_data();
             rectangle_t clip;
+
+            if (screen_buffer->input && screen_buffer->input->server)
+                return queue_host_ioctl( screen_buffer->input->server, code, screen_buffer->id,
+                                         async, &screen_buffer->ioctl_q );
+
             if (get_req_data_size() != sizeof(*params))
             {
                 set_error( STATUS_INVALID_PARAMETER );
@@ -1954,6 +2137,7 @@ static struct object *console_device_lookup_name( struct object *obj, struct uni
     static const WCHAR current_outW[]   = {'C','u','r','r','e','n','t','O','u','t'};
     static const WCHAR rendererW[]      = {'R','e','n','d','e','r','e','r'};
     static const WCHAR screen_bufferW[] = {'S','c','r','e','e','n','B','u','f','f','e','r'};
+    static const WCHAR serverW[]        = {'S','e','r','v','e','r'};
 
     if (name->len == sizeof(current_inW) && !memcmp( name->str, current_inW, name->len ))
     {
@@ -1998,6 +2182,12 @@ static struct object *console_device_lookup_name( struct object *obj, struct uni
         }
         name->len = 0;
         return create_console_output( current->process->console, -1 );
+    }
+
+    if (name->len == sizeof(serverW) && !memcmp( name->str, serverW, name->len ))
+    {
+        name->len = 0;
+        return create_console_server();
     }
 
     return NULL;
@@ -2125,12 +2315,6 @@ DECL_HANDLER(attach_console)
     return;
 }
 
-/* set info about a console input */
-DECL_HANDLER(set_console_input_info)
-{
-    set_console_input_info( req, get_req_data(), get_req_data_size() );
-}
-
 /* appends a string to console's history */
 DECL_HANDLER(append_console_input_history)
 {
@@ -2241,4 +2425,136 @@ DECL_HANDLER(get_console_wait_event)
         release_object( console );
     }
     else set_error( STATUS_INVALID_PARAMETER );
+}
+
+/* retrieve the next pending console ioctl request */
+DECL_HANDLER(get_next_console_request)
+{
+    struct console_host_ioctl *ioctl = NULL, *next;
+    struct console_server *server;
+    struct iosb *iosb = NULL;
+
+    server = (struct console_server *)get_handle_obj( current->process, req->handle, 0, &console_server_ops );
+    if (!server) return;
+
+    if (!server->console)
+    {
+        set_error( STATUS_INVALID_HANDLE );
+        release_object( server );
+        return;
+    }
+
+    if (req->signal) set_event( server->console->event);
+    else reset_event( server->console->event );
+
+    if (req->read)
+    {
+        /* set result of current pending ioctl */
+        if (list_empty( &server->read_queue ))
+        {
+            set_error( STATUS_INVALID_HANDLE );
+            release_object( server );
+            return;
+        }
+
+        ioctl = LIST_ENTRY( list_head( &server->read_queue ), struct console_host_ioctl, entry );
+        list_remove( &ioctl->entry );
+        list_move_tail( &server->queue, &server->read_queue );
+    }
+    else if (server->busy)
+    {
+        /* set result of previous ioctl */
+        ioctl = LIST_ENTRY( list_head( &server->queue ), struct console_host_ioctl, entry );
+        list_remove( &ioctl->entry );
+    }
+
+    if (ioctl)
+    {
+        unsigned int status = req->status;
+        if (ioctl->async)
+        {
+            iosb = async_get_iosb( ioctl->async );
+            iosb->status = req->status;
+            iosb->out_size = min( iosb->out_size, get_req_data_size() );
+            if (iosb->out_size)
+            {
+                if ((iosb->out_data = memdup( get_req_data(), iosb->out_size )))
+                {
+                    iosb->result = iosb->out_size;
+                    status = STATUS_ALERTED;
+                }
+                else if (!status)
+                {
+                    iosb->status = STATUS_NO_MEMORY;
+                    iosb->out_size = 0;
+                }
+            }
+        }
+        console_host_ioctl_terminate( ioctl, status );
+        if (iosb) release_object( iosb );
+
+        if (req->read)
+        {
+            release_object( server );
+            return;
+        }
+        server->busy = 0;
+    }
+
+    /* if we have a blocking read ioctl in queue head and previous blocking read is still waiting,
+     * move it to read queue for execution after current read is complete. move all blocking
+     * ioctl at the same time to preserve their order. */
+    if (!list_empty( &server->queue ) && !list_empty( &server->read_queue ))
+    {
+        ioctl = LIST_ENTRY( list_head( &server->queue ), struct console_host_ioctl, entry );
+        if (is_blocking_read_ioctl( ioctl->code ))
+        {
+            LIST_FOR_EACH_ENTRY_SAFE( ioctl, next, &server->queue, struct console_host_ioctl, entry )
+            {
+                if (!is_blocking_read_ioctl( ioctl->code )) continue;
+                list_remove( &ioctl->entry );
+                list_add_tail( &server->read_queue, &ioctl->entry );
+            }
+        }
+    }
+
+    /* return the next ioctl */
+    if (!list_empty( &server->queue ))
+    {
+        ioctl = LIST_ENTRY( list_head( &server->queue ), struct console_host_ioctl, entry );
+        iosb = ioctl->async ? async_get_iosb( ioctl->async ) : NULL;
+
+        if (!iosb || get_reply_max_size() >= iosb->in_size)
+        {
+            reply->code   = ioctl->code;
+            reply->output = ioctl->output;
+
+            if (iosb)
+            {
+                reply->out_size = iosb->out_size;
+                set_reply_data_ptr( iosb->in_data, iosb->in_size );
+                iosb->in_data = NULL;
+            }
+
+            if (is_blocking_read_ioctl( ioctl->code ))
+            {
+                list_remove( &ioctl->entry );
+                assert( list_empty( &server->read_queue ));
+                list_add_tail( &server->read_queue, &ioctl->entry );
+            }
+            else server->busy = 1;
+        }
+        else
+        {
+            reply->out_size = iosb->in_size;
+            set_error( STATUS_BUFFER_OVERFLOW );
+        }
+        if (iosb) release_object( iosb );
+    }
+    else
+    {
+        set_error( STATUS_PENDING );
+    }
+
+    release_object( server );
 }

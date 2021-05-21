@@ -70,6 +70,7 @@
 #define WIN32_NO_STATUS
 #include "windef.h"
 #include "winternl.h"
+#include "ddk/wdm.h"
 #include "wine/exception.h"
 #include "wine/list.h"
 #include "wine/asm.h"
@@ -85,6 +86,10 @@ WINE_DEFAULT_DEBUG_CHANNEL(seh);
 
 #include <asm/prctl.h>
 static inline int arch_prctl( int func, void *ptr ) { return syscall( __NR_arch_prctl, func, ptr ); }
+
+#ifndef FP_XSTATE_MAGIC1
+#define FP_XSTATE_MAGIC1 0x46505853
+#endif
 
 #define RAX_sig(context)     ((context)->uc_mcontext.gregs[REG_RAX])
 #define RBX_sig(context)     ((context)->uc_mcontext.gregs[REG_RBX])
@@ -110,6 +115,7 @@ static inline int arch_prctl( int func, void *ptr ) { return syscall( __NR_arch_
 #define TRAP_sig(context)    ((context)->uc_mcontext.gregs[REG_TRAPNO])
 #define ERROR_sig(context)   ((context)->uc_mcontext.gregs[REG_ERR])
 #define FPU_sig(context)     ((XMM_SAVE_AREA32 *)((context)->uc_mcontext.fpregs))
+#define XState_sig(fpu)      (((unsigned int *)fpu->Reserved4)[12] == FP_XSTATE_MAGIC1 ? (XSTATE *)(fpu + 1) : NULL)
 
 #elif defined(__FreeBSD__) || defined (__FreeBSD_kernel__)
 
@@ -140,6 +146,7 @@ static inline int arch_prctl( int func, void *ptr ) { return syscall( __NR_arch_
 #define TRAP_sig(context)    ((context)->uc_mcontext.mc_trapno)
 #define ERROR_sig(context)   ((context)->uc_mcontext.mc_err)
 #define FPU_sig(context)     ((XMM_SAVE_AREA32 *)((context)->uc_mcontext.mc_fpstate))
+#define XState_sig(context)  NULL
 
 #elif defined(__NetBSD__)
 
@@ -170,6 +177,7 @@ static inline int arch_prctl( int func, void *ptr ) { return syscall( __NR_arch_
 #define TRAP_sig(context)   ((context)->uc_mcontext.__gregs[_REG_TRAPNO])
 #define ERROR_sig(context)  ((context)->uc_mcontext.__gregs[_REG_ERR])
 #define FPU_sig(context)    ((XMM_SAVE_AREA32 *)((context)->uc_mcontext.__fpregs))
+#define XState_sig(context) NULL
 
 #elif defined (__APPLE__)
 
@@ -197,6 +205,7 @@ static inline int arch_prctl( int func, void *ptr ) { return syscall( __NR_arch_
 #define TRAP_sig(context)    ((context)->uc_mcontext->__es.__trapno)
 #define ERROR_sig(context)   ((context)->uc_mcontext->__es.__err)
 #define FPU_sig(context)     ((XMM_SAVE_AREA32 *)&(context)->uc_mcontext->__fs.__fpu_fcw)
+#define XState_sig(context)  NULL
 
 #else
 #error You must define the signal context functions for your platform
@@ -229,21 +238,24 @@ enum i386_trap_code
 struct stack_layout
 {
     CONTEXT           context;
-    ULONG64           unknown[4];
+    CONTEXT_EX        context_ex;
     EXCEPTION_RECORD  rec;
     ULONG64           rsi;
     ULONG64           rdi;
     ULONG64           rbp;
     ULONG64           rip;
-    ULONG64           red_zone[16];
+    ULONG64           align;
+    char              xstate[0]; /* If xstate is present it is allocated
+                                  * dynamically to provide 64 byte alignment. */
 };
 
-C_ASSERT( sizeof(struct stack_layout) == 0x630 ); /* Should match the size in call_user_exception_dispatcher(). */
+C_ASSERT((offsetof(struct stack_layout, xstate) == sizeof(struct stack_layout)));
+
+C_ASSERT( sizeof(XSTATE) == 0x140 );
+C_ASSERT( sizeof(struct stack_layout) == 0x5b0 ); /* Should match the size in call_user_exception_dispatcher(). */
 
 struct syscall_frame
 {
-    struct syscall_frame *prev_frame;
-    ULONG64               pad;
     ULONG64               xmm[10 * 2];  /* xmm6-xmm15 */
     ULONG64               mxcsr;
     ULONG64               r12;
@@ -1400,8 +1412,10 @@ static inline void set_sigcontext( const CONTEXT *context, ucontext_t *sigcontex
  *
  * Set the register values from a sigcontext.
  */
-static void save_context( CONTEXT *context, const ucontext_t *sigcontext )
+static void save_context( struct xcontext *xcontext, const ucontext_t *sigcontext )
 {
+    CONTEXT *context = &xcontext->c;
+
     context->ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_SEGMENTS | CONTEXT_DEBUG_REGISTERS;
     context->Rax    = RAX_sig(sigcontext);
     context->Rcx    = RCX_sig(sigcontext);
@@ -1450,6 +1464,11 @@ static void save_context( CONTEXT *context, const ucontext_t *sigcontext )
         context->ContextFlags |= CONTEXT_FLOATING_POINT;
         context->u.FltSave = *FPU_sig(sigcontext);
         context->MxCsr = context->u.FltSave.MxCsr;
+        xcontext->xstate = XState_sig(FPU_sig(sigcontext));
+    }
+    else
+    {
+        xcontext->xstate = NULL;
     }
 }
 
@@ -1459,8 +1478,10 @@ static void save_context( CONTEXT *context, const ucontext_t *sigcontext )
  *
  * Build a sigcontext from the register values.
  */
-static void restore_context( const CONTEXT *context, ucontext_t *sigcontext )
+static void restore_context( const struct xcontext *xcontext, ucontext_t *sigcontext )
 {
+    const CONTEXT *context = &xcontext->c;
+
     amd64_thread_data()->dr0 = context->Dr0;
     amd64_thread_data()->dr1 = context->Dr1;
     amd64_thread_data()->dr2 = context->Dr2;
@@ -1483,13 +1504,14 @@ __ASM_GLOBAL_FUNC( set_full_cpu_context,
                    __ASM_SEH(".seh_stackalloc 0x40\n\t")
                    __ASM_SEH(".seh_endprologue\n\t")
                    __ASM_CFI(".cfi_adjust_cfa_offset 40\n\t")
-                   "ldmxcsr 0x34(%rdi)\n\t"         /* context->MxCsr */
+                   "movq %gs:0x30,%rdx\n\t"
                    "movw 0x38(%rdi),%ax\n\t"        /* context->SegCs */
                    "movq %rax,8(%rsp)\n\t"
                    "movw 0x42(%rdi),%ax\n\t"        /* context->SegSs */
                    "movq %rax,32(%rsp)\n\t"
                    "movq 0x44(%rdi),%rax\n\t"       /* context->Eflags */
                    "movq %rax,16(%rsp)\n\t"
+                   "movq $0,0x328(%rdx)\n\t"        /* amd64_thread_data()->syscall_frame */
                    "movq 0x80(%rdi),%rcx\n\t"       /* context->Rcx */
                    "movq 0x88(%rdi),%rdx\n\t"       /* context->Rdx */
                    "movq 0x90(%rdi),%rbx\n\t"       /* context->Rbx */
@@ -1507,27 +1529,39 @@ __ASM_GLOBAL_FUNC( set_full_cpu_context,
                    "movq 0xf0(%rdi),%r15\n\t"       /* context->R15 */
                    "movq 0xf8(%rdi),%rax\n\t"       /* context->Rip */
                    "movq %rax,(%rsp)\n\t"
-                   "fxrstor 0x100(%rdi)\n\t"        /* context->FtlSave */
-                   "movdqa 0x1a0(%rdi),%xmm0\n\t"   /* context->Xmm0 */
-                   "movdqa 0x1b0(%rdi),%xmm1\n\t"   /* context->Xmm1 */
-                   "movdqa 0x1c0(%rdi),%xmm2\n\t"   /* context->Xmm2 */
-                   "movdqa 0x1d0(%rdi),%xmm3\n\t"   /* context->Xmm3 */
-                   "movdqa 0x1e0(%rdi),%xmm4\n\t"   /* context->Xmm4 */
-                   "movdqa 0x1f0(%rdi),%xmm5\n\t"   /* context->Xmm5 */
-                   "movdqa 0x200(%rdi),%xmm6\n\t"   /* context->Xmm6 */
-                   "movdqa 0x210(%rdi),%xmm7\n\t"   /* context->Xmm7 */
-                   "movdqa 0x220(%rdi),%xmm8\n\t"   /* context->Xmm8 */
-                   "movdqa 0x230(%rdi),%xmm9\n\t"   /* context->Xmm9 */
-                   "movdqa 0x240(%rdi),%xmm10\n\t"  /* context->Xmm10 */
-                   "movdqa 0x250(%rdi),%xmm11\n\t"  /* context->Xmm11 */
-                   "movdqa 0x260(%rdi),%xmm12\n\t"  /* context->Xmm12 */
-                   "movdqa 0x270(%rdi),%xmm13\n\t"  /* context->Xmm13 */
-                   "movdqa 0x280(%rdi),%xmm14\n\t"  /* context->Xmm14 */
-                   "movdqa 0x290(%rdi),%xmm15\n\t"  /* context->Xmm15 */
+                   "fxrstor 0x100(%rdi)\n\t"        /* context->FltSave */
                    "movq 0x78(%rdi),%rax\n\t"       /* context->Rax */
                    "movq 0xb0(%rdi),%rdi\n\t"       /* context->Rdi */
                    "iretq" );
 
+
+/***********************************************************************
+ *           restore_xstate
+ *
+ * Restore the XState context.
+ */
+static void restore_xstate( const CONTEXT *context )
+{
+    XSAVE_FORMAT *xrstor_base;
+    XSTATE *xs;
+
+    if (!(xs = xstate_from_context( context )))
+        return;
+
+    xrstor_base = (XSAVE_FORMAT *)xs - 1;
+
+    if (!(xs->CompactionMask & ((ULONG64)1 << 63)))
+    {
+        /* Non-compacted xrstor will load Mxcsr regardless of the specified mask. Loading garbage there
+         * may lead to fault. We have only padding, no more used EXCEPTION_RECORD or unused context fields
+         * at the MxCsr restore location, so just put it there. */
+        assert( (void *)&xrstor_base->MxCsr > (void *)context->VectorRegister );
+        xrstor_base->MxCsr = context->u.FltSave.MxCsr;
+        xrstor_base->MxCsr_Mask = context->u.FltSave.MxCsr_Mask;
+    }
+
+    __asm__ volatile( "xrstor64 %0" : : "m"(*xrstor_base), "a" (4), "d" (0) );
+}
 
 /***********************************************************************
  *           get_server_context_flags
@@ -1719,6 +1753,8 @@ NTSTATUS WINAPI NtSetContextThread( HANDLE handle, const CONTEXT *context )
         }
     }
 
+    restore_xstate( context );
+
     if (flags & CONTEXT_FULL)
     {
         if (!(flags & CONTEXT_CONTROL))
@@ -1818,7 +1854,6 @@ NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
     return STATUS_SUCCESS;
 }
 
-
 extern void CDECL raise_func_trampoline( void *dispatcher );
 
 __ASM_GLOBAL_FUNC( raise_func_trampoline,
@@ -1827,10 +1862,12 @@ __ASM_GLOBAL_FUNC( raise_func_trampoline,
 /***********************************************************************
  *           setup_raise_exception
  */
-static void setup_raise_exception( ucontext_t *sigcontext, EXCEPTION_RECORD *rec, CONTEXT *context )
+static void setup_raise_exception( ucontext_t *sigcontext, EXCEPTION_RECORD *rec, struct xcontext *xcontext )
 {
     void *stack_ptr = (void *)(RSP_sig(sigcontext) & ~15);
+    CONTEXT *context = &xcontext->c;
     struct stack_layout *stack;
+    size_t stack_size;
     NTSTATUS status;
 
     if (rec->ExceptionCode == EXCEPTION_SINGLE_STEP)
@@ -1853,16 +1890,37 @@ static void setup_raise_exception( ucontext_t *sigcontext, EXCEPTION_RECORD *rec
     status = send_debug_event( rec, context, TRUE );
     if (status == DBG_CONTINUE || status == DBG_EXCEPTION_HANDLED)
     {
-        restore_context( context, sigcontext );
+        restore_context( xcontext, sigcontext );
         return;
     }
 
     /* fix up instruction pointer in context for EXCEPTION_BREAKPOINT */
     if (rec->ExceptionCode == EXCEPTION_BREAKPOINT) context->Rip--;
 
-    stack = virtual_setup_exception( stack_ptr, sizeof(*stack), rec );
+    stack_size = sizeof(*stack);
+    if (xcontext->xstate)
+    {
+        stack_size += (ULONG_PTR)stack_ptr - (((ULONG_PTR)stack_ptr
+                - sizeof(XSTATE)) & ~(ULONG_PTR)63);
+    }
+
+    stack = virtual_setup_exception( stack_ptr, stack_size, rec );
     stack->rec          = *rec;
     stack->context      = *context;
+    if (xcontext->xstate)
+    {
+        XSTATE *dst_xs = (XSTATE *)stack->xstate;
+
+        assert( !((ULONG_PTR)dst_xs & 63) );
+        context_init_xstate( &stack->context, stack->xstate );
+        dst_xs->CompactionMask = user_shared_data->XState.CompactionEnabled ? 0x8000000000000004 : 0;
+        if (xcontext->xstate->Mask & 4)
+        {
+            dst_xs->Mask = 4;
+            memcpy( &dst_xs->YmmContext, &xcontext->xstate->YmmContext, sizeof(dst_xs->YmmContext) );
+        }
+    }
+
     RIP_sig(sigcontext) = (ULONG_PTR)raise_func_trampoline;
     R8_sig(sigcontext)  = (ULONG_PTR)pKiUserExceptionDispatcher;
     RSP_sig(sigcontext) = (ULONG_PTR)stack;
@@ -1880,7 +1938,7 @@ static void setup_raise_exception( ucontext_t *sigcontext, EXCEPTION_RECORD *rec
  */
 static void setup_exception( ucontext_t *sigcontext, EXCEPTION_RECORD *rec )
 {
-    CONTEXT context;
+    struct xcontext context;
 
     rec->ExceptionAddress = (void *)RIP_sig(sigcontext);
     save_context( &context, sigcontext );
@@ -1889,22 +1947,38 @@ static void setup_exception( ucontext_t *sigcontext, EXCEPTION_RECORD *rec )
 
 
 /***********************************************************************
- *           call_user_apc
+ *           call_user_apc_dispatcher
  */
-void WINAPI call_user_apc( CONTEXT *context_ptr, ULONG_PTR ctx, ULONG_PTR arg1,
-                           ULONG_PTR arg2, PNTAPCFUNC func )
-{
-    CONTEXT context;
-
-    if (!context_ptr)
-    {
-        context.ContextFlags = CONTEXT_FULL;
-        NtGetContextThread( GetCurrentThread(), &context );
-        context.Rax = STATUS_USER_APC;
-        context_ptr = &context;
-    }
-    pKiUserApcDispatcher( context_ptr, ctx, arg1, arg2, func );
-}
+__ASM_GLOBAL_FUNC( call_user_apc_dispatcher,
+                   "movq 0x28(%rsp),%rsi\n\t"       /* func */
+                   "movq 0x30(%rsp),%rdi\n\t"       /* dispatcher */
+                   "movq %gs:0x30,%rbx\n\t"
+                   "jrcxz 1f\n\t"
+                   "movq 0x98(%rcx),%rax\n\t"       /* context_ptr->Rsp */
+                   "leaq -0x5c0(%rax),%rsp\n\t"     /* sizeof(CONTEXT) + offsetof(frame,ret_addr) */
+                   "jmp 2f\n"
+                   "1:\tmovq 0x328(%rbx),%rax\n\t"  /* amd64_thread_data()->syscall_frame */
+                   "leaq -0x4d0(%rax),%r10\n\t"
+                   "movq %rdx,%r12\n\t"             /* ctx */
+                   "movq %r8,%r13\n\t"              /* arg1 */
+                   "movq %r9,%r14\n\t"              /* arg2 */
+                   "cmpq %rsp,%r10\n\t"
+                   "cmovbq %r10,%rsp\n\t"
+                   "andq $~15,%rsp\n\t"
+                   "movq %rsp,%rdx\n\t"             /* context */
+                   "movl $0x10000b,0x30(%rdx)\n\t"  /* context.ContextFlags */
+                   "movq $~1,%rcx\n\t"
+                   "call " __ASM_NAME("NtGetContextThread") "\n\t"
+                   "movq %rsp,%rcx\n\t"             /* context */
+                   "movl $0xc0,%eax\n\t"
+                   "movq %rax,0x78(%rcx)\n\t"       /* context.Rax = STATUS_USER_APC */
+                   "movq %r12,%rdx\n\t"             /* ctx */
+                   "movq %r13,%r8\n\t"              /* arg1 */
+                   "movq %r14,%r9\n"                /* arg2 */
+                   "2:\tmovq $0,0x328(%rbx)\n\t"
+                   "movq %rsi,0x20(%rsp)\n\t"       /* func */
+                   "leaq -8(%rsp),%rsp\n\t"
+                   "jmp *%rdi" )
 
 
 /***********************************************************************
@@ -1913,28 +1987,27 @@ void WINAPI call_user_apc( CONTEXT *context_ptr, ULONG_PTR ctx, ULONG_PTR arg1,
 __ASM_GLOBAL_FUNC( call_raise_user_exception_dispatcher,
                    "movq %gs:0x30,%rdx\n\t"
                    "movq 0x328(%rdx),%rax\n\t"    /* amd64_thread_data()->syscall_frame */
-                   "pushq (%rax)\n\t"             /* frame->prev_frame */
-                   "popq 0x328(%rdx)\n\t"
-                   "movdqu 0x10(%rax),%xmm6\n\t"  /* frame->xmm[0..19 */
-                   "movdqu 0x20(%rax),%xmm7\n\t"
-                   "movdqu 0x30(%rax),%xmm8\n\t"
-                   "movdqu 0x40(%rax),%xmm9\n\t"
-                   "movdqu 0x50(%rax),%xmm10\n\t"
-                   "movdqu 0x60(%rax),%xmm11\n\t"
-                   "movdqu 0x70(%rax),%xmm12\n\t"
-                   "movdqu 0x80(%rax),%xmm13\n\t"
-                   "movdqu 0x90(%rax),%xmm14\n\t"
-                   "movdqu 0xa0(%rax),%xmm15\n\t"
-                   "ldmxcsr 0xb0(%rax)\n\t"       /* frame->mxcsr */
-                   "movq 0xb8(%rax),%r12\n\t"     /* frame->r12 */
-                   "movq 0xc0(%rax),%r13\n\t"     /* frame->r13 */
-                   "movq 0xc8(%rax),%r14\n\t"     /* frame->r14 */
-                   "movq 0xd0(%rax),%r15\n\t"     /* frame->r15 */
-                   "movq 0xd8(%rax),%rdi\n\t"     /* frame->rdi */
-                   "movq 0xe0(%rax),%rsi\n\t"     /* frame->rsi */
-                   "movq 0xe8(%rax),%rbx\n\t"     /* frame->rbx */
-                   "movq 0xf0(%rax),%rbp\n\t"     /* frame->rbp */
-                   "leaq 0x100(%rax),%rsp\n\t"
+                   "movdqu 0x0(%rax),%xmm6\n\t"   /* frame->xmm[0..19] */
+                   "movdqu 0x10(%rax),%xmm7\n\t"
+                   "movdqu 0x20(%rax),%xmm8\n\t"
+                   "movdqu 0x30(%rax),%xmm9\n\t"
+                   "movdqu 0x40(%rax),%xmm10\n\t"
+                   "movdqu 0x50(%rax),%xmm11\n\t"
+                   "movdqu 0x60(%rax),%xmm12\n\t"
+                   "movdqu 0x70(%rax),%xmm13\n\t"
+                   "movdqu 0x80(%rax),%xmm14\n\t"
+                   "movdqu 0x90(%rax),%xmm15\n\t"
+                   "ldmxcsr 0xa0(%rax)\n\t"       /* frame->mxcsr */
+                   "movq 0xa8(%rax),%r12\n\t"     /* frame->r12 */
+                   "movq 0xb0(%rax),%r13\n\t"     /* frame->r13 */
+                   "movq 0xb8(%rax),%r14\n\t"     /* frame->r14 */
+                   "movq 0xc0(%rax),%r15\n\t"     /* frame->r15 */
+                   "movq 0xc8(%rax),%rdi\n\t"     /* frame->rdi */
+                   "movq 0xd0(%rax),%rsi\n\t"     /* frame->rsi */
+                   "movq 0xd8(%rax),%rbx\n\t"     /* frame->rbx */
+                   "movq 0xe0(%rax),%rbp\n\t"     /* frame->rbp */
+                   "movq $0,0x328(%rdx)\n\t"
+                   "leaq 0xf0(%rax),%rsp\n\t"
                    "jmpq *%rcx" )
 
 
@@ -1957,22 +2030,48 @@ void WINAPI do_call_user_exception_dispatcher( EXCEPTION_RECORD *rec, CONTEXT *c
                                                NTSTATUS (WINAPI *dispatcher)(EXCEPTION_RECORD*,CONTEXT*),
                                                struct stack_layout *stack )
 {
-    struct syscall_frame *frame = amd64_thread_data()->syscall_frame;
+    if ((context->ContextFlags & CONTEXT_XSTATE) == CONTEXT_XSTATE)
+    {
+        CONTEXT_EX *xctx = (CONTEXT_EX *)context + 1;
+        XSTATE *xs, *src_xs, xs_buf;
 
-    memmove(&stack->context, context, sizeof(*context));
+        src_xs = xstate_from_context(context);
+        if ((CONTEXT *)src_xs >= &stack->context + 1 || src_xs + 1 <= (XSTATE *)&stack->context)
+        {
+            xs = src_xs;
+        }
+        else
+        {
+            xs = &xs_buf;
+            memcpy(xs, src_xs, sizeof(*xs));
+        }
+
+        memmove(&stack->context, context, sizeof(*context) + sizeof(*xctx));
+        assert(!((ULONG_PTR)stack->xstate & 63));
+        context_init_xstate(&stack->context, stack->xstate);
+        memcpy(stack->xstate, xs, sizeof(*xs));
+    }
+    else
+    {
+        memmove(&stack->context, context, sizeof(*context));
+    }
     memcpy(&stack->rec, rec, sizeof(*rec));
 
     /* fix up instruction pointer in context for EXCEPTION_BREAKPOINT */
     if (stack->rec.ExceptionCode == EXCEPTION_BREAKPOINT) stack->context.Rip--;
 
-    amd64_thread_data()->syscall_frame = frame->prev_frame;
+    amd64_thread_data()->syscall_frame = NULL;
     user_exception_dispatcher_trampoline( stack, dispatcher );
 }
 
 __ASM_GLOBAL_FUNC( call_user_exception_dispatcher,
                    "movq 0x98(%rdx),%r9\n\t" /* context->Rsp */
                    "andq $~0xf,%r9\n\t"
-                   "subq $0x630,%r9\n\t" /* sizeof(struct stack_layout) */
+                   "btl $6,0x30(%rdx)\n\t" /* context->ContextFlags, CONTEXT_XSTATE bit. */
+                   "jnc 1f\n\t"
+                   "subq $0x140,%r9\n\t" /* sizeof(XSTATE) */
+                   "andq $~63,%r9\n"
+                   "1:\tsubq $0x5b0,%r9\n\t" /* sizeof(struct stack_layout) */
                    "cmpq %rsp,%r9\n\t"
                    "cmovbq %r9,%rsp\n\t"
                    "jmp " __ASM_NAME("do_call_user_exception_dispatcher") "\n\t")
@@ -2064,8 +2163,10 @@ static inline DWORD is_privileged_instr( CONTEXT *context )
  *
  * Handle an interrupt.
  */
-static inline BOOL handle_interrupt( ucontext_t *sigcontext, EXCEPTION_RECORD *rec, CONTEXT *context )
+static inline BOOL handle_interrupt( ucontext_t *sigcontext, EXCEPTION_RECORD *rec, struct xcontext *xcontext )
 {
+    CONTEXT *context = &xcontext->c;
+
     switch (ERROR_sig(sigcontext) >> 3)
     {
     case 0x2c:
@@ -2090,7 +2191,68 @@ static inline BOOL handle_interrupt( ucontext_t *sigcontext, EXCEPTION_RECORD *r
     default:
         return FALSE;
     }
-    setup_raise_exception( sigcontext, rec, context );
+    setup_raise_exception( sigcontext, rec, xcontext );
+    return TRUE;
+}
+
+
+/***********************************************************************
+ *           handle_syscall_fault
+ *
+ * Handle a page fault happening during a system call.
+ */
+static BOOL handle_syscall_fault( ucontext_t *sigcontext, EXCEPTION_RECORD *rec, CONTEXT *context )
+{
+    struct syscall_frame *frame = amd64_thread_data()->syscall_frame;
+    __WINE_FRAME *wine_frame = (__WINE_FRAME *)NtCurrentTeb()->Tib.ExceptionList;
+    DWORD i;
+
+    if (!frame) return FALSE;
+
+    TRACE( "code=%x flags=%x addr=%p ip=%lx tid=%04x\n",
+           rec->ExceptionCode, rec->ExceptionFlags, rec->ExceptionAddress,
+           context->Rip, GetCurrentThreadId() );
+    for (i = 0; i < rec->NumberParameters; i++)
+        TRACE( " info[%d]=%016lx\n", i, rec->ExceptionInformation[i] );
+    TRACE(" rax=%016lx rbx=%016lx rcx=%016lx rdx=%016lx\n",
+          context->Rax, context->Rbx, context->Rcx, context->Rdx );
+    TRACE(" rsi=%016lx rdi=%016lx rbp=%016lx rsp=%016lx\n",
+          context->Rsi, context->Rdi, context->Rbp, context->Rsp );
+    TRACE("  r8=%016lx  r9=%016lx r10=%016lx r11=%016lx\n",
+          context->R8, context->R9, context->R10, context->R11 );
+    TRACE(" r12=%016lx r13=%016lx r14=%016lx r15=%016lx\n",
+          context->R12, context->R13, context->R14, context->R15 );
+
+    if ((char *)wine_frame < (char *)frame)
+    {
+        TRACE( "returning to handler\n" );
+        RCX_sig(sigcontext) = (ULONG_PTR)&wine_frame->jmp;
+        RDX_sig(sigcontext) = 1;
+        RIP_sig(sigcontext) = (ULONG_PTR)__wine_longjmp;
+    }
+    else
+    {
+        XMM_SAVE_AREA32 *fpu = FPU_sig(sigcontext);
+
+        TRACE( "returning to user mode ip=%016lx ret=%08x\n", frame->ret_addr, rec->ExceptionCode );
+        RAX_sig(sigcontext) = rec->ExceptionCode;
+        RBX_sig(sigcontext) = frame->rbx;
+        RSI_sig(sigcontext) = frame->rsi;
+        RDI_sig(sigcontext) = frame->rdi;
+        RBP_sig(sigcontext) = frame->rbp;
+        R12_sig(sigcontext) = frame->r12;
+        R13_sig(sigcontext) = frame->r13;
+        R14_sig(sigcontext) = frame->r14;
+        R15_sig(sigcontext) = frame->r15;
+        RSP_sig(sigcontext) = (ULONG_PTR)&frame->ret_addr;
+        RIP_sig(sigcontext) = frame->thunk_addr;
+        if (fpu)
+        {
+            fpu->MxCsr =frame->mxcsr;
+            memcpy( fpu->XmmRegisters + 6, frame->xmm, sizeof(frame->xmm) );
+        }
+        amd64_thread_data()->syscall_frame = NULL;
+    }
     return TRUE;
 }
 
@@ -2103,7 +2265,7 @@ static inline BOOL handle_interrupt( ucontext_t *sigcontext, EXCEPTION_RECORD *r
 static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
 {
     EXCEPTION_RECORD rec = { 0 };
-    CONTEXT context;
+    struct xcontext context;
     ucontext_t *ucontext = sigcontext;
 
     rec.ExceptionAddress = (void *)RIP_sig(ucontext);
@@ -2127,7 +2289,7 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
     case TRAP_x86_PROTFLT:   /* General protection fault */
         {
             WORD err = ERROR_sig(ucontext);
-            if (!err && (rec.ExceptionCode = is_privileged_instr( &context ))) break;
+            if (!err && (rec.ExceptionCode = is_privileged_instr( &context.c ))) break;
             if ((err & 7) == 2 && handle_interrupt( ucontext, &rec, &context )) return;
             rec.ExceptionCode = EXCEPTION_ACCESS_VIOLATION;
             rec.NumberParameters = 2;
@@ -2158,6 +2320,7 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
         rec.ExceptionCode = EXCEPTION_ILLEGAL_INSTRUCTION;
         break;
     }
+    if (handle_syscall_fault( sigcontext, &rec, &context.c )) return;
     setup_raise_exception( sigcontext, &rec, &context );
 }
 
@@ -2170,7 +2333,7 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
 static void trap_handler( int signal, siginfo_t *siginfo, void *sigcontext )
 {
     EXCEPTION_RECORD rec = { 0 };
-    CONTEXT context;
+    struct xcontext context;
     ucontext_t *ucontext = sigcontext;
 
     rec.ExceptionAddress = (void *)RIP_sig(ucontext);
@@ -2289,10 +2452,10 @@ static void quit_handler( int signal, siginfo_t *siginfo, void *ucontext )
  */
 static void usr1_handler( int signal, siginfo_t *siginfo, void *ucontext )
 {
-    CONTEXT context;
+    struct xcontext context;
 
     save_context( &context, ucontext );
-    wait_suspend( &context );
+    wait_suspend( &context.c );
     restore_context( &context, ucontext );
 }
 
@@ -2483,10 +2646,10 @@ static void init_thread_context( CONTEXT *context, LPTHREAD_START_ROUTINE entry,
 
 
 /***********************************************************************
- *           attach_thread
+ *           get_initial_context
  */
-PCONTEXT DECLSPEC_HIDDEN attach_thread( LPTHREAD_START_ROUTINE entry, void *arg,
-                                        BOOL suspend, void *relay )
+PCONTEXT DECLSPEC_HIDDEN get_initial_context( LPTHREAD_START_ROUTINE entry, void *arg,
+                                              BOOL suspend, void *relay )
 {
     CONTEXT *ctx;
 
@@ -2507,7 +2670,6 @@ PCONTEXT DECLSPEC_HIDDEN attach_thread( LPTHREAD_START_ROUTINE entry, void *arg,
     }
     pthread_sigmask( SIG_UNBLOCK, &server_block_set, NULL );
     ctx->ContextFlags = CONTEXT_FULL;
-    pLdrInitializeThunk( ctx, (void **)&ctx->Rcx, 0, 0 );
     return ctx;
 }
 
@@ -2537,19 +2699,14 @@ __ASM_GLOBAL_FUNC( signal_start_thread,
                    "movq %rsp,0x320(%rax)\n\t"      /* amd64_thread_data()->exit_frame */
                    /* switch to thread stack */
                    "movq 8(%rax),%rax\n\t"          /* NtCurrentTeb()->Tib.StackBase */
+                   "movq %r8,%rbx\n\t"              /* thunk */
                    "leaq -0x1000(%rax),%rsp\n\t"
                    /* attach dlls */
-                   "call " __ASM_NAME("attach_thread") "\n\t"
-                   "movq %rax,%rbx\n\t"
-                   "leaq -32(%rax),%rsp\n\t"
-                   /* clear the stack */
-                   "andq $~0xfff,%rax\n\t"  /* round down to page size */
-                   "movq %rax,%rdi\n\t"
-                   "call " __ASM_NAME("virtual_clear_thread_stack") "\n\t"
-                   /* switch to the initial context */
-                   "movl $1,%edx\n\t"
-                   "movq %rbx,%rcx\n\t"
-                   "call " __ASM_NAME("NtContinue") )
+                   "call " __ASM_NAME("get_initial_context") "\n\t"
+                   "movq %rax,%rcx\n\t"             /* context */
+                   "xorq %rax,%rax\n\t"
+                   "pushq %rax\n\t"
+                   "jmp *%rbx" )
 
 
 /***********************************************************************

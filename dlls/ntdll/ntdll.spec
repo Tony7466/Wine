@@ -693,6 +693,7 @@
 @ stdcall RtlGetDaclSecurityDescriptor(ptr ptr ptr ptr)
 @ stub RtlGetElementGenericTable
 # @ stub RtlGetElementGenericTableAvl
+@ stdcall RtlGetEnabledExtendedFeatures(int64)
 @ stdcall RtlGetExePath(wstr ptr)
 # @ stub RtlGetFirstRange
 @ stdcall RtlGetFrame()
@@ -1580,12 +1581,12 @@
 # or 'wine_' (for user-visible functions) to avoid namespace conflicts.
 
 # Server interface
-@ cdecl -norelay wine_server_call(ptr)
-@ cdecl wine_server_fd_to_handle(long long long ptr)
-@ cdecl wine_server_handle_to_fd(long long ptr ptr)
-@ cdecl wine_server_release_fd(long long)
-@ cdecl wine_server_send_fd(long)
-@ cdecl __wine_make_process_system()
+@ cdecl -syscall -norelay wine_server_call(ptr)
+@ cdecl -syscall wine_server_fd_to_handle(long long long ptr)
+@ cdecl -syscall wine_server_handle_to_fd(long long ptr ptr)
+@ cdecl -syscall wine_server_release_fd(long long)
+@ cdecl -syscall wine_server_send_fd(long)
+@ cdecl -syscall __wine_make_process_system()
 @ cdecl __wine_set_unix_funcs(long ptr)
 @ extern __wine_syscall_dispatcher
 @ extern -arch=i386 __wine_ldt_copy
@@ -1597,16 +1598,16 @@
 @ cdecl -norelay __wine_dbg_strdup(str)
 
 # Virtual memory
-@ cdecl __wine_locked_recvmsg(long ptr long)
+@ cdecl -syscall __wine_locked_recvmsg(long ptr long)
 
 # Version
-@ cdecl wine_get_version()
-@ cdecl wine_get_build_id()
-@ cdecl wine_get_host_version(ptr ptr)
+@ cdecl -syscall wine_get_version()
+@ cdecl -syscall wine_get_build_id()
+@ cdecl -syscall wine_get_host_version(ptr ptr)
 
 # Codepages
 @ cdecl __wine_get_unix_codepage()
 
 # Filesystem
-@ cdecl wine_nt_to_unix_file_name(ptr ptr ptr long)
-@ cdecl wine_unix_to_nt_file_name(str ptr ptr)
+@ cdecl -syscall wine_nt_to_unix_file_name(ptr ptr ptr long)
+@ cdecl -syscall wine_unix_to_nt_file_name(str ptr ptr)

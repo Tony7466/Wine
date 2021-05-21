@@ -185,11 +185,11 @@ DECL_HANDLER(alloc_console);
 DECL_HANDLER(free_console);
 DECL_HANDLER(attach_console);
 DECL_HANDLER(get_console_wait_event);
-DECL_HANDLER(set_console_input_info);
 DECL_HANDLER(append_console_input_history);
 DECL_HANDLER(get_console_input_history);
 DECL_HANDLER(create_console_output);
 DECL_HANDLER(send_console_signal);
+DECL_HANDLER(get_next_console_request);
 DECL_HANDLER(read_directory_changes);
 DECL_HANDLER(read_change);
 DECL_HANDLER(create_mapping);
@@ -474,11 +474,11 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_free_console,
     (req_handler)req_attach_console,
     (req_handler)req_get_console_wait_event,
-    (req_handler)req_set_console_input_info,
     (req_handler)req_append_console_input_history,
     (req_handler)req_get_console_input_history,
     (req_handler)req_create_console_output,
     (req_handler)req_send_console_signal,
+    (req_handler)req_get_next_console_request,
     (req_handler)req_read_directory_changes,
     (req_handler)req_read_change,
     (req_handler)req_create_mapping,
@@ -1116,16 +1116,6 @@ C_ASSERT( FIELD_OFFSET(struct get_console_wait_event_request, handle) == 12 );
 C_ASSERT( sizeof(struct get_console_wait_event_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_console_wait_event_reply, event) == 8 );
 C_ASSERT( sizeof(struct get_console_wait_event_reply) == 16 );
-C_ASSERT( FIELD_OFFSET(struct set_console_input_info_request, handle) == 12 );
-C_ASSERT( FIELD_OFFSET(struct set_console_input_info_request, mask) == 16 );
-C_ASSERT( FIELD_OFFSET(struct set_console_input_info_request, active_sb) == 20 );
-C_ASSERT( FIELD_OFFSET(struct set_console_input_info_request, history_mode) == 24 );
-C_ASSERT( FIELD_OFFSET(struct set_console_input_info_request, history_size) == 28 );
-C_ASSERT( FIELD_OFFSET(struct set_console_input_info_request, edition_mode) == 32 );
-C_ASSERT( FIELD_OFFSET(struct set_console_input_info_request, input_cp) == 36 );
-C_ASSERT( FIELD_OFFSET(struct set_console_input_info_request, output_cp) == 40 );
-C_ASSERT( FIELD_OFFSET(struct set_console_input_info_request, win) == 44 );
-C_ASSERT( sizeof(struct set_console_input_info_request) == 48 );
 C_ASSERT( FIELD_OFFSET(struct append_console_input_history_request, handle) == 12 );
 C_ASSERT( sizeof(struct append_console_input_history_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_console_input_history_request, handle) == 12 );
@@ -1144,6 +1134,15 @@ C_ASSERT( sizeof(struct create_console_output_reply) == 16 );
 C_ASSERT( FIELD_OFFSET(struct send_console_signal_request, signal) == 12 );
 C_ASSERT( FIELD_OFFSET(struct send_console_signal_request, group_id) == 16 );
 C_ASSERT( sizeof(struct send_console_signal_request) == 24 );
+C_ASSERT( FIELD_OFFSET(struct get_next_console_request_request, handle) == 12 );
+C_ASSERT( FIELD_OFFSET(struct get_next_console_request_request, signal) == 16 );
+C_ASSERT( FIELD_OFFSET(struct get_next_console_request_request, read) == 20 );
+C_ASSERT( FIELD_OFFSET(struct get_next_console_request_request, status) == 24 );
+C_ASSERT( sizeof(struct get_next_console_request_request) == 32 );
+C_ASSERT( FIELD_OFFSET(struct get_next_console_request_reply, code) == 8 );
+C_ASSERT( FIELD_OFFSET(struct get_next_console_request_reply, output) == 12 );
+C_ASSERT( FIELD_OFFSET(struct get_next_console_request_reply, out_size) == 16 );
+C_ASSERT( sizeof(struct get_next_console_request_reply) == 24 );
 C_ASSERT( FIELD_OFFSET(struct read_directory_changes_request, filter) == 12 );
 C_ASSERT( FIELD_OFFSET(struct read_directory_changes_request, subtree) == 16 );
 C_ASSERT( FIELD_OFFSET(struct read_directory_changes_request, want_data) == 20 );

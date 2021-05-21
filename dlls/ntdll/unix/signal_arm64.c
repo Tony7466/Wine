@@ -110,6 +110,24 @@ static DWORD64 get_fault_esr( ucontext_t *sigcontext )
     return 0;
 }
 
+#elif defined(__APPLE__)
+
+/* All Registers access - only for local access */
+# define REG_sig(reg_name, context) ((context)->uc_mcontext->__ss.__ ## reg_name)
+# define REGn_sig(reg_num, context) ((context)->uc_mcontext->__ss.__x[reg_num])
+
+/* Special Registers access  */
+# define SP_sig(context)            REG_sig(sp, context)    /* Stack pointer */
+# define PC_sig(context)            REG_sig(pc, context)    /* Program counter */
+# define PSTATE_sig(context)        REG_sig(cpsr, context)  /* Current State Register */
+# define FP_sig(context)            REG_sig(fp, context)    /* Frame pointer */
+# define LR_sig(context)            REG_sig(lr, context)    /* Link Register */
+
+static DWORD64 get_fault_esr( ucontext_t *sigcontext )
+{
+    return sigcontext->uc_mcontext->__es.__esr;
+}
+
 #endif /* linux */
 
 static pthread_key_t teb_key;
@@ -118,9 +136,7 @@ struct syscall_frame
 {
     ULONG64 x29;
     ULONG64 thunk_addr;
-    ULONG64 x0, x1, x2, x3, x4, x5, x6, x7, x8;
-    struct syscall_frame *prev_frame;
-    ULONG64 x19, x20, x21, x22, x23, x24, x25, x26, x27, x28;
+    ULONG64 x0, x1, x2, x3, x4, x5, x6, x7, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28;
     ULONG64 thunk_x29;
     ULONG64 ret_addr;
 };
@@ -156,11 +172,27 @@ NTSTATUS CDECL unwind_builtin_dll( ULONG type, DISPATCHER_CONTEXT *dispatch, CON
     unw_proc_info_t info;
     int rc;
 
+#ifdef __APPLE__
+    rc = unw_getcontext( &unw_context );
+    if (rc == UNW_ESUCCESS)
+        rc = unw_init_local( &cursor, &unw_context );
+    if (rc == UNW_ESUCCESS)
+    {
+        int i;
+        for (i = 0; i <= 28; i++)
+            unw_set_reg( &cursor, UNW_ARM64_X0 + i, context->u.X[i] );
+        unw_set_reg( &cursor, UNW_ARM64_FP, context->u.s.Fp );
+        unw_set_reg( &cursor, UNW_ARM64_LR, context->u.s.Lr );
+        unw_set_reg( &cursor, UNW_ARM64_SP, context->Sp );
+        unw_set_reg( &cursor, UNW_REG_IP,   context->Pc );
+    }
+#else
     memcpy( unw_context.uc_mcontext.regs, context->u.X, sizeof(context->u.X) );
     unw_context.uc_mcontext.sp = context->Sp;
     unw_context.uc_mcontext.pc = context->Pc;
 
     rc = unw_init_local( &cursor, &unw_context );
+#endif
     if (rc != UNW_ESUCCESS)
     {
         WARN( "setup failed: %d\n", rc );
@@ -198,6 +230,16 @@ NTSTATUS CDECL unwind_builtin_dll( ULONG type, DISPATCHER_CONTEXT *dispatch, CON
     dispatch->LanguageHandler  = (void *)info.handler;
     dispatch->HandlerData      = (void *)info.lsda;
     dispatch->EstablisherFrame = context->Sp;
+#ifdef __APPLE__
+    {
+        int i;
+        for (i = 0; i <= 28; i++)
+            unw_get_reg( &cursor, UNW_ARM64_X0 + i, (unw_word_t *)&context->u.X[i] );
+    }
+    unw_get_reg( &cursor, UNW_ARM64_FP,    (unw_word_t *)&context->u.s.Fp );
+    unw_get_reg( &cursor, UNW_ARM64_X30,   (unw_word_t *)&context->u.s.Lr );
+    unw_get_reg( &cursor, UNW_ARM64_SP,    (unw_word_t *)&context->Sp );
+#else
     unw_get_reg( &cursor, UNW_AARCH64_X0,  (unw_word_t *)&context->u.s.X0 );
     unw_get_reg( &cursor, UNW_AARCH64_X1,  (unw_word_t *)&context->u.s.X1 );
     unw_get_reg( &cursor, UNW_AARCH64_X2,  (unw_word_t *)&context->u.s.X2 );
@@ -230,7 +272,8 @@ NTSTATUS CDECL unwind_builtin_dll( ULONG type, DISPATCHER_CONTEXT *dispatch, CON
     unw_get_reg( &cursor, UNW_AARCH64_X29, (unw_word_t *)&context->u.s.Fp );
     unw_get_reg( &cursor, UNW_AARCH64_X30, (unw_word_t *)&context->u.s.Lr );
     unw_get_reg( &cursor, UNW_AARCH64_SP,  (unw_word_t *)&context->Sp );
-    context->Pc = context->u.s.Lr;
+#endif
+    unw_get_reg( &cursor, UNW_REG_IP,      (unw_word_t *)&context->Pc );
     context->ContextFlags |= CONTEXT_UNWOUND_TO_CALL;
 
     TRACE( "next function pc=%016lx%s\n", context->Pc, rc ? "" : " (last frame)" );
@@ -266,7 +309,8 @@ static void save_context( CONTEXT *context, const ucontext_t *sigcontext )
 {
     DWORD i;
 
-    context->ContextFlags = CONTEXT_FULL;
+    context->ContextFlags = (CONTEXT_FULL & ~CONTEXT_FLOATING_POINT) |
+                             CONTEXT_ARM64;
     context->u.s.Fp = FP_sig(sigcontext);     /* Frame pointer */
     context->u.s.Lr = LR_sig(sigcontext);     /* Link register */
     context->Sp     = SP_sig(sigcontext);     /* Stack pointer */
@@ -301,6 +345,7 @@ static void restore_context( const CONTEXT *context, ucontext_t *sigcontext )
  */
 static void save_fpu( CONTEXT *context, ucontext_t *sigcontext )
 {
+#ifdef linux
     struct fpsimd_context *fp = get_fpsimd_context( sigcontext );
 
     if (!fp) return;
@@ -308,6 +353,12 @@ static void save_fpu( CONTEXT *context, ucontext_t *sigcontext )
     context->Fpcr = fp->fpcr;
     context->Fpsr = fp->fpsr;
     memcpy( context->V, fp->vregs, sizeof(context->V) );
+#elif defined(__APPLE__)
+    context->ContextFlags |= CONTEXT_FLOATING_POINT;
+    context->Fpcr = sigcontext->uc_mcontext->__ns.__fpcr;
+    context->Fpsr = sigcontext->uc_mcontext->__ns.__fpsr;
+    memcpy( context->V, sigcontext->uc_mcontext->__ns.__v, sizeof(context->V) );
+#endif
 }
 
 
@@ -318,12 +369,18 @@ static void save_fpu( CONTEXT *context, ucontext_t *sigcontext )
  */
 static void restore_fpu( CONTEXT *context, ucontext_t *sigcontext )
 {
+#ifdef linux
     struct fpsimd_context *fp = get_fpsimd_context( sigcontext );
 
     if (!fp) return;
     fp->fpcr = context->Fpcr;
     fp->fpsr = context->Fpsr;
     memcpy( fp->vregs, context->V, sizeof(fp->vregs) );
+#elif defined(__APPLE__)
+    sigcontext->uc_mcontext->__ns.__fpcr = context->Fpcr;
+    sigcontext->uc_mcontext->__ns.__fpsr = context->Fpsr;
+    memcpy( sigcontext->uc_mcontext->__ns.__v, context->V, sizeof(context->V) );
+#endif
 }
 
 
@@ -462,6 +519,7 @@ NTSTATUS WINAPI NtSetContextThread( HANDLE handle, const CONTEXT *context )
     }
     if (self && ret == STATUS_SUCCESS)
     {
+        arm64_thread_data()->syscall_frame = NULL;
         InterlockedExchangePointer( (void **)&arm64_thread_data()->context, (void *)context );
         raise( SIGUSR2 );
     }
@@ -579,22 +637,45 @@ static void setup_exception( ucontext_t *sigcontext, EXCEPTION_RECORD *rec )
 
 
 /***********************************************************************
- *           call_user_apc
+ *           call_user_apc_dispatcher
  */
-void WINAPI call_user_apc( CONTEXT *context_ptr, ULONG_PTR ctx, ULONG_PTR arg1,
-                           ULONG_PTR arg2, PNTAPCFUNC func )
-{
-    CONTEXT context;
-
-    if (!context_ptr)
-    {
-        context.ContextFlags = CONTEXT_FULL;
-        NtGetContextThread( GetCurrentThread(), &context );
-        context.u.s.X0 = STATUS_USER_APC;
-        context_ptr = &context;
-    }
-    pKiUserApcDispatcher( context_ptr, ctx, arg1, arg2, func );
-}
+__ASM_GLOBAL_FUNC( call_user_apc_dispatcher,
+                   "mov x19, x0\n\t"             /* context */
+                   "mov x20, x1\n\t"             /* ctx */
+                   "mov x21, x2\n\t"             /* arg1 */
+                   "mov x22, x3\n\t"             /* arg2 */
+                   "mov x23, x4\n\t"             /* func */
+                   "mov x24, x5\n\t"             /* dispatcher */
+                   "bl " __ASM_NAME("NtCurrentTeb") "\n\t"
+                   "add x25, x0, #0x2f8\n\t"     /* arm64_thread_data()->syscall_frame */
+                   "cbz x19, 1f\n\t"
+                   "ldr x0, [x19, #0x100]\n\t"   /* context.Sp */
+                   "sub x0, x0, #0x430\n\t"      /* sizeof(CONTEXT) + offsetof(frame,thunk_x29) */
+                   "str xzr, [x25]\n\t"
+                   "mov sp, x0\n\t"
+                   "b 2f\n"
+                   "1:\tldr x0, [x25]\n\t"
+                   "sub x19, x0, #0x390\n\t"
+                   "mov x0, sp\n\t"
+                   "cmp x19, x0\n\t"
+                   "csel x0, x19, x0, lo\n\t"
+                   "mov sp, x0\n\t"
+                   "mov w2, #0x400000\n\t"       /* context.ContextFlags = CONTEXT_FULL */
+                   "movk w2, #7\n\t"
+                   "mov x1, x19\n\t"
+                   "str w2, [x19]\n\t"
+                   "mov x0, #~1\n\t"
+                   "bl " __ASM_NAME("NtGetContextThread") "\n\t"
+                   "mov w2, #0xc0\n\t"           /* context.X0 = STATUS_USER_APC */
+                   "str x2, [x19, #8]\n\t"
+                   "str xzr, [x25]\n\t"
+                   "mov x0, x19\n"               /* context */
+                   "2:\tldr lr, [x0, #0xf8]\n\t" /* context.Lr */
+                   "mov x1, x20\n\t"             /* ctx */
+                   "mov x2, x21\n\t"             /* arg1 */
+                   "mov x3, x22\n\t"             /* arg2 */
+                   "mov x4, x23\n\t"             /* func */
+                   "br x24" )
 
 
 /***********************************************************************
@@ -615,19 +696,93 @@ __ASM_GLOBAL_FUNC( call_user_exception_dispatcher,
                    "bl " __ASM_NAME("NtCurrentTeb") "\n\t"
                    "add x4, x0, #0x2f8\n\t"        /* arm64_thread_data()->syscall_frame */
                    "ldr x5, [x4]\n\t"
-                   "ldr x6, [x5, #88]\n\t"         /* frame->prev_frame */
-                   "str x6, [x4]\n\t"
+                   "str xzr, [x4]\n\t"
                    "mov x0, x19\n\t"
                    "mov x1, x20\n\t"
                    "mov x2, x21\n\t"
-                   "ldp x19, x20, [x5, #96]\n\t"   /* frame->x19,x20 */
-                   "ldp x21, x22, [x5, #112]\n\t"  /* frame->x21,x22 */
-                   "ldp x23, x24, [x5, #128]\n\t"  /* frame->x23,x24 */
-                   "ldp x25, x26, [x5, #144]\n\t"  /* frame->x25,x26 */
-                   "ldp x27, x28, [x5, #160]\n\t"  /* frame->x27,x28 */
-                   "ldp x29, x30, [x5, #176]\n\t"  /* frame->thunk_x29,ret_addr */
-                   "add sp, x5, #192\n\t"
+                   "ldp x19, x20, [x5, #64]\n\t"   /* frame->x19,x20 */
+                   "ldp x21, x22, [x5, #96]\n\t"   /* frame->x21,x22 */
+                   "ldp x23, x24, [x5, #112]\n\t"  /* frame->x23,x24 */
+                   "ldp x25, x26, [x5, #128]\n\t"  /* frame->x25,x26 */
+                   "ldp x27, x28, [x5, #144]\n\t"  /* frame->x27,x28 */
+                   "ldp x29, x30, [x5, #160]\n\t"  /* frame->thunk_x29,ret_addr */
+                   "add sp, x5, #176\n\t"
                    "br x2" )
+
+
+/***********************************************************************
+ *           handle_syscall_fault
+ *
+ * Handle a page fault happening during a system call.
+ */
+static BOOL handle_syscall_fault( ucontext_t *context, EXCEPTION_RECORD *rec )
+{
+    struct syscall_frame *frame = arm64_thread_data()->syscall_frame;
+    __WINE_FRAME *wine_frame = (__WINE_FRAME *)NtCurrentTeb()->Tib.ExceptionList;
+    DWORD i;
+
+    if (!frame) return FALSE;
+
+    TRACE( "code=%x flags=%x addr=%p pc=%p tid=%04x\n",
+           rec->ExceptionCode, rec->ExceptionFlags, rec->ExceptionAddress,
+           (void *)PC_sig(context), GetCurrentThreadId() );
+    for (i = 0; i < rec->NumberParameters; i++)
+        TRACE( " info[%d]=%016lx\n", i, rec->ExceptionInformation[i] );
+
+    TRACE("  x0=%016lx  x1=%016lx  x2=%016lx  x3=%016lx\n",
+          (DWORD64)REGn_sig(0, context), (DWORD64)REGn_sig(1, context),
+          (DWORD64)REGn_sig(2, context), (DWORD64)REGn_sig(3, context) );
+    TRACE("  x4=%016lx  x5=%016lx  x6=%016lx  x7=%016lx\n",
+          (DWORD64)REGn_sig(4, context), (DWORD64)REGn_sig(5, context),
+          (DWORD64)REGn_sig(6, context), (DWORD64)REGn_sig(7, context) );
+    TRACE("  x8=%016lx  x9=%016lx x10=%016lx x11=%016lx\n",
+          (DWORD64)REGn_sig(8, context), (DWORD64)REGn_sig(9, context),
+          (DWORD64)REGn_sig(10, context), (DWORD64)REGn_sig(11, context) );
+    TRACE(" x12=%016lx x13=%016lx x14=%016lx x15=%016lx\n",
+          (DWORD64)REGn_sig(12, context), (DWORD64)REGn_sig(13, context),
+          (DWORD64)REGn_sig(14, context), (DWORD64)REGn_sig(15, context) );
+    TRACE(" x16=%016lx x17=%016lx x18=%016lx x19=%016lx\n",
+          (DWORD64)REGn_sig(16, context), (DWORD64)REGn_sig(17, context),
+          (DWORD64)REGn_sig(18, context), (DWORD64)REGn_sig(19, context) );
+    TRACE(" x20=%016lx x21=%016lx x22=%016lx x23=%016lx\n",
+          (DWORD64)REGn_sig(20, context), (DWORD64)REGn_sig(21, context),
+          (DWORD64)REGn_sig(22, context), (DWORD64)REGn_sig(23, context) );
+    TRACE(" x24=%016lx x25=%016lx x26=%016lx x27=%016lx\n",
+          (DWORD64)REGn_sig(24, context), (DWORD64)REGn_sig(25, context),
+          (DWORD64)REGn_sig(26, context), (DWORD64)REGn_sig(27, context) );
+    TRACE(" x28=%016lx  fp=%016lx  lr=%016lx  sp=%016lx\n",
+          (DWORD64)REGn_sig(28, context), (DWORD64)FP_sig(context),
+          (DWORD64)LR_sig(context), (DWORD64)SP_sig(context) );
+
+    if ((char *)wine_frame < (char *)frame)
+    {
+        TRACE( "returning to handler\n" );
+        REGn_sig(0, context) = (ULONG_PTR)&wine_frame->jmp;
+        REGn_sig(1, context) = 1;
+        PC_sig(context)      = (ULONG_PTR)__wine_longjmp;
+    }
+    else
+    {
+        TRACE( "returning to user mode ip=%p ret=%08x\n", (void *)frame->ret_addr, rec->ExceptionCode );
+        REGn_sig(0, context)  = rec->ExceptionCode;
+        REGn_sig(19, context) = frame->x19;
+        REGn_sig(20, context) = frame->x20;
+        REGn_sig(21, context) = frame->x21;
+        REGn_sig(22, context) = frame->x22;
+        REGn_sig(23, context) = frame->x23;
+        REGn_sig(24, context) = frame->x24;
+        REGn_sig(25, context) = frame->x25;
+        REGn_sig(26, context) = frame->x26;
+        REGn_sig(27, context) = frame->x27;
+        REGn_sig(28, context) = frame->x28;
+        FP_sig(context)       = frame->x29;
+        LR_sig(context)       = frame->ret_addr;
+        SP_sig(context)       = (DWORD)&frame->thunk_x29;
+        PC_sig(context)       = frame->thunk_addr;
+        arm64_thread_data()->syscall_frame = NULL;
+    }
+    return TRUE;
+}
 
 
 /**********************************************************************
@@ -646,6 +801,7 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
     rec.ExceptionCode = virtual_handle_fault( siginfo->si_addr, rec.ExceptionInformation[0],
                                               (void *)SP_sig(context) );
     if (!rec.ExceptionCode) return;
+    if (handle_syscall_fault( context, &rec )) return;
     setup_exception( context, &rec );
 }
 
@@ -932,10 +1088,10 @@ static void init_thread_context( CONTEXT *context, LPTHREAD_START_ROUTINE entry,
 
 
 /***********************************************************************
- *           attach_thread
+ *           get_initial_context
  */
-PCONTEXT DECLSPEC_HIDDEN attach_thread( LPTHREAD_START_ROUTINE entry, void *arg,
-                                        BOOL suspend, void *relay )
+PCONTEXT DECLSPEC_HIDDEN get_initial_context( LPTHREAD_START_ROUTINE entry, void *arg,
+                                              BOOL suspend, void *relay )
 {
     CONTEXT *ctx;
 
@@ -955,7 +1111,6 @@ PCONTEXT DECLSPEC_HIDDEN attach_thread( LPTHREAD_START_ROUTINE entry, void *arg,
     }
     pthread_sigmask( SIG_UNBLOCK, &server_block_set, NULL );
     ctx->ContextFlags = CONTEXT_FULL;
-    pLdrInitializeThunk( ctx, (void **)&ctx->u.s.X0, 0, 0 );
     return ctx;
 }
 
@@ -965,43 +1120,18 @@ PCONTEXT DECLSPEC_HIDDEN attach_thread( LPTHREAD_START_ROUTINE entry, void *arg,
  */
 __ASM_GLOBAL_FUNC( signal_start_thread,
                    "stp x29, x30, [sp,#-16]!\n\t"
-                   "mov x18, x4\n\t"             /* teb */
+                   "mov x19, x4\n\t"             /* thunk */
+                   "mov x18, x5\n\t"             /* teb */
                    /* store exit frame */
                    "mov x29, sp\n\t"
-                   "str x29, [x4, #0x2f0]\n\t"  /* arm64_thread_data()->exit_frame */
+                   "str x29, [x5, #0x2f0]\n\t"  /* arm64_thread_data()->exit_frame */
                    /* switch to thread stack */
-                   "ldr x5, [x4, #8]\n\t"       /* teb->Tib.StackBase */
+                   "ldr x5, [x5, #8]\n\t"       /* teb->Tib.StackBase */
                    "sub sp, x5, #0x1000\n\t"
                    /* attach dlls */
-                   "bl " __ASM_NAME("attach_thread") "\n\t"
-                   "mov sp, x0\n\t"
-                   /* clear the stack */
-                   "and x0, x0, #~0xfff\n\t"  /* round down to page size */
-                   "bl " __ASM_NAME("virtual_clear_thread_stack") "\n\t"
-                   /* switch to the initial context */
-                   "mov x0, sp\n\t"
-                   "ldp q0, q1, [x0, #0x110]\n\t"      /* context->V[0,1] */
-                   "ldp q2, q3, [x0, #0x130]\n\t"      /* context->V[2,3] */
-                   "ldp q4, q5, [x0, #0x150]\n\t"      /* context->V[4,5] */
-                   "ldp q6, q7, [x0, #0x170]\n\t"      /* context->V[6,7] */
-                   "ldp q8, q9, [x0, #0x190]\n\t"      /* context->V[8,9] */
-                   "ldp q10, q11, [x0, #0x1b0]\n\t"    /* context->V[10,11] */
-                   "ldp q12, q13, [x0, #0x1d0]\n\t"    /* context->V[12,13] */
-                   "ldp q14, q15, [x0, #0x1f0]\n\t"    /* context->V[14,15] */
-                   "ldp q16, q17, [x0, #0x210]\n\t"    /* context->V[16,17] */
-                   "ldp q18, q19, [x0, #0x230]\n\t"    /* context->V[18,19] */
-                   "ldp q20, q21, [x0, #0x250]\n\t"    /* context->V[20,21] */
-                   "ldp q22, q23, [x0, #0x270]\n\t"    /* context->V[22,23] */
-                   "ldp q24, q25, [x0, #0x290]\n\t"    /* context->V[24,25] */
-                   "ldp q26, q27, [x0, #0x2b0]\n\t"    /* context->V[26,27] */
-                   "ldp q28, q29, [x0, #0x2d0]\n\t"    /* context->V[28,29] */
-                   "ldp q30, q31, [x0, #0x2f0]\n\t"    /* context->V[30,31] */
-                   "ldr w1, [x0, #0x310]\n\t"          /* context->Fpcr */
-                   "msr fpcr, x1\n\t"
-                   "ldr w1, [x0, #0x314]\n\t"          /* context->Fpsr */
-                   "msr fpsr, x1\n\t"
-                   "mov x1, #1\n\t"
-                   "b " __ASM_NAME("NtContinue") )
+                   "bl " __ASM_NAME("get_initial_context") "\n\t"
+                   "mov lr, #0\n\t"
+                   "br x19" )
 
 
 extern void DECLSPEC_NORETURN call_thread_exit_func( int status, void (*func)(int), TEB *teb );

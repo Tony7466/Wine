@@ -177,6 +177,38 @@ void X11DRV_Settings_Init(void)
     X11DRV_Settings_SetHandler(&nores_handler);
 }
 
+/* Initialize registry display settings when new display devices are added */
+void init_registry_display_settings(void)
+{
+    DEVMODEW dm = {.dmSize = sizeof(dm)};
+    DISPLAY_DEVICEW dd = {sizeof(dd)};
+    DWORD i = 0;
+    LONG ret;
+
+    while (EnumDisplayDevicesW(NULL, i++, &dd, 0))
+    {
+        /* Skip if the device already has registry display settings */
+        if (EnumDisplaySettingsExW(dd.DeviceName, ENUM_REGISTRY_SETTINGS, &dm, 0))
+            continue;
+
+        if (!EnumDisplaySettingsExW(dd.DeviceName, ENUM_CURRENT_SETTINGS, &dm, 0))
+        {
+            ERR("Failed to query current display settings for %s.\n", wine_dbgstr_w(dd.DeviceName));
+            continue;
+        }
+
+        TRACE("Device %s current display mode %ux%u %ubits %uHz at %d,%d.\n",
+              wine_dbgstr_w(dd.DeviceName), dm.dmPelsWidth, dm.dmPelsHeight, dm.dmBitsPerPel,
+              dm.dmDisplayFrequency, dm.u1.s2.dmPosition.x, dm.u1.s2.dmPosition.y);
+
+        ret = ChangeDisplaySettingsExW(dd.DeviceName, &dm, NULL,
+                                       CDS_GLOBAL | CDS_NORESET | CDS_UPDATEREGISTRY, NULL);
+        if (ret != DISP_CHANGE_SUCCESSFUL)
+            ERR("Failed to save registry display settings for %s, returned %d.\n",
+                wine_dbgstr_w(dd.DeviceName), ret);
+    }
+}
+
 static BOOL get_display_device_reg_key(const WCHAR *device_name, WCHAR *key, unsigned len)
 {
     static const WCHAR display[] = {'\\','\\','.','\\','D','I','S','P','L','A','Y'};
@@ -424,11 +456,14 @@ BOOL is_detached_mode(const DEVMODEW *mode)
 }
 
 /* Get the full display mode with all the necessary fields set.
- * Return NULL on failure. Caller should free the returned mode. */
-static DEVMODEW *get_full_mode(ULONG_PTR id, const DEVMODEW *dev_mode)
+ * Return NULL on failure. Caller should call free_full_mode() to free the returned mode. */
+static DEVMODEW *get_full_mode(ULONG_PTR id, DEVMODEW *dev_mode)
 {
     DEVMODEW *modes, *full_mode, *found_mode = NULL;
     UINT mode_count, mode_idx;
+
+    if (is_detached_mode(dev_mode))
+        return dev_mode;
 
     if (!handler.get_modes(id, 0, &modes, &mode_count))
         return NULL;
@@ -438,7 +473,9 @@ static DEVMODEW *get_full_mode(ULONG_PTR id, const DEVMODEW *dev_mode)
     {
         found_mode = (DEVMODEW *)((BYTE *)modes + (sizeof(*modes) + modes[0].dmDriverExtra) * mode_idx);
 
-        if (dev_mode->dmFields & DM_BITSPERPEL && found_mode->dmBitsPerPel != dev_mode->dmBitsPerPel)
+        if (dev_mode->dmFields & DM_BITSPERPEL &&
+            dev_mode->dmBitsPerPel &&
+            found_mode->dmBitsPerPel != dev_mode->dmBitsPerPel)
             continue;
         if (dev_mode->dmFields & DM_PELSWIDTH && found_mode->dmPelsWidth != dev_mode->dmPelsWidth)
             continue;
@@ -468,7 +505,16 @@ static DEVMODEW *get_full_mode(ULONG_PTR id, const DEVMODEW *dev_mode)
 
     memcpy(full_mode, found_mode, sizeof(*found_mode) + found_mode->dmDriverExtra);
     handler.free_modes(modes);
+
+    full_mode->dmFields |= DM_POSITION;
+    full_mode->u1.s2.dmPosition = dev_mode->u1.s2.dmPosition;
     return full_mode;
+}
+
+static void free_full_mode(DEVMODEW *mode)
+{
+    if (!is_detached_mode(mode))
+        heap_free(mode);
 }
 
 static LONG get_display_settings(struct x11drv_display_setting **new_displays,
@@ -749,19 +795,9 @@ static LONG apply_display_settings(struct x11drv_display_setting *displays, INT 
         if ((attached_mode && !do_attach) || (!attached_mode && do_attach))
             continue;
 
-        if (attached_mode)
-        {
-            full_mode = get_full_mode(displays[display_idx].id, &displays[display_idx].desired_mode);
-            if (!full_mode)
-                return DISP_CHANGE_BADMODE;
-
-            full_mode->dmFields |= DM_POSITION;
-            full_mode->u1.s2.dmPosition = displays[display_idx].desired_mode.u1.s2.dmPosition;
-        }
-        else
-        {
-            full_mode = &displays[display_idx].desired_mode;
-        }
+        full_mode = get_full_mode(displays[display_idx].id, &displays[display_idx].desired_mode);
+        if (!full_mode)
+            return DISP_CHANGE_BADMODE;
 
         TRACE("handler:%s changing %s to position:(%d,%d) resolution:%ux%u frequency:%uHz "
               "depth:%ubits orientation:%#x.\n", handler.name,
@@ -771,8 +807,7 @@ static LONG apply_display_settings(struct x11drv_display_setting *displays, INT 
               full_mode->u1.s2.dmDisplayOrientation);
 
         ret = handler.set_current_mode(displays[display_idx].id, full_mode);
-        if (attached_mode)
-            heap_free(full_mode);
+        free_full_mode(full_mode);
         if (ret != DISP_CHANGE_SUCCESSFUL)
             return ret;
     }
@@ -802,6 +837,7 @@ LONG CDECL X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
 {
     struct x11drv_display_setting *displays;
     INT display_idx, display_count;
+    DEVMODEW *full_mode;
     LONG ret;
 
     ret = get_display_settings(&displays, &display_count, devname, devmode);
@@ -814,12 +850,22 @@ LONG CDECL X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
         {
             if (!lstrcmpiW(displays[display_idx].desired_mode.dmDeviceName, devname))
             {
-                if (!write_registry_settings(devname, &displays[display_idx].desired_mode))
+                full_mode = get_full_mode(displays[display_idx].id, &displays[display_idx].desired_mode);
+                if (!full_mode)
+                {
+                    heap_free(displays);
+                    return DISP_CHANGE_BADMODE;
+                }
+
+                if (!write_registry_settings(devname, full_mode))
                 {
                     ERR("Failed to write %s display settings to registry.\n", wine_dbgstr_w(devname));
+                    free_full_mode(full_mode);
                     heap_free(displays);
                     return DISP_CHANGE_NOTUPDATED;
                 }
+
+                free_full_mode(full_mode);
                 break;
             }
         }

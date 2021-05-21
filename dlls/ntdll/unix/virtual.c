@@ -92,6 +92,8 @@ struct file_view
     unsigned int  protect;       /* protection for all pages at allocation time and SEC_* flags */
 };
 
+#define __EXCEPT_SYSCALL __EXCEPT_HANDLER(0)
+
 /* per-page protection flags */
 #define VPROT_READ       0x01
 #define VPROT_WRITE      0x02
@@ -2179,9 +2181,9 @@ static NTSTATUS map_image_into_view( struct file_view *view, int fd, void *orig_
  *
  * Map a file section into memory.
  */
-NTSTATUS CDECL virtual_map_section( HANDLE handle, PVOID *addr_ptr, unsigned short zero_bits_64, SIZE_T commit_size,
-                              const LARGE_INTEGER *offset_ptr, SIZE_T *size_ptr, ULONG alloc_type,
-                              ULONG protect, pe_image_info_t *image_info )
+static NTSTATUS virtual_map_section( HANDLE handle, PVOID *addr_ptr, unsigned short zero_bits_64,
+                                     SIZE_T commit_size, const LARGE_INTEGER *offset_ptr, SIZE_T *size_ptr,
+                                     ULONG alloc_type, ULONG protect, pe_image_info_t *image_info )
 {
     NTSTATUS res;
     mem_size_t full_size;
@@ -2818,21 +2820,6 @@ done:
 
 
 /***********************************************************************
- *           virtual_clear_thread_stack
- *
- * Clear the stack contents before calling the main entry point, some broken apps need that.
- */
-void virtual_clear_thread_stack( void *stack_end )
-{
-    void *stack = NtCurrentTeb()->Tib.StackLimit;
-    size_t size = (char *)stack_end - (char *)stack;
-
-    wine_anon_mmap( stack, size, PROT_READ | PROT_WRITE, MAP_FIXED );
-    if (force_exec_prot) mprotect( stack, size, PROT_READ | PROT_WRITE | PROT_EXEC );
-}
-
-
-/***********************************************************************
  *           virtual_map_user_shared_data
  */
 void virtual_map_user_shared_data(void)
@@ -3085,9 +3072,9 @@ ssize_t virtual_locked_pread( int fd, void *addr, size_t size, off_t offset )
 
 
 /***********************************************************************
- *           virtual_locked_recvmsg
+ *           __wine_locked_recvmsg   (NTDLL.@)
  */
-ssize_t CDECL virtual_locked_recvmsg( int fd, struct msghdr *hdr, int flags )
+ssize_t CDECL __wine_locked_recvmsg( int fd, struct msghdr *hdr, int flags )
 {
     sigset_t sigset;
     size_t i;
@@ -3157,7 +3144,7 @@ BOOL virtual_check_buffer_for_read( const void *ptr, SIZE_T size )
         dummy = p[0];
         dummy = p[count - 1];
     }
-    __EXCEPT_PAGE_FAULT
+    __EXCEPT_SYSCALL
     {
         return FALSE;
     }
@@ -3190,7 +3177,7 @@ BOOL virtual_check_buffer_for_write( void *ptr, SIZE_T size )
         p[0] |= 0;
         p[count - 1] |= 0;
     }
-    __EXCEPT_PAGE_FAULT
+    __EXCEPT_SYSCALL
     {
         return FALSE;
     }
@@ -3212,7 +3199,7 @@ BOOL WINAPI IsBadStringPtrA( LPCSTR str, UINT_PTR max )
         volatile const char *p = str;
         while (p != str + max) if (!*p++) break;
     }
-    __EXCEPT_PAGE_FAULT
+    __EXCEPT_SYSCALL
     {
         return TRUE;
     }
@@ -3234,7 +3221,7 @@ BOOL WINAPI IsBadStringPtrW( LPCWSTR str, UINT_PTR max )
         volatile const WCHAR *p = str;
         while (p != str + max) if (!*p++) break;
     }
-    __EXCEPT_PAGE_FAULT
+    __EXCEPT_SYSCALL
     {
         return TRUE;
     }
@@ -4176,7 +4163,7 @@ void virtual_fill_image_information( const pe_image_info_t *pe_info, SECTION_IMA
     info->DllCharacteristics   = pe_info->dll_charact;
     info->Machine              = pe_info->machine;
     info->ImageContainsCode    = pe_info->contains_code;
-    info->ImageFlags           = pe_info->image_flags & ~(IMAGE_FLAGS_WineBuiltin|IMAGE_FLAGS_WineFakeDll);
+    info->ImageFlags           = pe_info->image_flags;
     info->LoaderFlags          = pe_info->loader_flags;
     info->ImageFileSize        = pe_info->file_size;
     info->CheckSum             = pe_info->checksum;

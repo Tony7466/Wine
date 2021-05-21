@@ -50,6 +50,10 @@
 #define IOCTL_CONDRV_GET_RENDERER_EVENTS   CTL_CODE(FILE_DEVICE_CONSOLE, 70, METHOD_BUFFERED, FILE_READ_PROPERTIES)
 #define IOCTL_CONDRV_ATTACH_RENDERER       CTL_CODE(FILE_DEVICE_CONSOLE, 71, METHOD_BUFFERED, FILE_READ_PROPERTIES)
 
+/* ioctls used for communication between driver and host */
+#define IOCTL_CONDRV_INIT_OUTPUT           CTL_CODE(FILE_DEVICE_CONSOLE, 90, METHOD_BUFFERED, 0)
+#define IOCTL_CONDRV_CLOSE_OUTPUT          CTL_CODE(FILE_DEVICE_CONSOLE, 91, METHOD_BUFFERED, 0)
+
 /* console handle type */
 typedef unsigned int condrv_handle_t;
 
@@ -86,6 +90,13 @@ struct condrv_input_info_params
     unsigned int  mask;               /* setting mask */
     struct condrv_input_info info;    /* input_info */
 };
+
+#define SET_CONSOLE_INPUT_INFO_EDITION_MODE     0x01
+#define SET_CONSOLE_INPUT_INFO_INPUT_CODEPAGE   0x02
+#define SET_CONSOLE_INPUT_INFO_OUTPUT_CODEPAGE  0x04
+#define SET_CONSOLE_INPUT_INFO_WIN              0x08
+#define SET_CONSOLE_INPUT_INFO_HISTORY_MODE     0x10
+#define SET_CONSOLE_INPUT_INFO_HISTORY_SIZE     0x20
 
 /* IOCTL_CONDRV_WRITE_OUTPUT and IOCTL_CONDRV_READ_OUTPUT params */
 struct condrv_output_params

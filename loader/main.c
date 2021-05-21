@@ -42,6 +42,8 @@
 
 extern char **environ;
 
+extern const char *wine_get_build_id(void);
+
 /* the preloader will set this variable */
 const struct wine_preload_info *wine_main_preload_info = NULL;
 
@@ -216,13 +218,15 @@ static const char *get_self_exe( char *argv0 )
         for (p = strtok( path, ":" ); p; p = strtok( NULL, ":" ))
         {
             char *name = build_path( p, argv0 );
-            int found = !access( name, X_OK );
+            if (!access( name, X_OK ))
+            {
+                free( path );
+                return name;
+            }
             free( name );
-            if (found) break;
         }
-        if (p) p = strdup( p );
         free( path );
-        return p;
+        return NULL;
     }
     return argv0;
 #endif

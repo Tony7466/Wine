@@ -2056,20 +2056,6 @@ static void dump_get_console_wait_event_reply( const struct get_console_wait_eve
     fprintf( stderr, " event=%04x", req->event );
 }
 
-static void dump_set_console_input_info_request( const struct set_console_input_info_request *req )
-{
-    fprintf( stderr, " handle=%04x", req->handle );
-    fprintf( stderr, ", mask=%d", req->mask );
-    fprintf( stderr, ", active_sb=%04x", req->active_sb );
-    fprintf( stderr, ", history_mode=%d", req->history_mode );
-    fprintf( stderr, ", history_size=%d", req->history_size );
-    fprintf( stderr, ", edition_mode=%d", req->edition_mode );
-    fprintf( stderr, ", input_cp=%d", req->input_cp );
-    fprintf( stderr, ", output_cp=%d", req->output_cp );
-    fprintf( stderr, ", win=%08x", req->win );
-    dump_varargs_unicode_str( ", title=", cur_size );
-}
-
 static void dump_append_console_input_history_request( const struct append_console_input_history_request *req )
 {
     fprintf( stderr, " handle=%04x", req->handle );
@@ -2106,6 +2092,23 @@ static void dump_send_console_signal_request( const struct send_console_signal_r
 {
     fprintf( stderr, " signal=%d", req->signal );
     fprintf( stderr, ", group_id=%04x", req->group_id );
+}
+
+static void dump_get_next_console_request_request( const struct get_next_console_request_request *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+    fprintf( stderr, ", signal=%d", req->signal );
+    fprintf( stderr, ", read=%d", req->read );
+    fprintf( stderr, ", status=%08x", req->status );
+    dump_varargs_bytes( ", out_data=", cur_size );
+}
+
+static void dump_get_next_console_request_reply( const struct get_next_console_request_reply *req )
+{
+    fprintf( stderr, " code=%08x", req->code );
+    fprintf( stderr, ", output=%08x", req->output );
+    fprintf( stderr, ", out_size=%u", req->out_size );
+    dump_varargs_bytes( ", in_data=", cur_size );
 }
 
 static void dump_read_directory_changes_request( const struct read_directory_changes_request *req )
@@ -4495,11 +4498,11 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_free_console_request,
     (dump_func)dump_attach_console_request,
     (dump_func)dump_get_console_wait_event_request,
-    (dump_func)dump_set_console_input_info_request,
     (dump_func)dump_append_console_input_history_request,
     (dump_func)dump_get_console_input_history_request,
     (dump_func)dump_create_console_output_request,
     (dump_func)dump_send_console_signal_request,
+    (dump_func)dump_get_next_console_request_request,
     (dump_func)dump_read_directory_changes_request,
     (dump_func)dump_read_change_request,
     (dump_func)dump_create_mapping_request,
@@ -4782,10 +4785,10 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     NULL,
     (dump_func)dump_get_console_wait_event_reply,
     NULL,
-    NULL,
     (dump_func)dump_get_console_input_history_reply,
     (dump_func)dump_create_console_output_reply,
     NULL,
+    (dump_func)dump_get_next_console_request_reply,
     NULL,
     (dump_func)dump_read_change_reply,
     (dump_func)dump_create_mapping_reply,
@@ -5067,11 +5070,11 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "free_console",
     "attach_console",
     "get_console_wait_event",
-    "set_console_input_info",
     "append_console_input_history",
     "get_console_input_history",
     "create_console_output",
     "send_console_signal",
+    "get_next_console_request",
     "read_directory_changes",
     "read_change",
     "create_mapping",

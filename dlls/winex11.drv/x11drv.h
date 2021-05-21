@@ -641,6 +641,7 @@ typedef int (*x11drv_error_callback)( Display *display, XErrorEvent *event, void
 extern void X11DRV_expect_error( Display *display, x11drv_error_callback callback, void *arg ) DECLSPEC_HIDDEN;
 extern int X11DRV_check_error(void) DECLSPEC_HIDDEN;
 extern void X11DRV_X_to_window_rect( struct x11drv_win_data *data, RECT *rect, int x, int y, int cx, int cy ) DECLSPEC_HIDDEN;
+extern BOOL is_window_rect_full_screen( const RECT *rect ) DECLSPEC_HIDDEN;
 extern POINT virtual_screen_to_root( INT x, INT y ) DECLSPEC_HIDDEN;
 extern POINT root_to_virtual_screen( INT x, INT y ) DECLSPEC_HIDDEN;
 extern RECT get_virtual_screen_rect(void) DECLSPEC_HIDDEN;
@@ -701,6 +702,7 @@ extern void X11DRV_Settings_SetHandler(const struct x11drv_settings_handler *han
 
 extern void X11DRV_init_desktop( Window win, unsigned int width, unsigned int height ) DECLSPEC_HIDDEN;
 extern void X11DRV_resize_desktop(BOOL) DECLSPEC_HIDDEN;
+extern void init_registry_display_settings(void) DECLSPEC_HIDDEN;
 extern BOOL is_virtual_desktop(void) DECLSPEC_HIDDEN;
 extern BOOL is_desktop_fullscreen(void) DECLSPEC_HIDDEN;
 extern BOOL is_detached_mode(const DEVMODEW *) DECLSPEC_HIDDEN;
@@ -792,6 +794,7 @@ struct x11drv_display_device_handler
 };
 
 extern HANDLE get_display_device_init_mutex(void) DECLSPEC_HIDDEN;
+extern BOOL get_host_primary_gpu(struct x11drv_gpu *gpu) DECLSPEC_HIDDEN;
 extern void release_display_device_init_mutex(HANDLE) DECLSPEC_HIDDEN;
 extern void X11DRV_DisplayDevices_SetHandler(const struct x11drv_display_device_handler *handler) DECLSPEC_HIDDEN;
 extern void X11DRV_DisplayDevices_Init(BOOL force) DECLSPEC_HIDDEN;
@@ -817,13 +820,6 @@ static inline BOOL is_window_rect_mapped( const RECT *rect )
             rect->top < virtual_rect.bottom &&
             max( rect->right, rect->left + 1 ) > virtual_rect.left &&
             max( rect->bottom, rect->top + 1 ) > virtual_rect.top);
-}
-
-static inline BOOL is_window_rect_fullscreen( const RECT *rect )
-{
-    RECT primary_rect = get_primary_monitor_rect();
-    return (rect->left <= primary_rect.left && rect->right >= primary_rect.right &&
-            rect->top <= primary_rect.top && rect->bottom >= primary_rect.bottom);
 }
 
 #endif  /* __WINE_X11DRV_H */

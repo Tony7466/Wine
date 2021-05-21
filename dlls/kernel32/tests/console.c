@@ -24,6 +24,8 @@
 #include <winternl.h>
 #include <stdio.h>
 
+static void (WINAPI *pClosePseudoConsole)(HPCON);
+static HRESULT (WINAPI *pCreatePseudoConsole)(COORD,HANDLE,HANDLE,DWORD,HPCON*);
 static BOOL (WINAPI *pGetConsoleInputExeNameA)(DWORD, LPSTR);
 static DWORD (WINAPI *pGetConsoleProcessList)(LPDWORD, DWORD);
 static HANDLE (WINAPI *pOpenConsoleW)(LPCWSTR,DWORD,BOOL,DWORD);
@@ -68,6 +70,8 @@ static void init_function_pointers(void)
     if(!p##func) trace("GetProcAddress(hKernel32, '%s') failed\n", #func);
 
     hKernel32 = GetModuleHandleA("kernel32.dll");
+    KERNEL32_GET_PROC(ClosePseudoConsole);
+    KERNEL32_GET_PROC(CreatePseudoConsole);
     KERNEL32_GET_PROC(GetConsoleInputExeNameA);
     KERNEL32_GET_PROC(GetConsoleProcessList);
     KERNEL32_GET_PROC(OpenConsoleW);
@@ -2255,9 +2259,9 @@ static void check_region_(unsigned int line, const SMALL_RECT *region, unsigned 
     else
         ok_(__FILE__,line)(region->Right == -right || region->Right == region->Left - 1,
                            "Right = %u, expected %d\n", region->Right, right);
-    if (bottom >= 0)
+    if (bottom > 0)
         ok_(__FILE__,line)(region->Bottom == bottom, "Bottom = %u, expected %u\n", region->Bottom, bottom);
-    else
+    else if (bottom < 0)
         ok_(__FILE__,line)(region->Bottom == -bottom || region->Bottom == region->Top - 1,
                            "Bottom = %u, expected %d\n", region->Bottom, bottom);
 }
@@ -2862,7 +2866,7 @@ static void test_ReadConsoleOutput(HANDLE console)
     set_region(&region, 200, 7, 15, 211);
     ret = ReadConsoleOutputW(console, char_info_buf, size, coord, &region);
     ok(!ret, "ReadConsoleOutputW returned: %x(%u)\n", ret, GetLastError());
-    check_region(&region, 200, 7, -15, -211);
+    check_region(&region, 200, 7, -15, 0);
 
     size.X = 23;
     size.Y = 17;
@@ -3641,11 +3645,23 @@ static void test_FreeConsole(void)
     ok(GetLastError() == ERROR_INVALID_HANDLE, "last error %u\n", GetLastError());
 
     SetLastError(0xdeadbeef);
+    ret = SetConsoleCP(GetOEMCP());
+    ok(!ret && GetLastError() == ERROR_INVALID_HANDLE, "SetConsoleCP returned %x(%u)\n", ret, GetLastError());
+
+    SetLastError(0xdeadbeef);
+    ret = SetConsoleOutputCP(GetOEMCP());
+    ok(!ret && GetLastError() == ERROR_INVALID_HANDLE, "SetConsoleCP returned %x(%u)\n", ret, GetLastError());
+
+    SetLastError(0xdeadbeef);
     memset( title, 0xc0, sizeof(title) );
     size = GetConsoleTitleW( title, ARRAY_SIZE(title) );
     ok(!size, "GetConsoleTitleW returned %u\n", size);
     ok(title[0] == 0xc0c0, "title byffer changed\n");
     ok(GetLastError() == ERROR_INVALID_HANDLE, "last error %u\n", GetLastError());
+
+    SetLastError(0xdeadbeef);
+    ret = SetConsoleTitleW( L"test" );
+    ok(!ret && GetLastError() == ERROR_INVALID_HANDLE, "SetConsoleTitleW returned %x(%u)\n", ret, GetLastError());
 
     SetLastError(0xdeadbeef);
     hwnd = GetConsoleWindow();
@@ -3929,11 +3945,126 @@ static void test_AllocConsole(void)
     CloseHandle(pipe_write);
 }
 
+static void test_pseudo_console_child(HANDLE input, HANDLE output)
+{
+    DWORD mode;
+    BOOL ret;
+
+    ret = GetConsoleMode(input, &mode);
+    ok(ret, "GetConsoleMode failed: %u\n", GetLastError());
+    ok(mode == (ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_MOUSE_INPUT |
+                ENABLE_INSERT_MODE | ENABLE_QUICK_EDIT_MODE | ENABLE_EXTENDED_FLAGS | ENABLE_AUTO_POSITION),
+       "mode = %x\n", mode);
+
+    ret = SetConsoleMode(input, mode & ~ENABLE_AUTO_POSITION);
+    ok(ret, "SetConsoleMode failed: %u\n", GetLastError());
+
+    ret = GetConsoleMode(input, &mode);
+    ok(ret, "GetConsoleMode failed: %u\n", GetLastError());
+    ok(mode == (ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_MOUSE_INPUT |
+                ENABLE_INSERT_MODE | ENABLE_QUICK_EDIT_MODE | ENABLE_EXTENDED_FLAGS), "mode = %x\n", mode);
+
+    ret = SetConsoleMode(input, mode | ENABLE_AUTO_POSITION);
+    ok(ret, "SetConsoleMode failed: %u\n", GetLastError());
+
+    ret = GetConsoleMode(output, &mode);
+    ok(ret, "GetConsoleMode failed: %u\n", GetLastError());
+    ok(mode == (ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT), "mode = %x\n", mode);
+
+    ret = SetConsoleMode(output, mode & ~ENABLE_WRAP_AT_EOL_OUTPUT);
+    ok(ret, "SetConsoleMode failed: %u\n", GetLastError());
+
+    ret = GetConsoleMode(output, &mode);
+    ok(ret, "GetConsoleMode failed: %u\n", GetLastError());
+    ok(mode == ENABLE_PROCESSED_OUTPUT, "mode = %x\n", mode);
+
+    ret = SetConsoleMode(output, mode | ENABLE_WRAP_AT_EOL_OUTPUT);
+    ok(ret, "SetConsoleMode failed: %u\n", GetLastError());
+
+    test_console_title();
+    test_WriteConsoleInputW(input);
+}
+
+static DWORD WINAPI read_pipe_proc( void *handle )
+{
+    char buf[64];
+    DWORD size;
+    while (ReadFile(handle, buf, sizeof(buf), &size, NULL));
+    ok(GetLastError() == ERROR_BROKEN_PIPE, "ReadFile returned %u\n", GetLastError());
+    CloseHandle(handle);
+    return 0;
+}
+
+static void test_pseudo_console(void)
+{
+    STARTUPINFOEXA startup = {{ sizeof(startup) }};
+    HANDLE console_pipe, console_pipe2, thread;
+    char **argv, cmdline[MAX_PATH];
+    PROCESS_INFORMATION info;
+    HPCON pseudo_console;
+    SIZE_T attr_size;
+    COORD size;
+    BOOL ret;
+    HRESULT hres;
+
+    if (!pCreatePseudoConsole)
+    {
+        win_skip("CreatePseudoConsole not available\n");
+        return;
+    }
+
+    console_pipe = CreateNamedPipeW(L"\\\\.\\pipe\\pseudoconsoleconn", PIPE_ACCESS_DUPLEX,
+                                    PIPE_WAIT | PIPE_TYPE_BYTE, 1, 4096, 4096, NMPWAIT_USE_DEFAULT_WAIT, NULL);
+    ok(console_pipe != INVALID_HANDLE_VALUE, "CreateNamedPipeW failed: %u\n", GetLastError());
+
+    console_pipe2 = CreateFileW(L"\\\\.\\pipe\\pseudoconsoleconn", GENERIC_READ | GENERIC_WRITE, 0, NULL,
+                                OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+    ok(console_pipe2 != INVALID_HANDLE_VALUE, "CreateFile failed: %u\n", GetLastError());
+
+    thread = CreateThread( NULL, 0, read_pipe_proc, console_pipe, 0, NULL );
+    CloseHandle(thread);
+
+    size.X = 0;
+    size.Y = 30;
+    hres = pCreatePseudoConsole(size, console_pipe2, console_pipe2, 0, &pseudo_console);
+    ok(hres == E_INVALIDARG, "CreatePseudoConsole failed: %08x\n", hres);
+
+    size.X = 40;
+    size.Y = 0;
+    hres = pCreatePseudoConsole(size, console_pipe2, console_pipe2, 0, &pseudo_console);
+    ok(hres == E_INVALIDARG, "CreatePseudoConsole failed: %08x\n", hres);
+
+    size.X = 40;
+    size.Y = 30;
+    hres = pCreatePseudoConsole(size, console_pipe2, console_pipe2, 0, &pseudo_console);
+    ok(hres == S_OK, "CreatePseudoConsole failed: %08x\n", hres);
+    CloseHandle(console_pipe2);
+
+    InitializeProcThreadAttributeList(NULL, 1, 0, &attr_size);
+    startup.lpAttributeList = HeapAlloc(GetProcessHeap(), 0, attr_size);
+    InitializeProcThreadAttributeList(startup.lpAttributeList, 1, 0, &attr_size);
+    UpdateProcThreadAttribute(startup.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, pseudo_console,
+                              sizeof(pseudo_console), NULL, NULL);
+
+    winetest_get_mainargs(&argv);
+    sprintf(cmdline, "\"%s\" %s --pseudo-console", argv[0], argv[1]);
+    ret = CreateProcessA(NULL, cmdline, NULL, NULL, FALSE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &startup.StartupInfo, &info);
+    ok(ret, "CreateProcessW failed: %u\n", GetLastError());
+
+    CloseHandle(info.hThread);
+    HeapFree(GetProcessHeap(), 0, startup.lpAttributeList);
+    wait_child_process(info.hProcess);
+    CloseHandle(info.hProcess);
+
+    pClosePseudoConsole(pseudo_console);
+}
+
 START_TEST(console)
 {
     HANDLE hConIn, hConOut;
     BOOL ret, test_current;
     CONSOLE_SCREEN_BUFFER_INFO	sbi;
+    BOOL using_pseudo_console;
     DWORD size;
     char **argv;
     int argc;
@@ -3957,8 +4088,9 @@ START_TEST(console)
     }
 
     test_current = argc >= 3 && !strcmp(argv[2], "--current");
+    using_pseudo_console = argc >= 3 && !strcmp(argv[2], "--pseudo-console");
 
-    if (!test_current)
+    if (!test_current && !using_pseudo_console)
     {
         static const char font_name[] = "Lucida Console";
         HKEY console_key;
@@ -4023,6 +4155,12 @@ START_TEST(console)
     /* now verify everything's ok */
     ok(hConIn != INVALID_HANDLE_VALUE, "Opening ConIn\n");
     ok(hConOut != INVALID_HANDLE_VALUE, "Opening ConOut\n");
+
+    if (using_pseudo_console)
+    {
+        test_pseudo_console_child(hConIn, hConOut);
+        return;
+    }
 
     ret = GetConsoleScreenBufferInfo(hConOut, &sbi);
     ok(ret, "Getting sb info\n");
@@ -4111,5 +4249,6 @@ START_TEST(console)
         test_AttachConsole(hConOut);
         test_AllocConsole();
         test_FreeConsole();
+        test_pseudo_console();
     }
 }

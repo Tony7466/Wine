@@ -57,8 +57,8 @@ struct MSVCRT_JUMP_BUFFER
     unsigned __int64 Fp;
     unsigned __int64 Lr;
     unsigned __int64 Sp;
-    unsigned long Fpcr;
-    unsigned long Fpsr;
+    ULONG Fpcr;
+    ULONG Fpsr;
     double D[8];
 };
 
@@ -96,8 +96,24 @@ __ASM_STDCALL_FUNC( RtlCaptureContext, 8,
                     "stp x29, x30, [x0, #0xf0]\n\t"  /* context->Fp,Lr */
                     "mov x1, sp\n\t"
                     "stp x1, x30, [x0, #0x100]\n\t"  /* context->Sp,Pc */
+                    "stp q0,  q1,  [x0, #0x110]\n\t" /* context->V[0-1] */
+                    "stp q2,  q3,  [x0, #0x130]\n\t" /* context->V[2-3] */
+                    "stp q4,  q5,  [x0, #0x150]\n\t" /* context->V[4-5] */
+                    "stp q6,  q7,  [x0, #0x170]\n\t" /* context->V[6-7] */
+                    "stp q8,  q9,  [x0, #0x190]\n\t" /* context->V[8-9] */
+                    "stp q10, q11, [x0, #0x1a0]\n\t" /* context->V[10-11] */
+                    "stp q12, q13, [x0, #0x1c0]\n\t" /* context->V[12-13] */
+                    "stp q14, q15, [x0, #0x1e0]\n\t" /* context->V[14-15] */
+                    "stp q16, q17, [x0, #0x210]\n\t" /* context->V[16-17] */
+                    "stp q18, q19, [x0, #0x230]\n\t" /* context->V[18-19] */
+                    "stp q20, q21, [x0, #0x250]\n\t" /* context->V[20-21] */
+                    "stp q22, q23, [x0, #0x270]\n\t" /* context->V[22-23] */
+                    "stp q24, q25, [x0, #0x290]\n\t" /* context->V[24-25] */
+                    "stp q26, q27, [x0, #0x2a0]\n\t" /* context->V[26-27] */
+                    "stp q28, q29, [x0, #0x2c0]\n\t" /* context->V[28-29] */
+                    "stp q30, q31, [x0, #0x2e0]\n\t" /* context->V[30-31] */
                     "mov w1, #0x400000\n\t"          /* CONTEXT_ARM64 */
-                    "add w1, w1, #0x3\n\t"           /* CONTEXT_FULL */
+                    "movk w1, #0x7\n\t"              /* CONTEXT_FULL */
                     "str w1, [x0]\n\t"               /* context->ContextFlags */
                     "mrs x1, NZCV\n\t"
                     "str w1, [x0, #0x4]\n\t"         /* context->Cpsr */
@@ -635,6 +651,15 @@ static void process_unwind_codes( BYTE *ptr, BYTE *end, CONTEXT *context,
             ptr += len;
             continue;
         }
+        else if (*ptr == 0xe9)  /* MSFT_OP_MACHINE_FRAME */
+        {
+            context->Pc = ((DWORD64 *)context->Sp)[1];
+            context->Sp = ((DWORD64 *)context->Sp)[0];
+        }
+        else if (*ptr == 0xea)  /* MSFT_OP_CONTEXT */
+        {
+            memcpy( context, (DWORD64 *)context->Sp, sizeof(CONTEXT) );
+        }
         else
         {
             WARN( "unsupported code %02x\n", *ptr );
@@ -889,13 +914,17 @@ PVOID WINAPI RtlVirtualUnwind( ULONG type, ULONG_PTR base, ULONG_PTR pc,
 
     TRACE( "type %x pc %lx sp %lx func %lx\n", type, pc, context->Sp, base + func->BeginAddress );
 
+    *handler_data = NULL;
+
+    context->Pc = 0;
     if (func->u.s.Flag)
         handler = unwind_packed_data( base, pc, func, context, ctx_ptr );
     else
         handler = unwind_full_data( base, pc, func, context, handler_data, ctx_ptr );
 
     TRACE( "ret: lr=%lx sp=%lx handler=%p\n", context->u.s.Lr, context->Sp, handler );
-    context->Pc = context->u.s.Lr;
+    if (!context->Pc)
+        context->Pc = context->u.s.Lr;
     context->ContextFlags |= CONTEXT_UNWOUND_TO_CALL;
     *frame_ret = context->Sp;
     return handler;
@@ -989,7 +1018,7 @@ void CDECL RtlRestoreContext( CONTEXT *context, EXCEPTION_RECORD *rec )
         context->Fpsr    = jmp->Fpsr;
 
         for (i = 0; i < 8; i++)
-            context->V[8+i].D[0] = jmp->D[0];
+            context->V[8+i].D[0] = jmp->D[i];
     }
     else if (rec && rec->ExceptionCode == STATUS_UNWIND_CONSOLIDATE && rec->NumberParameters >= 1)
     {
@@ -1187,6 +1216,14 @@ USHORT WINAPI RtlCaptureStackBackTrace( ULONG skip, ULONG count, PVOID *buffer, 
     FIXME( "(%d, %d, %p, %p) stub!\n", skip, count, buffer, hash );
     return 0;
 }
+
+/***********************************************************************
+ *           signal_start_thread
+ */
+__ASM_GLOBAL_FUNC( signal_start_thread,
+                   "mov sp, x0\n\t"  /* context */
+                   "mov x1, #1\n\t"
+                   "b " __ASM_NAME("NtContinue") )
 
 /**********************************************************************
  *              DbgBreakPoint   (NTDLL.@)

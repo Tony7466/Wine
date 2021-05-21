@@ -1876,34 +1876,6 @@ struct get_console_wait_event_reply
 
 
 
-struct set_console_input_info_request
-{
-    struct request_header __header;
-    obj_handle_t  handle;
-    int           mask;
-    obj_handle_t  active_sb;
-    int           history_mode;
-    int           history_size;
-    int           edition_mode;
-    int           input_cp;
-    int           output_cp;
-    user_handle_t win;
-    /* VARARG(title,unicode_str); */
-};
-struct set_console_input_info_reply
-{
-    struct reply_header __header;
-};
-#define SET_CONSOLE_INPUT_INFO_TITLE            0x02
-#define SET_CONSOLE_INPUT_INFO_HISTORY_MODE     0x04
-#define SET_CONSOLE_INPUT_INFO_HISTORY_SIZE     0x08
-#define SET_CONSOLE_INPUT_INFO_EDITION_MODE     0x10
-#define SET_CONSOLE_INPUT_INFO_INPUT_CODEPAGE   0x20
-#define SET_CONSOLE_INPUT_INFO_OUTPUT_CODEPAGE  0x40
-#define SET_CONSOLE_INPUT_INFO_WIN              0x80
-
-
-
 struct append_console_input_history_request
 {
     struct request_header __header;
@@ -1962,6 +1934,28 @@ struct send_console_signal_request
 struct send_console_signal_reply
 {
     struct reply_header __header;
+};
+
+
+
+struct get_next_console_request_request
+{
+    struct request_header __header;
+    obj_handle_t handle;
+    int          signal;
+    int          read;
+    unsigned int status;
+    /* VARARG(out_data,bytes); */
+    char __pad_28[4];
+};
+struct get_next_console_request_reply
+{
+    struct reply_header __header;
+    unsigned int code;
+    unsigned int output;
+    data_size_t  out_size;
+    /* VARARG(in_data,bytes); */
+    char __pad_20[4];
 };
 
 
@@ -5544,11 +5538,11 @@ enum request
     REQ_free_console,
     REQ_attach_console,
     REQ_get_console_wait_event,
-    REQ_set_console_input_info,
     REQ_append_console_input_history,
     REQ_get_console_input_history,
     REQ_create_console_output,
     REQ_send_console_signal,
+    REQ_get_next_console_request,
     REQ_read_directory_changes,
     REQ_read_change,
     REQ_create_mapping,
@@ -5834,11 +5828,11 @@ union generic_request
     struct free_console_request free_console_request;
     struct attach_console_request attach_console_request;
     struct get_console_wait_event_request get_console_wait_event_request;
-    struct set_console_input_info_request set_console_input_info_request;
     struct append_console_input_history_request append_console_input_history_request;
     struct get_console_input_history_request get_console_input_history_request;
     struct create_console_output_request create_console_output_request;
     struct send_console_signal_request send_console_signal_request;
+    struct get_next_console_request_request get_next_console_request_request;
     struct read_directory_changes_request read_directory_changes_request;
     struct read_change_request read_change_request;
     struct create_mapping_request create_mapping_request;
@@ -6122,11 +6116,11 @@ union generic_reply
     struct free_console_reply free_console_reply;
     struct attach_console_reply attach_console_reply;
     struct get_console_wait_event_reply get_console_wait_event_reply;
-    struct set_console_input_info_reply set_console_input_info_reply;
     struct append_console_input_history_reply append_console_input_history_reply;
     struct get_console_input_history_reply get_console_input_history_reply;
     struct create_console_output_reply create_console_output_reply;
     struct send_console_signal_reply send_console_signal_reply;
+    struct get_next_console_request_reply get_next_console_request_reply;
     struct read_directory_changes_reply read_directory_changes_reply;
     struct read_change_reply read_change_reply;
     struct create_mapping_reply create_mapping_reply;
@@ -6343,7 +6337,7 @@ union generic_reply
 
 /* ### protocol_version begin ### */
 
-#define SERVER_PROTOCOL_VERSION 636
+#define SERVER_PROTOCOL_VERSION 640
 
 /* ### protocol_version end ### */
 

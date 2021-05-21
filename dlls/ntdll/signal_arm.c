@@ -263,6 +263,14 @@ USHORT WINAPI RtlCaptureStackBackTrace( ULONG skip, ULONG count, PVOID *buffer, 
     return 0;
 }
 
+/***********************************************************************
+ *           signal_start_thread
+ */
+__ASM_GLOBAL_FUNC( signal_start_thread,
+                   "mov sp, r0\n\t"  /* context */
+                   "mov r1, #1\n\t"
+                   "b " __ASM_NAME("NtContinue") )
+
 /**********************************************************************
  *              DbgBreakPoint   (NTDLL.@)
  */

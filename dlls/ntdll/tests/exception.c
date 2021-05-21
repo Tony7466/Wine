@@ -30,6 +30,7 @@
 #include "winternl.h"
 #include "excpt.h"
 #include "wine/test.h"
+#include "intrin.h"
 
 static void *code_mem;
 
@@ -43,6 +44,7 @@ static ULONG     (WINAPI *pRtlRemoveVectoredExceptionHandler)(PVOID handler);
 static PVOID     (WINAPI *pRtlAddVectoredContinueHandler)(ULONG first, PVECTORED_EXCEPTION_HANDLER func);
 static ULONG     (WINAPI *pRtlRemoveVectoredContinueHandler)(PVOID handler);
 static void      (WINAPI *pRtlSetUnhandledExceptionFilter)(PRTL_EXCEPTION_FILTER filter);
+static ULONG64   (WINAPI *pRtlGetEnabledExtendedFeatures)(ULONG64);
 static NTSTATUS  (WINAPI *pNtReadVirtualMemory)(HANDLE, const void*, void*, SIZE_T, SIZE_T*);
 static NTSTATUS  (WINAPI *pNtTerminateProcess)(HANDLE handle, LONG exit_code);
 static NTSTATUS  (WINAPI *pNtQueryInformationProcess)(HANDLE, PROCESSINFOCLASS, PVOID, ULONG, PULONG);
@@ -4223,6 +4225,555 @@ static void test_debug_service(DWORD numexc)
 
 #elif defined(__aarch64__)
 
+#define UNW_FLAG_NHANDLER  0
+#define UNW_FLAG_EHANDLER  1
+#define UNW_FLAG_UHANDLER  2
+
+#define UWOP_TWOBYTES(x) (((x) >> 8) & 0xff), ((x) & 0xff)
+
+#define UWOP_ALLOC_SMALL(size)         (0x00 | (size/16))
+#define UWOP_SAVE_R19R20_X(offset)     (0x20 | (offset/8))
+#define UWOP_SAVE_FPLR(offset)         (0x40 | (offset/8))
+#define UWOP_SAVE_FPLR_X(offset)       (0x80 | (offset/8 - 1))
+#define UWOP_ALLOC_MEDIUM(size)        UWOP_TWOBYTES((0xC0 << 8) | (size/16))
+#define UWOP_SAVE_REGP(reg, offset)    UWOP_TWOBYTES((0xC8 << 8) | ((reg - 19) << 6) | (offset/8))
+#define UWOP_SAVE_REGP_X(reg, offset)  UWOP_TWOBYTES((0xCC << 8) | ((reg - 19) << 6) | (offset/8 - 1))
+#define UWOP_SAVE_REG(reg, offset)     UWOP_TWOBYTES((0xD0 << 8) | ((reg - 19) << 6) | (offset/8))
+#define UWOP_SAVE_REG_X(reg, offset)   UWOP_TWOBYTES((0xD4 << 8) | ((reg - 19) << 5) | (offset/8 - 1))
+#define UWOP_SAVE_LRP(reg, offset)     UWOP_TWOBYTES((0xD6 << 8) | ((reg - 19)/2 << 6) | (offset/8))
+#define UWOP_SAVE_FREGP(reg, offset)   UWOP_TWOBYTES((0xD8 << 8) | ((reg - 8) << 6) | (offset/8))
+#define UWOP_SAVE_FREGP_X(reg, offset) UWOP_TWOBYTES((0xDA << 8) | ((reg - 8) << 6) | (offset/8 - 1))
+#define UWOP_SAVE_FREG(reg, offset)    UWOP_TWOBYTES((0xDC << 8) | ((reg - 8) << 6) | (offset/8))
+#define UWOP_SAVE_FREG_X(reg, offset)  UWOP_TWOBYTES((0xDE << 8) | ((reg - 8) << 5) | (offset/8 - 1))
+#define UWOP_ALLOC_LARGE(size)         UWOP_TWOBYTES((0xE0 << 8) | ((size/16) >> 16)), UWOP_TWOBYTES(size/16)
+#define UWOP_SET_FP                    0xE1
+#define UWOP_ADD_FP(offset)            UWOP_TWOBYTES((0xE2 << 8) | (offset/8))
+#define UWOP_NOP                       0xE3
+#define UWOP_END                       0xE4
+#define UWOP_END_C                     0xE5
+#define UWOP_SAVE_NEXT                 0xE6
+#define UWOP_TRAP_FRAME                0xE8
+#define UWOP_MACHINE_FRAME             0xE9
+#define UWOP_CONTEXT                   0xEA
+#define UWOP_CLEAR_UNWOUND_TO_CALL     0xEC
+
+struct results
+{
+    int pc_offset;      /* pc offset from code start */
+    int fp_offset;      /* fp offset from stack pointer */
+    int handler;        /* expect handler to be set? */
+    ULONG_PTR pc;       /* expected final pc value */
+    int frame;          /* expected frame return value */
+    int frame_offset;   /* whether the frame return value is an offset or an absolute value */
+    int regs[48][2];    /* expected values for registers */
+};
+
+struct unwind_test
+{
+    const BYTE *function;
+    size_t function_size;
+    const BYTE *unwind_info;
+    size_t unwind_size;
+    const struct results *results;
+    unsigned int nb_results;
+};
+
+enum regs
+{
+    x0,  x1,  x2,  x3,  x4,  x5,  x6,  x7,
+    x8,  x9,  x10, x11, x12, x13, x14, x15,
+    x16, x17, x18, x19, x20, x21, x22, x23,
+    x24, x25, x26, x27, x28, x29, lr,  sp,
+    d0,  d1,  d2,  d3,  d4,  d5,  d6,  d7,
+    d8,  d9,  d10, d11, d12, d13, d14, d15
+};
+
+static const char * const reg_names[48] =
+{
+    "x0",  "x1",  "x2",  "x3",  "x4",  "x5",  "x6",  "x7",
+    "x8",  "x9",  "x10", "x11", "x12", "x13", "x14", "x15",
+    "x16", "x17", "x18", "x19", "x20", "x21", "x22", "x23",
+    "x24", "x25", "x26", "x27", "x28", "x29", "lr",  "sp",
+    "d0",  "d1",  "d2",  "d3",  "d4",  "d5",  "d6",  "d7",
+    "d8",  "d9",  "d10", "d11", "d12", "d13", "d14", "d15",
+};
+
+#define ORIG_LR 0xCCCCCCCC
+
+#define UWOP(code,info) (UWOP_##code | ((info) << 4))
+
+static void call_virtual_unwind( int testnum, const struct unwind_test *test )
+{
+    static const int code_offset = 1024;
+    static const int unwind_offset = 2048;
+    void *handler, *data;
+    CONTEXT context;
+    RUNTIME_FUNCTION runtime_func;
+    KNONVOLATILE_CONTEXT_POINTERS ctx_ptr;
+    UINT i, j, k;
+    ULONG64 fake_stack[256];
+    ULONG64 frame, orig_pc, orig_fp, unset_reg, sp_offset = 0;
+    static const UINT nb_regs = ARRAY_SIZE(test->results[i].regs);
+
+    memcpy( (char *)code_mem + code_offset, test->function, test->function_size );
+    memcpy( (char *)code_mem + unwind_offset, test->unwind_info, test->unwind_size );
+
+    runtime_func.BeginAddress = code_offset;
+    if (test->unwind_size)
+        runtime_func.UnwindData = unwind_offset;
+    else
+        memcpy(&runtime_func.UnwindData, test->unwind_info, 4);
+
+    trace( "code: %p stack: %p\n", code_mem, fake_stack );
+
+    for (i = 0; i < test->nb_results; i++)
+    {
+        memset( &ctx_ptr, 0, sizeof(ctx_ptr) );
+        memset( &context, 0x55, sizeof(context) );
+        memset( &unset_reg, 0x55, sizeof(unset_reg) );
+        for (j = 0; j < 256; j++) fake_stack[j] = j * 8;
+
+        context.Sp = (ULONG_PTR)fake_stack;
+        context.Lr = (ULONG_PTR)ORIG_LR;
+        context.Fp = (ULONG_PTR)fake_stack + test->results[i].fp_offset;
+        orig_fp = context.Fp;
+        orig_pc = (ULONG64)code_mem + code_offset + test->results[i].pc_offset;
+
+        trace( "%u/%u: pc=%p (%02x) fp=%p sp=%p\n", testnum, i,
+               (void *)orig_pc, *(DWORD *)orig_pc, (void *)orig_fp, (void *)context.Sp );
+
+        data = (void *)0xdeadbeef;
+        handler = RtlVirtualUnwind( UNW_FLAG_EHANDLER, (ULONG64)code_mem, orig_pc,
+                                    &runtime_func, &context, &data, &frame, &ctx_ptr );
+        if (test->results[i].handler > 0)
+        {
+            /* Yet untested */
+            ok( (char *)handler == (char *)code_mem + 0x200,
+                "%u/%u: wrong handler %p/%p\n", testnum, i, handler, (char *)code_mem + 0x200 );
+            if (handler) ok( *(DWORD *)data == 0x08070605,
+                             "%u/%u: wrong handler data %p\n", testnum, i, data );
+        }
+        else
+        {
+            ok( handler == NULL, "%u/%u: handler %p instead of NULL\n", testnum, i, handler );
+            ok( data == (test->results[i].handler < 0 ?
+                        (void *)0xdeadbeef : NULL),
+                "%u/%u: handler data set to %p/%p\n", testnum, i, data,
+                (test->results[i].handler < 0 ? (void *)0xdeadbeef : NULL) );
+        }
+
+        ok( context.Pc == test->results[i].pc, "%u/%u: wrong pc %p/%p\n",
+            testnum, i, (void *)context.Pc, (void*)test->results[i].pc );
+        ok( frame == (test->results[i].frame_offset ? (ULONG64)fake_stack : 0) + test->results[i].frame, "%u/%u: wrong frame %p/%p\n",
+            testnum, i, (void *)frame, (char *)(test->results[i].frame_offset ? fake_stack : NULL) + test->results[i].frame );
+
+        sp_offset = 0;
+        for (k = 0; k < nb_regs; k++)
+        {
+            if (test->results[i].regs[k][0] == -1)
+                break;
+            if (test->results[i].regs[k][0] == sp) {
+                /* If sp is part of the registers list, treat it as an offset
+                 * between the returned frame pointer and the sp register. */
+                sp_offset = test->results[i].regs[k][1];
+                break;
+            }
+        }
+        ok( frame - sp_offset == context.Sp, "%u/%u: wrong sp %p/%p\n",
+            testnum, i, (void *)(frame - sp_offset), (void *)context.Sp);
+
+        for (j = 0; j < 48; j++)
+        {
+            if (j == sp) continue; /* Handling sp separately above */
+
+            for (k = 0; k < nb_regs; k++)
+            {
+                if (test->results[i].regs[k][0] == -1)
+                {
+                    k = nb_regs;
+                    break;
+                }
+                if (test->results[i].regs[k][0] == j) break;
+            }
+
+            if (j >= 19 && j <= 30 && (&ctx_ptr.X19)[j - 19])
+            {
+                ok( k < nb_regs, "%u/%u: register %s should not be set to %llx\n",
+                    testnum, i, reg_names[j], context.X[j] );
+                if (k < nb_regs)
+                    ok( context.X[j] == test->results[i].regs[k][1],
+                        "%u/%u: register %s wrong %p/%x\n",
+                        testnum, i, reg_names[j], (void *)context.X[j], test->results[i].regs[k][1] );
+            }
+            else if (j >= d8 && j <= d15 && (&ctx_ptr.D8)[j - d8])
+            {
+                ok( k < nb_regs, "%u/%u: register %s should not be set to %llx\n",
+                    testnum, i, reg_names[j], context.V[j - d0].Low );
+                if (k < nb_regs)
+                    ok( context.V[j - d0].Low == test->results[i].regs[k][1],
+                        "%u/%u: register %s wrong %p/%x\n",
+                        testnum, i, reg_names[j], (void *)context.V[j - d0].Low, test->results[i].regs[k][1] );
+            }
+            else if (k < nb_regs)
+            {
+                if (j < d0)
+                  ok( context.X[j] == test->results[i].regs[k][1],
+                      "%u/%u: register %s wrong %p/%x\n",
+                      testnum, i, reg_names[j], (void *)context.X[j], test->results[i].regs[k][1] );
+                else
+                  ok( context.V[j - d0].Low == test->results[i].regs[k][1],
+                      "%u/%u: register %s wrong %p/%x\n",
+                      testnum, i, reg_names[j], (void *)context.V[j - d0].Low, test->results[i].regs[k][1] );
+            }
+            else
+            {
+                ok( k == nb_regs, "%u/%u: register %s should be set\n", testnum, i, reg_names[j] );
+                if (j == lr)
+                    ok( context.Lr == ORIG_LR, "%u/%u: register lr wrong %p/unset\n",
+                        testnum, i, (void *)context.Lr );
+                else if (j == x29)
+                    ok( context.Fp == orig_fp, "%u/%u: register fp wrong %p/unset\n",
+                        testnum, i, (void *)context.Fp );
+                else if (j < d0)
+                    ok( context.X[j] == unset_reg,
+                        "%u/%u: register %s wrong %p/unset\n",
+                        testnum, i, reg_names[j], (void *)context.X[j]);
+                else
+                    ok( context.V[j - d0].Low == unset_reg,
+                        "%u/%u: register %s wrong %p/unset\n",
+                        testnum, i, reg_names[j], (void *)context.V[j - d0].Low);
+            }
+        }
+    }
+}
+
+#define DW(dword) ((dword >> 0) & 0xff), ((dword >> 8) & 0xff), ((dword >> 16) & 0xff), ((dword >> 24) & 0xff)
+
+static void test_virtual_unwind(void)
+{
+    static const BYTE function_0[] =
+    {
+        0xff, 0x83, 0x00, 0xd1,   /* 00: sub sp, sp, #32 */
+        0xf3, 0x53, 0x01, 0xa9,   /* 04: stp x19, x20, [sp, #16] */
+        0x1f, 0x20, 0x03, 0xd5,   /* 08: nop */
+        0xf3, 0x53, 0x41, 0xa9,   /* 0c: ldp x19, x20, [sp, #16] */
+        0xff, 0x83, 0x00, 0x91,   /* 10: add sp, sp, #32 */
+        0xc0, 0x03, 0x5f, 0xd6,   /* 14: ret */
+    };
+
+    static const DWORD unwind_info_0_header =
+        (sizeof(function_0)/4) | /* function length */
+        (0 << 20) | /* X */
+        (0 << 21) | /* E */
+        (1 << 22) | /* epilog */
+        (2 << 27);  /* codes */
+    static const DWORD unwind_info_0_epilog0 =
+        (3 <<  0) | /* offset */
+        (4 << 22);  /* index */
+
+    static const BYTE unwind_info_0[] =
+    {
+        DW(unwind_info_0_header),
+        DW(unwind_info_0_epilog0),
+
+        UWOP_SAVE_REGP(19, 16), /* stp x19, x20, [sp, #16] */
+        UWOP_ALLOC_SMALL(32),   /* sub sp,  sp,  #32 */
+        UWOP_END,
+
+        UWOP_SAVE_REGP(19, 16), /* stp x19, x20, [sp, #16] */
+        UWOP_ALLOC_SMALL(32),   /* sub sp,  sp,  #32 */
+        UWOP_END,
+    };
+
+    static const struct results results_0[] =
+    {
+      /* offset  fp    handler  pc      frame offset  registers */
+        { 0x00,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+        { 0x04,  0x00,  0,     ORIG_LR, 0x020, TRUE, { {-1,-1} }},
+        { 0x08,  0x00,  0,     ORIG_LR, 0x020, TRUE, { {x19,0x10}, {x20,0x18}, {-1,-1} }},
+        { 0x0c,  0x00,  0,     ORIG_LR, 0x020, TRUE, { {x19,0x10}, {x20,0x18}, {-1,-1} }},
+        { 0x10,  0x00,  0,     ORIG_LR, 0x020, TRUE, { {-1,-1} }},
+        { 0x14,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+    };
+
+
+    static const BYTE function_1[] =
+    {
+        0xf3, 0x53, 0xbe, 0xa9,   /* 00: stp x19, x20, [sp, #-32]! */
+        0xfe, 0x0b, 0x00, 0xf9,   /* 04: str x30, [sp, #16] */
+        0xff, 0x43, 0x00, 0xd1,   /* 08: sub sp, sp, #16 */
+        0x1f, 0x20, 0x03, 0xd5,   /* 0c: nop */
+        0xff, 0x43, 0x00, 0x91,   /* 10: add sp, sp, #16 */
+        0xfe, 0x0b, 0x40, 0xf9,   /* 14: ldr x30, [sp, #16] */
+        0xf3, 0x53, 0xc2, 0xa8,   /* 18: ldp x19, x20, [sp], #32 */
+        0xc0, 0x03, 0x5f, 0xd6,   /* 1c: ret */
+    };
+
+    static const DWORD unwind_info_1_packed =
+        (1 << 0)  | /* Flag */
+        (sizeof(function_1)/4 << 2) | /* FunctionLength */
+        (0 << 13) | /* RegF */
+        (2 << 16) | /* RegI */
+        (0 << 20) | /* H */
+        (1 << 21) | /* CR */
+        (3 << 23);  /* FrameSize */
+
+    static const BYTE unwind_info_1[] = { DW(unwind_info_1_packed) };
+
+    /* The prologue/epilogue locations are commented out below, as we don't
+     * handle those cases at the moment. */
+    static const struct results results_1[] =
+    {
+      /* offset  fp    handler  pc      frame offset  registers */
+#if 0
+        { 0x00,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+        { 0x04,  0x00,  0,     ORIG_LR, 0x020, TRUE, { {x19,0x00}, {x20,0x08}, {-1,-1} }},
+        { 0x08,  0x00,  0,     0x10,    0x020, TRUE, { {x19,0x00}, {x20,0x08}, {lr,0x10}, {-1,-1} }},
+#endif
+        { 0x0c,  0x00,  0,     0x20,    0x030, TRUE, { {x19,0x10}, {x20,0x18}, {lr,0x20}, {-1,-1} }},
+        { 0x10,  0x00,  0,     0x20,    0x030, TRUE, { {x19,0x10}, {x20,0x18}, {lr,0x20}, {-1,-1} }},
+#if 0
+        { 0x14,  0x00,  0,     0x10,    0x020, TRUE, { {x19,0x00}, {x20,0x08}, {lr,0x10}, {-1,-1} }},
+        { 0x18,  0x00,  0,     ORIG_LR, 0x020, TRUE, { {x19,0x00}, {x20,0x08}, {-1,-1} }},
+        { 0x1c,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+#endif
+    };
+
+    static const BYTE function_2[] =
+    {
+        0xff, 0x43, 0x00, 0xd1,   /* 00: sub sp, sp, #16 */
+        0x1f, 0x20, 0x03, 0xd5,   /* 04: nop */
+        0xff, 0x43, 0x00, 0xd1,   /* 08: sub sp, sp, #16 */
+        0x1f, 0x20, 0x03, 0xd5,   /* 0c: nop */
+        0xc0, 0x03, 0x5f, 0xd6,   /* 10: ret */
+    };
+
+    static const DWORD unwind_info_2_header =
+        (sizeof(function_2)/4) | /* function length */
+        (0 << 20) | /* X */
+        (0 << 21) | /* E */
+        (0 << 22) | /* epilog */
+        (1 << 27);  /* codes */
+
+    static const BYTE unwind_info_2[] =
+    {
+        DW(unwind_info_2_header),
+
+        UWOP_ALLOC_SMALL(16),   /* sub sp,  sp,  #16 */
+        UWOP_MACHINE_FRAME,
+        UWOP_ALLOC_SMALL(16),   /* sub sp,  sp,  #16 */
+        UWOP_END,
+    };
+
+    /* Partial prologues with the custom frame opcodes (machine frame,
+     * context) behave like there's an off-by-one bug; unwinding from
+     * offset 0, which normally does nothing, executes one opcode if
+     * there's a machine frame or context in the prologue, and for other
+     * offsets, it behaves like unwinding from one instruction further
+     * ahead. So only test the full prologue case. */
+    static const struct results results_2[] =
+    {
+      /* offset  fp    handler  pc      frame offset  registers */
+#if 0
+        { 0x00,  0x00,  0,     ORIG_LR, 0x010, TRUE,  { {-1,-1} }},
+        { 0x04,  0x00,  0,     0x0008,  0x010, FALSE, { {-1,-1} }},
+        { 0x08,  0x00,  0,     0x0018,  0x020, FALSE, { {-1,-1} }},
+#endif
+        { 0x0c,  0x00,  0,     0x0018,  0x020, FALSE, { {-1,-1} }},
+    };
+
+    static const BYTE function_3[] =
+    {
+        0xff, 0x43, 0x00, 0xd1,   /* 00: sub sp, sp, #16 */
+        0x1f, 0x20, 0x03, 0xd5,   /* 04: nop */
+        0xff, 0x43, 0x00, 0xd1,   /* 08: sub sp, sp, #16 */
+        0x1f, 0x20, 0x03, 0xd5,   /* 0c: nop */
+        0xc0, 0x03, 0x5f, 0xd6,   /* 10: ret */
+    };
+
+    static const DWORD unwind_info_3_header =
+        (sizeof(function_3)/4) | /* function length */
+        (0 << 20) | /* X */
+        (0 << 21) | /* E */
+        (0 << 22) | /* epilog */
+        (1 << 27);  /* codes */
+
+    static const BYTE unwind_info_3[] =
+    {
+        DW(unwind_info_3_header),
+
+        UWOP_ALLOC_SMALL(16),   /* sub sp,  sp,  #16 */
+        UWOP_CONTEXT,
+        UWOP_ALLOC_SMALL(16),   /* sub sp,  sp,  #16 */
+        UWOP_END,
+    };
+
+    static const struct results results_3[] =
+    {
+      /* offset  fp    handler  pc      frame offset  registers */
+#if 0
+        { 0x00,  0x00,  0,     ORIG_LR, 0x010, TRUE,  { {-1,-1} }},
+        { 0x04,  0x00,  0 ,    0x0108,  0x110, FALSE, { {x0, 0x08}, {x1, 0x10}, {x2, 0x18}, {x3, 0x20}, {x4, 0x28}, {x5, 0x30}, {x6, 0x38}, {x7, 0x40}, {x8, 0x48}, {x9, 0x50}, {x10, 0x58}, {x11, 0x60}, {x12, 0x68}, {x13, 0x70}, {x14, 0x78}, {x15, 0x80}, {x16, 0x88}, {x17, 0x90}, {x18, 0x98}, {x19, 0xA0}, {x20, 0xA8}, {x21, 0xB0}, {x22, 0xB8}, {x23, 0xC0}, {x24, 0xC8}, {x25, 0xD0}, {x26, 0xD8}, {x27, 0xE0}, {x28, 0xE8}, {x29, 0xF0}, {lr, 0xF8}, {d0, 0x110}, {d1, 0x120}, {d2, 0x130}, {d3, 0x140}, {d4, 0x150}, {d5, 0x160}, {d6, 0x170}, {d7, 0x180}, {d8, 0x190}, {d9, 0x1a0}, {d10, 0x1b0}, {d11, 0x1c0}, {d12, 0x1d0}, {d13, 0x1e0}, {d14, 0x1f0}, {d15, 0x200}, {-1,-1} }},
+        { 0x08,  0x00,  0 ,    0x0118,  0x120, FALSE, { {x0, 0x18}, {x1, 0x20}, {x2, 0x28}, {x3, 0x30}, {x4, 0x38}, {x5, 0x40}, {x6, 0x48}, {x7, 0x50}, {x8, 0x58}, {x9, 0x60}, {x10, 0x68}, {x11, 0x70}, {x12, 0x78}, {x13, 0x80}, {x14, 0x88}, {x15, 0x90}, {x16, 0x98}, {x17, 0xA0}, {x18, 0xA8}, {x19, 0xB0}, {x20, 0xB8}, {x21, 0xC0}, {x22, 0xC8}, {x23, 0xD0}, {x24, 0xD8}, {x25, 0xE0}, {x26, 0xE8}, {x27, 0xF0}, {x28, 0xF8}, {x29, 0x100}, {lr, 0x108}, {d0, 0x120}, {d1, 0x130}, {d2, 0x140}, {d3, 0x150}, {d4, 0x160}, {d5, 0x170}, {d6, 0x180}, {d7, 0x190}, {d8, 0x1a0}, {d9, 0x1b0}, {d10, 0x1c0}, {d11, 0x1d0}, {d12, 0x1e0}, {d13, 0x1f0}, {d14, 0x200}, {d15, 0x210}, {-1,-1} }},
+#endif
+        { 0x0c,  0x00,  0 ,    0x0118,  0x120, FALSE, { {x0, 0x18}, {x1, 0x20}, {x2, 0x28}, {x3, 0x30}, {x4, 0x38}, {x5, 0x40}, {x6, 0x48}, {x7, 0x50}, {x8, 0x58}, {x9, 0x60}, {x10, 0x68}, {x11, 0x70}, {x12, 0x78}, {x13, 0x80}, {x14, 0x88}, {x15, 0x90}, {x16, 0x98}, {x17, 0xA0}, {x18, 0xA8}, {x19, 0xB0}, {x20, 0xB8}, {x21, 0xC0}, {x22, 0xC8}, {x23, 0xD0}, {x24, 0xD8}, {x25, 0xE0}, {x26, 0xE8}, {x27, 0xF0}, {x28, 0xF8}, {x29, 0x100}, {lr, 0x108}, {d0, 0x120}, {d1, 0x130}, {d2, 0x140}, {d3, 0x150}, {d4, 0x160}, {d5, 0x170}, {d6, 0x180}, {d7, 0x190}, {d8, 0x1a0}, {d9, 0x1b0}, {d10, 0x1c0}, {d11, 0x1d0}, {d12, 0x1e0}, {d13, 0x1f0}, {d14, 0x200}, {d15, 0x210}, {-1,-1} }},
+    };
+
+    static const BYTE function_4[] =
+    {
+        0xff, 0x43, 0x00, 0xd1,   /* 00: sub sp,  sp,  #16 */
+        0xff, 0x03, 0x08, 0xd1,   /* 04: sub sp,  sp,  #512 */
+        0xff, 0x43, 0x40, 0xd1,   /* 08: sub sp,  sp,  #65536 */
+        0xfd, 0x03, 0x00, 0x91,   /* 0c: mov x29, sp */
+        0xf3, 0x53, 0xbe, 0xa9,   /* 10: stp x19, x20, [sp, #-32]! */
+        0xf5, 0x5b, 0x01, 0xa9,   /* 14: stp x21, x22, [sp, #16] */
+        0xf7, 0x0f, 0x1e, 0xf8,   /* 18: str x23,      [sp, #-32]! */
+        0xf8, 0x07, 0x00, 0xf9,   /* 1c: str x24,      [sp, #8] */
+        0xf9, 0x7b, 0x01, 0xa9,   /* 20: stp x25, x30, [sp, #16] */
+        0xfd, 0x7b, 0x03, 0xa9,   /* 24: stp x29, x30, [sp, #48] */
+        0xfd, 0x7b, 0xbe, 0xa9,   /* 28: stp x29, x30, [sp, #-32]! */
+        0xf3, 0x53, 0xbe, 0xa9,   /* 2c: stp x19, x20, [sp, #-32]! */
+        0xe8, 0x27, 0xbe, 0x6d,   /* 30: stp d8,  d9,  [sp, #-32]! */
+        0xea, 0x2f, 0x01, 0x6d,   /* 34: stp d10, d11, [sp, #16] */
+        0xec, 0x0f, 0x1e, 0xfc,   /* 38: str d12,      [sp, #-32]! */
+        0xed, 0x07, 0x00, 0xfd,   /* 3c: str d13,      [sp, #8] */
+        0xfd, 0x43, 0x00, 0x91,   /* 40: add x29, sp,  #16 */
+        0xc0, 0x03, 0x5f, 0xd6,   /* 44: ret */
+    };
+
+    static const DWORD unwind_info_4_header =
+        (sizeof(function_4)/4) | /* function length */
+        (0 << 20) | /* X */
+        (0 << 21) | /* E */
+        (0 << 22) | /* epilog */
+        (8 << 27);  /* codes */
+
+    static const BYTE unwind_info_4[] =
+    {
+        DW(unwind_info_4_header),
+
+        UWOP_ADD_FP(16),          /* 40: add x29, sp, #16 */
+        UWOP_SAVE_FREG(13, 8),    /* 3c: str d13,      [sp, #8] */
+        UWOP_SAVE_FREG_X(12, 32), /* 38: str d12,      [sp, #-32]! */
+        UWOP_SAVE_FREGP(10, 16),  /* 34: stp d10, d11, [sp, #16] */
+        UWOP_SAVE_FREGP_X(8, 32), /* 30: stp d8,  d9,  [sp, #-32]! */
+        UWOP_SAVE_R19R20_X(32),   /* 2c: stp x19, x20, [sp, #-32]! */
+        UWOP_SAVE_FPLR_X(32),     /* 28: stp x29, x30, [sp, #-32]! */
+        UWOP_SAVE_FPLR(16),       /* 24: stp x29, x30, [sp, #16] */
+        UWOP_SAVE_LRP(25, 16),    /* 20: stp x25, x30, [sp, #16] */
+        UWOP_SAVE_REG(24, 8),     /* 1c: str x24,      [sp, #8] */
+        UWOP_SAVE_REG_X(23, 32),  /* 18: str x23,      [sp, #-32]! */
+        UWOP_SAVE_REGP(21, 16),   /* 14: stp x21, x22, [sp, #16] */
+        UWOP_SAVE_REGP_X(19, 32), /* 10: stp x19, x20, [sp, #-32]! */
+        UWOP_SET_FP,              /* 0c: mov x29, sp */
+        UWOP_ALLOC_LARGE(65536),  /* 08: sub sp,  sp,  #65536 */
+        UWOP_ALLOC_MEDIUM(512),   /* 04: sub sp,  sp,  #512 */
+        UWOP_ALLOC_SMALL(16),     /* 00: sub sp,  sp,  #16 */
+        UWOP_END,
+    };
+
+    static const struct results results_4[] =
+    {
+      /* offset  fp    handler  pc      frame offset  registers */
+        { 0x00,  0x10,  0,     ORIG_LR, 0x00000, TRUE, { {-1,-1} }},
+        { 0x04,  0x10,  0,     ORIG_LR, 0x00010, TRUE, { {-1,-1} }},
+        { 0x08,  0x10,  0,     ORIG_LR, 0x00210, TRUE, { {-1,-1} }},
+        { 0x0c,  0x10,  0,     ORIG_LR, 0x10210, TRUE, { {-1,-1} }},
+        { 0x14,  0x00,  0,     ORIG_LR, 0x10210, TRUE, { {x19, 0x00}, {x20, 0x08}, {-1,-1} }},
+        { 0x18,  0x00,  0,     ORIG_LR, 0x10210, TRUE, { {x19, 0x00}, {x20, 0x08}, {x21, 0x10}, {x22, 0x18}, {-1,-1} }},
+        { 0x1c,  0x00,  0,     ORIG_LR, 0x10210, TRUE, { {x19, 0x20}, {x20, 0x28}, {x21, 0x30}, {x22, 0x38}, {x23, 0x00}, {-1,-1} }},
+        { 0x20,  0x00,  0,     ORIG_LR, 0x10210, TRUE, { {x19, 0x20}, {x20, 0x28}, {x21, 0x30}, {x22, 0x38}, {x23, 0x00}, {x24, 0x08}, {-1,-1} }},
+        { 0x24,  0x00,  0,     0x0018,  0x10210, TRUE, { {x19, 0x20}, {x20, 0x28}, {x21, 0x30}, {x22, 0x38}, {x23, 0x00}, {x24, 0x08}, {x25, 0x10}, {lr, 0x18}, {-1,-1} }},
+        { 0x28,  0x00,  0,     0x0018,  0x10220, FALSE, { {x19, 0x20}, {x20, 0x28}, {x21, 0x30}, {x22, 0x38}, {x23, 0x00}, {x24, 0x08}, {x25, 0x10}, {lr, 0x18}, {x29, 0x10}, {-1,-1} }},
+        { 0x2c,  0x00,  0,     0x0038,  0x10240, FALSE, { {x19, 0x40}, {x20, 0x48}, {x21, 0x50}, {x22, 0x58}, {x23, 0x20}, {x24, 0x28}, {x25, 0x30}, {lr, 0x38}, {x29, 0x30}, {-1,-1} }},
+        { 0x30,  0x00,  0,     0x0058,  0x10260, FALSE, { {x19, 0x60}, {x20, 0x68}, {x21, 0x70}, {x22, 0x78}, {x23, 0x40}, {x24, 0x48}, {x25, 0x50}, {lr, 0x58}, {x29, 0x50}, {-1,-1} }},
+        { 0x34,  0x00,  0,     0x0078,  0x10280, FALSE, { {x19, 0x80}, {x20, 0x88}, {x21, 0x90}, {x22, 0x98}, {x23, 0x60}, {x24, 0x68}, {x25, 0x70}, {lr, 0x78}, {x29, 0x70}, {d8, 0x00}, {d9, 0x08}, {-1,-1} }},
+        { 0x38,  0x00,  0,     0x0078,  0x10280, FALSE, { {x19, 0x80}, {x20, 0x88}, {x21, 0x90}, {x22, 0x98}, {x23, 0x60}, {x24, 0x68}, {x25, 0x70}, {lr, 0x78}, {x29, 0x70}, {d8, 0x00}, {d9, 0x08}, {d10, 0x10}, {d11, 0x18}, {-1,-1} }},
+        { 0x3c,  0x00,  0,     0x0098,  0x102a0, FALSE, { {x19, 0xa0}, {x20, 0xa8}, {x21, 0xb0}, {x22, 0xb8}, {x23, 0x80}, {x24, 0x88}, {x25, 0x90}, {lr, 0x98}, {x29, 0x90}, {d8, 0x20}, {d9, 0x28}, {d10, 0x30}, {d11, 0x38}, {d12, 0x00}, {-1,-1} }},
+        { 0x40,  0x00,  0,     0x0098,  0x102a0, FALSE, { {x19, 0xa0}, {x20, 0xa8}, {x21, 0xb0}, {x22, 0xb8}, {x23, 0x80}, {x24, 0x88}, {x25, 0x90}, {lr, 0x98}, {x29, 0x90}, {d8, 0x20}, {d9, 0x28}, {d10, 0x30}, {d11, 0x38}, {d12, 0x00}, {d13, 0x08}, {-1,-1} }},
+        { 0x44,  0x20,  0,     0x00a8,  0x102b0, FALSE, { {x19, 0xb0}, {x20, 0xb8}, {x21, 0xc0}, {x22, 0xc8}, {x23, 0x90}, {x24, 0x98}, {x25, 0xa0}, {lr, 0xa8}, {x29, 0xa0}, {d8, 0x30}, {d9, 0x38}, {d10, 0x40}, {d11, 0x48}, {d12, 0x10}, {d13, 0x18}, {-1,-1} }},
+    };
+
+    static const BYTE function_5[] =
+    {
+        0xf3, 0x53, 0xbe, 0xa9,   /* 00: stp x19, x20, [sp, #-32]! */
+        0xf5, 0x5b, 0x01, 0xa9,   /* 04: stp x21, x22, [sp, #16] */
+        0xf7, 0x63, 0xbc, 0xa9,   /* 08: stp x23, x24, [sp, #-64]! */
+        0xf9, 0x6b, 0x01, 0xa9,   /* 0c: stp x25, x26, [sp, #16] */
+        0xfb, 0x73, 0x02, 0xa9,   /* 10: stp x27, x28, [sp, #32] */
+        0xfd, 0x7b, 0x03, 0xa9,   /* 14: stp x29, x30, [sp, #48] */
+        0xe8, 0x27, 0xbc, 0x6d,   /* 18: stp d8,  d9,  [sp, #-64]! */
+        0xea, 0x2f, 0x01, 0x6d,   /* 1c: stp d10, d11, [sp, #16] */
+        0xec, 0x37, 0x02, 0x6d,   /* 20: stp d12, d13, [sp, #32] */
+        0xee, 0x3f, 0x03, 0x6d,   /* 24: stp d14, d15, [sp, #48] */
+        0xc0, 0x03, 0x5f, 0xd6,   /* 28: ret */
+    };
+
+    static const DWORD unwind_info_5_header =
+        (sizeof(function_5)/4) | /* function length */
+        (0 << 20) | /* X */
+        (0 << 21) | /* E */
+        (0 << 22) | /* epilog */
+        (4 << 27);  /* codes */
+
+    static const BYTE unwind_info_5[] =
+    {
+        DW(unwind_info_5_header),
+
+        UWOP_SAVE_NEXT,           /* 24: stp d14, d15, [sp, #48] */
+        UWOP_SAVE_FREGP(12, 32),  /* 20: stp d12, d13, [sp, #32] */
+        UWOP_SAVE_NEXT,           /* 1c: stp d10, d11, [sp, #16] */
+        UWOP_SAVE_FREGP_X(8, 64), /* 18: stp d8,  d9,  [sp, #-64]! */
+        UWOP_SAVE_NEXT,           /* 14: stp x29, x30, [sp, #48] */
+        UWOP_SAVE_REGP(27, 32),   /* 10: stp x27, x28, [sp, #32] */
+        UWOP_SAVE_NEXT,           /* 0c: stp x25, x26, [sp, #16] */
+        UWOP_SAVE_REGP_X(23, 64), /* 08: stp x23, x24, [sp, #-64]! */
+        UWOP_SAVE_NEXT,           /* 04: stp x21, x22, [sp, #16] */
+        UWOP_SAVE_R19R20_X(32),   /* 00: stp x19, x20, [sp, #-32]! */
+        UWOP_END,
+        UWOP_NOP                  /* padding */
+    };
+
+    /* Windows seems to only save one register for UWOP_SAVE_NEXT for
+     * float registers, contrary to what the documentation says. The tests
+     * for those cases are commented out; they succeed in wine but fail
+     * on native windows. */
+    static const struct results results_5[] =
+    {
+      /* offset  fp    handler  pc      frame offset  registers */
+        { 0x00,  0x00,  0,     ORIG_LR, 0x00000, TRUE, { {-1,-1} }},
+        { 0x04,  0x00,  0,     ORIG_LR, 0x00020, TRUE, { {x19, 0x00}, {x20, 0x08}, {-1,-1} }},
+        { 0x08,  0x00,  0,     ORIG_LR, 0x00020, TRUE, { {x19, 0x00}, {x20, 0x08}, {x21, 0x10}, {x22, 0x18}, {-1,-1} }},
+        { 0x0c,  0x00,  0,     ORIG_LR, 0x00060, TRUE, { {x19, 0x40}, {x20, 0x48}, {x21, 0x50}, {x22, 0x58}, {x23, 0x00}, {x24, 0x08}, {-1,-1} }},
+        { 0x10,  0x00,  0,     ORIG_LR, 0x00060, TRUE, { {x19, 0x40}, {x20, 0x48}, {x21, 0x50}, {x22, 0x58}, {x23, 0x00}, {x24, 0x08}, {x25, 0x10}, {x26, 0x18}, {-1,-1} }},
+        { 0x14,  0x00,  0,     ORIG_LR, 0x00060, TRUE, { {x19, 0x40}, {x20, 0x48}, {x21, 0x50}, {x22, 0x58}, {x23, 0x00}, {x24, 0x08}, {x25, 0x10}, {x26, 0x18}, {x27, 0x20}, {x28, 0x28}, {-1,-1} }},
+        { 0x18,  0x00,  0,     0x38,    0x00060, TRUE, { {x19, 0x40}, {x20, 0x48}, {x21, 0x50}, {x22, 0x58}, {x23, 0x00}, {x24, 0x08}, {x25, 0x10}, {x26, 0x18}, {x27, 0x20}, {x28, 0x28}, {x29, 0x30}, {lr, 0x38}, {-1,-1} }},
+        { 0x1c,  0x00,  0,     0x78,    0x000a0, TRUE, { {x19, 0x80}, {x20, 0x88}, {x21, 0x90}, {x22, 0x98}, {x23, 0x40}, {x24, 0x48}, {x25, 0x50}, {x26, 0x58}, {x27, 0x60}, {x28, 0x68}, {x29, 0x70}, {lr, 0x78}, {d8, 0x00}, {d9, 0x08}, {-1,-1} }},
+#if 0
+        { 0x20,  0x00,  0,     0x78,    0x000a0, TRUE, { {x19, 0x80}, {x20, 0x88}, {x21, 0x90}, {x22, 0x98}, {x23, 0x40}, {x24, 0x48}, {x25, 0x50}, {x26, 0x58}, {x27, 0x60}, {x28, 0x68}, {x29, 0x70}, {lr, 0x78}, {d8, 0x00}, {d9, 0x08}, {d10, 0x10}, {d11, 0x18}, {-1,-1} }},
+        { 0x24,  0x00,  0,     0x78,    0x000a0, TRUE, { {x19, 0x80}, {x20, 0x88}, {x21, 0x90}, {x22, 0x98}, {x23, 0x40}, {x24, 0x48}, {x25, 0x50}, {x26, 0x58}, {x27, 0x60}, {x28, 0x68}, {x29, 0x70}, {lr, 0x78}, {d8, 0x00}, {d9, 0x08}, {d10, 0x10}, {d11, 0x18}, {d12, 0x20}, {d13, 0x28}, {-1,-1} }},
+        { 0x28,  0x00,  0,     0x78,    0x000a0, TRUE, { {x19, 0x80}, {x20, 0x88}, {x21, 0x90}, {x22, 0x98}, {x23, 0x40}, {x24, 0x48}, {x25, 0x50}, {x26, 0x58}, {x27, 0x60}, {x28, 0x68}, {x29, 0x70}, {lr, 0x78}, {d8, 0x00}, {d9, 0x08}, {d10, 0x10}, {d11, 0x18}, {d12, 0x20}, {d13, 0x28}, {d14, 0x30}, {d15, 0x38}, {-1,-1} }},
+#endif
+    };
+
+    static const struct unwind_test tests[] =
+    {
+#define TEST(func, unwind, unwind_packed, results) \
+        { func, sizeof(func), unwind, unwind_packed ? 0 : sizeof(unwind), results, ARRAY_SIZE(results) }
+        TEST(function_0, unwind_info_0, 0, results_0),
+        TEST(function_1, unwind_info_1, 1, results_1),
+        TEST(function_2, unwind_info_2, 0, results_2),
+        TEST(function_3, unwind_info_3, 0, results_3),
+        TEST(function_4, unwind_info_4, 0, results_4),
+        TEST(function_5, unwind_info_5, 0, results_5),
+#undef TEST
+    };
+    unsigned int i;
+
+    for (i = 0; i < ARRAY_SIZE(tests); i++)
+        call_virtual_unwind( i, &tests[i] );
+}
+
 static void test_thread_context(void)
 {
     CONTEXT context;
@@ -5420,6 +5971,160 @@ static void test_unload_trace(void)
     }
 }
 
+#if defined(__i386__) || defined(__x86_64__)
+
+static const unsigned int test_extended_context_data[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+static const unsigned test_extended_context_spoil_data1[8] = {0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80};
+static const unsigned test_extended_context_spoil_data2[8] = {0x15, 0x25, 0x35, 0x45, 0x55, 0x65, 0x75, 0x85};
+
+static BOOL test_extended_context_modified_state;
+
+static DWORD test_extended_context_handler(EXCEPTION_RECORD *rec, EXCEPTION_REGISTRATION_RECORD *frame,
+        CONTEXT *context, EXCEPTION_REGISTRATION_RECORD **dispatcher)
+{
+    static const ULONG64 expected_compaction_mask = 0x8000000000000004;
+    CONTEXT_EX *xctx = (CONTEXT_EX *)(context + 1);
+    unsigned int *context_ymm_data;
+    DWORD expected_min_offset;
+    BOOL compaction;
+    int regs[4];
+    XSTATE *xs;
+
+    /* Since we got xstates enabled by OS this cpuid level should be supported. */
+    __cpuidex(regs, 0xd, 1);
+    compaction = regs[0] & 2;
+
+    ok((context->ContextFlags & (CONTEXT_FULL | CONTEXT_XSTATE)) == (CONTEXT_FULL | CONTEXT_XSTATE),
+            "Got unexpected ContextFlags %#x.\n", context->ContextFlags);
+
+    if ((context->ContextFlags & (CONTEXT_FULL | CONTEXT_XSTATE)) != (CONTEXT_FULL | CONTEXT_XSTATE))
+        goto done;
+
+#ifdef __x86_64__
+    {
+        /* Unwind contexts do not inherit xstate information. */
+        DISPATCHER_CONTEXT *dispatch = (DISPATCHER_CONTEXT *)dispatcher;
+
+        ok(!(dispatch->ContextRecord->ContextFlags & 0x40), "Got unexpected ContextRecord->ContextFlags %#x.\n",
+                dispatch->ContextRecord->ContextFlags);
+    }
+#endif
+
+    ok(xctx->Legacy.Offset == -(int)(sizeof(CONTEXT)), "Got unexpected Legacy.Offset %d.\n", xctx->Legacy.Offset);
+    ok(xctx->Legacy.Length == sizeof(CONTEXT), "Got unexpected Legacy.Length %d.\n", xctx->Legacy.Length);
+    ok(xctx->All.Offset == -(int)sizeof(CONTEXT), "Got unexpected All.Offset %d.\n", xctx->All.Offset);
+    ok(xctx->All.Length == sizeof(CONTEXT) + xctx->XState.Offset + xctx->XState.Length,
+            "Got unexpected All.Offset %d.\n", xctx->All.Offset);
+    expected_min_offset = sizeof(void *) == 8 ? sizeof(CONTEXT_EX) + sizeof(EXCEPTION_RECORD) : sizeof(CONTEXT_EX);
+    ok(xctx->XState.Offset >= expected_min_offset,
+            "Got unexpected XState.Offset %d.\n", xctx->XState.Offset);
+    ok(xctx->XState.Length >= sizeof(XSTATE), "Got unexpected XState.Length %d.\n", xctx->XState.Length);
+
+    xs = (XSTATE *)((char *)xctx + xctx->XState.Offset);
+    context_ymm_data = (unsigned int *)&xs->YmmContext;
+    ok(!((ULONG_PTR)xs % 64), "Got unexpected xs %p.\n", xs);
+
+    ok((compaction && (xs->CompactionMask & (expected_compaction_mask | 3)) == expected_compaction_mask)
+            || (!compaction && !xs->CompactionMask), "Got unexpected CompactionMask %s, compaction %#x.\n",
+            wine_dbgstr_longlong(xs->CompactionMask), compaction);
+
+    if (test_extended_context_modified_state)
+    {
+        ok((xs->Mask & 7) == 4, "Got unexpected Mask %s.\n", wine_dbgstr_longlong(xs->Mask));
+        ok(!memcmp(context_ymm_data, test_extended_context_data + 4, sizeof(M128A)),
+                "Got unexpected context data.\n");
+    }
+    else
+    {
+        ok(!xs->Mask, "Got unexpected Mask %s.\n", wine_dbgstr_longlong(xs->Mask));
+        /* The save area has garbage in this case, the state should be restored to INIT_STATE
+         * without using these data. */
+        memcpy(context_ymm_data, test_extended_context_spoil_data1 + 4, sizeof(M128A));
+    }
+
+done:
+#ifdef __GNUC__
+    __asm__ volatile("vmovups %0,%%ymm0" : : "m"(test_extended_context_spoil_data2));
+#endif
+#ifdef __x86_64__
+    ++context->Rip;
+#else
+    if (*(BYTE *)context->Eip == 0xcc)
+        ++context->Eip;
+#endif
+    return ExceptionContinueExecution;
+}
+
+static void test_extended_context(void)
+{
+    static BYTE except_code_set_ymm0[] =
+    {
+#ifdef __x86_64__
+        0x48,
+#endif
+        0xb8,                         /* mov imm,%ax */
+        0x00, 0x00, 0x00, 0x00,
+#ifdef __x86_64__
+        0x00, 0x00, 0x00, 0x00,
+#endif
+
+        0xc5, 0xfc, 0x10, 0x00,       /* vmovups (%ax),%ymm0 */
+        0xcc,                         /* int3 */
+        0xc5, 0xfc, 0x11, 0x00,       /* vmovups %ymm0,(%ax) */
+        0xc3,                         /* ret  */
+    };
+    static BYTE except_code_reset_ymm_state[] =
+    {
+#ifdef __x86_64__
+        0x48,
+#endif
+        0xb8,                         /* mov imm,%ax */
+        0x00, 0x00, 0x00, 0x00,
+#ifdef __x86_64__
+        0x00, 0x00, 0x00, 0x00,
+#endif
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+        0xc5, 0xf8, 0x77,             /* vzeroupper */
+        0x0f, 0x57, 0xc0,             /* xorps  %xmm0,%xmm0 */
+        0xcc,                         /* int3 */
+        0xc5, 0xfc, 0x11, 0x00,       /* vmovups %ymm0,(%ax) */
+        0xc3,                         /* ret  */
+    };
+    unsigned int i, address_offset;
+    unsigned data[8];
+
+    address_offset = sizeof(void *) == 8 ? 2 : 1;
+    *(void **)(except_code_set_ymm0 + address_offset) = data;
+    *(void **)(except_code_reset_ymm_state + address_offset) = data;
+
+    if (!pRtlGetEnabledExtendedFeatures || !(pRtlGetEnabledExtendedFeatures(~(ULONG64)0) & (1 << XSTATE_AVX)))
+    {
+        skip("AVX is not supported.\n");
+        return;
+    }
+
+    memset(data, 0xff, sizeof(data));
+    test_extended_context_modified_state = FALSE;
+    run_exception_test(test_extended_context_handler, NULL, except_code_reset_ymm_state,
+            ARRAY_SIZE(except_code_reset_ymm_state), PAGE_EXECUTE_READ);
+    for (i = 0; i < 8; ++i)
+    {
+        /* Older Windows version do not reset AVX context to INIT_STATE on x86. */
+        ok(!data[i] || broken(i >= 4 && sizeof(void *) == 4 && data[i] == test_extended_context_spoil_data2[i]),
+                "Got unexpected data %#x, i %u.\n", data[i], i);
+    }
+
+    memcpy(data, test_extended_context_data, sizeof(data));
+    test_extended_context_modified_state = TRUE;
+    run_exception_test(test_extended_context_handler, NULL, except_code_set_ymm0,
+            ARRAY_SIZE(except_code_set_ymm0), PAGE_EXECUTE_READ);
+
+    for (i = 0; i < 8; ++i)
+        ok(data[i] == test_extended_context_data[i], "Got unexpected data %#x, i %u.\n", data[i], i);
+}
+#endif
+
 START_TEST(exception)
 {
     HMODULE hntdll = GetModuleHandleA("ntdll.dll");
@@ -5462,6 +6167,7 @@ START_TEST(exception)
     X(NtResumeProcess);
     X(RtlGetUnloadEventTrace);
     X(RtlGetUnloadEventTraceEx);
+    X(RtlGetEnabledExtendedFeatures);
 #undef X
 
     pIsWow64Process = (void *)GetProcAddress(GetModuleHandleA("kernel32.dll"), "IsWow64Process");
@@ -5544,6 +6250,7 @@ START_TEST(exception)
     test_dpe_exceptions();
     test_prot_fault();
     test_kiuserexceptiondispatcher();
+    test_extended_context();
 
 #elif defined(__x86_64__)
 
@@ -5582,6 +6289,12 @@ START_TEST(exception)
       test_dynamic_unwind();
     else
       skip( "Dynamic unwind functions not found\n" );
+    test_extended_context();
+
+#elif defined(__aarch64__)
+
+    test_virtual_unwind();
+
 #endif
 
     test_debugger();

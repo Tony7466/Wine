@@ -36,34 +36,6 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(seh);
 
-/* not defined for x86, so copy the x86_64 definition */
-typedef struct DECLSPEC_ALIGN(16) _M128A
-{
-    ULONGLONG Low;
-    LONGLONG High;
-} M128A;
-
-typedef struct
-{
-    WORD ControlWord;
-    WORD StatusWord;
-    BYTE TagWord;
-    BYTE Reserved1;
-    WORD ErrorOpcode;
-    DWORD ErrorOffset;
-    WORD ErrorSelector;
-    WORD Reserved2;
-    DWORD DataOffset;
-    WORD DataSelector;
-    WORD Reserved3;
-    DWORD MxCsr;
-    DWORD MxCsr_Mask;
-    M128A FloatRegisters[8];
-    M128A XmmRegisters[16];
-    BYTE Reserved4[96];
-} XMM_SAVE_AREA32;
-
-
 struct x86_thread_data
 {
     DWORD              fs;            /* 1d4 TEB selector */
@@ -287,8 +259,8 @@ static inline void save_fpux( CONTEXT *context )
 {
 #ifdef __GNUC__
     /* we have to enforce alignment by hand */
-    char buffer[sizeof(XMM_SAVE_AREA32) + 16];
-    XMM_SAVE_AREA32 *state = (XMM_SAVE_AREA32 *)(((ULONG_PTR)buffer + 15) & ~15);
+    char buffer[sizeof(XSAVE_FORMAT) + 16];
+    XSAVE_FORMAT *state = (XSAVE_FORMAT *)(((ULONG_PTR)buffer + 15) & ~15);
 
     context->ContextFlags |= CONTEXT_EXTENDED_REGISTERS;
     __asm__ __volatile__( "fxsave %0" : "=m" (*state) );
@@ -497,6 +469,27 @@ USHORT WINAPI RtlCaptureStackBackTrace( ULONG skip, ULONG count, PVOID *buffer, 
     return i;
 }
 
+
+/***********************************************************************
+ *           signal_start_thread
+ */
+__ASM_GLOBAL_FUNC( signal_start_thread,
+                   "movl 4(%esp),%esi\n\t"   /* context */
+                   "leal -12(%esi),%ecx\n\t"
+                   /* clear the thread stack */
+                   "andl $~0xfff,%ecx\n\t"   /* round down to page size */
+                   "movl %fs:8,%edi\n\t"     /* NtCurrentTeb()->Tib.StackLimit */
+                   "addl $0x1000,%edi\n\t"
+                   "movl %edi,%esp\n\t"
+                   "subl %edi,%ecx\n\t"
+                   "xorl %eax,%eax\n\t"
+                   "shrl $2,%ecx\n\t"
+                   "rep; stosl\n\t"
+                   /* switch to the initial context */
+                   "leal -12(%esi),%esp\n\t"
+                   "movl $1,4(%esp)\n\t"
+                   "movl %esi,(%esp)\n\t"
+                   "call " __ASM_STDCALL("NtContinue", 8) )
 
 /**********************************************************************
  *		DbgBreakPoint   (NTDLL.@)
