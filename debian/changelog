@@ -1,3 +1,13 @@
+wine-development (5.17-1) UNRELEASED; urgency=medium
+
+  * New upstream release 5.17, released Sep 11, 2020.
+    - ADVAPI32 library converted to PE.
+    - Beginnings of an NDIS network driver.
+    - Still more restructuration of the console support.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 22 May 2021 01:07:01 +0000
+
 wine-development (5.16-1) unstable; urgency=medium
 
   * New upstream release 5.16, released Aug 28, 2020.
