@@ -6,7 +6,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
 
 --- a/libs/wine/config.c
 +++ b/libs/wine/config.c
-@@ -374,6 +374,8 @@ static void init_server_dir( dev_t dev,
+@@ -373,6 +373,8 @@ static void init_server_dir( dev_t dev,
  {
      char *p, *root;
  
@@ -25,7 +25,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  #include <assert.h>
  #include <ctype.h>
  #include <errno.h>
-@@ -1112,6 +1113,17 @@ int server_pipe( int fd[2] )
+@@ -1111,6 +1112,17 @@ int server_pipe( int fd[2] )
      return ret;
  }
  
@@ -43,7 +43,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  
  /***********************************************************************
   *           init_server_dir
-@@ -1121,16 +1133,113 @@ static const char *init_server_dir( dev_
+@@ -1120,16 +1132,113 @@ static const char *init_server_dir( dev_
      char *p, *dir;
      size_t len = sizeof("/server-") + 2 * sizeof(dev) + 2 * sizeof(ino) + 2;
  

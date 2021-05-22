@@ -1,4 +1,5 @@
 debianization/mingw.patch
+debianization/indep.patch
 debianization/addons.patch
 debianization/makefile.patch
 debianization/manpages.patch
@@ -23,9 +24,6 @@ generate/vulkan.patch
 generate/vulkan162.patch
 generate/unicode.patch
 generate/request.patch
-
-binary-indep/manpages.patch
-binary-indep/sfnt2fon.patch
 
 fixes/x86.patch
 fixes/gstbase.patch

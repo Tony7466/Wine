@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -1557,14 +1557,6 @@ static struct file *open_include_file( c
+@@ -1561,14 +1561,6 @@ static struct file *open_include_file( c
          }
      }
  

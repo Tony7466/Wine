@@ -1,11 +1,11 @@
-description: add Makefile rules for building just the manpages
+description: support building just the manpages in the install-indep rule
 author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -3969,6 +3969,7 @@ static void output_sources( struct makef
-             output_filenames_obj_dir( make, make->all_targets );
+@@ -3987,6 +3987,7 @@ static void output_sources( struct makef
              output( "\n" );
+             strarray_add_uniq( &make->phony_targets, obj_dir_path( make, "all" ));
          }
 +        output( "install-man:: $(shell echo ${MANPAGES} | sed s/\\\\.in//g)\n" );
          output_install_rules( make, INSTALL_LIB, "install-lib" );

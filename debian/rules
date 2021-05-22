@@ -156,7 +156,6 @@ endif
 	./configure $(CONFLAGS)
 
 override_dh_auto_build-indep:
-	./tools/makedep libs/port tools/sfnt2fon fonts
 	make -C libs/port
 	make -C tools/sfnt2fon
 	make -C fonts
@@ -172,7 +171,6 @@ override_dh_auto_install-indep: $(INSTALLS)
 	    programs/wineconsole programs/regedit programs/regsvr32 \
 	    programs/wineboot programs/winefile programs/winepath \
 	    programs/winecfg; do \
-	    ./tools/makedep $$dir; \
 	    make -C $$dir install-man; \
 	    done
 	for file in $$(find . ! -path "./debian/*" -name \*.man); do \
@@ -228,6 +226,8 @@ endif
 	rm -rf debian/tmp/usr/share/man
 	rm -rf debian/tmp/usr/share/wine$(DEBSUFFIX)/wine/nls
 	rm -f debian/tmp/usr/lib/*/wineserver
+	rm -f debian/tmp/usr/share/*/fonts/*.fon
+	rm -f debian/tmp/usr/share/*/fonts/*.ttf
 	rm -f debian/tmp/notepad*.man debian/tmp/winemine*.man
 
 override_dh_shlibdeps:
