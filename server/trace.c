@@ -116,6 +116,7 @@ static void dump_ioctl_code( const char *prefix, const ioctl_code_t *code )
 #define CASE(c) case c: fprintf( stderr, "%s%s", prefix, #c ); break
         CASE(IOCTL_CONDRV_ACTIVATE);
         CASE(IOCTL_CONDRV_ATTACH_RENDERER);
+        CASE(IOCTL_CONDRV_CTRL_EVENT);
         CASE(IOCTL_CONDRV_FILL_OUTPUT);
         CASE(IOCTL_CONDRV_GET_INPUT_INFO);
         CASE(IOCTL_CONDRV_GET_MODE);
@@ -127,6 +128,7 @@ static void dump_ioctl_code( const char *prefix, const ioctl_code_t *code )
         CASE(IOCTL_CONDRV_READ_OUTPUT);
         CASE(IOCTL_CONDRV_SET_MODE);
         CASE(IOCTL_CONDRV_SET_OUTPUT_INFO);
+        CASE(IOCTL_CONDRV_WRITE_CONSOLE);
         CASE(IOCTL_CONDRV_WRITE_INPUT);
         CASE(IOCTL_CONDRV_WRITE_OUTPUT);
         CASE(FSCTL_DISMOUNT_VOLUME);
@@ -2086,12 +2088,6 @@ static void dump_create_console_output_request( const struct create_console_outp
 static void dump_create_console_output_reply( const struct create_console_output_reply *req )
 {
     fprintf( stderr, " handle_out=%04x", req->handle_out );
-}
-
-static void dump_send_console_signal_request( const struct send_console_signal_request *req )
-{
-    fprintf( stderr, " signal=%d", req->signal );
-    fprintf( stderr, ", group_id=%04x", req->group_id );
 }
 
 static void dump_get_next_console_request_request( const struct get_next_console_request_request *req )
@@ -4501,7 +4497,6 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_append_console_input_history_request,
     (dump_func)dump_get_console_input_history_request,
     (dump_func)dump_create_console_output_request,
-    (dump_func)dump_send_console_signal_request,
     (dump_func)dump_get_next_console_request_request,
     (dump_func)dump_read_directory_changes_request,
     (dump_func)dump_read_change_request,
@@ -4787,7 +4782,6 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     NULL,
     (dump_func)dump_get_console_input_history_reply,
     (dump_func)dump_create_console_output_reply,
-    NULL,
     (dump_func)dump_get_next_console_request_reply,
     NULL,
     (dump_func)dump_read_change_reply,
@@ -5073,7 +5067,6 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "append_console_input_history",
     "get_console_input_history",
     "create_console_output",
-    "send_console_signal",
     "get_next_console_request",
     "read_directory_changes",
     "read_change",

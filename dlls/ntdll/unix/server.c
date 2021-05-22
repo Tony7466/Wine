@@ -85,7 +85,6 @@
 #define WIN32_NO_STATUS
 #include "windef.h"
 #include "winnt.h"
-#include "wine/library.h"
 #include "wine/server.h"
 #include "wine/debug.h"
 #include "unix_private.h"
@@ -914,8 +913,8 @@ static BOOL add_fd_to_cache( HANDLE handle, int fd, enum server_fd_type type,
         if (!entry) fd_cache[0] = fd_cache_initial_block;
         else
         {
-            void *ptr = wine_anon_mmap( NULL, FD_CACHE_BLOCK_SIZE * sizeof(union fd_cache_entry),
-                                        PROT_READ | PROT_WRITE, 0 );
+            void *ptr = anon_mmap_alloc( FD_CACHE_BLOCK_SIZE * sizeof(union fd_cache_entry),
+                                         PROT_READ | PROT_WRITE );
             if (ptr == MAP_FAILED) return FALSE;
             fd_cache[entry] = ptr;
         }
@@ -1453,7 +1452,7 @@ void server_init_process(void)
 /***********************************************************************
  *           server_init_process_done
  */
-void CDECL server_init_process_done( void *relay )
+void server_init_process_done(void)
 {
     PEB *peb = NtCurrentTeb()->Peb;
     IMAGE_NT_HEADERS *nt = get_exe_nt_header();
@@ -1486,7 +1485,7 @@ void CDECL server_init_process_done( void *relay )
     SERVER_END_REQ;
 
     assert( !status );
-    signal_start_thread( entry, peb, suspend, relay, pLdrInitializeThunk, NtCurrentTeb() );
+    signal_start_thread( entry, peb, suspend, pLdrInitializeThunk, NtCurrentTeb() );
 }
 
 

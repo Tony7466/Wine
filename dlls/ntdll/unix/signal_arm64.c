@@ -655,21 +655,17 @@ __ASM_GLOBAL_FUNC( call_user_apc_dispatcher,
                    "mov sp, x0\n\t"
                    "b 2f\n"
                    "1:\tldr x0, [x25]\n\t"
-                   "sub x19, x0, #0x390\n\t"
-                   "mov x0, sp\n\t"
-                   "cmp x19, x0\n\t"
-                   "csel x0, x19, x0, lo\n\t"
-                   "mov sp, x0\n\t"
+                   "sub sp, x0, #0x390\n\t"
                    "mov w2, #0x400000\n\t"       /* context.ContextFlags = CONTEXT_FULL */
                    "movk w2, #7\n\t"
-                   "mov x1, x19\n\t"
-                   "str w2, [x19]\n\t"
+                   "str w2, [sp]\n\t"
+                   "mov x1, sp\n\t"
                    "mov x0, #~1\n\t"
                    "bl " __ASM_NAME("NtGetContextThread") "\n\t"
                    "mov w2, #0xc0\n\t"           /* context.X0 = STATUS_USER_APC */
-                   "str x2, [x19, #8]\n\t"
+                   "str x2, [sp, #8]\n\t"
                    "str xzr, [x25]\n\t"
-                   "mov x0, x19\n"               /* context */
+                   "mov x0, sp\n"                /* context */
                    "2:\tldr lr, [x0, #0xf8]\n\t" /* context.Lr */
                    "mov x1, x20\n\t"             /* ctx */
                    "mov x2, x21\n\t"             /* arg1 */
@@ -700,7 +696,7 @@ __ASM_GLOBAL_FUNC( call_user_exception_dispatcher,
                    "mov x0, x19\n\t"
                    "mov x1, x20\n\t"
                    "mov x2, x21\n\t"
-                   "ldp x19, x20, [x5, #64]\n\t"   /* frame->x19,x20 */
+                   "ldp x19, x20, [x5, #80]\n\t"   /* frame->x19,x20 */
                    "ldp x21, x22, [x5, #96]\n\t"   /* frame->x21,x22 */
                    "ldp x23, x24, [x5, #112]\n\t"  /* frame->x23,x24 */
                    "ldp x25, x26, [x5, #128]\n\t"  /* frame->x25,x26 */
@@ -777,7 +773,7 @@ static BOOL handle_syscall_fault( ucontext_t *context, EXCEPTION_RECORD *rec )
         REGn_sig(28, context) = frame->x28;
         FP_sig(context)       = frame->x29;
         LR_sig(context)       = frame->ret_addr;
-        SP_sig(context)       = (DWORD)&frame->thunk_x29;
+        SP_sig(context)       = (ULONG64)&frame->thunk_x29;
         PC_sig(context)       = frame->thunk_addr;
         arm64_thread_data()->syscall_frame = NULL;
     }
@@ -1077,13 +1073,13 @@ void signal_init_process(void)
 /***********************************************************************
  *           init_thread_context
  */
-static void init_thread_context( CONTEXT *context, LPTHREAD_START_ROUTINE entry, void *arg, void *relay )
+static void init_thread_context( CONTEXT *context, LPTHREAD_START_ROUTINE entry, void *arg, TEB *teb )
 {
     context->u.s.X0  = (DWORD64)entry;
     context->u.s.X1  = (DWORD64)arg;
-    context->u.s.X18 = (DWORD64)NtCurrentTeb();
-    context->Sp      = (DWORD64)NtCurrentTeb()->Tib.StackBase;
-    context->Pc      = (DWORD64)relay;
+    context->u.s.X18 = (DWORD64)teb;
+    context->Sp      = (DWORD64)teb->Tib.StackBase;
+    context->Pc      = (DWORD64)pRtlUserThreadStart;
 }
 
 
@@ -1091,7 +1087,7 @@ static void init_thread_context( CONTEXT *context, LPTHREAD_START_ROUTINE entry,
  *           get_initial_context
  */
 PCONTEXT DECLSPEC_HIDDEN get_initial_context( LPTHREAD_START_ROUTINE entry, void *arg,
-                                              BOOL suspend, void *relay )
+                                              BOOL suspend, TEB *teb )
 {
     CONTEXT *ctx;
 
@@ -1099,15 +1095,15 @@ PCONTEXT DECLSPEC_HIDDEN get_initial_context( LPTHREAD_START_ROUTINE entry, void
     {
         CONTEXT context = { CONTEXT_ALL };
 
-        init_thread_context( &context, entry, arg, relay );
+        init_thread_context( &context, entry, arg, teb );
         wait_suspend( &context );
         ctx = (CONTEXT *)((ULONG_PTR)context.Sp & ~15) - 1;
         *ctx = context;
     }
     else
     {
-        ctx = (CONTEXT *)NtCurrentTeb()->Tib.StackBase - 1;
-        init_thread_context( ctx, entry, arg, relay );
+        ctx = (CONTEXT *)teb->Tib.StackBase - 1;
+        init_thread_context( ctx, entry, arg, teb );
     }
     pthread_sigmask( SIG_UNBLOCK, &server_block_set, NULL );
     ctx->ContextFlags = CONTEXT_FULL;
@@ -1120,15 +1116,16 @@ PCONTEXT DECLSPEC_HIDDEN get_initial_context( LPTHREAD_START_ROUTINE entry, void
  */
 __ASM_GLOBAL_FUNC( signal_start_thread,
                    "stp x29, x30, [sp,#-16]!\n\t"
-                   "mov x19, x4\n\t"             /* thunk */
-                   "mov x18, x5\n\t"             /* teb */
+                   "mov x19, x3\n\t"             /* thunk */
+                   "mov x18, x4\n\t"             /* teb */
                    /* store exit frame */
                    "mov x29, sp\n\t"
-                   "str x29, [x5, #0x2f0]\n\t"  /* arm64_thread_data()->exit_frame */
+                   "str x29, [x4, #0x2f0]\n\t"  /* arm64_thread_data()->exit_frame */
                    /* switch to thread stack */
-                   "ldr x5, [x5, #8]\n\t"       /* teb->Tib.StackBase */
+                   "ldr x5, [x4, #8]\n\t"       /* teb->Tib.StackBase */
                    "sub sp, x5, #0x1000\n\t"
                    /* attach dlls */
+                   "mov x3, x4\n\t"
                    "bl " __ASM_NAME("get_initial_context") "\n\t"
                    "mov lr, #0\n\t"
                    "br x19" )

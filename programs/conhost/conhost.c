@@ -21,6 +21,8 @@
 
 #include <stdarg.h>
 #include <stdlib.h>
+#include <assert.h>
+
 #include <ntstatus.h>
 #define WIN32_NO_STATUS
 #include <windef.h>
@@ -54,23 +56,31 @@ struct font_info
 
 struct console
 {
-    HANDLE                server;        /* console server handle */
-    unsigned int          mode;          /* input mode */
-    struct screen_buffer *active;        /* active screen buffer */
-    INPUT_RECORD         *records;       /* input records */
-    unsigned int          record_count;  /* number of input records */
-    unsigned int          record_size;   /* size of input records buffer */
-    size_t                pending_read;  /* size of pending read buffer */
-    WCHAR                *title;         /* console title */
-    size_t                title_len;     /* length of console title */
-    struct history_line **history;       /* lines history */
-    unsigned int          history_size;  /* number of entries in history array */
-    unsigned int          history_index; /* number of used entries in history array */
-    unsigned int          history_mode;  /* mode of history (non zero means remove doubled strings */
-    unsigned int          edition_mode;  /* index to edition mode flavors */
-    unsigned int          input_cp;      /* console input codepage */
-    unsigned int          output_cp;     /* console output codepage */
-    unsigned int          win;           /* window handle if backend supports it */
+    HANDLE                server;              /* console server handle */
+    unsigned int          mode;                /* input mode */
+    struct screen_buffer *active;              /* active screen buffer */
+    INPUT_RECORD         *records;             /* input records */
+    unsigned int          record_count;        /* number of input records */
+    unsigned int          record_size;         /* size of input records buffer */
+    size_t                pending_read;        /* size of pending read buffer */
+    WCHAR                *title;               /* console title */
+    size_t                title_len;           /* length of console title */
+    struct history_line **history;             /* lines history */
+    unsigned int          history_size;        /* number of entries in history array */
+    unsigned int          history_index;       /* number of used entries in history array */
+    unsigned int          history_mode;        /* mode of history (non zero means remove doubled strings */
+    unsigned int          edition_mode;        /* index to edition mode flavors */
+    unsigned int          input_cp;            /* console input codepage */
+    unsigned int          output_cp;           /* console output codepage */
+    unsigned int          win;                 /* window handle if backend supports it */
+    HANDLE                tty_input;           /* handle to tty input stream */
+    HANDLE                tty_output;          /* handle to tty output stream */
+    char                  tty_buffer[4096];    /* tty output buffer */
+    size_t                tty_buffer_count;    /* tty buffer size */
+    unsigned int          tty_cursor_x;        /* tty cursor position */
+    unsigned int          tty_cursor_y;
+    unsigned int          tty_attr;            /* current tty char attributes */
+    int                   tty_cursor_visible;  /* tty cursor visibility flag */
 };
 
 struct screen_buffer
@@ -96,6 +106,15 @@ struct screen_buffer
 };
 
 static const char_info_t empty_char_info = { ' ', 0x0007 };  /* white on black space */
+
+static CRITICAL_SECTION console_section;
+static CRITICAL_SECTION_DEBUG critsect_debug =
+{
+    0, 0, &console_section,
+    { &critsect_debug.ProcessLocksList, &critsect_debug.ProcessLocksList },
+      0, 0, { (DWORD_PTR)(__FILE__ ": console_section") }
+};
+static CRITICAL_SECTION console_section = { &critsect_debug, -1, 0, 0, 0, 0 };
 
 static void *ioctl_buffer;
 static size_t ioctl_buffer_size;
@@ -140,9 +159,9 @@ static struct screen_buffer *create_screen_buffer( struct console *console, int 
     screen_buffer->max_width      = 80;
     screen_buffer->max_height     = 25;
     screen_buffer->win.left       = 0;
-    screen_buffer->win.right      = screen_buffer->max_width - 1;
+    screen_buffer->win.right      = min( screen_buffer->max_width - 1, width - 1 );
     screen_buffer->win.top        = 0;
-    screen_buffer->win.bottom     = screen_buffer->max_height - 1;
+    screen_buffer->win.bottom     = min( screen_buffer->max_height - 1, height - 1);
     screen_buffer->font.width     = 0;
     screen_buffer->font.height    = 0;
     screen_buffer->font.weight    = FW_NORMAL;
@@ -187,6 +206,230 @@ static BOOL is_active( struct screen_buffer *screen_buffer )
     return screen_buffer == screen_buffer->console->active;
 }
 
+static void tty_flush( struct console *console )
+{
+    if (!console->tty_output || !console->tty_buffer_count) return;
+    TRACE("%s\n", debugstr_an(console->tty_buffer, console->tty_buffer_count));
+    if (!WriteFile( console->tty_output, console->tty_buffer, console->tty_buffer_count,
+                    NULL, NULL ))
+        WARN( "write failed: %u\n", GetLastError() );
+    console->tty_buffer_count = 0;
+}
+
+static void tty_write( struct console *console, const char *buffer, size_t size )
+{
+    if (!size || !console->tty_output) return;
+    if (console->tty_buffer_count + size > sizeof(console->tty_buffer))
+        tty_flush( console );
+    if (console->tty_buffer_count + size <= sizeof(console->tty_buffer))
+    {
+        memcpy( console->tty_buffer + console->tty_buffer_count, buffer, size );
+        console->tty_buffer_count += size;
+    }
+    else
+    {
+        assert( !console->tty_buffer_count );
+        if (!WriteFile( console->tty_output, buffer, size, NULL, NULL ))
+            WARN( "write failed: %u\n", GetLastError() );
+    }
+}
+
+static void *tty_alloc_buffer( struct console *console, size_t size )
+{
+    void *ret;
+    if (console->tty_buffer_count + size > sizeof(console->tty_buffer)) return NULL;
+    ret = console->tty_buffer + console->tty_buffer_count;
+    console->tty_buffer_count += size;
+    return ret;
+}
+
+static void hide_tty_cursor( struct console *console )
+{
+    if (console->tty_cursor_visible)
+    {
+        tty_write(  console, "\x1b[?25l", 6 );
+        console->tty_cursor_visible = FALSE;
+    }
+}
+
+static void set_tty_cursor( struct console *console, unsigned int x, unsigned int y )
+{
+    char buf[64];
+
+    if (console->tty_cursor_x == x && console->tty_cursor_y == y) return;
+
+    if (!x && y == console->tty_cursor_y + 1) strcpy( buf, "\r\n" );
+    else if (!x && y == console->tty_cursor_y) strcpy( buf, "\r" );
+    else if (y == console->tty_cursor_y)
+    {
+        if (x + 1 == console->tty_cursor_x) strcpy( buf, "\b" );
+        else if (x > console->tty_cursor_x) sprintf( buf, "\x1b[%uC", x - console->tty_cursor_x );
+        else sprintf( buf, "\x1b[%uD", console->tty_cursor_x - x );
+    }
+    else if (x || y)
+    {
+        hide_tty_cursor( console );
+        sprintf( buf, "\x1b[%u;%uH", y + 1, x + 1);
+    }
+    else strcpy( buf, "\x1b[H" );
+    console->tty_cursor_x = x;
+    console->tty_cursor_y = y;
+    tty_write( console, buf, strlen(buf) );
+}
+
+static void set_tty_attr( struct console *console, unsigned int attr )
+{
+    char buf[8];
+
+    if ((attr & 0x0f) != (console->tty_attr & 0x0f))
+    {
+        if ((attr & 0x0f) != 7)
+        {
+            unsigned int n = 30;
+            if (attr & FOREGROUND_BLUE)  n += 4;
+            if (attr & FOREGROUND_GREEN) n += 2;
+            if (attr & FOREGROUND_RED)   n += 1;
+            if (attr & FOREGROUND_INTENSITY) n += 60;
+            sprintf(buf, "\x1b[%um", n);
+            tty_write( console, buf, strlen(buf) );
+        }
+        else tty_write( console, "\x1b[m", 3 );
+    }
+
+    if ((attr & 0xf0) != (console->tty_attr & 0xf0) && attr != 7)
+    {
+        unsigned int n = 40;
+        if (attr & BACKGROUND_BLUE)  n += 4;
+        if (attr & BACKGROUND_GREEN) n += 2;
+        if (attr & BACKGROUND_RED)   n += 1;
+        if (attr & BACKGROUND_INTENSITY) n += 60;
+        sprintf(buf, "\x1b[%um", n);
+        tty_write( console, buf, strlen(buf) );
+    }
+
+    console->tty_attr = attr;
+}
+
+static void tty_sync( struct console *console )
+{
+    if (!console->tty_output) return;
+
+    if (console->active->cursor_visible)
+    {
+        set_tty_cursor( console, console->active->cursor_x, console->active->cursor_y );
+        if (!console->tty_cursor_visible)
+        {
+            tty_write( console, "\x1b[?25h", 6 ); /* show cursor */
+            console->tty_cursor_visible = TRUE;
+        }
+    }
+    else if (console->tty_cursor_visible)
+        hide_tty_cursor( console );
+    tty_flush( console );
+}
+
+static void init_tty_output( struct console *console )
+{
+    /* initialize tty output, but don't flush */
+    tty_write( console, "\x1b[2J", 4 ); /* clear screen */
+    set_tty_attr( console, console->active->attr );
+    tty_write( console, "\x1b[H", 3 );  /* move cursor to (0,0) */
+    console->tty_cursor_visible = TRUE;
+}
+
+static void empty_update_rect( struct screen_buffer *screen_buffer, RECT *rect )
+{
+    SetRect( rect, screen_buffer->width, screen_buffer->height, 0, 0 );
+}
+
+static void update_output( struct screen_buffer *screen_buffer, RECT *rect )
+{
+    int x, y, size, trailing_spaces;
+    char_info_t *ch;
+    char buf[8];
+
+    if (!is_active( screen_buffer ) || !screen_buffer->console->tty_output) return;
+    if (rect->top > rect->bottom || rect->right < rect->left) return;
+    TRACE( "%s\n", wine_dbgstr_rect( rect ));
+
+    hide_tty_cursor( screen_buffer->console );
+
+    for (y = rect->top; y <= rect->bottom; y++)
+    {
+        for (trailing_spaces = 0; trailing_spaces < screen_buffer->width; trailing_spaces++)
+        {
+            ch = &screen_buffer->data[(y + 1) * screen_buffer->width - trailing_spaces - 1];
+            if (ch->ch != ' ' || ch->attr != 7) break;
+        }
+        if (trailing_spaces < 4) trailing_spaces = 0;
+
+        for (x = rect->left; x <= rect->right; x++)
+        {
+            ch = &screen_buffer->data[y * screen_buffer->width + x];
+            set_tty_attr( screen_buffer->console, ch->attr );
+            set_tty_cursor( screen_buffer->console, x, y );
+
+            if (x + trailing_spaces >= screen_buffer->width)
+            {
+                tty_write( screen_buffer->console, "\x1b[K", 3 );
+                break;
+            }
+
+            size = WideCharToMultiByte( CP_UTF8, 0, &ch->ch, 1, buf, sizeof(buf), NULL, NULL );
+            tty_write( screen_buffer->console, buf, size );
+            screen_buffer->console->tty_cursor_x++;
+        }
+    }
+
+    empty_update_rect( screen_buffer, rect );
+}
+
+static void new_line( struct screen_buffer *screen_buffer, RECT *update_rect )
+{
+    unsigned int i;
+
+    assert( screen_buffer->cursor_y == screen_buffer->height );
+    screen_buffer->cursor_y--;
+
+    if (screen_buffer->console->tty_output)
+        update_output( screen_buffer, update_rect );
+    else
+        SetRect( update_rect, 0, 0, screen_buffer->width - 1, screen_buffer->height - 1 );
+
+    memmove( screen_buffer->data, screen_buffer->data + screen_buffer->width,
+             screen_buffer->width * (screen_buffer->height - 1) * sizeof(*screen_buffer->data) );
+    for (i = 0; i < screen_buffer->width; i++)
+        screen_buffer->data[screen_buffer->width * (screen_buffer->height - 1) + i] = empty_char_info;
+    if (is_active( screen_buffer ))
+    {
+        screen_buffer->console->tty_cursor_y--;
+        if (screen_buffer->console->tty_cursor_y != screen_buffer->height - 2)
+            set_tty_cursor( screen_buffer->console, 0, screen_buffer->height - 2 );
+        set_tty_cursor( screen_buffer->console, 0, screen_buffer->height - 1 );
+    }
+}
+
+static void write_char( struct screen_buffer *screen_buffer, WCHAR ch, RECT *update_rect )
+{
+    if (screen_buffer->cursor_x == screen_buffer->width)
+    {
+        screen_buffer->cursor_x = 0;
+        screen_buffer->cursor_y++;
+    }
+    if (screen_buffer->cursor_y == screen_buffer->height)
+    {
+        new_line( screen_buffer, update_rect );
+    }
+
+    screen_buffer->data[screen_buffer->cursor_y * screen_buffer->width + screen_buffer->cursor_x].ch = ch;
+    screen_buffer->data[screen_buffer->cursor_y * screen_buffer->width + screen_buffer->cursor_x].attr = screen_buffer->attr;
+    update_rect->left   = min( update_rect->left,   screen_buffer->cursor_x );
+    update_rect->top    = min( update_rect->top,    screen_buffer->cursor_y );
+    update_rect->right  = max( update_rect->right,  screen_buffer->cursor_x );
+    update_rect->bottom = max( update_rect->bottom, screen_buffer->cursor_y );
+    screen_buffer->cursor_x++;
+}
+
 static NTSTATUS read_console_input( struct console *console, size_t out_size )
 {
     size_t count = min( out_size / sizeof(INPUT_RECORD), console->record_count );
@@ -217,9 +460,19 @@ static NTSTATUS read_console_input( struct console *console, size_t out_size )
     return STATUS_SUCCESS;
 }
 
+static NTSTATUS process_console_input( struct console *console )
+{
+    if (console->record_count && console->pending_read)
+    {
+        read_console_input( console, console->pending_read );
+        console->pending_read = 0;
+    }
+    return STATUS_SUCCESS;
+}
+
 /* add input events to a console input queue */
 static NTSTATUS write_console_input( struct console *console, const INPUT_RECORD *records,
-                                     unsigned int count )
+                                     unsigned int count, BOOL flush )
 {
     TRACE( "%u\n", count );
 
@@ -250,18 +503,272 @@ static NTSTATUS write_console_input( struct console *console, const INPUT_RECORD
                 count--;
                 if (records[i].Event.KeyEvent.bKeyDown)
                 {
-                    FIXME("CTRL C\n");
+                    struct condrv_ctrl_event ctrl_event;
+                    IO_STATUS_BLOCK io;
+
+                    ctrl_event.event = CTRL_C_EVENT;
+                    ctrl_event.group_id = 0;
+                    NtDeviceIoControlFile( console->server, NULL, NULL, NULL, &io, IOCTL_CONDRV_CTRL_EVENT,
+                                           &ctrl_event, sizeof(ctrl_event), NULL, 0 );
+
                 }
             }
             else i++;
         }
     }
     console->record_count += count;
-    if (count && console->pending_read)
+    return flush ? process_console_input( console ) : STATUS_SUCCESS;
+}
+
+static void set_key_input_record( INPUT_RECORD *record, WCHAR ch, unsigned int vk, BOOL is_down, unsigned int ctrl_state )
+{
+    record->EventType = KEY_EVENT;
+    record->Event.KeyEvent.bKeyDown = is_down;
+    record->Event.KeyEvent.wRepeatCount = 1;
+    record->Event.KeyEvent.uChar.UnicodeChar = ch;
+    record->Event.KeyEvent.wVirtualKeyCode = vk;
+    record->Event.KeyEvent.wVirtualScanCode = MapVirtualKeyW( vk, MAPVK_VK_TO_VSC );
+    record->Event.KeyEvent.dwControlKeyState = ctrl_state;
+}
+
+static NTSTATUS key_press( struct console *console, WCHAR ch, unsigned int vk, unsigned int ctrl_state )
+{
+    INPUT_RECORD records[8];
+    unsigned int count = 0, ctrl = 0;
+
+    if (ctrl_state & SHIFT_PRESSED)
     {
-        read_console_input( console, console->pending_read );
-        console->pending_read = 0;
+        ctrl |= SHIFT_PRESSED;
+        set_key_input_record( &records[count++], 0, VK_SHIFT, TRUE, ctrl );
     }
+    if (ctrl_state & LEFT_ALT_PRESSED)
+    {
+        ctrl |= LEFT_ALT_PRESSED;
+        set_key_input_record( &records[count++], 0, VK_MENU, TRUE, ctrl );
+    }
+    if (ctrl_state & LEFT_CTRL_PRESSED)
+    {
+        ctrl |= LEFT_CTRL_PRESSED;
+        set_key_input_record( &records[count++], 0, VK_CONTROL, TRUE, ctrl );
+    }
+
+    set_key_input_record( &records[count++], ch, vk, TRUE, ctrl );
+    set_key_input_record( &records[count++], ch, vk, FALSE, ctrl );
+
+    if (ctrl & LEFT_CTRL_PRESSED)
+    {
+        ctrl &= ~LEFT_CTRL_PRESSED;
+        set_key_input_record( &records[count++], 0, VK_CONTROL, FALSE, ctrl );
+    }
+    if (ctrl & LEFT_ALT_PRESSED)
+    {
+        ctrl &= ~LEFT_ALT_PRESSED;
+        set_key_input_record( &records[count++], 0, VK_MENU, FALSE, ctrl );
+    }
+    if (ctrl & SHIFT_PRESSED)
+    {
+        ctrl &= ~SHIFT_PRESSED;
+        set_key_input_record( &records[count++], 0, VK_SHIFT, FALSE, ctrl );
+    }
+
+    return write_console_input( console, records, count, FALSE );
+}
+
+static void char_key_press( struct console *console, WCHAR ch, unsigned int ctrl )
+{
+    unsigned int vk = VkKeyScanW( ch );
+    if (vk == ~0) vk = 0;
+    if (vk & 0x0100) ctrl |= SHIFT_PRESSED;
+    if (vk & 0x0200) ctrl |= LEFT_CTRL_PRESSED;
+    if (vk & 0x0400) ctrl |= LEFT_ALT_PRESSED;
+    vk &= 0xff;
+    key_press( console, ch, vk, ctrl );
+}
+
+static unsigned int escape_char_to_vk( WCHAR ch )
+{
+    switch (ch)
+    {
+    case 'A': return VK_UP;
+    case 'B': return VK_DOWN;
+    case 'C': return VK_RIGHT;
+    case 'D': return VK_LEFT;
+    case 'H': return VK_HOME;
+    case 'F': return VK_END;
+    case 'P': return VK_F1;
+    case 'Q': return VK_F2;
+    case 'R': return VK_F3;
+    case 'S': return VK_F4;
+    default:  return 0;
+    }
+}
+
+static unsigned int escape_number_to_vk( unsigned int n )
+{
+    switch(n)
+    {
+    case 2:  return VK_INSERT;
+    case 3:  return VK_DELETE;
+    case 5:  return VK_PRIOR;
+    case 6:  return VK_NEXT;
+    case 15: return VK_F5;
+    case 17: return VK_F6;
+    case 18: return VK_F7;
+    case 19: return VK_F8;
+    case 20: return VK_F9;
+    case 21: return VK_F10;
+    case 23: return VK_F11;
+    case 24: return VK_F12;
+    default: return 0;
+    }
+}
+
+static unsigned int convert_modifiers( unsigned int n )
+{
+    unsigned int ctrl = 0;
+    if (!n || n > 16) return 0;
+    n--;
+    if (n & 1) ctrl |= SHIFT_PRESSED;
+    if (n & 2) ctrl |= LEFT_ALT_PRESSED;
+    if (n & 4) ctrl |= LEFT_CTRL_PRESSED;
+    return ctrl;
+}
+
+static unsigned int process_csi_sequence( struct console *console, const WCHAR *buf, size_t size )
+{
+    unsigned int n, count = 0, params[8], params_cnt = 0, vk;
+
+    for (;;)
+    {
+        n = 0;
+        while (count < size && '0' <= buf[count] && buf[count] <= '9')
+            n = n * 10 + buf[count++] - '0';
+        if (params_cnt < ARRAY_SIZE(params)) params[params_cnt++] = n;
+        else FIXME( "too many params, skipping %u\n", n );
+        if (count == size) return 0;
+        if (buf[count] != ';') break;
+        if (++count == size) return 0;
+    }
+
+    if ((vk = escape_char_to_vk( buf[count] )))
+    {
+        key_press( console, 0, vk, params_cnt >= 2 ? convert_modifiers( params[1] ) : 0 );
+        return count + 1;
+    }
+
+    switch (buf[count])
+    {
+    case '~':
+        vk = escape_number_to_vk( params[0] );
+        key_press( console, 0, vk, params_cnt == 2 ? convert_modifiers( params[1] ) : 0 );
+        return count + 1;
+
+    default:
+        FIXME( "unhandled sequence %s\n", debugstr_wn( buf, size ));
+        return 0;
+    }
+}
+
+static unsigned int process_input_escape( struct console *console, const WCHAR *buf, size_t size )
+{
+    unsigned int vk = 0, count = 0, nlen;
+
+    if (!size)
+    {
+        key_press( console, 0, VK_ESCAPE, 0 );
+        return 0;
+    }
+
+    switch(buf[0])
+    {
+    case '[':
+        if (++count == size) break;
+        if ((nlen = process_csi_sequence( console, buf + 1, size - 1 ))) return count + nlen;
+        break;
+
+    case 'O':
+        if (++count == size) break;
+        vk = escape_char_to_vk( buf[1] );
+        if (vk)
+        {
+            key_press( console, 0, vk, 0 );
+            return count + 1;
+        }
+    }
+
+    char_key_press( console, buf[0], LEFT_ALT_PRESSED );
+    return 1;
+}
+
+static DWORD WINAPI tty_input( void *param )
+{
+    struct console *console = param;
+    IO_STATUS_BLOCK io;
+    HANDLE event;
+    char read_buf[4096];
+    WCHAR buf[4096];
+    DWORD count, i;
+    NTSTATUS status;
+
+    event = CreateEventW( NULL, TRUE, FALSE, NULL );
+
+    for (;;)
+    {
+        status = NtReadFile( console->tty_input, event, NULL, NULL, &io, read_buf, sizeof(read_buf), NULL, NULL );
+        if (status == STATUS_PENDING)
+        {
+            if ((status = NtWaitForSingleObject( event, FALSE, NULL ))) break;
+            status = io.Status;
+        }
+        if (status) break;
+
+        EnterCriticalSection( &console_section );
+
+        /* FIXME: Handle partial char read */
+        count = MultiByteToWideChar(CP_UTF8, 0, read_buf, io.Information, buf, ARRAY_SIZE(buf));
+
+        TRACE( "%s\n", debugstr_wn(buf, count) );
+
+        for (i = 0; i < count; i++)
+        {
+            WCHAR ch = buf[i];
+            switch (ch)
+            {
+            case 3: /* end of text */
+                return 0;
+            case '\n':
+                key_press( console, '\n', VK_RETURN, LEFT_CTRL_PRESSED );
+                break;
+            case '\b':
+                key_press( console, ch, 'H', LEFT_CTRL_PRESSED );
+                break;
+            case 0x1b:
+                i += process_input_escape( console, buf + i + 1, count - i - 1 );
+                break;
+            case 0x7f:
+                key_press( console, '\b', VK_BACK, 0 );
+                break;
+            default:
+                char_key_press( console, ch, 0 );
+            }
+        }
+
+        process_console_input( console );
+        LeaveCriticalSection( &console_section );
+    }
+
+    TRACE( "NtReadFile failed: %#x\n", status );
+    return 0;
+}
+
+static NTSTATUS screen_buffer_activate( struct screen_buffer *screen_buffer )
+{
+    RECT update_rect;
+    TRACE( "%p\n", screen_buffer );
+    screen_buffer->console->active = screen_buffer;
+    SetRect( &update_rect, 0, 0, screen_buffer->width - 1, screen_buffer->height - 1);
+    update_output( screen_buffer, &update_rect );
+    tty_sync( screen_buffer->console );
     return STATUS_SUCCESS;
 }
 
@@ -407,7 +914,7 @@ static NTSTATUS set_output_info( struct screen_buffer *screen_buffer,
             ir.EventType = WINDOW_BUFFER_SIZE_EVENT;
             ir.Event.WindowBufferSizeEvent.dwSize.X = info->width;
             ir.Event.WindowBufferSizeEvent.dwSize.Y = info->height;
-            write_console_input( screen_buffer->console, &ir, 1 );
+            write_console_input( screen_buffer->console, &ir, 1, TRUE );
         }
     }
     if (params->mask & SET_CONSOLE_OUTPUT_INFO_ATTR)
@@ -466,6 +973,60 @@ static NTSTATUS set_output_info( struct screen_buffer *screen_buffer,
         }
     }
 
+    if (is_active( screen_buffer )) tty_sync( screen_buffer->console );
+    return STATUS_SUCCESS;
+}
+
+static NTSTATUS write_console( struct screen_buffer *screen_buffer, const WCHAR *buffer, size_t len )
+{
+    RECT update_rect;
+    size_t i, j;
+
+    TRACE( "%s\n", debugstr_wn(buffer, len) );
+
+    empty_update_rect( screen_buffer, &update_rect );
+
+    for (i = 0; i < len; i++)
+    {
+        if (screen_buffer->mode & ENABLE_PROCESSED_OUTPUT)
+        {
+            switch (buffer[i])
+            {
+            case '\b':
+                if (screen_buffer->cursor_x) screen_buffer->cursor_x--;
+                continue;
+            case '\t':
+                j = min( screen_buffer->width - screen_buffer->cursor_x, 8 - (screen_buffer->cursor_x % 8) );
+                while (j--) write_char( screen_buffer, ' ', &update_rect );
+                continue;
+            case '\n':
+                screen_buffer->cursor_x = 0;
+                if (++screen_buffer->cursor_y == screen_buffer->height)
+                    new_line( screen_buffer, &update_rect );
+                else if (screen_buffer->mode & ENABLE_WRAP_AT_EOL_OUTPUT)
+                    update_output( screen_buffer, &update_rect );
+                continue;
+            case '\a':
+                FIXME( "beep\n" );
+                continue;
+            case '\r':
+                screen_buffer->cursor_x = 0;
+                continue;
+            }
+        }
+        if (screen_buffer->cursor_x == screen_buffer->width && !(screen_buffer->mode & ENABLE_WRAP_AT_EOL_OUTPUT))
+            screen_buffer->cursor_x = update_rect.left;
+        write_char( screen_buffer, buffer[i], &update_rect );
+    }
+
+    if (screen_buffer->cursor_x == screen_buffer->width)
+    {
+        if (screen_buffer->mode & ENABLE_WRAP_AT_EOL_OUTPUT) screen_buffer->cursor_x--;
+        else screen_buffer->cursor_x = update_rect.left;
+    }
+
+    update_output( screen_buffer, &update_rect );
+    tty_sync( screen_buffer->console );
     return STATUS_SUCCESS;
 }
 
@@ -521,6 +1082,34 @@ static NTSTATUS write_output( struct screen_buffer *screen_buffer, const struct 
         default:
             return STATUS_INVALID_PARAMETER;
         }
+    }
+
+    if (i && is_active( screen_buffer ))
+    {
+        RECT update_rect;
+
+        update_rect.left = params->x;
+        update_rect.top  = params->y;
+        if (params->width)
+        {
+            update_rect.bottom = min( params->y + entry_cnt / params->width, screen_buffer->height ) - 1;
+            update_rect.right  = min( params->x + params->width, screen_buffer->width ) - 1;
+        }
+        else
+        {
+            update_rect.bottom = params->y + (params->x + i - 1) / screen_buffer->width;
+            if (update_rect.bottom != params->y)
+            {
+                update_rect.left = 0;
+                update_rect.right = screen_buffer->width - 1;
+            }
+            else
+            {
+                update_rect.right = params->x + i - 1;
+            }
+        }
+        update_output( screen_buffer, &update_rect );
+        tty_sync( screen_buffer->console );
     }
 
     if (*out_size == sizeof(SMALL_RECT))
@@ -623,6 +1212,169 @@ static NTSTATUS read_output( struct screen_buffer *screen_buffer, const struct c
     return STATUS_SUCCESS;
 }
 
+static NTSTATUS fill_output( struct screen_buffer *screen_buffer, const struct condrv_fill_output_params *params )
+{
+    char_info_t *end, *dest;
+    DWORD i, count, *result;
+
+    TRACE( "(%u %u) mode %u\n", params->x, params->y, params->mode );
+
+    dest = screen_buffer->data + params->y * screen_buffer->width + params->x;
+
+    if (params->y >= screen_buffer->height) return STATUS_SUCCESS;
+
+    if (params->wrap)
+        end = screen_buffer->data + screen_buffer->height * screen_buffer->width;
+    else
+        end = screen_buffer->data + (params->y + 1) * screen_buffer->width;
+
+    count = params->count;
+    if (count > end - dest) count = end - dest;
+
+    switch(params->mode)
+    {
+    case CHAR_INFO_MODE_TEXT:
+        for (i = 0; i < count; i++) dest[i].ch = params->ch;
+        break;
+    case CHAR_INFO_MODE_ATTR:
+        for (i = 0; i < count; i++) dest[i].attr = params->attr;
+        break;
+    case CHAR_INFO_MODE_TEXTATTR:
+        for (i = 0; i < count; i++)
+        {
+            dest[i].ch   = params->ch;
+            dest[i].attr = params->attr;
+        }
+        break;
+    case CHAR_INFO_MODE_TEXTSTDATTR:
+        for (i = 0; i < count; i++)
+        {
+            dest[i].ch   = params->ch;
+            dest[i].attr = screen_buffer->attr;
+        }
+        break;
+    default:
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (count && is_active(screen_buffer))
+    {
+        RECT update_rect;
+        SetRect( &update_rect,
+                 params->x % screen_buffer->width,
+                 params->y + params->x / screen_buffer->width,
+                 (params->x + i - 1) % screen_buffer->width,
+                 params->y + (params->x + i - 1) / screen_buffer->width );
+        update_output( screen_buffer, &update_rect );
+        tty_sync( screen_buffer->console );
+    }
+
+    if (!(result = alloc_ioctl_buffer( sizeof(*result) ))) return STATUS_NO_MEMORY;
+    *result = count;
+    return STATUS_SUCCESS;
+}
+
+static NTSTATUS scroll_output( struct screen_buffer *screen_buffer, const struct condrv_scroll_params *params )
+{
+    int x, y, xsrc, ysrc, w, h;
+    char_info_t *psrc, *pdst;
+    SMALL_RECT src, dst;
+    RECT update_rect;
+    SMALL_RECT clip;
+
+    xsrc = params->scroll.Left;
+    ysrc = params->scroll.Top;
+    w = params->scroll.Right - params->scroll.Left + 1;
+    h = params->scroll.Bottom - params->scroll.Top + 1;
+
+    TRACE( "(%d %d) -> (%u %u) w %u h %u\n", xsrc, ysrc, params->origin.X, params->origin.Y, w, h );
+
+    clip.Left   = max( params->clip.Left, 0 );
+    clip.Top    = max( params->clip.Top,  0 );
+    clip.Right  = min( params->clip.Right,  screen_buffer->width - 1 );
+    clip.Bottom = min( params->clip.Bottom, screen_buffer->height - 1 );
+    if (clip.Left > clip.Right || clip.Top > clip.Bottom || params->scroll.Left < 0 || params->scroll.Top < 0 ||
+        params->scroll.Right >= screen_buffer->width || params->scroll.Bottom >= screen_buffer->height ||
+        params->scroll.Right < params->scroll.Left || params->scroll.Top > params->scroll.Bottom ||
+        params->origin.X < 0 || params->origin.X >= screen_buffer->width || params->origin.Y < 0 ||
+        params->origin.Y >= screen_buffer->height)
+        return STATUS_INVALID_PARAMETER;
+
+    src.Left   = max( xsrc, clip.Left );
+    src.Top    = max( ysrc, clip.Top );
+    src.Right  = min( xsrc + w - 1, clip.Right );
+    src.Bottom = min( ysrc + h - 1, clip.Bottom );
+
+    dst.Left   = params->origin.X;
+    dst.Top    = params->origin.Y;
+    dst.Right  = params->origin.X + w - 1;
+    dst.Bottom = params->origin.Y + h - 1;
+
+    if (dst.Left < clip.Left)
+    {
+        xsrc += clip.Left - dst.Left;
+        w -= clip.Left - dst.Left;
+        dst.Left = clip.Left;
+    }
+    if (dst.Top < clip.Top)
+    {
+        ysrc += clip.Top - dst.Top;
+        h -= clip.Top - dst.Top;
+        dst.Top = clip.Top;
+    }
+    if (dst.Right  > clip.Right)  w -= dst.Right  - clip.Right;
+    if (dst.Bottom > clip.Bottom) h -= dst.Bottom - clip.Bottom;
+
+    if (w > 0 && h > 0)
+    {
+        if (ysrc < dst.Top)
+        {
+            psrc = &screen_buffer->data[(ysrc + h - 1) * screen_buffer->width + xsrc];
+            pdst = &screen_buffer->data[(dst.Top + h - 1) * screen_buffer->width + dst.Left];
+
+            for (y = h; y > 0; y--)
+            {
+                memcpy( pdst, psrc, w * sizeof(*pdst) );
+                pdst -= screen_buffer->width;
+                psrc -= screen_buffer->width;
+            }
+        }
+        else
+        {
+            psrc = &screen_buffer->data[ysrc * screen_buffer->width + xsrc];
+            pdst = &screen_buffer->data[dst.Top * screen_buffer->width + dst.Left];
+
+            for (y = 0; y < h; y++)
+            {
+                /* we use memmove here because when psrc and pdst are the same,
+                 * copies are done on the same row, so the dst and src blocks
+                 * can overlap */
+                memmove( pdst, psrc, w * sizeof(*pdst) );
+                pdst += screen_buffer->width;
+                psrc += screen_buffer->width;
+            }
+        }
+    }
+
+    for (y = src.Top; y <= src.Bottom; y++)
+    {
+        int left  = src.Left;
+        int right = src.Right;
+        if (dst.Top <= y && y <= dst.Bottom)
+        {
+            if (dst.Left <= src.Left) left  = max( left, dst.Right + 1 );
+            if (dst.Left >= src.Left) right = min( right, dst.Left - 1 );
+        }
+        for (x = left; x <= right; x++) screen_buffer->data[y * screen_buffer->width + x] = params->fill;
+    }
+
+    SetRect( &update_rect, min( src.Left, dst.Left ), min( src.Top, dst.Top ),
+             max( src.Right, dst.Right ), max( src.Bottom, dst.Bottom ));
+    update_output( screen_buffer, &update_rect );
+    tty_sync( screen_buffer->console );
+    return STATUS_SUCCESS;
+}
+
 static NTSTATUS set_console_title( struct console *console, const WCHAR *in_title, size_t size )
 {
     WCHAR *title = NULL;
@@ -637,6 +1389,19 @@ static NTSTATUS set_console_title( struct console *console, const WCHAR *in_titl
     free( console->title );
     console->title     = title;
     console->title_len = size;
+
+    if (console->tty_output)
+    {
+        size_t len;
+        char *vt;
+
+        tty_write( console, "\x1b]0;", 4 );
+        len = WideCharToMultiByte( CP_UTF8, 0, console->title, size / sizeof(WCHAR), NULL, 0, NULL, NULL);
+        if ((vt = tty_alloc_buffer( console, len )))
+            WideCharToMultiByte( CP_UTF8, 0, console->title, size / sizeof(WCHAR), vt, len, NULL, NULL );
+        tty_write( console, "\x07", 1 );
+        tty_sync( console );
+    }
     return STATUS_SUCCESS;
 }
 
@@ -652,8 +1417,7 @@ static NTSTATUS screen_buffer_ioctl( struct screen_buffer *screen_buffer, unsign
 
     case IOCTL_CONDRV_ACTIVATE:
         if (in_size || *out_size) return STATUS_INVALID_PARAMETER;
-        screen_buffer->console->active = screen_buffer;
-        return STATUS_SUCCESS;
+        return screen_buffer_activate( screen_buffer );
 
     case IOCTL_CONDRV_GET_MODE:
         {
@@ -670,6 +1434,10 @@ static NTSTATUS screen_buffer_ioctl( struct screen_buffer *screen_buffer, unsign
         screen_buffer->mode = *(unsigned int *)in_data;
         TRACE( "set %x mode\n", screen_buffer->mode );
         return STATUS_SUCCESS;
+
+    case IOCTL_CONDRV_WRITE_CONSOLE:
+        if (in_size % sizeof(WCHAR) || *out_size) return STATUS_INVALID_PARAMETER;
+        return write_console( screen_buffer, in_data, in_size / sizeof(WCHAR) );
 
     case IOCTL_CONDRV_WRITE_OUTPUT:
         if ((*out_size != sizeof(DWORD) && *out_size != sizeof(SMALL_RECT)) ||
@@ -688,6 +1456,16 @@ static NTSTATUS screen_buffer_ioctl( struct screen_buffer *screen_buffer, unsign
     case IOCTL_CONDRV_SET_OUTPUT_INFO:
         if (in_size < sizeof(struct condrv_output_info) || *out_size) return STATUS_INVALID_PARAMETER;
         return set_output_info( screen_buffer, in_data, in_size );
+
+    case IOCTL_CONDRV_FILL_OUTPUT:
+        if (in_size != sizeof(struct condrv_fill_output_params) || *out_size != sizeof(DWORD))
+            return STATUS_INVALID_PARAMETER;
+        return fill_output( screen_buffer, in_data );
+
+    case IOCTL_CONDRV_SCROLL:
+        if (in_size != sizeof(struct condrv_scroll_params) || *out_size)
+            return STATUS_INVALID_PARAMETER;
+        return scroll_output( screen_buffer, in_data );
 
     default:
         FIXME( "unsupported ioctl %x\n", code );
@@ -735,7 +1513,7 @@ static NTSTATUS console_input_ioctl( struct console *console, unsigned int code,
 
     case IOCTL_CONDRV_WRITE_INPUT:
         if (in_size % sizeof(INPUT_RECORD) || *out_size) return STATUS_INVALID_PARAMETER;
-        return write_console_input( console, in_data, in_size / sizeof(INPUT_RECORD) );
+        return write_console_input( console, in_data, in_size / sizeof(INPUT_RECORD), TRUE );
 
     case IOCTL_CONDRV_PEEK:
         {
@@ -942,7 +1720,10 @@ static int main_loop( struct console *console, HANDLE signal )
         switch (res)
         {
         case WAIT_OBJECT_0:
-            if (process_console_ioctls( console )) return 0;
+            EnterCriticalSection( &console_section );
+            status = process_console_ioctls( console );
+            LeaveCriticalSection( &console_section );
+            if (status) return 0;
             break;
 
         case WAIT_OBJECT_0 + 1:
@@ -969,7 +1750,7 @@ static int main_loop( struct console *console, HANDLE signal )
 int __cdecl wmain(int argc, WCHAR *argv[])
 {
     int headless = 0, i, width = 80, height = 150;
-    HANDLE signal = NULL;
+    HANDLE signal = NULL, input_thread;
     WCHAR *end;
 
     static struct console console;
@@ -1036,6 +1817,16 @@ int __cdecl wmain(int argc, WCHAR *argv[])
     }
 
     if (!(console.active = create_screen_buffer( &console, 1, width, height ))) return 1;
+    if (headless)
+    {
+        console.tty_input  = GetStdHandle( STD_INPUT_HANDLE );
+        console.tty_output = GetStdHandle( STD_OUTPUT_HANDLE );
+        init_tty_output( &console );
+
+        if (!(input_thread = CreateThread( NULL, 0, tty_input, &console, 0, NULL )))
+            return 1;
+        CloseHandle( input_thread );
+    }
 
     return main_loop( &console, signal );
 }

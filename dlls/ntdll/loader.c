@@ -58,7 +58,7 @@ WINE_DECLARE_DEBUG_CHANNEL(imports);
 typedef DWORD (CALLBACK *DLLENTRYPROC)(HMODULE,DWORD,LPVOID);
 typedef void  (CALLBACK *LDRENUMPROC)(LDR_DATA_TABLE_ENTRY *, void *, BOOLEAN *);
 
-static void (WINAPI *kernel32_start_process)(LPTHREAD_START_ROUTINE,void *);
+void (FASTCALL *pBaseThreadInitThunk)(DWORD,LPTHREAD_START_ROUTINE,void *) = NULL;
 
 const struct unix_funcs *unix_funcs = NULL;
 
@@ -70,6 +70,7 @@ const WCHAR system_dir[] = {'C',':','\\','w','i','n','d','o','w','s','\\',
 const WCHAR syswow64_dir[] = {'C',':','\\','w','i','n','d','o','w','s','\\',
                               's','y','s','w','o','w','6','4','\\',0};
 
+static const BOOL is_win64 = (sizeof(void *) > sizeof(int));
 BOOL is_wow64 = FALSE;
 
 /* system search path */
@@ -3407,6 +3408,29 @@ PIMAGE_NT_HEADERS WINAPI RtlImageNtHeader(HMODULE hModule)
     return ret;
 }
 
+/***********************************************************************
+ *           process_breakpoint
+ *
+ * Trigger a debug breakpoint if the process is being debugged.
+ */
+static void process_breakpoint(void)
+{
+    DWORD_PTR port = 0;
+
+    NtQueryInformationProcess( GetCurrentProcess(), ProcessDebugPort, &port, sizeof(port), NULL );
+    if (!port) return;
+
+    __TRY
+    {
+        DbgBreakPoint();
+    }
+    __EXCEPT_ALL
+    {
+        /* do nothing */
+    }
+    __ENDTRY
+}
+
 
 /******************************************************************
  *		LdrInitializeThunk (NTDLL.@)
@@ -3494,6 +3518,7 @@ void WINAPI LdrInitializeThunk( CONTEXT *context, ULONG_PTR unknown2, ULONG_PTR 
         if (wm->ldr.TlsIndex != -1) call_tls_callbacks( wm->ldr.DllBase, DLL_PROCESS_ATTACH );
         if (wm->ldr.Flags & LDR_WINE_INTERNAL) unix_funcs->init_builtin_dll( wm->ldr.DllBase );
         if (wm->ldr.ActivationContext) RtlDeactivateActivationContext( 0, cookie );
+        process_breakpoint();
     }
     else
     {
@@ -3907,9 +3932,32 @@ BOOL WINAPI DllMain( HINSTANCE inst, DWORD reason, LPVOID reserved )
 
 
 /***********************************************************************
+ *           restart_winevdm
+ */
+static void restart_winevdm( RTL_USER_PROCESS_PARAMETERS *params )
+{
+    DWORD len;
+    WCHAR *appname, *cmdline;
+
+    len = wcslen(system_dir) + wcslen(L"winevdm.exe") + 1;
+    appname = RtlAllocateHeap( GetProcessHeap(), 0, len * sizeof(WCHAR) );
+    wcscpy( appname, (is_win64 || is_wow64) ? syswow64_dir : system_dir );
+    wcscat( appname, L"winevdm.exe" );
+
+    len += 16 + wcslen(params->ImagePathName.Buffer) + wcslen(params->CommandLine.Buffer);
+    cmdline = RtlAllocateHeap( GetProcessHeap(), 0, len * sizeof(WCHAR) );
+    swprintf( cmdline, len, L"%s --app-name \"%s\" %s",
+              appname, params->ImagePathName.Buffer, params->CommandLine.Buffer );
+
+    RtlInitUnicodeString( &params->ImagePathName, appname );
+    RtlInitUnicodeString( &params->CommandLine, cmdline );
+}
+
+
+/***********************************************************************
  *           process_init
  */
-static void process_init(void)
+static NTSTATUS process_init(void)
 {
     static const WCHAR ntdllW[] = {'\\','?','?','\\','C',':','\\','w','i','n','d','o','w','s','\\',
                                    's','y','s','t','e','m','3','2','\\',
@@ -3977,11 +4025,11 @@ static void process_init(void)
         MESSAGE( "wine: could not load kernel32.dll, status %x\n", status );
         NtTerminateProcess( GetCurrentProcess(), status );
     }
-    RtlInitAnsiString( &func_name, "__wine_start_process" );
+    RtlInitAnsiString( &func_name, "BaseThreadInitThunk" );
     if ((status = LdrGetProcedureAddress( wm->ldr.DllBase, &func_name,
-                                          0, (void **)&kernel32_start_process )) != STATUS_SUCCESS)
+                                          0, (void **)&pBaseThreadInitThunk )) != STATUS_SUCCESS)
     {
-        MESSAGE( "wine: could not find __wine_start_process in kernel32.dll, status %x\n", status );
+        MESSAGE( "wine: could not find BaseThreadInitThunk in kernel32.dll, status %x\n", status );
         NtTerminateProcess( GetCurrentProcess(), status );
     }
 
@@ -4000,21 +4048,30 @@ static void process_init(void)
     }
     else
     {
-        status = restart_process( params, status );
         switch (status)
         {
-        case STATUS_INVALID_IMAGE_WIN_64:
-            ERR( "%s 64-bit application not supported in 32-bit prefix\n",
-                 debugstr_us(&params->ImagePathName) );
-            break;
+        case STATUS_INVALID_IMAGE_NOT_MZ:
+        {
+            WCHAR *p = wcsrchr( params->ImagePathName.Buffer, '.' );
+            if (p && (!wcsicmp( p, L".com" ) || !wcsicmp( p, L".pif" )))
+            {
+                restart_winevdm( params );
+                status = STATUS_INVALID_IMAGE_WIN_16;
+            }
+            return status;
+        }
         case STATUS_INVALID_IMAGE_WIN_16:
         case STATUS_INVALID_IMAGE_NE_FORMAT:
         case STATUS_INVALID_IMAGE_PROTECT:
-            ERR( "%s 16-bit application not supported on this system\n",
-                 debugstr_us(&params->ImagePathName) );
-            break;
+            restart_winevdm( params );
+            return status;
+        case STATUS_CONFLICTING_ADDRESSES:
+        case STATUS_NO_MEMORY:
         case STATUS_INVALID_IMAGE_FORMAT:
-            ERR( "%s not supported on this system\n", debugstr_us(&params->ImagePathName) );
+            return status;
+        case STATUS_INVALID_IMAGE_WIN_64:
+            ERR( "%s 64-bit application not supported in 32-bit prefix\n",
+                 debugstr_us(&params->ImagePathName) );
             break;
         case STATUS_DLL_NOT_FOUND:
             ERR( "%s not found\n", debugstr_us(&params->ImagePathName) );
@@ -4049,16 +4106,15 @@ static void process_init(void)
     teb->Tib.StackBase = stack.StackBase;
     teb->Tib.StackLimit = stack.StackLimit;
     teb->DeallocationStack = stack.DeallocationStack;
-
-    unix_funcs->server_init_process_done( kernel32_start_process );
+    return STATUS_SUCCESS;
 }
 
 /***********************************************************************
  *           __wine_set_unix_funcs
  */
-void CDECL __wine_set_unix_funcs( int version, const struct unix_funcs *funcs )
+NTSTATUS CDECL __wine_set_unix_funcs( int version, const struct unix_funcs *funcs )
 {
     assert( version == NTDLL_UNIXLIB_VERSION );
     unix_funcs = funcs;
-    process_init();
+    return process_init();
 }

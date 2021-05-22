@@ -28,6 +28,7 @@
 #include "winnt.h"
 #include "winreg.h"
 #include "winternl.h"
+#include "ddk/wdm.h"
 #include "excpt.h"
 #include "wine/test.h"
 #include "intrin.h"
@@ -45,6 +46,16 @@ static PVOID     (WINAPI *pRtlAddVectoredContinueHandler)(ULONG first, PVECTORED
 static ULONG     (WINAPI *pRtlRemoveVectoredContinueHandler)(PVOID handler);
 static void      (WINAPI *pRtlSetUnhandledExceptionFilter)(PRTL_EXCEPTION_FILTER filter);
 static ULONG64   (WINAPI *pRtlGetEnabledExtendedFeatures)(ULONG64);
+static NTSTATUS  (WINAPI *pRtlGetExtendedContextLength)(ULONG context_flags, ULONG *length);
+static NTSTATUS  (WINAPI *pRtlGetExtendedContextLength2)(ULONG context_flags, ULONG *length, ULONG64 compaction_mask);
+static NTSTATUS  (WINAPI *pRtlInitializeExtendedContext)(void *context, ULONG context_flags, CONTEXT_EX **context_ex);
+static NTSTATUS  (WINAPI *pRtlInitializeExtendedContext2)(void *context, ULONG context_flags, CONTEXT_EX **context_ex,
+        ULONG64 compaction_mask);
+static NTSTATUS  (WINAPI *pRtlCopyExtendedContext)(CONTEXT_EX *dst, ULONG context_flags, CONTEXT_EX *src);
+static void *    (WINAPI *pRtlLocateExtendedFeature)(CONTEXT_EX *context_ex, ULONG feature_id, ULONG *length);
+static void *    (WINAPI *pRtlLocateLegacyContext)(CONTEXT_EX *context_ex, ULONG *length);
+static void      (WINAPI *pRtlSetExtendedFeaturesMask)(CONTEXT_EX *context_ex, ULONG64 feature_mask);
+static ULONG64   (WINAPI *pRtlGetExtendedFeaturesMask)(CONTEXT_EX *context_ex);
 static NTSTATUS  (WINAPI *pNtReadVirtualMemory)(HANDLE, const void*, void*, SIZE_T, SIZE_T*);
 static NTSTATUS  (WINAPI *pNtTerminateProcess)(HANDLE handle, LONG exit_code);
 static NTSTATUS  (WINAPI *pNtQueryInformationProcess)(HANDLE, PROCESSINFOCLASS, PVOID, ULONG, PULONG);
@@ -54,6 +65,14 @@ static BOOL      (WINAPI *pIsWow64Process)(HANDLE, PBOOL);
 static NTSTATUS  (WINAPI *pNtClose)(HANDLE);
 static NTSTATUS  (WINAPI *pNtSuspendProcess)(HANDLE process);
 static NTSTATUS  (WINAPI *pNtResumeProcess)(HANDLE process);
+static BOOL      (WINAPI *pInitializeContext)(void *buffer, DWORD context_flags, CONTEXT **context,
+        DWORD *length);
+static BOOL      (WINAPI *pInitializeContext2)(void *buffer, DWORD context_flags, CONTEXT **context,
+        DWORD *length, ULONG64 compaction_mask);
+static void *    (WINAPI *pLocateXStateFeature)(CONTEXT *context, DWORD feature_id, DWORD *length);
+static BOOL      (WINAPI *pSetXStateFeaturesMask)(CONTEXT *context, DWORD64 feature_mask);
+static BOOL      (WINAPI *pGetXStateFeaturesMask)(CONTEXT *context, DWORD64 *feature_mask);
+static BOOL      (WINAPI *pCopyContext)(CONTEXT *dst, DWORD context_flags, CONTEXT *src);
 
 #define RTL_UNLOAD_EVENT_TRACE_NUMBER 64
 
@@ -1049,7 +1068,18 @@ static void test_debugger(void)
                 ok(FALSE, "got way too many exceptions, probably caught in an infinite loop, terminating child\n");
                 pNtTerminateProcess(pi.hProcess, 1);
             }
-            else if (counter >= 2) /* skip startup breakpoint */
+            else if (counter < 2) /* startup breakpoint */
+            {
+                /* breakpoint is inside ntdll */
+                void *ntdll = GetModuleHandleA( "ntdll.dll" );
+                IMAGE_NT_HEADERS *nt = RtlImageNtHeader( ntdll );
+
+                ok( (char *)ctx.Eip >= (char *)ntdll &&
+                    (char *)ctx.Eip < (char *)ntdll + nt->OptionalHeader.SizeOfImage,
+                    "wrong eip %p ntdll %p-%p\n", (void *)ctx.Eip, ntdll,
+                    (char *)ntdll + nt->OptionalHeader.SizeOfImage );
+            }
+            else
             {
                 if (stage == 1)
                 {
@@ -3223,7 +3253,18 @@ static void test_debugger(void)
                 ok(FALSE, "got way too many exceptions, probably caught in an infinite loop, terminating child\n");
                 pNtTerminateProcess(pi.hProcess, 1);
             }
-            else if (counter >= 2) /* skip startup breakpoint */
+            else if (counter < 2) /* startup breakpoint */
+            {
+                /* breakpoint is inside ntdll */
+                void *ntdll = GetModuleHandleA( "ntdll.dll" );
+                IMAGE_NT_HEADERS *nt = RtlImageNtHeader( ntdll );
+
+                ok( (char *)ctx.Rip >= (char *)ntdll &&
+                    (char *)ctx.Rip < (char *)ntdll + nt->OptionalHeader.SizeOfImage,
+                    "wrong rip %p ntdll %p-%p\n", (void *)ctx.Rip, ntdll,
+                    (char *)ntdll + nt->OptionalHeader.SizeOfImage );
+            }
+            else
             {
                 if (stage == 1)
                 {
@@ -4083,7 +4124,18 @@ static void test_debugger(void)
                 ok(FALSE, "got way too many exceptions, probably caught in an infinite loop, terminating child\n");
                 pNtTerminateProcess(pi.hProcess, 1);
             }
-            else if (counter >= 2) /* skip startup breakpoint */
+            else if (counter < 2) /* startup breakpoint */
+            {
+                /* breakpoint is inside ntdll */
+                void *ntdll = GetModuleHandleA( "ntdll.dll" );
+                IMAGE_NT_HEADERS *nt = RtlImageNtHeader( ntdll );
+
+                ok( (char *)ctx.Pc >= (char *)ntdll &&
+                    (char *)ctx.Pc < (char *)ntdll + nt->OptionalHeader.SizeOfImage,
+                    "wrong pc %p ntdll %p-%p\n", (void *)ctx.Pc, ntdll,
+                    (char *)ntdll + nt->OptionalHeader.SizeOfImage );
+            }
+            else
             {
 #if 0  /* RtlRaiseException test disabled for now */
                 if (stage == 1)
@@ -4520,23 +4572,17 @@ static void test_virtual_unwind(void)
 
     static const BYTE unwind_info_1[] = { DW(unwind_info_1_packed) };
 
-    /* The prologue/epilogue locations are commented out below, as we don't
-     * handle those cases at the moment. */
     static const struct results results_1[] =
     {
       /* offset  fp    handler  pc      frame offset  registers */
-#if 0
         { 0x00,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
         { 0x04,  0x00,  0,     ORIG_LR, 0x020, TRUE, { {x19,0x00}, {x20,0x08}, {-1,-1} }},
         { 0x08,  0x00,  0,     0x10,    0x020, TRUE, { {x19,0x00}, {x20,0x08}, {lr,0x10}, {-1,-1} }},
-#endif
         { 0x0c,  0x00,  0,     0x20,    0x030, TRUE, { {x19,0x10}, {x20,0x18}, {lr,0x20}, {-1,-1} }},
         { 0x10,  0x00,  0,     0x20,    0x030, TRUE, { {x19,0x10}, {x20,0x18}, {lr,0x20}, {-1,-1} }},
-#if 0
         { 0x14,  0x00,  0,     0x10,    0x020, TRUE, { {x19,0x00}, {x20,0x08}, {lr,0x10}, {-1,-1} }},
         { 0x18,  0x00,  0,     ORIG_LR, 0x020, TRUE, { {x19,0x00}, {x20,0x08}, {-1,-1} }},
         { 0x1c,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
-#endif
     };
 
     static const BYTE function_2[] =
@@ -4756,6 +4802,314 @@ static void test_virtual_unwind(void)
 #endif
     };
 
+    static const BYTE function_6[] =
+    {
+        0xf3, 0x53, 0xbd, 0xa9,   /* 00: stp x19, x20, [sp, #-48]! */
+        0xf5, 0x0b, 0x00, 0xf9,   /* 04: str x21,      [sp, #16] */
+        0xe8, 0xa7, 0x01, 0x6d,   /* 08: stp d8,  d9,  [sp, #24] */
+        0xea, 0x17, 0x00, 0xfd,   /* 0c: str d10,      [sp, #40] */
+        0xff, 0x03, 0x00, 0xd1,   /* 10: sub sp,  sp,  #0 */
+        0x1f, 0x20, 0x03, 0xd5,   /* 14: nop */
+        0xff, 0x03, 0x00, 0x91,   /* 18: add sp,  sp,  #0 */
+        0xea, 0x17, 0x40, 0xfd,   /* 1c: ldr d10,      [sp, #40] */
+        0xe8, 0xa7, 0x41, 0x6d,   /* 20: ldp d8,  d9,  [sp, #24] */
+        0xf5, 0x0b, 0x40, 0xf9,   /* 24: ldr x21,      [sp, #16] */
+        0xf3, 0x53, 0xc3, 0xa8,   /* 28: ldp x19, x20, [sp], #48 */
+        0xc0, 0x03, 0x5f, 0xd6,   /* 2c: ret */
+    };
+
+    static const DWORD unwind_info_6_packed =
+        (1 << 0)  | /* Flag */
+        (sizeof(function_6)/4 << 2) | /* FunctionLength */
+        (2 << 13) | /* RegF */
+        (3 << 16) | /* RegI */
+        (0 << 20) | /* H */
+        (0 << 21) | /* CR */
+        (3 << 23);  /* FrameSize */
+
+    static const BYTE unwind_info_6[] = { DW(unwind_info_6_packed) };
+
+    static const struct results results_6[] =
+    {
+      /* offset  fp    handler  pc      frame offset  registers */
+        { 0x00,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+        { 0x04,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19,0x00}, {x20,0x08}, {-1,-1} }},
+        { 0x08,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19,0x00}, {x20,0x08}, {x21, 0x10}, {-1,-1} }},
+        { 0x0c,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19,0x00}, {x20,0x08}, {x21, 0x10}, {d8, 0x18}, {d9, 0x20}, {-1,-1} }},
+        { 0x10,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19,0x00}, {x20,0x08}, {x21, 0x10}, {d8, 0x18}, {d9, 0x20}, {d10, 0x28}, {-1,-1} }},
+        { 0x14,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19,0x00}, {x20,0x08}, {x21, 0x10}, {d8, 0x18}, {d9, 0x20}, {d10, 0x28}, {-1,-1} }},
+        { 0x18,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19,0x00}, {x20,0x08}, {x21, 0x10}, {d8, 0x18}, {d9, 0x20}, {d10, 0x28}, {-1,-1} }},
+        { 0x1c,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19,0x00}, {x20,0x08}, {x21, 0x10}, {d8, 0x18}, {d9, 0x20}, {d10, 0x28}, {-1,-1} }},
+        { 0x20,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19,0x00}, {x20,0x08}, {x21, 0x10}, {d8, 0x18}, {d9, 0x20}, {-1,-1} }},
+        { 0x24,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19,0x00}, {x20,0x08}, {x21, 0x10}, {-1,-1} }},
+        { 0x28,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19,0x00}, {x20,0x08}, {-1,-1} }},
+        { 0x2c,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+    };
+
+    static const BYTE function_7[] =
+    {
+        0xf3, 0x0f, 0x1d, 0xf8,   /* 00: str x19,      [sp, #-48]! */
+        0xe8, 0xa7, 0x00, 0x6d,   /* 04: stp d8,  d9,  [sp, #8] */
+        0xea, 0xaf, 0x01, 0x6d,   /* 08: stp d10, d11, [sp, #24] */
+        0xff, 0x03, 0x00, 0xd1,   /* 0c: sub sp,  sp,  #0 */
+        0x1f, 0x20, 0x03, 0xd5,   /* 10: nop */
+        0xff, 0x03, 0x00, 0x91,   /* 14: add sp,  sp,  #0 */
+        0xea, 0xaf, 0x41, 0x6d,   /* 18: ldp d10, d11, [sp, #24] */
+        0xe8, 0xa7, 0x40, 0x6d,   /* 1c: ldp d8,  d9,  [sp, #8] */
+        0xf3, 0x07, 0x43, 0xf8,   /* 20: ldr x19,      [sp], #48 */
+        0xc0, 0x03, 0x5f, 0xd6,   /* 24: ret */
+    };
+
+    static const DWORD unwind_info_7_packed =
+        (1 << 0)  | /* Flag */
+        (sizeof(function_7)/4 << 2) | /* FunctionLength */
+        (3 << 13) | /* RegF */
+        (1 << 16) | /* RegI */
+        (0 << 20) | /* H */
+        (0 << 21) | /* CR */
+        (3 << 23);  /* FrameSize */
+
+    static const BYTE unwind_info_7[] = { DW(unwind_info_7_packed) };
+
+    static const struct results results_7[] =
+    {
+      /* offset  fp    handler  pc      frame offset  registers */
+        { 0x00,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+        { 0x04,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19, 0x00}, {-1,-1} }},
+        { 0x08,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19, 0x00}, {d8, 0x08}, {d9, 0x10}, {-1,-1} }},
+        { 0x0c,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19, 0x00}, {d8, 0x08}, {d9, 0x10}, {d10, 0x18}, {d11, 0x20}, {-1,-1} }},
+        { 0x10,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19, 0x00}, {d8, 0x08}, {d9, 0x10}, {d10, 0x18}, {d11, 0x20}, {-1,-1} }},
+        { 0x14,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19, 0x00}, {d8, 0x08}, {d9, 0x10}, {d10, 0x18}, {d11, 0x20}, {-1,-1} }},
+        { 0x18,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19, 0x00}, {d8, 0x08}, {d9, 0x10}, {d10, 0x18}, {d11, 0x20}, {-1,-1} }},
+        { 0x1c,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19, 0x00}, {d8, 0x08}, {d9, 0x10}, {-1,-1} }},
+        { 0x20,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {x19, 0x00}, {-1,-1} }},
+        { 0x24,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+    };
+
+    static const BYTE function_8[] =
+    {
+        0xe8, 0x27, 0xbf, 0x6d,   /* 00: stp d8,  d9,  [sp, #-16]! */
+        0xff, 0x83, 0x00, 0xd1,   /* 04: sub sp,  sp,  #32 */
+        0x1f, 0x20, 0x03, 0xd5,   /* 08: nop */
+        0xff, 0x83, 0x00, 0x91,   /* 0c: add sp,  sp,  #32 */
+        0xe8, 0x27, 0xc1, 0x6c,   /* 10: ldp d8,  d9,  [sp], #16 */
+        0xc0, 0x03, 0x5f, 0xd6,   /* 14: ret */
+    };
+
+    static const DWORD unwind_info_8_packed =
+        (1 << 0)  | /* Flag */
+        (sizeof(function_8)/4 << 2) | /* FunctionLength */
+        (1 << 13) | /* RegF */
+        (0 << 16) | /* RegI */
+        (0 << 20) | /* H */
+        (0 << 21) | /* CR */
+        (3 << 23);  /* FrameSize */
+
+    static const BYTE unwind_info_8[] = { DW(unwind_info_8_packed) };
+
+    static const struct results results_8[] =
+    {
+      /* offset  fp    handler  pc      frame offset  registers */
+        { 0x00,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+        { 0x04,  0x00,  0,     ORIG_LR, 0x010, TRUE, { {d8, 0x00}, {d9, 0x08}, {-1,-1} }},
+        { 0x08,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {d8, 0x20}, {d9, 0x28}, {-1,-1} }},
+        { 0x0c,  0x00,  0,     ORIG_LR, 0x030, TRUE, { {d8, 0x20}, {d9, 0x28}, {-1,-1} }},
+        { 0x10,  0x00,  0,     ORIG_LR, 0x010, TRUE, { {d8, 0x00}, {d9, 0x08}, {-1,-1} }},
+        { 0x14,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+    };
+
+    static const BYTE function_9[] =
+    {
+        0xf3, 0x0f, 0x1b, 0xf8,   /* 00: str x19,      [sp, #-80]! */
+        0xe0, 0x87, 0x00, 0xa9,   /* 04: stp x0,  x1,  [sp, #8] */
+        0xe2, 0x8f, 0x01, 0xa9,   /* 08: stp x2,  x3,  [sp, #24] */
+        0xe4, 0x97, 0x02, 0xa9,   /* 0c: stp x4,  x5,  [sp, #40] */
+        0xe6, 0x9f, 0x03, 0xa9,   /* 10: stp x6,  x7,  [sp, #56] */
+        0xff, 0x83, 0x00, 0xd1,   /* 14: sub sp,  sp,  #32 */
+        0x1f, 0x20, 0x03, 0xd5,   /* 18: nop */
+        0xff, 0x83, 0x00, 0x91,   /* 1c: add sp,  sp,  #32 */
+        0x1f, 0x20, 0x03, 0xd5,   /* 20: nop */
+        0x1f, 0x20, 0x03, 0xd5,   /* 24: nop */
+        0x1f, 0x20, 0x03, 0xd5,   /* 28: nop */
+        0x1f, 0x20, 0x03, 0xd5,   /* 2c: nop */
+        0xf3, 0x0f, 0x1b, 0xf8,   /* 30: ldr x19,      [sp], #80 */
+        0xc0, 0x03, 0x5f, 0xd6,   /* 34: ret */
+    };
+
+    static const DWORD unwind_info_9_packed =
+        (1 << 0)  | /* Flag */
+        (sizeof(function_9)/4 << 2) | /* FunctionLength */
+        (0 << 13) | /* RegF */
+        (1 << 16) | /* RegI */
+        (1 << 20) | /* H */
+        (0 << 21) | /* CR */
+        (7 << 23);  /* FrameSize */
+
+    static const BYTE unwind_info_9[] = { DW(unwind_info_9_packed) };
+
+    static const struct results results_9[] =
+    {
+      /* offset  fp    handler  pc      frame offset  registers */
+        { 0x00,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+        { 0x04,  0x00,  0,     ORIG_LR, 0x050, TRUE, { {x19, 0x00}, {-1,-1} }},
+        { 0x08,  0x00,  0,     ORIG_LR, 0x050, TRUE, { {x19, 0x00}, {-1,-1} }},
+        { 0x0c,  0x00,  0,     ORIG_LR, 0x050, TRUE, { {x19, 0x00}, {-1,-1} }},
+        { 0x10,  0x00,  0,     ORIG_LR, 0x050, TRUE, { {x19, 0x00}, {-1,-1} }},
+        { 0x14,  0x00,  0,     ORIG_LR, 0x050, TRUE, { {x19, 0x00}, {-1,-1} }},
+        { 0x18,  0x00,  0,     ORIG_LR, 0x070, TRUE, { {x19, 0x20}, {-1,-1} }},
+        { 0x1c,  0x00,  0,     ORIG_LR, 0x070, TRUE, { {x19, 0x20}, {-1,-1} }},
+        { 0x20,  0x00,  0,     ORIG_LR, 0x050, TRUE, { {x19, 0x00}, {-1,-1} }},
+        { 0x24,  0x00,  0,     ORIG_LR, 0x050, TRUE, { {x19, 0x00}, {-1,-1} }},
+        { 0x28,  0x00,  0,     ORIG_LR, 0x050, TRUE, { {x19, 0x00}, {-1,-1} }},
+        { 0x2c,  0x00,  0,     ORIG_LR, 0x050, TRUE, { {x19, 0x00}, {-1,-1} }},
+        { 0x30,  0x00,  0,     ORIG_LR, 0x050, TRUE, { {x19, 0x00}, {-1,-1} }},
+        { 0x34,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+    };
+
+    static const BYTE function_10[] =
+    {
+        0xfe, 0x0f, 0x1f, 0xf8,   /* 00: str lr,       [sp, #-16]! */
+        0xff, 0x43, 0x00, 0xd1,   /* 04: sub sp,  sp,  #16 */
+        0x1f, 0x20, 0x03, 0xd5,   /* 08: nop */
+        0xff, 0x43, 0x00, 0x91,   /* 0c: add sp,  sp,  #16 */
+        0xfe, 0x07, 0x41, 0xf8,   /* 10: ldr lr,       [sp], #16 */
+        0xc0, 0x03, 0x5f, 0xd6,   /* 14: ret */
+    };
+
+    static const DWORD unwind_info_10_packed =
+        (1 << 0)  | /* Flag */
+        (sizeof(function_10)/4 << 2) | /* FunctionLength */
+        (0 << 13) | /* RegF */
+        (0 << 16) | /* RegI */
+        (0 << 20) | /* H */
+        (1 << 21) | /* CR */
+        (2 << 23);  /* FrameSize */
+
+    static const BYTE unwind_info_10[] = { DW(unwind_info_10_packed) };
+
+    static const struct results results_10[] =
+    {
+      /* offset  fp    handler  pc      frame offset  registers */
+        { 0x00,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+        { 0x04,  0x00,  0,     0x00,    0x010, TRUE, { {lr, 0x00}, {-1,-1} }},
+        { 0x08,  0x00,  0,     0x10,    0x020, TRUE, { {lr, 0x10}, {-1,-1} }},
+        { 0x0c,  0x00,  0,     0x10,    0x020, TRUE, { {lr, 0x10}, {-1,-1} }},
+        { 0x10,  0x00,  0,     0x00,    0x010, TRUE, { {lr, 0x00}, {-1,-1} }},
+        { 0x14,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+    };
+
+    static const BYTE function_11[] =
+    {
+        0xf3, 0x53, 0xbe, 0xa9,   /* 00: stp x19, x20, [sp, #-32]! */
+        0xf5, 0x7b, 0x01, 0xa9,   /* 04: stp x21, lr,  [sp, #16] */
+        0xff, 0x43, 0x00, 0xd1,   /* 08: sub sp,  sp,  #16 */
+        0x1f, 0x20, 0x03, 0xd5,   /* 0c: nop */
+        0xff, 0x43, 0x00, 0x91,   /* 10: add sp,  sp,  #16 */
+        0xf5, 0x7b, 0x41, 0xa9,   /* 14: ldp x21, lr,  [sp, #16] */
+        0xf3, 0x53, 0xc2, 0xa8,   /* 18: ldp x19, x20, [sp], #32 */
+        0xc0, 0x03, 0x5f, 0xd6,   /* 1c: ret */
+    };
+
+    static const DWORD unwind_info_11_packed =
+        (1 << 0)  | /* Flag */
+        (sizeof(function_11)/4 << 2) | /* FunctionLength */
+        (0 << 13) | /* RegF */
+        (3 << 16) | /* RegI */
+        (0 << 20) | /* H */
+        (1 << 21) | /* CR */
+        (3 << 23);  /* FrameSize */
+
+    static const BYTE unwind_info_11[] = { DW(unwind_info_11_packed) };
+
+    static const struct results results_11[] =
+    {
+      /* offset  fp    handler  pc      frame offset  registers */
+        { 0x00,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+        { 0x04,  0x00,  0,     ORIG_LR, 0x020, TRUE, { {x19, 0x00}, {x20, 0x08}, {-1,-1} }},
+        { 0x08,  0x00,  0,     0x18,    0x020, TRUE, { {x19, 0x00}, {x20, 0x08}, {x21, 0x10}, {lr, 0x18}, {-1,-1} }},
+        { 0x0c,  0x00,  0,     0x28,    0x030, TRUE, { {x19, 0x10}, {x20, 0x18}, {x21, 0x20}, {lr, 0x28}, {-1,-1} }},
+        { 0x10,  0x00,  0,     0x28,    0x030, TRUE, { {x19, 0x10}, {x20, 0x18}, {x21, 0x20}, {lr, 0x28}, {-1,-1} }},
+        { 0x14,  0x00,  0,     0x18,    0x020, TRUE, { {x19, 0x00}, {x20, 0x08}, {x21, 0x10}, {lr, 0x18}, {-1,-1} }},
+        { 0x18,  0x00,  0,     ORIG_LR, 0x020, TRUE, { {x19, 0x00}, {x20, 0x08}, {-1,-1} }},
+        { 0x1c,  0x00,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+    };
+
+    static const BYTE function_12[] =
+    {
+        0xf3, 0x53, 0xbf, 0xa9,   /* 00: stp x19, x20, [sp, #-16]! */
+        0xfd, 0x7b, 0xbe, 0xa9,   /* 04: stp x29, lr,  [sp, #-32]! */
+        0xfd, 0x03, 0x00, 0x91,   /* 08: mov x29, sp */
+        0x1f, 0x20, 0x03, 0xd5,   /* 0c: nop */
+        0xbf, 0x03, 0x00, 0x91,   /* 10: mov sp,  x29 */
+        0xfd, 0x7b, 0xc2, 0xa8,   /* 14: ldp x29, lr,  [sp], #32 */
+        0xf3, 0x53, 0xc1, 0xa8,   /* 18: ldp x19, x20, [sp], #16 */
+        0xc0, 0x03, 0x5f, 0xd6,   /* 1c: ret */
+    };
+
+    static const DWORD unwind_info_12_packed =
+        (1 << 0)  | /* Flag */
+        (sizeof(function_12)/4 << 2) | /* FunctionLength */
+        (0 << 13) | /* RegF */
+        (2 << 16) | /* RegI */
+        (0 << 20) | /* H */
+        (3 << 21) | /* CR */
+        (3 << 23);  /* FrameSize */
+
+    static const BYTE unwind_info_12[] = { DW(unwind_info_12_packed) };
+
+    static const struct results results_12[] =
+    {
+      /* offset  fp    handler  pc      frame offset  registers */
+        { 0x00,  0x10,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+        { 0x04,  0x10,  0,     ORIG_LR, 0x010, TRUE, { {x19, 0x00}, {x20, 0x08}, {-1,-1} }},
+        { 0x08,  0x10,  0,     0x08,    0x030, TRUE, { {x19, 0x20}, {x20, 0x28}, {x29, 0x00}, {lr, 0x08}, {-1,-1} }},
+        { 0x0c,  0x10,  0,     0x18,    0x040, TRUE, { {x19, 0x30}, {x20, 0x38}, {x29, 0x10}, {lr, 0x18}, {-1,-1} }},
+        { 0x10,  0x10,  0,     0x18,    0x040, TRUE, { {x19, 0x30}, {x20, 0x38}, {x29, 0x10}, {lr, 0x18}, {-1,-1} }},
+        { 0x14,  0x10,  0,     0x08,    0x030, TRUE, { {x19, 0x20}, {x20, 0x28}, {x29, 0x00}, {lr, 0x08}, {-1,-1} }},
+        { 0x18,  0x10,  0,     ORIG_LR, 0x010, TRUE, { {x19, 0x00}, {x20, 0x08}, {-1,-1} }},
+        { 0x1c,  0x10,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+    };
+
+    static const BYTE function_13[] =
+    {
+        0xf3, 0x53, 0xbf, 0xa9,   /* 00: stp x19, x20, [sp, #-16]! */
+        0xff, 0x43, 0x08, 0xd1,   /* 04: sub sp,  sp,  #528 */
+        0xfd, 0x7b, 0x00, 0xd1,   /* 08: stp x29, lr,  [sp] */
+        0xfd, 0x03, 0x00, 0x91,   /* 0c: mov x29, sp */
+        0x1f, 0x20, 0x03, 0xd5,   /* 10: nop */
+        0xbf, 0x03, 0x00, 0x91,   /* 14: mov sp,  x29 */
+        0xfd, 0x7b, 0x40, 0xa9,   /* 18: ldp x29, lr,  [sp] */
+        0xff, 0x43, 0x08, 0x91,   /* 1c: add sp,  sp,  #528 */
+        0xf3, 0x53, 0xc1, 0xa8,   /* 20: ldp x19, x20, [sp], #16 */
+        0xc0, 0x03, 0x5f, 0xd6,   /* 24: ret */
+    };
+
+    static const DWORD unwind_info_13_packed =
+        (1 << 0)  | /* Flag */
+        (sizeof(function_13)/4 << 2) | /* FunctionLength */
+        (0 << 13) | /* RegF */
+        (2 << 16) | /* RegI */
+        (0 << 20) | /* H */
+        (3 << 21) | /* CR */
+        (34 << 23);  /* FrameSize */
+
+    static const BYTE unwind_info_13[] = { DW(unwind_info_13_packed) };
+
+    static const struct results results_13[] =
+    {
+      /* offset  fp    handler  pc      frame offset  registers */
+        { 0x00,  0x10,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+        { 0x04,  0x10,  0,     ORIG_LR, 0x010, TRUE, { {x19, 0x00}, {x20, 0x08}, {-1,-1} }},
+        { 0x08,  0x10,  0,     ORIG_LR, 0x220, TRUE, { {x19, 0x210}, {x20, 0x218}, {-1,-1} }},
+        { 0x0c,  0x10,  0,     0x08,    0x220, TRUE, { {x19, 0x210}, {x20, 0x218}, {x29, 0x00}, {lr, 0x08}, {-1,-1} }},
+        { 0x10,  0x10,  0,     0x18,    0x230, TRUE, { {x19, 0x220}, {x20, 0x228}, {x29, 0x10}, {lr, 0x18}, {-1,-1} }},
+        { 0x14,  0x10,  0,     0x18,    0x230, TRUE, { {x19, 0x220}, {x20, 0x228}, {x29, 0x10}, {lr, 0x18}, {-1,-1} }},
+        { 0x18,  0x10,  0,     0x08,    0x220, TRUE, { {x19, 0x210}, {x20, 0x218}, {x29, 0x00}, {lr, 0x08}, {-1,-1} }},
+        { 0x1c,  0x10,  0,     ORIG_LR, 0x220, TRUE, { {x19, 0x210}, {x20, 0x218}, {-1,-1} }},
+        { 0x20,  0x10,  0,     ORIG_LR, 0x010, TRUE, { {x19, 0x00}, {x20, 0x08}, {-1,-1} }},
+        { 0x24,  0x10,  0,     ORIG_LR, 0x000, TRUE, { {-1,-1} }},
+    };
+
     static const struct unwind_test tests[] =
     {
 #define TEST(func, unwind, unwind_packed, results) \
@@ -4766,6 +5120,14 @@ static void test_virtual_unwind(void)
         TEST(function_3, unwind_info_3, 0, results_3),
         TEST(function_4, unwind_info_4, 0, results_4),
         TEST(function_5, unwind_info_5, 0, results_5),
+        TEST(function_6, unwind_info_6, 1, results_6),
+        TEST(function_7, unwind_info_7, 1, results_7),
+        TEST(function_8, unwind_info_8, 1, results_8),
+        TEST(function_9, unwind_info_9, 1, results_9),
+        TEST(function_10, unwind_info_10, 1, results_10),
+        TEST(function_11, unwind_info_11, 1, results_11),
+        TEST(function_12, unwind_info_12, 1, results_12),
+        TEST(function_13, unwind_info_13, 1, results_13),
 #undef TEST
     };
     unsigned int i;
@@ -5010,7 +5372,18 @@ static void test_debugger(void)
                 ok(FALSE, "got way too many exceptions, probably caught in an infinite loop, terminating child\n");
                 pNtTerminateProcess(pi.hProcess, 1);
             }
-            else if (counter >= 2) /* skip startup breakpoint */
+            else if (counter < 2) /* startup breakpoint */
+            {
+                /* breakpoint is inside ntdll */
+                void *ntdll = GetModuleHandleA( "ntdll.dll" );
+                IMAGE_NT_HEADERS *nt = RtlImageNtHeader( ntdll );
+
+                ok( (char *)ctx.Pc >= (char *)ntdll &&
+                    (char *)ctx.Pc < (char *)ntdll + nt->OptionalHeader.SizeOfImage,
+                    "wrong pc %p ntdll %p-%p\n", (void *)ctx.Pc, ntdll,
+                    (char *)ntdll + nt->OptionalHeader.SizeOfImage );
+            }
+            else
             {
 #if 0  /* RtlRaiseException test disabled for now */
                 if (stage == 1)
@@ -5978,6 +6351,7 @@ static const unsigned test_extended_context_spoil_data1[8] = {0x10, 0x20, 0x30, 
 static const unsigned test_extended_context_spoil_data2[8] = {0x15, 0x25, 0x35, 0x45, 0x55, 0x65, 0x75, 0x85};
 
 static BOOL test_extended_context_modified_state;
+static BOOL compaction_enabled;
 
 static DWORD test_extended_context_handler(EXCEPTION_RECORD *rec, EXCEPTION_REGISTRATION_RECORD *frame,
         CONTEXT *context, EXCEPTION_REGISTRATION_RECORD **dispatcher)
@@ -5986,13 +6360,7 @@ static DWORD test_extended_context_handler(EXCEPTION_RECORD *rec, EXCEPTION_REGI
     CONTEXT_EX *xctx = (CONTEXT_EX *)(context + 1);
     unsigned int *context_ymm_data;
     DWORD expected_min_offset;
-    BOOL compaction;
-    int regs[4];
     XSTATE *xs;
-
-    /* Since we got xstates enabled by OS this cpuid level should be supported. */
-    __cpuidex(regs, 0xd, 1);
-    compaction = regs[0] & 2;
 
     ok((context->ContextFlags & (CONTEXT_FULL | CONTEXT_XSTATE)) == (CONTEXT_FULL | CONTEXT_XSTATE),
             "Got unexpected ContextFlags %#x.\n", context->ContextFlags);
@@ -6024,9 +6392,9 @@ static DWORD test_extended_context_handler(EXCEPTION_RECORD *rec, EXCEPTION_REGI
     context_ymm_data = (unsigned int *)&xs->YmmContext;
     ok(!((ULONG_PTR)xs % 64), "Got unexpected xs %p.\n", xs);
 
-    ok((compaction && (xs->CompactionMask & (expected_compaction_mask | 3)) == expected_compaction_mask)
-            || (!compaction && !xs->CompactionMask), "Got unexpected CompactionMask %s, compaction %#x.\n",
-            wine_dbgstr_longlong(xs->CompactionMask), compaction);
+    ok((compaction_enabled && (xs->CompactionMask & (expected_compaction_mask | 3)) == expected_compaction_mask)
+            || (!compaction_enabled && !xs->CompactionMask), "Got unexpected CompactionMask %s, compaction %#x.\n",
+            wine_dbgstr_longlong(xs->CompactionMask), compaction_enabled);
 
     if (test_extended_context_modified_state)
     {
@@ -6054,6 +6422,8 @@ done:
 #endif
     return ExceptionContinueExecution;
 }
+
+#define CONTEXT_NATIVE (CONTEXT_XSTATE & CONTEXT_CONTROL)
 
 static void test_extended_context(void)
 {
@@ -6091,19 +6461,923 @@ static void test_extended_context(void)
         0xc5, 0xfc, 0x11, 0x00,       /* vmovups %ymm0,(%ax) */
         0xc3,                         /* ret  */
     };
-    unsigned int i, address_offset;
+
+    struct call_func_offsets
+    {
+        unsigned int func_addr;
+        unsigned int func_param1;
+        unsigned int func_param2;
+        unsigned int ymm0_save;
+    };
+#ifdef __x86_64__
+    static BYTE call_func_code_set_ymm0[] =
+    {
+        0x55,                         /* pushq %rbp */
+        0x48, 0xb8,                   /* mov imm,%rax */
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+        0x48, 0xb9,                   /* mov imm,%rcx */
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+        0x48, 0xba,                   /* mov imm,%rdx */
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+        0x48, 0xbd,                   /* mov imm,%rbp */
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+        0xc5, 0xfc, 0x10, 0x45, 0x00, /* vmovups (%rbp),%ymm0 */
+        0xff, 0xd0,                   /* call *rax */
+        0xc5, 0xfc, 0x11, 0x45, 0x00, /* vmovups %ymm0,(%rbp) */
+        0x5d,                         /* popq %rbp */
+        0xc3,                         /* ret  */
+    };
+    static BYTE call_func_code_reset_ymm_state[] =
+    {
+        0x55,                         /* pushq %rbp */
+        0x48, 0xb8,                   /* mov imm,%rax */
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+        0x48, 0xb9,                   /* mov imm,%rcx */
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+        0x48, 0xba,                   /* mov imm,%rdx */
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+        0x48, 0xbd,                   /* mov imm,%rbp */
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+        0xc5, 0xf8, 0x77,             /* vzeroupper */
+        0x0f, 0x57, 0xc0,             /* xorps  %xmm0,%xmm0 */
+        0xff, 0xd0,                   /* call *rax */
+        0xc5, 0xfc, 0x11, 0x45, 0x00, /* vmovups %ymm0,(%rbp) */
+        0x5d,                         /* popq %rbp */
+        0xc3,                         /* ret  */
+    };
+    static const struct call_func_offsets call_func_offsets = {3, 13, 23, 33};
+#else
+    static BYTE call_func_code_set_ymm0[] =
+    {
+        0x55,                         /* pushl %ebp */
+        0xb8,                         /* mov imm,%eax */
+        0x00, 0x00, 0x00, 0x00,
+
+        0xb9,                         /* mov imm,%ecx */
+        0x00, 0x00, 0x00, 0x00,
+
+        0xba,                         /* mov imm,%edx */
+        0x00, 0x00, 0x00, 0x00,
+
+        0xbd,                         /* mov imm,%ebp */
+        0x00, 0x00, 0x00, 0x00,
+
+        0x81, 0xfa, 0xef, 0xbe, 0xad, 0xde,
+                                      /* cmpl $0xdeadbeef, %edx */
+        0x74, 0x01,                   /* je 1f */
+        0x52,                         /* pushl %edx */
+        0x51,                         /* 1: pushl %ecx */
+        0xc5, 0xfc, 0x10, 0x45, 0x00, /* vmovups (%ebp),%ymm0 */
+        0xff, 0xd0,                   /* call *eax */
+        0xc5, 0xfc, 0x11, 0x45, 0x00, /* vmovups %ymm0,(%ebp) */
+        0x5d,                         /* popl %ebp */
+        0xc3,                         /* ret  */
+    };
+    static BYTE call_func_code_reset_ymm_state[] =
+    {
+        0x55,                         /* pushl %ebp */
+        0xb8,                         /* mov imm,%eax */
+        0x00, 0x00, 0x00, 0x00,
+
+        0xb9,                         /* mov imm,%ecx */
+        0x00, 0x00, 0x00, 0x00,
+
+        0xba,                         /* mov imm,%edx */
+        0x00, 0x00, 0x00, 0x00,
+
+        0xbd,                         /* mov imm,%ebp */
+        0x00, 0x00, 0x00, 0x00,
+
+        0x81, 0xfa, 0xef, 0xbe, 0xad, 0xde,
+                                      /* cmpl $0xdeadbeef, %edx */
+        0x74, 0x01,                   /* je 1f */
+        0x52,                         /* pushl %edx */
+        0x51,                         /* 1: pushl %ecx */
+        0xc5, 0xf8, 0x77,             /* vzeroupper */
+        0x0f, 0x57, 0xc0,             /* xorps  %xmm0,%xmm0 */
+        0xff, 0xd0,                   /* call *eax */
+        0xc5, 0xfc, 0x11, 0x45, 0x00, /* vmovups %ymm0,(%ebp) */
+        0x5d,                         /* popl %ebp */
+        0xc3,                         /* ret  */
+    };
+    static const struct call_func_offsets call_func_offsets = {2, 7, 12, 17};
+#endif
+
+    static const struct
+    {
+        ULONG flag;
+        ULONG supported_flags;
+        ULONG broken_flags;
+        ULONG context_length;
+        ULONG legacy_length;
+        ULONG context_ex_length;
+        ULONG align;
+        ULONG flags_offset;
+        ULONG xsavearea_offset;
+        ULONG vector_reg_count;
+    }
+    context_arch[] =
+    {
+        {
+            0x00100000,  /* CONTEXT_AMD64 */
+            0xd800005f,
+            0xd8000000,
+            0x4d0,       /* sizeof(CONTEXT) */
+            0x4d0,       /* sizeof(CONTEXT) */
+            0x20,        /* sizeof(CONTEXT_EX) */
+            7,
+            0x30,
+            0x100,       /* offsetof(CONTEXT, FltSave) */
+            16,
+        },
+        {
+            0x00010000,  /* CONTEXT_X86  */
+            0xd800007f,
+            0xd8000000,
+            0x2cc,       /* sizeof(CONTEXT) */
+            0xcc,        /* offsetof(CONTEXT, ExtendedRegisters) */
+            0x18,        /* sizeof(CONTEXT_EX) */
+            3,
+            0,
+            0xcc,        /* offsetof(CONTEXT, ExtendedRegisters) */
+            8,
+        },
+    };
+    ULONG expected_length, expected_length_xstate, context_flags, expected_offset;
+    ULONG64 enabled_features, expected_compaction;
+    DECLSPEC_ALIGN(64) BYTE context_buffer2[2048];
+    DECLSPEC_ALIGN(64) BYTE context_buffer[2048];
+    unsigned int i, j, address_offset, test;
+    ULONG ret, ret2, length, length2, align;
+    ULONG flags, flags_fpx, expected_flags;
+    ULONG (WINAPI* func)(void) = code_mem;
+    CONTEXT_EX *context_ex;
+    CONTEXT *context;
     unsigned data[8];
+    ULONG64 mask;
+    XSTATE *xs;
+    BOOL bret;
+    void *p;
 
     address_offset = sizeof(void *) == 8 ? 2 : 1;
     *(void **)(except_code_set_ymm0 + address_offset) = data;
     *(void **)(except_code_reset_ymm_state + address_offset) = data;
 
-    if (!pRtlGetEnabledExtendedFeatures || !(pRtlGetEnabledExtendedFeatures(~(ULONG64)0) & (1 << XSTATE_AVX)))
+    if (!pRtlGetEnabledExtendedFeatures)
+    {
+        skip("RtlGetEnabledExtendedFeatures is not available.\n");
+        return;
+    }
+
+    enabled_features = pRtlGetEnabledExtendedFeatures(~(ULONG64)0);
+
+    if (enabled_features)
+    {
+        int regs[4];
+
+        __cpuidex(regs, 0xd, 1);
+        compaction_enabled = regs[0] & 2;
+    }
+
+    /* Test context manipulation functions. */
+    length = 0xdeadbeef;
+    ret = pRtlGetExtendedContextLength(0, &length);
+    ok(ret == STATUS_INVALID_PARAMETER && length == 0xdeadbeef, "Got unexpected result ret %#x, length %#x.\n",
+            ret, length);
+
+    for (test = 0; test < ARRAY_SIZE(context_arch); ++test)
+    {
+        expected_length = context_arch[test].context_length + context_arch[test].context_ex_length
+                + context_arch[test].align;
+        expected_length_xstate = context_arch[test].context_length + context_arch[test].context_ex_length
+                + sizeof(XSTATE) + 63;
+
+        length = 0xdeadbeef;
+        ret = pRtlGetExtendedContextLength(context_arch[test].flag, &length);
+        ok(!ret && length == expected_length, "Got unexpected result ret %#x, length %#x.\n",
+                ret, length);
+
+        for (i = 0; i < 32; ++i)
+        {
+            if (i == 6) /* CONTEXT_XSTATE */
+                continue;
+
+            flags = context_arch[test].flag | (1 << i);
+            length = length2 = 0xdeadbeef;
+            ret = pRtlGetExtendedContextLength(flags, &length);
+
+            if ((context_arch[test].supported_flags & flags) || flags == context_arch[test].flag)
+            {
+                ok((!ret && length == expected_length)
+                        || broken((context_arch[test].broken_flags & (1 << i))
+                        && ret == STATUS_INVALID_PARAMETER && length == 0xdeadbeef),
+                        "Got unexpected result ret %#x, length %#x, flags 0x%08x.\n",
+                        ret, length, flags);
+            }
+            else
+            {
+                ok(ret == STATUS_INVALID_PARAMETER && length == 0xdeadbeef,
+                        "Got unexpected result ret %#x, length %#x, flags 0x%08x.\n", ret, length, flags);
+            }
+
+            SetLastError(0xdeadbeef);
+            bret = pInitializeContext(NULL, flags, NULL, &length2);
+            ok(!bret && length2 == length && GetLastError()
+                    == (!ret ? ERROR_INSUFFICIENT_BUFFER : ERROR_INVALID_PARAMETER),
+                    "Got unexpected bret %#x, length2 %#x, GetLastError() %u, flags %#x.\n",
+                    bret, length2, GetLastError(), flags);
+
+            if (GetLastError() == ERROR_INVALID_PARAMETER)
+                continue;
+
+            SetLastError(0xdeadbeef);
+            context = (void *)0xdeadbeef;
+            length2 = expected_length - 1;
+            bret = pInitializeContext(context_buffer, flags, &context, &length2);
+            ok(!bret && GetLastError() == ERROR_INSUFFICIENT_BUFFER,
+                    "Got unexpected bret %#x, GetLastError() %u, flags %#x.\n", bret, GetLastError(), flags);
+            ok(context == (void *)0xdeadbeef, "Got unexpected context %p.\n", context);
+
+            SetLastError(0xdeadbeef);
+            memset(context_buffer, 0xcc, sizeof(context_buffer));
+            length2 = expected_length;
+            bret = pInitializeContext(context_buffer, flags, &context, &length2);
+            ok(bret && GetLastError() == 0xdeadbeef,
+                    "Got unexpected bret %#x, GetLastError() %u, flags %#x.\n", bret, GetLastError(), flags);
+            ok(length2 == expected_length, "Got unexpexted length %#x.\n", length);
+            ok((BYTE *)context == context_buffer, "Got unexpected context %p, flags %#x.\n", context, flags);
+
+            context_flags = *(DWORD *)(context_buffer + context_arch[test].flags_offset);
+            ok(context_flags == flags, "Got unexpected ContextFlags %#x, flags %#x.\n", context_flags, flags);
+
+            context_ex = (CONTEXT_EX *)(context_buffer + context_arch[test].context_length);
+            ok(context_ex->Legacy.Offset == -(int)context_arch[test].context_length,
+                    "Got unexpected Offset %d, flags %#x.\n", context_ex->Legacy.Offset, flags);
+            ok(context_ex->Legacy.Length == ((flags & 0x20) ? context_arch[test].context_length
+                    : context_arch[test].legacy_length),
+                    "Got unexpected Length %#x, flags %#x.\n", context_ex->Legacy.Length, flags);
+            ok(context_ex->All.Offset == -(int)context_arch[test].context_length,
+                    "Got unexpected Offset %d, flags %#x.\n", context_ex->All.Offset, flags);
+
+            /* No extra 8 bytes in x64 CONTEXT_EX here. */
+            ok(context_ex->All.Length == context_arch[test].context_length + context_arch[1].context_ex_length,
+                    "Got unexpected Length %#x, flags %#x.\n", context_ex->All.Length, flags);
+
+            ok(context_ex->XState.Offset == 25,
+                    "Got unexpected Offset %d, flags %#x.\n", context_ex->XState.Offset, flags);
+            ok(!context_ex->XState.Length,
+                    "Got unexpected Length %#x, flags %#x.\n", context_ex->XState.Length, flags);
+
+            if (0)
+            {
+                /* Crashes on Windows. */
+                pRtlLocateLegacyContext(NULL, NULL);
+            }
+            p = pRtlLocateLegacyContext(context_ex, NULL);
+            ok(p == context, "Got unexpected p %p, flags %#x.\n", p, flags);
+            length2 = 0xdeadbeef;
+            p = pRtlLocateLegacyContext(context_ex, &length2);
+            ok(p == context && length2 == context_ex->Legacy.Length,
+                    "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+            length2 = expected_length;
+
+            if (0)
+            {
+                /* Crashes on Windows. */
+                pGetXStateFeaturesMask(context, NULL);
+                pRtlGetExtendedFeaturesMask(context_ex);
+                pRtlSetExtendedFeaturesMask(context_ex, 0);
+            }
+
+            flags_fpx = flags & 0x10000 ? flags | 0x20 : flags | 0x8;
+
+            mask = 0xdeadbeef;
+            bret = pGetXStateFeaturesMask(context, &mask);
+            SetLastError(0xdeadbeef);
+            if (flags & CONTEXT_NATIVE)
+                ok(bret && mask == ((flags & flags_fpx) == flags_fpx ? 0x3 : 0),
+                        "Got unexpected bret %#x, mask %s, flags %#x.\n", bret, wine_dbgstr_longlong(mask), flags);
+            else
+                ok(!bret && mask == 0xdeadbeef && GetLastError() == 0xdeadbeef,
+                        "Got unexpected bret %#x, mask %s, GetLastError() %#x, flags %#x.\n",
+                        bret, wine_dbgstr_longlong(mask), GetLastError(), flags);
+
+            bret = pSetXStateFeaturesMask(context, 0);
+            ok(bret == !!(flags & CONTEXT_NATIVE), "Got unexpected bret %#x, flags %#x.\n", bret, flags);
+            context_flags = *(DWORD *)(context_buffer + context_arch[test].flags_offset);
+            ok(context_flags == flags, "Got unexpected ContextFlags %#x, flags %#x.\n", context_flags, flags);
+
+            bret = pSetXStateFeaturesMask(context, 1);
+            ok(bret == !!(flags & CONTEXT_NATIVE), "Got unexpected bret %#x, flags %#x.\n", bret, flags);
+            context_flags = *(DWORD *)(context_buffer + context_arch[test].flags_offset);
+            ok(context_flags == (bret ? flags_fpx : flags),
+                    "Got unexpected ContextFlags %#x, flags %#x.\n", context_flags, flags);
+
+            bret = pSetXStateFeaturesMask(context, 2);
+            ok(bret == !!(flags & CONTEXT_NATIVE), "Got unexpected bret %#x, flags %#x.\n", bret, flags);
+            context_flags = *(DWORD *)(context_buffer + context_arch[test].flags_offset);
+            ok(context_flags == (bret ? flags_fpx : flags),
+                    "Got unexpected ContextFlags %#x, flags %#x.\n", context_flags, flags);
+
+            bret = pSetXStateFeaturesMask(context, 4);
+            ok(!bret, "Got unexpected bret %#x.\n", bret);
+            context_flags = *(DWORD *)(context_buffer + context_arch[test].flags_offset);
+            ok(context_flags == (flags & CONTEXT_NATIVE ? flags_fpx : flags),
+                    "Got unexpected ContextFlags %#x, flags %#x.\n", context_flags, flags);
+            *(DWORD *)(context_buffer + context_arch[test].flags_offset) = flags;
+
+            for (j = 0; j < context_arch[test].flags_offset; ++j)
+            {
+                if (context_buffer[j] != 0xcc)
+                {
+                    ok(0, "Buffer data changed at offset %#x.\n", j);
+                    break;
+                }
+            }
+            for (j = context_arch[test].flags_offset + sizeof(context_flags);
+                    j < context_arch[test].context_length; ++j)
+            {
+                if (context_buffer[j] != 0xcc)
+                {
+                    ok(0, "Buffer data changed at offset %#x.\n", j);
+                    break;
+                }
+            }
+            for (j = context_arch[test].context_length + context_arch[test].context_ex_length;
+                    j < sizeof(context_buffer); ++j)
+            {
+                if (context_buffer[j] != 0xcc)
+                {
+                    ok(0, "Buffer data changed at offset %#x.\n", j);
+                    break;
+                }
+            }
+
+            memset(context_buffer2, 0xcc, sizeof(context_buffer2));
+            ret2 = pRtlInitializeExtendedContext(context_buffer2, flags, &context_ex);
+            ok(!ret2, "Got unexpected ret2 %#x, flags %#x.\n", ret2, flags);
+            ok(!memcmp(context_buffer2, context_buffer, sizeof(context_buffer2)),
+                    "Context data do not match, flags %#x.\n", flags);
+
+            memset(context_buffer2, 0xcc, sizeof(context_buffer2));
+            ret2 = pRtlInitializeExtendedContext(context_buffer2 + 2, flags, &context_ex);
+            ok(!ret2, "Got unexpected ret2 %#x, flags %#x.\n", ret2, flags);
+
+            /* Buffer gets aligned to 16 bytes on x64, while returned context length suggests it should be 8. */
+            align = test ? 4 : 16;
+            ok(!memcmp(context_buffer2 + align, context_buffer,
+                    sizeof(context_buffer2) - align),
+                    "Context data do not match, flags %#x.\n", flags);
+
+            SetLastError(0xdeadbeef);
+            memset(context_buffer2, 0xcc, sizeof(context_buffer2));
+            bret = pInitializeContext(context_buffer2 + 2, flags, &context, &length2);
+            ok(bret && GetLastError() == 0xdeadbeef,
+                    "Got unexpected bret %#x, GetLastError() %u, flags %#x.\n", bret, GetLastError(), flags);
+            ok(length2 == expected_length, "Got unexpexted length %#x.\n", length);
+            ok(!memcmp(context_buffer2 + align, context_buffer,
+                    sizeof(context_buffer2) - align),
+                    "Context data do not match, flags %#x.\n", flags);
+
+            length2 = 0xdeadbeef;
+            p = pLocateXStateFeature(context, 0, &length2);
+            if (flags & CONTEXT_NATIVE)
+                ok(p == (BYTE *)context + context_arch[test].xsavearea_offset
+                        && length2 == offsetof(XSAVE_FORMAT, XmmRegisters),
+                        "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+            else
+                ok(!p && length2 == 0xdeadbeef, "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+            length2 = 0xdeadbeef;
+            p = pLocateXStateFeature(context, 1, &length2);
+            if (flags & CONTEXT_NATIVE)
+                ok(p == (BYTE *)context + context_arch[test].xsavearea_offset + offsetof(XSAVE_FORMAT, XmmRegisters)
+                        && length2 == sizeof(M128A) * context_arch[test].vector_reg_count,
+                         "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+            else
+                ok(!p && length2 == 0xdeadbeef, "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+            length2 = 0xdeadbeef;
+            p = pLocateXStateFeature(context, 2, &length2);
+            ok(!p && length2 == 0xdeadbeef, "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+
+            if (!pRtlInitializeExtendedContext2 || !pInitializeContext2)
+            {
+                static int once;
+
+                if (!once++)
+                    win_skip("InitializeContext2 is not available.\n");
+                continue;
+            }
+
+            length2 = expected_length;
+            memset(context_buffer2, 0xcc, sizeof(context_buffer2));
+            ret2 = pRtlInitializeExtendedContext2(context_buffer2 + 2, flags, &context_ex, ~(ULONG64)0);
+            ok(!ret2, "Got unexpected ret2 %#x, flags %#x.\n", ret2, flags);
+            ok(!memcmp(context_buffer2 + align, context_buffer,
+                    sizeof(context_buffer2) - align),
+                    "Context data do not match, flags %#x.\n", flags);
+
+            memset(context_buffer2, 0xcc, sizeof(context_buffer2));
+            bret = pInitializeContext2(context_buffer2 + 2, flags, &context, &length2, 0);
+            ok(bret && GetLastError() == 0xdeadbeef,
+                    "Got unexpected bret %#x, GetLastError() %u, flags %#x.\n", bret, GetLastError(), flags);
+            ok(length2 == expected_length, "Got unexpexted length %#x.\n", length);
+            ok(!memcmp(context_buffer2 + align, context_buffer,
+                    sizeof(context_buffer2) - align),
+                    "Context data do not match, flags %#x.\n", flags);
+
+            length2 = 0xdeadbeef;
+            p = pLocateXStateFeature(context, 0, &length2);
+            if (flags & CONTEXT_NATIVE)
+                ok(p == (BYTE *)context + context_arch[test].xsavearea_offset
+                        && length2 == offsetof(XSAVE_FORMAT, XmmRegisters),
+                        "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+            else
+                ok(!p && length2 == 0xdeadbeef, "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+        }
+
+        flags = context_arch[test].flag | 0x40;
+        flags_fpx = flags & 0x10000 ? flags | 0x20 : flags | 0x8;
+
+        length = 0xdeadbeef;
+        ret = pRtlGetExtendedContextLength(flags, &length);
+
+        if (!enabled_features)
+        {
+            ok(ret == STATUS_NOT_SUPPORTED && length == 0xdeadbeef,
+                    "Got unexpected result ret %#x, length %#x.\n", ret, length);
+
+            context_ex = (void *)0xdeadbeef;
+            ret2 = pRtlInitializeExtendedContext(context_buffer, flags, &context_ex);
+            ok(ret2 == STATUS_NOT_SUPPORTED, "Got unexpected result ret %#x, test %u.\n", ret2, test);
+
+            SetLastError(0xdeadbeef);
+            length2 = sizeof(context_buffer);
+            bret = pInitializeContext(context_buffer, flags, &context, &length2);
+            ok(bret && GetLastError() == 0xdeadbeef,
+                    "Got unexpected bret %#x, GetLastError() %u, flags %#x.\n", bret, GetLastError(), flags);
+            context_flags = *(DWORD *)(context_buffer + context_arch[test].flags_offset);
+            ok(context_flags == (flags & ~0x40), "Got unexpected ContextFlags %#x, flags %#x.\n",
+                    context_flags, flags);
+
+            if (pInitializeContext2)
+            {
+                SetLastError(0xdeadbeef);
+                length2 = sizeof(context_buffer);
+                bret = pInitializeContext2(context_buffer, flags, &context, &length2, ~(ULONG64)0);
+                ok(bret && GetLastError() == 0xdeadbeef,
+                        "Got unexpected bret %#x, GetLastError() %u, flags %#x.\n", bret, GetLastError(), flags);
+                context_flags = *(DWORD *)(context_buffer + context_arch[test].flags_offset);
+                ok(context_flags == (flags & ~0x40), "Got unexpected ContextFlags %#x, flags %#x.\n",
+                        context_flags, flags);
+            }
+            continue;
+        }
+
+        ok(!ret && length >= expected_length_xstate,
+                "Got unexpected result ret %#x, length %#x, test %u.\n", ret, length, test);
+
+        if (!pRtlGetExtendedContextLength2)
+        {
+            win_skip("RtlGetExtendedContextLength2 is not available.\n");
+        }
+        else
+        {
+            length = 0xdeadbeef;
+            ret = pRtlGetExtendedContextLength2(flags, &length, 7);
+            ok(!ret && length == expected_length_xstate,
+                    "Got unexpected result ret %#x, length %#x, test %u.\n", ret, length, test);
+
+            length = 0xdeadbeef;
+            ret = pRtlGetExtendedContextLength2(flags, &length, ~0);
+            ok(!ret && length >= expected_length_xstate,
+                    "Got unexpected result ret %#x, length %#x, test %u.\n", ret, length, test);
+
+            length = 0xdeadbeef;
+            ret = pRtlGetExtendedContextLength2(flags, &length, 0);
+            ok((!ret && length == expected_length_xstate - sizeof(YMMCONTEXT))
+                    || broken(!ret && length == expected_length_xstate) /* win10pro */,
+                    "Got unexpected result ret %#x, length %#x, test %u.\n", ret, length, test);
+
+            length = 0xdeadbeef;
+            ret = pRtlGetExtendedContextLength2(flags, &length, 3);
+            ok((!ret && length == expected_length_xstate - sizeof(YMMCONTEXT))
+                    || broken(!ret && length == expected_length_xstate) /* win10pro */,
+                    "Got unexpected result ret %#x, length %#x, test %u.\n", ret, length, test);
+
+            length = 0xdeadbeef;
+            ret = pRtlGetExtendedContextLength2(flags, &length, 4);
+            ok(!ret && length == expected_length_xstate,
+                    "Got unexpected result ret %#x, length %#x, test %u.\n", ret, length, test);
+        }
+
+        pRtlGetExtendedContextLength(flags, &length);
+        SetLastError(0xdeadbeef);
+        bret = pInitializeContext(NULL, flags, NULL, &length2);
+        ok(!bret && length2 == length && GetLastError() == ERROR_INSUFFICIENT_BUFFER,
+                "Got unexpected bret %#x, length2 %#x, GetLastError() %u, flags %#x.\n",
+                bret, length2, GetLastError(), flags);
+
+        SetLastError(0xdeadbeef);
+        context = (void *)0xdeadbeef;
+        length2 = length - 1;
+        bret = pInitializeContext(context_buffer, flags, &context, &length2);
+        ok(!bret && GetLastError() == ERROR_INSUFFICIENT_BUFFER && length2 == length && context == (void *)0xdeadbeef,
+                "Got unexpected bret %#x, GetLastError() %u, length2 %#x, flags %#x.\n",
+                bret, GetLastError(), length2, flags);
+
+        SetLastError(0xdeadbeef);
+        memset(context_buffer, 0xcc, sizeof(context_buffer));
+        length2 = length + 1;
+        bret = pInitializeContext(context_buffer, flags, &context, &length2);
+        ok(bret && GetLastError() == 0xdeadbeef,
+                "Got unexpected bret %#x, GetLastError() %u, flags %#x.\n", bret, GetLastError(), flags);
+        ok(length2 == length, "Got unexpexted length %#x.\n", length);
+        ok((BYTE *)context == context_buffer, "Got unexpected context %p.\n", context);
+
+        context_flags = *(DWORD *)(context_buffer + context_arch[test].flags_offset);
+        ok(context_flags == flags, "Got unexpected ContextFlags %#x, flags %#x.\n", context_flags, flags);
+
+        context_ex = (CONTEXT_EX *)(context_buffer + context_arch[test].context_length);
+        ok(context_ex->Legacy.Offset == -(int)context_arch[test].context_length,
+                "Got unexpected Offset %d, flags %#x.\n", context_ex->Legacy.Offset, flags);
+        ok(context_ex->Legacy.Length == ((flags & 0x20) ? context_arch[test].context_length
+                : context_arch[test].legacy_length),
+                "Got unexpected Length %#x, flags %#x.\n", context_ex->Legacy.Length, flags);
+
+        expected_offset = (((ULONG_PTR)context + context_arch[test].context_length
+                + context_arch[test].context_ex_length + 63) & ~(ULONG64)63) - (ULONG_PTR)context
+                - context_arch[test].context_length;
+        ok(context_ex->XState.Offset == expected_offset,
+                "Got unexpected Offset %d, flags %#x.\n", context_ex->XState.Offset, flags);
+        ok(context_ex->XState.Length >= sizeof(XSTATE),
+                "Got unexpected Length %#x, flags %#x.\n", context_ex->XState.Length, flags);
+
+        ok(context_ex->All.Offset == -(int)context_arch[test].context_length,
+                "Got unexpected Offset %d, flags %#x.\n", context_ex->All.Offset, flags);
+        /* No extra 8 bytes in x64 CONTEXT_EX here. */
+        ok(context_ex->All.Length == context_arch[test].context_length
+                + context_ex->XState.Offset + context_ex->XState.Length,
+                "Got unexpected Length %#x, flags %#x.\n", context_ex->All.Length, flags);
+
+        xs = (XSTATE *)((BYTE *)context_ex + context_ex->XState.Offset);
+        length2 = 0xdeadbeef;
+        for (i = 0; i < 2; ++i)
+        {
+            p = pRtlLocateExtendedFeature(context_ex, i, &length2);
+            ok(!p && length2 == 0xdeadbeef, "Got unexpected p %p, length %#x.\n", p, length2);
+        }
+
+        p = pRtlLocateExtendedFeature(context_ex, XSTATE_AVX, &length2);
+        ok(length2 == sizeof(YMMCONTEXT), "Got unexpected length %#x.\n", length2);
+        ok(p == &xs->YmmContext, "Got unexpected p %p.\n", p);
+        p = pRtlLocateExtendedFeature(context_ex, XSTATE_AVX, NULL);
+        ok(p == &xs->YmmContext, "Got unexpected p %p.\n", p);
+
+        length2 = 0xdeadbeef;
+        p = pLocateXStateFeature(context, 0, &length2);
+        if (flags & CONTEXT_NATIVE)
+            ok(p == (BYTE *)context + context_arch[test].xsavearea_offset
+                    && length2 == offsetof(XSAVE_FORMAT, XmmRegisters),
+                    "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+        else
+            ok(!p && length2 == 0xdeadbeef, "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+
+        length2 = 0xdeadbeef;
+        p = pLocateXStateFeature(context, 1, &length2);
+        if (flags & CONTEXT_NATIVE)
+            ok(p == (BYTE *)context + context_arch[test].xsavearea_offset + offsetof(XSAVE_FORMAT, XmmRegisters)
+                    && length2 == sizeof(M128A) * context_arch[test].vector_reg_count,
+                    "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+        else
+            ok(!p && length2 == 0xdeadbeef, "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+
+        length2 = 0xdeadbeef;
+        p = pLocateXStateFeature(context, 2, &length2);
+        if (flags & CONTEXT_NATIVE)
+            ok(p == &xs->YmmContext && length2 == sizeof(YMMCONTEXT),
+                    "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+        else
+            ok(!p && length2 == 0xdeadbeef, "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+
+        mask = 0xdeadbeef;
+        bret = pGetXStateFeaturesMask(context, &mask);
+        if (flags & CONTEXT_NATIVE)
+            ok(bret && !mask,
+                    "Got unexpected bret %#x, mask %s, flags %#x.\n", bret, wine_dbgstr_longlong(mask), flags);
+        else
+            ok(!bret && mask == 0xdeadbeef,
+                    "Got unexpected bret %#x, mask %s, flags %#x.\n", bret, wine_dbgstr_longlong(mask), flags);
+
+        expected_compaction = compaction_enabled ? ((ULONG64)1 << 63) | enabled_features : 0;
+        ok(!xs->Mask, "Got unexpected Mask %s.\n", wine_dbgstr_longlong(xs->Mask));
+        mask = pRtlGetExtendedFeaturesMask(context_ex);
+        ok(mask == (xs->Mask & ~(ULONG64)3), "Got unexpected mask %s.\n", wine_dbgstr_longlong(mask));
+        ok(xs->CompactionMask == expected_compaction,
+                "Got unexpected CompactionMask %s.\n", wine_dbgstr_longlong(xs->CompactionMask));
+        ok(!xs->Reserved[0], "Got unexpected Reserved[0]  %s.\n", wine_dbgstr_longlong(xs->Reserved[0]));
+
+        xs->Mask = 0xdeadbeef;
+        xs->CompactionMask = 0xdeadbeef;
+        pRtlSetExtendedFeaturesMask(context_ex, 0);
+        ok(!xs->Mask, "Got unexpected Mask %s.\n", wine_dbgstr_longlong(xs->Mask));
+        mask = pRtlGetExtendedFeaturesMask(context_ex);
+        ok(mask == (xs->Mask & ~(ULONG64)3), "Got unexpected mask %s.\n", wine_dbgstr_longlong(mask));
+        ok(xs->CompactionMask == 0xdeadbeef, "Got unexpected CompactionMask %s.\n", wine_dbgstr_longlong(xs->CompactionMask));
+        context_flags = *(DWORD *)(context_buffer + context_arch[test].flags_offset);
+        ok(context_flags == flags, "Got unexpected ContextFlags %#x, flags %#x.\n", context->ContextFlags, flags);
+
+        xs->Mask = 0xdeadbeef;
+        xs->CompactionMask = 0;
+        pRtlSetExtendedFeaturesMask(context_ex, ~(ULONG64)0);
+        ok(xs->Mask == (enabled_features & ~(ULONG64)3), "Got unexpected Mask %s.\n", wine_dbgstr_longlong(xs->Mask));
+        mask = pRtlGetExtendedFeaturesMask(context_ex);
+        ok(mask == (xs->Mask & ~(ULONG64)3), "Got unexpected mask %s.\n", wine_dbgstr_longlong(mask));
+        ok(!xs->CompactionMask, "Got unexpected CompactionMask %s.\n",
+                wine_dbgstr_longlong(xs->CompactionMask));
+        context_flags = *(DWORD *)(context_buffer + context_arch[test].flags_offset);
+        ok(context_flags == flags, "Got unexpected ContextFlags %#x, flags %#x.\n", context->ContextFlags, flags);
+
+        xs->Mask = 0xdeadbeef;
+        xs->CompactionMask = 0xdeadbeef;
+        bret = pSetXStateFeaturesMask(context, 7);
+        ok(bret == !!(flags & CONTEXT_NATIVE), "Got unexpected bret %#x.\n", bret);
+        context_flags = *(DWORD *)(context_buffer + context_arch[test].flags_offset);
+        ok(context_flags == (bret ? flags_fpx : flags),
+                "Got unexpected ContextFlags %#x, flags %#x.\n", context_flags, flags);
+        ok(xs->Mask == bret ? 4 : 0xdeadbeef, "Got unexpected Mask %s.\n", wine_dbgstr_longlong(xs->Mask));
+        mask = pRtlGetExtendedFeaturesMask(context_ex);
+        ok(mask == (xs->Mask & ~(ULONG64)3), "Got unexpected mask %s.\n", wine_dbgstr_longlong(mask));
+        ok(xs->CompactionMask == bret ? expected_compaction : 0xdeadbeef, "Got unexpected CompactionMask %s.\n",
+                wine_dbgstr_longlong(xs->CompactionMask));
+
+        mask = 0xdeadbeef;
+        bret = pGetXStateFeaturesMask(context, &mask);
+        if (flags & CONTEXT_NATIVE)
+            ok(bret && mask == enabled_features,
+                    "Got unexpected bret %#x, mask %s, flags %#x.\n", bret, wine_dbgstr_longlong(mask), flags);
+        else
+            ok(!bret && mask == 0xdeadbeef,
+                    "Got unexpected bret %#x, mask %s, flags %#x.\n", bret, wine_dbgstr_longlong(mask), flags);
+
+        if (pRtlGetExtendedContextLength2)
+        {
+            memset(context_buffer, 0xcc, sizeof(context_buffer));
+            pRtlGetExtendedContextLength2(flags, &length, 0);
+            SetLastError(0xdeadbeef);
+            memset(context_buffer, 0xcc, sizeof(context_buffer));
+            length2 = length;
+            bret = pInitializeContext2(context_buffer, flags, &context, &length2, 0);
+            ok(bret && GetLastError() == 0xdeadbeef,
+                    "Got unexpected bret %#x, GetLastError() %u, flags %#x.\n", bret, GetLastError(), flags);
+            ok(length2 == length, "Got unexpexted length %#x.\n", length);
+            ok((BYTE *)context == context_buffer, "Got unexpected context %p.\n", context);
+
+            length2 = 0xdeadbeef;
+            p = pLocateXStateFeature(context, 0, &length2);
+            if (flags & CONTEXT_NATIVE)
+                ok(p == (BYTE *)context + context_arch[test].xsavearea_offset
+                    && length2 == offsetof(XSAVE_FORMAT, XmmRegisters),
+                    "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+            else
+                ok(!p && length2 == 0xdeadbeef, "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+
+            length2 = 0xdeadbeef;
+            p = pRtlLocateExtendedFeature(context_ex, 2, &length2);
+            ok((!p && length2 == sizeof(YMMCONTEXT))
+                    || broken(p && length2 == sizeof(YMMCONTEXT)) /* win10pro */,
+                    "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+
+            length2 = 0xdeadbeef;
+            p = pLocateXStateFeature(context, 2, &length2);
+            ok(!p && length2 == (flags & CONTEXT_NATIVE) ? sizeof(YMMCONTEXT) : 0xdeadbeef,
+                    "Got unexpected p %p, length %#x, flags %#x.\n", p, length2, flags);
+
+            context_flags = *(DWORD *)(context_buffer + context_arch[test].flags_offset);
+            ok(context_flags == flags, "Got unexpected ContextFlags %#x, flags %#x.\n", context_flags, flags);
+
+            context_ex = (CONTEXT_EX *)(context_buffer + context_arch[test].context_length);
+            ok(context_ex->Legacy.Offset == -(int)context_arch[test].context_length,
+                    "Got unexpected Offset %d, flags %#x.\n", context_ex->Legacy.Offset, flags);
+            ok(context_ex->Legacy.Length == ((flags & 0x20) ? context_arch[test].context_length
+                    : context_arch[test].legacy_length),
+                    "Got unexpected Length %#x, flags %#x.\n", context_ex->Legacy.Length, flags);
+
+            expected_offset = (((ULONG_PTR)context + context_arch[test].context_length
+                    + context_arch[test].context_ex_length + 63) & ~(ULONG64)63) - (ULONG_PTR)context
+                    - context_arch[test].context_length;
+            ok(context_ex->XState.Offset == expected_offset,
+                    "Got unexpected Offset %d, flags %#x.\n", context_ex->XState.Offset, flags);
+            ok(context_ex->XState.Length == sizeof(XSTATE) - sizeof(YMMCONTEXT)
+                    || broken(context_ex->XState.Length == sizeof(XSTATE)) /* win10pro */,
+                    "Got unexpected Length %#x, flags %#x.\n", context_ex->XState.Length, flags);
+
+            ok(context_ex->All.Offset == -(int)context_arch[test].context_length,
+                    "Got unexpected Offset %d, flags %#x.\n", context_ex->All.Offset, flags);
+            /* No extra 8 bytes in x64 CONTEXT_EX here. */
+            ok(context_ex->All.Length == context_arch[test].context_length
+                    + context_ex->XState.Offset + context_ex->XState.Length,
+                    "Got unexpected Length %#x, flags %#x.\n", context_ex->All.Length, flags);
+
+            expected_compaction = compaction_enabled ? (ULONG64)1 << 63 : 0;
+            xs = (XSTATE *)((BYTE *)context_ex + context_ex->XState.Offset);
+            ok(!xs->Mask, "Got unexpected Mask %s.\n", wine_dbgstr_longlong(xs->Mask));
+            ok(xs->CompactionMask == expected_compaction,
+                    "Got unexpected CompactionMask %s.\n", wine_dbgstr_longlong(xs->CompactionMask));
+            ok(!xs->Reserved[0], "Got unexpected Reserved[0]  %s.\n", wine_dbgstr_longlong(xs->Reserved[0]));
+
+            pRtlSetExtendedFeaturesMask(context_ex, ~(ULONG64)0);
+            ok(xs->Mask == (enabled_features & ~(ULONG64)3), "Got unexpected Mask %s.\n", wine_dbgstr_longlong(xs->Mask));
+            ok(xs->CompactionMask == expected_compaction, "Got unexpected CompactionMask %s.\n", wine_dbgstr_longlong(xs->CompactionMask));
+        }
+    }
+
+    length = 0xdeadbeef;
+    ret = pRtlGetExtendedContextLength(context_arch[0].flag | context_arch[1].flag, &length);
+    ok(ret == STATUS_INVALID_PARAMETER && length == 0xdeadbeef, "Got unexpected result ret %#x, length %#x.\n",
+            ret, length);
+
+    if (0)
+    {
+        /* Crashes on Windows. */
+        pRtlGetExtendedContextLength(CONTEXT_FULL, NULL);
+        length = sizeof(context_buffer);
+        pInitializeContext(context_buffer, CONTEXT_FULL, NULL, &length);
+        pInitializeContext(context_buffer, CONTEXT_FULL, &context, NULL);
+    }
+
+    if (!(enabled_features & (1 << XSTATE_AVX)))
     {
         skip("AVX is not supported.\n");
         return;
     }
 
+    /* Test RtlCaptureContext (doesn't support xstates). */
+    length = sizeof(context_buffer);
+    memset(context_buffer, 0xcc, sizeof(context_buffer));
+    bret = pInitializeContext(context_buffer, CONTEXT_XSTATE, &context, &length);
+    ok(bret, "Got unexpected bret %#x.\n", bret);
+    context_ex = (CONTEXT_EX *)(context + 1);
+    xs = (XSTATE *)((BYTE *)context_ex + context_ex->XState.Offset);
+
+    *(void **)(call_func_code_set_ymm0 + call_func_offsets.func_addr) = RtlCaptureContext;
+    *(void **)(call_func_code_set_ymm0 + call_func_offsets.func_param1) = context;
+    *(void **)(call_func_code_set_ymm0 + call_func_offsets.func_param2) = (void *)0xdeadbeef;
+    *(void **)(call_func_code_set_ymm0 + call_func_offsets.ymm0_save) = data;
+    memcpy(code_mem, call_func_code_set_ymm0, sizeof(call_func_code_set_ymm0));
+
+    memcpy(data, test_extended_context_data, sizeof(data));
+    func();
+    ok(context->ContextFlags == (CONTEXT_FULL | CONTEXT_SEGMENTS), "Got unexpected ContextFlags %#x.\n",
+            context->ContextFlags);
+    for (i = 0; i < 8; ++i)
+        ok(data[i] == test_extended_context_data[i], "Got unexpected data %#x, i %u.\n", data[i], i);
+
+    /* Test GetThreadContext (current thread, ymm0 set). */
+    length = sizeof(context_buffer);
+    memset(context_buffer, 0xcc, sizeof(context_buffer));
+    bret = pInitializeContext(context_buffer, CONTEXT_FULL | CONTEXT_XSTATE | CONTEXT_FLOATING_POINT,
+            &context, &length);
+    ok(bret, "Got unexpected bret %#x.\n", bret);
+    memset(&xs->YmmContext, 0xcc, sizeof(xs->YmmContext));
+
+    expected_flags = CONTEXT_FULL | CONTEXT_XSTATE | CONTEXT_FLOATING_POINT;
+#ifdef __i386__
+    expected_flags |= CONTEXT_EXTENDED_REGISTERS;
+#endif
+    pSetXStateFeaturesMask(context, ~(ULONG64)0);
+    ok(context->ContextFlags == expected_flags, "Got unexpected ContextFlags %#x.\n",
+            context->ContextFlags);
+    *(void **)(call_func_code_set_ymm0 + call_func_offsets.func_addr) = GetThreadContext;
+    *(void **)(call_func_code_set_ymm0 + call_func_offsets.func_param1) = (void *)GetCurrentThread();
+    *(void **)(call_func_code_set_ymm0 + call_func_offsets.func_param2) = context;
+    *(void **)(call_func_code_set_ymm0 + call_func_offsets.ymm0_save) = data;
+    memcpy(code_mem, call_func_code_set_ymm0, sizeof(call_func_code_set_ymm0));
+    xs->CompactionMask = 2;
+    if (!compaction_enabled)
+        xs->Mask = 0;
+    context_ex->XState.Length = sizeof(XSTATE);
+
+    bret = func();
+    ok(bret, "Got unexpected bret %#x, GetLastError() %u.\n", bret, GetLastError());
+
+    ok(context->ContextFlags == expected_flags, "Got unexpected ContextFlags %#x.\n",
+            context->ContextFlags);
+    expected_compaction = compaction_enabled ? (ULONG64)1 << 63 : 0;
+
+    ok(!xs->Mask || broken(xs->Mask == 4) /* win10pro */,
+            "Got unexpected Mask %s.\n", wine_dbgstr_longlong(xs->Mask));
+    ok(xs->CompactionMask == expected_compaction, "Got unexpected CompactionMask %s.\n",
+            wine_dbgstr_longlong(xs->CompactionMask));
+
+    for (i = 4; i < 8; ++i)
+        ok(data[i] == test_extended_context_data[i], "Got unexpected data %#x, i %u.\n", data[i], i);
+
+    for (i = 0; i < 4; ++i)
+        ok(((ULONG *)&xs->YmmContext)[i] == (xs->Mask == 4 ? test_extended_context_data[i + 4] : 0xcccccccc),
+                "Got unexpected data %#x, i %u.\n", ((ULONG *)&xs->YmmContext)[i], i);
+
+    expected_compaction = compaction_enabled ? ((ULONG64)1 << 63) | 4 : 0;
+
+    xs->CompactionMask = 4;
+    xs->Mask = compaction_enabled ? 0 : 4;
+    context_ex->XState.Length = sizeof(XSTATE) + 64;
+    bret = func();
+    ok(!bret && GetLastError() == ERROR_INVALID_PARAMETER,
+            "Got unexpected bret %#x, GetLastError() %u.\n", bret, GetLastError());
+    ok(context->ContextFlags == expected_flags, "Got unexpected ContextFlags %#x.\n",
+            context->ContextFlags);
+    ok(xs->Mask == (compaction_enabled ? 0 : 4), "Got unexpected Mask %s.\n", wine_dbgstr_longlong(xs->Mask));
+    ok(xs->CompactionMask == 4, "Got unexpected CompactionMask %s.\n",
+            wine_dbgstr_longlong(xs->CompactionMask));
+    for (i = 0; i < 4; ++i)
+        ok(((ULONG *)&xs->YmmContext)[i] == 0xcccccccc
+                || broken(((ULONG *)&xs->YmmContext)[i] == test_extended_context_data[i + 4]) /* win10pro */,
+                "Got unexpected data %#x, i %u.\n", ((ULONG *)&xs->YmmContext)[i], i);
+
+    xs->CompactionMask = 4;
+    xs->Mask = compaction_enabled ? 0 : 4;
+    context_ex->XState.Length = offsetof(XSTATE, YmmContext);
+    bret = func();
+    ok(context->ContextFlags == expected_flags, "Got unexpected ContextFlags %#x.\n",
+            context->ContextFlags);
+    ok(!bret && GetLastError() == ERROR_MORE_DATA,
+            "Got unexpected bret %#x, GetLastError() %u.\n", bret, GetLastError());
+    ok(xs->Mask == 4, "Got unexpected Mask %s.\n", wine_dbgstr_longlong(xs->Mask));
+    ok(xs->CompactionMask == expected_compaction, "Got unexpected CompactionMask %s.\n",
+            wine_dbgstr_longlong(xs->CompactionMask));
+    for (i = 0; i < 4; ++i)
+        ok(((ULONG *)&xs->YmmContext)[i] == 0xcccccccc
+                || broken(((ULONG *)&xs->YmmContext)[i] == test_extended_context_data[i + 4]) /* win10pro */,
+                "Got unexpected data %#x, i %u.\n", ((ULONG *)&xs->YmmContext)[i], i);
+
+    context_ex->XState.Length = sizeof(XSTATE);
+    xs->CompactionMask = 4;
+    xs->Mask = compaction_enabled ? 0 : 4;
+    bret = func();
+    ok(bret, "Got unexpected bret %#x, GetLastError() %u.\n", bret, GetLastError());
+
+    ok(context->ContextFlags == expected_flags, "Got unexpected ContextFlags %#x.\n",
+            context->ContextFlags);
+
+    ok(xs->Mask == 4, "Got unexpected Mask %s.\n", wine_dbgstr_longlong(xs->Mask));
+    ok(xs->CompactionMask == expected_compaction, "Got unexpected CompactionMask %s.\n",
+            wine_dbgstr_longlong(xs->CompactionMask));
+
+    for (i = 4; i < 8; ++i)
+        ok(data[i] == test_extended_context_data[i], "Got unexpected data %#x, i %u.\n", data[i], i);
+
+    for (i = 0; i < 4; ++i)
+        ok(((ULONG *)&xs->YmmContext)[i] == test_extended_context_data[i + 4],
+                "Got unexpected data %#x, i %u.\n", ((ULONG *)&xs->YmmContext)[i], i);
+
+    /* Test GetThreadContext (current thread, ymm state cleared). */
+    length = sizeof(context_buffer);
+    memset(context_buffer, 0xcc, sizeof(context_buffer));
+    bret = pInitializeContext(context_buffer, CONTEXT_FULL | CONTEXT_XSTATE | CONTEXT_FLOATING_POINT,
+            &context, &length);
+    memset(&xs->YmmContext, 0xcc, sizeof(xs->YmmContext));
+    ok(bret, "Got unexpected bret %#x.\n", bret);
+    pSetXStateFeaturesMask(context, ~(ULONG64)0);
+    *(void **)(call_func_code_reset_ymm_state + call_func_offsets.func_addr) = GetThreadContext;
+    *(void **)(call_func_code_reset_ymm_state + call_func_offsets.func_param1) = (void *)GetCurrentThread();
+    *(void **)(call_func_code_reset_ymm_state + call_func_offsets.func_param2) = context;
+    *(void **)(call_func_code_reset_ymm_state + call_func_offsets.ymm0_save) = data;
+    memcpy(code_mem, call_func_code_reset_ymm_state, sizeof(call_func_code_reset_ymm_state));
+
+    bret = func();
+    ok(bret, "Got unexpected bret %#x, GetLastError() %u.\n", bret, GetLastError());
+
+    expected_flags = CONTEXT_FULL | CONTEXT_XSTATE | CONTEXT_FLOATING_POINT;
+#ifdef __i386__
+    expected_flags |= CONTEXT_EXTENDED_REGISTERS;
+#endif
+    ok(context->ContextFlags == expected_flags, "Got unexpected ContextFlags %#x.\n",
+            context->ContextFlags);
+
+    expected_compaction = compaction_enabled ? ((ULONG64)1 << 63) | 4 : 0;
+
+    xs = (XSTATE *)((BYTE *)context_ex + context_ex->XState.Offset);
+    ok(!xs->Mask, "Got unexpected Mask %s.\n", wine_dbgstr_longlong(xs->Mask));
+    ok(xs->CompactionMask == expected_compaction, "Got unexpected CompactionMask %s.\n",
+            wine_dbgstr_longlong(xs->CompactionMask));
+
+    for (i = 4; i < 8; ++i)
+        ok(!data[i], "Got unexpected data %#x, i %u.\n", data[i], i);
+
+    for (i = 0; i < 4; ++i)
+        ok(((ULONG *)&xs->YmmContext)[i] == 0xcccccccc
+                || broken(((ULONG *)&xs->YmmContext)[i] == test_extended_context_data[i + 4]),
+                "Got unexpected data %#x, i %u.\n", ((ULONG *)&xs->YmmContext)[i], i);
+
+    /* Test fault exception context. */
     memset(data, 0xff, sizeof(data));
     test_extended_context_modified_state = FALSE;
     run_exception_test(test_extended_context_handler, NULL, except_code_reset_ymm_state,
@@ -6123,11 +7397,371 @@ static void test_extended_context(void)
     for (i = 0; i < 8; ++i)
         ok(data[i] == test_extended_context_data[i], "Got unexpected data %#x, i %u.\n", data[i], i);
 }
+
+struct modified_range
+{
+    ULONG start;
+    ULONG flag;
+};
+
+#define check_changes_in_range(a, b, c, d) check_changes_in_range_(__FILE__, __LINE__, a, b, c, d)
+static void check_changes_in_range_(const char *file, unsigned int line, const BYTE *p,
+        const struct modified_range *range, ULONG flags, unsigned int length)
+{
+    ULONG range_flag, flag;
+    unsigned int once = 0;
+    unsigned int i;
+
+    range_flag = 0;
+    for (i = 0; i < length; i++)
+    {
+        if (i == range->start)
+        {
+            range_flag = range->flag;
+            ++range;
+        }
+
+        if ((flag = range_flag) == ~0)
+            continue;
+
+        if (flag & 0x80000000)
+        {
+            if (flag & flags && p[i] == 0xcc)
+            {
+                if (!once++)
+                    ok(broken(1), "Matched broken result at %#x, flags %#x.\n", i, flags);
+                continue;
+            }
+            flag = 0;
+        }
+
+        if (flag & flags && p[i] != 0xcc)
+        {
+            ok_(file, line)(0, "Got unexected byte %#x at %#x, flags %#x.\n", p[i], i, flags);
+            return;
+        }
+        else if (!(flag & flags) && p[i] != 0xdd)
+        {
+            ok_(file, line)(0, "Got unexected byte %#x at %#x, flags %#x.\n", p[i], i, flags);
+            return;
+        }
+    }
+    ok_(file, line)(1, "Range matches.\n");
+}
+
+static void test_copy_context(void)
+{
+    static const struct modified_range ranges_amd64[] =
+    {
+        {0x30, ~0}, {0x38, 0x1}, {0x3a, 0x4}, {0x42, 0x1}, {0x48, 0x10}, {0x78, 0x2}, {0x98, 0x1},
+        {0xa0, 0x2}, {0xf8, 0x1}, {0x100, 0x8}, {0x2a0, 0x80000008}, {0x4b0, 0x10}, {0x4d0, ~0},
+        {0x4e8, 0}, {0x500, ~0}, {0x640, 0}, {0x1000, 0},
+    };
+    static const struct modified_range ranges_x86[] =
+    {
+        {0x0, ~0}, {0x4, 0x10}, {0x1c, 0x8}, {0x8c, 0x4}, {0x9c, 0x2}, {0xb4, 0x1}, {0xcc, 0x20}, {0x1ec, 0x80000020},
+        {0x2cc, ~0}, {0x294, 0}, {0x1000, 0},
+    };
+    static const struct modified_range single_range[] =
+    {
+        {0x0, 0x1}, {0x1000, 0},
+    };
+
+    static const struct
+    {
+        ULONG flags;
+    }
+    tests[] =
+    {
+        /* AMD64 */
+        {0x100000 | 0x01}, /* CONTEXT_CONTROL */
+        {0x100000 | 0x02}, /* CONTEXT_INTEGER */
+        {0x100000 | 0x04}, /* CONTEXT_SEGMENTS */
+        {0x100000 | 0x08}, /* CONTEXT_FLOATING_POINT */
+        {0x100000 | 0x10}, /* CONTEXT_DEBUG_REGISTERS */
+        {0x100000 | 0x0b}, /* CONTEXT_FULL */
+        {0x100000 | 0x40}, /* CONTEXT_XSTATE */
+        {0x100000 | 0x1f}, /* CONTEXT_ALL */
+        /* X86 */
+        { 0x10000 | 0x01}, /* CONTEXT_CONTROL */
+        { 0x10000 | 0x02}, /* CONTEXT_INTEGER */
+        { 0x10000 | 0x04}, /* CONTEXT_SEGMENTS */
+        { 0x10000 | 0x08}, /* CONTEXT_FLOATING_POINT */
+        { 0x10000 | 0x10}, /* CONTEXT_DEBUG_REGISTERS */
+        { 0x10000 | 0x20}, /* CONTEXT_EXTENDED_REGISTERS */
+        { 0x10000 | 0x40}, /* CONTEXT_XSTATE */
+        { 0x10000 | 0x3f}, /* CONTEXT_ALL */
+    };
+    static const ULONG arch_flags[] = {0x100000, 0x10000};
+
+    DECLSPEC_ALIGN(64) BYTE src_context_buffer[4096];
+    DECLSPEC_ALIGN(64) BYTE dst_context_buffer[4096];
+    ULONG64 enabled_features, expected_compaction;
+    unsigned int context_length, flags_offset, i;
+    CONTEXT_EX *src_ex, *dst_ex;
+    XSTATE *dst_xs, *src_xs;
+    BOOL compaction, bret;
+    CONTEXT *src, *dst;
+    NTSTATUS status;
+    DWORD length;
+    ULONG flags;
+
+    if (!pRtlCopyExtendedContext)
+    {
+        win_skip("RtlCopyExtendedContext is not available.\n");
+        return;
+    }
+
+    if (!pRtlGetEnabledExtendedFeatures)
+    {
+        skip("RtlGetEnabledExtendedFeatures is not available.\n");
+        return;
+    }
+
+    enabled_features = pRtlGetEnabledExtendedFeatures(~(ULONG64)0);
+
+    for (i = 0; i < ARRAY_SIZE(tests); ++i)
+    {
+        flags = tests[i].flags;
+        flags_offset = (flags & 0x100000) ? 0x30 : 0;
+
+        memset(dst_context_buffer, 0xdd, sizeof(dst_context_buffer));
+        memset(src_context_buffer, 0xcc, sizeof(src_context_buffer));
+
+        status = pRtlInitializeExtendedContext(src_context_buffer, flags, &src_ex);
+        if (enabled_features || !(flags & 0x40))
+        {
+            ok(!status, "Got unexpected status %#x, flags %#x.\n", status, flags);
+        }
+        else
+        {
+            ok(status == STATUS_NOT_SUPPORTED, "Got unexpected status %#x, flags %#x.\n", status, flags);
+            continue;
+        }
+        status = pRtlInitializeExtendedContext(dst_context_buffer, flags, &dst_ex);
+        ok(!status, "Got unexpected status %#x, flags %#x.\n", status, flags);
+
+        src = pRtlLocateLegacyContext(src_ex, NULL);
+        dst = pRtlLocateLegacyContext(dst_ex, NULL);
+
+        *(DWORD *)((BYTE *)dst + flags_offset) = 0;
+        *(DWORD *)((BYTE *)src + flags_offset) = 0;
+
+        src_xs = (XSTATE *)((BYTE *)src_ex + src_ex->XState.Offset);
+        memset(src_xs, 0xcc, sizeof(XSTATE));
+        src_xs->Mask = 3;
+        src_xs->CompactionMask = ~(ULONG64)0;
+
+        status = pRtlCopyExtendedContext(dst_ex, flags, src_ex);
+        ok(!status, "Got unexpected status %#x, flags %#x.\n", status, flags);
+
+        context_length = (BYTE *)dst_ex - (BYTE *)dst + dst_ex->All.Length;
+        check_changes_in_range((BYTE *)dst, flags & 0x100000 ? &ranges_amd64[0] : &ranges_x86[0],
+                flags, context_length);
+
+        ok(*(DWORD *)((BYTE *)dst + flags_offset) == flags, "Got unexpected ContextFlags %#x, flags %#x.\n",
+                *(DWORD *)((BYTE *)dst + flags_offset), flags);
+
+        memset(dst_context_buffer, 0xdd, sizeof(dst_context_buffer));
+        status = pRtlInitializeExtendedContext(dst_context_buffer, flags, &dst_ex);
+        ok(!status, "Got unexpected status %#x, flags %#x.\n", status, flags);
+        *(DWORD *)((BYTE *)src + flags_offset) = 0;
+        *(DWORD *)((BYTE *)dst + flags_offset) = 0;
+        SetLastError(0xdeadbeef);
+        bret = pCopyContext(dst, flags | 0x40, src);
+        ok((!bret && GetLastError() == (enabled_features ? ERROR_INVALID_PARAMETER : ERROR_NOT_SUPPORTED))
+                || broken(!bret && GetLastError() == ERROR_INVALID_PARAMETER),
+                "Got unexpected bret %#x, GetLastError() %#x, flags %#x.\n",
+                bret, GetLastError(), flags);
+        ok(*(DWORD *)((BYTE *)dst + flags_offset) == 0, "Got unexpected ContextFlags %#x, flags %#x.\n",
+                *(DWORD *)((BYTE *)dst + flags_offset), flags);
+        check_changes_in_range((BYTE *)dst, flags & 0x100000 ? &ranges_amd64[0] : &ranges_x86[0],
+                0, context_length);
+
+        *(DWORD *)((BYTE *)dst + flags_offset) = flags & 0x110000;
+        *(DWORD *)((BYTE *)src + flags_offset) = flags;
+        SetLastError(0xdeadbeef);
+        bret = pCopyContext(dst, flags, src);
+        if (flags & 0x40)
+            ok((!bret && GetLastError() == ERROR_MORE_DATA)
+                    || broken(!(flags & CONTEXT_NATIVE) && !bret && GetLastError() == ERROR_INVALID_PARAMETER),
+                    "Got unexpected bret %#x, GetLastError() %#x, flags %#x.\n",
+                    bret, GetLastError(), flags);
+        else
+            ok((bret && GetLastError() == 0xdeadbeef)
+                    || broken(!(flags & CONTEXT_NATIVE) && !bret && GetLastError() == ERROR_INVALID_PARAMETER),
+                    "Got unexpected bret %#x, GetLastError() %#x, flags %#x.\n",
+                    bret, GetLastError(), flags);
+        if (bret)
+        {
+            ok(*(DWORD *)((BYTE *)dst + flags_offset) == flags, "Got unexpected ContextFlags %#x, flags %#x.\n",
+                    *(DWORD *)((BYTE *)dst + flags_offset), flags);
+            check_changes_in_range((BYTE *)dst, flags & 0x100000 ? &ranges_amd64[0] : &ranges_x86[0],
+                    flags, context_length);
+        }
+        else
+        {
+            ok(*(DWORD *)((BYTE *)dst + flags_offset) == (flags & 0x110000),
+                    "Got unexpected ContextFlags %#x, flags %#x.\n",
+                    *(DWORD *)((BYTE *)dst + flags_offset), flags);
+            check_changes_in_range((BYTE *)dst, flags & 0x100000 ? &ranges_amd64[0] : &ranges_x86[0],
+                    0, context_length);
+        }
+    }
+
+    for (i = 0; i < ARRAY_SIZE(arch_flags); ++i)
+    {
+        flags = arch_flags[i] | 0x42;
+        flags_offset = (flags & 0x100000) ? 0x30 : 0;
+        context_length = (flags & 0x100000) ? 0x4d0 : 0x2cc;
+
+        memset(dst_context_buffer, 0xdd, sizeof(dst_context_buffer));
+        memset(src_context_buffer, 0xcc, sizeof(src_context_buffer));
+        length = sizeof(src_context_buffer);
+        bret = pInitializeContext(src_context_buffer, flags, &src, &length);
+        ok(bret, "Got unexpected bret %#x, flags %#x.\n", bret, flags);
+
+        length = sizeof(dst_context_buffer);
+        bret = pInitializeContext(dst_context_buffer, flags, &dst, &length);
+        ok(bret, "Got unexpected bret %#x, flags %#x.\n", bret, flags);
+
+        dst_ex = (CONTEXT_EX *)((BYTE *)dst + context_length);
+        src_ex = (CONTEXT_EX *)((BYTE *)src + context_length);
+
+        dst_xs = (XSTATE *)((BYTE *)dst_ex + dst_ex->XState.Offset);
+        src_xs = (XSTATE *)((BYTE *)src_ex + src_ex->XState.Offset);
+
+        *(DWORD *)((BYTE *)dst + flags_offset) = 0;
+        *(DWORD *)((BYTE *)src + flags_offset) = 0;
+
+        compaction = !!(src_xs->CompactionMask & ((ULONG64)1 << 63));
+        expected_compaction = (compaction ? ((ULONG64)1 << (ULONG64)63) | enabled_features : 0);
+
+        memset(&src_xs->YmmContext, 0xcc, sizeof(src_xs->YmmContext));
+        src_xs->CompactionMask = ~(ULONG64)0;
+
+        src_xs->Mask = 0;
+        memset(&dst_xs->YmmContext, 0xdd, sizeof(dst_xs->YmmContext));
+        dst_xs->CompactionMask = 0xdddddddddddddddd;
+        dst_xs->Mask = 0xdddddddddddddddd;
+        dst_ex->XState.Length = 0;
+        status = pRtlCopyExtendedContext(dst_ex, flags, src_ex);
+        ok(status == (enabled_features ? STATUS_BUFFER_OVERFLOW : STATUS_NOT_SUPPORTED),
+                "Got unexpected status %#x, flags %#x.\n", status, flags);
+
+        if (!enabled_features)
+            continue;
+
+        ok(*(DWORD *)((BYTE *)dst + flags_offset) == flags, "Got unexpected ContextFlags %#x, flags %#x.\n",
+                *(DWORD *)((BYTE *)dst + flags_offset), flags);
+
+        src_xs->Mask = ~(ULONG64)0;
+
+        memset(&dst_xs->YmmContext, 0xdd, sizeof(dst_xs->YmmContext));
+        dst_xs->CompactionMask = 0xdddddddddddddddd;
+        dst_xs->Mask = 0xdddddddddddddddd;
+        dst_ex->XState.Length = 0;
+        status = pRtlCopyExtendedContext(dst_ex, flags, src_ex);
+        ok(status == STATUS_BUFFER_OVERFLOW, "Got unexpected status %#x, flags %#x.\n", status, flags);
+        ok(*(DWORD *)((BYTE *)dst + flags_offset) == flags, "Got unexpected ContextFlags %#x, flags %#x.\n",
+                *(DWORD *)((BYTE *)dst + flags_offset), flags);
+
+        ok(dst_xs->Mask == 0xdddddddddddddddd, "Got unexpected Mask %s.\n",
+                wine_dbgstr_longlong(dst_xs->Mask));
+        ok(dst_xs->CompactionMask == 0xdddddddddddddddd, "Got unexpected CompactionMask %s.\n",
+                wine_dbgstr_longlong(dst_xs->CompactionMask));
+        check_changes_in_range((BYTE *)&dst_xs->YmmContext, single_range, 0, sizeof(dst_xs->YmmContext));
+
+        src_xs->Mask = 3;
+        memset(&dst_xs->YmmContext, 0xdd, sizeof(dst_xs->YmmContext));
+        dst_xs->CompactionMask = 0xdddddddddddddddd;
+        dst_xs->Mask = 0xdddddddddddddddd;
+        dst_ex->XState.Length = offsetof(XSTATE, YmmContext);
+        status = pRtlCopyExtendedContext(dst_ex, flags, src_ex);
+        ok(!status, "Got unexpected status %#x, flags %#x.\n", status, flags);
+        ok(*(DWORD *)((BYTE *)dst + flags_offset) == flags, "Got unexpected ContextFlags %#x, flags %#x.\n",
+                *(DWORD *)((BYTE *)dst + flags_offset), flags);
+        ok(dst_xs->Mask == 0, "Got unexpected Mask %s.\n",
+                wine_dbgstr_longlong(dst_xs->Mask));
+        ok(dst_xs->CompactionMask == expected_compaction,
+                "Got unexpected CompactionMask %s.\n", wine_dbgstr_longlong(dst_xs->CompactionMask));
+        check_changes_in_range((BYTE *)&dst_xs->YmmContext, single_range, 0, sizeof(dst_xs->YmmContext));
+
+        memset(&dst_xs->YmmContext, 0xdd, sizeof(dst_xs->YmmContext));
+        dst_xs->CompactionMask = 0xdddddddddddddddd;
+        dst_xs->Mask = 0xdddddddddddddddd;
+        dst_ex->XState.Length = sizeof(XSTATE);
+        status = pRtlCopyExtendedContext(dst_ex, flags, src_ex);
+        ok(!status, "Got unexpected status %#x, flags %#x.\n", status, flags);
+        ok(dst_xs->Mask == 0, "Got unexpected Mask %s.\n",
+                wine_dbgstr_longlong(dst_xs->Mask));
+        ok(dst_xs->CompactionMask == expected_compaction,
+                "Got unexpected CompactionMask %s.\n", wine_dbgstr_longlong(dst_xs->CompactionMask));
+        check_changes_in_range((BYTE *)&dst_xs->YmmContext, single_range, 0, sizeof(dst_xs->YmmContext));
+
+        src_xs->Mask = 4;
+        memset(&dst_xs->YmmContext, 0xdd, sizeof(dst_xs->YmmContext));
+        dst_xs->CompactionMask = 0xdddddddddddddddd;
+        dst_xs->Mask = 0xdddddddddddddddd;
+        status = pRtlCopyExtendedContext(dst_ex, flags, src_ex);
+        ok(!status, "Got unexpected status %#x, flags %#x.\n", status, flags);
+        ok(dst_xs->Mask == 4, "Got unexpected Mask %s.\n",
+                wine_dbgstr_longlong(dst_xs->Mask));
+        ok(dst_xs->CompactionMask == expected_compaction,
+                "Got unexpected CompactionMask %s.\n", wine_dbgstr_longlong(dst_xs->CompactionMask));
+        check_changes_in_range((BYTE *)&dst_xs->YmmContext, single_range, 1, sizeof(dst_xs->YmmContext));
+
+        src_xs->Mask = 3;
+        memset(&dst_xs->YmmContext, 0xdd, sizeof(dst_xs->YmmContext));
+        dst_xs->CompactionMask = 0xdddddddddddddddd;
+        dst_xs->Mask = 0xdddddddddddddddd;
+        status = pRtlCopyExtendedContext(dst_ex, flags, src_ex);
+        ok(!status, "Got unexpected status %#x, flags %#x.\n", status, flags);
+        ok(dst_xs->Mask == 0, "Got unexpected Mask %s.\n",
+                wine_dbgstr_longlong(dst_xs->Mask));
+        ok(dst_xs->CompactionMask == expected_compaction,
+                "Got unexpected CompactionMask %s.\n", wine_dbgstr_longlong(dst_xs->CompactionMask));
+        check_changes_in_range((BYTE *)&dst_xs->YmmContext, single_range, 0, sizeof(dst_xs->YmmContext));
+
+
+        *(DWORD *)((BYTE *)src + flags_offset) = arch_flags[i];
+
+        src_xs->Mask = 7;
+        memset(&dst_xs->YmmContext, 0xdd, sizeof(dst_xs->YmmContext));
+        dst_xs->CompactionMask = 0xdddddddddddddddd;
+        dst_xs->Mask = 0xdddddddddddddddd;
+        status = pRtlCopyExtendedContext(dst_ex, flags, src_ex);
+        ok(!status, "Got unexpected status %#x, flags %#x.\n", status, flags);
+        ok(dst_xs->Mask == 4, "Got unexpected Mask %s.\n",
+                wine_dbgstr_longlong(dst_xs->Mask));
+        ok(dst_xs->CompactionMask == expected_compaction,
+                "Got unexpected CompactionMask %s.\n", wine_dbgstr_longlong(dst_xs->CompactionMask));
+        check_changes_in_range((BYTE *)&dst_xs->YmmContext, single_range, 1, sizeof(dst_xs->YmmContext));
+
+        src_xs->Mask = 7;
+        memset(&dst_xs->YmmContext, 0xdd, sizeof(dst_xs->YmmContext));
+        dst_xs->CompactionMask = 0xdddddddddddddddd;
+        dst_xs->Mask = 0xdddddddddddddddd;
+        SetLastError(0xdeadbeef);
+        bret = pCopyContext(dst, flags, src);
+        ok((bret && GetLastError() == 0xdeadbeef)
+                || broken(!(flags & CONTEXT_NATIVE) && !bret && GetLastError() == ERROR_INVALID_PARAMETER),
+                "Got unexpected bret %#x, GetLastError() %#x, flags %#x.\n",
+                bret, GetLastError(), flags);
+        ok(dst_xs->Mask == 0xdddddddddddddddd || broken(dst_xs->Mask == 4), "Got unexpected Mask %s, flags %#x.\n",
+                wine_dbgstr_longlong(dst_xs->Mask), flags);
+        ok(dst_xs->CompactionMask == 0xdddddddddddddddd || broken(dst_xs->CompactionMask == expected_compaction),
+                "Got unexpected CompactionMask %s, flags %#x.\n", wine_dbgstr_longlong(dst_xs->CompactionMask), flags);
+        check_changes_in_range((BYTE *)&dst_xs->YmmContext, single_range,
+                dst_xs->Mask == 4, sizeof(dst_xs->YmmContext));
+    }
+}
 #endif
 
 START_TEST(exception)
 {
     HMODULE hntdll = GetModuleHandleA("ntdll.dll");
+    HMODULE hkernel32 = GetModuleHandleA("kernel32.dll");
 #if defined(__x86_64__)
     HMODULE hmsvcrt = LoadLibraryA("msvcrt.dll");
 #endif
@@ -6168,10 +7802,28 @@ START_TEST(exception)
     X(RtlGetUnloadEventTrace);
     X(RtlGetUnloadEventTraceEx);
     X(RtlGetEnabledExtendedFeatures);
+    X(RtlGetExtendedContextLength);
+    X(RtlGetExtendedContextLength2);
+    X(RtlInitializeExtendedContext);
+    X(RtlInitializeExtendedContext2);
+    X(RtlLocateExtendedFeature);
+    X(RtlLocateLegacyContext);
+    X(RtlSetExtendedFeaturesMask);
+    X(RtlGetExtendedFeaturesMask);
+    X(RtlCopyExtendedContext);
 #undef X
 
-    pIsWow64Process = (void *)GetProcAddress(GetModuleHandleA("kernel32.dll"), "IsWow64Process");
+#define X(f) p##f = (void*)GetProcAddress(hkernel32, #f)
+    X(IsWow64Process);
     if (!pIsWow64Process || !pIsWow64Process( GetCurrentProcess(), &is_wow64 )) is_wow64 = FALSE;
+
+    X(InitializeContext);
+    X(InitializeContext2);
+    X(LocateXStateFeature);
+    X(SetXStateFeaturesMask);
+    X(GetXStateFeaturesMask);
+    X(CopyContext);
+#undef X
 
     if (pRtlAddVectoredExceptionHandler && pRtlRemoveVectoredExceptionHandler)
         have_vectored_api = TRUE;
@@ -6251,6 +7903,7 @@ START_TEST(exception)
     test_prot_fault();
     test_kiuserexceptiondispatcher();
     test_extended_context();
+    test_copy_context();
 
 #elif defined(__x86_64__)
 
@@ -6290,6 +7943,7 @@ START_TEST(exception)
     else
       skip( "Dynamic unwind functions not found\n" );
     test_extended_context();
+    test_copy_context();
 
 #elif defined(__aarch64__)
 

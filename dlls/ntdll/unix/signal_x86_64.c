@@ -1474,6 +1474,56 @@ static void save_context( struct xcontext *xcontext, const ucontext_t *sigcontex
 
 
 /***********************************************************************
+ *           save_xstate
+ *
+ * Save the XState context
+ */
+static inline NTSTATUS save_xstate( CONTEXT *context )
+{
+    CONTEXT_EX *context_ex = (CONTEXT_EX *)(context + 1);
+    DECLSPEC_ALIGN(64) struct
+    {
+        XSAVE_FORMAT xsave;
+        XSTATE xstate;
+    }
+    xsave_area;
+    XSTATE *xs;
+
+    if (!(user_shared_data->XState.EnabledFeatures && (xs = xstate_from_context( context ))))
+        return STATUS_SUCCESS;
+
+    if (context_ex->XState.Length < offsetof(XSTATE, YmmContext)
+            || context_ex->XState.Length > sizeof(XSTATE))
+        return STATUS_INVALID_PARAMETER;
+
+    if (user_shared_data->XState.CompactionEnabled)
+    {
+        /* xsavec doesn't use anything from the save area. */
+        __asm__ volatile( "xsavec %0" : "=m"(xsave_area)
+                : "a" ((unsigned int)(xs->CompactionMask & (1 << XSTATE_AVX))), "d" (0) );
+    }
+    else
+    {
+        /* xsave preserves those bits in the mask which are not in EDX:EAX, so zero it. */
+        xsave_area.xstate.Mask = xsave_area.xstate.CompactionMask = 0;
+        __asm__ volatile( "xsave %0" : "=m"(xsave_area)
+                : "a" ((unsigned int)(xs->Mask & (1 << XSTATE_AVX))), "d" (0) );
+    }
+
+    memcpy(xs, &xsave_area.xstate, offsetof(XSTATE, YmmContext));
+    if (xs->Mask & (1 << XSTATE_AVX))
+    {
+        if (context_ex->XState.Length < sizeof(XSTATE))
+            return STATUS_BUFFER_OVERFLOW;
+
+        memcpy(&xs->YmmContext, &xsave_area.xstate.YmmContext, sizeof(xs->YmmContext));
+    }
+
+    return STATUS_SUCCESS;
+}
+
+
+/***********************************************************************
  *           restore_context
  *
  * Build a sigcontext from the register values.
@@ -1772,12 +1822,16 @@ NTSTATUS WINAPI NtSetContextThread( HANDLE handle, const CONTEXT *context )
  */
 NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
 {
-    NTSTATUS ret;
+    NTSTATUS ret, xsave_status;
     DWORD needed_flags;
     struct syscall_frame *frame = amd64_thread_data()->syscall_frame;
     BOOL self = (handle == GetCurrentThread());
 
     if (!context) return STATUS_INVALID_PARAMETER;
+
+    /* Save xstate before any calls which can potentially change volatile ymm registers.
+     * E. g., debug output will clobber ymm registers. */
+    xsave_status = self ? save_xstate( context ) : STATUS_SUCCESS; /* FIXME: other thread. */
 
     needed_flags = context->ContextFlags & ~CONTEXT_AMD64;
 
@@ -1851,7 +1905,8 @@ NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
             amd64_thread_data()->dr7 = context->Dr7;
         }
     }
-    return STATUS_SUCCESS;
+
+    return xsave_status;
 }
 
 extern void CDECL raise_func_trampoline( void *dispatcher );
@@ -1958,26 +2013,24 @@ __ASM_GLOBAL_FUNC( call_user_apc_dispatcher,
                    "leaq -0x5c0(%rax),%rsp\n\t"     /* sizeof(CONTEXT) + offsetof(frame,ret_addr) */
                    "jmp 2f\n"
                    "1:\tmovq 0x328(%rbx),%rax\n\t"  /* amd64_thread_data()->syscall_frame */
-                   "leaq -0x4d0(%rax),%r10\n\t"
+                   "leaq -0x4d0(%rax),%rsp\n\t"
+                   "andq $~15,%rsp\n\t"
                    "movq %rdx,%r12\n\t"             /* ctx */
                    "movq %r8,%r13\n\t"              /* arg1 */
                    "movq %r9,%r14\n\t"              /* arg2 */
-                   "cmpq %rsp,%r10\n\t"
-                   "cmovbq %r10,%rsp\n\t"
-                   "andq $~15,%rsp\n\t"
                    "movq %rsp,%rdx\n\t"             /* context */
                    "movl $0x10000b,0x30(%rdx)\n\t"  /* context.ContextFlags */
                    "movq $~1,%rcx\n\t"
                    "call " __ASM_NAME("NtGetContextThread") "\n\t"
                    "movq %rsp,%rcx\n\t"             /* context */
-                   "movl $0xc0,%eax\n\t"
-                   "movq %rax,0x78(%rcx)\n\t"       /* context.Rax = STATUS_USER_APC */
+                   "movq $0xc0,0x78(%rcx)\n\t"      /* context.Rax = STATUS_USER_APC */
                    "movq %r12,%rdx\n\t"             /* ctx */
                    "movq %r13,%r8\n\t"              /* arg1 */
                    "movq %r14,%r9\n"                /* arg2 */
                    "2:\tmovq $0,0x328(%rbx)\n\t"
                    "movq %rsi,0x20(%rsp)\n\t"       /* func */
-                   "leaq -8(%rsp),%rsp\n\t"
+                   "movq 0xa0(%rcx),%rbp\n\t"       /* context.Rbp */
+                   "pushq 0xf8(%rcx)\n\t"           /* context.Rip */
                    "jmp *%rdi" )
 
 
@@ -2631,14 +2684,14 @@ void signal_init_process(void)
 /***********************************************************************
  *           init_thread_context
  */
-static void init_thread_context( CONTEXT *context, LPTHREAD_START_ROUTINE entry, void *arg, void *relay )
+static void init_thread_context( CONTEXT *context, LPTHREAD_START_ROUTINE entry, void *arg )
 {
     __asm__( "movw %%cs,%0" : "=m" (context->SegCs) );
     __asm__( "movw %%ss,%0" : "=m" (context->SegSs) );
     context->Rcx    = (ULONG_PTR)entry;
     context->Rdx    = (ULONG_PTR)arg;
     context->Rsp    = (ULONG_PTR)NtCurrentTeb()->Tib.StackBase - 0x28;
-    context->Rip    = (ULONG_PTR)relay;
+    context->Rip    = (ULONG_PTR)pRtlUserThreadStart;
     context->EFlags = 0x200;
     context->u.FltSave.ControlWord = 0x27f;
     context->u.FltSave.MxCsr = context->MxCsr = 0x1f80;
@@ -2648,8 +2701,7 @@ static void init_thread_context( CONTEXT *context, LPTHREAD_START_ROUTINE entry,
 /***********************************************************************
  *           get_initial_context
  */
-PCONTEXT DECLSPEC_HIDDEN get_initial_context( LPTHREAD_START_ROUTINE entry, void *arg,
-                                              BOOL suspend, void *relay )
+PCONTEXT DECLSPEC_HIDDEN get_initial_context( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend )
 {
     CONTEXT *ctx;
 
@@ -2658,7 +2710,7 @@ PCONTEXT DECLSPEC_HIDDEN get_initial_context( LPTHREAD_START_ROUTINE entry, void
         CONTEXT context = { 0 };
 
         context.ContextFlags = CONTEXT_ALL;
-        init_thread_context( &context, entry, arg, relay );
+        init_thread_context( &context, entry, arg );
         wait_suspend( &context );
         ctx = (CONTEXT *)((ULONG_PTR)context.Rsp & ~15) - 1;
         *ctx = context;
@@ -2666,7 +2718,7 @@ PCONTEXT DECLSPEC_HIDDEN get_initial_context( LPTHREAD_START_ROUTINE entry, void
     else
     {
         ctx = (CONTEXT *)((char *)NtCurrentTeb()->Tib.StackBase - 0x30) - 1;
-        init_thread_context( ctx, entry, arg, relay );
+        init_thread_context( ctx, entry, arg );
     }
     pthread_sigmask( SIG_UNBLOCK, &server_block_set, NULL );
     ctx->ContextFlags = CONTEXT_FULL;
@@ -2699,7 +2751,7 @@ __ASM_GLOBAL_FUNC( signal_start_thread,
                    "movq %rsp,0x320(%rax)\n\t"      /* amd64_thread_data()->exit_frame */
                    /* switch to thread stack */
                    "movq 8(%rax),%rax\n\t"          /* NtCurrentTeb()->Tib.StackBase */
-                   "movq %r8,%rbx\n\t"              /* thunk */
+                   "movq %rcx,%rbx\n\t"             /* thunk */
                    "leaq -0x1000(%rax),%rsp\n\t"
                    /* attach dlls */
                    "call " __ASM_NAME("get_initial_context") "\n\t"

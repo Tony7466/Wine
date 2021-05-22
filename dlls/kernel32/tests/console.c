@@ -3652,6 +3652,8 @@ static void test_FreeConsole(void)
     ret = SetConsoleOutputCP(GetOEMCP());
     ok(!ret && GetLastError() == ERROR_INVALID_HANDLE, "SetConsoleCP returned %x(%u)\n", ret, GetLastError());
 
+    if (skip_nt) return;
+
     SetLastError(0xdeadbeef);
     memset( title, 0xc0, sizeof(title) );
     size = GetConsoleTitleW( title, ARRAY_SIZE(title) );
@@ -3668,15 +3670,16 @@ static void test_FreeConsole(void)
     ok(!hwnd, "hwnd = %p\n", hwnd);
     ok(GetLastError() == ERROR_INVALID_HANDLE, "last error %u\n", GetLastError());
 
-    if (!skip_nt)
-    {
-        SetStdHandle( STD_INPUT_HANDLE, (HANDLE)0xdeadbeef );
-        handle = GetConsoleInputWaitHandle();
-        ok(handle == (HANDLE)0xdeadbeef, "GetConsoleInputWaitHandle returned %p\n", handle);
-        SetStdHandle( STD_INPUT_HANDLE, NULL );
-        handle = GetConsoleInputWaitHandle();
-        ok(!handle, "GetConsoleInputWaitHandle returned %p\n", handle);
-    }
+    ret = GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
+    ok(!ret && GetLastError() == ERROR_INVALID_HANDLE, "GenerateConsoleCtrlEvent returned %x(%u)\n",
+       ret, GetLastError());
+
+    SetStdHandle( STD_INPUT_HANDLE, (HANDLE)0xdeadbeef );
+    handle = GetConsoleInputWaitHandle();
+    ok(handle == (HANDLE)0xdeadbeef, "GetConsoleInputWaitHandle returned %p\n", handle);
+    SetStdHandle( STD_INPUT_HANDLE, NULL );
+    handle = GetConsoleInputWaitHandle();
+    ok(!handle, "GetConsoleInputWaitHandle returned %p\n", handle);
 }
 
 static void test_SetConsoleScreenBufferInfoEx(HANDLE std_output)
@@ -3969,6 +3972,7 @@ static void test_pseudo_console_child(HANDLE input, HANDLE output)
 
     ret = GetConsoleMode(output, &mode);
     ok(ret, "GetConsoleMode failed: %u\n", GetLastError());
+    mode &= ~ENABLE_VIRTUAL_TERMINAL_PROCESSING;
     ok(mode == (ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT), "mode = %x\n", mode);
 
     ret = SetConsoleMode(output, mode & ~ENABLE_WRAP_AT_EOL_OUTPUT);
