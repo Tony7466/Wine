@@ -116,6 +116,7 @@ static void dump_ioctl_code( const char *prefix, const ioctl_code_t *code )
 #define CASE(c) case c: fprintf( stderr, "%s%s", prefix, #c ); break
         CASE(IOCTL_CONDRV_ACTIVATE);
         CASE(IOCTL_CONDRV_ATTACH_RENDERER);
+        CASE(IOCTL_CONDRV_BIND_PID);
         CASE(IOCTL_CONDRV_CTRL_EVENT);
         CASE(IOCTL_CONDRV_FILL_OUTPUT);
         CASE(IOCTL_CONDRV_GET_INPUT_INFO);
@@ -128,6 +129,7 @@ static void dump_ioctl_code( const char *prefix, const ioctl_code_t *code )
         CASE(IOCTL_CONDRV_READ_OUTPUT);
         CASE(IOCTL_CONDRV_SET_MODE);
         CASE(IOCTL_CONDRV_SET_OUTPUT_INFO);
+        CASE(IOCTL_CONDRV_SETUP_INPUT);
         CASE(IOCTL_CONDRV_WRITE_CONSOLE);
         CASE(IOCTL_CONDRV_WRITE_INPUT);
         CASE(IOCTL_CONDRV_WRITE_OUTPUT);
@@ -1282,7 +1284,8 @@ typedef void (*dump_func)( const void *req );
 
 static void dump_new_process_request( const struct new_process_request *req )
 {
-    fprintf( stderr, " parent_process=%04x", req->parent_process );
+    fprintf( stderr, " token=%04x", req->token );
+    fprintf( stderr, ", parent_process=%04x", req->parent_process );
     fprintf( stderr, ", inherit_all=%d", req->inherit_all );
     fprintf( stderr, ", create_flags=%08x", req->create_flags );
     fprintf( stderr, ", socket_fd=%d", req->socket_fd );
@@ -1290,7 +1293,9 @@ static void dump_new_process_request( const struct new_process_request *req )
     fprintf( stderr, ", access=%08x", req->access );
     dump_client_cpu( ", cpu=", &req->cpu );
     fprintf( stderr, ", info_size=%u", req->info_size );
+    fprintf( stderr, ", handles_size=%u", req->handles_size );
     dump_varargs_object_attributes( ", objattr=", cur_size );
+    dump_varargs_uints( ", handles=", min(cur_size,req->handles_size) );
     dump_varargs_startup_info( ", info=", min(cur_size,req->info_size) );
     dump_varargs_unicode_str( ", env=", cur_size );
 }
@@ -1943,21 +1948,6 @@ static void dump_unlock_file_request( const struct unlock_file_request *req )
     dump_uint64( ", count=", &req->count );
 }
 
-static void dump_create_socket_request( const struct create_socket_request *req )
-{
-    fprintf( stderr, " access=%08x", req->access );
-    fprintf( stderr, ", attributes=%08x", req->attributes );
-    fprintf( stderr, ", family=%d", req->family );
-    fprintf( stderr, ", type=%d", req->type );
-    fprintf( stderr, ", protocol=%d", req->protocol );
-    fprintf( stderr, ", flags=%08x", req->flags );
-}
-
-static void dump_create_socket_reply( const struct create_socket_reply *req )
-{
-    fprintf( stderr, " handle=%04x", req->handle );
-}
-
 static void dump_accept_socket_request( const struct accept_socket_request *req )
 {
     fprintf( stderr, " lhandle=%04x", req->lhandle );
@@ -2031,7 +2021,6 @@ static void dump_alloc_console_request( const struct alloc_console_request *req 
     fprintf( stderr, " access=%08x", req->access );
     fprintf( stderr, ", attributes=%08x", req->attributes );
     fprintf( stderr, ", pid=%04x", req->pid );
-    fprintf( stderr, ", input_fd=%d", req->input_fd );
 }
 
 static void dump_alloc_console_reply( const struct alloc_console_reply *req )
@@ -2041,11 +2030,6 @@ static void dump_alloc_console_reply( const struct alloc_console_reply *req )
 
 static void dump_free_console_request( const struct free_console_request *req )
 {
-}
-
-static void dump_attach_console_request( const struct attach_console_request *req )
-{
-    fprintf( stderr, " pid=%04x", req->pid );
 }
 
 static void dump_get_console_wait_event_request( const struct get_console_wait_event_request *req )
@@ -2082,7 +2066,6 @@ static void dump_create_console_output_request( const struct create_console_outp
     fprintf( stderr, ", access=%08x", req->access );
     fprintf( stderr, ", attributes=%08x", req->attributes );
     fprintf( stderr, ", share=%08x", req->share );
-    fprintf( stderr, ", fd=%d", req->fd );
 }
 
 static void dump_create_console_output_reply( const struct create_console_output_reply *req )
@@ -3832,6 +3815,20 @@ static void dump_duplicate_token_reply( const struct duplicate_token_reply *req 
     fprintf( stderr, " new_handle=%04x", req->new_handle );
 }
 
+static void dump_filter_token_request( const struct filter_token_request *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+    fprintf( stderr, ", flags=%08x", req->flags );
+    fprintf( stderr, ", privileges_size=%u", req->privileges_size );
+    dump_varargs_LUID_AND_ATTRIBUTES( ", privileges=", min(cur_size,req->privileges_size) );
+    dump_varargs_SID( ", disable_sids=", cur_size );
+}
+
+static void dump_filter_token_reply( const struct filter_token_reply *req )
+{
+    fprintf( stderr, " new_handle=%04x", req->new_handle );
+}
+
 static void dump_access_check_request( const struct access_check_request *req )
 {
     fprintf( stderr, " handle=%04x", req->handle );
@@ -4482,7 +4479,6 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_volume_info_request,
     (dump_func)dump_lock_file_request,
     (dump_func)dump_unlock_file_request,
-    (dump_func)dump_create_socket_request,
     (dump_func)dump_accept_socket_request,
     (dump_func)dump_accept_into_socket_request,
     (dump_func)dump_set_socket_event_request,
@@ -4492,7 +4488,6 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_set_socket_deferred_request,
     (dump_func)dump_alloc_console_request,
     (dump_func)dump_free_console_request,
-    (dump_func)dump_attach_console_request,
     (dump_func)dump_get_console_wait_event_request,
     (dump_func)dump_append_console_input_history_request,
     (dump_func)dump_get_console_input_history_request,
@@ -4651,6 +4646,7 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_token_privileges_request,
     (dump_func)dump_check_token_privileges_request,
     (dump_func)dump_duplicate_token_request,
+    (dump_func)dump_filter_token_request,
     (dump_func)dump_access_check_request,
     (dump_func)dump_get_token_sid_request,
     (dump_func)dump_get_token_groups_request,
@@ -4767,7 +4763,6 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_volume_info_reply,
     (dump_func)dump_lock_file_reply,
     NULL,
-    (dump_func)dump_create_socket_reply,
     (dump_func)dump_accept_socket_reply,
     NULL,
     NULL,
@@ -4776,7 +4771,6 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     NULL,
     NULL,
     (dump_func)dump_alloc_console_reply,
-    NULL,
     NULL,
     (dump_func)dump_get_console_wait_event_reply,
     NULL,
@@ -4936,6 +4930,7 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_token_privileges_reply,
     (dump_func)dump_check_token_privileges_reply,
     (dump_func)dump_duplicate_token_reply,
+    (dump_func)dump_filter_token_reply,
     (dump_func)dump_access_check_reply,
     (dump_func)dump_get_token_sid_reply,
     (dump_func)dump_get_token_groups_reply,
@@ -5052,7 +5047,6 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "get_volume_info",
     "lock_file",
     "unlock_file",
-    "create_socket",
     "accept_socket",
     "accept_into_socket",
     "set_socket_event",
@@ -5062,7 +5056,6 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "set_socket_deferred",
     "alloc_console",
     "free_console",
-    "attach_console",
     "get_console_wait_event",
     "append_console_input_history",
     "get_console_input_history",
@@ -5221,6 +5214,7 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "get_token_privileges",
     "check_token_privileges",
     "duplicate_token",
+    "filter_token",
     "access_check",
     "get_token_sid",
     "get_token_groups",

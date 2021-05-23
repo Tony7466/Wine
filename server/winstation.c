@@ -70,6 +70,7 @@ static const struct object_ops winstation_ops =
     winstation_map_access,        /* map_access */
     default_get_sd,               /* get_sd */
     default_set_sd,               /* set_sd */
+    default_get_full_name,        /* get_full_name */
     winstation_lookup_name,       /* lookup_name */
     directory_link_name,          /* link_name */
     default_unlink_name,          /* unlink_name */
@@ -94,6 +95,7 @@ static const struct object_ops desktop_ops =
     desktop_map_access,           /* map_access */
     default_get_sd,               /* get_sd */
     default_set_sd,               /* set_sd */
+    default_get_full_name,        /* get_full_name */
     no_lookup_name,               /* lookup_name */
     desktop_link_name,            /* link_name */
     default_unlink_name,          /* unlink_name */
@@ -715,7 +717,7 @@ DECL_HANDLER(enum_winstation)
     {
         unsigned int access = WINSTA_ENUMERATE;
         if (req->index > index++) continue;
-        if (!check_object_access( &winsta->obj, &access )) continue;
+        if (!check_object_access( NULL, &winsta->obj, &access )) continue;
         clear_error();
         reply->next = index;
         if ((name = get_object_name( &winsta->obj, &len )))
@@ -744,7 +746,7 @@ DECL_HANDLER(enum_desktop)
         unsigned int access = DESKTOP_ENUMERATE;
         if (req->index > index++) continue;
         if (!desktop->obj.name) continue;
-        if (!check_object_access( &desktop->obj, &access )) continue;
+        if (!check_object_access( NULL, &desktop->obj, &access )) continue;
         if ((name = get_object_name( &desktop->obj, &len )))
             set_reply_data( name, min( len, get_reply_max_size() ));
         release_object( winstation );

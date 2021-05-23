@@ -1153,6 +1153,7 @@ typedef enum _PROCESSINFOCLASS {
     ProcessDebugObjectHandle = 30,
     ProcessDebugFlags = 31,
     ProcessHandleTracing = 32,
+    ProcessIoPriority = 33,
     ProcessExecuteFlags = 34,
     ProcessTlsInformation = 35,
     ProcessCookie = 36,
@@ -3043,6 +3044,7 @@ NTSYSAPI NTSTATUS  WINAPI NtDuplicateToken(HANDLE,ACCESS_MASK,POBJECT_ATTRIBUTES
 NTSYSAPI NTSTATUS  WINAPI NtEnumerateKey(HANDLE,ULONG,KEY_INFORMATION_CLASS,void *,DWORD,DWORD *);
 NTSYSAPI NTSTATUS  WINAPI NtEnumerateValueKey(HANDLE,ULONG,KEY_VALUE_INFORMATION_CLASS,PVOID,ULONG,PULONG);
 NTSYSAPI NTSTATUS  WINAPI NtExtendSection(HANDLE,PLARGE_INTEGER);
+NTSYSAPI NTSTATUS  WINAPI NtFilterToken(HANDLE,ULONG,TOKEN_GROUPS*,TOKEN_PRIVILEGES*,TOKEN_GROUPS*,HANDLE*);
 NTSYSAPI NTSTATUS  WINAPI NtFindAtom(const WCHAR*,ULONG,RTL_ATOM*);
 NTSYSAPI NTSTATUS  WINAPI NtFlushBuffersFile(HANDLE,IO_STATUS_BLOCK*);
 NTSYSAPI NTSTATUS  WINAPI NtFlushInstructionCache(HANDLE,LPCVOID,SIZE_T);
@@ -3755,6 +3757,9 @@ static inline PLIST_ENTRY RemoveTailList(PLIST_ENTRY le)
 
 
 #ifdef __WINESRC__
+
+/* Wine internal functions */
+extern NTSTATUS CDECL __wine_init_unix_lib( HMODULE module, DWORD reason, const void *ptr_in, void *ptr_out );
 
 /* The thread information for 16-bit threads */
 /* NtCurrentTeb()->SubSystemTib points to this */

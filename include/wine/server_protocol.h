@@ -773,6 +773,7 @@ struct rawinput_device
 struct new_process_request
 {
     struct request_header __header;
+    obj_handle_t token;
     obj_handle_t parent_process;
     int          inherit_all;
     unsigned int create_flags;
@@ -781,10 +782,12 @@ struct new_process_request
     unsigned int access;
     client_cpu_t cpu;
     data_size_t  info_size;
+    data_size_t  handles_size;
     /* VARARG(objattr,object_attributes); */
+    /* VARARG(handles,uints,handles_size); */
     /* VARARG(info,startup_info,info_size); */
     /* VARARG(env,unicode_str); */
-    char __pad_44[4];
+    char __pad_52[4];
 };
 struct new_process_reply
 {
@@ -1692,26 +1695,6 @@ struct unlock_file_reply
 
 
 
-struct create_socket_request
-{
-    struct request_header __header;
-    unsigned int access;
-    unsigned int attributes;
-    int          family;
-    int          type;
-    int          protocol;
-    unsigned int flags;
-    char __pad_36[4];
-};
-struct create_socket_reply
-{
-    struct reply_header __header;
-    obj_handle_t handle;
-    char __pad_12[4];
-};
-
-
-
 struct accept_socket_request
 {
     struct request_header __header;
@@ -1826,8 +1809,6 @@ struct alloc_console_request
     unsigned int access;
     unsigned int attributes;
     process_id_t pid;
-    int          input_fd;
-    char __pad_28[4];
 };
 struct alloc_console_reply
 {
@@ -1844,18 +1825,6 @@ struct free_console_request
     char __pad_12[4];
 };
 struct free_console_reply
-{
-    struct reply_header __header;
-};
-
-
-
-struct attach_console_request
-{
-    struct request_header __header;
-    process_id_t pid;
-};
-struct attach_console_reply
 {
     struct reply_header __header;
 };
@@ -1913,7 +1882,7 @@ struct create_console_output_request
     unsigned int access;
     unsigned int attributes;
     unsigned int share;
-    int          fd;
+    char __pad_28[4];
 };
 struct create_console_output_reply
 {
@@ -4534,6 +4503,22 @@ struct duplicate_token_reply
     char __pad_12[4];
 };
 
+struct filter_token_request
+{
+    struct request_header __header;
+    obj_handle_t  handle;
+    unsigned int  flags;
+    data_size_t   privileges_size;
+    /* VARARG(privileges,LUID_AND_ATTRIBUTES,privileges_size); */
+    /* VARARG(disable_sids,SID); */
+};
+struct filter_token_reply
+{
+    struct reply_header __header;
+    obj_handle_t  new_handle;
+    char __pad_12[4];
+};
+
 struct access_check_request
 {
     struct request_header __header;
@@ -5512,7 +5497,6 @@ enum request
     REQ_get_volume_info,
     REQ_lock_file,
     REQ_unlock_file,
-    REQ_create_socket,
     REQ_accept_socket,
     REQ_accept_into_socket,
     REQ_set_socket_event,
@@ -5522,7 +5506,6 @@ enum request
     REQ_set_socket_deferred,
     REQ_alloc_console,
     REQ_free_console,
-    REQ_attach_console,
     REQ_get_console_wait_event,
     REQ_append_console_input_history,
     REQ_get_console_input_history,
@@ -5681,6 +5664,7 @@ enum request
     REQ_get_token_privileges,
     REQ_check_token_privileges,
     REQ_duplicate_token,
+    REQ_filter_token,
     REQ_access_check,
     REQ_get_token_sid,
     REQ_get_token_groups,
@@ -5801,7 +5785,6 @@ union generic_request
     struct get_volume_info_request get_volume_info_request;
     struct lock_file_request lock_file_request;
     struct unlock_file_request unlock_file_request;
-    struct create_socket_request create_socket_request;
     struct accept_socket_request accept_socket_request;
     struct accept_into_socket_request accept_into_socket_request;
     struct set_socket_event_request set_socket_event_request;
@@ -5811,7 +5794,6 @@ union generic_request
     struct set_socket_deferred_request set_socket_deferred_request;
     struct alloc_console_request alloc_console_request;
     struct free_console_request free_console_request;
-    struct attach_console_request attach_console_request;
     struct get_console_wait_event_request get_console_wait_event_request;
     struct append_console_input_history_request append_console_input_history_request;
     struct get_console_input_history_request get_console_input_history_request;
@@ -5970,6 +5952,7 @@ union generic_request
     struct get_token_privileges_request get_token_privileges_request;
     struct check_token_privileges_request check_token_privileges_request;
     struct duplicate_token_request duplicate_token_request;
+    struct filter_token_request filter_token_request;
     struct access_check_request access_check_request;
     struct get_token_sid_request get_token_sid_request;
     struct get_token_groups_request get_token_groups_request;
@@ -6088,7 +6071,6 @@ union generic_reply
     struct get_volume_info_reply get_volume_info_reply;
     struct lock_file_reply lock_file_reply;
     struct unlock_file_reply unlock_file_reply;
-    struct create_socket_reply create_socket_reply;
     struct accept_socket_reply accept_socket_reply;
     struct accept_into_socket_reply accept_into_socket_reply;
     struct set_socket_event_reply set_socket_event_reply;
@@ -6098,7 +6080,6 @@ union generic_reply
     struct set_socket_deferred_reply set_socket_deferred_reply;
     struct alloc_console_reply alloc_console_reply;
     struct free_console_reply free_console_reply;
-    struct attach_console_reply attach_console_reply;
     struct get_console_wait_event_reply get_console_wait_event_reply;
     struct append_console_input_history_reply append_console_input_history_reply;
     struct get_console_input_history_reply get_console_input_history_reply;
@@ -6257,6 +6238,7 @@ union generic_reply
     struct get_token_privileges_reply get_token_privileges_reply;
     struct check_token_privileges_reply check_token_privileges_reply;
     struct duplicate_token_reply duplicate_token_reply;
+    struct filter_token_reply filter_token_reply;
     struct access_check_reply access_check_reply;
     struct get_token_sid_reply get_token_sid_reply;
     struct get_token_groups_reply get_token_groups_reply;
@@ -6320,7 +6302,7 @@ union generic_reply
 
 /* ### protocol_version begin ### */
 
-#define SERVER_PROTOCOL_VERSION 641
+#define SERVER_PROTOCOL_VERSION 647
 
 /* ### protocol_version end ### */
 

@@ -54,15 +54,41 @@ struct font_info
     size_t    face_len;
 };
 
+struct edit_line
+{
+    NTSTATUS              status;              /* edit status */
+    WCHAR                *buf;                 /* the line being edited */
+    unsigned int          len;                 /* number of chars in line */
+    size_t                size;                /* buffer size */
+    unsigned int          cursor;              /* offset for cursor in current line */
+    WCHAR                *yanked;              /* yanked line */
+    unsigned int          mark;                /* marked point (emacs mode only) */
+    unsigned int          history_index;       /* history index */
+    WCHAR                *current_history;     /* buffer for the recent history entry */
+    BOOL                  insert_key;          /* insert key state */
+    BOOL                  insert_mode;         /* insert mode */
+    unsigned int          update_begin;        /* update region */
+    unsigned int          update_end;
+    unsigned int          end_offset;          /* offset of the last written char */
+    unsigned int          home_x;              /* home position */
+    unsigned int          home_y;
+};
+
 struct console
 {
     HANDLE                server;              /* console server handle */
     unsigned int          mode;                /* input mode */
     struct screen_buffer *active;              /* active screen buffer */
+    int                   is_unix;             /* UNIX terminal mode */
     INPUT_RECORD         *records;             /* input records */
     unsigned int          record_count;        /* number of input records */
     unsigned int          record_size;         /* size of input records buffer */
+    WCHAR                *read_buffer;         /* buffer of data available for read */
+    size_t                read_buffer_count;   /* size of available data */
+    size_t                read_buffer_size;    /* size of buffer */
+    unsigned int          read_ioctl;          /* current read ioctl */
     size_t                pending_read;        /* size of pending read buffer */
+    struct edit_line      edit_line;           /* edit line context */
     WCHAR                *title;               /* console title */
     size_t                title_len;           /* length of console title */
     struct history_line **history;             /* lines history */
@@ -73,6 +99,7 @@ struct console
     unsigned int          input_cp;            /* console input codepage */
     unsigned int          output_cp;           /* console output codepage */
     unsigned int          win;                 /* window handle if backend supports it */
+    HANDLE                input_thread;        /* input thread handle */
     HANDLE                tty_input;           /* handle to tty input stream */
     HANDLE                tty_output;          /* handle to tty output stream */
     char                  tty_buffer[4096];    /* tty output buffer */
@@ -139,41 +166,48 @@ static int screen_buffer_compare_id( const void *key, const struct wine_rb_entry
 
 static struct wine_rb_tree screen_buffer_map = { screen_buffer_compare_id };
 
+static void destroy_screen_buffer( struct screen_buffer *screen_buffer )
+{
+    if (screen_buffer->console->active == screen_buffer)
+        screen_buffer->console->active = NULL;
+    wine_rb_remove( &screen_buffer_map, &screen_buffer->entry );
+    free( screen_buffer->data );
+    free( screen_buffer );
+}
+
 static struct screen_buffer *create_screen_buffer( struct console *console, int id, int width, int height )
 {
     struct screen_buffer *screen_buffer;
     unsigned int i;
 
-    if (!(screen_buffer = malloc( sizeof(*screen_buffer) ))) return NULL;
+    if (!(screen_buffer = calloc( 1, sizeof(*screen_buffer) ))) return NULL;
     screen_buffer->console        = console;
     screen_buffer->id             = id;
     screen_buffer->mode           = ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT;
     screen_buffer->cursor_size    = 100;
     screen_buffer->cursor_visible = 1;
-    screen_buffer->cursor_x       = 0;
-    screen_buffer->cursor_y       = 0;
     screen_buffer->width          = width;
     screen_buffer->height         = height;
     screen_buffer->attr           = 0x07;
     screen_buffer->popup_attr     = 0xf5;
     screen_buffer->max_width      = 80;
     screen_buffer->max_height     = 25;
-    screen_buffer->win.left       = 0;
     screen_buffer->win.right      = min( screen_buffer->max_width - 1, width - 1 );
-    screen_buffer->win.top        = 0;
     screen_buffer->win.bottom     = min( screen_buffer->max_height - 1, height - 1);
-    screen_buffer->font.width     = 0;
-    screen_buffer->font.height    = 0;
     screen_buffer->font.weight    = FW_NORMAL;
     screen_buffer->font.pitch_family = FIXED_PITCH | FF_DONTCARE;
-    screen_buffer->font.face_name = NULL;
-    screen_buffer->font.face_len  = 0;
-    memset( screen_buffer->color_map, 0, sizeof(screen_buffer->color_map) );
+
+    if (wine_rb_put( &screen_buffer_map, LongToPtr(id), &screen_buffer->entry ))
+    {
+        free( screen_buffer );
+        ERR( "id %x already exists\n", id );
+        return NULL;
+    }
 
     if (!(screen_buffer->data = malloc( screen_buffer->width * screen_buffer->height *
                                         sizeof(*screen_buffer->data) )))
     {
-        free( screen_buffer );
+        destroy_screen_buffer( screen_buffer );
         return NULL;
     }
 
@@ -184,26 +218,17 @@ static struct screen_buffer *create_screen_buffer( struct console *console, int 
         memcpy( &screen_buffer->data[i * screen_buffer->width], screen_buffer->data,
                 screen_buffer->width * sizeof(char_info_t) );
 
-    if (wine_rb_put( &screen_buffer_map, LongToPtr(id), &screen_buffer->entry ))
-    {
-        ERR( "id %x already exists\n", id );
-        return NULL;
-    }
-
     return screen_buffer;
-}
-
-static void destroy_screen_buffer( struct screen_buffer *screen_buffer )
-{
-    if (screen_buffer->console->active == screen_buffer)
-        screen_buffer->console->active = NULL;
-    wine_rb_remove( &screen_buffer_map, &screen_buffer->entry );
-    free( screen_buffer );
 }
 
 static BOOL is_active( struct screen_buffer *screen_buffer )
 {
     return screen_buffer == screen_buffer->console->active;
+}
+
+static unsigned int get_tty_cp( struct console *console )
+{
+    return console->is_unix ? CP_UNIXCP : CP_UTF8;
 }
 
 static void tty_flush( struct console *console )
@@ -277,6 +302,27 @@ static void set_tty_cursor( struct console *console, unsigned int x, unsigned in
     tty_write( console, buf, strlen(buf) );
 }
 
+static void set_tty_cursor_relative( struct console *console, unsigned int x, unsigned int y )
+{
+    if (y < console->tty_cursor_y)
+    {
+        char buf[64];
+        sprintf( buf, "\x1b[%uA", console->tty_cursor_y - y );
+        tty_write( console, buf, strlen(buf) );
+        console->tty_cursor_y = y;
+    }
+    else
+    {
+        while (console->tty_cursor_y < y)
+        {
+            console->tty_cursor_x = 0;
+            console->tty_cursor_y++;
+            tty_write( console, "\r\n", 2 );
+        }
+    }
+    set_tty_cursor( console, x, y );
+}
+
 static void set_tty_attr( struct console *console, unsigned int attr )
 {
     char buf[8];
@@ -330,10 +376,14 @@ static void tty_sync( struct console *console )
 
 static void init_tty_output( struct console *console )
 {
-    /* initialize tty output, but don't flush */
-    tty_write( console, "\x1b[2J", 4 ); /* clear screen */
-    set_tty_attr( console, console->active->attr );
-    tty_write( console, "\x1b[H", 3 );  /* move cursor to (0,0) */
+    if (!console->is_unix)
+    {
+        /* initialize tty output, but don't flush */
+        tty_write( console, "\x1b[2J", 4 ); /* clear screen */
+        set_tty_attr( console, console->active->attr );
+        tty_write( console, "\x1b[H", 3 );  /* move cursor to (0,0) */
+    }
+    else console->tty_attr = empty_char_info.attr;
     console->tty_cursor_visible = TRUE;
 }
 
@@ -375,7 +425,8 @@ static void update_output( struct screen_buffer *screen_buffer, RECT *rect )
                 break;
             }
 
-            size = WideCharToMultiByte( CP_UTF8, 0, &ch->ch, 1, buf, sizeof(buf), NULL, NULL );
+            size = WideCharToMultiByte( get_tty_cp( screen_buffer->console ), 0,
+                                        &ch->ch, 1, buf, sizeof(buf), NULL, NULL );
             tty_write( screen_buffer->console, buf, size );
             screen_buffer->console->tty_cursor_x++;
         }
@@ -388,8 +439,8 @@ static void new_line( struct screen_buffer *screen_buffer, RECT *update_rect )
 {
     unsigned int i;
 
-    assert( screen_buffer->cursor_y == screen_buffer->height );
-    screen_buffer->cursor_y--;
+    assert( screen_buffer->cursor_y >= screen_buffer->height );
+    screen_buffer->cursor_y = screen_buffer->height - 1;
 
     if (screen_buffer->console->tty_output)
         update_output( screen_buffer, update_rect );
@@ -409,7 +460,7 @@ static void new_line( struct screen_buffer *screen_buffer, RECT *update_rect )
     }
 }
 
-static void write_char( struct screen_buffer *screen_buffer, WCHAR ch, RECT *update_rect )
+static void write_char( struct screen_buffer *screen_buffer, WCHAR ch, RECT *update_rect, unsigned int *home_y )
 {
     if (screen_buffer->cursor_x == screen_buffer->width)
     {
@@ -418,6 +469,11 @@ static void write_char( struct screen_buffer *screen_buffer, WCHAR ch, RECT *upd
     }
     if (screen_buffer->cursor_y == screen_buffer->height)
     {
+        if (home_y)
+        {
+            if (!*home_y) return;
+            (*home_y)--;
+        }
         new_line( screen_buffer, update_rect );
     }
 
@@ -430,28 +486,32 @@ static void write_char( struct screen_buffer *screen_buffer, WCHAR ch, RECT *upd
     screen_buffer->cursor_x++;
 }
 
-static NTSTATUS read_console_input( struct console *console, size_t out_size )
+static NTSTATUS read_complete( struct console *console, NTSTATUS status, const void *buf, size_t size, int signal )
 {
-    size_t count = min( out_size / sizeof(INPUT_RECORD), console->record_count );
-    NTSTATUS status;
-
-    TRACE("count %u\n", count);
-
     SERVER_START_REQ( get_next_console_request )
     {
         req->handle = wine_server_obj_handle( console->server );
-        req->signal = count < console->record_count;
+        req->signal = signal;
         req->read   = 1;
-        req->status = STATUS_SUCCESS;
-        wine_server_add_data( req, console->records, count * sizeof(*console->records) );
+        req->status = status;
+        wine_server_add_data( req, buf, size );
         status = wine_server_call( req );
     }
     SERVER_END_REQ;
-    if (status)
-    {
-        ERR( "failed: %#x\n", status );
-        return status;
-    }
+    if (status && (console->read_ioctl || status != STATUS_INVALID_HANDLE)) ERR( "failed: %#x\n", status );
+    console->read_ioctl = 0;
+    console->pending_read = 0;
+    return status;
+}
+
+static NTSTATUS read_console_input( struct console *console, size_t out_size )
+{
+    size_t count = min( out_size / sizeof(INPUT_RECORD), console->record_count );
+
+    TRACE("count %u\n", count);
+
+    read_complete( console, STATUS_SUCCESS, console->records, count * sizeof(*console->records),
+                   console->record_count > count );
 
     if (count < console->record_count)
         memmove( console->records, console->records + count,
@@ -460,14 +520,860 @@ static NTSTATUS read_console_input( struct console *console, size_t out_size )
     return STATUS_SUCCESS;
 }
 
+static void read_from_buffer( struct console *console, size_t out_size )
+{
+    out_size = min( out_size, console->read_buffer_count * sizeof(WCHAR) );
+    read_complete( console, STATUS_SUCCESS, console->read_buffer, out_size, console->record_count != 0  );
+    if (out_size / sizeof(WCHAR) < console->read_buffer_count)
+    {
+        memmove( console->read_buffer, console->read_buffer + out_size / sizeof(WCHAR),
+                 console->read_buffer_count * sizeof(WCHAR) - out_size );
+    }
+    if (!(console->read_buffer_count -= out_size / sizeof(WCHAR)))
+        free( console->read_buffer );
+}
+
+static void append_input_history( struct console *console, const WCHAR *str, size_t len )
+{
+    struct history_line *ptr;
+
+    if (!console->history_size) return;
+
+    /* don't duplicate entry */
+    if (console->history_mode && console->history_index &&
+        console->history[console->history_index - 1]->len == len &&
+        !memcmp( console->history[console->history_index - 1]->text, str, len ))
+        return;
+
+    if (!(ptr = malloc( offsetof( struct history_line, text[len / sizeof(WCHAR)] )))) return;
+    ptr->len = len;
+    memcpy( ptr->text, str, len );
+
+    if (console->history_index < console->history_size)
+    {
+        console->history[console->history_index++] = ptr;
+    }
+    else
+    {
+        free( console->history[0]) ;
+        memmove( &console->history[0], &console->history[1],
+                 (console->history_size - 1) * sizeof(*console->history) );
+        console->history[console->history_size - 1] = ptr;
+    }
+}
+
+static void edit_line_update( struct console *console, unsigned int begin, unsigned int length )
+{
+    struct edit_line *ctx = &console->edit_line;
+    if (!length) return;
+    ctx->update_begin = min( ctx->update_begin, begin );
+    ctx->update_end   = max( ctx->update_end, begin + length - 1 );
+}
+
+static BOOL edit_line_grow( struct console *console, size_t length )
+{
+    struct edit_line *ctx = &console->edit_line;
+    WCHAR *new_buf;
+    size_t new_size;
+
+    if (ctx->len + length < ctx->size) return TRUE;
+
+    /* round up size to 32 byte-WCHAR boundary */
+    new_size = (ctx->len + length + 32) & ~31;
+    if (!(new_buf = realloc( ctx->buf, sizeof(WCHAR) * new_size )))
+    {
+        ctx->status = STATUS_NO_MEMORY;
+        return FALSE;
+    }
+    ctx->buf  = new_buf;
+    ctx->size = new_size;
+    return TRUE;
+}
+
+static void edit_line_delete( struct console *console, int begin, int end )
+{
+    struct edit_line *ctx = &console->edit_line;
+    unsigned int len = end - begin;
+
+    edit_line_update( console, begin, ctx->len - begin );
+    if (end < ctx->len)
+        memmove( &ctx->buf[begin], &ctx->buf[end], (ctx->len - end) * sizeof(WCHAR));
+    ctx->len -= len;
+    edit_line_update( console, 0, ctx->len );
+    ctx->buf[ctx->len] = 0;
+}
+
+static void edit_line_insert( struct console *console, const WCHAR *str, unsigned int len )
+{
+    struct edit_line *ctx = &console->edit_line;
+    unsigned int update_len;
+
+    if (!len) return;
+    if (ctx->insert_mode)
+    {
+        if (!edit_line_grow( console, len )) return;
+        if (ctx->len > ctx->cursor)
+            memmove( &ctx->buf[ctx->cursor + len], &ctx->buf[ctx->cursor],
+                     (ctx->len - ctx->cursor) * sizeof(WCHAR) );
+        ctx->len += len;
+        update_len = ctx->len - ctx->cursor;
+    }
+    else
+    {
+        if (ctx->cursor + len > ctx->len)
+        {
+            if (!edit_line_grow( console, (ctx->cursor + len) - ctx->len) )
+                return;
+            ctx->len = ctx->cursor + len;
+        }
+        update_len = len;
+    }
+    memcpy( &ctx->buf[ctx->cursor], str, len * sizeof(WCHAR) );
+    ctx->buf[ctx->len] = 0;
+    edit_line_update( console, ctx->cursor, update_len );
+    ctx->cursor += len;
+}
+
+static void edit_line_save_yank( struct console *console, unsigned int begin, unsigned int end )
+{
+    struct edit_line *ctx = &console->edit_line;
+    unsigned int len = end - begin;
+    if (len <= 0) return;
+
+    free(ctx->yanked);
+    ctx->yanked = malloc( (len + 1) * sizeof(WCHAR) );
+    if (!ctx->yanked)
+    {
+        ctx->status = STATUS_NO_MEMORY;
+        return;
+    }
+    memcpy( ctx->yanked, &ctx->buf[begin], len * sizeof(WCHAR) );
+    ctx->yanked[len] = 0;
+}
+
+static int edit_line_left_word_transition( struct console *console, int offset )
+{
+    offset--;
+    while (offset >= 0 && !iswalnum( console->edit_line.buf[offset] )) offset--;
+    while (offset >= 0 && iswalnum( console->edit_line.buf[offset] )) offset--;
+    if (offset >= 0) offset++;
+    return max( offset, 0 );
+}
+
+static int edit_line_right_word_transition( struct console *console, int offset )
+{
+    offset++;
+    while (offset <= console->edit_line.len && iswalnum( console->edit_line.buf[offset] ))
+        offset++;
+    while (offset <= console->edit_line.len && !iswalnum( console->edit_line.buf[offset] ))
+        offset++;
+    return min(offset, console->edit_line.len);
+}
+
+static WCHAR *edit_line_history( struct console *console, unsigned int index )
+{
+    WCHAR *ptr = NULL;
+
+    if (index < console->history_index)
+    {
+        if ((ptr = malloc( console->history[index]->len + sizeof(WCHAR) )))
+        {
+            memcpy( ptr, console->history[index]->text, console->history[index]->len );
+            ptr[console->history[index]->len / sizeof(WCHAR)] = 0;
+        }
+    }
+    else if(console->edit_line.current_history)
+    {
+        if ((ptr = malloc( (lstrlenW(console->edit_line.current_history) + 1) * sizeof(WCHAR) )))
+            lstrcpyW( ptr, console->edit_line.current_history );
+    }
+    return ptr;
+}
+
+static void edit_line_move_to_history( struct console *console, int index )
+{
+    struct edit_line *ctx = &console->edit_line;
+    WCHAR *line = edit_line_history(console, index);
+    size_t len = line ? lstrlenW(line) : 0;
+
+    /* save current line edition for recall when needed */
+    if (ctx->history_index == console->history_index)
+    {
+        free( ctx->current_history );
+        ctx->current_history = malloc( (ctx->len + 1) * sizeof(WCHAR) );
+        if (ctx->current_history)
+        {
+            memcpy( ctx->current_history, ctx->buf, (ctx->len + 1) * sizeof(WCHAR) );
+        }
+        else
+        {
+            ctx->status = STATUS_NO_MEMORY;
+            return;
+        }
+    }
+
+    /* need to clean also the screen if new string is shorter than old one */
+    edit_line_delete(console, 0, ctx->len);
+    ctx->cursor = 0;
+    /* insert new string */
+    if (edit_line_grow(console, len + 1))
+    {
+        edit_line_insert( console, line, len );
+        ctx->history_index = index;
+    }
+    free(line);
+}
+
+static void edit_line_find_in_history( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    int start_pos = ctx->history_index;
+    unsigned int len, oldoffset;
+    WCHAR *line;
+
+    if (ctx->history_index && ctx->history_index == console->history_index + 1)
+    {
+        start_pos--;
+        ctx->history_index--;
+    }
+
+    do
+    {
+       line = edit_line_history(console, ctx->history_index);
+
+       if (ctx->history_index) ctx->history_index--;
+       else ctx->history_index = console->history_index;
+
+       len = lstrlenW(line) + 1;
+       if (len >= ctx->cursor && !memcmp( ctx->buf, line, ctx->cursor * sizeof(WCHAR) ))
+       {
+           /* need to clean also the screen if new string is shorter than old one */
+           edit_line_delete(console, 0, ctx->len);
+
+           if (edit_line_grow(console, len))
+           {
+              oldoffset = ctx->cursor;
+              ctx->cursor = 0;
+              edit_line_insert( console, line, len - 1 );
+              ctx->cursor = oldoffset;
+              free(line);
+              return;
+           }
+       }
+       free(line);
+    }
+    while (ctx->history_index != start_pos);
+}
+
+static void edit_line_move_left( struct console *console )
+{
+    if (console->edit_line.cursor > 0) console->edit_line.cursor--;
+}
+
+static void edit_line_move_right( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    if (ctx->cursor < ctx->len) ctx->cursor++;
+}
+
+static void edit_line_move_left_word( struct console *console )
+{
+    console->edit_line.cursor = edit_line_left_word_transition( console, console->edit_line.cursor );
+}
+
+static void edit_line_move_right_word( struct console *console )
+{
+    console->edit_line.cursor = edit_line_right_word_transition( console, console->edit_line.cursor );
+}
+
+static void edit_line_move_home( struct console *console )
+{
+    console->edit_line.cursor = 0;
+}
+
+static void edit_line_move_end( struct console *console )
+{
+    console->edit_line.cursor = console->edit_line.len;
+}
+
+static void edit_line_set_mark( struct console *console )
+{
+    console->edit_line.mark = console->edit_line.cursor;
+}
+
+static void edit_line_exchange_mark( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    unsigned int cursor;
+
+    if (ctx->mark > ctx->len) return;
+    cursor = ctx->cursor;
+    ctx->cursor = ctx->mark;
+    ctx->mark = cursor;
+}
+
+static void edit_line_copy_marked_zone( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    unsigned int begin, end;
+
+    if (ctx->mark > ctx->len || ctx->mark == ctx->cursor) return;
+    if (ctx->mark > ctx->cursor)
+    {
+        begin = ctx->cursor;
+        end   = ctx->mark;
+    }
+    else
+    {
+        begin = ctx->mark;
+        end = ctx->cursor;
+    }
+    edit_line_save_yank( console, begin, end );
+}
+
+static void edit_line_transpose_char( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    WCHAR c;
+
+    if (!ctx->cursor || ctx->cursor == ctx->len) return;
+
+    c = ctx->buf[ctx->cursor];
+    ctx->buf[ctx->cursor] = ctx->buf[ctx->cursor - 1];
+    ctx->buf[ctx->cursor - 1] = c;
+
+    edit_line_update( console, ctx->cursor - 1, 2 );
+    ctx->cursor++;
+}
+
+static void edit_line_transpose_words( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    unsigned int left_offset = edit_line_left_word_transition( console, ctx->cursor );
+    unsigned int right_offset = edit_line_right_word_transition( console, ctx->cursor );
+    if (left_offset < ctx->cursor && right_offset > ctx->cursor)
+    {
+        unsigned int len_r = right_offset - ctx->cursor;
+        unsigned int len_l = ctx->cursor - left_offset;
+        char *tmp = malloc( len_r * sizeof(WCHAR) );
+        if (!tmp)
+        {
+            ctx->status = STATUS_NO_MEMORY;
+            return;
+        }
+
+        memcpy( tmp, &ctx->buf[ctx->cursor], len_r * sizeof(WCHAR) );
+        memmove( &ctx->buf[left_offset + len_r], &ctx->buf[left_offset],
+                 len_l * sizeof(WCHAR) );
+        memcpy( &ctx->buf[left_offset], tmp, len_r * sizeof(WCHAR) );
+        free(tmp);
+
+        edit_line_update( console, left_offset, len_l + len_r );
+        ctx->cursor = right_offset;
+    }
+}
+
+static void edit_line_lower_case_word( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    unsigned int new_offset = edit_line_right_word_transition( console, ctx->cursor );
+    if (new_offset != ctx->cursor)
+    {
+        CharLowerBuffW( ctx->buf + ctx->cursor, new_offset - ctx->cursor + 1 );
+        edit_line_update( console, ctx->cursor, new_offset - ctx->cursor + 1 );
+        ctx->cursor = new_offset;
+    }
+}
+
+static void edit_line_upper_case_word( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    unsigned int new_offset = edit_line_right_word_transition( console, ctx->cursor );
+    if (new_offset != ctx->cursor)
+    {
+        CharUpperBuffW( ctx->buf + ctx->cursor, new_offset - ctx->cursor + 1 );
+        edit_line_update( console, ctx->cursor, new_offset - ctx->cursor + 1 );
+        ctx->cursor = new_offset;
+    }
+}
+
+static void edit_line_capitalize_word( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    unsigned int new_offset = edit_line_right_word_transition( console, ctx->cursor );
+    if (new_offset != ctx->cursor)
+    {
+        CharUpperBuffW( ctx->buf + ctx->cursor, 1 );
+        CharLowerBuffW( ctx->buf + ctx->cursor + 1, new_offset - ctx->cursor );
+        edit_line_update( console, ctx->cursor, new_offset - ctx->cursor + 1 );
+        ctx->cursor = new_offset;
+    }
+}
+
+static void edit_line_yank( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    if (ctx->yanked) edit_line_insert( console, ctx->yanked, wcslen(ctx->yanked) );
+}
+
+static void edit_line_kill_suffix( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    edit_line_save_yank( console, ctx->cursor, ctx->len );
+    edit_line_delete( console, ctx->cursor, ctx->len );
+}
+
+static void edit_line_kill_prefix( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    if (ctx->cursor)
+    {
+        edit_line_save_yank( console, 0, ctx->cursor );
+        edit_line_delete( console, 0, ctx->cursor );
+        ctx->cursor = 0;
+    }
+}
+
+static void edit_line_kill_marked_zone( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    unsigned int begin, end;
+
+    if (ctx->mark > ctx->len || ctx->mark == ctx->cursor)
+        return;
+    if (ctx->mark > ctx->cursor)
+    {
+        begin = ctx->cursor;
+        end   = ctx->mark;
+    }
+    else
+    {
+        begin = ctx->mark;
+        end   = ctx->cursor;
+    }
+    edit_line_save_yank( console, begin, end );
+    edit_line_delete( console, begin, end );
+    ctx->cursor = begin;
+}
+
+static void edit_line_delete_prev( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    if (ctx->cursor)
+    {
+        edit_line_delete( console, ctx->cursor - 1, ctx->cursor );
+        ctx->cursor--;
+    }
+}
+
+static void edit_line_delete_char( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    if (ctx->cursor < ctx->len)
+        edit_line_delete( console, ctx->cursor, ctx->cursor + 1 );
+}
+
+static void edit_line_delete_left_word( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    unsigned int new_offset = edit_line_left_word_transition( console, ctx->cursor );
+    if (new_offset != ctx->cursor)
+    {
+        edit_line_delete( console, new_offset, ctx->cursor );
+        ctx->cursor = new_offset;
+    }
+}
+
+static void edit_line_delete_right_word( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    unsigned int new_offset = edit_line_right_word_transition( console, ctx->cursor );
+    if (new_offset != ctx->cursor)
+    {
+        edit_line_delete( console, ctx->cursor, new_offset );
+    }
+}
+
+static void edit_line_move_to_prev_hist( struct console *console )
+{
+    if (console->edit_line.history_index)
+        edit_line_move_to_history( console, console->edit_line.history_index - 1 );
+}
+
+static void edit_line_move_to_next_hist( struct console *console )
+{
+    if (console->edit_line.history_index < console->history_index)
+        edit_line_move_to_history( console, console->edit_line.history_index + 1 );
+}
+
+static void edit_line_move_to_first_hist( struct console *console )
+{
+    if (console->edit_line.history_index)
+        edit_line_move_to_history( console, 0 );
+}
+
+static void edit_line_move_to_last_hist( struct console *console )
+{
+    if (console->edit_line.history_index != console->history_index)
+        edit_line_move_to_history( console, console->history_index );
+}
+
+static void edit_line_redraw( struct console *console )
+{
+    if (console->mode & ENABLE_ECHO_INPUT)
+        edit_line_update( console, 0, console->edit_line.len );
+}
+
+static void edit_line_toggle_insert( struct console *console )
+{
+    struct edit_line *ctx = &console->edit_line;
+    ctx->insert_key = !ctx->insert_key;
+    console->active->cursor_size = ctx->insert_key ? 100 : 25;
+}
+
+static void edit_line_done( struct console *console )
+{
+    console->edit_line.status = STATUS_SUCCESS;
+}
+
+struct edit_line_key_entry
+{
+    WCHAR val;  /* vk or unicode char */
+    void (*func)( struct console *console );
+};
+
+struct edit_line_key_map
+{
+    DWORD key_state;      /* keyState (from INPUT_RECORD) to match */
+    BOOL  is_char;        /* check vk or char */
+    const struct edit_line_key_entry *entries;
+};
+
+#define CTRL(x) ((x) - '@')
+static const struct edit_line_key_entry std_key_map[] =
+{
+    { VK_BACK,   edit_line_delete_prev },
+    { VK_RETURN, edit_line_done        },
+    { VK_DELETE, edit_line_delete_char },
+    { 0 }
+};
+
+static const struct edit_line_key_entry emacs_key_map_ctrl[] =
+{
+    { CTRL('@'), edit_line_set_mark          },
+    { CTRL('A'), edit_line_move_home         },
+    { CTRL('B'), edit_line_move_left         },
+    { CTRL('D'), edit_line_delete_char       },
+    { CTRL('E'), edit_line_move_end          },
+    { CTRL('F'), edit_line_move_right        },
+    { CTRL('H'), edit_line_delete_prev       },
+    { CTRL('J'), edit_line_done              },
+    { CTRL('K'), edit_line_kill_suffix       },
+    { CTRL('L'), edit_line_redraw            },
+    { CTRL('M'), edit_line_done              },
+    { CTRL('N'), edit_line_move_to_next_hist },
+    { CTRL('P'), edit_line_move_to_prev_hist },
+    { CTRL('T'), edit_line_transpose_char    },
+    { CTRL('W'), edit_line_kill_marked_zone  },
+    { CTRL('X'), edit_line_exchange_mark     },
+    { CTRL('Y'), edit_line_yank              },
+    { 0 }
+};
+
+static const struct edit_line_key_entry emacs_key_map_alt[] =
+{
+    { 0x7f, edit_line_delete_left_word   },
+    { '<',  edit_line_move_to_first_hist },
+    { '>',  edit_line_move_to_last_hist  },
+    { 'b',  edit_line_move_left_word     },
+    { 'c',  edit_line_capitalize_word    },
+    { 'd',  edit_line_delete_right_word  },
+    { 'f',  edit_line_move_right_word    },
+    { 'l',  edit_line_lower_case_word    },
+    { 't',  edit_line_transpose_words    },
+    { 'u',  edit_line_upper_case_word    },
+    { 'w',  edit_line_copy_marked_zone   },
+    { 0 }
+};
+
+static const struct edit_line_key_entry emacs_std_key_map[] =
+{
+    { VK_PRIOR,  edit_line_move_to_prev_hist },
+    { VK_NEXT,   edit_line_move_to_next_hist },
+    { VK_END,    edit_line_move_end          },
+    { VK_HOME,   edit_line_move_home         },
+    { VK_RIGHT,  edit_line_move_right        },
+    { VK_LEFT,   edit_line_move_left         },
+    { VK_INSERT, edit_line_toggle_insert     },
+    { 0 }
+};
+
+static const struct edit_line_key_map emacs_key_map[] =
+{
+    { 0,                  0, std_key_map        },
+    { 0,                  0, emacs_std_key_map  },
+    { RIGHT_ALT_PRESSED,  1, emacs_key_map_alt  },
+    { LEFT_ALT_PRESSED,   1, emacs_key_map_alt  },
+    { RIGHT_CTRL_PRESSED, 1, emacs_key_map_ctrl },
+    { LEFT_CTRL_PRESSED,  1, emacs_key_map_ctrl },
+    { 0 }
+};
+
+static const struct edit_line_key_entry win32_std_key_map[] =
+{
+    { VK_LEFT,   edit_line_move_left         },
+    { VK_RIGHT,  edit_line_move_right        },
+    { VK_HOME,   edit_line_move_home         },
+    { VK_END,    edit_line_move_end          },
+    { VK_UP,     edit_line_move_to_prev_hist },
+    { VK_DOWN,   edit_line_move_to_next_hist },
+    { VK_INSERT, edit_line_toggle_insert     },
+    { VK_F8,     edit_line_find_in_history   },
+    { 0 }
+};
+
+static const struct edit_line_key_entry win32_key_map_ctrl[] =
+{
+    { VK_LEFT,  edit_line_move_left_word  },
+    { VK_RIGHT, edit_line_move_right_word },
+    { VK_END,   edit_line_kill_suffix     },
+    { VK_HOME,  edit_line_kill_prefix     },
+    { 0 }
+};
+
+static const struct edit_line_key_map win32_key_map[] =
+{
+    { 0,                  0, std_key_map        },
+    { SHIFT_PRESSED,      0, std_key_map        },
+    { 0,                  0, win32_std_key_map  },
+    { RIGHT_CTRL_PRESSED, 0, win32_key_map_ctrl },
+    { LEFT_CTRL_PRESSED,  0, win32_key_map_ctrl },
+    { 0 }
+};
+#undef CTRL
+
+static unsigned int edit_line_string_width( const WCHAR *str, unsigned int len)
+{
+    unsigned int i, offset = 0;
+    for (i = 0; i < len; i++) offset += str[i] < ' ' ? 2 : 1;
+    return offset;
+}
+
+static void update_read_output( struct console *console )
+{
+    struct screen_buffer *screen_buffer = console->active;
+    struct edit_line *ctx = &console->edit_line;
+    int offset = 0, j, end_offset;
+    RECT update_rect;
+
+    empty_update_rect( screen_buffer, &update_rect );
+
+    if (ctx->update_end >= ctx->update_begin)
+    {
+        TRACE( "update %d-%d %s\n", ctx->update_begin, ctx->update_end,
+               debugstr_wn( ctx->buf + ctx->update_begin, ctx->update_end - ctx->update_begin + 1 ));
+
+        hide_tty_cursor( screen_buffer->console );
+
+        offset = edit_line_string_width( ctx->buf, ctx->update_begin );
+        screen_buffer->cursor_x = (ctx->home_x + offset) % screen_buffer->width;
+        screen_buffer->cursor_y = ctx->home_y + (ctx->home_x + offset) / screen_buffer->width;
+        for (j = ctx->update_begin; j <= ctx->update_end; j++)
+        {
+            if (screen_buffer->cursor_y >= screen_buffer->height && !ctx->home_y) break;
+            if (j >= ctx->len) break;
+            if (ctx->buf[j] < ' ')
+            {
+                write_char( screen_buffer, '^', &update_rect, &ctx->home_y );
+                write_char( screen_buffer, '@' + ctx->buf[j], &update_rect, &ctx->home_y );
+                offset += 2;
+            }
+            else
+            {
+                write_char( screen_buffer, ctx->buf[j], &update_rect, &ctx->home_y );
+                offset++;
+            }
+        }
+        end_offset = ctx->end_offset;
+        ctx->end_offset = offset;
+        if (j >= ctx->len)
+        {
+            /* clear trailing characters if buffer was shortened */
+            while (offset < end_offset && screen_buffer->cursor_y < screen_buffer->height)
+            {
+                write_char( screen_buffer, ' ', &update_rect, &ctx->home_y );
+                offset++;
+            }
+        }
+    }
+
+    if (!ctx->status)
+    {
+        offset = edit_line_string_width( ctx->buf, ctx->len );
+        screen_buffer->cursor_x = 0;
+        screen_buffer->cursor_y = ctx->home_y + (ctx->home_x + offset) / screen_buffer->width;
+        if (++screen_buffer->cursor_y >= screen_buffer->height)
+            new_line( screen_buffer, &update_rect );
+    }
+    else
+    {
+        offset = edit_line_string_width( ctx->buf, ctx->cursor );
+        screen_buffer->cursor_y = ctx->home_y + (ctx->home_x + offset) / screen_buffer->width;
+        if (screen_buffer->cursor_y < screen_buffer->height)
+        {
+            screen_buffer->cursor_x = (ctx->home_x + offset) % screen_buffer->width;
+        }
+        else
+        {
+            screen_buffer->cursor_x = screen_buffer->width - 1;
+            screen_buffer->cursor_y = screen_buffer->height - 1;
+        }
+    }
+
+    /* always try to use relative cursor positions in UNIX mode so that it works even if cursor
+     * position is out of sync */
+    if (update_rect.left <= update_rect.right && update_rect.top <= update_rect.bottom)
+    {
+        if (console->is_unix)
+            set_tty_cursor_relative( screen_buffer->console, update_rect.left, update_rect.top );
+        update_output( screen_buffer, &update_rect );
+    }
+    if (console->is_unix)
+        set_tty_cursor_relative( screen_buffer->console, screen_buffer->cursor_x, screen_buffer->cursor_y );
+    tty_sync( screen_buffer->console );
+}
+
 static NTSTATUS process_console_input( struct console *console )
 {
-    if (console->record_count && console->pending_read)
+    struct edit_line *ctx = &console->edit_line;
+    unsigned int i;
+
+    switch (console->read_ioctl)
     {
-        read_console_input( console, console->pending_read );
-        console->pending_read = 0;
+    case IOCTL_CONDRV_READ_INPUT:
+        if (console->record_count) read_console_input( console, console->pending_read );
+        return STATUS_SUCCESS;
+    case IOCTL_CONDRV_READ_CONSOLE:
+        break;
+    default:
+        return STATUS_SUCCESS;
     }
+
+    ctx->update_begin = ctx->len + 1;
+    ctx->update_end = 0;
+
+    for (i = 0; i < console->record_count && ctx->status == STATUS_PENDING; i++)
+    {
+        void (*func)( struct console *console ) = NULL;
+        INPUT_RECORD ir = console->records[i];
+
+        if (ir.EventType != KEY_EVENT || !ir.Event.KeyEvent.bKeyDown) continue;
+
+        TRACE( "key code=%02x scan=%02x char=%02x state=%08x\n",
+               ir.Event.KeyEvent.wVirtualKeyCode, ir.Event.KeyEvent.wVirtualScanCode,
+               ir.Event.KeyEvent.uChar.UnicodeChar, ir.Event.KeyEvent.dwControlKeyState );
+
+        if (console->mode & ENABLE_LINE_INPUT)
+        {
+            const struct edit_line_key_entry *entry;
+            const struct edit_line_key_map *map;
+            unsigned int state;
+
+            /* mask out some bits which don't interest us */
+            state = ir.Event.KeyEvent.dwControlKeyState & ~(NUMLOCK_ON|SCROLLLOCK_ON|CAPSLOCK_ON|ENHANCED_KEY);
+
+            func = NULL;
+            for (map = console->edition_mode ? emacs_key_map : win32_key_map; map->entries != NULL; map++)
+            {
+                if (map->key_state != state)
+                    continue;
+                if (map->is_char)
+                {
+                    for (entry = &map->entries[0]; entry->func != 0; entry++)
+                        if (entry->val == ir.Event.KeyEvent.uChar.UnicodeChar) break;
+                }
+                else
+                {
+                    for (entry = &map->entries[0]; entry->func != 0; entry++)
+                        if (entry->val == ir.Event.KeyEvent.wVirtualKeyCode) break;
+
+                }
+                if (entry->func)
+                {
+                    func = entry->func;
+                    break;
+                }
+            }
+        }
+
+        ctx->insert_mode = ((console->mode & (ENABLE_INSERT_MODE | ENABLE_EXTENDED_FLAGS)) ==
+                            (ENABLE_INSERT_MODE | ENABLE_EXTENDED_FLAGS))
+            ^ ctx->insert_key;
+
+        if (func) func( console );
+        else if (ir.Event.KeyEvent.uChar.UnicodeChar && !(ir.Event.KeyEvent.dwControlKeyState & LEFT_ALT_PRESSED))
+            edit_line_insert( console, &ir.Event.KeyEvent.uChar.UnicodeChar, 1 );
+
+        if (!(console->mode & ENABLE_LINE_INPUT) && ctx->status == STATUS_PENDING &&
+            ctx->len >= console->pending_read / sizeof(WCHAR))
+            ctx->status = STATUS_SUCCESS;
+    }
+
+    if (console->record_count > i) memmove( console->records, console->records + i,
+                                            (console->record_count - i) * sizeof(*console->records) );
+    console->record_count -= i;
+
+    if (ctx->status == STATUS_PENDING && !(console->mode & ENABLE_LINE_INPUT) && ctx->len)
+        ctx->status = STATUS_SUCCESS;
+
+    if (console->mode & ENABLE_ECHO_INPUT) update_read_output( console );
+    if (ctx->status == STATUS_PENDING) return STATUS_SUCCESS;
+
+    if (!ctx->status && (console->mode & ENABLE_LINE_INPUT))
+    {
+        if (ctx->len) append_input_history( console, ctx->buf, ctx->len * sizeof(WCHAR) );
+        if (edit_line_grow(console, 2))
+        {
+            ctx->buf[ctx->len++] = '\r';
+            ctx->buf[ctx->len++] = '\n';
+            ctx->buf[ctx->len] = 0;
+            TRACE( "return %s\n", debugstr_wn( ctx->buf, ctx->len ));
+        }
+    }
+
+    console->read_buffer = ctx->buf;
+    console->read_buffer_count = ctx->len;
+    console->read_buffer_size = ctx->size;
+
+    if (ctx->status) read_complete( console, ctx->status, NULL, 0, console->record_count );
+    else read_from_buffer( console, console->pending_read );
+
+    /* reset context */
+    free( ctx->yanked );
+    free( ctx->current_history );
+    memset( &console->edit_line, 0, sizeof(console->edit_line) );
     return STATUS_SUCCESS;
+}
+
+static NTSTATUS read_console( struct console *console, size_t out_size )
+{
+    TRACE("\n");
+
+    if (!out_size || console->read_buffer_count)
+    {
+        read_from_buffer( console, out_size );
+        return STATUS_SUCCESS;
+    }
+
+    console->edit_line.history_index = console->history_index;
+    console->edit_line.home_x = console->active->cursor_x;
+    console->edit_line.home_y = console->active->cursor_y;
+    console->edit_line.status = STATUS_PENDING;
+    if (edit_line_grow( console, 1 )) console->edit_line.buf[0] = 0;
+
+    console->read_ioctl = IOCTL_CONDRV_READ_CONSOLE;
+    console->pending_read = out_size;
+    return process_console_input( console );
 }
 
 /* add input events to a console input queue */
@@ -708,7 +1614,16 @@ static DWORD WINAPI tty_input( void *param )
     char read_buf[4096];
     WCHAR buf[4096];
     DWORD count, i;
+    BOOL signaled;
     NTSTATUS status;
+
+    if (console->is_unix)
+    {
+        unsigned int h = condrv_handle( console->tty_input );
+        status = NtDeviceIoControlFile( console->server, NULL, NULL, NULL, &io, IOCTL_CONDRV_SETUP_INPUT,
+                                        &h, sizeof(h), NULL, 0 );
+        if (status) ERR( "input setup failed: %#x\n", status );
+    }
 
     event = CreateEventW( NULL, TRUE, FALSE, NULL );
 
@@ -723,9 +1638,10 @@ static DWORD WINAPI tty_input( void *param )
         if (status) break;
 
         EnterCriticalSection( &console_section );
+        signaled = console->record_count != 0;
 
         /* FIXME: Handle partial char read */
-        count = MultiByteToWideChar(CP_UTF8, 0, read_buf, io.Information, buf, ARRAY_SIZE(buf));
+        count = MultiByteToWideChar( get_tty_cp( console ), 0, read_buf, io.Information, buf, ARRAY_SIZE(buf) );
 
         TRACE( "%s\n", debugstr_wn(buf, count) );
 
@@ -735,7 +1651,8 @@ static DWORD WINAPI tty_input( void *param )
             switch (ch)
             {
             case 3: /* end of text */
-                return 0;
+                LeaveCriticalSection( &console_section );
+                goto done;
             case '\n':
                 key_press( console, '\n', VK_RETURN, LEFT_CTRL_PRESSED );
                 break;
@@ -754,11 +1671,38 @@ static DWORD WINAPI tty_input( void *param )
         }
 
         process_console_input( console );
+        if (!signaled && console->record_count)
+        {
+            assert( !console->read_ioctl );
+            read_complete( console, STATUS_SUCCESS, NULL, 0, TRUE ); /* signal console */
+        }
         LeaveCriticalSection( &console_section );
     }
 
     TRACE( "NtReadFile failed: %#x\n", status );
+
+done:
+    EnterCriticalSection( &console_section );
+    if (console->read_ioctl) read_complete( console, status, NULL, 0, FALSE );
+    if (console->is_unix)
+    {
+        unsigned int h = 0;
+        status = NtDeviceIoControlFile( console->server, NULL, NULL, NULL, &io, IOCTL_CONDRV_SETUP_INPUT,
+                                        &h, sizeof(h), NULL, 0 );
+        if (status) ERR( "input restore failed: %#x\n", status );
+    }
+    CloseHandle( console->input_thread );
+    console->input_thread = NULL;
+    LeaveCriticalSection( &console_section );
+
     return 0;
+}
+
+static BOOL ensure_tty_input_thread( struct console *console )
+{
+    if (!console->input_thread)
+        console->input_thread = CreateThread( NULL, 0, tty_input, console, 0, NULL );
+    return console->input_thread != NULL;
 }
 
 static NTSTATUS screen_buffer_activate( struct screen_buffer *screen_buffer )
@@ -997,14 +1941,17 @@ static NTSTATUS write_console( struct screen_buffer *screen_buffer, const WCHAR 
                 continue;
             case '\t':
                 j = min( screen_buffer->width - screen_buffer->cursor_x, 8 - (screen_buffer->cursor_x % 8) );
-                while (j--) write_char( screen_buffer, ' ', &update_rect );
+                while (j--) write_char( screen_buffer, ' ', &update_rect, NULL );
                 continue;
             case '\n':
                 screen_buffer->cursor_x = 0;
                 if (++screen_buffer->cursor_y == screen_buffer->height)
                     new_line( screen_buffer, &update_rect );
                 else if (screen_buffer->mode & ENABLE_WRAP_AT_EOL_OUTPUT)
+                {
                     update_output( screen_buffer, &update_rect );
+                    set_tty_cursor( screen_buffer->console, screen_buffer->cursor_x, screen_buffer->cursor_y );
+                }
                 continue;
             case '\a':
                 FIXME( "beep\n" );
@@ -1016,7 +1963,7 @@ static NTSTATUS write_console( struct screen_buffer *screen_buffer, const WCHAR 
         }
         if (screen_buffer->cursor_x == screen_buffer->width && !(screen_buffer->mode & ENABLE_WRAP_AT_EOL_OUTPUT))
             screen_buffer->cursor_x = update_rect.left;
-        write_char( screen_buffer, buffer[i], &update_rect );
+        write_char( screen_buffer, buffer[i], &update_rect, NULL );
     }
 
     if (screen_buffer->cursor_x == screen_buffer->width)
@@ -1036,6 +1983,8 @@ static NTSTATUS write_output( struct screen_buffer *screen_buffer, const struct 
     unsigned int i, entry_size, entry_cnt, x, y;
     char_info_t *dest;
     char *src;
+
+    if (*out_size == sizeof(SMALL_RECT) && !params->width) return STATUS_INVALID_PARAMETER;
 
     entry_size = params->mode == CHAR_INFO_MODE_TEXTATTR ? sizeof(char_info_t) : sizeof(WCHAR);
     entry_cnt = (in_size - sizeof(*params)) / entry_size;
@@ -1219,9 +2168,9 @@ static NTSTATUS fill_output( struct screen_buffer *screen_buffer, const struct c
 
     TRACE( "(%u %u) mode %u\n", params->x, params->y, params->mode );
 
-    dest = screen_buffer->data + params->y * screen_buffer->width + params->x;
-
     if (params->y >= screen_buffer->height) return STATUS_SUCCESS;
+    dest = screen_buffer->data + min( params->y * screen_buffer->width + params->x,
+                                      screen_buffer->height * screen_buffer->width );
 
     if (params->wrap)
         end = screen_buffer->data + screen_buffer->height * screen_buffer->width;
@@ -1396,9 +2345,9 @@ static NTSTATUS set_console_title( struct console *console, const WCHAR *in_titl
         char *vt;
 
         tty_write( console, "\x1b]0;", 4 );
-        len = WideCharToMultiByte( CP_UTF8, 0, console->title, size / sizeof(WCHAR), NULL, 0, NULL, NULL);
+        len = WideCharToMultiByte( get_tty_cp( console ), 0, console->title, size / sizeof(WCHAR), NULL, 0, NULL, NULL);
         if ((vt = tty_alloc_buffer( console, len )))
-            WideCharToMultiByte( CP_UTF8, 0, console->title, size / sizeof(WCHAR), vt, len, NULL, NULL );
+            WideCharToMultiByte( get_tty_cp( console ), 0, console->title, size / sizeof(WCHAR), vt, len, NULL, NULL );
         tty_write( console, "\x07", 1 );
         tty_sync( console );
     }
@@ -1494,15 +2443,22 @@ static NTSTATUS console_input_ioctl( struct console *console, unsigned int code,
         TRACE( "set %x mode\n", console->mode );
         return STATUS_SUCCESS;
 
+    case IOCTL_CONDRV_READ_CONSOLE:
+        if (in_size || *out_size % sizeof(WCHAR)) return STATUS_INVALID_PARAMETER;
+        ensure_tty_input_thread( console );
+        return read_console( console, *out_size );
+
     case IOCTL_CONDRV_READ_INPUT:
         {
             unsigned int blocking;
             NTSTATUS status;
             if (in_size && in_size != sizeof(blocking)) return STATUS_INVALID_PARAMETER;
+            ensure_tty_input_thread( console );
             blocking = in_size && *(unsigned int *)in_data;
             if (blocking && !console->record_count && *out_size)
             {
                 TRACE( "pending read" );
+                console->read_ioctl = IOCTL_CONDRV_READ_INPUT;
                 console->pending_read = *out_size;
                 return STATUS_PENDING;
             }
@@ -1616,6 +2572,15 @@ static NTSTATUS console_input_ioctl( struct console *console, unsigned int code,
         if (in_size % sizeof(WCHAR) || *out_size) return STATUS_INVALID_PARAMETER;
         return set_console_title( console, in_data, in_size );
 
+    case IOCTL_CONDRV_BEEP:
+        if (in_size || *out_size) return STATUS_INVALID_PARAMETER;
+        if (console->is_unix)
+        {
+            tty_write( console, "\a", 1 );
+            tty_sync( console );
+        }
+        return STATUS_SUCCESS;
+
     default:
         FIXME( "unsupported ioctl %x\n", code );
         return STATUS_NOT_SUPPORTED;
@@ -1693,7 +2658,7 @@ static NTSTATUS process_console_ioctls( struct console *console )
 static int main_loop( struct console *console, HANDLE signal )
 {
     HANDLE signal_event = NULL;
-    HANDLE wait_handles[2];
+    HANDLE wait_handles[3];
     unsigned int wait_cnt = 0;
     unsigned short signal_id;
     IO_STATUS_BLOCK signal_io;
@@ -1712,6 +2677,7 @@ static int main_loop( struct console *console, HANDLE signal )
 
     wait_handles[wait_cnt++] = console->server;
     if (signal) wait_handles[wait_cnt++] = signal_event;
+    if (console->input_thread) wait_handles[wait_cnt++] = console->input_thread;
 
     for (;;)
     {
@@ -1749,8 +2715,8 @@ static int main_loop( struct console *console, HANDLE signal )
 
 int __cdecl wmain(int argc, WCHAR *argv[])
 {
-    int headless = 0, i, width = 80, height = 150;
-    HANDLE signal = NULL, input_thread;
+    int headless = 0, i, width = 0, height = 0;
+    HANDLE signal = NULL;
     WCHAR *end;
 
     static struct console console;
@@ -1772,18 +2738,24 @@ int __cdecl wmain(int argc, WCHAR *argv[])
             headless = 1;
             continue;
         }
+        if (!wcscmp( argv[i], L"--unix"))
+        {
+            console.is_unix = 1;
+            headless = 1;
+            continue;
+        }
         if (!wcscmp( argv[i], L"--width" ))
         {
             if (++i == argc) return 1;
             width = wcstol( argv[i], &end, 0 );
-            if (!width || width > 0xffff || *end) return 1;
+            if ((!width && !console.is_unix) || width > 0xffff || *end) return 1;
             continue;
         }
         if (!wcscmp( argv[i], L"--height" ))
         {
             if (++i == argc) return 1;
             height = wcstol( argv[i], &end, 0 );
-            if (!height || height > 0xffff || *end) return 1;
+            if ((!height && !console.is_unix) || height > 0xffff || *end) return 1;
             continue;
         }
         if (!wcscmp( argv[i], L"--signal" ))
@@ -1816,16 +2788,16 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         return 1;
     }
 
+    if (!width)  width = 80;
+    if (!height) height = 150;
+
     if (!(console.active = create_screen_buffer( &console, 1, width, height ))) return 1;
     if (headless)
     {
         console.tty_input  = GetStdHandle( STD_INPUT_HANDLE );
         console.tty_output = GetStdHandle( STD_OUTPUT_HANDLE );
         init_tty_output( &console );
-
-        if (!(input_thread = CreateThread( NULL, 0, tty_input, &console, 0, NULL )))
-            return 1;
-        CloseHandle( input_thread );
+        if (!console.is_unix && !ensure_tty_input_thread( &console )) return 1;
     }
 
     return main_loop( &console, signal );

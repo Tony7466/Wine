@@ -14,7 +14,7 @@
 @ cdecl __AdjustPointer(ptr ptr) ucrtbase.__AdjustPointer
 @ stub __BuildCatchObject
 @ stub __BuildCatchObjectHelper
-@ stdcall -arch=x86_64 __C_specific_handler(ptr long ptr ptr) ucrtbase.__C_specific_handler
+@ stdcall -arch=x86_64,arm64 __C_specific_handler(ptr long ptr ptr) ucrtbase.__C_specific_handler
 @ stub __C_specific_handler_noexcept
 @ cdecl -arch=i386,x86_64,arm,arm64 __CxxDetectRethrow(ptr) ucrtbase.__CxxDetectRethrow
 @ cdecl -arch=i386,x86_64,arm,arm64 __CxxExceptionFilter(ptr ptr long ptr) ucrtbase.__CxxExceptionFilter
@@ -62,7 +62,7 @@
 @ cdecl _get_unexpected() ucrtbase._get_unexpected
 @ cdecl -arch=i386 _global_unwind2(ptr) ucrtbase._global_unwind2
 @ stub _is_exception_typeof
-@ cdecl -arch=x86_64 _local_unwind(ptr ptr) ucrtbase._local_unwind
+@ cdecl -arch=x86_64,arm64 _local_unwind(ptr ptr) ucrtbase._local_unwind
 @ cdecl -arch=i386 _local_unwind2(ptr long) ucrtbase._local_unwind2
 @ cdecl -arch=i386 _local_unwind4(ptr ptr long) ucrtbase._local_unwind4
 @ cdecl -arch=i386 _longjmpex(ptr long) ucrtbase._longjmpex
@@ -491,7 +491,7 @@
 @ cdecl _o__mbbtombc(long) ucrtbase._o__mbbtombc
 @ stub _o__mbbtombc_l
 @ cdecl _o__mbbtype(long long) ucrtbase._o__mbbtype
-@ stub _o__mbbtype_l
+@ cdecl _o__mbbtype_l(long long ptr) ucrtbase._o__mbbtype_l
 @ cdecl _o__mbccpy(ptr ptr) ucrtbase._o__mbccpy
 @ cdecl _o__mbccpy_l(ptr ptr ptr) ucrtbase._o__mbccpy_l
 @ cdecl _o__mbccpy_s(ptr long ptr ptr) ucrtbase._o__mbccpy_s
@@ -520,7 +520,7 @@
 @ cdecl _o__mbschr(str long) ucrtbase._o__mbschr
 @ stub _o__mbschr_l
 @ cdecl _o__mbscmp(str str) ucrtbase._o__mbscmp
-@ stub _o__mbscmp_l
+@ cdecl _o__mbscmp_l(str str ptr) ucrtbase._o__mbscmp_l
 @ cdecl _o__mbscoll(str str) ucrtbase._o__mbscoll
 @ cdecl _o__mbscoll_l(str str ptr) ucrtbase._o__mbscoll_l
 @ cdecl _o__mbscpy_s(ptr long str) ucrtbase._o__mbscpy_s
@@ -578,7 +578,7 @@
 @ stub _o__mbsncpy_s
 @ stub _o__mbsncpy_s_l
 @ cdecl _o__mbsnextc(str) ucrtbase._o__mbsnextc
-@ stub _o__mbsnextc_l
+@ cdecl _o__mbsnextc_l(str ptr) ucrtbase._o__mbsnextc_l
 @ cdecl _o__mbsnicmp(str str long) ucrtbase._o__mbsnicmp
 @ stub _o__mbsnicmp_l
 @ stub _o__mbsnicoll

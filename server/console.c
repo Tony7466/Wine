@@ -28,6 +28,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sys/ioctl.h>
+#include <termios.h>
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
@@ -80,6 +82,7 @@ struct console_input
 static void console_input_dump( struct object *obj, int verbose );
 static void console_input_destroy( struct object *obj );
 static struct fd *console_input_get_fd( struct object *obj );
+static struct object *console_input_lookup_name( struct object *obj, struct unicode_str *name, unsigned int attr );
 static struct object *console_input_open_file( struct object *obj, unsigned int access,
                                                unsigned int sharing, unsigned int options );
 
@@ -97,7 +100,8 @@ static const struct object_ops console_input_ops =
     default_fd_map_access,            /* map_access */
     default_get_sd,                   /* get_sd */
     default_set_sd,                   /* set_sd */
-    no_lookup_name,                   /* lookup_name */
+    no_get_full_name,                 /* get_full_name */
+    console_input_lookup_name,        /* lookup_name */
     no_link_name,                     /* link_name */
     NULL,                             /* unlink_name */
     console_input_open_file,          /* open_file */
@@ -155,6 +159,7 @@ static const struct object_ops console_input_events_ops =
     default_fd_map_access,            /* map_access */
     default_get_sd,                   /* get_sd */
     default_set_sd,                   /* set_sd */
+    no_get_full_name,                 /* get_full_name */
     no_lookup_name,                   /* lookup_name */
     no_link_name,                     /* link_name */
     NULL,                             /* unlink_name */
@@ -197,6 +202,8 @@ struct console_server
     struct list           queue;       /* ioctl queue */
     struct list           read_queue;  /* blocking read queue */
     int                   busy;        /* flag if server processing an ioctl */
+    int                   term_fd;     /* UNIX terminal fd */
+    struct termios        termios;     /* original termios */
 };
 
 static void console_server_dump( struct object *obj, int verbose );
@@ -221,6 +228,7 @@ static const struct object_ops console_server_ops =
     default_fd_map_access,            /* map_access */
     default_get_sd,                   /* get_sd */
     default_set_sd,                   /* set_sd */
+    no_get_full_name,                 /* get_full_name */
     console_server_lookup_name,       /* lookup_name */
     no_link_name,                     /* link_name */
     NULL,                             /* unlink_name */
@@ -303,6 +311,7 @@ static const struct object_ops screen_buffer_ops =
     default_fd_map_access,            /* map_access */
     default_get_sd,                   /* get_sd */
     default_set_sd,                   /* set_sd */
+    no_get_full_name,                 /* get_full_name */
     no_lookup_name,                   /* lookup_name */
     no_link_name,                     /* link_name */
     NULL,                             /* unlink_name */
@@ -349,6 +358,7 @@ static const struct object_ops console_device_ops =
     default_fd_map_access,            /* map_access */
     default_get_sd,                   /* get_sd */
     default_set_sd,                   /* set_sd */
+    default_get_full_name,            /* get_full_name */
     console_device_lookup_name,       /* lookup_name */
     directory_link_name,              /* link_name */
     default_unlink_name,              /* unlink_name */
@@ -356,6 +366,61 @@ static const struct object_ops console_device_ops =
     no_kernel_obj_list,               /* get_kernel_obj_list */
     no_close_handle,                  /* close_handle */
     no_destroy                        /* destroy */
+};
+
+struct console_connection
+{
+    struct object         obj;         /* object header */
+    struct fd            *fd;          /* pseudo-fd for ioctls */
+};
+
+static void console_connection_dump( struct object *obj, int verbose );
+static struct fd *console_connection_get_fd( struct object *obj );
+static struct object *console_connection_lookup_name( struct object *obj, struct unicode_str *name, unsigned int attr );
+static struct object *console_connection_open_file( struct object *obj, unsigned int access,
+                                                    unsigned int sharing, unsigned int options );
+static int console_connection_close_handle( struct object *obj, struct process *process, obj_handle_t handle );
+static void console_connection_destroy( struct object *obj );
+
+static const struct object_ops console_connection_ops =
+{
+    sizeof(struct console_connection),/* size */
+    console_connection_dump,          /* dump */
+    console_device_get_type,          /* get_type */
+    no_add_queue,                     /* add_queue */
+    NULL,                             /* remove_queue */
+    NULL,                             /* signaled */
+    no_satisfied,                     /* satisfied */
+    no_signal,                        /* signal */
+    console_connection_get_fd,        /* get_fd */
+    no_map_access,                    /* map_access */
+    default_get_sd,                   /* get_sd */
+    default_set_sd,                   /* set_sd */
+    no_get_full_name,                 /* get_full_name */
+    console_connection_lookup_name,   /* lookup_name */
+    directory_link_name,              /* link_name */
+    default_unlink_name,              /* unlink_name */
+    console_connection_open_file,     /* open_file */
+    no_kernel_obj_list,               /* get_kernel_obj_list */
+    console_connection_close_handle,  /* close_handle */
+    console_connection_destroy        /* destroy */
+};
+
+static int console_connection_ioctl( struct fd *fd, ioctl_code_t code, struct async *async );
+
+static const struct fd_ops console_connection_fd_ops =
+{
+    default_fd_get_poll_events,   /* get_poll_events */
+    default_poll_event,           /* poll_event */
+    console_get_fd_type,          /* get_fd_type */
+    no_fd_read,                   /* read */
+    no_fd_write,                  /* write */
+    no_fd_flush,                  /* flush */
+    no_fd_get_file_info,          /* get_file_info */
+    no_fd_get_volume_info,        /* get_volume_info */
+    console_connection_ioctl,     /* ioctl */
+    default_fd_queue_async,       /* queue_async */
+    default_fd_reselect_async     /* reselect_async */
 };
 
 static struct list screen_buffer_list = LIST_INIT(screen_buffer_list);
@@ -504,15 +569,13 @@ static struct object *create_console_input_events(void)
     return &evt->obj;
 }
 
-static struct object *create_console_input( int fd )
+static struct object *create_console_input(void)
 {
     struct console_input *console_input;
 
     if (!(console_input = alloc_object( &console_input_ops )))
-    {
-        if (fd != -1) close( fd );
         return NULL;
-    }
+
     console_input->renderer      = NULL;
     console_input->mode          = ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT |
                                    ENABLE_ECHO_INPUT | ENABLE_MOUSE_INPUT | ENABLE_INSERT_MODE |
@@ -541,21 +604,13 @@ static struct object *create_console_input( int fd )
 
     if (!console_input->history || !console_input->event)
     {
-        if (fd != -1) close( fd );
         console_input->history_size = 0;
         release_object( console_input );
         return NULL;
     }
-    if (fd != -1) /* bare console */
-    {
-        console_input->fd = create_anonymous_fd( &console_input_fd_ops, fd, &console_input->obj,
-                                                 FILE_SYNCHRONOUS_IO_NONALERT );
-    }
-    else
-    {
-        console_input->fd = alloc_pseudo_fd( &console_input_fd_ops, &console_input->obj,
-                                             FILE_SYNCHRONOUS_IO_NONALERT );
-    }
+
+    console_input->fd = alloc_pseudo_fd( &console_input_fd_ops, &console_input->obj,
+                                         FILE_SYNCHRONOUS_IO_NONALERT );
     if (!console_input->fd)
     {
         release_object( console_input );
@@ -610,6 +665,13 @@ static void disconnect_console_server( struct console_server *server )
         console_host_ioctl_terminate( call, STATUS_CANCELLED );
     }
 
+    if (server->term_fd != -1)
+    {
+        tcsetattr( server->term_fd, TCSANOW, &server->termios );
+        close( server->term_fd );
+        server->term_fd = -1;
+    }
+
     if (server->console)
     {
         assert( server->console->server == server );
@@ -658,7 +720,7 @@ static void set_active_screen_buffer( struct console_input *console_input, struc
     console_input_events_append( console_input, &evt );
 }
 
-static struct object *create_console_output( struct console_input *console_input, int fd )
+static struct object *create_console_output( struct console_input *console_input )
 {
     struct screen_buffer *screen_buffer;
     int	i;
@@ -670,10 +732,8 @@ static struct object *create_console_output( struct console_input *console_input
     }
 
     if (!(screen_buffer = alloc_object( &screen_buffer_ops )))
-    {
-        if (fd != -1) close( fd );
         return NULL;
-    }
+
     screen_buffer->id             = ++console_input->last_id;
     screen_buffer->mode           = ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT;
     screen_buffer->input          = console_input;
@@ -702,12 +762,8 @@ static struct object *create_console_output( struct console_input *console_input
     init_async_queue( &screen_buffer->ioctl_q );
     list_add_head( &screen_buffer_list, &screen_buffer->entry );
 
-    if (fd != -1)
-        screen_buffer->fd = create_anonymous_fd( &screen_buffer_fd_ops, fd, &screen_buffer->obj,
-                                                 FILE_SYNCHRONOUS_IO_NONALERT );
-    else
-        screen_buffer->fd = alloc_pseudo_fd( &screen_buffer_fd_ops, &screen_buffer->obj,
-                                             FILE_SYNCHRONOUS_IO_NONALERT );
+    screen_buffer->fd = alloc_pseudo_fd( &screen_buffer_fd_ops, &screen_buffer->obj,
+                                         FILE_SYNCHRONOUS_IO_NONALERT );
     if (!screen_buffer->fd)
     {
         release_object( screen_buffer );
@@ -765,14 +821,12 @@ obj_handle_t inherit_console( struct thread *parent_thread, obj_handle_t handle,
 {
     struct console_input *console = NULL;
 
-    if (handle && !(console = (struct console_input *)get_handle_obj( current->process, handle, 0,
-                                                                      &console_input_ops )))
-        return 0;
+    if (handle) return duplicate_handle( current->process, handle, process, 0, 0, DUP_HANDLE_SAME_ACCESS );
 
     /* if parent is a renderer, then attach current process to its console
      * a bit hacky....
      */
-    if (!console && hconin && parent_thread)
+    if (hconin && parent_thread)
     {
         /* FIXME: should we check some access rights ? */
         if (!(console = (struct console_input *)get_handle_obj( parent_thread->process, hconin,
@@ -1286,6 +1340,47 @@ static void console_input_destroy( struct object *obj )
     free( console_in->history );
 }
 
+static struct object *create_console_connection( struct console_input *console )
+{
+    struct console_connection *connection;
+
+    if (current->process->console)
+    {
+        set_error( STATUS_ACCESS_DENIED );
+        return NULL;
+    }
+
+    if (!(connection = alloc_object( &console_connection_ops ))) return NULL;
+    if (!(connection->fd = alloc_pseudo_fd( &console_connection_fd_ops, &connection->obj, 0 )))
+    {
+        release_object( connection );
+        return NULL;
+    }
+
+    if (console)
+    {
+        current->process->console = (struct console_input *)grab_object( console );
+        console->num_proc++;
+    }
+
+    return &connection->obj;
+}
+
+static struct object *console_input_lookup_name( struct object *obj, struct unicode_str *name, unsigned int attr )
+{
+    struct console_input *console = (struct console_input *)obj;
+    static const WCHAR connectionW[]    = {'C','o','n','n','e','c','t','i','o','n'};
+    assert( obj->ops == &console_input_ops );
+
+    if (name->len == sizeof(connectionW) && !memcmp( name->str, connectionW, name->len ))
+    {
+        name->len = 0;
+        return create_console_connection( console );
+    }
+
+    return NULL;
+}
+
 static struct object *console_input_open_file( struct object *obj, unsigned int access,
                                                unsigned int sharing, unsigned int options )
 {
@@ -1635,8 +1730,8 @@ static struct object *console_server_lookup_name( struct object *obj, struct uni
             set_error( STATUS_INVALID_HANDLE );
             return 0;
         }
-        if (!(server->console = (struct console_input *)create_console_input( -1 ))) return NULL;
-        if (!(screen_buffer = (struct screen_buffer *)create_console_output( server->console, -1 )))
+        if (!(server->console = (struct console_input *)create_console_input())) return NULL;
+        if (!(screen_buffer = (struct screen_buffer *)create_console_output( server->console )))
         {
             release_object( server->console );
             server->console = NULL;
@@ -1678,6 +1773,7 @@ static struct object *create_console_server( void )
     if (!(server = alloc_object( &console_server_ops ))) return NULL;
     server->console = NULL;
     server->busy    = 0;
+    server->term_fd = -1;
     list_init( &server->queue );
     list_init( &server->read_queue );
     server->fd = alloc_pseudo_fd( &console_server_fd_ops, &server->obj, FILE_SYNCHRONOUS_IO_NONALERT );
@@ -1693,7 +1789,7 @@ static struct object *create_console_server( void )
 
 static int is_blocking_read_ioctl( unsigned int code )
 {
-    return code == IOCTL_CONDRV_READ_INPUT;
+    return code == IOCTL_CONDRV_READ_INPUT || code == IOCTL_CONDRV_READ_CONSOLE;
 }
 
 static int console_input_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
@@ -1898,8 +1994,12 @@ static int console_input_ioctl( struct fd *fd, ioctl_code_t code, struct async *
         }
 
     default:
-        set_error( STATUS_INVALID_HANDLE );
-        return 0;
+        if (!console->server || code >> 16 != FILE_DEVICE_CONSOLE)
+        {
+            set_error( STATUS_INVALID_HANDLE );
+            return 0;
+        }
+        return queue_host_ioctl( console->server, code, 0, async, &console->ioctl_q );
     }
 }
 
@@ -2176,6 +2276,46 @@ static int console_input_events_ioctl( struct fd *fd, ioctl_code_t code, struct 
     }
 }
 
+static int console_connection_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
+{
+    struct console_connection *console_connection = get_fd_user( fd );
+
+    switch (code)
+    {
+    case IOCTL_CONDRV_BIND_PID:
+        {
+            struct process *process;
+            unsigned int pid;
+            if (get_req_data_size() != sizeof(unsigned int))
+            {
+                set_error( STATUS_INVALID_PARAMETER );
+                return 0;
+            }
+            if (current->process->console)
+            {
+                set_error( STATUS_INVALID_HANDLE );
+                return 0;
+            }
+
+            pid = *(unsigned int *)get_req_data();
+            if (pid == ATTACH_PARENT_PROCESS) pid = current->process->parent_id;
+            if (!(process = get_process_from_id( pid ))) return 0;
+
+            if (process->console)
+            {
+                current->process->console = (struct console_input *)grab_object( process->console );
+                process->console->num_proc++;
+            }
+            else set_error( STATUS_ACCESS_DENIED );
+            release_object( process );
+            return !get_error();
+        }
+
+    default:
+        return default_fd_ioctl( console_connection->fd, code, async );
+    }
+}
+
 static int console_server_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
 {
     struct console_server *server = get_fd_user( fd );
@@ -2199,10 +2339,104 @@ static int console_server_ioctl( struct fd *fd, ioctl_code_t code, struct async 
             return !get_error();
         }
 
+    case IOCTL_CONDRV_SETUP_INPUT:
+        {
+            struct termios term;
+            obj_handle_t handle;
+            struct file *file;
+            int unix_fd;
+
+            if (get_req_data_size() != sizeof(unsigned int) || get_reply_max_size())
+            {
+                set_error( STATUS_INVALID_PARAMETER );
+                return 0;
+            }
+            if (server->term_fd != -1)
+            {
+                tcsetattr( server->term_fd, TCSANOW, &server->termios );
+                close( server->term_fd );
+                server->term_fd = -1;
+            }
+            handle = *(unsigned int *)get_req_data();
+            if (!handle) return 1;
+            if (!(file = get_file_obj( current->process, handle, FILE_READ_DATA  )))
+            {
+                return 0;
+            }
+            unix_fd = get_file_unix_fd( file );
+            release_object( file );
+
+            if (tcgetattr( unix_fd, &server->termios ))
+            {
+                file_set_error();
+                return 0;
+            }
+            term = server->termios;
+            term.c_lflag &= ~(ECHO | ECHONL | ICANON | IEXTEN);
+            term.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+            term.c_cflag &= ~(CSIZE | PARENB);
+            term.c_cflag |= CS8;
+            term.c_cc[VMIN] = 1;
+            term.c_cc[VTIME] = 0;
+            if (tcsetattr( unix_fd, TCSANOW, &term ) || (server->term_fd = dup( unix_fd )) == -1)
+            {
+                file_set_error();
+                return 0;
+            }
+            return 1;
+        }
+
     default:
         set_error( STATUS_INVALID_HANDLE );
         return 0;
     }
+}
+
+static void console_connection_dump( struct object *obj, int verbose )
+{
+    fputs( "console connection\n", stderr );
+}
+
+static struct fd *console_connection_get_fd( struct object *obj )
+{
+    struct console_connection *connection = (struct console_connection *)obj;
+    return (struct fd *)grab_object( connection->fd );
+}
+
+static struct object *console_connection_lookup_name( struct object *obj, struct unicode_str *name, unsigned int attr )
+{
+    static const WCHAR referenceW[] = {'R','e','f','e','r','e','n','c','e'};
+
+    if (name->len == sizeof(referenceW) && !memcmp( name->str, referenceW, name->len ))
+    {
+        if (!current->process->console)
+        {
+            set_error( STATUS_INVALID_HANDLE );
+            return NULL;
+        }
+        name->len = 0;
+        return grab_object( current->process->console );
+    }
+
+    return NULL;
+}
+
+static struct object *console_connection_open_file( struct object *obj, unsigned int access,
+                                                    unsigned int sharing, unsigned int options )
+{
+    return grab_object( obj );
+}
+
+static int console_connection_close_handle( struct object *obj, struct process *process, obj_handle_t handle )
+{
+    free_console( process );
+    return 1;
+}
+
+static void console_connection_destroy( struct object *obj )
+{
+    struct console_connection *connection = (struct console_connection *)obj;
+    if (connection->fd) release_object( connection->fd );
 }
 
 static struct object_type *console_device_get_type( struct object *obj )
@@ -2219,6 +2453,7 @@ static void console_device_dump( struct object *obj, int verbose )
 
 static struct object *console_device_lookup_name( struct object *obj, struct unicode_str *name, unsigned int attr )
 {
+    static const WCHAR connectionW[]    = {'C','o','n','n','e','c','t','i','o','n'};
     static const WCHAR consoleW[]       = {'C','o','n','s','o','l','e'};
     static const WCHAR current_inW[]    = {'C','u','r','r','e','n','t','I','n'};
     static const WCHAR current_outW[]   = {'C','u','r','r','e','n','t','O','u','t'};
@@ -2268,13 +2503,19 @@ static struct object *console_device_lookup_name( struct object *obj, struct uni
             return NULL;
         }
         name->len = 0;
-        return create_console_output( current->process->console, -1 );
+        return create_console_output( current->process->console );
     }
 
     if (name->len == sizeof(serverW) && !memcmp( name->str, serverW, name->len ))
     {
         name->len = 0;
         return create_console_server();
+    }
+
+    if (name->len == sizeof(connectionW) && !memcmp( name->str, connectionW, name->len ))
+    {
+        name->len = 0;
+        return create_console_connection( NULL );
     }
 
     return NULL;
@@ -2299,9 +2540,10 @@ static struct object *console_device_open_file( struct object *obj, unsigned int
     return is_output ? grab_object( current->process->console->active ) : grab_object( current->process->console );
 }
 
-struct object *create_console_device( struct object *root, const struct unicode_str *name )
+struct object *create_console_device( struct object *root, const struct unicode_str *name,
+                                      unsigned int attr, const struct security_descriptor *sd )
 {
-    return create_named_object( root, &console_device_ops, name, 0, NULL );
+    return create_named_object( root, &console_device_ops, name, attr, sd );
 }
 
 /* allocate a console for the renderer */
@@ -2309,18 +2551,7 @@ DECL_HANDLER(alloc_console)
 {
     struct process *process;
     struct console_input *console;
-    int fd;
     int attach = 0;
-
-    if (req->input_fd != -1)
-    {
-        if ((fd = thread_get_inflight_fd( current, req->input_fd )) == -1)
-        {
-            set_error( STATUS_INVALID_PARAMETER );
-            return;
-        }
-    }
-    else fd = -1;
 
     switch (req->pid)
     {
@@ -2328,33 +2559,21 @@ DECL_HANDLER(alloc_console)
         /* console to be attached to parent process */
         if (!(process = get_process_from_id( current->process->parent_id )))
         {
-            if (fd != -1) close( fd );
             set_error( STATUS_ACCESS_DENIED );
             return;
         }
         attach = 1;
         break;
-    case 0xffffffff:
-        /* console to be attached to current process */
-        process = current->process;
-        grab_object( process );
-        attach = 1;
-        break;
     default:
         /* console to be attached to req->pid */
-        if (!(process = get_process_from_id( req->pid )))
-        {
-            if (fd != -1) close( fd );
-            return;
-        }
+        if (!(process = get_process_from_id( req->pid ))) return;
     }
 
     if (attach && process->console)
     {
-        if (fd != -1) close( fd );
         set_error( STATUS_ACCESS_DENIED );
     }
-    else if ((console = (struct console_input*)create_console_input( fd )))
+    else if ((console = (struct console_input*)create_console_input()))
     {
         if ((reply->handle_in = alloc_handle( current->process, console, req->access,
                                               req->attributes )) && attach)
@@ -2371,35 +2590,6 @@ DECL_HANDLER(alloc_console)
 DECL_HANDLER(free_console)
 {
     free_console( current->process );
-}
-
-/* attach to a other process's console */
-DECL_HANDLER(attach_console)
-{
-    struct process *process;
-
-    if (current->process->console)
-    {
-        set_error( STATUS_ACCESS_DENIED );
-        return;
-    }
-
-    process = get_process_from_id( req->pid == ATTACH_PARENT_PROCESS
-                                   ? current->process->parent_id : req->pid );
-    if (!process) return;
-
-    if (process->console && process->console->active)
-    {
-        current->process->console = (struct console_input *)grab_object( process->console );
-        current->process->console->num_proc++;
-    }
-    else
-    {
-        set_error( STATUS_INVALID_HANDLE );
-    }
-
-    release_object( process );
-    return;
 }
 
 /* appends a string to console's history */
@@ -2427,31 +2617,11 @@ DECL_HANDLER(create_console_output)
 {
     struct console_input *console;
     struct object        *screen_buffer;
-    int                   fd;
 
-    if (req->fd != -1)
-    {
-        if ((fd = thread_get_inflight_fd( current, req->fd )) == -1)
-        {
-            set_error( STATUS_INVALID_HANDLE );
-            return;
-        }
-    }
-    else fd = -1;
     if (!(console = console_input_get( req->handle_in, FILE_WRITE_PROPERTIES )))
-    {
-        if (fd != -1) close( fd );
         return;
-    }
-    if (console_input_is_bare( console ) ^ (fd != -1))
-    {
-        if (fd != -1) close( fd );
-        release_object( console );
-        set_error( STATUS_INVALID_HANDLE );
-        return;
-    }
 
-    screen_buffer = create_console_output( console, fd );
+    screen_buffer = create_console_output( console );
     if (screen_buffer)
     {
         /* FIXME: should store sharing and test it when opening the CONOUT$ device

@@ -2899,7 +2899,7 @@ NTSTATUS virtual_handle_fault( void *addr, DWORD err, void *stack )
     char *page = ROUND_ADDR( addr, page_mask );
     BYTE vprot;
 
-    pthread_mutex_lock( &virtual_mutex );  /* no need for signal masking inside signal handler */
+    mutex_lock( &virtual_mutex );  /* no need for signal masking inside signal handler */
     vprot = get_page_vprot( page );
     if (!is_inside_signal_stack( stack ) && (vprot & VPROT_GUARD))
     {
@@ -2926,7 +2926,7 @@ NTSTATUS virtual_handle_fault( void *addr, DWORD err, void *stack )
                 ret = STATUS_SUCCESS;
         }
     }
-    pthread_mutex_unlock( &virtual_mutex );
+    mutex_unlock( &virtual_mutex );
     return ret;
 }
 
@@ -2969,13 +2969,13 @@ void *virtual_setup_exception( void *stack_ptr, size_t size, EXCEPTION_RECORD *r
     }
     else if (stack < (char *)NtCurrentTeb()->Tib.StackLimit)
     {
-        pthread_mutex_lock( &virtual_mutex );  /* no need for signal masking inside signal handler */
+        mutex_lock( &virtual_mutex );  /* no need for signal masking inside signal handler */
         if ((get_page_vprot( stack ) & VPROT_GUARD) && grow_thread_stack( ROUND_ADDR( stack, page_mask )))
         {
             rec->ExceptionCode = STATUS_STACK_OVERFLOW;
             rec->NumberParameters = 0;
         }
-        pthread_mutex_unlock( &virtual_mutex );
+        mutex_unlock( &virtual_mutex );
     }
 #if defined(VALGRIND_MAKE_MEM_UNDEFINED)
     VALGRIND_MAKE_MEM_UNDEFINED( stack, size );
@@ -3198,50 +3198,6 @@ BOOL virtual_check_buffer_for_write( void *ptr, SIZE_T size )
     }
     __ENDTRY
     return TRUE;
-}
-
-
-/*************************************************************
- *            IsBadStringPtrA
- *
- * IsBadStringPtrA replacement for ntdll, to catch exception in debug traces.
- */
-BOOL WINAPI IsBadStringPtrA( LPCSTR str, UINT_PTR max )
-{
-    if (!str) return TRUE;
-    __TRY
-    {
-        volatile const char *p = str;
-        while (p != str + max) if (!*p++) break;
-    }
-    __EXCEPT_SYSCALL
-    {
-        return TRUE;
-    }
-    __ENDTRY
-    return FALSE;
-}
-
-
-/*************************************************************
- *            IsBadStringPtrW
- *
- * IsBadStringPtrW replacement for ntdll, to catch exception in debug traces.
- */
-BOOL WINAPI IsBadStringPtrW( LPCWSTR str, UINT_PTR max )
-{
-    if (!str) return TRUE;
-    __TRY
-    {
-        volatile const WCHAR *p = str;
-        while (p != str + max) if (!*p++) break;
-    }
-    __EXCEPT_SYSCALL
-    {
-        return TRUE;
-    }
-    __ENDTRY
-    return FALSE;
 }
 
 

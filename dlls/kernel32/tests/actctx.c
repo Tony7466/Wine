@@ -29,22 +29,11 @@
 #include "oaidl.h"
 #include "initguid.h"
 
-static BOOL   (WINAPI *pIsDebuggerPresent)(void);
 static BOOL   (WINAPI *pQueryActCtxSettingsW)(DWORD,HANDLE,LPCWSTR,LPCWSTR,LPWSTR,SIZE_T,SIZE_T*);
 
 static NTSTATUS(NTAPI *pRtlFindActivationContextSectionString)(DWORD,const GUID *,ULONG,PUNICODE_STRING,PACTCTX_SECTION_KEYED_DATA);
 static BOOLEAN (NTAPI *pRtlCreateUnicodeStringFromAsciiz)(PUNICODE_STRING, PCSZ);
 static VOID    (NTAPI *pRtlFreeUnicodeString)(PUNICODE_STRING);
-
-static const char* strw(LPCWSTR x)
-{
-    static char buffer[1024];
-    char*       p = buffer;
-
-    if (!x) return "(nil)";
-    else while ((*p++ = *x++));
-    return buffer;
-}
 
 #ifdef __i386__
 #define ARCH "x86"
@@ -622,7 +611,7 @@ static const detailed_info_t detailed_info0 = {
 static const detailed_info_t detailed_info1 = {
     1, 1, 1, ACTIVATION_CONTEXT_PATH_TYPE_WIN32_FILE, manifest_path,
     ACTIVATION_CONTEXT_PATH_TYPE_NONE, ACTIVATION_CONTEXT_PATH_TYPE_WIN32_FILE,
-    work_dir,
+    app_dir,
 };
 
 static const detailed_info_t detailed_info1_child = {
@@ -635,7 +624,7 @@ static const detailed_info_t detailed_info1_child = {
 static const detailed_info_t detailed_info2 = {
     1, 2, 3, ACTIVATION_CONTEXT_PATH_TYPE_WIN32_FILE, manifest_path,
     ACTIVATION_CONTEXT_PATH_TYPE_NONE, ACTIVATION_CONTEXT_PATH_TYPE_WIN32_FILE,
-    work_dir,
+    app_dir,
 };
 
 static void test_detailed_info(HANDLE handle, const detailed_info_t *exinfo, int line)
@@ -706,7 +695,8 @@ static void test_detailed_info(HANDLE handle, const detailed_info_t *exinfo, int
         ok_(__FILE__, line)(detailed_info->lpAppDirPath != NULL, "detailed_info->lpAppDirPath == NULL\n");
         if(detailed_info->lpAppDirPath)
             ok_(__FILE__, line)(!lstrcmpiW(exinfo->app_dir, detailed_info->lpAppDirPath),
-               "unexpected detailed_info->lpAppDirPath\n%s\n",strw(detailed_info->lpAppDirPath));
+                                "unexpected detailed_info->lpAppDirPath %s / %s\n",
+                                wine_dbgstr_w(detailed_info->lpAppDirPath), wine_dbgstr_w( exinfo->app_dir ));
     }else {
         ok_(__FILE__, line)(detailed_info->lpAppDirPath == NULL, "detailed_info->lpAppDirPath != NULL\n");
     }
@@ -864,7 +854,7 @@ static void test_info_in_assembly(HANDLE handle, DWORD id, const info_in_assembl
     if(info->lpAssemblyEncodedAssemblyIdentity && exinfo->encoded_assembly_id) {
         ok_(__FILE__, line)(!lstrcmpW(info->lpAssemblyEncodedAssemblyIdentity, exinfo->encoded_assembly_id),
            "unexpected info->lpAssemblyEncodedAssemblyIdentity %s / %s\n",
-           strw(info->lpAssemblyEncodedAssemblyIdentity), wine_dbgstr_w(exinfo->encoded_assembly_id));
+           wine_dbgstr_w(info->lpAssemblyEncodedAssemblyIdentity), wine_dbgstr_w(exinfo->encoded_assembly_id));
     }
     if(exinfo->manifest_path) {
         ok_(__FILE__, line)(info->lpAssemblyManifestPath != NULL, "info->lpAssemblyManifestPath == NULL\n");
@@ -882,7 +872,7 @@ static void test_info_in_assembly(HANDLE handle, DWORD id, const info_in_assembl
         ok_(__FILE__, line)(info->lpAssemblyDirectoryName != NULL, "info->lpAssemblyDirectoryName == NULL\n");
     else
         ok_(__FILE__, line)(info->lpAssemblyDirectoryName == NULL, "info->lpAssemblyDirectoryName = %s\n",
-           strw(info->lpAssemblyDirectoryName));
+           wine_dbgstr_w(info->lpAssemblyDirectoryName));
     HeapFree(GetProcessHeap(), 0, info);
 }
 
@@ -2025,7 +2015,7 @@ static void test_actctx(void)
         test_detailed_info(handle, &detailed_info1, __LINE__);
         test_info_in_assembly(handle, 1, &manifest1_info, __LINE__);
 
-        if (pIsDebuggerPresent && !pIsDebuggerPresent())
+        if (!IsDebuggerPresent())
         {
             /* CloseHandle will generate an exception if a debugger is present */
             b = CloseHandle(handle);
@@ -2723,7 +2713,6 @@ static BOOL init_funcs(void)
     HMODULE hLibrary = GetModuleHandleA("kernel32.dll");
 
 #define X(f) if (!(p##f = (void*)GetProcAddress(hLibrary, #f))) return FALSE;
-    X(IsDebuggerPresent);
     pQueryActCtxSettingsW = (void *)GetProcAddress( hLibrary, "QueryActCtxSettingsW" );
 
     hLibrary = GetModuleHandleA("ntdll.dll");

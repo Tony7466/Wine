@@ -107,7 +107,7 @@ extern NTSTATUS CDECL get_initial_environment( WCHAR **wargv[], WCHAR *env, SIZE
 extern NTSTATUS CDECL get_startup_info( startup_info_t *info, SIZE_T *total_size, SIZE_T *info_size ) DECLSPEC_HIDDEN;
 extern NTSTATUS CDECL get_dynamic_environment( WCHAR *env, SIZE_T *size ) DECLSPEC_HIDDEN;
 extern void CDECL get_initial_directory( UNICODE_STRING *dir ) DECLSPEC_HIDDEN;
-extern void CDECL get_initial_console( HANDLE *handle, HANDLE *std_in, HANDLE *std_out, HANDLE *std_err ) DECLSPEC_HIDDEN;
+extern void CDECL get_initial_console( RTL_USER_PROCESS_PARAMETERS *params ) DECLSPEC_HIDDEN;
 extern USHORT * CDECL get_unix_codepage_data(void) DECLSPEC_HIDDEN;
 extern void CDECL get_locales( WCHAR *sys, WCHAR *user ) DECLSPEC_HIDDEN;
 extern void CDECL virtual_release_address_space(void) DECLSPEC_HIDDEN;
@@ -132,6 +132,7 @@ extern char **main_envp DECLSPEC_HIDDEN;
 extern WCHAR **main_wargv DECLSPEC_HIDDEN;
 extern unsigned int server_cpus DECLSPEC_HIDDEN;
 extern BOOL is_wow64 DECLSPEC_HIDDEN;
+extern BOOL process_exiting DECLSPEC_HIDDEN;
 extern HANDLE keyed_event DECLSPEC_HIDDEN;
 extern timeout_t server_start_time DECLSPEC_HIDDEN;
 extern sigset_t server_block_set DECLSPEC_HIDDEN;
@@ -276,6 +277,16 @@ static inline IMAGE_NT_HEADERS *get_exe_nt_header(void)
 static inline void *get_signal_stack(void)
 {
     return (char *)NtCurrentTeb() + teb_size - teb_offset;
+}
+
+static inline void mutex_lock( pthread_mutex_t *mutex )
+{
+    if (!process_exiting) pthread_mutex_lock( mutex );
+}
+
+static inline void mutex_unlock( pthread_mutex_t *mutex )
+{
+    if (!process_exiting) pthread_mutex_unlock( mutex );
 }
 
 #ifndef _WIN64

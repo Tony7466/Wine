@@ -32,6 +32,7 @@
 #include <fcntl.h>
 #include <stdarg.h>
 #include <sys/types.h>
+#include <sys/ioctl.h>
 #ifdef HAVE_SYS_STAT_H
 # include <sys/stat.h>
 #endif
@@ -55,6 +56,7 @@
 #include "winternl.h"
 #include "winbase.h"
 #include "winnls.h"
+#include "wine/condrv.h"
 #include "wine/debug.h"
 #include "unix_private.h"
 
@@ -736,7 +738,7 @@ char **build_envp( const WCHAR *envW )
  *
  * Change the process name in the ps output.
  */
-static void set_process_name( int argc, char *argv[] )
+static int set_process_name( int argc, char *argv[] )
 {
     BOOL shift_strings;
     char *p, *name;
@@ -790,6 +792,7 @@ static void set_process_name( int argc, char *argv[] )
 #endif
     prctl( PR_SET_NAME, name );
 #endif  /* HAVE_PRCTL */
+    return argc - 1;
 }
 
 
@@ -954,14 +957,14 @@ void init_environment( int argc, char *argv[], char *envp[] )
 
     init_unix_codepage();
     init_locale();
-    set_process_name( argc, argv );
 
     if ((case_table = read_nls_file( "l_intl" )))
     {
         uctable = case_table + 2;
         lctable = case_table + case_table[1] + 2;
     }
-    main_argc = argc;
+
+    main_argc = set_process_name( argc, argv );
     main_argv = argv;
     main_wargv = build_wargv( argv );
     main_envp = envp;
@@ -1150,13 +1153,42 @@ NTSTATUS CDECL get_dynamic_environment( WCHAR *env, SIZE_T *size )
  *
  * Return the initial console handles.
  */
-void CDECL get_initial_console( HANDLE *handle, HANDLE *std_in, HANDLE *std_out, HANDLE *std_err )
+void CDECL get_initial_console( RTL_USER_PROCESS_PARAMETERS *params )
 {
-    *handle = *std_in = *std_out = *std_err = 0;
-    if (isatty(0) || isatty(1) || isatty(2)) *handle = (HANDLE)2; /* see kernel32/kernel_private.h */
-    if (!isatty(0)) wine_server_fd_to_handle( 0, GENERIC_READ|SYNCHRONIZE,  OBJ_INHERIT, std_in );
-    if (!isatty(1)) wine_server_fd_to_handle( 1, GENERIC_WRITE|SYNCHRONIZE, OBJ_INHERIT, std_out );
-    if (!isatty(2)) wine_server_fd_to_handle( 2, GENERIC_WRITE|SYNCHRONIZE, OBJ_INHERIT, std_err );
+    int output_fd = -1;
+
+    wine_server_fd_to_handle( 0, GENERIC_READ|SYNCHRONIZE,  OBJ_INHERIT, &params->hStdInput );
+    wine_server_fd_to_handle( 1, GENERIC_WRITE|SYNCHRONIZE, OBJ_INHERIT, &params->hStdOutput );
+    wine_server_fd_to_handle( 2, GENERIC_WRITE|SYNCHRONIZE, OBJ_INHERIT, &params->hStdError );
+
+    /* mark tty handles for kernelbase, see init_console */
+    if (params->hStdInput && isatty(0))
+    {
+        params->ConsoleHandle = CONSOLE_HANDLE_SHELL;
+        params->hStdInput = (HANDLE)((UINT_PTR)params->hStdInput | 1);
+    }
+    if (params->hStdError && isatty(2))
+    {
+        params->ConsoleHandle = CONSOLE_HANDLE_SHELL;
+        params->hStdError = (HANDLE)((UINT_PTR)params->hStdError | 1);
+        output_fd = 2;
+    }
+    if (params->hStdOutput && isatty(1))
+    {
+        params->ConsoleHandle = CONSOLE_HANDLE_SHELL;
+        params->hStdOutput = (HANDLE)((UINT_PTR)params->hStdOutput | 1);
+        output_fd = 1;
+    }
+
+    if (output_fd != -1)
+    {
+        struct winsize size;
+        if (!ioctl( output_fd, TIOCGWINSZ, &size ))
+        {
+            params->dwXCountChars = size.ws_col;
+            params->dwYCountChars = size.ws_row;
+        }
+    }
 }
 
 

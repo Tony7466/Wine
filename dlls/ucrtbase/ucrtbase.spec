@@ -48,7 +48,7 @@
 @ cdecl __AdjustPointer(ptr ptr)
 @ stub __BuildCatchObject
 @ stub __BuildCatchObjectHelper
-@ stdcall -arch=x86_64 __C_specific_handler(ptr long ptr ptr) ntdll.__C_specific_handler
+@ stdcall -arch=x86_64,arm64 __C_specific_handler(ptr long ptr ptr) ntdll.__C_specific_handler
 @ cdecl -arch=i386,x86_64,arm,arm64 __CxxDetectRethrow(ptr)
 @ cdecl -arch=i386,x86_64,arm,arm64 __CxxExceptionFilter(ptr ptr long ptr)
 @ cdecl -arch=i386,x86_64,arm,arm64 -norelay __CxxFrameHandler(ptr ptr ptr ptr)
@@ -555,7 +555,7 @@
 @ cdecl -arch=i386 -norelay _libm_sse2_sqrt_precise() MSVCRT___libm_sse2_sqrt_precise
 @ cdecl -arch=i386 -norelay _libm_sse2_tan_precise() MSVCRT___libm_sse2_tan
 @ cdecl _loaddll(str)
-@ cdecl -arch=x86_64 _local_unwind(ptr ptr)
+@ cdecl -arch=x86_64,arm64 _local_unwind(ptr ptr)
 @ cdecl -arch=i386 _local_unwind2(ptr long)
 @ cdecl -arch=i386 _local_unwind4(ptr ptr long)
 @ cdecl _localtime32(ptr) MSVCRT__localtime32
@@ -584,7 +584,7 @@
 @ cdecl _mbbtombc(long)
 @ stub _mbbtombc_l
 @ cdecl _mbbtype(long long)
-@ stub _mbbtype_l
+@ cdecl _mbbtype_l(long long ptr)
 @ stub _mbcasemap
 @ cdecl _mbccpy(ptr ptr)
 @ cdecl _mbccpy_l(ptr ptr ptr)
@@ -614,7 +614,7 @@
 @ cdecl _mbschr(str long)
 @ stub _mbschr_l
 @ cdecl _mbscmp(str str)
-@ stub _mbscmp_l
+@ cdecl _mbscmp_l(str str ptr)
 @ cdecl _mbscoll(str str)
 @ cdecl _mbscoll_l(str str ptr)
 @ cdecl _mbscpy_s(ptr long str)
@@ -673,7 +673,7 @@
 @ stub _mbsncpy_s
 @ stub _mbsncpy_s_l
 @ cdecl _mbsnextc(str)
-@ stub _mbsnextc_l
+@ cdecl _mbsnextc_l(str ptr)
 @ cdecl _mbsnicmp(str str long)
 @ stub _mbsnicmp_l
 @ stub _mbsnicoll(str str long)
@@ -1155,7 +1155,7 @@
 @ cdecl _o__mbbtombc(long) _mbbtombc
 @ stub _o__mbbtombc_l
 @ cdecl _o__mbbtype(long long) _mbbtype
-@ stub _o__mbbtype_l
+@ cdecl _o__mbbtype_l(long long ptr) _mbbtype_l
 @ cdecl _o__mbccpy(ptr ptr) _mbccpy
 @ cdecl _o__mbccpy_l(ptr ptr ptr) _mbccpy_l
 @ cdecl _o__mbccpy_s(ptr long ptr ptr) _mbccpy_s
@@ -1184,7 +1184,7 @@
 @ cdecl _o__mbschr(str long) _mbschr
 @ stub _o__mbschr_l
 @ cdecl _o__mbscmp(str str) _mbscmp
-@ stub _o__mbscmp_l
+@ cdecl _o__mbscmp_l(str str ptr) _mbscmp_l
 @ cdecl _o__mbscoll(str str) _mbscoll
 @ cdecl _o__mbscoll_l(str str ptr) _mbscoll_l
 @ cdecl _o__mbscpy_s(ptr long str) _mbscpy_s
@@ -1242,7 +1242,7 @@
 @ stub _o__mbsncpy_s
 @ stub _o__mbsncpy_s_l
 @ cdecl _o__mbsnextc(str) _mbsnextc
-@ stub _o__mbsnextc_l
+@ cdecl _o__mbsnextc_l(str ptr) _mbsnextc_l
 @ cdecl _o__mbsnicmp(str str long) _mbsnicmp
 @ stub _o__mbsnicmp_l
 @ stub _o__mbsnicoll
@@ -2344,7 +2344,7 @@
 @ cdecl ilogb(double) MSVCR120_ilogb
 @ cdecl ilogbf(float) MSVCR120_ilogbf
 @ cdecl ilogbl(double) MSVCR120_ilogbl
-@ stub imaxabs
+@ cdecl -ret64 imaxabs(int64) MSVCRT_imaxabs
 @ stub imaxdiv
 @ cdecl is_wctype(long long) MSVCRT_iswctype
 @ cdecl isalnum(long) MSVCRT_isalnum

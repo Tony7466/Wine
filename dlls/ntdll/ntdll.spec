@@ -208,7 +208,7 @@
 # @ stub NtEnumerateSystemEnvironmentValuesEx
 @ stdcall -syscall NtEnumerateValueKey(long long long ptr long ptr)
 @ stub NtExtendSection
-# @ stub NtFilterToken
+@ stdcall -syscall NtFilterToken(long long ptr ptr ptr ptr)
 @ stdcall -syscall NtFindAtom(ptr long ptr)
 @ stdcall -syscall NtFlushBuffersFile(long ptr)
 @ stdcall -syscall NtFlushInstructionCache(long ptr long)
@@ -1437,7 +1437,7 @@
 @ cdecl -private -arch=i386 _CIpow()
 @ cdecl -private -arch=i386 _CIsin()
 @ cdecl -private -arch=i386 _CIsqrt()
-@ stdcall -arch=x86_64 __C_specific_handler(ptr long ptr ptr)
+@ stdcall -arch=x86_64,arm64 __C_specific_handler(ptr long ptr ptr)
 @ cdecl -arch=arm,x86_64 -norelay __chkstk()
 @ cdecl __isascii(long)
 @ cdecl __iscsym(long)
@@ -1463,7 +1463,7 @@
 @ cdecl _itoa(long ptr long)
 @ cdecl _itow(long ptr long)
 @ cdecl _lfind(ptr ptr ptr long ptr)
-@ stdcall -arch=x86_64 _local_unwind(ptr ptr)
+@ stdcall -arch=x86_64,arm64 _local_unwind(ptr ptr)
 @ cdecl _ltoa(long ptr long)
 @ cdecl _ltow(long ptr long)
 @ cdecl _memccpy(ptr ptr long long)
@@ -1597,7 +1597,10 @@
 @ cdecl -syscall wine_server_release_fd(long long)
 @ cdecl -syscall wine_server_send_fd(long)
 @ cdecl -syscall __wine_make_process_system()
+
+# Unix interface
 @ cdecl __wine_set_unix_funcs(long ptr)
+@ cdecl __wine_init_unix_lib(long long ptr ptr)
 @ extern __wine_syscall_dispatcher
 @ extern -arch=i386 __wine_ldt_copy
 

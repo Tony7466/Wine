@@ -19,9 +19,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-#include "wine/port.h"
-
 #include <assert.h>
 #include <stdarg.h>
 
@@ -39,7 +36,6 @@
 #include "dde.h"
 #include "imm.h"
 #include "ddk/imm.h"
-#include "wine/unicode.h"
 #include "wine/server.h"
 #include "user_private.h"
 #include "win.h"
@@ -284,11 +280,9 @@ static const INPUT_MESSAGE_SOURCE msg_source_unavailable = { IMDT_UNAVAILABLE, I
 
 
 /* Message class descriptor */
-static const WCHAR messageW[] = {'M','e','s','s','a','g','e',0};
-
 const struct builtin_class_descr MESSAGE_builtin_class =
 {
-    messageW,             /* name */
+    L"Message",           /* name */
     0,                    /* style */
     WINPROC_MESSAGE,      /* proc */
     0,                    /* extra */
@@ -450,7 +444,7 @@ static inline void push_data( struct packed_message *data, const void *ptr, size
 /* add a string to a packed message */
 static inline void push_string( struct packed_message *data, LPCWSTR str )
 {
-    push_data( data, str, (strlenW(str) + 1) * sizeof(WCHAR) );
+    push_data( data, str, (lstrlenW(str) + 1) * sizeof(WCHAR) );
 }
 
 /* make sure that the buffer contains a valid null-terminated Unicode string */
@@ -1129,8 +1123,8 @@ static BOOL unpack_message( HWND hwnd, UINT message, WPARAM *wparam, LPARAM *lpa
         {
             if (!check_string( str, size )) return FALSE;
             cs.lpszName = str;
-            size -= (strlenW(str) + 1) * sizeof(WCHAR);
-            str += strlenW(str) + 1;
+            size -= (lstrlenW(str) + 1) * sizeof(WCHAR);
+            str += lstrlenW(str) + 1;
         }
         if (ps->cs.lpszClass >> 16)
         {
@@ -1415,8 +1409,8 @@ static BOOL unpack_message( HWND hwnd, UINT message, WPARAM *wparam, LPARAM *lpa
         {
             if (!check_string( str, size )) return FALSE;
             mcs.szClass = str;
-            size -= (strlenW(str) + 1) * sizeof(WCHAR);
-            str += strlenW(str) + 1;
+            size -= (lstrlenW(str) + 1) * sizeof(WCHAR);
+            str += lstrlenW(str) + 1;
         }
         if (ps->mcs.szTitle >> 16)
         {
@@ -1646,7 +1640,7 @@ static void pack_reply( HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam,
         break;
     }
     case WM_ASKCBFORMATNAME:
-        push_data( data, (WCHAR *)lparam, (strlenW((WCHAR *)lparam) + 1) * sizeof(WCHAR) );
+        push_data( data, (WCHAR *)lparam, (lstrlenW((WCHAR *)lparam) + 1) * sizeof(WCHAR) );
         break;
     }
 }

@@ -173,7 +173,6 @@ DECL_HANDLER(get_file_info);
 DECL_HANDLER(get_volume_info);
 DECL_HANDLER(lock_file);
 DECL_HANDLER(unlock_file);
-DECL_HANDLER(create_socket);
 DECL_HANDLER(accept_socket);
 DECL_HANDLER(accept_into_socket);
 DECL_HANDLER(set_socket_event);
@@ -183,7 +182,6 @@ DECL_HANDLER(enable_socket_event);
 DECL_HANDLER(set_socket_deferred);
 DECL_HANDLER(alloc_console);
 DECL_HANDLER(free_console);
-DECL_HANDLER(attach_console);
 DECL_HANDLER(get_console_wait_event);
 DECL_HANDLER(append_console_input_history);
 DECL_HANDLER(get_console_input_history);
@@ -342,6 +340,7 @@ DECL_HANDLER(adjust_token_privileges);
 DECL_HANDLER(get_token_privileges);
 DECL_HANDLER(check_token_privileges);
 DECL_HANDLER(duplicate_token);
+DECL_HANDLER(filter_token);
 DECL_HANDLER(access_check);
 DECL_HANDLER(get_token_sid);
 DECL_HANDLER(get_token_groups);
@@ -461,7 +460,6 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_get_volume_info,
     (req_handler)req_lock_file,
     (req_handler)req_unlock_file,
-    (req_handler)req_create_socket,
     (req_handler)req_accept_socket,
     (req_handler)req_accept_into_socket,
     (req_handler)req_set_socket_event,
@@ -471,7 +469,6 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_set_socket_deferred,
     (req_handler)req_alloc_console,
     (req_handler)req_free_console,
-    (req_handler)req_attach_console,
     (req_handler)req_get_console_wait_event,
     (req_handler)req_append_console_input_history,
     (req_handler)req_get_console_input_history,
@@ -630,6 +627,7 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_get_token_privileges,
     (req_handler)req_check_token_privileges,
     (req_handler)req_duplicate_token,
+    (req_handler)req_filter_token,
     (req_handler)req_access_check,
     (req_handler)req_get_token_sid,
     (req_handler)req_get_token_groups,
@@ -721,15 +719,17 @@ C_ASSERT( sizeof(unsigned char) == 1 );
 C_ASSERT( sizeof(unsigned int) == 4 );
 C_ASSERT( sizeof(unsigned short) == 2 );
 C_ASSERT( sizeof(user_handle_t) == 4 );
-C_ASSERT( FIELD_OFFSET(struct new_process_request, parent_process) == 12 );
-C_ASSERT( FIELD_OFFSET(struct new_process_request, inherit_all) == 16 );
-C_ASSERT( FIELD_OFFSET(struct new_process_request, create_flags) == 20 );
-C_ASSERT( FIELD_OFFSET(struct new_process_request, socket_fd) == 24 );
-C_ASSERT( FIELD_OFFSET(struct new_process_request, exe_file) == 28 );
-C_ASSERT( FIELD_OFFSET(struct new_process_request, access) == 32 );
-C_ASSERT( FIELD_OFFSET(struct new_process_request, cpu) == 36 );
-C_ASSERT( FIELD_OFFSET(struct new_process_request, info_size) == 40 );
-C_ASSERT( sizeof(struct new_process_request) == 48 );
+C_ASSERT( FIELD_OFFSET(struct new_process_request, token) == 12 );
+C_ASSERT( FIELD_OFFSET(struct new_process_request, parent_process) == 16 );
+C_ASSERT( FIELD_OFFSET(struct new_process_request, inherit_all) == 20 );
+C_ASSERT( FIELD_OFFSET(struct new_process_request, create_flags) == 24 );
+C_ASSERT( FIELD_OFFSET(struct new_process_request, socket_fd) == 28 );
+C_ASSERT( FIELD_OFFSET(struct new_process_request, exe_file) == 32 );
+C_ASSERT( FIELD_OFFSET(struct new_process_request, access) == 36 );
+C_ASSERT( FIELD_OFFSET(struct new_process_request, cpu) == 40 );
+C_ASSERT( FIELD_OFFSET(struct new_process_request, info_size) == 44 );
+C_ASSERT( FIELD_OFFSET(struct new_process_request, handles_size) == 48 );
+C_ASSERT( sizeof(struct new_process_request) == 56 );
 C_ASSERT( FIELD_OFFSET(struct new_process_reply, info) == 8 );
 C_ASSERT( FIELD_OFFSET(struct new_process_reply, pid) == 12 );
 C_ASSERT( FIELD_OFFSET(struct new_process_reply, handle) == 16 );
@@ -1054,15 +1054,6 @@ C_ASSERT( FIELD_OFFSET(struct unlock_file_request, handle) == 12 );
 C_ASSERT( FIELD_OFFSET(struct unlock_file_request, offset) == 16 );
 C_ASSERT( FIELD_OFFSET(struct unlock_file_request, count) == 24 );
 C_ASSERT( sizeof(struct unlock_file_request) == 32 );
-C_ASSERT( FIELD_OFFSET(struct create_socket_request, access) == 12 );
-C_ASSERT( FIELD_OFFSET(struct create_socket_request, attributes) == 16 );
-C_ASSERT( FIELD_OFFSET(struct create_socket_request, family) == 20 );
-C_ASSERT( FIELD_OFFSET(struct create_socket_request, type) == 24 );
-C_ASSERT( FIELD_OFFSET(struct create_socket_request, protocol) == 28 );
-C_ASSERT( FIELD_OFFSET(struct create_socket_request, flags) == 32 );
-C_ASSERT( sizeof(struct create_socket_request) == 40 );
-C_ASSERT( FIELD_OFFSET(struct create_socket_reply, handle) == 8 );
-C_ASSERT( sizeof(struct create_socket_reply) == 16 );
 C_ASSERT( FIELD_OFFSET(struct accept_socket_request, lhandle) == 12 );
 C_ASSERT( FIELD_OFFSET(struct accept_socket_request, access) == 16 );
 C_ASSERT( FIELD_OFFSET(struct accept_socket_request, attributes) == 20 );
@@ -1103,13 +1094,10 @@ C_ASSERT( sizeof(struct set_socket_deferred_request) == 24 );
 C_ASSERT( FIELD_OFFSET(struct alloc_console_request, access) == 12 );
 C_ASSERT( FIELD_OFFSET(struct alloc_console_request, attributes) == 16 );
 C_ASSERT( FIELD_OFFSET(struct alloc_console_request, pid) == 20 );
-C_ASSERT( FIELD_OFFSET(struct alloc_console_request, input_fd) == 24 );
-C_ASSERT( sizeof(struct alloc_console_request) == 32 );
+C_ASSERT( sizeof(struct alloc_console_request) == 24 );
 C_ASSERT( FIELD_OFFSET(struct alloc_console_reply, handle_in) == 8 );
 C_ASSERT( sizeof(struct alloc_console_reply) == 16 );
 C_ASSERT( sizeof(struct free_console_request) == 16 );
-C_ASSERT( FIELD_OFFSET(struct attach_console_request, pid) == 12 );
-C_ASSERT( sizeof(struct attach_console_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_console_wait_event_request, handle) == 12 );
 C_ASSERT( sizeof(struct get_console_wait_event_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_console_wait_event_reply, event) == 8 );
@@ -1125,7 +1113,6 @@ C_ASSERT( FIELD_OFFSET(struct create_console_output_request, handle_in) == 12 );
 C_ASSERT( FIELD_OFFSET(struct create_console_output_request, access) == 16 );
 C_ASSERT( FIELD_OFFSET(struct create_console_output_request, attributes) == 20 );
 C_ASSERT( FIELD_OFFSET(struct create_console_output_request, share) == 24 );
-C_ASSERT( FIELD_OFFSET(struct create_console_output_request, fd) == 28 );
 C_ASSERT( sizeof(struct create_console_output_request) == 32 );
 C_ASSERT( FIELD_OFFSET(struct create_console_output_reply, handle_out) == 8 );
 C_ASSERT( sizeof(struct create_console_output_reply) == 16 );
@@ -2007,6 +1994,12 @@ C_ASSERT( FIELD_OFFSET(struct duplicate_token_request, impersonation_level) == 2
 C_ASSERT( sizeof(struct duplicate_token_request) == 32 );
 C_ASSERT( FIELD_OFFSET(struct duplicate_token_reply, new_handle) == 8 );
 C_ASSERT( sizeof(struct duplicate_token_reply) == 16 );
+C_ASSERT( FIELD_OFFSET(struct filter_token_request, handle) == 12 );
+C_ASSERT( FIELD_OFFSET(struct filter_token_request, flags) == 16 );
+C_ASSERT( FIELD_OFFSET(struct filter_token_request, privileges_size) == 20 );
+C_ASSERT( sizeof(struct filter_token_request) == 24 );
+C_ASSERT( FIELD_OFFSET(struct filter_token_reply, new_handle) == 8 );
+C_ASSERT( sizeof(struct filter_token_reply) == 16 );
 C_ASSERT( FIELD_OFFSET(struct access_check_request, handle) == 12 );
 C_ASSERT( FIELD_OFFSET(struct access_check_request, desired_access) == 16 );
 C_ASSERT( FIELD_OFFSET(struct access_check_request, mapping_read) == 20 );
