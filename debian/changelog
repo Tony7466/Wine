@@ -1,3 +1,16 @@
+wine-development (5.18-1) UNRELEASED; urgency=medium
+
+  * New upstream release 5.18, released Sep 25, 2020.
+    - Vulkan shader compilation using the new vkd3d-shader library.
+    - USER32 library converted to PE.
+    - Console no longer requires the curses library.
+    - Support for display modes with various orientations.
+    - A number of syntax fixes in the WIDL compiler.
+    - Non-recursive makefiles.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 23 May 2021 20:22:09 +0000
+
 wine-development (5.17-1) unstable; urgency=medium
 
   * New upstream release 5.17, released Sep 11, 2020.
