@@ -1,3 +1,13 @@
+wine-development (5.21+repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 5.21, released Nov 6, 2020.
+    - GDI32 library converted to PE.
+    - More fixes for windowless RichEdit.
+    - A number of timezone updates.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 29 May 2021 22:08:13 +0000
+
 wine-development (5.20+repack-1) unstable; urgency=medium
 
   * New upstream release 5.20, released Oct 23, 2020.
