@@ -178,12 +178,7 @@ DECL_HANDLER(get_socket_event);
 DECL_HANDLER(get_socket_info);
 DECL_HANDLER(enable_socket_event);
 DECL_HANDLER(set_socket_deferred);
-DECL_HANDLER(alloc_console);
-DECL_HANDLER(free_console);
 DECL_HANDLER(get_console_wait_event);
-DECL_HANDLER(append_console_input_history);
-DECL_HANDLER(get_console_input_history);
-DECL_HANDLER(create_console_output);
 DECL_HANDLER(get_next_console_request);
 DECL_HANDLER(read_directory_changes);
 DECL_HANDLER(read_change);
@@ -385,6 +380,7 @@ DECL_HANDLER(set_window_layered_info);
 DECL_HANDLER(alloc_user_handle);
 DECL_HANDLER(free_user_handle);
 DECL_HANDLER(set_cursor);
+DECL_HANDLER(get_cursor_history);
 DECL_HANDLER(get_rawinput_buffer);
 DECL_HANDLER(update_rawinput_devices);
 DECL_HANDLER(get_rawinput_devices);
@@ -463,12 +459,7 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_get_socket_info,
     (req_handler)req_enable_socket_event,
     (req_handler)req_set_socket_deferred,
-    (req_handler)req_alloc_console,
-    (req_handler)req_free_console,
     (req_handler)req_get_console_wait_event,
-    (req_handler)req_append_console_input_history,
-    (req_handler)req_get_console_input_history,
-    (req_handler)req_create_console_output,
     (req_handler)req_get_next_console_request,
     (req_handler)req_read_directory_changes,
     (req_handler)req_read_change,
@@ -670,6 +661,7 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_alloc_user_handle,
     (req_handler)req_free_user_handle,
     (req_handler)req_set_cursor,
+    (req_handler)req_get_cursor_history,
     (req_handler)req_get_rawinput_buffer,
     (req_handler)req_update_rawinput_devices,
     (req_handler)req_get_rawinput_devices,
@@ -1078,31 +1070,10 @@ C_ASSERT( sizeof(struct enable_socket_event_request) == 32 );
 C_ASSERT( FIELD_OFFSET(struct set_socket_deferred_request, handle) == 12 );
 C_ASSERT( FIELD_OFFSET(struct set_socket_deferred_request, deferred) == 16 );
 C_ASSERT( sizeof(struct set_socket_deferred_request) == 24 );
-C_ASSERT( FIELD_OFFSET(struct alloc_console_request, access) == 12 );
-C_ASSERT( FIELD_OFFSET(struct alloc_console_request, attributes) == 16 );
-C_ASSERT( FIELD_OFFSET(struct alloc_console_request, pid) == 20 );
-C_ASSERT( sizeof(struct alloc_console_request) == 24 );
-C_ASSERT( FIELD_OFFSET(struct alloc_console_reply, handle_in) == 8 );
-C_ASSERT( sizeof(struct alloc_console_reply) == 16 );
-C_ASSERT( sizeof(struct free_console_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_console_wait_event_request, handle) == 12 );
 C_ASSERT( sizeof(struct get_console_wait_event_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_console_wait_event_reply, event) == 8 );
 C_ASSERT( sizeof(struct get_console_wait_event_reply) == 16 );
-C_ASSERT( FIELD_OFFSET(struct append_console_input_history_request, handle) == 12 );
-C_ASSERT( sizeof(struct append_console_input_history_request) == 16 );
-C_ASSERT( FIELD_OFFSET(struct get_console_input_history_request, handle) == 12 );
-C_ASSERT( FIELD_OFFSET(struct get_console_input_history_request, index) == 16 );
-C_ASSERT( sizeof(struct get_console_input_history_request) == 24 );
-C_ASSERT( FIELD_OFFSET(struct get_console_input_history_reply, total) == 8 );
-C_ASSERT( sizeof(struct get_console_input_history_reply) == 16 );
-C_ASSERT( FIELD_OFFSET(struct create_console_output_request, handle_in) == 12 );
-C_ASSERT( FIELD_OFFSET(struct create_console_output_request, access) == 16 );
-C_ASSERT( FIELD_OFFSET(struct create_console_output_request, attributes) == 20 );
-C_ASSERT( FIELD_OFFSET(struct create_console_output_request, share) == 24 );
-C_ASSERT( sizeof(struct create_console_output_request) == 32 );
-C_ASSERT( FIELD_OFFSET(struct create_console_output_reply, handle_out) == 8 );
-C_ASSERT( sizeof(struct create_console_output_reply) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_next_console_request_request, handle) == 12 );
 C_ASSERT( FIELD_OFFSET(struct get_next_console_request_request, signal) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_next_console_request_request, read) == 20 );
@@ -2222,6 +2193,8 @@ C_ASSERT( FIELD_OFFSET(struct set_cursor_reply, new_y) == 28 );
 C_ASSERT( FIELD_OFFSET(struct set_cursor_reply, new_clip) == 32 );
 C_ASSERT( FIELD_OFFSET(struct set_cursor_reply, last_change) == 48 );
 C_ASSERT( sizeof(struct set_cursor_reply) == 56 );
+C_ASSERT( sizeof(struct get_cursor_history_request) == 16 );
+C_ASSERT( sizeof(struct get_cursor_history_reply) == 8 );
 C_ASSERT( FIELD_OFFSET(struct get_rawinput_buffer_request, rawinput_size) == 12 );
 C_ASSERT( FIELD_OFFSET(struct get_rawinput_buffer_request, buffer_size) == 16 );
 C_ASSERT( sizeof(struct get_rawinput_buffer_request) == 24 );

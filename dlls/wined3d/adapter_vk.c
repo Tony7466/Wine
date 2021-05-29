@@ -1722,7 +1722,7 @@ static void adapter_vk_dispatch_compute(struct wined3d_device *device,
     context_release(&context_vk->c);
 }
 
-void adapter_vk_clear_uav(struct wined3d_context *context,
+static void adapter_vk_clear_uav(struct wined3d_context *context,
         struct wined3d_unordered_access_view *view, const struct wined3d_uvec4 *clear_value)
 {
     TRACE("context %p, view %p, clear_value %s.\n", context, view, debug_uvec4(clear_value));
@@ -2242,7 +2242,7 @@ static BOOL wined3d_adapter_vk_init(struct wined3d_adapter_vk *adapter_vk,
     struct wined3d_adapter *adapter = &adapter_vk->a;
     VkPhysicalDeviceIDProperties id_properties;
     VkPhysicalDeviceProperties2 properties2;
-    LUID *luid = NULL;
+    LUID primary_luid, *luid = NULL;
 
     TRACE("adapter_vk %p, ordinal %u, wined3d_creation_flags %#x.\n",
             adapter_vk, ordinal, wined3d_creation_flags);
@@ -2274,6 +2274,8 @@ static BOOL wined3d_adapter_vk_init(struct wined3d_adapter_vk *adapter_vk,
 
     if (id_properties.deviceLUIDValid)
         luid = (LUID *)id_properties.deviceLUID;
+    else if (ordinal == 0 && wined3d_get_primary_adapter_luid(&primary_luid))
+        luid = &primary_luid;
 
     if (!wined3d_adapter_init(adapter, ordinal, luid, &wined3d_adapter_vk_ops))
     {

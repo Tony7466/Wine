@@ -39,6 +39,7 @@
 #define IOCTL_CONDRV_SET_TITLE             CTL_CODE(FILE_DEVICE_CONSOLE, 17, METHOD_BUFFERED, FILE_WRITE_ACCESS)
 #define IOCTL_CONDRV_CTRL_EVENT            CTL_CODE(FILE_DEVICE_CONSOLE, 18, METHOD_BUFFERED, FILE_WRITE_ACCESS)
 #define IOCTL_CONDRV_BEEP                  CTL_CODE(FILE_DEVICE_CONSOLE, 19, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_CONDRV_FLUSH                 CTL_CODE(FILE_DEVICE_CONSOLE, 20, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 /* console output ioctls */
 #define IOCTL_CONDRV_WRITE_CONSOLE         CTL_CODE(FILE_DEVICE_CONSOLE, 30, METHOD_BUFFERED, FILE_WRITE_ACCESS)
@@ -55,10 +56,6 @@
 
 /* console server ioctls */
 #define IOCTL_CONDRV_SETUP_INPUT           CTL_CODE(FILE_DEVICE_CONSOLE, 60, METHOD_BUFFERED, FILE_ANY_ACCESS)
-
-/* console renderer ioctls */
-#define IOCTL_CONDRV_GET_RENDERER_EVENTS   CTL_CODE(FILE_DEVICE_CONSOLE, 70, METHOD_BUFFERED, FILE_READ_ACCESS)
-#define IOCTL_CONDRV_ATTACH_RENDERER       CTL_CODE(FILE_DEVICE_CONSOLE, 71, METHOD_BUFFERED, FILE_READ_ACCESS)
 
 /* ioctls used for communication between driver and host */
 #define IOCTL_CONDRV_INIT_OUTPUT           CTL_CODE(FILE_DEVICE_CONSOLE, 90, METHOD_BUFFERED, 0)
@@ -86,10 +83,6 @@ struct condrv_input_info
 {
     unsigned int  input_cp;       /* console input codepage */
     unsigned int  output_cp;      /* console output codepage */
-    unsigned int  history_mode;   /* whether we duplicate lines in history */
-    unsigned int  history_size;   /* number of lines in history */
-    unsigned int  history_index;  /* number of used lines in history */
-    unsigned int  edition_mode;   /* index to the edition mode flavors */
     unsigned int  input_count;    /* number of available input records */
     condrv_handle_t win;          /* renderer window handle */
 };
@@ -101,12 +94,8 @@ struct condrv_input_info_params
     struct condrv_input_info info;    /* input_info */
 };
 
-#define SET_CONSOLE_INPUT_INFO_EDITION_MODE     0x01
-#define SET_CONSOLE_INPUT_INFO_INPUT_CODEPAGE   0x02
-#define SET_CONSOLE_INPUT_INFO_OUTPUT_CODEPAGE  0x04
-#define SET_CONSOLE_INPUT_INFO_WIN              0x08
-#define SET_CONSOLE_INPUT_INFO_HISTORY_MODE     0x10
-#define SET_CONSOLE_INPUT_INFO_HISTORY_SIZE     0x20
+#define SET_CONSOLE_INPUT_INFO_INPUT_CODEPAGE   0x01
+#define SET_CONSOLE_INPUT_INFO_OUTPUT_CODEPAGE  0x02
 
 /* IOCTL_CONDRV_WRITE_OUTPUT and IOCTL_CONDRV_READ_OUTPUT params */
 struct condrv_output_params
@@ -123,7 +112,6 @@ enum char_info_mode
     CHAR_INFO_MODE_TEXT,              /* characters only */
     CHAR_INFO_MODE_ATTR,              /* attributes only */
     CHAR_INFO_MODE_TEXTATTR,          /* both characters and attributes */
-    CHAR_INFO_MODE_TEXTSTDATTR,       /* characters but use standard attributes */
 };
 
 /* IOCTL_CONDRV_GET_OUTPUT_INFO result */
@@ -163,9 +151,7 @@ struct condrv_output_info_params
 #define SET_CONSOLE_OUTPUT_INFO_ATTR            0x0008
 #define SET_CONSOLE_OUTPUT_INFO_DISPLAY_WINDOW  0x0010
 #define SET_CONSOLE_OUTPUT_INFO_MAX_SIZE        0x0020
-#define SET_CONSOLE_OUTPUT_INFO_FONT            0x0040
-#define SET_CONSOLE_OUTPUT_INFO_COLORTABLE      0x0080
-#define SET_CONSOLE_OUTPUT_INFO_POPUP_ATTR      0x0100
+#define SET_CONSOLE_OUTPUT_INFO_POPUP_ATTR      0x0040
 
 /* IOCTL_CONDRV_FILL_OUTPUT params */
 struct condrv_fill_output_params
@@ -186,54 +172,6 @@ struct condrv_scroll_params
     COORD        origin;              /* destination coordinates */
     SMALL_RECT   clip;                /* clipping rectangle */
     char_info_t  fill;                /* empty character info */
-};
-
-/* IOCTL_CONDRV_GET_RENDERER_EVENTS result */
-struct condrv_renderer_event
-{
-    short event;
-    union
-    {
-        struct
-        {
-            short top;
-            short bottom;
-        } update;
-        struct
-        {
-            short width;
-            short height;
-        } resize;
-        struct
-        {
-            short x;
-            short y;
-        } cursor_pos;
-        struct
-        {
-            short visible;
-            short size;
-        } cursor_geom;
-        struct
-        {
-            short left;
-            short top;
-            short width;
-            short height;
-        } display;
-    } u;
-};
-
-enum condrv_renderer_event_type
-{
-    CONSOLE_RENDERER_NONE_EVENT,
-    CONSOLE_RENDERER_TITLE_EVENT,
-    CONSOLE_RENDERER_SB_RESIZE_EVENT,
-    CONSOLE_RENDERER_UPDATE_EVENT,
-    CONSOLE_RENDERER_CURSOR_POS_EVENT,
-    CONSOLE_RENDERER_CURSOR_GEOM_EVENT,
-    CONSOLE_RENDERER_DISPLAY_EVENT,
-    CONSOLE_RENDERER_EXIT_EVENT,
 };
 
 /* IOCTL_CONDRV_CTRL_EVENT params */

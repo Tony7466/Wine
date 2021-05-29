@@ -1970,6 +1970,63 @@ static void test_WriteConsoleInputW(HANDLE input_handle)
     ok(ret == TRUE, "Expected SetConsoleMode to return TRUE, got %d\n", ret);
 }
 
+static void test_FlushConsoleInputBuffer(HANDLE input, HANDLE output)
+{
+    INPUT_RECORD record;
+    DWORD count;
+    BOOL ret;
+
+    ret = FlushConsoleInputBuffer(input);
+    ok(ret, "FlushConsoleInputBuffer failed: %u\n", GetLastError());
+
+    ret = GetNumberOfConsoleInputEvents(input, &count);
+    ok(ret, "GetNumberOfConsoleInputEvents failed: %u\n", GetLastError());
+    ok(count == 0, "Expected count to be 0, got %u\n", count);
+
+    record.EventType = KEY_EVENT;
+    record.Event.KeyEvent.bKeyDown = 1;
+    record.Event.KeyEvent.wRepeatCount = 1;
+    record.Event.KeyEvent.wVirtualKeyCode = VK_RETURN;
+    record.Event.KeyEvent.wVirtualScanCode = VK_RETURN;
+    record.Event.KeyEvent.uChar.UnicodeChar = '\r';
+    record.Event.KeyEvent.dwControlKeyState = 0;
+    ret = WriteConsoleInputW(input, &record, 1, &count);
+    ok(ret, "WriteConsoleInputW failed: %u\n", GetLastError());
+
+    ret = GetNumberOfConsoleInputEvents(input, &count);
+    ok(ret, "GetNumberOfConsoleInputEvents failed: %u\n", GetLastError());
+    ok(count == 1, "Expected count to be 0, got %u\n", count);
+
+    ret = FlushConsoleInputBuffer(input);
+    ok(ret, "FlushConsoleInputBuffer failed: %u\n", GetLastError());
+
+    ret = GetNumberOfConsoleInputEvents(input, &count);
+    ok(ret, "GetNumberOfConsoleInputEvents failed: %u\n", GetLastError());
+    ok(count == 0, "Expected count to be 0, got %u\n", count);
+
+    ret = WriteConsoleInputW(input, &record, 1, &count);
+    ok(ret, "WriteConsoleInputW failed: %u\n", GetLastError());
+
+    ret = GetNumberOfConsoleInputEvents(input, &count);
+    ok(ret, "GetNumberOfConsoleInputEvents failed: %u\n", GetLastError());
+    ok(count == 1, "Expected count to be 0, got %u\n", count);
+
+    ret = FlushFileBuffers(input);
+    ok(ret, "FlushFileBuffers failed: %u\n", GetLastError());
+
+    ret = GetNumberOfConsoleInputEvents(input, &count);
+    ok(ret, "GetNumberOfConsoleInputEvents failed: %u\n", GetLastError());
+    ok(count == 0, "Expected count to be 0, got %u\n", count);
+
+    ret = FlushConsoleInputBuffer(output);
+    ok(!ret && GetLastError() == ERROR_INVALID_HANDLE, "FlushConsoleInputBuffer returned: %x(%u)\n",
+       ret, GetLastError());
+
+    ret = FlushFileBuffers(output);
+    ok(!ret && GetLastError() == ERROR_INVALID_HANDLE, "FlushFileBuffers returned: %x(%u)\n",
+       ret, GetLastError());
+}
+
 static void test_WriteConsoleOutputCharacterA(HANDLE output_handle)
 {
     static const char output[] = {'a', 0};
@@ -2977,21 +3034,14 @@ static void test_ReadConsoleOutput(HANDLE console)
     ok(ch == 'z', "unexpected char %c/%x\n", ch, ch);
 }
 
-static void test_ReadConsole(void)
+static void test_ReadConsole(HANDLE input)
 {
-    HANDLE std_input;
     DWORD ret, bytes;
     char buf[1024];
-
-    std_input = GetStdHandle(STD_INPUT_HANDLE);
+    HANDLE output;
 
     SetLastError(0xdeadbeef);
-    ret = GetFileSize(std_input, NULL);
-    if (GetLastError() == 0xdeadbeef)
-    {
-        skip("stdin is redirected\n");
-        return;
-    }
+    ret = GetFileSize(input, NULL);
     ok(ret == INVALID_FILE_SIZE, "expected INVALID_FILE_SIZE, got %#x\n", ret);
     ok(GetLastError() == ERROR_INVALID_HANDLE ||
        GetLastError() == ERROR_INVALID_FUNCTION, /* Win 8, 10 */
@@ -2999,7 +3049,7 @@ static void test_ReadConsole(void)
 
     bytes = 0xdeadbeef;
     SetLastError(0xdeadbeef);
-    ret = ReadFile(std_input, buf, -128, &bytes, NULL);
+    ret = ReadFile(input, buf, -128, &bytes, NULL);
     ok(!ret, "expected 0, got %u\n", ret);
     ok(GetLastError() == ERROR_NOT_ENOUGH_MEMORY ||
        GetLastError() == ERROR_NOACCESS, /* Win 8, 10 */
@@ -3008,7 +3058,7 @@ static void test_ReadConsole(void)
 
     bytes = 0xdeadbeef;
     SetLastError(0xdeadbeef);
-    ret = ReadConsoleA(std_input, buf, -128, &bytes, NULL);
+    ret = ReadConsoleA(input, buf, -128, &bytes, NULL);
     ok(!ret, "expected 0, got %u\n", ret);
     ok(GetLastError() == ERROR_NOT_ENOUGH_MEMORY ||
        GetLastError() == ERROR_NOACCESS, /* Win 8, 10 */
@@ -3017,12 +3067,29 @@ static void test_ReadConsole(void)
 
     bytes = 0xdeadbeef;
     SetLastError(0xdeadbeef);
-    ret = ReadConsoleW(std_input, buf, -128, &bytes, NULL);
+    ret = ReadConsoleW(input, buf, -128, &bytes, NULL);
     ok(!ret, "expected 0, got %u\n", ret);
     ok(GetLastError() == ERROR_NOT_ENOUGH_MEMORY ||
        GetLastError() == ERROR_NOACCESS, /* Win 8, 10 */
        "expected ERROR_NOT_ENOUGH_MEMORY, got %d\n", GetLastError());
     ok(bytes == 0xdeadbeef, "expected 0xdeadbeef, got %#x\n", bytes);
+
+    output = CreateFileA("CONOUT$", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, 0);
+    ok(output != INVALID_HANDLE_VALUE, "Could not open console\n");
+
+    ret = ReadConsoleW(output, buf, sizeof(buf) / sizeof(WCHAR), &bytes, NULL);
+    ok(!ret && GetLastError() == ERROR_INVALID_HANDLE,
+       "ReadConsoleW returned %x(%u)\n", ret, GetLastError());
+
+    ret = ReadConsoleA(output, buf, sizeof(buf), &bytes, NULL);
+    ok(!ret && GetLastError() == ERROR_INVALID_HANDLE,
+       "ReadConsoleA returned %x(%u)\n", ret, GetLastError());
+
+    ret = ReadFile(output, buf, sizeof(buf), &bytes, NULL);
+    ok(!ret && GetLastError() == ERROR_INVALID_HANDLE,
+       "ReadFile returned %x(%u)\n", ret, GetLastError());
+
+    CloseHandle(output);
 }
 
 static void test_GetCurrentConsoleFont(HANDLE std_output)
@@ -4213,7 +4280,7 @@ START_TEST(console)
     ok(sbi.dwSize.Y == size, "Unexpected buffer size: %d instead of %d\n", sbi.dwSize.Y, size);
     if (!ret) return;
 
-    test_ReadConsole();
+    test_ReadConsole(hConIn);
     /* Non interactive tests */
     testCursor(hConOut, sbi.dwSize);
     /* test parameters (FIXME: test functionality) */
@@ -4259,6 +4326,7 @@ START_TEST(console)
     test_GetNumberOfConsoleInputEvents(hConIn);
     test_WriteConsoleInputA(hConIn);
     test_WriteConsoleInputW(hConIn);
+    test_FlushConsoleInputBuffer(hConIn, hConOut);
     test_WriteConsoleOutputCharacterA(hConOut);
     test_WriteConsoleOutputCharacterW(hConOut);
     test_WriteConsoleOutputAttribute(hConOut);

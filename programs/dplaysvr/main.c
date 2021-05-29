@@ -1,7 +1,5 @@
 /*
- * Console private definitions
- *
- * Copyright 2002 Eric Pouech
+ * Copyright 2020 Austin English
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,17 +16,18 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#ifndef __WINE_CONSOLE_PRIVATE_H
-#define __WINE_CONSOLE_PRIVATE_H
+#include "wine/debug.h"
 
-/* console.c */
-extern int      CONSOLE_GetHistory(int idx, WCHAR* buf, int buf_len) DECLSPEC_HIDDEN;
-extern BOOL     CONSOLE_AppendHistory(const WCHAR *p) DECLSPEC_HIDDEN;
-extern unsigned CONSOLE_GetNumHistoryEntries(HANDLE) DECLSPEC_HIDDEN;
-extern void     CONSOLE_FillLineUniform(HANDLE hConsoleOutput, int i, int j, int len, LPCHAR_INFO lpFill) DECLSPEC_HIDDEN;
-extern BOOL     CONSOLE_GetEditionMode(HANDLE, int*) DECLSPEC_HIDDEN;
+WINE_DEFAULT_DEBUG_CHANNEL(dplaysvr);
 
-/* editline.c */
-extern WCHAR*   CONSOLE_Readline(HANDLE, BOOL) DECLSPEC_HIDDEN;
+int __cdecl wmain(int argc, WCHAR *argv[])
+{
+    int i;
 
-#endif  /* __WINE_CONSOLE_PRIVATE_H */
+    WINE_FIXME("stub:");
+    for (i = 0; i < argc; i++)
+        WINE_FIXME(" %s", wine_dbgstr_w(argv[i]));
+    WINE_FIXME("\n");
+
+    return 0;
+}

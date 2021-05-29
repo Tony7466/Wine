@@ -659,7 +659,7 @@ static void edit_line_find_in_history( struct console *console )
     unsigned int len, oldoffset;
     WCHAR *line;
 
-    if (ctx->history_index && ctx->history_index == console->history_index + 1)
+    if (ctx->history_index && ctx->history_index == console->history_index)
     {
         start_pos--;
         ctx->history_index--;
@@ -1731,7 +1731,6 @@ static NTSTATUS set_output_info( struct screen_buffer *screen_buffer,
                                  const struct condrv_output_info_params *params, size_t extra_size )
 {
     const struct condrv_output_info *info = &params->info;
-    WCHAR *font_name;
     NTSTATUS status;
 
     TRACE( "%p\n", screen_buffer );
@@ -1824,30 +1823,6 @@ static NTSTATUS set_output_info( struct screen_buffer *screen_buffer,
     {
         screen_buffer->max_width  = info->max_width;
         screen_buffer->max_height = info->max_height;
-    }
-    if (params->mask & SET_CONSOLE_OUTPUT_INFO_COLORTABLE)
-    {
-        memcpy( screen_buffer->color_map, info->color_map, sizeof(screen_buffer->color_map) );
-    }
-    if (params->mask & SET_CONSOLE_OUTPUT_INFO_FONT)
-    {
-        screen_buffer->font.width  = info->font_width;
-        screen_buffer->font.height = info->font_height;
-        screen_buffer->font.weight = info->font_weight;
-        screen_buffer->font.pitch_family = info->font_pitch_family;
-        if (extra_size)
-        {
-            const WCHAR *params_font = (const WCHAR *)(params + 1);
-            extra_size = extra_size / sizeof(WCHAR) * sizeof(WCHAR);
-            font_name = malloc( extra_size );
-            if (font_name)
-            {
-                memcpy( font_name, params_font, extra_size );
-                free( screen_buffer->font.face_name );
-                screen_buffer->font.face_name = font_name;
-                screen_buffer->font.face_len  = extra_size;
-            }
-        }
     }
 
     if (is_active( screen_buffer ))
@@ -1962,10 +1937,6 @@ static NTSTATUS write_output( struct screen_buffer *screen_buffer, const struct 
             break;
         case CHAR_INFO_MODE_TEXTATTR:
             *dest = *(const char_info_t *)src;
-            break;
-        case CHAR_INFO_MODE_TEXTSTDATTR:
-            dest->ch   = *(const WCHAR *)src;
-            dest->attr = screen_buffer->attr;
             break;
         default:
             return STATUS_INVALID_PARAMETER;
@@ -2111,10 +2082,7 @@ static NTSTATUS fill_output( struct screen_buffer *screen_buffer, const struct c
     dest = screen_buffer->data + min( params->y * screen_buffer->width + params->x,
                                       screen_buffer->height * screen_buffer->width );
 
-    if (params->wrap)
-        end = screen_buffer->data + screen_buffer->height * screen_buffer->width;
-    else
-        end = screen_buffer->data + (params->y + 1) * screen_buffer->width;
+    end = screen_buffer->data + screen_buffer->height * screen_buffer->width;
 
     count = params->count;
     if (count > end - dest) count = end - dest;
@@ -2132,13 +2100,6 @@ static NTSTATUS fill_output( struct screen_buffer *screen_buffer, const struct c
         {
             dest[i].ch   = params->ch;
             dest[i].attr = params->attr;
-        }
-        break;
-    case CHAR_INFO_MODE_TEXTSTDATTR:
-        for (i = 0; i < count; i++)
-        {
-            dest[i].ch   = params->ch;
-            dest[i].attr = screen_buffer->attr;
         }
         break;
     default:
@@ -2271,12 +2232,12 @@ static NTSTATUS set_console_title( struct console *console, const WCHAR *in_titl
 
     if (size)
     {
-        if (!(title = malloc( size ))) return STATUS_NO_MEMORY;
+        if (!(title = malloc( size + sizeof(WCHAR) ))) return STATUS_NO_MEMORY;
         memcpy( title, in_title, size );
+        title[size / sizeof(WCHAR)] = 0;
     }
     free( console->title );
-    console->title     = title;
-    console->title_len = size;
+    console->title = title;
 
     if (console->tty_output)
     {
@@ -2284,12 +2245,16 @@ static NTSTATUS set_console_title( struct console *console, const WCHAR *in_titl
         char *vt;
 
         tty_write( console, "\x1b]0;", 4 );
-        len = WideCharToMultiByte( get_tty_cp( console ), 0, console->title, size / sizeof(WCHAR), NULL, 0, NULL, NULL);
+        len = WideCharToMultiByte( get_tty_cp( console ), 0, console->title, size / sizeof(WCHAR),
+                                   NULL, 0, NULL, NULL);
         if ((vt = tty_alloc_buffer( console, len )))
-            WideCharToMultiByte( get_tty_cp( console ), 0, console->title, size / sizeof(WCHAR), vt, len, NULL, NULL );
+            WideCharToMultiByte( get_tty_cp( console ), 0, console->title, size / sizeof(WCHAR),
+                                 vt, len, NULL, NULL );
         tty_write( console, "\x07", 1 );
         tty_sync( console );
     }
+    if (console->win)
+        SetWindowTextW( console->win, console->title );
     return STATUS_SUCCESS;
 }
 
@@ -2356,8 +2321,8 @@ static NTSTATUS screen_buffer_ioctl( struct screen_buffer *screen_buffer, unsign
         return scroll_output( screen_buffer, in_data );
 
     default:
-        FIXME( "unsupported ioctl %x\n", code );
-        return STATUS_NOT_SUPPORTED;
+        WARN( "invalid ioctl %x\n", code );
+        return STATUS_INVALID_HANDLE;
     }
 }
 
@@ -2393,11 +2358,9 @@ static NTSTATUS console_input_ioctl( struct console *console, unsigned int code,
 
     case IOCTL_CONDRV_READ_INPUT:
         {
-            unsigned int blocking;
-            if (in_size && in_size != sizeof(blocking)) return STATUS_INVALID_PARAMETER;
+            if (in_size) return STATUS_INVALID_PARAMETER;
             ensure_tty_input_thread( console );
-            blocking = in_size && *(unsigned int *)in_data;
-            if (blocking && !console->record_count && *out_size)
+            if (!console->record_count && *out_size)
             {
                 TRACE( "pending read\n" );
                 console->read_ioctl = IOCTL_CONDRV_READ_INPUT;
@@ -2431,14 +2394,10 @@ static NTSTATUS console_input_ioctl( struct console *console, unsigned int code,
             TRACE( "get info\n" );
             if (in_size || *out_size != sizeof(*info)) return STATUS_INVALID_PARAMETER;
             if (!(info = alloc_ioctl_buffer( sizeof(*info )))) return STATUS_NO_MEMORY;
-            info->history_mode  = console->history_mode;
-            info->history_size  = console->history_size;
-            info->history_index = console->history_index;
-            info->edition_mode  = console->edition_mode;
-            info->input_cp      = console->input_cp;
-            info->output_cp     = console->output_cp;
-            info->win           = condrv_handle( console->win );
-            info->input_count   = console->record_count;
+            info->input_cp    = console->input_cp;
+            info->output_cp   = console->output_cp;
+            info->win         = condrv_handle( console->win );
+            info->input_count = console->record_count;
             return STATUS_SUCCESS;
         }
 
@@ -2447,54 +2406,15 @@ static NTSTATUS console_input_ioctl( struct console *console, unsigned int code,
             const struct condrv_input_info_params *params = in_data;
             TRACE( "set info\n" );
             if (in_size != sizeof(*params) || *out_size) return STATUS_INVALID_PARAMETER;
-            if (params->mask & SET_CONSOLE_INPUT_INFO_HISTORY_MODE)
-            {
-                console->history_mode = params->info.history_mode;
-            }
-            if ((params->mask & SET_CONSOLE_INPUT_INFO_HISTORY_SIZE) &&
-                console->history_size != params->info.history_size)
-            {
-                struct history_line **mem = NULL;
-                int i, delta;
-
-                if (params->info.history_size)
-                {
-                    if (!(mem = malloc( params->info.history_size * sizeof(*mem) )))
-                        return STATUS_NO_MEMORY;
-                    memset( mem, 0, params->info.history_size * sizeof(*mem) );
-                }
-
-                delta = (console->history_index > params->info.history_size)
-                    ? (console->history_index - params->info.history_size) : 0;
-
-                for (i = delta; i < console->history_index; i++)
-                {
-                    mem[i - delta] = console->history[i];
-                    console->history[i] = NULL;
-                }
-                console->history_index -= delta;
-
-                for (i = 0; i < console->history_size; i++)
-                    free( console->history[i] );
-                free( console->history );
-                console->history = mem;
-                console->history_size = params->info.history_size;
-            }
-            if (params->mask & SET_CONSOLE_INPUT_INFO_EDITION_MODE)
-            {
-                console->edition_mode = params->info.edition_mode;
-            }
             if (params->mask & SET_CONSOLE_INPUT_INFO_INPUT_CODEPAGE)
             {
+                if (!IsValidCodePage( params->info.input_cp )) return STATUS_INVALID_PARAMETER;
                 console->input_cp = params->info.input_cp;
             }
             if (params->mask & SET_CONSOLE_INPUT_INFO_OUTPUT_CODEPAGE)
             {
+                if (!IsValidCodePage( params->info.output_cp )) return STATUS_INVALID_PARAMETER;
                 console->output_cp = params->info.output_cp;
-            }
-            if (params->mask & SET_CONSOLE_INPUT_INFO_WIN)
-            {
-                console->win = wine_server_ptr_handle( params->info.win );
             }
             return STATUS_SUCCESS;
         }
@@ -2503,10 +2423,9 @@ static NTSTATUS console_input_ioctl( struct console *console, unsigned int code,
         {
             WCHAR *result;
             if (in_size) return STATUS_INVALID_PARAMETER;
-            TRACE( "returning title %s\n", debugstr_wn(console->title,
-                                                       console->title_len / sizeof(WCHAR)) );
-            if (!(result = alloc_ioctl_buffer( *out_size = min( *out_size, console->title_len ))))
-                return STATUS_NO_MEMORY;
+            TRACE( "returning title %s\n", debugstr_w(console->title) );
+            *out_size = min( *out_size, console->title ? wcslen( console->title ) * sizeof(WCHAR) : 0 );
+            if (!(result = alloc_ioctl_buffer( *out_size ))) return STATUS_NO_MEMORY;
             if (*out_size) memcpy( result, console->title, *out_size );
             return STATUS_SUCCESS;
         }
@@ -2522,6 +2441,12 @@ static NTSTATUS console_input_ioctl( struct console *console, unsigned int code,
             tty_write( console, "\a", 1 );
             tty_sync( console );
         }
+        return STATUS_SUCCESS;
+
+    case IOCTL_CONDRV_FLUSH:
+        if (in_size || *out_size) return STATUS_INVALID_PARAMETER;
+        TRACE( "flush\n" );
+        console->record_count = 0;
         return STATUS_SUCCESS;
 
     default:
@@ -2754,7 +2679,10 @@ int __cdecl wmain(int argc, WCHAR *argv[])
     }
     else
     {
+        STARTUPINFOW si;
         if (!init_window( &console )) return 1;
+        GetStartupInfoW( &si );
+        set_console_title( &console, si.lpTitle, wcslen( si.lpTitle ) * sizeof(WCHAR) );
         ShowWindow( console.win, SW_SHOW );
     }
 

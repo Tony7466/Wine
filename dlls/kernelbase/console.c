@@ -7,6 +7,7 @@
  * Copyright 1998 Marcus Meissner
  * Copyright 2001,2002,2004,2005,2010 Eric Pouech
  * Copyright 2001 Alexandre Julliard
+ * Copyright 2020 Jacek Caban for CodeWeavers
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -326,9 +327,10 @@ BOOL WINAPI AllocConsole(void)
 {
     SECURITY_ATTRIBUTES inheritable_attr = { sizeof(inheritable_attr), NULL, TRUE };
     STARTUPINFOW app_si, console_si;
-    WCHAR buffer[1024], cmd[256];
+    HANDLE server, console = NULL;
+    WCHAR buffer[1024], cmd[256], conhost_path[MAX_PATH];
     PROCESS_INFORMATION pi;
-    HANDLE event, console;
+    void *redir;
     BOOL ret;
 
     TRACE("()\n");
@@ -343,11 +345,13 @@ BOOL WINAPI AllocConsole(void)
         return FALSE;
     }
 
+    if (!(server = create_console_server()) || !(console = create_console_reference( server ))) goto error;
+
     GetStartupInfoW(&app_si);
 
     memset(&console_si, 0, sizeof(console_si));
     console_si.cb = sizeof(console_si);
-    /* setup a view arguments for wineconsole (it'll use them as default values)  */
+    /* setup a view arguments for conhost (it'll use them as default values)  */
     if (app_si.dwFlags & STARTF_USECOUNTCHARS)
     {
         console_si.dwFlags |= STARTF_USECOUNTCHARS;
@@ -372,30 +376,27 @@ BOOL WINAPI AllocConsole(void)
         console_si.lpTitle = buffer;
     }
 
-    if (!(event = CreateEventW( &inheritable_attr, TRUE, FALSE, NULL ))) goto error;
+    swprintf( conhost_path, ARRAY_SIZE(conhost_path), L"%s\\conhost.exe", system_dir );
+    swprintf( cmd, ARRAY_SIZE(cmd),  L"\"%s\" --server 0x%x", conhost_path, condrv_handle( server ));
+    Wow64DisableWow64FsRedirection( &redir );
+    ret = CreateProcessW( conhost_path, cmd, NULL, NULL, TRUE, DETACHED_PROCESS, NULL, NULL, &console_si, &pi );
+    Wow64RevertWow64FsRedirection( redir );
 
-    swprintf( cmd, ARRAY_SIZE(cmd),  L"wineconsole --use-event=%ld", (DWORD_PTR)event );
-    if ((ret = CreateProcessW( NULL, cmd, NULL, NULL, TRUE, DETACHED_PROCESS, NULL, NULL, &console_si, &pi )))
-    {
-        HANDLE wait_handles[2] = { event, pi.hProcess };
-        ret = WaitForMultipleObjects( ARRAY_SIZE(wait_handles), wait_handles, FALSE, INFINITE ) == WAIT_OBJECT_0;
-        CloseHandle( pi.hThread );
-        CloseHandle( pi.hProcess );
-    }
-    CloseHandle( event );
-    if (!ret || !init_console_std_handles( !(app_si.dwFlags & STARTF_USESTDHANDLES) )) goto error;
-    console = CreateFileW( L"CONIN$", GENERIC_READ | GENERIC_WRITE | SYNCHRONIZE, 0, NULL, OPEN_EXISTING, 0, 0 );
-    if (console == INVALID_HANDLE_VALUE) goto error;
+    if (!ret || !create_console_connection( console)) goto error;
+    if (!init_console_std_handles( !(app_si.dwFlags & STARTF_USESTDHANDLES) )) goto error;
+
     RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle = console;
+    TRACE( "Started conhost pid=%08x tid=%08x\n", pi.dwProcessId, pi.dwThreadId );
 
-    TRACE( "Started wineconsole pid=%08x tid=%08x\n", pi.dwProcessId, pi.dwThreadId );
-
+    CloseHandle( server );
     RtlLeaveCriticalSection( &console_section );
     SetLastError( ERROR_SUCCESS );
     return TRUE;
 
 error:
     ERR("Can't allocate console\n");
+    NtClose( console );
+    NtClose( server );
     FreeConsole();
     RtlLeaveCriticalSection( &console_section );
     return FALSE;
@@ -583,7 +584,6 @@ HANDLE get_console_wait_handle( HANDLE handle )
 BOOL WINAPI DECLSPEC_HOTPATCH FreeConsole(void)
 {
     HANDLE event;
-    BOOL ret;
 
     RtlEnterCriticalSection( &console_section );
 
@@ -598,15 +598,10 @@ BOOL WINAPI DECLSPEC_HOTPATCH FreeConsole(void)
     if (console_flags & CONSOLE_ERROR_HANDLE)  NtClose( GetStdHandle( STD_ERROR_HANDLE ));
     console_flags = 0;
 
-    SERVER_START_REQ( free_console )
-    {
-        ret = !wine_server_call_err( req );
-    }
-    SERVER_END_REQ;
     if ((event = InterlockedExchangePointer( &console_wait_event, NULL ))) NtClose( event );
 
     RtlLeaveCriticalSection( &console_section );
-    return ret;
+    return TRUE;
 }
 
 
@@ -642,7 +637,7 @@ UINT WINAPI DECLSPEC_HOTPATCH GetConsoleCP(void)
     if (!console_ioctl( RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle,
                          IOCTL_CONDRV_GET_INPUT_INFO, NULL, 0, &info, sizeof(info), NULL ))
         return 0;
-    return info.input_cp ? info.input_cp : GetOEMCP();
+    return info.input_cp;
 }
 
 
@@ -715,7 +710,7 @@ UINT WINAPI DECLSPEC_HOTPATCH GetConsoleOutputCP(void)
     if (!console_ioctl( RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle,
                          IOCTL_CONDRV_GET_INPUT_INFO, NULL, 0, &info, sizeof(info), NULL ))
         return 0;
-    return info.output_cp ? info.output_cp : GetOEMCP();
+    return info.output_cp;
 }
 
 
@@ -1097,12 +1092,6 @@ BOOL WINAPI DECLSPEC_HOTPATCH SetConsoleCP( UINT cp )
 {
     struct condrv_input_info_params params = { SET_CONSOLE_INPUT_INFO_INPUT_CODEPAGE };
 
-    if (!IsValidCodePage( cp ))
-    {
-        SetLastError( ERROR_INVALID_PARAMETER );
-        return FALSE;
-    }
-
     params.info.input_cp = cp;
     return console_ioctl( RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle,
                           IOCTL_CONDRV_SET_INPUT_INFO, &params, sizeof(params), NULL, 0, NULL );
@@ -1182,46 +1171,12 @@ BOOL WINAPI DECLSPEC_HOTPATCH SetConsoleCursorInfo( HANDLE handle, CONSOLE_CURSO
 BOOL WINAPI DECLSPEC_HOTPATCH SetConsoleCursorPosition( HANDLE handle, COORD pos )
 {
     struct condrv_output_info_params params = { SET_CONSOLE_OUTPUT_INFO_CURSOR_POS };
-    CONSOLE_SCREEN_BUFFER_INFO info;
-    int w, h, do_move = 0;
 
     TRACE( "%p %d %d\n", handle, pos.X, pos.Y );
 
     params.info.cursor_x = pos.X;
     params.info.cursor_y = pos.Y;
-    if (!console_ioctl( handle, IOCTL_CONDRV_SET_OUTPUT_INFO, &params, sizeof(params), NULL, 0, NULL ))
-        return FALSE;
-
-    if (!GetConsoleScreenBufferInfo( handle, &info )) return FALSE;
-
-    /* if cursor is no longer visible, scroll the visible window... */
-    w = info.srWindow.Right - info.srWindow.Left + 1;
-    h = info.srWindow.Bottom - info.srWindow.Top + 1;
-    if (pos.X < info.srWindow.Left)
-    {
-	info.srWindow.Left = min(pos.X, info.dwSize.X - w);
-	do_move = 1;
-    }
-    else if (pos.X > info.srWindow.Right)
-    {
-	info.srWindow.Left = max(pos.X, w) - w + 1;
-	do_move = 1;
-    }
-    info.srWindow.Right = info.srWindow.Left + w - 1;
-
-    if (pos.Y < info.srWindow.Top)
-    {
-	info.srWindow.Top = min(pos.Y, info.dwSize.Y - h);
-	do_move = 1;
-    }
-    else if (pos.Y > info.srWindow.Bottom)
-    {
-	info.srWindow.Top = max(pos.Y, h) - h + 1;
-	do_move = 1;
-    }
-    info.srWindow.Bottom = info.srWindow.Top + h - 1;
-
-    return !do_move || SetConsoleWindowInfo( handle, TRUE, &info.srWindow );
+    return console_ioctl( handle, IOCTL_CONDRV_SET_OUTPUT_INFO, &params, sizeof(params), NULL, 0, NULL );
 }
 
 
@@ -1275,12 +1230,6 @@ BOOL WINAPI DECLSPEC_HOTPATCH SetConsoleMode( HANDLE handle, DWORD mode )
 BOOL WINAPI DECLSPEC_HOTPATCH SetConsoleOutputCP( UINT cp )
 {
     struct condrv_input_info_params params = { SET_CONSOLE_INPUT_INFO_OUTPUT_CODEPAGE };
-
-    if (!IsValidCodePage( cp ))
-    {
-        SetLastError( ERROR_INVALID_PARAMETER );
-        return FALSE;
-    }
 
     params.info.output_cp = cp;
     return console_ioctl( RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle,
@@ -1412,8 +1361,7 @@ BOOL WINAPI ReadConsoleInputA( HANDLE handle, INPUT_RECORD *buffer, DWORD length
  */
 BOOL WINAPI ReadConsoleInputW( HANDLE handle, INPUT_RECORD *buffer, DWORD length, DWORD *count )
 {
-    int blocking = 1;
-    if (!console_ioctl( handle, IOCTL_CONDRV_READ_INPUT, &blocking, sizeof(blocking),
+    if (!console_ioctl( handle, IOCTL_CONDRV_READ_INPUT, NULL, 0,
                         buffer, length * sizeof(*buffer), count ))
         return FALSE;
     *count /= sizeof(*buffer);
@@ -1656,6 +1604,99 @@ BOOL WINAPI DECLSPEC_HOTPATCH WriteConsoleOutputCharacterW( HANDLE handle, LPCWS
     ret = console_ioctl( handle, IOCTL_CONDRV_WRITE_OUTPUT, params, size, written, sizeof(*written), NULL );
     HeapFree( GetProcessHeap(), 0, params );
     return ret;
+}
+
+
+/***********************************************************************
+ *            ReadConsoleA   (kernelbase.@)
+ */
+BOOL WINAPI ReadConsoleA( HANDLE handle, void *buffer, DWORD length, DWORD *ret_count, void *reserved )
+{
+    LPWSTR strW = HeapAlloc( GetProcessHeap(), 0, length * sizeof(WCHAR) );
+    DWORD count = 0;
+    BOOL ret;
+
+    if (!strW)
+    {
+        SetLastError( ERROR_NOT_ENOUGH_MEMORY );
+        return FALSE;
+    }
+    if ((ret = ReadConsoleW( handle, strW, length, &count, NULL )))
+    {
+        count = WideCharToMultiByte( GetConsoleCP(), 0, strW, count, buffer, length, NULL, NULL );
+        if (ret_count) *ret_count = count;
+    }
+    HeapFree( GetProcessHeap(), 0, strW );
+    return ret;
+}
+
+
+/***********************************************************************
+ *            ReadConsoleW   (kernelbase.@)
+ */
+BOOL WINAPI ReadConsoleW( HANDLE handle, void *buffer, DWORD length, DWORD *count, void *reserved )
+{
+    BOOL ret;
+
+    TRACE( "(%p,%p,%d,%p,%p)\n", handle, buffer, length, count, reserved );
+
+    if (length > INT_MAX)
+    {
+        SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+        return FALSE;
+    }
+
+    ret = console_ioctl( handle, IOCTL_CONDRV_READ_CONSOLE, NULL, 0, buffer,
+                         length * sizeof(WCHAR), count );
+    if (ret) *count /= sizeof(WCHAR);
+    return ret;
+}
+
+
+/***********************************************************************
+ *            WriteConsoleA   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH WriteConsoleA( HANDLE handle, const void *buffer, DWORD length,
+                                             DWORD *written, void *reserved )
+{
+    UINT cp = GetConsoleOutputCP();
+    LPWSTR strW;
+    DWORD lenW;
+    BOOL ret;
+
+    if (written) *written = 0;
+    lenW = MultiByteToWideChar( cp, 0, buffer, length, NULL, 0 );
+    if (!(strW = HeapAlloc( GetProcessHeap(), 0, lenW * sizeof(WCHAR) ))) return FALSE;
+    MultiByteToWideChar( cp, 0, buffer, length, strW, lenW );
+    ret = WriteConsoleW( handle, strW, lenW, written, 0 );
+    HeapFree( GetProcessHeap(), 0, strW );
+    return ret;
+}
+
+
+/***********************************************************************
+ *            WriteConsoleW   (kernelbase.@)
+ */
+BOOL WINAPI DECLSPEC_HOTPATCH WriteConsoleW( HANDLE handle, const void *buffer, DWORD length,
+                                             DWORD *written, void *reserved )
+{
+    BOOL ret;
+
+    TRACE( "(%p,%s,%d,%p,%p)\n", handle, debugstr_wn(buffer, length), length, written, reserved );
+
+    ret = console_ioctl( handle, IOCTL_CONDRV_WRITE_CONSOLE, (void *)buffer,
+                         length * sizeof(WCHAR), NULL, 0, NULL );
+    if (written) *written = ret ? length : 0;
+    return ret;
+}
+
+
+/***********************************************************************
+ *            FlushConsoleInputBuffer   (kernelbase.@)
+ */
+BOOL WINAPI FlushConsoleInputBuffer( HANDLE handle )
+{
+    return console_ioctl( handle, IOCTL_CONDRV_FLUSH, NULL, 0, NULL, 0, NULL );
 }
 
 
