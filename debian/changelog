@@ -1,3 +1,14 @@
+wine-development (5.20+repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 5.20, released Oct 23, 2020.
+    - More work on the DSS cryptographic provider.
+    - A number of fixes for windowless RichEdit.
+    - Support for FLS callbacks.
+    - Window resizing in the new console host.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 29 May 2021 18:12:12 +0000
+
 wine-development (5.19+repack-1) unstable; urgency=medium
 
   * New upstream release 5.19, released Oct 9, 2020.
