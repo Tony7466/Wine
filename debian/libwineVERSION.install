@@ -4,6 +4,8 @@ debian/tmp/usr/lib/*/*/fakedlls
 
 # wine library
 debian/tmp/usr/lib/*/*/ntdll.so
+debian/tmp/usr/lib/*/*/bcrypt.so
+debian/tmp/usr/lib/*/*/odbc32.so
 debian/tmp/usr/lib/*/*/user32.so
 debian/tmp/usr/lib/*/*/libwine.so.*
 

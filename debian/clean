@@ -65,6 +65,13 @@ dlls/winevulkan/winevulkan.spec
 */*/*.ico
 */*/*/*.ico
 
+# generated test files
+*/*/*/test*.wav
+*/*/*/test*.mp3
+*/*/*/test*.mp4
+*/*/*/test*.mpg
+*/*/*/test*.avi
+
 # symlinked svg files
 dlls/comdlg32/cdrom.svg
 dlls/comdlg32/hdisk.svg

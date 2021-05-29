@@ -10,6 +10,11 @@ Files-Excluded:
  include/wine/vulkan*
  include/wine/server_protocol.h
  nls/*.nls
+ */*/*/test*.wav
+ */*/*/test*.mp3
+ */*/*/test*.mp4
+ */*/*/test*.mpg
+ */*/*/test*.avi
  libs/port/wctype.c
  libs/port/casemap.c
  libs/wine/compose.c

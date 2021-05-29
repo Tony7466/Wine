@@ -70,19 +70,17 @@ author: Michael Gilbert <mgilbert@debian.org>
  def main():
      parser = argparse.ArgumentParser()
      parser.add_argument("-v", "--verbose", action="count", default=0, help="increase output verbosity")
-@@ -3148,8 +3146,7 @@ def main():
+@@ -3153,7 +3151,6 @@ def main():
+         vk_xml = args.xml
+     else:
+         vk_xml = "vk-{0}.xml".format(VK_XML_VERSION)
+-        download_vk_xml(vk_xml)
  
-     set_working_directory()
- 
--    vk_xml = "vk-{0}.xml".format(VK_XML_VERSION)
--    download_vk_xml(vk_xml)
-+    vk_xml = "/usr/share/vulkan/registry/vk.xml"
      registry = VkRegistry(vk_xml)
      generator = VkGenerator(registry)
- 
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -5275,9 +5275,9 @@ const char *wined3d_debug_vkresult(VkRes
+@@ -5281,9 +5281,9 @@ const char *wined3d_debug_vkresult(VkRes
      switch (vr)
      {
  #define WINED3D_TO_STR(x) case x: return #x

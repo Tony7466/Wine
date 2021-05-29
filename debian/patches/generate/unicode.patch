@@ -30,7 +30,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  # Default char for undefined mappings
  my $DEF_CHAR = ord '?';
-@@ -435,6 +436,7 @@ my @category_table = ();
+@@ -436,6 +437,7 @@ my @category_table = ();
  my @joining_table = ();
  my @direction_table = ();
  my @decomp_table = ();
@@ -38,7 +38,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  my @combining_class_table = ();
  my @decomp_compat_table = ();
  my @comp_exclusions = ();
-@@ -482,25 +484,11 @@ sub open_data_file($$)
+@@ -483,25 +485,11 @@ sub open_data_file($$)
  
      if ($base =~ /.*\/([^\/]+)\.zip$/)
      {
@@ -66,7 +66,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
      return *FILE;
  }
-@@ -712,6 +700,7 @@ sub load_data()
+@@ -713,6 +701,7 @@ sub load_data()
              if ($decomp =~ /^([0-9a-fA-F]+)\s+([0-9a-fA-F]+)$/)
              {
                  $decomp_table[$src] = $decomp_compat_table[$src] = [ hex $1, hex $2 ];
@@ -74,7 +74,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              }
              elsif ($decomp =~ /^([0-9a-fA-F]+)$/)
              {
-@@ -1952,6 +1941,217 @@ sub dump_ctype_tables($)
+@@ -1953,6 +1942,217 @@ sub dump_ctype_tables($)
      save_file($filename);
  }
  
@@ -292,7 +292,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  sub rol($$)
  {
-@@ -2784,7 +2984,10 @@ sub save_file($)
+@@ -2785,7 +2985,10 @@ sub save_file($)
  chdir ".." if -f "./make_unicode";
  load_data();
  dump_case_mappings( "libs/port/casemap.c" );

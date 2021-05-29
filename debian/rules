@@ -125,7 +125,7 @@ override_dh_auto_configure:
 	./tools/make_requests
 	cd dlls/dsound && ./make_fir
 	cd dlls/opengl32 && ./make_opengl
-	cd dlls/winevulkan && ./make_vulkan
+	cd dlls/winevulkan && ./make_vulkan -x /usr/share/vulkan/registry/vk.xml
 	# autotools files
 	ln -sf /usr/share/misc/config.sub tools
 	ln -sf /usr/share/misc/config.guess tools
