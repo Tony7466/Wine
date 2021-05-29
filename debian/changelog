@@ -1,3 +1,16 @@
+wine-development (5.19-1) UNRELEASED; urgency=medium
+
+  * New upstream release 5.19, released Oct 9, 2020.
+    - Wine Mono engine updated to 5.1.1, with WPF text formatting
+    support.
+    - KERNEL32 library converted to PE.
+    - DSS cryptographic provider.
+    - Windowing support in the new console host.
+    - A number of exception handling fixes.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 29 May 2021 05:23:24 +0000
+
 wine-development (5.18-1) unstable; urgency=medium
 
   * New upstream release 5.18, released Sep 25, 2020.
