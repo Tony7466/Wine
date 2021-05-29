@@ -197,8 +197,16 @@ static NTSTATUS virtual_unwind( ULONG type, DISPATCHER_CONTEXT *dispatch, CONTEX
     }
     else
     {
-        WARN( "exception data not found in %s\n", debugstr_w(module->BaseDllName.Buffer) );
-        return STATUS_INVALID_DISPOSITION;
+        status = context->Pc != context->u.s.Lr ?
+                 STATUS_SUCCESS : STATUS_INVALID_DISPOSITION;
+        WARN( "exception data not found in %s for %p, LR %p, status %x\n",
+               debugstr_w(module->BaseDllName.Buffer), (void*) context->Pc,
+               (void*) context->u.s.Lr, status );
+        dispatch->EstablisherFrame = context->Sp;
+        dispatch->LanguageHandler = NULL;
+        context->Pc = context->u.s.Lr;
+        context->ContextFlags |= CONTEXT_UNWOUND_TO_CALL;
+        return status;
     }
 
     dispatch->EstablisherFrame = context->u.s.Fp;
@@ -307,10 +315,10 @@ static DWORD call_teb_unwind_handler( EXCEPTION_RECORD *rec, DISPATCHER_CONTEXT 
 static DWORD __cdecl nested_exception_handler( EXCEPTION_RECORD *rec, EXCEPTION_REGISTRATION_RECORD *frame,
                                                CONTEXT *context, EXCEPTION_REGISTRATION_RECORD **dispatcher )
 {
-    if (rec->ExceptionFlags & (EH_UNWINDING | EH_EXIT_UNWIND)) return ExceptionContinueSearch;
+    if (!(rec->ExceptionFlags & (EH_UNWINDING | EH_EXIT_UNWIND)))
+        rec->ExceptionFlags |= EH_NESTED_CALL;
 
-    /* FIXME */
-    return ExceptionNestedException;
+    return ExceptionContinueSearch;
 }
 
 
@@ -333,6 +341,7 @@ static DWORD call_handler( EXCEPTION_RECORD *rec, CONTEXT *context, DISPATCHER_C
     res = dispatch->LanguageHandler( rec, (void *)dispatch->EstablisherFrame, context, dispatch );
     TRACE( "handler at %p returned %u\n", dispatch->LanguageHandler, res );
 
+    rec->ExceptionFlags &= EH_NONCONTINUABLE;
     __wine_pop_frame( &frame );
     return res;
 }

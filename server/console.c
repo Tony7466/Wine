@@ -2130,10 +2130,6 @@ static int screen_buffer_ioctl( struct fd *fd, ioctl_code_t code, struct async *
         }
 
     case IOCTL_CONDRV_ACTIVATE:
-        if (screen_buffer->input && screen_buffer->input->server)
-            return queue_host_ioctl( screen_buffer->input->server, code, screen_buffer->id,
-                                     async, &screen_buffer->ioctl_q );
-
         if (!screen_buffer->input)
         {
             set_error( STATUS_INVALID_HANDLE );
@@ -2715,10 +2711,11 @@ DECL_HANDLER(get_next_console_request)
     if (ioctl)
     {
         unsigned int status = req->status;
+        if (status == STATUS_PENDING) status = STATUS_INVALID_PARAMETER;
         if (ioctl->async)
         {
             iosb = async_get_iosb( ioctl->async );
-            iosb->status = req->status;
+            iosb->status = status;
             iosb->out_size = min( iosb->out_size, get_req_data_size() );
             if (iosb->out_size)
             {

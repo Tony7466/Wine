@@ -3950,6 +3950,8 @@ static void test_AllocConsole(void)
 
 static void test_pseudo_console_child(HANDLE input, HANDLE output)
 {
+    CONSOLE_SCREEN_BUFFER_INFO sb_info;
+    CONSOLE_CURSOR_INFO cursor_info;
     DWORD mode;
     BOOL ret;
 
@@ -3984,6 +3986,25 @@ static void test_pseudo_console_child(HANDLE input, HANDLE output)
 
     ret = SetConsoleMode(output, mode | ENABLE_WRAP_AT_EOL_OUTPUT);
     ok(ret, "SetConsoleMode failed: %u\n", GetLastError());
+
+    ret = GetConsoleScreenBufferInfo(output, &sb_info);
+    ok(ret, "GetConsoleScreenBufferInfo failed: %u\n", GetLastError());
+    ok(sb_info.dwSize.X == 40, "dwSize.X = %u\n", sb_info.dwSize.X);
+    ok(sb_info.dwSize.Y == 30, "dwSize.Y = %u\n", sb_info.dwSize.Y);
+    ok(sb_info.dwCursorPosition.X == 0, "dwCursorPosition.X = %u\n", sb_info.dwCursorPosition.X);
+    ok(sb_info.dwCursorPosition.Y == 0, "dwCursorPosition.Y = %u\n", sb_info.dwCursorPosition.Y);
+    ok(sb_info.wAttributes == 7, "wAttributes = %x\n", sb_info.wAttributes);
+    ok(sb_info.srWindow.Left == 0, "srWindow.Left = %u\n", sb_info.srWindow.Left);
+    ok(sb_info.srWindow.Top == 0, "srWindow.Top = %u\n", sb_info.srWindow.Top);
+    ok(sb_info.srWindow.Right == 39, "srWindow.Right = %u\n", sb_info.srWindow.Right);
+    ok(sb_info.srWindow.Bottom == 29, "srWindow.Bottom = %u\n", sb_info.srWindow.Bottom);
+    ok(sb_info.dwMaximumWindowSize.X == 40, "dwMaximumWindowSize.X = %u\n", sb_info.dwMaximumWindowSize.X);
+    ok(sb_info.dwMaximumWindowSize.Y == 30, "dwMaximumWindowSize.Y = %u\n", sb_info.dwMaximumWindowSize.Y);
+
+    ret = GetConsoleCursorInfo(output, &cursor_info);
+    ok(ret, "GetConsoleCursorInfo failed: %u\n", GetLastError());
+    ok(cursor_info.dwSize == 25, "dwSize = %u\n", cursor_info.dwSize);
+    ok(cursor_info.bVisible == TRUE, "bVisible = %x\n", cursor_info.bVisible);
 
     test_console_title();
     test_WriteConsoleInputW(input);
@@ -4065,7 +4086,7 @@ static void test_pseudo_console(void)
 
 START_TEST(console)
 {
-    HANDLE hConIn, hConOut;
+    HANDLE hConIn, hConOut, revert_output = NULL;
     BOOL ret, test_current;
     CONSOLE_SCREEN_BUFFER_INFO	sbi;
     BOOL using_pseudo_console;
@@ -4153,6 +4174,16 @@ START_TEST(console)
         }
     }
 
+    if (test_current)
+    {
+        HANDLE sb;
+        revert_output = CreateFileA("CONOUT$", GENERIC_READ|GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, 0);
+        sb = CreateConsoleScreenBuffer(GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+                                       CONSOLE_TEXTMODE_BUFFER, NULL);
+        ok(sb != INVALID_HANDLE_VALUE, "Could not allocate screen buffer: %u\n", GetLastError());
+        SetConsoleActiveScreenBuffer(sb);
+    }
+
     hConIn = CreateFileA("CONIN$", GENERIC_READ|GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, 0);
     hConOut = CreateFileA("CONOUT$", GENERIC_READ|GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, 0);
 
@@ -4219,7 +4250,7 @@ START_TEST(console)
     else
         test_GetSetConsoleInputExeName();
 
-    test_GetConsoleProcessList();
+    if (!test_current) test_GetConsoleProcessList();
     test_OpenConsoleW();
     test_CreateFileW();
     test_OpenCON();
@@ -4239,20 +4270,25 @@ START_TEST(console)
     test_ReadConsoleOutputCharacterW(hConOut);
     test_ReadConsoleOutputAttribute(hConOut);
     test_ReadConsoleOutput(hConOut);
-    test_GetCurrentConsoleFont(hConOut);
-    test_GetCurrentConsoleFontEx(hConOut);
-    test_GetConsoleFontSize(hConOut);
-    test_GetLargestConsoleWindowSize(hConOut);
-    test_GetConsoleFontInfo(hConOut);
-    test_SetConsoleFont(hConOut);
+    if (!test_current)
+    {
+        test_GetCurrentConsoleFont(hConOut);
+        test_GetCurrentConsoleFontEx(hConOut);
+        test_GetConsoleFontSize(hConOut);
+        test_GetLargestConsoleWindowSize(hConOut);
+        test_GetConsoleFontInfo(hConOut);
+        test_SetConsoleFont(hConOut);
+    }
     test_GetConsoleScreenBufferInfoEx(hConOut);
     test_SetConsoleScreenBufferInfoEx(hConOut);
     test_console_title();
     if (!test_current)
     {
+        test_pseudo_console();
         test_AttachConsole(hConOut);
         test_AllocConsole();
         test_FreeConsole();
-        test_pseudo_console();
     }
+    else if (revert_output) SetConsoleActiveScreenBuffer(revert_output);
+
 }

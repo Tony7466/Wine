@@ -30,6 +30,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#ifdef HAVE_NETINET_IN_H
+# include <netinet/in.h>
+#endif
 #ifdef HAVE_POLL_H
 # include <poll.h>
 #endif
@@ -51,6 +54,29 @@
 # include <linux/rtnetlink.h>
 #endif
 
+#ifdef HAVE_NETIPX_IPX_H
+# include <netipx/ipx.h>
+#elif defined(HAVE_LINUX_IPX_H)
+# ifdef HAVE_ASM_TYPES_H
+#  include <asm/types.h>
+# endif
+# ifdef HAVE_LINUX_TYPES_H
+#  include <linux/types.h>
+# endif
+# include <linux/ipx.h>
+#endif
+#if defined(SOL_IPX) || defined(SO_DEFAULT_HEADERS)
+# define HAS_IPX
+#endif
+
+#ifdef HAVE_LINUX_IRDA_H
+# ifdef HAVE_LINUX_TYPES_H
+#  include <linux/types.h>
+# endif
+# include <linux/irda.h>
+# define HAS_IRDA
+#endif
+
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
 #include "windef.h"
@@ -58,6 +84,7 @@
 #include "winerror.h"
 #define USE_WS_PREFIX
 #include "winsock2.h"
+#include "wsipx.h"
 #include "wine/afd.h"
 
 #include "process.h"
@@ -429,7 +456,7 @@ static void sock_poll_event( struct fd *fd, int event )
     else
     {
         /* normal data flow */
-        if ( sock->type == SOCK_STREAM && ( event & POLLIN ) )
+        if (sock->type == WS_SOCK_STREAM && (event & POLLIN))
         {
             char dummy;
             int nr;
@@ -519,8 +546,8 @@ static int sock_get_poll_events( struct fd *fd )
     else if (smask & FD_READ || (sock->state & FD_WINE_LISTENING && mask & FD_ACCEPT))
         ev |= POLLIN | POLLPRI;
     /* We use POLLIN with 0 bytes recv() as FD_CLOSE indication for stream sockets. */
-    else if ( sock->type == SOCK_STREAM && sock->state & FD_READ && mask & FD_CLOSE &&
-              !(sock->hmask & FD_READ) )
+    else if (sock->type == WS_SOCK_STREAM && (sock->state & FD_READ) && (mask & FD_CLOSE) &&
+              !(sock->hmask & FD_READ))
         ev |= POLLIN;
 
     if (async_queued( &sock->write_q ))
@@ -638,12 +665,110 @@ static struct sock *create_socket(void)
     return sock;
 }
 
+static int get_unix_family( int family )
+{
+    switch (family)
+    {
+        case WS_AF_INET: return AF_INET;
+        case WS_AF_INET6: return AF_INET6;
+#ifdef HAS_IPX
+        case WS_AF_IPX: return AF_IPX;
+#endif
+#ifdef AF_IRDA
+        case WS_AF_IRDA: return AF_IRDA;
+#endif
+        case WS_AF_UNSPEC: return AF_UNSPEC;
+        default: return -1;
+    }
+}
+
+static int get_unix_type( int type )
+{
+    switch (type)
+    {
+        case WS_SOCK_DGRAM: return SOCK_DGRAM;
+        case WS_SOCK_RAW: return SOCK_RAW;
+        case WS_SOCK_STREAM: return SOCK_STREAM;
+        default: return -1;
+    }
+}
+
+static int get_unix_protocol( int protocol )
+{
+    if (protocol >= WS_NSPROTO_IPX && protocol <= WS_NSPROTO_IPX + 255)
+        return protocol;
+
+    switch (protocol)
+    {
+        case WS_IPPROTO_ICMP: return IPPROTO_ICMP;
+        case WS_IPPROTO_IGMP: return IPPROTO_IGMP;
+        case WS_IPPROTO_IP: return IPPROTO_IP;
+        case WS_IPPROTO_IPIP: return IPPROTO_IPIP;
+        case WS_IPPROTO_IPV6: return IPPROTO_IPV6;
+        case WS_IPPROTO_RAW: return IPPROTO_RAW;
+        case WS_IPPROTO_TCP: return IPPROTO_TCP;
+        case WS_IPPROTO_UDP: return IPPROTO_UDP;
+        default: return -1;
+    }
+}
+
+static void set_dont_fragment( int fd, int level, int value )
+{
+    int optname;
+
+    if (level == IPPROTO_IP)
+    {
+#ifdef IP_DONTFRAG
+        optname = IP_DONTFRAG;
+#elif defined(IP_MTU_DISCOVER) && defined(IP_PMTUDISC_DO) && defined(IP_PMTUDISC_DONT)
+        optname = IP_MTU_DISCOVER;
+        value = value ? IP_PMTUDISC_DO : IP_PMTUDISC_DONT;
+#else
+        return;
+#endif
+    }
+    else
+    {
+#ifdef IPV6_DONTFRAG
+        optname = IPV6_DONTFRAG;
+#elif defined(IPV6_MTU_DISCOVER) && defined(IPV6_PMTUDISC_DO) && defined(IPV6_PMTUDISC_DONT)
+        optname = IPV6_MTU_DISCOVER;
+        value = value ? IPV6_PMTUDISC_DO : IPV6_PMTUDISC_DONT;
+#else
+        return;
+#endif
+    }
+
+    setsockopt( fd, level, optname, &value, sizeof(value) );
+}
+
 static int init_socket( struct sock *sock, int family, int type, int protocol, unsigned int flags )
 {
     unsigned int options = 0;
-    int sockfd;
+    int sockfd, unix_type, unix_family, unix_protocol;
 
-    sockfd = socket( family, type, protocol );
+    unix_family = get_unix_family( family );
+    unix_type = get_unix_type( type );
+    unix_protocol = get_unix_protocol( protocol );
+
+    if (unix_protocol < 0)
+    {
+        if (type && unix_type < 0)
+            set_win32_error( WSAESOCKTNOSUPPORT );
+        else
+            set_win32_error( WSAEPROTONOSUPPORT );
+        return -1;
+    }
+    if (unix_family < 0)
+    {
+        if (family >= 0 && unix_type < 0)
+            set_win32_error( WSAESOCKTNOSUPPORT );
+        else
+            set_win32_error( WSAEAFNOSUPPORT );
+        return -1;
+    }
+
+    sockfd = socket( unix_family, unix_type, unix_protocol );
     if (sockfd == -1)
     {
         if (errno == EINVAL) set_win32_error( WSAESOCKTNOSUPPORT );
@@ -651,6 +776,41 @@ static int init_socket( struct sock *sock, int family, int type, int protocol, u
         return -1;
     }
     fcntl(sockfd, F_SETFL, O_NONBLOCK); /* make socket nonblocking */
+
+    if (family == WS_AF_IPX && protocol >= WS_NSPROTO_IPX && protocol <= WS_NSPROTO_IPX + 255)
+    {
+#ifdef HAS_IPX
+        int ipx_type = protocol - WS_NSPROTO_IPX;
+
+#ifdef SOL_IPX
+        setsockopt( sockfd, SOL_IPX, IPX_TYPE, &ipx_type, sizeof(ipx_type) );
+#else
+        struct ipx val;
+        /* Should we retrieve val using a getsockopt call and then
+         * set the modified one? */
+        val.ipx_pt = ipx_type;
+        setsockopt( sockfd, 0, SO_DEFAULT_HEADERS, &val, sizeof(val) );
+#endif
+#endif
+    }
+
+    if (unix_family == AF_INET || unix_family == AF_INET6)
+    {
+        /* ensure IP_DONTFRAGMENT is disabled for SOCK_DGRAM and SOCK_RAW, enabled for SOCK_STREAM */
+        if (unix_type == SOCK_DGRAM || unix_type == SOCK_RAW) /* in Linux the global default can be enabled */
+            set_dont_fragment( sockfd, unix_family == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP, FALSE );
+        else if (unix_type == SOCK_STREAM)
+            set_dont_fragment( sockfd, unix_family == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP, TRUE );
+    }
+
+#ifdef IPV6_V6ONLY
+    if (unix_family == AF_INET6)
+    {
+        static const int enable = 1;
+        setsockopt( sockfd, IPPROTO_IPV6, IPV6_V6ONLY, &enable, sizeof(enable) );
+    }
+#endif
+
     sock->state  = (type != SOCK_STREAM) ? (FD_READ|FD_WRITE) : 0;
     sock->flags  = flags;
     sock->proto  = protocol;
@@ -691,15 +851,10 @@ static int accept_new_fd( struct sock *sock )
 }
 
 /* accept a socket (creates a new fd) */
-static struct sock *accept_socket( obj_handle_t handle )
+static struct sock *accept_socket( struct sock *sock )
 {
     struct sock *acceptsock;
-    struct sock *sock;
     int	acceptfd;
-
-    sock = (struct sock *)get_handle_obj( current->process, handle, FILE_READ_DATA, &sock_ops );
-    if (!sock)
-        return NULL;
 
     if (get_unix_fd( sock->fd ) == -1) return NULL;
 
@@ -710,15 +865,10 @@ static struct sock *accept_socket( obj_handle_t handle )
     }
     else
     {
-        if ((acceptfd = accept_new_fd( sock )) == -1)
-        {
-            release_object( sock );
-            return NULL;
-        }
+        if ((acceptfd = accept_new_fd( sock )) == -1) return NULL;
         if (!(acceptsock = create_socket()))
         {
             close( acceptfd );
-            release_object( sock );
             return NULL;
         }
 
@@ -739,7 +889,6 @@ static struct sock *accept_socket( obj_handle_t handle )
                                                     get_fd_options( sock->fd ) )))
         {
             release_object( acceptsock );
-            release_object( sock );
             return NULL;
         }
     }
@@ -747,7 +896,6 @@ static struct sock *accept_socket( obj_handle_t handle )
     sock->pmask &= ~FD_ACCEPT;
     sock->hmask &= ~FD_ACCEPT;
     sock_reselect( sock );
-    release_object( sock );
     return acceptsock;
 }
 
@@ -937,6 +1085,47 @@ static int sock_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
             return 0;
         }
         init_socket( sock, params->family, params->type, params->protocol, params->flags );
+        return 0;
+    }
+
+    case IOCTL_AFD_ACCEPT:
+    {
+        struct sock *acceptsock;
+        obj_handle_t handle;
+
+        if (get_reply_max_size() != sizeof(handle))
+        {
+            set_error( STATUS_BUFFER_TOO_SMALL );
+            return 0;
+        }
+
+        if (!(acceptsock = accept_socket( sock ))) return 0;
+        handle = alloc_handle( current->process, &acceptsock->obj,
+                               GENERIC_READ | GENERIC_WRITE | SYNCHRONIZE, OBJ_INHERIT );
+        acceptsock->wparam = handle;
+        release_object( acceptsock );
+        set_reply_data( &handle, sizeof(handle) );
+        return 0;
+    }
+
+    case IOCTL_AFD_ACCEPT_INTO:
+    {
+        static const int access = FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | FILE_READ_DATA;
+        struct sock *acceptsock;
+        obj_handle_t handle;
+
+        if (get_req_data_size() != sizeof(handle))
+        {
+            set_error( STATUS_BUFFER_TOO_SMALL );
+            return 0;
+        }
+        handle = *(obj_handle_t *)get_req_data();
+
+        if (!(acceptsock = (struct sock *)get_handle_obj( current->process, handle, access, &sock_ops )))
+            return 0;
+        if (accept_into_socket( sock, acceptsock ))
+            acceptsock->wparam = handle;
+        release_object( acceptsock );
         return 0;
     }
 
@@ -1257,47 +1446,6 @@ struct object *create_socket_device( struct object *root, const struct unicode_s
     return create_named_object( root, &socket_device_ops, name, attr, sd );
 }
 
-/* accept a socket */
-DECL_HANDLER(accept_socket)
-{
-    struct sock *sock;
-
-    reply->handle = 0;
-    if ((sock = accept_socket( req->lhandle )) != NULL)
-    {
-        reply->handle = alloc_handle( current->process, &sock->obj, req->access, req->attributes );
-        sock->wparam = reply->handle;  /* wparam for message is the socket handle */
-        sock_reselect( sock );
-        release_object( &sock->obj );
-    }
-}
-
-/* accept a socket into an initialized socket */
-DECL_HANDLER(accept_into_socket)
-{
-    struct sock *sock, *acceptsock;
-    const int all_attributes = FILE_READ_ATTRIBUTES|FILE_WRITE_ATTRIBUTES|FILE_READ_DATA;
-
-    if (!(sock = (struct sock *)get_handle_obj( current->process, req->lhandle,
-                                                all_attributes, &sock_ops)))
-        return;
-
-    if (!(acceptsock = (struct sock *)get_handle_obj( current->process, req->ahandle,
-                                                      all_attributes, &sock_ops)))
-    {
-        release_object( sock );
-        return;
-    }
-
-    if (accept_into_socket( sock, acceptsock ))
-    {
-        acceptsock->wparam = req->ahandle;  /* wparam for message is the socket handle */
-        sock_reselect( acceptsock );
-    }
-    release_object( acceptsock );
-    release_object( sock );
-}
-
 /* set socket event parameters */
 DECL_HANDLER(set_socket_event)
 {
@@ -1380,7 +1528,7 @@ DECL_HANDLER(enable_socket_event)
     sock->hmask &= ~req->mask;
     sock->state |= req->sstate;
     sock->state &= ~req->cstate;
-    if ( sock->type != SOCK_STREAM ) sock->state &= ~STREAM_FLAG_MASK;
+    if (sock->type != WS_SOCK_STREAM) sock->state &= ~STREAM_FLAG_MASK;
 
     sock_reselect( sock );
 

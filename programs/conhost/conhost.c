@@ -19,118 +19,14 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include <stdarg.h>
-#include <stdlib.h>
 #include <assert.h>
 
-#include <ntstatus.h>
-#define WIN32_NO_STATUS
-#include <windef.h>
-#include <winbase.h>
-#include <winuser.h>
-#include <winnls.h>
-#include <winternl.h>
+#include "conhost.h"
 
-#include "wine/condrv.h"
 #include "wine/server.h"
-#include "wine/rbtree.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(conhost);
-
-struct history_line
-{
-    size_t len;
-    WCHAR  text[1];
-};
-
-struct font_info
-{
-    short int width;
-    short int height;
-    short int weight;
-    short int pitch_family;
-    WCHAR    *face_name;
-    size_t    face_len;
-};
-
-struct edit_line
-{
-    NTSTATUS              status;              /* edit status */
-    WCHAR                *buf;                 /* the line being edited */
-    unsigned int          len;                 /* number of chars in line */
-    size_t                size;                /* buffer size */
-    unsigned int          cursor;              /* offset for cursor in current line */
-    WCHAR                *yanked;              /* yanked line */
-    unsigned int          mark;                /* marked point (emacs mode only) */
-    unsigned int          history_index;       /* history index */
-    WCHAR                *current_history;     /* buffer for the recent history entry */
-    BOOL                  insert_key;          /* insert key state */
-    BOOL                  insert_mode;         /* insert mode */
-    unsigned int          update_begin;        /* update region */
-    unsigned int          update_end;
-    unsigned int          end_offset;          /* offset of the last written char */
-    unsigned int          home_x;              /* home position */
-    unsigned int          home_y;
-};
-
-struct console
-{
-    HANDLE                server;              /* console server handle */
-    unsigned int          mode;                /* input mode */
-    struct screen_buffer *active;              /* active screen buffer */
-    int                   is_unix;             /* UNIX terminal mode */
-    INPUT_RECORD         *records;             /* input records */
-    unsigned int          record_count;        /* number of input records */
-    unsigned int          record_size;         /* size of input records buffer */
-    WCHAR                *read_buffer;         /* buffer of data available for read */
-    size_t                read_buffer_count;   /* size of available data */
-    size_t                read_buffer_size;    /* size of buffer */
-    unsigned int          read_ioctl;          /* current read ioctl */
-    size_t                pending_read;        /* size of pending read buffer */
-    struct edit_line      edit_line;           /* edit line context */
-    WCHAR                *title;               /* console title */
-    size_t                title_len;           /* length of console title */
-    struct history_line **history;             /* lines history */
-    unsigned int          history_size;        /* number of entries in history array */
-    unsigned int          history_index;       /* number of used entries in history array */
-    unsigned int          history_mode;        /* mode of history (non zero means remove doubled strings */
-    unsigned int          edition_mode;        /* index to edition mode flavors */
-    unsigned int          input_cp;            /* console input codepage */
-    unsigned int          output_cp;           /* console output codepage */
-    unsigned int          win;                 /* window handle if backend supports it */
-    HANDLE                input_thread;        /* input thread handle */
-    HANDLE                tty_input;           /* handle to tty input stream */
-    HANDLE                tty_output;          /* handle to tty output stream */
-    char                  tty_buffer[4096];    /* tty output buffer */
-    size_t                tty_buffer_count;    /* tty buffer size */
-    unsigned int          tty_cursor_x;        /* tty cursor position */
-    unsigned int          tty_cursor_y;
-    unsigned int          tty_attr;            /* current tty char attributes */
-    int                   tty_cursor_visible;  /* tty cursor visibility flag */
-};
-
-struct screen_buffer
-{
-    struct console       *console;       /* console reference */
-    unsigned int          id;            /* screen buffer id */
-    unsigned int          mode;          /* output mode */
-    unsigned int          width;         /* size (w-h) of the screen buffer */
-    unsigned int          height;
-    unsigned int          cursor_size;   /* size of cursor (percentage filled) */
-    unsigned int          cursor_visible;/* cursor visibility flag */
-    unsigned int          cursor_x;      /* position of cursor */
-    unsigned int          cursor_y;      /* position of cursor */
-    unsigned short        attr;          /* default fill attributes (screen colors) */
-    unsigned short        popup_attr;    /* pop-up color attributes */
-    unsigned int          max_width;     /* size (w-h) of the window given font size */
-    unsigned int          max_height;
-    char_info_t          *data;          /* the data for each cell - a width x height matrix */
-    unsigned int          color_map[16]; /* color table */
-    RECT                  win;           /* current visible window on the screen buffer */
-    struct font_info      font;          /* console font information */
-    struct wine_rb_entry  entry;         /* map entry */
-};
 
 static const char_info_t empty_char_info = { ' ', 0x0007 };  /* white on black space */
 
@@ -184,18 +80,29 @@ static struct screen_buffer *create_screen_buffer( struct console *console, int 
     screen_buffer->console        = console;
     screen_buffer->id             = id;
     screen_buffer->mode           = ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT;
-    screen_buffer->cursor_size    = 100;
+    screen_buffer->cursor_size    = 25;
     screen_buffer->cursor_visible = 1;
     screen_buffer->width          = width;
     screen_buffer->height         = height;
     screen_buffer->attr           = 0x07;
     screen_buffer->popup_attr     = 0xf5;
-    screen_buffer->max_width      = 80;
-    screen_buffer->max_height     = 25;
-    screen_buffer->win.right      = min( screen_buffer->max_width - 1, width - 1 );
-    screen_buffer->win.bottom     = min( screen_buffer->max_height - 1, height - 1);
     screen_buffer->font.weight    = FW_NORMAL;
     screen_buffer->font.pitch_family = FIXED_PITCH | FF_DONTCARE;
+
+    if (console->active)
+    {
+        screen_buffer->max_width  = console->active->max_width;
+        screen_buffer->max_height = console->active->max_height;
+        screen_buffer->win.right  = console->active->win.right  - console->active->win.left;
+        screen_buffer->win.bottom = console->active->win.bottom - console->active->win.top;
+    }
+    else
+    {
+        screen_buffer->max_width  = width;
+        screen_buffer->max_height = height;
+        screen_buffer->win.right  = width - 1;
+        screen_buffer->win.bottom = height - 1;
+    }
 
     if (wine_rb_put( &screen_buffer_map, LongToPtr(id), &screen_buffer->entry ))
     {
@@ -387,9 +294,22 @@ static void init_tty_output( struct console *console )
     console->tty_cursor_visible = TRUE;
 }
 
-static void empty_update_rect( struct screen_buffer *screen_buffer, RECT *rect )
+static void scroll_to_cursor( struct screen_buffer *screen_buffer )
 {
-    SetRect( rect, screen_buffer->width, screen_buffer->height, 0, 0 );
+    int w = screen_buffer->win.right - screen_buffer->win.left + 1;
+    int h = screen_buffer->win.bottom - screen_buffer->win.top + 1;
+
+    if (screen_buffer->cursor_x < screen_buffer->win.left)
+        screen_buffer->win.left = min( screen_buffer->cursor_x, screen_buffer->width - w );
+    else if (screen_buffer->cursor_x > screen_buffer->win.right)
+        screen_buffer->win.left = max( screen_buffer->cursor_x, w ) - w + 1;
+    screen_buffer->win.right = screen_buffer->win.left + w - 1;
+
+    if (screen_buffer->cursor_y < screen_buffer->win.top)
+        screen_buffer->win.top = min( screen_buffer->cursor_y, screen_buffer->height - h );
+    else if (screen_buffer->cursor_y > screen_buffer->win.bottom)
+        screen_buffer->win.top = max( screen_buffer->cursor_y, h ) - h + 1;
+    screen_buffer->win.bottom = screen_buffer->win.top + h - 1;
 }
 
 static void update_output( struct screen_buffer *screen_buffer, RECT *rect )
@@ -398,9 +318,17 @@ static void update_output( struct screen_buffer *screen_buffer, RECT *rect )
     char_info_t *ch;
     char buf[8];
 
-    if (!is_active( screen_buffer ) || !screen_buffer->console->tty_output) return;
-    if (rect->top > rect->bottom || rect->right < rect->left) return;
+    if (!is_active( screen_buffer ) || rect->top > rect->bottom || rect->right < rect->left)
+        return;
+
     TRACE( "%s\n", wine_dbgstr_rect( rect ));
+
+    if (screen_buffer->console->win)
+    {
+        update_window_region( screen_buffer->console, rect );
+        return;
+    }
+    if (!screen_buffer->console->tty_output) return;
 
     hide_tty_cursor( screen_buffer->console );
 
@@ -1237,10 +1165,12 @@ static void update_read_output( struct console *console )
         if (console->is_unix)
             set_tty_cursor_relative( screen_buffer->console, update_rect.left, update_rect.top );
         update_output( screen_buffer, &update_rect );
+        scroll_to_cursor( screen_buffer );
     }
     if (console->is_unix)
         set_tty_cursor_relative( screen_buffer->console, screen_buffer->cursor_x, screen_buffer->cursor_y );
     tty_sync( screen_buffer->console );
+    update_window_config( screen_buffer->console );
 }
 
 static NTSTATUS process_console_input( struct console *console )
@@ -1377,8 +1307,8 @@ static NTSTATUS read_console( struct console *console, size_t out_size )
 }
 
 /* add input events to a console input queue */
-static NTSTATUS write_console_input( struct console *console, const INPUT_RECORD *records,
-                                     unsigned int count, BOOL flush )
+NTSTATUS write_console_input( struct console *console, const INPUT_RECORD *records,
+                              unsigned int count, BOOL flush )
 {
     TRACE( "%u\n", count );
 
@@ -1700,6 +1630,7 @@ done:
 
 static BOOL ensure_tty_input_thread( struct console *console )
 {
+    if (!console->tty_input) return TRUE;
     if (!console->input_thread)
         console->input_thread = CreateThread( NULL, 0, tty_input, console, 0, NULL );
     return console->input_thread != NULL;
@@ -1710,9 +1641,10 @@ static NTSTATUS screen_buffer_activate( struct screen_buffer *screen_buffer )
     RECT update_rect;
     TRACE( "%p\n", screen_buffer );
     screen_buffer->console->active = screen_buffer;
-    SetRect( &update_rect, 0, 0, screen_buffer->width - 1, screen_buffer->height - 1);
+    SetRect( &update_rect, 0, 0, screen_buffer->width - 1, screen_buffer->height - 1 );
     update_output( screen_buffer, &update_rect );
     tty_sync( screen_buffer->console );
+    update_window_config( screen_buffer->console );
     return STATUS_SUCCESS;
 }
 
@@ -1748,7 +1680,7 @@ static NTSTATUS get_output_info( struct screen_buffer *screen_buffer, size_t *ou
     return STATUS_SUCCESS;
 }
 
-static NTSTATUS change_screen_buffer_size( struct screen_buffer *screen_buffer, int new_width, int new_height )
+NTSTATUS change_screen_buffer_size( struct screen_buffer *screen_buffer, int new_width, int new_height )
 {
     int i, old_width, old_height, copy_width, copy_height;
     char_info_t *new_data;
@@ -1825,6 +1757,7 @@ static NTSTATUS set_output_info( struct screen_buffer *screen_buffer,
         {
             screen_buffer->cursor_x = info->cursor_x;
             screen_buffer->cursor_y = info->cursor_y;
+            scroll_to_cursor( screen_buffer );
         }
     }
     if (params->mask & SET_CONSOLE_OUTPUT_INFO_SIZE)
@@ -1917,7 +1850,11 @@ static NTSTATUS set_output_info( struct screen_buffer *screen_buffer,
         }
     }
 
-    if (is_active( screen_buffer )) tty_sync( screen_buffer->console );
+    if (is_active( screen_buffer ))
+    {
+        tty_sync( screen_buffer->console );
+        update_window_config( screen_buffer->console );
+    }
     return STATUS_SUCCESS;
 }
 
@@ -1972,8 +1909,10 @@ static NTSTATUS write_console( struct screen_buffer *screen_buffer, const WCHAR 
         else screen_buffer->cursor_x = update_rect.left;
     }
 
+    scroll_to_cursor( screen_buffer );
     update_output( screen_buffer, &update_rect );
     tty_sync( screen_buffer->console );
+    update_window_config( screen_buffer->console );
     return STATUS_SUCCESS;
 }
 
@@ -2425,6 +2364,8 @@ static NTSTATUS screen_buffer_ioctl( struct screen_buffer *screen_buffer, unsign
 static NTSTATUS console_input_ioctl( struct console *console, unsigned int code, const void *in_data,
                                      size_t in_size, size_t *out_size )
 {
+    NTSTATUS status;
+
     switch (code)
     {
     case IOCTL_CONDRV_GET_MODE:
@@ -2446,18 +2387,19 @@ static NTSTATUS console_input_ioctl( struct console *console, unsigned int code,
     case IOCTL_CONDRV_READ_CONSOLE:
         if (in_size || *out_size % sizeof(WCHAR)) return STATUS_INVALID_PARAMETER;
         ensure_tty_input_thread( console );
-        return read_console( console, *out_size );
+        status = read_console( console, *out_size );
+        *out_size = 0;
+        return status;
 
     case IOCTL_CONDRV_READ_INPUT:
         {
             unsigned int blocking;
-            NTSTATUS status;
             if (in_size && in_size != sizeof(blocking)) return STATUS_INVALID_PARAMETER;
             ensure_tty_input_thread( console );
             blocking = in_size && *(unsigned int *)in_data;
             if (blocking && !console->record_count && *out_size)
             {
-                TRACE( "pending read" );
+                TRACE( "pending read\n" );
                 console->read_ioctl = IOCTL_CONDRV_READ_INPUT;
                 console->pending_read = *out_size;
                 return STATUS_PENDING;
@@ -2474,8 +2416,9 @@ static NTSTATUS console_input_ioctl( struct console *console, unsigned int code,
     case IOCTL_CONDRV_PEEK:
         {
             void *result;
-            TRACE( "peek\n ");
+            TRACE( "peek\n" );
             if (in_size) return STATUS_INVALID_PARAMETER;
+            ensure_tty_input_thread( console );
             *out_size = min( *out_size, console->record_count * sizeof(INPUT_RECORD) );
             if (!(result = alloc_ioctl_buffer( *out_size ))) return STATUS_NO_MEMORY;
             if (*out_size) memcpy( result, console->records, *out_size );
@@ -2494,7 +2437,7 @@ static NTSTATUS console_input_ioctl( struct console *console, unsigned int code,
             info->edition_mode  = console->edition_mode;
             info->input_cp      = console->input_cp;
             info->output_cp     = console->output_cp;
-            info->win           = console->win;
+            info->win           = condrv_handle( console->win );
             info->input_count   = console->record_count;
             return STATUS_SUCCESS;
         }
@@ -2551,7 +2494,7 @@ static NTSTATUS console_input_ioctl( struct console *console, unsigned int code,
             }
             if (params->mask & SET_CONSOLE_INPUT_INFO_WIN)
             {
-                console->win = params->info.win;
+                console->win = wine_server_ptr_handle( params->info.win );
             }
             return STATUS_SUCCESS;
         }
@@ -2663,6 +2606,7 @@ static int main_loop( struct console *console, HANDLE signal )
     unsigned short signal_id;
     IO_STATUS_BLOCK signal_io;
     NTSTATUS status;
+    BOOL pump_msgs;
     DWORD res;
 
     if (signal)
@@ -2678,10 +2622,25 @@ static int main_loop( struct console *console, HANDLE signal )
     wait_handles[wait_cnt++] = console->server;
     if (signal) wait_handles[wait_cnt++] = signal_event;
     if (console->input_thread) wait_handles[wait_cnt++] = console->input_thread;
+    pump_msgs = console->win != NULL;
 
     for (;;)
     {
-        res = WaitForMultipleObjects( wait_cnt, wait_handles, FALSE, INFINITE );
+        if (pump_msgs)
+            res = MsgWaitForMultipleObjects( wait_cnt, wait_handles, FALSE, INFINITE, QS_ALLEVENTS );
+        else
+            res = WaitForMultipleObjects( wait_cnt, wait_handles, FALSE, INFINITE );
+
+        if (res == WAIT_OBJECT_0 + wait_cnt)
+        {
+            MSG msg;
+            while (PeekMessageW( &msg, 0, 0, 0, PM_REMOVE ))
+            {
+                if (msg.message == WM_QUIT) return 0;
+                DispatchMessageW(&msg);
+            }
+            continue;
+        }
 
         switch (res)
         {
@@ -2776,12 +2735,6 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         return 1;
     }
 
-    if (!headless)
-    {
-        FIXME( "windowed mode not supported\n" );
-        return 0;
-    }
-
     if (!console.server)
     {
         ERR( "no server handle\n" );
@@ -2798,6 +2751,11 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         console.tty_output = GetStdHandle( STD_OUTPUT_HANDLE );
         init_tty_output( &console );
         if (!console.is_unix && !ensure_tty_input_thread( &console )) return 1;
+    }
+    else
+    {
+        if (!init_window( &console )) return 1;
+        ShowWindow( console.win, SW_SHOW );
     }
 
     return main_loop( &console, signal );
