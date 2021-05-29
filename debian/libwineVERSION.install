@@ -1,9 +1,10 @@
 # fake PE files and their corresponding ELF files
 debian/tmp/usr/lib/*/*/*.*.so
-debian/tmp/usr/lib/*/*/ntdll.so
 debian/tmp/usr/lib/*/*/fakedlls
 
 # wine library
+debian/tmp/usr/lib/*/*/ntdll.so
+debian/tmp/usr/lib/*/*/user32.so
 debian/tmp/usr/lib/*/*/libwine.so.*
 
 # wine server

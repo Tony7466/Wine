@@ -8,10 +8,10 @@ author: Michael Gilbert <mgilbert@debian.org>
  mandir          = @mandir@
  includedir      = @includedir@
 -fontdir         = ${datadir}/wine/fonts
-+fontdir         = /usr/share/wine/fonts
++fontdir         = ${datadir}/wine
  nlsdir          = ${datadir}/wine/nls
 -dlldir          = ${libdir}/wine
 +dlldir          = ${libdir}
- top_srcdir      = @top_srcdir@
- top_builddir    = @top_builddir@
  srcdir          = @srcdir@
+ SHELL           = /bin/sh
+ CC              = @CC@

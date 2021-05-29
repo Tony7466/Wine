@@ -1,5 +1,4 @@
 debianization/mingw.patch
-debianization/indep.patch
 debianization/addons.patch
 debianization/makefile.patch
 debianization/manpages.patch
@@ -12,10 +11,11 @@ debianization/wineserver-persistence.patch
 system/zlib.patch
 
 disable/fold.patch
-disable/tests.patch
 disable/line-wrapping.patch
+disable/generated-data.patch
 disable/addons-download.patch
 disable/po-modifications.patch
+disable/font-installation.patch
 disable/blacklist-extensions.patch
 
 generate/icons.patch
@@ -38,6 +38,7 @@ arm64/incorrect-member.patch
 arm64/tautological-compare.patch
 
 warnings/bison.patch
+warnings/format-security.patch
 warnings/strcpy-overflow.patch
 warnings/incorrect-bounds.patch
 warnings/uninitialized-variables.patch

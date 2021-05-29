@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -1563,6 +1563,9 @@ static struct file *open_include_file( c
+@@ -1561,6 +1561,9 @@ static struct file *open_include_file( c
  
      if (pFile->type == INCL_SYSTEM) return NULL;  /* ignore system files we cannot find */
  
@@ -13,7 +13,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      /* try in src file directory */
      if ((file = open_file_same_dir( pFile->included_by, pFile->name, &pFile->filename ))) return file;
  
-@@ -2972,6 +2975,14 @@ static void output_source_svg( struct ma
+@@ -2927,6 +2930,17 @@ static void output_source_svg( struct ma
  
          if (images[i])
          {
@@ -22,12 +22,15 @@ author: Michael Gilbert <mgilbert@debian.org>
 +            {
 +                if (strendswith( src->name, ".rc" ))
 +                {
-+                output( "%s: %s.%s\n", replace_extension( src->name, "rc", "res" ), src_dir_path( make, obj ), images[i] );
++                    char *res = replace_extension( src->name, "rc", "res" );
++                    char *res_file = src_dir_path( make, res );
++                    char *obj_file = src_dir_path( make, obj );
++                    output( "%s: %s.%s\n", res_file, obj_file, images[i] );
 +                }
 +            }
              output( "%s.%s: %s\n", src_dir_path( make, obj ), images[i], source->filename );
              output( "\tCONVERT=\"%s\" ICOTOOL=\"%s\" RSVG=\"%s\" %s %s $@\n", convert, icotool, rsvg,
-                     top_src_dir_path( make, "tools/buildimage" ), source->filename );
+                     root_src_dir_path( "tools/buildimage" ), source->filename );
 --- a/programs/regedit/Makefile.in
 +++ b/programs/regedit/Makefile.in
 @@ -20,4 +20,4 @@ RC_SRCS = regedit.rc

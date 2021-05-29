@@ -1,7 +1,6 @@
-wine-development (5.18-1) UNRELEASED; urgency=medium
+wine-development (5.18-1) unstable; urgency=medium
 
   * New upstream release 5.18, released Sep 25, 2020.
-    - Vulkan shader compilation using the new vkd3d-shader library.
     - USER32 library converted to PE.
     - Console no longer requires the curses library.
     - Support for display modes with various orientations.

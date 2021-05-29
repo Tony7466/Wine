@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -1561,14 +1561,6 @@ static struct file *open_include_file( c
+@@ -1559,14 +1559,6 @@ static struct file *open_include_file( c
          }
      }
  
@@ -18,13 +18,30 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (pFile->type == INCL_SYSTEM) return NULL;  /* ignore system files we cannot find */
  
      /* try in src file directory */
+@@ -3250,6 +3242,7 @@ static void output_module( struct makefi
+ {
+     struct strarray all_libs = empty_strarray;
+     struct strarray dep_libs = empty_strarray;
++    struct strarray extra_ldflags = get_expanded_make_var_array( make, "EXTRA_LDFLAGS" );
+     char *module_path = obj_dir_path( make, make->module );
+     const char *debug_file = NULL;
+     char *spec_file = NULL;
+@@ -3318,6 +3311,7 @@ static void output_module( struct makefi
+     if (debug_file) output_filename( strmake( "-Wl,--debug-file,%s", debug_file ));
+     output_filenames( all_libs );
+     output_filename( make->is_cross ? "$(CROSSLDFLAGS)" : "$(LDFLAGS)" );
++    output_filenames( extra_ldflags );
+     output( "\n" );
+ 
+     if (make->unixobj_files.count)
 --- a/dlls/cabinet/Makefile.in
 +++ b/dlls/cabinet/Makefile.in
-@@ -1,11 +1,11 @@
+@@ -1,11 +1,12 @@
  MODULE    = cabinet.dll
  IMPORTLIB = cabinet
  
-+CROSSLDFLAGS  = -lz
++EXTRA_LDFLAGS = -lz
++
  EXTRADLLFLAGS = -mno-cygwin
  
  C_SRCS = \
@@ -55,11 +72,12 @@ author: Michael Gilbert <mgilbert@debian.org>
  #include "wine/debug.h"
 --- a/dlls/opcservices/Makefile.in
 +++ b/dlls/opcservices/Makefile.in
-@@ -1,11 +1,11 @@
+@@ -1,11 +1,12 @@
  MODULE  = opcservices.dll
  IMPORTS = uuid ole32 advapi32 urlmon xmllite oleaut32
  
-+CROSSLDFLAGS  = -lz
++EXTRA_LDFLAGS = -lz
++
  EXTRADLLFLAGS = -mno-cygwin
  
  C_SRCS = \
@@ -105,20 +123,21 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  #include "internet.h"
 -#include "zlib.h"
+ #include "resource.h"
  #include "wine/debug.h"
  #include "wine/exception.h"
- 
 --- a/dlls/wininet/Makefile.in
 +++ b/dlls/wininet/Makefile.in
-@@ -4,6 +4,7 @@ IMPORTLIB = wininet
+@@ -4,6 +4,8 @@ IMPORTLIB = wininet
  IMPORTS   = mpr shlwapi shell32 user32 ws2_32 advapi32
  DELAYIMPORTS = secur32 crypt32 cryptui dhcpcsvc iphlpapi
  
-+CROSSLDFLAGS  = -lz
++EXTRA_LDFLAGS = -lz
++
  EXTRADLLFLAGS = -mno-cygwin
  
  C_SRCS = \
-@@ -12,7 +13,6 @@ C_SRCS = \
+@@ -12,7 +14,6 @@ C_SRCS = \
  	ftp.c \
  	gopher.c \
  	http.c \
@@ -128,15 +147,16 @@ author: Michael Gilbert <mgilbert@debian.org>
  	urlcache.c \
 --- a/dlls/dbghelp/Makefile.in
 +++ b/dlls/dbghelp/Makefile.in
-@@ -3,6 +3,7 @@ IMPORTLIB = dbghelp
+@@ -3,6 +3,8 @@ IMPORTLIB = dbghelp
  EXTRADEFS = -D_IMAGEHLP_SOURCE_
  DELAYIMPORTS = version
  
-+CROSSLDFLAGS = -lz
++EXTRA_LDFLAGS = -lz
++
  EXTRADLLFLAGS = -mno-cygwin
  
  C_SRCS = \
-@@ -15,7 +16,6 @@ C_SRCS = \
+@@ -15,7 +17,6 @@ C_SRCS = \
  	dwarf.c \
  	elf_module.c \
  	image.c \

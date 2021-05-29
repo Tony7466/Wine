@@ -2,14 +2,14 @@ description: append debian package revision to the end of the version string
 origin: https://github.com/wine-compholio/wine-staging/blob/master/patches/Staging/0002-winelib-Append-Staging-at-the-end-of-the-version-s.patch
 forwarded: not-needed
 
---- a/dlls/ntdll/Makefile.in
-+++ b/dlls/ntdll/Makefile.in
-@@ -81,7 +81,7 @@ unix_loader_EXTRADEFS = \
- 	-DBIN_TO_DATADIR=\"`${MAKEDEP} -R ${bindir} ${datadir}/wine`\"
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -116,7 +116,7 @@ install-manpages:: manpages
+ # Rules for generated source files
  
- unix/version.c: dummy
--	version=`(GIT_DIR=$(top_srcdir)/.git git describe HEAD 2>/dev/null || echo "wine-$(PACKAGE_VERSION)") | sed -n -e '$$s/\(.*\)/const char wine_build[] = "\1";/p'` && (echo $$version | cmp -s - $@) || echo $$version >$@ || (rm -f $@ && exit 1)
-+	version=`(echo "wine-$(PACKAGE_VERSION)") | sed -n -e '$$s/\(.*\)/const char wine_build[] = "\1  ($(VENDOR))";/p'` && (echo $$version | cmp -s - $@) || echo $$version >$@ || ($(RM) $@ && exit 1)
+ dlls/ntdll/unix/version.c: dummy
+-	@version=`(GIT_DIR=$(srcdir)/.git git describe HEAD 2>/dev/null || echo "wine-$(PACKAGE_VERSION)") | sed -n -e '$$s/\(.*\)/const char wine_build[] = "\1";/p'` && (echo $$version | cmp -s - $@) || echo $$version >$@ || ($(RM) $@ && exit 1)
++	@version=`(echo "wine-$(PACKAGE_VERSION)") | sed -n -e '$$s/\(.*\)/const char wine_build[] = "\1  ($(VENDOR))";/p'` && (echo $$version | cmp -s - $@) || echo $$version >$@ || ($(RM) $@ && exit 1)
  
- dummy:
- .PHONY: dummy
+ programs/winetest/build.rc: dummy
+ 	@build="STRINGTABLE { 1 \"`GIT_DIR=$(srcdir)/.git git rev-parse HEAD 2>/dev/null`\" }" && (echo $$build | cmp -s - $@) || echo $$build >$@ || (rm -f $@ && exit 1)

@@ -7,7 +7,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  LOGGER = logging.Logger("vulkan")
  LOGGER.addHandler(logging.StreamHandler())
  
--VK_XML_VERSION = "1.2.149"
+-VK_XML_VERSION = "1.2.154"
 +VK_XML_VERSION = "1.2.162"
  WINE_VK_VERSION = (1, 2)
  
@@ -23,7 +23,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  ]
  
  # The Vulkan loader provides entry-points for core functionality and important
-@@ -1179,6 +1183,8 @@ class VkMember(object):
+@@ -1191,6 +1195,8 @@ class VkMember(object):
              return False
          elif self.type in ["uint64_t", "VkDeviceSize"]:
              return True
@@ -32,7 +32,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          elif self.is_struct():
              struct = self.type_info["data"]
              return struct.needs_alignment()
-@@ -1363,6 +1369,9 @@ class VkParam(object):
+@@ -1375,6 +1381,9 @@ class VkParam(object):
              elif self.type in ["uint64_t", "VkDeviceSize"]:
                  self.format_str = "0x%s"
                  self.format_conv = "wine_dbgstr_longlong({0})"
@@ -42,7 +42,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              elif self.type == "HANDLE":
                  self.format_str = "%p"
              elif self.type in ["VisualID", "xcb_visualid_t", "RROutput"]:
-@@ -1551,6 +1560,8 @@ class VkParam(object):
+@@ -1563,6 +1572,8 @@ class VkParam(object):
              return "long"
          if self.type in ["uint64_t", "VkDeviceSize"]:
              return "int64"
