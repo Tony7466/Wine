@@ -1,4 +1,4 @@
-wine-development (5.20+repack-1) UNRELEASED; urgency=medium
+wine-development (5.20+repack-1) unstable; urgency=medium
 
   * New upstream release 5.20, released Oct 23, 2020.
     - More work on the DSS cryptographic provider.

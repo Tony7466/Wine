@@ -18,7 +18,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (pFile->type == INCL_SYSTEM) return NULL;  /* ignore system files we cannot find */
  
      /* try in src file directory */
-@@ -3250,6 +3242,7 @@ static void output_module( struct makefi
+@@ -3254,6 +3246,7 @@ static void output_module( struct makefi
  {
      struct strarray all_libs = empty_strarray;
      struct strarray dep_libs = empty_strarray;
@@ -26,7 +26,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      char *module_path = obj_dir_path( make, make->module );
      const char *debug_file = NULL;
      char *spec_file = NULL;
-@@ -3318,6 +3311,7 @@ static void output_module( struct makefi
+@@ -3322,6 +3315,7 @@ static void output_module( struct makefi
      if (debug_file) output_filename( strmake( "-Wl,--debug-file,%s", debug_file ));
      output_filenames( all_libs );
      output_filename( make->is_cross ? "$(CROSSLDFLAGS)" : "$(LDFLAGS)" );
