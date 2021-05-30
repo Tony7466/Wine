@@ -12,7 +12,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  WINE_VK_VERSION = (1, 2)
  
  # Filenames to create.
-@@ -124,6 +124,10 @@ UNSUPPORTED_EXTENSIONS = [
+@@ -116,6 +116,10 @@ UNSUPPORTED_EXTENSIONS = [
      # Deprecated extensions
      "VK_NV_external_memory_capabilities",
      "VK_NV_external_memory_win32",
@@ -23,7 +23,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  ]
  
  # The Vulkan loader provides entry-points for core functionality and important
-@@ -1205,6 +1209,8 @@ class VkMember(object):
+@@ -1206,6 +1210,8 @@ class VkMember(object):
              return False
          elif self.type in ["uint64_t", "VkDeviceSize"]:
              return True
@@ -32,7 +32,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          elif self.is_struct():
              struct = self.type_info["data"]
              return struct.needs_alignment()
-@@ -1389,6 +1395,9 @@ class VkParam(object):
+@@ -1390,6 +1396,9 @@ class VkParam(object):
              elif self.type in ["uint64_t", "VkDeviceSize"]:
                  self.format_str = "0x%s"
                  self.format_conv = "wine_dbgstr_longlong({0})"
@@ -42,7 +42,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              elif self.type == "HANDLE":
                  self.format_str = "%p"
              elif self.type in ["VisualID", "xcb_visualid_t", "RROutput"]:
-@@ -1577,6 +1586,8 @@ class VkParam(object):
+@@ -1578,6 +1587,8 @@ class VkParam(object):
              return "long"
          if self.type in ["uint64_t", "VkDeviceSize"]:
              return "int64"

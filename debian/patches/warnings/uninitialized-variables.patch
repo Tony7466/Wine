@@ -163,7 +163,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  	WARN("Can't seek at %08X\n", mmt->dwIndex);
 --- a/dlls/msi/automation.c
 +++ b/dlls/msi/automation.c
-@@ -1823,7 +1823,7 @@ static HRESULT InstallerImpl_SummaryInfo
+@@ -1818,7 +1818,7 @@ static HRESULT InstallerImpl_SummaryInfo
      UINT ret;
      HRESULT hr;
      MSIHANDLE hsuminfo;

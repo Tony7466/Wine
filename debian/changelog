@@ -1,6 +1,7 @@
-wine-development (5.21+repack-1) UNRELEASED; urgency=medium
+wine-development (5.21+repack-1) unstable; urgency=medium
 
   * New upstream release 5.21, released Nov 6, 2020.
+    - 64-bit syscall thunks implemented (closes: #917307).
     - GDI32 library converted to PE.
     - More fixes for windowless RichEdit.
     - A number of timezone updates.
