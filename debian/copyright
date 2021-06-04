@@ -28,14 +28,13 @@ Files-Excluded:
  dlls/winevulkan/vulkan_thunks.c
  dlls/winevulkan/winevulkan.json
  dlls/winevulkan/winevulkan.spec
- dlls/gdi32/direction.c
  dlls/gdi32/vertical.c
- dlls/usp10/bracket.c
- dlls/usp10/direction.c
- dlls/usp10/indicsyllable.c
- dlls/usp10/linebreak.c
- dlls/usp10/mirror.c
- dlls/usp10/shaping.c
+ dlls/gdi32/uniscribe/direction.c
+ dlls/gdi32/uniscribe/bracket.c
+ dlls/gdi32/uniscribe/indicsyllable.c
+ dlls/gdi32/uniscribe/linebreak.c
+ dlls/gdi32/uniscribe/mirror.c
+ dlls/gdi32/uniscribe/shaping.c
  dlls/dwrite/bracket.c
  dlls/dwrite/direction.c
  dlls/dwrite/linebreak.c

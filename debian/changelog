@@ -1,4 +1,4 @@
-wine-development (5.22+repack-1) UNRELEASED; urgency=medium
+wine-development (5.22+repack-1) unstable; urgency=medium
 
   * New upstream release 5.22, released Nov 20, 2020.
     - C runtime libraries converted to PE.

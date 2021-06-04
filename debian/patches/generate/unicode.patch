@@ -301,5 +301,5 @@ author: Michael Gilbert <mgilbert@debian.org>
 +dump_compose_table( "libs/wine/compose.c" );
 +dump_decompose_table( "libs/wine/decompose.c", 0 );
  dump_ctype_tables( "libs/port/wctype.c" );
- dump_bidi_dir_table( "dlls/gdi32/direction.c" );
- dump_bidi_dir_table( "dlls/usp10/direction.c" );
+ dump_bidi_dir_table( "dlls/gdi32/uniscribe/direction.c" );
+ dump_bidi_dir_table( "dlls/dwrite/direction.c" );

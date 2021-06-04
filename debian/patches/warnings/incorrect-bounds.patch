@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/programs/winemenubuilder/winemenubuilder.c
 +++ b/programs/winemenubuilder/winemenubuilder.c
-@@ -2926,8 +2926,10 @@ static BOOL InvokeShellLinker( IShellLin
+@@ -2932,8 +2932,10 @@ static BOOL InvokeShellLinker( IShellLin
              strchrW( p, '\\' ) || strchrW( p, '/' ) ||
              lstrcmpiW( p, exeW ))
          {
@@ -15,7 +15,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              if (szArgs[0])
              {
                  p[0] = ' ';
-@@ -2939,7 +2941,7 @@ static BOOL InvokeShellLinker( IShellLin
+@@ -2945,7 +2947,7 @@ static BOOL InvokeShellLinker( IShellLin
  
              szArgs[0] = '"';
              lstrcpyW(szArgs + 1, szPath);

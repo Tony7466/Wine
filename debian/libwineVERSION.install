@@ -1,14 +1,8 @@
-# fake PE files and their corresponding ELF files
-debian/tmp/usr/lib/*/*/*.*.so
+# fake PE libraries
 debian/tmp/usr/lib/*/*/fakedlls
 
 # ELF libraries
-debian/tmp/usr/lib/*/*/ntdll.so
-debian/tmp/usr/lib/*/*/gdi32.so
-debian/tmp/usr/lib/*/*/bcrypt.so
-debian/tmp/usr/lib/*/*/odbc32.so
-debian/tmp/usr/lib/*/*/user32.so
-debian/tmp/usr/lib/*/*/windowscodecs.so
+debian/tmp/usr/lib/*/*/*.so
 
 # wine library
 debian/tmp/usr/lib/*/*/libwine.so.*
