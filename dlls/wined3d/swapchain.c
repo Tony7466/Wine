@@ -559,6 +559,7 @@ static void swapchain_gl_present(struct wined3d_swapchain *swapchain,
 
     /* call wglSwapBuffers through the gl table to avoid confusing the Steam overlay */
     gl_info->gl_ops.wgl.p_wglSwapBuffers(context_gl->dc);
+    wined3d_context_gl_submit_command_fence(context_gl);
 
     wined3d_swapchain_gl_rotate(swapchain, context);
 
@@ -634,6 +635,22 @@ done:
     return supported;
 }
 
+static VkFormat get_swapchain_fallback_format(VkFormat vk_format)
+{
+    switch (vk_format)
+    {
+        case VK_FORMAT_R8G8B8A8_SRGB:
+            return VK_FORMAT_B8G8R8A8_SRGB;
+        case VK_FORMAT_R8G8B8A8_UNORM:
+        case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
+        case VK_FORMAT_R16G16B16A16_SFLOAT:
+            return VK_FORMAT_B8G8R8A8_UNORM;
+        default:
+            WARN("Unhandled format %#x.\n", vk_format);
+            return VK_FORMAT_UNDEFINED;
+    }
+}
+
 static VkFormat wined3d_swapchain_vk_select_vk_format(struct wined3d_swapchain_vk *swapchain_vk,
         VkSurfaceKHR vk_surface)
 {
@@ -683,7 +700,7 @@ static VkFormat wined3d_swapchain_vk_select_vk_format(struct wined3d_swapchain_v
     if (i == format_count)
     {
         /* Try to create a swapchain with format conversion. */
-        vk_format = VK_FORMAT_B8G8R8A8_UNORM;
+        vk_format = get_swapchain_fallback_format(vk_format);
         WARN("Failed to find Vulkan swapchain format for %s.\n", debug_d3dformat(desc->backbuffer_format));
         for (i = 0; i < format_count; ++i)
         {

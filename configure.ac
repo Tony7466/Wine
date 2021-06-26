@@ -32,6 +32,7 @@ AC_ARG_ENABLE(win16, AS_HELP_STRING([--disable-win16],[do not include Win16 supp
 AC_ARG_ENABLE(win64, AS_HELP_STRING([--enable-win64],[build a Win64 emulator on AMD64 (won't run Win32 binaries)]))
 AC_ARG_ENABLE(tests, AS_HELP_STRING([--disable-tests],[do not build the regression tests]))
 AC_ARG_ENABLE(maintainer-mode, AS_HELP_STRING([--enable-maintainer-mode],[enable maintainer-specific build rules]))
+AC_ARG_ENABLE(silent-rules, AS_HELP_STRING([--enable-silent-rules],[use silent build rules (override: "make V=1")]))
 AC_ARG_ENABLE(werror, AS_HELP_STRING([--enable-werror],[treat compilation warnings as errors]))
 
 AC_ARG_WITH(alsa,      AS_HELP_STRING([--without-alsa],[do not use the Alsa sound support]))
@@ -417,7 +418,6 @@ AC_CHECK_HEADERS(\
 	Carbon/Carbon.h \
 	CommonCrypto/CommonCryptor.h \
 	CoreAudio/CoreAudio.h \
-	CoreServices/CoreServices.h \
 	DiskArbitration/DiskArbitration.h \
 	EGL/egl.h \
 	IOKit/IOKitLib.h \
@@ -449,7 +449,6 @@ AC_CHECK_HEADERS(\
 	libproc.h \
 	link.h \
 	linux/cdrom.h \
-	linux/compiler.h \
 	linux/filter.h \
 	linux/hdreg.h \
 	linux/hidraw.h \
@@ -462,10 +461,8 @@ AC_CHECK_HEADERS(\
 	linux/types.h \
 	linux/ucdrom.h \
 	lwp.h \
-	mach-o/nlist.h \
 	mach-o/loader.h \
 	mach/mach.h \
-	mach/machine.h \
 	machine/cpu.h \
 	machine/sysarch.h \
 	mntent.h \
@@ -484,7 +481,6 @@ AC_CHECK_HEADERS(\
 	scsi/scsi.h \
 	scsi/scsi_ioctl.h \
 	scsi/sg.h \
-	stdbool.h \
 	stdint.h \
 	stropts.h \
 	sys/attr.h \
@@ -870,29 +866,10 @@ case $host_os in
         LIBS="$ac_save_LIBS"
     fi
 
-    dnl Check for Xcode 3.x broken 16-bit support
-    if test "x$enable_win16" = "xyes"
-    then
-        AC_MSG_CHECKING([whether 16-bit code can be built correctly])
-        AC_RUN_IFELSE([AC_LANG_PROGRAM([[asm(".text\n"
-                                            "bad:\tnop;nop\n"
-                                            "good:\tnop;nop\n\t"
-                                            ".globl _testfunc\n"
-                                            "_testfunc:\tcallw good");
-                                        extern void testfunc();]],
-                                      [[unsigned short *p = (unsigned short *)testfunc;
-                                        return p[0] != 0xe866 || p[1] != 0xfffa]])],
-                                      AC_MSG_RESULT(yes),
-                                      [AC_MSG_RESULT(no)
-                                       AC_MSG_ERROR([Xcode 3.x cannot build 16-bit code correctly. Use --disable-win16 if you don't need 16-bit support.])],
-                                       AC_MSG_RESULT([[cross-compiling, assuming yes]]))
-    fi
-
     AC_SUBST(LIBWINE_SHAREDLIB,"libwine.$libwine_version.dylib")
     AC_SUBST(LIBWINE_LDFLAGS,["-dynamiclib -install_name @rpath/libwine.$libwine_soversion.dylib -Wl,-rpath,@loader_path/ -compatibility_version $libwine_soversion -current_version $libwine_version"])
     AC_SUBST(WINELOADER_DEPENDS,"wine_info.plist")
     TOP_INSTALL_LIB="$TOP_INSTALL_LIB libs/wine/libwine.$libwine_version.dylib libs/wine/libwine.$libwine_soversion.dylib"
-    TOP_INSTALL_DEV="$TOP_INSTALL_DEV libs/wine/libwine.dylib"
     ;;
 
   linux-android*)
@@ -985,7 +962,6 @@ case $host_os in
     AC_SUBST(LIBWINE_SHAREDLIB,"libwine.so.$libwine_version")
     AC_SUBST(LIBWINE_DEPENDS,"wine.map")
     TOP_INSTALL_LIB="$TOP_INSTALL_LIB libs/wine/libwine.so.$libwine_version libs/wine/libwine.so.$libwine_soversion"
-    TOP_INSTALL_DEV="$TOP_INSTALL_DEV libs/wine/libwine.so"
     ;;
 esac
 
@@ -1072,6 +1048,7 @@ then
                   WINE_TRY_CROSSCFLAGS([-Wformat-overflow])
                   WINE_TRY_CROSSCFLAGS([-Wnonnull])
                   WINE_TRY_CROSSCFLAGS([-mcx16]) ;;
+          aarch64) WINE_TRY_CROSSCFLAGS([-Wno-format]) ;;
         esac
 
         dnl Determine debug info format
@@ -1691,6 +1668,8 @@ then
         if test "$wine_cv_have_unw_step" = no -a -n "$UNWIND_LIBS"
         then
             save_libs=$LIBS
+            dnl Force static libgcc, libunwind breaks libgcc_s unwinding
+            UNWIND_LIBS="-static-libgcc $UNWIND_LIBS"
             LIBS="$UNWIND_LIBS $LIBS"
             AC_CACHE_CHECK([for unw_step in libunwind],wine_cv_have_libunwind_unw_step,
                [AC_LINK_IFELSE([AC_LANG_PROGRAM([[#define UNW_LOCAL_ONLY
@@ -1716,7 +1695,7 @@ dnl **** Check for libSDL2 ****
 if test "x$with_sdl" != "xno"
 then
     WINE_PACKAGE_FLAGS(SDL2,[sdl2],[-lSDL2],,,
-        [AC_CHECK_HEADERS([SDL2/SDL.h],
+        [AC_CHECK_HEADERS([SDL.h],
             [WINE_CHECK_SONAME(SDL2,SDL_Init,,,[$SDL2_LIBS],[[libSDL2-2.0*]])])])
 fi
 WINE_NOTICE_WITH(sdl,[test "x$ac_cv_lib_soname_SDL2" = "x"],
@@ -2081,7 +2060,8 @@ char*f(const char *h,char n) {return strchr(h,n);}]])],[ac_cv_c_logicalop_noisy=
   dnl Disable gcc builtins except for Mingw
   AC_SUBST(MSVCRTFLAGS,"")
   case $host_os in
-    mingw32*) ;;
+    mingw32*)  dnl Check for delayload linker support
+       WINE_TRY_CFLAGS([-Wl,-delayload,autoconftest.dll],[AC_SUBST(DELAYLOADFLAG,["-Wl,-delayload,"])]) ;;
     *) WINE_TRY_CFLAGS([-fno-builtin],[MSVCRTFLAGS="$MSVCRTFLAGS -fno-builtin"])
        WINE_TRY_CFLAGS([-fshort-wchar],[MSVCRTFLAGS="$MSVCRTFLAGS -fshort-wchar"]) ;;
   esac
@@ -2162,11 +2142,9 @@ AC_CHECK_FUNCS(\
         __res_getservers \
 	_spawnvp \
 	epoll_create \
-	ffs \
 	fnmatch \
 	fork \
 	fstatfs \
-	fstatvfs \
 	futimens \
 	futimes \
 	futimesat \
@@ -2185,23 +2163,14 @@ AC_CHECK_FUNCS(\
 	pread \
 	proc_pidinfo \
 	pwrite \
-	readdir \
 	readlink \
 	sched_yield \
-	select \
 	setproctitle \
 	setprogname \
-	settimeofday \
 	sigprocmask \
-	statfs \
-	statvfs \
-	strnlen \
-	strtold \
 	symlink \
-	sysinfo \
 	tcdrain \
-	thr_kill2 \
-	usleep
+	thr_kill2
 )
 CFLAGS="$ac_save_CFLAGS"
 
@@ -2228,7 +2197,6 @@ dnl **** Check for functions which may rely on -lsocket on Solaris.
 AC_CHECK_FUNCS(\
 	getaddrinfo \
 	getnameinfo \
-	getnetbyname \
 	getservbyport \
 )
 
@@ -2299,7 +2267,6 @@ fi
 dnl **** Check for types ****
 
 AC_C_INLINE
-AC_CHECK_TYPES([fsblkcnt_t, fsfilcnt_t])
 AC_CHECK_TYPES([sigset_t],,,[#include <sys/types.h>
 #include <signal.h>])
 AC_CHECK_TYPES([request_sense],,,[#include <linux/cdrom.h>])
@@ -2401,35 +2368,6 @@ then
                 [Define if <linux/joystick.h> defines the Linux 2.2 joystick API])
    fi
 fi
-
-dnl **** FIXME: what about mixed cases, where we need two of them? ***
-
-dnl Check for statfs members
-AC_CHECK_MEMBERS([struct statfs.f_bfree, struct statfs.f_bavail, struct statfs.f_frsize, struct statfs.f_ffree, struct statfs.f_favail, struct statfs.f_namelen],,,
-[#include <sys/types.h>
-#ifdef HAVE_SYS_PARAM_H
-# include <sys/param.h>
-#endif
-#ifdef HAVE_SYS_MOUNT_H
-# include <sys/mount.h>
-#endif
-#ifdef HAVE_SYS_VFS_H
-# include <sys/vfs.h>
-#endif
-#ifdef HAVE_SYS_STATFS_H
-# include <sys/statfs.h>
-#endif])
-
-AC_CHECK_MEMBERS([struct statvfs.f_blocks],,,
-[#ifdef HAVE_SYS_STATVFS_H
-#include <sys/statvfs.h>
-#endif])
-
-dnl Check for dirent.d_reclen
-AC_CHECK_MEMBERS([struct dirent.d_reclen],,,
-[#ifdef HAVE_DIRENT_H
-#include <dirent.h>
-#endif])
 
 dnl Check for socket structure members
 AC_CHECK_MEMBERS([struct msghdr.msg_accrights, struct sockaddr.sa_len, struct sockaddr_un.sun_len],,,
@@ -2785,6 +2723,9 @@ AC_SUBST([ALL_VARS_RULES],
 "m4_set_foreach([_AC_SUBST_VARS],[var],[m4_if(m4_bregexp(m4_defn([var]),[\(_CFLAGS\|_LIBS\)$]),-1,,[var = $var
 ])])")
 
+makedep_flags=""
+test "x$enable_silent_rules" = xyes && makedep_flags="$makedep_flags -S"
+
 dnl Main makefile
 
 WINE_APPEND_RULE([
@@ -2796,7 +2737,7 @@ all: Makefile
 Makefile: $srcdir/Makefile.in config.status \$(MAKEDEP)
 	@./config.status Make.tmp Makefile
 depend: \$(MAKEDEP)
-	\$(MAKEDEP)
+	\$(MAKEDEP)$makedep_flags
 dummy:
 .PHONY: depend dummy])
 
@@ -3191,6 +3132,7 @@ WINE_CONFIG_MAKEFILE(dlls/dbgeng/tests)
 WINE_CONFIG_MAKEFILE(dlls/dbghelp)
 WINE_CONFIG_MAKEFILE(dlls/dbghelp/tests)
 WINE_CONFIG_MAKEFILE(dlls/dciman32)
+WINE_CONFIG_MAKEFILE(dlls/dcomp)
 WINE_CONFIG_MAKEFILE(dlls/ddeml.dll16,enable_win16)
 WINE_CONFIG_MAKEFILE(dlls/ddraw)
 WINE_CONFIG_MAKEFILE(dlls/ddraw/tests)
@@ -4094,7 +4036,7 @@ fi
 AC_CONFIG_COMMANDS([Makefile], [wine_fn_output_makefile Makefile],
 [wine_fn_output_makefile ()
 {
-    cat Make.tmp - <<\_WINE_EOF >\$tmp/makefile && mv -f \$tmp/makefile \$[]1 && rm -f Make.tmp && "$wine_makedep" && return
+    cat Make.tmp - <<\_WINE_EOF >\$tmp/makefile && mv -f \$tmp/makefile \$[]1 && rm -f Make.tmp && "$wine_makedep"$makedep_flags && return
 `cat $wine_rules_file`
 _WINE_EOF
     AS_ERROR([could not create Makefile])
@@ -4150,9 +4092,6 @@ else
     TOP_INSTALL_LIB="$TOP_INSTALL_LIB \
 fonts \
 loader/wine.inf \
-loader/winebus.inf \
-loader/winehid.inf \
-loader/wineusb.inf \
 nls \
 programs/msidb/msidb \
 programs/msiexec/msiexec \

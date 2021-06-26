@@ -439,6 +439,7 @@ static const struct wined3d_gpu_description gpu_description_table[] =
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX1050TI,  "NVIDIA GeForce GTX 1050 Ti",       DRIVER_NVIDIA_KEPLER,  4096},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX1060_3GB,"NVIDIA GeForce GTX 1060 3GB",      DRIVER_NVIDIA_KEPLER,  3072},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX1060,    "NVIDIA GeForce GTX 1060",          DRIVER_NVIDIA_KEPLER,  6144},
+    {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX1060M,   "NVIDIA GeForce GTX 1060M",         DRIVER_NVIDIA_KEPLER,  6144},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX1070,    "NVIDIA GeForce GTX 1070",          DRIVER_NVIDIA_KEPLER,  8192},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX1080,    "NVIDIA GeForce GTX 1080",          DRIVER_NVIDIA_KEPLER,  8192},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_GTX1080M,   "NVIDIA GeForce GTX 1080M",         DRIVER_NVIDIA_KEPLER,  8192},
@@ -1002,15 +1003,13 @@ static BOOL CALLBACK enum_monitor_proc(HMONITOR monitor, HDC hdc, RECT *rect, LP
 HRESULT CDECL wined3d_output_get_desc(const struct wined3d_output *output,
         struct wined3d_output_desc *desc)
 {
-    struct wined3d_display_mode mode;
-
     TRACE("output %p, desc %p.\n", output, desc);
 
     memset(desc, 0, sizeof(*desc));
     desc->ordinal = output->ordinal;
     lstrcpyW(desc->device_name, output->device_name);
     EnumDisplayMonitors(NULL, NULL, enum_monitor_proc, (LPARAM)desc);
-    return wined3d_output_get_display_mode(output, &mode, &desc->rotation);
+    return WINED3D_OK;
 }
 
 /* FIXME: GetAdapterModeCount and EnumAdapterModes currently only returns modes
@@ -1514,7 +1513,7 @@ HRESULT CDECL wined3d_adapter_get_identifier(const struct wined3d_adapter *adapt
     identifier->device_identifier = IID_D3DDEVICE_D3DUID;
     identifier->driver_uuid = adapter->driver_uuid;
     identifier->device_uuid = adapter->device_uuid;
-    identifier->whql_level = (flags & WINED3DENUM_NO_WHQL_LEVEL) ? 0 : 1;
+    identifier->whql_level = (flags & WINED3DENUM_WHQL_LEVEL) ? 1 : 0;
     identifier->adapter_luid = adapter->luid;
     identifier->video_memory = min(~(SIZE_T)0, adapter->driver_info.vram_bytes);
     identifier->shared_system_memory = min(~(SIZE_T)0, adapter->driver_info.sysmem_bytes);
@@ -1693,10 +1692,10 @@ HRESULT CDECL wined3d_check_device_format(const struct wined3d *wined3d,
     DWORD format_flags = 0;
     DWORD allowed_usage;
 
-    TRACE("wined3d %p, adapter %p, device_type %s, adapter_format %s, usage %s, %s, "
+    TRACE("wined3d %p, adapter %p, device_type %s, adapter_format %s, usage %s, "
             "bind_flags %s, resource_type %s, check_format %s.\n",
             wined3d, adapter, debug_d3ddevicetype(device_type), debug_d3dformat(adapter_format_id),
-            debug_d3dusage(usage), debug_d3dusagequery(usage), wined3d_debug_bind_flags(bind_flags),
+            debug_d3dusage(usage), wined3d_debug_bind_flags(bind_flags),
             debug_d3dresourcetype(resource_type), debug_d3dformat(check_format_id));
 
     adapter_format = wined3d_get_format(adapter, adapter_format_id, WINED3D_BIND_RENDER_TARGET);

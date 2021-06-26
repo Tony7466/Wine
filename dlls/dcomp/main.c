@@ -1,7 +1,7 @@
 /*
- * strnlen function
+ * DirectComposition Library
  *
- * Copyright 2017 Alexandre Julliard
+ * Copyright 2020 Austin English
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -17,15 +17,28 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
+#include <stdarg.h>
 
-#include "config.h"
-#include "wine/port.h"
+#include "windef.h"
+#include "winbase.h"
+#include "wine/debug.h"
 
-#ifndef HAVE_STRNLEN
-size_t strnlen( const char *str, size_t maxlen )
+WINE_DEFAULT_DEBUG_CHANNEL(dcomp);
+
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
-    const char *ptr = memchr( str, 0, maxlen );
-    if (!ptr) return maxlen;
-    return ptr - str;
+    TRACE("(0x%p, %d, %p)\n", hinstDLL, fdwReason, lpvReserved);
+
+    switch (fdwReason)
+    {
+        case DLL_WINE_PREATTACH:
+            return FALSE;    /* prefer native version */
+        case DLL_PROCESS_ATTACH:
+            DisableThreadLibraryCalls(hinstDLL);
+            break;
+        default:
+            break;
+    }
+
+    return TRUE;
 }
-#endif /* HAVE_STRNLEN */

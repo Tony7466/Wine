@@ -441,6 +441,7 @@ GstFlowReturn bytestream_wrapper_pull(GstPad *pad, GstObject *parent, guint64 of
 {
     struct media_source *source = gst_pad_get_element_private(pad);
     IMFByteStream *byte_stream = source->byte_stream;
+    GstBuffer *new_buffer = NULL;
     ULONG bytes_read;
     GstMapInfo info;
     BOOL is_eof;
@@ -460,7 +461,7 @@ GstFlowReturn bytestream_wrapper_pull(GstPad *pad, GstObject *parent, guint64 of
         return GST_FLOW_EOS;
 
     if (!(*buf))
-        *buf = gst_buffer_new_and_alloc(len);
+        *buf = new_buffer = gst_buffer_new_and_alloc(len);
     gst_buffer_map(*buf, &info, GST_MAP_WRITE);
     hr = IMFByteStream_Read(byte_stream, info.data, len, &bytes_read);
     gst_buffer_unmap(*buf, &info);
@@ -468,7 +469,11 @@ GstFlowReturn bytestream_wrapper_pull(GstPad *pad, GstObject *parent, guint64 of
     gst_buffer_set_size(*buf, bytes_read);
 
     if (FAILED(hr))
+    {
+        if (new_buffer)
+            gst_buffer_unref(new_buffer);
         return GST_FLOW_ERROR;
+    }
     return GST_FLOW_OK;
 }
 
@@ -858,7 +863,7 @@ fail:
 static HRESULT media_stream_init_desc(struct media_stream *stream)
 {
     GstCaps *current_caps = gst_pad_get_current_caps(stream->their_src);
-    IMFMediaTypeHandler *type_handler;
+    IMFMediaTypeHandler *type_handler = NULL;
     IMFMediaType **stream_types = NULL;
     IMFMediaType *stream_type = NULL;
     DWORD type_count = 0;
@@ -1235,16 +1240,13 @@ static HRESULT media_source_constructor(IMFByteStream *bytestream, struct media_
     GstStaticPadTemplate src_template =
         GST_STATIC_PAD_TEMPLATE("mf_src", GST_PAD_SRC, GST_PAD_ALWAYS, GST_STATIC_CAPS_ANY);
 
-    struct media_source *object = heap_alloc_zero(sizeof(*object));
     IMFStreamDescriptor **descriptors = NULL;
+    struct media_source *object;
     gint64 total_pres_time = 0;
     DWORD bytestream_caps;
     unsigned int i;
     HRESULT hr;
     int ret;
-
-    if (!object)
-        return E_OUTOFMEMORY;
 
     if (FAILED(hr = IMFByteStream_GetCapabilities(bytestream, &bytestream_caps)))
         return hr;
@@ -1254,6 +1256,9 @@ static HRESULT media_source_constructor(IMFByteStream *bytestream, struct media_
         FIXME("Non-seekable bytestreams not supported.\n");
         return MF_E_BYTESTREAM_NOT_SEEKABLE;
     }
+
+    if (!(object = heap_alloc_zero(sizeof(*object))))
+        return E_OUTOFMEMORY;
 
     object->IMFMediaSource_iface.lpVtbl = &IMFMediaSource_vtbl;
     object->async_commands_callback.lpVtbl = &source_async_commands_callback_vtbl;

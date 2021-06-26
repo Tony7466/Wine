@@ -428,6 +428,7 @@ static NTSTATUS read_complete( struct console *console, NTSTATUS status, const v
     }
     SERVER_END_REQ;
     if (status && (console->read_ioctl || status != STATUS_INVALID_HANDLE)) ERR( "failed: %#x\n", status );
+    console->signaled = signal;
     console->read_ioctl = 0;
     console->pending_read = 0;
     return status;
@@ -690,6 +691,7 @@ static void edit_line_find_in_history( struct console *console )
     unsigned int len, oldoffset;
     WCHAR *line;
 
+    if (!console->history_index) return;
     if (ctx->history_index && ctx->history_index == console->history_index)
     {
         start_pos--;
@@ -698,28 +700,28 @@ static void edit_line_find_in_history( struct console *console )
 
     do
     {
-       line = edit_line_history(console, ctx->history_index);
+        line = edit_line_history(console, ctx->history_index);
 
-       if (ctx->history_index) ctx->history_index--;
-       else ctx->history_index = console->history_index;
+        if (ctx->history_index) ctx->history_index--;
+        else ctx->history_index = console->history_index - 1;
 
-       len = lstrlenW(line) + 1;
-       if (len >= ctx->cursor && !memcmp( ctx->buf, line, ctx->cursor * sizeof(WCHAR) ))
-       {
-           /* need to clean also the screen if new string is shorter than old one */
-           edit_line_delete(console, 0, ctx->len);
+        len = lstrlenW(line) + 1;
+        if (len >= ctx->cursor && !memcmp( ctx->buf, line, ctx->cursor * sizeof(WCHAR) ))
+        {
+            /* need to clean also the screen if new string is shorter than old one */
+            edit_line_delete(console, 0, ctx->len);
 
-           if (edit_line_grow(console, len))
-           {
-              oldoffset = ctx->cursor;
-              ctx->cursor = 0;
-              edit_line_insert( console, line, len - 1 );
-              ctx->cursor = oldoffset;
-              free(line);
-              return;
-           }
-       }
-       free(line);
+            if (edit_line_grow(console, len))
+            {
+                oldoffset = ctx->cursor;
+                ctx->cursor = 0;
+                edit_line_insert( console, line, len - 1 );
+                ctx->cursor = oldoffset;
+                free(line);
+                return;
+            }
+        }
+        free(line);
     }
     while (ctx->history_index != start_pos);
 }
@@ -1218,6 +1220,9 @@ static NTSTATUS process_console_input( struct console *console )
     case IOCTL_CONDRV_READ_FILE:
         break;
     default:
+        assert( !console->read_ioctl );
+        if (console->record_count && !console->signaled)
+            read_complete( console, STATUS_PENDING, NULL, 0, TRUE ); /* signal server */
         return STATUS_SUCCESS;
     }
 
@@ -1273,7 +1278,7 @@ static NTSTATUS process_console_input( struct console *console )
             ^ ctx->insert_key;
 
         if (func) func( console );
-        else if (ir.Event.KeyEvent.uChar.UnicodeChar && !(ir.Event.KeyEvent.dwControlKeyState & LEFT_ALT_PRESSED))
+        else if (ir.Event.KeyEvent.uChar.UnicodeChar)
             edit_line_insert( console, &ir.Event.KeyEvent.uChar.UnicodeChar, 1 );
 
         if (!(console->mode & ENABLE_LINE_INPUT) && ctx->status == STATUS_PENDING)
@@ -1698,8 +1703,6 @@ static NTSTATUS get_output_info( struct screen_buffer *screen_buffer, size_t *ou
 {
     struct condrv_output_info *info;
 
-    TRACE( "%p\n", screen_buffer );
-
     *out_size = min( *out_size, sizeof(*info) + screen_buffer->font.face_len );
     if (!(info = alloc_ioctl_buffer( *out_size ))) return STATUS_NO_MEMORY;
 
@@ -1723,6 +1726,12 @@ static NTSTATUS get_output_info( struct screen_buffer *screen_buffer, size_t *ou
     info->font_pitch_family = screen_buffer->font.pitch_family;
     memcpy( info->color_map, screen_buffer->color_map, sizeof(info->color_map) );
     if (*out_size > sizeof(*info)) memcpy( info + 1, screen_buffer->font.face_name, *out_size - sizeof(*info) );
+
+    TRACE( "%p cursor_size=%u cursor_visible=%x cursor=(%u,%u) width=%u height=%u win=%s attr=%x popup_attr=%x"
+           " font_width=%u font_height=%u %s\n", screen_buffer, info->cursor_size, info->cursor_visible,
+           info->cursor_x, info->cursor_y, info->width, info->height, wine_dbgstr_rect(&screen_buffer->win),
+           info->attr, info->popup_attr, info->font_width, info->font_height,
+           debugstr_wn( (const WCHAR *)(info + 1), (*out_size - sizeof(*info)) / sizeof(WCHAR) ) );
     return STATUS_SUCCESS;
 }
 
@@ -2534,11 +2543,12 @@ static NTSTATUS process_console_ioctls( struct console *console )
     {
         if (status) out_size = 0;
 
+        console->signaled = console->record_count != 0;
         SERVER_START_REQ( get_next_console_request )
         {
             req->handle = wine_server_obj_handle( console->server );
             req->status = status;
-            req->signal = console->record_count != 0;
+            req->signal = console->signaled;
             wine_server_add_data( req, ioctl_buffer, out_size );
             wine_server_set_reply( req, ioctl_buffer, ioctl_buffer_size );
             status = wine_server_call( req );
@@ -2620,7 +2630,7 @@ static int main_loop( struct console *console, HANDLE signal )
     for (;;)
     {
         if (pump_msgs)
-            res = MsgWaitForMultipleObjects( wait_cnt, wait_handles, FALSE, INFINITE, QS_ALLEVENTS );
+            res = MsgWaitForMultipleObjects( wait_cnt, wait_handles, FALSE, INFINITE, QS_ALLINPUT );
         else
             res = WaitForMultipleObjects( wait_cnt, wait_handles, FALSE, INFINITE );
 
@@ -2663,6 +2673,14 @@ static int main_loop( struct console *console, HANDLE signal )
     }
 
     return 0;
+}
+
+static LONG WINAPI handle_ctrl_c( EXCEPTION_POINTERS *eptr )
+{
+    if (eptr->ExceptionRecord->ExceptionCode != CONTROL_C_EXIT) return EXCEPTION_CONTINUE_SEARCH;
+    /* In Unix mode, ignore ctrl c exceptions. Signals are sent it to clients as well and we will
+     * terminate the usual way if they don't handle it. */
+    return EXCEPTION_CONTINUE_EXECUTION;
 }
 
 int __cdecl wmain(int argc, WCHAR *argv[])
@@ -2751,8 +2769,10 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         if (!init_window( &console )) return 1;
         GetStartupInfoW( &si );
         set_console_title( &console, si.lpTitle, wcslen( si.lpTitle ) * sizeof(WCHAR) );
-        ShowWindow( console.win, SW_SHOW );
+        ShowWindow( console.win, (si.dwFlags & STARTF_USESHOWWINDOW) ? si.wShowWindow : SW_SHOW );
     }
+
+    if (console.is_unix) RtlAddVectoredExceptionHandler( FALSE, handle_ctrl_c );
 
     return main_loop( &console, signal );
 }

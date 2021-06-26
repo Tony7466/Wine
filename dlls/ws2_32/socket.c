@@ -4618,10 +4618,11 @@ INT WINAPI WSAIoctl(SOCKET s, DWORD code, LPVOID in_buff, DWORD in_size, LPVOID 
                         if (ptr->IpAddressList.IpAddress.String[0] == '\0')
                             continue;
 
-                        if ((numInt + 1)*sizeof(INTERFACE_INFO)/sizeof(IP_ADAPTER_INFO) > out_size)
+                        if ((numInt + 1) * sizeof(INTERFACE_INFO) > out_size)
                         {
                             WARN("Buffer too small = %u, out_size = %u\n", numInt + 1, out_size);
                             status = WSAEFAULT;
+                            if (ret_size) *ret_size = 0;
                             break;
                         }
 
@@ -6615,6 +6616,11 @@ int WINAPI WS_getaddrinfo(LPCSTR nodename, LPCSTR servname, const struct WS_addr
              * is invalid */
             ERR_(winediag)("Failed to resolve your host name IP\n");
             result = getaddrinfo(NULL, servname ? servname : "0", punixhints, &unixaires);
+            if (!result && punixhints && (punixhints->ai_flags & AI_CANONNAME) && unixaires && !unixaires->ai_canonname)
+            {
+                freeaddrinfo(unixaires);
+                result = EAI_NONAME;
+            }
         }
     }
     TRACE("%s, %s %p -> %p %d\n", debugstr_a(nodename), debugstr_a(servname), hints, res, result);
@@ -7646,7 +7652,7 @@ static struct WS_hostent *WS_create_he(char *name, int aliases, int aliases_size
      * First set the pointer for aliases, second set the pointers for addresses.
      * Third fill the addresses indexes, fourth jump aliases names size.
      * Fifth fill the hostname.
-     * NOTE: This method is valid for OS version's >= XP.
+     * NOTE: This method is valid for OS versions >= XP.
      */
     p = (char *)(p_to + 1);
     p_to->h_aliases = (char **)p;

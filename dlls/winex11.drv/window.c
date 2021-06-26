@@ -37,6 +37,8 @@
 #include <X11/extensions/shape.h>
 #endif /* HAVE_LIBXSHAPE */
 
+/* avoid conflict with field names in included win32 headers */
+#undef Status
 #include "windef.h"
 #include "winbase.h"
 #include "wingdi.h"
@@ -750,6 +752,10 @@ static void set_mwm_hints( struct x11drv_win_data *data, DWORD style, DWORD ex_s
             if (style & WS_MINIMIZEBOX) mwm_hints.functions |= MWM_FUNC_MINIMIZE;
             if (style & WS_MAXIMIZEBOX) mwm_hints.functions |= MWM_FUNC_MAXIMIZE;
             if (style & WS_SYSMENU)     mwm_hints.functions |= MWM_FUNC_CLOSE;
+
+            /* The window can be programmatically minimized even without
+               a minimize box button. Allow the WM to restore it. */
+            if (style & WS_MINIMIZE)    mwm_hints.functions |= MWM_FUNC_MINIMIZE | MWM_FUNC_MAXIMIZE;
         }
     }
 
@@ -2479,7 +2485,8 @@ void CDECL X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags
             BOOL needs_map = TRUE;
 
             /* layered windows are mapped only once their attributes are set */
-            if (GetWindowLongW( hwnd, GWL_EXSTYLE ) & WS_EX_LAYERED) needs_map = data->layered;
+            if (GetWindowLongW( hwnd, GWL_EXSTYLE ) & WS_EX_LAYERED)
+                needs_map = data->layered || IsRectEmpty( rectWindow );
             release_win_data( data );
             if (needs_icon) fetch_icon_data( hwnd, 0, 0 );
             if (needs_map) map_window( hwnd, new_style );

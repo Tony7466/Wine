@@ -1,7 +1,5 @@
 /*
- * rint family
- *
- * Copyright 2017 Alex Henrie
+ * Copyright 2020 Rémi Bernon for CodeWeavers
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,49 +16,18 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-#include "wine/port.h"
-
-#include <math.h>
-
-#ifndef HAVE_RINT
-double rint(double x)
-{
-    return x >= 0 ? floor(x + 0.5) : ceil(x - 0.5);
-}
+#ifdef __WIDL__
+#pragma winrt ns_prefix
 #endif
 
-#ifndef HAVE_RINTF
-float rintf(float x)
-{
-    return rint(x);
-}
-#endif
+namespace Windows {
+    namespace Foundation {
+        [contractversion(4)]
+        apicontract FoundationContract
+        {};
 
-#ifndef HAVE_LRINT
-long lrint(double x)
-{
-    return x >= 0 ? floor(x + 0.5) : ceil(x - 0.5);
+        [contractversion(10)]
+        apicontract UniversalApiContract
+        {};
+    }
 }
-#endif
-
-#ifndef HAVE_LRINTF
-long lrintf(float x)
-{
-    return lrint(x);
-}
-#endif
-
-#ifndef HAVE_LLRINT
-__int64 llrint(double x)
-{
-    return x >= 0 ? floor(x + 0.5) : ceil(x - 0.5);
-}
-#endif
-
-#ifndef HAVE_LLRINTF
-__int64 llrintf(float x)
-{
-    return llrint(x);
-}
-#endif

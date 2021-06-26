@@ -1338,6 +1338,34 @@ NTSYSAPI PVOID WINAPI RtlVirtualUnwind(ULONG,ULONG64,ULONG64,RUNTIME_FUNCTION*,C
 #define XSTATE_IPT                   8
 #define XSTATE_CET_U                 11
 #define XSTATE_LWP                   62
+#define MAXIMUM_XSTATE_FEATURES      64
+
+#define XSTATE_MASK_LEGACY_FLOATING_POINT   (1 << XSTATE_LEGACY_FLOATING_POINT)
+#define XSTATE_MASK_LEGACY_SSE              (1 << XSTATE_LEGACY_SSE)
+#define XSTATE_MASK_LEGACY                  (XSTATE_MASK_LEGACY_FLOATING_POINT | XSTATE_MASK_LEGACY_SSE)
+#define XSTATE_MASK_GSSE                    (1 << XSTATE_GSSE)
+
+typedef struct _XSTATE_FEATURE
+{
+    ULONG Offset;
+    ULONG Size;
+} XSTATE_FEATURE, *PXSTATE_FEATURE;
+
+typedef struct _XSTATE_CONFIGURATION
+{
+    ULONG64 EnabledFeatures;
+    ULONG64 EnabledVolatileFeatures;
+    ULONG Size;
+    ULONG OptimizedSave:1;
+    ULONG CompactionEnabled:1;
+    XSTATE_FEATURE Features[MAXIMUM_XSTATE_FEATURES];
+
+    ULONG64 EnabledSupervisorFeatures;
+    ULONG64 AlignedFeatures;
+    ULONG AllFeatureSize;
+    ULONG AllFeatures[MAXIMUM_XSTATE_FEATURES];
+    ULONG64 EnabledUserVisibleSupervisorFeatures;
+} XSTATE_CONFIGURATION, *PXSTATE_CONFIGURATION;
 
 typedef struct _YMMCONTEXT
 {
@@ -6869,7 +6897,7 @@ static inline BOOLEAN BitScanReverse(DWORD *index, DWORD mask)
 #if defined(_MSC_VER)
 
 #define InterlockedCompareExchange128 _InterlockedCompareExchange128
-static inline unsigned char _InterlockedCompareExchange128(__int64 *dest, __int64 xchg_high, __int64 xchg_low, __int64 *compare);
+unsigned char _InterlockedCompareExchange128(volatile __int64 *dest, __int64 xchg_high, __int64 xchg_low, __int64 *compare);
 #pragma intrinsic(_InterlockedCompareExchange128)
 
 #elif defined(__x86_64__)

@@ -874,7 +874,7 @@ enum wined3d_shader_type
 #define WINED3DCOLORWRITEENABLE_ALPHA                           (1u << 3)
 
 #define WINED3DADAPTER_DEFAULT                                  0
-#define WINED3DENUM_NO_WHQL_LEVEL                               2
+#define WINED3DENUM_WHQL_LEVEL                                  2
 
 #define WINED3DTSS_TCI_PASSTHRU                                 0x00000
 #define WINED3DTSS_TCI_CAMERASPACENORMAL                        0x10000
@@ -2157,7 +2157,6 @@ struct wined3d_output_desc
     WCHAR device_name[CCHDEVICENAME];
     RECT desktop_rect;
     BOOL attached_to_desktop;
-    enum wined3d_display_rotation rotation;
     HMONITOR monitor;
 };
 

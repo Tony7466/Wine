@@ -191,6 +191,7 @@ struct test_callback
     IMFAsyncCallback IMFAsyncCallback_iface;
     HANDLE event;
     DWORD param;
+    IMFMediaEvent *media_event;
 };
 
 static struct test_callback *impl_from_IMFAsyncCallback(IMFAsyncCallback *iface)
@@ -420,38 +421,77 @@ static const IMFAsyncCallbackVtbl test_create_from_file_handler_callback_vtbl =
     test_create_from_file_handler_callback_Invoke,
 };
 
+static HRESULT WINAPI source_events_callback_Invoke(IMFAsyncCallback *iface, IMFAsyncResult *result)
+{
+    struct test_callback *callback = impl_from_IMFAsyncCallback(iface);
+    IMFMediaEventGenerator *generator;
+    HRESULT hr;
+
+    ok(!!result, "Unexpected result object.\n");
+
+    generator = (IMFMediaEventGenerator *)IMFAsyncResult_GetStateNoAddRef(result);
+
+    hr = IMFMediaEventGenerator_EndGetEvent(generator, result, &callback->media_event);
+    ok(hr == S_OK, "Failed to create an object, hr %#x.\n", hr);
+
+    SetEvent(callback->event);
+
+    return S_OK;
+}
+
+static const IMFAsyncCallbackVtbl events_callback_vtbl =
+{
+    testcallback_QueryInterface,
+    testcallback_AddRef,
+    testcallback_Release,
+    testcallback_GetParameters,
+    source_events_callback_Invoke,
+};
+
 static BOOL get_event(IMFMediaEventGenerator *generator, MediaEventType expected_event_type, PROPVARIANT *value)
 {
+    struct test_callback callback = { 0 };
     MediaEventType event_type;
-    HRESULT hr, event_status;
-    IMFMediaEvent *event;
+    BOOL ret = FALSE;
+    HRESULT hr;
 
-    hr = IMFMediaEventGenerator_GetEvent(generator, 0, &event);
-    ok(hr == S_OK, "Failed to get event, hr %#x.\n", hr);
+    callback.IMFAsyncCallback_iface.lpVtbl = &events_callback_vtbl;
+    callback.event = CreateEventA(NULL, FALSE, FALSE, NULL);
 
-    hr = IMFMediaEvent_GetStatus(event, &event_status);
-    ok(hr == S_OK, "Failed to get status code, hr %#x.\n", hr);
-    ok(event_status == S_OK, "Unexpected event status code %#x.\n", event_status);
-
-    hr = IMFMediaEvent_GetType(event, &event_type);
-    ok(hr == S_OK, "Failed to event type, hr %#x.\n", hr);
-    ok(event_type == expected_event_type, "Unexpected event type %u, expected %u.\n", event_type, expected_event_type);
-
-    if (event_type != expected_event_type)
+    for (;;)
     {
-        IMFMediaEvent_Release(event);
-        return FALSE;
+        hr = IMFMediaEventGenerator_BeginGetEvent(generator, &callback.IMFAsyncCallback_iface,
+                (IUnknown *)generator);
+        ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+        if (WaitForSingleObject(callback.event, 1000) == WAIT_TIMEOUT)
+        {
+            ok(0, "timeout\n");
+            break;
+        }
+
+        Sleep(10);
+
+        hr = IMFMediaEvent_GetType(callback.media_event, &event_type);
+        ok(hr == S_OK, "Failed to event type, hr %#x.\n", hr);
+
+        if ((ret = (event_type == expected_event_type)))
+        {
+            if (value)
+            {
+                hr = IMFMediaEvent_GetValue(callback.media_event, value);
+                ok(hr == S_OK, "Failed to get value of event, hr %#x.\n", hr);
+            }
+
+            break;
+        }
     }
 
-    if (value)
-    {
-        hr = IMFMediaEvent_GetValue(event, value);
-        ok(hr == S_OK, "Failed to get value of event, hr %#x.\n", hr);
-    }
+    CloseHandle(callback.event);
+    if (callback.media_event)
+        IMFMediaEvent_Release(callback.media_event);
 
-    IMFMediaEvent_Release(event);
-
-    return TRUE;
+    return ret;
 }
 
 static void test_source_resolver(void)
@@ -612,14 +652,13 @@ todo_wine
     hr = IMFMediaSource_Start(mediasource, descriptor, &GUID_NULL, &var);
     ok(hr == S_OK, "Failed to start media source, hr %#x.\n", hr);
 
-    get_event((IMFMediaEventGenerator *)mediasource, MENewStream, &var);
-    ok(var.vt == VT_UNKNOWN, "Unexpected value type %u from MENewStream event.\n", var.vt);
-    video_stream = (IMFMediaStream *)var.punkVal;
+    video_stream = NULL;
+    if (get_event((IMFMediaEventGenerator *)mediasource, MENewStream, &var))
+    {
+        ok(var.vt == VT_UNKNOWN, "Unexpected value type.\n");
+        video_stream = (IMFMediaStream *)var.punkVal;
+    }
 
-    get_event((IMFMediaEventGenerator *)mediasource, MESourceStarted, NULL);
-
-    /* Request samples, our file is 10 frames at 25fps */
-    get_event((IMFMediaEventGenerator *)video_stream, MEStreamStarted, NULL);
     sample_count = 10;
 
     for (i = 0; i < sample_count; ++i)
@@ -5600,9 +5639,12 @@ static void test_MFInitMediaTypeFromWaveFormatEx(void)
         { WAVE_FORMAT_WMAUDIO_LOSSLESS },
         { WAVE_FORMAT_WMASPDIF },
     };
+
+    UINT8 buff[MPEGLAYER3_WFX_EXTRA_BYTES];
     WAVEFORMATEXTENSIBLE waveformatext;
+    MPEGLAYER3WAVEFORMAT mp3format;
     IMFMediaType *mediatype;
-    unsigned int i;
+    unsigned int i, size;
     HRESULT hr;
 
     hr = MFCreateMediaType(&mediatype);
@@ -5622,11 +5664,38 @@ static void test_MFInitMediaTypeFromWaveFormatEx(void)
         waveformatext.dwChannelMask = 0x8;
         memcpy(&waveformatext.SubFormat, &MFAudioFormat_Base, sizeof(waveformatext.SubFormat));
         waveformatext.SubFormat.Data1 = waveformatex_tests[i].wFormatTag;
+
         hr = MFInitMediaTypeFromWaveFormatEx(mediatype, &waveformatext.Format, sizeof(waveformatext));
         ok(hr == S_OK, "Failed to initialize media type, hr %#x.\n", hr);
 
+        hr = IMFMediaType_GetItem(mediatype, &MF_MT_USER_DATA, NULL);
+        ok(hr == MF_E_ATTRIBUTENOTFOUND, "Unexpected hr %#x.\n", hr);
+
         validate_media_type(mediatype, &waveformatext.Format);
     }
+
+    /* MPEGLAYER3WAVEFORMAT */
+    mp3format.wfx.wFormatTag = WAVE_FORMAT_MPEGLAYER3;
+    mp3format.wfx.nChannels = 2;
+    mp3format.wfx.nSamplesPerSec = 44100;
+    mp3format.wfx.nAvgBytesPerSec = 16000;
+    mp3format.wfx.nBlockAlign = 1;
+    mp3format.wfx.wBitsPerSample = 0;
+    mp3format.wfx.cbSize = MPEGLAYER3_WFX_EXTRA_BYTES;
+    mp3format.wID = MPEGLAYER3_ID_MPEG;
+    mp3format.fdwFlags = 0;
+    mp3format.nBlockSize = 417;
+    mp3format.nFramesPerBlock = 0;
+    mp3format.nCodecDelay = 0;
+
+    hr = MFInitMediaTypeFromWaveFormatEx(mediatype, (WAVEFORMATEX *)&mp3format, sizeof(mp3format));
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    validate_media_type(mediatype, &mp3format.wfx);
+    hr = IMFMediaType_GetBlob(mediatype, &MF_MT_USER_DATA, buff, sizeof(buff), &size);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(size == mp3format.wfx.cbSize, "Unexpected size %u.\n", size);
+    ok(!memcmp(buff, (WAVEFORMATEX *)&mp3format + 1, size), "Unexpected user data.\n");
 
     IMFMediaType_Release(mediatype);
 }

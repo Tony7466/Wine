@@ -793,59 +793,41 @@ static DWORD CALLBACK push_data(LPVOID iface)
     return 0;
 }
 
-static GstFlowReturn got_data_sink(GstPad *pad, GstObject *parent, GstBuffer *buf)
+static HRESULT send_sample(struct gstdemux_source *pin, IMediaSample *sample,
+        GstBuffer *buf, GstMapInfo *info, gsize offset, gsize size, DWORD bytes_per_second)
 {
-    struct gstdemux_source *pin = gst_pad_get_element_private(pad);
-    struct gstdemux *This = impl_from_strmbase_filter(pin->pin.pin.filter);
     HRESULT hr;
     BYTE *ptr = NULL;
-    IMediaSample *sample;
-    GstMapInfo info;
 
-    TRACE("%p %p\n", pad, buf);
-
-    if (This->initial) {
-        gst_buffer_unref(buf);
-        return GST_FLOW_OK;
-    }
-
-    hr = BaseOutputPinImpl_GetDeliveryBuffer(&pin->pin, &sample, NULL, NULL, 0);
-
-    if (hr == VFW_E_NOT_CONNECTED) {
-        gst_buffer_unref(buf);
-        return GST_FLOW_NOT_LINKED;
-    }
-
-    if (FAILED(hr)) {
-        gst_buffer_unref(buf);
-        ERR("Could not get a delivery buffer (%x), returning GST_FLOW_FLUSHING\n", hr);
-        return GST_FLOW_FLUSHING;
-    }
-
-    gst_buffer_map(buf, &info, GST_MAP_READ);
-
-    hr = IMediaSample_SetActualDataLength(sample, info.size);
+    hr = IMediaSample_SetActualDataLength(sample, size);
     if(FAILED(hr)){
         WARN("SetActualDataLength failed: %08x\n", hr);
-        return GST_FLOW_FLUSHING;
+        return hr;
     }
 
     IMediaSample_GetPointer(sample, &ptr);
 
-    memcpy(ptr, info.data, info.size);
-
-    gst_buffer_unmap(buf, &info);
+    memcpy(ptr, &info->data[offset], size);
 
     if (GST_BUFFER_PTS_IS_VALID(buf)) {
-        REFERENCE_TIME rtStart = gst_segment_to_running_time(pin->segment, GST_FORMAT_TIME, buf->pts);
+        REFERENCE_TIME rtStart;
+        GstClockTime ptsStart = buf->pts;
+        if (offset > 0)
+            ptsStart = buf->pts + gst_util_uint64_scale(offset, GST_SECOND, bytes_per_second);
+        rtStart = gst_segment_to_running_time(pin->segment, GST_FORMAT_TIME, ptsStart);
         if (rtStart >= 0)
             rtStart /= 100;
 
         if (GST_BUFFER_DURATION_IS_VALID(buf)) {
-            REFERENCE_TIME tStart = buf->pts / 100;
-            REFERENCE_TIME tStop = (buf->pts + buf->duration) / 100;
             REFERENCE_TIME rtStop;
-            rtStop = gst_segment_to_running_time(pin->segment, GST_FORMAT_TIME, buf->pts + buf->duration);
+            REFERENCE_TIME tStart;
+            REFERENCE_TIME tStop;
+            GstClockTime ptsStop = buf->pts + buf->duration;
+            if (offset + size < info->size)
+                ptsStop = buf->pts + gst_util_uint64_scale(offset + size, GST_SECOND, bytes_per_second);
+            tStart = ptsStart / 100;
+            tStop = ptsStop / 100;
+            rtStop = gst_segment_to_running_time(pin->segment, GST_FORMAT_TIME, ptsStop);
             if (rtStop >= 0)
                 rtStop /= 100;
             TRACE("Current time on %p: %i to %i ms\n", pin, (int)(rtStart / 10000), (int)(rtStop / 10000));
@@ -860,7 +842,7 @@ static GstFlowReturn got_data_sink(GstPad *pad, GstObject *parent, GstBuffer *bu
         IMediaSample_SetMediaTime(sample, NULL, NULL);
     }
 
-    IMediaSample_SetDiscontinuity(sample, GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_DISCONT));
+    IMediaSample_SetDiscontinuity(sample, !offset && GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_DISCONT));
     IMediaSample_SetPreroll(sample, GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_LIVE));
     IMediaSample_SetSyncPoint(sample, !GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_DELTA_UNIT));
 
@@ -871,8 +853,77 @@ static GstFlowReturn got_data_sink(GstPad *pad, GstObject *parent, GstBuffer *bu
 
     TRACE("sending sample returned: %08x\n", hr);
 
+    return hr;
+}
+
+static GstFlowReturn got_data_sink(GstPad *pad, GstObject *parent, GstBuffer *buf)
+{
+    struct gstdemux_source *pin = gst_pad_get_element_private(pad);
+    struct gstdemux *This = impl_from_strmbase_filter(pin->pin.pin.filter);
+    HRESULT hr = S_OK;
+    IMediaSample *sample;
+    GstMapInfo info;
+
+    TRACE("%p %p\n", pad, buf);
+
+    if (This->initial) {
+        gst_buffer_unref(buf);
+        return GST_FLOW_OK;
+    }
+
+    gst_buffer_map(buf, &info, GST_MAP_READ);
+
+    if (IsEqualGUID(&pin->pin.pin.mt.formattype, &FORMAT_WaveFormatEx)
+            && (IsEqualGUID(&pin->pin.pin.mt.subtype, &MEDIASUBTYPE_PCM)
+            || IsEqualGUID(&pin->pin.pin.mt.subtype, &MEDIASUBTYPE_IEEE_FLOAT)))
+    {
+        WAVEFORMATEX *format = (WAVEFORMATEX *)pin->pin.pin.mt.pbFormat;
+        gsize offset = 0;
+        while (offset < info.size)
+        {
+            gsize advance;
+
+            hr = BaseOutputPinImpl_GetDeliveryBuffer(&pin->pin, &sample, NULL, NULL, 0);
+
+            if (FAILED(hr))
+            {
+                if (hr != VFW_E_NOT_CONNECTED)
+                    ERR("Could not get a delivery buffer (%x), returning GST_FLOW_FLUSHING\n", hr);
+                break;
+            }
+
+            advance = min(IMediaSample_GetSize(sample), info.size - offset);
+
+            hr = send_sample(pin, sample, buf, &info, offset, advance, format->nAvgBytesPerSec);
+
+            IMediaSample_Release(sample);
+
+            if (FAILED(hr))
+                break;
+
+            offset += advance;
+        }
+    }
+    else
+    {
+        hr = BaseOutputPinImpl_GetDeliveryBuffer(&pin->pin, &sample, NULL, NULL, 0);
+
+        if (FAILED(hr))
+        {
+            if (hr != VFW_E_NOT_CONNECTED)
+                ERR("Could not get a delivery buffer (%x), returning GST_FLOW_FLUSHING\n", hr);
+        }
+        else
+        {
+            hr = send_sample(pin, sample, buf, &info, 0, info.size, 0);
+
+            IMediaSample_Release(sample);
+        }
+    }
+
+    gst_buffer_unmap(buf, &info);
+
     gst_buffer_unref(buf);
-    IMediaSample_Release(sample);
 
     if (hr == VFW_E_NOT_CONNECTED)
         return GST_FLOW_NOT_LINKED;
@@ -1024,9 +1075,6 @@ static void init_new_decoded_pad(GstElement *bin, GstPad *pad, struct gstdemux *
             goto out;
         }
 
-        /* Avoid expensive color matrix conversions. */
-        gst_util_set_object_arg(G_OBJECT(vconv), "matrix-mode", "none");
-
         /* GStreamer outputs RGB video top-down, but DirectShow expects bottom-up. */
         if (!(flip = gst_element_factory_make("videoflip", NULL)))
         {
@@ -1043,9 +1091,6 @@ static void init_new_decoded_pad(GstElement *bin, GstPad *pad, struct gstdemux *
                     8 * (int)sizeof(void *));
             goto out;
         }
-
-        /* Avoid expensive color matrix conversions. */
-        gst_util_set_object_arg(G_OBJECT(vconv2), "matrix-mode", "none");
 
         /* The bin takes ownership of these elements. */
         gst_bin_add(GST_BIN(This->container), deinterlace);
@@ -1897,90 +1942,43 @@ static ULONG WINAPI GST_Seeking_Release(IMediaSeeking *iface)
     return IPin_Release(&This->pin.pin.IPin_iface);
 }
 
-static HRESULT WINAPI GST_Seeking_GetCurrentPosition(IMediaSeeking *iface, REFERENCE_TIME *pos)
-{
-    struct gstdemux_source *This = impl_from_IMediaSeeking(iface);
-
-    TRACE("(%p)->(%p)\n", This, pos);
-
-    if (!pos)
-        return E_POINTER;
-
-    mark_wine_thread();
-
-    if (This->pin.pin.filter->state == State_Stopped)
-    {
-        *pos = This->seek.llCurrent;
-        TRACE("Cached value\n");
-        return S_OK;
-    }
-
-    if (!gst_pad_query_position(This->their_src, GST_FORMAT_TIME, pos)) {
-        WARN("Could not query position\n");
-        return E_NOTIMPL;
-    }
-    *pos /= 100;
-    This->seek.llCurrent = *pos;
-    return S_OK;
-}
-
-static GstSeekType type_from_flags(DWORD flags)
-{
-    switch (flags & AM_SEEKING_PositioningBitsMask) {
-    case AM_SEEKING_NoPositioning:
-        return GST_SEEK_TYPE_NONE;
-    case AM_SEEKING_AbsolutePositioning:
-    case AM_SEEKING_RelativePositioning:
-        return GST_SEEK_TYPE_SET;
-    case AM_SEEKING_IncrementalPositioning:
-        return GST_SEEK_TYPE_END;
-    }
-    return GST_SEEK_TYPE_NONE;
-}
-
 static HRESULT WINAPI GST_Seeking_SetPositions(IMediaSeeking *iface,
-        REFERENCE_TIME *pCur, DWORD curflags, REFERENCE_TIME *pStop,
-        DWORD stopflags)
+        LONGLONG *current, DWORD current_flags, LONGLONG *stop, DWORD stop_flags)
 {
-    HRESULT hr;
-    struct gstdemux_source *This = impl_from_IMediaSeeking(iface);
-    GstSeekFlags f = 0;
-    GstSeekType curtype, stoptype;
-    GstEvent *e;
-    gint64 stop_pos = 0, curr_pos = 0;
+    GstSeekType current_type = GST_SEEK_TYPE_SET, stop_type = GST_SEEK_TYPE_SET;
+    struct gstdemux_source *pin = impl_from_IMediaSeeking(iface);
+    GstSeekFlags flags = 0;
 
-    TRACE("(%p)->(%p, 0x%x, %p, 0x%x)\n", This, pCur, curflags, pStop, stopflags);
+    TRACE("pin %p, current %s, current_flags %#x, stop %s, stop_flags %#x.\n",
+            pin, current ? debugstr_time(*current) : "<null>", current_flags,
+            stop ? debugstr_time(*stop) : "<null>", stop_flags);
 
     mark_wine_thread();
 
-    hr = SourceSeekingImpl_SetPositions(iface, pCur, curflags, pStop, stopflags);
-    if (This->pin.pin.filter->state == State_Stopped)
-        return hr;
-
-    curtype = type_from_flags(curflags);
-    stoptype = type_from_flags(stopflags);
-    if (curflags & AM_SEEKING_SeekToKeyFrame)
-        f |= GST_SEEK_FLAG_KEY_UNIT;
-    if (curflags & AM_SEEKING_Segment)
-        f |= GST_SEEK_FLAG_SEGMENT;
-    if (!(curflags & AM_SEEKING_NoFlush))
-        f |= GST_SEEK_FLAG_FLUSH;
-
-    if (((curflags & AM_SEEKING_PositioningBitsMask) == AM_SEEKING_RelativePositioning) ||
-        ((stopflags & AM_SEEKING_PositioningBitsMask) == AM_SEEKING_RelativePositioning)) {
-        gint64 tmp_pos;
-        gst_pad_query_position (This->my_sink, GST_FORMAT_TIME, &tmp_pos);
-        if ((curflags & AM_SEEKING_PositioningBitsMask) == AM_SEEKING_RelativePositioning)
-            curr_pos = tmp_pos;
-        if ((stopflags & AM_SEEKING_PositioningBitsMask) == AM_SEEKING_RelativePositioning)
-            stop_pos = tmp_pos;
-    }
-
-    e = gst_event_new_seek(This->seek.dRate, GST_FORMAT_TIME, f, curtype, pCur ? curr_pos + *pCur * 100 : -1, stoptype, pStop ? stop_pos + *pStop * 100 : -1);
-    if (gst_pad_push_event(This->my_sink, e))
+    SourceSeekingImpl_SetPositions(iface, current, current_flags, stop, stop_flags);
+    if (pin->pin.pin.filter->state == State_Stopped)
         return S_OK;
-    else
-        return E_NOTIMPL;
+
+    if (current_flags & AM_SEEKING_SeekToKeyFrame)
+        flags |= GST_SEEK_FLAG_KEY_UNIT;
+    if (current_flags & AM_SEEKING_Segment)
+        flags |= GST_SEEK_FLAG_SEGMENT;
+    if (!(current_flags & AM_SEEKING_NoFlush))
+        flags |= GST_SEEK_FLAG_FLUSH;
+
+    if ((current_flags & AM_SEEKING_PositioningBitsMask) == AM_SEEKING_NoPositioning)
+        current_type = GST_SEEK_TYPE_NONE;
+    if ((stop_flags & AM_SEEKING_PositioningBitsMask) == AM_SEEKING_NoPositioning)
+        stop_type = GST_SEEK_TYPE_NONE;
+
+    if (!gst_pad_push_event(pin->my_sink, gst_event_new_seek(pin->seek.dRate, GST_FORMAT_TIME, flags,
+            current_type, pin->seek.llCurrent * 100, stop_type, pin->seek.llStop * 100)))
+    {
+        ERR("Failed to seek (current %s, stop %s).\n",
+                debugstr_time(pin->seek.llCurrent), debugstr_time(pin->seek.llStop));
+        return E_FAIL;
+    }
+    return S_OK;
 }
 
 static const IMediaSeekingVtbl GST_Seeking_Vtbl =
@@ -1997,7 +1995,7 @@ static const IMediaSeekingVtbl GST_Seeking_Vtbl =
     SourceSeekingImpl_SetTimeFormat,
     SourceSeekingImpl_GetDuration,
     SourceSeekingImpl_GetStopPosition,
-    GST_Seeking_GetCurrentPosition,
+    SourceSeekingImpl_GetCurrentPosition,
     SourceSeekingImpl_ConvertTimeFormat,
     GST_Seeking_SetPositions,
     SourceSeekingImpl_GetPositions,

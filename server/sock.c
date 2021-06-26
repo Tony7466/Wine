@@ -459,6 +459,7 @@ static void fill_accept_output( struct accept_req *req, struct iosb *iosb )
 {
     union unix_sockaddr unix_addr;
     struct WS_sockaddr *win_addr;
+    unsigned int remote_len;
     socklen_t unix_len;
     int fd, size = 0;
     char *out_data;
@@ -495,7 +496,7 @@ static void fill_accept_output( struct accept_req *req, struct iosb *iosb )
         unix_len = sizeof(unix_addr);
         win_addr = (struct WS_sockaddr *)(out_data + req->recv_len + sizeof(int));
         if (getsockname( fd, &unix_addr.addr, &unix_len ) < 0 ||
-            (win_len = sockaddr_from_unix( &unix_addr, win_addr, req->local_len )) < 0)
+            (win_len = sockaddr_from_unix( &unix_addr, win_addr, req->local_len - sizeof(int) )) < 0)
         {
             set_win32_error( sock_get_error( errno ) );
             free( out_data );
@@ -506,8 +507,9 @@ static void fill_accept_output( struct accept_req *req, struct iosb *iosb )
 
     unix_len = sizeof(unix_addr);
     win_addr = (struct WS_sockaddr *)(out_data + req->recv_len + req->local_len + sizeof(int));
+    remote_len = iosb->out_size - req->recv_len - req->local_len;
     if (getpeername( fd, &unix_addr.addr, &unix_len ) < 0 ||
-        (win_len = sockaddr_from_unix( &unix_addr, win_addr, iosb->out_size - req->recv_len - req->local_len )) < 0)
+        (win_len = sockaddr_from_unix( &unix_addr, win_addr, remote_len - sizeof(int) )) < 0)
     {
         set_win32_error( sock_get_error( errno ) );
         free( out_data );
@@ -1735,7 +1737,8 @@ static void sock_release_ifchange( struct sock *sock )
 
 static struct object_type *socket_device_get_type( struct object *obj );
 static void socket_device_dump( struct object *obj, int verbose );
-static struct object *socket_device_lookup_name( struct object *obj, struct unicode_str *name, unsigned int attr );
+static struct object *socket_device_lookup_name( struct object *obj, struct unicode_str *name,
+                                                 unsigned int attr, struct object *root );
 static struct object *socket_device_open_file( struct object *obj, unsigned int access,
                                                unsigned int sharing, unsigned int options );
 
@@ -1775,7 +1778,8 @@ static void socket_device_dump( struct object *obj, int verbose )
     fputs( "Socket device\n", stderr );
 }
 
-static struct object *socket_device_lookup_name( struct object *obj, struct unicode_str *name, unsigned int attr )
+static struct object *socket_device_lookup_name( struct object *obj, struct unicode_str *name,
+                                                 unsigned int attr, struct object *root )
 {
     return NULL;
 }
