@@ -1,6 +1,7 @@
 description: call wineDEBSUFFIX instead of wine from desktop launchers
 author: Michael Gilbert <mgilbert@debian.org>
 author: Jens Reyer <jre.winesim@gmail.com>
+forwarded: not-needed
 
 --- a/programs/winemenubuilder/Makefile.in
 +++ b/programs/winemenubuilder/Makefile.in

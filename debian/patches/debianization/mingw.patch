@@ -1,5 +1,6 @@
 description: use host CFLAGS as the CFLAGS for mingw
 author: Michael Gilbert <mgilbert@debian.org>
+forwarded: not-needed
 
 --- a/configure.ac
 +++ b/configure.ac

@@ -1,5 +1,6 @@
 description: update long winebuild manpage line to fit into 80 characters
 author: Michael Gilbert <mgilbert@debian.org>
+forwarded: not-needed
 
 --- a/tools/winebuild/winebuild.man.in
 +++ b/tools/winebuild/winebuild.man.in

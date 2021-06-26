@@ -1,6 +1,7 @@
 description: adjust search paths for addon installers
 author: Michael Gilbert <mgilbert@debian.org>
 author: Jens Reyer <jre.winesim@gmail.com>
+forwarded: not-needed
 
 --- a/dlls/appwiz.cpl/addons.c
 +++ b/dlls/appwiz.cpl/addons.c

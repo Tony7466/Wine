@@ -263,6 +263,10 @@ Depends:
  ${misc:Depends},
  libwineVERSION (= ${binary:Version}),
  libc6-dev | libc6.1-dev | libc0.3-dev | libc0.1-dev | libc-dev,
+Breaks:
+ libwineVERSION (= 5.22+repack-1),
+Replaces:
+ libwineVERSION (= 5.22+repack-1),
 Recommends:
  wine64VERSION-tools (= ${binary:Version}) | wine32VERSION-tools (= ${binary:Version}),
 Description: Windows API implementation - development files

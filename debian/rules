@@ -224,6 +224,7 @@ endif
 	rm -rf debian/tmp/usr/share/man
 	rm -rf debian/tmp/usr/share/wine$(DEBSUFFIX)/wine/nls
 	rm -f debian/tmp/usr/lib/*/wineserver
+	rm -f debian/tmp/usr/lib/*/*/libwine.so
 	rm -f debian/tmp/usr/share/*/fonts/*.fon
 	rm -f debian/tmp/usr/share/*/fonts/*.ttf
 	rm -f debian/tmp/notepad*.man debian/tmp/winemine*.man
@@ -247,7 +248,7 @@ override_dh_bugfiles:
 	dh_bugfiles -A
 
 override_dh_missing:
-	dh_missing --fail-missing -X elf.depends -X elf.recommends -X wine.desktop
+	dh_missing -X elf.depends -X elf.recommends -X wine.desktop
 
 override_dh_clean:
 	dh_clean -- $(INSTALLS)

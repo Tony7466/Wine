@@ -1,5 +1,6 @@
 description: don't append wine to the default path settings
 author: Michael Gilbert <mgilbert@debian.org>
+forwarded: not-needed
 
 --- a/Makefile.in
 +++ b/Makefile.in

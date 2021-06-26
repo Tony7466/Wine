@@ -1,5 +1,6 @@
 description: fix wineserver manpages for Debian's default persistence value
 author: Jens Reyer <jre.winesim@gmail.com>
+forwarded: not-needed
 
 --- a/server/wineserver.de.UTF-8.man.in
 +++ b/server/wineserver.de.UTF-8.man.in
