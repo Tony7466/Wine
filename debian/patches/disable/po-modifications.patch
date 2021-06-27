@@ -3,15 +3,15 @@ author: Michael Gilbert
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -2676,11 +2676,6 @@ static void output_po_files( const struc
+@@ -2697,11 +2697,6 @@ static void output_po_files( const struc
  
      if (linguas.count)
      {
 -        for (i = 0; i < linguas.count; i++)
 -            output_filename( strmake( "%s/%s.po", po_dir, linguas.str[i] ));
 -        output( ": %s/wine.pot\n", po_dir );
--        output( "\tmsgmerge --previous -q $@ %s/wine.pot | msgattrib --no-obsolete -o $@.new && mv $@.new $@\n",
--                po_dir );
+-        output( "\t%smsgmerge --previous -q $@ %s/wine.pot | msgattrib --no-obsolete -o $@.new && mv $@.new $@\n",
+-                cmd_prefix( "MSG" ), po_dir );
          output( "po:" );
          for (i = 0; i < linguas.count; i++)
              output_filename( strmake( "%s/%s.po", po_dir, linguas.str[i] ));

@@ -22,14 +22,12 @@ include/wine/server_protocol.h
 
 # automatically generated unicode files
 nls/*.nls
-libs/port/wctype.c
-libs/port/casemap.c
+libs/wine/wctype.c
+libs/wine/casemap.c
 libs/wine/compose.c
 libs/wine/decompose.c
-libs/wine/digitmap.c
 libs/wine/collation.c
 dlls/gdi32/vertical.c
-dlls/gdi32/uniscribe/direction.c
 dlls/gdi32/uniscribe/bracket.c
 dlls/gdi32/uniscribe/direction.c
 dlls/gdi32/uniscribe/indicsyllable.c
@@ -42,9 +40,9 @@ dlls/dwrite/linebreak.c
 dlls/dwrite/mirror.c
 dlls/dwrite/scripts.c
 dlls/dwrite/scripts.h
+dlls/wineps.drv/vertical.c
 dlls/kernelbase/collation.c
 dlls/kernelbase/digitmap.c
-dlls/wineps.drv/vertical.c
 
 # automatically generated opengl spec files
 include/wine/wgl*

@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/programs/winedbg/be_arm.c
 +++ b/programs/winedbg/be_arm.c
-@@ -718,12 +718,12 @@ static UINT thumb2_disasm_branch(UINT in
+@@ -706,12 +706,12 @@ static UINT thumb2_disasm_branch(UINT in
      if (C)
      {
          offset |= I1 << 19 | I2 << 18 | (inst & 0x003f0000) >> 4;

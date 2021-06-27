@@ -15,8 +15,8 @@ Files-Excluded:
  */*/*/test*.mp4
  */*/*/test*.mpg
  */*/*/test*.avi
- libs/port/wctype.c
- libs/port/casemap.c
+ libs/wine/wctype.c
+ libs/wine/casemap.c
  libs/wine/compose.c
  libs/wine/decompose.c
  libs/wine/digitmap.c

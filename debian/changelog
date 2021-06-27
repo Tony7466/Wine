@@ -1,31 +1,6 @@
-wine-development (6.0+repack-1) UNRELEASED; urgency=medium
+wine-development (6.0+repack-1) unstable; urgency=medium
 
   * New upstream release 6.0, released Jan 14, 2021.
-    - Core modules in PE format.
-    - Vulkan backend for WineD3D.
-    - DirectShow and Media Foundation support.
-    - Text console redesign.
-    - Per render-target ("independent") blend states.
-    - Dual-source blending.
-    - Multi-sample anti-aliasing sample masks.
-    - Several more capability queries.
-    - "renderer" (REG_SZ)
-    - "csmt" (REG_DWORD)
-    - "DirectDrawRenderer"
-    - Initial Media Session implementation for state changes and data
-    - Initial Streaming Audio Renderer (SAR) pipeline component
-    - Initial Video Renderer implementation, a pipeline component
-    - Initial Topology Loader implementation.
-    - Various fixes for the Source Reader.
-    - Initial Media Engine implementation.
-    - Asynchronous queues functionality is moved to rtworkq.dll.
-    - Windowless and renderless mode.
-    - Automatic stretching and resizing of the video to match the window
-    - Hardware-accelerated color space conversion of YUV formats, if
-    - Preservation of video aspect ratio via letterboxing.
-    - Pseudo consoles are implemented (equivalent to Unix pseudo TTYs).
-    - All console handling is done in the ConHost process. WineConsole
-    - ConHost handles VT escape sequences, meaning that the Unix Curses
 
  -- Michael Gilbert <mgilbert@debian.org>  Sat, 26 Jun 2021 20:42:56 +0000
 

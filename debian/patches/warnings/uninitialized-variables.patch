@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/comdlg32/filedlg.c
 +++ b/dlls/comdlg32/filedlg.c
-@@ -247,7 +247,7 @@ static BOOL get_config_key_dword(HKEY hk
+@@ -238,7 +238,7 @@ static BOOL get_config_key_dword(HKEY hk
  
  static BOOL get_config_key_string(HKEY hkey, const WCHAR *name, WCHAR **value)
  {
@@ -25,7 +25,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          switch (c)
 --- a/dlls/ntdll/locale.c
 +++ b/dlls/ntdll/locale.c
-@@ -1939,7 +1939,7 @@ NTSTATUS WINAPI RtlIdnToUnicode( DWORD f
+@@ -1937,7 +1937,7 @@ NTSTATUS WINAPI RtlIdnToUnicode( DWORD f
      int i, buflen, start, end, out_label, out = 0;
      NTSTATUS status;
      UINT buffer[64];
@@ -36,10 +36,10 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (srclen == -1) srclen = wcslen( src ) + 1;
 --- a/dlls/msvcrt/misc.c
 +++ b/dlls/msvcrt/misc.c
-@@ -270,7 +270,7 @@ static void small_sort(void *base, MSVCR
+@@ -269,7 +269,7 @@ static void small_sort(void *base, size_
          int (CDECL *compar)(void *, const void *, const void *), void *context)
  {
-     MSVCRT_size_t e, i;
+     size_t e, i;
 -    char *max, *p;
 +    char *max, *p = NULL;
  
@@ -59,7 +59,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                      FOREACH_CHILD(xdr, xdr_child)
 --- a/dlls/ole32/datacache.c
 +++ b/dlls/ole32/datacache.c
-@@ -2519,7 +2519,7 @@ static HRESULT WINAPI DataCache_EnumCach
+@@ -2517,7 +2517,7 @@ static HRESULT WINAPI DataCache_EnumCach
      DataCacheEntry *cache_entry;
      int i = 0, count = 0;
      STATDATA *data;

@@ -25,7 +25,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  #include <assert.h>
  #include <ctype.h>
  #include <errno.h>
-@@ -1119,6 +1120,17 @@ int server_pipe( int fd[2] )
+@@ -1135,6 +1136,17 @@ int server_pipe( int fd[2] )
      return ret;
  }
  
@@ -43,7 +43,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  
  /***********************************************************************
   *           init_server_dir
-@@ -1128,16 +1140,113 @@ static const char *init_server_dir( dev_
+@@ -1144,16 +1156,113 @@ static const char *init_server_dir( dev_
      char *p, *dir;
      size_t len = sizeof("/server-") + 2 * sizeof(dev) + 2 * sizeof(ino) + 2;
  
@@ -177,7 +177,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  #include <assert.h>
  #include <errno.h>
  #include <fcntl.h>
-@@ -615,11 +616,23 @@ static void create_dir( const char *name
+@@ -616,11 +617,23 @@ static void create_dir( const char *name
      if (st->st_mode & 077) fatal_error( "%s must not be accessible by other users\n", name );
  }
  
@@ -202,7 +202,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
      struct stat st, st2;
      size_t len = sizeof("/server-") + 2 * sizeof(st.st_dev) + 2 * sizeof(st.st_ino) + 2;
  
-@@ -669,9 +682,117 @@ static char *create_server_dir( int forc
+@@ -670,9 +683,117 @@ static char *create_server_dir( int forc
      strcpy( server_dir, config_dir );
      strcat( server_dir, "/.wineserver" );
  #else

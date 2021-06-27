@@ -21,7 +21,6 @@ disable/blacklist-extensions.patch
 generate/icons.patch
 generate/opengl.patch
 generate/vulkan.patch
-generate/vulkan162.patch
 generate/unicode.patch
 generate/request.patch
 
@@ -37,7 +36,4 @@ arm64/incorrect-member.patch
 arm64/tautological-compare.patch
 
 warnings/bison.patch
-warnings/format-security.patch
-warnings/strcpy-overflow.patch
-warnings/incorrect-bounds.patch
 warnings/uninitialized-variables.patch

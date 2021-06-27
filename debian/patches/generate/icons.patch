@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -1561,6 +1561,9 @@ static struct file *open_include_file( c
+@@ -1569,6 +1569,9 @@ static struct file *open_include_file( c
  
      if (pFile->type == INCL_SYSTEM) return NULL;  /* ignore system files we cannot find */
  
@@ -13,7 +13,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      /* try in src file directory */
      if ((file = open_file_same_dir( pFile->included_by, pFile->name, &pFile->filename ))) return file;
  
-@@ -2946,6 +2949,17 @@ static void output_source_svg( struct ma
+@@ -2968,6 +2971,17 @@ static void output_source_svg( struct ma
  
          if (images[i])
          {
@@ -29,8 +29,8 @@ author: Michael Gilbert <mgilbert@debian.org>
 +                }
 +            }
              output( "%s.%s: %s\n", src_dir_path( make, obj ), images[i], source->filename );
-             output( "\tCONVERT=\"%s\" ICOTOOL=\"%s\" RSVG=\"%s\" %s %s $@\n", convert, icotool, rsvg,
-                     root_src_dir_path( "tools/buildimage" ), source->filename );
+             output( "\t%sCONVERT=\"%s\" ICOTOOL=\"%s\" RSVG=\"%s\" %s %s $@\n",
+                     cmd_prefix( "GEN" ), convert, icotool, rsvg,
 --- a/programs/regedit/Makefile.in
 +++ b/programs/regedit/Makefile.in
 @@ -20,4 +20,4 @@ RC_SRCS = regedit.rc
