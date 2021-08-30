@@ -1,0 +1,14 @@
+To support both wine and wine-development source packages, debian/control is
+not committed to the repo. Instead you should generate it before building:
+
+    ./debian/rules debian/control
+
+Similarly, there is a script for handling new upstream versions, though to
+avoid conflicts it doesn't use Files-Excluded. Use uscan to repack:
+
+    ./debian/scripts/import 6.16
+    uscan --download-current-version
+
+If using git-buildpackage, you'll need to import the deletions with:
+
+    gbp import-orig ../*6.16+repack.orig*
