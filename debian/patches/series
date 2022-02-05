@@ -36,4 +36,7 @@ arm64/incorrect-member.patch
 arm64/tautological-compare.patch
 
 warnings/bison.patch
+warnings/format.patch
+warnings/misleading-indentation.patch
+warnings/deprecated-declarations.patch
 warnings/uninitialized-variables.patch

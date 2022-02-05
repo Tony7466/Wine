@@ -255,7 +255,6 @@ override_dh_clean:
 	make -f debian/rules debian/control
 
 override_dh_auto_clean:
-	git clean -Xdf || true
 	make -f debian/rules debian/control
 ifeq (,$(filter $(DEB_HOST_ARCH),i386 amd64))
 	# remove zlib patch on non x86 architectures
@@ -263,5 +262,4 @@ ifeq (,$(filter $(DEB_HOST_ARCH),i386 amd64))
 	QUILT_PATCHES=debian/patches quilt delete system/zlib.patch || true
 endif
 	QUILT_PATCHES=debian/patches quilt push -af || true
-	rm -f Makefile
 	dh_auto_clean

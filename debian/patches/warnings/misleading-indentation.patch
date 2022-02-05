@@ -1,0 +1,14 @@
+description: fix misleading-indentation warning
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/dlls/shell32/classes.c
++++ b/dlls/shell32/classes.c
+@@ -315,7 +315,7 @@ BOOL HCR_GetDefaultIconA(LPCSTR szClass,
+     else
+         TRACE("-- not found\n");
+ 
+-	return ret;
++    return ret;
+ }
+ 
+ /***************************************************************************************

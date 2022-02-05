@@ -25,6 +25,7 @@ nls/*.nls
 libs/wine/wctype.c
 libs/wine/casemap.c
 libs/wine/compose.c
+libs/wine/digitmap.c
 libs/wine/decompose.c
 libs/wine/collation.c
 dlls/gdi32/vertical.c
