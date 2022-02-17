@@ -38,6 +38,9 @@ export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector
 # linker options
 export DEB_LDFLAGS_MAINT_APPEND+=-Wl,-rpath,/$(LIBDIR)
 
+# ignore array-bounds and packed-non-aligned warnings for now
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-array-bounds -Wno-packed-not-aligned
+
 # ignore all defined but unused function warnings
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-unused-function
 

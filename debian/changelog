@@ -1,3 +1,10 @@
+wine-development (6.0+repack-3) unstable; urgency=medium
+
+  * Define VK_NULL_HANDLE as a uint64_t.
+  * Ignore array-bounds and packed-not-aligned warnings.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Mon, 07 Feb 2022 02:14:56 +0000
+
 wine-development (6.0+repack-2) unstable; urgency=medium
 
   * Support building with gcc 11.
