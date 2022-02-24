@@ -8,7 +8,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              self.format_str = "%p"
          else:
 -            if self.type_info["category"] in ["bitmask", "enum"]:
-+            if self.type == "VkPipelineStageFlags2KHR":
++            if self.type == "VkPipelineStageFlags2":
 +                self.format_str = "0x%s"
 +                self.format_conv = "wine_dbgstr_longlong({0})"
 +            elif self.type_info["category"] in ["bitmask", "enum"]:

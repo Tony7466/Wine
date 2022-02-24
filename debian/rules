@@ -213,6 +213,8 @@ ifneq (,$(filter $(DEB_HOST_ARCH),i386 amd64))
 	echo "debian/tmp/usr/lib/*/*/*.ocx" >> debian/libwine$(VERSION).install
 	echo "debian/tmp/usr/lib/*/*/*.sys" >> debian/libwine$(VERSION).install
 	echo "debian/tmp/usr/lib/*/*/*.tlb" >> debian/libwine$(VERSION).install
+else
+	rm -f debian/libwine$(VERSION).prerm debian/libwine$(VERSION).postinst
 endif
 	dh_auto_install
 	for file in $$(find . ! -path "./debian/*" -name \*.man); do \
