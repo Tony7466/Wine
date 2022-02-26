@@ -20,8 +20,8 @@ git update-index --assume-unchanged configure include/config.h.in
 # pull specified tag from upstream repository
 version="$1"
 debian="https://salsa.debian.org/wine-team/wine.git"
-debian_branch="master"
-upstream_branch="upstream"
+debian_branch="bookworm"
+upstream_branch="bookworm-upstream"
 winehq="git://source.winehq.org/git/wine.git"
 tag="wine-$version"
 git checkout ${upstream_branch}

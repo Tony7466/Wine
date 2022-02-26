@@ -1,3 +1,11 @@
+wine (6.0.2~repack-1) unstable; urgency=medium
+
+  * New upstream release 6.0.2, released Oct 26, 2021.
+    - Compilation fixes (freetype, gcc 11)
+    - Various bug fixes
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 26 Feb 2022 18:43:01 +0000
+
 wine-development (6.0+repack-4) unstable; urgency=medium
 
   * Support building with vulkan 1.3.
