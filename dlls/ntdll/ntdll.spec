@@ -183,7 +183,7 @@
 @ stdcall -syscall NtCreateSection(ptr long ptr ptr long long long)
 @ stdcall -syscall NtCreateSemaphore(ptr long ptr long long)
 @ stdcall -syscall NtCreateSymbolicLinkObject(ptr long ptr ptr)
-@ stub NtCreateThread
+@ stdcall -syscall NtCreateThread(ptr long ptr long ptr ptr ptr long)
 @ stdcall -syscall NtCreateThreadEx(ptr long ptr long ptr ptr long long long long ptr)
 @ stdcall -syscall NtCreateTimer(ptr long ptr long)
 @ stub NtCreateToken
@@ -1189,7 +1189,7 @@
 @ stdcall -private -syscall ZwCreateSection(ptr long ptr ptr long long long) NtCreateSection
 @ stdcall -private -syscall ZwCreateSemaphore(ptr long ptr long long) NtCreateSemaphore
 @ stdcall -private -syscall ZwCreateSymbolicLinkObject(ptr long ptr ptr) NtCreateSymbolicLinkObject
-@ stub ZwCreateThread
+@ stdcall -private -syscall ZwCreateThread(ptr long ptr long ptr ptr ptr long) NtCreateThread
 @ stdcall -private -syscall ZwCreateThreadEx(ptr long ptr long ptr ptr long long long long ptr) NtCreateThreadEx
 @ stdcall -private -syscall ZwCreateTimer(ptr long ptr long) NtCreateTimer
 @ stub ZwCreateToken
@@ -1450,17 +1450,17 @@
 @ cdecl __iscsym(long)
 @ cdecl __iscsymf(long)
 @ cdecl __toascii(long)
-@ cdecl -arch=i386 -ret64 _alldiv(int64 int64)
+@ cdecl -norelay -arch=i386 -ret64 _alldiv(int64 int64)
 @ cdecl -arch=i386 -norelay _alldvrm(int64 int64)
-@ cdecl -arch=i386 -ret64 _allmul(int64 int64)
+@ cdecl -norelay -arch=i386 -ret64 _allmul(int64 int64)
 @ cdecl -arch=i386 -norelay _alloca_probe()
-@ cdecl -arch=i386 -ret64 _allrem(int64 int64)
+@ cdecl -norelay -arch=i386 -ret64 _allrem(int64 int64)
 @ stdcall -arch=i386 -ret64 _allshl(int64 long)
 @ stdcall -arch=i386 -ret64 _allshr(int64 long)
 @ cdecl -ret64 _atoi64(str)
-@ cdecl -arch=i386 -ret64 _aulldiv(int64 int64)
+@ cdecl -norelay -arch=i386 -ret64 _aulldiv(int64 int64)
 @ cdecl -arch=i386 -norelay _aulldvrm(int64 int64)
-@ cdecl -arch=i386 -ret64 _aullrem(int64 int64)
+@ cdecl -norelay -arch=i386 -ret64 _aullrem(int64 int64)
 @ stdcall -arch=i386 -ret64 _aullshr(int64 long)
 @ cdecl -arch=i386 -norelay _chkstk()
 @ stub _fltused

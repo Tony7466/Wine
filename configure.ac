@@ -742,10 +742,10 @@ case $host_os in
     AC_SUBST(APPKIT_LIBS,"-framework AppKit")
     AC_SUBST(SYSTEMCONFIGURATION_LIBS,"-framework SystemConfiguration")
 
-    WINELOADER_LDFLAGS="-Wl,-pie,-pagezero_size,0x1000,-sectcreate,__TEXT,__info_plist,loader/wine_info.plist"
+    WINELOADER_LDFLAGS="-Wl,-pie,-segalign,0x1000,-pagezero_size,0x1000,-sectcreate,__TEXT,__info_plist,loader/wine_info.plist"
 
     wine_can_build_preloader=yes
-    WINEPRELOADER_LDFLAGS="-nostartfiles -nodefaultlibs -e _start -ldylib1.o -Wl,-image_base,0x7d400000,-pagezero_size,0x1000,-sectcreate,__TEXT,__info_plist,loader/wine_info.plist"
+    WINEPRELOADER_LDFLAGS="-nostartfiles -nodefaultlibs -e _start -ldylib1.o -Wl,-image_base,0x7d400000,-segalign,0x1000,-pagezero_size,0x1000,-sectcreate,__TEXT,__info_plist,loader/wine_info.plist,-segaddr,WINE_4GB_RESERVE,0x100000000"
     WINE_TRY_CFLAGS([-Wl,-no_new_main -e _main],
                     [WINEPRELOADER_LDFLAGS="-Wl,-no_new_main $WINEPRELOADER_LDFLAGS"
                      WINE_TRY_CFLAGS([-Wl,-no_new_main -e _main -nostartfiles -nodefaultlibs],,
@@ -1588,16 +1588,7 @@ dnl **** Check for gstreamer ****
 if test "x$with_gstreamer" != "xno"
 then
     WINE_PACKAGE_FLAGS(GSTREAMER,[gstreamer-1.0 gstreamer-video-1.0 gstreamer-audio-1.0],,,,
-        [ac_gst_incl=""
-        for i in $GSTREAMER_CFLAGS
-        do
-            case "$i" in
-                -I*) ac_gst_incl="$ac_gst_incl $i";;
-            esac
-        done
-        GSTREAMER_CFLAGS=$ac_gst_incl
-        CPPFLAGS="$ac_save_CPPFLAGS $GSTREAMER_CFLAGS"
-        AC_CHECK_HEADER([gst/gst.h],
+        [AC_CHECK_HEADER([gst/gst.h],
             [AC_MSG_CHECKING([whether gint64 defined by gst/gst.h is indeed 64-bit])
               AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <gst/gst.h>]],
                                                  [[static int a[sizeof(gint64) > 4 ? 1 : -1]; if (a[0]) return 0;]])],
@@ -1704,7 +1695,7 @@ WINE_NOTICE_WITH(sdl,[test "x$ac_cv_lib_soname_SDL2" = "x"],
 dnl **** Check for FAudio ****
 if test "x$with_faudio" != "xno"
 then
-    WINE_PACKAGE_FLAGS(FAUDIO,[faudio],[-lFAudio],,,
+    WINE_PACKAGE_FLAGS(FAUDIO,[FAudio],[-lFAudio],,,
         [AC_CHECK_HEADERS([FAudio.h],
             [WINE_CHECK_SONAME(FAudio,FAudioCreate,,,[$FAUDIO_LIBS],[[libFAudio*]])])
              WINE_CHECK_LIB_FUNCS([FAudio_CommitOperationSet \
@@ -3456,6 +3447,7 @@ WINE_CONFIG_MAKEFILE(dlls/msvcp120_app)
 WINE_CONFIG_MAKEFILE(dlls/msvcp140)
 WINE_CONFIG_MAKEFILE(dlls/msvcp140/tests)
 WINE_CONFIG_MAKEFILE(dlls/msvcp140_1)
+WINE_CONFIG_MAKEFILE(dlls/msvcp140_1/tests)
 WINE_CONFIG_MAKEFILE(dlls/msvcp60)
 WINE_CONFIG_MAKEFILE(dlls/msvcp60/tests)
 WINE_CONFIG_MAKEFILE(dlls/msvcp70)

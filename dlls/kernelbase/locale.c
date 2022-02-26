@@ -108,6 +108,7 @@ static const struct { UINT cp; const WCHAR *name; } codepage_names[] =
     { 437,   L"OEM United States" },
     { 500,   L"IBM EBCDIC International" },
     { 708,   L"Arabic ASMO" },
+    { 720,   L"Arabic (Transparent ASMO)" },
     { 737,   L"OEM Greek 437G" },
     { 775,   L"OEM Baltic" },
     { 850,   L"OEM Multilingual Latin 1" },
@@ -161,6 +162,7 @@ static const struct { UINT cp; const WCHAR *name; } codepage_names[] =
     { 20127, L"US-ASCII (7bit)" },
     { 20866, L"Russian KOI8" },
     { 20932, L"EUC-JP" },
+    { 20949, L"Korean Wansung" },
     { 21866, L"Ukrainian KOI8" },
     { 28591, L"ISO 8859-1 Latin 1" },
     { 28592, L"ISO 8859-2 Latin 2 (East European)" },
@@ -3021,7 +3023,8 @@ INT WINAPI CompareStringEx( const WCHAR *locale, DWORD flags, const WCHAR *str1,
 {
     DWORD supported_flags = NORM_IGNORECASE | NORM_IGNORENONSPACE | NORM_IGNORESYMBOLS | SORT_STRINGSORT |
                             NORM_IGNOREKANATYPE | NORM_IGNOREWIDTH | LOCALE_USE_CP_ACP;
-    DWORD semistub_flags = NORM_LINGUISTIC_CASING | LINGUISTIC_IGNORECASE | 0x10000000;
+    DWORD semistub_flags = NORM_LINGUISTIC_CASING | LINGUISTIC_IGNORECASE | LINGUISTIC_IGNOREDIACRITIC |
+                           SORT_DIGITSASNUMBERS | 0x10000000;
     /* 0x10000000 is related to diacritics in Arabic, Japanese, and Hebrew */
     INT ret;
     static int once;
@@ -3080,6 +3083,13 @@ INT WINAPI DECLSPEC_HOTPATCH CompareStringA( LCID lcid, DWORD flags, const char 
         SetLastError( ERROR_INVALID_PARAMETER );
         return 0;
     }
+
+    if (flags & SORT_DIGITSASNUMBERS)
+    {
+        SetLastError( ERROR_INVALID_FLAGS );
+        return 0;
+    }
+
     if (len1 < 0) len1 = strlen(str1);
     if (len2 < 0) len2 = strlen(str2);
 

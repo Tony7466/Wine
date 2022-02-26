@@ -1327,6 +1327,7 @@ cards_nvidia_binary[] =
     {"GTX 1060",                    CARD_NVIDIA_GEFORCE_GTX1060},   /* GeForce 1000 - midend high */
     {"GTX 1050 Ti",                 CARD_NVIDIA_GEFORCE_GTX1050TI}, /* GeForce 1000 - midend */
     {"GTX 1050",                    CARD_NVIDIA_GEFORCE_GTX1050},   /* GeForce 1000 - midend */
+    {"GT 1030",                     CARD_NVIDIA_GEFORCE_GT1030},    /* GeForce 1000 - lowend */
     {"GTX 980 Ti",                  CARD_NVIDIA_GEFORCE_GTX980TI},  /* GeForce 900 - highend */
     {"GTX 980",                     CARD_NVIDIA_GEFORCE_GTX980},    /* GeForce 900 - highend */
     {"GTX 970M",                    CARD_NVIDIA_GEFORCE_GTX970M},   /* GeForce 900 - highend mobile*/
@@ -1646,8 +1647,9 @@ cards_intel[] =
  * drivers: R700, RV790, R680, RV535, RV516, R410, RS485, RV360, RV351. */
 cards_amd_mesa[] =
 {
-    /* Navi 10 */
+    /* Navi 10/14 */
     {"NAVI10",                      CARD_AMD_RADEON_RX_NAVI_10},
+    {"NAVI14",                      CARD_AMD_RADEON_RX_NAVI_14},
     /* Polaris 10/11 */
     {"POLARIS10",                   CARD_AMD_RADEON_RX_480},
     {"POLARIS11",                   CARD_AMD_RADEON_RX_460},

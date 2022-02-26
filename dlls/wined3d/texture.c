@@ -2135,10 +2135,10 @@ HRESULT CDECL wined3d_texture_add_dirty_region(struct wined3d_texture *texture,
 }
 
 static void wined3d_texture_gl_upload_bo(const struct wined3d_format *src_format, GLenum target,
-        unsigned int level, unsigned int src_row_pitch, unsigned int dst_x, unsigned int dst_y,
-        unsigned int dst_z, unsigned int update_w, unsigned int update_h, unsigned int update_d,
-        const BYTE *addr, BOOL srgb, struct wined3d_texture *dst_texture,
-        const struct wined3d_gl_info *gl_info)
+        unsigned int level, unsigned int src_row_pitch, unsigned int src_slice_pitch,
+        unsigned int dst_x, unsigned int dst_y, unsigned int dst_z, unsigned int update_w,
+        unsigned int update_h, unsigned int update_d, const BYTE *addr, BOOL srgb,
+        struct wined3d_texture *dst_texture, const struct wined3d_gl_info *gl_info)
 {
     const struct wined3d_format_gl *format_gl = wined3d_format_gl(src_format);
 
@@ -2211,17 +2211,19 @@ static void wined3d_texture_gl_upload_bo(const struct wined3d_format *src_format
     }
     else
     {
-        unsigned int y, y_count;
+        unsigned int y, y_count, z, z_count;
+        bool unpacking_rows = false;
 
         TRACE("Uploading data, target %#x, level %u, x %u, y %u, z %u, "
                 "w %u, h %u, d %u, format %#x, type %#x, addr %p.\n",
                 target, level, dst_x, dst_y, dst_z, update_w, update_h,
                 update_d, format_gl->format, format_gl->type, addr);
 
-        if (src_row_pitch)
+        if (src_row_pitch && !(src_row_pitch % src_format->byte_count))
         {
             gl_info->gl_ops.gl.p_glPixelStorei(GL_UNPACK_ROW_LENGTH, src_row_pitch / src_format->byte_count);
             y_count = 1;
+            unpacking_rows = true;
         }
         else
         {
@@ -2229,25 +2231,47 @@ static void wined3d_texture_gl_upload_bo(const struct wined3d_format *src_format
             update_h = 1;
         }
 
-        for (y = 0; y < y_count; ++y)
+        if (src_slice_pitch && unpacking_rows && !(src_slice_pitch % src_row_pitch))
         {
-            if (target == GL_TEXTURE_2D_ARRAY || target == GL_TEXTURE_3D)
+            gl_info->gl_ops.gl.p_glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, src_slice_pitch / src_row_pitch);
+            z_count = 1;
+        }
+        else if (src_slice_pitch && !unpacking_rows && !(src_slice_pitch % (update_w * src_format->byte_count)))
+        {
+            gl_info->gl_ops.gl.p_glPixelStorei(GL_UNPACK_IMAGE_HEIGHT,
+                    src_slice_pitch / (update_w * src_format->byte_count));
+            z_count = 1;
+        }
+        else
+        {
+            z_count = update_d;
+            update_d = 1;
+        }
+
+        for (z = 0; z < z_count; ++z)
+        {
+            for (y = 0; y < y_count; ++y)
             {
-                GL_EXTCALL(glTexSubImage3D(target, level, dst_x, dst_y + y, dst_z,
-                        update_w, update_h, update_d, format_gl->format, format_gl->type, addr));
-            }
-            else if (target == GL_TEXTURE_1D)
-            {
-                gl_info->gl_ops.gl.p_glTexSubImage1D(target, level, dst_x,
-                        update_w, format_gl->format, format_gl->type, addr);
-            }
-            else
-            {
-                gl_info->gl_ops.gl.p_glTexSubImage2D(target, level, dst_x, dst_y + y,
-                        update_w, update_h, format_gl->format, format_gl->type, addr);
+                const BYTE *upload_addr = &addr[z * src_slice_pitch + y * src_row_pitch];
+                if (target == GL_TEXTURE_2D_ARRAY || target == GL_TEXTURE_3D)
+                {
+                    GL_EXTCALL(glTexSubImage3D(target, level, dst_x, dst_y + y, dst_z + z, update_w,
+                            update_h, update_d, format_gl->format, format_gl->type, upload_addr));
+                }
+                else if (target == GL_TEXTURE_1D)
+                {
+                    gl_info->gl_ops.gl.p_glTexSubImage1D(target, level, dst_x,
+                            update_w, format_gl->format, format_gl->type, upload_addr);
+                }
+                else
+                {
+                    gl_info->gl_ops.gl.p_glTexSubImage2D(target, level, dst_x, dst_y + y,
+                            update_w, update_h, format_gl->format, format_gl->type, upload_addr);
+                }
             }
         }
         gl_info->gl_ops.gl.p_glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        gl_info->gl_ops.gl.p_glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, 0);
         checkGLcall("Upload texture data");
     }
 }
@@ -2460,8 +2484,8 @@ static void wined3d_texture_gl_upload_data(struct wined3d_context *context,
                 src_format->upload(src_mem, converted_mem, src_row_pitch, src_slice_pitch,
                         dst_row_pitch, dst_slice_pitch, update_w, update_h, 1);
 
-            wined3d_texture_gl_upload_bo(src_format, target, level, dst_row_pitch, dst_x, dst_y,
-                    dst_z + z, update_w, update_h, 1, converted_mem, srgb, dst_texture, gl_info);
+            wined3d_texture_gl_upload_bo(src_format, target, level, dst_row_pitch, dst_slice_pitch, dst_x,
+                    dst_y, dst_z + z, update_w, update_h, 1, converted_mem, srgb, dst_texture, gl_info);
         }
 
         wined3d_context_gl_unmap_bo_address(context_gl, &bo, 0, NULL);
@@ -2475,8 +2499,8 @@ static void wined3d_texture_gl_upload_data(struct wined3d_context *context,
             checkGLcall("glBindBuffer");
         }
 
-        wined3d_texture_gl_upload_bo(src_format, target, level, src_row_pitch, dst_x, dst_y,
-                dst_z, update_w, update_h, update_d, bo.addr, srgb, dst_texture, gl_info);
+        wined3d_texture_gl_upload_bo(src_format, target, level, src_row_pitch, src_slice_pitch, dst_x,
+                dst_y, dst_z, update_w, update_h, update_d, bo.addr, srgb, dst_texture, gl_info);
 
         if (bo.buffer_object)
         {
@@ -5187,6 +5211,26 @@ HRESULT wined3d_texture_vk_init(struct wined3d_texture_vk *texture_vk, struct wi
             flags, device, parent, parent_ops, &texture_vk[1], &wined3d_texture_vk_ops);
 }
 
+void wined3d_texture_vk_barrier(struct wined3d_texture_vk *texture_vk,
+        struct wined3d_context_vk *context_vk, uint32_t bind_mask)
+{
+    TRACE("texture_vk %p, context_vk %p, bind_mask %s.\n",
+            texture_vk, context_vk, wined3d_debug_bind_flags(bind_mask));
+
+    if (texture_vk->bind_mask && texture_vk->bind_mask != bind_mask)
+    {
+        TRACE("    %s -> %s.\n",
+                wined3d_debug_bind_flags(texture_vk->bind_mask), wined3d_debug_bind_flags(bind_mask));
+        wined3d_context_vk_image_barrier(context_vk, wined3d_context_vk_get_command_buffer(context_vk),
+                vk_pipeline_stage_mask_from_bind_flags(texture_vk->bind_mask),
+                vk_pipeline_stage_mask_from_bind_flags(bind_mask),
+                vk_access_mask_from_bind_flags(texture_vk->bind_mask), vk_access_mask_from_bind_flags(bind_mask),
+                texture_vk->layout, texture_vk->layout, texture_vk->vk_image,
+                vk_aspect_mask_from_format(texture_vk->t.resource.format));
+    }
+    texture_vk->bind_mask = bind_mask;
+}
+
 static void ffp_blitter_destroy(struct wined3d_blitter *blitter, struct wined3d_context *context)
 {
     struct wined3d_blitter *next;
@@ -6083,7 +6127,6 @@ static void vk_blitter_clear_rendertargets(struct wined3d_context_vk *context_vk
     struct wined3d_rendertarget_view_vk *rtv_vk;
     struct wined3d_rendertarget_view *view;
     const struct wined3d_vk_info *vk_info;
-    struct wined3d_texture_vk *texture_vk;
     struct wined3d_device_vk *device_vk;
     VkCommandBuffer vk_command_buffer;
     VkRenderPassBeginInfo begin_desc;
@@ -6122,6 +6165,7 @@ static void vk_blitter_clear_rendertargets(struct wined3d_context_vk *context_vk
 
         rtv_vk = wined3d_rendertarget_view_vk(view);
         views[attachment_count] = wined3d_rendertarget_view_vk_get_image_view(rtv_vk, context_vk);
+        wined3d_rendertarget_view_vk_barrier(rtv_vk, context_vk, WINED3D_BIND_RENDER_TARGET);
 
         c = &clear_values[attachment_count].color;
         if (view->format_flags & WINED3DFMT_FLAG_INTEGER)
@@ -6156,6 +6200,7 @@ static void vk_blitter_clear_rendertargets(struct wined3d_context_vk *context_vk
 
         rtv_vk = wined3d_rendertarget_view_vk(view);
         views[attachment_count] = wined3d_rendertarget_view_vk_get_image_view(rtv_vk, context_vk);
+        wined3d_rendertarget_view_vk_barrier(rtv_vk, context_vk, WINED3D_BIND_DEPTH_STENCIL);
 
         clear_values[attachment_count].depthStencil.depth = depth;
         clear_values[attachment_count].depthStencil.stencil = stencil;
@@ -6233,26 +6278,12 @@ static void vk_blitter_clear_rendertargets(struct wined3d_context_vk *context_vk
             continue;
 
         wined3d_context_vk_reference_rendertarget_view(context_vk, wined3d_rendertarget_view_vk(view));
-        texture_vk = wined3d_texture_vk(wined3d_texture_from_resource(view->resource));
-        wined3d_context_vk_image_barrier(context_vk, vk_command_buffer,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                vk_access_mask_from_bind_flags(texture_vk->t.resource.bind_flags),
-                texture_vk->layout, texture_vk->layout,
-                texture_vk->vk_image, VK_IMAGE_ASPECT_COLOR_BIT);
     }
 
     if (depth_stencil)
     {
         view = fb->depth_stencil;
         wined3d_context_vk_reference_rendertarget_view(context_vk, wined3d_rendertarget_view_vk(view));
-        texture_vk = wined3d_texture_vk(wined3d_texture_from_resource(view->resource));
-        wined3d_context_vk_image_barrier(context_vk, vk_command_buffer,
-                VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                vk_access_mask_from_bind_flags(texture_vk->t.resource.bind_flags),
-                texture_vk->layout, texture_vk->layout,
-                texture_vk->vk_image, vk_aspect_mask_from_format(texture_vk->t.resource.format));
     }
 }
 

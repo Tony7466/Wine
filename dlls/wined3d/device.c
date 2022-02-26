@@ -717,11 +717,15 @@ bool wined3d_device_vk_create_null_resources(struct wined3d_device_vk *device_vk
 
     vk_info = context_vk->vk_info;
 
-    usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
+    usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT
+            | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
     memory_type = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     if (!wined3d_context_vk_create_bo(context_vk, 16, usage, memory_type, &r->bo))
         return false;
     VK_CALL(vkCmdFillBuffer(vk_command_buffer, r->bo.vk_buffer, r->bo.buffer_offset, r->bo.size, 0x00000000u));
+    r->buffer_info.buffer = r->bo.vk_buffer;
+    r->buffer_info.offset = r->bo.buffer_offset;
+    r->buffer_info.range = r->bo.size;
 
     if (!wined3d_null_image_vk_init(&r->image_1d, context_vk, vk_command_buffer, VK_IMAGE_TYPE_1D, 1, 1))
     {
@@ -1084,26 +1088,6 @@ HRESULT wined3d_device_set_implicit_swapchain(struct wined3d_device *device, str
     if (device->d3d_initialized)
         return WINED3DERR_INVALIDCALL;
 
-    swapchain_desc = &swapchain->state.desc;
-    if (swapchain_desc->backbuffer_count && swapchain_desc->backbuffer_bind_flags & WINED3D_BIND_RENDER_TARGET)
-    {
-        struct wined3d_resource *back_buffer = &swapchain->back_buffers[0]->resource;
-        struct wined3d_view_desc view_desc;
-
-        view_desc.format_id = back_buffer->format->id;
-        view_desc.flags = 0;
-        view_desc.u.texture.level_idx = 0;
-        view_desc.u.texture.level_count = 1;
-        view_desc.u.texture.layer_idx = 0;
-        view_desc.u.texture.layer_count = 1;
-        if (FAILED(hr = wined3d_rendertarget_view_create(&view_desc, back_buffer,
-                NULL, &wined3d_null_parent_ops, &device->back_buffer_view)))
-        {
-            ERR("Failed to create rendertarget view, hr %#x.\n", hr);
-            return hr;
-        }
-    }
-
     device->swapchain_count = 1;
     if (!(device->swapchains = heap_calloc(device->swapchain_count, sizeof(*device->swapchains))))
     {
@@ -1121,6 +1105,28 @@ HRESULT wined3d_device_set_implicit_swapchain(struct wined3d_device *device, str
     if (FAILED(hr = device->adapter->adapter_ops->adapter_init_3d(device)))
         goto err_out;
     device->d3d_initialized = TRUE;
+
+    swapchain_desc = &swapchain->state.desc;
+    if (swapchain_desc->backbuffer_count && swapchain_desc->backbuffer_bind_flags & WINED3D_BIND_RENDER_TARGET)
+    {
+        struct wined3d_resource *back_buffer = &swapchain->back_buffers[0]->resource;
+        struct wined3d_view_desc view_desc;
+
+        view_desc.format_id = back_buffer->format->id;
+        view_desc.flags = 0;
+        view_desc.u.texture.level_idx = 0;
+        view_desc.u.texture.level_count = 1;
+        view_desc.u.texture.layer_idx = 0;
+        view_desc.u.texture.layer_count = 1;
+        if (FAILED(hr = wined3d_rendertarget_view_create(&view_desc, back_buffer,
+                NULL, &wined3d_null_parent_ops, &device->back_buffer_view)))
+        {
+            ERR("Failed to create rendertarget view, hr %#x.\n", hr);
+            device->adapter->adapter_ops->adapter_uninit_3d(device);
+            device->d3d_initialized = FALSE;
+            goto err_out;
+        }
+    }
 
     device_init_swapchain_state(device, swapchain);
 
@@ -1143,11 +1149,6 @@ err_out:
     heap_free(device->swapchains);
     device->swapchains = NULL;
     device->swapchain_count = 0;
-    if (device->back_buffer_view)
-    {
-        wined3d_rendertarget_view_decref(device->back_buffer_view);
-        device->back_buffer_view = NULL;
-    }
 
     return hr;
 }
@@ -4507,6 +4508,24 @@ void CDECL wined3d_device_copy_uav_counter(struct wined3d_device *device,
     wined3d_cs_emit_copy_uav_counter(device->cs, dst_buffer, offset, uav);
 }
 
+static bool resources_format_compatible(const struct wined3d_resource *src_resource,
+        const struct wined3d_resource *dst_resource)
+{
+    if (src_resource->format->id == dst_resource->format->id)
+        return true;
+    if (src_resource->format->typeless_id && src_resource->format->typeless_id == dst_resource->format->typeless_id)
+        return true;
+    if (src_resource->device->feature_level < WINED3D_FEATURE_LEVEL_10_1)
+        return false;
+    if ((src_resource->format_flags & WINED3DFMT_FLAG_BLOCKS)
+            && (dst_resource->format_flags & WINED3DFMT_FLAG_CAST_TO_BLOCK))
+        return src_resource->format->block_byte_count == dst_resource->format->byte_count;
+    if ((src_resource->format_flags & WINED3DFMT_FLAG_CAST_TO_BLOCK)
+            && (dst_resource->format_flags & WINED3DFMT_FLAG_BLOCKS))
+        return src_resource->format->byte_count == dst_resource->format->block_byte_count;
+    return false;
+}
+
 void CDECL wined3d_device_copy_resource(struct wined3d_device *device,
         struct wined3d_resource *dst_resource, struct wined3d_resource *src_resource)
 {
@@ -4540,8 +4559,7 @@ void CDECL wined3d_device_copy_resource(struct wined3d_device *device,
         return;
     }
 
-    if (src_resource->format->typeless_id != dst_resource->format->typeless_id
-            || (!src_resource->format->typeless_id && src_resource->format->id != dst_resource->format->id))
+    if (!resources_format_compatible(src_resource, dst_resource))
     {
         WARN("Resource formats %s and %s are incompatible.\n",
                 debug_d3dformat(dst_resource->format->id),
@@ -4603,8 +4621,7 @@ HRESULT CDECL wined3d_device_copy_sub_resource_region(struct wined3d_device *dev
         return WINED3DERR_INVALIDCALL;
     }
 
-    if (src_resource->format->typeless_id != dst_resource->format->typeless_id
-            || (!src_resource->format->typeless_id && src_resource->format->id != dst_resource->format->id))
+    if (!resources_format_compatible(src_resource, dst_resource))
     {
         WARN("Resource formats %s and %s are incompatible.\n",
                 debug_d3dformat(dst_resource->format->id),
