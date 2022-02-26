@@ -83,6 +83,11 @@ export DEB_CFLAGS_MAINT_APPEND+=-march=armv5t
 export DEB_LDFLAGS_MAINT_APPEND+=-march=armv5t
 endif
 
+# warnings to ignore on armhf
+ifeq ($(DEB_HOST_ARCH), armhf)
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-array-parameter
+endif
+
 # on arm64 build using clang and ignore compiler warnings
 ifeq ($(DEB_HOST_ARCH), arm64)
 export CC=clang

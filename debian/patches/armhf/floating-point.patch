@@ -1,0 +1,31 @@
+description: explicitly set fpu mode on armhf
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/dlls/rpcrt4/cproxy.c
++++ b/dlls/rpcrt4/cproxy.c
+@@ -171,6 +171,9 @@ __ASM_GLOBAL_FUNC(call_stubless_func,
+ #ifdef __SOFTFP__
+                   "mov r3, #0\n\t"
+ #else
++#ifdef __ARM_PCS_VFP
++                  ".fpu vfpv2\n\t"
++#endif
+                   "vpush {s0-s15}\n\t"          /* store the s0-s15/d0-d7 arguments */
+                   "mov r3, sp\n\t"              /* fpu_stack */
+ #endif
+--- a/tools/winebuild/spec32.c
++++ b/tools/winebuild/spec32.c
+@@ -310,7 +310,12 @@ static void output_relay_debug( DLLSPEC
+             output_cfi( ".cfi_startproc" );
+             output( "\tpush {r0-r3}\n" );
+             output( "\tmov r2, SP\n");
+-            if (has_float) output( "\tvpush {s0-s15}\n" );
++            if (has_float) {
++                if (target_cpu == CPU_ARM) {
++                    output( "\t.fpu vfpv2\n" );
++                }
++                output( "\tvpush {s0-s15}\n" );
++            }
+             output( "\tpush {LR}\n" );
+             output( "\tsub SP, #4\n");
+             for (mask = 0xff; mask; mask <<= 8)

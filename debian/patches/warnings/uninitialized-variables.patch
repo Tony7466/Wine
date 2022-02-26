@@ -90,7 +90,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!desc) return E_INVALIDARG;
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -2586,6 +2586,9 @@ static void check_fbo_compat(struct wine
+@@ -2605,6 +2605,9 @@ static void check_fbo_compat(struct wine
                      case WINED3D_GL_RES_TYPE_COUNT:
                          color = 0;
                          break;
@@ -183,3 +183,25 @@ author: Michael Gilbert <mgilbert@debian.org>
      PROPVARIANT param;
  
      if (topo_status == MF_TOPOSTATUS_INVALID)
+--- a/dlls/d3dx9_36/mesh.c
++++ b/dlls/d3dx9_36/mesh.c
+@@ -5524,7 +5524,8 @@ static BOOL attempt_line_merge(struct ou
+                                BOOL to_curve,
+                                const struct cos_table *table)
+ {
+-    D3DXVECTOR2 curdir, lastdir;
++    D3DXVECTOR2 curdir = {0.0f, 0.0f};
++    D3DXVECTOR2 lastdir = {0.0f, 0.0f};
+     struct point2d *prevpt, *pt;
+     BOOL ret = FALSE;
+ 
+--- a/dlls/d3dx9_36/shader.c
++++ b/dlls/d3dx9_36/shader.c
+@@ -1112,7 +1112,6 @@ static UINT set(struct ID3DXConstantTabl
+             if (inclass == D3DXPC_MATRIX_ROWS && desc->RegisterSet == D3DXRS_BOOL)
+             {
+                 D3DXMATRIX mat, *m, min;
+-                D3DXMatrixTranspose(&mat, &min);
+ 
+                 if (is_pointer)
+                     min = *(D3DXMATRIX *)(indata[index / 16]);

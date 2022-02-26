@@ -39,7 +39,19 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          return VkParam(type_info, const=const, pointer=pointer, name=name, array_len=array_len, dyn_array_len=dyn_array_len)
  
-@@ -1396,7 +1398,7 @@ class VkParam(object):
+@@ -1366,7 +1368,10 @@ class VkParam(object):
+         if self.is_static_array() or self.is_pointer():
+             self.format_str = "%p"
+         else:
+-            if self.type_info["category"] in ["bitmask", "enum"]:
++            if self.type == "VkPipelineStageFlags2" or self.type == "VkPipelineStageFlags2KHR":
++                self.format_str = "0x%s"
++                self.format_conv = "wine_dbgstr_longlong({0})"
++            elif self.type_info["category"] in ["bitmask", "enum"]:
+                 self.format_str = "%#x"
+             elif self.is_handle():
+                 # We use uint64_t for non-dispatchable handles as opposed to pointers
+@@ -1396,7 +1401,7 @@ class VkParam(object):
                  # Don't care about Linux specific types.
                  self.format_str = ""
              else:
@@ -48,7 +60,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      def copy(self, direction):
          if direction == Direction.INPUT:
-@@ -2162,7 +2164,9 @@ class VkGenerator(object):
+@@ -2162,7 +2167,9 @@ class VkGenerator(object):
  
      def _generate_copyright(self, f, spec_file=False):
          f.write("# " if spec_file else "/* ")
@@ -59,7 +71,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          lines = ["", "This file is generated from Vulkan vk.xml file covered",
              "by the following copyright and permission notice:"]
          lines.extend([l.rstrip(" ") for l in self.registry.copyright.splitlines()])
-@@ -2635,6 +2639,7 @@ class VkRegistry(object):
+@@ -2635,6 +2642,7 @@ class VkRegistry(object):
          self.funcpointers = None
          self.handles = None
          self.structs = None
@@ -67,7 +79,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          # We aggregate all types in here for cross-referencing.
          self.funcs = {}
-@@ -3191,11 +3196,6 @@ def set_working_directory():
+@@ -3191,11 +3199,6 @@ def set_working_directory():
      path = os.path.dirname(path)
      os.chdir(path)
  
@@ -79,7 +91,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  def main():
      parser = argparse.ArgumentParser()
      parser.add_argument("-v", "--verbose", action="count", default=0, help="increase output verbosity")
-@@ -3215,7 +3215,6 @@ def main():
+@@ -3215,7 +3218,6 @@ def main():
          vk_xml = args.xml
      else:
          vk_xml = "vk-{0}.xml".format(VK_XML_VERSION)
@@ -89,7 +101,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      generator = VkGenerator(registry)
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -5268,9 +5268,9 @@ const char *wined3d_debug_vkresult(VkRes
+@@ -5305,9 +5305,9 @@ const char *wined3d_debug_vkresult(VkRes
      switch (vr)
      {
  #define WINED3D_TO_STR(x) case x: return #x

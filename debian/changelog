@@ -1,8 +1,11 @@
 wine (6.0.2~repack-1) unstable; urgency=medium
 
-  * New upstream release 6.0.2, released Oct 26, 2021.
-    - Compilation fixes (freetype, gcc 11)
-    - Various bug fixes
+  * New upstream release 6.0.2, released Oct 26, 2021 (closes: #995305).
+    - Compilation fixes: freetype, gcc 11 (closes: #984402).
+    - Various bug fixes.
+  * Support building with openldap 2.5 (closes: #1006016).
+  * Support building with unicode-data 14 (closes: #995580).
+  * Avoid deleting files outside of package source directory (closes: #991822).
 
  -- Michael Gilbert <mgilbert@debian.org>  Sat, 26 Feb 2022 18:43:01 +0000
 

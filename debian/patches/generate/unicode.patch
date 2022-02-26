@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/make_unicode
 +++ b/tools/make_unicode
-@@ -21,17 +21,18 @@
+@@ -21,18 +21,19 @@
  
  use strict;
  
@@ -12,6 +12,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 -my $UNIDATA  = "https://www.unicode.org/Public/$UNIVERSION/ucd/UCD.zip";
 -my $IDNADATA = "https://www.unicode.org/Public/idna/$UNIVERSION";
 -my $JISDATA  = "https://www.unicode.org/Public/MAPPINGS/OBSOLETE/EASTASIA/JIS";
+-my $KSCDATA  = "https://www.unicode.org/Public/MAPPINGS/OBSOLETE/EASTASIA/KSC";
 -my $REPORTS = "http://www.unicode.org/reports";
 -my $MSDATA = "https://download.microsoft.com/download/C/F/7/CF713A5E-9FBC-4FD6-9246-275F65C0E498";
 +# Locations of unicode files
@@ -20,6 +21,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 +my $UNIDATA = "/usr/share/unicode";
 +my $IDNADATA = "debian/unicode/tr46/$UNIVERSION";
 +my $JISDATA = "debian/unicode/mappings/OBSOLETE/EASTASIA/JIS";
++my $KSCDATA = "debian/unicode/mappings/OBSOLETE/EASTASIA/KSC";
 +my $REPORTS = "debian/unicode";
 +my $MSDATA = "debian/unicode";
  my $MSCODEPAGES = "$MSDATA/Windows Supported Code Page Data Files.zip";
@@ -30,7 +32,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  # Default char for undefined mappings
  my $DEF_CHAR = ord '?';
-@@ -436,6 +437,7 @@ my @category_table = ();
+@@ -438,6 +439,7 @@ my @category_table = ();
  my @joining_table = ();
  my @direction_table = ();
  my @decomp_table = ();
@@ -38,7 +40,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  my @combining_class_table = ();
  my @decomp_compat_table = ();
  my @comp_exclusions = ();
-@@ -483,25 +485,11 @@ sub open_data_file($$)
+@@ -485,25 +487,11 @@ sub open_data_file($$)
  
      if ($base =~ /.*\/([^\/]+)\.zip$/)
      {
@@ -66,7 +68,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
      return *FILE;
  }
-@@ -713,6 +701,7 @@ sub load_data()
+@@ -715,6 +703,7 @@ sub load_data()
              if ($decomp =~ /^([0-9a-fA-F]+)\s+([0-9a-fA-F]+)$/)
              {
                  $decomp_table[$src] = $decomp_compat_table[$src] = [ hex $1, hex $2 ];
@@ -74,7 +76,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              }
              elsif ($decomp =~ /^([0-9a-fA-F]+)$/)
              {
-@@ -1868,6 +1857,297 @@ sub dump_bidi_dir_table($)
+@@ -1926,6 +1915,297 @@ sub dump_bidi_dir_table($)
      save_file($filename);
  }
  
@@ -372,7 +374,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  sub rol($$)
  {
-@@ -2699,7 +2979,12 @@ sub save_file($)
+@@ -2759,7 +3039,12 @@ sub save_file($)
  
  chdir ".." if -f "./make_unicode";
  load_data();
