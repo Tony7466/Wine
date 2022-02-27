@@ -5207,6 +5207,9 @@ HRESULT create_textlayout(const struct textlayout_desc *desc, IDWriteTextLayout 
 
     *layout = NULL;
 
+    if (desc->max_width < 0.0f || desc->max_height < 0.0f)
+        return E_INVALIDARG;
+
     if (!desc->format || !desc->string)
         return E_INVALIDARG;
 
@@ -5360,6 +5363,9 @@ HRESULT create_trimmingsign(IDWriteFactory7 *factory, IDWriteTextFormat *format,
     HRESULT hr;
 
     *sign = NULL;
+
+    if (!format)
+        return E_INVALIDARG;
 
     /* Validate reading/flow direction here, layout creation won't complain about
        invalid combinations. */
