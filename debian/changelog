@@ -1,3 +1,9 @@
+wine (6.0.2~repack-2) unstable; urgency=medium
+
+  * Fix font installation error.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 27 Feb 2022 03:09:33 +0000
+
 wine (6.0.2~repack-1) unstable; urgency=medium
 
   * New upstream release 6.0.2, released Oct 26, 2021 (closes: #995305).

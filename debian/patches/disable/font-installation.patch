@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -2927,13 +2927,13 @@ static void output_source_sfd( struct ma
+@@ -2927,7 +2927,7 @@ static void output_source_sfd( struct ma
                  fontforge, root_src_dir_path( "fonts/genttf.ff" ), source->filename );
          if (!(source->file->flags & FLAG_SFD_FONTS)) strarray_add( &make->font_files, ttf_obj );
      }
@@ -12,10 +12,11 @@ author: Michael Gilbert <mgilbert@debian.org>
      {
          add_install_rule( make, source->name, ttf_obj, strmake( "D$(fontdir)/%s", ttf_obj ));
          output_srcdir_symlink( make, ttf_obj );
+@@ -2947,7 +2947,6 @@ static void output_source_sfd( struct ma
+                     tools_path( make, "sfnt2fon" ), ttf_file );
+             output( "\t%s%s -q -o $@ %s %s\n", cmd_prefix( "GEN" ),
+                     tools_path( make, "sfnt2fon" ), ttf_file, args );
+-            add_install_rule( make, source->name, xstrdup(font), strmake( "d$(fontdir)/%s", font ));
+         }
      }
- 
--    if (source->file->flags & FLAG_SFD_FONTS)
-+    if (0)
-     {
-         struct strarray *array = source->file->args;
- 
+ }
