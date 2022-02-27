@@ -1,10 +1,9 @@
-wine-development (6.1+repack-1) UNRELEASED; urgency=medium
+wine-development (6.1~repack-1) unstable; urgency=medium
 
   * New upstream release 6.1, released Jan 29, 2021.
     - Arabic text shaping.
     - More WinRT support in WIDL.
     - VKD3D version 1.2 is used for Direct3D 12.
-    - Support for Rosetta's memory layout on M1 Macs.
     - Support for Thumb-2 mode on ARM.
     - Various bug fixes.
 

@@ -67,7 +67,7 @@ Build-Depends:
  libxslt1-dev,
  unixodbc-dev,
  libcups2-dev,
- libvkd3d-dev,
+ libvkd3d-dev (>= 1.2),
  libcapi20-dev,
  libvulkan-dev,
  libfaudio-dev (>= 19.06.07),

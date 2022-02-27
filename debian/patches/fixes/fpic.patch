@@ -1,0 +1,15 @@
+description: build with fpic on all architectures
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/configure.ac
++++ b/configure.ac
+@@ -909,9 +909,6 @@ case $host_os in
+ 
+   *)
+     case $host_cpu in
+-      *i[[3456789]]86*)
+-        DLLFLAGS="$DLLFLAGS -fno-PIC"
+-        LDDLLFLAGS="-fno-PIC" ;;
+       *)
+         DLLFLAGS="$DLLFLAGS -fPIC"
+         LDDLLFLAGS="-fPIC" ;;
