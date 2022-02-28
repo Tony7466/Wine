@@ -105,9 +105,11 @@ Suggests:
  exe-thumbnailer | kio-extras,
 Breaks:
  libwineVERSION (<< 5.5-6),
+ libwineVERSION (= 6.0.2~repack-2),
  wine-stable (<< 3.0.1ubuntu1~),
 Replaces:
  libwineVERSION (<< 5.5-6),
+ libwineVERSION (= 6.0.2~repack-2),
  wine-stable (<< 3.0.1ubuntu1~),
 Provides:
  wine,

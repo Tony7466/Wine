@@ -76,11 +76,10 @@ ifeq ($(DEB_HOST_ARCH), amd64)
 CONFLAGS+=--with-mingw
 endif
 
-# on armel build for armv5t
+# on armel build for armv6t2
 ifeq ($(DEB_HOST_ARCH), armel)
 CONFLAGS+=--with-float-abi=soft
-export DEB_CFLAGS_MAINT_APPEND+=-march=armv5t
-export DEB_LDFLAGS_MAINT_APPEND+=-march=armv5t
+export DEB_CFLAGS_MAINT_APPEND+=-march=armv6t2 -Wno-array-parameter
 endif
 
 # warnings to ignore on armhf
@@ -232,7 +231,7 @@ endif
 	test -f debian/tmp/$(BINDIR)/wine-preloader || \
 	    cp debian/scripts/wine-preloader debian/tmp/$(BINDIR)
 	rm -rf debian/tmp/usr/share/man
-	rm -rf debian/tmp/usr/share/wine$(DEBSUFFIX)/wine/nls
+	rm -rf debian/tmp/usr/share/wine$(VERSION)/wine/nls
 	rm -f debian/tmp/usr/lib/*/wineserver
 	rm -f debian/tmp/usr/lib/*/*/libwine.so
 	rm -f debian/tmp/usr/share/*/fonts/*.fon

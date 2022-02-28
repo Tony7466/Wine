@@ -1,3 +1,10 @@
+wine (6.0.2~repack-3) unstable; urgency=medium
+
+  * Remove nls files from the libwine package (closes: #1006539).
+  * Build for armv6t2 on armel (new minimum ARM architecture required by wine).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 27 Feb 2022 21:18:36 +0000
+
 wine (6.0.2~repack-2) unstable; urgency=medium
 
   * Fix font installation error.
