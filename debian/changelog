@@ -1,3 +1,14 @@
+wine-development (6.2~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 6.2, released Feb 12, 2021.
+    - Mono engine updated to version 6.0.0, with DirectX support.
+    - Support for NTDLL debugger APIs.
+    - More WinRT support in WIDL.
+    - Xbox One controller fixes on Mac.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Mon, 28 Feb 2022 02:08:53 +0000
+
 wine-development (6.1~repack-1) unstable; urgency=medium
 
   * New upstream release 6.1, released Jan 29, 2021.
