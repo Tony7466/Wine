@@ -1807,7 +1807,7 @@ static NTSTATUS map_file_into_view( struct file_view *view, int fd, size_t start
     /* only try mmap if media is not removable (or if we require write access) */
     if (!removable || (flags & MAP_SHARED))
     {
-        if (mmap( (char *)view->base + start, size, prot, flags, fd, offset ) != (void *)-1)
+        if (mmap( (char *)view->base + start, size, prot, flags, fd, offset ) != MAP_FAILED)
             goto done;
 
         switch (errno)
@@ -1970,7 +1970,7 @@ static NTSTATUS map_pe_header( void *ptr, size_t size, int fd, BOOL *removable )
 
     if (!*removable)
     {
-        if (mmap( ptr, size, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_FIXED|MAP_PRIVATE, fd, 0 ) != (void *)-1)
+        if (mmap( ptr, size, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_FIXED|MAP_PRIVATE, fd, 0 ) != MAP_FAILED)
             return STATUS_SUCCESS;
 
         switch (errno)
@@ -3865,6 +3865,37 @@ static NTSTATUS get_working_set_ex( HANDLE process, LPCVOID addr,
     return STATUS_SUCCESS;
 }
 
+static NTSTATUS get_memory_section_name( HANDLE process, LPCVOID addr,
+                                         MEMORY_SECTION_NAME *info, SIZE_T len, SIZE_T *ret_len )
+{
+    NTSTATUS status;
+
+    if (!info) return STATUS_ACCESS_VIOLATION;
+
+    SERVER_START_REQ( get_mapping_filename )
+    {
+        req->process = wine_server_obj_handle( process );
+        req->addr = wine_server_client_ptr( addr );
+        if (len > sizeof(*info) + sizeof(WCHAR))
+            wine_server_set_reply( req, info + 1, len - sizeof(*info) - sizeof(WCHAR) );
+        status = wine_server_call( req );
+        if (!status || status == STATUS_BUFFER_OVERFLOW)
+        {
+            if (ret_len) *ret_len = sizeof(*info) + reply->len + sizeof(WCHAR);
+            if (len < sizeof(*info)) status = STATUS_INFO_LENGTH_MISMATCH;
+            if (!status)
+            {
+                info->SectionFileName.Buffer = (WCHAR *)(info + 1);
+                info->SectionFileName.Length = reply->len;
+                info->SectionFileName.MaximumLength = reply->len + sizeof(WCHAR);
+                info->SectionFileName.Buffer[reply->len / sizeof(WCHAR)] = 0;
+            }
+        }
+    }
+    SERVER_END_REQ;
+    return status;
+}
+
 #define UNIMPLEMENTED_INFO_CLASS(c) \
     case c: \
         FIXME("(process=%p,addr=%p) Unimplemented information class: " #c "\n", process, addr); \
@@ -3885,12 +3916,12 @@ NTSTATUS WINAPI NtQueryVirtualMemory( HANDLE process, LPCVOID addr,
     {
         case MemoryBasicInformation:
             return get_basic_memory_info( process, addr, buffer, len, res_len );
-
         case MemoryWorkingSetExInformation:
             return get_working_set_ex( process, addr, buffer, len, res_len );
+        case MemorySectionName:
+            return get_memory_section_name( process, addr, buffer, len, res_len );
 
         UNIMPLEMENTED_INFO_CLASS(MemoryWorkingSetList);
-        UNIMPLEMENTED_INFO_CLASS(MemorySectionName);
         UNIMPLEMENTED_INFO_CLASS(MemoryBasicVlmInformation);
 
         default:
