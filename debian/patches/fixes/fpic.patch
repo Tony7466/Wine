@@ -3,13 +3,15 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -909,9 +909,6 @@ case $host_os in
+@@ -910,11 +910,6 @@ case $host_os in
  
    *)
      case $host_cpu in
 -      *i[[3456789]]86*)
 -        DLLFLAGS="$DLLFLAGS -fno-PIC"
--        LDDLLFLAGS="-fno-PIC" ;;
+-        LDDLLFLAGS="-fno-PIC"
+-        WINE_TRY_CFLAGS([-fno-PIC -Wl,-z,notext],[LDDLLFLAGS="$LDDLLFLAGS -Wl,-z,notext"])
+-        ;;
        *)
          DLLFLAGS="$DLLFLAGS -fPIC"
          LDDLLFLAGS="-fPIC" ;;

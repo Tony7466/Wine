@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/server/trace.c
 +++ b/server/trace.c
-@@ -609,12 +609,14 @@ static void dump_varargs_context( const
+@@ -615,12 +615,14 @@ static void dump_varargs_context( const
                       ctx.fp.i386_regs.err_off, ctx.fp.i386_regs.err_sel );
              fprintf( stderr, ",fp.data_off=%08x,fp.data_sel=%08x,fp.cr0npx=%08x",
                       ctx.fp.i386_regs.data_off, ctx.fp.i386_regs.data_sel, ctx.fp.i386_regs.cr0npx );

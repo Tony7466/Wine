@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -1591,7 +1591,7 @@ WINE_NOTICE_WITH(pulse, [test -z "$PULSE
+@@ -1592,7 +1592,7 @@ WINE_NOTICE_WITH(pulse, [test -z "$PULSE
  dnl **** Check for gstreamer ****
  if test "x$with_gstreamer" != "xno"
  then
@@ -12,7 +12,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          [ac_gst_incl=""
          for i in $GSTREAMER_CFLAGS
          do
-@@ -1599,6 +1599,7 @@ then
+@@ -1600,6 +1600,7 @@ then
                  -I*) ac_gst_incl="$ac_gst_incl $i";;
              esac
          done
