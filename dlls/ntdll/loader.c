@@ -105,8 +105,6 @@ static const char * const reason_names[] =
     "PROCESS_ATTACH",
     "THREAD_ATTACH",
     "THREAD_DETACH",
-    NULL, NULL, NULL, NULL,
-    "WINE_PREATTACH"
 };
 
 struct file_id
@@ -1261,8 +1259,6 @@ static void call_tls_callbacks( HMODULE module, UINT reason )
     const PIMAGE_TLS_CALLBACK *callback;
     ULONG dirsize;
 
-    if (reason == DLL_WINE_PREATTACH) return;
-
     dir = RtlImageDirectoryEntryToData( module, TRUE, IMAGE_DIRECTORY_ENTRY_TLS, &dirsize );
     if (!dir || !dir->AddressOfCallBacks) return;
 
@@ -2325,7 +2321,7 @@ static NTSTATUS load_so_dll( LPCWSTR load_path, const UNICODE_STRING *nt_name,
         SECTION_IMAGE_INFORMATION image_info = { 0 };
 
         image_info.u.s.WineBuiltin = 1;
-        if ((status = build_module( load_path, &win_name, &module, &image_info, NULL, flags, pwm )))
+        if ((status = build_module( load_path, &win_name, &module, &image_info, NULL, flags, &wm )))
         {
             if (module) unix_funcs->unload_builtin_dll( module );
             return status;
@@ -2687,14 +2683,6 @@ static NTSTATUS load_dll( const WCHAR *load_path, const WCHAR *libname, const WC
             case LO_BUILTIN_NATIVE:
             case LO_DEFAULT:
                 nts = load_builtin_dll( load_path, &nt_name, flags, pwm, loadorder == LO_DEFAULT );
-                if (nts == STATUS_SUCCESS && loadorder == LO_DEFAULT &&
-                    (MODULE_InitDLL( *pwm, DLL_WINE_PREATTACH, NULL ) != STATUS_SUCCESS))
-                {
-                    /* stub-only dll, try native */
-                    TRACE( "%s pre-attach returned FALSE, preferring native\n", debugstr_us(&nt_name) );
-                    LdrUnloadDll( (*pwm)->ldr.DllBase );
-                    nts = STATUS_IMAGE_ALREADY_LOADED;
-                }
                 if (nts == STATUS_DLL_NOT_FOUND || nts == STATUS_IMAGE_ALREADY_LOADED)
                     nts = load_native_dll( load_path, &nt_name, mapping, &image_info, &id, flags, pwm );
                 break;
@@ -3928,6 +3916,38 @@ static void restart_winevdm( RTL_USER_PROCESS_PARAMETERS *params )
     RtlInitUnicodeString( &params->CommandLine, cmdline );
 }
 
+#ifndef _WIN64
+void *Wow64Transition = NULL;
+
+static void map_wow64cpu(void)
+{
+    SIZE_T size = 0;
+    OBJECT_ATTRIBUTES attr;
+    UNICODE_STRING string;
+    HANDLE file, section;
+    IO_STATUS_BLOCK io;
+    NTSTATUS status;
+
+    RtlInitUnicodeString( &string, L"\\??\\C:\\windows\\sysnative\\wow64cpu.dll" );
+    InitializeObjectAttributes( &attr, &string, 0, NULL, NULL );
+    if ((status = NtOpenFile( &file, GENERIC_READ | SYNCHRONIZE, &attr, &io, FILE_SHARE_READ,
+                              FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE )))
+    {
+        WARN("failed to open wow64cpu, status %#x\n", status);
+        return;
+    }
+    if (!NtCreateSection( &section, STANDARD_RIGHTS_REQUIRED | SECTION_QUERY |
+                          SECTION_MAP_READ | SECTION_MAP_EXECUTE,
+                          NULL, NULL, PAGE_EXECUTE_READ, SEC_COMMIT, file ))
+    {
+        NtMapViewOfSection( section, NtCurrentProcess(), &Wow64Transition, 0,
+                            0, NULL, &size, ViewShare, 0, PAGE_EXECUTE_READ );
+        NtClose( section );
+    }
+    NtClose( file );
+}
+#endif
+
 
 /***********************************************************************
  *           process_init
@@ -3968,7 +3988,6 @@ static NTSTATUS process_init(void)
     is_wow64 = !!NtCurrentTeb64();
 #endif
 
-    init_unix_codepage();
     init_user_process_params();
     params = peb->ProcessParameters;
 
@@ -4037,6 +4056,11 @@ static NTSTATUS process_init(void)
 #endif
 
     build_ntdll_module();
+
+#ifndef _WIN64
+    if (is_wow64)
+        map_wow64cpu();
+#endif
 
     if ((status = load_dll( params->DllPath.Buffer, L"C:\\windows\\system32\\kernel32.dll",
                             NULL, 0, &wm )) != STATUS_SUCCESS)
