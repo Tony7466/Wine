@@ -1,3 +1,15 @@
+wine-development (6.4~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 6.4, released Mar 12, 2021.
+    - Support for the DTLS protocol.
+    - Fontset support in DirectWrite.
+    - Dialog for editing Access Control entries.
+    - Theming support for a few more common controls.
+    - Support for Korean Wansung encoding.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Fri, 04 Mar 2022 18:46:54 +0000
+
 wine-development (6.3~repack-1) unstable; urgency=medium
 
   * New upstream release 6.3, released Feb 26, 2021.
