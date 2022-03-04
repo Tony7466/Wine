@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -911,11 +911,6 @@ case $host_os in
+@@ -913,11 +913,6 @@ case $host_os in
  
    *)
      case $host_cpu in
