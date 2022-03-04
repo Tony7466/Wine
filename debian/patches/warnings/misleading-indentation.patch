@@ -14,7 +14,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  /***************************************************************************************
 --- a/dlls/oleaut32/vartype.c
 +++ b/dlls/oleaut32/vartype.c
-@@ -147,15 +147,27 @@ static HRESULT VARIANT_FromDisp(IDispatc
+@@ -149,15 +149,27 @@ static HRESULT VARIANT_FromDisp(IDispatc
  
  /* Compiler cast where input cannot be negative */
  #define NEGTST(dest, src, func) RETTYP _##func(src in, dest* out) { \

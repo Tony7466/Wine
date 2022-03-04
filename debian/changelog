@@ -1,4 +1,4 @@
-wine-development (6.3~repack-1) UNRELEASED; urgency=medium
+wine-development (6.3~repack-1) unstable; urgency=medium
 
   * New upstream release 6.3, released Feb 26, 2021.
     - Better debugger support in the NT syscall interface.
@@ -6,6 +6,7 @@ wine-development (6.3~repack-1) UNRELEASED; urgency=medium
     - Still more WinRT support in WIDL.
     - Optional support for build IDs.
     - Various bug fixes.
+  * Move function_grep.pl to /usr/libexec (closes: #1006571).
 
  -- Michael Gilbert <mgilbert@debian.org>  Wed, 02 Mar 2022 00:36:16 +0000
 

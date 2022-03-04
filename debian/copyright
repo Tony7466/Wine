@@ -59,7 +59,7 @@ Files: debian/*
 Copyright:
  Copyright (c) 2015-2018 Jens Reyer <jre.winesim@gmail.com>
  Copyright (c) 2014-2016 Stephen Kitt <skitt@debian.org>
- Copyright (c) 2012-2020 Michael Gilbert <mgilbert@debian.org>
+ Copyright (c) 2012-2022 Michael Gilbert <mgilbert@debian.org>
 License: LGPL-2.1+
 
 Files: debian/org.winehq.wine*.appdata.xml

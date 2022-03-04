@@ -8,6 +8,6 @@ usr/lib/wineVERSION/winedump
 usr/lib/wineVERSION/winebuild
 usr/lib/wineVERSION/winemaker
 
-usr/lib/wineVERSION/function_grep.pl usr/bin
+usr/lib/wineVERSION/function_grep.pl usr/libexec/wineVERSION/function_grep.pl
 
 debian/tmp/winegccDEBSUFFIX usr/bin

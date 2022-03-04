@@ -15,7 +15,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #endif
 --- a/tools/winebuild/spec32.c
 +++ b/tools/winebuild/spec32.c
-@@ -312,7 +312,12 @@ static void output_relay_debug( DLLSPEC
+@@ -309,7 +309,12 @@ static void output_relay_debug( DLLSPEC
              output_cfi( ".cfi_startproc" );
              output( "\tpush {r0-r3}\n" );
              output( "\tmov r2, SP\n");
@@ -28,4 +28,4 @@ author: Michael Gilbert <mgilbert@debian.org>
 +            }
              output( "\tpush {LR}\n" );
              output( "\tsub SP, #4\n");
-             for (mask = 0xff; mask; mask <<= 8)
+             output( "\tmov r1,#%u\n", i - spec->base );
