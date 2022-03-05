@@ -2609,6 +2609,7 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 11,,dosx.exe
 11,,dsound.vxd
 11,,winhlp32.exe
+52,win40\0,wineps16.drv,wineps16.drv16
 
 ; 64bit-only fake dlls
 [FakeDllsWin64]
@@ -2630,19 +2631,6 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 10,syswow64,stdole2.tlb
 11,,iexplore.exe
 11,,winetest.exe,-
-12,,fltmgr.sys,-
-12,,hidclass.sys,-
-12,,http.sys,-
-12,,ksecdd.sys,-
-12,,mountmgr.sys,-
-12,,ndis.sys,-
-12,,netio.sys,-
-12,,scsiport.sys,-
-12,,tdi.sys,-
-12,,usbd.sys,-
-12,,winebus.sys,-
-12,,winehid.sys,-
-12,,wineusb.sys,-
 ; skip .NET fake dlls in Wine Mono package
 11,,aspnet_regiis.exe,-
 11,,ngen.exe,-
@@ -2665,6 +2653,8 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 16427,System\OLE DB,oledb32.dll
 16427,System\OLE DB,msdaps.dll
 16427,System\ADO,msado15.dll
+66000,3,wineps.drv
+12,,*.sys,-
 11,,*
 
 [FakeDlls]
@@ -2685,19 +2675,6 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 11,,iexplore.exe
 11,,notepad.exe
 11,,winetest.exe,-
-12,,fltmgr.sys
-12,,hidclass.sys
-12,,http.sys
-12,,ksecdd.sys
-12,,mountmgr.sys
-12,,ndis.sys
-12,,netio.sys
-12,,scsiport.sys
-12,,tdi.sys
-12,,usbd.sys
-12,,winebus.sys
-12,,winehid.sys
-12,,wineusb.sys
 ; skip .NET fake dlls in Wine Mono package
 11,,aspnet_regiis.exe,-
 11,,ngen.exe,-
@@ -2732,6 +2709,8 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 16427,System\OLE DB,oledb32.dll
 16427,System\OLE DB,msdaps.dll
 16427,System\ADO,msado15.dll
+66000,3,wineps.drv
+12,,*.sys
 11,,*
 
 [SystemIni]
@@ -4062,12 +4041,12 @@ HKLM,Software\Wine\LicenseInformation,"Shell-InBoxGames-SpiderSolitaire-EnableGa
 HKLM,Software\Wine\LicenseInformation,"Shell-PremiumInBoxGames-Chess-EnableGame",0x10001,0x00000001
 
 [ColorFiles]
-srgb color space profile.icm,"@mscms.dll,-1"
+srgb color space profile.icm,"@%11%\mscms.dll,-1"
 
 [InfFiles]
-winebus.inf,"@winebus.sys,-1"
-winehid.inf,"@winehid.sys,-1"
-wineusb.inf,"@wineusb.sys,-1"
+winebus.inf,"@%12%\winebus.sys,-1"
+winehid.inf,"@%12%\winehid.sys,-1"
+wineusb.inf,"@%12%\wineusb.sys,-1"
 
 [NlsFiles]
 c_037.nls
