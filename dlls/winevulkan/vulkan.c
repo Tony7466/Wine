@@ -37,9 +37,7 @@ DEFINE_DEVPROPKEY(DEVPROPKEY_GPU_LUID, 0x60b193cb, 0x5276, 0x4d0f, 0x96, 0xfc, 0
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_GPU_VULKAN_UUID, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5c, 2);
 
 /* For now default to 4 as it felt like a reasonable version feature wise to support.
- * Don't support the optional vk_icdGetPhysicalDeviceProcAddr introduced in this version
- * as it is unlikely we will implement physical device extensions, which the loader is not
- * aware of. Version 5 adds more extensive version checks. Something to tackle later.
+ * Version 5 adds more extensive version checks. Something to tackle later.
  */
 #define WINE_VULKAN_ICD_VERSION 4
 
@@ -1164,7 +1162,8 @@ PFN_vkVoidFunction WINAPI wine_vkGetDeviceProcAddr(VkDevice device, const char *
      * https://github.com/KhronosGroup/Vulkan-Docs/issues/655
      */
     if (device->quirks & WINEVULKAN_QUIRK_GET_DEVICE_PROC_ADDR
-            && (func = wine_vk_get_instance_proc_addr(name)))
+            && ((func = wine_vk_get_instance_proc_addr(name))
+             || (func = wine_vk_get_phys_dev_proc_addr(name))))
     {
         WARN("Returning instance function %s.\n", debugstr_a(name));
         return func;
@@ -1227,12 +1226,22 @@ PFN_vkVoidFunction WINAPI wine_vkGetInstanceProcAddr(VkInstance instance, const 
     func = wine_vk_get_instance_proc_addr(name);
     if (func) return func;
 
+    func = wine_vk_get_phys_dev_proc_addr(name);
+    if (func) return func;
+
     /* vkGetInstanceProcAddr also loads any children of instance, so device functions as well. */
     func = wine_vk_get_device_proc_addr(name);
     if (func) return func;
 
     WARN("Unsupported device or instance function: %s.\n", debugstr_a(name));
     return NULL;
+}
+
+void * WINAPI wine_vk_icdGetPhysicalDeviceProcAddr(VkInstance instance, const char *name)
+{
+    TRACE("%p, %s\n", instance, debugstr_a(name));
+
+    return wine_vk_get_phys_dev_proc_addr(name);
 }
 
 void * WINAPI wine_vk_icdGetInstanceProcAddr(VkInstance instance, const char *name)
