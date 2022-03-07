@@ -227,7 +227,7 @@ Depends:
  ${misc:Depends},
  ${dlopen:Depends},
  ${shlibs:Depends},
- libz-mingw-w64,
+ libz-mingw-w64 (>= 1.2.11+dfsg-4),
 Recommends:
  ${dlopen:Recommends},
  libgl1-mesa-dri,

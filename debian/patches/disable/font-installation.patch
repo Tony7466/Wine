@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -2927,13 +2927,13 @@ static void output_source_sfd( struct ma
+@@ -2936,13 +2936,13 @@ static void output_source_sfd( struct ma
                  fontforge, root_src_dir_path( "fonts/genttf.ff" ), source->filename );
          if (!(source->file->flags & FLAG_SFD_FONTS)) strarray_add( &make->font_files, ttf_obj );
      }

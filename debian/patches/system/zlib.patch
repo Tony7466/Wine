@@ -3,22 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -1567,14 +1567,6 @@ static struct file *open_include_file( c
-         }
-     }
- 
--    if (pFile->type == INCL_SYSTEM && pFile->use_msvcrt)
--    {
--        if (!strcmp( pFile->name, "stdarg.h" )) return NULL;
--        fprintf( stderr, "%s:%d: error: system header %s cannot be used with msvcrt\n",
--                 pFile->included_by->file->name, pFile->included_line, pFile->name );
--        exit(1);
--    }
--
-     if (pFile->type == INCL_SYSTEM) return NULL;  /* ignore system files we cannot find */
- 
-     /* try in src file directory */
-@@ -3300,6 +3292,7 @@ static void output_module( struct makefi
+@@ -3301,6 +3301,7 @@ static void output_module( struct makefi
  {
      struct strarray all_libs = empty_strarray;
      struct strarray dep_libs = empty_strarray;
@@ -26,7 +11,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      char *module_path = obj_dir_path( make, make->module );
      const char *debug_file = NULL;
      char *spec_file = NULL;
-@@ -3368,6 +3361,7 @@ static void output_module( struct makefi
+@@ -3369,6 +3370,7 @@ static void output_module( struct makefi
      if (debug_file) output_filename( strmake( "-Wl,--debug-file,%s", obj_dir_path( make, debug_file )));
      output_filenames( all_libs );
      output_filename( make->is_cross ? "$(CROSSLDFLAGS)" : "$(LDFLAGS)" );
@@ -128,7 +113,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #include "wine/exception.h"
 --- a/dlls/wininet/Makefile.in
 +++ b/dlls/wininet/Makefile.in
-@@ -4,6 +4,8 @@ IMPORTLIB = wininet
+@@ -3,6 +3,8 @@ IMPORTLIB = wininet
  IMPORTS   = mpr shlwapi shell32 user32 ws2_32 advapi32
  DELAYIMPORTS = secur32 crypt32 cryptui dhcpcsvc iphlpapi
  
@@ -137,7 +122,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  EXTRADLLFLAGS = -mno-cygwin
  
  C_SRCS = \
-@@ -12,7 +14,6 @@ C_SRCS = \
+@@ -11,7 +13,6 @@ C_SRCS = \
  	ftp.c \
  	gopher.c \
  	http.c \
