@@ -144,6 +144,16 @@ static void update_attr_list( PS_ATTRIBUTE_LIST *attr, const CLIENT_ID *id, TEB 
     }
 }
 
+/***********************************************************************
+ *              NtCreateThread   (NTDLL.@)
+ */
+NTSTATUS WINAPI NtCreateThread( HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBUTES *attr,
+                                HANDLE process, CLIENT_ID *id, CONTEXT *ctx, INITIAL_TEB *teb,
+                                BOOLEAN suspended )
+{
+    FIXME( "%p %d %p %p %p %p %p %d, stub!\n", handle, access, attr, process, id, ctx, teb, suspended );
+    return STATUS_NOT_IMPLEMENTED;
+}
 
 /***********************************************************************
  *              NtCreateThreadEx   (NTDLL.@)
@@ -617,13 +627,8 @@ NTSTATUS get_thread_context( HANDLE handle, context_t *context, unsigned int fla
 
     if (ret == STATUS_PENDING)
     {
-        LARGE_INTEGER timeout;
-        timeout.QuadPart = -1000000;
-        if (NtWaitForSingleObject( handle, FALSE, &timeout ))
-        {
-            NtClose( handle );
-            return STATUS_ACCESS_DENIED;
-        }
+        NtWaitForSingleObject( handle, FALSE, NULL );
+
         SERVER_START_REQ( get_thread_context )
         {
             req->handle  = wine_server_obj_handle( handle );

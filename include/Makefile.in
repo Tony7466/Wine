@@ -529,6 +529,7 @@ SOURCES = \
 	nserror.h \
 	nspapi.h \
 	ntddcdrm.h \
+	ntddkbd.h \
 	ntddmou.h \
 	ntddndis.h \
 	ntddscsi.h \
@@ -756,6 +757,7 @@ SOURCES = \
 	windows.gaming.input.idl \
 	windows.globalization.idl \
 	windows.h \
+	windows.media.devices.idl \
 	windows.media.speechsynthesis.idl \
 	windows.system.idl \
 	windows.system.userprofile.idl \
@@ -836,6 +838,8 @@ SOURCES = \
 	wtypes.idl \
 	wuapi.idl \
 	x3daudio.h \
+	xact.h \
+	xact2wb.h \
 	xact3.h \
 	xact3wb.h \
 	xapo.idl \

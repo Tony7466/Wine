@@ -39,12 +39,13 @@
 
 #include "initguid.h"
 #include "ntddmou.h"
+#include "ntddkbd.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(rawinput);
 
 struct device
 {
-    WCHAR *path;
+    SP_DEVICE_INTERFACE_DETAIL_DATA_W *detail;
     HANDLE file;
     RID_DEVICE_INFO info;
     PHIDP_PREPARSED_DATA data;
@@ -80,7 +81,7 @@ static BOOL array_reserve(void **elements, unsigned int *capacity, unsigned int 
     if (new_capacity < count)
         new_capacity = max_capacity;
 
-    if (!(new_elements = heap_realloc(*elements, new_capacity * size)))
+    if (!(new_elements = realloc(*elements, new_capacity * size)))
         return FALSE;
 
     *elements = new_elements;
@@ -94,7 +95,6 @@ static struct device *add_device(HDEVINFO set, SP_DEVICE_INTERFACE_DATA *iface)
     SP_DEVICE_INTERFACE_DETAIL_DATA_W *detail;
     struct device *device;
     HANDLE file;
-    WCHAR *path;
     DWORD size;
 
     SetupDiGetDeviceInterfaceDetailW(set, iface, NULL, 0, &size, NULL);
@@ -103,7 +103,7 @@ static struct device *add_device(HDEVINFO set, SP_DEVICE_INTERFACE_DATA *iface)
         ERR("Failed to get device path, error %#x.\n", GetLastError());
         return FALSE;
     }
-    if (!(detail = heap_alloc(size)))
+    if (!(detail = malloc(size)))
     {
         ERR("Failed to allocate memory.\n");
         return FALSE;
@@ -113,20 +113,12 @@ static struct device *add_device(HDEVINFO set, SP_DEVICE_INTERFACE_DATA *iface)
 
     TRACE("Found HID device %s.\n", debugstr_w(detail->DevicePath));
 
-    if (!(path = heap_strdupW(detail->DevicePath)))
-    {
-        ERR("Failed to allocate memory.\n");
-        heap_free(detail);
-        return NULL;
-    }
-    heap_free(detail);
-
-    file = CreateFileW(path, GENERIC_READ | GENERIC_WRITE,
+    file = CreateFileW(detail->DevicePath, GENERIC_READ | GENERIC_WRITE,
             FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, 0);
     if (file == INVALID_HANDLE_VALUE)
     {
-        ERR("Failed to open device file %s, error %u.\n", debugstr_w(path), GetLastError());
-        heap_free(path);
+        ERR("Failed to open device file %s, error %u.\n", debugstr_w(detail->DevicePath), GetLastError());
+        free(detail);
         return NULL;
     }
 
@@ -135,14 +127,15 @@ static struct device *add_device(HDEVINFO set, SP_DEVICE_INTERFACE_DATA *iface)
     {
         ERR("Failed to allocate memory.\n");
         CloseHandle(file);
-        heap_free(path);
+        free(detail);
         return NULL;
     }
 
     device = &rawinput_devices[rawinput_devices_count++];
-    device->path = path;
+    device->detail = detail;
     device->file = file;
     device->info.cbSize = sizeof(RID_DEVICE_INFO);
+    device->data = NULL;
 
     return device;
 }
@@ -170,8 +163,9 @@ static void find_devices(void)
     /* destroy previous list */
     for (idx = 0; idx < rawinput_devices_count; ++idx)
     {
+        HidD_FreePreparsedData(rawinput_devices[idx].data);
         CloseHandle(rawinput_devices[idx].file);
-        heap_free(rawinput_devices[idx].path);
+        free(rawinput_devices[idx].detail);
     }
     rawinput_devices_count = 0;
 
@@ -214,6 +208,21 @@ static void find_devices(void)
 
         device->info.dwType = RIM_TYPEMOUSE;
         device->info.u.mouse = mouse_info;
+    }
+
+    SetupDiDestroyDeviceInfoList(set);
+
+    set = SetupDiGetClassDevsW(&GUID_DEVINTERFACE_KEYBOARD, NULL, NULL, DIGCF_DEVICEINTERFACE | DIGCF_PRESENT);
+
+    for (idx = 0; SetupDiEnumDeviceInterfaces(set, NULL, &GUID_DEVINTERFACE_KEYBOARD, idx, &iface); ++idx)
+    {
+        static const RID_DEVICE_INFO_KEYBOARD keyboard_info = {0, 0, 1, 12, 3, 101};
+
+        if (!(device = add_device(set, &iface)))
+            continue;
+
+        device->info.dwType = RIM_TYPEKEYBOARD;
+        device->info.u.keyboard = keyboard_info;
     }
 
     SetupDiDestroyDeviceInfoList(set);
@@ -681,8 +690,8 @@ UINT WINAPI GetRawInputDeviceInfoW(HANDLE handle, UINT command, void *data, UINT
         }
         else
         {
-            *data_size = lstrlenW(device->path) + 1;
-            to_copy = device->path;
+            *data_size = wcslen(device->detail->DevicePath) + 1;
+            to_copy = device->detail->DevicePath;
         }
         to_copy_bytes = *data_size * sizeof(WCHAR);
         break;

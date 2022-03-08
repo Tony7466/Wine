@@ -57,8 +57,6 @@
 static const unsigned int supported_cpus = CPU_FLAG(CPU_x86);
 #elif defined(__x86_64__)
 static const unsigned int supported_cpus = CPU_FLAG(CPU_x86_64) | CPU_FLAG(CPU_x86);
-#elif defined(__powerpc__)
-static const unsigned int supported_cpus = CPU_FLAG(CPU_POWERPC);
 #elif defined(__arm__)
 static const unsigned int supported_cpus = CPU_FLAG(CPU_ARM);
 #elif defined(__aarch64__)
@@ -306,6 +304,7 @@ static struct context *create_thread_context( struct thread *thread )
 /* create a new thread */
 struct thread *create_thread( int fd, struct process *process, const struct security_descriptor *sd )
 {
+    struct desktop *desktop;
     struct thread *thread;
     int request_pipe[2];
 
@@ -342,7 +341,7 @@ struct thread *create_thread( int fd, struct process *process, const struct secu
     init_thread_structure( thread );
 
     thread->process = (struct process *)grab_object( process );
-    thread->desktop = process->desktop;
+    thread->desktop = 0;
     thread->affinity = process->affinity;
     if (!current) current = thread;
 
@@ -367,6 +366,16 @@ struct thread *create_thread( int fd, struct process *process, const struct secu
     {
         release_object( thread );
         return NULL;
+    }
+
+    if (process->desktop)
+    {
+        if (!(desktop = get_desktop_obj( process, process->desktop, 0 ))) clear_error();  /* ignore errors */
+        else
+        {
+            set_thread_default_desktop( thread, desktop, process->desktop );
+            release_object( desktop );
+        }
     }
 
     set_fd_events( thread->request_fd, POLLIN );  /* start listening to events */
@@ -416,7 +425,7 @@ static void cleanup_thread( struct thread *thread )
     cleanup_clipboard_thread(thread);
     destroy_thread_windows( thread );
     free_msg_queue( thread );
-    close_thread_desktop( thread );
+    release_thread_desktop( thread, 1 );
     for (i = 0; i < MAX_INFLIGHT_FDS; i++)
     {
         if (thread->inflight[i].client != -1)
@@ -1302,7 +1311,6 @@ static unsigned int get_context_system_regs( enum cpu_type cpu )
     {
     case CPU_x86:     return SERVER_CTX_DEBUG_REGISTERS;
     case CPU_x86_64:  return SERVER_CTX_DEBUG_REGISTERS;
-    case CPU_POWERPC: return 0;
     case CPU_ARM:     return SERVER_CTX_DEBUG_REGISTERS;
     case CPU_ARM64:   return SERVER_CTX_DEBUG_REGISTERS;
     }
@@ -1437,8 +1445,6 @@ DECL_HANDLER(init_first_thread)
         return;
     }
 
-    if (!is_cpu_supported( req->cpu )) return;
-
     current->unix_pid = process->unix_pid = req->unix_pid;
     current->unix_tid = req->unix_tid;
     current->teb      = req->teb;
@@ -1457,7 +1463,8 @@ DECL_HANDLER(init_first_thread)
     reply->tid          = get_thread_id( current );
     reply->info_size    = get_process_startup_info_size( process );
     reply->server_start = server_start_time;
-    reply->all_cpus     = supported_cpus & get_prefix_cpu_mask();
+    set_reply_data( supported_machines,
+                    min( supported_machines_count * sizeof(unsigned short), get_reply_max_size() ));
 }
 
 /* initialize a new thread */
