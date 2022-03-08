@@ -26,7 +26,6 @@ generate/request.patch
 
 fixes/x86.patch
 fixes/fpic.patch
-fixes/gstbase.patch
 fixes/printer-resolution.patch
 fixes/temporary-directory.patch
 

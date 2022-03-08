@@ -6,7 +6,7 @@ Last-Update: 2019-12-31
 
 --- a/dlls/gdiplus/graphics.c
 +++ b/dlls/gdiplus/graphics.c
-@@ -6947,8 +6947,8 @@ GpStatus WINGDIPAPI GdipTransformPoints(
+@@ -6975,8 +6975,8 @@ GpStatus WINGDIPAPI GdipTransformPoints(
                                          GpCoordinateSpace src_space, GpPointF *points, INT count)
  {
      if(!graphics || !points || count <= 0 ||

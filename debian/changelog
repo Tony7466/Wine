@@ -1,7 +1,6 @@
-wine-development (6.6~repack-1) UNRELEASED; urgency=medium
+wine-development (6.6~repack-1) unstable; urgency=medium
 
   * New upstream release 6.6, released Apr 9, 2021.
-    - Mono engine updated to version 6.1.1, with upstream updates.
     - DWrite and DnsApi libraries converted to PE.
     - Plug & play driver support improvements.
     - Various bug fixes.

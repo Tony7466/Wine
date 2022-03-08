@@ -12,7 +12,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              else:
                  value = define.text
              return VkDefine(name, value)
-@@ -1112,7 +1114,7 @@ class VkMember(object):
+@@ -1118,7 +1120,7 @@ class VkMember(object):
          if self.needs_conversion():
              if self.is_dynamic_array():
                  if direction == Direction.OUTPUT:
@@ -21,7 +21,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                  else:
                      # Array length is either a variable name (string) or an int.
                      count = self.dyn_array_len if isinstance(self.dyn_array_len, int) else "{0}{1}".format(input, self.dyn_array_len)
-@@ -1124,7 +1126,7 @@ class VkMember(object):
+@@ -1130,7 +1132,7 @@ class VkMember(object):
                      return "convert_{0}_static_array_host_to_win({2}{1}, {3}{1}, {4});\n".format(self.type, self.name, input, output, count)
                  else:
                      # Nothing needed this yet.
@@ -30,7 +30,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              else:
                  if direction == Direction.OUTPUT:
                      return "convert_{0}_host_to_win(&{2}{1}, &{3}{1});\n".format(self.type, self.name, input, output)
-@@ -1340,7 +1342,7 @@ class VkParam(object):
+@@ -1346,7 +1348,7 @@ class VkParam(object):
          # Since we have parsed all types before hand, this should not happen.
          type_info = types.get(type_elem.text, None)
          if type_info is None:
@@ -39,7 +39,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          return VkParam(type_info, const=const, pointer=pointer, name=name, array_len=array_len, dyn_array_len=dyn_array_len)
  
-@@ -1443,7 +1445,7 @@ class VkParam(object):
+@@ -1449,7 +1451,7 @@ class VkParam(object):
                  # Don't care about Linux specific types.
                  self.format_str = ""
              else:
@@ -48,7 +48,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      def copy(self, direction):
          if direction == Direction.INPUT:
-@@ -2216,7 +2218,9 @@ class VkGenerator(object):
+@@ -2222,7 +2224,9 @@ class VkGenerator(object):
  
      def _generate_copyright(self, f, spec_file=False):
          f.write("# " if spec_file else "/* ")
@@ -59,7 +59,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          lines = ["", "This file is generated from Vulkan vk.xml file covered",
              "by the following copyright and permission notice:"]
          lines.extend([l.rstrip(" ") for l in self.registry.copyright.splitlines()])
-@@ -2693,6 +2697,7 @@ class VkRegistry(object):
+@@ -2722,6 +2726,7 @@ class VkRegistry(object):
          self.funcpointers = None
          self.handles = None
          self.structs = None
@@ -67,7 +67,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          # We aggregate all types in here for cross-referencing.
          self.funcs = {}
-@@ -3261,11 +3266,6 @@ def set_working_directory():
+@@ -3295,11 +3300,6 @@ def set_working_directory():
      path = os.path.dirname(path)
      os.chdir(path)
  
@@ -79,7 +79,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  def main():
      parser = argparse.ArgumentParser()
      parser.add_argument("-v", "--verbose", action="count", default=0, help="increase output verbosity")
-@@ -3285,7 +3285,6 @@ def main():
+@@ -3319,7 +3319,6 @@ def main():
          vk_xml = args.xml
      else:
          vk_xml = "vk-{0}.xml".format(VK_XML_VERSION)
