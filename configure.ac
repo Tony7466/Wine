@@ -235,8 +235,16 @@ if test "x$enable_win64" = "xyes"
 then
     test -z "$with_wine64" || AC_MSG_ERROR([--enable-win64 and --with-wine64 are mutually exclusive.
 --enable-win64 should be used in the 64-bit build tree, --with-wine64 in the 32-bit Wow64 build tree.])
-    test "x$libdir" != "x\${exec_prefix}/lib" || libdir="\${exec_prefix}/lib64"
 fi
+
+dnl Normalize CPU architecture
+case $host_cpu in
+  *i[[3456789]]86*) AC_SUBST(ARCH,"i386") ;;
+  *x86_64*)         AC_SUBST(ARCH,"x86_64") ;;
+  *aarch64*)        AC_SUBST(ARCH,"aarch64") ;;
+  *arm*)            AC_SUBST(ARCH,"arm") ;;
+  *)                AC_SUBST(ARCH,"") ;;
+esac
 
 AC_CACHE_CHECK([for the directory containing the Wine tools], wine_cv_toolsdir,
   [wine_cv_toolsdir="$with_wine_tools"
@@ -2666,23 +2674,16 @@ AC_CHECK_FUNCS(\
 	expm1f \
 	fma \
 	fmaf \
-	j0 \
-	j1 \
-	jn \
 	lgamma \
 	lgammaf \
 	llrint \
 	llrintf \
-	llround \
-	llroundf \
 	log1p \
 	log1pf \
 	log2 \
 	log2f \
 	lrint \
 	lrintf \
-	lround \
-	lroundf \
 	nearbyint \
 	nearbyintf \
 	nexttoward \
@@ -2693,15 +2694,10 @@ AC_CHECK_FUNCS(\
 	remquof \
 	rint \
 	rintf \
-	round \
-	roundf \
 	tgamma \
 	tgammaf \
 	trunc \
-	truncf \
-	y0 \
-	y1 \
-	yn
+	truncf
 )
 LIBS="$ac_save_LIBS"
 
@@ -2806,6 +2802,7 @@ WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-com-l1-1-1)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-com-private-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-comm-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-console-l1-1-0)
+WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-console-l1-2-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-console-l2-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-crt-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-crt-l2-1-0)
@@ -2972,6 +2969,7 @@ WINE_CONFIG_MAKEFILE(dlls/api-ms-win-eventing-controller-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-eventing-legacy-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-eventing-provider-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-eventlog-legacy-l1-1-0)
+WINE_CONFIG_MAKEFILE(dlls/api-ms-win-gaming-tcui-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-gdi-dpiinfo-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-mm-joystick-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-mm-misc-l1-1-1)
@@ -3315,6 +3313,7 @@ WINE_CONFIG_MAKEFILE(dlls/fusion/tests)
 WINE_CONFIG_MAKEFILE(dlls/fwpuclnt)
 WINE_CONFIG_MAKEFILE(dlls/gameux)
 WINE_CONFIG_MAKEFILE(dlls/gameux/tests)
+WINE_CONFIG_MAKEFILE(dlls/gamingtcui)
 WINE_CONFIG_MAKEFILE(dlls/gdi.exe16,enable_win16)
 WINE_CONFIG_MAKEFILE(dlls/gdi32)
 WINE_CONFIG_MAKEFILE(dlls/gdi32/tests)
@@ -3479,6 +3478,7 @@ WINE_CONFIG_MAKEFILE(dlls/mssign32)
 WINE_CONFIG_MAKEFILE(dlls/mssip32)
 WINE_CONFIG_MAKEFILE(dlls/mstask)
 WINE_CONFIG_MAKEFILE(dlls/mstask/tests)
+WINE_CONFIG_MAKEFILE(dlls/msv1_0)
 WINE_CONFIG_MAKEFILE(dlls/msvcirt)
 WINE_CONFIG_MAKEFILE(dlls/msvcirt/tests)
 WINE_CONFIG_MAKEFILE(dlls/msvcm80)

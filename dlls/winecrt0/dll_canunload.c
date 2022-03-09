@@ -1,7 +1,7 @@
 /*
- * MSXML2 implementation
+ * DllCanUnloadNow default implementation
  *
- * Copyright 2010 Alexandre Julliard
+ * Copyright 2021 Alexandre Julliard
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,45 +19,12 @@
  */
 
 #include <stdarg.h>
+#define COBJMACROS
 #include "windef.h"
 #include "winbase.h"
 #include "objbase.h"
-#include "rpcproxy.h"
 
-static HINSTANCE instance;
-
-BOOL WINAPI DllMain(HINSTANCE hinstance, DWORD reason, LPVOID reserved)
-{
-    switch (reason)
-    {
-    case DLL_PROCESS_ATTACH:
-        instance = hinstance;
-        DisableThreadLibraryCalls(hinstance);
-        break;
-    }
-    return TRUE;
-}
-
-/***********************************************************************
- *		DllCanUnloadNow (MSXML2.@)
- */
 HRESULT WINAPI DllCanUnloadNow(void)
 {
     return S_FALSE;
-}
-
-/***********************************************************************
- *		DllRegisterServer (MSXML2.@)
- */
-HRESULT WINAPI DllRegisterServer(void)
-{
-    return __wine_register_resources( instance );
-}
-
-/***********************************************************************
- *		DllUnregisterServer (MSXML2.@)
- */
-HRESULT WINAPI DllUnregisterServer(void)
-{
-    return __wine_unregister_resources( instance );
 }

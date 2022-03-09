@@ -1,5 +1,7 @@
 /*
- * Copyright 2008 Maarten Lankhorst
+ * DllRegisterServer default implementation
+ *
+ * Copyright 2021 Alexandre Julliard
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -17,27 +19,18 @@
  */
 
 #include <stdarg.h>
-
+#define COBJMACROS
 #include "windef.h"
 #include "winbase.h"
-#include "wine/debug.h"
+#include "olectl.h"
+#include "rpcproxy.h"
 
-WINE_DEFAULT_DEBUG_CHANNEL(slbcsp);
-
-/*****************************************************
- *    DllRegisterServer (SLBCSP.@)
- */
 HRESULT WINAPI DllRegisterServer(void)
 {
-    FIXME("Not implemented.\n");
-    return E_UNEXPECTED;
+    return __wine_register_resources();
 }
 
-/*****************************************************
- *    DllUnregisterServer (SLBCSP.@)
- */
 HRESULT WINAPI DllUnregisterServer(void)
 {
-    FIXME("Not implemented.\n");
-    return E_UNEXPECTED;
+    return __wine_unregister_resources();
 }

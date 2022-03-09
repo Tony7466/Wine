@@ -1,7 +1,5 @@
 /*
- *	exported dll functions for comcat.dll
- *
- * Copyright (C) 2002-2003 John K. Hohm
+ * Copyright 2021 Arkadiusz Hiler for CodeWeavers
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,31 +16,15 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include <stdarg.h>
+enum thread_exit_method {
+    thread_exit_return,
+    thread_exit_endthread,
+    thread_exit_endthreadex
+};
 
-#include "windef.h"
-#include "winbase.h"
-
-/***********************************************************************
- *		DllCanUnloadNow (COMCAT.@)
- */
-HRESULT WINAPI DllCanUnloadNow(void)
+struct threaddll_args
 {
-    return S_FALSE;
-}
-
-/***********************************************************************
- *		DllRegisterServer (COMCAT.@)
- */
-HRESULT WINAPI DllRegisterServer(void)
-{
-    return S_OK;
-}
-
-/***********************************************************************
- *		DllUnregisterServer (COMCAT.@)
- */
-HRESULT WINAPI DllUnregisterServer(void)
-{
-    return S_OK;
-}
+    HANDLE confirm_running;
+    HANDLE past_free;
+    enum thread_exit_method exit_method;
+};

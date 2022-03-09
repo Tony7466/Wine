@@ -110,16 +110,9 @@ typedef union
 } debug_event_t;
 
 
-enum cpu_type
-{
-    CPU_x86, CPU_x86_64, CPU_ARM, CPU_ARM64
-};
-typedef int client_cpu_t;
-
-
 typedef struct
 {
-    client_cpu_t     cpu;
+    unsigned int     machine;
     unsigned int     flags;
     union
     {
@@ -571,6 +564,7 @@ typedef union
         unsigned int     flags;
         client_ptr_t     func;
         client_ptr_t     arg;
+        mem_size_t       zero_bits;
         mem_size_t       reserve;
         mem_size_t       commit;
     } create_thread;
@@ -832,7 +826,8 @@ struct new_process_request
     unsigned int flags;
     int          socket_fd;
     unsigned int access;
-    client_cpu_t cpu;
+    unsigned short machine;
+    char __pad_38[2];
     data_size_t  info_size;
     data_size_t  handles_size;
     /* VARARG(objattr,object_attributes); */
@@ -926,8 +921,6 @@ struct init_first_thread_request
     client_ptr_t ldt_copy;
     int          reply_fd;
     int          wait_fd;
-    client_cpu_t cpu;
-    char __pad_60[4];
 };
 struct init_first_thread_reply
 {
@@ -5382,6 +5375,24 @@ struct resume_process_reply
 };
 
 
+
+struct get_next_thread_request
+{
+    struct request_header __header;
+    obj_handle_t process;
+    obj_handle_t last;
+    unsigned int access;
+    unsigned int attributes;
+    unsigned int flags;
+};
+struct get_next_thread_reply
+{
+    struct reply_header __header;
+    obj_handle_t handle;
+    char __pad_12[4];
+};
+
+
 enum request
 {
     REQ_new_process,
@@ -5657,6 +5668,7 @@ enum request
     REQ_terminate_job,
     REQ_suspend_process,
     REQ_resume_process,
+    REQ_get_next_thread,
     REQ_NB_REQUESTS
 };
 
@@ -5937,6 +5949,7 @@ union generic_request
     struct terminate_job_request terminate_job_request;
     struct suspend_process_request suspend_process_request;
     struct resume_process_request resume_process_request;
+    struct get_next_thread_request get_next_thread_request;
 };
 union generic_reply
 {
@@ -6215,11 +6228,12 @@ union generic_reply
     struct terminate_job_reply terminate_job_reply;
     struct suspend_process_reply suspend_process_reply;
     struct resume_process_reply resume_process_reply;
+    struct get_next_thread_reply get_next_thread_reply;
 };
 
 /* ### protocol_version begin ### */
 
-#define SERVER_PROTOCOL_VERSION 694
+#define SERVER_PROTOCOL_VERSION 698
 
 /* ### protocol_version end ### */
 
