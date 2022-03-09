@@ -66,7 +66,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  WINE_CONFIG_MAKEFILE(dlls/userenv)
  WINE_CONFIG_MAKEFILE(dlls/userenv/tests)
  WINE_CONFIG_MAKEFILE(dlls/usp10)
-@@ -3830,9 +3821,7 @@ WINE_CONFIG_MAKEFILE(dlls/wing32)
+@@ -3832,9 +3823,7 @@ WINE_CONFIG_MAKEFILE(dlls/wing32)
  WINE_CONFIG_MAKEFILE(dlls/winhttp)
  WINE_CONFIG_MAKEFILE(dlls/winhttp/tests)
  WINE_CONFIG_MAKEFILE(dlls/wininet)

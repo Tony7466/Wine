@@ -58,6 +58,8 @@ include/wine/vulkan_driver.h
 dlls/vulkan-1/vulkan-1.spec
 dlls/winevulkan/vulkan_thunks.h
 dlls/winevulkan/vulkan_thunks.c
+dlls/winevulkan/loader_thunks.h
+dlls/winevulkan/loader_thunks.c
 dlls/winevulkan/winevulkan.json
 dlls/winevulkan/winevulkan.spec
 

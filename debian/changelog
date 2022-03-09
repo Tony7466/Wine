@@ -1,6 +1,7 @@
-wine-development (6.7~repack-1) UNRELEASED; urgency=medium
+wine-development (6.7~repack-1) unstable; urgency=medium
 
   * New upstream release 6.7, released Apr 23, 2021.
+    - Support building with openldap 2.5 (closes: #1005996).
     - NetApi32, WLDAP32, and Kerberos libraries converted to PE.
     - More Media Foundation work.
     - ES6 JavaScript mode.
