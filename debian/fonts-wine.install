@@ -1,7 +1,5 @@
+# windows font files
 fonts/*.fon usr/share/wine/fonts
 
-fonts/symbol.ttf usr/share/wine/fonts
-fonts/tahoma.ttf usr/share/wine/fonts
-fonts/marlett.ttf usr/share/wine/fonts
-fonts/tahomabd.ttf usr/share/wine/fonts
-fonts/wingding.ttf usr/share/wine/fonts
+# true type font files
+fonts/*.ttf usr/share/wine/fonts

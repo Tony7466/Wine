@@ -184,6 +184,7 @@ override_dh_auto_install-indep: $(INSTALLS)
 	    done
 	rm -f debian/tmp/usr/lib/*/wineserver
 	rm -f debian/tmp/notepad*.man debian/tmp/winemine*.man
+	rm -rf debian/tmp/usr/share/wine$(VERSION)/wine/nls
 	# extract hicolor icon from logo.svg
 	sed '/image\/png/d;s|width="611"|width="209"|' programs/winecfg/logo.svg > debian/tmp/wine$(DEBSUFFIX).svg
 
@@ -231,7 +232,6 @@ endif
 	test -f debian/tmp/$(BINDIR)/wine-preloader || \
 	    cp debian/scripts/wine-preloader debian/tmp/$(BINDIR)
 	rm -rf debian/tmp/usr/share/man
-	rm -rf debian/tmp/usr/share/wine$(VERSION)/wine/nls
 	rm -f debian/tmp/usr/lib/*/wineserver
 	rm -f debian/tmp/usr/lib/*/*/libwine.so
 	rm -f debian/tmp/usr/share/*/fonts/*.fon

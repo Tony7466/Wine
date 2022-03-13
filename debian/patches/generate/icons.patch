@@ -13,7 +13,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      /* try in src file directory */
      if ((file = open_file_same_dir( pFile->included_by, pFile->name, &pFile->filename ))) return file;
  
-@@ -2968,6 +2971,17 @@ static void output_source_svg( struct ma
+@@ -2967,6 +2970,17 @@ static void output_source_svg( struct ma
  
          if (images[i])
          {
