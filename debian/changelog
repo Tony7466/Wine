@@ -1,3 +1,10 @@
+wine (6.0.3~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 6.0.3, released Feb 25, 2022.
+    - Various bug fixes
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 13 Mar 2022 04:27:41 +0000
+
 wine (6.0.2~repack-3) unstable; urgency=medium
 
   * Remove nls files from the libwine package (closes: #1006539).
