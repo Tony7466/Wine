@@ -2662,12 +2662,6 @@ AC_CHECK_FUNCS(\
 	asinhf \
 	atanh \
 	atanhf \
-	cbrt \
-	cbrtf \
-	erf \
-	erfc \
-	erfcf \
-	erff \
 	exp2 \
 	exp2f \
 	expm1 \
@@ -2676,28 +2670,12 @@ AC_CHECK_FUNCS(\
 	fmaf \
 	lgamma \
 	lgammaf \
-	llrint \
-	llrintf \
 	log1p \
 	log1pf \
 	log2 \
 	log2f \
-	lrint \
-	lrintf \
-	nearbyint \
-	nearbyintf \
-	nexttoward \
-	nexttowardf \
-	remainder \
-	remainderf \
-	remquo \
-	remquof \
-	rint \
-	rintf \
 	tgamma \
-	tgammaf \
-	trunc \
-	truncf
+	tgammaf
 )
 LIBS="$ac_save_LIBS"
 
