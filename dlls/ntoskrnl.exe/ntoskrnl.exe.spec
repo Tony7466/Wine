@@ -701,7 +701,7 @@
 @ stub MmFreeMappingAddress
 @ stdcall MmFreeNonCachedMemory(ptr long)
 @ stub MmFreePagesFromMdl
-@ stub MmGetPhysicalAddress
+@ stdcall MmGetPhysicalAddress(ptr)
 @ stub MmGetPhysicalMemoryRanges
 @ stdcall MmGetSystemRoutineAddress(ptr)
 @ stub MmGetVirtualForPhysical
@@ -886,7 +886,7 @@
 @ stub PsGetContextThread
 @ stdcall PsGetCurrentProcess() IoGetCurrentProcess
 @ stdcall PsGetCurrentProcessId()
-@ stub PsGetCurrentProcessSessionId
+@ stdcall PsGetCurrentProcessSessionId()
 @ stdcall PsGetCurrentThread() KeGetCurrentThread
 @ stdcall PsGetCurrentThreadId()
 @ stub PsGetCurrentThreadPreviousMode

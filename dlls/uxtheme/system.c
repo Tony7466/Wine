@@ -276,8 +276,11 @@ static void save_sys_colors (HKEY baseKey)
  * is deactivated */
 static void UXTHEME_BackupSystemMetrics(void)
 {
+    DPI_AWARENESS_CONTEXT old_context;
     HKEY hKey;
     const struct BackupSysParam* bsp = backupSysParams;
+
+    old_context = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE);
 
     if (RegCreateKeyExW( HKEY_CURRENT_USER, szThemeManager,
                          0, 0, 0, KEY_ALL_ACCESS,
@@ -315,13 +318,18 @@ static void UXTHEME_BackupSystemMetrics(void)
     
         RegCloseKey (hKey);
     }
+
+    SetThreadDpiAwarenessContext(old_context);
 }
 
 /* Read back old settings after a theme was deactivated */
 static void UXTHEME_RestoreSystemMetrics(void)
 {
+    DPI_AWARENESS_CONTEXT old_context;
     HKEY hKey;
     const struct BackupSysParam* bsp = backupSysParams;
+
+    old_context = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE);
 
     if (RegOpenKeyExW (HKEY_CURRENT_USER, szThemeManager,
                        0, KEY_QUERY_VALUE, &hKey) == ERROR_SUCCESS) 
@@ -402,6 +410,8 @@ static void UXTHEME_RestoreSystemMetrics(void)
       
         RegCloseKey (hKey);
     }
+
+    SetThreadDpiAwarenessContext(old_context);
 }
 
 /* Make system settings persistent, so they're in effect even w/o uxtheme 
@@ -634,6 +644,10 @@ HTHEME WINAPI OpenThemeDataEx(HWND hwnd, LPCWSTR pszClassList, DWORD flags)
 
         if (pszUseClassList)
             hTheme = MSSTYLES_OpenThemeClass(pszAppName, pszUseClassList);
+
+        /* Fall back to default class if the specified subclass is not found */
+        if (!hTheme)
+            hTheme = MSSTYLES_OpenThemeClass(NULL, pszUseClassList);
     }
     if(IsWindow(hwnd))
         SetPropW(hwnd, (LPCWSTR)MAKEINTATOM(atWindowTheme), hTheme);
@@ -681,7 +695,7 @@ HRESULT WINAPI SetWindowTheme(HWND hwnd, LPCWSTR pszSubAppName,
     if(SUCCEEDED(hr))
         hr = UXTHEME_SetWindowProperty(hwnd, atSubIdList, pszSubIdList);
     if(SUCCEEDED(hr))
-	UXTHEME_broadcast_msg (hwnd, WM_THEMECHANGED);
+        SendMessageW(hwnd, WM_THEMECHANGED, 0, 0);
     return hr;
 }
 

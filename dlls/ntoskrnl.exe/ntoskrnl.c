@@ -2671,6 +2671,17 @@ BOOLEAN WINAPI MmIsAddressValid(PVOID VirtualAddress)
 }
 
 /***********************************************************************
+ *           MmGetPhysicalAddress   (NTOSKRNL.EXE.@)
+ */
+PHYSICAL_ADDRESS WINAPI MmGetPhysicalAddress(void *virtual_address)
+{
+    PHYSICAL_ADDRESS ret;
+    FIXME("(%p): semi-stub\n", virtual_address);
+    ret.QuadPart = (ULONG_PTR)virtual_address;
+    return ret;
+}
+
+/***********************************************************************
  *           MmMapIoSpace   (NTOSKRNL.EXE.@)
  */
 PVOID WINAPI MmMapIoSpace( PHYSICAL_ADDRESS PhysicalAddress, DWORD NumberOfBytes, DWORD CacheType )
@@ -2934,6 +2945,13 @@ HANDLE WINAPI PsGetCurrentProcessId(void)
     return KeGetCurrentThread()->id.UniqueProcess;
 }
 
+/***********************************************************************
+ *           PsGetCurrentProcessSessionId   (NTOSKRNL.EXE.@)
+ */
+ULONG WINAPI PsGetCurrentProcessSessionId(void)
+{
+    return PsGetCurrentProcess()->info.PebBaseAddress->SessionId;
+}
 
 /***********************************************************************
  *           PsGetCurrentThreadId   (NTOSKRNL.EXE.@)

@@ -1,8 +1,5 @@
 /*
- * Windows Rights Management Client
- *
- * Copyright 2016 Austin English
- * Copyright 2021 Vijay Kiran Kamuju
+ * Copyright 2021 Andrey Gusev
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,31 +16,9 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include <stdarg.h>
+#define WINE_FILEDESCRIPTION_STR "Wine CRT library"
+#define WINE_FILENAME_STR "msvcr120.dll"
+#define WINE_FILEVERSION 12,0,40664,0
+#define WINE_FILEVERSION_STR "12.0.40664.0"
 
-#include "windef.h"
-#include "winbase.h"
-#include "wine/debug.h"
-
-WINE_DEFAULT_DEBUG_CHANNEL(msdrm);
-
-BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, void *reserved)
-{
-    switch (reason)
-    {
-        case DLL_WINE_PREATTACH:
-            return FALSE;    /* prefer native version */
-        case DLL_PROCESS_ATTACH:
-            DisableThreadLibraryCalls(instance);
-            break;
-    }
-
-    return TRUE;
-}
-
-HRESULT WINAPI DRMRegisterContent(BOOL value)
-{
-     FIXME("(%u): stub\n", value);
-
-     return S_OK;
-}
+#include "wine/wine_common_ver.rc"
