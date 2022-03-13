@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -116,7 +116,7 @@ install-manpages:: manpages
+@@ -117,7 +117,7 @@ install-manpages:: manpages
  # Rules for generated source files
  
  dlls/ntdll/unix/version.c: dummy

@@ -198,25 +198,25 @@ override_dh_auto_install-arch: $(INSTALLS)
 ifeq ($(DEB_HOST_ARCH), i386)
 	echo >> debian/libwine$(VERSION).install
 	echo "# 16-bit windows PE files" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*.vxd" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*.dll16" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*.drv16" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*.exe16" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*.mod16" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*/*.vxd" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*/*.dll16" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*/*.drv16" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*/*.exe16" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*/*.mod16" >> debian/libwine$(VERSION).install
 endif
 ifneq (,$(filter $(DEB_HOST_ARCH),i386 amd64))
 	echo >> debian/libwine$(VERSION).install
 	echo "# windows PE files" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*.ax" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*.com" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*.dll" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*.drv" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*.exe" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*.acm" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*.cpl" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*.ocx" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*.sys" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*.tlb" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*/*.ax" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*/*.com" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*/*.dll" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*/*.drv" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*/*.exe" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*/*.acm" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*/*.cpl" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*/*.ocx" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*/*.sys" >> debian/libwine$(VERSION).install
+	echo "debian/tmp/usr/lib/*/*/*/*.tlb" >> debian/libwine$(VERSION).install
 else
 	rm -f debian/libwine$(VERSION).prerm debian/libwine$(VERSION).postinst
 endif
@@ -228,8 +228,10 @@ endif
 ifeq ($(DEB_HOST_ARCH_BITS), 64)
 	cp debian/tmp/wine$(DEBSUFFIX).man debian/tmp/wine64$(DEBSUFFIX).man
 endif
+	# copy wine-preloader script
 	test -f debian/tmp/$(BINDIR)/wine-preloader || \
 	    cp debian/scripts/wine-preloader debian/tmp/$(BINDIR)
+	# files to exclude from the binary packages
 	rm -rf debian/tmp/usr/share/man
 	rm -rf debian/tmp/usr/share/wine$(VERSION)/wine/nls
 	rm -f debian/tmp/usr/lib/*/wineserver

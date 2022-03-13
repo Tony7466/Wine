@@ -3,15 +3,15 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3316,7 +3316,6 @@ WINE_CONFIG_MAKEFILE(dlls/gameux)
- WINE_CONFIG_MAKEFILE(dlls/gameux/tests)
+@@ -3315,7 +3315,6 @@ WINE_CONFIG_MAKEFILE(dlls/gameux/tests)
+ WINE_CONFIG_MAKEFILE(dlls/gamingtcui)
  WINE_CONFIG_MAKEFILE(dlls/gdi.exe16,enable_win16)
  WINE_CONFIG_MAKEFILE(dlls/gdi32)
 -WINE_CONFIG_MAKEFILE(dlls/gdi32/tests)
  WINE_CONFIG_MAKEFILE(dlls/gdiplus)
  WINE_CONFIG_MAKEFILE(dlls/gdiplus/tests)
  WINE_CONFIG_MAKEFILE(dlls/glu32)
-@@ -3362,7 +3361,6 @@ WINE_CONFIG_MAKEFILE(dlls/iprop)
+@@ -3361,7 +3360,6 @@ WINE_CONFIG_MAKEFILE(dlls/iprop)
  WINE_CONFIG_MAKEFILE(dlls/irprops.cpl)
  WINE_CONFIG_MAKEFILE(dlls/itircl)
  WINE_CONFIG_MAKEFILE(dlls/itss)
@@ -19,7 +19,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  WINE_CONFIG_MAKEFILE(dlls/joy.cpl)
  WINE_CONFIG_MAKEFILE(dlls/jscript)
  WINE_CONFIG_MAKEFILE(dlls/jscript/tests)
-@@ -3370,7 +3368,6 @@ WINE_CONFIG_MAKEFILE(dlls/jsproxy)
+@@ -3369,7 +3367,6 @@ WINE_CONFIG_MAKEFILE(dlls/jsproxy)
  WINE_CONFIG_MAKEFILE(dlls/jsproxy/tests)
  WINE_CONFIG_MAKEFILE(dlls/kerberos)
  WINE_CONFIG_MAKEFILE(dlls/kernel32)

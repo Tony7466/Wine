@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/make_requests
 +++ b/tools/make_requests
-@@ -273,16 +273,11 @@ sub PARSE_REQUESTS()
+@@ -272,16 +272,11 @@ sub PARSE_REQUESTS()
  }
  
  ### Retrieve the server protocol version from the existing server_protocol.h file
@@ -22,7 +22,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      return $protocol;
  }
  
-@@ -460,7 +455,7 @@ foreach my $err (sort keys %errors)
+@@ -459,7 +454,7 @@ foreach my $err (sort keys %errors)
  push @trace_lines, "    { NULL, 0 }\n";
  push @trace_lines, "};\n";
  
@@ -31,7 +31,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                   "### make_requests begin ###",
                   "### make_requests end ###",
                   @trace_lines );
-@@ -487,7 +482,7 @@ foreach my $type (sort keys %formats)
+@@ -486,7 +481,7 @@ foreach my $type (sort keys %formats)
  push @request_lines, @asserts;
  push @request_lines, "\n#endif  /* WANT_REQUEST_HANDLERS */\n";
  
@@ -54,9 +54,9 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  DECL_HANDLER(new_process);
  DECL_HANDLER(get_new_process_info);
-@@ -2229,9 +2229,8 @@ C_ASSERT( sizeof(struct suspend_process_
- C_ASSERT( FIELD_OFFSET(struct resume_process_request, handle) == 12 );
- C_ASSERT( sizeof(struct resume_process_request) == 16 );
+@@ -2237,9 +2237,8 @@ C_ASSERT( sizeof(struct get_next_thread_
+ C_ASSERT( FIELD_OFFSET(struct get_next_thread_reply, handle) == 8 );
+ C_ASSERT( sizeof(struct get_next_thread_reply) == 16 );
  
 -#endif  /* WANT_REQUEST_HANDLERS */
 +#endif
@@ -68,7 +68,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #endif  /* __WINE_SERVER_REQUEST_H */
 --- a/server/trace.c
 +++ b/server/trace.c
-@@ -1354,8 +1354,9 @@ static void dump_varargs_handle_infos( c
+@@ -1346,8 +1346,9 @@ static void dump_varargs_handle_infos( c
  
  typedef void (*dump_func)( const void *req );
  
@@ -80,7 +80,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  static void dump_new_process_request( const struct new_process_request *req )
  {
-@@ -5450,8 +5451,7 @@ static const struct
+@@ -5456,8 +5457,7 @@ static const struct
      { NULL, 0 }
  };
  

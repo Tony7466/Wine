@@ -1,11 +1,12 @@
-# fake PE libraries
-debian/tmp/usr/lib/*/*/fakedlls
+# PE libraries
+debian/tmp/usr/lib/*/*/*/*.ds
+debian/tmp/usr/lib/*/*/*/*.dll
 
 # ELF libraries
-debian/tmp/usr/lib/*/*/*.so
+debian/tmp/usr/lib/*/*/*/*.so
 
 # wine library
-debian/tmp/usr/lib/*/*/libwine.so.*
+debian/tmp/usr/lib/*/*/*/libwine.so.*
 
 # wine server
 debian/tmp/wineserver usr/lib/wineVERSION

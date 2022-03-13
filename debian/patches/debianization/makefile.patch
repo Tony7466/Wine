@@ -15,4 +15,4 @@ forwarded: not-needed
 +dlldir          = ${libdir}
  srcdir          = @srcdir@
  SHELL           = /bin/sh
- CC              = @CC@
+ ARCH            = @ARCH@
