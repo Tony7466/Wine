@@ -1,3 +1,14 @@
+wine-development (6.10~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 6.10, released Jun 4, 2021.
+    - Mono engine updated to version 6.2.0, with upstream updates.
+    - Shell folders naming scheme follows recent Windows.
+    - WinePulse library converted to PE.
+    - More math functions from Musl in the C runtime.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 26 Mar 2022 21:41:28 +0000
+
 wine-development (6.9~repack-1) unstable; urgency=medium
 
   * New upstream release 6.9, released May 21, 2021.
