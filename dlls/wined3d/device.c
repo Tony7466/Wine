@@ -1169,7 +1169,7 @@ void wined3d_device_uninit_3d(struct wined3d_device *device)
         wined3d_texture_decref(texture);
     }
 
-    wined3d_cs_emit_reset_state(device->cs);
+    wined3d_device_context_emit_reset_state(&device->cs->c, false);
     state_cleanup(state);
 
     wine_rb_clear(&device->samplers, device_free_sampler, NULL);
@@ -1649,6 +1649,15 @@ void CDECL wined3d_device_context_get_scissor_rects(const struct wined3d_device_
         *rect_count = state->scissor_rect_count;
 }
 
+void CDECL wined3d_device_context_reset_state(struct wined3d_device_context *context)
+{
+    TRACE("context %p.\n", context);
+
+    state_cleanup(context->state);
+    wined3d_state_reset(context->state, &context->device->adapter->d3d_info);
+    wined3d_device_context_emit_reset_state(context, true);
+}
+
 void CDECL wined3d_device_context_set_state(struct wined3d_device_context *context, struct wined3d_state *state)
 {
     const struct wined3d_light_info *light;
@@ -1985,7 +1994,7 @@ void CDECL wined3d_device_context_set_shader_resource_view(struct wined3d_device
     if (view == prev)
         return;
 
-    if (view && (wined3d_is_srv_rtv_bound(view)
+    if (view && (wined3d_is_srv_rtv_bound(state, view)
             || ((dsv = state->fb.depth_stencil)
             && dsv->resource == view->resource && wined3d_dsv_srv_conflict(dsv, view->format))))
     {
@@ -2064,22 +2073,31 @@ void CDECL wined3d_device_context_set_unordered_access_view(struct wined3d_devic
 static void wined3d_device_context_unbind_srv_for_rtv(struct wined3d_device_context *context,
         const struct wined3d_rendertarget_view *view, BOOL dsv)
 {
-    struct wined3d_state *state = context->state;
+    const struct wined3d_state *state = context->state;
+    const struct wined3d_resource *resource;
 
-    if (view && wined3d_is_rtv_srv_bound(view))
+    if (!view)
+        return;
+    resource = view->resource;
+
+    if (resource->srv_bind_count_device)
     {
-        const struct wined3d_resource *resource = view->resource;
         const struct wined3d_shader_resource_view *srv;
         unsigned int i, j;
 
-        WARN("Application sets bound resource as render target.\n");
-
         for (i = 0; i < WINED3D_SHADER_TYPE_COUNT; ++i)
+        {
             for (j = 0; j < MAX_SHADER_RESOURCE_VIEWS; ++j)
+            {
                 if ((srv = state->shader_resource_view[i][j]) && srv->resource == resource
-                        && ((!dsv && wined3d_is_srv_rtv_bound(srv))
+                        && ((!dsv && wined3d_is_srv_rtv_bound(state, srv))
                         || (dsv && wined3d_dsv_srv_conflict(view, srv->format))))
+                {
+                    WARN("Application sets bound resource as render target.\n");
                     wined3d_device_context_set_shader_resource_view(context, i, j, NULL);
+                }
+            }
+        }
     }
 }
 
@@ -4870,6 +4888,14 @@ void CDECL wined3d_device_context_issue_query(struct wined3d_device_context *con
     context->ops->issue_query(context, query, flags);
 }
 
+void CDECL wined3d_device_context_execute_command_list(struct wined3d_device_context *context,
+        struct wined3d_command_list *list, bool restore_state)
+{
+    TRACE("context %p, list %p, restore_state %d.\n", context, list, restore_state);
+
+    context->ops->execute_command_list(context, list, restore_state);
+}
+
 struct wined3d_rendertarget_view * CDECL wined3d_device_context_get_rendertarget_view(
         const struct wined3d_device_context *context, unsigned int view_idx)
 {
@@ -5408,7 +5434,7 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
     if (reset_state)
     {
         TRACE("Resetting state.\n");
-        wined3d_cs_emit_reset_state(device->cs);
+        wined3d_device_context_emit_reset_state(&device->cs->c, false);
         state_cleanup(state);
 
         LIST_FOR_EACH_ENTRY_SAFE(resource, cursor, &device->resources, struct wined3d_resource, resource_list_entry)
