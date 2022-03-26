@@ -1,12 +1,15 @@
-wine-development (6.9~repack-1) UNRELEASED; urgency=medium
+wine-development (6.9~repack-1) unstable; urgency=medium
 
   * New upstream release 6.9, released May 21, 2021.
     - WPCAP library converted to PE.
     - Support for paper forms in the print spooler.
     - More math functions from Musl in the C runtime.
     - Various bug fixes.
+  * Enable support for JPEG XR image files.
+  * Copy dlls from libz-mingw for both i386 and x86_64.
+  * Move nls files from wine-development to libwine-development.
 
- -- Michael Gilbert <mgilbert@debian.org>  Sun, 13 Mar 2022 19:13:52 +0000
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 26 Mar 2022 19:42:48 +0000
 
 wine-development (6.8~repack-1) unstable; urgency=medium
 

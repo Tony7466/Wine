@@ -13,3 +13,6 @@ debian/tmp/wineserver usr/lib/wineVERSION
 
 # configuration files
 debian/tmp/usr/share/*/wine/*
+
+# language support files
+nls/*.nls usr/share/wineVERSION/wine/nls

@@ -1,2 +1,2 @@
-/usr/lib/i386-linux-gnu/wineVERSION
-/usr/lib/x86_64-linux-gnu/wineVERSION
+/usr/lib/DEB_HOST_MULTIARCH/wineVERSION/i386-windows
+/usr/lib/DEB_HOST_MULTIARCH/wineVERSION/x86_64-windows

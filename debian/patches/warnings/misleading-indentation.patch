@@ -1,17 +1,6 @@
 description: fix misleading-indentation warnings
 author: Michael Gilbert <mgilbert@debian.org>
 
---- a/dlls/shell32/classes.c
-+++ b/dlls/shell32/classes.c
-@@ -315,7 +315,7 @@ BOOL HCR_GetDefaultIconA(LPCSTR szClass,
-     else
-         TRACE("-- not found\n");
- 
--	return ret;
-+    return ret;
- }
- 
- /***************************************************************************************
 --- a/dlls/oleaut32/vartype.c
 +++ b/dlls/oleaut32/vartype.c
 @@ -149,15 +149,27 @@ static HRESULT VARIANT_FromDisp(IDispatc

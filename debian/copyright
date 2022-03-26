@@ -24,6 +24,8 @@ Files-Excluded:
  dlls/dsound/fir.h
  dlls/itss/tests/data.chm
  dlls/vulkan-1/vulkan-1.spec
+ dlls/winevulkan/loader_thunks.h
+ dlls/winevulkan/loader_thunks.c
  dlls/winevulkan/vulkan_thunks.h
  dlls/winevulkan/vulkan_thunks.c
  dlls/winevulkan/winevulkan.json

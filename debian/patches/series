@@ -39,5 +39,4 @@ arm64/tautological-compare.patch
 warnings/bison.patch
 warnings/stringop-overflow.patch
 warnings/misleading-indentation.patch
-warnings/deprecated-declarations.patch
 warnings/uninitialized-variables.patch

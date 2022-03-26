@@ -3,14 +3,29 @@
 set -e
 
 if [ "$1" = "configure" ] || [ "$1" = "triggered" ] || [ "$1" = "upgrade" ] ; then
-    in=/usr/DEB_HOST_GNU_CPU-w64-mingw32/lib/zlib*.dll
-    out=/usr/lib/DEB_HOST_MULTIARCH/wineVERSION/$(basename $in)
 
-    head -c 64 $in > $out
-    printf "%b" "Wine builtin DLL" >> $out
-    printf "%b" "\0\0\0\0\0\0\0\0" >> $out
-    printf "%b" "\0\0\0\0\0\0\0\0" >> $out
-    tail -c +97 $in >> $out
+    # copy zlib dlls from libz-mingw
+    for mingw_arch in i686 x86_64; do
+        wine_arch=$mingw_arch
+        if [ "$mingw_arch" = "i686" ]; then
+            wine_arch=i386
+        fi
+
+        in=/usr/$mingw_arch-w64-mingw32/lib/zlib*.dll
+        out=/usr/lib/DEB_HOST_MULTIARCH/wineVERSION/$wine_arch-windows/$(basename $in)
+
+        head -c 64 $in > $out
+        printf "%b" "Wine builtin DLL" >> $out
+        printf "%b" "\0\0\0\0\0\0\0\0" >> $out
+        printf "%b" "\0\0\0\0\0\0\0\0" >> $out
+        tail -c +97 $in >> $out
+    done
+
+    # get rid of obsolete zlib dlls
+    if dpkg --compare-versions "$2" lt-nl 6.9~repack-1~; then
+        rm -f /usr/lib/DEB_HOST_MULTIARCH/wineVERSION/zlib*.dll
+    fi
+
 fi
 
 #DEBHELPER#

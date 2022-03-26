@@ -51,6 +51,7 @@ Build-Depends:
  libxcomposite-dev,
  libxml-simple-perl,
  libxml-parser-perl,
+ libjxr-dev,
  libpng-dev,
  libssl-dev,
  libv4l-dev,
@@ -244,11 +245,11 @@ Suggests:
 Pre-Depends:
  ${misc:Pre-Depends},
 Breaks:
- wineVERSION (<< 4.7-2~),
+ wineVERSION (<< 6.9~repack-1~),
  wine32VERSION (<< 4.7-2~),
  wine64VERSION (<< 4.7-2~),
 Replaces:
- wineVERSION (<< 4.7-2~),
+ wineVERSION (<< 6.9~repack-1~),
  wine32VERSION (<< 4.7-2~),
  wine64VERSION (<< 4.7-2~),
 Description: Windows API implementation - library

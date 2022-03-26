@@ -27,16 +27,11 @@ export VENDOR=$(DEB_VENDOR) $(DEB_VERSION)
 # enable verbose build log
 export DH_VERBOSE=1
 
-# indicate that binary targets do not require root (not supported in Stretch)
-ifeq (,$(findstring ~bpo9,$(DEB_VERSION)))
+# indicate that binary targets do not require root
 export DEB_RULES_REQUIRES_ROOT=no
-endif
 
 # enable hardening buildflags (fortify is not yet supported upstream and mingw does not yet support stackprotector)
 export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector
-
-# linker options
-export DEB_LDFLAGS_MAINT_APPEND+=-Wl,-rpath,/$(LIBDIR)
 
 # ignore array-bounds and packed-non-aligned warnings for now
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-array-bounds -Wno-packed-not-aligned
@@ -69,10 +64,7 @@ export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector,-format
 endif
 
 # build with mingw on intel architectures
-ifeq ($(DEB_HOST_ARCH), i386)
-CONFLAGS+=--with-mingw
-endif
-ifeq ($(DEB_HOST_ARCH), amd64)
+ifneq (,$(filter $(DEB_HOST_ARCH),i386 amd64))
 CONFLAGS+=--with-mingw
 endif
 
@@ -182,8 +174,10 @@ override_dh_auto_install-indep: $(INSTALLS)
 	    rename=$$(basename $$file | sed "s/\\./$(DEBSUFFIX)./;s/UTF-8\\.//"); \
 	    mv $$file debian/tmp/$$rename || true; \
 	    done
+	# files to exclude from the architecture-independent packages
 	rm -f debian/tmp/usr/lib/*/wineserver
 	rm -f debian/tmp/notepad*.man debian/tmp/winemine*.man
+	rm -rf debian/tmp/usr/share/wine$(VERSION)/wine/nls
 	# extract hicolor icon from logo.svg
 	sed '/image\/png/d;s|width="611"|width="209"|' programs/winecfg/logo.svg > debian/tmp/wine$(DEBSUFFIX).svg
 
@@ -220,6 +214,7 @@ ifneq (,$(filter $(DEB_HOST_ARCH),i386 amd64))
 else
 	rm -f debian/libwine$(VERSION).prerm debian/libwine$(VERSION).postinst
 endif
+	dh_installdirs
 	dh_auto_install
 	for file in $$(find . ! -path "./debian/*" -name \*.man); do \
 	    rename=$$(basename $$file | sed "s/\\./$(DEBSUFFIX)./;s/UTF-8\\.//"); \
@@ -231,9 +226,8 @@ endif
 	# copy wine-preloader script
 	test -f debian/tmp/$(BINDIR)/wine-preloader || \
 	    cp debian/scripts/wine-preloader debian/tmp/$(BINDIR)
-	# files to exclude from the binary packages
+	# files to exclude from the architecture-dependent packages
 	rm -rf debian/tmp/usr/share/man
-	rm -rf debian/tmp/usr/share/wine$(VERSION)/wine/nls
 	rm -f debian/tmp/usr/lib/*/wineserver
 	rm -f debian/tmp/usr/lib/*/*/libwine.so
 	rm -f debian/tmp/usr/share/*/fonts/*.fon
