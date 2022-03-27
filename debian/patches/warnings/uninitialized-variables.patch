@@ -174,7 +174,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!(wFlags & DISPATCH_PROPERTYGET))
 --- a/dlls/mf/session.c
 +++ b/dlls/mf/session.c
-@@ -631,7 +631,7 @@ static void session_clear_topologies(str
+@@ -517,7 +517,7 @@ static void session_clear_topologies(str
  static void session_set_topo_status(struct media_session *session, HRESULT status,
          MF_TOPOSTATUS topo_status)
  {
@@ -195,13 +195,3 @@ author: Michael Gilbert <mgilbert@debian.org>
      struct point2d *prevpt, *pt;
      BOOL ret = FALSE;
  
---- a/dlls/d3dx9_36/shader.c
-+++ b/dlls/d3dx9_36/shader.c
-@@ -1112,7 +1112,6 @@ static UINT set(struct ID3DXConstantTabl
-             if (inclass == D3DXPC_MATRIX_ROWS && desc->RegisterSet == D3DXRS_BOOL)
-             {
-                 D3DXMATRIX mat, *m, min;
--                D3DXMatrixTranspose(&mat, &min);
- 
-                 if (is_pointer)
-                     min = *(D3DXMATRIX *)(indata[index / 16]);

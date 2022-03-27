@@ -32,7 +32,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  # Default char for undefined mappings
  my $DEF_CHAR = ord '?';
-@@ -439,6 +440,7 @@ my @category_table = ();
+@@ -440,6 +441,7 @@ my @category_table = ();
  my @initial_joining_table = ();
  my @direction_table = ();
  my @decomp_table = ();
@@ -40,7 +40,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  my @combining_class_table = ();
  my @decomp_compat_table = ();
  my @comp_exclusions = ();
-@@ -486,25 +488,11 @@ sub open_data_file($$)
+@@ -487,25 +489,11 @@ sub open_data_file($$)
  
      if ($base =~ /.*\/([^\/]+)\.zip$/)
      {
@@ -68,7 +68,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
      return *FILE;
  }
-@@ -723,6 +711,7 @@ sub load_data()
+@@ -724,6 +712,7 @@ sub load_data()
              if ($decomp =~ /^([0-9a-fA-F]+)\s+([0-9a-fA-F]+)$/)
              {
                  $decomp_table[$src] = $decomp_compat_table[$src] = [ hex $1, hex $2 ];
@@ -76,7 +76,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              }
              elsif ($decomp =~ /^([0-9a-fA-F]+)$/)
              {
-@@ -1974,6 +1963,297 @@ sub dump_bidi_dir_table($)
+@@ -1975,6 +1964,297 @@ sub dump_bidi_dir_table($)
      save_file($filename);
  }
  
@@ -374,7 +374,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  sub rol($$)
  {
-@@ -2807,7 +3087,12 @@ sub save_file($)
+@@ -2808,7 +3088,12 @@ sub save_file($)
  
  chdir ".." if -f "./make_unicode";
  load_data();
