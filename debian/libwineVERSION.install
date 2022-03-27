@@ -1,6 +1,17 @@
 # PE libraries
-debian/tmp/usr/lib/*/*/*/*.ds
 debian/tmp/usr/lib/*/*/*/*.dll
+
+# other PE files
+debian/tmp/usr/lib/*/*/*/*.ax
+debian/tmp/usr/lib/*/*/*/*.ds
+debian/tmp/usr/lib/*/*/*/*.drv
+debian/tmp/usr/lib/*/*/*/*.acm
+debian/tmp/usr/lib/*/*/*/*.com
+debian/tmp/usr/lib/*/*/*/*.cpl
+debian/tmp/usr/lib/*/*/*/*.exe
+debian/tmp/usr/lib/*/*/*/*.ocx
+debian/tmp/usr/lib/*/*/*/*.sys
+debian/tmp/usr/lib/*/*/*/*.tlb
 
 # ELF libraries
 debian/tmp/usr/lib/*/*/*/*.so

@@ -198,20 +198,7 @@ ifeq ($(DEB_HOST_ARCH), i386)
 	echo "debian/tmp/usr/lib/*/*/*/*.exe16" >> debian/libwine$(VERSION).install
 	echo "debian/tmp/usr/lib/*/*/*/*.mod16" >> debian/libwine$(VERSION).install
 endif
-ifneq (,$(filter $(DEB_HOST_ARCH),i386 amd64))
-	echo >> debian/libwine$(VERSION).install
-	echo "# windows PE files" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*/*.ax" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*/*.com" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*/*.dll" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*/*.drv" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*/*.exe" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*/*.acm" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*/*.cpl" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*/*.ocx" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*/*.sys" >> debian/libwine$(VERSION).install
-	echo "debian/tmp/usr/lib/*/*/*/*.tlb" >> debian/libwine$(VERSION).install
-else
+ifeq (,$(filter $(DEB_HOST_ARCH),i386 amd64))
 	rm -f debian/libwine$(VERSION).prerm debian/libwine$(VERSION).postinst
 endif
 	dh_installdirs
