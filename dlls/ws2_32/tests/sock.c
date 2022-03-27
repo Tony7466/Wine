@@ -1214,7 +1214,7 @@ static void test_set_getsockopt(void)
     value = 0xdeadbeef;
     err = getsockopt(s, SOL_SOCKET, SO_SNDBUF, (char *)&value, &size);
     ok( !err, "getsockopt(SO_SNDBUF) failed error: %u\n", WSAGetLastError() );
-    todo_wine ok( value == 4096, "expected 4096, got %u\n", value );
+    ok( value == 4096, "expected 4096, got %u\n", value );
 
     /* SO_RCVBUF */
     value = 4096;
@@ -1224,7 +1224,7 @@ static void test_set_getsockopt(void)
     value = 0xdeadbeef;
     err = getsockopt(s, SOL_SOCKET, SO_RCVBUF, (char *)&value, &size);
     ok( !err, "getsockopt(SO_RCVBUF) failed error: %u\n", WSAGetLastError() );
-    todo_wine ok( value == 4096, "expected 4096, got %u\n", value );
+    ok( value == 4096, "expected 4096, got %u\n", value );
 
     /* SO_LINGER */
     for( i = 0; i < ARRAY_SIZE(linger_testvals);i++) {
@@ -1295,7 +1295,6 @@ todo_wine
     SetLastError(0xdeadbeef);
     i = 4321;
     err = getsockopt(s, SOL_SOCKET, SO_ERROR, (char *) &i, &size);
-todo_wine
     ok( !err && !WSAGetLastError(),
         "got %d with %d (expected 0 with 0)\n",
         err, WSAGetLastError());
@@ -1306,7 +1305,6 @@ todo_wine
     SetLastError(0xdeadbeef);
     size = 1;
     err = getsockopt(s, SOL_SOCKET, SO_ERROR, (char *) &i, &size);
-todo_wine
     ok( (err == SOCKET_ERROR) && (WSAGetLastError() == WSAEFAULT),
         "got %d with %d (expected SOCKET_ERROR with WSAEFAULT)\n",
         err, WSAGetLastError());
@@ -2294,23 +2292,51 @@ static void test_WSASocket(void)
     sock = WSASocketA(0, 0, 0, &pi[0], 0, 0);
     ok(sock != INVALID_SOCKET, "Failed to create socket: %d\n",
             WSAGetLastError());
+
     size = sizeof(socktype);
     socktype = 0xdead;
     err = getsockopt(sock, SOL_SOCKET, SO_TYPE, (char *) &socktype, &size);
     ok(!err,"getsockopt failed with %d\n", WSAGetLastError());
     ok(socktype == SOCK_DGRAM, "Wrong socket type, expected %d received %d\n",
        SOCK_DGRAM, socktype);
+
+    socktype = SOCK_STREAM;
+    WSASetLastError(0xdeadbeef);
+    err = setsockopt(sock, SOL_SOCKET, SO_TYPE, (char *)&socktype, sizeof(socktype));
+    ok(err == -1, "expected failure\n");
+    todo_wine ok(WSAGetLastError() == WSAEINVAL, "got error %u\n", WSAGetLastError());
+
+    socktype = SOCK_DGRAM;
+    WSASetLastError(0xdeadbeef);
+    err = setsockopt(sock, SOL_SOCKET, SO_TYPE, (char *)&socktype, sizeof(socktype));
+    ok(err == -1, "expected failure\n");
+    todo_wine ok(WSAGetLastError() == WSAEINVAL, "got error %u\n", WSAGetLastError());
+
     closesocket(sock);
 
     sock = WSASocketA(AF_INET, SOCK_STREAM, IPPROTO_TCP, &pi[0], 0, 0);
     ok(sock != INVALID_SOCKET, "Failed to create socket: %d\n",
             WSAGetLastError());
+
     size = sizeof(socktype);
     socktype = 0xdead;
     err = getsockopt(sock, SOL_SOCKET, SO_TYPE, (char *) &socktype, &size);
     ok(!err,"getsockopt failed with %d\n", WSAGetLastError());
     ok(socktype == SOCK_STREAM, "Wrong socket type, expected %d received %d\n",
        SOCK_STREAM, socktype);
+
+    socktype = SOCK_STREAM;
+    WSASetLastError(0xdeadbeef);
+    err = setsockopt(sock, SOL_SOCKET, SO_TYPE, (char *)&socktype, sizeof(socktype));
+    ok(err == -1, "expected failure\n");
+    ok(WSAGetLastError() == WSAENOPROTOOPT, "got error %u\n", WSAGetLastError());
+
+    socktype = SOCK_DGRAM;
+    WSASetLastError(0xdeadbeef);
+    err = setsockopt(sock, SOL_SOCKET, SO_TYPE, (char *)&socktype, sizeof(socktype));
+    ok(err == -1, "expected failure\n");
+    ok(WSAGetLastError() == WSAENOPROTOOPT, "got error %u\n", WSAGetLastError());
+
     closesocket(sock);
 
     HeapFree(GetProcessHeap(), 0, pi);
@@ -2856,6 +2882,18 @@ static void test_listen(void)
     ok (!ret, "getsockopt failed\n");
     ok (acceptc == 0, "SO_ACCEPTCONN should be 0, received %d\n", acceptc);
 
+    acceptc = 1;
+    WSASetLastError(0xdeadbeef);
+    ret = setsockopt(fdA, SOL_SOCKET, SO_ACCEPTCONN, (char *)&acceptc, sizeof(acceptc));
+    ok(ret == -1, "expected failure\n");
+    ok(WSAGetLastError() == WSAENOPROTOOPT, "got error %u\n", WSAGetLastError());
+
+    acceptc = 0;
+    WSASetLastError(0xdeadbeef);
+    ret = setsockopt(fdA, SOL_SOCKET, SO_ACCEPTCONN, (char *)&acceptc, sizeof(acceptc));
+    ok(ret == -1, "expected failure\n");
+    ok(WSAGetLastError() == WSAENOPROTOOPT, "got error %u\n", WSAGetLastError());
+
     ok (!listen(fdA, 0), "listen failed\n");
     ok (!listen(fdA, SOMAXCONN), "double listen failed\n");
 
@@ -2863,6 +2901,18 @@ static void test_listen(void)
     ret = getsockopt(fdA, SOL_SOCKET, SO_ACCEPTCONN, (char*)&acceptc, &olen);
     ok (!ret, "getsockopt failed\n");
     ok (acceptc == 1, "SO_ACCEPTCONN should be 1, received %d\n", acceptc);
+
+    acceptc = 1;
+    WSASetLastError(0xdeadbeef);
+    ret = setsockopt(fdA, SOL_SOCKET, SO_ACCEPTCONN, (char *)&acceptc, sizeof(acceptc));
+    ok(ret == -1, "expected failure\n");
+    ok(WSAGetLastError() == WSAENOPROTOOPT, "got error %u\n", WSAGetLastError());
+
+    acceptc = 0;
+    WSASetLastError(0xdeadbeef);
+    ret = setsockopt(fdA, SOL_SOCKET, SO_ACCEPTCONN, (char *)&acceptc, sizeof(acceptc));
+    ok(ret == -1, "expected failure\n");
+    ok(WSAGetLastError() == WSAENOPROTOOPT, "got error %u\n", WSAGetLastError());
 
     SetLastError(0xdeadbeef);
     ok ((listen(fdB, SOMAXCONN) == SOCKET_ERROR), "listen did not fail\n");
@@ -3127,6 +3177,14 @@ static void test_select(void)
     ret = select(0, &readfds, &writefds, &exceptfds, &select_timeout);
     ok(ret == 1, "expected 1, got %d\n", ret);
     ok(FD_ISSET(fdRead, &readfds), "fdRead socket is not in the set\n");
+    ok(!FD_ISSET(fdRead, &exceptfds), "fdRead socket is in the set\n");
+    FD_ZERO_ALL();
+    FD_SET_ALL(fdRead);
+    ret = select(0, &readfds, &writefds, &exceptfds, &select_timeout);
+    ok(ret == 2, "expected 1, got %d\n", ret);
+    ok(FD_ISSET(fdRead, &readfds), "fdRead socket is not in the set\n");
+    ok(FD_ISSET(fdRead, &writefds), "fdRead socket is not in the set\n");
+    ok(!FD_ISSET(fdRead, &exceptfds), "fdRead socket is in the set\n");
     ret = recv(fdRead, tmp_buf, sizeof(tmp_buf), 0);
     ok(ret == 4, "expected 4, got %d\n", ret);
     ok(!strcmp(tmp_buf, "1234"), "data received differs from sent\n");
@@ -3239,9 +3297,9 @@ static void test_select(void)
     FD_SET(fdWrite, &exceptfds);
     SetLastError(0xdeadbeef);
     ret = select(0, NULL, NULL, &exceptfds, &select_timeout);
-todo_wine
     ok(ret == SOCKET_ERROR, "expected -1, got %d\n", ret);
     ok(GetLastError() == WSAENOTSOCK, "got %d\n", GetLastError());
+    ok(!FD_ISSET(fdWrite, &exceptfds), "fdWrite socket is in the set\n");
     WaitForSingleObject (thread_handle, 1000);
     closesocket(fdRead);
 
@@ -3816,6 +3874,9 @@ static void test_fionread_siocatmark(void)
     ret = recv(client, buffer, 1, MSG_OOB);
     ok(ret == 1, "got %d\n", ret);
 
+    /* wait for the data to be available */
+    check_poll_mask_todo(client, POLLRDBAND, POLLRDBAND);
+
     check_fionread_siocatmark_todo(client, 2, FALSE);
 
     ret = recv(client, buffer, 5, 0);
@@ -3831,6 +3892,9 @@ static void test_fionread_siocatmark(void)
     ret = send(server, "a", 1, MSG_OOB);
     ok(ret == 1, "got %d\n", ret);
 
+    /* wait for the data to be available */
+    check_poll_mask(client, POLLRDBAND, POLLRDBAND);
+
     ret = 1;
     ret = setsockopt(client, SOL_SOCKET, SO_OOBINLINE, (char *)&ret, sizeof(ret));
     ok(!ret, "got error %u\n", WSAGetLastError());
@@ -3844,6 +3908,9 @@ static void test_fionread_siocatmark(void)
 
     ret = send(server, "a", 1, MSG_OOB);
     ok(ret == 1, "got %d\n", ret);
+
+    /* wait for the data to be available */
+    check_poll_mask(client, POLLRDNORM, POLLRDNORM);
 
     check_fionread_siocatmark(client, 1, TRUE);
 
@@ -6055,7 +6122,7 @@ static void test_WSAPoll(void)
     WSASetLastError(0xdeadbeef);
     ret = pWSAPoll(fds, 2, 0);
     ok(!ret, "got %d\n", ret);
-    todo_wine ok(!WSAGetLastError(), "got error %u\n", WSAGetLastError());
+    ok(!WSAGetLastError(), "got error %u\n", WSAGetLastError());
     ok(fds[0].revents == POLLNVAL, "got events %#x\n", fds[0].revents);
     ok(!fds[1].revents, "got events %#x\n", fds[1].revents);
 
@@ -6068,7 +6135,7 @@ static void test_WSAPoll(void)
     WSASetLastError(0xdeadbeef);
     ret = pWSAPoll(fds, 2, 0);
     ok(!ret, "got %d\n", ret);
-    todo_wine ok(!WSAGetLastError(), "got error %u\n", WSAGetLastError());
+    ok(!WSAGetLastError(), "got error %u\n", WSAGetLastError());
     ok(!fds[0].revents, "got events %#x\n", fds[0].revents);
     ok(fds[1].revents == POLLNVAL, "got events %#x\n", fds[1].revents);
 
@@ -6093,7 +6160,7 @@ static void test_WSAPoll(void)
     fds[1].revents = 0xdead;
     WSASetLastError(0xdeadbeef);
     ret = pWSAPoll(fds, 2, 0);
-    todo_wine ok(ret == -1, "got %d\n", ret);
+    ok(ret == -1, "got %d\n", ret);
     ok(WSAGetLastError() == WSAENOTSOCK, "got error %u\n", WSAGetLastError());
     ok(fds[0].revents == POLLNVAL, "got events %#x\n", fds[0].revents);
     ok(fds[1].revents == POLLNVAL, "got events %#x\n", fds[1].revents);
@@ -6213,8 +6280,8 @@ static void test_WSAPoll(void)
     ok(ret == 1, "got %d\n", ret);
 
     check_poll(client, POLLWRNORM);
-    check_poll_mask_todo(server, POLLRDNORM | POLLRDBAND, POLLRDNORM);
-    check_poll_todo(server, POLLWRNORM | POLLRDNORM);
+    check_poll_mask(server, POLLRDNORM | POLLRDBAND, POLLRDNORM);
+    check_poll(server, POLLWRNORM | POLLRDNORM);
 
     buffer[0] = 0xcc;
     ret = recv(server, buffer, 1, 0);
@@ -6252,8 +6319,8 @@ static void test_WSAPoll(void)
 
     closesocket(client);
 
-    check_poll_mask_todo(server, 0, POLLHUP);
-    check_poll_todo(server, POLLWRNORM | POLLHUP);
+    check_poll_mask(server, 0, POLLHUP);
+    check_poll(server, POLLWRNORM | POLLHUP);
 
     closesocket(server);
 
@@ -10852,7 +10919,7 @@ static void test_timeout(void)
     WSASetLastError(0xdeadbeef);
     ret = getsockopt(client, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, &len);
     ok(!ret, "expected success\n");
-    todo_wine ok(!WSAGetLastError(), "got error %u\n", WSAGetLastError());
+    ok(!WSAGetLastError(), "got error %u\n", WSAGetLastError());
     ok(len == sizeof(timeout), "got size %u\n", len);
     ok(!timeout, "got timeout %u\n", timeout);
 
@@ -10860,15 +10927,15 @@ static void test_timeout(void)
     WSASetLastError(0xdeadbeef);
     ret = setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));
     ok(!ret, "expected success\n");
-    todo_wine ok(!WSAGetLastError(), "got error %u\n", WSAGetLastError());
+    ok(!WSAGetLastError(), "got error %u\n", WSAGetLastError());
 
     timeout = 0xdeadbeef;
     len = sizeof(timeout);
     WSASetLastError(0xdeadbeef);
     ret = getsockopt(client, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, &len);
     ok(!ret, "expected success\n");
-    todo_wine ok(!WSAGetLastError(), "got error %u\n", WSAGetLastError());
-    todo_wine ok(timeout == 100, "got timeout %u\n", timeout);
+    ok(!WSAGetLastError(), "got error %u\n", WSAGetLastError());
+    ok(timeout == 100, "got timeout %u\n", timeout);
 
     WSASetLastError(0xdeadbeef);
     ret = recv(client, &buffer, 1, 0);
@@ -10909,6 +10976,82 @@ static void test_timeout(void)
     CloseHandle(overlapped.hEvent);
 }
 
+static void test_so_debug(void)
+{
+    int ret, len;
+    DWORD debug;
+    SOCKET s;
+
+    s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+    len = sizeof(debug);
+    WSASetLastError(0xdeadbeef);
+    debug = 0xdeadbeef;
+    ret = getsockopt(s, SOL_SOCKET, SO_DEBUG, (char *)&debug, &len);
+    ok(!ret, "got %d\n", ret);
+    ok(!WSAGetLastError(), "got error %u\n", WSAGetLastError());
+    ok(len == sizeof(debug), "got len %u\n", len);
+    ok(!debug, "got debug %u\n", debug);
+
+    WSASetLastError(0xdeadbeef);
+    debug = 2;
+    ret = setsockopt(s, SOL_SOCKET, SO_DEBUG, (char *)&debug, sizeof(debug));
+    ok(!ret, "got %d\n", ret);
+    todo_wine ok(!WSAGetLastError(), "got error %u\n", WSAGetLastError());
+
+    len = sizeof(debug);
+    WSASetLastError(0xdeadbeef);
+    debug = 0xdeadbeef;
+    ret = getsockopt(s, SOL_SOCKET, SO_DEBUG, (char *)&debug, &len);
+    ok(!ret, "got %d\n", ret);
+    ok(!WSAGetLastError(), "got error %u\n", WSAGetLastError());
+    ok(len == sizeof(debug), "got len %u\n", len);
+    todo_wine ok(debug == 1, "got debug %u\n", debug);
+
+    closesocket(s);
+}
+
+static void test_set_only_options(void)
+{
+    unsigned int i;
+    int ret, len;
+    int value;
+    SOCKET s;
+
+    static const struct
+    {
+        int level;
+        int option;
+    }
+    tests[] =
+    {
+        {IPPROTO_IP, IP_ADD_MEMBERSHIP},
+        {IPPROTO_IP, IP_DROP_MEMBERSHIP},
+        {IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP},
+        {IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP},
+    };
+
+    for (i = 0; i < ARRAY_SIZE(tests); ++i)
+    {
+        if (tests[i].level == IPPROTO_IPV6)
+        {
+            s = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
+            if (s == INVALID_SOCKET) continue;
+        }
+        else
+        {
+            s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        }
+
+        len = sizeof(value);
+        ret = getsockopt(s, tests[i].level, tests[i].option, (char *)&value, &len);
+        ok(ret == -1, "expected failure\n");
+        ok(WSAGetLastError() == WSAENOPROTOOPT, "got error %u\n", WSAGetLastError());
+
+        closesocket(s);
+    }
+}
+
 START_TEST( sock )
 {
     int i;
@@ -10924,6 +11067,8 @@ START_TEST( sock )
     test_so_reuseaddr();
     test_ip_pktinfo();
     test_extendedSocketOptions();
+    test_so_debug();
+    test_set_only_options();
 
     for (i = 0; i < ARRAY_SIZE(tests); i++)
         do_test(&tests[i]);

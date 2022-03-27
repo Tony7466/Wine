@@ -664,7 +664,7 @@ struct process *create_process( int fd, struct process *parent, unsigned int fla
     if (!parent)
     {
         process->handles = alloc_handle_table( process, 0 );
-        process->token = token_create_admin( TokenElevationTypeFull );
+        process->token = token_create_admin( TRUE, -1, TokenElevationTypeFull, default_session_id );
         process->affinity = ~0;
     }
     else
@@ -686,6 +686,7 @@ struct process *create_process( int fd, struct process *parent, unsigned int fla
         process->affinity = parent->affinity;
     }
     if (!process->handles || !process->token) goto error;
+    process->session_id = token_get_session_id( process->token );
 
     /* Assign a high security label to the token. The default would be medium
      * but Wine provides admin access to all applications right now so high
@@ -1088,7 +1089,7 @@ int set_process_debug_flag( struct process *process, int flag )
     char data = (flag != 0);
     client_ptr_t peb32 = 0;
 
-    if (!is_machine_64bit( process->machine ) && is_machine_64bit( supported_machines[0] ))
+    if (!is_machine_64bit( process->machine ) && is_machine_64bit( native_machine ))
         peb32 = process->peb + 0x1000;
 
     /* BeingDebugged flag is the byte at offset 2 in the PEB */
@@ -1455,6 +1456,7 @@ DECL_HANDLER(get_process_info)
         reply->peb              = process->peb;
         reply->start_time       = process->start_time;
         reply->end_time         = process->end_time;
+        reply->session_id       = process->session_id;
         reply->machine          = process->machine;
         if (get_reply_max_size())
         {
@@ -1872,6 +1874,7 @@ DECL_HANDLER(list_processes)
         process_info->priority = process->priority;
         process_info->pid = process->id;
         process_info->parent_pid = process->parent_id;
+        process_info->session_id = process->session_id;
         process_info->handle_count = get_handle_table_count(process);
         process_info->unix_pid = process->unix_pid;
         pos += sizeof(*process_info);
