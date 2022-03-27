@@ -1,3 +1,14 @@
+wine-development (6.12~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 6.12, released Jul 2, 2021.
+    - Builtin "Blue" and "Classic Blue" themes.
+    - More work towards WinSock PE conversion.
+    - Beginnings of the NSI (Network Store Interface) implementation.
+    - Support for 32/64-bit registry views in reg.exe.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 27 Mar 2022 13:52:14 +0000
+
 wine-development (6.11~repack-1) unstable; urgency=medium
 
   * New upstream release 6.11, released Jun 18, 2021.
