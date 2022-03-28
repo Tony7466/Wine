@@ -12,6 +12,7 @@ debian/tmp/usr/lib/*/*/*/*.exe
 debian/tmp/usr/lib/*/*/*/*.ocx
 debian/tmp/usr/lib/*/*/*/*.sys
 debian/tmp/usr/lib/*/*/*/*.tlb
+debian/tmp/usr/lib/*/*/*/*.msstyles
 
 # ELF libraries
 debian/tmp/usr/lib/*/*/*/*.so

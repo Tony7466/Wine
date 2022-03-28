@@ -1,4 +1,4 @@
-wine-development (6.12~repack-1) UNRELEASED; urgency=medium
+wine-development (6.12~repack-1) unstable; urgency=medium
 
   * New upstream release 6.12, released Jul 2, 2021.
     - Builtin "Blue" and "Classic Blue" themes.
