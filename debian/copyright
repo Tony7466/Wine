@@ -43,6 +43,7 @@ Files-Excluded:
  dlls/dwrite/mirror.c
  dlls/dwrite/scripts.c
  dlls/dwrite/scripts.h
+ dlls/dwrite/shapers/arabic_table.c
  dlls/kernelbase/collation.c
  dlls/kernelbase/digitmap.c
  dlls/wineps.drv/vertical.c

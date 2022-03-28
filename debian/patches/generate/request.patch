@@ -68,7 +68,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #endif  /* __WINE_SERVER_REQUEST_H */
 --- a/server/trace.c
 +++ b/server/trace.c
-@@ -1437,8 +1437,9 @@ static void dump_varargs_poll_socket_out
+@@ -1435,8 +1435,9 @@ static void dump_varargs_poll_socket_out
  
  typedef void (*dump_func)( const void *req );
  
@@ -80,7 +80,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  static void dump_new_process_request( const struct new_process_request *req )
  {
-@@ -5564,8 +5565,7 @@ static const struct
+@@ -5562,8 +5563,7 @@ static const struct
      { NULL, 0 }
  };
  
