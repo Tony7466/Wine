@@ -5,7 +5,7 @@ Bug-Debian: https://bugs.debian.org/845334
 
 --- a/programs/winemenubuilder/winemenubuilder.c
 +++ b/programs/winemenubuilder/winemenubuilder.c
-@@ -2478,10 +2478,51 @@ static BOOL is_extension_blacklisted(LPC
+@@ -2478,10 +2478,51 @@ static BOOL is_extension_banned(LPCWSTR
      static const WCHAR comW[] = {'.','c','o','m',0};
      static const WCHAR exeW[] = {'.','e','x','e',0};
      static const WCHAR msiW[] = {'.','m','s','i',0};
