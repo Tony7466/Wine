@@ -1,3 +1,15 @@
+wine-development (6.15~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 6.15, released Aug 13, 2021.
+    - WinSock (WS2_32) library converted to PE.
+    - Support for performance data in the registry.
+    - More 32->64-bit thunks for NTDLL calls.
+    - Improved floating point status handling in the C runtime.
+    - More preparation work for the GDI syscall interface.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Tue, 29 Mar 2022 17:25:40 +0000
+
 wine-development (6.14~repack-1) unstable; urgency=medium
 
   * New upstream release 6.14, released Jul 30, 2021.
