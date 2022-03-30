@@ -19,15 +19,25 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include <stdlib.h>
+
+#include "ntstatus.h"
+#define WIN32_NO_STATUS
 #include "gdi_private.h"
+#include "winuser.h"
+#include "winreg.h"
 #include "winnls.h"
-#include "winternl.h"
+#include "initguid.h"
+#include "devguid.h"
+#include "setupapi.h"
 
 #include "wine/rbtree.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(gdi);
 
+
+DEFINE_DEVPROPKEY(DEVPROPKEY_GPU_LUID, 0x60b193cb, 0x5276, 0x4d0f, 0x96, 0xfc, 0xf1, 0x73, 0xab, 0xad, 0x3e, 0xc6, 2);
 
 struct hdc_list
 {
@@ -152,6 +162,15 @@ BOOL WINAPI DeleteObject( HGDIOBJ obj )
 {
     struct hdc_list *hdc_list = NULL;
     struct wine_rb_entry *entry;
+
+    switch (gdi_handle_type( obj ))
+    {
+    case NTGDI_OBJ_DC:
+    case NTGDI_OBJ_MEMDC:
+    case NTGDI_OBJ_ENHMETADC:
+    case NTGDI_OBJ_METADC:
+        return DeleteDC( obj );
+    }
 
     EnterCriticalSection( &obj_map_cs );
 
@@ -380,6 +399,80 @@ HPEN WINAPI CreatePen( INT style, INT width, COLORREF color )
 }
 
 /***********************************************************************
+ *           CreateBrushIndirect    (GDI32.@)
+ */
+HBRUSH WINAPI CreateBrushIndirect( const LOGBRUSH *brush )
+{
+    switch (brush->lbStyle)
+    {
+    case BS_NULL:
+        return GetStockObject( NULL_BRUSH );
+    case BS_SOLID:
+        return CreateSolidBrush( brush->lbColor );
+    case BS_HATCHED:
+        return CreateHatchBrush( brush->lbHatch, brush->lbColor );
+    case BS_PATTERN:
+    case BS_PATTERN8X8:
+        return CreatePatternBrush( (HBITMAP)brush->lbHatch );
+    case BS_DIBPATTERN:
+        return CreateDIBPatternBrush( (HGLOBAL)brush->lbHatch, brush->lbColor );
+    case BS_DIBPATTERNPT:
+        return CreateDIBPatternBrushPt( (void *)brush->lbHatch, brush->lbColor );
+    default:
+        WARN( "invalid brush style %u\n", brush->lbStyle );
+        return 0;
+    }
+}
+
+/***********************************************************************
+ *           CreateSolidBrush    (GDI32.@)
+ */
+HBRUSH WINAPI CreateSolidBrush( COLORREF color )
+{
+    return NtGdiCreateSolidBrush( color, NULL );
+}
+
+/***********************************************************************
+ *           CreateHatchBrush    (GDI32.@)
+ */
+HBRUSH WINAPI CreateHatchBrush( INT style, COLORREF color )
+{
+    return NtGdiCreateHatchBrush( style, color, FALSE );
+}
+
+/***********************************************************************
+ *           CreatePatternBrush    (GDI32.@)
+ */
+HBRUSH WINAPI CreatePatternBrush( HBITMAP bitmap )
+{
+    return NtGdiCreatePatternBrushInternal( bitmap, FALSE, FALSE );
+}
+
+/***********************************************************************
+ *           CreateDIBPatternBrush    (GDI32.@)
+ */
+HBRUSH WINAPI CreateDIBPatternBrush( HGLOBAL hbitmap, UINT coloruse )
+{
+    HBRUSH brush;
+    void *mem;
+
+    TRACE( "%p\n", hbitmap );
+
+    if (!(mem = GlobalLock( hbitmap ))) return 0;
+    brush = NtGdiCreateDIBBrush( mem, coloruse, /* FIXME */ 0, FALSE, FALSE, hbitmap );
+    GlobalUnlock( hbitmap );
+    return brush;
+}
+
+/***********************************************************************
+ *           CreateDIBPatternBrushPt    (GDI32.@)
+ */
+HBRUSH WINAPI CreateDIBPatternBrushPt( const void *data, UINT coloruse )
+{
+    return NtGdiCreateDIBBrush( data, coloruse, /* FIXME */ 0, FALSE, FALSE, data );
+}
+
+/***********************************************************************
  *           CreateBitmapIndirect (GDI32.@)
  */
 HBITMAP WINAPI CreateBitmapIndirect( const BITMAP *bmp )
@@ -515,4 +608,183 @@ HCOLORSPACE WINAPI SetColorSpace( HDC hdc, HCOLORSPACE cs )
 {
     FIXME( "stub\n" );
     return cs;
+}
+
+/***********************************************************************
+ *           CreatePalette     (GDI32.@)
+ */
+HPALETTE WINAPI CreatePalette( const LOGPALETTE *palette )
+{
+    if (!palette) return 0;
+    return NtGdiCreatePaletteInternal( palette, palette->palNumEntries );
+}
+
+/***********************************************************************
+ *           GetPaletteEntries    (GDI32.@)
+ */
+UINT WINAPI GetPaletteEntries( HPALETTE palette, UINT start, UINT count, PALETTEENTRY *entries )
+{
+    return NtGdiDoPalette( palette, start, count, entries, NtGdiGetPaletteEntries, TRUE );
+}
+
+/***********************************************************************
+ *           SetPaletteEntries    (GDI32.@)
+ */
+UINT WINAPI SetPaletteEntries( HPALETTE palette, UINT start, UINT count,
+                               const PALETTEENTRY *entries )
+{
+    return NtGdiDoPalette( palette, start, count, (void *)entries, NtGdiSetPaletteEntries, FALSE );
+}
+
+/***********************************************************************
+ *           AnimatePalette    (GDI32.@)
+ */
+BOOL WINAPI AnimatePalette( HPALETTE palette, UINT start, UINT count, const PALETTEENTRY *entries )
+{
+    return NtGdiDoPalette( palette, start, count, (void *)entries, NtGdiAnimatePalette, FALSE );
+}
+
+/* first and last 10 entries are the default system palette entries */
+static const PALETTEENTRY default_system_palette_low[] =
+{
+    { 0x00, 0x00, 0x00 }, { 0x80, 0x00, 0x00 }, { 0x00, 0x80, 0x00 }, { 0x80, 0x80, 0x00 },
+    { 0x00, 0x00, 0x80 }, { 0x80, 0x00, 0x80 }, { 0x00, 0x80, 0x80 }, { 0xc0, 0xc0, 0xc0 },
+    { 0xc0, 0xdc, 0xc0 }, { 0xa6, 0xca, 0xf0 }
+};
+static const PALETTEENTRY default_system_palette_high[] =
+{
+    { 0xff, 0xfb, 0xf0 }, { 0xa0, 0xa0, 0xa4 }, { 0x80, 0x80, 0x80 }, { 0xff, 0x00, 0x00 },
+    { 0x00, 0xff, 0x00 }, { 0xff, 0xff, 0x00 }, { 0x00, 0x00, 0xff }, { 0xff, 0x00, 0xff },
+    { 0x00, 0xff, 0xff }, { 0xff, 0xff, 0xff }
+};
+
+/***********************************************************************
+ *           GetSystemPaletteEntries    (GDI32.@)
+ *
+ * Gets range of palette entries.
+ */
+UINT WINAPI GetSystemPaletteEntries( HDC hdc, UINT start, UINT count, PALETTEENTRY *entries )
+{
+    UINT i, ret;
+
+    ret = NtGdiDoPalette( hdc, start, count, (void *)entries,
+                          NtGdiGetSystemPaletteEntries, FALSE );
+    if (ret) return ret;
+
+    /* always fill output, even if hdc is an invalid handle */
+    if (!entries || start >= 256) return 0;
+    if (start + count > 256) count = 256 - start;
+
+    for (i = 0; i < count; i++)
+    {
+        if (start + i < 10)
+            entries[i] = default_system_palette_low[start + i];
+        else if (start + i >= 246)
+            entries[i] = default_system_palette_high[start + i - 246];
+        else
+            memset( &entries[i], 0, sizeof(entries[i]) );
+    }
+
+    return 0;
+}
+
+/***********************************************************************
+ *           GetDIBColorTable    (GDI32.@)
+ */
+UINT WINAPI GetDIBColorTable( HDC hdc, UINT start, UINT count, RGBQUAD *colors )
+{
+    return NtGdiDoPalette( hdc, start, count, colors, NtGdiGetDIBColorTable, TRUE );
+}
+
+/***********************************************************************
+ *           SetDIBColorTable    (GDI32.@)
+ */
+UINT WINAPI SetDIBColorTable( HDC hdc, UINT start, UINT count, const RGBQUAD *colors )
+{
+    return NtGdiDoPalette( hdc, start, count, (void *)colors, NtGdiSetDIBColorTable, FALSE );
+}
+
+static HANDLE get_display_device_init_mutex( void )
+{
+    HANDLE mutex = CreateMutexW( NULL, FALSE, L"display_device_init" );
+
+    WaitForSingleObject( mutex, INFINITE );
+    return mutex;
+}
+
+static void release_display_device_init_mutex( HANDLE mutex )
+{
+    ReleaseMutex( mutex );
+    CloseHandle( mutex );
+}
+
+/***********************************************************************
+ *           D3DKMTOpenAdapterFromGdiDisplayName    (GDI32.@)
+ */
+NTSTATUS WINAPI D3DKMTOpenAdapterFromGdiDisplayName( D3DKMT_OPENADAPTERFROMGDIDISPLAYNAME *desc )
+{
+    WCHAR *end, key_nameW[MAX_PATH], bufferW[MAX_PATH];
+    HDEVINFO devinfo = INVALID_HANDLE_VALUE;
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
+    D3DKMT_OPENADAPTERFROMLUID luid_desc;
+    SP_DEVINFO_DATA device_data;
+    DWORD size, state_flags;
+    DEVPROPTYPE type;
+    HANDLE mutex;
+    int index;
+
+    TRACE("(%p)\n", desc);
+
+    if (!desc)
+        return STATUS_UNSUCCESSFUL;
+
+    TRACE("DeviceName: %s\n", wine_dbgstr_w( desc->DeviceName ));
+    if (wcsnicmp( desc->DeviceName, L"\\\\.\\DISPLAY", lstrlenW(L"\\\\.\\DISPLAY") ))
+        return STATUS_UNSUCCESSFUL;
+
+    index = wcstol( desc->DeviceName + lstrlenW(L"\\\\.\\DISPLAY"), &end, 10 ) - 1;
+    if (*end)
+        return STATUS_UNSUCCESSFUL;
+
+    /* Get adapter LUID from SetupAPI */
+    mutex = get_display_device_init_mutex();
+
+    size = sizeof( bufferW );
+    swprintf( key_nameW, MAX_PATH, L"\\Device\\Video%d", index );
+    if (RegGetValueW( HKEY_LOCAL_MACHINE, L"HARDWARE\\DEVICEMAP\\VIDEO", key_nameW,
+                      RRF_RT_REG_SZ, NULL, bufferW, &size ))
+        goto done;
+
+    /* Strip \Registry\Machine\ prefix and retrieve Wine specific data set by the display driver */
+    lstrcpyW( key_nameW, bufferW + 18 );
+    size = sizeof( state_flags );
+    if (RegGetValueW( HKEY_CURRENT_CONFIG, key_nameW, L"StateFlags", RRF_RT_REG_DWORD, NULL,
+                      &state_flags, &size ))
+        goto done;
+
+    if (!(state_flags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP))
+        goto done;
+
+    size = sizeof( bufferW );
+    if (RegGetValueW( HKEY_CURRENT_CONFIG, key_nameW, L"GPUID", RRF_RT_REG_SZ, NULL, bufferW, &size ))
+        goto done;
+
+    devinfo = SetupDiCreateDeviceInfoList( &GUID_DEVCLASS_DISPLAY, NULL );
+    device_data.cbSize = sizeof( device_data );
+    SetupDiOpenDeviceInfoW( devinfo, bufferW, NULL, 0, &device_data );
+    if (!SetupDiGetDevicePropertyW( devinfo, &device_data, &DEVPROPKEY_GPU_LUID, &type,
+                                    (BYTE *)&luid_desc.AdapterLuid, sizeof( luid_desc.AdapterLuid ),
+                                    NULL, 0))
+        goto done;
+
+    if ((status = NtGdiDdDDIOpenAdapterFromLuid( &luid_desc ))) goto done;
+
+    desc->hAdapter = luid_desc.hAdapter;
+    desc->AdapterLuid = luid_desc.AdapterLuid;
+    desc->VidPnSourceId = index;
+
+done:
+    SetupDiDestroyDeviceInfoList( devinfo );
+    release_display_device_init_mutex( mutex );
+    return status;
 }
