@@ -28,4 +28,4 @@ author: Michael Gilbert <mgilbert@debian.org>
 +            }
              output( "\tpush {LR}\n" );
              output( "\tsub SP, #4\n");
-             output( "\tmov r1,#%u\n", i - spec->base );
+             output( "\tmovw r1,#%u\n", i - spec->base );

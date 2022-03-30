@@ -74,8 +74,9 @@ CONFLAGS+=--with-float-abi=soft
 export DEB_CFLAGS_MAINT_APPEND+=-march=armv6t2 -Wno-array-parameter
 endif
 
-# warnings to ignore on armhf
+# on armhf build with hard float ABI
 ifeq ($(DEB_HOST_ARCH), armhf)
+CONFLAGS+=--with-float-abi=hard
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-array-parameter
 endif
 
