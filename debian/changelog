@@ -1,4 +1,4 @@
-wine-development (6.16~repack-1) UNRELEASED; urgency=medium
+wine-development (6.16~repack-1) unstable; urgency=medium
 
   * New upstream release 6.16, released Aug 27, 2021.
     - Initial version of a HID-based joystick backend.
