@@ -3564,6 +3564,22 @@ VkResult convert_VkDeviceCreateInfo_struct_chain(const void *pNext, VkDeviceCrea
             break;
         }
 
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PAGEABLE_DEVICE_LOCAL_MEMORY_FEATURES_EXT:
+        {
+            const VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT *in = (const VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT *)in_header;
+            VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT *out;
+
+            if (!(out = malloc(sizeof(*out)))) goto out_of_memory;
+
+            out->sType = in->sType;
+            out->pNext = NULL;
+            out->pageableDeviceLocalMemory = in->pageableDeviceLocalMemory;
+
+            out_header->pNext = (VkBaseOutStructure *)out;
+            out_header = out_header->pNext;
+            break;
+        }
+
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES:
         {
             const VkPhysicalDeviceBufferDeviceAddressFeatures *in = (const VkPhysicalDeviceBufferDeviceAddressFeatures *)in_header;
@@ -3791,6 +3807,23 @@ VkResult convert_VkDeviceCreateInfo_struct_chain(const void *pNext, VkDeviceCrea
             out->sType = in->sType;
             out->pNext = NULL;
             out->separateDepthStencilLayouts = in->separateDepthStencilLayouts;
+
+            out_header->pNext = (VkBaseOutStructure *)out;
+            out_header = out_header->pNext;
+            break;
+        }
+
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRIMITIVE_TOPOLOGY_LIST_RESTART_FEATURES_EXT:
+        {
+            const VkPhysicalDevicePrimitiveTopologyListRestartFeaturesEXT *in = (const VkPhysicalDevicePrimitiveTopologyListRestartFeaturesEXT *)in_header;
+            VkPhysicalDevicePrimitiveTopologyListRestartFeaturesEXT *out;
+
+            if (!(out = malloc(sizeof(*out)))) goto out_of_memory;
+
+            out->sType = in->sType;
+            out->pNext = NULL;
+            out->primitiveTopologyListRestart = in->primitiveTopologyListRestart;
+            out->primitiveTopologyPatchListRestart = in->primitiveTopologyPatchListRestart;
 
             out_header->pNext = (VkBaseOutStructure *)out;
             out_header = out_header->pNext;
@@ -4381,6 +4414,22 @@ VkResult convert_VkDeviceCreateInfo_struct_chain(const void *pNext, VkDeviceCrea
             out->pNext = NULL;
             out->provokingVertexLast = in->provokingVertexLast;
             out->transformFeedbackPreservesProvokingVertex = in->transformFeedbackPreservesProvokingVertex;
+
+            out_header->pNext = (VkBaseOutStructure *)out;
+            out_header = out_header->pNext;
+            break;
+        }
+
+        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_FEATURES_KHR:
+        {
+            const VkPhysicalDeviceShaderIntegerDotProductFeaturesKHR *in = (const VkPhysicalDeviceShaderIntegerDotProductFeaturesKHR *)in_header;
+            VkPhysicalDeviceShaderIntegerDotProductFeaturesKHR *out;
+
+            if (!(out = malloc(sizeof(*out)))) goto out_of_memory;
+
+            out->sType = in->sType;
+            out->pNext = NULL;
+            out->shaderIntegerDotProduct = in->shaderIntegerDotProduct;
 
             out_header->pNext = (VkBaseOutStructure *)out;
             out_header = out_header->pNext;
@@ -7891,6 +7940,12 @@ static VkResult WINAPI wine_vkSetDebugUtilsObjectTagEXT(VkDevice device, const V
 #endif
 }
 
+static void WINAPI wine_vkSetDeviceMemoryPriorityEXT(VkDevice device, VkDeviceMemory memory, float priority)
+{
+    TRACE("%p, 0x%s, %f\n", device, wine_dbgstr_longlong(memory), priority);
+    device->funcs.p_vkSetDeviceMemoryPriorityEXT(device->device, memory, priority);
+}
+
 static VkResult WINAPI wine_vkSetEvent(VkDevice device, VkEvent event)
 {
     TRACE("%p, 0x%s\n", device, wine_dbgstr_longlong(event));
@@ -8097,9 +8152,11 @@ static const char * const vk_device_extensions[] =
     "VK_EXT_memory_budget",
     "VK_EXT_memory_priority",
     "VK_EXT_multi_draw",
+    "VK_EXT_pageable_device_local_memory",
     "VK_EXT_pci_bus_info",
     "VK_EXT_pipeline_creation_cache_control",
     "VK_EXT_post_depth_coverage",
+    "VK_EXT_primitive_topology_list_restart",
     "VK_EXT_private_data",
     "VK_EXT_provoking_vertex",
     "VK_EXT_queue_family_foreign",
@@ -8178,6 +8235,7 @@ static const char * const vk_device_extensions[] =
     "VK_KHR_shader_draw_parameters",
     "VK_KHR_shader_float16_int8",
     "VK_KHR_shader_float_controls",
+    "VK_KHR_shader_integer_dot_product",
     "VK_KHR_shader_non_semantic_info",
     "VK_KHR_shader_subgroup_extended_types",
     "VK_KHR_shader_subgroup_uniform_control_flow",
@@ -8702,6 +8760,7 @@ const struct unix_funcs loader_funcs =
     &wine_vkResetQueryPoolEXT,
     &wine_vkSetDebugUtilsObjectNameEXT,
     &wine_vkSetDebugUtilsObjectTagEXT,
+    &wine_vkSetDeviceMemoryPriorityEXT,
     &wine_vkSetEvent,
     &wine_vkSetPrivateDataEXT,
     &wine_vkSignalSemaphore,

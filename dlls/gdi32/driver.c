@@ -29,7 +29,6 @@
 #include "winbase.h"
 #include "wingdi.h"
 #include "winreg.h"
-#include "ddrawgdi.h"
 #include "wine/winbase16.h"
 #include "winuser.h"
 
@@ -226,7 +225,7 @@ done:
 
 
 /***********************************************************************
- *           __wine_set_display_driver    (GDI32.@)
+ *           __wine_set_display_driver    (win32u.@)
  */
 void CDECL __wine_set_display_driver( HMODULE module )
 {
@@ -336,11 +335,6 @@ static INT CDECL nulldrv_EndPage( PHYSDEV dev )
 static BOOL CDECL nulldrv_EnumFonts( PHYSDEV dev, LOGFONTW *logfont, FONTENUMPROCW proc, LPARAM lParam )
 {
     return TRUE;
-}
-
-static INT CDECL nulldrv_EnumICMProfiles( PHYSDEV dev, ICMENUMPROCW func, LPARAM lparam )
-{
-    return -1;
 }
 
 static INT CDECL nulldrv_ExtDeviceMode( LPSTR buffer, HWND hwnd, DEVMODEA *output, LPSTR device,
@@ -584,7 +578,7 @@ static DWORD CDECL nulldrv_GetGlyphOutline( PHYSDEV dev, UINT ch, UINT format, L
     return GDI_ERROR;
 }
 
-static BOOL CDECL nulldrv_GetICMProfile( PHYSDEV dev, LPDWORD size, LPWSTR filename )
+static BOOL CDECL nulldrv_GetICMProfile( PHYSDEV dev, BOOL allow_default, LPDWORD size, LPWSTR filename )
 {
     return FALSE;
 }
@@ -829,7 +823,6 @@ const struct gdi_dc_funcs null_driver =
     nulldrv_EndPage,                    /* pEndPage */
     nulldrv_EndPath,                    /* pEndPath */
     nulldrv_EnumFonts,                  /* pEnumFonts */
-    nulldrv_EnumICMProfiles,            /* pEnumICMProfiles */
     nulldrv_ExtDeviceMode,              /* pExtDeviceMode */
     nulldrv_ExtEscape,                  /* pExtEscape */
     nulldrv_ExtFloodFill,               /* pExtFloodFill */
@@ -939,56 +932,6 @@ BOOL DRIVER_GetDriverName( LPCWSTR device, LPWSTR driver, DWORD size )
     *p = 0;
     TRACE("Found %s for %s\n", debugstr_w(driver), debugstr_w(device));
     return TRUE;
-}
-
-
-/***********************************************************************
- *           GdiConvertToDevmodeW    (GDI32.@)
- */
-DEVMODEW * WINAPI GdiConvertToDevmodeW(const DEVMODEA *dmA)
-{
-    DEVMODEW *dmW;
-    WORD dmW_size, dmA_size;
-
-    dmA_size = dmA->dmSize;
-
-    /* this is the minimal dmSize that XP accepts */
-    if (dmA_size < FIELD_OFFSET(DEVMODEA, dmFields))
-        return NULL;
-
-    if (dmA_size > sizeof(DEVMODEA))
-        dmA_size = sizeof(DEVMODEA);
-
-    dmW_size = dmA_size + CCHDEVICENAME;
-    if (dmA_size >= FIELD_OFFSET(DEVMODEA, dmFormName) + CCHFORMNAME)
-        dmW_size += CCHFORMNAME;
-
-    dmW = HeapAlloc(GetProcessHeap(), 0, dmW_size + dmA->dmDriverExtra);
-    if (!dmW) return NULL;
-
-    MultiByteToWideChar(CP_ACP, 0, (const char*) dmA->dmDeviceName, -1,
-                                   dmW->dmDeviceName, CCHDEVICENAME);
-    /* copy slightly more, to avoid long computations */
-    memcpy(&dmW->dmSpecVersion, &dmA->dmSpecVersion, dmA_size - CCHDEVICENAME);
-
-    if (dmA_size >= FIELD_OFFSET(DEVMODEA, dmFormName) + CCHFORMNAME)
-    {
-        if (dmA->dmFields & DM_FORMNAME)
-            MultiByteToWideChar(CP_ACP, 0, (const char*) dmA->dmFormName, -1,
-                                       dmW->dmFormName, CCHFORMNAME);
-        else
-            dmW->dmFormName[0] = 0;
-
-        if (dmA_size > FIELD_OFFSET(DEVMODEA, dmLogPixels))
-            memcpy(&dmW->dmLogPixels, &dmA->dmLogPixels, dmA_size - FIELD_OFFSET(DEVMODEA, dmLogPixels));
-    }
-
-    if (dmA->dmDriverExtra)
-        memcpy((char *)dmW + dmW_size, (const char *)dmA + dmA_size, dmA->dmDriverExtra);
-
-    dmW->dmSize = dmW_size;
-
-    return dmW;
 }
 
 
@@ -1146,42 +1089,6 @@ INT WINAPI NtGdiExtEscape( HDC hdc, WCHAR *driver, int driver_id, INT escape, IN
     return ret;
 }
 
-
-/*******************************************************************
- *      DrawEscape [GDI32.@]
- *
- *
- */
-INT WINAPI DrawEscape(HDC hdc, INT nEscape, INT cbInput, LPCSTR lpszInData)
-{
-    FIXME("DrawEscape, stub\n");
-    return 0;
-}
-
-/*******************************************************************
- *      NamedEscape [GDI32.@]
- */
-INT WINAPI NamedEscape( HDC hdc, LPCWSTR pDriver, INT nEscape, INT cbInput, LPCSTR lpszInData,
-                        INT cbOutput, LPSTR lpszOutData )
-{
-    FIXME("(%p, %s, %d, %d, %p, %d, %p)\n",
-          hdc, wine_dbgstr_w(pDriver), nEscape, cbInput, lpszInData, cbOutput,
-          lpszOutData);
-    return 0;
-}
-
-/*******************************************************************
- *      DdQueryDisplaySettingsUniqueness [GDI32.@]
- *      GdiEntry13                       [GDI32.@]
- */
-ULONG WINAPI DdQueryDisplaySettingsUniqueness(VOID)
-{
-    static int warn_once;
-
-    if (!warn_once++)
-        FIXME("stub\n");
-    return 0;
-}
 
 /******************************************************************************
  *           NtGdiDdDDIOpenAdapterFromHdc    (win32u.@)
