@@ -22,6 +22,7 @@
 #define __GST_PRIVATE_INCLUDED__
 
 #include <assert.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -169,9 +170,10 @@ struct unix_funcs
     void (CDECL *wg_parser_begin_flush)(struct wg_parser *parser);
     void (CDECL *wg_parser_end_flush)(struct wg_parser *parser);
 
-    bool (CDECL *wg_parser_get_read_request)(struct wg_parser *parser,
-            void **data, uint64_t *offset, uint32_t *size);
-    void (CDECL *wg_parser_complete_read_request)(struct wg_parser *parser, bool ret);
+    bool (CDECL *wg_parser_get_next_read_offset)(struct wg_parser *parser,
+            uint64_t *offset, uint32_t *size);
+    void (CDECL *wg_parser_push_data)(struct wg_parser *parser,
+            const void *data, uint32_t size);
 
     void (CDECL *wg_parser_set_unlimited_buffering)(struct wg_parser *parser);
 

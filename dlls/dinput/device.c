@@ -305,14 +305,11 @@ BOOL get_app_key(HKEY *defkey, HKEY *appkey)
 /******************************************************************************
  * Get a config key from either the app-specific or the default config
  */
-DWORD get_config_key( HKEY defkey, HKEY appkey, const char *name,
-                             char *buffer, DWORD size )
+DWORD get_config_key( HKEY defkey, HKEY appkey, const WCHAR *name, WCHAR *buffer, DWORD size )
 {
-    if (appkey && !RegQueryValueExA( appkey, name, 0, NULL, (LPBYTE)buffer, &size ))
-        return 0;
+    if (appkey && !RegQueryValueExW( appkey, name, 0, NULL, (LPBYTE)buffer, &size )) return 0;
 
-    if (defkey && !RegQueryValueExA( defkey, name, 0, NULL, (LPBYTE)buffer, &size ))
-        return 0;
+    if (defkey && !RegQueryValueExW( defkey, name, 0, NULL, (LPBYTE)buffer, &size )) return 0;
 
     return ERROR_FILE_NOT_FOUND;
 }
@@ -989,9 +986,6 @@ void queue_event( IDirectInputDevice8W *iface, int inst_id, DWORD data, DWORD ti
     int next_pos, ofs = id_to_offset(&This->data_format, inst_id);
     ULONGLONG time_ms = GetTickCount64();
 
-    /* Event is being set regardless of the queue state */
-    if (This->hEvent) SetEvent(This->hEvent);
-
     if (time_ms - notify_ms > 1000)
     {
         PostMessageW(GetDesktopWindow(), WM_WINE_NOTIFY_ACTIVITY, 0, 0);
@@ -1100,6 +1094,7 @@ HRESULT WINAPI IDirectInputDevice2WImpl_SetDataFormat(LPDIRECTINPUTDEVICE8W ifac
     _dump_DIDATAFORMAT(df);
 
     if (df->dwSize != sizeof(DIDATAFORMAT)) return DIERR_INVALIDPARAM;
+    if (df->dwObjSize != sizeof(DIOBJECTDATAFORMAT)) return DIERR_INVALIDPARAM;
     if (This->acquired) return DIERR_ACQUIRED;
 
     EnterCriticalSection(&This->crit);
@@ -1123,6 +1118,7 @@ HRESULT WINAPI IDirectInputDevice2WImpl_SetDataFormat(LPDIRECTINPUTDEVICE8W ifac
 HRESULT WINAPI IDirectInputDevice2WImpl_SetCooperativeLevel(LPDIRECTINPUTDEVICE8W iface, HWND hwnd, DWORD dwflags)
 {
     IDirectInputDeviceImpl *This = impl_from_IDirectInputDevice8W(iface);
+    HRESULT hr;
 
     TRACE("(%p) %p,0x%08x\n", This, hwnd, dwflags);
     _dump_cooperativelevel_DI(dwflags);
@@ -1149,11 +1145,16 @@ HRESULT WINAPI IDirectInputDevice2WImpl_SetCooperativeLevel(LPDIRECTINPUTDEVICE8
 
     /* Store the window which asks for the mouse */
     EnterCriticalSection(&This->crit);
-    This->win = hwnd;
-    This->dwCoopLevel = dwflags;
+    if (This->acquired) hr = DIERR_ACQUIRED;
+    else
+    {
+        This->win = hwnd;
+        This->dwCoopLevel = dwflags;
+        hr = DI_OK;
+    }
     LeaveCriticalSection(&This->crit);
 
-    return DI_OK;
+    return hr;
 }
 
 /******************************************************************************

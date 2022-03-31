@@ -137,7 +137,6 @@ static void * const syscalls[] =
     NtCancelIoFileEx,
     NtCancelTimer,
     NtClearEvent,
-    NtClearPowerRequest,
     NtClose,
     NtCompleteConnectPort,
     NtConnectPort,
@@ -157,7 +156,6 @@ static void * const syscalls[] =
     NtCreateNamedPipeFile,
     NtCreatePagingFile,
     NtCreatePort,
-    NtCreatePowerRequest,
     NtCreateSection,
     NtCreateSemaphore,
     NtCreateSymbolicLinkObject,
@@ -307,7 +305,6 @@ static void * const syscalls[] =
     NtSetIntervalProfile,
     NtSetIoCompletion,
     NtSetLdtEntries,
-    NtSetPowerRequest,
     NtSetSecurityObject,
     NtSetSystemInformation,
     NtSetSystemTime,
@@ -2004,7 +2001,7 @@ static void CDECL init_builtin_dll( void *module )
         /* On older FreeBSD versions, l_addr was the absolute load address, now it's the relocation offset. */
         if (offsetof(struct link_map, l_addr) == 0)
             if (!get_relocbase(map->l_addr, &relocbase))
-                return STATUS_NOT_SUPPORTED;
+                return;
 #endif
         switch (dyn->d_tag)
         {

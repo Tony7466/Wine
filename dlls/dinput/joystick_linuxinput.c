@@ -264,7 +264,7 @@ static void find_joydevs(void)
         else
             joydev.name = joydev.device;
 
-        if (device_disabled_registry(joydev.name, FALSE)) {
+        if (device_disabled_registry(joydev.name)) {
             close(fd);
             HeapFree(GetProcessHeap(), 0, joydev.name);
             if (joydev.name != joydev.device)
@@ -806,8 +806,11 @@ static void joy_polldev( IDirectInputDevice8W *iface )
 	    break;
 	}
         if (inst_id >= 0)
+        {
             queue_event(iface, inst_id,
                         value, GetCurrentTime(), This->generic.base.dinput->evsequence++);
+            if (This->generic.base.hEvent) SetEvent( This->generic.base.hEvent );
+        }
     }
 }
 

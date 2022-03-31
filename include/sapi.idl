@@ -492,6 +492,13 @@ typedef [hidden] enum SPFILEMODE
     SPFM_NUM_MODES
 } SPFILEMODE;
 
+typedef [restricted, hidden] struct SPAUDIOBUFFERINFO
+{
+    ULONG ulMsMinNotification;
+    ULONG ulMsBufferSize;
+    ULONG ulMsEventBias;
+} SPAUDIOBUFFERINFO;
+
 cpp_quote("#if defined(__GNUC__)")
 
 cpp_quote("#define SPCAT_AUDIOOUT (const WCHAR []){ 'H','K','E','Y','_','L','O','C','A','L','_','M','A','C','H','I','N','E','\\\\','S','O','F','T','W','A','R','E','\\\\','M','i','c','r','o','s','o','f','t','\\\\','S','p','e','e','c','h','\\\\','A','u','d','i','o','O','u','t','p','u','t',0 }")
@@ -517,6 +524,7 @@ interface ISpEventSource;
 interface ISpRecoContext;
 interface ISpRecognizer;
 interface ISpStreamFormat;
+interface ISpVoice;
 
 [
     object,
@@ -839,69 +847,6 @@ interface ISpNotifySink : IUnknown
 
 [
     object,
-    uuid(6c44df74-72b9-4992-a1ec-ef996e0422d4),
-    pointer_default(unique),
-    restricted
-]
-interface ISpVoice : ISpEventSource
-{
-    HRESULT SetOutput([in] IUnknown *unk, [in] BOOL changes);
-    HRESULT GetOutputObjectToken([out] ISpObjectToken **token);
-    HRESULT GetOutputStream([out] ISpStreamFormat **stream);
-
-    HRESULT Pause(void);
-    HRESULT Resume(void);
-
-    HRESULT SetVoice([in] ISpObjectToken *token);
-    HRESULT GetVoice([out] ISpObjectToken **token);
-
-    HRESULT Speak([in, string] const WCHAR *pwcs,
-                [in] DWORD flags,
-                [out] ULONG *number);
-    HRESULT SpeakStream([in] IStream *stream,
-                [in] DWORD flags,
-                [out] ULONG *number);
-
-    HRESULT GetStatus(
-                [out] SPVOICESTATUS *status,
-                [out, string] WCHAR **bookmark);
-
-    HRESULT Skip([in,string] const WCHAR *type, [in] long items, [out] ULONG *skipped);
-
-    HRESULT SetPriority([in] SPVPRIORITY priority);
-    HRESULT GetPriority([out] SPVPRIORITY* priority);
-
-    HRESULT SetAlertBoundary([in] SPEVENTENUM boundary);
-    HRESULT GetAlertBoundary([out] SPEVENTENUM* boundary);
-
-    HRESULT SetRate([in] long adjust);
-    HRESULT GetRate([out] long *adjust);
-
-    HRESULT SetVolume([in] USHORT volume);
-    HRESULT GetVolume([out] USHORT *volume);
-
-    HRESULT WaitUntilDone([in] ULONG timeout);
-
-    HRESULT SetSyncSpeakTimeout([in] ULONG timeout);
-    HRESULT GetSyncSpeakTimeout([out] ULONG *timeout);
-
-    [local] HANDLE SpeakCompleteEvent();
-
-    [local] HRESULT IsUISupported(
-                [in] const WCHAR *type,
-                [in] void * extra,
-                [in] ULONG count,
-                [out] BOOL *supported);
-    [local] HRESULT DisplayUI(
-                [in] HWND parent,
-                [in] const WCHAR *title,
-                [in] const WCHAR *type,
-                [in] void *extra,
-                [in] ULONG count);
-};
-
-[
-    object,
     uuid(5eff4aef-8487-11d2-961c-00c04f8ee628),
     pointer_default(unique),
     restricted
@@ -984,6 +929,69 @@ interface ISpRecoContext : ISpEventSource
 
 [
     object,
+    uuid(6c44df74-72b9-4992-a1ec-ef996e0422d4),
+    pointer_default(unique),
+    restricted
+]
+interface ISpVoice : ISpEventSource
+{
+    HRESULT SetOutput([in] IUnknown *unk, [in] BOOL changes);
+    HRESULT GetOutputObjectToken([out] ISpObjectToken **token);
+    HRESULT GetOutputStream([out] ISpStreamFormat **stream);
+
+    HRESULT Pause(void);
+    HRESULT Resume(void);
+
+    HRESULT SetVoice([in] ISpObjectToken *token);
+    HRESULT GetVoice([out] ISpObjectToken **token);
+
+    HRESULT Speak([in, string] const WCHAR *pwcs,
+                [in] DWORD flags,
+                [out] ULONG *number);
+    HRESULT SpeakStream([in] IStream *stream,
+                [in] DWORD flags,
+                [out] ULONG *number);
+
+    HRESULT GetStatus(
+                [out] SPVOICESTATUS *status,
+                [out, string] WCHAR **bookmark);
+
+    HRESULT Skip([in,string] const WCHAR *type, [in] long items, [out] ULONG *skipped);
+
+    HRESULT SetPriority([in] SPVPRIORITY priority);
+    HRESULT GetPriority([out] SPVPRIORITY* priority);
+
+    HRESULT SetAlertBoundary([in] SPEVENTENUM boundary);
+    HRESULT GetAlertBoundary([out] SPEVENTENUM* boundary);
+
+    HRESULT SetRate([in] long adjust);
+    HRESULT GetRate([out] long *adjust);
+
+    HRESULT SetVolume([in] USHORT volume);
+    HRESULT GetVolume([out] USHORT *volume);
+
+    HRESULT WaitUntilDone([in] ULONG timeout);
+
+    HRESULT SetSyncSpeakTimeout([in] ULONG timeout);
+    HRESULT GetSyncSpeakTimeout([out] ULONG *timeout);
+
+    [local] HANDLE SpeakCompleteEvent();
+
+    [local] HRESULT IsUISupported(
+                [in] const WCHAR *type,
+                [in] void * extra,
+                [in] ULONG count,
+                [out] BOOL *supported);
+    [local] HRESULT DisplayUI(
+                [in] HWND parent,
+                [in] const WCHAR *title,
+                [in] const WCHAR *type,
+                [in] void *extra,
+                [in] ULONG count);
+};
+
+[
+    object,
     uuid(bed530be-2606-4f4d-a1c0-54c5cda5566f),
     pointer_default(unique),
     restricted
@@ -992,6 +1000,28 @@ interface ISpStreamFormat : IStream
 {
     HRESULT GetFormat(GUID *format, WAVEFORMATEX **wave);
 }
+
+[
+    object,
+    uuid(c05c768f-fae8-4ec2-8e07-338321c12452),
+    pointer_default(unique),
+    local,
+    restricted
+]
+interface ISpAudio : ISpStreamFormat
+{
+    HRESULT SetState([in] SPAUDIOSTATE state, [in] ULONGLONG reserved);
+    HRESULT SetFormat([in] REFGUID guid, [in] const WAVEFORMATEX *wave);
+    HRESULT GetStatus([out] SPAUDIOSTATUS *status);
+    HRESULT SetBufferInfo([in] const SPAUDIOBUFFERINFO *buffer);
+    HRESULT GetBufferInfo([out] SPAUDIOBUFFERINFO *buffer);
+    HRESULT GetDefaultFormat([out] GUID *guid, [out] WAVEFORMATEX **wave);
+    HANDLE  EventHandle();
+    HRESULT GetVolumeLevel([out] ULONG *level);
+    HRESULT SetVolumeLevel([in] ULONG level);
+    HRESULT GetBufferNotifySize([out] ULONG *size);
+    HRESULT SetBufferNotifySize([in] ULONG size);
+};
 
 [
     object,
