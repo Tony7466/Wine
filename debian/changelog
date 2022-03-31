@@ -1,3 +1,15 @@
+wine-development (6.18~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 6.18, released Sep 24, 2021.
+    - Shell32 and WineBus libraries converted to PE.
+    - Unicode data updated to Unicode version 14.
+    - Mono engine updated to version 6.4.0, with COM improvements.
+    - More work towards Dwarf 3/4 debug support.
+    - HID joystick enabled by default.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Thu, 31 Mar 2022 03:59:06 +0000
+
 wine-development (6.17~repack-1) unstable; urgency=medium
 
   * New upstream release 6.17, released Sep 10, 2021.
