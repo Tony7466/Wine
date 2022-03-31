@@ -79,7 +79,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      unsigned char type;
      HRESULT hr;
  
-@@ -6417,7 +6417,7 @@ static HRESULT read_type_struct( struct
+@@ -6424,7 +6424,7 @@ static HRESULT read_type_struct( struct
                                   WS_HEAP *heap, void *ret, ULONG size, BOOL *found )
  {
      ULONG i, offset;
