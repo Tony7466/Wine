@@ -351,6 +351,81 @@ typedef [hidden] enum SPVALUETYPE
     SPDF_ALL           = 0x000000ff
 } SPVALUETYPE;
 
+typedef [hidden] enum SPSTREAMFORMAT
+{
+    SPSF_Default = -1,
+    SPSF_NoAssignedFormat = 0,
+    SPSF_Text,
+    SPSF_NonStandardFormat,
+    SPSF_ExtendedAudioFormat,
+    SPSF_8kHz8BitMono,
+    SPSF_8kHz8BitStereo,
+    SPSF_8kHz16BitMono,
+    SPSF_8kHz16BitStereo,
+    SPSF_11kHz8BitMono,
+    SPSF_11kHz8BitStereo,
+    SPSF_11kHz16BitMono,
+    SPSF_11kHz16BitStereo,
+    SPSF_12kHz8BitMono,
+    SPSF_12kHz8BitStereo,
+    SPSF_12kHz16BitMono,
+    SPSF_12kHz16BitStereo,
+    SPSF_16kHz8BitMono,
+    SPSF_16kHz8BitStereo,
+    SPSF_16kHz16BitMono,
+    SPSF_16kHz16BitStereo,
+    SPSF_22kHz8BitMono,
+    SPSF_22kHz8BitStereo,
+    SPSF_22kHz16BitMono,
+    SPSF_22kHz16BitStereo,
+    SPSF_24kHz8BitMono,
+    SPSF_24kHz8BitStereo,
+    SPSF_24kHz16BitMono,
+    SPSF_24kHz16BitStereo,
+    SPSF_32kHz8BitMono,
+    SPSF_32kHz8BitStereo,
+    SPSF_32kHz16BitMono,
+    SPSF_32kHz16BitStereo,
+    SPSF_44kHz8BitMono,
+    SPSF_44kHz8BitStereo,
+    SPSF_44kHz16BitMono,
+    SPSF_44kHz16BitStereo,
+    SPSF_48kHz8BitMono,
+    SPSF_48kHz8BitStereo,
+    SPSF_48kHz16BitMono,
+    SPSF_48kHz16BitStereo,
+    SPSF_TrueSpeech_8kHz1BitMono,
+    SPSF_CCITT_ALaw_8kHzMono,
+    SPSF_CCITT_ALaw_8kHzStereo,
+    SPSF_CCITT_ALaw_11kHzMono,
+    SPSF_CCITT_ALaw_11kHzStereo,
+    SPSF_CCITT_ALaw_22kHzMono,
+    SPSF_CCITT_ALaw_22kHzStereo,
+    SPSF_CCITT_ALaw_44kHzMono,
+    SPSF_CCITT_ALaw_44kHzStereo,
+    SPSF_CCITT_uLaw_8kHzMono,
+    SPSF_CCITT_uLaw_8kHzStereo,
+    SPSF_CCITT_uLaw_11kHzMono,
+    SPSF_CCITT_uLaw_11kHzStereo,
+    SPSF_CCITT_uLaw_22kHzMono,
+    SPSF_CCITT_uLaw_22kHzStereo,
+    SPSF_CCITT_uLaw_44kHzMono,
+    SPSF_CCITT_uLaw_44kHzStereo,
+    SPSF_ADPCM_8kHzMono,
+    SPSF_ADPCM_8kHzStereo,
+    SPSF_ADPCM_11kHzMono,
+    SPSF_ADPCM_11kHzStereo,
+    SPSF_ADPCM_22kHzMono,
+    SPSF_ADPCM_22kHzStereo,
+    SPSF_ADPCM_44kHzMono,
+    SPSF_ADPCM_44kHzStereo,
+    SPSF_GSM610_8kHzMono,
+    SPSF_GSM610_11kHzMono,
+    SPSF_GSM610_22kHzMono,
+    SPSF_GSM610_44kHzMono,
+    SPSF_NUM_FORMATS
+} SPSTREAMFORMAT;
+
 typedef unsigned short SPPHONEID;
 
 typedef [restricted, hidden] struct SPPHRASEELEMENT
@@ -992,6 +1067,31 @@ interface ISpVoice : ISpEventSource
 
 [
     object,
+    uuid(be7a9cc9-5f9e-11d2-960f-00c04f8ee628),
+    pointer_default(unique),
+    local,
+    restricted
+]
+interface ISpEventSink : IUnknown
+{
+    HRESULT AddEvents([in] const SPEVENT *events, [in] ULONG count);
+    HRESULT GetEventInterest([out] ULONGLONG *interest);
+};
+
+[
+    object,
+    uuid(5b559f40-e952-11d2-bb91-00c04f8ee6c0),
+    pointer_default(unique),
+    restricted
+]
+interface ISpObjectWithToken : IUnknown
+{
+    HRESULT SetObjectToken([in] ISpObjectToken *token);
+    HRESULT GetObjectToken([out] ISpObjectToken **token);
+};
+
+[
+    object,
     uuid(bed530be-2606-4f4d-a1c0-54c5cda5566f),
     pointer_default(unique),
     restricted
@@ -1021,6 +1121,21 @@ interface ISpAudio : ISpStreamFormat
     HRESULT SetVolumeLevel([in] ULONG level);
     HRESULT GetBufferNotifySize([out] ULONG *size);
     HRESULT SetBufferNotifySize([in] ULONG size);
+};
+[
+    object,
+    uuid(15806f6e-1d70-4b48-98e6-3b1a007509ab),
+    pointer_default(unique),
+    local,
+    restricted
+]
+interface ISpMMSysAudio : ISpAudio
+{
+    HRESULT GetDeviceId([out] UINT *id);
+    HRESULT SetDeviceId([in] UINT id);
+    HRESULT GetMMHandle([out] void **handle);
+    HRESULT GetLineId([out] UINT *id);
+    HRESULT SetLineId([in] UINT id);
 };
 
 [
@@ -1178,5 +1293,27 @@ library SpeechLib
     {
         interface ISpStream;
         [default] interface ISpeechFileStream;
+    };
+
+    [
+        uuid(cf3d2e50-53f2-11d2-960c-00c04f8ee628)
+    ]
+    coclass SpMMAudioIn
+    {
+        interface ISpEventSource;
+        interface ISpEventSink;
+        interface ISpObjectWithToken;
+        interface ISpMMSysAudio;
+    };
+
+    [
+        uuid(a8c680eb-3d32-11d2-9ee7-00c04f797396)
+    ]
+    coclass SpMMAudioOut
+    {
+        interface ISpEventSource;
+        interface ISpEventSink;
+        interface ISpObjectWithToken;
+        interface ISpMMSysAudio;
     };
 }

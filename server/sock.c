@@ -795,6 +795,7 @@ static void free_poll_req( void *private )
     release_object( req->async );
     release_object( req->iosb );
     list_remove( &req->entry );
+    free( req->output );
     free( req );
 }
 
@@ -849,6 +850,7 @@ static void complete_async_poll( struct poll_req *req, unsigned int status )
 
     /* pass 0 as result; client will set actual result size */
     async_request_complete( req->async, status, 0, req->count * sizeof(*req->output), req->output );
+    req->output = NULL;
 }
 
 static void complete_async_polls( struct sock *sock, int event, int error )
@@ -2289,9 +2291,6 @@ static void sock_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
             if (!send_len) return;
         }
 
-        if (!(req = mem_alloc( sizeof(*req) )))
-            return;
-
         sock->state = SOCK_CONNECTING;
 
         if (params->synchronous && sock->nonblocking)
@@ -2300,6 +2299,9 @@ static void sock_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
             set_error( STATUS_DEVICE_NOT_READY );
             return;
         }
+
+        if (!(req = mem_alloc( sizeof(*req) )))
+            return;
 
         req->async = (struct async *)grab_object( async );
         req->iosb = async_get_iosb( async );
