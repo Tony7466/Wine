@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -3281,6 +3281,7 @@ static void output_module( struct makefi
+@@ -3312,6 +3312,7 @@ static void output_module( struct makefi
  {
      struct strarray all_libs = empty_strarray;
      struct strarray dep_libs = empty_strarray;
@@ -11,24 +11,22 @@ author: Michael Gilbert <mgilbert@debian.org>
      char *module_path = obj_dir_path( make, make->module );
      const char *debug_file = NULL;
      char *spec_file = NULL;
-@@ -3349,6 +3350,7 @@ static void output_module( struct makefi
+@@ -3380,6 +3381,7 @@ static void output_module( struct makefi
      if (debug_file) output_filename( strmake( "-Wl,--debug-file,%s", obj_dir_path( make, debug_file )));
      output_filenames( all_libs );
      output_filename( make->is_cross ? "$(CROSSLDFLAGS)" : "$(LDFLAGS)" );
 +    output_filenames( extra_ldflags );
      output( "\n" );
  
-     if (make->unixobj_files.count)
+     if (make->unixlib)
 --- a/dlls/cabinet/Makefile.in
 +++ b/dlls/cabinet/Makefile.in
-@@ -1,11 +1,12 @@
+@@ -1,9 +1,10 @@
  MODULE    = cabinet.dll
  IMPORTLIB = cabinet
  
 +EXTRA_LDFLAGS = -lz
 +
- EXTRADLLFLAGS = -mno-cygwin
- 
  C_SRCS = \
  	cabinet_main.c \
 -	deflate.c \
@@ -57,14 +55,12 @@ author: Michael Gilbert <mgilbert@debian.org>
  #include "wine/debug.h"
 --- a/dlls/opcservices/Makefile.in
 +++ b/dlls/opcservices/Makefile.in
-@@ -1,11 +1,12 @@
+@@ -1,9 +1,10 @@
  MODULE  = opcservices.dll
  IMPORTS = uuid ole32 advapi32 urlmon xmllite oleaut32
  
 +EXTRA_LDFLAGS = -lz
 +
- EXTRADLLFLAGS = -mno-cygwin
- 
  C_SRCS = \
  	compress.c \
 -	deflate.c \
@@ -113,16 +109,15 @@ author: Michael Gilbert <mgilbert@debian.org>
  #include "wine/exception.h"
 --- a/dlls/wininet/Makefile.in
 +++ b/dlls/wininet/Makefile.in
-@@ -3,6 +3,8 @@ IMPORTLIB = wininet
+@@ -3,13 +3,14 @@ IMPORTLIB = wininet
  IMPORTS   = mpr shlwapi shell32 user32 ws2_32 advapi32
  DELAYIMPORTS = secur32 crypt32 cryptui dhcpcsvc iphlpapi
  
 +EXTRA_LDFLAGS = -lz
 +
- EXTRADLLFLAGS = -mno-cygwin
- 
  C_SRCS = \
-@@ -11,7 +13,6 @@ C_SRCS = \
+ 	cookie.c \
+ 	dialogs.c \
  	ftp.c \
  	gopher.c \
  	http.c \
@@ -138,10 +133,10 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 +EXTRA_LDFLAGS = -lz
 +
- EXTRADLLFLAGS = -mno-cygwin
- 
  C_SRCS = \
-@@ -15,7 +17,6 @@ C_SRCS = \
+ 	coff.c \
+ 	cpu_arm.c \
+@@ -13,7 +15,6 @@ C_SRCS = \
  	dwarf.c \
  	elf_module.c \
  	image.c \
@@ -159,9 +154,9 @@ author: Michael Gilbert <mgilbert@debian.org>
 +#undef FAR
 +
  #include <sys/types.h>
- #include <limits.h>
  #include <stdlib.h>
-@@ -39,7 +42,6 @@
+ #include <string.h>
+@@ -38,7 +41,6 @@
  
  #include "dbghelp_private.h"
  #include "image_private.h"

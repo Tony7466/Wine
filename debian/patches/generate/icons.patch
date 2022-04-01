@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -1580,6 +1580,9 @@ static struct file *open_include_file( c
+@@ -1585,6 +1585,9 @@ static struct file *open_include_file( c
  
      if (pFile->type == INCL_SYSTEM) return NULL;  /* ignore system files we cannot find */
  
@@ -13,7 +13,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      /* try in src file directory */
      if ((file = open_file_same_dir( pFile->included_by, pFile->name, &pFile->filename ))) return file;
  
-@@ -2959,6 +2962,17 @@ static void output_source_svg( struct ma
+@@ -2993,6 +2996,17 @@ static void output_source_svg( struct ma
  
          if (images[i])
          {
@@ -49,7 +49,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 +SVG_SRCS = oic_hand.svg
 --- a/dlls/comdlg32/Makefile.in
 +++ b/dlls/comdlg32/Makefile.in
-@@ -22,6 +22,12 @@ SVG_SRCS = \
+@@ -20,6 +20,12 @@ SVG_SRCS = \
  	pd32_collate.svg \
  	pd32_landscape.svg \
  	pd32_nocollate.svg \
@@ -65,7 +65,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  IDL_SRCS = comdlg32_classes.idl
 --- a/dlls/comctl32/Makefile.in
 +++ b/dlls/comctl32/Makefile.in
-@@ -55,4 +55,8 @@ SVG_SRCS = \
+@@ -53,4 +53,8 @@ SVG_SRCS = \
  	idc_copy.svg \
  	idc_divider.svg \
  	idc_divideropen.svg \

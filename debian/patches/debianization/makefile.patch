@@ -14,5 +14,5 @@ forwarded: not-needed
 -dlldir          = ${libdir}/wine
 +dlldir          = ${libdir}
  srcdir          = @srcdir@
+ host_cpu        = @host_cpu@
  SHELL           = /bin/sh
- ARCH            = @ARCH@
