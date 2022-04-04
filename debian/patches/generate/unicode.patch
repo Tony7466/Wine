@@ -76,7 +76,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              }
              elsif ($decomp =~ /^([0-9a-fA-F]+)$/)
              {
-@@ -1975,6 +1964,297 @@ sub dump_bidi_dir_table($)
+@@ -1981,6 +1970,297 @@ sub dump_bidi_dir_table($)
      save_file($filename);
  }
  
@@ -374,7 +374,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  sub rol($$)
  {
-@@ -2808,7 +3088,12 @@ sub save_file($)
+@@ -2814,7 +3094,12 @@ sub save_file($)
  
  chdir ".." if -f "./make_unicode";
  load_data();

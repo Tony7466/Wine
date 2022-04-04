@@ -156,7 +156,6 @@ endif
 	./configure $(CONFLAGS)
 
 override_dh_auto_build-indep:
-	make -C libs/port
 	make -C tools/sfnt2fon
 	make -C fonts
 

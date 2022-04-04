@@ -1,5 +1,6 @@
-description: fix lintian manpage warnings
+description: remove incorrect backslashes from the msiexec manpage
 author: Michael Gilbert <mgilbert@debian.org>
+forwarded: not-needed
 
 --- a/programs/msiexec/msiexec.man.in
 +++ b/programs/msiexec/msiexec.man.in

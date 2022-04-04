@@ -76,7 +76,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          # We aggregate all types in here for cross-referencing.
          self.funcs = {}
-@@ -3779,11 +3782,6 @@ def set_working_directory():
+@@ -3785,11 +3788,6 @@ def set_working_directory():
      path = os.path.dirname(path)
      os.chdir(path)
  
@@ -88,7 +88,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  def main():
      parser = argparse.ArgumentParser()
      parser.add_argument("-v", "--verbose", action="count", default=0, help="increase output verbosity")
-@@ -3803,7 +3801,6 @@ def main():
+@@ -3809,7 +3807,6 @@ def main():
          vk_xml = args.xml
      else:
          vk_xml = "vk-{0}.xml".format(VK_XML_VERSION)
@@ -98,7 +98,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      generator = VkGenerator(registry)
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -5399,9 +5399,9 @@ const char *wined3d_debug_vkresult(VkRes
+@@ -5401,9 +5401,9 @@ const char *wined3d_debug_vkresult(VkRes
      switch (vr)
      {
  #define WINED3D_TO_STR(x) case x: return #x
@@ -112,7 +112,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          WINED3D_TO_STR(VK_ERROR_INVALID_SHADER_NV);
 --- a/dlls/wined3d/adapter_vk.c
 +++ b/dlls/wined3d/adapter_vk.c
-@@ -2230,7 +2230,7 @@ static bool wined3d_adapter_vk_init_devi
+@@ -2234,7 +2234,7 @@ static bool wined3d_adapter_vk_init_devi
      {
          {VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME,          ~0u},
          {VK_EXT_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME,    ~0u,                true},

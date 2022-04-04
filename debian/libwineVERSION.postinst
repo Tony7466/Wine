@@ -2,7 +2,7 @@
 
 set -e
 
-if [ "$1" = "configure" ] || [ "$1" = "triggered" ] || [ "$1" = "upgrade" ] ; then
+if [ "$1" = "configure" ] || [ "$1" = "triggered" ]; then
 
     # copy zlib dlls from libz-mingw
     for mingw_arch in i686 x86_64; do
@@ -20,6 +20,10 @@ if [ "$1" = "configure" ] || [ "$1" = "triggered" ] || [ "$1" = "upgrade" ] ; th
         printf "%b" "\0\0\0\0\0\0\0\0" >> $out
         tail -c +97 $in >> $out
     done
+
+fi
+
+if [ "$1" = "upgrade" ]; then
 
     # get rid of obsolete zlib dlls
     if dpkg --compare-versions "$2" lt-nl 6.9~repack-1~; then

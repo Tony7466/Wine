@@ -90,7 +90,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!desc) return E_INVALIDARG;
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -2684,6 +2684,9 @@ static void check_fbo_compat(struct wine
+@@ -2671,6 +2671,9 @@ static void check_fbo_compat(struct wine
                      case WINED3D_GL_RES_TYPE_COUNT:
                          color = 0;
                          break;
@@ -113,7 +113,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/tools/winedump/msc.c
 +++ b/tools/winedump/msc.c
-@@ -516,7 +516,7 @@ static void do_field(const unsigned char
+@@ -503,7 +503,7 @@ static void do_field(const unsigned char
      const unsigned char*        ptr = start;
      const char*                 cstr;
      const struct p_string*      pstr;
@@ -122,7 +122,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      while (ptr < end)
      {
-@@ -808,7 +808,7 @@ static void do_field(const unsigned char
+@@ -795,7 +795,7 @@ static void do_field(const unsigned char
  static void codeview_dump_one_type(unsigned curr_type, const union codeview_type* type)
  {
      const union codeview_reftype* reftype = (const union codeview_reftype*)type;
@@ -133,7 +133,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/tools/winebuild/import.c
 +++ b/tools/winebuild/import.c
-@@ -182,8 +182,11 @@ static int func_cmp( const void *func1,
+@@ -175,8 +175,11 @@ static int func_cmp( const void *func1,
  {
      const ORDDEF *odp1 = *(const ORDDEF * const *)func1;
      const ORDDEF *odp2 = *(const ORDDEF * const *)func2;

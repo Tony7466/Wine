@@ -1,0 +1,48 @@
+description: call wineDEBSUFFIX instead of wine from desktop launchers
+author: Michael Gilbert <mgilbert@debian.org>
+author: Jens Reyer <jre.winesim@gmail.com>
+forwarded: not-needed
+
+--- a/programs/winemenubuilder/Makefile.in
++++ b/programs/winemenubuilder/Makefile.in
+@@ -1,5 +1,6 @@
+ MODULE    = winemenubuilder.exe
+ IMPORTS   = uuid windowscodecs shell32 shlwapi ole32 user32 advapi32
++EXTRADEFS = -DDEBSUFFIX="\"${DEBSUFFIX}\""
+ 
+ EXTRADLLFLAGS = -mwindows -municode
+ 
+--- a/programs/winemenubuilder/winemenubuilder.c
++++ b/programs/winemenubuilder/winemenubuilder.c
+@@ -97,6 +97,8 @@ WINE_DEFAULT_DEBUG_CHANNEL(menubuilder);
+ #define IS_OPTION_TRUE(ch) \
+     ((ch) == 'y' || (ch) == 'Y' || (ch) == 't' || (ch) == 'T' || (ch) == '1')
+ 
++static const char wine_debsuffix[] = "wine" DEBSUFFIX;
++
+ /* link file formats */
+ 
+ #include "pshpack1.h"
+@@ -1418,7 +1420,7 @@ static BOOL write_desktop_entry(const WC
+         fprintf(file, "env WINEPREFIX=\"%s\" ", path);
+         heap_free( path );
+     }
+-    fprintf(file, "wine %s", escape(path));
++    fprintf(file, "%s %s", wine_debsuffix, escape(path));
+     if (args) fprintf(file, " %s", escape(args) );
+     fputc( '\n', file );
+     fprintf(file, "Type=Application\n");
+@@ -2123,11 +2125,11 @@ static BOOL write_freedesktop_associatio
+         if (prefix)
+         {
+             char *path = wine_get_unix_file_name( prefix );
+-            fprintf(desktop, "Exec=env WINEPREFIX=\"%s\" wine start /ProgIDOpen %s %%f\n", path, escape(progId));
++            fprintf(desktop, "Exec=env WINEPREFIX=\"%s\" %s start /ProgIDOpen %s %%f\n", path, wine_debsuffix, escape(progId));
+             heap_free( path );
+         }
+         else
+-            fprintf(desktop, "Exec=wine start /ProgIDOpen %s %%f\n", escape(progId));
++            fprintf(desktop, "Exec=%s start /ProgIDOpen %s %%f\n", wine_debsuffix, escape(progId));
+         fprintf(desktop, "NoDisplay=true\n");
+         fprintf(desktop, "StartupNotify=true\n");
+         if (openWithIcon)

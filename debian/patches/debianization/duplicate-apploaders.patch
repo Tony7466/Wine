@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -3503,11 +3503,6 @@ static void output_module( struct makefi
+@@ -3331,11 +3331,6 @@ static void output_module( struct makefi
  
      if (spec_file)
          output_man_pages( make );

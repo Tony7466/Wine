@@ -1,11 +1,10 @@
-debianization/mingw.patch
-debianization/addons.patch
-debianization/makefile.patch
-debianization/manpages.patch
-debianization/winebuild.patch
-debianization/wineapploader.patch
+debianization/addon-paths.patch
+debianization/makefile-paths.patch
 debianization/version-string.patch
-debianization/winemenubuilder.patch
+debianization/desktop-launchers.patch
+debianization/manpage-msiexec.patch
+debianization/manpage-winebuild.patch
+debianization/duplicate-apploaders.patch
 debianization/wineserver-persistence.patch
 
 system/zlib.patch
@@ -16,7 +15,7 @@ disable/generated-data.patch
 disable/addons-download.patch
 disable/po-modifications.patch
 disable/font-installation.patch
-disable/blacklist-extensions.patch
+disable/file-associations.patch
 
 generate/icons.patch
 generate/opengl.patch

@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -3312,6 +3312,7 @@ static void output_module( struct makefi
+@@ -3140,6 +3140,7 @@ static void output_module( struct makefi
  {
      struct strarray all_libs = empty_strarray;
      struct strarray dep_libs = empty_strarray;
@@ -11,7 +11,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      char *module_path = obj_dir_path( make, make->module );
      const char *debug_file = NULL;
      char *spec_file = NULL;
-@@ -3380,6 +3381,7 @@ static void output_module( struct makefi
+@@ -3208,6 +3209,7 @@ static void output_module( struct makefi
      if (debug_file) output_filename( strmake( "-Wl,--debug-file,%s", obj_dir_path( make, debug_file )));
      output_filenames( all_libs );
      output_filename( make->is_cross ? "$(CROSSLDFLAGS)" : "$(LDFLAGS)" );
