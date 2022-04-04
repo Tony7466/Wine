@@ -1,3 +1,9 @@
+wine-development (6.19~repack-2) unstable; urgency=medium
+
+  * Fix uninitialized variable warnings.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Mon, 04 Apr 2022 03:10:09 +0000
+
 wine-development (6.19~repack-1) unstable; urgency=medium
 
   * New upstream release 6.19, released Oct 8, 2021.

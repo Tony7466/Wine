@@ -195,3 +195,23 @@ author: Michael Gilbert <mgilbert@debian.org>
      struct point2d *prevpt, *pt;
      BOOL ret = FALSE;
  
+--- a/dlls/win32u/region.c
++++ b/dlls/win32u/region.c
+@@ -410,6 +410,7 @@ static BOOL init_region( WINEREGION *pRe
+ {
+     n = max( n, RGN_DEFAULT_RECTS );
+ 
++    pReg->rects = NULL;
+     if (n > RGN_DEFAULT_RECTS)
+     {
+         if (n > INT_MAX / sizeof(RECT)) return FALSE;
+--- a/dlls/win32u/dc.c
++++ b/dlls/win32u/dc.c
+@@ -947,6 +947,7 @@ BOOL WINAPI NtGdiGetAndSetDCDword( HDC h
+ 
+     default:
+         WARN( "unknown method %u\n", method );
++        prev = 0;
+         ret = FALSE;
+         break;
+     }
