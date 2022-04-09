@@ -187,6 +187,7 @@ ULONG CDECL wined3d_decref(struct wined3d *wined3d)
     {
         unsigned int i;
 
+        wined3d_mutex_lock();
         for (i = 0; i < wined3d->adapter_count; ++i)
         {
             struct wined3d_adapter *adapter = wined3d->adapters[i];
@@ -194,6 +195,7 @@ ULONG CDECL wined3d_decref(struct wined3d *wined3d)
             adapter->adapter_ops->adapter_destroy(adapter);
         }
         heap_free(wined3d);
+        wined3d_mutex_unlock();
     }
 
     return refcount;
@@ -2798,6 +2800,11 @@ static void adapter_no3d_copy_bo_address(struct wined3d_context *context,
     memcpy(dst->addr, src->addr, size);
 }
 
+static void adapter_no3d_flush_bo_address(struct wined3d_context *context,
+        const struct wined3d_const_bo_address *data, size_t size)
+{
+}
+
 static HRESULT adapter_no3d_create_swapchain(struct wined3d_device *device,
         struct wined3d_swapchain_desc *desc, struct wined3d_swapchain_state_parent *state_parent,
         void *parent, const struct wined3d_parent_ops *parent_ops, struct wined3d_swapchain **swapchain)
@@ -3067,6 +3074,7 @@ static const struct wined3d_adapter_ops wined3d_adapter_no3d_ops =
     .adapter_map_bo_address = adapter_no3d_map_bo_address,
     .adapter_unmap_bo_address = adapter_no3d_unmap_bo_address,
     .adapter_copy_bo_address = adapter_no3d_copy_bo_address,
+    .adapter_flush_bo_address = adapter_no3d_flush_bo_address,
     .adapter_create_swapchain = adapter_no3d_create_swapchain,
     .adapter_destroy_swapchain = adapter_no3d_destroy_swapchain,
     .adapter_create_buffer = adapter_no3d_create_buffer,

@@ -4321,7 +4321,7 @@ static BOOL CALLBACK bcast_desktop( LPWSTR desktop, LPARAM lp )
     }
 
     ret = EnumDesktopWindows( hdesktop, bcast_childwindow, lp );
-    CloseDesktop(hdesktop);
+    NtUserCloseDesktop( hdesktop );
     TRACE("-->%d\n", ret);
     return parm->success;
 }
@@ -4335,7 +4335,7 @@ static BOOL CALLBACK bcast_winsta( LPWSTR winsta, LPARAM lp )
         return TRUE;
     ((BroadcastParm *)lp)->winsta = hwinsta;
     ret = EnumDesktopsW( hwinsta, bcast_desktop, lp );
-    CloseWindowStation( hwinsta );
+    NtUserCloseWindowStation( hwinsta );
     TRACE("-->%d\n", ret);
     return ret;
 }
