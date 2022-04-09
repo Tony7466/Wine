@@ -30,7 +30,6 @@ Files-Excluded:
  dlls/winevulkan/vulkan_thunks.c
  dlls/winevulkan/winevulkan.json
  dlls/winevulkan/winevulkan.spec
- dlls/gdi32/vertical.c
  dlls/gdi32/uniscribe/direction.c
  dlls/gdi32/uniscribe/bracket.c
  dlls/gdi32/uniscribe/indicsyllable.c
@@ -44,12 +43,13 @@ Files-Excluded:
  dlls/dwrite/scripts.c
  dlls/dwrite/scripts.h
  dlls/dwrite/shapers/arabic_table.c
- dlls/kernelbase/collation.c
- dlls/kernelbase/digitmap.c
+ dlls/win32u/vertical.c
  dlls/wineps.drv/vertical.c
  dlls/opengl32/opengl_ext.c
  dlls/opengl32/opengl_norm.c
  dlls/opengl32/opengl32.spec
+ dlls/kernelbase/collation.c
+ dlls/kernelbase/digitmap.c
  dlls/*/tests/generated.c
 Upstream-Name: Wine
 

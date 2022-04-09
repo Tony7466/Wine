@@ -3,9 +3,9 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -886,11 +886,6 @@ case $host_os in
- 
+@@ -875,11 +875,6 @@ case $host_os in
    *)
+     AC_DEFINE(_GNU_SOURCE,1,[Define to 1 to enable GNU extensions on Linux])
      case $host_cpu in
 -      *i[[3456789]]86*)
 -        DLLFLAGS="$DLLFLAGS -fno-PIC"

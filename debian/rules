@@ -53,6 +53,7 @@ CONFLAGS=--with-gnutls \
          --mandir=/$(MANDIR) \
          --includedir=/$(INCDIR) \
          --datarootdir=/$(DATDIR) \
+         ZLIB_PE_LIBS=z \
          $(shell dpkg-buildflags --export=cmdline) \
 
 # enable wine64 on 64-bit architectures
@@ -150,14 +151,20 @@ override_dh_auto_configure:
 	ln -sf ../../dlls/shell32/resources/optical_drive.svg dlls/comdlg32/cdrom.svg
 ifneq (,$(filter $(DEB_HOST_ARCH),i386 amd64))
 	# ensure system zlib files are used for i386 and amd64
-	rm -f dlls/*/zlib.h dlls/*/inflate.c dlls/*/deflate.c
+	rm -rf libs/zlib
 endif
 	# execute wine's configure script
 	./configure $(CONFLAGS)
 
 override_dh_auto_build-indep:
+	# only build fonts for the architecture-independent packages
 	make -C tools/sfnt2fon
 	make -C fonts
+
+override_dh_auto_build-arch:
+	# build wine's headers upfront to avoid incompatible mingw versions
+	make -C include
+	dh_auto_build
 
 override_dh_auto_test:
 	# disabled, there are currently too many failing tests
@@ -210,9 +217,10 @@ endif
 ifeq ($(DEB_HOST_ARCH_BITS), 64)
 	cp debian/tmp/wine$(DEBSUFFIX).man debian/tmp/wine64$(DEBSUFFIX).man
 endif
-	# copy wine-preloader script
-	test -f debian/tmp/$(BINDIR)/wine-preloader || \
-	    cp debian/scripts/wine-preloader debian/tmp/$(BINDIR)
+	# copy wine-preloader
+	test -f debian/tmp/$(BINDIR)/wine-preloader && \
+	    mv debian/tmp/$(BINDIR)/wine-preloader debian/tmp/$(BINDIR)/wine-preloader.static || \
+	    cp debian/scripts/wine-preloader.static debian/tmp/$(BINDIR)
 	# files to exclude from the architecture-dependent packages
 	rm -rf debian/tmp/usr/share/man
 	rm -f debian/tmp/usr/lib/*/wineserver

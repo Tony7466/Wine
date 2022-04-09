@@ -28,7 +28,6 @@ libs/wine/compose.c
 libs/wine/digitmap.c
 libs/wine/decompose.c
 libs/wine/collation.c
-dlls/gdi32/vertical.c
 dlls/gdi32/uniscribe/bracket.c
 dlls/gdi32/uniscribe/direction.c
 dlls/gdi32/uniscribe/indicsyllable.c
@@ -42,6 +41,7 @@ dlls/dwrite/mirror.c
 dlls/dwrite/scripts.c
 dlls/dwrite/scripts.h
 dlls/dwrite/shapers/arabic_table.c
+dlls/win32u/vertical.c
 dlls/wineps.drv/vertical.c
 dlls/kernelbase/collation.c
 dlls/kernelbase/digitmap.c

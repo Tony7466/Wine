@@ -1,166 +1,24 @@
 description: build using system zlib
 author: Michael Gilbert <mgilbert@debian.org>
+forwarded: not-needed
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -3140,6 +3140,7 @@ static void output_module( struct makefi
- {
-     struct strarray all_libs = empty_strarray;
-     struct strarray dep_libs = empty_strarray;
-+    struct strarray extra_ldflags = get_expanded_make_var_array( make, "EXTRA_LDFLAGS" );
-     char *module_path = obj_dir_path( make, make->module );
-     const char *debug_file = NULL;
-     char *spec_file = NULL;
-@@ -3208,6 +3209,7 @@ static void output_module( struct makefi
-     if (debug_file) output_filename( strmake( "-Wl,--debug-file,%s", obj_dir_path( make, debug_file )));
-     output_filenames( all_libs );
-     output_filename( make->is_cross ? "$(CROSSLDFLAGS)" : "$(LDFLAGS)" );
-+    output_filenames( extra_ldflags );
-     output( "\n" );
- 
-     if (make->unixlib)
---- a/dlls/cabinet/Makefile.in
-+++ b/dlls/cabinet/Makefile.in
-@@ -1,9 +1,10 @@
- MODULE    = cabinet.dll
- IMPORTLIB = cabinet
- 
-+EXTRA_LDFLAGS = -lz
-+
- C_SRCS = \
- 	cabinet_main.c \
--	deflate.c \
- 	fci.c \
- 	fdi.c
- 
---- a/dlls/cabinet/fci.c
-+++ b/dlls/cabinet/fci.c
-@@ -30,6 +30,9 @@ There is still some work to be done:
- 
- */
- 
-+#include "zlib.h"
-+#undef FAR
-+
- #include <assert.h>
- #include <stdarg.h>
- #include <stdio.h>
-@@ -42,7 +45,6 @@ There is still some work to be done:
- #include "winerror.h"
- #include "winternl.h"
- #include "fci.h"
--#include "zlib.h"
- #include "cabinet.h"
- #include "wine/list.h"
- #include "wine/debug.h"
---- a/dlls/opcservices/Makefile.in
-+++ b/dlls/opcservices/Makefile.in
-@@ -1,9 +1,10 @@
- MODULE  = opcservices.dll
- IMPORTS = uuid ole32 advapi32 urlmon xmllite oleaut32
- 
-+EXTRA_LDFLAGS = -lz
-+
- C_SRCS = \
- 	compress.c \
--	deflate.c \
- 	factory.c \
- 	package.c \
- 	uri.c
---- a/dlls/opcservices/compress.c
-+++ b/dlls/opcservices/compress.c
-@@ -16,6 +16,9 @@
-  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
-  */
- 
-+#include "zlib.h"
-+#undef FAR
-+
- #define COBJMACROS
- 
- #include <stdarg.h>
-@@ -25,7 +28,6 @@
- #include "msopc.h"
- 
- #include "opc_private.h"
--#include "zlib.h"
- 
- #include "wine/debug.h"
- #include "wine/heap.h"
---- a/dlls/wininet/http.c
-+++ b/dlls/wininet/http.c
-@@ -27,6 +27,9 @@
-  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
-  */
- 
-+#include "zlib.h"
-+#undef FAR
-+
- #include <stdlib.h>
- 
- #include "winsock2.h"
-@@ -53,7 +56,6 @@
- #include "winuser.h"
- 
- #include "internet.h"
--#include "zlib.h"
- #include "resource.h"
- #include "wine/debug.h"
- #include "wine/exception.h"
---- a/dlls/wininet/Makefile.in
-+++ b/dlls/wininet/Makefile.in
-@@ -3,13 +3,14 @@ IMPORTLIB = wininet
- IMPORTS   = mpr shlwapi shell32 user32 ws2_32 advapi32
- DELAYIMPORTS = secur32 crypt32 cryptui dhcpcsvc iphlpapi
- 
-+EXTRA_LDFLAGS = -lz
-+
- C_SRCS = \
- 	cookie.c \
- 	dialogs.c \
- 	ftp.c \
- 	gopher.c \
- 	http.c \
--	inflate.c \
- 	internet.c \
- 	netconnection.c \
- 	urlcache.c \
---- a/dlls/dbghelp/Makefile.in
-+++ b/dlls/dbghelp/Makefile.in
-@@ -3,6 +3,8 @@ IMPORTLIB = dbghelp
- EXTRADEFS = -D_IMAGEHLP_SOURCE_
- DELAYIMPORTS = version
- 
-+EXTRA_LDFLAGS = -lz
-+
- C_SRCS = \
- 	coff.c \
- 	cpu_arm.c \
-@@ -13,7 +15,6 @@ C_SRCS = \
- 	dwarf.c \
- 	elf_module.c \
- 	image.c \
--	inflate.c \
- 	macho_module.c \
- 	minidump.c \
- 	module.c \
---- a/dlls/dbghelp/dwarf.c
-+++ b/dlls/dbghelp/dwarf.c
-@@ -22,6 +22,9 @@
- 
- #define NONAMELESSUNION
- 
-+#include "zlib.h"
-+#undef FAR
-+
- #include <sys/types.h>
- #include <stdlib.h>
- #include <string.h>
-@@ -38,7 +41,6 @@
- 
- #include "dbghelp_private.h"
- #include "image_private.h"
--#include "zlib.h"
- 
- #include "wine/debug.h"
- 
+@@ -1409,6 +1409,7 @@ static struct file *open_include_file( c
+     if (pFile->type == INCL_SYSTEM && pFile->use_msvcrt &&
+         !make->extlib && !pFile->included_by->is_external)
+     {
++        if (!strcmp( pFile->name, "zlib.h" )) return NULL;
+         if (!strcmp( pFile->name, "stdarg.h" )) return NULL;
+         if (!strcmp( pFile->name, "x86intrin.h" )) return NULL;
+         fprintf( stderr, "%s:%d: error: system header %s cannot be used with msvcrt\n",
+--- a/configure.ac
++++ b/configure.ac
+@@ -3632,7 +3632,6 @@ WINE_CONFIG_MAKEFILE(libs/wine)
+ WINE_CONFIG_MAKEFILE(libs/wmcodecdspuuid)
+ WINE_CONFIG_MAKEFILE(libs/xml2)
+ WINE_CONFIG_MAKEFILE(libs/xslt)
+-WINE_CONFIG_MAKEFILE(libs/zlib)
+ WINE_CONFIG_MAKEFILE(loader)
+ WINE_CONFIG_MAKEFILE(nls)
+ WINE_CONFIG_MAKEFILE(po)

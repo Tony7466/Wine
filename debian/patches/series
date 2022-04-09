@@ -1,9 +1,10 @@
 debianization/addon-paths.patch
+debianization/mingw-cflags.patch
 debianization/makefile-paths.patch
 debianization/version-string.patch
-debianization/desktop-launchers.patch
 debianization/manpage-msiexec.patch
 debianization/manpage-winebuild.patch
+debianization/desktop-launchers.patch
 debianization/duplicate-apploaders.patch
 debianization/wineserver-persistence.patch
 
