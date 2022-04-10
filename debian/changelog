@@ -1,3 +1,13 @@
+wine-development (6.21~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 6.21, released Nov 5, 2021.
+    - WinSpool, GPhoto, and a few other modules converted to PE.
+    - Better support for inline functions in DbgHelp.
+    - Beginnings of a MSDASQL implementation.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 10 Apr 2022 06:22:40 +0000
+
 wine-development (6.20~repack-1) unstable; urgency=medium
 
   * New upstream release 6.20, released Oct 22, 2021.
