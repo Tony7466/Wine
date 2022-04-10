@@ -35,9 +35,7 @@
 # include <sys/socket.h>
 #endif
 #include <unistd.h>
-#ifdef HAVE_POLL_H
 #include <poll.h>
-#endif
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
@@ -1868,6 +1866,8 @@ DECL_HANDLER(list_processes)
     char *buffer;
 
     reply->process_count = 0;
+    reply->total_thread_count = 0;
+    reply->total_name_len = 0;
     reply->info_size = 0;
 
     LIST_FOR_EACH_ENTRY( process, &process_list, struct process, entry )
@@ -1877,6 +1877,8 @@ DECL_HANDLER(list_processes)
         reply->info_size = (reply->info_size + 7) & ~7;
         reply->info_size += process->running_threads * sizeof(struct thread_info);
         reply->process_count++;
+        reply->total_thread_count += process->running_threads;
+        reply->total_name_len += process->imagelen;
     }
 
     if (reply->info_size > get_reply_max_size())
@@ -1916,6 +1918,8 @@ DECL_HANDLER(list_processes)
             thread_info->base_priority = thread->priority;
             thread_info->current_priority = thread->priority; /* FIXME */
             thread_info->unix_tid = thread->unix_tid;
+            thread_info->entry_point = thread->entry_point;
+            thread_info->teb = thread->teb;
             pos += sizeof(*thread_info);
         }
     }

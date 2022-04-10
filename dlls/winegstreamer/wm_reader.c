@@ -20,6 +20,512 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(wmvcore);
 
+static struct wm_stream *get_stream_by_output_number(struct wm_reader *reader, DWORD output)
+{
+    if (output < reader->stream_count)
+        return &reader->streams[output];
+    WARN("Invalid output number %u.\n", output);
+    return NULL;
+}
+
+struct output_props
+{
+    IWMOutputMediaProps IWMOutputMediaProps_iface;
+    LONG refcount;
+
+    AM_MEDIA_TYPE mt;
+};
+
+static inline struct output_props *impl_from_IWMOutputMediaProps(IWMOutputMediaProps *iface)
+{
+    return CONTAINING_RECORD(iface, struct output_props, IWMOutputMediaProps_iface);
+}
+
+static HRESULT WINAPI output_props_QueryInterface(IWMOutputMediaProps *iface, REFIID iid, void **out)
+{
+    struct output_props *props = impl_from_IWMOutputMediaProps(iface);
+
+    TRACE("props %p, iid %s, out %p.\n", iface, debugstr_guid(iid), out);
+
+    if (IsEqualGUID(iid, &IID_IUnknown) || IsEqualGUID(iid, &IID_IWMOutputMediaProps))
+        *out = &props->IWMOutputMediaProps_iface;
+    else
+    {
+        *out = NULL;
+        WARN("%s not implemented, returning E_NOINTERFACE.\n", debugstr_guid(iid));
+        return E_NOINTERFACE;
+    }
+
+    IUnknown_AddRef((IUnknown *)*out);
+    return S_OK;
+}
+
+static ULONG WINAPI output_props_AddRef(IWMOutputMediaProps *iface)
+{
+    struct output_props *props = impl_from_IWMOutputMediaProps(iface);
+    ULONG refcount = InterlockedIncrement(&props->refcount);
+
+    TRACE("%p increasing refcount to %u.\n", props, refcount);
+
+    return refcount;
+}
+
+static ULONG WINAPI output_props_Release(IWMOutputMediaProps *iface)
+{
+    struct output_props *props = impl_from_IWMOutputMediaProps(iface);
+    ULONG refcount = InterlockedDecrement(&props->refcount);
+
+    TRACE("%p decreasing refcount to %u.\n", props, refcount);
+
+    if (!refcount)
+        free(props);
+
+    return refcount;
+}
+
+static HRESULT WINAPI output_props_GetType(IWMOutputMediaProps *iface, GUID *major_type)
+{
+    FIXME("iface %p, major_type %p, stub!\n", iface, major_type);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI output_props_GetMediaType(IWMOutputMediaProps *iface, WM_MEDIA_TYPE *mt, DWORD *size)
+{
+    const struct output_props *props = impl_from_IWMOutputMediaProps(iface);
+    const DWORD req_size = *size;
+
+    TRACE("iface %p, mt %p, size %p.\n", iface, mt, size);
+
+    *size = sizeof(*mt) + props->mt.cbFormat;
+    if (!mt)
+        return S_OK;
+    if (req_size < *size)
+        return ASF_E_BUFFERTOOSMALL;
+
+    strmbase_dump_media_type(&props->mt);
+
+    memcpy(mt, &props->mt, sizeof(*mt));
+    memcpy(mt + 1, props->mt.pbFormat, props->mt.cbFormat);
+    mt->pbFormat = (BYTE *)(mt + 1);
+    return S_OK;
+}
+
+static HRESULT WINAPI output_props_SetMediaType(IWMOutputMediaProps *iface, WM_MEDIA_TYPE *mt)
+{
+    FIXME("iface %p, mt %p, stub!\n", iface, mt);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI output_props_GetStreamGroupName(IWMOutputMediaProps *iface, WCHAR *name, WORD *len)
+{
+    FIXME("iface %p, name %p, len %p, stub!\n", iface, name, len);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI output_props_GetConnectionName(IWMOutputMediaProps *iface, WCHAR *name, WORD *len)
+{
+    FIXME("iface %p, name %p, len %p, stub!\n", iface, name, len);
+    return E_NOTIMPL;
+}
+
+static const struct IWMOutputMediaPropsVtbl output_props_vtbl =
+{
+    output_props_QueryInterface,
+    output_props_AddRef,
+    output_props_Release,
+    output_props_GetType,
+    output_props_GetMediaType,
+    output_props_SetMediaType,
+    output_props_GetStreamGroupName,
+    output_props_GetConnectionName,
+};
+
+static struct output_props *unsafe_impl_from_IWMOutputMediaProps(IWMOutputMediaProps *iface)
+{
+    if (!iface)
+        return NULL;
+    assert(iface->lpVtbl == &output_props_vtbl);
+    return impl_from_IWMOutputMediaProps(iface);
+}
+
+static IWMOutputMediaProps *output_props_create(const struct wg_format *format)
+{
+    struct output_props *object;
+
+    if (!(object = calloc(1, sizeof(*object))))
+        return NULL;
+    object->IWMOutputMediaProps_iface.lpVtbl = &output_props_vtbl;
+    object->refcount = 1;
+
+    if (!amt_from_wg_format(&object->mt, format, true))
+    {
+        free(object);
+        return NULL;
+    }
+
+    TRACE("Created output properties %p.\n", object);
+    return &object->IWMOutputMediaProps_iface;
+}
+
+struct buffer
+{
+    INSSBuffer INSSBuffer_iface;
+    LONG refcount;
+
+    DWORD size;
+    BYTE data[1];
+};
+
+static struct buffer *impl_from_INSSBuffer(INSSBuffer *iface)
+{
+    return CONTAINING_RECORD(iface, struct buffer, INSSBuffer_iface);
+}
+
+static HRESULT WINAPI buffer_QueryInterface(INSSBuffer *iface, REFIID iid, void **out)
+{
+    struct buffer *buffer = impl_from_INSSBuffer(iface);
+
+    TRACE("buffer %p, iid %s, out %p.\n", iface, debugstr_guid(iid), out);
+
+    if (IsEqualGUID(iid, &IID_IUnknown) || IsEqualGUID(iid, &IID_INSSBuffer))
+        *out = &buffer->INSSBuffer_iface;
+    else
+    {
+        *out = NULL;
+        WARN("%s not implemented, returning E_NOINTERFACE.\n", debugstr_guid(iid));
+        return E_NOINTERFACE;
+    }
+
+    IUnknown_AddRef((IUnknown *)*out);
+    return S_OK;
+}
+
+static ULONG WINAPI buffer_AddRef(INSSBuffer *iface)
+{
+    struct buffer *buffer = impl_from_INSSBuffer(iface);
+    ULONG refcount = InterlockedIncrement(&buffer->refcount);
+
+    TRACE("%p increasing refcount to %u.\n", buffer, refcount);
+
+    return refcount;
+}
+
+static ULONG WINAPI buffer_Release(INSSBuffer *iface)
+{
+    struct buffer *buffer = impl_from_INSSBuffer(iface);
+    ULONG refcount = InterlockedDecrement(&buffer->refcount);
+
+    TRACE("%p decreasing refcount to %u.\n", buffer, refcount);
+
+    if (!refcount)
+        free(buffer);
+
+    return refcount;
+}
+
+static HRESULT WINAPI buffer_GetLength(INSSBuffer *iface, DWORD *size)
+{
+    FIXME("iface %p, size %p, stub!\n", iface, size);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI buffer_SetLength(INSSBuffer *iface, DWORD size)
+{
+    FIXME("iface %p, size %u, stub!\n", iface, size);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI buffer_GetMaxLength(INSSBuffer *iface, DWORD *size)
+{
+    FIXME("iface %p, size %p, stub!\n", iface, size);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI buffer_GetBuffer(INSSBuffer *iface, BYTE **data)
+{
+    FIXME("iface %p, data %p, stub!\n", iface, data);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI buffer_GetBufferAndLength(INSSBuffer *iface, BYTE **data, DWORD *size)
+{
+    struct buffer *buffer = impl_from_INSSBuffer(iface);
+
+    TRACE("buffer %p, data %p, size %p.\n", buffer, data, size);
+
+    *size = buffer->size;
+    *data = buffer->data;
+    return S_OK;
+}
+
+static const INSSBufferVtbl buffer_vtbl =
+{
+    buffer_QueryInterface,
+    buffer_AddRef,
+    buffer_Release,
+    buffer_GetLength,
+    buffer_SetLength,
+    buffer_GetMaxLength,
+    buffer_GetBuffer,
+    buffer_GetBufferAndLength,
+};
+
+struct stream_config
+{
+    IWMStreamConfig IWMStreamConfig_iface;
+    LONG refcount;
+
+    const struct wm_stream *stream;
+};
+
+static struct stream_config *impl_from_IWMStreamConfig(IWMStreamConfig *iface)
+{
+    return CONTAINING_RECORD(iface, struct stream_config, IWMStreamConfig_iface);
+}
+
+static HRESULT WINAPI stream_config_QueryInterface(IWMStreamConfig *iface, REFIID iid, void **out)
+{
+    struct stream_config *config = impl_from_IWMStreamConfig(iface);
+
+    TRACE("config %p, iid %s, out %p.\n", config, debugstr_guid(iid), out);
+
+    if (IsEqualGUID(iid, &IID_IUnknown) || IsEqualGUID(iid, &IID_IWMStreamConfig))
+        *out = &config->IWMStreamConfig_iface;
+    else
+    {
+        *out = NULL;
+        WARN("%s not implemented, returning E_NOINTERFACE.\n", debugstr_guid(iid));
+        return E_NOINTERFACE;
+    }
+
+    IUnknown_AddRef((IUnknown *)*out);
+    return S_OK;
+}
+
+static ULONG WINAPI stream_config_AddRef(IWMStreamConfig *iface)
+{
+    struct stream_config *config = impl_from_IWMStreamConfig(iface);
+    ULONG refcount = InterlockedIncrement(&config->refcount);
+
+    TRACE("%p increasing refcount to %u.\n", config, refcount);
+
+    return refcount;
+}
+
+static ULONG WINAPI stream_config_Release(IWMStreamConfig *iface)
+{
+    struct stream_config *config = impl_from_IWMStreamConfig(iface);
+    ULONG refcount = InterlockedDecrement(&config->refcount);
+
+    TRACE("%p decreasing refcount to %u.\n", config, refcount);
+
+    if (!refcount)
+    {
+        IWMProfile3_Release(&config->stream->reader->IWMProfile3_iface);
+        free(config);
+    }
+
+    return refcount;
+}
+
+static HRESULT WINAPI stream_config_GetStreamType(IWMStreamConfig *iface, GUID *type)
+{
+    struct stream_config *config = impl_from_IWMStreamConfig(iface);
+    struct wm_reader *reader = config->stream->reader;
+    AM_MEDIA_TYPE mt;
+
+    TRACE("config %p, type %p.\n", config, type);
+
+    EnterCriticalSection(&reader->cs);
+
+    if (!amt_from_wg_format(&mt, &config->stream->format, true))
+    {
+        LeaveCriticalSection(&reader->cs);
+        return E_OUTOFMEMORY;
+    }
+
+    *type = mt.majortype;
+    FreeMediaType(&mt);
+
+    LeaveCriticalSection(&reader->cs);
+
+    return S_OK;
+}
+
+static HRESULT WINAPI stream_config_GetStreamNumber(IWMStreamConfig *iface, WORD *number)
+{
+    struct stream_config *config = impl_from_IWMStreamConfig(iface);
+
+    TRACE("config %p, number %p.\n", config, number);
+
+    *number = config->stream->index + 1;
+    return S_OK;
+}
+
+static HRESULT WINAPI stream_config_SetStreamNumber(IWMStreamConfig *iface, WORD number)
+{
+    FIXME("iface %p, number %u, stub!\n", iface, number);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI stream_config_GetStreamName(IWMStreamConfig *iface, WCHAR *name, WORD *len)
+{
+    FIXME("iface %p, name %p, len %p, stub!\n", iface, name, len);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI stream_config_SetStreamName(IWMStreamConfig *iface, const WCHAR *name)
+{
+    FIXME("iface %p, name %s, stub!\n", iface, debugstr_w(name));
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI stream_config_GetConnectionName(IWMStreamConfig *iface, WCHAR *name, WORD *len)
+{
+    FIXME("iface %p, name %p, len %p, stub!\n", iface, name, len);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI stream_config_SetConnectionName(IWMStreamConfig *iface, const WCHAR *name)
+{
+    FIXME("iface %p, name %s, stub!\n", iface, debugstr_w(name));
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI stream_config_GetBitrate(IWMStreamConfig *iface, DWORD *bitrate)
+{
+    FIXME("iface %p, bitrate %p, stub!\n", iface, bitrate);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI stream_config_SetBitrate(IWMStreamConfig *iface, DWORD bitrate)
+{
+    FIXME("iface %p, bitrate %u, stub!\n", iface, bitrate);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI stream_config_GetBufferWindow(IWMStreamConfig *iface, DWORD *window)
+{
+    FIXME("iface %p, window %p, stub!\n", iface, window);
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI stream_config_SetBufferWindow(IWMStreamConfig *iface, DWORD window)
+{
+    FIXME("iface %p, window %u, stub!\n", iface, window);
+    return E_NOTIMPL;
+}
+
+static const IWMStreamConfigVtbl stream_config_vtbl =
+{
+    stream_config_QueryInterface,
+    stream_config_AddRef,
+    stream_config_Release,
+    stream_config_GetStreamType,
+    stream_config_GetStreamNumber,
+    stream_config_SetStreamNumber,
+    stream_config_GetStreamName,
+    stream_config_SetStreamName,
+    stream_config_GetConnectionName,
+    stream_config_SetConnectionName,
+    stream_config_GetBitrate,
+    stream_config_SetBitrate,
+    stream_config_GetBufferWindow,
+    stream_config_SetBufferWindow,
+};
+
+static DWORD CALLBACK read_thread(void *arg)
+{
+    struct wm_reader *reader = arg;
+    IStream *stream = reader->source_stream;
+    HANDLE file = reader->file;
+    size_t buffer_size = 4096;
+    uint64_t file_size;
+    void *data;
+
+    if (!(data = malloc(buffer_size)))
+        return 0;
+
+    if (file)
+    {
+        LARGE_INTEGER size;
+
+        GetFileSizeEx(file, &size);
+        file_size = size.QuadPart;
+    }
+    else
+    {
+        STATSTG stat;
+
+        IStream_Stat(stream, &stat, STATFLAG_NONAME);
+        file_size = stat.cbSize.QuadPart;
+    }
+
+    TRACE("Starting read thread for reader %p.\n", reader);
+
+    while (!reader->read_thread_shutdown)
+    {
+        LARGE_INTEGER large_offset;
+        uint64_t offset;
+        ULONG ret_size;
+        uint32_t size;
+        HRESULT hr;
+
+        if (!wg_parser_get_next_read_offset(reader->wg_parser, &offset, &size))
+            continue;
+
+        if (offset >= file_size)
+            size = 0;
+        else if (offset + size >= file_size)
+            size = file_size - offset;
+
+        if (!size)
+        {
+            wg_parser_push_data(reader->wg_parser, data, 0);
+            continue;
+        }
+
+        if (!array_reserve(&data, &buffer_size, size, 1))
+        {
+            free(data);
+            return 0;
+        }
+
+        ret_size = 0;
+
+        large_offset.QuadPart = offset;
+        if (file)
+        {
+            if (!SetFilePointerEx(file, large_offset, NULL, FILE_BEGIN)
+                    || !ReadFile(file, data, size, &ret_size, NULL))
+            {
+                ERR("Failed to read %u bytes at offset %I64u, error %u.\n", size, offset, GetLastError());
+                wg_parser_push_data(reader->wg_parser, NULL, 0);
+                continue;
+            }
+        }
+        else
+        {
+            if (SUCCEEDED(hr = IStream_Seek(stream, large_offset, STREAM_SEEK_SET, NULL)))
+                hr = IStream_Read(stream, data, size, &ret_size);
+            if (FAILED(hr))
+            {
+                ERR("Failed to read %u bytes at offset %I64u, hr %#x.\n", size, offset, hr);
+                wg_parser_push_data(reader->wg_parser, NULL, 0);
+                continue;
+            }
+        }
+
+        if (ret_size != size)
+            ERR("Unexpected short read: requested %u bytes, got %u.\n", size, ret_size);
+        wg_parser_push_data(reader->wg_parser, data, ret_size);
+    }
+
+    free(data);
+    TRACE("Reader is shutting down; exiting.\n");
+    return 0;
+}
+
 static struct wm_reader *impl_from_IWMProfile3(IWMProfile3 *iface)
 {
     return CONTAINING_RECORD(iface, struct wm_reader, IWMProfile3_iface);
@@ -126,19 +632,51 @@ static HRESULT WINAPI profile_SetDescription(IWMProfile3 *iface, const WCHAR *de
 
 static HRESULT WINAPI profile_GetStreamCount(IWMProfile3 *iface, DWORD *count)
 {
-    FIXME("iface %p, count %p, stub!\n", iface, count);
+    struct wm_reader *reader = impl_from_IWMProfile3(iface);
+
+    TRACE("reader %p, count %p.\n", reader, count);
 
     if (!count)
         return E_INVALIDARG;
 
-    *count = 0;
+    EnterCriticalSection(&reader->cs);
+    *count = reader->stream_count;
+    LeaveCriticalSection(&reader->cs);
     return S_OK;
 }
 
 static HRESULT WINAPI profile_GetStream(IWMProfile3 *iface, DWORD index, IWMStreamConfig **config)
 {
-    FIXME("iface %p, index %d, config %p, stub!\n", iface, index, config);
-    return E_NOTIMPL;
+    struct wm_reader *reader = impl_from_IWMProfile3(iface);
+    struct stream_config *object;
+
+    TRACE("reader %p, index %u, config %p.\n", reader, index, config);
+
+    EnterCriticalSection(&reader->cs);
+
+    if (index >= reader->stream_count)
+    {
+        LeaveCriticalSection(&reader->cs);
+        WARN("Index %u exceeds stream count %u; returning E_INVALIDARG.\n", index, reader->stream_count);
+        return E_INVALIDARG;
+    }
+
+    if (!(object = calloc(1, sizeof(*object))))
+    {
+        LeaveCriticalSection(&reader->cs);
+        return E_OUTOFMEMORY;
+    }
+
+    object->IWMStreamConfig_iface.lpVtbl = &stream_config_vtbl;
+    object->refcount = 1;
+    object->stream = &reader->streams[index];
+    IWMProfile3_AddRef(&reader->IWMProfile3_iface);
+
+    LeaveCriticalSection(&reader->cs);
+
+    TRACE("Created stream config %p.\n", object);
+    *config = &object->IWMStreamConfig_iface;
+    return S_OK;
 }
 
 static HRESULT WINAPI profile_GetStreamByNumber(IWMProfile3 *iface, WORD stream_number, IWMStreamConfig **config)
@@ -366,9 +904,68 @@ static HRESULT WINAPI header_info_GetAttributeByIndex(IWMHeaderInfo3 *iface, WOR
 static HRESULT WINAPI header_info_GetAttributeByName(IWMHeaderInfo3 *iface, WORD *stream_number,
         const WCHAR *name, WMT_ATTR_DATATYPE *type, BYTE *value, WORD *size)
 {
-    FIXME("iface %p, stream_number %p, name %s, type %p, value %p, size %p, stub!\n",
-            iface, stream_number, debugstr_w(name), type, value, size);
-    return E_NOTIMPL;
+    struct wm_reader *reader = impl_from_IWMHeaderInfo3(iface);
+    const WORD req_size = *size;
+
+    TRACE("reader %p, stream_number %p, name %s, type %p, value %p, size %u.\n",
+            reader, stream_number, debugstr_w(name), type, value, *size);
+
+    if (!stream_number)
+        return E_INVALIDARG;
+
+    if (!wcscmp(name, L"Duration"))
+    {
+        QWORD duration;
+
+        if (*stream_number)
+        {
+            WARN("Requesting duration for stream %u, returning ASF_E_NOTFOUND.\n", *stream_number);
+            return ASF_E_NOTFOUND;
+        }
+
+        *size = sizeof(QWORD);
+        if (!value)
+        {
+            *type = WMT_TYPE_QWORD;
+            return S_OK;
+        }
+        if (req_size < *size)
+            return ASF_E_BUFFERTOOSMALL;
+
+        *type = WMT_TYPE_QWORD;
+        EnterCriticalSection(&reader->cs);
+        duration = wg_parser_stream_get_duration(wg_parser_get_stream(reader->wg_parser, 0));
+        LeaveCriticalSection(&reader->cs);
+        TRACE("Returning duration %s.\n", debugstr_time(duration));
+        memcpy(value, &duration, sizeof(QWORD));
+        return S_OK;
+    }
+    else if (!wcscmp(name, L"Seekable"))
+    {
+        if (*stream_number)
+        {
+            WARN("Requesting duration for stream %u, returning ASF_E_NOTFOUND.\n", *stream_number);
+            return ASF_E_NOTFOUND;
+        }
+
+        *size = sizeof(BOOL);
+        if (!value)
+        {
+            *type = WMT_TYPE_BOOL;
+            return S_OK;
+        }
+        if (req_size < *size)
+            return ASF_E_BUFFERTOOSMALL;
+
+        *type = WMT_TYPE_BOOL;
+        *(BOOL *)value = TRUE;
+        return S_OK;
+    }
+    else
+    {
+        FIXME("Unknown attribute %s.\n", debugstr_w(name));
+        return ASF_E_NOTFOUND;
+    }
 }
 
 static HRESULT WINAPI header_info_SetAttribute(IWMHeaderInfo3 *iface, WORD stream_number,
@@ -466,7 +1063,7 @@ static HRESULT WINAPI header_info_GetAttributeByIndexEx(IWMHeaderInfo3 *iface,
 {
     FIXME("iface %p, stream_number %u, index %u, name %p, name_len %p,"
             " type %p, lang_index %p, value %p, size %p, stub!\n",
-            iface, stream_number, index, debugstr_w(name), name_len, type, lang_index, value, size);
+            iface, stream_number, index, name, name_len, type, lang_index, value, size);
     return E_NOTIMPL;
 }
 
@@ -759,6 +1356,455 @@ static const IWMReaderTimecodeVtbl timecode_vtbl =
     timecode_GetTimecodeRangeBounds,
 };
 
+static HRESULT init_stream(struct wm_reader *reader, QWORD file_size)
+{
+    struct wg_parser *wg_parser;
+    HRESULT hr;
+    WORD i;
+
+    if (!(wg_parser = wg_parser_create(WG_PARSER_DECODEBIN, false)))
+        return E_OUTOFMEMORY;
+
+    reader->wg_parser = wg_parser;
+    reader->read_thread_shutdown = false;
+    if (!(reader->read_thread = CreateThread(NULL, 0, read_thread, reader, 0, NULL)))
+    {
+        hr = E_OUTOFMEMORY;
+        goto out_destroy_parser;
+    }
+
+    if (FAILED(hr = wg_parser_connect(reader->wg_parser, file_size)))
+    {
+        ERR("Failed to connect parser, hr %#x.\n", hr);
+        goto out_shutdown_thread;
+    }
+
+    reader->stream_count = wg_parser_get_stream_count(reader->wg_parser);
+
+    if (!(reader->streams = calloc(reader->stream_count, sizeof(*reader->streams))))
+    {
+        hr = E_OUTOFMEMORY;
+        goto out_disconnect_parser;
+    }
+
+    for (i = 0; i < reader->stream_count; ++i)
+    {
+        struct wm_stream *stream = &reader->streams[i];
+
+        stream->wg_stream = wg_parser_get_stream(reader->wg_parser, i);
+        stream->reader = reader;
+        stream->index = i;
+        wg_parser_stream_get_preferred_format(stream->wg_stream, &stream->format);
+        if (stream->format.major_type == WG_MAJOR_TYPE_AUDIO)
+        {
+            /* R.U.S.E enumerates available audio types, picks the first one it
+             * likes, and then sets the wrong stream to that type. libav might
+             * give us WG_AUDIO_FORMAT_F32LE by default, which will result in
+             * the game incorrectly interpreting float data as integer.
+             * Therefore just match native and always set our default format to
+             * S16LE. */
+            stream->format.u.audio.format = WG_AUDIO_FORMAT_S16LE;
+        }
+        else if (stream->format.major_type == WG_MAJOR_TYPE_VIDEO)
+        {
+            /* Call of Juarez: Bound in Blood breaks if I420 is enumerated.
+             * Some native decoders output I420, but the msmpeg4v3 decoder
+             * never does. */
+            if (stream->format.u.video.format == WG_VIDEO_FORMAT_I420)
+                stream->format.u.video.format = WG_VIDEO_FORMAT_YV12;
+        }
+        wg_parser_stream_enable(stream->wg_stream, &stream->format);
+    }
+
+    wg_parser_end_flush(reader->wg_parser);
+    /* We probably discarded events because streams weren't enabled yet.
+     * Now that they're all enabled seek back to the start again. */
+    wg_parser_stream_seek(reader->streams[0].wg_stream, 1.0, 0, 0,
+            AM_SEEKING_AbsolutePositioning, AM_SEEKING_NoPositioning);
+
+    return S_OK;
+
+out_disconnect_parser:
+    wg_parser_disconnect(reader->wg_parser);
+
+out_shutdown_thread:
+    reader->read_thread_shutdown = true;
+    WaitForSingleObject(reader->read_thread, INFINITE);
+    CloseHandle(reader->read_thread);
+    reader->read_thread = NULL;
+
+out_destroy_parser:
+    wg_parser_destroy(reader->wg_parser);
+    reader->wg_parser = NULL;
+
+    return hr;
+}
+
+HRESULT wm_reader_open_stream(struct wm_reader *reader, IStream *stream)
+{
+    STATSTG stat;
+    HRESULT hr;
+
+    if (FAILED(hr = IStream_Stat(stream, &stat, STATFLAG_NONAME)))
+    {
+        ERR("Failed to stat stream, hr %#x.\n", hr);
+        return hr;
+    }
+
+    EnterCriticalSection(&reader->cs);
+
+    IStream_AddRef(reader->source_stream = stream);
+    if (FAILED(hr = init_stream(reader, stat.cbSize.QuadPart)))
+    {
+        IStream_Release(stream);
+        reader->source_stream = NULL;
+    }
+
+    LeaveCriticalSection(&reader->cs);
+    return hr;
+}
+
+HRESULT wm_reader_open_file(struct wm_reader *reader, const WCHAR *filename)
+{
+    LARGE_INTEGER size;
+    HANDLE file;
+    HRESULT hr;
+
+    if ((file = CreateFileW(filename, GENERIC_READ, FILE_SHARE_READ, NULL,
+            OPEN_EXISTING, 0, NULL)) == INVALID_HANDLE_VALUE)
+    {
+        ERR("Failed to open %s, error %u.\n", debugstr_w(filename), GetLastError());
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    if (!GetFileSizeEx(file, &size))
+    {
+        ERR("Failed to get the size of %s, error %u.\n", debugstr_w(filename), GetLastError());
+        CloseHandle(file);
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    EnterCriticalSection(&reader->cs);
+
+    reader->file = file;
+
+    if (FAILED(hr = init_stream(reader, size.QuadPart)))
+        reader->file = NULL;
+
+    LeaveCriticalSection(&reader->cs);
+    return hr;
+}
+
+HRESULT wm_reader_close(struct wm_reader *reader)
+{
+    EnterCriticalSection(&reader->cs);
+
+    if (!reader->wg_parser)
+    {
+        LeaveCriticalSection(&reader->cs);
+        return NS_E_INVALID_REQUEST;
+    }
+
+    wg_parser_disconnect(reader->wg_parser);
+
+    reader->read_thread_shutdown = true;
+    WaitForSingleObject(reader->read_thread, INFINITE);
+    CloseHandle(reader->read_thread);
+    reader->read_thread = NULL;
+
+    wg_parser_destroy(reader->wg_parser);
+    reader->wg_parser = NULL;
+
+    if (reader->source_stream)
+        IStream_Release(reader->source_stream);
+    reader->source_stream = NULL;
+    if (reader->file)
+        CloseHandle(reader->file);
+    reader->file = NULL;
+
+    LeaveCriticalSection(&reader->cs);
+    return S_OK;
+}
+
+struct wm_stream *wm_reader_get_stream_by_stream_number(struct wm_reader *reader, WORD stream_number)
+{
+    if (stream_number && stream_number <= reader->stream_count)
+        return &reader->streams[stream_number - 1];
+    WARN("Invalid stream number %u.\n", stream_number);
+    return NULL;
+}
+
+HRESULT wm_reader_get_output_props(struct wm_reader *reader, DWORD output, IWMOutputMediaProps **props)
+{
+    struct wm_stream *stream;
+
+    EnterCriticalSection(&reader->cs);
+
+    if (!(stream = get_stream_by_output_number(reader, output)))
+    {
+        LeaveCriticalSection(&reader->cs);
+        return E_INVALIDARG;
+    }
+
+    *props = output_props_create(&stream->format);
+    LeaveCriticalSection(&reader->cs);
+    return *props ? S_OK : E_OUTOFMEMORY;
+}
+
+static const enum wg_video_format video_formats[] =
+{
+    /* Try to prefer YUV formats over RGB ones. Most decoders output in the
+     * YUV color space, and it's generally much less expensive for
+     * videoconvert to do YUV -> YUV transformations. */
+    WG_VIDEO_FORMAT_NV12,
+    WG_VIDEO_FORMAT_YV12,
+    WG_VIDEO_FORMAT_YUY2,
+    WG_VIDEO_FORMAT_UYVY,
+    WG_VIDEO_FORMAT_YVYU,
+    WG_VIDEO_FORMAT_BGRx,
+    WG_VIDEO_FORMAT_BGR,
+    WG_VIDEO_FORMAT_RGB16,
+    WG_VIDEO_FORMAT_RGB15,
+};
+
+HRESULT wm_reader_get_output_format_count(struct wm_reader *reader, DWORD output, DWORD *count)
+{
+    struct wm_stream *stream;
+    struct wg_format format;
+
+    EnterCriticalSection(&reader->cs);
+
+    if (!(stream = get_stream_by_output_number(reader, output)))
+    {
+        LeaveCriticalSection(&reader->cs);
+        return E_INVALIDARG;
+    }
+
+    wg_parser_stream_get_preferred_format(stream->wg_stream, &format);
+    switch (format.major_type)
+    {
+        case WG_MAJOR_TYPE_VIDEO:
+            *count = ARRAY_SIZE(video_formats);
+            break;
+
+        case WG_MAJOR_TYPE_AUDIO:
+        case WG_MAJOR_TYPE_UNKNOWN:
+            *count = 1;
+            break;
+    }
+
+    LeaveCriticalSection(&reader->cs);
+    return S_OK;
+}
+
+HRESULT wm_reader_get_output_format(struct wm_reader *reader, DWORD output,
+        DWORD index, IWMOutputMediaProps **props)
+{
+    struct wm_stream *stream;
+    struct wg_format format;
+
+    EnterCriticalSection(&reader->cs);
+
+    if (!(stream = get_stream_by_output_number(reader, output)))
+    {
+        LeaveCriticalSection(&reader->cs);
+        return E_INVALIDARG;
+    }
+
+    wg_parser_stream_get_preferred_format(stream->wg_stream, &format);
+
+    switch (format.major_type)
+    {
+        case WG_MAJOR_TYPE_VIDEO:
+            if (index >= ARRAY_SIZE(video_formats))
+            {
+                LeaveCriticalSection(&reader->cs);
+                return NS_E_INVALID_OUTPUT_FORMAT;
+            }
+            format.u.video.format = video_formats[index];
+            break;
+
+        case WG_MAJOR_TYPE_AUDIO:
+            if (index)
+            {
+                LeaveCriticalSection(&reader->cs);
+                return NS_E_INVALID_OUTPUT_FORMAT;
+            }
+            format.u.audio.format = WG_AUDIO_FORMAT_S16LE;
+            break;
+
+        case WG_MAJOR_TYPE_UNKNOWN:
+            break;
+    }
+
+    LeaveCriticalSection(&reader->cs);
+
+    *props = output_props_create(&format);
+    return *props ? S_OK : E_OUTOFMEMORY;
+}
+
+HRESULT wm_reader_set_output_props(struct wm_reader *reader, DWORD output,
+        IWMOutputMediaProps *props_iface)
+{
+    struct output_props *props = unsafe_impl_from_IWMOutputMediaProps(props_iface);
+    struct wg_format format, pref_format;
+    struct wm_stream *stream;
+
+    strmbase_dump_media_type(&props->mt);
+
+    if (!amt_to_wg_format(&props->mt, &format))
+    {
+        ERR("Failed to convert media type to winegstreamer format.\n");
+        return E_FAIL;
+    }
+
+    EnterCriticalSection(&reader->cs);
+
+    if (!(stream = get_stream_by_output_number(reader, output)))
+    {
+        LeaveCriticalSection(&reader->cs);
+        return E_INVALIDARG;
+    }
+
+    wg_parser_stream_get_preferred_format(stream->wg_stream, &pref_format);
+    if (pref_format.major_type != format.major_type)
+    {
+        /* R.U.S.E sets the type of the wrong stream, apparently by accident. */
+        LeaveCriticalSection(&reader->cs);
+        WARN("Major types don't match; returning NS_E_INCOMPATIBLE_FORMAT.\n");
+        return NS_E_INCOMPATIBLE_FORMAT;
+    }
+
+    stream->format = format;
+    wg_parser_stream_enable(stream->wg_stream, &format);
+
+    /* Re-decode any buffers that might have been generated with the old format.
+     *
+     * FIXME: Seeking in-place will cause some buffers to be dropped.
+     * Unfortunately, we can't really store the last received PTS and seek there
+     * either: since seeks are inexact and we aren't guaranteed to receive
+     * samples in order, some buffers might be duplicated or dropped anyway.
+     * In order to really seamlessly allow for format changes, we need
+     * cooperation from each individual GStreamer stream, to be able to tell
+     * upstream exactly which buffers they need resent...
+     *
+     * In all likelihood this function is being called not mid-stream but rather
+     * while setting the stream up, before consuming any events. Accordingly
+     * let's just seek back to the beginning. */
+    wg_parser_stream_seek(reader->streams[0].wg_stream, 1.0, reader->start_time, 0,
+            AM_SEEKING_AbsolutePositioning, AM_SEEKING_NoPositioning);
+
+    LeaveCriticalSection(&reader->cs);
+    return S_OK;
+}
+
+static const char *get_major_type_string(enum wg_major_type type)
+{
+    switch (type)
+    {
+        case WG_MAJOR_TYPE_AUDIO:
+            return "audio";
+        case WG_MAJOR_TYPE_VIDEO:
+            return "video";
+        case WG_MAJOR_TYPE_UNKNOWN:
+            return "unknown";
+    }
+    assert(0);
+    return NULL;
+}
+
+HRESULT wm_reader_get_stream_sample(struct wm_stream *stream,
+        INSSBuffer **ret_sample, QWORD *pts, QWORD *duration, DWORD *flags)
+{
+    struct wg_parser_stream *wg_stream = stream->wg_stream;
+    struct wg_parser_event event;
+    struct buffer *object;
+
+    if (stream->eos)
+        return NS_E_NO_MORE_SAMPLES;
+
+    for (;;)
+    {
+        if (!wg_parser_stream_get_event(wg_stream, &event))
+        {
+            FIXME("Stream is flushing.\n");
+            return E_NOTIMPL;
+        }
+
+        TRACE("Got event of type %#x for %s stream %p.\n", event.type,
+                get_major_type_string(stream->format.major_type), stream);
+
+        switch (event.type)
+        {
+            case WG_PARSER_EVENT_BUFFER:
+                /* FIXME: Should these be pooled? */
+                if (!(object = calloc(1, offsetof(struct buffer, data[event.u.buffer.size]))))
+                {
+                    wg_parser_stream_release_buffer(wg_stream);
+                    return E_OUTOFMEMORY;
+                }
+
+                object->INSSBuffer_iface.lpVtbl = &buffer_vtbl;
+                object->refcount = 1;
+                object->size = event.u.buffer.size;
+
+                if (!wg_parser_stream_copy_buffer(wg_stream, object->data, 0, object->size))
+                {
+                    /* The GStreamer pin has been flushed. */
+                    free(object);
+                    break;
+                }
+
+                wg_parser_stream_release_buffer(wg_stream);
+
+                if (!event.u.buffer.has_pts)
+                    FIXME("Missing PTS.\n");
+                if (!event.u.buffer.has_duration)
+                    FIXME("Missing duration.\n");
+
+                *pts = event.u.buffer.pts;
+                *duration = event.u.buffer.duration;
+                *flags = 0;
+                if (event.u.buffer.discontinuity)
+                    *flags |= WM_SF_DISCONTINUITY;
+                if (!event.u.buffer.delta)
+                    *flags |= WM_SF_CLEANPOINT;
+
+                TRACE("Created buffer %p.\n", object);
+                *ret_sample = &object->INSSBuffer_iface;
+                return S_OK;
+
+            case WG_PARSER_EVENT_EOS:
+                stream->eos = true;
+                TRACE("End of stream.\n");
+                return NS_E_NO_MORE_SAMPLES;
+
+            case WG_PARSER_EVENT_SEGMENT:
+                break;
+
+            case WG_PARSER_EVENT_NONE:
+                assert(0);
+        }
+    }
+}
+
+void wm_reader_seek(struct wm_reader *reader, QWORD start, LONGLONG duration)
+{
+    WORD i;
+
+    EnterCriticalSection(&reader->cs);
+
+    reader->start_time = start;
+
+    wg_parser_stream_seek(reader->streams[0].wg_stream, 1.0, start, start + duration,
+            AM_SEEKING_AbsolutePositioning, duration ? AM_SEEKING_AbsolutePositioning : AM_SEEKING_NoPositioning);
+
+    for (i = 0; i < reader->stream_count; ++i)
+        reader->streams[i].eos = false;
+
+    LeaveCriticalSection(&reader->cs);
+}
+
 void wm_reader_init(struct wm_reader *reader, const struct wm_reader_ops *ops)
 {
     reader->IWMHeaderInfo3_iface.lpVtbl = &header_info_vtbl;
@@ -769,4 +1815,13 @@ void wm_reader_init(struct wm_reader *reader, const struct wm_reader_ops *ops)
     reader->IWMReaderTimecode_iface.lpVtbl = &timecode_vtbl;
     reader->refcount = 1;
     reader->ops = ops;
+
+    InitializeCriticalSection(&reader->cs);
+    reader->cs.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": wm_reader.cs");
+}
+
+void wm_reader_cleanup(struct wm_reader *reader)
+{
+    reader->cs.DebugInfo->Spare[0] = 0;
+    DeleteCriticalSection(&reader->cs);
 }

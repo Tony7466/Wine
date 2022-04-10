@@ -25,6 +25,8 @@ struct sync_reader
     struct wm_reader reader;
 
     IWMSyncReader2 IWMSyncReader2_iface;
+
+    WORD last_read_stream;
 };
 
 static struct sync_reader *impl_from_IWMSyncReader2(IWMSyncReader2 *iface)
@@ -55,9 +57,11 @@ static ULONG WINAPI WMSyncReader_Release(IWMSyncReader2 *iface)
 
 static HRESULT WINAPI WMSyncReader_Close(IWMSyncReader2 *iface)
 {
-    struct sync_reader *This = impl_from_IWMSyncReader2(iface);
-    FIXME("(%p): stub!\n", This);
-    return E_NOTIMPL;
+    struct sync_reader *reader = impl_from_IWMSyncReader2(iface);
+
+    TRACE("reader %p.\n", reader);
+
+    return wm_reader_close(&reader->reader);
 }
 
 static HRESULT WINAPI WMSyncReader_GetMaxOutputSampleSize(IWMSyncReader2 *iface, DWORD output, DWORD *max)
@@ -74,49 +78,117 @@ static HRESULT WINAPI WMSyncReader_GetMaxStreamSampleSize(IWMSyncReader2 *iface,
     return E_NOTIMPL;
 }
 
-static HRESULT WINAPI WMSyncReader_GetNextSample(IWMSyncReader2 *iface, WORD stream, INSSBuffer **sample,
-        QWORD *sample_time, QWORD *sample_duration, DWORD *flags, DWORD *output_num, WORD *stream_num)
+static HRESULT WINAPI WMSyncReader_GetNextSample(IWMSyncReader2 *iface,
+        WORD stream_number, INSSBuffer **sample, QWORD *pts, QWORD *duration,
+        DWORD *flags, DWORD *output_number, WORD *ret_stream_number)
 {
-    struct sync_reader *This = impl_from_IWMSyncReader2(iface);
-    FIXME("(%p)->(%d %p %p %p %p %p %p): stub!\n", This, stream, sample, sample_time,
-          sample_duration, flags, output_num, stream_num);
-    return E_NOTIMPL;
+    struct sync_reader *reader = impl_from_IWMSyncReader2(iface);
+    struct wm_stream *stream;
+    HRESULT hr;
+    WORD i;
+
+    TRACE("reader %p, stream_number %u, sample %p, pts %p, duration %p,"
+            " flags %p, output_number %p, ret_stream_number %p.\n",
+            reader, stream_number, sample, pts, duration, flags, output_number, ret_stream_number);
+
+    EnterCriticalSection(&reader->reader.cs);
+
+    if (!stream_number)
+    {
+        if (!output_number && !ret_stream_number)
+        {
+            LeaveCriticalSection(&reader->reader.cs);
+            return E_INVALIDARG;
+        }
+
+        for (i = 0; i < reader->reader.stream_count; ++i)
+        {
+            WORD index = (i + reader->last_read_stream + 1) % reader->reader.stream_count;
+
+            hr = wm_reader_get_stream_sample(&reader->reader.streams[index], sample, pts, duration, flags);
+            if (hr == S_OK)
+            {
+                if (output_number)
+                    *output_number = index;
+                if (ret_stream_number)
+                    *ret_stream_number = index + 1;
+            }
+            if (hr != NS_E_NO_MORE_SAMPLES)
+            {
+                reader->last_read_stream = index;
+                break;
+            }
+        }
+    }
+    else
+    {
+        if (!(stream = wm_reader_get_stream_by_stream_number(&reader->reader, stream_number)))
+        {
+            LeaveCriticalSection(&reader->reader.cs);
+            return E_INVALIDARG;
+        }
+
+        hr = wm_reader_get_stream_sample(stream, sample, pts, duration, flags);
+        if (hr == S_OK && output_number)
+            *output_number = stream->index;
+        if (ret_stream_number)
+            *ret_stream_number = stream->index + 1;
+    }
+
+    LeaveCriticalSection(&reader->reader.cs);
+    return hr;
 }
 
-static HRESULT WINAPI WMSyncReader_GetOutputCount(IWMSyncReader2 *iface, DWORD *outputs)
+static HRESULT WINAPI WMSyncReader_GetOutputCount(IWMSyncReader2 *iface, DWORD *count)
 {
-    struct sync_reader *This = impl_from_IWMSyncReader2(iface);
-    FIXME("(%p)->(%p): stub!\n", This, outputs);
-    return E_NOTIMPL;
+    struct sync_reader *reader = impl_from_IWMSyncReader2(iface);
+
+    TRACE("reader %p, count %p.\n", reader, count);
+
+    EnterCriticalSection(&reader->reader.cs);
+    *count = reader->reader.stream_count;
+    LeaveCriticalSection(&reader->reader.cs);
+    return S_OK;
 }
 
-static HRESULT WINAPI WMSyncReader_GetOutputFormat(IWMSyncReader2 *iface, DWORD output_num, DWORD format_num,
-        IWMOutputMediaProps **props)
+static HRESULT WINAPI WMSyncReader_GetOutputFormat(IWMSyncReader2 *iface,
+        DWORD output, DWORD index, IWMOutputMediaProps **props)
 {
-    struct sync_reader *This = impl_from_IWMSyncReader2(iface);
-    FIXME("(%p)->(%u %u %p): stub!\n", This, output_num, format_num, props);
-    return E_NOTIMPL;
+    struct sync_reader *reader = impl_from_IWMSyncReader2(iface);
+
+    TRACE("reader %p, output %u, index %u, props %p.\n", reader, output, index, props);
+
+    return wm_reader_get_output_format(&reader->reader, output, index, props);
 }
 
-static HRESULT WINAPI WMSyncReader_GetOutputFormatCount(IWMSyncReader2 *iface, DWORD output_num, DWORD *formats)
+static HRESULT WINAPI WMSyncReader_GetOutputFormatCount(IWMSyncReader2 *iface, DWORD output, DWORD *count)
 {
-    struct sync_reader *This = impl_from_IWMSyncReader2(iface);
-    FIXME("(%p)->(%u %p): stub!\n", This, output_num, formats);
-    return E_NOTIMPL;
+    struct sync_reader *reader = impl_from_IWMSyncReader2(iface);
+
+    TRACE("reader %p, output %u, count %p.\n", reader, output, count);
+
+    return wm_reader_get_output_format_count(&reader->reader, output, count);
 }
 
-static HRESULT WINAPI WMSyncReader_GetOutputNumberForStream(IWMSyncReader2 *iface, WORD stream_num, DWORD *output_num)
+static HRESULT WINAPI WMSyncReader_GetOutputNumberForStream(IWMSyncReader2 *iface,
+        WORD stream_number, DWORD *output)
 {
-    struct sync_reader *This = impl_from_IWMSyncReader2(iface);
-    FIXME("(%p)->(%u %p): stub!\n", This, stream_num, output_num);
-    return E_NOTIMPL;
+    struct sync_reader *reader = impl_from_IWMSyncReader2(iface);
+
+    TRACE("reader %p, stream_number %u, output %p.\n", reader, stream_number, output);
+
+    *output = stream_number - 1;
+    return S_OK;
 }
 
-static HRESULT WINAPI WMSyncReader_GetOutputProps(IWMSyncReader2 *iface, DWORD output_num, IWMOutputMediaProps **output)
+static HRESULT WINAPI WMSyncReader_GetOutputProps(IWMSyncReader2 *iface,
+        DWORD output, IWMOutputMediaProps **props)
 {
-    struct sync_reader *This = impl_from_IWMSyncReader2(iface);
-    FIXME("(%p)->(%u %p): stub!\n", This, output_num, output);
-    return E_NOTIMPL;
+    struct sync_reader *reader = impl_from_IWMSyncReader2(iface);
+
+    TRACE("reader %p, output %u, props %p.\n", reader, output, props);
+
+    return wm_reader_get_output_props(&reader->reader, output, props);
 }
 
 static HRESULT WINAPI WMSyncReader_GetOutputSetting(IWMSyncReader2 *iface, DWORD output_num, const WCHAR *name,
@@ -134,10 +206,14 @@ static HRESULT WINAPI WMSyncReader_GetReadStreamSamples(IWMSyncReader2 *iface, W
     return E_NOTIMPL;
 }
 
-static HRESULT WINAPI WMSyncReader_GetStreamNumberForOutput(IWMSyncReader2 *iface, DWORD output, WORD *stream_num)
+static HRESULT WINAPI WMSyncReader_GetStreamNumberForOutput(IWMSyncReader2 *iface,
+        DWORD output, WORD *stream_number)
 {
-    struct sync_reader *This = impl_from_IWMSyncReader2(iface);
-    FIXME("(%p)->(%u %p): stub!\n", This, output, stream_num);
+    struct sync_reader *reader = impl_from_IWMSyncReader2(iface);
+
+    TRACE("reader %p, output %u, stream_number %p.\n", reader, output, stream_number);
+
+    *stream_number = output + 1;
     return S_OK;
 }
 
@@ -150,38 +226,59 @@ static HRESULT WINAPI WMSyncReader_GetStreamSelected(IWMSyncReader2 *iface, WORD
 
 static HRESULT WINAPI WMSyncReader_Open(IWMSyncReader2 *iface, const WCHAR *filename)
 {
-    struct sync_reader *This = impl_from_IWMSyncReader2(iface);
-    FIXME("(%p)->(%s): stub!\n", This, debugstr_w(filename));
-    return E_NOTIMPL;
+    struct sync_reader *reader = impl_from_IWMSyncReader2(iface);
+
+    TRACE("reader %p, filename %s.\n", reader, debugstr_w(filename));
+
+    return wm_reader_open_file(&reader->reader, filename);
 }
 
 static HRESULT WINAPI WMSyncReader_OpenStream(IWMSyncReader2 *iface, IStream *stream)
 {
-    struct sync_reader *This = impl_from_IWMSyncReader2(iface);
-    FIXME("(%p)->(%p): stub!\n", This, stream);
-    return S_OK;
+    struct sync_reader *reader = impl_from_IWMSyncReader2(iface);
+
+    TRACE("reader %p, stream %p.\n", reader, stream);
+
+    return wm_reader_open_stream(&reader->reader, stream);
 }
 
-static HRESULT WINAPI WMSyncReader_SetOutputProps(IWMSyncReader2 *iface, DWORD output_num, IWMOutputMediaProps *output)
+static HRESULT WINAPI WMSyncReader_SetOutputProps(IWMSyncReader2 *iface, DWORD output, IWMOutputMediaProps *props)
 {
-    struct sync_reader *This = impl_from_IWMSyncReader2(iface);
-    FIXME("(%p)->(%u %p): stub!\n", This, output_num, output);
-    return E_NOTIMPL;
+    struct sync_reader *reader = impl_from_IWMSyncReader2(iface);
+
+    TRACE("reader %p, output %u, props %p.\n", reader, output, props);
+
+    return wm_reader_set_output_props(&reader->reader, output, props);
 }
 
-static HRESULT WINAPI WMSyncReader_SetOutputSetting(IWMSyncReader2 *iface, DWORD output_num, const WCHAR *name,
-        WMT_ATTR_DATATYPE type, const BYTE *value, WORD length)
+static HRESULT WINAPI WMSyncReader_SetOutputSetting(IWMSyncReader2 *iface, DWORD output,
+        const WCHAR *name, WMT_ATTR_DATATYPE type, const BYTE *value, WORD size)
 {
-    struct sync_reader *This = impl_from_IWMSyncReader2(iface);
-    FIXME("(%p)->(%d %s %d %p %d): stub!\n", This, output_num, debugstr_w(name), type, value, length);
-    return E_NOTIMPL;
+    struct sync_reader *reader = impl_from_IWMSyncReader2(iface);
+
+    TRACE("reader %p, output %u, name %s, type %#x, value %p, size %u.\n",
+            reader, output, debugstr_w(name), type, value, size);
+
+    if (!wcscmp(name, L"VideoSampleDurations"))
+    {
+        FIXME("Ignoring VideoSampleDurations setting.\n");
+        return S_OK;
+    }
+    else
+    {
+        FIXME("Unknown setting %s; returning E_NOTIMPL.\n", debugstr_w(name));
+        return E_NOTIMPL;
+    }
 }
 
 static HRESULT WINAPI WMSyncReader_SetRange(IWMSyncReader2 *iface, QWORD start, LONGLONG duration)
 {
-    struct sync_reader *This = impl_from_IWMSyncReader2(iface);
-    FIXME("(%p)->(%s %s): stub!\n", This, wine_dbgstr_longlong(start), wine_dbgstr_longlong(duration));
-    return E_NOTIMPL;
+    struct sync_reader *reader = impl_from_IWMSyncReader2(iface);
+
+    TRACE("reader %p, start %I64u, duration %I64d.\n", reader, start, duration);
+
+    wm_reader_seek(&reader->reader, start, duration);
+    return S_OK;
 }
 
 static HRESULT WINAPI WMSyncReader_SetRangeByFrame(IWMSyncReader2 *iface, WORD stream_num, QWORD frame_num,
@@ -309,6 +406,8 @@ static void sync_reader_destroy(struct wm_reader *iface)
 
     TRACE("reader %p.\n", reader);
 
+    wm_reader_close(&reader->reader);
+    wm_reader_cleanup(&reader->reader);
     free(reader);
 }
 
