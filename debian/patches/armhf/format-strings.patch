@@ -1,0 +1,14 @@
+description: fix format string that doesn't compile on armhf
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/programs/winedbg/info.c
++++ b/programs/winedbg/info.c
+@@ -284,7 +284,7 @@ void info_win32_module(DWORD64 base)
+     HeapFree(GetProcessHeap(), 0, im.modules);
+ 
+     if (base && !num_printed)
+-        dbg_printf("'0x%0*I64x' is not a valid module address\n", ADDRWIDTH, base);
++        dbg_printf("'%x 0x%I64x' is not a valid module address\n", ADDRWIDTH, base);
+ }
+ 
+ struct class_walker

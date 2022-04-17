@@ -122,7 +122,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      while (ptr < end)
      {
-@@ -795,7 +795,7 @@ static void do_field(const unsigned char
+@@ -810,7 +810,7 @@ static void do_field(const unsigned char
  static void codeview_dump_one_type(unsigned curr_type, const union codeview_type* type)
  {
      const union codeview_reftype* reftype = (const union codeview_reftype*)type;

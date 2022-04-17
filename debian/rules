@@ -216,11 +216,16 @@ endif
 	    done
 ifeq ($(DEB_HOST_ARCH_BITS), 64)
 	cp debian/tmp/wine$(DEBSUFFIX).man debian/tmp/wine64$(DEBSUFFIX).man
-endif
-	# copy wine-preloader
+	# copy 64 bit wine-preloader
+	test -f debian/tmp/$(BINDIR)/wine64-preloader && \
+	    mv debian/tmp/$(BINDIR)/wine64-preloader debian/tmp/$(BINDIR)/wine64-preloader.static || \
+	    cp debian/scripts/wine-preloader.static debian/tmp/$(BINDIR)/wine64-preloader.static
+else
+	# copy 32 bit wine-preloader
 	test -f debian/tmp/$(BINDIR)/wine-preloader && \
 	    mv debian/tmp/$(BINDIR)/wine-preloader debian/tmp/$(BINDIR)/wine-preloader.static || \
-	    cp debian/scripts/wine-preloader.static debian/tmp/$(BINDIR)
+	    cp debian/scripts/wine-preloader.static debian/tmp/$(BINDIR)/wine-preloader.static
+endif
 	# files to exclude from the architecture-dependent packages
 	rm -rf debian/tmp/usr/share/man
 	rm -f debian/tmp/usr/lib/*/wineserver
