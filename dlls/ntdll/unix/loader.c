@@ -110,7 +110,6 @@ static const char so_dir[] = "/aarch64-unix";
 static const char so_dir[] = "";
 #endif
 
-void     (WINAPI *pDbgUiRemoteBreakin)( void *arg ) = NULL;
 NTSTATUS (WINAPI *pKiRaiseUserExceptionDispatcher)(void) = NULL;
 NTSTATUS (WINAPI *pKiUserExceptionDispatcher)(EXCEPTION_RECORD*,CONTEXT*) = NULL;
 void     (WINAPI *pKiUserApcDispatcher)(CONTEXT*,ULONG_PTR,ULONG_PTR,ULONG_PTR,PNTAPCFUNC) = NULL;
@@ -133,6 +132,7 @@ static void * const syscalls[] =
     NtAdjustPrivilegesToken,
     NtAlertResumeThread,
     NtAlertThread,
+    NtAlertThreadByThreadId,
     NtAllocateLocallyUniqueId,
     NtAllocateUuids,
     NtAllocateVirtualMemory,
@@ -335,6 +335,7 @@ static void * const syscalls[] =
     NtUnlockFile,
     NtUnlockVirtualMemory,
     NtUnmapViewOfSection,
+    NtWaitForAlertByThreadId,
     NtWaitForDebugEvent,
     NtWaitForKeyedEvent,
     NtWaitForMultipleObjects,
@@ -1082,7 +1083,6 @@ static void load_ntdll_functions( HMODULE module )
     if (!(p##name = (void *)find_named_export( module, ntdll_exports, #name ))) \
         ERR( "%s not found\n", #name )
 
-    GET_FUNC( DbgUiRemoteBreakin );
     GET_FUNC( KiRaiseUserExceptionDispatcher );
     GET_FUNC( KiUserExceptionDispatcher );
     GET_FUNC( KiUserApcDispatcher );
@@ -2144,22 +2144,7 @@ static struct unix_funcs unix_funcs =
 #ifdef __aarch64__
     NtCurrentTeb,
 #endif
-    DbgUiIssueRemoteBreakin,
     RtlGetSystemTimePrecise,
-    RtlWaitOnAddress,
-    RtlWakeAddressAll,
-    RtlWakeAddressSingle,
-    fast_RtlpWaitForCriticalSection,
-    fast_RtlpUnWaitCriticalSection,
-    fast_RtlDeleteCriticalSection,
-    fast_RtlTryAcquireSRWLockExclusive,
-    fast_RtlAcquireSRWLockExclusive,
-    fast_RtlTryAcquireSRWLockShared,
-    fast_RtlAcquireSRWLockShared,
-    fast_RtlReleaseSRWLockExclusive,
-    fast_RtlReleaseSRWLockShared,
-    fast_RtlWakeConditionVariable,
-    fast_wait_cv,
     load_so_dll,
     init_builtin_dll,
     init_unix_lib,
