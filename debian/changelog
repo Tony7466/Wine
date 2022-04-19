@@ -1,3 +1,14 @@
+wine-development (6.23~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 6.23, released Dec 3, 2021.
+    - Mount manager and CoreAudio driver converted to PE.
+    - Support for exception handling in Wow64 mode.
+    - Optional support for using the distribution's PE libraries.
+    - A number of UI improvements in WineDbg.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Tue, 19 Apr 2022 04:05:32 +0000
+
 wine-development (6.22~repack-1) unstable; urgency=medium
 
   * New upstream release 6.22, released Nov 19, 2021.
