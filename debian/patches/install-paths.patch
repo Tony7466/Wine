@@ -1,0 +1,15 @@
+--- a/configure.ac
++++ b/configure.ac
+@@ -95,9 +95,9 @@ AC_ARG_WITH(wine64,    AS_HELP_STRING([-
+ 
+ AC_CANONICAL_HOST
+ 
+-AC_SUBST(dlldir,[\${libdir}/wine])
+-AC_SUBST(fontdir,[\${datadir}/wine/fonts])
+-AC_SUBST(nlsdir,[\${datadir}/wine/nls])
++AC_SUBST(dlldir,[\${libdir}])
++AC_SUBST(fontdir,[\${datadir}/fonts])
++AC_SUBST(nlsdir,[\${datadir}/nls])
+ AC_SUBST(srcdir)
+ 
+ dnl **** Check for some programs ****

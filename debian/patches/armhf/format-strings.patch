@@ -1,14 +1,83 @@
-description: fix format string that doesn't compile on armhf
+description: winedbg format strings use the wrong type on armhf
 author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/programs/winedbg/info.c
 +++ b/programs/winedbg/info.c
-@@ -284,7 +284,7 @@ void info_win32_module(DWORD64 base)
+@@ -284,7 +284,11 @@ void info_win32_module(DWORD64 base)
      HeapFree(GetProcessHeap(), 0, im.modules);
  
      if (base && !num_printed)
--        dbg_printf("'0x%0*I64x' is not a valid module address\n", ADDRWIDTH, base);
-+        dbg_printf("'%x 0x%I64x' is not a valid module address\n", ADDRWIDTH, base);
++#ifdef __arm__
++        dbg_printf("'%x 0x%I64lld' is not a valid module address\n", ADDRWIDTH, base);
++#else
+         dbg_printf("'0x%0*I64x' is not a valid module address\n", ADDRWIDTH, base);
++#endif
  }
  
  struct class_walker
+--- a/programs/winedbg/db_disasm64.c
++++ b/programs/winedbg/db_disasm64.c
+@@ -1603,7 +1603,11 @@ db_disasm(db_addr_t loc, boolean_t altfm
+ 		case Ilq:
+ 		    len = db_lengths[rex & REX_W ? QUAD : LONG];
+ 		    get_value_inc(imm64, loc, len, FALSE);
++#ifdef __arm__
++                    db_printf("$%#I64lld", imm64);
++#else
+                     db_printf("$%#I64x", imm64);
++#endif
+ 		    break;
+ 
+ 		case O:
+--- a/programs/winedbg/memory.c
++++ b/programs/winedbg/memory.c
+@@ -337,7 +337,11 @@ static void dbg_print_hex(DWORD size, UL
+     if (!sv)
+         dbg_printf("0");
+     else
++#ifdef __arm__
++        dbg_printf("%I64lld", sv);
++#else
+         dbg_printf("%#I64x", sv);
++#endif
+ }
+ 
+ static void print_typed_basic(const struct dbg_lvalue* lvalue)
+@@ -593,7 +597,11 @@ void print_address(const ADDRESS64* addr
+     si->MaxNameLen   = 256;
+     if (!SymFromAddr(dbg_curr_process->handle, (DWORD_PTR)lin, &disp64, si)) return;
+     dbg_printf(" %s", si->Name);
++#ifdef __arm__
++    if (disp64) dbg_printf("+0x%I64lld", disp64);
++#else
+     if (disp64) dbg_printf("+0x%I64x", disp64);
++#endif
+     if (with_line)
+     {
+         IMAGEHLP_LINE64             il;
+--- a/programs/winedbg/stack.c
++++ b/programs/winedbg/stack.c
+@@ -278,7 +278,11 @@ static void stack_print_addr_and_args(vo
+         DWORD           disp;
+ 
+         dbg_printf(" %s", si->Name);
++#ifdef __arm__
++        if (disp64) dbg_printf("+0x%I64lld", disp64);
++#else
+         if (disp64) dbg_printf("+0x%I64x", disp64);
++#endif
+ 
+         stack_set_local_scope();
+         se.first = TRUE;
+@@ -293,7 +297,11 @@ static void stack_print_addr_and_args(vo
+             dbg_printf(" [%s:%u]", il.FileName, il.LineNumber);
+         dbg_printf(" in %s", im.ModuleName);
+     }
++#ifdef __arm__
++    else dbg_printf(" in %s (+0x%Ild)", im.ModuleName, frm->linear_pc - im.BaseOfImage);
++#else
+     else dbg_printf(" in %s (+0x%Ix)", im.ModuleName, frm->linear_pc - im.BaseOfImage);
++#endif
+ }
+ 
+ /******************************************************************

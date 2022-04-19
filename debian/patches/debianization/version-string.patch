@@ -2,14 +2,14 @@ description: append debian package revision to the end of the version string
 origin: https://github.com/wine-compholio/wine-staging/blob/master/patches/Staging/0002-winelib-Append-Staging-at-the-end-of-the-version-s.patch
 forwarded: not-needed
 
---- a/Makefile.in
-+++ b/Makefile.in
-@@ -119,7 +119,7 @@ install-manpages:: manpages
- # Rules for generated source files
+--- a/configure.ac
++++ b/configure.ac
+@@ -3902,7 +3902,7 @@ dnl Rules for generated source files
  
- dlls/ntdll/unix/version.c: dummy
--	@version=`(GIT_DIR=$(srcdir)/.git git describe HEAD 2>/dev/null || echo "wine-$(PACKAGE_VERSION)") | sed -n -e '$$s/\(.*\)/const char wine_build[] = "\1";/p'` && (echo $$version | cmp -s - $@) || echo $$version >$@ || ($(RM) $@ && exit 1)
-+	@version=`(echo "wine-$(PACKAGE_VERSION)") | sed -n -e '$$s/\(.*\)/const char wine_build[] = "\1  ($(VENDOR))";/p'` && (echo $$version | cmp -s - $@) || echo $$version >$@ || ($(RM) $@ && exit 1)
- 
+ WINE_APPEND_RULE(
+ [dlls/ntdll/unix/version.c: dummy
+-	@version=\`(GIT_DIR=${wine_srcdir}.git git describe HEAD 2>/dev/null || echo \"wine-\$(PACKAGE_VERSION)\") | sed -n -e '\$\$s/\(.*\)/const char wine_build[[]] = \"\\1\";/p'\` && (echo \$\$version | cmp -s - \$[@]) || echo \$\$version >\$[@] || (rm -f \$[@] && exit 1)
++	@version=\`(echo \"wine-\$(PACKAGE_VERSION)\") | sed -n -e '\$\$s/\(.*\)/const char wine_build[[]] = \"\\1 (\$(VENDOR))\";/p'\` && (echo \$\$version | cmp -s - \$[@]) || echo \$\$version >\$[@] || (rm -f \$[@] && exit 1)
  programs/winetest/build.rc: dummy
- 	@build="STRINGTABLE { 1 \"`GIT_DIR=$(srcdir)/.git git rev-parse HEAD 2>/dev/null`\" }" && (echo $$build | cmp -s - $@) || echo $$build >$@ || (rm -f $@ && exit 1)
+ 	@build=\"STRINGTABLE { 1 \\\"\`GIT_DIR=${wine_srcdir}.git git rev-parse HEAD 2>/dev/null\`\\\" }\" && (echo \$\$build | cmp -s - \$[@]) || echo \$\$build >\$[@] || (rm -f \$[@] && exit 1)
+ programs/winetest/build.nfo:

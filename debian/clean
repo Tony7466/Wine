@@ -5,6 +5,7 @@ config.*
 con*.file
 configure
 configure.tmp
+configure.lineno
 tools/makedep
 tools/config.*
 include/stamp-h

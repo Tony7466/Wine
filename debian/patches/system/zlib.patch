@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -1409,6 +1409,7 @@ static struct file *open_include_file( c
+@@ -1401,6 +1401,7 @@ static struct file *open_include_file( c
      if (pFile->type == INCL_SYSTEM && pFile->use_msvcrt &&
          !make->extlib && !pFile->included_by->is_external)
      {
@@ -14,7 +14,7 @@ forwarded: not-needed
          if (make->include_paths.count) return NULL;
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3628,7 +3628,6 @@ WINE_CONFIG_MAKEFILE(libs/wine)
+@@ -3611,7 +3611,6 @@ WINE_CONFIG_MAKEFILE(libs/wine)
  WINE_CONFIG_MAKEFILE(libs/wmcodecdspuuid)
  WINE_CONFIG_MAKEFILE(libs/xml2)
  WINE_CONFIG_MAKEFILE(libs/xslt)

@@ -90,7 +90,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!desc) return E_INVALIDARG;
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -2671,6 +2671,9 @@ static void check_fbo_compat(struct wine
+@@ -2673,6 +2673,9 @@ static void check_fbo_compat(struct wine
                      case WINED3D_GL_RES_TYPE_COUNT:
                          color = 0;
                          break;
@@ -102,7 +102,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/dlls/user32/sysparams.c
 +++ b/dlls/user32/sysparams.c
-@@ -1724,7 +1724,7 @@ BOOL WINAPI SystemParametersInfoW( UINT
+@@ -1723,7 +1723,7 @@ BOOL WINAPI SystemParametersInfoW( UINT
      case SPI_GETNONCLIENTMETRICS:
      {
          LPNONCLIENTMETRICSW lpnm = pvParam;
@@ -133,7 +133,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/tools/winebuild/import.c
 +++ b/tools/winebuild/import.c
-@@ -175,8 +175,11 @@ static int func_cmp( const void *func1,
+@@ -165,8 +165,11 @@ static int func_cmp( const void *func1,
  {
      const ORDDEF *odp1 = *(const ORDDEF * const *)func1;
      const ORDDEF *odp2 = *(const ORDDEF * const *)func2;
@@ -174,7 +174,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!(wFlags & DISPATCH_PROPERTYGET))
 --- a/dlls/mf/session.c
 +++ b/dlls/mf/session.c
-@@ -517,7 +517,7 @@ static void session_clear_queued_topolog
+@@ -525,7 +525,7 @@ static void session_clear_queued_topolog
  static void session_set_topo_status(struct media_session *session, HRESULT status,
          MF_TOPOSTATUS topo_status)
  {

@@ -1,12 +1,12 @@
-wine-development (6.22~repack-1) UNRELEASED; urgency=medium
+wine-development (6.22~repack-1) unstable; urgency=medium
 
   * New upstream release 6.22, released Nov 19, 2021.
-    - Mono engine updated to version 7.0.0.
     - Exception unwinding on ARM.
     - More improvements to HID joystick support.
     - WoW64 thunks in a number of Unix libraries.
     - Beginnings of moving USER32 to Win32u.
     - Various bug fixes.
+  * Fix incorrect format strings on armhf.
 
  -- Michael Gilbert <mgilbert@debian.org>  Sun, 17 Apr 2022 05:28:05 +0000
 
