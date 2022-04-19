@@ -245,6 +245,7 @@ SOURCES = \
 	dmusics.h \
 	docobj.idl \
 	docobjectservice.idl \
+	documenttarget.idl \
 	downloadmgr.idl \
 	dpaddr.h \
 	dpfilter.h \
@@ -302,6 +303,7 @@ SOURCES = \
 	exposeenums2managed.h \
 	fci.h \
 	fdi.h \
+	featurestagingapi.h \
 	fileapi.h \
 	filter.idl \
 	fltdefs.h \
@@ -408,6 +410,7 @@ SOURCES = \
 	mediaobj.idl \
 	metahost.idl \
 	mfapi.h \
+	mfd3d12.idl \
 	mferror.h \
 	mfidl.idl \
 	mfmediaengine.idl \
@@ -775,6 +778,7 @@ SOURCES = \
 	windows.globalization.idl \
 	windows.h \
 	windows.media.devices.idl \
+	windows.media.idl \
 	windows.media.speechsynthesis.idl \
 	windows.storage.streams.idl \
 	windows.system.idl \

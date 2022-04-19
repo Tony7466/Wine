@@ -419,9 +419,6 @@
 /* Define to 1 if you have the <pwd.h> header file. */
 #undef HAVE_PWD_H
 
-/* Define to 1 if you have the <QuickTime/ImageCompression.h> header file. */
-#undef HAVE_QUICKTIME_IMAGECOMPRESSION_H
-
 /* Define to 1 if the system has the type `request_sense'. */
 #undef HAVE_REQUEST_SENSE
 
@@ -442,6 +439,9 @@
 
 /* Define to 1 if you have the `sched_setaffinity' function. */
 #undef HAVE_SCHED_SETAFFINITY
+
+/* Define to 1 if you have the `sched_yield' function. */
+#undef HAVE_SCHED_YIELD
 
 /* Define to 1 if `cmd' is a member of `scsireq_t'. */
 #undef HAVE_SCSIREQ_T_CMD
@@ -897,9 +897,6 @@
 
 /* Define to the soname of the libgssapi_krb5 library. */
 #undef SONAME_LIBGSSAPI_KRB5
-
-/* Define to the soname of the libhal library. */
-#undef SONAME_LIBHAL
 
 /* Define to the soname of the libkrb5 library. */
 #undef SONAME_LIBKRB5
