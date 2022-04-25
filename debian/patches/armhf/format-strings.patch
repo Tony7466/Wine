@@ -22,7 +22,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  		    len = db_lengths[rex & REX_W ? QUAD : LONG];
  		    get_value_inc(imm64, loc, len, FALSE);
 +#ifdef __arm__
-+                    db_printf("$%#I64lld", imm64);
++                    db_printf("$%I64lld", imm64);
 +#else
                      db_printf("$%#I64x", imm64);
 +#endif
@@ -31,30 +31,30 @@ author: Michael Gilbert <mgilbert@debian.org>
  		case O:
 --- a/programs/winedbg/memory.c
 +++ b/programs/winedbg/memory.c
-@@ -337,7 +337,11 @@ static void dbg_print_hex(DWORD size, UL
-     if (!sv)
+@@ -338,7 +338,11 @@ static void dbg_print_hex(DWORD size, UL
          dbg_printf("0");
      else
+         /* clear unneeded high bits, esp. sign extension */
 +#ifdef __arm__
-+        dbg_printf("%I64lld", sv);
++        dbg_printf("%I64lld", sv & (~0LLU >> (64 - 8 * size)));
 +#else
-         dbg_printf("%#I64x", sv);
+         dbg_printf("%#I64x", sv & (~0LLU >> (64 - 8 * size)));
 +#endif
  }
  
  static void print_typed_basic(const struct dbg_lvalue* lvalue)
-@@ -593,7 +597,11 @@ void print_address(const ADDRESS64* addr
-     si->MaxNameLen   = 256;
-     if (!SymFromAddr(dbg_curr_process->handle, (DWORD_PTR)lin, &disp64, si)) return;
-     dbg_printf(" %s", si->Name);
-+#ifdef __arm__
-+    if (disp64) dbg_printf("+0x%I64lld", disp64);
-+#else
-     if (disp64) dbg_printf("+0x%I64x", disp64);
-+#endif
-     if (with_line)
+@@ -592,7 +596,11 @@ void print_address(const ADDRESS64* addr
+     if (SymFromAddr(dbg_curr_process->handle, lin, &disp64, si) && disp64 < si->Size)
      {
-         IMAGEHLP_LINE64             il;
+         dbg_printf(" %s", si->Name);
++#ifdef __arm__
++        if (disp64) dbg_printf("+0x%I64lld", disp64);
++#else
+         if (disp64) dbg_printf("+0x%I64x", disp64);
++#endif
+     }
+     else
+     {
 --- a/programs/winedbg/stack.c
 +++ b/programs/winedbg/stack.c
 @@ -278,7 +278,11 @@ static void stack_print_addr_and_args(vo

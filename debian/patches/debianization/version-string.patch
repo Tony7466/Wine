@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3902,7 +3902,7 @@ dnl Rules for generated source files
+@@ -3966,7 +3966,7 @@ dnl Rules for generated source files
  
  WINE_APPEND_RULE(
  [dlls/ntdll/unix/version.c: dummy

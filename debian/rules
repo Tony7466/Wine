@@ -41,7 +41,6 @@ export DEB_CFLAGS_MAINT_APPEND+=-Wno-unused-function
 
 # configure options
 CONFLAGS=--with-gnutls \
-         --without-hal \
          --without-oss \
          --without-sane \
          --without-netapi \

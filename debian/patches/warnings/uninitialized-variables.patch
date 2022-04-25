@@ -90,7 +90,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!desc) return E_INVALIDARG;
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -2673,6 +2673,9 @@ static void check_fbo_compat(struct wine
+@@ -2672,6 +2672,9 @@ static void check_fbo_compat(struct wine
                      case WINED3D_GL_RES_TYPE_COUNT:
                          color = 0;
                          break;
@@ -102,7 +102,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/dlls/user32/sysparams.c
 +++ b/dlls/user32/sysparams.c
-@@ -1723,7 +1723,7 @@ BOOL WINAPI SystemParametersInfoW( UINT
+@@ -1645,7 +1645,7 @@ BOOL WINAPI SystemParametersInfoW( UINT
      case SPI_GETNONCLIENTMETRICS:
      {
          LPNONCLIENTMETRICSW lpnm = pvParam;
@@ -207,7 +207,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (n > INT_MAX / sizeof(RECT)) return FALSE;
 --- a/dlls/win32u/dc.c
 +++ b/dlls/win32u/dc.c
-@@ -947,6 +947,7 @@ BOOL WINAPI NtGdiGetAndSetDCDword( HDC h
+@@ -941,6 +941,7 @@ BOOL WINAPI NtGdiGetAndSetDCDword( HDC h
  
      default:
          WARN( "unknown method %u\n", method );
@@ -242,7 +242,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                      prefix->Address.iSockaddrLength = sockaddr_size;
 --- a/include/winsock2.h
 +++ b/include/winsock2.h
-@@ -599,9 +599,17 @@ typedef struct WS(timeval)
+@@ -597,9 +597,17 @@ typedef struct WS(timeval)
  #  define FD_SETSIZE    64
  # endif
  
