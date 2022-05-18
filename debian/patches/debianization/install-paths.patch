@@ -12,8 +12,38 @@ forwarded: not-needed
 -AC_SUBST(fontdir,[\${datadir}/wine/fonts])
 -AC_SUBST(nlsdir,[\${datadir}/wine/nls])
 +AC_SUBST(dlldir,[\${libdir}])
-+AC_SUBST(fontdir,[\${datadir}/fonts])
++AC_SUBST(fontdir,[/usr/share/wine/fonts])
 +AC_SUBST(nlsdir,[\${datadir}/nls])
  AC_SUBST(srcdir)
  
  dnl **** Check for some programs ****
+--- a/tools/makedep.c
++++ b/tools/makedep.c
+@@ -2897,7 +2897,7 @@ static void output_source_in( struct mak
+     output( "%s:", obj_dir_path( make, obj ));
+     output_filenames( source->dependencies );
+     output( "\n" );
+-    add_install_rule( make, obj, xstrdup( obj ), strmake( "d$(datadir)/wine/%s", obj ));
++    add_install_rule( make, obj, xstrdup( obj ), strmake( "d$(datadir)/%s", obj ));
+ }
+ 
+ 
+--- a/dlls/ntdll/Makefile.in
++++ b/dlls/ntdll/Makefile.in
+@@ -75,4 +75,4 @@ unix_loader_EXTRADEFS = \
+ 	-DBINDIR=\"${bindir}\" \
+ 	-DSYSTEMDLLPATH=\"${system_dllpath}\" \
+ 	-DDLL_TO_BINDIR=\"`${MAKEDEP} -R ${dlldir} ${bindir}`\" \
+-	-DBIN_TO_DATADIR=\"`${MAKEDEP} -R ${bindir} ${datadir}/wine`\"
++	-DBIN_TO_DATADIR=\"`${MAKEDEP} -R ${bindir} ${datadir}`\"
+--- a/libs/wine/Makefile.in
++++ b/libs/wine/Makefile.in
+@@ -93,7 +93,7 @@ config_EXTRADEFS = \
+ 	-DLIB_TO_BINDIR=\"`${MAKEDEP} -R ${libdir} ${bindir}`\" \
+ 	-DLIB_TO_DLLDIR=\"`${MAKEDEP} -R ${libdir} ${dlldir}`\" \
+ 	-DBIN_TO_DLLDIR=\"`${MAKEDEP} -R ${bindir} ${dlldir}`\" \
+-	-DBIN_TO_DATADIR=\"`${MAKEDEP} -R ${bindir} ${datadir}/wine`\"
++	-DBIN_TO_DATADIR=\"`${MAKEDEP} -R ${bindir} ${datadir}`\"
+ 
+ SHAREDLIB = $(LIBWINE_SHAREDLIB)
+ 

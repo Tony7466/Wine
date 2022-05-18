@@ -24,7 +24,7 @@ debian/tmp/usr/lib/*/*/*/libwine.so.*
 debian/tmp/wineserver usr/lib/wineVERSION
 
 # configuration files
-debian/tmp/usr/share/*/wine/*
+debian/tmp/usr/share/*/*
 
 # language support files
 debian/tmp/usr/share/wineVERSION/nls/*

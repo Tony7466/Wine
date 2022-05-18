@@ -33,12 +33,6 @@ export DEB_RULES_REQUIRES_ROOT=no
 # enable hardening buildflags (fortify is not yet supported upstream and mingw does not yet support stackprotector)
 export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector
 
-# ignore array-bounds and packed-non-aligned warnings for now
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-array-bounds -Wno-packed-not-aligned
-
-# ignore all defined but unused function warnings
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-unused-function
-
 # configure options
 CONFLAGS=--with-gnutls \
          --without-oss \
@@ -52,7 +46,6 @@ CONFLAGS=--with-gnutls \
          --mandir=/$(MANDIR) \
          --includedir=/$(INCDIR) \
          --datarootdir=/$(DATDIR) \
-         ZLIB_PE_LIBS=z \
          $(shell dpkg-buildflags --export=cmdline) \
 
 # enable wine64 on 64-bit architectures
@@ -65,7 +58,7 @@ endif
 
 # build with mingw on intel architectures
 ifneq (,$(filter $(DEB_HOST_ARCH),i386 amd64))
-CONFLAGS+=--with-mingw
+CONFLAGS+=--with-mingw ZLIB_PE_LIBS=z
 endif
 
 # on armel build for armv6t2

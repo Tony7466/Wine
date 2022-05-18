@@ -1,3 +1,12 @@
+wine-development (6.23~repack-2) unstable; urgency=medium
+
+  * Correct shift-overflow flag for clang on arm64.
+  * Add libusb-1.0-0-dev to the build dependencies.
+  * Build with system zlib PE only on i386 and amd64.
+  * Fix installation paths for fonts and nls files (closes: #1010269).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Thu, 05 May 2022 18:09:14 +0000
+
 wine-development (6.23~repack-1) unstable; urgency=medium
 
   * New upstream release 6.23, released Dec 3, 2021.
