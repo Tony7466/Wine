@@ -1,3 +1,11 @@
+wine-development (6.23~repack-3) unstable; urgency=medium
+
+  * Fix incorrect winedbg format strings on arm.
+  * Ignore warnings when building embedded libraries.
+  * Build for armv7-a on armel (new minimum ARM architecture required by wine).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Mon, 23 May 2022 01:17:00 +0000
+
 wine-development (6.23~repack-2) unstable; urgency=medium
 
   * Correct shift-overflow flag for clang on arm64.

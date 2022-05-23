@@ -1,0 +1,32 @@
+description: warnings to ignore when building embedded libs
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/libs/xml2/Makefile.in
++++ b/libs/xml2/Makefile.in
+@@ -1,6 +1,6 @@
+ EXTLIB    = libxml2.a
+ EXTRAINCL = $(XML2_PE_CFLAGS)
+-EXTRADEFS = -DHAVE_VA_COPY
++EXTRADEFS = -DHAVE_VA_COPY -Wno-format-extra-args
+ 
+ C_SRCS = \
+ 	HTMLparser.c \
+--- a/libs/faudio/Makefile.in
++++ b/libs/faudio/Makefile.in
+@@ -1,6 +1,6 @@
+ EXTLIB    = libfaudio.a
+ EXTRAINCL = -I$(srcdir)/include
+-EXTRADEFS = -DFAUDIO_WIN32_PLATFORM -DHAVE_WMADEC -DNDEBUG
++EXTRADEFS = -DFAUDIO_WIN32_PLATFORM -DHAVE_WMADEC -DNDEBUG -Wno-format -Wno-format-extra-args
+ 
+ C_SRCS = \
+ 	src/F3DAudio.c \
+--- a/libs/tiff/Makefile.in
++++ b/libs/tiff/Makefile.in
+@@ -1,5 +1,5 @@
+ EXTLIB    = libtiff.a
+-EXTRAINCL = -I$(srcdir)/libtiff $(JPEG_PE_CFLAGS) $(ZLIB_PE_CFLAGS)
++EXTRAINCL = -I$(srcdir)/libtiff $(JPEG_PE_CFLAGS) $(ZLIB_PE_CFLAGS) -Wno-format -Wno-format-extra-args
+ 
+ C_SRCS = \
+ 	libtiff/tif_aux.c \

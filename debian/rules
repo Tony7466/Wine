@@ -64,13 +64,14 @@ endif
 # on armel build for armv6t2
 ifeq ($(DEB_HOST_ARCH), armel)
 CONFLAGS+=--with-float-abi=soft
-export DEB_CFLAGS_MAINT_APPEND+=-march=armv6t2 -Wno-array-parameter
+export DEB_CFLAGS_MAINT_APPEND+=-march=armv7-a -Wno-array-bounds -Wno-packed-not-aligned
+export DEB_LDFLAGS_MAINT_APPEND+=-march=armv7-a
 endif
 
 # on armhf build with hard float ABI
 ifeq ($(DEB_HOST_ARCH), armhf)
 CONFLAGS+=--with-float-abi=hard
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-array-parameter
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-array-bounds -Wno-packed-not-aligned
 endif
 
 # on arm64 build using clang and ignore compiler warnings

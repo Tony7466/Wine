@@ -38,6 +38,7 @@ arm64/excess-precision.patch
 arm64/incorrect-member.patch
 arm64/tautological-compare.patch
 
+warnings/libs.patch
 warnings/bison.patch
 warnings/stringop-overflow.patch
 warnings/misleading-indentation.patch
