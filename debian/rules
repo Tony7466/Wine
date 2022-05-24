@@ -61,17 +61,17 @@ ifneq (,$(filter $(DEB_HOST_ARCH),i386 amd64))
 CONFLAGS+=--with-mingw ZLIB_PE_LIBS=z
 endif
 
-# on armel build for armv6t2
+# build with soft float ABI and armv7-a instruction set on armel
 ifeq ($(DEB_HOST_ARCH), armel)
 CONFLAGS+=--with-float-abi=soft
-export DEB_CFLAGS_MAINT_APPEND+=-march=armv7-a -Wno-array-bounds -Wno-packed-not-aligned
+export DEB_CFLAGS_MAINT_APPEND+=-march=armv7-a -Wno-array-bounds -Wno-unused-function
 export DEB_LDFLAGS_MAINT_APPEND+=-march=armv7-a
 endif
 
-# on armhf build with hard float ABI
+# build with hard float ABI on armhf
 ifeq ($(DEB_HOST_ARCH), armhf)
 CONFLAGS+=--with-float-abi=hard
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-array-bounds -Wno-packed-not-aligned
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-array-bounds -Wno-unused-function
 endif
 
 # on arm64 build using clang and ignore compiler warnings

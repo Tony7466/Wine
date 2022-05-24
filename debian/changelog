@@ -1,3 +1,9 @@
+wine-development (6.23~repack-4) unstable; urgency=medium
+
+  * Ignore unused function warnings on arm.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Mon, 23 May 2022 22:46:02 +0000
+
 wine-development (6.23~repack-3) unstable; urgency=medium
 
   * Fix incorrect winedbg format strings on arm.
