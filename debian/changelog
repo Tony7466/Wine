@@ -1,3 +1,53 @@
+wine-development (7.0-1) UNRELEASED; urgency=medium
+
+  * New upstream release 7.0, released Jan 18, 2022.
+    - Most modules converted to PE format.
+    - Better theming support, with a bundled theme for a more modern
+    look.
+    - Vastly improved HID stack and joystick support.
+    - New WoW64 architecture.
+    - Deferred device contexts.
+    - Device context state objects, and switching between them.
+    - Constant buffer offsetting.
+    - Resolving typeless multi-sample resources.
+    - Clearing unordered-access views of texture resources. When using
+    the OpenGL
+    - Resource copies between resources with "block-compatible" formats,
+    like for
+    - Clearing layered render-target views.
+    - AMD Radeon RX 5500M
+    - AMD Radeon RX 6800/6800 XT/6900 XT
+    - AMD Van Gogh
+    - Intel UHD Graphics 630
+    - NVIDIA GT 1030
+    - "UseGLSL"
+    - Basic functionality of IMFPMediaPlayer, media item properties,
+    support for
+    - Support for sample allocator in the Source Reader.
+    - Improved EVR sink integration with presenter and mixer.
+    - Improved SAR rendering buffer behavior.
+    - Video sample allocator, with support for d3d9, d3d11, and system
+    memory
+    - Further improvements to EVR's presenter and mixer implementation.
+    - D3D11 frame output for IMFMediaEngine.
+    - Improvements to generic media source implementation in
+    WineGStreamer to
+    - IDispatch interface supported on COM Callable Wrappers.
+    - Improved support for SafeArray marshaling.
+    - Many other marshaling and COM interop improvements.
+    - Code imports from .NET Core: System.Drawing.Printing,
+    - WMA and WMV support in FNA using mfplat.
+    - Debug symbols available separately in PDB form.
+    - Old VBNC compiler for Visual Basic .NET replaced with the VBC
+    compiler from
+    - Mono's JIT compiler generates code compatible with 64-bit macOS.
+    - WPF built with support for media controls.
+    - A replacement for the Managed DirectX API is included.
+    - Fixes for various bugs that prevented most WPF applications from
+    working.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 05 Jun 2022 21:54:23 +0000
+
 wine-development (6.23~repack-4) unstable; urgency=medium
 
   * Ignore unused function warnings on arm.
