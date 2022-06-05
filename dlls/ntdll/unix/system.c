@@ -33,9 +33,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <errno.h>
-#ifdef HAVE_SYS_TIME_H
-# include <sys/time.h>
-#endif
+#include <sys/time.h>
 #include <time.h>
 #ifdef HAVE_SYS_PARAM_H
 # include <sys/param.h>
@@ -251,10 +249,36 @@ BOOL xstate_compaction_enabled = FALSE;
 #define INEI	0x49656e69	/* "ineI" */
 #define NTEL	0x6c65746e	/* "ntel" */
 
-static inline void do_cpuid(unsigned int ax, unsigned int cx, unsigned int *p)
-{
-    __asm__ ("cpuid" : "=a"(p[0]), "=b" (p[1]), "=c"(p[2]), "=d"(p[3]) : "a"(ax), "c"(cx));
-}
+extern void do_cpuid( unsigned int ax, unsigned int cx, unsigned int *p ) DECLSPEC_HIDDEN;
+#ifdef __i386__
+__ASM_GLOBAL_FUNC( do_cpuid,
+                   "pushl %esi\n\t"
+                   "pushl %ebx\n\t"
+                   "movl 12(%esp),%eax\n\t"
+                   "movl 16(%esp),%ecx\n\t"
+                   "movl 20(%esp),%esi\n\t"
+                   "cpuid\n\t"
+                   "movl %eax,(%esi)\n\t"
+                   "movl %ebx,4(%esi)\n\t"
+                   "movl %ecx,8(%esi)\n\t"
+                   "movl %edx,12(%esi)\n\t"
+                   "popl %ebx\n\t"
+                   "popl %esi\n\t"
+                   "ret" )
+#else
+__ASM_GLOBAL_FUNC( do_cpuid,
+                   "pushq %rbx\n\t"
+                   "movl %edi,%eax\n\t"
+                   "movl %esi,%ecx\n\t"
+                   "movq %rdx,%r8\n\t"
+                   "cpuid\n\t"
+                   "movl %eax,(%r8)\n\t"
+                   "movl %ebx,4(%r8)\n\t"
+                   "movl %ecx,8(%r8)\n\t"
+                   "movl %edx,12(%r8)\n\t"
+                   "popq %rbx\n\t"
+                   "ret" )
+#endif
 
 #ifdef __i386__
 extern int have_cpuid(void) DECLSPEC_HIDDEN;
@@ -3513,6 +3537,51 @@ static NTSTATUS fill_battery_state( SYSTEM_BATTERY_STATE *bs )
         bs->EstimatedTime = (ULONG)remain;
 
     CFRelease( batteries );
+    return STATUS_SUCCESS;
+}
+
+#elif defined(__FreeBSD__)
+
+#include <dev/acpica/acpiio.h>
+
+static NTSTATUS fill_battery_state( SYSTEM_BATTERY_STATE *bs )
+{
+    size_t len;
+    int state = 0;
+    int rate_mW = 0;
+    int time_mins = -1;
+    int life_percent = 0;
+
+    bs->BatteryPresent = TRUE;
+    len = sizeof(state);
+    bs->BatteryPresent &= !sysctlbyname("hw.acpi.battery.state", &state, &len, NULL, 0);
+    len = sizeof(rate_mW);
+    bs->BatteryPresent &= !sysctlbyname("hw.acpi.battery.rate", &rate_mW, &len, NULL, 0);
+    len = sizeof(time_mins);
+    bs->BatteryPresent &= !sysctlbyname("hw.acpi.battery.time", &time_mins, &len, NULL, 0);
+    len = sizeof(life_percent);
+    bs->BatteryPresent &= !sysctlbyname("hw.acpi.battery.life", &life_percent, &len, NULL, 0);
+
+    if (bs->BatteryPresent)
+    {
+        bs->AcOnLine = (time_mins == -1);
+        bs->Charging = state & ACPI_BATT_STAT_CHARGING;
+        bs->Discharging = state & ACPI_BATT_STAT_DISCHARG;
+
+        bs->Rate = (rate_mW >= 0 ? -rate_mW : 0);
+        if (time_mins >= 0 && life_percent > 0)
+        {
+            bs->EstimatedTime = 60 * time_mins;
+            bs->RemainingCapacity = bs->EstimatedTime * rate_mW / 3600;
+            bs->MaxCapacity = bs->RemainingCapacity * 100 / life_percent;
+        }
+        else
+        {
+            bs->EstimatedTime = ~0u;
+            bs->RemainingCapacity = life_percent;
+            bs->MaxCapacity = 100;
+        }
+    }
     return STATUS_SUCCESS;
 }
 

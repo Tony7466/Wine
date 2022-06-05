@@ -429,12 +429,10 @@ AC_CHECK_HEADERS(\
 	Security/Security.h \
 	SystemConfiguration/SCDynamicStoreCopyDHCPInfo.h \
 	SystemConfiguration/SCNetworkConfiguration.h \
-	alias.h \
 	arpa/inet.h \
 	arpa/nameser.h \
 	asm/types.h \
 	asm/user.h \
-	dirent.h \
 	elf.h \
 	float.h \
 	gettext-po.h \
@@ -447,7 +445,6 @@ AC_CHECK_HEADERS(\
 	linux/hidraw.h \
 	linux/input.h \
 	linux/ioctl.h \
-	linux/joystick.h \
 	linux/major.h \
 	linux/param.h \
 	linux/serial.h \
@@ -480,15 +477,12 @@ AC_CHECK_HEADERS(\
 	sys/epoll.h \
 	sys/event.h \
 	sys/filio.h \
-	sys/ioctl.h \
 	sys/ipc.h \
 	sys/link.h \
-	sys/mman.h \
 	sys/modem.h \
 	sys/mtio.h \
 	sys/param.h \
 	sys/prctl.h \
-	sys/protosw.h \
 	sys/ptrace.h \
 	sys/queue.h \
 	sys/random.h \
@@ -496,24 +490,18 @@ AC_CHECK_HEADERS(\
 	sys/scsiio.h \
 	sys/shm.h \
 	sys/signal.h \
-	sys/socket.h \
 	sys/socketvar.h \
 	sys/sockio.h \
 	sys/statvfs.h \
 	sys/strtio.h \
 	sys/syscall.h \
 	sys/sysinfo.h \
-	sys/time.h \
-	sys/timeout.h \
 	sys/times.h \
 	sys/uio.h \
 	sys/user.h \
 	sys/utsname.h \
 	sys/vnode.h \
-	sys/wait.h \
 	syscall.h \
-	termios.h \
-	unistd.h \
 	utime.h \
 	valgrind/memcheck.h \
 	valgrind/valgrind.h
@@ -547,7 +535,6 @@ AC_CHECK_HEADERS(\
 	net/if_types.h \
 	net/route.h \
 	netinet/if_ether.h \
-	netinet/if_inarp.h \
 	netinet/in_pcb.h \
 	netinet/ip_icmp.h \
 	netinet/ip_var.h \
@@ -555,9 +542,7 @@ AC_CHECK_HEADERS(\
 	netipx/ipx.h \
 	sys/un.h \
 ,,,[#include <sys/types.h>
-     #ifdef HAVE_SYS_SOCKET_H
-     # include <sys/socket.h>
-     #endif
+     #include <sys/socket.h>
      #ifdef HAVE_SYS_SOCKETVAR_H
      # include <sys/socketvar.h>
      #endif
@@ -577,19 +562,11 @@ AC_CHECK_HEADERS(\
      # include <netinet/ip.h>
      #endif])
 
-AC_CHECK_HEADERS([netinet/tcp_timer.h netinet/udp_var.h netinet/icmp_var.h netinet/tcp_var.h ],,,
+AC_CHECK_HEADERS([netinet/udp_var.h netinet/icmp_var.h netinet/tcp_var.h ],,,
     [#include <sys/types.h>
-     #ifdef HAVE_ALIAS_H
-     # include <alias.h>
-     #endif
-     #ifdef HAVE_SYS_SOCKET_H
-     # include <sys/socket.h>
-     #endif
+     #include <sys/socket.h>
      #ifdef HAVE_SYS_SOCKETVAR_H
      # include <sys/socketvar.h>
-     #endif
-     #ifdef HAVE_SYS_TIMEOUT_H
-     # include <sys/timeout.h>
      #endif
      #ifdef HAVE_NETINET_IN_H
      # include <netinet/in.h>
@@ -611,18 +588,13 @@ AC_CHECK_HEADERS([netinet/tcp_timer.h netinet/udp_var.h netinet/icmp_var.h netin
      #endif
      #ifdef HAVE_NETINET_TCP_H
      # include <netinet/tcp.h>
-     #endif
-     #ifdef HAVE_NETINET_TCP_TIMER_H
-     #include <netinet/tcp_timer.h>
      #endif])
 
 AC_CHECK_HEADERS([linux/ipx.h linux/irda.h linux/rtnetlink.h],,,
     [#include <sys/types.h>
+     #include <sys/socket.h>
      #ifdef HAVE_ASM_TYPES_H
      # include <asm/types.h>
-     #endif
-     #ifdef HAVE_SYS_SOCKET_H
-     # include <sys/socket.h>
      #endif
      #ifdef HAVE_LINUX_TYPES_H
      # include <linux/types.h>
@@ -630,9 +602,7 @@ AC_CHECK_HEADERS([linux/ipx.h linux/irda.h linux/rtnetlink.h],,,
 
 AC_CHECK_HEADERS([resolv.h],,,
     [#include <sys/types.h>
-     #ifdef HAVE_SYS_SOCKET_H
-     # include <sys/socket.h>
-     #endif
+     #include <sys/socket.h>
      #ifdef HAVE_NETINET_IN_H
      # include <netinet/in.h>
      #endif
@@ -656,9 +626,7 @@ AC_CHECK_HEADERS([pthread_np.h],,,
 #endif])
 
 AC_CHECK_HEADERS([linux/videodev2.h],,,
-[#ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
-#endif
+[#include <sys/time.h>
 #include <sys/types.h>
 #ifdef HAVE_ASM_TYPES_H
 #include <asm/types.h>
@@ -668,11 +636,9 @@ AC_CHECK_HEADERS([libprocstat.h],,,
 [#ifdef HAVE_SYS_PARAM_H
 #include <sys/param.h>
 #endif
+#include <sys/socket.h>
 #ifdef HAVE_SYS_QUEUE_H
 #include <sys/queue.h>
-#endif
-#ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
 #endif])
 
 dnl **** Check for working dll ****
@@ -791,7 +757,7 @@ case $host_os in
     fi
     if test "$ac_cv_header_Metal_Metal_h" = "yes"
     then
-        AC_SUBST(METAL_LIBS,"-framework Metal -framework QuartzCore")
+        AC_SUBST(METAL_LIBS,"-framework Metal")
     fi
 
     dnl Check for MTLDevice registryID property
@@ -899,7 +865,6 @@ esac
 enable_winecoreaudio_drv=${enable_winecoreaudio_drv:-no}
 enable_wineandroid_drv=${enable_wineandroid_drv:-no}
 enable_winemac_drv=${enable_winemac_drv:-no}
-test "$ac_cv_header_linux_joystick_h" = "yes" -o "$ac_cv_header_IOKit_hid_IOHIDLib_h" = "yes" || enable_winejoystick_drv=${enable_winejoystick_drv:-no}
 
 dnl Check for cross compiler to build test programs
 AC_SUBST(CROSSTARGET)
@@ -2052,12 +2017,12 @@ dnl **** Check for OpenLDAP ***
 if test "x$with_ldap" != "xno"
 then
     dnl Actually there's no pkg-config support for ldap, but this way we can still override the flags
-    WINE_PACKAGE_FLAGS(LDAP,[openldap],[-lldap_r -llber],,,
+    WINE_PACKAGE_FLAGS(LDAP,[openldap],[-lldap -llber],,,
         [AC_CHECK_HEADERS([ldap.h lber.h])
         if test "$ac_cv_header_ldap_h" = "yes" -a "$ac_cv_header_lber_h" = "yes"
         then
             AC_CHECK_TYPE(LDAPSortKey,
-                [AC_CHECK_LIB(ldap_r, ldap_initialize,
+                [AC_CHECK_LIB(ldap, ldap_initialize,
                     [AC_CHECK_LIB(lber, ber_init,
                         [AC_DEFINE(HAVE_LDAP, 1, [Define if you have the OpenLDAP development environment])],
                         [LDAP_LIBS=""],
@@ -2066,16 +2031,6 @@ then
                     [$PTHREAD_LIBS $LDAP_LIBS])],
                 [LDAP_LIBS=""],
                 [#include <ldap.h>])
-            WINE_CHECK_LIB_FUNCS(\
-                ldap_count_references \
-                ldap_first_reference \
-                ldap_next_reference \
-                ldap_parse_reference \
-                ldap_parse_sort_control \
-                ldap_parse_sortresponse_control \
-                ldap_parse_vlv_control \
-                ldap_parse_vlvresponse_control,
-                [$LDAP_LIBS $PTHREAD_LIBS])
         else
             LDAP_LIBS=""
         fi])
@@ -2100,9 +2055,7 @@ AC_CHECK_TYPES([request_sense],,,[#include <linux/cdrom.h>])
 
 AC_CHECK_TYPES([struct xinpgen],,,
 [#include <sys/types.h>
-#ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
-#endif
 #ifdef HAVE_SYS_SOCKETVAR_H
 #include <sys/socketvar.h>
 #endif
@@ -2120,11 +2073,6 @@ AC_CHECK_TYPES([struct xinpgen],,,
 #endif
 #ifdef HAVE_NETINET_IN_PCB_H
 #include <netinet/in_pcb.h>
-#endif])
-
-AC_CHECK_MEMBERS([struct ff_effect.direction],,,
-[#ifdef HAVE_LINUX_INPUT_H
-#include <linux/input.h>
 #endif])
 
 AC_CACHE_CHECK([for sigaddset],wine_cv_have_sigaddset,
@@ -2158,34 +2106,10 @@ AC_CACHE_CHECK([whether we can use re-entrant gethostbyname_r Linux style],
                 [Define if Linux-style gethostbyname_r and gethostbyaddr_r are available])
    fi
 
-if test "$ac_cv_header_linux_joystick_h" = "yes"
-then
-   AC_CACHE_CHECK([whether linux/joystick.h uses the Linux 2.2+ API],
-   	wine_cv_linux_joystick_22_api,
-	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
-	#include <sys/ioctl.h>
-	#include <sys/types.h>
-	#include <linux/joystick.h>
-
-	struct js_event blub;
-	#if !defined(JS_EVENT_AXIS) || !defined(JS_EVENT_BUTTON)
-	#error "no 2.2 header"
-	#endif
-	]], [[/*empty*/]])],[wine_cv_linux_joystick_22_api=yes],[wine_cv_linux_joystick_22_api=no])
-   )
-   if test "$wine_cv_linux_joystick_22_api" = "yes"
-   then
-      AC_DEFINE(HAVE_LINUX_22_JOYSTICK_API, 1,
-                [Define if <linux/joystick.h> defines the Linux 2.2 joystick API])
-   fi
-fi
-
 dnl Check for socket structure members
 AC_CHECK_MEMBERS([struct msghdr.msg_accrights, struct sockaddr_un.sun_len],,,
 [#include <sys/types.h>
-#ifdef HAVE_SYS_SOCKET_H
-# include <sys/socket.h>
-#endif
+#include <sys/socket.h>
 #ifdef HAVE_SYS_UN_H
 # include <sys/un.h>
 #endif])
@@ -2223,83 +2147,15 @@ AC_CHECK_MEMBERS([
 
 dnl Check for sin6_scope_id
 AC_CHECK_MEMBERS([struct sockaddr_in6.sin6_scope_id],,,
-[#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
+[#include <sys/types.h>
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
 #endif])
 
-dnl Check for struct __res_state
-AC_CHECK_TYPES([struct __res_state],,,
-[#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
-#ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
-#endif
-#ifdef HAVE_RESOLV_H
-#include <resolv.h>
-#endif])
-
-dnl Check for _u._ext.nscount6
+dnl Check for struct __res_state._u._ext.nscount6
 AC_CHECK_MEMBERS([struct __res_state._u._ext.nscount6],,,
 [#ifdef HAVE_RESOLV_H
 #include <resolv.h>
-#endif])
-
-dnl Check for struct icmpstat
-AC_CHECK_MEMBERS([struct icmpstat.icps_inhist],,,
-[#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
-#ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
-#endif
-#ifdef HAVE_NETINET_IP_H
-#include <netinet/ip.h>
-#endif
-#ifdef HAVE_NETINET_IP_ICMP_H
-#include <netinet/ip_icmp.h>
-#endif
-#ifdef HAVE_NETINET_ICMP_VAR_H
-#include <netinet/icmp_var.h>
-#endif])
-
-dnl Check for struct icmpstat.icps_outhist
-AC_CHECK_MEMBERS([struct icmpstat.icps_outhist],,,
-[#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
-#ifdef HAVE_ALIAS_H
-#include <alias.h>
-#endif
-#ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
-#endif
-#ifdef HAVE_SYS_SOCKETVAR_H
-#include <sys/socketvar.h>
-#endif
-#ifdef HAVE_SYS_TIMEOUT_H
-#include <sys/timeout.h>
-#endif
-#ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
-#endif
-#ifdef HAVE_NETINET_IN_SYSTM_H
-#include <netinet/in_systm.h>
-#endif
-#ifdef HAVE_NETINET_IP_H
-#include <netinet/ip.h>
-#endif
-#ifdef HAVE_NETINET_IP_VAR_H
-#include <netinet/ip_var.h>
-#endif
-#ifdef HAVE_NETINET_IP_ICMP_H
-#include <netinet/ip_icmp.h>
-#endif
-#ifdef HAVE_NETINET_ICMP_VAR_H
-#include <netinet/icmp_var.h>
 #endif])
 
 dnl Check for struct in6_pktinfo
@@ -2310,9 +2166,7 @@ AC_CHECK_MEMBERS([struct in6_pktinfo.ipi6_addr],,,
 
 dnl Check for struct ipstat
 AC_CHECK_MEMBERS([struct ipstat.ips_total],,,
-[#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
+[#include <sys/types.h>
 #ifdef HAVE_SYS_SOCKETVAR_H
 #include <sys/socketvar.h>
 #endif
@@ -2331,9 +2185,7 @@ AC_CHECK_MEMBERS([struct ip_stats.ips_total],,,
 
 dnl Check for struct tcpstat
 AC_CHECK_MEMBERS([struct tcpstat.tcps_connattempt],,,
-[#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
+[#include <sys/types.h>
 #ifdef HAVE_SYS_SOCKETVAR_H
 #include <sys/socketvar.h>
 #endif
@@ -2355,9 +2207,7 @@ AC_CHECK_MEMBERS([struct tcp_stats.tcps_connattempt],,,
 
 dnl Check for struct udpstat
 AC_CHECK_MEMBERS([struct udpstat.udps_ipackets],,,
-[#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
+[#include <sys/types.h>
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
 #endif
@@ -2373,9 +2223,7 @@ AC_CHECK_MEMBERS([struct udpstat.udps_ipackets],,,
 
 dnl Check for struct ifreq.ifr_hwaddr
 AC_CHECK_MEMBERS([struct ifreq.ifr_hwaddr],,,
-[#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
+[#include <sys/types.h>
 #ifdef HAVE_NET_IF_H
 # include <net/if.h>
 #endif])
@@ -2622,6 +2470,7 @@ WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-version-l1-1-1)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-version-private-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-versionansi-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-windowserrorreporting-l1-1-0)
+WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-windowserrorreporting-l1-1-1)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-winrt-error-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-winrt-error-l1-1-1)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-winrt-errorprivate-l1-1-1)
@@ -2894,7 +2743,6 @@ WINE_CONFIG_MAKEFILE(dlls/difxapi)
 WINE_CONFIG_MAKEFILE(dlls/dinput)
 WINE_CONFIG_MAKEFILE(dlls/dinput/tests)
 WINE_CONFIG_MAKEFILE(dlls/dinput8)
-WINE_CONFIG_MAKEFILE(dlls/dinput8/tests)
 WINE_CONFIG_MAKEFILE(dlls/directmanipulation)
 WINE_CONFIG_MAKEFILE(dlls/directmanipulation/tests)
 WINE_CONFIG_MAKEFILE(dlls/dispdib.dll16,enable_win16)
@@ -3537,7 +3385,6 @@ WINE_CONFIG_MAKEFILE(dlls/winecrt0)
 WINE_CONFIG_MAKEFILE(dlls/wined3d)
 WINE_CONFIG_MAKEFILE(dlls/winegstreamer)
 WINE_CONFIG_MAKEFILE(dlls/winehid.sys)
-WINE_CONFIG_MAKEFILE(dlls/winejoystick.drv)
 WINE_CONFIG_MAKEFILE(dlls/winemac.drv)
 WINE_CONFIG_MAKEFILE(dlls/winemapi)
 WINE_CONFIG_MAKEFILE(dlls/wineoss.drv)

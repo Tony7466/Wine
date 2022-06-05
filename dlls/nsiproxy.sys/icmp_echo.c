@@ -30,10 +30,7 @@
 #include <limits.h>
 #include <pthread.h>
 #include <poll.h>
-
-#ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
-#endif
 
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
@@ -659,8 +656,8 @@ NTSTATUS icmp_send_echo( void *args )
     if (ret < 0)
     {
         TRACE( "sendto() rets %d errno %d\n", ret, errno );
-        icmp_data_free( data );
         params->reply_len = data->ops->set_reply_ip_status( errno_to_ip_status( errno ), params->bits, params->reply );
+        icmp_data_free( data );
         return STATUS_SUCCESS;
     }
 

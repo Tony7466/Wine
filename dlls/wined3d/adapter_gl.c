@@ -159,6 +159,7 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_ARB_vertex_buffer_object",         ARB_VERTEX_BUFFER_OBJECT      },
     {"GL_ARB_vertex_program",               ARB_VERTEX_PROGRAM            },
     {"GL_ARB_vertex_shader",                ARB_VERTEX_SHADER             },
+    {"GL_ARB_vertex_type_10f_11f_11f_rev",  ARB_VERTEX_TYPE_10F_11F_11F_REV},
     {"GL_ARB_vertex_type_2_10_10_10_rev",   ARB_VERTEX_TYPE_2_10_10_10_REV},
     {"GL_ARB_viewport_array",               ARB_VIEWPORT_ARRAY            },
     {"GL_ARB_texture_barrier",              ARB_TEXTURE_BARRIER           },
@@ -3385,6 +3386,7 @@ static BOOL wined3d_adapter_init_gl_caps(struct wined3d_adapter *adapter,
         {ARB_CLEAR_TEXTURE,                MAKEDWORD_VERSION(4, 4)},
         {ARB_QUERY_BUFFER_OBJECT,          MAKEDWORD_VERSION(4, 4)},
         {ARB_TEXTURE_MIRROR_CLAMP_TO_EDGE, MAKEDWORD_VERSION(4, 4)},
+        {ARB_VERTEX_TYPE_10F_11F_11F_REV,  MAKEDWORD_VERSION(4, 4)},
 
         {ARB_CLIP_CONTROL,                 MAKEDWORD_VERSION(4, 5)},
         {ARB_CULL_DISTANCE,                MAKEDWORD_VERSION(4, 5)},
@@ -4564,7 +4566,7 @@ static HRESULT adapter_gl_init_3d(struct wined3d_device *device)
 {
     TRACE("device %p.\n", device);
 
-    wined3d_cs_init_object(device->cs, wined3d_device_create_primary_opengl_context_cs, device);
+    wined3d_cs_init_object(device->cs, wined3d_device_gl_create_primary_opengl_context_cs, wined3d_device_gl(device));
     wined3d_cs_finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
     if (!wined3d_swapchain_gl(device->swapchains[0])->context_count)
         return E_FAIL;
@@ -4577,7 +4579,7 @@ static void adapter_gl_uninit_3d(struct wined3d_device *device)
     TRACE("device %p.\n", device);
 
     wined3d_device_destroy_default_samplers(device);
-    wined3d_cs_destroy_object(device->cs, wined3d_device_delete_opengl_contexts_cs, device);
+    wined3d_cs_destroy_object(device->cs, wined3d_device_gl_delete_opengl_contexts_cs, wined3d_device_gl(device));
     wined3d_cs_finish(device->cs, WINED3D_CS_QUEUE_DEFAULT);
 }
 

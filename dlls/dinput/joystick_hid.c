@@ -819,6 +819,7 @@ static HRESULT hid_joystick_get_property( IDirectInputDevice8W *iface, DWORD pro
     case (DWORD_PTR)DIPROP_GUIDANDPATH:
     {
         DIPROPGUIDANDPATH *value = (DIPROPGUIDANDPATH *)header;
+        value->guidClass = GUID_DEVCLASS_HIDCLASS;
         lstrcpynW( value->wszPath, impl->device_path, MAX_PATH );
         return DI_OK;
     }
@@ -866,7 +867,7 @@ static HRESULT hid_joystick_acquire( IDirectInputDevice8W *iface )
     {
         impl->device = CreateFileW( impl->device_path, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
                                     NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED | FILE_FLAG_NO_BUFFERING, 0 );
-        if (impl->device == INVALID_HANDLE_VALUE) return DIERR_INPUTLOST;
+        if (impl->device == INVALID_HANDLE_VALUE) return DIERR_INVALIDPARAM;
     }
 
     memset( &impl->read_ovl, 0, sizeof(impl->read_ovl) );
@@ -876,7 +877,7 @@ static HRESULT hid_joystick_acquire( IDirectInputDevice8W *iface )
     {
         CloseHandle( impl->device );
         impl->device = INVALID_HANDLE_VALUE;
-        return DIERR_INPUTLOST;
+        return DIERR_INVALIDPARAM;
     }
 
     IDirectInputDevice8_SendForceFeedbackCommand( iface, DISFFC_RESET );
@@ -1207,8 +1208,8 @@ static HRESULT hid_joystick_read( IDirectInputDevice8W *iface )
     struct hid_joystick *impl = impl_from_IDirectInputDevice8W( iface );
     ULONG i, index, count, report_len = impl->caps.InputReportByteLength;
     DIDATAFORMAT *format = impl->base.device_format;
-    struct parse_device_state_params params = {{0}};
     char *report_buf = impl->input_report_buf;
+    struct parse_device_state_params params;
     struct hid_joystick_effect *effect;
     DWORD device_state, effect_state;
     USAGE_AND_PAGE *usages;
@@ -1246,6 +1247,7 @@ static HRESULT hid_joystick_read( IDirectInputDevice8W *iface )
             params.time = GetCurrentTime();
             params.seq = impl->base.dinput->evsequence++;
             memcpy( params.old_state, impl->base.device_state, format->dwDataSize );
+            memset( params.buttons, 0, sizeof(params.buttons) );
             memset( impl->base.device_state, 0, format->dwDataSize );
 
             while (count--)
@@ -1731,6 +1733,9 @@ static BOOL init_pid_caps( struct hid_joystick *impl, struct hid_value_caps *cap
         else if (rep->id != instance->wReportId)                       \
             FIXME( "multiple " #rep " report ids!\n" );                \
     } while (0)
+
+    if (!instance->wCollectionNumber)
+        return DIENUM_CONTINUE;
 
     if (instance->wCollectionNumber == effect_state->collection)
         SET_REPORT_ID( effect_state );

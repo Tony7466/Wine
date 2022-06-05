@@ -31,9 +31,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/time.h>
-#ifdef HAVE_SYS_SOCKET_H
-# include <sys/socket.h>
-#endif
+#include <sys/socket.h>
 #include <unistd.h>
 #include <poll.h>
 #ifdef HAVE_SYS_PARAM_H
@@ -682,6 +680,7 @@ struct process *create_process( int fd, struct process *parent, unsigned int fla
     process->trace_data      = 0;
     process->rawinput_mouse  = NULL;
     process->rawinput_kbd    = NULL;
+    memset( &process->image_info, 0, sizeof(process->image_info) );
     list_init( &process->kernel_object );
     list_init( &process->thread_list );
     list_init( &process->locks );
@@ -1505,15 +1504,8 @@ DECL_HANDLER(get_process_info)
         reply->machine          = process->machine;
         if (get_reply_max_size())
         {
-            client_ptr_t base;
-            const pe_image_info_t *info;
-            struct memory_view *view = get_exe_view( process );
-            if (view)
-            {
-                if ((info = get_view_image_info( view, &base )))
-                    set_reply_data( info, min( sizeof(*info), get_reply_max_size() ));
-            }
-            else set_error( STATUS_PROCESS_IS_TERMINATING );
+            if (!process->running_threads) set_error( STATUS_PROCESS_IS_TERMINATING );
+            else set_reply_data( &process->image_info, min( sizeof(process->image_info), get_reply_max_size() ));
         }
         release_object( process );
     }
@@ -1528,7 +1520,7 @@ DECL_HANDLER(get_process_debug_info)
 
     reply->debug_children = process->debug_children;
     if (!process->debug_obj) set_error( STATUS_PORT_NOT_SET );
-    else reply->debug = alloc_handle( current->process, process->debug_obj, DEBUG_ALL_ACCESS, 0 );
+    else reply->debug = alloc_handle( current->process, process->debug_obj, MAXIMUM_ALLOWED, 0 );
     release_object( process );
 }
 

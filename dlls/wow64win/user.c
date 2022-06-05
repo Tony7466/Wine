@@ -181,6 +181,31 @@ NTSTATUS WINAPI wow64_NtUserRemoveProp( UINT *args )
     return HandleToUlong( NtUserRemoveProp( hwnd, str ));
 }
 
+NTSTATUS WINAPI wow64_NtUserBuildHwndList( UINT *args )
+{
+    HDESK desktop = get_handle( &args );
+    ULONG unk2 = get_ulong( &args );
+    ULONG unk3 = get_ulong( &args );
+    ULONG unk4 = get_ulong( &args );
+    ULONG thread_id = get_ulong( &args );
+    ULONG count = get_ulong( &args );
+    UINT32 *buffer32 = get_ptr( &args );
+    ULONG *size = get_ptr( &args );
+
+    HWND *buffer;
+    ULONG i;
+    NTSTATUS status;
+
+    if (!(buffer = Wow64AllocateTemp( count * sizeof(*buffer) ))) return STATUS_NO_MEMORY;
+
+    if ((status = NtUserBuildHwndList( desktop, unk2, unk3, unk4, thread_id, count, buffer, size )))
+        return status;
+
+    for (i = 0; i < *size; i++)
+        buffer32[i] = HandleToUlong( buffer[i] );
+    return status;
+}
+
 NTSTATUS WINAPI wow64_NtUserGetLayeredWindowAttributes( UINT *args )
 {
     HWND hwnd = get_handle( &args );
@@ -292,4 +317,41 @@ NTSTATUS WINAPI wow64_NtUserGetMouseMovePointsEx( UINT *args )
     DWORD resolution = get_ulong( &args );
 
     return NtUserGetMouseMovePointsEx( size, ptin, ptout, count, resolution );
+}
+
+NTSTATUS WINAPI wow64_NtUserSetProcessDpiAwarenessContext( UINT *args )
+{
+    ULONG awareness = get_ulong( &args );
+    ULONG unknown = get_ulong( &args );
+
+    return NtUserSetProcessDpiAwarenessContext( awareness, unknown );
+}
+
+NTSTATUS WINAPI wow64_NtUserGetProcessDpiAwarenessContext( UINT *args )
+{
+    HANDLE process = get_handle( &args );
+
+    return NtUserGetProcessDpiAwarenessContext( process );
+}
+
+NTSTATUS WINAPI wow64_NtUserGetSystemDpiForProcess( UINT *args )
+{
+    HANDLE process = get_handle( &args );
+
+    return NtUserGetSystemDpiForProcess( process );
+}
+
+NTSTATUS WINAPI wow64_NtUserGetDpiForMonitor( UINT *args )
+{
+    HMONITOR monitor = get_handle( &args );
+    UINT type = get_ulong( &args );
+    UINT *x = get_ptr( &args );
+    UINT *y = get_ptr( &args );
+
+    return NtUserGetDpiForMonitor( monitor, type, x, y );
+}
+
+NTSTATUS WINAPI wow64_NtUserGetDoubleClickTime( UINT *args )
+{
+    return NtUserGetDoubleClickTime();
 }

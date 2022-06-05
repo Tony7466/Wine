@@ -90,6 +90,7 @@
     SYSCALL_ENTRY( NtGdiTransformPoints ) \
     SYSCALL_ENTRY( NtUserAddClipboardFormatListener ) \
     SYSCALL_ENTRY( NtUserAttachThreadInput ) \
+    SYSCALL_ENTRY( NtUserBuildHwndList ) \
     SYSCALL_ENTRY( NtUserCloseDesktop ) \
     SYSCALL_ENTRY( NtUserCloseWindowStation ) \
     SYSCALL_ENTRY( NtUserCreateDesktopEx ) \
@@ -99,6 +100,8 @@
     SYSCALL_ENTRY( NtUserGetClipboardSequenceNumber ) \
     SYSCALL_ENTRY( NtUserGetClipboardViewer ) \
     SYSCALL_ENTRY( NtUserGetCursor ) \
+    SYSCALL_ENTRY( NtUserGetDoubleClickTime ) \
+    SYSCALL_ENTRY( NtUserGetDpiForMonitor ) \
     SYSCALL_ENTRY( NtUserGetKeyState ) \
     SYSCALL_ENTRY( NtUserGetKeyboardLayout ) \
     SYSCALL_ENTRY( NtUserGetKeyboardLayoutName ) \
@@ -107,8 +110,10 @@
     SYSCALL_ENTRY( NtUserGetMouseMovePointsEx ) \
     SYSCALL_ENTRY( NtUserGetObjectInformation ) \
     SYSCALL_ENTRY( NtUserGetOpenClipboardWindow ) \
+    SYSCALL_ENTRY( NtUserGetProcessDpiAwarenessContext ) \
     SYSCALL_ENTRY( NtUserGetProcessWindowStation ) \
     SYSCALL_ENTRY( NtUserGetProp ) \
+    SYSCALL_ENTRY( NtUserGetSystemDpiForProcess ) \
     SYSCALL_ENTRY( NtUserGetThreadDesktop ) \
     SYSCALL_ENTRY( NtUserOpenDesktop ) \
     SYSCALL_ENTRY( NtUserOpenInputDesktop ) \
@@ -117,6 +122,7 @@
     SYSCALL_ENTRY( NtUserRemoveProp ) \
     SYSCALL_ENTRY( NtUserSetKeyboardState ) \
     SYSCALL_ENTRY( NtUserSetObjectInformation ) \
+    SYSCALL_ENTRY( NtUserSetProcessDpiAwarenessContext ) \
     SYSCALL_ENTRY( NtUserSetProcessWindowStation ) \
     SYSCALL_ENTRY( NtUserSetProp ) \
     SYSCALL_ENTRY( NtUserSetThreadDesktop )

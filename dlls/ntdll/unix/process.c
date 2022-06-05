@@ -33,19 +33,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
-#endif
-#ifdef HAVE_SYS_TIME_H
-# include <sys/time.h>
-#endif
+#include <sys/time.h>
 #ifdef HAVE_SYS_TIMES_H
 # include <sys/times.h>
 #endif
 #include <sys/types.h>
-#ifdef HAVE_SYS_WAIT_H
-# include <sys/wait.h>
-#endif
+#include <sys/wait.h>
 #ifdef HAVE_SYS_SYSCTL_H
 # include <sys/sysctl.h>
 #endif
@@ -450,7 +444,7 @@ static NTSTATUS spawn_process( const RTL_USER_PROCESS_PARAMETERS *params, int so
         if (!(pid = fork()))  /* grandchild */
         {
             if (params->ConsoleFlags ||
-                params->ConsoleHandle == (HANDLE)1 /* KERNEL32_CONSOLE_ALLOC */ ||
+                params->ConsoleHandle == CONSOLE_HANDLE_ALLOC ||
                 (params->hStdInput == INVALID_HANDLE_VALUE && params->hStdOutput == INVALID_HANDLE_VALUE))
             {
                 setsid();
@@ -705,6 +699,16 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
     data_size_t handles_size, jobs_size;
     obj_handle_t *handles, *jobs;
 
+    if (thread_flags & THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER)
+    {
+        WARN( "Invalid thread flags %#x.\n", thread_flags );
+
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (thread_flags & ~THREAD_CREATE_FLAGS_CREATE_SUSPENDED)
+        FIXME( "Unsupported thread flags %#x.\n", thread_flags );
+
     for (i = 0; i < attr_count; i++)
     {
         switch (ps_attr->Attributes[i].Attribute)
@@ -845,7 +849,7 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
     {
         req->process    = wine_server_obj_handle( process_handle );
         req->access     = thread_access;
-        req->suspend    = !!(thread_flags & THREAD_CREATE_FLAGS_CREATE_SUSPENDED);
+        req->flags      = thread_flags;
         req->request_fd = -1;
         wine_server_add_data( req, objattr, attr_len );
         if (!(status = wine_server_call( req )))

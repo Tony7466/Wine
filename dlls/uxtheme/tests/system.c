@@ -997,11 +997,13 @@ todo_wine
 
 static void test_GetThemePartSize(void)
 {
+    static const DWORD enabled = 1;
     DPI_AWARENESS_CONTEXT old_context;
     unsigned int old_dpi, current_dpi;
     HTHEME htheme = NULL;
     HWND hwnd = NULL;
     SIZE size, size2;
+    HKEY key = NULL;
     HRESULT hr;
     HDC hdc;
 
@@ -1010,6 +1012,12 @@ static void test_GetThemePartSize(void)
         win_skip("SetThreadDpiAwarenessContext is unavailable.\n");
         return;
     }
+
+    /* Set IgnorePerProcessSystemDPIToast to 1 to disable "fix blurry apps popup" on Windows 10,
+     * which may interfere other tests because it steals focus */
+    RegOpenKeyA(HKEY_CURRENT_USER, "Control Panel\\Desktop", &key);
+    RegSetValueExA(key, "IgnorePerProcessSystemDPIToast", 0, REG_DWORD, (const BYTE *)&enabled,
+                   sizeof(enabled));
 
     old_context = pSetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     current_dpi = get_primary_monitor_effective_dpi();
@@ -1100,6 +1108,11 @@ done:
         CloseThemeData(htheme);
     if (get_primary_monitor_effective_dpi() != old_dpi)
         set_primary_monitor_effective_dpi(old_dpi);
+    if (key)
+    {
+        RegDeleteValueA(key, "IgnorePerProcessSystemDPIToast");
+        RegCloseKey(key);
+    }
     pSetThreadDpiAwarenessContext(old_context);
 }
 
@@ -1438,6 +1451,100 @@ done:
     DestroyWindow(hwnd);
 }
 
+static const struct message DrawThemeParentBackground_seq[] =
+{
+    {WM_ERASEBKGND, sent},
+    {WM_PRINTCLIENT, sent | lparam, 0, PRF_CLIENT},
+    {0}
+};
+
+static LRESULT WINAPI test_DrawThemeParentBackground_proc(HWND hwnd, UINT message, WPARAM wp,
+                                                          LPARAM lp)
+{
+    static LONG defwndproc_counter;
+    struct message msg = {0};
+    LRESULT lr;
+    POINT org;
+    BOOL ret;
+
+    switch (message)
+    {
+    /* Test that DrawThemeParentBackground() doesn't change brush origins */
+    case WM_ERASEBKGND:
+    case WM_PRINTCLIENT:
+        ret = GetBrushOrgEx((HDC)wp, &org);
+        ok(ret, "GetBrushOrgEx failed, error %d.\n", GetLastError());
+        ok(org.x == 0 && org.y == 0, "Expected (0,0), got %s.\n", wine_dbgstr_point(&org));
+        break;
+
+    default:
+        break;
+    }
+
+    msg.message = message;
+    msg.flags = sent | wparam | lparam;
+    if (defwndproc_counter)
+        msg.flags |= defwinproc;
+    msg.wParam = wp;
+    msg.lParam = lp;
+    add_message(sequences, PARENT_SEQ_INDEX, &msg);
+
+    InterlockedIncrement(&defwndproc_counter);
+    lr = DefWindowProcA(hwnd, message, wp, lp);
+    InterlockedDecrement(&defwndproc_counter);
+    return lr;
+}
+
+static void test_DrawThemeParentBackground(void)
+{
+    HWND child, parent;
+    WNDCLASSA cls;
+    HRESULT hr;
+    POINT org;
+    RECT rect;
+    BOOL ret;
+    HDC hdc;
+
+    memset(&cls, 0, sizeof(cls));
+    cls.hInstance = GetModuleHandleA(0);
+    cls.hCursor = LoadCursorA(0, (LPCSTR)IDC_ARROW);
+    cls.hbrBackground = GetStockObject(WHITE_BRUSH);
+    cls.lpfnWndProc = test_DrawThemeParentBackground_proc;
+    cls.lpszClassName = "TestDrawThemeParentBackgroundClass";
+    RegisterClassA(&cls);
+
+    parent = CreateWindowA("TestDrawThemeParentBackgroundClass", "parent", WS_POPUP | WS_VISIBLE, 0,
+                           0, 100, 100, 0, 0, 0, 0);
+    ok(parent != NULL, "CreateWindowA failed, error %d.\n", GetLastError());
+    child = CreateWindowA(WC_STATICA, "child", WS_CHILD | WS_VISIBLE, 1, 2, 50, 50, parent, 0, 0,
+                          NULL);
+    ok(child != NULL, "CreateWindowA failed, error %d.\n", GetLastError());
+    flush_events();
+    flush_sequences(sequences, NUM_MSG_SEQUENCES);
+
+    hdc = GetDC(child);
+    ret = GetBrushOrgEx(hdc, &org);
+    ok(ret, "GetBrushOrgEx failed, error %d.\n", GetLastError());
+    ok(org.x == 0 && org.y == 0, "Expected (0,0), got %s.\n", wine_dbgstr_point(&org));
+
+    hr = DrawThemeParentBackground(child, hdc, NULL);
+    ok(SUCCEEDED(hr), "DrawThemeParentBackground failed, hr %#x.\n", hr);
+    ok_sequence(sequences, PARENT_SEQ_INDEX, DrawThemeParentBackground_seq,
+                "DrawThemeParentBackground parent", FALSE);
+    flush_sequences(sequences, NUM_MSG_SEQUENCES);
+
+    GetClientRect(child, &rect);
+    hr = DrawThemeParentBackground(child, hdc, &rect);
+    ok(SUCCEEDED(hr), "DrawThemeParentBackground failed, hr %#x.\n", hr);
+    ok_sequence(sequences, PARENT_SEQ_INDEX, DrawThemeParentBackground_seq,
+                "DrawThemeParentBackground parent", FALSE);
+    flush_sequences(sequences, NUM_MSG_SEQUENCES);
+
+    ReleaseDC(child, hdc);
+    DestroyWindow(parent);
+    UnregisterClassA("TestDrawThemeParentBackgroundClass", GetModuleHandleA(0));
+}
+
 START_TEST(system)
 {
     init_funcs();
@@ -1459,6 +1566,7 @@ START_TEST(system)
     test_buffered_paint();
     test_GetThemeIntList();
     test_GetThemeTransitionDuration();
+    test_DrawThemeParentBackground();
 
     /* Test EnableTheming() in the end because it may disable theming */
     test_EnableTheming();

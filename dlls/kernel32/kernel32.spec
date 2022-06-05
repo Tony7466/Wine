@@ -267,7 +267,7 @@
 @ stdcall CreateActCtxA(ptr)
 @ stdcall -import CreateActCtxW(ptr)
 # @ stub CreateBoundaryDescriptorA
-# @ stub CreateBoundaryDescriptorW
+@ stdcall -import CreateBoundaryDescriptorW(wstr long)
 @ stdcall -import CreateConsoleScreenBuffer(long long ptr long ptr)
 @ stdcall -import CreateDirectoryA(str ptr)
 @ stdcall CreateDirectoryExA(str str ptr)
@@ -572,10 +572,10 @@
 @ stdcall -import GetCommTimeouts(long ptr)
 @ stdcall -import GetCommandLineA()
 @ stdcall -import GetCommandLineW()
-@ stdcall -import GetCompressedFileSizeA(long ptr)
+@ stdcall -import GetCompressedFileSizeA(str ptr)
 # @ stub GetCompressedFileSizeTransactedA
 # @ stub GetCompressedFileSizeTransactedW
-@ stdcall -import GetCompressedFileSizeW(long ptr)
+@ stdcall -import GetCompressedFileSizeW(wstr ptr)
 @ stdcall GetComputerNameA(ptr ptr)
 @ stdcall GetComputerNameExA(long ptr ptr)
 @ stdcall -import GetComputerNameExW(long ptr ptr)

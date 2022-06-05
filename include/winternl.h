@@ -2578,7 +2578,10 @@ typedef struct _SYSTEM_PROCESS_INFORMATION {
 #ifdef __WINESRC__                  /* win32/win64 */
     ULONG NextEntryOffset;             /* 00/00 */
     DWORD dwThreadCount;               /* 04/04 */
-    DWORD dwUnknown1[6];               /* 08/08 */
+    LARGE_INTEGER WorkingSetPrivateSize; /* 08/08 */
+    ULONG HardFaultCount;              /* 10/10 */
+    ULONG NumberOfThreadsHighWatermark;/* 14/14 */
+    ULONGLONG CycleTime;               /* 18/18 */
     LARGE_INTEGER CreationTime;        /* 20/20 */
     LARGE_INTEGER UserTime;            /* 28/28 */
     LARGE_INTEGER KernelTime;          /* 30/30 */
@@ -2588,7 +2591,7 @@ typedef struct _SYSTEM_PROCESS_INFORMATION {
     HANDLE ParentProcessId;            /* 48/58 */
     ULONG HandleCount;                 /* 4c/60 */
     ULONG SessionId;                   /* 50/64 */
-    DWORD dwUnknown4;                  /* 54/68 */
+    ULONG_PTR UniqueProcessKey;        /* 54/68 */
     VM_COUNTERS_EX vmCounters;         /* 58/70 */
     IO_COUNTERS ioCounters;            /* 88/d0 */
     SYSTEM_THREAD_INFORMATION ti[1];   /* b8/100 */
@@ -4064,6 +4067,7 @@ NTSYSAPI NTSTATUS  WINAPI NtResumeThread(HANDLE,PULONG);
 NTSYSAPI NTSTATUS  WINAPI NtSaveKey(HANDLE,HANDLE);
 NTSYSAPI NTSTATUS  WINAPI NtSecureConnectPort(PHANDLE,PUNICODE_STRING,PSECURITY_QUALITY_OF_SERVICE,PLPC_SECTION_WRITE,PSID,PLPC_SECTION_READ,PULONG,PVOID,PULONG);
 NTSYSAPI NTSTATUS  WINAPI NtSetContextThread(HANDLE,const CONTEXT*);
+NTSYSAPI NTSTATUS  WINAPI NtSetDebugFilterState(ULONG,ULONG,BOOLEAN);
 NTSYSAPI NTSTATUS  WINAPI NtSetDefaultHardErrorPort(HANDLE);
 NTSYSAPI NTSTATUS  WINAPI NtSetDefaultLocale(BOOLEAN,LCID);
 NTSYSAPI NTSTATUS  WINAPI NtSetDefaultUILanguage(LANGID);
@@ -4196,7 +4200,7 @@ NTSYSAPI NTSTATUS  WINAPI RtlCreateProcessParameters(RTL_USER_PROCESS_PARAMETERS
 NTSYSAPI NTSTATUS  WINAPI RtlCreateProcessParametersEx(RTL_USER_PROCESS_PARAMETERS**,const UNICODE_STRING*,const UNICODE_STRING*,const UNICODE_STRING*,const UNICODE_STRING*,PWSTR,const UNICODE_STRING*,const UNICODE_STRING*,const UNICODE_STRING*,const UNICODE_STRING*,ULONG);
 NTSYSAPI NTSTATUS  WINAPI RtlCreateSecurityDescriptor(PSECURITY_DESCRIPTOR,DWORD);
 NTSYSAPI NTSTATUS  WINAPI RtlCreateTimerQueue(PHANDLE);
-NTSYSAPI NTSTATUS  WINAPI RtlCreateTimer(PHANDLE, HANDLE, RTL_WAITORTIMERCALLBACKFUNC, PVOID, DWORD, DWORD, ULONG);
+NTSYSAPI NTSTATUS  WINAPI RtlCreateTimer(HANDLE,HANDLE*,RTL_WAITORTIMERCALLBACKFUNC, PVOID, DWORD, DWORD, ULONG);
 NTSYSAPI BOOLEAN   WINAPI RtlCreateUnicodeString(PUNICODE_STRING,LPCWSTR);
 NTSYSAPI BOOLEAN   WINAPI RtlCreateUnicodeStringFromAsciiz(PUNICODE_STRING,LPCSTR);
 NTSYSAPI NTSTATUS  WINAPI RtlCreateUserProcess(UNICODE_STRING*,ULONG,RTL_USER_PROCESS_PARAMETERS*,SECURITY_DESCRIPTOR*,SECURITY_DESCRIPTOR*,HANDLE,BOOLEAN,HANDLE,HANDLE,RTL_USER_PROCESS_INFORMATION*);
@@ -4677,7 +4681,7 @@ static inline PLIST_ENTRY RemoveTailList(PLIST_ENTRY le)
 #ifdef __WINESRC__
 
 /* Wine internal functions */
-extern NTSTATUS CDECL __wine_init_unix_lib( HMODULE module, DWORD reason, const void *ptr_in, void *ptr_out );
+
 extern NTSTATUS WINAPI __wine_unix_spawnvp( char * const argv[], int wait );
 
 /* The thread information for 16-bit threads */
