@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -914,12 +914,11 @@ then
+@@ -879,12 +879,11 @@ then
          ac_save_CC="$CC"
          saved_CFLAGS=$CFLAGS
          saved_LDFLAGS=$LDFLAGS

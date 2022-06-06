@@ -90,7 +90,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!desc) return E_INVALIDARG;
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -2672,6 +2672,9 @@ static void check_fbo_compat(struct wine
+@@ -2674,6 +2674,9 @@ static void check_fbo_compat(struct wine
                      case WINED3D_GL_RES_TYPE_COUNT:
                          color = 0;
                          break;
@@ -100,17 +100,6 @@ author: Michael Gilbert <mgilbert@debian.org>
                  }
                  checkGLcall("Post-pixelshader blending check");
  
---- a/dlls/user32/sysparams.c
-+++ b/dlls/user32/sysparams.c
-@@ -1645,7 +1645,7 @@ BOOL WINAPI SystemParametersInfoW( UINT
-     case SPI_GETNONCLIENTMETRICS:
-     {
-         LPNONCLIENTMETRICSW lpnm = pvParam;
--        int padded_border;
-+        int padded_border = 0;
- 
-         if (!pvParam) return FALSE;
- 
 --- a/tools/winedump/msc.c
 +++ b/tools/winedump/msc.c
 @@ -503,7 +503,7 @@ static void do_field(const unsigned char
@@ -119,10 +108,10 @@ author: Michael Gilbert <mgilbert@debian.org>
      const struct p_string*      pstr;
 -    int leaf_len, value;
 +    int leaf_len, value = 0;
+     struct full_value full_value;
  
      while (ptr < end)
-     {
-@@ -810,7 +810,7 @@ static void do_field(const unsigned char
+@@ -811,7 +811,7 @@ static void do_field(const unsigned char
  static void codeview_dump_one_type(unsigned curr_type, const union codeview_type* type)
  {
      const union codeview_reftype* reftype = (const union codeview_reftype*)type;

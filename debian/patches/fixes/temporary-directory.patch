@@ -177,7 +177,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  #include <assert.h>
  #include <errno.h>
  #include <fcntl.h>
-@@ -613,11 +614,23 @@ static void create_dir( const char *name
+@@ -609,11 +610,23 @@ static void create_dir( const char *name
      if (st->st_mode & 077) fatal_error( "%s must not be accessible by other users\n", name );
  }
  
@@ -202,7 +202,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
      struct stat st, st2;
      size_t len = sizeof("/server-") + 2 * sizeof(st.st_dev) + 2 * sizeof(st.st_ino) + 2;
  
-@@ -667,9 +680,117 @@ static char *create_server_dir( int forc
+@@ -663,9 +676,117 @@ static char *create_server_dir( int forc
      strcpy( server_dir, config_dir );
      strcat( server_dir, "/.wineserver" );
  #else
