@@ -281,7 +281,7 @@ Multi-Arch: foreign
 Depends:
  ${misc:Depends},
  wine,
- binfmt-support,
+ binfmt-support | systemd,
 Description: Register Wine as the interpreter for Windows executables
  Wine is a free MS-Windows API implementation.
  .

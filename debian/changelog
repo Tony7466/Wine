@@ -1,3 +1,14 @@
+wine (7.0~repack-2) unstable; urgency=medium
+
+  * Fix format string error on armhf.
+  * Denote wine32:i386 in launcher (closes: #1011461).
+  * Add support for systemd-binfmt (closes: #1012353).
+    - Thanks to Michael Biebl.
+  * Avoid infinite recursion in make_vulkan (closes: #1013501).
+    - Thanks to Adrian Heine.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 03 Jul 2022 18:24:37 +0000
+
 wine (7.0~repack-1) unstable; urgency=medium
 
   * New upstream release 7.0, released Jan 18, 2022 (closes: #1007913).

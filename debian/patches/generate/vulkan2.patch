@@ -1,0 +1,54 @@
+X-Git-Url: https://source.winehq.org/git/wine.git/blobdiff_plain/d5b31ea663c3dcbc75df8c0827fb21b56b41b635..3d824d11dbde45299963a758b97d1e417dca36e0:/dlls/winevulkan/make_vulkan
+
+--- a/dlls/winevulkan/make_vulkan
++++ b/dlls/winevulkan/make_vulkan
+@@ -2035,6 +2035,8 @@ class VkStruct(Sequence):
+         """
+ 
+         for m in self.members:
++            if self.name == m.type:
++                continue
+             if m.needs_alignment():
+                 return True
+         return False
+@@ -2049,6 +2051,8 @@ class VkStruct(Sequence):
+             return True
+ 
+         for m in self.members:
++            if self.name == m.type:
++                continue
+             if m.needs_conversion():
+                 return True
+         return False
+@@ -2057,6 +2061,8 @@ class VkStruct(Sequence):
+         """ Returns if struct members need unwrapping of handle. """
+ 
+         for m in self.members:
++            if self.name == m.type:
++                continue
+             if m.needs_unwrapping():
+                 return True
+         return False
+@@ -2065,11 +2071,11 @@ class VkStruct(Sequence):
+         """ Check if any struct member needs some memory freeing."""
+ 
+         for m in self.members:
++            if self.name == m.type:
++                continue
+             if m.needs_free():
+                 return True
+ 
+-            continue
+-
+         return False
+ 
+     def needs_struct_extensions_conversion(self):
+@@ -3345,7 +3351,7 @@ class VkRegistry(object):
+                 if "data" in type_info:
+                     types[m.type]["data"].required = True
+ 
+-                if type_info["category"] == "struct":
++                if type_info["category"] == "struct" and struct.name != m.type:
+                     # Yay, recurse
+                     mark_struct_dependencies(type_info["data"], types)
+                 elif type_info["category"] == "funcpointer":

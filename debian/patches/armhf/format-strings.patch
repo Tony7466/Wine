@@ -139,7 +139,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      else
          /* clear unneeded high bits, esp. sign extension */
 +#ifdef __arm__
-+        dbg_printf("%#I64lld", sv & (~(dbg_lguint_t)0 >> (8 * (sizeof(dbg_lgint_t) - size))));
++        dbg_printf("%I64lld", sv & (~(dbg_lguint_t)0 >> (8 * (sizeof(dbg_lgint_t) - size))));
 +#else
          dbg_printf("%#I64x", sv & (~(dbg_lguint_t)0 >> (8 * (sizeof(dbg_lgint_t) - size))));
 +#endif
