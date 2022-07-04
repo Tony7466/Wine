@@ -250,3 +250,41 @@ author: Michael Gilbert <mgilbert@debian.org>
  # define FD_ISSET(fd, set)    __WSAFDIsSet((SOCKET)(fd), (fd_set*)(set))
  
  #else
+--- a/dlls/ntdll/unix/env.c
++++ b/dlls/ntdll/unix/env.c
+@@ -2174,7 +2174,8 @@ static RTL_USER_PROCESS_PARAMETERS *buil
+     static const WCHAR valueW[] = {'1',0};
+     static const WCHAR pathW[] = {'P','A','T','H'};
+     RTL_USER_PROCESS_PARAMETERS *params = NULL;
+-    SIZE_T size, env_pos, env_size;
++    SIZE_T env_pos = 0;
++    SIZE_T size, env_size;
+     WCHAR *dst, *image, *cmdline, *path, *bootstrap;
+     WCHAR *env = get_initial_environment( &env_pos, &env_size );
+     WCHAR *curdir = get_initial_directory();
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -2170,11 +2170,14 @@ void CDECL X11DRV_GetDC( HDC hdc, HWND h
+     }
+     else
+     {
++        Drawable top_window = X11DRV_get_whole_window( top );
++        escape.drawable = top_window;
++
+         /* find the first ancestor that has a drawable */
+         for (parent = hwnd; parent && parent != top; parent = GetAncestor( parent, GA_PARENT ))
+             if ((escape.drawable = X11DRV_get_whole_window( parent ))) break;
+ 
+-        if (escape.drawable)
++        if (escape.drawable != top_window)
+         {
+             POINT pt = { 0, 0 };
+             MapWindowPoints( 0, parent, &pt, 1 );
+@@ -2182,7 +2185,6 @@ void CDECL X11DRV_GetDC( HDC hdc, HWND h
+             OffsetRect( &escape.dc_rect, pt.x, pt.y );
+             if (flags & DCX_CLIPCHILDREN) escape.mode = ClipByChildren;
+         }
+-        else escape.drawable = X11DRV_get_whole_window( top );
+     }
+ 
+     ExtEscape( hdc, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );

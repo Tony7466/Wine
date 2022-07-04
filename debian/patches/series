@@ -40,6 +40,9 @@ arm64/tautological-compare.patch
 
 warnings/libs.patch
 warnings/bison.patch
+warnings/address.patch
+warnings/use-after-free.patch
+warnings/format-overflow.patch
 warnings/stringop-overflow.patch
 warnings/misleading-indentation.patch
 warnings/uninitialized-variables.patch

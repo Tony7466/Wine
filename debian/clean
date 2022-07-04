@@ -15,6 +15,7 @@ include/config.h.in
 # automatically generated files
 dlls/dsound/fir.h
 dlls/*/tests/generated.c
+dlls/ntdll/unix/version.h
 
 # automatically generated requests files
 server/trace.generated

@@ -134,7 +134,19 @@ author: Michael Gilbert <mgilbert@debian.org>
          }
          break;
      case 'c': DO_DUMP2(char, 32, " %c", (_v < 0x20) ? ' ' : _v); break;
-@@ -469,7 +477,11 @@ static void dbg_print_hex(DWORD size, db
+@@ -460,7 +468,11 @@ char* memory_offset_to_string(char *str,
+ 
+ static void dbg_print_sdecimal(dbg_lgint_t sv)
+ {
++#ifdef __arm__
++    dbg_printf("%I64lld", sv);
++#else
+     dbg_printf("%I64d", sv);
++#endif
+ }
+ 
+ static void dbg_print_hex(DWORD size, dbg_lgint_t sv)
+@@ -469,7 +481,11 @@ static void dbg_print_hex(DWORD size, db
          dbg_printf("0");
      else
          /* clear unneeded high bits, esp. sign extension */
@@ -146,7 +158,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  }
  
  static void print_typed_basic(const struct dbg_lvalue* lvalue)
-@@ -723,7 +735,11 @@ void print_address(const ADDRESS64* addr
+@@ -723,7 +739,11 @@ void print_address(const ADDRESS64* addr
      if (SymFromAddr(dbg_curr_process->handle, lin, &disp64, si) && disp64 < si->Size)
      {
          dbg_printf(" %s", si->Name);
@@ -158,7 +170,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
      else
      {
-@@ -731,7 +747,11 @@ void print_address(const ADDRESS64* addr
+@@ -731,7 +751,11 @@ void print_address(const ADDRESS64* addr
          if (!SymGetModuleInfo(dbg_curr_process->handle, lin, &im)) return;
          dbg_printf(" %s", im.ModuleName);
          if (lin > im.BaseOfImage)
@@ -274,3 +286,24 @@ author: Michael Gilbert <mgilbert@debian.org>
      types_print_type(&type, TRUE);
      dbg_printf("\n");
      return TRUE;
+--- a/programs/winedbg/expr.c
++++ b/programs/winedbg/expr.c
+@@ -661,10 +661,18 @@ BOOL expr_print(const struct expr* exp)
+         dbg_printf("$%s", exp->un.intvar.name);
+         break;
+     case EXPR_TYPE_U_CONST:
++#ifdef __arm__
++        dbg_printf("%I64llu", exp->un.u_const.value);
++#else
+         dbg_printf("%I64u", exp->un.u_const.value);
++#endif
+         break;
+     case EXPR_TYPE_S_CONST:
++#ifdef __arm__
++        dbg_printf("%I64lld", exp->un.s_const.value);
++#else
+         dbg_printf("%I64d", exp->un.s_const.value);
++#endif
+         break;
+     case EXPR_TYPE_STRING:
+         dbg_printf("\"%s\"", exp->un.string.str);

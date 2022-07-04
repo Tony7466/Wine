@@ -1,0 +1,22 @@
+description: use buf before passing it to realloc (gcc 12 -Wuse-after-free)
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -3334,13 +3334,15 @@ DECL_HANDLER(get_rawinput_buffer)
+         if (cur + data->size > buf + get_reply_max_size()) break;
+         if (cur + data->size > buf + buf_size)
+         {
++            ptrdiff_t diff = cur - buf;
++
+             buf_size += buf_size / 2 + extra_size;
+             if (!(tmp = realloc( buf, buf_size )))
+             {
+                 set_error( STATUS_NO_MEMORY );
+                 return;
+             }
+-            cur = tmp + (cur - buf);
++            cur = tmp + diff;
+             buf = tmp;
+         }
+ 

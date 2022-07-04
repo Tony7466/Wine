@@ -1,3 +1,10 @@
+wine (7.0~repack-3) unstable; urgency=medium
+
+  * Fix dangling symlinks (closes: #1012827).
+  * Support building with gcc 12 (closes: #1013067).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Mon, 04 Jul 2022 00:34:31 +0000
+
 wine (7.0~repack-2) unstable; urgency=medium
 
   * Fix format string error on armhf.
