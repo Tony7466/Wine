@@ -1,3 +1,11 @@
+wine (7.0~repack-4) unstable; urgency=medium
+
+  * Fix syntax error in configure.ac.
+  * Support installing wine-binfmt without binfmt-support.
+  * Restore mistakenly removed binfmt-support file (closes: #1014323).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Wed, 06 Jul 2022 00:44:32 +0000
+
 wine (7.0~repack-3) unstable; urgency=medium
 
   * Fix dangling symlinks (closes: #1012827).

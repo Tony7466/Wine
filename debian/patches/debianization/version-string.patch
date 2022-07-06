@@ -14,7 +14,7 @@ forwarded: not-needed
 +dlls/ntdll/unix/loader.o: dlls/ntdll/unix/version.h
 +dlls/ntdll/unix/system.o: dlls/ntdll/unix/version.h
 +dlls/ntdll/unix/version.h: dummy
-+	@echo \"#ifndef wine_build\\n#define wine_build \\\"wine-\$(PACKAGE_VERSION) (\$(VENDOR))\\\"\n#endif\" > \$@ || (rm -f $@ && exit 1)
++	@echo \"#ifndef wine_build\\n#define wine_build \\\"wine-\$(PACKAGE_VERSION) (\$(VENDOR))\\\"\n#endif\" > \$@ || (rm -f \$@ && exit 1)
  programs/winetest/build.rc: dummy
  	@build=\"STRINGTABLE { 1 \\\"\`GIT_DIR=${wine_srcdir}.git git rev-parse HEAD 2>/dev/null\`\\\" }\" && (echo \$\$build | cmp -s - \$[@]) || echo \$\$build >\$[@] || (rm -f \$[@] && exit 1)
  programs/winetest/build.nfo:

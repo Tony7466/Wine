@@ -4,7 +4,9 @@ set -e
 
 case "$1" in
     remove|deconfigure)
-        update-binfmts --package wine --remove wine /usr/bin/wine
+        if [ -e /usr/sbin/update-binfmts ]; then
+            update-binfmts --package wine --remove wine /usr/bin/wine
+        fi
         ;;
 esac
 
