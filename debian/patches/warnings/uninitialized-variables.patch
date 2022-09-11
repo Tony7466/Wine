@@ -288,3 +288,27 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
  
      ExtEscape( hdc, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );
+--- a/dlls/comctl32/button.c
++++ b/dlls/comctl32/button.c
+@@ -1820,7 +1820,8 @@ static void BUTTON_DrawThemedLabel(const
+ static void PB_Paint( const BUTTON_INFO *infoPtr, HDC hDC, UINT action )
+ {
+     RECT     rc, labelRect, imageRect, textRect;
+-    UINT     dtFlags, uState;
++    UINT     uState;
++    UINT     dtFlags = (UINT)-1L;
+     HPEN     hOldPen, hpen;
+     HBRUSH   hOldBrush;
+     INT      oldBkMode;
+--- a/dlls/gdiplus/font.c
++++ b/dlls/gdiplus/font.c
+@@ -1394,7 +1394,8 @@ static WCHAR *load_ttf_name_id( const BY
+     const tt_header *header;
+     const tt_name_table *name_table;
+     const tt_name_record *name_record;
+-    DWORD pos, ofs, count;
++    DWORD pos, count;
++    DWORD ofs = 0;
+     int i, res, best_lang = 0, best_index = -1;
+ 
+     if (sizeof(tt_header) > size)

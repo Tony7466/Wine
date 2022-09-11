@@ -1,0 +1,14 @@
+description: fix omitted parentheses warning (-Wparentheses)
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/dlls/msvcrt/math.c
++++ b/dlls/msvcrt/math.c
+@@ -5452,7 +5452,7 @@ static void _setfp( unsigned int *cw, un
+     }
+ 
+     /* mask exceptions if needed */
+-    if (old_fpcr != fpcr && ~(old_fpcr >> 8) & fpsr & 0x9f != fpsr & 0x9f)
++    if (old_fpcr != (fpcr && ~(old_fpcr >> 8) & fpsr & 0x9f) != (fpsr & 0x9f))
+     {
+         ULONG_PTR mask = fpcr & ~0x9f00;
+         __asm__ __volatile__( "msr fpcr, %0" :: "r" (mask) );

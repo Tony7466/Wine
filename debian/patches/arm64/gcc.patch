@@ -1,0 +1,16 @@
+description: clang is no longer required for the arm64 build
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/configure.ac
++++ b/configure.ac
+@@ -193,10 +193,6 @@ case $host in
+     TARGETFLAGS="$TARGETFLAGS -mfloat-abi=$float_abi"
+     ;;
+   aarch64*)
+-    AC_CACHE_CHECK([whether $CC supports __builtin_ms_va_list],wine_cv_builtin_ms_va_list,
+-        [AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdarg.h>]], [[void func(__builtin_ms_va_list *args);]])],
+-                      [wine_cv_builtin_ms_va_list=yes],[wine_cv_builtin_ms_va_list=no])])
+-    test $wine_cv_builtin_ms_va_list != no || AC_MSG_ERROR([You need clang >= 5.0 to build Wine for arm64.])
+     enable_wow64=${enable_wow64:-yes}
+     enable_wow64win=${enable_wow64win:-yes}
+     ;;
