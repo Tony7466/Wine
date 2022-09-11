@@ -5,5 +5,10 @@ spelling-error-in-binary
 # the loader often requires exit in the shared library, see thread around
 # https://www.winehq.org/pipermail/wine-devel/2016-October/114988.html
 exit-in-shared-library
+# wine's archives do not yet support LTO, see upstream bug report:
+# https://bugs.winehq.org/show_bug.cgi?id=41712
+no-code-sections
+# wine uses winecrt, so it does not require support from libc
+library-not-linked-against-libc
 # mingw is not yet capable of producing ASLR capable executables
 portable-executable-missing-security-features

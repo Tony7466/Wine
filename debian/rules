@@ -80,11 +80,9 @@ CONFLAGS+=--with-float-abi=hard
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-unused-function
 endif
 
-# on arm64 build using clang and ignore compiler warnings
+# ignore unused function warnings on arm64
 ifeq ($(DEB_HOST_ARCH), arm64)
-export CC=clang
-export CXX=clang++
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-error
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-unused-function
 endif
 
 # use date of the latest changelog update as the build date
@@ -225,6 +223,9 @@ else
 	    mv debian/tmp/$(BINDIR)/wine-preloader debian/tmp/$(BINDIR)/wine-preloader.static || \
 	    cp debian/scripts/wine-preloader.static debian/tmp/$(BINDIR)/wine-preloader.static
 endif
+	# remove disabled netapi libraries
+	rm -f debian/tmp/usr/lib/*/wine/*/netapi32.so
+	rm -f debian/tmp/usr/lib/*/wine/*/netapi32.dll
 	# files to exclude from the architecture-dependent packages
 	rm -rf debian/tmp/usr/share/man
 	rm -f debian/tmp/usr/lib/*/wineserver

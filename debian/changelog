@@ -1,3 +1,11 @@
+wine (7.0~repack-6) unstable; urgency=medium
+
+  * Fix arm build failures.
+  * Fix various lintian warnings.
+  * Remove clang from debian/rules.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 11 Sep 2022 23:27:19 +0000
+
 wine (7.0~repack-5) unstable; urgency=medium
 
   * Build with gcc instead of clang on arm64.

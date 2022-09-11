@@ -12,3 +12,13 @@ author: Michael Gilbert <mgilbert@debian.org>
              sprintf(tmp, "callconv=%x", cc);
              callconv = tmp;
          }
+--- a/programs/winedbg/tgt_active.c
++++ b/programs/winedbg/tgt_active.c
+@@ -152,6 +152,7 @@ static BOOL dbg_exception_prolog(BOOL is
+ 
+         switch (addr.Mode)
+         {
++        default: name = "unknown"; break;
+         case AddrMode1616: name = "16 bit";     break;
+         case AddrMode1632: name = "segmented 32 bit"; break;
+         case AddrModeReal: name = "vm86";       break;
