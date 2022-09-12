@@ -312,3 +312,14 @@ author: Michael Gilbert <mgilbert@debian.org>
      int i, res, best_lang = 0, best_index = -1;
  
      if (sizeof(tt_header) > size)
+--- a/dlls/scrobj/scrobj.c
++++ b/dlls/scrobj/scrobj.c
+@@ -1195,7 +1195,7 @@ static HRESULT create_scriptlet_instance
+     struct script_host *factory_host, *host;
+     struct scriptlet_instance *obj;
+     IDispatch *script_dispatch;
+-    HRESULT hres;
++    HRESULT hres = E_FAIL;
+ 
+     if (!(obj = heap_alloc_zero(sizeof(*obj)))) return E_OUTOFMEMORY;
+ 

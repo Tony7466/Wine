@@ -1,0 +1,2 @@
+# many of wine's archives contain only global variable definitions with no code
+no-code-sections

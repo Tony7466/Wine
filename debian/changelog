@@ -1,3 +1,10 @@
+wine (7.0~repack-7) unstable; urgency=medium
+
+  * Update standards version to 4.6.1.
+  * Fix remaining build failures on arm.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Tue, 13 Sep 2022 00:46:21 +0000
+
 wine (7.0~repack-6) unstable; urgency=medium
 
   * Fix arm build failures.
