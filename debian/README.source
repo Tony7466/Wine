@@ -12,3 +12,16 @@ avoid conflicts it doesn't use Files-Excluded. Use uscan to repack:
 If using git-buildpackage, you'll need to import the deletions with:
 
     gbp import-orig ../*6.16+repack.orig*
+
+New unicode versions need special handling, so the dep is strictly versioned to
+major releases. See the git log of debian/unicode/ for the kinds of things to
+watch out for, this is a bare minimum:
+
+    VERSION=15
+    sed -i debian/control.in \
+        -e "/unicode/s/= ../= $VERSION/" \
+        -e "/unicode/s/< ../< $((VERSION+1))/"
+    git rm -r debian/unicode/tr46
+    mkdir -p "debian/unicode/tr46/$VERSION.0.0"
+    curl "https://unicode.org/Public/idna/$VERSION.0.0/IdnaMappingTable.txt" \
+        > "debian/unicode/tr46/$VERSION.0.0/IdnaMappingTable.txt"
