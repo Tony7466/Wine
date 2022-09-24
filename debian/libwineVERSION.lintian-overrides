@@ -7,5 +7,7 @@ spelling-error-in-binary
 exit-in-shared-library
 # wine uses winecrt, so it does not require support from libc
 library-not-linked-against-libc
+# wine's prerequisites are handled in the dlls, not the shared libraries
+shared-library-lacks-prerequisites
 # mingw is not yet capable of producing ASLR capable executables
 portable-executable-missing-security-features

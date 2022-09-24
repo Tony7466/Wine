@@ -33,7 +33,7 @@ export DH_VERBOSE=1
 # indicate that binary targets do not require root
 export DEB_RULES_REQUIRES_ROOT=no
 
-# enable hardening buildflags (fortify is not yet supported upstream and mingw does not yet support stackprotector)
+# enable hardening buildflags (fortify and LTO are not yet supported upstream, and mingw does not yet support stackprotector)
 export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector optimize=-lto
 
 # configure options
@@ -223,9 +223,6 @@ else
 	    mv debian/tmp/$(BINDIR)/wine-preloader debian/tmp/$(BINDIR)/wine-preloader.static || \
 	    cp debian/scripts/wine-preloader.static debian/tmp/$(BINDIR)/wine-preloader.static
 endif
-	# remove disabled netapi libraries
-	rm -f debian/tmp/usr/lib/*/wine/*/netapi32.so
-	rm -f debian/tmp/usr/lib/*/wine/*/netapi32.dll
 	# files to exclude from the architecture-dependent packages
 	rm -rf debian/tmp/usr/share/man
 	rm -f debian/tmp/usr/lib/*/wineserver
