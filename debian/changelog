@@ -1,3 +1,15 @@
+wine-development (7.1~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 7.1, released Jan 28, 2022.
+    - Vulkan 1.3 support.
+    - A number of theming fixes.
+    - WebSocket improvements.
+    - Improved cursor clipping on macOS.
+    - IDL compiler fixes for C++.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 25 Sep 2022 16:14:41 +0000
+
 wine-development (6.23~repack-4) unstable; urgency=medium
 
   * Ignore unused function warnings on arm.
