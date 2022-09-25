@@ -21,6 +21,7 @@
 
 #include "ks.h"
 #include "ksmedia.h"
+#include "wmcodecdsp.h"
 #include "initguid.h"
 #include "mfapi.h"
 
@@ -63,7 +64,7 @@ static ULONG WINAPI video_processor_AddRef(IMFTransform *iface)
     struct video_processor *transform = impl_video_processor_from_IMFTransform(iface);
     ULONG refcount = InterlockedIncrement(&transform->refcount);
 
-    TRACE("%p, refcount %u.\n", iface, refcount);
+    TRACE("%p, refcount %lu.\n", iface, refcount);
 
     return refcount;
 }
@@ -73,7 +74,7 @@ static ULONG WINAPI video_processor_Release(IMFTransform *iface)
     struct video_processor *transform = impl_video_processor_from_IMFTransform(iface);
     ULONG refcount = InterlockedDecrement(&transform->refcount);
 
-    TRACE("%p, refcount %u.\n", iface, refcount);
+    TRACE("%p, refcount %lu.\n", iface, refcount);
 
     if (!refcount)
     {
@@ -145,7 +146,7 @@ static HRESULT WINAPI video_processor_GetOutputStreamAttributes(IMFTransform *if
 {
     struct video_processor *transform = impl_video_processor_from_IMFTransform(iface);
 
-    TRACE("%p, %u, %p.\n", iface, id, attributes);
+    TRACE("%p, %lu, %p.\n", iface, id, attributes);
 
     *attributes = transform->output_attributes;
     IMFAttributes_AddRef(*attributes);
@@ -155,14 +156,14 @@ static HRESULT WINAPI video_processor_GetOutputStreamAttributes(IMFTransform *if
 
 static HRESULT WINAPI video_processor_DeleteInputStream(IMFTransform *iface, DWORD id)
 {
-    TRACE("%p, %u.\n", iface, id);
+    TRACE("%p, %lu.\n", iface, id);
 
     return E_NOTIMPL;
 }
 
 static HRESULT WINAPI video_processor_AddInputStreams(IMFTransform *iface, DWORD streams, DWORD *ids)
 {
-    TRACE("%p, %u, %p.\n", iface, streams, ids);
+    TRACE("%p, %lu, %p.\n", iface, streams, ids);
 
     return E_NOTIMPL;
 }
@@ -170,7 +171,7 @@ static HRESULT WINAPI video_processor_AddInputStreams(IMFTransform *iface, DWORD
 static HRESULT WINAPI video_processor_GetInputAvailableType(IMFTransform *iface, DWORD id, DWORD index,
         IMFMediaType **type)
 {
-    FIXME("%p, %u, %u, %p.\n", iface, id, index, type);
+    FIXME("%p, %lu, %lu, %p.\n", iface, id, index, type);
 
     return E_NOTIMPL;
 }
@@ -178,42 +179,42 @@ static HRESULT WINAPI video_processor_GetInputAvailableType(IMFTransform *iface,
 static HRESULT WINAPI video_processor_GetOutputAvailableType(IMFTransform *iface, DWORD id, DWORD index,
         IMFMediaType **type)
 {
-    FIXME("%p, %u, %u, %p.\n", iface, id, index, type);
+    FIXME("%p, %lu, %lu, %p.\n", iface, id, index, type);
 
     return E_NOTIMPL;
 }
 
 static HRESULT WINAPI video_processor_SetInputType(IMFTransform *iface, DWORD id, IMFMediaType *type, DWORD flags)
 {
-    FIXME("%p, %u, %p, %#x.\n", iface, id, type, flags);
+    FIXME("%p, %lu, %p, %#lx.\n", iface, id, type, flags);
 
     return E_NOTIMPL;
 }
 
 static HRESULT WINAPI video_processor_SetOutputType(IMFTransform *iface, DWORD id, IMFMediaType *type, DWORD flags)
 {
-    FIXME("%p, %u, %p, %#x.\n", iface, id, type, flags);
+    FIXME("%p, %lu, %p, %#lx.\n", iface, id, type, flags);
 
     return E_NOTIMPL;
 }
 
 static HRESULT WINAPI video_processor_GetInputCurrentType(IMFTransform *iface, DWORD id, IMFMediaType **type)
 {
-    FIXME("%p, %u, %p.\n", iface, id, type);
+    FIXME("%p, %lu, %p.\n", iface, id, type);
 
     return E_NOTIMPL;
 }
 
 static HRESULT WINAPI video_processor_GetOutputCurrentType(IMFTransform *iface, DWORD id, IMFMediaType **type)
 {
-    FIXME("%p, %u, %p.\n", iface, id, type);
+    FIXME("%p, %lu, %p.\n", iface, id, type);
 
     return E_NOTIMPL;
 }
 
 static HRESULT WINAPI video_processor_GetInputStatus(IMFTransform *iface, DWORD id, DWORD *flags)
 {
-    FIXME("%p, %u, %p.\n", iface, id, flags);
+    FIXME("%p, %lu, %p.\n", iface, id, flags);
 
     return E_NOTIMPL;
 }
@@ -234,21 +235,21 @@ static HRESULT WINAPI video_processor_SetOutputBounds(IMFTransform *iface, LONGL
 
 static HRESULT WINAPI video_processor_ProcessEvent(IMFTransform *iface, DWORD id, IMFMediaEvent *event)
 {
-    TRACE("%p, %u, %p.\n", iface, id, event);
+    TRACE("%p, %lu, %p.\n", iface, id, event);
 
     return E_NOTIMPL;
 }
 
 static HRESULT WINAPI video_processor_ProcessMessage(IMFTransform *iface, MFT_MESSAGE_TYPE message, ULONG_PTR param)
 {
-    FIXME("%p, %u.\n", iface, message);
+    FIXME("%p, %u, %#Ix.\n", iface, message, param);
 
     return E_NOTIMPL;
 }
 
 static HRESULT WINAPI video_processor_ProcessInput(IMFTransform *iface, DWORD id, IMFSample *sample, DWORD flags)
 {
-    FIXME("%p, %u, %p, %#x.\n", iface, id, sample, flags);
+    FIXME("%p, %lu, %p, %#lx.\n", iface, id, sample, flags);
 
     return E_NOTIMPL;
 }
@@ -256,7 +257,7 @@ static HRESULT WINAPI video_processor_ProcessInput(IMFTransform *iface, DWORD id
 static HRESULT WINAPI video_processor_ProcessOutput(IMFTransform *iface, DWORD flags, DWORD count,
         MFT_OUTPUT_DATA_BUFFER *samples, DWORD *status)
 {
-    FIXME("%p, %#x, %u, %p, %p.\n", iface, flags, count, samples, status);
+    FIXME("%p, %#lx, %lu, %p, %p.\n", iface, flags, count, samples, status);
 
     return E_NOTIMPL;
 }
@@ -436,7 +437,21 @@ HRESULT mfplat_get_class_object(REFCLSID rclsid, REFIID riid, void **obj)
 }
 
 static WCHAR audio_converterW[] = L"Audio Converter";
-static const GUID *audio_converter_supported_types[] =
+static const GUID *const audio_converter_supported_types[] =
+{
+    &MFAudioFormat_PCM,
+    &MFAudioFormat_Float,
+};
+
+static WCHAR wma_decoderW[] = L"WMAudio Decoder MFT";
+static const GUID *const wma_decoder_input_types[] =
+{
+    &MEDIASUBTYPE_MSAUDIO1,
+    &MFAudioFormat_WMAudioV8,
+    &MFAudioFormat_WMAudioV9,
+    &MFAudioFormat_WMAudio_Lossless,
+};
+static const GUID *const wma_decoder_output_types[] =
 {
     &MFAudioFormat_PCM,
     &MFAudioFormat_Float,
@@ -450,9 +465,9 @@ static const struct mft
     const UINT32 flags;
     const GUID *major_type;
     const UINT32 input_types_count;
-    const GUID **input_types;
+    const GUID *const *input_types;
     const UINT32 output_types_count;
-    const GUID **output_types;
+    const GUID *const *output_types;
 }
 mfts[] =
 {
@@ -467,13 +482,24 @@ mfts[] =
         ARRAY_SIZE(audio_converter_supported_types),
         audio_converter_supported_types,
     },
+    {
+        &CLSID_WMADecMediaObject,
+        &MFT_CATEGORY_AUDIO_DECODER,
+        wma_decoderW,
+        MFT_ENUM_FLAG_SYNCMFT,
+        &MFMediaType_Audio,
+        ARRAY_SIZE(wma_decoder_input_types),
+        wma_decoder_input_types,
+        ARRAY_SIZE(wma_decoder_output_types),
+        wma_decoder_output_types,
+    },
 };
 
 HRESULT mfplat_DllRegisterServer(void)
 {
     unsigned int i, j;
     HRESULT hr;
-    MFT_REGISTER_TYPE_INFO input_types[2], output_types[2];
+    MFT_REGISTER_TYPE_INFO input_types[4], output_types[2];
 
     for (i = 0; i < ARRAY_SIZE(mfts); i++)
     {
@@ -495,7 +521,7 @@ HRESULT mfplat_DllRegisterServer(void)
 
         if (FAILED(hr))
         {
-            FIXME("Failed to register MFT, hr %#x\n", hr);
+            FIXME("Failed to register MFT, hr %#lx.\n", hr);
             return hr;
         }
     }

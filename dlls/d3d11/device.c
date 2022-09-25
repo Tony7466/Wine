@@ -3377,6 +3377,8 @@ static HRESULT STDMETHODCALLTYPE d3d11_device_CreateShaderResourceView(ID3D11Dev
 
     TRACE("iface %p, resource %p, desc %p, view %p.\n", iface, resource, desc, view);
 
+    *view = NULL;
+
     if (!resource)
         return E_INVALIDARG;
 
@@ -3396,6 +3398,8 @@ static HRESULT STDMETHODCALLTYPE d3d11_device_CreateUnorderedAccessView(ID3D11De
     HRESULT hr;
 
     TRACE("iface %p, resource %p, desc %p, view %p.\n", iface, resource, desc, view);
+
+    *view = NULL;
 
     if (FAILED(hr = d3d11_unordered_access_view_create(device, resource, desc, &object)))
         return hr;
@@ -3435,6 +3439,8 @@ static HRESULT STDMETHODCALLTYPE d3d11_device_CreateDepthStencilView(ID3D11Devic
     HRESULT hr;
 
     TRACE("iface %p, resource %p, desc %p, view %p.\n", iface, resource, desc, view);
+
+    *view = NULL;
 
     if (FAILED(hr = d3d_depthstencil_view_create(device, resource, desc, &object)))
         return hr;
@@ -6021,6 +6027,8 @@ static HRESULT STDMETHODCALLTYPE d3d10_device_CreateShaderResourceView1(ID3D10De
 
     TRACE("iface %p, resource %p, desc %p, view %p.\n", iface, resource, desc, view);
 
+    *view = NULL;
+
     if (!resource)
         return E_INVALIDARG;
 
@@ -6096,6 +6104,8 @@ static HRESULT STDMETHODCALLTYPE d3d10_device_CreateDepthStencilView(ID3D10Devic
     HRESULT hr;
 
     TRACE("iface %p, resource %p, desc %p, view %p.\n", iface, resource, desc, view);
+
+    *view = NULL;
 
     if (desc)
     {
