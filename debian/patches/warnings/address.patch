@@ -1,0 +1,75 @@
+description: fix incomplete memory wrap around logic (gcc 12 -Waddress)
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -30,6 +30,7 @@
+ #include <stdarg.h>
+ #include <stdio.h>
+ #include <string.h>
++#include <stdint.h>
+ #include <stdlib.h>
+ #include <signal.h>
+ #include <sys/types.h>
+@@ -235,10 +236,13 @@ void *anon_mmap_alloc( size_t size, int
+ 
+ static void mmap_add_reserved_area( void *addr, SIZE_T size )
+ {
++    SIZE_T max_size = SIZE_MAX - (SIZE_T)addr;
+     struct reserved_area *area;
+     struct list *ptr;
+ 
+-    if (!((char *)addr + size)) size--;  /* avoid wrap-around */
++    _Static_assert(sizeof(SIZE_MAX) == sizeof(SIZE_T), "SIZE_MAX and SIZE_T are not the same size");
++
++    if (size > max_size) size = max_size;  /* avoid wrap-around */
+ 
+     LIST_FOR_EACH( ptr, &reserved_areas )
+     {
+@@ -284,10 +288,13 @@ static void mmap_add_reserved_area( void
+ 
+ static void mmap_remove_reserved_area( void *addr, SIZE_T size )
+ {
++    SIZE_T max_size = SIZE_MAX - (SIZE_T)addr;
+     struct reserved_area *area;
+     struct list *ptr;
+ 
+-    if (!((char *)addr + size)) size--;  /* avoid wrap-around */
++    _Static_assert(sizeof(SIZE_MAX) == sizeof(SIZE_T), "SIZE_MAX and SIZE_T are not the same size");
++
++    if (size > max_size) size = max_size; /* avoid wrap-around */
+ 
+     ptr = list_head( &reserved_areas );
+     /* find the first area covering address */
+--- a/libs/wine/mmap.c
++++ b/libs/wine/mmap.c
+@@ -498,10 +498,13 @@ void mmap_init(void)
+  */
+ void wine_mmap_add_reserved_area_obsolete( void *addr, size_t size )
+ {
++    size_t max_size = SIZE_MAX - (size_t)addr;
+     struct reserved_area *area;
+     struct list *ptr;
+ 
+-    if (!((char *)addr + size)) size--;  /* avoid wrap-around */
++    _Static_assert(sizeof(SIZE_MAX) == sizeof(size_t), "SIZE_MAX and SIZE_T are not the same size");
++
++    if (size > max_size) size = max_size;  /* avoid wrap-around */
+ 
+     LIST_FOR_EACH( ptr, &reserved_areas )
+     {
+@@ -557,10 +560,13 @@ void wine_mmap_add_reserved_area_obsolet
+  */
+ void wine_mmap_remove_reserved_area_obsolete( void *addr, size_t size, int unmap )
+ {
++    size_t max_size = SIZE_MAX - (size_t)addr;
+     struct reserved_area *area;
+     struct list *ptr;
+ 
+-    if (!((char *)addr + size)) size--;  /* avoid wrap-around */
++    _Static_assert(sizeof(SIZE_MAX) == sizeof(size_t), "SIZE_MAX and SIZE_T are not the same size");
++
++    if (size > max_size) size = max_size;  /* avoid wrap-around */
+ 
+     ptr = list_head( &reserved_areas );
+     /* find the first area covering address */

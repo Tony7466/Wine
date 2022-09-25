@@ -1,0 +1,4 @@
+# many of wine's archives contain only global variable definitions with no code
+# (this needs to be fixed before LTO can be enabled), see upstream bug report:
+# https://bugs.winehq.org/show_bug.cgi?id=41712
+no-code-sections

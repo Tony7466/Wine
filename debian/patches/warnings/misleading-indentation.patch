@@ -34,17 +34,3 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  /* I1 */
  POSTST(signed char, BYTE, VarI1FromUI1, I1_MAX)
---- a/dlls/wininet/internet.c
-+++ b/dlls/wininet/internet.c
-@@ -2887,9 +2887,10 @@ BOOL WINAPI InternetSetOptionW(HINTERNET
-         } else if(dwBufferLength != sizeof(ULONG)) {
-             SetLastError(ERROR_INTERNET_BAD_OPTION_LENGTH);
-             ret = FALSE;
--        } else
-+        } else {
-             TRACE("INTERNET_OPTION_ERROR_MASK: %x\n", *(ULONG*)lpBuffer);
-             lpwhh->ErrorMask = *(ULONG*)lpBuffer;
-+        }
-       }
-       break;
-     case INTERNET_OPTION_PROXY:

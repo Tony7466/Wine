@@ -8,9 +8,9 @@ wine32_hint () {
     if [ "$(dpkg --print-architecture)" = "amd64" ] && ! dpkg --print-foreign-architectures | grep -qx "i386"; then
         echo "multiarch needs to be enabled first.  as root, please"
         echo "execute \"dpkg --add-architecture i386 && apt-get update &&"
-        echo "apt-get install wine32VERSION\""
+        echo "apt-get install wine32VERSION:i386\""
     else
-        echo "as root, please execute \"apt-get install wine32VERSION\""
+        echo "as root, please execute \"apt-get install wine32VERSION:i386\""
     fi
 }
 

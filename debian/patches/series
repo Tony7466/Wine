@@ -21,10 +21,10 @@ disable/file-associations.patch
 generate/icons.patch
 generate/opengl.patch
 generate/vulkan.patch
+generate/vulkan2.patch
 generate/unicode.patch
 generate/request.patch
 
-fixes/x86.patch
 fixes/fpic.patch
 fixes/printer-resolution.patch
 fixes/temporary-directory.patch
@@ -33,13 +33,18 @@ armhf/shift-overflow.patch
 armhf/format-strings.patch
 armhf/floating-point.patch
 
-arm64/shift-overflow.patch
-arm64/excess-precision.patch
+arm64/gcc.patch
 arm64/incorrect-member.patch
 arm64/tautological-compare.patch
 
 warnings/libs.patch
 warnings/bison.patch
+warnings/address.patch
+warnings/execstack.patch
+warnings/parentheses.patch
+warnings/use-after-free.patch
+warnings/format-overflow.patch
 warnings/stringop-overflow.patch
+warnings/incompatible-types.patch
 warnings/misleading-indentation.patch
 warnings/uninitialized-variables.patch

@@ -90,7 +90,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!desc) return E_INVALIDARG;
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -2672,6 +2672,9 @@ static void check_fbo_compat(struct wine
+@@ -2674,6 +2674,9 @@ static void check_fbo_compat(struct wine
                      case WINED3D_GL_RES_TYPE_COUNT:
                          color = 0;
                          break;
@@ -100,17 +100,6 @@ author: Michael Gilbert <mgilbert@debian.org>
                  }
                  checkGLcall("Post-pixelshader blending check");
  
---- a/dlls/user32/sysparams.c
-+++ b/dlls/user32/sysparams.c
-@@ -1645,7 +1645,7 @@ BOOL WINAPI SystemParametersInfoW( UINT
-     case SPI_GETNONCLIENTMETRICS:
-     {
-         LPNONCLIENTMETRICSW lpnm = pvParam;
--        int padded_border;
-+        int padded_border = 0;
- 
-         if (!pvParam) return FALSE;
- 
 --- a/tools/winedump/msc.c
 +++ b/tools/winedump/msc.c
 @@ -503,7 +503,7 @@ static void do_field(const unsigned char
@@ -119,10 +108,10 @@ author: Michael Gilbert <mgilbert@debian.org>
      const struct p_string*      pstr;
 -    int leaf_len, value;
 +    int leaf_len, value = 0;
+     struct full_value full_value;
  
      while (ptr < end)
-     {
-@@ -810,7 +810,7 @@ static void do_field(const unsigned char
+@@ -811,7 +811,7 @@ static void do_field(const unsigned char
  static void codeview_dump_one_type(unsigned curr_type, const union codeview_type* type)
  {
      const union codeview_reftype* reftype = (const union codeview_reftype*)type;
@@ -261,3 +250,76 @@ author: Michael Gilbert <mgilbert@debian.org>
  # define FD_ISSET(fd, set)    __WSAFDIsSet((SOCKET)(fd), (fd_set*)(set))
  
  #else
+--- a/dlls/ntdll/unix/env.c
++++ b/dlls/ntdll/unix/env.c
+@@ -2174,7 +2174,8 @@ static RTL_USER_PROCESS_PARAMETERS *buil
+     static const WCHAR valueW[] = {'1',0};
+     static const WCHAR pathW[] = {'P','A','T','H'};
+     RTL_USER_PROCESS_PARAMETERS *params = NULL;
+-    SIZE_T size, env_pos, env_size;
++    SIZE_T env_pos = 0;
++    SIZE_T size, env_size;
+     WCHAR *dst, *image, *cmdline, *path, *bootstrap;
+     WCHAR *env = get_initial_environment( &env_pos, &env_size );
+     WCHAR *curdir = get_initial_directory();
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -2170,11 +2170,14 @@ void CDECL X11DRV_GetDC( HDC hdc, HWND h
+     }
+     else
+     {
++        Drawable top_window = X11DRV_get_whole_window( top );
++        escape.drawable = top_window;
++
+         /* find the first ancestor that has a drawable */
+         for (parent = hwnd; parent && parent != top; parent = GetAncestor( parent, GA_PARENT ))
+             if ((escape.drawable = X11DRV_get_whole_window( parent ))) break;
+ 
+-        if (escape.drawable)
++        if (escape.drawable != top_window)
+         {
+             POINT pt = { 0, 0 };
+             MapWindowPoints( 0, parent, &pt, 1 );
+@@ -2182,7 +2185,6 @@ void CDECL X11DRV_GetDC( HDC hdc, HWND h
+             OffsetRect( &escape.dc_rect, pt.x, pt.y );
+             if (flags & DCX_CLIPCHILDREN) escape.mode = ClipByChildren;
+         }
+-        else escape.drawable = X11DRV_get_whole_window( top );
+     }
+ 
+     ExtEscape( hdc, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );
+--- a/dlls/comctl32/button.c
++++ b/dlls/comctl32/button.c
+@@ -1820,7 +1820,8 @@ static void BUTTON_DrawThemedLabel(const
+ static void PB_Paint( const BUTTON_INFO *infoPtr, HDC hDC, UINT action )
+ {
+     RECT     rc, labelRect, imageRect, textRect;
+-    UINT     dtFlags, uState;
++    UINT     uState;
++    UINT     dtFlags = (UINT)-1L;
+     HPEN     hOldPen, hpen;
+     HBRUSH   hOldBrush;
+     INT      oldBkMode;
+--- a/dlls/gdiplus/font.c
++++ b/dlls/gdiplus/font.c
+@@ -1394,7 +1394,8 @@ static WCHAR *load_ttf_name_id( const BY
+     const tt_header *header;
+     const tt_name_table *name_table;
+     const tt_name_record *name_record;
+-    DWORD pos, ofs, count;
++    DWORD pos, count;
++    DWORD ofs = 0;
+     int i, res, best_lang = 0, best_index = -1;
+ 
+     if (sizeof(tt_header) > size)
+--- a/dlls/scrobj/scrobj.c
++++ b/dlls/scrobj/scrobj.c
+@@ -1195,7 +1195,7 @@ static HRESULT create_scriptlet_instance
+     struct script_host *factory_host, *host;
+     struct scriptlet_instance *obj;
+     IDispatch *script_dispatch;
+-    HRESULT hres;
++    HRESULT hres = E_FAIL;
+ 
+     if (!(obj = heap_alloc_zero(sizeof(*obj)))) return E_OUTOFMEMORY;
+ 

@@ -114,7 +114,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  		case O:
 --- a/programs/winedbg/memory.c
 +++ b/programs/winedbg/memory.c
-@@ -219,11 +219,19 @@ void memory_examine(const struct dbg_lva
+@@ -250,11 +250,19 @@ void memory_examine(const struct dbg_lva
      case 'a':
          if (sizeof(DWORD_PTR) == 4)
          {
@@ -134,19 +134,31 @@ author: Michael Gilbert <mgilbert@debian.org>
          }
          break;
      case 'c': DO_DUMP2(char, 32, " %c", (_v < 0x20) ? ' ' : _v); break;
-@@ -338,7 +346,11 @@ static void dbg_print_hex(DWORD size, UL
+@@ -460,7 +468,11 @@ char* memory_offset_to_string(char *str,
+ 
+ static void dbg_print_sdecimal(dbg_lgint_t sv)
+ {
++#ifdef __arm__
++    dbg_printf("%I64lld", sv);
++#else
+     dbg_printf("%I64d", sv);
++#endif
+ }
+ 
+ static void dbg_print_hex(DWORD size, dbg_lgint_t sv)
+@@ -469,7 +481,11 @@ static void dbg_print_hex(DWORD size, db
          dbg_printf("0");
      else
          /* clear unneeded high bits, esp. sign extension */
 +#ifdef __arm__
-+        dbg_printf("%I64lld", sv & (~0LLU >> (64 - 8 * size)));
++        dbg_printf("%I64lld", sv & (~(dbg_lguint_t)0 >> (8 * (sizeof(dbg_lgint_t) - size))));
 +#else
-         dbg_printf("%#I64x", sv & (~0LLU >> (64 - 8 * size)));
+         dbg_printf("%#I64x", sv & (~(dbg_lguint_t)0 >> (8 * (sizeof(dbg_lgint_t) - size))));
 +#endif
  }
  
  static void print_typed_basic(const struct dbg_lvalue* lvalue)
-@@ -592,7 +604,11 @@ void print_address(const ADDRESS64* addr
+@@ -723,7 +739,11 @@ void print_address(const ADDRESS64* addr
      if (SymFromAddr(dbg_curr_process->handle, lin, &disp64, si) && disp64 < si->Size)
      {
          dbg_printf(" %s", si->Name);
@@ -158,7 +170,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
      else
      {
-@@ -600,7 +616,11 @@ void print_address(const ADDRESS64* addr
+@@ -731,7 +751,11 @@ void print_address(const ADDRESS64* addr
          if (!SymGetModuleInfo(dbg_curr_process->handle, lin, &im)) return;
          dbg_printf(" %s", im.ModuleName);
          if (lin > im.BaseOfImage)
@@ -172,7 +184,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      {
 --- a/programs/winedbg/stack.c
 +++ b/programs/winedbg/stack.c
-@@ -278,7 +278,11 @@ static void stack_print_addr_and_args(vo
+@@ -276,7 +276,11 @@ static void stack_print_addr_and_args(vo
          DWORD           disp;
  
          dbg_printf(" %s", si->Name);
@@ -184,7 +196,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          stack_set_local_scope();
          se.first = TRUE;
-@@ -293,7 +297,11 @@ static void stack_print_addr_and_args(vo
+@@ -291,7 +295,11 @@ static void stack_print_addr_and_args(vo
              dbg_printf(" [%s:%u]", il.FileName, il.LineNumber);
          dbg_printf(" in %s", im.ModuleName);
      }
@@ -196,18 +208,6 @@ author: Michael Gilbert <mgilbert@debian.org>
  }
  
  /******************************************************************
-@@ -409,7 +417,11 @@ static void backtrace_all(void)
-                 dbg_active_wait_for_first_exception();
-             }
- 
-+#ifdef __arm__
-+            dbg_printf("\nBacktracing for thread %04x in process %Ild (%s):\n",
-+#else
-             dbg_printf("\nBacktracing for thread %04x in process %04Ix (%s):\n",
-+#endif
-                        entry.th32ThreadID, dbg_curr_pid,
-                        dbg_W2A(dbg_curr_process->imageName, -1));
-             backtrace_tid(dbg_curr_process, entry.th32ThreadID);
 --- a/programs/winedbg/break.c
 +++ b/programs/winedbg/break.c
 @@ -319,7 +319,11 @@ void break_add_break_from_lineno(const c
@@ -246,30 +246,9 @@ author: Michael Gilbert <mgilbert@debian.org>
                         dbg_curr_process->bp[dbg_curr_thread->stopped_xpoint].w.oldval);
          }
          return FALSE;
---- a/programs/winedbg/expr.c
-+++ b/programs/winedbg/expr.c
-@@ -687,10 +687,18 @@ BOOL expr_print(const struct expr* exp)
-         dbg_printf("$%s", exp->un.intvar.name);
-         break;
-     case EXPR_TYPE_U_CONST:
-+#ifdef __arm__
-+        dbg_printf("%Ilu", exp->un.u_const.value);
-+#else
-         dbg_printf("%Iu", exp->un.u_const.value);
-+#endif
-         break;
-     case EXPR_TYPE_S_CONST:
-+#ifdef __arm__
-+        dbg_printf("%Ild", exp->un.s_const.value);
-+#else
-         dbg_printf("%Id", exp->un.s_const.value);
-+#endif
-         break;
-     case EXPR_TYPE_STRING:
-         dbg_printf("\"%s\"", exp->un.string.str);
 --- a/programs/winedbg/symbol.c
 +++ b/programs/winedbg/symbol.c
-@@ -756,7 +756,11 @@ BOOL symbol_info_locals(void)
+@@ -749,7 +749,11 @@ BOOL symbol_info_locals(void)
      addr.Mode = AddrModeFlat;
      addr.Offset = frm->linear_pc;
      print_address(&addr, FALSE);
@@ -281,7 +260,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      SymEnumSymbols(dbg_curr_process->handle, 0, NULL, info_locals_cb, (void*)frm->linear_frame);
  
      return TRUE;
-@@ -778,7 +782,11 @@ static BOOL CALLBACK symbols_info_cb(PSY
+@@ -771,7 +775,11 @@ static BOOL CALLBACK symbols_info_cb(PSY
              mi.ModuleName[len - 5] = '\0';
      }
  
@@ -293,32 +272,9 @@ author: Michael Gilbert <mgilbert@debian.org>
      type.id = sym->TypeIndex;
      type.module = sym->ModBase;
  
---- a/programs/winedbg/tgt_active.c
-+++ b/programs/winedbg/tgt_active.c
-@@ -537,12 +537,20 @@ static void dbg_resume_debuggee(DWORD co
-         if (dbg_curr_thread)
-         {
-             if (!dbg_curr_process->be_cpu->set_context(dbg_curr_thread->handle, &dbg_context))
-+#ifdef __arm__
-+                dbg_printf("Cannot set ctx on %Ild\n", dbg_curr_tid);
-+#else
-                 dbg_printf("Cannot set ctx on %04Ix\n", dbg_curr_tid);
-+#endif
-         }
-     }
-     dbg_interactiveP = FALSE;
-     if (!ContinueDebugEvent(dbg_curr_pid, dbg_curr_tid, cont))
-+#ifdef __arm__
-+        dbg_printf("Cannot continue on %Ild (%08x)\n", dbg_curr_tid, cont);
-+#else
-         dbg_printf("Cannot continue on %04Ix (%08x)\n", dbg_curr_tid, cont);
-+#endif
- }
- 
- static void wait_exception(void)
 --- a/programs/winedbg/types.c
 +++ b/programs/winedbg/types.c
-@@ -572,7 +572,11 @@ static BOOL CALLBACK print_types_cb(PSYM
+@@ -555,7 +555,11 @@ static BOOL CALLBACK print_types_cb(PSYM
      struct dbg_type     type;
      type.module = sym->ModBase;
      type.id = sym->TypeIndex;
@@ -330,17 +286,24 @@ author: Michael Gilbert <mgilbert@debian.org>
      types_print_type(&type, TRUE);
      dbg_printf("\n");
      return TRUE;
---- a/programs/winedbg/winedbg.c
-+++ b/programs/winedbg/winedbg.c
-@@ -569,7 +569,11 @@ void dbg_start_interactive(const char* f
- 
-     if (dbg_curr_process)
-     {
+--- a/programs/winedbg/expr.c
++++ b/programs/winedbg/expr.c
+@@ -661,10 +661,18 @@ BOOL expr_print(const struct expr* exp)
+         dbg_printf("$%s", exp->un.intvar.name);
+         break;
+     case EXPR_TYPE_U_CONST:
 +#ifdef __arm__
-+        dbg_printf("WineDbg starting on pid %Ild\n", dbg_curr_pid);
++        dbg_printf("%I64llu", exp->un.u_const.value);
 +#else
-         dbg_printf("WineDbg starting on pid %04Ix\n", dbg_curr_pid);
+         dbg_printf("%I64u", exp->un.u_const.value);
 +#endif
-         if (dbg_curr_process->active_debuggee) dbg_active_wait_for_first_exception();
-     }
- 
+         break;
+     case EXPR_TYPE_S_CONST:
++#ifdef __arm__
++        dbg_printf("%I64lld", exp->un.s_const.value);
++#else
+         dbg_printf("%I64d", exp->un.s_const.value);
++#endif
+         break;
+     case EXPR_TYPE_STRING:
+         dbg_printf("\"%s\"", exp->un.string.str);

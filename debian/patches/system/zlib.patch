@@ -14,7 +14,7 @@ forwarded: not-needed
          if (has_external_import( make )) return NULL;
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3675,7 +3675,6 @@ WINE_CONFIG_MAKEFILE(libs/wine)
+@@ -3522,7 +3522,6 @@ WINE_CONFIG_MAKEFILE(libs/wine)
  WINE_CONFIG_MAKEFILE(libs/wmcodecdspuuid)
  WINE_CONFIG_MAKEFILE(libs/xml2)
  WINE_CONFIG_MAKEFILE(libs/xslt)

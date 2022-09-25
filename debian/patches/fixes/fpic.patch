@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -849,11 +849,6 @@ case $host_os in
+@@ -815,14 +815,11 @@ case $host_os in
    *)
      AC_DEFINE(_GNU_SOURCE,1,[Define to 1 to enable GNU extensions on Linux])
      case $host_cpu in
@@ -14,4 +14,10 @@ author: Michael Gilbert <mgilbert@debian.org>
 -        ;;
        *)
          DLLFLAGS="$DLLFLAGS -fPIC"
-         LDDLLFLAGS="-fPIC" ;;
+-        LDDLLFLAGS="-fPIC" ;;
++        LDDLLFLAGS="-fPIC"
++        WINE_TRY_CFLAGS([-fPIC -Wl,-z,notext],[LDDLLFLAGS="$LDDLLFLAGS -Wl,-z,notext"])
++        ;;
+     esac
+     LIBWINE_LDFLAGS="-shared -Wl,-soname,libwine.so.$libwine_soversion"
+ 

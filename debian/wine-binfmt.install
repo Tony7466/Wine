@@ -1,1 +1,2 @@
 debian/binfmt/wine usr/share/binfmts
+debian/binfmt/wine usr/lib/binfmt.d

@@ -8,11 +8,11 @@ Uploaders:
  Stephen Kitt <skitt@debian.org>,
 Vcs-Git: https://salsa.debian.org/wine-team/wine.git
 Vcs-Browser: https://salsa.debian.org/wine-team/wine
-Standards-Version: 4.5.1
+Standards-Version: 4.6.1
 Rules-Requires-Root: no
 Build-Depends:
+ dpkg (>= 1.21.0),
  debhelper-compat (= 13),
- clang [arm64],
  gcc-mingw-w64-i686 [i386],
  gcc-mingw-w64-x86-64 [amd64],
  libz-mingw-w64-dev,
@@ -30,8 +30,8 @@ Build-Depends:
  librsvg2-bin,
  fontforge-nox,
  khronos-api (>= 4.6),
- unicode-data (>= 14),
- unicode-data (<< 15),
+ unicode-data (>= 15),
+ unicode-data (<< 16),
  libxi-dev,
  libxt-dev,
  libxmu-dev,
@@ -210,8 +210,7 @@ Depends:
  libwineVERSION-dev:armhf (= ${binary:Version}) [arm64],
 Recommends:
  wineVERSION (= ${source:Version}),
- clang [arm64],
- g++ [!arm64],
+ g++,
 Conflicts:
  wine32VERSION-tools,
 Description: Windows API implementation - 64-bit developer tools
@@ -259,6 +258,7 @@ Description: Windows API implementation - library
 
 Package: libwineVERSION-dev
 Section: libdevel
+Multi-Arch: same
 Architecture: amd64 i386 armel armhf arm64
 Depends:
  ${misc:Depends},
@@ -281,7 +281,7 @@ Description: Windows API implementation - development files
 # Depends:
 #  ${misc:Depends},
 #  wine,
-#  binfmt-support,
+#  binfmt-support | systemd,
 # Description: Register Wine as the interpreter for Windows executables
 #  Wine is a free MS-Windows API implementation.
 #  .
