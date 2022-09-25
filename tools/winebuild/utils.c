@@ -250,7 +250,7 @@ struct strarray find_tool( const char *name, const char * const *names )
         names++;
     }
 
-    if (!file && strcmp( name, "as" )) /* llvm-as is not a gas replacement */
+    if (!file)
     {
         if (cc_command.count) file = find_clang_tool( cc_command, name );
         if (!file && !(file = find_binary( "llvm", name )))
@@ -289,11 +289,36 @@ struct strarray find_link_tool(void)
 struct strarray get_as_command(void)
 {
     struct strarray args = empty_strarray;
+    const char *file;
     unsigned int i;
+    int using_cc = 0;
 
     if (cc_command.count)
     {
         strarray_addall( &args, cc_command );
+        using_cc = 1;
+    }
+    else if (as_command.count)
+    {
+        strarray_addall( &args, as_command );
+    }
+    else if ((file = find_binary( target_alias, "as" )) || (file = find_binary( target_alias, "gas ")))
+    {
+        strarray_add( &args, file );
+    }
+    else if ((file = find_binary( NULL, "clang" )))
+    {
+        strarray_add( &args, file );
+        if (target_alias)
+        {
+            strarray_add( &args, "-target" );
+            strarray_add( &args, target_alias );
+        }
+        using_cc = 1;
+    }
+
+    if (using_cc)
+    {
         strarray_add( &args, "-xassembler" );
         strarray_add( &args, "-c" );
         if (force_pointer_size)
@@ -305,14 +330,6 @@ struct strarray get_as_command(void)
             strarray_add( &args, strmake("-B%s", tools_path.str[i] ));
         return args;
     }
-
-    if (!as_command.count)
-    {
-        static const char * const commands[] = { "gas", "as", NULL };
-        as_command = find_tool( "as", commands );
-    }
-
-    strarray_addall( &args, as_command );
 
     if (force_pointer_size)
     {
@@ -415,47 +432,13 @@ unsigned char *output_buffer;
 size_t output_buffer_pos;
 size_t output_buffer_size;
 
-static void check_output_buffer_space( size_t size )
-{
-    if (output_buffer_pos + size >= output_buffer_size)
-    {
-        output_buffer_size = max( output_buffer_size * 2, output_buffer_pos + size );
-        output_buffer = xrealloc( output_buffer, output_buffer_size );
-    }
-}
-
 void init_input_buffer( const char *file )
 {
-    int fd;
-    struct stat st;
-    unsigned char *buffer;
-
-    if ((fd = open( file, O_RDONLY | O_BINARY )) == -1) fatal_perror( "Cannot open %s", file );
-    if ((fstat( fd, &st ) == -1)) fatal_perror( "Cannot stat %s", file );
-    if (!st.st_size) fatal_error( "%s is an empty file\n", file );
-    input_buffer = buffer = xmalloc( st.st_size );
-    if (read( fd, buffer, st.st_size ) != st.st_size) fatal_error( "Cannot read %s\n", file );
-    close( fd );
+    if (!(input_buffer = read_file( file, &input_buffer_size ))) fatal_perror( "Cannot read %s", file );
+    if (!input_buffer_size) fatal_error( "%s is an empty file\n", file );
     input_buffer_filename = xstrdup( file );
-    input_buffer_size = st.st_size;
     input_buffer_pos = 0;
     byte_swapped = 0;
-}
-
-void init_output_buffer(void)
-{
-    output_buffer_size = 1024;
-    output_buffer_pos = 0;
-    output_buffer = xmalloc( output_buffer_size );
-}
-
-void flush_output_buffer(void)
-{
-    open_output_file();
-    if (fwrite( output_buffer, 1, output_buffer_pos, output_file ) != output_buffer_pos)
-        fatal_error( "Error writing to %s\n", output_file_name );
-    close_output_file();
-    free( output_buffer );
 }
 
 unsigned char get_byte(void)
@@ -490,61 +473,11 @@ unsigned int get_dword(void)
     return ret;
 }
 
-void put_data( const void *data, size_t size )
-{
-    check_output_buffer_space( size );
-    memcpy( output_buffer + output_buffer_pos, data, size );
-    output_buffer_pos += size;
-}
-
-void put_byte( unsigned char val )
-{
-    check_output_buffer_space( 1 );
-    output_buffer[output_buffer_pos++] = val;
-}
-
-void put_word( unsigned short val )
-{
-    if (byte_swapped) val = (val << 8) | (val >> 8);
-    put_data( &val, sizeof(val) );
-}
-
-void put_dword( unsigned int val )
-{
-    if (byte_swapped)
-        val = ((val << 24) | ((val << 8) & 0x00ff0000) | ((val >> 8) & 0x0000ff00) | (val >> 24));
-    put_data( &val, sizeof(val) );
-}
-
-void put_qword( unsigned int val )
-{
-    if (byte_swapped)
-    {
-        put_dword( 0 );
-        put_dword( val );
-    }
-    else
-    {
-        put_dword( val );
-        put_dword( 0 );
-    }
-}
-
 /* pointer-sized word */
 void put_pword( unsigned int val )
 {
     if (get_ptr_size() == 8) put_qword( val );
     else put_dword( val );
-}
-
-void align_output( unsigned int align )
-{
-    size_t size = align - (output_buffer_pos % align);
-
-    if (size == align) return;
-    check_output_buffer_space( size );
-    memset( output_buffer + output_buffer_pos, 0, size );
-    output_buffer_pos += size;
 }
 
 /* output a standard header for generated files */

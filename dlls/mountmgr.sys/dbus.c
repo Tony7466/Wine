@@ -97,7 +97,7 @@ static GUID *parse_uuid( GUID *guid, const char *str )
         int i;
         unsigned char *out = guid->Data4;
 
-        if (sscanf( str, "%x-%hx-%hx-", &guid->Data1, &guid->Data2, &guid->Data3 ) != 3) return NULL;
+        if (sscanf( str, "%x-%hx-%hx-", (int *)&guid->Data1, &guid->Data2, &guid->Data3 ) != 3) return NULL;
         for (i = 19; i < 36; i++)
         {
             unsigned char val;
@@ -635,11 +635,15 @@ static DBusMessage *dhcp4_config_request( const char *iface )
 
     p_dbus_message_iter_init( reply, &iter );
     if (p_dbus_message_iter_get_arg_type( &iter ) == DBUS_TYPE_OBJECT_PATH) p_dbus_message_iter_get_basic( &iter, &path );
-    p_dbus_message_unref( reply );
-    if (!path) return NULL;
+    if (!path)
+    {
+        p_dbus_message_unref( reply );
+        return NULL;
+    }
 
     request = p_dbus_message_new_method_call( "org.freedesktop.NetworkManager", path,
                                               "org.freedesktop.DBus.Properties", "Get" );
+    p_dbus_message_unref( reply );
     if (!request) return NULL;
 
     p_dbus_message_iter_init_append( request, &iter );

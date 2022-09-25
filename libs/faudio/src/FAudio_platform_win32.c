@@ -70,6 +70,44 @@ void FAudio_Log(char const *msg)
 	OutputDebugStringA(msg);
 }
 
+static HMODULE kernelbase = NULL;
+static HRESULT (WINAPI *my_SetThreadDescription)(HANDLE, PCWSTR) = NULL;
+
+static void FAudio_resolve_SetThreadDescription(void)
+{
+	kernelbase = LoadLibraryA("kernelbase.dll");
+	if (!kernelbase)
+		return;
+
+	my_SetThreadDescription = (HRESULT (WINAPI *)(HANDLE, PCWSTR)) GetProcAddress(kernelbase, "SetThreadDescription");
+	if (!my_SetThreadDescription)
+	{
+		FreeLibrary(kernelbase);
+		kernelbase = NULL;
+	}
+}
+
+static void FAudio_set_thread_name(char const *name)
+{
+	int ret;
+	WCHAR *nameW;
+
+	if (!my_SetThreadDescription)
+		return;
+
+	ret = MultiByteToWideChar(CP_UTF8, 0, name, -1, NULL, 0);
+
+	nameW = FAudio_malloc(ret * sizeof(WCHAR));
+	if (!nameW)
+		return;
+
+	ret = MultiByteToWideChar(CP_UTF8, 0, name, -1, nameW, ret);
+	if (ret)
+		my_SetThreadDescription(GetCurrentThread(), nameW);
+
+	FAudio_free(nameW);
+}
+
 static HRESULT FAudio_FillAudioClientBuffer(
 	struct FAudioAudioClientThreadArgs *args,
 	IAudioRenderClient *client,
@@ -120,6 +158,8 @@ static DWORD WINAPI FAudio_AudioClientThread(void *user)
 	IAudioRenderClient *render_client;
 	HRESULT hr = S_OK;
 	UINT frames, padding = 0;
+
+	FAudio_set_thread_name(__func__);
 
 	hr = IAudioClient_GetService(
 		args->client,
@@ -172,6 +212,7 @@ void FAudio_PlatformInit(
 	BOOL has_sse2 = IsProcessorFeaturePresent(PF_XMMI64_INSTRUCTIONS_AVAILABLE);
 
 	FAudio_INTERNAL_InitSIMDFunctions(has_sse2, FALSE);
+	FAudio_resolve_SetThreadDescription();
 
 	FAudio_PlatformAddRef();
 
@@ -305,6 +346,12 @@ void FAudio_PlatformQuit(void* platformDevice)
 	SetEvent(data->stopEvent);
 	WaitForSingleObject(data->audioThread, INFINITE);
 	if (data->client) IAudioClient_Release(data->client);
+	if (kernelbase)
+	{
+		my_SetThreadDescription = NULL;
+		FreeLibrary(kernelbase);
+		kernelbase = NULL;
+	}
 	FAudio_PlatformRelease();
 }
 
@@ -364,13 +411,14 @@ uint32_t FAudio_PlatformGetDeviceDetails(
 	uint32_t index,
 	FAudioDeviceDetails *details
 ) {
+	WAVEFORMATEX *format, *obtained;
 	WAVEFORMATEXTENSIBLE *ext;
-	WAVEFORMATEX *format;
 	IAudioClient *client;
 	IMMDevice *device;
 	uint32_t ret = 0;
 	HRESULT hr;
 	WCHAR *str;
+	GUID sub;
 
 	FAudio_memset(details, 0, sizeof(FAudioDeviceDetails));
 	if (index > 0) return FAUDIO_E_INVALID_CALL;
@@ -406,6 +454,28 @@ uint32_t FAudio_PlatformGetDeviceDetails(
 	hr = IAudioClient_GetMixFormat(client, &format);
 	FAudio_assert(!FAILED(hr) && "Failed to get audio client mix format!");
 
+	if (format->wFormatTag == WAVE_FORMAT_EXTENSIBLE)
+	{
+		ext = (WAVEFORMATEXTENSIBLE *)format;
+		sub = ext->SubFormat;
+		FAudio_memcpy(
+			&ext->SubFormat,
+			&DATAFORMAT_SUBTYPE_PCM,
+			sizeof(GUID)
+		);
+
+		hr = IAudioClient_IsFormatSupported(client, AUDCLNT_SHAREMODE_SHARED, format, &obtained);
+		if (FAILED(hr))
+		{
+			ext->SubFormat = sub;
+		}
+		else if (obtained)
+		{
+			CoTaskMemFree(format);
+			format = obtained;
+		}
+	}
+
 	details->OutputFormat.Format.wFormatTag = format->wFormatTag;
 	details->OutputFormat.Format.nChannels = format->nChannels;
 	details->OutputFormat.Format.nSamplesPerSec = format->nSamplesPerSec;
@@ -425,6 +495,8 @@ uint32_t FAudio_PlatformGetDeviceDetails(
 			sizeof(GUID)
 		);
 	}
+
+	CoTaskMemFree(format);
 
 	IAudioClient_Release(client);
 
@@ -475,6 +547,7 @@ static DWORD WINAPI FaudioThreadWrapper(void *user)
 	struct FAudioThreadArgs *args = user;
 	DWORD ret;
 
+	FAudio_set_thread_name(args->name);
 	ret = args->func(args->data);
 
 	FAudio_free(args);

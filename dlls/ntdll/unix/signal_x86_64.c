@@ -144,6 +144,8 @@ __ASM_GLOBAL_FUNC( alloc_fs_sel,
 
 #elif defined(__FreeBSD__) || defined (__FreeBSD_kernel__)
 
+#include <machine/trap.h>
+
 #define RAX_sig(context)     ((context)->uc_mcontext.mc_rax)
 #define RBX_sig(context)     ((context)->uc_mcontext.mc_rbx)
 #define RCX_sig(context)     ((context)->uc_mcontext.mc_rcx)
@@ -238,6 +240,27 @@ __ASM_GLOBAL_FUNC( alloc_fs_sel,
 
 enum i386_trap_code
 {
+#if defined(__FreeBSD__) || defined (__FreeBSD_kernel__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+    TRAP_x86_DIVIDE     = T_DIVIDE,     /* Division by zero exception */
+    TRAP_x86_TRCTRAP    = T_TRCTRAP,    /* Single-step exception */
+    TRAP_x86_NMI        = T_NMI,        /* NMI interrupt */
+    TRAP_x86_BPTFLT     = T_BPTFLT,     /* Breakpoint exception */
+    TRAP_x86_OFLOW      = T_OFLOW,      /* Overflow exception */
+    TRAP_x86_BOUND      = T_BOUND,      /* Bound range exception */
+    TRAP_x86_PRIVINFLT  = T_PRIVINFLT,  /* Invalid opcode exception */
+    TRAP_x86_DNA        = T_DNA,        /* Device not available exception */
+    TRAP_x86_DOUBLEFLT  = T_DOUBLEFLT,  /* Double fault exception */
+    TRAP_x86_FPOPFLT    = T_FPOPFLT,    /* Coprocessor segment overrun */
+    TRAP_x86_TSSFLT     = T_TSSFLT,     /* Invalid TSS exception */
+    TRAP_x86_SEGNPFLT   = T_SEGNPFLT,   /* Segment not present exception */
+    TRAP_x86_STKFLT     = T_STKFLT,     /* Stack fault */
+    TRAP_x86_PROTFLT    = T_PROTFLT,    /* General protection fault */
+    TRAP_x86_PAGEFLT    = T_PAGEFLT,    /* Page fault */
+    TRAP_x86_ARITHTRAP  = T_ARITHTRAP,  /* Floating point exception */
+    TRAP_x86_ALIGNFLT   = T_ALIGNFLT,   /* Alignment check exception */
+    TRAP_x86_MCHK       = T_MCHK,       /* Machine check exception */
+    TRAP_x86_CACHEFLT   = T_XMMFLT      /* Cache flush exception */
+#else
     TRAP_x86_DIVIDE     = 0,   /* Division by zero exception */
     TRAP_x86_TRCTRAP    = 1,   /* Single-step exception */
     TRAP_x86_NMI        = 2,   /* NMI interrupt */
@@ -257,6 +280,7 @@ enum i386_trap_code
     TRAP_x86_ALIGNFLT   = 17,  /* Alignment check exception */
     TRAP_x86_MCHK       = 18,  /* Machine check exception */
     TRAP_x86_CACHEFLT   = 19   /* Cache flush exception */
+#endif
 };
 
 /* stack layout when calling an exception raise function */
@@ -355,7 +379,7 @@ static inline struct amd64_thread_data *amd64_thread_data(void)
     return (struct amd64_thread_data *)ntdll_get_thread_data()->cpu_data;
 }
 
-static BOOL is_inside_syscall( ucontext_t *sigcontext )
+static BOOL is_inside_syscall( const ucontext_t *sigcontext )
 {
     return ((char *)RSP_sig(sigcontext) >= (char *)ntdll_get_thread_data()->kernel_stack &&
             (char *)RSP_sig(sigcontext) <= (char *)amd64_thread_data()->syscall_frame);
@@ -1415,12 +1439,13 @@ static NTSTATUS libunwind_virtual_unwind( ULONG64 ip, ULONG64 *frame, CONTEXT *c
     *frame = context->Rsp;
 
     rc = unw_get_proc_info(&cursor, &info);
-    if (rc != UNW_ESUCCESS && rc != UNW_ENOINFO)
+    if (UNW_ENOINFO < 0) rc = -rc;  /* LLVM libunwind has negative error codes */
+    if (rc != UNW_ESUCCESS && rc != -UNW_ENOINFO)
     {
         WARN( "failed to get info: %d\n", rc );
         return STATUS_INVALID_DISPOSITION;
     }
-    if (rc == UNW_ENOINFO || ip < info.start_ip || ip > info.end_ip || info.end_ip == info.start_ip + 1)
+    if (rc == -UNW_ENOINFO || ip < info.start_ip || ip > info.end_ip || info.end_ip == info.start_ip + 1)
         return STATUS_UNSUCCESSFUL;
 
     TRACE( "ip %#lx function %#lx-%#lx personality %#lx lsda %#lx fde %#lx\n",
@@ -1544,7 +1569,7 @@ static inline void init_handler( const ucontext_t *sigcontext )
 static inline void leave_handler( const ucontext_t *sigcontext )
 {
 #ifdef __linux__
-    if (fs32_sel && !is_inside_signal_stack( (void *)RSP_sig(sigcontext )))
+    if (fs32_sel && !is_inside_signal_stack( (void *)RSP_sig(sigcontext )) && !is_inside_syscall(sigcontext))
         __asm__ volatile( "movw %0,%%fs" :: "r" (fs32_sel) );
 #endif
 }
@@ -2292,6 +2317,14 @@ struct user_callback_frame
 NTSTATUS WINAPI KeUserModeCallback( ULONG id, const void *args, ULONG len, void **ret_ptr, ULONG *ret_len )
 {
     struct user_callback_frame callback_frame = { { 0 }, ret_ptr, ret_len };
+
+    /* if we have no syscall frame, call the callback directly */
+    if ((char *)&callback_frame < (char *)ntdll_get_thread_data()->kernel_stack ||
+        (char *)&callback_frame > (char *)amd64_thread_data()->syscall_frame)
+    {
+        NTSTATUS (WINAPI *func)(const void *, ULONG) = ((void **)NtCurrentTeb()->Peb->KernelCallbackTable)[id];
+        return func( args, len );
+    }
 
     if ((char *)ntdll_get_thread_data()->kernel_stack + min_kernel_stack > (char *)&callback_frame)
         return STATUS_STACK_OVERFLOW;

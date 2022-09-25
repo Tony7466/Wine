@@ -51,14 +51,13 @@ static void wined3d_blend_state_destroy_object(void *object)
 
 ULONG CDECL wined3d_blend_state_decref(struct wined3d_blend_state *state)
 {
-    ULONG refcount = InterlockedDecrement(&state->refcount);
+    ULONG refcount = wined3d_atomic_decrement_mutex_lock(&state->refcount);
     struct wined3d_device *device = state->device;
 
     TRACE("%p decreasing refcount to %u.\n", state, refcount);
 
     if (!refcount)
     {
-        wined3d_mutex_lock();
         state->parent_ops->wined3d_object_destroyed(state->parent);
         wined3d_cs_destroy_object(device->cs, wined3d_blend_state_destroy_object, state);
         wined3d_mutex_unlock();
@@ -127,14 +126,13 @@ static void wined3d_depth_stencil_state_destroy_object(void *object)
 
 ULONG CDECL wined3d_depth_stencil_state_decref(struct wined3d_depth_stencil_state *state)
 {
-    ULONG refcount = InterlockedDecrement(&state->refcount);
+    ULONG refcount = wined3d_atomic_decrement_mutex_lock(&state->refcount);
     struct wined3d_device *device = state->device;
 
     TRACE("%p decreasing refcount to %u.\n", state, refcount);
 
     if (!refcount)
     {
-        wined3d_mutex_lock();
         state->parent_ops->wined3d_object_destroyed(state->parent);
         wined3d_cs_destroy_object(device->cs, wined3d_depth_stencil_state_destroy_object, state);
         wined3d_mutex_unlock();
@@ -192,14 +190,13 @@ static void wined3d_rasterizer_state_destroy_object(void *object)
 
 ULONG CDECL wined3d_rasterizer_state_decref(struct wined3d_rasterizer_state *state)
 {
-    ULONG refcount = InterlockedDecrement(&state->refcount);
+    ULONG refcount = wined3d_atomic_decrement_mutex_lock(&state->refcount);
     struct wined3d_device *device = state->device;
 
     TRACE("%p decreasing refcount to %u.\n", state, refcount);
 
     if (!refcount)
     {
-        wined3d_mutex_lock();
         state->parent_ops->wined3d_object_destroyed(state->parent);
         wined3d_cs_destroy_object(device->cs, wined3d_rasterizer_state_destroy_object, state);
         wined3d_mutex_unlock();
@@ -4581,6 +4578,10 @@ static void state_cb(struct wined3d_context *context, const struct wined3d_state
         shader_type = state_id - STATE_GRAPHICS_CONSTANT_BUFFER(0);
     else
         shader_type = WINED3D_SHADER_TYPE_COMPUTE;
+
+    /* If a shader has not been set, buffer objects are not yet initialised. */
+    if (!state->shader[shader_type])
+        return;
 
     wined3d_gl_limits_get_uniform_block_range(&gl_info->limits, shader_type, &base, &count);
     for (i = 0; i < count; ++i)

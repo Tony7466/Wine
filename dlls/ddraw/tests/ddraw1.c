@@ -2585,14 +2585,16 @@ static void test_window_style(void)
 {
     LONG style, exstyle, tmp, expected_style;
     RECT fullscreen_rect, r;
+    HWND window, window2;
     IDirectDraw *ddraw;
-    HWND window;
     HRESULT hr;
     ULONG ref;
     BOOL ret;
 
     window = CreateWindowA("static", "ddraw_test", WS_OVERLAPPEDWINDOW,
             0, 0, 100, 100, 0, 0, 0, 0);
+    window2 = CreateWindowA("static", "ddraw_test", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            0, 0, 50, 50, 0, 0, 0, 0);
     ddraw = create_ddraw();
     ok(!!ddraw, "Failed to create a ddraw object.\n");
 
@@ -2636,6 +2638,133 @@ static void test_window_style(void)
     tmp = GetWindowLongA(window, GWL_EXSTYLE);
     ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
 
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN | DDSCL_NOWINDOWCHANGES);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    todo_wine ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    todo_wine ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
+
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    expected_style = style | WS_VISIBLE;
+    todo_wine ok(tmp == expected_style, "Expected window style %#x, got %#x.\n", expected_style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    todo_wine ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    ShowWindow(window, SW_HIDE);
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    todo_wine ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    todo_wine ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL | DDSCL_NOWINDOWCHANGES);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    ret = SetForegroundWindow(window);
+    ok(ret, "Failed to set foreground window.\n");
+
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    expected_style = style | WS_VISIBLE;
+    todo_wine ok(tmp == expected_style, "Expected window style %#x, got %#x.\n", expected_style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    todo_wine ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    ShowWindow(window, SW_HIDE);
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
+
+    ShowWindow(window, SW_SHOW);
+    ret = SetForegroundWindow(GetDesktopWindow());
+    ok(ret, "Failed to set foreground window.\n");
+    SetActiveWindow(window);
+    ok(GetActiveWindow() == window, "Unexpected active window.\n");
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    expected_style = style | WS_VISIBLE;
+    todo_wine ok(tmp == expected_style, "Expected window style %#x, got %#x.\n", expected_style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    todo_wine ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
+
+    GetWindowRect(window, &r);
+    ok(EqualRect(&r, &fullscreen_rect), "Expected %s, got %s.\n",
+            wine_dbgstr_rect(&fullscreen_rect), wine_dbgstr_rect(&r));
+
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    SetWindowPos(window, NULL, 0, 0, 100, 100, SWP_NOZORDER | SWP_NOACTIVATE);
+    GetWindowRect(window, &r);
+    ok(!EqualRect(&r, &fullscreen_rect), "Window resize failed? got %s.\n",
+            wine_dbgstr_rect(&r));
+
+    ret = SetForegroundWindow(window2);
+    ok(ret, "Failed to set foreground window.\n");
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    expected_style = style | WS_VISIBLE;
+    todo_wine ok(tmp == expected_style, "Expected window style %#x, got %#x.\n", expected_style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    todo_wine ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
+
+    GetWindowRect(window, &r);
+    ok(EqualRect(&r, &fullscreen_rect), "Expected %s, got %s.\n",
+            wine_dbgstr_rect(&fullscreen_rect), wine_dbgstr_rect(&r));
+
+    ret = SetForegroundWindow(window);
+    ok(ret, "Failed to set foreground window.\n");
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    expected_style = style | WS_VISIBLE;
+    todo_wine ok(tmp == expected_style, "Expected window style %#x, got %#x.\n", expected_style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    todo_wine ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    ShowWindow(window, SW_HIDE);
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
+
     ShowWindow(window, SW_SHOW);
     hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
     ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
@@ -2659,6 +2788,7 @@ static void test_window_style(void)
     ref = IDirectDraw_Release(ddraw);
     ok(ref == 0, "The ddraw object was not properly freed: refcount %u.\n", ref);
 
+    DestroyWindow(window2);
     DestroyWindow(window);
 }
 
@@ -14191,7 +14321,7 @@ static void test_vtbl_protection(void)
 static BOOL CALLBACK test_window_position_cb(HMONITOR monitor, HDC hdc, RECT *monitor_rect,
         LPARAM lparam)
 {
-    RECT primary_rect, window_rect;
+    RECT primary_rect, window_rect, new_rect;
     IDirectDraw *ddraw;
     HWND window;
     HRESULT hr;
@@ -14213,6 +14343,44 @@ static BOOL CALLBACK test_window_position_cb(HMONITOR monitor, HDC hdc, RECT *mo
     SetRect(&primary_rect, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
     ok(EqualRect(&window_rect, &primary_rect), "Expect window rect %s, got %s.\n",
             wine_dbgstr_rect(&primary_rect), wine_dbgstr_rect(&window_rect));
+
+    new_rect = window_rect;
+    --new_rect.right;
+    --new_rect.bottom;
+
+    ret = MoveWindow(window, new_rect.left, new_rect.top, new_rect.right - new_rect.left,
+            new_rect.bottom - new_rect.top, TRUE);
+    ok(ret, "Got unexpected ret %#x, error %#x.\n", ret, GetLastError());
+    ret = GetWindowRect(window, &window_rect);
+    ok(ret, "Got unexpected ret %#x, error %#x.\n", ret, GetLastError());
+    ok(EqualRect(&window_rect, &new_rect),
+            "Expected window rect %s, got %s.\n",
+            wine_dbgstr_rect(monitor_rect), wine_dbgstr_rect(&window_rect));
+    /* After processing window events window rectangle gets restored. But only once, the size set
+     * on the second resize remains. */
+    flush_events();
+    ret = GetWindowRect(window, &window_rect);
+    ok(ret, "Got unexpected ret %#x, error %#x.\n", ret, GetLastError());
+    /* Both Windows and Wine change the size of the window. On Windows it is exactly the new size but in Wine
+     * it may get adjusted depending on window manager. */
+    ok(window_rect.right != monitor_rect->right && window_rect.bottom != monitor_rect->bottom,
+            "Expected window rect %s, got %s.\n",
+            wine_dbgstr_rect(monitor_rect), wine_dbgstr_rect(&window_rect));
+
+    ret = MoveWindow(window, new_rect.left, new_rect.top, new_rect.right - new_rect.left,
+            new_rect.bottom - new_rect.top, TRUE);
+    ok(ret, "Got unexpected ret %#x, error %#x.\n", ret, GetLastError());
+    ret = GetWindowRect(window, &window_rect);
+    ok(ret, "Got unexpected ret %#x, error %#x.\n", ret, GetLastError());
+    ok(EqualRect(&window_rect, &new_rect),
+            "Expected window rect %s, got %s.\n",
+            wine_dbgstr_rect(monitor_rect), wine_dbgstr_rect(&window_rect));
+    flush_events();
+    ret = GetWindowRect(window, &window_rect);
+    ok(ret, "Got unexpected ret %#x, error %#x.\n", ret, GetLastError());
+    ok(window_rect.right != monitor_rect->right && window_rect.bottom != monitor_rect->bottom,
+            "Expected window rect %s, got %s.\n",
+            wine_dbgstr_rect(monitor_rect), wine_dbgstr_rect(&window_rect));
 
     /* Window activation should restore the window to fit the whole primary monitor */
     ret = SetWindowPos(window, 0, monitor_rect->left, monitor_rect->top, 0, 0,
@@ -14475,8 +14643,10 @@ static void test_filling_convention(void)
     D3DRECT clear_rect = {{0}, {0}, {vp_size}, {vp_size}};
 
     /* This test data follows the examples in MSDN's
-     * "Rasterization Rules (Direct3D 9)" article. */
-    static const float eps = 1.0f / 512.0f;
+     * "Rasterization Rules (Direct3D 9)" article.
+     *
+     * See the d3d9 test for a comment about the eps value. */
+    static const float eps = 1.0f / 64.0f;
     D3DLVERTEX center_tris[] =
     {
         /* left */

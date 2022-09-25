@@ -174,7 +174,6 @@ DECL_HANDLER(get_volume_info);
 DECL_HANDLER(lock_file);
 DECL_HANDLER(unlock_file);
 DECL_HANDLER(recv_socket);
-DECL_HANDLER(poll_socket);
 DECL_HANDLER(send_socket);
 DECL_HANDLER(get_next_console_request);
 DECL_HANDLER(read_directory_changes);
@@ -455,7 +454,6 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_lock_file,
     (req_handler)req_unlock_file,
     (req_handler)req_recv_socket,
-    (req_handler)req_poll_socket,
     (req_handler)req_send_socket,
     (req_handler)req_get_next_console_request,
     (req_handler)req_read_directory_changes,
@@ -694,13 +692,13 @@ C_ASSERT( sizeof(int) == 4 );
 C_ASSERT( sizeof(ioctl_code_t) == 4 );
 C_ASSERT( sizeof(irp_params_t) == 32 );
 C_ASSERT( sizeof(lparam_t) == 8 );
-C_ASSERT( sizeof(luid_t) == 8 );
 C_ASSERT( sizeof(mem_size_t) == 8 );
 C_ASSERT( sizeof(mod_handle_t) == 8 );
 C_ASSERT( sizeof(obj_handle_t) == 4 );
 C_ASSERT( sizeof(process_id_t) == 4 );
 C_ASSERT( sizeof(rectangle_t) == 16 );
 C_ASSERT( sizeof(short int) == 2 );
+C_ASSERT( sizeof(struct luid) == 8 );
 C_ASSERT( sizeof(thread_id_t) == 4 );
 C_ASSERT( sizeof(timeout_t) == 8 );
 C_ASSERT( sizeof(unsigned char) == 1 );
@@ -729,7 +727,7 @@ C_ASSERT( FIELD_OFFSET(struct get_new_process_info_reply, exit_code) == 12 );
 C_ASSERT( sizeof(struct get_new_process_info_reply) == 16 );
 C_ASSERT( FIELD_OFFSET(struct new_thread_request, process) == 12 );
 C_ASSERT( FIELD_OFFSET(struct new_thread_request, access) == 16 );
-C_ASSERT( FIELD_OFFSET(struct new_thread_request, suspend) == 20 );
+C_ASSERT( FIELD_OFFSET(struct new_thread_request, flags) == 20 );
 C_ASSERT( FIELD_OFFSET(struct new_thread_request, request_fd) == 24 );
 C_ASSERT( sizeof(struct new_thread_request) == 32 );
 C_ASSERT( FIELD_OFFSET(struct new_thread_reply, tid) == 8 );
@@ -1050,13 +1048,6 @@ C_ASSERT( sizeof(struct recv_socket_request) == 64 );
 C_ASSERT( FIELD_OFFSET(struct recv_socket_reply, wait) == 8 );
 C_ASSERT( FIELD_OFFSET(struct recv_socket_reply, options) == 12 );
 C_ASSERT( sizeof(struct recv_socket_reply) == 16 );
-C_ASSERT( FIELD_OFFSET(struct poll_socket_request, exclusive) == 12 );
-C_ASSERT( FIELD_OFFSET(struct poll_socket_request, async) == 16 );
-C_ASSERT( FIELD_OFFSET(struct poll_socket_request, timeout) == 56 );
-C_ASSERT( sizeof(struct poll_socket_request) == 64 );
-C_ASSERT( FIELD_OFFSET(struct poll_socket_reply, wait) == 8 );
-C_ASSERT( FIELD_OFFSET(struct poll_socket_reply, options) == 12 );
-C_ASSERT( sizeof(struct poll_socket_reply) == 16 );
 C_ASSERT( FIELD_OFFSET(struct send_socket_request, async) == 16 );
 C_ASSERT( FIELD_OFFSET(struct send_socket_request, status) == 56 );
 C_ASSERT( FIELD_OFFSET(struct send_socket_request, total) == 60 );
@@ -1966,7 +1957,8 @@ C_ASSERT( FIELD_OFFSET(struct get_token_sid_reply, sid_len) == 8 );
 C_ASSERT( sizeof(struct get_token_sid_reply) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_token_groups_request, handle) == 12 );
 C_ASSERT( sizeof(struct get_token_groups_request) == 16 );
-C_ASSERT( FIELD_OFFSET(struct get_token_groups_reply, user_len) == 8 );
+C_ASSERT( FIELD_OFFSET(struct get_token_groups_reply, attr_len) == 8 );
+C_ASSERT( FIELD_OFFSET(struct get_token_groups_reply, sid_len) == 12 );
 C_ASSERT( sizeof(struct get_token_groups_reply) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_token_default_dacl_request, handle) == 12 );
 C_ASSERT( sizeof(struct get_token_default_dacl_request) == 16 );

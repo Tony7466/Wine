@@ -364,11 +364,34 @@ struct filesystem_event
     char        name[1];
 };
 
-typedef struct
+struct luid
 {
     unsigned int low_part;
     int          high_part;
-} luid_t;
+};
+
+struct luid_attr
+{
+    struct luid  luid;
+    unsigned int attrs;
+};
+
+struct acl
+{
+    unsigned char  revision;
+    unsigned char  pad1;
+    unsigned short size;
+    unsigned short count;
+    unsigned short pad2;
+};
+
+struct sid
+{
+    unsigned char revision;
+    unsigned char sub_count;
+    unsigned char id_auth[6];
+    unsigned int  sub_auth[15];
+};
 
 typedef struct
 {
@@ -413,13 +436,6 @@ struct object_type_info
     unsigned int  handle_max;
     unsigned int  valid_access;
     generic_map_t mapping;
-
-};
-
-struct token_groups
-{
-    unsigned int count;
-
 
 };
 
@@ -870,7 +886,7 @@ struct new_thread_request
     struct request_header __header;
     obj_handle_t process;
     unsigned int access;
-    int          suspend;
+    unsigned int flags;
     int          request_fd;
     /* VARARG(objattr,object_attributes); */
     char __pad_28[4];
@@ -1756,36 +1772,6 @@ struct recv_socket_reply
     struct reply_header __header;
     obj_handle_t wait;
     unsigned int options;
-};
-
-
-struct poll_socket_input
-{
-    obj_handle_t socket;
-    int flags;
-};
-
-struct poll_socket_output
-{
-    int flags;
-    unsigned int status;
-};
-
-
-struct poll_socket_request
-{
-    struct request_header __header;
-    int          exclusive;
-    async_data_t async;
-    timeout_t    timeout;
-    /* VARARG(sockets,poll_socket_input); */
-};
-struct poll_socket_reply
-{
-    struct reply_header __header;
-    obj_handle_t wait;
-    unsigned int options;
-    /* VARARG(sockets,poll_socket_output); */
 };
 
 
@@ -4361,13 +4347,13 @@ struct adjust_token_privileges_request
     obj_handle_t  handle;
     int           disable_all;
     int           get_modified_state;
-    /* VARARG(privileges,LUID_AND_ATTRIBUTES); */
+    /* VARARG(privileges,luid_attr); */
 };
 struct adjust_token_privileges_reply
 {
     struct reply_header __header;
     unsigned int  len;
-    /* VARARG(privileges,LUID_AND_ATTRIBUTES); */
+    /* VARARG(privileges,luid_attr); */
     char __pad_12[4];
 };
 
@@ -4381,7 +4367,7 @@ struct get_token_privileges_reply
 {
     struct reply_header __header;
     unsigned int  len;
-    /* VARARG(privileges,LUID_AND_ATTRIBUTES); */
+    /* VARARG(privileges,luid_attr); */
     char __pad_12[4];
 };
 
@@ -4391,14 +4377,14 @@ struct check_token_privileges_request
     struct request_header __header;
     obj_handle_t  handle;
     int           all_required;
-    /* VARARG(privileges,LUID_AND_ATTRIBUTES); */
+    /* VARARG(privileges,luid_attr); */
     char __pad_20[4];
 };
 struct check_token_privileges_reply
 {
     struct reply_header __header;
     int           has_privileges;
-    /* VARARG(privileges,LUID_AND_ATTRIBUTES); */
+    /* VARARG(privileges,luid_attr); */
     char __pad_12[4];
 };
 
@@ -4425,8 +4411,8 @@ struct filter_token_request
     obj_handle_t  handle;
     unsigned int  flags;
     data_size_t   privileges_size;
-    /* VARARG(privileges,LUID_AND_ATTRIBUTES,privileges_size); */
-    /* VARARG(disable_sids,SID); */
+    /* VARARG(privileges,luid_attr,privileges_size); */
+    /* VARARG(disable_sids,sid); */
 };
 struct filter_token_reply
 {
@@ -4450,7 +4436,7 @@ struct access_check_reply
     unsigned int    access_granted;
     unsigned int    access_status;
     unsigned int    privileges_len;
-    /* VARARG(privileges,LUID_AND_ATTRIBUTES); */
+    /* VARARG(privileges,luid_attr); */
     char __pad_20[4];
 };
 
@@ -4465,7 +4451,7 @@ struct get_token_sid_reply
 {
     struct reply_header __header;
     data_size_t     sid_len;
-    /* VARARG(sid,SID); */
+    /* VARARG(sid,sid); */
     char __pad_12[4];
 };
 
@@ -4477,9 +4463,10 @@ struct get_token_groups_request
 struct get_token_groups_reply
 {
     struct reply_header __header;
-    data_size_t     user_len;
-    /* VARARG(user,token_groups); */
-    char __pad_12[4];
+    data_size_t     attr_len;
+    data_size_t     sid_len;
+    /* VARARG(attrs,uints,attr_len); */
+    /* VARARG(sids,sids); */
 };
 
 struct get_token_default_dacl_request
@@ -4491,7 +4478,7 @@ struct get_token_default_dacl_reply
 {
     struct reply_header __header;
     data_size_t     acl_len;
-    /* VARARG(acl,ACL); */
+    /* VARARG(acl,acl); */
     char __pad_12[4];
 };
 
@@ -4499,7 +4486,7 @@ struct set_token_default_dacl_request
 {
     struct request_header __header;
     obj_handle_t    handle;
-    /* VARARG(acl,ACL); */
+    /* VARARG(acl,acl); */
 };
 struct set_token_default_dacl_reply
 {
@@ -4762,7 +4749,7 @@ struct allocate_locally_unique_id_request
 struct allocate_locally_unique_id_reply
 {
     struct reply_header __header;
-    luid_t         luid;
+    struct luid    luid;
 };
 
 
@@ -4934,8 +4921,8 @@ struct get_token_info_request
 struct get_token_info_reply
 {
     struct reply_header __header;
-    luid_t         token_id;
-    luid_t         modified_id;
+    struct luid    token_id;
+    struct luid    modified_id;
     unsigned int   session_id;
     int            primary;
     int            impersonation_level;
@@ -5493,7 +5480,6 @@ enum request
     REQ_lock_file,
     REQ_unlock_file,
     REQ_recv_socket,
-    REQ_poll_socket,
     REQ_send_socket,
     REQ_get_next_console_request,
     REQ_read_directory_changes,
@@ -5775,7 +5761,6 @@ union generic_request
     struct lock_file_request lock_file_request;
     struct unlock_file_request unlock_file_request;
     struct recv_socket_request recv_socket_request;
-    struct poll_socket_request poll_socket_request;
     struct send_socket_request send_socket_request;
     struct get_next_console_request_request get_next_console_request_request;
     struct read_directory_changes_request read_directory_changes_request;
@@ -6055,7 +6040,6 @@ union generic_reply
     struct lock_file_reply lock_file_reply;
     struct unlock_file_reply unlock_file_reply;
     struct recv_socket_reply recv_socket_reply;
-    struct poll_socket_reply poll_socket_reply;
     struct send_socket_reply send_socket_reply;
     struct get_next_console_request_reply get_next_console_request_reply;
     struct read_directory_changes_reply read_directory_changes_reply;
@@ -6279,7 +6263,7 @@ union generic_reply
 
 /* ### protocol_version begin ### */
 
-#define SERVER_PROTOCOL_VERSION 737
+#define SERVER_PROTOCOL_VERSION 742
 
 /* ### protocol_version end ### */
 

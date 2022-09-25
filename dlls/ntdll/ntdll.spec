@@ -367,7 +367,7 @@
 # @ stub NtSetBootEntryOrder
 # @ stub NtSetBootOptions
 @ stdcall -syscall NtSetContextThread(long ptr)
-# @ stub NtSetDebugFilterState
+@ stdcall -syscall NtSetDebugFilterState(long long long)
 # @ stub NtSetDefaultHardErrorPort
 @ stdcall -syscall NtSetDefaultLocale(long long)
 @ stdcall -syscall NtSetDefaultUILanguage(long)
@@ -1389,7 +1389,7 @@
 # @ stub ZwSetBootEntryOrder
 # @ stub ZwSetBootOptions
 @ stdcall -private -syscall ZwSetContextThread(long ptr) NtSetContextThread
-# @ stub ZwSetDebugFilterState
+@ stdcall -private -syscall ZwSetDebugFilterState(long long long) NtSetDebugFilterState
 # @ stub ZwSetDefaultHardErrorPort
 @ stdcall -private -syscall ZwSetDefaultLocale(long long) NtSetDefaultLocale
 @ stdcall -private -syscall ZwSetDefaultUILanguage(long) NtSetDefaultUILanguage
@@ -1633,7 +1633,6 @@
 @ stdcall -syscall __wine_unix_call(int64 long ptr)
 @ stdcall -syscall __wine_unix_spawnvp(long ptr)
 @ cdecl __wine_set_unix_funcs(long ptr)
-@ cdecl __wine_init_unix_lib(long long ptr ptr)
 @ stdcall __wine_ctrl_routine(ptr)
 @ extern __wine_syscall_dispatcher
 @ extern -arch=i386 __wine_ldt_copy

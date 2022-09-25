@@ -48,12 +48,9 @@
 #ifdef HAVE_SYS_SYSCALL_H
 # include <sys/syscall.h>
 #endif
-#ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
-#endif
-#ifdef HAVE_SYS_TIME_H
-# include <sys/time.h>
-#endif
+#include <sys/time.h>
+#include <sys/ioctl.h>
 #ifdef HAVE_SYS_ATTR_H
 #include <sys/attr.h>
 #endif
@@ -83,9 +80,6 @@
 #undef list_move_tail
 #undef list_remove
 #endif
-#ifdef HAVE_SYS_IOCTL_H
-#include <sys/ioctl.h>
-#endif
 #ifdef HAVE_LINUX_IOCTL_H
 #include <linux/ioctl.h>
 #endif
@@ -105,9 +99,7 @@
 #include <sys/statfs.h>
 #endif
 #include <time.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
+#include <unistd.h>
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
@@ -5720,6 +5712,7 @@ NTSTATUS WINAPI NtDeviceIoControlFile( HANDLE handle, HANDLE event, PIO_APC_ROUT
     case FILE_DEVICE_BEEP:
     case FILE_DEVICE_NETWORK:
         status = sock_ioctl( handle, event, apc, apc_context, io, code, in_buffer, in_size, out_buffer, out_size );
+        if (status != STATUS_NOT_SUPPORTED && status != STATUS_BAD_DEVICE_TYPE) return status;
         break;
     case FILE_DEVICE_DISK:
     case FILE_DEVICE_CD_ROM:
@@ -5743,7 +5736,7 @@ NTSTATUS WINAPI NtDeviceIoControlFile( HANDLE handle, HANDLE event, PIO_APC_ROUT
         return server_ioctl_file( handle, event, apc, apc_context, io, code,
                                   in_buffer, in_size, out_buffer, out_size );
 
-    if (status != STATUS_PENDING) io->u.Status = status;
+    if (status != STATUS_PENDING && !NT_ERROR(status)) io->u.Status = status;
     return status;
 }
 
@@ -6230,7 +6223,7 @@ static inline BOOL is_device_placeholder( int fd )
     return !memcmp( buffer, wine_placeholder, sizeof(wine_placeholder) - 1 );
 }
 
-static NTSTATUS get_device_info( int fd, FILE_FS_DEVICE_INFORMATION *info )
+NTSTATUS get_device_info( int fd, FILE_FS_DEVICE_INFORMATION *info )
 {
     struct stat st;
 

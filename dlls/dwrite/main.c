@@ -30,11 +30,13 @@
 #include "initguid.h"
 
 #include "dwrite_private.h"
+#include "unixlib.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(dwrite);
 
 HMODULE dwrite_module = 0;
+unixlib_handle_t unixlib_handle = 0;
 static IDWriteFactory7 *shared_factory;
 static void release_shared_factory(IDWriteFactory7 *factory);
 
@@ -45,13 +47,15 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD reason, LPVOID reserved)
     case DLL_PROCESS_ATTACH:
         dwrite_module = hinstDLL;
         DisableThreadLibraryCalls( hinstDLL );
-        init_font_backend();
+        if (!NtQueryVirtualMemory(GetCurrentProcess(), hinstDLL, MemoryWineUnixFuncs,
+                &unixlib_handle, sizeof(unixlib_handle), NULL))
+            UNIX_CALL(process_attach, NULL);
         init_local_fontfile_loader();
         break;
     case DLL_PROCESS_DETACH:
         if (reserved) break;
         release_shared_factory(shared_factory);
-        release_font_backend();
+        if (unixlib_handle) UNIX_CALL(process_detach, NULL);
     }
     return TRUE;
 }
@@ -1394,13 +1398,17 @@ static HRESULT WINAPI dwritefactory2_CreateFontFallbackBuilder(IDWriteFactory7 *
 }
 
 static HRESULT WINAPI dwritefactory2_TranslateColorGlyphRun(IDWriteFactory7 *iface, FLOAT originX, FLOAT originY,
-    const DWRITE_GLYPH_RUN *run, const DWRITE_GLYPH_RUN_DESCRIPTION *rundescr, DWRITE_MEASURING_MODE mode,
-    const DWRITE_MATRIX *transform, UINT32 palette, IDWriteColorGlyphRunEnumerator **colorlayers)
+    const DWRITE_GLYPH_RUN *run, const DWRITE_GLYPH_RUN_DESCRIPTION *run_desc, DWRITE_MEASURING_MODE measuring_mode,
+    const DWRITE_MATRIX *transform, UINT32 palette, IDWriteColorGlyphRunEnumerator **layers)
 {
-    TRACE("%p, %.8e, %.8e, %p, %p, %d, %p, %u, %p.\n", iface, originX, originY, run, rundescr, mode,
-        transform, palette, colorlayers);
+    D2D1_POINT_2F origin = { originX, originY };
 
-    return create_colorglyphenum(originX, originY, run, rundescr, mode, transform, palette, colorlayers);
+    TRACE("%p, %.8e, %.8e, %p, %p, %d, %p, %u, %p.\n", iface, originX, originY, run, run_desc, measuring_mode,
+            transform, palette, layers);
+
+    return create_colorglyphenum(origin, run, run_desc, DWRITE_GLYPH_IMAGE_FORMATS_TRUETYPE
+            | DWRITE_GLYPH_IMAGE_FORMATS_CFF | DWRITE_GLYPH_IMAGE_FORMATS_COLR,
+            measuring_mode, transform, palette, (IDWriteColorGlyphRunEnumerator1 **)layers);
 }
 
 static HRESULT WINAPI dwritefactory2_CreateCustomRenderingParams(IDWriteFactory7 *iface, FLOAT gamma, FLOAT contrast,
@@ -1693,15 +1701,15 @@ static HRESULT WINAPI dwritefactory3_GetFontDownloadQueue(IDWriteFactory7 *iface
     return E_NOTIMPL;
 }
 
-static HRESULT WINAPI dwritefactory4_TranslateColorGlyphRun(IDWriteFactory7 *iface, D2D1_POINT_2F baseline_origin,
+static HRESULT WINAPI dwritefactory4_TranslateColorGlyphRun(IDWriteFactory7 *iface, D2D1_POINT_2F origin,
         DWRITE_GLYPH_RUN const *run, DWRITE_GLYPH_RUN_DESCRIPTION const *run_desc,
         DWRITE_GLYPH_IMAGE_FORMATS desired_formats, DWRITE_MEASURING_MODE measuring_mode, DWRITE_MATRIX const *transform,
         UINT32 palette, IDWriteColorGlyphRunEnumerator1 **layers)
 {
-    FIXME("%p, %p, %p, %u, %d, %p, %u, %p: stub\n", iface, run, run_desc, desired_formats, measuring_mode,
-        transform, palette, layers);
+    TRACE("%p, %.8e, %.8e, %p, %p, %u, %d, %p, %u, %p.\n", iface, origin.x, origin.y, run, run_desc, desired_formats,
+            measuring_mode, transform, palette, layers);
 
-    return E_NOTIMPL;
+    return create_colorglyphenum(origin, run, run_desc, desired_formats, measuring_mode, transform, palette, layers);
 }
 
 HRESULT compute_glyph_origins(DWRITE_GLYPH_RUN const *run, DWRITE_MEASURING_MODE measuring_mode,

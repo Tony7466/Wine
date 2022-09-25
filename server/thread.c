@@ -33,6 +33,8 @@
 #include <time.h>
 #include <poll.h>
 #ifdef HAVE_SCHED_H
+/* FreeBSD needs this for cpu_set_t instead of its cpuset_t */
+#define _WITH_CPU_SET_T
 #include <sched.h>
 #endif
 
@@ -1355,7 +1357,8 @@ DECL_HANDLER(new_thread)
     if ((thread = create_thread( request_fd, process, sd )))
     {
         thread->system_regs = current->system_regs;
-        if (req->suspend) thread->suspend++;
+        if (req->flags & THREAD_CREATE_FLAGS_CREATE_SUSPENDED) thread->suspend++;
+        thread->dbg_hidden = !!(req->flags & THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER);
         reply->tid = get_thread_id( thread );
         if ((reply->handle = alloc_handle_no_access_check( current->process, thread,
                                                            req->access, objattr->attributes )))

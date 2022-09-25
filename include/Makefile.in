@@ -526,6 +526,7 @@ SOURCES = \
 	mtxdm.h \
 	mulres.idl \
 	multimon.h \
+	namespaceapi.h \
 	natupnp.idl \
 	nb30.h \
 	ncrypt.h \
@@ -592,6 +593,7 @@ SOURCES = \
 	poppack.h \
 	powrprof.h \
 	prntvpt.h \
+	processthreadsapi.h \
 	profinfo.h \
 	proofofpossessioncookieinfo.idl \
 	propidl.idl \
@@ -715,6 +717,8 @@ SOURCES = \
 	traffic.h \
 	transact.idl \
 	trnjoi.idl \
+	trnlcl.idl \
+	trnobj.idl \
 	twain.h \
 	txcoord.idl \
 	txdtc.idl \
@@ -877,4 +881,6 @@ SOURCES = \
 	xmldso.idl \
 	xmldsodid.h \
 	xmllite.idl \
+	xpsobjectmodel.idl \
+	xpsobjectmodel_1.idl \
 	zmouse.h

@@ -1,7 +1,7 @@
 /*
- * Theming - Dialogs
+ * Dialog theming support
  *
- * Copyright (c) 2005 by Frank Richter
+ * Copyright 2022 Zhiyi Zhang for CodeWeavers
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -16,12 +16,9 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
- *
  */
 
 #include <stdarg.h>
-#include <string.h>
-#include <stdlib.h>
 
 #include "windef.h"
 #include "winbase.h"
@@ -30,96 +27,150 @@
 #include "uxtheme.h"
 #include "uxthemedll.h"
 #include "vssym32.h"
-#include "wine/debug.h"
 
-LRESULT WINAPI UXTHEME_DefDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, BOOL unicode)
+extern ATOM atDialogThemeEnabled;
+static const WCHAR wine_dialog_brush[] = L"wine_dialog_brush";
+
+static HBRUSH get_dialog_background_brush(HWND hwnd, BOOL create)
 {
-    HTHEME theme = GetWindowTheme ( hWnd );
-    static const WCHAR themeClass[] = L"Window";
-    BOOL themingActive = IsThemeDialogTextureEnabled (hWnd);
-    BOOL doTheming = themingActive && (theme != NULL);
-    HRESULT hr = E_FAIL;
-    LRESULT result;
+    HBITMAP bitmap, old_bitmap;
+    HDC hdc, hdc_screen;
+    HBRUSH brush;
+    HTHEME theme;
+    DWORD flag;
+    HRESULT hr;
+    RECT rect;
+    SIZE size;
+
+    if (!IsThemeActive())
+        return NULL;
+
+    flag = HandleToUlong(GetPropW(hwnd, (LPCWSTR)MAKEINTATOM(atDialogThemeEnabled)));
+    if (flag != ETDT_ENABLETAB && flag != ETDT_ENABLEAEROWIZARDTAB)
+        return NULL;
+
+    brush = GetPropW(hwnd, wine_dialog_brush);
+    if (brush)
+        return brush;
+
+    if (!create)
+        return NULL;
+
+    theme = OpenThemeData(NULL, L"Tab");
+    if (!theme)
+        return NULL;
+
+    hr = GetThemePartSize(theme, NULL, TABP_BODY, 0, NULL, TS_TRUE, &size);
+    if (FAILED(hr))
+    {
+        size.cx = 10;
+        size.cy = 600;
+    }
+
+    hdc_screen = GetDC(NULL);
+    hdc = CreateCompatibleDC(hdc_screen);
+    bitmap = CreateCompatibleBitmap(hdc_screen, size.cx, size.cy);
+    old_bitmap = SelectObject(hdc, bitmap);
+
+    SetRect(&rect, 0, 0, size.cx, size.cy);
+    /* FIXME: XP draws the tab body bitmap directly without transparency even if there is */
+    FillRect(hdc, &rect, GetSysColorBrush(COLOR_3DFACE));
+    hr = DrawThemeBackground(theme, hdc, TABP_BODY, 0, &rect, NULL);
+    if (SUCCEEDED(hr))
+    {
+        brush = CreatePatternBrush(bitmap);
+        SetPropW(hwnd, wine_dialog_brush, brush);
+    }
+
+    SelectObject(hdc, old_bitmap);
+    DeleteDC(hdc);
+    ReleaseDC(NULL, hdc_screen);
+    CloseThemeData(theme);
+    return brush;
+}
+
+static void destroy_dialog_brush(HWND hwnd)
+{
+    LOGBRUSH logbrush;
+    HBRUSH brush;
+
+    brush = GetPropW(hwnd, wine_dialog_brush);
+    if (brush)
+    {
+        RemovePropW(hwnd, wine_dialog_brush);
+        if (GetObjectW(brush, sizeof(logbrush), &logbrush) == sizeof(logbrush))
+            DeleteObject((HBITMAP)logbrush.lbHatch);
+        DeleteObject(brush);
+    }
+}
+
+LRESULT WINAPI UXTHEME_DefDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, BOOL unicode)
+{
+    POINT org, old_org;
+    WNDPROC dlgproc;
+    HBRUSH brush;
+    LRESULT lr;
+    RECT rect;
+    HDC hdc;
 
     switch (msg)
     {
-    case WM_CREATE:
-        result = user_api.pDefDlgProc(hWnd, msg, wParam, lParam, unicode);
-	theme = OpenThemeData( hWnd, themeClass );
-	return result;
-    
-    case WM_DESTROY:
-        CloseThemeData ( theme );
-        SetWindowTheme( hWnd, NULL, NULL );
-        OpenThemeData( hWnd, NULL );
-        return user_api.pDefDlgProc(hWnd, msg, wParam, lParam, unicode);
-
-    case WM_THEMECHANGED:
-        CloseThemeData ( theme );
-	OpenThemeData( hWnd, themeClass );
-	InvalidateRect( hWnd, NULL, TRUE );
-	return 0;
-
-    case WM_ERASEBKGND:
-        if (!doTheming) return user_api.pDefDlgProc(hWnd, msg, wParam, lParam, unicode);
-        {
-            RECT rc;
-            WNDPROC dlgp = (WNDPROC)GetWindowLongPtrW (hWnd, DWLP_DLGPROC);
-            if (!CallWindowProcW(dlgp, hWnd, msg, wParam, lParam))
-            {
-                /* Draw background*/
-                GetClientRect (hWnd, &rc);
-                if (IsThemePartDefined (theme, WP_DIALOG, 0))
-                    /* Although there is a theme for the WINDOW class/DIALOG part, 
-                     * but I[res] haven't seen Windows using it yet... Even when
-                     * dialog theming is activated, the good ol' BTNFACE 
-                     * background seems to be used. */
-#if 0
-                    DrawThemeBackground (theme, (HDC)wParam, WP_DIALOG, 0, &rc, 
-                        NULL);
-#endif
-                    return user_api.pDefDlgProc(hWnd, msg, wParam, lParam, unicode);
-                /* We might have gotten a TAB theme class, so check if we can draw as a tab page */
-                else if (IsThemePartDefined(theme, TABP_BODY, 0))
-                    hr = DrawThemeBackground(theme, (HDC)wParam, TABP_BODY, 0, &rc, NULL);
-
-                if (FAILED(hr))
-                    return user_api.pDefDlgProc(hWnd, msg, wParam, lParam, unicode);
-            }
-            return 1;
-        }
-
-    case WM_CTLCOLORSTATIC:
-        if (!doTheming) return user_api.pDefDlgProc(hWnd, msg, wParam, lParam, unicode);
-        {
-            WNDPROC dlgp = (WNDPROC)GetWindowLongPtrW (hWnd, DWLP_DLGPROC);
-            LRESULT result = CallWindowProcW(dlgp, hWnd, msg, wParam, lParam);
-            if (!result)
-            {
-                /* Override defaults with more suitable values when themed */
-                HDC controlDC = (HDC)wParam;
-                HWND controlWnd = (HWND)lParam;
-                WCHAR controlClass[32];
-
-                GetClassNameW (controlWnd, controlClass, ARRAY_SIZE(controlClass));
-                if (lstrcmpiW (controlClass, WC_STATICW) == 0)
-                {
-                    SetBkColor(controlDC, GetSysColor(COLOR_BTNFACE));
-                    SetBkMode (controlDC, TRANSPARENT);
-
-                    /* Return NULL brush since we painted the BG already */
-                    return (LRESULT)GetStockObject (NULL_BRUSH);
-                }
-                else
-                    return user_api.pDefDlgProc(hWnd, msg, wParam, lParam, unicode);
-
-            }
-            return result;
-        }
-
-    default: 
-	/* Call old proc */
-        return user_api.pDefDlgProc(hWnd, msg, wParam, lParam, unicode);
+    case WM_NCDESTROY:
+    {
+        destroy_dialog_brush(hwnd);
+        break;
     }
-    return 0;
+    case WM_THEMECHANGED:
+    {
+        destroy_dialog_brush(hwnd);
+        InvalidateRect(hwnd, NULL, TRUE);
+        break;
+    }
+    case WM_ERASEBKGND:
+    {
+        dlgproc = (WNDPROC)GetWindowLongPtrW(hwnd, DWLP_DLGPROC);
+        lr = CallWindowProcW(dlgproc, hwnd, msg, wp, lp);
+        if (lr)
+            return lr;
+
+        brush = get_dialog_background_brush(hwnd, TRUE);
+        if (!brush)
+            break;
+
+        /* Using FillRect() to draw background could introduce a tiling effect if the destination
+         * rectangle is larger than the pattern brush size, which is usually 10x600. This bug is
+         * visible on property sheet pages if system DPI is set to 192. However, the same bug also
+         * exists on XP and explains why vista+ don't use gradient tab body background anymore */
+        hdc = (HDC)wp;
+        GetViewportOrgEx(hdc, &org);
+        SetBrushOrgEx(hdc, org.x, org.y, &old_org);
+        GetClientRect(hwnd, &rect);
+        FillRect(hdc, &rect, brush);
+        SetBrushOrgEx(hdc, old_org.x, old_org.y, NULL);
+        return TRUE;
+    }
+    case WM_CTLCOLORSTATIC:
+    {
+        dlgproc = (WNDPROC)GetWindowLongPtrW(hwnd, DWLP_DLGPROC);
+        lr = CallWindowProcW(dlgproc, hwnd, msg, wp, lp);
+        if (lr)
+            return lr;
+
+        brush = get_dialog_background_brush(hwnd, FALSE);
+        if (!brush)
+            break;
+
+        hdc = (HDC)wp;
+        SetBkColor(hdc, GetSysColor(COLOR_BTNFACE));
+        SetBkMode(hdc, TRANSPARENT);
+
+        org.x = 0;
+        org.y = 0;
+        MapWindowPoints((HWND)lp, hwnd, &org, 1);
+        SetBrushOrgEx(hdc, -org.x, -org.y, NULL);
+        return (LRESULT)brush;
+    }
+    }
+
+    return user_api.pDefDlgProc(hwnd, msg, wp, lp, unicode);
 }

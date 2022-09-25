@@ -33,13 +33,9 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <sys/types.h>
-#ifdef HAVE_SYS_SOCKET_H
-# include <sys/socket.h>
-#endif
+#include <sys/socket.h>
 #include <sys/stat.h>
-#ifdef HAVE_SYS_MMAN_H
-# include <sys/mman.h>
-#endif
+#include <sys/mman.h>
 #ifdef HAVE_SYS_SYSINFO_H
 # include <sys/sysinfo.h>
 #endif
@@ -102,9 +98,7 @@ struct builtin_module
     unsigned int refcount;
     void        *handle;
     void        *module;
-    char        *unix_name;
     void        *unix_handle;
-    void        *unix_entry;
 };
 
 static struct list builtin_modules = LIST_INIT( builtin_modules );
@@ -589,9 +583,7 @@ static void add_builtin_module( void *module, void *handle )
     builtin->handle      = handle;
     builtin->module      = module;
     builtin->refcount    = 1;
-    builtin->unix_name   = NULL;
     builtin->unix_handle = NULL;
-    builtin->unix_entry  = NULL;
     list_add_tail( &builtin_modules, &builtin->entry );
 }
 
@@ -611,7 +603,6 @@ void release_builtin_module( void *module )
             list_remove( &builtin->entry );
             if (builtin->handle) dlclose( builtin->handle );
             if (builtin->unix_handle) dlclose( builtin->unix_handle );
-            free( builtin->unix_name );
             free( builtin );
         }
         break;
@@ -655,8 +646,11 @@ static NTSTATUS get_builtin_unix_funcs( void *module, BOOL wow, void **funcs )
     LIST_FOR_EACH_ENTRY( builtin, &builtin_modules, struct builtin_module, entry )
     {
         if (builtin->module != module) continue;
-        *funcs = dlsym( builtin->unix_handle, ptr_name );
-        status = *funcs ? STATUS_SUCCESS : STATUS_ENTRYPOINT_NOT_FOUND;
+        if (builtin->unix_handle)
+        {
+            *funcs = dlsym( builtin->unix_handle, ptr_name );
+            status = *funcs ? STATUS_SUCCESS : STATUS_ENTRYPOINT_NOT_FOUND;
+        }
         break;
     }
     server_leave_uninterrupted_section( &virtual_mutex, &sigset );
@@ -665,45 +659,22 @@ static NTSTATUS get_builtin_unix_funcs( void *module, BOOL wow, void **funcs )
 
 
 /***********************************************************************
- *           get_builtin_unix_info
+ *           load_builtin_unixlib
  */
-NTSTATUS get_builtin_unix_info( void *module, const char **name, void **handle, void **entry )
+NTSTATUS load_builtin_unixlib( void *module, const char *name )
 {
+    void *handle;
     sigset_t sigset;
     NTSTATUS status = STATUS_DLL_NOT_FOUND;
     struct builtin_module *builtin;
 
-    server_enter_uninterrupted_section( &virtual_mutex, &sigset );
-    LIST_FOR_EACH_ENTRY( builtin, &builtin_modules, struct builtin_module, entry )
-    {
-        if (builtin->module != module) continue;
-        *name   = builtin->unix_name;
-        *handle = builtin->unix_handle;
-        *entry  = builtin->unix_entry;
-        status = STATUS_SUCCESS;
-        break;
-    }
-    server_leave_uninterrupted_section( &virtual_mutex, &sigset );
-    return status;
-}
-
-
-/***********************************************************************
- *           set_builtin_unix_handle
- */
-NTSTATUS set_builtin_unix_handle( void *module, const char *name, void *handle )
-{
-    sigset_t sigset;
-    NTSTATUS status = STATUS_DLL_NOT_FOUND;
-    struct builtin_module *builtin;
-
+    if (!(handle = dlopen( name, RTLD_NOW ))) return status;
     server_enter_uninterrupted_section( &virtual_mutex, &sigset );
     LIST_FOR_EACH_ENTRY( builtin, &builtin_modules, struct builtin_module, entry )
     {
         if (builtin->module != module) continue;
         if (!builtin->unix_handle)
         {
-            builtin->unix_name = strdup( name );
             builtin->unix_handle = handle;
             status = STATUS_SUCCESS;
         }
@@ -711,31 +682,7 @@ NTSTATUS set_builtin_unix_handle( void *module, const char *name, void *handle )
         break;
     }
     server_leave_uninterrupted_section( &virtual_mutex, &sigset );
-    return status;
-}
-
-
-/***********************************************************************
- *           set_builtin_unix_entry
- */
-NTSTATUS set_builtin_unix_entry( void *module, void *entry )
-{
-    sigset_t sigset;
-    NTSTATUS status = STATUS_DLL_NOT_FOUND;
-    struct builtin_module *builtin;
-
-    server_enter_uninterrupted_section( &virtual_mutex, &sigset );
-    LIST_FOR_EACH_ENTRY( builtin, &builtin_modules, struct builtin_module, entry )
-    {
-        if (builtin->module != module) continue;
-        if (builtin->unix_handle)
-        {
-            builtin->unix_entry = entry;
-            status = STATUS_SUCCESS;
-        }
-        break;
-    }
-    server_leave_uninterrupted_section( &virtual_mutex, &sigset );
+    if (status) dlclose( handle );
     return status;
 }
 
@@ -844,8 +791,8 @@ static void free_ranges_remove_view( struct file_view *view )
     /* It's possible to use AT_ROUND_TO_PAGE on 32bit with NtMapViewOfSection to force 4kB alignment,
      * and this breaks our assumptions. Look at the views around to check if the range is still in use. */
 #ifndef _WIN64
-    struct file_view *prev_view = WINE_RB_ENTRY_VALUE( wine_rb_prev( &view->entry ), struct file_view, entry );
-    struct file_view *next_view = WINE_RB_ENTRY_VALUE( wine_rb_next( &view->entry ), struct file_view, entry );
+    struct file_view *prev_view = RB_ENTRY_VALUE( rb_prev( &view->entry ), struct file_view, entry );
+    struct file_view *next_view = RB_ENTRY_VALUE( rb_next( &view->entry ), struct file_view, entry );
     void *prev_view_base = prev_view ? ROUND_ADDR( prev_view->base, granularity_mask ) : NULL;
     void *prev_view_end = prev_view ? ROUND_ADDR( (char *)prev_view->base + prev_view->size + granularity_mask, granularity_mask ) : NULL;
     void *next_view_base = next_view ? ROUND_ADDR( next_view->base, granularity_mask ) : NULL;
@@ -1346,7 +1293,7 @@ static void *map_free_area( void *base, void *end, size_t size, int top_down, in
             start = ROUND_ADDR( (char *)view->base - size, granularity_mask );
             /* stop if remaining space is not large enough */
             if (!start || start >= end || start < base) return NULL;
-            first = wine_rb_prev( first );
+            first = rb_prev( first );
         }
     }
     else
@@ -1362,7 +1309,7 @@ static void *map_free_area( void *base, void *end, size_t size, int top_down, in
             start = ROUND_ADDR( (char *)view->base + view->size + granularity_mask, granularity_mask );
             /* stop if remaining space is not large enough */
             if (!start || start >= end || (char *)end - (char *)start < size) return NULL;
-            first = wine_rb_next( first );
+            first = rb_next( first );
         }
     }
 
@@ -2408,11 +2355,6 @@ static NTSTATUS map_image_into_view( struct file_view *view, const WCHAR *filena
         if (sec->Characteristics & IMAGE_SCN_MEM_READ)    vprot |= VPROT_READ;
         if (sec->Characteristics & IMAGE_SCN_MEM_WRITE)   vprot |= VPROT_WRITECOPY;
         if (sec->Characteristics & IMAGE_SCN_MEM_EXECUTE) vprot |= VPROT_EXEC;
-
-        /* Dumb game crack lets the AOEP point into a data section. Adjust. */
-        if ((nt->OptionalHeader.AddressOfEntryPoint >= sec->VirtualAddress) &&
-            (nt->OptionalHeader.AddressOfEntryPoint < sec->VirtualAddress + size))
-            vprot |= VPROT_EXEC;
 
         if (!set_vprot( view, ptr + sec->VirtualAddress, size, vprot ) && (vprot & VPROT_EXEC))
             ERR( "failed to set %08x protection on %s section %.8s, noexec filesystem?\n",

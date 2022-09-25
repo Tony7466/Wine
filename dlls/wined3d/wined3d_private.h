@@ -447,6 +447,16 @@ static inline unsigned int wined3d_popcount(unsigned int x)
 #endif
 }
 
+static inline int wined3d_uint32_compare(uint32_t x, uint32_t y)
+{
+    return (x > y) - (x < y);
+}
+
+static inline int wined3d_uint64_compare(uint64_t x, uint64_t y)
+{
+    return (x > y) - (x < y);
+}
+
 #define ORM_BACKBUFFER  0
 #define ORM_FBO         1
 
@@ -3920,8 +3930,6 @@ BOOL device_context_add(struct wined3d_device *device, struct wined3d_context *c
 void device_context_remove(struct wined3d_device *device, struct wined3d_context *context) DECLSPEC_HIDDEN;
 void wined3d_device_create_default_samplers(struct wined3d_device *device,
         struct wined3d_context *context) DECLSPEC_HIDDEN;
-void wined3d_device_create_primary_opengl_context_cs(void *object) DECLSPEC_HIDDEN;
-void wined3d_device_delete_opengl_contexts_cs(void *object) DECLSPEC_HIDDEN;
 void wined3d_device_destroy_default_samplers(struct wined3d_device *device) DECLSPEC_HIDDEN;
 HRESULT wined3d_device_init(struct wined3d_device *device, struct wined3d *wined3d,
         unsigned int adapter_idx, enum wined3d_device_type device_type, HWND focus_window, unsigned int flags,
@@ -3963,6 +3971,9 @@ static inline struct wined3d_device_gl *wined3d_device_gl(struct wined3d_device 
 {
     return CONTAINING_RECORD(device, struct wined3d_device_gl, d);
 }
+
+void wined3d_device_gl_create_primary_opengl_context_cs(void *object) DECLSPEC_HIDDEN;
+void wined3d_device_gl_delete_opengl_contexts_cs(void *object) DECLSPEC_HIDDEN;
 
 struct wined3d_null_resources_vk
 {
@@ -4155,6 +4166,26 @@ const char *wined3d_debug_view_desc(const struct wined3d_view_desc *d,
         const struct wined3d_resource *resource) DECLSPEC_HIDDEN;
 const char *wined3d_debug_vkresult(VkResult vr) DECLSPEC_HIDDEN;
 
+static inline ULONG wined3d_atomic_decrement_mutex_lock(volatile LONG *refcount)
+{
+    ULONG count, old_count = *refcount;
+    do
+    {
+        if ((count = old_count) == 1)
+        {
+            wined3d_mutex_lock();
+            count = InterlockedDecrement(refcount);
+            if (count) wined3d_mutex_unlock();
+            return count;
+        }
+
+        old_count = InterlockedCompareExchange(refcount, count - 1, count);
+    }
+    while (old_count != count);
+
+    return count - 1;
+}
+
 struct wined3d_client_resource
 {
     /* The resource's persistently mapped address, which we may use to perform
@@ -4285,6 +4316,7 @@ void wined3d_resource_update_draw_binding(struct wined3d_resource *resource) DEC
 
 #define WINED3D_LOCATION_DISCARDED      0x00000001
 #define WINED3D_LOCATION_SYSMEM         0x00000002
+#define WINED3D_LOCATION_CLEARED        0x00000004
 #define WINED3D_LOCATION_BUFFER         0x00000008
 #define WINED3D_LOCATION_TEXTURE_RGB    0x00000010
 #define WINED3D_LOCATION_TEXTURE_SRGB   0x00000020
@@ -4848,14 +4880,6 @@ struct wined3d_device_context_ops
     void (*flush)(struct wined3d_device_context *context);
     void (*acquire_resource)(struct wined3d_device_context *context, struct wined3d_resource *resource);
     void (*acquire_command_list)(struct wined3d_device_context *context, struct wined3d_command_list *list);
-    void (*acquire_blend_state)(struct wined3d_device_context *context, struct wined3d_blend_state *blend_state);
-    void (*acquire_rasterizer_state)(struct wined3d_device_context *context,
-            struct wined3d_rasterizer_state *rasterizer_state);
-    void (*acquire_depth_stencil_state)(struct wined3d_device_context *context,
-            struct wined3d_depth_stencil_state *depth_stencil_state);
-    void (*acquire_shader)(struct wined3d_device_context *context, struct wined3d_shader *shader);
-    void (*acquire_samplers)(struct wined3d_device_context *context, struct wined3d_sampler * const *samplers,
-            unsigned int count);
 };
 
 struct wined3d_device_context
@@ -5736,8 +5760,8 @@ void find_ps_compile_args(const struct wined3d_state *state, const struct wined3
         BOOL position_transformed, struct ps_compile_args *args,
         const struct wined3d_context *context) DECLSPEC_HIDDEN;
 
-BOOL vshader_get_input(const struct wined3d_shader *shader,
-        BYTE usage_req, BYTE usage_idx_req, unsigned int *regnum) DECLSPEC_HIDDEN;
+bool vshader_get_input(const struct wined3d_shader *shader,
+        uint8_t usage_req, uint8_t usage_idx_req, unsigned int *regnum) DECLSPEC_HIDDEN;
 void find_vs_compile_args(const struct wined3d_state *state, const struct wined3d_shader *shader,
         struct vs_compile_args *args, const struct wined3d_context *context) DECLSPEC_HIDDEN;
 
@@ -5932,6 +5956,7 @@ extern enum wined3d_format_id pixelformat_for_depth(DWORD depth) DECLSPEC_HIDDEN
 #define WINED3DFMT_FLAG_BLIT                        0x02000000
 #define WINED3DFMT_FLAG_MAPPABLE                    0x04000000
 #define WINED3DFMT_FLAG_CAST_TO_BLOCK               0x08000000
+#define WINED3DFMT_FLAG_INDEX_BUFFER                0x10000000
 
 struct wined3d_rational
 {

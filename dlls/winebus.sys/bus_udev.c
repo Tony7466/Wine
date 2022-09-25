@@ -31,18 +31,14 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <dirent.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
+#include <unistd.h>
 #include <poll.h>
+#include <sys/ioctl.h>
 #ifdef HAVE_LIBUDEV_H
 # include <libudev.h>
 #endif
 #ifdef HAVE_LINUX_HIDRAW_H
 # include <linux/hidraw.h>
-#endif
-#ifdef HAVE_SYS_IOCTL_H
-# include <sys/ioctl.h>
 #endif
 #ifdef HAVE_SYS_INOTIFY_H
 # include <sys/inotify.h>
@@ -121,6 +117,7 @@ static inline struct base_device *impl_from_unix_device(struct unix_device *ifac
 }
 
 #define QUIRK_DS4_BT 0x1
+#define QUIRK_DUALSENSE_BT 0x2
 
 struct hidraw_device
 {
@@ -360,7 +357,58 @@ static void hidraw_device_read_report(struct unix_device *iface)
             buff[0] = 1;
         }
 
+        /* The behavior of DualSense is very similar to DS4 described above with a few exceptions.
+         *
+         * The report number #41 is used for the extended bluetooth input report. The report comes
+         * with only one extra byte in front and the format is not exactly the same as the one used
+         * for the report #1 so we need to shuffle a few bytes around.
+         *
+         * Basic #1 report:
+         *   X  Y  Z  RZ  Buttons[3]  TriggerLeft  TriggerRight
+         *
+         * Extended #41 report:
+         *   Prefix X  Y  Z  Rz  TriggerLeft  TriggerRight  Counter  Buttons[3] ...
+         */
+        if ((impl->quirks & QUIRK_DUALSENSE_BT) && report_buffer[0] == 0x31 && size >= 11)
+        {
+            BYTE trigger[2];
+            size = 10;
+            buff += 1;
+
+            buff[0] = 1; /* fake report #1 */
+
+            trigger[0] = buff[5]; /* TriggerLeft*/
+            trigger[1] = buff[6]; /* TriggerRight */
+
+            buff[5] = buff[8];    /* Buttons[0] */
+            buff[6] = buff[9];    /* Buttons[1] */
+            buff[7] = buff[10];   /* Buttons[2] */
+            buff[8] = trigger[0]; /* TriggerLeft */
+            buff[9] = trigger[1]; /* TirggerRight */
+        }
+
         bus_event_queue_input_report(&event_queue, iface, buff, size);
+    }
+}
+
+static void hidraw_disable_sony_quirks(struct unix_device *iface)
+{
+    struct hidraw_device *impl = hidraw_impl_from_unix_device(iface);
+
+    /* FIXME: we may want to validate CRC at the end of the outbound HID reports,
+     * as controllers do not switch modes if it is incorrect.
+     */
+
+    if ((impl->quirks & QUIRK_DS4_BT))
+    {
+        TRACE("Disabling report quirk for Bluetooth DualShock4 controller iface %p\n", iface);
+        impl->quirks &= ~QUIRK_DS4_BT;
+    }
+
+    if ((impl->quirks & QUIRK_DUALSENSE_BT))
+    {
+        TRACE("Disabling report quirk for Bluetooth DualSense controller iface %p\n", iface);
+        impl->quirks &= ~QUIRK_DUALSENSE_BT;
     }
 }
 
@@ -383,6 +431,7 @@ static void hidraw_device_set_output_report(struct unix_device *iface, HID_XFER_
 
     if (count > 0)
     {
+        hidraw_disable_sony_quirks(iface);
         io->Information = count;
         io->Status = STATUS_SUCCESS;
     }
@@ -415,6 +464,7 @@ static void hidraw_device_get_feature_report(struct unix_device *iface, HID_XFER
 
     if (count > 0)
     {
+        hidraw_disable_sony_quirks(iface);
         io->Information = count;
         io->Status = STATUS_SUCCESS;
     }
@@ -451,6 +501,7 @@ static void hidraw_device_set_feature_report(struct unix_device *iface, HID_XFER
 
     if (count > 0)
     {
+        hidraw_disable_sony_quirks(iface);
         io->Information = count;
         io->Status = STATUS_SUCCESS;
     }
@@ -949,7 +1000,7 @@ static NTSTATUS lnxev_device_physical_device_set_gain(struct unix_device *iface,
     {
         .type = EV_FF,
         .code = FF_GAIN,
-        .value = percent,
+        .value = 0xffff * percent / 100,
     };
 
     TRACE("iface %p, percent %#x.\n", iface, percent);
@@ -1045,19 +1096,14 @@ static NTSTATUS lnxev_device_physical_effect_update(struct unix_device *iface, B
     if (params->effect_type == PID_USAGE_UNDEFINED) return STATUS_SUCCESS;
     if ((status = set_effect_type_from_usage(&effect, params->effect_type))) return status;
 
-    effect.replay.length = params->duration;
+    effect.replay.length = (params->duration == 0xffff ? 0 : params->duration);
     effect.replay.delay = params->start_delay;
     effect.trigger.button = params->trigger_button;
     effect.trigger.interval = params->trigger_repeat_interval;
 
-    /* Linux FF only supports polar direction, and uses an inverted convention compared
-     * to SDL or dinput (see SDL src/haptic/linux/SDL_syshaptic.c), where the force pulls
-     * into the specified direction, instead of coming from it.
-     *
-     * The first direction we get from PID is in polar coordinate space, so we need to
-     * add 180° to make it match Linux coordinates. */
-    effect.direction = (params->direction[0] + 18000) % 36000;
-    effect.direction = effect.direction * 0x800 / 1125;
+    /* Linux FF only supports polar direction, and the first direction we get from PID
+     * is in polar coordinate space already. */
+    effect.direction = params->direction[0] * 0x800 / 1125;
 
     switch (params->effect_type)
     {
@@ -1210,6 +1256,9 @@ static void hidraw_set_quirks(struct hidraw_device *impl, DWORD bus_type, WORD v
 {
     if (bus_type == BUS_BLUETOOTH && is_dualshock4_gamepad(vid, pid))
         impl->quirks |= QUIRK_DS4_BT;
+
+    if (bus_type == BUS_BLUETOOTH && is_dualsense_gamepad(vid, pid))
+        impl->quirks |= QUIRK_DUALSENSE_BT;
 }
 
 static void udev_add_device(struct udev_device *dev, int fd)

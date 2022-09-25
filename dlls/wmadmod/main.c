@@ -1,7 +1,5 @@
 /*
- * WinMM joystick driver header
- *
- * Copyright 2015 Ken Thomases for CodeWeavers Inc.
+ * Copyright 2022 Rémi Bernon for CodeWeavers
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,17 +16,20 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-
 #include <stdarg.h>
 
 #include "windef.h"
 #include "winbase.h"
-#include "mmddk.h"
-#include "winuser.h"
 
+#include "wine/debug.h"
 
-LRESULT driver_open(LPSTR str, DWORD index) DECLSPEC_HIDDEN;
-LRESULT driver_close(DWORD_PTR device_id) DECLSPEC_HIDDEN;
-LRESULT driver_joyGetDevCaps(DWORD_PTR device_id, JOYCAPSW* caps, DWORD size) DECLSPEC_HIDDEN;
-LRESULT driver_joyGetPosEx(DWORD_PTR device_id, JOYINFOEX* info) DECLSPEC_HIDDEN;
-LRESULT driver_joyGetPos(DWORD_PTR device_id, JOYINFO* info) DECLSPEC_HIDDEN;
+WINE_DEFAULT_DEBUG_CHANNEL(wmadmod);
+
+/*************************************************************************
+ *              DllGetClassObject (WMADMOD.@)
+ */
+HRESULT WINAPI DllGetClassObject( REFCLSID clsid, REFIID iid, void **obj )
+{
+    FIXME( "class %s not available\n", debugstr_guid( clsid ) );
+    return CLASS_E_CLASSNOTAVAILABLE;
+}

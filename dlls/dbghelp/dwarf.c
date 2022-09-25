@@ -2314,7 +2314,10 @@ static struct symt* dwarf2_parse_subprogram(dwarf2_debug_info_t* di)
      * Actual thunks will be created in elf_module from the symbol table
      */
     if (elf_is_in_thunk_area(di->unit_ctx->module_ctx->load_offset + addr_ranges[0].low, di->unit_ctx->module_ctx->thunks) >= 0)
+    {
+        free(addr_ranges);
         return NULL;
+    }
     ret_type = dwarf2_lookup_type(di);
 
     /* FIXME: assuming C source code */
@@ -3771,7 +3774,8 @@ static BOOL dwarf2_fetch_frame_info(struct module* module, struct cpu* cpu, LONG
         fde_ctx.data = modfmt->u.dwarf2_info->debug_frame.address;
         fde_ctx.end_data = fde_ctx.data + modfmt->u.dwarf2_info->debug_frame.size;
         delta = module->reloc_delta;
-        if (!dwarf2_get_cie(ip, module, delta, &fde_ctx, &cie_ctx, info, FALSE))
+        if (modfmt->u.dwarf2_info->debug_frame.address == IMAGE_NO_MAP ||
+            !dwarf2_get_cie(ip, module, delta, &fde_ctx, &cie_ctx, info, FALSE))
         {
             TRACE("Couldn't find information for %lx\n", ip);
             return FALSE;

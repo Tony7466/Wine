@@ -1,3 +1,4 @@
+EXTRADEFS = -DWINE_NO_LONG_TYPES
 TESTDLL   = ntdll.dll
 IMPORTS   = user32 advapi32
 
@@ -22,6 +23,7 @@ C_SRCS = \
 	rtlstr.c \
 	string.c \
 	sync.c \
+	thread.c \
 	threadpool.c \
 	time.c \
 	virtual.c \

@@ -2709,7 +2709,7 @@ static void test_FindFirstFileA(void)
 
     /* try FindFirstFileA on "C:\foo\" */
     SetLastError( 0xdeadbeaf );
-    if (!GetTempFileNameA( buffer, "foo", 0, nonexistent ) && GetLastError() == ERROR_ACCESS_DENIED)
+    if (!GetTempFileNameA( buffer, "foo", 0, nonexistent ))
     {
         char tmp[MAX_PATH];
         GetTempPathA( sizeof(tmp), tmp );
@@ -2825,8 +2825,12 @@ static void test_FindFirstFileA(void)
     strcat(buffer2, "foo\\bar\\nul");
     handle = FindFirstFileA(buffer2, &data);
     err = GetLastError();
-    ok ( handle == INVALID_HANDLE_VALUE, "FindFirstFile on %s should fail\n", buffer2 );
-    ok ( err == ERROR_PATH_NOT_FOUND, "Bad Error number %d\n", err );
+    ok( handle == INVALID_HANDLE_VALUE || broken(1), /* win8 */
+         "FindFirstFile on %s should fail\n", buffer2 );
+    if (handle == INVALID_HANDLE_VALUE)
+        ok( err == ERROR_PATH_NOT_FOUND, "Bad Error number %d\n", err );
+    else
+        CloseHandle( handle );
 
     /* try FindFirstFileA on "c:\foo\nul\bar" */
     SetLastError( 0xdeadbeaf );
@@ -5309,12 +5313,12 @@ static void test_SetFileInformationByHandle(void)
     /* test FileDispositionInfo, additional details already covered by ntdll tests */
     SetLastError(0xdeadbeef);
     ret = pSetFileInformationByHandle(file, FileDispositionInfo, &dispinfo, 0);
-todo_wine
+    todo_wine
     ok(!ret && GetLastError() == ERROR_BAD_LENGTH, "got %d, error %d\n", ret, GetLastError());
 
     SetLastError(0xdeadbeef);
     ret = pSetFileInformationByHandle(file, FileBasicInfo, &basicinfo, 0);
-todo_wine
+    todo_wine
     ok(!ret && GetLastError() == ERROR_BAD_LENGTH, "got %d, error %d\n", ret, GetLastError());
 
     memset(&basicinfo, 0, sizeof(basicinfo));
@@ -5405,7 +5409,7 @@ static void test_SetFileRenameInfo(void)
     fri->FileNameLength = wcslen(tempFileTo1) * sizeof(WCHAR);
     memcpy(fri->FileName, tempFileTo1, fri->FileNameLength + sizeof(WCHAR));
     ret = pSetFileInformationByHandle(file, FileRenameInfo, fri, size);
-todo_wine
+    todo_wine
     ok(!ret && GetLastError() == ERROR_ACCESS_DENIED, "FileRenameInfo unexpected result %d\n", GetLastError());
     CloseHandle(file);
 

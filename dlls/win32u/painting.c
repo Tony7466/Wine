@@ -147,7 +147,7 @@ BOOL CDECL nulldrv_PolyBezierTo( PHYSDEV dev, const POINT *points, DWORD count )
         pts[0] = dc->attr->cur_pos;
         memcpy( pts + 1, points, sizeof(POINT) * count );
         count++;
-        ret = NtGdiPolyPolyDraw( dev->hdc, pts, &count, 1, NtGdiPolyBezier );
+        ret = NtGdiPolyPolyDraw( dev->hdc, pts, (UINT *)&count, 1, NtGdiPolyBezier );
         free( pts );
     }
     return ret;
@@ -156,7 +156,7 @@ BOOL CDECL nulldrv_PolyBezierTo( PHYSDEV dev, const POINT *points, DWORD count )
 BOOL CDECL nulldrv_PolyDraw( PHYSDEV dev, const POINT *points, const BYTE *types, DWORD count )
 {
     DC *dc = get_nulldrv_dc( dev );
-    POINT *line_pts = NULL, *bzr_pts = NULL, bzr[4];
+    POINT *line_pts = NULL, *new_line_pts, *bzr_pts = NULL, bzr[4];
     DWORD i;
     INT num_pts, num_bzr_pts, space, size;
 
@@ -182,6 +182,7 @@ BOOL CDECL nulldrv_PolyDraw( PHYSDEV dev, const POINT *points, const BYTE *types
 
     space = count + 300;
     line_pts = malloc( space * sizeof(POINT) );
+    if (!line_pts) return FALSE;
     num_pts = 1;
 
     line_pts[0] = dc->attr->cur_pos;
@@ -209,7 +210,14 @@ BOOL CDECL nulldrv_PolyDraw( PHYSDEV dev, const POINT *points, const BYTE *types
                 if (space < size)
                 {
                     space = size * 2;
-                    line_pts = realloc( line_pts, space * sizeof(POINT) );
+                    new_line_pts = realloc( line_pts, space * sizeof(POINT) );
+                    if (!new_line_pts)
+                    {
+                        free( bzr_pts );
+                        free( line_pts );
+                        return FALSE;
+                    }
+                    line_pts = new_line_pts;
                 }
                 memcpy( &line_pts[num_pts], &bzr_pts[1], (num_bzr_pts - 1) * sizeof(POINT) );
                 num_pts += num_bzr_pts - 1;
@@ -542,7 +550,7 @@ BOOL WINAPI NtGdiInvertRgn( HDC hdc, HRGN hrgn )
  *          NtGdiPolyPolyDraw  (win32u.@)
  */
 ULONG WINAPI NtGdiPolyPolyDraw( HDC hdc, const POINT *points, const UINT *counts,
-                                UINT count, UINT function )
+                                DWORD count, UINT function )
 {
     PHYSDEV physdev;
     ULONG ret;
@@ -564,7 +572,7 @@ ULONG WINAPI NtGdiPolyPolyDraw( HDC hdc, const POINT *points, const UINT *counts
 
     case NtGdiPolyPolyline:
         physdev = GET_DC_PHYSDEV( dc, pPolyPolyline );
-        ret = physdev->funcs->pPolyPolyline( physdev, points, counts, count );
+        ret = physdev->funcs->pPolyPolyline( physdev, points, (const DWORD *)counts, count );
         break;
 
     case NtGdiPolyBezier:

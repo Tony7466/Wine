@@ -1057,6 +1057,7 @@ static DWORD gateway_and_prefix_addresses_alloc( IP_ADAPTER_ADDRESSES *aa, ULONG
             if (flags & GAA_FLAG_INCLUDE_PREFIX)
             {
                 memset( &sockaddr, 0, sizeof(sockaddr) );
+                prefix_len = 0;
                 if (family == AF_INET)
                 {
                     if (!key4->next_hop.s_addr)
@@ -1221,7 +1222,7 @@ static DWORD adapters_addresses_alloc( ULONG family, ULONG flags, IP_ADAPTER_ADD
     if (err) return err;
 
     needed = count * (sizeof(*aa) + ((CHARS_IN_GUID + 1) & ~1) + sizeof(stat->descr.String));
-    if (!(flags & GAA_FLAG_SKIP_FRIENDLY_NAME)) needed += count * sizeof(rw->alias.String);
+    needed += count * sizeof(rw->alias.String); /* GAA_FLAG_SKIP_FRIENDLY_NAME is ignored */
 
     aa = heap_alloc_zero( needed );
     if (!aa)
@@ -1243,12 +1244,9 @@ static DWORD adapters_addresses_alloc( ULONG family, ULONG flags, IP_ADAPTER_ADD
         if_counted_string_copy( (WCHAR *)str_ptr, ARRAY_SIZE(stat[i].descr.String), &stat[i].descr );
         aa[i].Description = (WCHAR *)str_ptr;
         str_ptr += sizeof(stat[i].descr.String);
-        if (!(flags & GAA_FLAG_SKIP_FRIENDLY_NAME))
-        {
-            if_counted_string_copy( (WCHAR *)str_ptr, ARRAY_SIZE(rw[i].alias.String), &rw[i].alias );
-            aa[i].FriendlyName = (WCHAR *)str_ptr;
-            str_ptr += sizeof(rw[i].alias.String);
-        }
+        if_counted_string_copy( (WCHAR *)str_ptr, ARRAY_SIZE(rw[i].alias.String), &rw[i].alias );
+        aa[i].FriendlyName = (WCHAR *)str_ptr;
+        str_ptr += sizeof(rw[i].alias.String);
         aa[i].PhysicalAddressLength = rw[i].phys_addr.Length;
         if (aa[i].PhysicalAddressLength > sizeof(aa[i].PhysicalAddress)) aa[i].PhysicalAddressLength = 0;
         memcpy( aa[i].PhysicalAddress, rw[i].phys_addr.Address, aa[i].PhysicalAddressLength );
