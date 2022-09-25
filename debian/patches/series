@@ -46,5 +46,4 @@ warnings/use-after-free.patch
 warnings/format-overflow.patch
 warnings/stringop-overflow.patch
 warnings/incompatible-types.patch
-warnings/misleading-indentation.patch
 warnings/uninitialized-variables.patch

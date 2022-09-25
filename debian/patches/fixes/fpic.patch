@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -815,14 +815,11 @@ case $host_os in
+@@ -813,14 +813,11 @@ case $host_os in
    *)
      AC_DEFINE(_GNU_SOURCE,1,[Define to 1 to enable GNU extensions on Linux])
      case $host_cpu in

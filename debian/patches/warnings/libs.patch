@@ -1,4 +1,4 @@
-description: warnings to ignore when building embedded libs
+description: fix warnings in embedded libs
 author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/libs/xml2/Makefile.in
@@ -11,22 +11,65 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  C_SRCS = \
  	HTMLparser.c \
---- a/libs/faudio/Makefile.in
-+++ b/libs/faudio/Makefile.in
-@@ -1,6 +1,6 @@
- EXTLIB    = libfaudio.a
- EXTRAINCL = -I$(srcdir)/include
--EXTRADEFS = -DFAUDIO_WIN32_PLATFORM -DHAVE_WMADEC -DNDEBUG
-+EXTRADEFS = -DFAUDIO_WIN32_PLATFORM -DHAVE_WMADEC -DNDEBUG -Wno-format -Wno-format-extra-args
+--- a/libs/faudio/src/FAudio_internal.h
++++ b/libs/faudio/src/FAudio_internal.h
+@@ -82,8 +82,8 @@
+ #define FAudio_snprintf snprintf
+ #define FAudio_vsnprintf vsnprintf
+ #define FAudio_getenv getenv
+-#define FAudio_PRIu64 PRIu64
+-#define FAudio_PRIx64 PRIx64
++#define FAudio_PRIu64 "I64u"
++#define FAudio_PRIx64 "I64x"
  
- C_SRCS = \
- 	src/F3DAudio.c \
---- a/libs/tiff/Makefile.in
-+++ b/libs/tiff/Makefile.in
-@@ -1,5 +1,5 @@
- EXTLIB    = libtiff.a
--EXTRAINCL = -I$(srcdir)/libtiff $(JPEG_PE_CFLAGS) $(ZLIB_PE_CFLAGS)
-+EXTRAINCL = -I$(srcdir)/libtiff $(JPEG_PE_CFLAGS) $(ZLIB_PE_CFLAGS) -Wno-format -Wno-format-extra-args
+ extern void FAudio_Log(char const *msg);
  
- C_SRCS = \
- 	libtiff/tif_aux.c \
+--- a/libs/faudio/src/FAudio_platform_win32.c
++++ b/libs/faudio/src/FAudio_platform_win32.c
+@@ -1086,7 +1086,7 @@ static HRESULT FAudio_WMAMF_ProcessInput
+ 
+ 	copy_size = min(buffer->AudioBytes - impl->input_pos, impl->input_size);
+ 	if (!copy_size) return S_FALSE;
+-	LOG_INFO(voice->audio, "pushing %x bytes at %x", copy_size, impl->input_pos);
++	LOG_INFO(voice->audio, "pushing %lx bytes at %x", copy_size, impl->input_pos);
+ 
+ 	hr = MFCreateSample(&sample);
+ 	FAudio_assert(!FAILED(hr) && "Failed to create sample!");
+@@ -1114,7 +1114,7 @@ static HRESULT FAudio_WMAMF_ProcessInput
+ 	if (hr == MF_E_NOTACCEPTING) return S_OK;
+ 	if (FAILED(hr))
+ 	{
+-		LOG_ERROR(voice->audio, "IMFTransform_ProcessInput returned %#x", hr);
++		LOG_ERROR(voice->audio, "IMFTransform_ProcessInput returned %#lx", hr);
+ 		return hr;
+ 	}
+ 
+@@ -1141,7 +1141,7 @@ static HRESULT FAudio_WMAMF_ProcessOutpu
+ 		if (hr == MF_E_TRANSFORM_NEED_MORE_INPUT) return S_FALSE;
+ 		if (FAILED(hr))
+ 		{
+-			LOG_ERROR(voice->audio, "IMFTransform_ProcessInput returned %#x", hr);
++			LOG_ERROR(voice->audio, "IMFTransform_ProcessInput returned %#lx", hr);
+ 			return hr;
+ 		}
+ 
+@@ -1173,7 +1173,7 @@ static HRESULT FAudio_WMAMF_ProcessOutpu
+ 		}
+ 		FAudio_memcpy(impl->output_buf + impl->output_pos, copy_buf, copy_size);
+ 		impl->output_pos += copy_size;
+-		LOG_INFO(voice->audio, "pulled %x bytes at %x", copy_size, impl->output_pos);
++		LOG_INFO(voice->audio, "pulled %lx bytes at %x", copy_size, impl->output_pos);
+ 		hr = IMFMediaBuffer_Unlock(media_buffer);
+ 		FAudio_assert(!FAILED(hr) && "Failed to unlock buffer bytes!");
+ 
+--- a/libs/tiff/libtiff/tif_config.h
++++ b/libs/tiff/libtiff/tif_config.h
+@@ -161,3 +161,8 @@
+ #  define TIFF_SIZE_FORMAT "Iu"
+ #  define TIFF_SSIZE_FORMAT "Id"
+ #endif
++
++#undef PRIu64
++#undef PRId64
++#define PRIu64 "I64u"
++#define PRId64 "I64d"

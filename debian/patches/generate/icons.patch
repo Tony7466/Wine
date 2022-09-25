@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -1429,6 +1429,9 @@ static struct file *open_include_file( c
+@@ -1465,6 +1465,9 @@ static struct file *open_include_file( c
  
      if (pFile->type == INCL_SYSTEM) return NULL;  /* ignore system files we cannot find */
  
@@ -11,9 +11,9 @@ author: Michael Gilbert <mgilbert@debian.org>
 +    return file;
 +
      /* try in src file directory */
-     if ((file = open_file_same_dir( pFile->included_by, pFile->name, &pFile->filename )))
-     {
-@@ -2817,6 +2820,17 @@ static void output_source_svg( struct ma
+     if ((file = open_same_dir_generated_file( make, pFile->included_by, pFile, ".tab.h", ".y" )) ||
+         (file = open_same_dir_generated_file( make, pFile->included_by, pFile, ".h", ".idl" )) ||
+@@ -2857,6 +2860,17 @@ static void output_source_svg( struct ma
  
          if (images[i])
          {
@@ -33,7 +33,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                      cmd_prefix( "GEN" ), convert, icotool, rsvg,
 --- a/programs/regedit/Makefile.in
 +++ b/programs/regedit/Makefile.in
-@@ -20,4 +20,4 @@ RC_SRCS = regedit.rc
+@@ -21,4 +21,4 @@ RC_SRCS = regedit.rc
  
  MANPAGES = regedit.man.in
  
@@ -49,7 +49,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 +SVG_SRCS = oic_hand.svg
 --- a/dlls/comdlg32/Makefile.in
 +++ b/dlls/comdlg32/Makefile.in
-@@ -20,6 +20,12 @@ SVG_SRCS = \
+@@ -21,6 +21,12 @@ SVG_SRCS = \
  	pd32_collate.svg \
  	pd32_landscape.svg \
  	pd32_nocollate.svg \

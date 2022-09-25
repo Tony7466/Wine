@@ -4,11 +4,12 @@ forwarded: not-needed
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -3203,11 +3203,6 @@ static void output_module( struct makefi
- 
-     if (spec_file)
-         output_man_pages( make );
--    else if (*dll_ext && !make->is_win16 && strendswith( make->module, ".exe" ))
+@@ -3198,12 +3198,6 @@ static void output_module( struct makefi
+     output_filenames( all_libs );
+     output_filename( make->is_cross ? "$(CROSSLDFLAGS)" : "$(LDFLAGS)" );
+     output( "\n" );
+-
+-    if (*dll_ext && make->is_exe && !make->is_win16 && strendswith( make->module, ".exe" ))
 -    {
 -        char *binary = replace_extension( make->module, ".exe", "" );
 -        add_install_rule( make, binary, "wineapploader", strmake( "t$(bindir)/%s", binary ));

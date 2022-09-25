@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/winevulkan/make_vulkan
 +++ b/dlls/winevulkan/make_vulkan
-@@ -1230,7 +1230,7 @@ class VkMember(object):
+@@ -1231,7 +1231,7 @@ class VkMember(object):
          if (conv and self.needs_conversion()) or self.needs_unwrapping():
              if self.is_dynamic_array():
                  if direction == Direction.OUTPUT:
@@ -12,7 +12,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                  else:
                      # Array length is either a variable name (string) or an int.
                      count = self.dyn_array_len if isinstance(self.dyn_array_len, int) else "{0}{1}".format(input, self.dyn_array_len)
-@@ -1242,7 +1242,7 @@ class VkMember(object):
+@@ -1243,7 +1243,7 @@ class VkMember(object):
                      return "convert_{0}_static_array_host_to_win({2}{1}, {3}{1}, {4});\n".format(self.type, self.name, input, output, count)
                  else:
                      # Nothing needed this yet.
@@ -21,7 +21,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              elif self.is_handle() and self.needs_unwrapping():
                  if direction == Direction.OUTPUT:
                      LOGGER.err("OUTPUT parameter {0}.{1} cannot be unwrapped".format(self.type, self.name))
-@@ -1535,7 +1535,7 @@ class VkParam(object):
+@@ -1536,7 +1536,7 @@ class VkParam(object):
          # Since we have parsed all types before hand, this should not happen.
          type_info = types.get(type_elem.text, None)
          if type_info is None:
@@ -30,7 +30,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          return VkParam(type_info, const=const, pointer=pointer, name=name, array_len=array_len, dyn_array_len=dyn_array_len, object_type=object_type)
  
-@@ -1640,7 +1640,7 @@ class VkParam(object):
+@@ -1641,7 +1641,7 @@ class VkParam(object):
                  # Don't care about specific types for non-Windows platforms.
                  self.format_str = ""
              else:
@@ -39,7 +39,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      def copy(self, direction, prefix=""):
          if direction == Direction.INPUT:
-@@ -2177,7 +2177,7 @@ class ConversionFunction(object):
+@@ -2178,7 +2178,7 @@ class ConversionFunction(object):
          elif isinstance(self.operand, VkHandle) and self.direction == Direction.INPUT:
              body += "        out[i] = " + self.operand.driver_handle("in[i]") + ";\n"
          else:
@@ -48,7 +48,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              body += "        out[i] = in[i];\n"
  
          body += "    }\n\n"
-@@ -2319,7 +2319,7 @@ class ConversionFunction(object):
+@@ -2320,7 +2320,7 @@ class ConversionFunction(object):
          elif isinstance(self.operand, VkHandle) and self.direction == Direction.INPUT:
              body += "        out[i] = " + self.operand.driver_handle("in[i]") + ";\n"
          else:
@@ -57,7 +57,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              body += "        out[i] = in[i];\n"
  
          body += "    }\n"
-@@ -2705,7 +2705,9 @@ class VkGenerator(object):
+@@ -2706,7 +2706,9 @@ class VkGenerator(object):
  
      def _generate_copyright(self, f, spec_file=False):
          f.write("# " if spec_file else "/* ")
@@ -68,7 +68,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          lines = ["", "This file is generated from Vulkan vk.xml file covered",
              "by the following copyright and permission notice:"]
          lines.extend([l.rstrip(" ") for l in self.registry.copyright.splitlines()])
-@@ -3272,6 +3274,7 @@ class VkRegistry(object):
+@@ -3273,6 +3275,7 @@ class VkRegistry(object):
          self.funcpointers = None
          self.handles = None
          self.structs = None
@@ -76,7 +76,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          # We aggregate all types in here for cross-referencing.
          self.funcs = {}
-@@ -3854,11 +3857,6 @@ def set_working_directory():
+@@ -3855,11 +3858,6 @@ def set_working_directory():
      path = os.path.dirname(path)
      os.chdir(path)
  
@@ -88,7 +88,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  def main():
      parser = argparse.ArgumentParser()
      parser.add_argument("-v", "--verbose", action="count", default=0, help="increase output verbosity")
-@@ -3878,7 +3876,6 @@ def main():
+@@ -3879,7 +3877,6 @@ def main():
          vk_xml = args.xml
      else:
          vk_xml = "vk-{0}.xml".format(VK_XML_VERSION)
@@ -98,7 +98,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      generator = VkGenerator(registry)
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -5498,9 +5498,9 @@ const char *wined3d_debug_vkresult(VkRes
+@@ -5499,9 +5499,9 @@ const char *wined3d_debug_vkresult(VkRes
      switch (vr)
      {
  #define WINED3D_TO_STR(x) case x: return #x
