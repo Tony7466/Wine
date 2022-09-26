@@ -1640,7 +1640,7 @@ void WINPOS_ActivateOtherWindow(HWND hwnd)
     }
 
  done:
-    fg = GetForegroundWindow();
+    fg = NtUserGetForegroundWindow();
     TRACE("win = %p fg = %p\n", hwndTo, fg);
     if (!fg || (hwnd == fg))
     {
@@ -2520,7 +2520,7 @@ HDWP WINAPI BeginDeferWindowPos( INT count )
     pDWP->hwndParent     = 0;
 
     if (!(pDWP->winPos = HeapAlloc( GetProcessHeap(), 0, count * sizeof(WINDOWPOS) )) ||
-        !(handle = alloc_user_handle( &pDWP->obj, USER_DWP )))
+        !(handle = alloc_user_handle( &pDWP->obj, NTUSER_OBJ_WINPOS )))
     {
         HeapFree( GetProcessHeap(), 0, pDWP->winPos );
         HeapFree( GetProcessHeap(), 0, pDWP );
@@ -2561,7 +2561,7 @@ HDWP WINAPI DeferWindowPos( HDWP hdwp, HWND hwnd, HWND hwndAfter,
     winpos.cy = cy;
     map_dpi_winpos( &winpos );
 
-    if (!(pDWP = get_user_handle_ptr( hdwp, USER_DWP ))) return 0;
+    if (!(pDWP = get_user_handle_ptr( hdwp, NTUSER_OBJ_WINPOS ))) return 0;
     if (pDWP == OBJ_OTHER_PROCESS)
     {
         FIXME( "other process handle %p?\n", hdwp );
@@ -2626,7 +2626,7 @@ BOOL WINAPI EndDeferWindowPos( HDWP hdwp )
 
     TRACE("%p\n", hdwp);
 
-    if (!(pDWP = free_user_handle( hdwp, USER_DWP ))) return FALSE;
+    if (!(pDWP = free_user_handle( hdwp, NTUSER_OBJ_WINPOS ))) return FALSE;
     if (pDWP == OBJ_OTHER_PROCESS)
     {
         FIXME( "other process handle %p?\n", hdwp );
@@ -2761,7 +2761,7 @@ static LONG start_size_move( HWND hwnd, WPARAM wParam, POINT *capturePoint, LONG
     }
     else  /* SC_SIZE */
     {
-        SetCursor( LoadCursorW( 0, (LPWSTR)IDC_SIZEALL ) );
+        NtUserSetCursor( LoadCursorW( 0, (LPWSTR)IDC_SIZEALL ) );
         pt.x = pt.y = 0;
         while(!hittest)
         {
@@ -2816,7 +2816,7 @@ static LONG start_size_move( HWND hwnd, WPARAM wParam, POINT *capturePoint, LONG
         }
         *capturePoint = pt;
     }
-    SetCursorPos( pt.x, pt.y );
+    NtUserSetCursorPos( pt.x, pt.y );
     SendMessageW( hwnd, WM_SETCURSOR, (WPARAM)hwnd, MAKELONG( hittest, WM_MOUSEMOVE ));
     return hittest;
 }
@@ -2849,7 +2849,7 @@ void WINPOS_SysCommandSizeMove( HWND hwnd, WPARAM wParam )
     pt.x = (short)LOWORD(dwPoint);
     pt.y = (short)HIWORD(dwPoint);
     capturePoint = pt;
-    ClipCursor( NULL );
+    NtUserClipCursor( NULL );
 
     TRACE("hwnd %p command %04lx, hittest %d, pos %d,%d\n",
           hwnd, syscommand, hittest, pt.x, pt.y);
@@ -2991,7 +2991,7 @@ void WINPOS_SysCommandSizeMove( HWND hwnd, WPARAM wParam )
                     draw_moving_frame( parent, hdc, &sizingRect, thickframe );
             }
 
-            if (msg.message == WM_KEYDOWN) SetCursorPos( pt.x, pt.y );
+            if (msg.message == WM_KEYDOWN) NtUserSetCursorPos( pt.x, pt.y );
             else
             {
                 if (!DragFullWindows) draw_moving_frame( parent, hdc, &sizingRect, thickframe );
