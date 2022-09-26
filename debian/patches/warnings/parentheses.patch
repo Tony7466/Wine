@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/msvcrt/math.c
 +++ b/dlls/msvcrt/math.c
-@@ -5453,7 +5453,7 @@ static void _setfp( unsigned int *cw, un
+@@ -5457,7 +5457,7 @@ static void _setfp( unsigned int *cw, un
      }
  
      /* mask exceptions if needed */

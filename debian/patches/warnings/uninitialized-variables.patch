@@ -59,7 +59,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                      FOREACH_CHILD(xdr, xdr_child)
 --- a/dlls/ole32/datacache.c
 +++ b/dlls/ole32/datacache.c
-@@ -2517,7 +2517,7 @@ static HRESULT WINAPI DataCache_EnumCach
+@@ -2516,7 +2516,7 @@ static HRESULT WINAPI DataCache_EnumCach
      DataCacheEntry *cache_entry;
      int i = 0, count = 0;
      STATDATA *data;
@@ -152,7 +152,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  	WARN("Can't seek at %08X\n", mmt->dwIndex);
 --- a/dlls/msi/automation.c
 +++ b/dlls/msi/automation.c
-@@ -1818,7 +1818,7 @@ static HRESULT InstallerImpl_SummaryInfo
+@@ -1819,7 +1819,7 @@ static HRESULT InstallerImpl_SummaryInfo
      UINT ret;
      HRESULT hr;
      MSIHANDLE hsuminfo;
@@ -323,3 +323,14 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (!(obj = heap_alloc_zero(sizeof(*obj)))) return E_OUTOFMEMORY;
  
+--- a/dlls/ntdll/unix/socket.c
++++ b/dlls/ntdll/unix/socket.c
+@@ -680,7 +680,7 @@ static NTSTATUS sock_recv( HANDLE handle
+                            struct WS_sockaddr *addr, int *addr_len, DWORD *ret_flags, int unix_flags, int force_async )
+ {
+     struct async_recv_ioctl *async;
+-    ULONG_PTR information;
++    ULONG_PTR information = 0;
+     HANDLE wait_handle;
+     DWORD async_size;
+     NTSTATUS status;

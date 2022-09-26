@@ -33,7 +33,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                      cmd_prefix( "GEN" ), convert, icotool, rsvg,
 --- a/programs/regedit/Makefile.in
 +++ b/programs/regedit/Makefile.in
-@@ -21,4 +21,4 @@ RC_SRCS = regedit.rc
+@@ -20,4 +20,4 @@ RC_SRCS = regedit.rc
  
  MANPAGES = regedit.man.in
  
@@ -49,7 +49,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 +SVG_SRCS = oic_hand.svg
 --- a/dlls/comdlg32/Makefile.in
 +++ b/dlls/comdlg32/Makefile.in
-@@ -21,6 +21,12 @@ SVG_SRCS = \
+@@ -20,6 +20,12 @@ SVG_SRCS = \
  	pd32_collate.svg \
  	pd32_landscape.svg \
  	pd32_nocollate.svg \

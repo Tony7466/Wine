@@ -32,9 +32,9 @@ author: Michael Gilbert <mgilbert@debian.org>
              strcpy(wndName, "-- Empty --");
  
 +#ifdef __arm__
-+        dbg_printf("%x %s %Ild %x %s %-17.17s %08x %x %Ild %08x %.14s\n",
++        dbg_printf("%x %s %Ild %x %s %-17.17s %08lx %x %Ild %08lx %.14s\n",
 +#else
-         dbg_printf("%*s%08Ix%*s %-17.17s %08x %0*Ix %08x %.14s\n",
+         dbg_printf("%*s%08Ix%*s %-17.17s %08lx %0*Ix %08lx %.14s\n",
 +#endif
                     indent, "", (DWORD_PTR)hWnd, 12 - indent, "",
                     clsName, GetWindowLongW(hWnd, GWL_STYLE),
@@ -48,8 +48,8 @@ author: Michael Gilbert <mgilbert@debian.org>
 +#else
                 "inst=%p  active=%p  idmenu=%08Ix\n"
 +#endif
-                "style=0x%08x  exstyle=0x%08x  wndproc=%p  text='%s'\n"
-                "client=%d,%d-%d,%d  window=%d,%d-%d,%d sysmenu=%p\n",
+                "style=0x%08lx  exstyle=0x%08lx  wndproc=%p  text='%s'\n"
+                "client=%ld,%ld-%ld,%ld  window=%ld,%ld-%ld,%ld sysmenu=%p\n",
                 GetWindow(hWnd, GW_HWNDNEXT),
 @@ -791,7 +807,11 @@ void info_win32_virtual(DWORD pid)
              type = "";
@@ -91,9 +91,9 @@ author: Michael Gilbert <mgilbert@debian.org>
                         (void*)rec->ExceptionInformation[3]);
          else
 +#ifdef __arm__
-+            dbg_printf("C++ exception with strange parameter count %d or magic %x 0x%0Ild",
++            dbg_printf("C++ exception with strange parameter count %ld or magic %x 0x%0Ild",
 +#else
-             dbg_printf("C++ exception with strange parameter count %d or magic 0x%0*Ix",
+             dbg_printf("C++ exception with strange parameter count %ld or magic 0x%0*Ix",
 +#endif
                         rec->NumberParameters, ADDRWIDTH, rec->ExceptionInformation[0]);
          break;
@@ -197,7 +197,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          stack_set_local_scope();
          se.first = TRUE;
 @@ -291,7 +295,11 @@ static void stack_print_addr_and_args(vo
-             dbg_printf(" [%s:%u]", il.FileName, il.LineNumber);
+             dbg_printf(" [%s:%lu]", il.FileName, il.LineNumber);
          dbg_printf(" in %s", im.ModuleName);
      }
 +#ifdef __arm__
@@ -279,9 +279,9 @@ author: Michael Gilbert <mgilbert@debian.org>
      type.module = sym->ModBase;
      type.id = sym->TypeIndex;
 +#ifdef __arm__
-+    dbg_printf("Mod: %x %Ild ID: %08x\n", ADDRWIDTH, type.module, type.id);
++    dbg_printf("Mod: %x %Ild ID: %08lx\n", ADDRWIDTH, type.module, type.id);
 +#else
-     dbg_printf("Mod: %0*Ix ID: %08x\n", ADDRWIDTH, type.module, type.id);
+     dbg_printf("Mod: %0*Ix ID: %08lx\n", ADDRWIDTH, type.module, type.id);
 +#endif
      types_print_type(&type, TRUE);
      dbg_printf("\n");

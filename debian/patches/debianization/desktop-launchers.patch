@@ -5,12 +5,15 @@ forwarded: not-needed
 
 --- a/programs/winemenubuilder/Makefile.in
 +++ b/programs/winemenubuilder/Makefile.in
-@@ -1,4 +1,4 @@
--EXTRADEFS = -DWINE_NO_LONG_TYPES
-+EXTRADEFS = -DWINE_NO_LONG_TYPES -DDEBSUFFIX="\"${DEBSUFFIX}\""
+@@ -1,6 +1,8 @@
  MODULE    = winemenubuilder.exe
  IMPORTS   = uuid windowscodecs shell32 shlwapi ole32 user32 advapi32
  
++EXTRADEFS = -DDEBSUFFIX="\"${DEBSUFFIX}\""
++
+ EXTRADLLFLAGS = -mwindows -municode
+ 
+ C_SRCS = \
 --- a/programs/winemenubuilder/winemenubuilder.c
 +++ b/programs/winemenubuilder/winemenubuilder.c
 @@ -97,6 +97,8 @@ WINE_DEFAULT_DEBUG_CHANNEL(menubuilder);
