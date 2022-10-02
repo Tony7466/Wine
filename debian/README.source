@@ -4,7 +4,10 @@ not committed to the repo. Instead you should generate it before building:
     ./debian/rules debian/control
 
 Similarly, there is a script for handling new upstream versions, though to
-avoid conflicts it doesn't use Files-Excluded. Use uscan to repack:
+avoid conflicts it doesn't use Files-Excluded. If there are conflicts anyway
+e.g. deletions when using import-stable, then after resolving them you can run
+the rest of the script by commenting out the git pull and merge sections. Use
+uscan to repack:
 
     ./debian/scripts/import 6.16
     uscan --download-current-version
