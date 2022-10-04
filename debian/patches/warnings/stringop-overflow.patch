@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/ddraw/device.c
 +++ b/dlls/ddraw/device.c
-@@ -4681,7 +4681,7 @@ static HRESULT WINAPI d3d_device3_Comput
+@@ -4685,7 +4685,7 @@ static HRESULT WINAPI d3d_device3_Comput
          D3DVECTOR *centers, D3DVALUE *radii, DWORD sphere_count, DWORD flags, DWORD *return_values)
  {
      static const DWORD enabled_planes = 0x3f;

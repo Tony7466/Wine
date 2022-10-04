@@ -1,4 +1,4 @@
-wine-development (7.3~repack-1) UNRELEASED; urgency=medium
+wine-development (7.3~repack-1) unstable; urgency=medium
 
   * New upstream release 7.3, released Feb 25, 2022.
     - More large scale cleanups to support 'long' type.
@@ -6,6 +6,7 @@ wine-development (7.3~repack-1) UNRELEASED; urgency=medium
     - Progress on the PE conversion of USER32 and WineALSA.
     - A number of HID joystick fixes.
     - Various bug fixes.
+  * Remove build dependencies for libraries that are now embedded.
 
  -- Michael Gilbert <mgilbert@debian.org>  Mon, 26 Sep 2022 01:53:49 +0000
 

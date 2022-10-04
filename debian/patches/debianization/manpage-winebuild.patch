@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/tools/winebuild/winebuild.man.in
 +++ b/tools/winebuild/winebuild.man.in
-@@ -174,7 +174,10 @@ option.
+@@ -179,7 +179,10 @@ option.
  .B \-m16, -m32, -m64
  Generate respectively 16-bit, 32-bit or 64-bit code.
  .TP

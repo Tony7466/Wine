@@ -149,7 +149,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 +    DWORD	tmp = 0;
  
      if (mmioSeek(wmm->hFile, mmt->dwIndex, SEEK_SET) != mmt->dwIndex) {
- 	WARN("Can't seek at %08X\n", mmt->dwIndex);
+ 	WARN("Can't seek at %08lX\n", mmt->dwIndex);
 --- a/dlls/msi/automation.c
 +++ b/dlls/msi/automation.c
 @@ -1819,7 +1819,7 @@ static HRESULT InstallerImpl_SummaryInfo
@@ -163,7 +163,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!(wFlags & DISPATCH_PROPERTYGET))
 --- a/dlls/mf/session.c
 +++ b/dlls/mf/session.c
-@@ -497,7 +497,7 @@ static void session_clear_queued_topolog
+@@ -507,7 +507,7 @@ static void session_clear_queued_topolog
  static void session_set_topo_status(struct media_session *session, HRESULT status,
          MF_TOPOSTATUS topo_status)
  {
@@ -186,7 +186,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/dlls/win32u/region.c
 +++ b/dlls/win32u/region.c
-@@ -410,6 +410,7 @@ static BOOL init_region( WINEREGION *pRe
+@@ -405,6 +405,7 @@ static BOOL init_region( WINEREGION *pRe
  {
      n = max( n, RGN_DEFAULT_RECTS );
  
@@ -196,7 +196,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (n > INT_MAX / sizeof(RECT)) return FALSE;
 --- a/dlls/win32u/dc.c
 +++ b/dlls/win32u/dc.c
-@@ -941,6 +941,7 @@ BOOL WINAPI NtGdiGetAndSetDCDword( HDC h
+@@ -953,6 +953,7 @@ BOOL WINAPI NtGdiGetAndSetDCDword( HDC h
  
      default:
          WARN( "unknown method %u\n", method );
@@ -252,7 +252,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #else
 --- a/dlls/ntdll/unix/env.c
 +++ b/dlls/ntdll/unix/env.c
-@@ -2174,7 +2174,8 @@ static RTL_USER_PROCESS_PARAMETERS *buil
+@@ -2172,7 +2172,8 @@ static RTL_USER_PROCESS_PARAMETERS *buil
      static const WCHAR valueW[] = {'1',0};
      static const WCHAR pathW[] = {'P','A','T','H'};
      RTL_USER_PROCESS_PARAMETERS *params = NULL;

@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -2621,7 +2621,7 @@ static void output_source_y( struct make
+@@ -2622,7 +2622,7 @@ static void output_source_y( struct make
      if (find_include_file( make, header ))
      {
          output( "%s: %s\n", obj_dir_path( make, header ), source->filename );
@@ -12,7 +12,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                  cmd_prefix( "BISON" ), bison, obj_dir_path( make, obj ), source->filename );
          output( "%s.tab.c: %s %s\n", obj_dir_path( make, obj ),
                  source->filename, obj_dir_path( make, header ));
-@@ -2629,7 +2629,7 @@ static void output_source_y( struct make
+@@ -2630,7 +2630,7 @@ static void output_source_y( struct make
      }
      else output( "%s.tab.c: %s\n", obj_dir_path( make, obj ), source->filename );
  
