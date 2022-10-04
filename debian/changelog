@@ -1,3 +1,14 @@
+wine-development (7.4~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 7.4, released Mar 11, 2022.
+    - 'Light' theme enabled by default.
+    - Bundled vkd3d library.
+    - WineD3D, D3D12 and DXGI modules converted to PE.
+    - More large scale cleanups to support 'long' type.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Tue, 04 Oct 2022 23:44:30 +0000
+
 wine-development (7.3~repack-1) unstable; urgency=medium
 
   * New upstream release 7.3, released Feb 25, 2022.
