@@ -42,8 +42,6 @@ WINE_DEFAULT_DEBUG_CHANNEL(class);
 
 static INIT_ONCE init_once = INIT_ONCE_STATIC_INIT;
 
-#define CLASS_OTHER_PROCESS ((CLASS *)1)
-
 static inline const char *debugstr_us( const UNICODE_STRING *us )
 {
     if (!us) return "<null>";
@@ -174,6 +172,7 @@ static BOOL alloc_menu_nameW( struct client_menu_name *ret, const WCHAR *menu_na
         DWORD lenA = WideCharToMultiByte( CP_ACP, 0, menu_name, lenW, NULL, 0, NULL, NULL );
         ret->nameW = HeapAlloc( GetProcessHeap(), 0, lenA + lenW * sizeof(WCHAR) );
         if (!ret->nameW) return FALSE;
+        ret->nameA = (char *)(ret->nameW + lenW);
         memcpy( ret->nameW, menu_name, lenW * sizeof(WCHAR) );
         WideCharToMultiByte( CP_ACP, 0, menu_name, lenW, ret->nameA, lenA, NULL, NULL );
     }
@@ -347,35 +346,6 @@ void register_desktop_class(void)
 {
     register_builtin( &DESKTOP_builtin_class );
     register_builtin( &MESSAGE_builtin_class );
-}
-
-
-/***********************************************************************
- *           get_class_winproc
- */
-WNDPROC get_class_winproc( CLASS *class )
-{
-    return class->winproc;
-}
-
-
-/***********************************************************************
- *           get_class_dce
- */
-struct dce *get_class_dce( CLASS *class )
-{
-    return class->dce;
-}
-
-
-/***********************************************************************
- *           set_class_dce
- */
-struct dce *set_class_dce( CLASS *class, struct dce *dce )
-{
-    if (class->dce) return class->dce;  /* already set, don't change it */
-    class->dce = dce;
-    return dce;
 }
 
 

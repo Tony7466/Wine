@@ -33,6 +33,7 @@
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(graphics);
+WINE_DECLARE_DEBUG_CHANNEL(message);
 
 HMODULE user32_module = 0;
 
@@ -140,30 +141,50 @@ static void CDECL notify_ime( HWND hwnd, UINT param )
     if (ime_default) SendMessageW( ime_default, WM_IME_INTERNAL, param, HandleToUlong(hwnd) );
 }
 
+static BOOL WINAPI register_imm( HWND hwnd )
+{
+    return imm_register_window( hwnd );
+}
+
+static void WINAPI unregister_imm( HWND hwnd )
+{
+    imm_unregister_window( hwnd );
+}
+
+static void CDECL free_win_ptr( WND *win )
+{
+    HeapFree( GetProcessHeap(), 0, win->text );
+    HeapFree( GetProcessHeap(), 0, win->pScroll );
+}
+
 static const struct user_callbacks user_funcs =
 {
+    AdjustWindowRectEx,
     CopyImage,
+    DestroyCaret,
+    EndMenu,
+    HideCaret,
     PostMessageW,
-    RedrawWindow,
     SendInput,
     SendMessageTimeoutW,
+    SendMessageA,
     SendMessageW,
     SendNotifyMessageW,
-    SetWindowPos,
+    SetSystemMenu,
+    ShowCaret,
     WaitForInputIdle,
-    WindowFromDC,
-    free_dce,
+    free_menu_items,
+    free_win_ptr,
+    MENU_IsMenuActive,
     notify_ime,
     register_builtin_classes,
     MSG_SendInternalMessageTimeout,
+    MENU_SetMenu,
+    SCROLL_SetStandardScrollPainted,
     (void *)__wine_set_user_driver,
-    set_window_pos,
+    register_imm,
+    unregister_imm,
 };
-
-static void WINAPI User32CallFreeIcon( ULONG *param, ULONG size )
-{
-    wow_handlers.free_icon_param( *param );
-}
 
 static BOOL WINAPI User32LoadDriver( const WCHAR *path, ULONG size )
 {
@@ -174,9 +195,9 @@ static const void *kernel_callback_table[NtUserCallCount] =
 {
     User32CallEnumDisplayMonitor,
     User32CallWinEventHook,
+    User32CallWindowProc,
     User32CallWindowsHook,
     User32LoadDriver,
-    User32CallFreeIcon,
 };
 
 
@@ -218,12 +239,11 @@ static void thread_detach(void)
     struct user_thread_info *thread_info = get_user_thread_info();
 
     exiting_thread_id = GetCurrentThreadId();
+    NtUserCallNoParam( NtUserExitingThread );
 
     WDML_NotifyThreadDetach();
 
     NtUserCallNoParam( NtUserThreadDetach );
-    destroy_thread_windows();
-    CloseHandle( thread_info->server_queue );
     HeapFree( GetProcessHeap(), 0, thread_info->wmchar_data );
     HeapFree( GetProcessHeap(), 0, thread_info->rawinput );
 
@@ -336,4 +356,24 @@ BOOL WINAPI ShutdownBlockReasonDestroy(HWND hwnd)
     FIXME("(%p): stub\n", hwnd);
     SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
     return FALSE;
+}
+
+const char *SPY_GetMsgName( UINT msg, HWND hwnd )
+{
+    return (const char *)NtUserCallHwndParam( hwnd, msg, NtUserSpyGetMsgName );
+}
+
+const char *SPY_GetVKeyName( WPARAM wparam )
+{
+    return (const char *)NtUserCallOneParam( wparam, NtUserSpyGetVKeyName );
+}
+
+void SPY_EnterMessage( INT flag, HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam )
+{
+    if (TRACE_ON(message)) NtUserMessageCall( hwnd, msg, wparam, lparam, 0, FNID_SPYENTER, flag );
+}
+
+void SPY_ExitMessage( INT flag, HWND hwnd, UINT msg, LRESULT lreturn, WPARAM wparam, LPARAM lparam )
+{
+    if (TRACE_ON(message)) NtUserMessageCall( hwnd, msg, wparam, lparam, lreturn, FNID_SPYEXIT, flag );
 }

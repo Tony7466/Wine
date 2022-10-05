@@ -508,7 +508,7 @@ static HWND DIALOG_CreateIndirect( HINSTANCE hInst, LPCVOID dlgTemplate,
             }
             SelectObject( dc, hOldFont );
         }
-        ReleaseDC(0, dc);
+        NtUserReleaseDC( 0, dc );
         TRACE("units = %d,%d\n", xBaseUnit, yBaseUnit );
     }
 
@@ -639,7 +639,7 @@ static HWND DIALOG_CreateIndirect( HINSTANCE hInst, LPCVOID dlgTemplate,
     if (!hwnd)
     {
         if (hUserFont) DeleteObject( hUserFont );
-        if (hMenu) DestroyMenu( hMenu );
+        if (hMenu) NtUserDestroyMenu( hMenu );
         if (disabled_owner) EnableWindow( disabled_owner, TRUE );
         return 0;
     }
@@ -702,12 +702,12 @@ static HWND DIALOG_CreateIndirect( HINSTANCE hInst, LPCVOID dlgTemplate,
 
         if (template.style & WS_VISIBLE && !(GetWindowLongW( hwnd, GWL_STYLE ) & WS_VISIBLE))
         {
-           ShowWindow( hwnd, SW_SHOWNORMAL );   /* SW_SHOW doesn't always work */
+           NtUserShowWindow( hwnd, SW_SHOWNORMAL );   /* SW_SHOW doesn't always work */
         }
         return hwnd;
     }
     if (disabled_owner) EnableWindow( disabled_owner, TRUE );
-    if( IsWindow(hwnd) ) DestroyWindow( hwnd );
+    if (IsWindow(hwnd)) NtUserDestroyWindow( hwnd );
     return 0;
 }
 
@@ -793,7 +793,7 @@ INT DIALOG_DoDialogBox( HWND hwnd, HWND owner )
                 if (bFirstEmpty)
                 {
                     /* ShowWindow the first time the queue goes empty */
-                    ShowWindow( hwnd, SW_SHOWNORMAL );
+                    NtUserShowWindow( hwnd, SW_SHOWNORMAL );
                     bFirstEmpty = FALSE;
                 }
                 if (!(GetWindowLongW( hwnd, GWL_STYLE ) & DS_NOIDLEMSG))
@@ -821,13 +821,13 @@ INT DIALOG_DoDialogBox( HWND hwnd, HWND owner )
 
             if (bFirstEmpty && msg.message == WM_TIMER)
             {
-                ShowWindow( hwnd, SW_SHOWNORMAL );
+                NtUserShowWindow( hwnd, SW_SHOWNORMAL );
                 bFirstEmpty = FALSE;
             }
         }
     }
     retval = dlgInfo->idResult;
-    DestroyWindow( hwnd );
+    NtUserDestroyWindow( hwnd );
     return retval;
 }
 
@@ -931,8 +931,8 @@ BOOL WINAPI EndDialog( HWND hwnd, INT_PTR retval )
     /* Don't have to send a ShowWindow(SW_HIDE), just do
        SetWindowPos with SWP_HIDEWINDOW as done in Windows */
 
-    SetWindowPos(hwnd, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE
-                 | SWP_NOZORDER | SWP_NOACTIVATE | SWP_HIDEWINDOW);
+    NtUserSetWindowPos( hwnd, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE
+                        | SWP_NOZORDER | SWP_NOACTIVATE | SWP_HIDEWINDOW );
 
     if (hwnd == GetActiveWindow())
     {
@@ -1528,7 +1528,7 @@ DWORD WINAPI GetDialogBaseUnits(void)
         if ((hdc = GetDC(0)))
         {
             cx = GdiGetCharDimensions( hdc, NULL, &cy );
-            ReleaseDC( 0, hdc );
+            NtUserReleaseDC( 0, hdc );
         }
         TRACE( "base units = %d,%d\n", cx, cy );
     }
