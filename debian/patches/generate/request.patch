@@ -18,7 +18,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 -        if (/^\#define SERVER_PROTOCOL_VERSION (\d+)/) { $protocol = $1; last; }
 -    }
 -    close SERVER_PROT;
-+    my $protocol = 745;
++    my $protocol = 748;
      return $protocol;
  }
  

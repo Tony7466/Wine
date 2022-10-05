@@ -1,3 +1,15 @@
+wine-development (7.5~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 7.5, released Mar 25, 2022.
+    - ALSA driver converted to PE.
+    - Locale database generated from Unicode CLDR.
+    - HLSL compiler support with the bundled vkd3d.
+    - Initial support for the OCSP protocol.
+    - More cleanups to support 'long' type.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Wed, 05 Oct 2022 03:26:04 +0000
+
 wine-development (7.4~repack-1) unstable; urgency=medium
 
   * New upstream release 7.4, released Mar 11, 2022.
