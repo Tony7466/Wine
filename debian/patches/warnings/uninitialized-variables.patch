@@ -90,7 +90,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!desc) return E_INVALIDARG;
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -2675,6 +2675,9 @@ static void check_fbo_compat(struct wine
+@@ -2673,6 +2673,9 @@ static void check_fbo_compat(struct wine
                      case WINED3D_GL_RES_TYPE_COUNT:
                          color = 0;
                          break;
@@ -196,7 +196,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (n > INT_MAX / sizeof(RECT)) return FALSE;
 --- a/dlls/win32u/dc.c
 +++ b/dlls/win32u/dc.c
-@@ -953,6 +953,7 @@ BOOL WINAPI NtGdiGetAndSetDCDword( HDC h
+@@ -956,6 +956,7 @@ BOOL WINAPI NtGdiGetAndSetDCDword( HDC h
  
      default:
          WARN( "unknown method %u\n", method );

@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -3209,12 +3209,6 @@ static void output_module( struct makefi
+@@ -3182,12 +3182,6 @@ static void output_module( struct makefi
      output_filenames( all_libs );
      output_filename( make->is_cross ? "$(CROSSLDFLAGS)" : "$(LDFLAGS)" );
      output( "\n" );

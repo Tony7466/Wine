@@ -108,5 +108,8 @@ tools/sfnt2fon/Makefile
 # windows help files
 dlls/itss/tests/data.chm
 
+# bison generated files
+*/*/*.tab.h
+
 # things that wine's clean doesn't clean
 po/LINGUAS

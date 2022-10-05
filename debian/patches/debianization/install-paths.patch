@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -95,9 +95,9 @@ AC_ARG_WITH(wine64,    AS_HELP_STRING([-
+@@ -94,9 +94,9 @@ AC_ARG_WITH(wine64,    AS_HELP_STRING([-
  
  AC_CANONICAL_HOST
  
@@ -19,7 +19,7 @@ forwarded: not-needed
  dnl **** Check for some programs ****
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -2939,7 +2939,7 @@ static void output_source_in( struct mak
+@@ -2912,7 +2912,7 @@ static void output_source_in( struct mak
      output( "%s:", obj_dir_path( make, obj ));
      output_filenames( source->dependencies );
      output( "\n" );

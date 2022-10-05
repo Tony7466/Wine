@@ -59,7 +59,6 @@ Build-Depends:
  libldap2-dev,
  unixodbc-dev,
  libcups2-dev,
- libvkd3d-dev (>= 1.2),
  libcapi20-dev,
  libvulkan-dev,
  libopenal-dev,

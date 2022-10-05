@@ -1,4 +1,4 @@
-wine-development (7.4~repack-1) UNRELEASED; urgency=medium
+wine-development (7.4~repack-1) unstable; urgency=medium
 
   * New upstream release 7.4, released Mar 11, 2022.
     - 'Light' theme enabled by default.
