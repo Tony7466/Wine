@@ -1,3 +1,13 @@
+wine-development (7.6~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 7.6, released Apr 8, 2022.
+    - Mono engine updated to version 7.2.0.
+    - More progress on the PE conversion of graphics drivers.
+    - Locale support using the new CLDR-based database.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 08 Oct 2022 03:23:48 +0000
+
 wine-development (7.5~repack-1) unstable; urgency=medium
 
   * New upstream release 7.5, released Mar 25, 2022.
