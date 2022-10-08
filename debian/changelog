@@ -1,4 +1,4 @@
-wine-development (7.7~repack-1) UNRELEASED; urgency=medium
+wine-development (7.7~repack-1) unstable; urgency=medium
 
   * New upstream release 7.7, released Apr 22, 2022.
     - More progress on the PE conversion of the X11 and OSS drivers.
@@ -851,7 +851,6 @@ wine-development (4.21-1) unstable; urgency=medium
 wine-development (4.20-1) unstable; urgency=medium
 
   * New upstream release 4.20, released Nov 15, 2019.
-    - New version of the Mono engine with an FNA update.
     - Code persistence in VBScript and JScript.
     - Vulkan spec updates.
     - Improved support for LLVM MinGW.
@@ -894,7 +893,6 @@ wine-development (4.18-1) unstable; urgency=medium
 wine-development (4.17-1) unstable; urgency=medium
 
   * New upstream release 4.17, released Sep 27, 2019.
-    - New version of the Mono engine with upstream fixes.
     - Support for DXTn compressed textures.
     - Initial version of the Windows Script runtime library.
     - Support for XRandR device change notifications.
@@ -935,7 +933,6 @@ wine-development (4.15-1) unstable; urgency=medium
 wine-development (4.14-1) unstable; urgency=medium
 
   * New upstream release 4.14, released Aug 16, 2019.
-    - New version of the Mono engine with upstream updates.
     - PE dlls no longer rely on the MinGW runtime.
     - Exception handling fixes on ARM64.
     - Various bug fixes.
@@ -976,7 +973,6 @@ wine-development (4.12.1-1) unstable; urgency=medium
 wine-development (4.11-1) unstable; urgency=medium
 
   * New upstream release 4.11, released Jun 21, 2019.
-    - Updated version of the Mono engine, including Windows.Forms.
     - More DLLs are built as PE files by default.
     - Faster implementation of Slim Reader/Writer locks on Linux.
     - Initial support for enumerating display devices.
@@ -1044,7 +1040,6 @@ wine-development (4.7-1) unstable; urgency=medium
 
   * New upstream release 4.7, released Apr 26, 2019.
     - Support for builtin libraries in PE format even on Unix.
-    - Updated version of the Mono engine.
     - More implementation of the Debug Engine DLL.
     - Support for the Command Link standard control.
     - Improved Edit control sizing in CJK locales.
@@ -1401,7 +1396,6 @@ wine-development (3.13-1) unstable; urgency=medium
 
   * New upstream release 3.13, released Jul 20, 2018.
     - Initial support for performance data in the registry.
-    - Mono engine updated with some bug fixes.
     - Support for fetching BIOS information on Linux.
     - Improvements in the standard Task Dialog.
     - Various bug fixes.
@@ -2278,7 +2272,6 @@ wine-development (1.9.12-1) unstable; urgency=medium
 
   [ Michael Gilbert ]
   * New upstream release 1.9.12, released Jun 10, 2016.
-    - Bug fix update of the Mono engine.
     - Initial version of a taskbar in desktop mode.
     - Fixes for right-to-left languages in Uniscribe.
     - More Shader Model 4 support in Direct3D.
@@ -3022,7 +3015,6 @@ wine-development (1.7.33-1) experimental; urgency=medium
 wine-development (1.7.32-1) experimental; urgency=medium
 
   * New upstream release 1.7.32, released Nov 28, 2014.
-    - New version of the Mono engine.
     - A few more functions implemented in MSHTML.
     - Improved support for restoring display mode.
     - Font metrics improvements in DirectWrite.
@@ -3421,7 +3413,6 @@ wine-unstable (1.7.9-1) unstable; urgency=medium
 wine-unstable (1.7.8-1) unstable; urgency=medium
 
   * New upstream release:
-    - Updated version of the Mono package.
     - Improvements in the BITS service implementation.
     - Better data tables for Japanese vertical fonts support.
     - Various bug fixes.
@@ -3852,7 +3843,6 @@ wine-unstable (1.5.17-1) unstable; urgency=low
 wine-unstable (1.5.16-1) unstable; urgency=low
 
   * New upstream release 1.5.16, released Oct 26, 2012.
-    - New version of the Mono package.
     - Many improvements to the CMD command-line parser.
     - More stream classes in the C++ runtime.
     - Support for managing services in WMI.

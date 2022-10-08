@@ -1,4 +1,4 @@
-description: fix incorrect array size
+description: fix operations that potentially overflow (gcc -Wstringop-overflow)
 author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/ddraw/device.c
@@ -11,7 +11,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 +    struct wined3d_vec4 plane[12];
      unsigned int i, j;
  
-     TRACE("iface %p, centers %p, radii %p, sphere_count %u, flags %#x, return_values %p.\n",
+     TRACE("iface %p, centers %p, radii %p, sphere_count %lu, flags %#lx, return_values %p.\n",
 --- a/dlls/glu32/project.c
 +++ b/dlls/glu32/project.c
 @@ -37,20 +37,20 @@
@@ -63,3 +63,42 @@ author: Michael Gilbert <mgilbert@debian.org>
      m[0][0] = side[0];
      m[1][0] = side[1];
      m[2][0] = side[2];
+--- a/dlls/win32u/message.c
++++ b/dlls/win32u/message.c
+@@ -24,6 +24,7 @@
+ #pragma makedep unix
+ #endif
+ 
++#include <limits.h>
+ #include <assert.h>
+ #include "ntstatus.h"
+ #define WIN32_NO_STATUS
+@@ -332,16 +333,19 @@ static BOOL unpack_message( HWND hwnd, U
+     {
+     case WM_WINE_SETWINDOWPOS:
+     {
+-        WINDOWPOS wp;
++        HWND hwnd;
++        HWND hwnd_after;
++        HWND hwnd_maximum = (HWND)UINT_MAX;
+         if (size < sizeof(ps->wp)) return FALSE;
+-        wp.hwnd            = wine_server_ptr_handle( ps->wp.hwnd );
+-        wp.hwndInsertAfter = wine_server_ptr_handle( ps->wp.hwndInsertAfter );
+-        wp.x               = ps->wp.x;
+-        wp.y               = ps->wp.y;
+-        wp.cx              = ps->wp.cx;
+-        wp.cy              = ps->wp.cy;
+-        wp.flags           = ps->wp.flags;
+-        memcpy( &ps->wp, &wp, sizeof(wp) );
++        hwnd       = wine_server_ptr_handle( ps->wp.hwnd );
++        hwnd_after = wine_server_ptr_handle( ps->wp.hwndInsertAfter );
++        if (hwnd > hwnd_maximum || hwnd_after > hwnd_maximum)
++        {
++            ERR("Got window handle larger than UINT on this hardware\n");
++            exit(-1);
++        }
++        ps->wp.hwnd            = (UINT)hwnd;
++        ps->wp.hwndInsertAfter = (UINT)hwnd_after;
+         break;
+     }
+     case WM_WINE_KEYBOARD_LL_HOOK:

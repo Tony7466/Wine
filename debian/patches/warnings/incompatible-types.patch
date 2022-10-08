@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/winegstreamer/media_source.c
 +++ b/dlls/winegstreamer/media_source.c
-@@ -596,7 +596,7 @@ static DWORD CALLBACK read_thread(void *
+@@ -597,7 +597,7 @@ static DWORD CALLBACK read_thread(void *
      struct media_source *source = arg;
      IMFByteStream *byte_stream = source->byte_stream;
      size_t buffer_size = 4096;
@@ -12,7 +12,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      void *data;
  
      if (!(data = malloc(buffer_size)))
-@@ -1384,7 +1384,7 @@ static HRESULT media_source_constructor(
+@@ -1385,7 +1385,7 @@ static HRESULT media_source_constructor(
      UINT64 total_pres_time = 0;
      struct wg_parser *parser;
      DWORD bytestream_caps;

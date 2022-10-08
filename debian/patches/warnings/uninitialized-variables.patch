@@ -25,7 +25,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          switch (c)
 --- a/dlls/ntdll/locale.c
 +++ b/dlls/ntdll/locale.c
-@@ -1897,7 +1897,7 @@ NTSTATUS WINAPI RtlIdnToUnicode( DWORD f
+@@ -1387,7 +1387,7 @@ NTSTATUS WINAPI RtlIdnToUnicode( DWORD f
      int i, buflen, start, end, out_label, out = 0;
      NTSTATUS status;
      UINT buffer[64];
@@ -70,7 +70,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/dlls/webservices/reader.c
 +++ b/dlls/webservices/reader.c
-@@ -2041,7 +2041,7 @@ static inline BOOL is_element_type( unsi
+@@ -2043,7 +2043,7 @@ static inline BOOL is_element_type( unsi
  
  static HRESULT read_attributes_bin( struct reader *reader, WS_XML_ELEMENT_NODE *elem )
  {
@@ -79,7 +79,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      unsigned char type;
      HRESULT hr;
  
-@@ -6424,7 +6424,7 @@ static HRESULT read_type_struct( struct
+@@ -6430,7 +6430,7 @@ static HRESULT read_type_struct( struct
                                   WS_HEAP *heap, void *ret, ULONG size, BOOL *found )
  {
      ULONG i, offset;
@@ -252,7 +252,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #else
 --- a/dlls/ntdll/unix/env.c
 +++ b/dlls/ntdll/unix/env.c
-@@ -2180,7 +2180,8 @@ static RTL_USER_PROCESS_PARAMETERS *buil
+@@ -1890,7 +1890,8 @@ static RTL_USER_PROCESS_PARAMETERS *buil
      static const WCHAR valueW[] = {'1',0};
      static const WCHAR pathW[] = {'P','A','T','H'};
      RTL_USER_PROCESS_PARAMETERS *params = NULL;
@@ -264,7 +264,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      WCHAR *curdir = get_initial_directory();
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -2170,11 +2170,14 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
+@@ -2156,11 +2156,14 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
      }
      else
      {
@@ -272,22 +272,22 @@ author: Michael Gilbert <mgilbert@debian.org>
 +        escape.drawable = top_window;
 +
          /* find the first ancestor that has a drawable */
-         for (parent = hwnd; parent && parent != top; parent = GetAncestor( parent, GA_PARENT ))
+         for (parent = hwnd; parent && parent != top; parent = NtUserGetAncestor( parent, GA_PARENT ))
              if ((escape.drawable = X11DRV_get_whole_window( parent ))) break;
  
 -        if (escape.drawable)
 +        if (escape.drawable != top_window)
          {
              POINT pt = { 0, 0 };
-             MapWindowPoints( 0, parent, &pt, 1 );
-@@ -2182,7 +2185,6 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
+             NtUserMapWindowPoints( 0, parent, &pt, 1 );
+@@ -2168,7 +2171,6 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
              OffsetRect( &escape.dc_rect, pt.x, pt.y );
              if (flags & DCX_CLIPCHILDREN) escape.mode = ClipByChildren;
          }
 -        else escape.drawable = X11DRV_get_whole_window( top );
      }
  
-     ExtEscape( hdc, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );
+     NtGdiExtEscape( hdc, NULL, 0, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );
 --- a/dlls/comctl32/button.c
 +++ b/dlls/comctl32/button.c
 @@ -1833,7 +1833,8 @@ static void BUTTON_DrawThemedLabel(const
@@ -302,7 +302,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      INT      oldBkMode;
 --- a/dlls/gdiplus/font.c
 +++ b/dlls/gdiplus/font.c
-@@ -1394,7 +1394,8 @@ static WCHAR *load_ttf_name_id( const BY
+@@ -1396,7 +1396,8 @@ static WCHAR *load_ttf_name_id( const BY
      const tt_header *header;
      const tt_name_table *name_table;
      const tt_name_record *name_record;
