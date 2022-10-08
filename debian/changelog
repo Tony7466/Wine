@@ -1,3 +1,13 @@
+wine-development (7.7~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 7.7, released Apr 22, 2022.
+    - More progress on the PE conversion of the X11 and OSS drivers.
+    - Support for UTF-8 as default Ansi codepage.
+    - Theming support for control panel applets.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 08 Oct 2022 05:49:03 +0000
+
 wine-development (7.6~repack-1) unstable; urgency=medium
 
   * New upstream release 7.6, released Apr 8, 2022.
