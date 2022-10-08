@@ -73,7 +73,7 @@
 @ stub ClientThreadSetup
 @ stdcall ClientToScreen(long ptr)
 @ stdcall -import ClipCursor(ptr) NtUserClipCursor
-@ stdcall CloseClipboard()
+@ stdcall CloseClipboard() NtUserCloseClipboard
 @ stdcall CloseDesktop(long) NtUserCloseDesktop
 @ stdcall CloseTouchInputHandle(long)
 @ stdcall CloseWindow(long)
@@ -544,7 +544,7 @@
 @ stdcall MonitorFromWindow(long long)
 @ stdcall MoveWindow(long long long long long long) NtUserMoveWindow
 @ stdcall MsgWaitForMultipleObjects(long ptr long long long)
-@ stdcall MsgWaitForMultipleObjectsEx(long ptr long long long)
+@ stdcall MsgWaitForMultipleObjectsEx(long ptr long long long) NtUserMsgWaitForMultipleObjectsEx
 @ stdcall NotifyWinEvent(long long long long) NtUserNotifyWinEvent
 @ stdcall OemKeyScan(long)
 @ stdcall OemToCharA(str ptr)
@@ -571,7 +571,7 @@
 @ stdcall PostMessageW(long long long long)
 @ stdcall PostQuitMessage(long)
 @ stdcall PostThreadMessageA(long long long long)
-@ stdcall PostThreadMessageW(long long long long)
+@ stdcall PostThreadMessageW(long long long long) NtUserPostThreadMessage
 @ stdcall PrintWindow(long long long)
 @ stdcall PrivateExtractIconExA(str long ptr ptr long)
 @ stdcall PrivateExtractIconExW(wstr long ptr ptr long)
@@ -608,6 +608,7 @@
 @ stdcall RegisterRawInputDevices(ptr long long)
 @ stdcall RegisterServicesProcess(long)
 @ stdcall RegisterShellHookWindow (long)
+@ stdcall RegisterSuspendResumeNotification(long long)
 @ stdcall RegisterSystemThread(long long)
 @ stdcall RegisterTasklist (long)
 @ stdcall RegisterTouchHitTestingWindow(long long)
@@ -634,7 +635,7 @@
 @ stdcall SendDlgItemMessageW(long long long long long)
 @ stdcall SendIMEMessageExA(long long)
 @ stdcall SendIMEMessageExW(long long)
-@ stdcall SendInput(long ptr long)
+@ stdcall SendInput(long ptr long) NtUserSendInput
 @ stdcall SendMessageA(long long long long)
 @ stdcall SendMessageCallbackA(long long long long ptr long)
 @ stdcall SendMessageCallbackW(long long long long ptr long)
@@ -783,6 +784,7 @@
 @ stdcall UnregisterHotKey(long long) NtUserUnregisterHotKey
 # @ stub UnregisterMessagePumpHook
 @ stdcall UnregisterPowerSettingNotification(ptr)
+@ stdcall UnregisterSuspendResumeNotification(ptr)
 @ stdcall UnregisterTouchWindow(long)
 @ stdcall UnregisterUserApiHook()
 @ stdcall UpdateLayeredWindow(long long ptr ptr long ptr long ptr long)
@@ -836,6 +838,4 @@
 # All functions must be prefixed with '__wine_' (for internal functions)
 # or 'wine_' (for user-visible functions) to avoid namespace conflicts.
 #
-@ cdecl __wine_send_input(long ptr ptr)
 @ cdecl __wine_set_pixel_format(long long)
-@ cdecl __wine_set_user_driver(ptr long)

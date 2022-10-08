@@ -28,12 +28,14 @@ enum
 {
     /* user32 callbacks */
     NtUserCallEnumDisplayMonitor,
+    NtUserCallSendAsyncCallback,
     NtUserCallWinEventHook,
-    NtUserCallWindowProc,
+    NtUserCallWinProc,
     NtUserCallWindowsHook,
     NtUserLoadDriver,
     /* win16 hooks */
     NtUserCallFreeIcon,
+    NtUserThunkLock,
     /* Vulkan support */
     NtUserCallVulkanDebugReportCallback,
     NtUserCallVulkanDebugUtilsCallback,
@@ -48,6 +50,16 @@ struct enum_display_monitor_params
     HDC hdc;
     RECT rect;
     LPARAM lparam;
+};
+
+/* NtUserCallSendAsyncCallback params */
+struct send_async_params
+{
+    SENDASYNCPROC callback;
+    HWND hwnd;
+    UINT msg;
+    ULONG_PTR data;
+    LRESULT result;
 };
 
 /* NtUserCallWinEventHook params */
@@ -89,6 +101,7 @@ struct win_proc_params
     BOOL ansi;
     BOOL ansi_dst;
     BOOL is_dialog;
+    BOOL needs_unpack;
     enum wm_char_mapping mapping;
     DPI_AWARENESS_CONTEXT dpi_awareness;
     WNDPROC procA;
@@ -128,6 +141,7 @@ enum
     /* temporary exports */
     NtUserExitingThread,
     NtUserThreadDetach,
+    NtUserUpdateClipboard,
 };
 
 /* NtUserCallOneParam codes, not compatible with Windows */
@@ -137,6 +151,7 @@ enum
     NtUserCreateCursorIcon,
     NtUserDispatchMessageA,
     NtUserEnableDC,
+    NtUserEnableThunkLock,
     NtUserGetClipCursor,
     NtUserGetCursorPos,
     NtUserGetIconParam,
@@ -154,7 +169,6 @@ enum
     NtUserGetDeskPattern,
     NtUserGetWinProcPtr,
     NtUserHandleInternalMessage,
-    NtUserIncrementKeyStateCounter,
     NtUserLock,
     NtUserSetCallbacks,
     NtUserSpyGetVKeyName,
@@ -167,6 +181,7 @@ enum
     NtUserGetSystemMetricsForDpi,
     NtUserMirrorRgn,
     NtUserMonitorFromRect,
+    NtUserReplyMessage,
     NtUserSetIconParam,
     NtUserUnhookWindowsHook,
     /* temporary exports */
@@ -184,6 +199,7 @@ enum
     NtUserGetWindowDpiAwarenessContext,
     NtUserGetWindowTextLength,
     NtUserIsWindow,
+    NtUserIsWindowEnabled,
     NtUserIsWindowUnicode,
     NtUserIsWindowVisible,
 };
@@ -224,12 +240,28 @@ enum
 /* NtUserMessageCall codes */
 enum
 {
-    FNID_CALLWNDPROC        = 0x02ab,
-    FNID_SENDMESSAGE        = 0x02b1,
-    FNID_SENDNOTIFYMESSAGE  = 0x02b7,
+    NtUserDefWindowProc       = 0x029e,
+    NtUserCallWindowProc      = 0x02ab,
+    NtUserSendMessage         = 0x02b1,
+    NtUserSendMessageTimeout  = 0x02b3,
+    NtUserSendNotifyMessage   = 0x02b7,
+    NtUserSendMessageCallback = 0x02b8,
     /* Wine-specific exports */
-    FNID_SPYENTER           = 0x0300,
-    FNID_SPYEXIT            = 0x0301,
+    NtUserSpyEnter            = 0x0300,
+    NtUserSpyExit             = 0x0301,
+};
+
+struct send_message_timeout_params
+{
+    UINT flags;
+    UINT timeout;
+    DWORD_PTR result;
+};
+
+struct send_message_callback_params
+{
+    SENDASYNCPROC callback;
+    ULONG_PTR data;
 };
 
 /* color index used to retrieve system 55aa brush */
@@ -310,6 +342,158 @@ enum wine_internal_message
     WM_WINE_LAST_DRIVER_MSG = 0x80001fff
 };
 
+/* the various structures that can be sent in messages, in platform-independent layout */
+struct packed_CREATESTRUCTW
+{
+    ULONGLONG lpCreateParams;
+    ULONGLONG hInstance;
+    UINT      hMenu;
+    DWORD     __pad1;
+    UINT      hwndParent;
+    DWORD     __pad2;
+    INT       cy;
+    INT       cx;
+    INT       y;
+    INT       x;
+    LONG      style;
+    ULONGLONG lpszName;
+    ULONGLONG lpszClass;
+    DWORD     dwExStyle;
+    DWORD     __pad3;
+};
+
+struct packed_DRAWITEMSTRUCT
+{
+    UINT      CtlType;
+    UINT      CtlID;
+    UINT      itemID;
+    UINT      itemAction;
+    UINT      itemState;
+    UINT      hwndItem;
+    DWORD     __pad1;
+    UINT      hDC;
+    DWORD     __pad2;
+    RECT      rcItem;
+    ULONGLONG itemData;
+};
+
+struct packed_MEASUREITEMSTRUCT
+{
+    UINT      CtlType;
+    UINT      CtlID;
+    UINT      itemID;
+    UINT      itemWidth;
+    UINT      itemHeight;
+    ULONGLONG itemData;
+};
+
+struct packed_DELETEITEMSTRUCT
+{
+    UINT      CtlType;
+    UINT      CtlID;
+    UINT      itemID;
+    UINT      hwndItem;
+    DWORD     __pad;
+    ULONGLONG itemData;
+};
+
+struct packed_COMPAREITEMSTRUCT
+{
+    UINT      CtlType;
+    UINT      CtlID;
+    UINT      hwndItem;
+    DWORD     __pad1;
+    UINT      itemID1;
+    ULONGLONG itemData1;
+    UINT      itemID2;
+    ULONGLONG itemData2;
+    DWORD     dwLocaleId;
+    DWORD     __pad2;
+};
+
+struct packed_WINDOWPOS
+{
+    UINT      hwnd;
+    DWORD     __pad1;
+    UINT      hwndInsertAfter;
+    DWORD     __pad2;
+    INT       x;
+    INT       y;
+    INT       cx;
+    INT       cy;
+    UINT      flags;
+    DWORD     __pad3;
+};
+
+struct packed_COPYDATASTRUCT
+{
+    ULONGLONG dwData;
+    DWORD     cbData;
+    ULONGLONG lpData;
+};
+
+struct packed_HELPINFO
+{
+    UINT      cbSize;
+    INT       iContextType;
+    INT       iCtrlId;
+    UINT      hItemHandle;
+    DWORD     __pad;
+    ULONGLONG dwContextId;
+    POINT     MousePos;
+};
+
+struct packed_NCCALCSIZE_PARAMS
+{
+    RECT      rgrc[3];
+    ULONGLONG __pad1;
+    UINT      hwnd;
+    DWORD     __pad2;
+    UINT      hwndInsertAfter;
+    DWORD     __pad3;
+    INT       x;
+    INT       y;
+    INT       cx;
+    INT       cy;
+    UINT      flags;
+    DWORD     __pad4;
+};
+
+struct packed_MSG
+{
+    UINT      hwnd;
+    DWORD     __pad1;
+    UINT      message;
+    ULONGLONG wParam;
+    ULONGLONG lParam;
+    DWORD     time;
+    POINT     pt;
+    DWORD     __pad2;
+};
+
+struct packed_MDINEXTMENU
+{
+    UINT      hmenuIn;
+    DWORD     __pad1;
+    UINT      hmenuNext;
+    DWORD     __pad2;
+    UINT      hwndNext;
+    DWORD     __pad3;
+};
+
+struct packed_MDICREATESTRUCTW
+{
+    ULONGLONG szClass;
+    ULONGLONG szTitle;
+    ULONGLONG hOwner;
+    INT       x;
+    INT       y;
+    INT       cx;
+    INT       cy;
+    DWORD     style;
+    ULONGLONG lParam;
+};
+
 
 HKL     WINAPI NtUserActivateKeyboardLayout( HKL layout, UINT flags );
 BOOL    WINAPI NtUserAddClipboardFormatListener( HWND hwnd );
@@ -326,6 +510,7 @@ ULONG_PTR WINAPI NtUserCallTwoParam( ULONG_PTR arg1, ULONG_PTR arg2, ULONG code 
 LONG    WINAPI NtUserChangeDisplaySettings( UNICODE_STRING *devname, DEVMODEW *devmode, HWND hwnd,
                                             DWORD flags, void *lparam );
 BOOL    WINAPI NtUserClipCursor( const RECT *rect );
+BOOL    WINAPI NtUserCloseClipboard(void);
 BOOL    WINAPI NtUserCloseDesktop( HDESK handle );
 BOOL    WINAPI NtUserCloseWindowStation( HWINSTA handle );
 INT     WINAPI NtUserCopyAcceleratorTable( HACCEL src, ACCEL *dst, INT count );
@@ -391,6 +576,7 @@ UINT    WINAPI NtUserGetKeyboardLayoutList( INT size, HKL *layouts );
 BOOL    WINAPI NtUserGetKeyboardLayoutName( WCHAR *name );
 BOOL    WINAPI NtUserGetKeyboardState( BYTE *state );
 BOOL    WINAPI NtUserGetLayeredWindowAttributes( HWND hwnd, COLORREF *key, BYTE *alpha, DWORD *flags );
+BOOL    WINAPI NtUserGetMessage( MSG *msg, HWND hwnd, UINT first, UINT last );
 int     WINAPI NtUserGetMouseMovePointsEx( UINT size, MOUSEMOVEPOINT *ptin, MOUSEMOVEPOINT *ptout,
                                            int count, DWORD resolution );
 BOOL    WINAPI NtUserGetObjectInformation( HANDLE handle, INT index, void *info,
@@ -414,14 +600,19 @@ INT     WINAPI NtUserInternalGetWindowText( HWND hwnd, WCHAR *text, INT count );
 BOOL    WINAPI NtUserIsClipboardFormatAvailable( UINT format );
 BOOL    WINAPI NtUserKillTimer( HWND hwnd, UINT_PTR id );
 UINT    WINAPI NtUserMapVirtualKeyEx( UINT code, UINT type, HKL layout );
-BOOL    WINAPI NtUserMessageCall( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
-                                  ULONG_PTR result_info, DWORD type, BOOL ansi );
+LRESULT WINAPI NtUserMessageCall( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
+                                  void *result_info, DWORD type, BOOL ansi );
 BOOL    WINAPI NtUserMoveWindow( HWND hwnd, INT x, INT y, INT cx, INT cy, BOOL repaint );
+DWORD   WINAPI NtUserMsgWaitForMultipleObjectsEx( DWORD count, const HANDLE *handles,
+                                                  DWORD timeout, DWORD mask, DWORD flags );
 void    WINAPI NtUserNotifyWinEvent( DWORD event, HWND hwnd, LONG object_id, LONG child_id );
 HWINSTA WINAPI NtUserOpenWindowStation( OBJECT_ATTRIBUTES *attr, ACCESS_MASK access );
 BOOL    WINAPI NtUserSetObjectInformation( HANDLE handle, INT index, void *info, DWORD len );
 HDESK   WINAPI NtUserOpenDesktop( OBJECT_ATTRIBUTES *attr, DWORD flags, ACCESS_MASK access );
 HDESK   WINAPI NtUserOpenInputDesktop( DWORD flags, BOOL inherit, ACCESS_MASK access );
+BOOL    WINAPI NtUserPeekMessage( MSG *msg_out, HWND hwnd, UINT first, UINT last, UINT flags );
+BOOL    WINAPI NtUserPostMessage( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam );
+BOOL    WINAPI NtUserPostThreadMessage( DWORD thread, UINT msg, WPARAM wparam, LPARAM lparam );
 BOOL    WINAPI NtUserRedrawWindow( HWND hwnd, const RECT *rect, HRGN hrgn, UINT flags );
 ATOM    WINAPI NtUserRegisterClassExWOW( const WNDCLASSEXW *wc, UNICODE_STRING *name, UNICODE_STRING *version,
                                          struct client_menu_name *client_menu_name, DWORD fnid, DWORD flags,
@@ -433,6 +624,7 @@ HANDLE  WINAPI NtUserRemoveProp( HWND hwnd, const WCHAR *str );
 BOOL    WINAPI NtUserScrollDC( HDC hdc, INT dx, INT dy, const RECT *scroll, const RECT *clip,
                                HRGN ret_update_rgn, RECT *update_rect );
 HPALETTE WINAPI NtUserSelectPalette( HDC hdc, HPALETTE palette, WORD force_background );
+UINT     WINAPI NtUserSendInput( UINT count, INPUT *inputs, int size );
 HWND     WINAPI NtUserSetActiveWindow( HWND hwnd );
 HWND     WINAPI NtUserSetCapture( HWND hwnd );
 DWORD    WINAPI NtUserSetClassLong( HWND hwnd, INT offset, LONG newval, BOOL ansi );
