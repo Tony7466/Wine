@@ -1,3 +1,13 @@
+wine-development (7.8~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 7.8, released May 6, 2022.
+    - X11 and OSS drivers converted to PE.
+    - WoW64 support in the sound drivers.
+    - Number formatting using the new locale database.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 08 Oct 2022 21:56:06 +0000
+
 wine-development (7.7~repack-2) unstable; urgency=medium
 
   * Fix pointer-to-int-cast warnings.
