@@ -1,9 +1,9 @@
-description: use buf before passing it to realloc (gcc 12 -Wuse-after-free)
+description: do not use pointers after calling realloc (gcc 12 -Wuse-after-free)
 author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/server/queue.c
 +++ b/server/queue.c
-@@ -3334,13 +3334,15 @@ DECL_HANDLER(get_rawinput_buffer)
+@@ -3372,13 +3372,15 @@ DECL_HANDLER(get_rawinput_buffer)
          if (cur + data->size > buf + get_reply_max_size()) break;
          if (cur + data->size > buf + buf_size)
          {
@@ -20,3 +20,22 @@ author: Michael Gilbert <mgilbert@debian.org>
              buf = tmp;
          }
  
+--- a/dlls/winex11.drv/clipboard.c
++++ b/dlls/winex11.drv/clipboard.c
+@@ -1854,6 +1854,7 @@ static BOOL X11DRV_CLIPBOARD_GetProperty
+ 
+     for (;;)
+     {
++        unsigned char *tmp = val;
+         if (XGetWindowProperty(display, w, prop, pos, INT_MAX / 4, False,
+                                AnyPropertyType, atype, &aformat, &nitems, &remain, &buffer))
+         {
+@@ -1863,7 +1864,7 @@ static BOOL X11DRV_CLIPBOARD_GetProperty
+         }
+ 
+         count = get_property_size( aformat, nitems );
+-        *data = realloc( val, pos * sizeof(int) + count + 1 );
++        *data = realloc( tmp, pos * sizeof(int) + count + 1 );
+ 
+         if (!*data)
+         {

@@ -65,7 +65,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  IDL_SRCS = comdlg32_classes.idl
 --- a/dlls/comctl32/Makefile.in
 +++ b/dlls/comctl32/Makefile.in
-@@ -53,4 +53,8 @@ SVG_SRCS = \
+@@ -52,4 +52,8 @@ SVG_SRCS = \
  	idc_copy.svg \
  	idc_divider.svg \
  	idc_divideropen.svg \

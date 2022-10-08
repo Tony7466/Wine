@@ -184,7 +184,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      {
 --- a/programs/winedbg/stack.c
 +++ b/programs/winedbg/stack.c
-@@ -276,7 +276,11 @@ static void stack_print_addr_and_args(vo
+@@ -277,7 +277,11 @@ static void stack_print_addr_and_args(vo
          DWORD           disp;
  
          dbg_printf(" %s", si->Name);
@@ -196,7 +196,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          stack_set_local_scope();
          se.first = TRUE;
-@@ -291,7 +295,11 @@ static void stack_print_addr_and_args(vo
+@@ -292,7 +296,11 @@ static void stack_print_addr_and_args(vo
              dbg_printf(" [%s:%lu]", il.FileName, il.LineNumber);
          dbg_printf(" in %s", im.ModuleName);
      }
@@ -248,7 +248,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return FALSE;
 --- a/programs/winedbg/symbol.c
 +++ b/programs/winedbg/symbol.c
-@@ -749,7 +749,11 @@ BOOL symbol_info_locals(void)
+@@ -745,7 +745,11 @@ BOOL symbol_info_locals(void)
      addr.Mode = AddrModeFlat;
      addr.Offset = frm->linear_pc;
      print_address(&addr, FALSE);
@@ -260,7 +260,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      SymEnumSymbols(dbg_curr_process->handle, 0, NULL, info_locals_cb, (void*)frm->linear_frame);
  
      return TRUE;
-@@ -771,7 +775,11 @@ static BOOL CALLBACK symbols_info_cb(PSY
+@@ -767,7 +771,11 @@ static BOOL CALLBACK symbols_info_cb(PSY
              mi.ModuleName[len - 5] = '\0';
      }
  
