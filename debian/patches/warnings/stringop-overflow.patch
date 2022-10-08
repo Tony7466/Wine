@@ -73,14 +73,15 @@ author: Michael Gilbert <mgilbert@debian.org>
  #include <assert.h>
  #include "ntstatus.h"
  #define WIN32_NO_STATUS
-@@ -332,16 +333,19 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -332,16 +333,20 @@ static BOOL unpack_message( HWND hwnd, U
      {
      case WM_WINE_SETWINDOWPOS:
      {
 -        WINDOWPOS wp;
++        SIZE_T hwnd_max = UINT_MAX;
++
 +        HWND hwnd;
 +        HWND hwnd_after;
-+        HWND hwnd_maximum = (HWND)UINT_MAX;
          if (size < sizeof(ps->wp)) return FALSE;
 -        wp.hwnd            = wine_server_ptr_handle( ps->wp.hwnd );
 -        wp.hwndInsertAfter = wine_server_ptr_handle( ps->wp.hwndInsertAfter );
@@ -92,13 +93,13 @@ author: Michael Gilbert <mgilbert@debian.org>
 -        memcpy( &ps->wp, &wp, sizeof(wp) );
 +        hwnd       = wine_server_ptr_handle( ps->wp.hwnd );
 +        hwnd_after = wine_server_ptr_handle( ps->wp.hwndInsertAfter );
-+        if (hwnd > hwnd_maximum || hwnd_after > hwnd_maximum)
++        if ((SIZE_T)hwnd > hwnd_max || (SIZE_T)hwnd_after > hwnd_max)
 +        {
 +            ERR("Got window handle larger than UINT on this hardware\n");
 +            exit(-1);
 +        }
-+        ps->wp.hwnd            = (UINT)hwnd;
-+        ps->wp.hwndInsertAfter = (UINT)hwnd_after;
++        memcpy( &(ps->wp.hwnd), hwnd, sizeof(UINT) );
++        memcpy( &(ps->wp.hwndInsertAfter), hwnd_after, sizeof(UINT) );
          break;
      }
      case WM_WINE_KEYBOARD_LL_HOOK:

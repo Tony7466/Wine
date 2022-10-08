@@ -1,3 +1,9 @@
+wine-development (7.7~repack-2) unstable; urgency=medium
+
+  * Fix pointer-to-int-cast warnings.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 08 Oct 2022 21:13:28 +0000
+
 wine-development (7.7~repack-1) unstable; urgency=medium
 
   * New upstream release 7.7, released Apr 22, 2022.
