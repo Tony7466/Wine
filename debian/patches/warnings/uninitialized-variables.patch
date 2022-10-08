@@ -25,7 +25,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          switch (c)
 --- a/dlls/ntdll/locale.c
 +++ b/dlls/ntdll/locale.c
-@@ -1808,7 +1808,7 @@ NTSTATUS WINAPI RtlIdnToUnicode( DWORD f
+@@ -1897,7 +1897,7 @@ NTSTATUS WINAPI RtlIdnToUnicode( DWORD f
      int i, buflen, start, end, out_label, out = 0;
      NTSTATUS status;
      UINT buffer[64];
@@ -196,7 +196,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (n > INT_MAX / sizeof(RECT)) return FALSE;
 --- a/dlls/win32u/dc.c
 +++ b/dlls/win32u/dc.c
-@@ -956,6 +956,7 @@ BOOL WINAPI NtGdiGetAndSetDCDword( HDC h
+@@ -949,6 +949,7 @@ BOOL WINAPI NtGdiGetAndSetDCDword( HDC h
  
      default:
          WARN( "unknown method %u\n", method );
@@ -252,7 +252,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #else
 --- a/dlls/ntdll/unix/env.c
 +++ b/dlls/ntdll/unix/env.c
-@@ -2172,7 +2172,8 @@ static RTL_USER_PROCESS_PARAMETERS *buil
+@@ -2164,7 +2164,8 @@ static RTL_USER_PROCESS_PARAMETERS *buil
      static const WCHAR valueW[] = {'1',0};
      static const WCHAR pathW[] = {'P','A','T','H'};
      RTL_USER_PROCESS_PARAMETERS *params = NULL;

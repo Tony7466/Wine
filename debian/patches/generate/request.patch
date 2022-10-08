@@ -54,7 +54,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  DECL_HANDLER(new_process);
  DECL_HANDLER(get_new_process_info);
-@@ -2253,9 +2253,8 @@ C_ASSERT( sizeof(struct get_next_thread_
+@@ -2254,9 +2254,8 @@ C_ASSERT( sizeof(struct get_next_thread_
  C_ASSERT( FIELD_OFFSET(struct get_next_thread_reply, handle) == 8 );
  C_ASSERT( sizeof(struct get_next_thread_reply) == 16 );
  
@@ -80,7 +80,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  static void dump_new_process_request( const struct new_process_request *req )
  {
-@@ -5496,8 +5497,7 @@ static const struct
+@@ -5497,8 +5498,7 @@ static const struct
      { NULL, 0 }
  };
  

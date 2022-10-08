@@ -2,6 +2,8 @@
 hardening-no-fortify-functions
 # incorrectly flagged
 spelling-error-in-binary
+# PE versions are built from the embedded libraries
+embedded-library
 # the loader often requires exit in the shared library, see thread around
 # https://www.winehq.org/pipermail/wine-devel/2016-October/114988.html
 exit-in-shared-library

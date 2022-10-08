@@ -158,7 +158,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  }
  
  static void print_typed_basic(const struct dbg_lvalue* lvalue)
-@@ -723,7 +739,11 @@ void print_address(const ADDRESS64* addr
+@@ -719,7 +735,11 @@ void print_address(const ADDRESS64* addr
      if (SymFromAddr(dbg_curr_process->handle, lin, &disp64, si) && disp64 < si->Size)
      {
          dbg_printf(" %s", si->Name);
@@ -170,7 +170,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
      else
      {
-@@ -731,7 +751,11 @@ void print_address(const ADDRESS64* addr
+@@ -727,7 +747,11 @@ void print_address(const ADDRESS64* addr
          if (!SymGetModuleInfo(dbg_curr_process->handle, lin, &im)) return;
          dbg_printf(" %s", im.ModuleName);
          if (lin > im.BaseOfImage)

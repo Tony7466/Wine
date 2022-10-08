@@ -47,6 +47,7 @@ dlls/win32u/vertical.c
 dlls/wineps.drv/vertical.c
 dlls/kernelbase/collation.c
 dlls/kernelbase/digitmap.c
+dlls/kernelbase/kernelbase.rgs
 
 # automatically generated opengl spec files
 include/wine/wgl*
@@ -110,6 +111,7 @@ dlls/itss/tests/data.chm
 
 # bison generated files
 */*/*.tab.h
+*/*/*/*/*.tab.h
 
 # things that wine's clean doesn't clean
 po/LINGUAS

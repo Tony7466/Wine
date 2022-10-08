@@ -112,7 +112,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          WINED3D_TO_STR(VK_ERROR_INVALID_SHADER_NV);
 --- a/dlls/wined3d/adapter_vk.c
 +++ b/dlls/wined3d/adapter_vk.c
-@@ -2382,7 +2382,7 @@ static bool wined3d_adapter_vk_init_devi
+@@ -2383,7 +2383,7 @@ static bool wined3d_adapter_vk_init_devi
      {
          {VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME,          ~0u},
          {VK_EXT_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME,    ~0u,                true},

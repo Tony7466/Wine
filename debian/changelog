@@ -1,4 +1,4 @@
-wine-development (7.5~repack-1) UNRELEASED; urgency=medium
+wine-development (7.5~repack-1) unstable; urgency=medium
 
   * New upstream release 7.5, released Mar 25, 2022.
     - ALSA driver converted to PE.

@@ -3,9 +3,9 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/make_unicode
 +++ b/tools/make_unicode
-@@ -21,18 +21,19 @@
- 
- use strict;
+@@ -23,26 +23,26 @@ use strict;
+ use XML::LibXML;
+ use Encode;
  
 -# base URLs for www.unicode.org files
 -my $UNIVERSION = "14.0.0";
@@ -26,13 +26,25 @@ author: Michael Gilbert <mgilbert@debian.org>
 +my $MSDATA = "debian/unicode";
  my $MSCODEPAGES = "$MSDATA/Windows Supported Code Page Data Files.zip";
  
+-#my $CLDRDATA = "https://www.unicode.org/Public/cldr/40/cldr-common-40.0.zip";
+-my $CLDRVERSION = "40";
+-my $CLDRDATA = "https://github.com/unicode-org/cldr/archive/refs/tags/release-$CLDRVERSION.zip";
+-my $CLDR33DATA = "https://www.unicode.org/Public/cldr/33/cldr-common-33.0.zip";
++my $CLDRVERSION = "41";
++my $CLDRDATA = "/usr/share/unicode";
++my $CLDR33DATA = "debian/unicode/cldr33";
+ 
+ my $ISO639VERSION = "20220120";
+-my $ISO639 =  "https://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3_Code_Tables_$ISO639VERSION.zip";
++my $ISO639 =  "debian/unicode/iso639";
+ 
  # Sort keys file
 -my $SORTKEYS = "tr10/allkeys.txt";
 +my $SORTKEYS = "tr10/3.1.0/allkeys.txt";
  
  # Default char for undefined mappings
  my $DEF_CHAR = ord '?';
-@@ -440,6 +441,7 @@ my @category_table = ();
+@@ -1498,6 +1498,7 @@ my @category_table = ();
  my @initial_joining_table = ();
  my @direction_table = ();
  my @decomp_table = ();
@@ -40,7 +52,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  my @combining_class_table = ();
  my @decomp_compat_table = ();
  my @comp_exclusions = ();
-@@ -487,25 +489,11 @@ sub open_data_file($$)
+@@ -1545,25 +1546,11 @@ sub open_data_file($$)
  
      if ($base =~ /.*\/([^\/]+)\.zip$/)
      {
@@ -68,7 +80,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
      return *FILE;
  }
-@@ -724,6 +712,7 @@ sub load_data()
+@@ -1793,6 +1780,7 @@ sub load_data()
              if ($decomp =~ /^([0-9a-fA-F]+)\s+([0-9a-fA-F]+)$/)
              {
                  $decomp_table[$src] = $decomp_compat_table[$src] = [ hex $1, hex $2 ];
@@ -76,7 +88,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              }
              elsif ($decomp =~ /^([0-9a-fA-F]+)$/)
              {
-@@ -1986,6 +1975,297 @@ sub dump_bidi_dir_table($)
+@@ -3055,6 +3043,297 @@ sub dump_bidi_dir_table($)
      save_file($filename);
  }
  
@@ -374,7 +386,57 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  sub rol($$)
  {
-@@ -2819,7 +3099,12 @@ sub save_file($)
+@@ -4068,7 +4347,7 @@ sub load_iso639()
+ # build the locale table for locale.nls
+ sub build_locale_data()
+ {
+-    my $base = "cldr-release-$CLDRVERSION";
++    my $base = "cldr";
+     my $suppl = load_xml_data_file( $CLDRDATA, "$base/common/supplemental/supplementalData.xml" );
+     my $subtags = load_xml_data_file( $CLDRDATA, "$base/common/supplemental/likelySubtags.xml" );
+     my $numbers = load_xml_data_file( $CLDRDATA, "$base/common/supplemental/numberingSystems.xml" );
+@@ -4108,6 +4387,9 @@ sub build_locale_data()
+         next if defined $loc->{alias};
+         (my $file = $loc->{file} || $loc->{name}) =~ s/-/_/g;
+         $file = "$base/" . ($loc->{dir} || "common") . "/main/$file.xml";
++
++        if (-e "$CLDRDATA/$file")
++        {
+         my $xml = load_xml_data_file( $CLDRDATA, $file );
+         $loc->{xml} = $xml;
+         $loc->{language} ||= xml_query( $xml, "/ldml/identity/language/\@type" );
+@@ -4115,12 +4397,14 @@ sub build_locale_data()
+         $loc->{script} = xml_query( $xml, "/ldml/identity/script/\@type" );
+         if (!defined($loc->{territory}) && $loc->{name} =~ /-([A-Z]{2}|[0-9]{3})$/) { $loc->{territory} = $1; }
+         if (!defined($loc->{script}) && $loc->{name} =~ /-([A-Z][a-z]{3})(-[A-Z]{2})?$/) { $loc->{script} = $1; }
++        }
+     }
+ 
+     # assign a default territory and sort locale
+ 
+     foreach my $loc (@locales)
+     {
++        next unless defined $loc->{xml};
+         next if defined $loc->{alias};
+         next if defined $loc->{territory};
+         my $id = $loc->{sortlocale};
+@@ -4225,6 +4509,7 @@ sub build_locale_data()
+     my $default_lcid = 0x8001;
+     foreach my $loc (@locales)
+     {
++        next unless defined $loc->{xml};
+         next if defined $loc->{alias};
+         my $sname = $loc->{name};
+         my $language = $loc->{language};
+@@ -4576,6 +4861,7 @@ sub build_locale_data()
+     add_registry_key( "Locale", "00000409" );
+     foreach my $loc (@locales)
+     {
++        next unless defined $loc->{xml};
+         next unless defined $loc->{lcid};
+         next if ($loc->{lcid} & 0x80000000);
+         next if !defined($loc->{alias}) && $loc->{name} !~ /-$loc->{territory}/; # skip neutral locales
+@@ -4709,7 +4995,12 @@ sub save_file($)
  
  chdir ".." if -f "./make_unicode";
  load_data();
