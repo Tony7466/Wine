@@ -88,6 +88,15 @@ author: Michael Gilbert <mgilbert@debian.org>
              }
              elsif ($decomp =~ /^([0-9a-fA-F]+)$/)
              {
+@@ -2235,7 +2224,7 @@ sub load_data()
+ 
+     # load the Unihan mappings
+ 
+-    my $UNIHAN = open_data_file( $UNIHAN, "Unihan_Variants.txt" );
++    my $UNIHAN = open_data_file( $UNIHAN, "Unihan_Variants.txt.bz2" );
+     while (<$UNIHAN>)
+     {
+         s/\#.*//;  # remove comments
 @@ -3405,6 +3394,297 @@ sub dump_bidi_dir_table($)
      save_file($filename);
  }
@@ -457,14 +466,3 @@ author: Michael Gilbert <mgilbert@debian.org>
  dump_bidi_dir_table( "dlls/gdi32/uniscribe/direction.c" );
  dump_bidi_dir_table( "dlls/dwrite/direction.c" );
  dump_mirroring( "dlls/gdi32/uniscribe/mirror.c" );
---- a/tools/make_unicode
-+++ b/tools/make_unicode
-@@ -2224,7 +2224,7 @@ sub load_data()
- 
-     # load the Unihan mappings
- 
--    my $UNIHAN = open_data_file( $UNIHAN, "Unihan_Variants.txt" );
-+    my $UNIHAN = open_data_file( $UNIHAN, "Unihan_Variants.txt.bz2" );
-     while (<$UNIHAN>)
-     {
-         s/\#.*//;  # remove comments

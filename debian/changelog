@@ -1,7 +1,6 @@
-wine-development (7.9~repack-1) UNRELEASED; urgency=medium
+wine-development (7.9~repack-1) unstable; urgency=medium
 
   * New upstream release 7.9, released May 20, 2022.
-    - Preliminary work towards PE conversion of macOS driver.
     - A number of fixes for test failures on Windows.
     - Various bug fixes.
 
