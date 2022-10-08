@@ -45,7 +45,6 @@
 #include "wine/exception.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(msg);
-WINE_DECLARE_DEBUG_CHANNEL(key);
 
 
 /* Message class descriptor */
@@ -265,21 +264,6 @@ static void map_wparam_WtoA( MSG *msg, BOOL remove )
     }
 }
 
-
-/***********************************************************************
- *           handle_internal_message
- *
- * Handle an internal Wine message instead of calling the window proc.
- */
-LRESULT handle_internal_message( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam )
-{
-    MSG m;
-    m.hwnd    = hwnd;
-    m.message = msg;
-    m.wParam  = wparam;
-    m.lParam  = lparam;
-    return NtUserCallOneParam( (UINT_PTR)&m, NtUserHandleInternalMessage );
-}
 
 /* since the WM_DDE_ACK response to a WM_DDE_EXECUTE message should contain the handle
  * to the memory handle, we keep track (in the server side) of all pairs of handle
@@ -709,7 +693,7 @@ BOOL WINAPI SendMessageCallbackW( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
  */
 BOOL WINAPI ReplyMessage( LRESULT result )
 {
-    return NtUserCallTwoParam( result, 0, NtUserReplyMessage );
+    return NtUserReplyMessage( result, NULL );
 }
 
 
@@ -863,50 +847,7 @@ BOOL WINAPI IsDialogMessageA( HWND hwndDlg, LPMSG pmsg )
  */
 BOOL WINAPI TranslateMessage( const MSG *msg )
 {
-    UINT message;
-    WCHAR wp[8];
-    BYTE state[256];
-    INT len;
-
-    if (msg->message < WM_KEYFIRST || msg->message > WM_KEYLAST) return FALSE;
-    if (msg->message != WM_KEYDOWN && msg->message != WM_SYSKEYDOWN) return TRUE;
-
-    TRACE_(key)("Translating key %s (%04lX), scancode %04x\n",
-                SPY_GetVKeyName(msg->wParam), msg->wParam, HIWORD(msg->lParam));
-
-    switch (msg->wParam)
-    {
-    case VK_PACKET:
-        message = (msg->message == WM_KEYDOWN) ? WM_CHAR : WM_SYSCHAR;
-        TRACE_(key)("PostMessageW(%p,%s,%04x,%08x)\n",
-                    msg->hwnd, SPY_GetMsgName(message, msg->hwnd), HIWORD(msg->lParam), LOWORD(msg->lParam));
-        PostMessageW( msg->hwnd, message, HIWORD(msg->lParam), LOWORD(msg->lParam));
-        return TRUE;
-
-    case VK_PROCESSKEY:
-        return ImmTranslateMessage(msg->hwnd, msg->message, msg->wParam, msg->lParam);
-    }
-
-    NtUserGetKeyboardState( state );
-    len = ToUnicode(msg->wParam, HIWORD(msg->lParam), state, wp, ARRAY_SIZE(wp), 0);
-    if (len == -1)
-    {
-        message = (msg->message == WM_KEYDOWN) ? WM_DEADCHAR : WM_SYSDEADCHAR;
-        TRACE_(key)("-1 -> PostMessageW(%p,%s,%04x,%08lx)\n",
-            msg->hwnd, SPY_GetMsgName(message, msg->hwnd), wp[0], msg->lParam);
-        PostMessageW( msg->hwnd, message, wp[0], msg->lParam );
-    }
-    else if (len > 0)
-    {
-        INT i;
-
-        message = (msg->message == WM_KEYDOWN) ? WM_CHAR : WM_SYSCHAR;
-        TRACE_(key)("%d -> PostMessageW(%p,%s,<x>,%08lx) for <x> in %s\n", len, msg->hwnd,
-            SPY_GetMsgName(message, msg->hwnd), msg->lParam, debugstr_wn(wp, len));
-        for (i = 0; i < len; i++)
-            PostMessageW( msg->hwnd, message, wp[i], msg->lParam );
-    }
-    return TRUE;
+    return NtUserTranslateMessage( msg, 0 );
 }
 
 
@@ -920,24 +861,21 @@ LRESULT WINAPI DECLSPEC_HOTPATCH DispatchMessageA( const MSG* msg )
     LRESULT retval;
 
       /* Process timer messages */
-    if ((msg->message == WM_TIMER) || (msg->message == WM_SYSTIMER))
+    if (msg->lParam && msg->message == WM_TIMER)
     {
-        if (msg->lParam)
+        __TRY
         {
-            __TRY
-            {
-                retval = CallWindowProcA( (WNDPROC)msg->lParam, msg->hwnd,
-                                          msg->message, msg->wParam, GetTickCount() );
-            }
-            __EXCEPT_ALL
-            {
-                retval = 0;
-            }
-            __ENDTRY
-            return retval;
+            retval = CallWindowProcA( (WNDPROC)msg->lParam, msg->hwnd,
+                                      msg->message, msg->wParam, GetTickCount() );
         }
+        __EXCEPT_ALL
+        {
+            retval = 0;
+        }
+        __ENDTRY
+        return retval;
     }
-    return NtUserCallOneParam( (UINT_PTR)msg, NtUserDispatchMessageA );
+    return NtUserDispatchMessageA( msg );
 }
 
 
@@ -1013,7 +951,7 @@ LRESULT WINAPI DECLSPEC_HOTPATCH DispatchMessageW( const MSG* msg )
  */
 DWORD WINAPI GetMessagePos(void)
 {
-    return get_user_thread_info()->GetMessagePosVal;
+    return NtUserGetThreadInfo()->message_pos;
 }
 
 
@@ -1034,7 +972,7 @@ DWORD WINAPI GetMessagePos(void)
  */
 LONG WINAPI GetMessageTime(void)
 {
-    return get_user_thread_info()->GetMessageTimeVal;
+    return NtUserGetThreadInfo()->message_time;
 }
 
 
@@ -1044,7 +982,7 @@ LONG WINAPI GetMessageTime(void)
  */
 LPARAM WINAPI GetMessageExtraInfo(void)
 {
-    return get_user_thread_info()->GetMessageExtraInfoVal;
+    return NtUserGetThreadInfo()->message_extra;
 }
 
 
@@ -1053,9 +991,9 @@ LPARAM WINAPI GetMessageExtraInfo(void)
  */
 LPARAM WINAPI SetMessageExtraInfo(LPARAM lParam)
 {
-    struct user_thread_info *thread_info = get_user_thread_info();
-    LONG old_value = thread_info->GetMessageExtraInfoVal;
-    thread_info->GetMessageExtraInfoVal = lParam;
+    struct ntuser_thread_info *thread_info = NtUserGetThreadInfo();
+    LONG old_value = thread_info->message_extra;
+    thread_info->message_extra = lParam;
     return old_value;
 }
 
@@ -1315,7 +1253,7 @@ BOOL WINAPI SetMessageQueue( INT size )
  */
 BOOL WINAPI MessageBeep( UINT i )
 {
-    return NtUserCallOneParam( i, NtUserMessageBeep );
+    return NtUserMessageBeep( i );
 }
 
 
@@ -1328,12 +1266,23 @@ UINT_PTR WINAPI SetTimer( HWND hwnd, UINT_PTR id, UINT timeout, TIMERPROC proc )
 }
 
 
+/******************************************************************
+ *      SetSystemTimer (USER32.@)
+ */
+UINT_PTR WINAPI SetSystemTimer( HWND hwnd, UINT_PTR id, UINT timeout, void *unknown )
+{
+    if (unknown) FIXME( "ignoring unknown parameter %p\n", unknown );
+
+    return NtUserSetSystemTimer( hwnd, id, timeout );
+}
+
+
 /***********************************************************************
  *		KillSystemTimer (USER32.@)
  */
 BOOL WINAPI KillSystemTimer( HWND hwnd, UINT_PTR id )
 {
-    return NtUserCallHwndParam( hwnd, id, NtUserKillSystemTimer );
+    return NtUserKillSystemTimer( hwnd, id );
 }
 
 

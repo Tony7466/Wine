@@ -26,6 +26,7 @@
 #include "wingdi.h"
 #include "winuser.h"
 #include "imm.h"
+#include "ddk/imm.h"
 
 #include "controls.h"
 #include "user_private.h"
@@ -75,7 +76,7 @@ void USER_CheckNotLock(void)
  */
 UINT WINAPI UserRealizePalette( HDC hdc )
 {
-    return NtUserCallOneParam( HandleToUlong(hdc), NtUserRealizePalette );
+    return NtUserRealizePalette( hdc );
 }
 
 
@@ -164,6 +165,7 @@ static const struct user_callbacks user_funcs =
     EndMenu,
     HideCaret,
     ImmProcessKey,
+    ImmTranslateMessage,
     SetSystemMenu,
     ShowCaret,
     free_menu_items,
@@ -174,9 +176,10 @@ static const struct user_callbacks user_funcs =
     process_rawinput_message,
     rawinput_device_get_usages,
     register_builtin_classes,
-    MENU_SetMenu,
     SCROLL_SetStandardScrollPainted,
+    toggle_caret,
     unpack_dde_message,
+    update_mouse_tracking_info,
     register_imm,
     unregister_imm,
 };

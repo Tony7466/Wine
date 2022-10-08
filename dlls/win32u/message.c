@@ -36,6 +36,7 @@
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(msg);
+WINE_DECLARE_DEBUG_CHANNEL(key);
 WINE_DECLARE_DEBUG_CHANNEL(relay);
 
 #define MAX_WINPROC_RECURSION  64
@@ -1079,7 +1080,7 @@ BOOL reply_message_result( LRESULT result, MSG *msg )
  *
  * Handle an internal Wine message instead of calling the window proc.
  */
-LRESULT handle_internal_message( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam )
+static LRESULT handle_internal_message( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam )
 {
     switch(msg)
     {
@@ -1797,9 +1798,9 @@ static int peek_message( MSG *msg, HWND hwnd, UINT first, UINT last, UINT flags,
                     continue;  /* ignore it */
                 }
                 *msg = info.msg;
-                thread_info->GetMessagePosVal = MAKELONG( info.msg.pt.x, info.msg.pt.y );
-                thread_info->GetMessageTimeVal = info.msg.time;
-                thread_info->GetMessageExtraInfoVal = msg_data->hardware.info;
+                thread_info->client_info.message_pos   = MAKELONG( info.msg.pt.x, info.msg.pt.y );
+                thread_info->client_info.message_time  = info.msg.time;
+                thread_info->client_info.message_extra = msg_data->hardware.info;
                 free( buffer );
                 call_hooks( WH_GETMESSAGE, HC_ACTION, flags & PM_REMOVE, (LPARAM)msg, TRUE );
                 return 1;
@@ -1832,9 +1833,9 @@ static int peek_message( MSG *msg, HWND hwnd, UINT first, UINT last, UINT flags,
             }
             *msg = info.msg;
             msg->pt = point_phys_to_win_dpi( info.msg.hwnd, info.msg.pt );
-            thread_info->GetMessagePosVal = MAKELONG( msg->pt.x, msg->pt.y );
-            thread_info->GetMessageTimeVal = info.msg.time;
-            thread_info->GetMessageExtraInfoVal = 0;
+            thread_info->client_info.message_pos   = MAKELONG( msg->pt.x, msg->pt.y );
+            thread_info->client_info.message_time  = info.msg.time;
+            thread_info->client_info.message_extra = 0;
             thread_info->msg_source = msg_source_unavailable;
             free( buffer );
             call_hooks( WH_GETMESSAGE, HC_ACTION, flags & PM_REMOVE, (LPARAM)msg, TRUE );
@@ -2450,7 +2451,7 @@ LRESULT dispatch_message( const MSG *msg, BOOL ansi )
     LRESULT retval = 0;
 
     /* Process timer messages */
-    if (msg->lParam && (msg->message == WM_TIMER || msg->message == WM_SYSTIMER))
+    if (msg->lParam && msg->message == WM_TIMER)
     {
         params.func = (WNDPROC)msg->lParam;
         params.result = &retval; /* FIXME */
@@ -2468,6 +2469,22 @@ LRESULT dispatch_message( const MSG *msg, BOOL ansi )
         __ENDTRY
         return retval;
     }
+    if (msg->message == WM_SYSTIMER)
+    {
+        switch (msg->wParam)
+        {
+            case SYSTEM_TIMER_CARET:
+                if (!user_callbacks) break;
+                user_callbacks->toggle_caret( msg->hwnd );
+                return 0;
+
+            case SYSTEM_TIMER_TRACK_MOUSE:
+                if (!user_callbacks) break;
+                user_callbacks->update_mouse_tracking_info( msg->hwnd );
+                return 0;
+        }
+    }
+
     if (!msg->hwnd) return 0;
 
     spy_enter_message( SPY_DISPATCHMESSAGE, msg->hwnd, msg->message, msg->wParam, msg->lParam );
@@ -2508,9 +2525,11 @@ static BOOL is_message_broadcastable( UINT msg )
  */
 static BOOL broadcast_message( struct send_message_info *info, DWORD_PTR *res_ptr )
 {
-    if (is_message_broadcastable( info->msg ))
+    HWND *list;
+
+    if (is_message_broadcastable( info->msg ) &&
+        (list = list_window_children( 0, get_desktop_window(), NULL, 0 )))
     {
-        HWND *list = list_window_children( 0, get_desktop_window(), NULL, 0 );
         int i;
 
         for (i = 0; list[i]; i++)
@@ -2632,12 +2651,11 @@ UINT_PTR WINAPI NtUserSetTimer( HWND hwnd, UINT_PTR id, UINT timeout, TIMERPROC 
 /***********************************************************************
  *           NtUserSetSystemTimer (win32u.@)
  */
-UINT_PTR WINAPI NtUserSetSystemTimer( HWND hwnd, UINT_PTR id, UINT timeout, TIMERPROC proc )
+UINT_PTR WINAPI NtUserSetSystemTimer( HWND hwnd, UINT_PTR id, UINT timeout )
 {
     UINT_PTR ret;
-    WNDPROC winproc = 0;
 
-    if (proc) winproc = alloc_winproc( (WNDPROC)proc, TRUE );
+    TRACE( "window %p, id %#lx, timeout %u\n", hwnd, id, timeout );
 
     timeout = min( max( USER_TIMER_MINIMUM, timeout ), USER_TIMER_MAXIMUM );
 
@@ -2647,7 +2665,7 @@ UINT_PTR WINAPI NtUserSetSystemTimer( HWND hwnd, UINT_PTR id, UINT timeout, TIME
         req->msg    = WM_SYSTIMER;
         req->id     = id;
         req->rate   = timeout;
-        req->lparam = (ULONG_PTR)winproc;
+        req->lparam = 0;
         if (!wine_server_call_err( req ))
         {
             ret = reply->id;
@@ -2657,7 +2675,6 @@ UINT_PTR WINAPI NtUserSetSystemTimer( HWND hwnd, UINT_PTR id, UINT timeout, TIME
     }
     SERVER_END_REQ;
 
-    TRACE( "Added %p %lx %p timeout %d\n", hwnd, id, winproc, timeout );
     return ret;
 }
 
@@ -2876,4 +2893,60 @@ LRESULT WINAPI NtUserMessageCall( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
         FIXME( "%p %x %lx %lx %p %x %x\n", hwnd, msg, wparam, lparam, result_info, type, ansi );
     }
     return 0;
+}
+
+/***********************************************************************
+ *           NtUserTranslateMessage (win32u.@)
+ */
+BOOL WINAPI NtUserTranslateMessage( const MSG *msg, UINT flags )
+{
+    UINT message;
+    WCHAR wp[8];
+    BYTE state[256];
+    INT len;
+
+    if (flags) FIXME( "unsupported flags %x\n", flags );
+
+    if (msg->message < WM_KEYFIRST || msg->message > WM_KEYLAST) return FALSE;
+    if (msg->message != WM_KEYDOWN && msg->message != WM_SYSKEYDOWN) return TRUE;
+
+    TRACE_(key)( "Translating key %s (%04lX), scancode %04x\n",
+                 debugstr_vkey_name( msg->wParam ), msg->wParam, HIWORD(msg->lParam) );
+
+    switch (msg->wParam)
+    {
+    case VK_PACKET:
+        message = (msg->message == WM_KEYDOWN) ? WM_CHAR : WM_SYSCHAR;
+        TRACE_(key)( "PostMessageW(%p,%s,%04x,%08x)\n", msg->hwnd,
+                     debugstr_msg_name( message, msg->hwnd ),
+                     HIWORD(msg->lParam), LOWORD(msg->lParam) );
+        NtUserPostMessage( msg->hwnd, message, HIWORD(msg->lParam), LOWORD(msg->lParam) );
+        return TRUE;
+
+    case VK_PROCESSKEY:
+        return user_callbacks && user_callbacks->pImmTranslateMessage( msg->hwnd, msg->message,
+                                                                       msg->wParam, msg->lParam );
+    }
+
+    NtUserGetKeyboardState( state );
+    len = NtUserToUnicodeEx( msg->wParam, HIWORD(msg->lParam), state, wp, ARRAY_SIZE(wp), 0,
+                             NtUserGetKeyboardLayout(0) );
+    if (len == -1)
+    {
+        message = msg->message == WM_KEYDOWN ? WM_DEADCHAR : WM_SYSDEADCHAR;
+        TRACE_(key)( "-1 -> PostMessageW(%p,%s,%04x,%08lx)\n",
+                     msg->hwnd, debugstr_msg_name( message, msg->hwnd ), wp[0], msg->lParam );
+        NtUserPostMessage( msg->hwnd, message, wp[0], msg->lParam );
+    }
+    else if (len > 0)
+    {
+        INT i;
+
+        message = msg->message == WM_KEYDOWN ? WM_CHAR : WM_SYSCHAR;
+        TRACE_(key)( "%d -> PostMessageW(%p,%s,<x>,%08lx) for <x> in %s\n", len, msg->hwnd,
+                     debugstr_msg_name(message, msg->hwnd), msg->lParam, debugstr_wn(wp, len) );
+        for (i = 0; i < len; i++)
+            NtUserPostMessage( msg->hwnd, message, wp[i], msg->lParam );
+    }
+    return TRUE;
 }

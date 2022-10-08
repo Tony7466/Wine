@@ -755,6 +755,12 @@ BOOL WINAPI NtUserCloseClipboard(void)
     return unix_funcs->pNtUserCloseClipboard();
 }
 
+BOOL WINAPI NtUserChangeClipboardChain( HWND hwnd, HWND next )
+{
+    if (!unix_funcs) return DISP_CHANGE_FAILED;
+    return unix_funcs->pNtUserChangeClipboardChain( hwnd, next );
+}
+
 LONG WINAPI NtUserChangeDisplaySettings( UNICODE_STRING *devname, DEVMODEW *devmode, HWND hwnd,
                                          DWORD flags, void *lparam )
 {
@@ -826,6 +832,12 @@ BOOL WINAPI NtUserDrawIconEx( HDC hdc, INT x0, INT y0, HICON icon, INT width,
     return unix_funcs->pNtUserDrawIconEx( hdc, x0, y0, icon, width, height, istep, hbr, flags );
 }
 
+BOOL WINAPI NtUserEnableMenuItem( HMENU handle, UINT id, UINT flags )
+{
+    if (!unix_funcs) return FALSE;
+    return unix_funcs->pNtUserEnableMenuItem( handle, id, flags );
+}
+
 BOOL WINAPI NtUserEndDeferWindowPosEx( HDWP hdwp, BOOL async )
 {
     if (!unix_funcs) return FALSE;
@@ -850,6 +862,12 @@ BOOL WINAPI NtUserEnumDisplaySettings( UNICODE_STRING *device, DWORD mode,
 {
     if (!unix_funcs) return FALSE;
     return unix_funcs->pNtUserEnumDisplaySettings( device, mode, dev_mode, flags );
+}
+
+INT WINAPI NtUserExcludeUpdateRgn( HDC hdc, HWND hwnd )
+{
+    if (!unix_funcs) return ERROR;
+    return unix_funcs->pNtUserExcludeUpdateRgn( hdc, hwnd );
 }
 
 BOOL WINAPI NtUserFlashWindowEx( FLASHWINFO *info )
@@ -1076,6 +1094,12 @@ WORD WINAPI NtUserSetClassWord( HWND hwnd, INT offset, WORD newval )
     return unix_funcs->pNtUserSetClassWord( hwnd, offset, newval );
 }
 
+HWND WINAPI NtUserSetClipboardViewer( HWND hwnd )
+{
+    if (!unix_funcs) return 0;
+    return unix_funcs->pNtUserSetClipboardViewer( hwnd );
+}
+
 BOOL WINAPI NtUserSetCursorIconData( HCURSOR cursor, UNICODE_STRING *module, UNICODE_STRING *res_name,
                                      struct cursoricon_desc *desc )
 {
@@ -1099,6 +1123,12 @@ BOOL WINAPI NtUserSetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alph
 {
     if (!unix_funcs) return FALSE;
     return unix_funcs->pNtUserSetLayeredWindowAttributes( hwnd, key, alpha, flags );
+}
+
+BOOL WINAPI NtUserSetMenu( HWND hwnd, HMENU menu )
+{
+    if (!unix_funcs) return FALSE;
+    return unix_funcs->pNtUserSetMenu( hwnd, menu );
 }
 
 HWND WINAPI NtUserSetParent( HWND hwnd, HWND parent )
@@ -1178,6 +1208,12 @@ INT WINAPI NtUserToUnicodeEx( UINT virt, UINT scan, const BYTE *state,
 {
     if (!unix_funcs) return 0;
     return unix_funcs->pNtUserToUnicodeEx( virt, scan, state, str, size, flags, layout );
+}
+
+BOOL WINAPI NtUserTranslateMessage( const MSG *msg, UINT flags )
+{
+    if (!unix_funcs) return 0;
+    return unix_funcs->pNtUserTranslateMessage( msg, flags );
 }
 
 BOOL WINAPI NtUserUnregisterClass( UNICODE_STRING *name, HINSTANCE instance,
