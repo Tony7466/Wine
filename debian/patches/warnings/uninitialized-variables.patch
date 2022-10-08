@@ -252,7 +252,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #else
 --- a/dlls/ntdll/unix/env.c
 +++ b/dlls/ntdll/unix/env.c
-@@ -2164,7 +2164,8 @@ static RTL_USER_PROCESS_PARAMETERS *buil
+@@ -2180,7 +2180,8 @@ static RTL_USER_PROCESS_PARAMETERS *buil
      static const WCHAR valueW[] = {'1',0};
      static const WCHAR pathW[] = {'P','A','T','H'};
      RTL_USER_PROCESS_PARAMETERS *params = NULL;
@@ -264,7 +264,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      WCHAR *curdir = get_initial_directory();
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -2170,11 +2170,14 @@ void CDECL X11DRV_GetDC( HDC hdc, HWND h
+@@ -2170,11 +2170,14 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
      }
      else
      {
@@ -280,7 +280,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          {
              POINT pt = { 0, 0 };
              MapWindowPoints( 0, parent, &pt, 1 );
-@@ -2182,7 +2185,6 @@ void CDECL X11DRV_GetDC( HDC hdc, HWND h
+@@ -2182,7 +2185,6 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
              OffsetRect( &escape.dc_rect, pt.x, pt.y );
              if (flags & DCX_CLIPCHILDREN) escape.mode = ClipByChildren;
          }
@@ -314,15 +314,15 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (sizeof(tt_header) > size)
 --- a/dlls/scrobj/scrobj.c
 +++ b/dlls/scrobj/scrobj.c
-@@ -1195,7 +1195,7 @@ static HRESULT create_scriptlet_instance
+@@ -1188,7 +1188,7 @@ static HRESULT create_scriptlet_instance
      struct script_host *factory_host, *host;
      struct scriptlet_instance *obj;
      IDispatch *script_dispatch;
 -    HRESULT hres;
 +    HRESULT hres = E_FAIL;
  
-     if (!(obj = heap_alloc_zero(sizeof(*obj)))) return E_OUTOFMEMORY;
- 
+     if (!(obj = calloc(1, sizeof(*obj))))
+         return E_OUTOFMEMORY;
 --- a/dlls/ntdll/unix/socket.c
 +++ b/dlls/ntdll/unix/socket.c
 @@ -680,7 +680,7 @@ static NTSTATUS sock_recv( HANDLE handle

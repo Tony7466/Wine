@@ -25,7 +25,7 @@ forwarded: not-needed
  /* link file formats */
  
  #include "pshpack1.h"
-@@ -1275,7 +1277,7 @@ static BOOL write_desktop_entry(const WC
+@@ -1293,7 +1295,7 @@ static BOOL write_desktop_entry(const WC
          fprintf(file, "env WINEPREFIX=\"%s\" ", path);
          heap_free( path );
      }
@@ -34,7 +34,7 @@ forwarded: not-needed
      if (args) fprintf(file, " %s", escape(args) );
      fputc( '\n', file );
      fprintf(file, "Type=Application\n");
-@@ -1985,11 +1987,11 @@ static BOOL write_freedesktop_associatio
+@@ -2003,11 +2005,11 @@ static BOOL write_freedesktop_associatio
          if (prefix)
          {
              char *path = wine_get_unix_file_name( prefix );

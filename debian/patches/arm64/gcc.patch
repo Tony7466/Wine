@@ -1,0 +1,16 @@
+description: build with gcc instead of clang on arm64
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/configure.ac
++++ b/configure.ac
+@@ -1002,10 +1002,6 @@ fi
+ WINE_NOTICE_WITH(mingw,[test "x$CROSSTARGET" = "x"],
+                  [MinGW compiler not found, cross-compiling PE files won't be supported.])
+ 
+-case $host_cpu in
+-  aarch64*) test "x$CROSSTARGET" != x || AC_MSG_ERROR([PE cross-compilation is required for ARM64, please install clang/llvm-dlltool/lld, or llvm-mingw.]) ;;
+-esac
+-
+ dnl **** External libraries ****
+ 
+ if test "x$with_system_dllpath" != "x" -a "$CROSSCC" != "false"

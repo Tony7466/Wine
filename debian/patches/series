@@ -33,6 +33,7 @@ armhf/shift-overflow.patch
 armhf/format-strings.patch
 armhf/floating-point.patch
 
+arm64/gcc.patch
 arm64/incorrect-member.patch
 arm64/tautological-compare.patch
 

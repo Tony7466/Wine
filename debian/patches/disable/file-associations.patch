@@ -5,7 +5,7 @@ bug-debian: https://bugs.debian.org/845334
 
 --- a/programs/winemenubuilder/winemenubuilder.c
 +++ b/programs/winemenubuilder/winemenubuilder.c
-@@ -1950,6 +1950,9 @@ static BOOL write_freedesktop_mime_type_
+@@ -1968,6 +1968,9 @@ static BOOL write_freedesktop_mime_type_
  
  static BOOL is_extension_banned(LPCWSTR extension)
  {

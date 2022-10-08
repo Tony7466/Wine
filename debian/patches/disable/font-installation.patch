@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -2792,7 +2792,6 @@ static void output_source_sfd( struct ma
+@@ -2793,7 +2793,6 @@ static void output_source_sfd( struct ma
      }
      if (source->file->flags & FLAG_INSTALL)
      {
