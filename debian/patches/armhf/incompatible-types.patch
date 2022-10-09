@@ -21,3 +21,21 @@ author: Michael Gilbert <mgilbert@debian.org>
      unsigned int i;
      HRESULT hr;
  
+--- a/programs/winedbg/be_arm.c
++++ b/programs/winedbg/be_arm.c
+@@ -1555,12 +1555,12 @@ void be_arm_disasm_one_insn(ADDRESS64 *a
+     int matched = 0;
+ 
+     char tmp[64];
+-    DWORD_PTR* pval;
++    union { DWORD dvalue; struct dbg_lvalue lvalue; } values;
+ 
+-    if (!memory_get_register(CV_ARM_CPSR, &pval, tmp, sizeof(tmp)))
++    if (!memory_get_register(CV_ARM_CPSR, &values.lvalue, tmp, sizeof(tmp)))
+         dbg_printf("\n\tmemory_get_register failed: %s", tmp);
+     else
+-        db_disasm_thumb = (*pval & 0x20) != 0;
++        db_disasm_thumb = (values.dvalue & 0x20) != 0;
+ 
+     db_display = display;
+ 

@@ -4,17 +4,6 @@ bug-debian: https://bugs.debian.org/903622
 bug-debian: https://bugs.debian.org/904041
 bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
 
---- a/libs/wine/config.c
-+++ b/libs/wine/config.c
-@@ -382,6 +382,8 @@ static void init_server_dir( dev_t dev,
- {
-     char *p, *root;
- 
-+    fatal_error("called obsolete init_server_dir\n");
-+
- #ifdef __ANDROID__  /* there's no /tmp dir on Android */
-     root = build_path( config_dir, ".wineserver" );
- #else
 --- a/dlls/ntdll/unix/server.c
 +++ b/dlls/ntdll/unix/server.c
 @@ -24,6 +24,7 @@

@@ -1,3 +1,10 @@
+wine-development (7.11~repack-2) unstable; urgency=medium
+
+  * Remove obsolete API.
+  * Fix build failures on arm.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 09 Oct 2022 19:08:09 +0000
+
 wine-development (7.11~repack-1) unstable; urgency=medium
 
   * New upstream release 7.11, released Jun 17, 2022.

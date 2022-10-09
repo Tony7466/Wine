@@ -10,7 +10,7 @@ debianization/wineserver-persistence.patch
 
 system/zlib.patch
 
-disable/fold.patch
+disable/obsolete-api.patch
 disable/line-wrapping.patch
 disable/generated-data.patch
 disable/addons-download.patch
@@ -31,6 +31,8 @@ fixes/temporary-directory.patch
 armhf/shift-overflow.patch
 armhf/format-strings.patch
 armhf/floating-point.patch
+armhf/variadic-functions.patch
+armhf/incompatible-types.patch
 
 arm64/gcc.patch
 arm64/incorrect-member.patch
@@ -44,5 +46,4 @@ warnings/parentheses.patch
 warnings/use-after-free.patch
 warnings/format-overflow.patch
 warnings/stringop-overflow.patch
-warnings/incompatible-types.patch
 warnings/uninitialized-variables.patch

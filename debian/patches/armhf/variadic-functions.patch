@@ -1,0 +1,76 @@
+description: use AAPCS calling convention for variadic functions on armhf
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/libs/xml2/include/libxml/xmlexports.h
++++ b/libs/xml2/include/libxml/xmlexports.h
+@@ -26,7 +26,7 @@
+ #else
+   #define XMLCALL __cdecl
+ #endif
+-#define XMLCDECL __cdecl
++#define XMLCDECL WINAPIV
+ 
+ /** DOC_ENABLE */
+ #else /* not Windows */
+--- a/libs/xml2/include/libxml/xmlerror.h
++++ b/libs/xml2/include/libxml/xmlerror.h
+@@ -914,7 +914,7 @@ XMLPUBFUN int XMLCALL
+ /*
+  * Internal callback reporting routine
+  */
+-XMLPUBFUN void XMLCALL
++XMLPUBFUN void XMLCDECL
+     __xmlRaiseError		(xmlStructuredErrorFunc schannel,
+ 				 xmlGenericErrorFunc channel,
+ 				 void *data,
+--- a/libs/xml2/include/libxml/xmlstring.h
++++ b/libs/xml2/include/libxml/xmlstring.h
+@@ -94,7 +94,7 @@ XMLPUBFUN xmlChar * XMLCALL
+                 xmlStrncatNew            (const xmlChar *str1,
+                                          const xmlChar *str2,
+                                          int len);
+-XMLPUBFUN int XMLCALL
++XMLPUBFUN int XMLCDECL
+                 xmlStrPrintf             (xmlChar *buf,
+                                          int len,
+                                          const char *msg,
+--- a/libs/xslt/libxslt/xsltutils.c
++++ b/libs/xslt/libxslt/xsltutils.c
+@@ -511,7 +511,7 @@ xsltMessage(xsltTransformContextPtr ctxt
+  *
+  * Default handler for out of context error messages.
+  */
+-static void LIBXSLT_ATTR_FORMAT(2,3)
++static void XMLCDECL LIBXSLT_ATTR_FORMAT(2,3)
+ xsltGenericErrorDefaultFunc(void *ctx ATTRIBUTE_UNUSED, const char *msg, ...) {
+     va_list args;
+ 
+@@ -557,7 +557,7 @@ xsltSetGenericErrorFunc(void *ctx, xmlGe
+  *
+  * Default handler for out of context error messages.
+  */
+-static void LIBXSLT_ATTR_FORMAT(2,3)
++static void XMLCDECL LIBXSLT_ATTR_FORMAT(2,3)
+ xsltGenericDebugDefaultFunc(void *ctx ATTRIBUTE_UNUSED, const char *msg, ...) {
+     va_list args;
+ 
+@@ -698,7 +698,7 @@ xsltSetTransformErrorFunc(xsltTransformC
+  * Display and format an error messages, gives file, line, position and
+  * extra parameters, will use the specific transformation context if available
+  */
+-void
++void XMLCDECL
+ xsltTransformError(xsltTransformContextPtr ctxt,
+ 		   xsltStylesheetPtr style,
+ 		   xmlNodePtr node,
+--- a/libs/xslt/libxslt/xsltutils.h
++++ b/libs/xslt/libxslt/xsltutils.h
+@@ -160,7 +160,7 @@ XSLTPUBFUN void XSLTCALL
+ 		xsltSetTransformErrorFunc	(xsltTransformContextPtr ctxt,
+ 						 void *ctx,
+ 						 xmlGenericErrorFunc handler);
+-XSLTPUBFUN void XSLTCALL
++XSLTPUBFUN void XMLCDECL
+ 		xsltTransformError		(xsltTransformContextPtr ctxt,
+ 						 xsltStylesheetPtr style,
+ 						 xmlNodePtr node,

@@ -1,5 +1,7 @@
+# control file is automatically generated
 debian/control
 
+# build-related temporary files
 wine
 config.*
 con*.file
@@ -11,6 +13,28 @@ tools/config.*
 include/stamp-h
 include/config.h
 include/config.h.in
+
+# obsolete API
+libs/wine/c_*.c
+libs/wine/casemap.c
+libs/wine/collation.c
+libs/wine/compose.c
+libs/wine/config.c
+libs/wine/cpsymbol.c
+libs/wine/cptable.c
+libs/wine/debug.c
+libs/wine/decompose.c
+libs/wine/digitmap.c
+libs/wine/fold.c
+libs/wine/ldt.c
+libs/wine/mbtowc.c
+libs/wine/port.c
+libs/wine/sortkey.c
+libs/wine/string.c
+libs/wine/utf8.c
+libs/wine/wctomb.c
+libs/wine/wctype.c
+libs/wine/unicode.h
 
 # automatically generated files
 dlls/dsound/fir.h
@@ -24,12 +48,6 @@ include/wine/server_protocol.h
 
 # automatically generated unicode files
 nls/*.nls
-libs/wine/wctype.c
-libs/wine/casemap.c
-libs/wine/compose.c
-libs/wine/digitmap.c
-libs/wine/decompose.c
-libs/wine/collation.c
 dlls/gdi32/uniscribe/bracket.c
 dlls/gdi32/uniscribe/direction.c
 dlls/gdi32/uniscribe/indicsyllable.c

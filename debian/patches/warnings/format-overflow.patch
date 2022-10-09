@@ -1,4 +1,4 @@
-description: fix string format warnings, output buffers were not large enough
+description: fix formatting calls that might overflow (gcc -Wformat-overflow)
 author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/winedump/msc.c

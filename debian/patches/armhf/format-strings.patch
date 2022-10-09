@@ -298,6 +298,50 @@ author: Michael Gilbert <mgilbert@debian.org>
      types_print_type(&type, TRUE);
      dbg_printf("\n");
      return TRUE;
+@@ -611,7 +615,11 @@ BOOL types_print_type(const struct dbg_t
+         {
+             const char* longness = "";
+             if (bt == btLong || bt == btULong) longness = " long";
++#ifdef __arm__
++            dbg_printf(": size=%I64lld%s", bitlen, longness);
++#else
+             dbg_printf(": size=%I64d%s", bitlen, longness);
++#endif
+         }
+         break;
+     case SymTagPointerType:
+@@ -662,7 +670,11 @@ BOOL types_print_type(const struct dbg_t
+                         dbg_printf(" %ls", ptr);
+                         HeapFree(GetProcessHeap(), 0, ptr);
+                         if (bitlen != ~(DWORD64)0)
++#ifdef __arm__
++                            dbg_printf(" : %I64llu", bitlen);
++#else
+                             dbg_printf(" : %I64u", bitlen);
++#endif
+                         dbg_printf(";");
+                         if (i < min(fcp->Count, count) - 1 || count > 256) dbg_printf(" ");
+                     }
+@@ -714,11 +726,19 @@ BOOL types_print_type(const struct dbg_t
+                         case VT_I1:  dbg_printf("%d",    V_I1(&variant)); break;
+                         case VT_I2:  dbg_printf("%d",    V_I2(&variant)); break;
+                         case VT_I4:  dbg_printf("%ld",   V_I4(&variant)); break;
++#ifdef __arm__
++                        case VT_I8:  dbg_printf("%I64lld", V_I8(&variant)); break;
++#else
+                         case VT_I8:  dbg_printf("%I64d", V_I8(&variant)); break;
++#endif
+                         case VT_UI1: dbg_printf("%u",    V_UI1(&variant)); break;
+                         case VT_UI2: dbg_printf("%u",    V_UI2(&variant)); break;
+                         case VT_UI4: dbg_printf("%lu",   V_UI4(&variant)); break;
++#ifdef __arm__
++                        case VT_UI8: dbg_printf("%I64llu", V_UI8(&variant)); break;
++#else
+                         case VT_UI8: dbg_printf("%I64u", V_UI8(&variant)); break;
++#endif
+                         }
+                         HeapFree(GetProcessHeap(), 0, ptr);
+                         if (i < min(fcp->Count, count) - 1 || count > 256) dbg_printf(", ");
 --- a/programs/winedbg/expr.c
 +++ b/programs/winedbg/expr.c
 @@ -637,10 +637,18 @@ BOOL expr_print(const struct expr* exp)
