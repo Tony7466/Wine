@@ -74,7 +74,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
      return *FILE;
  }
-@@ -2137,6 +2125,7 @@ sub load_data()
+@@ -2142,6 +2130,7 @@ sub load_data()
              if ($decomp =~ /^([0-9a-fA-F]+)\s+([0-9a-fA-F]+)$/)
              {
                  $decomp_table[$src] = $decomp_compat_table[$src] = [ hex $1, hex $2 ];
@@ -82,7 +82,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              }
              elsif ($decomp =~ /^([0-9a-fA-F]+)$/)
              {
-@@ -2231,7 +2220,7 @@ sub load_data()
+@@ -2240,7 +2229,7 @@ sub load_data()
  
      # load the Unihan mappings
  
@@ -91,7 +91,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      while (<$UNIHAN>)
      {
          s/\#.*//;  # remove comments
-@@ -2434,6 +2423,111 @@ sub dump_krwansung_codepage(@)
+@@ -2451,6 +2440,111 @@ sub dump_krwansung_codepage(@)
      output_codepage_file( 20949 );
  }
  
@@ -203,7 +203,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  ################################################################
  # dump an array of integers
-@@ -3301,6 +3395,297 @@ sub dump_bidi_dir_table($)
+@@ -3336,6 +3430,297 @@ sub dump_bidi_dir_table($)
      save_file($filename);
  }
  
@@ -501,7 +501,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  sub rol($$)
  {
-@@ -4323,7 +4708,7 @@ sub load_iso639()
+@@ -4359,7 +4744,7 @@ sub load_iso639()
  # build the locale table for locale.nls
  sub build_locale_data()
  {
@@ -510,7 +510,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      my $suppl = load_xml_data_file( $CLDRDATA, "$base/common/supplemental/supplementalData.xml" );
      my $subtags = load_xml_data_file( $CLDRDATA, "$base/common/supplemental/likelySubtags.xml" );
      my $numbers = load_xml_data_file( $CLDRDATA, "$base/common/supplemental/numberingSystems.xml" );
-@@ -4363,6 +4748,9 @@ sub build_locale_data()
+@@ -4399,6 +4784,9 @@ sub build_locale_data()
          next if defined $loc->{alias};
          (my $file = $loc->{file} || $loc->{name}) =~ s/-/_/g;
          $file = "$base/" . ($loc->{dir} || "common") . "/main/$file.xml";
@@ -520,7 +520,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          my $xml = load_xml_data_file( $CLDRDATA, $file );
          $loc->{xml} = $xml;
          $loc->{language} ||= xml_query( $xml, "/ldml/identity/language/\@type" );
-@@ -4370,12 +4758,14 @@ sub build_locale_data()
+@@ -4406,12 +4794,14 @@ sub build_locale_data()
          $loc->{script} = xml_query( $xml, "/ldml/identity/script/\@type" );
          if (!defined($loc->{territory}) && $loc->{name} =~ /-([A-Z]{2}|[0-9]{3})$/) { $loc->{territory} = $1; }
          if (!defined($loc->{script}) && $loc->{name} =~ /-([A-Z][a-z]{3})(-[A-Z]{2})?$/) { $loc->{script} = $1; }
@@ -535,7 +535,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          next if defined $loc->{alias};
          next if defined $loc->{territory};
          my $id = $loc->{sortlocale};
-@@ -4421,6 +4811,7 @@ sub build_locale_data()
+@@ -4457,6 +4847,7 @@ sub build_locale_data()
      }
      foreach my $loc (@locales)
      {
@@ -543,7 +543,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          next if defined $loc->{alias};
          my $territory = $loc->{territory};
          $geotable{$territory} ||= { name => $territory };
-@@ -4548,6 +4939,7 @@ sub build_locale_data()
+@@ -4584,6 +4975,7 @@ sub build_locale_data()
      my $default_lcid = 0x8001;
      foreach my $loc (@locales)
      {
@@ -551,7 +551,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          next if defined $loc->{alias};
          my $sname = $loc->{name};
          my $language = $loc->{language};
-@@ -4923,6 +5315,7 @@ sub build_locale_data()
+@@ -4959,6 +5351,7 @@ sub build_locale_data()
      add_registry_key( "Locale", "00000409" );
      foreach my $loc (@locales)
      {
@@ -559,7 +559,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          next unless defined $loc->{lcid};
          next if ($loc->{lcid} & 0x80000000);
          next if !defined($loc->{alias}) && $loc->{name} !~ /-$loc->{territory}/; # skip neutral locales
-@@ -5268,6 +5661,11 @@ sub save_file($)
+@@ -5313,6 +5706,11 @@ sub save_file($)
  
  chdir ".." if -f "./make_unicode";
  load_data();
