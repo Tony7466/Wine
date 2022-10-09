@@ -1,3 +1,13 @@
+wine-development (7.11~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 7.11, released Jun 17, 2022.
+    - Android driver converted to PE.
+    - Zero-copy support with GStreamer.
+    - High Unicode planes support in case mappings.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 09 Oct 2022 06:26:34 +0000
+
 wine-development (7.10~repack-1) unstable; urgency=medium
 
   * New upstream release 7.10, released Jun 3, 2022.
