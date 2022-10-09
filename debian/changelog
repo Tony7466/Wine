@@ -1,3 +1,9 @@
+wine (7.0~repack-9) UNRELEASED; urgency=medium
+
+  * Fix various lintian warnings.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 08 Oct 2022 23:29:58 +0000
+
 wine (7.0~repack-8) unstable; urgency=medium
 
   * Fix lintian warning.
