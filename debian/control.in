@@ -11,7 +11,6 @@ Vcs-Browser: https://salsa.debian.org/wine-team/wine
 Standards-Version: 4.6.1
 Rules-Requires-Root: no
 Build-Depends:
- dpkg (>= 1.21.0),
  debhelper-compat (= 13),
  gcc-mingw-w64-i686 [i386],
  gcc-mingw-w64-x86-64 [amd64],
@@ -69,7 +68,7 @@ Build-Depends:
  libcups2-dev,
  libvkd3d-dev (>= 1.2),
  libcapi20-dev,
- libvulkan-dev,
+ libvulkan-dev (>= 1.2.189.0),
  libfaudio-dev (>= 19.06.07),
  libopenal-dev,
  libdbus-1-dev,

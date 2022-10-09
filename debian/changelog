@@ -1,8 +1,10 @@
-wine (7.0~repack-9) UNRELEASED; urgency=medium
+wine (7.0~repack-9) unstable; urgency=medium
 
   * Fix various lintian warnings.
+  * Drop unnecessary dpkg version constraint.
+  * Indicate vulkan >= 1.2.189.0 is required.
 
- -- Michael Gilbert <mgilbert@debian.org>  Sat, 08 Oct 2022 23:29:58 +0000
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 09 Oct 2022 07:01:14 +0000
 
 wine (7.0~repack-8) unstable; urgency=medium
 
