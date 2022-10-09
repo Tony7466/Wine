@@ -48,7 +48,6 @@ Files-Excluded:
  dlls/opengl32/opengl_ext.c
  dlls/opengl32/opengl_norm.c
  dlls/opengl32/opengl32.spec
- dlls/kernelbase/collation.c
  dlls/kernelbase/kernelbase.rgs
  dlls/*/tests/generated.c
 Upstream-Name: Wine

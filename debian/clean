@@ -45,7 +45,6 @@ dlls/dwrite/scripts.h
 dlls/dwrite/shapers/arabic_table.c
 dlls/win32u/vertical.c
 dlls/wineps.drv/vertical.c
-dlls/kernelbase/collation.c
 dlls/kernelbase/kernelbase.rgs
 
 # automatically generated opengl spec files

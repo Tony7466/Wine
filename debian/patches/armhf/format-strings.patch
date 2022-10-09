@@ -196,7 +196,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      {
 --- a/programs/winedbg/stack.c
 +++ b/programs/winedbg/stack.c
-@@ -277,7 +277,11 @@ static void stack_print_addr_and_args(vo
+@@ -278,7 +278,11 @@ static void stack_print_addr_and_args(vo
          DWORD           disp;
  
          dbg_printf(" %s", si->Name);
@@ -208,7 +208,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          stack_set_local_scope();
          se.first = TRUE;
-@@ -292,7 +296,11 @@ static void stack_print_addr_and_args(vo
+@@ -293,7 +297,11 @@ static void stack_print_addr_and_args(vo
              dbg_printf(" [%s:%lu]", il.FileName, il.LineNumber);
          dbg_printf(" in %s", im.ModuleName);
      }
@@ -286,7 +286,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/programs/winedbg/types.c
 +++ b/programs/winedbg/types.c
-@@ -555,7 +555,11 @@ static BOOL CALLBACK print_types_cb(PSYM
+@@ -565,7 +565,11 @@ static BOOL CALLBACK print_types_cb(PSYM
      struct dbg_type     type;
      type.module = sym->ModBase;
      type.id = sym->TypeIndex;
@@ -300,7 +300,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      return TRUE;
 --- a/programs/winedbg/expr.c
 +++ b/programs/winedbg/expr.c
-@@ -661,10 +661,18 @@ BOOL expr_print(const struct expr* exp)
+@@ -637,10 +637,18 @@ BOOL expr_print(const struct expr* exp)
          dbg_printf("$%s", exp->un.intvar.name);
          break;
      case EXPR_TYPE_U_CONST:

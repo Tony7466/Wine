@@ -22,7 +22,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/dlls/winex11.drv/clipboard.c
 +++ b/dlls/winex11.drv/clipboard.c
-@@ -1854,6 +1854,7 @@ static BOOL X11DRV_CLIPBOARD_GetProperty
+@@ -1853,6 +1853,7 @@ static BOOL X11DRV_CLIPBOARD_GetProperty
  
      for (;;)
      {
@@ -30,7 +30,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (XGetWindowProperty(display, w, prop, pos, INT_MAX / 4, False,
                                 AnyPropertyType, atype, &aformat, &nitems, &remain, &buffer))
          {
-@@ -1863,7 +1864,7 @@ static BOOL X11DRV_CLIPBOARD_GetProperty
+@@ -1862,7 +1863,7 @@ static BOOL X11DRV_CLIPBOARD_GetProperty
          }
  
          count = get_property_size( aformat, nitems );
