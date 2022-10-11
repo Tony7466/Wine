@@ -1,3 +1,9 @@
+wine (7.0~repack-10~bpo11+1) bullseye-backports; urgency=medium
+
+  * Rebuild for bullseye-backports.
+
+ -- Phil Morrell <emorrp1@debian.org>  Wed, 12 Oct 2022 10:25:38 +0100
+
 wine (7.0~repack-10) unstable; urgency=medium
 
   [ Phil Morrell ]
