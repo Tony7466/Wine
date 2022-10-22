@@ -30,9 +30,6 @@ export WINE_CPU=$(shell echo $(DEB_HOST_MULTIARCH) | cut -d- -f1)
 # enable verbose build log
 export DH_VERBOSE=1
 
-# indicate that binary targets do not require root
-export DEB_RULES_REQUIRES_ROOT=no
-
 # specify buildflags (stack protector, fortify, and LTO are not yet supported upstream)
 export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector optimize=-lto
 
@@ -51,15 +48,15 @@ CONFLAGS=--with-gnutls \
          --datarootdir=/$(DATDIR) \
          $(shell dpkg-buildflags --export=cmdline) \
 
-# ignore array bound warnings, not yet handled upstream
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-array-bounds
+# ignore array bound and unused function warnings, not yet handled upstream
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-array-bounds -Wno-unused-function
 
 # enable wine64 on 64-bit architectures
 ifeq ($(DEB_HOST_ARCH_BITS), 64)
 CONFLAGS+=--enable-win64
 # set "-Wno-format" (many format strings are not yet updated for 64-bit)
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-format
-export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector,-format
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector,-format optimize=-lto
 endif
 
 # build with mingw on intel architectures
@@ -70,19 +67,13 @@ endif
 # build with soft float ABI and armv7-a instruction set on armel
 ifeq ($(DEB_HOST_ARCH), armel)
 CONFLAGS+=--with-float-abi=soft
-export DEB_CFLAGS_MAINT_APPEND+=-march=armv7-a -Wno-unused-function
+export DEB_CFLAGS_MAINT_APPEND+=-march=armv7-a
 export DEB_LDFLAGS_MAINT_APPEND+=-march=armv7-a
 endif
 
 # build with hard float ABI on armhf
 ifeq ($(DEB_HOST_ARCH), armhf)
 CONFLAGS+=--with-float-abi=hard
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-unused-function
-endif
-
-# ignore unused function warnings on arm64
-ifeq ($(DEB_HOST_ARCH), arm64)
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-unused-function
 endif
 
 # use date of the latest changelog update as the build date

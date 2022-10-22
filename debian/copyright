@@ -74,11 +74,6 @@ Copyright:
  Non-copyrightable data
 License: Public-Domain
 
-Files: debian/unicode/tr10/*
-Copyright:
- Copyright (c) 1991-2002 Unicode, Inc.
-License: Unicode
-
 Files: debian/unicode/tr46/*
 Copyright:
  Copyright (c) 2010-2019 Unicode, Inc.

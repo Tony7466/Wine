@@ -13,3 +13,5 @@ library-not-linked-against-libc
 shared-library-lacks-prerequisites
 # mingw is not yet capable of producing ASLR capable executables
 portable-executable-missing-security-features
+# incorrectly flagged
+debian-news-entry-has-unknown-version

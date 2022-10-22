@@ -63,43 +63,133 @@ author: Michael Gilbert <mgilbert@debian.org>
      m[0][0] = side[0];
      m[1][0] = side[1];
      m[2][0] = side[2];
+--- a/dlls/user32/winproc.c
++++ b/dlls/user32/winproc.c
+@@ -891,7 +891,7 @@ static BOOL unpack_message( HWND hwnd, U
+             if (!check_string( str, size )) return FALSE;
+             cs.lpszClass = str;
+         }
+-        memcpy( &ps->cs, &cs, sizeof(cs) );
++        memcpy( &ps, &cs, sizeof(cs) );
+         break;
+     }
+     case WM_GETTEXT:
+@@ -925,7 +925,7 @@ static BOOL unpack_message( HWND hwnd, U
+         dis.hDC        = unpack_handle( ps->dis.hDC );
+         dis.rcItem     = ps->dis.rcItem;
+         dis.itemData   = (ULONG_PTR)unpack_ptr( ps->dis.itemData );
+-        memcpy( &ps->dis, &dis, sizeof(dis) );
++        memcpy( &ps, &dis, sizeof(dis) );
+         break;
+     }
+     case WM_MEASUREITEM:
+@@ -938,7 +938,7 @@ static BOOL unpack_message( HWND hwnd, U
+         mis.itemWidth  = ps->mis.itemWidth;
+         mis.itemHeight = ps->mis.itemHeight;
+         mis.itemData   = (ULONG_PTR)unpack_ptr( ps->mis.itemData );
+-        memcpy( &ps->mis, &mis, sizeof(mis) );
++        memcpy( &ps, &mis, sizeof(mis) );
+         break;
+     }
+     case WM_DELETEITEM:
+@@ -950,7 +950,7 @@ static BOOL unpack_message( HWND hwnd, U
+         dls.itemID     = ps->dls.itemID;
+         dls.hwndItem   = unpack_handle( ps->dls.hwndItem );
+         dls.itemData   = (ULONG_PTR)unpack_ptr( ps->dls.itemData );
+-        memcpy( &ps->dls, &dls, sizeof(dls) );
++        memcpy( &ps, &dls, sizeof(dls) );
+         break;
+     }
+     case WM_COMPAREITEM:
+@@ -965,7 +965,7 @@ static BOOL unpack_message( HWND hwnd, U
+         cis.itemID2    = ps->cis.itemID2;
+         cis.itemData2  = (ULONG_PTR)unpack_ptr( ps->cis.itemData2 );
+         cis.dwLocaleId = ps->cis.dwLocaleId;
+-        memcpy( &ps->cis, &cis, sizeof(cis) );
++        memcpy( &ps, &cis, sizeof(cis) );
+         break;
+     }
+     case WM_WINDOWPOSCHANGING:
+@@ -980,7 +980,7 @@ static BOOL unpack_message( HWND hwnd, U
+         wp.cx              = ps->wp.cx;
+         wp.cy              = ps->wp.cy;
+         wp.flags           = ps->wp.flags;
+-        memcpy( &ps->wp, &wp, sizeof(wp) );
++        memcpy( &ps, &wp, sizeof(wp) );
+         break;
+     }
+     case WM_COPYDATA:
+@@ -999,7 +999,7 @@ static BOOL unpack_message( HWND hwnd, U
+             cds.cbData = 0;
+             cds.lpData = 0;
+         }
+-        memcpy( &ps->cds, &cds, sizeof(cds) );
++        memcpy( &ps, &cds, sizeof(cds) );
+         break;
+     }
+     case WM_NOTIFY:
+@@ -1015,7 +1015,7 @@ static BOOL unpack_message( HWND hwnd, U
+         hi.hItemHandle  = unpack_handle( ps->hi.hItemHandle );
+         hi.dwContextId  = (ULONG_PTR)unpack_ptr( ps->hi.dwContextId );
+         hi.MousePos     = ps->hi.MousePos;
+-        memcpy( &ps->hi, &hi, sizeof(hi) );
++        memcpy( &ps, &hi, sizeof(hi) );
+         break;
+     }
+     case WM_STYLECHANGING:
+@@ -1040,7 +1040,7 @@ static BOOL unpack_message( HWND hwnd, U
+             wp.cy              = ps->ncp.cy;
+             wp.flags           = ps->ncp.flags;
+             ncp.lppos = (WINDOWPOS *)((NCCALCSIZE_PARAMS *)&ps->ncp + 1);
+-            memcpy( &ps->ncp, &ncp, sizeof(ncp) );
++            memcpy( &ps, &ncp, sizeof(ncp) );
+             *ncp.lppos = wp;
+         }
+         break;
+@@ -1055,7 +1055,7 @@ static BOOL unpack_message( HWND hwnd, U
+             msg.lParam  = (ULONG_PTR)unpack_ptr( ps->msg.lParam );
+             msg.time    = ps->msg.time;
+             msg.pt      = ps->msg.pt;
+-            memcpy( &ps->msg, &msg, sizeof(msg) );
++            memcpy( &ps, &msg, sizeof(msg) );
+             break;
+         }
+         return TRUE;
+@@ -1140,7 +1140,7 @@ static BOOL unpack_message( HWND hwnd, U
+         mnm.hmenuIn   = unpack_handle( ps->mnm.hmenuIn );
+         mnm.hmenuNext = unpack_handle( ps->mnm.hmenuNext );
+         mnm.hwndNext  = unpack_handle( ps->mnm.hwndNext );
+-        memcpy( &ps->mnm, &mnm, sizeof(mnm) );
++        memcpy( &ps, &mnm, sizeof(mnm) );
+         break;
+     }
+     case WM_SIZING:
+@@ -1176,7 +1176,7 @@ static BOOL unpack_message( HWND hwnd, U
+             if (!check_string( str, size )) return FALSE;
+             mcs.szTitle = str;
+         }
+-        memcpy( &ps->mcs, &mcs, sizeof(mcs) );
++        memcpy( &ps, &mcs, sizeof(mcs) );
+         break;
+     }
+     case WM_MDIGETACTIVE:
 --- a/dlls/win32u/message.c
 +++ b/dlls/win32u/message.c
-@@ -24,6 +24,7 @@
- #pragma makedep unix
- #endif
- 
-+#include <limits.h>
- #include <assert.h>
- #include "ntstatus.h"
- #define WIN32_NO_STATUS
-@@ -332,16 +333,20 @@ static BOOL unpack_message( HWND hwnd, U
-     {
-     case WM_WINE_SETWINDOWPOS:
-     {
--        WINDOWPOS wp;
-+        SIZE_T hwnd_max = UINT_MAX;
-+
-+        HWND hwnd;
-+        HWND hwnd_after;
-         if (size < sizeof(ps->wp)) return FALSE;
--        wp.hwnd            = wine_server_ptr_handle( ps->wp.hwnd );
--        wp.hwndInsertAfter = wine_server_ptr_handle( ps->wp.hwndInsertAfter );
--        wp.x               = ps->wp.x;
--        wp.y               = ps->wp.y;
--        wp.cx              = ps->wp.cx;
--        wp.cy              = ps->wp.cy;
--        wp.flags           = ps->wp.flags;
+@@ -341,7 +341,7 @@ static BOOL unpack_message( HWND hwnd, U
+         wp.cx              = ps->wp.cx;
+         wp.cy              = ps->wp.cy;
+         wp.flags           = ps->wp.flags;
 -        memcpy( &ps->wp, &wp, sizeof(wp) );
-+        hwnd       = wine_server_ptr_handle( ps->wp.hwnd );
-+        hwnd_after = wine_server_ptr_handle( ps->wp.hwndInsertAfter );
-+        if ((SIZE_T)hwnd > hwnd_max || (SIZE_T)hwnd_after > hwnd_max)
-+        {
-+            ERR("Got window handle larger than UINT on this hardware\n");
-+            exit(-1);
-+        }
-+        memcpy( &(ps->wp.hwnd), hwnd, sizeof(UINT) );
-+        memcpy( &(ps->wp.hwndInsertAfter), hwnd_after, sizeof(UINT) );
++        memcpy( &ps, &wp, sizeof(wp) );
          break;
      }
      case WM_WINE_KEYBOARD_LL_HOOK:
+@@ -354,7 +354,7 @@ static BOOL unpack_message( HWND hwnd, U
+         if (size < minsize) return FALSE;
+         h_extra.handle = wine_server_ptr_handle( ps->hook.handle );
+         h_extra.lparam = (LPARAM)(&ps->hook + 1);
+-        memcpy( &ps->hook, &h_extra, sizeof(h_extra) );
++        memcpy( &ps, &h_extra, sizeof(h_extra) );
+         break;
+     }
+     default:

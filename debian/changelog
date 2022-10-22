@@ -1,3 +1,14 @@
+wine-development (7.11~repack-3) unstable; urgency=medium
+
+  * Update standards to 4.6.2.
+  * Depend on libxml-libxml-perl.
+  * Disable link time optimization.
+  * Support building with vulkan 1.3.231.
+  * Support building with gcc-mingw-w64 12.
+  * Ignore debian-news-entry-has-unknown-version lintian warning.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 18 Dec 2022 00:01:18 +0000
+
 wine-development (7.11~repack-2) unstable; urgency=medium
 
   * Remove obsolete API.
