@@ -1,3 +1,14 @@
+wine-development (7.12~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 7.12, released Jul 1, 2022.
+    - Theming support for Qt5 applications.
+    - Bundled vkd3d upgraded to version 1.4.
+    - Improved effect support in Direct2D.
+    - QWORD support in registry tools.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Fri, 23 Dec 2022 06:05:31 +0000
+
 wine-development (7.11~repack-3) unstable; urgency=medium
 
   * Update standards to 4.6.2.
