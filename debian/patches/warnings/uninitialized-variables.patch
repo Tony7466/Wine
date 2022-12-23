@@ -323,3 +323,46 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (!(obj = heap_alloc_zero(sizeof(*obj)))) return E_OUTOFMEMORY;
  
+--- a/dlls/user.exe16/message.c
++++ b/dlls/user.exe16/message.c
+@@ -402,7 +402,7 @@ static EDITWORDBREAKPROC16 get_word_brea
+ 
+ static inline void *get_buffer( void *static_buffer, size_t size, size_t need )
+ {
+-    if (size >= need) return static_buffer;
++    if (size >= need) return NULL;
+     return HeapAlloc( GetProcessHeap(), 0, need );
+ }
+ 
+@@ -1451,6 +1451,11 @@ LRESULT WINPROC_CallProc32ATo16( winproc
+         {
+             RECT *r32 = (RECT *)lParam;
+             RECT16 rect;
++            rect.left = 0;
++            rect.top = 0;
++            rect.right = 0;
++            rect.bottom = 0;
++
+             lParam = MapLS( &rect );
+             ret = callback( HWND_16(hwnd),
+                             (msg == LB_GETITEMRECT) ? LB_GETITEMRECT16 : CB_GETDROPPEDCONTROLRECT16,
+--- a/dlls/kernelbase/loader.c
++++ b/dlls/kernelbase/loader.c
+@@ -326,7 +326,7 @@ done:
+  */
+ HMODULE WINAPI DECLSPEC_HOTPATCH GetModuleHandleA( LPCSTR module )
+ {
+-    HMODULE ret;
++    HMODULE ret = NULL;
+ 
+     GetModuleHandleExA( GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, module, &ret );
+     return ret;
+@@ -338,7 +338,7 @@ HMODULE WINAPI DECLSPEC_HOTPATCH GetModu
+  */
+ HMODULE WINAPI DECLSPEC_HOTPATCH GetModuleHandleW( LPCWSTR module )
+ {
+-    HMODULE ret;
++    HMODULE ret = NULL;
+ 
+     GetModuleHandleExW( GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, module, &ret );
+     return ret;

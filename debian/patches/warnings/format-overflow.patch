@@ -1,4 +1,4 @@
-description: fix string format warnings, output buffers were not large enough
+description: fix formatting calls that might overflow (gcc -Wformat-overflow)
 author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/winedump/msc.c
@@ -22,3 +22,14 @@ author: Michael Gilbert <mgilbert@debian.org>
          case AddrMode1616: name = "16 bit";     break;
          case AddrMode1632: name = "segmented 32 bit"; break;
          case AddrModeReal: name = "vm86";       break;
+--- a/dlls/krnl386.exe16/vxd.c
++++ b/dlls/krnl386.exe16/vxd.c
+@@ -1318,7 +1318,7 @@ void WINAPI __wine_vxd_win32s( CONTEXT *
+ 
+         if (!atom || GlobalGetAtomNameA(atom, name, sizeof(name)))
+         {
+-            TRACE("NtCreateSection: name=%s\n", atom? name : NULL);
++            TRACE("NtCreateSection: name=%s\n", atom? name : "NULL");
+ 
+             result = CreateFileMappingA(hFile, NULL, protect,
+                                           size? size->u.HighPart : 0,

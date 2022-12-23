@@ -59,7 +59,7 @@ ifeq ($(DEB_HOST_ARCH_BITS), 64)
 CONFLAGS+=--enable-win64
 # set "-Wno-format" (many format strings are not yet updated for 64-bit)
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-format
-export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector,-format
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector,-format optimize=-lto
 endif
 
 # build with mingw on intel architectures
