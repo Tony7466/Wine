@@ -14,7 +14,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          }
 --- a/programs/winedbg/tgt_active.c
 +++ b/programs/winedbg/tgt_active.c
-@@ -152,6 +152,7 @@ static BOOL dbg_exception_prolog(BOOL is
+@@ -157,6 +157,7 @@ static BOOL dbg_exception_prolog(BOOL is
  
          switch (addr.Mode)
          {

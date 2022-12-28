@@ -31,7 +31,6 @@ Build-Depends:
  khronos-api (>= 4.6),
  unicode-data (>= 15),
  unicode-data (<< 16),
- unicode-cldr-core (>= 41),
  libgl-dev,
  libxi-dev,
  libxt-dev,

@@ -51,7 +51,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                 "style=0x%08lx  exstyle=0x%08lx  wndproc=%p  text='%s'\n"
                 "client=%ld,%ld-%ld,%ld  window=%ld,%ld-%ld,%ld sysmenu=%p\n",
                 GetWindow(hWnd, GW_HWNDNEXT),
-@@ -795,7 +811,11 @@ void info_win32_virtual(DWORD pid)
+@@ -798,7 +814,11 @@ void info_win32_virtual(DWORD pid)
              type = "";
              prot[0] = '\0';
          }
@@ -63,7 +63,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                     ADDRWIDTH, (DWORD_PTR)addr, ADDRWIDTH, (DWORD_PTR)addr + mbi.RegionSize - 1, state, type, prot);
          if (addr + mbi.RegionSize < addr) /* wrap around ? */
              break;
-@@ -897,7 +917,11 @@ void info_win32_exception(void)
+@@ -900,7 +920,11 @@ void info_win32_exception(void)
          break;
      case EXCEPTION_ACCESS_VIOLATION:
          if (rec->NumberParameters == 2)
@@ -75,7 +75,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                         rec->ExceptionInformation[0] == EXCEPTION_WRITE_FAULT ? "write" :
                         rec->ExceptionInformation[0] == EXCEPTION_EXECUTE_FAULT ? "execute" : "read",
                         ADDRWIDTH, rec->ExceptionInformation[1]);
-@@ -965,14 +989,22 @@ void info_win32_exception(void)
+@@ -968,14 +992,22 @@ void info_win32_exception(void)
          break;
      case EXCEPTION_WINE_CXX_EXCEPTION:
          if(rec->NumberParameters == 3 && rec->ExceptionInformation[0] == EXCEPTION_WINE_CXX_FRAME_MAGIC)

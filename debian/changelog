@@ -1,4 +1,4 @@
-wine-development (7.12~repack-1) UNRELEASED; urgency=medium
+wine-development (7.12~repack-1) unstable; urgency=medium
 
   * New upstream release 7.12, released Jul 1, 2022.
     - Theming support for Qt5 applications.
@@ -6,6 +6,7 @@ wine-development (7.12~repack-1) UNRELEASED; urgency=medium
     - Improved effect support in Direct2D.
     - QWORD support in registry tools.
     - Various bug fixes.
+  * Bundle unicode cldr (closes: #1021523).
 
  -- Michael Gilbert <mgilbert@debian.org>  Fri, 23 Dec 2022 06:05:31 +0000
 

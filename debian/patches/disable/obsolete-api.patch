@@ -10,7 +10,7 @@
 --- a/libs/wine/Makefile.in
 +++ b/libs/wine/Makefile.in
 @@ -1,91 +1,8 @@
- EXTRALIBS = $(COREFOUNDATION_LIBS) $(CORESERVICES_LIBS) $(I386_LIBS)
+ UNIX_LIBS = $(COREFOUNDATION_LIBS) $(CORESERVICES_LIBS) $(I386_LIBS)
  
  C_SRCS = \
 -	c_037.c \

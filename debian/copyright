@@ -54,7 +54,7 @@ Upstream-Name: Wine
 
 Files: *
 Copyright:
- Copyright (c) 1993-2020 Wine project authors (see AUTHORS file)
+ Copyright (c) 1993-2022 Wine project authors (see AUTHORS file)
 License: LGPL-2.1+
 
 Files: debian/*
@@ -69,6 +69,11 @@ Copyright:
  Copyright (c) 2017 Jens Reyer <jre.winesim@gmail.com>
 License: FSFAP
 
+Files: debian/tzdata/*
+Copyright:
+ Non-copyrightable data
+License: Public-Domain
+
 Files: debian/unicode/Windows*
 Copyright:
  Non-copyrightable data
@@ -76,7 +81,17 @@ License: Public-Domain
 
 Files: debian/unicode/tr46/*
 Copyright:
- Copyright (c) 2010-2019 Unicode, Inc.
+ Copyright (c) 2010-2022 Unicode, Inc.
+License: Unicode
+
+Files: debian/unicode/cldr/*
+Copyright:
+ Copyright (c) 1991-2022 Unicode, Inc.
+License: Unicode
+
+Files: debian/unicode/cldr33/*
+Copyright:
+ Copyright (c) 1991-2013 Unicode, Inc.
 License: Unicode
 
 Files: debian/unicode/mappings/*

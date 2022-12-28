@@ -3,133 +3,109 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/make_unicode
 +++ b/tools/make_unicode
-@@ -23,22 +23,23 @@ use strict;
- use XML::LibXML;
+@@ -25,36 +25,38 @@ use Digest::SHA;
  use Encode;
+ use Time::Local qw(timegm_modern);
  
--# base URLs for www.unicode.org files
 -my $UNIVERSION = "14.0.0";
--my $UNIDATA  = "https://www.unicode.org/Public/$UNIVERSION/ucd/UCD.zip";
--my $UNIHAN   = "https://www.unicode.org/Public/$UNIVERSION/ucd/Unihan.zip";
--my $IDNADATA = "https://www.unicode.org/Public/idna/$UNIVERSION";
--my $JISDATA  = "https://www.unicode.org/Public/MAPPINGS/OBSOLETE/EASTASIA/JIS";
--my $KSCDATA  = "https://www.unicode.org/Public/MAPPINGS/OBSOLETE/EASTASIA/KSC";
--my $MSDATA = "https://download.microsoft.com/download/C/F/7/CF713A5E-9FBC-4FD6-9246-275F65C0E498";
-+# Locations of unicode files
 +my $UNIVERSION = `dpkg-parsechangelog --file /usr/share/doc/unicode-data/changelog.Debian.gz --show-field Version | sed s/-.*//`;
 +chomp($UNIVERSION);
-+my $UNIDATA = "/usr/share/unicode";
-+my $UNIHAN = "/usr/share/unicode";
-+my $IDNADATA = "debian/unicode/tr46/$UNIVERSION";
-+my $JISDATA = "debian/unicode/mappings/OBSOLETE/EASTASIA/JIS";
-+my $KSCDATA = "debian/unicode/mappings/OBSOLETE/EASTASIA/KSC";
-+my $MSDATA = "debian/unicode";
- my $MSCODEPAGES = "$MSDATA/Windows Supported Code Page Data Files.zip";
- 
++
  my $CLDRVERSION = "41";
--my $CLDRDATA = "https://github.com/unicode-org/cldr/archive/refs/tags/release-$CLDRVERSION.zip";
--my $CLDR33DATA = "https://www.unicode.org/Public/cldr/33/cldr-common-33.0.zip";
-+my $CLDRDATA = "/usr/share/unicode";
-+my $CLDR33DATA = "debian/unicode/cldr33";
- 
  my $ISO639VERSION = "20220120";
--my $ISO639 =  "https://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3_Code_Tables_$ISO639VERSION.zip";
-+my $ISO639 =  "debian/unicode/iso639";
+ my $TZVERSION = "2022a";
  
- # Default char for undefined mappings
- my $DEF_CHAR = ord '?';
-@@ -1878,25 +1879,11 @@ sub open_data_file($$)
+ my %data_files =
+ (
+- ucd       => { url  => "https://www.unicode.org/Public/$UNIVERSION/ucd/UCD.zip", name => "UCD-$UNIVERSION.zip",
++ ucd       => { url  => "/usr/share/unicode",
+                 sha  => "033a5276b5d7af8844589f8e3482f3977a8385e71d107d375055465178c23600" },
+- unihan    => { url  => "https://www.unicode.org/Public/$UNIVERSION/ucd/Unihan.zip", name => "Unihan-$UNIVERSION.zip",
++ unihan    => { url  => "/usr/share/unicode",
+                 sha  => "2ae4519b2b82cd4d15379c17e57bfb12c33c0f54da4977de03b2b04bcf11852d" },
+- idna      => { url  => "https://www.unicode.org/Public/idna/$UNIVERSION/IdnaMappingTable.txt", name => "IdnaMappingTable-$UNIVERSION.txt",
++ idna      => { url  => "debian/unicode/tr46/$UNIVERSION",
+                 sha  => "d43d9ca367af27b0e4c9dc645cadc23690bdecaf7ec2687f37f01180022d4dfa" },
+- cldr      => { url  => "https://github.com/unicode-org/cldr/archive/refs/tags/release-$CLDRVERSION.zip",
++ cldr      => { url  => "debian/unicode/cldr/release-$CLDRVERSION.zip",
+                 sha  => "a2b7aee281ad2f497d47995808cf5e8f24123b0814ca47f7a824556aec8a0d91" },
+- cldr33    => { url  => "https://www.unicode.org/Public/cldr/33/cldr-common-33.0.zip",
++ cldr33    => { url  => "debian/unicode/cldr33",
+                 sha  => "fa3490082c086d21257153609642f54fcf788fcfda4966fe67f3f6daca0d58b9" },
+- sorting   => { url  => "https://download.microsoft.com/download/C/F/7/CF713A5E-9FBC-4FD6-9246-275F65C0E498/Windows 10 Sorting Weight Table.txt",
++ sorting   => { url  => "debian/unicode/Windows 10 Sorting Weight Table.txt",
+                 sha  => "81fcfa1e5ed3e3a94d329959ff7d97d522ddf9d653d2c4d6ddcccc5cd4df663f" },
+- codepages => { url  => "https://download.microsoft.com/download/C/F/7/CF713A5E-9FBC-4FD6-9246-275F65C0E498/Windows Supported Code Page Data Files.zip",
++ codepages => { url  => "debian/unicode/Windows Supported Code Page Data Files.zip",
+                 sha  => "5074e6dd253056ba61fc6c870c9a955467855129c6ad3a51761c386b301b125a" },
+- iso639    => { url  => "https://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3_Code_Tables_$ISO639VERSION.zip",
++ iso639    => { url  => "debian/unicode/iso639",
+                 sha  => "d912749d10c344835f052a9f31d13f13d5ffc99bc589e1eb88f2b4663e990881" },
+- ksx1001   => { url  => "https://www.unicode.org/Public/MAPPINGS/OBSOLETE/EASTASIA/KSC/KSX1001.TXT",
++ ksx1001   => { url  => "debian/unicode/mappings/OBSOLETE/EASTASIA/KSC/KSX1001.TXT",
+                 sha  => "d8d2a35206ac0ea2865f5d801c9d6717f735bf46f263a658a64a960abe59e371" },
+- jis0208   => { url  => "https://www.unicode.org/Public/MAPPINGS/OBSOLETE/EASTASIA/JIS/JIS0208.TXT",
++ jis0208   => { url  => "debian/unicode/mappings/OBSOLETE/EASTASIA/JIS/JIS0208.TXT",
+                 sha  => "1c571870457f19c97720631fa83ee491549a96ba1436da1296786a67d8632e87" },
+- jis0212   => { url  => "https://www.unicode.org/Public/MAPPINGS/OBSOLETE/EASTASIA/JIS/JIS0212.TXT",
++ jis0212   => { url  => "debian/unicode/mappings/OBSOLETE/EASTASIA/JIS/JIS0212.TXT",
+                 sha  => "477820bb3055bbcc90880d788cd95607d221dc94457bae249231adecf13c12e6" },
+- tzdata    => { url  => "https://data.iana.org/time-zones/releases/tzdata$TZVERSION.tar.gz",
++ tzdata    => { url  => "debian/tzdata/tzdata$TZVERSION.tar.gz",
+                 sha  => "ef7fffd9f4f50f4f58328b35022a32a5a056b245c5cb3d6791dddb342f871664" },
+ );
  
-     if ($base =~ /.*\/([^\/]+)\.zip$/)
+@@ -1897,28 +1899,32 @@ sub open_data_file($@)
+ {
+     my ($id, $name) = @_;
+     my $data = $data_files{$id};
+-    my $cache = ($ENV{XDG_CACHE_HOME} || "$ENV{HOME}/.cache") . "/wine";
+     local *FILE;
+ 
+     my $url = $data->{url};
+-    my $filename = "$cache/" . ($data->{name} || ($url =~ s/.*\/([^\/]+)$/$1/r));
+-    unless (-f $filename)
++    if (!-d $url) # skip shasum check for directories
      {
--        my $zip = "$1$suffix.zip";
--        unless (-f "$cache/$zip")
--        {
--            system "mkdir", "-p", $cache;
--            print "Fetching $base...\n";
--            !system "wget", "-q", "-O", "$cache/$zip", $base or die "cannot fetch $base";
--        }
--        open FILE, "-|", "unzip", "-p", "$cache/$zip", $name or die "cannot extract $name from $zip";
-+        open FILE, "-|", "unzip", "-p", "$base", $name or die "cannot extract $name from $base";
+-        print "Fetching $url...\n";
+-        system "mkdir", "-p", $cache;
+-        !system "wget", "-q", "-O", $filename, $url or die "cannot fetch $url";
++        my $sha = Digest::SHA->new( "sha256" )->addfile( $url )->hexdigest;
++        die "invalid checksum $sha for $url" unless $sha eq $data->{sha};
+     }
+ 
+-    my $sha = Digest::SHA->new( "sha256" )->addfile( $filename )->hexdigest;
+-    die "invalid checksum $sha for $filename" unless $sha eq $data->{sha};
++    my $filename = "$url";
++    if ($name)
++    {
++        $filename = "$url/$name";
++    }
+ 
+-    if ($filename =~ /\.zip$/)
++    if ($url =~ /\.zip$/)
++    {
++        open FILE, "-|", "unzip", "-p", $url, $name or die "cannot extract $name from $url";
++    }
++    elsif ($url =~ /\.tar\.gz$/)
+     {
+-        open FILE, "-|", "unzip", "-p", $filename, $name or die "cannot extract $name from $filename";
++        open FILE, "-|", "tar", "-x", "-f", $url, "-O", $name or die "cannot extract $name from $url";
+     }
+-    elsif ($filename =~ /\.tar\.gz$/)
++    elsif ($filename =~ /\.tar\.bz2$/)
+     {
+-        open FILE, "-|", "tar", "-x", "-f", $filename, "-O", $name or die "cannot extract $name from $filename";
++        open FILE, "-|", "tar", "-x", "-f", $filename or die "cannot extract $name from $filename";
      }
      else
      {
--        (my $dest = "$cache/$name") =~ s/(.*)(\.[^\/.]+)$/$1$suffix$2/;
--        unless (-f $dest)
--        {
--            system "mkdir", "-p", $dir;
--            print "Fetching $base/$name...\n";
--            !system "wget", "-q", "-O", $dest, "$base/$name" or die "cannot fetch $base/$name";
--        }
--        open FILE, "<$dest" or die "cannot open $dest";
-+        open FILE, "<$base/$name" or die "cannot open $base/$name";
-     }
-     return *FILE;
- }
-@@ -2240,7 +2227,7 @@ sub load_data()
+@@ -2267,7 +2273,7 @@ sub load_data()
  
      # load the Unihan mappings
  
--    my $UNIHAN = open_data_file( $UNIHAN, "Unihan_Variants.txt" );
-+    my $UNIHAN = open_data_file( $UNIHAN, "Unihan_Variants.txt.bz2" );
+-    my $UNIHAN = open_data_file( "unihan", "Unihan_Variants.txt" );
++    my $UNIHAN = open_data_file( "unihan", "Unihan_Variants.txt.bz2" );
      while (<$UNIHAN>)
      {
          s/\#.*//;  # remove comments
-@@ -4359,7 +4346,7 @@ sub load_iso639()
- # build the locale table for locale.nls
- sub build_locale_data()
- {
--    my $base = "cldr-release-$CLDRVERSION";
-+    my $base = "cldr";
-     my $suppl = load_xml_data_file( $CLDRDATA, "$base/common/supplemental/supplementalData.xml" );
-     my $subtags = load_xml_data_file( $CLDRDATA, "$base/common/supplemental/likelySubtags.xml" );
-     my $numbers = load_xml_data_file( $CLDRDATA, "$base/common/supplemental/numberingSystems.xml" );
-@@ -4399,6 +4386,9 @@ sub build_locale_data()
-         next if defined $loc->{alias};
-         (my $file = $loc->{file} || $loc->{name}) =~ s/-/_/g;
-         $file = "$base/" . ($loc->{dir} || "common") . "/main/$file.xml";
-+
-+        if (-e "$CLDRDATA/$file")
-+        {
-         my $xml = load_xml_data_file( $CLDRDATA, $file );
-         $loc->{xml} = $xml;
-         $loc->{language} ||= xml_query( $xml, "/ldml/identity/language/\@type" );
-@@ -4406,12 +4396,14 @@ sub build_locale_data()
-         $loc->{script} = xml_query( $xml, "/ldml/identity/script/\@type" );
-         if (!defined($loc->{territory}) && $loc->{name} =~ /-([A-Z]{2}|[0-9]{3})$/) { $loc->{territory} = $1; }
-         if (!defined($loc->{script}) && $loc->{name} =~ /-([A-Z][a-z]{3})(-[A-Z]{2})?$/) { $loc->{script} = $1; }
-+        }
-     }
- 
-     # assign a default territory and sort locale
- 
-     foreach my $loc (@locales)
-     {
-+        next unless defined $loc->{xml};
-         next if defined $loc->{alias};
-         next if defined $loc->{territory};
-         my $id = $loc->{sortlocale};
-@@ -4457,6 +4449,7 @@ sub build_locale_data()
-     }
-     foreach my $loc (@locales)
-     {
-+        next unless defined $loc->{xml};
-         next if defined $loc->{alias};
-         my $territory = $loc->{territory};
-         $geotable{$territory} ||= { name => $territory };
-@@ -4584,6 +4577,7 @@ sub build_locale_data()
-     my $default_lcid = 0x8001;
-     foreach my $loc (@locales)
-     {
-+        next unless defined $loc->{xml};
-         next if defined $loc->{alias};
-         my $sname = $loc->{name};
-         my $language = $loc->{language};
-@@ -4959,6 +4953,7 @@ sub build_locale_data()
-     add_registry_key( "Locale", "00000409" );
-     foreach my $loc (@locales)
-     {
-+        next unless defined $loc->{xml};
-         next unless defined $loc->{lcid};
-         next if ($loc->{lcid} & 0x80000000);
-         next if !defined($loc->{alias}) && $loc->{name} !~ /-$loc->{territory}/; # skip neutral locales
