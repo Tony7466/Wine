@@ -252,7 +252,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #else
 --- a/dlls/ntdll/unix/env.c
 +++ b/dlls/ntdll/unix/env.c
-@@ -1897,7 +1897,8 @@ static RTL_USER_PROCESS_PARAMETERS *buil
+@@ -1900,7 +1900,8 @@ static RTL_USER_PROCESS_PARAMETERS *buil
      static const WCHAR valueW[] = {'1',0};
      static const WCHAR pathW[] = {'P','A','T','H'};
      RTL_USER_PROCESS_PARAMETERS *params = NULL;
@@ -325,15 +325,15 @@ author: Michael Gilbert <mgilbert@debian.org>
          return E_OUTOFMEMORY;
 --- a/dlls/ntdll/unix/socket.c
 +++ b/dlls/ntdll/unix/socket.c
-@@ -680,7 +680,7 @@ static NTSTATUS sock_recv( HANDLE handle
-                            struct WS_sockaddr *addr, int *addr_len, DWORD *ret_flags, int unix_flags, int force_async )
+@@ -679,7 +679,7 @@ static NTSTATUS sock_recv( HANDLE handle
+                            int fd, struct async_recv_ioctl *async, int force_async )
  {
-     struct async_recv_ioctl *async;
+     BOOL nonblocking, alerted;
 -    ULONG_PTR information;
 +    ULONG_PTR information = 0;
      HANDLE wait_handle;
-     DWORD async_size;
      NTSTATUS status;
+     unsigned int i;
 --- a/dlls/user.exe16/message.c
 +++ b/dlls/user.exe16/message.c
 @@ -403,7 +403,7 @@ static EDITWORDBREAKPROC16 get_word_brea

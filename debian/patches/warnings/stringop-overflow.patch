@@ -175,7 +175,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      case WM_MDIGETACTIVE:
 --- a/dlls/win32u/message.c
 +++ b/dlls/win32u/message.c
-@@ -341,7 +341,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -342,7 +342,7 @@ static BOOL unpack_message( HWND hwnd, U
          wp.cx              = ps->wp.cx;
          wp.cy              = ps->wp.cy;
          wp.flags           = ps->wp.flags;
@@ -184,7 +184,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          break;
      }
      case WM_WINE_KEYBOARD_LL_HOOK:
-@@ -354,7 +354,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -355,7 +355,7 @@ static BOOL unpack_message( HWND hwnd, U
          if (size < minsize) return FALSE;
          h_extra.handle = wine_server_ptr_handle( ps->hook.handle );
          h_extra.lparam = (LPARAM)(&ps->hook + 1);
