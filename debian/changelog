@@ -1,3 +1,14 @@
+wine-development (7.15~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 7.15, released Aug 13, 2022.
+    - Command lists in Direct2D.
+    - RSA encryption.
+    - Initial Wow64 thunking in WIN32U.
+    - Optional support for colors in test output.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Thu, 29 Dec 2022 14:03:52 +0000
+
 wine-development (7.14~repack-1) unstable; urgency=medium
 
   * New upstream release 7.14, released Jul 29, 2022.
