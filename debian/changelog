@@ -1,3 +1,14 @@
+wine-development (7.16~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 7.16, released Aug 28, 2022.
+    - Wow64 support in X11 driver.
+    - Session storage in MSHTML.
+    - Unicode regexp fixes in MSXML.
+    - IME improvements in Edit control.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Thu, 29 Dec 2022 21:10:42 +0000
+
 wine-development (7.15~repack-1) unstable; urgency=medium
 
   * New upstream release 7.15, released Aug 13, 2022.
