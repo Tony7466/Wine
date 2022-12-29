@@ -196,7 +196,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (n > INT_MAX / sizeof(RECT)) return FALSE;
 --- a/dlls/win32u/dc.c
 +++ b/dlls/win32u/dc.c
-@@ -973,6 +973,7 @@ BOOL WINAPI NtGdiGetAndSetDCDword( HDC h
+@@ -974,6 +974,7 @@ BOOL WINAPI NtGdiGetAndSetDCDword( HDC h
  
      default:
          WARN( "unknown method %u\n", method );
@@ -325,7 +325,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return E_OUTOFMEMORY;
 --- a/dlls/ntdll/unix/socket.c
 +++ b/dlls/ntdll/unix/socket.c
-@@ -853,7 +853,7 @@ static NTSTATUS sock_recv( HANDLE handle
+@@ -852,7 +852,7 @@ static NTSTATUS sock_recv( HANDLE handle
                             int fd, struct async_recv_ioctl *async, int force_async )
  {
      BOOL nonblocking, alerted;
@@ -377,3 +377,13 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      GetModuleHandleExW( GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, module, &ret );
      return ret;
+--- a/dlls/user32/winproc.c
++++ b/dlls/user32/winproc.c
+@@ -1245,6 +1245,7 @@ BOOL WINAPI User32CallWindowProc( struct
+         else
+         {
+             size = sizeof(stack_buffer);
++            for (ULONG i = 0; i < size; ++i) stack_buffer[i] = '\0';
+             buffer = stack_buffer;
+         }
+         if (!unpack_message( params->hwnd, params->msg, &params->wparam,

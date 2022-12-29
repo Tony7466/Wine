@@ -65,7 +65,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      m[2][0] = side[2];
 --- a/dlls/user32/winproc.c
 +++ b/dlls/user32/winproc.c
-@@ -884,7 +884,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -882,7 +882,7 @@ static BOOL unpack_message( HWND hwnd, U
              if (!check_string( str, size )) return FALSE;
              cs.lpszClass = str;
          }
@@ -74,7 +74,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          break;
      }
      case WM_GETTEXT:
-@@ -918,7 +918,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -916,7 +916,7 @@ static BOOL unpack_message( HWND hwnd, U
          dis.hDC        = unpack_handle( ps->dis.hDC );
          dis.rcItem     = ps->dis.rcItem;
          dis.itemData   = (ULONG_PTR)unpack_ptr( ps->dis.itemData );
@@ -83,7 +83,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          break;
      }
      case WM_MEASUREITEM:
-@@ -931,7 +931,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -929,7 +929,7 @@ static BOOL unpack_message( HWND hwnd, U
          mis.itemWidth  = ps->mis.itemWidth;
          mis.itemHeight = ps->mis.itemHeight;
          mis.itemData   = (ULONG_PTR)unpack_ptr( ps->mis.itemData );
@@ -92,7 +92,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          break;
      }
      case WM_DELETEITEM:
-@@ -943,7 +943,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -941,7 +941,7 @@ static BOOL unpack_message( HWND hwnd, U
          dls.itemID     = ps->dls.itemID;
          dls.hwndItem   = unpack_handle( ps->dls.hwndItem );
          dls.itemData   = (ULONG_PTR)unpack_ptr( ps->dls.itemData );
@@ -101,7 +101,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          break;
      }
      case WM_COMPAREITEM:
-@@ -958,7 +958,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -956,7 +956,7 @@ static BOOL unpack_message( HWND hwnd, U
          cis.itemID2    = ps->cis.itemID2;
          cis.itemData2  = (ULONG_PTR)unpack_ptr( ps->cis.itemData2 );
          cis.dwLocaleId = ps->cis.dwLocaleId;
@@ -110,7 +110,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          break;
      }
      case WM_WINDOWPOSCHANGING:
-@@ -973,7 +973,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -971,7 +971,7 @@ static BOOL unpack_message( HWND hwnd, U
          wp.cx              = ps->wp.cx;
          wp.cy              = ps->wp.cy;
          wp.flags           = ps->wp.flags;
@@ -119,7 +119,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          break;
      }
      case WM_COPYDATA:
-@@ -992,7 +992,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -990,7 +990,7 @@ static BOOL unpack_message( HWND hwnd, U
              cds.cbData = 0;
              cds.lpData = 0;
          }
@@ -128,7 +128,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          break;
      }
      case WM_NOTIFY:
-@@ -1008,7 +1008,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -1006,7 +1006,7 @@ static BOOL unpack_message( HWND hwnd, U
          hi.hItemHandle  = unpack_handle( ps->hi.hItemHandle );
          hi.dwContextId  = (ULONG_PTR)unpack_ptr( ps->hi.dwContextId );
          hi.MousePos     = ps->hi.MousePos;
@@ -137,7 +137,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          break;
      }
      case WM_STYLECHANGING:
-@@ -1033,7 +1033,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -1031,7 +1031,7 @@ static BOOL unpack_message( HWND hwnd, U
              wp.cy              = ps->ncp.cy;
              wp.flags           = ps->ncp.flags;
              ncp.lppos = (WINDOWPOS *)((NCCALCSIZE_PARAMS *)&ps->ncp + 1);
@@ -146,7 +146,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              *ncp.lppos = wp;
          }
          break;
-@@ -1048,7 +1048,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -1046,7 +1046,7 @@ static BOOL unpack_message( HWND hwnd, U
              msg.lParam  = (ULONG_PTR)unpack_ptr( ps->msg.lParam );
              msg.time    = ps->msg.time;
              msg.pt      = ps->msg.pt;
@@ -155,7 +155,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              break;
          }
          return TRUE;
-@@ -1133,7 +1133,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -1131,7 +1131,7 @@ static BOOL unpack_message( HWND hwnd, U
          mnm.hmenuIn   = unpack_handle( ps->mnm.hmenuIn );
          mnm.hmenuNext = unpack_handle( ps->mnm.hmenuNext );
          mnm.hwndNext  = unpack_handle( ps->mnm.hwndNext );
@@ -164,7 +164,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          break;
      }
      case WM_SIZING:
-@@ -1169,7 +1169,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -1167,7 +1167,7 @@ static BOOL unpack_message( HWND hwnd, U
              if (!check_string( str, size )) return FALSE;
              mcs.szTitle = str;
          }

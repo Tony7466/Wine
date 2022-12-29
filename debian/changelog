@@ -1,4 +1,4 @@
-wine-development (7.15~repack-1) UNRELEASED; urgency=medium
+wine-development (7.15~repack-1) unstable; urgency=medium
 
   * New upstream release 7.15, released Aug 13, 2022.
     - Command lists in Direct2D.
