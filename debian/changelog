@@ -1,3 +1,12 @@
+wine-development (7.17~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 7.17, released Sep 9, 2022.
+    - High Unicode planes support in DirectWrite.
+    - Some work towards Wow64 support in the Vulkan driver.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Thu, 29 Dec 2022 22:05:30 +0000
+
 wine-development (7.16~repack-1) unstable; urgency=medium
 
   * New upstream release 7.16, released Aug 28, 2022.
