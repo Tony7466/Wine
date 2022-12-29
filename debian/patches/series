@@ -41,7 +41,6 @@ arm64/tautological-compare.patch
 warnings/libs.patch
 warnings/bison.patch
 warnings/address.patch
-warnings/execstack.patch
 warnings/parentheses.patch
 warnings/use-after-free.patch
 warnings/format-overflow.patch

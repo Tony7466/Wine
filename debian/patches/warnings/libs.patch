@@ -26,7 +26,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/libs/faudio/src/FAudio_platform_win32.c
 +++ b/libs/faudio/src/FAudio_platform_win32.c
-@@ -1092,7 +1092,7 @@ static HRESULT FAudio_WMAMF_ProcessInput
+@@ -1096,7 +1096,7 @@ static HRESULT FAudio_WMAMF_ProcessInput
  
  	copy_size = min(buffer->AudioBytes - impl->input_pos, impl->input_size);
  	if (!copy_size) return S_FALSE;
@@ -35,7 +35,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  	hr = MFCreateSample(&sample);
  	FAudio_assert(!FAILED(hr) && "Failed to create sample!");
-@@ -1120,7 +1120,7 @@ static HRESULT FAudio_WMAMF_ProcessInput
+@@ -1124,7 +1124,7 @@ static HRESULT FAudio_WMAMF_ProcessInput
  	if (hr == MF_E_NOTACCEPTING) return S_OK;
  	if (FAILED(hr))
  	{
@@ -44,7 +44,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  		return hr;
  	}
  
-@@ -1147,7 +1147,7 @@ static HRESULT FAudio_WMAMF_ProcessOutpu
+@@ -1151,7 +1151,7 @@ static HRESULT FAudio_WMAMF_ProcessOutpu
  		if (hr == MF_E_TRANSFORM_NEED_MORE_INPUT) return S_FALSE;
  		if (FAILED(hr))
  		{
@@ -53,7 +53,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  			return hr;
  		}
  
-@@ -1179,7 +1179,7 @@ static HRESULT FAudio_WMAMF_ProcessOutpu
+@@ -1183,7 +1183,7 @@ static HRESULT FAudio_WMAMF_ProcessOutpu
  		}
  		FAudio_memcpy(impl->output_buf + impl->output_pos, copy_buf, copy_size);
  		impl->output_pos += copy_size;

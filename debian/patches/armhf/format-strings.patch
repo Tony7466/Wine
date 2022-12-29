@@ -15,8 +15,8 @@ author: Michael Gilbert <mgilbert@debian.org>
                 ADDRWIDTH, ADDRWIDTH, module->mi.BaseOfImage,
                 ADDRWIDTH, ADDRWIDTH, module->mi.BaseOfImage + module->mi.ImageSize,
                 is_embedded ? "\\" : get_symtype_str(&module->mi), module->name);
-@@ -284,7 +288,11 @@ void info_win32_module(DWORD64 base)
-     HeapFree(GetProcessHeap(), 0, im.modules);
+@@ -286,7 +290,11 @@ void info_win32_module(DWORD64 base)
+     free(im.modules);
  
      if (base && !num_printed)
 +#ifdef __arm__
@@ -27,7 +27,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  }
  
  struct class_walker
-@@ -392,7 +400,11 @@ static void info_window(HWND hWnd, int i
+@@ -396,7 +404,11 @@ static void info_window(HWND hWnd, int i
          if (!GetWindowTextA(hWnd, wndName, sizeof(wndName)))
              strcpy(wndName, "-- Empty --");
  
@@ -39,7 +39,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                     indent, "", (DWORD_PTR)hWnd, 12 - indent, "",
                     clsName, GetWindowLongW(hWnd, GWL_STYLE),
                     ADDRWIDTH, (ULONG_PTR)GetWindowLongPtrW(hWnd, GWLP_WNDPROC),
-@@ -434,7 +446,11 @@ void info_win32_window(HWND hWnd, BOOL d
+@@ -438,7 +450,11 @@ void info_win32_window(HWND hWnd, BOOL d
  
      /* FIXME missing fields: hmemTaskQ, hrgnUpdate, dce, flags, pProp, scroll */
      dbg_printf("next=%p  child=%p  parent=%p  owner=%p  class='%s'\n"
@@ -51,7 +51,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                 "style=0x%08lx  exstyle=0x%08lx  wndproc=%p  text='%s'\n"
                 "client=%ld,%ld-%ld,%ld  window=%ld,%ld-%ld,%ld sysmenu=%p\n",
                 GetWindow(hWnd, GW_HWNDNEXT),
-@@ -798,7 +814,11 @@ void info_win32_virtual(DWORD pid)
+@@ -851,7 +867,11 @@ void info_win32_virtual(DWORD pid)
              type = "";
              prot[0] = '\0';
          }
@@ -63,7 +63,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                     ADDRWIDTH, (DWORD_PTR)addr, ADDRWIDTH, (DWORD_PTR)addr + mbi.RegionSize - 1, state, type, prot);
          if (addr + mbi.RegionSize < addr) /* wrap around ? */
              break;
-@@ -900,7 +920,11 @@ void info_win32_exception(void)
+@@ -953,7 +973,11 @@ void info_win32_exception(void)
          break;
      case EXCEPTION_ACCESS_VIOLATION:
          if (rec->NumberParameters == 2)
@@ -75,7 +75,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                         rec->ExceptionInformation[0] == EXCEPTION_WRITE_FAULT ? "write" :
                         rec->ExceptionInformation[0] == EXCEPTION_EXECUTE_FAULT ? "execute" : "read",
                         ADDRWIDTH, rec->ExceptionInformation[1]);
-@@ -968,14 +992,22 @@ void info_win32_exception(void)
+@@ -1021,14 +1045,22 @@ void info_win32_exception(void)
          break;
      case EXCEPTION_WINE_CXX_EXCEPTION:
          if(rec->NumberParameters == 3 && rec->ExceptionInformation[0] == EXCEPTION_WINE_CXX_FRAME_MAGIC)
@@ -196,7 +196,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      {
 --- a/programs/winedbg/stack.c
 +++ b/programs/winedbg/stack.c
-@@ -278,7 +278,11 @@ static void stack_print_addr_and_args(vo
+@@ -280,7 +280,11 @@ static void stack_print_addr_and_args(vo
          DWORD           disp;
  
          dbg_printf(" %s", si->Name);
@@ -208,7 +208,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          stack_set_local_scope();
          se.first = TRUE;
-@@ -293,7 +297,11 @@ static void stack_print_addr_and_args(vo
+@@ -295,7 +299,11 @@ static void stack_print_addr_and_args(vo
              dbg_printf(" [%s:%lu]", il.FileName, il.LineNumber);
          dbg_printf(" in %s", im.ModuleName);
      }
@@ -222,7 +222,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  /******************************************************************
 --- a/programs/winedbg/break.c
 +++ b/programs/winedbg/break.c
-@@ -319,7 +319,11 @@ void break_add_break_from_lineno(const c
+@@ -325,7 +325,11 @@ void break_add_break_from_lineno(const c
          il.SizeOfStruct = sizeof(il);
          if (!SymGetLineFromAddr64(dbg_curr_process->handle, linear, &disp, &il))
          {
@@ -234,7 +234,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              return;
          }
          filename = il.FileName;
-@@ -402,7 +406,11 @@ static void break_add_watch(const struct
+@@ -408,7 +412,11 @@ static void break_add_watch(const struct
              {
              case 4: case 2: case 1: break;
              default:
@@ -246,7 +246,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                  break;
              }
          }
-@@ -751,7 +759,11 @@ BOOL break_should_continue(ADDRESS64* ad
+@@ -757,7 +765,11 @@ BOOL break_should_continue(ADDRESS64* ad
          case be_xpoint_watch_write:
              dbg_printf("Stopped on watchpoint %d at ", dbg_curr_thread->stopped_xpoint);
              print_address(addr, TRUE);
@@ -286,7 +286,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/programs/winedbg/types.c
 +++ b/programs/winedbg/types.c
-@@ -565,7 +565,11 @@ static BOOL CALLBACK print_types_cb(PSYM
+@@ -599,7 +599,11 @@ static BOOL CALLBACK print_types_cb(PSYM
      struct dbg_type     type;
      type.module = sym->ModBase;
      type.id = sym->TypeIndex;
@@ -298,7 +298,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      types_print_type(&type, TRUE);
      dbg_printf("\n");
      return TRUE;
-@@ -611,7 +615,11 @@ BOOL types_print_type(const struct dbg_t
+@@ -645,7 +649,11 @@ BOOL types_print_type(const struct dbg_t
          {
              const char* longness = "";
              if (bt == btLong || bt == btULong) longness = " long";
@@ -310,7 +310,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          }
          break;
      case SymTagPointerType:
-@@ -662,7 +670,11 @@ BOOL types_print_type(const struct dbg_t
+@@ -695,7 +703,11 @@ BOOL types_print_type(const struct dbg_t
                          dbg_printf(" %ls", ptr);
                          HeapFree(GetProcessHeap(), 0, ptr);
                          if (bitlen != ~(DWORD64)0)
@@ -322,7 +322,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                          dbg_printf(";");
                          if (i < min(fcp->Count, count) - 1 || count > 256) dbg_printf(" ");
                      }
-@@ -714,11 +726,19 @@ BOOL types_print_type(const struct dbg_t
+@@ -746,11 +758,19 @@ BOOL types_print_type(const struct dbg_t
                          case VT_I1:  dbg_printf("%d",    V_I1(&variant)); break;
                          case VT_I2:  dbg_printf("%d",    V_I2(&variant)); break;
                          case VT_I4:  dbg_printf("%ld",   V_I4(&variant)); break;

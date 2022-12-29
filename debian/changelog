@@ -1,4 +1,4 @@
-wine-development (7.14~repack-1) UNRELEASED; urgency=medium
+wine-development (7.14~repack-1) unstable; urgency=medium
 
   * New upstream release 7.14, released Jul 29, 2022.
     - More progress on syscall interface for USER32.
