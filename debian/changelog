@@ -1,4 +1,4 @@
-wine-development (7.16~repack-1) UNRELEASED; urgency=medium
+wine-development (7.16~repack-1) unstable; urgency=medium
 
   * New upstream release 7.16, released Aug 28, 2022.
     - Wow64 support in X11 driver.

@@ -113,7 +113,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      generator = VkGenerator(registry)
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -5514,9 +5514,9 @@ const char *wined3d_debug_vkresult(VkRes
+@@ -5515,9 +5515,9 @@ const char *wined3d_debug_vkresult(VkRes
      switch (vr)
      {
  #define WINED3D_TO_STR(x) case x: return #x

@@ -14,7 +14,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #else /* not Windows */
 --- a/libs/xml2/include/libxml/xmlerror.h
 +++ b/libs/xml2/include/libxml/xmlerror.h
-@@ -914,7 +914,7 @@ XMLPUBFUN int XMLCALL
+@@ -916,7 +916,7 @@ XMLPUBFUN int XMLCALL
  /*
   * Internal callback reporting routine
   */
@@ -36,7 +36,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                                           const char *msg,
 --- a/libs/xslt/libxslt/xsltutils.c
 +++ b/libs/xslt/libxslt/xsltutils.c
-@@ -511,7 +511,7 @@ xsltMessage(xsltTransformContextPtr ctxt
+@@ -510,7 +510,7 @@ xsltMessage(xsltTransformContextPtr ctxt
   *
   * Default handler for out of context error messages.
   */
@@ -45,7 +45,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  xsltGenericErrorDefaultFunc(void *ctx ATTRIBUTE_UNUSED, const char *msg, ...) {
      va_list args;
  
-@@ -557,7 +557,7 @@ xsltSetGenericErrorFunc(void *ctx, xmlGe
+@@ -556,7 +556,7 @@ xsltSetGenericErrorFunc(void *ctx, xmlGe
   *
   * Default handler for out of context error messages.
   */
@@ -54,7 +54,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  xsltGenericDebugDefaultFunc(void *ctx ATTRIBUTE_UNUSED, const char *msg, ...) {
      va_list args;
  
-@@ -698,7 +698,7 @@ xsltSetTransformErrorFunc(xsltTransformC
+@@ -697,7 +697,7 @@ xsltSetTransformErrorFunc(xsltTransformC
   * Display and format an error messages, gives file, line, position and
   * extra parameters, will use the specific transformation context if available
   */
@@ -65,7 +65,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  		   xmlNodePtr node,
 --- a/libs/xslt/libxslt/xsltutils.h
 +++ b/libs/xslt/libxslt/xsltutils.h
-@@ -160,7 +160,7 @@ XSLTPUBFUN void XSLTCALL
+@@ -157,7 +157,7 @@ XSLTPUBFUN void XSLTCALL
  		xsltSetTransformErrorFunc	(xsltTransformContextPtr ctxt,
  						 void *ctx,
  						 xmlGenericErrorFunc handler);

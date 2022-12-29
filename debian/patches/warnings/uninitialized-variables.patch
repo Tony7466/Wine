@@ -379,7 +379,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      return ret;
 --- a/dlls/user32/winproc.c
 +++ b/dlls/user32/winproc.c
-@@ -1245,6 +1245,7 @@ BOOL WINAPI User32CallWindowProc( struct
+@@ -1194,6 +1194,7 @@ BOOL WINAPI User32CallWindowProc( struct
          else
          {
              size = sizeof(stack_buffer);
