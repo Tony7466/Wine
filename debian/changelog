@@ -1,4 +1,4 @@
-wine-development (7.17~repack-1) UNRELEASED; urgency=medium
+wine-development (7.17~repack-1) unstable; urgency=medium
 
   * New upstream release 7.17, released Sep 9, 2022.
     - High Unicode planes support in DirectWrite.

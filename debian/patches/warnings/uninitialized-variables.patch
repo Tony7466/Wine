@@ -163,7 +163,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!(wFlags & DISPATCH_PROPERTYGET))
 --- a/dlls/mf/session.c
 +++ b/dlls/mf/session.c
-@@ -507,7 +507,7 @@ static void session_clear_queued_topolog
+@@ -496,7 +496,7 @@ static void session_clear_queued_topolog
  static void session_set_topo_status(struct media_session *session, HRESULT status,
          MF_TOPOSTATUS topo_status)
  {

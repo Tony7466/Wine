@@ -15,12 +15,26 @@ Files-Excluded:
  */*/*/test*.mp4
  */*/*/test*.mpg
  */*/*/test*.avi
- libs/wine/wctype.c
+ libs/wine/c_*.c
  libs/wine/casemap.c
+ libs/wine/collation.c
  libs/wine/compose.c
+ libs/wine/config.c
+ libs/wine/cpsymbol.c
+ libs/wine/cptable.c
+ libs/wine/debug.c
  libs/wine/decompose.c
  libs/wine/digitmap.c
- libs/wine/collation.c
+ libs/wine/fold.c
+ libs/wine/ldt.c
+ libs/wine/mbtowc.c
+ libs/wine/port.c
+ libs/wine/sortkey.c
+ libs/wine/string.c
+ libs/wine/utf8.c
+ libs/wine/wctomb.c
+ libs/wine/wctype.c
+ libs/wine/unicode.h
  dlls/dsound/fir.h
  dlls/itss/tests/data.chm
  dlls/vulkan-1/vulkan-1.spec

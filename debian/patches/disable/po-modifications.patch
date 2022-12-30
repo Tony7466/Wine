@@ -3,7 +3,7 @@ author: Michael Gilbert
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -2599,11 +2599,6 @@ static void output_po_files( struct make
+@@ -2598,11 +2598,6 @@ static void output_po_files( struct make
  
      if (linguas.count)
      {
