@@ -419,8 +419,6 @@ static BOOL socket_list_remove( SOCKET socket )
     return FALSE;
 }
 
-#define MAX_SOCKETS_PER_PROCESS      128     /* reasonable guess */
-#define MAX_UDP_DATAGRAM             1024
 static INT WINAPI WSA_DefaultBlockingHook( FARPROC x );
 
 int num_startup;
@@ -572,29 +570,34 @@ BOOL WINAPI DllMain( HINSTANCE instance, DWORD reason, void *reserved )
 /***********************************************************************
  *      WSAStartup		(WS2_32.115)
  */
-int WINAPI WSAStartup(WORD wVersionRequested, LPWSADATA lpWSAData)
+int WINAPI WSAStartup( WORD version, WSADATA *data )
 {
-    TRACE("verReq=%x\n", wVersionRequested);
+    TRACE( "version %#x\n", version );
 
-    if (LOBYTE(wVersionRequested) < 1)
+    if (data)
+    {
+        if (!LOBYTE(version) || LOBYTE(version) > 2
+                || (LOBYTE(version) == 2 && HIBYTE(version) > 2))
+            data->wVersion = MAKEWORD(2, 2);
+        else if (LOBYTE(version) == 1 && HIBYTE(version) > 1)
+            data->wVersion = MAKEWORD(1, 1);
+        else
+            data->wVersion = version;
+        data->wHighVersion = MAKEWORD(2, 2);
+        strcpy( data->szDescription, "WinSock 2.0" );
+        strcpy( data->szSystemStatus, "Running" );
+        data->iMaxSockets = (LOBYTE(version) == 1 ? 32767 : 0);
+        data->iMaxUdpDg = (LOBYTE(version) == 1 ? 65467 : 0);
+        /* don't fill lpVendorInfo */
+    }
+
+    if (!LOBYTE(version))
         return WSAVERNOTSUPPORTED;
 
-    if (!lpWSAData) return WSAEINVAL;
+    if (!data) return WSAEFAULT;
 
     num_startup++;
-
-    /* that's the whole of the negotiation for now */
-    lpWSAData->wVersion = wVersionRequested;
-    /* return winsock information */
-    lpWSAData->wHighVersion = 0x0202;
-    strcpy(lpWSAData->szDescription, "WinSock 2.0" );
-    strcpy(lpWSAData->szSystemStatus, "Running" );
-    lpWSAData->iMaxSockets = MAX_SOCKETS_PER_PROCESS;
-    lpWSAData->iMaxUdpDg = MAX_UDP_DATAGRAM;
-    /* don't do anything with lpWSAData->lpVendorInfo */
-    /* (some apps don't allocate the space for this field) */
-
-    TRACE("succeeded starts: %d\n", num_startup);
+    TRACE( "increasing startup count to %d\n", num_startup );
     return 0;
 }
 
@@ -2900,8 +2903,14 @@ int WINAPI setsockopt( SOCKET s, int level, int optname, const char *optval, int
         switch(optname)
         {
         case TCP_NODELAY:
-            return server_setsockopt( s, IOCTL_AFD_WINE_SET_TCP_NODELAY, optval, optlen );
-
+        {
+            INT nodelay = *optval;
+            if (optlen <= 0) {
+                SetLastError(WSAEFAULT);
+                return SOCKET_ERROR;
+            }
+            return server_setsockopt( s, IOCTL_AFD_WINE_SET_TCP_NODELAY, (char*)&nodelay, sizeof(nodelay) );
+        }
         default:
             FIXME("Unknown IPPROTO_TCP optname 0x%08x\n", optname);
             SetLastError(WSAENOPROTOOPT);

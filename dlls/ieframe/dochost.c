@@ -384,9 +384,12 @@ static LRESULT WINAPI doc_view_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
 
 static void free_travellog_entry(travellog_entry_t *entry)
 {
-    if(entry->stream)
+    if(entry->stream) {
         IStream_Release(entry->stream);
+        entry->stream = NULL;
+    }
     heap_free(entry->url);
+    entry->url = NULL;
 }
 
 static IStream *get_travellog_stream(DocHost *This)
@@ -466,6 +469,8 @@ static void update_travellog(DocHost *This)
 
     if(This->travellog.loading_pos == -1) {
         This->travellog.position++;
+        This->travellog.log[This->travellog.position].stream = NULL;
+        This->travellog.log[This->travellog.position].url = NULL;
     }else {
          This->travellog.position = This->travellog.loading_pos;
          This->travellog.loading_pos = -1;
