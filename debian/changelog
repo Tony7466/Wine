@@ -1,3 +1,11 @@
+wine (7.0.1~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 7.0.1, released Nov 8, 2022.
+    - Various bug fixes
+    - Translation updates
+
+ -- Michael Gilbert <mgilbert@debian.org>  Fri, 30 Dec 2022 06:15:52 +0000
+
 wine (7.0~repack-11) unstable; urgency=medium
 
   * Update standards version to 4.6.2.
