@@ -1,0 +1,13 @@
+description: fix NULL passed to memcpy (gcc -Wstringop-overread)
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/dlls/user32/win.c
++++ b/dlls/user32/win.c
+@@ -640,6 +640,7 @@ static RECT *CDECL offscreen_window_surf
+ static void *CDECL offscreen_window_surface_get_bitmap_info( struct window_surface *base, BITMAPINFO *info )
+ {
+     struct offscreen_window_surface *impl = impl_from_window_surface( base );
++    if (!impl) return NULL;
+     memcpy( info, &impl->info, offsetof( BITMAPINFO, bmiColors[0] ) );
+     return impl->bits;
+ }
