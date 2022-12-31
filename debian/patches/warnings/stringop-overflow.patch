@@ -1,195 +1,113 @@
 description: fix operations that potentially overflow (gcc -Wstringop-overflow)
 author: Michael Gilbert <mgilbert@debian.org>
 
---- a/dlls/ddraw/device.c
-+++ b/dlls/ddraw/device.c
-@@ -4685,7 +4685,7 @@ static HRESULT WINAPI d3d_device3_Comput
-         D3DVECTOR *centers, D3DVALUE *radii, DWORD sphere_count, DWORD flags, DWORD *return_values)
- {
-     static const DWORD enabled_planes = 0x3f;
--    struct wined3d_vec4 plane[6];
-+    struct wined3d_vec4 plane[12];
-     unsigned int i, j;
- 
-     TRACE("iface %p, centers %p, radii %p, sphere_count %lu, flags %#lx, return_values %p.\n",
---- a/dlls/glu32/project.c
-+++ b/dlls/glu32/project.c
-@@ -37,20 +37,20 @@
- /*
- ** Make m an identity matrix
- */
--static void __gluMakeIdentityd(GLdouble m[16])
-+static void __gluMakeIdentityd(GLdouble m[4][4])
- {
--    m[0+4*0] = 1; m[0+4*1] = 0; m[0+4*2] = 0; m[0+4*3] = 0;
--    m[1+4*0] = 0; m[1+4*1] = 1; m[1+4*2] = 0; m[1+4*3] = 0;
--    m[2+4*0] = 0; m[2+4*1] = 0; m[2+4*2] = 1; m[2+4*3] = 0;
--    m[3+4*0] = 0; m[3+4*1] = 0; m[3+4*2] = 0; m[3+4*3] = 1;
-+    m[0][0] = 1; m[0][1] = 0; m[0][2] = 0; m[0][3] = 0;
-+    m[1][0] = 0; m[1][1] = 1; m[1][2] = 0; m[1][3] = 0;
-+    m[2][0] = 0; m[2][1] = 0; m[2][2] = 1; m[2][3] = 0;
-+    m[3][0] = 0; m[3][1] = 0; m[3][2] = 0; m[3][3] = 1;
- }
- 
--static void __gluMakeIdentityf(GLfloat m[16])
-+static void __gluMakeIdentityf(GLfloat m[4][4])
- {
--    m[0+4*0] = 1; m[0+4*1] = 0; m[0+4*2] = 0; m[0+4*3] = 0;
--    m[1+4*0] = 0; m[1+4*1] = 1; m[1+4*2] = 0; m[1+4*3] = 0;
--    m[2+4*0] = 0; m[2+4*1] = 0; m[2+4*2] = 1; m[2+4*3] = 0;
--    m[3+4*0] = 0; m[3+4*1] = 0; m[3+4*2] = 0; m[3+4*3] = 1;
-+    m[0][0] = 1; m[0][1] = 0; m[0][2] = 0; m[0][3] = 0;
-+    m[1][0] = 0; m[1][1] = 1; m[1][2] = 0; m[1][3] = 0;
-+    m[2][0] = 0; m[2][1] = 0; m[2][2] = 1; m[2][3] = 0;
-+    m[3][0] = 0; m[3][1] = 0; m[3][2] = 0; m[3][3] = 1;
- }
- 
- /***********************************************************************
-@@ -77,7 +77,7 @@ void WINAPI gluPerspective( GLdouble fov
-     }
-     cotangent = cos(radians) / sine;
- 
--    __gluMakeIdentityd(&m[0][0]);
-+    __gluMakeIdentityd(m);
-     m[0][0] = cotangent / aspect;
-     m[1][1] = cotangent;
-     m[2][2] = -(zFar + zNear) / deltaZ;
-@@ -133,7 +133,7 @@ void WINAPI gluLookAt( GLdouble eyex, GL
-     /* Recompute up as: up = side x forward */
-     cross(side, forward, up);
- 
--    __gluMakeIdentityf(&m[0][0]);
-+    __gluMakeIdentityf(m);
-     m[0][0] = side[0];
-     m[1][0] = side[1];
-     m[2][0] = side[2];
 --- a/dlls/user32/winproc.c
 +++ b/dlls/user32/winproc.c
-@@ -830,7 +830,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -831,7 +831,7 @@ static BOOL unpack_message( HWND hwnd, U
              if (!check_string( str, size )) return FALSE;
              cs.lpszClass = str;
          }
 -        memcpy( &ps->cs, &cs, sizeof(cs) );
-+        memcpy( &ps, &cs, sizeof(cs) );
++        memcpy( ps, &cs, sizeof(cs) );
          break;
      }
      case WM_GETTEXT:
-@@ -864,7 +864,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -865,7 +865,7 @@ static BOOL unpack_message( HWND hwnd, U
          dis.hDC        = unpack_handle( ps->dis.hDC );
          dis.rcItem     = ps->dis.rcItem;
          dis.itemData   = (ULONG_PTR)unpack_ptr( ps->dis.itemData );
 -        memcpy( &ps->dis, &dis, sizeof(dis) );
-+        memcpy( &ps, &dis, sizeof(dis) );
++        memcpy( ps, &dis, sizeof(dis) );
          break;
      }
      case WM_MEASUREITEM:
-@@ -877,7 +877,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -878,7 +878,7 @@ static BOOL unpack_message( HWND hwnd, U
          mis.itemWidth  = ps->mis.itemWidth;
          mis.itemHeight = ps->mis.itemHeight;
          mis.itemData   = (ULONG_PTR)unpack_ptr( ps->mis.itemData );
 -        memcpy( &ps->mis, &mis, sizeof(mis) );
-+        memcpy( &ps, &mis, sizeof(mis) );
++        memcpy( ps, &mis, sizeof(mis) );
          break;
      }
      case WM_DELETEITEM:
-@@ -889,7 +889,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -890,7 +890,7 @@ static BOOL unpack_message( HWND hwnd, U
          dls.itemID     = ps->dls.itemID;
          dls.hwndItem   = unpack_handle( ps->dls.hwndItem );
          dls.itemData   = (ULONG_PTR)unpack_ptr( ps->dls.itemData );
 -        memcpy( &ps->dls, &dls, sizeof(dls) );
-+        memcpy( &ps, &dls, sizeof(dls) );
++        memcpy( ps, &dls, sizeof(dls) );
          break;
      }
      case WM_COMPAREITEM:
-@@ -904,7 +904,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -905,7 +905,7 @@ static BOOL unpack_message( HWND hwnd, U
          cis.itemID2    = ps->cis.itemID2;
          cis.itemData2  = (ULONG_PTR)unpack_ptr( ps->cis.itemData2 );
          cis.dwLocaleId = ps->cis.dwLocaleId;
 -        memcpy( &ps->cis, &cis, sizeof(cis) );
-+        memcpy( &ps, &cis, sizeof(cis) );
++        memcpy( ps, &cis, sizeof(cis) );
          break;
      }
      case WM_WINDOWPOSCHANGING:
-@@ -919,7 +919,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -920,7 +920,7 @@ static BOOL unpack_message( HWND hwnd, U
          wp.cx              = ps->wp.cx;
          wp.cy              = ps->wp.cy;
          wp.flags           = ps->wp.flags;
 -        memcpy( &ps->wp, &wp, sizeof(wp) );
-+        memcpy( &ps, &wp, sizeof(wp) );
++        memcpy( ps, &wp, sizeof(wp) );
          break;
      }
      case WM_COPYDATA:
-@@ -938,7 +938,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -939,7 +939,7 @@ static BOOL unpack_message( HWND hwnd, U
              cds.cbData = 0;
              cds.lpData = 0;
          }
 -        memcpy( &ps->cds, &cds, sizeof(cds) );
-+        memcpy( &ps, &cds, sizeof(cds) );
++        memcpy( ps, &cds, sizeof(cds) );
          break;
      }
      case WM_NOTIFY:
-@@ -954,7 +954,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -955,7 +955,7 @@ static BOOL unpack_message( HWND hwnd, U
          hi.hItemHandle  = unpack_handle( ps->hi.hItemHandle );
          hi.dwContextId  = (ULONG_PTR)unpack_ptr( ps->hi.dwContextId );
          hi.MousePos     = ps->hi.MousePos;
 -        memcpy( &ps->hi, &hi, sizeof(hi) );
-+        memcpy( &ps, &hi, sizeof(hi) );
++        memcpy( ps, &hi, sizeof(hi) );
          break;
      }
      case WM_STYLECHANGING:
-@@ -979,7 +979,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -980,7 +980,7 @@ static BOOL unpack_message( HWND hwnd, U
              wp.cy              = ps->ncp.cy;
              wp.flags           = ps->ncp.flags;
              ncp.lppos = (WINDOWPOS *)((NCCALCSIZE_PARAMS *)&ps->ncp + 1);
 -            memcpy( &ps->ncp, &ncp, sizeof(ncp) );
-+            memcpy( &ps, &ncp, sizeof(ncp) );
++            memcpy( ps, &ncp, sizeof(ncp) );
              *ncp.lppos = wp;
          }
          break;
-@@ -994,7 +994,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -995,7 +995,7 @@ static BOOL unpack_message( HWND hwnd, U
              msg.lParam  = (ULONG_PTR)unpack_ptr( ps->msg.lParam );
              msg.time    = ps->msg.time;
              msg.pt      = ps->msg.pt;
 -            memcpy( &ps->msg, &msg, sizeof(msg) );
-+            memcpy( &ps, &msg, sizeof(msg) );
++            memcpy( ps, &msg, sizeof(msg) );
              break;
          }
          return TRUE;
-@@ -1079,7 +1079,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -1080,7 +1080,7 @@ static BOOL unpack_message( HWND hwnd, U
          mnm.hmenuIn   = unpack_handle( ps->mnm.hmenuIn );
          mnm.hmenuNext = unpack_handle( ps->mnm.hmenuNext );
          mnm.hwndNext  = unpack_handle( ps->mnm.hwndNext );
 -        memcpy( &ps->mnm, &mnm, sizeof(mnm) );
-+        memcpy( &ps, &mnm, sizeof(mnm) );
++        memcpy( ps, &mnm, sizeof(mnm) );
          break;
      }
      case WM_SIZING:
-@@ -1115,7 +1115,7 @@ static BOOL unpack_message( HWND hwnd, U
+@@ -1116,7 +1116,7 @@ static BOOL unpack_message( HWND hwnd, U
              if (!check_string( str, size )) return FALSE;
              mcs.szTitle = str;
          }
 -        memcpy( &ps->mcs, &mcs, sizeof(mcs) );
-+        memcpy( &ps, &mcs, sizeof(mcs) );
++        memcpy( ps, &mcs, sizeof(mcs) );
          break;
      }
      case WM_MDIGETACTIVE:
---- a/dlls/win32u/message.c
-+++ b/dlls/win32u/message.c
-@@ -356,7 +356,7 @@ static BOOL unpack_message( HWND hwnd, U
-         wp.cx              = ps->wp.cx;
-         wp.cy              = ps->wp.cy;
-         wp.flags           = ps->wp.flags;
--        memcpy( &ps->wp, &wp, sizeof(wp) );
-+        memcpy( &ps, &wp, sizeof(wp) );
-         break;
-     }
-     case WM_WINE_KEYBOARD_LL_HOOK:
-@@ -369,7 +369,7 @@ static BOOL unpack_message( HWND hwnd, U
-         if (size < minsize) return FALSE;
-         h_extra.handle = wine_server_ptr_handle( ps->hook.handle );
-         h_extra.lparam = (LPARAM)(&ps->hook + 1);
--        memcpy( &ps->hook, &h_extra, sizeof(h_extra) );
-+        memcpy( &ps, &h_extra, sizeof(h_extra) );
-         break;
-     }
-     default:

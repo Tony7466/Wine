@@ -1,8 +1,6 @@
-wine-development (7.18~repack-1) UNRELEASED; urgency=medium
+wine-development (7.18~repack-1) unstable; urgency=medium
 
   * New upstream release 7.18, released Sep 23, 2022.
-    - Character tables updated to Unicode 15.0.0.
-    - Wow64 support in the macOS driver.
     - Async reader fixes in GStreamer support.
     - Various bug fixes.
 

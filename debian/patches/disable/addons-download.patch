@@ -4,7 +4,7 @@ author: Jens Reyer <jre.winesim@gmail.com>
 
 --- a/dlls/appwiz.cpl/addons.c
 +++ b/dlls/appwiz.cpl/addons.c
-@@ -609,6 +609,7 @@ static const IInternetBindInfoVtbl Insta
+@@ -597,6 +597,7 @@ static const IInternetBindInfoVtbl Insta
  
  static IInternetBindInfo InstallCallbackBindInfo = { &InstallCallbackBindInfoVtbl };
  
@@ -12,7 +12,7 @@ author: Jens Reyer <jre.winesim@gmail.com>
  static void append_url_params( WCHAR *url )
  {
      DWORD size = INTERNET_MAX_URL_LENGTH * sizeof(WCHAR);
-@@ -755,6 +756,7 @@ static INT_PTR CALLBACK installer_proc(H
+@@ -743,6 +744,7 @@ static INT_PTR CALLBACK installer_proc(H
  
      return FALSE;
  }
@@ -20,7 +20,7 @@ author: Jens Reyer <jre.winesim@gmail.com>
  
  BOOL install_addon(addon_t addon_type)
  {
-@@ -772,13 +774,11 @@ BOOL install_addon(addon_t addon_type)
+@@ -760,13 +762,11 @@ BOOL install_addon(addon_t addon_type)
       * - $INSTALL_DATADIR/wine/$addon_subdir/
       * - /usr/share/wine/$addon_subdir/
       * - /opt/wine/$addon_subdir/

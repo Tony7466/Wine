@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/winedump/msc.c
 +++ b/tools/winedump/msc.c
-@@ -462,7 +462,7 @@ static const char* get_callconv(unsigned
+@@ -461,7 +461,7 @@ static const char* get_callconv(unsigned
      case CV_CALL_RESERVED:      callconv = "reserved"; break;
      default:
          {

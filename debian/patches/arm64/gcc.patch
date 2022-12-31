@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -1003,10 +1003,6 @@ fi
+@@ -1004,10 +1004,6 @@ fi
  WINE_NOTICE_WITH(mingw,[test "x$CROSSTARGET" = "x"],
                   [MinGW compiler not found, cross-compiling PE files won't be supported.])
  

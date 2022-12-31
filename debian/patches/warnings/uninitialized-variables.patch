@@ -102,7 +102,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/tools/winedump/msc.c
 +++ b/tools/winedump/msc.c
-@@ -503,7 +503,7 @@ static void do_field(const unsigned char
+@@ -502,7 +502,7 @@ static void do_field(const unsigned char
      const unsigned char*        ptr = start;
      const char*                 cstr;
      const struct p_string*      pstr;
@@ -111,7 +111,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      struct full_value full_value;
  
      while (ptr < end)
-@@ -811,7 +811,7 @@ static void do_field(const unsigned char
+@@ -810,7 +810,7 @@ static void do_field(const unsigned char
  static void codeview_dump_one_type(unsigned curr_type, const union codeview_type* type)
  {
      const union codeview_reftype* reftype = (const union codeview_reftype*)type;
@@ -379,7 +379,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      return ret;
 --- a/dlls/user32/winproc.c
 +++ b/dlls/user32/winproc.c
-@@ -1194,6 +1194,7 @@ BOOL WINAPI User32CallWindowProc( struct
+@@ -1195,6 +1195,7 @@ BOOL WINAPI User32CallWindowProc( struct
          else
          {
              size = sizeof(stack_buffer);

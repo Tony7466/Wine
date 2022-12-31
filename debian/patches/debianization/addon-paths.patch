@@ -5,7 +5,7 @@ forwarded: not-needed
 
 --- a/dlls/appwiz.cpl/addons.c
 +++ b/dlls/appwiz.cpl/addons.c
-@@ -209,7 +209,7 @@ static enum install_res install_from_dos
+@@ -197,7 +197,7 @@ static enum install_res install_from_dos
  
      lstrcpyW( path, dir );
      if (!wcsncmp( path, L"\\??\\", 4 ))  path[1] = '\\';  /* change \??\ into \\?\ */
@@ -14,7 +14,7 @@ forwarded: not-needed
  
      lstrcpyW( path + len, subdir );
      lstrcatW( path, L"\\" );
-@@ -318,12 +318,14 @@ static enum install_res install_from_def
+@@ -306,12 +306,14 @@ static enum install_res install_from_def
          heap_free(dir_buf);
      }
  
