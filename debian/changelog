@@ -1,4 +1,4 @@
-wine-development (7.19~repack-1) UNRELEASED; urgency=medium
+wine-development (7.19~repack-1) unstable; urgency=medium
 
   * New upstream release 7.19, released Oct 14, 2022.
     - Support for storing DOS attributes on disk.

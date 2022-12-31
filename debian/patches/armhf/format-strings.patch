@@ -196,7 +196,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      {
 --- a/programs/winedbg/stack.c
 +++ b/programs/winedbg/stack.c
-@@ -280,7 +280,11 @@ static void stack_print_addr_and_args(vo
+@@ -281,7 +281,11 @@ static void stack_print_addr_and_args(vo
          DWORD           disp;
  
          dbg_printf(" %s", si->Name);
@@ -208,7 +208,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          stack_set_local_scope();
          se.first = TRUE;
-@@ -295,7 +299,11 @@ static void stack_print_addr_and_args(vo
+@@ -296,7 +300,11 @@ static void stack_print_addr_and_args(vo
              dbg_printf(" [%s:%lu]", il.FileName, il.LineNumber);
          dbg_printf(" in %s", im.ModuleName);
      }
@@ -260,7 +260,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return FALSE;
 --- a/programs/winedbg/symbol.c
 +++ b/programs/winedbg/symbol.c
-@@ -745,7 +745,11 @@ BOOL symbol_info_locals(void)
+@@ -755,7 +755,11 @@ BOOL symbol_info_locals(void)
      addr.Mode = AddrModeFlat;
      addr.Offset = frm->linear_pc;
      print_address(&addr, FALSE);
@@ -272,7 +272,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      SymEnumSymbols(dbg_curr_process->handle, 0, NULL, info_locals_cb, (void*)frm->linear_frame);
  
      return TRUE;
-@@ -767,7 +771,11 @@ static BOOL CALLBACK symbols_info_cb(PSY
+@@ -777,7 +781,11 @@ static BOOL CALLBACK symbols_info_cb(PSY
              mi.ModuleName[len - 5] = '\0';
      }
  
@@ -295,10 +295,10 @@ author: Michael Gilbert <mgilbert@debian.org>
 +#else
      dbg_printf("Mod: %0*Ix ID: %08lx\n", ADDRWIDTH, type.module, type.id);
 +#endif
-     types_print_type(&type, TRUE);
+     types_print_type(&type, TRUE, FALSE);
      dbg_printf("\n");
      return TRUE;
-@@ -645,7 +649,11 @@ BOOL types_print_type(const struct dbg_t
+@@ -646,7 +650,11 @@ BOOL types_print_type(const struct dbg_t
          {
              const char* longness = "";
              if (bt == btLong || bt == btULong) longness = " long";
@@ -311,7 +311,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          break;
      case SymTagPointerType:
 @@ -695,7 +703,11 @@ BOOL types_print_type(const struct dbg_t
-                         dbg_printf(" %ls", ptr);
+                         else dbg_printf("<unknown> %ls", ptr);
                          HeapFree(GetProcessHeap(), 0, ptr);
                          if (bitlen != ~(DWORD64)0)
 +#ifdef __arm__
@@ -322,7 +322,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                          dbg_printf(";");
                          if (i < min(fcp->Count, count) - 1 || count > 256) dbg_printf(" ");
                      }
-@@ -746,11 +758,19 @@ BOOL types_print_type(const struct dbg_t
+@@ -749,11 +761,19 @@ BOOL types_print_type(const struct dbg_t
                          case VT_I1:  dbg_printf("%d",    V_I1(&variant)); break;
                          case VT_I2:  dbg_printf("%d",    V_I2(&variant)); break;
                          case VT_I4:  dbg_printf("%ld",   V_I4(&variant)); break;

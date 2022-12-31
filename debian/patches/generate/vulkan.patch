@@ -3,8 +3,8 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/winevulkan/make_vulkan
 +++ b/dlls/winevulkan/make_vulkan
-@@ -1305,7 +1305,7 @@ class VkMember(VkVariable):
-         if (conv and self.needs_conversion()) or self.needs_unwrapping():
+@@ -1299,7 +1299,7 @@ class VkMember(VkVariable):
+         if (conv and self.needs_conversion()) or (unwrap and self.needs_unwrapping()):
              if self.is_dynamic_array():
                  if direction == Direction.OUTPUT:
 -                    LOGGER.warn("TODO: implement copying of returnedonly dynamic array for {0}.{1}".format(self.type, self.name))
@@ -12,8 +12,8 @@ author: Michael Gilbert <mgilbert@debian.org>
                  else:
                      # Array length is either a variable name (string) or an int.
                      count = self.dyn_array_len if isinstance(self.dyn_array_len, int) else "{0}{1}".format(input, self.dyn_array_len)
-@@ -1317,7 +1317,7 @@ class VkMember(VkVariable):
-                     return "convert_{0}_static_array_host_to_win({2}{1}, {3}{1}, {4});\n".format(self.type, self.name, input, output, count)
+@@ -1312,7 +1312,7 @@ class VkMember(VkVariable):
+                     return "convert_{0}_static_array_host_to_{5}({2}{1}, {3}{1}, {4});\n".format(self.type, self.name, input, output, count, win_type)
                  else:
                      # Nothing needed this yet.
 -                    LOGGER.warn("TODO: implement copying of static array for {0}.{1}".format(self.type, self.name))
@@ -21,7 +21,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              elif self.is_handle() and self.needs_unwrapping():
                  if direction == Direction.OUTPUT:
                      LOGGER.err("OUTPUT parameter {0}.{1} cannot be unwrapped".format(self.type, self.name))
-@@ -1547,7 +1547,7 @@ class VkParam(VkVariable):
+@@ -1466,7 +1466,7 @@ class VkParam(VkVariable):
          # Since we have parsed all types before hand, this should not happen.
          type_info = types.get(type_elem.text, None)
          if type_info is None:
@@ -30,16 +30,16 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          return VkParam(type_info, const=const, pointer=pointer, name=name, array_len=array_len, dyn_array_len=dyn_array_len, object_type=object_type)
  
-@@ -1652,7 +1652,7 @@ class VkParam(VkVariable):
+@@ -1574,7 +1574,7 @@ class VkParam(VkVariable):
                  # Don't care about specific types for non-Windows platforms.
                  self.format_str = ""
              else:
 -                LOGGER.warn("Unhandled type: {0}".format(self.type_info))
 +                LOGGER.warning("Unhandled type: {0}".format(self.type_info))
  
-     def copy(self, direction, prefix=""):
-         if direction == Direction.INPUT:
-@@ -2180,7 +2180,7 @@ class ConversionFunction(object):
+     def copy(self, direction, conv, unwrap, prefix=""):
+         win_type = "win32" if conv else "win64"
+@@ -2085,7 +2085,7 @@ class ConversionFunction(object):
          elif isinstance(self.operand, VkHandle) and self.direction == Direction.INPUT:
              body += "        out[i] = " + self.operand.driver_handle("in[i]") + ";\n"
          else:
@@ -48,7 +48,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              body += "        out[i] = in[i];\n"
  
          body += "    }\n\n"
-@@ -2322,7 +2322,7 @@ class ConversionFunction(object):
+@@ -2198,7 +2198,7 @@ class ConversionFunction(object):
          elif isinstance(self.operand, VkHandle) and self.direction == Direction.INPUT:
              body += "        out[i] = " + self.operand.driver_handle("in[i]") + ";\n"
          else:
@@ -57,7 +57,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              body += "        out[i] = in[i];\n"
  
          body += "    }\n"
-@@ -2708,7 +2708,9 @@ class VkGenerator(object):
+@@ -2354,7 +2354,9 @@ class VkGenerator(object):
  
      def _generate_copyright(self, f, spec_file=False):
          f.write("# " if spec_file else "/* ")
@@ -68,7 +68,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          lines = ["", "This file is generated from Vulkan vk.xml file covered",
              "by the following copyright and permission notice:"]
          lines.extend([l.rstrip(" ") for l in self.registry.copyright.splitlines()])
-@@ -3271,6 +3273,7 @@ class VkRegistry(object):
+@@ -2932,6 +2934,7 @@ class VkRegistry(object):
          self.funcpointers = None
          self.handles = None
          self.structs = None
@@ -76,7 +76,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          # We aggregate all types in here for cross-referencing.
          self.funcs = {}
-@@ -3856,11 +3859,6 @@ def set_working_directory():
+@@ -3517,11 +3520,6 @@ def set_working_directory():
      path = os.path.dirname(path)
      os.chdir(path)
  
@@ -88,7 +88,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  def main():
      parser = argparse.ArgumentParser()
      parser.add_argument("-v", "--verbose", action="count", default=0, help="increase output verbosity")
-@@ -3880,7 +3878,6 @@ def main():
+@@ -3541,7 +3539,6 @@ def main():
          vk_xml = args.xml
      else:
          vk_xml = "vk-{0}.xml".format(VK_XML_VERSION)

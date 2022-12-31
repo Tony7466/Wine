@@ -163,7 +163,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!(wFlags & DISPATCH_PROPERTYGET))
 --- a/dlls/mf/session.c
 +++ b/dlls/mf/session.c
-@@ -496,7 +496,7 @@ static void session_clear_queued_topolog
+@@ -500,7 +500,7 @@ static void session_clear_queued_topolog
  static void session_set_topo_status(struct media_session *session, HRESULT status,
          MF_TOPOSTATUS topo_status)
  {
@@ -264,7 +264,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      WCHAR *curdir = get_initial_directory();
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -2313,11 +2313,14 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
+@@ -2317,11 +2317,14 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
      }
      else
      {
@@ -280,7 +280,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          {
              POINT pt = { 0, 0 };
              NtUserMapWindowPoints( 0, parent, &pt, 1 );
-@@ -2325,7 +2328,6 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
+@@ -2329,7 +2332,6 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
              OffsetRect( &escape.dc_rect, pt.x, pt.y );
              if (flags & DCX_CLIPCHILDREN) escape.mode = ClipByChildren;
          }
