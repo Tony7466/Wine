@@ -1,3 +1,13 @@
+wine-development (7.19~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 7.19, released Oct 14, 2022.
+    - Support for storing DOS attributes on disk.
+    - Bundled vkd3d upgraded to version 1.5.
+    - Support for MPEG-4 audio format.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 31 Dec 2022 07:06:16 +0000
+
 wine-development (7.18~repack-1) unstable; urgency=medium
 
   * New upstream release 7.18, released Sep 23, 2022.
