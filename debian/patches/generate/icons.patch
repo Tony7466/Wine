@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -1459,6 +1459,9 @@ static struct file *open_include_file( c
+@@ -1506,6 +1506,9 @@ static struct file *open_include_file( c
  
      if (pFile->type == INCL_SYSTEM) return NULL;  /* ignore system files we cannot find */
  
@@ -13,7 +13,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      /* try in src file directory */
      if ((file = open_same_dir_generated_file( make, pFile->included_by, pFile, ".tab.h", ".y" )) ||
          (file = open_same_dir_generated_file( make, pFile->included_by, pFile, ".h", ".idl" )) ||
-@@ -2872,6 +2875,17 @@ static void output_source_svg( struct ma
+@@ -2972,6 +2975,17 @@ static void output_source_svg( struct ma
  
          if (images[i])
          {

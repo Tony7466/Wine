@@ -1,7 +1,6 @@
-wine-development (7.20~repack-1) UNRELEASED; urgency=medium
+wine-development (7.20~repack-1) unstable; urgency=medium
 
   * New upstream release 7.20, released Oct 31, 2022.
-    - Mono engine updated to version 7.4.0.
     - Font linking improvements.
     - A number of fixes for exception unwinding.
     - Support for dumping EMF spool files in WineDump.

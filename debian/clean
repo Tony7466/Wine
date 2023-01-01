@@ -92,6 +92,7 @@ dlls/winevulkan/winevulkan.spec
 */*/*/test*.mp4
 */*/*/test*.mpg
 */*/*/test*.avi
+dlls/mfmediaengine/tests/i420-64x64.avi
 
 # symlinked svg files
 dlls/comdlg32/cdrom.svg

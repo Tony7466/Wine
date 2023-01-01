@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -413,7 +413,7 @@ static const char *normalize_arch( const
+@@ -412,7 +412,7 @@ static const char *normalize_arch( const
   */
  static void output_filename( const char *name )
  {

@@ -323,17 +323,6 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (!(obj = calloc(1, sizeof(*obj))))
          return E_OUTOFMEMORY;
---- a/dlls/ntdll/unix/socket.c
-+++ b/dlls/ntdll/unix/socket.c
-@@ -852,7 +852,7 @@ static NTSTATUS sock_recv( HANDLE handle
-                            int fd, struct async_recv_ioctl *async, int force_async )
- {
-     BOOL nonblocking, alerted;
--    ULONG_PTR information;
-+    ULONG_PTR information = 0;
-     HANDLE wait_handle;
-     NTSTATUS status;
-     unsigned int i;
 --- a/dlls/user.exe16/message.c
 +++ b/dlls/user.exe16/message.c
 @@ -403,7 +403,7 @@ static EDITWORDBREAKPROC16 get_word_brea

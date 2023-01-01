@@ -3,11 +3,11 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -2834,7 +2834,6 @@ static void output_source_sfd( struct ma
+@@ -2934,7 +2934,6 @@ static void output_source_sfd( struct ma
      }
      if (source->file->flags & FLAG_INSTALL)
      {
--        add_install_rule( make, source->name, ttf_obj, strmake( "D$(fontdir)/%s", ttf_obj ));
+-        add_install_rule( make, source->name, 0, ttf_obj, strmake( "D$(fontdir)/%s", ttf_obj ));
          output_srcdir_symlink( make, ttf_obj );
      }
  

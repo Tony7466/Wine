@@ -55,7 +55,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                  sha  => "ef7fffd9f4f50f4f58328b35022a32a5a056b245c5cb3d6791dddb342f871664" },
  );
  
-@@ -1897,28 +1899,32 @@ sub open_data_file($@)
+@@ -1910,28 +1912,32 @@ sub open_data_file($@)
  {
      my ($id, $name) = @_;
      my $data = $data_files{$id};
@@ -100,7 +100,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
      else
      {
-@@ -2267,7 +2273,7 @@ sub load_data()
+@@ -2280,7 +2286,7 @@ sub load_data()
  
      # load the Unihan mappings
  

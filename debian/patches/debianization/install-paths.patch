@@ -19,12 +19,12 @@ forwarded: not-needed
  dnl **** Check for some programs ****
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -2955,7 +2955,7 @@ static void output_source_in( struct mak
+@@ -3055,7 +3055,7 @@ static void output_source_in( struct mak
      output( "%s:", obj_dir_path( make, obj ));
      output_filenames( source->dependencies );
      output( "\n" );
--    add_install_rule( make, obj, xstrdup( obj ), strmake( "d$(datadir)/wine/%s", obj ));
-+    add_install_rule( make, obj, xstrdup( obj ), strmake( "d$(datadir)/%s", obj ));
+-    add_install_rule( make, obj, 0, obj, strmake( "d$(datadir)/wine/%s", obj ));
++    add_install_rule( make, obj, 0, obj, strmake( "d$(datadir)/%s", obj ));
  }
  
  
