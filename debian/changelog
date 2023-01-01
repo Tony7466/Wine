@@ -1,3 +1,15 @@
+wine-development (7.21~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 7.21, released Nov 11, 2022.
+    - OpenGL library converted to PE.
+    - Support for multi-architecture PE builds.
+    - More preparation work for Vulkan 32-on-64 support.
+    - Support for creating import libraries without dlltool.
+    - Locale data updates.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 01 Jan 2023 02:09:27 +0000
+
 wine-development (7.20~repack-1) unstable; urgency=medium
 
   * New upstream release 7.20, released Oct 31, 2022.
