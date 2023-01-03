@@ -21,32 +21,11 @@ DATDIR=usr/share/wine$(VERSION)
 INCDIR=usr/include/wine$(VERSION)
 LIBDIR=usr/lib/$(DEB_HOST_MULTIARCH)/wine$(VERSION)
 
-# extra information to add to the version string
-export VENDOR=$(DEB_VENDOR) $(DEB_VERSION)
-
-# parse wine's cpu string from DEB_HOST_MULTIARCH
-export WINE_CPU=$(shell echo $(DEB_HOST_MULTIARCH) | cut -d- -f1)
-
 # enable verbose build log
 export DH_VERBOSE=1
 
 # specify buildflags (stack protector, fortify, and LTO are not yet supported upstream)
 export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector optimize=-lto
-
-# configure options
-CONFLAGS=--with-gnutls \
-         --without-oss \
-         --without-sane \
-         --without-netapi \
-         --disable-tests \
-         --enable-werror \
-         --enable-maintainer-mode \
-         --libdir=/$(LIBDIR) \
-         --bindir=/$(BINDIR) \
-         --mandir=/$(MANDIR) \
-         --includedir=/$(INCDIR) \
-         --datarootdir=/$(DATDIR) \
-         $(shell dpkg-buildflags --export=cmdline) \
 
 # ignore array bound and unused function warnings, not yet handled upstream
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-array-bounds -Wno-unused-function
@@ -76,8 +55,30 @@ ifeq ($(DEB_HOST_ARCH), armhf)
 CONFLAGS+=--with-float-abi=hard
 endif
 
+# extra information to add to the version string
+export VENDOR=$(DEB_VENDOR) $(DEB_VERSION)
+
+# parse wine's cpu string from DEB_HOST_MULTIARCH
+export WINE_CPU=$(shell echo $(DEB_HOST_MULTIARCH) | cut -d- -f1)
+
 # use date of the latest changelog update as the build date
 export WIDL_TIME_OVERRIDE=$(SOURCE_DATE_EPOCH)
+
+# configure options
+CONFLAGS=--with-gnutls \
+         --without-oss \
+         --without-sane \
+         --without-netapi \
+         --disable-tests \
+         --enable-werror \
+         --enable-maintainer-mode \
+         --libdir=/$(LIBDIR) \
+         --bindir=/$(BINDIR) \
+         --mandir=/$(MANDIR) \
+         --includedir=/$(INCDIR) \
+         --datarootdir=/$(DATDIR) \
+         LDFLAGS="" \
+         CFLAGS="$(shell dpkg-buildflags --get CFLAGS)" \
 
 # additional files to generate
 INSTALLS=$(shell ls debian/*VERSION* | sed s/VERSION/$(VERSION)/) \
@@ -105,8 +106,10 @@ debian/bug-control: debian/bug-control.in
 	dh $@
 
 override_dh_auto_configure:
-	# output compiler information
+	# cc version
 	$(CC) --version
+	# mingw version
+	$(DEB_HOST_GNU_CPU)-w64-mingw32-gcc --version || echo "no mingw"
 	# automatically generated files
 	./debian/scripts/generate server/trace.generated make_requests
 	./debian/scripts/generate server/request.generated make_requests

@@ -1,4 +1,4 @@
-wine-development (7.21~repack-1) UNRELEASED; urgency=medium
+wine-development (7.21~repack-1) unstable; urgency=medium
 
   * New upstream release 7.21, released Nov 11, 2022.
     - OpenGL library converted to PE.

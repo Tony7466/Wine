@@ -1,6 +1,6 @@
 --- a/include/wine/asm.h
 +++ b/include/wine/asm.h
-@@ -182,4 +182,6 @@
+@@ -188,4 +188,6 @@
  #undef __ASM_OBSOLETE
  #endif
  

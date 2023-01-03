@@ -3,14 +3,15 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -1010,10 +1010,6 @@ fi
- WINE_NOTICE_WITH(mingw,[test "x$CROSSTARGET" = "x"],
+@@ -1043,11 +1043,6 @@ do
+     CFLAGS=$saved_CFLAGS
+ done
+ 
+-if test $HOST_ARCH = aarch64 -a "x$PE_ARCHS" = x
+-then
+-    AC_MSG_ERROR([PE cross-compilation is required for ARM64, please install clang/llvm-dlltool/lld, or llvm-mingw.])
+-fi
+-
+ WINE_NOTICE_WITH(mingw,[test "x$PE_ARCHS" = "x"],
                   [MinGW compiler not found, cross-compiling PE files won't be supported.])
  
--case $host_cpu in
--  aarch64*) test "x$CROSSTARGET" != x || AC_MSG_ERROR([PE cross-compilation is required for ARM64, please install clang/llvm-dlltool/lld, or llvm-mingw.]) ;;
--esac
--
- dnl **** External libraries ****
- 
- if test "x$with_system_dllpath" != "x" -a "$CROSSCC" != "false"

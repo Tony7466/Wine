@@ -163,7 +163,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!(wFlags & DISPATCH_PROPERTYGET))
 --- a/dlls/mf/session.c
 +++ b/dlls/mf/session.c
-@@ -500,7 +500,7 @@ static void session_clear_queued_topolog
+@@ -501,7 +501,7 @@ static void session_clear_queued_topolog
  static void session_set_topo_status(struct media_session *session, HRESULT status,
          MF_TOPOSTATUS topo_status)
  {
@@ -264,7 +264,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      WCHAR *curdir = get_initial_directory();
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -2317,11 +2317,14 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
+@@ -2360,11 +2360,14 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
      }
      else
      {
@@ -280,7 +280,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          {
              POINT pt = { 0, 0 };
              NtUserMapWindowPoints( 0, parent, &pt, 1 );
-@@ -2329,7 +2332,6 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
+@@ -2372,7 +2375,6 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
              OffsetRect( &escape.dc_rect, pt.x, pt.y );
              if (flags & DCX_CLIPCHILDREN) escape.mode = ClipByChildren;
          }
@@ -288,18 +288,6 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
  
      NtGdiExtEscape( hdc, NULL, 0, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );
---- a/dlls/comctl32/button.c
-+++ b/dlls/comctl32/button.c
-@@ -1833,7 +1833,8 @@ static void BUTTON_DrawThemedLabel(const
- static void PB_Paint( const BUTTON_INFO *infoPtr, HDC hDC, UINT action )
- {
-     RECT     rc, labelRect, imageRect, textRect;
--    UINT     dtFlags, uState;
-+    UINT     uState;
-+    UINT     dtFlags = (UINT)-1L;
-     HPEN     hOldPen, hpen;
-     HBRUSH   hOldBrush;
-     INT      oldBkMode;
 --- a/dlls/gdiplus/font.c
 +++ b/dlls/gdiplus/font.c
 @@ -1396,7 +1396,8 @@ static WCHAR *load_ttf_name_id( const BY

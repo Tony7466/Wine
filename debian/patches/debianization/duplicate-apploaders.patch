@@ -4,16 +4,15 @@ forwarded: not-needed
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -3350,12 +3350,6 @@ static void output_module( struct makefi
-     output_filenames( all_libs );
-     output_filename( arch_make_variable( "LDFLAGS", arch ));
-     output( "\n" );
--
--    if (*dll_ext && make->is_exe && !make->is_win16 && strendswith( make->module, ".exe" ))
--    {
--        char *binary = replace_extension( make->module, ".exe", "" );
--        add_install_rule( make, binary, arch, "wineapploader", strmake( "t$(bindir)/%s", binary ));
--    }
- }
- 
- 
+@@ -3806,11 +3806,6 @@ static void output_sources( struct makef
+         }
+         if (make->unixlib) output_unix_lib( make );
+         if (make->importlib) for (arch = 0; arch < archs.count; arch++) output_import_lib( make, arch );
+-        if (make->is_exe && !make->is_win16 && *dll_ext && strendswith( make->module, ".exe" ))
+-        {
+-            char *binary = replace_extension( make->module, ".exe", "" );
+-            add_install_rule( make, binary, 0, "wineapploader", strmake( "t$(bindir)/%s", binary ));
+-        }
+     }
+     else if (make->testdll)
+     {

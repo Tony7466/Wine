@@ -1,5 +1,5 @@
 debianization/addon-paths.patch
-debianization/mingw-cflags.patch
+debianization/build-flags.patch
 debianization/install-paths.patch
 debianization/version-string.patch
 debianization/manpage-msiexec.patch
@@ -31,7 +31,6 @@ fixes/temporary-directory.patch
 armhf/shift-overflow.patch
 armhf/format-strings.patch
 armhf/floating-point.patch
-armhf/variadic-functions.patch
 armhf/incompatible-types.patch
 
 arm64/gcc.patch

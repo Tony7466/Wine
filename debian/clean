@@ -67,8 +67,9 @@ dlls/kernelbase/kernelbase.rgs
 
 # automatically generated opengl spec files
 include/wine/wgl*
-dlls/opengl32/opengl_ext.c
-dlls/opengl32/opengl_norm.c
+dlls/opengl32/thunks.c
+dlls/opengl32/unix_thunks.c
+dlls/opengl32/unixlib.h
 dlls/opengl32/opengl32.spec
 
 # automatically generated vulkan files

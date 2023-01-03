@@ -1,0 +1,23 @@
+description: pass LDFLAGS only to gcc (not mingw)
+author: Michael Gilbert <mgilbert@debian.org>
+forwarded: not-needed
+
+--- a/configure.ac
++++ b/configure.ac
+@@ -649,7 +649,7 @@ AC_SUBST(LDDLLFLAGS,"")
+ AC_SUBST(LDEXECFLAGS,"")
+ AC_SUBST(EXTRACFLAGS,"")
+ AC_SUBST(UNIXDLLFLAGS,"-fPIC")
+-AC_SUBST(UNIXLDFLAGS,["-shared -Wl,-Bsymbolic -Wl,-soname,\$(UNIXLIB)"])
++AC_SUBST(UNIXLDFLAGS,["-shared -Wl,-Bsymbolic -Wl,-soname,\$(UNIXLIB) $(shell dpkg-buildflags --get LDFLAGS)"])
+ AC_SUBST(TOP_INSTALL_LIB,"")
+ AC_SUBST(TOP_INSTALL_DEV,"")
+ AC_SUBST(WINELOADER_LDFLAGS,"")
+@@ -911,7 +911,6 @@ do
+     saved_CC=$CC
+     saved_CFLAGS=$CFLAGS
+ 
+-    CFLAGS=${CROSSCFLAGS:-"-g -O2"}
+     AS_VAR_COPY([CC],[${wine_arch}_CC])
+     AS_VAR_COPY([${wine_arch}_CFLAGS],[CFLAGS])
+     AS_VAR_COPY([${wine_arch}_LDFLAGS],[LDFLAGS])

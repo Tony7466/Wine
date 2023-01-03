@@ -14,7 +14,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  #include <assert.h>
  #include <ctype.h>
  #include <errno.h>
-@@ -1104,6 +1105,17 @@ int server_pipe( int fd[2] )
+@@ -1134,6 +1135,17 @@ int server_pipe( int fd[2] )
      return ret;
  }
  
@@ -32,7 +32,7 @@ bug-upstream: https://bugs.winehq.org/show_bug.cgi?id=39013
  
  /***********************************************************************
   *           init_server_dir
-@@ -1113,16 +1125,113 @@ static const char *init_server_dir( dev_
+@@ -1143,16 +1155,113 @@ static const char *init_server_dir( dev_
      char *p, *dir;
      size_t len = sizeof("/server-") + 2 * sizeof(dev) + 2 * sizeof(ino) + 2;
  
