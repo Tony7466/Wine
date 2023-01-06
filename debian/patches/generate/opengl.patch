@@ -43,7 +43,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 -}
 -close HEADER;
 +# Current wgl_driver.h version, modified by debian/scripts/import
-+my $wgl_version = 20;
++my $wgl_version = 21;
  
  #
  # Generate the wgl_driver.h file

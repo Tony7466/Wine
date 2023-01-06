@@ -1,3 +1,14 @@
+wine-development (7.22~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 7.22, released Nov 25, 2022.
+    - 32-on-64 thunks for both Vulkan and OpenGL.
+    - OpenLDAP library bundled and built as PE.
+    - Support for the RAW print processor in WinPrint.
+    - More progress on the long types printf format conversion.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Fri, 06 Jan 2023 23:06:28 +0000
+
 wine-development (7.21~repack-2) unstable; urgency=medium
 
   * Fix build failure on amd64 (closes: #1028004).
