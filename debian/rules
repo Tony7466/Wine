@@ -30,6 +30,22 @@ export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector optimize=
 # ignore array bound and unused function warnings, not yet handled upstream
 export DEB_CFLAGS_MAINT_APPEND+=-Wno-array-bounds -Wno-unused-function
 
+# configure options
+CONFLAGS=--with-gnutls \
+         --without-oss \
+         --without-sane \
+         --without-netapi \
+         --disable-tests \
+         --enable-werror \
+         --enable-maintainer-mode \
+         --libdir=/$(LIBDIR) \
+         --bindir=/$(BINDIR) \
+         --mandir=/$(MANDIR) \
+         --includedir=/$(INCDIR) \
+         --datarootdir=/$(DATDIR) \
+         LDFLAGS="" \
+         CFLAGS="$(shell dpkg-buildflags --get CFLAGS)" \
+
 # enable wine64 on 64-bit architectures
 ifeq ($(DEB_HOST_ARCH_BITS), 64)
 CONFLAGS+=--enable-win64
@@ -63,22 +79,6 @@ export WINE_CPU=$(shell echo $(DEB_HOST_MULTIARCH) | cut -d- -f1)
 
 # use date of the latest changelog update as the build date
 export WIDL_TIME_OVERRIDE=$(SOURCE_DATE_EPOCH)
-
-# configure options
-CONFLAGS=--with-gnutls \
-         --without-oss \
-         --without-sane \
-         --without-netapi \
-         --disable-tests \
-         --enable-werror \
-         --enable-maintainer-mode \
-         --libdir=/$(LIBDIR) \
-         --bindir=/$(BINDIR) \
-         --mandir=/$(MANDIR) \
-         --includedir=/$(INCDIR) \
-         --datarootdir=/$(DATDIR) \
-         LDFLAGS="" \
-         CFLAGS="$(shell dpkg-buildflags --get CFLAGS)" \
 
 # additional files to generate
 INSTALLS=$(shell ls debian/*VERSION* | sed s/VERSION/$(VERSION)/) \

@@ -1,3 +1,9 @@
+wine-development (7.21~repack-2) unstable; urgency=medium
+
+  * Fix build failure on amd64 (closes: #1028004).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Fri, 06 Jan 2023 22:16:05 +0000
+
 wine-development (7.21~repack-1) unstable; urgency=medium
 
   * New upstream release 7.21, released Nov 11, 2022.
