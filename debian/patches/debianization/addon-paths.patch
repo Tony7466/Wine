@@ -15,7 +15,7 @@ forwarded: not-needed
      lstrcpyW( path + len, subdir );
      lstrcatW( path, L"\\" );
 @@ -306,12 +306,14 @@ static enum install_res install_from_def
-         heap_free(dir_buf);
+         free(dir_buf);
      }
  
 +    /* debian's DATADIR already defines the wine subdir */

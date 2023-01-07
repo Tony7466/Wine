@@ -3,8 +3,8 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/winevulkan/make_vulkan
 +++ b/dlls/winevulkan/make_vulkan
-@@ -1369,7 +1369,7 @@ class VkMember(VkVariable):
-                     return "convert_{0}_array_host_to_{5}({2}{1}, {3}{1}, {4});\n".format(self.type, self.name, input, output, count, win_type)
+@@ -1450,7 +1450,7 @@ class VkMember(VkVariable):
+                         self.type, self.name, input, output, count, win_type, host_part)
                  else:
                      # Nothing needed this yet.
 -                    LOGGER.warn("TODO: implement copying of static array for {0}.{1}".format(self.type, self.name))
@@ -12,7 +12,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              elif self.is_handle() and self.needs_unwrapping():
                  if direction == Direction.OUTPUT:
                      LOGGER.err("OUTPUT parameter {0}.{1} cannot be unwrapped".format(self.type, self.name))
-@@ -1518,7 +1518,7 @@ class VkParam(VkVariable):
+@@ -1619,7 +1619,7 @@ class VkParam(VkVariable):
          # Since we have parsed all types before hand, this should not happen.
          type_info = types.get(type_elem.text, None)
          if type_info is None:
@@ -21,7 +21,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          return VkParam(type_info, const=const, pointer=pointer, name=name, array_len=array_len,
                         dyn_array_len=dyn_array_len, object_type=object_type, optional=optional,
-@@ -1570,7 +1570,7 @@ class VkParam(VkVariable):
+@@ -1671,7 +1671,7 @@ class VkParam(VkVariable):
                  # Don't care about specific types for non-Windows platforms.
                  self.format_str = ""
              else:
@@ -30,7 +30,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      def copy(self, direction, conv, unwrap, prefix=""):
          win_type = "win32" if conv else "win64"
-@@ -2380,7 +2380,9 @@ class VkGenerator(object):
+@@ -2572,7 +2572,9 @@ class VkGenerator(object):
  
      def _generate_copyright(self, f, spec_file=False):
          f.write("# " if spec_file else "/* ")
@@ -41,7 +41,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          lines = ["", "This file is generated from Vulkan vk.xml file covered",
              "by the following copyright and permission notice:"]
          lines.extend([l.rstrip(" ") for l in self.registry.copyright.splitlines()])
-@@ -2948,6 +2950,7 @@ class VkRegistry(object):
+@@ -3136,6 +3138,7 @@ class VkRegistry(object):
          self.funcpointers = None
          self.handles = None
          self.structs = None
@@ -49,7 +49,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          # We aggregate all types in here for cross-referencing.
          self.funcs = {}
-@@ -3533,11 +3536,6 @@ def set_working_directory():
+@@ -3721,11 +3724,6 @@ def set_working_directory():
      path = os.path.dirname(path)
      os.chdir(path)
  
@@ -61,7 +61,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  def main():
      parser = argparse.ArgumentParser()
      parser.add_argument("-v", "--verbose", action="count", default=0, help="increase output verbosity")
-@@ -3557,7 +3555,6 @@ def main():
+@@ -3745,7 +3743,6 @@ def main():
          vk_xml = args.xml
      else:
          vk_xml = "vk-{0}.xml".format(VK_XML_VERSION)

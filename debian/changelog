@@ -1,4 +1,4 @@
-wine-development (7.22~repack-1) UNRELEASED; urgency=medium
+wine-development (7.22~repack-1) unstable; urgency=medium
 
   * New upstream release 7.22, released Nov 25, 2022.
     - 32-on-64 thunks for both Vulkan and OpenGL.

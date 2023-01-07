@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -649,7 +649,7 @@ AC_SUBST(LDDLLFLAGS,"")
+@@ -647,7 +647,7 @@ AC_SUBST(LDDLLFLAGS,"")
  AC_SUBST(LDEXECFLAGS,"")
  AC_SUBST(EXTRACFLAGS,"")
  AC_SUBST(UNIXDLLFLAGS,"-fPIC")
@@ -13,11 +13,11 @@ forwarded: not-needed
  AC_SUBST(TOP_INSTALL_LIB,"")
  AC_SUBST(TOP_INSTALL_DEV,"")
  AC_SUBST(WINELOADER_LDFLAGS,"")
-@@ -911,7 +911,6 @@ do
+@@ -906,7 +906,6 @@ do
      saved_CC=$CC
      saved_CFLAGS=$CFLAGS
  
 -    CFLAGS=${CROSSCFLAGS:-"-g -O2"}
      AS_VAR_COPY([CC],[${wine_arch}_CC])
      AS_VAR_COPY([${wine_arch}_CFLAGS],[CFLAGS])
-     AS_VAR_COPY([${wine_arch}_LDFLAGS],[LDFLAGS])
+     AS_VAR_COPY([${wine_arch}_LDFLAGS],[CROSSLDFLAGS])

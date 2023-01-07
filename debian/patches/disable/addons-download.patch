@@ -34,5 +34,5 @@ author: Jens Reyer <jre.winesim@gmail.com>
 +        && install_from_cache() == INSTALL_NEXT)
 +        {};
  
-     heap_free(url);
+     free(url);
      url = NULL;
