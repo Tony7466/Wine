@@ -1,4 +1,4 @@
-description: winedbg format strings use the wrong type on armhf
+description: fix format strings with the wrong type on armhf
 author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/programs/winedbg/info.c
@@ -383,3 +383,23 @@ author: Michael Gilbert <mgilbert@debian.org>
                 ctx->ctx.R8, ctx->ctx.R9, ctx->ctx.R10, ctx->ctx.R11, ctx->ctx.R12);
  
      if (all_regs) dbg_printf( "Floating point ARM dump not implemented\n" );
+--- a/dlls/ntdll/unix/signal_arm.c
++++ b/dlls/ntdll/unix/signal_arm.c
+@@ -668,7 +668,7 @@ static NTSTATUS libunwind_virtual_unwind
+     {
+         NTSTATUS status = context->Pc != context->Lr ?
+                           STATUS_SUCCESS : STATUS_INVALID_DISPOSITION;
+-        TRACE( "no info found for %x ip %x-%x, %s\n",
++        TRACE( "no info found for %lx ip %x-%x, %s\n",
+                ip, info.start_ip, info.end_ip, status == STATUS_SUCCESS ?
+                "assuming leaf function" : "error, stuck" );
+         *handler = NULL;
+@@ -678,7 +678,7 @@ static NTSTATUS libunwind_virtual_unwind
+         return status;
+     }
+ 
+-    TRACE( "ip %#x function %#lx-%#lx personality %#lx lsda %#lx fde %#lx\n",
++    TRACE( "ip %#lx function %#lx-%#lx personality %#lx lsda %#lx fde %#lx\n",
+            ip, (unsigned long)info.start_ip, (unsigned long)info.end_ip, (unsigned long)info.handler,
+            (unsigned long)info.lsda, (unsigned long)info.unwind_info );
+ 

@@ -41,6 +41,7 @@ warnings/libs.patch
 warnings/bison.patch
 warnings/parentheses.patch
 warnings/use-after-free.patch
+warnings/int-conversion.patch
 warnings/format-overflow.patch
 warnings/stringop-overflow.patch
 warnings/uninitialized-variables.patch
