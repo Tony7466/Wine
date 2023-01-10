@@ -1,3 +1,15 @@
+wine-development (8.0~rc1~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 8.0-rc1, released Dec 9, 2022.
+    - Bundled vkd3d upgraded to version 1.6.
+    - Vulkan and OpenGL thunking optimizations.
+    - More support for print processors.
+    - Improved joystick control panel.
+    - Long types printf format conversion finished.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Tue, 10 Jan 2023 02:09:54 +0000
+
 wine-development (7.22~repack-2) unstable; urgency=medium
 
   * Fix integer conversion warning.
