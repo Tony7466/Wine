@@ -182,18 +182,6 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
      else
      {
-@@ -726,7 +750,11 @@ void print_address(const ADDRESS64* addr
-         if (!SymGetModuleInfo(dbg_curr_process->handle, lin, &im)) return;
-         dbg_printf(" %s", im.ModuleName);
-         if (lin > im.BaseOfImage)
-+#ifdef __arm__
-+            dbg_printf("+0x%Ild", lin - im.BaseOfImage);
-+#else
-             dbg_printf("+0x%Ix", lin - im.BaseOfImage);
-+#endif
-     }
-     if (with_line)
-     {
 --- a/programs/winedbg/stack.c
 +++ b/programs/winedbg/stack.c
 @@ -281,7 +281,11 @@ static void stack_print_addr_and_args(vo
@@ -208,18 +196,6 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          stack_set_local_scope();
          se.first = TRUE;
-@@ -296,7 +300,11 @@ static void stack_print_addr_and_args(vo
-             dbg_printf(" [%s:%lu]", il.FileName, il.LineNumber);
-         dbg_printf(" in %s", im.ModuleName);
-     }
-+#ifdef __arm__
-+    else dbg_printf(" in %s (+0x%Ild)", im.ModuleName, frm->linear_pc - im.BaseOfImage);
-+#else
-     else dbg_printf(" in %s (+0x%Ix)", im.ModuleName, frm->linear_pc - im.BaseOfImage);
-+#endif
- }
- 
- /******************************************************************
 --- a/programs/winedbg/break.c
 +++ b/programs/winedbg/break.c
 @@ -325,7 +325,11 @@ void break_add_break_from_lineno(const c
@@ -363,26 +339,6 @@ author: Michael Gilbert <mgilbert@debian.org>
          break;
      case EXPR_TYPE_STRING:
          dbg_printf("\"%s\"", exp->un.string.str);
---- a/programs/winedbg/be_arm.c
-+++ b/programs/winedbg/be_arm.c
-@@ -1704,13 +1704,13 @@ static void be_arm_print_context(HANDLE
-         if (!((ctx->ctx.Cpsr >> 26) & (1 << (sizeof(condflags) - i))))
-             buf[i] = '-';
- 
--    dbg_printf(" Pc:%08x Sp:%08x Lr:%08x Cpsr:%08x(%s)\n",
-+    dbg_printf(" Pc:%08lx Sp:%08lx Lr:%08lx Cpsr:%08lx(%s)\n",
-                ctx->ctx.Pc, ctx->ctx.Sp, ctx->ctx.Lr, ctx->ctx.Cpsr, buf);
--    dbg_printf(" r0:%08x r1:%08x r2:%08x r3:%08x\n",
-+    dbg_printf(" r0:%08lx r1:%08lx r2:%08lx r3:%08lx\n",
-                ctx->ctx.R0, ctx->ctx.R1, ctx->ctx.R2, ctx->ctx.R3);
--    dbg_printf(" r4:%08x r5:%08x r6:%08x r7:%08x\n",
-+    dbg_printf(" r4:%08lx r5:%08lx r6:%08lx r7:%08lx\n",
-                ctx->ctx.R4, ctx->ctx.R5, ctx->ctx.R6, ctx->ctx.R7);
--    dbg_printf(" r8:%08x r9:%08x r10:%08x r11:%08x r12:%08x\n",
-+    dbg_printf(" r8:%08lx r9:%08lx r10:%08lx r11:%08lx r12:%08lx\n",
-                ctx->ctx.R8, ctx->ctx.R9, ctx->ctx.R10, ctx->ctx.R11, ctx->ctx.R12);
- 
-     if (all_regs) dbg_printf( "Floating point ARM dump not implemented\n" );
 --- a/dlls/ntdll/unix/signal_arm.c
 +++ b/dlls/ntdll/unix/signal_arm.c
 @@ -668,7 +668,7 @@ static NTSTATUS libunwind_virtual_unwind

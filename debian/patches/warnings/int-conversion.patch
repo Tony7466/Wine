@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/opengl32/unix_wgl.c
 +++ b/dlls/opengl32/unix_wgl.c
-@@ -1366,7 +1366,7 @@ NTSTATUS wow64_ext_glPathGlyphIndexRange
+@@ -1391,7 +1391,7 @@ NTSTATUS wow64_ext_glPathGlyphIndexRange
          .fontStyle = params32->fontStyle,
          .pathParameterTemplate = params32->pathParameterTemplate,
          .emScale = params32->emScale,

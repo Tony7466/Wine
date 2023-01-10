@@ -90,7 +90,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!desc) return E_INVALIDARG;
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -2681,6 +2681,9 @@ static void check_fbo_compat(struct wine
+@@ -2682,6 +2682,9 @@ static void check_fbo_compat(struct wine
                      case WINED3D_GL_RES_TYPE_COUNT:
                          color = 0;
                          break;
@@ -231,7 +231,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                      prefix->Address.iSockaddrLength = sockaddr_size;
 --- a/include/winsock2.h
 +++ b/include/winsock2.h
-@@ -597,9 +597,17 @@ typedef struct WS(timeval)
+@@ -605,9 +605,17 @@ typedef struct WS(timeval)
  #  define FD_SETSIZE    64
  # endif
  
@@ -264,7 +264,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      WCHAR *curdir = get_initial_directory();
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -2360,11 +2360,14 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
+@@ -2361,11 +2361,14 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
      }
      else
      {
@@ -280,7 +280,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          {
              POINT pt = { 0, 0 };
              NtUserMapWindowPoints( 0, parent, &pt, 1 );
-@@ -2372,7 +2375,6 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
+@@ -2373,7 +2376,6 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
              OffsetRect( &escape.dc_rect, pt.x, pt.y );
              if (flags & DCX_CLIPCHILDREN) escape.mode = ClipByChildren;
          }

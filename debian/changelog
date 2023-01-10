@@ -1,6 +1,6 @@
-wine-development (8.0~rc1~repack-1) UNRELEASED; urgency=medium
+wine (8.0~rc1~repack-1) unstable; urgency=medium
 
-  * New upstream release 8.0-rc1, released Dec 9, 2022.
+  * New upstream release 8.0-rc1, released Dec 9, 2022 (closes: #1028338).
     - Bundled vkd3d upgraded to version 1.6.
     - Vulkan and OpenGL thunking optimizations.
     - More support for print processors.
@@ -274,6 +274,105 @@ wine-development (7.1~repack-1) unstable; urgency=medium
   * Import updates from the 7.0 stable branch.
 
  -- Michael Gilbert <mgilbert@debian.org>  Sun, 25 Sep 2022 16:14:41 +0000
+
+wine (7.0.1~repack-1) unstable; urgency=medium
+
+  * New upstream release 7.0.1, released Nov 8, 2022.
+  * Fix stringop overflow and overread warnings (closes: #1027111).
+  * Import upstream fix for use after free in wineserver (closes: #1019253).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Fri, 30 Dec 2022 06:15:52 +0000
+
+wine (7.0~repack-11) unstable; urgency=medium
+
+  * Update standards version to 4.6.2.
+  * Support building with vulkan 1.3.231 and gcc-mingw 12 (closes: #1026489).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Fri, 23 Dec 2022 05:09:01 +0000
+
+wine (7.0~repack-10) unstable; urgency=medium
+
+  [ Phil Morrell ]
+  * Depend on libxml-libxml-perl.
+  * Add README.source to explain the layout.
+
+  [ Michael Gilbert ]
+  * Ignore debian-news-entry-has-unknown-version lintian warning.
+    - The NEWS file is correct for the different wine packages.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Wed, 12 Oct 2022 00:18:28 +0000
+
+wine (7.0~repack-9) unstable; urgency=medium
+
+  * Fix various lintian warnings.
+  * Drop unnecessary dpkg version constraint.
+  * Indicate vulkan >= 1.2.189.0 is required.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 09 Oct 2022 07:01:14 +0000
+
+wine (7.0~repack-8) unstable; urgency=medium
+
+  * Fix lintian warning.
+  * Restore netapi32.dll (closes: #1019943).
+  * Support building with unicode-data 15 (closes: #1020013).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 24 Sep 2022 17:29:03 +0000
+
+wine (7.0~repack-7) unstable; urgency=medium
+
+  * Update standards version to 4.6.1.
+  * Fix remaining build failures on arm.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Tue, 13 Sep 2022 00:46:21 +0000
+
+wine (7.0~repack-6) unstable; urgency=medium
+
+  * Fix arm build failures.
+  * Fix various lintian warnings.
+  * Remove clang from debian/rules.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 11 Sep 2022 23:27:19 +0000
+
+wine (7.0~repack-5) unstable; urgency=medium
+
+  * Build with gcc instead of clang on arm64.
+  * Disable link time optimization (closes: #1015705).
+  * Add multiarch:same to the dev package (closes: #1015239).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 11 Sep 2022 17:20:52 +0000
+
+wine (7.0~repack-4) unstable; urgency=medium
+
+  * Fix syntax error in configure.ac.
+  * Support installing wine-binfmt without binfmt-support.
+  * Restore mistakenly removed binfmt-support file (closes: #1014323).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Wed, 06 Jul 2022 00:44:32 +0000
+
+wine (7.0~repack-3) unstable; urgency=medium
+
+  * Fix dangling symlinks (closes: #1012827).
+  * Support building with gcc 12 (closes: #1013067).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Mon, 04 Jul 2022 00:34:31 +0000
+
+wine (7.0~repack-2) unstable; urgency=medium
+
+  * Fix format string error on armhf.
+  * Denote wine32:i386 in launcher (closes: #1011461).
+  * Add support for systemd-binfmt (closes: #1012353).
+    - Thanks to Michael Biebl.
+  * Avoid infinite recursion in make_vulkan (closes: #1013501).
+    - Thanks to Adrian Heine.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 03 Jul 2022 18:24:37 +0000
+
+wine (7.0~repack-1) unstable; urgency=medium
+
+  * New upstream release 7.0, released Jan 18, 2022 (closes: #1007913).
+    - Fix crash during resolution change in a few games (closes: #1002023).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 05 Jun 2022 21:54:23 +0000
 
 wine-development (6.23~repack-4) unstable; urgency=medium
 

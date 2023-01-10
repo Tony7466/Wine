@@ -21,9 +21,9 @@ git update-index --assume-unchanged configure include/config.h.in
 version="$1"
 tag="wine-$version"
 debian="https://salsa.debian.org/wine-team/wine.git"
-debian_branch="bookworm-wine7"
+debian_branch="bookworm-wine8"
 upstream="https://source.winehq.org/git/wine.git"
-upstream_branch="upstream-wine7"
+upstream_branch="upstream-wine8"
 git checkout ${upstream_branch}
 git pull --verbose --no-edit $upstream tag "$tag"
 

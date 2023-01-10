@@ -35,6 +35,7 @@ armhf/incompatible-types.patch
 
 arm64/gcc.patch
 arm64/incorrect-member.patch
+arm64/incompatible-types.patch
 arm64/tautological-compare.patch
 
 warnings/libs.patch

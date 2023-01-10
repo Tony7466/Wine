@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3622,8 +3622,11 @@ maintainer-clean::
+@@ -3576,8 +3576,11 @@ maintainer-clean::
  dnl Rules for generated source files
  
  WINE_APPEND_RULE(

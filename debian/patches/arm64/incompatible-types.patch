@@ -1,0 +1,16 @@
+description: remove duplicate type definitions (gcc -Wincompatible-pointer-types)
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/include/winber.h
++++ b/include/winber.h
+@@ -22,10 +22,6 @@
+ #define LBER_ERROR   (~0L)
+ #define LBER_DEFAULT (~0L)
+ 
+-typedef int ber_int_t;
+-typedef unsigned int ber_tag_t;
+-typedef unsigned int ber_len_t;
+-
+ void CDECL ber_free( BerElement *, int );
+ void CDECL ber_bvfree( BERVAL * );
+ 
