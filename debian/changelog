@@ -1,3 +1,10 @@
+wine (8.0~rc2~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 8.0-rc2, released Dec 21, 2022.
+    - Bug fixes only, we are in code freeze.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Thu, 12 Jan 2023 18:03:15 +0000
+
 wine (8.0~rc1~repack-1) unstable; urgency=medium
 
   * New upstream release 8.0-rc1, released Dec 9, 2022 (closes: #1028338).
