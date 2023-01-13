@@ -34,6 +34,7 @@ armhf/floating-point.patch
 armhf/incompatible-types.patch
 
 arm64/gcc.patch
+arm64/binary-name.patch
 arm64/incorrect-member.patch
 arm64/incompatible-types.patch
 arm64/tautological-compare.patch

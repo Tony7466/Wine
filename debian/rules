@@ -110,7 +110,7 @@ override_dh_auto_configure:
 	# cc version
 	$(CC) --version
 	# mingw version
-	$(DEB_HOST_GNU_CPU)-w64-mingw32-gcc --version || echo "no mingw"
+	$(DEB_HOST_GNU_CPU)-w64-mingw32-gcc --version || echo ""
 	# automatically generated files
 	./debian/scripts/generate server/trace.generated make_requests
 	./debian/scripts/generate server/request.generated make_requests
