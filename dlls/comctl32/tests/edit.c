@@ -72,6 +72,35 @@ static void flush_events(void)
     }
 }
 
+static BOOL open_clipboard(HWND hwnd)
+{
+    DWORD start = GetTickCount();
+    while (1)
+    {
+        BOOL ret = OpenClipboard(hwnd);
+        if (ret || GetLastError() != ERROR_ACCESS_DENIED)
+            return ret;
+        if (GetTickCount() - start > 100)
+        {
+            char classname[256];
+            DWORD le = GetLastError();
+            HWND clipwnd = GetOpenClipboardWindow();
+            /* Provide a hint as to the source of interference:
+             * - The class name would typically be CLIPBRDWNDCLASS if the
+             *   clipboard was opened by a Windows application using the
+             *   ole32 API.
+             * - And it would be __wine_clipboard_manager if it was opened in
+             *   response to a native application.
+             */
+            GetClassNameA(clipwnd, classname, ARRAY_SIZE(classname));
+            trace("%p (%s) opened the clipboard\n", clipwnd, classname);
+            SetLastError(le);
+            return ret;
+        }
+        Sleep(15);
+    }
+}
+
 static INT_PTR CALLBACK multi_edit_dialog_proc(HWND hdlg, UINT msg, WPARAM wparam, LPARAM lparam)
 {
     static int num_ok_commands = 0;
@@ -2264,7 +2293,7 @@ static void test_espassword(void)
     ok(r == strlen(password), "Expected: %s, got len %ld\n", password, r);
     ok(strcmp(buffer, password) == 0, "expected %s, got %s\n", password, buffer);
 
-    r = OpenClipboard(hwEdit);
+    r = open_clipboard(hwEdit);
     ok(r == TRUE, "expected %d, got %ld\n", TRUE, r);
     r = EmptyClipboard();
     ok(r == TRUE, "expected %d, got %ld\n", TRUE, r);
@@ -3217,6 +3246,26 @@ static void test_EM_GETHANDLE(void)
     DestroyWindow(hEdit);
 }
 
+/* In Windows 10+, the WM_PASTE message isn't always successful.
+ * So retry in case of failure.
+ */
+#define check_paste(a, b) _check_paste(__LINE__, (a), (b))
+static void _check_paste(unsigned int line, HWND hedit, const char *content)
+{
+    /* only retry on windows platform */
+    int tries = strcmp(winetest_platform, "wine") ? 3 : 1;
+    int len = 0;
+
+    SendMessageA(hedit, WM_SETTEXT, 0, (LPARAM)"");
+    do
+    {
+        SendMessageA(hedit, WM_PASTE, 0, 0);
+        if ((len = SendMessageA(hedit, WM_GETTEXTLENGTH, 0, 0))) break;
+        Sleep(1);
+    } while (--tries > 0);
+    ok_(__FILE__, line)(len == strlen(content), "Unexpected len %u in edit\n", len);
+}
+
 static void test_paste(void)
 {
     static const char *str = "this is a simple text";
@@ -3224,7 +3273,7 @@ static void test_paste(void)
     HWND hEdit, hMultilineEdit;
     HANDLE hmem, hmem_ret;
     char *buffer;
-    int r, len;
+    int r;
 
     hEdit = create_editcontrol(ES_AUTOHSCROLL | ES_AUTOVSCROLL, 0);
     hMultilineEdit = create_editcontrol(ES_AUTOHSCROLL | ES_AUTOVSCROLL | ES_MULTILINE, 0);
@@ -3237,7 +3286,7 @@ static void test_paste(void)
     strcpy(buffer, str);
     GlobalUnlock(hmem);
 
-    r = OpenClipboard(hEdit);
+    r = open_clipboard(hEdit);
     ok(r == TRUE, "expected %d, got %d\n", TRUE, r);
     r = EmptyClipboard();
     ok(r == TRUE, "expected %d, got %d\n", TRUE, r);
@@ -3247,10 +3296,7 @@ static void test_paste(void)
     ok(r == TRUE, "expected %d, got %d\n", TRUE, r);
 
     /* Paste single line */
-    SendMessageA(hEdit, WM_SETTEXT, 0, (LPARAM)"");
-    r = SendMessageA(hEdit, WM_PASTE, 0, 0);
-    len = SendMessageA(hEdit, WM_GETTEXTLENGTH, 0, 0);
-    ok(strlen(str) == len, "got %d\n", len);
+    check_paste(hEdit, str);
 
     /* Prepare clipboard data with multiline text */
     hmem = GlobalAlloc(GMEM_MOVEABLE, 255);
@@ -3260,7 +3306,7 @@ static void test_paste(void)
     strcpy(buffer, str2);
     GlobalUnlock(hmem);
 
-    r = OpenClipboard(hEdit);
+    r = open_clipboard(hEdit);
     ok(r == TRUE, "expected %d, got %d\n", TRUE, r);
     r = EmptyClipboard();
     ok(r == TRUE, "expected %d, got %d\n", TRUE, r);
@@ -3271,15 +3317,10 @@ static void test_paste(void)
 
     /* Paste multiline text in singleline edit - should be cut */
     SendMessageA(hEdit, WM_SETTEXT, 0, (LPARAM)"");
-    r = SendMessageA(hEdit, WM_PASTE, 0, 0);
-    len = SendMessageA(hEdit, WM_GETTEXTLENGTH, 0, 0);
-    ok(strlen("first line") == len, "got %d\n", len);
+    check_paste(hEdit, "first line");
 
     /* Paste multiline text in multiline edit */
-    SendMessageA(hMultilineEdit, WM_SETTEXT, 0, (LPARAM)"");
-    r = SendMessageA(hMultilineEdit, WM_PASTE, 0, 0);
-    len = SendMessageA(hMultilineEdit, WM_GETTEXTLENGTH, 0, 0);
-    ok(strlen(str2) == len, "got %d\n", len);
+    check_paste(hMultilineEdit, str2);
 
     /* Cleanup */
     DestroyWindow(hEdit);

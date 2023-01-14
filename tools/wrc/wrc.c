@@ -135,6 +135,7 @@ static char *output_name;	/* The name given by the -o option */
 const char *input_name = NULL;	/* The name given on the command-line */
 static char *temp_name = NULL;	/* Temporary file for preprocess pipe */
 static struct strarray input_files;
+const char *temp_dir = NULL;
 
 static int stdinc = 1;
 static int po_mode;
@@ -304,6 +305,8 @@ static void init_argv0_dir( const char *argv0 )
     char *path = xmalloc( path_size );
     if (!sysctl( pathname, ARRAY_SIZE(pathname), path, &path_size, NULL, 0 ))
         dir = realpath( path, NULL );
+    else
+        dir = NULL;
     free( path );
 #else
     dir = realpath( argv0, NULL );
@@ -519,4 +522,5 @@ static void cleanup_files(void)
 {
 	if (output_name) unlink(output_name);
 	if (temp_name) unlink(temp_name);
+        if (temp_dir) rmdir(temp_dir);
 }
