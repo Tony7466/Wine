@@ -187,7 +187,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          dbg_printf(" %s", im.ModuleName);
          if (lin > im.BaseOfImage)
 +#ifdef __arm__
-+            dbg_printf("+0x%Ilx", lin - (DWORD_PTR)im.BaseOfImage);
++            dbg_printf("+0x%Ild", lin - (DWORD_PTR)im.BaseOfImage);
 +#else
              dbg_printf("+0x%Ix", lin - (DWORD_PTR)im.BaseOfImage);
 +#endif
@@ -213,7 +213,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          dbg_printf(" in %s", im.ModuleName);
      }
 +#ifdef __arm__
-+    else dbg_printf(" in %s (+0x%Ilx)", im.ModuleName, frm->linear_pc - (DWORD_PTR)im.BaseOfImage);
++    else dbg_printf(" in %s (+0x%Ild)", im.ModuleName, frm->linear_pc - (DWORD_PTR)im.BaseOfImage);
 +#else
      else dbg_printf(" in %s (+0x%Ix)", im.ModuleName, frm->linear_pc - (DWORD_PTR)im.BaseOfImage);
 +#endif
