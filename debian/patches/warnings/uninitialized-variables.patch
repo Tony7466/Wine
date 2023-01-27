@@ -206,7 +206,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
 --- a/dlls/iphlpapi/iphlpapi_main.c
 +++ b/dlls/iphlpapi/iphlpapi_main.c
-@@ -992,7 +992,9 @@ static DWORD gateway_and_prefix_addresse
+@@ -994,7 +994,9 @@ static DWORD gateway_and_prefix_addresse
      struct nsi_ipv6_forward_key *key6;
      IP_ADAPTER_GATEWAY_ADDRESS *gw, **gw_next;
      IP_ADAPTER_PREFIX *prefix, **prefix_next;
@@ -217,7 +217,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      DWORD sockaddr_size = (family == AF_INET) ? sizeof(SOCKADDR_IN) : sizeof(SOCKADDR_IN6);
      SOCKADDR_INET sockaddr;
      NET_LUID *luid;
-@@ -1086,6 +1088,11 @@ static DWORD gateway_and_prefix_addresse
+@@ -1088,6 +1090,11 @@ static DWORD gateway_and_prefix_addresse
                          err = ERROR_NOT_ENOUGH_MEMORY;
                          goto err;
                      }
