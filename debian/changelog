@@ -1,3 +1,14 @@
+wine (8.0~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 8.0, released Jan 24, 2023.
+    - Per-format support for vertex and index buffers.
+    - Per-format support for all capabilities via
+    D3D11_FEATURE_FORMAT_SUPPORT.
+    - No-overwrite maps on shader resources and constant buffers.
+    - Partial range binding of constant buffers.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Fri, 27 Jan 2023 01:36:01 +0000
+
 wine (8.0~rc5~repack-1) unstable; urgency=medium
 
   * New upstream release 8.0-rc5, released Jan 20, 2023.
