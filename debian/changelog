@@ -1,3 +1,11 @@
+wine (8.0~repack-2) unstable; urgency=medium
+
+  * Include branch in the vcs-git field.
+  * Match only stable releases in the watch file.
+  * Support building on systems with only one cpu (closes: #1030536).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 05 Feb 2023 02:09:23 +0000
+
 wine (8.0~repack-1) unstable; urgency=medium
 
   * New upstream release 8.0, released Jan 24, 2023.

@@ -24,6 +24,7 @@ generate/vulkan.patch
 generate/unicode.patch
 generate/request.patch
 
+fixes/flex.patch
 fixes/fpic.patch
 fixes/printer-resolution.patch
 fixes/temporary-directory.patch

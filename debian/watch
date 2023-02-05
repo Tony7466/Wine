@@ -1,3 +1,4 @@
 version=4
 opts="repacksuffix=~repack,dversionmangle=s/\~repack//,repack,uversionmangle=s/-rc/~rc/,pgpsigurlmangle=s/$/.sign/" \
-https://dl.winehq.org/wine/source/(\d+)\.(0*x*)/wine-(\d.*)\.tar\.xz
+https://dl.winehq.org/wine/source/(\d+)\.(0*)/wine-(\d.*)\.tar\.xz
+# development: https://dl.winehq.org/wine/source/(\d+)\.(0*x*)/wine-(\d.*)\.tar\.xz

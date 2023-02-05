@@ -1,0 +1,20 @@
+description: add explicit lex file dependencies to the makefile rules
+bug-debian: https://bugs.debian.org/1030536
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/tools/makedep.c
++++ b/tools/makedep.c
+@@ -4143,6 +4143,13 @@ static void output_top_makefile( struct
+ 
+     if (!found) output( "\n%s (everything below this line is auto-generated; DO NOT EDIT!!)\n", separator );
+ 
++    output( "\n" );
++    output( "tools/wrc/ppl.l: tools/wrc/ppy.tab.c\n" );
++    output( "tools/widl/ppl.l: tools/widl/ppy.tab.c\n" );
++    output( "libs/vkd3d/libs/vkd3d-shader/hlsl.l: libs/vkd3d/libs/vkd3d-shader/hlsl.tab.c\n" );
++    output( "libs/vkd3d/libs/vkd3d-shader/preproc.l: libs/vkd3d/libs/vkd3d-shader/preproc.tab.c\n" );
++    output( "\n" );
++
+     if (silent_rules) output_silent_rules();
+     for (i = 0; i < subdirs.count; i++) output_sources( submakes[i] );
+     output_sources( make );
