@@ -28,8 +28,6 @@ case "$1" in
               regsvr32
               wineconsole
 
-              wine64
-
               wmc
               wrc
               widl
