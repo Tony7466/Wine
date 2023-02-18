@@ -207,7 +207,6 @@ endif
 	    mv $$file debian/tmp/$$rename || true; \
 	    done
 ifeq ($(DEB_HOST_ARCH_BITS), 64)
-	cp debian/tmp/wine$(DEBSUFFIX).man debian/tmp/wine64$(DEBSUFFIX).man
 	# copy 64 bit wine-preloader
 	test -f debian/tmp/$(BINDIR)/wine64-preloader && \
 	    mv debian/tmp/$(BINDIR)/wine64-preloader debian/tmp/$(BINDIR)/wine64-preloader.static || \

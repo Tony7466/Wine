@@ -1,3 +1,9 @@
+wine (8.0~repack-4) unstable; urgency=medium
+
+  * Remove wine64-stable manpage.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 18 Feb 2023 22:16:11 +0000
+
 wine (8.0~repack-3) unstable; urgency=medium
 
   * Remove wine64-stable symlink (closes: #1029536).
