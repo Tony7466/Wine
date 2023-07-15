@@ -1,9 +1,9 @@
-wine (8.0.1~repack-1) UNRELEASED; urgency=medium
+wine (8.0.1~repack-1) unstable; urgency=medium
 
   * New upstream release 8.0.1, released Apr 20, 2023.
-    - Fixes for macOS Ventura 13.3 on Apple Silicon
-    - Tamil and Turkish translation updates
     - Various bug fixes
+  * Support building with vulkan 1.3.250.
+  * Fix font paths in win32u (closes: #1036080).
 
  -- Michael Gilbert <mgilbert@debian.org>  Sat, 15 Jul 2023 01:13:56 +0000
 
