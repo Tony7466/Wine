@@ -1,3 +1,12 @@
+wine (8.0.1~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 8.0.1, released Apr 20, 2023.
+    - Fixes for macOS Ventura 13.3 on Apple Silicon
+    - Tamil and Turkish translation updates
+    - Various bug fixes
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 15 Jul 2023 01:13:56 +0000
+
 wine (8.0~repack-4) unstable; urgency=medium
 
   * Remove wine64-stable manpage.
