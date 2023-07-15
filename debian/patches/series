@@ -29,6 +29,10 @@ fixes/flex.patch
 fixes/fpic.patch
 fixes/printer-resolution.patch
 fixes/temporary-directory.patch
+fixes/dotfile-attributes1.patch
+fixes/dotfile-attributes2.patch
+fixes/dotfile-attributes3.patch
+fixes/dotfile-attributes4.patch
 
 armhf/shift-overflow.patch
 armhf/format-strings.patch
@@ -39,7 +43,6 @@ arm64/gcc.patch
 arm64/binary-name.patch
 arm64/incorrect-member.patch
 arm64/incompatible-types.patch
-arm64/tautological-compare.patch
 
 warnings/libs.patch
 warnings/bison.patch

@@ -2,4 +2,4 @@
 fonts/*.fon usr/share/wine/fonts
 
 # true type font files
-fonts/*.ttf usr/share/wine/fonts
+fonts/*.ttf usr/share/fonts/truetype/wine

@@ -1,0 +1,38 @@
+commit d433986924c142ab807363b0146160b2b6986a42
+Author: Torge Matthies <tmatthies@codeweavers.com>
+Date:   Wed Apr 12 13:35:10 2023 +0200
+
+    ntdll: Only infer hidden attribute from file name if xattr is not present.
+    
+    Signed-off-by: Torge Matthies <tmatthies@codeweavers.com>
+
+--- a/dlls/ntdll/tests/file.c
++++ b/dlls/ntdll/tests/file.c
+@@ -4107,7 +4107,7 @@ static void test_dotfile_file_attributes
+     status = nt_get_file_attrs(filename, &attrs);
+     ok( status == STATUS_SUCCESS, "got %#lx\n", status );
+     ok( attrs & FILE_ATTRIBUTE_SYSTEM, "got attributes %#lx\n", attrs );
+-    todo_wine ok( !(attrs & FILE_ATTRIBUTE_HIDDEN), "got attributes %#lx\n", attrs );
++    ok( !(attrs & FILE_ATTRIBUTE_HIDDEN), "got attributes %#lx\n", attrs );
+ 
+     status = pNtQueryInformationFile( h, &io, &info, sizeof(info), FileBasicInformation );
+     ok( status == STATUS_SUCCESS, "got %#lx\n", status );
+--- a/dlls/ntdll/unix/file.c
++++ b/dlls/ntdll/unix/file.c
+@@ -1681,14 +1681,13 @@ static int get_file_info( const char *pa
+     }
+     *attr |= get_file_attributes( st );
+ 
+-    if (is_hidden_file( path ))
+-        *attr |= FILE_ATTRIBUTE_HIDDEN;
+-
+     attr_len = xattr_get( path, SAMBA_XATTR_DOS_ATTRIB, attr_data, sizeof(attr_data)-1 );
+     if (attr_len != -1)
+         *attr |= parse_samba_dos_attrib_data( attr_data, attr_len );
+     else
+     {
++        if (is_hidden_file( path ))
++            *attr |= FILE_ATTRIBUTE_HIDDEN;
+         if (errno == ENOTSUP) return ret;
+ #ifdef ENODATA
+         if (errno == ENODATA) return ret;
