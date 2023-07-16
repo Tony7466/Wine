@@ -131,7 +131,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          else
          {
 +#ifdef __arm__
-+            DO_DUMP(DWORD64, 2, " %16.16I64lld");
++            DO_DUMP(DWORD64, 2, " %I64lld");
 +#else
              DO_DUMP(DWORD64, 2, " %16.16I64x");
 +#endif

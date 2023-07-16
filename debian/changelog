@@ -1,3 +1,9 @@
+wine (8.0.1~repack-3) unstable; urgency=medium
+
+  * Fix build failure on arm.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 16 Jul 2023 01:30:59 +0000
+
 wine (8.0.1~repack-2) unstable; urgency=medium
 
   * Fix build failure on arm.
