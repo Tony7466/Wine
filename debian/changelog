@@ -1,4 +1,4 @@
-wine-development (8.2~repack-1) UNRELEASED; urgency=medium
+wine-development (8.2~repack-1) unstable; urgency=medium
 
   * New upstream release 8.2, released Feb 17, 2023.
     - Better debug information in Wow64 mode.

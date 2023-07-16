@@ -3,19 +3,29 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/programs/winedbg/info.c
 +++ b/programs/winedbg/info.c
-@@ -168,7 +168,11 @@ struct info_modules
- 
- static void module_print_info(const struct info_module *module, BOOL is_embedded)
+@@ -183,13 +183,21 @@ static const char* get_machine_str(DWORD
+ static void module_print_info(const struct info_module *module, BOOL is_embedded, BOOL multi_machine)
  {
+     if (multi_machine)
 +#ifdef __arm__
-+    dbg_printf("%x_%x_%I64lld-%x_%x_%I64lld\t%-16s%s\n",
++        dbg_printf("%I64lld-%I64lld\t%s\t%-16s%s\n",
 +#else
-     dbg_printf("%*.*I64x-%*.*I64x\t%-16s%s\n",
+         dbg_printf("%16I64x-%16I64x\t%s\t%-16s%s\n",
 +#endif
-                ADDRWIDTH, ADDRWIDTH, module->mi.BaseOfImage,
-                ADDRWIDTH, ADDRWIDTH, module->mi.BaseOfImage + module->mi.ImageSize,
-                is_embedded ? "\\" : get_symtype_str(&module->mi), module->name);
-@@ -286,7 +290,11 @@ void info_win32_module(DWORD64 base)
+                    module->mi.BaseOfImage,
+                    module->mi.BaseOfImage + module->mi.ImageSize,
+                    get_machine_str(module->mi.MachineType),
+                    is_embedded ? "\\" : get_symtype_str(&module->mi), module->name);
+     else
++#ifdef __arm__
++        dbg_printf("%x_%x_%I64lld-%x_%x_%I64lld\t%-16s%s\n",
++#else
+         dbg_printf("%*.*I64x-%*.*I64x\t%-16s%s\n",
++#endif
+                    ADDRWIDTH, ADDRWIDTH, module->mi.BaseOfImage,
+                    ADDRWIDTH, ADDRWIDTH, module->mi.BaseOfImage + module->mi.ImageSize,
+                    is_embedded ? "\\" : get_symtype_str(&module->mi), module->name);
+@@ -323,7 +331,11 @@ void info_win32_module(DWORD64 base, BOO
      free(im.modules);
  
      if (base && !num_printed)
@@ -27,7 +37,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  }
  
  struct class_walker
-@@ -396,7 +404,11 @@ static void info_window(HWND hWnd, int i
+@@ -433,7 +445,11 @@ static void info_window(HWND hWnd, int i
          if (!GetWindowTextA(hWnd, wndName, sizeof(wndName)))
              strcpy(wndName, "-- Empty --");
  
@@ -39,7 +49,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                     indent, "", (DWORD_PTR)hWnd, 12 - indent, "",
                     clsName, GetWindowLongW(hWnd, GWL_STYLE),
                     ADDRWIDTH, (ULONG_PTR)GetWindowLongPtrW(hWnd, GWLP_WNDPROC),
-@@ -438,7 +450,11 @@ void info_win32_window(HWND hWnd, BOOL d
+@@ -475,7 +491,11 @@ void info_win32_window(HWND hWnd, BOOL d
  
      /* FIXME missing fields: hmemTaskQ, hrgnUpdate, dce, flags, pProp, scroll */
      dbg_printf("next=%p  child=%p  parent=%p  owner=%p  class='%s'\n"
@@ -51,7 +61,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                 "style=0x%08lx  exstyle=0x%08lx  wndproc=%p  text='%s'\n"
                 "client=%ld,%ld-%ld,%ld  window=%ld,%ld-%ld,%ld sysmenu=%p\n",
                 GetWindow(hWnd, GW_HWNDNEXT),
-@@ -851,7 +867,11 @@ void info_win32_virtual(DWORD pid)
+@@ -888,7 +908,11 @@ void info_win32_virtual(DWORD pid)
              type = "";
              prot[0] = '\0';
          }
@@ -63,7 +73,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                     ADDRWIDTH, (DWORD_PTR)addr, ADDRWIDTH, (DWORD_PTR)addr + mbi.RegionSize - 1, state, type, prot);
          if (addr + mbi.RegionSize < addr) /* wrap around ? */
              break;
-@@ -953,7 +973,11 @@ void info_win32_exception(void)
+@@ -990,7 +1014,11 @@ void info_win32_exception(void)
          break;
      case EXCEPTION_ACCESS_VIOLATION:
          if (rec->NumberParameters == 2)
@@ -75,7 +85,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                         rec->ExceptionInformation[0] == EXCEPTION_WRITE_FAULT ? "write" :
                         rec->ExceptionInformation[0] == EXCEPTION_EXECUTE_FAULT ? "execute" : "read",
                         ADDRWIDTH, rec->ExceptionInformation[1]);
-@@ -1021,14 +1045,22 @@ void info_win32_exception(void)
+@@ -1058,14 +1086,22 @@ void info_win32_exception(void)
          break;
      case EXCEPTION_WINE_CXX_EXCEPTION:
          if(rec->NumberParameters == 3 && rec->ExceptionInformation[0] == EXCEPTION_WINE_CXX_FRAME_MAGIC)
