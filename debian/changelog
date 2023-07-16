@@ -1,3 +1,12 @@
+wine (8.1~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 8.1, released Feb 2, 2023.
+    - Windows version set to Windows 10 for new prefixes.
+    - Many code cleanups that were deferred during code freeze.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 16 Jul 2023 02:06:37 +0000
+
 wine (8.0~repack-4) unstable; urgency=medium
 
   * Remove wine64-stable manpage.
