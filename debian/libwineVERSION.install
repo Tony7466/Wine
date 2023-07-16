@@ -17,9 +17,6 @@ debian/tmp/usr/lib/*/*/*/*.msstyles
 # ELF libraries
 debian/tmp/usr/lib/*/*/*/*.so
 
-# wine library
-debian/tmp/usr/lib/*/*/*/libwine.so.*
-
 # wine server
 debian/tmp/wineserver usr/lib/wineVERSION
 

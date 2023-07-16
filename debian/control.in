@@ -70,6 +70,7 @@ Build-Depends:
  libncurses-dev,
  libfreetype-dev,
  libgnutls28-dev,
+ libpcsclite-dev,
  libusb-1.0-0-dev,
  libgettextpo-dev,
  libfontconfig-dev,

@@ -1,4 +1,4 @@
-wine-development (8.3~repack-1) UNRELEASED; urgency=medium
+wine-development (8.3~repack-1) unstable; urgency=medium
 
   * New upstream release 8.3, released Mar 3, 2023.
     - Support for the Low Fragmentation Heap.

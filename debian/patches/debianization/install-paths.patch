@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -90,9 +90,9 @@ AC_ARG_WITH(wine64,    AS_HELP_STRING([-
+@@ -91,9 +91,9 @@ AC_ARG_WITH(wine64,    AS_HELP_STRING([-
  
  AC_CANONICAL_HOST
  
@@ -19,7 +19,7 @@ forwarded: not-needed
  dnl **** Check for some programs ****
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -3061,7 +3061,7 @@ static void output_source_in( struct mak
+@@ -3027,7 +3027,7 @@ static void output_source_in( struct mak
      output( "%s:", obj_dir_path( make, obj ));
      output_filenames( source->dependencies );
      output( "\n" );
@@ -36,17 +36,6 @@ forwarded: not-needed
  	-DDLL_TO_BINDIR=\"`${MAKEDEP} -R ${dlldir} ${bindir}`\" \
 -	-DBIN_TO_DATADIR=\"`${MAKEDEP} -R ${bindir} ${datadir}/wine`\"
 +	-DBIN_TO_DATADIR=\"`${MAKEDEP} -R ${bindir} ${datadir}`\"
---- a/libs/wine/Makefile.in
-+++ b/libs/wine/Makefile.in
-@@ -93,7 +93,7 @@ config_EXTRADEFS = \
- 	-DLIB_TO_BINDIR=\"`${MAKEDEP} -R ${libdir} ${bindir}`\" \
- 	-DLIB_TO_DLLDIR=\"`${MAKEDEP} -R ${libdir} ${dlldir}`\" \
- 	-DBIN_TO_DLLDIR=\"`${MAKEDEP} -R ${bindir} ${dlldir}`\" \
--	-DBIN_TO_DATADIR=\"`${MAKEDEP} -R ${bindir} ${datadir}/wine`\"
-+	-DBIN_TO_DATADIR=\"`${MAKEDEP} -R ${bindir} ${datadir}`\"
- 
- SHAREDLIB = $(LIBWINE_SHAREDLIB)
- 
 --- a/dlls/win32u/Makefile.in
 +++ b/dlls/win32u/Makefile.in
 @@ -56,4 +56,4 @@ C_SRCS = \

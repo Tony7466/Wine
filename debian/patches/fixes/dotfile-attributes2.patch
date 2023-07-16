@@ -60,7 +60,7 @@ Date:   Wed Apr 12 13:35:10 2023 +0200
          fill_file_info( &st, attributes, info, class );
      }
  
-@@ -4213,7 +4215,6 @@ NTSTATUS WINAPI NtQueryFullAttributesFil
+@@ -4218,7 +4220,6 @@ NTSTATUS WINAPI NtQueryFullAttributesFil
              info->AllocationSize = std.AllocationSize;
              info->EndOfFile      = std.EndOfFile;
              info->FileAttributes = basic.FileAttributes;
@@ -68,7 +68,7 @@ Date:   Wed Apr 12 13:35:10 2023 +0200
          }
          free( unix_name );
      }
-@@ -4244,10 +4245,7 @@ NTSTATUS WINAPI NtQueryAttributesFile( c
+@@ -4249,10 +4250,7 @@ NTSTATUS WINAPI NtQueryAttributesFile( c
          else if (!S_ISREG(st.st_mode) && !S_ISDIR(st.st_mode))
              status = STATUS_INVALID_INFO_CLASS;
          else

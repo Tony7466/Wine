@@ -10,7 +10,6 @@ debianization/wineserver-persistence.patch
 
 system/zlib.patch
 
-disable/obsolete-api.patch
 disable/line-wrapping.patch
 disable/generated-data.patch
 disable/addons-download.patch

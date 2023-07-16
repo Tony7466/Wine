@@ -92,7 +92,7 @@ Date:   Wed Apr 12 13:35:10 2023 +0200
                      WARN( "Failed to set extended attribute " SAMBA_XATTR_DOS_ATTRIB ". errno %d (%s)",
                            errno, strerror( errno ) );
                  if (needs_close) close( fd );
-@@ -4560,20 +4567,25 @@ NTSTATUS WINAPI NtSetInformationFile( HA
+@@ -4565,20 +4572,25 @@ NTSTATUS WINAPI NtSetInformationFile( HA
          {
              const FILE_BASIC_INFORMATION *info = ptr;
              LARGE_INTEGER mtime, atime;

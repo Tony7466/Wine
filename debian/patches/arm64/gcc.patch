@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -997,11 +997,6 @@ do
+@@ -979,11 +979,6 @@ do
      CFLAGS=$saved_CFLAGS
  done
  

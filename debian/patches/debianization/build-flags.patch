@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -636,7 +636,7 @@ AC_SUBST(LDDLLFLAGS,"")
+@@ -637,7 +637,7 @@ AC_SUBST(LDDLLFLAGS,"")
  AC_SUBST(LDEXECFLAGS,"")
  AC_SUBST(EXTRACFLAGS,"")
  AC_SUBST(UNIXDLLFLAGS,"-fPIC")
@@ -13,7 +13,7 @@ forwarded: not-needed
  AC_SUBST(TOP_INSTALL_LIB,"")
  AC_SUBST(TOP_INSTALL_DEV,"")
  AC_SUBST(WINELOADER_LDFLAGS,"")
-@@ -860,7 +860,6 @@ do
+@@ -842,7 +842,6 @@ do
      saved_CC=$CC
      saved_CFLAGS=$CFLAGS
  
