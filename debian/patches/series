@@ -20,7 +20,6 @@ disable/file-associations.patch
 generate/icons.patch
 generate/opengl.patch
 generate/vulkan.patch
-generate/vulkansc.patch
 generate/unicode.patch
 generate/request.patch
 
