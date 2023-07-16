@@ -1,5 +1,5 @@
-#!/bin/sh -e
-# Copyright: 2013-2015 Michael Gilbert <mgilbert@debian.org>
+#!/bin/sh -xe
+# Copyright: 2013-2023 Michael Gilbert <mgilbert@debian.org>
 # License: LGPL-2.1+
 
 # check for version argument
@@ -19,14 +19,14 @@ git update-index --assume-unchanged configure include/config.h.in
 
 # pull specified tag from upstream repository
 version="$1"
+tag="wine-$version"
 debian="https://salsa.debian.org/wine-team/wine.git"
 debian_branch="master"
+upstream="https://source.winehq.org/git/wine.git"
 upstream_branch="upstream"
-winehq="git://source.winehq.org/git/wine.git"
-tag="wine-$version"
 git checkout ${upstream_branch}
-git pull $debian ${upstream_branch}
-git pull --no-edit $winehq tag "$tag" || echo "unable to fetch tag $tag"
+git pull --verbose $debian ${upstream_branch}
+git pull --verbose --no-edit $upstream tag "$tag" || echo "unable to fetch tag $tag"
 
 # merge upstream into master (favoring "their" changes)
 git checkout ${debian_branch}

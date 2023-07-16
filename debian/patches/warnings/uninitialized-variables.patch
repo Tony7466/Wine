@@ -23,17 +23,6 @@ author: Michael Gilbert <mgilbert@debian.org>
          DWORD i, v = 0, mask32 = format->bits[c] == 32 ? ~0U : ((1 << format->bits[c]) - 1);
  
          switch (c)
---- a/dlls/ntdll/locale.c
-+++ b/dlls/ntdll/locale.c
-@@ -1329,7 +1329,7 @@ NTSTATUS WINAPI RtlIdnToUnicode( DWORD f
-     int i, buflen, start, end, out_label, out = 0;
-     NTSTATUS status;
-     UINT buffer[64];
--    WCHAR ch;
-+    WCHAR ch = '\0';
- 
-     if (!src || srclen < -1) return STATUS_INVALID_PARAMETER;
-     if (srclen == -1) srclen = wcslen( src ) + 1;
 --- a/dlls/msvcrt/misc.c
 +++ b/dlls/msvcrt/misc.c
 @@ -269,7 +269,7 @@ static void small_sort(void *base, size_
@@ -152,7 +141,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  	WARN("Can't seek at %08lX\n", mmt->dwIndex);
 --- a/dlls/msi/automation.c
 +++ b/dlls/msi/automation.c
-@@ -1819,7 +1819,7 @@ static HRESULT InstallerImpl_SummaryInfo
+@@ -1821,7 +1821,7 @@ static HRESULT InstallerImpl_SummaryInfo
      UINT ret;
      HRESULT hr;
      MSIHANDLE hsuminfo;
@@ -288,29 +277,6 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
  
      NtGdiExtEscape( hdc, NULL, 0, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );
---- a/dlls/gdiplus/font.c
-+++ b/dlls/gdiplus/font.c
-@@ -1396,7 +1396,8 @@ static WCHAR *load_ttf_name_id( const BY
-     const tt_header *header;
-     const tt_name_table *name_table;
-     const tt_name_record *name_record;
--    DWORD pos, ofs, count;
-+    DWORD pos, count;
-+    DWORD ofs = 0;
-     int i, res, best_lang = 0, best_index = -1;
- 
-     if (sizeof(tt_header) > size)
---- a/dlls/scrobj/scrobj.c
-+++ b/dlls/scrobj/scrobj.c
-@@ -1188,7 +1188,7 @@ static HRESULT create_scriptlet_instance
-     struct script_host *factory_host, *host;
-     struct scriptlet_instance *obj;
-     IDispatch *script_dispatch;
--    HRESULT hres;
-+    HRESULT hres = E_FAIL;
- 
-     if (!(obj = calloc(1, sizeof(*obj))))
-         return E_OUTOFMEMORY;
 --- a/dlls/user.exe16/message.c
 +++ b/dlls/user.exe16/message.c
 @@ -403,7 +403,7 @@ static EDITWORDBREAKPROC16 get_word_brea

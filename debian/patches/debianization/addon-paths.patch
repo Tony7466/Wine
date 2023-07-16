@@ -14,7 +14,7 @@ forwarded: not-needed
  
      lstrcpyW( path + len, subdir );
      lstrcatW( path, L"\\" );
-@@ -306,12 +306,14 @@ static enum install_res install_from_def
+@@ -309,12 +309,14 @@ static enum install_res install_from_def
          free(dir_buf);
      }
  

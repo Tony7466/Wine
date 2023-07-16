@@ -1,11 +1,36 @@
-wine (8.1~repack-1) UNRELEASED; urgency=medium
+wine-development (8.1~repack-1) unstable; urgency=medium
 
   * New upstream release 8.1, released Feb 2, 2023.
     - Windows version set to Windows 10 for new prefixes.
     - Many code cleanups that were deferred during code freeze.
     - Various bug fixes.
+  * Merge changelogs from the stable branches.
+  * Import updates from the 8.0 stable branch.
 
  -- Michael Gilbert <mgilbert@debian.org>  Sun, 16 Jul 2023 02:06:37 +0000
+
+wine (8.0.1~repack-3) unstable; urgency=medium
+
+  * Fix build failure on arm.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 16 Jul 2023 01:30:59 +0000
+
+wine (8.0.1~repack-2) unstable; urgency=medium
+
+  * Fix build failure on arm.
+  * Move ttf fonts to /usr/share/fonts/truetype/wine (closes: #883973).
+  * Import upstream fixes for hidden file attributes (closes: #1033278).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 15 Jul 2023 14:05:24 +0000
+
+wine (8.0.1~repack-1) unstable; urgency=medium
+
+  * New upstream release 8.0.1, released Apr 20, 2023.
+    - Various bug fixes
+  * Support building with vulkan 1.3.250.
+  * Fix font paths in win32u (closes: #1036080).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 15 Jul 2023 01:13:56 +0000
 
 wine (8.0~repack-4) unstable; urgency=medium
 
@@ -722,6 +747,37 @@ wine-development (6.1~repack-1) unstable; urgency=medium
 
  -- Michael Gilbert <mgilbert@debian.org>  Sun, 27 Feb 2022 06:18:32 +0000
 
+wine (6.0.3~repack-1) unstable; urgency=medium
+
+  * New upstream release 6.0.3, released Feb 25, 2022.
+  * Move nls files back to libwine (closes: #1006827).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 13 Mar 2022 04:27:41 +0000
+
+wine (6.0.2~repack-3) unstable; urgency=medium
+
+  * Remove nls files from the libwine package (closes: #1006539).
+  * Build for armv6t2 on armel (new minimum ARM architecture required by wine).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 27 Feb 2022 21:18:36 +0000
+
+wine (6.0.2~repack-2) unstable; urgency=medium
+
+  * Fix font installation error.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 27 Feb 2022 03:09:33 +0000
+
+wine (6.0.2~repack-1) unstable; urgency=medium
+
+  * New upstream release 6.0.2, released Oct 26, 2021 (closes: #995305).
+    - Compilation fixes: freetype, gcc 11 (closes: #984402).
+    - Various bug fixes.
+  * Support building with openldap 2.5 (closes: #1006016).
+  * Support building with unicode-data 14 (closes: #995580).
+  * Avoid deleting files outside of package source directory (closes: #991822).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 26 Feb 2022 18:43:01 +0000
+
 wine-development (6.0+repack-4) unstable; urgency=medium
 
   * Support building with vulkan 1.3.
@@ -1112,6 +1168,23 @@ wine-development (5.1-1) unstable; urgency=medium
   * Switch to the development branch.
 
  -- Michael Gilbert <mgilbert@debian.org>  Sat, 22 Feb 2020 04:21:29 +0000
+
+wine (5.0.3-1) unstable; urgency=medium
+
+  * New upstream release 5.0.3, released Nov 10, 2020.
+    - Fix compilation with gcc 10 (closes: #957936).
+  * Fix incorrect uses of sizeof (closes: #971759).
+    - Thanks to Yuri Konotopov.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 10 Jan 2021 21:42:51 +0000
+
+wine (5.0-4) unstable; urgency=medium
+
+  * Switch to git branches 'bullseye' and 'upstream-stable'.
+  * Support building with unicode-data 13 (closes: #954132).
+    - Thanks to Graham Inggs.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 20 Apr 2020 20:49:41 +0200
 
 wine (5.0-3) unstable; urgency=medium
 
@@ -1523,6 +1596,32 @@ wine-development (4.1-1) unstable; urgency=medium
     - Checks that /run/user/$uid exists (closes: #921126).
 
  -- Michael Gilbert <mgilbert@debian.org>  Wed, 06 Feb 2019 00:19:39 +0000
+
+wine (4.0.3-1) unstable; urgency=medium
+
+  * New upstream release 4.0.3, released Nov 25, 2019.
+    - Various bug fixes
+    - Updates to the National Language Support files
+  * Drop no longer supported add-log-mailing-address setting from
+    debian/changelog.
+  * Add missing colon in closes line.
+  * Set debhelper compatibility level to 12.
+    Drop now unnecessary dh arguments "--parallel --with autoreconf".
+  * Recommend or suggest gstreamer plugins (LP: #1817244).
+  * Update standards version to 4.4.1.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 02 Dec 2019 01:28:55 +0100
+
+wine (4.0.2-1) unstable; urgency=medium
+
+  * New upstream release 4.0.2, released Aug 23, 2019.
+    - Various bug fixes
+  * Refresh patches.
+    Drop fixes/pcap.patch, applied upstream.
+    Drop warnings/arm64-dword.patch, fixed upstream by commit 553368ff50.
+  * Ignore all warnings in src:wine for now.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Sun, 01 Sep 2019 18:16:14 +0200
 
 wine (4.0-1) unstable; urgency=medium
 
@@ -1950,6 +2049,96 @@ wine-development (3.1-1) unstable; urgency=medium
 
  -- Jens Reyer <jre.winesim@gmail.com>  Tue, 06 Feb 2018 22:54:59 +0100
 
+wine (3.0.4-1) unstable; urgency=medium
+
+  * New upstream release 3.0.4, released Nov 29, 2018.
+    - Added a lot of icons in Shell32
+    - Various bug fixes
+  * Drop revert-clang5.0.patch, applied upstream.
+  * Drop gcc-8.1.patch, applied upstream.
+  * Refresh patches.
+  * Strip unnecessary signature from upstream signing key.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 03 Dec 2018 20:33:19 +0100
+
+wine (3.0.3-2) unstable; urgency=medium
+
+  * Revert upstream commit which requires clang >= 5.0 to build on arm64.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Sun, 14 Oct 2018 15:19:16 +0200
+
+wine (3.0.3-1) unstable; urgency=medium
+
+  * New upstream release 3.0.3, released Sep 13, 2018.
+    - Various bug fixes
+  * Install upstream ANNOUNCE as NEWS.gz.
+  * Bump Standards-Version to 4.2.1.
+  * Update documentation and take some minor packaging changes from the
+    git master branch.
+  * Add q4wine to the suggested packages (cf. #908962).
+  * Only install the ttf that are intended to be used by Wine.
+  * Refresh patches.
+  * Add gcc-8.1.patch to prevent some apps to crash (cf. #908021).
+  * This version will be built with libsane1 in unstable (closes: #907965).
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Sun, 14 Oct 2018 02:42:58 +0200
+
+wine (3.0.2-3) unstable; urgency=medium
+
+  * Move ttf fonts back to /usr/share/wine/fonts (closes: #904372).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Tue, 24 Jul 2018 00:48:45 +0000
+
+wine (3.0.2-2) unstable; urgency=medium
+
+  * Update to unicode 11 (closes: #903382).
+  * Update standards version to 4.1.5 (no changes required).
+  * Move ttf fonts to /usr/share/fonts/truetype/wine (closes: #883973).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Thu, 12 Jul 2018 01:43:11 +0000
+
+wine (3.0.2-1) unstable; urgency=medium
+
+  * New upstream release 3.0.2, released Jun 26, 2018.
+    - Various bug fixes
+  * Let wine break/replace the old non-transitional package wine-stable.
+    Needed until the next Ubuntu LTS (20.04) is released (LP: #1769649).
+  * Refresh patches.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Tue, 26 Jun 2018 23:15:28 +0200
+
+wine (3.0.1-2) unstable; urgency=medium
+
+  * Drop font patch, now fixed in freetype.
+  * Drop opengl compatibility patch and build-depend on khronos-api >= 4.6.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Sat, 19 May 2018 22:18:15 +0200
+
+wine (3.0.1-1) unstable; urgency=medium
+
+  * New upstream release 3.0.1, released May 14, 2018.
+    - Various bug fixes
+    - Translation updates
+  * Make versioned dependency on debhelper backports safe.
+  * Activate Wine as interpreter for Windows executables in wine-binfmt
+    (closes: #819255).
+  * Set branch names for stable releases/buster.
+  * Update maintainer address to debian-wine@lists.debian.org (closes: #897120).
+  * Move version control to salsa.debian.org.
+  * Update Standards-Version to 4.1.4 (no changes needed).
+  * Set Rules-Requires-Root: no.
+  * Drop breaks/replaces to old Ubuntu packages.
+    The transition to the Debian packages has been done now in Ubuntu 18.04.
+  * Update README.debian:
+    - Update links.
+    - Adapt examples to new upstream versioning system.
+    - Hint to wine-gecko status (closes: #891461).
+    - Editorial changes.
+  * Update copyright years.
+  * Refresh patches.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Fri, 18 May 2018 22:12:51 +0200
+
 wine (3.0-1) unstable; urgency=medium
 
   * New upstream release 3.0, released Jan 18, 2018.
@@ -2333,6 +2522,82 @@ wine-development (2.1-1) experimental; urgency=medium
   * Update to debhelper 10.
 
  -- Michael Gilbert <mgilbert@debian.org>  Sun, 05 Feb 2017 17:39:44 +0000
+
+wine (2.0.4-1) unstable; urgency=medium
+
+  [ Jens Reyer ]
+  * New upstream release 2.0.4, released Jan 2, 2018 (closes: #886314).
+    - Various bug fixes
+    - Updates to the National Language Support files
+    - Documentation updates
+  * Set upstream's WINE_WGL_DRIVER_VERSION in opengl.patch.
+  * Cleanup and automatically commit changes by d/s/import.
+
+  [ Michael Gilbert ]
+  * Remove prebuilt microsoft help file from the upstream tarball.
+  * Drop dbgsym migration line.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Tue, 09 Jan 2018 23:34:01 +0100
+
+wine (2.0.3-1) unstable; urgency=medium
+
+  * New upstream release 2.0.3, released Oct 20, 2017.
+    - Various bug fixes
+    - FreeType 2.8.1 compatibility fixes
+  * Drop freetype_2.8.1.patch (applied upstream).
+  * Use unversioned solinks in sonames2elf.
+  * Use dpkg libraries to get DEB_* variables.
+  * Use secure URI in watch file.
+  * Refresh patches.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 23 Oct 2017 20:03:33 +0200
+
+wine (2.0.2-2) unstable; urgency=medium
+
+  [ Jens Reyer ]
+  * Add upstream patches to fix ftbfs and crash with freetype 2.8.1
+    (closes: #877178).
+  * Update some links to https.
+  * Update standards-version to 4.1.1.
+  * Adjust branch to "buster" in Vcs fields.
+  * Refresh patches.
+
+  [ Michael Gilbert ]
+  * Update copyright notices.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Wed, 11 Oct 2017 20:54:36 +0200
+
+wine (2.0.2-1) unstable; urgency=medium
+
+  [ Michael Gilbert ]
+  * New upstream release 2.0.2, released Jul 20, 2017.
+  * Update the import script to fetch upstream's stable version.
+
+  [ Jens Reyer ]
+  * Update to using Unicode 10 (closes: #868175).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 23 Jul 2017 00:17:53 +0000
+
+wine (2.0.1-1) experimental; urgency=medium
+
+  [ Michael Gilbert ]
+  * Update to debhelper 10.
+  * Use date of the latest changelog update as the build date.
+
+  [ Jens Reyer ]
+  * New upstream release 2.0.1, released Apr 20, 2017.
+    - Various bug fixes
+    - Deprecated tools/wineinstall
+  * Describe purpose of the sonames2elf script.
+  * Clarify license LGPL-2.1 *or later* in import scripts.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Wed, 03 May 2017 17:22:11 +0200
+
+wine (2.0-4) experimental; urgency=medium
+
+  * Switch to the stable branch.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Tue, 04 Apr 2017 18:24:36 +0200
 
 wine-development (2.0-3) unstable; urgency=medium
 
@@ -2891,6 +3156,234 @@ wine-development (1.9.0-1) unstable; urgency=medium
   * Suggest winetricks and playonlinux.
 
  -- Michael Gilbert <mgilbert@debian.org>  Sun, 31 Jan 2016 23:09:39 +0000
+
+wine (1.8.7-2) unstable; urgency=medium
+
+  * Update appstream data with 1.8.7 release information.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Tue, 21 Mar 2017 16:09:57 +0100
+
+wine (1.8.7-1) experimental; urgency=medium
+
+  * New upstream release 1.8.7, released Feb 28, 2017.
+    - Various bug fixes.
+    - A few more cards added to the GPU description table.
+    - Turkish translation updates.
+  * Refresh patches.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Wed, 08 Mar 2017 18:55:35 +0100
+
+wine (1.8.6-5) unstable; urgency=medium
+
+  * Enable oss on kfreebsd, explicitly disable it on other archs.
+  * Create the sonames2elf binary without -nostdlib (cf. #853793)
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Thu, 02 Feb 2017 15:04:27 +0100
+
+wine (1.8.6-4) unstable; urgency=medium
+
+  * Remove outdated oss4 build dependency (closes: #852988).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Tue, 31 Jan 2017 06:05:01 +0000
+
+wine (1.8.6-3) unstable; urgency=medium
+
+  * Fix AppStream metainfo file (closes: #848839).
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Thu, 19 Jan 2017 23:51:57 +0100
+
+wine (1.8.6-2) unstable; urgency=medium
+
+  [ Jens Reyer ]
+  * Cherrypick changes from master:
+    - Reorganize patches and add some metadata.
+    - Drop shlib-exit-calls.patch.
+    - Drop openal.patch, fixed upstream.
+    - Simplify the foreign-arch test in the wine script.
+    - Let wine suggest winbind.
+    - Change trigger interest to noawait (LP: 1652434).
+    - Documentation updates.
+    - Blacklist some extensions for native file type association
+      (closes: #845334).
+  * Sort packages in debian/control.in.
+  * Drop obsolete entries from d/clean.
+  * Check for invalid WINEARCH values (closes: #838474).
+  * Generate and install wine.svg icon.
+  * Add initial AppStream metainfo file (closes: #848839).
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Sat, 14 Jan 2017 02:01:07 +0100
+
+wine (1.8.6-1) unstable; urgency=medium
+
+  * New upstream release 1.8.6, released Dec 19, 2016.
+    - Various bug fixes.
+    - Fix a regression introduced in 1.8.5 (winehq: #41627)
+    - A few more cards added to the GPU description table.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 01 Jan 2017 18:08:18 +0000
+
+wine (1.8.5-1) unstable; urgency=medium
+
+  * New upstream release 1.8.5, released Oct 7, 2016.
+    - Various bug fixes.
+  * Cherrypick changes from master:
+    - Make libc6-dev dependency portable.
+    - Generate the correct SERVER_PROTOCOL_VERSION (closes: #836566).
+    - Mention the alternatives system in wine's package description.
+    - Provide wine.desktop as example in package wine.
+  * Declare relationship to the old Ubuntu packages in d/control.in.
+  * Refresh patches.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 10 Oct 2016 14:27:43 +0200
+
+wine (1.8.4-1) unstable; urgency=medium
+
+  * New upstream release 1.8.4, released Aug 22, 2016.
+    - Various bug fixes.
+    - A few more cards added to the GPU description table.
+  * Refresh patches, drop gnutls.patch (applied upstream).
+  * Cherrypick changes from master:
+    - Make "update-alternatives --remove" quiet.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 29 Aug 2016 17:49:04 +0200
+
+wine (1.8.3-3) unstable; urgency=medium
+
+  * Cherrypick changes from master:
+    - Fix wineserver manpages for Debian's default persistence value (see:
+      #816020).
+    - Drop alternative depends on perl:any (now handled by debhelper).
+      Bump build-dep on debhelper version to >= 9.20160702.
+    - Add removal instructions for binfmt support to README.debian.
+    - Add Recommends g++ or g++-multilib to the -tools (closes: #832041).
+  * Implement the Debian alternatives system (see: #758291).
+    Partly cherrypicked from master:
+    - Replace VERSION (value is empty or '-development') with DEBSUFFIX
+      ('-stable' or '-development') in user exposed files.
+    - Generate scripts (wine, wineserver, wineapploader, winegcc) with
+      hardcoded paths/names instead of using runtime detection.
+    - Export DEBSUFFIX from d/rules.
+    - Drop now obsolete development/winegcc.patch.
+    - Use variable instead of '-development' in winemenubuilder.patch, and
+      enable it.
+    - Let the -tools packages recommend wineVERSION.
+    - Add bug script to show the target of the /usr/bin/wine link.
+  * Make wine-binfmt M-A:foreign.
+  * Add gnutls.patch to fix FTBFS against gnutls 3.5 (closes: #832275).
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Mon, 08 Aug 2016 14:36:29 +0200
+
+wine (1.8.3-2) unstable; urgency=medium
+
+  * Backport upstream changes for building with Unicode 9.0 (closes: #829003).
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Thu, 30 Jun 2016 21:17:56 +0200
+
+wine (1.8.3-1) unstable; urgency=medium
+
+  [ Jens Reyer ]
+  * New upstream release 1.8.3, released Jun 16, 2016.
+    - Various bug fixes.
+    - A lot of NVidia cards added to the GPU description table.
+    - Updates to the National Language Support files.
+  * Cherrypick changes from master:
+    - Fix local search for addon (gecko/mono) installers and update
+      documentation for their manual installation (closes: #812750).
+    - Bump recommended fonts-wine version to one with ttf fonts.
+    - Move some dependencies to libwineVERSION.
+    - Add widl to the -tools packages.
+      Thanks to Andrey Gursky (see: #824671).
+    - Fix winegcc script to call wineg++/cpp based on its basename.
+      Thanks to Javier Serrano Polo (closes: #824715).
+    - Change version string to display vendor and version.
+    - Drop obsolete dh_strip exclusion of some files.
+    - Drop obsolete dependency on x11-utils.
+    - Generate list of used shared libraries and let libwine recommend
+      it (closes: #823991).
+      Also use this mechanism to identify the package names of depended
+      upon libraries. Thanks to Jakub Wilk.
+    - Drop useless workaround for one-arch-only binNMUs.
+    - Add alternative dependency on 32-bit libwine-dev to wine64-tools.
+    - Make wineNN-tools multi-arch installable (closes: #823264,
+      see: #824673). Thanks to Javier Serrano Polo.
+    - Let libwine-dev prefer wine64-tools to wine32-tools.
+    - Document generating 32-bit results with the -tools packages.
+      Thanks to Andrey Gursky and Javier Serrano Polo.
+  * Drop manpages-typo.patch, applied upstream.
+  * Refresh patches.
+
+  [ Michael Gilbert ]
+  * Indicate incompatibility with unicode-data 9.
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Thu, 16 Jun 2016 18:04:56 +0200
+
+wine (1.8.2-1) unstable; urgency=medium
+
+  * New upstream release 1.8.2, released Apr 12, 2016.
+    - Various bug fixes.
+    - Small translation updates.
+  * Cherrypick changes from master:
+    - Use minimal wineapploader script, instead of patching the upstream one.
+    - Install executables to bindir usr/lib/wine-development.
+      Make wine32-tools and wine64-tools conflict with each other.
+    - Install 32-bit winecpp.
+    - Update lintian overrides.
+    - Add Jens Reyer to uploaders.
+    - Suggest winetricks and playonlinux.
+    - Update copyright.
+    - Explicitly specify which manpages to install.
+    - Install manpages for all installed executables.
+    - Install winegcc script again to specify WINEBUILD.
+    - Add symlinks in /usr/bin for installed tools in wine32|64-tools.
+    - Add symlink in /usr/bin for winepath in wine.
+    - Break older wine32|64 which don't have a reverse version requirement.
+    - Re-enable "err" level output by default (closes: #816014).
+    - Drop version output (closes: #816017).
+    - wineserver script: Drop obsolete script variable.
+    - If wine32 is missing warn about it unless err output is disabled
+      (closes: #818874).
+    - Add patch to append '(Debian)' to the version string.
+  * In the VCS-* fields point to the stretch git branch.
+  * Set fontdir /usr/share/wine/fonts.
+  * Add fontdir.patch to take into account the build time configuration
+    (closes: #814844).
+  * Install wine's TrueType fonts (closes: #818925).
+  * Build wine in maintainer mode.
+  * Don't error out on build warnings.
+  * Add TrueType fonts to clean to regenerate them.
+  * Bump standards-version to 3.9.8, no changes required.
+  * Add manpages-typo.patch to fix a typo in the msiexec manpage.
+  * Update lintian overrides (changes in lintian 2.5.44).
+
+ -- Jens Reyer <jre.winesim@gmail.com>  Fri, 29 Apr 2016 03:28:50 +0200
+
+wine (1.8.1-2) unstable; urgency=medium
+
+  [ Jens Reyer ]
+  * Simplify bug-control.
+  * Use secure uri in vcs fields.
+  * Update README.debian.
+  * Depend on libfontconfig1 (thanks Johannes Stezenbach, see #813381).
+  * Send script messages to STDERR (thanks Joerg Schiermeier).
+
+  [ Michael Gilbert ]
+  * Move fonts back to /usr/share/wine (closes: #813381).
+  * Remove references to the gecko package while its missing (closes: #814350).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 13 Feb 2016 18:02:54 +0000
+
+wine (1.8.1-1) unstable; urgency=medium
+
+  * New upstream release 1.8.1, released Feb 3, 2016.
+  * Output a short blurb about debugging in the launcher script.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 06 Feb 2016 00:55:14 +0000
+
+wine (1.8-7) unstable; urgency=medium
+
+  * Install fonts to /usr/share/fonts.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 31 Jan 2016 07:55:06 +0000
 
 wine (1.8-6) unstable; urgency=medium
 
@@ -3867,6 +4360,133 @@ wine-unstable (1.7.0-1) unstable; urgency=medium
     - Respect LC_MESSAGES (closes: #504992).
 
  -- Michael Gilbert <mgilbert@debian.org>  Sat, 15 Feb 2014 23:59:47 +0000
+
+wine (1.6.2-22) unstable; urgency=medium
+
+  * Move fonts into an architecture-independent package (closes: #786519).
+  * Also make the wine package architecture-independent.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 30 May 2015 20:25:10 +0000
+
+wine (1.6.2-21) unstable; urgency=medium
+
+  * Build without gstreamer (closes: #785889).
+  * Add missing dependencies to libwine (closes: #783812).
+  * Add libtiff5-dev to the build-dependencies (closes: #783814).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Fri, 22 May 2015 02:52:50 +0000
+
+wine (1.6.2-20) unstable; urgency=medium
+
+  * Recommend libasound2-plugins (closes: #779002).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Mon, 23 Feb 2015 06:07:16 +0000
+
+wine (1.6.2-19) unstable; urgency=medium
+
+  * Fix typo in libwine-alsa.maintscript (closes: #774861).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 11 Jan 2015 01:49:36 +0000
+
+wine (1.6.2-18) unstable; urgency=medium
+
+  * Handle symlink_to_dir issues for all libwine packages (closes: #774861).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 10 Jan 2015 18:40:51 +0000
+
+wine (1.6.2-17) unstable; urgency=medium
+
+  * Add libgl1-mesa-dri dependency to wine32 (closes: #766028).
+  * Add ncurses and freetype dependencies to wine32 (closes: #771104).
+  * Add binfmt-support dependency to wine-binfmt and document binfmt setup
+    in README.debian (closes: #769233).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 30 Nov 2014 21:04:09 +0000
+
+wine (1.6.2-16) unstable; urgency=medium
+
+  * Indicate that wine32-tools breaks older wine32-dev-tools packages
+    (closes: #767751).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 02 Nov 2014 18:33:58 +0000
+
+wine (1.6.2-15) unstable; urgency=medium
+
+  * Add missing test in wine launcher script (closes: #767437).
+  * Indicate that wine64-tools breaks older wine64-dev-tools packages
+    (closes: #767626).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 02 Nov 2014 01:58:12 +0000
+
+wine (1.6.2-14) unstable; urgency=medium
+
+  * Fix paths to wine executables (closes: #766030)
+    - Thanks to jre.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Mon, 27 Oct 2014 00:59:11 +0000
+
+wine (1.6.2-13) unstable; urgency=medium
+
+  * Fix some lintian warnings.
+  * Simplify build flag handling.
+  * Fix typo in freebsd-glue build-dependency.
+  * Install winegcc helper scripts (closes: #746661).
+  * Merge wine launcher script from wine-development (closes: #764641).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 19 Oct 2014 20:49:28 +0000
+
+wine (1.6.2-12) unstable; urgency=medium
+
+  * Build-depend on libjpeg-dev instead of libjpeg8-dev (closes:
+    #765826).
+  * wine32-tools and wine64-tools replace wine32-dev-tools and wine64-
+    dev-tools respectively, to allow upgrading.
+  * Update dlls/msi/table.c from master to allow the installer to work
+    again (closes: #765645).
+  * Build-depend on libgnutls28-dev to restore SSL support; enforce it at
+    configure time and patch aclocal.m4 as required.
+  * Drop obsolete libcapi20-dev build-dependency.
+
+ -- Stephen Kitt <skitt@debian.org>  Sun, 19 Oct 2014 01:08:06 +0200
+
+wine (1.6.2-11) unstable; urgency=medium
+
+  * Link against freebsd-glue instead of kfreebsd-kernel-headers on kfreebsd.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Thu, 16 Oct 2014 02:09:13 +0000
+
+wine (1.6.2-10) unstable; urgency=medium
+
+  * Fix wine-tools installation paths.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Mon, 13 Oct 2014 01:06:11 +0000
+
+wine (1.6.2-9) unstable; urgency=medium
+
+  * Disable capi, sane, gphoto, and v4l.
+  * Add wine-binfmt package (closes: #733556).
+  * Rename wine-dev-tools packages to wine-tools.
+  * Remove references to wine-doc (closes: #762044).
+  * Include missing multiarch step (closes: #751450).
+  * Remove libgnutls-dev build dependency (closes: #764110).
+  * Move transitional packages to section oldlibs (closes: #760696).
+
+ -- Michael Gilbert <mgilbert@debian.org>  Fri, 10 Oct 2014 02:27:11 +0000
+
+wine (1.6.2-8) unstable; urgency=medium
+
+  * Use a .maintscript file to handle symlink-to-folder transitions in
+    full, and specify 1.6.2-8~ as the version to update from (closes:
+    #736296); thanks to Andreas Beckmann for explaining everything.
+  * Build-depend on libgphoto2-dev (closes: #739356).
+  * Correctly break/replace wine-utils << 1.1.25-1 (closes: #739386),
+    and mark all the replaced packages as broken too; thanks to Andreas
+    Beckmann.
+  * Build-depend on libosmesa6-dev to enable offscreen OpenGL rendering.
+  * Build-depend on libgstreamer-plugins-base0.10-dev to enable
+    gstreamer support.
+
+ -- Stephen Kitt <skitt@debian.org>  Sat, 29 Mar 2014 22:39:43 +0100
 
 wine (1.6.2-7) unstable; urgency=medium
 

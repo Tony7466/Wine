@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/winex11.drv/clipboard.c
 +++ b/dlls/winex11.drv/clipboard.c
-@@ -1867,8 +1867,8 @@ static BOOL X11DRV_CLIPBOARD_GetProperty
+@@ -1868,8 +1868,8 @@ static BOOL X11DRV_CLIPBOARD_GetProperty
          if (!*data)
          {
              XFree( buffer );

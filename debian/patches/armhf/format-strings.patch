@@ -126,27 +126,19 @@ author: Michael Gilbert <mgilbert@debian.org>
                     os, size);
          return FALSE;
      }
-@@ -250,11 +254,19 @@ void memory_examine(const struct dbg_lva
-     case 'a':
-         if (sizeof(DWORD_PTR) == 4)
-         {
-+#ifdef __arm__
-+            DO_DUMP(DWORD_PTR, 4, " %Ild");
-+#else
-             DO_DUMP(DWORD_PTR, 4, " %8.8Ix");
-+#endif
+@@ -254,7 +258,11 @@ void memory_examine(const struct dbg_lva
          }
          else
          {
 +#ifdef __arm__
-+            DO_DUMP(DWORD_PTR, 2, " %Ild");
++            DO_DUMP(DWORD64, 2, " %I64lld");
 +#else
-             DO_DUMP(DWORD_PTR, 2, " %16.16Ix");
+             DO_DUMP(DWORD64, 2, " %16.16I64x");
 +#endif
          }
          break;
      case 'c': DO_DUMP2(char, 32, " %c", (_v < 0x20) ? ' ' : _v); break;
-@@ -459,7 +471,11 @@ char* memory_offset_to_string(char *str,
+@@ -459,7 +467,11 @@ char* memory_offset_to_string(char *str,
  
  static void dbg_print_sdecimal(dbg_lgint_t sv)
  {
@@ -158,7 +150,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  }
  
  static void dbg_print_hex(DWORD size, dbg_lgint_t sv)
-@@ -468,7 +484,11 @@ static void dbg_print_hex(DWORD size, db
+@@ -468,7 +480,11 @@ static void dbg_print_hex(DWORD size, db
          dbg_printf("0");
      else
          /* clear unneeded high bits, esp. sign extension */
@@ -170,7 +162,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  }
  
  static void print_typed_basic(const struct dbg_lvalue* lvalue)
-@@ -718,7 +738,11 @@ void print_address(const ADDRESS64* addr
+@@ -718,7 +734,11 @@ void print_address(const ADDRESS64* addr
      if (SymFromAddr(dbg_curr_process->handle, lin, &disp64, si) && disp64 < si->Size)
      {
          dbg_printf(" %s", si->Name);
@@ -182,7 +174,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
      else
      {
-@@ -726,7 +750,11 @@ void print_address(const ADDRESS64* addr
+@@ -726,7 +746,11 @@ void print_address(const ADDRESS64* addr
          if (!SymGetModuleInfo(dbg_curr_process->handle, lin, &im)) return;
          dbg_printf(" %s", im.ModuleName);
          if (lin > im.BaseOfImage)
@@ -260,7 +252,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return FALSE;
 --- a/programs/winedbg/symbol.c
 +++ b/programs/winedbg/symbol.c
-@@ -755,7 +755,11 @@ BOOL symbol_info_locals(void)
+@@ -757,7 +757,11 @@ BOOL symbol_info_locals(void)
      addr.Mode = AddrModeFlat;
      addr.Offset = frm->linear_pc;
      print_address(&addr, FALSE);
@@ -272,7 +264,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      SymEnumSymbols(dbg_curr_process->handle, 0, NULL, info_locals_cb, (void*)frm->linear_frame);
  
      return TRUE;
-@@ -777,7 +781,11 @@ static BOOL CALLBACK symbols_info_cb(PSY
+@@ -779,7 +783,11 @@ static BOOL CALLBACK symbols_info_cb(PSY
              mi.ModuleName[len - 5] = '\0';
      }
  

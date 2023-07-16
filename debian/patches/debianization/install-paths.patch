@@ -19,7 +19,7 @@ forwarded: not-needed
  dnl **** Check for some programs ****
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -3051,7 +3051,7 @@ static void output_source_in( struct mak
+@@ -3061,7 +3061,7 @@ static void output_source_in( struct mak
      output( "%s:", obj_dir_path( make, obj ));
      output_filenames( source->dependencies );
      output( "\n" );
@@ -47,3 +47,11 @@ forwarded: not-needed
  
  SHAREDLIB = $(LIBWINE_SHAREDLIB)
  
+--- a/dlls/win32u/Makefile.in
++++ b/dlls/win32u/Makefile.in
+@@ -56,4 +56,4 @@ C_SRCS = \
+ 	winstation.c \
+ 	wrappers.c
+ 
+-font_EXTRADEFS = -DWINE_FONT_DIR=\"`${MAKEDEP} -R ${datadir}/wine ${fontdir}`\"
++font_EXTRADEFS = -DWINE_FONT_DIR=\"`${MAKEDEP} -R ${datadir} ${fontdir}`\"

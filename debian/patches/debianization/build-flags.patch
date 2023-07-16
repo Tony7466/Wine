@@ -9,7 +9,7 @@ forwarded: not-needed
  AC_SUBST(EXTRACFLAGS,"")
  AC_SUBST(UNIXDLLFLAGS,"-fPIC")
 -AC_SUBST(UNIXLDFLAGS,["-shared -Wl,-Bsymbolic -Wl,-soname,\$(UNIXLIB)"])
-+AC_SUBST(UNIXLDFLAGS,["-shared -Wl,-Bsymbolic -Wl,-soname,\$(UNIXLIB) $(shell dpkg-buildflags --get LDFLAGS)"])
++AC_SUBST(UNIXLDFLAGS,["-shared -Wl,-Bsymbolic -Wl,-soname,\$(UNIXLIB) $(dpkg-buildflags --get LDFLAGS)"])
  AC_SUBST(TOP_INSTALL_LIB,"")
  AC_SUBST(TOP_INSTALL_DEV,"")
  AC_SUBST(WINELOADER_LDFLAGS,"")
