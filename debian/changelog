@@ -1,3 +1,14 @@
+wine-development (8.2~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 8.2, released Feb 17, 2023.
+    - Better debug information in Wow64 mode.
+    - Wow64 thunks in the WPCAP library.
+    - Indeo IV50 codec support.
+    - Monitor names set from EDID data.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 16 Jul 2023 18:50:45 +0000
+
 wine-development (8.1~repack-1) unstable; urgency=medium
 
   * New upstream release 8.1, released Feb 2, 2023.
