@@ -1,3 +1,13 @@
+wine-development (8.3~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 8.3, released Mar 3, 2023.
+    - Support for the Low Fragmentation Heap.
+    - Smard card support using PCSC-Lite.
+    - Bundled Zydis library for more correct disassembly.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 16 Jul 2023 19:41:14 +0000
+
 wine-development (8.2~repack-1) unstable; urgency=medium
 
   * New upstream release 8.2, released Feb 17, 2023.
