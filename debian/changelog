@@ -1,3 +1,13 @@
+wine-development (8.4~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 8.4, released Mar 17, 2023.
+    - Initial step of the Wayland graphics driver.
+    - Cleanups in IME support.
+    - A number of test fixes.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sun, 16 Jul 2023 22:16:51 +0000
+
 wine-development (8.3~repack-1) unstable; urgency=medium
 
   * New upstream release 8.3, released Mar 3, 2023.
