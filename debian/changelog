@@ -1,3 +1,13 @@
+wine-development (8.6~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 8.6, released Apr 14, 2023.
+    - Bundled math library from Musl libc.
+    - Gecko engine updated to version 2.47.4.
+    - Improved spool file support in the PostScript driver.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Wed, 02 Aug 2023 02:02:31 +0000
+
 wine-development (8.5~repack-1) unstable; urgency=medium
 
   * New upstream release 8.5, released Mar 31, 2023.
