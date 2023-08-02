@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3578,8 +3578,11 @@ maintainer-clean::
+@@ -3581,8 +3581,11 @@ maintainer-clean::
  dnl Rules for generated source files
  
  WINE_APPEND_RULE(
@@ -30,7 +30,7 @@ forwarded: not-needed
  #include <string.h>
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
-@@ -109,8 +109,6 @@ extern LONGLONG CDECL fast_RtlGetSystemT
+@@ -137,8 +137,6 @@ extern LONGLONG CDECL fast_RtlGetSystemT
  
  struct _FILE_FS_DEVICE_INFORMATION;
  

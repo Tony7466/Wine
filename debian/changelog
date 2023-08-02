@@ -1,4 +1,4 @@
-wine-development (8.5~repack-1) UNRELEASED; urgency=medium
+wine-development (8.5~repack-1) unstable; urgency=medium
 
   * New upstream release 8.5, released Mar 31, 2023.
     - Bundled vkd3d upgraded to version 1.7.
