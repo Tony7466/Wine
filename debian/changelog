@@ -1,3 +1,15 @@
+wine-development (8.5~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 8.5, released Mar 31, 2023.
+    - Bundled vkd3d upgraded to version 1.7.
+    - Better error reporting in the IDL compiler.
+    - Support for shared Wow64 Classes registry key.
+    - More cleanups in IME support.
+    - Support for configuring a WinRT dark theme.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Wed, 02 Aug 2023 00:57:49 +0000
+
 wine-development (8.4~repack-1) unstable; urgency=medium
 
   * New upstream release 8.4, released Mar 17, 2023.
