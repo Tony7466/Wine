@@ -1,4 +1,4 @@
-wine-development (8.8~repack-1) UNRELEASED; urgency=medium
+wine-development (8.8~repack-1) unstable; urgency=medium
 
   * New upstream release 8.8, released May 12, 2023.
     - More work towards full PE support in the PostScript driver.

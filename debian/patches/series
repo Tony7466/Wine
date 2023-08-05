@@ -27,10 +27,6 @@ fixes/flex.patch
 fixes/fpic.patch
 fixes/printer-resolution.patch
 fixes/temporary-directory.patch
-fixes/dotfile-attributes1.patch
-fixes/dotfile-attributes2.patch
-fixes/dotfile-attributes3.patch
-fixes/dotfile-attributes4.patch
 
 arm/gcc.patch
 arm/binary-name.patch
