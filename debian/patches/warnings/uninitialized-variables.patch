@@ -253,7 +253,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      WCHAR *curdir = get_initial_directory();
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -2363,11 +2363,14 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
+@@ -2341,11 +2341,14 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
      }
      else
      {
@@ -269,7 +269,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          {
              POINT pt = { 0, 0 };
              NtUserMapWindowPoints( 0, parent, &pt, 1 );
-@@ -2375,7 +2378,6 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
+@@ -2353,7 +2356,6 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
              OffsetRect( &escape.dc_rect, pt.x, pt.y );
              if (flags & DCX_CLIPCHILDREN) escape.mode = ClipByChildren;
          }
@@ -330,28 +330,6 @@ author: Michael Gilbert <mgilbert@debian.org>
              buffer = stack_buffer;
          }
          if (!unpack_message( params->hwnd, params->msg, &params->wparam,
---- a/dlls/msvcrt/math.c
-+++ b/dlls/msvcrt/math.c
-@@ -9845,7 +9845,8 @@ double CDECL lgamma(double x)
-         w6 = -1.63092934096575273989e-03;
- 
-     union {double f; UINT64 i;} u = {x};
--    double t, y, z, nadj, p, p1, p2, p3, q, r, w;
-+    double nadj = 0.0;
-+    double t, y, z, p, p1, p2, p3, q, r, w;
-     UINT32 ix;
-     int sign,i;
- 
-@@ -10046,7 +10047,8 @@ float CDECL lgammaf(float x)
-         w6 = -1.6309292987e-03;
- 
-     union {float f; UINT32 i;} u = {x};
--    float t, y, z, nadj, p, p1, p2, p3, q, r, w;
-+    float nadj = 0.0f;
-+    float t, y, z, p, p1, p2, p3, q, r, w;
-     UINT32 ix;
-     int i, sign;
- 
 --- a/dlls/localspl/provider.c
 +++ b/dlls/localspl/provider.c
 @@ -3008,7 +3008,11 @@ static void fill_builtin_form_info( BYTE
@@ -366,4 +344,28 @@ author: Michael Gilbert <mgilbert@debian.org>
 +    DWORD name_len = wcslen( form->name ) + 1;
      static const WCHAR dll_name[] = L"localspl.dll";
      const WCHAR *resource;
+ 
+--- a/libs/musl/src/math/lgammaf_r.c
++++ b/libs/musl/src/math/lgammaf_r.c
+@@ -105,7 +105,8 @@ static float sin_pi(float x)
+ float __lgammaf_r(float x, int *signgamp)
+ {
+ 	union {float f; uint32_t i;} u = {x};
+-	float t,y,z,nadj,p,p1,p2,p3,q,r,w;
++	float nadj=0.0f;
++	float t,y,z,p,p1,p2,p3,q,r,w;
+ 	uint32_t ix;
+ 	int i,sign;
+ 
+--- a/libs/musl/src/math/lgamma_r.c
++++ b/libs/musl/src/math/lgamma_r.c
+@@ -170,7 +170,8 @@ static double sin_pi(double x)
+ double __lgamma_r(double x, int *signgamp)
+ {
+ 	union {double f; uint64_t i;} u = {x};
+-	double_t t,y,z,nadj,p,p1,p2,p3,q,r,w;
++	double_t nadj=0.0;
++	double_t t,y,z,p,p1,p2,p3,q,r,w;
+ 	uint32_t ix;
+ 	int sign,i;
  

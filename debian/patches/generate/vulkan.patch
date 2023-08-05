@@ -14,7 +14,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      # Instance extensions
      "VK_EXT_headless_surface", # Needs WSI work.
      "VK_KHR_display", # Needs WSI work.
-@@ -1491,7 +1495,7 @@ class VkMember(VkVariable):
+@@ -1492,7 +1496,7 @@ class VkMember(VkVariable):
                          self.type, self.name, input, output, count, win_type, host_part)
                  else:
                      # Nothing needed this yet.
@@ -23,7 +23,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              elif self.is_handle() and self.needs_unwrapping():
                  handle = self.type_info["data"]
                  if direction == Direction.OUTPUT:
-@@ -1666,7 +1670,7 @@ class VkParam(VkVariable):
+@@ -1667,7 +1671,7 @@ class VkParam(VkVariable):
          # Since we have parsed all types before hand, this should not happen.
          type_info = types.get(type_elem.text, None)
          if type_info is None:
@@ -32,7 +32,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          return VkParam(type_info, const=const, pointer=pointer, name=name, array_len=array_len,
                         dyn_array_len=dyn_array_len, object_type=object_type, optional=optional,
-@@ -1718,7 +1722,7 @@ class VkParam(VkVariable):
+@@ -1719,7 +1723,7 @@ class VkParam(VkVariable):
                  # Don't care about specific types for non-Windows platforms.
                  self.format_str = ""
              else:
@@ -41,7 +41,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      def copy(self, direction, conv, unwrap, prefix=""):
          win_type = "win32" if conv else "win64"
-@@ -2632,7 +2636,9 @@ class VkGenerator(object):
+@@ -2633,7 +2637,9 @@ class VkGenerator(object):
  
      def _generate_copyright(self, f, spec_file=False):
          f.write("# " if spec_file else "/* ")
@@ -52,7 +52,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          lines = ["", "This file is generated from Vulkan vk.xml file covered",
              "by the following copyright and permission notice:"]
          lines.extend([l.rstrip(" ") for l in self.registry.copyright.splitlines()])
-@@ -3197,6 +3203,7 @@ class VkRegistry(object):
+@@ -3198,6 +3204,7 @@ class VkRegistry(object):
          self.funcpointers = None
          self.handles = None
          self.structs = None
@@ -60,7 +60,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          # We aggregate all types in here for cross-referencing.
          self.funcs = {}
-@@ -3809,11 +3816,6 @@ def set_working_directory():
+@@ -3810,11 +3817,6 @@ def set_working_directory():
      path = os.path.dirname(path)
      os.chdir(path)
  
@@ -72,7 +72,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  def main():
      parser = argparse.ArgumentParser()
      parser.add_argument("-v", "--verbose", action="count", default=0, help="increase output verbosity")
-@@ -3833,7 +3835,6 @@ def main():
+@@ -3834,7 +3836,6 @@ def main():
          vk_xml = args.xml
      else:
          vk_xml = "vk-{0}.xml".format(VK_XML_VERSION)
