@@ -1,3 +1,13 @@
+wine-development (8.8~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 8.8, released May 12, 2023.
+    - More work towards full PE support in the PostScript driver.
+    - Initial support for loading ARM64EC modules.
+    - More work on IME restructuration.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 05 Aug 2023 05:26:30 +0000
+
 wine-development (8.7~repack-1) unstable; urgency=medium
 
   * New upstream release 8.7, released Apr 28, 2023.
