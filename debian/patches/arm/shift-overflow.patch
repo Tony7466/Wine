@@ -1,4 +1,4 @@
-description: avoid shifting into the signed bit of integers
+description: avoid shifting into the signed bit of integers on arm architectures
 author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/programs/winedbg/be_arm.c

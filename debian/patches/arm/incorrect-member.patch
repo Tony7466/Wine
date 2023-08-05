@@ -1,4 +1,4 @@
-description: retrieve the correct union member
+description: retrieve the correct union member on arm64
 author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/dbghelp/cpu_arm64.c

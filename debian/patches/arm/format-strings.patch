@@ -222,19 +222,19 @@ author: Michael Gilbert <mgilbert@debian.org>
              return;
          }
          filename = il.FileName;
-@@ -408,7 +412,11 @@ static void break_add_watch(const struct
-             {
-             case 4: case 2: case 1: break;
-             default:
+@@ -421,7 +425,11 @@ void break_add_watch(const struct dbg_lv
+             if (!(l64 & (l64 - 1)) && l64 <= l)
+                 l = l64;
+             else
 +#ifdef __arm__
-+                dbg_printf("Unsupported length (%I64lld) for watch-points, defaulting to 4\n", l);
++                dbg_printf("Unsupported length (%I64lld) for watch-points, defaulting to %lu\n", l64, l);
 +#else
-                 dbg_printf("Unsupported length (%I64x) for watch-points, defaulting to 4\n", l);
+                 dbg_printf("Unsupported length (%I64x) for watch-points, defaulting to %lu\n", l64, l);
 +#endif
-                 break;
-             }
-         }
-@@ -757,7 +765,11 @@ BOOL break_should_continue(ADDRESS64* ad
+             /* most CPUs request watch address to be aligned on length */
+             if (lvalue->addr.Offset & (l - 1))
+             {
+@@ -738,7 +746,11 @@ BOOL break_should_continue(ADDRESS64* ad
          case be_xpoint_watch_write:
              dbg_printf("Stopped on watchpoint %d at ", dbg_curr_thread->stopped_xpoint);
              print_address(addr, TRUE);
@@ -353,7 +353,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          dbg_printf("\"%s\"", exp->un.string.str);
 --- a/dlls/ntdll/unix/signal_arm.c
 +++ b/dlls/ntdll/unix/signal_arm.c
-@@ -668,7 +668,7 @@ static NTSTATUS libunwind_virtual_unwind
+@@ -666,7 +666,7 @@ static NTSTATUS libunwind_virtual_unwind
      {
          NTSTATUS status = context->Pc != context->Lr ?
                            STATUS_SUCCESS : STATUS_INVALID_DISPOSITION;
@@ -362,7 +362,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                 ip, info.start_ip, info.end_ip, status == STATUS_SUCCESS ?
                 "assuming leaf function" : "error, stuck" );
          *handler = NULL;
-@@ -678,7 +678,7 @@ static NTSTATUS libunwind_virtual_unwind
+@@ -676,7 +676,7 @@ static NTSTATUS libunwind_virtual_unwind
          return status;
      }
  

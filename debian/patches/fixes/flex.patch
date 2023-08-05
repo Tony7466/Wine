@@ -4,7 +4,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -4098,6 +4098,13 @@ static void output_top_makefile( struct
+@@ -4134,6 +4134,13 @@ static void output_top_makefile( struct
  
      if (!found) output( "\n%s (everything below this line is auto-generated; DO NOT EDIT!!)\n", separator );
  

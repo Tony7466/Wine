@@ -32,15 +32,13 @@ fixes/dotfile-attributes2.patch
 fixes/dotfile-attributes3.patch
 fixes/dotfile-attributes4.patch
 
-armhf/shift-overflow.patch
-armhf/format-strings.patch
-armhf/floating-point.patch
-armhf/incompatible-types.patch
-
-arm64/gcc.patch
-arm64/binary-name.patch
-arm64/incorrect-member.patch
-arm64/incompatible-types.patch
+arm/gcc.patch
+arm/binary-name.patch
+arm/shift-overflow.patch
+arm/format-strings.patch
+arm/floating-point.patch
+arm/incorrect-member.patch
+arm/incompatible-types.patch
 
 warnings/libs.patch
 warnings/bison.patch

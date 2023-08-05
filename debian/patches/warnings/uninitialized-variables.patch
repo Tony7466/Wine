@@ -332,7 +332,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (!unpack_message( params->hwnd, params->msg, &params->wparam,
 --- a/dlls/localspl/provider.c
 +++ b/dlls/localspl/provider.c
-@@ -3008,7 +3008,11 @@ static void fill_builtin_form_info( BYTE
+@@ -3021,7 +3021,11 @@ static void fill_builtin_form_info( BYTE
                                      DWORD size, DWORD *used )
  {
      FORM_INFO_2W *info = *(FORM_INFO_2W**)base;
