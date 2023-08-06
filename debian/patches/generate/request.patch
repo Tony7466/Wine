@@ -54,7 +54,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  DECL_HANDLER(new_process);
  DECL_HANDLER(get_new_process_info);
-@@ -2280,9 +2280,8 @@ C_ASSERT( sizeof(struct get_next_thread_
+@@ -2289,9 +2289,8 @@ C_ASSERT( sizeof(struct get_next_thread_
  C_ASSERT( FIELD_OFFSET(struct get_next_thread_reply, handle) == 8 );
  C_ASSERT( sizeof(struct get_next_thread_reply) == 16 );
  
@@ -68,7 +68,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #endif  /* __WINE_SERVER_REQUEST_H */
 --- a/server/trace.c
 +++ b/server/trace.c
-@@ -1368,8 +1368,9 @@ static void dump_varargs_handle_infos( c
+@@ -1369,8 +1369,9 @@ static void dump_varargs_handle_infos( c
  
  typedef void (*dump_func)( const void *req );
  
@@ -80,7 +80,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
  static void dump_new_process_request( const struct new_process_request *req )
  {
-@@ -5554,8 +5555,7 @@ static const struct
+@@ -5569,8 +5570,7 @@ static const struct
      { NULL, 0 }
  };
  

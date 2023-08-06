@@ -68,7 +68,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      unsigned char type;
      HRESULT hr;
  
-@@ -6430,7 +6430,7 @@ static HRESULT read_type_struct( struct
+@@ -6431,7 +6431,7 @@ static HRESULT read_type_struct( struct
                                   WS_HEAP *heap, void *ret, ULONG size, BOOL *found )
  {
      ULONG i, offset;
@@ -185,7 +185,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (n > INT_MAX / sizeof(RECT)) return FALSE;
 --- a/dlls/win32u/dc.c
 +++ b/dlls/win32u/dc.c
-@@ -974,6 +974,7 @@ BOOL WINAPI NtGdiGetAndSetDCDword( HDC h
+@@ -973,6 +973,7 @@ BOOL WINAPI NtGdiGetAndSetDCDword( HDC h
  
      default:
          WARN( "unknown method %u\n", method );
@@ -241,7 +241,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  #else
 --- a/dlls/ntdll/unix/env.c
 +++ b/dlls/ntdll/unix/env.c
-@@ -1912,7 +1912,8 @@ static RTL_USER_PROCESS_PARAMETERS *buil
+@@ -1911,7 +1911,8 @@ static RTL_USER_PROCESS_PARAMETERS *buil
      static const WCHAR valueW[] = {'1',0};
      static const WCHAR pathW[] = {'P','A','T','H'};
      RTL_USER_PROCESS_PARAMETERS *params = NULL;
