@@ -11,9 +11,9 @@ author: Michael Gilbert <mgilbert@debian.org>
 +my $UNIVERSION = `dpkg-parsechangelog --file /usr/share/doc/unicode-data/changelog.Debian.gz --show-field Version | sed s/-.*//`;
 +chomp($UNIVERSION);
 +
- my $CLDRVERSION = "42";
- my $ISO639VERSION = "20220120";
- my $TZVERSION = "2022g";
+ my $CLDRVERSION = "43";
+ my $ISO639VERSION = "20230123";
+ my $TZVERSION = "2023c";
  
  my %data_files =
  (
@@ -28,7 +28,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                  sha  => "cc8522199541d60326a42a8f91f8748fd15630a42502dd2cf4878e81e2066ead" },
 - cldr      => { url  => "https://github.com/unicode-org/cldr/archive/refs/tags/release-$CLDRVERSION.zip",
 + cldr      => { url  => "debian/unicode/cldr/release-$CLDRVERSION.zip",
-                 sha  => "275c37b1373a1c8461c14d2fe9e3b7b47ba24ea89e3fdd2dedfe0547ab2f07dc" },
+                 sha  => "132cdd24e479abb6e86db1429931cec3dada485fd41da39ece3c08e531c477df" },
 - cldr33    => { url  => "https://www.unicode.org/Public/cldr/33/cldr-common-33.0.zip",
 + cldr33    => { url  => "debian/unicode/cldr33",
                  sha  => "fa3490082c086d21257153609642f54fcf788fcfda4966fe67f3f6daca0d58b9" },
@@ -39,8 +39,8 @@ author: Michael Gilbert <mgilbert@debian.org>
 + codepages => { url  => "debian/unicode/Windows Supported Code Page Data Files.zip",
                  sha  => "5074e6dd253056ba61fc6c870c9a955467855129c6ad3a51761c386b301b125a" },
 - iso639    => { url  => "https://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3_Code_Tables_$ISO639VERSION.zip",
-+ iso639    => { url  => "debian/unicode/iso639",
-                 sha  => "d912749d10c344835f052a9f31d13f13d5ffc99bc589e1eb88f2b4663e990881" },
++ iso639    => { url  => "debian/unicode/iso-639-3_Code_Tables_$ISO639VERSION.zip",
+                 sha  => "884faa6cc5ac5181ed7969eed75355c1bc665447614cf4c06c62e87b38fe6a97" },
 - ksx1001   => { url  => "https://www.unicode.org/Public/MAPPINGS/OBSOLETE/EASTASIA/KSC/KSX1001.TXT",
 + ksx1001   => { url  => "debian/unicode/mappings/OBSOLETE/EASTASIA/KSC/KSX1001.TXT",
                  sha  => "d8d2a35206ac0ea2865f5d801c9d6717f735bf46f263a658a64a960abe59e371" },
@@ -52,7 +52,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                  sha  => "477820bb3055bbcc90880d788cd95607d221dc94457bae249231adecf13c12e6" },
 - tzdata    => { url  => "https://data.iana.org/time-zones/releases/tzdata$TZVERSION.tar.gz",
 + tzdata    => { url  => "debian/tzdata/tzdata$TZVERSION.tar.gz",
-                 sha  => "4491db8281ae94a84d939e427bdd83dc389f26764d27d9a5c52d782c16764478" },
+                 sha  => "3f510b5d1b4ae9bb38e485aa302a776b317fb3637bdb6404c4adf7b6cadd965c" },
  );
  
 @@ -1910,28 +1912,32 @@ sub open_data_file($@)

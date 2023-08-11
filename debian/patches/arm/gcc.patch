@@ -3,8 +3,8 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -980,11 +980,6 @@ do
-     CFLAGS=$saved_CFLAGS
+@@ -983,11 +983,6 @@ do
+     LDFLAGS=$saved_LDFLAGS
  done
  
 -if test $HOST_ARCH = aarch64 -a "x$PE_ARCHS" = x

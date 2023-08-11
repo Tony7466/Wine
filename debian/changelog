@@ -1,4 +1,4 @@
-wine-development (8.10~repack-1) UNRELEASED; urgency=medium
+wine-development (8.10~repack-1) unstable; urgency=medium
 
   * New upstream release 8.10, released Jun 9, 2023.
     - All PE->Unix transitions go through the syscall interface.

@@ -38,9 +38,9 @@ forwarded: not-needed
 +	-DBIN_TO_DATADIR=\"`${MAKEDEP} -R ${bindir} ${datadir}`\"
 --- a/dlls/win32u/Makefile.in
 +++ b/dlls/win32u/Makefile.in
-@@ -56,4 +56,4 @@ C_SRCS = \
- 	winstation.c \
- 	wrappers.c
+@@ -55,4 +55,4 @@ C_SRCS = \
+ 	window.c \
+ 	winstation.c
  
 -font_EXTRADEFS = -DWINE_FONT_DIR=\"`${MAKEDEP} -R ${datadir}/wine ${fontdir}`\"
 +font_EXTRADEFS = -DWINE_FONT_DIR=\"`${MAKEDEP} -R ${datadir} ${fontdir}`\"

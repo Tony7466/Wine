@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -1958,6 +1958,7 @@ dnl **** Platform-specific checks ****
+@@ -1961,6 +1961,7 @@ dnl **** Platform-specific checks ****
  case "$HOST_ARCH,$PE_ARCHS" in
    x86_64,*i386*) wine_binary="wine" ;;
    x86_64,*) wine_binary="wine64" ;;

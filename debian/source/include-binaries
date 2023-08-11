@@ -1,3 +1,4 @@
-debian/tzdata/tzdata2022g.tar.gz
-debian/unicode/cldr/release-42.zip
+debian/tzdata/tzdata2023c.tar.gz
+debian/unicode/cldr/release-43.zip
+debian/unicode/iso-639-3_Code_Tables_20230123.zip
 debian/unicode/Windows Supported Code Page Data Files.zip

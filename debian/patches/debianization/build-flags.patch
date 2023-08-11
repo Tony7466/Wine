@@ -13,11 +13,12 @@ forwarded: not-needed
  AC_SUBST(TOP_INSTALL_LIB,"")
  AC_SUBST(TOP_INSTALL_DEV,"")
  AC_SUBST(WINELOADER_LDFLAGS,"")
-@@ -843,7 +843,6 @@ do
-     saved_CC=$CC
+@@ -844,8 +844,6 @@ do
      saved_CFLAGS=$CFLAGS
+     saved_LDFLAGS=$LDFLAGS
  
 -    CFLAGS=${CROSSCFLAGS:-"-g -O2"}
+-    LDFLAGS=$CROSSLDFLAGS
      AS_VAR_COPY([CC],[${wine_arch}_CC])
      AS_VAR_COPY([${wine_arch}_CFLAGS],[CFLAGS])
-     AS_VAR_COPY([${wine_arch}_LDFLAGS],[CROSSLDFLAGS])
+     AS_VAR_COPY([${wine_arch}_LDFLAGS],[LDFLAGS])
