@@ -3,15 +3,12 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -983,11 +983,6 @@ do
+@@ -997,7 +997,7 @@ do
      LDFLAGS=$saved_LDFLAGS
  done
  
--if test $HOST_ARCH = aarch64 -a "x$PE_ARCHS" = x
--then
--    AC_MSG_ERROR([PE cross-compilation is required for ARM64, please install clang/llvm-dlltool/lld, or llvm-mingw.])
--fi
--
- WINE_NOTICE_WITH(mingw,[test "x$PE_ARCHS" = "x"],
-                  [MinGW compiler not found, cross-compiling PE files won't be supported.])
- 
+-if test $HOST_ARCH = aarch64
++if test $HOST_ARCH = ""
+ then
+     test "x$PE_ARCHS" != x || AC_MSG_ERROR([PE cross-compilation is required for ARM64, please install clang/llvm-dlltool/lld, or llvm-mingw.])
+     DLLEXT=""

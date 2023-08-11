@@ -1,4 +1,4 @@
-wine-development (8.11~repack-1) UNRELEASED; urgency=medium
+wine-development (8.11~repack-1) unstable; urgency=medium
 
   * New upstream release 8.11, released Jun 23, 2023.
     - More mouse cursor clipping improvements.
