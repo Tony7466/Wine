@@ -1,4 +1,4 @@
-wine-development (8.13~repack-1) UNRELEASED; urgency=medium
+wine-development (8.13~repack-1) unstable; urgency=medium
 
   * New upstream release 8.13, released Jul 21, 2023.
     - Wow64 support in WineGStreamer.

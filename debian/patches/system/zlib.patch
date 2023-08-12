@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3322,7 +3322,6 @@ WINE_CONFIG_MAKEFILE(libs/wbemuuid)
+@@ -3328,7 +3328,6 @@ WINE_CONFIG_MAKEFILE(libs/wbemuuid)
  WINE_CONFIG_MAKEFILE(libs/wmcodecdspuuid)
  WINE_CONFIG_MAKEFILE(libs/xml2)
  WINE_CONFIG_MAKEFILE(libs/xslt)

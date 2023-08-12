@@ -13,7 +13,7 @@ forwarded: not-needed
  AC_SUBST(TOP_INSTALL_LIB,"")
  AC_SUBST(TOP_INSTALL_DEV,"")
  AC_SUBST(WINELOADER_LDFLAGS,"")
-@@ -849,8 +849,6 @@ do
+@@ -853,8 +853,6 @@ do
      saved_CFLAGS=$CFLAGS
      saved_LDFLAGS=$LDFLAGS
  

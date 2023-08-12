@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/comdlg32/filedlg.c
 +++ b/dlls/comdlg32/filedlg.c
-@@ -238,7 +238,7 @@ static BOOL get_config_key_dword(HKEY hk
+@@ -236,7 +236,7 @@ static BOOL get_config_key_dword(HKEY hk
  
  static BOOL get_config_key_string(HKEY hkey, const WCHAR *name, WCHAR **value)
  {
@@ -79,7 +79,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (!desc) return E_INVALIDARG;
 --- a/dlls/wined3d/utils.c
 +++ b/dlls/wined3d/utils.c
-@@ -2682,6 +2682,9 @@ static void check_fbo_compat(struct wine
+@@ -2683,6 +2683,9 @@ static void check_fbo_compat(struct wine
                      case WINED3D_GL_RES_TYPE_COUNT:
                          color = 0;
                          break;
@@ -253,7 +253,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      WCHAR *curdir = get_initial_directory();
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -2369,11 +2369,14 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
+@@ -2382,11 +2382,14 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
      }
      else
      {
@@ -269,7 +269,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          {
              POINT pt = { 0, 0 };
              NtUserMapWindowPoints( 0, parent, &pt, 1 );
-@@ -2381,7 +2384,6 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
+@@ -2394,7 +2397,6 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
              OffsetRect( &escape.dc_rect, pt.x, pt.y );
              if (flags & DCX_CLIPCHILDREN) escape.mode = ClipByChildren;
          }
@@ -322,7 +322,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      return ret;
 --- a/dlls/user32/winproc.c
 +++ b/dlls/user32/winproc.c
-@@ -1195,6 +1195,7 @@ BOOL WINAPI User32CallWindowProc( struct
+@@ -1196,6 +1196,7 @@ BOOL WINAPI User32CallWindowProc( struct
          else
          {
              size = sizeof(stack_buffer);

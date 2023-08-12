@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -994,7 +994,7 @@ do
+@@ -998,7 +998,7 @@ do
      LDFLAGS=$saved_LDFLAGS
  done
  
