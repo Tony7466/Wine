@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/dbghelp/cpu_arm64.c
 +++ b/dlls/dbghelp/cpu_arm64.c
-@@ -170,7 +170,7 @@ static unsigned arm64_map_dwarf_register
+@@ -168,7 +168,7 @@ static unsigned arm64_map_dwarf_register
  static void *arm64_fetch_context_reg(union ctx *pctx, unsigned regno, unsigned *size)
  {
  #ifdef __aarch64__

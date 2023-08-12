@@ -48,7 +48,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                      FOREACH_CHILD(xdr, xdr_child)
 --- a/dlls/ole32/datacache.c
 +++ b/dlls/ole32/datacache.c
-@@ -2516,7 +2516,7 @@ static HRESULT WINAPI DataCache_EnumCach
+@@ -2513,7 +2513,7 @@ static HRESULT WINAPI DataCache_EnumCach
      DataCacheEntry *cache_entry;
      int i = 0, count = 0;
      STATDATA *data;
@@ -253,7 +253,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      WCHAR *curdir = get_initial_directory();
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -2359,11 +2359,14 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
+@@ -2369,11 +2369,14 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
      }
      else
      {
@@ -269,7 +269,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          {
              POINT pt = { 0, 0 };
              NtUserMapWindowPoints( 0, parent, &pt, 1 );
-@@ -2371,7 +2374,6 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
+@@ -2381,7 +2384,6 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
              OffsetRect( &escape.dc_rect, pt.x, pt.y );
              if (flags & DCX_CLIPCHILDREN) escape.mode = ClipByChildren;
          }
