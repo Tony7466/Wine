@@ -1,14 +1,17 @@
-description: fix 64-bit integer conversion warning (gcc -Wint-conversion)
+description: fix 64-bit integer conversion warning (gcc13 -Wint-conversion)
 author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/opengl32/unix_wgl.c
 +++ b/dlls/opengl32/unix_wgl.c
-@@ -1454,7 +1454,7 @@ NTSTATUS wow64_ext_glPathGlyphIndexRange
+@@ -1454,7 +1454,11 @@ NTSTATUS wow64_ext_glPathGlyphIndexRange
          .fontStyle = params32->fontStyle,
          .pathParameterTemplate = params32->pathParameterTemplate,
          .emScale = params32->emScale,
--        .baseAndCount = {params32->baseAndCount[0], params32->baseAndCount[1]},
++#if defined(__x86_64__) || defined(__aarch64__)
 +        .baseAndCount = params32->baseAndCount,
++#else
+         .baseAndCount = {params32->baseAndCount[0], params32->baseAndCount[1]},
++#endif
      };
      NTSTATUS status;
      if ((status = ext_glPathGlyphIndexRangeNV( &params ))) return status;

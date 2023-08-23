@@ -1,4 +1,4 @@
-description: fix omitted parentheses warning (-Wparentheses)
+description: fix omitted parentheses warning (gcc13 -Wparentheses)
 author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/msvcrt/math.c

@@ -24,7 +24,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 + unihan    => { url  => "/usr/share/unicode",
                  sha  => "24b154691fc97cb44267b925d62064297086b3f896b57a8181c7b6d42702a026" },
 - idna      => { url  => "https://www.unicode.org/Public/idna/$UNIVERSION/IdnaMappingTable.txt", name => "IdnaMappingTable-$UNIVERSION.txt",
-+ idna      => { url  => "debian/unicode/tr46/$UNIVERSION",
++ idna      => { url  => "/usr/share/unicode/idna",
                  sha  => "cc8522199541d60326a42a8f91f8748fd15630a42502dd2cf4878e81e2066ead" },
 - cldr      => { url  => "https://github.com/unicode-org/cldr/archive/refs/tags/release-$CLDRVERSION.zip",
 + cldr      => { url  => "debian/unicode/cldr/release-$CLDRVERSION.zip",
@@ -55,7 +55,21 @@ author: Michael Gilbert <mgilbert@debian.org>
                  sha  => "3f510b5d1b4ae9bb38e485aa302a776b317fb3637bdb6404c4adf7b6cadd965c" },
  );
  
-@@ -1910,28 +1912,32 @@ sub open_data_file($@)
+@@ -280,6 +282,13 @@ my %break_types =
+     "EB"  => 0x0029,
+     "EM"  => 0x002a,
+     "ZWJ" => 0x002b,
++
++    "AK"  => 0x002c,
++    "AP"  => 0x002d,
++    "AL"  => 0x002e,
++    "AS"  => 0x002f,
++    "VI"  => 0x002e,
++    "VF"  => 0x002f,
+ );
+ 
+ my %vertical_types =
+@@ -1910,28 +1919,32 @@ sub open_data_file($@)
  {
      my ($id, $name) = @_;
      my $data = $data_files{$id};
@@ -100,7 +114,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
      else
      {
-@@ -2280,7 +2286,7 @@ sub load_data()
+@@ -2280,7 +2293,7 @@ sub load_data()
  
      # load the Unihan mappings
  

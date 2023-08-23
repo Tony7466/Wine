@@ -1,3 +1,13 @@
+wine-development (8.13~repack-2) unstable; urgency=medium
+
+  * Support building with unicode 15.1.
+  * Fix incorrect vkd3d format strings.
+  * Build using the unicode-idna package.
+  * Avoid clobbering the x18 register on arm64.
+  * Remove uninitialized variable fixes that are now upstream.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Fri, 17 Nov 2023 23:13:38 +0000
+
 wine-development (8.13~repack-1) unstable; urgency=medium
 
   * New upstream release 8.13, released Jul 21, 2023.

@@ -72,6 +72,12 @@ ifeq ($(DEB_HOST_ARCH), armhf)
 CONFLAGS+=--with-float-abi=hard
 endif
 
+# the x18 register is reserved in windows on arm64, avoid clobbering it
+# (see https://bugs.winehq.org/show_bug.cgi?id=38780)
+ifeq ($(DEB_HOST_ARCH), armhf)
+export DEB_CFLAGS_MAINT_APPEND+=-ffixed-x18
+endif
+
 # extra information to add to the version string
 export VENDOR=$(DEB_VENDOR) $(DEB_VERSION)
 

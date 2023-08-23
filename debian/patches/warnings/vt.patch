@@ -1,0 +1,15 @@
+description: clarify unimplemented VT_USERDEFINED warning
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/tools/widl/write_msft.c
++++ b/tools/widl/write_msft.c
+@@ -1245,6 +1245,9 @@ static void write_default_value(msft_typ
+             }
+             break;
+         }
++        case VT_USERDEFINED:
++            warning("can't write user defined types yet (VT_USERDEFINED)\n");
++            return;
+         default:
+             warning("can't write value of type %d yet\n", vt);
+             return;

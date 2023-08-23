@@ -1,0 +1,1093 @@
+description: fix incorrect format strings in vkd3d
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/libs/vkd3d/include/private/vkd3d_memory.h
++++ b/libs/vkd3d/include/private/vkd3d_memory.h
+@@ -37,7 +37,7 @@ static inline void *vkd3d_malloc(size_t
+ static inline void *vkd3d_realloc(void *ptr, size_t size)
+ {
+     if (!(ptr = realloc(ptr, size)))
+-        ERR("Out of memory, size %zu.\n", size);
++        ERR("Out of memory, size %u.\n", size);
+     return ptr;
+ }
+ 
+--- a/libs/vkd3d/libs/vkd3d/vkd3d_main.c
++++ b/libs/vkd3d/libs/vkd3d/vkd3d_main.c
+@@ -60,7 +60,7 @@ HRESULT vkd3d_create_device(const struct
+     }
+     else if (FAILED(hr = vkd3d_create_instance(create_info->instance_create_info, &instance)))
+     {
+-        WARN("Failed to create instance, hr %#x.\n", hr);
++        WARN("Failed to create instance, hr %#lx.\n", hr);
+         return E_FAIL;
+     }
+ 
+@@ -125,7 +125,7 @@ static ULONG STDMETHODCALLTYPE d3d12_roo
+     struct d3d12_root_signature_deserializer *deserializer = impl_from_ID3D12RootSignatureDeserializer(iface);
+     ULONG refcount = InterlockedIncrement(&deserializer->refcount);
+ 
+-    TRACE("%p increasing refcount to %u.\n", deserializer, refcount);
++    TRACE("%p increasing refcount to %lu.\n", deserializer, refcount);
+ 
+     return refcount;
+ }
+@@ -135,7 +135,7 @@ static ULONG STDMETHODCALLTYPE d3d12_roo
+     struct d3d12_root_signature_deserializer *deserializer = impl_from_ID3D12RootSignatureDeserializer(iface);
+     ULONG refcount = InterlockedDecrement(&deserializer->refcount);
+ 
+-    TRACE("%p decreasing refcount to %u.\n", deserializer, refcount);
++    TRACE("%p decreasing refcount to %lu.\n", deserializer, refcount);
+ 
+     if (!refcount)
+     {
+@@ -286,7 +286,7 @@ static ULONG STDMETHODCALLTYPE d3d12_ver
+     struct d3d12_versioned_root_signature_deserializer *deserializer = impl_from_ID3D12VersionedRootSignatureDeserializer(iface);
+     ULONG refcount = InterlockedIncrement(&deserializer->refcount);
+ 
+-    TRACE("%p increasing refcount to %u.\n", deserializer, refcount);
++    TRACE("%p increasing refcount to %lu.\n", deserializer, refcount);
+ 
+     return refcount;
+ }
+@@ -296,7 +296,7 @@ static ULONG STDMETHODCALLTYPE d3d12_ver
+     struct d3d12_versioned_root_signature_deserializer *deserializer = impl_from_ID3D12VersionedRootSignatureDeserializer(iface);
+     ULONG refcount = InterlockedDecrement(&deserializer->refcount);
+ 
+-    TRACE("%p decreasing refcount to %u.\n", deserializer, refcount);
++    TRACE("%p decreasing refcount to %lu.\n", deserializer, refcount);
+ 
+     if (!refcount)
+     {
+@@ -456,7 +456,7 @@ HRESULT vkd3d_serialize_root_signature(c
+         if (error_blob && messages)
+         {
+             if (FAILED(hr = vkd3d_blob_create(messages, strlen(messages), error_blob)))
+-                ERR("Failed to create error blob, hr %#x.\n", hr);
++                ERR("Failed to create error blob, hr %#lx.\n", hr);
+         }
+         return hresult_from_vkd3d_result(ret);
+     }
+@@ -464,7 +464,7 @@ HRESULT vkd3d_serialize_root_signature(c
+ 
+     if (FAILED(hr = vkd3d_blob_create((void *)dxbc.code, dxbc.size, blob)))
+     {
+-        WARN("Failed to create blob object, hr %#x.\n", hr);
++        WARN("Failed to create blob object, hr %#lx.\n", hr);
+         vkd3d_shader_free_shader_code(&dxbc);
+     }
+     return hr;
+@@ -497,7 +497,7 @@ HRESULT vkd3d_serialize_versioned_root_s
+         if (error_blob && messages)
+         {
+             if (FAILED(hr = vkd3d_blob_create(messages, strlen(messages), error_blob)))
+-                ERR("Failed to create error blob, hr %#x.\n", hr);
++                ERR("Failed to create error blob, hr %#lx.\n", hr);
+         }
+         return hresult_from_vkd3d_result(ret);
+     }
+@@ -505,7 +505,7 @@ HRESULT vkd3d_serialize_versioned_root_s
+ 
+     if (FAILED(hr = vkd3d_blob_create((void *)dxbc.code, dxbc.size, blob)))
+     {
+-        WARN("Failed to create blob object, hr %#x.\n", hr);
++        WARN("Failed to create blob object, hr %#lx.\n", hr);
+         vkd3d_shader_free_shader_code(&dxbc);
+     }
+     return hr;
+--- a/libs/vkd3d/libs/vkd3d-common/blob.c
++++ b/libs/vkd3d/libs/vkd3d-common/blob.c
+@@ -59,7 +59,7 @@ static ULONG STDMETHODCALLTYPE vkd3d_blo
+     struct vkd3d_blob *blob = impl_from_ID3DBlob(iface);
+     ULONG refcount = InterlockedIncrement(&blob->refcount);
+ 
+-    TRACE("%p increasing refcount to %u.\n", blob, refcount);
++    TRACE("%p increasing refcount to %lu.\n", blob, refcount);
+ 
+     return refcount;
+ }
+@@ -69,7 +69,7 @@ static ULONG STDMETHODCALLTYPE vkd3d_blo
+     struct vkd3d_blob *blob = impl_from_ID3DBlob(iface);
+     ULONG refcount = InterlockedDecrement(&blob->refcount);
+ 
+-    TRACE("%p decreasing refcount to %u.\n", blob, refcount);
++    TRACE("%p decreasing refcount to %lu.\n", blob, refcount);
+ 
+     if (!refcount)
+     {
+--- a/libs/vkd3d/libs/vkd3d-shader/d3dbc.c
++++ b/libs/vkd3d/libs/vkd3d-shader/d3dbc.c
+@@ -646,7 +646,7 @@ static void shader_sm1_read_immconst(str
+     {
+         vkd3d_shader_parser_error(&sm1->p, VKD3D_SHADER_ERROR_D3DBC_UNEXPECTED_EOF,
+                 "Attempted to read a constant definition, but not enough tokens are remaining. "
+-                "%zu token(s) available, %u required.", sm1->end - *ptr, count);
++                "%u token(s) available, %u required.", sm1->end - *ptr, count);
+         sm1->abort = true;
+         return;
+     }
+@@ -690,7 +690,7 @@ static void shader_sm1_read_comment(stru
+         if (size > --remaining)
+         {
+             vkd3d_shader_parser_error(&sm1->p, VKD3D_SHADER_ERROR_D3DBC_UNEXPECTED_EOF,
+-                    "Encountered a %u token comment, but only %zu token(s) is/are remaining.",
++                    "Encountered a %u token comment, but only %u token(s) is/are remaining.",
+                     size, remaining);
+             return;
+         }
+@@ -733,7 +733,7 @@ static void shader_sm1_validate_instruct
+     if ((ins->handler_idx == VKD3DSIH_BREAKP || ins->handler_idx == VKD3DSIH_IF) && ins->flags)
+     {
+         vkd3d_shader_parser_warning(&sm1->p, VKD3D_SHADER_WARNING_D3DBC_IGNORED_INSTRUCTION_FLAGS,
+-                "Ignoring unexpected instruction flags %#x.", ins->flags);
++                "Ignoring unexpected instruction flags %#lx.", ins->flags);
+         ins->flags = 0;
+     }
+ }
+@@ -799,7 +799,7 @@ static void shader_sm1_read_instruction(
+     if (*ptr > sm1->end)
+     {
+         vkd3d_shader_parser_error(&sm1->p, VKD3D_SHADER_ERROR_D3DBC_UNEXPECTED_EOF,
+-                "The current instruction ends %zu token(s) past the end of the shader.",
++                "The current instruction ends %u token(s) past the end of the shader.",
+                 *ptr - sm1->end);
+         goto fail;
+     }
+@@ -892,7 +892,7 @@ static enum vkd3d_result shader_sm1_init
+     if (token_count < 2)
+     {
+         vkd3d_shader_error(message_context, &location, VKD3D_SHADER_ERROR_D3DBC_UNEXPECTED_EOF,
+-                "Invalid shader size %zu (token count %zu). At least 2 tokens are required.",
++                "Invalid shader size %u (token count %u). At least 2 tokens are required.",
+                 code_size, token_count);
+         return VKD3D_ERROR_INVALID_SHADER;
+     }
+--- a/libs/vkd3d/libs/vkd3d-shader/dxbc.c
++++ b/libs/vkd3d/libs/vkd3d-shader/dxbc.c
+@@ -50,7 +50,7 @@ int vkd3d_shader_serialize_dxbc(size_t s
+     struct vkd3d_bytecode_buffer buffer = {0};
+     uint32_t checksum[4];
+ 
+-    TRACE("section_count %zu, sections %p, dxbc %p, messages %p.\n", section_count, sections, dxbc, messages);
++    TRACE("section_count %u, sections %p, dxbc %p, messages %p.\n", section_count, sections, dxbc, messages);
+ 
+     if (messages)
+         *messages = NULL;
+@@ -354,7 +354,7 @@ static void shader_sm4_read_dcl_sampler(
+ 
+     ins->flags = (opcode_token & VKD3D_SM4_SAMPLER_MODE_MASK) >> VKD3D_SM4_SAMPLER_MODE_SHIFT;
+     if (ins->flags & ~VKD3D_SM4_SAMPLER_COMPARISON)
+-        FIXME("Unhandled sampler mode %#x.\n", ins->flags);
++        FIXME("Unhandled sampler mode %#lx.\n", ins->flags);
+     shader_sm4_read_src_param(priv, &tokens, end, VKD3D_DATA_SAMPLER, &ins->declaration.sampler.src);
+     shader_sm4_set_descriptor_register_range(priv, &ins->declaration.sampler.src.reg, &ins->declaration.sampler.range);
+     shader_sm4_read_register_space(priv, &tokens, end, &ins->declaration.sampler.range.space);
+@@ -1398,7 +1398,7 @@ static void shader_sm4_read_instruction_
+             } aoffimmi;
+ 
+             if (modifier & ~recognized_bits)
+-                FIXME("Unhandled instruction modifier %#x.\n", modifier);
++                FIXME("Unhandled instruction modifier %#lx.\n", modifier);
+ 
+             aoffimmi.u = (modifier & VKD3D_SM4_AOFFIMMI_U_MASK) >> VKD3D_SM4_AOFFIMMI_U_SHIFT;
+             aoffimmi.v = (modifier & VKD3D_SM4_AOFFIMMI_V_MASK) >> VKD3D_SM4_AOFFIMMI_V_SHIFT;
+@@ -1455,7 +1455,7 @@ static void shader_sm4_read_instruction_
+         }
+ 
+         default:
+-            FIXME("Unhandled instruction modifier %#x.\n", modifier);
++            FIXME("Unhandled instruction modifier %#lx.\n", modifier);
+     }
+ }
+ 
+@@ -1496,7 +1496,7 @@ static void shader_sm4_read_instruction(
+     }
+     if (!len || remaining < len)
+     {
+-        WARN("Read invalid length %u (remaining %zu).\n", len, remaining);
++        WARN("Read invalid length %u (remaining %u).\n", len, remaining);
+         goto fail;
+     }
+     --len;
+@@ -1734,7 +1734,7 @@ static const char *shader_get_string(con
+ 
+     if (offset >= data_size)
+     {
+-        WARN("Invalid offset %#x (data size %#lx).\n", offset, (long)data_size);
++        WARN("Invalid offset %#lx (data size %#lx).\n", offset, (long)data_size);
+         return NULL;
+     }
+ 
+@@ -1764,9 +1764,9 @@ static int parse_dxbc(const struct vkd3d
+ 
+     if (data_size < VKD3D_DXBC_HEADER_SIZE)
+     {
+-        WARN("Invalid data size %zu.\n", data_size);
++        WARN("Invalid data size %u.\n", data_size);
+         vkd3d_shader_error(message_context, &location, VKD3D_SHADER_ERROR_DXBC_INVALID_SIZE,
+-                "DXBC size %zu is smaller than the DXBC header size.", data_size);
++                "DXBC size %u is smaller than the DXBC header size.", data_size);
+         return VKD3D_ERROR_INVALID_ARGUMENT;
+     }
+ 
+@@ -1830,9 +1830,9 @@ static int parse_dxbc(const struct vkd3d
+ 
+         if (chunk_offset >= data_size || !require_space(chunk_offset, 2, sizeof(DWORD), data_size))
+         {
+-            WARN("Invalid chunk offset %#x (data size %zu).\n", chunk_offset, data_size);
++            WARN("Invalid chunk offset %#x (data size %u).\n", chunk_offset, data_size);
+             vkd3d_shader_error(message_context, &location, VKD3D_SHADER_ERROR_DXBC_INVALID_CHUNK_OFFSET,
+-                    "DXBC chunk %u has invalid offset %#x (data size %#zx).", i, chunk_offset, data_size);
++                    "DXBC chunk %u has invalid offset %#x (data size %#x).", i, chunk_offset, data_size);
+             vkd3d_free(sections);
+             return VKD3D_ERROR_INVALID_ARGUMENT;
+         }
+@@ -1844,10 +1844,10 @@ static int parse_dxbc(const struct vkd3d
+ 
+         if (!require_space(chunk_ptr - data, 1, chunk_size, data_size))
+         {
+-            WARN("Invalid chunk size %#x (data size %zu, chunk offset %#x).\n",
++            WARN("Invalid chunk size %#x (data size %u, chunk offset %#x).\n",
+                     chunk_size, data_size, chunk_offset);
+             vkd3d_shader_error(message_context, &location, VKD3D_SHADER_ERROR_DXBC_INVALID_CHUNK_SIZE,
+-                    "DXBC chunk %u has invalid size %#x (data size %#zx, chunk offset %#x).",
++                    "DXBC chunk %u has invalid size %#x (data size %#x, chunk offset %#x).",
+                     i, chunk_offset, data_size, chunk_offset);
+             vkd3d_free(sections);
+             return VKD3D_ERROR_INVALID_ARGUMENT;
+@@ -1905,7 +1905,7 @@ int vkd3d_shader_parse_dxbc(const struct
+     struct vkd3d_shader_message_context message_context;
+     int ret;
+ 
+-    TRACE("dxbc {%p, %zu}, flags %#x, desc %p, messages %p.\n", dxbc->code, dxbc->size, flags, desc, messages);
++    TRACE("dxbc {%p, %u}, flags %#x, desc %p, messages %p.\n", dxbc->code, dxbc->size, flags, desc, messages);
+ 
+     if (messages)
+         *messages = NULL;
+@@ -1939,9 +1939,9 @@ static int shader_parse_signature(const
+ 
+     if (!require_space(0, 2, sizeof(uint32_t), section->data.size))
+     {
+-        WARN("Invalid data size %#zx.\n", section->data.size);
++        WARN("Invalid data size %#x.\n", section->data.size);
+         vkd3d_shader_error(message_context, NULL, VKD3D_SHADER_ERROR_DXBC_INVALID_SIGNATURE,
+-                "Section size %zu is smaller than the minimum signature header size.\n", section->data.size);
++                "Section size %u is smaller than the minimum signature header size.\n", section->data.size);
+         return VKD3D_ERROR_INVALID_ARGUMENT;
+     }
+ 
+@@ -1962,7 +1962,7 @@ static int shader_parse_signature(const
+ 
+     if (!require_space(ptr - data, count, 6 * sizeof(uint32_t), section->data.size))
+     {
+-        WARN("Invalid count %#x (data size %#zx).\n", count, section->data.size);
++        WARN("Invalid count %#x (data size %#x).\n", count, section->data.size);
+         return VKD3D_ERROR_INVALID_ARGUMENT;
+     }
+ 
+@@ -1987,7 +1987,7 @@ static int shader_parse_signature(const
+         read_dword(&ptr, &name_offset);
+         if (!(e[i].semantic_name = shader_get_string(data, section->data.size, name_offset)))
+         {
+-            WARN("Invalid name offset %#x (data size %#zx).\n", name_offset, section->data.size);
++            WARN("Invalid name offset %#x (data size %#x).\n", name_offset, section->data.size);
+             vkd3d_free(e);
+             return VKD3D_ERROR_INVALID_ARGUMENT;
+         }
+@@ -2489,7 +2489,7 @@ static int shader_parse_root_parameters1
+ 
+     if (!require_space(offset, 3 * count, sizeof(DWORD), context->data_size))
+     {
+-        WARN("Invalid data size %#x (offset %u, count %u).\n", context->data_size, offset, count);
++        WARN("Invalid data size %#x (offset %u, count %lu).\n", context->data_size, offset, count);
+         return VKD3D_ERROR_INVALID_ARGUMENT;
+     }
+     ptr = &context->data[offset];
+@@ -2575,7 +2575,7 @@ static int shader_parse_root_signature(c
+ 
+     if (!require_space(0, 6, sizeof(uint32_t), data->size))
+     {
+-        WARN("Invalid data size %#zx.\n", data->size);
++        WARN("Invalid data size %#x.\n", data->size);
+         return VKD3D_ERROR_INVALID_ARGUMENT;
+     }
+ 
+@@ -2661,7 +2661,7 @@ int vkd3d_shader_parse_root_signature(co
+     struct vkd3d_shader_message_context message_context;
+     int ret;
+ 
+-    TRACE("dxbc {%p, %zu}, root_signature %p, messages %p.\n", dxbc->code, dxbc->size, root_signature, messages);
++    TRACE("dxbc {%p, %u}, root_signature %p, messages %p.\n", dxbc->code, dxbc->size, root_signature, messages);
+ 
+     memset(root_signature, 0, sizeof(*root_signature));
+     if (messages)
+--- a/libs/vkd3d/libs/vkd3d-shader/hlsl.c
++++ b/libs/vkd3d/libs/vkd3d-shader/hlsl.c
+@@ -895,7 +895,7 @@ struct hlsl_ir_var *hlsl_new_synthetic_v
+ 
+     if (!(string = hlsl_get_string_buffer(ctx)))
+         return NULL;
+-    vkd3d_string_buffer_printf(string, "<%s-%u>", template, InterlockedIncrement(&counter));
++    vkd3d_string_buffer_printf(string, "<%s-%lu>", template, InterlockedIncrement(&counter));
+     if (!(name = hlsl_strdup(ctx, string->buffer)))
+     {
+         hlsl_release_string_buffer(ctx, string);
+@@ -2313,7 +2313,7 @@ static void dump_ir_swizzle(struct vkd3d
+     {
+         vkd3d_string_buffer_printf(buffer, ".");
+         for (i = 0; i < swizzle->node.data_type->dimx; ++i)
+-            vkd3d_string_buffer_printf(buffer, "_m%u%u", (swizzle->swizzle >> i * 8) & 0xf, (swizzle->swizzle >> (i * 8 + 4)) & 0xf);
++            vkd3d_string_buffer_printf(buffer, "_m%lu%lu", (swizzle->swizzle >> i * 8) & 0xf, (swizzle->swizzle >> (i * 8 + 4)) & 0xf);
+     }
+     else
+     {
+--- a/libs/vkd3d/libs/vkd3d-shader/vkd3d_shader_private.h
++++ b/libs/vkd3d/libs/vkd3d-shader/vkd3d_shader_private.h
+@@ -1213,7 +1213,7 @@ static inline unsigned int vkd3d_write_m
+             return i;
+     }
+ 
+-    FIXME("Invalid write mask %#x.\n", write_mask);
++    FIXME("Invalid write mask %#lx.\n", write_mask);
+     return 0;
+ }
+ 
+--- a/libs/vkd3d/libs/vkd3d-shader/spirv.c
++++ b/libs/vkd3d/libs/vkd3d-shader/spirv.c
+@@ -3919,7 +3919,7 @@ static void spirv_compiler_emit_store_ds
+     for (i = 0; i < component_count; ++i)
+     {
+         if (vkd3d_swizzle_get_component(swizzle, component_idx + i))
+-            ERR("Invalid swizzle %#x for scalar value, write mask %#x.\n", swizzle, dst->write_mask);
++            ERR("Invalid swizzle %#lx for scalar value, write mask %#lx.\n", swizzle, dst->write_mask);
+ 
+         component_ids[i] = val_id;
+     }
+@@ -4271,7 +4271,7 @@ static const struct vkd3d_shader_signatu
+         }
+     }
+ 
+-    FIXME("Could not find shader signature element (register %u, write mask %#x).\n",
++    FIXME("Could not find shader signature element (register %u, write mask %#lx).\n",
+             reg_idx, write_mask);
+     if (signature_element_index)
+         *signature_element_index = ~0u;
+@@ -6276,7 +6276,7 @@ static bool spirv_compiler_check_index_r
+         if (range->dst.write_mask != reg_info.write_mask
+                 || vkd3d_write_mask_component_count(reg_info.write_mask) != 1)
+         {
+-            FIXME("Unhandled index range write mask %#x (%#x).\n",
++            FIXME("Unhandled index range write mask %#lx (%#x).\n",
+                     range->dst.write_mask, reg_info.write_mask);
+             return false;
+         }
+@@ -9216,7 +9216,7 @@ static void spirv_compiler_emit_resinfo(
+     else
+     {
+         if (instruction->flags)
+-            FIXME("Unhandled flags %#x.\n", instruction->flags);
++            FIXME("Unhandled flags %#lx.\n", instruction->flags);
+         val_id = vkd3d_spirv_build_op_convert_utof(builder, type_id, val_id);
+     }
+     val_id = spirv_compiler_emit_swizzle(compiler, val_id, VKD3DSP_WRITEMASK_ALL,
+@@ -9275,7 +9275,7 @@ static void spirv_compiler_emit_sample_i
+     else
+     {
+         if (instruction->flags)
+-            FIXME("Unhandled flags %#x.\n", instruction->flags);
++            FIXME("Unhandled flags %#lx.\n", instruction->flags);
+         val_id = vkd3d_spirv_build_op_convert_utof(builder, type_id, val_id);
+     }
+ 
+--- a/libs/vkd3d/libs/vkd3d-shader/trace.c
++++ b/libs/vkd3d/libs/vkd3d-shader/trace.c
+@@ -1365,7 +1365,7 @@ static void shader_dump_ins_modifiers(st
+         case 1: shader_addline(buffer, "_x2"); break;
+         case 2: shader_addline(buffer, "_x4"); break;
+         case 3: shader_addline(buffer, "_x8"); break;
+-        default: shader_addline(buffer, "_unhandled_shift(%d)", dst->shift); break;
++        default: shader_addline(buffer, "_unhandled_shift(%ld)", dst->shift); break;
+     }
+ 
+     if (mmask & VKD3DSPDM_SATURATE)         shader_addline(buffer, "_sat");
+@@ -1512,7 +1512,7 @@ static void shader_dump_instruction_flag
+             {
+                 case VKD3D_SHADER_CONDITIONAL_OP_NZ: shader_addline(buffer, "_nz"); break;
+                 case VKD3D_SHADER_CONDITIONAL_OP_Z:  shader_addline(buffer, "_z"); break;
+-                default: shader_addline(buffer, "_unrecognized(%#x)", ins->flags); break;
++                default: shader_addline(buffer, "_unrecognized(%#lx)", ins->flags); break;
+             }
+             break;
+ 
+@@ -1526,7 +1526,7 @@ static void shader_dump_instruction_flag
+                 case VKD3D_SHADER_REL_OP_LT: shader_addline(buffer, "_lt"); break;
+                 case VKD3D_SHADER_REL_OP_NE: shader_addline(buffer, "_ne"); break;
+                 case VKD3D_SHADER_REL_OP_LE: shader_addline(buffer, "_le"); break;
+-                default: shader_addline(buffer, "_(%u)", ins->flags);
++                default: shader_addline(buffer, "_(%lu)", ins->flags);
+             }
+             break;
+ 
+@@ -1536,7 +1536,7 @@ static void shader_dump_instruction_flag
+                 case VKD3DSI_NONE: break;
+                 case VKD3DSI_RESINFO_RCP_FLOAT: shader_addline(buffer, "_rcpFloat"); break;
+                 case VKD3DSI_RESINFO_UINT: shader_addline(buffer, "_uint"); break;
+-                default: shader_addline(buffer, "_unrecognized(%#x)", ins->flags);
++                default: shader_addline(buffer, "_unrecognized(%#lx)", ins->flags);
+             }
+             break;
+ 
+@@ -1545,7 +1545,7 @@ static void shader_dump_instruction_flag
+             {
+                 case VKD3DSI_NONE: break;
+                 case VKD3DSI_SAMPLE_INFO_UINT: shader_addline(buffer, "_uint"); break;
+-                default: shader_addline(buffer, "_unrecognized(%#x)", ins->flags);
++                default: shader_addline(buffer, "_unrecognized(%#lx)", ins->flags);
+             }
+             break;
+ 
+--- a/libs/vkd3d/libs/vkd3d-shader/vkd3d_shader_main.c
++++ b/libs/vkd3d/libs/vkd3d-shader/vkd3d_shader_main.c
+@@ -1394,7 +1394,7 @@ int vkd3d_shader_parse_input_signature(c
+     struct vkd3d_shader_message_context message_context;
+     int ret;
+ 
+-    TRACE("dxbc {%p, %zu}, signature %p, messages %p.\n", dxbc->code, dxbc->size, signature, messages);
++    TRACE("dxbc {%p, %u}, signature %p, messages %p.\n", dxbc->code, dxbc->size, signature, messages);
+ 
+     if (messages)
+         *messages = NULL;
+--- a/libs/vkd3d/libs/vkd3d/command.c
++++ b/libs/vkd3d/libs/vkd3d/command.c
+@@ -312,7 +312,7 @@ static void vkd3d_wait_for_gpu_fence(str
+ 
+     TRACE("Signaling fence %p value %#"PRIx64".\n", waiting_fence->fence, waiting_fence->value);
+     if (FAILED(hr = d3d12_fence_signal(waiting_fence->fence, waiting_fence->value, waiting_fence->u.vk_fence, false)))
+-        ERR("Failed to signal D3D12 fence, hr %#x.\n", hr);
++        ERR("Failed to signal D3D12 fence, hr %#lx.\n", hr);
+ 
+     d3d12_fence_decref(waiting_fence->fence);
+ 
+@@ -926,7 +926,7 @@ static ULONG STDMETHODCALLTYPE d3d12_fen
+     struct d3d12_fence *fence = impl_from_ID3D12Fence(iface);
+     ULONG refcount = InterlockedIncrement(&fence->refcount);
+ 
+-    TRACE("%p increasing refcount to %u.\n", fence, refcount);
++    TRACE("%p increasing refcount to %lu.\n", fence, refcount);
+ 
+     return refcount;
+ }
+@@ -941,7 +941,7 @@ static ULONG STDMETHODCALLTYPE d3d12_fen
+     struct d3d12_fence *fence = impl_from_ID3D12Fence(iface);
+     ULONG refcount = InterlockedDecrement(&fence->refcount);
+ 
+-    TRACE("%p decreasing refcount to %u.\n", fence, refcount);
++    TRACE("%p decreasing refcount to %lu.\n", fence, refcount);
+ 
+     if (!refcount)
+         d3d12_fence_decref(fence);
+@@ -1628,7 +1628,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
+     struct d3d12_command_allocator *allocator = impl_from_ID3D12CommandAllocator(iface);
+     ULONG refcount = InterlockedIncrement(&allocator->refcount);
+ 
+-    TRACE("%p increasing refcount to %u.\n", allocator, refcount);
++    TRACE("%p increasing refcount to %lu.\n", allocator, refcount);
+ 
+     return refcount;
+ }
+@@ -1638,7 +1638,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
+     struct d3d12_command_allocator *allocator = impl_from_ID3D12CommandAllocator(iface);
+     ULONG refcount = InterlockedDecrement(&allocator->refcount);
+ 
+-    TRACE("%p decreasing refcount to %u.\n", allocator, refcount);
++    TRACE("%p decreasing refcount to %lu.\n", allocator, refcount);
+ 
+     if (!refcount)
+     {
+@@ -2288,7 +2288,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
+     struct d3d12_command_list *list = impl_from_ID3D12GraphicsCommandList2(iface);
+     ULONG refcount = InterlockedIncrement(&list->refcount);
+ 
+-    TRACE("%p increasing refcount to %u.\n", list, refcount);
++    TRACE("%p increasing refcount to %lu.\n", list, refcount);
+ 
+     return refcount;
+ }
+@@ -2303,7 +2303,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
+     struct d3d12_command_list *list = impl_from_ID3D12GraphicsCommandList2(iface);
+     ULONG refcount = InterlockedDecrement(&list->refcount);
+ 
+-    TRACE("%p decreasing refcount to %u.\n", list, refcount);
++    TRACE("%p decreasing refcount to %lu.\n", list, refcount);
+ 
+     if (!refcount)
+     {
+@@ -3621,7 +3621,7 @@ static void d3d12_command_list_copy_inco
+             buffer_image_copy.imageExtent.height * buffer_image_copy.imageExtent.depth;
+     if (FAILED(hr = d3d12_command_list_allocate_transfer_buffer(list, buffer_size, &transfer_buffer)))
+     {
+-        ERR("Failed to allocate transfer buffer, hr %#x.\n", hr);
++        ERR("Failed to allocate transfer buffer, hr %#lx.\n", hr);
+         return;
+     }
+ 
+@@ -4808,7 +4808,7 @@ static void STDMETHODCALLTYPE d3d12_comm
+ 
+     if (render_target_descriptor_count > ARRAY_SIZE(list->rtvs))
+     {
+-        WARN("Descriptor count %u > %zu, ignoring extra descriptors.\n",
++        WARN("Descriptor count %u > %u, ignoring extra descriptors.\n",
+                 render_target_descriptor_count, ARRAY_SIZE(list->rtvs));
+         render_target_descriptor_count = ARRAY_SIZE(list->rtvs);
+     }
+@@ -5994,7 +5994,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
+     struct d3d12_command_queue *command_queue = impl_from_ID3D12CommandQueue(iface);
+     ULONG refcount = InterlockedIncrement(&command_queue->refcount);
+ 
+-    TRACE("%p increasing refcount to %u.\n", command_queue, refcount);
++    TRACE("%p increasing refcount to %lu.\n", command_queue, refcount);
+ 
+     return refcount;
+ }
+@@ -6009,7 +6009,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
+     struct d3d12_command_queue *command_queue = impl_from_ID3D12CommandQueue(iface);
+     ULONG refcount = InterlockedDecrement(&command_queue->refcount);
+ 
+-    TRACE("%p decreasing refcount to %u.\n", command_queue, refcount);
++    TRACE("%p decreasing refcount to %lu.\n", command_queue, refcount);
+ 
+     if (!refcount)
+     {
+@@ -6162,7 +6162,7 @@ static void d3d12_command_queue_submit_l
+     if (queue->op_queue.count == 1 && !queue->is_flushing)
+     {
+         if (FAILED(hr = d3d12_command_queue_flush_ops_locked(queue, &flushed_any)))
+-            ERR("Cannot flush queue, hr %#x.\n", hr);
++            ERR("Cannot flush queue, hr %#lx.\n", hr);
+     }
+ }
+ 
+@@ -6771,7 +6771,7 @@ static bool d3d12_command_queue_op_array
+ {
+     if (!vkd3d_array_reserve((void **)&array->ops, &array->size, array->count + count, sizeof(*array->ops)))
+     {
+-        ERR("Cannot reserve memory for %zu new ops.\n", count);
++        ERR("Cannot reserve memory for %u new ops.\n", count);
+         return false;
+     }
+ 
+@@ -6979,7 +6979,7 @@ VkQueue vkd3d_acquire_vk_queue(ID3D12Com
+     VkQueue vk_queue = vkd3d_queue_acquire(d3d12_queue->vkd3d_queue);
+ 
+     if (d3d12_queue->op_queue.count)
+-        WARN("Acquired command queue %p with %zu remaining ops.\n", d3d12_queue, d3d12_queue->op_queue.count);
++        WARN("Acquired command queue %p with %u remaining ops.\n", d3d12_queue, d3d12_queue->op_queue.count);
+     else if (d3d12_queue->is_flushing)
+         WARN("Acquired command queue %p which is flushing.\n", d3d12_queue);
+ 
+@@ -7026,7 +7026,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
+     struct d3d12_command_signature *signature = impl_from_ID3D12CommandSignature(iface);
+     ULONG refcount = InterlockedIncrement(&signature->refcount);
+ 
+-    TRACE("%p increasing refcount to %u.\n", signature, refcount);
++    TRACE("%p increasing refcount to %lu.\n", signature, refcount);
+ 
+     return refcount;
+ }
+@@ -7036,7 +7036,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
+     struct d3d12_command_signature *signature = impl_from_ID3D12CommandSignature(iface);
+     ULONG refcount = InterlockedDecrement(&signature->refcount);
+ 
+-    TRACE("%p decreasing refcount to %u.\n", signature, refcount);
++    TRACE("%p decreasing refcount to %lu.\n", signature, refcount);
+ 
+     if (!refcount)
+     {
+--- a/libs/vkd3d/libs/vkd3d/device.c
++++ b/libs/vkd3d/libs/vkd3d/device.c
+@@ -546,7 +546,7 @@ static HRESULT vkd3d_instance_init(struc
+     }
+     if (create_info->wchar_size != 2 && create_info->wchar_size != 4)
+     {
+-        ERR("Unexpected WCHAR size %zu.\n", create_info->wchar_size);
++        ERR("Unexpected WCHAR size %u.\n", create_info->wchar_size);
+         return E_INVALIDARG;
+     }
+ 
+@@ -559,7 +559,7 @@ static HRESULT vkd3d_instance_init(struc
+ 
+     if (FAILED(hr = vkd3d_init_vk_global_procs(instance, create_info->pfn_vkGetInstanceProcAddr)))
+     {
+-        ERR("Failed to initialize Vulkan global procs, hr %#x.\n", hr);
++        ERR("Failed to initialize Vulkan global procs, hr %#lx.\n", hr);
+         return hr;
+     }
+ 
+@@ -639,7 +639,7 @@ static HRESULT vkd3d_instance_init(struc
+ 
+     if (FAILED(hr = vkd3d_load_vk_instance_procs(&instance->vk_procs, vk_global_procs, vk_instance)))
+     {
+-        ERR("Failed to load instance procs, hr %#x.\n", hr);
++        ERR("Failed to load instance procs, hr %#lx.\n", hr);
+         if (instance->vk_procs.vkDestroyInstance)
+             instance->vk_procs.vkDestroyInstance(vk_instance, NULL);
+         if (instance->libvulkan)
+@@ -717,7 +717,7 @@ ULONG vkd3d_instance_incref(struct vkd3d
+ {
+     ULONG refcount = InterlockedIncrement(&instance->refcount);
+ 
+-    TRACE("%p increasing refcount to %u.\n", instance, refcount);
++    TRACE("%p increasing refcount to %lu.\n", instance, refcount);
+ 
+     return refcount;
+ }
+@@ -726,7 +726,7 @@ ULONG vkd3d_instance_decref(struct vkd3d
+ {
+     ULONG refcount = InterlockedDecrement(&instance->refcount);
+ 
+-    TRACE("%p decreasing refcount to %u.\n", instance, refcount);
++    TRACE("%p decreasing refcount to %lu.\n", instance, refcount);
+ 
+     if (!refcount)
+         vkd3d_destroy_instance(instance);
+@@ -2025,7 +2025,7 @@ static HRESULT vkd3d_create_vk_device(st
+ 
+     if (FAILED(hr = vkd3d_load_vk_device_procs(&device->vk_procs, vk_procs, vk_device)))
+     {
+-        ERR("Failed to load device procs, hr %#x.\n", hr);
++        ERR("Failed to load device procs, hr %#lx.\n", hr);
+         if (device->vk_procs.vkDestroyDevice)
+             device->vk_procs.vkDestroyDevice(vk_device, NULL);
+         return hr;
+@@ -2035,7 +2035,7 @@ static HRESULT vkd3d_create_vk_device(st
+ 
+     if (FAILED(hr = d3d12_device_create_vkd3d_queues(device, &device_queue_info)))
+     {
+-        ERR("Failed to create queues, hr %#x.\n", hr);
++        ERR("Failed to create queues, hr %#lx.\n", hr);
+         device->vk_procs.vkDestroyDevice(vk_device, NULL);
+         return hr;
+     }
+@@ -2103,7 +2103,7 @@ static D3D12_GPU_VIRTUAL_ADDRESS vkd3d_g
+     slab_idx = slab - allocator->slabs;
+     address = VKD3D_VA_SLAB_BASE + slab_idx * VKD3D_VA_SLAB_SIZE;
+ 
+-    TRACE("Allocated address %#"PRIx64", slab %u, size %zu.\n", address, slab_idx, aligned_size);
++    TRACE("Allocated address %#"PRIx64", slab %u, size %u.\n", address, slab_idx, aligned_size);
+ 
+     return address;
+ }
+@@ -2135,7 +2135,7 @@ static D3D12_GPU_VIRTUAL_ADDRESS vkd3d_g
+      * only fail once we have exhausted 63 bits of address space. */
+     allocator->fallback_floor = base + aligned_size;
+ 
+-    TRACE("Allocated address %#"PRIx64", size %zu.\n", base, aligned_size);
++    TRACE("Allocated address %#"PRIx64", size %u.\n", base, aligned_size);
+ 
+     return base;
+ }
+@@ -2181,7 +2181,7 @@ static void *vkd3d_gpu_va_allocator_dere
+     base_offset -= slab_idx * VKD3D_VA_SLAB_SIZE;
+     if (base_offset >= slab->size)
+     {
+-        ERR("Address %#"PRIx64" is %#"PRIx64" bytes into slab %u of size %zu.\n",
++        ERR("Address %#"PRIx64" is %#"PRIx64" bytes into slab %u of size %u.\n",
+                 address, base_offset, slab_idx, slab->size);
+         return NULL;
+     }
+@@ -2445,7 +2445,7 @@ static ULONG STDMETHODCALLTYPE d3d12_dev
+     struct d3d12_device *device = impl_from_ID3D12Device(iface);
+     ULONG refcount = InterlockedIncrement(&device->refcount);
+ 
+-    TRACE("%p increasing refcount to %u.\n", device, refcount);
++    TRACE("%p increasing refcount to %lu.\n", device, refcount);
+ 
+     return refcount;
+ }
+@@ -2456,7 +2456,7 @@ static ULONG STDMETHODCALLTYPE d3d12_dev
+     ULONG refcount = InterlockedDecrement(&device->refcount);
+     size_t i;
+ 
+-    TRACE("%p decreasing refcount to %u.\n", device, refcount);
++    TRACE("%p decreasing refcount to %lu.\n", device, refcount);
+ 
+     if (!refcount)
+     {
+@@ -3796,7 +3796,7 @@ static HRESULT STDMETHODCALLTYPE d3d12_d
+ {
+     struct d3d12_device *device = impl_from_ID3D12Device(iface);
+ 
+-    FIXME("iface %p, object %p, attributes %p, access %#x, name %s, handle %p stub!\n",
++    FIXME("iface %p, object %p, attributes %p, access %#lx, name %s, handle %p stub!\n",
+             iface, object, attributes, access, debugstr_w(name, device->wchar_size), handle);
+ 
+     return E_NOTIMPL;
+@@ -3816,7 +3816,7 @@ static HRESULT STDMETHODCALLTYPE d3d12_d
+ {
+     struct d3d12_device *device = impl_from_ID3D12Device(iface);
+ 
+-    FIXME("iface %p, name %s, access %#x, handle %p stub!\n",
++    FIXME("iface %p, name %s, access %#lx, handle %p stub!\n",
+             iface, debugstr_w(name, device->wchar_size), access, handle);
+ 
+     return E_NOTIMPL;
+@@ -4179,7 +4179,7 @@ void d3d12_device_mark_as_removed(struct
+     va_list args;
+ 
+     va_start(args, message);
+-    WARN("Device %p is lost (reason %#x, \"%s\").\n",
++    WARN("Device %p is lost (reason %#lx, \"%s\").\n",
+             device, reason, vkd3d_dbg_vsprintf(message, args));
+     va_end(args);
+ 
+@@ -4228,7 +4228,7 @@ HRESULT vkd3d_create_thread(struct vkd3d
+         thread_data->data = data;
+         if (!(thread->handle = CreateThread(NULL, 0, call_thread_main, thread_data, 0, NULL)))
+         {
+-            ERR("Failed to create thread, error %d.\n", GetLastError());
++            ERR("Failed to create thread, error %ld.\n", GetLastError());
+             vkd3d_free(thread_data);
+             hr = E_FAIL;
+         }
+@@ -4237,7 +4237,7 @@ HRESULT vkd3d_create_thread(struct vkd3d
+ 
+         if ((rc = pthread_create(&thread->pthread, NULL, thread_main, data)))
+         {
+-            ERR("Failed to create thread, error %d.\n", rc);
++            ERR("Failed to create thread, error %ld.\n", rc);
+             hr = hresult_from_errno(rc);
+         }
+ #endif
+@@ -4254,7 +4254,7 @@ HRESULT vkd3d_join_thread(struct vkd3d_i
+     if (instance->join_thread)
+     {
+         if (FAILED(hr = instance->join_thread(thread->handle)))
+-            ERR("Failed to join thread, hr %#x.\n", hr);
++            ERR("Failed to join thread, hr %#lx.\n", hr);
+     }
+     else
+     {
+--- a/libs/vkd3d/libs/vkd3d/resource.c
++++ b/libs/vkd3d/libs/vkd3d/resource.c
+@@ -310,7 +310,7 @@ static ULONG STDMETHODCALLTYPE d3d12_hea
+     struct d3d12_heap *heap = impl_from_ID3D12Heap(iface);
+     ULONG refcount = InterlockedIncrement(&heap->refcount);
+ 
+-    TRACE("%p increasing refcount to %u.\n", heap, refcount);
++    TRACE("%p increasing refcount to %lu.\n", heap, refcount);
+ 
+     assert(!heap->is_private);
+ 
+@@ -344,7 +344,7 @@ static ULONG STDMETHODCALLTYPE d3d12_hea
+     struct d3d12_heap *heap = impl_from_ID3D12Heap(iface);
+     ULONG refcount = InterlockedDecrement(&heap->refcount);
+ 
+-    TRACE("%p decreasing refcount to %u.\n", heap, refcount);
++    TRACE("%p decreasing refcount to %lu.\n", heap, refcount);
+ 
+     if (!refcount)
+         d3d12_heap_destroy(heap);
+@@ -1035,7 +1035,7 @@ static ULONG d3d12_resource_incref(struc
+ {
+     ULONG refcount = InterlockedIncrement(&resource->internal_refcount);
+ 
+-    TRACE("%p increasing refcount to %u.\n", resource, refcount);
++    TRACE("%p increasing refcount to %lu.\n", resource, refcount);
+ 
+     return refcount;
+ }
+@@ -1044,7 +1044,7 @@ static ULONG d3d12_resource_decref(struc
+ {
+     ULONG refcount = InterlockedDecrement(&resource->internal_refcount);
+ 
+-    TRACE("%p decreasing refcount to %u.\n", resource, refcount);
++    TRACE("%p decreasing refcount to %lu.\n", resource, refcount);
+ 
+     if (!refcount)
+     {
+@@ -1131,7 +1131,7 @@ static ULONG STDMETHODCALLTYPE d3d12_res
+     struct d3d12_resource *resource = impl_from_ID3D12Resource(iface);
+     ULONG refcount = InterlockedIncrement(&resource->refcount);
+ 
+-    TRACE("%p increasing refcount to %u.\n", resource, refcount);
++    TRACE("%p increasing refcount to %lu.\n", resource, refcount);
+ 
+     if (refcount == 1)
+     {
+@@ -1149,7 +1149,7 @@ static ULONG STDMETHODCALLTYPE d3d12_res
+     struct d3d12_resource *resource = impl_from_ID3D12Resource(iface);
+     ULONG refcount = InterlockedDecrement(&resource->refcount);
+ 
+-    TRACE("%p decreasing refcount to %u.\n", resource, refcount);
++    TRACE("%p decreasing refcount to %lu.\n", resource, refcount);
+ 
+     if (!refcount)
+     {
+@@ -1262,7 +1262,7 @@ static HRESULT STDMETHODCALLTYPE d3d12_r
+     WARN("Ignoring read range %p.\n", read_range);
+ 
+     if (FAILED(hr = d3d12_heap_map(resource->heap, resource->heap_offset, resource, data)))
+-        WARN("Failed to map resource %p, hr %#x.\n", resource, hr);
++        WARN("Failed to map resource %p, hr %#lx.\n", resource, hr);
+ 
+     if (data)
+         TRACE("Returning pointer %p.\n", *data);
+@@ -1383,7 +1383,7 @@ static HRESULT STDMETHODCALLTYPE d3d12_r
+ 
+     if (FAILED(hr = d3d12_heap_map(resource->heap, resource->heap_offset, resource, (void **)&dst_data)))
+     {
+-        WARN("Failed to map resource %p, hr %#x.\n", resource, hr);
++        WARN("Failed to map resource %p, hr %#lx.\n", resource, hr);
+         return hr;
+     }
+ 
+@@ -1471,7 +1471,7 @@ static HRESULT STDMETHODCALLTYPE d3d12_r
+ 
+     if (FAILED(hr = d3d12_heap_map(resource->heap, resource->heap_offset, resource, (void **)&src_data)))
+     {
+-        WARN("Failed to map resource %p, hr %#x.\n", resource, hr);
++        WARN("Failed to map resource %p, hr %#lx.\n", resource, hr);
+         return hr;
+     }
+ 
+@@ -3658,7 +3658,7 @@ static ULONG STDMETHODCALLTYPE d3d12_des
+     struct d3d12_descriptor_heap *heap = impl_from_ID3D12DescriptorHeap(iface);
+     ULONG refcount = InterlockedIncrement(&heap->refcount);
+ 
+-    TRACE("%p increasing refcount to %u.\n", heap, refcount);
++    TRACE("%p increasing refcount to %lu.\n", heap, refcount);
+ 
+     return refcount;
+ }
+@@ -3668,7 +3668,7 @@ static ULONG STDMETHODCALLTYPE d3d12_des
+     struct d3d12_descriptor_heap *heap = impl_from_ID3D12DescriptorHeap(iface);
+     ULONG refcount = InterlockedDecrement(&heap->refcount);
+ 
+-    TRACE("%p decreasing refcount to %u.\n", heap, refcount);
++    TRACE("%p decreasing refcount to %lu.\n", heap, refcount);
+ 
+     if (!refcount)
+     {
+@@ -4026,7 +4026,7 @@ HRESULT d3d12_descriptor_heap_create(str
+     max_descriptor_count = (~(size_t)0 - sizeof(*object)) / descriptor_size;
+     if (desc->NumDescriptors > max_descriptor_count)
+     {
+-        WARN("Invalid descriptor count %u (max %zu).\n", desc->NumDescriptors, max_descriptor_count);
++        WARN("Invalid descriptor count %u (max %u).\n", desc->NumDescriptors, max_descriptor_count);
+         return E_OUTOFMEMORY;
+     }
+ 
+@@ -4094,7 +4094,7 @@ static ULONG STDMETHODCALLTYPE d3d12_que
+     struct d3d12_query_heap *heap = impl_from_ID3D12QueryHeap(iface);
+     ULONG refcount = InterlockedIncrement(&heap->refcount);
+ 
+-    TRACE("%p increasing refcount to %u.\n", heap, refcount);
++    TRACE("%p increasing refcount to %lu.\n", heap, refcount);
+ 
+     return refcount;
+ }
+@@ -4104,7 +4104,7 @@ static ULONG STDMETHODCALLTYPE d3d12_que
+     struct d3d12_query_heap *heap = impl_from_ID3D12QueryHeap(iface);
+     ULONG refcount = InterlockedDecrement(&heap->refcount);
+ 
+-    TRACE("%p decreasing refcount to %u.\n", heap, refcount);
++    TRACE("%p decreasing refcount to %lu.\n", heap, refcount);
+ 
+     if (!refcount)
+     {
+@@ -4586,7 +4586,7 @@ HRESULT vkd3d_init_null_resources(struct
+     return vkd3d_init_null_resources_data(null_resources, device);
+ 
+ fail:
+-    ERR("Failed to initialize NULL resources, hr %#x.\n", hr);
++    ERR("Failed to initialize NULL resources, hr %#lx.\n", hr);
+     vkd3d_destroy_null_resources(null_resources, device);
+     return hr;
+ }
+--- a/libs/vkd3d/libs/vkd3d/state.c
++++ b/libs/vkd3d/libs/vkd3d/state.c
+@@ -53,7 +53,7 @@ static ULONG STDMETHODCALLTYPE d3d12_roo
+     struct d3d12_root_signature *root_signature = impl_from_ID3D12RootSignature(iface);
+     ULONG refcount = InterlockedIncrement(&root_signature->refcount);
+ 
+-    TRACE("%p increasing refcount to %u.\n", root_signature, refcount);
++    TRACE("%p increasing refcount to %lu.\n", root_signature, refcount);
+ 
+     return refcount;
+ }
+@@ -111,7 +111,7 @@ static ULONG STDMETHODCALLTYPE d3d12_roo
+     struct d3d12_root_signature *root_signature = impl_from_ID3D12RootSignature(iface);
+     ULONG refcount = InterlockedDecrement(&root_signature->refcount);
+ 
+-    TRACE("%p decreasing refcount to %u.\n", root_signature, refcount);
++    TRACE("%p decreasing refcount to %lu.\n", root_signature, refcount);
+ 
+     if (!refcount)
+     {
+@@ -1413,7 +1413,7 @@ static HRESULT d3d12_root_signature_init
+         return hr;
+     if (info.cost > D3D12_MAX_ROOT_COST)
+     {
+-        WARN("Root signature cost %zu exceeds maximum allowed cost.\n", info.cost);
++        WARN("Root signature cost %u exceeds maximum allowed cost.\n", info.cost);
+         return E_INVALIDARG;
+     }
+ 
+@@ -1783,7 +1783,7 @@ static ULONG STDMETHODCALLTYPE d3d12_pip
+     struct d3d12_pipeline_state *state = impl_from_ID3D12PipelineState(iface);
+     ULONG refcount = InterlockedIncrement(&state->refcount);
+ 
+-    TRACE("%p increasing refcount to %u.\n", state, refcount);
++    TRACE("%p increasing refcount to %lu.\n", state, refcount);
+ 
+     return refcount;
+ }
+@@ -1826,7 +1826,7 @@ static ULONG STDMETHODCALLTYPE d3d12_pip
+     struct d3d12_pipeline_state *state = impl_from_ID3D12PipelineState(iface);
+     ULONG refcount = InterlockedDecrement(&state->refcount);
+ 
+-    TRACE("%p decreasing refcount to %u.\n", state, refcount);
++    TRACE("%p decreasing refcount to %lu.\n", state, refcount);
+ 
+     if (!refcount)
+     {
+@@ -2053,7 +2053,7 @@ static HRESULT vkd3d_create_compute_pipe
+     VK_CALL(vkDestroyShaderModule(device->vk_device, pipeline_info.stage.module, NULL));
+     if (vr < 0)
+     {
+-        WARN("Failed to create Vulkan compute pipeline, hr %#x.\n", hr);
++        WARN("Failed to create Vulkan compute pipeline, hr %#lx.\n", hr);
+         return hresult_from_vk_result(vr);
+     }
+ 
+@@ -2181,7 +2181,7 @@ static HRESULT d3d12_pipeline_state_find
+     }
+ 
+     if (FAILED(hr = d3d12_pipeline_state_init_uav_counters(state, device, root_signature, &shader_info, stage_flags)))
+-        WARN("Failed to create descriptor set layout for UAV counters, hr %#x.\n", hr);
++        WARN("Failed to create descriptor set layout for UAV counters, hr %#lx.\n", hr);
+ 
+     vkd3d_shader_free_scan_descriptor_info(&shader_info);
+ 
+@@ -2255,7 +2255,7 @@ static HRESULT d3d12_pipeline_state_init
+     if (FAILED(hr = vkd3d_create_compute_pipeline(device, &desc->CS, &shader_interface,
+             vk_pipeline_layout, &state->u.compute.vk_pipeline)))
+     {
+-        WARN("Failed to create Vulkan compute pipeline, hr %#x.\n", hr);
++        WARN("Failed to create Vulkan compute pipeline, hr %#lx.\n", hr);
+         d3d12_pipeline_uav_counter_state_cleanup(&state->uav_counters, device);
+         return hr;
+     }
+@@ -2820,7 +2820,7 @@ static HRESULT d3d12_pipeline_state_init
+     rt_count = desc->NumRenderTargets;
+     if (rt_count > ARRAY_SIZE(graphics->blend_attachments))
+     {
+-        FIXME("NumRenderTargets %zu > %zu, ignoring extra formats.\n",
++        FIXME("NumRenderTargets %u > %u, ignoring extra formats.\n",
+                 rt_count, ARRAY_SIZE(graphics->blend_attachments));
+         rt_count = ARRAY_SIZE(graphics->blend_attachments);
+     }
+@@ -3087,7 +3087,7 @@ static HRESULT d3d12_pipeline_state_init
+     graphics->attribute_count = desc->InputLayout.NumElements;
+     if (graphics->attribute_count > ARRAY_SIZE(graphics->attributes))
+     {
+-        FIXME("InputLayout.NumElements %zu > %zu, ignoring extra elements.\n",
++        FIXME("InputLayout.NumElements %u > %u, ignoring extra elements.\n",
+                 graphics->attribute_count, ARRAY_SIZE(graphics->attributes));
+         graphics->attribute_count = ARRAY_SIZE(graphics->attributes);
+     }
+@@ -3719,14 +3719,14 @@ HRESULT vkd3d_uav_clear_state_init(struc
+         if (FAILED(hr = vkd3d_create_descriptor_set_layout(device, 0,
+                 1, false, &set_binding, set_layouts[i].set_layout)))
+         {
+-            ERR("Failed to create descriptor set layout %u, hr %#x.\n", i, hr);
++            ERR("Failed to create descriptor set layout %u, hr %#lx.\n", i, hr);
+             goto fail;
+         }
+ 
+         if (FAILED(hr = vkd3d_create_pipeline_layout(device, 1, set_layouts[i].set_layout,
+                 1, &push_constant_range, set_layouts[i].pipeline_layout)))
+         {
+-            ERR("Failed to create pipeline layout %u, hr %#x.\n", i, hr);
++            ERR("Failed to create pipeline layout %u, hr %#lx.\n", i, hr);
+             goto fail;
+         }
+     }
+@@ -3752,7 +3752,7 @@ HRESULT vkd3d_uav_clear_state_init(struc
+         if (FAILED(hr = vkd3d_create_compute_pipeline(device, &pipelines[i].code, &shader_interface,
+                 *pipelines[i].pipeline_layout, pipelines[i].pipeline)))
+         {
+-            ERR("Failed to create compute pipeline %u, hr %#x.\n", i, hr);
++            ERR("Failed to create compute pipeline %u, hr %#lx.\n", i, hr);
+             goto fail;
+         }
+     }
+--- a/libs/vkd3d/libs/vkd3d/vkd3d_private.h
++++ b/libs/vkd3d/libs/vkd3d/vkd3d_private.h
+@@ -245,7 +245,7 @@ static inline void vkd3d_cond_broadcast(
+ static inline void vkd3d_cond_wait(struct vkd3d_cond *cond, struct vkd3d_mutex *lock)
+ {
+     if (!SleepConditionVariableCS(&cond->cond, &lock->lock, INFINITE))
+-        ERR("Could not sleep on the condition variable, error %u.\n", GetLastError());
++        ERR("Could not sleep on the condition variable, error %lu.\n", GetLastError());
+ }
+ 
+ static inline void vkd3d_cond_destroy(struct vkd3d_cond *cond)
+--- a/libs/vkd3d/libs/vkd3d-shader/preproc.y
++++ b/libs/vkd3d/libs/vkd3d-shader/preproc.y
+@@ -101,7 +101,7 @@ bool preproc_add_macro(struct preproc_ct
+         preproc_free_macro(macro);
+     }
+ 
+-    TRACE("Defining new macro %s with %zu arguments.\n", debugstr_a(name), arg_count);
++    TRACE("Defining new macro %s with %u arguments.\n", debugstr_a(name), arg_count);
+ 
+     if (!(macro = vkd3d_malloc(sizeof(*macro))))
+         return false;
+--- a/libs/vkd3d/libs/vkd3d-shader/preproc.l
++++ b/libs/vkd3d/libs/vkd3d-shader/preproc.l
+@@ -245,7 +245,7 @@ static void preproc_pop_buffer(struct pr
+         yy_delete_buffer(exp->buffer.lexer_buffer, ctx->scanner);
+ 
+         --ctx->expansion_count;
+-        TRACE("Expansion stack size is now %zu.\n", ctx->expansion_count);
++        TRACE("Expansion stack size is now %u.\n", ctx->expansion_count);
+     }
+     else
+     {
+@@ -267,7 +267,7 @@ static void preproc_pop_buffer(struct pr
+         yy_delete_buffer(file->buffer.lexer_buffer, ctx->scanner);
+ 
+         --ctx->file_count;
+-        TRACE("File stack size is now %zu.\n", ctx->file_count);
++        TRACE("File stack size is now %u.\n", ctx->file_count);
+     }
+ 
+     if (ctx->expansion_count)
+@@ -328,7 +328,7 @@ static bool preproc_push_expansion(struc
+     exp->buffer.lexer_buffer = yy_scan_bytes(text->text.buffer, text->text.content_size, ctx->scanner);
+     exp->buffer.location = text->location;
+     exp->macro = macro;
+-    TRACE("Expansion stack size is now %zu.\n", ctx->expansion_count);
++    TRACE("Expansion stack size is now %u.\n", ctx->expansion_count);
+     return true;
+ }
+ 
+@@ -643,7 +643,7 @@ int yylex(YYSTYPE *lval, YYLTYPE *lloc,
+                             else
+                             {
+                                 preproc_warning(ctx, lloc, VKD3D_SHADER_WARNING_PP_ARGUMENT_COUNT_MISMATCH,
+-                                        "Wrong number of arguments to macro \"%s\": expected %zu, got %zu.",
++                                        "Wrong number of arguments to macro \"%s\": expected %u, got %u.",
+                                         func_state->macro->name, func_state->macro->arg_count, func_state->arg_count);
+ 
+                                 if (ctx->current_directive)
+@@ -705,7 +705,7 @@ bool preproc_push_include(struct preproc
+     file->buffer.location.source_name = file->filename;
+     file->buffer.location.line = 1;
+     file->buffer.location.column = 1;
+-    TRACE("File stack size is now %zu.\n", ctx->file_count);
++    TRACE("File stack size is now %u.\n", ctx->file_count);
+     ctx->last_was_newline = true;
+     return true;
+ }

@@ -31,6 +31,8 @@ Build-Depends:
  khronos-api (>= 4.6),
  unicode-data (>= 15),
  unicode-data (<< 16),
+ unicode-idna (>= 15),
+ unicode-idna (<< 16),
  libgl-dev,
  libxi-dev,
  libxt-dev,

@@ -36,7 +36,9 @@ arm/floating-point.patch
 arm/incorrect-member.patch
 arm/incompatible-types.patch
 
+warnings/vt.patch
 warnings/libs.patch
+warnings/vkd3d.patch
 warnings/bison.patch
 warnings/parentheses.patch
 warnings/use-after-free.patch
