@@ -262,32 +262,6 @@ author: Michael Gilbert <mgilbert@debian.org>
      WCHAR *dst, *image, *cmdline, *path, *bootstrap;
      WCHAR *env = get_initial_environment( &env_pos, &env_size );
      WCHAR *curdir = get_initial_directory();
---- a/dlls/winex11.drv/window.c
-+++ b/dlls/winex11.drv/window.c
-@@ -2364,11 +2364,14 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
-     }
-     else
-     {
-+        Drawable top_window = X11DRV_get_whole_window( top );
-+        escape.drawable = top_window;
-+
-         /* find the first ancestor that has a drawable */
-         for (parent = hwnd; parent && parent != top; parent = NtUserGetAncestor( parent, GA_PARENT ))
-             if ((escape.drawable = X11DRV_get_whole_window( parent ))) break;
- 
--        if (escape.drawable)
-+        if (escape.drawable != top_window)
-         {
-             POINT pt = { 0, 0 };
-             NtUserMapWindowPoints( 0, parent, &pt, 1 );
-@@ -2376,7 +2379,6 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, H
-             OffsetRect( &escape.dc_rect, pt.x, pt.y );
-             if (flags & DCX_CLIPCHILDREN) escape.mode = ClipByChildren;
-         }
--        else escape.drawable = X11DRV_get_whole_window( top );
-     }
- 
-     NtGdiExtEscape( hdc, NULL, 0, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );
 --- a/dlls/gdiplus/font.c
 +++ b/dlls/gdiplus/font.c
 @@ -1396,7 +1396,8 @@ static WCHAR *load_ttf_name_id( const BY
