@@ -147,6 +147,11 @@ static const char manifest3[] =
 "        name=\"testsurrogate\""
 "        runtimeVersion=\"v2.0.50727\""
 "    />"
+"    <clrSurrogate "
+"        clsid=\"{96666666-8888-7777-6666-555555555556}\""
+"        name=\"testsurrogate\""
+"        runtimeVersion=\"v2.0.50728\""
+"    />"
 "    <clrClass "
 "        clsid=\"{22345678-1234-5678-1234-111122223333}\""
 "        name=\"clrclass\""
@@ -615,6 +620,50 @@ static BOOL create_wide_manifest(const char *filename, const char *manifest, BOO
     ret = create_manifest_file(filename, (char *)&wmanifest[offset], (strlen(manifest)+1-offset) * sizeof(WCHAR), NULL, NULL);
     HeapFree(GetProcessHeap(), 0, wmanifest);
     return ret;
+}
+
+static HANDLE create_temp_manifest_file(const char *manifest, WCHAR *pathname)
+{
+    WCHAR tmp_path[MAX_PATH];
+    DWORD size, tmp_path_len;
+    HANDLE file, file_w;
+    UINT unique;
+
+    tmp_path_len = GetTempPathW(ARRAY_SIZE(tmp_path), tmp_path);
+    ok(tmp_path_len != 0, "GetTempPathW returned error %lu\n", GetLastError());
+    ok(tmp_path_len < ARRAY_SIZE(tmp_path), "GetTempPathW return value %lu should be less than %Iu\n",
+       tmp_path_len, ARRAY_SIZE(tmp_path));
+
+    memset(pathname, 0, MAX_PATH * sizeof(WCHAR));
+    unique = GetTempFileNameW(tmp_path, L"tst", 0, pathname);
+    ok(unique != 0, "GetTempFileNameW returned error %lu\n", GetLastError());
+
+    /* Open file handle that will be deleted on close or process termination */
+    file = CreateFileW(pathname,
+                       GENERIC_READ | DELETE,
+                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                       NULL,
+                       CREATE_ALWAYS,
+                       FILE_ATTRIBUTE_NORMAL | FILE_FLAG_DELETE_ON_CLOSE,
+                       NULL);
+    ok(file != INVALID_HANDLE_VALUE, "CreateFile returned error %lu\n", GetLastError());
+
+    /* Re-open file with write access */
+    file_w = CreateFileW(pathname,
+                         GENERIC_WRITE,
+                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                         NULL,
+                         TRUNCATE_EXISTING,
+                         FILE_ATTRIBUTE_NORMAL,
+                         NULL);
+    ok(file_w != INVALID_HANDLE_VALUE, "CreateFile returned error %lu\n", GetLastError());
+
+    WriteFile(file_w, manifest, strlen(manifest), &size, NULL);
+
+    /* Close file handle that was open for write to avoid sharing violation */
+    CloseHandle(file_w);
+
+    return file;
 }
 
 typedef struct {
@@ -1410,8 +1459,8 @@ static void test_find_activatable_class(HANDLE handle, const WCHAR *classid, enu
     ok_(__FILE__, line)(data.lpData != NULL, "got lpData %p\n", data.lpData);
 
     header = (struct strsection_header *)data.lpSectionBase;
-    ok_(__FILE__, line)(header->magic == 0x64487353, "got wrong magic 0x%08lx\n", header->magic);
     ok_(__FILE__, line)(data.lpSectionBase != NULL, "got lpSectionBase %p\n", data.lpSectionBase);
+    ok_(__FILE__, line)(header->magic == 0x64487353, "got wrong magic 0x%08lx\n", header->magic);
     ok_(__FILE__, line)(data.ulSectionTotalLength > 0, "got ulSectionTotalLength %lu\n", data.ulSectionTotalLength);
     ok_(__FILE__, line)(data.lpSectionGlobalData == (BYTE *)header + header->global_offset,
                         "got lpSectionGlobalData %p\n", data.lpSectionGlobalData);
@@ -1548,6 +1597,29 @@ struct clrclass_data {
     DWORD res2[2];
 };
 
+static void validate_guid_index(const ACTCTX_SECTION_KEYED_DATA *data, int line)
+{
+#define GUIDSECTION_MAGIC  0x64487347 /* dHsG */
+    struct guidsection_header *header;
+    struct guid_index *index;
+    unsigned int i;
+
+    header = (struct guidsection_header *)data->lpSectionBase;
+
+    ok_(__FILE__, line)(header->magic == GUIDSECTION_MAGIC, "Unexpected magic %#lx.\n", header->magic);
+    ok_(__FILE__, line)(header->size == sizeof(*header), "Unexpected size %ld.\n", header->size);
+    ok_(__FILE__, line)(header->index_offset >= sizeof(*header), "Unexpected index offset %lu.\n", header->index_offset);
+
+    index = (struct guid_index *)((BYTE *)data->lpSectionBase + header->index_offset);
+    for (i = 0; i < header->count; ++i)
+    {
+        ok_(__FILE__, line)(index[i].data_len <= data->ulSectionTotalLength, "Unexpected data length.\n");
+        ok_(__FILE__, line)(index[i].data_offset <= data->ulSectionTotalLength - index[i].data_len,
+                "Unexpected data offset %ld, section total length %lu, data length %lu.\n",
+                index[i].data_offset, data->ulSectionTotalLength, index[i].data_len);
+    }
+}
+
 static void test_find_com_redirection(HANDLE handle, const GUID *clsid, const GUID *tlid, const WCHAR *progid, ULONG exid, int line)
 {
     struct comclassredirect_data *comclass, *comclass2;
@@ -1662,15 +1734,16 @@ static void test_find_com_redirection(HANDLE handle, const GUID *clsid, const GU
     }
 
     header = (struct guidsection_header*)data.lpSectionBase;
+    ok_(__FILE__, line)(data.lpSectionBase != NULL, "data.lpSectionBase == NULL\n");
     ok_(__FILE__, line)(data.lpSectionGlobalData == ((BYTE*)header + header->names_offset), "data.lpSectionGlobalData == NULL\n");
     ok_(__FILE__, line)(data.ulSectionGlobalDataLength == header->names_len, "data.ulSectionGlobalDataLength=%lu\n",
        data.ulSectionGlobalDataLength);
-    ok_(__FILE__, line)(data.lpSectionBase != NULL, "data.lpSectionBase == NULL\n");
     ok_(__FILE__, line)(data.ulSectionTotalLength > 0, "data.ulSectionTotalLength=%lu\n",
        data.ulSectionTotalLength);
     ok_(__FILE__, line)(data.hActCtx == NULL, "data.hActCtx=%p\n", data.hActCtx);
     ok_(__FILE__, line)(data.ulAssemblyRosterIndex == exid, "data.ulAssemblyRosterIndex=%lu, expected %lu\n",
        data.ulAssemblyRosterIndex, exid);
+    validate_guid_index(&data, line);
 
     /* generated guid for this class works as key guid in search */
     memset(&data2, 0xfe, sizeof(data2));
@@ -1757,6 +1830,8 @@ static void test_find_ifaceps_redirection(HANDLE handle, const GUID *iid, const 
     ok_(__FILE__, line)(data.hActCtx == NULL, "data.hActCtx=%p\n", data.hActCtx);
     ok_(__FILE__, line)(data.ulAssemblyRosterIndex == exid, "data.ulAssemblyRosterIndex=%lu, expected %lu\n",
        data.ulAssemblyRosterIndex, exid);
+
+    validate_guid_index(&data, line);
 }
 
 struct clrsurrogate_data
@@ -1771,7 +1846,7 @@ struct clrsurrogate_data
 };
 
 static void test_find_surrogate(HANDLE handle, const GUID *clsid, const WCHAR *name, const WCHAR *version,
-    ULONG exid, int line)
+        ULONG exid, int line)
 {
     struct clrsurrogate_data *surrogate;
     ACTCTX_SECTION_KEYED_DATA data;
@@ -1827,6 +1902,8 @@ static void test_find_surrogate(HANDLE handle, const GUID *clsid, const WCHAR *n
     ok_(__FILE__, line)(data.hActCtx == NULL, "data.hActCtx=%p\n", data.hActCtx);
     ok_(__FILE__, line)(data.ulAssemblyRosterIndex == exid, "data.ulAssemblyRosterIndex=%lu, expected %lu\n",
        data.ulAssemblyRosterIndex, exid);
+
+    validate_guid_index(&data, line);
 }
 
 static void test_find_progid_redirection(HANDLE handle, const GUID *clsid, const char *progid, ULONG exid, int line)
@@ -1867,12 +1944,14 @@ static void test_find_progid_redirection(HANDLE handle, const GUID *clsid, const
         comclass = (struct comclassredirect_data*)data2.lpData;
         ok_(__FILE__, line)(IsEqualGUID(guid, &comclass->alias), "got wrong alias referenced from progid %s, %s\n", progid, wine_dbgstr_guid(guid));
         ok_(__FILE__, line)(IsEqualGUID(clsid, &comclass->clsid), "got wrong class referenced from progid %s, %s\n", progid, wine_dbgstr_guid(clsid));
+
+        validate_guid_index(&data2, line);
     }
 
     header = (struct strsection_header*)data.lpSectionBase;
+    ok_(__FILE__, line)(data.lpSectionBase != NULL, "data.lpSectionBase == NULL\n");
     ok_(__FILE__, line)(data.lpSectionGlobalData == (BYTE*)header + header->global_offset, "data.lpSectionGlobalData == NULL\n");
     ok_(__FILE__, line)(data.ulSectionGlobalDataLength == header->global_len, "data.ulSectionGlobalDataLength=%lu\n", data.ulSectionGlobalDataLength);
-    ok_(__FILE__, line)(data.lpSectionBase != NULL, "data.lpSectionBase == NULL\n");
     ok_(__FILE__, line)(data.ulSectionTotalLength > 0, "data.ulSectionTotalLength=%lu\n", data.ulSectionTotalLength);
     ok_(__FILE__, line)(data.hActCtx == NULL, "data.hActCtx=%p\n", data.hActCtx);
     ok_(__FILE__, line)(data.ulAssemblyRosterIndex == exid, "data.ulAssemblyRosterIndex=%lu, expected %lu\n",
@@ -2032,6 +2111,7 @@ static void test_typelib_section(void)
     section = (struct guidsection_header*)data.lpSectionBase;
     ok(section->count == 4, "got %ld\n", section->count);
     ok(section->size == sizeof(*section), "got %ld\n", section->size);
+    validate_guid_index(&data, __LINE__);
 
     /* For both GUIDs same section is returned */
     ok(data.lpSectionBase == data2.lpSectionBase, "got %p, %p\n", data.lpSectionBase, data2.lpSectionBase);
@@ -2858,6 +2938,27 @@ todo_wine {
 
         winetest_pop_context();
     }
+}
+
+static void test_CreateActCtx_share_mode(void)
+{
+    WCHAR tmp_manifest_pathname[MAX_PATH];
+    HANDLE handle, manifest_file;
+    ACTCTXW actctx;
+
+    manifest_file = create_temp_manifest_file(manifest1, tmp_manifest_pathname);
+
+    memset(&actctx, 0, sizeof(ACTCTXW));
+    actctx.cbSize = sizeof(ACTCTXW);
+    actctx.lpSource = tmp_manifest_pathname;
+
+    handle = CreateActCtxW(&actctx);
+    ok(handle != INVALID_HANDLE_VALUE, "CreateActCtxW returned error %lu\n", GetLastError());
+    ok(handle != NULL, "CreateActCtxW returned %p\n", handle);
+
+    ReleaseActCtx(handle);
+
+    CloseHandle(manifest_file);
 }
 
 static BOOL init_funcs(void)
@@ -3719,6 +3820,7 @@ START_TEST(actctx)
     test_actctx();
     test_create_fail();
     test_CreateActCtx();
+    test_CreateActCtx_share_mode();
     test_findsectionstring();
     test_ZombifyActCtx();
     run_child_process();

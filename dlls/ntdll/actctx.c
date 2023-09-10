@@ -2925,7 +2925,8 @@ static NTSTATUS open_nt_file( HANDLE *handle, UNICODE_STRING *name )
     attr.ObjectName = name;
     attr.SecurityDescriptor = NULL;
     attr.SecurityQualityOfService = NULL;
-    return NtOpenFile( handle, GENERIC_READ | SYNCHRONIZE, &attr, &io, FILE_SHARE_READ, FILE_SYNCHRONOUS_IO_ALERT );
+    return NtOpenFile( handle, GENERIC_READ | SYNCHRONIZE, &attr, &io,
+                       FILE_SHARE_READ | FILE_SHARE_DELETE, FILE_SYNCHRONOUS_IO_ALERT );
 }
 
 static NTSTATUS get_manifest_in_module( struct actctx_loader* acl, struct assembly_identity* ai,
@@ -4818,7 +4819,7 @@ static NTSTATUS build_clr_surrogate_section(ACTIVATION_CONTEXT* actctx, struct g
                     ptrW[data->version_len/sizeof(WCHAR)] = 0;
                 }
 
-                data_offset += index->data_offset;
+                data_offset += index->data_len;
                 index++;
             }
         }
