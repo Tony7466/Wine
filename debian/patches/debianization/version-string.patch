@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3620,8 +3620,11 @@ maintainer-clean::
+@@ -3614,8 +3614,11 @@ maintainer-clean::
  dnl Rules for generated source files
  
  WINE_APPEND_RULE(
@@ -30,7 +30,7 @@ forwarded: not-needed
  #include <string.h>
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
-@@ -136,8 +136,6 @@ extern SYSTEM_DLL_INIT_BLOCK *pLdrSystem
+@@ -137,8 +137,6 @@ extern SYSTEM_DLL_INIT_BLOCK *pLdrSystem
  
  struct _FILE_FS_DEVICE_INFORMATION;
  

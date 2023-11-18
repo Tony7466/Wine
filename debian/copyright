@@ -39,10 +39,14 @@ Files-Excluded:
  dlls/dwrite/shapers/arabic_table.c
  dlls/win32u/vertical.c
  dlls/wineps.drv/vertical.c
+ dlls/wineps.drv/direction.c
  dlls/opengl32/thunks.c
  dlls/opengl32/unix_thunks.c
  dlls/opengl32/unixlib.h
  dlls/opengl32/opengl32.spec
+ dlls/comctl32/idb_*_*.bmp
+ dlls/hhctrl.ocx/*.bmp
+ dlls/user32/resources/ocr_help.cur
  dlls/kernelbase/kernelbase.rgs
  dlls/*/tests/generated.c
 Upstream-Name: Wine

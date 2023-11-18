@@ -14,32 +14,10 @@ include/stamp-h
 include/config.h
 include/config.h.in
 
-# obsolete API
-libs/wine/c_*.c
-libs/wine/casemap.c
-libs/wine/collation.c
-libs/wine/compose.c
-libs/wine/config.c
-libs/wine/cpsymbol.c
-libs/wine/cptable.c
-libs/wine/debug.c
-libs/wine/decompose.c
-libs/wine/digitmap.c
-libs/wine/fold.c
-libs/wine/ldt.c
-libs/wine/mbtowc.c
-libs/wine/port.c
-libs/wine/sortkey.c
-libs/wine/string.c
-libs/wine/utf8.c
-libs/wine/wctomb.c
-libs/wine/wctype.c
-libs/wine/unicode.h
-
 # automatically generated files
 dlls/dsound/fir.h
-dlls/*/tests/generated.c
 dlls/ntdll/unix/version.h
+dlls/user32/resources/ocr_help.cur
 
 # automatically generated requests files
 server/trace.generated
@@ -63,6 +41,7 @@ dlls/dwrite/scripts.h
 dlls/dwrite/shapers/arabic_table.c
 dlls/win32u/vertical.c
 dlls/wineps.drv/vertical.c
+dlls/wineps.drv/direction.c
 dlls/kernelbase/kernelbase.rgs
 
 # automatically generated opengl spec files
@@ -86,6 +65,8 @@ dlls/winevulkan/winevulkan.spec
 # automatically generated icon files
 */*/*.ico
 */*/*/*.ico
+dlls/comctl32/idb_*_*.bmp
+dlls/hhctrl.ocx/*.bmp
 
 # generated test files
 */*/*/test*.wav
@@ -93,6 +74,7 @@ dlls/winevulkan/winevulkan.spec
 */*/*/test*.mp4
 */*/*/test*.mpg
 */*/*/test*.avi
+dlls/*/tests/generated.c
 dlls/mfmediaengine/tests/i420-64x64.avi
 
 # symlinked svg files
