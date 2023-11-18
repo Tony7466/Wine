@@ -15,8 +15,8 @@ author: Michael Gilbert <mgilbert@debian.org>
  #endif
 --- a/tools/winebuild/spec32.c
 +++ b/tools/winebuild/spec32.c
-@@ -303,7 +303,12 @@ static void output_relay_debug( DLLSPEC
-             output_cfi( ".cfi_startproc" );
+@@ -302,7 +302,12 @@ static void output_relay_debug( DLLSPEC
+             output( "__wine_spec_relay_entry_point_%d:\n", i );
              output( "\tpush {r0-r3}\n" );
              output( "\tmov r2, SP\n");
 -            if (has_float) output( "\tvpush {s0-s15}\n" );

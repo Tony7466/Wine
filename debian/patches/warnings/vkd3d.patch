@@ -117,7 +117,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      {
 --- a/libs/vkd3d/libs/vkd3d-shader/d3dbc.c
 +++ b/libs/vkd3d/libs/vkd3d-shader/d3dbc.c
-@@ -646,7 +646,7 @@ static void shader_sm1_read_immconst(str
+@@ -959,7 +959,7 @@ static void shader_sm1_read_immconst(str
      {
          vkd3d_shader_parser_error(&sm1->p, VKD3D_SHADER_ERROR_D3DBC_UNEXPECTED_EOF,
                  "Attempted to read a constant definition, but not enough tokens are remaining. "
@@ -126,7 +126,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          sm1->abort = true;
          return;
      }
-@@ -690,7 +690,7 @@ static void shader_sm1_read_comment(stru
+@@ -1004,7 +1004,7 @@ static void shader_sm1_read_comment(stru
          if (size > --remaining)
          {
              vkd3d_shader_parser_error(&sm1->p, VKD3D_SHADER_ERROR_D3DBC_UNEXPECTED_EOF,
@@ -135,7 +135,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                      size, remaining);
              return;
          }
-@@ -733,7 +733,7 @@ static void shader_sm1_validate_instruct
+@@ -1047,7 +1047,7 @@ static void shader_sm1_validate_instruct
      if ((ins->handler_idx == VKD3DSIH_BREAKP || ins->handler_idx == VKD3DSIH_IF) && ins->flags)
      {
          vkd3d_shader_parser_warning(&sm1->p, VKD3D_SHADER_WARNING_D3DBC_IGNORED_INSTRUCTION_FLAGS,
@@ -144,7 +144,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          ins->flags = 0;
      }
  }
-@@ -799,7 +799,7 @@ static void shader_sm1_read_instruction(
+@@ -1120,7 +1120,7 @@ static void shader_sm1_read_instruction(
      if (*ptr > sm1->end)
      {
          vkd3d_shader_parser_error(&sm1->p, VKD3D_SHADER_ERROR_D3DBC_UNEXPECTED_EOF,
@@ -153,7 +153,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                  *ptr - sm1->end);
          goto fail;
      }
-@@ -892,7 +892,7 @@ static enum vkd3d_result shader_sm1_init
+@@ -1221,7 +1221,7 @@ static enum vkd3d_result shader_sm1_init
      if (token_count < 2)
      {
          vkd3d_shader_error(message_context, &location, VKD3D_SHADER_ERROR_D3DBC_UNEXPECTED_EOF,
@@ -164,7 +164,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
 --- a/libs/vkd3d/libs/vkd3d-shader/dxbc.c
 +++ b/libs/vkd3d/libs/vkd3d-shader/dxbc.c
-@@ -50,7 +50,7 @@ int vkd3d_shader_serialize_dxbc(size_t s
+@@ -44,7 +44,7 @@ int vkd3d_shader_serialize_dxbc(size_t s
      struct vkd3d_bytecode_buffer buffer = {0};
      uint32_t checksum[4];
  
@@ -173,43 +173,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (messages)
          *messages = NULL;
-@@ -354,7 +354,7 @@ static void shader_sm4_read_dcl_sampler(
- 
-     ins->flags = (opcode_token & VKD3D_SM4_SAMPLER_MODE_MASK) >> VKD3D_SM4_SAMPLER_MODE_SHIFT;
-     if (ins->flags & ~VKD3D_SM4_SAMPLER_COMPARISON)
--        FIXME("Unhandled sampler mode %#x.\n", ins->flags);
-+        FIXME("Unhandled sampler mode %#lx.\n", ins->flags);
-     shader_sm4_read_src_param(priv, &tokens, end, VKD3D_DATA_SAMPLER, &ins->declaration.sampler.src);
-     shader_sm4_set_descriptor_register_range(priv, &ins->declaration.sampler.src.reg, &ins->declaration.sampler.range);
-     shader_sm4_read_register_space(priv, &tokens, end, &ins->declaration.sampler.range.space);
-@@ -1398,7 +1398,7 @@ static void shader_sm4_read_instruction_
-             } aoffimmi;
- 
-             if (modifier & ~recognized_bits)
--                FIXME("Unhandled instruction modifier %#x.\n", modifier);
-+                FIXME("Unhandled instruction modifier %#lx.\n", modifier);
- 
-             aoffimmi.u = (modifier & VKD3D_SM4_AOFFIMMI_U_MASK) >> VKD3D_SM4_AOFFIMMI_U_SHIFT;
-             aoffimmi.v = (modifier & VKD3D_SM4_AOFFIMMI_V_MASK) >> VKD3D_SM4_AOFFIMMI_V_SHIFT;
-@@ -1455,7 +1455,7 @@ static void shader_sm4_read_instruction_
-         }
- 
-         default:
--            FIXME("Unhandled instruction modifier %#x.\n", modifier);
-+            FIXME("Unhandled instruction modifier %#lx.\n", modifier);
-     }
- }
- 
-@@ -1496,7 +1496,7 @@ static void shader_sm4_read_instruction(
-     }
-     if (!len || remaining < len)
-     {
--        WARN("Read invalid length %u (remaining %zu).\n", len, remaining);
-+        WARN("Read invalid length %u (remaining %u).\n", len, remaining);
-         goto fail;
-     }
-     --len;
-@@ -1734,7 +1734,7 @@ static const char *shader_get_string(con
+@@ -128,7 +128,7 @@ static const char *shader_get_string(con
  
      if (offset >= data_size)
      {
@@ -218,7 +182,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return NULL;
      }
  
-@@ -1764,9 +1764,9 @@ static int parse_dxbc(const struct vkd3d
+@@ -158,9 +158,9 @@ static int parse_dxbc(const struct vkd3d
  
      if (data_size < VKD3D_DXBC_HEADER_SIZE)
      {
@@ -230,7 +194,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return VKD3D_ERROR_INVALID_ARGUMENT;
      }
  
-@@ -1830,9 +1830,9 @@ static int parse_dxbc(const struct vkd3d
+@@ -224,9 +224,9 @@ static int parse_dxbc(const struct vkd3d
  
          if (chunk_offset >= data_size || !require_space(chunk_offset, 2, sizeof(DWORD), data_size))
          {
@@ -242,7 +206,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              vkd3d_free(sections);
              return VKD3D_ERROR_INVALID_ARGUMENT;
          }
-@@ -1844,10 +1844,10 @@ static int parse_dxbc(const struct vkd3d
+@@ -238,10 +238,10 @@ static int parse_dxbc(const struct vkd3d
  
          if (!require_space(chunk_ptr - data, 1, chunk_size, data_size))
          {
@@ -255,7 +219,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                      i, chunk_offset, data_size, chunk_offset);
              vkd3d_free(sections);
              return VKD3D_ERROR_INVALID_ARGUMENT;
-@@ -1905,7 +1905,7 @@ int vkd3d_shader_parse_dxbc(const struct
+@@ -299,7 +299,7 @@ int vkd3d_shader_parse_dxbc(const struct
      struct vkd3d_shader_message_context message_context;
      int ret;
  
@@ -264,7 +228,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (messages)
          *messages = NULL;
-@@ -1939,9 +1939,9 @@ static int shader_parse_signature(const
+@@ -353,9 +353,9 @@ static int shader_parse_signature(const
  
      if (!require_space(0, 2, sizeof(uint32_t), section->data.size))
      {
@@ -276,7 +240,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return VKD3D_ERROR_INVALID_ARGUMENT;
      }
  
-@@ -1962,7 +1962,7 @@ static int shader_parse_signature(const
+@@ -376,7 +376,7 @@ static int shader_parse_signature(const
  
      if (!require_space(ptr - data, count, 6 * sizeof(uint32_t), section->data.size))
      {
@@ -285,7 +249,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return VKD3D_ERROR_INVALID_ARGUMENT;
      }
  
-@@ -1987,7 +1987,7 @@ static int shader_parse_signature(const
+@@ -403,7 +403,7 @@ static int shader_parse_signature(const
          read_dword(&ptr, &name_offset);
          if (!(e[i].semantic_name = shader_get_string(data, section->data.size, name_offset)))
          {
@@ -294,7 +258,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              vkd3d_free(e);
              return VKD3D_ERROR_INVALID_ARGUMENT;
          }
-@@ -2489,7 +2489,7 @@ static int shader_parse_root_parameters1
+@@ -846,7 +846,7 @@ static int shader_parse_root_parameters1
  
      if (!require_space(offset, 3 * count, sizeof(DWORD), context->data_size))
      {
@@ -303,7 +267,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return VKD3D_ERROR_INVALID_ARGUMENT;
      }
      ptr = &context->data[offset];
-@@ -2575,7 +2575,7 @@ static int shader_parse_root_signature(c
+@@ -932,7 +932,7 @@ static int shader_parse_root_signature(c
  
      if (!require_space(0, 6, sizeof(uint32_t), data->size))
      {
@@ -312,7 +276,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return VKD3D_ERROR_INVALID_ARGUMENT;
      }
  
-@@ -2661,7 +2661,7 @@ int vkd3d_shader_parse_root_signature(co
+@@ -1018,7 +1018,7 @@ int vkd3d_shader_parse_root_signature(co
      struct vkd3d_shader_message_context message_context;
      int ret;
  
@@ -323,16 +287,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      if (messages)
 --- a/libs/vkd3d/libs/vkd3d-shader/hlsl.c
 +++ b/libs/vkd3d/libs/vkd3d-shader/hlsl.c
-@@ -895,7 +895,7 @@ struct hlsl_ir_var *hlsl_new_synthetic_v
- 
-     if (!(string = hlsl_get_string_buffer(ctx)))
-         return NULL;
--    vkd3d_string_buffer_printf(string, "<%s-%u>", template, InterlockedIncrement(&counter));
-+    vkd3d_string_buffer_printf(string, "<%s-%lu>", template, InterlockedIncrement(&counter));
-     if (!(name = hlsl_strdup(ctx, string->buffer)))
-     {
-         hlsl_release_string_buffer(ctx, string);
-@@ -2313,7 +2313,7 @@ static void dump_ir_swizzle(struct vkd3d
+@@ -2643,7 +2643,7 @@ static void dump_ir_swizzle(struct vkd3d
      {
          vkd3d_string_buffer_printf(buffer, ".");
          for (i = 0; i < swizzle->node.data_type->dimx; ++i)
@@ -343,7 +298,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      {
 --- a/libs/vkd3d/libs/vkd3d-shader/vkd3d_shader_private.h
 +++ b/libs/vkd3d/libs/vkd3d-shader/vkd3d_shader_private.h
-@@ -1213,7 +1213,7 @@ static inline unsigned int vkd3d_write_m
+@@ -1376,7 +1376,7 @@ static inline unsigned int vkd3d_write_m
              return i;
      }
  
@@ -354,7 +309,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
 --- a/libs/vkd3d/libs/vkd3d-shader/spirv.c
 +++ b/libs/vkd3d/libs/vkd3d-shader/spirv.c
-@@ -3919,7 +3919,7 @@ static void spirv_compiler_emit_store_ds
+@@ -4014,7 +4014,7 @@ static void spirv_compiler_emit_store_ds
      for (i = 0; i < component_count; ++i)
      {
          if (vkd3d_swizzle_get_component(swizzle, component_idx + i))
@@ -363,25 +318,16 @@ author: Michael Gilbert <mgilbert@debian.org>
  
          component_ids[i] = val_id;
      }
-@@ -4271,7 +4271,7 @@ static const struct vkd3d_shader_signatu
-         }
-     }
+@@ -7454,7 +7454,7 @@ static int spirv_compiler_emit_control_f
  
--    FIXME("Could not find shader signature element (register %u, write mask %#x).\n",
-+    FIXME("Could not find shader signature element (register %u, write mask %#lx).\n",
-             reg_idx, write_mask);
-     if (signature_element_index)
-         *signature_element_index = ~0u;
-@@ -6276,7 +6276,7 @@ static bool spirv_compiler_check_index_r
-         if (range->dst.write_mask != reg_info.write_mask
-                 || vkd3d_write_mask_component_count(reg_info.write_mask) != 1)
-         {
--            FIXME("Unhandled index range write mask %#x (%#x).\n",
-+            FIXME("Unhandled index range write mask %#lx (%#x).\n",
-                     range->dst.write_mask, reg_info.write_mask);
-             return false;
-         }
-@@ -9216,7 +9216,7 @@ static void spirv_compiler_emit_resinfo(
+             if (src->swizzle != VKD3D_SHADER_SWIZZLE(X, X, X, X))
+             {
+-                WARN("Unexpected src swizzle %#x.\n", src->swizzle);
++                WARN("Unexpected src swizzle %#lx.\n", src->swizzle);
+                 spirv_compiler_warning(compiler, VKD3D_SHADER_WARNING_SPV_INVALID_SWIZZLE,
+                         "The swizzle for a switch case value is not scalar.");
+             }
+@@ -8826,7 +8826,7 @@ static void spirv_compiler_emit_resinfo(
      else
      {
          if (instruction->flags)
@@ -390,7 +336,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          val_id = vkd3d_spirv_build_op_convert_utof(builder, type_id, val_id);
      }
      val_id = spirv_compiler_emit_swizzle(compiler, val_id, VKD3DSP_WRITEMASK_ALL,
-@@ -9275,7 +9275,7 @@ static void spirv_compiler_emit_sample_i
+@@ -8885,7 +8885,7 @@ static void spirv_compiler_emit_sample_i
      else
      {
          if (instruction->flags)
@@ -399,57 +345,10 @@ author: Michael Gilbert <mgilbert@debian.org>
          val_id = vkd3d_spirv_build_op_convert_utof(builder, type_id, val_id);
      }
  
---- a/libs/vkd3d/libs/vkd3d-shader/trace.c
-+++ b/libs/vkd3d/libs/vkd3d-shader/trace.c
-@@ -1365,7 +1365,7 @@ static void shader_dump_ins_modifiers(st
-         case 1: shader_addline(buffer, "_x2"); break;
-         case 2: shader_addline(buffer, "_x4"); break;
-         case 3: shader_addline(buffer, "_x8"); break;
--        default: shader_addline(buffer, "_unhandled_shift(%d)", dst->shift); break;
-+        default: shader_addline(buffer, "_unhandled_shift(%ld)", dst->shift); break;
-     }
- 
-     if (mmask & VKD3DSPDM_SATURATE)         shader_addline(buffer, "_sat");
-@@ -1512,7 +1512,7 @@ static void shader_dump_instruction_flag
-             {
-                 case VKD3D_SHADER_CONDITIONAL_OP_NZ: shader_addline(buffer, "_nz"); break;
-                 case VKD3D_SHADER_CONDITIONAL_OP_Z:  shader_addline(buffer, "_z"); break;
--                default: shader_addline(buffer, "_unrecognized(%#x)", ins->flags); break;
-+                default: shader_addline(buffer, "_unrecognized(%#lx)", ins->flags); break;
-             }
-             break;
- 
-@@ -1526,7 +1526,7 @@ static void shader_dump_instruction_flag
-                 case VKD3D_SHADER_REL_OP_LT: shader_addline(buffer, "_lt"); break;
-                 case VKD3D_SHADER_REL_OP_NE: shader_addline(buffer, "_ne"); break;
-                 case VKD3D_SHADER_REL_OP_LE: shader_addline(buffer, "_le"); break;
--                default: shader_addline(buffer, "_(%u)", ins->flags);
-+                default: shader_addline(buffer, "_(%lu)", ins->flags);
-             }
-             break;
- 
-@@ -1536,7 +1536,7 @@ static void shader_dump_instruction_flag
-                 case VKD3DSI_NONE: break;
-                 case VKD3DSI_RESINFO_RCP_FLOAT: shader_addline(buffer, "_rcpFloat"); break;
-                 case VKD3DSI_RESINFO_UINT: shader_addline(buffer, "_uint"); break;
--                default: shader_addline(buffer, "_unrecognized(%#x)", ins->flags);
-+                default: shader_addline(buffer, "_unrecognized(%#lx)", ins->flags);
-             }
-             break;
- 
-@@ -1545,7 +1545,7 @@ static void shader_dump_instruction_flag
-             {
-                 case VKD3DSI_NONE: break;
-                 case VKD3DSI_SAMPLE_INFO_UINT: shader_addline(buffer, "_uint"); break;
--                default: shader_addline(buffer, "_unrecognized(%#x)", ins->flags);
-+                default: shader_addline(buffer, "_unrecognized(%#lx)", ins->flags);
-             }
-             break;
- 
 --- a/libs/vkd3d/libs/vkd3d-shader/vkd3d_shader_main.c
 +++ b/libs/vkd3d/libs/vkd3d-shader/vkd3d_shader_main.c
-@@ -1394,7 +1394,7 @@ int vkd3d_shader_parse_input_signature(c
-     struct vkd3d_shader_message_context message_context;
+@@ -1570,7 +1570,7 @@ int vkd3d_shader_parse_input_signature(c
+     struct shader_signature shader_signature;
      int ret;
  
 -    TRACE("dxbc {%p, %zu}, signature %p, messages %p.\n", dxbc->code, dxbc->size, signature, messages);
@@ -459,7 +358,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          *messages = NULL;
 --- a/libs/vkd3d/libs/vkd3d/command.c
 +++ b/libs/vkd3d/libs/vkd3d/command.c
-@@ -312,7 +312,7 @@ static void vkd3d_wait_for_gpu_fence(str
+@@ -313,7 +313,7 @@ static void vkd3d_wait_for_gpu_fence(str
  
      TRACE("Signaling fence %p value %#"PRIx64".\n", waiting_fence->fence, waiting_fence->value);
      if (FAILED(hr = d3d12_fence_signal(waiting_fence->fence, waiting_fence->value, waiting_fence->u.vk_fence, false)))
@@ -468,8 +367,8 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      d3d12_fence_decref(waiting_fence->fence);
  
-@@ -926,7 +926,7 @@ static ULONG STDMETHODCALLTYPE d3d12_fen
-     struct d3d12_fence *fence = impl_from_ID3D12Fence(iface);
+@@ -928,7 +928,7 @@ static ULONG STDMETHODCALLTYPE d3d12_fen
+     struct d3d12_fence *fence = impl_from_ID3D12Fence1(iface);
      ULONG refcount = InterlockedIncrement(&fence->refcount);
  
 -    TRACE("%p increasing refcount to %u.\n", fence, refcount);
@@ -477,8 +376,8 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      return refcount;
  }
-@@ -941,7 +941,7 @@ static ULONG STDMETHODCALLTYPE d3d12_fen
-     struct d3d12_fence *fence = impl_from_ID3D12Fence(iface);
+@@ -943,7 +943,7 @@ static ULONG STDMETHODCALLTYPE d3d12_fen
+     struct d3d12_fence *fence = impl_from_ID3D12Fence1(iface);
      ULONG refcount = InterlockedDecrement(&fence->refcount);
  
 -    TRACE("%p decreasing refcount to %u.\n", fence, refcount);
@@ -486,7 +385,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (!refcount)
          d3d12_fence_decref(fence);
-@@ -1628,7 +1628,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
+@@ -1637,7 +1637,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
      struct d3d12_command_allocator *allocator = impl_from_ID3D12CommandAllocator(iface);
      ULONG refcount = InterlockedIncrement(&allocator->refcount);
  
@@ -495,7 +394,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      return refcount;
  }
-@@ -1638,7 +1638,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
+@@ -1647,7 +1647,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
      struct d3d12_command_allocator *allocator = impl_from_ID3D12CommandAllocator(iface);
      ULONG refcount = InterlockedDecrement(&allocator->refcount);
  
@@ -504,8 +403,8 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (!refcount)
      {
-@@ -2288,7 +2288,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
-     struct d3d12_command_list *list = impl_from_ID3D12GraphicsCommandList2(iface);
+@@ -2320,7 +2320,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
+     struct d3d12_command_list *list = impl_from_ID3D12GraphicsCommandList3(iface);
      ULONG refcount = InterlockedIncrement(&list->refcount);
  
 -    TRACE("%p increasing refcount to %u.\n", list, refcount);
@@ -513,8 +412,8 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      return refcount;
  }
-@@ -2303,7 +2303,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
-     struct d3d12_command_list *list = impl_from_ID3D12GraphicsCommandList2(iface);
+@@ -2335,7 +2335,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
+     struct d3d12_command_list *list = impl_from_ID3D12GraphicsCommandList3(iface);
      ULONG refcount = InterlockedDecrement(&list->refcount);
  
 -    TRACE("%p decreasing refcount to %u.\n", list, refcount);
@@ -522,8 +421,8 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (!refcount)
      {
-@@ -3621,7 +3621,7 @@ static void d3d12_command_list_copy_inco
-             buffer_image_copy.imageExtent.height * buffer_image_copy.imageExtent.depth;
+@@ -3699,7 +3699,7 @@ static void d3d12_command_list_copy_inco
+             buffer_image_copy.imageExtent.height * buffer_image_copy.imageExtent.depth * layer_count;
      if (FAILED(hr = d3d12_command_list_allocate_transfer_buffer(list, buffer_size, &transfer_buffer)))
      {
 -        ERR("Failed to allocate transfer buffer, hr %#x.\n", hr);
@@ -531,7 +430,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return;
      }
  
-@@ -4808,7 +4808,7 @@ static void STDMETHODCALLTYPE d3d12_comm
+@@ -4928,7 +4928,7 @@ static void STDMETHODCALLTYPE d3d12_comm
  
      if (render_target_descriptor_count > ARRAY_SIZE(list->rtvs))
      {
@@ -540,7 +439,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                  render_target_descriptor_count, ARRAY_SIZE(list->rtvs));
          render_target_descriptor_count = ARRAY_SIZE(list->rtvs);
      }
-@@ -5994,7 +5994,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
+@@ -6135,7 +6135,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
      struct d3d12_command_queue *command_queue = impl_from_ID3D12CommandQueue(iface);
      ULONG refcount = InterlockedIncrement(&command_queue->refcount);
  
@@ -549,7 +448,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      return refcount;
  }
-@@ -6009,7 +6009,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
+@@ -6177,7 +6177,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
      struct d3d12_command_queue *command_queue = impl_from_ID3D12CommandQueue(iface);
      ULONG refcount = InterlockedDecrement(&command_queue->refcount);
  
@@ -558,7 +457,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (!refcount)
      {
-@@ -6162,7 +6162,7 @@ static void d3d12_command_queue_submit_l
+@@ -6466,7 +6466,7 @@ static void d3d12_command_queue_submit_l
      if (queue->op_queue.count == 1 && !queue->is_flushing)
      {
          if (FAILED(hr = d3d12_command_queue_flush_ops_locked(queue, &flushed_any)))
@@ -567,7 +466,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
  }
  
-@@ -6771,7 +6771,7 @@ static bool d3d12_command_queue_op_array
+@@ -7080,7 +7080,7 @@ static bool d3d12_command_queue_op_array
  {
      if (!vkd3d_array_reserve((void **)&array->ops, &array->size, array->count + count, sizeof(*array->ops)))
      {
@@ -576,7 +475,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return false;
      }
  
-@@ -6979,7 +6979,7 @@ VkQueue vkd3d_acquire_vk_queue(ID3D12Com
+@@ -7299,7 +7299,7 @@ VkQueue vkd3d_acquire_vk_queue(ID3D12Com
      VkQueue vk_queue = vkd3d_queue_acquire(d3d12_queue->vkd3d_queue);
  
      if (d3d12_queue->op_queue.count)
@@ -585,7 +484,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      else if (d3d12_queue->is_flushing)
          WARN("Acquired command queue %p which is flushing.\n", d3d12_queue);
  
-@@ -7026,7 +7026,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
+@@ -7346,7 +7346,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
      struct d3d12_command_signature *signature = impl_from_ID3D12CommandSignature(iface);
      ULONG refcount = InterlockedIncrement(&signature->refcount);
  
@@ -594,7 +493,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      return refcount;
  }
-@@ -7036,7 +7036,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
+@@ -7356,7 +7356,7 @@ static ULONG STDMETHODCALLTYPE d3d12_com
      struct d3d12_command_signature *signature = impl_from_ID3D12CommandSignature(iface);
      ULONG refcount = InterlockedDecrement(&signature->refcount);
  
@@ -602,10 +501,10 @@ author: Michael Gilbert <mgilbert@debian.org>
 +    TRACE("%p decreasing refcount to %lu.\n", signature, refcount);
  
      if (!refcount)
-     {
+         d3d12_command_signature_decref(signature);
 --- a/libs/vkd3d/libs/vkd3d/device.c
 +++ b/libs/vkd3d/libs/vkd3d/device.c
-@@ -546,7 +546,7 @@ static HRESULT vkd3d_instance_init(struc
+@@ -548,7 +548,7 @@ static HRESULT vkd3d_instance_init(struc
      }
      if (create_info->wchar_size != 2 && create_info->wchar_size != 4)
      {
@@ -614,7 +513,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return E_INVALIDARG;
      }
  
-@@ -559,7 +559,7 @@ static HRESULT vkd3d_instance_init(struc
+@@ -561,7 +561,7 @@ static HRESULT vkd3d_instance_init(struc
  
      if (FAILED(hr = vkd3d_init_vk_global_procs(instance, create_info->pfn_vkGetInstanceProcAddr)))
      {
@@ -623,7 +522,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return hr;
      }
  
-@@ -639,7 +639,7 @@ static HRESULT vkd3d_instance_init(struc
+@@ -641,7 +641,7 @@ static HRESULT vkd3d_instance_init(struc
  
      if (FAILED(hr = vkd3d_load_vk_instance_procs(&instance->vk_procs, vk_global_procs, vk_instance)))
      {
@@ -632,7 +531,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (instance->vk_procs.vkDestroyInstance)
              instance->vk_procs.vkDestroyInstance(vk_instance, NULL);
          if (instance->libvulkan)
-@@ -717,7 +717,7 @@ ULONG vkd3d_instance_incref(struct vkd3d
+@@ -719,7 +719,7 @@ ULONG vkd3d_instance_incref(struct vkd3d
  {
      ULONG refcount = InterlockedIncrement(&instance->refcount);
  
@@ -641,7 +540,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      return refcount;
  }
-@@ -726,7 +726,7 @@ ULONG vkd3d_instance_decref(struct vkd3d
+@@ -728,7 +728,7 @@ ULONG vkd3d_instance_decref(struct vkd3d
  {
      ULONG refcount = InterlockedDecrement(&instance->refcount);
  
@@ -650,7 +549,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (!refcount)
          vkd3d_destroy_instance(instance);
-@@ -2025,7 +2025,7 @@ static HRESULT vkd3d_create_vk_device(st
+@@ -2029,7 +2029,7 @@ static HRESULT vkd3d_create_vk_device(st
  
      if (FAILED(hr = vkd3d_load_vk_device_procs(&device->vk_procs, vk_procs, vk_device)))
      {
@@ -659,7 +558,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          if (device->vk_procs.vkDestroyDevice)
              device->vk_procs.vkDestroyDevice(vk_device, NULL);
          return hr;
-@@ -2035,7 +2035,7 @@ static HRESULT vkd3d_create_vk_device(st
+@@ -2039,7 +2039,7 @@ static HRESULT vkd3d_create_vk_device(st
  
      if (FAILED(hr = d3d12_device_create_vkd3d_queues(device, &device_queue_info)))
      {
@@ -668,7 +567,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          device->vk_procs.vkDestroyDevice(vk_device, NULL);
          return hr;
      }
-@@ -2103,7 +2103,7 @@ static D3D12_GPU_VIRTUAL_ADDRESS vkd3d_g
+@@ -2107,7 +2107,7 @@ static D3D12_GPU_VIRTUAL_ADDRESS vkd3d_g
      slab_idx = slab - allocator->slabs;
      address = VKD3D_VA_SLAB_BASE + slab_idx * VKD3D_VA_SLAB_SIZE;
  
@@ -677,7 +576,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      return address;
  }
-@@ -2135,7 +2135,7 @@ static D3D12_GPU_VIRTUAL_ADDRESS vkd3d_g
+@@ -2139,7 +2139,7 @@ static D3D12_GPU_VIRTUAL_ADDRESS vkd3d_g
       * only fail once we have exhausted 63 bits of address space. */
      allocator->fallback_floor = base + aligned_size;
  
@@ -686,7 +585,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      return base;
  }
-@@ -2181,7 +2181,7 @@ static void *vkd3d_gpu_va_allocator_dere
+@@ -2185,7 +2185,7 @@ static void *vkd3d_gpu_va_allocator_dere
      base_offset -= slab_idx * VKD3D_VA_SLAB_SIZE;
      if (base_offset >= slab->size)
      {
@@ -695,8 +594,8 @@ author: Michael Gilbert <mgilbert@debian.org>
                  address, base_offset, slab_idx, slab->size);
          return NULL;
      }
-@@ -2445,7 +2445,7 @@ static ULONG STDMETHODCALLTYPE d3d12_dev
-     struct d3d12_device *device = impl_from_ID3D12Device(iface);
+@@ -2487,7 +2487,7 @@ static ULONG STDMETHODCALLTYPE d3d12_dev
+     struct d3d12_device *device = impl_from_ID3D12Device1(iface);
      ULONG refcount = InterlockedIncrement(&device->refcount);
  
 -    TRACE("%p increasing refcount to %u.\n", device, refcount);
@@ -704,34 +603,34 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      return refcount;
  }
-@@ -2456,7 +2456,7 @@ static ULONG STDMETHODCALLTYPE d3d12_dev
+@@ -2497,7 +2497,7 @@ static ULONG STDMETHODCALLTYPE d3d12_dev
+     struct d3d12_device *device = impl_from_ID3D12Device1(iface);
      ULONG refcount = InterlockedDecrement(&device->refcount);
-     size_t i;
  
 -    TRACE("%p decreasing refcount to %u.\n", device, refcount);
 +    TRACE("%p decreasing refcount to %lu.\n", device, refcount);
  
      if (!refcount)
      {
-@@ -3796,7 +3796,7 @@ static HRESULT STDMETHODCALLTYPE d3d12_d
+@@ -3697,7 +3697,7 @@ static HRESULT STDMETHODCALLTYPE d3d12_d
  {
-     struct d3d12_device *device = impl_from_ID3D12Device(iface);
+     struct d3d12_device *device = impl_from_ID3D12Device1(iface);
  
 -    FIXME("iface %p, object %p, attributes %p, access %#x, name %s, handle %p stub!\n",
 +    FIXME("iface %p, object %p, attributes %p, access %#lx, name %s, handle %p stub!\n",
              iface, object, attributes, access, debugstr_w(name, device->wchar_size), handle);
  
      return E_NOTIMPL;
-@@ -3816,7 +3816,7 @@ static HRESULT STDMETHODCALLTYPE d3d12_d
+@@ -3717,7 +3717,7 @@ static HRESULT STDMETHODCALLTYPE d3d12_d
  {
-     struct d3d12_device *device = impl_from_ID3D12Device(iface);
+     struct d3d12_device *device = impl_from_ID3D12Device1(iface);
  
 -    FIXME("iface %p, name %s, access %#x, handle %p stub!\n",
 +    FIXME("iface %p, name %s, access %#lx, handle %p stub!\n",
              iface, debugstr_w(name, device->wchar_size), access, handle);
  
      return E_NOTIMPL;
-@@ -4179,7 +4179,7 @@ void d3d12_device_mark_as_removed(struct
+@@ -4115,7 +4115,7 @@ void d3d12_device_mark_as_removed(struct
      va_list args;
  
      va_start(args, message);
@@ -740,7 +639,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              device, reason, vkd3d_dbg_vsprintf(message, args));
      va_end(args);
  
-@@ -4228,7 +4228,7 @@ HRESULT vkd3d_create_thread(struct vkd3d
+@@ -4164,7 +4164,7 @@ HRESULT vkd3d_create_thread(struct vkd3d
          thread_data->data = data;
          if (!(thread->handle = CreateThread(NULL, 0, call_thread_main, thread_data, 0, NULL)))
          {
@@ -749,7 +648,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              vkd3d_free(thread_data);
              hr = E_FAIL;
          }
-@@ -4237,7 +4237,7 @@ HRESULT vkd3d_create_thread(struct vkd3d
+@@ -4173,7 +4173,7 @@ HRESULT vkd3d_create_thread(struct vkd3d
  
          if ((rc = pthread_create(&thread->pthread, NULL, thread_main, data)))
          {
@@ -758,7 +657,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              hr = hresult_from_errno(rc);
          }
  #endif
-@@ -4254,7 +4254,7 @@ HRESULT vkd3d_join_thread(struct vkd3d_i
+@@ -4190,7 +4190,7 @@ HRESULT vkd3d_join_thread(struct vkd3d_i
      if (instance->join_thread)
      {
          if (FAILED(hr = instance->join_thread(thread->handle)))
@@ -778,16 +677,16 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      assert(!heap->is_private);
  
-@@ -344,7 +344,7 @@ static ULONG STDMETHODCALLTYPE d3d12_hea
+@@ -347,7 +347,7 @@ static ULONG STDMETHODCALLTYPE d3d12_hea
      struct d3d12_heap *heap = impl_from_ID3D12Heap(iface);
      ULONG refcount = InterlockedDecrement(&heap->refcount);
  
 -    TRACE("%p decreasing refcount to %u.\n", heap, refcount);
 +    TRACE("%p decreasing refcount to %lu.\n", heap, refcount);
  
-     if (!refcount)
-         d3d12_heap_destroy(heap);
-@@ -1035,7 +1035,7 @@ static ULONG d3d12_resource_incref(struc
+     /* A heap must not be destroyed until all contained resources are destroyed. */
+     if (!refcount && !heap->resource_count)
+@@ -1001,7 +1001,7 @@ static ULONG d3d12_resource_incref(struc
  {
      ULONG refcount = InterlockedIncrement(&resource->internal_refcount);
  
@@ -796,7 +695,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      return refcount;
  }
-@@ -1044,7 +1044,7 @@ static ULONG d3d12_resource_decref(struc
+@@ -1010,7 +1010,7 @@ static ULONG d3d12_resource_decref(struc
  {
      ULONG refcount = InterlockedDecrement(&resource->internal_refcount);
  
@@ -805,7 +704,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (!refcount)
      {
-@@ -1131,7 +1131,7 @@ static ULONG STDMETHODCALLTYPE d3d12_res
+@@ -1281,7 +1281,7 @@ static ULONG STDMETHODCALLTYPE d3d12_res
      struct d3d12_resource *resource = impl_from_ID3D12Resource(iface);
      ULONG refcount = InterlockedIncrement(&resource->refcount);
  
@@ -814,7 +713,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (refcount == 1)
      {
-@@ -1149,7 +1149,7 @@ static ULONG STDMETHODCALLTYPE d3d12_res
+@@ -1299,7 +1299,7 @@ static ULONG STDMETHODCALLTYPE d3d12_res
      struct d3d12_resource *resource = impl_from_ID3D12Resource(iface);
      ULONG refcount = InterlockedDecrement(&resource->refcount);
  
@@ -823,34 +722,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (!refcount)
      {
-@@ -1262,7 +1262,7 @@ static HRESULT STDMETHODCALLTYPE d3d12_r
-     WARN("Ignoring read range %p.\n", read_range);
- 
-     if (FAILED(hr = d3d12_heap_map(resource->heap, resource->heap_offset, resource, data)))
--        WARN("Failed to map resource %p, hr %#x.\n", resource, hr);
-+        WARN("Failed to map resource %p, hr %#lx.\n", resource, hr);
- 
-     if (data)
-         TRACE("Returning pointer %p.\n", *data);
-@@ -1383,7 +1383,7 @@ static HRESULT STDMETHODCALLTYPE d3d12_r
- 
-     if (FAILED(hr = d3d12_heap_map(resource->heap, resource->heap_offset, resource, (void **)&dst_data)))
-     {
--        WARN("Failed to map resource %p, hr %#x.\n", resource, hr);
-+        WARN("Failed to map resource %p, hr %#lx.\n", resource, hr);
-         return hr;
-     }
- 
-@@ -1471,7 +1471,7 @@ static HRESULT STDMETHODCALLTYPE d3d12_r
- 
-     if (FAILED(hr = d3d12_heap_map(resource->heap, resource->heap_offset, resource, (void **)&src_data)))
-     {
--        WARN("Failed to map resource %p, hr %#x.\n", resource, hr);
-+        WARN("Failed to map resource %p, hr %#lx.\n", resource, hr);
-         return hr;
-     }
- 
-@@ -3658,7 +3658,7 @@ static ULONG STDMETHODCALLTYPE d3d12_des
+@@ -3931,7 +3931,7 @@ static ULONG STDMETHODCALLTYPE d3d12_des
      struct d3d12_descriptor_heap *heap = impl_from_ID3D12DescriptorHeap(iface);
      ULONG refcount = InterlockedIncrement(&heap->refcount);
  
@@ -859,7 +731,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      return refcount;
  }
-@@ -3668,7 +3668,7 @@ static ULONG STDMETHODCALLTYPE d3d12_des
+@@ -3941,7 +3941,7 @@ static ULONG STDMETHODCALLTYPE d3d12_des
      struct d3d12_descriptor_heap *heap = impl_from_ID3D12DescriptorHeap(iface);
      ULONG refcount = InterlockedDecrement(&heap->refcount);
  
@@ -868,7 +740,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (!refcount)
      {
-@@ -4026,7 +4026,7 @@ HRESULT d3d12_descriptor_heap_create(str
+@@ -4259,7 +4259,7 @@ HRESULT d3d12_descriptor_heap_create(str
      max_descriptor_count = (~(size_t)0 - sizeof(*object)) / descriptor_size;
      if (desc->NumDescriptors > max_descriptor_count)
      {
@@ -877,7 +749,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return E_OUTOFMEMORY;
      }
  
-@@ -4094,7 +4094,7 @@ static ULONG STDMETHODCALLTYPE d3d12_que
+@@ -4329,7 +4329,7 @@ static ULONG STDMETHODCALLTYPE d3d12_que
      struct d3d12_query_heap *heap = impl_from_ID3D12QueryHeap(iface);
      ULONG refcount = InterlockedIncrement(&heap->refcount);
  
@@ -886,7 +758,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      return refcount;
  }
-@@ -4104,7 +4104,7 @@ static ULONG STDMETHODCALLTYPE d3d12_que
+@@ -4339,7 +4339,7 @@ static ULONG STDMETHODCALLTYPE d3d12_que
      struct d3d12_query_heap *heap = impl_from_ID3D12QueryHeap(iface);
      ULONG refcount = InterlockedDecrement(&heap->refcount);
  
@@ -895,7 +767,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (!refcount)
      {
-@@ -4586,7 +4586,7 @@ HRESULT vkd3d_init_null_resources(struct
+@@ -4821,7 +4821,7 @@ HRESULT vkd3d_init_null_resources(struct
      return vkd3d_init_null_resources_data(null_resources, device);
  
  fail:
@@ -906,7 +778,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  }
 --- a/libs/vkd3d/libs/vkd3d/state.c
 +++ b/libs/vkd3d/libs/vkd3d/state.c
-@@ -53,7 +53,7 @@ static ULONG STDMETHODCALLTYPE d3d12_roo
+@@ -54,7 +54,7 @@ static ULONG STDMETHODCALLTYPE d3d12_roo
      struct d3d12_root_signature *root_signature = impl_from_ID3D12RootSignature(iface);
      ULONG refcount = InterlockedIncrement(&root_signature->refcount);
  
@@ -915,7 +787,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      return refcount;
  }
-@@ -111,7 +111,7 @@ static ULONG STDMETHODCALLTYPE d3d12_roo
+@@ -112,7 +112,7 @@ static ULONG STDMETHODCALLTYPE d3d12_roo
      struct d3d12_root_signature *root_signature = impl_from_ID3D12RootSignature(iface);
      ULONG refcount = InterlockedDecrement(&root_signature->refcount);
  
@@ -924,7 +796,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (!refcount)
      {
-@@ -1413,7 +1413,7 @@ static HRESULT d3d12_root_signature_init
+@@ -1414,7 +1414,7 @@ static HRESULT d3d12_root_signature_init
          return hr;
      if (info.cost > D3D12_MAX_ROOT_COST)
      {
@@ -933,7 +805,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return E_INVALIDARG;
      }
  
-@@ -1783,7 +1783,7 @@ static ULONG STDMETHODCALLTYPE d3d12_pip
+@@ -1784,7 +1784,7 @@ static ULONG STDMETHODCALLTYPE d3d12_pip
      struct d3d12_pipeline_state *state = impl_from_ID3D12PipelineState(iface);
      ULONG refcount = InterlockedIncrement(&state->refcount);
  
@@ -942,7 +814,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      return refcount;
  }
-@@ -1826,7 +1826,7 @@ static ULONG STDMETHODCALLTYPE d3d12_pip
+@@ -1827,7 +1827,7 @@ static ULONG STDMETHODCALLTYPE d3d12_pip
      struct d3d12_pipeline_state *state = impl_from_ID3D12PipelineState(iface);
      ULONG refcount = InterlockedDecrement(&state->refcount);
  
@@ -951,7 +823,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      if (!refcount)
      {
-@@ -2053,7 +2053,7 @@ static HRESULT vkd3d_create_compute_pipe
+@@ -2057,7 +2057,7 @@ static HRESULT vkd3d_create_compute_pipe
      VK_CALL(vkDestroyShaderModule(device->vk_device, pipeline_info.stage.module, NULL));
      if (vr < 0)
      {
@@ -960,7 +832,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return hresult_from_vk_result(vr);
      }
  
-@@ -2181,7 +2181,7 @@ static HRESULT d3d12_pipeline_state_find
+@@ -2185,7 +2185,7 @@ static HRESULT d3d12_pipeline_state_find
      }
  
      if (FAILED(hr = d3d12_pipeline_state_init_uav_counters(state, device, root_signature, &shader_info, stage_flags)))
@@ -969,7 +841,7 @@ author: Michael Gilbert <mgilbert@debian.org>
  
      vkd3d_shader_free_scan_descriptor_info(&shader_info);
  
-@@ -2255,7 +2255,7 @@ static HRESULT d3d12_pipeline_state_init
+@@ -2259,7 +2259,7 @@ static HRESULT d3d12_pipeline_state_init
      if (FAILED(hr = vkd3d_create_compute_pipeline(device, &desc->CS, &shader_interface,
              vk_pipeline_layout, &state->u.compute.vk_pipeline)))
      {
@@ -978,7 +850,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          d3d12_pipeline_uav_counter_state_cleanup(&state->uav_counters, device);
          return hr;
      }
-@@ -2820,7 +2820,7 @@ static HRESULT d3d12_pipeline_state_init
+@@ -2824,7 +2824,7 @@ static HRESULT d3d12_pipeline_state_init
      rt_count = desc->NumRenderTargets;
      if (rt_count > ARRAY_SIZE(graphics->blend_attachments))
      {
@@ -987,7 +859,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                  rt_count, ARRAY_SIZE(graphics->blend_attachments));
          rt_count = ARRAY_SIZE(graphics->blend_attachments);
      }
-@@ -3087,7 +3087,7 @@ static HRESULT d3d12_pipeline_state_init
+@@ -3091,7 +3091,7 @@ static HRESULT d3d12_pipeline_state_init
      graphics->attribute_count = desc->InputLayout.NumElements;
      if (graphics->attribute_count > ARRAY_SIZE(graphics->attributes))
      {
@@ -996,7 +868,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                  graphics->attribute_count, ARRAY_SIZE(graphics->attributes));
          graphics->attribute_count = ARRAY_SIZE(graphics->attributes);
      }
-@@ -3719,14 +3719,14 @@ HRESULT vkd3d_uav_clear_state_init(struc
+@@ -3723,14 +3723,14 @@ HRESULT vkd3d_uav_clear_state_init(struc
          if (FAILED(hr = vkd3d_create_descriptor_set_layout(device, 0,
                  1, false, &set_binding, set_layouts[i].set_layout)))
          {
@@ -1013,7 +885,7 @@ author: Michael Gilbert <mgilbert@debian.org>
              goto fail;
          }
      }
-@@ -3752,7 +3752,7 @@ HRESULT vkd3d_uav_clear_state_init(struc
+@@ -3756,7 +3756,7 @@ HRESULT vkd3d_uav_clear_state_init(struc
          if (FAILED(hr = vkd3d_create_compute_pipeline(device, &pipelines[i].code, &shader_interface,
                  *pipelines[i].pipeline_layout, pipelines[i].pipeline)))
          {
@@ -1024,7 +896,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
 --- a/libs/vkd3d/libs/vkd3d/vkd3d_private.h
 +++ b/libs/vkd3d/libs/vkd3d/vkd3d_private.h
-@@ -245,7 +245,7 @@ static inline void vkd3d_cond_broadcast(
+@@ -246,7 +246,7 @@ static inline void vkd3d_cond_broadcast(
  static inline void vkd3d_cond_wait(struct vkd3d_cond *cond, struct vkd3d_mutex *lock)
  {
      if (!SleepConditionVariableCS(&cond->cond, &lock->lock, INFINITE))
@@ -1046,7 +918,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          return false;
 --- a/libs/vkd3d/libs/vkd3d-shader/preproc.l
 +++ b/libs/vkd3d/libs/vkd3d-shader/preproc.l
-@@ -245,7 +245,7 @@ static void preproc_pop_buffer(struct pr
+@@ -260,7 +260,7 @@ static void preproc_pop_buffer(struct pr
          yy_delete_buffer(exp->buffer.lexer_buffer, ctx->scanner);
  
          --ctx->expansion_count;
@@ -1055,7 +927,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
      else
      {
-@@ -267,7 +267,7 @@ static void preproc_pop_buffer(struct pr
+@@ -282,7 +282,7 @@ static void preproc_pop_buffer(struct pr
          yy_delete_buffer(file->buffer.lexer_buffer, ctx->scanner);
  
          --ctx->file_count;
@@ -1064,7 +936,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      }
  
      if (ctx->expansion_count)
-@@ -328,7 +328,7 @@ static bool preproc_push_expansion(struc
+@@ -343,7 +343,7 @@ static bool preproc_push_expansion(struc
      exp->buffer.lexer_buffer = yy_scan_bytes(text->text.buffer, text->text.content_size, ctx->scanner);
      exp->buffer.location = text->location;
      exp->macro = macro;
@@ -1073,7 +945,7 @@ author: Michael Gilbert <mgilbert@debian.org>
      return true;
  }
  
-@@ -643,7 +643,7 @@ int yylex(YYSTYPE *lval, YYLTYPE *lloc,
+@@ -706,7 +706,7 @@ int yylex(YYSTYPE *lval, YYLTYPE *lloc,
                              else
                              {
                                  preproc_warning(ctx, lloc, VKD3D_SHADER_WARNING_PP_ARGUMENT_COUNT_MISMATCH,
@@ -1082,7 +954,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                                          func_state->macro->name, func_state->macro->arg_count, func_state->arg_count);
  
                                  if (ctx->current_directive)
-@@ -705,7 +705,7 @@ bool preproc_push_include(struct preproc
+@@ -771,7 +771,7 @@ bool preproc_push_include(struct preproc
      file->buffer.location.source_name = file->filename;
      file->buffer.location.line = 1;
      file->buffer.location.column = 1;
@@ -1091,3 +963,349 @@ author: Michael Gilbert <mgilbert@debian.org>
      ctx->last_was_newline = true;
      return true;
  }
+--- a/libs/vkd3d/libs/vkd3d-shader/d3d_asm.c
++++ b/libs/vkd3d/libs/vkd3d-shader/d3d_asm.c
+@@ -1367,7 +1367,7 @@ static void shader_dump_ins_modifiers(st
+         case 1: shader_addline(buffer, "_x2"); break;
+         case 2: shader_addline(buffer, "_x4"); break;
+         case 3: shader_addline(buffer, "_x8"); break;
+-        default: shader_addline(buffer, "_unhandled_shift(%d)", dst->shift); break;
++        default: shader_addline(buffer, "_unhandled_shift(%ld)", dst->shift); break;
+     }
+ 
+     if (mmask & VKD3DSPDM_SATURATE)         shader_addline(buffer, "_sat");
+@@ -1514,7 +1514,7 @@ static void shader_dump_instruction_flag
+             {
+                 case VKD3D_SHADER_CONDITIONAL_OP_NZ: shader_addline(buffer, "_nz"); break;
+                 case VKD3D_SHADER_CONDITIONAL_OP_Z:  shader_addline(buffer, "_z"); break;
+-                default: shader_addline(buffer, "_unrecognized(%#x)", ins->flags); break;
++                default: shader_addline(buffer, "_unrecognized(%#lx)", ins->flags); break;
+             }
+             break;
+ 
+@@ -1528,7 +1528,7 @@ static void shader_dump_instruction_flag
+                 case VKD3D_SHADER_REL_OP_LT: shader_addline(buffer, "_lt"); break;
+                 case VKD3D_SHADER_REL_OP_NE: shader_addline(buffer, "_ne"); break;
+                 case VKD3D_SHADER_REL_OP_LE: shader_addline(buffer, "_le"); break;
+-                default: shader_addline(buffer, "_(%u)", ins->flags);
++                default: shader_addline(buffer, "_(%lu)", ins->flags);
+             }
+             break;
+ 
+@@ -1538,7 +1538,7 @@ static void shader_dump_instruction_flag
+                 case VKD3DSI_NONE: break;
+                 case VKD3DSI_RESINFO_RCP_FLOAT: shader_addline(buffer, "_rcpFloat"); break;
+                 case VKD3DSI_RESINFO_UINT: shader_addline(buffer, "_uint"); break;
+-                default: shader_addline(buffer, "_unrecognized(%#x)", ins->flags);
++                default: shader_addline(buffer, "_unrecognized(%#lx)", ins->flags);
+             }
+             break;
+ 
+@@ -1547,7 +1547,7 @@ static void shader_dump_instruction_flag
+             {
+                 case VKD3DSI_NONE: break;
+                 case VKD3DSI_SAMPLE_INFO_UINT: shader_addline(buffer, "_uint"); break;
+-                default: shader_addline(buffer, "_unrecognized(%#x)", ins->flags);
++                default: shader_addline(buffer, "_unrecognized(%#lx)", ins->flags);
+             }
+             break;
+ 
+--- a/libs/vkd3d/libs/vkd3d-shader/dxil.c
++++ b/libs/vkd3d/libs/vkd3d-shader/dxil.c
+@@ -1069,13 +1069,13 @@ static enum vkd3d_result sm6_parser_type
+ 
+                 if (!(type->u.array.count = record->operands[0]))
+                 {
+-                    TRACE("Setting unbounded for type %zu.\n", type_index);
++                    TRACE("Setting unbounded for type %u.\n", type_index);
+                     type->u.array.count = UINT_MAX;
+                 }
+ 
+                 if ((type_id = record->operands[1]) >= type_count)
+                 {
+-                    WARN("Invalid contained type id %"PRIu64" for type %zu.\n", type_id, type_index);
++                    WARN("Invalid contained type id %"PRIu64" for type %u.\n", type_id, type_index);
+                     return VKD3D_ERROR_INVALID_SHADER;
+                 }
+                 type->u.array.elem_type = &sm6->types[type_id];
+@@ -1097,13 +1097,13 @@ static enum vkd3d_result sm6_parser_type
+                 if (!dxil_record_validate_operand_min_count(record, 2, sm6))
+                     return VKD3D_ERROR_INVALID_SHADER;
+                 if (record->operands[0])
+-                    FIXME("Unhandled vararg function type %zu.\n", type_index);
++                    FIXME("Unhandled vararg function type %u.\n", type_index);
+ 
+                 type->class = TYPE_CLASS_FUNCTION;
+ 
+                 if ((type_id = record->operands[1]) >= type_count)
+                 {
+-                    WARN("Invalid return type id %"PRIu64" for type %zu.\n", type_id, type_index);
++                    WARN("Invalid return type id %"PRIu64" for type %u.\n", type_id, type_index);
+                     return VKD3D_ERROR_INVALID_SHADER;
+                 }
+ 
+@@ -1121,7 +1121,7 @@ static enum vkd3d_result sm6_parser_type
+                 {
+                     if ((type_id = record->operands[j + 2]) >= type_count)
+                     {
+-                        WARN("Invalid parameter type id %"PRIu64" for type %zu.\n", type_id, type_index);
++                        WARN("Invalid parameter type id %"PRIu64" for type %u.\n", type_id, type_index);
+                         vkd3d_free(type->u.function);
+                         return VKD3D_ERROR_INVALID_SHADER;
+                     }
+@@ -1153,7 +1153,7 @@ static enum vkd3d_result sm6_parser_type
+                     case 64:
+                         break;
+                     default:
+-                        WARN("Invalid integer width %"PRIu64" for type %zu.\n", width, type_index);
++                        WARN("Invalid integer width %"PRIu64" for type %u.\n", width, type_index);
+                         return VKD3D_ERROR_INVALID_SHADER;
+                 }
+                 type->u.width = width;
+@@ -1179,7 +1179,7 @@ static enum vkd3d_result sm6_parser_type
+ 
+                 if ((type_id = record->operands[0]) >= type_count)
+                 {
+-                    WARN("Invalid pointee type id %"PRIu64" for type %zu.\n", type_id, type_index);
++                    WARN("Invalid pointee type id %"PRIu64" for type %u.\n", type_id, type_index);
+                     return VKD3D_ERROR_INVALID_SHADER;
+                 }
+                 type->u.pointer.type = &sm6->types[type_id];
+@@ -1192,7 +1192,7 @@ static enum vkd3d_result sm6_parser_type
+                     return VKD3D_ERROR_INVALID_SHADER;
+                 if (record->code == TYPE_CODE_STRUCT_NAMED && !struct_name)
+                 {
+-                    WARN("Missing struct name before struct type %zu.\n", type_index);
++                    WARN("Missing struct name before struct type %u.\n", type_index);
+                     return VKD3D_ERROR_INVALID_SHADER;
+                 }
+ 
+@@ -1214,7 +1214,7 @@ static enum vkd3d_result sm6_parser_type
+                 {
+                     if ((type_id = record->operands[j + 1]) >= type_count)
+                     {
+-                        WARN("Invalid contained type id %"PRIu64" for type %zu.\n", type_id, type_index);
++                        WARN("Invalid contained type id %"PRIu64" for type %u.\n", type_id, type_index);
+                         vkd3d_free(type->u.struc);
+                         return VKD3D_ERROR_INVALID_SHADER;
+                     }
+@@ -1238,7 +1238,7 @@ static enum vkd3d_result sm6_parser_type
+                     return VKD3D_ERROR_OUT_OF_MEMORY;
+                 }
+                 if (!struct_name[0])
+-                    WARN("Struct name is empty for type %zu.\n", type_index);
++                    WARN("Struct name is empty for type %u.\n", type_index);
+                 continue;
+ 
+             case TYPE_CODE_VOID:
+@@ -1247,7 +1247,7 @@ static enum vkd3d_result sm6_parser_type
+                 break;
+ 
+             default:
+-                FIXME("Unhandled type %u at index %zu.\n", record->code, type_index);
++                FIXME("Unhandled type %u at index %u.\n", record->code, type_index);
+                 return VKD3D_ERROR_INVALID_SHADER;
+         }
+         ++sm6->type_count;
+@@ -1392,7 +1392,7 @@ static const struct sm6_type *sm6_parser
+ {
+     if (type_id >= sm6->type_count)
+     {
+-        WARN("Invalid type index %"PRIu64" at %zu.\n", type_id, sm6->value_count);
++        WARN("Invalid type index %"PRIu64" at %u.\n", type_id, sm6->value_count);
+         vkd3d_shader_parser_error(&sm6->p, VKD3D_SHADER_ERROR_DXIL_INVALID_TYPE_ID,
+                 "DXIL type id %"PRIu64" is invalid.", type_id);
+         return NULL;
+@@ -1702,14 +1702,14 @@ static size_t sm6_parser_get_value_index
+     /* This may underflow to produce a forward reference, but it must not exceeed the final value count. */
+     if (i >= sm6->cur_max_value)
+     {
+-        WARN("Invalid value index %"PRIx64" at %zu.\n", idx, sm6->value_count);
++        WARN("Invalid value index %"PRIx64" at %u.\n", idx, sm6->value_count);
+         vkd3d_shader_parser_error(&sm6->p, VKD3D_SHADER_ERROR_DXIL_INVALID_OPERAND,
+                 "Invalid value relative index %u.", (unsigned int)idx);
+         return SIZE_MAX;
+     }
+     if (i == sm6->value_count)
+     {
+-        WARN("Invalid value self-reference at %zu.\n", sm6->value_count);
++        WARN("Invalid value self-reference at %u.\n", sm6->value_count);
+         vkd3d_shader_parser_error(&sm6->p, VKD3D_SHADER_ERROR_DXIL_INVALID_OPERAND, "Invalid value self-reference.");
+         return SIZE_MAX;
+     }
+@@ -1775,7 +1775,7 @@ static bool sm6_parser_declare_function(
+     fn->value_type = VALUE_TYPE_FUNCTION;
+     if (!(fn->u.function.name = sm6_parser_get_global_symbol_name(sm6, sm6->value_count)))
+     {
+-        WARN("Missing symbol name for function %zu.\n", sm6->value_count);
++        WARN("Missing symbol name for function %u.\n", sm6->value_count);
+         fn->u.function.name = "";
+     }
+ 
+@@ -1904,7 +1904,7 @@ static enum vkd3d_result sm6_parser_cons
+ 
+         if (!type)
+         {
+-            WARN("Constant record %zu has no type.\n", value_idx);
++            WARN("Constant record %u has no type.\n", value_idx);
+             return VKD3D_ERROR_INVALID_SHADER;
+         }
+ 
+@@ -1927,7 +1927,7 @@ static enum vkd3d_result sm6_parser_cons
+ 
+                 if (!sm6_type_is_integer(type))
+                 {
+-                    WARN("Invalid integer of non-integer type %u at constant idx %zu.\n", type->class, value_idx);
++                    WARN("Invalid integer of non-integer type %u at constant idx %u.\n", type->class, value_idx);
+                     return VKD3D_ERROR_INVALID_SHADER;
+                 }
+ 
+@@ -1945,7 +1945,7 @@ static enum vkd3d_result sm6_parser_cons
+ 
+                 if (!sm6_type_is_floating_point(type))
+                 {
+-                    WARN("Invalid float of non-fp type %u at constant idx %zu.\n", type->class, value_idx);
++                    WARN("Invalid float of non-fp type %u at constant idx %u.\n", type->class, value_idx);
+                     return VKD3D_ERROR_INVALID_SHADER;
+                 }
+ 
+@@ -2354,9 +2354,9 @@ static void sm6_parser_emit_call(struct
+     operand_count = type->u.function->param_count;
+     if (operand_count > ARRAY_SIZE(operands))
+     {
+-        WARN("Ignoring %zu operands.\n", operand_count - ARRAY_SIZE(operands));
++        WARN("Ignoring %u operands.\n", operand_count - ARRAY_SIZE(operands));
+         vkd3d_shader_parser_warning(&sm6->p, VKD3D_SHADER_WARNING_DXIL_IGNORING_OPERANDS,
+-                "Ignoring %zu operands for function call.", operand_count - ARRAY_SIZE(operands));
++                "Ignoring %u operands for function call.", operand_count - ARRAY_SIZE(operands));
+         operand_count = ARRAY_SIZE(operands);
+     }
+ 
+@@ -2438,7 +2438,7 @@ static enum vkd3d_result sm6_parser_func
+     if (block->record_count < 2)
+     {
+         /* It should contain at least a block count and a RET instruction. */
+-        WARN("Invalid function block record count %zu.\n", block->record_count);
++        WARN("Invalid function block record count %u.\n", block->record_count);
+         return VKD3D_ERROR_INVALID_SHADER;
+     }
+     if (block->records[0]->code != FUNC_CODE_DECLAREBLOCKS || !block->records[0]->operand_count
+@@ -2474,9 +2474,9 @@ static enum vkd3d_result sm6_parser_func
+ 
+         if (!code_block)
+         {
+-            WARN("Invalid block count %zu.\n", function->block_count);
++            WARN("Invalid block count %u.\n", function->block_count);
+             vkd3d_shader_parser_error(&sm6->p, VKD3D_SHADER_ERROR_DXIL_INVALID_OPERAND,
+-                    "Invalid block count %zu.", function->block_count);
++                    "Invalid block count %u.", function->block_count);
+             return VKD3D_ERROR_INVALID_SHADER;
+         }
+ 
+@@ -2696,9 +2696,9 @@ static enum vkd3d_result sm6_parser_init
+     count = byte_code_size / sizeof(*byte_code);
+     if (count < 6)
+     {
+-        WARN("Invalid data size %zu.\n", byte_code_size);
++        WARN("Invalid data size %u.\n", byte_code_size);
+         vkd3d_shader_error(message_context, &location, VKD3D_SHADER_ERROR_DXIL_INVALID_SIZE,
+-                "DXIL chunk size %zu is smaller than the DXIL header size.", byte_code_size);
++                "DXIL chunk size %u is smaller than the DXIL header size.", byte_code_size);
+         return VKD3D_ERROR_INVALID_SHADER;
+     }
+ 
+@@ -2709,9 +2709,9 @@ static enum vkd3d_result sm6_parser_init
+ 
+     if (token_count < 6 || count < token_count)
+     {
+-        WARN("Invalid token count %u (word count %zu).\n", token_count, count);
++        WARN("Invalid token count %u (word count %u).\n", token_count, count);
+         vkd3d_shader_error(message_context, &location, VKD3D_SHADER_ERROR_DXIL_INVALID_CHUNK_SIZE,
+-                "DXIL chunk token count %#x is invalid (word count %zu).", token_count, count);
++                "DXIL chunk token count %#x is invalid (word count %u).", token_count, count);
+         return VKD3D_ERROR_INVALID_SHADER;
+     }
+ 
+@@ -2727,18 +2727,18 @@ static enum vkd3d_result sm6_parser_init
+     chunk_offset = byte_code[4];
+     if (chunk_offset < 16 || chunk_offset >= byte_code_size)
+     {
+-        WARN("Invalid bitcode chunk offset %#x (data size %zu).\n", chunk_offset, byte_code_size);
++        WARN("Invalid bitcode chunk offset %#x (data size %u).\n", chunk_offset, byte_code_size);
+         vkd3d_shader_error(message_context, &location, VKD3D_SHADER_ERROR_DXIL_INVALID_CHUNK_OFFSET,
+-                "DXIL bitcode chunk has invalid offset %#x (data size %#zx).", chunk_offset, byte_code_size);
++                "DXIL bitcode chunk has invalid offset %#x (data size %#x).", chunk_offset, byte_code_size);
+         return VKD3D_ERROR_INVALID_SHADER;
+     }
+     chunk_size = byte_code[5];
+     if (chunk_size > byte_code_size - chunk_offset)
+     {
+-        WARN("Invalid bitcode chunk size %#x (data size %zu, chunk offset %#x).\n",
++        WARN("Invalid bitcode chunk size %#x (data size %u, chunk offset %#x).\n",
+                 chunk_size, byte_code_size, chunk_offset);
+         vkd3d_shader_error(message_context, &location, VKD3D_SHADER_ERROR_DXIL_INVALID_CHUNK_SIZE,
+-                "DXIL bitcode chunk has invalid size %#x (data size %#zx, chunk offset %#x).",
++                "DXIL bitcode chunk has invalid size %#x (data size %#x, chunk offset %#x).",
+                 chunk_size, byte_code_size, chunk_offset);
+         return VKD3D_ERROR_INVALID_SHADER;
+     }
+@@ -2799,17 +2799,17 @@ static enum vkd3d_result sm6_parser_init
+     length = sm6->ptr - sm6->start - block->start;
+     if (length != block->length)
+     {
+-        WARN("Invalid block length %zu; expected %u.\n", length, block->length);
++        WARN("Invalid block length %u; expected %u.\n", length, block->length);
+         vkd3d_shader_parser_warning(&sm6->p, VKD3D_SHADER_WARNING_DXIL_INVALID_BLOCK_LENGTH,
+-                "Root block ends with length %zu but indicated length is %u.", length, block->length);
++                "Root block ends with length %u but indicated length is %u.", length, block->length);
+     }
+     if (sm6->ptr != sm6->end)
+     {
+         size_t expected_length = sm6->end - sm6->start;
+         length = sm6->ptr - sm6->start;
+-        WARN("Invalid module length %zu; expected %zu.\n", length, expected_length);
++        WARN("Invalid module length %u; expected %u.\n", length, expected_length);
+         vkd3d_shader_parser_warning(&sm6->p, VKD3D_SHADER_WARNING_DXIL_INVALID_MODULE_LENGTH,
+-                "Module ends with length %zu but indicated length is %zu.", length, expected_length);
++                "Module ends with length %u but indicated length is %u.", length, expected_length);
+     }
+ 
+     if ((ret = sm6_parser_type_table_init(sm6)) < 0)
+--- a/libs/vkd3d/libs/vkd3d-shader/tpf.c
++++ b/libs/vkd3d/libs/vkd3d-shader/tpf.c
+@@ -858,7 +858,7 @@ static void shader_sm4_read_dcl_sampler(
+ 
+     ins->flags = (opcode_token & VKD3D_SM4_SAMPLER_MODE_MASK) >> VKD3D_SM4_SAMPLER_MODE_SHIFT;
+     if (ins->flags & ~VKD3D_SM4_SAMPLER_COMPARISON)
+-        FIXME("Unhandled sampler mode %#x.\n", ins->flags);
++        FIXME("Unhandled sampler mode %#lx.\n", ins->flags);
+     shader_sm4_read_src_param(priv, &tokens, end, VKD3D_DATA_SAMPLER, &ins->declaration.sampler.src);
+     shader_sm4_set_descriptor_register_range(priv, &ins->declaration.sampler.src.reg, &ins->declaration.sampler.range);
+     shader_sm4_read_register_space(priv, &tokens, end, &ins->declaration.sampler.range.space);
+@@ -2217,7 +2217,7 @@ static void shader_sm4_read_instruction_
+             } aoffimmi;
+ 
+             if (modifier & ~recognized_bits)
+-                FIXME("Unhandled instruction modifier %#x.\n", modifier);
++                FIXME("Unhandled instruction modifier %#lx.\n", modifier);
+ 
+             aoffimmi.u = (modifier & VKD3D_SM4_AOFFIMMI_U_MASK) >> VKD3D_SM4_AOFFIMMI_U_SHIFT;
+             aoffimmi.v = (modifier & VKD3D_SM4_AOFFIMMI_V_MASK) >> VKD3D_SM4_AOFFIMMI_V_SHIFT;
+@@ -2274,7 +2274,7 @@ static void shader_sm4_read_instruction_
+         }
+ 
+         default:
+-            FIXME("Unhandled instruction modifier %#x.\n", modifier);
++            FIXME("Unhandled instruction modifier %#lx.\n", modifier);
+     }
+ }
+ 
+@@ -2314,7 +2314,7 @@ static void shader_sm4_read_instruction(
+     }
+     if (!len || remaining < len)
+     {
+-        WARN("Read invalid length %u (remaining %zu).\n", len, remaining);
++        WARN("Read invalid length %u (remaining %u).\n", len, remaining);
+         goto fail;
+     }
+     --len;
