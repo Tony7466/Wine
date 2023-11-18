@@ -1,3 +1,12 @@
+wine-development (8.16~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 8.16, released Sep 15, 2023.
+    - Beginnings of a DirectMusic revival.
+    - Many fixes and improvements in the regression tests.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 18 Nov 2023 15:23:44 +0000
+
 wine-development (8.15~repack-1) unstable; urgency=medium
 
   * New upstream release 8.15, released Sep 1, 2023.
