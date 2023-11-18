@@ -1,0 +1,72 @@
+description: fix large source file warnings (gcc13 -flarge-source-files)
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/dlls/mshtml/Makefile.in
++++ b/dlls/mshtml/Makefile.in
+@@ -63,7 +63,65 @@ C_SRCS = \
+ 	view.c \
+ 	xmlhttprequest.c
+ 
+-nsembed_EXTRADEFS = -DINSTALL_DATADIR="\"${datadir}\""
++nsembed_EXTRADEFS = -DINSTALL_DATADIR="\"${datadir}\"" -flarge-source-files
++
++conpoint_EXTRADEFS = -flarge-source-files
++dispex_EXTRADEFS = -flarge-source-files
++editor_EXTRADEFS = -flarge-source-files
++htmlanchor_EXTRADEFS = -flarge-source-files
++htmlarea_EXTRADEFS = -flarge-source-files
++htmlattr_EXTRADEFS = -flarge-source-files
++htmlbody_EXTRADEFS = -flarge-source-files
++htmlcomment_EXTRADEFS = -flarge-source-files
++htmlcurstyle_EXTRADEFS = -flarge-source-files
++htmldoc_EXTRADEFS = -flarge-source-files
++htmlelem_EXTRADEFS = -flarge-source-files
++htmlelemcol_EXTRADEFS = -flarge-source-files
++htmlevent_EXTRADEFS = -flarge-source-files
++htmlform_EXTRADEFS = -flarge-source-files
++htmlframe_EXTRADEFS = -flarge-source-files
++htmlgeneric_EXTRADEFS = -flarge-source-files
++htmlhead_EXTRADEFS = -flarge-source-files
++htmlimg_EXTRADEFS = -flarge-source-files
++htmlinput_EXTRADEFS = -flarge-source-files
++htmllink_EXTRADEFS = -flarge-source-files
++htmllocation_EXTRADEFS = -flarge-source-files
++htmlnode_EXTRADEFS = -flarge-source-files
++htmlobject_EXTRADEFS = -flarge-source-files
++htmlscript_EXTRADEFS = -flarge-source-files
++htmlselect_EXTRADEFS = -flarge-source-files
++htmlstorage_EXTRADEFS = -flarge-source-files
++htmlstyle_EXTRADEFS = -flarge-source-files
++htmlstyleelem_EXTRADEFS = -flarge-source-files
++htmlstylesheet_EXTRADEFS = -flarge-source-files
++htmltable_EXTRADEFS = -flarge-source-files
++htmltextarea_EXTRADEFS = -flarge-source-files
++htmltextnode_EXTRADEFS = -flarge-source-files
++htmlwindow_EXTRADEFS = -flarge-source-files
++ifacewrap_EXTRADEFS = -flarge-source-files
++loadopts_EXTRADEFS = -flarge-source-files
++main_EXTRADEFS = -flarge-source-files
++mutation_EXTRADEFS = -flarge-source-files
++navigate_EXTRADEFS = -flarge-source-files
++npplugin_EXTRADEFS = -flarge-source-files
++nsevents_EXTRADEFS = -flarge-source-files
++nsio_EXTRADEFS = -flarge-source-files
++nsservice_EXTRADEFS = -flarge-source-files
++olecmd_EXTRADEFS = -flarge-source-files
++oleobj_EXTRADEFS = -flarge-source-files
++omnavigator_EXTRADEFS = -flarge-source-files
++persist_EXTRADEFS = -flarge-source-files
++pluginhost_EXTRADEFS = -flarge-source-files
++protocol_EXTRADEFS = -flarge-source-files
++range_EXTRADEFS = -flarge-source-files
++script_EXTRADEFS = -flarge-source-files
++secmgr_EXTRADEFS = -flarge-source-files
++selection_EXTRADEFS = -flarge-source-files
++service_EXTRADEFS = -flarge-source-files
++svg_EXTRADEFS = -flarge-source-files
++task_EXTRADEFS = -flarge-source-files
++view_EXTRADEFS = -flarge-source-files
++xmlhttprequest_EXTRADEFS = -flarge-source-files
+ 
+ RC_SRCS = mshtml.rc
+ 

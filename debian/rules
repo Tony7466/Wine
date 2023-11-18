@@ -27,9 +27,6 @@ export DH_VERBOSE=1
 # specify buildflags (stack protector, fortify, and LTO are not yet supported upstream)
 export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector optimize=-lto
 
-# ignore array bound and unused function warnings, not yet handled upstream
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-array-bounds -Wno-unused-function
-
 # configure options
 CONFLAGS=--with-gnutls \
          --without-oss \

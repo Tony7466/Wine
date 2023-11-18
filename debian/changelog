@@ -1,4 +1,4 @@
-wine-development (8.15~repack-1) UNRELEASED; urgency=medium
+wine-development (8.15~repack-1) unstable; urgency=medium
 
   * New upstream release 8.15, released Sep 1, 2023.
     - Support for TEXT print processor.

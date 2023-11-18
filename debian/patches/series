@@ -40,6 +40,7 @@ warnings/vt.patch
 warnings/libs.patch
 warnings/vkd3d.patch
 warnings/bison.patch
+warnings/large-files.patch
 warnings/parentheses.patch
 warnings/use-after-free.patch
 warnings/int-conversion.patch
