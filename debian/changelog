@@ -1,3 +1,13 @@
+wine-development (8.17~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 8.17, released Sep 29, 2023.
+    - Bundled vkd3d upgraded to version 1.9.
+    - Initial window management in the Wayland driver.
+    - SoundFont support in DirectMusic.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 18 Nov 2023 17:41:22 +0000
+
 wine-development (8.16~repack-1) unstable; urgency=medium
 
   * New upstream release 8.16, released Sep 15, 2023.
