@@ -1,3 +1,13 @@
+wine-development (8.18~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 8.18, released Oct 13, 2023.
+    - Bundled FluidSynth library for DirectMusic.
+    - More window management in the Wayland driver.
+    - More effect support in Direct3D 10.
+    - Various bug fixes.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 18 Nov 2023 21:00:12 +0000
+
 wine-development (8.17~repack-1) unstable; urgency=medium
 
   * New upstream release 8.17, released Sep 29, 2023.
