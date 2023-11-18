@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -3799,11 +3799,6 @@ static void output_sources( struct makef
+@@ -3815,11 +3815,6 @@ static void output_sources( struct makef
                  output_import_lib( make, arch );
          }
          if (make->unixlib) output_unix_lib( make );
