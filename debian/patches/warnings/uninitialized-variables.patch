@@ -44,7 +44,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                      prefix->Address.iSockaddrLength = sockaddr_size;
 --- a/dlls/localspl/provider.c
 +++ b/dlls/localspl/provider.c
-@@ -3042,7 +3042,11 @@ static void fill_builtin_form_info( BYTE
+@@ -3072,7 +3072,11 @@ static void fill_builtin_form_info( BYTE
                                      DWORD size, DWORD *used )
  {
      FORM_INFO_2W *info = *(FORM_INFO_2W**)base;

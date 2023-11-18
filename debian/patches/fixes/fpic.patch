@@ -20,4 +20,4 @@ author: Michael Gilbert <mgilbert@debian.org>
 +        ;;
      esac
  
-     WINE_TRY_CFLAGS([-Wl,-z,defs],[UNIXLDFLAGS="$UNIXLDFLAGS -Wl,-z,defs"])
+     AC_CACHE_CHECK([whether -Wl,-z,defs works correctly], ac_cv_wl_z_defs,

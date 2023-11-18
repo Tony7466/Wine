@@ -69,15 +69,15 @@ ifeq ($(DEB_HOST_ARCH), armhf)
 CONFLAGS+=--with-float-abi=hard
 endif
 
-# ignore arm-specific unused functions
-ifneq (,$(filter $(DEB_HOST_ARCH),armel armhf arm64))
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-unused-function
-endif
-
 # the x18 register is reserved in windows on arm64, avoid clobbering it
 # (see https://bugs.winehq.org/show_bug.cgi?id=38780)
 ifeq ($(DEB_HOST_ARCH), arm64)
 export DEB_CFLAGS_MAINT_APPEND+=-ffixed-x18
+endif
+
+# ignore arm-specific unused functions
+ifneq (,$(filter $(DEB_HOST_ARCH),armel armhf arm64))
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-unused-function
 endif
 
 # extra information to add to the version string

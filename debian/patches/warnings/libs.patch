@@ -62,14 +62,25 @@ author: Michael Gilbert <mgilbert@debian.org>
  		hr = IMFMediaBuffer_Unlock(media_buffer);
  		FAudio_assert(!FAILED(hr) && "Failed to unlock buffer bytes!");
  
---- a/libs/tiff/libtiff/tif_config.h
-+++ b/libs/tiff/libtiff/tif_config.h
-@@ -161,3 +161,8 @@
- #  define TIFF_SIZE_FORMAT "Iu"
- #  define TIFF_SSIZE_FORMAT "Id"
- #endif
-+
-+#undef PRIu64
-+#undef PRId64
-+#define PRIu64 "I64u"
-+#define PRId64 "I64d"
+--- a/libs/mpg123/src/libmpg123/gapless.h
++++ b/libs/mpg123/src/libmpg123/gapless.h
+@@ -106,7 +106,7 @@ static void frame_buffercheck(mpg123_han
+ 
+ 		if(VERBOSE3)
+ 			fprintf(stderr, "\nNote: Cut frame %" PRIi64
+-				" buffer on beginning of stream by %" PRIi64 " samples, fill now %zu bytes.\n"
++				" buffer on beginning of stream by %" PRIi64 " samples, fill now %u bytes.\n"
+ 			,	fr->num, fr->firstoff, fr->buffer.fill);
+ 		/* We can only reach this frame again by seeking. And on seeking, firstoff will be recomputed.
+ 		   So it is safe to null it here (and it makes the if() decision abort earlier). */
+--- a/libs/mpg123/src/libmpg123/readers.c
++++ b/libs/mpg123/src/libmpg123/readers.c
+@@ -42,7 +42,7 @@ static ptrdiff_t fdread(mpg123_handle *f
+ 		int ret = fr->rdat.r_read64(fr->rdat.iohandle, buf, count, &got);
+ 		if(ret<0)
+ 		{
+-			if(NOQUIET) merror("error reading %zu bytes", count);
++			if(NOQUIET) merror("error reading %u bytes", count);
+ 			return -1;
+ 		}
+ 		if(VERBOSE3) mdebug("read %zu bytes of %zu", got, count);
