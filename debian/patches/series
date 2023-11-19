@@ -33,7 +33,6 @@ arm/binary-name.patch
 arm/shift-overflow.patch
 arm/format-strings.patch
 arm/floating-point.patch
-arm/incorrect-member.patch
 arm/incompatible-types.patch
 
 warnings/vt.patch

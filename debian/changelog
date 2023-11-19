@@ -1,7 +1,6 @@
-wine-development (8.19~repack-1) UNRELEASED; urgency=medium
+wine-development (8.19~repack-1) unstable; urgency=medium
 
   * New upstream release 8.19, released Oct 29, 2023.
-    - Mono engine updated to version 8.1.0.
     - More DirectMusic implementation.
     - Various bug fixes.
 

@@ -33,12 +33,17 @@ author: Michael Gilbert <mgilbert@debian.org>
                      cmd_prefix( "GEN" ), convert, icotool, rsvg,
 --- a/programs/regedit/Makefile.in
 +++ b/programs/regedit/Makefile.in
-@@ -20,4 +20,4 @@ RC_SRCS = regedit.rc
- 
- MANPAGES = regedit.man.in
- 
--SVG_SRCS = regedit.svg
-+SVG_SRCS = regedit.svg folderopen.svg folder.svg computer.svg string.svg bin.svg
+@@ -16,5 +16,10 @@ SOURCES = \
+ 	regedit.man.in \
+ 	regedit.rc \
+ 	regedit.svg \
++	string.svg \
++	folder.svg \
++	folderopen.svg \
++	computer.svg \
++	bin.svg \
+ 	regproc.c \
+ 	treeview.c
 --- a/dlls/display.drv16/Makefile.in
 +++ b/dlls/display.drv16/Makefile.in
 @@ -6,3 +6,5 @@ EXTRADLLFLAGS = -m16
@@ -49,39 +54,36 @@ author: Michael Gilbert <mgilbert@debian.org>
 +SVG_SRCS = oic_hand.svg
 --- a/dlls/comdlg32/Makefile.in
 +++ b/dlls/comdlg32/Makefile.in
-@@ -21,6 +21,12 @@ SVG_SRCS = \
- 	pd32_collate.svg \
+@@ -19,4 +19,10 @@ SOURCES = \
  	pd32_landscape.svg \
  	pd32_nocollate.svg \
--	pd32_portrait.svg
-+	pd32_portrait.svg \
+ 	pd32_portrait.svg \
 +	cdrom.svg \
 +	hdisk.svg \
 +	floppy.svg \
 +	folder.svg \
 +	folder2.svg \
-+	network.svg
- 
- IDL_SRCS = comdlg32_classes.idl
++	network.svg \
+ 	printdlg.c
 --- a/dlls/comctl32/Makefile.in
 +++ b/dlls/comctl32/Makefile.in
-@@ -53,4 +53,8 @@ SVG_SRCS = \
- 	idc_copy.svg \
+@@ -29,6 +29,10 @@ SOURCES = \
  	idc_divider.svg \
  	idc_divideropen.svg \
--	idc_movebutton.svg
-+	idc_movebutton.svg \
+ 	idc_movebutton.svg \
 +	idi_dragarrow.svg \
 +	idi_tt_info_sm.svg \
 +	idi_tt_warn_sm.svg \
-+	idi_tt_error_sm.svg
++	idi_tt_error_sm.svg \
+ 	imagelist.c \
+ 	ipaddress.c \
+ 	listbox.c \
 --- a/programs/taskmgr/Makefile.in
 +++ b/programs/taskmgr/Makefile.in
-@@ -26,4 +26,6 @@ C_SRCS = \
- RC_SRCS = taskmgr.rc
- 
- SVG_SRCS = \
--	taskmgr.svg
-+	taskmgr.svg \
+@@ -23,4 +23,6 @@ SOURCES = \
+ 	taskmgr.c \
+ 	taskmgr.rc \
+ 	taskmgr.svg \
 +	window.svg \
-+	windowsm.svg
++	windowsm.svg \
+ 	trayicon.c

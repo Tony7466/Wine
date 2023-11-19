@@ -13,5 +13,5 @@ bug-debian: https://bugs.debian.org/845334
 +    return TRUE;
 +
      /* These are managed through external tools like wine.desktop, to evade malware created file type associations */
-     if (!wcsicmp(extension, L".com") ||
-         !wcsicmp(extension, L".exe") ||
+     if (!wcsicmp(extension, L".bat") ||
+         !wcsicmp(extension, L".com") ||
