@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -1013,7 +1013,7 @@ This is an error since --enable-archs=$w
+@@ -1010,7 +1010,7 @@ This is an error since --enable-archs=$w
      LDFLAGS=$saved_LDFLAGS
  done
  

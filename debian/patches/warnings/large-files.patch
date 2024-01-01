@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/mshtml/Makefile.in
 +++ b/dlls/mshtml/Makefile.in
-@@ -63,7 +63,65 @@ C_SRCS = \
+@@ -67,4 +67,62 @@ SOURCES = \
  	view.c \
  	xmlhttprequest.c
  
@@ -67,6 +67,3 @@ author: Michael Gilbert <mgilbert@debian.org>
 +task_EXTRADEFS = -flarge-source-files
 +view_EXTRADEFS = -flarge-source-files
 +xmlhttprequest_EXTRADEFS = -flarge-source-files
- 
- RC_SRCS = mshtml.rc
- 

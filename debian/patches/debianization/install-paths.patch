@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -92,9 +92,9 @@ AC_ARG_WITH(wine64,    AS_HELP_STRING([-
+@@ -91,9 +91,9 @@ AC_ARG_WITH(wine64,    AS_HELP_STRING([-
  
  AC_CANONICAL_HOST
  
@@ -19,7 +19,7 @@ forwarded: not-needed
  dnl **** Check for some programs ****
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -3055,7 +3055,7 @@ static void output_source_in( struct mak
+@@ -3056,7 +3056,7 @@ static void output_source_in( struct mak
      output( "%s:", obj_dir_path( make, obj ));
      output_filenames( source->dependencies );
      output( "\n" );
@@ -30,7 +30,7 @@ forwarded: not-needed
  
 --- a/dlls/ntdll/Makefile.in
 +++ b/dlls/ntdll/Makefile.in
-@@ -76,4 +76,4 @@ unix_loader_EXTRADEFS = \
+@@ -75,4 +75,4 @@ unix_loader_EXTRADEFS = \
  	-DBINDIR=\"${bindir}\" \
  	-DSYSTEMDLLPATH=\"${system_dllpath}\" \
  	-DDLL_TO_BINDIR=\"`${MAKEDEP} -R ${dlldir} ${bindir}`\" \
@@ -38,7 +38,7 @@ forwarded: not-needed
 +	-DBIN_TO_DATADIR=\"`${MAKEDEP} -R ${bindir} ${datadir}`\"
 --- a/dlls/win32u/Makefile.in
 +++ b/dlls/win32u/Makefile.in
-@@ -55,4 +55,4 @@ C_SRCS = \
+@@ -55,4 +55,4 @@ SOURCES = \
  	window.c \
  	winstation.c
  

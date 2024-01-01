@@ -3,7 +3,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/dlls/rpcrt4/cproxy.c
 +++ b/dlls/rpcrt4/cproxy.c
-@@ -171,6 +171,9 @@ __ASM_GLOBAL_FUNC(call_stubless_func,
+@@ -144,6 +144,9 @@ __ASM_GLOBAL_FUNC(call_stubless_func,
  #ifdef __SOFTFP__
                    "mov r3, #0\n\t"
  #else

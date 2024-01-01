@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3648,8 +3648,11 @@ maintainer-clean::
+@@ -3640,8 +3640,11 @@ maintainer-clean::
  dnl Rules for generated source files
  
  WINE_APPEND_RULE(
@@ -51,9 +51,9 @@ forwarded: not-needed
  #include <errno.h>
 --- a/dlls/ntdll/Makefile.in
 +++ b/dlls/ntdll/Makefile.in
-@@ -70,8 +70,6 @@ C_SRCS = \
- 
- RC_SRCS = version.rc
+@@ -69,8 +69,6 @@ SOURCES = \
+ 	version.rc \
+ 	wcstring.c
  
 -EXTRA_OBJS = unix/version.o
 -

@@ -9,7 +9,7 @@ author: Michael Gilbert <mgilbert@debian.org>
 -EXTRADEFS = -DHAVE_VA_COPY
 +EXTRADEFS = -DHAVE_VA_COPY -Wno-format-extra-args
  
- C_SRCS = \
+ SOURCES = \
  	HTMLparser.c \
 --- a/libs/faudio/src/FAudio_internal.h
 +++ b/libs/faudio/src/FAudio_internal.h
