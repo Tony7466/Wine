@@ -1,3 +1,9 @@
+wine (8.0.2~repack-2) unstable; urgency=medium
+
+  * Ignore maybe-uninitialized and dangling-pointer warnings.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Mon, 15 Jan 2024 01:30:32 +0000
+
 wine (8.0.2~repack-1) unstable; urgency=medium
 
   * New upstream release 8.0.2, released Jul 19, 2023.

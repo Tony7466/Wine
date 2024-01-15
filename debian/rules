@@ -28,7 +28,7 @@ export DH_VERBOSE=1
 export DEB_BUILD_MAINT_OPTIONS=hardening=+all,-fortify,-stackprotector optimize=-lto
 
 # ignore array bound and unused function warnings, not yet handled upstream
-export DEB_CFLAGS_MAINT_APPEND+=-Wno-array-bounds -Wno-unused-function
+export DEB_CFLAGS_MAINT_APPEND+=-Wno-array-bounds -Wno-unused-function -Wno-dangling-pointer -Wno-maybe-uninitialized
 
 # configure options
 CONFLAGS=--with-gnutls \
