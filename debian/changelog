@@ -1,3 +1,9 @@
+wine-development (9.0~repack-1) UNRELEASED; urgency=medium
+
+  * New upstream release 9.0, released Jan 16, 2024.
+
+ -- Michael Gilbert <mgilbert@debian.org>  Sat, 27 Jan 2024 05:31:07 +0000
+
 wine-development (8.21~repack-1) unstable; urgency=medium
 
   * New upstream release 8.21, released Nov 24, 2023.
