@@ -1,0 +1,22 @@
+description: fix occasional build failures due to missing bison files
+author: Michael Gilbert <mgilbert@debian.org>
+
+--- a/tools/makedep.c
++++ b/tools/makedep.c
+@@ -2682,14 +2682,10 @@ static void output_source_y( struct make
+ 
+     if (find_include_file( make, header ))
+     {
+-        output( "%s: %s\n", obj_dir_path( make, header ), source->filename );
+-        output( "\t%s%s -o %s.tab.$$$$.c --defines=$@ %s && rm -f %s.tab.$$$$.c\n",
+-                cmd_prefix( "BISON" ), bison, obj_dir_path( make, obj ),
+-                source->filename, obj_dir_path( make, obj ));
+-        strarray_add( &make->clean_files, header );
++        output( "%s: %s.tab.c\n", obj_dir_path( make, header ), obj_dir_path( make, obj ) );
+     }
+     output( "%s.tab.c: %s\n", obj_dir_path( make, obj ), source->filename );
+-    output( "\t%s%s -o $@ %s\n", cmd_prefix( "BISON" ), bison, source->filename );
++    output( "\t%s%s -Wno-conflicts-rr -Wno-conflicts-sr -o $@ -d %s\n", cmd_prefix( "BISON" ), bison, source->filename );
+ }
+ 
+ 

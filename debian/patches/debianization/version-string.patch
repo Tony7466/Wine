@@ -4,7 +4,7 @@ forwarded: not-needed
 
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3640,8 +3640,11 @@ maintainer-clean::
+@@ -3648,8 +3648,11 @@ maintainer-clean::
  dnl Rules for generated source files
  
  WINE_APPEND_RULE(
@@ -30,15 +30,15 @@ forwarded: not-needed
  #include <string.h>
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
-@@ -137,8 +137,6 @@ extern SYSTEM_DLL_INIT_BLOCK *pLdrSystem
+@@ -144,8 +144,6 @@ extern SYSTEM_DLL_INIT_BLOCK *pLdrSystem
  
  struct _FILE_FS_DEVICE_INFORMATION;
  
--extern const char wine_build[] DECLSPEC_HIDDEN;
+-extern const char wine_build[];
 -
- extern const char *home_dir DECLSPEC_HIDDEN;
- extern const char *data_dir DECLSPEC_HIDDEN;
- extern const char *build_dir DECLSPEC_HIDDEN;
+ extern const char *home_dir;
+ extern const char *data_dir;
+ extern const char *build_dir;
 --- a/dlls/ntdll/unix/loader.c
 +++ b/dlls/ntdll/unix/loader.c
 @@ -23,6 +23,7 @@
@@ -51,7 +51,7 @@ forwarded: not-needed
  #include <errno.h>
 --- a/dlls/ntdll/Makefile.in
 +++ b/dlls/ntdll/Makefile.in
-@@ -69,8 +69,6 @@ SOURCES = \
+@@ -70,8 +70,6 @@ SOURCES = \
  	version.rc \
  	wcstring.c
  

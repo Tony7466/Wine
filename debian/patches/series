@@ -24,6 +24,7 @@ generate/unicode.patch
 generate/request.patch
 
 fixes/flex.patch
+fixes/bison.patch
 fixes/printer-resolution.patch
 fixes/temporary-directory.patch
 
@@ -37,7 +38,6 @@ arm/incompatible-types.patch
 warnings/vt.patch
 warnings/libs.patch
 warnings/vkd3d.patch
-warnings/bison.patch
 warnings/large-files.patch
 warnings/parentheses.patch
 warnings/use-after-free.patch

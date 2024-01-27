@@ -3,41 +3,42 @@ author: Michael Gilbert <mgilbert@debian.org>
 
 --- a/programs/winedbg/info.c
 +++ b/programs/winedbg/info.c
-@@ -183,13 +183,21 @@ static const char* get_machine_str(DWORD
- static void module_print_info(const struct info_module *module, BOOL is_embedded, BOOL multi_machine)
- {
+@@ -197,14 +197,22 @@ static void module_print_info(const stru
+              module->ext_module_info.has_file_image ? "" : "^");
+ 
      if (multi_machine)
 +#ifdef __arm__
-+        dbg_printf("%I64lld-%I64lld\t%s\t%-16s%s\n",
++        dbg_printf("%-8s%16I64lld-%16I64lld       %-16s%-16s%s\n",
 +#else
-         dbg_printf("%16I64x-%16I64x\t%s\t%-16s%s\n",
+         dbg_printf("%-8s%16I64x-%16I64x       %-16s%-16s%s\n",
 +#endif
+                    buffer,
                     module->mi.BaseOfImage,
                     module->mi.BaseOfImage + module->mi.ImageSize,
                     get_machine_str(module->mi.MachineType),
-                    is_embedded ? "\\" : get_symtype_str(&module->mi), module->name);
+                    is_embedded ? "\\" : get_symtype_str(module), module->name);
      else
 +#ifdef __arm__
-+        dbg_printf("%x_%x_%I64lld-%x_%x_%I64lld\t%-16s%s\n",
++        dbg_printf("%-8s%*I64lld-%*I64lld       %-16s%s\n",
 +#else
-         dbg_printf("%*.*I64x-%*.*I64x\t%-16s%s\n",
+         dbg_printf("%-8s%*I64x-%*I64x       %-16s%s\n",
 +#endif
-                    ADDRWIDTH, ADDRWIDTH, module->mi.BaseOfImage,
-                    ADDRWIDTH, ADDRWIDTH, module->mi.BaseOfImage + module->mi.ImageSize,
-                    is_embedded ? "\\" : get_symtype_str(&module->mi), module->name);
-@@ -323,7 +331,11 @@ void info_win32_module(DWORD64 base, BOO
+                    buffer,
+                    ADDRWIDTH, module->mi.BaseOfImage,
+                    ADDRWIDTH, module->mi.BaseOfImage + module->mi.ImageSize,
+@@ -337,7 +345,11 @@ void info_win32_module(DWORD64 base, BOO
      free(im.modules);
  
      if (base && !num_printed)
 +#ifdef __arm__
-+        dbg_printf("'%x 0x%I64lld' is not a valid module address\n", ADDRWIDTH, base);
++        dbg_printf("'0x%0*I64lld' is not a valid module address\n", ADDRWIDTH, base);
 +#else
          dbg_printf("'0x%0*I64x' is not a valid module address\n", ADDRWIDTH, base);
 +#endif
+     if (has_missing_filename)
+         dbg_printf("^ denotes modules for which image file couldn't be found\n");
  }
- 
- struct class_walker
-@@ -433,7 +445,11 @@ static void info_window(HWND hWnd, int i
+@@ -449,7 +461,11 @@ static void info_window(HWND hWnd, int i
          if (!GetWindowTextA(hWnd, wndName, sizeof(wndName)))
              strcpy(wndName, "-- Empty --");
  
@@ -49,7 +50,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                     indent, "", (DWORD_PTR)hWnd, 12 - indent, "",
                     clsName, GetWindowLongW(hWnd, GWL_STYLE),
                     ADDRWIDTH, (ULONG_PTR)GetWindowLongPtrW(hWnd, GWLP_WNDPROC),
-@@ -475,7 +491,11 @@ void info_win32_window(HWND hWnd, BOOL d
+@@ -491,7 +507,11 @@ void info_win32_window(HWND hWnd, BOOL d
  
      /* FIXME missing fields: hmemTaskQ, hrgnUpdate, dce, flags, pProp, scroll */
      dbg_printf("next=%p  child=%p  parent=%p  owner=%p  class='%s'\n"
@@ -61,7 +62,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                 "style=0x%08lx  exstyle=0x%08lx  wndproc=%p  text='%s'\n"
                 "client=%ld,%ld-%ld,%ld  window=%ld,%ld-%ld,%ld sysmenu=%p\n",
                 GetWindow(hWnd, GW_HWNDNEXT),
-@@ -888,7 +908,11 @@ void info_win32_virtual(DWORD pid)
+@@ -904,7 +924,11 @@ void info_win32_virtual(DWORD pid)
              type = "";
              prot[0] = '\0';
          }
@@ -73,7 +74,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                     ADDRWIDTH, (DWORD_PTR)addr, ADDRWIDTH, (DWORD_PTR)addr + mbi.RegionSize - 1, state, type, prot);
          if (addr + mbi.RegionSize < addr) /* wrap around ? */
              break;
-@@ -990,7 +1014,11 @@ void info_win32_exception(void)
+@@ -1006,7 +1030,11 @@ void info_win32_exception(void)
          break;
      case EXCEPTION_ACCESS_VIOLATION:
          if (rec->NumberParameters == 2)
@@ -85,7 +86,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                         rec->ExceptionInformation[0] == EXCEPTION_WRITE_FAULT ? "write" :
                         rec->ExceptionInformation[0] == EXCEPTION_EXECUTE_FAULT ? "execute" : "read",
                         ADDRWIDTH, rec->ExceptionInformation[1]);
-@@ -1058,14 +1086,22 @@ void info_win32_exception(void)
+@@ -1074,14 +1102,22 @@ void info_win32_exception(void)
          break;
      case EXCEPTION_WINE_CXX_EXCEPTION:
          if(rec->NumberParameters == 3 && rec->ExceptionInformation[0] == EXCEPTION_WINE_CXX_FRAME_MAGIC)
@@ -353,7 +354,7 @@ author: Michael Gilbert <mgilbert@debian.org>
          dbg_printf("\"%s\"", exp->un.string.str);
 --- a/dlls/ntdll/unix/signal_arm.c
 +++ b/dlls/ntdll/unix/signal_arm.c
-@@ -666,7 +666,7 @@ static NTSTATUS libunwind_virtual_unwind
+@@ -668,7 +668,7 @@ static NTSTATUS libunwind_virtual_unwind
      {
          NTSTATUS status = context->Pc != context->Lr ?
                            STATUS_SUCCESS : STATUS_INVALID_DISPOSITION;
@@ -362,7 +363,7 @@ author: Michael Gilbert <mgilbert@debian.org>
                 ip, info.start_ip, info.end_ip, status == STATUS_SUCCESS ?
                 "assuming leaf function" : "error, stuck" );
          *handler = NULL;
-@@ -676,7 +676,7 @@ static NTSTATUS libunwind_virtual_unwind
+@@ -678,7 +678,7 @@ static NTSTATUS libunwind_virtual_unwind
          return status;
      }
  

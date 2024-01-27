@@ -19,7 +19,7 @@ forwarded: not-needed
  dnl **** Check for some programs ****
 --- a/tools/makedep.c
 +++ b/tools/makedep.c
-@@ -3056,7 +3056,7 @@ static void output_source_in( struct mak
+@@ -3053,7 +3053,7 @@ static void output_source_in( struct mak
      output( "%s:", obj_dir_path( make, obj ));
      output_filenames( source->dependencies );
      output( "\n" );
@@ -30,7 +30,7 @@ forwarded: not-needed
  
 --- a/dlls/ntdll/Makefile.in
 +++ b/dlls/ntdll/Makefile.in
-@@ -75,4 +75,4 @@ unix_loader_EXTRADEFS = \
+@@ -76,4 +76,4 @@ unix_loader_EXTRADEFS = \
  	-DBINDIR=\"${bindir}\" \
  	-DSYSTEMDLLPATH=\"${system_dllpath}\" \
  	-DDLL_TO_BINDIR=\"`${MAKEDEP} -R ${dlldir} ${bindir}`\" \

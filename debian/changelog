@@ -1,4 +1,4 @@
-wine-development (8.21~repack-1) UNRELEASED; urgency=medium
+wine-development (8.21~repack-1) unstable; urgency=medium
 
   * New upstream release 8.21, released Nov 24, 2023.
     - High-DPI scaling and initial Vulkan support in the Wayland driver.
