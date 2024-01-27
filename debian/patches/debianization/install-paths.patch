@@ -38,7 +38,7 @@ forwarded: not-needed
 +	-DBIN_TO_DATADIR=\"`${MAKEDEP} -R ${bindir} ${datadir}`\"
 --- a/dlls/win32u/Makefile.in
 +++ b/dlls/win32u/Makefile.in
-@@ -55,4 +55,4 @@ SOURCES = \
+@@ -56,4 +56,4 @@ SOURCES = \
  	window.c \
  	winstation.c
  

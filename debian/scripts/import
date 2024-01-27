@@ -38,7 +38,7 @@ release_date=$(LC_ALL=C date -u -d "@$tag_time" +"%b %-d, %Y")
 
 # create the initial changelog entry
 dch -v "$(echo $version~repack|sed "s/-/~/")-1" "New upstream release $version, released $release_date."
-sed -n 's/^  - \(.*\)/- \1/p' ANNOUNCE | while read line; do
+sed -n 's/^  - \(.*\)/- \1/p' ANNOUNCE.md | while read line; do
   dch $line
 done
 sed -i "s|^  \* -|    -|g" debian/changelog

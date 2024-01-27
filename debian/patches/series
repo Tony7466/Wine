@@ -40,6 +40,5 @@ warnings/libs.patch
 warnings/vkd3d.patch
 warnings/large-files.patch
 warnings/parentheses.patch
-warnings/use-after-free.patch
 warnings/int-conversion.patch
 warnings/uninitialized-variables.patch

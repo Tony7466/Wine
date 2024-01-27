@@ -42,18 +42,3 @@ author: Michael Gilbert <mgilbert@debian.org>
                      prefix->Length = sizeof(*prefix);
                      prefix->Address.lpSockaddr = (SOCKADDR *)(prefix + 1);
                      prefix->Address.iSockaddrLength = sockaddr_size;
---- a/dlls/localspl/provider.c
-+++ b/dlls/localspl/provider.c
-@@ -3072,7 +3072,11 @@ static void fill_builtin_form_info( BYTE
-                                     DWORD size, DWORD *used )
- {
-     FORM_INFO_2W *info = *(FORM_INFO_2W**)base;
--    DWORD name_len = wcslen( form->name ) + 1, res_len = 0, keyword_len, total_size;
-+
-+    DWORD total_size;
-+    DWORD res_len = 0;
-+    DWORD keyword_len = 0;
-+    DWORD name_len = wcslen( form->name ) + 1;
-     static const WCHAR dll_name[] = L"localspl.dll";
-     const WCHAR *resource;
- 

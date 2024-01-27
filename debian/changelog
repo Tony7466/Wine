@@ -1,4 +1,4 @@
-wine-development (9.0~repack-1) UNRELEASED; urgency=medium
+wine (9.0~repack-1) unstable; urgency=medium
 
   * New upstream release 9.0, released Jan 16, 2024.
 
